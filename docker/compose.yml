@@ -1,0 +1,59 @@
+##############################################################################
+# 映智汇认证审核管理系统 - 开发环境 Docker Compose
+##############################################################################
+
+services:
+  ##############################################################################
+  # MySQL 8.0 - 业务关系数据库
+  ##############################################################################
+  mysql:
+    image: mysql:8.0
+    container_name: yzh-mysql
+    restart: unless-stopped
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Yzh123456.}
+      MYSQL_DATABASE: yzh_cert_platform
+      TZ: Asia/Shanghai
+    volumes:
+      - ./mysql/data:/var/lib/mysql
+      - ./mysql/conf:/etc/mysql/conf.d
+    command:
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --max_connections=500
+      --innodb_buffer_pool_size=256M
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-Yzh123456.}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - yzh-net
+
+  ##############################################################################
+  # Redis 7 - 缓存/会话
+  ##############################################################################
+  redis:
+    image: redis:7-alpine
+    container_name: yzh-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - ./redis/data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - yzh-net
+
+networks:
+  yzh-net:
+    driver: bridge
+    name: yzh-network

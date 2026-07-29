@@ -1,0 +1,36 @@
+/* 映智汇认证审核管理系统 - 审核员端全局样式 */
+
+:root {
+  --yzh-primary: #1a5fb4;
+  --yzh-primary-light: #3584e4;
+  --yzh-success: #26a269;
+  --yzh-warning: #e5a50a;
+  --yzh-danger: #c01c28;
+  --yzh-bg: #f6f8fa;
+  --yzh-border: #deddda;
+  --yzh-text: #3d3846;
+  --yzh-text-secondary: #9a9996;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: var(--yzh-text);
+  background: var(--yzh-bg);
+}
+
+/* Element Plus 主题覆盖 */
+.el-button--primary {
+  --el-button-bg-color: var(--yzh-primary);
+  --el-button-border-color: var(--yzh-primary);
+}
+
+.el-menu {
+  border-right: none;
+}
