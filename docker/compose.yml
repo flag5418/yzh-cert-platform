@@ -9,7 +9,7 @@ services:
   mysql:
     image: mysql:8.0
     container_name: yzh-mysql
-    restart: unless-stopped
+    restart: "no"
     ports:
       - "3307:3306"
     environment:
@@ -39,7 +39,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: yzh-redis
-    restart: unless-stopped
+    restart: "no"
     ports:
       - "6380:6379"
     volumes:
@@ -59,7 +59,7 @@ services:
   minio:
     image: minio/minio:latest
     container_name: yzh-minio
-    restart: unless-stopped
+    restart: "no"
     ports:
       - "9000:9000"
       - "9001:9001"

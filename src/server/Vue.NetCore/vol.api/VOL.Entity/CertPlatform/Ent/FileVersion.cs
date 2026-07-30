@@ -1,0 +1,29 @@
+using System;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace VOL.Entity.CertPlatform.Ent
+{
+    /// <summary>
+    /// FileVersion
+    /// <para>表名：ent_file_version</para>
+    /// </summary>
+    [Table("ent_file_version")]
+    public class FileVersion : BaseEntity
+    {
+
+    [Required][StringLength(36)][Column("file_code")]
+    public string FileCode { get; set; }
+    [Required][Column("version_number")]
+    public int VersionNumber { get; set; }
+    [Required][Column("file_size")]
+    public long FileSize { get; set; }
+    [Required][StringLength(500)][Column("storage_path")]
+    public string StoragePath { get; set; }
+    [Required][StringLength(64)][Column("file_hash")]
+    public string FileHash { get; set; }
+    [Column("change_notes")]
+    public string ChangeNotes { get; set; }
+
+    }
+}
