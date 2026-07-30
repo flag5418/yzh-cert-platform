@@ -113,3 +113,16 @@ ScaffoldingReadMe.txt
 
 # 关键信息速查（含密码/Token）
 关键信息速查.md
+
+# 应用配置文件（含数据库连接串/密钥，按需排除）
+# 注意：Vue.NetCore 是独立 git 仓库，以下规则仅保护主仓库层面的安全
+**/appsettings.json
+**/appsettings.Development.json
+**/appsettings.Production.json
+**/launchSettings.json
+
+# JetBrains IDE
+.idea/
+
+# VS Code 个人配置（保留共享配置）
+.vscode/launch.json
