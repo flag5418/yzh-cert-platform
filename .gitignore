@@ -114,8 +114,8 @@ ScaffoldingReadMe.txt
 # 关键信息速查（含密码/Token）
 关键信息速查.md
 
-# 应用配置文件（含数据库连接串/密钥，按需排除）
-# 注意：Vue.NetCore 是独立 git 仓库，以下规则仅保护主仓库层面的安全
+# 应用配置文件（含数据库连接串/密钥）
+# Vue.NetCore 已纳入主仓库管理，配置文件含敏感信息需排除
 **/appsettings.json
 **/appsettings.Development.json
 **/appsettings.Production.json
@@ -126,3 +126,18 @@ ScaffoldingReadMe.txt
 
 # VS Code 个人配置（保留共享配置）
 .vscode/launch.json
+
+# === Vue.NetCore (.NET 后端) 构建产物 ===
+_ReSharper.Caches/
+**/_ReSharper.Caches/
+# 上传文件目录（运行时数据）
+**/wwwroot/Upload/
+**/Upload/
+# 下载/日志临时目录
+**/Download/ExcelExport/
+**/Download/Logger/
+**/Download/SqlLog/
+# 发布配置
+**/Properties/PublishProfiles/
+# vol.web 前端构建产物
+src/server/Vue.NetCore/vol.web/dist/

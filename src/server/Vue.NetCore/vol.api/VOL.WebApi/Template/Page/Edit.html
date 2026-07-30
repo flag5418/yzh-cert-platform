@@ -1,0 +1,116 @@
+﻿<template>
+    <vol-edit ref="edit"
+              :keyField="key"
+              :tableName="tableName"
+              :tableCNName="tableCNName"
+              :label-width="labelWidth"
+              :labelPosition="labelPosition"
+              :formFields="editFormFields"
+              :formOptions="editFormOptions"
+              :detail-height="detailHeight"
+              :detail="detail"
+              :details="details"
+              :searchBefore="searchBefore"
+              :searchAfter="searchAfter"
+              :addBefore="addBefore"
+              :addAfter="addAfter"
+              :updateBefore="updateBefore"
+              :updateAfter="updateAfter"
+              :onInit="onInit"
+              :onInited="onInited"
+              :detailAddRowBefore="detailAddRowBefore"
+              :delBefore="delBefore"
+              :delAfter="delAfter"
+              :dicInited="dicInited"
+              :searchDetailBefore="searchDetailBefore">
+        <template #header>
+            <!-- 自定义数据槽显示 -->
+        </template>
+        <template #content>
+            <!-- 自定义数据槽显示 -->
+        </template>
+        <template #footer>
+            <!-- 自定义数据槽显示 -->
+        </template>
+    </vol-edit>
+</template>
+
+<script setup lang="jsx">
+    defineOptions({ name: '#TableName_edit' })
+    import editOptions from "./options.js";
+    import { ref, reactive } from "vue";
+    import { useRoute } from "vue-router";
+    const route = useRoute();
+    //是否新建操作
+    const isAdd = !route.query.id;
+    const { key, tableName, tableCNName, editFormFields, editFormOptions, detail, details } = reactive(editOptions());
+    /********************* 完整配置见文档：http://doc.volcore.xyz/docs/edit/ ****************************/
+    const edit = ref(null);
+    //编辑表单文字宽度
+    const labelWidth = 90;
+    //编辑表单文字显示位置：left、top
+    const labelPosition = ref("");
+    //明细表高度
+    const detailHeight = 200;
+    //初始化配置
+    //更多表单、明细表属性方法配置见：http://doc.volcore.xyz/docs/web/  http://doc.volcore.xyz/docs/view-grid/
+    let gridRef;
+    const onInit = async ($vm) => {
+        gridRef = $vm;
+    };
+    const onInited = async ($vm) => { };
+
+    //表单查询前方法
+    const searchBefore = async (params) => {
+        //查询条件及参数设置：http://doc.volcore.xyz/docs/view-grid/methods/searchBefore.html
+        return true;
+    };
+    //表单查询后方法
+    const searchAfter = async (res) => {
+        return true;
+    };
+
+    //新建保存前方法
+    const addBefore = async (formData, cb, isCopyClick) => {
+        //保存参数设置：http://doc.volcore.xyz/docs/view-grid/methods/addBefore.html
+        return true;
+    };
+    //新建保存后方法
+    const addAfter = async (res) => {
+        return true;
+    };
+
+    //新建保存前方法
+    const updateBefore = async (formData) => {
+        //保存参数设置：http://doc.volcore.xyz/docs/view-grid/methods/addBefore.html
+        return true;
+    };
+    //新建保存后方法
+    const updateAfter = async (res) => {
+        return true;
+    };
+
+    //主表删除按钮删除前方法
+    const delBefore = async (rows, table, item) => {
+        return true;
+    };
+    //主表删除按钮删除后
+    const delAfter = async (rows, table, item) => {
+        return true;
+    };
+
+    //明细表点击添加行时，设置默认值
+    const detailAddRowBefore = (table, item) => {
+        //return {字段:值}
+    };
+
+    //主表、明细表字典加载后方法,table:明细表的字典
+    const dicInited = (res, table) => {
+        return true;
+    };
+    //细表查询前方法
+    const searchDetailBefore = (param, callback, table, item) => {
+        callback(true);
+    };
+    defineExpose({});
+</script>

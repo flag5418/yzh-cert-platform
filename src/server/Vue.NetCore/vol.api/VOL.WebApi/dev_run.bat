@@ -1,0 +1,1 @@
+ dotnet watch --no-hot-reload delay 1000

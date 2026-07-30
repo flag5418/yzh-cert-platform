@@ -1,0 +1,41 @@
+{
+  "name": "vol",
+  "private": true,
+  "version": "3.6.0",
+  "type": "module",
+  "scripts": {
+    "serve": "vite --host",
+    "dev": "vite --host",
+    "buildWithCheck": "run-p type-check build-only",
+    "preview": "vite preview",
+    "test:unit": "vitest",
+    "build": "vite build",
+    "type-check": "vue-tsc --noEmit -p tsconfig.vitest.json --composite false",
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
+    "format": "prettier --write src/",
+    "clean": "rimraf node_modules"
+  },
+  "dependencies": {
+    "@microsoft/signalr": "^8.0.7",
+    "ali-oss": "^6.23.0",
+    "axios": "^1.15.0",
+    "echarts": "^5.6.0",
+    "element-plus": "^2.11.4",
+    "less": "^4.4.0",
+    "pinia": "^3.0.3",
+    "qrcode.vue": "^3.6.0",
+    "sortablejs": "^1.15.3",
+    "vue": "^3.5.13",
+    "vue-draggable-next": "^2.2.1",
+    "vue-router": "^4.5.1",
+    "vuex": "^4.1.0",
+    "wangeditor": "^4.7.15"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vitejs/plugin-vue-jsx": "^4.0.0",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.1",
+    "vue-tsc": "^2.1.10"
+  }
+}
