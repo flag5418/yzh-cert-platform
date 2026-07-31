@@ -12,7 +12,7 @@ export default function () {
   const table = {
     name: "AuditTask",
     cnName: "审核任务管理",
-    url: "/api/AuditTask/",
+    url: "/api/AuditTask",
     sortName: "id",
     key: "Id",
     footer: "Foots",

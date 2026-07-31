@@ -12,7 +12,7 @@ export default function () {
   const table = {
     name: "ISOStandard",
     cnName: "ISO 标准管理",
-    url: "/api/ISOStandard/",
+    url: "/api/ISOStandard",
     sortName: "id",
     key: "Id",
     footer: "Foots",
