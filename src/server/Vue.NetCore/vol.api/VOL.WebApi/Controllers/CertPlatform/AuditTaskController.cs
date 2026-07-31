@@ -9,7 +9,7 @@ using VOL.Builder.IServices.CertPlatform;
 
 namespace VOL.WebApi.Controllers.CertPlatform
 {
-    [Route("api/[controller]")]
+    [Route("api/AuditTask")]
     [PermissionTable(Name = "AuditTask")]
     public partial class AuditTaskController : ApiBaseController<IAuditTaskService>
     {

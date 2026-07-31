@@ -9,7 +9,7 @@ using VOL.Builder.IServices.CertPlatform;
 
 namespace VOL.WebApi.Controllers.CertPlatform
 {
-    [Route("api/[controller]")]
+    [Route("api/ISOStandard")]
     [PermissionTable(Name = "ISOStandard")]
     public partial class ISOStandardController : ApiBaseController<IISOStandardService>
     {
