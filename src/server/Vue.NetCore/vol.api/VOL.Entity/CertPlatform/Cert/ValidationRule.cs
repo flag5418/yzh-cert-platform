@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Cert
     /// <para>表名：cert_validation_rule</para>
     /// </summary>
     [Table("cert_validation_rule")]
-    public class ValidationRule : BaseEntity
+    public class ValidationRule : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("standard_code")]

@@ -10,7 +10,7 @@ namespace VOL.Entity.CertPlatform.Cert
     /// <para>域：A - 认证体系配置</para>
     /// </summary>
     [Table("cert_phase_definition")]
-    public class PhaseDefinition : BaseEntity
+    public class PhaseDefinition : YZHBaseEntity
     {
         /// <summary>
         /// 阶段编码（S1/S2/Surv1/Surv2/Recert）

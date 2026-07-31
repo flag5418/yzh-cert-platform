@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Ent
     /// <para>表名：ent_enterprise_phase</para>
     /// </summary>
     [Table("ent_enterprise_phase")]
-    public class EnterprisePhase : BaseEntity
+    public class EnterprisePhase : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("enterprise_code")]

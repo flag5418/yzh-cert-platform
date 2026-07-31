@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Rpt
     /// <para>表名：rpt_report_task</para>
     /// </summary>
     [Table("rpt_report_task")]
-    public class ReportTask : BaseEntity
+    public class ReportTask : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("phase_code")]

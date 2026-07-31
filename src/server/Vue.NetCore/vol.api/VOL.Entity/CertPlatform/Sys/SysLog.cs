@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Sys
     /// <para>表名：sys_log</para>
     /// </summary>
     [Table("sys_log")]
-    public class SysLog : BaseEntity
+    public class SysLog : YZHBaseEntity
     {
 
     [Column("user_id")]

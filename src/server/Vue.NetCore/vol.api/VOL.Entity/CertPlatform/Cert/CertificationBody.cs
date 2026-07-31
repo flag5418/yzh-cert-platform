@@ -8,9 +8,10 @@ namespace VOL.Entity.CertPlatform.Cert
     /// 认证机构
     /// <para>表名：cert_certification_body</para>
     /// <para>域：A - 认证体系配置</para>
+    /// <para>继承：YZHBaseEntity（统一审计字段）</para>
     /// </summary>
     [Table("cert_certification_body")]
-    public class CertificationBody : BaseEntity
+    public class CertificationBody : YZHBaseEntity
     {
         /// <summary>
         /// 机构全称

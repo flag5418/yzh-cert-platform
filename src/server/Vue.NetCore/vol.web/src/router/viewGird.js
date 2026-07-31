@@ -79,6 +79,7 @@ let viewgird = [
     name: 'Sys_Department',
     component: () => import('@/views/sys/system/Sys_Department.vue')
   },
+  // ==================== MES 模块（示例）====================
   {
     path: '/MES_WarehouseManagement',
     name: 'MES_WarehouseManagement',
@@ -207,7 +208,44 @@ let viewgird = [
     path: '/TestService',
     name: 'TestService',
     component: () => import('@/views/mes/mes/TestService.vue')
-  }]
+  },
+  
+  // ==================== 认证平台模块（Phase 2）====================
+  // ⚠️ 只添加实际存在 Vue 组件的路由！
+  // 已存在的组件：CertificationBody, ISOStandard, CertApplication, AuditTask
+  // ⚠️ path 必须与数据库 Sys_Menu.Url 完全一致！
+  
+  {
+    path: '/CertPlatform/Cert/CertificationBody',
+    name: 'CertCertificationBody',
+    component: () => import('@/views/cert/CertificationBody/CertificationBody.vue')
+  },
+  {
+    path: '/CertPlatform/Cert/ISOStandard',
+    name: 'CertISOStandard',
+    component: () => import('@/views/cert/ISOStandard/ISOStandard.vue')
+  },
+  {
+    path: '/CertPlatform/Cert/CertApplication',
+    name: 'CertApplication',
+    component: () => import('@/views/cert/CertApplication/CertApplication.vue')
+  },
+  {
+    path: '/CertPlatform/Audit/AuditTask',
+    name: 'CertAuditTask',
+    component: () => import('@/views/cert/AuditTask/AuditTask.vue')
+  }
+  
+  // TODO: 以下页面需要创建 Vue 组件后才能启用路由
+  // - /CertPlatform/Sys/AuditorManage      → 审核员管理（可复用 Sys_User）
+  // - /CertPlatform/Audit/TaskMonitor       → 任务状态监控
+  // - /CertPlatform/Auditor/PendingTasks   → 待办任务
+  // - /CertPlatform/Ent/EnterpriseList     → 企业列表
+  // - /CertPlatform/Audit/AuditTask        → 审核任务
+  // - /CertPlatform/Rpt/ReportList         → 报告列表
+  // - /CertPlatform/Wf/WorkflowDefinition  → 工作流配置
+  // - /CertPlatform/Audit/NonConformity   → 不符合项管理
+]
 
 //上面的demo、MES开头的都是示例菜单，可以任意删除 
 export default viewgird

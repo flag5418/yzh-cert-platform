@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Cert
     /// <para>表名：cert_report_template</para>
     /// </summary>
     [Table("cert_report_template")]
-    public class ReportTemplate : BaseEntity
+    public class ReportTemplate : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("cb_code")]

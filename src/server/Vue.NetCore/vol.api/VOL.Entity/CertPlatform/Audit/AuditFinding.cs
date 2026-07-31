@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Audit
     /// <para>表名：audit_finding</para>
     /// </summary>
     [Table("audit_finding")]
-    public class AuditFinding : BaseEntity
+    public class AuditFinding : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("checklist_item_code")]

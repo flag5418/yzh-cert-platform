@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Audit
     /// <para>表名：audit_evidence</para>
     /// </summary>
     [Table("audit_evidence")]
-    public class AuditEvidence : BaseEntity
+    public class AuditEvidence : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("task_code")]

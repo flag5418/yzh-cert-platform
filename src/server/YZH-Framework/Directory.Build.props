@@ -1,0 +1,108 @@
+<!--
+  YZH-Framework Directory.Build.props
+  统一所有子项目的版本号、NuGet 包引用、编译选项
+  
+  使用方式：
+  - 此文件放在解决方案根目录
+  - 所有 .csproj 自动继承此配置
+  - 无需在每个项目中重复定义
+-->
+
+<Project>
+  
+  <!-- ==============================
+       版本信息（统一管理）
+       ============================== -->
+  <PropertyGroup>
+    <!-- YZH Framework 版本 -->
+    <VersionPrefix>1.0.0</VersionPrefix>
+    
+    <!-- 预发布标识：alpha → beta → RC → 正式 -->
+    <!-- 当前处于 Phase 1，使用 alpha 标识 -->
+    <PreReleaseLabel>alpha</PreReleaseLabel>
+    
+    <!-- 构建元数据 -->
+    <VersionSuffix>$(PreReleaseLabel).1</VersionSuffix>
+    
+    <!-- 程序集信息 -->
+    <Company>映智汇 (YingZhiHui)</Company>
+    <Product>YZH Framework</Product>
+    <Copyright>© 2026 映智汇. All rights reserved.</Copyright>
+    
+    <!-- 是否生成可移植 PDB（推荐） -->
+    <DebugType>portable</DebugType>
+    
+    <!-- 启用可空引用类型（C# 8+ 特性）-->
+    <!-- TODO:P2 - Phase 2 全面启用可空检查 -->
+    <Nullable>disable</Nullable>
+    
+    <!-- 隐式 using（简化代码，无需重复写 using）-->
+    <ImplicitUsings>enable</ImplicitUsings>
+    
+    <!-- 启用全局命名空间（可选）-->
+    <!-- <RootNamespace>YZH.Core</RootNamespace> -->
+  </PropertyGroup>
+
+  <!-- ==============================
+       目标框架
+       ============================== -->
+  <PropertyGroup>
+    <!-- 统一使用 .NET 8.0（LTS 长期支持）-->
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+  <!-- ==============================
+       编译选项
+       ============================== -->
+  <PropertyGroup>
+    <!-- 警告级别：4（显示所有警告）-->
+    <WarningLevel>4</WarningLevel>
+    
+    <!-- 将警告视为错误（严格模式）-->
+    <!-- TODO: 在 CI/CD 中启用，开发阶段先关闭避免阻碍编译 -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    
+    <!-- 生成 XML 文档文件（用于 API 文档生成）-->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    
+    <!-- 取消 CS1591 警告（公共类型缺少 XML 注释）-->
+    <!-- 开发阶段允许部分代码缺少注释 -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    
+    <!-- 启用可空分析（逐步启用）-->
+    <!-- <Nullable>enable</Nullable> -->
+  </PropertyGroup>
+
+  <!-- ==============================
+       NuGet 包版本管理（统一锁定）
+       ============================== -->
+  <ItemGroup>
+    <!-- 测试框架 -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.6.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Moq" Version="4.20.69" />
+    <PackageReference Include="FluentAssertions" Version="6.12.0" />
+    
+    <!-- 日志框架（Phase 3 使用）-->
+    <!-- <PackageReference Include="Serilog" Version="3.1.1" /> -->
+    <!-- <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" /> -->
+    
+    <!-- Redis 客户端（Phase 3 幂等性使用）-->
+    <!-- <PackageReference Include="StackExchange.Redis" Version="2.6.122" /> -->
+  </ItemGroup>
+
+  <!-- ==============================
+       Vol 框架引用（项目引用而非 NuGet）
+       ============================== -->
+  <!-- 
+    注意：
+    - YZH.Core 引用 VOL.Core（通过项目引用）
+    - 路径相对于当前解决方案目录
+    - 不修改 Vol 源码，只读取编译产物
+  -->
+
+</Project>

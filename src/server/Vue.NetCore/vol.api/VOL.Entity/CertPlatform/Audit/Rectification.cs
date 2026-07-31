@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Audit
     /// <para>表名：audit_rectification</para>
     /// </summary>
     [Table("audit_rectification")]
-    public class Rectification : BaseEntity
+    public class Rectification : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("nc_code")]

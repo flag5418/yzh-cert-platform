@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Rpt
     /// <para>表名：rpt_audit_report</para>
     /// </summary>
     [Table("rpt_audit_report")]
-    public class AuditReport : BaseEntity
+    public class AuditReport : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("task_code")]

@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Wf
     /// <para>表名：wf_workflow_execution_log</para>
     /// </summary>
     [Table("wf_workflow_execution_log")]
-    public class WorkflowExecutionLog : BaseEntity
+    public class WorkflowExecutionLog : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("workflow_code")]

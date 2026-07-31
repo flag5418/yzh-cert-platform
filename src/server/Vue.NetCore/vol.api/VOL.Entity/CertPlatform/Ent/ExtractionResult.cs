@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Ent
     /// <para>表名：ent_extraction_result</para>
     /// </summary>
     [Table("ent_extraction_result")]
-    public class ExtractionResult : BaseEntity
+    public class ExtractionResult : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("file_code")]

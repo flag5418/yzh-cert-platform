@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Ent
     /// <para>表名：ent_file_version</para>
     /// </summary>
     [Table("ent_file_version")]
-    public class FileVersion : BaseEntity
+    public class FileVersion : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("file_code")]

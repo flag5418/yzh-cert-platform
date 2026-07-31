@@ -1,0 +1,85 @@
+# YZH-Framework EditorConfig
+# 统一代码风格，确保团队协作一致性
+# 参考：.NET EditorConfig 最佳实践
+
+root = true
+
+# ==============================
+# 通用设置
+# ==============================
+
+[*]
+indent_style = space
+indent_size = 4
+end_of_line = lf
+charset = utf-8-bom
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# ==============================
+# C# 文件特定设置
+# ==============================
+
+[*.cs]
+# 使用 4 空格缩进（.NET 官方推荐）
+indent_size = 4
+
+# Using 排序：System → Microsoft → 第三方 → 项目命名空间
+using_sort_system_first = true
+
+# 大括号风格：Allman（新行）或 K&R（同行）
+# YZH 框架使用 Allman 风格，更清晰
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+
+# 缩进设置
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+
+# 空格设置
+csharp_space_after_cast = false
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_between_method_declaration_empty_list_formatting = no_space
+
+# 代码样式偏好
+csharp_style_var_for_built_in_types = false:error
+csharp_style_var_when_type_is_apparent = false:error
+csharp_style_var_elsewhere = false:warning
+
+# 表达式级别偏好
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = true:none
+csharp_style_expression_bodied_accessors = true:none
+
+# 字段偏好：private readonly 优先
+csharp_prefer_static_local_function = true:suggestion
+
+# ==============================
+# JSON 文件设置
+# ==============================
+
+[*.json]
+indent_size = 2
+
+# ==============================
+# XML/Markdown 文件设置
+# ==============================
+
+[*.{xml,md}]
+indent_size = 2
+
+# ==============================
+# 项目文件设置
+# ==============================
+
+[*.csproj]
+indent_size = 2
+
+# ==============================
+# 解决方案文件设置
+# ==============================
+
+[*.sln]
+indent_size = 2

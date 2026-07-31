@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Sys
     /// <para>表名：sys_config</para>
     /// </summary>
     [Table("sys_config")]
-    public class SysConfig : BaseEntity
+    public class SysConfig : YZHBaseEntity
     {
 
     [Required][StringLength(100)][Column("config_key")]

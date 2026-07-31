@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace VOL.Entity.CertPlatform.Cert
 {
     [Table("cert_standard_phase_config")]
-    public class StandardPhaseConfig : BaseEntity
+    public class StandardPhaseConfig : YZHBaseEntity
     {
         [Required][StringLength(36)][Column("standard_code")]
         public string StandardCode { get; set; }

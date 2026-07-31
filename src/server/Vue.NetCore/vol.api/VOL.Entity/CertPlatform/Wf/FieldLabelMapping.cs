@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Wf
     /// <para>表名：wf_field_label_mapping</para>
     /// </summary>
     [Table("wf_field_label_mapping")]
-    public class FieldLabelMapping : BaseEntity
+    public class FieldLabelMapping : YZHBaseEntity
     {
 
     [Required][StringLength(500)][Column("label_tag")]

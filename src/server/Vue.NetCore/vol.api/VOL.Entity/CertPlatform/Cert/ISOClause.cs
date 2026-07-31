@@ -10,7 +10,7 @@ namespace VOL.Entity.CertPlatform.Cert
     /// <para>域：A - 认证体系配置</para>
     /// </summary>
     [Table("cert_iso_clause")]
-    public class ISOClause : BaseEntity
+    public class ISOClause : YZHBaseEntity
     {
         /// <summary>
         /// 所属标准编码（关联 ISOStandard.Code）

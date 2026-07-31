@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Ent
     /// <para>表名：ent_file_compliance_check</para>
     /// </summary>
     [Table("ent_file_compliance_check")]
-    public class FileComplianceCheck : BaseEntity
+    public class FileComplianceCheck : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("file_code")]

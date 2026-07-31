@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Audit
     /// <para>表名：audit_task</para>
     /// </summary>
     [Table("audit_task")]
-    public class AuditTask : BaseEntity
+    public class AuditTask : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("phase_code")]

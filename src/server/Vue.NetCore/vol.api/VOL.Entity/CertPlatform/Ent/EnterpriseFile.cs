@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Ent
     /// <para>表名：ent_enterprise_file</para>
     /// </summary>
     [Table("ent_enterprise_file")]
-    public class EnterpriseFile : BaseEntity
+    public class EnterpriseFile : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("folder_code")]

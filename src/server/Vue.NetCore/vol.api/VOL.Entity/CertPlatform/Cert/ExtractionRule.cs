@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Cert
     /// <para>表名：cert_extraction_rule</para>
     /// </summary>
     [Table("cert_extraction_rule")]
-    public class ExtractionRule : BaseEntity
+    public class ExtractionRule : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("file_requirement_code")]

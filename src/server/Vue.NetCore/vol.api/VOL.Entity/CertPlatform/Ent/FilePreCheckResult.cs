@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Ent
     /// <para>表名：ent_file_pre_check_result</para>
     /// </summary>
     [Table("ent_file_pre_check_result")]
-    public class FilePreCheckResult : BaseEntity
+    public class FilePreCheckResult : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("file_code")]

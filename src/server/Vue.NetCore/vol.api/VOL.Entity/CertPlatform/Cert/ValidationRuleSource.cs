@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Cert
     /// <para>表名：cert_validation_rule_source</para>
     /// </summary>
     [Table("cert_validation_rule_source")]
-    public class ValidationRuleSource : BaseEntity
+    public class ValidationRuleSource : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("rule_code")]

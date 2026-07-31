@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Wf
     /// <para>表名：wf_skill</para>
     /// </summary>
     [Table("wf_skill")]
-    public class Skill : BaseEntity
+    public class Skill : YZHBaseEntity
     {
 
     [Required][StringLength(100)][Column("skill_code")]

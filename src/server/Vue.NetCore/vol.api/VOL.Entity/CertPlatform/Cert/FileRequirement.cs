@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Cert
     /// <para>表名：cert_file_requirement</para>
     /// </summary>
     [Table("cert_file_requirement")]
-    public class FileRequirement : BaseEntity
+    public class FileRequirement : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("folder_code")]

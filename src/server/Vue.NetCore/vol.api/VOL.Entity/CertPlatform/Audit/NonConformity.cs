@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Audit
     /// <para>表名：audit_nonconformity</para>
     /// </summary>
     [Table("audit_nonconformity")]
-    public class NonConformity : BaseEntity
+    public class NonConformity : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("task_code")]

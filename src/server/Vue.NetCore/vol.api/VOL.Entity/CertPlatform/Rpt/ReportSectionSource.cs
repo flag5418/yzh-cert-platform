@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Rpt
     /// <para>表名：rpt_report_section_source</para>
     /// </summary>
     [Table("rpt_report_section_source")]
-    public class ReportSectionSource : BaseEntity
+    public class ReportSectionSource : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("section_code")]

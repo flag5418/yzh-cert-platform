@@ -9,7 +9,7 @@ namespace VOL.Entity.CertPlatform.Cert
     /// <para>表名：cert_directory_template</para>
     /// </summary>
     [Table("cert_directory_template")]
-    public class DirectoryTemplate : BaseEntity
+    public class DirectoryTemplate : YZHBaseEntity
     {
 
     [Required][StringLength(36)][Column("config_code")]
