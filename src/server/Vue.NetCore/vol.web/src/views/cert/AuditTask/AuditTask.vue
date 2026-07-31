@@ -2,81 +2,34 @@
  *Author：CertPlatform
  *Date：2026-07-31
  *Contact：cert@platform.com
- *业务请在@/extension/cert/AuditTask.jsx或AuditTask.vue文件编写
+ *基于 YZHBaseCrud 的审核任务管理页面
  -->
 <template>
-  <view-grid
-    ref="grid"
-    :columns="columns"
-    :detail="detail"
-    :details="details"
-    :editFormFields="editFormFields"
-    :editFormOptions="editFormOptions"
-    :searchFormFields="searchFormFields"
-    :searchFormOptions="searchFormOptions"
-    :table="table"
-    :extend="extend"
-    :onInit="onInit"
-    :onInited="onInited"
-    :searchBefore="searchBefore"
-    :addBefore="addBefore"
-    :updateBefore="updateBefore"
-    :rowClick="rowClick"
-  >
-    <template #gridHeader>
-      <el-alert
-        title="审核任务管理：管理各审核阶段的具体任务，包括任务分配、进度跟踪、结果记录（5个核心阶段）"
-        type="info"
-        :closable="false"
-        show-icon
-        style="margin-bottom: 10px"
-      />
-    </template>
-
-    <template #btnLeft>
-      <el-button size="small" type="primary" @click="handleCustomAction" :disabled="!selectedRow">
-        自定义操作
-      </el-button>
-    </template>
-  </view-grid>
+  <YZHBaseCrud
+    :options="viewOptions"
+    module-name="AuditTask"
+    description="审核任务管理：管理各审核阶段的具体任务，包括任务分配、进度跟踪、结果记录（5个核心阶段）"
+    @on-init="handleInit"
+    @add-after="handleAddAfter"
+    @update-after="handleUpdateAfter"
+  />
 </template>
 
 <script setup lang="jsx">
-import extend from "@/extension/cert/AuditTask.jsx";
-import viewOptions from './options.js';
-import { ref, reactive, getCurrentInstance } from "vue";
+import YZHBaseCrud from "@/components/yzh/YZHBaseCrud.vue";
+import viewOptions from "./options.js";
 
-const grid = ref(null);
-const selectedRow = ref(null);
-const { proxy } = getCurrentInstance();
-
-const { 
-  table, editFormFields, editFormOptions, searchFormFields, 
-  searchFormOptions, columns, detail, details
-} = reactive(viewOptions());
-
-let gridRef;
-
-const onInit = async ($vm) => { gridRef = $vm; };
-const onInited = async () => {};
-const searchBefore = async (param) => { return true; };
-const addBefore = async (formData) => { return true; };
-const updateBefore = async (formData) => { return true; };
-const rowClick = ({ row, column, event }) => { selectedRow.value = row; };
-const modelOpenBefore = async (row) => { return true; };
-const modelOpenAfter = async (row) => {};
-
-const handleCustomAction = () => {
-  if (!selectedRow.value) {
-    proxy.$message.warning('请先选择一行数据');
-    return;
-  }
-  proxy.$message.success(`操作: ${selectedRow.value.task_number}`);
+const handleInit = ($vm) => {
+  // 审核任务可以自定义配置
 };
 
-defineExpose({})
-</script>
+const handleAddAfter = (result, formData) => {
+  console.log("Audit Task 新增成功:", result);
+  return true;
+};
 
-<style lang="less" scoped>
-.el-alert { border-radius: 4px; }
-</style>
+const handleUpdateAfter = (result, formData) => {
+  console.log("Audit Task 更新成功:", result);
+  return true;
+};
+</script>
