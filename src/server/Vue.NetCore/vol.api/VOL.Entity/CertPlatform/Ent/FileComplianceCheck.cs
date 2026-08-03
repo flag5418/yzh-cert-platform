@@ -12,21 +12,21 @@ namespace VOL.Entity.CertPlatform.Ent
     public class FileComplianceCheck : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("file_code")]
+    [Required][StringLength(36)]
     public string FileCode { get; set; }
-    [Required][Column("version_number")]
+    [Required]
     public int VersionNumber { get; set; }
-    [Required][StringLength(36)][Column("rule_code")]
+    [Required][StringLength(36)]
     public string RuleCode { get; set; }
-    [StringLength(36)][Column("workflow_execution_code")]
+    [StringLength(36)]
     public string WorkflowExecutionCode { get; set; }
-    [Required][Column("check_status")]
+    [Required]
     public string CheckStatus { get; set; }
-    [Column("message")]
+    
     public string Message { get; set; }
-    [Column("detail")]
+    
     public string Detail { get; set; }
-    [Required][Column("checked_at")]
+    [Required]
     public DateTime CheckedAt { get; set; }
 
     }

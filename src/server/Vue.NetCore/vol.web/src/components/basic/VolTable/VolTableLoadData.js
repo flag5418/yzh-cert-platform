@@ -78,8 +78,10 @@ export const loadData = async (
     (error) => {
       console.log(error);
       loading.value = false;
+      return null;
     }
   );
+  if (!data) return;
   if (Array.isArray(data)) {
     data = { rows: data, total: data.length };
   }else if (data.status===false) {

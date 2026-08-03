@@ -12,19 +12,19 @@ namespace VOL.Entity.CertPlatform.Ent
     public class FilePreCheckResult : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("file_code")]
+    [Required][StringLength(36)]
     public string FileCode { get; set; }
-    [Required][Column("version_number")]
+    [Required]
     public int VersionNumber { get; set; }
-    [Required][Column("check_type")]
+    [Required]
     public string CheckType { get; set; }
-    [Required][Column("check_result")]
+    [Required]
     public string CheckResult { get; set; }
-    [Column("message")]
+    
     public string Message { get; set; }
-    [Column("detail")]
+    
     public string Detail { get; set; }
-    [Required][Column("checked_at")]
+    [Required]
     public DateTime CheckedAt { get; set; }
 
     }

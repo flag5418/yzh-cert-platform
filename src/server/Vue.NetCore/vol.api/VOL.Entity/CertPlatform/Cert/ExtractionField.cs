@@ -12,21 +12,21 @@ namespace VOL.Entity.CertPlatform.Cert
     public class ExtractionField : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("rule_code")]
+    [Required][StringLength(36)]
     public string RuleCode { get; set; }
-    [StringLength(36)][Column("skill_code")]
+    [StringLength(36)]
     public string SkillCode { get; set; }
-    [Required][StringLength(100)][Column("field_code")]
+    [Required][StringLength(100)]
     public string FieldCode { get; set; }
-    [Required][StringLength(500)][Column("label_tag")]
+    [Required][StringLength(500)]
     public string LabelTag { get; set; }
-    [Required][StringLength(100)][Column("field_name")]
+    [Required][StringLength(100)]
     public string FieldName { get; set; }
-    [Column("field_type")]
+    
     public string FieldType { get; set; } = "string";
-    [Column("enum_values")]
+    
     public string EnumValues { get; set; }
-    [Column("sort_order")]
+    
     public int SortOrder { get; set; } = 0;
 
     }

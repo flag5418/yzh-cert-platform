@@ -1,18 +1,21 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq.Expressions;
 using System.Text;
 using VOL.Entity.DomainModels;
 
 namespace VOL.Core.WorkFlow
 {
+    [NotMapped]
     public class WorkFlowTableOptions:Sys_WorkFlow
     {
         public AuditStatus DefaultAuditStatus { get; set; }
         public List<FilterOptions> FilterList { get; set; }
     }
 
+    [NotMapped]
     public class FilterOptions : Sys_WorkFlowStep 
     {
        public List<FieldFilter> FieldFilters { get; set; }

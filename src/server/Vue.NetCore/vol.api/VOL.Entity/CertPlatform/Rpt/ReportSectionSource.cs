@@ -12,15 +12,15 @@ namespace VOL.Entity.CertPlatform.Rpt
     public class ReportSectionSource : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("section_code")]
+    [Required][StringLength(36)]
     public string SectionCode { get; set; }
-    [Required][Column("source_type")]
+    [Required]
     public string SourceType { get; set; }
-    [StringLength(36)][Column("source_code")]
+    [StringLength(36)]
     public string SourceCode { get; set; }
-    [Column("source_description")]
+    
     public string SourceDescription { get; set; }
-    [Column("confidence")]
+    
     public decimal? Confidence { get; set; }
 
     }

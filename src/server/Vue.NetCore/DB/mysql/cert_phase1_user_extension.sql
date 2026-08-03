@@ -42,55 +42,55 @@ SET @sql = (SELECT IF(
 ));
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
-SELECT '✅ Sys_User 表扩展完成' AS status;
+SELECT '✅ Sys_User 表扩展完成' AS Status;
 
 -- ============================================================
 -- Step 2: 创建新表
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS `cert_org_config` (
-    `id` BIGINT(20) NOT NULL AUTO_INCREMENT,
-    `code` CHAR(36) NOT NULL,
-    `org_code` VARCHAR(50) NOT NULL,
+    `Id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+    `Code` CHAR(36) NOT NULL,
+    `OrgCode` VARCHAR(50) NOT NULL,
     `org_name` VARCHAR(200) NOT NULL,
     `org_short_name` VARCHAR(100) DEFAULT NULL,
     `org_type` TINYINT NOT NULL DEFAULT 1,
     `registration_no` VARCHAR(100) DEFAULT NULL,
-    `legal_person` VARCHAR(100) DEFAULT NULL,
-    `contact_phone` VARCHAR(20) DEFAULT NULL,
-    `contact_email` VARCHAR(200) DEFAULT NULL,
-    `address` VARCHAR(500) DEFAULT NULL,
+    `LegalPerson` VARCHAR(100) DEFAULT NULL,
+    `ContactPhone` VARCHAR(20) DEFAULT NULL,
+    `ContactEmail` VARCHAR(200) DEFAULT NULL,
+    `Address` VARCHAR(500) DEFAULT NULL,
     `logo_url` VARCHAR(500) DEFAULT NULL,
-    `status` TINYINT NOT NULL DEFAULT 0,
-    `scope_text` TEXT,
+    `Status` TINYINT NOT NULL DEFAULT 0,
+    `ScopeText` TEXT,
     `cert_scope_json` JSON,
     `theme_config` JSON,
     `login_config` JSON,
     `max_users` INT(11) DEFAULT 100,
     `max_enterprises` INT(11) DEFAULT 1000,
     `expire_date` DATE DEFAULT NULL,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_org_code` (`org_code`),
-    UNIQUE KEY `uk_code` (`code`)
+    PRIMARY KEY (`Id`),
+    UNIQUE KEY `uk_org_code` (`OrgCode`),
+    UNIQUE KEY `uk_code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='认证机构配置表';
 
 CREATE TABLE IF NOT EXISTS `cert_registration` (
-    `id` BIGINT(20) NOT NULL AUTO_INCREMENT,
-    `code` CHAR(36) NOT NULL,
+    `Id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+    `Code` CHAR(36) NOT NULL,
     `registration_no` VARCHAR(50) NOT NULL,
     `org_name` VARCHAR(200) NOT NULL,
     `registration_type` TINYINT NOT NULL,
-    `contact_person` VARCHAR(100) NOT NULL,
-    `contact_phone` VARCHAR(20) NOT NULL,
-    `contact_email` VARCHAR(200) DEFAULT NULL,
-    `status` TINYINT NOT NULL DEFAULT 0,
-    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
+    `ContactName` VARCHAR(100) NOT NULL,
+    `ContactPhone` VARCHAR(20) NOT NULL,
+    `ContactEmail` VARCHAR(200) DEFAULT NULL,
+    `Status` TINYINT NOT NULL DEFAULT 0,
+    `CreateDate` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`Id`),
     UNIQUE KEY `uk_registration_no` (`registration_no`),
-    UNIQUE KEY `uk_code` (`code`)
+    UNIQUE KEY `uk_code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='注册申请表';
 
-SELECT '✅ 新表创建完成' AS status;
+SELECT '✅ 新表创建完成' AS Status;
 
 -- ============================================================
 -- Step 3: 为已存在的业务表添加 OrgCode（手动列出）
@@ -100,7 +100,7 @@ SELECT '✅ 新表创建完成' AS status;
 -- cert_certification_body
 SET @sql = (SELECT IF(
     (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'yzh_cert_platform' AND table_name = 'cert_certification_body' AND column_name = 'OrgCode') = 0,
-    'ALTER TABLE `cert_certification_body` ADD COLUMN `OrgCode` VARCHAR(50) DEFAULT NULL COMMENT ''机构编码（多租户）'' AFTER `notes`',
+    'ALTER TABLE `cert_certification_body` ADD COLUMN `OrgCode` VARCHAR(50) DEFAULT NULL COMMENT ''机构编码（多租户）'' AFTER `Remark`',
     'SELECT "Skip: cert_certification_body.OrgCode exists"'
 ));
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
@@ -108,10 +108,10 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 -- cert_iso_standard
 SET @sql = (SELECT IF(
     (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'yzh_cert_platform' AND table_name = 'cert_iso_standard' AND column_name = 'OrgCode') = 0,
-    'ALTER TABLE `cert_iso_standard` ADD COLUMN `OrgCode` VARCHAR(50) DEFAULT NULL COMMENT ''机构编码（多租户）'' AFTER `notes`',
+    'ALTER TABLE `cert_iso_standard` ADD COLUMN `OrgCode` VARCHAR(50) DEFAULT NULL COMMENT ''机构编码（多租户）'' AFTER `Remark`',
     'SELECT "Skip: cert_iso_standard.OrgCode exists"'
 ));
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
-SELECT '✅ 业务表多租户字段扩展完成' AS status;
+SELECT '✅ 业务表多租户字段扩展完成' AS Status;
 SELECT '🎉 Phase 1 用户权限体系扩展完成！' AS summary;

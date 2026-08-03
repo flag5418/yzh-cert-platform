@@ -12,23 +12,23 @@ namespace VOL.Entity.CertPlatform.Cert
     public class ValidationRule : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("standard_code")]
+    [Required][StringLength(36)]
     public string StandardCode { get; set; }
-    [Required][StringLength(36)][Column("phase_code")]
+    [Required][StringLength(36)]
     public string PhaseCode { get; set; }
-    [Required][StringLength(36)][Column("clause_code")]
+    [Required][StringLength(36)]
     public string ClauseCode { get; set; }
-    [Required][StringLength(36)][Column("workflow_code")]
+    [Required][StringLength(36)]
     public string WorkflowCode { get; set; }
-    [Required][StringLength(50)][Column("rule_code")]
+    [Required][StringLength(50)]
     public string RuleCode { get; set; }
-    [Required][StringLength(200)][Column("rule_name")]
+    [Required][StringLength(200)]
     public string RuleName { get; set; }
-    [Required][Column("severity_if_violated")]
+    [Required]
     public string SeverityIfViolated { get; set; }
-    [Column("nc_description_template")]
+    
     public string NcDescriptionTemplate { get; set; }
-    [Column("is_active")]
+    
     public bool IsActive { get; set; } = true;
 
     }

@@ -59,13 +59,13 @@ DELIMITER ;
 -- ============================================================
 CALL safe_add_column('Sys_User', 'UserType', 'TINYINT NOT NULL DEFAULT 10', '用户类型：1=超级管理员, 10=总管理员, 13=运维人员, 14=配置人员, 15=质量专员, 20=审核管理员, 21=审核组长, 22=普通审核员, 30=企业账号');
 CALL safe_add_column('Sys_User', 'OrgCode', 'VARCHAR(50) DEFAULT NULL', '机构编码（多租户隔离），NULL表示平台管理层');
-CALL safe_add_column('Sys_User', 'OrgId', 'BIGINT(20) DEFAULT NULL', '机构ID，关联cert_org_config.id');
+CALL safe_add_column('Sys_User', 'OrgId', 'BIGINT(20) DEFAULT NULL', '机构ID，关联cert_org_config.Id');
 CALL safe_add_column('Sys_User', 'ParentUserId', 'INT(11) DEFAULT NULL', '上级用户ID，用于企业子账号或审核员层级');
 
 CALL safe_add_index('Sys_User', 'idx_sys_user_org_code', 'OrgCode');
 CALL safe_add_index('Sys_User', 'idx_sys_user_user_type', 'UserType');
 
-SELECT '✅ Sys_User 表扩展完成' AS status;
+SELECT '✅ Sys_User 表扩展完成' AS Status;
 
 -- ============================================================
 -- 第二部分：创建新表（IF NOT EXISTS）
@@ -73,71 +73,71 @@ SELECT '✅ Sys_User 表扩展完成' AS status;
 
 -- 创建机构配置表
 CREATE TABLE IF NOT EXISTS `cert_org_config` (
-    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    `code` CHAR(36) NOT NULL COMMENT 'GUID编码，用于关联',
-    `org_code` VARCHAR(50) NOT NULL COMMENT '机构唯一编码',
+    `Id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `Code` CHAR(36) NOT NULL COMMENT 'GUID编码，用于关联',
+    `OrgCode` VARCHAR(50) NOT NULL COMMENT '机构唯一编码',
     `org_name` VARCHAR(200) NOT NULL COMMENT '机构全称',
     `org_short_name` VARCHAR(100) DEFAULT NULL COMMENT '机构简称',
     `org_type` TINYINT NOT NULL DEFAULT 1 COMMENT '机构类型：1=认证机构, 2=咨询公司, 3=检测机构',
     `registration_no` VARCHAR(100) DEFAULT NULL COMMENT '认证机构批准号',
-    `legal_person` VARCHAR(100) DEFAULT NULL COMMENT '法定代表人',
-    `contact_phone` VARCHAR(20) DEFAULT NULL COMMENT '联系电话',
-    `contact_email` VARCHAR(200) DEFAULT NULL COMMENT '联系邮箱',
-    `address` VARCHAR(500) DEFAULT NULL COMMENT '详细地址',
+    `LegalPerson` VARCHAR(100) DEFAULT NULL COMMENT '法定代表人',
+    `ContactPhone` VARCHAR(20) DEFAULT NULL COMMENT '联系电话',
+    `ContactEmail` VARCHAR(200) DEFAULT NULL COMMENT '联系邮箱',
+    `Address` VARCHAR(500) DEFAULT NULL COMMENT '详细地址',
     `logo_url` VARCHAR(500) DEFAULT NULL COMMENT '机构Logo URL',
-    `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态：0=停用, 1=正常, 2=待审核',
-    `scope_text` TEXT COMMENT '认证范围说明',
+    `Status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态：0=停用, 1=正常, 2=待审核',
+    `ScopeText` TEXT COMMENT '认证范围说明',
     `cert_scope_json` JSON COMMENT '认证范围详细数据(JSON)',
     `theme_config` JSON COMMENT '前端主题配置(JSON)',
     `login_config` JSON COMMENT '登录页定制配置(JSON)',
     `max_users` INT(11) DEFAULT 100 COMMENT '最大用户数限制',
     `max_enterprises` INT(11) DEFAULT 1000 COMMENT '最大企业数限制',
     `expire_date` DATE DEFAULT NULL COMMENT '服务到期日期',
-    `create_by` INT(11) DEFAULT NULL COMMENT '创建人',
-    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `update_by` INT(11) DEFAULT NULL COMMENT '更新人',
-    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    `delete_by` INT(11) DEFAULT NULL COMMENT '删除人',
-    `delete_time` DATETIME DEFAULT NULL COMMENT '删除时间',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_org_code` (`org_code`),
-    UNIQUE KEY `uk_code` (`code`),
-    KEY `idx_org_status` (`status`),
+    `CreateID` INT(11) DEFAULT NULL COMMENT '创建人',
+    `CreateDate` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `ModifyID` INT(11) DEFAULT NULL COMMENT '更新人',
+    `ModifyDate` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `DeleteID` INT(11) DEFAULT NULL COMMENT '删除人',
+    `DeleteTime` DATETIME DEFAULT NULL COMMENT '删除时间',
+    PRIMARY KEY (`Id`),
+    UNIQUE KEY `uk_org_code` (`OrgCode`),
+    UNIQUE KEY `uk_code` (`Code`),
+    KEY `idx_org_status` (`Status`),
     KEY `idx_org_type` (`org_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='认证机构配置表';
 
 -- 创建注册申请表
 CREATE TABLE IF NOT EXISTS `cert_registration` (
-    `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    `code` CHAR(36) NOT NULL COMMENT 'GUID编码',
+    `Id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `Code` CHAR(36) NOT NULL COMMENT 'GUID编码',
     `registration_no` VARCHAR(50) NOT NULL COMMENT '申请编号',
     `org_name` VARCHAR(200) NOT NULL COMMENT '机构/企业名称',
     `registration_type` TINYINT NOT NULL COMMENT '注册类型：1=认证机构, 2=企业用户',
-    `contact_person` VARCHAR(100) NOT NULL COMMENT '联系人',
-    `contact_phone` VARCHAR(20) NOT NULL COMMENT '联系电话',
-    `contact_email` VARCHAR(200) DEFAULT NULL COMMENT '联系邮箱',
+    `ContactName` VARCHAR(100) NOT NULL COMMENT '联系人',
+    `ContactPhone` VARCHAR(20) NOT NULL COMMENT '联系电话',
+    `ContactEmail` VARCHAR(200) DEFAULT NULL COMMENT '联系邮箱',
     `org_type` TINYINT DEFAULT NULL COMMENT '机构类型（认证机构时必填）',
     `business_license` VARCHAR(500) DEFAULT NULL COMMENT '营业执照URL',
     `qualification_files` JSON COMMENT '资质文件列表(JSON)',
-    `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态：0=待审核, 1=已通过, 2=已拒绝, 3=已撤销',
+    `Status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态：0=待审核, 1=已通过, 2=已拒绝, 3=已撤销',
     `audit_by` INT(11) DEFAULT NULL COMMENT '审核人',
     `audit_time` DATETIME DEFAULT NULL COMMENT '审核时间',
     `audit_remark` VARCHAR(1000) DEFAULT NULL COMMENT '审核备注',
-    `create_by` INT(11) DEFAULT NULL COMMENT '创建人',
-    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `update_by` INT(11) DEFAULT NULL COMMENT '更新人',
-    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    `delete_by` INT(11) DEFAULT NULL COMMENT '删除人',
-    `delete_time` DATETIME DEFAULT NULL COMMENT '删除时间',
-    PRIMARY KEY (`id`),
+    `CreateID` INT(11) DEFAULT NULL COMMENT '创建人',
+    `CreateDate` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `ModifyID` INT(11) DEFAULT NULL COMMENT '更新人',
+    `ModifyDate` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `DeleteID` INT(11) DEFAULT NULL COMMENT '删除人',
+    `DeleteTime` DATETIME DEFAULT NULL COMMENT '删除时间',
+    PRIMARY KEY (`Id`),
     UNIQUE KEY `uk_registration_no` (`registration_no`),
-    UNIQUE KEY `uk_code` (`code`),
+    UNIQUE KEY `uk_code` (`Code`),
     KEY `idx_reg_type` (`registration_type`),
-    KEY `idx_reg_status` (`status`),
-    KEY `idx_reg_create_time` (`create_time`)
+    KEY `idx_reg_status` (`Status`),
+    KEY `idx_reg_create_time` (`CreateDate`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='注册申请表';
 
-SELECT '✅ 新表创建完成' AS status;
+SELECT '✅ 新表创建完成' AS Status;
 
 -- ============================================================
 -- 第三部分：为现有业务表添加 Org_Code 字段（仅对存在的表）
@@ -203,7 +203,7 @@ CALL safe_add_index('wf_process_instance', 'wf_pi_org_code', 'OrgCode');
 CALL safe_add_column('wf_task', 'OrgCode', 'VARCHAR(50) DEFAULT NULL', '所属机构编码');
 CALL safe_add_index('wf_task', 'wf_task_org_code', 'OrgCode');
 
-SELECT '✅ 业务表 OrgCode 字段添加完成' AS status;
+SELECT '✅ 业务表 OrgCode 字段添加完成' AS Status;
 
 -- ============================================================
 -- 第四部分：插入角色数据（忽略重复）
@@ -227,25 +227,25 @@ INSERT IGNORE INTO `Sys_Role` (`RoleId`, `RoleName`, `ParentId`, `Enable`, `Crea
 INSERT IGNORE INTO `Sys_Role` (`RoleId`, `RoleName`, `ParentId`, `Enable`, `CreateID`, `CreateDate`, `ModifyID`, `ModifyDate`, `OrderNo`) VALUES
 (300, '企业账号', 0, 1, 0, NOW(), 0, NOW(), 20);
 
-SELECT '✅ 角色数据插入完成' AS status;
+SELECT '✅ 角色数据插入完成' AS Status;
 
 -- ============================================================
 -- 第五部分：创建部门数据
 -- ============================================================
-INSERT IGNORE INTO `sys_department` (`id`, `department_name`, `department_code`, `parent_id`, `enable`, `create_id`, `create_time`, `modify_id`, `modify_time`) VALUES
+INSERT IGNORE INTO `sys_department` (`Id`, `department_name`, `department_code`, `parent_id`, `Enable`, `CreateID`, `CreateDate`, `ModifyID`, `modify_time`) VALUES
 (100, '体系认证平台总部', 'PLATFORM_HQ', 0, 1, 0, NOW(), 0, NOW()),
 (101, '运维部', 'OPS_DEPT', 100, 1, 0, NOW(), 0, NOW()),
 (102, '配置管理部', 'CONFIG_DEPT', 100, 1, 0, NOW(), 0, NOW()),
 (103, '质量管理部', 'QA_DEPT', 100, 1, 0, NOW(), 0, NOW());
 
-SELECT '✅ 部门数据插入完成' AS status;
+SELECT '✅ 部门数据插入完成' AS Status;
 
 -- ============================================================
 -- 第六部分：更新超级管理员账号
 -- ============================================================
 UPDATE `Sys_User` SET `UserType` = 1 WHERE `User_Id` = 1;
 
-SELECT '✅ 超级管理员账号更新完成' AS status;
+SELECT '✅ 超级管理员账号更新完成' AS Status;
 
 -- ============================================================
 -- 第七部分：创建测试用户（忽略重复）
@@ -355,7 +355,7 @@ INSERT IGNORE INTO `Sys_User` (
     NOW()
 );
 
-SELECT '✅ 平台管理层测试用户创建完成' AS status;
+SELECT '✅ 平台管理层测试用户创建完成' AS Status;
 
 -- ============================================================
 -- 第八部分：创建示例机构和审核员用户
@@ -363,9 +363,9 @@ SELECT '✅ 平台管理层测试用户创建完成' AS status;
 
 -- 插入示例认证机构（如果不存在）
 INSERT IGNORE INTO `cert_org_config` (
-    `code`, `org_code`, `org_name`, `org_short_name`, `org_type`,
-    `registration_no`, `legal_person`, `contact_phone`, `contact_email`,
-    `address`, `status`, `max_users`, `max_enterprises`
+    `Code`, `OrgCode`, `org_name`, `org_short_name`, `org_type`,
+    `registration_no`, `LegalPerson`, `ContactPhone`, `ContactEmail`,
+    `Address`, `Status`, `max_users`, `max_enterprises`
 ) VALUES (
     UUID(),
     'CB001',
@@ -400,13 +400,13 @@ INSERT IGNORE INTO `Sys_User` (
     1,
     20,
     'CB001',
-    id,
+    Id,
     'admin@shanglong.cn',
     '13900000001',
     '李四（尚龙认证管理员）',
     1,
     NOW()
-FROM `cert_org_config` WHERE `org_code` = 'CB001' LIMIT 1;
+FROM `cert_org_config` WHERE `OrgCode` = 'CB001' LIMIT 1;
 
 -- 审核组长（CB001）
 INSERT IGNORE INTO `Sys_User` (
@@ -426,13 +426,13 @@ INSERT IGNORE INTO `Sys_User` (
     1,
     21,
     'CB001',
-    id,
+    Id,
     'leader@shanglong.cn',
     '13900000002',
     '王五（尚龙审核组长）',
     1,
     NOW()
-FROM `cert_org_config` WHERE `org_code` = 'CB001' LIMIT 1;
+FROM `cert_org_config` WHERE `OrgCode` = 'CB001' LIMIT 1;
 
 -- 普通审核员（CB001）
 INSERT IGNORE INTO `Sys_User` (
@@ -452,15 +452,15 @@ INSERT IGNORE INTO `Sys_User` (
     1,
     22,
     'CB001',
-    id,
+    Id,
     'auditor@shanglong.cn',
     '13900000003',
     '赵六（尚龙审核员）',
     1,
     NOW()
-FROM `cert_org_config` WHERE `org_code` = 'CB001' LIMIT 1;
+FROM `cert_org_config` WHERE `OrgCode` = 'CB001' LIMIT 1;
 
-SELECT '✅ 示例机构和审核员用户创建完成' AS status;
+SELECT '✅ 示例机构和审核员用户创建完成' AS Status;
 
 -- ============================================================
 -- 第九部分：创建企业用户测试账号
@@ -482,15 +482,15 @@ INSERT IGNORE INTO `Sys_User` (
     1,
     30,
     'CB001',
-    id,
+    Id,
     'ent@testcompany.com',
     '13700000001',
     '孙七（测试企业管理员）',
     1,
     NOW()
-FROM `cert_org_config` WHERE `org_code` = 'CB001' LIMIT 1;
+FROM `cert_org_config` WHERE `OrgCode` = 'CB001' LIMIT 1;
 
-SELECT '✅ 企业用户测试账号创建完成' AS status;
+SELECT '✅ 企业用户测试账号创建完成' AS Status;
 
 -- ============================================================
 -- 清理临时存储过程（可选）

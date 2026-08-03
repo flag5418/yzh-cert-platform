@@ -12,21 +12,21 @@ namespace VOL.Entity.CertPlatform.Wf
     public class Skill : YZHBaseEntity
     {
 
-    [Required][StringLength(100)][Column("skill_code")]
+    [Required][StringLength(100)]
     public string SkillCode { get; set; }
-    [Required][StringLength(200)][Column("skill_name")]
+    [Required][StringLength(200)]
     public string SkillName { get; set; }
-    [Required][Column("skill_type")]
+    [Required]
     public string SkillType { get; set; }
-    [Column("input_schema")]
+    
     public string InputSchema { get; set; }
-    [Column("output_schema")]
+    
     public string OutputSchema { get; set; }
-    [Column("endpoint_config")]
+    
     public string EndpointConfig { get; set; }
-    [Column("description")]
+    
     public string Description { get; set; }
-    [Column("is_active")]
+    
     public bool IsActive { get; set; } = true;
 
     }

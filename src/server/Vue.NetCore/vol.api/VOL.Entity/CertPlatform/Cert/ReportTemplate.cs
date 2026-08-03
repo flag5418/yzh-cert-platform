@@ -12,19 +12,19 @@ namespace VOL.Entity.CertPlatform.Cert
     public class ReportTemplate : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("cb_code")]
+    [Required][StringLength(36)]
     public string CbCode { get; set; }
-    [Required][StringLength(36)][Column("standard_code")]
+    [Required][StringLength(36)]
     public string StandardCode { get; set; }
-    [Required][StringLength(36)][Column("phase_code")]
+    [Required][StringLength(36)]
     public string PhaseCode { get; set; }
-    [Required][StringLength(200)][Column("template_name")]
+    [Required][StringLength(200)]
     public string TemplateName { get; set; }
-    [StringLength(500)][Column("template_file_path")]
+    [StringLength(500)]
     public string TemplateFilePath { get; set; }
-    [Column("section_config")]
+    
     public string SectionConfig { get; set; }
-    [Column("is_default")]
+    
     public bool IsDefault { get; set; } = false;
 
     }

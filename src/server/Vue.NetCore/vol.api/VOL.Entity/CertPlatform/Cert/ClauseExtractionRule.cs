@@ -12,11 +12,11 @@ namespace VOL.Entity.CertPlatform.Cert
     public class ClauseExtractionRule : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("clause_code")]
+    [Required][StringLength(36)]
     public string ClauseCode { get; set; }
-    [Required][StringLength(36)][Column("workflow_code")]
+    [Required][StringLength(36)]
     public string WorkflowCode { get; set; }
-    [Column("description")]
+    
     public string Description { get; set; }
 
     }

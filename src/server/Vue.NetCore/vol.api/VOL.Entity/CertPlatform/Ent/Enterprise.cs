@@ -12,30 +12,26 @@ namespace VOL.Entity.CertPlatform.Ent
     public class Enterprise : YZHBaseEntity
     {
 
-    [Required][StringLength(200)][Column("name")]
+    [Required][StringLength(200)]
     public string Name { get; set; }
-    [StringLength(100)][Column("short_name")]
+    [StringLength(100)]
     public string ShortName { get; set; }
-    [StringLength(50)][Column("credit_code")]
+    [StringLength(50)]
     public string CreditCode { get; set; }
-    [StringLength(50)][Column("legal_person")]
+    [StringLength(50)]
     public string LegalPerson { get; set; }
-    [Column("address")]
+    
     public string Address { get; set; }
-    [Column("cert_scope")]
+    
     public string CertScope { get; set; }
-    [StringLength(50)][Column("contact_name")]
+    [StringLength(50)]
     public string ContactName { get; set; }
-    [StringLength(20)][Column("contact_phone")]
+    [StringLength(20)]
     public string ContactPhone { get; set; }
-    [StringLength(200)][Column("contact_email")]
+    [StringLength(200)]
     public string ContactEmail { get; set; }
-    [Column("status")]
-    public string Status { get; set; } = "active";
-    [Column("archive_date")]
+    
     public DateTime? ArchiveDate { get; set; }
-    [Column("notes")]
-    public string Notes { get; set; }
 
     }
 }

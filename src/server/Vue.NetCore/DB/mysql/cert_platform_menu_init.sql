@@ -530,13 +530,13 @@ INSERT INTO `Sys_RoleAuth` (`Role_Id`, `Menu_Id`, `AuthValue`, `Creator`, `Creat
 -- 5. 插入第一条认证机构初始数据（示例数据）
 -- ============================================================
 INSERT INTO `cert_certification_body` (
-    `code`, `name`, `short_name`, `registration_no`, 
-    `accreditation_scope`, `contact_person`, `contact_phone`, 
-    `contact_email`, `address`, `website`, 
-    `logo_url`, `status`, `remarks`,
-    `create_by`, `create_time`
+    `Code`, `Name`, `ShortName`, `registration_no`, 
+    `accreditation_scope`, `ContactName`, `ContactPhone`, 
+    `ContactEmail`, `Address`, `website`, 
+    `logo_url`, `Status`, `remarks`,
+    `CreateID`, `CreateDate`
 ) VALUES (
-    UUID(),  -- code 字段使用 GUID
+    UUID(),  -- Code 字段使用 GUID
     '映智汇认证有限公司',
     '映智汇认证',
     'YZH-CERT-2026-001',
@@ -547,9 +547,9 @@ INSERT INTO `cert_certification_body` (
     '北京市海淀区中关村科技园区',
     'https://www.yingzhihui.com',
     '',
-    1,  -- status: 1=启用
+    1,  -- Status: 1=启用
     '体系认证平台的默认认证机构，用于开发和测试',
-    1,  -- create_by: 默认管理员 ID
+    1,  -- CreateID: 默认管理员 ID
     NOW()
 );
 

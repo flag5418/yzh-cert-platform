@@ -12,19 +12,19 @@ namespace VOL.Entity.CertPlatform.Ent
     public class EnterpriseDocument : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("enterprise_code")]
+    [Required][StringLength(36)]
     public string EnterpriseCode { get; set; }
-    [StringLength(36)][Column("phase_code")]
+    [StringLength(36)]
     public string PhaseCode { get; set; }
-    [Required][Column("scope")]
+    [Required]
     public string Scope { get; set; }
-    [StringLength(36)][Column("template_folder_code")]
+    [StringLength(36)]
     public string TemplateFolderCode { get; set; }
-    [StringLength(36)][Column("parent_code")]
+    [StringLength(36)]
     public string ParentCode { get; set; }
-    [Required][StringLength(200)][Column("folder_name")]
+    [Required][StringLength(200)]
     public string FolderName { get; set; }
-    [Column("sort_order")]
+    
     public int SortOrder { get; set; } = 0;
 
     }

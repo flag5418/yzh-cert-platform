@@ -12,27 +12,27 @@ namespace VOL.Entity.CertPlatform.Audit
     public class AuditEvidence : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("task_code")]
+    [Required][StringLength(36)]
     public string TaskCode { get; set; }
-    [StringLength(36)][Column("clause_code")]
+    [StringLength(36)]
     public string ClauseCode { get; set; }
-    [Required][Column("evidence_type")]
+    [Required]
     public string EvidenceType { get; set; }
-    [Required][StringLength(500)][Column("storage_path")]
+    [Required][StringLength(500)]
     public string StoragePath { get; set; }
-    [Required][StringLength(64)][Column("file_hash")]
+    [Required][StringLength(64)]
     public string FileHash { get; set; }
-    [Column("is_voided")]
+    
     public bool IsVoided { get; set; } = false;
-    [Column("voided_at")]
+    
     public DateTime? VoidedAt { get; set; }
-    [Column("voided_by")]
+    
     public long? VoidedBy { get; set; }
-    [Column("captured_at")]
+    
     public DateTime? CapturedAt { get; set; }
-    [Required][Column("captured_by")]
+    [Required]
     public long CapturedBy { get; set; }
-    [Column("notes")]
+    
     public string Notes { get; set; }
 
     }

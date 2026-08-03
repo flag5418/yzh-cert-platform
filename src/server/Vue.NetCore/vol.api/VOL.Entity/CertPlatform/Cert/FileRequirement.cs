@@ -12,19 +12,19 @@ namespace VOL.Entity.CertPlatform.Cert
     public class FileRequirement : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("folder_code")]
+    [Required][StringLength(36)]
     public string FolderCode { get; set; }
-    [Required][StringLength(200)][Column("file_name_template")]
+    [Required][StringLength(200)]
     public string FileNameTemplate { get; set; }
-    [Required][StringLength(50)][Column("file_type")]
+    [Required][StringLength(50)]
     public string FileType { get; set; }
-    [Column("is_required")]
+    
     public bool IsRequired { get; set; } = true;
-    [Column("max_size_mb")]
+    
     public int MaxSizeMB { get; set; } = 10;
-    [Column("description")]
+    
     public string Description { get; set; }
-    [Column("sort_order")]
+    
     public int SortOrder { get; set; } = 0;
 
     }

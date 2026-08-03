@@ -22,7 +22,7 @@ namespace VOL.Entity.CertPlatform
     /// 
     /// 状态：[DONE] Phase 1 基础字段定义完成
     /// </summary>
-    public class YZHBaseEntity : BaseEntity
+    public abstract class YZHBaseEntity : BaseEntity
     {
         #region 主键
 
@@ -32,7 +32,6 @@ namespace VOL.Entity.CertPlatform
         /// </summary>
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        [Column("id")]
         public long Id { get; set; }
 
         #endregion
@@ -44,18 +43,13 @@ namespace VOL.Entity.CertPlatform
         /// 示例：CB001-2026001（机构编号-年份流水号）
         /// </summary>
         [MaxLength(100)]
-        [Column(TypeName = "nvarchar(100)")]
         public string Code { get; set; }
 
         /// <summary>
         /// 多租户组织编码（用于数据隔离）
         /// 由 [YZHMultiTenant] 特性自动填充，值为 UserContext.Current.OrgCode
-        /// 
-        /// TODO:P2 - Phase 2 实现多租户过滤时启用此字段
-        /// 当前仅作为预留字段，不影响现有功能
         /// </summary>
         [MaxLength(50)]
-        [Column(TypeName = "varchar(50)")]
         public string OrgCode { get; set; }
 
         #endregion
@@ -74,14 +68,12 @@ namespace VOL.Entity.CertPlatform
         /// 由框架在新增时自动填充 UserContext.Current.UserName
         /// </summary>
         [MaxLength(50)]
-        [Column(TypeName = "nvarchar(50)")]
         public string Creator { get; set; }
 
         /// <summary>
         /// 创建时间
         /// 由框架在新增时自动填充 DateTime.Now
         /// </summary>
-        [Column(TypeName = "datetime2")]
         public DateTime? CreateDate { get; set; }
 
         #endregion
@@ -100,14 +92,12 @@ namespace VOL.Entity.CertPlatform
         /// 由框架在更新时自动填充 UserContext.Current.UserName
         /// </summary>
         [MaxLength(50)]
-        [Column(TypeName = "nvarchar(50)")]
         public string Modifier { get; set; }
 
         /// <summary>
         /// 修改时间
         /// 由框架在更新时自动填充 DateTime.Now
         /// </summary>
-        [Column(TypeName = "datetime2")]
         public DateTime? ModifyDate { get; set; }
 
         #endregion
@@ -118,8 +108,6 @@ namespace VOL.Entity.CertPlatform
         /// 删除人 ID（对应 Sys_User.Id，int 类型）
         /// 由框架在逻辑删除时自动填充 UserContext.Current.UserId
         /// 仅当 Enable = false 时有值
-        /// 
-        /// TODO:P3 - Phase 3 实现删除策略时正式使用
         /// </summary>
         public int? DeleteID { get; set; }
 
@@ -127,21 +115,15 @@ namespace VOL.Entity.CertPlatform
         /// 删除人姓名（对应 Sys_User.UserName）
         /// 由框架在逻辑删除时自动填充
         /// 仅当 Enable = false 时有值
-        /// 
-        /// TODO:P3 - Phase 3 实现删除策略时正式使用
         /// </summary>
         [MaxLength(50)]
-        [Column(TypeName = "nvarchar(50)")]
         public string Deleter { get; set; }
 
         /// <summary>
         /// 删除时间
         /// 由框架在逻辑删除时自动填充 DateTime.Now
         /// 仅当 Enable = false 时有值
-        /// 
-        /// TODO:P3 - Phase 3 实现删除策略时正式使用
         /// </summary>
-        [Column(TypeName = "datetime2")]
         public DateTime? DeleteTime { get; set; }
 
         #endregion
@@ -154,17 +136,11 @@ namespace VOL.Entity.CertPlatform
         /// 默认值：active
         /// </summary>
         [MaxLength(50)]
-        [Column(TypeName = "varchar(50)")]
         public string Status { get; set; } = "active";
 
         /// <summary>
         /// 启用状态（true = 启用, false = 禁用/逻辑删除）
         /// 默认值：true
-        /// 
-        /// 设计说明：
-        /// - 此字段同时承担"是否启用"和"逻辑删除标记"双重职责
-        /// - 配合 DeleteTime 可区分"禁用"（DeleteTime 为 null）和"已删除"（DeleteTime 有值）
-        /// - 如果需要更细粒度的控制，可在 Phase 3 引入独立的 IsDeleted 字段
         /// </summary>
         public bool Enable { get; set; } = true;
 
@@ -178,7 +154,6 @@ namespace VOL.Entity.CertPlatform
         /// 备注
         /// </summary>
         [MaxLength(500)]
-        [Column(TypeName = "nvarchar(500)")]
         public string Remark { get; set; }
 
         #endregion

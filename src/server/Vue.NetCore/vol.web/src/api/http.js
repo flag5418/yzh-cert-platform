@@ -1,10 +1,10 @@
-import axios from 'axios'
-import store from '../store/index'
-import { nextTick } from 'vue'
-axios.defaults.timeout = 1000*60*5;
+import axios from 'axios';
+import { nextTick } from 'vue';
+import store from '../store/index';
+axios.defaults.timeout = 1000 * 60 * 5;
 axios.defaults.headers.post['Content-Type'] = 'application/json;charset=UTF-8'
 
-import { ElLoading as Loading, ElMessage as Message } from 'element-plus'
+import { ElLoading as Loading, ElMessage as Message } from 'element-plus';
 
 let loadingInstance
 let loadingStatus = false
@@ -214,18 +214,22 @@ function createXHR() {
 
 function redirect(responseText, message) {
   try {
-    let responseData = typeof responseText == 'string' ? JSON.parse(responseText) : responseText
+    let responseData = responseText;
+    if (typeof responseText == 'string' && responseText.startsWith('{')) {
+      responseData = JSON.parse(responseText);
+    }
     if (
-      (responseData.hasOwnProperty('code') && responseData.code == 401) ||
-      (responseData.data && responseData.data.code == 401)
+      responseData && typeof responseData === 'object' &&
+      ((responseData.hasOwnProperty('code') && responseData.code == 401) ||
+        (responseData.data && responseData.data.code == 401))
     ) {
       closeLoading()
       toLogin()
     } else {
-      if (message) {
+      if (message || (typeof responseText === 'string' && !responseText.startsWith('{'))) {
         Message.error({
           showClose: true,
-          message: message,
+          message: message || responseText,
           type: 'error'
         })
       }
@@ -295,22 +299,34 @@ function ajax(param) {
     },
     param
   )
+  // 统一错误回调名称
+  if (param.error && !param.errror) {
+    httpParam.errror = param.error;
+  }
 
-  httpParam.url = axios.defaults.baseURL + httpParam.url.replace(/\/?/, '')
+  httpParam.url = axios.defaults.baseURL + httpParam.url.replace(/^\//, '')
   httpParam.headers[_Authorization] = getToken()
   var xhr = createXHR()
   xhr.onreadystatechange = function () {
-    if (xhr.status == 403 || xhr.status == 401) {
-      redirect(xhr.responseText)
-      return
-    }
-    checkResponse(xhr)
-    if (xhr.readyState == 4 && xhr.status == 200) {
-      httpParam.success(httpParam.json ? JSON.parse(xhr.responseText) : xhr.responseText)
-      return
-    }
-    if (xhr.status != 0 && xhr.readyState != 1) {
-      httpParam.errror(xhr)
+    if (xhr.readyState == 4) {
+      if (xhr.status == 403 || xhr.status == 401) {
+        redirect(xhr.responseText)
+        return
+      }
+      checkResponse(xhr)
+      if (xhr.status == 200) {
+        let responseData = xhr.responseText;
+        if (httpParam.json && typeof responseData === 'string' && responseData.startsWith('{')) {
+          try {
+            responseData = JSON.parse(responseData);
+          } catch (e) {
+            console.error('JSON parse error', e);
+          }
+        }
+        httpParam.success(responseData)
+      } else {
+        httpParam.errror(xhr)
+      }
     }
   }
   //初始化请求
@@ -330,21 +346,21 @@ function ajax(param) {
   }
 }
 
-ajax.post = function (url, param, success, errror) {
+ajax.post = function (url, param, success, error) {
   ajax({
     url: url,
     param: param,
     success: success,
-    error: errror,
+    errror: error,
     type: 'post'
   })
 }
-ajax.get = function (url, param, success, errror) {
+ajax.get = function (url, param, success, error) {
   ajax({
     url: url,
     param: param,
     success: success,
-    error: errror,
+    errror: error,
     type: 'get'
   })
 }

@@ -1,8 +1,9 @@
-﻿using EntityFrameworkCore.UseRowNumberForPaging;
+using EntityFrameworkCore.UseRowNumberForPaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.Extensions.DependencyModel;
 using System;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Loader;
@@ -12,6 +13,7 @@ using VOL.Core.DBManager;
 using VOL.Core.Enums;
 using VOL.Core.Extensions;
 using VOL.Core.Extensions.AutofacManager;
+using VOL.Entity;
 using VOL.Entity.SystemModels;
 
 namespace VOL.Core.EFDbContext
@@ -118,20 +120,26 @@ namespace VOL.Core.EFDbContext
                 var compilationLibrary = DependencyContext
                     .Default
                     .RuntimeLibraries
-                    .Where(x => !x.Serviceable && x.Type != "package" && x.Type == "project");
+                    .Where(x => !x.Serviceable && x.Type != "package" && (x.Type == "project" || x.Name.StartsWith("VOL.")));
                 foreach (var _compilation in compilationLibrary)
                 {
                     //加载指定类
-                    AssemblyLoadContext.Default
-                    .LoadFromAssemblyName(new AssemblyName(_compilation.Name))
-                    .GetTypes()
+                    Assembly assembly = AssemblyLoadContext.Default.LoadFromAssemblyName(new AssemblyName(_compilation.Name));
+                    
+                    assembly.GetTypes()
                     .Where(x =>
-                        x.GetTypeInfo().BaseType != null
-                        && x.BaseType == (typeof(BaseEntity)))
+                        typeof(BaseEntity).IsAssignableFrom(x)
+                        && x != typeof(BaseEntity)
+                        && !x.IsAbstract
+                        && x.GetCustomAttribute<NotMappedAttribute>() == null)
                         .ToList().ForEach(t =>
                         {
-                            modelBuilder.Entity(t);
-                            //  modelBuilder.Model.AddEntityType(t);
+                            // 只有标记了对应 DBServer 的实体才加入此上下文
+                            var entityAttr = t.GetCustomAttribute<EntityAttribute>();
+                            if (entityAttr == null || string.IsNullOrEmpty(entityAttr.DBServer) || entityAttr.DBServer == nameof(VOLContext))
+                            {
+                                modelBuilder.Entity(t);
+                            }
                         });
                 }
 

@@ -12,19 +12,19 @@ namespace VOL.Entity.CertPlatform.Wf
     public class WorkflowDefinition : YZHBaseEntity
     {
 
-    [Required][StringLength(100)][Column("workflow_code")]
+    [Required][StringLength(100)]
     public string WorkflowCode { get; set; }
-    [Required][StringLength(200)][Column("workflow_name")]
+    [Required][StringLength(200)]
     public string WorkflowName { get; set; }
-    [Required][Column("workflow_type")]
+    [Required]
     public string WorkflowType { get; set; }
-    [Required][Column("workflow_config")]
+    [Required]
     public string WorkflowConfig { get; set; }
-    [Column("version")]
+    
     public int Version { get; set; } = 1;
-    [Column("is_active")]
+    
     public bool IsActive { get; set; } = true;
-    [Column("description")]
+    
     public string Description { get; set; }
 
     }

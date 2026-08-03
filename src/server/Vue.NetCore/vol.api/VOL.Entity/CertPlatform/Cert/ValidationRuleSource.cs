@@ -12,13 +12,13 @@ namespace VOL.Entity.CertPlatform.Cert
     public class ValidationRuleSource : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("rule_code")]
+    [Required][StringLength(36)]
     public string RuleCode { get; set; }
-    [Required][StringLength(36)][Column("file_requirement_code")]
+    [Required][StringLength(36)]
     public string FileRequirementCode { get; set; }
-    [StringLength(500)][Column("source_path")]
+    [StringLength(500)]
     public string SourcePath { get; set; }
-    [Column("notes")]
+    
     public string Notes { get; set; }
 
     }

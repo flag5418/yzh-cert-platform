@@ -12,17 +12,15 @@ namespace VOL.Entity.CertPlatform.Ent
     public class EnterprisePhase : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("enterprise_code")]
+    [Required][StringLength(36)]
     public string EnterpriseCode { get; set; }
-    [Required][StringLength(36)][Column("phase_code")]
+    [Required][StringLength(36)]
     public string PhaseCode { get; set; }
-    [Required][StringLength(36)][Column("standard_code")]
+    [Required][StringLength(36)]
     public string StandardCode { get; set; }
-    [Column("status")]
-    public string Status { get; set; } = "pending";
-    [Column("started_at")]
+    
     public DateTime? StartedAt { get; set; }
-    [Column("completed_at")]
+    
     public DateTime? CompletedAt { get; set; }
 
     }

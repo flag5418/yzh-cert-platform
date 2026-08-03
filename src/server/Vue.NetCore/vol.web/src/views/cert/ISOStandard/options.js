@@ -12,7 +12,7 @@ export default function () {
   const table = {
     name: "ISOStandard",
     cnName: "ISO 标准管理",
-    url: "/api/ISOStandard",
+    url: "/ISOStandard/",
     sortName: "id",
     key: "Id",
     footer: "Foots",
@@ -26,23 +26,23 @@ export default function () {
 
   // 表单字段
   const editFormFields = {
-    code: "",           // 隐藏：业务编码
-    cb_code: "",        // 所属机构编码
-    standard_code: "",  // 标准编号
-    standard_name: "",  // 标准名称
-    version_year: 2016, // 版本年份
-    status: "pending",  // 状态
-    notes: "",          // 备注
+    Code: "",           // 隐藏：业务编码
+    CbCode: "",        // 所属机构编码
+    StandardCode: "",  // 标准编号
+    StandardName: "",  // 标准名称
+    VersionYear: 2016, // 版本年份
+    Status: "pending",  // 状态
+    Remark: "",          // 备注
   };
 
   // 表单配置 - 统一 2 列布局
   const editFormOptions = [
     // 第一行：隐藏字段 + 所属机构（整行）
     [
-      { field: "code", type: "hidden" },
+      { field: "Code", type: "hidden" },
       {
         title: "所属机构",
-        field: "cb_code",
+        field: "CbCode",
         required: true,
         type: "select",
         dataKey: "cb_list",
@@ -54,7 +54,7 @@ export default function () {
     [
       {
         title: "标准编号",
-        field: "standard_code",
+        field: "StandardCode",
         required: true,
         maxlength: 50,
         placeholder: "如：ISO 13485:2016",
@@ -62,7 +62,7 @@ export default function () {
       },
       {
         title: "版本年份",
-        field: "version_year",
+        field: "VersionYear",
         type: "number",
         min: 1990,
         max: 2100,
@@ -73,7 +73,7 @@ export default function () {
     [
       {
         title: "标准名称",
-        field: "standard_name",
+        field: "StandardName",
         required: true,
         maxlength: 200,
         colSize: 12,
@@ -83,7 +83,7 @@ export default function () {
     [
       {
         title: "状态",
-        field: "status",
+        field: "Status",
         dataKey: "standard_status",
         data: [],
         type: "select",
@@ -91,7 +91,7 @@ export default function () {
       },
       {
         title: "备注",
-        field: "notes",
+        field: "Notes",
         type: "textarea",
         rows: 3,
         colSize: 12,
@@ -101,8 +101,8 @@ export default function () {
 
   // 搜索字段
   const searchFormFields = {
-    keyword: "",
-    status: "",
+    StandardName: "",
+    Status: "",
   };
 
   // 搜索配置
@@ -110,13 +110,13 @@ export default function () {
     [
       {
         title: "关键词",
-        field: "keyword",
+        field: "StandardName",
         placeholder: "标准编号/名称",
         colSize: 8,
       },
       {
         title: "状态",
-        field: "status",
+        field: "Status",
         dataKey: "standard_status",
         data: [],
         type: "select",
@@ -128,45 +128,44 @@ export default function () {
   // 列配置（操作列由 YZHBaseCrud 自动添加）
   const columns = [
     {
-      field: "id",
+      field: "Id",
       title: "ID",
       width: 70,
       hidden: true,
       align: "center",
     },
     {
-      field: "standard_code",
+      field: "StandardCode",
       title: "标准编号",
       width: 150,
       align: "center",
       sortable: true,
     },
     {
-      field: "standard_name",
+      field: "StandardName",
       title: "标准名称",
       width: 300,
       sortable: true,
     },
     {
-      field: "version_year",
+      field: "VersionYear",
       title: "版本",
       width: 80,
       align: "center",
     },
     {
-      field: "status",
+      field: "Status",
       title: "状态",
       width: 100,
       align: "center",
-      bind: { key: "standard_status", value: "status" },
+      bind: { key: "standard_status", value: "Status" },
     },
     {
-      field: "create_time",
+      field: "CreateDate",
       title: "创建时间",
       width: 160,
       align: "center",
       sortable: true,
-      formatter: true,
     },
   ];
 

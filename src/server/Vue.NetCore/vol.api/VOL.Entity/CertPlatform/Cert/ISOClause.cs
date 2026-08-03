@@ -17,14 +17,14 @@ namespace VOL.Entity.CertPlatform.Cert
         /// </summary>
         [Required]
         [StringLength(36)]
-        [Column("standard_code")]
+        
         public string StandardCode { get; set; }
 
         /// <summary>
         /// 父条款编码（树形结构，关联同表的 Code）
         /// </summary>
         [StringLength(36)]
-        [Column("parent_code")]
+        
         public string ParentCode { get; set; }
 
         /// <summary>
@@ -32,7 +32,7 @@ namespace VOL.Entity.CertPlatform.Cert
         /// </summary>
         [Required]
         [StringLength(20)]
-        [Column("clause_number")]
+        
         public string ClauseNumber { get; set; }
 
         /// <summary>
@@ -40,19 +40,19 @@ namespace VOL.Entity.CertPlatform.Cert
         /// </summary>
         [Required]
         [StringLength(200)]
-        [Column("title")]
+        
         public string Title { get; set; }
 
         /// <summary>
         /// 条款原文或摘要
         /// </summary>
-        [Column("description")]
+        
         public string Description { get; set; }
 
         /// <summary>
         /// 排序
         /// </summary>
-        [Column("sort_order")]
+        
         public int SortOrder { get; set; } = 0;
     }
 }

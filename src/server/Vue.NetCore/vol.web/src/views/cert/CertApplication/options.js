@@ -7,8 +7,8 @@ export default function () {
   const table = {
     name: 'CertApplication',
     cnName: '认证申请管理',
-    url: '/api/CertApplication/',
-    sortName: 'id',
+    url: '/CertApplication/',
+    sortName: 'Id',
     key: 'Id',
     footer: 'Foots',
     pagination: { pageSize: 20, pageSizes: [10, 20, 50, 100] },
@@ -20,22 +20,22 @@ export default function () {
   const key = table.key;
 
   const editFormFields = {
-    code: '',
-    application_no: '',
+    Code: '',
+    ApplicationNo: '',
     ent_code: '',
-    cb_code: '',
-    standard_code: '',
-    status: 'draft',
+    CbCode: '',
+    StandardCode: '',
+    Status: 'draft',
     apply_date: '',
-    notes: '',
+    Remark: '',
   };
 
   const editFormOptions = [
     [
-      { title: 'code', field: 'code', type: 'hidden' },
+      { title: 'Code', field: 'Code', type: 'hidden' },
       {
         title: '申请编号',
-        field: 'application_no',
+        field: 'ApplicationNo',
         maxlength: 50,
         colSize: 6,
       },
@@ -52,7 +52,7 @@ export default function () {
     [
       {
         title: '认证机构',
-        field: 'cb_code',
+        field: 'CbCode',
         required: true,
         type: 'select',
         dataKey: 'cb_list',
@@ -61,7 +61,7 @@ export default function () {
       },
       {
         title: '认证标准',
-        field: 'standard_code',
+        field: 'StandardCode',
         required: true,
         type: 'select',
         dataKey: 'standard_list',
@@ -72,7 +72,7 @@ export default function () {
     [
       {
         title: '状态',
-        field: 'status',
+        field: 'Status',
         dataKey: 'application_status',
         data: [],
         type: 'select',
@@ -88,7 +88,7 @@ export default function () {
     [
       {
         title: '备注',
-        field: 'notes',
+        field: 'Remark',
         type: 'textarea',
         rows: 3,
         colSize: 12,
@@ -98,7 +98,7 @@ export default function () {
 
   const searchFormFields = {
     keyword: '',
-    status: '',
+    Status: '',
   };
 
   const searchFormOptions = [
@@ -111,7 +111,7 @@ export default function () {
       },
       {
         title: '状态',
-        field: 'status',
+        field: 'Status',
         dataKey: 'application_status',
         data: [],
         type: 'select',
@@ -129,7 +129,7 @@ export default function () {
       align: 'center',
     },
     {
-      field: 'application_no',
+      field: 'ApplicationNo',
       title: '申请编号',
       width: 150,
       align: 'center',
@@ -142,23 +142,23 @@ export default function () {
       bind: { key: 'ent_list', value: 'ent_code' },
     },
     {
-      field: 'cb_code',
+      field: 'CbCode',
       title: '认证机构',
       width: 150,
-      bind: { key: 'cb_list', value: 'cb_code' },
+      bind: { key: 'cb_list', value: 'CbCode' },
     },
     {
-      field: 'standard_code',
+      field: 'StandardCode',
       title: '认证标准',
       width: 150,
-      bind: { key: 'standard_list', value: 'standard_code' },
+      bind: { key: 'standard_list', value: 'StandardCode' },
     },
     {
-      field: 'status',
+      field: 'Status',
       title: '状态',
       width: 100,
       align: 'center',
-      bind: { key: 'application_status', value: 'status' },
+      bind: { key: 'application_status', value: 'Status' },
     },
     {
       field: 'apply_date',
@@ -167,12 +167,11 @@ export default function () {
       align: 'center',
     },
     {
-      field: 'create_time',
+      field: 'CreateDate',
       title: '创建时间',
       width: 160,
       align: 'center',
       sortable: true,
-      formatter: true,
     },
   ];
 

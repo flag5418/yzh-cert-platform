@@ -12,17 +12,17 @@ namespace VOL.Entity.CertPlatform.Rpt
     public class ReportSection : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("report_code")]
+    [Required][StringLength(36)]
     public string ReportCode { get; set; }
-    [StringLength(36)][Column("clause_code")]
+    [StringLength(36)]
     public string ClauseCode { get; set; }
-    [Required][StringLength(200)][Column("section_name")]
+    [Required][StringLength(200)]
     public string SectionName { get; set; }
-    [Column("section_content")]
+    
     public string SectionContent { get; set; }
-    [StringLength(36)][Column("workflow_code")]
+    [StringLength(36)]
     public string WorkflowCode { get; set; }
-    [Column("sort_order")]
+    
     public int SortOrder { get; set; } = 0;
 
     }

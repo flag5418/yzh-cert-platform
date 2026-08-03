@@ -31,6 +31,12 @@ namespace VOL.WebApi.Controllers.CertPlatform
             _httpContextAccessor = httpContextAccessor;
         }
 
+        [HttpPost("GetMaxId")]
+        public async Task<IActionResult> GetMaxId()
+        {
+            return JsonNormal(await _service.GetMaxId());
+        }
+
         /// <summary>
         /// 获取所有启用的认证机构列表（用于下拉选择）
         /// TODO: Phase 2 实现具体业务逻辑时启用

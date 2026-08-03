@@ -12,25 +12,25 @@ namespace VOL.Entity.CertPlatform.Ent
     public class ExtractionResult : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("file_code")]
+    [Required][StringLength(36)]
     public string FileCode { get; set; }
-    [Required][Column("version_number")]
+    [Required]
     public int VersionNumber { get; set; }
-    [Required][StringLength(36)][Column("rule_code")]
+    [Required][StringLength(36)]
     public string RuleCode { get; set; }
-    [Required][StringLength(36)][Column("field_code")]
+    [Required][StringLength(36)]
     public string FieldCode { get; set; }
-    [StringLength(500)][Column("label_tag")]
+    [StringLength(500)]
     public string LabelTag { get; set; }
-    [Column("extracted_value")]
+    
     public string ExtractedValue { get; set; }
-    [Column("confidence")]
+    
     public decimal? Confidence { get; set; }
-    [Column("position_info")]
+    
     public string PositionInfo { get; set; }
-    [Column("is_manual_edited")]
+    
     public bool IsManualEdited { get; set; } = false;
-    [Required][Column("extracted_at")]
+    [Required]
     public DateTime ExtractedAt { get; set; }
 
     }

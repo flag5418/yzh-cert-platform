@@ -12,21 +12,21 @@ namespace VOL.Entity.CertPlatform.Ent
     public class EnterpriseFile : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("folder_code")]
+    [Required][StringLength(36)]
     public string FolderCode { get; set; }
-    [Required][StringLength(500)][Column("file_name")]
+    [Required][StringLength(500)]
     public string FileName { get; set; }
-    [Required][StringLength(50)][Column("file_type")]
+    [Required][StringLength(50)]
     public string FileType { get; set; }
-    [Required][Column("file_size")]
+    [Required]
     public long FileSize { get; set; }
-    [Required][StringLength(500)][Column("storage_path")]
+    [Required][StringLength(500)]
     public string StoragePath { get; set; }
-    [StringLength(64)][Column("file_hash")]
+    [StringLength(64)]
     public string FileHash { get; set; }
-    [Column("current_version")]
+    
     public int CurrentVersion { get; set; } = 1;
-    [Column("notes")]
+    
     public string Notes { get; set; }
 
     }

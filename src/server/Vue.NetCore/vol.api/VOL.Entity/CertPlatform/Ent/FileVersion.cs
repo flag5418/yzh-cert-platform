@@ -12,17 +12,17 @@ namespace VOL.Entity.CertPlatform.Ent
     public class FileVersion : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("file_code")]
+    [Required][StringLength(36)]
     public string FileCode { get; set; }
-    [Required][Column("version_number")]
+    [Required]
     public int VersionNumber { get; set; }
-    [Required][Column("file_size")]
+    [Required]
     public long FileSize { get; set; }
-    [Required][StringLength(500)][Column("storage_path")]
+    [Required][StringLength(500)]
     public string StoragePath { get; set; }
-    [Required][StringLength(64)][Column("file_hash")]
+    [Required][StringLength(64)]
     public string FileHash { get; set; }
-    [Column("change_notes")]
+    
     public string ChangeNotes { get; set; }
 
     }

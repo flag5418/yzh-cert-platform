@@ -10,12 +10,47 @@ using VOL.Core.BaseProvider;
 using VOL.Core.Extensions.AutofacManager;
 using VOL.Entity.CertPlatform.Cert;
 using VOL.Builder.IRepositories.CertPlatform;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using System.Linq;
+using Microsoft.Extensions.DependencyInjection;
+using VOL.Entity.DomainModels;
 
 namespace VOL.Builder.Services.CertPlatform
 {
     public partial class CertCertificationBodyService
     {
-        private readonly ICertCertificationBodyRepository _repository;//访问数据库
+        private readonly ICertCertificationBodyRepository _repository;
+
+        [ActivatorUtilitiesConstructor]
+        public CertCertificationBodyService(ICertCertificationBodyRepository dbRepository)
+        : base(dbRepository)
+        {
+            _repository = dbRepository;
+            // 显式赋值给基类 field，确保 GetPageData 不报 NPE
+            this.repository = dbRepository;
+        }
+
+        /// <summary>
+        /// 兜底处理：如果框架通过反射或无参构造函数实例化，确保 repository 被赋值
+        /// </summary>
+        public override PageGridData<CertificationBody> GetPageData(PageDataOptions options)
+        {
+            if (this.repository == null)
+            {
+                this.repository = _repository ?? AutofacContainerModule.GetService<ICertCertificationBodyRepository>();
+            }
+            return base.GetPageData(options);
+        }
+
+        /// <summary>
+        /// 获取当前最大 ID，用于生成编号
+        /// </summary>
+        /// <returns></returns>
+        public async Task<int> GetMaxId()
+        {
+            return await _repository.FindAsIQueryable(x => true).CountAsync();
+        }
 
         /// <summary>
         /// 获取所有启用的认证机构（下拉选择用）

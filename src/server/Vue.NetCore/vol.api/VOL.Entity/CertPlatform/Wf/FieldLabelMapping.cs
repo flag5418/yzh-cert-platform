@@ -12,23 +12,23 @@ namespace VOL.Entity.CertPlatform.Wf
     public class FieldLabelMapping : YZHBaseEntity
     {
 
-    [Required][StringLength(500)][Column("label_tag")]
+    [Required][StringLength(500)]
     public string LabelTag { get; set; }
-    [Required][StringLength(200)][Column("field_code")]
+    [Required][StringLength(200)]
     public string FieldCode { get; set; }
-    [Required][StringLength(36)][Column("standard_code")]
+    [Required][StringLength(36)]
     public string StandardCode { get; set; }
-    [StringLength(100)][Column("scope_level")]
+    [StringLength(100)]
     public string ScopeLevel { get; set; }
-    [StringLength(200)][Column("document_name")]
+    [StringLength(200)]
     public string DocumentName { get; set; }
-    [StringLength(100)][Column("field_name")]
+    [StringLength(100)]
     public string FieldName { get; set; }
-    [StringLength(50)][Column("data_type")]
+    [StringLength(50)]
     public string DataType { get; set; }
-    [StringLength(36)][Column("skill_code")]
+    [StringLength(36)]
     public string SkillCode { get; set; }
-    [Column("description")]
+    
     public string Description { get; set; }
 
     }

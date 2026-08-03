@@ -1,12 +1,23 @@
 using VOL.Core.BaseProvider;
+using VOL.Core.EFDbContext;
 using VOL.Core.Extensions.AutofacManager;
 using VOL.Entity.CertPlatform.Cert;
 using VOL.Builder.IRepositories.CertPlatform;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace VOL.Builder.Repositories.CertPlatform
 {
-    public class CertCertificationBodyRepository : RepositoryBase<CertificationBody>, ICertCertificationBodyRepository, IDependency
+    public partial class CertCertificationBodyRepository : RepositoryBase<CertificationBody>, ICertCertificationBodyRepository, IDependency
     {
-        // 使用默认无参构造函数，框架会自动注入 DbContext
+        [ActivatorUtilitiesConstructor]
+        public CertCertificationBodyRepository(VOLContext dbContext)
+        : base(dbContext)
+        {
+
+        }
+        public static ICertCertificationBodyRepository Instance
+        {
+            get { return AutofacContainerModule.GetService<ICertCertificationBodyRepository>(); }
+        }
     }
 }

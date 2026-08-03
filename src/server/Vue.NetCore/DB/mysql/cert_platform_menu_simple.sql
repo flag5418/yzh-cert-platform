@@ -107,11 +107,11 @@ INSERT INTO `Sys_RoleAuth` (`Role_Id`, `Menu_Id`, `AuthValue`, `Creator`, `Creat
 
 -- 12. 插入第一条认证机构初始数据
 INSERT INTO `cert_certification_body` (
-    `code`, `name`, `short_name`, `registration_no`, 
-    `accreditation_scope`, `contact_person`, `contact_phone`, 
-    `contact_email`, `address`, `website`, 
-    `logo_url`, `status`, `remarks`,
-    `create_by`, `create_time`
+    `Code`, `Name`, `ShortName`, `registration_no`, 
+    `accreditation_scope`, `ContactName`, `ContactPhone`, 
+    `ContactEmail`, `Address`, `website`, 
+    `logo_url`, `Status`, `remarks`,
+    `CreateID`, `CreateDate`
 ) VALUES (
     UUID(),
     '映智汇认证有限公司',

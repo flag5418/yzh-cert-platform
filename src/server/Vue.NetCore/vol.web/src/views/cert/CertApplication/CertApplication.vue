@@ -24,19 +24,23 @@
     :rowClick="rowClick"
   >
     <template #gridHeader>
-      <el-alert
+      <div>
+        <el-alert
         title="认证申请管理：管理企业提交的认证申请，跟踪从申请受理到证书颁发的完整流程（5个审核阶段）"
         type="info"
         :closable="false"
         show-icon
         style="margin-bottom: 10px"
       />
+      </div>
     </template>
 
     <template #btnLeft>
-      <el-button size="small" type="primary" @click="handleCustomAction" :disabled="!selectedRow">
-        自定义操作
-      </el-button>
+      <div>
+        <el-button size="small" type="primary" @click="handleCustomAction" :disabled="!selectedRow">
+          自定义操作
+        </el-button>
+      </div>
     </template>
   </view-grid>
 </template>
@@ -71,7 +75,7 @@ const handleCustomAction = () => {
     proxy.$message.warning('请先选择一行数据');
     return;
   }
-  proxy.$message.success(`操作: ${selectedRow.value.application_no}`);
+  proxy.$message.success(`操作: ${selectedRow.value.ApplicationNo}`);
 };
 
 defineExpose({})

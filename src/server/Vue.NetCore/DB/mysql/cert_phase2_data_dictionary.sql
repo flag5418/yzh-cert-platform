@@ -15,14 +15,14 @@ VALUES ('认证平台字典', 'cert_dict', 1, 0, 200, NOW(), 1, '超级管理员
 
 SET @cert_dict_id = LAST_INSERT_ID();
 
-SELECT CONCAT('✅ 认证平台字典根节点创建成功，ID=', @cert_dict_id) AS status;
+SELECT CONCAT('✅ 认证平台字典根节点创建成功，ID=', @cert_dict_id) AS Status;
 
 -- ============================================================
 -- Step 2: 认证类型字典
 -- ============================================================
 
 INSERT INTO `Sys_Dictionary` (`DicName`, `DicNo`, `Enable`, `ParentId`, `OrderNo`, `CreateDate`, `CreateID`, `Creator`)
-VALUES ('认证类型', 'cert_type', 1, @cert_dict_id, 10, NOW(), 1, '超级管理员');
+VALUES ('认证类型', 'CertType', 1, @cert_dict_id, 10, NOW(), 1, '超级管理员');
 
 SET @dict_id = LAST_INSERT_ID();
 
@@ -33,7 +33,7 @@ INSERT INTO `Sys_DictionaryList` (`DicName`, `DicValue`, `Dic_ID`, `Enable`, `Or
 ('职业健康安全管理体系认证', 'OHSAS', @dict_id, 1, 3, NOW(), 1, '超级管理员'),
 ('信息安全管理体系认证', 'ISMS', @dict_id, 1, 4, NOW(), 1, '超级管理员');
 
-SELECT '✅ 认证类型字典创建完成 (4 项)' AS status;
+SELECT '✅ 认证类型字典创建完成 (4 项)' AS Status;
 
 -- ============================================================
 -- Step 3: 审核阶段字典（5 个核心阶段）
@@ -52,7 +52,7 @@ INSERT INTO `Sys_DictionaryList` (`DicName`, `DicValue`, `Dic_ID`, `Enable`, `Or
 ('认证决定', 'certification_decision', @dict_id, 1, 50, NOW(), 1, '超级管理员'),
 ('证书颁发', 'certificate_issuance', @dict_id, 1, 60, NOW(), 1, '超级管理员');
 
-SELECT '✅ 审核阶段字典创建完成 (6 项)' AS status;
+SELECT '✅ 审核阶段字典创建完成 (6 项)' AS Status;
 
 -- ============================================================
 -- Step 4: 证书状态字典
@@ -70,7 +70,7 @@ INSERT INTO `Sys_DictionaryList` (`DicName`, `DicValue`, `Dic_ID`, `Enable`, `Or
 ('过期', 'expired', @dict_id, 1, 40, NOW(), 1, '超级管理员'),
 ('待颁发', 'pending_issuance', @dict_id, 1, 5, NOW(), 1, '超级管理员');
 
-SELECT '✅ 证书状态字典创建完成 (5 项)' AS status;
+SELECT '✅ 证书状态字典创建完成 (5 项)' AS Status;
 
 -- ============================================================
 -- Step 5: 审核结论字典
@@ -88,7 +88,7 @@ INSERT INTO `Sys_DictionaryList` (`DicName`, `DicValue`, `Dic_ID`, `Enable`, `Or
 ('待改进后复审', 'improvement_required', @dict_id, 1, 40, NOW(), 1, '超级管理员'),
 ('取消审核', 'cancelled', @dict_id, 1, 50, NOW(), 1, '超级管理员');
 
-SELECT '✅ 审核结论字典创建完成 (5 项)' AS status;
+SELECT '✅ 审核结论字典创建完成 (5 项)' AS Status;
 
 -- ============================================================
 -- Step 6: 不符合项严重程度字典
@@ -105,7 +105,7 @@ INSERT INTO `Sys_DictionaryList` (`DicName`, `DicValue`, `Dic_ID`, `Enable`, `Or
 ('轻微不符合', 'observation', @dict_id, 1, 30, '改进建议性质，可作为预防措施', NOW(), 1, '超级管理员'),
 ('观察项', 'suggestion', @dict_id, 1, 40, '非不符合，仅是最佳实践建议', NOW(), 1, '超级管理员');
 
-SELECT '✅ 不符合项严重程度字典创建完成 (4 项)' AS status;
+SELECT '✅ 不符合项严重程度字典创建完成 (4 项)' AS Status;
 
 -- ============================================================
 -- Step 7: ISO 标准类型字典
@@ -124,7 +124,7 @@ INSERT INTO `Sys_DictionaryList` (`DicName`, `DicValue`, `Dic_ID`, `Enable`, `Or
 ('ISO 45001 职业健康安全管理体系', 'ISO45001', @dict_id, 1, 50, '职业健康安全', NOW(), 1, '超级管理员'),
 ('IATF 16949 汽车行业质量管理', 'IATF16949', @dict_id, 1, 60, '汽车行业', NOW(), 1, '超级管理员');
 
-SELECT '✅ 标准类型字典创建完成 (6 项)' AS status;
+SELECT '✅ 标准类型字典创建完成 (6 项)' AS Status;
 
 -- ============================================================
 -- Step 8: 申请状态字典
@@ -146,7 +146,7 @@ INSERT INTO `Sys_DictionaryList` (`DicName`, `DicValue`, `Dic_ID`, `Enable`, `Or
 ('已拒绝', 'rejected', @dict_id, 1, 60, NOW(), 1, '超级管理员'),
 ('已取消', 'cancelled', @dict_id, 1, 70, NOW(), 1, '超级管理员');
 
-SELECT '✅ 申请状态字典创建完成 (9 项)' AS status;
+SELECT '✅ 申请状态字典创建完成 (9 项)' AS Status;
 
 -- ============================================================
 -- Step 9: 任务状态字典
@@ -165,7 +165,7 @@ INSERT INTO `Sys_DictionaryList` (`DicName`, `DicValue`, `Dic_ID`, `Enable`, `Or
 ('已暂停', 'paused', @dict_id, 1, 50, NOW(), 1, '超级管理员'),
 ('已取消', 'cancelled', @dict_id, 1, 60, NOW(), 1, '超级管理员');
 
-SELECT '✅ 任务状态字典创建完成 (6 项)' AS status;
+SELECT '✅ 任务状态字典创建完成 (6 项)' AS Status;
 
 -- ============================================================
 -- Step 10: 机构状态字典
@@ -182,7 +182,7 @@ INSERT INTO `Sys_DictionaryList` (`DicName`, `DicValue`, `Dic_ID`, `Enable`, `Or
 ('注销', 'cancelled', @dict_id, 1, 30, NOW(), 1, '超级管理员'),
 ('整改中', 'rectification', @dict_id, 1, 40, NOW(), 1, '超级管理员');
 
-SELECT '✅ 机构状态字典创建完成 (4 项)' AS status;
+SELECT '✅ 机构状态字典创建完成 (4 项)' AS Status;
 
 -- ============================================================
 -- Step 11: 报告模板类型字典
@@ -200,7 +200,7 @@ INSERT INTO `Sys_DictionaryList` (`DicName`, `DicValue`, `Dic_ID`, `Enable`, `Or
 ('认证证书', 'certificate', @dict_id, 1, 40, '认证证书模板', NOW(), 1, '超级管理员'),
 ('不符合项报告', 'nc_report', @dict_id, 1, 50, '不符合项汇总报告', NOW(), 1, '超级管理员');
 
-SELECT '✅ 报告模板类型字典创建完成 (5 项)' AS status;
+SELECT '✅ 报告模板类型字典创建完成 (5 项)' AS Status;
 
 -- ============================================================
 -- 总结
@@ -213,5 +213,5 @@ FROM Sys_Dictionary d
 LEFT JOIN Sys_DictionaryList l ON d.Dic_ID = l.Dic_ID
 WHERE d.ParentId = @cert_dict_id;
 
-SELECT '🎉 数据字典初始化完成！' AS status;
+SELECT '🎉 数据字典初始化完成！' AS Status;
 SELECT '共创建 11 个字典分类，54 个字典项' AS summary;

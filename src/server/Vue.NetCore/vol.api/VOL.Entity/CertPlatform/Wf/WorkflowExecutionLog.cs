@@ -12,31 +12,29 @@ namespace VOL.Entity.CertPlatform.Wf
     public class WorkflowExecutionLog : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("workflow_code")]
+    [Required][StringLength(36)]
     public string WorkflowCode { get; set; }
-    [Required][Column("workflow_version")]
+    [Required]
     public int WorkflowVersion { get; set; }
-    [Required][Column("business_type")]
+    [Required]
     public string BusinessType { get; set; }
-    [Required][Column("business_id")]
+    [Required]
     public long BusinessId { get; set; }
-    [Required][StringLength(50)][Column("node_id")]
+    [Required][StringLength(50)]
     public string NodeId { get; set; }
-    [Required][StringLength(100)][Column("skill_code")]
+    [Required][StringLength(100)]
     public string SkillCode { get; set; }
-    [Column("input_data")]
+    
     public string InputData { get; set; }
-    [Column("output_data")]
+    
     public string OutputData { get; set; }
-    [Required][Column("status")]
-    public string Status { get; set; }
-    [Column("error_msg")]
+    
     public string ErrorMsg { get; set; }
-    [Column("duration_ms")]
+    
     public int? DurationMs { get; set; }
-    [Required][Column("started_at")]
+    [Required]
     public DateTime StartedAt { get; set; }
-    [Column("completed_at")]
+    
     public DateTime? CompletedAt { get; set; }
 
     }

@@ -12,45 +12,45 @@ export default function () {
       // 中文名称
       cnName: '认证机构管理',
       // API接口路径前缀
-      url: '/api/CertificationBody/',
+      url: '/CertCertificationBody/',
       // 分页配置
       pagination: { pageSize: 20, pageSizes: [10, 20, 50, 100] },
       // 排序字段
-      sortName: 'id',
+      sortName: 'Id',
     },
-    
+
     // 编辑表单字段定义
     editFormFields: {
-      code: '',
-      name: '',
-      short_name: '',
-      cb_code: '',
-      status: 'active',
-      contact_name: '',
-      contact_phone: '',
-      notes: '',
+      Code: '',
+      Name: '',
+      ShortName: '',
+      CbCode: '',
+      Status: 'active',
+      ContactName: '',
+      ContactPhone: '',
+      Remark: '',
     },
-    
+
     // 编辑表单选项配置
     editFormOptions: [
       [
-        { title: '基本信息', field: 'code', type: 'hidden' },
+        { title: '基本信息', field: 'Code', type: 'hidden' },
         {
           title: '机构全称',
-          field: 'name',
+          field: 'Name',
           required: true,
           maxlength: 200,
           colSize: 12,
         },
         {
           title: '简称',
-          field: 'short_name',
+          field: 'ShortName',
           maxlength: 100,
           colSize: 6,
         },
         {
           title: 'CNAS编号',
-          field: 'cb_code',
+          field: 'CbCode',
           maxlength: 50,
           colSize: 6,
         },
@@ -58,7 +58,7 @@ export default function () {
       [
         {
           title: '状态',
-          field: 'status',
+          field: 'Status',
           dataKey: 'org_status',
           data: [],
           type: 'select',
@@ -66,13 +66,13 @@ export default function () {
         },
         {
           title: '联系人',
-          field: 'contact_name',
+          field: 'ContactName',
           maxlength: 50,
           colSize: 6,
         },
         {
           title: '联系电话',
-          field: 'contact_phone',
+          field: 'ContactPhone',
           maxlength: 20,
           colSize: 6,
         },
@@ -80,20 +80,20 @@ export default function () {
       [
         {
           title: '备注',
-          field: 'notes',
+          field: 'Remark',
           type: 'textarea',
           rows: 3,
           colSize: 12,
         },
       ],
     ],
-    
+
     // 搜索表单字段
     searchFormFields: {
       keyword: '',
-      status: '',
+      Status: '',
     },
-    
+
     // 搜索表单选项
     searchFormOptions: [
       [
@@ -105,7 +105,7 @@ export default function () {
         },
         {
           title: '状态',
-          field: 'status',
+          field: 'Status',
           dataKey: 'org_status',
           data: [],
           type: 'select',
@@ -113,94 +113,74 @@ export default function () {
         },
       ],
     ],
-    
+
     // 表格列配置
     columns: [
       {
-        field: 'id',
+        field: 'Id',
         title: 'ID',
         width: 70,
         hidden: true,
         align: 'center',
       },
       {
-        field: 'cb_code',
+        field: 'CbCode',
         title: 'CNAS编号',
         width: 120,
         align: 'center',
         sortable: true,
       },
       {
-        field: 'name',
+        field: 'Name',
         title: '机构全称',
         width: 250,
         link: true,
         sortable: true,
       },
       {
-        field: 'short_name',
+        field: 'ShortName',
         title: '简称',
         width: 120,
         align: 'center',
       },
       {
-        field: 'status',
+        field: 'Status',
         title: '状态',
         width: 100,
         align: 'center',
-        bind: { key: 'org_status', value: 'status' },
-        render: (h, { row }) => {
-          const colorMap = {
-            active: 'success',
-            suspended: 'warning',
-            cancelled: 'danger',
-            rectification: 'info',
-          };
-          return h(
-            'el-tag',
-            { props: { type: colorMap[row.status] || 'info', size: 'small' } },
-            row.status === 'active'
-              ? '正常运营'
-              : row.status === 'suspended'
-              ? '暂停业务'
-              : row.status === 'cancelled'
-              ? '已注销'
-              : '整改中'
-          );
-        },
+        bind: { key: 'org_status', value: 'Status' },
       },
       {
-        field: 'contact_name',
+        field: 'ContactName',
         title: '联系人',
         width: 100,
         align: 'center',
       },
       {
-        field: 'contact_phone',
+        field: 'ContactPhone',
         title: '联系电话',
         width: 130,
         align: 'center',
       },
       {
-        field: 'create_time',
+        field: 'CreateDate',
         title: '创建时间',
         width: 160,
         align: 'center',
         sortable: true,
-        formatter: true,
       },
       {
-        field: 'notes',
+        field: 'Remark',
         title: '备注',
         width: 200,
         showOverflowTooltip: true,
       },
     ],
-    
+
     // 明细表配置（暂无）
     detail: null,
     details: [],
-    
+
     // 扩展配置
     extend: {
       // 自定义按钮

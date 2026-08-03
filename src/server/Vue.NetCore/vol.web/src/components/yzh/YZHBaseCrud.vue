@@ -47,19 +47,23 @@
   >
     <!-- 顶部描述信息 -->
     <template #gridHeader>
-      <el-alert
-        v-if="description"
-        :title="description"
-        type="info"
-        :closable="false"
-        show-icon
-        style="margin-bottom: 10px"
-      />
+      <div>
+        <el-alert
+          v-if="description"
+          :title="description"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 10px"
+        />
+      </div>
     </template>
 
     <!-- 左侧扩展插槽（可选） -->
     <template #btnLeft>
-      <slot name="btnLeft"></slot>
+      <div>
+        <slot name="btnLeft"></slot>
+      </div>
     </template>
   </view-grid>
 </template>

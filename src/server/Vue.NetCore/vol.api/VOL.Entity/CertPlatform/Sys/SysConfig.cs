@@ -12,15 +12,15 @@ namespace VOL.Entity.CertPlatform.Sys
     public class SysConfig : YZHBaseEntity
     {
 
-    [Required][StringLength(100)][Column("config_key")]
+    [Required][StringLength(100)]
     public string ConfigKey { get; set; }
-    [Required][Column("config_value")]
+    [Required]
     public string ConfigValue { get; set; }
-    [Column("value_type")]
+    
     public string ValueType { get; set; } = "string";
-    [Column("description")]
+    
     public string Description { get; set; }
-    [Column("is_system")]
+    
     public bool IsSystem { get; set; } = false;
 
     }

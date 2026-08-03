@@ -12,23 +12,23 @@ namespace VOL.Entity.CertPlatform.Audit
     public class AuditFinding : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("checklist_item_code")]
+    [Required][StringLength(36)]
     public string ChecklistItemCode { get; set; }
-    [StringLength(36)][Column("nc_code")]
+    [StringLength(36)]
     public string NcCode { get; set; }
-    [StringLength(36)][Column("source_file_code")]
+    [StringLength(36)]
     public string SourceFileCode { get; set; }
-    [StringLength(200)][Column("source_position")]
+    [StringLength(200)]
     public string SourcePosition { get; set; }
-    [Column("source_content")]
+    
     public string SourceContent { get; set; }
-    [Required][Column("finding_type")]
+    [Required]
     public string FindingType { get; set; }
-    [Required][Column("description")]
+    [Required]
     public string Description { get; set; }
-    [Column("confidence")]
+    
     public decimal? Confidence { get; set; }
-    [Column("is_manual")]
+    
     public bool IsManual { get; set; } = false;
 
     }

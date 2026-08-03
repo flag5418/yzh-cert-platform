@@ -945,6 +945,53 @@ public override WebResponseContent Add(SaveModel saveDataModel)
 3. 异步接口（生成器勾选）：重写 `AddAsync` 等，可另赋 `AddOnExecutingAsync`；与同步版 **链式都执行**。
 4. **禁止** 在 Partial 中重写整个 Save 逻辑；仅通过 Func 扩展。完整自定义 API 用 Partial Controller（§12.J.10）。
 
+**⚠ YZH 硬约束（踩坑 P2-02，2026-08-03）：Partial 构造函数必须显式注入 `[ActivatorUtilitiesConstructor]`**
+
+Autofac + ServiceBase 多层继承在 Partial 类声明自定义构造函数时，若未加 `[ActivatorUtilitiesConstructor]` 特性会回退到无参构造，导致 `repository`/`unitWork` 全部 `null`，`GetPageData` 报 `NullReferenceException`。
+
+**CertPlatform 域所有 Partial Service 必须使用以下构造函数模板，缺一不可：**
+
+```csharp
+using Microsoft.Extensions.DependencyInjection;   // ActivatorUtilitiesConstructor
+using VOL.Core.BaseProvider;
+using VOL.Core.Utilities;
+
+namespace VOL.Builder.Services.CertPlatform
+{
+    public partial class CertCertificationBodyService  // 其他服务同理
+    {
+        // ①【必须】告诉 Autofac 用这个构造函数注入
+        [ActivatorUtilitiesConstructor]
+        public CertCertificationBodyService(
+            IRepository<CertificationBody> repository,   // ② 强类型仓储
+            IUnitWork unitWork
+        ) : base(repository, unitWork)                  // ③ 必须传 base 构造
+        {
+            this.repository = repository;               // ④ 兜底赋值，防反射偶尔丢失
+        }
+
+        // ⑤ GetPageData 兜底：若反射仍拿不到 repository，手动 Autofac 解析
+        public override PageGridData<CertificationBody> GetPageData(PageDataOptions options)
+        {
+            if (this.repository == null)
+            {
+                this.repository =
+                    AutofacContainerModule.GetService<IRepository<CertificationBody>>();
+            }
+            return base.GetPageData(options);
+        }
+    }
+}
+```
+
+同时 **`VOL.Core/EFDbContext/VOLContext.cs` 实体准入扫描需三层校验**（踩坑 P2-03）：
+```csharp
+1. typeof(BaseEntity).IsAssignableFrom(type)          // 继承链深度扫描
+2. !type.IsDefined(typeof(NotMappedAttribute))         // 过滤 NotMapped DTO/Option 类
+3. type.GetProperty("DBServer") != null                // 过滤 object 属性容器
+```
+任何 FilterOptions / DTO / ViewModel 类都必须第一行加 `[NotMapped]`。
+
 **执行顺序速查：**
 
 | 操作 | 顺序 |
@@ -1512,7 +1559,7 @@ gridRef.ck = false              // 隐藏 checkbox
 gridRef.fixedSearchForm = true  // 默认展开查询
 gridRef.continueAdd = true      // 连续添加
 gridRef.doubleEdit = true       // 双击编辑
-gridRef.url = 'api/{表}/'       // 接口前缀
+gridRef.url = 'api/{表}/'       // 接口前缀【⚠ 必须以 / 结尾，缺尾斜杠会导致 404 → urlgetPageData，踩坑 P2-06】
 gridRef.pagination = { size: 30, sizes: [30,60,100] }
 gridRef.boxOptions.width = 1000
 gridRef.queryFields = ['Field1','Field2'] // 多快捷查询
@@ -1522,6 +1569,34 @@ gridRef.dyScript = `{ ... }`    // 动态脚本扩展
 ### D.3 Slots
 
 `#gridHeader` `#gridBody` `#gridFooter` `#btnLeft` `#btnRight` `#modelHeader` `#modelBody` `#modelFooter` `#detailContent` `#modelBtn` `#modelRight` `#importContent` `#auditContent` `#auditButton` `#printContent`
+
+> **⚠ 强约束（YZH-Framework 特定，踩坑 P2-04，2026-08-03）**  
+> Vol 框架的 `ViewGridProvider.jsx` 对插槽内容做了 `parentNode` 手动遍历，**与 Vue 3 Fragment 多根节点 v-if 卸载时机冲突**会导致
+> `TypeError: Cannot read properties of null (reading 'parentNode')`。
+>
+> **所有插槽内容必须包裹在单一根节点 `<div>` 中**，即使只有一个子元素也要包：
+>
+> ```vue
+> <!-- 正确：单根 -->
+> <template #gridHeader>
+>   <div>
+>     <el-alert v-if="desc" ... />
+>   </div>
+> </template>
+>
+> <template #btnLeft>
+>   <div>
+>     <el-button ... />
+>   </div>
+> </template>
+>
+> <!-- 错误：Fragment 多根（哪怕只有一个 el-alert） -->
+> <template #gridHeader>
+>   <el-alert v-if="desc" ... />
+> </template>
+> ```
+>
+> 详见 YZH 知识库踩坑记录：`docs/60-AI工程设计/YZH-知识库/05-踩坑记录/2026-08-03_Phase2联调全栈问题修复记录.md` P2-04。
 
 ### D.4 主从 / 一对多 / 三级
 
@@ -1579,6 +1654,23 @@ bindFormEvent('Qty', {
 c.onKeyPress / c.onChange / c.blur / c.formatter = (row) => {}
 c.checkEdit = (row, column, index) => row.Status !== 1
 ```
+
+> **⚠ 强约束（踩坑 P2-05，2026-08-03）**  
+> `columns.formatter` **必须是函数，不能是 `true`/字符串/其他非函数值**。  
+> 错误配置 `formatter: true` 会导致 VolTable.vue 渲染时抛出：
+> `TypeError: column.formatter is not a function`，随后 Vue 3 二次抛：
+> `TypeError: Cannot destructure property 'type' of 'vnode' as it is null.`
+>
+> **正确写法（示例）**：
+> ```javascript
+> c.formatter = (row, col, idx) => row.Status === 1 ? '<span class="tag-success">已通过</span>' : '<span class="tag-warning">待审</span>'
+> // 或者
+> const dateCol = gridRef.columns.find(c => c.field === 'CreateDate')
+> dateCol.formatter = (row) => dayjs(row.CreateDate).format('YYYY-MM-DD HH:mm')
+> ```
+>
+> **排查**：发现 VolTable 渲染红屏时先 `grep 'formatter: true'` 全局搜索 options.js 与 onInit 配置。
+> 详见踩坑记录 P2-05。
 
 ### E.4 事件对照
 
@@ -2375,5 +2467,104 @@ forminput/formfocus/formblur/formchange/formcalc§12.E | detailforminput/detailf
 - `.jsx` = **MUST NOT** 写业务
 
 ---
+
+## 十四、YZH 单表基类 MVP 落地 23 项踩坑清单（V1~V11，2026-08-03 联调）
+
+> **背景**：`components/yzh/base/YzhBaseSingleTable.vue` 在 `cert_certification_body` 首次打通前后端链路时，因 Vol 框架 4 层 Provider 与 YZH 自己 state 双源不同步、栅格隐式约定、字典重复、wheres 格式错误等「隐式坑点连续爆发 23 项。本节把所有「之前反复踩过的坑 + 修复代码 + 预防规则全部沉淀为可复用的宪法级规则，**下一轮任何 Cert 7 个页面推广时 1:1 套，不许再反复修同样的错**。
+
+### 14.0 为什么反复了 10+ 轮才修好的 4 条根本原因（AI/开发者必须记住）
+1. **Vol 框架是「4 层深度 Provider 脚手架**：ViewGridProvider → ViewGridEvent → VolFormProvider → VolTableProvider，每一层都有自己的初始化钩子和内部 state。**隐式约定 90% 未写文档**，单点 patch 一个问题会暴露下一层另一个问题。
+2. **之前是 Vol 内部 state + YZH 自己 state 双源不同步**：勾选框/行点击/编辑模式多选各自维护一套，**不同步必炸。
+3. **之前顺序错误的修复顺序反了**：应该先把 7 个交互（增删改查+刷新+导入/导出/列配置 **基类里一次性全部接上 Vol 原生**，再改业务字段；之前是反馈一个改一个，每次都缺其他 6 个没接，每次都爆下一轮。
+4. **用户反馈是「现象」不是「根因」**：如「搜索输入没效果」背后实际藏 3 个独立根因（缺 type→v-model 不回写、searchFormFields 字段没被 searchBefore 拆解进 wheres、Vol 内部 VolFormProvider initDicKeys 没去重），之前每次只修 1 个，反复暴露下一轮继续。
+
+### 14.1 P0 - 致命级（页面直接白屏 / 完全不能用，共 8 项
+| 编号 | 现象 | 根因 | 修复位置 | 修复手段（宪法级）| 预防规则 |
+|---|---|---|---|---|---|
+| P0-01 | `locateNonHydratedAsyncRoot: Cannot read properties of null (reading 'component')` 白屏 | 在 JS 层改 dataConfig.buttons=[]，导致 Vol initButtonsAuthFields 内部报错，instance.parent 变成 null | [YzhBaseSingleTable.vue L409-L418](file:///Volumes/Expand/wangqingquan/Documents/work/study/体系认证平台/src/server/Vue.NetCore/vol.web/src/components/yzh/base/YzhBaseSingleTable.vue#L409-L418) `_freezeVolButtons` 什么都不做 + CSS 隐藏 UI 层 `:deep(.view-header > .btn-group) { display:none !important }` | **禁止任何场景**在 JS 层删除/清空 Vol 内部 dataConfig 任何数据结构；UI 隐藏一定只改 CSS |
+| P0-02 | Vite 500 编译失败 → Vue Router `Failed to fetch dynamically imported module | .vue lang=jsx 文件写 TS 风格 `(x as any)` 语法，@babel/parser 抛 Unexpected token，Vite dynamic import 失败 | 所有 .vue 删除所有 TS 类型断言 `as` / `as T` 语法，保持纯 JSX | 写 .vue 代码时，要泛型一律用 typeof / instanceof / JSDoc 类型注释 |
+| P0-03 | 勾选了复选框，点删除仍提示「请选择一行」| 两套 state：Vol 原生勾选框存在 `gridVM.getSelected()`，YZH 自己的 `useYZHEditMode` 自己维护 `selectedRows`，两套不同步 | [useYZHEditMode.ts#L52-L115](file:///Volumes/Expand/wangqingquan/Documents/work/study/体系认证平台/src/server/Vue.NetCore/vol.web/src/components/yzh/composables/useYZHEditMode.ts#L52-L115) 重写 selectedKeys/selectedRowObjects/hasSelection：**优先读 Vol 原生 getSelected()**，其次 editMode.selectedRows，最后 singleSelectedRow；用 registerVolSelectionGetter 在 onInit/onInited/onMounted 3 次注册** | selection 永远只认 Vol 原生勾选框为「唯一真实数据源；YZH 自己 state 只做 fallback，永远反例** |
+| P0-04 | 搜索关键词输入字符但 Vol 读不到值（用户说输入框能打字但没效果） | ① searchFormOptions.Name **缺 `type:'input'`→Vol fallback 成普通 div 不绑 v-model；② 输入了字符但 set 不到 searchFormFields 回写；③ searchBefore 没把 searchFormFields 拼到 param.wheres | ① options.js searchFormOptions 所有可输入字段显式写 type: 'input' / 'select' / 'textarea'，② opts.searchFormFields 普通 JS 对象浅拷贝（不能 Proxy/reactive readonly），③ searchBefore 把 Name 拆 3 字段 LIKE 到 param.wheres | 所有表单字段可输入**必须显式写 type 同构 |
+| P0-05 | wheres 查询条件传给后端后端完全没读到 | VolTableLoadData.js L29 / L61 规定：**所有条件必须放 `param.wheres: Array<{name,value}>`，后端 ServiceBase 只 JSON.parse(wheres_str)；之前写 param.Name=xx 直接写 param 顶层，后端忽略导致搜索看起来传了实际不生效 | [YzhBaseSingleTable.vue L645-L706](file:///Volumes/Expand/wangqingquan/Documents/work/study/体系认证平台/src/server/Vue.NetCore/vol.web/src/components/yzh/base/YzhBaseSingleTable.vue#L645-L706) searchBefore 统一把所有 searchFormFields 全部拼到 wheres | 查询条件**一个一个字段** 拼到 `param.wheres` 数组**，永远不能写 param 顶层字段 |
+| P0-06 | 404 `/api/api/CertCertificationBody/` 双前缀 | table.url 写成 `/api/CertCertificationBody/`，Vol getUrl = '/' + 'api' + table.url，自动拼 `/api` 前缀 | mergedTable.url 构造时 `/${props.schema.controllerName}/`，URL 必须相对路径 `/xxx/` **不写 /api 前缀 | 前端所有 table.url **禁止写 /api 开头，一律 `/ControllerName/` |
+| P0-07 | 弹窗 v-show 不显示隐藏字段列少了 Code 存库失败 | Vol v-show 条件判断必须要写 `{ field: 'Code', type:'input', hidden:true }`；只写 hidden:true 不写 type 不渲染隐藏 input，Vol 会把 Code 当无类型字段跳过，保存时后端缺字段报错 | options.js editFormOptions 第一行必须先放隐藏字段：`{ field:'Code', type:'input', hidden:true }` **所有隐藏字段必须显式写 type:'input' |
+| P0-08 | 点遮罩录入一半丢失编辑内容丢了 | Vol dialog 默认 width 70% 视口 + closeOnClickModal=true，点外面直接关 | opts.boxOptions `{ width:960, top:'8vh', closeOnClickModal:false }`， `<view-grid :boxOptions="opts.boxOptions"` | 所有业务弹窗固定宽 960，禁止遮罩关弹窗
+
+### 14.2 P1 - 严重 UX 问题（能用但体验非常不友好，共 10 项）
+| 编号 | 现象 | 根因 | 修复位置 | 修复手段 |
+|---|---|---|---|---|
+| P1-01 | 弹窗 3 列 + 备注只占半行，用户说不够严谨 + 70% 跳格显示不友好 | ① editFormOptions colSize 每行合计按 12 满格重算，备注 colSize=12 只占半格；② ②缺 colSize 的字段被 VolFormProvider L71-78 平均分配→导致 | [CertificationBody/options.js#L36-L105](file:///Volumes/Expand/wangqingquan/Documents/work/study/体系认证平台/src/server/Vue.NetCore/vol.web/src/views/cert/CertificationBody/options.js#L36-L105) 严格 2 列 4 行 24 栅格（每行 2×colSize 12=24，备注 colSize 24 整行，备注整行 rows=5 + maxlen 1000；基类 scoped style 对 span=24 textarea 强制 width:100% min-height:140px | 所有 editFormOptions 必须写 colSize 的和：每行严格 =24，备注 textarea colSize 24 整行 |
+| P1-02 | 「状态」下拉里每一项重复 2 遍（整改中/注销/暂停/正常各出现 2 次）| VolFormProvider initDataSource L141 `if (!x.data.length \|\| resetData)` 在 onInited + modelOpenBeforeAsync + resetData=true 3 次反复 push 同一 dicKey → GetVueDictionary 返回 N 份同字典→bindData 同一项出现 2 次 | 基类 `_dedupSelectData(items)` 按 value+label Set 去重（x.data.splice 原地替换）；在 onInit / onInited / onMounted 3 次 phase 都对 searchFormOptions + editFormOptions flat 数组去重 | 所有含 dataKey 的 select 列**在基类 3 次 phase 都去重 1 次 |
+| P1-03 | 搜索输入/选择后需要点其他地方才刷新 | Vol quickSearchKeyPress 只处理第一个 input 的 keyCode 13，完全没监听 blur/change；Element Plus el-select change 事件不冒泡 | 基类 `_ensureSearchAutoTrigger` 对 fixedSearchBox + customSearchRef 容器所有 input/select/textarea 统一绑：blur/change/keydown Enter；el-select 容器额外 mouseup/mouseleave 延迟 220/320ms 调 `gridVM.search(null,true) `| 搜索区交互：失焦/值变/Enter → 立即 search，永远不依赖用户点搜索按钮或其他地方 |
+| P1-04 | 「查看标准」放工具栏未选中时灰色死按钮占槽位导致视觉误导 | toolbarLeft 插槽强制 disabled 灰色按钮占槽位，用户不知道什么时候能点 | [CertificationBody.vue#L14-L29](file:///Volumes/Expand/wangqingquan/Documents/work/study/体系认证平台/src/server/Vue.NetCore/vol.web/src/views/cert/CertificationBody/CertificationBody.vue#L14-L29) 改成 `v-if="selectedRow"` 仅选中行时显示 plain 「查看关联标准」，未选中时整个 slot 为空 | 业务工具栏：条件按钮**用 v-if 按需显示，不用 disabled 灰掉占位置** |
+| P1-05 | 批量删除要「先进入编辑模式」才能删除（用户说已经取消编辑了为什么还要点编辑）| 之前 hasSelection 只认 editMode.selectedRows，不认勾选框 | useYZHEditMode 重写 hasSelection：勾选框勾了/点行/编辑模式多选 → 任一满足即可删 | batchDelete 永远与 editMode 解耦，勾选即删 |
+| P1-06 | 刷新/导入/导出/列配置 4 按钮点了没反应提示占位，显示「列配置可点右上角 | 之前只接了 tbl.importClick/exportClick（Vol 部分版本没暴露），列配置写了占位 $message.info | 基类 onYzhToolbarClick 重写：① 刷新 → gridVM.refresh + search(null,true) 兜底；② 导入/导出 → 优先 tbl.importClick/exportClick，**兜底动态 import ViewGridEventButton.jsx 的 importData/exportData(proxy,props,dataConfig,false) 原始函数**；③ 列配置 → `customColumnRef.show(columns, orginColumnFields, tableName)` 与 ViewGrid.vue L726 参数完全一致 | 4 个按钮接 Vol 原生函数兜底，失败时提示「用表格右上角」而不是完全占位 info |
+| P1-07 | 备注挤一块显示挤在弹窗左半格很难看 | 备注 colSize 还是 12（半格）+ rows=3 高度不够，Vol colSize 24 + scoped style `.el-dialog__body .el-form-item textarea` 强制 100% 宽 + min-height 140px，**已修见 P1-01，这里重复但不同角度 | textarea 列必须 colSize 24 + 整行 |
+| P1-08 | 关键词多字段模糊（Name/ShortName/CbCode 任一 LIKE）| Vol 默认 searchFormFields.Name=xx 当相等查询 Name=xx 导致只能查全称，查不到简称/CNAS 编号 | searchBefore 里 `_appendOrLikeForKeyword` 对 searchKeywordFields 数组（默认 Name/ShortName/CbCode）逐个拼 wheres LIKE + `{ name:字段, value: kw, operator:'like'}`，**把 Name 置 undefined 防止 Vol 默认相等重复拼一层 | 关键词搜索默认 3 字段 OR LIKE，永远别写单字段 = |
+| P1-09 | Status/其他 select 下拉值重复 2 次（同上 P1-02 同一根因 search 角度）| initDicKeys 3 次 + dicKeys 不 dedupe → 同 dicKey 请求多次 | _dedupSelectData 对 searchFormOptions + editFormOptions 两个数组都去重 | 两个表单（编辑 + 搜索）的 data 都去重 |
+| P1-10 | 删除提示还是「请进入编辑模式多选」误导用户 | 文案从「请选择一行（点击行选中或进入编辑模式多选）」改成「请先勾选要删除的行（使用左侧复选框或行选择）」 | onYzhToolbarClick batchDelete 分支改文案 | 删除提示永远不出现编辑模式 4 个字，强调复选框。
+
+### 14.3 P2 - 架构级预防规则（不炸但反复导致小问题，共 5 项）
+| 编号 | 规则内容 | 为什么是宪法级 | 对应文件/代码 |
+|---|---|---|---|
+| P2-01 |  opts.searchFormFields / editFormFields / editFormOptions / searchFormOptions **必须全部是普通 JS 对象浅拷贝，不能用 reactive(readonly Proxy)/structuredClone/深拷贝**，否则 Vol 内部 `item.data = []` 赋值静默失败→v-model setter 不回写→「输入框能打字符但 Vol 读不到值」 | Vue 3 reactive Proxy 的 writable:false 导致内部 item.data=[] 静默失败；structuredClone 会把函数/SFC 组件丢掉 → 报 Vue runtime-core locateNonHydratedAsyncRoot | [YzhBaseSingleTable.vue L182-L199](file:///Volumes/Expand/wangqingquan/Documents/work/study/体系认证平台/src/server/Vue.NetCore/vol.web/src/components/yzh/base/YzhBaseSingleTable.vue#L182-L199) opts 构造：Object.assign({}, _defaults, rawOpts, { editFormFields: Object.assign({}, ...}) + editFormOptions: row.map(x→Object.assign({}, x) ... }
+| P2-02 | **所有可输入字段（search + edit）必须同构显式写 type: 'input' / 'select' / 'textarea' | 缺 type→Vol 根据 type 判断分支** 走错误分支渲染：不绑 v-model→输入框/下拉 v-model setter 无法写回（P0-04/P0-07 | CertificationBody options.js editFormOptions + searchFormOptions 显式全字段 |
+| P2-03 | **禁止手改 Vol 核心源码**：ViewGridProvider/VolTable/VolForm 的 .jsx/.js 全部只读** 0 修改** | 一改就连锁炸：定位隐式依赖 init 4 层 provider 内部 state 结构不同步→ P0-01 null.component | 只读诊断定位根因→只改基类 + Preset + Options + 业务页 4 个目录 |
+| P2-04 | **view-grid 所有插槽必须 <div> 单根包裹** | Vol ViewGridProvider 内部对插槽做 parentNode 手动遍历，Vue 3 Fragment 多根节点 v-if 空 空 Fragment 先卸载，后 parentNode 访问 null→P2-04 parentNode null TypeError | 见 P2-04 fix 所有业务页所有插槽一律先敲<div> 再写业务 |
+| P2-05 | **推广到 7 个 Cert 页面前，必须在基类 YzhBaseSingleTable.vue 一次性把 23 坑都跑完，再 1:1 套**，不能单点 patch 一个页就推广，会再爆 10+ 轮同样错误 | 单点 patch 一个页每次修 1 个坑就推广 → 下页爆同样 6 个没接的按钮/selection 不同步→再修再爆→反复 N 轮 | 推广前先跑一遍 14.0 检查清单再推广 |
+
+---
+
+### 14.4 V12 用户真实 Chrome 操作阶段 4 项显式反馈 + 5 个现象级复现 → 即时修复记录（2026-08-03 18:30 用户侧最新反馈）
+
+> **用户原话总览**：「先将当前踩坑的地方更新到文档吧，现在还有一大堆错误，我觉得我都需要给你做个错误清单了，这个简单页面至少还有10几个错误」+ 截图展示 5 个复现场景（Q1~Q4）。
+> 核心要求：①文档沉淀 + ②直接给用户一份打勾 Checklist，不用用户自己写错误列表。
+
+| 用户反馈编号 | 用户原话 / 截图复现场景 | 对应 23 项编号 | 根因（一句话） | 是否已落地 | 验证方式 |
+|---|---|---|---|---|---|
+| **Q1** | 「顶部的查看标准为什么要放到这里」——截图展示未勾选行时仍显示 disabled 灰色「查看标准」死按钮占槽位 | **P1-04** | 之前 toolbarLeft 一直渲染按钮，v-if 没写，导致未选中时灰色死按钮误导用户视觉 | ✅ 已修 | 未勾选行 → toolbarLeft 空；勾选 1 行 → 立即出现绿色 plain「查看关联标准」 |
+| **Q2-Phenomenon A** | 「我明明选择了一行还是提示要选择一行机构」——截图：勾了复选框 + 蓝色选中行，但点删除仍红色提示「请选择一行」 | **P0-03** | Vol 原生勾选框 state（gridVM.getSelected）与 YZH 自己的 editMode.selectedRows 两套不同步；hasSelection 只认后者 | ✅ 已修 | 勾复选框 1 行 → 顶部删除 → 正常二次确认，不出红色提示；勾选全选 → 批量删除正常选多行 |
+| **Q2-Phenomenon B** | 「我已经取消编辑了为什么还要点编辑才能删除」——用户退出 ✎编辑模式后勾复选框，仍提示要进编辑模式 | **P1-05** | 删除分支前置判断 editMode，把「复选框勾选」和「编辑模式多选」错误地绑定成一回事 | ✅ 已修 | 点 ✎ → 再点一次退出编辑（编辑模式关闭）→ 勾行复选框 → 顶部删除 → 不出现「编辑模式」4 字，直接弹二次确认 |
+| **Q2-Phenomenon C** | 「勾选了行了也不能删除」——勾了行但删除按钮无反应 | **P0-03 + P1-10** | 上同；且删除提示文案仍写「进入编辑模式多选」进一步误导用户 | ✅ 已修 | 删除提示文案：「请先勾选要删除的行（使用左侧复选框或行选择）」——永远不再出现「编辑模式」4 个字 |
+| **Q3-Phenomenon A（刷新）** | 「导入、导出、列配置、刷新好像都未实现」——点 🔄 刷新没反应 | **P1-06 刷新分支** | 只写了占位提示 `$message.info`，没真实调 gridVM.refresh + search(null,true) 3 层兜底 | ✅ 已修 | 在第 3 页 → 点 🔄 → 表格从第 1 页重查，Network 看到新的 getPageData POST |
+| **Q3-Phenomenon B（导入）** | 点 📥 导入没反应 | **P1-06 导入分支（❓ 待真实 Network 验证）** | tbl.importClick 多数 Vol 版本没 expose；没兜底动态 import ViewGridEventButton.importData | ✅ 已修（待真实浏览器） | 点 📥 导入 → 4 层兜底：volUploadRef.show → volUpload.show → tbl.importClick → ViewGridEventButton.importData；任一命中应弹出「选择 Excel + 下载模板」的 Vol 原生导入弹窗 |
+| **Q3-Phenomenon C（导出）** | 点 📤 导出没反应 | **P1-06 导出分支（❓ 待真实 Network 验证 blob 返回）** | tbl.exportClick 部分 Vol 版本没 expose；没兜底动态 import ViewGridEventButton.exportData | ✅ 已修（待真实浏览器 + 后端 .NET 起） | 先筛「暂停业务」→ 点 📤 导出 → 浏览器下载 xlsx；Network POST `/api/CertCertificationBody/export` 返回 blob，下载的行 = 过滤后的行数 |
+| **Q3-Phenomenon D（列配置）** | 点 🛠 列设置只弹占位 info 提示「列配置可点右上角图标」 | **P1-06 列配置分支** | 之前只写 $message.info 占位，完全没接 Vol 内部 customColumnRef.show() 原始 API | ✅ 已修 | 点 🛠 列设置 → Vol 列配置面板弹出（每列 checkbox + 「重置默认」+「确认」两个按钮）；参数与 ViewGrid.vue L726 完全一致：show(columns, orginColumnFields, tableName) |
+| **Q4 文档要求** | 「我觉得我都需要给你做个错误清单了，这个简单页面至少还有10几个错误」 | §十四 23 项清单 + §十五 23 项推广 Checklist + 踩坑记录.md §8 | 之前文档只写了技术修复面，没有给用户一份可直接打勾、按操作顺序的 Checklist，用户不知道怎么提问题 | ✅ 已写 2 份文档 · 3 份清单 | ① vol-skill.md §十五 23 项推广 Checklist（开发者/AI 侧）；② 踩坑记录.md §8 🎯 12 项用户侧测试 Checklist；③ §8.1 🚩 15+ 项即时打勾清单（本章 §14.4 对应落地） |
+
+**📌 V12 阶段修复落地的 3 份打勾 Checklist 定位索引**：
+| 文档 | 给谁用 | 清单内容 | 打勾数量 |
+|---|---|---|---|
+| `vol-skill.md §十五` | AI / 开发者（推广到 6 个 Cert 页面前逐条对照） | 23 项 P0/P1/P2 技术修复 Checklist | 23 项 |
+| `2026-08-03_Phase2联调.md §8` | 用户真实浏览器操作测试（前 12 步 + 2 步 Network ❓） | 🎯 12 步用户操作顺序 Checklist + 2 步 Network 抓包验证 | 14 项 |
+| 同文件 §8.1 末尾 | 用户即时反馈新问题时直接勾选，不用自己写列表 | 🚩 15+ 项用户原话对应打勾清单 | 15+ 项 |
+
+---
+
+## 十五、下一轮推广到 6 个 Cert 页面检查清单（23 项 Checklist）
+推广到 ISOStandard / ISOClause / Enterprise / CertApplication / AuditTask + M3 左树右表 ISOClauseTreeTable 前，**先在每个页面按下面 23 项逐条打勾，不许漏：
+- [ ] P0-01 白屏：CSS 隐藏 btn-group，JS 不改 dataConfig.buttons
+- [ ] P0-02 Vite 编译：删除所有 .vue 里所有 TS `as any` 语法
+- [ ] P0-03 selection 同步：hasSelection 优先 Vol 原生 getSelected()
+- [ ] P0-04 搜索可输入：searchFormOptions 全字段显式 type: input/select
+- [ ] P0-05 wheres 数组：searchBefore 所有字段拼 param.wheres，不写 param 顶层
+- [ ] P0-06 URL 单前缀 /api 相对 /ControllerName/
+- [ ] P0-07 隐藏字段 Code 显式 type:input hidden:true 放第一
+- [ ] P0-08 boxOptions 960 + closeOnClickModal=false
+- [ ] P1-01 弹窗严格 2 列 24 栅格备注 colSize 24 整行
+- [ ] P1-02 下拉去重：_dedupSelectData 3 次 phase
+- [ ] P1-03 搜索自动触发：blur/change/Enter/mouseup 立即 search(null,true)
+- [ ] P1-04 业务按钮 v-if 按需显示不占槽位
+- [ ] P1-05 删除与 editMode 解耦
+- [ ] P1-06 刷新/导入/导出/列配置 4 按钮接 Vol 原生兜底
+- [ ] P1-07 备注 textarea min-height 140 + rows=5
+- [ ] P1-08 关键词 3 字段 OR LIKE
+- [ ] P1-09 两个表单（search+edit）下拉都去重
+- [ ] P1-10 删除提示文案正确
+- [ ] P2-01 opts 普通 JS 浅拷贝无 Proxy
+- [ ] P2-02 全字段显式 type 同构
+- [ ] P2-03 0 改 Vol 核心源码
+- [ ] P2-04 插槽全 <div> 单根
+- [ ] P2-05 跑完 23 项 Checklist 再推广下一个页面
 
 *VolPro 业务逻辑 AI 开发技能 · 文档四分法（cs / view-grid / web / edit）· Skill + v3.volcore.xyz 双源 ·*

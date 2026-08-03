@@ -12,13 +12,13 @@ namespace VOL.Entity.CertPlatform.Cert
     public class DirectoryTemplate : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("config_code")]
+    [Required][StringLength(36)]
     public string ConfigCode { get; set; }
-    [StringLength(36)][Column("parent_code")]
+    [StringLength(36)]
     public string ParentCode { get; set; }
-    [Required][StringLength(200)][Column("folder_name")]
+    [Required][StringLength(200)]
     public string FolderName { get; set; }
-    [Column("sort_order")]
+    
     public int SortOrder { get; set; } = 0;
 
     }

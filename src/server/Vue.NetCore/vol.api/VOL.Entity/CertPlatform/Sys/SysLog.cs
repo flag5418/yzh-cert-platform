@@ -12,21 +12,21 @@ namespace VOL.Entity.CertPlatform.Sys
     public class SysLog : YZHBaseEntity
     {
 
-    [Column("user_id")]
+    
     public long? UserId { get; set; }
-    [Required][StringLength(50)][Column("module")]
+    [Required][StringLength(50)]
     public string Module { get; set; }
-    [Required][StringLength(100)][Column("action")]
+    [Required][StringLength(100)]
     public string Action { get; set; }
-    [StringLength(50)][Column("target_type")]
+    [StringLength(50)]
     public string TargetType { get; set; }
-    [Column("target_id")]
+    
     public long? TargetId { get; set; }
-    [Column("detail")]
+    
     public string Detail { get; set; }
-    [StringLength(50)][Column("ip_address")]
+    [StringLength(50)]
     public string IpAddress { get; set; }
-    [StringLength(500)][Column("user_agent")]
+    [StringLength(500)]
     public string UserAgent { get; set; }
 
     }

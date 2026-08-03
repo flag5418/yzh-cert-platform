@@ -12,35 +12,33 @@ namespace VOL.Entity.CertPlatform.Audit
     public class NonConformity : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("task_code")]
+    [Required][StringLength(36)]
     public string TaskCode { get; set; }
-    [Required][StringLength(36)][Column("clause_code")]
+    [Required][StringLength(36)]
     public string ClauseCode { get; set; }
-    [Required][StringLength(50)][Column("nc_number")]
+    [Required][StringLength(50)]
     public string NcNumber { get; set; }
-    [Required][Column("severity")]
+    [Required]
     public string Severity { get; set; }
-    [Required][Column("description")]
+    [Required]
     public string Description { get; set; }
-    [Column("requirement_ref")]
+    
     public string RequirementRef { get; set; }
-    [Column("evidence_ref")]
+    
     public string EvidenceRef { get; set; }
-    [Column("status")]
-    public string Status { get; set; } = "open";
-    [Column("source_type")]
+    
     public string SourceType { get; set; } = "manual";
-    [StringLength(36)][Column("source_check_code")]
+    [StringLength(36)]
     public string SourceCheckCode { get; set; }
-    [StringLength(36)][Column("rule_code")]
+    [StringLength(36)]
     public string RuleCode { get; set; }
-    [Column("due_date")]
+    
     public DateTime? DueDate { get; set; }
-    [Required][Column("opened_by")]
+    [Required]
     public long OpenedBy { get; set; }
-    [Required][Column("opened_at")]
+    [Required]
     public DateTime OpenedAt { get; set; }
-    [Column("closed_at")]
+    
     public DateTime? ClosedAt { get; set; }
 
     }

@@ -12,25 +12,25 @@ namespace VOL.Entity.CertPlatform.Audit
     public class Rectification : YZHBaseEntity
     {
 
-    [Required][StringLength(36)][Column("nc_code")]
+    [Required][StringLength(36)]
     public string NcCode { get; set; }
-    [Required][Column("correction")]
+    [Required]
     public string Correction { get; set; }
-    [Column("corrective_action")]
+    
     public string CorrectiveAction { get; set; }
-    [Column("evidence_files")]
+    
     public string EvidenceFiles { get; set; }
-    [Required][Column("submitted_by")]
+    [Required]
     public long SubmittedBy { get; set; }
-    [Required][Column("submitted_at")]
+    [Required]
     public DateTime SubmittedAt { get; set; }
-    [Column("verified_by")]
+    
     public long? VerifiedBy { get; set; }
-    [Column("verified_at")]
+    
     public DateTime? VerifiedAt { get; set; }
-    [Column("verify_result")]
+    
     public string VerifyResult { get; set; }
-    [Column("verify_notes")]
+    
     public string VerifyNotes { get; set; }
 
     }
