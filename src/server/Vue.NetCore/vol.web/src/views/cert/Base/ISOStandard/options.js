@@ -42,16 +42,14 @@ export default function () {
     editFormFields,
     searchFormFields,
 
-    // ===== 列定义（V3.0：后续可迁移到 yzh_field_config 表） =====
+    // ===== 列定义（V3.0：后端视图已包含字典翻译，直接显示中文字段） =====
     columns: [
       { field: 'Id', title: 'ID', width: 70, align: 'center', hidden: true },
       { field: 'StandardCode', title: '标准编号', width: 160, sortable: true },
       { field: 'StandardName', title: '标准名称', width: 280, sortable: true, showOverflow: true },
       { field: 'VersionYear', title: '版本', width: 80, align: 'center' },
-      { field: 'Category', title: '分类', width: 100, align: 'center',
-        dataKey: 'iso_category' },
-      { field: 'Status', title: '状态', width: 100, align: 'center',
-        dataKey: 'standard_status' },
+      { field: 'CategoryName', title: '分类', width: 120, align: 'center' },        // ✅ 视图字段，中文
+      { field: 'StatusName', title: '状态', width: 100, align: 'center' },          // ✅ 视图字段，中文
     ],
     editFormOptions: [
       [
