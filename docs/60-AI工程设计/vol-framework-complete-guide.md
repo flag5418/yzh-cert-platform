@@ -969,6 +969,9 @@ http://localhost:9990/#/CertNewEntity
 | JS 语法错误 | 括号不匹配 | 使用 `node -c` 验证 |
 | 字典不显示 | SQL 未执行 | 执行数据字典初始化脚本 |
 | 样式异常 | colSize 错误 | 总计应为 24（Element Plus 栅格） |
+| **导出 Excel 为空** (2026-08-07) | 前端 `handleExport` 未传 `columns` 字段，后端 EPPlus 不知道导出哪些列 | 在基类 `handleExport` 中补全 `columns: visibleCols.map(c => c.field)`，对齐 Vol 原生 ViewGridEventButton.jsx 的传参格式 |
+| **部分字段不可排序** (2026-08-07) | 列设置和表格列头都有 `v-if="col.sortable"` / `col.sortable ? 'custom' : false` 限制 | 改为 **opt-out 模式**：默认所有字段可排序（`col.sortable !== false`），显式设 `sortable: false` 禁用 |
+| **业务页面代码冗余** (2026-08-07) | lifecycles 写了空壳钩子、无用的业务方法、无用的 onReady 回调 | 设计原则：①空壳禁令——没有实际逻辑的钩子不写；②通用下沉——字符串默认值填充等逻辑写入基类 `applyStringFieldDefaults` |
 
 ### 5.3 快速诊断命令
 

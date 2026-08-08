@@ -32,6 +32,10 @@ using VOL.WebApi;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddModule(builder.Configuration);
 
+// ====== YZH Framework æœåŠ¡æ³¨å†Œ ======
+// YZH V3.0 é…ç½®é©±åŠ¨ UI æœåŠ¡ï¼ˆä¸šåŠ¡é€»è¾‘åœ¨ YZH-Frameworkï¼ŒController åªåš HTTP é€‚é…ï¼‰
+builder.Services.AddScoped<YZH.CertPlatform.Services.IYzhPageConfigService, YZH.CertPlatform.Services.YzhPageConfigService>();
+
 
 builder.Services
     .AddControllers()
@@ -52,13 +56,13 @@ builder.Services.AddAuthentication(options =>
           {
               options.TokenValidationParameters = new TokenValidationParameters
               {
-                  SaveSigninToken = true,//±£´ætoken,ºóÌ¨ÑéÖ¤tokenÊÇ·ñÉúĞ§(ÖØÒª)
-                  ValidateIssuer = true,//ÊÇ·ñÑéÖ¤Issuer
-                  ValidateAudience = true,//ÊÇ·ñÑéÖ¤Audience
-                  ValidateLifetime = true,//ÊÇ·ñÑéÖ¤Ê§Ğ§Ê±¼ä
-                  ValidateIssuerSigningKey = true,//ÊÇ·ñÑéÖ¤SecurityKey
+                  SaveSigninToken = true,//ï¿½ï¿½ï¿½ï¿½token,ï¿½ï¿½Ì¨ï¿½ï¿½Ö¤tokenï¿½Ç·ï¿½ï¿½ï¿½Ğ§(ï¿½ï¿½Òª)
+                  ValidateIssuer = true,//ï¿½Ç·ï¿½ï¿½ï¿½Ö¤Issuer
+                  ValidateAudience = true,//ï¿½Ç·ï¿½ï¿½ï¿½Ö¤Audience
+                  ValidateLifetime = true,//ï¿½Ç·ï¿½ï¿½ï¿½Ö¤Ê§Ğ§Ê±ï¿½ï¿½
+                  ValidateIssuerSigningKey = true,//ï¿½Ç·ï¿½ï¿½ï¿½Ö¤SecurityKey
                   ValidAudience = AppSetting.Secret.Audience,//Audience
-                  ValidIssuer = AppSetting.Secret.Issuer,//Issuer£¬ÕâÁ½ÏîºÍÇ°ÃæÇ©·¢jwtµÄÉèÖÃÒ»ÖÂ
+                  ValidIssuer = AppSetting.Secret.Issuer,//Issuerï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç°ï¿½ï¿½Ç©ï¿½ï¿½jwtï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½
                   IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(AppSetting.Secret.JWT))
               };
               options.Events = new JwtBearerEvents()
@@ -69,7 +73,7 @@ builder.Services.AddAuthentication(options =>
                       context.Response.Clear();
                       context.Response.ContentType = "application/json";
                       context.Response.StatusCode = 401;
-                      context.Response.WriteAsync(new { message = "ÊÚÈ¨Î´Í¨¹ı", status = false, code = 401 }.Serialize());
+                      context.Response.WriteAsync(new { message = "ï¿½ï¿½È¨Î´Í¨ï¿½ï¿½", status = false, code = 401 }.Serialize());
                       return Task.CompletedTask;
                   }
               };
@@ -91,7 +95,7 @@ builder.Services.AddSwaggerGen(c =>
     var security = new Dictionary<string, IEnumerable<string>> { { AppSetting.Secret.Issuer, new string[] { } } };
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme()
     {
-        Description = "JWTÊÚÈ¨tokenÇ°ÃæĞèÒª¼ÓÉÏ×Ö¶ÎBearerÓëÒ»¸ö¿Õ¸ñ,ÈçBearer token",
+        Description = "JWTï¿½ï¿½È¨tokenÇ°ï¿½ï¿½ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½ï¿½Ö¶ï¿½Bearerï¿½ï¿½Ò»ï¿½ï¿½ï¿½Õ¸ï¿½,ï¿½ï¿½Bearer token",
         Name = "Authorization",
         In = ParameterLocation.Header,
         Type = SecuritySchemeType.ApiKey,
@@ -133,7 +137,7 @@ builder.Services.AddSingleton<IObjectModelValidator>(new NullObjectModelValidato
 //Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-//ºóÌ¨Ä¬ÈÏÆô¶¯¶Ë¿Ú
+//ï¿½ï¿½Ì¨Ä¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ë¿ï¿½
 builder.WebHost.UseUrls("http://*:9991");
 builder.Services.Configure<FormOptions>(x =>
 {
@@ -148,7 +152,7 @@ builder.Services.Configure<FormOptions>(x =>
 
 var app = builder.Build();
 
-//ÕıÊ½»·¾³Èç¹ûÒª¹Ø±Õswgger,Çë×¢ÊÍÏÂÃæÈıĞĞ´úÂë
+//ï¿½ï¿½Ê½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Òªï¿½Ø±ï¿½swgger,ï¿½ï¿½×¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ğ´ï¿½ï¿½ï¿½
 //app.UseDeveloperExceptionPage();
 //app.UseSwagger();
 //app.UseSwaggerUI();
@@ -160,7 +164,7 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
-    //¶¨Ê±ÈÎÎñ£¬Èç¹ûĞèÒª±¾µØÖ´ĞĞ¶¨Ê±ÈÎÎñ£¬Çë½«´Ë´úÂë·ÅÔÚelseÍâÃæ
+    //ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½Ö´ï¿½Ğ¶ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½ë½«ï¿½Ë´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½elseï¿½ï¿½ï¿½ï¿½
     app.UseQuartz(app.Environment);
 }
 app.UseMiddleware<ExceptionHandlerMiddleWare>();
@@ -185,11 +189,11 @@ app.UseStaticFiles(new StaticFileOptions()
     RequestPath = "/Upload",
     OnPrepareResponse = (Microsoft.AspNetCore.StaticFiles.StaticFileResponseContext staticFile) => { }
 });
-//ÅäÖÃHttpContext
+//ï¿½ï¿½ï¿½ï¿½HttpContext
 app.UseStaticHttpContext();
 // Configure the HTTP request pipeline.
 
-//ÕıÊ½»·¾³½ûÓÃswaggerÇëÈ¡ÏûÏÂÃæif×¢ÊÍ
+//ï¿½ï¿½Ê½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½swaggerï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½if×¢ï¿½ï¿½
 //if (app.Environment.IsDevelopment())
 //{
 app.UseSwaggerUI(options =>
@@ -201,7 +205,7 @@ app.UseSwaggerUI(options =>
 
 app.UseCors("cors");
 app.UseCors();
-// Ê¹ÓÃÂ·ÓÉ
+// Ê¹ï¿½ï¿½Â·ï¿½ï¿½
 app.UseRouting();
 app.UseAuthorization();
 

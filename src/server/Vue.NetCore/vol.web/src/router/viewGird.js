@@ -234,6 +234,30 @@ let viewgird = [
     path: '/CertPlatform/Audit/AuditTask',
     name: 'CertAuditTask',
     component: () => import('@/views/cert/AuditTask/AuditTask.vue')
+  },
+
+  // ==================== 认证平台 - 基础资料（全局）====================
+  {
+    path: '/CertPlatform/Base/ISOStandard',
+    name: 'BaseISOStandard',
+    component: () => import('@/views/cert/Base/ISOStandard/ISOStandard.vue')
+  },
+  {
+    path: '/CertPlatform/Base/CertStage',
+    name: 'BaseCertStage',
+    component: () => import('@/views/cert/Base/CertStage/CertStage.vue')
+  },
+
+  // ==================== 认证平台 - 关联管理（左树+右checkbox表格）====================
+  {
+    path: '/CertPlatform/Link/OrgStandard',
+    name: 'LinkOrgStandard',
+    component: () => import('@/views/cert/Link/OrgStandard/OrgStandard.vue')
+  },
+  {
+    path: '/CertPlatform/Link/OrgStage',
+    name: 'LinkOrgStage',
+    component: () => import('@/views/cert/Link/OrgStage/OrgStage.vue')
   }
   
   // TODO: 以下页面需要创建 Vue 组件后才能启用路由

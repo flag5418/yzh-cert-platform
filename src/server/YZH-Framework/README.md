@@ -89,7 +89,7 @@ src/server/YZH-Framework/
 ├── Directory.Build.props            # 统一版本号和 NuGet 包引用
 │
 ├── YZH.Core/                        # 🔬 核心类库（已实现 80%）
-│   ├── YZH.Core.csproj              # 项目文件
+│   ├── YZH.Core.csproj              # 项目文件（引用 VOL.Core）
 │   ├── YZHModule.cs                 # Autofac 模块注册入口
 │   │
 │   ├── Entities/                    # 实体基类
@@ -128,6 +128,27 @@ src/server/YZH-Framework/
     ├── YZH.CertPlatform.csproj      # 项目文件
     └── Entities/
         └── _placeholder.md         # 待迁移实体占位
+
+📌 YZHBaseEntity 位置说明（2026-08-08 修复）：
+   
+   ⚠️ 重要：由于循环依赖问题，YZHBaseEntity 仍然保留在两个位置：
+   - YZH.Core/Entities/YZHBaseEntity.cs（YZH-Framework 项目，核心定义）
+   - VOL.Entity/CertPlatform/YZHBaseEntity.cs（Vol 项目，实体定义）
+   
+   两个文件内容必须保持一致！
+   
+   依赖关系：
+   ```
+   YZH.Core → VOL.Core（引用）
+   VOL.Core → VOL.Entity（引用）
+   VOL.WebApi → YZH.Core（引用）
+   VOL.WebApi → VOL.Entity（引用）
+   ```
+   
+   避免循环依赖：
+   - ❌ VOL.Entity 不能引用 YZH.Core（会形成循环）
+   - ✅ YZH.Core 引用 VOL.Core（允许）
+   - ✅ VOL.WebApi 同时引用 YZH.Core 和 VOL.Entity（允许）
 ```
 
 ---

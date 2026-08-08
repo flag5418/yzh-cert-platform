@@ -29,8 +29,10 @@ namespace VOL.Entity.CertPlatform
         /// <summary>
         /// 主键（自增，由数据库生成）
         /// EF Core 要求每个实体必须有主键
+        /// Vol 框架的 ValidationValueForDbType 依赖 [Column(TypeName)] 获取数据库类型
         /// </summary>
         [Key]
+        [Column(TypeName = "bigint")]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public long Id { get; set; }
 
@@ -39,11 +41,12 @@ namespace VOL.Entity.CertPlatform
         #region 业务编码
 
         /// <summary>
-        /// 业务编码（由 YZHCodeRule 生成，非主键，用于业务标识）
-        /// 示例：CB001-2026001（机构编号-年份流水号）
+        /// 业务编码（自动生成，非主键，用于业务标识）
+        /// 新建时自动赋值 Guid 短格式，无需前端传参、无需钩子干预
+        /// 示例：a1b2c3d4e5f6...
         /// </summary>
         [MaxLength(100)]
-        public string Code { get; set; }
+        public string Code { get; set; } = Guid.NewGuid().ToString("N");
 
         /// <summary>
         /// 多租户组织编码（用于数据隔离）
@@ -74,7 +77,7 @@ namespace VOL.Entity.CertPlatform
         /// 创建时间
         /// 由框架在新增时自动填充 DateTime.Now
         /// </summary>
-        public DateTime? CreateDate { get; set; }
+        public DateTime? CreateDate { get; set; } = DateTime.Now;
 
         #endregion
 
@@ -98,7 +101,7 @@ namespace VOL.Entity.CertPlatform
         /// 修改时间
         /// 由框架在更新时自动填充 DateTime.Now
         /// </summary>
-        public DateTime? ModifyDate { get; set; }
+        public DateTime? ModifyDate { get; set; } = DateTime.Now;
 
         #endregion
 
@@ -124,7 +127,7 @@ namespace VOL.Entity.CertPlatform
         /// 由框架在逻辑删除时自动填充 DateTime.Now
         /// 仅当 Enable = false 时有值
         /// </summary>
-        public DateTime? DeleteTime { get; set; }
+        public DateTime? DeleteTime { get; set; } = DateTime.Now;
 
         #endregion
 
@@ -144,11 +147,9 @@ namespace VOL.Entity.CertPlatform
         /// </summary>
         public bool Enable { get; set; } = true;
 
-        /// <summary>
-        /// 排序号（默认 0，数字越小越靠前）
-        /// 用于前端列表排序
-        /// </summary>
-        public int Sort { get; set; } = 0;
+        #endregion
+
+        #region 辅助字段
 
         /// <summary>
         /// 备注

@@ -34,13 +34,15 @@
   </ItemGroup>
 
 
-  <ItemGroup>
-    <ProjectReference Include="..\VOL.Builder\VOL.Builder.csproj" />
-    <ProjectReference Include="..\VOL.Core\VOL.Core.csproj" />
-    <ProjectReference Include="..\VOL.Entity\VOL.Entity.csproj" />
-    <ProjectReference Include="..\VOL.MES\VOL.MES.csproj" />
-    <ProjectReference Include="..\VOL.Sys\VOL.Sys.csproj" />
-  </ItemGroup>
+<ItemGroup>
+<ProjectReference Include="..\VOL.Builder\VOL.Builder.csproj" />
+<ProjectReference Include="..\VOL.Core\VOL.Core.csproj" />
+<ProjectReference Include="..\VOL.Entity\VOL.Entity.csproj" />
+<ProjectReference Include="..\VOL.MES\VOL.MES.csproj" />
+<ProjectReference Include="..\VOL.Sys\VOL.Sys.csproj" />
+<!-- YZH Framework：配置驱动 UI 服务 -->
+<ProjectReference Include="..\..\..\YZH-Framework\YZH.CertPlatform\YZH.CertPlatform.csproj" />
+</ItemGroup>
 
   <ItemGroup>
     <Folder Include="Download\" />

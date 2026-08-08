@@ -3,12 +3,28 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+    <Nullable>disable</Nullable>
     <OutputType>Library</OutputType>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\YZH.Core\YZH.Core.csproj" />
+  </ItemGroup>
+
+  <!--
+    YZH V3.0 配置驱动 UI 需要访问 Vol 实体和 DbContext
+    通过项目引用（非 NuGet）保持与 Vol 框架同步
+    路径: YZH-Framework → Vue.NetCore/vol.api/
+  -->
+  <ItemGroup>
+    <!-- Vol 实体定义（YzhPageConfig, YzhFieldConfig 等） -->
+    <Reference Include="VOL.Entity">
+      <HintPath>..\..\Vue.NetCore\vol.api\VOL.Entity\bin\Debug\net8.0\VOL.Entity.dll</HintPath>
+    </Reference>
+    <!-- Vol EF Core DbContext + UserContext 等基础设施 -->
+    <Reference Include="VOL.Core">
+      <HintPath>..\..\Vue.NetCore\vol.api\VOL.Core\bin\Debug\net8.0\VOL.Core.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>

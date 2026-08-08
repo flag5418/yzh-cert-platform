@@ -1,6 +1,6 @@
 # Vol 框架高频问题速查手册
 
-> **版本**: V1.0 | **更新日期**: 2026-07-31  
+> **版本**: V1.1 | **更新日期**: 2026-08-07  
 > **定位**: 前后端分离的快速排查指南，避免重复分析
 
 ---
@@ -58,6 +58,7 @@ docker exec -i yzh-mysql mysql -uroot -pYzh123456. yzh_cert_platform \
 
 #### **预防措施**
 - ✅ **添加路由前先确认文件存在**
+- ✅ **SQL 脚本统一放在 `DB/mysql/` 目录**
 - ✅ **使用 TODO 注释标记待开发页面**
 - ✅ **统一临时方案：未开发页面指向已存在的占位页面**
 
@@ -389,6 +390,65 @@ using Microsoft.EntityFrameworkCore;       // DbSet<T>, DbContext
 
 ---
 
+### 6. EF Core 列名映射错误（snake_case vs PascalCase） ⭐ 2026-08-07 新增
+
+#### **现象**
+```
+MySqlException: Unknown column 'y.CheckboxSelection' in 'field list'
+HTTP 400 Bad Request
+```
+
+#### **根因分析**
+
+YZH 框架新表使用 **snake_case** 列名（如 `checkbox_selection`），但 C# 实体属性是 **PascalCase**（如 `CheckboxSelection`）。EF Core 默认**不会自动转换**，直接用属性名生成 SQL。
+
+| 数据库列 | C# 属性 | EF 生成的 SQL |
+|---------|---------|--------------|
+| `checkbox_selection` | `CheckboxSelection` | ❌ `y.CheckboxSelection` (找不到) |
+| `page_key` | `PageKey` | ❌ `y.PageKey` (找不到) |
+
+#### **诊断步骤**
+
+```bash
+# 1. 确认数据库实际列名
+docker exec -i yzh-mysql mysql -uroot -pYzh123456. yzh_cert_platform \
+  -e "DESCRIBE yzh_page_config;"
+
+# 2. 检查实体属性是否有 [Column] 特性
+grep -n "\[Column\]\|public.*{" VOL.Entity/CertPlatform/Sys/YzhPageConfig.cs
+```
+
+#### **解决方案**
+
+给实体每个属性添加 `[Column("snake_case")]` 特性：
+
+```csharp
+using System.ComponentModel.DataAnnotations.Schema;
+
+[Table("yzh_page_config")]
+public class YzhPageConfig : BaseEntity
+{
+    [Column("page_key")]
+    public string PageKey { get; set; }
+
+    [Column("checkbox_selection")]
+    public byte CheckboxSelection { get; set; } = 1;
+
+    // ... 所有属性都加 [Column]
+}
+```
+
+#### **影响范围（本项目）**
+- `YzhPageConfig.cs` — 23 个属性
+- `YzhFieldConfig.cs` — 30+ 个属性
+
+#### **预防措施**
+- ✅ **建表后立即创建实体，逐字段加 `[Column]`**
+- ✅ **代码审查检查项：新实体的 `[Column]` 是否完整**
+- ✅ **远期考虑：在 DbContext.OnModelCreating 中配置全局 snake_case 约定**
+
+---
+
 ## 🔧 开发工作流检查清单
 
 ### 新建页面标准流程（前端）
@@ -436,7 +496,7 @@ using Microsoft.EntityFrameworkCore;       // DbSet<T>, DbContext
 
 ## 📊 问题统计与趋势
 
-### 已解决问题（截至 2026-07-31）
+### 已解决问题（截至 2026-08-07）
 
 | # | 问题类别 | 发生次数 | 解决状态 | 最终方案 |
 |---|----------|----------|----------|----------|
@@ -447,6 +507,7 @@ using Microsoft.EntityFrameworkCore;       // DbSet<T>, DbContext
 | 5 | 循环依赖 | 1 次 | ✅ 已解决 | 复制基类到本地 |
 | 6 | using 引用缺失 | 多次 | ✅ 已解决 | 添加常用 using |
 | 7 | 数据字典未加载 | 1 次 | ✅ 已解决 | 执行 SQL 初始化脚本 |
+| **8** | **EF Core snake_case 映射** | **1 次** | **✅ 已解决** | **实体属性加 `[Column]` 特性** |
 
 ### 预防措施总结
 
@@ -454,6 +515,7 @@ using Microsoft.EntityFrameworkCore;       // DbSet<T>, DbContext
 2. **后端**：新建实体必须继承 `YZHBaseEntity`，编译前检查 using
 3. **数据库**：SQL 脚本统一管理，执行后更新 README.md
 4. **架构**：避免跨层引用，必要时复制代码打破循环依赖
+5. **EF Core 映射**：snake_case 表必须给所有属性加 `[Column]` 特性 ⭐ 新增
 
 ---
 
@@ -462,6 +524,7 @@ using Microsoft.EntityFrameworkCore;       // DbSet<T>, DbContext
 | 版本 | 日期 | 更新内容 |
 |------|------|----------|
 | V1.0 | 2026-07-31 | 初始版本，包含前后端分离的高频问题速查 |
+| V1.1 | 2026-08-07 | 新增 EF Core snake_case 列名映射错误（#6） |
 
 ---
 

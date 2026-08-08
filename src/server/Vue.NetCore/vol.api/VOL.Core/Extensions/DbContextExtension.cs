@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿﻿using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -123,13 +123,34 @@ namespace VOL.Core.Extensions
         }
         /// <summary>
         /// 过滤逻辑删除 
+        /// 
+        /// YZH 扩展（2026-08-07）：
+        /// - 原始实现直接 return query，不做任何过滤
+        /// - 现在自动检测实体是否有 Enable 属性（bool 类型）
+        /// - 有 Enable 属性 → 追加 WHERE Enable = true 过滤条件
+        /// - 无 Enable 属性 → 保持原行为（不过滤）
+        /// 
+        /// 这样 YZHBaseEntity 子类的软删除记录（Enable=false）不会出现在查询结果中
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="query"></param>
         /// <returns></returns>
         public static IQueryable<T> FilterLogicDel<T>(this IQueryable<T> query) where T : class
         {
-            return query;
+            var logicDelProperty = typeof(T).GetLogicDelPropertyWithType();
+            if (logicDelProperty == null)
+            {
+                return query;
+            }
+
+            // 构建 WHERE Enable == true 表达式
+            var parameter = Expression.Parameter(typeof(T), "x");
+            var propertyAccess = Expression.Property(parameter, logicDelProperty);
+            var trueValue = Expression.Constant(true, typeof(bool));
+            var equalExpr = Expression.Equal(propertyAccess, trueValue);
+            var lambda = Expression.Lambda<Func<T, bool>>(equalExpr, parameter);
+
+            return query.Where(lambda);
         }
     }
 }

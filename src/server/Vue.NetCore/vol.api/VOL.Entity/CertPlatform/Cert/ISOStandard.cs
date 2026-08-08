@@ -2,7 +2,6 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using VOL.Entity;
-using VOL.Entity.CertPlatform;
 
 namespace VOL.Entity.CertPlatform.Cert
 {
@@ -16,19 +15,11 @@ namespace VOL.Entity.CertPlatform.Cert
     public class ISOStandard : YZHBaseEntity
     {
         /// <summary>
-        /// 所属认证机构编码（关联 CertificationBody.Code）
-        /// </summary>
-        [Required]
-        [StringLength(36)]
-        
-        public string CbCode { get; set; }
-
-        /// <summary>
-        /// 标准编号（如 ISO 9001:2015）
+        /// 标准编号（如 ISO 9001:2015, ISO 13485:2016）
         /// </summary>
         [Required]
         [StringLength(50)]
-        
+        [Editable(true)]
         public string StandardCode { get; set; }
 
         /// <summary>
@@ -36,13 +27,13 @@ namespace VOL.Entity.CertPlatform.Cert
         /// </summary>
         [Required]
         [StringLength(200)]
-        
+        [Editable(true)]
         public string StandardName { get; set; }
 
         /// <summary>
         /// 版本年份
         /// </summary>
-        
+        [Editable(true)]
         public int VersionYear { get; set; }
     }
 }

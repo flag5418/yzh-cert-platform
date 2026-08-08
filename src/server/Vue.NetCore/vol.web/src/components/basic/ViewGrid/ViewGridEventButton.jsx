@@ -114,6 +114,11 @@ export const onDelete = async (proxy, props, rows, dataConfig) => {
       if (tigger) return;
       tigger = true;
       let url = getUrl(action.DEL, null, props.table, props.dyScript, props, dataConfig.asyncApi.value);
+      // 支持自定义删除 URL（通过 props.extend.urls.del 覆盖框架默认删除路由）
+      // 解决：基类 Del 的 object[] 参数反序列化问题、ValidationValueForDbType NRE、路由冲突等
+      if (props.extend && props.extend.urls && props.extend.urls.del) {
+        url = props.extend.urls.del;
+      }
       if (props.generic) {
         delKeys = {
           tableName: props.table.name,

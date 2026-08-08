@@ -1,5 +1,7 @@
 import { createStore } from 'vuex'
 const keys = { USER: 'user' }
+// YZH V3.0 配置驱动 Store
+import yzhConfigStore from '@/yzh/store/yzhConfig.js'
 function getUserInfo(state) {
   if (state.userInfo) return state.userInfo
   let userInfo = localStorage.getItem(keys.USER)
@@ -18,6 +20,10 @@ export default createStore({
     userInfo: null,
     appLang: {},
     serviceList: []
+  },
+  modules: {
+    // YZH V3.0 配置驱动模块（命名空间：yzhConfig）
+    yzhConfig: yzhConfigStore,
   },
   mutations: {
     setLocal(state, source) {

@@ -207,8 +207,36 @@ namespace VOL.Core.BaseProvider
             return list;
         }
 
+        /// <summary>
+        /// 获取实体的逻辑删除属性
+        /// 
+        /// YZH 扩展（2026-08-07）：
+        /// - 原始实现返回 null，导致所有实体都走物理删除
+        /// - 现在识别 YZHBaseEntity 及其子类的 Enable 属性（bool 类型）
+        /// - 有 Enable 属性 → 软删除（ExecuteUpdate SET Enable = 0）
+        /// - 无 Enable 属性 → 物理删除（原始行为）
+        /// </summary>
         public static PropertyInfo GetLogicDelPropertyWithType(this Type type)
         {
+            if (type == null) return null;
+
+            // YZH 扩展：检测 YZHBaseEntity 子类的 Enable 字段
+            // 判断条件：类型本身或其基类链中有 bool 类型的 Enable 属性
+            var currentType = type;
+            while (currentType != null && currentType != typeof(object))
+            {
+                var enableProp = currentType.GetProperty("Enable",
+                    System.Reflection.BindingFlags.Public |
+                    System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.DeclaredOnly);
+
+                if (enableProp != null && enableProp.PropertyType == typeof(bool))
+                {
+                    return enableProp;
+                }
+                currentType = currentType.BaseType;
+            }
+
             return null;
         }
 
