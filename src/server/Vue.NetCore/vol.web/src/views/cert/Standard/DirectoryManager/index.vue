@@ -1,399 +1,644 @@
 <template>
-  <div class="app-container directory-manager">
+  <div class="directory-manager">
+    <!-- 左侧面板 -->
     <div class="left-panel">
-      <div class="panel-header">
-        <span>组织结构</span>
+      <div class="left-header">
+        <span class="left-title">目录结构</span>
+      </div>
+      <div class="search-box">
+        <input type="text" class="search-input" placeholder="搜索..." v-model="searchText" />
       </div>
       <div class="tree-container">
-        <el-tree
-          ref="treeRef"
-          :data="treeData"
-          :props="treeProps"
-          :loading="treeLoading"
-          node-key="id"
-          highlight-current
-          @node-click="handleNodeClick"
-        >
-          <template #default="{ node, data }">
-            <span class="tree-node">
-              <el-icon v-if="data.type === 'organization'"><OfficeBuilding /></el-icon>
-              <el-icon v-else-if="data.type === 'standard'"><Document /></el-icon>
-              <el-icon v-else><Folder /></el-icon>
-              <span class="node-label">{{ data.label }}</span>
-            </span>
+        <div v-for="org in treeData" :key="org.id" class="tree-group">
+          <!-- 机构 -->
+          <div class="tree-node level-0" @click="toggleExpand(org)">
+            <span class="tree-toggle" :class="{ expanded: org.expanded }">▶</span>
+            <span class="tree-icon org">🏢</span>
+            <span class="tree-label">{{ org.label }}</span>
+            <span class="tree-badge">{{ org.children ? org.children.length : 0 }}</span>
+          </div>
+          <!-- 标准 -->
+          <template v-if="org.expanded && org.children">
+            <template v-for="std in org.children" :key="std.id">
+              <div class="tree-node level-1" @click="toggleExpand(std)">
+                <span class="tree-toggle" :class="{ expanded: std.expanded }">▶</span>
+                <span class="tree-icon standard">📋</span>
+                <span class="tree-label">{{ std.label }}</span>
+                <span class="tree-badge">{{ std.children ? std.children.length : 0 }}</span>
+              </div>
+              <!-- 阶段 -->
+              <div v-for="phase in std.children" :key="phase.id"
+                class="tree-node level-2"
+                :class="{ active: currentPhase && currentPhase.id === phase.id }"
+                @click="selectPhase(phase)">
+                <span class="tree-toggle" style="visibility: hidden;">▶</span>
+                <span class="tree-icon phase">📅</span>
+                <span class="tree-label">{{ phase.label }}</span>
+              </div>
+            </template>
           </template>
-        </el-tree>
+        </div>
       </div>
     </div>
 
+    <!-- 右侧内容区 -->
     <div class="right-panel">
-      <div class="panel-header">
-        <div class="breadcrumb" v-if="currentNode">
-          <el-breadcrumb separator="/">
-            <el-breadcrumb-item v-for="(item, index) in breadcrumbs" :key="index">
-              {{ item }}
-            </el-breadcrumb-item>
-          </el-breadcrumb>
+      <!-- 面包屑 -->
+      <div class="breadcrumb" v-if="currentPhase">
+        <span class="breadcrumb-item" @click="navigateToRoot">{{ currentPhase.standardCode }}</span>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-item" @click="navigateToRoot">{{ currentPhase.phaseCode }}</span>
+        <template v-for="(crumb, index) in breadcrumbPath" :key="index">
+          <span class="breadcrumb-separator">/</span>
+          <span v-if="index < breadcrumbPath.length - 1" class="breadcrumb-item" @click="navigateToCrumb(index)">
+            {{ crumb.name }}
+          </span>
+          <span v-else class="breadcrumb-current">{{ crumb.name }}</span>
+        </template>
+      </div>
+
+      <!-- 工具栏 -->
+      <div class="toolbar" v-if="currentPhase">
+        <button class="btn btn-primary" @click="handleNewFolder">
+          <span>📁</span> 新建文件夹
+        </button>
+        <button class="btn" @click="handleUpload">
+          <span>⬆️</span> 上传文件
+        </button>
+        <div class="toolbar-divider"></div>
+        <button class="btn" @click="handleExport">
+          <span>📦</span> 导出打包
+        </button>
+        <div class="toolbar-divider"></div>
+        <button class="btn" @click="selectAll">☑️ 全选</button>
+        <button class="btn btn-danger" @click="deleteSelected">🗑️ 删除</button>
+        <div style="flex: 1;"></div>
+        <button class="btn btn-help" @click="handleHelp">❓ 使用帮助</button>
+      </div>
+
+      <!-- 文件列表 -->
+      <div class="file-list-container" v-if="currentPhase">
+        <div class="file-list-header">
+          <div><input type="checkbox" class="file-checkbox" @change="toggleSelectAll" /></div>
+          <div>名称</div>
+          <div>大小</div>
+          <div>修改时间</div>
+          <div>操作</div>
         </div>
-        <div class="actions">
-          <el-button type="primary" size="small" :disabled="!currentConfig" @click="handleUpload">
-            <el-icon><Upload /></el-icon> 上传文件
-          </el-button>
-          <el-button size="small" :disabled="!currentConfig" @click="handleNewFolder">
-            <el-icon><FolderAdd /></el-icon> 新建文件夹
-          </el-button>
-          <el-button size="small" :disabled="!currentConfig" @click="handleExport">
-            <el-icon><Download /></el-icon> 导出打包
-          </el-button>
-          <el-button size="small" :disabled="!currentConfig" @click="handleHelp">
-            <el-icon><QuestionFilled /></el-icon> 使用帮助
-          </el-button>
+
+        <!-- 文件夹 -->
+        <div v-for="folder in currentFolders" :key="folder.FolderCode || folder.folderCode"
+          class="file-list-item"
+          :class="{ selected: selectedItems.has(folder.FolderCode || folder.folderCode) }"
+          @click="toggleSelect(folder)"
+          @dblclick="enterFolder(folder)"
+          @contextmenu.prevent="showContextMenu($event, folder, 'folder')">
+          <div>
+            <input type="checkbox" class="file-checkbox"
+              :checked="selectedItems.has(folder.FolderCode || folder.folderCode)"
+              @click.stop="toggleSelect(folder)" />
+          </div>
+          <div class="file-name">
+            <span class="file-icon folder">📁</span>
+            <span class="file-name-text folder-name">{{ folder.FolderName || folder.folderName }}</span>
+          </div>
+          <div class="file-size">--</div>
+          <div class="file-date">{{ formatDate(folder.CreateDate || folder.createDate) }}</div>
+          <div class="file-actions">
+            <button class="action-btn" @click.stop="showRenameDialog(folder)">重命名</button>
+            <button class="action-btn danger" @click.stop="deleteItem(folder)">删除</button>
+          </div>
+        </div>
+
+        <!-- 文件 -->
+        <div v-for="file in currentFiles" :key="file.FileCode || file.fileCode"
+          class="file-list-item"
+          :class="{ selected: selectedItems.has(file.FileCode || file.fileCode) }"
+          @click="toggleSelect(file)"
+          @contextmenu.prevent="showContextMenu($event, file, 'file')">
+          <div>
+            <input type="checkbox" class="file-checkbox"
+              :checked="selectedItems.has(file.FileCode || file.fileCode)"
+              @click.stop="toggleSelect(file)" />
+          </div>
+          <div class="file-name">
+            <span class="file-icon" :class="getFileIconClass(file.FileName || file.fileName)">📄</span>
+            <span class="file-name-text">{{ file.FileName || file.fileName }}</span>
+          </div>
+          <div class="file-size">{{ formatFileSize(file.FileSize || file.fileSize) }}</div>
+          <div class="file-date">{{ formatDate(file.CreateDate || file.createDate) }}</div>
+          <div class="file-actions">
+            <button class="action-btn" @click.stop="replaceFile(file)">替换</button>
+            <button class="action-btn" @click.stop="downloadFile(file)">下载</button>
+            <button class="action-btn danger" @click.stop="deleteItem(file)">删除</button>
+          </div>
+        </div>
+
+        <!-- 空状态 -->
+        <div v-if="currentFolders.length === 0 && currentFiles.length === 0" class="empty-state">
+          <div class="empty-icon">📂</div>
+          <div class="empty-text">暂无内容</div>
+          <div class="empty-hint">点击上方按钮上传文件或创建文件夹</div>
         </div>
       </div>
 
-      <div class="content-area" v-loading="contentLoading">
-        <el-empty v-if="!currentConfig" description="请在左侧选择机构-标准-阶段" />
-        
-        <div v-else class="file-grid">
-          <div 
-            v-for="folder in folders" 
-            :key="folder.folderCode" 
-            class="file-item folder-item"
-            @click="handleFolderClick(folder)"
-            @contextmenu.prevent="showFolderMenu($event, folder)"
-          >
-            <el-icon class="file-icon folder"><Folder /></el-icon>
-            <span class="file-name">{{ folder.folderName }}</span>
+      <!-- 未选中阶段提示 -->
+      <div v-if="!currentPhase" class="empty-state">
+        <div class="empty-icon">👈</div>
+        <div class="empty-text">请在左侧选择阶段</div>
+        <div class="empty-hint">选择机构 > 标准 > 阶段后，右侧将加载文件目录</div>
+      </div>
+
+      <!-- 状态栏 -->
+      <div class="status-bar" v-if="currentPhase">
+        <span>共 {{ currentFolders.length + currentFiles.length }} 项 | 文件夹 {{ currentFolders.length }} 个，文件 {{ currentFiles.length }} 个</span>
+        <span>总大小 {{ totalSizeFormatted }}</span>
+      </div>
+    </div>
+
+    <!-- 新建文件夹弹窗 -->
+    <div class="dialog-overlay" v-if="showFolderDialog" @click.self="showFolderDialog = false">
+      <div class="dialog">
+        <div class="dialog-header">
+          <span class="dialog-title">新建文件夹</span>
+          <span class="dialog-close" @click="showFolderDialog = false">×</span>
+        </div>
+        <div class="dialog-body">
+          <div class="form-item">
+            <label class="form-label">文件夹名称</label>
+            <input type="text" class="form-input" v-model="folderForm.folderName" placeholder="请输入文件夹名称" />
           </div>
-          
-          <div 
-            v-for="file in files" 
-            :key="file.fileCode" 
-            class="file-item"
-            @contextmenu.prevent="showFileMenu($event, file)"
-          >
-            <el-icon class="file-icon" :class="getFileClass(file.fileType)">
-              <Document />
-            </el-icon>
-            <span class="file-name">{{ file.fileName }}</span>
-            <span class="file-meta">{{ file.fileType }}</span>
+          <div class="form-item">
+            <label class="form-label">备注</label>
+            <input type="text" class="form-input" v-model="folderForm.remark" placeholder="可选备注" />
           </div>
         </div>
+        <div class="dialog-footer">
+          <button class="btn" @click="showFolderDialog = false">取消</button>
+          <button class="btn btn-primary" @click="submitFolder">确定</button>
+        </div>
+      </div>
+    </div>
 
-        <el-empty v-if="currentConfig && folders.length === 0 && files.length === 0" description="暂无内容" />
+    <!-- 重命名弹窗 -->
+    <div class="dialog-overlay" v-if="showRenameDialogFlag" @click.self="showRenameDialogFlag = false">
+      <div class="dialog">
+        <div class="dialog-header">
+          <span class="dialog-title">重命名</span>
+          <span class="dialog-close" @click="showRenameDialogFlag = false">×</span>
+        </div>
+        <div class="dialog-body">
+          <div class="form-item">
+            <label class="form-label">名称</label>
+            <input type="text" class="form-input" v-model="renameForm.newName" placeholder="请输入新名称" />
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="btn" @click="showRenameDialogFlag = false">取消</button>
+          <button class="btn btn-primary" @click="confirmRename">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 使用帮助弹窗 -->
+    <div class="dialog-overlay" v-if="showHelpDialog" @click.self="showHelpDialog = false">
+      <div class="dialog" style="width: 600px;">
+        <div class="dialog-header">
+          <span class="dialog-title">使用帮助</span>
+          <span class="dialog-close" @click="showHelpDialog = false">×</span>
+        </div>
+        <div class="dialog-body">
+          <div class="help-content">
+            <h3>📌 页面功能说明</h3>
+            <p>本页面用于维护每个"机构+标准+阶段"组合下的标准文件目录结构。</p>
+            <h3>📌 右侧文件管理</h3>
+            <ul>
+              <li><strong>新建文件夹</strong>: 创建子文件夹，系统自动生成编码</li>
+              <li><strong>上传文件</strong>: 支持拖拽上传或点击按钮选择文件</li>
+              <li><strong>双击文件夹</strong>: 进入该文件夹查看子内容</li>
+              <li><strong>面包屑导航</strong>: 点击面包屑可返回上级目录</li>
+            </ul>
+            <h3>📌 编码规则</h3>
+            <div class="code-example">
+              <div>目录编码: SDC-{标准}|{阶段} → SDC-ISO134852016|STAGE01</div>
+              <div>文件夹编码: FD-{目录编码}|L{层级}|S{序号} → FD-SDC-ISO134852016|STAGE01|L02|S001</div>
+              <div>文件编码: FL-{文件夹编码}|{文件名} → FL-FD-SDC-ISO134852016|STAGE01|L02|S001|营业执照.pdf</div>
+            </div>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="btn btn-primary" @click="showHelpDialog = false">我知道了</button>
+        </div>
       </div>
     </div>
 
     <!-- 上传对话框 -->
-    <el-dialog v-model="uploadDialogVisible" title="上传文件" width="560px" :close-on-click-modal="false" class="upload-dialog">
-      <div class="upload-dialog-body">
-        <div class="upload-tabs">
-          <el-radio-group v-model="uploadMode" size="small">
-            <el-radio-button value="file">上传文件</el-radio-button>
-            <el-radio-button value="folder">上传文件夹</el-radio-button>
-          </el-radio-group>
+    <div class="dialog-overlay" v-if="showUploadDialogFlag" @click.self="showUploadDialogFlag = false">
+      <div class="dialog" style="width: 560px;">
+        <div class="dialog-header">
+          <span class="dialog-title">上传文件</span>
+          <span class="dialog-close" @click="cancelUpload">×</span>
         </div>
-
-        <div class="upload-area">
-          <input
-            v-if="uploadMode === 'file'"
-            ref="fileInputRef"
-            type="file"
-            multiple
-            :accept="acceptTypes"
-            style="display: none"
-            @change="handleFileSelect"
-          />
-          <input
-            v-else
-            ref="folderInputRef"
-            type="file"
-            webkitdirectory
-            multiple
-            style="display: none"
-            @change="handleFolderSelect"
-          />
-          <div 
-            class="upload-trigger" 
-            :class="{ 'is-dragover': isDragOver }"
-            @click="triggerUpload"
-            @dragover.prevent="isDragOver = true"
-            @dragleave.prevent="isDragOver = false"
-            @drop.prevent="handleDrop"
-          >
-            <el-icon class="upload-icon"><Upload /></el-icon>
-            <div class="upload-text">{{ uploadMode === 'file' ? '点击选择文件或拖拽到此处' : '点击选择文件夹或拖拽文件夹到此处' }}</div>
-            <div class="upload-hint">{{ uploadMode === 'file' ? '支持多个文件同时上传' : '将递归上传文件夹内所有文件' }}</div>
+        <div class="dialog-body">
+          <div class="upload-tabs">
+            <el-radio-group v-model="uploadMode" size="small">
+              <el-radio-button value="file">上传文件</el-radio-button>
+              <el-radio-button value="folder">上传文件夹</el-radio-button>
+            </el-radio-group>
           </div>
-        </div>
-
-        <div v-if="uploadFileList.length > 0" class="upload-file-list">
-          <div class="file-list-header">
-            <span>待上传文件 ({{ uploadFileList.length }}个)</span>
-            <el-button type="danger" link size="small" @click="clearUploadList" :disabled="uploading">清空</el-button>
-          </div>
-          <el-scrollbar max-height="200px">
-            <div v-for="(file, index) in uploadFileList" :key="index" class="file-list-item">
-              <el-icon class="file-type-icon"><Document /></el-icon>
-              <span class="file-item-name" :title="file.webkitRelativePath || file.name">{{ file.webkitRelativePath || file.name }}</span>
-              <span class="file-item-size">{{ formatFileSize(file.size) }}</span>
-              <el-button v-if="!uploading" type="danger" link size="small" @click="removeFile(index)">
-                <el-icon><Delete /></el-icon>
-              </el-button>
+          <div class="upload-area">
+            <input v-if="uploadMode === 'file'" ref="fileInputRef" type="file" multiple
+              style="display: none" @change="handleFileSelect" />
+            <input v-else ref="folderInputRef" type="file" webkitdirectory multiple
+              style="display: none" @change="handleFolderSelect" />
+            <div class="upload-trigger" @click="triggerUpload">
+              <div class="upload-icon-text">⬆️</div>
+              <div class="upload-text">{{ uploadMode === 'file' ? '点击选择文件或拖拽到此处' : '点击选择文件夹' }}</div>
             </div>
-          </el-scrollbar>
-        </div>
-
-        <!-- 上传进度条 -->
-        <div v-if="uploading || uploadProgress.status === 'done'" class="upload-progress">
-          <div class="progress-info">
-            <span v-if="uploadProgress.status === 'uploading'">
-              正在上传: {{ uploadProgress.currentFile }} ({{ uploadProgress.completed }}/{{ uploadProgress.total }})
-            </span>
-            <span v-else-if="uploadProgress.failed > 0" class="text-danger">
-              上传完成，{{ uploadProgress.failed }} 个文件失败
-            </span>
-            <span v-else class="text-success">
-              全部 {{ uploadProgress.total }} 个文件上传成功
-            </span>
           </div>
-          <el-progress
-            :percentage="uploadProgress.total > 0 ? Math.round((uploadProgress.completed / uploadProgress.total) * 100) : 0"
-            :status="uploadProgress.failed > 0 ? 'exception' : (uploadProgress.status === 'done' && uploadProgress.failed === 0 ? 'success' : '')"
-          />
+          <div v-if="uploadFileList.length > 0" class="upload-file-list">
+            <div class="file-list-header-sm">
+              <span>待上传文件 ({{ uploadFileList.length }}个)</span>
+              <button class="action-btn danger" @click="clearUploadList" :disabled="uploading">清空</button>
+            </div>
+            <div v-for="(file, index) in uploadFileList" :key="index" class="file-list-item-sm">
+              <span class="file-item-name">{{ file.webkitRelativePath || file.name }}</span>
+              <span class="file-item-size">{{ formatFileSize(file.size) }}</span>
+              <button v-if="!uploading" class="action-btn danger" @click="removeFile(index)">×</button>
+            </div>
+          </div>
+          <!-- 上传进度 -->
+          <div v-if="uploading || uploadProgress.status === 'done'" class="upload-progress-area">
+            <div class="progress-info">
+              <span v-if="uploadProgress.status === 'uploading'">
+                正在上传: {{ uploadProgress.currentFile }} ({{ uploadProgress.completed }}/{{ uploadProgress.total }})
+              </span>
+              <span v-else-if="uploadProgress.failed > 0" class="text-danger">
+                上传完成，{{ uploadProgress.failed }} 个文件失败
+              </span>
+              <span v-else class="text-success">
+                全部 {{ uploadProgress.total }} 个文件上传成功
+              </span>
+            </div>
+            <el-progress
+              :percentage="uploadProgress.total > 0 ? Math.round((uploadProgress.completed / uploadProgress.total) * 100) : 0"
+              :status="uploadProgress.failed > 0 ? 'exception' : (uploadProgress.status === 'done' && uploadProgress.failed === 0 ? 'success' : '')" />
+          </div>
         </div>
-      </div>
-      <template #footer>
         <div class="dialog-footer">
-          <el-button @click="uploadDialogVisible = false">取消</el-button>
-          <el-button type="primary" :disabled="uploadFileList.length === 0" :loading="uploading" @click="submitUpload">
+          <button class="btn" @click="cancelUpload">取消</button>
+          <button class="btn btn-primary" :disabled="uploadFileList.length === 0 || uploading" @click="submitUpload">
             {{ uploading ? '上传中...' : '开始上传' }}
-          </el-button>
+          </button>
         </div>
-      </template>
-    </el-dialog>
-
-    <!-- 新建文件夹对话框 -->
-    <el-dialog v-model="folderDialogVisible" title="新建文件夹" width="400px">
-      <el-form :model="folderForm" label-width="100px">
-        <el-form-item label="文件夹名称">
-          <el-input v-model="folderForm.folderName" placeholder="请输入文件夹名称" />
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="folderForm.remark" type="textarea" placeholder="可选备注" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="folderDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitFolder">确定</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 使用帮助对话框 -->
-    <el-dialog v-model="helpDialogVisible" title="使用帮助" width="600px">
-      <div class="help-content">
-        <h4>标准目录管理器使用说明</h4>
-        <ul>
-          <li><strong>左侧树形结构：</strong>显示机构-标准-阶段的层级关系</li>
-          <li><strong>右侧文件区：</strong>显示选中阶段下的文件夹和文件</li>
-          <li><strong>上传文件：</strong>点击"上传文件"按钮，选择本地文件上传</li>
-          <li><strong>新建文件夹：</strong>点击"新建文件夹"按钮，创建新的文件夹</li>
-          <li><strong>导出打包：</strong>点击"导出打包"按钮，将当前目录结构下载为ZIP文件</li>
-          <li><strong>右键菜单：</strong>在文件或文件夹上右键，可进行重命名、删除等操作</li>
-        </ul>
       </div>
-      <template #footer>
-        <el-button @click="helpDialogVisible = false">关闭</el-button>
-      </template>
-    </el-dialog>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div v-if="contextMenu.visible" class="context-menu"
+      :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
+      <div class="context-menu-item" @click="handleContextRename">✏️ 重命名</div>
+      <div class="context-menu-divider"></div>
+      <div class="context-menu-item danger" @click="handleContextDelete">🗑️ 删除</div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { 
-  OfficeBuilding, Document, Folder, Upload, Download, 
-  FolderAdd, QuestionFilled, Delete 
-} from '@element-plus/icons-vue'
 import http from '@/api/http'
 
-const treeRef = ref(null)
+const searchText = ref('')
 const treeData = ref([])
-const treeLoading = ref(false)
-const treeProps = {
-  children: 'children',
-  label: 'label'
-}
+const currentPhase = ref(null)
+const currentFolders = ref([])
+const currentFiles = ref([])
+const breadcrumbPath = ref([])
+const currentFolderCode = ref('') // 当前浏览的文件夹编码，空=根目录
 
-const currentNode = ref(null)
-const currentConfig = ref(null)
-const folders = ref([])
-const files = ref([])
-const contentLoading = ref(false)
+const selectedItems = reactive(new Set())
 
-const breadcrumbs = computed(() => {
-  if (!currentNode.value) return []
-  const parts = currentNode.value.id.split('|')
-  return parts
-})
+// 弹窗控制
+const showFolderDialog = ref(false)
+const showRenameDialogFlag = ref(false)
+const showHelpDialog = ref(false)
+const showUploadDialogFlag = ref(false)
 
-const uploadDialogVisible = ref(false)
-const folderDialogVisible = ref(false)
-const helpDialogVisible = ref(false)
+const folderForm = reactive({ folderName: '', remark: '' })
+const renameForm = reactive({ newName: '', item: null })
 const uploadMode = ref('file')
 const fileInputRef = ref(null)
 const folderInputRef = ref(null)
 const uploadFileList = ref([])
 const uploading = ref(false)
-const isDragOver = ref(false)
-const acceptTypes = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.png,.jpg,.jpeg,.gif,.bmp'
 
-// 上传进度状态
-const uploadProgress = ref({
-  total: 0,
-  completed: 0,
-  failed: 0,
-  currentFile: '',
-  status: 'idle' // idle / uploading / done
+const uploadProgress = reactive({
+  total: 0, completed: 0, failed: 0, currentFile: '', status: 'idle'
 })
 
-const folderForm = ref({
-  folderName: '',
-  remark: ''
+// 右键菜单
+const contextMenu = reactive({ visible: false, x: 0, y: 0, item: null, type: '' })
+
+// 计算属性
+const totalSizeFormatted = computed(() => {
+  const total = currentFiles.value.reduce((sum, f) => sum + parseInt(f.FileSize || f.fileSize || 0), 0)
+  return formatFileSize(total)
 })
 
-// 加载组织树
+// ========== 组织树 ==========
 const loadTree = async () => {
-  treeLoading.value = true
   try {
     const res = await http.get('/api/standard-directory/organization-tree')
-    console.log('API Response:', res)
-    // 兼容不同的响应格式
-    if (res.Status === true || res.status === 0 || res.code === 0 || res.success) {
-      treeData.value = res.Data || res.data || []
-    } else if (Array.isArray(res)) {
-      // 如果直接返回数组
-      treeData.value = res
+    if (res.Status === true || res.status === 0) {
+      treeData.value = (res.Data || res.data || []).map(org => ({
+        ...org,
+        expanded: true,
+        children: (org.children || []).map(std => ({
+          ...std,
+          expanded: false,
+          children: std.children || []
+        }))
+      }))
     }
   } catch (error) {
     console.error('加载组织树失败:', error)
-    ElMessage.error('加载组织树失败')
-  } finally {
-    treeLoading.value = false
   }
 }
 
-// 处理节点点击
-const handleNodeClick = async (data) => {
-  currentNode.value = data
-  
-  if (data.type === 'phase') {
-    await loadDirectoryConfig(data.cbCode, data.standardCode, data.phaseCode)
-  } else {
-    currentConfig.value = null
-    folders.value = []
-    files.value = []
-  }
+const toggleExpand = (node) => {
+  node.expanded = !node.expanded
 }
 
-// 加载目录配置（不存在时自动创建）
-const loadDirectoryConfig = async (cbCode, standardCode, phaseCode) => {
-  contentLoading.value = true
+const selectPhase = async (phase) => {
+  currentPhase.value = phase
+  currentFolderCode.value = ''
+  breadcrumbPath.value = []
+  selectedItems.clear()
+  await loadCurrentContent()
+}
+
+// ========== 文件夹/文件加载 ==========
+const loadCurrentContent = async () => {
+  if (!currentPhase.value) return
+  const directoryCode = `SDC-${currentPhase.value.standardCode.replace(/[:\-\s]/g, '')}|${currentPhase.value.phaseCode.replace(/[:\-\s]/g, '')}`
   try {
-    // 与后端GenerateDirectoryCode保持一致：清理特殊字符
-    const cleanStd = standardCode.replace(/[:\-\s]/g, '')
-    const cleanPhase = phaseCode.replace(/[:\-\s]/g, '')
-    const directoryCode = `SDC-${cleanStd}|${cleanPhase}`
-    console.log('loadDirectoryConfig:', { cbCode, standardCode, phaseCode, directoryCode })
-    
-    let res = await http.get(`/api/standard-directory/configs/${directoryCode}`)
-    console.log('GET config result:', res)
-    let config = (res.Status === true || res.status === 0) ? (res.Data || res.data) : null
-
-    // 配置不存在，自动创建
-    if (!config) {
-      console.log('配置不存在，自动创建...')
-      const createRes = await http.post(`/api/standard-directory/configs/create`, {
-        directoryCode,
-        standardCode,
-        phaseCode,
-        rootFolderName: `${standardCode} - ${phaseCode}`
-      })
-      console.log('创建结果:', createRes)
-      if (createRes.Status === true || createRes.status === 0) {
-        // 重新获取配置
-        res = await http.get(`/api/standard-directory/configs/${directoryCode}`)
-        console.log('重新GET config:', res)
-        config = (res.Status === true || res.status === 0) ? (res.Data || res.data) : null
+    if (!currentFolderCode.value) {
+      // 加载根目录 - 获取文件夹树
+      const res = await http.get(`/api/standard-directory/configs/${directoryCode}/folders`)
+      if (res.Status === true || res.status === 0) {
+        const data = res.Data || res.data || []
+        // 从树结构中提取根文件夹的子文件夹（Depth=2的文件夹）
+        currentFolders.value = extractFoldersAtLevel(data, 2)
+        currentFiles.value = []
       }
-    }
-
-    if (config) {
-      console.log('currentConfig 设置为:', config)
-      // 统一属性名为 camelCase（API 返回 PascalCase，前端用 camelCase）
-      currentConfig.value = {
-        ...config,
-        directoryCode: config.DirectoryCode || config.directoryCode,
-        standardCode: config.StandardCode || config.standardCode,
-        phaseCode: config.PhaseCode || config.phaseCode
-      }
-      await loadFolders(currentConfig.value.directoryCode)
     } else {
-      console.error('配置加载失败')
-      currentConfig.value = null
-      folders.value = []
-      files.value = []
+      // 加载指定文件夹的内容
+      const [foldersRes, filesRes] = await Promise.all([
+        http.get(`/api/standard-directory/configs/${directoryCode}/folders`),
+        http.get(`/api/standard-directory/folders/${currentFolderCode.value}/files`)
+      ])
+      if (foldersRes.Status === true || foldersRes.status === 0) {
+        const allFolders = foldersRes.Data || foldersRes.data || []
+        currentFolders.value = extractChildFolders(allFolders, currentFolderCode.value)
+      }
+      if (filesRes.Status === true || filesRes.status === 0) {
+        const allFiles = filesRes.Data || filesRes.data || []
+        currentFiles.value = Array.isArray(allFiles) ? allFiles.filter(f => f.IsValid !== false) : []
+      }
     }
   } catch (error) {
-    console.error('loadDirectoryConfig 异常:', error)
-    currentConfig.value = null
-    folders.value = []
-    files.value = []
-  } finally {
-    contentLoading.value = false
+    console.error('加载内容失败:', error)
+    currentFolders.value = []
+    currentFiles.value = []
   }
 }
 
-// 加载文件夹
-const loadFolders = async (directoryCode) => {
+// 从树结构中提取指定层级的文件夹
+const extractFoldersAtLevel = (tree, targetDepth) => {
+  const result = []
+  const traverse = (nodes) => {
+    for (const node of (nodes || [])) {
+      if (node.Depth === targetDepth || node.depth === targetDepth) {
+        result.push(node)
+      }
+      if (node.Children && node.Children.length > 0) {
+        traverse(node.Children)
+      }
+    }
+  }
+  // 树结构的根节点可能是数组或单个对象
+  if (Array.isArray(tree)) {
+    for (const root of tree) {
+      if (root.Children) traverse(root.Children)
+    }
+  } else if (tree && tree.Children) {
+    traverse(tree.Children)
+  }
+  return result
+}
+
+// 提取指定父文件夹下的子文件夹
+const extractChildFolders = (tree, parentCode) => {
+  const result = []
+  const findAndExtract = (nodes) => {
+    for (const node of (nodes || [])) {
+      const code = node.FolderCode || node.folderCode
+      if (code === parentCode) {
+        if (node.Children) {
+          result.push(...node.Children)
+        }
+        return true
+      }
+      if (node.Children && findAndExtract(node.Children)) {
+        return true
+      }
+    }
+    return false
+  }
+  if (Array.isArray(tree)) {
+    for (const root of tree) {
+      findAndExtract(root.Children || [root])
+    }
+  } else if (tree) {
+    findAndExtract(tree.Children || [tree])
+  }
+  return result
+}
+
+// ========== 文件夹导航 ==========
+const enterFolder = (folder) => {
+  const code = folder.FolderCode || folder.folderCode
+  const name = folder.FolderName || folder.folderName
+  currentFolderCode.value = code
+  breadcrumbPath.value.push({ code, name })
+  selectedItems.clear()
+  loadCurrentContent()
+}
+
+const navigateToRoot = () => {
+  currentFolderCode.value = ''
+  breadcrumbPath.value = []
+  selectedItems.clear()
+  loadCurrentContent()
+}
+
+const navigateToCrumb = (index) => {
+  breadcrumbPath.value = breadcrumbPath.value.slice(0, index + 1)
+  currentFolderCode.value = breadcrumbPath.value[index].code
+  selectedItems.clear()
+  loadCurrentContent()
+}
+
+// ========== 选择操作 ==========
+const toggleSelect = (item) => {
+  const code = item.FolderCode || item.fileCode || item.FileCode
+  if (selectedItems.has(code)) {
+    selectedItems.delete(code)
+  } else {
+    selectedItems.add(code)
+  }
+}
+
+const toggleSelectAll = (e) => {
+  selectedItems.clear()
+  if (e.target.checked) {
+    currentFolders.value.forEach(f => selectedItems.add(f.FolderCode || f.folderCode))
+    currentFiles.value.forEach(f => selectedItems.add(f.FileCode || f.fileCode))
+  }
+}
+
+const selectAll = () => {
+  currentFolders.value.forEach(f => selectedItems.add(f.FolderCode || f.folderCode))
+  currentFiles.value.forEach(f => selectedItems.add(f.FileCode || f.fileCode))
+}
+
+// ========== 新建文件夹 ==========
+const handleNewFolder = () => {
+  folderForm.folderName = ''
+  folderForm.remark = ''
+  showFolderDialog.value = true
+}
+
+const submitFolder = async () => {
+  if (!folderForm.folderName) {
+    ElMessage.warning('请输入文件夹名称')
+    return
+  }
+  const directoryCode = `SDC-${currentPhase.value.standardCode.replace(/[:\-\s]/g, '')}|${currentPhase.value.phaseCode.replace(/[:\-\s]/g, '')}`
   try {
-    const res = await http.get(`/api/standard-directory/configs/${directoryCode}/folders`)
-    console.log('Folders Response:', res)
+    const res = await http.post(`/api/standard-directory/configs/${directoryCode}/folders/create`, {
+      folderName: folderForm.folderName,
+      remark: folderForm.remark,
+      depth: 1,
+      parentCode: currentFolderCode.value || ''
+    })
     if (res.Status === true || res.status === 0) {
-      folders.value = res.Data || res.data || []
+      ElMessage.success('创建成功')
+      showFolderDialog.value = false
+      await loadCurrentContent()
+    } else {
+      ElMessage.error(res.Message || res.message || '创建失败')
     }
   } catch (error) {
-    folders.value = []
+    ElMessage.error('创建失败')
   }
 }
 
-// 处理文件夹点击
-const handleFolderClick = async (folder) => {
-  await loadFiles(folder.folderCode)
+// ========== 重命名 ==========
+const showRenameDialog = (item) => {
+  renameForm.item = item
+  renameForm.newName = item.FolderName || item.folderName || item.FileName || item.fileName
+  showRenameDialogFlag.value = true
 }
 
-// 加载文件
-const loadFiles = async (folderCode) => {
-  contentLoading.value = true
+const confirmRename = async () => {
+  if (!renameForm.newName) {
+    ElMessage.warning('请输入新名称')
+    return
+  }
+  const item = renameForm.item
+  const isFolder = !!(item.FolderCode || item.folderCode)
+  const code = item.FolderCode || item.folderCode || item.FileCode || item.fileCode
   try {
-    const res = await http.get(`/api/standard-directory/folders/${folderCode}/files`)
-    console.log('Files Response:', res)
+    let res
+    if (isFolder) {
+      res = await http.put(`/api/standard-directory/folders/${code}`, {
+        ...item,
+        FolderName: renameForm.newName
+      })
+    } else {
+      res = await http.put(`/api/standard-directory/files/${code}`, {
+        ...item,
+        FileName: renameForm.newName
+      })
+    }
     if (res.Status === true || res.status === 0) {
-      files.value = res.Data || res.data || []
+      ElMessage.success('重命名成功')
+      showRenameDialogFlag.value = false
+      await loadCurrentContent()
+    } else {
+      ElMessage.error(res.Message || '重命名失败')
     }
   } catch (error) {
-    files.value = []
-  } finally {
-    contentLoading.value = false
+    ElMessage.error('重命名失败')
   }
 }
 
-// 上传文件
+// ========== 删除 ==========
+const deleteItem = async (item) => {
+  const name = item.FolderName || item.folderName || item.FileName || item.fileName
+  try {
+    await ElMessageBox.confirm(`确定要删除 "${name}" 吗？`, '确认删除', { type: 'warning' })
+  } catch { return }
+
+  const isFolder = !!(item.FolderCode || item.folderCode)
+  const code = item.FolderCode || item.folderCode || item.FileCode || item.fileCode
+  try {
+    let res
+    if (isFolder) {
+      res = await http.delete(`/api/standard-directory/folders/${code}`)
+    } else {
+      res = await http.delete(`/api/standard-directory/files/${code}`)
+    }
+    if (res.Status === true || res.status === 0) {
+      ElMessage.success('删除成功')
+      await loadCurrentContent()
+    } else {
+      ElMessage.error(res.Message || '删除失败')
+    }
+  } catch (error) {
+    ElMessage.error('删除失败')
+  }
+}
+
+const deleteSelected = async () => {
+  if (selectedItems.size === 0) {
+    ElMessage.warning('请先选择要删除的项目')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`确定要删除选中的 ${selectedItems.size} 个项目吗？`, '确认删除', { type: 'warning' })
+  } catch { return }
+
+  // 逐个删除
+  for (const code of selectedItems) {
+    const folder = currentFolders.value.find(f => (f.FolderCode || f.folderCode) === code)
+    const file = currentFiles.value.find(f => (f.FileCode || f.fileCode) === code)
+    if (folder) await deleteItem(folder)
+    else if (file) await deleteItem(file)
+  }
+  selectedItems.clear()
+}
+
+// ========== 上传 ==========
 const handleUpload = () => {
   uploadFileList.value = []
   uploadMode.value = 'file'
-  uploadDialogVisible.value = true
+  uploadProgress.status = 'idle'
+  uploadProgress.completed = 0
+  uploadProgress.failed = 0
+  showUploadDialogFlag.value = true
 }
 
 const triggerUpload = () => {
@@ -416,16 +661,6 @@ const handleFolderSelect = (event) => {
   event.target.value = ''
 }
 
-const handleDrop = (event) => {
-  isDragOver.value = false
-  if (uploading.value) return
-  
-  const droppedFiles = Array.from(event.dataTransfer.files)
-  if (droppedFiles.length > 0) {
-    uploadFileList.value = [...uploadFileList.value, ...droppedFiles]
-  }
-}
-
 const removeFile = (index) => {
   uploadFileList.value.splice(index, 1)
 }
@@ -434,44 +669,37 @@ const clearUploadList = () => {
   uploadFileList.value = []
 }
 
-const formatFileSize = (bytes) => {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+const cancelUpload = () => {
+  showUploadDialogFlag.value = false
+  uploadFileList.value = []
+  uploading.value = false
 }
 
 const submitUpload = async () => {
   if (uploadFileList.value.length === 0) return
-  if (!currentConfig.value) {
+  if (!currentPhase.value) {
     ElMessage.warning('请先在左侧选择一个阶段节点')
     return
   }
-  
+
   uploading.value = true
-  uploadProgress.value = {
-    total: uploadFileList.value.length,
-    completed: 0,
-    failed: 0,
-    currentFile: '',
-    status: 'uploading'
-  }
-  
-  const directoryCode = currentConfig.value.directoryCode
+  uploadProgress.total = uploadFileList.value.length
+  uploadProgress.completed = 0
+  uploadProgress.failed = 0
+  uploadProgress.status = 'uploading'
+
+  const directoryCode = `SDC-${currentPhase.value.standardCode.replace(/[:\-\s]/g, '')}|${currentPhase.value.phaseCode.replace(/[:\-\s]/g, '')}`
   let taskId = null
-  
+
   try {
-    // ===== Step 1: 构建基础清单 =====
+    // Step 1: 构建清单
     const folderSet = new Set()
     const folders = []
     const files = []
-    
+
     for (const file of uploadFileList.value) {
       const relativePath = file.webkitRelativePath || file.name
       const pathParts = relativePath.split('/')
-      
-      // 提取文件夹路径（去掉文件名部分）
       if (pathParts.length > 1) {
         for (let i = 1; i < pathParts.length; i++) {
           const folderPath = pathParts.slice(0, i).join('/')
@@ -481,8 +709,6 @@ const submitUpload = async () => {
           }
         }
       }
-      
-      // 文件项
       files.push({
         relativePath: relativePath,
         fileName: file.name,
@@ -490,81 +716,66 @@ const submitUpload = async () => {
         mimeType: file.type || 'application/octet-stream'
       })
     }
-    
-    const manifest = { directoryCode, folders, files }
-    console.log('清单:', manifest)
-    
-    // ===== Step 2: 调用 upload-init =====
-    const initRes = await http.post('/api/standard-directory/upload-init', manifest)
-    console.log('upload-init 响应:', initRes)
-    
+
+    // Step 2: upload-init
+    const initRes = await http.post('/api/standard-directory/upload-init', { directoryCode, folders, files })
     if (!initRes.Status && initRes.status !== 0) {
       throw new Error(initRes.Message || initRes.message || '预处理失败')
     }
-    
+
     const enhancedManifest = initRes.Data || initRes.data
     taskId = enhancedManifest.TaskId || enhancedManifest.taskId
-    
     const totalFiles = enhancedManifest.TotalFiles || enhancedManifest.totalFiles || 0
-    console.log('任务ID:', taskId, '文件数:', totalFiles)
-    
-    // ===== Step 3: 逐个上传文件 =====
     const fileList = enhancedManifest.Files || enhancedManifest.files || []
+
+    // Step 3: 逐个上传
     let failed = false
-    
     for (let i = 0; i < fileList.length; i++) {
       if (failed) break
-      
       const enhancedFile = fileList[i]
       const localFile = uploadFileList.value[i]
-      
-      uploadProgress.value.currentFile = enhancedFile.FileName || enhancedFile.fileName
-      uploadProgress.value.completed = i
-      
+      uploadProgress.currentFile = enhancedFile.FileName || enhancedFile.fileName
+      uploadProgress.completed = i
+
       const formData = new FormData()
       formData.append('file', localFile)
       formData.append('fileCode', enhancedFile.FileCode || enhancedFile.fileCode)
       formData.append('storagePath', enhancedFile.StoragePath || enhancedFile.storagePath)
       formData.append('taskId', taskId)
-      
+
       try {
         const res = await http.post('/api/standard-directory/upload-file-v2', formData, null, {
           headers: { 'Content-Type': undefined }
         })
         if (res.Status === true || res.status === 0) {
-          uploadProgress.value.completed = i + 1
+          uploadProgress.completed = i + 1
         } else {
           failed = true
-          uploadProgress.value.failed++
-          console.warn(`上传失败 [${i+1}/${totalFiles}]:`, enhancedFile.FileName || enhancedFile.fileName, res.Message)
+          uploadProgress.failed++
         }
       } catch (error) {
         failed = true
-        uploadProgress.value.failed++
-        console.error(`上传异常 [${i+1}/${totalFiles}]:`, enhancedFile.FileName || enhancedFile.fileName, error)
+        uploadProgress.failed++
       }
     }
-    
-    // ===== Step 4: 确认或回滚 =====
+
+    // Step 4: 确认或回滚
     if (failed) {
-      uploadProgress.value.status = 'done'
+      uploadProgress.status = 'done'
       await http.post(`/api/standard-directory/upload-cancel?taskId=${taskId}`)
-      ElMessage.error(`上传完成，${uploadProgress.value.failed} 个文件失败，已回滚`)
+      ElMessage.error(`上传完成，${uploadProgress.failed} 个文件失败，已回滚`)
     } else {
-      uploadProgress.value.completed = totalFiles
-      uploadProgress.value.status = 'done'
+      uploadProgress.completed = totalFiles
+      uploadProgress.status = 'done'
       await http.post(`/api/standard-directory/upload-confirm?taskId=${taskId}`)
       ElMessage.success(`全部 ${totalFiles} 个文件上传成功`)
       uploadFileList.value = []
-      uploadDialogVisible.value = false
-      if (currentConfig.value) {
-        loadFolders(currentConfig.value.directoryCode)
-      }
+      showUploadDialogFlag.value = false
+      await loadCurrentContent()
     }
   } catch (error) {
     console.error('上传流程异常:', error)
-    uploadProgress.value.status = 'done'
-    // 尝试回滚
+    uploadProgress.status = 'done'
     if (taskId) {
       try { await http.post(`/api/standard-directory/upload-cancel?taskId=${taskId}`) } catch {}
     }
@@ -574,81 +785,83 @@ const submitUpload = async () => {
   }
 }
 
-// 新建文件夹
-const handleNewFolder = () => {
-  folderForm.value = {
-    folderName: '',
-    remark: ''
-  }
-  folderDialogVisible.value = true
-}
-
-const submitFolder = async () => {
-  if (!folderForm.value.folderName) {
-    ElMessage.warning('请输入文件夹名称')
-    return
-  }
-
-  try {
-    const res = await http.post(`/api/standard-directory/configs/${currentConfig.value.directoryCode}/folders/create`, {
-      folderName: folderForm.value.folderName,
-      remark: folderForm.value.remark,
-      depth: 1,
-      parentCode: ''
-    })
-    
-    console.log('Create Folder Response:', res)
-    if (res.Status === true || res.status === 0) {
-      ElMessage.success('创建成功')
-      folderDialogVisible.value = false
-      await loadFolders(currentConfig.value.directoryCode)
-    } else {
-      ElMessage.error(res.Message || res.message || '创建失败')
-    }
-  } catch (error) {
-    ElMessage.error('创建失败')
-  }
-}
-
-// 导出打包
+// ========== 其他操作 ==========
 const handleExport = () => {
-  if (!currentConfig.value) return
-  
-  const url = `/api/standard-directory/configs/${currentConfig.value.directoryCode}/export`
-  window.open(url, '_blank')
+  if (!currentPhase.value) return
+  const directoryCode = `SDC-${currentPhase.value.standardCode.replace(/[:\-\s]/g, '')}|${currentPhase.value.phaseCode.replace(/[:\-\s]/g, '')}`
+  window.open(`/api/standard-directory/configs/${directoryCode}/export`, '_blank')
 }
 
-// 使用帮助
 const handleHelp = () => {
-  helpDialogVisible.value = true
+  showHelpDialog.value = true
 }
 
-// 获取文件样式类
-const getFileClass = (fileType) => {
-  const typeMap = {
-    'pdf': 'file-pdf',
-    'doc': 'file-doc',
-    'docx': 'file-doc',
-    'xls': 'file-xls',
-    'xlsx': 'file-xls',
-    'jpg': 'file-image',
-    'jpeg': 'file-image',
-    'png': 'file-image'
+const replaceFile = (file) => {
+  ElMessage.info('替换文件功能开发中')
+}
+
+const downloadFile = (file) => {
+  const storagePath = file.StoragePath || file.storagePath
+  if (storagePath) {
+    window.open(`/api/standard-directory/download?path=${encodeURIComponent(storagePath)}`, '_blank')
   }
-  return typeMap[fileType?.toLowerCase()] || 'file-default'
 }
 
-// 右键菜单
-const showFolderMenu = (event, folder) => {
-  // TODO: 实现右键菜单
+// ========== 右键菜单 ==========
+const showContextMenu = (event, item, type) => {
+  contextMenu.visible = true
+  contextMenu.x = event.pageX
+  contextMenu.y = event.pageY
+  contextMenu.item = item
+  contextMenu.type = type
 }
 
-const showFileMenu = (event, file) => {
-  // TODO: 实现右键菜单
+const handleContextRename = () => {
+  if (contextMenu.item) showRenameDialog(contextMenu.item)
+  contextMenu.visible = false
 }
 
+const handleContextDelete = () => {
+  if (contextMenu.item) deleteItem(contextMenu.item)
+  contextMenu.visible = false
+}
+
+const hideContextMenu = () => {
+  contextMenu.visible = false
+}
+
+// ========== 工具函数 ==========
+const formatFileSize = (bytes) => {
+  if (!bytes || bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return '--'
+  return dateStr.substring(0, 10)
+}
+
+const getFileIconClass = (fileName) => {
+  if (!fileName) return 'file-default'
+  const ext = fileName.split('.').pop().toLowerCase()
+  if (['pdf'].includes(ext)) return 'file-pdf'
+  if (['doc', 'docx'].includes(ext)) return 'file-doc'
+  if (['xls', 'xlsx'].includes(ext)) return 'file-xls'
+  if (['jpg', 'jpeg', 'png', 'gif', 'bmp'].includes(ext)) return 'file-image'
+  return 'file-default'
+}
+
+// ========== 生命周期 ==========
 onMounted(() => {
   loadTree()
+  document.addEventListener('click', hideContextMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', hideContextMenu)
 })
 </script>
 
@@ -659,296 +872,294 @@ onMounted(() => {
   background: #fff;
 }
 
+/* 左侧面板 */
 .left-panel {
   width: 280px;
+  background: #fff;
   border-right: 1px solid #e4e7ed;
   display: flex;
   flex-direction: column;
 }
 
-.panel-header {
+.left-header {
   padding: 12px 16px;
-  border-bottom: 1px solid #e4e7ed;
-  font-weight: 500;
-  background: #fafafa;
+  border-bottom: 1px solid #ebeef5;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+}
+
+.left-title {
+  font-weight: 500;
+  color: #303133;
+}
+
+.search-box {
+  padding: 12px 16px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  font-size: 13px;
+  outline: none;
+}
+
+.search-input:focus {
+  border-color: #409eff;
 }
 
 .tree-container {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 8px 0;
 }
 
 .tree-node {
+  padding: 6px 16px;
+  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 6px;
+  transition: background 0.2s;
 }
 
-.node-label {
-  font-size: 14px;
+.tree-node:hover {
+  background: #f5f7fa;
 }
 
+.tree-node.active {
+  background: #ecf5ff;
+  color: #409eff;
+}
+
+.tree-node.level-0 { padding-left: 16px; font-weight: 500; }
+.tree-node.level-1 { padding-left: 36px; }
+.tree-node.level-2 { padding-left: 56px; }
+
+.tree-icon { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; }
+.tree-icon.org { color: #e6a23c; }
+.tree-icon.standard { color: #409eff; }
+.tree-icon.phase { color: #67c23a; }
+
+.tree-toggle {
+  width: 16px; height: 16px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: #c0c4cc; transition: transform 0.2s;
+}
+.tree-toggle.expanded { transform: rotate(90deg); }
+
+.tree-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.tree-badge {
+  background: #f0f2f5; color: #909399; font-size: 12px;
+  padding: 1px 6px; border-radius: 10px;
+}
+
+/* 右侧面板 */
 .right-panel {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  background: #fff;
 }
 
-.actions {
+/* 面包屑 */
+.breadcrumb {
+  padding: 12px 20px;
+  border-bottom: 1px solid #ebeef5;
   display: flex;
+  align-items: center;
   gap: 8px;
-}
-
-.content-area {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-}
-
-.file-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 16px;
-}
-
-.file-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 16px 8px;
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.file-item:hover {
-  background: #f5f7fa;
-  border-color: #409eff;
-}
-
-.folder-item {
-  background: #fdf6ec;
-  border-color: #e6a23c;
-}
-
-.folder-item:hover {
-  background: #faecd8;
-}
-
-.file-icon {
-  font-size: 48px;
-  margin-bottom: 8px;
-}
-
-.file-icon.folder {
-  color: #e6a23c;
-}
-
-.file-icon.file-pdf {
-  color: #f56c6c;
-}
-
-.file-icon.file-doc {
-  color: #409eff;
-}
-
-.file-icon.file-xls {
-  color: #67c23a;
-}
-
-.file-icon.file-image {
-  color: #909399;
-}
-
-.file-icon.file-default {
-  color: #909399;
-}
-
-.file-name {
-  font-size: 12px;
-  text-align: center;
-  word-break: break-all;
-  line-height: 1.4;
-}
-
-.file-meta {
-  font-size: 10px;
-  color: #909399;
-  margin-top: 4px;
-}
-
-.help-content h4 {
-  margin-top: 0;
-  margin-bottom: 16px;
-}
-
-.help-content ul {
-  padding-left: 20px;
-}
-
-.help-content li {
-  margin-bottom: 8px;
-  line-height: 1.6;
-}
-
-/* 上传对话框样式 */
-:deep(.upload-dialog) .el-dialog__header {
-  padding: 20px 20px 16px;
-  margin: 0;
-  border-bottom: 1px solid #ebeef5;
-}
-
-:deep(.upload-dialog) .el-dialog__body {
-  padding: 20px;
-}
-
-:deep(.upload-dialog) .el-dialog__footer {
-  padding: 16px 20px 20px;
-  border-top: 1px solid #ebeef5;
-}
-
-.upload-dialog-body {
-  padding: 0;
-}
-
-.upload-tabs {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 20px;
-}
-
-.upload-area {
-  border: 2px dashed #dcdfe6;
-  border-radius: 8px;
-  padding: 32px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s;
-  margin-bottom: 16px;
-}
-
-.upload-area:hover {
-  border-color: #409eff;
-  background: #f5f7fa;
-}
-
-.upload-trigger {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  border: 2px dashed #dcdfe6;
-  border-radius: 8px;
-  padding: 32px 20px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.upload-trigger:hover {
-  border-color: #409eff;
-}
-
-.upload-trigger.is-dragover {
-  border-color: #409eff;
-  background-color: #ecf5ff;
-}
-
-.upload-icon {
-  font-size: 48px;
-  color: #909399;
-  margin-bottom: 12px;
-}
-
-.upload-text {
-  font-size: 16px;
-  color: #303133;
-  margin-bottom: 8px;
-}
-
-.upload-hint {
-  font-size: 13px;
-  color: #909399;
-}
-
-.upload-file-list {
-  border: 1px solid #ebeef5;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.file-list-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px;
-  background: #fafafa;
-  border-bottom: 1px solid #ebeef5;
   font-size: 13px;
   color: #606266;
+}
+
+.breadcrumb-item { color: #409eff; cursor: pointer; }
+.breadcrumb-item:hover { text-decoration: underline; }
+.breadcrumb-separator { color: #c0c4cc; }
+.breadcrumb-current { color: #303133; font-weight: 500; }
+
+/* 工具栏 */
+.toolbar {
+  padding: 12px 20px;
+  border-bottom: 1px solid #ebeef5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn {
+  padding: 8px 16px; border: 1px solid #dcdfe6; border-radius: 4px;
+  cursor: pointer; font-size: 13px; display: flex; align-items: center;
+  gap: 6px; transition: all 0.2s; background: #fff;
+}
+.btn:hover { border-color: #409eff; color: #409eff; }
+.btn-primary { background: #409eff; color: #fff; border-color: #409eff; }
+.btn-primary:hover { background: #66b1ff; border-color: #66b1ff; color: #fff; }
+.btn-danger { color: #f56c6c; border-color: #f56c6c; }
+.btn-danger:hover { background: #f56c6c; color: #fff; }
+.btn-help { border-color: #e6a23c; color: #e6a23c; }
+.btn-help:hover { background: #e6a23c; color: #fff; border-color: #e6a23c; }
+
+.toolbar-divider { width: 1px; height: 24px; background: #e4e7ed; }
+
+/* 文件列表 */
+.file-list-container { flex: 1; overflow-y: auto; }
+
+.file-list-header {
+  display: grid; grid-template-columns: 40px 1fr 100px 140px 120px;
+  padding: 10px 20px; background: #f5f7fa; border-bottom: 1px solid #ebeef5;
+  font-weight: 500; color: #606266; font-size: 13px; position: sticky; top: 0;
 }
 
 .file-list-item {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  font-size: 13px;
+  display: grid; grid-template-columns: 40px 1fr 100px 140px 120px;
+  padding: 12px 20px; border-bottom: 1px solid #ebeef5;
+  align-items: center; cursor: pointer; transition: background 0.2s;
+}
+.file-list-item:hover { background: #f5f7fa; }
+.file-list-item.selected { background: #ecf5ff; }
+
+.file-checkbox { width: 16px; height: 16px; cursor: pointer; }
+
+.file-name { display: flex; align-items: center; gap: 10px; overflow: hidden; }
+
+.file-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+.file-icon.folder { color: #e6a23c; }
+.file-icon.file-pdf { color: #f56c6c; }
+.file-icon.file-doc { color: #409eff; }
+.file-icon.file-xls { color: #67c23a; }
+.file-icon.file-image { color: #909399; }
+.file-icon.file-default { color: #909399; }
+
+.file-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-name-text.folder-name { color: #303133; font-weight: 500; }
+
+.file-size, .file-date { color: #909399; font-size: 13px; }
+
+.file-actions { display: flex; gap: 8px; opacity: 0; transition: opacity 0.2s; }
+.file-list-item:hover .file-actions { opacity: 1; }
+
+.action-btn {
+  padding: 4px 8px; border: none; background: none; cursor: pointer;
+  color: #606266; font-size: 12px; border-radius: 4px;
+}
+.action-btn:hover { background: #ebeef5; color: #409eff; }
+.action-btn.danger:hover { color: #f56c6c; }
+
+/* 状态栏 */
+.status-bar {
+  padding: 10px 20px; border-top: 1px solid #ebeef5; background: #f5f7fa;
+  font-size: 13px; color: #909399; display: flex; justify-content: space-between;
 }
 
-.file-list-item:last-child {
-  border-bottom: none;
+/* 空状态 */
+.empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #909399; }
+.empty-icon { font-size: 64px; margin-bottom: 16px; color: #dcdfe6; }
+.empty-text { font-size: 14px; margin-bottom: 8px; }
+.empty-hint { font-size: 13px; color: #c0c4cc; }
+
+/* 弹窗 */
+.dialog-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.5); display: flex; align-items: center;
+  justify-content: center; z-index: 1000;
 }
 
-.file-type-icon {
-  color: #909399;
-  margin-right: 8px;
-  font-size: 16px;
+.dialog {
+  background: #fff; border-radius: 8px; width: 480px; max-width: 90%;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.file-item-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #303133;
+.dialog-header {
+  padding: 16px 20px; border-bottom: 1px solid #ebeef5;
+  display: flex; align-items: center; justify-content: space-between;
 }
 
-.file-item-size {
-  color: #909399;
-  margin: 0 12px;
-  font-size: 12px;
+.dialog-title { font-size: 16px; font-weight: 500; color: #303133; }
+.dialog-close { cursor: pointer; color: #909399; font-size: 20px; }
+.dialog-close:hover { color: #303133; }
+.dialog-body { padding: 20px; }
+
+.form-item { margin-bottom: 16px; }
+.form-label { display: block; margin-bottom: 8px; font-weight: 500; color: #606266; }
+
+.form-input {
+  width: 100%; padding: 10px 12px; border: 1px solid #dcdfe6;
+  border-radius: 4px; font-size: 14px; outline: none;
 }
+.form-input:focus { border-color: #409eff; }
 
 .dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  padding: 12px 20px; border-top: 1px solid #ebeef5;
+  display: flex; justify-content: flex-end; gap: 12px;
 }
 
-.upload-progress {
-  margin-top: 16px;
-  padding: 12px;
-  background: #fafafa;
-  border-radius: 4px;
-  border: 1px solid #ebeef5;
+/* 上传区域 */
+.upload-tabs { display: flex; justify-content: center; margin-bottom: 20px; }
+
+.upload-area {
+  border: 2px dashed #dcdfe6; border-radius: 8px; padding: 32px;
+  text-align: center; cursor: pointer; margin-bottom: 16px;
+}
+.upload-area:hover { border-color: #409eff; background: #ecf5ff; }
+
+.upload-trigger { display: flex; flex-direction: column; align-items: center; }
+.upload-icon-text { font-size: 48px; margin-bottom: 12px; }
+.upload-text { font-size: 14px; color: #303133; }
+
+.upload-file-list { border: 1px solid #ebeef5; border-radius: 4px; max-height: 200px; overflow-y: auto; }
+
+.file-list-header-sm {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 12px; background: #fafafa; border-bottom: 1px solid #ebeef5;
+  font-size: 13px; color: #606266;
 }
 
-.progress-info {
-  margin-bottom: 8px;
-  font-size: 13px;
-  color: #606266;
+.file-list-item-sm {
+  display: flex; align-items: center; padding: 8px 12px;
+  border-bottom: 1px solid #f0f0f0; font-size: 13px;
 }
 
-.text-success {
-  color: #67c23a;
+.file-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-item-size { color: #909399; margin: 0 12px; font-size: 12px; }
+
+.upload-progress-area { margin-top: 16px; padding: 12px; background: #fafafa; border-radius: 4px; }
+.progress-info { margin-bottom: 8px; font-size: 13px; color: #606266; }
+.text-success { color: #67c23a; }
+.text-danger { color: #f56c6c; }
+
+/* 右键菜单 */
+.context-menu {
+  position: fixed; background: #fff; border: 1px solid #e4e7ed;
+  border-radius: 4px; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  padding: 6px 0; min-width: 160px; z-index: 2000;
 }
 
-.text-danger {
-  color: #f56c6c;
+.context-menu-item {
+  padding: 8px 16px; cursor: pointer; display: flex; align-items: center;
+  gap: 8px; font-size: 13px; color: #606266;
+}
+.context-menu-item:hover { background: #f5f7fa; color: #409eff; }
+.context-menu-item.danger { color: #f56c6c; }
+.context-menu-item.danger:hover { background: #fef0f0; }
+
+.context-menu-divider { height: 1px; background: #e4e7ed; margin: 6px 0; }
+
+/* 帮助内容 */
+.help-content h3 { color: #303133; font-size: 15px; margin: 20px 0 10px 0; padding-bottom: 8px; border-bottom: 1px solid #ebeef5; }
+.help-content h3:first-child { margin-top: 0; }
+.help-content p { color: #606266; line-height: 1.6; margin-bottom: 12px; }
+.help-content ul { color: #606266; line-height: 1.8; padding-left: 20px; margin-bottom: 12px; }
+.help-content li { margin-bottom: 4px; }
+.help-content strong { color: #303133; }
+
+.code-example {
+  background: #f5f7fa; border: 1px solid #ebeef5; border-radius: 4px;
+  padding: 12px; font-family: monospace; font-size: 13px; color: #606266;
+  line-height: 1.8; margin-bottom: 12px;
 }
 </style>
