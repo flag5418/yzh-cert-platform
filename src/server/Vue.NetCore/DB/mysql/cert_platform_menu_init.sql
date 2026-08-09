@@ -554,6 +554,24 @@ INSERT INTO `cert_certification_body` (
 );
 
 -- ============================================================
+-- 添加标准目录管理菜单
+-- ============================================================
+SET @standard_dir_id = (SELECT MAX(Menu_Id) FROM Sys_Menu) + 1;
+INSERT INTO `Sys_Menu` (`MenuName`, `ParentId`, `Url`, `Sort`, `Icon`, `MenuType`, `Hidden`, `Creator`, `CreateDate`) VALUES 
+('标准目录管理', @cert_parent_id, '/CertPlatform/Standard', 90, 'el-icon-setting', 0, 0, '超级管理员', NOW()),
+('目录配置', @standard_dir_id, '/CertPlatform/Standard/DirectoryConfig', 1, '', 1, 0, '超级管理员', NOW()),
+('文件夹结构', @standard_dir_id + 1, '/CertPlatform/Standard/DirectoryTree', 2, '', 1, 0, '超级管理员', NOW());
+
+-- 分配权限
+INSERT INTO `Sys_RoleAuth` (`Role_Id`, `Menu_Id`, `AuthValue`, `Creator`, `CreateDate`) VALUES
+(10, @standard_dir_id, '["Search"]', '超级管理员', NOW()),
+(10, @standard_dir_id + 1, '["Search","Add","Delete","Update"]', '超级管理员', NOW()),
+(10, @standard_dir_id + 2, '["Search"]', '超级管理员', NOW()),
+(20, @standard_dir_id, '["Search"]', '超级管理员', NOW()),
+(20, @standard_dir_id + 1, '["Search","Add","Delete","Update"]', '超级管理员', NOW()),
+(20, @standard_dir_id + 2, '["Search"]', '超级管理员', NOW());
+
+-- ============================================================
 -- 完成！
 -- ============================================================
 SELECT 

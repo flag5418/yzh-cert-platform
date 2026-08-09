@@ -11,4 +11,21 @@
     <ProjectReference Include="..\..\Vue.NetCore\vol.api\VOL.Core\VOL.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      保持 NPOI 2.7.2（勿降级）：
+      经核验 NPOI NuGet 官方包（2.3.0 ~ 2.7.2）均不打包 HWPF 程序集，
+      .doc（OLE2）旧格式提取无法通过 NPOI 实现（见 NpoiWordExtractor.cs 说明与
+      docs/20-架构决策/文件数据提取能力落地-V1.md §十 已知限制）。
+    -->
+    <PackageReference Include="NPOI" Version="2.7.2" />
+    <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
+  </ItemGroup>
+
+  <!--
+    注：Extractor 模块（接口/实现/Models）全部参与编译。
+    曾出现外部会话将 PdfPig 引用改为 "PdfPig 0.1.15"（中国镜像包），
+    为与代码中 using UglyToad.PdfPig 保持一致，此处统一使用 nuget.org 的 UglyToad.PdfPig。
+  -->
+
 </Project>

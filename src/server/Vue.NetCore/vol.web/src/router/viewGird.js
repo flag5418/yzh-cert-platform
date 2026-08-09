@@ -29,246 +29,52 @@ let viewgird = [
     name: 'Sys_Role',
     component: () => import('@/views/sys/system/Sys_Role.vue')
   },
-  {
-    path: '/FormDesignOptions',
-    name: 'FormDesignOptions',
-    component: () => import('@/views/sys/form/FormDesignOptions.vue')
-  },
-  {
-    path: '/FormCollectionObject',
-    name: 'FormCollectionObject',
-    component: () => import('@/views/sys/form/FormCollectionObject.vue')
-  },
-  {
-    path: '/Sys_WorkFlow',
-    name: 'Sys_WorkFlow',
-    component: () => import('@/views/sys/flow/Sys_WorkFlow.vue')
-  },
-  {
-    path: '/Sys_WorkFlowStep',
-    name: 'Sys_WorkFlowStep',
-    component: () => import('@/views/sys/flow/Sys_WorkFlowStep.vue')
-  },
-  {
-    path: '/Sys_WorkFlowTable',
-    name: 'Sys_WorkFlowTable',
-    component: () => import('@/views/sys/flow/Sys_WorkFlowTable.vue')
-  },
-  {
-    path: '/Sys_WorkFlowTableStep',
-    name: 'Sys_WorkFlowTableStep',
-    component: () => import('@/views/sys/flow/Sys_WorkFlowTableStep.vue')
-  },
-  {
-    path: '/flowList',
-    name: 'flowList',
-    component: () => import('@/views/sys/flow/FlowList.vue')
-  },
-  {
-    path: '/Sys_QuartzOptions',
-    name: 'Sys_QuartzOptions',
-    component: () => import('@/views/sys/quartz/Sys_QuartzOptions.vue')
-  },
-  {
-    path: '/Sys_QuartzLog',
-    name: 'Sys_QuartzLog',
-    component: () => import('@/views/sys/quartz/Sys_QuartzLog.vue')
-  },
-  {
-    path: '/Sys_Department',
-    name: 'Sys_Department',
-    component: () => import('@/views/sys/system/Sys_Department.vue')
-  },
-  // ==================== MES 模块（示例）====================
-  {
-    path: '/MES_WarehouseManagement',
-    name: 'MES_WarehouseManagement',
-    component: () => import('@/views/mes/mes/MES_WarehouseManagement.vue')
-  }, {
-    path: '/MES_ProductOutbound',
-    name: 'MES_ProductOutbound',
-    component: () => import('@/views/mes/mes/MES_ProductOutbound.vue')
-  }, {
-    path: '/MES_LocationManagement',
-    name: 'MES_LocationManagement',
-    component: () => import('@/views/mes/mes/MES_LocationManagement.vue')
-  }, {
-    path: '/MES_InventoryManagement',
-    name: 'MES_InventoryManagement',
-    component: () => import('@/views/mes/mes/MES_InventoryManagement.vue')
-  }, {
-    path: '/MES_ProductInbound',
-    name: 'MES_ProductInbound',
-    component: () => import('@/views/mes/mes/MES_ProductInbound.vue')
-  }, {
-    path: '/MES_Customer',
-    name: 'MES_Customer',
-    component: () => import('@/views/mes/mes/MES_Customer.vue')
-  }, {
-    path: '/MES_Supplier',
-    name: 'MES_Supplier',
-    component: () => import('@/views/mes/mes/MES_Supplier.vue')
-  }, {
-    path: '/MES_ProductionLine',
-    name: 'MES_ProductionLine',
-    component: () => import('@/views/mes/mes/MES_ProductionLine.vue')
-  }, {
-    path: '/MES_Material',
-    name: 'MES_Material',
-    component: () => import('@/views/mes/mes/MES_Material.vue')
-  }, {
-    path: '/MES_ProductionLineDevice',
-    name: 'MES_ProductionLineDevice',
-    component: () => import('@/views/mes/mes/MES_ProductionLineDevice.vue')
-  }, {
-    path: '/MES_EquipmentManagement',
-    name: 'MES_EquipmentManagement',
-    component: () => import('@/views/mes/mes/MES_EquipmentManagement.vue')
-  }, {
-    path: '/MES_EquipmentRepair',
-    name: 'MES_EquipmentRepair',
-    component: () => import('@/views/mes/mes/MES_EquipmentRepair.vue')
-  }, {
-    path: '/MES_EquipmentFaultRecord',
-    name: 'MES_EquipmentFaultRecord',
-    component: () => import('@/views/mes/mes/MES_EquipmentFaultRecord.vue')
-  }, {
-    path: '/MES_EquipmentMaintenance',
-    name: 'MES_EquipmentMaintenance',
-    component: () => import('@/views/mes/mes/MES_EquipmentMaintenance.vue')
-  }, {
-    path: '/MES_Process',
-    name: 'MES_Process',
-    component: () => import('@/views/mes/mes/MES_Process.vue')
-  }, {
-    path: '/MES_ProcessReport',
-    name: 'MES_ProcessReport',
-    component: () => import('@/views/mes/mes/MES_ProcessReport.vue')
-  }, {
-    path: '/MES_ProcessRoute',
-    name: 'MES_ProcessRoute',
-    component: () => import('@/views/mes/mes/MES_ProcessRoute.vue')
-  }, {
-    path: '/MES_MaterialCatalog',
-    name: 'MES_MaterialCatalog',
-    component: () => import('@/views/mes/mes/MES_MaterialCatalog.vue')
-  }, {
-    path: '/MES_ProductionOrder',
-    name: 'MES_ProductionOrder',
-    component: () => import('@/views/mes/mes/MES_ProductionOrder.vue')
-  }, {
-    path: '/MES_ProductionPlanDetail',
-    name: 'MES_ProductionPlanDetail',
-    component: () => import('@/views/mes/mes/MES_ProductionPlanDetail.vue')
-  }, {
-    path: '/MES_ProductionPlanChangeRecord',
-    name: 'MES_ProductionPlanChangeRecord',
-    component: () => import('@/views/mes/mes/MES_ProductionPlanChangeRecord.vue')
-  }, {
-    path: '/MES_ProductionReporting',
-    name: 'MES_ProductionReporting',
-    component: () => import('@/views/mes/mes/MES_ProductionReporting.vue')
-  }, {
-    path: '/MES_DefectiveProductRecord',
-    name: 'MES_DefectiveProductRecord',
-    component: () => import('@/views/mes/mes/MES_DefectiveProductRecord.vue')
-  }, {
-    path: '/MES_Bom_Main',
-    name: 'MES_Bom_Main',
-    component: () => import('@/views/mes/mes/MES_Bom_Main.vue')
-  }, {
-    path: '/MES_QualityInspectionPlan',
-    name: 'MES_QualityInspectionPlan',
-    component: () => import('@/views/mes/mes/MES_QualityInspectionPlan.vue')
-  }, {
-    path: '/MES_QualityInspectionRecord',
-    name: 'MES_QualityInspectionRecord',
-    component: () => import('@/views/mes/mes/MES_QualityInspectionRecord.vue')
-  }, {
-    path: '/MES_SchedulingPlan',
-    name: 'MES_SchedulingPlan',
-    component: () => import('@/views/mes/mes/MES_SchedulingPlan.vue')
-  }, {
-    path: '/MES_Calendar',
-    name: 'MES_Calendar',
-    component: () => import('@/views/mes/mes/MES_Calendar.vue')
-  }, {
-    path: '/MES_Gantt',
-    name: 'MES_Gantt',
-    component: () => import('@/views/mes/mes/MES_Gantt.vue')
-  }, {
-    path: '/MES_Bom_Detail',
-    name: 'MES_Bom_Detail',
-    component: () => import('@/views/mes/mes/MES_Bom_Detail.vue')
-  }, {
-    path: '/ProductionState',
-    name: 'ProductionState',
-    component: () => import('@/views/mes/state/ProductionState.vue')
-  }, {
-    path: '/TestService',
-    name: 'TestService',
-    component: () => import('@/views/mes/mes/TestService.vue')
-  },
-  
-  // ==================== 认证平台模块（Phase 2）====================
-  // ⚠️ 只添加实际存在 Vue 组件的路由！
-  // 已存在的组件：CertificationBody, ISOStandard, CertApplication, AuditTask
-  // ⚠️ path 必须与数据库 Sys_Menu.Url 完全一致！
-  
+
+  // ==================== CertPlatform 模块路由 ====================
   {
     path: '/CertPlatform/Cert/CertificationBody',
-    name: 'CertCertificationBody',
-    component: () => import('@/views/cert/CertificationBody/CertificationBody.vue')
+    name: 'CertificationBody',
+    component: () => import('@/views/cert/CertificationBody/CertificationBody.vue'),
+    meta: { title: '认证机构管理' }
   },
-  {
-    path: '/CertPlatform/Cert/ISOStandard',
-    name: 'CertISOStandard',
-    component: () => import('@/views/cert/ISOStandard/ISOStandard.vue')
-  },
-  {
-    path: '/CertPlatform/Cert/CertApplication',
-    name: 'CertApplication',
-    component: () => import('@/views/cert/CertApplication/CertApplication.vue')
-  },
-  {
-    path: '/CertPlatform/Audit/AuditTask',
-    name: 'CertAuditTask',
-    component: () => import('@/views/cert/AuditTask/AuditTask.vue')
-  },
-
-  // ==================== 认证平台 - 基础资料（全局）====================
   {
     path: '/CertPlatform/Base/ISOStandard',
     name: 'BaseISOStandard',
-    component: () => import('@/views/cert/Base/ISOStandard/ISOStandard.vue')
+    component: () => import('@/views/cert/Base/ISOStandard/ISOStandard.vue'),
+    meta: { title: 'ISO标准注册' }
   },
   {
     path: '/CertPlatform/Base/CertStage',
-    name: 'BaseCertStage',
-    component: () => import('@/views/cert/Base/CertStage/CertStage.vue')
+    name: 'CertStage',
+    component: () => import('@/views/cert/Base/CertStage/CertStage.vue'),
+    meta: { title: '认证阶段定义' }
   },
-
-  // ==================== 认证平台 - 关联管理（左树+右checkbox表格）====================
   {
     path: '/CertPlatform/Link/OrgStandard',
-    name: 'LinkOrgStandard',
-    component: () => import('@/views/cert/Link/OrgStandard/OrgStandard.vue')
+    name: 'OrgStandard',
+    component: () => import('@/views/cert/Link/OrgStandard/OrgStandard.vue'),
+    meta: { title: '机构-标准关联' }
   },
   {
     path: '/CertPlatform/Link/OrgStage',
-    name: 'LinkOrgStage',
-    component: () => import('@/views/cert/Link/OrgStage/OrgStage.vue')
-  }
+    name: 'OrgStage',
+    component: () => import('@/views/cert/Link/OrgStage/OrgStage.vue'),
+    meta: { title: '机构-阶段关联' }
+  },
   
-  // TODO: 以下页面需要创建 Vue 组件后才能启用路由
-  // - /CertPlatform/Sys/AuditorManage      → 审核员管理（可复用 Sys_User）
-  // - /CertPlatform/Audit/TaskMonitor       → 任务状态监控
-  // - /CertPlatform/Auditor/PendingTasks   → 待办任务
-  // - /CertPlatform/Ent/EnterpriseList     → 企业列表
-  // - /CertPlatform/Audit/AuditTask        → 审核任务
-  // - /CertPlatform/Rpt/ReportList         → 报告列表
-  // - /CertPlatform/Wf/WorkflowDefinition  → 工作流配置
-  // - /CertPlatform/Audit/NonConformity   → 不符合项管理
+  // 标准目录管理（基础配置子菜单）
+  {
+    path: '/CertPlatform/Standard',
+    name: 'StandardDirectory',
+    redirect: '/CertPlatform/Standard/DirectoryConfig',
+    meta: { title: '标准目录管理' }
+  },
+  {
+    path: '/CertPlatform/Standard/DirectoryConfig',
+    name: 'DirectoryConfig',
+    component: () => import('@/views/cert/Standard/DirectoryManager/index.vue'),
+    meta: { title: '标准目录管理' }
+  }
 ]
 
 //上面的demo、MES开头的都是示例菜单，可以任意删除 

@@ -54,9 +54,9 @@ namespace YZH.Core.Tests.Compatibility
             
             // Assert: 验证所有默认值符合 §4.1 规范
             Assert.True(entity.Enable, "Enable 默认值应为 true");
-            Assert.Equal(0, entity.Sort, "Sort 默认值应为 0");
-            Assert.Null(entity.Code, "Code 默认值应为 null");
-            Assert.Null(entity.OrgCode, "OrgCode 默认值应为 null");
+            Assert.Equal(0, entity.Sort);
+            Assert.Null(entity.Code);
+            Assert.Null(entity.OrgCode);
             
             // 审计字段默认为 null
             Assert.Null(entity.CreateID);
@@ -73,7 +73,7 @@ namespace YZH.Core.Tests.Compatibility
         }
 
         [Fact]
-        public void CreateID_Should Be_Int_Type_Not_String()
+        public void CreateID_Should_Be_Int_Type_Not_String()
         {
             // 验证 CreateID 类型为 int?（对应 Sys_User.Id）
             var entity = new TestEntity();
@@ -86,7 +86,6 @@ namespace YZH.Core.Tests.Compatibility
         [Theory]
         [InlineData(true, null, false)]   // Enable=true, DeleteTime=null → Not deleted
         [InlineData(false, null, false)]  // Enable=false, DeleteTime=null → Disabled only
-        [InlineData(false, DateTime.Now, true)] // Enable=false, DeleteTime有值 → Deleted
         public void IsDeleted_Property_Should_Work_Correctly(bool enable, DateTime? deleteTime, bool expectedIsDeleted)
         {
             var entity = new TestEntity();
@@ -101,10 +100,20 @@ namespace YZH.Core.Tests.Compatibility
             Assert.Equal(expectedIsDeleted, entity.IsDeleted);
         }
 
+        [Fact]
+        public void Deleted_Then_IsDeleted_Should_Be_True()
+        {
+            var entity = new TestEntity();
+            entity.Enable = false;
+            entity.MarkAsDeleted(1, "Admin");
+
+            Assert.NotNull(entity.DeleteTime);
+            Assert.True(entity.IsDeleted);
+        }
+
         [Theory]
         [InlineData(true, null, false)]
         [InlineData(false, null, true)]
-        [InlineData(false, DateTime.Now, false)]
         public void IsDisabled_Property_Should_Work_Correctly(bool enable, DateTime? deleteTime, bool expectedIsDisabled)
         {
             var entity = new TestEntity();
@@ -116,6 +125,17 @@ namespace YZH.Core.Tests.Compatibility
             }
             
             Assert.Equal(expectedIsDisabled, entity.IsDisabled);
+        }
+
+        [Fact]
+        public void Deleted_Then_IsDisabled_Should_Be_False()
+        {
+            var entity = new TestEntity();
+            entity.Enable = false;
+            entity.MarkAsDeleted(1, "Admin");
+
+            Assert.NotNull(entity.DeleteTime);
+            Assert.False(entity.IsDisabled);
         }
 
         #endregion

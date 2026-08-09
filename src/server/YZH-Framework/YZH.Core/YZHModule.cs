@@ -5,6 +5,12 @@ using Autofac;
 using YZH.Core.Audit;
 using YZH.Core.CodeRule;
 using YZH.Core.DeleteStrategy;
+using YZH.Core.Extractor;
+using YZH.Core.Extractor.Excel;
+using YZH.Core.Extractor.Models;
+using YZH.Core.Extractor.Pdf;
+using YZH.Core.Extractor.Text;
+using YZH.Core.Extractor.Word;
 using YZH.Core.Validation;
 
 namespace YZH.Core
@@ -49,8 +55,10 @@ namespace YZH.Core
             RegisterBaseInfrastructure(builder);
 
             // ============================================================
-            // Phase 2: 核心能力注册（待实现）
+            // Phase 2: 核心能力注册（部分完成）
             // ============================================================
+
+            RegisterExtractorServices(builder);
 
             // TODO:P2 - 取消以下注释以启用 Phase 2 组件
             // RegisterCodeRuleServices(builder);
@@ -92,7 +100,35 @@ namespace YZH.Core
 
         #endregion
 
-        #region Phase 2: 核心能力（待实现）
+        #region Phase 2: 核心能力（部分完成）
+
+        /// <summary>
+        /// 注册文件提取能力（提取引擎的基础能力，见 docs/20-架构决策/文件数据提取能力落地-V1.md）。
+        /// 状态：[DONE] Word(docx)/Excel/PDF(文本层)/纯文本 基本逻辑；[TODO:P2] 图片 OCR 第三方实现（IOcrExtractor）接入后在此注册。
+        /// 说明：.doc（OLE2）因 NPOI NuGet 包无 HWPF 暂不支持，由提取器内部返回 Unsupported，不影响注册。
+        /// </summary>
+        private void RegisterExtractorServices(ContainerBuilder builder)
+        {
+            builder.RegisterType<NpoiWordExtractor>()
+                   .Keyed<ITextExtractor>(ExtractSourceType.Word)
+                   .InstancePerLifetimeScope();
+            builder.RegisterType<NpoiExcelExtractor>()
+                   .Keyed<ITextExtractor>(ExtractSourceType.Excel)
+                   .InstancePerLifetimeScope();
+            builder.RegisterType<PdfPigPdfExtractor>()
+                   .Keyed<ITextExtractor>(ExtractSourceType.Pdf)
+                   .InstancePerLifetimeScope();
+            builder.RegisterType<PlainTextExtractor>()
+                   .Keyed<ITextExtractor>(ExtractSourceType.Text)
+                   .InstancePerLifetimeScope();
+            builder.RegisterType<FileExtractorService>()
+                   .As<IFileExtractor>()
+                   .InstancePerLifetimeScope();
+
+            // [TODO:P2] 图片 OCR：IOcrExtractor 第三方实现（腾讯云/百度 OCR）接入后，
+            // 在此注册 Keyed<IOcrExtractor>(ExtractSourceType.Image) 并由 FileExtractorService 消费。
+            Console.WriteLine("[YZH] Extractor services registered (Word/Excel/PDF/Text)");
+        }
 
         /// <summary>
         /// 注册编码规则相关服务

@@ -12,12 +12,12 @@ namespace VOL.Entity.CertPlatform.Cert
     /// - V = CertStageView（视图，用于显示，包含关联字段）
     /// 
     /// 数据来源：v_cert_stage MySQL 视图
+    /// 注意：不要添加 [Table] 属性，否则会覆盖父类的表名配置
     /// </summary>
-    [Table("v_cert_stage")]
+    [NotMapped]
     public class CertStageView : CertStage  // 继承 CertStage 以支持 Cast
     {
         // ====== 视图特有字段（字典翻译后的中文）======
-        // 注意：不要加 [NotMapped]，否则 EF Core 不会从数据库读取这些字段！
 
         /// <summary>
         /// 分类中文名（流程阶段/审核阶段/证后阶段）

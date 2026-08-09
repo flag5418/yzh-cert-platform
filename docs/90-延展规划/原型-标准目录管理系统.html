@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>标准目录管理系统 - 原型设计</title>
+    <link href="https://cdn.jsdelivr.net/npm/element-plus/dist/index.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/element-plus"></script>
+    <script src="https://unpkg.com/@element-plus/icons-vue"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: #f5f7fa; }
+        
+        /* 顶部导航 */
+        .header {
+            height: 60px;
+            background: #fff;
+            border-bottom: 1px solid #e4e7ed;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+        .header-title { font-size: 18px; font-weight: 500; color: #303133; }
+        .header-breadcrumb { margin-left: 30px; color: #909399; font-size: 14px; }
+        .header-actions { margin-left: auto; display: flex; gap: 10px; }
+        
+        /* 主体布局 */
+        .layout {
+            display: flex;
+            height: calc(100vh - 60px);
+        }
+        
+        /* 左侧面板 */
+        .left-panel {
+            width: 300px;
+            background: #fff;
+            border-right: 1px solid #e4e7ed;
+            display: flex;
+            flex-direction: column;
+        }
+        .left-panel-header {
+            padding: 15px;
+            border-bottom: 1px solid #ebeef5;
+        }
+        .left-panel-search {
+            width: 100%;
+        }
+        .left-panel-tree {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        .tree-section {
+            margin-bottom: 20px;
+        }
+        .tree-section-title {
+            font-size: 13px;
+            color: #909399;
+            margin-bottom: 10px;
+            padding-left: 10px;
+        }
+        
+        /* 右侧面板 */
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #f5f7fa;
+        }
+        
+        /* 工具栏 */
+        .toolbar {
+            background: #fff;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e4e7ed;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .toolbar-left { display: flex; align-items: center; gap: 15px; }
+        .toolbar-right { display: flex; gap: 10px; }
+        
+        /* 面包屑 */
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #606266;
+        }
+        .breadcrumb-item { cursor: pointer; transition: color 0.2s; }
+        .breadcrumb-item:hover { color: #409eff; }
+        .breadcrumb-separator { color: #c0c4cc; }
+        
+        /* 内容区域 */
+        .content-area {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        /* 空状态 */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #909399;
+        }
+        .empty-state-icon { font-size: 64px; margin-bottom: 20px; opacity: 0.5; }
+        .empty-state-text { font-size: 16px; }
+        
+        /* 文件夹列表 */
+        .folder-list {
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+        }
+        .folder-list-header {
+            display: grid;
+            grid-template-columns: 2fr 80px 80px 100px 80px;
+            padding: 12px 20px;
+            background: #fafafa;
+            border-bottom: 1px solid #ebeef5;
+            font-size: 13px;
+            color: #909399;
+        }
+        .folder-list-row {
+            display: grid;
+            grid-template-columns: 2fr 80px 80px 100px 80px;
+            padding: 12px 20px;
+            border-bottom: 1px solid #ebeef5;
+            align-items: center;
+            transition: background 0.2s;
+        }
+        .folder-list-row:hover { background: #f5f7fa; }
+        .folder-list-row:last-child { border-bottom: none; }
+        
+        /* 文件列表 */
+        .file-list {
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+            margin-top: 20px;
+        }
+        .file-list-header {
+            display: grid;
+            grid-template-columns: 2fr 100px 140px 100px 80px;
+            padding: 12px 20px;
+            background: #fafafa;
+            border-bottom: 1px solid #ebeef5;
+            font-size: 13px;
+            color: #909399;
+        }
+        .file-list-row {
+            display: grid;
+            grid-template-columns: 2fr 100px 140px 100px 80px;
+            padding: 12px 20px;
+            border-bottom: 1px solid #ebeef5;
+            align-items: center;
+            transition: background 0.2s;
+        }
+        .file-list-row:hover { background: #f5f7fa; }
+        .file-list-row:last-child { border-bottom: none; }
+        
+        /* 拖拽上传区域 */
+        .upload-area {
+            border: 2px dashed #dcdfe6;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin-top: 20px;
+            background: #fff;
+            transition: all 0.3s;
+        }
+        .upload-area:hover { border-color: #409eff; background: #ecf5ff; }
+        .upload-area-icon { font-size: 48px; color: #c0c4cc; margin-bottom: 15px; }
+        .upload-area-text { color: #909399; font-size: 14px; }
+        
+        /* 状态栏 */
+        .status-bar {
+            height: 36px;
+            background: #fff;
+            border-top: 1px solid #e4e7ed;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            font-size: 13px;
+            color: #909399;
+        }
+        .status-bar-info { display: flex; gap: 20px; }
+        
+        /* 树节点样式 */
+        .custom-tree-node {
+            display: flex;
+            align-items: center;
+            padding: 8px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .custom-tree-node:hover { background: #f5f7fa; }
+        .custom-tree-node.active { background: #ecf5ff; color: #409eff; }
+        .custom-tree-node-icon { margin-right: 8px; font-size: 16px; }
+        .custom-tree-node-label { flex: 1; }
+        .custom-tree-node-badge {
+            background: #f0f0f0;
+            color: #909399;
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+        
+        /* 图标颜色 */
+        .icon-org { color: #409eff; }
+        .icon-standard { color: #67c23a; }
+        .icon-phase { color: #e6a23c; }
+        .icon-folder { color: #e6a23c; }
+        .icon-file { color: #909399; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 顶部导航 -->
+        <div class="header">
+            <div class="header-title">标准目录管理系统</div>
+            <div class="header-breadcrumb">
+                体系认证平台 / 基础配置 / 标准目录管理
+            </div>
+            <div class="header-actions">
+                <el-button size="small" @click="refresh">
+                    <el-icon><Refresh /></el-icon> 刷新
+                </el-button>
+                <el-button size="small" type="primary" @click="showCreateFolderDialog">
+                    <el-icon><FolderAdd /></el-icon> 新建文件夹
+                </el-button>
+                <el-upload :auto-upload="false" :on-change="handleFileChange">
+                    <el-button size="small" type="success">
+                        <el-icon><Upload /></el-icon> 上传文件
+                    </el-button>
+                </el-upload>
+            </div>
+        </div>
+        
+        <!-- 主体布局 -->
+        <div class="layout">
+            <!-- 左侧面板 -->
+            <div class="left-panel">
+                <div class="left-panel-header">
+                    <el-input v-model="searchText" placeholder="搜索机构/标准/阶段..." clearable class="left-panel-search">
+                        <template #prefix>
+                            <el-icon><Search /></el-icon>
+                        </template>
+                    </el-input>
+                </div>
+                
+                <div class="left-panel-tree">
+                    <!-- 机构-标准-阶段树 -->
+                    <div class="tree-section">
+                        <div class="tree-section-title">机构-标准-阶段</div>
+                        <el-tree
+                            :data="orgTreeData"
+                            :props="{ label: 'name', children: 'children' }"
+                            node-key="code"
+                            highlight-current
+                            :default-expanded-keys="['CB001']"
+                            @node-click="handleNodeClick"
+                        >
+                            <template #default="{ node, data }">
+                                <div class="custom-tree-node" :class="{ active: currentCode === data.code }">
+                                    <el-icon :class="getNodeIconClass(data.type)">
+                                        <component :is="getNodeIcon(data.type)" />
+                                    </el-icon>
+                                    <span class="custom-tree-node-label">{{ node.label }}</span>
+                                    <span v-if="data.fileCount" class="custom-tree-node-badge">{{ data.fileCount }}</span>
+                                </div>
+                            </template>
+                        </el-tree>
+                    </div>
+                    
+                    <!-- 文件夹树 -->
+                    <div class="tree-section" v-if="currentPhase">
+                        <div class="tree-section-title">当前文件夹结构</div>
+                        <el-tree
+                            :data="folderTreeData"
+                            :props="{ label: 'folderName', children: 'children' }"
+                            node-key="folderCode"
+                            highlight-current
+                            @node-click="handleFolderClick"
+                        >
+                            <template #default="{ node, data }">
+                                <div class="custom-tree-node">
+                                    <el-icon class="icon-folder"><Folder /></el-icon>
+                                    <span class="custom-tree-node-label">{{ node.label }}</span>
+                                    <span v-if="data.fileCount" class="custom-tree-node-badge">{{ data.fileCount }}</span>
+                                </div>
+                            </template>
+                        </el-tree>
+                    </div>
+                </div>
+                
+                <!-- 拖拽上传区域 -->
+                <div class="upload-area" v-if="currentPhase" @dragover.prevent @drop="handleDrop">
+                    <div class="upload-area-icon">
+                        <el-icon><UploadFilled /></el-icon>
+                    </div>
+                    <div class="upload-area-text">
+                        拖拽文件到此处上传<br>
+                        <span style="font-size: 12px;">支持 PDF、Word、Excel 等格式</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 右侧面板 -->
+            <div class="right-panel">
+                <!-- 工具栏 -->
+                <div class="toolbar">
+                    <div class="toolbar-left">
+                        <el-breadcrumb separator="/">
+                            <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
+                            <el-breadcrumb-item>体系认证平台</el-breadcrumb-item>
+                            <el-breadcrumb-item>标准目录管理</el-breadcrumb-item>
+                            <el-breadcrumb-item v-if="currentPhase">{{ currentPhase.name }}</el-breadcrumb-item>
+                        </el-breadcrumb>
+                    </div>
+                    <div class="toolbar-right">
+                        <el-button size="small" @click="toggleView">
+                            <el-icon><Grid /></el-icon> {{ viewType === 'list' ? '卡片视图' : '列表视图' }}
+                        </el-button>
+                        <el-button size="small" @click="sortFiles">
+                            <el-icon><Sort /></el-icon> 排序
+                        </el-button>
+                    </div>
+                </div>
+                
+                <!-- 内容区域 -->
+                <div class="content-area">
+                    <!-- 空状态 -->
+                    <div class="empty-state" v-if="!currentPhase">
+                        <el-icon class="empty-state-icon"><FolderOpened /></el-icon>
+                        <div class="empty-state-text">请从左侧选择机构-标准-阶段</div>
+                    </div>
+                    
+                    <!-- 文件夹和文件列表 -->
+                    <template v-else>
+                        <!-- 文件夹列表 -->
+                        <div class="folder-list">
+                            <div class="folder-list-header">
+                                <span>文件夹名称</span>
+                                <span>子项数</span>
+                                <span>文件数</span>
+                                <span>修改时间</span>
+                                <span>操作</span>
+                            </div>
+                            <div 
+                                class="folder-list-row" 
+                                v-for="folder in folderList" 
+                                :key="folder.folderCode"
+                            >
+                                <span>
+                                    <el-icon class="icon-folder"><Folder /></el-icon>
+                                    {{ folder.folderName }}
+                                </span>
+                                <span>{{ folder.childCount }}</span>
+                                <span>{{ folder.fileCount }}</span>
+                                <span>{{ folder.modifyDate | formatDate }}</span>
+                                <span>
+                                    <el-button size="small" link @click="enterFolder(folder)">进入</el-button>
+                                    <el-button size="small" link type="danger" @click="deleteFolder(folder)">删除</el-button>
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <!-- 文件列表 -->
+                        <div class="file-list" v-if="fileList.length > 0">
+                            <div class="file-list-header">
+                                <span>文件名</span>
+                                <span>大小</span>
+                                <span>上传时间</span>
+                                <span>状态</span>
+                                <span>操作</span>
+                            </div>
+                            <div 
+                                class="file-list-row" 
+                                v-for="file in fileList" 
+                                :key="file.fileCode"
+                            >
+                                <span>
+                                    <el-icon :class="getFileIconClass(file.fileType)"><Document /></el-icon>
+                                    {{ file.fileName }}
+                                </span>
+                                <span>{{ formatFileSize(file.fileSize) }}</span>
+                                <span>{{ file.uploadedAt | formatDate }}</span>
+                                <span>
+                                    <el-tag :type="getStatusType(file.status)" size="small">
+                                        {{ getStatusText(file.status) }}
+                                    </el-tag>
+                                </span>
+                                <span>
+                                    <el-button size="small" link @click="previewFile(file)">预览</el-button>
+                                    <el-button size="small" link @click="downloadFile(file)">下载</el-button>
+                                    <el-button size="small" link type="danger" @click="deleteFile(file)">删除</el-button>
+                                </span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                
+                <!-- 状态栏 -->
+                <div class="status-bar">
+                    <div class="status-bar-info">
+                        <span>已选择 {{ selectedFiles.length }} 项</span>
+                        <span>共 {{ fileList.length }} 个文件，总大小 {{ totalSize }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 新建文件夹对话框 -->
+        <el-dialog v-model="createFolderVisible" title="新建文件夹" width="400px">
+            <el-form :model="newFolderForm" label-width="80px">
+                <el-form-item label="文件夹名称">
+                    <el-input v-model="newFolderForm.folderName" placeholder="请输入文件夹名称" />
+                </el-form-item>
+                <el-form-item label="上级文件夹">
+                    <el-cascader
+                        v-model="newFolderForm.parentCode"
+                        :options="folderTreeData"
+                        :props="{ checkStrictly: true, value: 'folderCode', label: 'folderName' }"
+                        placeholder="选择上级文件夹"
+                        clearable
+                    />
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="createFolderVisible = false">取消</el-button>
+                <el-button type="primary" @click="submitCreateFolder">确定</el-button>
+            </template>
+        </el-dialog>
+        
+        <!-- 文件预览对话框 -->
+        <el-dialog v-model="previewVisible" :title="previewFile?.fileName" width="80%" top="5vh">
+            <div class="preview-container">
+                <div class="preview-placeholder">
+                    <el-icon size="72" color="#c0c4cc"><Document /></el-icon>
+                    <p>文件预览功能开发中...</p>
+                    <p style="font-size: 12px; color: #909399; margin-top: 10px;">
+                        后续支持：PDF预览、图片预览、Office文档预览、在线编辑
+                    </p>
+                </div>
+            </div>
+            <template #footer>
+                <el-button @click="previewVisible = false">返回文件列表</el-button>
+                <el-button type="primary" @click="downloadFile(previewFile)">下载文件</el-button>
+            </template>
+        </el-dialog>
+    </div>
+    
+    <script>
+        const { createApp, ref, computed } = Vue;
+        
+        const app = createApp({
+            setup() {
+                // 状态
+                const searchText = ref('');
+                const currentCode = ref(null);
+                const currentPhase = ref(null);
+                const viewType = ref('list');
+                const selectedFiles = ref([]);
+                
+                // 文件夹相关
+                const folderList = ref([]);
+                const folderTreeData = ref([]);
+                const createFolderVisible = ref(false);
+                const newFolderForm = ref({ folderName: '', parentCode: [] });
+                
+                // 文件相关
+                const fileList = ref([]);
+                const previewVisible = ref(false);
+                const previewFile = ref(null);
+                
+                // 示例数据 - 机构-标准-阶段树
+                const orgTreeData = ref([
+                    {
+                        code: 'CB001',
+                        name: '河北雄安尚龙认证有限公司',
+                        type: 'organization',
+                        children: [
+                            {
+                                code: 'ISO9001',
+                                name: 'ISO 9001:2015',
+                                type: 'standard',
+                                children: [
+                                    {
+                                        code: 'PH01',
+                                        name: '初审第一阶段',
+                                        type: 'phase',
+                                        fileCount: 15,
+                                        children: [
+                                            {
+                                                code: 'FOLDER-001',
+                                                name: '企业基础资料',
+                                                type: 'folder',
+                                                fileCount: 8,
+                                                children: [
+                                                    { code: 'FOLDER-001-01', name: '资质文件', type: 'folder', fileCount: 5 },
+                                                    { code: 'FOLDER-001-02', name: '财务文件', type: 'folder', fileCount: 3 }
+                                                ]
+                                            },
+                                            {
+                                                code: 'FOLDER-002',
+                                                name: '阶段隔离资料',
+                                                type: 'folder',
+                                                fileCount: 7,
+                                                children: [
+                                                    { code: 'FOLDER-002-01', name: '申请文件', type: 'folder', fileCount: 4 },
+                                                    { code: 'FOLDER-002-02', name: '审核计划', type: 'folder', fileCount: 3 }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        code: 'PH02',
+                                        name: '初审第二阶段',
+                                        type: 'phase',
+                                        fileCount: 12,
+                                        children: []
+                                    }
+                                ]
+                            },
+                            {
+                                code: 'ISO13485',
+                                name: 'ISO 13485:2016',
+                                type: 'standard',
+                                children: [
+                                    {
+                                        code: 'PH01',
+                                        name: '初审第一阶段',
+                                        type: 'phase',
+                                        fileCount: 10,
+                                        children: []
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        code: 'CB002',
+                        name: '某检测认证有限公司',
+                        type: 'organization',
+                        children: [
+                            {
+                                code: 'ISO9001',
+                                name: 'ISO 9001:2015',
+                                type: 'standard',
+                                children: [
+                                    { code: 'PH01', name: '初审第一阶段', type: 'phase', fileCount: 8, children: [] }
+                                ]
+                            }
+                        ]
+                    }
+                ]);
+                
+                // 示例数据 - 文件夹列表
+                const mockFolders = ref([
+                    { folderCode: 'FD-001', folderName: '企业基础资料', childCount: 2, fileCount: 8, modifyDate: '2026-08-09 10:30' },
+                    { folderCode: 'FD-002', folderName: '阶段隔离资料', childCount: 2, fileCount: 7, modifyDate: '2026-08-09 09:15' }
+                ]);
+                
+                // 示例数据 - 文件列表
+                const mockFiles = ref([
+                    { fileCode: 'FL-001', fileName: '营业执照正本.pdf', fileType: 'pdf', fileSize: 2456789, uploadedAt: '2026-08-09 10:30:00', status: 'verified' },
+                    { fileCode: 'FL-002', fileName: '营业执照副本.pdf', fileType: 'pdf', fileSize: 1856234, uploadedAt: '2026-08-09 10:31:00', status: 'verified' },
+                    { fileCode: 'FL-003', fileName: '组织机构代码证.pdf', fileType: 'pdf', fileSize: 956123, uploadedAt: '2026-08-09 10:32:00', status: 'pending' },
+                    { fileCode: 'FL-004', fileName: '审计报告2025.pdf', fileType: 'pdf', fileSize: 5234567, uploadedAt: '2026-08-08 15:20:00', status: 'verified' },
+                    { fileCode: 'FL-005', fileName: '审核申请表.docx', fileType: 'docx', fileSize: 123456, uploadedAt: '2026-08-08 14:15:00', status: 'failed' }
+                ]);
+                
+                // 计算属性
+                const folderList = computed(() => mockFolders.value);
+                const fileList = computed(() => mockFiles.value);
+                const totalSize = computed(() => {
+                    const bytes = fileList.value.reduce((sum, f) => sum + f.fileSize, 0);
+                    return formatFileSize(bytes);
+                });
+                
+                // 方法
+                const getNodeIcon = (type) => {
+                    const icons = {
+                        organization: 'Company',
+                        standard: 'Document',
+                        phase: 'Calendar',
+                        folder: 'Folder'
+                    };
+                    return icons[type] || 'Document';
+                };
+                
+                const getNodeIconClass = (type) => {
+                    const classes = {
+                        organization: 'icon-org',
+                        standard: 'icon-standard',
+                        phase: 'icon-phase',
+                        folder: 'icon-folder'
+                    };
+                    return classes[type] || '';
+                };
+                
+                const getFileIconClass = (type) => {
+                    const classes = {
+                        pdf: 'icon-pdf',
+                        docx: 'icon-doc',
+                        xlsx: 'icon-excel',
+                        jpg: 'icon-image',
+                        png: 'icon-image'
+                    };
+                    return `icon-${type}`;
+                };
+                
+                const getStatusType = (status) => {
+                    const types = { verified: 'success', pending: 'warning', failed: 'danger' };
+                    return types[status] || 'info';
+                };
+                
+                const getStatusText = (status) => {
+                    const texts = { verified: '已通过', pending: '待审核', failed: '未通过' };
+                    return texts[status] || status;
+                };
+                
+                const formatFileSize = (bytes) => {
+                    if (bytes === 0) return '0 B';
+                    const k = 1024;
+                    const sizes = ['B', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                };
+                
+                const formatDate = (date) => {
+                    if (!date) return '-';
+                    return new Date(date).toLocaleDateString('zh-CN');
+                };
+                
+                const handleNodeClick = (data) => {
+                    if (data.type === 'phase') {
+                        currentPhase.value = data;
+                        currentCode.value = data.code;
+                        // 模拟加载文件夹和文件
+                        mockFolders.value = [...mockFolders.value];
+                        mockFiles.value = [...mockFiles.value];
+                    } else if (data.type === 'folder') {
+                        // 进入文件夹
+                        enterFolder(data);
+                    }
+                };
+                
+                const handleFolderClick = (data) => {
+                    enterFolder(data);
+                };
+                
+                const enterFolder = (folder) => {
+                    console.log('进入文件夹:', folder);
+                    // 这里可以添加加载子文件夹和文件的逻辑
+                };
+                
+                const refresh = () => {
+                    console.log('刷新');
+                };
+                
+                const toggleView = () => {
+                    viewType.value = viewType.value === 'list' ? 'card' : 'list';
+                };
+                
+                const sortFiles = () => {
+                    console.log('排序');
+                };
+                
+                const showCreateFolderDialog = () => {
+                    createFolderVisible.value = true;
+                };
+                
+                const submitCreateFolder = () => {
+                    console.log('创建文件夹:', newFolderForm.value);
+                    createFolderVisible.value = false;
+                };
+                
+                const handleFileChange = (file) => {
+                    console.log('上传文件:', file);
+                };
+                
+                const handleDrop = (event) => {
+                    event.preventDefault();
+                    console.log('拖拽上传');
+                };
+                
+                const previewFile = (file) => {
+                    previewFile.value = file;
+                    previewVisible.value = true;
+                };
+                
+                const downloadFile = (file) => {
+                    console.log('下载文件:', file);
+                };
+                
+                const deleteFile = (file) => {
+                    console.log('删除文件:', file);
+                };
+                
+                const deleteFolder = (folder) => {
+                    console.log('删除文件夹:', folder);
+                };
+                
+                return {
+                    searchText,
+                    currentCode,
+                    currentPhase,
+                    viewType,
+                    selectedFiles,
+                    folderList,
+                    folderTreeData,
+                    createFolderVisible,
+                    newFolderForm,
+                    fileList,
+                    previewVisible,
+                    previewFile,
+                    orgTreeData,
+                    getNodeIcon,
+                    getNodeIconClass,
+                    getFileIconClass,
+                    getStatusType,
+                    getStatusText,
+                    formatFileSize,
+                    formatDate,
+                    handleNodeClick,
+                    handleFolderClick,
+                    enterFolder,
+                    refresh,
+                    toggleView,
+                    sortFiles,
+                    showCreateFolderDialog,
+                    submitCreateFolder,
+                    handleFileChange,
+                    handleDrop,
+                    previewFile,
+                    downloadFile,
+                    deleteFile,
+                    deleteFolder,
+                    totalSize
+                };
+            }
+        });
+        
+        // 注册 Element Plus
+        app.use(ElementPlus);
+        
+        // 注册所有图标
+        for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+            app.component(key, component);
+        }
+        
+        app.mount('#app');
+    </script>
+</body>
+</html>

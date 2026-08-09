@@ -121,33 +121,34 @@ namespace VOL.Builder.Services.CertPlatform
             var db = _repository.DbContext as VOL.Core.EFDbContext.VOLContext
                 ?? new VOL.Core.EFDbContext.VOLContext();
 
-            // 查询视图（已包含 CategoryName, StatusName 中文字段）
-            IQueryable<CertStageView> query = db.Set<CertStageView>();
-
-            // 总数
-            int totalCount = query.Count();
-
-            // 排序
+            // 使用原生 SQL 查询视图（避免 EF Core 继承映射问题）
+            var sql = "SELECT * FROM v_cert_stage";
+            var viewData = db.Set<CertStage>().FromSqlRaw(sql).ToList();
+            
+            // 内存中排序和分页
             string sortField = options.Sort ?? "SortOrder";
             bool isAsc = options.Order?.ToLower() == "asc";
-            query = sortField.ToUpper() switch
+            
+            viewData = sortField.ToUpper() switch
             {
-                "SORTORDER" => isAsc ? query.OrderBy(x => x.SortOrder) : query.OrderByDescending(x => x.SortOrder),
-                "STAGECODE" => isAsc ? query.OrderBy(x => x.StageCode) : query.OrderByDescending(x => x.StageCode),
-                "CREATEDATE" => isAsc ? query.OrderBy(x => x.CreateDate) : query.OrderByDescending(x => x.CreateDate),
-                _ => query.OrderByDescending(x => x.Id),
+                "SORTORDER" => isAsc ? viewData.OrderBy(x => x.SortOrder).ToList() : viewData.OrderByDescending(x => x.SortOrder).ToList(),
+                "STAGECODE" => isAsc ? viewData.OrderBy(x => x.StageCode).ToList() : viewData.OrderByDescending(x => x.StageCode).ToList(),
+                "CREATEDATE" => isAsc ? viewData.OrderBy(x => x.CreateDate).ToList() : viewData.OrderByDescending(x => x.CreateDate).ToList(),
+                _ => viewData.OrderByDescending(x => x.Id).ToList(),
             };
-
+            
+            int totalCount = viewData.Count;
+            
             // 分页
             int page = options.Page > 0 ? options.Page : 1;
             int rows = options.Rows > 0 ? options.Rows : 20;
-            var list = query.Skip((page - 1) * rows).Take(rows).ToList();
+            var list = viewData.Skip((page - 1) * rows).Take(rows).ToList();
 
             Console.WriteLine($"[CertStageGetPageData] ✅ totalCount={totalCount}, 返回{list.Count}条");
 
             // 转换为 PageGridData
             var result = new PageGridData<CertStage>();
-            result.rows = list.Cast<CertStage>().ToList();
+            result.rows = list;
             result.total = totalCount;
             return result;
         }

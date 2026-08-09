@@ -209,7 +209,6 @@ namespace YZH.Core.Tests.Entities
         [Theory]
         [InlineData(true, null, false, false)]   // 正常状态
         [InlineData(false, null, false, true)]   // 仅禁用
-        [InlineData(false, DateTime.Now, true, false)] // 已删除
         public void State_Properties_Should_Work_Correctly(
             bool enable, 
             DateTime? deleteTime, 
@@ -232,6 +231,19 @@ namespace YZH.Core.Tests.Entities
             // Assert
             Assert.Equal(expectedIsDeleted, entity.IsDeleted);
             Assert.Equal(expectedIsDisabled, entity.IsDisabled);
+        }
+
+        [Fact]
+        public void State_Properties_Should_Reflect_Deleted()
+        {
+            // Arrange: Enable=false + MarkAsDeleted（DeleteTime 有值）
+            var entity = new TestEntity();
+            entity.Enable = false;
+            entity.MarkAsDeleted(1, "Test");
+
+            // Assert: 已删除 → IsDeleted=true, IsDisabled=false
+            Assert.Equal(true, entity.IsDeleted);
+            Assert.Equal(false, entity.IsDisabled);
         }
 
         #endregion

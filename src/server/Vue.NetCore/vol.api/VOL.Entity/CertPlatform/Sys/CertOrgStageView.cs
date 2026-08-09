@@ -10,12 +10,12 @@ namespace VOL.Entity.CertPlatform.Sys
     /// - V = CertOrgStageView（视图，用于显示，包含阶段信息）
     /// 
     /// 数据来源：v_cert_org_stage MySQL 视图
+    /// 注意：不要添加 [Table] 属性，否则会覆盖父类的表名配置
     /// </summary>
-    [Table("v_cert_org_stage")]
+    [NotMapped]
     public class CertOrgStageView : CertOrgStage
     {
         // ====== 视图特有字段（来自关联的阶段信息和字典翻译）======
-        // 注意：不要加 [NotMapped]，否则 EF Core 不会从数据库读取这些字段！
 
         /// <summary>
         /// 阶段名称（cert_cert_stage.StageName）

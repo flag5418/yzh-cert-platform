@@ -1,0 +1,1464 @@
+- generic [ref=e3]:
+  - generic [ref=e44]:
+    - generic [ref=e45]: Select a definition
+    - combobox "Select a definition" [ref=e46]:
+      - option "VOL.WebApi v1" [selected]
+  - generic [ref=e48]:
+    - generic [ref=e53]:
+      - heading "vol.core.api v1 OAS 3.0" [level=2] [ref=e54]:
+        - text: vol.core.api
+        - generic [ref=e55]:
+          - generic [ref=e56]: v1
+          - generic [ref=e58]: OAS 3.0
+      - link "http://localhost:9991/swagger/v1/swagger.json" [ref=e60] [cursor=pointer]:
+        - /url: http://localhost:9991/swagger/v1/swagger.json
+    - button "Authorize" [ref=e65] [cursor=pointer]
+    - generic [ref=e71]:
+      - generic [ref=e73]:
+        - heading "AliOSS Collapse operation" [level=3] [ref=e74] [cursor=pointer]:
+          - generic [ref=e75]: AliOSS
+          - button "Collapse operation" [expanded] [ref=e76]
+        - generic [ref=e83] [cursor=pointer]:
+          - button "GET /api/alioss/getAccessToken" [ref=e84]:
+            - generic [ref=e85]: GET
+            - generic [ref=e86]: /api/alioss/getAccessToken
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e92]
+          - button "get /api/alioss/getAccessToken" [ref=e95]
+      - generic [ref=e99]:
+        - heading "AuditTask Collapse operation" [level=3] [ref=e100] [cursor=pointer]:
+          - generic [ref=e101]: AuditTask
+          - button "Collapse operation" [expanded] [ref=e102]
+        - generic [ref=e109] [cursor=pointer]:
+          - button "POST /api/AuditTask/getPageData" [ref=e110]:
+            - generic [ref=e111]: POST
+            - generic [ref=e112]: /api/AuditTask/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e118]
+          - button "post /api/AuditTask/getPageData" [ref=e121]
+      - generic [ref=e125]:
+        - heading "Builder Collapse operation" [level=3] [ref=e126] [cursor=pointer]:
+          - generic [ref=e127]: Builder
+          - button "Collapse operation" [expanded] [ref=e128]
+        - generic [ref=e132]:
+          - generic [ref=e135] [cursor=pointer]:
+            - button "POST /api/Builder/GetTableTree" [ref=e136]:
+              - generic [ref=e137]: POST
+              - generic [ref=e138]: /api/Builder/GetTableTree
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e144]
+            - button "post /api/Builder/GetTableTree" [ref=e147]
+          - generic [ref=e152] [cursor=pointer]:
+            - button "POST /api/Builder/CreateVuePage" [ref=e153]:
+              - generic [ref=e154]: POST
+              - generic [ref=e155]: /api/Builder/CreateVuePage
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e161]
+            - button "post /api/Builder/CreateVuePage" [ref=e164]
+          - generic [ref=e169] [cursor=pointer]:
+            - button "POST /api/Builder/loadOptions" [ref=e170]:
+              - generic [ref=e171]: POST
+              - generic [ref=e172]: /api/Builder/loadOptions
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e178]
+            - button "post /api/Builder/loadOptions" [ref=e181]
+          - generic [ref=e186] [cursor=pointer]:
+            - button "POST /api/Builder/CreateModel" [ref=e187]:
+              - generic [ref=e188]: POST
+              - generic [ref=e189]: /api/Builder/CreateModel
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e195]
+            - button "post /api/Builder/CreateModel" [ref=e198]
+          - generic [ref=e203] [cursor=pointer]:
+            - button "POST /api/Builder/Save" [ref=e204]:
+              - generic [ref=e205]: POST
+              - generic [ref=e206]: /api/Builder/Save
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e212]
+            - button "post /api/Builder/Save" [ref=e215]
+          - generic [ref=e220] [cursor=pointer]:
+            - button "POST /api/Builder/CreateServices" [ref=e221]:
+              - generic [ref=e222]: POST
+              - generic [ref=e223]: /api/Builder/CreateServices
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e229]
+            - button "post /api/Builder/CreateServices" [ref=e232]
+          - generic [ref=e237] [cursor=pointer]:
+            - button "POST /api/Builder/LoadTableInfo" [ref=e238]:
+              - generic [ref=e239]: POST
+              - generic [ref=e240]: /api/Builder/LoadTableInfo
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e246]
+            - button "post /api/Builder/LoadTableInfo" [ref=e249]
+          - generic [ref=e254] [cursor=pointer]:
+            - button "POST /api/Builder/delTree" [ref=e255]:
+              - generic [ref=e256]: POST
+              - generic [ref=e257]: /api/Builder/delTree
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e263]
+            - button "post /api/Builder/delTree" [ref=e266]
+          - generic [ref=e271] [cursor=pointer]:
+            - button "POST /api/Builder/syncTable" [ref=e272]:
+              - generic [ref=e273]: POST
+              - generic [ref=e274]: /api/Builder/syncTable
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e280]
+            - button "post /api/Builder/syncTable" [ref=e283]
+          - generic [ref=e288] [cursor=pointer]:
+            - button "POST /api/Builder/getDyTable" [ref=e289]:
+              - generic [ref=e290]: POST
+              - generic [ref=e291]: /api/Builder/getDyTable
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e297]
+            - button "post /api/Builder/getDyTable" [ref=e300]
+      - generic [ref=e304]:
+        - heading "CertCertificationBody Collapse operation" [level=3] [ref=e305] [cursor=pointer]:
+          - generic [ref=e306]: CertCertificationBody
+          - button "Collapse operation" [expanded] [ref=e307]
+        - generic [ref=e311]:
+          - generic [ref=e314] [cursor=pointer]:
+            - button "POST /api/CertCertificationBody/GetMaxId" [ref=e315]:
+              - generic [ref=e316]: POST
+              - generic [ref=e317]: /api/CertCertificationBody/GetMaxId
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e323]
+            - button "post /api/CertCertificationBody/GetMaxId" [ref=e326]
+          - generic [ref=e331] [cursor=pointer]:
+            - button "POST /api/CertCertificationBody/Remove" [ref=e332]:
+              - generic [ref=e333]: POST
+              - generic [ref=e334]: /api/CertCertificationBody/Remove
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e340]
+            - button "post /api/CertCertificationBody/Remove" [ref=e343]
+          - generic [ref=e348] [cursor=pointer]:
+            - button "POST /api/CertCertificationBody/getPageData" [ref=e349]:
+              - generic [ref=e350]: POST
+              - generic [ref=e351]: /api/CertCertificationBody/getPageData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e357]
+            - button "post /api/CertCertificationBody/getPageData" [ref=e360]
+      - generic [ref=e364]:
+        - heading "CertStage Collapse operation" [level=3] [ref=e365] [cursor=pointer]:
+          - generic [ref=e366]: CertStage
+          - button "Collapse operation" [expanded] [ref=e367]
+        - generic [ref=e374] [cursor=pointer]:
+          - button "POST /api/CertStage/getPageData" [ref=e375]:
+            - generic [ref=e376]: POST
+            - generic [ref=e377]: /api/CertStage/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e383]
+          - button "post /api/CertStage/getPageData" [ref=e386]
+      - generic [ref=e390]:
+        - heading "FormCollectionObject Collapse operation" [level=3] [ref=e391] [cursor=pointer]:
+          - generic [ref=e392]: FormCollectionObject
+          - button "Collapse operation" [expanded] [ref=e393]
+        - generic [ref=e400] [cursor=pointer]:
+          - button "POST /api/FormCollectionObject/getPageData" [ref=e401]:
+            - generic [ref=e402]: POST
+            - generic [ref=e403]: /api/FormCollectionObject/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e409]
+          - button "post /api/FormCollectionObject/getPageData" [ref=e412]
+      - generic [ref=e416]:
+        - heading "FormDesignOptions Collapse operation" [level=3] [ref=e417] [cursor=pointer]:
+          - generic [ref=e418]: FormDesignOptions
+          - button "Collapse operation" [expanded] [ref=e419]
+        - generic [ref=e423]:
+          - generic [ref=e426] [cursor=pointer]:
+            - button "GET /api/FormDesignOptions/getFormOptions" [ref=e427]:
+              - generic [ref=e428]: GET
+              - generic [ref=e429]: /api/FormDesignOptions/getFormOptions
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e435]
+            - button "get /api/FormDesignOptions/getFormOptions" [ref=e438]
+          - generic [ref=e443] [cursor=pointer]:
+            - button "POST /api/FormDesignOptions/submit" [ref=e444]:
+              - generic [ref=e445]: POST
+              - generic [ref=e446]: /api/FormDesignOptions/submit
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e452]
+            - button "post /api/FormDesignOptions/submit" [ref=e455]
+          - generic [ref=e460] [cursor=pointer]:
+            - button "GET /api/FormDesignOptions/getList" [ref=e461]:
+              - generic [ref=e462]: GET
+              - generic [ref=e463]: /api/FormDesignOptions/getList
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e469]
+            - button "get /api/FormDesignOptions/getList" [ref=e472]
+          - generic [ref=e477] [cursor=pointer]:
+            - button "POST /api/FormDesignOptions/getPageData" [ref=e478]:
+              - generic [ref=e479]: POST
+              - generic [ref=e480]: /api/FormDesignOptions/getPageData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e486]
+            - button "post /api/FormDesignOptions/getPageData" [ref=e489]
+      - generic [ref=e493]:
+        - heading "ISOStandard Collapse operation" [level=3] [ref=e494] [cursor=pointer]:
+          - generic [ref=e495]: ISOStandard
+          - button "Collapse operation" [expanded] [ref=e496]
+        - generic [ref=e500]:
+          - generic [ref=e503] [cursor=pointer]:
+            - button "POST /api/ISOStandard/Remove" [ref=e504]:
+              - generic [ref=e505]: POST
+              - generic [ref=e506]: /api/ISOStandard/Remove
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e512]
+            - button "post /api/ISOStandard/Remove" [ref=e515]
+          - generic [ref=e520] [cursor=pointer]:
+            - button "POST /api/ISOStandard/getPageData" [ref=e521]:
+              - generic [ref=e522]: POST
+              - generic [ref=e523]: /api/ISOStandard/getPageData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e529]
+            - button "post /api/ISOStandard/getPageData" [ref=e532]
+      - generic [ref=e536]:
+        - heading "MES_Bom_Detail Collapse operation" [level=3] [ref=e537] [cursor=pointer]:
+          - generic [ref=e538]: MES_Bom_Detail
+          - button "Collapse operation" [expanded] [ref=e539]
+        - generic [ref=e546] [cursor=pointer]:
+          - button "POST /api/MES_Bom_Detail/getPageData" [ref=e547]:
+            - generic [ref=e548]: POST
+            - generic [ref=e549]: /api/MES_Bom_Detail/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e555]
+          - button "post /api/MES_Bom_Detail/getPageData" [ref=e558]
+      - generic [ref=e562]:
+        - heading "MES_Bom_Main Collapse operation" [level=3] [ref=e563] [cursor=pointer]:
+          - generic [ref=e564]: MES_Bom_Main
+          - button "Collapse operation" [expanded] [ref=e565]
+        - generic [ref=e572] [cursor=pointer]:
+          - button "POST /api/MES_Bom_Main/getPageData" [ref=e573]:
+            - generic [ref=e574]: POST
+            - generic [ref=e575]: /api/MES_Bom_Main/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e581]
+          - button "post /api/MES_Bom_Main/getPageData" [ref=e584]
+      - generic [ref=e588]:
+        - heading "MES_Customer Collapse operation" [level=3] [ref=e589] [cursor=pointer]:
+          - generic [ref=e590]: MES_Customer
+          - button "Collapse operation" [expanded] [ref=e591]
+        - generic [ref=e598] [cursor=pointer]:
+          - button "POST /api/MES_Customer/getPageData" [ref=e599]:
+            - generic [ref=e600]: POST
+            - generic [ref=e601]: /api/MES_Customer/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e607]
+          - button "post /api/MES_Customer/getPageData" [ref=e610]
+      - generic [ref=e614]:
+        - heading "MES_DefectiveProductRecord Collapse operation" [level=3] [ref=e615] [cursor=pointer]:
+          - generic [ref=e616]: MES_DefectiveProductRecord
+          - button "Collapse operation" [expanded] [ref=e617]
+        - generic [ref=e624] [cursor=pointer]:
+          - button "POST /api/MES_DefectiveProductRecord/getPageData" [ref=e625]:
+            - generic [ref=e626]: POST
+            - generic [ref=e627]: /api/MES_DefectiveProductRecord/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e633]
+          - button "post /api/MES_DefectiveProductRecord/getPageData" [ref=e636]
+      - generic [ref=e640]:
+        - heading "MES_EquipmentFaultRecord Collapse operation" [level=3] [ref=e641] [cursor=pointer]:
+          - generic [ref=e642]: MES_EquipmentFaultRecord
+          - button "Collapse operation" [expanded] [ref=e643]
+        - generic [ref=e650] [cursor=pointer]:
+          - button "POST /api/MES_EquipmentFaultRecord/getPageData" [ref=e651]:
+            - generic [ref=e652]: POST
+            - generic [ref=e653]: /api/MES_EquipmentFaultRecord/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e659]
+          - button "post /api/MES_EquipmentFaultRecord/getPageData" [ref=e662]
+      - generic [ref=e666]:
+        - heading "MES_EquipmentMaintenance Collapse operation" [level=3] [ref=e667] [cursor=pointer]:
+          - generic [ref=e668]: MES_EquipmentMaintenance
+          - button "Collapse operation" [expanded] [ref=e669]
+        - generic [ref=e676] [cursor=pointer]:
+          - button "POST /api/MES_EquipmentMaintenance/getPageData" [ref=e677]:
+            - generic [ref=e678]: POST
+            - generic [ref=e679]: /api/MES_EquipmentMaintenance/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e685]
+          - button "post /api/MES_EquipmentMaintenance/getPageData" [ref=e688]
+      - generic [ref=e692]:
+        - heading "MES_EquipmentManagement Collapse operation" [level=3] [ref=e693] [cursor=pointer]:
+          - generic [ref=e694]: MES_EquipmentManagement
+          - button "Collapse operation" [expanded] [ref=e695]
+        - generic [ref=e702] [cursor=pointer]:
+          - button "POST /api/MES_EquipmentManagement/getPageData" [ref=e703]:
+            - generic [ref=e704]: POST
+            - generic [ref=e705]: /api/MES_EquipmentManagement/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e711]
+          - button "post /api/MES_EquipmentManagement/getPageData" [ref=e714]
+      - generic [ref=e718]:
+        - heading "MES_EquipmentRepair Collapse operation" [level=3] [ref=e719] [cursor=pointer]:
+          - generic [ref=e720]: MES_EquipmentRepair
+          - button "Collapse operation" [expanded] [ref=e721]
+        - generic [ref=e728] [cursor=pointer]:
+          - button "POST /api/MES_EquipmentRepair/getPageData" [ref=e729]:
+            - generic [ref=e730]: POST
+            - generic [ref=e731]: /api/MES_EquipmentRepair/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e737]
+          - button "post /api/MES_EquipmentRepair/getPageData" [ref=e740]
+      - generic [ref=e744]:
+        - heading "MES_InventoryManagement Collapse operation" [level=3] [ref=e745] [cursor=pointer]:
+          - generic [ref=e746]: MES_InventoryManagement
+          - button "Collapse operation" [expanded] [ref=e747]
+        - generic [ref=e754] [cursor=pointer]:
+          - button "POST /api/MES_InventoryManagement/getPageData" [ref=e755]:
+            - generic [ref=e756]: POST
+            - generic [ref=e757]: /api/MES_InventoryManagement/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e763]
+          - button "post /api/MES_InventoryManagement/getPageData" [ref=e766]
+      - generic [ref=e770]:
+        - heading "MES_LocationManagement Collapse operation" [level=3] [ref=e771] [cursor=pointer]:
+          - generic [ref=e772]: MES_LocationManagement
+          - button "Collapse operation" [expanded] [ref=e773]
+        - generic [ref=e780] [cursor=pointer]:
+          - button "POST /api/MES_LocationManagement/getPageData" [ref=e781]:
+            - generic [ref=e782]: POST
+            - generic [ref=e783]: /api/MES_LocationManagement/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e789]
+          - button "post /api/MES_LocationManagement/getPageData" [ref=e792]
+      - generic [ref=e796]:
+        - heading "MES_Material Collapse operation" [level=3] [ref=e797] [cursor=pointer]:
+          - generic [ref=e798]: MES_Material
+          - button "Collapse operation" [expanded] [ref=e799]
+        - generic [ref=e806] [cursor=pointer]:
+          - button "POST /api/MES_Material/getPageData" [ref=e807]:
+            - generic [ref=e808]: POST
+            - generic [ref=e809]: /api/MES_Material/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e815]
+          - button "post /api/MES_Material/getPageData" [ref=e818]
+      - generic [ref=e822]:
+        - heading "MES_MaterialCatalog Collapse operation" [level=3] [ref=e823] [cursor=pointer]:
+          - generic [ref=e824]: MES_MaterialCatalog
+          - button "Collapse operation" [expanded] [ref=e825]
+        - generic [ref=e829]:
+          - generic [ref=e832] [cursor=pointer]:
+            - button "GET /api/MES_MaterialCatalog/getList" [ref=e833]:
+              - generic [ref=e834]: GET
+              - generic [ref=e835]: /api/MES_MaterialCatalog/getList
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e841]
+            - button "get /api/MES_MaterialCatalog/getList" [ref=e844]
+          - generic [ref=e849] [cursor=pointer]:
+            - button "POST /api/MES_MaterialCatalog/getPageData" [ref=e850]:
+              - generic [ref=e851]: POST
+              - generic [ref=e852]: /api/MES_MaterialCatalog/getPageData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e858]
+            - button "post /api/MES_MaterialCatalog/getPageData" [ref=e861]
+      - generic [ref=e865]:
+        - heading "MES_Packaging Collapse operation" [level=3] [ref=e866] [cursor=pointer]:
+          - generic [ref=e867]: MES_Packaging
+          - button "Collapse operation" [expanded] [ref=e868]
+        - generic [ref=e875] [cursor=pointer]:
+          - button "POST /api/MES_Packaging/getPageData" [ref=e876]:
+            - generic [ref=e877]: POST
+            - generic [ref=e878]: /api/MES_Packaging/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e884]
+          - button "post /api/MES_Packaging/getPageData" [ref=e887]
+      - generic [ref=e891]:
+        - heading "MES_Process Collapse operation" [level=3] [ref=e892] [cursor=pointer]:
+          - generic [ref=e893]: MES_Process
+          - button "Collapse operation" [expanded] [ref=e894]
+        - generic [ref=e901] [cursor=pointer]:
+          - button "POST /api/MES_Process/getPageData" [ref=e902]:
+            - generic [ref=e903]: POST
+            - generic [ref=e904]: /api/MES_Process/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e910]
+          - button "post /api/MES_Process/getPageData" [ref=e913]
+      - generic [ref=e917]:
+        - heading "MES_ProcessReport Collapse operation" [level=3] [ref=e918] [cursor=pointer]:
+          - generic [ref=e919]: MES_ProcessReport
+          - button "Collapse operation" [expanded] [ref=e920]
+        - generic [ref=e927] [cursor=pointer]:
+          - button "POST /api/MES_ProcessReport/getPageData" [ref=e928]:
+            - generic [ref=e929]: POST
+            - generic [ref=e930]: /api/MES_ProcessReport/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e936]
+          - button "post /api/MES_ProcessReport/getPageData" [ref=e939]
+      - generic [ref=e943]:
+        - heading "MES_ProcessRoute Collapse operation" [level=3] [ref=e944] [cursor=pointer]:
+          - generic [ref=e945]: MES_ProcessRoute
+          - button "Collapse operation" [expanded] [ref=e946]
+        - generic [ref=e953] [cursor=pointer]:
+          - button "POST /api/MES_ProcessRoute/getPageData" [ref=e954]:
+            - generic [ref=e955]: POST
+            - generic [ref=e956]: /api/MES_ProcessRoute/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e962]
+          - button "post /api/MES_ProcessRoute/getPageData" [ref=e965]
+      - generic [ref=e969]:
+        - heading "MES_ProductInbound Collapse operation" [level=3] [ref=e970] [cursor=pointer]:
+          - generic [ref=e971]: MES_ProductInbound
+          - button "Collapse operation" [expanded] [ref=e972]
+        - generic [ref=e979] [cursor=pointer]:
+          - button "POST /api/MES_ProductInbound/getPageData" [ref=e980]:
+            - generic [ref=e981]: POST
+            - generic [ref=e982]: /api/MES_ProductInbound/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e988]
+          - button "post /api/MES_ProductInbound/getPageData" [ref=e991]
+      - generic [ref=e995]:
+        - heading "MES_ProductionLine Collapse operation" [level=3] [ref=e996] [cursor=pointer]:
+          - generic [ref=e997]: MES_ProductionLine
+          - button "Collapse operation" [expanded] [ref=e998]
+        - generic [ref=e1005] [cursor=pointer]:
+          - button "POST /api/MES_ProductionLine/getPageData" [ref=e1006]:
+            - generic [ref=e1007]: POST
+            - generic [ref=e1008]: /api/MES_ProductionLine/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e1014]
+          - button "post /api/MES_ProductionLine/getPageData" [ref=e1017]
+      - generic [ref=e1021]:
+        - heading "MES_ProductionLineDevice Collapse operation" [level=3] [ref=e1022] [cursor=pointer]:
+          - generic [ref=e1023]: MES_ProductionLineDevice
+          - button "Collapse operation" [expanded] [ref=e1024]
+        - generic [ref=e1031] [cursor=pointer]:
+          - button "POST /api/MES_ProductionLineDevice/getPageData" [ref=e1032]:
+            - generic [ref=e1033]: POST
+            - generic [ref=e1034]: /api/MES_ProductionLineDevice/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e1040]
+          - button "post /api/MES_ProductionLineDevice/getPageData" [ref=e1043]
+      - generic [ref=e1047]:
+        - heading "MES_ProductionOrder Collapse operation" [level=3] [ref=e1048] [cursor=pointer]:
+          - generic [ref=e1049]: MES_ProductionOrder
+          - button "Collapse operation" [expanded] [ref=e1050]
+        - generic [ref=e1057] [cursor=pointer]:
+          - button "POST /api/MES_ProductionOrder/getPageData" [ref=e1058]:
+            - generic [ref=e1059]: POST
+            - generic [ref=e1060]: /api/MES_ProductionOrder/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e1066]
+          - button "post /api/MES_ProductionOrder/getPageData" [ref=e1069]
+      - generic [ref=e1073]:
+        - heading "MES_ProductionPlanChangeRecord Collapse operation" [level=3] [ref=e1074] [cursor=pointer]:
+          - generic [ref=e1075]: MES_ProductionPlanChangeRecord
+          - button "Collapse operation" [expanded] [ref=e1076]
+        - generic [ref=e1083] [cursor=pointer]:
+          - button "POST /api/MES_ProductionPlanChangeRecord/getPageData" [ref=e1084]:
+            - generic [ref=e1085]: POST
+            - generic [ref=e1086]: /api/MES_ProductionPlanChangeRecord/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e1092]
+          - button "post /api/MES_ProductionPlanChangeRecord/getPageData" [ref=e1095]
+      - generic [ref=e1099]:
+        - heading "MES_ProductionPlanDetail Collapse operation" [level=3] [ref=e1100] [cursor=pointer]:
+          - generic [ref=e1101]: MES_ProductionPlanDetail
+          - button "Collapse operation" [expanded] [ref=e1102]
+        - generic [ref=e1109] [cursor=pointer]:
+          - button "POST /api/MES_ProductionPlanDetail/getPageData" [ref=e1110]:
+            - generic [ref=e1111]: POST
+            - generic [ref=e1112]: /api/MES_ProductionPlanDetail/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e1118]
+          - button "post /api/MES_ProductionPlanDetail/getPageData" [ref=e1121]
+      - generic [ref=e1125]:
+        - heading "MES_ProductionReporting Collapse operation" [level=3] [ref=e1126] [cursor=pointer]:
+          - generic [ref=e1127]: MES_ProductionReporting
+          - button "Collapse operation" [expanded] [ref=e1128]
+        - generic [ref=e1135] [cursor=pointer]:
+          - button "POST /api/MES_ProductionReporting/getPageData" [ref=e1136]:
+            - generic [ref=e1137]: POST
+            - generic [ref=e1138]: /api/MES_ProductionReporting/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e1144]
+          - button "post /api/MES_ProductionReporting/getPageData" [ref=e1147]
+      - generic [ref=e1151]:
+        - heading "MES_ProductionReportingDetail Collapse operation" [level=3] [ref=e1152] [cursor=pointer]:
+          - generic [ref=e1153]: MES_ProductionReportingDetail
+          - button "Collapse operation" [expanded] [ref=e1154]
+        - generic [ref=e1161] [cursor=pointer]:
+          - button "POST /api/MES_ProductionReportingDetail/getPageData" [ref=e1162]:
+            - generic [ref=e1163]: POST
+            - generic [ref=e1164]: /api/MES_ProductionReportingDetail/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e1170]
+          - button "post /api/MES_ProductionReportingDetail/getPageData" [ref=e1173]
+      - generic [ref=e1177]:
+        - heading "MES_ProductOutbound Collapse operation" [level=3] [ref=e1178] [cursor=pointer]:
+          - generic [ref=e1179]: MES_ProductOutbound
+          - button "Collapse operation" [expanded] [ref=e1180]
+        - generic [ref=e1187] [cursor=pointer]:
+          - button "POST /api/MES_ProductOutbound/getPageData" [ref=e1188]:
+            - generic [ref=e1189]: POST
+            - generic [ref=e1190]: /api/MES_ProductOutbound/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e1196]
+          - button "post /api/MES_ProductOutbound/getPageData" [ref=e1199]
+      - generic [ref=e1203]:
+        - heading "MES_QualityInspectionPlan Collapse operation" [level=3] [ref=e1204] [cursor=pointer]:
+          - generic [ref=e1205]: MES_QualityInspectionPlan
+          - button "Collapse operation" [expanded] [ref=e1206]
+        - generic [ref=e1213] [cursor=pointer]:
+          - button "POST /api/MES_QualityInspectionPlan/getPageData" [ref=e1214]:
+            - generic [ref=e1215]: POST
+            - generic [ref=e1216]: /api/MES_QualityInspectionPlan/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e1222]
+          - button "post /api/MES_QualityInspectionPlan/getPageData" [ref=e1225]
+      - generic [ref=e1229]:
+        - heading "MES_QualityInspectionPlanDetail Collapse operation" [level=3] [ref=e1230] [cursor=pointer]:
+          - generic [ref=e1231]: MES_QualityInspectionPlanDetail
+          - button "Collapse operation" [expanded] [ref=e1232]
+        - generic [ref=e1239] [cursor=pointer]:
+          - button "POST /api/MES_QualityInspectionPlanDetail/getPageData" [ref=e1240]:
+            - generic [ref=e1241]: POST
+            - generic [ref=e1242]: /api/MES_QualityInspectionPlanDetail/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e1248]
+          - button "post /api/MES_QualityInspectionPlanDetail/getPageData" [ref=e1251]
+      - generic [ref=e1255]:
+        - heading "MES_QualityInspectionRecord Collapse operation" [level=3] [ref=e1256] [cursor=pointer]:
+          - generic [ref=e1257]: MES_QualityInspectionRecord
+          - button "Collapse operation" [expanded] [ref=e1258]
+        - generic [ref=e1265] [cursor=pointer]:
+          - button "POST /api/MES_QualityInspectionRecord/getPageData" [ref=e1266]:
+            - generic [ref=e1267]: POST
+            - generic [ref=e1268]: /api/MES_QualityInspectionRecord/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e1274]
+          - button "post /api/MES_QualityInspectionRecord/getPageData" [ref=e1277]
+      - generic [ref=e1281]:
+        - heading "MES_SchedulingPlan Collapse operation" [level=3] [ref=e1282] [cursor=pointer]:
+          - generic [ref=e1283]: MES_SchedulingPlan
+          - button "Collapse operation" [expanded] [ref=e1284]
+        - generic [ref=e1291] [cursor=pointer]:
+          - button "POST /api/MES_SchedulingPlan/getPageData" [ref=e1292]:
+            - generic [ref=e1293]: POST
+            - generic [ref=e1294]: /api/MES_SchedulingPlan/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e1300]
+          - button "post /api/MES_SchedulingPlan/getPageData" [ref=e1303]
+      - generic [ref=e1307]:
+        - heading "MES_Supplier Collapse operation" [level=3] [ref=e1308] [cursor=pointer]:
+          - generic [ref=e1309]: MES_Supplier
+          - button "Collapse operation" [expanded] [ref=e1310]
+        - generic [ref=e1317] [cursor=pointer]:
+          - button "POST /api/MES_Supplier/getPageData" [ref=e1318]:
+            - generic [ref=e1319]: POST
+            - generic [ref=e1320]: /api/MES_Supplier/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e1326]
+          - button "post /api/MES_Supplier/getPageData" [ref=e1329]
+      - generic [ref=e1333]:
+        - heading "MES_WarehouseManagement Collapse operation" [level=3] [ref=e1334] [cursor=pointer]:
+          - generic [ref=e1335]: MES_WarehouseManagement
+          - button "Collapse operation" [expanded] [ref=e1336]
+        - generic [ref=e1343] [cursor=pointer]:
+          - button "POST /api/MES_WarehouseManagement/getPageData" [ref=e1344]:
+            - generic [ref=e1345]: POST
+            - generic [ref=e1346]: /api/MES_WarehouseManagement/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e1352]
+          - button "post /api/MES_WarehouseManagement/getPageData" [ref=e1355]
+      - generic [ref=e1359]:
+        - heading "ObjectActionValidatorExample Collapse operation" [level=3] [ref=e1360] [cursor=pointer]:
+          - generic [ref=e1361]: ObjectActionValidatorExample
+          - button "Collapse operation" [expanded] [ref=e1362]
+        - generic [ref=e1366]:
+          - generic [ref=e1369] [cursor=pointer]:
+            - button "POST /validatorExample/test1" [ref=e1370]:
+              - generic [ref=e1371]: POST
+              - generic [ref=e1372]: /validatorExample/test1
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1378]
+            - button "post /validatorExample/test1" [ref=e1381]
+          - generic [ref=e1386] [cursor=pointer]:
+            - button "GET /validatorExample/test1" [ref=e1387]:
+              - generic [ref=e1388]: GET
+              - generic [ref=e1389]: /validatorExample/test1
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1395]
+            - button "get /validatorExample/test1" [ref=e1398]
+          - generic [ref=e1403] [cursor=pointer]:
+            - button "POST /validatorExample/test2" [ref=e1404]:
+              - generic [ref=e1405]: POST
+              - generic [ref=e1406]: /validatorExample/test2
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1412]
+            - button "post /validatorExample/test2" [ref=e1415]
+          - generic [ref=e1420] [cursor=pointer]:
+            - button "GET /validatorExample/test2" [ref=e1421]:
+              - generic [ref=e1422]: GET
+              - generic [ref=e1423]: /validatorExample/test2
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1429]
+            - button "get /validatorExample/test2" [ref=e1432]
+          - generic [ref=e1437] [cursor=pointer]:
+            - button "POST /validatorExample/test3" [ref=e1438]:
+              - generic [ref=e1439]: POST
+              - generic [ref=e1440]: /validatorExample/test3
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1446]
+            - button "post /validatorExample/test3" [ref=e1449]
+          - generic [ref=e1454] [cursor=pointer]:
+            - button "GET /validatorExample/test3" [ref=e1455]:
+              - generic [ref=e1456]: GET
+              - generic [ref=e1457]: /validatorExample/test3
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1463]
+            - button "get /validatorExample/test3" [ref=e1466]
+          - generic [ref=e1471] [cursor=pointer]:
+            - button "POST /validatorExample/Test4" [ref=e1472]:
+              - generic [ref=e1473]: POST
+              - generic [ref=e1474]: /validatorExample/Test4
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1480]
+            - button "post /validatorExample/Test4" [ref=e1483]
+          - generic [ref=e1488] [cursor=pointer]:
+            - button "GET /validatorExample/Test4" [ref=e1489]:
+              - generic [ref=e1490]: GET
+              - generic [ref=e1491]: /validatorExample/Test4
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1497]
+            - button "get /validatorExample/Test4" [ref=e1500]
+          - generic [ref=e1505] [cursor=pointer]:
+            - button "POST /validatorExample/Test5" [ref=e1506]:
+              - generic [ref=e1507]: POST
+              - generic [ref=e1508]: /validatorExample/Test5
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1514]
+            - button "post /validatorExample/Test5" [ref=e1517]
+          - generic [ref=e1522] [cursor=pointer]:
+            - button "GET /validatorExample/Test5" [ref=e1523]:
+              - generic [ref=e1524]: GET
+              - generic [ref=e1525]: /validatorExample/Test5
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1531]
+            - button "get /validatorExample/Test5" [ref=e1534]
+          - generic [ref=e1539] [cursor=pointer]:
+            - button "POST /validatorExample/Test6" [ref=e1540]:
+              - generic [ref=e1541]: POST
+              - generic [ref=e1542]: /validatorExample/Test6
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1548]
+            - button "post /validatorExample/Test6" [ref=e1551]
+          - generic [ref=e1556] [cursor=pointer]:
+            - button "GET /validatorExample/Test6" [ref=e1557]:
+              - generic [ref=e1558]: GET
+              - generic [ref=e1559]: /validatorExample/Test6
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1565]
+            - button "get /validatorExample/Test6" [ref=e1568]
+      - generic [ref=e1572]:
+        - heading "OrgLink Collapse operation" [level=3] [ref=e1573] [cursor=pointer]:
+          - generic [ref=e1574]: OrgLink
+          - button "Collapse operation" [expanded] [ref=e1575]
+        - generic [ref=e1579]:
+          - generic [ref=e1582] [cursor=pointer]:
+            - button "POST /api/org-link/SyncOrgStandards" [ref=e1583]:
+              - generic [ref=e1584]: POST
+              - generic [ref=e1585]: /api/org-link/SyncOrgStandards
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1591]
+            - button "post /api/org-link/SyncOrgStandards" [ref=e1594]
+          - generic [ref=e1599] [cursor=pointer]:
+            - 'button "GET /api/org-link/GetOrgStdIds/{cbCode}" [ref=e1600]':
+              - generic [ref=e1601]: GET
+              - generic [ref=e1602]: "/api/org-link/GetOrgStdIds/{cbCode}"
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1608]
+            - 'button "get /api/org-link/GetOrgStdIds/{cbCode}" [ref=e1611]'
+          - generic [ref=e1616] [cursor=pointer]:
+            - button "POST /api/org-link/SyncOrgStages" [ref=e1617]:
+              - generic [ref=e1618]: POST
+              - generic [ref=e1619]: /api/org-link/SyncOrgStages
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1625]
+            - button "post /api/org-link/SyncOrgStages" [ref=e1628]
+          - generic [ref=e1633] [cursor=pointer]:
+            - 'button "GET /api/org-link/GetOrgStageIds/{cbCode}" [ref=e1634]':
+              - generic [ref=e1635]: GET
+              - generic [ref=e1636]: "/api/org-link/GetOrgStageIds/{cbCode}"
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1642]
+            - 'button "get /api/org-link/GetOrgStageIds/{cbCode}" [ref=e1645]'
+          - generic [ref=e1650] [cursor=pointer]:
+            - button "POST /api/org-link/getPageData" [ref=e1651]:
+              - generic [ref=e1652]: POST
+              - generic [ref=e1653]: /api/org-link/getPageData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1659]
+            - button "post /api/org-link/getPageData" [ref=e1662]
+      - generic [ref=e1666]:
+        - heading "StandardDirectory Collapse operation" [level=3] [ref=e1667] [cursor=pointer]:
+          - generic [ref=e1668]: StandardDirectory
+          - button "Collapse operation" [expanded] [ref=e1669]
+        - generic [ref=e1673]:
+          - generic [ref=e1676] [cursor=pointer]:
+            - button "GET /api/standard-directory/organization-tree" [ref=e1677]:
+              - generic [ref=e1678]: GET
+              - generic [ref=e1679]: /api/standard-directory/organization-tree
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1685]
+            - button "get /api/standard-directory/organization-tree" [ref=e1688]
+          - generic [ref=e1693] [cursor=pointer]:
+            - button "GET /api/standard-directory/configs" [ref=e1694]:
+              - generic [ref=e1695]: GET
+              - generic [ref=e1696]: /api/standard-directory/configs
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1702]
+            - button "get /api/standard-directory/configs" [ref=e1705]
+          - generic [ref=e1710] [cursor=pointer]:
+            - 'button "GET /api/standard-directory/configs/{directoryCode}" [ref=e1711]':
+              - generic [ref=e1712]: GET
+              - generic [ref=e1713]: "/api/standard-directory/configs/{directoryCode}"
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1719]
+            - 'button "get /api/standard-directory/configs/{directoryCode}" [ref=e1722]'
+          - generic [ref=e1727] [cursor=pointer]:
+            - 'button "PUT /api/standard-directory/configs/{directoryCode}" [ref=e1728]':
+              - generic [ref=e1729]: PUT
+              - generic [ref=e1730]: "/api/standard-directory/configs/{directoryCode}"
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1736]
+            - 'button "put /api/standard-directory/configs/{directoryCode}" [ref=e1739]'
+          - generic [ref=e1744] [cursor=pointer]:
+            - 'button "DELETE /api/standard-directory/configs/{directoryCode}" [ref=e1745]':
+              - generic [ref=e1746]: DELETE
+              - generic [ref=e1747]: "/api/standard-directory/configs/{directoryCode}"
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1753]
+            - 'button "delete /api/standard-directory/configs/{directoryCode}" [ref=e1756]'
+          - generic [ref=e1761] [cursor=pointer]:
+            - button "POST /api/standard-directory/configs/create" [ref=e1762]:
+              - generic [ref=e1763]: POST
+              - generic [ref=e1764]: /api/standard-directory/configs/create
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1770]
+            - button "post /api/standard-directory/configs/create" [ref=e1773]
+          - generic [ref=e1778] [cursor=pointer]:
+            - 'button "GET /api/standard-directory/configs/{directoryCode}/folders" [ref=e1779]':
+              - generic [ref=e1780]: GET
+              - generic [ref=e1781]: "/api/standard-directory/configs/{directoryCode}/folders"
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1787]
+            - 'button "get /api/standard-directory/configs/{directoryCode}/folders" [ref=e1790]'
+          - generic [ref=e1795] [cursor=pointer]:
+            - 'button "POST /api/standard-directory/configs/{directoryCode}/folders/create" [ref=e1796]':
+              - generic [ref=e1797]: POST
+              - generic [ref=e1798]: "/api/standard-directory/configs/{directoryCode}/folders/create"
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1804]
+            - 'button "post /api/standard-directory/configs/{directoryCode}/folders/create" [ref=e1807]'
+          - generic [ref=e1812] [cursor=pointer]:
+            - 'button "PUT /api/standard-directory/folders/{folderCode}" [ref=e1813]':
+              - generic [ref=e1814]: PUT
+              - generic [ref=e1815]: "/api/standard-directory/folders/{folderCode}"
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1821]
+            - 'button "put /api/standard-directory/folders/{folderCode}" [ref=e1824]'
+          - generic [ref=e1829] [cursor=pointer]:
+            - 'button "DELETE /api/standard-directory/folders/{folderCode}" [ref=e1830]':
+              - generic [ref=e1831]: DELETE
+              - generic [ref=e1832]: "/api/standard-directory/folders/{folderCode}"
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1838]
+            - 'button "delete /api/standard-directory/folders/{folderCode}" [ref=e1841]'
+          - generic [ref=e1846] [cursor=pointer]:
+            - 'button "GET /api/standard-directory/folders/{folderCode}/files" [ref=e1847]':
+              - generic [ref=e1848]: GET
+              - generic [ref=e1849]: "/api/standard-directory/folders/{folderCode}/files"
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1855]
+            - 'button "get /api/standard-directory/folders/{folderCode}/files" [ref=e1858]'
+          - generic [ref=e1863] [cursor=pointer]:
+            - 'button "POST /api/standard-directory/folders/{folderCode}/files/create" [ref=e1864]':
+              - generic [ref=e1865]: POST
+              - generic [ref=e1866]: "/api/standard-directory/folders/{folderCode}/files/create"
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1872]
+            - 'button "post /api/standard-directory/folders/{folderCode}/files/create" [ref=e1875]'
+          - generic [ref=e1880] [cursor=pointer]:
+            - 'button "PUT /api/standard-directory/files/{fileCode}" [ref=e1881]':
+              - generic [ref=e1882]: PUT
+              - generic [ref=e1883]: "/api/standard-directory/files/{fileCode}"
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1889]
+            - 'button "put /api/standard-directory/files/{fileCode}" [ref=e1892]'
+          - generic [ref=e1897] [cursor=pointer]:
+            - 'button "DELETE /api/standard-directory/files/{fileCode}" [ref=e1898]':
+              - generic [ref=e1899]: DELETE
+              - generic [ref=e1900]: "/api/standard-directory/files/{fileCode}"
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1906]
+            - 'button "delete /api/standard-directory/files/{fileCode}" [ref=e1909]'
+          - generic [ref=e1914] [cursor=pointer]:
+            - 'button "GET /api/standard-directory/configs/{directoryCode}/export" [ref=e1915]':
+              - generic [ref=e1916]: GET
+              - generic [ref=e1917]: "/api/standard-directory/configs/{directoryCode}/export"
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1923]
+            - 'button "get /api/standard-directory/configs/{directoryCode}/export" [ref=e1926]'
+          - generic [ref=e1931] [cursor=pointer]:
+            - button "GET /api/standard-directory/codes/directory" [ref=e1932]:
+              - generic [ref=e1933]: GET
+              - generic [ref=e1934]: /api/standard-directory/codes/directory
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1940]
+            - button "get /api/standard-directory/codes/directory" [ref=e1943]
+          - generic [ref=e1948] [cursor=pointer]:
+            - button "GET /api/standard-directory/codes/folder" [ref=e1949]:
+              - generic [ref=e1950]: GET
+              - generic [ref=e1951]: /api/standard-directory/codes/folder
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1957]
+            - button "get /api/standard-directory/codes/folder" [ref=e1960]
+          - generic [ref=e1965] [cursor=pointer]:
+            - button "GET /api/standard-directory/codes/file" [ref=e1966]:
+              - generic [ref=e1967]: GET
+              - generic [ref=e1968]: /api/standard-directory/codes/file
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1974]
+            - button "get /api/standard-directory/codes/file" [ref=e1977]
+          - generic [ref=e1982] [cursor=pointer]:
+            - button "GET /api/standard-directory/paths/storage" [ref=e1983]:
+              - generic [ref=e1984]: GET
+              - generic [ref=e1985]: /api/standard-directory/paths/storage
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e1991]
+            - button "get /api/standard-directory/paths/storage" [ref=e1994]
+          - generic [ref=e1999] [cursor=pointer]:
+            - button "POST /api/standard-directory/getPageData" [ref=e2000]:
+              - generic [ref=e2001]: POST
+              - generic [ref=e2002]: /api/standard-directory/getPageData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2008]
+            - button "post /api/standard-directory/getPageData" [ref=e2011]
+      - generic [ref=e2015]:
+        - heading "Sys_Department Collapse operation" [level=3] [ref=e2016] [cursor=pointer]:
+          - generic [ref=e2017]: Sys_Department
+          - button "Collapse operation" [expanded] [ref=e2018]
+        - generic [ref=e2022]:
+          - generic [ref=e2025] [cursor=pointer]:
+            - button "POST /api/Sys_Department/GetPageData" [ref=e2026]:
+              - generic [ref=e2027]: POST
+              - generic [ref=e2028]: /api/Sys_Department/GetPageData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2034]
+            - button "post /api/Sys_Department/GetPageData" [ref=e2037]
+          - generic [ref=e2042] [cursor=pointer]:
+            - button "POST /api/Sys_Department/getTreeTableRootData" [ref=e2043]:
+              - generic [ref=e2044]: POST
+              - generic [ref=e2045]: /api/Sys_Department/getTreeTableRootData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2051]
+            - button "post /api/Sys_Department/getTreeTableRootData" [ref=e2054]
+          - generic [ref=e2059] [cursor=pointer]:
+            - button "POST /api/Sys_Department/getTreeTableChildrenData" [ref=e2060]:
+              - generic [ref=e2061]: POST
+              - generic [ref=e2062]: /api/Sys_Department/getTreeTableChildrenData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2068]
+            - button "post /api/Sys_Department/getTreeTableChildrenData" [ref=e2071]
+      - generic [ref=e2075]:
+        - heading "Sys_Dictionary Collapse operation" [level=3] [ref=e2076] [cursor=pointer]:
+          - generic [ref=e2077]: Sys_Dictionary
+          - button "Collapse operation" [expanded] [ref=e2078]
+        - generic [ref=e2082]:
+          - generic [ref=e2085] [cursor=pointer]:
+            - button "POST /api/Sys_Dictionary/GetVueDictionary" [ref=e2086]:
+              - generic [ref=e2087]: POST
+              - generic [ref=e2088]: /api/Sys_Dictionary/GetVueDictionary
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2094]
+            - button "post /api/Sys_Dictionary/GetVueDictionary" [ref=e2097]
+          - generic [ref=e2102] [cursor=pointer]:
+            - button "POST /api/Sys_Dictionary/getTableDictionary" [ref=e2103]:
+              - generic [ref=e2104]: POST
+              - generic [ref=e2105]: /api/Sys_Dictionary/getTableDictionary
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2111]
+            - button "post /api/Sys_Dictionary/getTableDictionary" [ref=e2114]
+          - generic [ref=e2119] [cursor=pointer]:
+            - button "POST /api/Sys_Dictionary/getSearchDictionary" [ref=e2120]:
+              - generic [ref=e2121]: POST
+              - generic [ref=e2122]: /api/Sys_Dictionary/getSearchDictionary
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2128]
+            - button "post /api/Sys_Dictionary/getSearchDictionary" [ref=e2131]
+          - generic [ref=e2136] [cursor=pointer]:
+            - button "POST /api/Sys_Dictionary/getRemoteDefaultKeyValue" [ref=e2137]:
+              - generic [ref=e2138]: POST
+              - generic [ref=e2139]: /api/Sys_Dictionary/getRemoteDefaultKeyValue
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2145]
+            - button "post /api/Sys_Dictionary/getRemoteDefaultKeyValue" [ref=e2148]
+          - generic [ref=e2153] [cursor=pointer]:
+            - button "POST /api/Sys_Dictionary/GetBuilderDictionary" [ref=e2154]:
+              - generic [ref=e2155]: POST
+              - generic [ref=e2156]: /api/Sys_Dictionary/GetBuilderDictionary
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2162]
+            - button "post /api/Sys_Dictionary/GetBuilderDictionary" [ref=e2165]
+          - generic [ref=e2170] [cursor=pointer]:
+            - button "POST /api/Sys_Dictionary/getPageData" [ref=e2171]:
+              - generic [ref=e2172]: POST
+              - generic [ref=e2173]: /api/Sys_Dictionary/getPageData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2179]
+            - button "post /api/Sys_Dictionary/getPageData" [ref=e2182]
+      - generic [ref=e2186]:
+        - heading "Sys_DictionaryList Collapse operation" [level=3] [ref=e2187] [cursor=pointer]:
+          - generic [ref=e2188]: Sys_DictionaryList
+          - button "Collapse operation" [expanded] [ref=e2189]
+        - generic [ref=e2193]:
+          - generic [ref=e2196] [cursor=pointer]:
+            - button "POST /api/Sys_DictionaryList/Export" [ref=e2197]:
+              - generic [ref=e2198]: POST
+              - generic [ref=e2199]: /api/Sys_DictionaryList/Export
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2205]
+            - button "post /api/Sys_DictionaryList/Export" [ref=e2208]
+          - generic [ref=e2213] [cursor=pointer]:
+            - button "POST /api/Sys_DictionaryList/Import" [ref=e2214]:
+              - generic [ref=e2215]: POST
+              - generic [ref=e2216]: /api/Sys_DictionaryList/Import
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2222]
+            - button "post /api/Sys_DictionaryList/Import" [ref=e2225]
+          - generic [ref=e2230] [cursor=pointer]:
+            - button "GET /api/Sys_DictionaryList/DownLoadTemplate" [ref=e2231]:
+              - generic [ref=e2232]: GET
+              - generic [ref=e2233]: /api/Sys_DictionaryList/DownLoadTemplate
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2239]
+            - button "get /api/Sys_DictionaryList/DownLoadTemplate" [ref=e2242]
+          - generic [ref=e2247] [cursor=pointer]:
+            - button "POST /api/Sys_DictionaryList/getPageData" [ref=e2248]:
+              - generic [ref=e2249]: POST
+              - generic [ref=e2250]: /api/Sys_DictionaryList/getPageData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2256]
+            - button "post /api/Sys_DictionaryList/getPageData" [ref=e2259]
+      - generic [ref=e2263]:
+        - heading "Sys_Log Collapse operation" [level=3] [ref=e2264] [cursor=pointer]:
+          - generic [ref=e2265]: Sys_Log
+          - button "Collapse operation" [expanded] [ref=e2266]
+        - generic [ref=e2273] [cursor=pointer]:
+          - button "POST /api/Sys_Log/getPageData" [ref=e2274]:
+            - generic [ref=e2275]: POST
+            - generic [ref=e2276]: /api/Sys_Log/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e2282]
+          - button "post /api/Sys_Log/getPageData" [ref=e2285]
+      - generic [ref=e2289]:
+        - heading "Sys_Menu Collapse operation" [level=3] [ref=e2290] [cursor=pointer]:
+          - generic [ref=e2291]: Sys_Menu
+          - button "Collapse operation" [expanded] [ref=e2292]
+        - generic [ref=e2296]:
+          - generic [ref=e2299] [cursor=pointer]:
+            - button "GET /api/menu/getTreeMenu" [ref=e2300]:
+              - generic [ref=e2301]: GET
+              - generic [ref=e2302]: /api/menu/getTreeMenu
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2308]
+            - button "get /api/menu/getTreeMenu" [ref=e2311]
+          - generic [ref=e2316] [cursor=pointer]:
+            - button "POST /api/menu/getTreeMenu" [ref=e2317]:
+              - generic [ref=e2318]: POST
+              - generic [ref=e2319]: /api/menu/getTreeMenu
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2325]
+            - button "post /api/menu/getTreeMenu" [ref=e2328]
+          - generic [ref=e2333] [cursor=pointer]:
+            - button "POST /api/menu/getMenu" [ref=e2334]:
+              - generic [ref=e2335]: POST
+              - generic [ref=e2336]: /api/menu/getMenu
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2342]
+            - button "post /api/menu/getMenu" [ref=e2345]
+          - generic [ref=e2350] [cursor=pointer]:
+            - button "POST /api/menu/getTreeItem" [ref=e2351]:
+              - generic [ref=e2352]: POST
+              - generic [ref=e2353]: /api/menu/getTreeItem
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2359]
+            - button "post /api/menu/getTreeItem" [ref=e2362]
+          - generic [ref=e2367] [cursor=pointer]:
+            - button "POST /api/menu/save" [ref=e2368]:
+              - generic [ref=e2369]: POST
+              - generic [ref=e2370]: /api/menu/save
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2376]
+            - button "post /api/menu/save" [ref=e2379]
+          - generic [ref=e2384] [cursor=pointer]:
+            - button "POST /api/menu/delMenu" [ref=e2385]:
+              - generic [ref=e2386]: POST
+              - generic [ref=e2387]: /api/menu/delMenu
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2393]
+            - button "post /api/menu/delMenu" [ref=e2396]
+          - generic [ref=e2401] [cursor=pointer]:
+            - button "POST /api/menu/getPageData" [ref=e2402]:
+              - generic [ref=e2403]: POST
+              - generic [ref=e2404]: /api/menu/getPageData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2410]
+            - button "post /api/menu/getPageData" [ref=e2413]
+      - generic [ref=e2417]:
+        - heading "Sys_QuartzLog Collapse operation" [level=3] [ref=e2418] [cursor=pointer]:
+          - generic [ref=e2419]: Sys_QuartzLog
+          - button "Collapse operation" [expanded] [ref=e2420]
+        - generic [ref=e2427] [cursor=pointer]:
+          - button "POST /api/Sys_QuartzLog/getPageData" [ref=e2428]:
+            - generic [ref=e2429]: POST
+            - generic [ref=e2430]: /api/Sys_QuartzLog/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e2436]
+          - button "post /api/Sys_QuartzLog/getPageData" [ref=e2439]
+      - generic [ref=e2443]:
+        - heading "Sys_QuartzOptions Collapse operation" [level=3] [ref=e2444] [cursor=pointer]:
+          - generic [ref=e2445]: Sys_QuartzOptions
+          - button "Collapse operation" [expanded] [ref=e2446]
+        - generic [ref=e2450]:
+          - generic [ref=e2453] [cursor=pointer]:
+            - button "GET /api/Sys_QuartzOptions/test2" [ref=e2454]:
+              - generic [ref=e2455]: GET
+              - generic [ref=e2456]: /api/Sys_QuartzOptions/test2
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2462]
+            - button "get /api/Sys_QuartzOptions/test2" [ref=e2465]
+          - generic [ref=e2470] [cursor=pointer]:
+            - button "POST /api/Sys_QuartzOptions/test2" [ref=e2471]:
+              - generic [ref=e2472]: POST
+              - generic [ref=e2473]: /api/Sys_QuartzOptions/test2
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2479]
+            - button "post /api/Sys_QuartzOptions/test2" [ref=e2482]
+          - generic [ref=e2487] [cursor=pointer]:
+            - button "GET /api/Sys_QuartzOptions/taskTest" [ref=e2488]:
+              - generic [ref=e2489]: GET
+              - generic [ref=e2490]: /api/Sys_QuartzOptions/taskTest
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2496]
+            - button "get /api/Sys_QuartzOptions/taskTest" [ref=e2499]
+          - generic [ref=e2504] [cursor=pointer]:
+            - button "POST /api/Sys_QuartzOptions/taskTest" [ref=e2505]:
+              - generic [ref=e2506]: POST
+              - generic [ref=e2507]: /api/Sys_QuartzOptions/taskTest
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2513]
+            - button "post /api/Sys_QuartzOptions/taskTest" [ref=e2516]
+          - generic [ref=e2521] [cursor=pointer]:
+            - button "POST /api/Sys_QuartzOptions/run" [ref=e2522]:
+              - generic [ref=e2523]: POST
+              - generic [ref=e2524]: /api/Sys_QuartzOptions/run
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2530]
+            - button "post /api/Sys_QuartzOptions/run" [ref=e2533]
+          - generic [ref=e2538] [cursor=pointer]:
+            - button "POST /api/Sys_QuartzOptions/start" [ref=e2539]:
+              - generic [ref=e2540]: POST
+              - generic [ref=e2541]: /api/Sys_QuartzOptions/start
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2547]
+            - button "post /api/Sys_QuartzOptions/start" [ref=e2550]
+          - generic [ref=e2555] [cursor=pointer]:
+            - button "POST /api/Sys_QuartzOptions/pause" [ref=e2556]:
+              - generic [ref=e2557]: POST
+              - generic [ref=e2558]: /api/Sys_QuartzOptions/pause
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2564]
+            - button "post /api/Sys_QuartzOptions/pause" [ref=e2567]
+          - generic [ref=e2572] [cursor=pointer]:
+            - button "POST /api/Sys_QuartzOptions/getPageData" [ref=e2573]:
+              - generic [ref=e2574]: POST
+              - generic [ref=e2575]: /api/Sys_QuartzOptions/getPageData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2581]
+            - button "post /api/Sys_QuartzOptions/getPageData" [ref=e2584]
+      - generic [ref=e2588]:
+        - heading "Sys_Role Collapse operation" [level=3] [ref=e2589] [cursor=pointer]:
+          - generic [ref=e2590]: Sys_Role
+          - button "Collapse operation" [expanded] [ref=e2591]
+        - generic [ref=e2595]:
+          - generic [ref=e2598] [cursor=pointer]:
+            - button "POST /api/role/getCurrentTreePermission" [ref=e2599]:
+              - generic [ref=e2600]: POST
+              - generic [ref=e2601]: /api/role/getCurrentTreePermission
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2607]
+            - button "post /api/role/getCurrentTreePermission" [ref=e2610]
+          - generic [ref=e2615] [cursor=pointer]:
+            - button "POST /api/Sys_Role/getCurrentTreePermission" [ref=e2616]:
+              - generic [ref=e2617]: POST
+              - generic [ref=e2618]: /api/Sys_Role/getCurrentTreePermission
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2624]
+            - button "post /api/Sys_Role/getCurrentTreePermission" [ref=e2627]
+          - generic [ref=e2632] [cursor=pointer]:
+            - button "POST /api/role/getUserTreePermission" [ref=e2633]:
+              - generic [ref=e2634]: POST
+              - generic [ref=e2635]: /api/role/getUserTreePermission
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2641]
+            - button "post /api/role/getUserTreePermission" [ref=e2644]
+          - generic [ref=e2649] [cursor=pointer]:
+            - button "POST /api/Sys_Role/getUserTreePermission" [ref=e2650]:
+              - generic [ref=e2651]: POST
+              - generic [ref=e2652]: /api/Sys_Role/getUserTreePermission
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2658]
+            - button "post /api/Sys_Role/getUserTreePermission" [ref=e2661]
+          - generic [ref=e2666] [cursor=pointer]:
+            - button "POST /api/role/savePermission" [ref=e2667]:
+              - generic [ref=e2668]: POST
+              - generic [ref=e2669]: /api/role/savePermission
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2675]
+            - button "post /api/role/savePermission" [ref=e2678]
+          - generic [ref=e2683] [cursor=pointer]:
+            - button "POST /api/Sys_Role/savePermission" [ref=e2684]:
+              - generic [ref=e2685]: POST
+              - generic [ref=e2686]: /api/Sys_Role/savePermission
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2692]
+            - button "post /api/Sys_Role/savePermission" [ref=e2695]
+          - generic [ref=e2700] [cursor=pointer]:
+            - button "POST /api/role/getUserChildRoles" [ref=e2701]:
+              - generic [ref=e2702]: POST
+              - generic [ref=e2703]: /api/role/getUserChildRoles
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2709]
+            - button "post /api/role/getUserChildRoles" [ref=e2712]
+          - generic [ref=e2717] [cursor=pointer]:
+            - button "POST /api/Sys_Role/getUserChildRoles" [ref=e2718]:
+              - generic [ref=e2719]: POST
+              - generic [ref=e2720]: /api/Sys_Role/getUserChildRoles
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2726]
+            - button "post /api/Sys_Role/getUserChildRoles" [ref=e2729]
+          - generic [ref=e2734] [cursor=pointer]:
+            - button "POST /api/role/GetPageData" [ref=e2735]:
+              - generic [ref=e2736]: POST
+              - generic [ref=e2737]: /api/role/GetPageData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2743]
+            - button "post /api/role/GetPageData" [ref=e2746]
+          - generic [ref=e2751] [cursor=pointer]:
+            - button "POST /api/Sys_Role/GetPageData" [ref=e2752]:
+              - generic [ref=e2753]: POST
+              - generic [ref=e2754]: /api/Sys_Role/GetPageData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2760]
+            - button "post /api/Sys_Role/GetPageData" [ref=e2763]
+          - generic [ref=e2768] [cursor=pointer]:
+            - button "POST /api/role/getTreeTableRootData" [ref=e2769]:
+              - generic [ref=e2770]: POST
+              - generic [ref=e2771]: /api/role/getTreeTableRootData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2777]
+            - button "post /api/role/getTreeTableRootData" [ref=e2780]
+          - generic [ref=e2785] [cursor=pointer]:
+            - button "POST /api/Sys_Role/getTreeTableRootData" [ref=e2786]:
+              - generic [ref=e2787]: POST
+              - generic [ref=e2788]: /api/Sys_Role/getTreeTableRootData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2794]
+            - button "post /api/Sys_Role/getTreeTableRootData" [ref=e2797]
+          - generic [ref=e2802] [cursor=pointer]:
+            - button "POST /api/role/getTreeTableChildrenData" [ref=e2803]:
+              - generic [ref=e2804]: POST
+              - generic [ref=e2805]: /api/role/getTreeTableChildrenData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2811]
+            - button "post /api/role/getTreeTableChildrenData" [ref=e2814]
+          - generic [ref=e2819] [cursor=pointer]:
+            - button "POST /api/Sys_Role/getTreeTableChildrenData" [ref=e2820]:
+              - generic [ref=e2821]: POST
+              - generic [ref=e2822]: /api/Sys_Role/getTreeTableChildrenData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2828]
+            - button "post /api/Sys_Role/getTreeTableChildrenData" [ref=e2831]
+      - generic [ref=e2835]:
+        - heading "Sys_User Collapse operation" [level=3] [ref=e2836] [cursor=pointer]:
+          - generic [ref=e2837]: Sys_User
+          - button "Collapse operation" [expanded] [ref=e2838]
+        - generic [ref=e2842]:
+          - generic [ref=e2845] [cursor=pointer]:
+            - button "POST /api/User/login" [ref=e2846]:
+              - generic [ref=e2847]: POST
+              - generic [ref=e2848]: /api/User/login
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2854]
+            - button "post /api/User/login" [ref=e2857]
+          - generic [ref=e2862] [cursor=pointer]:
+            - button "GET /api/User/login" [ref=e2863]:
+              - generic [ref=e2864]: GET
+              - generic [ref=e2865]: /api/User/login
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2871]
+            - button "get /api/User/login" [ref=e2874]
+          - generic [ref=e2879] [cursor=pointer]:
+            - button "POST /api/Sys_User/login" [ref=e2880]:
+              - generic [ref=e2881]: POST
+              - generic [ref=e2882]: /api/Sys_User/login
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2888]
+            - button "post /api/Sys_User/login" [ref=e2891]
+          - generic [ref=e2896] [cursor=pointer]:
+            - button "GET /api/Sys_User/login" [ref=e2897]:
+              - generic [ref=e2898]: GET
+              - generic [ref=e2899]: /api/Sys_User/login
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2905]
+            - button "get /api/Sys_User/login" [ref=e2908]
+          - generic [ref=e2913] [cursor=pointer]:
+            - button "POST /api/User/replaceToken" [ref=e2914]:
+              - generic [ref=e2915]: POST
+              - generic [ref=e2916]: /api/User/replaceToken
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2922]
+            - button "post /api/User/replaceToken" [ref=e2925]
+          - generic [ref=e2930] [cursor=pointer]:
+            - button "POST /api/Sys_User/replaceToken" [ref=e2931]:
+              - generic [ref=e2932]: POST
+              - generic [ref=e2933]: /api/Sys_User/replaceToken
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2939]
+            - button "post /api/Sys_User/replaceToken" [ref=e2942]
+          - generic [ref=e2947] [cursor=pointer]:
+            - button "POST /api/User/modifyPwd" [ref=e2948]:
+              - generic [ref=e2949]: POST
+              - generic [ref=e2950]: /api/User/modifyPwd
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2956]
+            - button "post /api/User/modifyPwd" [ref=e2959]
+          - generic [ref=e2964] [cursor=pointer]:
+            - button "POST /api/Sys_User/modifyPwd" [ref=e2965]:
+              - generic [ref=e2966]: POST
+              - generic [ref=e2967]: /api/Sys_User/modifyPwd
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2973]
+            - button "post /api/Sys_User/modifyPwd" [ref=e2976]
+          - generic [ref=e2981] [cursor=pointer]:
+            - button "POST /api/User/getCurrentUserInfo" [ref=e2982]:
+              - generic [ref=e2983]: POST
+              - generic [ref=e2984]: /api/User/getCurrentUserInfo
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e2990]
+            - button "post /api/User/getCurrentUserInfo" [ref=e2993]
+          - generic [ref=e2998] [cursor=pointer]:
+            - button "POST /api/Sys_User/getCurrentUserInfo" [ref=e2999]:
+              - generic [ref=e3000]: POST
+              - generic [ref=e3001]: /api/Sys_User/getCurrentUserInfo
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3007]
+            - button "post /api/Sys_User/getCurrentUserInfo" [ref=e3010]
+          - generic [ref=e3015] [cursor=pointer]:
+            - button "POST /api/User/modifyUserPwd" [ref=e3016]:
+              - generic [ref=e3017]: POST
+              - generic [ref=e3018]: /api/User/modifyUserPwd
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3024]
+            - button "post /api/User/modifyUserPwd" [ref=e3027]
+          - generic [ref=e3032] [cursor=pointer]:
+            - button "POST /api/Sys_User/modifyUserPwd" [ref=e3033]:
+              - generic [ref=e3034]: POST
+              - generic [ref=e3035]: /api/Sys_User/modifyUserPwd
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3041]
+            - button "post /api/Sys_User/modifyUserPwd" [ref=e3044]
+          - generic [ref=e3049] [cursor=pointer]:
+            - button "GET /api/User/getVierificationCode" [ref=e3050]:
+              - generic [ref=e3051]: GET
+              - generic [ref=e3052]: /api/User/getVierificationCode
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3058]
+            - button "get /api/User/getVierificationCode" [ref=e3061]
+          - generic [ref=e3066] [cursor=pointer]:
+            - button "GET /api/Sys_User/getVierificationCode" [ref=e3067]:
+              - generic [ref=e3068]: GET
+              - generic [ref=e3069]: /api/Sys_User/getVierificationCode
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3075]
+            - button "get /api/Sys_User/getVierificationCode" [ref=e3078]
+          - generic [ref=e3083] [cursor=pointer]:
+            - button "POST /api/User/updateUserInfo" [ref=e3084]:
+              - generic [ref=e3085]: POST
+              - generic [ref=e3086]: /api/User/updateUserInfo
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3092]
+            - button "post /api/User/updateUserInfo" [ref=e3095]
+          - generic [ref=e3100] [cursor=pointer]:
+            - button "POST /api/Sys_User/updateUserInfo" [ref=e3101]:
+              - generic [ref=e3102]: POST
+              - generic [ref=e3103]: /api/Sys_User/updateUserInfo
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3109]
+            - button "post /api/Sys_User/updateUserInfo" [ref=e3112]
+          - generic [ref=e3117] [cursor=pointer]:
+            - button "POST /api/User/getPageData" [ref=e3118]:
+              - generic [ref=e3119]: POST
+              - generic [ref=e3120]: /api/User/getPageData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3126]
+            - button "post /api/User/getPageData" [ref=e3129]
+          - generic [ref=e3134] [cursor=pointer]:
+            - button "POST /api/Sys_User/getPageData" [ref=e3135]:
+              - generic [ref=e3136]: POST
+              - generic [ref=e3137]: /api/Sys_User/getPageData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3143]
+            - button "post /api/Sys_User/getPageData" [ref=e3146]
+      - generic [ref=e3150]:
+        - heading "Sys_WorkFlow Collapse operation" [level=3] [ref=e3151] [cursor=pointer]:
+          - generic [ref=e3152]: Sys_WorkFlow
+          - button "Collapse operation" [expanded] [ref=e3153]
+        - generic [ref=e3157]:
+          - generic [ref=e3160] [cursor=pointer]:
+            - button "GET /api/Sys_WorkFlow/getTableInfo" [ref=e3161]:
+              - generic [ref=e3162]: GET
+              - generic [ref=e3163]: /api/Sys_WorkFlow/getTableInfo
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3169]
+            - button "get /api/Sys_WorkFlow/getTableInfo" [ref=e3172]
+          - generic [ref=e3177] [cursor=pointer]:
+            - button "GET /api/Sys_WorkFlow/getNodeDic" [ref=e3178]:
+              - generic [ref=e3179]: GET
+              - generic [ref=e3180]: /api/Sys_WorkFlow/getNodeDic
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3186]
+            - button "get /api/Sys_WorkFlow/getNodeDic" [ref=e3189]
+          - generic [ref=e3194] [cursor=pointer]:
+            - button "POST /api/Sys_WorkFlow/getSteps" [ref=e3195]:
+              - generic [ref=e3196]: POST
+              - generic [ref=e3197]: /api/Sys_WorkFlow/getSteps
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3203]
+            - button "post /api/Sys_WorkFlow/getSteps" [ref=e3206]
+          - generic [ref=e3211] [cursor=pointer]:
+            - button "POST /api/Sys_WorkFlow/getFields" [ref=e3212]:
+              - generic [ref=e3213]: POST
+              - generic [ref=e3214]: /api/Sys_WorkFlow/getFields
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3220]
+            - button "post /api/Sys_WorkFlow/getFields" [ref=e3223]
+          - generic [ref=e3228] [cursor=pointer]:
+            - button "GET /api/Sys_WorkFlow/getOptions" [ref=e3229]:
+              - generic [ref=e3230]: GET
+              - generic [ref=e3231]: /api/Sys_WorkFlow/getOptions
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3237]
+            - button "get /api/Sys_WorkFlow/getOptions" [ref=e3240]
+          - generic [ref=e3245] [cursor=pointer]:
+            - button "POST /api/Sys_WorkFlow/getPageData" [ref=e3246]:
+              - generic [ref=e3247]: POST
+              - generic [ref=e3248]: /api/Sys_WorkFlow/getPageData
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3254]
+            - button "post /api/Sys_WorkFlow/getPageData" [ref=e3257]
+      - generic [ref=e3261]:
+        - heading "Sys_WorkFlowStep Collapse operation" [level=3] [ref=e3262] [cursor=pointer]:
+          - generic [ref=e3263]: Sys_WorkFlowStep
+          - button "Collapse operation" [expanded] [ref=e3264]
+        - generic [ref=e3271] [cursor=pointer]:
+          - button "POST /api/Sys_WorkFlowStep/getPageData" [ref=e3272]:
+            - generic [ref=e3273]: POST
+            - generic [ref=e3274]: /api/Sys_WorkFlowStep/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e3280]
+          - button "post /api/Sys_WorkFlowStep/getPageData" [ref=e3283]
+      - generic [ref=e3287]:
+        - heading "Sys_WorkFlowTable Collapse operation" [level=3] [ref=e3288] [cursor=pointer]:
+          - generic [ref=e3289]: Sys_WorkFlowTable
+          - button "Collapse operation" [expanded] [ref=e3290]
+        - generic [ref=e3297] [cursor=pointer]:
+          - button "POST /api/Sys_WorkFlowTable/getPageData" [ref=e3298]:
+            - generic [ref=e3299]: POST
+            - generic [ref=e3300]: /api/Sys_WorkFlowTable/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e3306]
+          - button "post /api/Sys_WorkFlowTable/getPageData" [ref=e3309]
+      - generic [ref=e3313]:
+        - heading "Sys_WorkFlowTableAuditLog Collapse operation" [level=3] [ref=e3314] [cursor=pointer]:
+          - generic [ref=e3315]: Sys_WorkFlowTableAuditLog
+          - button "Collapse operation" [expanded] [ref=e3316]
+        - generic [ref=e3323] [cursor=pointer]:
+          - button "POST /api/Sys_WorkFlowTableAuditLog/getPageData" [ref=e3324]:
+            - generic [ref=e3325]: POST
+            - generic [ref=e3326]: /api/Sys_WorkFlowTableAuditLog/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e3332]
+          - button "post /api/Sys_WorkFlowTableAuditLog/getPageData" [ref=e3335]
+      - generic [ref=e3339]:
+        - heading "Sys_WorkFlowTableStep Collapse operation" [level=3] [ref=e3340] [cursor=pointer]:
+          - generic [ref=e3341]: Sys_WorkFlowTableStep
+          - button "Collapse operation" [expanded] [ref=e3342]
+        - generic [ref=e3349] [cursor=pointer]:
+          - button "POST /api/Sys_WorkFlowTableStep/getPageData" [ref=e3350]:
+            - generic [ref=e3351]: POST
+            - generic [ref=e3352]: /api/Sys_WorkFlowTableStep/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e3358]
+          - button "post /api/Sys_WorkFlowTableStep/getPageData" [ref=e3361]
+      - generic [ref=e3365]:
+        - heading "TestService Collapse operation" [level=3] [ref=e3366] [cursor=pointer]:
+          - generic [ref=e3367]: TestService
+          - button "Collapse operation" [expanded] [ref=e3368]
+        - generic [ref=e3375] [cursor=pointer]:
+          - button "POST /api/TestService/getPageData" [ref=e3376]:
+            - generic [ref=e3377]: POST
+            - generic [ref=e3378]: /api/TestService/getPageData
+          - generic "Copy to clipboard"
+          - button "authorization button unlocked" [ref=e3384]
+          - button "post /api/TestService/getPageData" [ref=e3387]
+      - generic [ref=e3391]:
+        - heading "YzhPageConfig Collapse operation" [level=3] [ref=e3392] [cursor=pointer]:
+          - generic [ref=e3393]: YzhPageConfig
+          - button "Collapse operation" [expanded] [ref=e3394]
+        - generic [ref=e3398]:
+          - generic [ref=e3401] [cursor=pointer]:
+            - 'button "GET /api/yzh-page-config/{pageKey}" [ref=e3402]':
+              - generic [ref=e3403]: GET
+              - generic [ref=e3404]: "/api/yzh-page-config/{pageKey}"
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3410]
+            - 'button "get /api/yzh-page-config/{pageKey}" [ref=e3413]'
+          - generic [ref=e3418] [cursor=pointer]:
+            - button "GET /api/yzh-page-config" [ref=e3419]:
+              - generic [ref=e3420]: GET
+              - generic [ref=e3421]: /api/yzh-page-config
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3427]
+            - button "get /api/yzh-page-config" [ref=e3430]
+          - generic [ref=e3435] [cursor=pointer]:
+            - button "GET /api/yzh-page-config/all" [ref=e3436]:
+              - generic [ref=e3437]: GET
+              - generic [ref=e3438]: /api/yzh-page-config/all
+            - generic "Copy to clipboard"
+            - button "authorization button unlocked" [ref=e3444]
+            - button "get /api/yzh-page-config/all" [ref=e3447]
+    - generic [ref=e3452]:
+      - heading [level=4] [ref=e3453] [cursor=pointer]:
+        - button "Schemas" [expanded] [ref=e3454]
+      - generic [ref=e3458]:
+        - button "CertBodyRemoveRequest" [ref=e3461] [cursor=pointer]
+        - button "DetailInfo" [ref=e3467] [cursor=pointer]
+        - button "IsoStandardRemoveRequest" [ref=e3473] [cursor=pointer]
+        - button "LoginInfo" [ref=e3479] [cursor=pointer]
+        - button "PageDataOptions" [ref=e3485] [cursor=pointer]
+        - button "SaveModel" [ref=e3491] [cursor=pointer]
+        - button "SearchParameters" [ref=e3497] [cursor=pointer]
+        - button "StandardDirectoryConfig" [ref=e3503] [cursor=pointer]
+        - button "StandardDirectoryFile" [ref=e3509] [cursor=pointer]
+        - button "StandardDirectoryFolder" [ref=e3515] [cursor=pointer]
+        - button "SubDelInfo" [ref=e3521] [cursor=pointer]
+        - button "SyncLinkRequest" [ref=e3527] [cursor=pointer]
+        - button "Sys_Actions" [ref=e3533] [cursor=pointer]
+        - button "Sys_Menu" [ref=e3539] [cursor=pointer]
+        - button "Sys_QuartzOptions" [ref=e3545] [cursor=pointer]
+        - button "Sys_TableColumn" [ref=e3551] [cursor=pointer]
+        - button "Sys_TableInfo" [ref=e3557] [cursor=pointer]
+        - button "Sys_User" [ref=e3563] [cursor=pointer]
+        - button "UserPermissions" [ref=e3569] [cursor=pointer]

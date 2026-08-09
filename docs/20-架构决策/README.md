@@ -28,6 +28,8 @@ AIGC:
 | Phase1_实施报告.md | Phase 1 实施总结、经验教训 | 成熟态 |
 | YZH-Framework架构设计评审报告-V1.md | YZH-Framework 架构设计评审分析 | 成熟态 |
 | cert_phase2_implementation_summary.md | Phase 2 实施总结 | 成熟态 |
+| 工作流引擎选型与技术研究-V1.md | 自定义工作流（提取/校验/报告）技术研究：Vol 审批流盘点、前端设计器选型（LogicFlow）、双态 JSON、DAG 解释器设计、四阶段路线 | 研究中/草案 |
+| 文件数据提取能力落地-V1.md | 提取引擎基础能力落地：YZH.Core/Extractor 模块（NPOI+PdfPig）、统一结果模型、接口清单、使用示例、第三方 OCR 扩展点、真实样例验证记录、完善建议 | 已实现（基础）/ 研究中（OCR） |
 
 ---
 

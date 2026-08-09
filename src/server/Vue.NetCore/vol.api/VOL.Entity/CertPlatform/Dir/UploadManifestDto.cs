@@ -1,0 +1,310 @@
+using System.Collections.Generic;
+
+namespace VOL.Entity.CertPlatform.Dir
+{
+    /// <summary>
+    /// 上传清单请求DTO（客户端基础清单）
+    /// 客户端选择文件后生成此JSON，发送给服务端进行预处理
+    /// </summary>
+    public class UploadManifestRequest
+    {
+        /// <summary>
+        /// 目标目录编码
+        /// </summary>
+        public string DirectoryCode { get; set; }
+
+        /// <summary>
+        /// 需要创建的文件夹列表（前端从文件路径中提取去重）
+        /// </summary>
+        public List<FolderItem> Folders { get; set; } = new List<FolderItem>();
+
+        /// <summary>
+        /// 待上传文件列表
+        /// </summary>
+        public List<FileItem> Files { get; set; } = new List<FileItem>();
+    }
+
+    /// <summary>
+    /// 文件夹项
+    /// </summary>
+    public class FolderItem
+    {
+        /// <summary>
+        /// 文件夹路径（如：4记录文件/内审记录）
+        /// </summary>
+        public string Path { get; set; }
+    }
+
+    /// <summary>
+    /// 文件项
+    /// </summary>
+    public class FileItem
+    {
+        /// <summary>
+        /// 文件的相对路径（含文件夹层级）
+        /// </summary>
+        public string RelativePath { get; set; }
+
+        /// <summary>
+        /// 文件名
+        /// </summary>
+        public string FileName { get; set; }
+
+        /// <summary>
+        /// 文件大小（字节）
+        /// </summary>
+        public long FileSize { get; set; }
+
+        /// <summary>
+        /// MIME类型
+        /// </summary>
+        public string MimeType { get; set; }
+    }
+
+    /// <summary>
+    /// 上传清单响应DTO（服务端增强清单）
+    /// 服务端处理后返回，补充了编码、OSS路径等信息
+    /// </summary>
+    public class UploadManifestResponse
+    {
+        /// <summary>
+        /// 任务状态
+        /// </summary>
+        public string Status { get; set; } = "initialized";
+
+        /// <summary>
+        /// 任务唯一ID
+        /// </summary>
+        public string TaskId { get; set; }
+
+        /// <summary>
+        /// 目标目录编码
+        /// </summary>
+        public string DirectoryCode { get; set; }
+
+        /// <summary>
+        /// 总文件数
+        /// </summary>
+        public int TotalFiles { get; set; }
+
+        /// <summary>
+        /// 总文件大小（字节）
+        /// </summary>
+        public long TotalSize { get; set; }
+
+        /// <summary>
+        /// 文件夹列表（含编码）
+        /// </summary>
+        public List<EnhancedFolderItem> Folders { get; set; } = new List<EnhancedFolderItem>();
+
+        /// <summary>
+        /// 文件列表（含编码和OSS路径）
+        /// </summary>
+        public List<EnhancedFileItem> Files { get; set; } = new List<EnhancedFileItem>();
+    }
+
+    /// <summary>
+    /// 增强的文件夹项
+    /// </summary>
+    public class EnhancedFolderItem
+    {
+        /// <summary>
+        /// 文件夹编码
+        /// </summary>
+        public string FolderCode { get; set; }
+
+        /// <summary>
+        /// 文件夹名称
+        /// </summary>
+        public string FolderName { get; set; }
+
+        /// <summary>
+        /// 父文件夹编码
+        /// </summary>
+        public string ParentCode { get; set; }
+
+        /// <summary>
+        /// 深度
+        /// </summary>
+        public int Depth { get; set; }
+
+        /// <summary>
+        /// 完整路径
+        /// </summary>
+        public string FullPath { get; set; }
+
+        /// <summary>
+        /// 操作模式：create=新增, reuse=复用已有文件夹
+        /// </summary>
+        public string Mode { get; set; } = "create";
+    }
+
+    /// <summary>
+    /// 增强的文件项
+    /// </summary>
+    public class EnhancedFileItem
+    {
+        /// <summary>
+        /// 文件在清单中的序号
+        /// </summary>
+        public int Index { get; set; }
+
+        /// <summary>
+        /// 文件编码（服务端生成）
+        /// </summary>
+        public string FileCode { get; set; }
+
+        /// <summary>
+        /// 文件名
+        /// </summary>
+        public string FileName { get; set; }
+
+        /// <summary>
+        /// 文件相对路径
+        /// </summary>
+        public string RelativePath { get; set; }
+
+        /// <summary>
+        /// 完整路径（从根到文件）
+        /// </summary>
+        public string FullPath { get; set; }
+
+        /// <summary>
+        /// 文件大小（字节）
+        /// </summary>
+        public long FileSize { get; set; }
+
+        /// <summary>
+        /// MIME类型
+        /// </summary>
+        public string MimeType { get; set; }
+
+        /// <summary>
+        /// MinIO存储路径
+        /// </summary>
+        public string StoragePath { get; set; }
+
+        /// <summary>
+        /// 所属文件夹编码
+        /// </summary>
+        public string ParentFolderCode { get; set; }
+
+        /// <summary>
+        /// 操作模式：create=新增, replace=替换已有文件
+        /// </summary>
+        public string Mode { get; set; } = "create";
+
+        /// <summary>
+        /// 替换模式下，已有文件的编码（用于定位要更新的记录）
+        /// </summary>
+        public string ExistingFileCode { get; set; }
+
+        /// <summary>
+        /// 替换模式下，已有文件的主键ID（用于直接更新记录）
+        /// </summary>
+        public long? ExistingFileId { get; set; }
+
+        /// <summary>
+        /// 替换模式下，旧文件的MinIO路径（用于删除旧对象）
+        /// </summary>
+        public string OldStoragePath { get; set; }
+
+        /// <summary>
+        /// 状态（pending/uploading/active/failed）
+        /// </summary>
+        public string Status { get; set; } = "pending";
+    }
+
+    /// <summary>
+    /// 上传文件请求DTO（单个文件上传时使用）
+    /// </summary>
+    public class UploadFileRequest
+    {
+        /// <summary>
+        /// 增强清单中的 fileCode
+        /// </summary>
+        public string FileCode { get; set; }
+
+        /// <summary>
+        /// 增强清单中的 storagePath
+        /// </summary>
+        public string StoragePath { get; set; }
+
+        /// <summary>
+        /// 任务ID
+        /// </summary>
+        public string TaskId { get; set; }
+    }
+
+    /// <summary>
+    /// 任务状态查询响应DTO
+    /// </summary>
+    public class UploadStatusResponse
+    {
+        /// <summary>
+        /// 任务ID
+        /// </summary>
+        public string TaskId { get; set; }
+
+        /// <summary>
+        /// 任务状态
+        /// </summary>
+        public string Status { get; set; }
+
+        /// <summary>
+        /// 总文件数
+        /// </summary>
+        public int TotalFiles { get; set; }
+
+        /// <summary>
+        /// 已成功上传数
+        /// </summary>
+        public int SuccessCount { get; set; }
+
+        /// <summary>
+        /// 失败数
+        /// </summary>
+        public int FailCount { get; set; }
+
+        /// <summary>
+        /// 文件列表（含状态）
+        /// </summary>
+        public List<FileStatusItem> Files { get; set; } = new List<FileStatusItem>();
+    }
+
+    /// <summary>
+    /// 文件状态项
+    /// </summary>
+    public class FileStatusItem
+    {
+        public string FileCode { get; set; }
+        public string FileName { get; set; }
+        public string Status { get; set; }
+    }
+
+    /// <summary>
+    /// 上传文件V2请求DTO（解决 Swagger [FromForm] + IFormFile 问题）
+    /// </summary>
+    public class UploadFileV2Dto
+    {
+        /// <summary>
+        /// 文件内容
+        /// </summary>
+        public Microsoft.AspNetCore.Http.IFormFile File { get; set; }
+
+        /// <summary>
+        /// 文件编码
+        /// </summary>
+        public string FileCode { get; set; }
+
+        /// <summary>
+        /// MinIO存储路径
+        /// </summary>
+        public string StoragePath { get; set; }
+
+        /// <summary>
+        /// 任务ID
+        /// </summary>
+        public string TaskId { get; set; }
+    }
+}

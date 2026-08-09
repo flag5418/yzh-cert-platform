@@ -10,12 +10,12 @@ namespace VOL.Entity.CertPlatform.Sys
     /// - V = CertOrgStandardView（视图，用于显示，包含标准信息）
     /// 
     /// 数据来源：v_cert_org_standard MySQL 视图
+    /// 注意：不要添加 [Table] 属性，否则会覆盖父类的表名配置
     /// </summary>
-    [Table("v_cert_org_standard")]
+    [NotMapped]
     public class CertOrgStandardView : CertOrgStandard
     {
         // ====== 视图特有字段（来自关联的标准信息）======
-        // 注意：不要加 [NotMapped]，否则 EF Core 不会从数据库读取这些字段！
 
         /// <summary>
         /// 标准编号

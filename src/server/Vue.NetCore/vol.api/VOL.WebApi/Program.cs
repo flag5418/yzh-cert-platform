@@ -136,7 +136,6 @@ builder.Services.UseMethodsModelParameters().UseMethodsGeneralParameters();
 builder.Services.AddSingleton<IObjectModelValidator>(new NullObjectModelValidator());
 //Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
 //��̨Ĭ�������˿�
 builder.WebHost.UseUrls("http://*:9991");
 builder.Services.Configure<FormOptions>(x =>
