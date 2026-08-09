@@ -806,6 +806,7 @@ namespace VOL.Builder.Services.CertPlatform
                 var enhancedFolders = new List<EnhancedFolderItem>();
                 var folderMap = new Dictionary<string, string>(); // path -> folderCode
                 var existingFolderMap = new Dictionary<string, StandardDirectoryFolder>(); // path -> existing folder
+                var seqCounter = new Dictionary<string, int>(); // "directoryCode|depth" -> maxSeq（同深度全局计数，避免不同父级下相同depth生成重复FolderCode）
 
                 // 按路径深度排序，确保父文件夹先处理
                 var sortedFolders = manifest.Folders
@@ -851,7 +852,12 @@ namespace VOL.Builder.Services.CertPlatform
                     {
                         // 创建新文件夹
                         var depth = pathParts.Length;
-                        var sortOrder = GetMaxSequenceForUpload(manifest.DirectoryCode, parentCode, taskId) + 1;
+                        // 先从数据库查最大序号，再与内存计数器取较大值
+                        var dbMaxSeq = GetMaxSequenceForUpload(manifest.DirectoryCode, parentCode, taskId);
+                        var seqKey = $"{manifest.DirectoryCode}|{depth}";
+                        var memMaxSeq = seqCounter.ContainsKey(seqKey) ? seqCounter[seqKey] : 0;
+                        var sortOrder = Math.Max(dbMaxSeq, memMaxSeq) + 1;
+                        seqCounter[seqKey] = sortOrder;
                         var folderCode = _codeGenerator.GenerateFolderCode(manifest.DirectoryCode, depth, sortOrder);
 
                         var newFolder = new StandardDirectoryFolder
