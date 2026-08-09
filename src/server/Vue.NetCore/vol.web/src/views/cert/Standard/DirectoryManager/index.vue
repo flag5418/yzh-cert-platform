@@ -503,26 +503,28 @@ const submitUpload = async () => {
     }
     
     const enhancedManifest = initRes.Data || initRes.data
-    taskId = enhancedManifest.taskId
+    taskId = enhancedManifest.TaskId || enhancedManifest.taskId
     
-    console.log('任务ID:', taskId, '文件数:', enhancedManifest.totalFiles)
+    const totalFiles = enhancedManifest.TotalFiles || enhancedManifest.totalFiles || 0
+    console.log('任务ID:', taskId, '文件数:', totalFiles)
     
     // ===== Step 3: 逐个上传文件 =====
+    const fileList = enhancedManifest.Files || enhancedManifest.files || []
     let failed = false
     
-    for (let i = 0; i < enhancedManifest.files.length; i++) {
+    for (let i = 0; i < fileList.length; i++) {
       if (failed) break
       
-      const enhancedFile = enhancedManifest.files[i]
+      const enhancedFile = fileList[i]
       const localFile = uploadFileList.value[i]
       
-      uploadProgress.value.currentFile = enhancedFile.fileName
+      uploadProgress.value.currentFile = enhancedFile.FileName || enhancedFile.fileName
       uploadProgress.value.completed = i
       
       const formData = new FormData()
       formData.append('file', localFile)
-      formData.append('fileCode', enhancedFile.fileCode)
-      formData.append('storagePath', enhancedFile.storagePath)
+      formData.append('fileCode', enhancedFile.FileCode || enhancedFile.fileCode)
+      formData.append('storagePath', enhancedFile.StoragePath || enhancedFile.storagePath)
       formData.append('taskId', taskId)
       
       try {
@@ -534,12 +536,12 @@ const submitUpload = async () => {
         } else {
           failed = true
           uploadProgress.value.failed++
-          console.warn(`上传失败 [${i+1}/${enhancedManifest.totalFiles}]:`, enhancedFile.fileName, res.Message)
+          console.warn(`上传失败 [${i+1}/${totalFiles}]:`, enhancedFile.FileName || enhancedFile.fileName, res.Message)
         }
       } catch (error) {
         failed = true
         uploadProgress.value.failed++
-        console.error(`上传异常 [${i+1}/${enhancedManifest.totalFiles}]:`, enhancedFile.fileName, error)
+        console.error(`上传异常 [${i+1}/${totalFiles}]:`, enhancedFile.FileName || enhancedFile.fileName, error)
       }
     }
     
@@ -549,10 +551,10 @@ const submitUpload = async () => {
       await http.post(`/api/standard-directory/upload-cancel?taskId=${taskId}`)
       ElMessage.error(`上传完成，${uploadProgress.value.failed} 个文件失败，已回滚`)
     } else {
-      uploadProgress.value.completed = enhancedManifest.totalFiles
+      uploadProgress.value.completed = totalFiles
       uploadProgress.value.status = 'done'
       await http.post(`/api/standard-directory/upload-confirm?taskId=${taskId}`)
-      ElMessage.success(`全部 ${enhancedManifest.totalFiles} 个文件上传成功`)
+      ElMessage.success(`全部 ${totalFiles} 个文件上传成功`)
       uploadFileList.value = []
       uploadDialogVisible.value = false
       if (currentConfig.value) {
