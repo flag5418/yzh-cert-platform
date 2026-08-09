@@ -46,11 +46,11 @@
       <!-- 面包屑 -->
       <div class="breadcrumb" v-if="currentPhase">
         <el-breadcrumb separator="/">
-          <el-breadcrumb-item :click="() => navigateToRoot()" class="clickable-breadcrumb">
-            {{ currentPhase.standardCode }}
+          <el-breadcrumb-item>
+            <span class="clickable-breadcrumb" @click="navigateToRoot">{{ currentPhase.standardCode }}</span>
           </el-breadcrumb-item>
-          <el-breadcrumb-item :click="() => navigateToRoot()" class="clickable-breadcrumb">
-            {{ currentPhase.phaseCode }}
+          <el-breadcrumb-item>
+            <span class="clickable-breadcrumb" @click="navigateToRoot">{{ currentPhase.phaseCode }}</span>
           </el-breadcrumb-item>
           <el-breadcrumb-item v-for="(crumb, index) in breadcrumbPath" :key="index">
             <span v-if="index < breadcrumbPath.length - 1" class="clickable-breadcrumb" @click="navigateToCrumb(index)">
@@ -162,7 +162,7 @@
 
     <!-- 新建文件夹弹窗 -->
     <el-dialog v-model="showFolderDialog" title="新建文件夹" width="400px">
-      <el-form :model="folderForm" label-width="80px">
+      <el-form :model="folderForm" label-width="80px" class="dialog-form">
         <el-form-item label="文件夹名称">
           <el-input v-model="folderForm.folderName" placeholder="请输入文件夹名称" />
         </el-form-item>
@@ -178,7 +178,7 @@
 
     <!-- 重命名弹窗 -->
     <el-dialog v-model="showRenameDialogFlag" title="重命名" width="400px">
-      <el-form :model="renameForm" label-width="80px">
+      <el-form :model="renameForm" label-width="80px" class="dialog-form">
         <el-form-item label="名称">
           <el-input v-model="renameForm.newName" placeholder="请输入新名称" />
         </el-form-item>
@@ -862,6 +862,7 @@ onMounted(() => { loadTree() })
 .file-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .file-table th {
@@ -878,10 +879,12 @@ onMounted(() => { loadTree() })
 }
 
 .file-table td {
-  padding: 10px 16px;
+  padding: 0 16px;
   border-bottom: 1px solid #ebeef5;
   font-size: 13px;
   color: #606266;
+  vertical-align: middle;
+  height: 48px;
 }
 
 .file-table tr:hover { background: #f5f7fa; }
@@ -891,14 +894,15 @@ onMounted(() => { loadTree() })
   display: flex;
   align-items: center;
   gap: 8px;
+  line-height: 48px;
 }
 
 .name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .folder-name { color: #303133; font-weight: 500; }
 
-.folder-icon { color: #e6a23c; font-size: 18px; }
+.folder-icon { color: #e6a23c; font-size: 18px; flex-shrink: 0; }
 
-.file-type-icon { color: #909399; font-size: 18px; }
+.file-type-icon { color: #909399; font-size: 18px; flex-shrink: 0; }
 .file-type-icon.file-pdf { color: #f56c6c; }
 .file-type-icon.file-doc { color: #409eff; }
 .file-type-icon.file-xls { color: #67c23a; }
@@ -975,5 +979,10 @@ onMounted(() => { loadTree() })
   background: #f5f7fa; border: 1px solid #ebeef5; border-radius: 4px;
   padding: 12px; font-family: monospace; font-size: 13px; color: #606266;
   line-height: 1.8; margin-bottom: 12px;
+}
+
+/* 弹窗表单 padding */
+.dialog-form {
+  padding: 10px 20px 0;
 }
 </style>
