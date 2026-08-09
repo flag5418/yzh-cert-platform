@@ -1331,11 +1331,10 @@ namespace VOL.Builder.Services.CertPlatform
         /// </summary>
         private async Task CleanupOrphanData(string directoryCode, string currentTaskId)
         {
-            // 查找该目录下所有 IsValid=0 的文件夹（排除当前任务）
+            // 查找该目录下所有 IsValid=0 的文件夹（清理所有残留，不仅限于不同 TaskId）
             var orphanFolders = _db.Set<StandardDirectoryFolder>()
                 .Where(x => x.DirectoryCode == directoryCode 
-                           && x.IsValid == false 
-                           && x.TaskId != currentTaskId)
+                           && x.IsValid == false)
                 .ToList();
 
             var bucketName = _configuration["MinIO:BucketName"] ?? "cert-platform";
@@ -1345,8 +1344,7 @@ namespace VOL.Builder.Services.CertPlatform
                 // 删除该文件夹下 IsValid=0 的文件
                 var orphanFiles = _db.Set<StandardDirectoryFile>()
                     .Where(x => x.FolderCode == folder.FolderCode 
-                               && x.IsValid == false 
-                               && x.TaskId != currentTaskId)
+                               && x.IsValid == false)
                     .ToList();
 
                 foreach (var file in orphanFiles)
@@ -1378,8 +1376,7 @@ namespace VOL.Builder.Services.CertPlatform
             // 也清理目录根级别的 IsValid=0 文件
             var rootOrphanFiles = _db.Set<StandardDirectoryFile>()
                 .Where(x => x.DirectoryCode == directoryCode 
-                           && x.IsValid == false 
-                           && x.TaskId != currentTaskId)
+                           && x.IsValid == false)
                 .ToList();
 
             foreach (var file in rootOrphanFiles)
