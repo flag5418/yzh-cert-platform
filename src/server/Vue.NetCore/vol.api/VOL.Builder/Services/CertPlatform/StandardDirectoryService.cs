@@ -1331,72 +1331,43 @@ namespace VOL.Builder.Services.CertPlatform
         /// </summary>
         private async Task CleanupOrphanData(string directoryCode, string currentTaskId)
         {
-            // 查找该目录下所有 IsValid=0 的文件夹（清理所有残留，不仅限于不同 TaskId）
-            var orphanFolders = _db.Set<StandardDirectoryFolder>()
-                .Where(x => x.DirectoryCode == directoryCode 
-                           && x.IsValid == false)
-                .ToList();
+            // 用原生 SQL 清理 IsValid=0 的脏数据，避免 EF Core change tracker 冲突
+            var conn = _db.Database.GetDbConnection();
+            if (conn.State != System.Data.ConnectionState.Open)
+                await conn.OpenAsync();
 
-            var bucketName = _configuration["MinIO:BucketName"] ?? "cert-platform";
-
-            foreach (var folder in orphanFolders)
+            // 删除 IsValid=0 的文件
+            using (var cmd = conn.CreateCommand())
             {
-                // 删除该文件夹下 IsValid=0 的文件
-                var orphanFiles = _db.Set<StandardDirectoryFile>()
-                    .Where(x => x.FolderCode == folder.FolderCode 
-                               && x.IsValid == false)
-                    .ToList();
-
-                foreach (var file in orphanFiles)
-                {
-                    if (!string.IsNullOrEmpty(file.StoragePath))
-                    {
-                        try
-                        {
-                            var storagePath = file.StoragePath.TrimStart('/');
-                            var rmArgs = new RemoveObjectArgs()
-                                .WithBucket(bucketName)
-                                .WithObject(storagePath);
-                            await _minioClient.RemoveObjectAsync(rmArgs).ConfigureAwait(false);
-                        }
-                        catch { /* 忽略MinIO删除失败 */ }
-                    }
-                    _db.Set<StandardDirectoryFile>().Remove(file);
-                }
-
-                // 如果文件夹为空，删除文件夹
-                var hasFiles = _db.Set<StandardDirectoryFile>()
-                    .Any(x => x.FolderCode == folder.FolderCode);
-                if (!hasFiles)
-                {
-                    _db.Set<StandardDirectoryFolder>().Remove(folder);
-                }
+                cmd.CommandText = "DELETE FROM cert_standard_directory_file WHERE DirectoryCode = @dc AND IsValid = 0";
+                var p = cmd.CreateParameter();
+                p.ParameterName = "@dc";
+                p.Value = directoryCode;
+                cmd.Parameters.Add(p);
+                await cmd.ExecuteNonQueryAsync();
             }
 
-            // 也清理目录根级别的 IsValid=0 文件
-            var rootOrphanFiles = _db.Set<StandardDirectoryFile>()
-                .Where(x => x.DirectoryCode == directoryCode 
-                           && x.IsValid == false)
-                .ToList();
-
-            foreach (var file in rootOrphanFiles)
+            // 删除 IsValid=0 的文件夹
+            using (var cmd = conn.CreateCommand())
             {
-                if (!string.IsNullOrEmpty(file.StoragePath))
-                {
-                    try
-                    {
-                        var storagePath = file.StoragePath.TrimStart('/');
-                        var rmArgs = new RemoveObjectArgs()
-                            .WithBucket(bucketName)
-                            .WithObject(storagePath);
-                        await _minioClient.RemoveObjectAsync(rmArgs).ConfigureAwait(false);
-                    }
-                    catch { /* 忽略MinIO删除失败 */ }
-                }
-                _db.Set<StandardDirectoryFile>().Remove(file);
+                cmd.CommandText = "DELETE FROM cert_standard_directory_folder WHERE DirectoryCode = @dc AND IsValid = 0";
+                var p = cmd.CreateParameter();
+                p.ParameterName = "@dc";
+                p.Value = directoryCode;
+                cmd.Parameters.Add(p);
+                await cmd.ExecuteNonQueryAsync();
             }
 
-            await _db.SaveChangesAsync();
+            // 删除 IsValid=0 的任务
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "DELETE FROM cert_upload_task WHERE DirectoryCode = @dc AND Status != 'completed'";
+                var p = cmd.CreateParameter();
+                p.ParameterName = "@dc";
+                p.Value = directoryCode;
+                cmd.Parameters.Add(p);
+                await cmd.ExecuteNonQueryAsync();
+            }
         }
 
         /// <summary>
