@@ -85,13 +85,18 @@ const getStatusTitle = (status) => {
 };
 
 const onNodeClick = (data, node) => {
+  console.log('[FileTree] onNodeClick:', { type: data.type, id: data.id, name: data.name, raw: data })
   if (data.type === 'file') {
+    console.log('[FileTree] ✅ emit select →', data.id, data.name)
     emit('select', data);
   } else if (data.type === 'stage') {
     // 点击阶段节点，触发加载文件
     emit('load-phase', data);
     // 展开节点
     node.expanded = !node.expanded;
+  } else {
+    console.log(`[FileTree] type=${data.type} 不触发 select/load-phase，仅展开`)
+    node.expanded = !node.expanded
   }
 };
 </script>

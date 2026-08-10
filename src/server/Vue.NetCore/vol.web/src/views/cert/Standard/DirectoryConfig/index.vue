@@ -1,5 +1,14 @@
 <template>
-  <div class="app-container">
+  <div
+    class="app-container"
+    style="
+      padding: 16px 24px;
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 100%;
+      background: #fff;
+    "
+  >
     <el-alert
       title="标准目录配置管理：为每个机构-标准-阶段组合定义文件目录结构"
       type="info"
@@ -68,9 +77,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import http from '@/api/http'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { onMounted, ref } from 'vue'
 
 const loading = ref(false)
 const tableData = ref([])
@@ -140,6 +149,13 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.app-container {
+  padding: 16px 24px;
+  box-sizing: border-box;
+  height: 100%;
+  width: 100%;
+  background: #fff;
+}
 .card-header {
   display: flex;
   justify-content: space-between;

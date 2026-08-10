@@ -541,18 +541,19 @@ defineExpose({
 
 <style lang="less" scoped>
 .yzh-tree-checkbox-table {
-  /* 绝对定位填满父容器（el-scrollbar__view），
-     解决 Vol 框架 el-scrollbar__view 无明确高度导致 height:100% 失效的问题 */
+  /* 与 YzhCrudTable 对齐：四周 16/24/16/24 padding；
+     border/圆角由外层定位容器的间距自然形成，避免与 padding 叠加后视觉溢出 */
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 16px;
+  left: 24px;
+  right: 24px;
+  bottom: 16px;
   display: flex;
   overflow: hidden;
   border: 1px solid #ebeef5;
   border-radius: 4px;
   background: #fff;
+  box-sizing: border-box;
 
   .left-tree {
     flex-shrink: 0;

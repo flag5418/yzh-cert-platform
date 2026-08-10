@@ -1507,15 +1507,16 @@ defineExpose(exposedApi)
 <style lang="less">
 /* 注意：不使用 scoped！因为 el-dialog 渲染在 body 层级，scoped 样式无法穿透 */
 
-/* ====== 主容器：带左右 padding ====== */
+/* ====== 主容器：四周 padding，对齐 Vol 标准页面（如 Sys_Menu） ====== */
 .yzh-crud-table {
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
   position: relative;
-  padding: 0 16px; /* 左右各 16px padding */
+  padding: 16px 24px 16px 24px; /* 上16 / 左右24 / 下16：与截图标准页面的「四周留白」完全一致 */
   box-sizing: border-box;
+  gap: 0;
 }
 
 /* 弹窗样式 —— el-dialog 挂载在 body 下，必须用全局选择器 */

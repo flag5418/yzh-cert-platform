@@ -6,13 +6,21 @@
         <span class="left-title">目录结构</span>
       </div>
       <div class="search-box">
-        <el-input v-model="searchText" placeholder="搜索..." size="small" clearable prefix-icon="Search" />
+        <el-input
+          v-model="searchText"
+          placeholder="搜索..."
+          size="small"
+          clearable
+          prefix-icon="Search"
+        />
       </div>
       <div class="tree-container">
         <div v-for="org in treeData" :key="org.id" class="tree-group">
           <!-- 机构 -->
           <div class="tree-node level-0" @click="toggleExpand(org)">
-            <el-icon class="tree-toggle" :class="{ expanded: org.expanded }"><ArrowRight /></el-icon>
+            <el-icon class="tree-toggle" :class="{ expanded: org.expanded }"
+              ><ArrowRight
+            /></el-icon>
             <el-icon class="tree-icon org"><OfficeBuilding /></el-icon>
             <span class="tree-label">{{ org.label }}</span>
             <el-badge :value="org.children ? org.children.length : 0" type="info" />
@@ -21,17 +29,22 @@
           <template v-if="org.expanded && org.children">
             <template v-for="std in org.children" :key="std.id">
               <div class="tree-node level-1" @click="toggleExpand(std)">
-                <el-icon class="tree-toggle" :class="{ expanded: std.expanded }"><ArrowRight /></el-icon>
+                <el-icon class="tree-toggle" :class="{ expanded: std.expanded }"
+                  ><ArrowRight
+                /></el-icon>
                 <el-icon class="tree-icon standard"><Document /></el-icon>
                 <span class="tree-label">{{ std.label }}</span>
                 <el-badge :value="std.children ? std.children.length : 0" type="info" />
               </div>
               <!-- 阶段 -->
-              <div v-for="phase in std.children" :key="phase.id"
+              <div
+                v-for="phase in std.children"
+                :key="phase.id"
                 class="tree-node level-2"
                 :class="{ active: currentPhase && currentPhase.id === phase.id }"
-                @click="selectPhase(phase)">
-                <el-icon class="tree-toggle" style="visibility: hidden;"><ArrowRight /></el-icon>
+                @click="selectPhase(phase)"
+              >
+                <el-icon class="tree-toggle" style="visibility: hidden"><ArrowRight /></el-icon>
                 <el-icon class="tree-icon phase"><Calendar /></el-icon>
                 <span class="tree-label">{{ phase.label }}</span>
               </div>
@@ -47,13 +60,21 @@
       <div class="breadcrumb" v-if="currentPhase">
         <el-breadcrumb separator="/">
           <el-breadcrumb-item>
-            <span class="clickable-breadcrumb" @click="navigateToRoot">{{ currentPhase.standardCode }}</span>
+            <span class="clickable-breadcrumb" @click="navigateToRoot">{{
+              currentPhase.standardCode
+            }}</span>
           </el-breadcrumb-item>
           <el-breadcrumb-item>
-            <span class="clickable-breadcrumb" @click="navigateToRoot">{{ currentPhase.phaseCode }}</span>
+            <span class="clickable-breadcrumb" @click="navigateToRoot">{{
+              currentPhase.phaseCode
+            }}</span>
           </el-breadcrumb-item>
           <el-breadcrumb-item v-for="(crumb, index) in breadcrumbPath" :key="index">
-            <span v-if="index < breadcrumbPath.length - 1" class="clickable-breadcrumb" @click="navigateToCrumb(index)">
+            <span
+              v-if="index < breadcrumbPath.length - 1"
+              class="clickable-breadcrumb"
+              @click="navigateToCrumb(index)"
+            >
               {{ crumb.name }}
             </span>
             <span v-else>{{ crumb.name }}</span>
@@ -78,7 +99,7 @@
         <el-button size="small" type="danger" plain @click="deleteSelected">
           <el-icon><Delete /></el-icon> 删除
         </el-button>
-        <div style="flex: 1;"></div>
+        <div style="flex: 1"></div>
         <el-button size="small" type="warning" plain @click="handleHelp">
           <el-icon><QuestionFilled /></el-icon> 使用帮助
         </el-button>
@@ -89,7 +110,9 @@
         <table class="file-table">
           <thead>
             <tr>
-              <th style="width:40px;"><el-checkbox v-model="allSelected" @change="toggleSelectAll" /></th>
+              <th style="width: 40px">
+                <el-checkbox v-model="allSelected" @change="toggleSelectAll" />
+              </th>
               <th>名称</th>
               <th>大小</th>
               <th>修改时间</th>
@@ -98,51 +121,82 @@
           </thead>
           <tbody>
             <!-- 文件夹 -->
-            <tr v-for="folder in currentFolders" :key="folder.FolderCode || folder.folderCode"
+            <tr
+              v-for="folder in currentFolders"
+              :key="folder.FolderCode || folder.folderCode"
               :class="{ selected: selectedItems.has(folder.FolderCode || folder.folderCode) }"
               @click="toggleSelect(folder)"
-              @dblclick="enterFolder(folder)">
+              @dblclick="enterFolder(folder)"
+            >
               <td>
-                <el-checkbox :model-value="selectedItems.has(folder.FolderCode || folder.folderCode)"
-                  @click.stop="toggleSelect(folder)" />
+                <el-checkbox
+                  :model-value="selectedItems.has(folder.FolderCode || folder.folderCode)"
+                  @click.stop="toggleSelect(folder)"
+                />
               </td>
               <td class="name-cell">
                 <el-icon class="folder-icon"><Folder /></el-icon>
-                <span class="name-text folder-name">{{ folder.FolderName || folder.folderName }}</span>
+                <span class="name-text folder-name">{{
+                  folder.FolderName || folder.folderName
+                }}</span>
               </td>
               <td class="size-cell">--</td>
               <td class="date-cell">{{ formatDate(folder.CreateDate || folder.createDate) }}</td>
               <td class="action-cell">
-                <el-button link type="primary" size="small" @click.stop="showRenameDialog(folder)">重命名</el-button>
-                <el-button link type="danger" size="small" @click.stop="deleteItem(folder)">删除</el-button>
+                <el-button link type="primary" size="small" @click.stop="showRenameDialog(folder)"
+                  >重命名</el-button
+                >
+                <el-button link type="danger" size="small" @click.stop="deleteItem(folder)"
+                  >删除</el-button
+                >
               </td>
             </tr>
             <!-- 文件 -->
-            <tr v-for="file in currentFiles" :key="file.FileCode || file.fileCode"
+            <tr
+              v-for="file in currentFiles"
+              :key="file.FileCode || file.fileCode"
               :class="{ selected: selectedItems.has(file.FileCode || file.fileCode) }"
-              @click="toggleSelect(file)">
+              @click="toggleSelect(file)"
+            >
               <td>
-                <el-checkbox :model-value="selectedItems.has(file.FileCode || file.fileCode)"
-                  @click.stop="toggleSelect(file)" />
+                <el-checkbox
+                  :model-value="selectedItems.has(file.FileCode || file.fileCode)"
+                  @click.stop="toggleSelect(file)"
+                />
               </td>
               <td class="name-cell">
-                <el-icon class="file-type-icon" :class="getFileIconClass(file.FileName || file.fileName)"><Document /></el-icon>
+                <el-icon
+                  class="file-type-icon"
+                  :class="getFileIconClass(file.FileName || file.fileName)"
+                  ><Document
+                /></el-icon>
                 <span class="name-text">{{ file.FileName || file.fileName }}</span>
               </td>
               <td class="size-cell">{{ formatFileSize(file.FileSize || file.fileSize) }}</td>
               <td class="date-cell">{{ formatDate(file.CreateDate || file.createDate) }}</td>
               <td class="action-cell">
-                <el-button link type="primary" size="small" @click.stop="showRenameDialog(file)">重命名</el-button>
-                <el-button link type="primary" size="small" @click.stop="replaceFile(file)">替换</el-button>
-                <el-button link type="primary" size="small" @click.stop="downloadFile(file)">下载</el-button>
-                <el-button link type="danger" size="small" @click.stop="deleteItem(file)">删除</el-button>
+                <el-button link type="primary" size="small" @click.stop="showRenameDialog(file)"
+                  >重命名</el-button
+                >
+                <el-button link type="primary" size="small" @click.stop="replaceFile(file)"
+                  >替换</el-button
+                >
+                <el-button link type="primary" size="small" @click.stop="downloadFile(file)"
+                  >下载</el-button
+                >
+                <el-button link type="danger" size="small" @click.stop="deleteItem(file)"
+                  >删除</el-button
+                >
               </td>
             </tr>
           </tbody>
         </table>
 
         <!-- 空状态 -->
-        <el-empty v-if="currentFolders.length === 0 && currentFiles.length === 0" description="暂无内容" />
+        <el-empty
+          v-if="currentFolders.length === 0 && currentFiles.length === 0"
+          description="暂无内容"
+        />
       </div>
 
       <!-- 未选中阶段提示 -->
@@ -156,7 +210,10 @@
 
       <!-- 状态栏 -->
       <div class="status-bar" v-if="currentPhase">
-        <span>共 {{ currentFolders.length + currentFiles.length }} 项 | 文件夹 {{ currentFolders.length }} 个，文件 {{ currentFiles.length }} 个</span>
+        <span
+          >共 {{ currentFolders.length + currentFiles.length }} 项 | 文件夹
+          {{ currentFolders.length }} 个，文件 {{ currentFiles.length }} 个</span
+        >
         <span>总大小 {{ totalSizeFormatted }}</span>
       </div>
     </div>
@@ -205,8 +262,13 @@
         <h4>编码规则</h4>
         <div class="code-example">
           <div>目录编码: SDC-{标准}|{阶段} → SDC-ISO134852016|STAGE01</div>
-          <div>文件夹编码: FD-{目录编码}|L{层级}|S{序号} → FD-SDC-ISO134852016|STAGE01|L02|S001</div>
-          <div>文件编码: FL-{文件夹编码}|{文件名} → FL-FD-SDC-ISO134852016|STAGE01|L02|S001|营业执照.pdf</div>
+          <div>
+            文件夹编码: FD-{目录编码}|L{层级}|S{序号} → FD-SDC-ISO134852016|STAGE01|L02|S001
+          </div>
+          <div>
+            文件编码: FL-{文件夹编码}|{文件名} →
+            FL-FD-SDC-ISO134852016|STAGE01|L02|S001|营业执照.pdf
+          </div>
         </div>
       </div>
       <template #footer>
@@ -215,7 +277,12 @@
     </el-dialog>
 
     <!-- 上传对话框 -->
-    <el-dialog v-model="showUploadDialogFlag" title="上传文件" width="560px" :close-on-click-modal="false">
+    <el-dialog
+      v-model="showUploadDialogFlag"
+      title="上传文件"
+      width="560px"
+      :close-on-click-modal="false"
+    >
       <div class="upload-dialog-body">
         <div class="upload-tabs">
           <el-radio-group v-model="uploadMode" size="small">
@@ -224,20 +291,42 @@
           </el-radio-group>
         </div>
         <div class="upload-area">
-          <input v-if="uploadMode === 'file'" ref="fileInputRef" type="file" multiple
-            style="display: none" @change="handleFileSelect" />
-          <input v-else ref="folderInputRef" type="file" webkitdirectory multiple
-            style="display: none" @change="handleFolderSelect" />
+          <input
+            v-if="uploadMode === 'file'"
+            ref="fileInputRef"
+            type="file"
+            multiple
+            style="display: none"
+            @change="handleFileSelect"
+          />
+          <input
+            v-else
+            ref="folderInputRef"
+            type="file"
+            webkitdirectory
+            multiple
+            style="display: none"
+            @change="handleFolderSelect"
+          />
           <div class="upload-trigger" @click="triggerUpload">
             <el-icon class="upload-icon"><Upload /></el-icon>
-            <div class="upload-text">{{ uploadMode === 'file' ? '点击选择文件或拖拽到此处' : '点击选择文件夹' }}</div>
+            <div class="upload-text">
+              {{ uploadMode === 'file' ? '点击选择文件或拖拽到此处' : '点击选择文件夹' }}
+            </div>
             <div class="upload-hint">支持多个文件同时上传</div>
           </div>
         </div>
         <div v-if="uploadFileList.length > 0" class="upload-file-list">
           <div class="file-list-header-sm">
             <span>待上传文件 ({{ uploadFileList.length }}个)</span>
-            <el-button type="danger" link size="small" @click="clearUploadList" :disabled="uploading">清空</el-button>
+            <el-button
+              type="danger"
+              link
+              size="small"
+              @click="clearUploadList"
+              :disabled="uploading"
+              >清空</el-button
+            >
           </div>
           <div v-for="(file, index) in uploadFileList" :key="index" class="file-list-item-sm">
             <span class="file-item-name">{{ file.webkitRelativePath || file.name }}</span>
@@ -251,7 +340,9 @@
         <div v-if="uploading || uploadProgress.status === 'done'" class="upload-progress-area">
           <div class="progress-info">
             <span v-if="uploadProgress.status === 'uploading'">
-              正在上传: {{ uploadProgress.currentFile }} ({{ uploadProgress.completed }}/{{ uploadProgress.total }})
+              正在上传: {{ uploadProgress.currentFile }} ({{ uploadProgress.completed }}/{{
+                uploadProgress.total
+              }})
             </span>
             <span v-else-if="uploadProgress.failed > 0" class="text-danger">
               上传完成，{{ uploadProgress.failed }} 个文件失败
@@ -261,13 +352,28 @@
             </span>
           </div>
           <el-progress
-            :percentage="uploadProgress.total > 0 ? Math.round((uploadProgress.completed / uploadProgress.total) * 100) : 0"
-            :status="uploadProgress.failed > 0 ? 'exception' : (uploadProgress.status === 'done' && uploadProgress.failed === 0 ? 'success' : '')" />
+            :percentage="
+              uploadProgress.total > 0
+                ? Math.round((uploadProgress.completed / uploadProgress.total) * 100)
+                : 0
+            "
+            :status="
+              uploadProgress.failed > 0
+                ? 'exception'
+                : uploadProgress.status === 'done' && uploadProgress.failed === 0
+                  ? 'success'
+                  : ''
+            "
+          />
         </div>
       </div>
       <template #footer>
         <el-button @click="cancelUpload">取消</el-button>
-        <el-button type="primary" :disabled="uploadFileList.length === 0 || uploading" @click="submitUpload">
+        <el-button
+          type="primary"
+          :disabled="uploadFileList.length === 0 || uploading"
+          @click="submitUpload"
+        >
           {{ uploading ? '上传中...' : '开始上传' }}
         </el-button>
       </template>
@@ -276,13 +382,21 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  OfficeBuilding, Document, Folder, Calendar, ArrowRight,
-  FolderAdd, Upload, Download, Delete, QuestionFilled, Search
-} from '@element-plus/icons-vue'
 import http from '@/api/http'
+import {
+  ArrowRight,
+  Calendar,
+  Delete,
+  Document,
+  Download,
+  Folder,
+  FolderAdd,
+  OfficeBuilding,
+  QuestionFilled,
+  Upload
+} from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { computed, onMounted, reactive, ref } from 'vue'
 
 const searchText = ref('')
 const treeData = ref([])
@@ -309,12 +423,19 @@ const uploadFileList = ref([])
 const uploading = ref(false)
 
 const uploadProgress = reactive({
-  total: 0, completed: 0, failed: 0, currentFile: '', status: 'idle'
+  total: 0,
+  completed: 0,
+  failed: 0,
+  currentFile: '',
+  status: 'idle'
 })
 
 // 计算属性
 const totalSizeFormatted = computed(() => {
-  const total = currentFiles.value.reduce((sum, f) => sum + parseInt(f.FileSize || f.fileSize || 0), 0)
+  const total = currentFiles.value.reduce(
+    (sum, f) => sum + parseInt(f.FileSize || f.fileSize || 0),
+    0
+  )
   return formatFileSize(total)
 })
 
@@ -323,10 +444,10 @@ const loadTree = async () => {
   try {
     const res = await http.get('/api/standard-directory/organization-tree')
     if (res.Status === true || res.status === 0) {
-      treeData.value = (res.Data || res.data || []).map(org => ({
+      treeData.value = (res.Data || res.data || []).map((org) => ({
         ...org,
         expanded: true,
-        children: (org.children || []).map(std => ({
+        children: (org.children || []).map((std) => ({
           ...std,
           expanded: false,
           children: std.children || []
@@ -374,7 +495,9 @@ const loadCurrentContent = async () => {
       }
       if (filesRes.Status === true || filesRes.status === 0) {
         const allFiles = filesRes.Data || filesRes.data || []
-        currentFiles.value = Array.isArray(allFiles) ? allFiles.filter(f => f.IsValid !== false) : []
+        currentFiles.value = Array.isArray(allFiles)
+          ? allFiles.filter((f) => f.IsValid !== false)
+          : []
       }
     }
     allSelected.value = false
@@ -392,7 +515,7 @@ const buildDirectoryCode = () => {
 const extractFoldersAtLevel = (tree, targetDepth) => {
   const result = []
   const traverse = (nodes) => {
-    for (const node of (nodes || [])) {
+    for (const node of nodes || []) {
       if (node.Depth === targetDepth || node.depth === targetDepth) {
         result.push(node)
       }
@@ -414,7 +537,7 @@ const extractFoldersAtLevel = (tree, targetDepth) => {
 const extractChildFolders = (tree, parentCode) => {
   const result = []
   const findAndExtract = (nodes) => {
-    for (const node of (nodes || [])) {
+    for (const node of nodes || []) {
       const code = node.FolderCode || node.folderCode
       if (code === parentCode) {
         if (node.Children) result.push(...node.Children)
@@ -462,20 +585,20 @@ const toggleSelect = (item) => {
   const code = item.FolderCode || item.fileCode || item.FileCode
   if (selectedItems.has(code)) selectedItems.delete(code)
   else selectedItems.add(code)
-  allSelected.value = selectedItems.size === (currentFolders.value.length + currentFiles.value.length)
+  allSelected.value = selectedItems.size === currentFolders.value.length + currentFiles.value.length
 }
 
 const toggleSelectAll = (val) => {
   selectedItems.clear()
   if (val) {
-    currentFolders.value.forEach(f => selectedItems.add(f.FolderCode || f.folderCode))
-    currentFiles.value.forEach(f => selectedItems.add(f.FileCode || f.fileCode))
+    currentFolders.value.forEach((f) => selectedItems.add(f.FolderCode || f.folderCode))
+    currentFiles.value.forEach((f) => selectedItems.add(f.FileCode || f.fileCode))
   }
 }
 
 const selectAll = () => {
-  currentFolders.value.forEach(f => selectedItems.add(f.FolderCode || f.folderCode))
-  currentFiles.value.forEach(f => selectedItems.add(f.FileCode || f.fileCode))
+  currentFolders.value.forEach((f) => selectedItems.add(f.FolderCode || f.folderCode))
+  currentFiles.value.forEach((f) => selectedItems.add(f.FileCode || f.fileCode))
   allSelected.value = true
 }
 
@@ -492,12 +615,15 @@ const submitFolder = async () => {
     return
   }
   try {
-    const res = await http.post(`/api/standard-directory/configs/${buildDirectoryCode()}/folders/create`, {
-      folderName: folderForm.folderName,
-      remark: folderForm.remark,
-      depth: 1,
-      parentCode: currentFolderCode.value || ''
-    })
+    const res = await http.post(
+      `/api/standard-directory/configs/${buildDirectoryCode()}/folders/create`,
+      {
+        folderName: folderForm.folderName,
+        remark: folderForm.remark,
+        depth: 1,
+        parentCode: currentFolderCode.value || ''
+      }
+    )
     if (res.Status === true || res.status === 0) {
       ElMessage.success('创建成功')
       showFolderDialog.value = false
@@ -528,9 +654,15 @@ const confirmRename = async () => {
   try {
     let res
     if (isFolder) {
-      res = await http.put(`/api/standard-directory/folders/${code}`, { ...item, FolderName: renameForm.newName })
+      res = await http.put(`/api/standard-directory/folders/${code}`, {
+        ...item,
+        FolderName: renameForm.newName
+      })
     } else {
-      res = await http.put(`/api/standard-directory/files/${code}`, { ...item, FileName: renameForm.newName })
+      res = await http.put(`/api/standard-directory/files/${code}`, {
+        ...item,
+        FileName: renameForm.newName
+      })
     }
     if (res.Status === true || res.status === 0) {
       ElMessage.success('重命名成功')
@@ -549,7 +681,9 @@ const deleteItem = async (item) => {
   const name = item.FolderName || item.folderName || item.FileName || item.fileName
   try {
     await ElMessageBox.confirm(`确定要删除 "${name}" 吗？`, '确认删除', { type: 'warning' })
-  } catch { return }
+  } catch {
+    return
+  }
 
   const isFolder = !!(item.FolderCode || item.folderCode)
   const code = item.FolderCode || item.folderCode || item.FileCode || item.fileCode
@@ -574,12 +708,16 @@ const deleteSelected = async () => {
     return
   }
   try {
-    await ElMessageBox.confirm(`确定要删除选中的 ${selectedItems.size} 个项目吗？`, '确认删除', { type: 'warning' })
-  } catch { return }
+    await ElMessageBox.confirm(`确定要删除选中的 ${selectedItems.size} 个项目吗？`, '确认删除', {
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
 
   for (const code of [...selectedItems]) {
-    const folder = currentFolders.value.find(f => (f.FolderCode || f.folderCode) === code)
-    const file = currentFiles.value.find(f => (f.FileCode || f.fileCode) === code)
+    const folder = currentFolders.value.find((f) => (f.FolderCode || f.folderCode) === code)
+    const file = currentFiles.value.find((f) => (f.FileCode || f.fileCode) === code)
     if (folder) await deleteItem(folder)
     else if (file) await deleteItem(file)
   }
@@ -613,7 +751,9 @@ const handleFolderSelect = (event) => {
 }
 
 const removeFile = (index) => uploadFileList.value.splice(index, 1)
-const clearUploadList = () => { uploadFileList.value = [] }
+const clearUploadList = () => {
+  uploadFileList.value = []
+}
 const cancelUpload = () => {
   showUploadDialogFlag.value = false
   uploadFileList.value = []
@@ -650,12 +790,18 @@ const submitUpload = async () => {
         }
       }
       files.push({
-        relativePath, fileName: file.name, fileSize: file.size,
+        relativePath,
+        fileName: file.name,
+        fileSize: file.size,
         mimeType: file.type || 'application/octet-stream'
       })
     }
 
-    const initRes = await http.post('/api/standard-directory/upload-init', { directoryCode, folders, files })
+    const initRes = await http.post('/api/standard-directory/upload-init', {
+      directoryCode,
+      folders,
+      files
+    })
     if (!initRes.Status && initRes.status !== 0) {
       throw new Error(initRes.Message || initRes.message || '预处理失败')
     }
@@ -684,9 +830,13 @@ const submitUpload = async () => {
           headers: { 'Content-Type': undefined }
         })
         if (res.Status === true || res.status === 0) uploadProgress.completed = i + 1
-        else { failed = true; uploadProgress.failed++ }
+        else {
+          failed = true
+          uploadProgress.failed++
+        }
       } catch {
-        failed = true; uploadProgress.failed++
+        failed = true
+        uploadProgress.failed++
       }
     }
 
@@ -707,7 +857,9 @@ const submitUpload = async () => {
     console.error('上传流程异常:', error)
     uploadProgress.status = 'done'
     if (taskId) {
-      try { await http.post(`/api/standard-directory/upload-cancel?taskId=${taskId}`) } catch {}
+      try {
+        await http.post(`/api/standard-directory/upload-cancel?taskId=${taskId}`)
+      } catch {}
     }
     ElMessage.error(error.message || '上传流程异常')
   } finally {
@@ -726,9 +878,9 @@ const handleExport = async () => {
   const folderCodes = []
   const fileCodes = []
   for (const code of selectedItems) {
-    if (currentFolders.value.some(f => (f.FolderCode || f.folderCode) === code)) {
+    if (currentFolders.value.some((f) => (f.FolderCode || f.folderCode) === code)) {
       folderCodes.push(code)
-    } else if (currentFiles.value.some(f => (f.FileCode || f.fileCode) === code)) {
+    } else if (currentFiles.value.some((f) => (f.FileCode || f.fileCode) === code)) {
       fileCodes.push(code)
     }
   }
@@ -744,7 +896,7 @@ const handleExport = async () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': token } : {})
+        ...(token ? { Authorization: token } : {})
       },
       body: JSON.stringify({ folderCodes, fileCodes })
     })
@@ -768,7 +920,9 @@ const handleExport = async () => {
   }
 }
 
-const handleHelp = () => { showHelpDialog.value = true }
+const handleHelp = () => {
+  showHelpDialog.value = true
+}
 
 const replaceFile = (file) => {
   ElMessage.info('替换文件功能开发中')
@@ -789,7 +943,7 @@ const downloadFile = async (file) => {
     const baseUrl = window.ipAddress || 'http://localhost:9991/'
     const url = `${baseUrl}api/standard-directory/download?path=${encodeURIComponent(storagePath)}`
     const resp = await fetch(url, {
-      headers: token ? { 'Authorization': token } : {}
+      headers: token ? { Authorization: token } : {}
     })
     if (!resp.ok) {
       const text = await resp.text()
@@ -799,7 +953,9 @@ const downloadFile = async (file) => {
     const blob = await resp.blob()
     const disposition = resp.headers.get('Content-Disposition')
     const match = disposition && disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
-    const fileName = match ? match[1].replace(/['"]/g, '') : file.FileName || file.fileName || 'download'
+    const fileName = match
+      ? match[1].replace(/['"]/g, '')
+      : file.FileName || file.fileName || 'download'
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = fileName
@@ -834,32 +990,37 @@ const getFileIconClass = (fileName) => {
   return 'file-default'
 }
 
-onMounted(() => { loadTree() })
+onMounted(() => {
+  loadTree()
+})
 </script>
 
 <style scoped>
 .directory-manager {
-  /* absolute 定位填满 Vol 框架 el-scrollbar__view 容器，
-     解决 height:100% 在父链无明确高度时失效的问题 */
+  /* 与标准页面对齐：四周留白 + 浅灰背景，让 padding 一眼能看出来（纯白背景会视觉上吃掉 padding） */
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 16px;
+  left: 24px;
+  right: 24px;
+  bottom: 16px;
   display: flex;
   overflow: hidden;
-  background: #fff;
+  background: #f5f7fa;
+  gap: 16px;
+  border-radius: 4px;
 }
 
-/* 左侧面板 */
+/* 左侧面板：包一层白色卡片 + 圆角，与浅灰背景形成对比 */
 .left-panel {
   width: 280px;
   height: 100%;
   overflow: hidden;
   background: #fff;
-  border-right: 1px solid #e4e7ed;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 
 .left-header {
@@ -898,26 +1059,53 @@ onMounted(() => { loadTree() })
   font-size: 13px;
 }
 
-.tree-node:hover { background: #f5f7fa; }
-.tree-node.active { background: #ecf5ff; color: #409eff; }
-.tree-node.level-0 { padding-left: 16px; font-weight: 500; }
-.tree-node.level-1 { padding-left: 36px; }
-.tree-node.level-2 { padding-left: 56px; }
+.tree-node:hover {
+  background: #f5f7fa;
+}
+.tree-node.active {
+  background: #ecf5ff;
+  color: #409eff;
+}
+.tree-node.level-0 {
+  padding-left: 16px;
+  font-weight: 500;
+}
+.tree-node.level-1 {
+  padding-left: 36px;
+}
+.tree-node.level-2 {
+  padding-left: 56px;
+}
 
 .tree-toggle {
   transition: transform 0.2s;
   color: #c0c4cc;
 }
-.tree-toggle.expanded { transform: rotate(90deg); }
+.tree-toggle.expanded {
+  transform: rotate(90deg);
+}
 
-.tree-icon { color: #909399; }
-.tree-icon.org { color: #e6a23c; }
-.tree-icon.standard { color: #409eff; }
-.tree-icon.phase { color: #67c23a; }
+.tree-icon {
+  color: #909399;
+}
+.tree-icon.org {
+  color: #e6a23c;
+}
+.tree-icon.standard {
+  color: #409eff;
+}
+.tree-icon.phase {
+  color: #67c23a;
+}
 
-.tree-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-/* 右侧面板 */
+/* 右侧面板：同样包一层白色卡片 + 圆角 + 边框，与左卡片一致 */
 .right-panel {
   flex: 1;
   height: 100%;
@@ -926,6 +1114,8 @@ onMounted(() => { loadTree() })
   flex-direction: column;
   background: #fff;
   min-width: 0;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
 }
 
 /* 面包屑 */
@@ -935,8 +1125,13 @@ onMounted(() => { loadTree() })
   flex-shrink: 0;
 }
 
-.clickable-breadcrumb { cursor: pointer; color: #409eff; }
-.clickable-breadcrumb:hover { text-decoration: underline; }
+.clickable-breadcrumb {
+  cursor: pointer;
+  color: #409eff;
+}
+.clickable-breadcrumb:hover {
+  text-decoration: underline;
+}
 
 /* 工具栏 */
 .toolbar {
@@ -964,16 +1159,26 @@ onMounted(() => { loadTree() })
 
 /* 固定宽度列 */
 .file-table th:nth-child(1),
-.file-table td:nth-child(1) { width: 44px; }
+.file-table td:nth-child(1) {
+  width: 44px;
+}
 .file-table th:nth-child(3),
-.file-table td:nth-child(3) { width: 80px; }
+.file-table td:nth-child(3) {
+  width: 80px;
+}
 .file-table th:nth-child(4),
-.file-table td:nth-child(4) { width: 140px; }
+.file-table td:nth-child(4) {
+  width: 140px;
+}
 .file-table th:nth-child(5),
-.file-table td:nth-child(5) { width: 160px; }
+.file-table td:nth-child(5) {
+  width: 160px;
+}
 /* 名称列自动填充剩余空间 */
 .file-table th:nth-child(2),
-.file-table td:nth-child(2) { min-width: 0; }
+.file-table td:nth-child(2) {
+  min-width: 0;
+}
 
 .file-table th {
   padding: 10px 16px;
@@ -997,8 +1202,12 @@ onMounted(() => { loadTree() })
   height: 48px;
 }
 
-.file-table tr:hover { background: #f5f7fa; }
-.file-table tr.selected { background: #ecf5ff; }
+.file-table tr:hover {
+  background: #f5f7fa;
+}
+.file-table tr.selected {
+  background: #ecf5ff;
+}
 
 .name-cell {
   display: flex;
@@ -1014,17 +1223,39 @@ onMounted(() => { loadTree() })
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.folder-name { color: #303133; font-weight: 500; }
+.folder-name {
+  color: #303133;
+  font-weight: 500;
+}
 
-.folder-icon { color: #e6a23c; font-size: 18px; flex-shrink: 0; }
+.folder-icon {
+  color: #e6a23c;
+  font-size: 18px;
+  flex-shrink: 0;
+}
 
-.file-type-icon { color: #909399; font-size: 18px; flex-shrink: 0; }
-.file-type-icon.file-pdf { color: #f56c6c; }
-.file-type-icon.file-doc { color: #409eff; }
-.file-type-icon.file-xls { color: #67c23a; }
-.file-type-icon.file-image { color: #909399; }
+.file-type-icon {
+  color: #909399;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.file-type-icon.file-pdf {
+  color: #f56c6c;
+}
+.file-type-icon.file-doc {
+  color: #409eff;
+}
+.file-type-icon.file-xls {
+  color: #67c23a;
+}
+.file-type-icon.file-image {
+  color: #909399;
+}
 
-.size-cell, .date-cell { color: #909399; }
+.size-cell,
+.date-cell {
+  color: #909399;
+}
 
 .action-cell {
   white-space: nowrap;
@@ -1043,10 +1274,19 @@ onMounted(() => { loadTree() })
 }
 
 /* 空状态 */
-.empty-state { flex: 1; display: flex; align-items: center; justify-content: center; }
+.empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
 /* 上传区域 */
-.upload-tabs { display: flex; justify-content: center; margin-bottom: 20px; }
+.upload-tabs {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
 
 .upload-area {
   border: 2px dashed #dcdfe6;
@@ -1056,46 +1296,126 @@ onMounted(() => { loadTree() })
   cursor: pointer;
   margin-bottom: 16px;
 }
-.upload-area:hover { border-color: #409eff; background: #ecf5ff; }
+.upload-area:hover {
+  border-color: #409eff;
+  background: #ecf5ff;
+}
 
-.upload-trigger { display: flex; flex-direction: column; align-items: center; }
-.upload-icon { font-size: 48px; color: #909399; margin-bottom: 12px; }
-.upload-text { font-size: 14px; color: #303133; margin-bottom: 8px; }
-.upload-hint { font-size: 12px; color: #c0c4cc; }
+.upload-trigger {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.upload-icon {
+  font-size: 48px;
+  color: #909399;
+  margin-bottom: 12px;
+}
+.upload-text {
+  font-size: 14px;
+  color: #303133;
+  margin-bottom: 8px;
+}
+.upload-hint {
+  font-size: 12px;
+  color: #c0c4cc;
+}
 
-.upload-file-list { border: 1px solid #ebeef5; border-radius: 4px; max-height: 200px; overflow-y: auto; }
+.upload-file-list {
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
 
 .file-list-header-sm {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 10px 12px; background: #fafafa; border-bottom: 1px solid #ebeef5;
-  font-size: 13px; color: #606266;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #fafafa;
+  border-bottom: 1px solid #ebeef5;
+  font-size: 13px;
+  color: #606266;
 }
 
 .file-list-item-sm {
-  display: flex; align-items: center; padding: 8px 12px;
-  border-bottom: 1px solid #f0f0f0; font-size: 13px;
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 13px;
 }
 
-.file-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-item-size { color: #909399; margin: 0 12px; font-size: 12px; }
+.file-item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-item-size {
+  color: #909399;
+  margin: 0 12px;
+  font-size: 12px;
+}
 
-.upload-progress-area { margin-top: 16px; padding: 12px; background: #fafafa; border-radius: 4px; }
-.progress-info { margin-bottom: 8px; font-size: 13px; color: #606266; }
-.text-success { color: #67c23a; }
-.text-danger { color: #f56c6c; }
+.upload-progress-area {
+  margin-top: 16px;
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 4px;
+}
+.progress-info {
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #606266;
+}
+.text-success {
+  color: #67c23a;
+}
+.text-danger {
+  color: #f56c6c;
+}
 
 /* 帮助内容 */
-.help-content h4 { color: #303133; font-size: 14px; margin: 16px 0 8px 0; padding-bottom: 6px; border-bottom: 1px solid #ebeef5; }
-.help-content h4:first-child { margin-top: 0; }
-.help-content p { color: #606266; line-height: 1.6; margin-bottom: 8px; }
-.help-content ul { color: #606266; line-height: 1.8; padding-left: 20px; margin-bottom: 8px; }
-.help-content li { margin-bottom: 4px; }
-.help-content strong { color: #303133; }
+.help-content h4 {
+  color: #303133;
+  font-size: 14px;
+  margin: 16px 0 8px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #ebeef5;
+}
+.help-content h4:first-child {
+  margin-top: 0;
+}
+.help-content p {
+  color: #606266;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+.help-content ul {
+  color: #606266;
+  line-height: 1.8;
+  padding-left: 20px;
+  margin-bottom: 8px;
+}
+.help-content li {
+  margin-bottom: 4px;
+}
+.help-content strong {
+  color: #303133;
+}
 
 .code-example {
-  background: #f5f7fa; border: 1px solid #ebeef5; border-radius: 4px;
-  padding: 12px; font-family: monospace; font-size: 13px; color: #606266;
-  line-height: 1.8; margin-bottom: 12px;
+  background: #f5f7fa;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  padding: 12px;
+  font-family: monospace;
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.8;
+  margin-bottom: 12px;
 }
 
 /* 弹窗 — 不用 scoped，因为 el-dialog teleport 到 body */

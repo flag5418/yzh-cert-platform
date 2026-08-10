@@ -30,6 +30,7 @@ AIGC:
 | cert_phase2_implementation_summary.md | Phase 2 实施总结 | 成熟态 |
 | 工作流引擎选型与技术研究-V1.md | 自定义工作流（提取/校验/报告）技术研究：Vol 审批流盘点、前端设计器选型（LogicFlow）、双态 JSON、DAG 解释器设计、四阶段路线 | 研究中/草案 |
 | 文件数据提取能力落地-V1.md | 提取引擎基础能力落地：YZH.Core/Extractor 模块（NPOI+PdfPig）、统一结果模型、接口清单、使用示例、第三方 OCR 扩展点、真实样例验证记录、完善建议 | 已实现（基础）/ 研究中（OCR） |
+| 旧版 Office 文档后端自动转换方案评估-V1（doc→docx xls→xlsx）.md | **旧版 Office 文档统一治理方案**：NPOI xls→xlsx（IWorkbook 逐格迁移）vs LibreOffice CLI soffice doc→docx（业界标准 95% 保真）对比；DB 4 字段设计（ConvertedStoragePath/ConvertStatus/ConvertMessage/ConvertDate）；MinIO 双存路径约定（.converted/ 隐藏目录）；BackgroundService Channel 异步队列（SemaphoreSlim=2 并发 + 120s 超时）；DownloadFile fallback 前端零改造；统一提取规则收益（4 套砍到 2 套 + LLM Prompt token 降 20% + 准确率升 15%）；风险规避清单 + 5 Phase 工时评估（最短 1.5 天只做 xls，全量 2.5 天） | 草案/待开发排期 |
 
 ---
 

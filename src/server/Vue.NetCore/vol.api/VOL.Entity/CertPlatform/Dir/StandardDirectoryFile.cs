@@ -193,6 +193,37 @@ namespace VOL.Entity.CertPlatform.Dir
 
         #endregion
 
+        #region 文件转换（旧版 Office → OOXML）
+
+        /// <summary>
+        /// 转换后文件在 MinIO 的存储路径（.docx/.xlsx）
+        /// </summary>
+        [MaxLength(512)]
+        [Column("converted_storage_path")]
+        public string ConvertedStoragePath { get; set; }
+
+        /// <summary>
+        /// 转换状态：null/pending/converting/converted/failed
+        /// </summary>
+        [MaxLength(20)]
+        [Column("convert_status")]
+        public string ConvertStatus { get; set; }
+
+        /// <summary>
+        /// 转换失败原因或丢失的样式信息
+        /// </summary>
+        [MaxLength(1024)]
+        [Column("convert_message")]
+        public string ConvertMessage { get; set; }
+
+        /// <summary>
+        /// 转换完成时间
+        /// </summary>
+        [Column("convert_date")]
+        public DateTime? ConvertDate { get; set; }
+
+        #endregion
+
         #region 审计字段
 
         /// <summary>

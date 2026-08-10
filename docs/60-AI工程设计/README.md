@@ -27,6 +27,7 @@ AIGC:
 | [YZH-知识库/01-Vol能力清单.md](<./YZH-知识库/01-Vol能力清单.md>) | Vol 框架能力结构化索引（2026-07-31） | 正式发布 |
 | [YZH-知识库/02-YZH增量清单.md](<./YZH-知识库/02-YZH增量清单.md>) | YZH 增量能力清单 | 正式发布 |
 | [YZH-知识库/03-边界与约束.md](<./YZH-知识库/03-边界与约束.md>) | 不可修改的边界与已废弃方案 | 正式发布 |
+| **[当前项目规则整理 + 下次开发 TODO 清单-V1.md](<./当前项目规则整理 + 下次开发 TODO 清单-V1.md>)** | **AI 行为宪法速查 + V13 DocExtractionRule 预览链已完成全景 + 下次开发 Phase1~5 任务分解（DB 4 字段 / NPOI xls→xlsx / LibreOffice doc→docx / ConvertStatus 徽标 / 历史补跑） + 推荐执行顺序（总工时 ~3 天）** | 成熟态 V1.0 |
 
 ---
 
