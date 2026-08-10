@@ -17,6 +17,9 @@
   },
   "dependencies": {
     "@microsoft/signalr": "^8.0.7",
+    "@vue-office/docx": "^1.6.3",
+    "@vue-office/excel": "^1.7.14",
+    "@vue-office/pdf": "^2.0.10",
     "ali-oss": "^6.23.0",
     "axios": "^1.15.0",
     "echarts": "^5.6.0",

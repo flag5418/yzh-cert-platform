@@ -70,7 +70,7 @@
           <el-icon><Upload /></el-icon> 上传文件
         </el-button>
         <el-divider direction="vertical" />
-        <el-button size="small" @click="handleExport">
+        <el-button size="small" @click="handleExport" :disabled="selectedItems.size === 0">
           <el-icon><Download /></el-icon> 导出打包
         </el-button>
         <el-divider direction="vertical" />
@@ -89,11 +89,11 @@
         <table class="file-table">
           <thead>
             <tr>
-              <th width="40"><el-checkbox v-model="allSelected" @change="toggleSelectAll" /></th>
+              <th style="width:40px;"><el-checkbox v-model="allSelected" @change="toggleSelectAll" /></th>
               <th>名称</th>
-              <th width="100">大小</th>
-              <th width="140">修改时间</th>
-              <th width="120">操作</th>
+              <th>大小</th>
+              <th>修改时间</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -132,6 +132,7 @@
               <td class="size-cell">{{ formatFileSize(file.FileSize || file.fileSize) }}</td>
               <td class="date-cell">{{ formatDate(file.CreateDate || file.createDate) }}</td>
               <td class="action-cell">
+                <el-button link type="primary" size="small" @click.stop="showRenameDialog(file)">重命名</el-button>
                 <el-button link type="primary" size="small" @click.stop="replaceFile(file)">替换</el-button>
                 <el-button link type="primary" size="small" @click.stop="downloadFile(file)">下载</el-button>
                 <el-button link type="danger" size="small" @click.stop="deleteItem(file)">删除</el-button>
@@ -715,9 +716,56 @@ const submitUpload = async () => {
 }
 
 // ========== 其他操作 ==========
-const handleExport = () => {
+const handleExport = async () => {
   if (!currentPhase.value) return
-  window.open(`/api/standard-directory/configs/${buildDirectoryCode()}/export`, '_blank')
+  if (selectedItems.size === 0) {
+    ElMessage.warning('请先勾选需要导出的文件夹或文件')
+    return
+  }
+  // 收集选中的文件夹编码和文件编码
+  const folderCodes = []
+  const fileCodes = []
+  for (const code of selectedItems) {
+    if (currentFolders.value.some(f => (f.FolderCode || f.folderCode) === code)) {
+      folderCodes.push(code)
+    } else if (currentFiles.value.some(f => (f.FileCode || f.fileCode) === code)) {
+      fileCodes.push(code)
+    }
+  }
+  try {
+    let token = ''
+    try {
+      const user = JSON.parse(localStorage.getItem('user'))
+      if (user && user.token) token = 'Bearer ' + user.token
+    } catch {}
+    const baseUrl = window.ipAddress || 'http://localhost:9991/'
+    const url = `${baseUrl}api/standard-directory/configs/${buildDirectoryCode()}/export`
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': token } : {})
+      },
+      body: JSON.stringify({ folderCodes, fileCodes })
+    })
+    if (!resp.ok) {
+      const text = await resp.text()
+      ElMessage.error('导出失败：' + (text || resp.statusText))
+      return
+    }
+    const blob = await resp.blob()
+    const disposition = resp.headers.get('Content-Disposition')
+    const match = disposition && disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+    const fileName = match ? match[1].replace(/['"]/g, '') : 'export.zip'
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = fileName
+    a.click()
+    URL.revokeObjectURL(a.href)
+    ElMessage.success('导出成功')
+  } catch (e) {
+    ElMessage.error('导出失败：' + (e.message || e))
+  }
 }
 
 const handleHelp = () => { showHelpDialog.value = true }
@@ -726,9 +774,40 @@ const replaceFile = (file) => {
   ElMessage.info('替换文件功能开发中')
 }
 
-const downloadFile = (file) => {
+const downloadFile = async (file) => {
   const storagePath = file.StoragePath || file.storagePath
-  if (storagePath) window.open(`/api/standard-directory/download?path=${encodeURIComponent(storagePath)}`, '_blank')
+  if (!storagePath) {
+    ElMessage.warning('文件存储路径不存在')
+    return
+  }
+  try {
+    let token = ''
+    try {
+      const user = JSON.parse(localStorage.getItem('user'))
+      if (user && user.token) token = 'Bearer ' + user.token
+    } catch {}
+    const baseUrl = window.ipAddress || 'http://localhost:9991/'
+    const url = `${baseUrl}api/standard-directory/download?path=${encodeURIComponent(storagePath)}`
+    const resp = await fetch(url, {
+      headers: token ? { 'Authorization': token } : {}
+    })
+    if (!resp.ok) {
+      const text = await resp.text()
+      ElMessage.error('下载失败：' + (text || resp.statusText))
+      return
+    }
+    const blob = await resp.blob()
+    const disposition = resp.headers.get('Content-Disposition')
+    const match = disposition && disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+    const fileName = match ? match[1].replace(/['"]/g, '') : file.FileName || file.fileName || 'download'
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = fileName
+    a.click()
+    URL.revokeObjectURL(a.href)
+  } catch (e) {
+    ElMessage.error('下载失败：' + (e.message || e))
+  }
 }
 
 // ========== 工具函数 ==========
@@ -760,14 +839,23 @@ onMounted(() => { loadTree() })
 
 <style scoped>
 .directory-manager {
+  /* absolute 定位填满 Vol 框架 el-scrollbar__view 容器，
+     解决 height:100% 在父链无明确高度时失效的问题 */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
-  height: calc(100vh - 84px);
+  overflow: hidden;
   background: #fff;
 }
 
 /* 左侧面板 */
 .left-panel {
   width: 280px;
+  height: 100%;
+  overflow: hidden;
   background: #fff;
   border-right: 1px solid #e4e7ed;
   display: flex;
@@ -777,6 +865,7 @@ onMounted(() => { loadTree() })
 .left-header {
   padding: 12px 16px;
   border-bottom: 1px solid #ebeef5;
+  flex-shrink: 0;
 }
 
 .left-title {
@@ -788,11 +877,14 @@ onMounted(() => { loadTree() })
 .search-box {
   padding: 12px 16px;
   border-bottom: 1px solid #ebeef5;
+  flex-shrink: 0;
 }
 
 .tree-container {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
   padding: 8px 0;
 }
 
@@ -828,6 +920,8 @@ onMounted(() => { loadTree() })
 /* 右侧面板 */
 .right-panel {
   flex: 1;
+  height: 100%;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: #fff;
@@ -838,6 +932,7 @@ onMounted(() => { loadTree() })
 .breadcrumb {
   padding: 12px 20px;
   border-bottom: 1px solid #ebeef5;
+  flex-shrink: 0;
 }
 
 .clickable-breadcrumb { cursor: pointer; color: #409eff; }
@@ -851,12 +946,14 @@ onMounted(() => { loadTree() })
   align-items: center;
   gap: 8px;
   flex-wrap: nowrap;
+  flex-shrink: 0;
 }
 
-/* 文件列表 */
+/* 文件列表 - 填充剩余空间，溢出时滚动 */
 .file-list-container {
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
 }
 
 .file-table {
@@ -864,6 +961,19 @@ onMounted(() => { loadTree() })
   border-collapse: collapse;
   table-layout: fixed;
 }
+
+/* 固定宽度列 */
+.file-table th:nth-child(1),
+.file-table td:nth-child(1) { width: 44px; }
+.file-table th:nth-child(3),
+.file-table td:nth-child(3) { width: 80px; }
+.file-table th:nth-child(4),
+.file-table td:nth-child(4) { width: 140px; }
+.file-table th:nth-child(5),
+.file-table td:nth-child(5) { width: 160px; }
+/* 名称列自动填充剩余空间 */
+.file-table th:nth-child(2),
+.file-table td:nth-child(2) { min-width: 0; }
 
 .file-table th {
   padding: 10px 16px;
@@ -894,10 +1004,16 @@ onMounted(() => { loadTree() })
   display: flex;
   align-items: center;
   gap: 8px;
-  line-height: 48px;
+  min-width: 0;
 }
 
-.name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.name-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .folder-name { color: #303133; font-weight: 500; }
 
 .folder-icon { color: #e6a23c; font-size: 18px; flex-shrink: 0; }
@@ -923,6 +1039,7 @@ onMounted(() => { loadTree() })
   color: #909399;
   display: flex;
   justify-content: space-between;
+  flex-shrink: 0;
 }
 
 /* 空状态 */
@@ -981,8 +1098,22 @@ onMounted(() => { loadTree() })
   line-height: 1.8; margin-bottom: 12px;
 }
 
-/* 弹窗表单 padding */
-.dialog-form {
-  padding: 10px 20px 0;
+/* 弹窗 — 不用 scoped，因为 el-dialog teleport 到 body */
+</style>
+
+<!-- 非 scoped 样式：dialog teleport 到 body，scoped 无法命中 -->
+<style>
+/* 标题栏内边距 */
+.el-dialog__header {
+  padding: 20px 20px 10px;
+  margin-right: 0;
+}
+/* 内容区内边距 */
+.el-dialog__body {
+  padding: 10px 20px 20px;
+}
+/* 底部按钮栏内边距 */
+.el-dialog__footer {
+  padding: 0 20px 20px;
 }
 </style>

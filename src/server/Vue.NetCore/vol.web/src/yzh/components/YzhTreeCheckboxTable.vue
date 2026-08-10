@@ -541,8 +541,14 @@ defineExpose({
 
 <style lang="less" scoped>
 .yzh-tree-checkbox-table {
+  /* 绝对定位填满父容器（el-scrollbar__view），
+     解决 Vol 框架 el-scrollbar__view 无明确高度导致 height:100% 失效的问题 */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
-  height: 100%;
   overflow: hidden;
   border: 1px solid #ebeef5;
   border-radius: 4px;
@@ -619,7 +625,10 @@ defineExpose({
       }
     }
 
-    :deep(.el-table) { flex: 1; }
+    :deep(.el-table) {
+      flex: 1;
+      overflow: hidden; /* 关键：让 el-table 的 height:100% 正确计算 */
+    }
 
     .pagination-wrap {
       flex-shrink: 0;

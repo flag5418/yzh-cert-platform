@@ -307,4 +307,160 @@ namespace VOL.Entity.CertPlatform.Dir
         /// </summary>
         public string TaskId { get; set; }
     }
+
+    /// <summary>
+    /// 导出打包请求DTO
+    /// 用户勾选需要导出的文件夹和文件后提交
+    /// </summary>
+    public class ExportRequest
+    {
+        /// <summary>
+        /// 选中的文件夹编码列表
+        /// </summary>
+        public List<string> FolderCodes { get; set; } = new List<string>();
+
+        /// <summary>
+        /// 选中的文件编码列表
+        /// </summary>
+        public List<string> FileCodes { get; set; } = new List<string>();
+    }
+
+    #region 阶段文件树响应（文档提取规则管理用）
+
+    /// <summary>
+    /// 阶段完整文件树响应
+    /// 用于文档提取规则管理页面，单次返回所有层级的文件夹和文件
+    /// </summary>
+    public class StageFileTreeResponse
+    {
+        /// <summary>
+        /// 目录编码
+        /// </summary>
+        public string DirectoryCode { get; set; }
+
+        /// <summary>
+        /// 文件夹树（含子文件夹和文件）
+        /// </summary>
+        public List<StageFolderNode> Folders { get; set; } = new List<StageFolderNode>();
+
+        /// <summary>
+        /// 统计信息
+        /// </summary>
+        public StageFileStatistics Statistics { get; set; } = new StageFileStatistics();
+    }
+
+    /// <summary>
+    /// 阶段文件夹节点
+    /// </summary>
+    public class StageFolderNode
+    {
+        /// <summary>
+        /// 文件夹编码
+        /// </summary>
+        public string Code { get; set; }
+
+        /// <summary>
+        /// 文件夹名称
+        /// </summary>
+        public string Name { get; set; }
+
+        /// <summary>
+        /// 父级编码
+        /// </summary>
+        public string ParentCode { get; set; }
+
+        /// <summary>
+        /// 深度层级
+        /// </summary>
+        public int Depth { get; set; }
+
+        /// <summary>
+        /// 排序号
+        /// </summary>
+        public int SortOrder { get; set; }
+
+        /// <summary>
+        /// 子文件夹列表
+        /// </summary>
+        public List<StageFolderNode> Children { get; set; } = new List<StageFolderNode>();
+
+        /// <summary>
+        /// 该文件夹下的文件列表
+        /// </summary>
+        public List<StageFileNode> Files { get; set; } = new List<StageFileNode>();
+    }
+
+    /// <summary>
+    /// 阶段文件节点
+    /// </summary>
+    public class StageFileNode
+    {
+        /// <summary>
+        /// 文件编码
+        /// </summary>
+        public string FileCode { get; set; }
+
+        /// <summary>
+        /// 文件名
+        /// </summary>
+        public string FileName { get; set; }
+
+        /// <summary>
+        /// 所属文件夹编码
+        /// </summary>
+        public string FolderCode { get; set; }
+
+        /// <summary>
+        /// MinIO存储路径
+        /// </summary>
+        public string StoragePath { get; set; }
+
+        /// <summary>
+        /// 文件大小（字节）
+        /// </summary>
+        public long? FileSize { get; set; }
+
+        /// <summary>
+        /// MIME类型
+        /// </summary>
+        public string MimeType { get; set; }
+
+        /// <summary>
+        /// 规则状态：none=未配置, configured=已配置, failed=失败
+        /// </summary>
+        public string RuleStatus { get; set; } = "none";
+
+        /// <summary>
+        /// 已提取的字段数
+        /// </summary>
+        public int ExtractFieldCount { get; set; }
+
+        /// <summary>
+        /// 已定义的表格数
+        /// </summary>
+        public int TableDefCount { get; set; }
+    }
+
+    /// <summary>
+    /// 阶段文件统计信息
+    /// </summary>
+    public class StageFileStatistics
+    {
+        /// <summary>
+        /// 总文件夹数
+        /// </summary>
+        public int TotalFolders { get; set; }
+
+        /// <summary>
+        /// 总文件数
+        /// </summary>
+        public int TotalFiles { get; set; }
+
+        /// <summary>
+        /// 已配置规则的文件数
+        /// </summary>
+        public int ConfiguredFiles { get; set; }
+    }
+
+    #endregion
 }

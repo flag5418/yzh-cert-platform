@@ -64,6 +64,14 @@ namespace VOL.Builder.IServices.CertPlatform
         #region 标准目录文件夹
 
         /// <summary>
+        /// 获取阶段的完整文件树（含规则属性）
+        /// 用于文档提取规则管理页面，单次返回所有层级
+        /// </summary>
+        /// <param name="directoryCode">目录编码</param>
+        /// <returns>完整的文件夹+文件树JSON</returns>
+        StageFileTreeResponse GetStageFileTree(string directoryCode);
+
+        /// <summary>
         /// 获取标准目录文件夹树
         /// </summary>
         WebResponseContent GetFolderTree(string directoryCode);
@@ -115,8 +123,17 @@ namespace VOL.Builder.IServices.CertPlatform
         /// 将标准目录配置及其子文件夹、文件打包成ZIP
         /// </summary>
         /// <param name="directoryCode">目录编码</param>
+        /// <param name="folderCodes">选中的文件夹编码列表</param>
+        /// <param name="fileCodes">选中的文件编码列表</param>
         /// <returns>ZIP文件流</returns>
-        Task<Stream> ExportAsZip(string directoryCode);
+        Task<Stream> ExportAsZip(string directoryCode, List<string> folderCodes, List<string> fileCodes);
+
+        /// <summary>
+        /// 从 MinIO 下载单个文件
+        /// </summary>
+        /// <param name="storagePath">MinIO 存储路径</param>
+        /// <returns>(流, contentType, 文件名)</returns>
+        Task<(Stream stream, string contentType, string fileName)> DownloadFile(string storagePath);
 
         #endregion
 

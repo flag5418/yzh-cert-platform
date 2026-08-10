@@ -62,18 +62,33 @@ let viewgird = [
     meta: { title: '机构-阶段关联' }
   },
   
-  // 标准目录管理（基础配置子菜单）
+  // 标准目录管理（基础配置子菜单）- 使用嵌套路由
   {
     path: '/CertPlatform/Standard',
     name: 'StandardDirectory',
     redirect: '/CertPlatform/Standard/DirectoryConfig',
-    meta: { title: '标准目录管理' }
+    meta: { title: '标准目录管理' },
+    children: [
+      {
+        path: 'DirectoryConfig',
+        name: 'DirectoryConfig',
+        component: () => import('@/views/cert/Standard/DirectoryManager/index.vue'),
+        meta: { title: '目录配置' }
+      },
+      {
+        path: 'DirectoryTree',
+        name: 'DirectoryTree',
+        component: () => import('@/views/cert/Standard/DirectoryTree/index.vue'),
+        meta: { title: '文件夹结构' }
+      }
+    ]
   },
+  // 文档提取规则管理（独立菜单）
   {
-    path: '/CertPlatform/Standard/DirectoryConfig',
-    name: 'DirectoryConfig',
-    component: () => import('@/views/cert/Standard/DirectoryManager/index.vue'),
-    meta: { title: '标准目录管理' }
+    path: '/CertPlatform/DocExtractionRule',
+    name: 'DocExtractionRule',
+    component: () => import('@/views/cert/Standard/DocExtractionRule/index.vue'),
+    meta: { title: '文档提取规则' }
   }
 ]
 

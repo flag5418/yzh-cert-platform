@@ -1,6 +1,7 @@
 /*
  * 标准目录管理 Controller
  */
+using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -106,6 +107,17 @@ namespace VOL.WebApi.Controllers.CertPlatform
         #region 标准目录文件夹
 
         /// <summary>
+        /// 获取阶段的完整文件树（含规则属性）
+        /// 用于文档提取规则管理页面，单次返回所有层级
+        /// </summary>
+        [HttpGet("stage-files/{directoryCode}")]
+        public IActionResult GetStageFileTree(string directoryCode)
+        {
+            var result = _service.GetStageFileTree(directoryCode);
+            return JsonNormal(new WebResponseContent().OK(null, result));
+        }
+
+        /// <summary>
         /// 获取标准目录文件夹树
         /// </summary>
         [HttpGet("configs/{directoryCode}/folders")]
@@ -198,16 +210,45 @@ namespace VOL.WebApi.Controllers.CertPlatform
         #region 导出打包
 
         /// <summary>
-        /// 将标准目录配置及其子文件夹、文件打包成ZIP
+        /// 将选中的文件夹和文件打包成ZIP
         /// </summary>
-        [HttpGet("configs/{directoryCode}/export")]
-        public async Task<IActionResult> ExportAsZip(string directoryCode)
+        [HttpPost("configs/{directoryCode}/export")]
+        public async Task<IActionResult> ExportAsZip(string directoryCode, [FromBody] ExportRequest request)
         {
             try
             {
-                var stream = await _service.ExportAsZip(directoryCode);
+                if ((request?.FolderCodes == null || request.FolderCodes.Count == 0) &&
+                    (request?.FileCodes == null || request.FileCodes.Count == 0))
+                {
+                    return BadRequest("请至少选择一个文件夹或文件");
+                }
+                var stream = await _service.ExportAsZip(directoryCode, request.FolderCodes, request.FileCodes);
                 var fileName = $"StandardDirectory_{directoryCode}_{System.DateTime.Now:yyyyMMddHHmmss}.zip";
                 return File(stream, "application/zip", fileName);
+            }
+            catch (System.Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// 下载单个文件（从 MinIO 流式返回）
+        /// </summary>
+        [HttpGet("download")]
+        public async Task<IActionResult> DownloadFile([FromQuery] string path)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(path))
+                    return BadRequest("缺少文件路径参数");
+
+                var (stream, contentType, fileName) = await _service.DownloadFile(path);
+                return File(stream, contentType, fileName);
+            }
+            catch (FileNotFoundException)
+            {
+                return NotFound("文件不存在");
             }
             catch (System.Exception ex)
             {
