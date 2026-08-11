@@ -55,13 +55,21 @@ namespace YZH.Core.AI.Clients
             }
 
             var providerName = string.IsNullOrWhiteSpace(request.Provider) ? ActiveProvider : request.Provider;
+            var requestedExplicitly = !string.IsNullOrWhiteSpace(request.Provider);
             var ordered = ProviderOrder(providerName);
             Exception? lastEx = null;
+
+            // 显式指定 Provider 但注册表中不存在 → 直接抛异常，不走降级链
+            if (requestedExplicitly && _providers.All(p => p.Name != providerName))
+                throw new AI.LlmCallException($"未注册 Provider: {providerName}", true);
+
+            var foundAny = false;
 
             foreach (var pName in ordered)
             {
                 var provider = _providers.FirstOrDefault(p => p.Name == pName);
                 if (provider == null) continue;
+                foundAny = true;
 
                 for (var retry = 0; retry <= RetryDelaysMs.Length; retry++)
                 {
@@ -101,6 +109,8 @@ namespace YZH.Core.AI.Clients
                 }
             }
 
+            if (!foundAny)
+                throw new AI.LlmCallException($"未注册 Provider: {providerName}", true);
             throw new AI.LlmCallException(
                 $"所有 Provider 调用均失败: {lastEx?.Message}", true);
         }

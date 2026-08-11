@@ -1,6 +1,6 @@
 # Vol 框架高频问题速查手册
 
-> **版本**: V1.1 | **更新日期**: 2026-08-07  
+> **版本**: V1.2 | **更新日期**: 2026-08-11  
 > **定位**: 前后端分离的快速排查指南，避免重复分析
 
 ---
@@ -516,6 +516,75 @@ public class YzhPageConfig : BaseEntity
 3. **数据库**：SQL 脚本统一管理，执行后更新 README.md
 4. **架构**：避免跨层引用，必要时复制代码打破循环依赖
 5. **EF Core 映射**：snake_case 表必须给所有属性加 `[Column]` 特性 ⭐ 新增
+6. **端口配置**：后端必须在 9992，不能硬编码 9991（与审核员前端冲突）⭐ 新增
+7. **ControllerBase**：自定义控制器用 `new JsonResult()` 而非 `JsonNormal()` ⭐ 新增
+8. **循环依赖**：`VOL.Builder` 不能引用 `VOL.WebApi`，跨项目用接口解耦 ⭐ 新增
+
+---
+
+## 📦 队列管理篇（新增 2026-08-11）
+
+### 7. 文件转换队列
+
+#### 关键文件
+
+| 文件 | 职责 |
+|------|------|
+| `ConvertQueueManager.cs` | 队列管理器（并发控制+超时+通知） |
+| `ConvertHostedService.cs` | 后台轮询服务 |
+| `OfficeConvertService.cs` | LibreOffice 转换执行 |
+| `IConvertNotifier.cs` | 通知接口（解耦） |
+| `ConvertNotifier.cs` | SignalR 推送实现 |
+
+#### 排查步骤
+
+1. **转换不执行** → 检查 `cert_file_convert_job` 表 status=pending 数量
+2. **转换超时** → 检查 `cert_sys_config` 中 `convert_timeout_seconds` 值
+3. **并发不生效** → 检查 `convert_max_concurrent` 值 + SemaphoreSlim 初始化
+4. **SignalR 不推送** → 检查浏览器 Console 是否连接 `/message` hub
+5. **进度面板不显示** → 检查 UploadConfirm 返回的 `convertCount > 0`
+
+### 8. 系统参数
+
+#### API 端点
+
+```
+GET  /api/sys-config/list?category=convert_queue
+GET  /api/sys-config/value/{configKey}
+POST /api/sys-config/update
+POST /api/sys-config/update-batch
+```
+
+#### 参数分类
+
+| 分类 | key 前缀 | 示例 |
+|------|---------|------|
+| convert_queue | convert_* | convert_max_concurrent=5 |
+| ai_model | ai_* | ai_provider=deepseek |
+| ocr | ocr_* | ocr_provider=tencent |
+| storage | minio_* | minio_endpoint=127.0.0.1:9000 |
+| system | system_* | system_version=3.0 (只读) |
+
+### 9. 站内消息
+
+#### API 端点
+
+```
+GET  /api/message/unread-count
+GET  /api/message/list?page=1&pageSize=20&unreadOnly=false
+POST /api/message/read/{id}
+POST /api/message/read-all
+```
+
+#### SignalR 事件
+
+```javascript
+// 监听 ReceiveHomePageMessage 事件
+connection.on('ReceiveHomePageMessage', (data) => {
+  if (data.value === 'convert_progress') { /* 转换进度 */ }
+  if (data.value === 'convert_cancelled') { /* 转换已取消 */ }
+})
+```
 
 ---
 
@@ -525,6 +594,7 @@ public class YzhPageConfig : BaseEntity
 |------|------|----------|
 | V1.0 | 2026-07-31 | 初始版本，包含前后端分离的高频问题速查 |
 | V1.1 | 2026-08-07 | 新增 EF Core snake_case 列名映射错误（#6） |
+| V1.2 | 2026-08-11 | 新增队列管理篇(#7-9)、端口配置(#6)、ControllerBase(#7)、循环依赖(#8) |
 
 ---
 
