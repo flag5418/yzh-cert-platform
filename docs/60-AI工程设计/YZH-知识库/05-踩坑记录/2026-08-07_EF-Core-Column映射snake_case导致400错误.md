@@ -2,6 +2,11 @@
 
 > **背景**：配置驱动 UI 架构上线后，点击「刷新配置」按钮报 `Unknown column 'y.CheckboxSelection'` 错误，表格数据无法显示。
 
+> **官方文档参考**：
+> - 数据库访问（EF Core/repository）：http://v3.volcore.xyz/docs/cs/dev/db.html
+> - 接口返回大小写（JsonNormal）：http://v3.volcore.xyz/docs/cs/dev/case.html
+> - 前端 API 传参：http://v3.volcore.xyz/docs/cs/dev/api.html
+
 ---
 
 ## 📝 问题索引
@@ -28,6 +33,8 @@ MySqlException: Unknown column 'y.CheckboxSelection' in 'field list'
 ### 根因分析
 
 **EF Core 属性名与数据库列名风格不一致**。
+
+> **官方文档对照**：[db.html](http://v3.volcore.xyz/docs/cs/dev/db.html) 中所有 `repository.FindAsIQueryable(x => 条件)` 示例均直接使用 C# 属性名（PascalCase），如 `x.CreateDate`、`x.User_Id`。EF Core 默认将属性名直接作为 SQL 列名，**不自动转换命名风格**。Vol 框架内置表（`Sys_Menu`、`Sys_User` 等）全部使用 PascalCase 列名，与属性名一致。
 
 | 维度 | C# 实体属性 | 数据库列 |
 |------|------------|---------|
@@ -90,6 +97,8 @@ public class YzhPageConfig : BaseEntity
 
 > **规则**: 当数据库表使用 snake_case 命名时，C# 实体属性**必须**添加 `[Column]` 特性。
 
+> **与 PascalCase 策略的关系**：本项目 Cert 业务表采用 PascalCase 列名（见 [Phase2 联调 P2-01](./2026-08-03_Phase2联调全栈问题修复记录.md)），**不需要** `[Column]` 特性。但 YZH 配置表（`yzh_*` 系列）使用 snake_case 列名，**必须**加 `[Column]`。两种策略在同一项目中共存，按表前缀区分即可。
+
 1. **建表时同步创建实体**：写完 DDL 后立即创建 Entity 类，逐字段加 `[Column]`
 2. **代码审查检查项**：新实体是否所有属性都有 `[Column]` 映射
 3. **考虑全局约定**（远期）：在 EF Core 的 `OnModelCreating` 中配置全局 snake_case 约定
@@ -102,6 +111,13 @@ public class YzhPageConfig : BaseEntity
            prop.SetColumnName(SnakeCase(prop.Name));  // 需要引入 Humanizer 库
        });
    });
+   ```
+4. **快速诊断命令**：
+   ```bash
+   # 对比实体属性名与数据库列名
+   docker exec yzh-mysql mysql -u root -p'Yzh123456.' yzh_cert_platform \
+     -e "SHOW COLUMNS FROM yzh_page_config;" | grep _
+   # 如果输出含 snake_case 列名，对应实体必须有 [Column] 特性
    ```
 
 ---
@@ -168,9 +184,10 @@ columns computed → 回退到 options.js.columns（也是空数组）
 
 ## 关键经验总结
 
-| 经验 | 说明 |
-|------|------|
-| **snake_case 是坑** | Vol 框架原有表用 PascalCase 列名，但 YZH 新表用了 snake_case，EF Core 默认不转换 |
-| **链式故障排查** | 一个后端错误可能导致前端多层回退失败，需从根因修复 |
-| **UI 一致性** | 工具栏元素应使用统一的 `<a>` 标签风格，不要混用 `el-button link` |
-| **Column 特性是必须品** | 不是可选项，只要列名和属性名不同就必须加 |
+| 经验 | 说明 | 官方文档参考 |
+|------|------|-------------|
+| **snake_case 是坑** | Vol 框架原有表用 PascalCase 列名，但 YZH 新表用了 snake_case，EF Core 默认不转换 | [db.html](http://v3.volcore.xyz/docs/cs/dev/db.html) 全部示例使用 PascalCase |
+| **链式故障排查** | 一个后端错误可能导致前端多层回退失败，需从根因修复 | - |
+| **UI 一致性** | 工具栏元素应使用统一的 `<a>` 标签风格，不要混用 `el-button link` | - |
+| **Column 特性是必须品** | 不是可选项，只要列名和属性名不同就必须加 | EF Core 官方约定 |
+| **接口返回大小写** | `JsonNormal()` 保持原始大小写，`Json()` 转小驼峰 | [case.html](http://v3.volcore.xyz/docs/cs/dev/case.html) |

@@ -103,6 +103,13 @@ let viewgird = [
     name: 'ConvertQueueMonitor',
     component: () => import('@/views/cert/Standard/ConvertQueueMonitor/index.vue'),
     meta: { title: '转换队列监控' }
+  },
+  // Prompt 模板管理
+  {
+    path: '/CertPlatform/PromptTemplate',
+    name: 'PromptTemplate',
+    component: () => import('@/views/cert/Standard/PromptTemplate/index.vue'),
+    meta: { title: 'Prompt 模板管理' }
   }
 ]
 

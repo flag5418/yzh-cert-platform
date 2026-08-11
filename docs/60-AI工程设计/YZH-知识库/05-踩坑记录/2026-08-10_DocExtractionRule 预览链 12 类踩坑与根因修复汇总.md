@@ -8,6 +8,12 @@
 - `第一类医疗器械适用法律法规目录.xlsx`（用户 Network Hex 100% 合法 xlsx 结构）
 - `XASL-QP-030 医疗器械不良事件报告和再评价程序.docx`（真实合法 OOXML docx 结构）
 
+> **官方文档参考**：
+> - Vol 前端 API 传参（http.js 封装规则）：http://v3.volcore.xyz/docs/cs/dev/api.html
+> - Vol 接口返回大小写（JsonNormal）：http://v3.volcore.xyz/docs/cs/dev/case.html
+> - @vue-office 官方支持矩阵：https://502647092.github.io/vue-office-examples/ （docx/xlsx/pdf）
+> - Element Plus el-upload 下载：https://element-plus.org/zh-CN/component/upload.html
+
 ---
 
 ## 0. 锚点链路（定位必用，100% console.log，Default levels 必现）
@@ -38,6 +44,9 @@
 真实下载 docx/xlsx Network Hex 100% 合法（504B0304 ZIP 头 + 标准 Central Directory），但前端始终进入「服务器返回空文件」降级分支，previewBuffer 永远是 undefined。
 
 ### 根因分析
+
+> **官方文档对照**：[api.html](http://v3.volcore.xyz/docs/cs/dev/api.html) 中 `proxy.http.get/post` 返回的是 `response.data`（已由 http.js 内部 resolve），不是完整 `response` 对象。因此业务层不需要再加 `.data`。
+
 [http.js#L145-L164](file:///Volumes/Expand/wangqingquan/Documents/work/study/体系认证平台/src/server/Vue.NetCore/vol.web/src/api/http.js#L145-L164) 内部实现是：
 ```js
 axios.get(url, config).then(
@@ -73,6 +82,9 @@ let buf = await _httpGetArrayBuffer(url)    // ✅ buf 直接是真实 ArrayBuff
 DocPreview.vue 最开始用原生 `fetch(url, { credentials:'include' })` 下载 ArrayBuffer，Network 返回 `200 OK`，但 Content-Type 是 `text/html; charset=utf-8`，喂给 `@vue-office-docx` 后 JSZip 抛 `Can't find end of central directory : is this a zip file ?`
 
 ### 根因分析
+
+> **官方文档对照**：Vol 框架鉴权使用 `[JWTAuthorize]` 特性（见 [api.html](http://v3.volcore.xyz/docs/cs/dev/api.html)），`http.js` 在每次请求前自动注入 `Authorization: Bearer <token>` 和语言头。原生 `fetch` 只带 Cookie 不带 JWT Header，后端直接 401 重定向到登录页。
+
 Vol 框架鉴权是 `[JWTAuthorize]`，请求头需要 `Authorization: Bearer <token>`，原生 fetch 只带 Cookie 不会带这个 Header，后端直接 401，而 ASP.NET Core 默认对 401 做 302 重定向到 `/login`，fetch 跟随重定向返回一个登录页 HTML，字节流本身以 `<!doctype html` 开头，HTTP 状态仍是 200，所以 JSZip 当 ZIP 解压直接炸。
 
 ### 解决方案

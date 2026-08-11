@@ -62,6 +62,7 @@
             <AIAnalysisTab
               :fields="analysisFields"
               :tables="analysisTables"
+              :raw-json="rawJsonDisplay"
               @analyze="onAIAnalyze"
               @update:fields="onFieldsUpdate"
               @update:tables="onTablesUpdate"
@@ -95,6 +96,7 @@ import { ElMessage } from 'element-plus'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AIAnalysisTab from './components/AIAnalysisTab.vue'
+import { aiAnalyzeDocument } from './api'
 import DocPreview from './components/DocPreview.vue'
 import FileTree from './components/FileTree.vue'
 import PromptVerifyTab from './components/PromptVerifyTab.vue'
@@ -118,6 +120,7 @@ const analysisTables = ref([])
 // Prompt和验证结果
 const generatedPrompt = ref('')
 const verifyResult = ref(null)
+const rawJsonDisplay = ref('')
 
 // 规则状态
 const ruleStatus = ref('none') // none, configured, failed
@@ -181,8 +184,53 @@ const onLoadPhase = async (phase) => {
 }
 
 const onAIAnalyze = async () => {
-  // TODO: 调用后端AI分析接口
+  if (!currentFile.value?.fileCode) {
+    ElMessage.warning('请先选择一个文件')
+    return
+  }
+  const fileCode = currentFile.value.fileCode
+  // 根据 mimeType 推断 skill
+  const mimeType = currentFile.value.mimeType || ''
+  let skill = 'word'
+  if (mimeType.includes('excel') || fileCode.toLowerCase().endsWith('.xlsx') || fileCode.toLowerCase().endsWith('.xls'))
+    skill = 'excel'
+  else if (mimeType.includes('pdf') || fileCode.toLowerCase().endsWith('.pdf'))
+    skill = 'pdf'
+
+  console.log('[DocExtractionRule] 🔍 开始分析:', { fileCode, skill })
   ElMessage.info('AI分析中...')
+
+  try {
+    const res = await aiAnalyzeDocument({ fileCode, skill })
+    console.log('[DocExtractionRule] 📦 analyze 响应:', JSON.stringify(res, null, 2))
+
+    // 解析响应数据
+    const data = res?.Data ?? res?.data ?? res
+    if (data?.fields) {
+      analysisFields.value = data.fields.map(f => ({
+        name: f.fieldName ?? f.name ?? f.field_code ?? '',
+        dataType: f.dataType ?? 'string',
+        description: f.description ?? '',
+        isManual: f.isManual ?? false
+      }))
+    }
+    if (data?.tables) {
+      analysisTables.value = data.tables.map(t => ({
+        name: t.tableName ?? t.name ?? t.table_code ?? '',
+        description: t.description ?? '',
+        columns: (t.columns ?? []).map(c => ({
+          name: c.columnName ?? c.name ?? c.column_code ?? '',
+          dataType: c.dataType ?? 'string'
+        }))
+      }))
+    }
+    // 原始JSON展示
+    rawJsonDisplay.value = JSON.stringify(data ?? res, null, 2)
+    ElMessage.success('分析完成')
+  } catch (err) {
+    console.error('[DocExtractionRule] ❌ 分析失败:', err)
+    ElMessage.error('AI分析失败: ' + (err?.message ?? '未知错误'))
+  }
 }
 
 const onFieldsUpdate = (fields) => {
@@ -410,6 +458,7 @@ const transformStageFileTree = (folderNodes, depth = 0) => {
     if (folder.Files && folder.Files.length > 0) {
       const fileNodes = folder.Files.map((file, idx) => ({
         id: file.FileCode || `file-${depth}-${idx}`,
+        fileCode: file.FileCode || `file-${depth}-${idx}`,
         name: file.FileName || `文件${idx + 1}`,
         type: 'file',
         // 规则相关属性（后端返回）

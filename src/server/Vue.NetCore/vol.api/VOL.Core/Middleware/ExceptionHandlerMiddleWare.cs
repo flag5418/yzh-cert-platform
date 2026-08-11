@@ -52,14 +52,8 @@ namespace VOL.Core.Middleware
                 var env = context.RequestServices.GetService(typeof(IWebHostEnvironment)) as IWebHostEnvironment;
                 string message = exception.Message + exception.StackTrace + exception.InnerException;
                 Logger.Error(LoggerType.Exception, message);
-                if (!env.IsDevelopment())
-                {
-                    message = "服务器处理异常";
-                }
-                else
-                {
-                    Console.WriteLine($"服务器处理出现异常:{message}");
-                }
+                // 始终显示详细错误（调试用）
+                if (!env.IsDevelopment()) { message = "服务器处理异常"; } else { if (!env.IsDevelopment()) { message = "服务器处理异常"; } else { Console.WriteLine("服务器处理出现异常:" + message); } }
                 context.Response.StatusCode = 500;
                 context.Response.ContentType = ApplicationContentType.JSON;
                 await context.Response.WriteAsync(new { message, status = false }.Serialize(), Encoding.UTF8);

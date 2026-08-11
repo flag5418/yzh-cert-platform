@@ -45,6 +45,7 @@ namespace VOL.Entity.CertPlatform
         /// 新建时自动赋值 Guid 短格式，无需前端传参、无需钩子干预
         /// 示例：a1b2c3d4e5f6...
         /// </summary>
+        [Column("code")]
         [MaxLength(100)]
         public string Code { get; set; } = Guid.NewGuid().ToString("N");
 
@@ -52,6 +53,7 @@ namespace VOL.Entity.CertPlatform
         /// 多租户组织编码（用于数据隔离）
         /// 由 [YZHMultiTenant] 特性自动填充，值为 UserContext.Current.OrgCode
         /// </summary>
+        [Column("org_code")]
         [MaxLength(50)]
         public string OrgCode { get; set; }
 
@@ -64,12 +66,14 @@ namespace VOL.Entity.CertPlatform
         /// 由框架在新增时自动填充 UserContext.Current.UserId
         /// 禁止业务代码手动设置！
         /// </summary>
+        [Column("create_id")]
         public int? CreateID { get; set; }
 
         /// <summary>
         /// 创建人姓名（对应 Sys_User.UserName）
         /// 由框架在新增时自动填充 UserContext.Current.UserName
         /// </summary>
+        [Column("creator")]
         [MaxLength(50)]
         public string Creator { get; set; }
 
@@ -77,6 +81,7 @@ namespace VOL.Entity.CertPlatform
         /// 创建时间
         /// 由框架在新增时自动填充 DateTime.Now
         /// </summary>
+        [Column("create_date")]
         public DateTime? CreateDate { get; set; } = DateTime.Now;
 
         #endregion
@@ -88,12 +93,14 @@ namespace VOL.Entity.CertPlatform
         /// 由框架在更新时自动填充 UserContext.Current.UserId
         /// 禁止业务代码手动设置！
         /// </summary>
+        [Column("modify_id")]
         public int? ModifyID { get; set; }
 
         /// <summary>
         /// 修改人姓名（对应 Sys_User.UserName）
         /// 由框架在更新时自动填充 UserContext.Current.UserName
         /// </summary>
+        [Column("modifier")]
         [MaxLength(50)]
         public string Modifier { get; set; }
 
@@ -101,6 +108,7 @@ namespace VOL.Entity.CertPlatform
         /// 修改时间
         /// 由框架在更新时自动填充 DateTime.Now
         /// </summary>
+        [Column("modify_date")]
         public DateTime? ModifyDate { get; set; } = DateTime.Now;
 
         #endregion
@@ -112,6 +120,7 @@ namespace VOL.Entity.CertPlatform
         /// 由框架在逻辑删除时自动填充 UserContext.Current.UserId
         /// 仅当 Enable = false 时有值
         /// </summary>
+        [Column("delete_id")]
         public int? DeleteID { get; set; }
 
         /// <summary>
@@ -119,6 +128,7 @@ namespace VOL.Entity.CertPlatform
         /// 由框架在逻辑删除时自动填充
         /// 仅当 Enable = false 时有值
         /// </summary>
+        [Column("deleter")]
         [MaxLength(50)]
         public string Deleter { get; set; }
 
@@ -127,6 +137,7 @@ namespace VOL.Entity.CertPlatform
         /// 由框架在逻辑删除时自动填充 DateTime.Now
         /// 仅当 Enable = false 时有值
         /// </summary>
+        [Column("delete_time")]
         public DateTime? DeleteTime { get; set; } = DateTime.Now;
 
         #endregion
@@ -138,6 +149,7 @@ namespace VOL.Entity.CertPlatform
         /// 与 Enable 字段区分：Enable 是系统级启用/禁用，Status 是业务级状态
         /// 默认值：active
         /// </summary>
+        [Column("status")]
         [MaxLength(50)]
         public string Status { get; set; } = "active";
 
@@ -145,6 +157,7 @@ namespace VOL.Entity.CertPlatform
         /// 启用状态（true = 启用, false = 禁用/逻辑删除）
         /// 默认值：true
         /// </summary>
+        [Column("enable")]
         public bool Enable { get; set; } = true;
 
         #endregion
@@ -155,6 +168,7 @@ namespace VOL.Entity.CertPlatform
         /// 备注
         /// </summary>
         [MaxLength(500)]
+        [Column("remark")]
         public string Remark { get; set; }
 
         #endregion

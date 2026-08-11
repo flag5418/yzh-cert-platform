@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using VOL.Core.Enums;
@@ -19,6 +20,12 @@ namespace VOL.Builder.Services.CertPlatform
     public partial class DocExtractionRuleService : ServiceBase<CertDocExtractionRule, ICertDocExtractionRuleRepository>
     , IDocExtractionRuleService, IDependency
     {
+        [ActivatorUtilitiesConstructor]
+        public DocExtractionRuleService(ICertDocExtractionRuleRepository repository)
+            : base(repository)
+        {
+        }
+
         public static IDocExtractionRuleService Instance
         {
             get { return AutofacContainerModule.GetService<IDocExtractionRuleService>(); }
@@ -438,9 +445,16 @@ namespace VOL.Builder.Services.CertPlatform
         /// </summary>
         public async Task<AIConfigDto> GetAIConfigAsync()
         {
+            Console.WriteLine("[AIConfig] Starting GetAIConfigAsync...");
+            Console.WriteLine("[AIConfig] Repository: " + (repository != null ? "not null" : "NULL"));
+            if (repository == null)
+            {
+                return new AIConfigDto { Provider = "qwen", Model = "qwen-turbo" };
+            }
             var config = await repository.DbContext.Set<AIConfig>()
                 .Where(x => x.IsEnabled)
                 .FirstOrDefaultAsync();
+            Console.WriteLine("[AIConfig] Config found: " + (config != null ? "yes" : "no"));
 
             if (config == null)
             {

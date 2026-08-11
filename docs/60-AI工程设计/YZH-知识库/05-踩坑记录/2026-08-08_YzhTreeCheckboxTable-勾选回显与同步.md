@@ -5,6 +5,11 @@
 **组件**: `YzhTreeCheckboxTable.vue`
 **耗时**: 约 4 小时（应该 30 分钟解决的问题）
 
+> **官方文档参考**：
+> - 数据库访问（repository/EF Core/跨库访问）：http://v3.volcore.xyz/docs/cs/dev/db.html
+> - Service 业务扩展（Add/Update/Del 钩子）：http://v3.volcore.xyz/docs/cs/service/guid.html
+> - Element Plus el-table toggleRowSelection API：https://element-plus.org/zh-CN/component/table.html#methods
+
 ---
 
 ## 问题现象
@@ -63,6 +68,12 @@ if (isSettingCheckboxes) return  // 跳过程序化触发的变更
 **现象**: 后端返回 500 错误，`Cannot create a DbSet for 'CertOrgStandard'`
 
 **根因**: `CertOrgStandard` 实体类存在，但没有在 EF Core 的 `DbContext.OnModelCreating` 中注册为 `DbSet`。
+
+> **官方文档对照**：[db.html](http://v3.volcore.xyz/docs/cs/dev/db.html) 「跨业务类库访问其他表」章节提供了两种方式：
+> 1. **EF 原生方式**：`DBServerProvider.GetEFDbContext<表>()` 获取 DbContext，再 `dbContext.Set<表>()` 操作
+> 2. **Repository 注入**：在 Service 构造函数中注入其他表的 Repository（需 `[ActivatorUtilitiesConstructor]` 标记）
+>
+> 两种方式都要求实体被 EF Core 扫描到。Vol 框架通过 `[Entity]` 属性 + `BaseEntity` 继承实现自动扫描（见 [关联表保存问题修复](./2026-08-08_关联表保存问题与T+V模式修复.md)）。
 
 **解决方案**: 将所有 `_db.Set<CertOrgStandard>()` 操作改为原生 SQL：
 
@@ -132,6 +143,8 @@ function onUserAction() {
 1. 检查 `DbContext` 是否有 `public DbSet<Xxx> Xxxs { get; set; }`
 2. 如果没有，要么注册实体，要么改用原生 SQL
 3. 对于中间表/关联表，通常不需要注册为实体，用原生 SQL 更简单
+
+> **官方文档对照**：[db.html](http://v3.volcore.xyz/docs/cs/dev/db.html) 提供了 `DBServerProvider.GetEFDbContext<表>()` 获取跨库 DbContext 的方式，但前提是实体已注册。如果实体未注册，可使用 `repository.DapperContext` 或 `DBServerProvider.SqlDapper` 执行原生 SQL。
 
 ### 4. 调试日志的添加策略
 

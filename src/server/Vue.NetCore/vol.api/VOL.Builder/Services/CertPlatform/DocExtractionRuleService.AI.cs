@@ -15,6 +15,7 @@ using YZH.Core.Workflow;
 using YZH.Core.Workflow.Models;
 using YZH.Core.Skills;
 using YZH.Core.Extractor.Models;
+using VOL.Entity.CertPlatform.Wf;
 
 namespace VOL.Builder.Services.CertPlatform
 {
@@ -97,15 +98,34 @@ namespace VOL.Builder.Services.CertPlatform
         /// </summary>
         private async Task<AIAnalyzeResponse> CallAIForAnalysisAsync(YZH.Core.Extractor.Models.FileExtractionResult extraction, string skill)
         {
-            if (extraction == null || extraction.Sections.Count == 0)
-                return new AIAnalyzeResponse { Fields = new(), Tables = new(), Message = "文档为空或无法提取" };
+            if (extraction == null)
+                return new AIAnalyzeResponse { Fields = new(), Tables = new(), Message = "文档信息为空" };
+
+            if (extraction.Status == YZH.Core.Extractor.Models.ExtractStatus.Unsupported)
+                return new AIAnalyzeResponse
+                {
+                    Fields = new(),
+                    Tables = new(),
+                    Message = $"不支持的文件类型：{extraction.Message ?? "未知原因"}，请确认文件已转换为 .docx/.xlsx 格式"
+                };
+
+            if (extraction.Status == YZH.Core.Extractor.Models.ExtractStatus.OcrRequired)
+                return new AIAnalyzeResponse
+                {
+                    Fields = new(),
+                    Tables = new(),
+                    Message = "该文档为扫描件（无文本层），需要 OCR 链路（暂未接入），请使用文字版 PDF 或 .docx/.xlsx 文件"
+                };
+
+            if (extraction.Sections.Count == 0)
+                return new AIAnalyzeResponse { Fields = new(), Tables = new(), Message = "文档内容为空或提取失败" };
 
             var docContent = BuildStructuredContext(extraction);
             var workflowEngine = AutofacContainerModule.GetService<IWorkflowEngine>();
             if (workflowEngine == null)
                 return new AIAnalyzeResponse { Fields = new(), Tables = new(), Message = "工作流引擎未注册" };
 
-            var analyzePrompt = BuildAnalysisPrompt(skill);
+            var analyzePrompt = await BuildAnalysisPromptAsync(skill);
             var workflowJson = BuildExtractWorkflow(analyzePrompt);
             var ctx = new WorkflowContext
             {
@@ -164,9 +184,23 @@ namespace VOL.Builder.Services.CertPlatform
         #region 私有辅助方法
 
         /// <summary>
-        /// 构建 AI 分析提示词（analyze 模式）：推荐字段和表格。
+        /// 构建 AI 分析提示词（analyze 模式）：优先从 DB 读取模板，回退到内嵌默认。
         /// </summary>
-        private static string BuildAnalysisPrompt(string skill)
+        private async Task<string> BuildAnalysisPromptAsync(string skill)
+        {
+            var promptCode = $"analyze_{skill}_v1";
+            var dbPrompt = await repository.DbContext.Set<PromptTemplate>()
+                .FirstOrDefaultAsync(x => x.PromptCode == promptCode && x.IsActive == true && x.Enable == true);
+            if (dbPrompt != null && !string.IsNullOrWhiteSpace(dbPrompt.Template))
+            {
+                Console.WriteLine($"[DocExtractionRule] 📝 使用数据库提示词: {promptCode} (v{dbPrompt.Version})");
+                return dbPrompt.Template;
+            }
+            // 回退到内嵌默认
+            return BuildDefaultAnalysisPrompt(skill);
+        }
+
+        private static string BuildDefaultAnalysisPrompt(string skill)
         {
             var skillDesc = skill.ToLowerInvariant() switch
             {

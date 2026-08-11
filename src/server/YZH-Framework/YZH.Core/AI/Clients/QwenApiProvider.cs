@@ -16,7 +16,8 @@ namespace YZH.Core.AI.Clients
     {
         public string Name => "qwen";
 
-        private static readonly string Endpoint =
+        private static string Endpoint => 
+            Environment.GetEnvironmentVariable("AI_QWEN_ENDPOINT") ?? 
             "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
 
         public async Task<LlmResponse> ChatAsync(LlmRequest request, CancellationToken ct = default)
@@ -24,10 +25,16 @@ namespace YZH.Core.AI.Clients
             var apiKey = GetApiKey();
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(request.TimeoutSeconds) };
 
+            // 过滤非文本内容，移除图片引用以避免模型报错
+            var cleanedMessages = request.Messages.Select(m => new { 
+                role = m.Role, 
+                content = CleanContent(m.Content) 
+            }).ToArray();
+            
             var payload = new
             {
                 model = request.Model,
-                messages = request.Messages.Select(m => (object)new { role = m.Role, content = m.Content }),
+                messages = cleanedMessages,
                 temperature = request.Temperature,
                 max_tokens = request.MaxTokens,
                 response_format = request.JsonMode ? (object)new { type = "json_object" } : null
@@ -65,6 +72,17 @@ namespace YZH.Core.AI.Clients
                 sw.Stop();
                 throw new AI.LlmCallException($"Qwen 调用异常: {ex.Message}", true, ex);
             }
+        }
+
+        /// <summary>清理内容，移除图片引用等非文本内容</summary>
+        private static string CleanContent(string content)
+        {
+            if (string.IsNullOrWhiteSpace(content)) return content;
+            // 移除常见的图片引用模式
+            var cleaned = System.Text.RegularExpressions.Regex.Replace(content, @"!\[.*?\]\(.*?\)", "[图片已移除]");
+            cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"<img[^>]*>", "[图片已移除]");
+            cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"\[\](image|png|jpg|jpeg|gif|bmp)[^\]*", "[图片已移除]");
+            return cleaned.Trim();
         }
 
         private static string GetApiKey()

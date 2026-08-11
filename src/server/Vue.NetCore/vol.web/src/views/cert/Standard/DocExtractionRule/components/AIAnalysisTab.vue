@@ -1,17 +1,25 @@
 <template>
   <div class="ai-analysis-tab">
-    <!-- AI 分析按钮 -->
+    <!-- AI 分析按钮 + 原始JSON开关 -->
     <div class="section-header">
       <h4>AI 自动分析</h4>
-      <el-button
-        type="primary"
-        :loading="analyzing"
-        @click="startAnalysis"
-        :disabled="!hasSkills"
-      >
-        <el-icon><Aim /></el-icon>
-        开始分析
-      </el-button>
+      <div class="header-actions">
+        <el-switch
+          v-model="showRawJson"
+          size="small"
+          active-text="原始JSON"
+          @change="onShowRawJsonChange"
+        />
+        <el-button
+          type="primary"
+          :loading="analyzing"
+          @click="startAnalysis"
+          style="margin-left: 12px"
+        >
+          <el-icon><Aim /></el-icon>
+          开始分析
+        </el-button>
+      </div>
     </div>
 
     <el-alert
@@ -21,6 +29,17 @@
       :closable="false"
       show-icon
     />
+
+    <!-- 原始JSON显示区 -->
+    <div v-if="showRawJson && rawJsonDisplay" class="raw-json-section">
+      <div class="section-title">
+        <span>📦 原始响应 JSON</span>
+        <el-button size="small" text @click="copyRawJson">
+          <el-icon><CopyDocument /></el-icon>复制
+        </el-button>
+      </div>
+      <pre class="json-preview">{{ rawJsonDisplay }}</pre>
+    </div>
 
     <!-- 提取字段列表 -->
     <div class="section">
@@ -80,7 +99,7 @@
         </div>
       </div>
 
-      <el-empty v-if="localFields.length === 0" description="暂无字段，点击添加或AI分析" />
+      <el-empty v-if="localFields.length === 0" description="暂无字段，点击AI分析或手动添加" />
     </div>
 
     <!-- 提取表格列表 -->
@@ -166,36 +185,33 @@
         </div>
       </div>
 
-      <el-empty v-if="localTables.length === 0" description="暂无表格，点击添加或AI分析" />
+      <el-empty v-if="localTables.length === 0" description="暂无表格，点击AI分析或手动添加" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
-import { Aim, Plus, Delete } from '@element-plus/icons-vue';
+import { ref, watch } from 'vue';
+import { Aim, Plus, Delete, CopyDocument } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 
 const props = defineProps({
-  fields: {
-    type: Array,
-    default: () => []
-  },
-  tables: {
-    type: Array,
-    default: () => []
-  }
+  fields: { type: Array, default: () => [] },
+  tables: { type: Array, default: () => [] },
+  // 供父组件传入原始JSON（由父组件从API响应中提取）
+  rawJson: { type: String, default: '' }
 });
 
-const emit = defineEmits(['analyze', 'update:fields', 'update:tables']);
+const emit = defineEmits(['analyze', 'update:fields', 'update:tables', 'update:rawJson']);
 
 const analyzing = ref(false);
-const hasSkills = ref(true); // TODO: 从后端获取技能配置
+const hasSkills = ref(true);
+const showRawJson = ref(false);
+const rawJsonDisplay = ref('');
 
 const localFields = ref([]);
 const localTables = ref([]);
 
-// 同步 props 到本地
 watch(() => props.fields, (val) => {
   localFields.value = JSON.parse(JSON.stringify(val));
 }, { immediate: true, deep: true });
@@ -204,52 +220,35 @@ watch(() => props.tables, (val) => {
   localTables.value = JSON.parse(JSON.stringify(val));
 }, { immediate: true, deep: true });
 
-// 字段操作
+watch(() => props.rawJson, (val) => {
+  rawJsonDisplay.value = val;
+}, { immediate: true });
+
 const addField = () => {
-  localFields.value.push({
-    name: '',
-    dataType: 'string',
-    description: '',
-    isManual: false
-  });
+  localFields.value.push({ name: '', dataType: 'string', description: '', isManual: false });
   emit('update:fields', localFields.value);
 };
-
 const removeField = (index) => {
   localFields.value.splice(index, 1);
   emit('update:fields', localFields.value);
 };
-
-// 表格操作
 const addTable = () => {
-  localTables.value.push({
-    name: '',
-    description: '',
-    columns: []
-  });
+  localTables.value.push({ name: '', description: '', columns: [] });
   emit('update:tables', localTables.value);
 };
-
 const removeTable = (index) => {
   localTables.value.splice(index, 1);
   emit('update:tables', localTables.value);
 };
-
-// 表格字段操作
 const addTableField = (tableIndex) => {
-  localTables.value[tableIndex].columns.push({
-    name: '',
-    dataType: 'string'
-  });
+  localTables.value[tableIndex].columns.push({ name: '', dataType: 'string' });
   emit('update:tables', localTables.value);
 };
-
 const removeTableField = (tableIndex, colIndex) => {
   localTables.value[tableIndex].columns.splice(colIndex, 1);
   emit('update:tables', localTables.value);
 };
 
-// AI分析
 const startAnalysis = async () => {
   analyzing.value = true;
   try {
@@ -258,133 +257,80 @@ const startAnalysis = async () => {
     analyzing.value = false;
   }
 };
+
+const onShowRawJsonChange = (val) => {
+  if (!val) rawJsonDisplay.value = '';
+};
+
+const copyRawJson = () => {
+  navigator.clipboard.writeText(rawJsonDisplay.value).then(() => {
+    ElMessage.success('已复制到剪贴板');
+  });
+};
 </script>
 
 <style scoped>
-.ai-analysis-tab {
-  height: 100%;
-  overflow-y: auto;
-}
+.ai-analysis-tab { height: 100%; overflow-y: auto; }
 
-/* 区块头部 - 更精致 */
 .section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #ebeef5;
+}
+.section-header h4 { margin: 0; font-size: 15px; font-weight: 600; color: #303133; }
+.header-actions { display: flex; align-items: center; gap: 8px; }
+
+/* 原始JSON区域 */
+.raw-json-section {
   margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #ebeef5;
-}
-
-.section-header h4 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: #303133;
-}
-
-/* 区块样式 */
-.section {
-  margin-bottom: 28px;
-}
-
-.section-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14px;
-  font-weight: 600;
-  font-size: 14px;
-  color: #606266;
-}
-
-/* 字段和表格列表 */
-.field-list, .table-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* 字段项 - 更现代的卡片 */
-.field-item, .table-item {
   border: 1px solid #e4e7ed;
   border-radius: 8px;
-  padding: 16px;
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-  transition: all 0.3s;
+  overflow: hidden;
+}
+.raw-json-section .section-title {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; background: #f5f7fa; font-size: 13px; color: #606266;
+  border-bottom: 1px solid #e4e7ed;
+}
+.json-preview {
+  margin: 0; padding: 16px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 12px; line-height: 1.6;
+  color: #303133; background: #fafafa;
+  white-space: pre-wrap; word-break: break-all;
+  max-height: 400px; overflow-y: auto;
 }
 
+.section { margin-bottom: 28px; }
+.section-title {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px; font-weight: 600; font-size: 14px; color: #606266;
+}
+.field-list, .table-list { display: flex; flex-direction: column; gap: 12px; }
+
+.field-item, .table-item {
+  border: 1px solid #e4e7ed; border-radius: 8px; padding: 16px;
+  background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.04); transition: all 0.3s;
+}
 .field-item:hover, .table-item:hover {
-  border-color: #c6e2ff;
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
+  border-color: #c6e2ff; box-shadow: 0 2px 8px rgba(64,158,255,0.1);
 }
+.field-item.manual { border-left: 3px solid #e6a23c; background: linear-gradient(to right, #fdf6ec, #fff); }
 
-.field-item.manual {
-  border-left: 3px solid #e6a23c;
-  background: linear-gradient(to right, #fdf6ec, #fff);
-}
-
-/* 字段头部 */
 .field-header, .table-header {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 12px;
-  align-items: center;
+  display: flex; gap: 10px; margin-bottom: 12px; align-items: center;
 }
+.field-name, .table-name { flex: 1; }
+.field-type, .col-type { width: 100px; }
+.field-body, .table-body { display: flex; flex-direction: column; gap: 10px; }
 
-.field-name, .table-name {
-  flex: 1;
-}
-
-.field-type, .col-type {
-  width: 100px;
-}
-
-/* 字段内容区 */
-.field-body, .table-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* 表格字段区 */
 .table-fields {
-  margin-top: 12px;
-  padding: 12px;
-  background: #f5f7fa;
-  border-radius: 6px;
-  border: 1px dashed #dcdfe6;
+  margin-top: 12px; padding: 12px; background: #f5f7fa;
+  border-radius: 6px; border: 1px dashed #dcdfe6;
 }
-
 .table-fields-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  font-size: 12px;
-  color: #606266;
-  font-weight: 500;
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px; font-size: 12px; color: #606266; font-weight: 500;
 }
-
-.table-field-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-  align-items: center;
-}
-
-.col-name {
-  flex: 1;
-}
-
-/* 空状态优化 */
-:deep(.el-empty) {
-  padding: 40px 0;
-}
-
-:deep(.el-empty__description) {
-  color: #909399;
-  font-size: 13px;
-}
+.table-field-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+.col-name { flex: 1; }
 </style>

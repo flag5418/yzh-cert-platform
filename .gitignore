@@ -114,6 +114,10 @@ ScaffoldingReadMe.txt
 # 关键信息速查（含密码/Token）
 关键信息速查.md
 
+# API Key / 敏感配置文件（CSV/JSON 含密钥）
+docs/**/*.csv
+!docs/**/*.example.csv
+
 # 应用配置文件（含数据库连接串/密钥）
 # Vue.NetCore 已纳入主仓库管理，配置文件含敏感信息需排除
 **/appsettings.json

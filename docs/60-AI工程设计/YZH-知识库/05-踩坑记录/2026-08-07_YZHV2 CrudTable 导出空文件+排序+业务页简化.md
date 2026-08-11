@@ -2,6 +2,12 @@
 
 > **背景**：`CertificationBody.vue`（认证机构管理）作为 YZH V2 架构的首个落地页面，在真实使用中暴露了导出、排序、代码冗余三类问题。本次修复同时推动了「通用逻辑下沉基类」的架构改进。
 
+> **官方文档参考**：
+> - searchBefore 查询条件配置：http://v3.volcore.xyz/docs/view-grid/methods/searchBefore.html
+> - view-grid 参数属性（boxOptions/sortable 等）：http://v3.volcore.xyz/docs/view-grid/properties.html
+> - onInit/onInited 生命周期：http://v3.volcore.xyz/docs/view-grid/methods/onInit.html
+> - 后台 Service 导出/导入业务扩展：http://v3.volcore.xyz/docs/cs/service/guid.html
+
 ---
 
 ## 📝 问题索引
@@ -24,6 +30,8 @@
 ### 根因分析
 
 **前端传参缺失 `columns` 字段**。
+
+> **官方文档对照**：[searchBefore 文档](http://v3.volcore.xyz/docs/view-grid/methods/searchBefore.html) 中 `param` 包含查询条件、分页、排序，导出时还需传 `columns` 字段告诉后端导出哪些列。`downloadFileName` 属性可自定义导出文件名（见 [properties.html](http://v3.volcore.xyz/docs/view-grid/properties.html)）。
 
 后端 `ServiceBase.ExportBytes()` 的核心逻辑（`VOL.Core/BaseProvider/ServiceBase.cs` L578-L591）：
 
@@ -88,6 +96,8 @@ const param: any = {
 ### 根因分析
 
 两处限制叠加：
+
+> **官方文档对照**：[properties.html](http://v3.volcore.xyz/docs/view-grid/properties.html) 中 `sortable` 属性是 2024.10.06 新增的「表格拖拽排序」功能，默认 `false`。Element Plus `el-table-column` 的 `sortable` 属性默认也为 `false`，需显式设为 `'custom'` 才启用服务端排序。
 
 **① 列设置面板**（模板 L102）：
 ```vue
@@ -232,12 +242,12 @@ const lifecycles = markRaw({
 
 ### 设计原则总结
 
-| 原则 | 说明 |
-|------|------|
-| **差异编程** | 业务页面只写与基类不同的代码，不重复基类已有的默认行为 |
-| **空壳禁令** | lifecycles 中没有实际逻辑的钩子一律不写（基类 `createDefaultLifecycles` 已提供空实现） |
-| **通用下沉** | 多个业务页面可能需要的逻辑（如字符串默认值填充）写在基类，而非每个页面复制 |
-| **Opt-Out 默认值** | 排序等 UI 特性默认开启，通过显式 `false` 禁用，减少配置量 |
+| 原则 | 说明 | 官方文档参考 |
+|------|------|-------------|
+| **差异编程** | 业务页面只写与基类不同的代码，不重复基类已有的默认行为 | Vol 框架设计哲学：生成代码 + Partial 扩展 |
+| **空壳禁令** | lifecycles 中没有实际逻辑的钩子一律不写（基类已提供空实现） | [guid.html](http://v3.volcore.xyz/docs/cs/service/guid.html) 生成代码已实现默认 CRUD |
+| **通用下沉** | 多个业务页面可能需要的逻辑（如字符串默认值填充）写在基类，而非每个页面复制 | - |
+| **Opt-Out 默认值** | 排序等 UI 特性默认开启，通过显式 `false` 禁用，减少配置量 | [properties.html](http://v3.volcore.xyz/docs/view-grid/properties.html) |
 
 ---
 
