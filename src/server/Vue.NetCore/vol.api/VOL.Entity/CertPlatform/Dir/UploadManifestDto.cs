@@ -14,6 +14,16 @@ namespace VOL.Entity.CertPlatform.Dir
         public string DirectoryCode { get; set; }
 
         /// <summary>
+        /// 所属标准编码（如 ISO9001）
+        /// </summary>
+        public string StandardCode { get; set; }
+
+        /// <summary>
+        /// 所属阶段编码（如 PH01）
+        /// </summary>
+        public string PhaseCode { get; set; }
+
+        /// <summary>
         /// 需要创建的文件夹列表（前端从文件路径中提取去重）
         /// </summary>
         public List<FolderItem> Folders { get; set; } = new List<FolderItem>();

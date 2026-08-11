@@ -84,8 +84,8 @@ public class NpoiWordExtractor : ITextExtractor
     private void ExtractOpenXml(Stream stream, FileExtractionResult result, ExtractionOptions opts)
     {
         using var doc = new XWPFDocument(stream);
-        var bodyParts = new List<string>();
         var tableIndex = 1;
+        var sectionIndex = 0;
 
         foreach (var element in doc.BodyElements)
         {
@@ -94,15 +94,20 @@ public class NpoiWordExtractor : ITextExtractor
                 case XWPFParagraph paragraph:
                     var text = paragraph.Text ?? string.Empty;
                     if (string.IsNullOrWhiteSpace(text))
-                    {
                         continue;
-                    }
+
+                    sectionIndex++;
+                    var section = new TextSection
+                    {
+                        Content = text,
+                        SectionIndex = sectionIndex,
+                        SectionType = "paragraph",
+                        PositionInfo = System.Text.Json.JsonSerializer.Serialize(new { line_start = sectionIndex })
+                    };
+                    result.Sections.Add(section);
 
                     if (opts.ExtractFullText)
-                    {
-                        bodyParts.Add(text);
-                    }
-
+                        result.FullText += (string.IsNullOrEmpty(result.FullText) ? "" : "\n") + text;
                     break;
 
                 case XWPFTable table:
@@ -111,10 +116,7 @@ public class NpoiWordExtractor : ITextExtractor
                     {
                         var cells = new List<string>();
                         foreach (var cell in row.GetTableCells())
-                        {
                             cells.Add(cell.GetText() ?? string.Empty);
-                        }
-
                         rows.Add(cells);
                     }
 
@@ -127,22 +129,25 @@ public class NpoiWordExtractor : ITextExtractor
                     };
                     result.Tables.Add(t);
 
-                    if (opts.ExtractFullText)
+                    sectionIndex++;
+                    var tableSection = new TextSection
                     {
-                        bodyParts.Add("[表格] " + string.Join(" | ", rows.Select(r => string.Join("\t", r))));
-                    }
+                        Content = string.Join("\n", rows.Select(r => string.Join("\t", r))),
+                        SectionIndex = sectionIndex,
+                        SectionType = "table",
+                        PositionInfo = $"{{\"table\":{tableIndex - 1}}}"
+                    };
+                    result.Sections.Add(tableSection);
 
+                    if (opts.ExtractFullText)
+                        result.FullText += (string.IsNullOrEmpty(result.FullText) ? "" : "\n")
+                            + "[表格] " + string.Join(" | ", rows.Select(r => string.Join("\t", r)));
                     break;
             }
         }
 
-        if (opts.ExtractFullText)
-        {
-            result.FullText = string.Join(Environment.NewLine, bodyParts);
-        }
-
         result.SourceInfo.DetectedType = ExtractSourceType.Word;
-        result.SourceInfo.StructureCount = bodyParts.Count;
+        result.SourceInfo.StructureCount = result.Sections.Count;
     }
 
     /// <summary>

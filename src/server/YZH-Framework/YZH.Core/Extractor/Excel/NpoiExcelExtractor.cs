@@ -51,26 +51,19 @@ public class NpoiExcelExtractor : ITextExtractor
                 ct.ThrowIfCancellationRequested();
 
                 var sheet = workbook.GetSheetAt(s);
-                // NPOI ISheet 无 IsHidden 属性，隐藏状态需通过 IWorkbook.IsSheetHidden(index) 判断
                 if (!opts.IncludeHiddenSheets && workbook.IsSheetHidden(s))
-                {
                     continue;
-                }
 
                 var rows = new List<List<string>>();
                 var maxRow = Math.Min(sheet.LastRowNum, opts.MaxRowsPerSheet > 0 ? opts.MaxRowsPerSheet - 1 : int.MaxValue);
-                if (maxRow < 0)
-                {
-                    maxRow = 0;
-                }
+                if (maxRow < 0) maxRow = 0;
+
+                var sheetSectionIndex = 0;
 
                 for (var r = sheet.FirstRowNum; r <= maxRow; r++)
                 {
                     var row = sheet.GetRow(r);
-                    if (row == null)
-                    {
-                        continue;
-                    }
+                    if (row == null) continue;
 
                     var cells = new List<string>();
                     var lastCell = Math.Min(row.LastCellNum, row.LastCellNum > 0 ? row.LastCellNum : 0);
@@ -81,10 +74,20 @@ public class NpoiExcelExtractor : ITextExtractor
                     }
 
                     rows.Add(cells);
-                    if (opts.ExtractFullText)
+
+                    var lineText = string.Join("\t", cells);
+                    textLines.Add(lineText);
+
+                    // 每行作为独立段落（line 类型），供 LLM 精准定位
+                    sheetSectionIndex++;
+                    result.Sections.Add(new TextSection
                     {
-                        textLines.Add(string.Join("\t", cells));
-                    }
+                        Content = lineText,
+                        SectionIndex = sheetSectionIndex,
+                        SectionType = "line",
+                        SheetName = sheet.SheetName,
+                        PositionInfo = System.Text.Json.JsonSerializer.Serialize(new { sheet = sheet.SheetName, row = r + 1 })
+                    });
                 }
 
                 result.Tables.Add(new ExtractedTable
@@ -95,12 +98,20 @@ public class NpoiExcelExtractor : ITextExtractor
                     PositionInfo = $"{{\"sheet\":\"{sheet.SheetName}\",\"row_count\":{rows.Count}}}",
                     Confidence = 1.0m
                 });
+
+                // 整表也作为一个 section（table 类型），保留整体结构感
+                result.Sections.Add(new TextSection
+                {
+                    Content = string.Join("\n", textLines),
+                    SectionIndex = ++sheetSectionIndex,
+                    SectionType = "table",
+                    SheetName = sheet.SheetName,
+                    PositionInfo = $"{{\"sheet\":\"{sheet.SheetName}\",\"row_count\":{rows.Count}}}"
+                });
             }
 
             if (opts.ExtractFullText)
-            {
                 result.FullText = string.Join(Environment.NewLine, textLines);
-            }
 
             result.SourceInfo.DetectedType = ExtractSourceType.Excel;
             result.SourceInfo.StructureCount = workbook.NumberOfSheets;

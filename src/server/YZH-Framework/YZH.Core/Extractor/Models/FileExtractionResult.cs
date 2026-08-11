@@ -25,6 +25,12 @@ public class FileExtractionResult
     /// <summary>全文拼接文本（Word 段落 + 表格按顺序、PDF 逐页、Excel 逐行 join；选项关闭时为空）</summary>
     public string? FullText { get; set; }
 
+    /// <summary>
+    /// 结构化文本段落列表（含页码/行号/位置 JSON）。
+    /// <para>比 FullText 更丰富：每段有独立位置信息，LLM 可精准定位。</para>
+    /// </summary>
+    public List<TextSection> Sections { get; set; } = new();
+
     /// <summary>字段级提取结果列表</summary>
     public List<ExtractedField> Fields { get; set; } = new();
 

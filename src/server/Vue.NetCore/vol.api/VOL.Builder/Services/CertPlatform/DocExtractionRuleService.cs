@@ -62,11 +62,11 @@ namespace VOL.Builder.Services.CertPlatform
                 throw new Exception("文件不存在");
             }
 
-            // 2. 根据技能类型提取文档内容
-            var docContent = await ExtractDocumentContentAsync(fileInfo, request.Skill);
+            // 2. 根据技能类型提取文档内容（结构化）
+            var extraction = await ExtractDocumentContentAsync(fileInfo, request.Skill);
 
             // 3. 调用AI分析
-            var aiResult = await CallAIForAnalysisAsync(docContent, request.Skill);
+            var aiResult = await CallAIForAnalysisAsync(extraction, request.Skill);
 
             return new AIAnalyzeResponse
             {
@@ -166,11 +166,11 @@ namespace VOL.Builder.Services.CertPlatform
 
                 var skill = rule?.Skill ?? "word";
 
-                // 3. 提取文档内容
-                var docContent = await ExtractDocumentContentAsync(fileInfo, skill);
+                // 3. 提取文档内容（结构化）
+                var extraction = await ExtractDocumentContentAsync(fileInfo, skill);
 
                 // 4. 调用AI执行提取
-                var extractionResult = await CallAIForExtractionAsync(docContent, request.Prompt);
+                var extractionResult = await CallAIForExtractionAsync(extraction, request.Prompt);
 
                 return new VerifyPromptResponse
                 {

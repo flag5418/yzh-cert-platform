@@ -32,36 +32,75 @@ namespace VOL.Builder.Services.CertPlatform
         }
 
         /// <summary>
-        /// 调用 IFileExtractor 提取文档全文（用于 analyze / verify）。
+        /// 调用 IFileExtractor 提取文档内容，返回结构化结果（含 Sections + Tables + FullText）。
         /// </summary>
-        private async Task<string> ExtractDocumentContentAsync(StandardDirectoryFile fileInfo, string skill)
+        private async Task<FileExtractionResult> ExtractDocumentContentAsync(StandardDirectoryFile fileInfo, string skill)
         {
-            if (fileInfo == null) return string.Empty;
+            if (fileInfo == null) return FileExtractionResult.CreateBase("unknown");
             var storagePath = fileInfo.ConvertedStoragePath ?? fileInfo.StoragePath;
-            if (string.IsNullOrWhiteSpace(storagePath)) return string.Empty;
+            if (string.IsNullOrWhiteSpace(storagePath))
+            {
+                var r = FileExtractionResult.CreateBase(fileInfo.FileName);
+                r.Status = YZH.Core.Extractor.Models.ExtractStatus.Unsupported;
+                r.Message = "文件路径为空";
+                return r;
+            }
 
             var extractor = AutofacContainerModule.GetService<YZH.Core.Extractor.IFileExtractor>();
-            if (extractor == null) return string.Empty;
+            if (extractor == null)
+            {
+                var r = FileExtractionResult.CreateBase(fileInfo.FileName);
+                r.Status = YZH.Core.Extractor.Models.ExtractStatus.Unsupported;
+                r.Message = "文件提取器不可用";
+                return r;
+            }
 
             try
             {
-                var result = await extractor.ExtractAsync(storagePath);
-                return result.FullText ?? string.Empty;
+                return await extractor.ExtractAsync(storagePath);
             }
             catch
             {
-                return string.Empty;
+                var r = FileExtractionResult.CreateBase(fileInfo.FileName);
+                r.Status = YZH.Core.Extractor.Models.ExtractStatus.Failed;
+                r.ErrorMessage = "提取异常";
+                return r;
             }
+        }
+
+        /// <summary>
+        /// 将结构化 Sections 转为 LLM 可读的带位置标记文本。
+        /// <para>示例输出：[Page:1 Line:10] 段落内容...</para>
+        /// </summary>
+        private static string BuildStructuredContext(YZH.Core.Extractor.Models.FileExtractionResult extraction)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"# 文档类型：{extraction.SourceType}");
+            sb.AppendLine($"# 文件名：{extraction.FileName}");
+            sb.AppendLine($"# 段落总数：{extraction.Sections.Count} | 表格数：{extraction.Tables.Count}");
+            sb.AppendLine();
+
+            foreach (var sec in extraction.Sections)
+            {
+                var location = sec.PositionInfo != null ? $" [{sec.PositionInfo}]" : "";
+                var typeTag = sec.SectionType != "paragraph" ? $" ({sec.SectionType})" : "";
+                sb.AppendLine($"[Section:{sec.SectionIndex}{typeTag}{location}]");
+                sb.AppendLine(sec.Content);
+                sb.AppendLine();
+            }
+
+            return sb.ToString();
         }
 
         /// <summary>
         /// 调用 WorkflowEngine + LlmExtractSkill 做 AI 字段/表格推荐（analyze 模式）。
         /// </summary>
-        private async Task<AIAnalyzeResponse> CallAIForAnalysisAsync(string docContent, string skill)
+        private async Task<AIAnalyzeResponse> CallAIForAnalysisAsync(YZH.Core.Extractor.Models.FileExtractionResult extraction, string skill)
         {
-            if (string.IsNullOrWhiteSpace(docContent))
-                return new AIAnalyzeResponse { Fields = new(), Tables = new(), Message = "文档为空" };
+            if (extraction == null || extraction.Sections.Count == 0)
+                return new AIAnalyzeResponse { Fields = new(), Tables = new(), Message = "文档为空或无法提取" };
 
+            var docContent = BuildStructuredContext(extraction);
             var workflowEngine = AutofacContainerModule.GetService<IWorkflowEngine>();
             if (workflowEngine == null)
                 return new AIAnalyzeResponse { Fields = new(), Tables = new(), Message = "工作流引擎未注册" };
@@ -91,11 +130,12 @@ namespace VOL.Builder.Services.CertPlatform
         /// <summary>
         /// 调用 WorkflowEngine + LlmExtractSkill 执行实际提取（verify 模式）。
         /// </summary>
-        private async Task<ExtractionData> CallAIForExtractionAsync(string docContent, string prompt)
+        private async Task<ExtractionData> CallAIForExtractionAsync(YZH.Core.Extractor.Models.FileExtractionResult extraction, string prompt)
         {
-            if (string.IsNullOrWhiteSpace(docContent) || string.IsNullOrWhiteSpace(prompt))
+            if (extraction == null || extraction.Sections.Count == 0 || string.IsNullOrWhiteSpace(prompt))
                 return new ExtractionData { Fields = new(), Tables = new() };
 
+            var docContent = BuildStructuredContext(extraction);
             var workflowEngine = AutofacContainerModule.GetService<IWorkflowEngine>();
             if (workflowEngine == null)
                 return new ExtractionData { Fields = new(), Tables = new() };

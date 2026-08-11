@@ -219,8 +219,8 @@
     </div>
 
     <!-- 新建文件夹弹窗 -->
-    <el-dialog v-model="showFolderDialog" title="新建文件夹" width="400px">
-      <el-form :model="folderForm" label-width="80px" class="dialog-form">
+    <el-dialog v-model="showFolderDialog" title="新建文件夹" width="420px">
+      <el-form :model="folderForm" label-width="90px" class="dialog-form">
         <el-form-item label="文件夹名称">
           <el-input v-model="folderForm.folderName" placeholder="请输入文件夹名称" />
         </el-form-item>
@@ -1446,5 +1446,12 @@ onMounted(() => {
 /* 底部按钮栏内边距 */
 .el-dialog__footer {
   padding: 0 20px 20px;
+}
+
+/* 弹窗表单：标签不折行 */
+.dialog-form {
+  .el-form-item__label {
+    white-space: nowrap;
+  }
 }
 </style>

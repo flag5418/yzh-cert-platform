@@ -6,43 +6,43 @@
       </el-icon>
     </el-badge>
   </div>
-  <vol-box v-model="model" :width="420" :padding="5">
+  <vol-box v-model="model" :width="460" :padding="0">
     <div class="msg-header">
       <el-tabs v-model="activeName" class="msg-tabs" @tab-change="loadMessages">
         <el-tab-pane name="unread">
           <template #label>
-            <span class="custom-tabs-label">
-              <el-badge :value="msgCount" :show-zero="false" :offset="[-2, 4]"
-                badge-style="background-color: #ff1b0b;width: 18px;">
-                未读消息
-              </el-badge>
+            <span class="tab-label">未读消息
+              <el-badge v-if="msgCount > 0" :value="msgCount" :show-zero="false"
+                badge-style="background-color: #ff1b0b; margin-left: 4px;" />
             </span>
           </template>
         </el-tab-pane>
         <el-tab-pane label="已读消息" name="read" />
         <el-tab-pane label="全部消息" name="all" />
       </el-tabs>
-      <el-button v-if="msgCount > 0" type="primary" link size="small" @click="markAllRead" style="position:absolute;right:10px;top:8px;z-index:10;">
+      <el-button v-if="msgCount > 0" type="primary" link size="small" @click="markAllRead" class="read-all-btn">
         全部已读
       </el-button>
     </div>
     <el-scrollbar :height="400">
-      <div class="msg-item" v-for="(item, index) in msgList" :key="item.id || index"
-        :class="{ 'msg-unread': item.isRead === 0 }"
-        @click="markRead(item)">
-        <div class="title">
-          <el-badge v-if="item.isRead === 0" is-dot class="unread-dot" />
-          {{ item.title }}
-        </div>
-        <div class="desc">{{ item.content }}</div>
-        <div class="bottom">
-          <div class="tag">
-            <el-tag :type="getTagType(item.messageType)" size="small">{{ getTypeLabel(item.messageType) }}</el-tag>
+      <div v-if="msgList.length === 0" class="empty-state">
+        <el-empty description="暂无消息" />
+      </div>
+      <div v-else class="msg-list">
+        <div class="msg-item" v-for="(item, index) in msgList" :key="item.id || index"
+          :class="{ 'msg-unread': item.isRead === 0 }"
+          @click="markRead(item)">
+          <div class="title">
+            <span v-if="item.isRead === 0" class="unread-dot" />
+            {{ item.title }}
           </div>
-          <div class="date">{{ formatDate(item.createDate) }}</div>
+          <div class="desc">{{ item.content }}</div>
+          <div class="bottom">
+            <el-tag :type="getTagType(item.messageType)" size="small">{{ getTypeLabel(item.messageType) }}</el-tag>
+            <span class="date">{{ formatDate(item.createDate) }}</span>
+          </div>
         </div>
       </div>
-      <vol-empty v-if="msgList.length === 0" />
     </el-scrollbar>
   </vol-box>
 </template>
@@ -74,7 +74,6 @@ const loadMessages = async () => {
     if (res.status) {
       msgList.value = res.data || [];
     }
-    // 同步未读数
     const countRes = await proxy.http.post("api/message/unread-count", {}, true);
     if (countRes.status) {
       msgCount.value = countRes.data || 0;
@@ -123,13 +122,10 @@ const formatDate = (dateStr) => {
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
-// 暴露给 MessageConfig.js 调用
 const onSignalRMessage = (data) => {
   if (data.value === "convert_progress" || data.value === "convert_cancelled") {
     msgCount.value++;
-    // 如果弹窗打开，刷新列表
     if (model.value) loadMessages();
-    // 显示桌面通知
     ElNotification({
       title: data.title || "文件转换",
       message: data.message || "",
@@ -160,51 +156,83 @@ onMounted(() => {
 
 .msg-header {
   position: relative;
-}
+  padding: 12px 16px 0 16px;
 
-.msg-item {
-  border-bottom: 1px solid #eee;
-  padding: 10px;
-  cursor: pointer;
+  .read-all-btn {
+    position: absolute;
+    right: 16px;
+    top: 14px;
+    z-index: 10;
+  }
 
-  .title {
-    font-weight: bolder;
-    font-size: 13px;
-    color: #000;
-    display: flex;
+  .tab-label {
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
-  }
-
-  .desc {
-    margin-top: 5px;
-    line-height: 1.3;
-    font-size: 12px;
-    color: #676565;
-  }
-
-  .bottom {
-    display: flex;
-    margin-top: 5px;
-    font-size: 12px;
-    color: #676565;
-  }
-
-  .tag {
-    flex: 1;
+    white-space: nowrap;
   }
 }
 
-.msg-item:hover {
-  background: #f9f9f9;
-}
+.msg-list {
+  .msg-item {
+    border-bottom: 1px solid #eee;
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: background 0.15s;
 
-.msg-unread {
-  background: #f0f7ff;
+    &:hover {
+      background: #f9f9f9;
+    }
+
+    &.msg-unread {
+      background: #f0f7ff;
+    }
+
+    .title {
+      font-weight: 600;
+      font-size: 13px;
+      color: #303133;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      line-height: 1.5;
+    }
+
+    .desc {
+      margin-top: 4px;
+      line-height: 1.4;
+      font-size: 12px;
+      color: #909399;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 6px;
+      font-size: 12px;
+      color: #909399;
+
+      .date {
+        flex-shrink: 0;
+        margin-left: 8px;
+      }
+    }
+  }
 }
 
 .unread-dot {
-  margin-right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff1b0b;
+  flex-shrink: 0;
+}
+
+.empty-state {
+  padding: 60px 20px;
 }
 
 ::v-deep(.el-tabs__header) {
@@ -217,11 +245,9 @@ onMounted(() => {
 
 ::v-deep(.el-tabs__nav) {
   width: 100%;
-  padding: 0 10px;
 }
 
 ::v-deep(.el-tabs__item) {
-  padding: 0 6px;
-  flex: 1;
+  padding: 0 16px;
 }
 </style>

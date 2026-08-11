@@ -1110,11 +1110,24 @@ namespace VOL.Builder.Services.CertPlatform
         {
             try
             {
-                // 1. 校验目录配置
+                // 1. 校验或自动创建目录配置
                 var config = _db.Set<StandardDirectoryConfig>()
-                    .FirstOrDefault(x => x.DirectoryCode == manifest.DirectoryCode && x.Enable == true);
+                    .FirstOrDefault(x => x.DirectoryCode == manifest.DirectoryCode);
                 if (config == null)
-                    return new WebResponseContent().Error("目录配置不存在");
+                {
+                    // 自动创建默认目录配置
+                    config = new StandardDirectoryConfig
+                    {
+                        DirectoryCode = manifest.DirectoryCode,
+                        StandardCode = "",
+                        PhaseCode = "",
+                        Enable = true,
+                        CreateDate = DateTime.Now,
+                    };
+                    _db.Set<StandardDirectoryConfig>().Add(config);
+                    await _db.SaveChangesAsync();
+                    Console.WriteLine($"[UploadInit] 自动创建目录配置: {manifest.DirectoryCode}");
+                }
 
                 // 2. 生成任务ID
                 var taskId = Guid.NewGuid().ToString("N");
