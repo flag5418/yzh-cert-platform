@@ -92,5 +92,51 @@ namespace VOL.Entity.CertPlatform.Dir
         /// </summary>
         [Column("complete_time")]
         public DateTime? CompleteTime { get; set; }
+
+        /// <summary>
+        /// 上传批次任务ID
+        /// </summary>
+        [MaxLength(64)]
+        [Column("task_id")]
+        public string TaskId { get; set; }
+
+        /// <summary>
+        /// 发起用户ID
+        /// </summary>
+        [Column("user_id")]
+        public int? UserId { get; set; }
+
+        /// <summary>
+        /// 发起用户名
+        /// </summary>
+        [MaxLength(100)]
+        [Column("user_name")]
+        public string UserName { get; set; }
+
+        /// <summary>
+        /// 机构编码
+        /// </summary>
+        [MaxLength(50)]
+        [Column("org_code")]
+        public string OrgCode { get; set; }
+
+        /// <summary>
+        /// 优先级（0=普通，10=高优先）
+        /// </summary>
+        [Column("priority")]
+        public int Priority { get; set; } = 0;
+
+        /// <summary>
+        /// 锁定时间（用于超时检测）
+        /// </summary>
+        [Column("locked_at")]
+        public DateTime? LockedAt { get; set; }
+
+        /// <summary>
+        /// 锁定者（Worker标识）
+        /// </summary>
+        [MaxLength(100)]
+        [Column("locked_by")]
+        public string LockedBy { get; set; }
     }
 }

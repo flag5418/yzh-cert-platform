@@ -48,7 +48,8 @@ AIGC:
 | 文件 | 职责 | 状态 |
 |------|------|------|
 | YZH-V3.0-架构设计文档.md | YZH-Framework V3.0 架构设计 | 开发中 |
-| YZH-AI引擎详细设计-V1.md | YZH-AI引擎四件套（SkillRegistry/LLM Gateway/PromptInterpreter/WorkflowEngine）L2 落地级详细设计，三引擎复用统一基础设施，含 8 张 Mermaid 设计图；V1.2 已补：① Office convertStatus 衔接 ② branches condition.field ③ 重试/熔断/信号量 ④ PromptInterpreter 边界 ⑤ S5 端到端验收 | 待实施 / V1.2 / 待审核 |
+| YZH-AI引擎详细设计-V1.md | YZH-AI引擎四件套（SkillRegistry/LLM Gateway/PromptInterpreter/WorkflowEngine）L2 落地级详细设计，三引擎复用统一基础设施，含 8 张 Mermaid 设计图；V1.2 已补：① Office convertStatus 衔接 ② branches condition.field ③ 重试/熔断/信号量 ④ PromptInterpreter 边界 ⑤ S5 端到端验收 | 待实施 / V1.2 / 实施中 |
+| YZH-AI引擎-实施TODO清单-V1.md | AI引擎四件套逐里程碑 TODO 清单，含 T0 前置对齐 + S1~S5 完整任务分解 + 已完成状态记录 + 待讨论事项 | 实施中 V1.0 |
 | YZH-前端框架建设方案-V1.0-待审批版.md | 前端框架建设方案 | 待审批 |
 | YZH-Framework-V2.0架构设计升级方案.md | V2.0 架构升级方案 | 设计阶段 |
 | YZH-Framework-V2.0-TODO清单.md | V2.0 升级 TODO 清单 | 待实施 |
@@ -65,7 +66,7 @@ AIGC:
 
 ## 关键词索引
 
-`执行中` `开发中` `实施中` `待实施` `待审核` `待审批` `研究中` `草案` `TODO` `Phase` `Office转换` `MinIO` `NPOI` `LibreOffice` `标准目录` `文档提取` `批量上传` `YZH` `工作流` `原型`
+`执行中` `开发中` `实施中` `待实施` `待审核` `待审批` `研究中` `草案` `TODO` `Phase` `Office转换` `MinIO` `NPOI` `LibreOffice` `标准目录` `文档提取` `批量上传` `YZH` `工作流` `AI引擎` `SkillRegistry` `LLM Gateway`
 
 ---
 

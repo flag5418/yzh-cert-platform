@@ -37,5 +37,12 @@ namespace VOL.Entity.CertPlatform.Wf
     
     public DateTime? CompletedAt { get; set; }
 
+    /// <summary>
+    /// 执行状态（区别于基类 Status 实体启用标记）
+    /// 取值：pending / running / success / failed / skipped
+    /// </summary>
+    [StringLength(20)]
+    public string ExecutionStatus { get; set; } = "pending";
+
     }
 }

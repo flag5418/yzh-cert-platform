@@ -1,27 +1,50 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.SystemModels;
 
 namespace VOL.Entity.CertPlatform.Sys
 {
     /// <summary>
-    /// SysConfig
-    /// <para>表名：sys_config</para>
+    /// 全局系统参数配置实体
     /// </summary>
-    [Table("sys_config")]
-    public class SysConfig : YZHBaseEntity
+    [Entity(TableCnName = "系统参数配置", TableName = "cert_sys_config", DBServer = "VOLContext")]
+    [Table("cert_sys_config")]
+    public class SysConfig : BaseEntity
     {
+        [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        [Column("id")]
+        public long Id { get; set; }
 
-    [Required][StringLength(100)]
-    public string ConfigKey { get; set; }
-    [Required]
-    public string ConfigValue { get; set; }
-    
-    public string ValueType { get; set; } = "string";
-    
-    public string Description { get; set; }
-    
-    public bool IsSystem { get; set; } = false;
+        [Column("config_key")]
+        public string ConfigKey { get; set; }
 
+        [Column("config_value")]
+        public string ConfigValue { get; set; }
+
+        [Column("config_type")]
+        public string ConfigType { get; set; } = "string";
+
+        [Column("category")]
+        public string Category { get; set; }
+
+        [Column("display_name")]
+        public string DisplayName { get; set; }
+
+        [Column("description")]
+        public string Description { get; set; }
+
+        [Column("sort_order")]
+        public int SortOrder { get; set; }
+
+        [Column("is_readonly")]
+        public int IsReadonly { get; set; }
+
+        [Column("create_date")]
+        public DateTime CreateDate { get; set; } = DateTime.Now;
+
+        [Column("modify_date")]
+        public DateTime? ModifyDate { get; set; }
     }
 }

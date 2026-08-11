@@ -1523,23 +1523,43 @@ namespace VOL.Builder.Services.CertPlatform
                     MarkModified(file, nameof(StandardDirectoryFile.IsValid), nameof(StandardDirectoryFile.UploadStatus), nameof(StandardDirectoryFile.ModifyDate));
                 }
 
-                // 5. 为 .doc/.xls 文件触发格式转换（.doc→.docx, .xls→.xlsx）
+                // 5. 为 .doc/.xls 文件入转换队列（.doc→.docx, .xls→.xlsx）
+                var userId = UserContext.Current.UserId;
+                var userName = UserContext.Current.UserName;
+                var orgCode = await GetCurrentOrgCodeAsync();
+                var convertCount = 0;
                 foreach (var file in filesToActivate)
                 {
                     if (string.IsNullOrEmpty(file.StoragePath)) continue;
-                    // 已有转换任务或已转换完成的跳过
                     if (!string.IsNullOrEmpty(file.ConvertStatus) && file.ConvertStatus != "pending") continue;
 
                     var ext = Path.GetExtension(file.FileName).TrimStart('.').ToLower();
-                    if (ext == "xls")
+                    string convertType = null;
+                    if (ext == "xls") convertType = "xls2xlsx";
+                    else if (ext == "doc") convertType = "doc2docx";
+                    else continue;
+
+                    // 创建转换任务（带批次信息）
+                    var existingJob = _db.Set<ConvertJob>()
+                        .FirstOrDefault(j => j.FileCode == file.FileCode && j.Status == "pending");
+                    if (existingJob == null)
                     {
-                        await _convertService.CreateConvertJobAsync(
-                            file.FileCode, file.StoragePath, "xls2xlsx");
-                    }
-                    else if (ext == "doc")
-                    {
-                        await _convertService.CreateConvertJobAsync(
-                            file.FileCode, file.StoragePath, "doc2docx");
+                        var targetPath = _convertService.GenerateTargetPathPublic(file.StoragePath, convertType);
+                        _db.Set<ConvertJob>().Add(new ConvertJob
+                        {
+                            FileCode = file.FileCode,
+                            SourcePath = file.StoragePath,
+                            TargetPath = targetPath,
+                            ConvertType = convertType,
+                            Status = "pending",
+                            CreateTime = DateTime.Now,
+                            TaskId = taskId,
+                            UserId = userId,
+                            UserName = userName,
+                            OrgCode = orgCode,
+                            Priority = 0
+                        });
+                        convertCount++;
                     }
                 }
 
@@ -1550,7 +1570,10 @@ namespace VOL.Builder.Services.CertPlatform
 
                 _db.SaveChanges();
 
-                return new WebResponseContent().OK($"上传确认完成，共{task.TotalFiles}个文件");
+                var msg = convertCount > 0
+                    ? $"上传确认完成，共{task.TotalFiles}个文件，{convertCount}个文件正在转换"
+                    : $"上传确认完成，共{task.TotalFiles}个文件";
+                return new WebResponseContent().OK(msg, new { taskId, convertCount });
             }
             catch (Exception ex)
             {

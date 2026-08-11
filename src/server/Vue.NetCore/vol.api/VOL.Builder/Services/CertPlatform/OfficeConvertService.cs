@@ -234,6 +234,14 @@ namespace VOL.Builder.Services.CertPlatform
         }
         
         /// <summary>
+        /// 生成目标文件路径（公开方法）
+        /// </summary>
+        public string GenerateTargetPathPublic(string sourcePath, string convertType)
+        {
+            return GenerateTargetPath(sourcePath, convertType);
+        }
+
+        /// <summary>
         /// 生成目标文件路径
         /// </summary>
         private string GenerateTargetPath(string sourcePath, string convertType)

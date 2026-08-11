@@ -9,6 +9,7 @@ using VOL.Core.Controllers.Basic;
 using VOL.Core.Utilities;
 using VOL.Core.Filters;
 using VOL.Builder.IServices.CertPlatform;
+using VOL.Builder.Services.CertPlatform;
 using VOL.Entity.CertPlatform.Dir;
 using VOL.Entity.DomainModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,15 +24,19 @@ namespace VOL.WebApi.Controllers.CertPlatform
         private readonly IStandardDirectoryService _service;
         private readonly ICodeGeneratorService _codeGenerator;
 
-        [ActivatorUtilitiesConstructor]
-        public StandardDirectoryController(
-            IStandardDirectoryService service,
-            ICodeGeneratorService codeGenerator)
-        : base(service)
-        {
-            _service = service;
-            _codeGenerator = codeGenerator;
-        }
+    private readonly ConvertQueueManager _queueManager;
+
+    [ActivatorUtilitiesConstructor]
+    public StandardDirectoryController(
+        IStandardDirectoryService service,
+        ICodeGeneratorService codeGenerator,
+        ConvertQueueManager queueManager)
+    : base(service)
+    {
+        _service = service;
+        _codeGenerator = codeGenerator;
+        _queueManager = queueManager;
+    }
 
         #region 组织树
 
@@ -422,6 +427,31 @@ namespace VOL.WebApi.Controllers.CertPlatform
             var path = _codeGenerator.GenerateStoragePath(
                 standardCode, phaseCode, folderCode, fileName);
             return JsonNormal(new WebResponseContent().OK(null, path));
+        }
+
+        #endregion
+
+        #region 转换队列
+
+        [HttpGet("convert/progress")]
+        public async Task<IActionResult> GetConvertProgress([FromQuery] string taskId)
+        {
+            var progress = await _queueManager.GetBatchProgressAsync(taskId);
+            return JsonNormal(new WebResponseContent().OK(null, progress));
+        }
+
+        [HttpGet("convert/queue-status")]
+        public async Task<IActionResult> GetQueueStatus()
+        {
+            var status = await _queueManager.GetQueueStatusAsync();
+            return JsonNormal(new WebResponseContent().OK(null, status));
+        }
+
+        [HttpPost("convert/cancel")]
+        public async Task<IActionResult> CancelConvert([FromQuery] string taskId)
+        {
+            await _queueManager.CancelBatchAsync(taskId);
+            return JsonNormal(new WebResponseContent().OK("转换已取消"));
         }
 
         #endregion

@@ -132,6 +132,7 @@ builder.Services.AddMvc(options =>
 
 // ====== Office 文档转换后台服务 ======
 builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.OfficeConvertService>();
+builder.Services.AddSingleton<VOL.Builder.Services.CertPlatform.ConvertQueueManager>();
 builder.Services.AddHostedService<VOL.Builder.Services.CertPlatform.ConvertHostedService>();
 
 var startup = new Startup(builder.Configuration);
