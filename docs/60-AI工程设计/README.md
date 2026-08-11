@@ -8,7 +8,7 @@
 
 | 文件 | 职责 | 状态 |
 |------|------|------|
-| [AI代码生成检查清单-V1.md](<./AI代码生成检查清单-V1.md>) | AI 在生成代码前必须逐项检查的清单，整合所有约束 | 成熟态 V1.0 |
+| [AI代码生成检查清单-V1.md](<./AI代码生成检查清单-V1.md>) | AI 在生成代码前必须逐项检查的清单，整合所有约束 | 成熟态 V1.2 |
 | [vol-skill.md](<./vol-skill.md>) | Vol 框架 AI 开发技能（开发用） | 正式发布 |
 | [vol-framework-complete-guide.md](<./vol-framework-complete-guide.md>) | Vol 框架完整指南 | 正式发布 |
 | [vol-framework-troubleshooting.md](<./vol-framework-troubleshooting.md>) | Vol 框架常见问题排查 | 正式发布 |

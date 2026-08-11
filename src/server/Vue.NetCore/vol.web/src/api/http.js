@@ -10,9 +10,9 @@ let loadingInstance
 let loadingStatus = false
 if (process.env.NODE_ENV == 'development') {
   //本地接口地址
-  axios.defaults.baseURL = 'http://localhost:9991/'
+  axios.defaults.baseURL = 'http://localhost:9992/'
 } else if (process.env.NODE_ENV == 'debug') {
-  axios.defaults.baseURL = 'http://localhost:9991/'
+  axios.defaults.baseURL = 'http://localhost:9992/'
 } else if (process.env.NODE_ENV == 'production') {
   //部署的后台接口地址
   axios.defaults.baseURL = 'http://api.volcore.xyz/'

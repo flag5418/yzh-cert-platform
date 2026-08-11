@@ -416,6 +416,11 @@ namespace VOL.Entity.CertPlatform.Dir
         public string StoragePath { get; set; }
 
         /// <summary>
+        /// 转换后文件的 MinIO 存储路径（.doc→.docx, .xls→.xlsx）
+        /// </summary>
+        public string ConvertedStoragePath { get; set; }
+
+        /// <summary>
         /// 文件大小（字节）
         /// </summary>
         public long? FileSize { get; set; }

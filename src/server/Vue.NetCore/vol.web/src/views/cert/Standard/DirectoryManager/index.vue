@@ -890,7 +890,7 @@ const handleExport = async () => {
       const user = JSON.parse(localStorage.getItem('user'))
       if (user && user.token) token = 'Bearer ' + user.token
     } catch {}
-    const baseUrl = window.ipAddress || 'http://localhost:9991/'
+    const baseUrl = window.ipAddress || 'http://localhost:9992/'
     const url = `${baseUrl}api/standard-directory/configs/${buildDirectoryCode()}/export`
     const resp = await fetch(url, {
       method: 'POST',
@@ -940,7 +940,7 @@ const downloadFile = async (file) => {
       const user = JSON.parse(localStorage.getItem('user'))
       if (user && user.token) token = 'Bearer ' + user.token
     } catch {}
-    const baseUrl = window.ipAddress || 'http://localhost:9991/'
+    const baseUrl = window.ipAddress || 'http://localhost:9992/'
     const url = `${baseUrl}api/standard-directory/download?path=${encodeURIComponent(storagePath)}`
     const resp = await fetch(url, {
       headers: token ? { Authorization: token } : {}

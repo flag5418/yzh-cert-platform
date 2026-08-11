@@ -1,3 +1,14 @@
+---
+AIGC:
+    Label: "1"
+    ContentProducer: 001191440300708461136T1XGW3
+    ProduceID: 9a16bac6e27d25132787d930f50d9879_1dc5117a953411f1b6b5525400287e28
+    ReservedCode1: y8FuTifN8zH8HR4ipUcIbQ2rnuZO1M8ijp5NIHwj2vQ0GzoJ91ORNBD8PHWNNSlV/iAutf/61hVXENi5VYtn4paV1lHLIMrqRiUHtiWS9DQXXMWn3jYiyfKr/S+7hfN8bB5m4i0S2kutNsiUyT4s6NJJ3Z7wsmyFRpDzRfOl+CyPVtg1y9l0YLNnTFg=
+    ContentPropagator: 001191440300708461136T1XGW3
+    PropagateID: 9a16bac6e27d25132787d930f50d9879_1dc5117a953411f1b6b5525400287e28
+    ReservedCode2: y8FuTifN8zH8HR4ipUcIbQ2rnuZO1M8ijp5NIHwj2vQ0GzoJ91ORNBD8PHWNNSlV/iAutf/61hVXENi5VYtn4paV1lHLIMrqRiUHtiWS9DQXXMWn3jYiyfKr/S+7hfN8bB5m4i0S2kutNsiUyT4s6NJJ3Z7wsmyFRpDzRfOl+CyPVtg1y9l0YLNnTFg=
+---
+
 # 70-当前执行
 
 > **作用**：当前正在执行（开发中/实施中/待实施/待审核/研究中）的文档集中归集处。方便查阅与审核项目是否按文档推进。
@@ -37,6 +48,7 @@
 | 文件 | 职责 | 状态 |
 |------|------|------|
 | YZH-V3.0-架构设计文档.md | YZH-Framework V3.0 架构设计 | 开发中 |
+| YZH-AI引擎详细设计-V1.md | YZH-AI引擎四件套（SkillRegistry/LLM Gateway/PromptInterpreter/WorkflowEngine）L2 落地级详细设计，三引擎复用统一基础设施，含 8 张 Mermaid 设计图 | 待实施 |
 | YZH-前端框架建设方案-V1.0-待审批版.md | 前端框架建设方案 | 待审批 |
 | YZH-Framework-V2.0架构设计升级方案.md | V2.0 架构升级方案 | 设计阶段 |
 | YZH-Framework-V2.0-TODO清单.md | V2.0 升级 TODO 清单 | 待实施 |
@@ -62,3 +74,4 @@
 - 依赖 `20-架构决策/`：执行方案基于架构决策的选型
 - 依赖 `60-AI工程设计/`：AI 开发遵循方法论与知识库
 - 完成后结论沉淀至 `40-领域设计/`、`20-架构决策/` 等正式目录
+*（内容由AI生成，仅供参考）*

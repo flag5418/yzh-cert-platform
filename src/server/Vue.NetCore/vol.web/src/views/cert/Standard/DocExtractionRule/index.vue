@@ -418,6 +418,7 @@ const transformStageFileTree = (folderNodes, depth = 0) => {
         tableDefCount: file.TableDefCount || 0,
         // 文件属性
         storagePath: file.StoragePath,
+        convertedStoragePath: file.ConvertedStoragePath,
         mimeType: file.MimeType,
         fileSize: file.FileSize,
         // 原始数据

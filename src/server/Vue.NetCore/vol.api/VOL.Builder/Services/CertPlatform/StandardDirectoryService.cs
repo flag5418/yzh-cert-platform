@@ -395,11 +395,12 @@ namespace VOL.Builder.Services.CertPlatform
                     FileName = file.FileName,
                     FolderCode = file.FolderCode,
                     StoragePath = file.StoragePath,
-                    FileSize = null, // StandardDirectoryFile 实体暂无此字段
+                    ConvertedStoragePath = file.ConvertedStoragePath,
+                    FileSize = null,
                     MimeType = file.FileType,
                     RuleStatus = hasRule ? "configured" : "none",
-                    ExtractFieldCount = 0, // TODO: 从规则表查询
-                    TableDefCount = 0      // TODO: 从规则表查询
+                    ExtractFieldCount = 0,
+                    TableDefCount = 0
                 });
             }
 
@@ -1467,7 +1468,7 @@ namespace VOL.Builder.Services.CertPlatform
         /// create 模式：IsValid=0 → 1
         /// replace 模式：更新旧记录文件信息，UploadStatus → active
         /// </summary>
-        public WebResponseContent UploadConfirm(string taskId)
+        public async Task<WebResponseContent> UploadConfirm(string taskId)
         {
             try
             {
@@ -1522,7 +1523,27 @@ namespace VOL.Builder.Services.CertPlatform
                     MarkModified(file, nameof(StandardDirectoryFile.IsValid), nameof(StandardDirectoryFile.UploadStatus), nameof(StandardDirectoryFile.ModifyDate));
                 }
 
-                // 5. 更新任务状态
+                // 5. 为 .doc/.xls 文件触发格式转换（.doc→.docx, .xls→.xlsx）
+                foreach (var file in filesToActivate)
+                {
+                    if (string.IsNullOrEmpty(file.StoragePath)) continue;
+                    // 已有转换任务或已转换完成的跳过
+                    if (!string.IsNullOrEmpty(file.ConvertStatus) && file.ConvertStatus != "pending") continue;
+
+                    var ext = Path.GetExtension(file.FileName).TrimStart('.').ToLower();
+                    if (ext == "xls")
+                    {
+                        await _convertService.CreateConvertJobAsync(
+                            file.FileCode, file.StoragePath, "xls2xlsx");
+                    }
+                    else if (ext == "doc")
+                    {
+                        await _convertService.CreateConvertJobAsync(
+                            file.FileCode, file.StoragePath, "doc2docx");
+                    }
+                }
+
+                // 6. 更新任务状态
                 task.Status = "completed";
                 task.ModifyDate = DateTime.Now;
                 MarkModified(task, nameof(UploadTask.Status), nameof(UploadTask.ModifyDate));

@@ -221,7 +221,7 @@ async function _fetchConfig(
   const url = `${apiPrefix.replace(/\/+$/, '')}/${encodeURIComponent(pageKey)}`
 
   // 使用 Vol 框架的 http 模块：
-  // - 自动设置 baseURL（http://localhost:9991/）
+  // - 自动设置 baseURL（http://localhost:9992/）
   // - 自动携带 JWT Authorization header
   // - get(url, params, loading) 返回 response.data（即响应体 JSON）
   let result: any

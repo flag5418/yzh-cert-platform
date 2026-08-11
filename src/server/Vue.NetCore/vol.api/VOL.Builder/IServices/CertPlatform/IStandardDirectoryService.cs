@@ -169,7 +169,7 @@ namespace VOL.Builder.IServices.CertPlatform
         /// </summary>
         /// <param name="taskId">任务ID</param>
         /// <returns>操作结果</returns>
-        WebResponseContent UploadConfirm(string taskId);
+        Task<WebResponseContent> UploadConfirm(string taskId);
 
         /// <summary>
         /// 回滚上传任务

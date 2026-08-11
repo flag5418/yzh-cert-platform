@@ -122,7 +122,7 @@ builder.Services.UseMethodsModelParameters().UseMethodsGeneralParameters();
 builder.Services.AddSingleton<IObjectModelValidator>(new NullObjectModelValidator());
 //Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.WebHost.UseUrls("http://*:9991");
+builder.WebHost.UseUrls("http://*:9992");
 builder.Services.Configure<FormOptions>(x =>
 {
     x.MultipartBodyLengthLimit = 1024 * 1024 * 100;

@@ -324,11 +324,11 @@ namespace VOL.WebApi.Controllers.CertPlatform
         /// 确认上传完成
         /// </summary>
         [HttpPost("upload-confirm")]
-        public IActionResult UploadConfirm([FromQuery] string taskId)
+        public async Task<IActionResult> UploadConfirm([FromQuery] string taskId)
         {
             try
             {
-                var result = _service.UploadConfirm(taskId);
+                var result = await _service.UploadConfirm(taskId);
                 return JsonNormal(result);
             }
             catch (System.Exception ex)
