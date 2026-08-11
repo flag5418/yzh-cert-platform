@@ -138,7 +138,16 @@ const previewError = ref(null) /* 降级页提示 */
 const textContent = ref('') /* 文本预览 */
 
 /* ============ 1. 文件类型分类（速查.md 官方支持矩阵） ============ */
-const ext = computed(() => (props.file.name || '').split('.').pop().toLowerCase())
+const ext = computed(() => {
+  // 优先从转换后的路径提取扩展名（.doc→.docx 转换后实际是 docx）
+  const convertedPath = props.file?.convertedStoragePath || props.file?.ConvertedStoragePath || ''
+  if (convertedPath) {
+    const convertedExt = convertedPath.split('.').pop().toLowerCase()
+    if (convertedExt && convertedExt !== 'converted') return convertedExt
+  }
+  // 回退到原始文件名扩展名
+  return (props.file?.name || '').split('.').pop().toLowerCase()
+})
 
 const isImage = computed(() => ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext.value))
 const isText = computed(() => ['txt', 'md', 'json', 'xml', 'csv'].includes(ext.value))
