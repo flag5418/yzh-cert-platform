@@ -782,7 +782,24 @@ const submitUpload = async () => {
     const files = []
 
     for (const file of uploadFileList.value) {
-      const relativePath = file.webkitRelativePath || file.name
+      // 拼接当前文件夹路径，确保文件上传到正确的子目录
+      const fileName = file.name
+      const rawPath = file.webkitRelativePath || fileName
+      // 如果已在子文件夹中（webkitdirectory），保留原路径；否则拼上当前文件夹
+      let relativePath = rawPath
+      if (!rawPath.includes('/') && currentFolderCode.value) {
+        // 需要查找当前文件夹的 FullPath 来构建相对路径
+        const currentFolder = currentFolders.value.find(
+          f => (f.FolderCode || f.folderCode) === currentFolderCode.value
+        )
+        if (currentFolder && (currentFolder.FullPath || currentFolder.fullPath)) {
+          relativePath = `${currentFolder.FullPath || currentFolder.fullPath}/${fileName}`
+        } else {
+          // 回退：用 FolderCode 作为路径前缀
+          relativePath = `${currentFolderCode.value}/${fileName}`
+        }
+      }
+
       const pathParts = relativePath.split('/')
       if (pathParts.length > 1) {
         for (let i = 1; i < pathParts.length; i++) {
