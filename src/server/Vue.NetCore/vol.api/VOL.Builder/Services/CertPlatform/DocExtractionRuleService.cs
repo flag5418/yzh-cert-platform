@@ -535,62 +535,6 @@ namespace VOL.Builder.Services.CertPlatform
             return $"{tableCode}-COL-{columnName.ToPascalCase()}";
         }
 
-        /// <summary>
-        /// 获取文件信息
-        /// </summary>
-        private async Task<object> GetFileInfoAsync(string fileCode)
-        {
-            // TODO: 从StandardDirectoryService获取文件信息
-            // 这里需要调用现有接口获取MinIO文件路径
-            return null;
-        }
-
-        /// <summary>
-        /// 提取文档内容
-        /// </summary>
-        private async Task<string> ExtractDocumentContentAsync(object fileInfo, string skill)
-        {
-            // TODO: 根据技能类型调用不同的提取方法
-            // - word: 使用NPOI提取Word内容
-            // - excel: 使用NPOI提取Excel内容
-            // - pdf: 使用PDF提取库
-            return string.Empty;
-        }
-
-        /// <summary>
-        /// 调用AI进行分析
-        /// </summary>
-        private async Task<AIAnalyzeResponse> CallAIForAnalysisAsync(string docContent, string skill)
-        {
-            // TODO: 调用阿里云百炼API
-            // 使用千问模型进行文档结构分析
-            // 返回建议的字段和表格定义
-
-            // 模拟返回
-            return new AIAnalyzeResponse
-            {
-                Fields = new List<FieldDefDto>(),
-                Tables = new List<TableDefDto>(),
-                Message = "AI分析完成"
-            };
-        }
-
-        /// <summary>
-        /// 调用AI执行提取
-        /// </summary>
-        private async Task<ExtractionData> CallAIForExtractionAsync(string docContent, string prompt)
-        {
-            // TODO: 调用阿里云百炼API执行实际提取
-            // 返回提取的字段值和表格数据
-
-            // 模拟返回
-            return new ExtractionData
-            {
-                Fields = new Dictionary<string, object>(),
-                Tables = new Dictionary<string, List<Dictionary<string, object>>>()
-            };
-        }
-
         #endregion
     }
 

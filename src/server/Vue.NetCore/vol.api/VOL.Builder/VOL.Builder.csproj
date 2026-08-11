@@ -36,6 +36,7 @@
   <ItemGroup>
     <ProjectReference Include="..\VOL.Core\VOL.Core.csproj" />
     <ProjectReference Include="..\VOL.Entity\VOL.Entity.csproj" />
+    <ProjectReference Include="..\..\..\YZH-Framework\YZH.Core\YZH.Core.csproj" />
   </ItemGroup>
 
 </Project>

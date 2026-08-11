@@ -4,8 +4,11 @@ using VOL.Core.Filters;
 using Microsoft.AspNetCore.Mvc;
 using VOL.Core.Controllers.Basic;
 using VOL.Core.Enums;
+using Microsoft.EntityFrameworkCore;
+using VOL.Core.Extensions.AutofacManager;
 using VOL.Entity.CertPlatform.DocExtraction;
 using VOL.Entity.CertPlatform.DocExtraction.DTOs;
+using VOL.Entity.CertPlatform.Dir;
 using VOL.Builder.IServices.CertPlatform;
 
 namespace VOL.WebApi.Controllers.CertPlatform
@@ -73,9 +76,7 @@ namespace VOL.WebApi.Controllers.CertPlatform
         {
             var result = await _service.GetRuleDetailAsync(fileCode);
             if (result == null)
-            {
                 return JsonNormal(new { success = false, message = "规则不存在" });
-            }
             return JsonNormal(new { success = true, data = result });
         }
 
@@ -117,6 +118,53 @@ namespace VOL.WebApi.Controllers.CertPlatform
         {
             var skills = _service.GetSkills();
             return JsonNormal(new { success = true, data = skills });
+        }
+
+        /// <summary>
+        /// 获取标准目录文件树（按目录编码）。
+        /// </summary>
+        [HttpGet, Route("files/tree")]
+        public IActionResult GetFileTree([FromQuery] string directoryCode)
+        {
+            var dirService = AutofacContainerModule.GetService<VOL.Builder.IServices.CertPlatform.IStandardDirectoryService>();
+            if (dirService == null)
+                return JsonNormal(new { success = false, message = "标准目录服务不可用" });
+            var tree = dirService.GetStageFileTree(directoryCode);
+            return JsonNormal(new { success = true, data = tree });
+        }
+
+        /// <summary>
+        /// 获取文件全文内容（经 IFileExtractor 提取）。
+        /// </summary>
+        [HttpGet, Route("files/{fileCode}/content")]
+        public async Task<IActionResult> GetFileContent(string fileCode)
+        {
+            var volContext = AutofacContainerModule.GetService<VOL.Core.EFDbContext.VOLContext>();
+            var stdFile = await volContext.Set<StandardDirectoryFile>()
+                .FirstOrDefaultAsync(x => x.FileCode == fileCode);
+            if (stdFile == null)
+                return JsonNormal(new { success = false, message = "文件不存在" });
+
+            var extractor = AutofacContainerModule.GetService<YZH.Core.Extractor.IFileExtractor>();
+            if (extractor == null)
+                return JsonNormal(new { success = false, message = "文件提取器不可用" });
+
+            var filePath = stdFile.ConvertedStoragePath ?? stdFile.StoragePath;
+            if (string.IsNullOrWhiteSpace(filePath))
+                return JsonNormal(new { success = false, message = "文件路径为空" });
+
+            var result = await extractor.ExtractAsync(filePath);
+            return JsonNormal(new {
+                success = true,
+                data = new {
+                    fullText = result.FullText ?? string.Empty,
+                    fileName = stdFile.FileName,
+                    sourceType = result.SourceType.ToString(),
+                    status = result.Status.ToString(),
+                    fieldCount = result.Fields.Count,
+                    tableCount = result.Tables.Count
+                }
+            });
         }
 
         /// <summary>

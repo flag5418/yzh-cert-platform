@@ -55,12 +55,11 @@ namespace YZH.Core.AI.Clients
             }
 
             var providerName = string.IsNullOrWhiteSpace(request.Provider) ? ActiveProvider : request.Provider;
-            var requestedExplicitly = !string.IsNullOrWhiteSpace(request.Provider);
             var ordered = ProviderOrder(providerName);
             Exception? lastEx = null;
 
             // 显式指定 Provider 但注册表中不存在 → 直接抛异常，不走降级链
-            if (requestedExplicitly && _providers.All(p => p.Name != providerName))
+            if (!string.IsNullOrWhiteSpace(request.Provider) && _providers.All(p => p.Name != providerName))
                 throw new AI.LlmCallException($"未注册 Provider: {providerName}", true);
 
             var foundAny = false;
@@ -97,7 +96,6 @@ namespace YZH.Core.AI.Clients
                             lock (_circuitLock)
                                 _circuitBreakerUntil = DateTime.Now.AddSeconds(30);
                             _logger.LogError("Provider {Provider} 连续失败 5 次，熔断 30s", pName);
-                            break; // 切下一个 Provider
                         }
                         if (retry < RetryDelaysMs.Length)
                             await Task.Delay(RetryDelaysMs[retry], ct);

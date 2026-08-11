@@ -14,7 +14,6 @@ namespace YZH.Core.Tests.AI
 {
     public class S1_LlmClientTests
     {
-        /// <param name="extraProviders">额外注册的 Provider（放在 MockProvider 之后）</param>
         private static ILlmClient CreateClient(
             List<ILlmProvider>? extraProviders = null,
             string activeProvider = "qwen")
@@ -45,13 +44,11 @@ namespace YZH.Core.Tests.AI
         }
 
         [Fact]
-        public async Task CompleteAsync_ActiveProvider_FallsBackToConfig()
+        public async Task CompleteAsync_ActiveProvider_Should_UseConfig()
         {
+            // 显式设置 Provider=null，走 ActiveProvider（config=mock）
             var client = CreateClient(activeProvider: "mock");
-            var request = new LlmRequest
-            {
-                Messages = new List<LlmMessage> { new() { Role = "user", Content = "test" } }
-            };
+            var request = new LlmRequest { Provider = null };
             var response = await client.CompleteAsync(request);
             Assert.True(response.Success);
             Assert.Equal("mock", response.Provider);
@@ -60,19 +57,12 @@ namespace YZH.Core.Tests.AI
         [Fact]
         public async Task CompleteAsync_UnknownProvider_Should_ThrowLlmCallException()
         {
-            // 注册一个 Name="unknown" 的 Provider 但不包含 MockProvider
-            // 这样 request.Provider="unknown" 会找到它，但它抛异常
-            // 然后降级链里没有其他 provider，最终抛异常
-            var unknownProvider = new Mock<ILlmProvider>();
-            unknownProvider.Setup(p => p.Name).Returns("unknown");
-            unknownProvider.Setup(p => p.ChatAsync(It.IsAny<LlmRequest>(), It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new YZH.Core.AI.LlmCallException("unknown 不可用", true));
-
-            var client = CreateClient(new List<ILlmProvider> { unknownProvider.Object });
-
+            // 注册表中只有 MockProvider(Name="mock")，request.Provider="unknown" 未注册 → 抛异常
+            var client = CreateClient();
             var request = new LlmRequest { Provider = "unknown" };
             var ex = await Assert.ThrowsAsync<YZH.Core.AI.LlmCallException>(() => client.CompleteAsync(request));
             Assert.True(ex.IsUnreachable);
+            Assert.Contains("未注册", ex.Message);
         }
 
         [Fact]

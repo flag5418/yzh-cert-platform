@@ -433,14 +433,15 @@ namespace VOL.WebApi.Controllers.CertPlatform
 
         #region 转换队列
 
-        [HttpGet("convert/progress")]
-        public async Task<IActionResult> GetConvertProgress([FromQuery] string taskId)
-        {
-            var progress = await _queueManager.GetBatchProgressAsync(taskId);
+[HttpPost("convert/progress")]
+public async Task<IActionResult> GetConvertProgress([FromBody] dynamic param)
+{
+    string taskId = (string)(param?.taskId ?? "");
+    var progress = await _queueManager.GetBatchProgressAsync(taskId);
             return JsonNormal(new WebResponseContent().OK(null, progress));
         }
 
-        [HttpGet("convert/queue-status")]
+        [HttpPost("convert/queue-status")]
         public async Task<IActionResult> GetQueueStatus()
         {
             var status = await _queueManager.GetQueueStatusAsync();

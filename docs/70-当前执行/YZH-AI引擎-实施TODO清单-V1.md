@@ -11,11 +11,11 @@
 | 阶段 | 预估工时 | 状态 | 完成度 |
 |------|----------|------|--------|
 | T0 前置：文档与实体对齐 | 0.5 天 | 进行中 | 0% |
-| S1 LLM Gateway | 1 天 | 待开始 | 0% |
-| S2 SkillRegistry + 内置 Skill | 1 天 | 待开始 | 0% |
-| S3 PromptInterpreter | 1 天 | 待开始 | 0% |
-| S4 WorkflowEngine + 留痕 | 1.5 天 | 待开始 | 0% |
-| S5 接入验证场 | 2 天 | 待开始 | 0% |
+| S1 LLM Gateway | 1 天 | ✅ 完成 | 100% |
+| S2 SkillRegistry + 内置6个Skill | 1 天 | ✅ 完成 | 100% |
+| S3 PromptInterpreter | 1 天 | ✅ 完成 | 100% |
+| S4 WorkflowEngine + 留痕 | 1.5 天 | ✅ 完成 | 100% |
+| S5 接入验证场 | 2 天 | ✅ 完成 | 100% |
 | **合计** | **6.5 天** | — | — |
 
 > **当前基线**：`dotnet build` 0 错误 / 42/42 测试通过 / MySQL(3307) + Redis(6380) 容器运行中
@@ -282,6 +282,11 @@
 | 2026-08-11 | 数据库容器确认：MySQL(3307) + Redis(6380) 运行中 | `docker ps` |
 | 2026-08-11 | AIConfig 实体确认：`cert_ai_config` 表存在 | 代码核实 |
 | 2026-08-11 | WorkflowExecutionLog 字段差异确认：缺 Status / BusinessId 类型 | 代码核实 |
+| 2026-08-11 | S1 LLM Gateway 完成：9个文件，7个测试 | 构建0错误 / 49/49测试通过 |
+| 2026-08-11 | S2 SkillRegistry+6个Skill完成：12个文件，8个测试 | 构建0错误 / 57/57测试通过 |
+| 2026-08-11 | S3 PromptInterpreter完成：8个文件，10个测试 | 构建0错误 / 67/67测试通过 |
+| 2026-08-11 | S4 WorkflowEngine完成：9个文件，7个测试 | 构建0错误 / 74/74测试通过 |
+| 2026-08-11 | S5 接入完成：DocExtractionRuleService.AI.cs + Controller扩展 | VOL.WebApi构建0错误 |
 
 ---
 

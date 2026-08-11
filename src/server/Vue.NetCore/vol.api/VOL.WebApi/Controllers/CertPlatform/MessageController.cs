@@ -19,7 +19,7 @@ namespace VOL.WebApi.Controllers.CertPlatform
             _messageService = messageService;
         }
 
-        [HttpGet("unread-count")]
+        [HttpPost("unread-count")]
         public async Task<IActionResult> GetUnreadCount()
         {
             var userId = UserContext.Current.UserId;
@@ -27,13 +27,17 @@ namespace VOL.WebApi.Controllers.CertPlatform
             return new JsonResult(new { status = true, data = count });
         }
 
-        [HttpGet("list")]
-        public async Task<IActionResult> GetList([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] bool unreadOnly = false)
-        {
-            var userId = UserContext.Current.UserId;
-            var list = await _messageService.GetListAsync(userId, page, pageSize, unreadOnly);
-            return new JsonResult(new { status = true, data = list });
-        }
+[HttpPost("list")]
+public async Task<IActionResult> GetList([FromBody] dynamic param)
+{
+    int page = (int)(param?.page ?? 1);
+    int pageSize = (int)(param?.pageSize ?? 20);
+    bool unreadOnly = (bool)(param?.unreadOnly ?? false);
+
+    var userId = UserContext.Current.UserId;
+    var list = await _messageService.GetListAsync(userId, page, pageSize, unreadOnly);
+    return new JsonResult(new { status = true, data = list });
+}
 
         [HttpPost("read/{id}")]
         public async Task<IActionResult> MarkRead(long id)

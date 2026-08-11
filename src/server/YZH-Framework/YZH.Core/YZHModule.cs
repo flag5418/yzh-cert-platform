@@ -12,6 +12,9 @@ using YZH.Core.Extractor.Pdf;
 using YZH.Core.Extractor.Text;
 using YZH.Core.Extractor.Word;
 using YZH.Core.Validation;
+using YZH.Core.AI.Clients;
+using YZH.Core.Workflow;
+using YZH.Core.Skills;
 
 namespace YZH.Core
 {
@@ -59,6 +62,8 @@ namespace YZH.Core
             // ============================================================
 
             RegisterExtractorServices(builder);
+            RegisterLlmServices(builder);
+            RegisterWorkflowServices(builder);
 
             // TODO:P2 - 取消以下注释以启用 Phase 2 组件
             // RegisterCodeRuleServices(builder);
@@ -128,6 +133,57 @@ namespace YZH.Core
             // [TODO:P2] 图片 OCR：IOcrExtractor 第三方实现（腾讯云/百度 OCR）接入后，
             // 在此注册 Keyed<IOcrExtractor>(ExtractSourceType.Image) 并由 FileExtractorService 消费。
             Console.WriteLine("[YZH] Extractor services registered (Word/Excel/PDF/Text)");
+        }
+
+        /// <summary>
+        /// 注册 LLM Gateway 服务（S1 完成）。
+        /// Provider 顺序：QwenApiProvider（云端默认）/ OllamaProvider（本地断网兜底）/ MockProvider（测试）
+        /// </summary>
+        private void RegisterLlmServices(ContainerBuilder builder)
+        {
+            builder.RegisterType<QwenApiProvider>()
+                   .As<ILlmProvider>()
+                   .InstancePerLifetimeScope();
+            builder.RegisterType<OllamaProvider>()
+                   .As<ILlmProvider>()
+                   .InstancePerLifetimeScope();
+            builder.RegisterType<MockProvider>()
+                   .As<ILlmProvider>()
+                   .InstancePerLifetimeScope();
+            builder.RegisterType<LlmClient>()
+                   .As<ILlmClient>()
+                   .InstancePerLifetimeScope();
+            Console.WriteLine("[YZH] LLM Gateway services registered (Qwen/Ollama/Mock)");
+        }
+
+        /// <summary>
+        /// 注册工作流基础服务（S2/S4 补充 Skill/Engine 注册）。
+        /// </summary>
+        private void RegisterWorkflowServices(ContainerBuilder builder)
+        {
+            // S2: SkillRegistry + 内置 Skill
+            builder.RegisterType<SkillRegistry>()
+                   .As<ISkillRegistry>()
+                   .InstancePerLifetimeScope();
+            builder.RegisterType<DocumentExtractSkill>()
+                   .As<ISkillNode>()
+                   .InstancePerLifetimeScope();
+            builder.RegisterType<LlmExtractSkill>()
+                   .As<ISkillNode>()
+                   .InstancePerLifetimeScope();
+            builder.RegisterType<CompareSkill>()
+                   .As<ISkillNode>()
+                   .InstancePerLifetimeScope();
+            builder.RegisterType<GetFieldSkill>()
+                   .As<ISkillNode>()
+                   .InstancePerLifetimeScope();
+            builder.RegisterType<GetTableSkill>()
+                   .As<ISkillNode>()
+                   .InstancePerLifetimeScope();
+            builder.RegisterType<AssembleSkill>()
+                   .As<ISkillNode>()
+                   .InstancePerLifetimeScope();
+            Console.WriteLine("[YZH] Workflow services registered (SkillRegistry + 6 built-in Skills)");
         }
 
         /// <summary>

@@ -19,19 +19,21 @@ namespace VOL.WebApi.Controllers.CertPlatform
             _configService = configService;
         }
 
-        [HttpGet("list")]
-        public async Task<IActionResult> GetList([FromQuery] string category)
-        {
-            var list = await _configService.GetByCategoryAsync(category ?? "");
-            return new JsonResult(new { status = true, data = list });
-        }
+[HttpPost("list")]
+public async Task<IActionResult> GetList([FromBody] dynamic param)
+{
+    string category = (string)(param?.category ?? "");
+    var list = await _configService.GetByCategoryAsync(category);
+    return new JsonResult(new { status = true, data = list });
+}
 
-        [HttpGet("value/{configKey}")]
-        public IActionResult GetValue(string configKey)
-        {
-            var value = _configService.Get(configKey);
-            return new JsonResult(new { status = true, data = value });
-        }
+[HttpPost("value")]
+public IActionResult GetValue([FromBody] dynamic param)
+{
+    string configKey = (string)(param?.configKey ?? "");
+    var value = _configService.Get(configKey);
+    return new JsonResult(new { status = true, data = value });
+}
 
         [HttpPost("update")]
         public async Task<IActionResult> Update([FromBody] CertConfigUpdateDto dto)
