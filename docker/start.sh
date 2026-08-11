@@ -131,3 +131,5 @@ echo -e "${CYAN}MySQL:    mysql -h 127.0.0.1 -P 3307 -u root -p yzh_cert_platfor
 echo -e "${CYAN}Redis:    redis-cli -p 6380"
 echo -e "${CYAN}MinIO:    http://127.0.0.1:9001 (Console) / http://127.0.0.1:9000 (API)${NC}"
 echo ""
+echo -e "${GREEN}提示: 使用 ./stop.sh 停止服务${NC}"
+echo ""

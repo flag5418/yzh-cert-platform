@@ -40,5 +40,25 @@ namespace VOL.Builder.IServices.CertPlatform
         /// </summary>
         (string StandardCode, string PhaseCode, string FolderCode, string FileName) 
          ParseStoragePath(string path);
+
+        /// <summary>
+        /// 生成 MinIO 存储路径 V2（四级结构）
+        /// 格式：/{OrgCode}/{CleanStandardCode}/{PhaseCode}/{FolderPath}/{FileName}
+        /// 示例：/CB001/ISO134852016/STAGE01/质量手册/程序文件.docx
+        /// </summary>
+        /// <param name="orgCode">企业编码</param>
+        /// <param name="standardCode">标准编码（会自动清理特殊字符）</param>
+        /// <param name="phaseCode">阶段编码</param>
+        /// <param name="folderPath">文件夹路径（相对于阶段根目录）</param>
+        /// <param name="fileName">文件名</param>
+        string GenerateStoragePathV2(string orgCode, string standardCode, string phaseCode,
+                                     string folderPath, string fileName);
+
+        /// <summary>
+        /// 生成转换后文件的存储路径
+        /// 格式：/{OrgCode}/{CleanStandardCode}/{PhaseCode}/{FolderPath}/.converted/{FileName}
+        /// </summary>
+        string GenerateConvertedStoragePath(string orgCode, string standardCode, string phaseCode,
+                                            string folderPath, string fileName);
     }
 }

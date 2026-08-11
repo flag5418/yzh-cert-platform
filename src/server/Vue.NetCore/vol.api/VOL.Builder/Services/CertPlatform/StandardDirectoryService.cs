@@ -31,12 +31,15 @@ namespace VOL.Builder.Services.CertPlatform
         private readonly ICodeGeneratorService _codeGenerator;
         private readonly IConfiguration _configuration;
         private readonly IMinioClient _minioClient;
+        private readonly OfficeConvertService _convertService;
 
-        public StandardDirectoryService(VOLContext db, ICodeGeneratorService codeGenerator, IConfiguration configuration)
+        public StandardDirectoryService(VOLContext db, ICodeGeneratorService codeGenerator, 
+                                        IConfiguration configuration, OfficeConvertService convertService)
         {
             _db = db;
             _codeGenerator = codeGenerator;
             _configuration = configuration;
+            _convertService = convertService;
             
             // 初始化 MinIO 客户端
             _minioClient = new MinioClient()
@@ -866,7 +869,7 @@ namespace VOL.Builder.Services.CertPlatform
         #region 文件上传
 
         /// <summary>
-        /// 上传文件到标准目录（存储到MinIO）
+        /// 上传文件到标准目录（存储到MinIO）- V2版本使用四级路径结构
         /// </summary>
         public async Task<WebResponseContent> UploadFile(IFormFile file, string directoryCode, string relativePath)
         {
@@ -885,10 +888,18 @@ namespace VOL.Builder.Services.CertPlatform
                     return new WebResponseContent().Error("目录配置不存在");
                 }
 
+                // 获取当前用户机构编码
+                var orgCode = await GetCurrentOrgCodeAsync();
+                if (string.IsNullOrEmpty(orgCode))
+                {
+                    return new WebResponseContent().Error("无法获取当前用户机构信息");
+                }
+
                 // 解析相对路径，获取文件夹结构
                 var pathParts = relativePath.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
                 string parentCode = "";
                 string folderCode = directoryCode;
+                var folderNames = new List<string>();
 
                 // 如果有子文件夹，逐级创建或查找
                 if (pathParts.Length > 1)
@@ -896,6 +907,8 @@ namespace VOL.Builder.Services.CertPlatform
                     for (int i = 0; i < pathParts.Length - 1; i++)
                     {
                         var folderName = pathParts[i];
+                        folderNames.Add(folderName);
+                        
                         var existingFolder = _db.Set<StandardDirectoryFolder>()
                             .FirstOrDefault(x => x.DirectoryCode == directoryCode 
                                                && x.ParentCode == parentCode 
@@ -938,11 +951,17 @@ namespace VOL.Builder.Services.CertPlatform
 
                 // 获取文件名
                 var fileName = pathParts.Last();
+                var fileExt = Path.GetExtension(fileName).TrimStart('.').ToLower();
                 
-                // 生成文件编码和存储路径
+                // 生成文件编码
                 var fileCode = _codeGenerator.GenerateFileCode(folderCode, fileName);
-                var storagePath = _codeGenerator.GenerateStoragePath(
-                    config.StandardCode, config.PhaseCode, folderCode, fileName);
+                
+                // 构建文件夹路径（用于 MinIO 路径）
+                var folderPath = string.Join("/", folderNames);
+                
+                // 使用 V2 路径生成器生成四级路径
+                var storagePath = _codeGenerator.GenerateStoragePathV2(
+                    orgCode, config.StandardCode, config.PhaseCode, folderPath, fileName);
 
                 // 确保 Bucket 存在
                 var bucketName = _configuration["MinIO:BucketName"] ?? "cert-platform";
@@ -975,20 +994,72 @@ namespace VOL.Builder.Services.CertPlatform
                     DirectoryCode = directoryCode,
                     FolderCode = folderCode,
                     FileName = fileName,
-                    FileType = Path.GetExtension(fileName).TrimStart('.'),
+                    FileType = fileExt,
+                    StoragePath = storagePath,
                     Code = Guid.NewGuid().ToString("N"),
                     CreateDate = DateTime.Now,
                     Enable = true
                 };
 
+                // 如果是旧版 Office 格式，标记为待转换
+                if (fileExt == "doc" || fileExt == "xls")
+                {
+                    fileRecord.ConvertStatus = "pending";
+                }
+
                 _db.Set<StandardDirectoryFile>().Add(fileRecord);
                 await _db.SaveChangesAsync();
+
+                // 如果是旧版 Office 文件，创建转换任务
+                if (fileExt == "xls")
+                {
+                    await _convertService.CreateConvertJobAsync(
+                        fileRecord.FileCode, 
+                        storagePath, 
+                        "xls2xlsx");
+                }
+                else if (fileExt == "doc")
+                {
+                    await _convertService.CreateConvertJobAsync(
+                        fileRecord.FileCode, 
+                        storagePath, 
+                        "doc2docx");
+                }
 
                 return new WebResponseContent().OK($"文件上传成功：{fileName}");
             }
             catch (Exception ex)
             {
-                return new WebResponseContent().Error($"上传失败：{ex.Message}");
+                var innerMessage = ex.InnerException?.Message ?? "无内部异常";
+                Console.WriteLine($"[UploadFile] 上传失败: {ex.Message}, 内部异常: {innerMessage}");
+                Console.WriteLine($"[UploadFile] 堆栈: {ex.StackTrace}");
+                return new WebResponseContent().Error($"上传失败：{ex.Message}，内部：{innerMessage}");
+            }
+        }
+
+        /// <summary>
+        /// 获取当前登录用户的机构编码
+        /// </summary>
+        private async Task<string> GetCurrentOrgCodeAsync()
+        {
+            try
+            {
+                var userId = UserContext.Current.UserId;
+                if (userId <= 0)
+                {
+                    return null;
+                }
+
+                var user = await _db.Set<Sys_User>()
+                    .Where(x => x.User_Id == userId)
+                    .Select(x => new { x.OrgCode })
+                    .FirstOrDefaultAsync();
+
+                return user?.OrgCode;
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -1142,8 +1213,13 @@ namespace VOL.Builder.Services.CertPlatform
 
                 // 5. 处理文件列表（基于完整路径判定 create/replace）
                 var enhancedFiles = new List<EnhancedFileItem>();
-                var standardCode = config.StandardCode.Replace(":", "").Replace("-", "").Replace(" ", "");
-                var phaseCode = config.PhaseCode.Replace(":", "").Replace("-", "").Replace(" ", "");
+                
+                // 获取当前用户机构编码（用于生成四级路径）
+                var orgCode = await GetCurrentOrgCodeAsync();
+                if (string.IsNullOrEmpty(orgCode))
+                {
+                    return new WebResponseContent().Error("无法获取当前用户机构信息");
+                }
 
                 for (int i = 0; i < manifest.Files.Count; i++)
                 {
@@ -1200,7 +1276,16 @@ namespace VOL.Builder.Services.CertPlatform
                     {
                         // ===== create 模式 =====
                         var fileCode = _codeGenerator.GenerateFileCode(parentFolderCode, fileName);
-                        var storagePath = $"/{standardCode}/{phaseCode}/{parentFolderCode}/{fileName}";
+                        var fileExt = Path.GetExtension(fileName).TrimStart('.').ToLower();
+                        
+                        // 构建文件夹路径（用于 MinIO 四级路径）
+                        var folderPath = pathParts.Length > 1 
+                            ? string.Join("/", pathParts.Take(pathParts.Length - 1)) 
+                            : "";
+                        
+                        // 使用 V2 路径生成器生成四级路径：/{org}/{standard}/{phase}/{folder}/{file}
+                        var storagePath = _codeGenerator.GenerateStoragePathV2(
+                            orgCode, config.StandardCode, config.PhaseCode, folderPath, fileName);
 
                         var fileRecord = new StandardDirectoryFile
                         {
@@ -1208,7 +1293,7 @@ namespace VOL.Builder.Services.CertPlatform
                             FolderCode = parentFolderCode,
                             DirectoryCode = manifest.DirectoryCode,
                             FileName = fileName,
-                            FileType = Path.GetExtension(fileName).TrimStart('.'),
+                            FileType = fileExt,
                             Code = Guid.NewGuid().ToString("N"),
                             TaskId = taskId,
                             IsValid = false, // 预创建状态
@@ -1218,6 +1303,12 @@ namespace VOL.Builder.Services.CertPlatform
                             CreateDate = DateTime.Now,
                             Enable = true
                         };
+                        
+                        // 如果是旧版 Office 格式，标记为待转换
+                        if (fileExt == "doc" || fileExt == "xls")
+                        {
+                            fileRecord.ConvertStatus = "pending";
+                        }
 
                         _db.Set<StandardDirectoryFile>().Add(fileRecord);
 

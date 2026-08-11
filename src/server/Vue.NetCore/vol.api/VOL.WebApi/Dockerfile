@@ -30,6 +30,32 @@ RUN dotnet publish "./VOL.WebApi.csproj" -c $BUILD_CONFIGURATION -o /app/publish
 
 # 此阶段在生产中使用，或在常规模式下从 VS 运行时使用(在不使用调试配置时为默认值)
 FROM base AS final
+
+# 切换到 root 用户安装 LibreOffice 和中文字体
+USER root
+
+# 安装 LibreOffice 和中文字体
+RUN apt-get update && apt-get install -y \
+    libreoffice-writer \
+    libreoffice-calc \
+    libreoffice-impress \
+    fonts-wqy-zenhei \
+    fonts-wqy-microhei \
+    fonts-noto-cjk \
+    fonts-noto-cjk-extra \
+    fontconfig \
+    && rm -rf /var/lib/apt/lists/*
+
+# 刷新字体缓存
+RUN fc-cache -fv
+
+# 创建 LibreOffice 转换工作目录
+RUN mkdir -p /tmp/libreoffice-convert && chmod 777 /tmp/libreoffice-convert
+
 WORKDIR /app
 COPY --from=publish /app/publish .
+
+# 切换回非 root 用户运行应用
+USER $APP_UID
+
 ENTRYPOINT ["dotnet", "VOL.WebApi.dll"]

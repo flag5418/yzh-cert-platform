@@ -78,6 +78,23 @@ services:
     networks:
       - yzh-net
 
+  ##############################################################################
+  # LibreOffice - Office 文档转换服务 (DOC->DOCX, XLS->XLSX)
+  # 使用 Alpine + LibreOffice 轻量版
+  ##############################################################################
+  libreoffice:
+    image: woahbase/alpine-libreoffice:latest
+    container_name: yzh-libreoffice
+    restart: "no"
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./libreoffice/tmp:/tmp/libreoffice
+    # 保持容器运行，等待转换任务
+    command: tail -f /dev/null
+    networks:
+      - yzh-net
+
 networks:
   yzh-net:
     driver: bridge

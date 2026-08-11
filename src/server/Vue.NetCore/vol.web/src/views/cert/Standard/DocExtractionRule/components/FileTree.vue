@@ -22,7 +22,17 @@
               <Folder v-else />
             </el-icon>
             <span class="node-label">{{ data.name }}</span>
-            <!-- 文档状态标识 -->
+            <!-- 转换状态标识（旧版 Office 格式） -->
+            <el-tag
+              v-if="data.type === 'file' && data.convertStatus"
+              size="small"
+              :type="getConvertTagType(data.convertStatus)"
+              class="convert-status-tag"
+              :title="getConvertStatusTitle(data.convertStatus)"
+            >
+              {{ getConvertStatusIcon(data.convertStatus) }}
+            </el-tag>
+            <!-- 文档规则状态标识 -->
             <span
               v-if="data.type === 'file'"
               class="status-icon"
@@ -82,6 +92,37 @@ const getStatusTitle = (status) => {
     failed: '制定规则失败'
   };
   return map[status] || '';
+};
+
+// 转换状态相关方法
+const getConvertStatusIcon = (status) => {
+  const map = {
+    pending: '⏳',
+    converting: '🔄',
+    completed: '✓',
+    failed: '✕'
+  };
+  return map[status] || '';
+};
+
+const getConvertStatusTitle = (status) => {
+  const map = {
+    pending: '等待转换',
+    converting: '正在转换',
+    completed: '转换完成',
+    failed: '转换失败'
+  };
+  return map[status] || '';
+};
+
+const getConvertTagType = (status) => {
+  const map = {
+    pending: 'info',
+    converting: 'warning',
+    completed: 'success',
+    failed: 'danger'
+  };
+  return map[status] || 'info';
 };
 
 const onNodeClick = (data, node) => {
@@ -209,6 +250,15 @@ const onNodeClick = (data, node) => {
   color: #f56c6c;
   background: #fef0f0;
   box-shadow: 0 0 0 1px #fde2e2;
+}
+
+/* 转换状态徽标样式 */
+.convert-status-tag {
+  margin-left: 4px;
+  font-size: 12px;
+  padding: 0 4px;
+  height: 18px;
+  line-height: 16px;
 }
 
 /* Element Tree 样式覆盖 */

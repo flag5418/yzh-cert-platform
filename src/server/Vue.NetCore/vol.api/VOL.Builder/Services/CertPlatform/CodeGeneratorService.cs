@@ -94,6 +94,70 @@ namespace VOL.Builder.Services.CertPlatform
             return (parts[0], parts[1], folderCode, fileName);
         }
 
+        /// <summary>
+        /// 生成 MinIO 存储路径 V2（四级结构）
+        /// 格式：/{OrgCode}/{CleanStandardCode}/{PhaseCode}/{FolderPath}/{FileName}
+        /// 示例：/CB001/ISO134852016/STAGE01/质量手册/程序文件.docx
+        /// </summary>
+        public string GenerateStoragePathV2(string orgCode, string standardCode, string phaseCode,
+                                            string folderPath, string fileName)
+        {
+            // 清理编码中的特殊字符
+            var cleanStandard = CleanCode(standardCode);
+            var cleanPhase = CleanCode(phaseCode);
+            var cleanOrg = CleanCode(orgCode);
+            
+            // 清理文件夹路径中的特殊字符
+            var cleanFolderPath = folderPath?.Replace("|", "-").Replace("//", "/").Trim('/') ?? "";
+            
+            // 生成完整路径
+            if (string.IsNullOrEmpty(cleanFolderPath))
+            {
+                return $"/{cleanOrg}/{cleanStandard}/{cleanPhase}/{fileName}";
+            }
+            
+            return $"/{cleanOrg}/{cleanStandard}/{cleanPhase}/{cleanFolderPath}/{fileName}";
+        }
+
+        /// <summary>
+        /// 生成转换后文件的存储路径
+        /// 格式：/{OrgCode}/{CleanStandardCode}/{PhaseCode}/{FolderPath}/.converted/{FileName}
+        /// </summary>
+        public string GenerateConvertedStoragePath(string orgCode, string standardCode, string phaseCode,
+                                                   string folderPath, string fileName)
+        {
+            // 清理编码中的特殊字符
+            var cleanStandard = CleanCode(standardCode);
+            var cleanPhase = CleanCode(phaseCode);
+            var cleanOrg = CleanCode(orgCode);
+            
+            // 清理文件夹路径中的特殊字符
+            var cleanFolderPath = folderPath?.Replace("|", "-").Replace("//", "/").Trim('/') ?? "";
+            
+            // 生成完整路径（转换后文件放在 .converted 隐藏目录下）
+            if (string.IsNullOrEmpty(cleanFolderPath))
+            {
+                return $"/{cleanOrg}/{cleanStandard}/{cleanPhase}/.converted/{fileName}";
+            }
+            
+            return $"/{cleanOrg}/{cleanStandard}/{cleanPhase}/{cleanFolderPath}/.converted/{fileName}";
+        }
+
+        /// <summary>
+        /// 清理编码中的特殊字符（用于路径）
+        /// </summary>
+        private string CleanCode(string code)
+        {
+            if (string.IsNullOrEmpty(code))
+                return "";
+            
+            return code.Replace(":", "")
+                       .Replace("-", "")
+                       .Replace(" ", "")
+                       .Replace("/", "")
+                       .Replace("\\", "");
+        }
+
         #endregion
     }
 }

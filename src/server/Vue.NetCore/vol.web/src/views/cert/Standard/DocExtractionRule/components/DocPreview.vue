@@ -177,9 +177,15 @@ const fileTypeText = computed(() => {
  * StandardDirectoryController.cs L238-L257
  *   [Route("api/standard-directory")] + [HttpGet("download")]
  *   [JWTAuthorize] + public async Task<IActionResult> DownloadFile([FromQuery] string path)
+ * 
+ * 优先使用 ConvertedStoragePath（转换后的 .docx/.xlsx），其次使用原始 StoragePath
  */
 const buildFileUrl = () => {
   if (!props.file) return ''
+  // 优先使用转换后的路径（如果转换成功）
+  const convertedPath = props.file.convertedStoragePath || props.file.ConvertedStoragePath || ''
+  if (convertedPath) return `/api/standard-directory/download?path=${encodeURIComponent(convertedPath)}`
+  // 回退到原始路径
   const path = props.file.storagePath || props.file.StoragePath || ''
   if (path) return `/api/standard-directory/download?path=${encodeURIComponent(path)}`
   const fileCode = props.file.fileCode || props.file.FileCode || ''

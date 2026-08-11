@@ -129,6 +129,11 @@ builder.Services.AddMvc(options =>
     options.Filters.Add(typeof(ApiAuthorizeFilter));
     options.Filters.Add(typeof(ActionExecuteFilter));
 });
+
+// ====== Office 文档转换后台服务 ======
+builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.OfficeConvertService>();
+builder.Services.AddHostedService<VOL.Builder.Services.CertPlatform.ConvertHostedService>();
+
 var startup = new Startup(builder.Configuration);
 
 
