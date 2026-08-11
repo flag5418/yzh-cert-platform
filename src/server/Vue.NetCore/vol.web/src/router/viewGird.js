@@ -89,6 +89,20 @@ let viewgird = [
     name: 'DocExtractionRule',
     component: () => import('@/views/cert/Standard/DocExtractionRule/index.vue'),
     meta: { title: '文档提取规则' }
+  },
+  // 系统参数配置
+  {
+    path: '/CertPlatform/SysConfig',
+    name: 'SysConfig',
+    component: () => import('@/views/cert/Standard/SysConfigManager/index.vue'),
+    meta: { title: '系统参数配置' }
+  },
+  // 转换队列监控
+  {
+    path: '/CertPlatform/ConvertQueueMonitor',
+    name: 'ConvertQueueMonitor',
+    component: () => import('@/views/cert/Standard/ConvertQueueMonitor/index.vue'),
+    meta: { title: '转换队列监控' }
   }
 ]
 

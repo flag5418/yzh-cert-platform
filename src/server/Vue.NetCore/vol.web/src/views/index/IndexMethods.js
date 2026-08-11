@@ -229,8 +229,9 @@ export default function (proxy, dataConfig, router, onSelect) {
     //开启消息推送（main.js中设置是否开启signalR)
     if (proxy.$global.signalR) {
       MessageConfig(proxy.http, (result) => {
-        // messageList.unshift(result)
-        //    console.log(result)
+        if (proxy.$refs?.messageRef?.onSignalRMessage) {
+          proxy.$refs.messageRef.onSignalRMessage(result)
+        }
       })
     }
 

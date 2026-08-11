@@ -378,6 +378,8 @@
         </el-button>
       </template>
     </el-dialog>
+    <!-- 文件转换进度面板 -->
+    <ConvertProgressPanel ref="convertPanelRef" />
   </div>
 </template>
 
@@ -397,6 +399,7 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
+import ConvertProgressPanel from './ConvertProgressPanel.vue'
 
 const searchText = ref('')
 const treeData = ref([])
@@ -421,6 +424,7 @@ const fileInputRef = ref(null)
 const folderInputRef = ref(null)
 const uploadFileList = ref([])
 const uploading = ref(false)
+const convertPanelRef = ref(null)
 
 const uploadProgress = reactive({
   total: 0,
@@ -847,8 +851,15 @@ const submitUpload = async () => {
     } else {
       uploadProgress.completed = totalFiles
       uploadProgress.status = 'done'
-      await http.post(`/api/standard-directory/upload-confirm?taskId=${taskId}`)
-      ElMessage.success(`全部 ${totalFiles} 个文件上传成功`)
+      const confirmRes = await http.post(`/api/standard-directory/upload-confirm?taskId=${taskId}`)
+      // 检查是否有文件需要转换
+      if (confirmRes.data && confirmRes.data.convertCount > 0) {
+        ElMessage.success(`上传成功，${confirmRes.data.convertCount} 个文件正在转换`)
+        // 显示转换进度面板
+        convertPanelRef.value?.start(taskId)
+      } else {
+        ElMessage.success(`全部 ${totalFiles} 个文件上传成功`)
+      }
       uploadFileList.value = []
       showUploadDialogFlag.value = false
       await loadCurrentContent()

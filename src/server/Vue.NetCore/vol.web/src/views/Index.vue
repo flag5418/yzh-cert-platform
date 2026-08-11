@@ -93,7 +93,7 @@
 
           <!--消息管理-->
           <div class="h-link">
-            <message :list="messageList"></message>
+            <message ref="messageRef" :list="messageList"></message>
             <!-- <a><i class="el-icon-message-solid"></i></a> -->
           </div>
 
@@ -266,6 +266,7 @@ const getColor = () => {
 
 const theme = ref()
 theme.value = proxy.$global.theme || ''
+const messageRef = ref(null)
 const messageList = reactive([])
 
 const toggleLeft = () => {
