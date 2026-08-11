@@ -1,19 +1,18 @@
 ---
 AIGC:
-    Label: "1"
-    ContentProducer: 001191440300708461136T1XGW3
-    ProduceID: 9a16bac6e27d25132787d930f50d9879_1d078285953411f181ac525400f8a581
-    ReservedCode1: y87/8Hf+ByLo/LqXat1eLnPbcgPvueC+sLSjwSlUykUsGigtX1vTdlRMbrtYxKcaTREzlSKmnX+LfYYSYLl1Chc1xWMGYFsncjyBo+Mwrc91lr74ylnMs4F9qhPDWYuIx9digqlpk/m937vRHmcu0k94h+3M9DB/SNIXreL6Uw4BX+o2pzkY9Ij3ieA=
-    ContentPropagator: 001191440300708461136T1XGW3
-    PropagateID: 9a16bac6e27d25132787d930f50d9879_1d078285953411f181ac525400f8a581
-    ReservedCode2: y87/8Hf+ByLo/LqXat1eLnPbcgPvueC+sLSjwSlUykUsGigtX1vTdlRMbrtYxKcaTREzlSKmnX+LfYYSYLl1Chc1xWMGYFsncjyBo+Mwrc91lr74ylnMs4F9qhPDWYuIx9digqlpk/m937vRHmcu0k94h+3M9DB/SNIXreL6Uw4BX+o2pzkY9Ij3ieA=
+  Label: '1'
+  ContentProducer: 001191440300708461136T1XGW3
+  ProduceID: 9a16bac6e27d25132787d930f50d9879_1d078285953411f181ac525400f8a581
+  ReservedCode1: y87/8Hf+ByLo/LqXat1eLnPbcgPvueC+sLSjwSlUykUsGigtX1vTdlRMbrtYxKcaTREzlSKmnX+LfYYSYLl1Chc1xWMGYFsncjyBo+Mwrc91lr74ylnMs4F9qhPDWYuIx9digqlpk/m937vRHmcu0k94h+3M9DB/SNIXreL6Uw4BX+o2pzkY9Ij3ieA=
+  ContentPropagator: 001191440300708461136T1XGW3
+  PropagateID: 9a16bac6e27d25132787d930f50d9879_1d078285953411f181ac525400f8a581
+  ReservedCode2: y87/8Hf+ByLo/LqXat1eLnPbcgPvueC+sLSjwSlUykUsGigtX1vTdlRMbrtYxKcaTREzlSKmnX+LfYYSYLl1Chc1xWMGYFsncjyBo+Mwrc91lr74ylnMs4F9qhPDWYuIx9digqlpk/m937vRHmcu0k94h+3M9DB/SNIXreL6Uw4BX+o2pzkY9Ij3ieA=
 ---
-
-
 
 # YZH-AI引擎详细设计-V1
 
-> **版本**：V1.1 | **日期**：2026-08-11 | **状态**：待实施
+> **版本**：V1.2 | **日期**：2026-08-11 | **状态**：待实施
+> **V1.1→V1.2 更新点**：① 补旧版 Office convertStatus 与 DocumentExtractSkill 衔接；② 补 branches condition.field 定义 + skipped 留痕；③ 补 LlmClient 重试/熔断/信号量；④ 补 PromptInterpreter 边界 + LlmExtractSkill 1 次 JSON 失败重试；⑤ 补 S5 验收 Office 联动 + http.js 声明
 
 ---
 
@@ -36,16 +35,16 @@ AIGC:
 
 ## 设计图索引
 
-| # | 图名 | 所在章节 | 用途 |
-|---|---|---|---|
-| 图1 | 总体架构分层图 | [2. 模块划分](#2-模块划分) | 业务层 / YZH.Core 四件套 / Vol 框架三层关系 |
-| 图2 | 四件套模块协作图 | [2.1 目录结构](#21-目录结构) | SkillRegistry / LLM Gateway / PromptInterpreter / WorkflowEngine / Extractor / ExecutionLog 调用关系 |
-| 图3 | 配置期时序图 | [5.1 配置期](#51-配置期注册-skill--配置规则) | 维护人员配置规则 → 自动生成 / 注册 Skill → 发布 |
-| 图4 | 运行期提取执行时序图 | [5.2 运行期](#52-运行期标准文档提取执行) | 上传 → 本地提取 → 匹配 Skill → LLM → B-08 落库 → 低置信度复核 |
-| 图5 | 三引擎复用图 | [5.3 校验 / 报告引擎复用](#53-校验--报告引擎复用) | extraction / validation / report 复用同一套工作流 + Skill 基础设施 |
-| 图6 | 模型无关 provider 切换原理图 | [7.1 切换机制](#71-切换机制) | ILlmClient → QwenApiProvider / OllamaProvider / MockProvider 路由与降级 |
-| 图7 | 提取执行状态机图 | [5.2 运行期](#52-运行期标准文档提取执行) | Pending → Extracting → Success / LowConfidence / OcrRequired / Failed |
-| 图8 | 工作流引擎执行原理图 | [6.5 WorkflowEngine](#65-workflowengine线性管道--条件分支) | workflow_config 解析 → 线性管道 / 条件分支 → 节点执行 |
+| #   | 图名                         | 所在章节                                                   | 用途                                                                                                 |
+| --- | ---------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| 图1 | 总体架构分层图               | [2. 模块划分](#2-模块划分)                                 | 业务层 / YZH.Core 四件套 / Vol 框架三层关系                                                          |
+| 图2 | 四件套模块协作图             | [2.1 目录结构](#21-目录结构)                               | SkillRegistry / LLM Gateway / PromptInterpreter / WorkflowEngine / Extractor / ExecutionLog 调用关系 |
+| 图3 | 配置期时序图                 | [5.1 配置期](#51-配置期注册-skill--配置规则)               | 维护人员配置规则 → 自动生成 / 注册 Skill → 发布                                                      |
+| 图4 | 运行期提取执行时序图         | [5.2 运行期](#52-运行期标准文档提取执行)                   | 上传 → 本地提取 → 匹配 Skill → LLM → B-08 落库 → 低置信度复核                                        |
+| 图5 | 三引擎复用图                 | [5.3 校验 / 报告引擎复用](#53-校验--报告引擎复用)          | extraction / validation / report 复用同一套工作流 + Skill 基础设施                                   |
+| 图6 | 模型无关 provider 切换原理图 | [7.1 切换机制](#71-切换机制)                               | ILlmClient → QwenApiProvider / OllamaProvider / MockProvider 路由与降级                              |
+| 图7 | 提取执行状态机图             | [5.2 运行期](#52-运行期标准文档提取执行)                   | Pending → Extracting → Success / LowConfidence / OcrRequired / Failed                                |
+| 图8 | 工作流引擎执行原理图         | [6.5 WorkflowEngine](#65-workflowengine线性管道--条件分支) | workflow_config 解析 → 线性管道 / 条件分支 → 节点执行                                                |
 
 > 全部设计图使用 **Mermaid** 语法，与《总体设计-V3.md》（docs/20-架构决策）既定格式保持一致，GitHub / VSCode 可直接渲染。
 
@@ -57,14 +56,14 @@ AIGC:
 
 项目存在三条数据引擎：**标准文档数据提取**（上传 → 提取字段/表格）、**数据校验**（自动 NC 判定）、**报告生成**（章节内容组装）。三引擎均需要"调用外部 AI → 执行本地 Skill → 结构化输出"的统一能力，但当前现状：
 
-| 组件 | 现状 | 依据 |
-|------|------|------|
-| `IFileExtractor` | ✅ 已实现，42/42 测试通过（Word/Excel/PDF 文本层） | `YZH.Core/Extractor/` |
-| `DocExtractionRuleService` | ⚠️ 4 个私有方法全 TODO 模拟返回空；未引用 IFileExtractor | 代码核实 |
-| `QwenAIConfigService` / `PromptGenerationService` / `FieldAnalysisService` | ❌ 三服务均不存在（V3 设计） | 代码核实 |
-| `wf_skill` 实体 | ✅ 已建（`VOL.Entity/CertPlatform/Wf/Skill.cs`） | 代码核实 |
-| `ISkillNode` / `ISkillRegistry` / `WorkflowEngine` | ❌ 零实现 | 代码核实 |
-| 前端 4 按钮（analyze/generate-prompt/verify/save） | ❌ 全 TODO 未接后端 | index.vue 核实 |
+| 组件                                                                       | 现状                                                     | 依据                  |
+| -------------------------------------------------------------------------- | -------------------------------------------------------- | --------------------- |
+| `IFileExtractor`                                                           | ✅ 已实现，42/42 测试通过（Word/Excel/PDF 文本层）       | `YZH.Core/Extractor/` |
+| `DocExtractionRuleService`                                                 | ⚠️ 4 个私有方法全 TODO 模拟返回空；未引用 IFileExtractor | 代码核实              |
+| `QwenAIConfigService` / `PromptGenerationService` / `FieldAnalysisService` | ❌ 三服务均不存在（V3 设计）                             | 代码核实              |
+| `wf_skill` 实体                                                            | ✅ 已建（`VOL.Entity/CertPlatform/Wf/Skill.cs`）         | 代码核实              |
+| `ISkillNode` / `ISkillRegistry` / `WorkflowEngine`                         | ❌ 零实现                                                | 代码核实              |
+| 前端 4 按钮（analyze/generate-prompt/verify/save）                         | ❌ 全 TODO 未接后端                                      | index.vue 核实        |
 
 结论：配置期链路（规则 → 提示词）方向正确，但"本地 Skill + 运行期 AI 推理 + 结果回写"三机制全缺失。本设计补齐这三块，并作为三引擎复用的统一基础设施。
 
@@ -82,11 +81,13 @@ AIGC:
 ### 1.3 范围边界
 
 **本设计包含**：
+
 - 四件套的接口契约、数据契约、代码骨架、测试、里程碑
 - 验证场 = 标准文档数据提取（`cert_doc_*` 规则 → 上传 → 提取 → B-08/B-09 落库 → 低置信度人工复核）
 - 校验/报告引擎的复用方式（F-03 `workflow_type` 区分）
 
 **本设计不包含（如实标注）**：
+
 - 前端 LogicFlow 可视化编辑器（另行设计）
 - OCR 第三方接入（`IFileExtractor` 已预留 `OcrExtractor` 扩展点，`[TODO:P2]`）
 - `cert_doc_*` 表与 V2 域 F/B 的物理收敛 SQL（本设计给出收敛方案，执行列为 `[TODO:P0]`，见 §11）
@@ -348,7 +349,7 @@ public class LlmResponse
 
 ### 3.4 IPromptInterpreter（提示词渲染与解析）
 
-```csharp
+````csharp
 namespace YZH.Core.AI.Prompt;
 
 /// <summary>
@@ -391,7 +392,7 @@ public class ParseResult<T> where T : class
     public string? Error { get; set; }      // 解析失败原因（供重试/降级）
     public string? RawText { get; set; }    // 剥离围栏后的原始文本
 }
-```
+````
 
 ### 3.5 IWorkflowEngine（解释器）
 
@@ -490,10 +491,22 @@ F-01 表字段见数据库表设计-V2 §8.2。`input_schema` / `output_schema` 
     "type": "object",
     "required": ["document_content", "prompt"],
     "properties": {
-      "document_content": { "type": "string", "description": "文档全文（IFileExtractor 提取结果）" },
-      "prompt": { "type": "string", "description": "提取提示词模板（含 {document_content} 占位）" },
-      "fields_json": { "type": "string", "description": "字段定义 JSON（cert_doc_field_def）" },
-      "tables_json": { "type": "string", "description": "表格定义 JSON（cert_doc_table_def + table_field_def）" }
+      "document_content": {
+        "type": "string",
+        "description": "文档全文（IFileExtractor 提取结果）"
+      },
+      "prompt": {
+        "type": "string",
+        "description": "提取提示词模板（含 {document_content} 占位）"
+      },
+      "fields_json": {
+        "type": "string",
+        "description": "字段定义 JSON（cert_doc_field_def）"
+      },
+      "tables_json": {
+        "type": "string",
+        "description": "表格定义 JSON（cert_doc_table_def + table_field_def）"
+      }
     }
   },
   "output_schema": {
@@ -520,7 +533,10 @@ F-01 表字段见数据库表设计-V2 §8.2。`input_schema` / `output_schema` 
           "required": ["table_code", "rows"],
           "properties": {
             "table_code": { "type": "string" },
-            "rows": { "type": "array", "items": { "type": "array", "items": { "type": "string" } } },
+            "rows": {
+              "type": "array",
+              "items": { "type": "array", "items": { "type": "string" } }
+            },
             "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
           }
         }
@@ -560,9 +576,19 @@ V2 已定义 nodes/edges/output_config 基础结构，本设计扩展 `branches`
         "required": ["node_id", "skill_code", "inputs", "output"],
         "properties": {
           "node_id": { "type": "string", "pattern": "^n[0-9]+$" },
-          "skill_code": { "type": "string", "description": "F-01.skill_code 或内置编码" },
-          "inputs": { "type": "object", "additionalProperties": true, "description": "字面量或 {{nX.port}} 模板" },
-          "output": { "type": "string", "description": "本节点输出端口名（供下游引用）" }
+          "skill_code": {
+            "type": "string",
+            "description": "F-01.skill_code 或内置编码"
+          },
+          "inputs": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "字面量或 {{nX.port}} 模板"
+          },
+          "output": {
+            "type": "string",
+            "description": "本节点输出端口名（供下游引用）"
+          }
         }
       }
     },
@@ -584,12 +610,30 @@ V2 已定义 nodes/edges/output_config 基础结构，本设计扩展 `branches`
         "type": "object",
         "required": ["from", "condition", "then"],
         "properties": {
-          "from": { "type": "string", "description": "判定节点 node_id（如 n4 输出 is_violation）" },
+          "from": {
+            "type": "string",
+            "description": "判定节点 node_id（如 n4 输出 is_violation）"
+          },
           "condition": {
             "type": "object",
-            "required": ["op", "value"],
+            "required": ["field", "op", "value"],
+            "description": "对 from 节点输出的指定端口（field）执行 op 运算，与 value 比较；truthy 时忽略 value",
             "properties": {
-              "op": { "enum": ["equals", "not_equals", "gt", "gte", "lt", "lte", "truthy"] },
+              "field": {
+                "type": "string",
+                "description": "from 节点输出的端口名，如 is_violation / n4.output / confidence"
+              },
+              "op": {
+                "enum": [
+                  "equals",
+                  "not_equals",
+                  "gt",
+                  "gte",
+                  "lt",
+                  "lte",
+                  "truthy"
+                ]
+              },
               "value": { "type": ["boolean", "string", "number", "null"] }
             }
           },
@@ -615,10 +659,34 @@ V2 已定义 nodes/edges/output_config 基础结构，本设计扩展 `branches`
 ```json
 {
   "nodes": [
-    { "node_id": "n1", "skill_code": "get_field", "inputs": { "label_tag": "[ISO9001_一监_管理评审记录_评审日期]" }, "output": "review_date" },
-    { "node_id": "n2", "skill_code": "get_field", "inputs": { "label_tag": "[ISO9001_一监_阶段审核日期]" }, "output": "audit_date" },
-    { "node_id": "n3", "skill_code": "date_diff", "inputs": { "date_a": "{{n1.output}}", "date_b": "{{n2.output}}", "unit": "month" }, "output": "diff_months" },
-    { "node_id": "n4", "skill_code": "compare", "inputs": { "value": "{{n3.output}}", "operator": ">", "threshold": 12 }, "output": "is_violation" }
+    {
+      "node_id": "n1",
+      "skill_code": "get_field",
+      "inputs": { "label_tag": "[ISO9001_一监_管理评审记录_评审日期]" },
+      "output": "review_date"
+    },
+    {
+      "node_id": "n2",
+      "skill_code": "get_field",
+      "inputs": { "label_tag": "[ISO9001_一监_阶段审核日期]" },
+      "output": "audit_date"
+    },
+    {
+      "node_id": "n3",
+      "skill_code": "date_diff",
+      "inputs": {
+        "date_a": "{{n1.output}}",
+        "date_b": "{{n2.output}}",
+        "unit": "month"
+      },
+      "output": "diff_months"
+    },
+    {
+      "node_id": "n4",
+      "skill_code": "compare",
+      "inputs": { "value": "{{n3.output}}", "operator": ">", "threshold": 12 },
+      "output": "is_violation"
+    }
   ],
   "edges": [
     { "from": "n1", "to": "n3" },
@@ -628,9 +696,17 @@ V2 已定义 nodes/edges/output_config 基础结构，本设计扩展 `branches`
   "branches": [
     {
       "from": "n4",
-      "condition": { "op": "equals", "value": true },
+      "condition": { "field": "output", "op": "equals", "value": true },
       "then": [
-        { "node_id": "n5", "skill_code": "create_nc", "inputs": { "severity": "minor", "template": "管理评审记录距审核日期超过12个月" }, "output": "nc_id" }
+        {
+          "node_id": "n5",
+          "skill_code": "create_nc",
+          "inputs": {
+            "severity": "minor",
+            "template": "管理评审记录距审核日期超过12个月"
+          },
+          "output": "nc_id"
+        }
       ]
     }
   ],
@@ -648,15 +724,25 @@ V2 已定义 nodes/edges/output_config 基础结构，本设计扩展 `branches`
   "type": "object",
   "required": ["plan_name", "steps"],
   "properties": {
-    "plan_name": { "type": "string", "description": "计划名称（日志/复核展示）" },
+    "plan_name": {
+      "type": "string",
+      "description": "计划名称（日志/复核展示）"
+    },
     "steps": {
       "type": "array",
       "items": {
         "type": "object",
         "required": ["order", "skill_code", "params"],
         "properties": {
-          "order": { "type": "integer", "minimum": 1, "description": "执行顺序（从 1 递增，引擎按序执行）" },
-          "skill_code": { "type": "string", "description": "F-01.skill_code（llm_extract / compare / get_field ...）" },
+          "order": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "执行顺序（从 1 递增，引擎按序执行）"
+          },
+          "skill_code": {
+            "type": "string",
+            "description": "F-01.skill_code（llm_extract / compare / get_field ...）"
+          },
           "params": {
             "type": "object",
             "additionalProperties": true,
@@ -680,9 +766,33 @@ V2 已定义 nodes/edges/output_config 基础结构，本设计扩展 `branches`
 {
   "plan_name": "营业执照提取计划",
   "steps": [
-    { "order": 1, "skill_code": "llm_extract", "params": { "prompt_template": "extract_license_v1", "document_content": "{{input.full_text}}" } },
-    { "order": 2, "skill_code": "compare", "params": { "value": "{{step.1.fields.companyName}}", "operator": "not_empty" } },
-    { "order": 3, "skill_code": "assemble", "params": { "parts": ["{{step.1.fields.companyName}}", "{{step.1.fields.creditCode}}"], "joiner": " | " } }
+    {
+      "order": 1,
+      "skill_code": "llm_extract",
+      "params": {
+        "prompt_template": "extract_license_v1",
+        "document_content": "{{input.full_text}}"
+      }
+    },
+    {
+      "order": 2,
+      "skill_code": "compare",
+      "params": {
+        "value": "{{step.1.fields.companyName}}",
+        "operator": "not_empty"
+      }
+    },
+    {
+      "order": 3,
+      "skill_code": "assemble",
+      "params": {
+        "parts": [
+          "{{step.1.fields.companyName}}",
+          "{{step.1.fields.creditCode}}"
+        ],
+        "joiner": " | "
+      }
+    }
   ],
   "output_mapping": {
     "companyName": "B08:companyName",
@@ -696,12 +806,12 @@ V2 已定义 nodes/edges/output_config 基础结构，本设计扩展 `branches`
 
 ### 4.4 与 B-08 / B-09 映射
 
-| AI 输出（output_schema） | 目标表 | 映射规则 |
-|---|---|---|
-| `fields[]` | **B-08 ExtractionResult** | `field_code` → `field_id`（经 A-09/F-02 匹配）；`field_value` → `extracted_value`；`confidence` → `confidence`；`position_info` → `position_info`；`label_tag` 冗余写入；`is_manual_edited=false` |
-| `tables[]` | **B-09 TableExtractionResult** | `table_code` → `rule_id` + `table_index`（多表按出现序）；`rows` → `extracted_json`（System.Text.Json 序列化）；`confidence` → `confidence`；`position_info` → `position_info` |
-| `confidence < 0.8` | — | 落库后标记待人工复核（前端列表红标 + `is_manual_edited` 语义：人工改后置 true） |
-| `fields_json` / `tables_json`（规则配置） | cert_doc_field_def / cert_doc_table_def | 规则配置期写入，非运行期落 B-08/B-09 |
+| AI 输出（output_schema）                  | 目标表                                  | 映射规则                                                                                                                                                                                          |
+| ----------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fields[]`                                | **B-08 ExtractionResult**               | `field_code` → `field_id`（经 A-09/F-02 匹配）；`field_value` → `extracted_value`；`confidence` → `confidence`；`position_info` → `position_info`；`label_tag` 冗余写入；`is_manual_edited=false` |
+| `tables[]`                                | **B-09 TableExtractionResult**          | `table_code` → `rule_id` + `table_index`（多表按出现序）；`rows` → `extracted_json`（System.Text.Json 序列化）；`confidence` → `confidence`；`position_info` → `position_info`                    |
+| `confidence < 0.8`                        | —                                       | 落库后标记待人工复核（前端列表红标 + `is_manual_edited` 语义：人工改后置 true）                                                                                                                   |
+| `fields_json` / `tables_json`（规则配置） | cert_doc_field_def / cert_doc_table_def | 规则配置期写入，非运行期落 B-08/B-09                                                                                                                                                              |
 
 > **字段编码 ↔ 标签**：`ExtractedField.LabelTag`（对齐 F-02 label_tag）作为工作流 `get_field` 的引用键；配置期由 F-02 建立 `label_tag → field_code` 映射，运行期 `GetFieldSkill` 按标签查 B-08。
 
@@ -771,7 +881,7 @@ sequenceDiagram
 
 ### 5.2 运行期：标准文档提取执行
 
-```
+````
 上传（标准文档/企业文档）
   │
   ▼
@@ -792,7 +902,7 @@ sequenceDiagram
 ⑥ 落库       B-08 每条 field 一条记录；B-09 每个 table 一条记录（confidence / position_info 全量写入）
   ▼
 ⑦ 人工复核   confidence < 0.8 → 前端红标待复核；人工修改 → is_manual_edited=true
-```
+````
 
 > **图4 运行期提取执行时序图** — 覆盖 §5.2 七步主链路：上传 → 本地提取 → 匹配规则 → WorkflowEngine 调度 → LLM 渲染/调用/解析 → B-08/B-09 落库。关键分支为 confidence < 0.8 时进入人工复核，复核结果回写 is_manual_edited 标记。
 
@@ -854,11 +964,11 @@ stateDiagram-v2
 
 ### 5.3 校验 / 报告引擎复用
 
-| 引擎 | workflow_type | 复用组件 | 差异点 |
-|---|---|---|---|
-| 标准文档提取 | `extraction` | SkillRegistry + LLM Gateway + PromptInterpreter + WorkflowEngine | 入口节点 `llm_extract` / `document_extract`；落 B-08/B-09 |
-| 数据校验 | `validation` | 同上 | 入口节点 `get_field`（读 B-08）+ `compare`/`date_diff`/`llm_judge`；分支写 C-03 自动 NC |
-| 报告生成 | `report` | 同上 | 入口节点 `get_field`/`get_table` + `llm_generate`/`assemble`；输出写 D-03 ReportSection |
+| 引擎         | workflow_type | 复用组件                                                         | 差异点                                                                                  |
+| ------------ | ------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| 标准文档提取 | `extraction`  | SkillRegistry + LLM Gateway + PromptInterpreter + WorkflowEngine | 入口节点 `llm_extract` / `document_extract`；落 B-08/B-09                               |
+| 数据校验     | `validation`  | 同上                                                             | 入口节点 `get_field`（读 B-08）+ `compare`/`date_diff`/`llm_judge`；分支写 C-03 自动 NC |
+| 报告生成     | `report`      | 同上                                                             | 入口节点 `get_field`/`get_table` + `llm_generate`/`assemble`；输出写 D-03 ReportSection |
 
 三引擎共用同一 `WorkflowEngine` 与 `IExecutionLogStore`（F-04 留痕），仅 `workflow_config` 内容与 `business_type` 不同。
 
@@ -942,23 +1052,95 @@ namespace YZH.Core.AI.Clients;
 
 public class LlmClient : ILlmClient
 {
-    private readonly IEnumerable<ILlmProvider> _providers;   // DI 注入：QwenApiProvider / OllamaProvider / MockProvider
+    private readonly IEnumerable<ILlmProvider> _providers;
     private readonly IConfiguration _config;
+    private readonly ILogger<LlmClient> _logger;
 
-    public LlmClient(IEnumerable<ILlmProvider> providers, IConfiguration config)
+    // ── 全局并发控制（多 Workflow 实例共享）──
+    // 默认并发 2（可经 appsettings Ai:MaxConcurrency 覆盖），
+    // 防止批量提取时 Qwen 触发 429 限流 / 本地 Ollama GPU 过载。
+    private static readonly SemaphoreSlim _callGate = new(2, 2);
+
+    // ── 熔断状态（连续失败 5 次 → 熔断 30s 内所有请求直接抛 LlmCallException(IsUnreachable=true)）──
+    private static int _consecutiveFailures;
+    private static DateTime _circuitBreakerUntil = DateTime.MinValue;
+    private static readonly object _circuitLock = new();
+
+    // ── 重试退避：429 / 5xx / Timeout 指数退避最多 3 次（1s / 3s / 7s）──
+    private static readonly int[] RetryDelaysMs = { 1000, 3000, 7000 };
+
+    public LlmClient(IEnumerable<ILlmProvider> providers, IConfiguration config, ILogger<LlmClient> logger)
     {
         _providers = providers;
         _config = config;
+        _logger = logger;
+        if (int.TryParse(config["Ai:MaxConcurrency"], out var conc) && conc > 0 && conc <= 32)
+            _callGate = new SemaphoreSlim(conc, conc);
     }
 
     public string ActiveProvider => _config["Ai:Provider"] ?? "qwen";
 
     public async Task<LlmResponse> CompleteAsync(LlmRequest request, CancellationToken ct = default)
     {
+        // 1. 熔断快速失败
+        lock (_circuitLock)
+        {
+            if (DateTime.Now < _circuitBreakerUntil)
+                throw new LlmCallException($"Provider 熔断中（至 {_circuitBreakerUntil:HH:mm:ss}），请稍后重试", false) { IsUnreachable = true };
+        }
+
         var providerName = string.IsNullOrWhiteSpace(request.Provider) ? ActiveProvider : request.Provider;
         var provider = _providers.FirstOrDefault(p => p.Name == providerName)
                        ?? throw new LlmCallException($"未注册 Provider: {providerName}");
-        return await provider.ChatAsync(request, ct);
+
+        // 2. 降级链主循环：当前 Provider 失败 3 次后自动切下一个（qwen → ollama → 抛错）
+        var ordered = ProviderOrder(providerName);
+        Exception? lastEx = null;
+        foreach (var pName in ordered)
+        {
+            var p = _providers.FirstOrDefault(x => x.Name == pName);
+            if (p == null) continue;
+            for (var retry = 0; retry <= RetryDelaysMs.Length; retry++)
+            {
+                ct.ThrowIfCancellationRequested();
+                await _callGate.WaitAsync(ct);
+                try
+                {
+                    var resp = await p.ChatAsync(request, ct);
+                    // 成功：重置熔断计数
+                    Interlocked.Exchange(ref _consecutiveFailures, 0);
+                    return resp;
+                }
+                catch (LlmCallException ex) when (ex.IsTimeout || ex.Message.Contains("429") || ex.Message.Contains("50") || ex.Message.Contains("502") || ex.Message.Contains("503"))
+                {
+                    lastEx = ex;
+                    var fails = Interlocked.Increment(ref _consecutiveFailures);
+                    _logger.LogWarning(ex, "LlmCall {Provider} 第 {Retry} 次失败（累计 {Fails}）", pName, retry, fails);
+                    if (fails >= 5)
+                    {
+                        lock (_circuitLock) { _circuitBreakerUntil = DateTime.Now.AddSeconds(30); }
+                        _logger.LogError("Provider {Provider} 连续失败 5 次，熔断 30s", pName);
+                        break;  // 切下一个 Provider
+                    }
+                    if (retry < RetryDelaysMs.Length)
+                        await Task.Delay(RetryDelaysMs[retry], ct);
+                }
+                finally
+                {
+                    _callGate.Release();
+                }
+            }
+        }
+        throw new LlmCallException($"所有 Provider 调用均失败: {lastEx?.Message}", true) { IsUnreachable = true };
+    }
+
+    // 按当前选中的 Provider 优先，其余按降级链顺序排列（默认 qwen 开头，ollama 兜底）
+    private static IReadOnlyList<string> ProviderOrder(string first)
+    {
+        var list = new List<string> { first };
+        foreach (var fallback in new[] { "qwen", "ollama", "mock" })
+            if (!list.Contains(fallback)) list.Add(fallback);
+        return list;
     }
 }
 ```
@@ -1044,7 +1226,7 @@ public class OllamaProvider : ILlmProvider
 
 ### 6.4 PromptInterpreter
 
-```csharp
+````csharp
 namespace YZH.Core.AI.Prompt;
 
 public class PromptInterpreter : IPromptInterpreter
@@ -1084,10 +1266,12 @@ public class PromptInterpreter : IPromptInterpreter
         {
             return new ParseResult<T> { Success = false, Error = $"JSON 解析失败: {ex.Message}", RawText = jsonText };
         }
-        await Task.CompletedTask;   // 保持 async 签名（骨架示意，实际实现可无 await）
+        await Task.CompletedTask;
     }
 }
 ```
+
+> **设计边界说明**：`PromptInterpreter` 是**纯字符串 + 反序列化层**，职责仅限三件事：① `Render` 做 `{name}` 占位符替换；② `ParseAsync` 先剥离 `` ```json `` 围栏 → 兜底正则取首个 `{...}` 子串（前后有杂讯时）→ `System.Text.Json` 反序列化；③ 非法 JSON 返回 `ParseResult.Success=false`。**绝不反向依赖 `ILlmClient` 做自修复或二次 LLM 调用**，自修复逻辑由上游 `LlmExtractSkill` 负责（控制重试次数 ≤1，防止 token 爆炸）。
 
 ### 6.5 WorkflowEngine（线性管道 + 条件分支）
 
@@ -1112,36 +1296,43 @@ public class WorkflowEngine : IWorkflowEngine
         var sw = Stopwatch.StartNew();
         var outputs = new Dictionary<string, IDictionary<string, object>>();
 
-        // 1. 主管道：拓扑排序（含环检测）
-        var order = TopoSort(wf.Nodes, wf.Edges);
+        // 1. 主管道拓扑排序（保守 Kahn：主 edges + 所有 branches.then 目标节点的全集，确保分支可执行）
+        var allEdges = wf.Edges.ToList();
+        foreach (var b in wf.Branches ?? new())
+        {
+            // branch 内部无 edges 时按 then 数组顺序链式补边（then[n]→then[n+1]）
+            allEdges.AddRange(LinearBranchEdges(b));
+        }
+        var order = TopoSort(wf.AllNodes(), allEdges);
+
         foreach (var nodeId in order)
         {
             ct.ThrowIfCancellationRequested();
-            var node = wf.Nodes.First(n => n.NodeId == nodeId);
+            var (node, isBranch, branch) = wf.FindNode(nodeId);
+            if (isBranch && branch != null && !outputs.TryGetValue(branch.From, out var fromOut)) { await WriteSkipped(node, context, ct, "branch_from 节点未执行"); continue; }
+            if (isBranch && branch != null && !MatchCondition(branch.Condition, fromOut!)) { await WriteSkipped(node, context, ct, "condition 未命中"); continue; }
+
             var result = await ExecuteNodeAsync(node, outputs, context, ct);
             outputs[nodeId] = result.Outputs;
             if (!result.Success)
                 return new WorkflowRunResult { Success = false, FailedNodeId = nodeId, Error = result.Error, DurationMs = sw.ElapsedMilliseconds };
         }
 
-        // 2. 条件分支：对每个 branch 判定 from 节点输出，命中则线性执行 then 子管道
-        foreach (var branch in wf.Branches ?? new())
-        {
-            if (!outputs.TryGetValue(branch.From, out var fromOutput)) continue;
-            if (!MatchCondition(branch.Condition, fromOutput)) continue;
-            var branchOrder = TopoSort(branch.Then, branch.EdgesOf(branch.Then));
-            foreach (var nodeId in branchOrder)
-            {
-                var node = branch.Then.First(n => n.NodeId == nodeId);
-                var result = await ExecuteNodeAsync(node, outputs, context, ct);
-                outputs[nodeId] = result.Outputs;
-                if (!result.Success)
-                    return new WorkflowRunResult { Success = false, FailedNodeId = nodeId, Error = result.Error, DurationMs = sw.ElapsedMilliseconds };
-            }
-        }
-
         sw.Stop();
         return new WorkflowRunResult { Success = true, NodeOutputs = outputs, DurationMs = sw.ElapsedMilliseconds };
+    }
+
+    // 按 skipped 写 F-04（分支未命中 / from 节点缺失，不阻断整体工作流）
+    private async Task WriteSkipped(WorkflowNode node, WorkflowContext context, CancellationToken ct, string reason)
+    {
+        if (context.LogStore == null) return;
+        await context.LogStore.WriteAsync(new ExecutionLogEntry
+        {
+            BusinessType = context.BusinessType, BusinessId = context.BusinessId,
+            NodeId = node.NodeId, SkillCode = node.SkillCode,
+            Status = "skipped", ErrorMsg = reason,
+            StartedAt = DateTime.Now, CompletedAt = DateTime.Now
+        }, ct);
     }
 
     private async Task<SkillResult> ExecuteNodeAsync(WorkflowNode node, IDictionary<string, IDictionary<string, object>> outputs,
@@ -1193,9 +1384,16 @@ public class WorkflowEngine : IWorkflowEngine
     }
 
     // TopoSort / ResolveInputs / MatchCondition 为内部实现（骨架示意，S4 补全单测覆盖）
-    private static IReadOnlyList<string> TopoSort(IReadOnlyList<WorkflowNode> nodes, IReadOnlyList<WorkflowEdge> edges) => throw new NotImplementedException("S4 实现：Kahn 拓扑排序 + 环检测");
-    private static IDictionary<string, object> ResolveInputs(IDictionary<string, object> inputs, IDictionary<string, IDictionary<string, object>> outputs) => throw new NotImplementedException("S4 实现：{{nX.port}} 求值");
-    private static bool MatchCondition(BranchCondition? condition, IDictionary<string, object> fromOutput) => throw new NotImplementedException("S4 实现：op/value 判定");
+    //   TopoSort: Kahn 算法 + 环检测（wf.AllNodes() 为主节点 + 所有分支 then 节点的并集）
+    //   MatchCondition: 先按 condition.field 取 fromOutput[field] 再按 op 比较
+    private static IReadOnlyList<string> TopoSort(IReadOnlyList<WorkflowNode> nodes, IReadOnlyList<WorkflowEdge> edges) => throw new NotImplementedException("S4 实现：Kahn 拓扑排序 + 环检测；入参 nodes 为 nodes ∪ branches.Then 全集");
+    private static IDictionary<string, object> ResolveInputs(IDictionary<string, object> inputs, IDictionary<string, IDictionary<string, object>> outputs) => throw new NotImplementedException("S4 实现：{{nX.port}} / {{step.N.port}} 求值");
+    private static bool MatchCondition(BranchCondition? condition, IDictionary<string, object> fromOutput)
+    {
+        if (condition == null) return true;
+        _ = fromOutput.TryGetValue(condition.Field, out var left);   // 按 condition.field 取端口值
+        throw new NotImplementedException($"S4 实现：op={condition.Op} 比较 left={left} vs value={condition.Value}");
+    }
 }
 ```
 
@@ -1247,28 +1445,37 @@ public class LlmExtractSkill : ISkillNode
         if (string.IsNullOrWhiteSpace(template))
             return new SkillResult { Success = false, Error = "缺少 prompt 入参" };
 
-        var rendered = _interpreter.Render(template, new RenderContext(new Dictionary<string, object>
+        var baseRender = _interpreter.Render(template, new RenderContext(new Dictionary<string, object>
         {
             ["document_content"] = doc,
             ["fields_json"] = context.Inputs.TryGetValue("fields_json", out var f) ? f : string.Empty,
             ["tables_json"] = context.Inputs.TryGetValue("tables_json", out var t) ? t : string.Empty
         }));
 
-        var resp = await _llm.CompleteAsync(new LlmRequest
+        LlmResponse? resp = null;
+        ParseResult<AiExtractionResult>? parsed = null;
+
+        // 最多 2 次 LLM 调用：首次按原始 prompt；JSON 解析失败再追加"严格 JSON Schema"提示词重试 1 次
+        for (var attempt = 0; attempt < 2; attempt++)
         {
-            Messages = new List<LlmMessage>
+            var prompt = attempt == 0 ? baseRender : baseRender + "\n\n⚠️ 上一轮输出存在 JSON 格式错误。请**仅输出**符合要求 Schema 的 JSON，不要包含任何解释文字、Markdown 围栏或前缀/后缀说明。";
+            resp = await _llm.CompleteAsync(new LlmRequest
             {
-                new() { Role = "system", Content = "你是专业的文档信息提取助手，只输出 JSON。" },
-                new() { Role = "user", Content = rendered }
-            },
-            JsonMode = true
-        }, ct);
+                Messages = new List<LlmMessage>
+                {
+                    new() { Role = "system", Content = "你是专业的文档信息提取助手，只输出 JSON。" },
+                    new() { Role = "user", Content = prompt }
+                },
+                JsonMode = true
+            }, ct);
 
-        if (!resp.Success) return new SkillResult { Success = false, Error = resp.Error };
+            if (!resp.Success) return new SkillResult { Success = false, Error = resp.Error };
+            parsed = await _interpreter.ParseAsync<AiExtractionResult>(resp.Content, ct);
+            if (parsed.Success) break;
+        }
 
-        var parsed = await _interpreter.ParseAsync<AiExtractionResult>(resp.Content, ct);
-        if (!parsed.Success)
-            return new SkillResult { Success = false, Error = parsed.Error };
+        if (parsed == null || !parsed.Success)
+            return new SkillResult { Success = false, Error = parsed?.Error ?? "LLM 输出 JSON 解析两次均失败，请人工复核" };
 
         var confidence = parsed.Value!.Fields.Count == 0 && parsed.Value.Tables.Count == 0
             ? 0m : parsed.Value.Fields.Where(f => f.Confidence.HasValue).DefaultIfEmpty().Min(f => f.Confidence) ?? 0m;
@@ -1282,6 +1489,88 @@ public class LlmExtractSkill : ISkillNode
                 ["raw_json"] = parsed.RawText ?? string.Empty
             },
             Confidence = (double?)confidence
+        };
+    }
+}
+```
+
+### 6.7 DocumentExtractSkill（衔接旧版 Office convertStatus）
+
+```csharp
+namespace YZH.Core.Skills;
+
+/// <summary>
+/// 包装 IFileExtractor 的本地提取 Skill。
+/// 衔接《旧版 Office 后端自动转换方案 V1》的 convertStatus 状态机：
+///   pending → 直接返回 Error（文件正在转换中，UI 显示等待提示）
+///   failed  → 返回 Error + 原始错误信息
+///   converted→ 读 convertedStoragePath 对应的 .docx/.xlsx（IFileExtractor 统一 OOXML 分支，不再兼容旧版二进制）
+///   未转换（字段空 / 扩展名是 .docx/.xlsx/.pdf）→ 走 original StoragePath
+/// </summary>
+public class DocumentExtractSkill : ISkillNode
+{
+    public string SkillCode => "document_extract";
+
+    private readonly IEnumerable<IFileExtractor> _extractors;
+
+    public DocumentExtractSkill(IEnumerable<IFileExtractor> extractors)
+    {
+        _extractors = extractors;
+    }
+
+    public async Task<SkillResult> ExecuteAsync(SkillContext context, CancellationToken ct = default)
+    {
+        var storagePath = context.Inputs.TryGetValue("storage_path", out var s) ? s?.ToString() : string.Empty;
+        var convertedStoragePath = context.Inputs.TryGetValue("converted_storage_path", out var cs) ? cs?.ToString() : string.Empty;
+        var convertStatus = context.Inputs.TryGetValue("convert_status", out var st) ? st?.ToString() : null;
+        var convertMessage = context.Inputs.TryGetValue("convert_message", out var cm) ? cm?.ToString() : null;
+        var originalExt = Path.GetExtension(storagePath)?.ToLowerInvariant();
+
+        // 1. pending：文件还在异步转换中（BackgroundService Channel 队列），UI 需轮询等待
+        if (string.Equals(convertStatus, "pending", StringComparison.OrdinalIgnoreCase))
+            return new SkillResult { Success = false, Error = "DOC/XLS 正在转换中，请稍后再试（可刷新页面查看最新状态）" };
+
+        // 2. failed：转换失败（LibreOffice 崩溃 / NPOI 异常等），提示原始消息
+        if (string.Equals(convertStatus, "failed", StringComparison.OrdinalIgnoreCase))
+            return new SkillResult { Success = false, Error = $"旧版文件转换失败：{convertMessage ?? "未知原因"}，请人工处理" };
+
+        // 3. converted / 原生 OOXML / PDF：选择提取路径（统一 OOXML 分支，降低 IFileExtractor 维护成本）
+        var useConverted = string.Equals(convertStatus, "converted", StringComparison.OrdinalIgnoreCase)
+                           && !string.IsNullOrWhiteSpace(convertedStoragePath);
+        var effectivePath = useConverted ? convertedStoragePath : storagePath;
+        var effectiveExt = Path.GetExtension(effectivePath)?.ToLowerInvariant() ?? originalExt;
+
+        if (string.IsNullOrWhiteSpace(effectivePath))
+            return new SkillResult { Success = false, Error = "缺少 storage_path 入参" };
+
+        var extractor = _extractors.FirstOrDefault(e => e.SupportedExtensions.Contains(effectiveExt));
+        if (extractor == null)
+            return new SkillResult { Success = false, Error = $"不支持的文件扩展名：{effectiveExt}（可提取扩展名：{string.Join(",", _extractors.SelectMany(e => e.SupportedExtensions).Distinct())}）" };
+
+        // 4. 实际提取（真实实现由调用方注入 Stream 读取；此处为代码骨架）
+        FileExtractionResult extraction;
+        try
+        {
+            // TODO[接入层]: 从 MinIO 下载 effectivePath 的 Stream 后，调用：
+            // extraction = await extractor.ExtractAsync(stream, effectiveExt, ct);
+            extraction = new FileExtractionResult { FullText = "", Fields = new(), Tables = new() };
+        }
+        catch (Exception ex)
+        {
+            return new SkillResult { Success = false, Error = $"本地提取失败: {ex.Message}" };
+        }
+
+        return new SkillResult
+        {
+            Success = true,
+            Outputs = new Dictionary<string, object>
+            {
+                ["fields"] = extraction.Fields,
+                ["tables"] = extraction.Tables,
+                ["full_text"] = extraction.FullText,
+                ["effective_path"] = effectivePath,
+                ["is_converted_version"] = useConverted
+            }
         };
     }
 }
@@ -1325,15 +1614,16 @@ graph LR
 
 ### 7.2 配置与密钥
 
-| 项 | 来源 | 说明 |
-|---|---|---|
-| provider / model / temperature / max_tokens | `cert_ai_config`（DB）或 appsettings `Ai:*` | DB 优先，[TODO:P0-4] 明确优先级 |
-| api_key | 环境变量 `AI_QWEN_API_KEY`（首选） | 避免明文入库；cert_ai_config.api_key 为 `[TODO:P1]` 加密存储改造项 |
-| ollama 基址 | appsettings `Ai:OllamaBaseUrl`，默认 `http://localhost:11434` | 生产可配置 |
+| 项                                          | 来源                                                          | 说明                                                               |
+| ------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------ |
+| provider / model / temperature / max_tokens | `cert_ai_config`（DB）或 appsettings `Ai:*`                   | DB 优先，[TODO:P0-4] 明确优先级                                    |
+| api_key                                     | 环境变量 `AI_QWEN_API_KEY`（首选）                            | 避免明文入库；cert_ai_config.api_key 为 `[TODO:P1]` 加密存储改造项 |
+| ollama 基址                                 | appsettings `Ai:OllamaBaseUrl`，默认 `http://localhost:11434` | 生产可配置                                                         |
 
 ### 7.3 协议对齐说明
 
 两个 Provider 均按 OpenAI 兼容协议发送，差异仅在端点与鉴权：
+
 - Qwen：`https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`，Bearer Key，`response_format=json_object`。
 - Ollama：`/api/chat`，无鉴权，`format=json`，`stream=false`。
 - 若后续接 DeepSeek/其他厂商：实现 `ILlmProvider` 一个类即接入，`ILlmClient` 与上层零改动（cert_ai_config.provider 已含 `deepseek` 预留值）。
@@ -1344,26 +1634,26 @@ graph LR
 
 ### 8.1 四件套单测清单（xUnit + Moq，放 `YZH.Core.Tests`）
 
-| 组件 | 用例 | 验证点 |
-|---|---|---|
-| SkillRegistry | 注册/取/覆盖/注销 | 重复注册覆盖、未知编码返回 null、AllCodes 去重 |
-| SkillRegistry | 并发注册 | ConcurrentDictionary 线程安全（Task.WhenAll 100 次） |
-| LlmClient | Provider 路由 | 按 request.Provider 路由；未知 provider 抛 LlmCallException |
-| QwenApiProvider | 成功响应解析 | 构造 200 + OpenAI 格式 body → Content/Token 正确 |
-| QwenApiProvider | 非 2xx | 抛 LlmCallException，Error 含状态码 |
-| QwenApiProvider | 超时 | HttpClient 短超时 → LlmCallException(IsTimeout=true) |
-| OllamaProvider | 成功响应 | /api/chat 格式 body → message.content 提取正确 |
-| OllamaProvider | 服务不可达 | HttpRequestException → LlmCallException（本地未启动语义） |
-| PromptInterpreter.Render | 占位符替换 | 字符串/对象序列化/缺失占位符保留 |
-| PromptInterpreter.Parse | JSON 围栏剥离 | ```json 包裹 / 纯 JSON / 前后杂讯均解析成功 |
-| PromptInterpreter.Parse | 非法 JSON | ParseResult.Success=false + Error 非空 |
-| WorkflowEngine | 线性管道 | 3 节点按序执行，输出按端口正确传递 |
-| WorkflowEngine | 条件分支 | condition=true 走 then；false 跳过 |
-| WorkflowEngine | 环检测 | 自环/双向环抛 WorkflowExecutionException |
-| WorkflowEngine | 未知 Skill | 抛 UnknownSkillException |
-| WorkflowEngine | 节点失败 | 失败节点中止，FailedNodeId 正确，F-04 写 failed |
-| IExecutionLogStore | 内存实现 | Write/QueryByInstance 往返一致 |
-| LlmExtractSkill | 端到端（MockProvider） | 固定 JSON 输入 → Outputs.fields 正确、Confidence 计算正确 |
+| 组件                     | 用例                   | 验证点                                                      |
+| ------------------------ | ---------------------- | ----------------------------------------------------------- |
+| SkillRegistry            | 注册/取/覆盖/注销      | 重复注册覆盖、未知编码返回 null、AllCodes 去重              |
+| SkillRegistry            | 并发注册               | ConcurrentDictionary 线程安全（Task.WhenAll 100 次）        |
+| LlmClient                | Provider 路由          | 按 request.Provider 路由；未知 provider 抛 LlmCallException |
+| QwenApiProvider          | 成功响应解析           | 构造 200 + OpenAI 格式 body → Content/Token 正确            |
+| QwenApiProvider          | 非 2xx                 | 抛 LlmCallException，Error 含状态码                         |
+| QwenApiProvider          | 超时                   | HttpClient 短超时 → LlmCallException(IsTimeout=true)        |
+| OllamaProvider           | 成功响应               | /api/chat 格式 body → message.content 提取正确              |
+| OllamaProvider           | 服务不可达             | HttpRequestException → LlmCallException（本地未启动语义）   |
+| PromptInterpreter.Render | 占位符替换             | 字符串/对象序列化/缺失占位符保留                            |
+| PromptInterpreter.Parse  | JSON 围栏剥离          | ```json 包裹 / 纯 JSON / 前后杂讯均解析成功                 |
+| PromptInterpreter.Parse  | 非法 JSON              | ParseResult.Success=false + Error 非空                      |
+| WorkflowEngine           | 线性管道               | 3 节点按序执行，输出按端口正确传递                          |
+| WorkflowEngine           | 条件分支               | condition=true 走 then；false 跳过                          |
+| WorkflowEngine           | 环检测                 | 自环/双向环抛 WorkflowExecutionException                    |
+| WorkflowEngine           | 未知 Skill             | 抛 UnknownSkillException                                    |
+| WorkflowEngine           | 节点失败               | 失败节点中止，FailedNodeId 正确，F-04 写 failed             |
+| IExecutionLogStore       | 内存实现               | Write/QueryByInstance 往返一致                              |
+| LlmExtractSkill          | 端到端（MockProvider） | 固定 JSON 输入 → Outputs.fields 正确、Confidence 计算正确   |
 
 ### 8.2 提取场景集成测试样例
 
@@ -1384,16 +1674,16 @@ graph LR
 
 ## 9. 风险与降级
 
-| 风险 | 影响 | 缓解措施 | 降级路径 |
-|---|---|---|---|
-| **成本失控**（qwen-turbo token 消耗） | 单人项目预算超支 | 默认低温 0.1；文档全文截断（`Truncate(3000~8000)`）；`max_tokens=4096`；analyze 类提示词限 3000 字 | 切 `OllamaProvider` 本地免费；批量任务节流 |
-| **幻觉**（AI 编造字段值） | 提取结果污染 B-08/B-09 | JSON Schema 强约束（output_schema）；`confidence` 必填；`<0.8` 强制人工复核；`is_manual_edited` 留痕 | 复核通过前不进入校验/报告引擎 |
-| **断网 / Ollama 未启动** | 提取链路不可用 | `LlmCallException(IsTimeout/IsUnreachable)` 语义化；失败可重试（指数退避，最多 2 次） | 降级为"仅本地提取"：落 IFileExtractor 文本层结果，AI 字段置空并标记待处理；界面提示"AI 服务不可用" |
-| **限流 / 429** | 调用失败 | 捕获 429 → 等待 1s/3s 重试（2 次） | 同上降级；记录 F-04 failed 日志 |
-| **JSON 解析失败**（模型输出不合法） | 单次提取失败 | PromptInterpreter 围栏剥离 + 错误恢复；可重试 1 次（提示词追加"严格输出 JSON"） | 单字段降级：解析失败的字段置空 + confidence=0，交人工 |
-| **并发**（多文件同时提取） | 资源竞争 | 引擎按实例隔离；LLM 调用加信号量（默认并发 2，可配） | 排队执行，F-04 记录 pending |
-| **Skill 编排错误**（连线不合法） | 运行期失败 | input_schema/output_schema 配置期校验（`validate_plan` 类工具，S4 补） | 配置工具提示 + 运行前预检 |
-| **表结构分叉**（cert_doc_* vs 域 F/B） | 双体系维护成本 | 收敛方案见 §11 [TODO:P0-1/2] | 收敛前：桥接映射，不改动已有数据 |
+| 风险                                    | 影响                   | 缓解措施                                                                                             | 降级路径                                                                                           |
+| --------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **成本失控**（qwen-turbo token 消耗）   | 单人项目预算超支       | 默认低温 0.1；文档全文截断（`Truncate(3000~8000)`）；`max_tokens=4096`；analyze 类提示词限 3000 字   | 切 `OllamaProvider` 本地免费；批量任务节流                                                         |
+| **幻觉**（AI 编造字段值）               | 提取结果污染 B-08/B-09 | JSON Schema 强约束（output_schema）；`confidence` 必填；`<0.8` 强制人工复核；`is_manual_edited` 留痕 | 复核通过前不进入校验/报告引擎                                                                      |
+| **断网 / Ollama 未启动**                | 提取链路不可用         | `LlmCallException(IsTimeout/IsUnreachable)` 语义化；失败可重试（指数退避，最多 2 次）                | 降级为"仅本地提取"：落 IFileExtractor 文本层结果，AI 字段置空并标记待处理；界面提示"AI 服务不可用" |
+| **限流 / 429**                          | 调用失败               | 捕获 429 → 等待 1s/3s 重试（2 次）                                                                   | 同上降级；记录 F-04 failed 日志                                                                    |
+| **JSON 解析失败**（模型输出不合法）     | 单次提取失败           | PromptInterpreter 围栏剥离 + 错误恢复；可重试 1 次（提示词追加"严格输出 JSON"）                      | 单字段降级：解析失败的字段置空 + confidence=0，交人工                                              |
+| **并发**（多文件同时提取）              | 资源竞争               | 引擎按实例隔离；LLM 调用加信号量（默认并发 2，可配）                                                 | 排队执行，F-04 记录 pending                                                                        |
+| **Skill 编排错误**（连线不合法）        | 运行期失败             | input_schema/output_schema 配置期校验（`validate_plan` 类工具，S4 补）                               | 配置工具提示 + 运行前预检                                                                          |
+| **表结构分叉**（cert*doc*\* vs 域 F/B） | 双体系维护成本         | 收敛方案见 §11 [TODO:P0-1/2]                                                                         | 收敛前：桥接映射，不改动已有数据                                                                   |
 
 ---
 
@@ -1403,51 +1693,52 @@ graph LR
 
 ### S1：LLM Gateway 骨架（约 1 天）
 
-| # | 任务 | 接口/文件 | 验证标准 |
-|---|---|---|---|
-| S1-1 | 定义 ILlmClient / ILlmProvider / LlmRequest / LlmResponse | `YZH.Core/AI/Clients/` | 编译通过；接口含完整 XML 注释 |
-| S1-2 | 实现 QwenApiProvider（OpenAI 兼容） | `QwenApiProvider.cs` | 单测：成功/非 2xx/超时 3 用例通过 |
-| S1-3 | 实现 OllamaProvider | `OllamaProvider.cs` | 单测：成功/不可达 2 用例通过 |
-| S1-4 | 实现 MockProvider + LlmClient 路由 | `MockProvider.cs` / `LlmClient.cs` | 单测：路由 + 未知 provider 抛异常 |
-| S1-5 | DI 注册 + appsettings `Ai:*` 配置 | `YZHModule.cs` | 启动日志打印 ActiveProvider |
+| #    | 任务                                                      | 接口/文件                          | 验证标准                                                                                                                                                                         |
+| ---- | --------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S1-1 | 定义 ILlmClient / ILlmProvider / LlmRequest / LlmResponse | `YZH.Core/AI/Clients/`             | 编译通过；接口含完整 XML 注释                                                                                                                                                   |
+| S1-2 | 实现 QwenApiProvider（OpenAI 兼容）                       | `QwenApiProvider.cs`               | 单测：成功/非 2xx/超时 3 用例通过；429 响应体抛出 LlmCallException                                                                                                              |
+| S1-3 | 实现 OllamaProvider                                       | `OllamaProvider.cs`                | 单测：成功/不可达 2 用例通过；HttpRequestException → IsUnreachable=true                                                                                                         |
+| S1-4 | 实现 MockProvider + **LlmClient 路由 + 全局重试/熔断/信号量** | `MockProvider.cs` / `LlmClient.cs` | 单测：① 路由 + 未知 provider 抛异常；② SemaphoreSlim=2 并发下 Task.WhenAll 10 次无死锁；③ 模拟 429 → 指数退避 3 次（1s/3s/7s）均失败 → 自动切 ollama；④ 连续失败 5 次 → 后续请求 30s 内快速失败（熔断） |
+| S1-5 | DI 注册 + appsettings `Ai:*` 配置                         | `YZHModule.cs`                     | 启动日志打印 ActiveProvider + MaxConcurrency                                                                                                                                    |
 
 ### S2：SkillRegistry + 内置 Skill（约 1 天）
 
-| # | 任务 | 接口/文件 | 验证标准 |
-|---|---|---|---|
-| S2-1 | ISkillRegistry + SkillRegistry 实现 | `YZH.Core/Workflow/` | 注册/取/覆盖/并发单测通过 |
-| S2-2 | SkillContext / SkillResult / ISkillNode 定义 | 同上 | 与工作流选型 §7.2 签名一致 |
-| S2-3 | DocumentExtractSkill（包装 IFileExtractor） | `YZH.Core/Skills/` | 对 42/42 的提取器做集成用例 1 条 |
-| S2-4 | LlmExtractSkill（核心 AI Skill） | `Skills/LlmExtractSkill.cs` | MockProvider 端到端单测通过 |
-| S2-5 | CompareSkill / GetFieldSkill / GetTableSkill / AssembleSkill 骨架 | `Skills/` | 每个至少 1 条确定性单测 |
+| #    | 任务                                                              | 接口/文件                   | 验证标准                         |
+| ---- | ----------------------------------------------------------------- | --------------------------- | -------------------------------- |
+| S2-1 | ISkillRegistry + SkillRegistry 实现                               | `YZH.Core/Workflow/`        | 注册/取/覆盖/并发单测通过        |
+| S2-2 | SkillContext / SkillResult / ISkillNode 定义                      | 同上                        | 与工作流选型 §7.2 签名一致       |
+| S2-3 | DocumentExtractSkill（包装 IFileExtractor）                       | `YZH.Core/Skills/`          | 对 42/42 的提取器做集成用例 1 条 |
+| S2-4 | LlmExtractSkill（核心 AI Skill）                                  | `Skills/LlmExtractSkill.cs` | MockProvider 端到端单测通过      |
+| S2-5 | CompareSkill / GetFieldSkill / GetTableSkill / AssembleSkill 骨架 | `Skills/`                   | 每个至少 1 条确定性单测          |
 
 ### S3：PromptInterpreter（约 1 天）
 
-| # | 任务 | 接口/文件 | 验证标准 |
-|---|---|---|---|
-| S3-1 | IPromptInterpreter + PromptInterpreter.Render | `YZH.Core/AI/Prompt/` | 占位符替换单测通过（含缺失保留） |
-| S3-2 | ParseAsync（围栏剥离 + JSON 反序列化 + 错误恢复） | 同上 | 4 用例：围栏/纯 JSON/杂讯/非法 |
-| S3-3 | AiExtractionResult / AiPlan / AiPlanParser 强类型模型 | `AI/Plan/` | AiPlan 解析单测通过（steps 顺序/编码） |
+| #    | 任务                                                  | 接口/文件             | 验证标准                               |
+| ---- | ----------------------------------------------------- | --------------------- | -------------------------------------- |
+| S3-1 | IPromptInterpreter + PromptInterpreter.Render         | `YZH.Core/AI/Prompt/` | 占位符替换单测通过（含缺失保留）       |
+| S3-2 | ParseAsync（围栏剥离 + JSON 反序列化 + 错误恢复）     | 同上                  | 4 用例：围栏/纯 JSON/杂讯/非法         |
+| S3-3 | AiExtractionResult / AiPlan / AiPlanParser 强类型模型 | `AI/Plan/`            | AiPlan 解析单测通过（steps 顺序/编码） |
 
 ### S4：WorkflowEngine + 留痕（约 1.5 天）
 
-| # | 任务 | 接口/文件 | 验证标准 |
-|---|---|---|---|
-| S4-1 | WorkflowConfig 模型（nodes/edges/branches/output_config） | `Workflow/Models/` | 反序列化 F-03 示例 JSON 通过 |
-| S4-2 | TopoSort（Kahn + 环检测） | `WorkflowEngine.cs` | 线性/分支/环 3 用例通过 |
-| S4-3 | ResolveInputs（{{nX.port}} 模板求值） | 同上 | 链式引用用例通过 |
-| S4-4 | 条件分支执行（branches） | 同上 | condition true/false 用例通过 |
-| S4-5 | IExecutionLogStore + 内存实现 + EF 实现（F-04） | `Workflow/` + VOL.Entity | 写入 F-04 集成用例通过 |
+| #    | 任务                                                      | 接口/文件                | 验证标准                      |
+| ---- | --------------------------------------------------------- | ------------------------ | ----------------------------- |
+| S4-1 | WorkflowConfig 模型（nodes/edges/branches/output_config） | `Workflow/Models/`       | 反序列化 F-03 示例 JSON 通过  |
+| S4-2 | TopoSort（Kahn + 环检测）                                 | `WorkflowEngine.cs`      | 线性/分支/环 3 用例通过       |
+| S4-3 | ResolveInputs（{{nX.port}} 模板求值）                     | 同上                     | 链式引用用例通过              |
+| S4-4 | 条件分支执行（branches）                                  | 同上                     | condition true/false 用例通过 |
+| S4-5 | IExecutionLogStore + 内存实现 + EF 实现（F-04）           | `Workflow/` + VOL.Entity | 写入 F-04 集成用例通过        |
 
 ### S5：接入验证场 + 前端接真（约 2 天）
 
-| # | 任务 | 接口/文件 | 验证标准 |
-|---|---|---|---|
-| S5-1 | DocExtractionRuleService 接入：analyze / generate-prompt / verify / save 四方法改真 | `VOL.Builder/Services/CertPlatform/DocExtractionRuleService.cs` | 4 个接口 Postman 可跑通，返回真实数据 |
-| S5-2 | 运行期提取链路：上传 → 匹配规则 → LLM 提取 → B-08/B-09 落库 | 提取服务 | 样例 docx 端到端：B-08 每条 field 一条记录 |
-| S5-3 | 低置信度人工复核标记（confidence<0.8） | 前端规则管理/提取结果列表 | 红标展示 + 人工修改置 is_manual_edited=true |
-| S5-4 | 前端 4 按钮接真（analyze/generate-prompt/verify/save） | `index.vue` + Tab 组件 | 按钮点击 → 后端真实响应 → 界面更新 |
-| S5-5 | F-04 留痕闭环 + 文档清单更新 | README + 实施记录 | 一次提取产生可查的 F-04 记录 |
+| #    | 任务                                                                                | 接口/文件                                                       | 验证标准                                                                                                                                                                                                                              |
+| ---- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S5-1 | DocExtractionRuleService 接入：analyze / generate-prompt / verify / save 四方法改真 | `VOL.Builder/Services/CertPlatform/DocExtractionRuleService.cs` | 4 个接口 Postman 可跑通，返回真实数据                                                                                                                                                                                                |
+| S5-2 | 运行期提取链路：上传 → 匹配规则 → DocumentExtractSkill → LLM 提取 → B-08/B-09 落库（含旧版 Office convertStatus 联动） | 提取服务 + MinIO DownloadFile | ① 样例 docx 端到端：B-08 每条 field 一条记录、confidence∈[0,1]；② 手工 UPDATE `convertStatus=pending` 后点 analyze → 返回"正在转换中"友好提示；③ UPDATE `convertStatus=converted` + `convertedStoragePath` 有效 → 实际走转换后文件、byteLength 与 DownloadFile 流大小一致 |
+| S5-3 | 低置信度人工复核标记（confidence<0.8）                                              | 前端规则管理/提取结果列表                                       | 红标展示 + 人工修改置 is_manual_edited=true                                                                                                                                                                                           |
+| S5-4 | 前端 4 按钮接真（analyze/generate-prompt/verify/save）                              | `index.vue` + Tab 组件                                          | **① 所有按钮请求统一走 `this.$http.yzPost`（项目全局规则 http.js 封装，自动注入 JWT/lang/baseURL），禁止原生 fetch/axios；② 按钮点击 → 后端真实响应 → 界面更新；③ DocPreview + 提取结果 Tab 联调无刷新**                               |
+| S5-5 | F-04 留痕闭环 + 文档清单更新                                                        | README + 实施记录                                               | 一次提取产生可查的 F-04 记录（含 condition 未命中的 skipped 分支条目）                                                                                                                                                               |
+| S5-6 | 旧版 Office 转换联动端到端（上一轮方案复用验证）                                    | 上传接口 + BackgroundService + MinIO `.converted/`            | 上传 `.xls`（小于 500KB 小文件，方便 NPOI 快速转换）→ convertStatus pending→converted 状态变化可查 → DocPreview 预览转换后 `.xlsx` 正常 → analyze 按钮走 DocumentExtractSkill 的 convertedStoragePath 分支成功提取 → B-08/B-09 落库           |
 
 ---
 
@@ -1455,33 +1746,34 @@ graph LR
 
 > 标记格式 `[TODO:P0/P1/P2]`：P0=阻碍落地必须处理；P1=功能完整必须处理；P2=增强/远期。
 
-| # | 标记 | 项 | 现状 | 目标 |
-|---|---|---|---|---|
-| T1 | **[TODO:P0-1]** | `cert_doc_extraction_rule.skill` 与 F-01 `skill_code` 收敛 | 现只有 `word/excel/pdf` 三值（文件类型） | 改为引用 F-01 编码（`word_extract`/`excel_extract`/`pdf_extract`/`llm_extract`），保留字典 `doc_skill` 兼容 |
-| T2 | **[TODO:P0-2]** | `cert_doc_*` 5 表与域 F/B 体系收敛 | V3 表与 V2 域 F/B 双轨并存 | 明确边界：cert_doc_* 继续作为"提取规则配置"（V3 定位），运行期结果只落 B-08/B-09；`sample_data`/`is_valid` 为验证快照不替代 B-08/B-09 |
-| T3 | **[TODO:P0-3]** | `cert_ai_config` 与 F-01 `endpoint_config` 的配置来源优先级 | 两处都有 provider/model 配置 | 定义优先级：cert_ai_config 全局默认 → F-01 endpoint_config 按 Skill 覆盖 → LlmRequest 显式最高 |
-| T4 | **[TODO:P0-4]** | `cert_ai_config.api_key` 明文存储 | SQL 默认插入明文 Key | 改环境变量 `AI_QWEN_API_KEY` 优先；DB 字段加密或置空 |
-| T5 | **[TODO:P1-1]** | F-04 `status` 字段与执行状态机对齐 | enum 已定义 pending/running/success/failed/skipped | 引擎在节点执行前写 pending、执行中 running、结束写 success/failed；skipped 用于分支未命中显式记录 |
-| T6 | **[TODO:P1-2]** | 前端 4 按钮接真 | analyze/generate-prompt/verify/save 全 TODO | 依赖 S5-1/S5-4 |
-| T7 | **[TODO:P1-3]** | 校验/报告引擎复用验证 | 本设计仅给复用方式 | 校验引擎接 1 条真工作流（管理评审日期超期判定）验证 branches |
-| T8 | **[TODO:P1-4]** | LLM 调用信号量并发控制 | 未实现 | 默认并发 2，可配；防 Qwen 限流与本地 Ollama 过载 |
-| T9 | **[TODO:P2-1]** | OCR 接入 | IFileExtractor 预留 OcrRequired 状态 | 接第三方 OCR，`DocumentExtractSkill` 增加 ocr 分支 |
-| T10 | **[TODO:P2-2]** | 提示词版本管理与 diff | 无 | `prompt` 变更留历史版本，verify 对比新旧输出 |
-| T11 | **[TODO:P2-3]** | AI plan 多步执行 | 本设计已定义 AiPlan Schema | 前端可选启用"AI 规划 → 分步执行"模式 |
-| T12 | **[TODO:P2-4]** | LogicFlow 可视化配置 | 前端选型已定 | 基于 F-03 Schema 生成/编辑 workflow_config |
+| #   | 标记            | 项                                                          | 现状                                               | 目标                                                                                                                                   |
+| --- | --------------- | ----------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| T1  | **[TODO:P0-1]** | `cert_doc_extraction_rule.skill` 与 F-01 `skill_code` 收敛  | 现只有 `word/excel/pdf` 三值（文件类型）           | 改为引用 F-01 编码（`word_extract`/`excel_extract`/`pdf_extract`/`llm_extract`），保留字典 `doc_skill` 兼容                            |
+| T2  | **[TODO:P0-2]** | `cert_doc_*` 5 表与域 F/B 体系收敛                          | V3 表与 V2 域 F/B 双轨并存                         | 明确边界：cert*doc*\* 继续作为"提取规则配置"（V3 定位），运行期结果只落 B-08/B-09；`sample_data`/`is_valid` 为验证快照不替代 B-08/B-09 |
+| T3  | **[TODO:P0-3]** | `cert_ai_config` 与 F-01 `endpoint_config` 的配置来源优先级 | 两处都有 provider/model 配置                       | 定义优先级：cert_ai_config 全局默认 → F-01 endpoint_config 按 Skill 覆盖 → LlmRequest 显式最高                                         |
+| T4  | **[TODO:P0-4]** | `cert_ai_config.api_key` 明文存储                           | SQL 默认插入明文 Key                               | 改环境变量 `AI_QWEN_API_KEY` 优先；DB 字段加密或置空                                                                                   |
+| T5  | **[TODO:P1-1]** | F-04 `status` 字段与执行状态机对齐                          | enum 已定义 pending/running/success/failed/skipped | 引擎在节点执行前写 pending、执行中 running、结束写 success/failed；skipped 用于分支未命中显式记录                                      |
+| T6  | **[TODO:P1-2]** | 前端 4 按钮接真                                             | analyze/generate-prompt/verify/save 全 TODO        | 依赖 S5-1/S5-4                                                                                                                         |
+| T7  | **[TODO:P1-3]** | 校验/报告引擎复用验证                                       | 本设计仅给复用方式                                 | 校验引擎接 1 条真工作流（管理评审日期超期判定）验证 branches                                                                           |
+| T8  | **[TODO:P1-4]** | LLM 调用信号量并发控制                                      | 未实现                                             | 默认并发 2，可配；防 Qwen 限流与本地 Ollama 过载                                                                                       |
+| T9  | **[TODO:P2-1]** | OCR 接入                                                    | IFileExtractor 预留 OcrRequired 状态               | 接第三方 OCR，`DocumentExtractSkill` 增加 ocr 分支                                                                                     |
+| T10 | **[TODO:P2-2]** | 提示词版本管理与 diff                                       | 无                                                 | `prompt` 变更留历史版本，verify 对比新旧输出                                                                                           |
+| T11 | **[TODO:P2-3]** | AI plan 多步执行                                            | 本设计已定义 AiPlan Schema                         | 前端可选启用"AI 规划 → 分步执行"模式                                                                                                   |
+| T12 | **[TODO:P2-4]** | LogicFlow 可视化配置                                        | 前端选型已定                                       | 基于 F-03 Schema 生成/编辑 workflow_config                                                                                             |
 
 ---
 
 ## 附录 A 与既有文档的关系
 
-| 文档 | 关系 |
-|---|---|
-| `工作流引擎选型与技术研究-V1.md` | 本设计 §3/§6 的接口签名与最小骨架**对齐并升级**该文档 §7.2/§7.3：补充 ILlmClient/IPromptInterpreter/IExecutionLogStore 三接口，WorkflowEngine 增加条件分支（branches） |
-| `文档数据提取系统-设计文档-V3.md` | 本设计是 V3 的"落地实现层"：V3 定义规则/提示词配置业务（cert_doc_* 表 + 11 个 API），本设计补齐其缺失的 QwenAIConfigService/PromptGenerationService/FieldAnalysisService 三服务对应的运行时能力（LLM Gateway + PromptInterpreter + Skill），并给出表收敛方案 |
-| `数据库表设计-V2.md` | 域 F（F-01~F-04）为本设计的持久化基础；域 B（B-08/B-09）为提取结果落库目标 |
-| `YZH-V3.0-架构设计文档.md` | 本设计四件套归入 YZH.Core 增量层，遵循"不修改 Vol 源码、Autofac 挂载"约束 |
-| `文件数据提取能力落地-V1.md` | IFileExtractor 已实现部分由本设计 `DocumentExtractSkill` 包装复用 |
+| 文档                              | 关系                                                                                                                                                                                                                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `工作流引擎选型与技术研究-V1.md`  | 本设计 §3/§6 的接口签名与最小骨架**对齐并升级**该文档 §7.2/§7.3：补充 ILlmClient/IPromptInterpreter/IExecutionLogStore 三接口，WorkflowEngine 增加条件分支（branches）                                                                                        |
+| `文档数据提取系统-设计文档-V3.md` | 本设计是 V3 的"落地实现层"：V3 定义规则/提示词配置业务（cert*doc*\* 表 + 11 个 API），本设计补齐其缺失的 QwenAIConfigService/PromptGenerationService/FieldAnalysisService 三服务对应的运行时能力（LLM Gateway + PromptInterpreter + Skill），并给出表收敛方案 |
+| `数据库表设计-V2.md`              | 域 F（F-01~F-04）为本设计的持久化基础；域 B（B-08/B-09）为提取结果落库目标                                                                                                                                                                                    |
+| `YZH-V3.0-架构设计文档.md`        | 本设计四件套归入 YZH.Core 增量层，遵循"不修改 Vol 源码、Autofac 挂载"约束                                                                                                                                                                                     |
+| `文件数据提取能力落地-V1.md`      | IFileExtractor 已实现部分由本设计 `DocumentExtractSkill` 包装复用                                                                                                                                                                                             |
 
 **状态与归档**：本设计处于"待实施"；实施完成后结论沉淀至 `20-架构决策/`，本文件按项目全局规则移入 `历史文档/` 或更新版本。
-*（内容由AI生成，仅供参考）*
-*（内容由AI生成，仅供参考）*
+_（内容由AI生成，仅供参考）_
+_（内容由AI生成，仅供参考）_
+````
