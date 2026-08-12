@@ -890,8 +890,8 @@ const deleteItem = async (item) => {
   const code = item.FolderCode || item.folderCode || item.FileCode || item.fileCode
   try {
     let res
-    if (isFolder) res = await http.delete(`/api/standard-directory/folders/${code}`)
-    else res = await http.delete(`/api/standard-directory/files/${code}`)
+    if (isFolder) res = await http.del(`/api/standard-directory/folders/${code}`)
+    else res = await http.del(`/api/standard-directory/files/${code}`)
     if (res.Status === true || res.status === 0) {
       ElMessage.success('删除成功')
       await loadCurrentContent()

@@ -133,6 +133,11 @@ builder.Services.AddMvc(options =>
 
 // ====== Office 文档转换后台服务 ======
 builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.OfficeConvertService>();
+            
+            // 新增Helper服务
+            builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IMinIOHelper, VOL.Builder.Services.CertPlatform.MinIOHelper>();
+            builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IFolderFileManager, VOL.Builder.Services.CertPlatform.FolderFileManager>();
+            builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IFileStorageService, VOL.Builder.Services.CertPlatform.FileStorageService>();
 builder.Services.AddSingleton<VOL.Builder.Services.CertPlatform.ConvertQueueManager>();
 builder.Services.AddHostedService<VOL.Builder.Services.CertPlatform.ConvertHostedService>();
 

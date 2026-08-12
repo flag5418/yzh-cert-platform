@@ -21,6 +21,7 @@ using VOL.Entity.CertPlatform.Dir;
 using VOL.Entity.CertPlatform.Cert;
 using VOL.Entity.CertPlatform.Sys;
 using VOL.Builder.IServices.CertPlatform;
+using VOL.Builder.Services.CertPlatform;
 using VOL.Entity.DomainModels;
 using VOL.Core.ManageUser;
 using Microsoft.AspNetCore.SignalR;
@@ -35,18 +36,29 @@ namespace VOL.Builder.Services.CertPlatform
         private readonly IMinioClient _minioClient;
         private readonly OfficeConvertService _convertService;
         private readonly IHubContext<UploadProgressHub> _hubContext;
+        
+        // ===== 新增Helper服务 =====
+        private readonly IMinIOHelper _minioHelper;
+        private readonly IFolderFileManager _folderFileManager;
+        private readonly IFileStorageService _fileStorageService;
 
         public StandardDirectoryService(VOLContext db, ICodeGeneratorService codeGenerator,
                                         IConfiguration configuration, OfficeConvertService convertService,
-                                        IHubContext<UploadProgressHub> hubContext)
+                                        IHubContext<UploadProgressHub> hubContext,
+                                        IMinIOHelper minioHelper,
+                                        IFolderFileManager folderFileManager,
+                                        IFileStorageService fileStorageService)
         {
             _db = db;
             _codeGenerator = codeGenerator;
             _configuration = configuration;
             _convertService = convertService;
             _hubContext = hubContext;
+            _minioHelper = minioHelper;
+            _folderFileManager = folderFileManager;
+            _fileStorageService = fileStorageService;
 
-            // 初始化 MinIO 客户端
+            // 初始化 MinIO 客户端（保留用于兼容旧代码）
             _minioClient = new MinioClient()
                 .WithEndpoint(configuration["MinIO:Endpoint"] ?? "127.0.0.1:9000")
                 .WithCredentials(
@@ -505,23 +517,22 @@ namespace VOL.Builder.Services.CertPlatform
         /// <summary>
         /// 更新标准目录文件夹
         /// </summary>
+        /// <summary>
+        /// 更新文件夹（重命名）— 委托给FolderFileManager处理
+        /// TODO: 后续绑定工作流/校验规则时，重命名前需检查关联数据
+        /// </summary>
         public WebResponseContent UpdateFolder(StandardDirectoryFolder folder)
         {
             try
             {
-                var existing = _db.Set<StandardDirectoryFolder>()
-                    .FirstOrDefault(x => x.FolderCode == folder.FolderCode);
-
-                if (existing == null)
-                    return new WebResponseContent().Error("文件夹不存在");
-
-                existing.FolderName = folder.FolderName;
-                existing.SortOrder = folder.SortOrder;
-                existing.Remark = folder.Remark;
-                existing.ModifyDate = DateTime.Now;
-
-                _db.SaveChanges();
-
+                var result = _folderFileManager.RenameFolderAsync(
+                    folder.FolderCode, 
+                    folder.FolderName, 
+                    force: false).GetAwaiter().GetResult();
+                
+                if (!result)
+                    return new WebResponseContent().Error("文件夹不存在或重命名失败");
+                
                 return new WebResponseContent().OK("更新成功");
             }
             catch (Exception ex)
@@ -533,26 +544,18 @@ namespace VOL.Builder.Services.CertPlatform
         /// <summary>
         /// 删除标准目录文件夹
         /// </summary>
+        /// <summary>
+        /// 删除文件夹 — 委托给FolderFileManager处理
+        /// TODO: 后续绑定工作流/校验规则时，删除前需检查关联数据
+        /// </summary>
         public WebResponseContent DeleteFolder(string folderCode)
         {
             try
             {
-                var folder = _db.Set<StandardDirectoryFolder>()
-                    .FirstOrDefault(x => x.FolderCode == folderCode);
-
-                if (folder == null)
-                    return new WebResponseContent().Error("文件夹不存在");
-
-                // 软删除
-                folder.Enable = false;
-                folder.DeleteID = UserContext.Current?.UserId;
-                folder.Deleter = UserContext.Current?.UserName;
-                folder.DeleteTime = DateTime.Now;
-                folder.Status = "archived";
-
-                _db.SaveChanges();
-
-                return new WebResponseContent().OK("删除成功");
+                var (foldersDeleted, filesDeleted) = _folderFileManager.DeleteFolderAsync(folderCode).GetAwaiter().GetResult();
+                
+                return new WebResponseContent().OK(
+                    $"删除成功，共删除 {foldersDeleted} 个子文件夹和 {filesDeleted} 个文件");
             }
             catch (Exception ex)
             {
@@ -637,32 +640,19 @@ namespace VOL.Builder.Services.CertPlatform
         /// <summary>
         /// 更新标准目录文件
         /// </summary>
+        /// <summary>
+        /// 更新文件（重命名/修改属性）— 委托给FileStorageService处理
+        /// TODO: 后续绑定了校验规则/提取规则后，重命名前需检查关联数据
+        /// </summary>
         public WebResponseContent UpdateFile(StandardDirectoryFile file)
         {
             try
             {
-                var existing = _db.Set<StandardDirectoryFile>()
-                    .FirstOrDefault(x => x.FileCode == file.FileCode);
-
-                if (existing == null)
-                    return new WebResponseContent().Error("文件不存在");
-
-                existing.FileName = file.FileName;
-                existing.FileType = file.FileType;
-                existing.FilePattern = file.FilePattern;
-                existing.IsRequired = file.IsRequired;
-                existing.MaxFileSizeMB = file.MaxFileSizeMB;
-                existing.Description = file.Description;
-                existing.SortOrder = file.SortOrder;
-                existing.ExtractionEnabled = file.ExtractionEnabled;
-                existing.ExtractionRules = file.ExtractionRules;
-                existing.PreCheckRequired = file.PreCheckRequired;
-                existing.ComplianceRequired = file.ComplianceRequired;
-                existing.Remark = file.Remark;
-                existing.ModifyDate = DateTime.Now;
-
-                _db.SaveChanges();
-
+                var result = _fileStorageService.RenameFileAsync(file.FileCode, file.FileName).GetAwaiter().GetResult();
+                
+                if (!result)
+                    return new WebResponseContent().Error("文件不存在或重命名失败");
+                
                 return new WebResponseContent().OK("更新成功");
             }
             catch (Exception ex)
@@ -674,25 +664,19 @@ namespace VOL.Builder.Services.CertPlatform
         /// <summary>
         /// 删除标准目录文件
         /// </summary>
+        /// <summary>
+        /// 删除文件 — 委托给FileStorageService处理
+        /// TODO: 后续绑定了提取规则/校验规则后，删除前需检查关联数据
+        /// </summary>
         public WebResponseContent DeleteFile(string fileCode)
         {
             try
             {
-                var file = _db.Set<StandardDirectoryFile>()
-                    .FirstOrDefault(x => x.FileCode == fileCode);
-
-                if (file == null)
+                var result = _fileStorageService.DeleteFileAsync(fileCode).GetAwaiter().GetResult();
+                
+                if (!result)
                     return new WebResponseContent().Error("文件不存在");
-
-                // 软删除
-                file.Enable = false;
-                file.DeleteID = UserContext.Current?.UserId;
-                file.Deleter = UserContext.Current?.UserName;
-                file.DeleteTime = DateTime.Now;
-                file.Status = "archived";
-
-                _db.SaveChanges();
-
+                
                 return new WebResponseContent().OK("删除成功");
             }
             catch (Exception ex)
