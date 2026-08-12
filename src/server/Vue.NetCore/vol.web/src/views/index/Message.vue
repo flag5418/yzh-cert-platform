@@ -97,12 +97,17 @@ const markRead = async (item) => {
 
 const markAllRead = async () => {
   try {
-    await proxy.http.post("api/message/read-all", {}, true);
-    msgList.value.forEach(m => { m.isRead = 1; });
-    msgCount.value = 0;
-    proxy.$message.success("全部已读");
+    const res = await proxy.http.post("api/message/read-all", {}, true);
+    if (res.status) {
+      // 修复 Bug 2: 全部已读后立即重新加载当前 tab 的数据，确保与服务器同步
+      await loadMessages();
+      proxy.$message.success("全部已读");
+    } else {
+      proxy.$message.error(res.message || "全部已读失败");
+    }
   } catch (e) {
     console.error("全部已读失败", e);
+    proxy.$message.error("全部已读失败，请重试");
   }
 };
 
@@ -172,6 +177,16 @@ onMounted(() => {
   }
 }
 
+// 修复 Bug 1: 消除 el-tabs__content 的默认 padding 导致的顶部空白
+::v-deep(.el-tabs__content) {
+  padding: 0 !important;
+  min-height: 0 !important;
+}
+
+::v-deep(.el-tab-pane) {
+  padding: 0 !important;
+}
+
 .msg-list {
   .msg-item {
     border-bottom: 1px solid #eee;
@@ -239,9 +254,7 @@ onMounted(() => {
   margin: 0;
 }
 
-::v-deep(.el-tabs__content) {
-  min-height: 200px;
-}
+// 已移至上方统一定义，避免重复设置导致空白
 
 ::v-deep(.el-tabs__nav) {
   width: 100%;

@@ -116,7 +116,7 @@ namespace VOL.Builder.Services.CertPlatform.Converters
                     {
                         process.Kill();
                     }
-                    catch { }
+                    catch (Exception ex) { Console.WriteLine($"[DocToDocxConverter] Error: {ex.Message}"); }
                     
                     return new ConvertResult
                     {
@@ -184,7 +184,7 @@ namespace VOL.Builder.Services.CertPlatform.Converters
                         Directory.Delete(tempOutputDir, true);
                     }
                 }
-                catch { }
+                catch (Exception ex) { Console.WriteLine($"[DocToDocxConverter] Error: {ex.Message}"); }
             }
         }
         

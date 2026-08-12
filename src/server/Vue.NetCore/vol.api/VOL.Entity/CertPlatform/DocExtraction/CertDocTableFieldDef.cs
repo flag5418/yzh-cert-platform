@@ -14,6 +14,24 @@ namespace VOL.Entity.CertPlatform.DocExtraction
     [Entity(TableCnName = "文档表格字段定义")]
     public class CertDocTableFieldDef : YZHBaseEntity
     {
+        /// <summary>覆盖基类审计字段，适配snake_case列名</summary>
+        [Column("create_id")] public new int? CreateID { get; set; }
+        [Column("creator")]   [MaxLength(50)] public new string Creator { get; set; }
+        [Column("create_date")] public new DateTime? CreateDate { get; set; } = DateTime.Now;
+        [NotMapped] public new int? ModifyID { get; set; }
+        [NotMapped] public new string Modifier { get; set; }
+        [NotMapped] public new DateTime? ModifyDate { get; set; }
+        [NotMapped] public new int? DeleteID { get; set; }
+        [NotMapped] public new string Deleter { get; set; }
+        [NotMapped] public new DateTime? DeleteTime { get; set; }
+        /// <summary>覆盖基类字段，适配snake_case列名</summary>
+        [Column("code")]        public new string Code { get; set; }
+        [NotMapped] public new string OrgCode { get; set; }
+        [NotMapped] public new string Status { get; set; }
+        [NotMapped] public new bool Enable { get; set; }
+        [NotMapped] public new int Sort { get; set; }
+        [Column("remark")]      public new string Remark { get; set; }
+
         /// <summary>
         /// 表格编码（关联cert_doc_table_def.Code）
         /// </summary>
@@ -56,13 +74,5 @@ namespace VOL.Entity.CertPlatform.DocExtraction
         [Column("sort_order")]
         [Display(Name = "显示顺序")]
         public int SortOrder { get; set; } = 0;
-
-        /// <summary>
-        /// 备注（覆盖基类Remark）
-        /// </summary>
-        [Column("remark")]
-        [Display(Name = "备注")]
-        [MaxLength(500)]
-        public new string Remark { get; set; }
     }
 }

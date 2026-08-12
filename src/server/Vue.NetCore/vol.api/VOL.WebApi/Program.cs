@@ -116,6 +116,7 @@ builder.Services.AddSwaggerGen(c =>
         "https://*/404";
 });
 builder.Services.AddSignalR();
+builder.Services.AddSingleton<VOL.Core.SignalR.UploadProgressHub>();
 builder.Services.AddHttpClient()
 .AddHttpContextAccessor()
 .AddMemoryCache()
@@ -216,4 +217,5 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<HomePageMessageHub>("/message");
+app.MapHub<VOL.Core.SignalR.UploadProgressHub>("/uploadHub");
 app.Run();

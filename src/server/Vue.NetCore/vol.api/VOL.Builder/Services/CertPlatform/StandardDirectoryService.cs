@@ -15,6 +15,7 @@ using Minio.DataModel.Args;
 using VOL.Core.BaseProvider;
 using VOL.Core.EFDbContext;
 using VOL.Core.Extensions.AutofacManager;
+using VOL.Core.SignalR;
 using VOL.Core.Utilities;
 using VOL.Entity.CertPlatform.Dir;
 using VOL.Entity.CertPlatform.Cert;
@@ -22,6 +23,7 @@ using VOL.Entity.CertPlatform.Sys;
 using VOL.Builder.IServices.CertPlatform;
 using VOL.Entity.DomainModels;
 using VOL.Core.ManageUser;
+using Microsoft.AspNetCore.SignalR;
 
 namespace VOL.Builder.Services.CertPlatform
 {
@@ -32,15 +34,18 @@ namespace VOL.Builder.Services.CertPlatform
         private readonly IConfiguration _configuration;
         private readonly IMinioClient _minioClient;
         private readonly OfficeConvertService _convertService;
+        private readonly IHubContext<UploadProgressHub> _hubContext;
 
-        public StandardDirectoryService(VOLContext db, ICodeGeneratorService codeGenerator, 
-                                        IConfiguration configuration, OfficeConvertService convertService)
+        public StandardDirectoryService(VOLContext db, ICodeGeneratorService codeGenerator,
+                                        IConfiguration configuration, OfficeConvertService convertService,
+                                        IHubContext<UploadProgressHub> hubContext)
         {
             _db = db;
             _codeGenerator = codeGenerator;
             _configuration = configuration;
             _convertService = convertService;
-            
+            _hubContext = hubContext;
+
             // 初始化 MinIO 客户端
             _minioClient = new MinioClient()
                 .WithEndpoint(configuration["MinIO:Endpoint"] ?? "127.0.0.1:9000")
@@ -456,10 +461,11 @@ namespace VOL.Builder.Services.CertPlatform
             {
                 // 生成编码
                 folder.Code = Guid.NewGuid().ToString("N");
+                int maxSeq = GetMaxSequence(folder.DirectoryCode, folder.ParentCode);
                 folder.FolderCode = _codeGenerator.GenerateFolderCode(
                     folder.DirectoryCode, 
                     folder.Depth, 
-                    GetMaxSequence(folder.DirectoryCode, folder.ParentCode) + 1
+                    maxSeq + 1
                 );
                 folder.CreateDate = DateTime.Now;
                 folder.Status = "draft";
@@ -469,6 +475,26 @@ namespace VOL.Builder.Services.CertPlatform
                 _db.SaveChanges();
 
                 return new WebResponseContent().OK($"创建成功，文件夹编码：{folder.FolderCode}");
+            }
+            catch (MySqlConnector.MySqlException ex) when (ex.Number == 1062)
+            {
+                // Duplicate entry：序号计算仍有冲突，尝试递增直到找到可用编码
+                for (int i = 0; i < 100; i++)
+                {
+                    try
+                    {
+                        folder.FolderCode = _codeGenerator.GenerateFolderCode(
+                            folder.DirectoryCode, folder.Depth, GetMaxSequence(folder.DirectoryCode, folder.ParentCode) + 1 + i);
+                        _db.Set<StandardDirectoryFolder>().Add(folder);
+                        _db.SaveChanges();
+                        return new WebResponseContent().OK($"创建成功，文件夹编码：{folder.FolderCode}");
+                    }
+                    catch (MySqlConnector.MySqlException ex2) when (ex2.Number == 1062)
+                    {
+                        continue; // 继续尝试下一个序号
+                    }
+                }
+                return new WebResponseContent().Error("创建失败：无法生成唯一编码，请重试");
             }
             catch (Exception ex)
             {
@@ -545,13 +571,34 @@ namespace VOL.Builder.Services.CertPlatform
         {
             try
             {
-                var files = _db.Set<StandardDirectoryFile>()
-                    .Where(x => x.FolderCode == folderCode && x.Enable == true && x.IsValid == true)
-                    .OrderBy(x => x.SortOrder)
-                    .ToList();
+                var query = _db.Set<StandardDirectoryFile>()
+                    .Where(x => x.Enable == true && x.IsValid == true);
+                if (!string.IsNullOrEmpty(folderCode))
+                    query = query.Where(x => x.FolderCode == folderCode);
+                var files = query.OrderBy(x => x.SortOrder).ToList();
 
                 var result = new WebResponseContent().OK(null, files);
                 return result;
+            }
+            catch (Exception ex)
+            {
+                return new WebResponseContent().Error($"获取失败：{ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 获取目录下所有文件（不含子文件夹中的文件）
+        /// </summary>
+        public WebResponseContent GetFilesByDirectory(string directoryCode)
+        {
+            try
+            {
+                var files = _db.Set<StandardDirectoryFile>()
+                    .Where(x => x.DirectoryCode == directoryCode && x.Enable == true && x.IsValid == true)
+                    .OrderBy(x => x.SortOrder)
+                    .ToList();
+
+                return new WebResponseContent().OK(null, files);
             }
             catch (Exception ex)
             {
@@ -757,7 +804,7 @@ namespace VOL.Builder.Services.CertPlatform
             finally
             {
                 // 3. 清理临时目录
-                try { Directory.Delete(tempDir, true); } catch { }
+                try { Directory.Delete(tempDir, true); } catch (Exception ex) { Console.WriteLine($"[StandardDirectoryService] Error: {ex.Message}"); }
             }
         }
 
@@ -1078,19 +1125,18 @@ namespace VOL.Builder.Services.CertPlatform
                          && x.ParentCode == parentCode 
                          && x.Enable == true);
 
-            // 先获取所有记录，然后在内存中处理
             var folders = query.ToList();
             if (folders.Count == 0)
                 return 0;
             
             int maxSeq = 0;
-            bool isRoot = string.IsNullOrEmpty(parentCode);
             foreach (var folder in folders)
             {
+                // FolderCode格式: FD-{DirCode}|L{Level}|S{Sequence}
+                // 最后一段是S{Sequence}，直接取parts.Last()
                 var parts = folder.FolderCode.Split('|');
-                var seqIndex = isRoot ? 2 : 3;
-                var seqStr = seqIndex < parts.Length ? parts[seqIndex] : "S001";
-                var numStr = seqStr.Replace(isRoot ? "L" : "S", "");
+                var seqStr = parts.Length > 0 ? parts[parts.Length - 1] : "S001";
+                var numStr = seqStr.Replace("S", "");
                 if (int.TryParse(numStr, out int value) && value > maxSeq)
                     maxSeq = value;
             }
@@ -1113,20 +1159,26 @@ namespace VOL.Builder.Services.CertPlatform
                 // 1. 校验或自动创建目录配置
                 var config = _db.Set<StandardDirectoryConfig>()
                     .FirstOrDefault(x => x.DirectoryCode == manifest.DirectoryCode);
-                if (config == null)
+                 if (config == null)
                 {
-                    // 自动创建默认目录配置
+                    // 从 DirectoryCode 解析 StandardCode 和 PhaseCode
+                    // 格式：SDC-{StandardCode}|{PhaseCode}
+                    var dirParts = manifest.DirectoryCode.Split('|');
+                    var stdCodeRaw = dirParts.Length > 0 ? dirParts[0].Replace("SDC-", "") : "";
+                    var phaseCode = dirParts.Length > 1 ? dirParts[1] : "";
+
                     config = new StandardDirectoryConfig
                     {
+                        Code = Guid.NewGuid().ToString("N"),
                         DirectoryCode = manifest.DirectoryCode,
-                        StandardCode = "",
-                        PhaseCode = "",
+                        StandardCode = stdCodeRaw,
+                        PhaseCode = phaseCode,
                         Enable = true,
                         CreateDate = DateTime.Now,
                     };
                     _db.Set<StandardDirectoryConfig>().Add(config);
                     await _db.SaveChangesAsync();
-                    Console.WriteLine($"[UploadInit] 自动创建目录配置: {manifest.DirectoryCode}");
+                    Console.WriteLine($"[UploadInit] 自动创建目录配置: {manifest.DirectoryCode} (StandardCode={stdCodeRaw}, PhaseCode={phaseCode})");
                 }
 
                 // 2. 生成任务ID
@@ -1242,7 +1294,7 @@ namespace VOL.Builder.Services.CertPlatform
 
                     // 查找所属文件夹
                     var pathParts = fullPath.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
-                    string parentFolderCode = manifest.DirectoryCode;
+                    string parentFolderCode = null;
                     if (pathParts.Length > 1)
                     {
                         var folderPath = string.Join("/", pathParts.Take(pathParts.Length - 1));
@@ -1251,6 +1303,18 @@ namespace VOL.Builder.Services.CertPlatform
                             parentFolderCode = folderMap[folderPath];
                         }
                     }
+                    // 如果文件在根目录（无子文件夹），使用根文件夹编码
+                    if (string.IsNullOrEmpty(parentFolderCode))
+                    {
+                        var rootFolder = _db.Set<StandardDirectoryFolder>()
+                            .FirstOrDefault(x => x.DirectoryCode == manifest.DirectoryCode
+                                               && string.IsNullOrEmpty(x.ParentCode)
+                                               && x.IsValid == true);
+                        parentFolderCode = rootFolder?.FolderCode;
+                    }
+                    // 兜底：如果仍为空，使用目录编码作为文件夹编码（保持向后兼容）
+                    if (string.IsNullOrEmpty(parentFolderCode))
+                        parentFolderCode = manifest.DirectoryCode;
 
                     var fileName = pathParts.Last();
 
@@ -1468,6 +1532,9 @@ namespace VOL.Builder.Services.CertPlatform
                 var saveResult = await _db.SaveChangesAsync();
                 Console.WriteLine($"[UploadFileWithTask] SaveChangesAsync returned: {saveResult}");
 
+                // 广播上传进度到 SignalR
+                await BroadcastUploadProgressAsync(request.TaskId);
+
                 return new WebResponseContent().OK($"文件上传成功：{fileRecord.FileName}");
             }
             catch (Exception ex)
@@ -1586,6 +1653,8 @@ namespace VOL.Builder.Services.CertPlatform
                 var msg = convertCount > 0
                     ? $"上传确认完成，共{task.TotalFiles}个文件，{convertCount}个文件正在转换"
                     : $"上传确认完成，共{task.TotalFiles}个文件";
+                // 广播上传完成进度
+                await BroadcastUploadProgressAsync(taskId);
                 return new WebResponseContent().OK(msg, new { taskId, convertCount });
             }
             catch (Exception ex)
@@ -1634,7 +1703,7 @@ namespace VOL.Builder.Services.CertPlatform
                                     .WithObject(storagePath);
                                 await _minioClient.RemoveObjectAsync(rmArgs).ConfigureAwait(false);
                             }
-                            catch { /* 忽略MinIO删除失败 */ }
+                            catch (Exception ex) { Console.WriteLine($"[StandardDirectoryService] Error: {ex.Message}"); /* 忽略MinIO删除失败 */ }
                         }
                         _db.Set<StandardDirectoryFile>().Remove(file);
                         deletedFiles++;
@@ -1653,7 +1722,7 @@ namespace VOL.Builder.Services.CertPlatform
                                     .WithObject(storagePath);
                                 await _minioClient.RemoveObjectAsync(rmArgs).ConfigureAwait(false);
                             }
-                            catch { /* 忽略MinIO删除失败 */ }
+                            catch (Exception ex) { Console.WriteLine($"[StandardDirectoryService] Error: {ex.Message}"); /* 忽略MinIO删除失败 */ }
                         }
                         // 恢复状态为 active（旧文件内容未被修改）
                         file.UploadStatus = "active";
@@ -1808,6 +1877,43 @@ namespace VOL.Builder.Services.CertPlatform
             foreach (var name in propertyNames)
             {
                 _db.Entry(entity).Property(name).IsModified = true;
+            }
+        }
+
+        /// <summary>
+        /// 广播上传进度到 SignalR 客户端组
+        /// </summary>
+        private async Task BroadcastUploadProgressAsync(string taskId)
+        {
+            try
+            {
+                var task = await _db.Set<UploadTask>()
+                    .FirstOrDefaultAsync(x => x.TaskId == taskId);
+                if (task == null) return;
+
+                var files = await _db.Set<StandardDirectoryFile>()
+                    .Where(x => x.TaskId == taskId)
+                    .ToListAsync();
+
+                var uploaded = files.Count(f => f.UploadStatus == "uploaded" || f.UploadStatus == "active");
+                var pending = files.Count(f => f.UploadStatus == "pending" || f.UploadStatus == "replacing");
+
+                var progress = new
+                {
+                    taskId,
+                    status = task.Status,
+                    totalFiles = task.TotalFiles,
+                    uploadedFiles = uploaded,
+                    pendingFiles = pending,
+                    percent = task.TotalFiles > 0 ? (int)((decimal)uploaded / task.TotalFiles * 100) : 0,
+                    updateTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                };
+
+                await _hubContext.Clients.Group($"upload_{taskId}").SendAsync("ReceiveUploadProgress", progress);
+            }
+            catch
+            {
+                // 广播失败不影响主流程
             }
         }
 

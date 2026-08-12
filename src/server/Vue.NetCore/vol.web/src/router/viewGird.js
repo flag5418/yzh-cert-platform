@@ -62,7 +62,7 @@ let viewgird = [
     meta: { title: '机构-阶段关联' }
   },
   
-  // 标准目录管理（基础配置子菜单）- 使用嵌套路由
+  // 标准目录管理（基础配置子菜单）
   {
     path: '/CertPlatform/Standard',
     name: 'StandardDirectory',
@@ -73,13 +73,7 @@ let viewgird = [
         path: 'DirectoryConfig',
         name: 'DirectoryConfig',
         component: () => import('@/views/cert/Standard/DirectoryManager/index.vue'),
-        meta: { title: '目录配置' }
-      },
-      {
-        path: 'DirectoryTree',
-        name: 'DirectoryTree',
-        component: () => import('@/views/cert/Standard/DirectoryTree/index.vue'),
-        meta: { title: '文件夹结构' }
+        meta: { title: '目录管理' }
       }
     ]
   },

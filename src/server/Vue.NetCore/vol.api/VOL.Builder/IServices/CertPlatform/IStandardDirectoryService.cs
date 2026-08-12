@@ -99,6 +99,7 @@ namespace VOL.Builder.IServices.CertPlatform
         /// 获取标准目录文件列表
         /// </summary>
         WebResponseContent GetFiles(string folderCode);
+        WebResponseContent GetFilesByDirectory(string directoryCode);
 
         /// <summary>
         /// 创建标准目录文件

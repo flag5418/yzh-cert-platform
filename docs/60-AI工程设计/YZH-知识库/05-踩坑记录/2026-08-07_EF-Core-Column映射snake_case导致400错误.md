@@ -191,3 +191,38 @@ columns computed → 回退到 options.js.columns（也是空数组）
 | **UI 一致性** | 工具栏元素应使用统一的 `<a>` 标签风格，不要混用 `el-button link` | - |
 | **Column 特性是必须品** | 不是可选项，只要列名和属性名不同就必须加 | EF Core 官方约定 |
 | **接口返回大小写** | `JsonNormal()` 保持原始大小写，`Json()` 转小驼峰 | [case.html](http://v3.volcore.xyz/docs/cs/dev/case.html) |
+
+---
+
+# 2026-08-12 追加：YZHBaseEntity 审计字段映射全面修复
+
+## 问题
+
+`Unknown column 'w.CreateDate'` 和 `Unknown column 'c.org_code'` 反复出现，影响 PromptTemplate、ISOStandard、DirectoryConfig 等多个页面。
+
+## 根因
+
+YZHBaseEntity 在 2026-08-11 被错误地添加了 `[Column("create_id")]` 等 snake_case 映射，
+导致 PascalCase 表（如 cert_iso_standard）查询时 EF Core 生成错误 SQL。
+
+## 修复
+
+1. **YZHBaseEntity**：移除所有 audit 字段的 `[Column]` 映射，只保留 `[Column(TypeName="bigint")]` 用于 Id
+2. **6 个 snake_case 实体**：在子类中用 `new` + `[Column]` 覆盖基类字段：
+   - `PromptTemplate.cs`（wf_prompt_template）
+   - `AIConfig.cs`（cert_ai_config）
+   - `CertDocExtractionRule.cs`（cert_doc_extraction_rule）
+   - `CertDocFieldDef.cs`（cert_doc_field_def）
+   - `CertDocTableDef.cs`（cert_doc_table_def）
+   - `CertDocTableFieldDef.cs`（cert_doc_table_field_def）
+
+## 验证结果
+
+- `GET /api/prompt-template/list` → ✅ Status: True, Count: 3
+- `POST /api/ISOStandard/getPageData` → ✅ total: 10, rows: 3
+- `GET /api/standard-directory/organization-tree` → ✅ Status: True
+- SQL 错误数：0
+
+## 完整分析文档
+
+详见：`docs/60-AI工程设计/YZH-知识库/05-踩坑记录/2026-08-12_YZHBaseEntity审计字段映射全面分析与修复.md`

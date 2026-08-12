@@ -14,6 +14,24 @@ namespace VOL.Entity.CertPlatform.DocExtraction
     [Entity(TableCnName = "文档提取规则")]
     public class CertDocExtractionRule : YZHBaseEntity
     {
+        /// <summary>覆盖基类审计字段，适配snake_case列名</summary>
+        [Column("create_id")] public new int? CreateID { get; set; }
+        [Column("creator")]   [MaxLength(50)] public new string Creator { get; set; }
+        [Column("create_date")] public new DateTime? CreateDate { get; set; } = DateTime.Now;
+        [Column("modify_id")] public new int? ModifyID { get; set; }
+        [Column("modifier")]  [MaxLength(50)] public new string Modifier { get; set; }
+        [Column("modify_date")] public new DateTime? ModifyDate { get; set; }
+        [Column("delete_id")] public new int? DeleteID { get; set; }
+        [Column("deleter")]   [MaxLength(50)] public new string Deleter { get; set; }
+        [Column("delete_time")] public new DateTime? DeleteTime { get; set; }
+        /// <summary>覆盖基类字段，适配snake_case列名</summary>
+        [Column("code")]        public new string Code { get; set; }
+        [Column("org_code")]    public new string OrgCode { get; set; }
+        [Column("status")]      public new string Status { get; set; }
+        [Column("remark")]      public new string Remark { get; set; }
+        [NotMapped] public new bool Enable { get; set; }
+        [NotMapped] public new int Sort { get; set; }
+
         /// <summary>
         /// 文件编码（关联标准目录文件）
         /// </summary>
@@ -60,21 +78,5 @@ namespace VOL.Entity.CertPlatform.DocExtraction
         [Column("sample_data")]
         [Display(Name = "样本数据")]
         public string SampleData { get; set; }
-
-        /// <summary>
-        /// 规则状态：none/configured/failed（覆盖基类Status）
-        /// </summary>
-        [Column("status")]
-        [Display(Name = "规则状态")]
-        [MaxLength(20)]
-        public new string Status { get; set; } = "none";
-
-        /// <summary>
-        /// 备注（覆盖基类Remark）
-        /// </summary>
-        [Column("remark")]
-        [Display(Name = "备注")]
-        [MaxLength(500)]
-        public new string Remark { get; set; }
     }
 }

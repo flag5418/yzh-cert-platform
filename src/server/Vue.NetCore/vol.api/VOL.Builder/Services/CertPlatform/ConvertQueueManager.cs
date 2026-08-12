@@ -26,7 +26,6 @@ namespace VOL.Builder.Services.CertPlatform
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<ConvertQueueManager> _logger;
-        private readonly IConvertNotifier _notifier;
 
         private SemaphoreSlim _semaphore;
         private int _maxConcurrent;
@@ -37,12 +36,10 @@ namespace VOL.Builder.Services.CertPlatform
 
         public ConvertQueueManager(
             IServiceProvider serviceProvider,
-            ILogger<ConvertQueueManager> logger,
-            IConvertNotifier notifier)
+            ILogger<ConvertQueueManager> logger)
         {
             _serviceProvider = serviceProvider;
             _logger = logger;
-            _notifier = notifier;
             _maxConcurrent = 5;
             _timeoutSeconds = 300;
             _semaphore = new SemaphoreSlim(_maxConcurrent, _maxConcurrent);
@@ -212,7 +209,9 @@ namespace VOL.Builder.Services.CertPlatform
             // 3. 推送取消通知
             if (!string.IsNullOrEmpty(taskId))
             {
-                await _notifier.SendToConvertGroup(taskId, new
+                using var nScope = _serviceProvider.CreateScope();
+                var notifier = nScope.ServiceProvider.GetRequiredService<IConvertNotifier>();
+                await notifier.SendToConvertGroup(taskId, new
                     {
                         title = "转换已取消",
                         message = $"批次 {taskId} 的转换任务已全部取消",
@@ -313,13 +312,17 @@ namespace VOL.Builder.Services.CertPlatform
             // 按 taskId 推送到组
             if (!string.IsNullOrEmpty(job.TaskId))
             {
-                await _notifier.SendToConvertGroup(job.TaskId, notification);
+                using var nScope = _serviceProvider.CreateScope();
+                var notifier = nScope.ServiceProvider.GetRequiredService<IConvertNotifier>();
+                await notifier.SendToConvertGroup(job.TaskId, notification);
             }
 
             // 也推送给用户
             if (!string.IsNullOrEmpty(job.UserName))
             {
-                await _notifier.SendToUser(job.UserName, notification);
+                using var uScope = _serviceProvider.CreateScope();
+                var notifier = uScope.ServiceProvider.GetRequiredService<IConvertNotifier>();
+                await notifier.SendToUser(job.UserName, notification);
             }
         }
     }

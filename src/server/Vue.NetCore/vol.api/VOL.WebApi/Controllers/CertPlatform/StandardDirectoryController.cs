@@ -179,6 +179,16 @@ namespace VOL.WebApi.Controllers.CertPlatform
         }
 
         /// <summary>
+        /// 获取目录下所有文件（不含子文件夹中的文件）
+        /// </summary>
+        [HttpGet("directory-files")]
+        public IActionResult GetDirectoryFiles([FromQuery] string directoryCode)
+        {
+            var result = _service.GetFilesByDirectory(directoryCode);
+            return JsonNormal(result);
+        }
+
+        /// <summary>
         /// 创建标准目录文件
         /// </summary>
         [HttpPost("folders/{folderCode}/files/create")]

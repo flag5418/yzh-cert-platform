@@ -1,5 +1,11 @@
 <template>
   <div class="directory-manager">
+    <!-- 上传队列顶部通知栏 -->
+    <UploadQueueBanner
+      :tasks="activeUploadTasks"
+      @cancel="handleCancelUploadTask"
+    />
+
     <!-- 左侧面板 -->
     <div class="left-panel">
       <div class="left-header">
@@ -84,23 +90,28 @@
 
       <!-- 工具栏 -->
       <div class="toolbar" v-if="currentPhase">
-        <el-button type="primary" size="small" @click="handleNewFolder">
+        <el-badge :value="activeUploadTasks.length" :hidden="activeUploadTasks.length === 0">
+          <el-button type="primary" size="small" @click="showUploadPanel = true" :disabled="isUploading">
+            <el-icon><Upload /></el-icon> 上传队列
+          </el-button>
+        </el-badge>
+        <el-button type="primary" size="small" @click="handleNewFolder" :disabled="isUploading">
           <el-icon><FolderAdd /></el-icon> 新建文件夹
         </el-button>
-        <el-button size="small" @click="handleUpload">
+        <el-button size="small" @click="handleUpload" :disabled="isUploading">
           <el-icon><Upload /></el-icon> 上传文件
         </el-button>
         <el-divider direction="vertical" />
-        <el-button size="small" @click="handleExport" :disabled="selectedItems.size === 0">
+        <el-button size="small" @click="handleExport" :disabled="selectedItems.size === 0 || isUploading">
           <el-icon><Download /></el-icon> 导出打包
         </el-button>
         <el-divider direction="vertical" />
-        <el-button size="small" @click="selectAll">全选</el-button>
-        <el-button size="small" type="danger" plain @click="deleteSelected">
+        <el-button size="small" :disabled="isUploading">全选</el-button>
+        <el-button size="small" type="danger" plain :disabled="isUploading" @click="deleteSelected">
           <el-icon><Delete /></el-icon> 删除
         </el-button>
         <div style="flex: 1"></div>
-        <el-button size="small" type="warning" plain @click="handleHelp">
+        <el-button size="small" type="warning" plain :disabled="isUploading" @click="handleHelp">
           <el-icon><QuestionFilled /></el-icon> 使用帮助
         </el-button>
       </div>
@@ -115,6 +126,7 @@
               </th>
               <th>名称</th>
               <th>大小</th>
+              <th>上传状态</th>
               <th>修改时间</th>
               <th>操作</th>
             </tr>
@@ -141,8 +153,9 @@
                 }}</span>
               </td>
               <td class="size-cell">--</td>
+              <td class="upload-status-cell">—</td>
               <td class="date-cell">{{ formatDate(folder.CreateDate || folder.createDate) }}</td>
-              <td class="action-cell">
+              <td class="action-cell" :style="{ pointerEvents: isUploading ? 'none' : 'auto', opacity: isUploading ? 0.5 : 1 }">
                 <el-button link type="primary" size="small" @click.stop="showRenameDialog(folder)"
                   >重命名</el-button
                 >
@@ -173,8 +186,18 @@
                 <span class="name-text">{{ file.FileName || file.fileName }}</span>
               </td>
               <td class="size-cell">{{ formatFileSize(file.FileSize || file.fileSize) }}</td>
+              <td class="upload-status-cell">
+                <el-icon v-if="file.uploadStatus === 'uploading'" color="#409eff" class="is-spinning"><Loading /></el-icon>
+                <el-icon v-else-if="file.uploadStatus === 'uploaded' || file.uploadStatus === 'active'" color="#67c23a"><Check /></el-icon>
+                <el-icon v-else-if="file.uploadStatus === 'converting'" color="#409eff"><Document /></el-icon>
+                <el-icon v-else-if="file.uploadStatus === 'failed'" color="#f56c6c"><Close /></el-icon>
+                <span v-if="file.uploadProgress > 0 && file.uploadProgress < 100" class="upload-percent">
+                  {{ file.uploadProgress }}%
+                </span>
+                <span v-else class="upload-idle">—</span>
+              </td>
               <td class="date-cell">{{ formatDate(file.CreateDate || file.createDate) }}</td>
-              <td class="action-cell">
+              <td class="action-cell" :style="{ pointerEvents: isUploading ? 'none' : 'auto', opacity: isUploading ? 0.5 : 1 }">
                 <el-button link type="primary" size="small" @click.stop="showRenameDialog(file)"
                   >重命名</el-button
                 >
@@ -199,13 +222,9 @@
         />
       </div>
 
-      <!-- 未选中阶段提示 -->
+      <!-- 未选中阶段：显示目录配置管理 -->
       <div v-if="!currentPhase" class="empty-state">
-        <el-empty description="请在左侧选择阶段">
-          <template #description>
-            <div>选择 机构 > 标准 > 阶段 后，右侧将加载文件目录</div>
-          </template>
-        </el-empty>
+        <ConfigTab />
       </div>
 
       <!-- 状态栏 -->
@@ -395,11 +414,17 @@ import {
   FolderAdd,
   OfficeBuilding,
   QuestionFilled,
-  Upload
+  Upload,
+  Loading,
+  Check,
+  Close
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import ConvertProgressPanel from './ConvertProgressPanel.vue'
+import ConfigTab from './components/ConfigTab.vue'
+import UploadQueueBanner from './components/UploadQueueBanner.vue'
+import * as signalR from '@microsoft/signalr'
 
 const searchText = ref('')
 const treeData = ref([])
@@ -425,6 +450,7 @@ const folderInputRef = ref(null)
 const uploadFileList = ref([])
 const uploading = ref(false)
 const convertPanelRef = ref(null)
+const showUploadPanel = ref(false)
 
 const uploadProgress = reactive({
   total: 0,
@@ -433,6 +459,134 @@ const uploadProgress = reactive({
   currentFile: '',
   status: 'idle'
 })
+
+// ========== 上传队列管理（SignalR 实时状态） ==========
+const uploadTasks = ref([])  // 活跃上传任务列表
+const signalRConnection = ref(null)
+
+/**
+ * 将 API 返回的 PascalCase 属性规范化为 camelCase
+ * 同时补充 uploadStatus / uploadProgress 等前端计算属性
+ */
+const normalizeItem = (item, type) => {
+  if (!item) return item
+  const n = { ...item }
+  // PascalCase → camelCase
+  if (n.UploadStatus !== undefined) n.uploadStatus = n.UploadStatus
+  if (n.FileName !== undefined) n.fileName = n.FileName
+  if (n.FileSize !== undefined) n.fileSize = n.FileSize
+  if (n.FolderName !== undefined) n.folderName = n.FolderName
+  if (n.FolderCode !== undefined) n.folderCode = n.FolderCode
+  if (n.FileCode !== undefined) n.fileCode = n.FileCode
+  if (n.CreateDate !== undefined) n.createDate = n.CreateDate
+  if (n.ModifyDate !== undefined) n.modifyDate = n.ModifyDate
+  if (n.IsValid !== undefined) n.isValid = n.IsValid
+  // 计算上传进度（从活跃任务中查找）
+  if (type === 'file' && n.fileCode) {
+    const task = uploadTasks.value.find(t => t.taskId && t.files)
+    if (task) {
+      const f = task.files.find(f => f.fileCode === n.fileCode)
+      if (f) {
+        n.uploadStatus = f.status
+        n.uploadProgress = f.uploadProgress
+      }
+    }
+  }
+  return n
+}
+
+// 计算属性
+const isUploading = computed(() => uploadTasks.value.some(t => t.status === 'uploading'))
+const activeUploadTasks = computed(() => uploadTasks.value.filter(t => t.status !== 'done' && t.status !== 'cancelled'))
+
+// 初始化 SignalR 连接（只连一次）
+const initSignalR = () => {
+  if (signalRConnection.value) return
+  const token = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')).token : ''
+  signalRConnection.value = new signalR.HubConnectionBuilder()
+    .withUrl(`${window.ipAddress || 'http://localhost:9992/'}uploadHub${token ? `?access_token=${token}` : ''}`, {
+      skipNegotiation: true,
+      transport: signalR.HttpTransportType.WebSockets
+    })
+    .withAutomaticReconnect()
+    .build()
+
+  signalRConnection.value.on('ReceiveUploadProgress', (progress) => {
+    updateTaskProgress(progress)
+  })
+
+  signalRConnection.value.start().catch(err => {
+    console.warn('[SignalR] 连接失败，将使用轮询降级:', err.message)
+  })
+}
+
+// 更新单个任务的进度
+const updateTaskProgress = (progress) => {
+  const task = uploadTasks.value.find(t => t.taskId === progress.taskId)
+  if (!task) {
+    // 任务不存在，创建新条目
+    uploadTasks.value.push({
+      taskId: progress.taskId,
+      directoryCode: '',
+      status: progress.status || 'uploading',
+      totalFiles: progress.totalFiles || 0,
+      uploadedFiles: progress.uploadedFiles || 0,
+      pendingFiles: progress.pendingFiles || 0,
+      percent: progress.percent || 0,
+      failedFiles: 0,
+      convertCount: 0,
+      files: []
+    })
+    return
+  }
+  task.status = progress.status || task.status
+  task.uploadedFiles = progress.uploadedFiles ?? task.uploadedFiles
+  task.totalFiles = progress.totalFiles ?? task.totalFiles
+  task.percent = progress.percent ?? task.percent
+  task.updateTime = progress.updateTime
+  if (task.status === 'completed') {
+    task.status = 'done'
+    ElMessage.success(`上传任务完成：${task.totalFiles} 个文件全部上传成功`)
+    loadCurrentContent()
+    showUploadPanel.value = false
+  } else if (task.status === 'cancelled' || task.status === 'expired') {
+    task.status = 'cancelled'
+    ElMessage.warning('上传任务已取消')
+    showUploadPanel.value = false
+  }
+}
+
+// 开始监听某个任务的进度
+const subscribeToTask = (taskId) => {
+  if (!signalRConnection.value || signalRConnection.value.state !== signalR.HubConnectionState.Connected) {
+    initSignalR()
+  }
+  signalRConnection.value?.invoke('BroadcastUploadProgress', taskId, {})
+    .catch(err => console.warn('[SignalR] 订阅失败:', err))
+}
+
+// 取消任务
+const handleCancelUploadTask = async (taskId) => {
+  try {
+    await http.post(`/api/standard-directory/upload-cancel?taskId=${taskId}`)
+    const task = uploadTasks.value.find(t => t.taskId === taskId)
+    if (task) task.status = 'cancelled'
+    uploadTasks.value = uploadTasks.value.filter(t => t.taskId !== taskId)
+    ElMessage.success('已取消上传任务')
+  } catch (e) {
+    ElMessage.error('取消失败')
+  }
+}
+
+// 获取文件上传状态文本
+const getUploadStatusText = (status) => {
+  const map = { uploading: '上传中', uploaded: '已上传', active: '已完成', converting: '转换中', converted: '已转换', failed: '失败', idle: '—', pending: '等待中', replacing: '替换中' }
+  return map[status] || '—'
+}
+const getUploadStatusClass = (status) => {
+  const cls = { uploading: 'uploading', uploaded: 'success', active: 'success', converting: 'converting', failed: 'failed' }
+  return cls[status] || ''
+}
 
 // 计算属性
 const totalSizeFormatted = computed(() => {
@@ -485,22 +639,49 @@ const loadCurrentContent = async () => {
       const res = await http.get(`/api/standard-directory/configs/${directoryCode}/folders`)
       if (res.Status === true || res.status === 0) {
         const data = res.Data || res.data || []
-        currentFolders.value = extractFoldersAtLevel(data, 2)
-        currentFiles.value = []
+        // 根级别：取tree根节点的直接子节点（Depth=2的文件夹）
+        // 如果根节点没有子节点（新建的根文件夹），直接用它
+        const rootChildren = []
+        for (const root of (Array.isArray(data) ? data : [data])) {
+          if (root.Children && root.Children.length > 0) {
+            rootChildren.push(...root.Children)
+          } else if (!root.Children || root.Children.length === 0) {
+            // 无子节点时，检查是否为新建的根文件夹（有FolderName）
+            if (root.FolderName || root.folderName) {
+              rootChildren.push(root)
+            }
+          }
+        }
+        currentFolders.value = rootChildren.map(f => normalizeItem(f, 'folder'))
+        // 根级别：只加载在根文件夹下的文件（FolderCode以根文件夹code开头）
+        const filesRes = await http.get(`/api/standard-directory/directory-files?directoryCode=${directoryCode}`)
+        if (filesRes.Status === true || filesRes.status === 0) {
+          const allFiles = filesRes.Data || filesRes.data || []
+          // 根级别文件过滤：只保留在L01根文件夹下的文件（不包含子文件夹L02+中的文件）
+          currentFiles.value = Array.isArray(allFiles)
+            ? allFiles.filter((f) => {
+                const fc = f.FolderCode || f.folderCode || ''
+                const valid = f.IsValid !== false
+                // L01表示根级别文件夹，L02+表示子文件夹
+                const inRoot = !fc.includes('|L02|') && !fc.includes('|L03|') && !fc.includes('|L04|')
+                return valid && inRoot
+              }).map(f => normalizeItem(f, 'file'))
+            : []
+        }
       }
     } else {
-      const [foldersRes, filesRes] = await Promise.all([
-        http.get(`/api/standard-directory/configs/${directoryCode}/folders`),
-        http.get(`/api/standard-directory/folders/${currentFolderCode.value}/files`)
-      ])
+      // 子文件夹级别：分别获取子文件夹列表和文件
+      const foldersRes = await http.get(`/api/standard-directory/configs/${directoryCode}/folders`)
       if (foldersRes.Status === true || foldersRes.status === 0) {
         const allFolders = foldersRes.Data || foldersRes.data || []
-        currentFolders.value = extractChildFolders(allFolders, currentFolderCode.value)
+        currentFolders.value = extractChildFolders(allFolders, currentFolderCode.value).map(f => normalizeItem(f, 'folder'))
       }
+      const filesRes = await http.get(`/api/standard-directory/folders/${currentFolderCode.value}/files`)
       if (filesRes.Status === true || filesRes.status === 0) {
-        const allFiles = filesRes.Data || filesRes.data || []
-        currentFiles.value = Array.isArray(allFiles)
-          ? allFiles.filter((f) => f.IsValid !== false)
+        const allItems = filesRes.Data || filesRes.data || []
+        // folders/{folderCode}/files 返回该文件夹下的所有文件
+        currentFiles.value = Array.isArray(allItems)
+          ? allItems.filter((f) => f.IsValid !== false).map(f => normalizeItem(f, 'file'))
           : []
       }
     }
@@ -547,14 +728,29 @@ const extractChildFolders = (tree, parentCode) => {
         if (node.Children) result.push(...node.Children)
         return true
       }
-      if (node.Children && findAndExtract(node.Children)) return true
+      if (node.Children) {
+        if (findAndExtract(node.Children)) return true
+      }
     }
     return false
   }
+  // 先检查根节点本身是否匹配，再检查其子节点
   if (Array.isArray(tree)) {
-    for (const root of tree) findAndExtract(root.Children || [root])
+    for (const root of tree) {
+      const code = root.FolderCode || root.folderCode
+      if (code === parentCode) {
+        if (root.Children) result.push(...root.Children)
+      } else if (root.Children) {
+        findAndExtract(root.Children)
+      }
+    }
   } else if (tree) {
-    findAndExtract(tree.Children || [tree])
+    const code = tree.FolderCode || tree.folderCode
+    if (code === parentCode) {
+      if (tree.Children) result.push(...tree.Children)
+    } else if (tree.Children) {
+      findAndExtract(tree.Children)
+    }
   }
   return result
 }
@@ -624,7 +820,8 @@ const submitFolder = async () => {
       {
         folderName: folderForm.folderName,
         remark: folderForm.remark,
-        depth: 1,
+        // depth自动计算：根级别=1，子文件夹=父文件夹depth+1
+        depth: currentFolderCode.value ? (currentFolderCode.value.includes('|L0') ? 2 : 1) : 1,
         parentCode: currentFolderCode.value || ''
       }
     )
@@ -832,6 +1029,28 @@ const submitUpload = async () => {
     const totalFiles = manifest.TotalFiles || manifest.totalFiles || 0
     const fileList = manifest.Files || manifest.files || []
 
+    // 注册上传任务到队列
+    const newTask = {
+      taskId,
+      directoryCode,
+      status: 'uploading',
+      totalFiles,
+      uploadedFiles: 0,
+      pendingFiles: totalFiles,
+      percent: 0,
+      failedFiles: 0,
+      convertCount: 0,
+      files: fileList.map(f => ({
+        fileCode: f.FileCode || f.fileCode,
+        fileName: f.FileName || f.fileName,
+        status: 'pending',
+        uploadProgress: 0
+      }))
+    }
+    uploadTasks.value.push(newTask)
+    // 连接 SignalR 监听实时进度
+    setTimeout(() => subscribeToTask(taskId), 500)
+
     let failed = false
     for (let i = 0; i < fileList.length; i++) {
       if (failed) break
@@ -839,6 +1058,12 @@ const submitUpload = async () => {
       const localFile = uploadFileList.value[i]
       uploadProgress.currentFile = enhancedFile.FileName || enhancedFile.fileName
       uploadProgress.completed = i
+      // 更新当前文件的上传进度
+      const task = uploadTasks.value.find(t => t.taskId === taskId)
+      if (task) {
+        const f = task.files.find(f => f.fileCode === (enhancedFile.FileCode || enhancedFile.fileCode))
+        if (f) f.uploadProgress = Math.round((i / fileList.length) * 100)
+      }
 
       const formData = new FormData()
       formData.append('file', localFile)
@@ -850,14 +1075,28 @@ const submitUpload = async () => {
         const res = await http.post('/api/standard-directory/upload-file-v2', formData, null, {
           headers: { 'Content-Type': undefined }
         })
-        if (res.Status === true || res.status === 0) uploadProgress.completed = i + 1
-        else {
+        if (res.Status === true || res.status === 0) {
+          uploadProgress.completed = i + 1
+          // 标记该文件为已上传
+          if (task) {
+            const f = task.files.find(f => f.fileCode === (enhancedFile.FileCode || enhancedFile.fileCode))
+            if (f) { f.status = 'uploaded'; f.uploadProgress = 100 }
+          }
+        } else {
           failed = true
           uploadProgress.failed++
+          if (task) {
+            const f = task.files.find(f => f.fileCode === (enhancedFile.FileCode || enhancedFile.fileCode))
+            if (f) f.status = 'failed'
+          }
         }
       } catch {
         failed = true
         uploadProgress.failed++
+        if (task) {
+          const f = task.files.find(f => f.fileCode === (enhancedFile.FileCode || enhancedFile.fileCode))
+          if (f) f.status = 'failed'
+        }
       }
     }
 
@@ -888,11 +1127,24 @@ const submitUpload = async () => {
       try {
         await http.post(`/api/standard-directory/upload-cancel?taskId=${taskId}`)
       } catch {}
+      const task = uploadTasks.value.find(t => t.taskId === taskId)
+      if (task) { task.status = 'failed'; task.failedFiles = task.totalFiles }
     }
     ElMessage.error(error.message || '上传流程异常')
   } finally {
     uploading.value = false
   }
+}
+
+// ========== 取消上传 ==========
+const handleCancelUpload = async () => {
+  if (!uploading.value) return
+  try {
+    await ElMessageBox.confirm('确定要取消当前上传任务吗？', '提示', { type: 'warning' })
+    uploading.value = false
+    uploadFileList.value = []
+    uploadProgress.status = 'idle'
+  } catch {}
 }
 
 // ========== 其他操作 ==========
@@ -1020,6 +1272,11 @@ const getFileIconClass = (fileName) => {
 
 onMounted(() => {
   loadTree()
+  initSignalR()
+})
+
+onUnmounted(() => {
+  signalRConnection.value?.stop().catch(() => {})
 })
 </script>
 

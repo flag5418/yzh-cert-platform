@@ -24,6 +24,7 @@ namespace VOL.WebApi.Controllers.CertPlatform
         }
 
         /// <summary>获取提示词列表（可按类型/技能筛选）</summary>
+        [HttpGet("list")]
         [HttpGet]
         public async Task<IActionResult> GetList(
             [FromQuery] string? promptType = null,

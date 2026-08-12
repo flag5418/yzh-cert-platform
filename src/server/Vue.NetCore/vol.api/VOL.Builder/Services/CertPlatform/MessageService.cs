@@ -69,17 +69,16 @@ namespace VOL.Builder.Services.CertPlatform
 
         public async Task MarkAllReadAsync(int userId)
         {
-            var unreadMessages = await _db.Set<CertMessage>()
+            // 使用 ExecuteUpdate 批量更新，避免逐条跟踪的性能问题和潜在错误
+            // 这是 EF Core 7+ 的高效批量更新方式
+            var updated = await _db.Set<CertMessage>()
                 .Where(m => m.UserId == userId && m.IsRead == 0)
-                .ToListAsync();
-
-            foreach (var msg in unreadMessages)
-            {
-                msg.IsRead = 1;
-                msg.ReadDate = DateTime.Now;
-            }
-
-            await _db.SaveChangesAsync();
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(m => m.IsRead, 1)
+                    .SetProperty(m => m.ReadDate, DateTime.Now));
+            
+            // 如果 ExecuteUpdate 不可用（EF Core 版本低于 7），回退到传统方式
+            // if (updated == 0) { /* fallback logic */ }
         }
 
         public async Task CreateAsync(int userId, string userName, string title, string content, string messageType, string extraData)

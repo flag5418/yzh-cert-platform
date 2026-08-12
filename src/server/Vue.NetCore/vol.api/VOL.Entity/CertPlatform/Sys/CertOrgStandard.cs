@@ -2,7 +2,6 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using VOL.Entity;
-using VOL.Entity.SystemModels;
 
 namespace VOL.Entity.CertPlatform.Sys
 {
@@ -12,12 +11,8 @@ namespace VOL.Entity.CertPlatform.Sys
     /// </summary>
     [Entity(TableCnName = "机构-标准关联", TableName = "cert_org_standard", DBServer = "VOLContext")]
     [Table("cert_org_standard")]
-    public class CertOrgStandard : BaseEntity
+    public class CertOrgStandard : YZHBaseEntity
     {
-        [Key]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public long Id { get; set; }
-
         [Required]
         [StringLength(50)]
         public string CbCode { get; set; }
@@ -30,8 +25,5 @@ namespace VOL.Entity.CertPlatform.Sys
         public string StdCode { get; set; }
 
         public DateTime EnabledAt { get; set; } = DateTime.Now;
-
-        [StringLength(500)]
-        public string Remark { get; set; }
     }
 }
