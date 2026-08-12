@@ -535,3 +535,30 @@ if (Array.isArray(tree)) {
   }
 }
 ```
+
+---
+
+## 附录I：http工具缺少put/delete方法
+
+### 问题
+前端调用 `http.put()` 和 `http.delete()` 时报错，重命名和删除功能失败。
+
+### 根因
+`src/api/http.js` 只导出了 `post` 和 `get` 方法，没有 `put` 和 `delete`。
+`ajax` 函数支持所有HTTP方法，但没有为put/delete创建便捷方法。
+
+### 修复
+```javascript
+// 添加put方法
+ajax.put = function (url, param, success, error) {
+  ajax({ url, param, success, errror: error, type: 'put' })
+}
+
+// 添加delete方法
+ajax.delete = function (url, param, success, error) {
+  ajax({ url, param, success, errror: error, type: 'delete' })
+}
+
+// 更新导出
+export default { post, get, put, delete, download, ajax, ipAddress }
+```
