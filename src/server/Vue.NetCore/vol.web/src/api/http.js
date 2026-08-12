@@ -382,4 +382,4 @@ ajax.delete = function (url, param, success, error) {
     type: 'delete'
   })
 }
-export default { post, get, put, del: function(...a){return ajax.delete(...a)}, download, ajax, ipAddress }
+export default { post, get, put: ajax.put, del: ajax.delete, download, ajax, ipAddress }

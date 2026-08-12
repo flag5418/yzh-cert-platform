@@ -27,6 +27,8 @@ using VOL.Core.ObjectActionValidator;
 using VOL.Core.Quartz;
 using VOL.WebApi.Controllers.Hubs;
 using VOL.WebApi;
+using Minio;
+using Microsoft.Extensions.Configuration;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -135,6 +137,18 @@ builder.Services.AddMvc(options =>
 builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.OfficeConvertService>();
             
             // 新增Helper服务
+            // 注册MinIO客户端
+            builder.Services.AddSingleton<IMinioClient>(sp =>
+            {
+                var config = sp.GetRequiredService<IConfiguration>();
+                return new MinioClient()
+                    .WithEndpoint(config["MinIO:Endpoint"] ?? "127.0.0.1:9000")
+                    .WithCredentials(
+                        config["MinIO:AccessKey"] ?? "admin",
+                        config["MinIO:SecretKey"] ?? "Yzh123456.")
+                    .WithSSL(false)
+                    .Build();
+            });
             builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IMinIOHelper, VOL.Builder.Services.CertPlatform.MinIOHelper>();
             builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IFolderFileManager, VOL.Builder.Services.CertPlatform.FolderFileManager>();
             builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IFileStorageService, VOL.Builder.Services.CertPlatform.FileStorageService>();
