@@ -107,6 +107,7 @@ namespace VOL.Entity.CertPlatform.Dir
         [Column("IsValid")]
         public bool IsValid { get; set; }
 
+        [NotMapped]
         /// <summary>是否强制重命名（有子项时）</summary>
         public bool Force { get; set; } = true;
 
