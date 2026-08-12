@@ -89,8 +89,8 @@ namespace VOL.WebApi.Controllers.CertPlatform
         /// <summary>
         /// 更新标准目录配置
         /// </summary>
-        [HttpPut("configs/{directoryCode}")]
-        public IActionResult UpdateConfig(string directoryCode, [FromBody] StandardDirectoryConfig config)
+        [HttpPost("configs/{directoryCode}")]
+        public IActionResult UpdateOrDeleteConfig(string directoryCode, [FromBody] StandardDirectoryConfig config)
         {
             config.DirectoryCode = directoryCode;
             var result = _service.UpdateConfig(config);
@@ -100,7 +100,7 @@ namespace VOL.WebApi.Controllers.CertPlatform
         /// <summary>
         /// 删除标准目录配置
         /// </summary>
-        [HttpDelete("configs/{directoryCode}")]
+        [HttpPost("configs/{directoryCode}/delete")]
         public IActionResult DeleteConfig(string directoryCode)
         {
             var result = _service.DeleteConfig(directoryCode);
@@ -146,7 +146,7 @@ namespace VOL.WebApi.Controllers.CertPlatform
         /// <summary>
         /// 更新标准目录文件夹
         /// </summary>
-        [HttpPut("folders/{folderCode}")]
+        [HttpPost("folders/{folderCode}")]
         public IActionResult UpdateFolder(string folderCode, [FromBody] StandardDirectoryFolder folder)
         {
             folder.FolderCode = folderCode;
@@ -157,7 +157,7 @@ namespace VOL.WebApi.Controllers.CertPlatform
         /// <summary>
         /// 删除标准目录文件夹
         /// </summary>
-        [HttpDelete("folders/{folderCode}")]
+        [HttpPost("folders/{folderCode}/delete")]
         public IActionResult DeleteFolder(string folderCode)
         {
             var result = _service.DeleteFolder(folderCode);
@@ -202,7 +202,7 @@ namespace VOL.WebApi.Controllers.CertPlatform
         /// <summary>
         /// 更新标准目录文件
         /// </summary>
-        [HttpPut("files/{fileCode}")]
+        [HttpPost("files/{fileCode}")]
         public IActionResult UpdateFile(string fileCode, [FromBody] StandardDirectoryFile file)
         {
             file.FileCode = fileCode;
@@ -213,7 +213,7 @@ namespace VOL.WebApi.Controllers.CertPlatform
         /// <summary>
         /// 删除标准目录文件
         /// </summary>
-        [HttpDelete("files/{fileCode}")]
+        [HttpPost("files/{fileCode}/delete")]
         public IActionResult DeleteFile(string fileCode)
         {
             var result = _service.DeleteFile(fileCode);

@@ -114,7 +114,7 @@ const handleEdit = (row) => {
 const handleDelete = async (row) => {
   try {
     await ElMessageBox.confirm('确定要删除此配置吗？', '提示', { type: 'warning' })
-    await http.delete(`/api/standard-directory/configs/${row.directoryCode}`)
+    await http.post(`/api/standard-directory/configs/${row.directoryCode}/delete`)
     ElMessage.success('删除成功')
     loadData()
   } catch (error) {
@@ -128,7 +128,7 @@ const handleSubmit = async () => {
   submitting.value = true
   try {
     if (form.value.directoryCode) {
-      await http.put(`/api/standard-directory/configs/${form.value.directoryCode}`, form.value)
+      await http.post(`/api/standard-directory/configs/${form.value.directoryCode}`, form.value)
     } else {
       await http.post('/api/standard-directory/configs/create', form.value)
     }

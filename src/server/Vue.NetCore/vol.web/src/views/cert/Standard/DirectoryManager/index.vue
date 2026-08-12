@@ -855,12 +855,12 @@ const confirmRename = async () => {
   try {
     let res
     if (isFolder) {
-      res = await http.put(`/api/standard-directory/folders/${code}`, {
+      res = await http.post(`/api/standard-directory/folders/${code}`, {
         ...item,
         FolderName: renameForm.newName
       })
     } else {
-      res = await http.put(`/api/standard-directory/files/${code}`, {
+      res = await http.post(`/api/standard-directory/files/${code}`, {
         ...item,
         FileName: renameForm.newName
       })
@@ -890,8 +890,8 @@ const deleteItem = async (item) => {
   const code = item.FolderCode || item.folderCode || item.FileCode || item.fileCode
   try {
     let res
-    if (isFolder) res = await http.del(`/api/standard-directory/folders/${code}`)
-    else res = await http.del(`/api/standard-directory/files/${code}`)
+    if (isFolder) res = await http.post(`/api/standard-directory/folders/${code}/delete`)
+    else res = await http.post(`/api/standard-directory/files/${code}/delete`)
     if (res.Status === true || res.status === 0) {
       ElMessage.success('删除成功')
       await loadCurrentContent()

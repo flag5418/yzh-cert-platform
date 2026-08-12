@@ -78,7 +78,7 @@ export const getExtractionRule = (fileCode) => {
  * @param {string} fileCode - 文件编码
  */
 export const deleteExtractionRule = (fileCode) => {
-  return http.delete(`/api/DocExtractionRule/${fileCode}`);
+  return http.post(`/api/DocExtractionRule/${fileCode}/delete`);
 };
 
 /**

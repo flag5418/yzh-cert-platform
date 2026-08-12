@@ -35,7 +35,7 @@ export const savePrompt = (data) => {
  * 删除提示词
  */
 export const deletePrompt = (promptCode) => {
-  return http.delete(`/api/prompt-template/${promptCode}`);
+  return http.post(`/api/prompt-template/${promptCode}/delete`);
 };
 
 /**

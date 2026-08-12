@@ -70,7 +70,7 @@ namespace VOL.WebApi.Controllers.CertPlatform
         }
 
         /// <summary>删除提示词</summary>
-        [HttpDelete("{promptCode}")]
+        [HttpPost("{promptCode}/delete")]
         public async Task<IActionResult> Delete(string promptCode)
         {
             var success = await _service.DeleteAsync(promptCode);

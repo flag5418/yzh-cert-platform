@@ -83,7 +83,7 @@ namespace VOL.WebApi.Controllers.CertPlatform
         /// <summary>
         /// 删除规则
         /// </summary>
-        [HttpDelete, Route("{fileCode}")]
+        [HttpPost, Route("{fileCode}/delete")]
         public async Task<IActionResult> DeleteRule(string fileCode)
         {
             var success = await _service.DeleteRuleAsync(fileCode);

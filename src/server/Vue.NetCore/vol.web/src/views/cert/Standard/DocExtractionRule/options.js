@@ -52,7 +52,7 @@ export default {
               cancelButtonText: "取消",
               type: "warning"
             }).then(() => {
-              $vue.http.delete(`api/DocExtractionRule/${row.fileCode}`).then(() => {
+              $vue.http.post(`api/DocExtractionRule/${row.fileCode}/delete`).then(() => {
                 $vue.$message.success("删除成功");
                 $vue.refresh();
               });
