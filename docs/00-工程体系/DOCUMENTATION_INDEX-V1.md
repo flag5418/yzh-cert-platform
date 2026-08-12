@@ -103,6 +103,8 @@ docs/
 | `70-当前执行/原型-标准目录管理系统.html` | 标准目录管理系统原型 | B |
 | `70-当前执行/YZH-V3.0-架构设计文档.md` | YZH V3.0 架构设计（开发中） | C. YZH 升级 |
 | `70-当前执行/YZH-前端框架建设方案-V1.0-待审批版.md` | 前端框架建设方案（待审批） | C |
+| `70-当前执行/YZH-前端架构v3设计-V1.md` | 基于 vidlang 模式的 YZH 架构扩容（tokens/图标/基础组件库）+ certcore 项目级通用层设计 | C |
+| `70-当前执行/yzh-基础组件标准规范-V1.md` | yzh 基础组件（YzhBaseCard/TitledCard/EmptyState/StatusBadge）使用规范 | C |
 | `70-当前执行/YZH-Framework-V2.0架构设计升级方案.md` | V2.0 架构升级方案 | C |
 | `70-当前执行/YZH-Framework-V2.0-TODO清单.md` | V2.0 升级 TODO 清单 | C |
 | `70-当前执行/BlazorServer与YZH-Framework对比分析.md` | BlazorServer vs YZH 框架对比 | C |

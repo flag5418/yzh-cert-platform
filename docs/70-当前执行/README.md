@@ -52,6 +52,8 @@ AIGC:
 | YZH-AI引擎-实施TODO清单-V1.md | AI引擎四件套逐里程碑 TODO 清单，含 T0 前置对齐 + S1~S5 完整任务分解 + 已完成状态记录 + 待讨论事项 | 已完成 V1.0 |
 | YZH-AI引擎-实施文档-V1.md | AI引擎四件套后台文件清单、代码运行逻辑、主链路时序、测试覆盖汇总 | 已完成 V1.0 |
 | YZH-前端框架建设方案-V1.0-待审批版.md | 前端框架建设方案 | 待审批 |
+| YZH-前端架构v3设计-V1.md | 基于 vidlang 模式的 YZH 架构扩容（样式令牌/统一图标/基础组件库）+ certcore 项目级通用层设计 | 成熟态 V1.0 / 待实施 |
+| yzh-基础组件标准规范-V1.md | yzh 基础组件（YzhBaseCard/TitledCard/EmptyState/StatusBadge）使用规范 | 成熟态 V1.0 / 待实施 |
 | YZH-Framework-V2.0架构设计升级方案.md | V2.0 架构升级方案 | 设计阶段 |
 | YZH-Framework-V2.0-TODO清单.md | V2.0 升级 TODO 清单 | 待实施 |
 | BlazorServer与YZH-Framework对比分析.md | BlazorServer 与 YZH-Framework 框架对比 | 分析 |
@@ -67,7 +69,7 @@ AIGC:
 
 ## 关键词索引
 
-`执行中` `开发中` `实施中` `待实施` `待审核` `待审批` `研究中` `草案` `TODO` `Phase` `Office转换` `MinIO` `NPOI` `LibreOffice` `标准目录` `文档提取` `批量上传` `YZH` `工作流` `AI引擎` `SkillRegistry` `LLM Gateway`
+`执行中` `开发中` `实施中` `待实施` `待审核` `待审批` `研究中` `草案` `TODO` `Phase` `Office转换` `MinIO` `NPOI` `LibreOffice` `标准目录` `文档提取` `批量上传` `YZH` `工作流` `AI引擎` `SkillRegistry` `LLM Gateway` `前端架构` `设计令牌` `tokens` `图标管理` `基础组件` `certcore` `vidlang`
 
 ---
 
