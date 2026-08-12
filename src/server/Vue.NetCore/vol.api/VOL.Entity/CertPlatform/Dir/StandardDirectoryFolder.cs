@@ -105,7 +105,10 @@ namespace VOL.Entity.CertPlatform.Dir
         /// 有效标志: 0=无效(预创建), 1=有效(已确认)
         /// </summary>
         [Column("IsValid")]
-        public bool IsValid { get; set; } = true;
+        public bool IsValid { get; set; }
+
+        /// <summary>是否强制重命名（有子项时）</summary>
+        public bool Force { get; set; } = true;
 
         /// <summary>
         /// 完整路径（从根到当前文件夹），用于路径判定

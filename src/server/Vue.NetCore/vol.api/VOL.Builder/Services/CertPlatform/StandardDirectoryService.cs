@@ -528,7 +528,7 @@ namespace VOL.Builder.Services.CertPlatform
                 var result = _folderFileManager.RenameFolderAsync(
                     folder.FolderCode, 
                     folder.FolderName, 
-                    force: false).GetAwaiter().GetResult();
+                    force: folder.Force).GetAwaiter().GetResult();
                 
                 if (!result)
                     return new WebResponseContent().Error("文件夹不存在或重命名失败");

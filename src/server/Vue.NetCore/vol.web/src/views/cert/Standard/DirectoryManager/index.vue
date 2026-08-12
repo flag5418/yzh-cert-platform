@@ -869,6 +869,29 @@ const confirmRename = async () => {
       ElMessage.success('重命名成功')
       showRenameDialogFlag.value = false
       await loadCurrentContent()
+    } else if (res.Message?.includes('force=true')) {
+      ElMessageBox.confirm(res.Message, '确认重命名', { type: 'warning' }).then(async () => {
+        if (isFolder) {
+          res = await http.post(`/api/standard-directory/folders/${code}`, {
+            ...item,
+            FolderName: renameForm.newName,
+            Force: true
+          })
+        } else {
+          res = await http.post(`/api/standard-directory/files/${code}`, {
+            ...item,
+            FileName: renameForm.newName,
+            Force: true
+          })
+        }
+        if (res.Status === true || res.status === 0) {
+          ElMessage.success('重命名成功')
+          showRenameDialogFlag.value = false
+          await loadCurrentContent()
+        } else {
+          ElMessage.error(res.Message || '重命名失败')
+        }
+      }).catch(() => {})
     } else {
       ElMessage.error(res.Message || '重命名失败')
     }
