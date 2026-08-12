@@ -530,8 +530,20 @@ namespace VOL.Builder.Services.CertPlatform
                     folder.FolderName, 
                     force: folder.Force).GetAwaiter().GetResult();
                 
+                // 如果 EF 更新失败，尝试直接 SQL 更新
                 if (!result)
-                    return new WebResponseContent().Error("文件夹不存在或重命名失败");
+                {
+                    try
+                    {
+                        var sql = $"UPDATE cert_standard_directory_folder SET FolderName = '{folder.FolderName.Replace("'", "''")}', ModifyDate = NOW() WHERE FolderCode = '{folder.FolderCode.Replace("'", "''")}';";
+                        _db.Database.ExecuteSqlRaw(sql);
+                        return new WebResponseContent().OK("更新成功(SQL)");
+                    }
+                    catch (Exception ex)
+                    {
+                        return new WebResponseContent().Error($"更新失败：{ex.Message}");
+                    }
+                }
                 
                 return new WebResponseContent().OK("更新成功");
             }
