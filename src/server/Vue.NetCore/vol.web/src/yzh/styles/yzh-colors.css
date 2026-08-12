@@ -1,0 +1,45 @@
+/**
+ * YZH 颜色令牌（对齐 vidlang app_colors.dart）
+ * 品牌色 / 语义色 / 中性色 / 表面层级 / 边框
+ * 只通过 yzh.css 统一引用，禁止单独 import
+ */
+:root {
+  /* ===== 品牌色（对齐 Vol 主题主色 #409eff） ===== */
+  --yzh-color-primary: #409eff;
+  --yzh-color-primary-light-3: #79bbff;
+  --yzh-color-primary-light-5: #a0cfff;
+  --yzh-color-primary-light-7: #c6e2ff;
+  --yzh-color-primary-light-9: #ecf5ff;
+  --yzh-color-primary-dark-2: #337ecc;
+
+  /* ===== 语义色 ===== */
+  --yzh-color-success: #67c23a;
+  --yzh-color-success-light-3: #95d475;
+  --yzh-color-success-light-9: #f0f9eb;
+  --yzh-color-warning: #e6a23c;
+  --yzh-color-warning-light-3: #eebe77;
+  --yzh-color-warning-light-9: #fdf6ec;
+  --yzh-color-danger: #f56c6c;
+  --yzh-color-danger-light-3: #f89898;
+  --yzh-color-danger-light-9: #fef0f0;
+  --yzh-color-info: #909399;
+  --yzh-color-info-light-9: #f4f4f5;
+
+  /* ===== 中性色（文字层级，对齐 vidlang textPrimary/Secondary/Weak） ===== */
+  --yzh-color-text-primary: #303133;
+  --yzh-color-text-regular: #606266;
+  --yzh-color-text-secondary: #909399;
+  --yzh-color-text-disabled: #c0c4cc;
+  --yzh-color-text-placeholder: #a8abb2;
+
+  /* ===== 表面层级 ===== */
+  --yzh-color-bg-page: #f5f7fa;      /* 页面灰底 */
+  --yzh-color-bg-card: #ffffff;      /* 卡片白 */
+  --yzh-color-bg-hover: #f5f7fa;     /* 悬停 */
+  --yzh-color-bg-active: #ecf5ff;    /* 选中 */
+
+  /* ===== 边框 ===== */
+  --yzh-color-border: #e4e7ed;
+  --yzh-color-border-light: #ebeef5;
+  --yzh-color-border-lighter: #f0f0f0;
+}

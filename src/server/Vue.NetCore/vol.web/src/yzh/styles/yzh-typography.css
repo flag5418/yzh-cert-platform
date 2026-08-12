@@ -1,0 +1,15 @@
+/**
+ * YZH 字体令牌（对齐 vidlang app_typography.dart）
+ * 只通过 yzh.css 统一引用，禁止单独 import
+ */
+:root {
+  --yzh-font-size-xs: 12px;
+  --yzh-font-size-sm: 13px;
+  --yzh-font-size-md: 14px;
+  --yzh-font-size-lg: 16px;
+  --yzh-font-size-xl: 18px;
+  --yzh-font-weight-regular: 400;
+  --yzh-font-weight-medium: 500;
+  --yzh-font-weight-bold: 600;
+  --yzh-line-height-base: 1.6;
+}

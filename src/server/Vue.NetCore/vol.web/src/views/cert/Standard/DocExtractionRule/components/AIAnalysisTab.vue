@@ -16,7 +16,7 @@
           @click="startAnalysis"
           style="margin-left: 12px"
         >
-          <el-icon><Aim /></el-icon>
+          <el-icon><IconAnalyze /></el-icon>
           开始分析
         </el-button>
       </div>
@@ -33,9 +33,9 @@
     <!-- 原始JSON显示区 -->
     <div v-if="showRawJson && rawJsonDisplay" class="raw-json-section">
       <div class="section-title">
-        <span>📦 原始响应 JSON</span>
+        <span class="section-title-text"><el-icon><IconCode /></el-icon>原始响应 JSON</span>
         <el-button size="small" text @click="copyRawJson">
-          <el-icon><CopyDocument /></el-icon>复制
+          <el-icon><IconCopy /></el-icon>复制
         </el-button>
       </div>
       <pre class="json-preview">{{ rawJsonDisplay }}</pre>
@@ -44,9 +44,9 @@
     <!-- 提取字段列表 -->
     <div class="section">
       <div class="section-title">
-        <span>📋 提取字段 ({{ localFields.length }})</span>
+        <span class="section-title-text"><el-icon><IconList /></el-icon>提取字段 ({{ localFields.length }})</span>
         <el-button size="small" @click="addField">
-          <el-icon><Plus /></el-icon>添加
+          <el-icon><IconAdd /></el-icon>添加
         </el-button>
       </div>
 
@@ -81,7 +81,7 @@
               circle
               @click="removeField(index)"
             >
-              <el-icon><Delete /></el-icon>
+              <el-icon><IconDelete /></el-icon>
             </el-button>
           </div>
           <div class="field-body">
@@ -105,9 +105,9 @@
     <!-- 提取表格列表 -->
     <div class="section">
       <div class="section-title">
-        <span>📊 提取表格 ({{ localTables.length }})</span>
+        <span class="section-title-text"><el-icon><IconGrid /></el-icon>提取表格 ({{ localTables.length }})</span>
         <el-button size="small" @click="addTable">
-          <el-icon><Plus /></el-icon>添加
+          <el-icon><IconAdd /></el-icon>添加
         </el-button>
       </div>
 
@@ -130,7 +130,7 @@
               circle
               @click="removeTable(index)"
             >
-              <el-icon><Delete /></el-icon>
+              <el-icon><IconDelete /></el-icon>
             </el-button>
           </div>
           <div class="table-body">
@@ -147,7 +147,7 @@
               <div class="table-fields-header">
                 <span>表格列定义</span>
                 <el-button size="small" text @click="addTableField(index)">
-                  <el-icon><Plus /></el-icon>添加列
+                  <el-icon><IconAdd /></el-icon>添加列
                 </el-button>
               </div>
               <div
@@ -177,7 +177,7 @@
                   text
                   @click="removeTableField(index, colIndex)"
                 >
-                  <el-icon><Delete /></el-icon>
+                  <el-icon><IconDelete /></el-icon>
                 </el-button>
               </div>
             </div>
@@ -192,7 +192,7 @@
 
 <script setup>
 import { ref, watch } from 'vue';
-import { Aim, Plus, Delete, CopyDocument } from '@element-plus/icons-vue';
+import { IconAnalyze, IconAdd, IconDelete, IconCopy, IconCode, IconList, IconGrid } from '@/yzh';
 import { ElMessage } from 'element-plus';
 
 const props = defineProps({
@@ -270,14 +270,26 @@ const copyRawJson = () => {
 </script>
 
 <style scoped>
+/* yzh 设计令牌 */
+@import '@/yzh/styles/yzh.css';
+
 .ai-analysis-tab { height: 100%; overflow-y: auto; }
 
 .section-header {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #ebeef5;
+  margin-bottom: var(--yzh-space-5, 20px); padding-bottom: var(--yzh-space-4, 16px); border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
 }
-.section-header h4 { margin: 0; font-size: 15px; font-weight: 600; color: #303133; }
-.header-actions { display: flex; align-items: center; gap: 8px; }
+.section-header h4 { margin: 0; font-size: var(--yzh-font-size-lg, 15px); font-weight: var(--yzh-font-weight-bold, 600); color: var(--yzh-color-text-primary, #303133); }
+.header-actions { display: flex; align-items: center; gap: var(--yzh-space-2, 8px); }
+.section-title-text {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yzh-space-1, 4px);
+}
+.section-title-text .el-icon {
+  font-size: 14px;
+  color: var(--yzh-color-text-secondary, #909399);
+}
 
 /* 原始JSON区域 */
 .raw-json-section {

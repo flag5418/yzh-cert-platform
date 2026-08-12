@@ -1,0 +1,13 @@
+/**
+ * YZH 圆角令牌（对齐 vidlang app_radius.dart）
+ * 只通过 yzh.css 统一引用，禁止单独 import
+ */
+:root {
+  --yzh-radius-none: 0;
+  --yzh-radius-xs: 2px;       /* 小标签 */
+  --yzh-radius-sm: 4px;       /* 卡片/按钮（认证平台基线） */
+  --yzh-radius-md: 6px;       /* 输入框/表格 */
+  --yzh-radius-lg: 8px;       /* 弹窗/大卡片 */
+  --yzh-radius-xl: 12px;      /* 大弹窗 */
+  --yzh-radius-full: 9999px;  /* 圆点/头像 */
+}

@@ -1,0 +1,32 @@
+/**
+ * YZH 设计令牌 —— 统一出口（对齐 vidlang design_tokens.dart）
+ *
+ * 引用方式（业务页面）：
+ *   @import '@/yzh/styles/yzh.css';
+ *
+ * 禁止单独 import 子文件（对齐 barrel 规则）。
+ */
+@import './yzh-colors.css';
+@import './yzh-spacing.css';
+@import './yzh-radius.css';
+@import './yzh-shadows.css';
+@import './yzh-typography.css';
+
+:root {
+  /* ===== 断点（响应式） ===== */
+  --yzh-bp-sm: 768px;
+  --yzh-bp-md: 1280px;
+  --yzh-bp-lg: 1600px;
+
+  /* ===== z-index 层级（对齐 vidlang zIndex map） ===== */
+  --yzh-z-dropdown: 100;
+  --yzh-z-sticky: 200;
+  --yzh-z-fixed: 300;
+  --yzh-z-modal: 500;
+  --yzh-z-notification: 800;
+
+  /* ===== 动画时长 ===== */
+  --yzh-duration-fast: 0.15s;
+  --yzh-duration-normal: 0.3s;
+  --yzh-duration-slow: 0.5s;
+}

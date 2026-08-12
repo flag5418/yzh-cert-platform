@@ -1,0 +1,24 @@
+/**
+ * certcore 业务扩展令牌（认证业务域）
+ * 基础令牌来自 yzh/styles/yzh.css，本文件只做业务扩展
+ * 业务页面引用方式：先 @import '@/yzh/styles/yzh.css'，再 @import '@/certcore/styles/cert-tokens.css'
+ */
+:root {
+  /* ===== 目录树层级色（机构/标准/阶段/文件夹） ===== */
+  --cert-color-org: #e6a23c;
+  --cert-color-standard: #409eff;
+  --cert-color-stage: #67c23a;
+  --cert-color-folder: #fac858;
+
+  /* ===== 文件类型色 ===== */
+  --cert-color-file-pdf: #f56c6c;
+  --cert-color-file-doc: #409eff;
+  --cert-color-file-xls: #67c23a;
+  --cert-color-file-image: #909399;
+  --cert-color-file-default: #909399;
+
+  /* ===== 规则状态色 ===== */
+  --cert-color-rule-none: #c0c4cc;
+  --cert-color-rule-configured: #67c23a;
+  --cert-color-rule-failed: #f56c6c;
+}

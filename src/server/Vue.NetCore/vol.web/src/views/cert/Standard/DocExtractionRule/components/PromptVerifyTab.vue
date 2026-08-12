@@ -4,14 +4,14 @@
     <div class="section-header">
       <h4>Prompt 生成与验证</h4>
       <el-button type="primary" @click="generatePrompt" :loading="generating">
-        <el-icon><Aim /></el-icon>
+        <el-icon><IconPrompt /></el-icon>
         生成 Prompt
       </el-button>
     </div>
 
     <!-- Prompt 编辑区 -->
     <div class="section">
-      <div class="section-title">📝 提取 Prompt</div>
+      <div class="section-title"><el-icon class="section-title-icon"><IconPrompt /></el-icon>提取 Prompt</div>
       <el-input
         :model-value="prompt"
         @update:model-value="onPromptUpdate"
@@ -21,14 +21,14 @@
         class="prompt-editor"
       />
       <div class="prompt-hint">
-        <el-icon><InfoFilled /></el-icon>
+        <el-icon><IconInfo /></el-icon>
         <span>您可以直接编辑生成的 Prompt，调整提取逻辑</span>
       </div>
     </div>
 
     <!-- 验证结果 -->
     <div class="section" v-if="verifyResult">
-      <div class="section-title">✅ 验证结果</div>
+      <div class="section-title"><el-icon class="section-title-icon is-success"><IconCircleSuccess /></el-icon>验证结果</div>
 
       <el-alert
         :title="verifyResult.success ? '验证通过' : '验证失败'"
@@ -82,7 +82,7 @@
         :loading="verifying"
         :disabled="!prompt"
       >
-        <el-icon><Check /></el-icon>
+        <el-icon><IconCircleSuccess /></el-icon>
         验证 Prompt
       </el-button>
     </div>
@@ -91,7 +91,7 @@
 
 <script setup>
 import { ref } from 'vue';
-import { Aim, InfoFilled, Check } from '@element-plus/icons-vue';
+import { IconPrompt, IconInfo, IconCircleSuccess } from '@/yzh';
 
 const props = defineProps({
   prompt: {
@@ -138,9 +138,27 @@ const getTableColumns = (tableData) => {
 </script>
 
 <style scoped>
+/* yzh 设计令牌 */
+@import '@/yzh/styles/yzh.css';
+
 .prompt-verify-tab {
   height: 100%;
   overflow-y: auto;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--yzh-space-2, 8px);
+}
+
+.section-title-icon {
+  font-size: 14px;
+  color: var(--yzh-color-text-secondary, #909399);
+}
+
+.section-title-icon.is-success {
+  color: var(--yzh-color-success, #67c23a);
 }
 
 /* 区块头部 - 更精致 */

@@ -1,0 +1,10 @@
+/**
+ * YZH 阴影令牌（对齐 vidlang app_shadows.dart）
+ * 只通过 yzh.css 统一引用，禁止单独 import
+ */
+:root {
+  --yzh-shadow-none: none;
+  --yzh-shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.04);   /* 卡片 */
+  --yzh-shadow-md: 0 2px 12px rgba(0, 0, 0, 0.06);  /* 悬浮卡片 */
+  --yzh-shadow-lg: 0 6px 24px rgba(0, 0, 0, 0.10);  /* 弹窗 */
+}

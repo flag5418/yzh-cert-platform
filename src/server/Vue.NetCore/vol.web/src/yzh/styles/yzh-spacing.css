@@ -1,0 +1,23 @@
+/**
+ * YZH 间距令牌（对齐 vidlang app_spacing.dart，4px 网格）
+ * 基础档位 + 语义档位
+ * 只通过 yzh.css 统一引用，禁止单独 import
+ */
+:root {
+  /* ===== 基础档位（4px 网格） ===== */
+  --yzh-space-1: 4px;
+  --yzh-space-2: 8px;
+  --yzh-space-3: 12px;
+  --yzh-space-4: 16px;
+  --yzh-space-5: 20px;
+  --yzh-space-6: 24px;
+  --yzh-space-8: 32px;
+  --yzh-space-12: 48px;
+
+  /* ===== 语义档位 ===== */
+  --yzh-space-page: var(--yzh-space-4) var(--yzh-space-6); /* 页面留白 16/24 */
+  --yzh-space-gap: var(--yzh-space-4);                     /* 卡片间隙 16 */
+  --yzh-space-card-pad: var(--yzh-space-4);                /* 卡片内边距 */
+  --yzh-space-header-pad: var(--yzh-space-3) var(--yzh-space-5);
+  --yzh-space-section-gap: var(--yzh-space-6);             /* 区块间距 */
+}

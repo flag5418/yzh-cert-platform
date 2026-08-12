@@ -40,3 +40,17 @@ export { useYZHIncrementSync } from './composables/useYZHIncrementSync'
 
 // ====== 预设配置 ======
 export { mergeDefaultButtons, DEFAULT_BUTTONS } from './presets/defaultButtons'
+
+// ====== 统一图标管理（V3 新增） ======
+export { YzhIcon } from './icons'
+export {
+  IconBack, IconForward, IconMenu, IconClose,
+  IconAdd, IconDelete, IconEdit, IconEditPen, IconSearch, IconRefresh,
+  IconDownload, IconUpload, IconCopy,
+  IconFolder, IconFolderOpen, IconFolderChecked, IconFile, IconFileChecked,
+  IconSuccess, IconCircleSuccess, IconError, IconWarning, IconInfo,
+  IconLoading, IconPending, IconHelp, IconSetting, IconAnalyze, IconPrompt,
+} from './icons'
+
+// ====== 基础组件库（V3 新增，对齐 vidlang components/ui） ======
+export { YzhBaseCard, YzhTitledCard, YzhEmptyState, YzhStatusBadge } from './components/ui'

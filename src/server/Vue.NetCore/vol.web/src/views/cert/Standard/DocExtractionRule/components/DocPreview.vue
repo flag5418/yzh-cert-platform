@@ -2,21 +2,26 @@
   <div class="doc-preview">
     <div class="preview-header">
       <div class="file-info">
-        <el-icon class="file-icon"><Document /></el-icon>
+        <el-icon class="file-icon"><IconFile /></el-icon>
         <span class="file-name">{{ file.name }}</span>
         <el-tag size="small" type="info">{{ fileTypeText }}</el-tag>
       </div>
-      <el-button size="small" @click="refresh">
-        <el-icon><Refresh /></el-icon>刷新
-      </el-button>
+      <div class="preview-actions">
+        <el-button size="small" @click="download">
+          <el-icon><IconDownload /></el-icon>下载
+        </el-button>
+        <el-button size="small" @click="refresh">
+          <el-icon><IconRefresh /></el-icon>刷新
+        </el-button>
+      </div>
     </div>
 
     <div class="preview-content">
       <!-- 前置校验失败：统一降级页 -->
       <template v-if="previewError">
         <div class="unsupported">
-          <el-icon :size="56" color="#f56c6c"><Warning /></el-icon>
-          <p style="font-weight: 600; color: #f56c6c">文档预览失败</p>
+          <el-icon :size="56" color="var(--yzh-color-danger, #f56c6c)"><IconWarning /></el-icon>
+          <p class="unsupported-title">文档预览失败</p>
           <p>{{ previewError }}</p>
           <p class="tip">提示：可下载后用 WPS / Microsoft Office 打开查看</p>
           <el-button type="primary" @click="download">下载查看</el-button>
@@ -56,7 +61,7 @@
       <!-- 旧版二进制 Office 不支持：.doc / .ppt（OLE2） -->
       <template v-else-if="isOldFormat">
         <div class="unsupported">
-          <el-icon :size="48"><Document /></el-icon>
+          <el-icon :size="48"><IconFile /></el-icon>
           <p>
             {{
               isOldDoc
@@ -99,7 +104,7 @@
       <!-- 不支持的格式 -->
       <template v-else>
         <div class="unsupported">
-          <el-icon :size="48"><Document /></el-icon>
+          <el-icon :size="48"><IconFile /></el-icon>
           <p>该文件格式暂不支持预览</p>
           <el-button type="primary" @click="download">下载查看</el-button>
         </div>
@@ -110,9 +115,10 @@
 
 <script setup>
 import http from '@/api/http'
-import { Document, Refresh, Warning } from '@element-plus/icons-vue'
+import { IconFile, IconRefresh, IconWarning, IconDownload } from '@/yzh'
 import { ElMessage } from 'element-plus'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { downloadBlob } from '@/certcore'
 
 /* ============ 0. 锚点日志（最高优先级 console.log，级别过滤不会拦截） ============ */
 console.log(
@@ -269,7 +275,6 @@ function _detectOfficeKindFromZip(buf) {
  * ============================================================ */
 const _httpGetArrayBuffer = (url) => http.get(url, null, false, { responseType: 'arraybuffer' })
 const _httpGetText = (url) => http.get(url, null, false, { responseType: 'text' })
-const _httpGetBlob = (url) => http.get(url, null, false, { responseType: 'blob' })
 
 /**
  * 从 ArrayBuffer 开头判断是不是登录重定向吐的 HTML / JSON（http.js 不返回 headers，所以退而求其次读 payload）
@@ -477,21 +482,12 @@ const onError = (e) => {
 }
 const refresh = () => loadPreview()
 
-/* 下载：同样走带鉴权的 http（http.js resolve response.data = 直接就是 Blob 对象） */
+/* 下载：复用 certcore downloadBlob（http.js 带鉴权），失败降级 window.open */
 const download = async () => {
   const raw = buildFileUrl()
   if (!raw) return ElMessage.warning('无可用的下载地址')
   try {
-    const blob = await _httpGetBlob(raw)
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob instanceof Blob ? blob : new Blob([blob]))
-    a.download = props.file?.name || 'file'
-    document.body.appendChild(a)
-    a.click()
-    setTimeout(() => {
-      document.body.removeChild(a)
-      URL.revokeObjectURL(a.href)
-    }, 1200)
+    await downloadBlob(raw, props.file?.name || 'file')
   } catch (_) {
     window.open(raw, '_blank')
   }
@@ -505,25 +501,33 @@ onBeforeUnmount(() => _revoke())
 </script>
 
 <style scoped>
+/* yzh 设计令牌 */
+@import '@/yzh/styles/yzh.css';
+
 .doc-preview {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  border: 1px solid #e4e7ed;
+  background: var(--yzh-color-bg-card, #fff);
+  border-radius: var(--yzh-radius-sm, 4px);
+  box-shadow: var(--yzh-shadow-sm, 0 1px 4px rgba(0, 0, 0, 0.04));
+  border: 1px solid var(--yzh-color-border, #e4e7ed);
   overflow: hidden;
 }
 .preview-header {
   flex-shrink: 0;
-  padding: 14px 20px;
-  background: linear-gradient(to right, #fff, #f5f7fa);
-  border-bottom: 1px solid #e4e7ed;
+  padding: var(--yzh-space-3, 12px) var(--yzh-space-5, 20px);
+  background: linear-gradient(to right, #fff, var(--yzh-color-bg-page, #f5f7fa));
+  border-bottom: 1px solid var(--yzh-color-border, #e4e7ed);
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+.preview-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--yzh-space-2, 8px);
 }
 .preview-content {
   flex: 1;
@@ -543,7 +547,7 @@ onBeforeUnmount(() => _revoke())
 }
 .file-icon {
   font-size: 22px;
-  color: #409eff;
+  color: var(--yzh-color-primary, #409eff);
 }
 .file-name {
   font-weight: 600;
@@ -576,17 +580,21 @@ onBeforeUnmount(() => _revoke())
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #909399;
-  gap: 16px;
-  background: #fff;
-  border-radius: 8px;
+  color: var(--yzh-color-text-secondary, #909399);
+  gap: var(--yzh-space-4, 16px);
+  background: var(--yzh-color-bg-card, #fff);
+  border-radius: var(--yzh-radius-sm, 4px);
+}
+.unsupported-title {
+  font-weight: var(--yzh-font-weight-bold, 600);
+  color: var(--yzh-color-danger, #f56c6c);
 }
 .unsupported :deep(.el-icon) {
-  color: #c0c4cc;
+  color: var(--yzh-color-text-disabled, #c0c4cc);
 }
 .unsupported .tip {
-  font-size: 12px;
-  color: #b0b0b0;
-  margin: -8px 0 0 0;
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--yzh-color-text-disabled, #c0c4cc);
+  margin: calc(-1 * var(--yzh-space-2, 8px)) 0 0 0;
 }
 </style>
