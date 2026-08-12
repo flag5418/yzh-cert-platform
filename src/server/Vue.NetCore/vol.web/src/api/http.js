@@ -364,4 +364,22 @@ ajax.get = function (url, param, success, error) {
     type: 'get'
   })
 }
-export default { post, get, download, ajax, ipAddress }
+ajax.put = function (url, param, success, error) {
+  ajax({
+    url: url,
+    param: param,
+    success: success,
+    errror: error,
+    type: 'put'
+  })
+}
+ajax.delete = function (url, param, success, error) {
+  ajax({
+    url: url,
+    param: param,
+    success: success,
+    errror: error,
+    type: 'delete'
+  })
+}
+export default { post, get, put, delete, download, ajax, ipAddress }
