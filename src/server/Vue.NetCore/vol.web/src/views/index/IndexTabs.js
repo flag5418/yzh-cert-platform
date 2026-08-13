@@ -154,11 +154,9 @@ const openTabs = (proxy, dataConfig, item, useRoute, router) => {
     let b = false
     if (navigation[selectId * 1] && navigation[selectId * 1].path == item.path) {
         b = true
-        //同一个页面不再跳转
+        //同一个页面不再跳转；若需刷新则主动 reload
         if (navigation[_index].name == item.name) {
-            if (dynamicPage) {
-                proxy.$tabs.reload && proxy.$tabs?.reload(router.currentRoute.value.name);
-            }
+            proxy.$tabs.reload && proxy.$tabs.reload(router.currentRoute.value.name)
             return
         }
     }
