@@ -248,6 +248,7 @@
       </div>
 
       <!-- 未选中阶段：显示目录配置管理 -->
+      <div v-if="!currentPhase" class="empty-state">
         <ConfigTab />
       </div>
 
