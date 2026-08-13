@@ -467,5 +467,15 @@ public async Task<IActionResult> GetConvertProgress([FromBody] dynamic param)
         }
 
         #endregion
+
+        /// <summary>
+        /// 查询当前目录（机构/标准/阶段）下是否有运行中的队列
+        /// </summary>
+        [HttpGet("active-queue")]
+        public async Task<IActionResult> GetActiveQueue([FromQuery] string directoryCode)
+        {
+            var result = await _service.GetActiveQueueAsync(directoryCode);
+            return JsonNormal(new WebResponseContent().OK(null, result));
+        }
     }
 }

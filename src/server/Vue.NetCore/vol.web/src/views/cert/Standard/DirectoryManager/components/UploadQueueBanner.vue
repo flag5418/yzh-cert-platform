@@ -4,10 +4,20 @@
       <div class="banner-header">
         <div class="banner-title">
           <el-icon :class="{ 'is-spinning': isAnyRunning }"><IconUpload /></el-icon>
-          <span v-if="runningTasks.length > 0">上传队列进行中 ({{ runningTasks.length }} 个任务)</span>
+          <span v-if="hasActiveQueue">队列执行中 ({{ queueStatusText }})</span>
+          <span v-else-if="runningTasks.length > 0">上传队列进行中 ({{ runningTasks.length }} 个任务)</span>
           <span v-else>上传队列已完成 ({{ finishedTasks.length }} 个任务)</span>
         </div>
         <div class="banner-actions">
+          <el-button
+            v-if="hasActiveQueue"
+            type="primary"
+            link
+            size="small"
+            @click="goToQueueMonitor"
+          >
+            队列监控
+          </el-button>
           <el-button
             v-if="finishedTasks.length > 0"
             type="info"
@@ -24,7 +34,7 @@
             size="small"
             @click="showPanel = true"
           >
-            查看详情
+            详情
           </el-button>
           <el-button type="info" link size="small" @click="expanded = !expanded">
             {{ expanded ? '收起' : '展开' }}
@@ -141,21 +151,46 @@ import { IconUpload, IconSuccess, IconClose, IconLoading, IconFile } from '@/yzh
 import http from '@/api/http'
 
 const props = defineProps({
-  tasks: { type: Array, default: () => [] }
+  tasks: { type: Array, default: () => [] },
+  // 当前目录在 yzh_queue 中的运行中队列（来自后端 GetActiveQueueAsync）
+  queue: { type: Object, default: null }
 })
 
 const emit = defineEmits(['cancel', 'clear-done'])
 
-// 父组件传入的是当前阶段的任务（含已完成），这里直接展示完成/失败状态
-const visible = computed(() => props.tasks.length > 0)
-const runningTasks = computed(() => props.tasks.filter(t => t.status === 'uploading' || t.status === 'converting'))
-const finishedTasks = computed(() => props.tasks.filter(t => t.status === 'done' || t.status === 'failed'))
+// 优先级：后端 yzh_queue 状态 > 本地 SignalR 任务
+const hasActiveQueue = computed(() => props.queue?.exists === true)
+const visible = computed(() => hasActiveQueue.value || props.tasks.length > 0)
+
+const runningTasks = computed(() =>
+  props.tasks.filter(t => t.status === 'uploading' || t.status === 'converting')
+)
+const finishedTasks = computed(() =>
+  props.tasks.filter(t => t.status === 'done' || t.status === 'failed')
+)
 const expanded = ref(false)
 const showPanel = ref(false)
 
-const isAnyRunning = computed(() => runningTasks.value.length > 0)
+const isAnyRunning = computed(() =>
+  hasActiveQueue.value || runningTasks.value.length > 0
+)
 
-const activeTasks = computed(() => props.tasks)
+// 优先展示后端 yzh_queue 信息，fallback 到本地 uploadTasks
+const activeTasks = computed(() => {
+  if (hasActiveQueue.value) {
+    return [{
+      queueCode: props.queue.queueCode,
+      name: props.queue.queueName,
+      status: props.queue.status,
+      percent: props.queue.progress || 0,
+      totalFiles: props.queue.totalCount || 0,
+      uploadedFiles: props.queue.completedCount || 0,
+      failedFiles: props.queue.failedCount || 0,
+      files: []
+    }]
+  }
+  return props.tasks
+})
 
 const statusText = (status) => {
   const map = { uploading: '上传中', converting: '转换中', done: '已完成', failed: '失败', cancelled: '已取消', pending: '等待中' }
@@ -192,6 +227,16 @@ const handleCancelAll = async () => {
 const handleClosePanel = () => {
   showPanel.value = false
 }
+
+const goToQueueMonitor = () => {
+  window.open('#/CertPlatform/ConvertQueueMonitor', '_blank')
+}
+
+const queueStatusText = computed(() => {
+  const s = props.queue?.status
+  const map = { running: '处理中', pending: '等待中', completed: '已完成', failed: '已失败', cancelled: '已取消' }
+  return map[s] || s || ''
+})
 
 const statusTagType = (status) => {
   const map = { uploading: 'warning', done: 'success', failed: 'danger', converting: 'primary', cancelled: 'info', pending: 'info' }

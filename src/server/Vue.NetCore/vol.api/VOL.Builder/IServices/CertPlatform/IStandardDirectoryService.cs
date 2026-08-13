@@ -192,6 +192,12 @@ namespace VOL.Builder.IServices.CertPlatform
         /// <returns>操作结果（含入队数量）</returns>
         Task<WebResponseContent> RetryFailedConversionsAsync();
 
+        /// <summary>
+        /// 查询某目录（机构/标准/阶段）下运行中的队列
+        /// 返回 null 表示无运行中队列
+        /// </summary>
+        Task<object> GetActiveQueueAsync(string directoryCode);
+
         #endregion
     }
 }

@@ -66,6 +66,13 @@ export function useYzhQueue() {
     }
   }
 
+  /** 查询某目录下的运行中队列（供 DirectoryManager 横幅展示） */
+  async function getActiveQueue(directoryCode) {
+    if (!directoryCode) return null
+    const res = await proxy.http.get(`api/standard-directory/active-queue?directoryCode=${encodeURIComponent(directoryCode)}`)
+    return res?.Data ?? res?.data ?? null
+  }
+
   return {
     getQueueList,
     getQueueStats,
@@ -74,6 +81,7 @@ export function useYzhQueue() {
     retryQueue,
     retryTask,
     checkResourceLock,
-    retryFailedConversions
+    retryFailedConversions,
+    getActiveQueue
   }
 }

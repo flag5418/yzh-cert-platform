@@ -4,6 +4,7 @@
     <UploadQueueBanner
       ref="uploadQueueBannerRef"
       :tasks="activeUploadTasks"
+      :queue="activeQueue"
       @cancel="handleCancelUploadTask"
       @clear-done="clearFinishedTasks"
     />
@@ -88,32 +89,47 @@
             <span v-else>{{ crumb.name }}</span>
           </el-breadcrumb-item>
         </el-breadcrumb>
+        <!-- 队列执行中状态条 -->
+        <div v-if="activeQueue?.exists" class="queue-status-bar">
+          <el-icon class="is-spinning"><IconLoading /></el-icon>
+          <span class="queue-name">{{ activeQueue.queueName || activeQueue.queueCode }}</span>
+          <el-progress
+            :percentage="activeQueue.progress || 0"
+            :status="activeQueue.status === 'failed' ? 'exception' : activeQueue.status === 'completed' ? 'success' : ''"
+            :stroke-width="6"
+            style="flex:1;margin:0 12px;"
+          />
+          <span class="queue-count">{{ activeQueue.completedCount }}/{{ activeQueue.totalCount }}</span>
+          <el-button link type="primary" size="small" @click="goToQueueMonitor">
+            队列监控 →
+          </el-button>
+        </div>
       </div>
 
       <!-- 工具栏 -->
       <div class="toolbar" v-if="currentPhase">
         <el-badge :value="runningUploadCount" :hidden="runningUploadCount === 0">
-          <el-button type="primary" size="small" @click="showUploadQueue" :disabled="isUploading">
+          <el-button type="primary" size="small" @click="showUploadQueue" :disabled="isBusy">
             <el-icon><IconUpload /></el-icon> 上传队列
           </el-button>
         </el-badge>
-        <el-button type="primary" size="small" @click="handleNewFolder" :disabled="isUploading">
+        <el-button type="primary" size="small" @click="handleNewFolder" :disabled="isBusy">
           <el-icon><IconFolderAdd /></el-icon> 新建文件夹
         </el-button>
-        <el-button size="small" @click="handleUpload" :disabled="isUploading">
+        <el-button size="small" @click="handleUpload" :disabled="isBusy">
           <el-icon><IconUpload /></el-icon> 上传文件
         </el-button>
         <el-divider direction="vertical" />
-        <el-button size="small" @click="handleExport" :disabled="selectedItems.size === 0 || isUploading">
+        <el-button size="small" @click="handleExport" :disabled="selectedItems.size === 0 || isBusy">
           <el-icon><IconDownload /></el-icon> 导出打包
         </el-button>
         <el-divider direction="vertical" />
-        <el-button size="small" :disabled="isUploading">全选</el-button>
-        <el-button size="small" type="danger" plain :disabled="isUploading" @click="deleteSelected">
+        <el-button size="small" :disabled="isBusy">全选</el-button>
+        <el-button size="small" type="danger" plain :disabled="isBusy" @click="deleteSelected">
           <el-icon><IconDelete /></el-icon> 删除
         </el-button>
         <div style="flex: 1"></div>
-        <el-button size="small" type="warning" plain :disabled="isUploading" @click="handleHelp">
+        <el-button size="small" type="warning" plain :disabled="isBusy" @click="handleHelp">
           <el-icon><IconHelp /></el-icon> 使用帮助
         </el-button>
       </div>
@@ -430,6 +446,7 @@ import ConvertProgressPanel from './ConvertProgressPanel.vue'
 import ConfigTab from './components/ConfigTab.vue'
 import UploadQueueBanner from './components/UploadQueueBanner.vue'
 import * as signalR from '@microsoft/signalr'
+import { useYzhQueue } from '@/yzh'
 
 const searchText = ref('')
 const treeData = ref([])
@@ -504,10 +521,18 @@ const normalizeItem = (item, type) => {
 // 当前机构+标准+阶段 的目录编码（用于队列隔离）
 const currentDirectoryCode = computed(() => (currentPhase.value ? buildDirectoryCode() : ''))
 
+// 来自后端 yzh_queue 的当前目录运行中队列（轮询更新）
+const activeQueue = ref(null)
+let pollTimer = null
+
 // 计算属性：是否正在上传（仅针对当前阶段，不影响其他 机构/标准/阶段 的文件管理）
 const isUploading = computed(() =>
   uploadTasks.value.some(t => t.directoryCode === currentDirectoryCode.value && (t.status === 'uploading' || t.status === 'converting'))
 )
+// 计算属性：队列是否运行中（后端 yzh_queue + 本地 SignalR 任务）
+const isQueueRunning = computed(() => activeQueue.value?.exists === true)
+// 综合忙闲状态：上传中 或 队列执行中 都视为忙
+const isBusy = computed(() => isUploading.value || isQueueRunning.value)
 // 当前阶段的上传任务（含已完成，供横幅展示完成状态）
 const activeUploadTasks = computed(() =>
   uploadTasks.value.filter(t => t.directoryCode === currentDirectoryCode.value)
@@ -520,6 +545,10 @@ const runningUploadCount = computed(() =>
 // 打开上传队列详情面板
 const showUploadQueue = () => {
   uploadQueueBannerRef.value?.openPanel()
+}
+
+const goToQueueMonitor = () => {
+  window.open('#/CertPlatform/ConvertQueueMonitor', '_blank')
 }
 
 // 清除当前阶段已结束的任务（保持队列整洁）
@@ -672,7 +701,39 @@ const selectPhase = async (phase) => {
   breadcrumbPath.value = []
   selectedItems.clear()
   allSelected.value = false
+  activeQueue.value = null
   await loadCurrentContent()
+  await refreshActiveQueue()
+}
+
+// ========== 队列轮询（当前目录） ==========
+const { getActiveQueue } = useYzhQueue()
+
+const refreshActiveQueue = async () => {
+  const dc = currentDirectoryCode.value
+  if (!dc) { activeQueue.value = null; return }
+  try {
+    activeQueue.value = await getActiveQueue(dc)
+  } catch (e) {
+    console.warn('[DirectoryManager] 队列查询失败:', e)
+  }
+}
+
+const startPolling = () => {
+  if (pollTimer) return
+  pollTimer = setInterval(async () => {
+    // 有运行中队列时轮询，无则静默
+    try {
+      const q = activeQueue.value
+      if (!q?.exists) return
+      await refreshActiveQueue()
+      // 队列完成后停止轮询
+      if (q.status === 'completed' || q.status === 'failed' || q.status === 'cancelled') {
+        clearInterval(pollTimer)
+        pollTimer = null
+      }
+    } catch {}
+  }, 5000)
 }
 
 // ========== 文件夹/文件加载 ==========
@@ -1348,10 +1409,12 @@ const getFileIconClass = (fileName) => {
 onMounted(() => {
   loadTree()
   initSignalR()
+  startPolling()
 })
 
 onUnmounted(() => {
   signalRConnection.value?.stop().catch(() => {})
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
 })
 </script>
 

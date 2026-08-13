@@ -1288,6 +1288,30 @@ namespace VOL.Builder.Services.CertPlatform
         }
 
         /// <summary>
+        /// 公开接口：查询某目录下的运行中队列（供前端横幅展示队列状态）
+        /// </summary>
+        public async Task<object> GetActiveQueueAsync(string directoryCode)
+        {
+            var q = await GetRunningQueueForDirectoryAsync(directoryCode);
+            if (q == null) return new { exists = false };
+            return new
+            {
+                exists = true,
+                queueCode = q.QueueCode,
+                queueName = q.QueueName,
+                status = q.Status,
+                progress = q.Progress,
+                totalCount = q.TotalCount,
+                completedCount = q.CompletedCount,
+                failedCount = q.FailedCount,
+                pendingCount = q.PendingCount,
+                startTime = q.StartTime?.ToString("yyyy-MM-dd HH:mm:ss"),
+                endTime = q.EndTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "",
+                scopeKey = q.ScopeKey
+            };
+        }
+
+        /// <summary>
         /// 范围互斥检查：该机构/标准/阶段下已有转换队列运行则返回错误文案
         /// </summary>
         private async Task<string> GetQueueLockErrorAsync(string directoryCode, string preferredOrgCode = null)
