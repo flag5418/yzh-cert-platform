@@ -15,6 +15,13 @@
       />
     </div>
 
+    <!-- 队列锁定提示条 -->
+    <div v-if="activeQueue?.exists" class="cert-directory-tree__queue-lock-bar">
+      <el-icon class="is-spinning"><IconLoading /></el-icon>
+      <span class="lock-text">队列「{{ activeQueue.queueName || activeQueue.queueCode }}」执行中，以下文件暂不可操作</span>
+      <el-tag size="small" type="danger" class="lock-badge">{{ lockCount }} 个资源被锁定</el-tag>
+    </div>
+
     <div v-loading="loading" class="cert-directory-tree__content">
       <el-tree
         ref="treeRef"
@@ -47,6 +54,14 @@
               :class="`is-${data.ruleStatus || 'none'}`"
               :title="ruleStatusTitle(data.ruleStatus)"
             />
+            <!-- 队列锁定指示器 -->
+            <el-tooltip
+              v-if="isLocked(data.fileCode)"
+              :content="`队列 ${queueLockMap[data.fileCode]} 处理中，不可操作`"
+              placement="right"
+            >
+              <el-icon class="cert-directory-tree__lock-icon"><IconLoading /></el-icon>
+            </el-tooltip>
           </div>
         </template>
       </el-tree>
@@ -71,7 +86,8 @@
  */
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { YzhEmptyState, IconFolderOpen } from '@/yzh'
+import { YzhEmptyState, IconFolderOpen, IconLoading } from '@/yzh'
+import { useYzhQueue } from '@/yzh/composables/useYzhQueue'
 import CertConvertBadge from './CertConvertBadge.vue'
 import { useFileTree } from '../composables/useFileTree'
 import { CertTreeIcon, CERT_FILE_TYPE_COLOR } from '../icons'
@@ -128,8 +144,101 @@ watch(filterText, (val) => {
 })
 
 /* ===== 交互 ===== */
+/* ===== 队列锁定 ===== */
+const queueLockMap = ref({})
+const activeQueue = ref(null)
+
+const lockCount = computed(() => Object.keys(queueLockMap.value).length)
+const isLocked = (fileCode) => !!queueLockMap.value[fileCode]
+
+/** 收集所有已加载阶段的文件编码 */
+const collectFileCodes = () => {
+  const codes = []
+  const walk = (nodes) => {
+    for (const n of nodes || []) {
+      if (n.type === 'file' && n.fileCode) codes.push(n.fileCode)
+      if (n.children) walk(n.children)
+    }
+  }
+  walk(fileTreeData.value)
+  return codes
+}
+
+const { getActiveQueue, getFileLockStatus } = useYzhQueue()
+
+/** 查询当前目录的运行中队列 */
+const refreshActiveQueue = async () => {
+  const dc = activeDirectoryCode.value
+  if (!dc) { activeQueue.value = null; return }
+  try {
+    activeQueue.value = await getActiveQueue(dc)
+  } catch {}
+}
+
+/** 轮询更新锁定状态 */
+let lockPollTimer = null
+const refreshLockStatus = async () => {
+  const codes = collectFileCodes()
+  if (codes.length === 0) { queueLockMap.value = {}; return }
+  try {
+    queueLockMap.value = await getFileLockStatus(codes)
+  } catch {}
+}
+
+const startLockPolling = () => {
+  if (lockPollTimer) return
+  lockPollTimer = setInterval(refreshLockStatus, 5000)
+}
+const stopLockPolling = () => {
+  if (lockPollTimer) { clearInterval(lockPollTimer); lockPollTimer = null }
+}
+
+// 当前展开阶段的 directoryCode（用于查询锁定）
+const activeDirectoryCode = computed(() => {
+  for (const org of fileTreeData.value || []) {
+    for (const std of org.children || []) {
+      for (const phase of std.children || []) {
+        if (phase._loaded && phase.directoryCode) return phase.directoryCode
+      }
+    }
+  }
+  return null
+})
+
+// 监听阶段加载完成，自动查询队列状态
+watch(() => fileTreeData.value, async (data) => {
+  if (!data) return
+  let hasNewLoaded = false
+  const walk = (nodes) => {
+    for (const n of nodes || []) {
+      if (n.type === 'stage' && n._loaded) hasNewLoaded = true
+      if (n.children) walk(n.children)
+    }
+  }
+  walk(data)
+  if (hasNewLoaded) {
+    await refreshActiveQueue()
+    if (activeQueue.value?.exists) {
+      refreshLockStatus()
+      startLockPolling()
+    } else {
+      queueLockMap.value = {}
+      stopLockPolling()
+    }
+  }
+}, { immediate: true, deep: true })
+
+onUnmounted(() => {
+  stopLockPolling()
+})
+
 const onNodeClick = (data, node) => {
   if (data.type === 'file' && props.mode === 'file') {
+    if (isLocked(data.fileCode)) {
+      const qc = queueLockMap.value[data.fileCode]
+      ElMessage.warning(`文件「${data.name}」正被队列 ${qc} 处理中，请稍后再试`)
+      return
+    }
     emit('select', data)
     emit('update:selectedFile', data)
   } else if (data.type === 'stage') {
@@ -253,6 +362,39 @@ defineExpose({ refresh: refreshLoadedStages })
   white-space: nowrap;
   font-size: var(--yzh-font-size-sm, 13px);
   color: var(--yzh-color-text-regular, #606266);
+}
+
+/* 队列锁定提示条 */
+.cert-directory-tree__queue-lock-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--yzh-space-2, 8px);
+  flex-shrink: 0;
+  padding: var(--yzh-space-2, 8px) var(--yzh-space-4, 16px);
+  background: var(--yzh-color-danger-light-9, #fef0f0);
+  border-bottom: 1px solid var(--yzh-color-danger-light-7, #fde2e2);
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--yzh-color-danger, #f56c6c);
+}
+.cert-directory-tree__queue-lock-bar .is-spinning {
+  animation: spin 1s linear infinite;
+}
+.cert-directory-tree__queue-lock-bar .lock-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cert-directory-tree__queue-lock-bar .lock-badge {
+  flex-shrink: 0;
+}
+
+/* 队列锁定图标 */
+.cert-directory-tree__lock-icon {
+  font-size: 14px;
+  color: var(--yzh-color-danger, #f56c6c);
+  flex-shrink: 0;
+  animation: spin 1s linear infinite;
 }
 
 .cert-directory-tree__node.is-active .cert-directory-tree__node-label {

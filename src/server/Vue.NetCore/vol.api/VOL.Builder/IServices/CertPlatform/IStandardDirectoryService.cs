@@ -198,6 +198,11 @@ namespace VOL.Builder.IServices.CertPlatform
         /// </summary>
         Task<object> GetActiveQueueAsync(string directoryCode);
 
+        /// <summary>
+        /// 批量查询文件编码在运行中队列中的锁定状态，返回 { fileCode: queueCode }
+        /// </summary>
+        Task<Dictionary<string, string>> GetFileLockStatusAsync(List<string> fileCodes);
+
         #endregion
     }
 }

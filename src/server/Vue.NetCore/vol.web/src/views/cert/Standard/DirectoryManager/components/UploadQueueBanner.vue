@@ -158,9 +158,13 @@ const props = defineProps({
 
 const emit = defineEmits(['cancel', 'clear-done'])
 
-// 优先级：后端 yzh_queue 状态 > 本地 SignalR 任务
+// 优先级：优先展示后端 yzh_queue 状态
+// 当有后端队列时横幅本身已含队列状态条（面包屑下方），此处仅展示本地 SignalR 任务（上传进度）
 const hasActiveQueue = computed(() => props.queue?.exists === true)
-const visible = computed(() => hasActiveQueue.value || props.tasks.length > 0)
+// 横幅可见条件：有本地正在上传的任务，且有后端队列时横幅不重复展示进度
+const visible = computed(() =>
+  runningTasks.value.length > 0 && !hasActiveQueue.value
+)
 
 const runningTasks = computed(() =>
   props.tasks.filter(t => t.status === 'uploading' || t.status === 'converting')

@@ -73,6 +73,13 @@ export function useYzhQueue() {
     return res?.Data ?? res?.data ?? null
   }
 
+  /** 批量查询文件锁定状态：返回 { [fileCode]: queueCode } 对象 */
+  async function getFileLockStatus(fileCodes) {
+    if (!fileCodes || fileCodes.length === 0) return {}
+    const res = await proxy.http.post('api/standard-directory/file-lock-status', { fileCodes })
+    return res?.Data ?? res?.data ?? {}
+  }
+
   return {
     getQueueList,
     getQueueStats,
@@ -82,6 +89,7 @@ export function useYzhQueue() {
     retryTask,
     checkResourceLock,
     retryFailedConversions,
-    getActiveQueue
+    getActiveQueue,
+    getFileLockStatus
   }
 }

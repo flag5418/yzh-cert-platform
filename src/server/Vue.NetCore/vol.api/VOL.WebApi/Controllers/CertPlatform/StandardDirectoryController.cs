@@ -1,7 +1,9 @@
 /*
  * 标准目录管理 Controller
  */
+using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -475,6 +477,17 @@ public async Task<IActionResult> GetConvertProgress([FromBody] dynamic param)
         public async Task<IActionResult> GetActiveQueue([FromQuery] string directoryCode)
         {
             var result = await _service.GetActiveQueueAsync(directoryCode);
+            return JsonNormal(new WebResponseContent().OK(null, result));
+        }
+
+        /// <summary>
+        /// 批量查询文件在运行中队列中的锁定状态，返回 { fileCode → queueCode } 字典
+        /// </summary>
+        [HttpPost("file-lock-status")]
+        public async Task<IActionResult> GetFileLockStatus([FromBody] dynamic param)
+        {
+            var fileCodes = param?.fileCodes as string[] ?? Array.Empty<string>();
+            var result = await _service.GetFileLockStatusAsync(fileCodes.ToList());
             return JsonNormal(new WebResponseContent().OK(null, result));
         }
     }

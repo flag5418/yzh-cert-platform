@@ -173,7 +173,7 @@
               <td class="size-cell">--</td>
               <td class="upload-status-cell">—</td>
               <td class="date-cell">{{ formatDate(folder.CreateDate || folder.createDate) }}</td>
-              <td class="action-cell" :style="{ pointerEvents: isUploading ? 'none' : 'auto', opacity: isUploading ? 0.5 : 1 }">
+              <td class="action-cell" :style="{ pointerEvents: isBusy ? 'none' : 'auto', opacity: isBusy ? 0.5 : 1 }">
                 <el-button link type="primary" size="small" @click.stop="showRenameDialog(folder)"
                   >重命名</el-button
                 >
@@ -215,7 +215,7 @@
                 <span v-else class="upload-idle">—</span>
               </td>
               <td class="date-cell">{{ formatDate(file.CreateDate || file.createDate) }}</td>
-              <td class="action-cell" :style="{ pointerEvents: isUploading ? 'none' : 'auto', opacity: isUploading ? 0.5 : 1 }">
+              <td class="action-cell" :style="{ pointerEvents: isBusy ? 'none' : 'auto', opacity: isBusy ? 0.5 : 1 }">
                 <el-button link type="primary" size="small" @click.stop="showRenameDialog(file)"
                   >重命名</el-button
                 >

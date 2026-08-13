@@ -1312,6 +1312,17 @@ namespace VOL.Builder.Services.CertPlatform
         }
 
         /// <summary>
+        /// 查询指定文件编码在运行中队列中是否被锁定，返回 queueCode 或 null
+        /// </summary>
+        public async Task<Dictionary<string, string>> GetFileLockStatusAsync(List<string> fileCodes)
+        {
+            if (fileCodes == null || fileCodes.Count == 0) return new Dictionary<string, string>();
+            var hit = await _queueManager.FindResourceLockAsync(YzhQueueManager.RESOURCE_FILE, fileCodes);
+            if (hit == null) return new Dictionary<string, string>();
+            return new Dictionary<string, string> { [hit.ResourceCode] = hit.QueueCode };
+        }
+
+        /// <summary>
         /// 范围互斥检查：该机构/标准/阶段下已有转换队列运行则返回错误文案
         /// </summary>
         private async Task<string> GetQueueLockErrorAsync(string directoryCode, string preferredOrgCode = null)
