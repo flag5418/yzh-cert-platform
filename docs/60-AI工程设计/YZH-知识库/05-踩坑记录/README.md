@@ -18,6 +18,7 @@
 | **2026-08-10_DocExtractionRule 预览链 12 类踩坑与根因修复汇总.md** | **DocExtractionRule V1~V13 全部 12 类真实踩坑（http.js res.data 双层 / fetch 缺 JWT / console.debug 过滤看不见 / ZIP Central Directory _rels/.rels 误判 docx 专属 / 7 锚点日志链 / MinIO storagePath 拆分扩展名等），100% 真实 Network hex + Console 日志，下次开发预览相关问题直接对照** | 2026-08-10 |
 | **2026-08-11-转换队列化实施踩坑记录.md** | **转换队列化实施 5 类踩坑：循环依赖 VOL.Builder↔VOL.WebApi / ControllerBase 缺 JsonNormal / MySQL 不支持 RETURNING / 端口 9991 冲突 / HttpClient.Headers 不存在** | 2026-08-11 |
 | **2026-08-11_Vol框架菜单配置完整指南与踩坑记录.md** | **Vol 框架菜单系统完整指南：MenuType 字段详解、top/classics 布局差异、ParentId 归属、Redis+内存双层缓存机制、SQL 模板、快速诊断命令。覆盖 90% 菜单不显示问题（MenuType错误/ParentId错误/缓存未清除）** | 2026-08-11 |
+| **2026-08-13_NOTracking静默失效与文件夹重命名级联修复.md** | **NoTracking 导致 465 个转换任务永久 stuck（ConvertQueueManager/OfficeConvertService 缺 AsTracking）/ GetMaxSequence 按 parentCode 分组导致跨父节点同级编码碰撞（改为按 Depth 全局分配）/ 文件夹重命名缺少 MinIO 级联同步（重写 RenameFolderAsync）/ 根目录级孤立文件不可见（虚拟"根目录"节点兜底）** | 2026-08-13 |
 
 ## 格式约定
 
