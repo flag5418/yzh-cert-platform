@@ -954,9 +954,18 @@ namespace YZH.Core.Queue
                 },
                 tasks = tasks.Select((j, i) =>
                 {
-                    var fileName = j.Payload?.IndexOf("\"fileName\"") >= 0 ? ExtractJsonValue(j.Payload, "fileName") : null;
-                    var fileCode = j.Payload?.IndexOf("\"fileCode\"") >= 0 ? ExtractJsonValue(j.Payload, "fileCode") : null;
-                    var convertType = j.Payload?.IndexOf("\"convertType\"") >= 0 ? ExtractJsonValue(j.Payload, "convertType") : null;
+                    string fileCode = null, fileName = null, convertType = null;
+                    if (!string.IsNullOrEmpty(j.Payload))
+                    {
+                        try
+                        {
+                            var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(j.Payload);
+                            fileCode = dict.TryGetValue("fileCode", out var fc) ? fc : null;
+                            fileName = dict.TryGetValue("fileName", out var fn) ? fn : null;
+                            convertType = dict.TryGetValue("convertType", out var ct) ? ct : null;
+                        }
+                        catch { /* 解析失败留空，不影响主流程 */ }
+                    }
                     return new
                     {
                         id = j.Id,

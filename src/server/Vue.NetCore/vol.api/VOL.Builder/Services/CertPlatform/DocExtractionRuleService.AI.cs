@@ -221,19 +221,32 @@ namespace VOL.Builder.Services.CertPlatform
         #region 私有辅助方法
 
         /// <summary>
-        /// 构建 AI 分析提示词（analyze 模式）：优先从 DB 读取模板，回退到内嵌默认。
+        /// 构建 AI 分析提示词（analyze 模式）：优先从 DB 读取 V2 模板，其次 V1，最后回退到内嵌默认。
         /// </summary>
         private async Task<string> BuildAnalysisPromptAsync(string skill)
         {
-            var promptCode = $"analyze_{skill}_v1";
-            var dbPrompt = await repository.DbContext.Set<PromptTemplate>()
-                .FirstOrDefaultAsync(x => x.PromptCode == promptCode && x.IsActive == true && x.Enable == true);
-            if (dbPrompt != null && !string.IsNullOrWhiteSpace(dbPrompt.Template))
+            // 优先尝试 V2 版本（中英文双名 + 提取值预览）
+            var promptCodeV2 = $"analyze_{skill}_v2";
+            var dbPromptV2 = await repository.DbContext.Set<PromptTemplate>()
+                .FirstOrDefaultAsync(x => x.PromptCode == promptCodeV2 && x.IsActive == true && x.Enable == true);
+            if (dbPromptV2 != null && !string.IsNullOrWhiteSpace(dbPromptV2.Template))
             {
-                Console.WriteLine($"[DocExtractionRule] 📝 使用数据库提示词: {promptCode} (v{dbPrompt.Version})");
-                return dbPrompt.Template;
+                Console.WriteLine($"[DocExtractionRule] 📝 使用数据库提示词 V2: {promptCodeV2} (v{dbPromptV2.Version})");
+                return dbPromptV2.Template;
             }
+
+            // 其次尝试 V1 版本
+            var promptCodeV1 = $"analyze_{skill}_v1";
+            var dbPromptV1 = await repository.DbContext.Set<PromptTemplate>()
+                .FirstOrDefaultAsync(x => x.PromptCode == promptCodeV1 && x.IsActive == true && x.Enable == true);
+            if (dbPromptV1 != null && !string.IsNullOrWhiteSpace(dbPromptV1.Template))
+            {
+                Console.WriteLine($"[DocExtractionRule] 📝 使用数据库提示词 V1: {promptCodeV1} (v{dbPromptV1.Version})");
+                return dbPromptV1.Template;
+            }
+
             // 回退到内嵌默认
+            Console.WriteLine($"[DocExtractionRule] 📝 使用内嵌默认提示词");
             return BuildDefaultAnalysisPrompt(skill);
         }
 
@@ -285,59 +298,121 @@ namespace VOL.Builder.Services.CertPlatform
         }
 
         /// <summary>
-        /// 将 LlmExtractSkill 输出映射为 AIAnalyzeResponse 的字段 DTO 列表。
+        /// 将 LlmExtractSkill 输出映射为 AIAnalyzeResponse 的字段 DTO 列表（支持 V2 格式）。
+        /// V2 格式：field_name_cn / field_name_en / extracted_value
+        /// 兼容 V1 格式：field_code / field_name
         /// </summary>
         private static List<FieldDefDto> MapAiFieldsToDtos(IDictionary<string, object> outputs)
         {
             var result = new List<FieldDefDto>();
             if (!outputs.TryGetValue("fields", out var fieldsObj) || fieldsObj is not IEnumerable<object> fields)
                 return result;
+
             foreach (var f in fields)
             {
                 if (f is not IDictionary<string, object> fd) continue;
+
+                // 优先读取 V2 格式字段
+                var nameCn = fd.TryGetValue("field_name_cn", out var v1) ? v1?.ToString() : null;
+                var nameEn = fd.TryGetValue("field_name_en", out var v2) ? v2?.ToString() : null;
+                var extractedValue = fd.TryGetValue("extracted_value", out var v3) ? v3?.ToString() : null;
+                var isRequired = fd.TryGetValue("is_required", out var v4) && bool.TryParse(v4?.ToString(), out var r) && r;
+
+                // 兼容 V1 格式
+                if (string.IsNullOrEmpty(nameCn))
+                    nameCn = fd.TryGetValue("field_name", out var v5) ? v5?.ToString() : "";
+                if (string.IsNullOrEmpty(nameEn))
+                    nameEn = fd.TryGetValue("field_code", out var v6) ? v6?.ToString() : "";
+
                 result.Add(new FieldDefDto
                 {
-                    Name = fd.TryGetValue("field_code", out var code) ? code?.ToString() ?? "" : "",
-                    Code = fd.TryGetValue("field_code", out var c2) ? c2?.ToString() ?? "" : "",
+                    Name = nameCn ?? "",
+                    NameEn = nameEn ?? "",
+                    Code = nameEn ?? nameCn ?? "",
                     DataType = fd.TryGetValue("field_type", out var t) ? t?.ToString() ?? "string" : "string",
                     Description = fd.TryGetValue("description", out var d) ? d?.ToString() ?? "" : "",
-                    IsManual = false
+                    IsRequired = isRequired,
+                    IsManual = false,
+                    ExtractedValue = extractedValue ?? ""
                 });
             }
             return result;
         }
 
         /// <summary>
-        /// 将 LlmExtractSkill 输出映射为 AIAnalyzeResponse 的表格 DTO 列表。
+        /// 将 LlmExtractSkill 输出映射为 AIAnalyzeResponse 的表格 DTO 列表（支持 V2 格式）。
+        /// V2 格式：table_name_cn / table_name_en / extracted_data
+        /// 兼容 V1 格式：table_code / table_name
         /// </summary>
         private static List<TableDefDto> MapAiTablesToDtos(IDictionary<string, object> outputs)
         {
             var result = new List<TableDefDto>();
             if (!outputs.TryGetValue("tables", out var tablesObj) || tablesObj is not IEnumerable<object> tables)
                 return result;
+
             foreach (var t in tables)
             {
                 if (t is not IDictionary<string, object> td) continue;
+
+                // 读取列定义（支持 V2 和 V1 格式）
                 var cols = new List<TableColumnDto>();
                 if (td.TryGetValue("columns", out var colsObj) && colsObj is IEnumerable<object> colsList)
                 {
                     foreach (var c in colsList)
                     {
                         if (c is not IDictionary<string, object> cd) continue;
+
+                        // 优先 V2 格式
+                        var colNameCn = cd.TryGetValue("column_name_cn", out var cv1) ? cv1?.ToString() : null;
+                        var colNameEn = cd.TryGetValue("column_name_en", out var cv2) ? cv2?.ToString() : null;
+
+                        // 兼容 V1 格式
+                        if (string.IsNullOrEmpty(colNameCn))
+                            colNameCn = cd.TryGetValue("column_name", out var cv3) ? cv3?.ToString() : "";
+                        if (string.IsNullOrEmpty(colNameEn))
+                            colNameEn = cd.TryGetValue("column_code", out var cv4) ? cv4?.ToString() : "";
+
                         cols.Add(new TableColumnDto
                         {
-                            Name = cd.TryGetValue("column_name", out var n) ? n?.ToString() ?? "" : "",
-                            Code = cd.TryGetValue("column_code", out var c2) ? c2?.ToString() ?? "" : "",
+                            Name = colNameCn ?? "",
+                            NameEn = colNameEn ?? "",
+                            Code = colNameEn ?? colNameCn ?? "",
                             DataType = cd.TryGetValue("column_type", out var tp) ? tp?.ToString() ?? "string" : "string"
                         });
                     }
                 }
+
+                // 优先读取 V2 格式字段
+                var tableNameCn = td.TryGetValue("table_name_cn", out var tv1) ? tv1?.ToString() : null;
+                var tableNameEn = td.TryGetValue("table_name_en", out var tv2) ? tv2?.ToString() : null;
+                var sheetName = td.TryGetValue("sheet_name", out var tv3) ? tv3?.ToString() : null;
+
+                // 兼容 V1 格式
+                if (string.IsNullOrEmpty(tableNameCn))
+                    tableNameCn = td.TryGetValue("table_name", out var tv4) ? tv4?.ToString() : "";
+                if (string.IsNullOrEmpty(tableNameEn))
+                    tableNameEn = td.TryGetValue("table_code", out var tv5) ? tv5?.ToString() : "";
+
+                // 读取提取的数据样例（V2 特有）
+                var extractedData = new List<Dictionary<string, object>>();
+                if (td.TryGetValue("extracted_data", out var edObj) && edObj is IEnumerable<object> edList)
+                {
+                    foreach (var row in edList)
+                    {
+                        if (row is IDictionary<string, object> rowDict)
+                            extractedData.Add(new Dictionary<string, object>(rowDict));
+                    }
+                }
+
                 result.Add(new TableDefDto
                 {
-                    Name = td.TryGetValue("table_name", out var n2) ? n2?.ToString() ?? "" : "",
-                    Code = td.TryGetValue("table_code", out var c3) ? c3?.ToString() ?? "" : "",
+                    Name = tableNameCn ?? "",
+                    NameEn = tableNameEn ?? "",
+                    Code = tableNameEn ?? tableNameCn ?? "",
                     Description = td.TryGetValue("description", out var d2) ? d2?.ToString() ?? "" : "",
-                    Columns = cols
+                    SheetName = sheetName ?? "",
+                    Columns = cols,
+                    ExtractedData = extractedData
                 });
             }
             return result;
