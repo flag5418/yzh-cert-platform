@@ -202,6 +202,10 @@
                   ><Document
                 /></el-icon>
                 <span class="name-text">{{ file.FileName || file.fileName }}</span>
+                <!-- 上传中 / 队列锁定状态图标 -->
+                <el-icon v-if="file.uploadStatus === 'uploading'" class="status-icon is-spinning" color="var(--yzh-color-primary)"><IconLoading /></el-icon>
+                <el-icon v-else-if="file.uploadStatus === 'converting'" class="status-icon" color="var(--yzh-color-primary)"><IconFile /></el-icon>
+                <el-icon v-else-if="isQueueRunning" class="status-icon is-spinning" color="var(--yzh-color-danger)"><IconLoading /></el-icon>
               </td>
               <td class="size-cell">{{ formatFileSize(file.FileSize || file.fileSize) }}</td>
               <td class="upload-status-cell">
@@ -244,7 +248,6 @@
       </div>
 
       <!-- 未选中阶段：显示目录配置管理 -->
-      <div v-if="!currentPhase" class="empty-state">
         <ConfigTab />
       </div>
 
@@ -1836,6 +1839,47 @@ onUnmounted(() => {
   color: var(--yzh-color-text-regular, #606266);
   line-height: 1.8;
   margin-bottom: var(--yzh-space-3, 12px);
+}
+
+/* 队列执行中状态条 */
+.queue-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: var(--yzh-color-primary-light-9, #ecf5ff);
+  border: 1px solid var(--yzh-color-primary-light-7, #b3d8ff);
+  border-radius: var(--yzh-radius-sm, 4px);
+  font-size: 13px;
+}
+.queue-status-bar .queue-name {
+  font-weight: 600;
+  color: var(--yzh-color-primary, #409eff);
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.queue-status-bar .queue-count {
+  font-size: 12px;
+  color: var(--yzh-color-text-secondary, #909399);
+  white-space: nowrap;
+}
+
+/* 文件名后状态图标 */
+.status-icon {
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+/* 通用旋转动画 */
+.is-spinning {
+  animation: yzh-spin 1s linear infinite;
+}
+@keyframes yzh-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 /* 弹窗 — 不用 scoped，因为 el-dialog teleport 到 body */

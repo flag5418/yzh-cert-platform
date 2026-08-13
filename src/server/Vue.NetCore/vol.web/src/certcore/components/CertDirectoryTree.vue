@@ -98,7 +98,13 @@ const props = defineProps({
   showConvertBadge: { type: Boolean, default: true },
   showRuleStatus: { type: Boolean, default: true },
   filterable: { type: Boolean, default: false },
-  selectedFile: { type: Object, default: null }
+  selectedFile: { type: Object, default: null },
+  // 运行中队列的锁定状态 map：{ fileCode: queueCode }
+  queueLockMap: { type: Object, default: () => ({}) },
+  // 正在上传中的文件编码集合（本地上传阶段，尚未入 yzh_queue）
+  uploadingFileCodes: { type: Set, default: () => new Set() },
+  // 当前目录的 busy 状态（队列执行中或本地上传中）
+  isBusy: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['select', 'stage-load', 'update:selectedFile'])
@@ -150,6 +156,7 @@ const activeQueue = ref(null)
 
 const lockCount = computed(() => Object.keys(queueLockMap.value).length)
 const isLocked = (fileCode) => !!queueLockMap.value[fileCode]
+const isUploading = (fileCode) => props.uploadingFileCodes?.has(fileCode) ?? false
 
 /** 收集所有已加载阶段的文件编码 */
 const collectFileCodes = () => {
@@ -234,9 +241,14 @@ onUnmounted(() => {
 
 const onNodeClick = (data, node) => {
   if (data.type === 'file' && props.mode === 'file') {
-    if (isLocked(data.fileCode)) {
-      const qc = queueLockMap.value[data.fileCode]
-      ElMessage.warning(`文件「${data.name}」正被队列 ${qc} 处理中，请稍后再试`)
+    const fc = data.fileCode
+    if (isLocked(fc)) {
+      const qc = queueLockMap.value[fc]
+      emit('lock-warning', { fileCode: fc, fileName: data.name, queueCode: qc })
+      return
+    }
+    if (isUploading(fc)) {
+      emit('lock-warning', { fileCode: fc, fileName: data.name, queueCode: 'uploading' })
       return
     }
     emit('select', data)

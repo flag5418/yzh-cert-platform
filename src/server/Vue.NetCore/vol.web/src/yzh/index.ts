@@ -61,4 +61,4 @@ export {
 } from './icons'
 
 // ====== 基础组件库（V3 新增，对齐 vidlang components/ui） ======
-export { YzhBaseCard, YzhTitledCard, YzhEmptyState, YzhStatusBadge } from './components/ui'
+export { YzhBaseCard, YzhTitledCard, YzhEmptyState, YzhStatusBadge, YzhLockStatus } from './components/ui'

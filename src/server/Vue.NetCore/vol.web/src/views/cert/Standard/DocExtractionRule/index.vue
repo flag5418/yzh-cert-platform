@@ -12,6 +12,7 @@
           :show-rule-status="true"
           filterable
           @select="onFileSelect"
+          @lock-warning="onFileLockWarning"
         >
           <template #header-actions>
             <el-button
@@ -35,7 +36,14 @@
 
       <!-- 中间：文档预览 -->
       <div class="center-panel">
-        <DocPreview v-if="currentFile" :file="currentFile" />
+        <DocPreview v-if="currentFile && !lockReason" :file="currentFile" />
+        <div v-else-if="lockReason" class="lock-state-panel">
+          <YzhLockStatus
+            title="文件处理中，暂不可操作"
+            :description="lockReason"
+            tag-text="队列执行期间锁定"
+          />
+        </div>
         <div v-else class="empty-preview">
           <YzhEmptyState :icon="IconFile" title="请选择左侧文档进行预览" description="从目录树中选择一份文档查看内容" />
         </div>
@@ -103,8 +111,8 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CertDirectoryTree } from '@/certcore'
-import { YzhEmptyState, YzhStatusBadge } from '@/yzh'
-import { IconFile, IconAnalyze, IconPrompt, IconRefresh } from '@/yzh'
+import { YzhEmptyState, YzhStatusBadge, YzhLockStatus } from '@/yzh'
+import { IconFile, IconAnalyze, IconPrompt, IconRefresh, IconLoading } from '@/yzh'
 import { useYzhQueue } from '@/yzh/composables/useYzhQueue'
 import { aiAnalyzeDocument } from './api'
 import AIAnalysisTab from './components/AIAnalysisTab.vue'
@@ -121,6 +129,7 @@ const leftPanelWidth = ref(280) // 左侧面板默认宽度
 const currentFile = ref(null)
 const saving = ref(false)
 const retrying = ref(false)
+const lockReason = ref('') // 当前文件锁定原因（队列处理中 / 上传中）
 
 // AI分析结果
 const analysisFields = ref([])
@@ -153,12 +162,21 @@ const onFileSelect = (file) => {
   console.log('[DocExtractionRule] ✅ onFileSelect 触发:',
     { id: file?.id, name: file?.name, type: file?.type, storagePath: file?.storagePath, mimeType: file?.mimeType })
   currentFile.value = file
+  lockReason.value = ''
   // 重置状态
   analysisFields.value = []
   analysisTables.value = []
   generatedPrompt.value = ''
   verifyResult.value = null
   activeTab.value = 'analysis'
+}
+
+const onFileLockWarning = (info) => {
+  const reason = info.queueCode === 'uploading'
+    ? `文件「${info.fileName}」正在上传处理中，请稍后再试`
+    : `文件「${info.fileName}」正被队列 ${info.queueCode} 处理中，请稍后再试`
+  lockReason.value = reason
+  ElMessage.warning(reason)
 }
 
 const onAIAnalyze = async () => {
