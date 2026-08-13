@@ -117,7 +117,11 @@
           <el-icon><IconFolderAdd /></el-icon> 新建文件夹
         </el-button>
         <el-button size="small" @click="handleUpload" :disabled="isBusy">
-          <el-icon><IconUpload /></el-icon> 上传文件
+          <el-icon><IconUpload /></el-icon> 上传
+        </el-button>
+        <el-divider direction="vertical" />
+        <el-button size="small" :disabled="isBusy" @click="handleRefresh">
+          <el-icon><IconRefresh /></el-icon> 刷新节点
         </el-button>
         <el-divider direction="vertical" />
         <el-button size="small" @click="handleExport" :disabled="selectedItems.size === 0 || isBusy">
@@ -328,15 +332,8 @@
       :close-on-click-modal="false"
     >
       <div class="upload-dialog-body">
-        <div class="upload-tabs">
-          <el-radio-group v-model="uploadMode" size="small">
-            <el-radio-button value="file">上传文件</el-radio-button>
-            <el-radio-button value="folder">上传文件夹</el-radio-button>
-          </el-radio-group>
-        </div>
         <div class="upload-area">
           <input
-            v-if="uploadMode === 'file'"
             ref="fileInputRef"
             type="file"
             multiple
@@ -344,7 +341,6 @@
             @change="handleFileSelect"
           />
           <input
-            v-else
             ref="folderInputRef"
             type="file"
             webkitdirectory
@@ -355,17 +351,22 @@
           <div
             class="upload-trigger"
             :class="{ 'is-dragging': dragActive }"
-            @click="triggerUpload"
+            @click="triggerFileUpload"
             @dragover.prevent="dragActive = true"
             @dragleave="dragActive = false"
             @drop.prevent="handleDrop"
           >
             <el-icon class="upload-icon"><IconUpload /></el-icon>
             <div class="upload-text">
-              {{ uploadMode === 'file' ? '点击选择文件或拖拽到此处' : '点击选择文件夹' }}
+              点击选择文件或拖拽到此处
             </div>
-            <div class="upload-hint">支持多个文件同时上传</div>
+            <div class="upload-hint">支持多个文件同时上传（文档/图片）</div>
           </div>
+        </div>
+        <div class="upload-secondary-btn">
+          <el-button size="small" plain @click="triggerFolderUpload">
+            <el-icon><IconFolderAdd /></el-icon> 或上传整个文件夹
+          </el-button>
         </div>
         <div v-if="uploadFileList.length > 0" class="upload-file-list">
           <div class="file-list-header-sm">
@@ -1082,10 +1083,8 @@ const handleUpload = () => {
   showUploadDialogFlag.value = true
 }
 
-const triggerUpload = () => {
-  if (uploadMode.value === 'file') fileInputRef.value?.click()
-  else folderInputRef.value?.click()
-}
+const triggerFileUpload = () => fileInputRef.value?.click()
+const triggerFolderUpload = () => folderInputRef.value?.click()
 
 // ========== 上传文件类型白名单 ==========
 // 体系认证系统只允许上传文档/表格/图片等认证材料文件，
@@ -1318,6 +1317,7 @@ const submitUpload = async () => {
       uploadFileList.value = []
       showUploadDialogFlag.value = false
       await loadCurrentContent()
+      await refreshActiveQueue()
     }
   } catch (error) {
     console.error('上传流程异常:', error)
@@ -1330,6 +1330,7 @@ const submitUpload = async () => {
       if (task) { task.status = 'failed'; task.failedFiles = task.totalFiles }
     }
     ElMessage.error(error.message || '上传流程异常')
+    await refreshActiveQueue()
   } finally {
     uploading.value = false
   }
@@ -1377,6 +1378,18 @@ const handleExport = async () => {
 
 const handleHelp = () => {
   showHelpDialog.value = true
+}
+
+const handleRefresh = async () => {
+  await loadTree()
+  if (currentPhase.value) {
+    currentFolderCode.value = ''
+    breadcrumbPath.value = []
+    selectedItems.clear()
+    allSelected.value = false
+    await loadCurrentContent()
+  }
+  await refreshActiveQueue()
 }
 
 const replaceFile = (file) => {
@@ -1703,6 +1716,11 @@ onUnmounted(() => {
   display: flex;
   justify-content: center;
   margin-bottom: 20px;
+}
+.upload-secondary-btn {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
 }
 
 .upload-area {
