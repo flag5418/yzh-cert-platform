@@ -112,12 +112,12 @@ const markAllRead = async () => {
 };
 
 const getTagType = (type) => {
-  const map = { convert: "success", system: "info", task: "warning" };
+  const map = { convert: "success", system: "info", task: "warning", queue: "primary" };
   return map[type] || "info";
 };
 
 const getTypeLabel = (type) => {
-  const map = { convert: "文件转换", system: "系统消息", task: "任务通知" };
+  const map = { convert: "文件转换", system: "系统消息", task: "任务通知", queue: "队列通知" };
   return map[type] || "消息";
 };
 
@@ -127,6 +127,7 @@ const formatDate = (dateStr) => {
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
+// 队列终态实时通知：按完成/失败/取消区分弹窗颜色
 const onSignalRMessage = (data) => {
   if (data.value === "convert_progress" || data.value === "convert_cancelled") {
     msgCount.value++;
@@ -135,7 +136,28 @@ const onSignalRMessage = (data) => {
       title: data.title || "文件转换",
       message: data.message || "",
       type: data.value === "convert_cancelled" ? "warning" : "success",
+      duration: 6000,
     });
+    emitQueueProgress(data);
+  } else if (data.value === "queue_progress") {
+    msgCount.value++;
+    if (model.value) loadMessages();
+    const type = data.data?.status === "failed" ? "error" : (data.data?.status === "cancelled" ? "warning" : "success");
+    ElNotification({
+      title: data.title || "队列通知",
+      message: data.message || "",
+      type,
+      duration: 8000,
+      onClick: () => {
+        // 点击弹窗跳转队列监控
+        const q = data.data?.queueCode;
+        if (q) {
+          // 通过全局路由跳转（Index.vue 提供）
+          window.dispatchEvent(new CustomEvent("queue-monitor-jump"));
+        }
+      },
+    });
+    emitQueueProgress(data);
   } else {
     msgCount.value++;
     if (model.value) loadMessages();
@@ -146,10 +168,50 @@ const onSignalRMessage = (data) => {
   }
 };
 
-defineExpose({ onSignalRMessage });
+// 广播队列进度事件：文档提取规则页等监听后自动刷新（隐藏文件恢复可见）
+const emitQueueProgress = (data) => {
+  try {
+    window.dispatchEvent(new CustomEvent("queue-progress", { detail: data }));
+  } catch (e) {
+    console.warn("广播队列事件失败", e);
+  }
+};
+
+// 首次进入：拉取未读队列消息并汇总弹窗（关闭页面后重新打开第一时间看到）
+const showQueueSummaryOnEntry = async () => {
+  try {
+    const res = await proxy.http.post("api/message/list", {
+      page: 1,
+      pageSize: 50,
+      unreadOnly: 1,
+    }, true);
+    const list = (res.data || []).filter((m) => m.messageType === "queue");
+    if (list.length === 0) return;
+    const done = list.filter((m) => m.title && m.title.includes("完成")).length;
+    const failed = list.filter((m) => m.title && m.title.includes("失败")).length;
+    const cancelled = list.filter((m) => m.title && m.title.includes("取消")).length;
+    const parts = [];
+    if (done) parts.push(`${done} 个完成`);
+    if (failed) parts.push(`${failed} 个失败`);
+    if (cancelled) parts.push(`${cancelled} 个取消`);
+    const latest = list[0];
+    ElNotification({
+      title: `您有 ${list.length} 条队列通知`,
+      message: (parts.length ? parts.join("，") + "。" : "") + (latest ? `最近：${latest.content}` : ""),
+      type: failed > 0 ? "warning" : "success",
+      duration: 10000,
+    });
+  } catch (e) {
+    console.warn("加载队列汇总失败", e);
+  }
+};
+
+defineExpose({ onSignalRMessage, showQueueSummaryOnEntry });
 
 onMounted(() => {
   loadMessages();
+  // 延迟一点，等页面就绪后再弹汇总（避免与登录页跳转竞争）
+  setTimeout(() => showQueueSummaryOnEntry(), 3000);
 });
 </script>
 

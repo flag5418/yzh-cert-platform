@@ -91,12 +91,12 @@ let viewgird = [
     component: () => import('@/views/cert/Standard/SysConfigManager/index.vue'),
     meta: { title: '系统参数配置' }
   },
-  // 转换队列监控
+  // 队列监控（yzh 队列中心通用页面）
   {
     path: '/CertPlatform/ConvertQueueMonitor',
     name: 'ConvertQueueMonitor',
-    component: () => import('@/views/cert/Standard/ConvertQueueMonitor/index.vue'),
-    meta: { title: '转换队列监控' }
+    component: () => import('@/yzh/views/QueueMonitor/index.vue'),
+    meta: { title: '队列监控' }
   },
   // Prompt 模板管理
   {

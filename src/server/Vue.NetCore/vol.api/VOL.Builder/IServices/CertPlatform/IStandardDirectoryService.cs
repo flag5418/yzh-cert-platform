@@ -186,6 +186,12 @@ namespace VOL.Builder.IServices.CertPlatform
         /// <returns>任务状态</returns>
         UploadStatusResponse GetUploadStatus(string taskId);
 
+        /// <summary>
+        /// 重试失败的文档转换（failed 或孤儿 pending 的 doc/xls 重新入队）
+        /// </summary>
+        /// <returns>操作结果（含入队数量）</returns>
+        Task<WebResponseContent> RetryFailedConversionsAsync();
+
         #endregion
     }
 }

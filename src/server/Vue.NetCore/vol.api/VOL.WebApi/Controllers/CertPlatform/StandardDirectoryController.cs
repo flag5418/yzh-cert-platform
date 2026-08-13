@@ -13,6 +13,7 @@ using VOL.Builder.Services.CertPlatform;
 using VOL.Entity.CertPlatform.Dir;
 using VOL.Entity.DomainModels;
 using Microsoft.Extensions.DependencyInjection;
+using YZH.Core.Queue;
 
 namespace VOL.WebApi.Controllers.CertPlatform
 {
@@ -24,13 +25,13 @@ namespace VOL.WebApi.Controllers.CertPlatform
         private readonly IStandardDirectoryService _service;
         private readonly ICodeGeneratorService _codeGenerator;
 
-    private readonly ConvertQueueManager _queueManager;
+    private readonly YzhQueueManager _queueManager;
 
     [ActivatorUtilitiesConstructor]
     public StandardDirectoryController(
         IStandardDirectoryService service,
         ICodeGeneratorService codeGenerator,
-        ConvertQueueManager queueManager)
+        YzhQueueManager queueManager)
     : base(service)
     {
         _service = service;

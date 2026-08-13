@@ -1133,6 +1133,8 @@ const submitUpload = async () => {
 
     const initRes = await http.post('/api/standard-directory/upload-init', {
       directoryCode,
+      // 机构编码来自组织树节点关系（cbCode），与登录人无关
+      orgCode: currentPhase.value?.cbCode || currentPhase.value?.orgCode || '',
       folders,
       files
     })

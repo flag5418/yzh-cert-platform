@@ -38,6 +38,12 @@ export { loadPageConfig, clearPageConfigCache, clearAllConfigCache, getCachedCon
 export { useYZHEditMode } from './composables/useYZHEditMode'
 export { useYZHIncrementSync } from './composables/useYZHIncrementSync'
 
+// ====== 队列中心（通用后台任务队列） ======
+export { useYzhQueue } from './composables/useYzhQueue'
+
+// ====== 队列监控页面（通用） ======
+export { default as YzhQueueMonitor } from './views/QueueMonitor/index.vue'
+
 // ====== 预设配置 ======
 export { mergeDefaultButtons, DEFAULT_BUTTONS } from './presets/defaultButtons'
 

@@ -39,11 +39,14 @@ namespace VOL.WebApi.Controllers.Hubs
         public override async Task OnConnectedAsync()
         {
             //Console.WriteLine($"建立连接{Context.ConnectionId}");
-            _connectionIds[Context.ConnectionId] = Context.GetHttpContext().Request.Query["userName"].ToString();
-            //添加到一个组下
-            //await Groups.AddToGroupAsync(Context.ConnectionId, "SignalR Users");
-            //发送上线消息
-            //await Clients.All.SendAsync("ReceiveHomePageMessage", 1, new { title = "系统消息", content = $"{Context.ConnectionId} 上线" });
+            var userName = Context.GetHttpContext().Request.Query["userName"].ToString();
+            _connectionIds[Context.ConnectionId] = userName;
+            // 加入用户组：ConvertNotifier.SendToUser 推送到 "user_{userName}" 组，
+            // 必须在连接时加入组，否则按用户推送的队列终态通知会丢失
+            if (!string.IsNullOrEmpty(userName))
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{userName}");
+            }
             await base.OnConnectedAsync();
         }
 

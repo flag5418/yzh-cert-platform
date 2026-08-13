@@ -5,13 +5,27 @@
       <!-- 左侧：文件目录树（certcore 通用件，全局复用） -->
       <div class="left-panel" :style="{ width: leftPanelWidth + 'px' }">
         <CertDirectoryTree
+          ref="treeRef"
           :selected-file="currentFile"
           mode="file"
           :show-convert-badge="true"
           :show-rule-status="true"
           filterable
           @select="onFileSelect"
-        />
+        >
+          <template #header-actions>
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              :loading="retrying"
+              title="将转换失败/未转换的 doc、xls 文件重新加入转换队列"
+              @click.stop="onRetryFailed"
+            >
+              <el-icon style="margin-right: 4px"><IconRefresh /></el-icon>重试失败转换
+            </el-button>
+          </template>
+        </CertDirectoryTree>
       </div>
 
       <!-- 左侧拖拽调整宽度 -->
@@ -87,22 +101,26 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { CertDirectoryTree } from '@/certcore'
 import { YzhEmptyState, YzhStatusBadge } from '@/yzh'
-import { IconFile, IconAnalyze, IconPrompt } from '@/yzh'
+import { IconFile, IconAnalyze, IconPrompt, IconRefresh } from '@/yzh'
+import { useYzhQueue } from '@/yzh/composables/useYzhQueue'
 import { aiAnalyzeDocument } from './api'
 import AIAnalysisTab from './components/AIAnalysisTab.vue'
 import DocPreview from './components/DocPreview.vue'
 import PromptVerifyTab from './components/PromptVerifyTab.vue'
 
 const router = useRouter()
+const treeRef = ref(null)
+const { retryFailedConversions } = useYzhQueue()
 
 // 状态
 const activeTab = ref('analysis')
 const leftPanelWidth = ref(280) // 左侧面板默认宽度
 const currentFile = ref(null)
 const saving = ref(false)
+const retrying = ref(false)
 
 // AI分析结果
 const analysisFields = ref([])
@@ -234,6 +252,41 @@ const saveRule = async () => {
 
 const cancel = () => {
   router.back()
+}
+
+/* 重试失败的文档转换：把转换失败/未转换的 doc、xls 重新入队，队列完成后树自动刷新 */
+const onRetryFailed = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '将把转换失败或未转换的 doc、xls 文件重新加入转换队列（文件会在转换期间暂时隐藏，完成后自动恢复）。确定继续吗？',
+      '重试失败转换',
+      { type: 'warning', confirmButtonText: '开始重试', cancelButtonText: '取消' }
+    )
+  } catch {
+    return
+  }
+
+  retrying.value = true
+  try {
+    const { ok, message, data } = await retryFailedConversions()
+    if (!ok) {
+      ElMessage.error(message || '重试失败')
+      return
+    }
+    const enqueued = data?.enqueued ?? 0
+    if (enqueued > 0) {
+      ElMessage.success(`${message}（${enqueued} 个文件）`)
+      // 文件已置为隐藏，立即刷新树
+      treeRef.value?.refresh?.()
+    } else {
+      ElMessage.info(message || '没有需要重试的文件')
+    }
+  } catch (err) {
+    console.error('[DocExtractionRule] 重试失败转换出错:', err)
+    ElMessage.error('重试失败：' + (err?.message ?? '未知错误'))
+  } finally {
+    retrying.value = false
+  }
 }
 
 // ====== 左侧面板拖拽调整宽度 ======

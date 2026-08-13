@@ -25,11 +25,19 @@ using VOL.Builder.Services.CertPlatform;
 using VOL.Entity.DomainModels;
 using VOL.Core.ManageUser;
 using Microsoft.AspNetCore.SignalR;
+using System.Text.Json;
+using YZH.Core.Queue;
 
 namespace VOL.Builder.Services.CertPlatform
 {
     public class StandardDirectoryService : IStandardDirectoryService
     {
+        /// <summary>队列 payload 序列化选项（camelCase，与 yzh 队列框架约定一致）</summary>
+        private static readonly JsonSerializerOptions _payloadJsonOptions = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+
         private readonly VOLContext _db;
         private readonly ICodeGeneratorService _codeGenerator;
         private readonly IConfiguration _configuration;
@@ -41,13 +49,15 @@ namespace VOL.Builder.Services.CertPlatform
         private readonly IMinIOHelper _minioHelper;
         private readonly IFolderFileManager _folderFileManager;
         private readonly IFileStorageService _fileStorageService;
+        private readonly YzhQueueManager _queueManager;
 
         public StandardDirectoryService(VOLContext db, ICodeGeneratorService codeGenerator,
                                         IConfiguration configuration, OfficeConvertService convertService,
                                         IHubContext<UploadProgressHub> hubContext,
                                         IMinIOHelper minioHelper,
                                         IFolderFileManager folderFileManager,
-                                        IFileStorageService fileStorageService)
+                                        IFileStorageService fileStorageService,
+                                        YzhQueueManager queueManager)
         {
             _db = db;
             _codeGenerator = codeGenerator;
@@ -57,6 +67,7 @@ namespace VOL.Builder.Services.CertPlatform
             _minioHelper = minioHelper;
             _folderFileManager = folderFileManager;
             _fileStorageService = fileStorageService;
+            _queueManager = queueManager;
 
             // 初始化 MinIO 客户端（保留用于兼容旧代码）
             _minioClient = new MinioClient()
@@ -371,6 +382,8 @@ namespace VOL.Builder.Services.CertPlatform
                             FolderCode = file.FolderCode,
                             StoragePath = file.StoragePath,
                             ConvertedStoragePath = file.ConvertedStoragePath,
+                            ConvertStatus = file.ConvertStatus,
+                            ConvertMessage = file.ConvertMessage,
                             FileSize = null,
                             MimeType = file.FileType,
                             RuleStatus = hasRule ? "configured" : "none",
@@ -455,6 +468,8 @@ namespace VOL.Builder.Services.CertPlatform
                     FolderCode = file.FolderCode,
                     StoragePath = file.StoragePath,
                     ConvertedStoragePath = file.ConvertedStoragePath,
+                    ConvertStatus = file.ConvertStatus,
+                    ConvertMessage = file.ConvertMessage,
                     FileSize = null,
                     MimeType = file.FileType,
                     RuleStatus = hasRule ? "configured" : "none",
@@ -513,6 +528,10 @@ namespace VOL.Builder.Services.CertPlatform
         {
             try
             {
+                var dirLockErr = CheckDirLockErrorAsync(folder.DirectoryCode).GetAwaiter().GetResult();
+                if (dirLockErr != null)
+                    return new WebResponseContent().Error(dirLockErr);
+
                 // 生成编码
                 folder.Code = Guid.NewGuid().ToString("N");
                 int maxSeq = GetMaxSequence(folder.DirectoryCode, folder.Depth);
@@ -571,6 +590,14 @@ namespace VOL.Builder.Services.CertPlatform
         {
             try
             {
+                var existingFolder = _db.Set<StandardDirectoryFolder>()
+                    .FirstOrDefault(x => x.FolderCode == folder.FolderCode && x.Enable == true);
+                if (existingFolder == null)
+                    return new WebResponseContent().Error("文件夹不存在或已被禁用");
+                var dirLockErr = CheckDirLockErrorAsync(existingFolder.DirectoryCode).GetAwaiter().GetResult();
+                if (dirLockErr != null)
+                    return new WebResponseContent().Error(dirLockErr);
+
                 var result = _folderFileManager.RenameFolderAsync(
                     folder.FolderCode, 
                     folder.FolderName, 
@@ -598,6 +625,14 @@ namespace VOL.Builder.Services.CertPlatform
         {
             try
             {
+                var existingFolder = _db.Set<StandardDirectoryFolder>()
+                    .FirstOrDefault(x => x.FolderCode == folderCode && x.Enable == true);
+                if (existingFolder == null)
+                    return new WebResponseContent().Error("文件夹不存在");
+                var dirLockErr = CheckDirLockErrorAsync(existingFolder.DirectoryCode).GetAwaiter().GetResult();
+                if (dirLockErr != null)
+                    return new WebResponseContent().Error(dirLockErr);
+
                 var (foldersDeleted, filesDeleted) = _folderFileManager.DeleteFolderAsync(folderCode).GetAwaiter().GetResult();
                 
                 return new WebResponseContent().OK(
@@ -662,6 +697,12 @@ namespace VOL.Builder.Services.CertPlatform
         {
             try
             {
+                var lockParent = _db.Set<StandardDirectoryFolder>()
+                    .FirstOrDefault(x => x.FolderCode == file.FolderCode && x.Enable == true);
+                var dirLockErr = CheckDirLockErrorAsync(lockParent?.DirectoryCode).GetAwaiter().GetResult();
+                if (dirLockErr != null)
+                    return new WebResponseContent().Error(dirLockErr);
+
                 // 生成编码（简化版）
                 file.Code = Guid.NewGuid().ToString("N");
                 file.FileCode = _codeGenerator.GenerateFileCode(
@@ -702,6 +743,10 @@ namespace VOL.Builder.Services.CertPlatform
         {
             try
             {
+                var fileLockErr = CheckFileLockErrorAsync(file.FileCode).GetAwaiter().GetResult();
+                if (fileLockErr != null)
+                    return new WebResponseContent().Error(fileLockErr);
+
                 var result = _fileStorageService.RenameFileAsync(file.FileCode, file.FileName).GetAwaiter().GetResult();
                 
                 if (!result)
@@ -726,6 +771,10 @@ namespace VOL.Builder.Services.CertPlatform
         {
             try
             {
+                var fileLockErr = CheckFileLockErrorAsync(fileCode).GetAwaiter().GetResult();
+                if (fileLockErr != null)
+                    return new WebResponseContent().Error(fileLockErr);
+
                 var result = _fileStorageService.DeleteFileAsync(fileCode).GetAwaiter().GetResult();
                 
                 if (!result)
@@ -974,12 +1023,17 @@ namespace VOL.Builder.Services.CertPlatform
                     return new WebResponseContent().Error("目录配置不存在");
                 }
 
-                // 获取当前用户机构编码
-                var orgCode = await GetCurrentOrgCodeAsync();
+                // 解析机构编码（机构与登录人无关，优先从目录节点关系解析）
+                var orgCode = await ResolveOrgCodeAsync(directoryCode);
                 if (string.IsNullOrEmpty(orgCode))
                 {
-                    return new WebResponseContent().Error("无法获取当前用户机构信息");
+                    return new WebResponseContent().Error("无法确定机构信息，请从组织树选择机构节点后操作");
                 }
+
+                // 队列互斥：该机构/标准/阶段下已有转换队列运行则拒绝
+                var runningQueue = await GetRunningQueueForDirectoryAsync(directoryCode);
+                if (runningQueue != null)
+                    return new WebResponseContent().Error($"该机构/标准/阶段下已有队列任务 {runningQueue.QueueCode}（文档转换）正在执行，请等待完成后再上传");
 
                 // 服务端文件类型白名单校验（relativePath 是目录路径，真实文件名在 file.FileName）
                 var typeErr = ValidateUploadFileType(file.FileName);
@@ -1103,20 +1157,51 @@ namespace VOL.Builder.Services.CertPlatform
                 _db.Set<StandardDirectoryFile>().Add(fileRecord);
                 await _db.SaveChangesAsync();
 
-                // 如果是旧版 Office 文件，创建转换任务
-                if (fileExt == "xls")
+                // 如果是旧版 Office 文件，创建转换队列（单任务）
+                if (fileExt == "xls" || fileExt == "doc")
                 {
-                    await _convertService.CreateConvertJobAsync(
-                        fileRecord.FileCode, 
-                        storagePath, 
-                        "xls2xlsx");
-                }
-                else if (fileExt == "doc")
-                {
-                    await _convertService.CreateConvertJobAsync(
-                        fileRecord.FileCode, 
-                        storagePath, 
-                        "doc2docx");
+                    var convertType = fileExt == "xls" ? "xls2xlsx" : "doc2docx";
+                    var targetPath = _convertService.GenerateTargetPathPublic(storagePath, convertType);
+                    var payload = new FileConvertPayload
+                    {
+                        FileCode = fileRecord.FileCode,
+                        FileName = fileName,
+                        SourcePath = storagePath,
+                        TargetPath = targetPath,
+                        ConvertType = convertType
+                    };
+                    var scopeKey = $"{orgCode}|{config.StandardCode}|{config.PhaseCode}";
+                    var req = new YzhQueueManager.CreateQueueRequest
+                    {
+                        QueueType = "file_convert",
+                        QueueName = $"文档转换-1个文件",
+                        ScopeKey = scopeKey,
+                        SourceType = "upload_file",
+                        SourceId = fileRecord.FileCode,
+                        UserId = UserContext.Current.UserId,
+                        UserName = UserContext.Current.UserName,
+                        OrgCode = orgCode,
+                        ResourceLocks = new List<YzhQueueManager.ResourceLockItem>
+                        {
+                            new YzhQueueManager.ResourceLockItem { ResourceTable = YzhQueueManager.RESOURCE_DIR, ResourceCode = directoryCode, ResourceName = directoryCode, TaskNo = null },
+                            new YzhQueueManager.ResourceLockItem { ResourceTable = YzhQueueManager.RESOURCE_FILE, ResourceCode = fileRecord.FileCode, ResourceName = fileName, TaskNo = 1 }
+                        },
+                        Tasks = new List<YzhQueueManager.TaskItem>
+                        {
+                            new YzhQueueManager.TaskItem { TaskType = "file_convert", Payload = JsonSerializer.Serialize(payload, _payloadJsonOptions), TaskId = null }
+                        }
+                    };
+                    var (qOk, qErr, qCode, qCount) = await _queueManager.CreateQueueAsync(req);
+                    if (!qOk)
+                    {
+                        Console.WriteLine($"[UploadFile] 创建转换队列失败: {qErr}");
+                    }
+                    else
+                    {
+                        // 文件置为无效隐藏，转换完成/失败后恢复
+                        fileRecord.IsValid = false;
+                        await _db.SaveChangesAsync();
+                    }
                 }
 
                 return new WebResponseContent().OK($"文件上传成功：{fileName}");
@@ -1131,7 +1216,7 @@ namespace VOL.Builder.Services.CertPlatform
         }
 
         /// <summary>
-        /// 获取当前登录用户的机构编码
+        /// 获取当前登录用户的机构编码（审核员绑定机构后使用；维护/管理端不依赖此值）
         /// </summary>
         private async Task<string> GetCurrentOrgCodeAsync()
         {
@@ -1154,6 +1239,88 @@ namespace VOL.Builder.Services.CertPlatform
             {
                 return null;
             }
+        }
+
+        /// <summary>
+        /// 解析机构编码（架构约定：机构与登录人无关）
+        /// <para>优先级：</para>
+        /// <para>1. 前端显式传入（组织树节点 cbCode，维护/管理端主路径）</para>
+        /// <para>2. 目录已有数据推导（存储路径首段，如 /CB001/... → CB001）</para>
+        /// <para>3. 登录用户机构（审核员注册绑定机构后使用）</para>
+        /// </summary>
+        private async Task<string> ResolveOrgCodeAsync(string directoryCode, string preferredOrgCode = null)
+        {
+            // 1. 显式传入（前端从组织树节点点击得到）
+            if (!string.IsNullOrEmpty(preferredOrgCode))
+                return preferredOrgCode.Trim();
+
+            // 2. 从目录已有文件推导（存储路径首段即为机构编码）
+            if (!string.IsNullOrEmpty(directoryCode))
+            {
+                var samplePath = _db.Set<StandardDirectoryFile>()
+                    .Where(f => f.DirectoryCode == directoryCode && f.DeleteTime == null && f.StoragePath != null)
+                    .Select(f => f.StoragePath)
+                    .FirstOrDefault();
+                var derived = DeriveOrgCodeFromPath(samplePath);
+                if (!string.IsNullOrEmpty(derived))
+                    return derived;
+            }
+
+            // 3. 登录用户机构（审核员绑定机构后使用）
+            return await GetCurrentOrgCodeAsync();
+        }
+
+        #endregion
+
+        #region 队列互斥与资源锁（队列中心 V3）
+
+        /// <summary>
+        /// 查询某目录（机构/标准/阶段）下运行中的队列
+        /// </summary>
+        private async Task<YzhQueue> GetRunningQueueForDirectoryAsync(string directoryCode, string preferredOrgCode = null)
+        {
+            var config = _db.Set<StandardDirectoryConfig>()
+                .FirstOrDefault(x => x.DirectoryCode == directoryCode && x.Enable == true);
+            if (config == null) return null;
+            var orgCode = await ResolveOrgCodeAsync(directoryCode, preferredOrgCode);
+            if (string.IsNullOrEmpty(orgCode)) return null;
+            return await _queueManager.FindRunningQueueByScopeKeyAsync($"{orgCode}|{config.StandardCode}|{config.PhaseCode}");
+        }
+
+        /// <summary>
+        /// 范围互斥检查：该机构/标准/阶段下已有转换队列运行则返回错误文案
+        /// </summary>
+        private async Task<string> GetQueueLockErrorAsync(string directoryCode, string preferredOrgCode = null)
+        {
+            var q = await GetRunningQueueForDirectoryAsync(directoryCode, preferredOrgCode);
+            if (q == null) return null;
+            return $"该机构/标准/阶段下已有队列任务 {q.QueueCode}（文档转换）正在执行，请等待完成后再操作";
+        }
+
+        /// <summary>
+        /// 目录资源锁检查（目录被队列锁定则整个目录的文件夹/文件禁止增删改）
+        /// </summary>
+        private async Task<string> CheckDirLockErrorAsync(string directoryCode)
+        {
+            if (string.IsNullOrEmpty(directoryCode)) return null;
+            var hit = await _queueManager.FindResourceLockAsync(YzhQueueManager.RESOURCE_DIR, new List<string> { directoryCode });
+            if (hit == null) return null;
+            return $"该目录正被队列 {hit.QueueCode}（文档转换）处理中，队列完成前禁止修改，请稍后操作";
+        }
+
+        /// <summary>
+        /// 文件资源锁检查（文件本身 + 所在目录）
+        /// </summary>
+        private async Task<string> CheckFileLockErrorAsync(string fileCode)
+        {
+            var file = _db.Set<StandardDirectoryFile>()
+                .FirstOrDefault(x => x.FileCode == fileCode && x.Enable == true);
+            if (file == null) return null;
+            var dirErr = await CheckDirLockErrorAsync(file.DirectoryCode);
+            if (dirErr != null) return dirErr;
+            var hit = await _queueManager.FindResourceLockAsync(YzhQueueManager.RESOURCE_FILE, new List<string> { fileCode });
+            if (hit == null) return null;
+            return $"文件「{hit.ResourceName ?? fileCode}」正被队列 {hit.QueueCode}（文档转换）处理中，请稍后操作";
         }
 
         #endregion
@@ -1289,6 +1456,11 @@ namespace VOL.Builder.Services.CertPlatform
                     Console.WriteLine($"[UploadInit] 自动创建目录配置: {manifest.DirectoryCode} (StandardCode={stdCodeRaw}, PhaseCode={phaseCode})");
                 }
 
+                // 1.1 队列互斥：该机构/标准/阶段下已有转换队列运行则拒绝上传
+                var queueLockErr = await GetQueueLockErrorAsync(manifest.DirectoryCode, manifest.OrgCode);
+                if (queueLockErr != null)
+                    return new WebResponseContent().Error(queueLockErr);
+
                 // 2. 生成任务ID
                 var taskId = Guid.NewGuid().ToString("N");
 
@@ -1388,11 +1560,11 @@ namespace VOL.Builder.Services.CertPlatform
                 // 5. 处理文件列表（基于完整路径判定 create/replace）
                 var enhancedFiles = new List<EnhancedFileItem>();
                 
-                // 获取当前用户机构编码（用于生成四级路径）
-                var orgCode = await GetCurrentOrgCodeAsync();
+                // 解析机构编码（用于生成四级路径；优先前端节点 cbCode，其次目录已有数据，最后登录用户）
+                var orgCode = await ResolveOrgCodeAsync(manifest.DirectoryCode, manifest.OrgCode);
                 if (string.IsNullOrEmpty(orgCode))
                 {
-                    return new WebResponseContent().Error("无法获取当前用户机构信息");
+                    return new WebResponseContent().Error("无法确定机构信息，请从组织树选择机构节点后上传");
                 }
 
                 for (int i = 0; i < manifest.Files.Count; i++)
@@ -1673,6 +1845,11 @@ namespace VOL.Builder.Services.CertPlatform
                 if (task == null)
                     return new WebResponseContent().Error("上传任务不存在");
 
+                // 1.1 队列互斥：该机构/标准/阶段下已有转换队列运行则拒绝确认
+                var scopeErr = await GetQueueLockErrorAsync(task.DirectoryCode);
+                if (scopeErr != null)
+                    return new WebResponseContent().Error(scopeErr);
+
                 // 2. 检查所有文件是否已上传（uploaded 状态表示文件已到 MinIO，等待确认）
                 var pendingFiles = _db.Set<StandardDirectoryFile>()
                     .Where(x => x.TaskId == taskId && x.UploadStatus == "pending")
@@ -1718,15 +1895,16 @@ namespace VOL.Builder.Services.CertPlatform
                     MarkModified(file, nameof(StandardDirectoryFile.IsValid), nameof(StandardDirectoryFile.UploadStatus), nameof(StandardDirectoryFile.ModifyDate));
                 }
 
-                // 5. 为 .doc/.xls 文件入转换队列（.doc→.docx, .xls→.xlsx）
+                // 5. 为 .doc/.xls 文件创建转换队列（.doc→.docx, .xls→.xlsx）
                 var userId = UserContext.Current.UserId;
                 var userName = UserContext.Current.UserName;
-                var orgCode = await GetCurrentOrgCodeAsync();
+                var orgCode = await ResolveOrgCodeAsync(task.DirectoryCode);
                 var convertCount = 0;
+                var queuedFiles = new List<StandardDirectoryFile>();
+                var specs = new List<FileConvertPayload>();
                 foreach (var file in filesToActivate)
                 {
                     if (string.IsNullOrEmpty(file.StoragePath)) continue;
-                    if (!string.IsNullOrEmpty(file.ConvertStatus) && file.ConvertStatus != "pending") continue;
 
                     var ext = Path.GetExtension(file.FileName).TrimStart('.').ToLower();
                     string convertType = null;
@@ -1734,28 +1912,87 @@ namespace VOL.Builder.Services.CertPlatform
                     else if (ext == "doc") convertType = "doc2docx";
                     else continue;
 
-                    // 创建转换任务（带批次信息）
-                    var existingJob = _db.Set<ConvertJob>()
-                        .FirstOrDefault(j => j.FileCode == file.FileCode && j.Status == "pending");
-                    if (existingJob == null)
+                    var targetPath = _convertService.GenerateTargetPathPublic(file.StoragePath, convertType);
+                    specs.Add(new FileConvertPayload
                     {
-                        var targetPath = _convertService.GenerateTargetPathPublic(file.StoragePath, convertType);
-                        _db.Set<ConvertJob>().Add(new ConvertJob
+                        FileCode = file.FileCode,
+                        FileName = file.FileName,
+                        SourcePath = file.StoragePath,
+                        TargetPath = targetPath,
+                        ConvertType = convertType
+                    });
+                    queuedFiles.Add(file);
+                }
+
+                if (specs.Count > 0)
+                {
+                    var config = _db.Set<StandardDirectoryConfig>()
+                        .FirstOrDefault(x => x.DirectoryCode == task.DirectoryCode && x.Enable == true);
+                    var scopeKey = $"{orgCode}|{config?.StandardCode}|{config?.PhaseCode}";
+                    var scopeInfo = JsonSerializer.Serialize(new
+                    {
+                        orgCode,
+                        standardCode = config?.StandardCode,
+                        phaseCode = config?.PhaseCode,
+                        directoryCode = task.DirectoryCode
+                    });
+
+                    var locks = new List<YzhQueueManager.ResourceLockItem>
+                    {
+                        // 队列级目录锁（整个目录在队列期间禁止增删改）
+                        new YzhQueueManager.ResourceLockItem
                         {
-                            FileCode = file.FileCode,
-                            SourcePath = file.StoragePath,
-                            TargetPath = targetPath,
-                            ConvertType = convertType,
-                            Status = "pending",
-                            CreateTime = DateTime.Now,
-                            TaskId = taskId,
-                            UserId = userId,
-                            UserName = userName,
-                            OrgCode = orgCode,
-                            Priority = 0
-                        });
-                        convertCount++;
+                            ResourceTable = YzhQueueManager.RESOURCE_DIR,
+                            ResourceCode = task.DirectoryCode,
+                            ResourceName = task.DirectoryCode,
+                            TaskNo = null
+                        }
+                    };
+                    locks.AddRange(specs.Select((s, i) => new YzhQueueManager.ResourceLockItem
+                    {
+                        ResourceTable = YzhQueueManager.RESOURCE_FILE,
+                        ResourceCode = s.FileCode,
+                        ResourceName = s.FileName,
+                        TaskNo = i + 1
+                    }));
+
+                    var req = new YzhQueueManager.CreateQueueRequest
+                    {
+                        QueueType = "file_convert",
+                        QueueName = $"文档转换-{specs.Count}个文件",
+                        ScopeKey = scopeKey,
+                        ScopeInfoJson = scopeInfo,
+                        SourceType = "upload_task",
+                        SourceId = taskId,
+                        UserId = userId,
+                        UserName = userName,
+                        OrgCode = orgCode,
+                        ResourceLocks = locks,
+                        Tasks = specs.Select(s => new YzhQueueManager.TaskItem
+                        {
+                            TaskType = "file_convert",
+                            Payload = JsonSerializer.Serialize(s, _payloadJsonOptions),
+                            TaskId = taskId
+                        }).ToList()
+                    };
+
+                    var (ok, queueError, queueCode, count) = await _queueManager.CreateQueueAsync(req);
+                    if (!ok)
+                    {
+                        // 队列创建失败（资源被其他队列锁定）：不落库，文件保持"已上传未确认"，用户可稍后重试确认
+                        return new WebResponseContent().Error(queueError);
                     }
+                    // 队列中的文件置为无效（文档提取规则页隐藏），转换完成/失败后由执行器恢复
+                    foreach (var f in queuedFiles)
+                    {
+                        f.IsValid = false;
+                        f.ConvertStatus = "pending";
+                        f.ConvertedStoragePath = null;
+                        f.ConvertMessage = null;
+                        MarkModified(f, nameof(StandardDirectoryFile.IsValid), nameof(StandardDirectoryFile.ConvertStatus),
+                            nameof(StandardDirectoryFile.ConvertedStoragePath), nameof(StandardDirectoryFile.ConvertMessage));
+                    }
+                    convertCount = count;
                 }
 
                 // 6. 更新任务状态
@@ -1807,6 +2044,9 @@ namespace VOL.Builder.Services.CertPlatform
                 {
                     if (file.IsValid == false)
                     {
+                        // 队列处理中的文件（转换未完成）不删除，防止把有效数据当脏数据清掉
+                        if (file.ConvertStatus == "pending" || file.ConvertStatus == "converting")
+                            continue;
                         // ===== create 模式：删除新记录 + MinIO 新文件 =====
                         if (!string.IsNullOrEmpty(file.StoragePath))
                         {
@@ -1825,6 +2065,9 @@ namespace VOL.Builder.Services.CertPlatform
                     }
                     else if (file.UploadStatus == "replacing" || file.UploadStatus == "uploaded")
                     {
+                        // 队列处理中的文件不恢复（由队列完成后统一处理）
+                        if (file.ConvertStatus == "pending" || file.ConvertStatus == "converting")
+                            continue;
                         // ===== replace 模式：恢复旧记录状态 =====
                         // 如果已上传了新文件到 MinIO，需要删除新文件
                         if (file.UploadStatus == "uploaded" && !string.IsNullOrEmpty(file.StoragePath))
@@ -1925,7 +2168,7 @@ namespace VOL.Builder.Services.CertPlatform
             // 删除 IsValid=0 的文件
             using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = "DELETE FROM cert_standard_directory_file WHERE DirectoryCode = @dc AND IsValid = 0";
+                cmd.CommandText = "DELETE FROM cert_standard_directory_file WHERE DirectoryCode = @dc AND IsValid = 0 AND (convert_status IS NULL OR convert_status NOT IN ('pending','converting'))";
                 var p = cmd.CreateParameter();
                 p.ParameterName = "@dc";
                 p.Value = directoryCode;
@@ -1992,6 +2235,191 @@ namespace VOL.Builder.Services.CertPlatform
             foreach (var name in propertyNames)
             {
                 _db.Entry(entity).Property(name).IsModified = true;
+            }
+        }
+
+        /// <summary>
+        /// 重试失败的文档转换
+        /// 扫描 convert_status=failed 以及无活跃资源锁的 pending 孤儿 doc/xls 文件，
+        /// 按目录分组重新创建转换队列（资源锁 + 防重复入队逻辑与上传确认一致）。
+        /// </summary>
+        public async Task<WebResponseContent> RetryFailedConversionsAsync()
+        {
+            try
+            {
+                var userId = UserContext.Current.UserId;
+                var userName = UserContext.Current.UserName;
+
+                // 1. 候选文件：doc/xls 且 failed 或 pending（pending 多为历史遗留孤儿，无活跃队列）
+                var candidates = _db.Set<StandardDirectoryFile>()
+                    .Where(f => f.DeleteTime == null
+                                && (f.FileType == "doc" || f.FileType == "xls")
+                                && (f.ConvertStatus == "failed" || f.ConvertStatus == "pending"))
+                    .ToList();
+
+                if (candidates.Count == 0)
+                    return new WebResponseContent().OK("没有需要重试的失败转换文件", new { enqueued = 0, queueCount = 0 });
+
+                // 2. 排除仍在队列中（有活跃资源锁）的文件；源文件在 MinIO 已不存在的无法转换，跳过并提示
+                var activeLocks = _db.Set<YzhQueueResourceLock>().AsNoTracking()
+                    .Where(r => r.Status == "locked" && r.ResourceTable == YzhQueueManager.RESOURCE_FILE)
+                    .Select(r => r.ResourceCode)
+                    .ToList();
+                var toRetry = new List<StandardDirectoryFile>();
+                var missingSources = new List<string>();
+                foreach (var f in candidates)
+                {
+                    if (activeLocks.Contains(f.FileCode)) continue;
+                    if (!await SourceExistsAsync(f.StoragePath))
+                    {
+                        missingSources.Add(f.FileName);
+                        continue;
+                    }
+                    toRetry.Add(f);
+                }
+                if (toRetry.Count == 0)
+                {
+                    var tip = missingSources.Count > 0
+                        ? $"没有可重试的文件（{missingSources.Count} 个文件源文件已不存在，无法转换）"
+                        : "失败文件均在队列处理中，无需重复重试";
+                    return new WebResponseContent().OK(tip, new { enqueued = 0, queueCount = 0, missingCount = missingSources.Count });
+                }
+
+                // 3. 按目录分组建队（每组一个队列，目录锁保证与上传/删除互斥）
+                var groups = toRetry.GroupBy(f => f.DirectoryCode).ToList();
+                var enqueued = 0;
+                var queueCodes = new List<string>();
+                var skipped = new List<string>();
+                var seq = 0;
+
+                foreach (var group in groups)
+                {
+                    var config = _db.Set<StandardDirectoryConfig>().AsNoTracking()
+                        .FirstOrDefault(c => c.DirectoryCode == group.Key && c.Enable == true);
+                    // 机构编码从存储路径推导：/CB001/标准/阶段/...
+                    var orgCode = DeriveOrgCodeFromPath(group.First().StoragePath);
+                    var scopeKey = $"{orgCode}|{config?.StandardCode}|{config?.PhaseCode}";
+
+                    var specs = new List<FileConvertPayload>();
+                    foreach (var file in group)
+                    {
+                        var ext = (file.FileType ?? "").ToLower();
+                        var convertType = ext == "doc" ? "doc2docx" : "xls2xlsx";
+                        specs.Add(new FileConvertPayload
+                        {
+                            FileCode = file.FileCode,
+                            FileName = file.FileName,
+                            SourcePath = file.StoragePath,
+                            TargetPath = _convertService.GenerateTargetPathPublic(file.StoragePath, convertType),
+                            ConvertType = convertType
+                        });
+                    }
+
+                    var locks = new List<YzhQueueManager.ResourceLockItem>
+                    {
+                        new YzhQueueManager.ResourceLockItem
+                        {
+                            ResourceTable = YzhQueueManager.RESOURCE_DIR,
+                            ResourceCode = group.Key,
+                            ResourceName = group.Key,
+                            TaskNo = null
+                        }
+                    };
+                    locks.AddRange(specs.Select((s, i) => new YzhQueueManager.ResourceLockItem
+                    {
+                        ResourceTable = YzhQueueManager.RESOURCE_FILE,
+                        ResourceCode = s.FileCode,
+                        ResourceName = s.FileName,
+                        TaskNo = i + 1
+                    }));
+
+                    var req = new YzhQueueManager.CreateQueueRequest
+                    {
+                        QueueType = "file_convert",
+                        QueueName = $"失败重试-{specs.Count}个文件",
+                        ScopeKey = scopeKey,
+                        SourceType = "retry_failed",
+                        // uk_source 唯一：每次调用每个目录的 SourceId 必须唯一
+                        SourceId = $"retry_{DateTime.Now:yyyyMMddHHmmss}{seq++}_{group.Key}",
+                        UserId = userId,
+                        UserName = userName,
+                        OrgCode = orgCode,
+                        ResourceLocks = locks,
+                        Tasks = specs.Select(s => new YzhQueueManager.TaskItem
+                        {
+                            TaskType = "file_convert",
+                            Payload = JsonSerializer.Serialize(s, _payloadJsonOptions),
+                            TaskId = group.Key
+                        }).ToList()
+                    };
+
+                    var (ok, queueError, queueCode, count) = await _queueManager.CreateQueueAsync(req);
+                    if (!ok)
+                    {
+                        // 该目录被其他运行中队列占用，跳过并记录
+                        skipped.Add($"{group.Key}（{queueError}）");
+                        continue;
+                    }
+
+                    // 文件置为隐藏 + pending，转换完成后由执行器恢复可见
+                    foreach (var f in group)
+                    {
+                        f.IsValid = false;
+                        f.ConvertStatus = "pending";
+                        f.ConvertedStoragePath = null;
+                        f.ConvertMessage = null;
+                        MarkModified(f, nameof(StandardDirectoryFile.IsValid), nameof(StandardDirectoryFile.ConvertStatus),
+                            nameof(StandardDirectoryFile.ConvertedStoragePath), nameof(StandardDirectoryFile.ConvertMessage));
+                    }
+                    await _db.SaveChangesAsync();
+                    enqueued += count;
+                    queueCodes.Add(queueCode);
+                }
+
+                var skipTip = new List<string>();
+                if (skipped.Count > 0) skipTip.Add($"{skipped.Count} 个目录被其他队列占用已跳过");
+                if (missingSources.Count > 0) skipTip.Add($"{missingSources.Count} 个文件源文件不存在已跳过");
+                var msg = enqueued > 0
+                    ? $"已重新入队 {enqueued} 个失败文件（{queueCodes.Count} 个队列），" + (skipTip.Count > 0 ? string.Join("，", skipTip) : "正在后台转换")
+                    : "没有可重试的文件" + (skipTip.Count > 0 ? $"（{string.Join("，", skipTip)}）" : "");
+                return new WebResponseContent().OK(msg, new { enqueued, queueCount = queueCodes.Count, skipped, missingCount = missingSources.Count });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[StandardDirectoryService] 重试失败转换出错: {ex.Message}");
+                return new WebResponseContent().Error($"重试失败转换出错：{ex.Message}");
+            }
+        }
+
+        /// <summary>从 MinIO 存储路径推导机构编码：/CB001/标准/阶段/... → CB001</summary>
+        private static string DeriveOrgCodeFromPath(string storagePath)
+        {
+            if (string.IsNullOrEmpty(storagePath)) return null;
+            var segments = storagePath.TrimStart('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+            return segments.Length > 0 ? segments[0] : null;
+        }
+
+        /// <summary>检查 MinIO 源文件是否存在（缺失的文件无法转换，重试时跳过）</summary>
+        private async Task<bool> SourceExistsAsync(string storagePath)
+        {
+            if (string.IsNullOrEmpty(storagePath)) return false;
+            try
+            {
+                var bucketName = _configuration["MinIO:BucketName"] ?? "cert-platform";
+                var statArgs = new StatObjectArgs()
+                    .WithBucket(bucketName)
+                    .WithObject(storagePath.TrimStart('/'));
+                await _minioClient.StatObjectAsync(statArgs);
+                return true;
+            }
+            catch (Minio.Exceptions.ObjectNotFoundException)
+            {
+                return false;
+            }
+            catch
+            {
+                // 其他异常（网络等）不阻塞重试，交由队列执行器判断
+                return true;
             }
         }
 

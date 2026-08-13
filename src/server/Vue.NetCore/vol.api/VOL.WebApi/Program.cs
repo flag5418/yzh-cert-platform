@@ -135,6 +135,13 @@ builder.Services.AddMvc(options =>
 
 // ====== Office 文档转换后台服务 ======
 builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.OfficeConvertService>();
+
+// ====== yzh 队列中心（YZH.Core.Queue 框架核心） ======
+builder.Services.Configure<YZH.Core.Queue.YzhQueueOptions>(builder.Configuration.GetSection(YZH.Core.Queue.YzhQueueOptions.SectionName));
+builder.Services.AddSingleton<YZH.Core.Queue.YzhQueueManager>();
+builder.Services.AddSingleton<YZH.Core.Queue.IYzhTaskExecutor, VOL.Builder.Services.CertPlatform.OfficeConvertTaskExecutor>();
+builder.Services.AddSingleton<YZH.Core.Queue.IYzhQueueNotifier, VOL.Builder.Services.CertPlatform.CertQueueNotifier>();
+builder.Services.AddHostedService<YZH.Core.Queue.YzhQueueHostedService>();
             
             // 新增Helper服务
             // 注册MinIO客户端
@@ -154,8 +161,6 @@ builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.OfficeConvertServic
             builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IFileStorageService, VOL.Builder.Services.CertPlatform.FileStorageService>();
             // 注册文件提取器（YZH.Core），供文档提取规则 analyze/content 链路使用
             builder.Services.AddScoped<YZH.Core.Extractor.IFileExtractor, YZH.Core.Extractor.FileExtractorService>();
-builder.Services.AddSingleton<VOL.Builder.Services.CertPlatform.ConvertQueueManager>();
-builder.Services.AddHostedService<VOL.Builder.Services.CertPlatform.ConvertHostedService>();
 
 var startup = new Startup(builder.Configuration);
 

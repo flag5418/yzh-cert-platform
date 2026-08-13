@@ -1,10 +1,10 @@
 /*
- * Office 文档转换服务
- * 管理转换任务队列和执行转换
+ * Office 文档转换服务（yzh 队列中心 file_convert 执行核心）
+ * 由 OfficeConvertTaskExecutor 调用，负责：幂等检查 → 下载 → 转换 → 上传 → 文件状态联动
+ * 任务状态机（pending/processing/completed/failed/cancelled/退避重试）由 YzhQueueManager 统一管理
  */
 using System;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -44,179 +44,99 @@ namespace VOL.Builder.Services.CertPlatform
                 .WithSSL(false)
                 .Build();
         }
-        
+
         /// <summary>
-        /// 创建转换任务
+        /// 执行文件转换（幂等）：成功返回 true；失败抛出异常（错误分类由执行器/队列管理器处理）
         /// </summary>
-        public async Task CreateConvertJobAsync(string fileCode, string sourcePath, string convertType)
-        {
-            // 检查是否已存在待处理的任务
-            var existingJob = await _db.Set<ConvertJob>()
-                .FirstOrDefaultAsync(j => j.FileCode == fileCode && j.Status == "pending");
-            
-            if (existingJob != null)
-            {
-                return; // 已存在待处理任务
-            }
-            
-            // 生成目标路径
-            var targetPath = GenerateTargetPath(sourcePath, convertType);
-            
-            var job = new ConvertJob
-            {
-                FileCode = fileCode,
-                SourcePath = sourcePath,
-                TargetPath = targetPath,
-                ConvertType = convertType,
-                Status = "pending",
-                CreateTime = DateTime.Now
-            };
-            
-            _db.Set<ConvertJob>().Add(job);
-            await _db.SaveChangesAsync();
-            
-            // 更新文件记录的转换状态
-            var fileRecord = await _db.Set<StandardDirectoryFile>()
-                .FirstOrDefaultAsync(f => f.FileCode == fileCode);
-            
-            if (fileRecord != null)
-            {
-                fileRecord.ConvertStatus = "pending";
-                await _db.SaveChangesAsync();
-            }
-        }
-        
-        /// <summary>
-        /// 获取下一个待处理的任务
-        /// </summary>
-        public async Task<ConvertJob> GetNextPendingJobAsync()
-        {
-            // 使用 AsTracking 确保实体被跟踪，以便后续更新
-            return await _db.Set<ConvertJob>()
-                .AsTracking()
-                .Where(j => j.Status == "pending" && j.RetryCount < j.MaxRetryCount)
-                .OrderBy(j => j.CreateTime)
-                .FirstOrDefaultAsync();
-        }
-        
-        /// <summary>
-        /// 执行转换任务
-        /// </summary>
-        public async Task ExecuteConvertAsync(ConvertJob job, CancellationToken cancellationToken = default)
+        public async Task<bool> ConvertAsync(FileConvertPayload payload, CancellationToken cancellationToken = default)
         {
             var bucketName = _configuration["MinIO:BucketName"] ?? "cert-platform";
-            
-            try
-            {
-                // 传入的 job 由 ConvertQueueManager 领取（另一 DbContext 实例 + VOLContext 默认 NoTracking），
-                // 必须 Attach 到当前上下文，否则 job.Status 的更新在 SaveChanges 时不会落库，
-                // 任务会一直停留在 pending 被反复领取。
-                if (_db.Entry(job).State == EntityState.Detached)
-                {
-                    _db.Set<ConvertJob>().Attach(job);
-                }
 
-                // 更新状态为处理中
-                job.Status = "processing";
-                job.ProcessTime = DateTime.Now;
-                await _db.SaveChangesAsync();
-                
-                // 更新文件记录状态
-                await UpdateFileConvertStatus(job.FileCode, "converting", null, null);
-                
-                // 从 MinIO 下载源文件
-                var sourceObjectName = job.SourcePath.TrimStart('/');
-                var sourceStream = new MemoryStream();
-                
-                await _minioClient.GetObjectAsync(
-                    new GetObjectArgs()
-                        .WithBucket(bucketName)
-                        .WithObject(sourceObjectName)
-                        .WithCallbackStream(async (stream, ct) =>
-                        {
-                            await stream.CopyToAsync(sourceStream, ct);
-                        }),
-                    cancellationToken);
-                
-                sourceStream.Position = 0;
-                
-                // 执行转换
-                var targetStream = new MemoryStream();
-                ConvertResult result = null;
-                string contentType = "application/octet-stream";
-                
-                if (job.ConvertType == "xls2xlsx")
-                {
-                    result = await _xlsConverter.ConvertAsync(sourceStream, targetStream);
-                    contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-                }
-                else if (job.ConvertType == "doc2docx")
-                {
-                    // 检查 LibreOffice 是否可用
-                    if (!_docConverter.IsAvailable())
-                    {
-                        throw new InvalidOperationException("LibreOffice 不可用，无法转换 DOC 文件");
-                    }
-                    
-                    result = await _docConverter.ConvertAsync(sourceStream, targetStream);
-                    contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-                }
-                else
-                {
-                    throw new NotSupportedException($"不支持的转换类型: {job.ConvertType}");
-                }
-                
-                if (result == null || !result.Success)
-                {
-                    throw new Exception(result?.Message ?? "转换失败");
-                }
-                
-                // 上传转换后的文件到 MinIO
-                targetStream.Position = 0;
-                var targetObjectName = job.TargetPath.TrimStart('/');
-                
-                await _minioClient.PutObjectAsync(
-                    new PutObjectArgs()
-                        .WithBucket(bucketName)
-                        .WithObject(targetObjectName)
-                        .WithStreamData(targetStream)
-                        .WithObjectSize(targetStream.Length)
-                        .WithContentType(contentType),
-                    cancellationToken);
-                
-                // 更新任务状态为完成
-                job.Status = "completed";
-                job.CompleteTime = DateTime.Now;
-                await _db.SaveChangesAsync();
-                Console.WriteLine($"[OfficeConvertService] 任务状态已更新为 completed");
-                
-                // 更新文件记录
-                await UpdateFileConvertStatus(job.FileCode, "completed", job.TargetPath, null);
-                
-                Console.WriteLine($"[OfficeConvertService] 转换成功: {job.FileCode} -> {job.TargetPath}");
-            }
-            catch (Exception ex)
+            // 幂等检查：文件已转换且目标未变 → 直接成功（至少一次投递语义，Worker 崩溃重跑不重复转换）
+            var convertedRecord = await _db.Set<StandardDirectoryFile>().AsNoTracking()
+                .FirstOrDefaultAsync(f => f.FileCode == payload.FileCode);
+            if (convertedRecord != null && convertedRecord.ConvertStatus == "converted"
+                && convertedRecord.ConvertedStoragePath == payload.TargetPath)
             {
-                // 更新任务状态为失败
-                job.Status = "failed";
-                job.ErrorMessage = ex.Message;
-                job.RetryCount++;
-                await _db.SaveChangesAsync();
-                
-                // 更新文件记录
-                await UpdateFileConvertStatus(job.FileCode, "failed", null, ex.Message);
-                
-                Console.WriteLine($"[OfficeConvertService] 转换失败: {job.FileCode}, 错误: {ex.Message}");
-                throw;
+                Console.WriteLine($"[OfficeConvertService] 幂等跳过（已转换）: {payload.FileCode}");
+                return true;
             }
+
+            // 更新文件记录状态为转换中
+            await UpdateFileConvertStatus(payload.FileCode, "converting", null, null);
+            
+            // 从 MinIO 下载源文件
+            var sourceObjectName = payload.SourcePath.TrimStart('/');
+            var sourceStream = new MemoryStream();
+            
+            await _minioClient.GetObjectAsync(
+                new GetObjectArgs()
+                    .WithBucket(bucketName)
+                    .WithObject(sourceObjectName)
+                    .WithCallbackStream(async (stream, ct) =>
+                    {
+                        await stream.CopyToAsync(sourceStream, ct);
+                    }),
+                cancellationToken);
+            
+            sourceStream.Position = 0;
+            
+            // 执行转换
+            var targetStream = new MemoryStream();
+            ConvertResult result = null;
+            string contentType = "application/octet-stream";
+            
+            if (payload.ConvertType == "xls2xlsx")
+            {
+                result = await _xlsConverter.ConvertAsync(sourceStream, targetStream);
+                contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            }
+            else if (payload.ConvertType == "doc2docx")
+            {
+                // 检查 LibreOffice 是否可用
+                if (!_docConverter.IsAvailable())
+                {
+                    throw new InvalidOperationException("LibreOffice 不可用，无法转换 DOC 文件");
+                }
+                
+                result = await _docConverter.ConvertAsync(sourceStream, targetStream);
+                contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            }
+            else
+            {
+                throw new NotSupportedException($"不支持的转换类型: {payload.ConvertType}");
+            }
+            
+            if (result == null || !result.Success)
+            {
+                throw new Exception(result?.Message ?? "转换失败");
+            }
+            
+            // 上传转换后的文件到 MinIO
+            targetStream.Position = 0;
+            var targetObjectName = payload.TargetPath.TrimStart('/');
+            
+            await _minioClient.PutObjectAsync(
+                new PutObjectArgs()
+                    .WithBucket(bucketName)
+                    .WithObject(targetObjectName)
+                    .WithStreamData(targetStream)
+                    .WithObjectSize(targetStream.Length)
+                    .WithContentType(contentType),
+                cancellationToken);
+            
+            // 更新文件记录：转换完成 + 恢复可见
+            await UpdateFileConvertStatus(payload.FileCode, "completed", payload.TargetPath, null);
+            
+            Console.WriteLine($"[OfficeConvertService] 转换成功: {payload.FileCode} -> {payload.TargetPath}");
+            return true;
         }
-        
+
         /// <summary>
-        /// 更新文件转换状态
+        /// 更新文件转换状态（仅 completed 恢复 IsValid；失败/重试状态由 OfficeConvertTaskExecutor 统一联动）
         /// </summary>
         private async Task UpdateFileConvertStatus(string fileCode, string status, string convertedPath, string errorMessage)
         {
-            // 使用 AsTracking 确保实体被跟踪
             var fileRecord = await _db.Set<StandardDirectoryFile>()
                 .AsTracking()
                 .FirstOrDefaultAsync(f => f.FileCode == fileCode);
@@ -227,9 +147,11 @@ namespace VOL.Builder.Services.CertPlatform
                 fileRecord.ConvertedStoragePath = convertedPath;
                 fileRecord.ConvertMessage = errorMessage;
                 
-                if (status == "completed" || status == "failed")
+                if (status == "completed")
                 {
                     fileRecord.ConvertDate = DateTime.Now;
+                    // 转换成功：恢复文件有效，文档提取规则页可见
+                    fileRecord.IsValid = true;
                 }
                 
                 await _db.SaveChangesAsync();
@@ -240,7 +162,7 @@ namespace VOL.Builder.Services.CertPlatform
                 Console.WriteLine($"[OfficeConvertService] 警告: 找不到文件记录: {fileCode}");
             }
         }
-        
+
         /// <summary>
         /// 生成目标文件路径（公开方法）
         /// </summary>

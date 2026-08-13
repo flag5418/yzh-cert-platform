@@ -4,7 +4,7 @@ using VOL.Core.Extensions.AutofacManager;
 namespace VOL.Builder.IServices.CertPlatform
 {
     /// <summary>
-    /// 转换进度通知接口（解耦 ConvertQueueManager 与 SignalR Hub）
+    /// 转换进度通知接口（解耦 yzh 队列引擎与 SignalR Hub）
     /// 实现在 VOL.WebApi，通过 DI 注入
     /// </summary>
     public interface IConvertNotifier : IDependency

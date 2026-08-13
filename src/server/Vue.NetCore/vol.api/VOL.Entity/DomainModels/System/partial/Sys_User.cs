@@ -23,7 +23,7 @@ namespace VOL.Entity.DomainModels
         /// </summary>
         [Display(Name = "机构编码")]
         [MaxLength(50)]
-        [Column("org_code", TypeName = "varchar(50)")]
+        [Column("OrgCode", TypeName = "varchar(50)")]
         public string OrgCode { get; set; }
     }
 }

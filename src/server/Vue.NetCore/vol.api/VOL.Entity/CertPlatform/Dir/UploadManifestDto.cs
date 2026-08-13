@@ -14,6 +14,12 @@ namespace VOL.Entity.CertPlatform.Dir
         public string DirectoryCode { get; set; }
 
         /// <summary>
+        /// 机构编码（前端从组织树节点点击得到 cbCode；
+        /// 架构约定：维护/管理端机构与登录人无关，来自节点关系；审核员登录后由后端从登录信息解析）
+        /// </summary>
+        public string OrgCode { get; set; }
+
+        /// <summary>
         /// 所属标准编码（如 ISO9001）
         /// </summary>
         public string StandardCode { get; set; }
@@ -429,6 +435,16 @@ namespace VOL.Entity.CertPlatform.Dir
         /// 转换后文件的 MinIO 存储路径（.doc→.docx, .xls→.xlsx）
         /// </summary>
         public string ConvertedStoragePath { get; set; }
+
+        /// <summary>
+        /// 转换状态：null/pending/converting/completed/failed
+        /// </summary>
+        public string ConvertStatus { get; set; }
+
+        /// <summary>
+        /// 转换失败原因
+        /// </summary>
+        public string ConvertMessage { get; set; }
 
         /// <summary>
         /// 文件大小（字节）

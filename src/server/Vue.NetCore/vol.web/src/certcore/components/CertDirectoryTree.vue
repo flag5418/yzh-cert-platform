@@ -69,7 +69,7 @@
  *
  * 供 DocExtractionRule / 规则定义 / 报告内容定义等页面复用
  */
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { YzhEmptyState, IconFolderOpen } from '@/yzh'
 import CertConvertBadge from './CertConvertBadge.vue'
@@ -161,6 +161,48 @@ const handleStageClick = async (data, node) => {
 /* ===== 初始化 ===== */
 watch(() => props.filterable, () => {}, { immediate: true })
 loadTree()
+
+/* ===== 队列事件联动：队列终态后自动刷新已加载的阶段文件 =====
+ * 队列执行期间文件 IsValid=0（提取规则页隐藏），完成后恢复可见。
+ * 若当前已展开某阶段，列表是旧数据，监听 queue-progress 事件自动重拉。
+ */
+const refreshLoadedStages = async () => {
+  const stages = []
+  const walk = (nodes) => {
+    for (const n of nodes || []) {
+      if (n.type === 'stage' && n._loaded) stages.push(n)
+      if (n.children && n.children.length) walk(n.children)
+    }
+  }
+  walk(fileTreeData.value)
+  for (const stage of stages) {
+    try {
+      await loadStageFiles(stage)
+    } catch (e) {
+      // 刷新失败不打断其它阶段
+    }
+  }
+}
+
+const onQueueProgress = (e) => {
+  const data = e?.detail
+  if (!data) return
+  // 仅终态事件触发刷新（完成/失败/取消），进行中进度不刷
+  const status = data.data?.status || ''
+  if (['completed', 'failed', 'cancelled'].includes(status)) {
+    refreshLoadedStages()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('queue-progress', onQueueProgress)
+})
+onUnmounted(() => {
+  window.removeEventListener('queue-progress', onQueueProgress)
+})
+
+/* 供父页面主动刷新（如重试失败转换后立即隐藏/显示文件） */
+defineExpose({ refresh: refreshLoadedStages })
 </script>
 
 <style scoped>
