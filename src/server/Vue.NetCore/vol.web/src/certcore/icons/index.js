@@ -3,26 +3,25 @@
  * 基础图标经 YzhIcon，本文件只做业务语义扩展
  * 换图标只改本文件
  */
-import { OfficeBuilding, Calendar, Picture, VideoCamera } from '@element-plus/icons-vue'
-import { IconFolder, IconFile, IconFileChecked, IconCircleSuccess, IconWarning, IconPending } from '@/yzh'
+import { OfficeBuilding, Calendar, Picture, VideoCamera, Folder, Document, DocumentChecked, Check, Warning, Clock } from '@element-plus/icons-vue'
 
 /** 目录树层级图标 */
 export const CertTreeIcon = {
   organization: OfficeBuilding,
-  standard: IconFile,
+  standard: Document,
   stage: Calendar,
-  folder: IconFolder,
-  file: IconFile,
-  fileConfigured: IconFileChecked
+  folder: Folder,
+  file: Document,
+  fileConfigured: DocumentChecked
 }
 
 /** 文件扩展名 → 图标（业务扩展用） */
 export const CertFileIcon = {
-  pdf: IconFile,
-  doc: IconFile,
-  docx: IconFile,
-  xls: IconFile,
-  xlsx: IconFile,
+  pdf: Document,
+  doc: Document,
+  docx: Document,
+  xls: Document,
+  xlsx: Document,
   png: Picture,
   jpg: Picture,
   jpeg: Picture,
@@ -30,7 +29,7 @@ export const CertFileIcon = {
   bmp: Picture,
   webp: Picture,
   mp4: VideoCamera,
-  default: IconFile
+  default: Document
 }
 
 /** 文件扩展名 → 类型色（CSS 变量） */
@@ -51,15 +50,15 @@ export const CERT_FILE_TYPE_COLOR = {
 
 /** 转换状态图标（供 CertConvertBadge 使用） */
 export const CERT_CONVERT_ICON = {
-  pending: IconPending,
+  pending: Clock,
   converting: null, // 用 Loading（旋转），由组件内处理
-  converted: IconCircleSuccess,
-  failed: IconWarning
+  converted: Check,
+  failed: Warning
 }
 
 /** 规则状态图标 */
 export const CERT_RULE_ICON = {
   none: null,
-  configured: IconFileChecked,
-  failed: IconWarning
+  configured: DocumentChecked,
+  failed: Warning
 }
