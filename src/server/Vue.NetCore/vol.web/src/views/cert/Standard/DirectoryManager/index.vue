@@ -709,6 +709,7 @@ const selectPhase = async (phase) => {
   activeQueue.value = null
   await loadCurrentContent()
   await refreshActiveQueue()
+  startPolling()
 }
 
 // ========== 队列轮询（当前目录） ==========
@@ -727,16 +728,8 @@ const refreshActiveQueue = async () => {
 const startPolling = () => {
   if (pollTimer) return
   pollTimer = setInterval(async () => {
-    // 有运行中队列时轮询，无则静默
     try {
-      const q = activeQueue.value
-      if (!q?.exists) return
       await refreshActiveQueue()
-      // 队列完成后停止轮询
-      if (q.status === 'completed' || q.status === 'failed' || q.status === 'cancelled') {
-        clearInterval(pollTimer)
-        pollTimer = null
-      }
     } catch {}
   }, 5000)
 }

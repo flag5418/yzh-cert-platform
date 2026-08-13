@@ -161,9 +161,12 @@ const emit = defineEmits(['cancel', 'clear-done'])
 // 优先级：优先展示后端 yzh_queue 状态
 // 当有后端队列时横幅本身已含队列状态条（面包屑下方），此处仅展示本地 SignalR 任务（上传进度）
 const hasActiveQueue = computed(() => props.queue?.exists === true)
-// 横幅可见：有正在进行的本地上传任务，且没有后端队列（后端队列已在面包屑下方展示）
+// 横幅可见条件：
+// 1. 有后端队列运行中 → 始终显示（展示队列进度、队列监控链接）
+// 2. 无后端队列但有本地上传任务 → 显示本地上传进度
+// 3. 两者都没有 → 隐藏
 const visible = computed(() => {
-  if (hasActiveQueue.value) return false
+  if (hasActiveQueue.value) return true
   return runningTasks.value.length > 0
 })
 
