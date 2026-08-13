@@ -959,12 +959,18 @@ namespace YZH.Core.Queue
                     {
                         try
                         {
-                            var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(j.Payload);
-                            fileCode = dict.TryGetValue("fileCode", out var fc) ? fc : null;
-                            fileName = dict.TryGetValue("fileName", out var fn) ? fn : null;
-                            convertType = dict.TryGetValue("convertType", out var ct) ? ct : null;
+                            var doc = JsonDocument.Parse(j.Payload);
+                            if (doc.RootElement.TryGetProperty("fileCode", out var fc))
+                                fileCode = fc.GetString();
+                            if (doc.RootElement.TryGetProperty("fileName", out var fn))
+                                fileName = fn.GetString();
+                            if (doc.RootElement.TryGetProperty("convertType", out var ct))
+                                convertType = ct.GetString();
                         }
-                        catch { /* 解析失败留空，不影响主流程 */ }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Payload parse failed for task {Id}: {Payload}", j.Id, j.Payload?.Substring(0, Math.Min(j.Payload.Length, 100)));
+                        }
                     }
                     return new
                     {
