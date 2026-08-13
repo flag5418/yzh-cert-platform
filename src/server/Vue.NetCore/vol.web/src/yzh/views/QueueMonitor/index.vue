@@ -94,9 +94,9 @@
       <el-table :data="rows" v-loading="loading" size="default" stripe>
         <el-table-column prop="queueCode" label="队列编码" width="170" />
         <el-table-column prop="queueName" label="队列名称" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="scopeKey" label="范围" min-width="180" show-overflow-tooltip>
+        <el-table-column prop="scopeKey" label="范围" min-width="200">
           <template #default="{ row }">
-            <span class="scope-text">{{ row.scopeKey || '—' }}</span>
+            <span class="scope-text">{{ formatScopeKey(row.scopeKey) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="creator" label="创建人" width="110" />
@@ -164,7 +164,9 @@
         <el-descriptions :column="2" border size="small" class="detail-desc">
           <el-descriptions-item label="队列编码">{{ detail.queue.queueCode }}</el-descriptions-item>
           <el-descriptions-item label="队列名称">{{ detail.queue.queueName }}</el-descriptions-item>
-          <el-descriptions-item label="范围">{{ detail.queue.scopeKey || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="范围">
+            {{ formatScopeKey(detail.queue.scopeKey) || '—' }}
+          </el-descriptions-item>
           <el-descriptions-item label="创建人">{{ detail.queue.creator || '—' }}</el-descriptions-item>
           <el-descriptions-item label="状态">
             <el-tag :type="statusTagType(detail.queue.status)" size="small">{{ statusText(detail.queue.status) }}</el-tag>
@@ -178,7 +180,7 @@
           <h4>子任务明细（{{ detail.tasks.length }}）</h4>
           <el-table :data="detail.tasks" border size="small" max-height="300">
             <el-table-column prop="taskNo" label="#" width="50" align="center" />
-            <el-table-column prop="fileCode" label="文件" min-width="260" show-overflow-tooltip />
+            <el-table-column prop="fileName" label="文件" min-width="220" show-overflow-tooltip />
             <el-table-column prop="convertType" label="类型" width="90">
               <template #default="{ row }">{{ convertTypeText(row.convertType) }}</template>
             </el-table-column>
@@ -188,9 +190,9 @@
               </template>
             </el-table-column>
             <el-table-column prop="retryCount" label="重试" width="60" align="center" />
-            <el-table-column prop="errorMessage" label="错误信息" min-width="180" show-overflow-tooltip>
+            <el-table-column label="错误信息" min-width="200">
               <template #default="{ row }">
-                <span v-if="row.errorMessage" class="error-text">{{ row.errorMessage }}</span>
+                <span v-if="row.errorMessage" class="error-text" :title="row.errorMessage">{{ row.errorMessage }}</span>
                 <span v-else>—</span>
               </template>
             </el-table-column>
@@ -218,13 +220,13 @@
             </el-table-column>
             <el-table-column label="状态" width="80" align="center">
               <template #default="{ row }">
-                <el-tag :type="row.status === 'locked' ? 'warning' : 'success'" size="small">
+                <el-tag :type="row.status === 'locked' ? 'warning' : 'info'" size="small">
                   {{ row.status === 'locked' ? '锁定中' : '已释放' }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="createTime" label="加锁时间" width="160" />
-            <el-table-column prop="releaseTime" label="释放时间" width="160">
+            <el-table-column prop="createTime" label="加锁时间" width="150" />
+            <el-table-column prop="releaseTime" label="释放时间" width="150">
               <template #default="{ row }">{{ row.releaseTime || '—' }}</template>
             </el-table-column>
           </el-table>
@@ -406,6 +408,13 @@ const progressStatus = (row) => {
 const convertTypeText = (t) => ({
   doc2docx: 'doc→docx', xls2xlsx: 'xls→xlsx'
 }[t] || t || '—')
+
+const formatScopeKey = (scopeKey) => {
+  if (!scopeKey) return '—'
+  const parts = scopeKey.split('|')
+  if (parts.length < 3) return scopeKey
+  return [parts[0], parts[1], parts[2]].join(' / ')
+}
 
 const formatDateTime = (d) => {
   if (!d) return null

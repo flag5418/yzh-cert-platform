@@ -952,18 +952,26 @@ namespace YZH.Core.Queue
                     endTime = queue.EndTime?.ToString("yyyy-MM-dd HH:mm:ss"),
                     createDate = queue.CreateDate?.ToString("yyyy-MM-dd HH:mm:ss")
                 },
-                tasks = tasks.Select((j, i) => new
+                tasks = tasks.Select((j, i) =>
                 {
-                    id = j.Id,
-                    taskNo = i + 1,
-                    taskType = j.TaskType,
-                    payload = TryParsePayload(j.Payload),
-                    status = j.Status,
-                    retryCount = j.RetryCount,
-                    errorType = j.ErrorType,
-                    errorMessage = j.ErrorMessage,
-                    processTime = j.ProcessTime?.ToString("yyyy-MM-dd HH:mm:ss"),
-                    completeTime = j.CompleteTime?.ToString("yyyy-MM-dd HH:mm:ss")
+                    var fileName = j.Payload?.IndexOf("\"fileName\"") >= 0 ? ExtractJsonValue(j.Payload, "fileName") : null;
+                    var fileCode = j.Payload?.IndexOf("\"fileCode\"") >= 0 ? ExtractJsonValue(j.Payload, "fileCode") : null;
+                    var convertType = j.Payload?.IndexOf("\"convertType\"") >= 0 ? ExtractJsonValue(j.Payload, "convertType") : null;
+                    return new
+                    {
+                        id = j.Id,
+                        taskNo = i + 1,
+                        taskType = j.TaskType,
+                        fileCode,
+                        fileName,
+                        convertType,
+                        status = j.Status,
+                        retryCount = j.RetryCount,
+                        errorType = j.ErrorType,
+                        errorMessage = j.ErrorMessage,
+                        processTime = j.ProcessTime?.ToString("yyyy-MM-dd HH:mm:ss"),
+                        completeTime = j.CompleteTime?.ToString("yyyy-MM-dd HH:mm:ss")
+                    };
                 }).ToList(),
                 locks = locks.Select(r => new
                 {
@@ -984,6 +992,21 @@ namespace YZH.Core.Queue
             if (string.IsNullOrEmpty(payload)) return null;
             try { return JsonSerializer.Deserialize<JsonElement>(payload); }
             catch { return payload; }
+        }
+
+        /// <summary>从 JSON payload 字符串中提取指定字段值（避免反射开销）</summary>
+        private static string ExtractJsonValue(string json, string key)
+        {
+            var k = $"\"{key}\"";
+            var idx = json.IndexOf(k);
+            if (idx < 0) return null;
+            var colon = json.IndexOf(':', idx + k.Length);
+            if (colon < 0) return null;
+            var start = json.IndexOf('"', colon + 1);
+            if (start < 0) return null;
+            var end = json.IndexOf('"', start + 1);
+            if (end < 0) return null;
+            return json.Substring(start + 1, end - start - 1);
         }
 
         #endregion
