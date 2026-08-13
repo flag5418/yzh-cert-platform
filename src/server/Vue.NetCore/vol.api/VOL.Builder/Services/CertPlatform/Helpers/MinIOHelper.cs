@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Minio;
@@ -113,6 +115,55 @@ namespace VOL.Builder.Services.CertPlatform
 
             await DeleteAsync(oldPath);
             Console.WriteLine($"[MinIOHelper.Rename] {oldPath} → {newPath}");
+        }
+
+        /// <summary>列出指定前缀下的所有对象（递归）</summary>
+        public async Task<List<string>> ListObjectsAsync(string prefix)
+        {
+            var cleanPrefix = (prefix ?? "").TrimStart('/');
+            var listArgs = new ListObjectsArgs()
+                .WithBucket(_bucketName)
+                .WithPrefix(cleanPrefix)
+                .WithRecursive(true);
+
+            var keys = new List<string>();
+            await foreach (var item in _client.ListObjectsEnumAsync(listArgs))
+            {
+                if (!string.IsNullOrEmpty(item?.Key))
+                    keys.Add(item.Key);
+            }
+            return keys;
+        }
+
+        /// <summary>递归删除指定前缀下的所有对象</summary>
+        public async Task DeletePrefixAsync(string prefix)
+        {
+            var keys = await ListObjectsAsync(prefix);
+            if (keys.Count == 0)
+                return;
+
+            try
+            {
+                // 批量删除（一次最多 1000 个，分批处理）
+                const int batchSize = 1000;
+                for (int i = 0; i < keys.Count; i += batchSize)
+                {
+                    var batch = keys.Skip(i).Take(batchSize).ToList();
+                    var removeArgs = new RemoveObjectsArgs()
+                        .WithBucket(_bucketName)
+                        .WithObjects(batch);
+                    var errors = await _client.RemoveObjectsAsync(removeArgs);
+                    foreach (var err in errors)
+                    {
+                        Console.WriteLine($"[MinIOHelper.DeletePrefix] 删除失败: {err.Key} - {err.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[MinIOHelper.DeletePrefix] 批量删除异常: {ex.Message}");
+                throw;
+            }
         }
 
         /// <summary>检查对象是否存在</summary>

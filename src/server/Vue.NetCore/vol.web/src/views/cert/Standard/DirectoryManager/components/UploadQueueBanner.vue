@@ -3,10 +3,20 @@
     <div v-if="visible" class="upload-banner">
       <div class="banner-header">
         <div class="banner-title">
-          <el-icon :class="{ 'is-spinning': isAnyRunning }"><Upload /></el-icon>
-          <span>上传队列进行中 ({{ activeCount }} 个任务)</span>
+          <el-icon :class="{ 'is-spinning': isAnyRunning }"><IconUpload /></el-icon>
+          <span v-if="runningTasks.length > 0">上传队列进行中 ({{ runningTasks.length }} 个任务)</span>
+          <span v-else>上传队列已完成 ({{ finishedTasks.length }} 个任务)</span>
         </div>
         <div class="banner-actions">
+          <el-button
+            v-if="finishedTasks.length > 0"
+            type="info"
+            link
+            size="small"
+            @click="clearFinished"
+          >
+            清除已完成
+          </el-button>
           <el-button
             v-if="expanded && activeTasks.length > 0"
             type="primary"
@@ -19,7 +29,8 @@
           <el-button type="info" link size="small" @click="expanded = !expanded">
             {{ expanded ? '收起' : '展开' }}
           </el-button>
-          <el-button type="info" link size="small" @click="handleClose">✕</*>
+          <el-button type="info" link size="small" @click="handleClose">
+            <el-icon><IconClose /></el-icon>
           </el-button>
         </div>
       </div>
@@ -28,7 +39,7 @@
         <div v-for="task in activeTasks" :key="task.taskId" class="task-item">
           <div class="task-info">
             <span class="task-name">{{ task.name || task.directoryCode }}</span>
-            <span class="task-status" :class="task.status">{{ task.statusText }}</span>
+            <span class="task-status" :class="task.status">{{ statusText(task.status) }}</span>
           </div>
           <el-progress
             :percentage="task.percent"
@@ -60,7 +71,7 @@
   >
     <div class="panel-content">
       <div v-if="activeTasks.length === 0" class="empty-state">
-        <el-empty description="当前没有活跃的上传任务" />
+        <el-empty description="当前没有上传任务" />
       </div>
       <div v-for="task in activeTasks" :key="task.taskId" class="task-detail">
         <div class="task-detail-header">
@@ -80,10 +91,10 @@
         </div>
         <div class="task-detail-files" v-if="task.files && task.files.length > 0">
           <div v-for="f in task.files" :key="f.fileCode" class="file-row">
-            <el-icon v-if="f.status === 'uploaded' || f.status === 'active'" color="#67c23a"><Check /></el-icon>
-            <el-icon v-else-if="f.status === 'uploading'" color="#409eff" class="is-spinning"><Loading /></el-icon>
-            <el-icon v-else-if="f.status === 'converting'" color="#409eff"><Document /></el-icon>
-            <el-icon v-else-if="f.status === 'failed'" color="#f56c6c"><Close /></el-icon>
+            <el-icon v-if="f.status === 'uploaded' || f.status === 'active'" color="var(--yzh-color-success)"><IconSuccess /></el-icon>
+            <el-icon v-else-if="f.status === 'uploading'" color="var(--yzh-color-primary)" class="is-spinning"><IconLoading /></el-icon>
+            <el-icon v-else-if="f.status === 'converting'" color="var(--yzh-color-primary)"><IconFile /></el-icon>
+            <el-icon v-else-if="f.status === 'failed'" color="var(--yzh-color-danger)"><IconClose /></el-icon>
             <span class="file-name">{{ f.fileName }}</span>
             <span class="file-status">{{ fileStatusText(f.status) }}</span>
           </div>
@@ -99,16 +110,26 @@
           取消此任务
         </el-button>
       </div>
-      <el-button
-        v-if="activeTasks.length > 0"
-        type="danger"
-        plain
-        size="small"
-        @click="handleCancelAll"
-        style="margin-top: 16px;"
-      >
-        取消全部任务
-      </el-button>
+      <div v-if="activeTasks.length > 0" class="drawer-actions">
+        <el-button
+          v-if="finishedTasks.length > 0"
+          type="info"
+          plain
+          size="small"
+          @click="clearFinished"
+        >
+          清除已完成任务
+        </el-button>
+        <el-button
+          v-if="runningTasks.length > 0"
+          type="danger"
+          plain
+          size="small"
+          @click="handleCancelAll"
+        >
+          取消全部任务
+        </el-button>
+      </div>
     </div>
   </el-drawer>
 </template>
@@ -116,25 +137,40 @@
 <script setup>
 import { ref, computed, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Upload, Check, Close, Loading } from '@element-plus/icons-vue'
+import { IconUpload, IconSuccess, IconClose, IconLoading, IconFile } from '@/yzh'
 import http from '@/api/http'
 
 const props = defineProps({
   tasks: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['cancel'])
+const emit = defineEmits(['cancel', 'clear-done'])
 
+// 父组件传入的是当前阶段的任务（含已完成），这里直接展示完成/失败状态
 const visible = computed(() => props.tasks.length > 0)
-const activeCount = computed(() => props.tasks.filter(t => t.status !== 'done' && t.status !== 'failed').length)
+const runningTasks = computed(() => props.tasks.filter(t => t.status === 'uploading' || t.status === 'converting'))
+const finishedTasks = computed(() => props.tasks.filter(t => t.status === 'done' || t.status === 'failed'))
 const expanded = ref(false)
 const showPanel = ref(false)
 
-const isAnyRunning = computed(() =>
-  props.tasks.some(t => t.status === 'uploading' || t.status === 'converting')
-)
+const isAnyRunning = computed(() => runningTasks.value.length > 0)
 
-const activeTasks = computed(() => props.tasks.filter(t => t.status !== 'done'))
+const activeTasks = computed(() => props.tasks)
+
+const statusText = (status) => {
+  const map = { uploading: '上传中', converting: '转换中', done: '已完成', failed: '失败', cancelled: '已取消', pending: '等待中' }
+  return map[status] || status || ''
+}
+
+// 供父组件“上传队列”按钮打开详情面板
+const openPanel = () => {
+  showPanel.value = true
+}
+defineExpose({ openPanel })
+
+const clearFinished = () => {
+  emit('clear-done')
+}
 
 const handleClose = () => {
   expanded.value = false
@@ -158,7 +194,7 @@ const handleClosePanel = () => {
 }
 
 const statusTagType = (status) => {
-  const map = { uploading: 'warning', done: 'success', failed: 'danger', converting: 'primary' }
+  const map = { uploading: 'warning', done: 'success', failed: 'danger', converting: 'primary', cancelled: 'info', pending: 'info' }
   return map[status] || 'info'
 }
 
@@ -197,9 +233,9 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   z-index: 2000;
-  background: #fff;
-  border-bottom: 1px solid #ebeef5;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  background: var(--yzh-color-bg-card, #fff);
+  border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
+  box-shadow: var(--yzh-shadow-md, 0 2px 12px rgba(0, 0, 0, 0.06));
 }
 
 .banner-header {
@@ -213,13 +249,13 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #303133;
+  font-size: var(--yzh-font-size-md, 14px);
+  font-weight: var(--yzh-font-weight-bold, 600);
+  color: var(--yzh-color-text-primary, #303133);
 }
 
 .banner-title .el-icon {
-  color: #409eff;
+  color: var(--yzh-color-primary, #409eff);
 }
 
 .is-spinning {
@@ -265,17 +301,24 @@ onUnmounted(() => {
 }
 
 .task-status {
-  font-size: 12px;
-  color: #909399;
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--yzh-color-text-secondary, #909399);
 }
 
-.task-status.uploading { color: #e6a23c; }
-.task-status.converting { color: #409eff; }
-.task-status.done { color: #67c23a; }
-.task-status.failed { color: #f56c6c; }
+.task-status.uploading { color: var(--yzh-color-warning, #e6a23c); }
+.task-status.converting { color: var(--yzh-color-primary, #409eff); }
+.task-status.done { color: var(--yzh-color-success, #67c23a); }
+.task-status.failed { color: var(--yzh-color-danger, #f56c6c); }
 
 .panel-content {
   padding: 8px 0;
+}
+
+.drawer-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px 16px;
 }
 
 .empty-state {
@@ -284,7 +327,7 @@ onUnmounted(() => {
 
 .task-detail {
   padding: 12px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--yzh-color-border-lighter, #f0f0f0);
 }
 
 .task-detail:last-child {
@@ -304,22 +347,22 @@ onUnmounted(() => {
 
 .task-detail-stats {
   display: flex;
-  gap: 16px;
-  font-size: 12px;
-  color: #909399;
+  gap: var(--yzh-space-4, 16px);
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--yzh-color-text-secondary, #909399);
   margin-top: 4px;
 }
 
 .text-danger {
-  color: #f56c6c !important;
+  color: var(--yzh-color-danger, #f56c6c) !important;
 }
 
 .task-detail-files {
   margin-top: 8px;
   max-height: 200px;
   overflow-y: auto;
-  border: 1px solid #ebeef5;
-  border-radius: 4px;
+  border: 1px solid var(--yzh-color-border-light, #ebeef5);
+  border-radius: var(--yzh-radius-sm, 4px);
   padding: 4px 0;
 }
 
@@ -332,7 +375,7 @@ onUnmounted(() => {
 }
 
 .file-row:hover {
-  background: #f5f7fa;
+  background: var(--yzh-color-bg-hover, #f5f7fa);
 }
 
 .file-name {
@@ -343,7 +386,7 @@ onUnmounted(() => {
 }
 
 .file-status {
-  color: #909399;
+  color: var(--yzh-color-text-secondary, #909399);
   min-width: 60px;
   text-align: right;
 }

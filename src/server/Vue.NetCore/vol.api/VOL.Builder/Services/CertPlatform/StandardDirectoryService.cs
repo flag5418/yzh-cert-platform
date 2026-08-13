@@ -339,7 +339,49 @@ namespace VOL.Builder.Services.CertPlatform
                     folderNodes.Add(node);
                 }
 
-                // 4. 返回结果
+                // 4. 根目录级文件（FolderCode 未关联任何文件夹节点）
+                // 历史数据中直接上传到目录根部（无子文件夹）的文件 FolderCode 会退化为 DirectoryCode，
+                // 不归属任何 FD- 文件夹，导致在文档提取规则等页面树中不可见（pdf/jpg 等尤其常见）。
+                // 这里统一挂到一个虚拟的“根目录”节点下展示。
+                var folderCodeSet = new HashSet<string>(allFolders.Select(f => f.FolderCode));
+                var rootOrphanFiles = allFiles
+                    .Where(f => !folderCodeSet.Contains(f.FolderCode))
+                    .ToList();
+
+                if (rootOrphanFiles.Count > 0)
+                {
+                    var rootNode = new StageFolderNode
+                    {
+                        Code = directoryCode,
+                        Name = "根目录",
+                        ParentCode = string.Empty,
+                        Depth = 0,
+                        SortOrder = 0
+                    };
+                    foreach (var file in rootOrphanFiles)
+                    {
+                        totalFiles++;
+                        bool hasRule = !string.IsNullOrEmpty(file.ExtractionRules) || file.ExtractionEnabled == true;
+                        if (hasRule) configuredFiles++;
+
+                        rootNode.Files.Add(new StageFileNode
+                        {
+                            FileCode = file.FileCode,
+                            FileName = file.FileName,
+                            FolderCode = file.FolderCode,
+                            StoragePath = file.StoragePath,
+                            ConvertedStoragePath = file.ConvertedStoragePath,
+                            FileSize = null,
+                            MimeType = file.FileType,
+                            RuleStatus = hasRule ? "configured" : "none",
+                            ExtractFieldCount = 0,
+                            TableDefCount = 0
+                        });
+                    }
+                    folderNodes.Insert(0, rootNode);
+                }
+
+                // 5. 返回结果
                 return new StageFileTreeResponse
                 {
                     DirectoryCode = directoryCode,
@@ -473,7 +515,7 @@ namespace VOL.Builder.Services.CertPlatform
             {
                 // 生成编码
                 folder.Code = Guid.NewGuid().ToString("N");
-                int maxSeq = GetMaxSequence(folder.DirectoryCode, folder.ParentCode);
+                int maxSeq = GetMaxSequence(folder.DirectoryCode, folder.Depth);
                 folder.FolderCode = _codeGenerator.GenerateFolderCode(
                     folder.DirectoryCode, 
                     folder.Depth, 
@@ -482,6 +524,10 @@ namespace VOL.Builder.Services.CertPlatform
                 folder.CreateDate = DateTime.Now;
                 folder.Status = "draft";
                 folder.Enable = true;
+                // 有效标志：非上传预创建，创建即有效（否则 GetFolderTree 过滤后看不到）
+                folder.IsValid = true;
+                // 计算名称路径（FullPath）：基于父文件夹路径 + 自身名称
+                folder.FullPath = BuildFolderFullPath(folder);
 
                 _db.Set<StandardDirectoryFolder>().Add(folder);
                 _db.SaveChanges();
@@ -496,7 +542,7 @@ namespace VOL.Builder.Services.CertPlatform
                     try
                     {
                         folder.FolderCode = _codeGenerator.GenerateFolderCode(
-                            folder.DirectoryCode, folder.Depth, GetMaxSequence(folder.DirectoryCode, folder.ParentCode) + 1 + i);
+                            folder.DirectoryCode, folder.Depth, GetMaxSequence(folder.DirectoryCode, folder.Depth) + 1 + i);
                         _db.Set<StandardDirectoryFolder>().Add(folder);
                         _db.SaveChanges();
                         return new WebResponseContent().OK($"创建成功，文件夹编码：{folder.FolderCode}");
@@ -529,22 +575,10 @@ namespace VOL.Builder.Services.CertPlatform
                     folder.FolderCode, 
                     folder.FolderName, 
                     force: folder.Force).GetAwaiter().GetResult();
-                
-                // 如果 EF 更新失败，尝试直接 SQL 更新
+
                 if (!result)
-                {
-                    try
-                    {
-                        var sql = $"UPDATE cert_standard_directory_folder SET FolderName = '{folder.FolderName.Replace("'", "''")}', ModifyDate = NOW() WHERE FolderCode = '{folder.FolderCode.Replace("'", "''")}';";
-                        _db.Database.ExecuteSqlRaw(sql);
-                        return new WebResponseContent().OK("更新成功(SQL)");
-                    }
-                    catch (Exception ex)
-                    {
-                        return new WebResponseContent().Error($"更新失败：{ex.Message}");
-                    }
-                }
-                
+                    return new WebResponseContent().Error("文件夹不存在或已被禁用");
+
                 return new WebResponseContent().OK("更新成功");
             }
             catch (Exception ex)
@@ -637,6 +671,14 @@ namespace VOL.Builder.Services.CertPlatform
                 file.CreateDate = DateTime.Now;
                 file.Status = "draft";
                 file.Enable = true;
+                file.IsValid = true;
+                // 计算名称路径：父文件夹 FullPath + 文件名
+                var parentFolder = _db.Set<StandardDirectoryFolder>()
+                    .FirstOrDefault(x => x.FolderCode == file.FolderCode && x.Enable == true);
+                var parentPath = parentFolder?.FullPath?.Trim('/') ?? "";
+                file.FullPath = string.IsNullOrEmpty(parentPath)
+                    ? file.FileName
+                    : $"{parentPath}/{file.FileName}";
 
                 _db.Set<StandardDirectoryFile>().Add(file);
                 _db.SaveChanges();
@@ -939,6 +981,13 @@ namespace VOL.Builder.Services.CertPlatform
                     return new WebResponseContent().Error("无法获取当前用户机构信息");
                 }
 
+                // 服务端文件类型白名单校验（relativePath 是目录路径，真实文件名在 file.FileName）
+                var typeErr = ValidateUploadFileType(file.FileName);
+                if (typeErr != null)
+                {
+                    return new WebResponseContent().Error(typeErr);
+                }
+
                 // 解析相对路径，获取文件夹结构
                 var pathParts = relativePath.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
                 string parentCode = "";
@@ -963,7 +1012,7 @@ namespace VOL.Builder.Services.CertPlatform
                         {
                             // 创建新文件夹
                             var depth = i + 1;
-                            var sortOrder = GetMaxSequence(directoryCode, parentCode) + 1;
+                            var sortOrder = GetMaxSequence(directoryCode, depth) + 1;
                             var newFolderCode = _codeGenerator.GenerateFolderCode(directoryCode, depth, sortOrder);
                             
                             var newFolder = new StandardDirectoryFolder
@@ -1112,19 +1161,52 @@ namespace VOL.Builder.Services.CertPlatform
         #region 辅助方法
 
         /// <summary>
+        /// 体系认证上传文件类型白名单：仅允许文档/表格/图片等认证材料文件。
+        /// 过滤 .DS_Store、临时文件等无关文件，避免后期文件比对出现问题。
+        /// </summary>
+        private static readonly HashSet<string> _allowedUploadExts = new HashSet<string>
+        {
+            // 文档
+            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "rtf",
+            // 图片
+            "jpg", "jpeg", "png", "gif", "bmp", "webp", "tif", "tiff"
+        };
+
+        /// <summary>校验文件是否允许上传；返回 null 表示通过，否则返回错误消息</summary>
+        private static string ValidateUploadFileType(string relativePath)
+        {
+            if (string.IsNullOrWhiteSpace(relativePath))
+                return "文件路径不能为空";
+
+            var fileName = relativePath.Replace('\\', '/').Split('/').Last();
+
+            // 过滤隐藏文件（.DS_Store、.gitignore 等）
+            if (fileName.StartsWith("."))
+                return $"不允许上传系统文件：{fileName}（仅支持文档/图片）";
+
+            var ext = Path.GetExtension(fileName)?.TrimStart('.').ToLower() ?? "";
+            if (!_allowedUploadExts.Contains(ext))
+                return $"不支持的文件类型：{fileName}（仅支持文档/图片，如 pdf/doc/xls/图片等）";
+
+            return null;
+        }
+
+        /// <summary>
         /// 获取同级最大序号
         /// </summary>
-        private int GetMaxSequence(string directoryCode, string parentCode)
+        /// <summary>
+        /// 计算同一目录、同一层级下已用过的最大序号（含软删除记录，防止删除后序号复用导致编码冲突）。
+        /// 按 (DirectoryCode, Depth) 全局分配，避免不同父节点下同级文件夹编码碰撞。
+        /// </summary>
+        private int GetMaxSequence(string directoryCode, int depth)
         {
-            var query = _db.Set<StandardDirectoryFolder>()
-                .Where(x => x.DirectoryCode == directoryCode 
-                         && x.ParentCode == parentCode 
-                         && x.Enable == true);
-
-            var folders = query.ToList();
+            var folders = _db.Set<StandardDirectoryFolder>()
+                .Where(x => x.DirectoryCode == directoryCode
+                         && x.Depth == depth)
+                .ToList();
             if (folders.Count == 0)
                 return 0;
-            
+
             int maxSeq = 0;
             foreach (var folder in folders)
             {
@@ -1137,6 +1219,36 @@ namespace VOL.Builder.Services.CertPlatform
                     maxSeq = value;
             }
             return maxSeq;
+        }
+
+        /// <summary>
+        /// 新建文件夹时计算名称路径（FullPath）。
+        /// 优先复用父文件夹 FullPath；父级为历史数据无 FullPath 时沿父链拼名称。
+        /// </summary>
+        private string BuildFolderFullPath(StandardDirectoryFolder folder)
+        {
+            if (string.IsNullOrEmpty(folder.ParentCode))
+                return folder.FolderName;
+
+            var parent = _db.Set<StandardDirectoryFolder>()
+                .FirstOrDefault(x => x.FolderCode == folder.ParentCode && x.Enable == true);
+            var parentPath = parent?.FullPath?.Trim('/') ?? "";
+            if (!string.IsNullOrEmpty(parentPath))
+                return $"{parentPath}/{folder.FolderName}";
+
+            var parts = new List<string> { folder.FolderName };
+            var code = folder.ParentCode;
+            var guard = 0;
+            while (!string.IsNullOrEmpty(code) && guard++ < 100)
+            {
+                var p = _db.Set<StandardDirectoryFolder>()
+                    .FirstOrDefault(x => x.FolderCode == code && x.Enable == true);
+                if (p == null)
+                    break;
+                parts.Insert(0, p.FolderName);
+                code = p.ParentCode;
+            }
+            return string.Join("/", parts);
         }
 
         #endregion
@@ -1233,8 +1345,8 @@ namespace VOL.Builder.Services.CertPlatform
                     {
                         // 创建新文件夹
                         var depth = pathParts.Length;
-                        // 先从数据库查最大序号，再与内存计数器取较大值
-                        var dbMaxSeq = GetMaxSequenceForUpload(manifest.DirectoryCode, parentCode, taskId);
+                        // 先从数据库查最大序号，再与内存计数器取较大值（均按 目录+层级 全局分配，防止编码冲突）
+                        var dbMaxSeq = GetMaxSequenceForUpload(manifest.DirectoryCode, depth);
                         var seqKey = $"{manifest.DirectoryCode}|{depth}";
                         var memMaxSeq = seqCounter.ContainsKey(seqKey) ? seqCounter[seqKey] : 0;
                         var sortOrder = Math.Max(dbMaxSeq, memMaxSeq) + 1;
@@ -1287,6 +1399,13 @@ namespace VOL.Builder.Services.CertPlatform
                 {
                     var fileItem = manifest.Files[i];
                     var fullPath = fileItem.RelativePath; // 前端传入完整路径
+
+                    // 服务端文件类型白名单校验（防止绕过前端过滤上传 .DS_Store 等垃圾文件）
+                    var validateResult = ValidateUploadFileType(fullPath);
+                    if (validateResult != null)
+                    {
+                        return new WebResponseContent().Error(validateResult);
+                    }
 
                     // 查找所属文件夹
                     var pathParts = fullPath.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
@@ -1840,11 +1959,11 @@ namespace VOL.Builder.Services.CertPlatform
         /// <summary>
         /// 获取同级最大序号（上传版本，支持 taskId 隔离）
         /// </summary>
-        private int GetMaxSequenceForUpload(string directoryCode, string parentCode, string taskId)
+        private int GetMaxSequenceForUpload(string directoryCode, int depth)
         {
             var query = _db.Set<StandardDirectoryFolder>()
-                .Where(x => x.DirectoryCode == directoryCode 
-                         && x.ParentCode == parentCode);
+                .Where(x => x.DirectoryCode == directoryCode
+                         && x.Depth == depth);
 
             var folders = query.ToList();
             if (folders.Count == 0)

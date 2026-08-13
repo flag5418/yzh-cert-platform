@@ -36,6 +36,12 @@ import {
   ChatDotRound,
   QuestionFilled,
   Setting,
+  List,
+  Grid,
+  Memo,
+  Calendar,
+  FolderAdd,
+  OfficeBuilding,
 } from '@element-plus/icons-vue'
 
 /** 统一图标表（对象形式，支持 :is 动态绑定） */
@@ -74,6 +80,14 @@ export const YzhIcon = {
   /* AI */
   analyze: MagicStick,
   prompt: ChatDotRound,
+  /* 数据展示 */
+  code: Memo,
+  list: List,
+  grid: Grid,
+  /* 业务 */
+  calendar: Calendar,
+  folderAdd: FolderAdd,
+  officeBuilding: OfficeBuilding,
 }
 
 /* ===== 语义常量（模板中直接使用，如 <el-icon><IconBack /></el-icon>） ===== */
@@ -106,5 +120,11 @@ export const IconHelp = QuestionFilled
 export const IconSetting = Setting
 export const IconAnalyze = MagicStick
 export const IconPrompt = ChatDotRound
+export const IconCode = Memo
+export const IconList = List
+export const IconGrid = Grid
+export const IconCalendar = Calendar
+export const IconFolderAdd = FolderAdd
+export const IconOfficeBuilding = OfficeBuilding
 
 export default YzhIcon

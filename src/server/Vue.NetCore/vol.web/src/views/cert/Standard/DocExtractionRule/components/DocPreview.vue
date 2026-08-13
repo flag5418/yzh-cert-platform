@@ -62,16 +62,27 @@
       <template v-else-if="isOldFormat">
         <div class="unsupported">
           <el-icon :size="48"><IconFile /></el-icon>
-          <p>
-            {{
-              isOldDoc
-                ? '旧版 Word (.doc) 格式暂不支持在线预览'
-                : '旧版 PPT (.ppt) 格式暂不支持在线预览'
-            }}
-          </p>
-          <p class="tip">
-            提示：可下载后用 WPS 或 Microsoft Office 打开；或将文件另存为 .docx / .pptx 后上传
-          </p>
+          <!-- 转换链路已就绪：明确提示当前转换状态，而不是笼统的“不支持” -->
+          <template v-if="convertingStatus === 'converting' || convertingStatus === 'pending'">
+            <p>旧版 {{ isOldDoc ? 'Word (.doc)' : 'PPT (.ppt)' }} 文件正在转换中…</p>
+            <p class="tip">系统会自动转换为 {{ isOldDoc ? '.docx' : '.pptx' }}，转换完成后即可在线预览与提取，请稍后刷新重试</p>
+          </template>
+          <template v-else-if="convertingStatus === 'failed'">
+            <p>旧版 {{ isOldDoc ? 'Word (.doc)' : 'PPT (.ppt)' }} 文件转换失败</p>
+            <p class="tip">{{ convertFailedMessage }}</p>
+          </template>
+          <template v-else>
+            <p>
+              {{
+                isOldDoc
+                  ? '旧版 Word (.doc) 格式暂不支持在线预览'
+                  : '旧版 PPT (.ppt) 格式暂不支持在线预览'
+              }}
+            </p>
+            <p class="tip">
+              提示：可下载后用 WPS 或 Microsoft Office 打开；或将文件另存为 .docx / .pptx 后上传
+            </p>
+          </template>
           <el-button type="primary" @click="download">下载查看</el-button>
         </div>
       </template>
@@ -158,6 +169,11 @@ const ext = computed(() => {
 const isImage = computed(() => ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext.value))
 const isText = computed(() => ['txt', 'md', 'json', 'xml', 'csv'].includes(ext.value))
 const isPdf = computed(() => ext.value === 'pdf')
+
+/* 转换状态（.doc→.docx / .xls→.xlsx），供旧格式预览给出明确提示 */
+const convertStatusRaw = computed(() => props.file?.convertStatus || props.file?.ConvertStatus || '')
+const convertingStatus = computed(() => String(convertStatusRaw.value || '').toLowerCase())
+const convertFailedMessage = computed(() => props.file?.convertMessage || props.file?.ConvertMessage || '转换失败，请重新上传或联系管理员')
 
 const isDocx = computed(() => ext.value === 'docx') /* ✅ 官方支持 */
 const isPptx = computed(() => ext.value === 'pptx') /* ✅ 官方支持 */

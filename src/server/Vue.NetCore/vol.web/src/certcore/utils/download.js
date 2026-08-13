@@ -40,3 +40,24 @@ export async function downloadBlob(url, fileName) {
     URL.revokeObjectURL(a.href)
   }, 1200)
 }
+
+/**
+ * 通过 http.js POST 下载（导出类接口，body 为 JSON）
+ * @param {string} url 下载地址
+ * @param {object} params POST body（JSON）
+ * @param {string} fileName 下载文件名
+ */
+export async function downloadBlobPost(url, params, fileName) {
+  if (!url) throw new Error('无可用的下载地址')
+  const blob = await http.post(url, params, false, { responseType: 'blob' })
+  const effective = blob instanceof Blob ? blob : new Blob([blob])
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(effective)
+  a.download = fileName || 'download'
+  document.body.appendChild(a)
+  a.click()
+  setTimeout(() => {
+    document.body.removeChild(a)
+    URL.revokeObjectURL(a.href)
+  }, 1200)
+}

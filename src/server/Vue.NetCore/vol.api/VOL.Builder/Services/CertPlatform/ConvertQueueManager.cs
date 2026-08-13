@@ -77,6 +77,9 @@ namespace VOL.Builder.Services.CertPlatform
             var db = scope.ServiceProvider.GetRequiredService<VOLContext>();
 
             // 1. 查找下一个 pending 任务（按优先级降序、创建时间升序）
+            // 注意：VOLContext 默认全局 NoTracking，必须显式 AsTracking，
+            // 否则下面的 Status/LockedAt 更新 SaveChanges 不落库，
+            // 导致同一任务被反复领取、其余任务永远得不到执行。
             var job = await db.Set<ConvertJob>()
                 .FromSqlRaw(@"
                     SELECT * FROM cert_file_convert_job
@@ -84,6 +87,7 @@ namespace VOL.Builder.Services.CertPlatform
                     ORDER BY priority DESC, create_time ASC
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED")
+                .AsTracking()
                 .FirstOrDefaultAsync();
 
             if (job == null)
@@ -148,7 +152,7 @@ namespace VOL.Builder.Services.CertPlatform
 
                 using var scope = _serviceProvider.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<VOLContext>();
-                var jobToUpdate = await db.Set<ConvertJob>().FirstOrDefaultAsync(j => j.Id == job.Id);
+                var jobToUpdate = await db.Set<ConvertJob>().AsTracking().FirstOrDefaultAsync(j => j.Id == job.Id);
                 if (jobToUpdate != null)
                 {
                     jobToUpdate.Status = "failed";
@@ -194,7 +198,9 @@ namespace VOL.Builder.Services.CertPlatform
             }
 
             // 2. 更新待处理任务为 cancelled
+            // 注意：VOLContext 默认全局 NoTracking，这里必须 AsTracking，否则状态更新不落库
             var pendingJobs = await db.Set<ConvertJob>()
+                .AsTracking()
                 .Where(j => j.TaskId == taskId && j.Status == "pending")
                 .ToListAsync();
 

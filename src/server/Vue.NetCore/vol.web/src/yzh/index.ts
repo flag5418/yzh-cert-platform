@@ -50,6 +50,8 @@ export {
   IconFolder, IconFolderOpen, IconFolderChecked, IconFile, IconFileChecked,
   IconSuccess, IconCircleSuccess, IconError, IconWarning, IconInfo,
   IconLoading, IconPending, IconHelp, IconSetting, IconAnalyze, IconPrompt,
+  IconCode, IconList, IconGrid,
+  IconCalendar, IconFolderAdd, IconOfficeBuilding,
 } from './icons'
 
 // ====== 基础组件库（V3 新增，对齐 vidlang components/ui） ======

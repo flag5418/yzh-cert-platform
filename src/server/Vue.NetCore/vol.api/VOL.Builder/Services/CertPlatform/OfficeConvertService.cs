@@ -108,6 +108,14 @@ namespace VOL.Builder.Services.CertPlatform
             
             try
             {
+                // 传入的 job 由 ConvertQueueManager 领取（另一 DbContext 实例 + VOLContext 默认 NoTracking），
+                // 必须 Attach 到当前上下文，否则 job.Status 的更新在 SaveChanges 时不会落库，
+                // 任务会一直停留在 pending 被反复领取。
+                if (_db.Entry(job).State == EntityState.Detached)
+                {
+                    _db.Set<ConvertJob>().Attach(job);
+                }
+
                 // 更新状态为处理中
                 job.Status = "processing";
                 job.ProcessTime = DateTime.Now;

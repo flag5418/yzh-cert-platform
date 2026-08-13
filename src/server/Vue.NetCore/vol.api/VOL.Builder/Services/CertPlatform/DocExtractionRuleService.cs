@@ -79,7 +79,8 @@ namespace VOL.Builder.Services.CertPlatform
             {
                 Fields = aiResult.Fields,
                 Tables = aiResult.Tables,
-                Message = "AI分析完成"
+                // 透传提取层消息（如“转换中/转换失败/不支持的文件类型”），正常完成时保留“AI分析完成”
+                Message = string.IsNullOrEmpty(aiResult.Message) ? "AI分析完成" : aiResult.Message
             };
         }
 
@@ -178,6 +179,17 @@ namespace VOL.Builder.Services.CertPlatform
 
                 // 4. 调用AI执行提取
                 var extractionResult = await CallAIForExtractionAsync(extraction, request.Prompt);
+
+                // 提取层有明确原因（转换中/失败/不支持）时透传，避免显示“验证成功”
+                if (!string.IsNullOrEmpty(extractionResult?.Message))
+                {
+                    return new VerifyPromptResponse
+                    {
+                        Success = false,
+                        Message = extractionResult.Message,
+                        Data = extractionResult
+                    };
+                }
 
                 return new VerifyPromptResponse
                 {

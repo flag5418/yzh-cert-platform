@@ -2,7 +2,7 @@
   <div class="config-tab">
     <!-- 无阶段选中时的提示信息 -->
     <div v-if="!hasActiveConfig" class="empty-hint">
-      <el-icon class="hint-icon"><FolderOpened /></el-icon>
+      <el-icon class="hint-icon"><IconFolderOpen /></el-icon>
       <div class="hint-text">请选择左侧阶段，进行文件管理</div>
       <div class="hint-sub">点击左侧树中的阶段节点，即可查看和上传该阶段的认证材料</div>
     </div>
@@ -13,7 +13,7 @@
         <div class="card-header">
           <span>目录配置管理</span>
           <el-button type="primary" size="small" @click="handleAdd">
-            <el-icon><Plus /></el-icon> 新建配置
+            <el-icon><IconAdd /></el-icon> 新建配置
           </el-button>
         </div>
       </template>
@@ -71,7 +71,7 @@
 </template>
 
 <script setup>
-import { Plus, FolderOpened } from '@element-plus/icons-vue'
+import { IconAdd, IconFolderOpen } from '@/yzh'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, ref, computed } from 'vue'
 import http from '@/api/http'
@@ -159,25 +159,25 @@ onMounted(() => {
 
 .empty-hint {
   text-align: center;
-  color: #909399;
+  color: var(--yzh-color-text-secondary, #909399);
 }
 
 .hint-icon {
   font-size: 64px;
-  color: #c0c4cc;
-  margin-bottom: 16px;
+  color: var(--yzh-color-text-disabled, #c0c4cc);
+  margin-bottom: var(--yzh-space-4, 16px);
 }
 
 .hint-text {
-  font-size: 18px;
-  color: #606266;
-  font-weight: 500;
-  margin-bottom: 8px;
+  font-size: var(--yzh-font-size-xl, 18px);
+  color: var(--yzh-color-text-regular, #606266);
+  font-weight: var(--yzh-font-weight-medium, 500);
+  margin-bottom: var(--yzh-space-2, 8px);
 }
 
 .hint-sub {
-  font-size: 13px;
-  color: #909399;
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--yzh-color-text-secondary, #909399);
 }
 
 .config-card {

@@ -1,9 +1,10 @@
 <template>
   <div class="queue-monitor-page">
-    <div class="monitor-header">
-      <h3>转换队列监控</h3>
-      <el-button type="primary" @click="loadStatus" :loading="loading">刷新</el-button>
-    </div>
+    <CertPageHeader title="转换队列监控" :icon="IconPending">
+      <template #actions>
+        <el-button type="primary" @click="loadStatus" :loading="loading">刷新</el-button>
+      </template>
+    </CertPageHeader>
 
     <!-- 全局状态卡片 -->
     <el-row :gutter="15" class="status-cards">
@@ -78,6 +79,8 @@
 <script setup>
 import { ref, onMounted, onUnmounted, getCurrentInstance } from 'vue'
 import { ElMessage } from 'element-plus'
+import { CertPageHeader } from '@/certcore'
+import { IconPending } from '@/yzh'
 
 const { proxy } = getCurrentInstance()
 const loading = ref(false)
@@ -93,8 +96,10 @@ const loadStatus = async () => {
   loading.value = true
   try {
     const res = await proxy.http.post('api/standard-directory/convert/queue-status', {}, true)
-    if (res.status && res.data) {
-      status.value = res.data
+    // 接口经 JsonNormal 返回 PascalCase：{ Status, Data }，需同时兼容两种大小写
+    const data = res.Data || res.data
+    if (data) {
+      status.value = data
     }
   } catch (e) {
     ElMessage.error('获取队列状态失败')
@@ -119,18 +124,11 @@ onUnmounted(() => {
 
 <style scoped lang="less">
 .queue-monitor-page {
-  padding: 20px;
-
-  .monitor-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    h3 { margin: 0; font-size: 18px; }
-  }
+  padding: var(--yzh-space-5, 20px);
 
   .status-cards {
-    margin-bottom: 20px;
+    margin-bottom: var(--yzh-space-5, 20px);
+    margin-top: var(--yzh-space-5, 20px);
   }
 
   .stat-card {
@@ -142,22 +140,22 @@ onUnmounted(() => {
       font-weight: bold;
     }
     .stat-label {
-      font-size: 13px;
-      color: #909399;
+      font-size: var(--yzh-font-size-sm, 13px);
+      color: var(--yzh-color-text-secondary, #909399);
       margin-top: 5px;
     }
 
-    &.pending .stat-value { color: #e6a23c; }
-    &.processing .stat-value { color: #409eff; }
-    &.completed .stat-value { color: #67c23a; }
-    &.failed .stat-value { color: #f56c6c; }
-    &.workers .stat-value { color: #909399; }
-    &.timeout .stat-value { color: #909399; }
+    &.pending .stat-value { color: var(--yzh-color-warning, #e6a23c); }
+    &.processing .stat-value { color: var(--yzh-color-primary, #409eff); }
+    &.completed .stat-value { color: var(--yzh-color-success, #67c23a); }
+    &.failed .stat-value { color: var(--yzh-color-danger, #f56c6c); }
+    &.workers .stat-value { color: var(--yzh-color-text-secondary, #909399); }
+    &.timeout .stat-value { color: var(--yzh-color-text-secondary, #909399); }
   }
 
   .failed-section {
-    margin-top: 20px;
-    h4 { margin-bottom: 10px; }
+    margin-top: var(--yzh-space-5, 20px);
+    h4 { margin-bottom: var(--yzh-space-2, 8px); }
   }
 }
 </style>

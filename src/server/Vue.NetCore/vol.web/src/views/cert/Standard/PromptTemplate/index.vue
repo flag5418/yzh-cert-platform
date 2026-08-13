@@ -31,9 +31,9 @@
     <el-card shadow="never" class="table-card">
       <template #header>
         <div class="card-header">
-          <span class="card-title">📋 提示词模板管理</span>
+          <span class="card-title"><el-icon class="card-title-icon"><IconPrompt /></el-icon> 提示词模板管理</span>
           <el-button type="primary" size="small" @click="openEdit(null)">
-            <el-icon><Plus /></el-icon> 新建提示词
+            <el-icon><IconAdd /></el-icon> 新建提示词
           </el-button>
         </div>
       </template>
@@ -128,7 +128,7 @@
             class="prompt-editor"
           />
           <div class="form-hint">
-            <el-icon><InfoFilled /></el-icon>
+            <el-icon><IconInfo /></el-icon>
             <span>常用占位符：{document_content} / {fields_json} / {tables_json} / {prompt}</span>
           </div>
         </el-form-item>
@@ -174,7 +174,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, InfoFilled } from '@element-plus/icons-vue'
+import { IconAdd, IconInfo, IconPrompt } from '@/yzh'
 import { getPromptList, savePrompt, deletePrompt, activatePrompt } from './api.js'
 
 const filterForm = reactive({ promptType: '', skillTarget: '' })
@@ -300,16 +300,17 @@ onMounted(loadList)
 </script>
 
 <style scoped>
-.prompt-template-page { padding: 16px; }
-.prompt-template-page :deep(.el-dialog__body) { padding: 20px; }
-.prompt-template-page :deep(.el-dialog) { border-radius: 8px; }
-.filter-card { margin-bottom: 16px; }
+.prompt-template-page { padding: var(--yzh-space-page, 16px 24px); }
+.prompt-template-page :deep(.el-dialog__body) { padding: var(--yzh-space-5, 20px); }
+.prompt-template-page :deep(.el-dialog) { border-radius: var(--yzh-radius-lg, 8px); }
+.filter-card { margin-bottom: var(--yzh-space-4, 16px); }
 .filter-form { display: flex; flex-wrap: wrap; align-items: center; }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
-.card-title { font-size: 15px; font-weight: 600; }
-.prompt-editor :deep(textarea) { font-family: 'Consolas', monospace; font-size: 13px; }
-.form-hint { color: #909399; font-size: 12px; margin-top: 4px; display: flex; align-items: center; gap: 4px; }
-.view-section { margin-top: 16px; }
-.view-section-title { font-weight: 600; margin-bottom: 8px; font-size: 14px; }
-.view-template { background: #f5f7fa; border: 1px solid #e4e7ed; border-radius: 4px; padding: 12px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; max-height: 400px; overflow-y: auto; }
+.card-title { font-size: 15px; font-weight: var(--yzh-font-weight-bold, 600); display: flex; align-items: center; gap: var(--yzh-space-2, 8px); }
+.card-title-icon { color: var(--yzh-color-primary, #409eff); font-size: 16px; }
+.prompt-editor :deep(textarea) { font-family: 'Consolas', monospace; font-size: var(--yzh-font-size-sm, 13px); }
+.form-hint { color: var(--yzh-color-text-secondary, #909399); font-size: var(--yzh-font-size-xs, 12px); margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+.view-section { margin-top: var(--yzh-space-4, 16px); }
+.view-section-title { font-weight: var(--yzh-font-weight-bold, 600); margin-bottom: var(--yzh-space-2, 8px); font-size: var(--yzh-font-size-md, 14px); }
+.view-template { background: var(--yzh-color-bg-page, #f5f7fa); border: 1px solid var(--yzh-color-border, #e4e7ed); border-radius: var(--yzh-radius-sm, 4px); padding: var(--yzh-space-3, 12px); font-size: var(--yzh-font-size-sm, 13px); line-height: var(--yzh-line-height-base, 1.6); white-space: pre-wrap; word-break: break-all; max-height: 400px; overflow-y: auto; }
 </style>

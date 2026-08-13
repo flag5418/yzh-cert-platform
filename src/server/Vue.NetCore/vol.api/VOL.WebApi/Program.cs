@@ -152,6 +152,8 @@ builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.OfficeConvertServic
             builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IMinIOHelper, VOL.Builder.Services.CertPlatform.MinIOHelper>();
             builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IFolderFileManager, VOL.Builder.Services.CertPlatform.FolderFileManager>();
             builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IFileStorageService, VOL.Builder.Services.CertPlatform.FileStorageService>();
+            // 注册文件提取器（YZH.Core），供文档提取规则 analyze/content 链路使用
+            builder.Services.AddScoped<YZH.Core.Extractor.IFileExtractor, YZH.Core.Extractor.FileExtractorService>();
 builder.Services.AddSingleton<VOL.Builder.Services.CertPlatform.ConvertQueueManager>();
 builder.Services.AddHostedService<VOL.Builder.Services.CertPlatform.ConvertHostedService>();
 

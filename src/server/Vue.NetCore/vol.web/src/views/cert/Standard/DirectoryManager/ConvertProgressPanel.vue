@@ -3,8 +3,8 @@
     <div v-if="visible" class="convert-progress-panel">
       <div class="panel-header">
         <div class="panel-title">
-          <el-icon v-if="!isFinished" class="is-loading"><Loading /></el-icon>
-          <el-icon v-else color="#67c23a"><CircleCheck /></el-icon>
+          <el-icon v-if="!isFinished" class="is-loading"><IconLoading /></el-icon>
+          <el-icon v-else color="var(--yzh-color-success)"><IconCircleSuccess /></el-icon>
           <span>文档转换进度</span>
         </div>
         <div class="panel-actions">
@@ -14,7 +14,9 @@
           <el-button type="info" link size="small" @click="handleMinimize">
             {{ minimized ? '展开' : '最小化' }}
           </el-button>
-          <el-button type="info" link size="small" @click="handleClose">✕</el-button>
+          <el-button type="info" link size="small" @click="handleClose">
+            <el-icon><IconClose /></el-icon>
+          </el-button>
         </div>
       </div>
 
@@ -28,13 +30,13 @@
           />
         </div>
         <div class="progress-stats">
-          <span class="stat-item completed">✅ 已完成 {{ progress.completed }}</span>
-          <span class="stat-item pending">⏳ 等待中 {{ progress.pending }}</span>
-          <span class="stat-item failed" v-if="progress.failed > 0">❌ 失败 {{ progress.failed }}</span>
+          <span class="stat-item completed"><el-icon><IconCircleSuccess /></el-icon> 已完成 {{ progress.completed }}</span>
+          <span class="stat-item pending"><el-icon><IconPending /></el-icon> 等待中 {{ progress.pending }}</span>
+          <span class="stat-item failed" v-if="progress.failed > 0"><el-icon><IconError /></el-icon> 失败 {{ progress.failed }}</span>
           <span class="stat-item total">共 {{ progress.total }}</span>
         </div>
         <div class="current-file" v-if="currentFileName">
-          <el-icon><Document /></el-icon>
+          <el-icon><IconFile /></el-icon>
           <span>{{ currentFileName }}</span>
         </div>
       </div>
@@ -48,7 +50,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, getCurrentInstance } from 'vue'
-import { Loading, CircleCheck, Document } from '@element-plus/icons-vue'
+import { IconLoading, IconCircleSuccess, IconFile, IconClose, IconPending, IconError } from '@/yzh'
 import { ElMessageBox, ElNotification } from 'element-plus'
 
 const { proxy } = getCurrentInstance()
@@ -113,8 +115,10 @@ const fetchProgress = async (taskId) => {
     const res = await proxy.http.post('api/standard-directory/convert/progress', {
       taskId
     }, true)
-    if (res.status && res.data) {
-      progress.value = res.data
+    // 接口经 JsonNormal 返回 PascalCase：{ Status, Data }，需同时兼容两种大小写
+    const data = res.Data || res.data
+    if (data) {
+      progress.value = data
     }
   } catch (e) {
     console.error('获取进度失败', e)
@@ -175,9 +179,9 @@ defineExpose({ start })
   bottom: 0;
   right: 20px;
   width: 420px;
-  background: #fff;
-  border-radius: 8px 8px 0 0;
-  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.15);
+  background: var(--yzh-color-bg-card, #fff);
+  border-radius: var(--yzh-radius-lg, 8px) var(--yzh-radius-lg, 8px) 0 0;
+  box-shadow: var(--yzh-shadow-lg, 0 6px 24px rgba(0, 0, 0, 0.1));
   z-index: 2000;
   overflow: hidden;
 
@@ -186,8 +190,8 @@ defineExpose({ start })
     justify-content: space-between;
     align-items: center;
     padding: 10px 15px;
-    background: #f5f7fa;
-    border-bottom: 1px solid #eee;
+    background: var(--yzh-color-bg-page, #f5f7fa);
+    border-bottom: 1px solid var(--yzh-color-border-lighter, #eee);
 
     .panel-title {
       display: flex;
@@ -214,18 +218,19 @@ defineExpose({ start })
       display: flex;
       gap: 15px;
       font-size: 12px;
-      color: #606266;
+      color: var(--yzh-color-text-regular, #606266);
 
-      .completed { color: #67c23a; }
-      .pending { color: #e6a23c; }
-      .failed { color: #f56c6c; }
-      .total { color: #909399; }
+      .stat-item { display: inline-flex; align-items: center; gap: 4px; }
+      .completed { color: var(--yzh-color-success, #67c23a); }
+      .pending { color: var(--yzh-color-warning, #e6a23c); }
+      .failed { color: var(--yzh-color-danger, #f56c6c); }
+      .total { color: var(--yzh-color-text-secondary, #909399); }
     }
 
     .current-file {
       margin-top: 8px;
       font-size: 12px;
-      color: #909399;
+      color: var(--yzh-color-text-secondary, #909399);
       display: flex;
       align-items: center;
       gap: 4px;
@@ -238,7 +243,7 @@ defineExpose({ start })
   .panel-minimized {
     padding: 8px 15px;
     font-size: 13px;
-    color: #606266;
+    color: var(--yzh-color-text-regular, #606266);
   }
 }
 </style>

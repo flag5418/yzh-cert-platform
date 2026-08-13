@@ -108,8 +108,8 @@ namespace VOL.Entity.CertPlatform.Dir
         public bool IsValid { get; set; }
 
         [NotMapped]
-        /// <summary>是否强制重命名（有子项时）</summary>
-        public bool Force { get; set; } = true;
+        /// <summary>是否强制重命名（有子项时）。默认 false：有子项时后端要求确认 force=true</summary>
+        public bool Force { get; set; } = false;
 
         /// <summary>
         /// 完整路径（从根到当前文件夹），用于路径判定

@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 # 项目路径
 PROJECT_DIR="/Volumes/Expand/wangqingquan/Documents/work/study/体系认证平台/src/server/Vue.NetCore/vol.api"
 WEB_API_DIR="$PROJECT_DIR/VOL.WebApi"
-PORT=9991
+PORT=9992
 
 # 打印带颜色的消息
 print_info() {

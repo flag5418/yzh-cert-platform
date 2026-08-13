@@ -10,6 +10,7 @@ using VOL.Entity.CertPlatform.DocExtraction;
 using VOL.Entity.CertPlatform.DocExtraction.DTOs;
 using VOL.Entity.CertPlatform.Dir;
 using VOL.Builder.IServices.CertPlatform;
+using YZH.Core.Extractor.Models;
 
 namespace VOL.WebApi.Controllers.CertPlatform
 {
@@ -153,7 +154,21 @@ namespace VOL.WebApi.Controllers.CertPlatform
             if (string.IsNullOrWhiteSpace(filePath))
                 return JsonNormal(new { success = false, message = "文件路径为空" });
 
-            var result = await extractor.ExtractAsync(filePath);
+            // StoragePath 是 MinIO 对象路径，下载到内存流后调用流式提取
+            var minio = AutofacContainerModule.GetService<VOL.Builder.IServices.CertPlatform.IMinIOHelper>();
+            FileExtractionResult result;
+            if (minio != null)
+            {
+                var (stream, _) = await minio.DownloadAsync(filePath);
+                using (stream)
+                {
+                    result = await extractor.ExtractAsync(stream, stdFile.FileName);
+                }
+            }
+            else
+            {
+                result = await extractor.ExtractAsync(filePath);
+            }
             return JsonNormal(new {
                 success = true,
                 data = new {
@@ -161,6 +176,8 @@ namespace VOL.WebApi.Controllers.CertPlatform
                     fileName = stdFile.FileName,
                     sourceType = result.SourceType.ToString(),
                     status = result.Status.ToString(),
+                    message = result.Message,
+                    errorMessage = result.ErrorMessage,
                     fieldCount = result.Fields.Count,
                     tableCount = result.Tables.Count
                 }

@@ -167,6 +167,11 @@ namespace VOL.Entity.CertPlatform.DocExtraction.DTOs
         /// 表格数据
         /// </summary>
         public Dictionary<string, List<Dictionary<string, object>>> Tables { get; set; }
+
+        /// <summary>
+        /// 提取过程消息（如“转换中/转换失败/不支持的文件类型”）
+        /// </summary>
+        public string Message { get; set; }
     }
 
     /// <summary>

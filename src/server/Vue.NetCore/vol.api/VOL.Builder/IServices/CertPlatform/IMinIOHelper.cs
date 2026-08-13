@@ -24,6 +24,11 @@ namespace VOL.Builder.IServices.CertPlatform
         /// <summary>重命名/移动MinIO对象（Copy+Delete）</summary>
         Task RenameAsync(string oldObjectName, string newObjectName);
 
+        /// <summary>列出指定前缀下的所有对象（递归）</summary>
+        Task<List<string>> ListObjectsAsync(string prefix);
+
+        /// <summary>递归删除指定前缀下的所有对象（用于删除文件夹时清理整棵存储树）</summary>
+        Task DeletePrefixAsync(string prefix);
 
         /// <summary>检查对象是否存在</summary>
         Task<bool> ExistsAsync(string objectName);

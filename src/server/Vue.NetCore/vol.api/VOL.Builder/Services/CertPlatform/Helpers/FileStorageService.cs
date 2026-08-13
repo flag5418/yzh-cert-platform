@@ -92,14 +92,15 @@ namespace VOL.Builder.Services.CertPlatform
             return (stream, contentType, file.FileName);
         }
 
-        /// <summary>删除文件（数据库软删除 + MinIO物理删除）</summary>
+        /// <summary>删除文件（数据库软删除 + MinIO物理删除，含转换产物）</summary>
         public async Task<bool> DeleteFileAsync(string fileCode)
         {
             var file = await _db.Set<StandardDirectoryFile>()
+                .AsTracking()
                 .FirstOrDefaultAsync(x => x.FileCode == fileCode && x.Enable == true);
             if (file == null) return false;
 
-            // 删除MinIO对象
+            // 删除MinIO对象（原文件 + 转换产物）
             if (!string.IsNullOrEmpty(file.StoragePath))
             {
                 try
@@ -110,6 +111,17 @@ namespace VOL.Builder.Services.CertPlatform
                 {
                     Console.WriteLine($"[FileStorageService.Delete] MinIO删除失败: {ex.Message}");
                     // MinIO删除失败不阻断数据库操作
+                }
+            }
+            if (!string.IsNullOrEmpty(file.ConvertedStoragePath))
+            {
+                try
+                {
+                    await _minioHelper.DeleteAsync(file.ConvertedStoragePath);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[FileStorageService.Delete] MinIO删除转换文件失败: {ex.Message}");
                 }
             }
 
@@ -124,10 +136,16 @@ namespace VOL.Builder.Services.CertPlatform
             return true;
         }
 
-        /// <summary>重命名文件 — 同步更新MinIO路径</summary>
+        /// <summary>
+        /// 重命名文件 — 同步更新MinIO路径（只替换路径末尾的文件名，保留目录前缀）
+        /// </summary>
         public async Task<bool> RenameFileAsync(string fileCode, string newFileName)
         {
+            if (string.IsNullOrWhiteSpace(newFileName))
+                return false;
+
             var file = await _db.Set<StandardDirectoryFile>()
+                .AsTracking()
                 .FirstOrDefaultAsync(x => x.FileCode == fileCode && x.Enable == true);
             if (file == null) return false;
 
@@ -138,38 +156,61 @@ namespace VOL.Builder.Services.CertPlatform
             // if (hasRules) throw new InvalidOperationException("该文件有绑定的规则，无法重命名");
 
             var oldStoragePath = file.StoragePath;
-            var newStoragePath = _codeGenerator.GenerateStoragePathV2(
-                "CB001", // TODO: 从配置文件获取
-                "", // 从DirectoryCode解析
-                "",
-                file.FolderCode.Replace("|", "-"),
-                newFileName);
+            var newStoragePath = ReplaceFileNameInPath(oldStoragePath, newFileName);
+            var oldConvertedPath = file.ConvertedStoragePath;
+            var newConvertedPath = ReplaceFileNameInPath(oldConvertedPath, newFileName);
 
-            // 同步MinIO
-            try
+            // 同步MinIO（原文件 + 转换产物）
+            if (!string.IsNullOrEmpty(oldStoragePath) && newStoragePath != oldStoragePath)
             {
-                await _minioHelper.RenameAsync(oldStoragePath, newStoragePath);
+                try
+                {
+                    await _minioHelper.RenameAsync(oldStoragePath, newStoragePath);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[FileStorageService.Rename] MinIO重命名失败: {ex.Message}");
+                    return false; // 主文件移动失败则整体失败，避免 DB 指向不存在的对象
+                }
             }
-            catch (Exception ex)
+            if (!string.IsNullOrEmpty(oldConvertedPath) && newConvertedPath != oldConvertedPath)
             {
-                Console.WriteLine($"[FileStorageService.Rename] MinIO重命名失败: {ex.Message}");
-                // MinIO重命名失败不阻断数据库操作
+                try
+                {
+                    await _minioHelper.RenameAsync(oldConvertedPath, newConvertedPath);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[FileStorageService.Rename] MinIO转换文件重命名失败: {ex.Message}");
+                }
             }
 
             // 更新数据库
             file.FileName = newFileName;
             file.FileType = Path.GetExtension(newFileName)?.TrimStart('.') ?? "file";
             file.StoragePath = newStoragePath;
+            file.ConvertedStoragePath = newConvertedPath;
             file.ModifyDate = DateTime.Now;
+            file.FullPath = ReplaceFileNameInPath(file.FullPath, newFileName);
 
             await _db.SaveChangesAsync();
             return true;
+        }
+
+        /// <summary>将路径末尾的文件名替换为新文件名（保留目录前缀）</summary>
+        private static string ReplaceFileNameInPath(string fullPath, string newFileName)
+        {
+            if (string.IsNullOrEmpty(fullPath))
+                return fullPath;
+            var idx = fullPath.LastIndexOf('/');
+            return idx < 0 ? newFileName : fullPath.Substring(0, idx + 1) + newFileName;
         }
 
         /// <summary>替换文件（上传新文件并删除旧文件）</summary>
         public async Task<StandardDirectoryFile> ReplaceFileAsync(string fileCode, IFormFile newFile)
         {
             var oldFile = await _db.Set<StandardDirectoryFile>()
+                .AsTracking()
                 .FirstOrDefaultAsync(x => x.FileCode == fileCode && x.Enable == true);
             if (oldFile == null)
                 throw new ArgumentException($"文件不存在: {fileCode}");

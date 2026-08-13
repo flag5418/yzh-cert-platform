@@ -1,14 +1,6 @@
 <template>
   <div class="doc-extraction-rule">
-    <!-- 顶部导航 -->
-    <CertPageHeader title="文档提取规则管理" :icon="IconFileChecked">
-      <template #actions>
-        <el-button @click="goBack">返回列表</el-button>
-        <el-button type="primary" @click="saveRule" :loading="saving">保存规则</el-button>
-      </template>
-    </CertPageHeader>
-
-    <!-- 三栏布局 -->
+    <!-- 三栏布局：目录树 / 预览 / 操作区 -->
     <div class="main-container">
       <!-- 左侧：文件目录树（certcore 通用件，全局复用） -->
       <div class="left-panel" :style="{ width: leftPanelWidth + 'px' }">
@@ -96,13 +88,13 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { CertDirectoryTree, YzhEmptyState } from '@/certcore'
-import { IconFile, IconFileChecked, IconAnalyze, IconPrompt } from '@/yzh'
+import { CertDirectoryTree } from '@/certcore'
+import { YzhEmptyState, YzhStatusBadge } from '@/yzh'
+import { IconFile, IconAnalyze, IconPrompt } from '@/yzh'
 import { aiAnalyzeDocument } from './api'
 import AIAnalysisTab from './components/AIAnalysisTab.vue'
 import DocPreview from './components/DocPreview.vue'
 import PromptVerifyTab from './components/PromptVerifyTab.vue'
-import { YzhStatusBadge } from '@/yzh'
 
 const router = useRouter()
 
@@ -139,10 +131,6 @@ const fieldCount = computed(() => analysisFields.value.length)
 const tableCount = computed(() => analysisTables.value.length)
 
 // 方法
-const goBack = () => {
-  router.back()
-}
-
 const onFileSelect = (file) => {
   console.log('[DocExtractionRule] ✅ onFileSelect 触发:',
     { id: file?.id, name: file?.name, type: file?.type, storagePath: file?.storagePath, mimeType: file?.mimeType })
@@ -198,7 +186,13 @@ const onAIAnalyze = async () => {
     }
     // 原始JSON展示
     rawJsonDisplay.value = JSON.stringify(data ?? res, null, 2)
-    ElMessage.success('分析完成')
+    // 后端返回的 Message 可能包含明确原因（如文件转换中/转换失败/不支持的类型），必须展示给用户
+    const message = data?.Message ?? data?.message
+    if (message && message !== 'AI分析完成') {
+      ElMessage.warning(message)
+    } else {
+      ElMessage.success('分析完成')
+    }
   } catch (err) {
     console.error('[DocExtractionRule] ❌ 分析失败:', err)
     ElMessage.error('AI分析失败: ' + (err?.message ?? '未知错误'))
@@ -422,6 +416,11 @@ const startResizeLeft = (e) => {
   line-height: 44px;
   font-size: var(--yzh-font-size-sm, 13px);
   color: var(--yzh-color-text-regular, #606266);
+  padding: 0 var(--yzh-space-5, 20px);
+}
+
+/* EP 内置「首/末 Tab 去内边距」规则特异性更高，直接给 nav-wrap 加内边距更可靠，且与内容区 20px 对齐 */
+.right-tabs :deep(.el-tabs__nav-wrap) {
   padding: 0 var(--yzh-space-5, 20px);
 }
 

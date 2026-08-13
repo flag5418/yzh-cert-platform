@@ -6,7 +6,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
 
-PORT=9991
+PORT=9992
 
 print_info() {
     echo -e "${GREEN}[INFO]${NC} $1"

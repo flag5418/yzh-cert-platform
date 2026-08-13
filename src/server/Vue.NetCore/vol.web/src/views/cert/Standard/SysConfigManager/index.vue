@@ -1,8 +1,6 @@
 <template>
   <div class="sys-config-page">
-    <div class="config-header">
-      <h3>系统参数配置</h3>
-    </div>
+    <CertPageHeader title="系统参数配置" :icon="IconSetting" />
 
     <el-tabs v-model="activeCategory" @tab-change="loadConfigs">
       <el-tab-pane
@@ -53,6 +51,8 @@
 <script setup>
 import { ref, onMounted, getCurrentInstance } from 'vue'
 import { ElMessage } from 'element-plus'
+import { CertPageHeader } from '@/certcore'
+import { IconSetting } from '@/yzh'
 
 const { proxy } = getCurrentInstance()
 const loading = ref(false)
@@ -103,22 +103,14 @@ onMounted(() => {
 
 <style scoped lang="less">
 .sys-config-page {
-  padding: 20px;
-
-  .config-header {
-    margin-bottom: 15px;
-    h3 {
-      margin: 0;
-      font-size: 18px;
-    }
-  }
+  padding: var(--yzh-space-5, 20px);
 
   .readonly-value {
-    color: #909399;
+    color: var(--yzh-color-text-secondary, #909399);
   }
 
   .config-footer {
-    margin-top: 15px;
+    margin-top: var(--yzh-space-4, 16px);
     text-align: right;
   }
 }

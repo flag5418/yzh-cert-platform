@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -38,6 +39,23 @@ namespace VOL.Builder.Services.CertPlatform
         private async Task<FileExtractionResult> ExtractDocumentContentAsync(StandardDirectoryFile fileInfo, string skill)
         {
             if (fileInfo == null) return FileExtractionResult.CreateBase("unknown");
+
+            // .doc 旧格式必须依赖 doc→docx 转换产物才能提取（NPOI 无 HWPF）。
+            // 转换未完成/失败时给出明确提示，而不是让用户看到笼统的“不支持的文件类型”。
+            var fileExt = Path.GetExtension(fileInfo.FileName ?? "").TrimStart('.').ToLower();
+            if (fileExt == "doc" && string.IsNullOrEmpty(fileInfo.ConvertedStoragePath))
+            {
+                var r = FileExtractionResult.CreateBase(fileInfo.FileName);
+                r.Status = YZH.Core.Extractor.Models.ExtractStatus.Unsupported;
+                r.Message = (fileInfo.ConvertStatus ?? "").ToLowerInvariant() switch
+                {
+                    "converting" => $"文件正在转换中（.doc→.docx），转换完成后即可分析，请稍后重试（{fileInfo.FileName}）",
+                    "failed" => $"文件转换失败：{fileInfo.ConvertMessage ?? "未知原因"}，请重新上传或联系管理员（{fileInfo.FileName}）",
+                    _ => $"文件尚未完成 doc→docx 转换，转换完成后即可分析，请稍后重试（{fileInfo.FileName}）"
+                };
+                return r;
+            }
+
             var storagePath = fileInfo.ConvertedStoragePath ?? fileInfo.StoragePath;
             if (string.IsNullOrWhiteSpace(storagePath))
             {
@@ -58,6 +76,18 @@ namespace VOL.Builder.Services.CertPlatform
 
             try
             {
+                // StoragePath 是 MinIO 对象路径，需下载到内存流后调用流式提取（提取器要求本地文件/可寻址流）
+                var minio = AutofacContainerModule.GetService<VOL.Builder.IServices.CertPlatform.IMinIOHelper>();
+                if (minio != null)
+                {
+                    var (stream, _) = await minio.DownloadAsync(storagePath);
+                    using (stream)
+                    {
+                        return await extractor.ExtractAsync(stream, fileInfo.FileName);
+                    }
+                }
+
+                // 无 MinIO 时回退：路径可能是本地文件
                 return await extractor.ExtractAsync(storagePath);
             }
             catch
@@ -106,7 +136,8 @@ namespace VOL.Builder.Services.CertPlatform
                 {
                     Fields = new(),
                     Tables = new(),
-                    Message = $"不支持的文件类型：{extraction.Message ?? "未知原因"}，请确认文件已转换为 .docx/.xlsx 格式"
+                    // 提取器返回的 Message 已包含具体原因（如“转换中/转换失败/旧格式不支持”），直接透传给前端
+                    Message = string.IsNullOrEmpty(extraction.Message) ? "不支持的文件类型，请确认文件已转换为 .docx/.xlsx 格式" : extraction.Message
                 };
 
             if (extraction.Status == YZH.Core.Extractor.Models.ExtractStatus.OcrRequired)
@@ -123,7 +154,7 @@ namespace VOL.Builder.Services.CertPlatform
             var docContent = BuildStructuredContext(extraction);
             var workflowEngine = AutofacContainerModule.GetService<IWorkflowEngine>();
             if (workflowEngine == null)
-                return new AIAnalyzeResponse { Fields = new(), Tables = new(), Message = "工作流引擎未注册" };
+                return new AIAnalyzeResponse { Fields = new(), Tables = new(), Message = "AI 分析服务未配置（LLM 工作流未注册），文档内容已提取成功，可先在“提示词与验证”页签配置提取规则" };
 
             var analyzePrompt = await BuildAnalysisPromptAsync(skill);
             var workflowJson = BuildExtractWorkflow(analyzePrompt);
@@ -153,7 +184,13 @@ namespace VOL.Builder.Services.CertPlatform
         private async Task<ExtractionData> CallAIForExtractionAsync(YZH.Core.Extractor.Models.FileExtractionResult extraction, string prompt)
         {
             if (extraction == null || extraction.Sections.Count == 0 || string.IsNullOrWhiteSpace(prompt))
+            {
+                // 提取层未产生内容时，把具体原因（如“转换中/转换失败/不支持”）透传给前端
+                var msg = extraction?.Message;
+                if (!string.IsNullOrEmpty(msg))
+                    return new ExtractionData { Fields = new(), Tables = new(), Message = msg };
                 return new ExtractionData { Fields = new(), Tables = new() };
+            }
 
             var docContent = BuildStructuredContext(extraction);
             var workflowEngine = AutofacContainerModule.GetService<IWorkflowEngine>();

@@ -22,7 +22,7 @@
     "@vue-office/pdf": "^2.0.10",
     "ali-oss": "^6.23.0",
     "axios": "^1.15.0",
-    "echarts": "^5.6.0",
+    "echarts": "^6.1.0",
     "element-plus": "^2.11.4",
     "less": "^4.4.0",
     "pinia": "^3.0.3",

@@ -23,7 +23,7 @@ export { usePolling } from './composables/usePolling'
 /* utils */
 export { formatFileSize, formatDate, formatDateTime } from './utils/format'
 export { isOk, getData, getMessage, unwrap, pickCamel } from './utils/api'
-export { downloadBlob, parseFileNameFromDisposition, fileNameOf } from './utils/download'
+export { downloadBlob, downloadBlobPost, parseFileNameFromDisposition, fileNameOf } from './utils/download'
 export {
   CONVERT_STATUS_MAP,
   convertStatusInfo,

@@ -55,6 +55,10 @@ public class NpoiWordExtractor : ITextExtractor
                 return result;
             }
 
+            // NPOI CT_Jc 不认识 OOXML 的 start/end 对齐值（LibreOffice 转换产物常见），
+            // 解析 document.xml 时会抛 "Requested value 'start' was not found"，先做兼容替换。
+            stream = SanitizeAlignmentValues(stream);
+
             ExtractOpenXml(stream, result, opts);
 
             result.Status = ExtractStatus.Success;
@@ -148,6 +152,111 @@ public class NpoiWordExtractor : ITextExtractor
 
         result.SourceInfo.DetectedType = ExtractSourceType.Word;
         result.SourceInfo.StructureCount = result.Sections.Count;
+    }
+
+    /// <summary>
+    /// 将 docx 包内 XML 的 start/end 对齐值替换为 NPOI 认识的 left/right，
+    /// 兼容 LibreOffice 等产出的 docx（NPOI CT_Jc 仅支持 left/right/center 等）。
+    /// <para>docx 是 zip 容器，须解压逐条目改写后再重新打包；仅对含目标值的条目做替换。</para>
+    /// </summary>
+    private static Stream SanitizeAlignmentValues(Stream stream)
+    {
+        if (!stream.CanRead)
+        {
+            return stream;
+        }
+
+        try
+        {
+            if (stream.CanSeek)
+            {
+                stream.Position = 0;
+            }
+
+            using var input = new MemoryStream();
+            stream.CopyTo(input);
+            input.Position = 0;
+
+            var output = new MemoryStream();
+            using (var archive = new System.IO.Compression.ZipArchive(input, System.IO.Compression.ZipArchiveMode.Read, leaveOpen: true))
+            using (var writer = new System.IO.Compression.ZipArchive(output, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+            {
+                foreach (var entry in archive.Entries)
+                {
+                    var newEntry = writer.CreateEntry(entry.FullName, System.IO.Compression.CompressionLevel.Optimal);
+                    using var src = entry.Open();
+                    using var dst = newEntry.Open();
+                    if (entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
+                        || entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+                    {
+                        using var entryMs = new MemoryStream();
+                        src.CopyTo(entryMs);
+                        var data = entryMs.ToArray();
+                        data = ReplaceAscii(data, "w:val=\"start\"", "w:val=\"left\"");
+                        data = ReplaceAscii(data, "w:val=\"end\"", "w:val=\"right\"");
+                        dst.Write(data, 0, data.Length);
+                    }
+                    else
+                    {
+                        src.CopyTo(dst);
+                    }
+                }
+            }
+
+            output.Position = 0;
+            return output;
+        }
+        catch
+        {
+            return stream;
+        }
+    }
+
+    /// <summary>
+    /// ASCII 字节序列替换（避免对二进制流做字符串解码）。
+    /// </summary>
+    private static byte[] ReplaceAscii(byte[] source, string oldStr, string newStr)
+    {
+        var oldBytes = System.Text.Encoding.ASCII.GetBytes(oldStr);
+        var newBytes = System.Text.Encoding.ASCII.GetBytes(newStr);
+        if (oldBytes.Length == 0)
+        {
+            return source;
+        }
+
+        var list = new List<byte>(source.Length + 32);
+        var i = 0;
+        while (i <= source.Length - oldBytes.Length)
+        {
+            var match = true;
+            for (var j = 0; j < oldBytes.Length; j++)
+            {
+                if (source[i + j] != oldBytes[j])
+                {
+                    match = false;
+                    break;
+                }
+            }
+
+            if (match)
+            {
+                list.AddRange(newBytes);
+                i += oldBytes.Length;
+            }
+            else
+            {
+                list.Add(source[i]);
+                i++;
+            }
+        }
+
+        while (i < source.Length)
+        {
+            list.Add(source[i]);
+            i++;
+        }
+
+        return list.ToArray();
     }
 
     /// <summary>

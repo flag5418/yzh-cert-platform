@@ -1,9 +1,11 @@
 <template>
   <div class="directory-manager">
-    <!-- 上传队列顶部通知栏 -->
+    <!-- 上传队列顶部通知栏（只展示当前 机构+标准+阶段 的任务） -->
     <UploadQueueBanner
+      ref="uploadQueueBannerRef"
       :tasks="activeUploadTasks"
       @cancel="handleCancelUploadTask"
+      @clear-done="clearFinishedTasks"
     />
 
     <!-- 左侧面板 -->
@@ -25,9 +27,9 @@
           <!-- 机构 -->
           <div class="tree-node level-0" @click="toggleExpand(org)">
             <el-icon class="tree-toggle" :class="{ expanded: org.expanded }"
-              ><ArrowRight
+              ><IconForward
             /></el-icon>
-            <el-icon class="tree-icon org"><OfficeBuilding /></el-icon>
+            <el-icon class="tree-icon org"><IconOfficeBuilding /></el-icon>
             <span class="tree-label">{{ org.label }}</span>
             <el-badge :value="org.children ? org.children.length : 0" type="info" />
           </div>
@@ -36,9 +38,9 @@
             <template v-for="std in org.children" :key="std.id">
               <div class="tree-node level-1" @click="toggleExpand(std)">
                 <el-icon class="tree-toggle" :class="{ expanded: std.expanded }"
-                  ><ArrowRight
+                  ><IconForward
                 /></el-icon>
-                <el-icon class="tree-icon standard"><Document /></el-icon>
+                <el-icon class="tree-icon standard"><IconFile /></el-icon>
                 <span class="tree-label">{{ std.label }}</span>
                 <el-badge :value="std.children ? std.children.length : 0" type="info" />
               </div>
@@ -50,8 +52,8 @@
                 :class="{ active: currentPhase && currentPhase.id === phase.id }"
                 @click="selectPhase(phase)"
               >
-                <el-icon class="tree-toggle" style="visibility: hidden"><ArrowRight /></el-icon>
-                <el-icon class="tree-icon phase"><Calendar /></el-icon>
+                <el-icon class="tree-toggle" style="visibility: hidden"><IconForward /></el-icon>
+                <el-icon class="tree-icon phase"><IconCalendar /></el-icon>
                 <span class="tree-label">{{ phase.label }}</span>
               </div>
             </template>
@@ -90,29 +92,29 @@
 
       <!-- 工具栏 -->
       <div class="toolbar" v-if="currentPhase">
-        <el-badge :value="activeUploadTasks.length" :hidden="activeUploadTasks.length === 0">
-          <el-button type="primary" size="small" @click="showUploadPanel = true" :disabled="isUploading">
-            <el-icon><Upload /></el-icon> 上传队列
+        <el-badge :value="runningUploadCount" :hidden="runningUploadCount === 0">
+          <el-button type="primary" size="small" @click="showUploadQueue" :disabled="isUploading">
+            <el-icon><IconUpload /></el-icon> 上传队列
           </el-button>
         </el-badge>
         <el-button type="primary" size="small" @click="handleNewFolder" :disabled="isUploading">
-          <el-icon><FolderAdd /></el-icon> 新建文件夹
+          <el-icon><IconFolderAdd /></el-icon> 新建文件夹
         </el-button>
         <el-button size="small" @click="handleUpload" :disabled="isUploading">
-          <el-icon><Upload /></el-icon> 上传文件
+          <el-icon><IconUpload /></el-icon> 上传文件
         </el-button>
         <el-divider direction="vertical" />
         <el-button size="small" @click="handleExport" :disabled="selectedItems.size === 0 || isUploading">
-          <el-icon><Download /></el-icon> 导出打包
+          <el-icon><IconDownload /></el-icon> 导出打包
         </el-button>
         <el-divider direction="vertical" />
         <el-button size="small" :disabled="isUploading">全选</el-button>
         <el-button size="small" type="danger" plain :disabled="isUploading" @click="deleteSelected">
-          <el-icon><Delete /></el-icon> 删除
+          <el-icon><IconDelete /></el-icon> 删除
         </el-button>
         <div style="flex: 1"></div>
         <el-button size="small" type="warning" plain :disabled="isUploading" @click="handleHelp">
-          <el-icon><QuestionFilled /></el-icon> 使用帮助
+          <el-icon><IconHelp /></el-icon> 使用帮助
         </el-button>
       </div>
 
@@ -147,7 +149,7 @@
                 />
               </td>
               <td class="name-cell">
-                <el-icon class="folder-icon"><Folder /></el-icon>
+                <el-icon class="folder-icon"><IconFolder /></el-icon>
                 <span class="name-text folder-name">{{
                   folder.FolderName || folder.folderName
                 }}</span>
@@ -187,10 +189,10 @@
               </td>
               <td class="size-cell">{{ formatFileSize(file.FileSize || file.fileSize) }}</td>
               <td class="upload-status-cell">
-                <el-icon v-if="file.uploadStatus === 'uploading'" color="#409eff" class="is-spinning"><Loading /></el-icon>
-                <el-icon v-else-if="file.uploadStatus === 'uploaded' || file.uploadStatus === 'active'" color="#67c23a"><Check /></el-icon>
-                <el-icon v-else-if="file.uploadStatus === 'converting'" color="#409eff"><Document /></el-icon>
-                <el-icon v-else-if="file.uploadStatus === 'failed'" color="#f56c6c"><Close /></el-icon>
+                <el-icon v-if="file.uploadStatus === 'uploading'" color="var(--yzh-color-primary)" class="is-spinning"><IconLoading /></el-icon>
+                <el-icon v-else-if="file.uploadStatus === 'uploaded' || file.uploadStatus === 'active'" color="var(--yzh-color-success)"><IconSuccess /></el-icon>
+                <el-icon v-else-if="file.uploadStatus === 'converting'" color="var(--yzh-color-primary)"><IconFile /></el-icon>
+                <el-icon v-else-if="file.uploadStatus === 'failed'" color="var(--yzh-color-danger)"><IconClose /></el-icon>
                 <span v-if="file.uploadProgress > 0 && file.uploadProgress < 100" class="upload-percent">
                   {{ file.uploadProgress }}%
                 </span>
@@ -216,9 +218,12 @@
         </table>
 
         <!-- 空状态 -->
-        <el-empty
+        <YzhEmptyState
           v-if="currentFolders.length === 0 && currentFiles.length === 0"
-          description="暂无内容"
+          :icon="IconFolder"
+          title="暂无内容"
+          description="该目录下暂无文件夹或文件"
+          compact
         />
       </div>
 
@@ -228,13 +233,13 @@
       </div>
 
       <!-- 状态栏 -->
-      <div class="status-bar" v-if="currentPhase">
+      <CertStatusBar v-if="currentPhase">
         <span
           >共 {{ currentFolders.length + currentFiles.length }} 项 | 文件夹
           {{ currentFolders.length }} 个，文件 {{ currentFiles.length }} 个</span
         >
-        <span>总大小 {{ totalSizeFormatted }}</span>
-      </div>
+        <template #right><span>总大小 {{ totalSizeFormatted }}</span></template>
+      </CertStatusBar>
     </div>
 
     <!-- 新建文件夹弹窗 -->
@@ -327,8 +332,15 @@
             style="display: none"
             @change="handleFolderSelect"
           />
-          <div class="upload-trigger" @click="triggerUpload">
-            <el-icon class="upload-icon"><Upload /></el-icon>
+          <div
+            class="upload-trigger"
+            :class="{ 'is-dragging': dragActive }"
+            @click="triggerUpload"
+            @dragover.prevent="dragActive = true"
+            @dragleave="dragActive = false"
+            @drop.prevent="handleDrop"
+          >
+            <el-icon class="upload-icon"><IconUpload /></el-icon>
             <div class="upload-text">
               {{ uploadMode === 'file' ? '点击选择文件或拖拽到此处' : '点击选择文件夹' }}
             </div>
@@ -351,7 +363,7 @@
             <span class="file-item-name">{{ file.webkitRelativePath || file.name }}</span>
             <span class="file-item-size">{{ formatFileSize(file.size) }}</span>
             <el-button v-if="!uploading" type="danger" link size="small" @click="removeFile(index)">
-              <el-icon><Delete /></el-icon>
+              <el-icon><IconDelete /></el-icon>
             </el-button>
           </div>
         </div>
@@ -404,23 +416,16 @@
 
 <script setup>
 import http from '@/api/http'
-import {
-  ArrowRight,
-  Calendar,
-  Delete,
-  Document,
-  Download,
-  Folder,
-  FolderAdd,
-  OfficeBuilding,
-  QuestionFilled,
-  Upload,
-  Loading,
-  Check,
-  Close
-} from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import {
+  IconForward, IconCalendar, IconDelete, IconFile, IconDownload,
+  IconFolder, IconFolderAdd, IconOfficeBuilding, IconHelp, IconUpload,
+  IconLoading, IconSuccess, IconClose,
+  YzhEmptyState
+} from '@/yzh'
+import { CertStatusBar } from '@/certcore'
+import { formatFileSize, formatDate, downloadBlob, downloadBlobPost, fileNameOf } from '@/certcore'
 import ConvertProgressPanel from './ConvertProgressPanel.vue'
 import ConfigTab from './components/ConfigTab.vue'
 import UploadQueueBanner from './components/UploadQueueBanner.vue'
@@ -461,8 +466,9 @@ const uploadProgress = reactive({
 })
 
 // ========== 上传队列管理（SignalR 实时状态） ==========
-const uploadTasks = ref([])  // 活跃上传任务列表
+const uploadTasks = ref([])  // 上传任务列表（含已完成，按 directoryCode 隔离）
 const signalRConnection = ref(null)
+const uploadQueueBannerRef = ref(null)
 
 /**
  * 将 API 返回的 PascalCase 属性规范化为 camelCase
@@ -481,9 +487,9 @@ const normalizeItem = (item, type) => {
   if (n.CreateDate !== undefined) n.createDate = n.CreateDate
   if (n.ModifyDate !== undefined) n.modifyDate = n.ModifyDate
   if (n.IsValid !== undefined) n.isValid = n.IsValid
-  // 计算上传进度（从活跃任务中查找）
+  // 计算上传进度（从当前阶段的任务中查找，避免跨阶段串扰）
   if (type === 'file' && n.fileCode) {
-    const task = uploadTasks.value.find(t => t.taskId && t.files)
+    const task = uploadTasks.value.find(t => t.taskId && t.files && t.directoryCode === currentDirectoryCode.value)
     if (task) {
       const f = task.files.find(f => f.fileCode === n.fileCode)
       if (f) {
@@ -495,9 +501,33 @@ const normalizeItem = (item, type) => {
   return n
 }
 
-// 计算属性
-const isUploading = computed(() => uploadTasks.value.some(t => t.status === 'uploading'))
-const activeUploadTasks = computed(() => uploadTasks.value.filter(t => t.status !== 'done' && t.status !== 'cancelled'))
+// 当前机构+标准+阶段 的目录编码（用于队列隔离）
+const currentDirectoryCode = computed(() => (currentPhase.value ? buildDirectoryCode() : ''))
+
+// 计算属性：是否正在上传（仅针对当前阶段，不影响其他 机构/标准/阶段 的文件管理）
+const isUploading = computed(() =>
+  uploadTasks.value.some(t => t.directoryCode === currentDirectoryCode.value && (t.status === 'uploading' || t.status === 'converting'))
+)
+// 当前阶段的上传任务（含已完成，供横幅展示完成状态）
+const activeUploadTasks = computed(() =>
+  uploadTasks.value.filter(t => t.directoryCode === currentDirectoryCode.value)
+)
+// 当前阶段进行中的任务数（工具栏徽标）
+const runningUploadCount = computed(() =>
+  uploadTasks.value.filter(t => t.directoryCode === currentDirectoryCode.value && (t.status === 'uploading' || t.status === 'converting')).length
+)
+
+// 打开上传队列详情面板
+const showUploadQueue = () => {
+  uploadQueueBannerRef.value?.openPanel()
+}
+
+// 清除当前阶段已结束的任务（保持队列整洁）
+const clearFinishedTasks = () => {
+  uploadTasks.value = uploadTasks.value.filter(
+    t => t.directoryCode !== currentDirectoryCode.value || (t.status !== 'done' && t.status !== 'failed')
+  )
+}
 
 // 初始化 SignalR 连接（只连一次）
 const initSignalR = () => {
@@ -557,12 +587,27 @@ const updateTaskProgress = (progress) => {
 }
 
 // 开始监听某个任务的进度
-const subscribeToTask = (taskId) => {
-  if (!signalRConnection.value || signalRConnection.value.state !== signalR.HubConnectionState.Connected) {
+const subscribeToTask = async (taskId) => {
+  let conn = signalRConnection.value
+  if (!conn) {
     initSignalR()
+    conn = signalRConnection.value
   }
-  signalRConnection.value?.invoke('BroadcastUploadProgress', taskId, {})
-    .catch(err => console.warn('[SignalR] 订阅失败:', err))
+  if (!conn) return
+  // 确保连接就绪后再订阅（小文件上传可能瞬间完成，延迟订阅会错过“已完成”事件）
+  if (conn.state !== signalR.HubConnectionState.Connected) {
+    try {
+      await conn.start()
+    } catch (err) {
+      console.warn('[SignalR] 连接失败，无法订阅实时进度:', err.message)
+      return
+    }
+  }
+  try {
+    await conn.invoke('BroadcastUploadProgress', taskId, {})
+  } catch (err) {
+    console.warn('[SignalR] 订阅失败:', err)
+  }
 }
 
 // 取消任务
@@ -850,19 +895,30 @@ const confirmRename = async () => {
     return
   }
   const item = renameForm.item
-  const isFolder = !!(item.FolderCode || item.folderCode)
-  const code = item.FolderCode || item.folderCode || item.FileCode || item.fileCode
+  // 快照捕获新名称：ElMessageBox 确认框挂起期间，renameForm 可能被其他行的
+  // showRenameDialog 覆盖，force 重试必须用本次的目标名称，而不是全局最新值。
+  const newName = renameForm.newName
+  // 类型判断：文件记录也有 FolderCode（所属文件夹），不能用 FolderCode 判文件夹！
+  // 文件夹有 FolderName 且无 FileCode；文件有 FileName/FileCode。
+  const isFolder = !!(item.FolderName || item.folderName) && !(item.FileCode || item.fileCode)
+  const code = isFolder
+    ? item.FolderCode || item.folderCode
+    : item.FileCode || item.fileCode
   try {
     let res
+    // 注意：后端 Newtonsoft 使用 CamelCase 契约（大小写不敏感），
+    // 展开 item 时其 camelCase 字段（folderName/fileName）会覆盖 PascalCase 新值，
+    // 必须剔除旧名字段，只保留新名字。
+    const { folderName, fileName, ...rest } = item
     if (isFolder) {
       res = await http.post(`/api/standard-directory/folders/${code}`, {
-        ...item,
-        FolderName: renameForm.newName
+        ...rest,
+        FolderName: newName
       })
     } else {
       res = await http.post(`/api/standard-directory/files/${code}`, {
-        ...item,
-        FileName: renameForm.newName
+        ...rest,
+        FileName: newName
       })
     }
     if (res.Status === true || res.status === 0) {
@@ -873,14 +929,14 @@ const confirmRename = async () => {
       ElMessageBox.confirm(res.Message, '确认重命名', { type: 'warning' }).then(async () => {
         if (isFolder) {
           res = await http.post(`/api/standard-directory/folders/${code}`, {
-            ...item,
-            FolderName: renameForm.newName,
+            ...rest,
+            FolderName: newName,
             Force: true
           })
         } else {
           res = await http.post(`/api/standard-directory/files/${code}`, {
-            ...item,
-            FileName: renameForm.newName,
+            ...rest,
+            FileName: newName,
             Force: true
           })
         }
@@ -909,8 +965,10 @@ const deleteItem = async (item) => {
     return
   }
 
-  const isFolder = !!(item.FolderCode || item.folderCode)
-  const code = item.FolderCode || item.folderCode || item.FileCode || item.fileCode
+  const isFolder = !!(item.FolderName || item.folderName) && !(item.FileCode || item.fileCode)
+  const code = isFolder
+    ? item.FolderCode || item.folderCode
+    : item.FileCode || item.fileCode
   try {
     let res
     if (isFolder) res = await http.post(`/api/standard-directory/folders/${code}/delete`)
@@ -964,14 +1022,49 @@ const triggerUpload = () => {
   else folderInputRef.value?.click()
 }
 
+// ========== 上传文件类型白名单 ==========
+// 体系认证系统只允许上传文档/表格/图片等认证材料文件，
+// 过滤掉 .DS_Store、临时文件等无关文件，避免后期文件比对出现问题。
+const ALLOWED_UPLOAD_EXTS = [
+  // 文档
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'rtf',
+  // 图片
+  'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tif', 'tiff'
+]
+const HIDDEN_FILE_PATTERN = /(^|\/)\.[^/]+$/
+
+const isAllowedUploadFile = (file) => {
+  const name = file.webkitRelativePath || file.name || ''
+  // 过滤隐藏文件（如 .DS_Store、.gitignore）
+  if (HIDDEN_FILE_PATTERN.test(name)) return false
+  const ext = name.split('.').pop().toLowerCase()
+  return ALLOWED_UPLOAD_EXTS.includes(ext)
+}
+
+const appendAllowedFiles = (files) => {
+  const list = Array.from(files || [])
+  const allowed = list.filter(isAllowedUploadFile)
+  const rejected = list.filter(f => !isAllowedUploadFile(f))
+  if (rejected.length > 0) {
+    ElMessage.warning(`已过滤 ${rejected.length} 个不支持的文件（仅允许文档/图片）`)
+  }
+  uploadFileList.value = [...uploadFileList.value, ...allowed]
+}
+
 const handleFileSelect = (event) => {
-  uploadFileList.value = [...uploadFileList.value, ...Array.from(event.target.files)]
+  appendAllowedFiles(event.target.files)
   event.target.value = ''
 }
 
 const handleFolderSelect = (event) => {
-  uploadFileList.value = [...uploadFileList.value, ...Array.from(event.target.files)]
+  appendAllowedFiles(event.target.files)
   event.target.value = ''
+}
+
+const dragActive = ref(false)
+const handleDrop = (event) => {
+  dragActive.value = false
+  appendAllowedFiles(event.dataTransfer?.files)
 }
 
 const removeFile = (index) => uploadFileList.value.splice(index, 1)
@@ -1056,6 +1149,7 @@ const submitUpload = async () => {
     const newTask = {
       taskId,
       directoryCode,
+      name: currentPhase.value ? (currentPhase.value.label || currentPhase.value.phaseName || directoryCode) : directoryCode,
       status: 'uploading',
       totalFiles,
       uploadedFiles: 0,
@@ -1071,8 +1165,8 @@ const submitUpload = async () => {
       }))
     }
     uploadTasks.value.push(newTask)
-    // 连接 SignalR 监听实时进度
-    setTimeout(() => subscribeToTask(taskId), 500)
+    // 尽早订阅实时进度（放在上传循环前，避免错过完成事件）
+    subscribeToTask(taskId)
 
     let failed = false
     for (let i = 0; i < fileList.length; i++) {
@@ -1127,17 +1221,32 @@ const submitUpload = async () => {
       uploadProgress.status = 'done'
       await http.post(`/api/standard-directory/upload-cancel?taskId=${taskId}`)
       ElMessage.error(`上传完成，${uploadProgress.failed} 个文件失败，已回滚`)
+      // 无论 SignalR 是否送达，都同步更新队列状态
+      const failedTask = uploadTasks.value.find(t => t.taskId === taskId)
+      if (failedTask) {
+        failedTask.status = 'failed'
+        failedTask.failedFiles = uploadProgress.failed
+      }
     } else {
       uploadProgress.completed = totalFiles
       uploadProgress.status = 'done'
       const confirmRes = await http.post(`/api/standard-directory/upload-confirm?taskId=${taskId}`)
-      // 检查是否有文件需要转换
-      if (confirmRes.data && confirmRes.data.convertCount > 0) {
-        ElMessage.success(`上传成功，${confirmRes.data.convertCount} 个文件正在转换`)
+      // 检查是否有文件需要转换（接口返回 PascalCase：Data.ConvertCount）
+      const confirmData = confirmRes.Data || confirmRes.data
+      const convertCount = confirmData && (confirmData.ConvertCount ?? confirmData.convertCount)
+      if (convertCount > 0) {
+        ElMessage.success(`上传成功，${convertCount} 个文件正在转换`)
         // 显示转换进度面板
         convertPanelRef.value?.start(taskId)
       } else {
         ElMessage.success(`全部 ${totalFiles} 个文件上传成功`)
+      }
+      // 兜底：确认成功后直接把队列任务标记为完成（不依赖 SignalR 是否送达）
+      const doneTask = uploadTasks.value.find(t => t.taskId === taskId)
+      if (doneTask) {
+        doneTask.status = 'done'
+        doneTask.uploadedFiles = doneTask.totalFiles
+        doneTask.percent = 100
       }
       uploadFileList.value = []
       showUploadDialogFlag.value = false
@@ -1188,35 +1297,11 @@ const handleExport = async () => {
     }
   }
   try {
-    let token = ''
-    try {
-      const user = JSON.parse(localStorage.getItem('user'))
-      if (user && user.token) token = 'Bearer ' + user.token
-    } catch {}
-    const baseUrl = window.ipAddress || 'http://localhost:9992/'
-    const url = `${baseUrl}api/standard-directory/configs/${buildDirectoryCode()}/export`
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: token } : {})
-      },
-      body: JSON.stringify({ folderCodes, fileCodes })
-    })
-    if (!resp.ok) {
-      const text = await resp.text()
-      ElMessage.error('导出失败：' + (text || resp.statusText))
-      return
-    }
-    const blob = await resp.blob()
-    const disposition = resp.headers.get('Content-Disposition')
-    const match = disposition && disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
-    const fileName = match ? match[1].replace(/['"]/g, '') : 'export.zip'
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = fileName
-    a.click()
-    URL.revokeObjectURL(a.href)
+    await downloadBlobPost(
+      `/api/standard-directory/configs/${buildDirectoryCode()}/export`,
+      { folderCodes, fileCodes },
+      `${buildDirectoryCode()}-export.zip`
+    )
     ElMessage.success('导出成功')
   } catch (e) {
     ElMessage.error('导出失败：' + (e.message || e))
@@ -1238,51 +1323,16 @@ const downloadFile = async (file) => {
     return
   }
   try {
-    let token = ''
-    try {
-      const user = JSON.parse(localStorage.getItem('user'))
-      if (user && user.token) token = 'Bearer ' + user.token
-    } catch {}
-    const baseUrl = window.ipAddress || 'http://localhost:9992/'
-    const url = `${baseUrl}api/standard-directory/download?path=${encodeURIComponent(storagePath)}`
-    const resp = await fetch(url, {
-      headers: token ? { Authorization: token } : {}
-    })
-    if (!resp.ok) {
-      const text = await resp.text()
-      ElMessage.error('下载失败：' + (text || resp.statusText))
-      return
-    }
-    const blob = await resp.blob()
-    const disposition = resp.headers.get('Content-Disposition')
-    const match = disposition && disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
-    const fileName = match
-      ? match[1].replace(/['"]/g, '')
-      : file.FileName || file.fileName || 'download'
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = fileName
-    a.click()
-    URL.revokeObjectURL(a.href)
+    await downloadBlob(
+      `/api/standard-directory/download?path=${encodeURIComponent(storagePath)}`,
+      fileNameOf(file, 'download')
+    )
   } catch (e) {
     ElMessage.error('下载失败：' + (e.message || e))
   }
 }
 
 // ========== 工具函数 ==========
-const formatFileSize = (bytes) => {
-  if (!bytes || bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return '--'
-  return dateStr.substring(0, 10)
-}
-
 const getFileIconClass = (fileName) => {
   if (!fileName) return 'file-default'
   const ext = fileName.split('.').pop().toLowerCase()
@@ -1304,6 +1354,8 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+@import '@/yzh/styles/yzh.css';
+
 .directory-manager {
   /* 与标准页面对齐：四周留白 + 浅灰背景，让 padding 一眼能看出来（纯白背景会视觉上吃掉 padding） */
   position: absolute;
@@ -1313,9 +1365,9 @@ onUnmounted(() => {
   bottom: 16px;
   display: flex;
   overflow: hidden;
-  background: #f5f7fa;
-  gap: 16px;
-  border-radius: 4px;
+  background: var(--yzh-color-bg-page, #f5f7fa);
+  gap: var(--yzh-space-gap, 16px);
+  border-radius: var(--yzh-radius-sm, 4px);
 }
 
 /* 左侧面板：包一层白色卡片 + 圆角，与浅灰背景形成对比 */
@@ -1323,29 +1375,29 @@ onUnmounted(() => {
   width: 280px;
   height: 100%;
   overflow: hidden;
-  background: #fff;
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
+  background: var(--yzh-color-bg-card, #fff);
+  border: 1px solid var(--yzh-color-border, #e4e7ed);
+  border-radius: var(--yzh-radius-sm, 4px);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
 }
 
 .left-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid #ebeef5;
+  padding: var(--yzh-space-3, 12px) var(--yzh-space-4, 16px);
+  border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
   flex-shrink: 0;
 }
 
 .left-title {
-  font-weight: 500;
-  color: #303133;
-  font-size: 14px;
+  font-weight: var(--yzh-font-weight-medium, 500);
+  color: var(--yzh-color-text-primary, #303133);
+  font-size: var(--yzh-font-size-md, 14px);
 }
 
 .search-box {
-  padding: 12px 16px;
-  border-bottom: 1px solid #ebeef5;
+  padding: var(--yzh-space-3, 12px) var(--yzh-space-4, 16px);
+  border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
   flex-shrink: 0;
 }
 
@@ -1368,11 +1420,11 @@ onUnmounted(() => {
 }
 
 .tree-node:hover {
-  background: #f5f7fa;
+  background: var(--yzh-color-bg-hover, #f5f7fa);
 }
 .tree-node.active {
-  background: #ecf5ff;
-  color: #409eff;
+  background: var(--yzh-color-bg-active, #ecf5ff);
+  color: var(--yzh-color-primary, #409eff);
 }
 .tree-node.level-0 {
   padding-left: 16px;
@@ -1387,23 +1439,23 @@ onUnmounted(() => {
 
 .tree-toggle {
   transition: transform 0.2s;
-  color: #c0c4cc;
+  color: var(--yzh-color-text-disabled, #c0c4cc);
 }
 .tree-toggle.expanded {
   transform: rotate(90deg);
 }
 
 .tree-icon {
-  color: #909399;
+  color: var(--yzh-color-text-secondary, #909399);
 }
 .tree-icon.org {
-  color: #e6a23c;
+  color: var(--yzh-color-warning, #e6a23c);
 }
 .tree-icon.standard {
-  color: #409eff;
+  color: var(--yzh-color-primary, #409eff);
 }
 .tree-icon.phase {
-  color: #67c23a;
+  color: var(--yzh-color-success, #67c23a);
 }
 
 .tree-label {
@@ -1420,22 +1472,22 @@ onUnmounted(() => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--yzh-color-bg-card, #fff);
   min-width: 0;
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
+  border: 1px solid var(--yzh-color-border, #e4e7ed);
+  border-radius: var(--yzh-radius-sm, 4px);
 }
 
 /* 面包屑 */
 .breadcrumb {
-  padding: 12px 20px;
-  border-bottom: 1px solid #ebeef5;
+  padding: var(--yzh-space-3, 12px) var(--yzh-space-5, 20px);
+  border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
   flex-shrink: 0;
 }
 
 .clickable-breadcrumb {
   cursor: pointer;
-  color: #409eff;
+  color: var(--yzh-color-primary, #409eff);
 }
 .clickable-breadcrumb:hover {
   text-decoration: underline;
@@ -1443,11 +1495,11 @@ onUnmounted(() => {
 
 /* 工具栏 */
 .toolbar {
-  padding: 12px 20px;
-  border-bottom: 1px solid #ebeef5;
+  padding: var(--yzh-space-3, 12px) var(--yzh-space-5, 20px);
+  border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--yzh-space-2, 8px);
   flex-wrap: nowrap;
   flex-shrink: 0;
 }
@@ -1490,11 +1542,11 @@ onUnmounted(() => {
 
 .file-table th {
   padding: 10px 16px;
-  background: #f5f7fa;
-  border-bottom: 1px solid #ebeef5;
-  font-weight: 500;
-  color: #606266;
-  font-size: 13px;
+  background: var(--yzh-color-bg-hover, #f5f7fa);
+  border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
+  font-weight: var(--yzh-font-weight-medium, 500);
+  color: var(--yzh-color-text-regular, #606266);
+  font-size: var(--yzh-font-size-sm, 13px);
   text-align: left;
   position: sticky;
   top: 0;
@@ -1503,18 +1555,18 @@ onUnmounted(() => {
 
 .file-table td {
   padding: 0 16px;
-  border-bottom: 1px solid #ebeef5;
-  font-size: 13px;
-  color: #606266;
+  border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--yzh-color-text-regular, #606266);
   vertical-align: middle;
   height: 48px;
 }
 
 .file-table tr:hover {
-  background: #f5f7fa;
+  background: var(--yzh-color-bg-hover, #f5f7fa);
 }
 .file-table tr.selected {
-  background: #ecf5ff;
+  background: var(--yzh-color-bg-active, #ecf5ff);
 }
 
 .name-cell {
@@ -1532,56 +1584,44 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 .folder-name {
-  color: #303133;
-  font-weight: 500;
+  color: var(--yzh-color-text-primary, #303133);
+  font-weight: var(--yzh-font-weight-medium, 500);
 }
 
 .folder-icon {
-  color: #e6a23c;
+  color: var(--yzh-color-warning, #e6a23c);
   font-size: 18px;
   flex-shrink: 0;
 }
 
 .file-type-icon {
-  color: #909399;
+  color: var(--yzh-color-text-secondary, #909399);
   font-size: 18px;
   flex-shrink: 0;
 }
 .file-type-icon.file-pdf {
-  color: #f56c6c;
+  color: var(--yzh-color-danger, #f56c6c);
 }
 .file-type-icon.file-doc {
-  color: #409eff;
+  color: var(--yzh-color-primary, #409eff);
 }
 .file-type-icon.file-xls {
-  color: #67c23a;
+  color: var(--yzh-color-success, #67c23a);
 }
 .file-type-icon.file-image {
-  color: #909399;
+  color: var(--yzh-color-text-secondary, #909399);
 }
 
 .size-cell,
 .date-cell {
-  color: #909399;
+  color: var(--yzh-color-text-secondary, #909399);
 }
 
 .action-cell {
   white-space: nowrap;
 }
 
-/* 状态栏 */
-.status-bar {
-  padding: 10px 20px;
-  border-top: 1px solid #ebeef5;
-  background: #f5f7fa;
-  font-size: 13px;
-  color: #909399;
-  display: flex;
-  justify-content: space-between;
-  flex-shrink: 0;
-}
-
-/* 空状态 */
+/* 空状态（列表内部使用 compact 模式） */
 .empty-state {
   flex: 1;
   display: flex;
@@ -1597,16 +1637,16 @@ onUnmounted(() => {
 }
 
 .upload-area {
-  border: 2px dashed #dcdfe6;
-  border-radius: 8px;
-  padding: 32px;
+  border: 2px dashed var(--yzh-color-border, #dcdfe6);
+  border-radius: var(--yzh-radius-lg, 8px);
+  padding: var(--yzh-space-8, 32px);
   text-align: center;
   cursor: pointer;
-  margin-bottom: 16px;
+  margin-bottom: var(--yzh-space-4, 16px);
 }
 .upload-area:hover {
-  border-color: #409eff;
-  background: #ecf5ff;
+  border-color: var(--yzh-color-primary, #409eff);
+  background: var(--yzh-color-bg-active, #ecf5ff);
 }
 
 .upload-trigger {
@@ -1614,24 +1654,31 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
 }
+.upload-trigger.is-dragging {
+  transform: scale(1.02);
+}
+.upload-area:has(.is-dragging) {
+  border-color: var(--yzh-color-primary, #409eff);
+  background: var(--yzh-color-bg-active, #ecf5ff);
+}
 .upload-icon {
   font-size: 48px;
-  color: #909399;
-  margin-bottom: 12px;
+  color: var(--yzh-color-text-secondary, #909399);
+  margin-bottom: var(--yzh-space-3, 12px);
 }
 .upload-text {
-  font-size: 14px;
-  color: #303133;
-  margin-bottom: 8px;
+  font-size: var(--yzh-font-size-md, 14px);
+  color: var(--yzh-color-text-primary, #303133);
+  margin-bottom: var(--yzh-space-2, 8px);
 }
 .upload-hint {
-  font-size: 12px;
-  color: #c0c4cc;
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--yzh-color-text-disabled, #c0c4cc);
 }
 
 .upload-file-list {
-  border: 1px solid #ebeef5;
-  border-radius: 4px;
+  border: 1px solid var(--yzh-color-border-light, #ebeef5);
+  border-radius: var(--yzh-radius-sm, 4px);
   max-height: 200px;
   overflow-y: auto;
 }
@@ -1641,18 +1688,18 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 10px 12px;
-  background: #fafafa;
-  border-bottom: 1px solid #ebeef5;
-  font-size: 13px;
-  color: #606266;
+  background: var(--yzh-color-bg-hover, #fafafa);
+  border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--yzh-color-text-regular, #606266);
 }
 
 .file-list-item-sm {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  font-size: 13px;
+  padding: var(--yzh-space-2, 8px) var(--yzh-space-3, 12px);
+  border-bottom: 1px solid var(--yzh-color-border-lighter, #f0f0f0);
+  font-size: var(--yzh-font-size-sm, 13px);
 }
 
 .file-item-name {
@@ -1662,47 +1709,47 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 .file-item-size {
-  color: #909399;
+  color: var(--yzh-color-text-secondary, #909399);
   margin: 0 12px;
-  font-size: 12px;
+  font-size: var(--yzh-font-size-xs, 12px);
 }
 
 .upload-progress-area {
-  margin-top: 16px;
-  padding: 12px;
-  background: #fafafa;
-  border-radius: 4px;
+  margin-top: var(--yzh-space-4, 16px);
+  padding: var(--yzh-space-3, 12px);
+  background: var(--yzh-color-bg-hover, #fafafa);
+  border-radius: var(--yzh-radius-sm, 4px);
 }
 .progress-info {
-  margin-bottom: 8px;
-  font-size: 13px;
-  color: #606266;
+  margin-bottom: var(--yzh-space-2, 8px);
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--yzh-color-text-regular, #606266);
 }
 .text-success {
-  color: #67c23a;
+  color: var(--yzh-color-success, #67c23a);
 }
 .text-danger {
-  color: #f56c6c;
+  color: var(--yzh-color-danger, #f56c6c);
 }
 
 /* 帮助内容 */
 .help-content h4 {
-  color: #303133;
-  font-size: 14px;
+  color: var(--yzh-color-text-primary, #303133);
+  font-size: var(--yzh-font-size-md, 14px);
   margin: 16px 0 8px 0;
   padding-bottom: 6px;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
 }
 .help-content h4:first-child {
   margin-top: 0;
 }
 .help-content p {
-  color: #606266;
-  line-height: 1.6;
+  color: var(--yzh-color-text-regular, #606266);
+  line-height: var(--yzh-line-height-base, 1.6);
   margin-bottom: 8px;
 }
 .help-content ul {
-  color: #606266;
+  color: var(--yzh-color-text-regular, #606266);
   line-height: 1.8;
   padding-left: 20px;
   margin-bottom: 8px;
@@ -1711,19 +1758,19 @@ onUnmounted(() => {
   margin-bottom: 4px;
 }
 .help-content strong {
-  color: #303133;
+  color: var(--yzh-color-text-primary, #303133);
 }
 
 .code-example {
-  background: #f5f7fa;
-  border: 1px solid #ebeef5;
-  border-radius: 4px;
-  padding: 12px;
+  background: var(--yzh-color-bg-page, #f5f7fa);
+  border: 1px solid var(--yzh-color-border-light, #ebeef5);
+  border-radius: var(--yzh-radius-sm, 4px);
+  padding: var(--yzh-space-3, 12px);
   font-family: monospace;
-  font-size: 13px;
-  color: #606266;
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--yzh-color-text-regular, #606266);
   line-height: 1.8;
-  margin-bottom: 12px;
+  margin-bottom: var(--yzh-space-3, 12px);
 }
 
 /* 弹窗 — 不用 scoped，因为 el-dialog teleport 到 body */
