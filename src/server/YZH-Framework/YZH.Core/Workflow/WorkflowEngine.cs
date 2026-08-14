@@ -82,7 +82,7 @@ var wf = JsonSerializer.Deserialize<WorkflowConfig>(workflowConfigJson, opts)
         {
             var skill = _registry.Get(node.SkillCode)
                         ?? throw new UnknownSkillException(node.SkillCode);
-            var inputs = ResolveInputs(node.Inputs, outputs);
+            var inputs = ResolveInputs(node.Inputs, outputs, context.Inputs);
             var skillCtx = new SkillContext
             {
                 Inputs = inputs,
@@ -167,23 +167,32 @@ var wf = JsonSerializer.Deserialize<WorkflowConfig>(workflowConfigJson, opts)
             return result;
         }
 
-        private static Dictionary<string, object> ResolveInputs(Dictionary<string, object> inputs, Dictionary<string, IDictionary<string, object>> outputs)
+        private static Dictionary<string, object> ResolveInputs(Dictionary<string, object> inputs,
+            Dictionary<string, IDictionary<string, object>> outputs, IDictionary<string, object> workflowInputs)
         {
             var resolved = new Dictionary<string, object>();
             foreach (var (key, val) in inputs)
             {
                 var str = val?.ToString() ?? string.Empty;
-                resolved[key] = ResolveTemplate(str, outputs);
+                resolved[key] = ResolveTemplate(str, outputs, workflowInputs);
             }
             return resolved;
         }
 
-        private static object ResolveTemplate(string str, Dictionary<string, IDictionary<string, object>> outputs)
+        private static object ResolveTemplate(string str, Dictionary<string, IDictionary<string, object>> outputs,
+            IDictionary<string, object> workflowInputs)
         {
             if (!str.Contains("{{")) return str;
             return System.Text.RegularExpressions.Regex.Replace(str, @"\{\{(.*?)\}\}", m =>
             {
                 var refPart = m.Groups[1].Value.Trim();
+                if (refPart.StartsWith("input.")) // {{input.document_content}} → 工作流输入
+                {
+                    var key = refPart.Substring("input.".Length);
+                    if (workflowInputs != null && workflowInputs.TryGetValue(key, out var v))
+                        return (v ?? string.Empty).ToString() ?? string.Empty;
+                    return string.Empty;
+                }
                 if (refPart.StartsWith("n")) // {{n1.output}} or {{n1.port}}
                 {
                     var parts = refPart.Split('.');

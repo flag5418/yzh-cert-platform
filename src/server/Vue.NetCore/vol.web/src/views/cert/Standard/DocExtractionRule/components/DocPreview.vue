@@ -28,13 +28,22 @@
         </div>
       </template>
 
-      <!-- 图片预览 -->
+      <!-- 图片预览：el-image 优先，失败时降级为原生 <img>（容错性更强） -->
       <template v-else-if="isImage">
         <el-image
+          v-if="!imageFallback"
           :src="previewUrl"
           :preview-src-list="[previewUrl]"
           fit="contain"
           class="image-preview"
+          @error="onImageError"
+        />
+        <!-- 降级：原生 img 标签（支持浏览器能解码的所有图片格式，包括 TIFF/WebP/HEIC 等） -->
+        <img
+          v-else
+          :src="previewUrl"
+          class="image-fallback-img"
+          alt="图片预览"
         />
       </template>
 
@@ -97,13 +106,23 @@
         />
       </template>
 
-      <!-- PDF 文档 -->
+      <!-- PDF 文档：vue-office-pdf 优先，失败时降级为 iframe（浏览器原生渲染，容错性更强） -->
       <template v-else-if="isPdf && previewUrl">
+        <!-- 优先使用 vue-office-pdf（支持文本选择/复制） -->
         <vue-office-pdf
+          v-if="!pdfFallback"
           :src="previewUrl"
           style="height: 100%; min-height: 0"
           @rendered="onRendered"
-          @error="onError"
+          @error="onPdfError"
+        />
+        <!-- 降级：浏览器原生 PDF 渲染（兼容损坏/加密/扫描件等特殊 PDF） -->
+        <iframe
+          v-else
+          :src="previewUrl"
+          class="pdf-fallback-iframe"
+          frameborder="0"
+          title="PDF 预览"
         />
       </template>
 
@@ -153,6 +172,8 @@ const previewUrl = ref('') /* 图片/PDF 的 blob URL / 原始路径兜底 */
 const previewBuffer = ref(null) /* 传给 vue-office-docx/excel 的 ArrayBuffer（通过校验才赋值） */
 const previewError = ref(null) /* 降级页提示 */
 const textContent = ref('') /* 文本预览 */
+const pdfFallback = ref(false) /* PDF 降级标记：vue-office-pdf 失败时切换为 iframe */
+const imageFallback = ref(false) /* 图片降级标记：el-image 失败时切换为原生 img */
 
 /* ============ 1. 文件类型分类（速查.md 官方支持矩阵） ============ */
 const ext = computed(() => {
@@ -352,6 +373,8 @@ const loadPreview = async () => {
   previewBuffer.value = null
   previewError.value = null
   textContent.value = ''
+  pdfFallback.value = false /* 重置 PDF 降级标记 */
+  imageFallback.value = false /* 重置图片降级标记 */
   if (!props.file) {
     console.log('[DocPreview] 无 props.file，返回')
     return
@@ -496,6 +519,26 @@ const onError = (e) => {
   previewError.value = '文档渲染失败: ' + (e?.message || e || '未知错误')
   ElMessage.error(previewError.value)
 }
+
+/**
+ * PDF 专用错误处理：vue-office-pdf（pdf.js）无法解析的损坏/加密/扫描件 PDF
+ * 自动降级为浏览器原生 iframe 渲染，容错性远强于 pdf.js
+ */
+const onPdfError = (e) => {
+  const msg = e?.message || e || '未知错误'
+  console.warn('[DocPreview] vue-office-pdf 渲染失败，自动降级为 iframe:', msg)
+  pdfFallback.value = true
+  // 静默降级，不显示提示（用户体验优先）
+}
+
+/**
+ * 图片专用错误处理：el-image 无法解码的图片（TIFF/HEIC/损坏的 PNG 等）
+ * 自动降级为原生 <img> 标签，浏览器原生解码器支持更多格式
+ */
+const onImageError = () => {
+  console.warn('[DocPreview] el-image 加载失败，自动降级为原生 img')
+  imageFallback.value = true
+}
 const refresh = () => loadPreview()
 
 /* 下载：复用 certcore downloadBlob（http.js 带鉴权），失败降级 window.open */
@@ -612,5 +655,25 @@ onBeforeUnmount(() => _revoke())
   font-size: var(--yzh-font-size-xs, 12px);
   color: var(--yzh-color-text-disabled, #c0c4cc);
   margin: calc(-1 * var(--yzh-space-2, 8px)) 0 0 0;
+}
+
+/* ============ 降级渲染器样式 ============ */
+
+/* PDF 降级：iframe 全屏填充 */
+.pdf-fallback-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: var(--yzh-radius-sm, 4px);
+  background: #fff;
+}
+
+/* 图片降级：原生 img 自适应 */
+.image-fallback-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+  background: repeating-conic-gradient(#f5f5f5 0% 25%, #fff 0% 50%) 50% / 20px 20px;
 }
 </style>

@@ -36,8 +36,16 @@ namespace YZH.Core.Tests.Skills
                     Success = true,
                     Value = new AiExtractionResult
                     {
-                        Fields = new List<AiField> { new() { FieldCode = "name", FieldValue = "张三", Confidence = 0.95 } },
-                        Tables = new List<AiTable>()
+                        Fields = new List<Dictionary<string, object>>
+                        {
+                            new()
+                            {
+                                ["field_code"] = "name",
+                                ["field_value"] = "张三",
+                                ["confidence"] = 0.95
+                            }
+                        },
+                        Tables = new List<Dictionary<string, object>>()
                     },
                     RawText = "{\"fields\":[...],\"tables\":[]}"
                 });

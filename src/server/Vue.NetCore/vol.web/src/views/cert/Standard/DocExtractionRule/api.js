@@ -104,3 +104,11 @@ export const updateAIConfig = (data) => {
 export const getSkills = () => {
   return http.get("/api/DocExtractionRule/skills");
 };
+
+/**
+ * 获取文件内容（经 IFileExtractor 提取）
+ * @param {string} fileCode - 文件编码
+ */
+export const getFileContent = (fileCode) => {
+  return http.get(`/api/DocExtractionRule/files/${fileCode}/content`);
+};

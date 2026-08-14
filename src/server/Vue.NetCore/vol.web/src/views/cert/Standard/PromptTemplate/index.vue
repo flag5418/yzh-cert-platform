@@ -5,7 +5,7 @@
       <el-form :inline="true" :model="filterForm" class="filter-form">
         <el-form-item label="提示词类型">
           <el-select v-model="filterForm.promptType" placeholder="全部" clearable style="width:140px">
-            <el-option label="AI 分析推荐" value="analyze" />
+            <el-option label="文档分析" value="document_analysis" />
             <el-option label="字段提取" value="extract" />
             <el-option label="验证提取" value="verify" />
             <el-option label="校验规则" value="validate" />
@@ -61,12 +61,14 @@
           </template>
         </el-table-column>
         <el-table-column prop="description" label="说明" min-width="200" show-overflow-tooltip />
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="viewPrompt(row)">查看</el-button>
-            <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button v-if="!row.isActive" link type="warning" size="small" @click="doActivate(row)">激活</el-button>
-            <el-button link type="danger" size="small" @click="doDelete(row)">删除</el-button>
+            <div class="row-actions">
+              <el-button link type="primary" size="small" @click="viewPrompt(row)">查看</el-button>
+              <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+              <el-button v-if="!row.isActive" link type="warning" size="small" @click="doActivate(row)">激活</el-button>
+              <el-button link type="danger" size="small" @click="doDelete(row)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -97,7 +99,7 @@
           <el-col :span="12">
             <el-form-item label="类型" prop="promptType">
               <el-select v-model="editForm.promptType" placeholder="选择类型" style="width:100%">
-                <el-option label="AI 分析推荐 (analyze)" value="analyze" />
+                <el-option label="文档分析 (document_analysis)" value="document_analysis" />
                 <el-option label="字段提取 (extract)" value="extract" />
                 <el-option label="验证提取 (verify)" value="verify" />
                 <el-option label="校验规则 (validate)" value="validate" />
@@ -190,7 +192,7 @@ const editForm = reactive({
   id: null,
   promptCode: '',
   promptName: '',
-  promptType: 'analyze',
+  promptType: 'document_analysis',
   skillTarget: null,
   template: '',
   description: ''
@@ -203,8 +205,8 @@ const editRules = {
   template: [{ required: true, message: '请输入模板内容', trigger: 'blur' }]
 }
 
-const typeMap = { analyze: '', extract: 'warning', verify: 'success', validate: 'danger', report: 'info' }
-const labelMap = { analyze: 'AI分析', extract: '字段提取', verify: '验证', validate: '校验', report: '报告' }
+const typeMap = { document_analysis: '', extract: 'warning', verify: 'success', validate: 'danger', report: 'info' }
+const labelMap = { document_analysis: '文档分析', extract: '字段提取', verify: '验证', validate: '校验', report: '报告' }
 
 function typeTag(t) { return typeMap[t] || '' }
 function typeLabel(t) { return labelMap[t] || t }
@@ -213,7 +215,26 @@ async function loadList() {
   loading.value = true
   try {
     const res = await getPromptList(filterForm)
-    tableData.value = res.data || []
+    // 后端返回 PascalCase 字段名，需要转换为 camelCase
+    const rawData = res.Data || res.data || []
+    tableData.value = rawData.map(item => ({
+      id: item.Id || item.id,
+      promptCode: item.PromptCode || item.promptCode,
+      promptName: item.PromptName || item.promptName,
+      promptType: item.PromptType || item.promptType,
+      skillTarget: item.SkillTarget || item.skillTarget,
+      template: item.Template || item.template,
+      description: item.Description || item.description,
+      version: item.Version || item.version,
+      isActive: item.IsActive ?? item.isActive,
+      enable: item.Enable ?? item.enable,
+      code: item.Code || item.code,
+      createDate: item.CreateDate || item.createDate,
+      creator: item.Creator || item.creator
+    }))
+  } catch (error) {
+    console.error('加载提示词列表失败:', error)
+    tableData.value = []
   } finally {
     loading.value = false
   }
@@ -246,7 +267,7 @@ function resetForm() {
   editForm.id = null
   editForm.promptCode = ''
   editForm.promptName = ''
-  editForm.promptType = 'analyze'
+  editForm.promptType = 'document_analysis'
   editForm.skillTarget = null
   editForm.template = ''
   editForm.description = ''
@@ -313,4 +334,6 @@ onMounted(loadList)
 .view-section { margin-top: var(--yzh-space-4, 16px); }
 .view-section-title { font-weight: var(--yzh-font-weight-bold, 600); margin-bottom: var(--yzh-space-2, 8px); font-size: var(--yzh-font-size-md, 14px); }
 .view-template { background: var(--yzh-color-bg-page, #f5f7fa); border: 1px solid var(--yzh-color-border, #e4e7ed); border-radius: var(--yzh-radius-sm, 4px); padding: var(--yzh-space-3, 12px); font-size: var(--yzh-font-size-sm, 13px); line-height: var(--yzh-line-height-base, 1.6); white-space: pre-wrap; word-break: break-all; max-height: 400px; overflow-y: auto; }
+.row-actions { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.row-actions .el-button { margin: 0; padding: 0 4px; }
 </style>

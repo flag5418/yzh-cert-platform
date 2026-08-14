@@ -183,7 +183,13 @@ namespace YZH.Core
             builder.RegisterType<AssembleSkill>()
                    .As<ISkillNode>()
                    .InstancePerLifetimeScope();
-            Console.WriteLine("[YZH] Workflow services registered (SkillRegistry + 6 built-in Skills)");
+            
+            // S4: WorkflowEngine
+            builder.RegisterType<WorkflowEngine>()
+                   .As<IWorkflowEngine>()
+                   .InstancePerLifetimeScope();
+            
+            Console.WriteLine("[YZH] Workflow services registered (SkillRegistry + 6 built-in Skills + WorkflowEngine)");
         }
 
         /// <summary>

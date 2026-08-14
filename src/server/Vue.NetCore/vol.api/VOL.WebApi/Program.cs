@@ -142,8 +142,33 @@ builder.Services.AddSingleton<YZH.Core.Queue.YzhQueueManager>();
 builder.Services.AddSingleton<YZH.Core.Queue.IYzhTaskExecutor, VOL.Builder.Services.CertPlatform.OfficeConvertTaskExecutor>();
 builder.Services.AddSingleton<YZH.Core.Queue.IYzhQueueNotifier, VOL.Builder.Services.CertPlatform.CertQueueNotifier>();
 builder.Services.AddHostedService<YZH.Core.Queue.YzhQueueHostedService>();
-            
-            // 新增Helper服务
+
+// ====== YZH Framework 核心服务注册（替代 YZHModule Autofac 注册）======
+// 文件提取服务：仅注册 IFileExtractor。
+// 注意：不要在这里注册未键控的 ITextExtractor —— FileExtractorService 同时有无参构造与
+// (ITextExtractor×4) 构造，MS DI 会优先选择参数最多的构造，未键控注册会导致四个参数
+// 全部解析为最后注册的 PlainTextExtractor，所有文档都被当成纯文本（详见 FileExtractorService）。
+// 具体提取器由 FileExtractorService 无参构造内部实例化（Npoi/PlainText 等）。
+builder.Services.AddScoped<YZH.Core.Extractor.IFileExtractor, YZH.Core.Extractor.FileExtractorService>();
+
+// LLM 服务
+builder.Services.AddScoped<YZH.Core.AI.Clients.ILlmProvider, YZH.Core.AI.Clients.QwenApiProvider>();
+builder.Services.AddScoped<YZH.Core.AI.Clients.ILlmProvider, YZH.Core.AI.Clients.OllamaProvider>();
+builder.Services.AddScoped<YZH.Core.AI.Clients.ILlmProvider, YZH.Core.AI.Clients.MockProvider>();
+builder.Services.AddScoped<YZH.Core.AI.Clients.ILlmClient, YZH.Core.AI.Clients.LlmClient>();
+builder.Services.AddScoped<YZH.Core.AI.Prompt.IPromptInterpreter, YZH.Core.AI.Prompt.PromptInterpreter>();
+
+// 工作流服务
+builder.Services.AddScoped<YZH.Core.Workflow.ISkillRegistry, YZH.Core.Workflow.SkillRegistry>();
+builder.Services.AddScoped<YZH.Core.Workflow.ISkillNode, YZH.Core.Skills.DocumentExtractSkill>();
+builder.Services.AddScoped<YZH.Core.Workflow.ISkillNode, YZH.Core.Skills.LlmExtractSkill>();
+builder.Services.AddScoped<YZH.Core.Workflow.ISkillNode, YZH.Core.Skills.CompareSkill>();
+builder.Services.AddScoped<YZH.Core.Workflow.ISkillNode, YZH.Core.Skills.GetFieldSkill>();
+builder.Services.AddScoped<YZH.Core.Workflow.ISkillNode, YZH.Core.Skills.GetTableSkill>();
+builder.Services.AddScoped<YZH.Core.Workflow.ISkillNode, YZH.Core.Skills.AssembleSkill>();
+builder.Services.AddScoped<YZH.Core.Workflow.IWorkflowEngine, YZH.Core.Workflow.WorkflowEngine>();
+
+// 新增Helper服务
             // 注册MinIO客户端
             builder.Services.AddSingleton<IMinioClient>(sp =>
             {

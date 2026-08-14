@@ -171,7 +171,7 @@ namespace VOL.Builder.Services.CertPlatform
 
             var result = await workflowEngine.RunAsync(workflowJson, ctx);
             if (!result.Success || !result.NodeOutputs.TryGetValue("n1", out var outputs))
-                return new AIAnalyzeResponse { Fields = new(), Tables = new(), Message = "AI 分析失败" };
+                return new AIAnalyzeResponse { Fields = new(), Tables = new(), Message = $"AI 分析失败：{result.Error}" };
 
             var fields = MapAiFieldsToDtos(outputs);
             var tables = MapAiTablesToDtos(outputs);
@@ -264,6 +264,12 @@ namespace VOL.Builder.Services.CertPlatform
 1. fields: 数组，每项含 field_code（英文驼峰）、field_name（中文名称）、field_type（string/number/date）、description
 2. tables: 数组，每项含 table_code（英文驼峰）、table_name（中文名称）、description、columns（列定义数组，每项含 column_code / column_name / column_type）
 
+规则（必须遵守）：
+- 内容中标记为 (table) 的 Section 属于表格，表格内的单元格内容（如""质量方针""、""质量目标""）禁止作为 fields 提取
+- 表格内容只能通过 tables 提取，每个表格只需输出名称与列定义 columns，不要将表格内容拆成独立字段
+- fields 只从普通段落中提取，且必须能在文档中找到实际内容
+- 字段名称必须与文档中的实际标签一致，禁止角色替换（如把""总经理""改写为""编制人""、把""管理者代表""改写为""审核人/批准人""）；文档中不存在的字段一律不要输出
+
 只输出 JSON，不要任何解释文字。
 
 {skillDesc}内容：
@@ -308,10 +314,13 @@ namespace VOL.Builder.Services.CertPlatform
             if (!outputs.TryGetValue("fields", out var fieldsObj) || fieldsObj is not IEnumerable<object> fields)
                 return result;
 
-            foreach (var f in fields)
-            {
-                if (f is not IDictionary<string, object> fd) continue;
+            var fieldsList = fields.OfType<IDictionary<string, object>>().ToList();
+            // V2 模板要求每个字段输出 extracted_value：响应采用 V2 键名时，丢弃未提取到实际值的字段，
+            // 避免把文档中不存在的字段（如版本号/审核人）列入规则；V1 无 extracted_value 键，不受影响。
+            var usesV2 = fieldsList.Any(fd => fd.ContainsKey("extracted_value") || fd.ContainsKey("field_name_cn"));
 
+            foreach (var fd in fieldsList)
+            {
                 // 优先读取 V2 格式字段
                 var nameCn = fd.TryGetValue("field_name_cn", out var v1) ? v1?.ToString() : null;
                 var nameEn = fd.TryGetValue("field_name_en", out var v2) ? v2?.ToString() : null;
@@ -323,6 +332,10 @@ namespace VOL.Builder.Services.CertPlatform
                     nameCn = fd.TryGetValue("field_name", out var v5) ? v5?.ToString() : "";
                 if (string.IsNullOrEmpty(nameEn))
                     nameEn = fd.TryGetValue("field_code", out var v6) ? v6?.ToString() : "";
+
+                // V2 模式：只保留有实际提取值的字段
+                if (usesV2 && string.IsNullOrWhiteSpace(extractedValue))
+                    continue;
 
                 result.Add(new FieldDefDto
                 {
@@ -350,10 +363,12 @@ namespace VOL.Builder.Services.CertPlatform
             if (!outputs.TryGetValue("tables", out var tablesObj) || tablesObj is not IEnumerable<object> tables)
                 return result;
 
-            foreach (var t in tables)
-            {
-                if (t is not IDictionary<string, object> td) continue;
+            var tablesList = tables.OfType<IDictionary<string, object>>().ToList();
+            // V2 模板要求每个表格输出 extracted_data：响应采用 V2 键名时，丢弃没有真实提取数据的表格
+            var usesV2 = tablesList.Any(td => td.ContainsKey("extracted_data") || td.ContainsKey("table_name_cn"));
 
+            foreach (var td in tablesList)
+            {
                 // 读取列定义（支持 V2 和 V1 格式）
                 var cols = new List<TableColumnDto>();
                 if (td.TryGetValue("columns", out var colsObj) && colsObj is IEnumerable<object> colsList)
@@ -365,6 +380,8 @@ namespace VOL.Builder.Services.CertPlatform
                         // 优先 V2 格式
                         var colNameCn = cd.TryGetValue("column_name_cn", out var cv1) ? cv1?.ToString() : null;
                         var colNameEn = cd.TryGetValue("column_name_en", out var cv2) ? cv2?.ToString() : null;
+                        var colIsRequired = cd.TryGetValue("column_is_required", out var cv6) || cd.TryGetValue("is_required", out cv6);
+                        var colRequired = colIsRequired && bool.TryParse(cv6?.ToString(), out var cr) && cr;
 
                         // 兼容 V1 格式
                         if (string.IsNullOrEmpty(colNameCn))
@@ -377,7 +394,8 @@ namespace VOL.Builder.Services.CertPlatform
                             Name = colNameCn ?? "",
                             NameEn = colNameEn ?? "",
                             Code = colNameEn ?? colNameCn ?? "",
-                            DataType = cd.TryGetValue("column_type", out var tp) ? tp?.ToString() ?? "string" : "string"
+                            DataType = cd.TryGetValue("column_type", out var tp) ? tp?.ToString() ?? "string" : "string",
+                            IsRequired = colRequired
                         });
                     }
                 }
@@ -403,6 +421,10 @@ namespace VOL.Builder.Services.CertPlatform
                             extractedData.Add(new Dictionary<string, object>(rowDict));
                     }
                 }
+
+                // V2 模式：只保留有真实提取数据的表格（避免输出文档中不存在的示例表格）
+                if (usesV2 && extractedData.Count == 0)
+                    continue;
 
                 result.Add(new TableDefDto
                 {

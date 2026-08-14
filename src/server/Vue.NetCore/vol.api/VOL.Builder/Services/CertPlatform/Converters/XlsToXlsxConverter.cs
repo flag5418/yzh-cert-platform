@@ -184,10 +184,16 @@ namespace VOL.Builder.Services.CertPlatform.Converters
             newStyle.BorderLeft = sourceStyle.BorderLeft;
             newStyle.BorderRight = sourceStyle.BorderRight;
             
-            // 复制填充
-            newStyle.FillPattern = sourceStyle.FillPattern;
-            newStyle.FillForegroundColor = sourceStyle.FillForegroundColor;
-            newStyle.FillBackgroundColor = sourceStyle.FillBackgroundColor;
+            // 复制填充：仅当源单元格存在真实填充时复制。
+            // HSSF 对无填充单元格的 FillForegroundColor 默认返回 0x40（系统默认/黑色），若直接复制，
+            // XSSF 会输出 patternType="none" + fgColor indexed="64"，前端 x-spreadsheet 忽略 patternType
+            // 将 fgColor 当作背景色渲染 → 整张表变成黑底、深色文字不可见（“列完全看不到”）。
+            if (sourceStyle.FillPattern != FillPattern.NoFill)
+            {
+                newStyle.FillPattern = sourceStyle.FillPattern;
+                newStyle.FillForegroundColor = sourceStyle.FillForegroundColor;
+                newStyle.FillBackgroundColor = sourceStyle.FillBackgroundColor;
+            }
             
             // 复制字体（简化处理，只复制基本属性）
             if (sourceStyle.GetFont(sourceWorkbook) != null)

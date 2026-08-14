@@ -5,9 +5,16 @@ import http from "@/api/http.js";
 
 /**
  * 获取提示词列表（可按类型/技能筛选）
+ * 注意：后端返回 PascalCase 字段名，需要转换为 camelCase
  */
 export const getPromptList = (params) => {
-  return http.get("/api/prompt-template", params);
+  // 后端 GetList 接口使用 query params，直接拼接 URL
+  const query = new URLSearchParams();
+  if (params?.promptType) query.append('promptType', params.promptType);
+  if (params?.skillTarget) query.append('skillTarget', params.skillTarget);
+  const queryString = query.toString();
+  const url = queryString ? `/api/prompt-template/list?${queryString}` : '/api/prompt-template/list';
+  return http.get(url);
 };
 
 /**
@@ -21,7 +28,11 @@ export const getPromptByCode = (promptCode) => {
  * 获取指定类型当前生效的提示词
  */
 export const getActivePrompt = (promptType, skillTarget) => {
-  return http.get(`/api/prompt-template/active/${promptType}`, { skillTarget });
+  const query = new URLSearchParams();
+  if (skillTarget) query.append('skillTarget', skillTarget);
+  const queryString = query.toString();
+  const url = queryString ? `/api/prompt-template/active/${promptType}?${queryString}` : `/api/prompt-template/active/${promptType}`;
+  return http.get(url);
 };
 
 /**

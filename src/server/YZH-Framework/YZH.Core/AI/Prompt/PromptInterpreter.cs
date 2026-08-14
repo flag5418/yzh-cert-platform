@@ -11,7 +11,8 @@ namespace YZH.Core.AI.Prompt
 {
     public class PromptInterpreter : IPromptInterpreter
     {
-        private static readonly Regex Placeholder = new(@"\{([a-zA-Z_][a-zA-Z0-9_]*)\}", RegexOptions.Compiled);
+        // 模板占位符使用 {{name}}（双大括号），与 DB 提示词模板（{{document_content}} / {{fields_json}} 等）一致
+        private static readonly Regex Placeholder = new(@"\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}", RegexOptions.Compiled);
         private static readonly Regex JsonFence = new(@"```(?:json)?\s*(.*?)\s*```", RegexOptions.Singleline | RegexOptions.Compiled);
 
         public string Render(string template, IDictionary<string, object> context)

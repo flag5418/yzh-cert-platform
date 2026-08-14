@@ -47,10 +47,11 @@ public async Task<IActionResult> GetList([FromBody] dynamic param)
         }
 
         [HttpPost("read-all")]
-        public async Task<IActionResult> MarkAllRead()
+        public async Task<IActionResult> MarkAllRead([FromBody] dynamic param)
         {
             var userId = UserContext.Current.UserId;
-            await _messageService.MarkAllReadAsync(userId);
+            string messageType = param?.type;
+            await _messageService.MarkAllReadAsync(userId, messageType);
             return new JsonResult(new { status = true, message = "全部已读" });
         }
     }

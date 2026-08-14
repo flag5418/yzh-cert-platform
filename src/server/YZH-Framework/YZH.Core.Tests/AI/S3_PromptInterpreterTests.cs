@@ -9,10 +9,11 @@ namespace YZH.Core.Tests.AI
     {
         private readonly PromptInterpreter _interpreter = new();
 
+        // 占位符约定为 {{name}}（双大括号），与 DB 提示词模板一致
         [Fact]
         public void Render_SubstituteString_Should_Work()
         {
-            var result = _interpreter.Render("Hello {name}, you are {age} years old",
+            var result = _interpreter.Render("Hello {{name}}, you are {{age}} years old",
                 new Dictionary<string, object> { ["name"] = "张三", ["age"] = 30 });
             Assert.Equal("Hello 张三, you are 30 years old", result);
         }
@@ -20,15 +21,15 @@ namespace YZH.Core.Tests.AI
         [Fact]
         public void Render_MissingPlaceholder_Should_KeepOriginal()
         {
-            var result = _interpreter.Render("Hello {name}, score is {score}",
+            var result = _interpreter.Render("Hello {{name}}, score is {{score}}",
                 new Dictionary<string, object> { ["name"] = "李四" });
-            Assert.Equal("Hello 李四, score is {score}", result);
+            Assert.Equal("Hello 李四, score is {{score}}", result);
         }
 
         [Fact]
         public void Render_NullValue_Should_Empty()
         {
-            var result = _interpreter.Render("Value: {v}",
+            var result = _interpreter.Render("Value: {{v}}",
                 new Dictionary<string, object> { ["v"] = null });
             Assert.Equal("Value: ", result);
         }
@@ -36,7 +37,7 @@ namespace YZH.Core.Tests.AI
         [Fact]
         public void Render_ObjectValue_Should_Serialize()
         {
-            var result = _interpreter.Render("Data: {obj}",
+            var result = _interpreter.Render("Data: {{obj}}",
                 new Dictionary<string, object> { ["obj"] = new { x = 1, y = 2 } });
             Assert.Contains("\"x\"", result);
             Assert.Contains("\"y\"", result);

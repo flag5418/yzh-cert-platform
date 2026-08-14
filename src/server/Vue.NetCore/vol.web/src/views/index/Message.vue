@@ -201,6 +201,12 @@ const showQueueSummaryOnEntry = async () => {
       type: failed > 0 ? "warning" : "success",
       duration: 10000,
     });
+    // 汇总弹窗已展示即视为已查看：标记队列消息已读，避免每次登录/刷新重复弹出
+    await proxy.http.post("api/message/read-all", { type: "queue" }, true);
+    const countRes = await proxy.http.post("api/message/unread-count", {}, true);
+    if (countRes.status) {
+      msgCount.value = countRes.data || 0;
+    }
   } catch (e) {
     console.warn("加载队列汇总失败", e);
   }

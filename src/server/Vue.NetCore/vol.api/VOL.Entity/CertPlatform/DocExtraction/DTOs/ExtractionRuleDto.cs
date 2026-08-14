@@ -43,36 +43,81 @@ namespace VOL.Entity.CertPlatform.DocExtraction.DTOs
     }
 
     /// <summary>
-    /// 字段定义DTO
+    /// 字段定义DTO（支持 V2 格式：中英文双名 + 提取值预览）
     /// </summary>
     public class FieldDefDto
     {
+        /// <summary>中文字段名（展示用）</summary>
         public string Name { get; set; }
+
+        /// <summary>英文字段名（snake_case，数据库存储用）</summary>
+        public string NameEn { get; set; }
+
+        /// <summary>字段编码（兼容旧版，优先使用 NameEn）</summary>
         public string Code { get; set; }
+
+        /// <summary>数据类型</summary>
         public string DataType { get; set; } = "string";
+
+        /// <summary>字段描述</summary>
         public string Description { get; set; }
+
+        /// <summary>是否必须</summary>
+        public bool IsRequired { get; set; }
+
+        /// <summary>是否手动维护</summary>
         public bool IsManual { get; set; }
+
+        /// <summary>AI 提取的值（前端预览用）</summary>
+        public string ExtractedValue { get; set; }
     }
 
     /// <summary>
-    /// 表格定义DTO
+    /// 表格定义DTO（支持 V2 格式：中英文双名 + 提取数据预览）
     /// </summary>
     public class TableDefDto
     {
+        /// <summary>中文表名（展示用）</summary>
         public string Name { get; set; }
+
+        /// <summary>英文表名（snake_case，数据库存储用）</summary>
+        public string NameEn { get; set; }
+
+        /// <summary>表格编码（兼容旧版，优先使用 NameEn）</summary>
         public string Code { get; set; }
+
+        /// <summary>表格描述</summary>
         public string Description { get; set; }
+
+        /// <summary>工作表名称（Excel 特有）</summary>
+        public string SheetName { get; set; }
+
+        /// <summary>列定义</summary>
         public List<TableColumnDto> Columns { get; set; } = new List<TableColumnDto>();
+
+        /// <summary>AI 提取的数据样例（前端预览用，最多5行）</summary>
+        public List<Dictionary<string, object>> ExtractedData { get; set; } = new List<Dictionary<string, object>>();
     }
 
     /// <summary>
-    /// 表格列定义DTO
+    /// 表格列定义DTO（支持 V2 格式：中英文双名）
     /// </summary>
     public class TableColumnDto
     {
+        /// <summary>中文列名（展示用）</summary>
         public string Name { get; set; }
+
+        /// <summary>英文列名（snake_case，数据库存储用）</summary>
+        public string NameEn { get; set; }
+
+        /// <summary>列编码（兼容旧版，优先使用 NameEn）</summary>
         public string Code { get; set; }
+
+        /// <summary>数据类型</summary>
         public string DataType { get; set; } = "string";
+
+        /// <summary>是否必须（NC/报告生成等下游业务要求必填字段不能为空）</summary>
+        public bool IsRequired { get; set; }
     }
 
     /// <summary>

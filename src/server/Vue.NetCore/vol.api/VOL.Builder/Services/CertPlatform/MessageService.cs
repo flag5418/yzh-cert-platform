@@ -67,15 +67,20 @@ namespace VOL.Builder.Services.CertPlatform
             }
         }
 
-        public async Task MarkAllReadAsync(int userId)
+        public async Task MarkAllReadAsync(int userId, string messageType = null)
         {
             // 使用 ExecuteUpdate 批量更新，避免逐条跟踪的性能问题和潜在错误
             // 这是 EF Core 7+ 的高效批量更新方式
-            var updated = await _db.Set<CertMessage>()
-                .Where(m => m.UserId == userId && m.IsRead == 0)
-                .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(m => m.IsRead, 1)
-                    .SetProperty(m => m.ReadDate, DateTime.Now));
+            var query = _db.Set<CertMessage>()
+                .Where(m => m.UserId == userId && m.IsRead == 0);
+
+            // 可选按类型过滤：进入系统汇总弹窗展示队列通知后，只标记 queue 类型已读
+            if (!string.IsNullOrEmpty(messageType))
+                query = query.Where(m => m.MessageType == messageType);
+
+            var updated = await query.ExecuteUpdateAsync(setters => setters
+                .SetProperty(m => m.IsRead, 1)
+                .SetProperty(m => m.ReadDate, DateTime.Now));
             
             // 如果 ExecuteUpdate 不可用（EF Core 版本低于 7），回退到传统方式
             // if (updated == 0) { /* fallback logic */ }

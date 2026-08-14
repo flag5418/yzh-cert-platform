@@ -233,6 +233,9 @@
                 <el-button link type="primary" size="small" @click.stop="downloadFile(file)"
                   >下载</el-button
                 >
+                <el-button link type="success" size="small" @click.stop="handleAiAnalyze(file)"
+                  >AI 分析</el-button
+                >
                 <el-button link type="danger" size="small" @click.stop="deleteItem(file)"
                   >删除</el-button
                 >
@@ -432,6 +435,68 @@
     </el-dialog>
     <!-- 文件转换进度面板 -->
     <ConvertProgressPanel ref="convertPanelRef" />
+
+    <!-- AI 分析结果弹窗 -->
+    <el-dialog
+      v-model="showAiAnalyzeDialog"
+      title="AI 文档分析"
+      width="800px"
+      :close-on-click-modal="false"
+    >
+      <div class="ai-analyze-content">
+        <!-- 文件信息 -->
+        <div class="ai-file-info">
+          <el-icon class="file-icon"><IconDocument /></el-icon>
+          <span class="file-name">{{ aiAnalyzeFile?.fileName || aiAnalyzeFile?.FileName }}</span>
+        </div>
+
+        <!-- 提示词模板选择 -->
+        <div class="ai-template-select">
+          <el-select
+            v-model="selectedTemplateId"
+            placeholder="选择提示词模板"
+            style="width: 100%"
+            :disabled="aiAnalyzing"
+          >
+            <el-option
+              v-for="template in promptTemplates"
+              :key="template.id"
+              :label="template.templateName"
+              :value="template.id"
+            />
+          </el-select>
+        </div>
+
+        <!-- 分析按钮 -->
+        <div class="ai-actions">
+          <el-button
+            type="primary"
+            :loading="aiAnalyzing"
+            :disabled="!selectedTemplateId"
+            @click="submitAiAnalyze"
+          >
+            {{ aiAnalyzing ? '分析中...' : '开始分析' }}
+          </el-button>
+        </div>
+
+        <!-- 分析结果展示 -->
+        <div v-if="aiAnalyzeResult" class="ai-result">
+          <el-divider />
+          <div class="result-header">
+            <span class="result-title">分析结果</span>
+            <el-tag :type="aiAnalyzeResult.success ? 'success' : 'danger'">
+              {{ aiAnalyzeResult.success ? '成功' : '失败' }}
+            </el-tag>
+          </div>
+          <div v-if="aiAnalyzeResult.success" class="result-content">
+            <pre>{{ JSON.stringify(aiAnalyzeResult.data, null, 2) }}</pre>
+          </div>
+          <div v-else class="result-error">
+            <el-alert :title="aiAnalyzeResult.message" type="error" show-icon />
+          </div>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -468,6 +533,14 @@ const showFolderDialog = ref(false)
 const showRenameDialogFlag = ref(false)
 const showHelpDialog = ref(false)
 const showUploadDialogFlag = ref(false)
+const showAiAnalyzeDialog = ref(false)
+
+// AI 分析相关
+const aiAnalyzeFile = ref(null)
+const selectedTemplateId = ref(null)
+const aiAnalyzing = ref(false)
+const aiAnalyzeResult = ref(null)
+const promptTemplates = ref([])
 
 const folderForm = reactive({ folderName: '', remark: '' })
 const renameForm = reactive({ newName: '', item: null })
@@ -1389,6 +1462,77 @@ const replaceFile = (file) => {
   ElMessage.info('替换文件功能开发中')
 }
 
+// ========== AI 分析 ==========
+const handleAiAnalyze = async (file) => {
+  aiAnalyzeFile.value = file
+  selectedTemplateId.value = null
+  aiAnalyzeResult.value = null
+  showAiAnalyzeDialog.value = true
+
+  // 加载提示词模板列表
+  await loadPromptTemplates()
+}
+
+const loadPromptTemplates = async () => {
+  try {
+    const res = await http.post('/api/prompt-template/getPageData', {
+      tableName: 'cert_prompt_template',
+      page: 1,
+      rows: 100,
+      sort: 'Id',
+      order: 'desc',
+      wheres: []
+    })
+    if (res.status === true || res.Status === true) {
+      promptTemplates.value = res.data || res.Data || []
+    } else {
+      promptTemplates.value = []
+    }
+  } catch (error) {
+    console.error('加载提示词模板失败:', error)
+    promptTemplates.value = []
+    ElMessage.warning('加载提示词模板失败')
+  }
+}
+
+const submitAiAnalyze = async () => {
+  if (!selectedTemplateId.value || !aiAnalyzeFile.value) return
+
+  aiAnalyzing.value = true
+  aiAnalyzeResult.value = null
+
+  try {
+    // 获取文件ID
+    const fileId = aiAnalyzeFile.value.id || aiAnalyzeFile.value.Id
+
+    const res = await http.post('/api/DocExtractionRule/analyze', {
+      fileId: fileId,
+      templateId: selectedTemplateId.value
+    })
+
+    if (res.status === true || res.Status === true) {
+      aiAnalyzeResult.value = {
+        success: true,
+        data: res.data || res.Data
+      }
+      ElMessage.success('AI 分析完成')
+    } else {
+      aiAnalyzeResult.value = {
+        success: false,
+        message: res.message || res.Message || '分析失败'
+      }
+    }
+  } catch (error) {
+    console.error('AI 分析失败:', error)
+    aiAnalyzeResult.value = {
+      success: false,
+      message: error.message || 'AI 分析请求失败'
+    }
+  } finally {
+    aiAnalyzing.value = false
+  }
+}
+
 const downloadFile = async (file) => {
   const storagePath = file.StoragePath || file.storagePath
   if (!storagePath) {
@@ -1883,6 +2027,82 @@ onUnmounted(() => {
 .status-icon {
   margin-left: 4px;
   flex-shrink: 0;
+}
+
+/* AI 分析弹窗样式 */
+.ai-analyze-content {
+  padding: 0 10px;
+}
+
+.ai-file-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: var(--yzh-color-bg-hover, #f5f7fa);
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+
+.ai-file-info .file-icon {
+  font-size: 24px;
+  color: var(--yzh-color-primary, #409eff);
+}
+
+.ai-file-info .file-name {
+  font-weight: 500;
+  color: var(--yzh-color-text-primary, #303133);
+  word-break: break-all;
+}
+
+.ai-template-select {
+  margin-bottom: 16px;
+}
+
+.ai-actions {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.ai-result {
+  margin-top: 16px;
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.result-title {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--yzh-color-text-primary, #303133);
+}
+
+.result-content {
+  background: var(--yzh-color-bg-page, #f5f7fa);
+  border: 1px solid var(--yzh-color-border-light, #ebeef5);
+  border-radius: 4px;
+  padding: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.result-content pre {
+  margin: 0;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--yzh-color-text-regular, #606266);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.result-error {
+  margin-top: 12px;
 }
 
 /* 通用旋转动画 */

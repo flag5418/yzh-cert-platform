@@ -50,7 +50,7 @@
       </div>
 
       <!-- 右侧：操作区 -->
-      <div class="right-panel">
+      <div class="right-panel" v-loading="analyzing" element-loading-text="AI 分析中，请稍候…" element-loading-background="rgba(255,255,255,0.7)">
         <!-- 状态栏 -->
         <div class="status-bar" v-if="currentFile">
           <div class="status-item">
@@ -77,6 +77,7 @@
               :fields="analysisFields"
               :tables="analysisTables"
               :raw-json="rawJsonDisplay"
+              :analyzing="analyzing"
               @analyze="onAIAnalyze"
               @update:fields="onFieldsUpdate"
               @update:tables="onTablesUpdate"
@@ -114,7 +115,7 @@ import { CertDirectoryTree } from '@/certcore'
 import { YzhEmptyState, YzhStatusBadge, YzhLockStatus } from '@/yzh'
 import { IconFile, IconAnalyze, IconPrompt, IconRefresh, IconLoading } from '@/yzh'
 import { useYzhQueue } from '@/yzh/composables/useYzhQueue'
-import { aiAnalyzeDocument } from './api'
+import { aiAnalyzeDocument, getExtractionRule } from './api'
 import AIAnalysisTab from './components/AIAnalysisTab.vue'
 import DocPreview from './components/DocPreview.vue'
 import PromptVerifyTab from './components/PromptVerifyTab.vue'
@@ -129,6 +130,7 @@ const leftPanelWidth = ref(280) // 左侧面板默认宽度
 const currentFile = ref(null)
 const saving = ref(false)
 const retrying = ref(false)
+const analyzing = ref(false) // AI 分析全局等待态（右侧操作区 v-loading）
 const lockReason = ref('') // 当前文件锁定原因（队列处理中 / 上传中）
 
 // AI分析结果
@@ -158,7 +160,7 @@ const fieldCount = computed(() => analysisFields.value.length)
 const tableCount = computed(() => analysisTables.value.length)
 
 // 方法
-const onFileSelect = (file) => {
+const onFileSelect = async (file) => {
   console.log('[DocExtractionRule] ✅ onFileSelect 触发:',
     { id: file?.id, name: file?.name, type: file?.type, storagePath: file?.storagePath, mimeType: file?.mimeType })
   currentFile.value = file
@@ -169,6 +171,30 @@ const onFileSelect = (file) => {
   generatedPrompt.value = ''
   verifyResult.value = null
   activeTab.value = 'analysis'
+  // 若该文档已保存过提取规则，自动分析应回显已有字段/表格/Prompt，而不是全部清空
+  await loadExistingRule(file)
+}
+
+// 加载该文档已保存的提取规则（字段/表格/Prompt/状态），未保存过则保持空状态
+const loadExistingRule = async (file) => {
+  if (!file?.fileCode) return
+  try {
+    const res = await getExtractionRule(file.fileCode)
+    // 规则不存在时后端返回 { success: false, message } 且无 data
+    const data = res?.Data ?? res?.data
+    if (!data) return
+    // 防止快速切换文件时旧请求的响应覆盖新选择的文件
+    if (currentFile.value?.fileCode !== file.fileCode) return
+    if (data.fields || data.Fields) analysisFields.value = mapFields(data)
+    if (data.tables || data.Tables) analysisTables.value = mapTables(data)
+    const prompt = pick(data, 'Prompt', 'prompt')
+    if (prompt) generatedPrompt.value = prompt
+    const status = pick(data, 'Status', 'status')
+    if (status) ruleStatus.value = ['configured', 'failed'].includes(status) ? status : 'none'
+  } catch (err) {
+    // 加载失败不影响页面使用，保持空状态
+    console.warn('[DocExtractionRule] 加载已有规则失败:', err?.message ?? err)
+  }
 }
 
 const onFileLockWarning = (info) => {
@@ -194,31 +220,18 @@ const onAIAnalyze = async () => {
     skill = 'pdf'
 
   console.log('[DocExtractionRule] 🔍 开始分析:', { fileCode, skill })
-  ElMessage.info('AI分析中...')
-
+  analyzing.value = true
   try {
     const res = await aiAnalyzeDocument({ fileCode, skill })
     console.log('[DocExtractionRule] 📦 analyze 响应:', JSON.stringify(res, null, 2))
 
-    // 解析响应数据（兼容 Fields/Tables 大写与 fields/tables 小写）
+    // 解析响应数据（兼容后端 PascalCase Fields/Tables 与 camelCase/snake_case 各键名）
     const data = res?.Data ?? res?.data ?? res
     if (data?.fields || data?.Fields) {
-      analysisFields.value = (data.fields || data.Fields || []).map(f => ({
-        name: f.fieldName ?? f.name ?? f.field_code ?? '',
-        dataType: f.dataType ?? 'string',
-        description: f.description ?? '',
-        isManual: f.isManual ?? false
-      }))
+      analysisFields.value = mapFields(data)
     }
     if (data?.tables || data?.Tables) {
-      analysisTables.value = (data.tables || data.Tables || []).map(t => ({
-        name: t.tableName ?? t.name ?? t.table_code ?? '',
-        description: t.description ?? '',
-        columns: (t.columns ?? t.Columns ?? []).map(c => ({
-          name: c.columnName ?? c.name ?? c.column_code ?? '',
-          dataType: c.dataType ?? 'string'
-        }))
-      }))
+      analysisTables.value = mapTables(data)
     }
     // 原始JSON展示
     rawJsonDisplay.value = JSON.stringify(data ?? res, null, 2)
@@ -232,8 +245,48 @@ const onAIAnalyze = async () => {
   } catch (err) {
     console.error('[DocExtractionRule] ❌ 分析失败:', err)
     ElMessage.error('AI分析失败: ' + (err?.message ?? '未知错误'))
+  } finally {
+    analyzing.value = false
   }
 }
+
+// 兼容不同大小写的字段取值（PascalCase / camelCase / snake_case）
+const pick = (obj, ...keys) => {
+  if (!obj) return undefined
+  for (const k of keys) {
+    if (obj[k] !== undefined && obj[k] !== null) return obj[k]
+  }
+  return undefined
+}
+
+// 字段/表格列表映射（AI 分析结果与已保存规则共用；NameEn 缺失时回退到 Code，保证英文名能回显）
+const mapFields = (data) => (data.fields || data.Fields || []).map(f => ({
+  name: pick(f, 'Name', 'name', 'fieldName', 'field_name_cn', 'field_name') ?? '',
+  nameEn: pick(f, 'NameEn', 'nameEn', 'field_name_en') ?? pick(f, 'Code', 'code', 'field_code') ?? '',
+  code: pick(f, 'Code', 'code', 'field_code') ?? '',
+  dataType: pick(f, 'DataType', 'dataType', 'field_type') ?? 'string',
+  description: pick(f, 'Description', 'description') ?? '',
+  isRequired: pick(f, 'IsRequired', 'isRequired', 'is_required') ?? false,
+  isManual: pick(f, 'IsManual', 'isManual') ?? false,
+  extractedValue: pick(f, 'ExtractedValue', 'extractedValue', 'extracted_value') ?? ''
+}));
+
+const mapTables = (data) => (data.tables || data.Tables || []).map(t => ({
+  name: pick(t, 'Name', 'name', 'tableName', 'table_name_cn', 'table_name') ?? '',
+  nameEn: pick(t, 'NameEn', 'nameEn', 'table_name_en') ?? pick(t, 'Code', 'code', 'table_code') ?? '',
+  code: pick(t, 'Code', 'code', 'table_code') ?? '',
+  description: pick(t, 'Description', 'description') ?? '',
+  sheetName: pick(t, 'SheetName', 'sheetName', 'sheet_name') ?? '',
+  // 提取数据预览行（后端 ExtractedData 是「列名→值」字典数组，必须透传否则表格数据不显示）
+  extractedData: pick(t, 'ExtractedData', 'extractedData', 'extracted_data') ?? [],
+  columns: (t.columns ?? t.Columns ?? []).map(c => ({
+    name: pick(c, 'Name', 'name', 'columnName', 'column_name_cn', 'column_name') ?? '',
+    nameEn: pick(c, 'NameEn', 'nameEn', 'column_name_en') ?? pick(c, 'Code', 'code', 'column_code') ?? '',
+    code: pick(c, 'Code', 'code', 'column_code') ?? '',
+    dataType: pick(c, 'DataType', 'dataType', 'column_type') ?? 'string',
+    isRequired: pick(c, 'IsRequired', 'isRequired', 'column_is_required') ?? false
+  }))
+}));
 
 const onFieldsUpdate = (fields) => {
   analysisFields.value = fields

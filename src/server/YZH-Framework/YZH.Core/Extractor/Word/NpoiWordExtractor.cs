@@ -83,7 +83,11 @@ public class NpoiWordExtractor : ITextExtractor
     }
 
     /// <summary>
-    /// .docx（OOXML）提取：XWPF 按文档顺序遍历段落与表格。
+    /// .docx（OOXML）提取：页眉内容优先，随后 XWPF 正文按文档顺序遍历段落与表格。
+    /// <para>页眉处理：认证体系文档的封面表格（如“文件编号/版本/生效日期”）常位于 Word
+    /// 页眉（header*.xml）而非正文，若只读 BodyElements 会导致这些关键信息丢失，
+    /// AI 分析自然无法提取。页眉按文本去重（同一页眉被多个节引用时 HeaderList 会有多份）。
+    /// 页脚（页码等）不提取，避免污染内容。</para>
     /// </summary>
     private void ExtractOpenXml(Stream stream, FileExtractionResult result, ExtractionOptions opts)
     {
@@ -91,67 +95,93 @@ public class NpoiWordExtractor : ITextExtractor
         var tableIndex = 1;
         var sectionIndex = 0;
 
-        foreach (var element in doc.BodyElements)
+        // 页眉（封面表格通常在这里）优先提取，按页眉文本去重
+        // （同一页眉被多个节引用时 HeaderList 会出现多份；空页眉直接跳过）
+        var seenHeaderTexts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var header in doc.HeaderList ?? new List<XWPFHeader>())
         {
-            switch (element)
-            {
-                case XWPFParagraph paragraph:
-                    var text = paragraph.Text ?? string.Empty;
-                    if (string.IsNullOrWhiteSpace(text))
-                        continue;
+            var headerText = header?.Text?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(headerText) || !seenHeaderTexts.Add(headerText))
+                continue;
 
-                    sectionIndex++;
-                    var section = new TextSection
-                    {
-                        Content = text,
-                        SectionIndex = sectionIndex,
-                        SectionType = "paragraph",
-                        PositionInfo = System.Text.Json.JsonSerializer.Serialize(new { line_start = sectionIndex })
-                    };
-                    result.Sections.Add(section);
-
-                    if (opts.ExtractFullText)
-                        result.FullText += (string.IsNullOrEmpty(result.FullText) ? "" : "\n") + text;
-                    break;
-
-                case XWPFTable table:
-                    var rows = new List<List<string>>();
-                    foreach (var row in table.Rows)
-                    {
-                        var cells = new List<string>();
-                        foreach (var cell in row.GetTableCells())
-                            cells.Add(cell.GetText() ?? string.Empty);
-                        rows.Add(cells);
-                    }
-
-                    var t = new ExtractedTable
-                    {
-                        TableIndex = tableIndex++,
-                        Rows = rows,
-                        PositionInfo = $"{{\"table\":{tableIndex - 1}}}",
-                        Confidence = 1.0m
-                    };
-                    result.Tables.Add(t);
-
-                    sectionIndex++;
-                    var tableSection = new TextSection
-                    {
-                        Content = string.Join("\n", rows.Select(r => string.Join("\t", r))),
-                        SectionIndex = sectionIndex,
-                        SectionType = "table",
-                        PositionInfo = $"{{\"table\":{tableIndex - 1}}}"
-                    };
-                    result.Sections.Add(tableSection);
-
-                    if (opts.ExtractFullText)
-                        result.FullText += (string.IsNullOrEmpty(result.FullText) ? "" : "\n")
-                            + "[表格] " + string.Join(" | ", rows.Select(r => string.Join("\t", r)));
-                    break;
-            }
+            foreach (var element in header.BodyElements ?? new List<IBodyElement>())
+                AppendBodyElement(element, result, opts, ref tableIndex, ref sectionIndex);
         }
+
+        // 正文
+        foreach (var element in doc.BodyElements)
+            AppendBodyElement(element, result, opts, ref tableIndex, ref sectionIndex);
 
         result.SourceInfo.DetectedType = ExtractSourceType.Word;
         result.SourceInfo.StructureCount = result.Sections.Count;
+    }
+
+    /// <summary>
+    /// 将单个正文元素（段落/表格）追加到提取结果：同步维护 Sections（供 AI 结构化上下文）
+    /// 与 Tables（保留行列结构）、FullText（拼接纯文本）。
+    /// </summary>
+    private static void AppendBodyElement(
+        IBodyElement element,
+        FileExtractionResult result,
+        ExtractionOptions opts,
+        ref int tableIndex,
+        ref int sectionIndex)
+    {
+        switch (element)
+        {
+            case XWPFParagraph paragraph:
+                var text = paragraph.Text ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(text))
+                    return;
+
+                sectionIndex++;
+                var section = new TextSection
+                {
+                    Content = text,
+                    SectionIndex = sectionIndex,
+                    SectionType = "paragraph",
+                    PositionInfo = System.Text.Json.JsonSerializer.Serialize(new { line_start = sectionIndex })
+                };
+                result.Sections.Add(section);
+
+                if (opts.ExtractFullText)
+                    result.FullText += (string.IsNullOrEmpty(result.FullText) ? "" : "\n") + text;
+                break;
+
+            case XWPFTable table:
+                var rows = new List<List<string>>();
+                foreach (var row in table.Rows)
+                {
+                    var cells = new List<string>();
+                    foreach (var cell in row.GetTableCells())
+                        cells.Add(cell.GetText() ?? string.Empty);
+                    rows.Add(cells);
+                }
+
+                var t = new ExtractedTable
+                {
+                    TableIndex = tableIndex++,
+                    Rows = rows,
+                    PositionInfo = $"{{\"table\":{tableIndex - 1}}}",
+                    Confidence = 1.0m
+                };
+                result.Tables.Add(t);
+
+                sectionIndex++;
+                var tableSection = new TextSection
+                {
+                    Content = string.Join("\n", rows.Select(r => string.Join("\t", r))),
+                    SectionIndex = sectionIndex,
+                    SectionType = "table",
+                    PositionInfo = $"{{\"table\":{tableIndex - 1}}}"
+                };
+                result.Sections.Add(tableSection);
+
+                if (opts.ExtractFullText)
+                    result.FullText += (string.IsNullOrEmpty(result.FullText) ? "" : "\n")
+                        + "[表格] " + string.Join(" | ", rows.Select(r => string.Join("\t", r)));
+                break;
+        }
     }
 
     /// <summary>

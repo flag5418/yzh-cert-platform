@@ -9,7 +9,7 @@ namespace VOL.Builder.IServices.CertPlatform
         Task<int> GetUnreadCountAsync(int userId);
         Task<List<MessageDto>> GetListAsync(int userId, int page, int pageSize, bool unreadOnly);
         Task MarkReadAsync(long messageId);
-        Task MarkAllReadAsync(int userId);
+        Task MarkAllReadAsync(int userId, string messageType = null);
         Task CreateAsync(int userId, string userName, string title, string content, string messageType, string extraData);
     }
 

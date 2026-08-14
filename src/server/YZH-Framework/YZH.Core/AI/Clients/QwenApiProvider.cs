@@ -4,21 +4,39 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using YZH.Core.AI.Clients.Models;
 
 namespace YZH.Core.AI.Clients
 {
     /// <summary>
     /// Qwen 云端 Provider（OpenAI 兼容 /chat/completions）。
-    /// 默认模型 qwen-turbo，成本控制用；API Key 优先环境变量 AI_QWEN_API_KEY。
+    /// 默认模型 qwen-turbo，成本控制用；API Key 优先级：环境变量 > IConfiguration > 抛出异常。
     /// </summary>
     public class QwenApiProvider : ILlmProvider
     {
         public string Name => "qwen";
 
-        private static string Endpoint => 
-            Environment.GetEnvironmentVariable("AI_QWEN_ENDPOINT") ?? 
-            "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+        private readonly IConfiguration _config;
+
+        public QwenApiProvider(IConfiguration config)
+        {
+            _config = config;
+        }
+
+        private string Endpoint
+        {
+            get
+            {
+                var envEndpoint = Environment.GetEnvironmentVariable("AI_QWEN_ENDPOINT");
+                if (!string.IsNullOrWhiteSpace(envEndpoint)) return envEndpoint;
+
+                var baseUrl = _config["Ai:BaseUrl"];
+                if (string.IsNullOrWhiteSpace(baseUrl))
+                    baseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1";
+                return baseUrl.TrimEnd('/') + "/chat/completions";
+            }
+        }
 
         public async Task<LlmResponse> ChatAsync(LlmRequest request, CancellationToken ct = default)
         {
@@ -81,15 +99,21 @@ namespace YZH.Core.AI.Clients
             // 移除常见的图片引用模式
             var cleaned = System.Text.RegularExpressions.Regex.Replace(content, @"!\[.*?\]\(.*?\)", "[图片已移除]");
             cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"<img[^>]*>", "[图片已移除]");
-            cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"\[\](image|png|jpg|jpeg|gif|bmp)[^\]*", "[图片已移除]");
+            // [^\]]* 匹配直到下一个 ] 的任意字符（此前 [^\] 是非法的字符类，会抛 "Unterminated [] set" 异常）
+            cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"\[\](image|png|jpg|jpeg|gif|bmp)[^\]]*", "[图片已移除]");
             return cleaned.Trim();
         }
 
-        private static string GetApiKey()
+        private string GetApiKey()
         {
+            // 优先级：环境变量 > IConfiguration
             var key = Environment.GetEnvironmentVariable("AI_QWEN_API_KEY");
             if (!string.IsNullOrWhiteSpace(key)) return key;
-            throw new AI.LlmCallException("未配置 AI_QWEN_API_KEY 环境变量", true);
+            
+            key = _config["Ai:ApiKey"];
+            if (!string.IsNullOrWhiteSpace(key)) return key;
+            
+            throw new AI.LlmCallException("未配置 AI_QWEN_API_KEY 环境变量或 Ai:ApiKey 配置", true);
         }
 
         private static LlmResponse ParseOpenAiResponse(string body, string provider, string model, long durationMs)
