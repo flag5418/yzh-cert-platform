@@ -23,20 +23,14 @@ namespace VOL.Builder.Services.CertPlatform
         }
 
         /// <summary>
-        /// 重写 GetPageData：查询 v_iso_standard 视图（含字典翻译）
+        /// 重写 GetPageData：直接查询 cert_iso_standard 表
         /// 
-        /// T+V 架构：
-        /// - T = ISOStandard（实体表，用于增删改）
-        /// - V = v_iso_standard（视图，用于显示，含 CategoryName/StatusName）
+        /// 注意：v_iso_standard 视图已 DROP，后续按需重建视图或用 EF Core 投影替代
         /// </summary>
         public override PageGridData<ISOStandard> GetPageData(PageDataOptions options)
         {
-            Console.WriteLine($"[ISOStandardGetPageData] ====== 查询视图 v_iso_standard ======");
-            
             var db = _repository.DbContext as VOLContext ?? new VOLContext();
-
-            // 查询视图（已包含 CategoryName, StatusName 中文字段）
-            IQueryable<ISOStandardView> query = db.Set<ISOStandardView>();
+            var query = db.Set<ISOStandard>().AsQueryable();
 
             int totalCount = query.Count();
 
@@ -55,10 +49,8 @@ namespace VOL.Builder.Services.CertPlatform
             int rows = options.Rows > 0 ? options.Rows : 20;
             var list = query.Skip((page - 1) * rows).Take(rows).ToList();
 
-            Console.WriteLine($"[ISOStandardGetPageData] ✅ totalCount={totalCount}, 返回{list.Count}条");
-
             var result = new PageGridData<ISOStandard>();
-            result.rows = list.Cast<ISOStandard>().ToList();
+            result.rows = list;
             result.total = totalCount;
             return result;
         }

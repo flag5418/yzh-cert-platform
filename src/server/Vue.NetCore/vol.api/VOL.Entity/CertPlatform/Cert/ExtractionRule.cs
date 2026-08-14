@@ -5,25 +5,32 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace VOL.Entity.CertPlatform.Cert
 {
     /// <summary>
-    /// ExtractionRule
+    /// ExtractionRule 提取规则
     /// <para>表名：cert_extraction_rule</para>
     /// </summary>
     [Table("cert_extraction_rule")]
     public class ExtractionRule : YZHBaseEntity
     {
+        [Required, StringLength(36)]
+        [Column("file_requirement_code")]
+        public string FileRequirementCode { get; set; }
 
-    [Required][StringLength(36)]
-    public string FileRequirementCode { get; set; }
-    [Required][StringLength(36)]
-    public string SkillCode { get; set; }
-    [Required]
-    public string RuleType { get; set; }
-    [Required]
-    public string RuleConfig { get; set; }
-    
-    public string Description { get; set; }
-    
-    public bool IsActive { get; set; } = true;
+        [Required, StringLength(36)]
+        [Column("skill_code")]
+        public string SkillCode { get; set; }
 
+        [Required, StringLength(20)]
+        [Column("rule_type")]
+        public string RuleType { get; set; }
+
+        [Required]
+        [Column("rule_config")]
+        public string RuleConfig { get; set; }
+
+        [Column("description")]
+        public string Description { get; set; }
+
+        [Column("is_active")]
+        public bool IsActive { get; set; } = true;
     }
 }

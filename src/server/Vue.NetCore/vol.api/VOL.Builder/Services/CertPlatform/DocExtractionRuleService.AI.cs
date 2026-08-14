@@ -25,37 +25,23 @@ namespace VOL.Builder.Services.CertPlatform
         #region S5 接入 YZH.Core 四件套
 
         /// <summary>
-        /// 文件信息临时 DTO（替代已废弃的 StandardDirectoryFile，待 EnterpriseFile 实体重建后替换）
+        /// 按 fileCode 查询文件信息（通过 EnterpriseFileService 获取）。
         /// </summary>
-        private class TempFileInfo
+        private async Task<(string FileName, string StoragePath, string ConvertedStoragePath, string ConvertStatus, string ConvertMessage)> GetFileInfoAsync(string fileCode)
         {
-            public string FileCode { get; set; }
-            public string FileName { get; set; }
-            public string StoragePath { get; set; }
-            public string ConvertedStoragePath { get; set; }
-            public string ConvertStatus { get; set; }
-            public string ConvertMessage { get; set; }
-        }
+            var fileService = AutofacContainerModule.GetService<IEnterpriseFileService>();
+            if (fileService == null)
+                return (null, null, null, null, null);
 
-        /// <summary>
-        /// 按 fileCode 查询文件信息（临时使用原始 SQL，待企业文件实体重建后改回 EF Core）。
-        /// </summary>
-        private async Task<TempFileInfo> GetFileInfoAsync(string fileCode)
-        {
-            var sql = @"SELECT file_code AS FileCode, file_name AS FileName,
-                        storage_path AS StoragePath, converted_storage_path AS ConvertedStoragePath,
-                        convert_status AS ConvertStatus, convert_message AS ConvertMessage
-                        FROM ent_enterprise_file WHERE code = @p0 OR file_code = @p0 LIMIT 1";
-            return await repository.DbContext.Database.SqlQueryRaw<TempFileInfo>(sql, fileCode)
-                .FirstOrDefaultAsync();
+            return await fileService.GetFileInfoAsync(fileCode);
         }
 
         /// <summary>
         /// 调用 IFileExtractor 提取文档内容，返回结构化结果（含 Sections + Tables + FullText）。
         /// </summary>
-        private async Task<FileExtractionResult> ExtractDocumentContentAsync(TempFileInfo fileInfo, string skill)
+        private async Task<FileExtractionResult> ExtractDocumentContentAsync((string FileName, string StoragePath, string ConvertedStoragePath, string ConvertStatus, string ConvertMessage) fileInfo, string skill)
         {
-            if (fileInfo == null) return FileExtractionResult.CreateBase("unknown");
+            if (string.IsNullOrEmpty(fileInfo.FileName)) return FileExtractionResult.CreateBase("unknown");
 
             // .doc 旧格式必须依赖 doc→docx 转换产物才能提取（NPOI 无 HWPF）。
             // 转换未完成/失败时给出明确提示，而不是让用户看到笼统的“不支持的文件类型”。

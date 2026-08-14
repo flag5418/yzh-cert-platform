@@ -20,6 +20,7 @@ namespace VOL.Entity.CertPlatform.Cert
         [Required]
         [StringLength(50)]
         [Editable(true)]
+        [Column("standard_code")]
         public string StandardCode { get; set; }
 
         /// <summary>
@@ -28,12 +29,31 @@ namespace VOL.Entity.CertPlatform.Cert
         [Required]
         [StringLength(200)]
         [Editable(true)]
+        [Column("standard_name")]
         public string StandardName { get; set; }
 
         /// <summary>
         /// 版本年份
         /// </summary>
         [Editable(true)]
+        [Column("version_year")]
         public int VersionYear { get; set; }
+
+        /// <summary>
+        /// 类别（quality/environment/medical 等）
+        /// </summary>
+        [StringLength(50)]
+        [Editable(true)]
+        [Column("category")]
+        public string Category { get; set; } = "quality";
+
+        /// <summary>
+        /// 描述
+        /// </summary>
+        [Column("description")]
+        public string Description { get; set; }
+
+        // Status, OrgCode, Code, CreateID, Creator, CreateDate, ModifyID, Modifier, ModifyDate,
+        // DeleteID, Deleter, DeleteTime, Enable, Remark 继承自 YZHBaseEntity
     }
 }

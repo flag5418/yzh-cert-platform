@@ -5,29 +5,40 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace VOL.Entity.CertPlatform.Cert
 {
     /// <summary>
-    /// ExtractionField
+    /// ExtractionField 提取字段定义
     /// <para>表名：cert_extraction_field</para>
     /// </summary>
     [Table("cert_extraction_field")]
     public class ExtractionField : YZHBaseEntity
     {
+        [Required, StringLength(36)]
+        [Column("rule_code")]
+        public string RuleCode { get; set; }
 
-    [Required][StringLength(36)]
-    public string RuleCode { get; set; }
-    [StringLength(36)]
-    public string SkillCode { get; set; }
-    [Required][StringLength(100)]
-    public string FieldCode { get; set; }
-    [Required][StringLength(500)]
-    public string LabelTag { get; set; }
-    [Required][StringLength(100)]
-    public string FieldName { get; set; }
-    
-    public string FieldType { get; set; } = "string";
-    
-    public string EnumValues { get; set; }
-    
-    public int SortOrder { get; set; } = 0;
+        [StringLength(36)]
+        [Column("skill_code")]
+        public string SkillCode { get; set; }
 
+        [Required, StringLength(100)]
+        [Column("field_code")]
+        public string FieldCode { get; set; }
+
+        [Required, StringLength(500)]
+        [Column("label_tag")]
+        public string LabelTag { get; set; }
+
+        [Required, StringLength(100)]
+        [Column("field_name")]
+        public string FieldName { get; set; }
+
+        [StringLength(20)]
+        [Column("field_type")]
+        public string FieldType { get; set; } = "string";
+
+        [Column("enum_values")]
+        public string EnumValues { get; set; }
+
+        [Column("sort_order")]
+        public int SortOrder { get; set; } = 0;
     }
 }

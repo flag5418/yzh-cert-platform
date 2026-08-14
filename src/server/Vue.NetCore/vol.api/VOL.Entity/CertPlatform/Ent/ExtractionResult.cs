@@ -5,33 +5,55 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace VOL.Entity.CertPlatform.Ent
 {
     /// <summary>
-    /// ExtractionResult
+    /// ExtractionResult 提取结果（字段级）
     /// <para>表名：ent_extraction_result</para>
+    /// <para>注意：此表仅有 create_date 审计字段，不继承完整审计字段</para>
     /// </summary>
     [Table("ent_extraction_result")]
     public class ExtractionResult : YZHBaseEntity
     {
+        [Required, StringLength(36)]
+        [Column("enterprise_code")]
+        public string EnterpriseCode { get; set; }
 
-    [Required][StringLength(36)]
-    public string FileCode { get; set; }
-    [Required]
-    public int VersionNumber { get; set; }
-    [Required][StringLength(36)]
-    public string RuleCode { get; set; }
-    [Required][StringLength(36)]
-    public string FieldCode { get; set; }
-    [StringLength(500)]
-    public string LabelTag { get; set; }
-    
-    public string ExtractedValue { get; set; }
-    
-    public decimal? Confidence { get; set; }
-    
-    public string PositionInfo { get; set; }
-    
-    public bool IsManualEdited { get; set; } = false;
-    [Required]
-    public DateTime ExtractedAt { get; set; }
+        [StringLength(36)]
+        [Column("phase_code")]
+        public string PhaseCode { get; set; }
 
+        [Required, StringLength(36)]
+        [Column("file_code")]
+        public string FileCode { get; set; }
+
+        [Required]
+        [Column("version_number")]
+        public int VersionNumber { get; set; }
+
+        [Required, StringLength(36)]
+        [Column("rule_code")]
+        public string RuleCode { get; set; }
+
+        [Required, StringLength(36)]
+        [Column("field_code")]
+        public string FieldCode { get; set; }
+
+        [StringLength(500)]
+        [Column("label_tag")]
+        public string LabelTag { get; set; }
+
+        [Column("extracted_value")]
+        public string ExtractedValue { get; set; }
+
+        [Column("confidence")]
+        public decimal? Confidence { get; set; }
+
+        [Column("position_info")]
+        public string PositionInfo { get; set; }
+
+        [Column("is_manual_edited")]
+        public bool IsManualEdited { get; set; } = false;
+
+        [Required]
+        [Column("extracted_at")]
+        public DateTime ExtractedAt { get; set; }
     }
 }

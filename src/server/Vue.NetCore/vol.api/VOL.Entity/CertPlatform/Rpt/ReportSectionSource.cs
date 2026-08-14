@@ -5,23 +5,29 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace VOL.Entity.CertPlatform.Rpt
 {
     /// <summary>
-    /// ReportSectionSource
+    /// ReportSectionSource 报告章节来源
     /// <para>表名：rpt_report_section_source</para>
+    /// <para>注意：此表仅有 create_date 审计字段</para>
     /// </summary>
     [Table("rpt_report_section_source")]
     public class ReportSectionSource : YZHBaseEntity
     {
+        [Required, StringLength(36)]
+        [Column("section_code")]
+        public string SectionCode { get; set; }
 
-    [Required][StringLength(36)]
-    public string SectionCode { get; set; }
-    [Required]
-    public string SourceType { get; set; }
-    [StringLength(36)]
-    public string SourceCode { get; set; }
-    
-    public string SourceDescription { get; set; }
-    
-    public decimal? Confidence { get; set; }
+        [Required, StringLength(20)]
+        [Column("source_type")]
+        public string SourceType { get; set; }
 
+        [Required, StringLength(36)]
+        [Column("source_code")]
+        public string SourceCode { get; set; }
+
+        [Column("source_summary")]
+        public string SourceSummary { get; set; }
+
+        [Column("sort_order")]
+        public int SortOrder { get; set; } = 0;
     }
 }

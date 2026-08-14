@@ -17,7 +17,7 @@ namespace VOL.Entity.CertPlatform.Cert
         /// </summary>
         [Required]
         [StringLength(20)]
-        
+        [Column("phase_code")]
         public string PhaseCode { get; set; }
 
         /// <summary>
@@ -25,19 +25,19 @@ namespace VOL.Entity.CertPlatform.Cert
         /// </summary>
         [Required]
         [StringLength(100)]
-        
+        [Column("phase_name")]
         public string PhaseName { get; set; }
 
         /// <summary>
         /// 顺序（1=S1 2=S2 3=一监 4=二监 5=再认证）
         /// </summary>
-        
+        [Column("sequence_order")]
         public int SequenceOrder { get; set; }
 
         /// <summary>
         /// 阶段说明
         /// </summary>
-        
+        [Column("description")]
         public string Description { get; set; }
     }
 }

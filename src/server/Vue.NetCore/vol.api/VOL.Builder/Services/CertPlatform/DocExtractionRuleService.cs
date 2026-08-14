@@ -64,7 +64,7 @@ namespace VOL.Builder.Services.CertPlatform
         {
             // 1. 获取文件信息
             var fileInfo = await GetFileInfoAsync(request.FileCode);
-            if (fileInfo == null)
+            if (string.IsNullOrEmpty(fileInfo.FileName))
             {
                 throw new Exception("文件不存在");
             }
@@ -198,7 +198,7 @@ namespace VOL.Builder.Services.CertPlatform
             {
                 // 1. 获取文件信息
                 var fileInfo = await GetFileInfoAsync(request.FileCode);
-                if (fileInfo == null)
+                if (string.IsNullOrEmpty(fileInfo.FileName))
                 {
                     return new VerifyPromptResponse
                     {
