@@ -17,7 +17,7 @@ namespace VOL.WebApi.Controllers.CertPlatform
         /// <summary>
         /// 上传企业文件
         /// </summary>
-        [HttpPost, Route("upload")]
+        [HttpPost, Route("uploadFile")]
         public async Task<IActionResult> Upload([FromForm] FileUploadRequest request)
         {
             if (request.File == null || request.File.Length == 0)
@@ -27,6 +27,7 @@ namespace VOL.WebApi.Controllers.CertPlatform
             var result = await Service.UploadAsync(
                 request.EnterpriseCode, request.FolderCode,
                 request.StandardCode, request.PhaseCode, request.FolderPath,
+                request.StandardFileCode,
                 request.File.FileName, stream, request.File.Length);
 
             return Ok(result);
@@ -90,6 +91,11 @@ namespace VOL.WebApi.Controllers.CertPlatform
         public string StandardCode { get; set; }
         public string PhaseCode { get; set; }
         public string FolderPath { get; set; }
+        /// <summary>
+        /// 标准文件编码（关联 cert_file_requirement.code）
+        /// 标记企业文件对应的标准文件模板，用于自动触发提取
+        /// </summary>
+        public string StandardFileCode { get; set; }
         public IFormFile File { get; set; }
     }
 

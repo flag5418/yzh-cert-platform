@@ -8,7 +8,7 @@ namespace VOL.Builder.IServices.CertPlatform
 {
     /// <summary>
     /// 企业文件上传服务接口
-    /// 职责：文件上传、查询、删除、版本管理、格式转换触发
+    /// 职责：文件上传、查询、删除、版本管理、格式转换触发、自动提取
     /// </summary>
     public interface IEnterpriseFileService : IDependency
     {
@@ -20,11 +20,13 @@ namespace VOL.Builder.IServices.CertPlatform
         /// <param name="standardCode">标准编码</param>
         /// <param name="phaseCode">阶段编码</param>
         /// <param name="folderPath">文件夹路径</param>
+        /// <param name="standardFileCode">标准文件编码（关联 cert_file_requirement.code，标记企业文件对应的标准文件模板）</param>
         /// <param name="fileName">文件名</param>
         /// <param name="stream">文件流</param>
         /// <param name="fileSize">文件大小</param>
         Task<WebResponseContent> UploadAsync(string enterpriseCode, string folderCode,
             string standardCode, string phaseCode, string folderPath,
+            string standardFileCode,
             string fileName, Stream stream, long fileSize);
 
         /// <summary>

@@ -14,6 +14,8 @@ namespace VOL.Builder.Services.CertPlatform
 {
     /// <summary>
     /// 提取结果保存服务实现
+    /// 核心关联：standard_file_code → cert_file_requirement.code
+    /// 冗余字段：org_code / standard_code / phase_code 方便过滤和工作流引用
     /// </summary>
     public class ExtractionResultService : IExtractionResultService
     {
@@ -26,9 +28,11 @@ namespace VOL.Builder.Services.CertPlatform
 
         /// <summary>
         /// 保存提取结果（字段级 + 表格级）
+        /// 写入 standard_file_code/org_code/standard_code/phase_code 完整冗余字段
         /// </summary>
         public async Task<WebResponseContent> SaveExtractionResultAsync(
-            string fileCode, string enterpriseCode, string phaseCode, string ruleCode,
+            string fileCode, string enterpriseCode, string standardFileCode, string ruleCode,
+            string orgCode, string standardCode, string phaseCode,
             Dictionary<string, object> fields,
             Dictionary<string, List<Dictionary<string, object>>> tables)
         {
@@ -51,7 +55,10 @@ namespace VOL.Builder.Services.CertPlatform
                     {
                         Code = Guid.NewGuid().ToString("N"),
                         EnterpriseCode = enterpriseCode,
+                        StandardFileCode = standardFileCode,
+                        StandardCode = standardCode,
                         PhaseCode = phaseCode,
+                        OrgCode = orgCode,
                         FileCode = fileCode,
                         VersionNumber = versionNumber,
                         RuleCode = ruleCode,
@@ -76,7 +83,10 @@ namespace VOL.Builder.Services.CertPlatform
                     {
                         Code = Guid.NewGuid().ToString("N"),
                         EnterpriseCode = enterpriseCode,
+                        StandardFileCode = standardFileCode,
+                        StandardCode = standardCode,
                         PhaseCode = phaseCode,
+                        OrgCode = orgCode,
                         FileCode = fileCode,
                         VersionNumber = versionNumber,
                         RuleCode = ruleCode,
@@ -104,6 +114,7 @@ namespace VOL.Builder.Services.CertPlatform
                 .Select(x => new
                 {
                     x.Code,
+                    x.StandardFileCode,
                     x.RuleCode,
                     x.FieldCode,
                     x.LabelTag,
@@ -120,6 +131,7 @@ namespace VOL.Builder.Services.CertPlatform
                 .Select(x => new
                 {
                     x.Code,
+                    x.StandardFileCode,
                     x.RuleCode,
                     x.TableIndex,
                     x.ExtractedJson,

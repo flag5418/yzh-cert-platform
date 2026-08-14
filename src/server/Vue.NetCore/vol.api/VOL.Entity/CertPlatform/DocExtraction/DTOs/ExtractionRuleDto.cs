@@ -6,14 +6,30 @@ namespace VOL.Entity.CertPlatform.DocExtraction.DTOs
 {
     /// <summary>
     /// 保存提取规则请求
+    /// 规则绑定到标准文件（cert_file_requirement.code），而非企业文件
     /// </summary>
     public class SaveExtractionRuleRequest
     {
         /// <summary>
-        /// 文件编码
+        /// 标准文件编码（关联 cert_file_requirement.code）
         /// </summary>
-        [Required(ErrorMessage = "文件编码不能为空")]
-        public string FileCode { get; set; }
+        [Required(ErrorMessage = "标准文件编码不能为空")]
+        public string StandardFileCode { get; set; }
+
+        /// <summary>
+        /// 机构编码（冗余，方便过滤）
+        /// </summary>
+        public string OrgCode { get; set; }
+
+        /// <summary>
+        /// 标准编码（冗余，关联 cert_iso_standard.code）
+        /// </summary>
+        public string StandardCode { get; set; }
+
+        /// <summary>
+        /// 阶段编码（冗余，方便过滤）
+        /// </summary>
+        public string PhaseCode { get; set; }
 
         /// <summary>
         /// 技能类型
@@ -131,8 +147,8 @@ namespace VOL.Entity.CertPlatform.DocExtraction.DTOs
     /// </summary>
     public class AIAnalyzeRequest
     {
-        [Required(ErrorMessage = "文件编码不能为空")]
-        public string FileCode { get; set; }
+        [Required(ErrorMessage = "标准文件编码不能为空")]
+        public string StandardFileCode { get; set; }
 
         [Required(ErrorMessage = "技能类型不能为空")]
         public string Skill { get; set; }
@@ -164,8 +180,8 @@ namespace VOL.Entity.CertPlatform.DocExtraction.DTOs
     /// </summary>
     public class GeneratePromptRequest
     {
-        [Required(ErrorMessage = "文件编码不能为空")]
-        public string FileCode { get; set; }
+        [Required(ErrorMessage = "标准文件编码不能为空")]
+        public string StandardFileCode { get; set; }
 
         public List<FieldDefDto> Fields { get; set; } = new List<FieldDefDto>();
         public List<TableDefDto> Tables { get; set; } = new List<TableDefDto>();
@@ -176,8 +192,8 @@ namespace VOL.Entity.CertPlatform.DocExtraction.DTOs
     /// </summary>
     public class VerifyPromptRequest
     {
-        [Required(ErrorMessage = "文件编码不能为空")]
-        public string FileCode { get; set; }
+        [Required(ErrorMessage = "标准文件编码不能为空")]
+        public string StandardFileCode { get; set; }
 
         [Required(ErrorMessage = "Prompt不能为空")]
         public string Prompt { get; set; }
@@ -232,7 +248,10 @@ namespace VOL.Entity.CertPlatform.DocExtraction.DTOs
     {
         public long Id { get; set; }
         public string Code { get; set; }
-        public string FileCode { get; set; }
+        public string StandardFileCode { get; set; }
+        public string OrgCode { get; set; }
+        public string StandardCode { get; set; }
+        public string PhaseCode { get; set; }
         public string Skill { get; set; }
         public string Prompt { get; set; }
         public bool IsValid { get; set; }

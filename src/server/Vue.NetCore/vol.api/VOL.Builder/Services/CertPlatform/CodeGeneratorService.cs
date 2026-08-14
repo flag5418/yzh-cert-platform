@@ -10,6 +10,7 @@
  *   /{StandardCode}/{PhaseCode}/{FolderCode}/{FileName}
  */
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using VOL.Builder.IServices.CertPlatform;
 using VOL.Core.Extensions.AutofacManager;
@@ -159,10 +160,14 @@ namespace VOL.Builder.Services.CertPlatform
             var cleanPhase = CleanCode(phaseCode);
             var cleanFolderPath = folderPath?.Replace("|", "-").Replace("//", "/").Trim('/') ?? "";
 
-            if (string.IsNullOrEmpty(cleanFolderPath))
-                return $"/standard-directory/{cleanOrg}/{cleanStandard}/{cleanPhase}/{fileName}";
+            // 过滤空段，避免路径中出现 //
+            var segments = new List<string> { cleanOrg, cleanStandard, cleanPhase };
+            if (!string.IsNullOrEmpty(cleanFolderPath))
+                segments.Add(cleanFolderPath);
+            segments.Add(CleanCode(fileName));
 
-            return $"/standard-directory/{cleanOrg}/{cleanStandard}/{cleanPhase}/{cleanFolderPath}/{fileName}";
+            var path = string.Join("/", segments.Where(s => !string.IsNullOrEmpty(s)));
+            return $"/standard-directory/{path}";
         }
 
         /// <summary>
@@ -178,10 +183,14 @@ namespace VOL.Builder.Services.CertPlatform
             var cleanPhase = CleanCode(phaseCode);
             var cleanFolderPath = folderPath?.Replace("|", "-").Replace("//", "/").Trim('/') ?? "";
 
-            if (string.IsNullOrEmpty(cleanFolderPath))
-                return $"/enterprise-documents/{cleanEnt}/{cleanOrg}/{cleanStandard}/{cleanPhase}/{fileName}";
+            // 过滤空段，避免路径中出现 //
+            var segments = new List<string> { cleanEnt, cleanOrg, cleanStandard, cleanPhase };
+            if (!string.IsNullOrEmpty(cleanFolderPath))
+                segments.Add(cleanFolderPath);
+            segments.Add(CleanCode(fileName));
 
-            return $"/enterprise-documents/{cleanEnt}/{cleanOrg}/{cleanStandard}/{cleanPhase}/{cleanFolderPath}/{fileName}";
+            var path = string.Join("/", segments.Where(s => !string.IsNullOrEmpty(s)));
+            return $"/enterprise-documents/{path}";
         }
 
         /// <summary>
@@ -197,10 +206,15 @@ namespace VOL.Builder.Services.CertPlatform
             var cleanPhase = CleanCode(phaseCode);
             var cleanFolderPath = folderPath?.Replace("|", "-").Replace("//", "/").Trim('/') ?? "";
 
-            if (string.IsNullOrEmpty(cleanFolderPath))
-                return $"/enterprise-documents/{cleanEnt}/{cleanOrg}/{cleanStandard}/{cleanPhase}/.converted/{fileName}";
+            // 过滤空段，避免路径中出现 //
+            var segments = new List<string> { cleanEnt, cleanOrg, cleanStandard, cleanPhase };
+            if (!string.IsNullOrEmpty(cleanFolderPath))
+                segments.Add(cleanFolderPath);
+            segments.Add(".converted");
+            segments.Add(CleanCode(fileName));
 
-            return $"/enterprise-documents/{cleanEnt}/{cleanOrg}/{cleanStandard}/{cleanPhase}/{cleanFolderPath}/.converted/{fileName}";
+            var path = string.Join("/", segments.Where(s => !string.IsNullOrEmpty(s)));
+            return $"/enterprise-documents/{path}";
         }
 
         #endregion

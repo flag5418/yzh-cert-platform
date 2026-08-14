@@ -75,6 +75,11 @@ namespace VOL.Entity.CertPlatform.Ent
         [Column("upload_status")]
         public string UploadStatus { get; set; } = "active";
 
+        /// <summary>标准文件编码（关联 cert_file_requirement.code，标记企业文件对应的标准文件模板）</summary>
+        [StringLength(36)]
+        [Column("standard_file_code")]
+        public string StandardFileCode { get; set; }
+
         // 注：Id, Code, OrgCode, CreateID, Creator, CreateDate, ModifyID, Modifier, ModifyDate,
         // DeleteID, Deleter, DeleteTime, Status, Enable, Remark 继承自 YZHBaseEntity
     }

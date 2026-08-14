@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using VOL.Builder.IServices.CertPlatform;
@@ -82,6 +83,57 @@ namespace VOL.WebApi.Controllers.CertPlatform
             var result = await Service.DeleteFileRequirementAsync(request.RequirementCode);
             return Ok(result);
         }
+
+        // ===== 模板文件管理 API =====
+
+        /// <summary>
+        /// 上传标准目录模板文件
+        /// </summary>
+        [HttpPost, Route("uploadTemplateFile")]
+        public async Task<IActionResult> UploadTemplateFile([FromForm] TemplateFileUploadRequest request)
+        {
+            if (request.File == null || request.File.Length == 0)
+                return Ok(new { status = false, message = "请选择文件" });
+
+            using var stream = request.File.OpenReadStream();
+            var result = await Service.UploadTemplateFileAsync(
+                request.RequirementCode, request.File.FileName, stream, request.File.Length);
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// 下载标准目录模板文件
+        /// </summary>
+        [HttpGet, Route("downloadTemplateFile")]
+        public async Task<IActionResult> DownloadTemplateFile([FromQuery] string requirementCode)
+        {
+            var (stream, fileName, contentType) = await Service.DownloadTemplateFileAsync(requirementCode);
+            if (stream == null)
+                return Ok(new { status = false, message = "模板文件不存在" });
+
+            return File(stream, contentType ?? "application/octet-stream", fileName);
+        }
+
+        /// <summary>
+        /// 删除标准目录模板文件
+        /// </summary>
+        [HttpPost, Route("deleteTemplateFile")]
+        public async Task<IActionResult> DeleteTemplateFile([FromBody] RequirementCodeRequest request)
+        {
+            var result = await Service.DeleteTemplateFileAsync(request.RequirementCode);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// 重命名标准目录模板文件
+        /// </summary>
+        [HttpPost, Route("renameTemplateFile")]
+        public async Task<IActionResult> RenameTemplateFile([FromBody] RenameTemplateFileRequest request)
+        {
+            var result = await Service.RenameTemplateFileAsync(request.RequirementCode, request.NewFileName);
+            return Ok(result);
+        }
     }
 
     public class FolderCodeRequest
@@ -92,5 +144,17 @@ namespace VOL.WebApi.Controllers.CertPlatform
     public class RequirementCodeRequest
     {
         public string RequirementCode { get; set; }
+    }
+
+    public class TemplateFileUploadRequest
+    {
+        public string RequirementCode { get; set; }
+        public IFormFile File { get; set; }
+    }
+
+    public class RenameTemplateFileRequest
+    {
+        public string RequirementCode { get; set; }
+        public string NewFileName { get; set; }
     }
 }

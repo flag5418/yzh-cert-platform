@@ -62,11 +62,11 @@ namespace VOL.Builder.Services.CertPlatform
         /// </summary>
         public async Task<AIAnalyzeResponse> AIAnalyzeAsync(AIAnalyzeRequest request)
         {
-            // 1. 获取文件信息
-            var fileInfo = await GetFileInfoAsync(request.FileCode);
+            // 1. 获取标准文件信息（从 cert_file_requirement 获取模板文件）
+            var fileInfo = await GetFileInfoAsync(request.StandardFileCode);
             if (string.IsNullOrEmpty(fileInfo.FileName))
             {
-                throw new Exception("文件不存在");
+                throw new Exception("标准模板文件不存在，请先上传模板文件");
             }
 
             // 2. 根据技能类型提取文档内容（结构化）
@@ -196,20 +196,20 @@ namespace VOL.Builder.Services.CertPlatform
         {
             try
             {
-                // 1. 获取文件信息
-                var fileInfo = await GetFileInfoAsync(request.FileCode);
+                // 1. 获取标准文件信息（从 cert_file_requirement 获取模板文件）
+                var fileInfo = await GetFileInfoAsync(request.StandardFileCode);
                 if (string.IsNullOrEmpty(fileInfo.FileName))
                 {
                     return new VerifyPromptResponse
                     {
                         Success = false,
-                        Message = "文件不存在"
+                        Message = "标准模板文件不存在，请先上传模板文件"
                     };
                 }
 
-                // 2. 获取规则信息（确定技能类型 + 文档内容缓存）
+                // 2. 获取规则信息（按 standardFileCode 查询，确定技能类型 + 文档内容缓存）
                 var rule = await repository
-                    .FindAsIQueryable(x => x.FileCode == request.FileCode)
+                    .FindAsIQueryable(x => x.StandardFileCode == request.StandardFileCode)
                     .FirstOrDefaultAsync();
 
                 var skill = rule?.Skill ?? "word";
@@ -221,7 +221,7 @@ namespace VOL.Builder.Services.CertPlatform
                 {
                     // 有缓存，直接使用
                     docContent = rule.DocContent;
-                    Console.WriteLine($"[DocExtractionRule] 📄 使用缓存的文档内容 (FileCode={request.FileCode}, length={docContent.Length})");
+                    Console.WriteLine($"[DocExtractionRule] 📄 使用缓存的文档内容 (StandardFileCode={request.StandardFileCode}, length={docContent.Length})");
                 }
                 else
                 {
@@ -255,7 +255,7 @@ namespace VOL.Builder.Services.CertPlatform
                         rule.DocContent = docContent;
                         rule.ModifyDate = DateTime.Now;
                         await repository.SaveChangesAsync();
-                        Console.WriteLine($"[DocExtractionRule] 💾 文档内容已缓存到数据库 (FileCode={request.FileCode}, length={docContent.Length})");
+                        Console.WriteLine($"[DocExtractionRule] 💾 文档内容已缓存到数据库 (StandardFileCode={request.StandardFileCode}, length={docContent.Length})");
                     }
                 }
 
@@ -297,20 +297,30 @@ namespace VOL.Builder.Services.CertPlatform
             using var transaction = await repository.DbContext.Database.BeginTransactionAsync();
             try
             {
-                // 1. 查找或创建规则
+                // 1. 查找或创建规则（按 standardFileCode 查询）
                 var rule = await repository
-                    .FindAsIQueryable(x => x.FileCode == request.FileCode)
+                    .FindAsIQueryable(x => x.StandardFileCode == request.StandardFileCode)
                     .FirstOrDefaultAsync();
 
                 if (rule == null)
                 {
                     rule = new CertDocExtractionRule
                     {
-                        Code = GenerateRuleCode(request.FileCode),
-                        FileCode = request.FileCode,
+                        Code = GenerateRuleCode(request.StandardFileCode),
+                        StandardFileCode = request.StandardFileCode,
+                        StandardCode = request.StandardCode,
+                        PhaseCode = request.PhaseCode,
+                        OrgCode = request.OrgCode,
                         CreateDate = DateTime.Now
                     };
                     repository.Add(rule);
+                }
+                else
+                {
+                    // 更新冗余字段
+                    rule.StandardCode = request.StandardCode;
+                    rule.PhaseCode = request.PhaseCode;
+                    rule.OrgCode = request.OrgCode;
                 }
 
                 // 2. 更新规则信息
@@ -426,10 +436,10 @@ namespace VOL.Builder.Services.CertPlatform
         /// <summary>
         /// 获取规则详情
         /// </summary>
-        public async Task<RuleDetailResponse> GetRuleDetailAsync(string fileCode)
+        public async Task<RuleDetailResponse> GetRuleDetailAsync(string standardFileCode)
         {
             var rule = await repository
-                .FindAsIQueryable(x => x.FileCode == fileCode)
+                .FindAsIQueryable(x => x.StandardFileCode == standardFileCode)
                 .FirstOrDefaultAsync();
 
             if (rule == null)
@@ -486,7 +496,10 @@ namespace VOL.Builder.Services.CertPlatform
             {
                 Id = rule.Id,
                 Code = rule.Code,
-                FileCode = rule.FileCode,
+                StandardFileCode = rule.StandardFileCode,
+                OrgCode = rule.OrgCode,
+                StandardCode = rule.StandardCode,
+                PhaseCode = rule.PhaseCode,
                 Skill = rule.Skill,
                 Prompt = rule.Prompt,
                 IsValid = rule.IsValid,
@@ -501,10 +514,10 @@ namespace VOL.Builder.Services.CertPlatform
         /// <summary>
         /// 删除规则
         /// </summary>
-        public async Task<bool> DeleteRuleAsync(string fileCode)
+        public async Task<bool> DeleteRuleAsync(string standardFileCode)
         {
             var rule = await repository
-                .FindAsIQueryable(x => x.FileCode == fileCode)
+                .FindAsIQueryable(x => x.StandardFileCode == standardFileCode)
                 .FirstOrDefaultAsync();
 
             if (rule == null)
@@ -615,9 +628,9 @@ namespace VOL.Builder.Services.CertPlatform
         /// <summary>
         /// 生成规则编码
         /// </summary>
-        private string GenerateRuleCode(string fileCode)
+        private string GenerateRuleCode(string standardFileCode)
         {
-            return $"RULE-{fileCode}-{DateTime.Now:yyyyMMddHHmmss}";
+            return $"RULE-{standardFileCode}-{DateTime.Now:yyyyMMddHHmmss}";
         }
 
         /// <summary>

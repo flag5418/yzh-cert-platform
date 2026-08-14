@@ -9,19 +9,45 @@ namespace VOL.Entity.CertPlatform.DocExtraction
     /// <summary>
     /// 文档提取规则主表
     /// 一个标准文件对应一个规则
+    /// <para>核心关联：standard_file_code → cert_file_requirement.code</para>
+    /// <para>冗余字段：org_code / standard_code / phase_code 方便过滤</para>
     /// </summary>
     [Table("cert_doc_extraction_rule")]
     [Entity(TableCnName = "文档提取规则")]
     public class CertDocExtractionRule : YZHBaseEntity
     {
         /// <summary>
-        /// 文件编码（关联标准目录文件）
+        /// 文件编码（旧字段，保留向后兼容，新代码不再使用）
         /// </summary>
         [Column("file_code")]
         [Display(Name = "文件编码")]
-        [Required(ErrorMessage = "文件编码不能为空")]
         [MaxLength(100)]
         public string FileCode { get; set; }
+
+        /// <summary>
+        /// 标准文件编码（关联 cert_file_requirement.code，核心枢纽）
+        /// 一个标准文件对应一个提取规则
+        /// </summary>
+        [Column("standard_file_code")]
+        [Display(Name = "标准文件编码")]
+        [MaxLength(36)]
+        public string StandardFileCode { get; set; }
+
+        /// <summary>
+        /// 标准编码（冗余，关联 cert_iso_standard.code）
+        /// </summary>
+        [Column("standard_code")]
+        [Display(Name = "标准编码")]
+        [MaxLength(36)]
+        public string StandardCode { get; set; }
+
+        /// <summary>
+        /// 阶段编码（冗余，方便过滤）
+        /// </summary>
+        [Column("phase_code")]
+        [Display(Name = "阶段编码")]
+        [MaxLength(36)]
+        public string PhaseCode { get; set; }
 
         /// <summary>
         /// 技能类型（word/excel/pdf）
@@ -68,7 +94,6 @@ namespace VOL.Entity.CertPlatform.DocExtraction
         [Display(Name = "文档内容缓存")]
         public string DocContent { get; set; }
 
-        // 审计字段（create_id/creator/create_date/modify_id/modifier/modify_date/delete_id/deleter/delete_time/enable）
-        // 以及 Code/OrgCode/Status/Remark 继承自 YZHBaseEntity，无需 new 覆盖
+        // 审计字段及 Code/OrgCode/Status/Enable/Remark 继承自 YZHBaseEntity
     }
 }

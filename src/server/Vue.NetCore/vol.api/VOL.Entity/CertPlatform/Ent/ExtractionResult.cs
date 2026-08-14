@@ -7,7 +7,8 @@ namespace VOL.Entity.CertPlatform.Ent
     /// <summary>
     /// ExtractionResult 提取结果（字段级）
     /// <para>表名：ent_extraction_result</para>
-    /// <para>注意：此表仅有 create_date 审计字段，不继承完整审计字段</para>
+    /// <para>核心关联：standard_file_code → cert_file_requirement.code</para>
+    /// <para>冗余字段：org_code / standard_code / phase_code 方便过滤和数据提取</para>
     /// </summary>
     [Table("ent_extraction_result")]
     public class ExtractionResult : YZHBaseEntity
@@ -16,6 +17,17 @@ namespace VOL.Entity.CertPlatform.Ent
         [Column("enterprise_code")]
         public string EnterpriseCode { get; set; }
 
+        /// <summary>标准文件编码（关联 cert_file_requirement.code，核心枢纽）</summary>
+        [StringLength(36)]
+        [Column("standard_file_code")]
+        public string StandardFileCode { get; set; }
+
+        /// <summary>标准编码（冗余，关联 cert_iso_standard.code）</summary>
+        [StringLength(36)]
+        [Column("standard_code")]
+        public string StandardCode { get; set; }
+
+        /// <summary>阶段编码（冗余，方便过滤）</summary>
         [StringLength(36)]
         [Column("phase_code")]
         public string PhaseCode { get; set; }
@@ -55,5 +67,7 @@ namespace VOL.Entity.CertPlatform.Ent
         [Required]
         [Column("extracted_at")]
         public DateTime ExtractedAt { get; set; }
+
+        // org_code 继承自 YZHBaseEntity
     }
 }

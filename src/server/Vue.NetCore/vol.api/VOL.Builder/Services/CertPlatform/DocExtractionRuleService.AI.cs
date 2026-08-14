@@ -17,6 +17,7 @@ using YZH.Core.Workflow.Models;
 using YZH.Core.Skills;
 using YZH.Core.Extractor.Models;
 using VOL.Entity.CertPlatform.Wf;
+using VOL.Entity.CertPlatform.Cert;
 
 namespace VOL.Builder.Services.CertPlatform
 {
@@ -25,15 +26,31 @@ namespace VOL.Builder.Services.CertPlatform
         #region S5 接入 YZH.Core 四件套
 
         /// <summary>
-        /// 按 fileCode 查询文件信息（通过 EnterpriseFileService 获取）。
+        /// 按 standardFileCode 查询标准模板文件信息（从 cert_file_requirement 获取）。
+        /// 返回模板文件的 OSS 存储路径，供提取器下载使用。
         /// </summary>
-        private async Task<(string FileName, string StoragePath, string ConvertedStoragePath, string ConvertStatus, string ConvertMessage)> GetFileInfoAsync(string fileCode)
+        private async Task<(string FileName, string StoragePath, string ConvertedStoragePath, string ConvertStatus, string ConvertMessage)> GetFileInfoAsync(string standardFileCode)
         {
-            var fileService = AutofacContainerModule.GetService<IEnterpriseFileService>();
-            if (fileService == null)
+            if (string.IsNullOrEmpty(standardFileCode))
                 return (null, null, null, null, null);
 
-            return await fileService.GetFileInfoAsync(fileCode);
+            // 从 cert_file_requirement 获取标准模板文件信息
+            var volContext = AutofacContainerModule.GetService<VOL.Core.EFDbContext.VOLContext>();
+            if (volContext == null)
+                return (null, null, null, null, null);
+
+            var fileReq = await volContext.Set<VOL.Entity.CertPlatform.Cert.FileRequirement>()
+                .Where(x => x.Code == standardFileCode && x.Enable == true)
+                .Select(x => new { x.TemplateFileName, x.TemplateStoragePath, x.FileNameTemplate })
+                .FirstOrDefaultAsync();
+
+            if (fileReq == null || string.IsNullOrEmpty(fileReq.TemplateStoragePath))
+                return (null, null, null, null, null);
+
+            // 标准目录模板文件不需要转换（假设上传时已是可读格式）
+            // ConvertedStoragePath = null, ConvertStatus = null
+            var fileName = fileReq.TemplateFileName ?? fileReq.FileNameTemplate;
+            return (fileName, fileReq.TemplateStoragePath, null, null, null);
         }
 
         /// <summary>

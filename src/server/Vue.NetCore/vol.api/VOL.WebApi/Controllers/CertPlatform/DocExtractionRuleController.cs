@@ -72,10 +72,10 @@ namespace VOL.WebApi.Controllers.CertPlatform
         /// <summary>
         /// 获取规则详情
         /// </summary>
-        [HttpGet, Route("{fileCode}")]
-        public async Task<IActionResult> GetRuleDetail(string fileCode)
+        [HttpGet, Route("{standardFileCode}")]
+        public async Task<IActionResult> GetRuleDetail(string standardFileCode)
         {
-            var result = await _service.GetRuleDetailAsync(fileCode);
+            var result = await _service.GetRuleDetailAsync(standardFileCode);
             if (result == null)
                 return JsonNormal(new { success = false, message = "规则不存在" });
             return JsonNormal(new { success = true, data = result });
@@ -84,10 +84,10 @@ namespace VOL.WebApi.Controllers.CertPlatform
         /// <summary>
         /// 删除规则
         /// </summary>
-        [HttpPost, Route("{fileCode}/delete")]
-        public async Task<IActionResult> DeleteRule(string fileCode)
+        [HttpPost, Route("{standardFileCode}/delete")]
+        public async Task<IActionResult> DeleteRule(string standardFileCode)
         {
-            var success = await _service.DeleteRuleAsync(fileCode);
+            var success = await _service.DeleteRuleAsync(standardFileCode);
             return JsonNormal(new { success, message = success ? "删除成功" : "删除失败" });
         }
 
