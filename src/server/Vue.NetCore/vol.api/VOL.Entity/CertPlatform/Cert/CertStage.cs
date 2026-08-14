@@ -32,6 +32,12 @@ namespace VOL.Entity.CertPlatform.Cert
         public string StageName { get; set; }
 
         /// <summary>
+        /// 描述
+        /// </summary>
+        [Column("description")]
+        public string Description { get; set; }
+
+        /// <summary>
         /// 排序号
         /// </summary>
         [Editable(true)]

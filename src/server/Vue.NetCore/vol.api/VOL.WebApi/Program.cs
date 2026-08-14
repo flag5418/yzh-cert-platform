@@ -142,6 +142,10 @@ builder.Services.AddSingleton<YZH.Core.Queue.YzhQueueManager>();
 builder.Services.AddSingleton<YZH.Core.Queue.IYzhTaskExecutor, VOL.Builder.Services.CertPlatform.OfficeConvertTaskExecutor>();
 builder.Services.AddHostedService<YZH.Core.Queue.YzhQueueHostedService>();
 
+// ====== SignalR 转换进度通知（桥接队列引擎与 Hub） ======
+builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IConvertNotifier, VOL.WebApi.Hubs.ConvertNotifier>();
+builder.Services.AddSingleton<YZH.Core.Queue.IYzhQueueNotifier, VOL.Builder.Services.CertPlatform.CertQueueNotifier>();
+
 // ====== YZH Framework 核心服务注册（替代 YZHModule Autofac 注册）======
 // 文件提取服务：仅注册 IFileExtractor。
 // 注意：不要在这里注册未键控的 ITextExtractor —— FileExtractorService 同时有无参构造与
