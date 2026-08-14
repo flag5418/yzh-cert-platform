@@ -119,18 +119,19 @@ namespace VOL.Builder.Services.CertPlatform
 
                 foreach (var org in organizations)
                 {
+                    // V3 架构：关联表用 org_code 列存储的是机构实体的 Code 字段值（如 CB001-CODE）
                     var orgNode = new
                     {
-                        id = org.OrgCode,
+                        id = org.Code,
                         label = org.Name,
                         type = "organization",
-                        cbCode = org.OrgCode,
+                        cbCode = org.Code,
                         children = new List<object>()
                     };
 
-                    // 获取该机构关联的标准（通过 org_code 关联）
+                    // 获取该机构关联的标准（关联表 cert_org_standard.org_code 存储的是 org.Code）
                     var orgStdCodes = orgStandards
-                        .Where(x => x.OrgCode == org.OrgCode)
+                        .Where(x => x.OrgCode == org.Code)
                         .Select(x => x.StdCode)
                         .ToList();
 
@@ -142,18 +143,18 @@ namespace VOL.Builder.Services.CertPlatform
                     {
                         var stdNode = new
                         {
-                            id = $"{org.OrgCode}|{std.StandardCode}",
+                            id = $"{org.Code}|{std.StandardCode}",
                             label = $"{std.StandardCode} - {std.StandardName}",
                             type = "standard",
-                            cbCode = org.OrgCode,
+                            cbCode = org.Code,
                             standardCode = std.StandardCode,
                             standardName = std.StandardName,
                             children = new List<object>()
                         };
 
-                        // 获取该机构+标准关联的阶段
+                        // 获取该机构+标准关联的阶段（关联表用 org.Code + std.Code 匹配）
                         var orgStageCodes = orgStages
-                        .Where(x => x.OrgCode == org.OrgCode && x.StdCode == std.Code)
+                        .Where(x => x.OrgCode == org.Code && x.StdCode == std.Code)
                             .Select(x => x.StageCode)
                             .ToList();
 
@@ -165,10 +166,10 @@ namespace VOL.Builder.Services.CertPlatform
                         {
                             var phaseNode = new
                             {
-                                id = $"{org.OrgCode}|{std.StandardCode}|{stage.StageCode}",
+                                id = $"{org.Code}|{std.StandardCode}|{stage.StageCode}",
                                 label = $"{stage.StageCode} - {stage.StageName}",
                                 type = "phase",
-                                cbCode = org.OrgCode,
+                                cbCode = org.Code,
                                 standardCode = std.StandardCode,
                                 phaseCode = stage.StageCode,
                                 phaseName = stage.StageName,

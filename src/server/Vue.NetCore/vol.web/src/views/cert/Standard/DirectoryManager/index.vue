@@ -507,7 +507,7 @@ import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import {
   IconForward, IconCalendar, IconDelete, IconFile, IconDownload,
   IconFolder, IconFolderAdd, IconOfficeBuilding, IconHelp, IconUpload,
-  IconLoading, IconSuccess, IconClose,
+  IconLoading, IconSuccess, IconClose, IconDocument,
   YzhEmptyState
 } from '@/yzh'
 import { CertStatusBar } from '@/certcore'

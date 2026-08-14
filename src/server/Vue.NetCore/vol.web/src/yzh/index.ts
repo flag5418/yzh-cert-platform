@@ -53,7 +53,7 @@ export {
   IconBack, IconForward, IconMenu, IconClose,
   IconAdd, IconDelete, IconEdit, IconEditPen, IconSearch, IconRefresh,
   IconDownload, IconUpload, IconCopy,
-  IconFolder, IconFolderOpen, IconFolderChecked, IconFile, IconFileChecked,
+  IconFolder, IconFolderOpen, IconFolderChecked, IconFile, IconFileChecked, IconDocument,
   IconSuccess, IconCircleSuccess, IconError, IconWarning, IconInfo,
   IconLoading, IconPending, IconHelp, IconSetting, IconAnalyze, IconPrompt,
   IconCode, IconList, IconGrid,

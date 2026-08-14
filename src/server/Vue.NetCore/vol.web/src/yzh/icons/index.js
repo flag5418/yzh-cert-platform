@@ -113,6 +113,7 @@ export const IconFolder = Folder
 export const IconFolderOpen = FolderOpened
 export const IconFolderChecked = FolderChecked
 export const IconFile = Document
+export const IconDocument = Document
 export const IconFileChecked = DocumentChecked
 export const IconSuccess = Check
 export const IconCircleSuccess = CircleCheck
