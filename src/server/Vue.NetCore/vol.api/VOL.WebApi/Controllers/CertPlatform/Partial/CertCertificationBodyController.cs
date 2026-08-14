@@ -88,10 +88,11 @@ namespace VOL.WebApi.Controllers.CertPlatform
 
                     var cbCode = entity.Code ?? code;
 
-                    // 【短路】只查 cert_org_standard 关联表
-                    var refCount = _db.Set<VOL.Entity.CertPlatform.Sys.CertOrgStandard>()
-                        .Where(x => x.CbCode == cbCode)
-                        .Count();
+                    // TODO: CertOrgStandard 已废弃删除，待 cert_cb_standard 表重建后恢复
+                    // var refCount = _db.Set<VOL.Entity.CertPlatform.Sys.CertOrgStandard>()
+                    //     .Where(x => x.CbCode == cbCode)
+                    //     .Count();
+                    var refCount = 0;
 
                     if (refCount > 0)
                     {

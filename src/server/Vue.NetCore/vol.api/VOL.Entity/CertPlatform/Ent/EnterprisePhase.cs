@@ -5,23 +5,30 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace VOL.Entity.CertPlatform.Ent
 {
     /// <summary>
-    /// EnterprisePhase
+    /// EnterprisePhase 企业阶段
     /// <para>表名：ent_enterprise_phase</para>
     /// </summary>
     [Table("ent_enterprise_phase")]
     public class EnterprisePhase : YZHBaseEntity
     {
+        [Required, StringLength(36)]
+        [Column("enterprise_code")]
+        public string EnterpriseCode { get; set; }
 
-    [Required][StringLength(36)]
-    public string EnterpriseCode { get; set; }
-    [Required][StringLength(36)]
-    public string PhaseCode { get; set; }
-    [Required][StringLength(36)]
-    public string StandardCode { get; set; }
-    
-    public DateTime? StartedAt { get; set; }
-    
-    public DateTime? CompletedAt { get; set; }
+        [Required, StringLength(36)]
+        [Column("standard_code")]
+        public string StandardCode { get; set; }
 
+        [Required, StringLength(36)]
+        [Column("phase_code")]
+        public string PhaseCode { get; set; }
+
+        [Column("started_at")]
+        public DateTime? StartedAt { get; set; }
+
+        [Column("completed_at")]
+        public DateTime? CompletedAt { get; set; }
+
+        // Status 继承自 YZHBaseEntity（snake_case: status）
     }
 }

@@ -166,20 +166,21 @@ namespace VOL.Builder.Services.CertPlatform
                 .ToListAsync();
         }
 
-        /// <summary>
-        /// 获取指定机构已关联的阶段 ID 列表
-        /// </summary>
-        public async Task<List<long>> GetOrgStageIdsAsync(string cbCode)
-        {
-            if (string.IsNullOrEmpty(cbCode)) return new List<long>();
-
-            var db = _repository.DbContext as VOL.Core.EFDbContext.VOLContext 
-                ?? new VOL.Core.EFDbContext.VOLContext();
-
-            return await db.Set<VOL.Entity.CertPlatform.Sys.CertOrgStage>()
-                .Where(x => x.CbCode == cbCode)
-                .Select(x => x.StageId)
-                .ToListAsync();
-        }
+        // TODO: CertOrgStage 已废弃删除，待 cert_cb_stage 表重建后恢复
+        // /// <summary>
+        // /// 获取指定机构已关联的阶段 ID 列表
+        // /// </summary>
+        // public async Task<List<long>> GetOrgStageIdsAsync(string cbCode)
+        // {
+        //     if (string.IsNullOrEmpty(cbCode)) return new List<long>();
+        //
+        //     var db = _repository.DbContext as VOL.Core.EFDbContext.VOLContext
+        //         ?? new VOL.Core.EFDbContext.VOLContext();
+        //
+        //     return await db.Set<VOL.Entity.CertPlatform.Sys.CertOrgStage>()
+        //         .Where(x => x.CbCode == cbCode)
+        //         .Select(x => x.StageId)
+        //         .ToListAsync();
+        // }
     }
 }

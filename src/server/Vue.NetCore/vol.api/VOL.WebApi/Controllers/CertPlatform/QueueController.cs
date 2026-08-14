@@ -7,8 +7,6 @@ using Microsoft.AspNetCore.Mvc;
 using VOL.Core.Controllers.Basic;
 using VOL.Core.Filters;
 using VOL.Core.Utilities;
-using VOL.Builder.IServices.CertPlatform;
-using VOL.Builder.Services.CertPlatform;
 using YZH.Core.Queue;
 
 namespace VOL.WebApi.Controllers.CertPlatform
@@ -19,12 +17,10 @@ namespace VOL.WebApi.Controllers.CertPlatform
     public class QueueController : ApiBaseController<object>
     {
         private readonly YzhQueueManager _queueManager;
-        private readonly IStandardDirectoryService _standardDirectoryService;
 
-        public QueueController(YzhQueueManager queueManager, IStandardDirectoryService standardDirectoryService)
+        public QueueController(YzhQueueManager queueManager)
         {
             _queueManager = queueManager;
-            _standardDirectoryService = standardDirectoryService;
         }
 
         public class QueueListRequest
@@ -103,15 +99,13 @@ namespace VOL.WebApi.Controllers.CertPlatform
                 : JsonNormal(new WebResponseContent().Error(error));
         }
 
-        /// <summary>
-        /// 重试失败的文档转换（failed/孤儿 pending 的 doc/xls 重新入队）
-        /// </summary>
-        [HttpPost("file-convert/retry-failed")]
-        public async Task<IActionResult> RetryFailedConversions()
-        {
-            var result = await _standardDirectoryService.RetryFailedConversionsAsync();
-            return JsonNormal(result);
-        }
+        // TODO: RetryFailedConversions 端点暂时移除，待企业文件服务重建后恢复
+        // [HttpPost("file-convert/retry-failed")]
+        // public async Task<IActionResult> RetryFailedConversions()
+        // {
+        //     var result = await _standardDirectoryService.RetryFailedConversionsAsync();
+        //     return JsonNormal(result);
+        // }
 
         /// <summary>
         /// 队列监控统计卡

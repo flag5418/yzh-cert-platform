@@ -6,7 +6,6 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using VOL.Core.Extensions.AutofacManager;
-using VOL.Entity.CertPlatform.Dir;
 using VOL.Entity.CertPlatform.DocExtraction;
 using VOL.Entity.CertPlatform.DocExtraction.DTOs;
 using VOL.Builder.IServices.CertPlatform;
@@ -26,18 +25,35 @@ namespace VOL.Builder.Services.CertPlatform
         #region S5 接入 YZH.Core 四件套
 
         /// <summary>
-        /// 从标准目录按 fileCode 查询文件信息（StoragePath / ConvertStatus 等）。
+        /// 文件信息临时 DTO（替代已废弃的 StandardDirectoryFile，待 EnterpriseFile 实体重建后替换）
         /// </summary>
-        private async Task<StandardDirectoryFile> GetFileInfoAsync(string fileCode)
+        private class TempFileInfo
         {
-            return await repository.DbContext.Set<StandardDirectoryFile>()
-                .FirstOrDefaultAsync(x => x.FileCode == fileCode);
+            public string FileCode { get; set; }
+            public string FileName { get; set; }
+            public string StoragePath { get; set; }
+            public string ConvertedStoragePath { get; set; }
+            public string ConvertStatus { get; set; }
+            public string ConvertMessage { get; set; }
+        }
+
+        /// <summary>
+        /// 按 fileCode 查询文件信息（临时使用原始 SQL，待企业文件实体重建后改回 EF Core）。
+        /// </summary>
+        private async Task<TempFileInfo> GetFileInfoAsync(string fileCode)
+        {
+            var sql = @"SELECT file_code AS FileCode, file_name AS FileName,
+                        storage_path AS StoragePath, converted_storage_path AS ConvertedStoragePath,
+                        convert_status AS ConvertStatus, convert_message AS ConvertMessage
+                        FROM ent_enterprise_file WHERE code = @p0 OR file_code = @p0 LIMIT 1";
+            return await repository.DbContext.Database.SqlQueryRaw<TempFileInfo>(sql, fileCode)
+                .FirstOrDefaultAsync();
         }
 
         /// <summary>
         /// 调用 IFileExtractor 提取文档内容，返回结构化结果（含 Sections + Tables + FullText）。
         /// </summary>
-        private async Task<FileExtractionResult> ExtractDocumentContentAsync(StandardDirectoryFile fileInfo, string skill)
+        private async Task<FileExtractionResult> ExtractDocumentContentAsync(TempFileInfo fileInfo, string skill)
         {
             if (fileInfo == null) return FileExtractionResult.CreateBase("unknown");
 

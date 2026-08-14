@@ -134,13 +134,15 @@ builder.Services.AddMvc(options =>
 });
 
 // ====== Office 文档转换后台服务 ======
-builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.OfficeConvertService>();
+// TODO: OfficeConvertService 已废弃删除，待企业文件转换服务重建后恢复
+// builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.OfficeConvertService>();
 
 // ====== yzh 队列中心（YZH.Core.Queue 框架核心） ======
 builder.Services.Configure<YZH.Core.Queue.YzhQueueOptions>(builder.Configuration.GetSection(YZH.Core.Queue.YzhQueueOptions.SectionName));
 builder.Services.AddSingleton<YZH.Core.Queue.YzhQueueManager>();
-builder.Services.AddSingleton<YZH.Core.Queue.IYzhTaskExecutor, VOL.Builder.Services.CertPlatform.OfficeConvertTaskExecutor>();
-builder.Services.AddSingleton<YZH.Core.Queue.IYzhQueueNotifier, VOL.Builder.Services.CertPlatform.CertQueueNotifier>();
+// TODO: OfficeConvertTaskExecutor/CertQueueNotifier 已废弃删除，待企业文件转换服务重建后恢复
+// builder.Services.AddSingleton<YZH.Core.Queue.IYzhTaskExecutor, VOL.Builder.Services.CertPlatform.OfficeConvertTaskExecutor>();
+// builder.Services.AddSingleton<YZH.Core.Queue.IYzhQueueNotifier, VOL.Builder.Services.CertPlatform.CertQueueNotifier>();
 builder.Services.AddHostedService<YZH.Core.Queue.YzhQueueHostedService>();
 
 // ====== YZH Framework 核心服务注册（替代 YZHModule Autofac 注册）======
@@ -182,8 +184,10 @@ builder.Services.AddScoped<YZH.Core.Workflow.IWorkflowEngine, YZH.Core.Workflow.
                     .Build();
             });
             builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IMinIOHelper, VOL.Builder.Services.CertPlatform.MinIOHelper>();
-            builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IFolderFileManager, VOL.Builder.Services.CertPlatform.FolderFileManager>();
-            builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IFileStorageService, VOL.Builder.Services.CertPlatform.FileStorageService>();
+            // TODO: FolderFileManager 已废弃删除，待企业文件服务重建后恢复
+            // builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IFolderFileManager, VOL.Builder.Services.CertPlatform.FolderFileManager>();
+            // TODO: FileStorageService 已废弃删除，待企业文件服务重建后恢复
+            // builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IFileStorageService, VOL.Builder.Services.CertPlatform.FileStorageService>();
             // 注册文件提取器（YZH.Core），供文档提取规则 analyze/content 链路使用
             builder.Services.AddScoped<YZH.Core.Extractor.IFileExtractor, YZH.Core.Extractor.FileExtractorService>();
 

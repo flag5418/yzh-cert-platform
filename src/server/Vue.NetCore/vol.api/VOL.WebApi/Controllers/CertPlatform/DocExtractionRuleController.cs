@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using VOL.Core.Extensions.AutofacManager;
 using VOL.Entity.CertPlatform.DocExtraction;
 using VOL.Entity.CertPlatform.DocExtraction.DTOs;
-using VOL.Entity.CertPlatform.Dir;
+// using VOL.Entity.CertPlatform.Dir; // 废弃，待企业文件实体重建后恢复
 using VOL.Builder.IServices.CertPlatform;
 using YZH.Core.Extractor.Models;
 
@@ -121,68 +121,69 @@ namespace VOL.WebApi.Controllers.CertPlatform
             return JsonNormal(new { success = true, data = skills });
         }
 
-        /// <summary>
-        /// 获取标准目录文件树（按目录编码）。
-        /// </summary>
-        [HttpGet, Route("files/tree")]
-        public IActionResult GetFileTree([FromQuery] string directoryCode)
-        {
-            var dirService = AutofacContainerModule.GetService<VOL.Builder.IServices.CertPlatform.IStandardDirectoryService>();
-            if (dirService == null)
-                return JsonNormal(new { success = false, message = "标准目录服务不可用" });
-            var tree = dirService.GetStageFileTree(directoryCode);
-            return JsonNormal(new { success = true, data = tree });
-        }
+        // TODO: 以下两个端点依赖废弃的 StandardDirectoryFile/IStandardDirectoryService，待企业文件服务重建后恢复
+        // /// <summary>
+        // /// 获取标准目录文件树（按目录编码）。
+        // /// </summary>
+        // [HttpGet, Route("files/tree")]
+        // public IActionResult GetFileTree([FromQuery] string directoryCode)
+        // {
+        //     var dirService = AutofacContainerModule.GetService<VOL.Builder.IServices.CertPlatform.IStandardDirectoryService>();
+        //     if (dirService == null)
+        //         return JsonNormal(new { success = false, message = "标准目录服务不可用" });
+        //     var tree = dirService.GetStageFileTree(directoryCode);
+        //     return JsonNormal(new { success = true, data = tree });
+        // }
 
-        /// <summary>
-        /// 获取文件全文内容（经 IFileExtractor 提取）。
-        /// </summary>
-        [HttpGet, Route("files/{fileCode}/content")]
-        public async Task<IActionResult> GetFileContent(string fileCode)
-        {
-            var volContext = AutofacContainerModule.GetService<VOL.Core.EFDbContext.VOLContext>();
-            var stdFile = await volContext.Set<StandardDirectoryFile>()
-                .FirstOrDefaultAsync(x => x.FileCode == fileCode);
-            if (stdFile == null)
-                return JsonNormal(new { success = false, message = "文件不存在" });
-
-            var extractor = AutofacContainerModule.GetService<YZH.Core.Extractor.IFileExtractor>();
-            if (extractor == null)
-                return JsonNormal(new { success = false, message = "文件提取器不可用" });
-
-            var filePath = stdFile.ConvertedStoragePath ?? stdFile.StoragePath;
-            if (string.IsNullOrWhiteSpace(filePath))
-                return JsonNormal(new { success = false, message = "文件路径为空" });
-
-            // StoragePath 是 MinIO 对象路径，下载到内存流后调用流式提取
-            var minio = AutofacContainerModule.GetService<VOL.Builder.IServices.CertPlatform.IMinIOHelper>();
-            FileExtractionResult result;
-            if (minio != null)
-            {
-                var (stream, _) = await minio.DownloadAsync(filePath);
-                using (stream)
-                {
-                    result = await extractor.ExtractAsync(stream, stdFile.FileName);
-                }
-            }
-            else
-            {
-                result = await extractor.ExtractAsync(filePath);
-            }
-            return JsonNormal(new {
-                success = true,
-                data = new {
-                    fullText = result.FullText ?? string.Empty,
-                    fileName = stdFile.FileName,
-                    sourceType = result.SourceType.ToString(),
-                    status = result.Status.ToString(),
-                    message = result.Message,
-                    errorMessage = result.ErrorMessage,
-                    fieldCount = result.Fields.Count,
-                    tableCount = result.Tables.Count
-                }
-            });
-        }
+        // /// <summary>
+        // /// 获取文件全文内容（经 IFileExtractor 提取）。
+        // /// </summary>
+        // [HttpGet, Route("files/{fileCode}/content")]
+        // public async Task<IActionResult> GetFileContent(string fileCode)
+        // {
+        //     var volContext = AutofacContainerModule.GetService<VOL.Core.EFDbContext.VOLContext>();
+        //     var stdFile = await volContext.Set<StandardDirectoryFile>()
+        //         .FirstOrDefaultAsync(x => x.FileCode == fileCode);
+        //     if (stdFile == null)
+        //         return JsonNormal(new { success = false, message = "文件不存在" });
+        //
+        //     var extractor = AutofacContainerModule.GetService<YZH.Core.Extractor.IFileExtractor>();
+        //     if (extractor == null)
+        //         return JsonNormal(new { success = false, message = "文件提取器不可用" });
+        //
+        //     var filePath = stdFile.ConvertedStoragePath ?? stdFile.StoragePath;
+        //     if (string.IsNullOrWhiteSpace(filePath))
+        //         return JsonNormal(new { success = false, message = "文件路径为空" });
+        //
+        //     // StoragePath 是 MinIO 对象路径，下载到内存流后调用流式提取
+        //     var minio = AutofacContainerModule.GetService<VOL.Builder.IServices.CertPlatform.IMinIOHelper>();
+        //     FileExtractionResult result;
+        //     if (minio != null)
+        //     {
+        //         var (stream, _) = await minio.DownloadAsync(filePath);
+        //         using (stream)
+        //         {
+        //             result = await extractor.ExtractAsync(stream, stdFile.FileName);
+        //         }
+        //     }
+        //     else
+        //     {
+        //         result = await extractor.ExtractAsync(filePath);
+        //     }
+        //     return JsonNormal(new {
+        //         success = true,
+        //         data = new {
+        //             fullText = result.FullText ?? string.Empty,
+        //             fileName = stdFile.FileName,
+        //             sourceType = result.SourceType.ToString(),
+        //             status = result.Status.ToString(),
+        //             message = result.Message,
+        //             errorMessage = result.ErrorMessage,
+        //             fieldCount = result.Fields.Count,
+        //             tableCount = result.Tables.Count
+        //         }
+        //     });
+        // }
 
         /// <summary>
         /// 获取规则列表（分页）

@@ -60,5 +60,28 @@ namespace VOL.Builder.IServices.CertPlatform
         /// </summary>
         string GenerateConvertedStoragePath(string orgCode, string standardCode, string phaseCode,
                                             string folderPath, string fileName);
+
+        // ====== V3 OSS 路径生成（双顶层文件夹） ======
+
+        /// <summary>
+        /// 生成标准目录存储路径
+        /// 格式：/standard-directory/{OrgCode}/{StandardCode}/{PhaseCode}/{FolderPath}/{FileName}
+        /// </summary>
+        string GenerateStandardDirectoryPath(string orgCode, string standardCode,
+                                             string phaseCode, string folderPath, string fileName);
+
+        /// <summary>
+        /// 生成企业资料存储路径
+        /// 格式：/enterprise-documents/{EnterpriseNo}/{OrgCode}/{StandardCode}/{PhaseCode}/{FolderPath}/{FileName}
+        /// </summary>
+        string GenerateEnterpriseDocumentPath(string enterpriseNo, string orgCode,
+            string standardCode, string phaseCode, string folderPath, string fileName);
+
+        /// <summary>
+        /// 生成转换后文件存储路径
+        /// 格式：/enterprise-documents/{EnterpriseNo}/{OrgCode}/{StandardCode}/{PhaseCode}/{FolderPath}/.converted/{FileName}
+        /// </summary>
+        string GenerateEnterpriseConvertedPath(string enterpriseNo, string orgCode,
+            string standardCode, string phaseCode, string folderPath, string fileName);
     }
 }

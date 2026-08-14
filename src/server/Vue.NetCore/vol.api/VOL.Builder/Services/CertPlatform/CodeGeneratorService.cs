@@ -143,6 +143,70 @@ namespace VOL.Builder.Services.CertPlatform
             return $"/{cleanOrg}/{cleanStandard}/{cleanPhase}/{cleanFolderPath}/.converted/{fileName}";
         }
 
+        #endregion
+
+        #region V3 OSS 路径生成（双顶层文件夹）
+
+        /// <summary>
+        /// 生成标准目录存储路径
+        /// 格式：/standard-directory/{OrgCode}/{StandardCode}/{PhaseCode}/{FolderPath}/{FileName}
+        /// </summary>
+        public string GenerateStandardDirectoryPath(string orgCode, string standardCode,
+                                                    string phaseCode, string folderPath, string fileName)
+        {
+            var cleanOrg = CleanCode(orgCode);
+            var cleanStandard = CleanCode(standardCode);
+            var cleanPhase = CleanCode(phaseCode);
+            var cleanFolderPath = folderPath?.Replace("|", "-").Replace("//", "/").Trim('/') ?? "";
+
+            if (string.IsNullOrEmpty(cleanFolderPath))
+                return $"/standard-directory/{cleanOrg}/{cleanStandard}/{cleanPhase}/{fileName}";
+
+            return $"/standard-directory/{cleanOrg}/{cleanStandard}/{cleanPhase}/{cleanFolderPath}/{fileName}";
+        }
+
+        /// <summary>
+        /// 生成企业资料存储路径
+        /// 格式：/enterprise-documents/{EnterpriseNo}/{OrgCode}/{StandardCode}/{PhaseCode}/{FolderPath}/{FileName}
+        /// </summary>
+        public string GenerateEnterpriseDocumentPath(string enterpriseNo, string orgCode,
+            string standardCode, string phaseCode, string folderPath, string fileName)
+        {
+            var cleanEnt = CleanCode(enterpriseNo);
+            var cleanOrg = CleanCode(orgCode);
+            var cleanStandard = CleanCode(standardCode);
+            var cleanPhase = CleanCode(phaseCode);
+            var cleanFolderPath = folderPath?.Replace("|", "-").Replace("//", "/").Trim('/') ?? "";
+
+            if (string.IsNullOrEmpty(cleanFolderPath))
+                return $"/enterprise-documents/{cleanEnt}/{cleanOrg}/{cleanStandard}/{cleanPhase}/{fileName}";
+
+            return $"/enterprise-documents/{cleanEnt}/{cleanOrg}/{cleanStandard}/{cleanPhase}/{cleanFolderPath}/{fileName}";
+        }
+
+        /// <summary>
+        /// 生成转换后文件存储路径
+        /// 格式：/enterprise-documents/{EnterpriseNo}/{OrgCode}/{StandardCode}/{PhaseCode}/{FolderPath}/.converted/{FileName}
+        /// </summary>
+        public string GenerateEnterpriseConvertedPath(string enterpriseNo, string orgCode,
+            string standardCode, string phaseCode, string folderPath, string fileName)
+        {
+            var cleanEnt = CleanCode(enterpriseNo);
+            var cleanOrg = CleanCode(orgCode);
+            var cleanStandard = CleanCode(standardCode);
+            var cleanPhase = CleanCode(phaseCode);
+            var cleanFolderPath = folderPath?.Replace("|", "-").Replace("//", "/").Trim('/') ?? "";
+
+            if (string.IsNullOrEmpty(cleanFolderPath))
+                return $"/enterprise-documents/{cleanEnt}/{cleanOrg}/{cleanStandard}/{cleanPhase}/.converted/{fileName}";
+
+            return $"/enterprise-documents/{cleanEnt}/{cleanOrg}/{cleanStandard}/{cleanPhase}/{cleanFolderPath}/.converted/{fileName}";
+        }
+
+        #endregion
+
+        #region V2 路径生成（废弃，保留兼容）
+
         /// <summary>
         /// 清理编码中的特殊字符（用于路径）
         /// </summary>
@@ -150,7 +214,7 @@ namespace VOL.Builder.Services.CertPlatform
         {
             if (string.IsNullOrEmpty(code))
                 return "";
-            
+
             return code.Replace(":", "")
                        .Replace("-", "")
                        .Replace(" ", "")
