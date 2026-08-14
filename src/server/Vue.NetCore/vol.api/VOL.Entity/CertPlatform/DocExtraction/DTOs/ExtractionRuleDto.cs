@@ -68,6 +68,9 @@ namespace VOL.Entity.CertPlatform.DocExtraction.DTOs
         /// <summary>是否手动维护</summary>
         public bool IsManual { get; set; }
 
+        /// <summary>是否 AI 推荐字段（true=可自动提取，false=手动添加/审核员必填字段，生成Prompt时过滤掉）</summary>
+        public bool IsAiRecommended { get; set; } = true;
+
         /// <summary>AI 提取的值（前端预览用）</summary>
         public string ExtractedValue { get; set; }
     }
@@ -97,6 +100,9 @@ namespace VOL.Entity.CertPlatform.DocExtraction.DTOs
 
         /// <summary>AI 提取的数据样例（前端预览用，最多5行）</summary>
         public List<Dictionary<string, object>> ExtractedData { get; set; } = new List<Dictionary<string, object>>();
+
+        /// <summary>是否 AI 推荐表格（true=可自动提取，false=手动添加，生成Prompt时过滤掉）</summary>
+        public bool IsAiRecommended { get; set; } = true;
     }
 
     /// <summary>

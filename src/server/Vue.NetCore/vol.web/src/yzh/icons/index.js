@@ -42,6 +42,8 @@ import {
   Calendar,
   FolderAdd,
   OfficeBuilding,
+  Money,
+  TrendCharts,
 } from '@element-plus/icons-vue'
 
 /** 统一图标表（对象形式，支持 :is 动态绑定） */
@@ -88,6 +90,9 @@ export const YzhIcon = {
   calendar: Calendar,
   folderAdd: FolderAdd,
   officeBuilding: OfficeBuilding,
+  /* 费用 */
+  money: Money,
+  trend: TrendCharts,
 }
 
 /* ===== 语义常量（模板中直接使用，如 <el-icon><IconBack /></el-icon>） ===== */
@@ -126,5 +131,7 @@ export const IconGrid = Grid
 export const IconCalendar = Calendar
 export const IconFolderAdd = FolderAdd
 export const IconOfficeBuilding = OfficeBuilding
+export const IconMoney = Money
+export const IconTrend = TrendCharts
 
 export default YzhIcon

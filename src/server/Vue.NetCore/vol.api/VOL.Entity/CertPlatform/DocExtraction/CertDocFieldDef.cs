@@ -16,11 +16,11 @@ namespace VOL.Entity.CertPlatform.DocExtraction
     {
         /// <summary>覆盖基类审计字段，适配snake_case列名</summary>
         [Column("create_id")] public new int? CreateID { get; set; }
-        [Column("creator")]   [MaxLength(50)] public new string Creator { get; set; }
+        [NotMapped] public new string Creator { get; set; }
         [Column("create_date")] public new DateTime? CreateDate { get; set; } = DateTime.Now;
-        [NotMapped] public new int? ModifyID { get; set; }
+        [Column("update_id")] public new int? ModifyID { get; set; }
         [NotMapped] public new string Modifier { get; set; }
-        [NotMapped] public new DateTime? ModifyDate { get; set; }
+        [Column("update_date")] public new DateTime? ModifyDate { get; set; } = DateTime.Now;
         [NotMapped] public new int? DeleteID { get; set; }
         [NotMapped] public new string Deleter { get; set; }
         [NotMapped] public new DateTime? DeleteTime { get; set; }
@@ -82,6 +82,13 @@ namespace VOL.Entity.CertPlatform.DocExtraction
         [Column("is_manual")]
         [Display(Name = "需手动补充")]
         public bool IsManual { get; set; } = false;
+
+        /// <summary>
+        /// 是否 AI 推荐字段（true=可自动提取，false=手动添加/审核员必填字段，生成Prompt时过滤掉）
+        /// </summary>
+        [Column("is_ai_recommended")]
+        [Display(Name = "AI推荐")]
+        public bool IsAiRecommended { get; set; } = true;
 
         /// <summary>
         /// 显示顺序

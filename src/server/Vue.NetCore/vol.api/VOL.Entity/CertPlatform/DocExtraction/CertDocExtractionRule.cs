@@ -16,14 +16,14 @@ namespace VOL.Entity.CertPlatform.DocExtraction
     {
         /// <summary>覆盖基类审计字段，适配snake_case列名</summary>
         [Column("create_id")] public new int? CreateID { get; set; }
-        [Column("creator")]   [MaxLength(50)] public new string Creator { get; set; }
+        [NotMapped] public new string Creator { get; set; }
         [Column("create_date")] public new DateTime? CreateDate { get; set; } = DateTime.Now;
-        [Column("modify_id")] public new int? ModifyID { get; set; }
-        [Column("modifier")]  [MaxLength(50)] public new string Modifier { get; set; }
-        [Column("modify_date")] public new DateTime? ModifyDate { get; set; }
-        [Column("delete_id")] public new int? DeleteID { get; set; }
-        [Column("deleter")]   [MaxLength(50)] public new string Deleter { get; set; }
-        [Column("delete_time")] public new DateTime? DeleteTime { get; set; }
+        [Column("update_id")] public new int? ModifyID { get; set; }
+        [NotMapped] public new string Modifier { get; set; }
+        [Column("update_date")] public new DateTime? ModifyDate { get; set; } = DateTime.Now;
+        [NotMapped] public new int? DeleteID { get; set; }
+        [NotMapped] public new string Deleter { get; set; }
+        [NotMapped] public new DateTime? DeleteTime { get; set; }
         /// <summary>覆盖基类字段，适配snake_case列名</summary>
         [Column("code")]        public new string Code { get; set; }
         [Column("org_code")]    public new string OrgCode { get; set; }
@@ -78,5 +78,12 @@ namespace VOL.Entity.CertPlatform.DocExtraction
         [Column("sample_data")]
         [Display(Name = "样本数据")]
         public string SampleData { get; set; }
+
+        /// <summary>
+        /// 提取的文档内容缓存（结构化文本，避免每次验证都重新提取文档）
+        /// </summary>
+        [Column("doc_content")]
+        [Display(Name = "文档内容缓存")]
+        public string DocContent { get; set; }
     }
 }

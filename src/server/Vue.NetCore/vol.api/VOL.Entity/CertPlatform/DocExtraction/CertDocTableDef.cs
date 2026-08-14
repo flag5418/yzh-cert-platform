@@ -16,11 +16,11 @@ namespace VOL.Entity.CertPlatform.DocExtraction
     {
         /// <summary>覆盖基类审计字段，适配snake_case列名</summary>
         [Column("create_id")] public new int? CreateID { get; set; }
-        [Column("creator")]   [MaxLength(50)] public new string Creator { get; set; }
+        [NotMapped] public new string Creator { get; set; }
         [Column("create_date")] public new DateTime? CreateDate { get; set; } = DateTime.Now;
-        [NotMapped] public new int? ModifyID { get; set; }
+        [Column("update_id")] public new int? ModifyID { get; set; }
         [NotMapped] public new string Modifier { get; set; }
-        [NotMapped] public new DateTime? ModifyDate { get; set; }
+        [Column("update_date")] public new DateTime? ModifyDate { get; set; } = DateTime.Now;
         [NotMapped] public new int? DeleteID { get; set; }
         [NotMapped] public new string Deleter { get; set; }
         [NotMapped] public new DateTime? DeleteTime { get; set; }

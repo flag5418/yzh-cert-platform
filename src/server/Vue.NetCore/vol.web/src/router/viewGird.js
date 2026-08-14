@@ -104,6 +104,13 @@ let viewgird = [
     name: 'PromptTemplate',
     component: () => import('@/views/cert/Standard/PromptTemplate/index.vue'),
     meta: { title: 'Prompt 模板管理' }
+  },
+  // AI 费用监控
+  {
+    path: '/CertPlatform/AIUsageMonitor',
+    name: 'AIUsageMonitor',
+    component: () => import('@/views/cert/Standard/AIUsageMonitor/index.vue'),
+    meta: { title: 'AI 费用监控' }
   }
 ]
 

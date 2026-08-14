@@ -110,6 +110,7 @@ docs/
 | `70-当前执行/BlazorServer与YZH-Framework对比分析.md` | BlazorServer vs YZH 框架对比 | C |
 | `70-当前执行/工作流引擎选型与技术研究-V1.md` | 自定义工作流技术研究（LogicFlow、双态 JSON、DAG） | D. 技术研究 |
 | `70-当前执行/文件数据提取能力落地-V1.md` | 提取引擎基础能力落地（Extractor 模块） | D |
+| `70-当前执行/LogicFlow工作流设计器实施分析与建议-V1.md` | Phase E（数据管道）→ F（LogicFlow设计器）→ G（引擎接入）完整实施计划；E0前置文档对齐 + B-08/B-09新增列 + 数据节点可视化配置设计 | D. 技术研究 |
 
 ## 八、90-延展规划（后续迭代参考）
 

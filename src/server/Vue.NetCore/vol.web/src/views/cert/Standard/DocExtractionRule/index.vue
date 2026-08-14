@@ -90,6 +90,8 @@
             <PromptVerifyTab
               :prompt="generatedPrompt"
               :verify-result="verifyResult"
+              :generating="generating"
+              :verifying="verifying"
               @generate="onGeneratePrompt"
               @verify="onVerifyPrompt"
               @update:prompt="onPromptUpdate"
@@ -115,7 +117,7 @@ import { CertDirectoryTree } from '@/certcore'
 import { YzhEmptyState, YzhStatusBadge, YzhLockStatus } from '@/yzh'
 import { IconFile, IconAnalyze, IconPrompt, IconRefresh, IconLoading } from '@/yzh'
 import { useYzhQueue } from '@/yzh/composables/useYzhQueue'
-import { aiAnalyzeDocument, getExtractionRule } from './api'
+import { aiAnalyzeDocument, getExtractionRule, generatePrompt, verifyPrompt, saveExtractionRule } from './api'
 import AIAnalysisTab from './components/AIAnalysisTab.vue'
 import DocPreview from './components/DocPreview.vue'
 import PromptVerifyTab from './components/PromptVerifyTab.vue'
@@ -141,6 +143,9 @@ const analysisTables = ref([])
 const generatedPrompt = ref('')
 const verifyResult = ref(null)
 const rawJsonDisplay = ref('')
+const generating = ref(false)
+const verifying = ref(false)
+const verifiedIsValid = ref(false)  // 最近一次验证是否通过（saveRule 时推断 isValid）
 
 // 规则状态
 const ruleStatus = ref('none') // none, configured, failed
@@ -191,6 +196,13 @@ const loadExistingRule = async (file) => {
     if (prompt) generatedPrompt.value = prompt
     const status = pick(data, 'Status', 'status')
     if (status) ruleStatus.value = ['configured', 'failed'].includes(status) ? status : 'none'
+    // 回显验证状态
+    const isValid = pick(data, 'IsValid', 'isValid')
+    verifiedIsValid.value = isValid ?? false
+    // 已有 Prompt 的文件自动切到提示词与验证 Tab
+    if (prompt) {
+      activeTab.value = 'prompt'
+    }
   } catch (err) {
     // 加载失败不影响页面使用，保持空状态
     console.warn('[DocExtractionRule] 加载已有规则失败:', err?.message ?? err)
@@ -268,6 +280,7 @@ const mapFields = (data) => (data.fields || data.Fields || []).map(f => ({
   description: pick(f, 'Description', 'description') ?? '',
   isRequired: pick(f, 'IsRequired', 'isRequired', 'is_required') ?? false,
   isManual: pick(f, 'IsManual', 'isManual') ?? false,
+  isAiRecommended: pick(f, 'IsAiRecommended', 'isAiRecommended') ?? true,
   extractedValue: pick(f, 'ExtractedValue', 'extractedValue', 'extracted_value') ?? ''
 }));
 
@@ -279,6 +292,7 @@ const mapTables = (data) => (data.tables || data.Tables || []).map(t => ({
   sheetName: pick(t, 'SheetName', 'sheetName', 'sheet_name') ?? '',
   // 提取数据预览行（后端 ExtractedData 是「列名→值」字典数组，必须透传否则表格数据不显示）
   extractedData: pick(t, 'ExtractedData', 'extractedData', 'extracted_data') ?? [],
+  isAiRecommended: pick(t, 'IsAiRecommended', 'isAiRecommended') ?? true,
   columns: (t.columns ?? t.Columns ?? []).map(c => ({
     name: pick(c, 'Name', 'name', 'columnName', 'column_name_cn', 'column_name') ?? '',
     nameEn: pick(c, 'NameEn', 'nameEn', 'column_name_en') ?? pick(c, 'Code', 'code', 'column_code') ?? '',
@@ -288,34 +302,225 @@ const mapTables = (data) => (data.tables || data.Tables || []).map(t => ({
   }))
 }));
 
+// 验证结果映射：字段 code→中文名（只展示当前 analysisFields 中存在的字段，过滤已删除的）
+const mapVerifyFields = (rawData) => {
+  const innerData = rawData?.Data ?? rawData?.data ?? rawData
+  const rawFields = innerData?.Fields ?? innerData?.fields ?? {}
+  // 构建 code→中文名 映射表（只包含当前字段列表中的字段）
+  const codeToName = {}
+  const validCodes = new Set()
+  analysisFields.value.forEach(f => {
+    const code = f.nameEn || f.code
+    if (code) {
+      codeToName[code] = f.name
+      validCodes.add(code)
+    }
+  })
+  const result = {}
+  for (const [key, val] of Object.entries(rawFields)) {
+    // 只展示当前字段列表中存在的字段，已删除的字段不展示
+    if (!validCodes.has(key)) continue
+    const displayName = codeToName[key] || key
+    result[displayName] = val
+  }
+  return result
+}
+
+// 验证结果映射：表格 tableCode→中文表名 + 列名 code→中文列名
+// 只展示当前 analysisTables 中存在的表格和列，已删除的表格/列不展示
+const mapVerifyTables = (rawData) => {
+  const innerData = rawData?.Data ?? rawData?.data ?? rawData
+  const rawTables = innerData?.Tables ?? innerData?.tables ?? {}
+  // 构建 tableCode→中文表名 + 列名 code→中文列名 映射表
+  const tableCodeToName = {}
+  // 同时构建 每个表的 columnCode→columnName 映射 + 有效列集合
+  const tableColMap = {}  // { tableCode: { colCode: colNameCn } }
+  const tableValidCols = {}  // { tableCode: Set<colCode> }
+  analysisTables.value.forEach(t => {
+    const code = t.nameEn || t.code
+    if (code) {
+      tableCodeToName[code] = t.name
+      // 构建该表的列名映射 + 有效列集合
+      const colMap = {}
+      const validCols = new Set()
+      if (t.columns) {
+        t.columns.forEach(c => {
+          const colCode = c.nameEn || c.code
+          if (colCode) {
+            colMap[colCode] = c.name
+            validCols.add(colCode)
+          }
+        })
+      }
+      tableColMap[code] = colMap
+      tableValidCols[code] = validCols
+    }
+  })
+  const result = {}
+  for (const [key, rows] of Object.entries(rawTables)) {
+    // 只展示当前表格列表中存在的表格，已删除的表格不展示
+    if (!tableCodeToName[key]) continue
+    const displayName = tableCodeToName[key]
+    const colMap = tableColMap[key] || {}
+    const validCols = tableValidCols[key] || new Set()
+    // 将每行数据的 key 从英文 code 替换为中文列名，只展示当前列定义中存在的列
+    const mappedRows = (rows || []).map(row => {
+      const newRow = {}
+      for (const [colKey, colVal] of Object.entries(row)) {
+        // 只展示当前列定义中存在的列，已删除的列不展示
+        if (!validCols.has(colKey)) continue
+        const colName = colMap[colKey] || colKey
+        newRow[colName] = colVal
+      }
+      return newRow
+    })
+    result[displayName] = mappedRows
+  }
+  return result
+}
+
 const onFieldsUpdate = (fields) => {
   analysisFields.value = fields
+  // 字段变更后，验证结果失效
+  if (verifyResult.value) {
+    verifyResult.value = null
+    verifiedIsValid.value = false
+  }
+  // 字段变更后，旧 Prompt 已过期（包含已删除的字段），必须重新生成
+  if (generatedPrompt.value) {
+    generatedPrompt.value = ''
+  }
 }
 
 const onTablesUpdate = (tables) => {
   analysisTables.value = tables
+  // 表格变更后，验证结果失效
+  if (verifyResult.value) {
+    verifyResult.value = null
+    verifiedIsValid.value = false
+  }
+  // 表格变更后，旧 Prompt 已过期（包含已删除的表格/列），必须重新生成
+  if (generatedPrompt.value) {
+    generatedPrompt.value = ''
+  }
 }
 
 const onGeneratePrompt = async () => {
-  // TODO: 调用后端生成Prompt接口（功能待开发）
-  ElMessage.info('生成Prompt中...')
+  // 校验：至少有一个字段或一个表格
+  const aiFields = analysisFields.value.filter(f => f.isAiRecommended !== false)
+  const aiTables = analysisTables.value.filter(t => t.isAiRecommended !== false)
+  if (aiFields.length === 0 && aiTables.length === 0) {
+    ElMessage.warning('请先在「自动分析」页签添加至少一个字段或表格')
+    return
+  }
+  generating.value = true
+  try {
+    const res = await generatePrompt({
+      fileCode: currentFile.value.fileCode,
+      fields: analysisFields.value,
+      tables: analysisTables.value
+    })
+    const data = res?.Data ?? res?.data ?? res
+    const prompt = data?.Prompt ?? data?.prompt
+    if (prompt) {
+      generatedPrompt.value = prompt
+      verifyResult.value = null  // 清空旧验证结果
+      verifiedIsValid.value = false
+      ElMessage.success('Prompt 生成成功')
+    } else {
+      ElMessage.warning('生成失败：未返回 Prompt 内容')
+    }
+  } catch (err) {
+    ElMessage.error('生成失败: ' + (err?.message ?? '未知错误'))
+  } finally {
+    generating.value = false
+  }
 }
 
 const onVerifyPrompt = async () => {
-  // TODO: 调用后端验证接口（功能待开发）
-  ElMessage.info('验证中...')
+  if (!generatedPrompt.value) {
+    ElMessage.warning('请先生成 Prompt')
+    return
+  }
+  verifying.value = true
+  try {
+    const res = await verifyPrompt({
+      fileCode: currentFile.value.fileCode,
+      prompt: generatedPrompt.value
+    })
+    // 后端返回 { Success, Message, Data: { Fields, Tables, Message } }
+    // success/message 在顶层，Fields/Tables 在 Data 内层
+    const success = res?.Success ?? res?.success ?? false
+    const message = res?.Message ?? res?.message ?? ''
+    const innerData = res?.Data ?? res?.data ?? {}
+    // 映射验证结果：字段 code→中文名、表格 tableCode→中文表名 + 列名 code→中文列名
+    const result = {
+      success,
+      message,
+      data: {
+        fields: mapVerifyFields(innerData),
+        tables: mapVerifyTables(innerData)
+      }
+    }
+    verifyResult.value = result
+    verifiedIsValid.value = success
+    if (success) {
+      ElMessage.success('验证通过')
+    } else {
+      ElMessage.warning(message || '验证失败')
+    }
+  } catch (err) {
+    ElMessage.error('验证失败: ' + (err?.message ?? '未知错误'))
+  } finally {
+    verifying.value = false
+  }
 }
 
 const onPromptUpdate = (prompt) => {
   generatedPrompt.value = prompt
+  // Prompt 被修改后，验证结果失效
+  if (verifyResult.value) {
+    verifyResult.value = null
+    verifiedIsValid.value = false
+  }
 }
 
 const saveRule = async () => {
+  if (!currentFile.value?.fileCode) {
+    ElMessage.warning('请先选择一个文件')
+    return
+  }
+  // 允许未验证直接保存，isValid 取最近验证结果（未验证则为 false）
+  const isValid = verifiedIsValid.value
+  // skill 推断（复用 onAIAnalyze 逻辑）
+  const mimeType = currentFile.value.mimeType || ''
+  const fileCode = currentFile.value.fileCode || ''
+  let skill = 'word'
+  if (mimeType.includes('excel') || fileCode.toLowerCase().endsWith('.xlsx') || fileCode.toLowerCase().endsWith('.xls'))
+    skill = 'excel'
+  else if (mimeType.includes('pdf') || fileCode.toLowerCase().endsWith('.pdf'))
+    skill = 'pdf'
+
   saving.value = true
   try {
-    // TODO: 调用后端保存接口（功能待开发）
-    ElMessage.success('规则保存成功')
-    ruleStatus.value = 'configured'
+    const res = await saveExtractionRule({
+      fileCode: currentFile.value.fileCode,
+      skill,
+      fields: analysisFields.value,
+      tables: analysisTables.value,
+      prompt: generatedPrompt.value,
+      isValid
+    })
+    const data = res?.Data ?? res?.data ?? res
+    const success = data?.success ?? data?.Success ?? false
+    if (success) {
+      ruleStatus.value = isValid ? 'configured' : 'failed'
+      ElMessage.success('规则保存成功')
+    } else {
+      ElMessage.error(data?.message ?? data?.Message ?? '保存失败')
+    }
+  } catch (err) {
+    ElMessage.error('保存失败: ' + (err?.message ?? '未知错误'))
   } finally {
     saving.value = false
   }

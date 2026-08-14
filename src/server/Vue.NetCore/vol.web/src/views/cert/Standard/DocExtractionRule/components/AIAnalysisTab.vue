@@ -104,6 +104,8 @@
               :rows="2"
             />
             <div class="field-meta">
+              <el-tag v-if="field.isAiRecommended" size="small" type="success" class="field-tag-ai">AI推荐</el-tag>
+              <el-tag v-else size="small" type="info" class="field-tag-ai">手动</el-tag>
               <el-tag v-if="field.extractedValue" size="small" type="success" class="field-extracted">
                 提取值：{{ field.extractedValue }}
               </el-tag>
@@ -305,8 +307,10 @@ const localTables = ref([]);
 const normalizeEn = (v) => (v || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 
 const normalizeField = (f) => {
-  if (!f || typeof f !== 'object') return { name: '', nameEn: '', dataType: 'string', description: '', isRequired: false, isManual: false };
+  if (!f || typeof f !== 'object') return { name: '', nameEn: '', dataType: 'string', description: '', isRequired: false, isManual: false, isAiRecommended: true };
   f.nameEn = normalizeEn(f.nameEn ?? f.code);
+  // 默认 isAiRecommended=true（AI 分析来的字段）；手动添加的为 false
+  if (f.isAiRecommended === undefined) f.isAiRecommended = true;
   return f;
 };
 
@@ -336,7 +340,7 @@ watch(() => props.rawJson, (val) => {
 }, { immediate: true });
 
 const addField = () => {
-  localFields.value.push({ name: '', nameEn: '', dataType: 'string', description: '', isRequired: false, isManual: false });
+  localFields.value.push({ name: '', nameEn: '', dataType: 'string', description: '', isRequired: false, isManual: false, isAiRecommended: false });
   emit('update:fields', localFields.value);
 };
 const removeField = (index) => {
@@ -344,7 +348,7 @@ const removeField = (index) => {
   emit('update:fields', localFields.value);
 };
 const addTable = () => {
-  localTables.value.push({ name: '', nameEn: '', description: '', columns: [] });
+  localTables.value.push({ name: '', nameEn: '', description: '', columns: [], isAiRecommended: true });
   emit('update:tables', localTables.value);
 };
 const removeTable = (index) => {
@@ -503,6 +507,9 @@ const copyRawJson = () => {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+}
+.field-tag-ai {
+  flex-shrink: 0;
 }
 .field-extracted {
   max-width: 100%;

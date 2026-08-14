@@ -85,7 +85,7 @@ namespace VOL.Builder.Services.CertPlatform
         }
 
         /// <summary>
-        /// 生成提取Prompt
+        /// 生成提取Prompt（结构化格式，只纳入 AI 推荐字段/表格，手动添加的字段不纳入 Prompt）
         /// </summary>
         public async Task<string> GeneratePromptAsync(GeneratePromptRequest request)
         {
@@ -93,58 +93,98 @@ namespace VOL.Builder.Services.CertPlatform
 
             promptBuilder.AppendLine("# 文档数据提取任务");
             promptBuilder.AppendLine();
-            promptBuilder.AppendLine("请从以下文档内容中提取指定信息：");
+            promptBuilder.AppendLine("你是一位专业的文档信息提取助手。请从以下文档内容中提取指定的字段和表格信息。");
             promptBuilder.AppendLine();
 
-            // 字段提取说明
-            if (request.Fields?.Any() == true)
+            // 只纳入 AI 推荐的字段（IsAiRecommended=true），手动添加的字段由审核员后续手动填写
+            var aiFields = request.Fields?.Where(f => f.IsAiRecommended).ToList() ?? new List<FieldDefDto>();
+            var aiTables = request.Tables?.Where(t => t.IsAiRecommended).ToList() ?? new List<TableDefDto>();
+
+            // 字段提取说明（表格化展示，清晰易读）
+            if (aiFields.Any())
             {
-                promptBuilder.AppendLine("## 需要提取的字段：");
-                foreach (var field in request.Fields)
+                promptBuilder.AppendLine("## 需要提取的字段");
+                promptBuilder.AppendLine();
+                promptBuilder.AppendLine("请从文档中提取以下字段，每个字段需按指定的英文名称（field_code）输出：");
+                promptBuilder.AppendLine();
+                promptBuilder.AppendLine("| 序号 | 字段名称(中文) | 英文名称(field_code) | 数据类型 | 是否必填 | 描述 |");
+                promptBuilder.AppendLine("|------|---------------|---------------------|---------|---------|------|");
+                for (int i = 0; i < aiFields.Count; i++)
                 {
-                    promptBuilder.AppendLine($"- {field.Name} ({field.DataType}): {field.Description}");
-                    if (field.IsManual)
-                    {
-                        promptBuilder.AppendLine($"  [标记为需手动补充]");
-                    }
+                    var field = aiFields[i];
+                    var code = !string.IsNullOrEmpty(field.NameEn) ? field.NameEn : (!string.IsNullOrEmpty(field.Code) ? field.Code : field.Name);
+                    promptBuilder.AppendLine($"| {i + 1} | {field.Name} | {code} | {field.DataType} | {(field.IsRequired ? "是" : "否")} | {field.Description} |");
                 }
                 promptBuilder.AppendLine();
             }
 
-            // 表格提取说明
-            if (request.Tables?.Any() == true)
+            // 表格提取说明（每个表格一个结构化块）
+            if (aiTables.Any())
             {
-                promptBuilder.AppendLine("## 需要提取的表格：");
-                foreach (var table in request.Tables)
+                promptBuilder.AppendLine("## 需要提取的表格");
+                promptBuilder.AppendLine();
+                promptBuilder.AppendLine("请从文档中提取以下表格数据，每个表格的列需按指定的英文名称（column_code）输出：");
+                promptBuilder.AppendLine();
+
+                for (int i = 0; i < aiTables.Count; i++)
                 {
-                    promptBuilder.AppendLine($"### {table.Name}");
-                    promptBuilder.AppendLine($"描述: {table.Description}");
+                    var table = aiTables[i];
+                    var tableCode = !string.IsNullOrEmpty(table.NameEn) ? table.NameEn : (!string.IsNullOrEmpty(table.Code) ? table.Code : table.Name);
+
+                    promptBuilder.AppendLine($"### 表格 {i + 1}：{table.Name}");
+                    promptBuilder.AppendLine($"- 英文名称(table_code)：{tableCode}");
+                    if (!string.IsNullOrEmpty(table.Description))
+                        promptBuilder.AppendLine($"- 描述：{table.Description}");
+                    promptBuilder.AppendLine();
+
                     if (table.Columns?.Any() == true)
                     {
-                        promptBuilder.AppendLine("列定义：");
-                        foreach (var col in table.Columns)
+                        promptBuilder.AppendLine("| 序号 | 列名称(中文) | 英文名称(column_code) | 数据类型 | 是否必填 |");
+                        promptBuilder.AppendLine("|------|-------------|----------------------|---------|---------|");
+                        for (int j = 0; j < table.Columns.Count; j++)
                         {
-                            promptBuilder.AppendLine($"  - {col.Name} ({col.DataType})");
+                            var col = table.Columns[j];
+                            var colCode = !string.IsNullOrEmpty(col.NameEn) ? col.NameEn : (!string.IsNullOrEmpty(col.Code) ? col.Code : col.Name);
+                            promptBuilder.AppendLine($"| {j + 1} | {col.Name} | {colCode} | {col.DataType} | {(col.IsRequired ? "是" : "否")} |");
                         }
+                        promptBuilder.AppendLine();
                     }
-                    promptBuilder.AppendLine();
                 }
             }
 
-            promptBuilder.AppendLine("## 输出格式要求：");
-            promptBuilder.AppendLine("请以JSON格式返回提取结果：");
+            promptBuilder.AppendLine("## 输出格式要求");
+            promptBuilder.AppendLine();
+            promptBuilder.AppendLine("请严格按照以下 JSON 格式返回提取结果（不要输出任何解释文字）：");
+            promptBuilder.AppendLine();
             promptBuilder.AppendLine("```json");
             promptBuilder.AppendLine("{");
-            promptBuilder.AppendLine("  \"fields\": {");
-            promptBuilder.AppendLine("    \"字段名\": \"提取的值\"");
-            promptBuilder.AppendLine("  },");
-            promptBuilder.AppendLine("  \"tables\": {");
-            promptBuilder.AppendLine("    \"表格名\": [");
-            promptBuilder.AppendLine("      {\"列名\": \"值\"}");
-            promptBuilder.AppendLine("    ]");
-            promptBuilder.AppendLine("  }");
+            promptBuilder.AppendLine("  \"fields\": [");
+            promptBuilder.AppendLine("    {\"field_code\": \"company_name\", \"field_value\": \"北京某某科技有限公司\"},");
+            promptBuilder.AppendLine("    {\"field_code\": \"cert_date\", \"field_value\": \"2026-08-14\"}");
+            promptBuilder.AppendLine("  ],");
+            promptBuilder.AppendLine("  \"tables\": [");
+            promptBuilder.AppendLine("    {");
+            promptBuilder.AppendLine("      \"table_code\": \"shareholder_info\",");
+            promptBuilder.AppendLine("      \"rows\": [");
+            promptBuilder.AppendLine("        {\"shareholder_name\": \"张三\", \"investment_amount\": 6000000, \"investment_ratio\": 0.6}");
+            promptBuilder.AppendLine("      ]");
+            promptBuilder.AppendLine("    }");
+            promptBuilder.AppendLine("  ]");
             promptBuilder.AppendLine("}");
             promptBuilder.AppendLine("```");
+            promptBuilder.AppendLine();
+            promptBuilder.AppendLine("**注意事项：**");
+            promptBuilder.AppendLine("1. fields 数组中每项必须包含 field_code 和 field_value 两个字段");
+            promptBuilder.AppendLine("2. field_code 必须使用上表中的英文名称，区分大小写");
+            promptBuilder.AppendLine("3. field_value 为提取到的实际值，无法找到时返回空字符串 \"\"");
+            promptBuilder.AppendLine("4. tables 数组中每项必须包含 table_code 和 rows 两个字段");
+            promptBuilder.AppendLine("5. rows 中每行的键名必须使用列定义中的英文名称(column_code)");
+            promptBuilder.AppendLine("6. 表格如果没有提取到数据，rows 返回空数组 []");
+            promptBuilder.AppendLine();
+
+            promptBuilder.AppendLine("## 文档内容");
+            promptBuilder.AppendLine();
+            promptBuilder.AppendLine("{{document_content}}");
 
             return promptBuilder.ToString();
         }
@@ -167,20 +207,61 @@ namespace VOL.Builder.Services.CertPlatform
                     };
                 }
 
-                // 2. 获取规则信息（确定技能类型）
+                // 2. 获取规则信息（确定技能类型 + 文档内容缓存）
                 var rule = await repository
                     .FindAsIQueryable(x => x.FileCode == request.FileCode)
                     .FirstOrDefaultAsync();
 
                 var skill = rule?.Skill ?? "word";
 
-                // 3. 提取文档内容（结构化）
-                var extraction = await ExtractDocumentContentAsync(fileInfo, skill);
+                // 3. 获取文档内容：优先从数据库缓存读取，无缓存则自动提取并存储
+                string docContent = null;
 
-                // 4. 调用AI执行提取
-                var extractionResult = await CallAIForExtractionAsync(extraction, request.Prompt);
+                if (rule != null && !string.IsNullOrWhiteSpace(rule.DocContent))
+                {
+                    // 有缓存，直接使用
+                    docContent = rule.DocContent;
+                    Console.WriteLine($"[DocExtractionRule] 📄 使用缓存的文档内容 (FileCode={request.FileCode}, length={docContent.Length})");
+                }
+                else
+                {
+                    // 无缓存，自动提取文档内容
+                    var extraction = await ExtractDocumentContentAsync(fileInfo, skill);
 
-                // 提取层有明确原因（转换中/失败/不支持）时透传，避免显示“验证成功”
+                    // 提取层有明确原因（转换中/失败/不支持）时透传
+                    if (!string.IsNullOrEmpty(extraction.Message))
+                    {
+                        return new VerifyPromptResponse
+                        {
+                            Success = false,
+                            Message = extraction.Message
+                        };
+                    }
+
+                    if (extraction.Sections.Count == 0)
+                    {
+                        return new VerifyPromptResponse
+                        {
+                            Success = false,
+                            Message = "文档内容为空或提取失败"
+                        };
+                    }
+
+                    docContent = BuildStructuredContext(extraction);
+
+                    // 存储到数据库缓存
+                    if (rule != null)
+                    {
+                        rule.DocContent = docContent;
+                        rule.ModifyDate = DateTime.Now;
+                        await repository.SaveChangesAsync();
+                        Console.WriteLine($"[DocExtractionRule] 💾 文档内容已缓存到数据库 (FileCode={request.FileCode}, length={docContent.Length})");
+                    }
+                }
+
+                // 4. 调用AI执行提取（使用已获取的文档内容）
+                var extractionResult = await CallAIForExtractionAsync(docContent, request.Prompt);
+
                 if (!string.IsNullOrEmpty(extractionResult?.Message))
                 {
                     return new VerifyPromptResponse
@@ -264,6 +345,7 @@ namespace VOL.Builder.Services.CertPlatform
                             DataType = fieldDto.DataType,
                             Description = fieldDto.Description,
                             IsManual = fieldDto.IsManual,
+                            IsAiRecommended = fieldDto.IsAiRecommended,
                             SortOrder = sortOrder++,
                             CreateDate = DateTime.Now
                         };
@@ -365,7 +447,8 @@ namespace VOL.Builder.Services.CertPlatform
                     Code = x.FieldCode,
                     DataType = x.DataType,
                     Description = x.Description,
-                    IsManual = x.IsManual
+                    IsManual = x.IsManual,
+                    IsAiRecommended = x.IsAiRecommended
                 })
                 .ToListAsync();
 

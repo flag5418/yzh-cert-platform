@@ -9,5 +9,9 @@ namespace YZH.Core.Workflow
         public string? FailedNodeId { get; set; }
         public string? Error { get; set; }
         public long DurationMs { get; set; }
+        public int? PromptTokens { get; set; }
+        public int? CompletionTokens { get; set; }
+        public string? Model { get; set; }
+        public string? Provider { get; set; }
     }
 }

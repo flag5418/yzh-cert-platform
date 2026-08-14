@@ -64,6 +64,7 @@ const categories = [
   { key: 'ai_model', label: 'AI 模型' },
   { key: 'ocr', label: 'OCR 配置' },
   { key: 'storage', label: '存储配置' },
+  { key: 'aliyun', label: '阿里云' },
   { key: 'system', label: '系统级' }
 ]
 

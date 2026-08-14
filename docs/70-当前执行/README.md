@@ -64,12 +64,13 @@ AIGC:
 |------|------|------|
 | 工作流引擎选型与技术研究-V1.md | 自定义工作流技术研究（LogicFlow、双态 JSON、DAG） | 研究中/草案 |
 | 文件数据提取能力落地-V1.md | 提取引擎基础能力落地（Extractor 模块） | 已实现（基础）/ 研究中（OCR） |
+| **LogicFlow工作流设计器实施分析与建议-V1.md** | **Phase E（数据管道）→ Phase F（LogicFlow设计器）→ Phase G（引擎接入）完整实施计划；核心结论：必须先接通B-08/B-09数据，再启动设计器** | **成熟态 V1.0** |
 
 ---
 
 ## 关键词索引
 
-`执行中` `开发中` `实施中` `待实施` `待审核` `待审批` `研究中` `草案` `TODO` `Phase` `Office转换` `MinIO` `NPOI` `LibreOffice` `标准目录` `文档提取` `批量上传` `YZH` `工作流` `AI引擎` `SkillRegistry` `LLM Gateway` `前端架构` `设计令牌` `tokens` `图标管理` `基础组件` `certcore` `vidlang`
+`执行中` `开发中` `实施中` `待实施` `待审核` `待审批` `研究中` `草案` `TODO` `Phase` `Office转换` `MinIO` `NPOI` `LibreOffice` `标准目录` `文档提取` `批量上传` `YZH` `工作流` `AI引擎` `SkillRegistry` `LLM Gateway` `LogicFlow` `B-08` `B-09` `数据管道` `前置依赖` `自定义数据节点` `可视化配置`
 
 ---
 

@@ -20,6 +20,15 @@
         placeholder="点击「生成 Prompt」按钮，AI 将根据字段和表格定义自动生成提取 Prompt..."
         class="prompt-editor"
       />
+      <!-- 工具栏 -->
+      <div class="prompt-toolbar" v-if="prompt">
+        <el-button size="small" text @click="copyPrompt">
+          <el-icon><IconCopy /></el-icon>复制
+        </el-button>
+        <el-button size="small" text type="primary" @click="generatePrompt" :loading="generating">
+          <el-icon><IconRefresh /></el-icon>重新生成
+        </el-button>
+      </div>
       <div class="prompt-hint">
         <el-icon><IconInfo /></el-icon>
         <span>您可以直接编辑生成的 Prompt，调整提取逻辑</span>
@@ -91,7 +100,8 @@
 
 <script setup>
 import { ref } from 'vue';
-import { IconPrompt, IconInfo, IconCircleSuccess } from '@/yzh';
+import { ElMessage } from 'element-plus';
+import { IconPrompt, IconInfo, IconCircleSuccess, IconCopy, IconRefresh } from '@/yzh';
 
 const props = defineProps({
   prompt: {
@@ -101,34 +111,35 @@ const props = defineProps({
   verifyResult: {
     type: Object,
     default: null
+  },
+  generating: {
+    type: Boolean,
+    default: false
+  },
+  verifying: {
+    type: Boolean,
+    default: false
   }
 });
 
 const emit = defineEmits(['generate', 'verify', 'update:prompt']);
 
-const generating = ref(false);
-const verifying = ref(false);
-
 const onPromptUpdate = (val) => {
   emit('update:prompt', val);
 };
 
-const generatePrompt = async () => {
-  generating.value = true;
-  try {
-    emit('generate');
-  } finally {
-    generating.value = false;
-  }
+const generatePrompt = () => {
+  emit('generate');
 };
 
-const verifyPrompt = async () => {
-  verifying.value = true;
-  try {
-    emit('verify');
-  } finally {
-    verifying.value = false;
-  }
+const verifyPrompt = () => {
+  emit('verify');
+};
+
+const copyPrompt = () => {
+  navigator.clipboard.writeText(props.prompt).then(() => {
+    ElMessage.success('已复制到剪贴板');
+  });
 };
 
 const getTableColumns = (tableData) => {
@@ -205,6 +216,15 @@ const getTableColumns = (tableData) => {
 .prompt-editor :deep(.el-textarea__inner:focus) {
   border-color: #409eff;
   box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+}
+
+/* Prompt 工具栏 */
+.prompt-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 4px 0;
 }
 
 /* 提示信息 */

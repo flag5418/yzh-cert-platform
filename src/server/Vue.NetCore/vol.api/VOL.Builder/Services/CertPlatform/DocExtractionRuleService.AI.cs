@@ -9,6 +9,7 @@ using VOL.Core.Extensions.AutofacManager;
 using VOL.Entity.CertPlatform.Dir;
 using VOL.Entity.CertPlatform.DocExtraction;
 using VOL.Entity.CertPlatform.DocExtraction.DTOs;
+using VOL.Builder.IServices.CertPlatform;
 using YZH.Core.AI.Prompt;
 using YZH.Core.AI.Prompt.Models;
 using YZH.Core.AI.Clients.Models;
@@ -170,6 +171,11 @@ namespace VOL.Builder.Services.CertPlatform
             };
 
             var result = await workflowEngine.RunAsync(workflowJson, ctx);
+            if (!result.Success || !result.NodeOutputs.TryGetValue("n1", out var _outputs1))
+                await LogAIUsageAsync(skill, null, null, false, $"AI 分析失败：{result.Error}");
+            else
+                await LogAIUsageAsync(skill, result.PromptTokens, result.CompletionTokens, true, null, result.DurationMs);
+
             if (!result.Success || !result.NodeOutputs.TryGetValue("n1", out var outputs))
                 return new AIAnalyzeResponse { Fields = new(), Tables = new(), Message = $"AI 分析失败：{result.Error}" };
 
@@ -180,22 +186,18 @@ namespace VOL.Builder.Services.CertPlatform
 
         /// <summary>
         /// 调用 WorkflowEngine + LlmExtractSkill 执行实际提取（verify 模式）。
+        /// 直接接收已构建好的 docContent 字符串，避免重复提取文档。
         /// </summary>
-        private async Task<ExtractionData> CallAIForExtractionAsync(YZH.Core.Extractor.Models.FileExtractionResult extraction, string prompt)
+        private async Task<ExtractionData> CallAIForExtractionAsync(string docContent, string prompt)
         {
-            if (extraction == null || extraction.Sections.Count == 0 || string.IsNullOrWhiteSpace(prompt))
+            if (string.IsNullOrWhiteSpace(docContent) || string.IsNullOrWhiteSpace(prompt))
             {
-                // 提取层未产生内容时，把具体原因（如“转换中/转换失败/不支持”）透传给前端
-                var msg = extraction?.Message;
-                if (!string.IsNullOrEmpty(msg))
-                    return new ExtractionData { Fields = new(), Tables = new(), Message = msg };
-                return new ExtractionData { Fields = new(), Tables = new() };
+                return new ExtractionData { Fields = new(), Tables = new(), Message = "文档内容为空或Prompt为空" };
             }
 
-            var docContent = BuildStructuredContext(extraction);
             var workflowEngine = AutofacContainerModule.GetService<IWorkflowEngine>();
             if (workflowEngine == null)
-                return new ExtractionData { Fields = new(), Tables = new() };
+                return new ExtractionData { Fields = new(), Tables = new(), Message = "AI 工作流引擎未注册" };
 
             var workflowJson = BuildExtractWorkflow(prompt);
             var ctx = new WorkflowContext
@@ -210,8 +212,13 @@ namespace VOL.Builder.Services.CertPlatform
             };
 
             var result = await workflowEngine.RunAsync(workflowJson, ctx);
+            if (!result.Success || !result.NodeOutputs.TryGetValue("n1", out var _outputs2))
+                await LogAIUsageAsync("verify", null, null, false, $"AI 提取失败：{result?.Error}");
+            else
+                await LogAIUsageAsync("verify", result.PromptTokens, result.CompletionTokens, true, null, result.DurationMs);
+
             if (!result.Success || !result.NodeOutputs.TryGetValue("n1", out var outputs))
-                return new ExtractionData { Fields = new(), Tables = new() };
+                return new ExtractionData { Fields = new(), Tables = new(), Message = $"AI 提取失败：{result?.Error}" };
 
             return MapOutputsToExtractionData(outputs);
         }
@@ -442,6 +449,8 @@ namespace VOL.Builder.Services.CertPlatform
 
         /// <summary>
         /// 将 LlmExtractSkill 输出映射为 ExtractionData（verify 用）。
+        /// 优先解析 field_code/field_value 数组格式（与 GeneratePromptAsync 输出格式对齐），
+        /// 兜底兼容 AI 可能返回的「中文名→值」dict 格式。
         /// </summary>
         private static ExtractionData MapOutputsToExtractionData(IDictionary<string, object> outputs)
         {
@@ -450,24 +459,53 @@ namespace VOL.Builder.Services.CertPlatform
                 Fields = new Dictionary<string, object>(),
                 Tables = new Dictionary<string, List<Dictionary<string, object>>>()
             };
-            if (outputs.TryGetValue("fields", out var fieldsObj) && fieldsObj is IEnumerable<object> fields)
+
+            #region 解析 fields
+            if (outputs.TryGetValue("fields", out var fieldsObj))
             {
-                foreach (var f in fields)
+                // 格式 A（优先）：数组 [{field_code, field_value}]
+                if (fieldsObj is IEnumerable<object> fieldsList)
                 {
-                    if (f is not IDictionary<string, object> fd) continue;
-                    var code = fd.TryGetValue("field_code", out var c) ? c?.ToString() ?? "" : "";
-                    var value = fd.TryGetValue("field_value", out var v) ? v : null;
-                    if (!string.IsNullOrEmpty(code))
-                        data.Fields[code] = value;
+                    foreach (var f in fieldsList)
+                    {
+                        if (f is not IDictionary<string, object> fd) continue;
+                        var code = fd.TryGetValue("field_code", out var c) ? c?.ToString() ?? "" : "";
+                        // 兼容：部分 AI 可能用 field_name 做 key
+                        if (string.IsNullOrEmpty(code))
+                            code = fd.TryGetValue("field_name", out var fn) ? fn?.ToString() ?? "" : "";
+                        var value = fd.TryGetValue("field_value", out var v) ? v : null;
+                        // 兼容：部分 AI 可能用 value 做 key
+                        if (value == null)
+                            value = fd.TryGetValue("value", out var v2) ? v2 : null;
+                        if (!string.IsNullOrEmpty(code))
+                            data.Fields[code] = value;
+                    }
+                }
+                // 格式 B（兜底）：dict {中文名: 值}
+                else if (fieldsObj is IDictionary<string, object> fieldsDict)
+                {
+                    foreach (var kv in fieldsDict)
+                    {
+                        if (!string.IsNullOrEmpty(kv.Key))
+                            data.Fields[kv.Key] = kv.Value;
+                    }
                 }
             }
+            #endregion
+
+            #region 解析 tables
             if (outputs.TryGetValue("tables", out var tablesObj) && tablesObj is IEnumerable<object> tables)
             {
                 foreach (var t in tables)
                 {
                     if (t is not IDictionary<string, object> td) continue;
+
+                    // 优先 table_code，兜底 table_name
                     var tableCode = td.TryGetValue("table_code", out var tc) ? tc?.ToString() ?? "" : "";
+                    if (string.IsNullOrEmpty(tableCode))
+                        tableCode = td.TryGetValue("table_name", out var tn) ? tn?.ToString() ?? "" : "";
                     if (string.IsNullOrEmpty(tableCode)) continue;
+
                     var rows = new List<Dictionary<string, object>>();
                     if (td.TryGetValue("rows", out var rowsObj) && rowsObj is IEnumerable<object> rowsList)
                     {
@@ -480,7 +518,52 @@ namespace VOL.Builder.Services.CertPlatform
                     data.Tables[tableCode] = rows;
                 }
             }
+            #endregion
+
             return data;
+        }
+
+        #endregion
+
+        #region AI 调用日志
+
+        private async Task LogAIUsageAsync(string skill, int? promptTokens, int? completionTokens, bool success, string? errorMsg = null, long durationMs = 0)
+        {
+            try
+            {
+                var aiConfig = await repository.DbContext.Set<AIConfig>()
+                    .Where(c => c.IsEnabled)
+                    .FirstOrDefaultAsync();
+
+                var model = aiConfig?.Model ?? "qwen-turbo";
+                var provider = aiConfig?.Provider ?? "qwen";
+                var totalTokens = (promptTokens ?? 0) + (completionTokens ?? 0);
+                var costUsd = AIUsageLogService.CalculateCost(model, promptTokens ?? 0, completionTokens ?? 0);
+
+                var log = new AIUsageLog
+                {
+                    CallId = Guid.NewGuid().ToString("N"),
+                    BusinessType = "doc_extraction",
+                    Skill = skill,
+                    Provider = provider,
+                    Model = model,
+                    PromptTokens = promptTokens ?? 0,
+                    CompletionTokens = completionTokens ?? 0,
+                    TotalTokens = totalTokens,
+                    CostUsd = costUsd,
+                    DurationMs = durationMs,
+                    Success = success,
+                    ErrorMessage = errorMsg
+                };
+
+                var usageService = AutofacContainerModule.GetService<IAIUsageLogService>();
+                if (usageService != null)
+                    await usageService.LogCallAsync(log);
+            }
+            catch (Exception ex)
+            {
+                System.Console.WriteLine($"[AIUsageLog] 记录失败: {ex.Message}");
+            }
         }
 
         #endregion

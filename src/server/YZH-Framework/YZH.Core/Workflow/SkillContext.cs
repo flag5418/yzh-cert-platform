@@ -18,5 +18,7 @@ namespace YZH.Core.Workflow
         public double? Confidence { get; set; }
         public string? Error { get; set; }
         public long DurationMs { get; set; }
+        public int? PromptTokens { get; set; }
+        public int? CompletionTokens { get; set; }
     }
 }

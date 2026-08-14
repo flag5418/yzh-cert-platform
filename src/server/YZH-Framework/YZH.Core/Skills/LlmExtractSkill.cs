@@ -97,9 +97,13 @@ namespace YZH.Core.Skills
                 {
                     ["fields"] = fields,
                     ["tables"] = tables,
-                    ["raw_json"] = parsed.RawText ?? string.Empty
+                    ["raw_json"] = parsed.RawText ?? string.Empty,
+                    ["prompt_tokens"] = resp?.PromptTokens ?? 0,
+                    ["completion_tokens"] = resp?.CompletionTokens ?? 0,
                 },
-                Confidence = confidence
+                Confidence = confidence,
+                PromptTokens = resp?.PromptTokens,
+                CompletionTokens = resp?.CompletionTokens
             };
         }
 

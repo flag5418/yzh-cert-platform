@@ -56,7 +56,19 @@ var wf = JsonSerializer.Deserialize<WorkflowConfig>(workflowConfigJson, opts)
             }
 
             sw.Stop();
-            return new WorkflowRunResult { Success = true, NodeOutputs = outputs, DurationMs = sw.ElapsedMilliseconds };
+            int? pt = null, ct2 = null;
+            foreach (var nid in order.Reverse())
+            {
+                if (outputs.TryGetValue(nid, out var outDict)
+                    && outDict.TryGetValue("prompt_tokens", out var p)
+                    && outDict.TryGetValue("completion_tokens", out var c))
+                {
+                    pt = Convert.ToInt32(p);
+                    ct2 = Convert.ToInt32(c);
+                    break;
+                }
+            }
+            return new WorkflowRunResult { Success = true, NodeOutputs = outputs, DurationMs = sw.ElapsedMilliseconds, PromptTokens = pt, CompletionTokens = ct2 };
         }
 
         private static async Task WriteSkipped(WorkflowNode node, WorkflowContext context, CancellationToken ct, string reason)
