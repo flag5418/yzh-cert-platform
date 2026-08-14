@@ -10,13 +10,13 @@ namespace VOL.Entity.CertPlatform.Cert
     /// - T = ISOStandard（实体表，用于增删改）
     /// - V = ISOStandardView（视图，用于显示，包含关联字段）
     /// 
-    /// 数据来源：v_iso_standard MySQL 视图
+    /// 数据来源：v_iso_standard MySQL 视图（当前未创建，用 [NotMapped] 阻止 EF Core 映射）
+    /// 注意：[NotMapped] 防止 EF Core 继承映射覆盖父类 ISOStandard 的表名
     /// </summary>
-    [Table("v_iso_standard")]
+    [NotMapped]
     public class ISOStandardView : ISOStandard  // 继承 ISOStandard 以支持 Cast
     {
         // ====== 视图特有字段（字典翻译后的中文）======
-        // 注意：不要加 [NotMapped]，否则 EF Core 不会从数据库读取这些字段！
 
         /// <summary>
         /// 分类中文名（质量管理/环境管理/医疗器械等）
