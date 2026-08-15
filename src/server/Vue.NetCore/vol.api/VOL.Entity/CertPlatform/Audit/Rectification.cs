@@ -12,6 +12,11 @@ namespace VOL.Entity.CertPlatform.Audit
     [Table("audit_rectification")]
     public class Rectification : YZHBaseEntity
     {
+        /// <summary>机构编码（多租户隔离，此表需要机构级数据隔离）</summary>
+        [StringLength(50)]
+        [Column("org_code")]
+        public string OrgCode { get; set; }
+
         [Required, StringLength(36)]
         [Column("nc_code")]
         public string NcCode { get; set; }

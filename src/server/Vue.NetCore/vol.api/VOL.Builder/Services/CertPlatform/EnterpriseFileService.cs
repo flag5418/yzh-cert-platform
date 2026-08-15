@@ -85,7 +85,8 @@ namespace VOL.Builder.Services.CertPlatform
 
             var userId = UserContext.Current?.UserId ?? 0;
             var userName = UserContext.Current?.UserName ?? "system";
-            file.FillCreateInfo(userId, userName, enterprise.OrgCode);
+            file.OrgCode = enterprise.OrgCode;
+            file.FillCreateInfo(userId, userName);
 
             _db.Set<EnterpriseFile>().Add(file);
 

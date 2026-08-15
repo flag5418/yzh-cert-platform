@@ -52,13 +52,9 @@ namespace VOL.Entity.CertPlatform.Cert
         [Column("template_file_name")]
         public string TemplateFileName { get; set; }
 
-        /// <summary>
-        /// 标准编码（关联 cert_iso_standard.code）
-        /// </summary>
+        /// <summary>标准编码（关联 cert_iso_standard.code）</summary>
         [StringLength(36)]
         [Column("standard_code")]
         public string StandardCode { get; set; }
-
-        // org_code 继承自 YZHBaseEntity
     }
 }

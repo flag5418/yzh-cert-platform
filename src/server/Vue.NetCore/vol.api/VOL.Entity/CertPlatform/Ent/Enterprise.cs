@@ -12,6 +12,11 @@ namespace VOL.Entity.CertPlatform.Ent
     [Table("ent_enterprise")]
     public class Enterprise : YZHBaseEntity
     {
+        /// <summary>机构编码（所属认证机构，多租户隔离）</summary>
+        [Required, StringLength(50)]
+        [Column("org_code")]
+        public string OrgCode { get; set; }
+
         /// <summary>企业短编码(如 ENT-2026-0001，用于OSS路径)</summary>
         [Required, StringLength(20)]
         [Column("enterprise_no")]

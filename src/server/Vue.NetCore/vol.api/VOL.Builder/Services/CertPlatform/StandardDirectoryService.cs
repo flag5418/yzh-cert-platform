@@ -152,9 +152,9 @@ namespace VOL.Builder.Services.CertPlatform
                             children = new List<object>()
                         };
 
-                        // 获取该机构+标准关联的阶段（关联表用 org.Code + std.Code 匹配）
+                        // 获取该机构+标准关联的阶段（关联表用 org.Code 匹配；standard_code 可能为 NULL，表示该阶段适用于所有标准）
                         var orgStageCodes = orgStages
-                        .Where(x => x.OrgCode == org.Code && x.StdCode == std.Code)
+                        .Where(x => x.OrgCode == org.Code && (x.StdCode == null || x.StdCode == std.Code))
                             .Select(x => x.StageCode)
                             .ToList();
 

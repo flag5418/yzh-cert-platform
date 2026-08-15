@@ -94,7 +94,7 @@ namespace VOL.Builder.Services.CertPlatform
 
             var userId = UserContext.Current?.UserId ?? 0;
             var userName = UserContext.Current?.UserName ?? "system";
-            profile.FillCreateInfo(userId, userName, orgCode);
+            profile.FillCreateInfo(userId, userName);
 
             _db.Set<AuditorProfile>().Add(profile);
             await _db.SaveChangesAsync();

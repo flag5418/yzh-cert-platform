@@ -331,65 +331,64 @@
     <el-dialog
       v-model="showUploadDialogFlag"
       title="上传文件"
-      width="560px"
+      width="680px"
       :close-on-click-modal="false"
+      top="5vh"
+      append-to-body
+      :modal="false"
+      @dragover.prevent
+      @drop.prevent="onDialogDrop"
     >
-      <div class="upload-dialog-body">
-        <div class="upload-area">
-          <input
-            ref="fileInputRef"
-            type="file"
-            multiple
-            style="display: none"
-            @change="handleFileSelect"
-          />
-          <input
-            ref="folderInputRef"
-            type="file"
-            webkitdirectory
-            multiple
-            style="display: none"
-            @change="handleFolderSelect"
-          />
-          <div
-            class="upload-trigger"
-            :class="{ 'is-dragging': dragActive }"
-            @click="triggerFileUpload"
-            @dragover.prevent="dragActive = true"
-            @dragleave="dragActive = false"
-            @drop.prevent="handleDrop"
+      <div class="upload-dialog-body" style="max-height: 65vh; overflow-y: auto;">
+        <!-- 当前位置提示 -->
+        <div class="current-location-hint">
+          <el-icon><IconFolder /></el-icon>
+          <span>当前位置：<strong>{{ currentFolderCode ? getCurrentFolderPath() : '根目录' }}</strong></span>
+          <span class="location-tip">（文件将上传到此位置）</span>
+        </div>
+
+        <!-- YZH 框架文件夹上传组件（支持拖拽 + 文件夹 + 多选） -->
+        <YzhFolderUpload
+          ref="folderUploadRef"
+          v-model="uploadFileList"
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.gif,.bmp,.zip,.rar"
+          :max-size="50 * 1024 * 1024"
+          :max-files="100"
+          :uploading="uploading"
+          :list-max-height="280"
+          @change="onUploadFileListChange"
+          @error="onUploadError"
+        />
+        
+        <!-- 浏览器限制提示 + 文件夹选择按钮（高亮显示） -->
+        <div class="browser-limit-hint">
+          <el-alert
+            type="warning"
+            :closable="true"
+            show-icon
+            effect="dark"
+            style="margin-top: 12px;"
           >
-            <el-icon class="upload-icon"><IconUpload /></el-icon>
-            <div class="upload-text">
-              点击选择文件或拖拽到此处
-            </div>
-            <div class="upload-hint">支持多个文件同时上传（文档/图片）</div>
-          </div>
-        </div>
-        <div class="upload-secondary-btn">
-          <el-button size="small" plain @click="triggerFolderUpload">
-            <el-icon><IconFolderAdd /></el-icon> 或上传整个文件夹
+            <template #title>
+              <span style="font-weight: 600;">⚠️ 浏览器安全限制</span>
+            </template>
+            <template #default>
+              从桌面/访达拖拽的文件夹无法自动展开（浏览器安全策略）。
+              <br/>
+              请使用下方<strong>「选择文件夹上传」</strong>按钮代替。
+            </template>
+          </el-alert>
+          
+          <el-button
+            type="primary"
+            size="large"
+            round
+            @click="triggerFolderSelect"
+            class="folder-select-btn"
+          >
+            <el-icon><IconFolderAdd /></el-icon>
+            👉 选择文件夹上传（推荐）
           </el-button>
-        </div>
-        <div v-if="uploadFileList.length > 0" class="upload-file-list">
-          <div class="file-list-header-sm">
-            <span>待上传文件 ({{ uploadFileList.length }}个)</span>
-            <el-button
-              type="danger"
-              link
-              size="small"
-              @click="clearUploadList"
-              :disabled="uploading"
-              >清空</el-button
-            >
-          </div>
-          <div v-for="(file, index) in uploadFileList" :key="index" class="file-list-item-sm">
-            <span class="file-item-name">{{ file.webkitRelativePath || file.name }}</span>
-            <span class="file-item-size">{{ formatFileSize(file.size) }}</span>
-            <el-button v-if="!uploading" type="danger" link size="small" @click="removeFile(index)">
-              <el-icon><IconDelete /></el-icon>
-            </el-button>
-          </div>
         </div>
         <!-- 上传进度 -->
         <div v-if="uploading || uploadProgress.status === 'done'" class="upload-progress-area">
@@ -507,7 +506,7 @@ import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import {
   IconForward, IconCalendar, IconDelete, IconFile, IconDownload,
   IconFolder, IconFolderAdd, IconOfficeBuilding, IconHelp, IconUpload,
-  IconLoading, IconSuccess, IconClose, IconDocument,
+  IconLoading, IconSuccess, IconClose, IconDocument, IconRefresh,
   YzhEmptyState
 } from '@/yzh'
 import { CertStatusBar } from '@/certcore'
@@ -516,7 +515,7 @@ import ConvertProgressPanel from './ConvertProgressPanel.vue'
 import ConfigTab from './components/ConfigTab.vue'
 import UploadQueueBanner from './components/UploadQueueBanner.vue'
 import * as signalR from '@microsoft/signalr'
-import { useYzhQueue } from '@/yzh'
+import { useYzhQueue, YzhFolderUpload } from '@/yzh'
 
 const searchText = ref('')
 const treeData = ref([])
@@ -551,6 +550,49 @@ const uploadFileList = ref([])
 const uploading = ref(false)
 const convertPanelRef = ref(null)
 const showUploadPanel = ref(false)
+
+// 目标文件夹选择（上传弹窗）
+const selectedTargetFolder = ref([])
+const folderTreeOptions = ref([])
+
+// 获取当前文件夹路径（用于显示）
+const getCurrentFolderPath = () => {
+  if (!currentFolderCode.value) return '根目录'
+  const folder = currentFolders.value.find(f => (f.FolderCode || f.folderCode) === currentFolderCode.value)
+  if (folder) return folder.FolderName || folder.folderName
+  // 从面包屑中查找
+  for (const crumb of breadcrumbPath.value) {
+    if (crumb.code === currentFolderCode.value) return crumb.name
+  }
+  return currentFolderCode.value
+}
+
+// 加载文件夹树（用于级联选择器）
+const loadFolderTreeForUpload = async () => {
+  if (!currentPhase.value) return
+  const directoryCode = buildDirectoryCode()
+  try {
+    const res = await http.get(`/api/standard-directory/configs/${directoryCode}/folders`)
+    if (res.Status === true || res.status === 0) {
+      const data = res.Data || res.data || []
+      // 将后端返回的树形数据转换为 el-cascader 需要的格式
+      folderTreeOptions.value = buildCascaderOptions(Array.isArray(data) ? data : [data])
+    }
+  } catch (error) {
+    console.error('加载文件夹树失败:', error)
+    folderTreeOptions.value = []
+  }
+}
+
+// 构建级联选择器选项（递归转换树形结构）
+const buildCascaderOptions = (nodes) => {
+  if (!nodes || !Array.isArray(nodes)) return []
+  return nodes.map(node => ({
+    folderCode: node.FolderCode || node.folderCode,
+    folderName: node.FolderName || node.folderName || '未命名文件夹',
+    children: buildCascaderOptions(node.Children || node.children || [])
+  }))
+}
 
 const uploadProgress = reactive({
   total: 0,
@@ -1140,17 +1182,44 @@ const deleteSelected = async () => {
 }
 
 // ========== 上传 ==========
-const handleUpload = () => {
+const handleUpload = async () => {
   uploadFileList.value = []
   uploadMode.value = 'file'
   uploadProgress.status = 'idle'
   uploadProgress.completed = 0
   uploadProgress.failed = 0
+  selectedTargetFolder.value = [] // 重置目标文件夹选择
   showUploadDialogFlag.value = true
+  // 加载文件夹树供用户选择目标位置
+  await loadFolderTreeForUpload()
 }
 
 const triggerFileUpload = () => fileInputRef.value?.click()
 const triggerFolderUpload = () => folderInputRef.value?.click()
+
+/**
+ * 触发 YzhFolderUpload 组件的文件夹选择功能
+ * 用于浏览器限制提示中的"选择文件夹上传（推荐）"按钮
+ */
+const triggerFolderSelect = () => {
+  if (folderUploadRef.value && typeof folderUploadRef.value.triggerFolderSelect === 'function') {
+    folderUploadRef.value.triggerFolderSelect()
+    console.log('[Upload] 已触发组件的文件夹选择功能')
+  } else if (folderUploadRef.value) {
+    // 如果组件没有暴露该方法，尝试直接点击隐藏的 input
+    const inputEl = document.querySelector('.yzh-folder-upload [type="file"][webkitdirectory]')
+    if (inputEl) {
+      inputEl.click()
+      console.log('[Upload] 已通过 DOM 点击触发文件夹选择')
+    } else {
+      // 最终回退：使用原生文件选择器
+      triggerFolderUpload()
+      console.log('[Upload] 使用回退方案：原生文件夹选择器')
+    }
+  } else {
+    ElMessage.warning('上传组件未就绪，请稍后再试')
+  }
+}
 
 // ========== 上传文件类型白名单 ==========
 // 体系认证系统只允许上传文档/表格/图片等认证材料文件，
@@ -1192,20 +1261,299 @@ const handleFolderSelect = (event) => {
 }
 
 const dragActive = ref(false)
+
+// 拖拽进入目标区域
+const onDragOver = (event) => {
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'copy'
+  dragActive.value = true
+}
+
+// 拖拽悬停在目标区域（持续触发）
+const onDragEnter = (event) => {
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'copy'
+  dragActive.value = true
+}
+
+// 拖拽离开目标区域
+const onDragLeave = (event) => {
+  event.preventDefault()
+  // 检查是否真的离开了拖拽区域（避免子元素触发）
+  const relatedTarget = event.relatedTarget
+  const currentTarget = event.currentTarget
+  if (!currentTarget.contains(relatedTarget)) {
+    dragActive.value = false
+  }
+}
+
+// 拖拽放下（核心处理）
 const handleDrop = (event) => {
+  event.preventDefault()
   dragActive.value = false
-  appendAllowedFiles(event.dataTransfer?.files)
+  
+  console.log('[Drop] 文件拖放事件触发', event.dataTransfer)
+  
+  // 阻止事件冒泡和默认行为
+  if (event.stopPropagation) event.stopPropagation()
+  
+  // 处理拖拽的文件和文件夹（支持 DataTransferItemList）
+  let files = []
+  
+  // 方式1：使用 DataTransferItemList（现代浏览器，支持文件夹）
+  const items = event.dataTransfer?.items
+  if (items && items.length > 0) {
+    console.log('[Drop] 检测到', items.length, '个拖拽项')
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      console.log('[Drop] 项目', i, ': kind=', item.kind, 'type=', item.type)
+      if (item.kind === 'file') {
+        const file = item.getAsFile()
+        if (file) {
+          files.push(file)
+          console.log('[Drop] 获取到文件:', file.name, 'size:', file.size, 'path:', file.webkitRelativePath || '(无)')
+        }
+      }
+    }
+  }
+  
+  // 方式2：回退到 dataTransfer.files（旧浏览器，不支持文件夹）
+  if (files.length === 0 && event.dataTransfer?.files) {
+    files = Array.from(event.dataTransfer.files)
+    console.log('[Drop] 使用回退方式获取到', files.length, '个文件')
+  }
+  
+  // 如果有文件，添加到上传列表
+  if (files.length > 0) {
+    console.log('[Drop] 准备添加', files.length, '个文件到上传列表')
+    appendAllowedFiles(files)
+    
+    // 显示反馈
+    const fileNames = files.map(f => f.webkitRelativePath || f.name).join(', ')
+    console.log('[Drop] 已添加文件:', fileNames)
+  } else {
+    console.warn('[Drop] 未检测到任何文件')
+    ElMessage.warning('未检测到有效的文件，请确保拖拽的是文件或文件夹')
+  }
 }
 
 const removeFile = (index) => uploadFileList.value.splice(index, 1)
 const clearUploadList = () => {
   uploadFileList.value = []
+  // 同时清空 el-upload 的文件列表
+  if (uploadRef.value) {
+    uploadRef.value.clearFiles()
+  }
 }
 const cancelUpload = () => {
   showUploadDialogFlag.value = false
   uploadFileList.value = []
   uploading.value = false
 }
+
+// ========== YzhFolderUpload 组件回调 ==========
+
+/**
+ * 文件列表变化回调
+ * @param {File[]} newFileList - 新的文件列表
+ */
+const onUploadFileListChange = (newFileList) => {
+  console.log('[Upload] 文件列表变化:', newFileList.length, '个文件')
+  // uploadFileList 已通过 v-model 双向绑定，无需手动更新
+}
+
+/**
+ * 上传错误回调（用于调试）
+ * @param {Error} error - 错误对象
+ */
+const onUploadError = (error) => {
+  console.error('[Upload] 组件错误:', error)
+  ElMessage.error('上传组件错误: ' + (error?.message || '未知错误'))
+}
+
+/**
+ * Dialog 级别的拖拽事件（后备方案，当组件内拖拽失效时触发）
+ * 支持文件和文件夹拖拽
+ * 
+ * 注意：由于浏览器安全限制，从桌面拖拽的文件夹可能无法递归读取。
+ * 此时应该提示用户使用"选择文件夹"按钮代替。
+ */
+const onDialogDrop = async (event) => {
+  console.log('[DialogDrop] Dialog 拖拽事件触发！', event.dataTransfer)
+  
+  const items = event.dataTransfer?.items
+  const files = event.dataTransfer?.files
+  
+  // 情况1：有 DataTransferItemList（现代浏览器）
+  if (items && items.length > 0) {
+    console.log(`[DialogDrop] 检测到 ${items.length} 个拖拽项`)
+    
+    let collectedFiles = []
+    let folderCount = 0
+    
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      console.log(`[DialogDrop] 项目 ${i}: kind=${item.kind}, type=${item.type}`)
+      
+      if (item.kind === 'file') {
+        const entry = item.webkitGetAsEntry?.()
+        
+        if (entry?.isDirectory) {
+          folderCount++
+          console.log(`[DialogDrop] 📁 发现文件夹: ${entry.name}，尝试递归...`)
+          
+          // 尝试递归读取（可能因浏览器限制失败）
+          const beforeCount = collectedFiles.length
+          await traverseDirectoryWithRetry(entry, entry.name + '/', collectedFiles, 3) // 最多重试3层深度
+          
+          const afterCount = collectedFiles.length
+          if (afterCount === beforeCount) {
+            console.warn(`[DialogDrop] ⚠️ 文件夹 "${entry.name}" 无法读取（浏览器安全限制）`)
+            // 将文件夹本身作为一个占位项
+            const placeholderFile = new File(['(文件夹)'], entry.name, { type: 'directory' })
+            Object.defineProperty(placeholderFile, 'webkitRelativePath', {
+              value: entry.name + '/',
+              writable: false
+            })
+            collectedFiles.push(placeholderFile)
+          }
+        } else if (entry?.isFile) {
+          // 普通文件
+          try {
+            const file = await getFileFromEntryForDialog(entry)
+            if (file) collectedFiles.push(file)
+          } catch (err) {
+            console.warn(`[DialogDrop] ⚠️ 读取文件失败:`, err)
+          }
+        } else {
+          // 最终回退到 getAsFile
+          const file = item.getAsFile()
+          if (file) collectedFiles.push(file)
+        }
+      }
+    }
+    
+    // 添加结果
+    if (collectedFiles.length > 0) {
+      const actualFileCount = collectedFiles.filter(f => f.type !== 'directory').length
+      console.log(`[DialogDrop] ✅ 收集完成: ${actualFileCount} 个文件 + ${folderCount} 个文件夹占位`)
+      
+      uploadFileList.value = [...uploadFileList.value, ...collectedFiles]
+      
+      if (folderCount > 0 && actualFileCount === 0) {
+        ElMessage.warning('检测到文件夹但无法展开（浏览器限制），请使用"选择文件夹"按钮上传')
+      } else {
+        ElMessage.success(`添加了 ${actualFileCount} 个文件${folderCount > 0 ? `（${folderCount} 个文件夹未展开）` : ''}`)
+      }
+    } else {
+      ElMessage.warning('未检测到有效的文件')
+    }
+    return
+  }
+  
+  // 情况2：回退到 files 属性（旧浏览器或无 items）
+  if (files && files.length > 0) {
+    const fileList = Array.from(files)
+    console.log('[DialogDrop] 回退模式 - 获取到文件:', fileList.map(f => `${f.name} (${f.size} bytes)`))
+    
+    // 检查是否有 webkitRelativePath（说明来自文件夹选择器）
+    const hasFolderFiles = fileList.some(f => f.webkitRelativePath && f.webkitRelativePath.includes('/'))
+    
+    uploadFileList.value = [...uploadFileList.value, ...fileList]
+    ElMessage.success(`添加了 ${fileList.length} 个文件${hasFolderFiles ? '（含文件夹内文件）' : ''}`)
+    return
+  }
+  
+  console.warn('[DialogDrop] 未获取到任何文件')
+}
+
+/**
+ * 带重试机制的递归遍历文件夹
+ * @param {FileSystemDirectoryEntry} directoryEntry - 目录条目
+ * @param {string} path - 当前路径前缀
+ * @param {Array} fileList - 收集的文件列表
+ * @param {number} maxDepth - 最大递归深度（防止无限循环）
+ * @param {number} currentDepth - 当前深度（默认 0）
+ */
+const traverseDirectoryWithRetry = async (directoryEntry, path, fileList, maxDepth = 3, currentDepth = 0) => {
+  // 防止过深递归
+  if (currentDepth >= maxDepth) {
+    console.warn(`[DialogDrop] 🛑 达到最大递归深度 ${maxDepth}，停止递归`)
+    return
+  }
+  
+  return new Promise((resolve) => {
+    const reader = directoryEntry.createReader()
+    let allEntries = []
+    let retryCount = 0
+    const maxRetries = 3 // 最多重试3次
+    
+    const readAllEntries = () => {
+      reader.readEntries((entries) => {
+        if (!entries.length) {
+          // 没有更多条目
+          processEntries(allEntries).then(resolve)
+          return
+        }
+        
+        allEntries = allEntries.concat(entries)
+        readAllEntries() // 继续读取
+      }, (error) => {
+        console.error(`[DialogDrop] ❌ 读取目录失败 (第${retryCount + 1}次):`, error)
+        retryCount++
+        
+        if (retryCount < maxRetries) {
+          console.log(`[DialogDrop] 🔁 重试读取... (${retryCount}/${maxRetries})`)
+          setTimeout(() => readAllEntries(), 100 * retryCount) // 延迟重试
+        } else {
+          console.error('[DialogDrop] ❌ 重试耗尽，处理已收集的条目')
+          processEntries(allEntries).finally(resolve)
+        }
+      })
+    }
+    
+    const processEntries = async (entries) => {
+      for (const entry of entries) {
+        if (entry.isFile) {
+          try {
+            const file = await getFileFromEntryForDialog(entry, path)
+            if (file) fileList.push(file)
+          } catch (err) {
+            console.warn(`[DialogDrop] ⚠️ 读取文件失败: ${entry.name}`, err)
+          }
+        } else if (entry.isDirectory) {
+          console.log(`[DialogDrop] 📁 [${currentDepth}] 进入子目录: ${path}${entry.name}/`)
+          await traverseDirectoryWithRetry(entry, path + entry.name + '/', fileList, maxDepth, currentDepth + 1)
+        }
+      }
+    }
+    
+    // 开始首次读取
+    readAllEntries()
+  })
+}
+
+/**
+ * 从 FileEntry 获取 File 对象（用于 Dialog 级别拖拽）
+ */
+const getFileFromEntryForDialog = (fileEntry, path = '') => {
+  return new Promise((resolve, reject) => {
+    fileEntry.file((file) => {
+      // 保留相对路径
+      if (path && !file.webkitRelativePath) {
+        Object.defineProperty(file, 'webkitRelativePath', {
+          value: path + file.name,
+          writable: false,
+          configurable: true
+        })
+      }
+      resolve(file)
+    }, reject)
+  })
+}
+
+// 暴露给模板的 ref
+const folderUploadRef = ref(null)
 
 const submitUpload = async () => {
   if (uploadFileList.value.length === 0 || !currentPhase.value) return
@@ -1854,10 +2202,120 @@ onUnmounted(() => {
   justify-content: center;
   margin-bottom: 20px;
 }
+
+/* 当前位置提示 */
+.current-location-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--yzh-color-bg-active, #ecf5ff);
+  border: 1px solid var(--yzh-color-primary-light-7, #b3d8ff);
+  border-radius: var(--yzh-radius-sm, 4px);
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--yzh-text-color-primary, #303133);
+}
+
+.current-location-hint .location-tip {
+  color: var(--yzh-text-color-secondary, #909399);
+  font-size: 12px;
+  margin-left: auto;
+}
+
 .upload-secondary-btn {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 16px;
+  gap: 8px;
+}
+
+.upload-hint-text {
+  font-size: 12px;
+  color: var(--yzh-text-color-disabled, #c0c4cc);
+}
+
+.upload-hint-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--yzh-text-color-secondary, #909399);
+  text-align: left;
+  padding: 8px 12px;
+  background: var(--yzh-color-bg-hover, #fafafa);
+  border-radius: var(--yzh-radius-sm, 4px);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.upload-hint-list kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  background: var(--yzh-color-bg-page, #f5f7fa);
+  border: 1px solid var(--yzh-border-color-lighter, #e4e7ed);
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--yzh-text-color-primary, #303133);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+/* Element Plus Upload 组件样式覆盖 */
+.upload-dragger-wrapper {
+  width: 100%;
+}
+
+.upload-dragger-wrapper :deep(.el-upload) {
+  width: 100%;
+}
+
+.upload-dragger-wrapper :deep(.el-upload-dragger) {
+  width: 100%;
+  height: auto;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
+  padding: 32px 20px;
+  border-radius: var(--yzh-radius-lg, 8px);
+}
+
+.upload-dragger-wrapper :deep(.el-upload-dragger .el-icon--upload) {
+  font-size: 48px;
+  color: var(--yzh-color-text-secondary, #909399);
+  margin-bottom: 12px;
+}
+
+.upload-dragger-wrapper :deep(.el-upload__text) {
+  font-size: 14px;
+  color: var(--yzh-color-text-primary, #303133);
+}
+
+.upload-dragger-wrapper :deep(.el-upload__text em) {
+  color: var(--yzh-color-primary, #409eff);
+  font-style: normal;
+}
+
+.upload-dragger-wrapper :deep(.el-upload__tip) {
+  margin-top: 16px;
+  text-align: center;
+}
+
+.upload-dragger-wrapper :deep(.el-upload-list) {
+  max-height: 200px;
+  overflow-y: auto;
   margin-top: 12px;
+  border: 1px solid var(--yzh-border-color-lighter, #e4e7ed);
+  border-radius: var(--yzh-radius-sm, 4px);
+  padding: 8px 0;
+}
+
+.upload-dragger-wrapper :deep(.el-upload-list__item) {
+  padding: 6px 16px;
+  margin: 2px 0;
 }
 
 .upload-area {
@@ -2138,5 +2596,36 @@ onUnmounted(() => {
   .el-form-item__label {
     white-space: nowrap;
   }
+}
+
+/* 浏览器限制提示区域 */
+.browser-limit-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 16px;
+  background: var(--yzh-color-bg-hover, #fafafa);
+  border-radius: var(--yzh-radius-md, 8px);
+  border: 1px dashed var(--yzh-color-warning-light-5, #faecd8);
+}
+
+.browser-limit-hint .el-alert {
+  width: 100%;
+}
+
+.folder-select-btn {
+  font-size: 15px !important;
+  padding: 12px 32px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3) !important;
+  transition: all 0.3s ease !important;
+}
+
+.folder-select-btn:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.4) !important;
 }
 </style>

@@ -21,7 +21,7 @@ namespace YZH.Core.Entities
     /// - CreateID / Creator / CreateDate：新增时自动填充
     /// - ModifyID / Modifier / ModifyDate：更新时自动填充
     /// - DeleteID / Deleter / DeleteTime：逻辑删除时自动填充
-    /// - OrgCode：新增时从 UserContext.Current.OrgCode 填充
+    /// - OrgCode：不在基类定义，由需要多租户隔离的子类自行声明
     /// 
     /// 状态：[DONE] Phase 1 完整实现（12 字段 + 辅助方法）
     /// </summary>
@@ -36,15 +36,6 @@ namespace YZH.Core.Entities
         [MaxLength(100)]
         [Column(TypeName = "nvarchar(100)")]
         public string Code { get; set; }
-
-        /// <summary>
-        /// 多租户组织编码（用于数据隔离）
-        /// 由 [YZHMultiTenant] 特性自动填充
-        /// TODO:P2 - Phase 2 实现多租户过滤时启用此字段
-        /// </summary>
-        [MaxLength(50)]
-        [Column(TypeName = "varchar(50)")]
-        public string OrgCode { get; set; }
 
         #endregion
 
@@ -137,14 +128,11 @@ namespace YZH.Core.Entities
         }
 
         /// <summary>填充创建信息（由 YZHServiceBase 调用）</summary>
-        public void FillCreateInfo(int userId, string userName, string orgCode = null)
+        public void FillCreateInfo(int userId, string userName)
         {
             CreateID = userId;
             Creator = userName;
             CreateDate = DateTime.Now;
-            
-            if (!string.IsNullOrEmpty(orgCode))
-                OrgCode = orgCode;
         }
 
         /// <summary>填充修改信息（由 YZHServiceBase 调用）</summary>

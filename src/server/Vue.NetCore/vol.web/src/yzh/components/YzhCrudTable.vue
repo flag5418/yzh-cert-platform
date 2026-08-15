@@ -181,11 +181,7 @@ v-for="col in actualVisibleColumns"
       >
         <template #default="{ row }">
           <el-button link type="primary" size="small" @click="handleEdit(row)">修改</el-button>
-          <el-popconfirm title="确认删除？" @confirm="handleDelete(row)">
-            <template #reference>
-              <el-button link type="danger" size="small">删除</el-button>
-            </template>
-          </el-popconfirm>
+          <el-button link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>

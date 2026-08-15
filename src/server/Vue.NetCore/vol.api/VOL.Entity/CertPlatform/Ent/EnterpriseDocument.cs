@@ -11,6 +11,11 @@ namespace VOL.Entity.CertPlatform.Ent
     [Table("ent_enterprise_document")]
     public class EnterpriseDocument : YZHBaseEntity
     {
+        /// <summary>机构编码（多租户隔离，此表需要机构级数据隔离）</summary>
+        [StringLength(50)]
+        [Column("org_code")]
+        public string OrgCode { get; set; }
+
         [Required, StringLength(36)]
         [Column("enterprise_code")]
         public string EnterpriseCode { get; set; }

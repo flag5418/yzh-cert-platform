@@ -12,6 +12,11 @@ namespace VOL.Entity.CertPlatform.Audit
     [Table("audit_finding")]
     public class AuditFinding : YZHBaseEntity
     {
+        /// <summary>机构编码（多租户隔离，此表需要机构级数据隔离）</summary>
+        [StringLength(50)]
+        [Column("org_code")]
+        public string OrgCode { get; set; }
+
         [Required, StringLength(36)]
         [Column("checklist_item_code")]
         public string ChecklistItemCode { get; set; }

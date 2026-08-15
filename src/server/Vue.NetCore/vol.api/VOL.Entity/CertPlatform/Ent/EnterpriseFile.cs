@@ -12,6 +12,11 @@ namespace VOL.Entity.CertPlatform.Ent
     [Table("ent_enterprise_file")]
     public class EnterpriseFile : YZHBaseEntity
     {
+        /// <summary>机构编码（所属认证机构，多租户隔离）</summary>
+        [StringLength(50)]
+        [Column("org_code")]
+        public string OrgCode { get; set; }
+
         /// <summary>关联企业 code</summary>
         [Required, StringLength(36)]
         [Column("enterprise_code")]

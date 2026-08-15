@@ -70,7 +70,7 @@ namespace VOL.Builder.Services.CertPlatform
             // 填充创建信息
             var userId = UserContext.Current?.UserId ?? 0;
             var userName = UserContext.Current?.UserName ?? "system";
-            entity.FillCreateInfo(userId, userName, entity.OrgCode);
+            entity.FillCreateInfo(userId, userName);
 
             _db.Set<Enterprise>().Add(entity);
             await _db.SaveChangesAsync();

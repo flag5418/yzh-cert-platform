@@ -13,10 +13,10 @@ namespace VOL.Entity.CertPlatform
     /// 2. Creator / Modifier / Deleter → string 类型（操作人姓名）
     /// 3. Code 作为业务编码，与数据库主键 Id 分离（不依赖自增 ID 做业务标识）
     /// 4. Enable 字段统一处理逻辑删除（true = 启用，false = 禁用/已删除）
-    /// 5. OrgCode 字段支持多租户隔离（由 [YZHMultiTenant] 特性自动填充）
+    /// 5. OrgCode 不在基类定义，由需要多租户隔离的子类自行声明
     /// 
     /// 自动填充规则（由 YZHServiceBase 接管，业务代码禁止手动设置）：
-    /// - 新建: CreateID + Creator + CreateDate + OrgCode
+    /// - 新建: CreateID + Creator + CreateDate
     /// - 编辑: ModifyID + Modifier + ModifyDate
     /// - 删除: DeleteID + Deleter + DeleteTime + Enable = false
     /// 
@@ -48,14 +48,6 @@ namespace VOL.Entity.CertPlatform
         [MaxLength(100)]
         [Column("code")]
         public string Code { get; set; } = Guid.NewGuid().ToString("N");
-
-        /// <summary>
-        /// 多租户组织编码（用于数据隔离）
-        /// 由 [YZHMultiTenant] 特性自动填充，值为 UserContext.Current.OrgCode
-        /// </summary>
-        [MaxLength(50)]
-        [Column("org_code")]
-        public string OrgCode { get; set; }
 
         #endregion
 
@@ -212,16 +204,11 @@ namespace VOL.Entity.CertPlatform
         /// <summary>
         /// 填充创建信息（由 YZHServiceBase 在新增时调用）
         /// </summary>
-        public void FillCreateInfo(int userId, string userName, string orgCode = null)
+        public void FillCreateInfo(int userId, string userName)
         {
             CreateID = userId;
             Creator = userName;
             CreateDate = DateTime.Now;
-            
-            if (!string.IsNullOrEmpty(orgCode))
-            {
-                OrgCode = orgCode;
-            }
         }
 
         /// <summary>

@@ -89,11 +89,7 @@
         <template #default="{ row, $index }">
           <slot name="action" :row="row" :index="$index">
             <el-button link type="primary" size="small" @click="emit('edit', row)">修改</el-button>
-            <el-popconfirm title="确认删除？" @confirm="emit('delete', row)">
-              <template #reference>
-                <el-button link type="danger" size="small">删除</el-button>
-              </template>
-            </el-popconfirm>
+            <el-button link type="danger" size="small" @click="emit('delete', row)">删除</el-button>
           </slot>
         </template>
       </el-table-column>

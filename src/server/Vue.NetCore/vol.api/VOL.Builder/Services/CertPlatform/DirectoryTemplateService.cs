@@ -239,7 +239,7 @@ namespace VOL.Builder.Services.CertPlatform
 
             var configInfo = await _db.Set<StandardPhaseConfig>()
                 .Where(x => x.Code == folderInfo.ConfigCode)
-                .Select(x => new { x.OrgCode, x.StandardCode, x.PhaseCode })
+                .Select(x => new { x.StandardCode, x.PhaseCode })
                 .FirstOrDefaultAsync();
             if (configInfo == null)
                 return new WebResponseContent().Error("标准阶段配置不存在");
@@ -248,8 +248,9 @@ namespace VOL.Builder.Services.CertPlatform
             var folderPath = await BuildFolderPathAsync(req.FolderCode);
 
             // 4. 生成 OSS 存储路径
+            // 标准目录模板是全局的，OrgCode 使用 "GLOBAL" 作为占位
             var storagePath = _codeGenerator.GenerateStandardDirectoryPath(
-                configInfo.OrgCode, configInfo.StandardCode,
+                "GLOBAL", configInfo.StandardCode,
                 configInfo.PhaseCode, folderPath, fileName);
 
             // 5. 如果已有旧文件，先删除
@@ -270,9 +271,7 @@ namespace VOL.Builder.Services.CertPlatform
             var userName = UserContext.Current?.UserName ?? "system";
             req.FillModifyInfo(userId, userName);
 
-            // 同时更新 org_code 和 standard_code（冗余字段）
-            if (string.IsNullOrEmpty(req.OrgCode))
-                req.OrgCode = configInfo.OrgCode;
+            // 同时更新 standard_code（冗余字段）
             if (string.IsNullOrEmpty(req.StandardCode))
                 req.StandardCode = configInfo.StandardCode;
 

@@ -11,6 +11,11 @@ namespace VOL.Entity.CertPlatform.Cert
     [Table("cert_auditor_profile")]
     public class AuditorProfile : YZHBaseEntity
     {
+        /// <summary>机构编码（所属认证机构，多租户隔离）</summary>
+        [Required, StringLength(50)]
+        [Column("org_code")]
+        public string OrgCode { get; set; }
+
         /// <summary>关联 Sys_User.User_Id</summary>
         [Required]
         [Column("user_id")]

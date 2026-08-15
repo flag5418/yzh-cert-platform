@@ -16,6 +16,11 @@ namespace VOL.Entity.CertPlatform.DocExtraction
     [Entity(TableCnName = "文档提取规则")]
     public class CertDocExtractionRule : YZHBaseEntity
     {
+        /// <summary>机构编码（冗余，方便多租户过滤）</summary>
+        [StringLength(50)]
+        [Column("org_code")]
+        public string OrgCode { get; set; }
+
         /// <summary>
         /// 文件编码（旧字段，保留向后兼容，新代码不再使用）
         /// </summary>

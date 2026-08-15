@@ -62,3 +62,6 @@ export {
 
 // ====== 基础组件库（V3 新增，对齐 vidlang components/ui） ======
 export { YzhBaseCard, YzhTitledCard, YzhEmptyState, YzhStatusBadge, YzhLockStatus } from './components/ui'
+
+// ====== 文件上传组件（支持文件夹拖拽） ======
+export { default as YzhFolderUpload } from '../components/YzhFolderUpload/index.vue'

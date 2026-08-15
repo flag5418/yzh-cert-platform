@@ -22,7 +22,7 @@ namespace VOL.Entity.CertPlatform.DocExtraction
         [Column("delete_time")] public new DateTime? DeleteTime { get; set; }
         /// <summary>覆盖基类字段，适配snake_case列名</summary>
         [Column("code")]        public new string Code { get; set; }
-        [Column("org_code")]    public new string OrgCode { get; set; }
+        [Column("org_code")]    public string OrgCode { get; set; }
         [Column("status")]      public new string Status { get; set; }
         [Column("enable")]      public new bool Enable { get; set; }
         [Column("sort")]        public new int Sort { get; set; }
