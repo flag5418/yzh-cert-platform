@@ -142,6 +142,9 @@ const analysisTables = ref([])
 // Prompt和验证结果
 const generatedPrompt = ref('')
 const verifyResult = ref(null)
+// 最近一次验证的原始提取数据 { Fields: {code:value}, Tables: {code:rows} }（不经 mapVerify 转换）
+// 保存规则时随请求提交 → 后端落 B-08/B-09（YZH 标准企业），供工作流验证
+const verifyRawData = ref(null)
 const rawJsonDisplay = ref('')
 const generating = ref(false)
 const verifying = ref(false)
@@ -175,6 +178,7 @@ const onFileSelect = async (file) => {
   analysisTables.value = []
   generatedPrompt.value = ''
   verifyResult.value = null
+  verifyRawData.value = null
   activeTab.value = 'analysis'
   // 若该文档已保存过提取规则，自动分析应回显已有字段/表格/Prompt，而不是全部清空
   await loadExistingRule(file)
@@ -223,15 +227,10 @@ const onAIAnalyze = async () => {
     return
   }
   const fileCode = currentFile.value.fileCode
-  // 根据 mimeType 推断 skill
-  const mimeType = currentFile.value.mimeType || ''
-  let skill = 'word'
-  if (mimeType.includes('excel') || fileCode.toLowerCase().endsWith('.xlsx') || fileCode.toLowerCase().endsWith('.xls'))
-    skill = 'excel'
-  else if (mimeType.includes('pdf') || fileCode.toLowerCase().endsWith('.pdf'))
-    skill = 'pdf'
+  // skill 由后端按文件扩展名权威推导（单一约束原则：后端唯一控制），前端不再推断
+  const skill = 'word'
 
-  console.log('[DocExtractionRule] 🔍 开始分析:', { fileCode, skill })
+  console.log('[DocExtractionRule] 🔍 开始分析:', { fileCode, skill: '(后端推导)' })
   analyzing.value = true
   try {
     const res = await aiAnalyzeDocument({ fileCode, skill })
@@ -425,6 +424,7 @@ const onGeneratePrompt = async () => {
     if (prompt) {
       generatedPrompt.value = prompt
       verifyResult.value = null  // 清空旧验证结果
+      verifyRawData.value = null
       verifiedIsValid.value = false
       ElMessage.success('Prompt 生成成功')
     } else {
@@ -453,6 +453,11 @@ const onVerifyPrompt = async () => {
     const success = res?.Success ?? res?.success ?? false
     const message = res?.Message ?? res?.message ?? ''
     const innerData = res?.Data ?? res?.data ?? {}
+    // 保留原始提取数据（code→value / code→rows），保存规则时提交给后端落 B-08/B-09
+    verifyRawData.value = {
+      Fields: innerData?.Fields ?? innerData?.fields ?? {},
+      Tables: innerData?.Tables ?? innerData?.tables ?? {}
+    }
     // 映射验证结果：字段 code→中文名、表格 tableCode→中文表名 + 列名 code→中文列名
     const result = {
       success,
@@ -492,14 +497,29 @@ const saveRule = async () => {
   }
   // 允许未验证直接保存，isValid 取最近验证结果（未验证则为 false）
   const isValid = verifiedIsValid.value
-  // skill 推断（复用 onAIAnalyze 逻辑）
-  const mimeType = currentFile.value.mimeType || ''
-  const fileCode = currentFile.value.fileCode || ''
-  let skill = 'word'
-  if (mimeType.includes('excel') || fileCode.toLowerCase().endsWith('.xlsx') || fileCode.toLowerCase().endsWith('.xls'))
-    skill = 'excel'
-  else if (mimeType.includes('pdf') || fileCode.toLowerCase().endsWith('.pdf'))
-    skill = 'pdf'
+  // skill 由后端按文件扩展名权威推导（单一约束原则），前端不再推断
+  const skill = 'word'
+
+  // 组装提取数据（供后端落 B-08/B-09 工作流验证数据）：验证结果优先，分析预览值兜底
+  let extractionData = null
+  const raw = verifyRawData.value
+  if (raw && (Object.keys(raw.Fields || {}).length > 0 || Object.keys(raw.Tables || {}).length > 0)) {
+    extractionData = { Fields: raw.Fields || {}, Tables: raw.Tables || {} }
+  } else {
+    const fields = {}
+    analysisFields.value.forEach(f => {
+      const code = f.nameEn || f.code
+      if (code && f.extractedValue) fields[code] = f.extractedValue
+    })
+    const tables = {}
+    analysisTables.value.forEach(t => {
+      const code = t.nameEn || t.code
+      if (code && t.extractedData?.length > 0) tables[code] = t.extractedData
+    })
+    if (Object.keys(fields).length > 0 || Object.keys(tables).length > 0) {
+      extractionData = { Fields: fields, Tables: tables }
+    }
+  }
 
   saving.value = true
   try {
@@ -509,13 +529,16 @@ const saveRule = async () => {
       fields: analysisFields.value,
       tables: analysisTables.value,
       prompt: generatedPrompt.value,
-      isValid
+      isValid,
+      extractionData
     })
     const data = res?.Data ?? res?.data ?? res
     const success = data?.success ?? data?.Success ?? false
     if (success) {
       ruleStatus.value = isValid ? 'configured' : 'failed'
       ElMessage.success('规则保存成功')
+      // 刷新目录树，让文件节点的规则状态标签（已配置/未配置）立即更新
+      treeRef.value?.refresh?.()
     } else {
       ElMessage.error(data?.message ?? data?.Message ?? '保存失败')
     }

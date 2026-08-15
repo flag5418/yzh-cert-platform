@@ -22,8 +22,8 @@ namespace VOL.Entity.CertPlatform.Ent
         [Column("enterprise_code")]
         public string EnterpriseCode { get; set; }
 
-        /// <summary>标准文件编码（关联 cert_file_requirement.code，核心枢纽）</summary>
-        [StringLength(36)]
+        /// <summary>标准文件编码（规则键：实际文件 FileCode 或文件要求模板 Code，最长 200）</summary>
+        [StringLength(200)]
         [Column("standard_file_code")]
         public string StandardFileCode { get; set; }
 
@@ -37,7 +37,7 @@ namespace VOL.Entity.CertPlatform.Ent
         [Column("phase_code")]
         public string PhaseCode { get; set; }
 
-        [Required, StringLength(36)]
+        [Required, StringLength(200)]
         [Column("file_code")]
         public string FileCode { get; set; }
 
@@ -45,7 +45,7 @@ namespace VOL.Entity.CertPlatform.Ent
         [Column("version_number")]
         public int VersionNumber { get; set; }
 
-        [Required, StringLength(36)]
+        [Required, StringLength(200)]
         [Column("rule_code")]
         public string RuleCode { get; set; }
 

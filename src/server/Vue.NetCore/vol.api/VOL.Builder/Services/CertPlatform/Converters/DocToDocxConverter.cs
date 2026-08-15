@@ -74,7 +74,13 @@ namespace VOL.Builder.Services.CertPlatform.Converters
                 }
                 
                 // 构建 Docker 执行命令
-                var arguments = $"exec {_dockerContainerName} libreoffice --headless --convert-to docx --outdir {dockerOutputDir} {dockerInputPath}";
+                // 关键：-env:UserInstallation 为每次转换指定独立 profile 目录，避免并发时多个
+                // LibreOffice 实例争抢共享 profile（/root/.config/libreoffice/4）锁导致静默失败
+                // （退出码 1、stderr 为空、无输出文件），实测 5 并发下旧命令 2/5 失败、新命令 5/5 成功
+                var dockerProfileDir = $"{dockerTempDir}/profile_{guid}";
+                var arguments = $"exec {_dockerContainerName} libreoffice --headless " +
+                                $"-env:UserInstallation=file://{dockerProfileDir} " +
+                                $"--convert-to docx --outdir {dockerOutputDir} {dockerInputPath}";
                 
                 // 执行转换
                 var process = new Process
@@ -171,7 +177,7 @@ namespace VOL.Builder.Services.CertPlatform.Converters
             }
             finally
             {
-                // 清理临时文件
+                // 清理临时文件（含独立 profile 目录，避免每次转换在 /tmp/libreoffice 累积）
                 try
                 {
                     if (File.Exists(tempInputPath))
@@ -182,6 +188,12 @@ namespace VOL.Builder.Services.CertPlatform.Converters
                     if (Directory.Exists(tempOutputDir))
                     {
                         Directory.Delete(tempOutputDir, true);
+                    }
+                    
+                    var tempProfileDir = Path.Combine(_tempDirectory, $"profile_{guid}");
+                    if (Directory.Exists(tempProfileDir))
+                    {
+                        Directory.Delete(tempProfileDir, true);
                     }
                 }
                 catch (Exception ex) { Console.WriteLine($"[DocToDocxConverter] Error: {ex.Message}"); }

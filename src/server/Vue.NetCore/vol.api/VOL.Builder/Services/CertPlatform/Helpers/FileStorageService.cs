@@ -45,8 +45,8 @@ namespace VOL.Builder.Services.CertPlatform
             // 生成文件编码
             var fileCode = _codeGenerator.GenerateFileCode(folderCode, file.FileName);
 
-            // 生成存储路径
-            var storagePath = _codeGenerator.GenerateStoragePathV2(
+            // 生成存储路径（V3：/standard-directory/{Org}/{Standard}/{Phase}/{Folder}/{File}）
+            var storagePath = _codeGenerator.GenerateStandardDirectoryPath(
                 orgCode, standardCode, phaseCode, 
                 folderCode.Replace("|", "-"), file.FileName);
 

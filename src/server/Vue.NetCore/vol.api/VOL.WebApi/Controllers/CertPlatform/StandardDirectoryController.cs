@@ -119,9 +119,9 @@ namespace VOL.WebApi.Controllers.CertPlatform
         /// 用于文档提取规则管理页面，单次返回所有层级
         /// </summary>
         [HttpGet("stage-files/{directoryCode}")]
-        public IActionResult GetStageFileTree(string directoryCode)
+        public async Task<IActionResult> GetStageFileTree(string directoryCode)
         {
-            var result = _service.GetStageFileTree(directoryCode);
+            var result = await _service.GetStageFileTree(directoryCode);
             return JsonNormal(new WebResponseContent().OK(null, result));
         }
 

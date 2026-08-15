@@ -88,10 +88,8 @@ namespace VOL.Builder.Services.CertPlatform
                     file.IsValid = true;
                     break;
                 case "cancelled":
-                    // 取消：恢复可见，保留原始文件
-                    file.ConvertStatus = "pending";
-                    file.ConvertMessage = message;
-                    file.IsValid = true;
+                    // 取消：由 IYzhQueueCancelHandler（UploadQueueCancelHandler）彻底清理本次上传的
+                    // 数据库记录 + MinIO 对象，此处不再恢复可见性，避免出现半可见的"混乱"状态
                     break;
             }
             await db.SaveChangesAsync();

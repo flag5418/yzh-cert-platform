@@ -6,15 +6,15 @@ namespace VOL.Entity.CertPlatform.DocExtraction.DTOs
 {
     /// <summary>
     /// 保存提取规则请求
-    /// 规则绑定到标准文件（cert_file_requirement.code），而非企业文件
+    /// 规则绑定到标准目录文件（cert_standard_directory_file.file_code），而非企业文件
     /// </summary>
     public class SaveExtractionRuleRequest
     {
         /// <summary>
-        /// 标准文件编码（关联 cert_file_requirement.code）
+        /// 文件编码（cert_standard_directory_file.file_code，前端目录树选中节点的 fileCode）
         /// </summary>
-        [Required(ErrorMessage = "标准文件编码不能为空")]
-        public string StandardFileCode { get; set; }
+        [Required(ErrorMessage = "文件编码不能为空")]
+        public string FileCode { get; set; }
 
         /// <summary>
         /// 机构编码（冗余，方便过滤）
@@ -56,6 +56,14 @@ namespace VOL.Entity.CertPlatform.DocExtraction.DTOs
         /// 是否验证通过
         /// </summary>
         public bool IsValid { get; set; }
+
+        /// <summary>
+        /// 验证/分析时的提取数据（可选）
+        /// 有值则保存规则时同步落 B-08/B-09（YZH 标准企业，enterprise_code=YZH-STD-ENT），供工作流验证
+        /// 优先使用验证结果，前端兜底用分析预览值
+        /// 关联：docs/80-功能设计/提取结果落库-功能设计-V1.md
+        /// </summary>
+        public ExtractionData ExtractionData { get; set; }
     }
 
     /// <summary>
@@ -147,8 +155,8 @@ namespace VOL.Entity.CertPlatform.DocExtraction.DTOs
     /// </summary>
     public class AIAnalyzeRequest
     {
-        [Required(ErrorMessage = "标准文件编码不能为空")]
-        public string StandardFileCode { get; set; }
+        [Required(ErrorMessage = "文件编码不能为空")]
+        public string FileCode { get; set; }
 
         [Required(ErrorMessage = "技能类型不能为空")]
         public string Skill { get; set; }
@@ -180,8 +188,8 @@ namespace VOL.Entity.CertPlatform.DocExtraction.DTOs
     /// </summary>
     public class GeneratePromptRequest
     {
-        [Required(ErrorMessage = "标准文件编码不能为空")]
-        public string StandardFileCode { get; set; }
+        [Required(ErrorMessage = "文件编码不能为空")]
+        public string FileCode { get; set; }
 
         public List<FieldDefDto> Fields { get; set; } = new List<FieldDefDto>();
         public List<TableDefDto> Tables { get; set; } = new List<TableDefDto>();
@@ -192,8 +200,8 @@ namespace VOL.Entity.CertPlatform.DocExtraction.DTOs
     /// </summary>
     public class VerifyPromptRequest
     {
-        [Required(ErrorMessage = "标准文件编码不能为空")]
-        public string StandardFileCode { get; set; }
+        [Required(ErrorMessage = "文件编码不能为空")]
+        public string FileCode { get; set; }
 
         [Required(ErrorMessage = "Prompt不能为空")]
         public string Prompt { get; set; }

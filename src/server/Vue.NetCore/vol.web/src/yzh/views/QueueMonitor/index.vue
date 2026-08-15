@@ -118,6 +118,21 @@
             </div>
           </template>
         </el-table-column>
+        <el-table-column label="成功" width="70" align="center">
+          <template #default="{ row }">
+            <span class="count-success">{{ row.completedCount ?? 0 }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="失败" width="70" align="center">
+          <template #default="{ row }">
+            <span class="count-failed">{{ row.failedCount ?? 0 }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="取消" width="70" align="center">
+          <template #default="{ row }">
+            <span class="count-cancelled">{{ row.cancelledCount ?? 0 }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="startTime" label="开始时间" width="160">
           <template #default="{ row }">{{ row.startTime || '—' }}</template>
         </el-table-column>
@@ -131,7 +146,7 @@
               link
               type="warning"
               size="small"
-              v-if="['failed', 'cancelled'].includes(row.status)"
+              v-if="row.status === 'failed'"
               @click="retryQueue(row)"
             >重试</el-button>
             <el-button
@@ -199,7 +214,7 @@
             <el-table-column label="操作" width="90" align="center">
               <template #default="{ row }">
                 <el-button
-                  v-if="['failed', 'cancelled'].includes(row.status)"
+                  v-if="row.status === 'failed'"
                   link
                   type="warning"
                   size="small"
@@ -515,6 +530,10 @@ onUnmounted(() => {
         white-space: nowrap;
       }
     }
+
+    .count-success { color: var(--yzh-color-success, #67c23a); font-weight: 500; }
+    .count-failed { color: var(--yzh-color-danger, #f56c6c); font-weight: 500; }
+    .count-cancelled { color: var(--yzh-color-text-secondary, #909399); }
 
     .pagination-row {
       display: flex;

@@ -151,6 +151,8 @@ namespace VOL.Builder.Services.CertPlatform
         /// <summary>
         /// 生成标准目录存储路径
         /// 格式：/standard-directory/{OrgCode}/{StandardCode}/{PhaseCode}/{FolderPath}/{FileName}
+        /// 注意：编码段（机构/标准/阶段）做 CleanCode，文件夹路径与文件名保持原样（仅去路径分隔符），
+        ///       避免 CleanCode 删除文件名中的空格/连字符/中文括号导致 MinIO 对象名与 DB 不一致
         /// </summary>
         public string GenerateStandardDirectoryPath(string orgCode, string standardCode,
                                                     string phaseCode, string folderPath, string fileName)
@@ -164,7 +166,7 @@ namespace VOL.Builder.Services.CertPlatform
             var segments = new List<string> { cleanOrg, cleanStandard, cleanPhase };
             if (!string.IsNullOrEmpty(cleanFolderPath))
                 segments.Add(cleanFolderPath);
-            segments.Add(CleanCode(fileName));
+            segments.Add(SanitizeFileName(fileName));
 
             var path = string.Join("/", segments.Where(s => !string.IsNullOrEmpty(s)));
             return $"/standard-directory/{path}";
@@ -187,7 +189,7 @@ namespace VOL.Builder.Services.CertPlatform
             var segments = new List<string> { cleanEnt, cleanOrg, cleanStandard, cleanPhase };
             if (!string.IsNullOrEmpty(cleanFolderPath))
                 segments.Add(cleanFolderPath);
-            segments.Add(CleanCode(fileName));
+            segments.Add(SanitizeFileName(fileName));
 
             var path = string.Join("/", segments.Where(s => !string.IsNullOrEmpty(s)));
             return $"/enterprise-documents/{path}";
@@ -211,10 +213,19 @@ namespace VOL.Builder.Services.CertPlatform
             if (!string.IsNullOrEmpty(cleanFolderPath))
                 segments.Add(cleanFolderPath);
             segments.Add(".converted");
-            segments.Add(CleanCode(fileName));
+            segments.Add(SanitizeFileName(fileName));
 
             var path = string.Join("/", segments.Where(s => !string.IsNullOrEmpty(s)));
             return $"/enterprise-documents/{path}";
+        }
+
+        /// <summary>
+        /// 文件名安全化：仅去除路径分隔符（防止 / 或 \ 穿越目录），保留空格/连字符/中文等原样
+        /// </summary>
+        private string SanitizeFileName(string fileName)
+        {
+            if (string.IsNullOrEmpty(fileName)) return "";
+            return fileName.Replace("/", "").Replace("\\", "");
         }
 
         #endregion

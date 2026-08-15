@@ -325,6 +325,28 @@ namespace YZH.Core.Queue
         }
 
         /// <summary>
+        /// 启动时回收：回收所有 processing 任务（进程重启/崩溃遗留的孤儿任务）
+        /// 与 ReapStaleTasksAsync 的区别：不等待租约过期，服务一启动就立即回收
+        /// </summary>
+        public async Task<int> ReapStaleTasksOnStartupAsync()
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<VOLContext>();
+            var orphaned = await db.Set<YzhQueueTask>().AsTracking()
+                .Where(j => j.Status == "processing")
+                .ToListAsync();
+            if (orphaned.Count == 0) return 0;
+
+            foreach (var task in orphaned)
+                await ReapTaskAsync(db, task, "进程重启，任务执行中断");
+
+            await db.SaveChangesAsync();
+            foreach (var task in orphaned)
+                await RefreshQueueProgressAsync(task.QueueCode);
+            return orphaned.Count;
+        }
+
+        /// <summary>
         /// 租约回收：租约过期的 processing 任务视为 Worker 已死
         /// </summary>
         private async Task ReapStaleTasksAsync(VOLContext db)
@@ -335,30 +357,37 @@ namespace YZH.Core.Queue
             if (stale.Count == 0) return;
 
             foreach (var task in stale)
-            {
-                task.RetryCount++;
-                if (task.RetryCount >= task.MaxRetryCount)
-                {
-                    task.Status = "failed";
-                    task.ErrorType = "retryable";
-                    task.ErrorMessage = "任务执行中断（Worker 租约过期），重试次数已耗尽";
-                    task.CompleteTime = DateTime.Now;
-                    task.LockedUntil = null;
-                    await ReleaseTaskLocksByCodesAsync(task.LockCodes);
-                    await NotifyTaskStateChangedAsync(task, "failed", task.ErrorMessage);
-                }
-                else
-                {
-                    task.Status = "pending";
-                    task.ErrorMessage = "任务执行中断（Worker 租约过期），准备重试";
-                    task.NextRetryAt = DateTime.Now.AddSeconds(BackoffSeconds(task.RetryCount));
-                    task.LockedUntil = null;
-                    await NotifyTaskStateChangedAsync(task, "pending", task.ErrorMessage);
-                }
-            }
+                await ReapTaskAsync(db, task, "Worker 租约过期，任务执行中断");
+
             await db.SaveChangesAsync();
             foreach (var task in stale)
                 await RefreshQueueProgressAsync(task.QueueCode);
+        }
+
+        /// <summary>
+        /// 回收单个孤儿任务：重试未耗尽 → 回 pending 重试；耗尽 → failed 终态
+        /// </summary>
+        private async Task ReapTaskAsync(VOLContext db, YzhQueueTask task, string reason)
+        {
+            task.RetryCount++;
+            if (task.RetryCount >= task.MaxRetryCount)
+            {
+                task.Status = "failed";
+                task.ErrorType = "retryable";
+                task.ErrorMessage = $"{reason}，重试次数已耗尽";
+                task.CompleteTime = DateTime.Now;
+                task.LockedUntil = null;
+                await ReleaseTaskLocksByCodesAsync(task.LockCodes);
+                await NotifyTaskStateChangedAsync(task, "failed", task.ErrorMessage);
+            }
+            else
+            {
+                task.Status = "pending";
+                task.ErrorMessage = $"{reason}，准备重试";
+                task.NextRetryAt = DateTime.Now.AddSeconds(BackoffSeconds(task.RetryCount));
+                task.LockedUntil = null;
+                await NotifyTaskStateChangedAsync(task, "pending", task.ErrorMessage);
+            }
         }
 
         /// <summary>
@@ -386,6 +415,23 @@ namespace YZH.Core.Queue
                 }
                 taskRow.LockedUntil = DateTime.Now.AddMinutes(_options.LeaseMinutes);
                 await db.SaveChangesAsync();
+
+                // 队列已取消：跳过执行，避免读取已被取消清理删除的 MinIO 对象产生 ObjectNotFoundException
+                // （取消与取任务存在竞态：任务可能已被领取，但其取消令牌未被注册/触发）
+                var queueRow = await db.Set<YzhQueue>().AsNoTracking()
+                    .FirstOrDefaultAsync(q => q.QueueCode == taskRow.QueueCode);
+                if (queueRow != null && queueRow.Status == "cancelled")
+                {
+                    taskRow.Status = "cancelled";
+                    taskRow.CompleteTime = DateTime.Now;
+                    taskRow.LockedUntil = null;
+                    taskRow.ErrorMessage = "队列已取消，任务跳过执行";
+                    await db.SaveChangesAsync();
+                    await ReleaseTaskLocksAsync(taskRow);
+                    await RefreshQueueProgressAsync(taskRow.QueueCode);
+                    _logger.LogInformation($"[YzhQueueManager] 队列已取消，跳过执行: {taskRow.Id}");
+                    return;
+                }
 
                 // 执行器分发
                 if (!_executors.TryGetValue(taskRow.TaskType, out var executor))
@@ -599,9 +645,39 @@ namespace YZH.Core.Queue
                     .SetProperty(r => r.ReleaseTime, DateTime.Now));
             await db.SaveChangesAsync();
 
+            // 4.1 业务清理钩子（如上传队列取消后彻底清理本次上传的数据库记录 + MinIO 对象）
+            await NotifyQueueCancelledAsync(queue);
+
             await NotifyQueueTerminalAsync(queue);
             _logger.LogInformation($"[YzhQueueManager] 队列已取消: {queueCode}");
             return (true, null);
+        }
+
+        /// <summary>
+        /// 终态通知：交业务侧实现（消息落库 + SignalR 等）
+        /// </summary>
+        private async Task NotifyQueueCancelledAsync(YzhQueue queue)
+        {
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var handlers = scope.ServiceProvider.GetServices<IYzhQueueCancelHandler>();
+                foreach (var handler in handlers)
+                {
+                    try
+                    {
+                        await handler.OnQueueCancelledAsync(queue);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"[YzhQueueManager] 队列取消清理回调执行失败: {queue.QueueCode}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"[YzhQueueManager] 队列取消清理回调解析失败: {queue.QueueCode}");
+            }
         }
 
         /// <summary>
@@ -613,8 +689,9 @@ namespace YZH.Core.Queue
             var db = scope.ServiceProvider.GetRequiredService<VOLContext>();
             var task = await db.Set<YzhQueueTask>().AsTracking().FirstOrDefaultAsync(j => j.Id == taskId);
             if (task == null) return (false, "任务不存在");
-            if (task.Status != "failed" && task.Status != "cancelled")
-                return (false, "仅失败/取消的任务可重试");
+            // 仅失败（异常）的任务可重试；取消的任务已被彻底清理，不允许重试
+            if (task.Status != "failed")
+                return (false, "仅失败的任务可重试");
 
             var relock = await RelockTaskAsync(db, task);
             if (!relock.ok) return relock;
@@ -646,7 +723,8 @@ namespace YZH.Core.Queue
             if (!IsTerminal(queue.Status)) return (false, "仅已结束的队列可整队重跑");
 
             var tasks = await db.Set<YzhQueueTask>().AsTracking()
-                .Where(j => j.QueueCode == queueCode && (j.Status == "failed" || j.Status == "cancelled"))
+                // 仅失败（异常）的任务可重试；取消的任务已被彻底清理，不允许重试
+                .Where(j => j.QueueCode == queueCode && j.Status == "failed")
                 .ToListAsync();
             if (tasks.Count == 0) return (false, "没有可重试的任务");
 

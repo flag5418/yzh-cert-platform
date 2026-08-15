@@ -140,6 +140,8 @@ builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.OfficeConvertServic
 builder.Services.Configure<YZH.Core.Queue.YzhQueueOptions>(builder.Configuration.GetSection(YZH.Core.Queue.YzhQueueOptions.SectionName));
 builder.Services.AddSingleton<YZH.Core.Queue.YzhQueueManager>();
 builder.Services.AddSingleton<YZH.Core.Queue.IYzhTaskExecutor, VOL.Builder.Services.CertPlatform.OfficeConvertTaskExecutor>();
+// 队列取消后的业务清理钩子：上传任务取消时彻底清理数据库记录 + MinIO 对象
+builder.Services.AddScoped<YZH.Core.Queue.IYzhQueueCancelHandler, VOL.Builder.Services.CertPlatform.UploadQueueCancelHandler>();
 builder.Services.AddHostedService<YZH.Core.Queue.YzhQueueHostedService>();
 
 // ====== SignalR 转换进度通知（桥接队列引擎与 Hub） ======

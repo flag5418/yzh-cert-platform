@@ -27,6 +27,20 @@ namespace YZH.Core.Queue
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation($"[YzhQueueHostedService] 后台服务已启动 (workerId={_workerId})");
+
+            // 启动时立即回收遗留的 processing 任务（上次进程退出/重启时未完成的任务）
+            // 避免：上一轮 Worker 被杀后任务孤儿化，需等整段租约（LeaseMinutes）过期才被回收，
+            //      导致队列进度卡住长时间不结束。启动即回收 = 重启后秒级恢复。
+            try
+            {
+                var reaped = await _queueManager.ReapStaleTasksOnStartupAsync();
+                _logger.LogInformation($"[YzhQueueHostedService] 启动回收遗留任务: {reaped} 个");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[YzhQueueHostedService] 启动回收遗留任务失败");
+            }
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 try

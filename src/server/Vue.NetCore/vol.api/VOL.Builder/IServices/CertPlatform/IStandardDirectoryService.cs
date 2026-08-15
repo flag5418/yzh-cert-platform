@@ -69,7 +69,7 @@ namespace VOL.Builder.IServices.CertPlatform
         /// </summary>
         /// <param name="directoryCode">目录编码</param>
         /// <returns>完整的文件夹+文件树JSON</returns>
-        StageFileTreeResponse GetStageFileTree(string directoryCode);
+        Task<StageFileTreeResponse> GetStageFileTree(string directoryCode);
 
         /// <summary>
         /// 获取标准目录文件夹树

@@ -19,6 +19,7 @@ using VOL.Core.SignalR;
 using VOL.Core.Utilities;
 using VOL.Entity.CertPlatform.Dir;
 using VOL.Entity.CertPlatform.Cert;
+using VOL.Entity.CertPlatform.DocExtraction;
 using VOL.Entity.CertPlatform.Sys;
 using VOL.Builder.IServices.CertPlatform;
 using VOL.Builder.Services.CertPlatform;
@@ -319,7 +320,7 @@ namespace VOL.Builder.Services.CertPlatform
         /// 获取阶段的完整文件树（含规则属性）
         /// 用于文档提取规则管理页面，单次返回所有层级的文件夹和文件
         /// </summary>
-        public StageFileTreeResponse GetStageFileTree(string directoryCode)
+        public async Task<StageFileTreeResponse> GetStageFileTree(string directoryCode)
         {
             try
             {
@@ -341,6 +342,30 @@ namespace VOL.Builder.Services.CertPlatform
                     .OrderBy(x => x.SortOrder)
                     .ToList();
 
+                // 3.1 规则状态权威来源：cert_doc_extraction_rule（按 standard_file_code 关联）
+                //     历史实现读 file.ExtractionRules / file.ExtractionEnabled 列，但规则保存时从不写这两列，
+                //     导致树中 RuleStatus 永远为 none。规则表才是唯一权威（单一约束原则）。
+                var ruleStatusMap = new Dictionary<string, string>();
+                try
+                {
+                    var stageFileCodes = allFiles.Select(f => f.FileCode).ToList();
+                    if (stageFileCodes.Count > 0)
+                    {
+                        var ruleList = await _db.Set<CertDocExtractionRule>()
+                            .Where(r => stageFileCodes.Contains(r.StandardFileCode))
+                            .Select(r => new { r.StandardFileCode, r.Status })
+                            .ToListAsync();
+                        ruleStatusMap = ruleList
+                            .GroupBy(x => x.StandardFileCode)
+                            .ToDictionary(g => g.Key, g => g.Last().Status);
+                    }
+                }
+                catch (Exception ruleEx)
+                {
+                    // 规则状态查询失败不影响文件树加载，降级为 none
+                    Console.WriteLine($"[GetStageFileTree] 规则状态查询失败: {ruleEx.Message}");
+                }
+
                 var folderNodes = new List<StageFolderNode>();
                 int totalFolders = 0;
                 int totalFiles = 0;
@@ -348,7 +373,7 @@ namespace VOL.Builder.Services.CertPlatform
 
                 foreach (var root in rootFolders)
                 {
-                    var node = BuildStageFolderNode(root, allFolders, allFiles, ref totalFolders, ref totalFiles, ref configuredFiles);
+                    var node = BuildStageFolderNode(root, allFolders, allFiles, ruleStatusMap, ref totalFolders, ref totalFiles, ref configuredFiles);
                     folderNodes.Add(node);
                 }
 
@@ -374,7 +399,8 @@ namespace VOL.Builder.Services.CertPlatform
                     foreach (var file in rootOrphanFiles)
                     {
                         totalFiles++;
-                        bool hasRule = !string.IsNullOrEmpty(file.ExtractionRules) || file.ExtractionEnabled == true;
+                        var fileRuleStatus = ruleStatusMap.TryGetValue(file.FileCode, out var rs) ? rs : "none";
+                        bool hasRule = fileRuleStatus == "configured" || fileRuleStatus == "failed";
                         if (hasRule) configuredFiles++;
 
                         rootNode.Files.Add(new StageFileNode
@@ -386,9 +412,9 @@ namespace VOL.Builder.Services.CertPlatform
                             ConvertedStoragePath = file.ConvertedStoragePath,
                             ConvertStatus = file.ConvertStatus,
                             ConvertMessage = file.ConvertMessage,
-                            FileSize = null,
+                            FileSize = file.FileSize,
                             MimeType = file.FileType,
-                            RuleStatus = hasRule ? "configured" : "none",
+                            RuleStatus = fileRuleStatus,
                             ExtractFieldCount = 0,
                             TableDefCount = 0
                         });
@@ -423,6 +449,7 @@ namespace VOL.Builder.Services.CertPlatform
             StandardDirectoryFolder folder, 
             List<StandardDirectoryFolder> allFolders,
             List<StandardDirectoryFile> allFiles,
+            Dictionary<string, string> ruleStatusMap,
             ref int totalFolders,
             ref int totalFiles,
             ref int configuredFiles)
@@ -446,7 +473,7 @@ namespace VOL.Builder.Services.CertPlatform
 
             foreach (var child in children)
             {
-                node.Children.Add(BuildStageFolderNode(child, allFolders, allFiles, ref totalFolders, ref totalFiles, ref configuredFiles));
+                node.Children.Add(BuildStageFolderNode(child, allFolders, allFiles, ruleStatusMap, ref totalFolders, ref totalFiles, ref configuredFiles));
             }
 
             // 获取该文件夹下的文件
@@ -459,8 +486,9 @@ namespace VOL.Builder.Services.CertPlatform
             {
                 totalFiles++;
                 
-                // 判断是否已配置规则（根据 ExtractionRules 或其他字段）
-                bool hasRule = !string.IsNullOrEmpty(file.ExtractionRules) || file.ExtractionEnabled == true;
+                // 规则状态：以 cert_doc_extraction_rule 表为权威（configured/failed/none）
+                var fileRuleStatus = ruleStatusMap.TryGetValue(file.FileCode, out var rs) ? rs : "none";
+                bool hasRule = fileRuleStatus == "configured" || fileRuleStatus == "failed";
                 if (hasRule) configuredFiles++;
 
                 node.Files.Add(new StageFileNode
@@ -472,9 +500,9 @@ namespace VOL.Builder.Services.CertPlatform
                     ConvertedStoragePath = file.ConvertedStoragePath,
                     ConvertStatus = file.ConvertStatus,
                     ConvertMessage = file.ConvertMessage,
-                    FileSize = null,
+                    FileSize = file.FileSize,
                     MimeType = file.FileType,
-                    RuleStatus = hasRule ? "configured" : "none",
+                    RuleStatus = fileRuleStatus,
                     ExtractFieldCount = 0,
                     TableDefCount = 0
                 });
@@ -1108,8 +1136,8 @@ namespace VOL.Builder.Services.CertPlatform
                 // 构建文件夹路径（用于 MinIO 路径）
                 var folderPath = string.Join("/", folderNames);
                 
-                // 使用 V2 路径生成器生成四级路径
-                var storagePath = _codeGenerator.GenerateStoragePathV2(
+                // 使用 V3 路径生成器（双顶层文件夹：/standard-directory/{Org}/{Standard}/{Phase}/{Folder}/{File}）
+                var storagePath = _codeGenerator.GenerateStandardDirectoryPath(
                     orgCode, config.StandardCode, config.PhaseCode, folderPath, fileName);
 
                 // 确保 Bucket 存在
@@ -1136,7 +1164,7 @@ namespace VOL.Builder.Services.CertPlatform
                     await _minioClient.PutObjectAsync(putArgs);
                 }
 
-                // 创建文件记录
+                // 创建文件记录（文件大小以后端实际接收字节数为准）
                 var fileRecord = new StandardDirectoryFile
                 {
                     FileCode = fileCode,
@@ -1145,6 +1173,7 @@ namespace VOL.Builder.Services.CertPlatform
                     FileName = fileName,
                     FileType = fileExt,
                     StoragePath = storagePath,
+                    FileSize = file.Length,
                     Code = Guid.NewGuid().ToString("N"),
                     CreateDate = DateTime.Now,
                     Enable = true
@@ -1610,10 +1639,12 @@ namespace VOL.Builder.Services.CertPlatform
                     var fullPath = fileItem.RelativePath; // 前端传入完整路径
 
                     // 服务端文件类型白名单校验（防止绕过前端过滤上传 .DS_Store 等垃圾文件）
+                    // 命中时跳过该文件而不是拒绝整个批次，保证正常文件不受影响
                     var validateResult = ValidateUploadFileType(fullPath);
                     if (validateResult != null)
                     {
-                        return new WebResponseContent().Error(validateResult);
+                        Console.WriteLine($"[UploadInit] 跳过不允许上传的文件: {validateResult}");
+                        continue;
                     }
 
                     // 查找所属文件夹
@@ -1654,7 +1685,21 @@ namespace VOL.Builder.Services.CertPlatform
                         // 不创建新记录，标记旧记录 UploadStatus = "replacing"
                         existingFile.UploadStatus = "replacing";
                         existingFile.TaskId = taskId;
-                        MarkModified(existingFile, nameof(StandardDirectoryFile.UploadStatus), nameof(StandardDirectoryFile.TaskId));
+                        // 标记 replace 来源（取消时用于区分 create/replace：create 删除、replace 恢复）
+                        existingFile.Remark = (existingFile.Remark ?? "") + $"[upload-replace:{taskId}]";
+
+                        // 存储路径统一按 V3 约定生成（/standard-directory/{Org}/{Std}/{Phase}/{Folder}/{File}）
+                        // 不沿用旧 V2 路径（/CB001CODE/...）——否则重传/替换后新文件仍落在旧结构，
+                        // 导致 MinIO 目录树与约定不一致；旧 V2 对象在 UploadFileWithTask 上传成功后删除
+                        var oldStorage = existingFile.StoragePath;
+                        var replaceFolderPath = pathParts.Length > 1
+                            ? string.Join("/", pathParts.Take(pathParts.Length - 1))
+                            : "";
+                        var newStoragePath = _codeGenerator.GenerateStandardDirectoryPath(
+                            orgCode, config.StandardCode, config.PhaseCode, replaceFolderPath, fileName);
+                        existingFile.StoragePath = newStoragePath;
+                        MarkModified(existingFile, nameof(StandardDirectoryFile.UploadStatus), nameof(StandardDirectoryFile.TaskId),
+                            nameof(StandardDirectoryFile.Remark), nameof(StandardDirectoryFile.StoragePath));
 
                         enhancedFiles.Add(new EnhancedFileItem
                         {
@@ -1665,12 +1710,12 @@ namespace VOL.Builder.Services.CertPlatform
                             FullPath = fullPath,
                             FileSize = fileItem.FileSize,
                             MimeType = fileItem.MimeType,
-                            StoragePath = existingFile.StoragePath, // 保持旧路径
+                            StoragePath = newStoragePath,
                             ParentFolderCode = parentFolderCode,
                             Mode = "replace",
                             ExistingFileCode = existingFile.FileCode,
                             ExistingFileId = existingFile.Id,
-                            OldStoragePath = existingFile.StoragePath,
+                            OldStoragePath = oldStorage,
                             Status = "pending"
                         });
                     }
@@ -1685,8 +1730,8 @@ namespace VOL.Builder.Services.CertPlatform
                             ? string.Join("/", pathParts.Take(pathParts.Length - 1)) 
                             : "";
                         
-                        // 使用 V2 路径生成器生成四级路径：/{org}/{standard}/{phase}/{folder}/{file}
-                        var storagePath = _codeGenerator.GenerateStoragePathV2(
+                        // 使用 V3 路径生成器：/standard-directory/{org}/{standard}/{phase}/{folder}/{file}
+                        var storagePath = _codeGenerator.GenerateStandardDirectoryPath(
                             orgCode, config.StandardCode, config.PhaseCode, folderPath, fileName);
 
                         var fileRecord = new StandardDirectoryFile
@@ -1731,13 +1776,19 @@ namespace VOL.Builder.Services.CertPlatform
                     }
                 }
 
-                // 6. 创建任务记录
+                // 全部文件都被过滤时（如整批都是 .DS_Store），返回明确错误
+                if (enhancedFiles.Count == 0)
+                {
+                    return new WebResponseContent().Error("没有可上传的有效文件（文件均被过滤）");
+                }
+
+                // 6. 创建任务记录（统计基于实际接受的 enhancedFiles，过滤掉 .DS_Store 等）
                 var uploadTask = new UploadTask
                 {
                     TaskId = taskId,
                     DirectoryCode = manifest.DirectoryCode,
-                    TotalFiles = manifest.Files.Count,
-                    TotalSize = manifest.Files.Sum(f => f.FileSize),
+                    TotalFiles = enhancedFiles.Count,
+                    TotalSize = enhancedFiles.Sum(f => f.FileSize),
                     SuccessCount = 0,
                     Status = "initialized",
                     Creator = UserContext.Current?.UserName,
@@ -1754,8 +1805,8 @@ namespace VOL.Builder.Services.CertPlatform
                     Status = "initialized",
                     TaskId = taskId,
                     DirectoryCode = manifest.DirectoryCode,
-                    TotalFiles = manifest.Files.Count,
-                    TotalSize = manifest.Files.Sum(f => f.FileSize),
+                    TotalFiles = enhancedFiles.Count,
+                    TotalSize = enhancedFiles.Sum(f => f.FileSize),
                     Folders = enhancedFolders,
                     Files = enhancedFiles
                 };
@@ -1803,8 +1854,12 @@ namespace VOL.Builder.Services.CertPlatform
                 var oldStoragePath = isReplaceMode ? fileRecord.StoragePath : null;
 
                 // 3. 上传到MinIO
+                // 存储路径以后端为准：使用 UploadInit 阶段生成并写入 DB 的 StoragePath（V3 约定路径），
+                // 不信任前端传入的 StoragePath——前端可能被篡改或与 DB 不一致，导致 MinIO 与页面逻辑混乱
                 var bucketName = _configuration["MinIO:BucketName"] ?? "cert-platform";
-                var storagePath = request.StoragePath.TrimStart('/');
+                var storagePath = (fileRecord.StoragePath ?? request.StoragePath)?.TrimStart('/');
+                if (string.IsNullOrEmpty(storagePath))
+                    return new WebResponseContent().Error("文件存储路径缺失，请重新发起上传");
 
                 // 确保Bucket存在
                 var beArgs = new BucketExistsArgs().WithBucket(bucketName);
@@ -1826,7 +1881,10 @@ namespace VOL.Builder.Services.CertPlatform
                 await _minioClient.PutObjectAsync(putArgs).ConfigureAwait(false);
 
                 // 4. replace 模式：上传成功后删除旧 MinIO 对象
-                if (isReplaceMode && !string.IsNullOrEmpty(oldStoragePath))
+                //    注意：UploadInit 对 replace 复用旧 StoragePath（同路径覆盖写入），新旧对象是同一个，
+                //    此时不能删除——否则会把刚上传的新内容删掉，导致后续文档转换 ObjectNotFound
+                if (isReplaceMode && !string.IsNullOrEmpty(oldStoragePath)
+                    && oldStoragePath.TrimStart('/') != storagePath)
                 {
                     try
                     {
@@ -1842,11 +1900,12 @@ namespace VOL.Builder.Services.CertPlatform
                     }
                 }
 
-                // 5. 更新文件记录状态
+                // 5. 更新文件记录状态（文件大小以后端实际接收的字节数为准，不信任前端）
                 fileRecord.UploadStatus = "uploaded"; // 标记为已上传，等待 confirm
+                fileRecord.FileSize = file.Length;
                 fileRecord.ModifyDate = DateTime.Now;
-                MarkModified(fileRecord, nameof(StandardDirectoryFile.UploadStatus), nameof(StandardDirectoryFile.ModifyDate));
-                Console.WriteLine($"[UploadFileWithTask] Updated fileRecord.UploadStatus to 'uploaded', FileCode={fileRecord.FileCode}");
+                MarkModified(fileRecord, nameof(StandardDirectoryFile.UploadStatus), nameof(StandardDirectoryFile.FileSize), nameof(StandardDirectoryFile.ModifyDate));
+                Console.WriteLine($"[UploadFileWithTask] Updated fileRecord.UploadStatus to 'uploaded', FileCode={fileRecord.FileCode}, Size={file.Length}");
 
                 // 6. 更新任务成功数
                 task.SuccessCount++;
@@ -2053,111 +2112,112 @@ namespace VOL.Builder.Services.CertPlatform
         }
 
         /// <summary>
-        /// 回滚上传任务（支持 create/replace 模式）
-        /// create 模式：删除 IsValid=0 的新记录 + MinIO 新文件
-        /// replace 模式：旧记录 UploadStatus → active（恢复），删除 MinIO 新文件
+        /// 彻底取消上传任务（支持 create/replace 模式）
+        /// 语义：取消 = 彻底干掉本次上传过程，不允许重试。
+        /// create 模式：删除本次任务新建的文件记录 + MinIO 对象（含原文件与转换后文件）
+        /// replace 模式：取消替换，恢复为普通可用文件（原内容已被覆盖无法恢复，保留当前内容）
+        /// 同时删除本次任务创建的空文件夹与上传任务记录。
         /// </summary>
         public async Task<WebResponseContent> UploadCancel(string taskId)
         {
             try
             {
-                // 1. 查找任务
-                var task = _db.Set<UploadTask>()
-                    .FirstOrDefault(x => x.TaskId == taskId);
-                if (task == null)
-                    return new WebResponseContent().Error("上传任务不存在");
+                // 0. 该上传任务若仍有未结束的转换队列，先取消队列（幂等：已取消/已结束则跳过）
+                var activeQueue = _db.Set<YzhQueue>()
+                    .FirstOrDefault(q => q.SourceType == "upload_task"
+                                      && q.SourceId == taskId
+                                      && q.Status != "completed" && q.Status != "failed" && q.Status != "cancelled");
+                if (activeQueue != null)
+                {
+                    var (_, cancelErr) = await _queueManager.CancelQueueAsync(activeQueue.QueueCode);
+                    if (cancelErr != null)
+                        Console.WriteLine($"[UploadCancel] 取消关联转换队列失败: {cancelErr}");
+                }
 
                 var bucketName = _configuration["MinIO:BucketName"] ?? "cert-platform";
                 var restoredCount = 0;
                 var deletedFiles = 0;
                 var deletedFolders = 0;
 
-                // 2. 处理所有关联文件
+                // 1. 彻底删除本次任务关联的所有文件（含转换中/已转换），不再跳过任何状态
+                // 按 TaskId 幂等清理：即使任务记录已被清理（如递归取消场景）也能正确删除
                 var allFiles = _db.Set<StandardDirectoryFile>()
                     .Where(x => x.TaskId == taskId)
                     .ToList();
 
                 foreach (var file in allFiles)
                 {
-                    if (file.IsValid == false)
+                    // 删除 MinIO 对象：原文件 + 转换后文件
+                    foreach (var objPath in new[] { file.StoragePath, file.ConvertedStoragePath })
                     {
-                        // 队列处理中的文件（转换未完成）不删除，防止把有效数据当脏数据清掉
-                        if (file.ConvertStatus == "pending" || file.ConvertStatus == "converting")
-                            continue;
-                        // ===== create 模式：删除新记录 + MinIO 新文件 =====
-                        if (!string.IsNullOrEmpty(file.StoragePath))
+                        if (string.IsNullOrEmpty(objPath)) continue;
+                        try
                         {
-                            try
-                            {
-                                var storagePath = file.StoragePath.TrimStart('/');
-                                var rmArgs = new RemoveObjectArgs()
-                                    .WithBucket(bucketName)
-                                    .WithObject(storagePath);
-                                await _minioClient.RemoveObjectAsync(rmArgs).ConfigureAwait(false);
-                            }
-                            catch (Exception ex) { Console.WriteLine($"[StandardDirectoryService] Error: {ex.Message}"); /* 忽略MinIO删除失败 */ }
+                            var rmArgs = new RemoveObjectArgs()
+                                .WithBucket(bucketName)
+                                .WithObject(objPath.TrimStart('/'));
+                            await _minioClient.RemoveObjectAsync(rmArgs).ConfigureAwait(false);
                         }
+                        catch (Exception ex) { Console.WriteLine($"[StandardDirectoryService] MinIO删除失败: {ex.Message}"); /* 忽略单对象删除失败 */ }
+                    }
+
+                    // create 模式（本次任务新建的记录）：直接删除；replace 模式：取消替换并恢复
+                    var replaceMarker = $"[upload-replace:{taskId}]";
+                    if ((file.Remark ?? "").Contains(replaceMarker))
+                    {
+                        // ===== replace 模式：取消替换 =====
+                        // 原文件内容已被覆盖无法恢复，保留当前内容，恢复为普通可用文件记录
+                        file.UploadStatus = "active";
+                        file.TaskId = null; // 清除任务关联
+                        file.ConvertStatus = null;
+                        file.ConvertedStoragePath = null;
+                        file.ConvertMessage = null;
+                        file.Remark = (file.Remark ?? "").Replace(replaceMarker, "").Trim();
+                        MarkModified(file, nameof(StandardDirectoryFile.UploadStatus), nameof(StandardDirectoryFile.TaskId),
+                            nameof(StandardDirectoryFile.ConvertStatus), nameof(StandardDirectoryFile.ConvertedStoragePath),
+                            nameof(StandardDirectoryFile.ConvertMessage), nameof(StandardDirectoryFile.Remark));
+                        restoredCount++;
+                    }
+                    else
+                    {
+                        // ===== create 模式：删除新记录 =====
                         _db.Set<StandardDirectoryFile>().Remove(file);
                         deletedFiles++;
                     }
-                    else if (file.UploadStatus == "replacing" || file.UploadStatus == "uploaded")
-                    {
-                        // 队列处理中的文件不恢复（由队列完成后统一处理）
-                        if (file.ConvertStatus == "pending" || file.ConvertStatus == "converting")
-                            continue;
-                        // ===== replace 模式：恢复旧记录状态 =====
-                        // 如果已上传了新文件到 MinIO，需要删除新文件
-                        if (file.UploadStatus == "uploaded" && !string.IsNullOrEmpty(file.StoragePath))
-                        {
-                            try
-                            {
-                                var storagePath = file.StoragePath.TrimStart('/');
-                                var rmArgs = new RemoveObjectArgs()
-                                    .WithBucket(bucketName)
-                                    .WithObject(storagePath);
-                                await _minioClient.RemoveObjectAsync(rmArgs).ConfigureAwait(false);
-                            }
-                            catch (Exception ex) { Console.WriteLine($"[StandardDirectoryService] Error: {ex.Message}"); /* 忽略MinIO删除失败 */ }
-                        }
-                        // 恢复状态为 active（旧文件内容未被修改）
-                        file.UploadStatus = "active";
-                        file.TaskId = null; // 清除任务关联
-                        MarkModified(file, nameof(StandardDirectoryFile.UploadStatus), nameof(StandardDirectoryFile.TaskId));
-                        restoredCount++;
-                    }
                 }
 
-                // 3. 删除空文件夹（IsValid=0 的新文件夹）
-                var foldersToDelete = _db.Set<StandardDirectoryFolder>()
-                    .Where(x => x.TaskId == taskId && x.IsValid == false)
+                // 2. 删除本次任务创建的空文件夹（含已激活的；若被其他任务复用了文件则保留）
+                var taskFolders = _db.Set<StandardDirectoryFolder>()
+                    .Where(x => x.TaskId == taskId)
                     .ToList();
 
-                foreach (var folder in foldersToDelete)
+                foreach (var folder in taskFolders)
                 {
-                    // 检查文件夹下是否还有文件（非本次任务的）
-                    var hasOtherFiles = _db.Set<StandardDirectoryFile>()
-                        .Any(x => x.FolderCode == folder.FolderCode && x.TaskId != taskId);
-                    
-                    if (!hasOtherFiles)
+                    var hasFiles = _db.Set<StandardDirectoryFile>()
+                        .Any(x => x.FolderCode == folder.FolderCode);
+                    if (!hasFiles)
                     {
                         _db.Set<StandardDirectoryFolder>().Remove(folder);
                         deletedFolders++;
                     }
                 }
 
-                // 4. 删除任务记录
-                _db.Set<UploadTask>().Remove(task);
+                // 3. 删除上传任务记录（若仍存在）
+                var task = _db.Set<UploadTask>()
+                    .FirstOrDefault(x => x.TaskId == taskId);
+                if (task != null)
+                    _db.Set<UploadTask>().Remove(task);
 
                 await _db.SaveChangesAsync();
 
-                var msg = $"回滚完成，已清理{deletedFiles}个新文件和{deletedFolders}个新文件夹";
+                var msg = $"已彻底清理本次上传：删除{deletedFiles}个文件和{deletedFolders}个文件夹";
                 if (restoredCount > 0)
-                    msg += $"，已恢复{restoredCount}个替换文件的原始状态";
+                    msg += $"，已恢复{restoredCount}个替换文件";
                 return new WebResponseContent().OK(msg);
             }
             catch (Exception ex)
             {
-                return new WebResponseContent().Error($"回滚失败：{ex.Message}");
+                return new WebResponseContent().Error($"清理失败：{ex.Message}");
             }
         }
 
@@ -2202,10 +2262,13 @@ namespace VOL.Builder.Services.CertPlatform
             if (conn.State != System.Data.ConnectionState.Open)
                 await conn.OpenAsync();
 
-            // 删除 IsValid=0 的文件
+            // 删除 IsValid=0 的文件（无条件清理：预创建记录未确认即孤儿；
+            // 注意 UploadInit 对 .doc/.xls 预创建时就置 ConvertStatus='pending'，
+            // 若此处按 convert_status 过滤会永远清不掉这些孤儿，下次上传撞唯一键失败。
+            // 转换只发生在 confirm 后的 IsValid=1 记录上，清理 IsValid=0 不影响转换）
             using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = "DELETE FROM cert_standard_directory_file WHERE DirectoryCode = @dc AND IsValid = 0 AND (convert_status IS NULL OR convert_status NOT IN ('pending','converting'))";
+                cmd.CommandText = "DELETE FROM cert_standard_directory_file WHERE DirectoryCode = @dc AND IsValid = 0";
                 var p = cmd.CreateParameter();
                 p.ParameterName = "@dc";
                 p.Value = directoryCode;
@@ -2433,7 +2496,15 @@ namespace VOL.Builder.Services.CertPlatform
         {
             if (string.IsNullOrEmpty(storagePath)) return null;
             var segments = storagePath.TrimStart('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
-            return segments.Length > 0 ? segments[0] : null;
+            if (segments.Length == 0) return null;
+            // 兼容 V3 双顶层文件夹：/standard-directory/{Org}/... 与 /enterprise-documents/{Ent}/{Org}/...
+            // 首段是固定前缀时取下一段作为机构编码
+            int idx = 0;
+            if (segments[idx] == "standard-directory")
+                idx = 1;
+            else if (segments[idx] == "enterprise-documents")
+                idx = 2; // {Ent}/{Org}/...
+            return segments.Length > idx ? segments[idx] : null;
         }
 
         /// <summary>检查 MinIO 源文件是否存在（缺失的文件无法转换，重试时跳过）</summary>

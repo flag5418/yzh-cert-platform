@@ -9,20 +9,16 @@ namespace VOL.Entity.CertPlatform.DocExtraction
     /// <summary>
     /// 文档提取规则主表
     /// 一个标准文件对应一个规则
-    /// <para>核心关联：standard_file_code → cert_file_requirement.code</para>
-    /// <para>冗余字段：org_code / standard_code / phase_code 方便过滤</para>
+    /// <para>规则键：standard_file_code — 存实际标准目录文件的 FileCode（FL-xxx，前端目录树流程）</para>
+    /// <para>或文件要求的模板 Code（FR-xxx，模板流程）</para>
+    /// <para>冗余字段：standard_code / phase_code 方便过滤</para>
     /// </summary>
     [Table("cert_doc_extraction_rule")]
     [Entity(TableCnName = "文档提取规则")]
     public class CertDocExtractionRule : YZHBaseEntity
     {
-        /// <summary>机构编码（冗余，方便多租户过滤）</summary>
-        [StringLength(50)]
-        [Column("org_code")]
-        public string OrgCode { get; set; }
-
         /// <summary>
-        /// 文件编码（旧字段，保留向后兼容，新代码不再使用）
+        /// 文件编码（历史字段，保留兼容；当前流程规则键统一用 standard_file_code）
         /// </summary>
         [Column("file_code")]
         [Display(Name = "文件编码")]
@@ -30,12 +26,13 @@ namespace VOL.Entity.CertPlatform.DocExtraction
         public string FileCode { get; set; }
 
         /// <summary>
-        /// 标准文件编码（关联 cert_file_requirement.code，核心枢纽）
-        /// 一个标准文件对应一个提取规则
+        /// 规则键：实际文件 FileCode（FL-FD-...|文件名，前端目录树 AI 分析流程）
+        /// 或文件要求模板 Code（FR-xxx，模板流程）
+        /// GetFileInfoAsync 按此值两级查询（模板优先、实际文件兜底）
         /// </summary>
         [Column("standard_file_code")]
-        [Display(Name = "标准文件编码")]
-        [MaxLength(36)]
+        [Display(Name = "规则文件编码")]
+        [MaxLength(200)]
         public string StandardFileCode { get; set; }
 
         /// <summary>
@@ -99,6 +96,7 @@ namespace VOL.Entity.CertPlatform.DocExtraction
         [Display(Name = "文档内容缓存")]
         public string DocContent { get; set; }
 
-        // 审计字段及 Code/OrgCode/Status/Enable/Remark 继承自 YZHBaseEntity
+        // 审计字段及 Code/Status/Enable/Remark 继承自 YZHBaseEntity
+        // 注：org_code 列已随全局表迁移移除（remove_orgcode_from_global_tables.sql），不再映射
     }
 }

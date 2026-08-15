@@ -1,33 +1,37 @@
 #!/bin/bash
 
 # 快速重启后端服务
-# 先停止已运行的服务，再重新编译和启动
+# 流程：按进程名过滤 dotnet/VOL.WebApi 直接停止 → 编译 → 后台启动
+# 用法: ./restart-backend.sh
 
-# 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 NC='\033[0m'
 
-PORT=9992
+print_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-print_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
+echo "========================================="
+echo "    快速重启后端服务"
+echo "========================================="
 
-# 停止已运行的服务
+# 1. 停止已运行的服务（按进程名过滤，脚本自身退出码不影响流程）
 print_info "停止已运行的服务..."
-if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
-    kill $(lsof -t -i:$PORT) 2>/dev/null
-    sleep 1
-    print_info "服务已停止"
-else
-    print_info "没有运行中的服务"
-fi
+"$SCRIPT_DIR/stop-backend.sh"
+sleep 1
 
-# 重新编译并运行
+# 2. 重新编译并后台启动
 print_info "重新编译并启动服务..."
-./run-backend.sh all
+"$SCRIPT_DIR/run-backend.sh" all
+
+if [ $? -eq 0 ]; then
+    echo ""
+    print_info "重启完成: http://localhost:9992"
+else
+    echo ""
+    print_error "重启失败，请查看上方错误信息"
+    exit 1
+fi

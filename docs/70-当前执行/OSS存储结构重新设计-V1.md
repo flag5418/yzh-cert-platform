@@ -1,8 +1,20 @@
 # OSS 存储结构重新设计 V1
 
-> **文档状态**: 待审核  
+> **文档状态**: 已全量实施（2026-08-15 更新）  
 > **创建日期**: 2026-08-14  
-> **关联文档**: `审核员注册-企业创建-文件存储链路差异分析-V1.md`、`数据库表设计-V2.md`
+> **关联文档**: `数据库大改造-OSS存储-审核员业务链路-V1.md`、`批量上传架构设计.md`、`Phase3-标准文件code枢纽改造设计-V1.md`
+
+> **实施状态（2026-08-15）**：
+> - ✅ **V3 为唯一标准**：标准目录上传路径 `/standard-directory/{Org}/{Standard}/{Phase}/{FolderPath}/{FileName}`
+>   （`CodeGeneratorService.GenerateStandardDirectoryPath`，应用于 `StandardDirectoryService.UploadInit / UploadFile / UploadFileWithTask`）
+> - ✅ **上传路径由后端生成并写 DB**：前端不再传 storagePath，`UploadFileWithTask` 按 fileCode 从 DB 读取（单一约束原则，后端唯一控制）
+> - ✅ **文件名原样保留**：生成器仅清理路径分隔符（`SanitizeFileName`），空格/连字符/中文/括号等文件名不裁剪
+> - ✅ **replace 重传也生成 V3 新路径**：不沿用旧 V2 路径，上传成功后删除旧对象（新旧路径不同才删）
+> - ✅ 转换后文件随源路径自动落在同级 `.converted/` 下（`OfficeConvertService.GenerateTargetPath`）
+> - ✅ 企业资料路径 `/enterprise-documents/{EnterpriseNo}/...` 已由 `EnterpriseFileService` 使用
+> - ✅ **存量数据已彻底清除**（2026-08-15）：MinIO 全部对象 + DB 业务数据清空，无 V2 残留、无孤儿对象、无迁移包袱
+> - ✅ `DeriveOrgCodeFromPath` 兼容 V3 顶层前缀（跳过 `standard-directory` / `enterprise-documents` 取机构段）
+> - Q1 顶层命名：采用英文 `standard-directory` / `enterprise-documents`（与 §4.2 建议 B 一致）
 
 ---
 
@@ -29,13 +41,15 @@
 
 ---
 
-## 二、当前 MinIO 存储现状
+## 二、改造前的 MinIO 存储现状（历史背景）
 
-### 2.1 当前路径结构
+> 以下为 V2 时代（2026-08-15 前）的现状，**V3 改造后已全部清除，仅作背景记录**。
+
+### 2.1 改造前路径结构
 
 ```
 cert-platform/                         ← Bucket
-└── CB001/                             ← 认证机构编码（OrgCode）
+└── CB001CODE/                         ← 认证机构编码（OrgCode）
     └── ISO134852016/                  ← 标准编码（StandardCode）
         └── STAGE01/                   ← 阶段编码（PhaseCode）
             ├── CS河北雄安尚龙医疗科技有限公司13485体系材料/   ← 根文件夹名（企业名称混入）
@@ -47,20 +61,15 @@ cert-platform/                         ← Bucket
             └── E_Documents except for the above parts (2).pdf
 ```
 
-### 2.2 当前路径生成逻辑（CodeGeneratorService.cs）
+### 2.2 改造前路径生成逻辑（CodeGeneratorService.GenerateStoragePathV2，已废弃）
 
 ```csharp
-// 当前 V2 路径生成
-public string GenerateStoragePathV2(string orgCode, string standardCode, string phaseCode,
-                                    string folderPath, string fileName)
-{
-    // 格式：/{OrgCode}/{StandardCode}/{PhaseCode}/{FolderPath}/{FileName}
-    // 示例：/CB001/ISO134852016/STAGE01/质量手册/程序文件.docx
-    return $"/{cleanOrg}/{cleanStandard}/{cleanPhase}/{cleanFolderPath}/{fileName}";
-}
+// 旧 V2 路径生成（已废弃，仅历史参考）
+// 格式：/{OrgCode}/{StandardCode}/{PhaseCode}/{FolderPath}/{FileName}
+// 问题：无顶层区分、企业名称混入、标准目录与企业资料不分离
 ```
 
-### 2.3 当前存在的问题
+### 2.3 改造前存在的问题
 
 | 问题 | 说明 |
 |------|------|

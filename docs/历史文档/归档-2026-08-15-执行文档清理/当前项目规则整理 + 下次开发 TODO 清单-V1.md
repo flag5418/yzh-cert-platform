@@ -98,6 +98,8 @@
 
 > 对齐：《旧版 Office 文档后端自动转换方案评估-V1.md §五 改造时间评估》，每项都写了明确的交付物和验收标准。下次开发直接按顺序执行即可，不用再从头设计方案。
 
+> ⚠️ **状态更新（2026-08-15）**：Phase 1（DB 4 字段 + DownloadFile fallback）与 Phase 2/3 的转换服务（`ConvertHostedService` + Channel/Semaphore）**已被 yzh 队列框架替代并落地**——`.doc/.xls` 转换走 `YzhQueueManager`（`yzh_queue`/`yzh_queue_task`），字段与路径约定一致；Phase 4（ConvertStatus 徽标 + 重转换）已部分完成（DirectoryManager 文件行状态展示）；Phase 5（历史补跑/审计脚本）未实施。
+
 ### Phase 1：DB 4 字段 + DownloadFile fallback（2 小时，最快见效）
 **目标**：先把基础设施打平，后续 Phase 2/3 写转换服务直接复用
 

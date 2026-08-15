@@ -6,9 +6,20 @@
     </div>
 
     <div v-if="filterable" class="cert-directory-tree__search">
+      <el-select
+        v-model="ruleFilter"
+        size="small"
+        class="cert-directory-tree__rule-filter"
+        placeholder="规则状态"
+      >
+        <el-option label="全部" value="all" />
+        <el-option label="已配置规则" value="configured" />
+        <el-option label="未配置规则" value="none" />
+        <el-option label="配置失败" value="failed" />
+      </el-select>
       <el-input
         v-model="filterText"
-        placeholder="搜索..."
+        placeholder="搜索文档..."
         size="small"
         clearable
         prefix-icon="Search"
@@ -47,13 +58,13 @@
               :status="data.convertStatus"
             />
 
-            <!-- 规则状态点 -->
+            <!-- 规则状态标签（明显可筛选：已配置/未配置/失败） -->
             <span
               v-if="showRuleStatus && data.type === 'file'"
-              class="cert-directory-tree__rule-dot"
+              class="cert-directory-tree__rule-tag"
               :class="`is-${data.ruleStatus || 'none'}`"
               :title="ruleStatusTitle(data.ruleStatus)"
-            />
+            >{{ ruleStatusText(data.ruleStatus) }}</span>
             <!-- 队列锁定指示器 -->
             <el-tooltip
               v-if="isLocked(data.fileCode)"
@@ -111,6 +122,7 @@ const emit = defineEmits(['select', 'stage-load', 'update:selectedFile'])
 
 const treeRef = ref(null)
 const filterText = ref('')
+const ruleFilter = ref('all')
 
 const { fileTreeData, loading, loadTree, loadStageFiles } = useFileTree()
 
@@ -138,16 +150,42 @@ const RULE_STATUS_TITLE = {
   configured: '已制定规则',
   failed: '制定规则失败'
 }
+const RULE_STATUS_TEXT = {
+  none: '未配置',
+  configured: '已配置',
+  failed: '失败'
+}
 const ruleStatusTitle = (status) => RULE_STATUS_TITLE[status] || ''
+const ruleStatusText = (status) => RULE_STATUS_TEXT[status] || ''
 
-/* ===== 搜索过滤 ===== */
-const filterNode = (value, data) => {
+/* ===== 搜索 + 规则状态过滤 ===== */
+// 规则状态过滤：文件节点按自身状态匹配；文件夹/阶段节点保留「子树中存在匹配文件」的祖先链
+const matchRuleStatus = (data, node) => {
+  const filter = ruleFilter.value
+  if (!filter || filter === 'all') return true
+  if (data.type === 'file') return data.ruleStatus === filter
+  // 非文件节点：递归检查子树是否有匹配的文件
+  const walk = (n) => {
+    if (!n?.childNodes?.length) return false
+    return n.childNodes.some((child) => {
+      const d = child.data
+      if (d.type === 'file') return d.ruleStatus === filter
+      return walk(child)
+    })
+  }
+  return walk(node)
+}
+
+const filterNode = (value, data, node) => {
+  if (!matchRuleStatus(data, node)) return false
   if (!value) return true
   return (data.name || '').toLowerCase().includes(value.toLowerCase())
 }
-watch(filterText, (val) => {
-  treeRef.value?.filter(val)
-})
+const applyFilter = () => {
+  treeRef.value?.filter(filterText.value || '')
+}
+watch(filterText, applyFilter)
+watch(ruleFilter, applyFilter)
 
 /* ===== 交互 ===== */
 /* ===== 队列锁定 ===== */
@@ -348,8 +386,15 @@ defineExpose({ refresh: refreshLoadedStages })
 
 .cert-directory-tree__search {
   flex-shrink: 0;
+  display: flex;
+  gap: var(--yzh-space-2, 8px);
   padding: var(--yzh-space-2, 8px) var(--yzh-space-4, 16px);
   border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
+}
+
+.cert-directory-tree__rule-filter {
+  width: 110px;
+  flex-shrink: 0;
 }
 
 .cert-directory-tree__content {
@@ -426,21 +471,28 @@ defineExpose({ refresh: refreshLoadedStages })
 .cert-directory-tree__node-icon.is-folder { color: var(--cert-color-folder, #fac858); }
 .cert-directory-tree__node-icon.is-file { color: var(--cert-color-file-default, #909399); }
 
-/* 规则状态点（纯 CSS，不用字符/emoji） */
-.cert-directory-tree__rule-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+/* 规则状态标签（明显可见 + 可筛选） */
+.cert-directory-tree__rule-tag {
   flex-shrink: 0;
-  background: var(--cert-color-rule-none, #c0c4cc);
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: var(--cert-color-rule-none-text, #909399);
+  background: var(--cert-color-rule-none-bg, #f0f2f5);
+  border: 1px solid var(--cert-color-rule-none, #c0c4cc);
 }
 
-.cert-directory-tree__rule-dot.is-configured {
-  background: var(--cert-color-rule-configured, #67c23a);
+.cert-directory-tree__rule-tag.is-configured {
+  color: var(--cert-color-rule-configured-text, #529b2e);
+  background: var(--cert-color-rule-configured-bg, #f0f9eb);
+  border-color: var(--cert-color-rule-configured, #67c23a);
 }
 
-.cert-directory-tree__rule-dot.is-failed {
-  background: var(--cert-color-rule-failed, #f56c6c);
+.cert-directory-tree__rule-tag.is-failed {
+  color: var(--cert-color-rule-failed-text, #c45656);
+  background: var(--cert-color-rule-failed-bg, #fef0f0);
+  border-color: var(--cert-color-rule-failed, #f56c6c);
 }
 
 /* Element Tree 微调 */

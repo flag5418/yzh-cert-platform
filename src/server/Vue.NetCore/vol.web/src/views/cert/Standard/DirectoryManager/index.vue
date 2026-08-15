@@ -128,7 +128,7 @@
           <el-icon><IconDownload /></el-icon> 导出打包
         </el-button>
         <el-divider direction="vertical" />
-        <el-button size="small" :disabled="isBusy">全选</el-button>
+        <el-button size="small" :disabled="isBusy" @click="selectAll">全选</el-button>
         <el-button size="small" type="danger" plain :disabled="isBusy" @click="deleteSelected">
           <el-icon><IconDelete /></el-icon> 删除
         </el-button>
@@ -353,29 +353,29 @@
           v-model="uploadFileList"
           accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.gif,.bmp,.zip,.rar"
           :max-size="50 * 1024 * 1024"
-          :max-files="100"
+          :max-files="500"
           :uploading="uploading"
           :list-max-height="280"
           @change="onUploadFileListChange"
           @error="onUploadError"
         />
         
-        <!-- 浏览器限制提示 + 文件夹选择按钮（高亮显示） -->
+        <!-- 文件夹选择按钮（高亮显示） -->
         <div class="browser-limit-hint">
           <el-alert
-            type="warning"
+            type="info"
             :closable="true"
             show-icon
-            effect="dark"
+            effect="light"
             style="margin-top: 12px;"
           >
             <template #title>
-              <span style="font-weight: 600;">⚠️ 浏览器安全限制</span>
+              <span style="font-weight: 600;">💡 支持拖拽文件夹</span>
             </template>
             <template #default>
-              从桌面/访达拖拽的文件夹无法自动展开（浏览器安全策略）。
+              可直接将<strong>文件夹</strong>拖拽到上方区域，会自动递归读取文件夹内所有层级的文件；
               <br/>
-              请使用下方<strong>「选择文件夹上传」</strong>按钮代替。
+              也可点击下方<strong>「选择文件夹上传」</strong>按钮进行选择。
             </template>
           </el-alert>
           
@@ -387,7 +387,7 @@
             class="folder-select-btn"
           >
             <el-icon><IconFolderAdd /></el-icon>
-            👉 选择文件夹上传（推荐）
+            选择文件夹上传
           </el-button>
         </div>
         <!-- 上传进度 -->
@@ -1001,7 +1001,7 @@ const navigateToCrumb = (index) => {
 
 // ========== 选择操作 ==========
 const toggleSelect = (item) => {
-  const code = item.FolderCode || item.fileCode || item.FileCode
+  const code = item.FolderCode || item.folderCode || item.FileCode || item.fileCode
   if (selectedItems.has(code)) selectedItems.delete(code)
   else selectedItems.add(code)
   allSelected.value = selectedItems.size === currentFolders.value.length + currentFiles.value.length
@@ -1015,10 +1015,15 @@ const toggleSelectAll = (val) => {
   }
 }
 
+// 工具栏「全选」按钮：全选/取消全选切换
 const selectAll = () => {
-  currentFolders.value.forEach((f) => selectedItems.add(f.FolderCode || f.folderCode))
-  currentFiles.value.forEach((f) => selectedItems.add(f.FileCode || f.fileCode))
-  allSelected.value = true
+  const target = !allSelected.value
+  selectedItems.clear()
+  if (target) {
+    currentFolders.value.forEach((f) => selectedItems.add(f.FolderCode || f.folderCode))
+    currentFiles.value.forEach((f) => selectedItems.add(f.FileCode || f.fileCode))
+  }
+  allSelected.value = target
 }
 
 // ========== 新建文件夹 ==========
@@ -1131,12 +1136,15 @@ const confirmRename = async () => {
 }
 
 // ========== 删除 ==========
-const deleteItem = async (item) => {
+// options.skipConfirm=true 表示由批量删除统一确认过，不再重复弹窗
+const deleteItem = async (item, options = {}) => {
   const name = item.FolderName || item.folderName || item.FileName || item.fileName
-  try {
-    await ElMessageBox.confirm(`确定要删除 "${name}" 吗？`, '确认删除', { type: 'warning' })
-  } catch {
-    return
+  if (!options.skipConfirm) {
+    try {
+      await ElMessageBox.confirm(`确定要删除 "${name}" 吗？`, '确认删除', { type: 'warning' })
+    } catch {
+      return
+    }
   }
 
   const isFolder = !!(item.FolderName || item.folderName) && !(item.FileCode || item.fileCode)
@@ -1171,11 +1179,12 @@ const deleteSelected = async () => {
     return
   }
 
+  // 已统一确认过一次，逐项删除时跳过各自的确认弹窗，避免二次提示
   for (const code of [...selectedItems]) {
     const folder = currentFolders.value.find((f) => (f.FolderCode || f.folderCode) === code)
     const file = currentFiles.value.find((f) => (f.FileCode || f.fileCode) === code)
-    if (folder) await deleteItem(folder)
-    else if (file) await deleteItem(file)
+    if (folder) await deleteItem(folder, { skipConfirm: true })
+    else if (file) await deleteItem(file, { skipConfirm: true })
   }
   selectedItems.clear()
   allSelected.value = false
@@ -1358,8 +1367,14 @@ const cancelUpload = () => {
  * @param {File[]} newFileList - 新的文件列表
  */
 const onUploadFileListChange = (newFileList) => {
-  console.log('[Upload] 文件列表变化:', newFileList.length, '个文件')
-  // uploadFileList 已通过 v-model 双向绑定，无需手动更新
+  // 静默过滤系统文件（.DS_Store 等）与不支持的类型，不提示、不影响上传
+  const list = newFileList || []
+  const filtered = list.filter(isAllowedUploadFile)
+  if (filtered.length !== list.length) {
+    console.log(`[Upload] 已静默过滤 ${list.length - filtered.length} 个系统/不支持的文件`)
+    // 回写过滤后的列表（v-model 指向同一数组，组件展示会同步更新）
+    uploadFileList.value = filtered
+  }
 }
 
 /**
@@ -1380,6 +1395,12 @@ const onUploadError = (error) => {
  */
 const onDialogDrop = async (event) => {
   console.log('[DialogDrop] Dialog 拖拽事件触发！', event.dataTransfer)
+  
+  // 拖拽发生在 YzhFolderUpload 组件区域内时，由组件自身处理（含递归），避免重复添加
+  if (event.target?.closest?.('.yzh-folder-upload')) {
+    console.log('[DialogDrop] 拖拽发生在 YzhFolderUpload 组件内，跳过（由组件处理）')
+    return
+  }
   
   const items = event.dataTransfer?.items
   const files = event.dataTransfer?.files
@@ -1402,9 +1423,8 @@ const onDialogDrop = async (event) => {
           folderCount++
           console.log(`[DialogDrop] 📁 发现文件夹: ${entry.name}，尝试递归...`)
           
-          // 尝试递归读取（可能因浏览器限制失败）
           const beforeCount = collectedFiles.length
-          await traverseDirectoryWithRetry(entry, entry.name + '/', collectedFiles, 3) // 最多重试3层深度
+          await traverseDirectoryWithRetry(entry, entry.name + '/', collectedFiles)
           
           const afterCount = collectedFiles.length
           if (afterCount === beforeCount) {
@@ -1468,20 +1488,12 @@ const onDialogDrop = async (event) => {
 }
 
 /**
- * 带重试机制的递归遍历文件夹
+ * 带重试机制的递归遍历文件夹（无深度限制，完整递归所有层级）
  * @param {FileSystemDirectoryEntry} directoryEntry - 目录条目
  * @param {string} path - 当前路径前缀
  * @param {Array} fileList - 收集的文件列表
- * @param {number} maxDepth - 最大递归深度（防止无限循环）
- * @param {number} currentDepth - 当前深度（默认 0）
  */
-const traverseDirectoryWithRetry = async (directoryEntry, path, fileList, maxDepth = 3, currentDepth = 0) => {
-  // 防止过深递归
-  if (currentDepth >= maxDepth) {
-    console.warn(`[DialogDrop] 🛑 达到最大递归深度 ${maxDepth}，停止递归`)
-    return
-  }
-  
+const traverseDirectoryWithRetry = async (directoryEntry, path, fileList) => {
   return new Promise((resolve) => {
     const reader = directoryEntry.createReader()
     let allEntries = []
@@ -1522,8 +1534,8 @@ const traverseDirectoryWithRetry = async (directoryEntry, path, fileList, maxDep
             console.warn(`[DialogDrop] ⚠️ 读取文件失败: ${entry.name}`, err)
           }
         } else if (entry.isDirectory) {
-          console.log(`[DialogDrop] 📁 [${currentDepth}] 进入子目录: ${path}${entry.name}/`)
-          await traverseDirectoryWithRetry(entry, path + entry.name + '/', fileList, maxDepth, currentDepth + 1)
+          console.log(`[DialogDrop] 📁 进入子目录: ${path}${entry.name}/`)
+          await traverseDirectoryWithRetry(entry, path + entry.name + '/', fileList)
         }
       }
     }
@@ -1556,10 +1568,12 @@ const getFileFromEntryForDialog = (fileEntry, path = '') => {
 const folderUploadRef = ref(null)
 
 const submitUpload = async () => {
-  if (uploadFileList.value.length === 0 || !currentPhase.value) return
+  // 静默过滤系统文件与不支持的类型（.DS_Store 等），避免后端校验拒绝整个批次
+  const uploadFiles = uploadFileList.value.filter(isAllowedUploadFile)
+  if (uploadFiles.length === 0 || !currentPhase.value) return
 
   uploading.value = true
-  uploadProgress.total = uploadFileList.value.length
+  uploadProgress.total = uploadFiles.length
   uploadProgress.completed = 0
   uploadProgress.failed = 0
   uploadProgress.status = 'uploading'
@@ -1572,7 +1586,7 @@ const submitUpload = async () => {
     const folders = []
     const files = []
 
-    for (const file of uploadFileList.value) {
+    for (const file of uploadFiles) {
       // 拼接当前文件夹路径，确保文件上传到正确的子目录
       const fileName = file.name
       const rawPath = file.webkitRelativePath || fileName
@@ -1624,6 +1638,7 @@ const submitUpload = async () => {
     taskId = manifest.TaskId || manifest.taskId
     const totalFiles = manifest.TotalFiles || manifest.totalFiles || 0
     const fileList = manifest.Files || manifest.files || []
+    uploadProgress.total = totalFiles
 
     // 注册上传任务到队列
     const newTask = {
@@ -1652,7 +1667,8 @@ const submitUpload = async () => {
     for (let i = 0; i < fileList.length; i++) {
       if (failed) break
       const enhancedFile = fileList[i]
-      const localFile = uploadFileList.value[i]
+      // 用服务端返回的原始序号定位本地文件，避免过滤/跳过导致索引错位
+      const localFile = uploadFiles[enhancedFile.Index ?? i]
       uploadProgress.currentFile = enhancedFile.FileName || enhancedFile.fileName
       uploadProgress.completed = i
       // 更新当前文件的上传进度
@@ -1665,7 +1681,8 @@ const submitUpload = async () => {
       const formData = new FormData()
       formData.append('file', localFile)
       formData.append('fileCode', enhancedFile.FileCode || enhancedFile.fileCode)
-      formData.append('storagePath', enhancedFile.StoragePath || enhancedFile.storagePath)
+      // 存储路径由后端在 upload-init 阶段生成并保存到 DB（V3 约定路径），上传时后端按 fileCode 从 DB 读取，
+      // 前端不再传 storagePath，避免前后端路径不一致导致 MinIO 与页面逻辑混乱
       formData.append('taskId', taskId)
 
       try {

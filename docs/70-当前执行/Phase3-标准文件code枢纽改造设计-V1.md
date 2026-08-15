@@ -1,8 +1,14 @@
 # Phase 3：标准文件 code 枢纽改造设计文档
 
-> **版本**：V1.0 | **日期**：2026-08-14 | **状态**：执行中
-> **前置文档**：`数据库表设计-V2.md`、`OSS存储结构重新设计-V1.md`、`数据库大改造-OSS存储-审核员业务链路-V1.md`
+> **版本**：V1.1 | **日期**：2026-08-15 | **状态**：AI 分析链路已实施（fileCode 双查询）；企业提取链路（4.3）待实施
+> **前置文档**：`OSS存储结构重新设计-V1.md`、`数据库大改造-OSS存储-审核员业务链路-V1.md`、`标准目录-编码体系与上传层级设计.md`
 > **核心原则**：文档先行，再实施
+>
+> **实施状态修订（2026-08-15）**：
+> - ✅ **规则/AI 分析链路已按实际文件打通**：前端目录树选实际标准目录文件（FileCode=FL-xxx），
+>   `DocExtractionRuleService.GetFileInfoAsync` 两级查询：① `cert_file_requirement` 模板（Code=FR-xxx）→ ② 兜底 `cert_standard_directory_file` 实际文件（FileCode）；
+> - ✅ 请求 DTO 统一使用 `fileCode` 字段（`AIAnalyzeRequest / GeneratePromptRequest / VerifyPromptRequest / SaveExtractionRuleRequest`）；
+> - ⚠️ 企业文件上传→自动提取（4.3）与数据消费（4.4）仍待实施；模板上传前端入口（4.1）后端 API 齐全、前端待接通。
 
 ---
 
@@ -188,20 +194,21 @@ ent_table_extraction_result（表格级提取结果）⭐ 企业真正的数据�
    f. 更新 cert_file_requirement.template_storage_path 和 template_file_name
 ```
 
-### 4.2 提取规则配置流程
+### 4.2 提取规则配置流程（已实施，2026-08-15）
 
 ```
-1. 管理员在文档提取规则页面选择标准文件
+1. 管理员在文档提取规则页面选择实际标准目录文件（CertDirectoryTree 树节点）
 2. 前端调用 POST /api/DocExtractionRule/analyze
-   参数：standardFileCode + skill
-3. DocExtractionRuleService：
-   a. 通过 standardFileCode 从 cert_file_requirement 获取模板文件信息
-   b. 从 MinIO 下载模板文件
-   c. 调用 IFileExtractor 提取文档内容
-   d. 调用 AI 分析推荐字段和表格
+   参数：fileCode + skill
+3. DocExtractionRuleService.GetFileInfoAsync 两级查询：
+   a. 优先：cert_file_requirement 模板文件（Code=FR-xxx，有 template_storage_path 时命中）
+   b. 兜底：cert_standard_directory_file 实际文件（FileCode=FL-xxx，带 .doc/.xls 转换状态）
+   c. 从 MinIO 下载文件（.doc 用 .converted/xxx.docx 转换产物）
+   d. 调用 IFileExtractor 提取文档内容
+   e. 调用 AI 分析推荐字段和表格
 4. 管理员确认字段/表格后调用 POST /api/DocExtractionRule/save
-   参数：standardFileCode + orgCode + standardCode + phaseCode + skill + fields + tables + prompt
-5. 规则保存到 cert_doc_extraction_rule（按 standard_file_code 查找或创建）
+   参数：fileCode + orgCode + standardCode + phaseCode + skill + fields + tables + prompt
+5. 规则保存到 cert_doc_extraction_rule（standard_file_code 存实际 FileCode，按它查找或创建）
    字段定义保存到 cert_doc_field_def（通过 rule_code 关联）
    表格定义保存到 cert_doc_table_def + cert_doc_table_field_def（通过 rule_code 关联）
 ```
@@ -276,7 +283,7 @@ ent_table_extraction_result（表格级提取结果）⭐ 企业真正的数据�
 | 服务 | 变更 | 状态 |
 |---|---|---|
 | DirectoryTemplateService | +模板文件上传/下载/删除/改名 | ✅ 完成 |
-| DocExtractionRuleService | fileCode→standardFileCode | ✅ 完成 |
+| DocExtractionRuleService | GetFileInfoAsync 双查询（模板 Code + 实际 FileCode）+ DTO 统一 fileCode | ✅ 完成（2026-08-15） |
 | ExtractionResultService | 适配新参数 | 待实施 |
 | EnterpriseFileService | +standardFileCode +自动触发提取 | 待实施 |
 
@@ -284,8 +291,8 @@ ent_table_extraction_result（表格级提取结果）⭐ 企业真正的数据�
 
 | Controller | 变更 | 状态 |
 |---|---|---|
-| DirectoryTemplateController | +模板文件 API | ✅ 完成 |
-| DocExtractionRuleController | 路由 fileCode→standardFileCode | 待实施 |
+| DirectoryTemplateController | +模板文件 API | ✅ 完成（前端上传入口待接通） |
+| DocExtractionRuleController | 请求体 fileCode（DTO 字段统一），不再依赖 standardFileCode 键名 | ✅ 完成（2026-08-15） |
 | EnterpriseFileController | +StandardFileCode 参数 | 待实施 |
 
 ---

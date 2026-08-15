@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,8 +11,10 @@ using VOL.Core.Extensions;
 using VOL.Core.BaseProvider;
 using VOL.Core.Extensions.AutofacManager;
 using VOL.Core.Utilities;
+using VOL.Entity.CertPlatform;
 using VOL.Entity.CertPlatform.DocExtraction;
 using VOL.Entity.CertPlatform.DocExtraction.DTOs;
+using VOL.Entity.CertPlatform.Ent;
 using VOL.Builder.IRepositories.CertPlatform;
 using VOL.Builder.IServices.CertPlatform;
 
@@ -62,18 +65,21 @@ namespace VOL.Builder.Services.CertPlatform
         /// </summary>
         public async Task<AIAnalyzeResponse> AIAnalyzeAsync(AIAnalyzeRequest request)
         {
-            // 1. 获取标准文件信息（从 cert_file_requirement 获取模板文件）
-            var fileInfo = await GetFileInfoAsync(request.StandardFileCode);
+            // 1. 获取标准文件信息（文件要求模板或实际上传的标准目录文件）
+            var fileInfo = await GetFileInfoAsync(request.FileCode);
             if (string.IsNullOrEmpty(fileInfo.FileName))
             {
-                throw new Exception("标准模板文件不存在，请先上传模板文件");
+                throw new Exception("未找到可分析的文件：请确认该标准已上传模板文件（文件要求），或该文件已上传到标准目录");
             }
 
-            // 2. 根据技能类型提取文档内容（结构化）
-            var extraction = await ExtractDocumentContentAsync(fileInfo, request.Skill);
+            // 2. 技能类型由后端按文件扩展名权威推导（单一约束原则：不依赖前端传入的 skill）
+            var skill = ResolveSkill(fileInfo.FileName);
 
-            // 3. 调用AI分析
-            var aiResult = await CallAIForAnalysisAsync(extraction, request.Skill);
+            // 3. 根据技能类型提取文档内容（结构化）
+            var extraction = await ExtractDocumentContentAsync(fileInfo, skill);
+
+            // 4. 调用AI分析
+            var aiResult = await CallAIForAnalysisAsync(extraction, skill);
 
             return new AIAnalyzeResponse
             {
@@ -81,6 +87,22 @@ namespace VOL.Builder.Services.CertPlatform
                 Tables = aiResult.Tables,
                 // 透传提取层消息（如“转换中/转换失败/不支持的文件类型”），正常完成时保留“AI分析完成”
                 Message = string.IsNullOrEmpty(aiResult.Message) ? "AI分析完成" : aiResult.Message
+            };
+        }
+
+        /// <summary>
+        /// 按文件扩展名权威推导技能类型（word/excel/pdf），后端唯一控制。
+        /// </summary>
+        private static string ResolveSkill(string fileName)
+        {
+            if (string.IsNullOrEmpty(fileName)) return "word";
+            var ext = Path.GetExtension(fileName)?.TrimStart('.').ToLower() ?? "";
+            return ext switch
+            {
+                "docx" or "doc" => "word",
+                "xlsx" or "xls" or "csv" => "excel",
+                "pdf" => "pdf",
+                _ => "word"
             };
         }
 
@@ -196,21 +218,25 @@ namespace VOL.Builder.Services.CertPlatform
         {
             try
             {
-                // 1. 获取标准文件信息（从 cert_file_requirement 获取模板文件）
-                var fileInfo = await GetFileInfoAsync(request.StandardFileCode);
+                // 1. 获取标准文件信息（文件要求模板或实际上传的标准目录文件）
+                var fileInfo = await GetFileInfoAsync(request.FileCode);
                 if (string.IsNullOrEmpty(fileInfo.FileName))
                 {
                     return new VerifyPromptResponse
                     {
                         Success = false,
-                        Message = "标准模板文件不存在，请先上传模板文件"
+                        Message = "未找到可分析的文件：请确认该标准已上传模板文件（文件要求），或该文件已上传到标准目录"
                     };
                 }
 
                 // 2. 获取规则信息（按 standardFileCode 查询，确定技能类型 + 文档内容缓存）
                 var rule = await repository
-                    .FindAsIQueryable(x => x.StandardFileCode == request.StandardFileCode)
+                    .FindAsIQueryable(x => x.StandardFileCode == request.FileCode)
                     .FirstOrDefaultAsync();
+
+                // 全局 NoTracking：Detached 实体必须 Attach，后续 DocContent 缓存写入才能持久化
+                if (rule != null)
+                    repository.DbContext.Attach(rule);
 
                 var skill = rule?.Skill ?? "word";
 
@@ -221,7 +247,7 @@ namespace VOL.Builder.Services.CertPlatform
                 {
                     // 有缓存，直接使用
                     docContent = rule.DocContent;
-                    Console.WriteLine($"[DocExtractionRule] 📄 使用缓存的文档内容 (StandardFileCode={request.StandardFileCode}, length={docContent.Length})");
+                    Console.WriteLine($"[DocExtractionRule] 📄 使用缓存的文档内容 (StandardFileCode={request.FileCode}, length={docContent.Length})");
                 }
                 else
                 {
@@ -255,7 +281,7 @@ namespace VOL.Builder.Services.CertPlatform
                         rule.DocContent = docContent;
                         rule.ModifyDate = DateTime.Now;
                         await repository.SaveChangesAsync();
-                        Console.WriteLine($"[DocExtractionRule] 💾 文档内容已缓存到数据库 (StandardFileCode={request.StandardFileCode}, length={docContent.Length})");
+                        Console.WriteLine($"[DocExtractionRule] 💾 文档内容已缓存到数据库 (StandardFileCode={request.FileCode}, length={docContent.Length})");
                     }
                 }
 
@@ -294,37 +320,42 @@ namespace VOL.Builder.Services.CertPlatform
         /// </summary>
         public async Task<bool> SaveExtractionRuleAsync(SaveExtractionRuleRequest request)
         {
+            // 文件编码为空直接拒绝（规则键必须有效，否则产生空键垃圾规则）
+            if (string.IsNullOrWhiteSpace(request.FileCode))
+                return false;
+
             using var transaction = await repository.DbContext.Database.BeginTransactionAsync();
             try
             {
                 // 1. 查找或创建规则（按 standardFileCode 查询）
                 var rule = await repository
-                    .FindAsIQueryable(x => x.StandardFileCode == request.StandardFileCode)
+                    .FindAsIQueryable(x => x.StandardFileCode == request.FileCode)
                     .FirstOrDefaultAsync();
 
                 if (rule == null)
                 {
+                    // Code 由 YZHBaseEntity 默认生成 GUID（项目统一规范：所有表关联通过 code(GUID)）
                     rule = new CertDocExtractionRule
                     {
-                        Code = GenerateRuleCode(request.StandardFileCode),
-                        StandardFileCode = request.StandardFileCode,
+                        StandardFileCode = request.FileCode,
                         StandardCode = request.StandardCode,
                         PhaseCode = request.PhaseCode,
-                        OrgCode = request.OrgCode,
                         CreateDate = DateTime.Now
                     };
                     repository.Add(rule);
                 }
                 else
                 {
+                    // 全局 NoTracking：查出的实体为 Detached，必须 Attach 才能让后续属性修改生成 UPDATE
+                    repository.DbContext.Attach(rule);
                     // 更新冗余字段
                     rule.StandardCode = request.StandardCode;
                     rule.PhaseCode = request.PhaseCode;
-                    rule.OrgCode = request.OrgCode;
                 }
 
                 // 2. 更新规则信息
-                rule.Skill = request.Skill;
+                // 技能类型由后端按文件扩展名权威推导（单一约束原则，不依赖前端传入）
+                rule.Skill = ResolveSkill(request.FileCode);
                 rule.Prompt = request.Prompt;
                 rule.IsValid = request.IsValid;
                 rule.Status = request.IsValid ? "configured" : "failed";
@@ -346,7 +377,6 @@ namespace VOL.Builder.Services.CertPlatform
                     {
                         var field = new CertDocFieldDef
                         {
-                            Code = GenerateFieldCode(rule.Code, fieldDto.Name),
                             RuleCode = rule.Code,
                             FieldName = fieldDto.Name,
                             FieldCode = string.IsNullOrEmpty(fieldDto.Code)
@@ -382,7 +412,8 @@ namespace VOL.Builder.Services.CertPlatform
                     var tableSortOrder = 0;
                     foreach (var tableDto in request.Tables)
                     {
-                        var tableCode = GenerateTableCode(rule.Code, tableDto.Name);
+                        // 表格定义 Code 为 GUID；tableCode 同时作为表格字段定义的 TableCode 外键
+                        var tableCode = Guid.NewGuid().ToString("N");
                         var table = new CertDocTableDef
                         {
                             Code = tableCode,
@@ -406,7 +437,6 @@ namespace VOL.Builder.Services.CertPlatform
                             {
                                 var col = new CertDocTableFieldDef
                                 {
-                                    Code = GenerateTableFieldCode(tableCode, colDto.Name),
                                     TableCode = tableCode,
                                     ColumnName = colDto.Name,
                                     ColumnCode = string.IsNullOrEmpty(colDto.Code)
@@ -422,6 +452,12 @@ namespace VOL.Builder.Services.CertPlatform
                     }
                 }
 
+                // 8.【新增】同步提取结果到 B-08/B-09（YZH 标准企业），供工作流验证
+                //    先物理删除再插入（同一文件只保留最新提取）；一致性过滤（只写定义中存在的 code）；
+                //    DB 唯一约束 uk_ent_ext_ent_file_field / uk_ent_tbl_ent_file_idx 兜底
+                //    关联：docs/80-功能设计/提取结果落库-功能设计-V1.md
+                await SyncExtractionResultToB08B09Async(rule, request);
+
                 await repository.SaveChangesAsync();
                 await transaction.CommitAsync();
                 return true;
@@ -430,6 +466,114 @@ namespace VOL.Builder.Services.CertPlatform
             {
                 await transaction.RollbackAsync();
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// 将规则保存请求中的提取数据同步到 B-08/B-09（YZH 标准企业）。
+        /// 规则：
+        ///   1. extractionData 为空 → 跳过（不阻塞规则保存）；
+        ///   2. 按 (enterprise_code=YZH-STD-ENT, file_code) 先物理删除旧结果，再插入新数据（不产生冗余）；
+        ///   3. 一致性过滤：只写入已保存字段/表格定义中存在 code 的数据（后端权威，丢弃脏键）；
+        ///   4. 空值字段 / 空数组表格不写入（避免噪音数据）。
+        /// </summary>
+        private async Task SyncExtractionResultToB08B09Async(CertDocExtractionRule rule, SaveExtractionRuleRequest request)
+        {
+            var extractionData = request.ExtractionData;
+            if (extractionData == null)
+                return;
+
+            const string yzhStdEnt = VOL.Entity.CertPlatform.CertPlatformConstants.YZH_STANDARD_ENTERPRISE_CODE;
+            var db = repository.DbContext;
+            var now = DateTime.Now;
+            var fileCode = rule.StandardFileCode;
+
+            // 已保存定义中的合法 code 集合（与保存字段/表格定义时的生成逻辑一致）
+            var validFieldCodes = request.Fields?
+                .Where(f => f != null)
+                .Select(f => string.IsNullOrEmpty(f.Code) ? f.Name.ToPascalCase() : f.Code)
+                .Where(c => !string.IsNullOrEmpty(c))
+                .ToHashSet() ?? new HashSet<string>();
+            var validTableCodes = request.Tables?
+                .Where(t => t != null)
+                .Select(t => string.IsNullOrEmpty(t.Code) ? t.Name.ToPascalCase() : t.Code)
+                .Where(c => !string.IsNullOrEmpty(c))
+                .ToHashSet() ?? new HashSet<string>();
+
+            // 1. 物理删除旧结果（同一企业 + 同一文件）
+            //    注意：YZH 框架软删除拦截器会把 Remove/RemoveRange 转成 UPDATE delete_time，
+            //    软删残留会与唯一约束 uk_ent_ext_ent_file_field / uk_ent_tbl_ent_file_idx 冲突（重复保存必报 1062），
+            //    必须用原生 SQL 物理删除绕过拦截器。
+            await db.Database.ExecuteSqlRawAsync(
+                "DELETE FROM ent_extraction_result WHERE enterprise_code = {0} AND file_code = {1}",
+                yzhStdEnt, fileCode);
+            await db.Database.ExecuteSqlRawAsync(
+                "DELETE FROM ent_table_extraction_result WHERE enterprise_code = {0} AND file_code = {1}",
+                yzhStdEnt, fileCode);
+
+            // 2. 字段级 → B-08（每字段一条；label_tag = field_code，工作流引用键）
+            if (extractionData.Fields != null && extractionData.Fields.Count > 0)
+            {
+                foreach (var kv in extractionData.Fields)
+                {
+                    // 一致性过滤 + 空值过滤
+                    if (!validFieldCodes.Contains(kv.Key))
+                        continue;
+                    var value = kv.Value?.ToString();
+                    if (string.IsNullOrWhiteSpace(value))
+                        continue;
+
+                    db.Set<ExtractionResult>().Add(new ExtractionResult
+                    {
+                        Code = Guid.NewGuid().ToString("N"),
+                        EnterpriseCode = yzhStdEnt,
+                        StandardFileCode = fileCode,
+                        StandardCode = rule.StandardCode,
+                        PhaseCode = rule.PhaseCode,
+                        FileCode = fileCode,
+                        VersionNumber = 1,
+                        RuleCode = rule.Code,
+                        FieldCode = kv.Key,
+                        LabelTag = kv.Key,
+                        ExtractedValue = value,
+                        Confidence = null,        // 标准目录数据为人工确认，无可信度
+                        PositionInfo = null,
+                        IsManualEdited = false,
+                        ExtractedAt = now
+                    });
+                }
+            }
+
+            // 3. 表格级 → B-09（每表格一条，extracted_json = 行数组 JSON）
+            if (extractionData.Tables != null && extractionData.Tables.Count > 0)
+            {
+                var tableIndex = 1;
+                foreach (var kv in extractionData.Tables)
+                {
+                    // 一致性过滤
+                    if (!validTableCodes.Contains(kv.Key))
+                        continue;
+                    var rows = kv.Value;
+                    if (rows == null || rows.Count == 0)
+                        continue;
+
+                    db.Set<TableExtractionResult>().Add(new TableExtractionResult
+                    {
+                        Code = Guid.NewGuid().ToString("N"),
+                        EnterpriseCode = yzhStdEnt,
+                        StandardFileCode = fileCode,
+                        StandardCode = rule.StandardCode,
+                        PhaseCode = rule.PhaseCode,
+                        FileCode = fileCode,
+                        VersionNumber = 1,
+                        RuleCode = rule.Code,
+                        TableIndex = tableIndex++,
+                        ExtractedJson = Newtonsoft.Json.JsonConvert.SerializeObject(rows),
+                        Confidence = null,
+                        PositionInfo = null,
+                        ExtractedAt = now
+                    });
+                }
             }
         }
 
@@ -447,6 +591,22 @@ namespace VOL.Builder.Services.CertPlatform
                 return null;
             }
 
+            // 读取 YZH 标准企业提取结果（B-08 字段值 / B-09 表格行数据），保存后重新进入可完整回显提取数据
+            // 关联：docs/80-功能设计/提取结果落库-功能设计-V1.md
+            const string yzhStdEnt = CertPlatformConstants.YZH_STANDARD_ENTERPRISE_CODE;
+            // 注意：YZHBaseEntity.DeleteTime 默认赋当前时间（新建即非空），有效态由 Enable=true 区分，
+            // 查询必须用 Enable 过滤（DeleteTime == null 会误伤所有新建记录）
+            var b08 = await repository.DbContext.Set<ExtractionResult>()
+                .Where(x => x.EnterpriseCode == yzhStdEnt && x.FileCode == standardFileCode && x.Enable)
+                .ToListAsync();
+            var b08Map = b08
+                .GroupBy(x => x.FieldCode, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First().ExtractedValue, StringComparer.OrdinalIgnoreCase);
+            var b09 = await repository.DbContext.Set<TableExtractionResult>()
+                .Where(x => x.EnterpriseCode == yzhStdEnt && x.FileCode == standardFileCode && x.Enable)
+                .OrderBy(x => x.TableIndex)
+                .ToListAsync();
+
             // 获取字段定义（通过rule_code关联）
             var fields = await repository.DbContext.Set<CertDocFieldDef>()
                 .Where(x => x.RuleCode == rule.Code)
@@ -461,6 +621,12 @@ namespace VOL.Builder.Services.CertPlatform
                     IsAiRecommended = x.IsAiRecommended
                 })
                 .ToListAsync();
+            // 填充字段提取值（B-08，按 field_code 匹配）
+            foreach (var f in fields)
+            {
+                if (!string.IsNullOrEmpty(f.Code) && b08Map.TryGetValue(f.Code, out var val))
+                    f.ExtractedValue = val;
+            }
 
             // 获取表格定义（通过rule_code关联）
             var tables = await repository.DbContext.Set<CertDocTableDef>()
@@ -491,13 +657,29 @@ namespace VOL.Builder.Services.CertPlatform
                     Columns = columns
                 });
             }
+            // 填充表格提取行数据（B-09，按 TableIndex 顺序与表格定义 SortOrder 顺序一一对应）
+            for (int i = 0; i < tableDtos.Count && i < b09.Count; i++)
+            {
+                if (string.IsNullOrEmpty(b09[i].ExtractedJson))
+                    continue;
+                try
+                {
+                    var rows = Newtonsoft.Json.JsonConvert
+                        .DeserializeObject<List<Dictionary<string, object>>>(b09[i].ExtractedJson);
+                    if (rows != null)
+                        tableDtos[i].ExtractedData = rows;
+                }
+                catch
+                {
+                    // 解析失败不影响规则回显，跳过提取数据预览
+                }
+            }
 
             return new RuleDetailResponse
             {
                 Id = rule.Id,
                 Code = rule.Code,
                 StandardFileCode = rule.StandardFileCode,
-                OrgCode = rule.OrgCode,
                 StandardCode = rule.StandardCode,
                 PhaseCode = rule.PhaseCode,
                 Skill = rule.Skill,
@@ -628,35 +810,6 @@ namespace VOL.Builder.Services.CertPlatform
         /// <summary>
         /// 生成规则编码
         /// </summary>
-        private string GenerateRuleCode(string standardFileCode)
-        {
-            return $"RULE-{standardFileCode}-{DateTime.Now:yyyyMMddHHmmss}";
-        }
-
-        /// <summary>
-        /// 生成字段定义编码
-        /// </summary>
-        private string GenerateFieldCode(string ruleCode, string fieldName)
-        {
-            return $"{ruleCode}-FIELD-{fieldName.ToPascalCase()}";
-        }
-
-        /// <summary>
-        /// 生成表格定义编码
-        /// </summary>
-        private string GenerateTableCode(string ruleCode, string tableName)
-        {
-            return $"{ruleCode}-TABLE-{tableName.ToPascalCase()}";
-        }
-
-        /// <summary>
-        /// 生成表格字段定义编码
-        /// </summary>
-        private string GenerateTableFieldCode(string tableCode, string columnName)
-        {
-            return $"{tableCode}-COL-{columnName.ToPascalCase()}";
-        }
-
         #endregion
     }
 

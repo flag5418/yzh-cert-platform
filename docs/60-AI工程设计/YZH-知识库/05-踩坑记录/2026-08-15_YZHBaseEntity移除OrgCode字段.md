@@ -115,6 +115,32 @@ var stages = await _db.Set<OrgStage>()
 - 文件：`src/server/Vue.NetCore/vol.api/VOL.Builder/Services/CertPlatform/StandardDirectoryService.cs`
 - 影响：前端标准目录页面可正常显示完整的机构→标准→阶段树形结构
 
+## 后续影响（2026-08-15 补充）：CertDocExtractionRule 实体残留 org_code 映射
+
+### 问题现象
+
+文档提取规则页面查询时报错：
+```
+Unknown column 'c.org_code' in 'field list'
+    at VOL.Builder.Services.CertPlatform.DocExtractionRuleService.GetRuleDetailAsync
+```
+
+### 根因
+
+`CertDocExtractionRule` 实体在迁移后仍声明了 `[Column("org_code")] OrgCode` 属性（迁移脚本 `remove_orgcode_from_global_tables.sql` 已从 `cert_doc_extraction_rule` 表删除该列）。EF Core 物化实体时会把所有映射列加入 SELECT，导致 SQL 引用不存在的列。
+
+> 注：迁移涉及的 19 张表中，其余 18 张对应的实体均已同步移除 OrgCode 属性，仅此一张遗漏。
+
+### 修复方案
+
+1. `VOL.Entity/CertPlatform/DocExtraction/CertDocExtractionRule.cs`：删除 `OrgCode` 属性（含 `[Column("org_code")]`）
+2. `DocExtractionRuleService.cs`：移除 3 处引用（`SaveExtractionRuleAsync` 新建/更新、`GetRuleDetailAsync` 响应赋值）
+
+### 影响范围
+
+- 文件：`CertDocExtractionRule.cs`、`DocExtractionRuleService.cs`
+- 影响：文档提取规则页面的保存/查询恢复正常
+
 ## SQL 脚本
 
 `DB/mysql/remove_orgcode_from_global_tables.sql`

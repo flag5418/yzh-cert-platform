@@ -150,8 +150,9 @@
             <el-input
               v-model="table.nameEn"
               size="small"
-              placeholder="英文表名"
+              placeholder="英文表名（唯一）"
               class="table-nameen"
+              :class="{ 'input-error': tableNameEnError(table, index) }"
               @input="onTableNameEnInput(table)"
             />
             <el-button
@@ -162,6 +163,9 @@
             >
               <el-icon><IconDelete /></el-icon>
             </el-button>
+          </div>
+          <div v-if="tableNameEnError(table, index)" class="field-error-text">
+            英文名重复：{{ table.nameEn }}
           </div>
           <div class="table-body">
             <el-input
@@ -306,9 +310,12 @@ const localTables = ref([]);
 // snake_case：小写 + 空格/非法字符转下划线 + 合并连续下划线
 const normalizeEn = (v) => (v || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 
+// nameEn 是唯一编辑源：code 始终与 nameEn 同步（保存/落库/工作流引用统一用 code=英文名）
+// 修复：手动添加字段无 code、编辑英文名后 code 不更新，导致保存时提交旧英文名的问题
 const normalizeField = (f) => {
   if (!f || typeof f !== 'object') return { name: '', nameEn: '', dataType: 'string', description: '', isRequired: false, isManual: false, isAiRecommended: true };
   f.nameEn = normalizeEn(f.nameEn ?? f.code);
+  f.code = f.nameEn;
   // 默认 isAiRecommended=true（AI 分析来的字段）；手动添加的为 false
   if (f.isAiRecommended === undefined) f.isAiRecommended = true;
   return f;
@@ -317,6 +324,7 @@ const normalizeField = (f) => {
 const normalizeTable = (t) => {
   if (!t || typeof t !== 'object') return { name: '', nameEn: '', description: '', columns: [] };
   t.nameEn = normalizeEn(t.nameEn ?? t.code);
+  t.code = t.nameEn;
   t.columns = (t.columns || []).map(normalizeColumn);
   return t;
 };
@@ -324,23 +332,58 @@ const normalizeTable = (t) => {
 const normalizeColumn = (c) => {
   if (!c || typeof c !== 'object') return { name: '', nameEn: '', dataType: 'string', isRequired: false };
   c.nameEn = normalizeEn(c.nameEn ?? c.code);
+  c.code = c.nameEn;
   return c;
 };
 
+// 父组件换引用（新数组）时才重载本地副本；去掉 deep，避免与本地编辑同步循环冲突
+// 记录规范化后的 props 快照：仅当用户真实编辑（local 与 props 内容不同）时才回传父组件，
+// 否则（规则加载回显）不 emit → 不会触发父组件 onFieldsUpdate 清空已回显的 Prompt
+let propsFieldsJson = '';
+let propsTablesJson = '';
+
 watch(() => props.fields, (val) => {
-  localFields.value = (JSON.parse(JSON.stringify(val)) || []).map(normalizeField);
-}, { immediate: true, deep: true });
+  const normalized = (JSON.parse(JSON.stringify(val)) || []).map(normalizeField);
+  localFields.value = normalized;
+  propsFieldsJson = JSON.stringify(normalized);
+}, { immediate: true });
 
 watch(() => props.tables, (val) => {
-  localTables.value = (JSON.parse(JSON.stringify(val)) || []).map(normalizeTable);
-}, { immediate: true, deep: true });
+  const normalized = (JSON.parse(JSON.stringify(val)) || []).map(normalizeTable);
+  localTables.value = normalized;
+  propsTablesJson = JSON.stringify(normalized);
+}, { immediate: true });
+
+// ====== 本地编辑实时同步父组件（修复：字段/表格内容编辑不 emit 导致保存提交旧数据）======
+// 任何编辑（增删/改名称/英文名/描述/类型/开关）都同步到父组件，保存时提交最新数据
+// 通过 JSON 比较去重：① 与 props 快照相同 = 规则回显/加载，不 emit；② 与上次 emit 相同 = 回环，不重复 emit
+let lastEmittedFieldsJson = '';
+let lastEmittedTablesJson = '';
+
+watch(localFields, (val) => {
+  const json = JSON.stringify(val);
+  if (json === propsFieldsJson) return;
+  if (json !== lastEmittedFieldsJson) {
+    lastEmittedFieldsJson = json;
+    emit('update:fields', JSON.parse(JSON.stringify(val)));
+  }
+}, { deep: true });
+
+watch(localTables, (val) => {
+  const json = JSON.stringify(val);
+  if (json === propsTablesJson) return;
+  if (json !== lastEmittedTablesJson) {
+    lastEmittedTablesJson = json;
+    emit('update:tables', JSON.parse(JSON.stringify(val)));
+  }
+}, { deep: true });
 
 watch(() => props.rawJson, (val) => {
   rawJsonDisplay.value = val;
 }, { immediate: true });
 
 const addField = () => {
-  localFields.value.push({ name: '', nameEn: '', dataType: 'string', description: '', isRequired: false, isManual: false, isAiRecommended: false });
+  localFields.value.push({ name: '', nameEn: '', code: '', dataType: 'string', description: '', isRequired: false, isManual: false, isAiRecommended: false });
   emit('update:fields', localFields.value);
 };
 const removeField = (index) => {
@@ -348,7 +391,7 @@ const removeField = (index) => {
   emit('update:fields', localFields.value);
 };
 const addTable = () => {
-  localTables.value.push({ name: '', nameEn: '', description: '', columns: [], isAiRecommended: true });
+  localTables.value.push({ name: '', nameEn: '', code: '', description: '', columns: [], isAiRecommended: true });
   emit('update:tables', localTables.value);
 };
 const removeTable = (index) => {
@@ -356,7 +399,7 @@ const removeTable = (index) => {
   emit('update:tables', localTables.value);
 };
 const addTableField = (tableIndex) => {
-  localTables.value[tableIndex].columns.push({ name: '', nameEn: '', dataType: 'string', isRequired: false });
+  localTables.value[tableIndex].columns.push({ name: '', nameEn: '', code: '', dataType: 'string', isRequired: false });
   emit('update:tables', localTables.value);
 };
 const removeTableField = (tableIndex, colIndex) => {
@@ -364,16 +407,23 @@ const removeTableField = (tableIndex, colIndex) => {
   emit('update:tables', localTables.value);
 };
 
-// 输入时实时规范化（小写 + 非法字符转下划线）
-const onFieldNameEnInput = (field) => { field.nameEn = normalizeEn(field.nameEn); };
-const onTableNameEnInput = (table) => { table.nameEn = normalizeEn(table.nameEn); };
-const onColumnNameEnInput = (col) => { col.nameEn = normalizeEn(col.nameEn); };
+// 输入时实时规范化（小写 + 非法字符转下划线），code 同步跟随 nameEn
+const onFieldNameEnInput = (field) => { field.nameEn = normalizeEn(field.nameEn); field.code = field.nameEn; };
+const onTableNameEnInput = (table) => { table.nameEn = normalizeEn(table.nameEn); table.code = table.nameEn; };
+const onColumnNameEnInput = (col) => { col.nameEn = normalizeEn(col.nameEn); col.code = col.nameEn; };
 
 // 字段英文名在同一文档内必须唯一
 const fieldNameEnError = (field, index) => {
   const en = normalizeEn(field.nameEn);
   if (!en) return false;
   return localFields.value.some((f, i) => i !== index && normalizeEn(f.nameEn) === en);
+};
+
+// 表格英文名在同一文档内必须唯一
+const tableNameEnError = (table, index) => {
+  const en = normalizeEn(table.nameEn);
+  if (!en) return false;
+  return localTables.value.some((t, i) => i !== index && normalizeEn(t.nameEn) === en);
 };
 
 // 列英文名在同一表格内必须唯一

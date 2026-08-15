@@ -79,6 +79,12 @@ namespace VOL.Entity.CertPlatform.Dir
         [Column("FilePattern")]
         public string FilePattern { get; set; }
 
+        /// <summary>
+        /// 文件大小（字节），上传成功后由后端从 IFormFile.Length 记录（权威值，不依赖前端）
+        /// </summary>
+        [Column("file_size")]
+        public long? FileSize { get; set; }
+
         #endregion
 
         #region 文件要求

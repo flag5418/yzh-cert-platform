@@ -26,31 +26,48 @@ namespace VOL.Builder.Services.CertPlatform
         #region S5 接入 YZH.Core 四件套
 
         /// <summary>
-        /// 按 standardFileCode 查询标准模板文件信息（从 cert_file_requirement 获取）。
-        /// 返回模板文件的 OSS 存储路径，供提取器下载使用。
+        /// 按 standardFileCode 查询标准模板文件信息。
+        /// 查询顺序：
+        ///   1. cert_file_requirement（文件要求的模板文件，Code=FR-xxx，已上传模板时命中）
+        ///   2. cert_standard_directory_file（实际上传的标准目录文件，FileCode=FL-xxx，兜底）
+        /// 返回模板/实际文件的 OSS 存储路径（含 .doc/.xls 转换产物路径），供提取器下载使用。
         /// </summary>
         private async Task<(string FileName, string StoragePath, string ConvertedStoragePath, string ConvertStatus, string ConvertMessage)> GetFileInfoAsync(string standardFileCode)
         {
             if (string.IsNullOrEmpty(standardFileCode))
                 return (null, null, null, null, null);
 
-            // 从 cert_file_requirement 获取标准模板文件信息
             var volContext = AutofacContainerModule.GetService<VOL.Core.EFDbContext.VOLContext>();
             if (volContext == null)
                 return (null, null, null, null, null);
 
+            // 1. 优先：cert_file_requirement 文件要求的模板文件（Code=FR-xxx）
             var fileReq = await volContext.Set<VOL.Entity.CertPlatform.Cert.FileRequirement>()
                 .Where(x => x.Code == standardFileCode && x.Enable == true)
                 .Select(x => new { x.TemplateFileName, x.TemplateStoragePath, x.FileNameTemplate })
                 .FirstOrDefaultAsync();
 
-            if (fileReq == null || string.IsNullOrEmpty(fileReq.TemplateStoragePath))
-                return (null, null, null, null, null);
+            if (fileReq != null && !string.IsNullOrEmpty(fileReq.TemplateStoragePath))
+            {
+                // 标准目录模板文件不需要转换（假设上传时已是可读格式）
+                // ConvertedStoragePath = null, ConvertStatus = null
+                var fileName = fileReq.TemplateFileName ?? fileReq.FileNameTemplate;
+                return (fileName, fileReq.TemplateStoragePath, null, null, null);
+            }
 
-            // 标准目录模板文件不需要转换（假设上传时已是可读格式）
-            // ConvertedStoragePath = null, ConvertStatus = null
-            var fileName = fileReq.TemplateFileName ?? fileReq.FileNameTemplate;
-            return (fileName, fileReq.TemplateStoragePath, null, null, null);
+            // 2. 兜底：cert_standard_directory_file 实际上传的文件（FileCode=FL-xxx）
+            //    前端目录树选中的是实际文件，直接按 FileCode 查，带转换状态供 .doc/.xls 使用
+            var dirFile = await volContext.Set<VOL.Entity.CertPlatform.Dir.StandardDirectoryFile>()
+                .Where(x => x.FileCode == standardFileCode && x.DeleteTime == null && x.IsValid == true)
+                .Select(x => new { x.FileName, x.StoragePath, x.ConvertedStoragePath, x.ConvertStatus, x.ConvertMessage })
+                .FirstOrDefaultAsync();
+
+            if (dirFile != null && !string.IsNullOrEmpty(dirFile.StoragePath))
+            {
+                return (dirFile.FileName, dirFile.StoragePath, dirFile.ConvertedStoragePath, dirFile.ConvertStatus, dirFile.ConvertMessage);
+            }
+
+            return (null, null, null, null, null);
         }
 
         /// <summary>

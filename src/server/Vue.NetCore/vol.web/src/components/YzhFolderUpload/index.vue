@@ -106,11 +106,12 @@ import {
   IconDelete,
   IconClose,
 } from '@/yzh'
+import { traverseDirectory, getFileFromEntry } from './traverse'
 
 const props = defineProps({
   accept: { type: String, default: '' },
   maxSize: { type: Number, default: 50 * 1024 * 1024 },
-  maxFiles: { type: Number, default: 100 },
+  maxFiles: { type: Number, default: 500 },
   disabled: { type: Boolean, default: false },
   uploading: { type: Boolean, default: false },
   listMaxHeight: { type: Number, default: 250 },
@@ -149,18 +150,30 @@ const onDrop = async (event) => {
     return
   }
 
+  // 先同步收集所有目录项（webkitGetAsEntry 必须在拖拽事件中同步调用），
+  // 再统一异步遍历，避免 dataTransfer.items 在 await 过程中失效
+  const entries = []
   const files = []
-  
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
     if (item.kind === 'file') {
       const entry = item.webkitGetAsEntry?.()
-      if (entry?.isDirectory) {
-        await traverseDirectory(entry, entry.name + '/', files)
+      if (entry) {
+        entries.push(entry)
       } else {
+        // 浏览器不支持 webkitGetAsEntry 时的回退方案
         const file = item.getAsFile()
         if (file) files.push(file)
       }
+    }
+  }
+
+  for (const entry of entries) {
+    if (entry.isDirectory) {
+      await traverseDirectory(entry, entry.name + '/', files)
+    } else if (entry.isFile) {
+      const file = await getFileFromEntry(entry)
+      if (file) files.push(file)
     }
   }
 
@@ -168,30 +181,6 @@ const onDrop = async (event) => {
     addFiles(files)
     ElMessage.success(`已添加 ${files.length} 个文件`)
   }
-}
-
-// 递归遍历文件夹
-const traverseDirectory = async (entry, path, fileList) => {
-  return new Promise((resolve) => {
-    const reader = entry.createReader()
-    const readEntries = () => {
-      reader.readEntries(async (entries) => {
-        if (!entries.length) { resolve(); return }
-        for (const e of entries) {
-          if (e.isFile) {
-            e.file(f => { 
-              if (path) Object.defineProperty(f, 'webkitRelativePath', { value: path + f.name, writable: false })
-              fileList.push(f) 
-            }, () => {})
-          } else if (e.isDirectory) {
-            await traverseDirectory(e, path + e.name + '/', fileList)
-          }
-        }
-        readEntries()
-      }, resolve)
-    }
-    readEntries()
-  })
 }
 
 // 文件选择
@@ -220,7 +209,18 @@ const addFiles = (files) => {
     return
   }
 
-  const valid = files.filter(f => f.size <= props.maxSize).slice(0, available)
+  const sizeValid = files.filter(f => f.size <= props.maxSize)
+  const overSizeCount = files.length - sizeValid.length
+  const valid = sizeValid.slice(0, available)
+  const truncatedCount = sizeValid.length - valid.length
+
+  if (overSizeCount > 0) {
+    ElMessage.warning(`已忽略 ${overSizeCount} 个超过大小限制 (${formatFileSize(props.maxSize)}) 的文件`)
+  }
+  if (truncatedCount > 0) {
+    ElMessage.warning(`已达到最大文件数限制 (${props.maxFiles})，仅添加前 ${valid.length} 个文件，忽略 ${truncatedCount} 个`)
+  }
+
   if (valid.length) {
     internalFileList.value = [...internalFileList.value, ...valid]
     emit('change', internalFileList.value)

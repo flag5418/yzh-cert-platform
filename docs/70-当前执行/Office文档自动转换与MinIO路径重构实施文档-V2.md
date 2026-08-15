@@ -1,7 +1,9 @@
 # Office 文档自动转换与 MinIO 路径重构实施文档 V2
 
-> **版本**：V2.0 | **日期**：2026-08-10 | **状态**：实施中
+> **版本**：V2.0 | **日期**：2026-08-10 | **状态**：已实施（2026-08-15 更新）
 > **背景**：解决旧版 Office 文档（.doc/.xls）预览问题，重构 MinIO 存储路径为四级结构
+
+> ⚠️ **实施状态（2026-08-15）**：本计划中的后台任务已由 **yzh 队列框架（YzhQueueManager + OfficeConvertTaskExecutor）** 落地，替代原计划的 `ConvertHostedService`（Channel/Semaphore）方案；DB 4 字段（converted_storage_path / convert_status / convert_message / convert_date）、MinIO `.converted` 双存、.doc/.xls 入队转换均已实现。MinIO 路径已按 V3 双顶层结构执行（见 [OSS存储结构重新设计-V1.md](./OSS存储结构重新设计-V1.md)），不再是本文档 1.1 的四级结构。
 
 ---
 

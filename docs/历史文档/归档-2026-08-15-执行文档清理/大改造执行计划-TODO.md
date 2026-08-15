@@ -4,6 +4,8 @@
 > **前置**：已 git commit 备份当前代码 (commit: 5e33d4e)  
 > **原则**：废弃的表彻底删除，包括后端 .cs 代码文件
 
+> ⚠️ **状态更新（2026-08-15）**：本计划的 Phase 1.2 / Phase 2（DROP `cert_standard_directory_*`、`cert_upload_task` 及删除 `StandardDirectoryService` 等）**已被后续决策推翻**——标准目录管理保留并持续扩展（批量上传四段式 + 转换队列 + 文档提取均已落地），`cert_upload_task` 已恢复；Phase 3/4 的域 A 实体重建与 snake_case 映射已完成。下方勾选状态不代表当前代码，执行前请以实际代码为准。
+
 ---
 
 ## Phase 1: 清空环境（MinIO + 数据库废弃表）
@@ -170,21 +172,21 @@
 ## Phase 5: 路径生成 + 核心服务重建
 
 ### 5.1 更新 CodeGeneratorService.cs
-- [ ] 新增 `GenerateStandardDirectoryPath()` 方法
-- [ ] 新增 `GenerateEnterpriseDocumentPath()` 方法
-- [ ] 新增 `GenerateConvertedStoragePath()` 方法
-- [ ] 废弃旧 `GenerateStoragePathV2()` 方法
+- [x] 新增 `GenerateStandardDirectoryPath()` 方法（✅ 已实现）
+- [x] 新增 `GenerateEnterpriseDocumentPath()` 方法（✅ 已实现）
+- [x] 新增 `GenerateConvertedStoragePath()` 方法（✅ 已实现）
+- [ ] 废弃旧 `GenerateStoragePathV2()` 方法（保留兼容，上传流程已切换到 V3）
 
 ### 5.2 更新 ICodeGeneratorService.cs 接口
-- [ ] 同步新增方法签名
+- [x] 同步新增方法签名（✅ 已实现）
 
 ### 5.3 重建标准目录相关 Service（精简版）
-- [ ] 重建 `StandardDirectoryService.cs`（仅保留标准目录模板管理 + 文件上传到 standard-directory 路径）
-- [ ] 重建 `IStandardDirectoryService.cs`
+- [x] 重建 `StandardDirectoryService.cs`（✅ 已实现：标准目录管理 + 批量上传到 standard-directory 路径）
+- [x] 重建 `IStandardDirectoryService.cs`
 
 ### 5.4 新建企业文件 Service
-- [ ] 新建 `EnterpriseFileService.cs`（企业文件上传到 enterprise-documents 路径）
-- [ ] 新建 `IEnterpriseFileService.cs`
+- [x] 新建 `EnterpriseFileService.cs`（✅ 已实现：企业文件上传到 enterprise-documents 路径）
+- [x] 新建 `IEnterpriseFileService.cs`
 
 ---
 

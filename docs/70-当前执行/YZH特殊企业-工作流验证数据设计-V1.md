@@ -1,5 +1,14 @@
 # YZH 特殊企业 - 工作流验证数据设计
 
+> **状态核对（2026-08-15，对当前代码/DB）**：
+> - ✅ B-08/B-09 列已就位：`enterprise_code`、`phase_code`、`standard_file_code`、`standard_code`、`version_number`、`rule_code`、`field_code`、`label_tag`、`extracted_value`、`confidence`、`position_info`、`is_manual_edited`、`extracted_at`（表结构已含，无需迁移）
+> - ✅ `ExtractionResult` / `TableExtractionResult` 实体字段齐全
+> - ❌ **YZH-STD-ENT 企业记录缺失**（2026-08-15 全量清理时删除，实施时需先执行 §2.3 SQL 重建）
+> - ❌ `YZH_STANDARD_ENTERPRISE_CODE` 常量未定义
+> - ❌ `SaveExtractionRuleAsync` 第 5 步（同步 B-08/B-09）未实现——当前保存只写规则 + 字段/表格**定义**，提取值不入库
+> - ❌ `SaveExtractionRuleRequest.ExtractionData` 未加，前端 saveRule 未提交提取数据
+> - ✅ 验证接口已返回原始提取数据（`VerifyPromptResponse.Data = ExtractionData { Fields, Tables }`），前端需保留原始值供保存提交
+
 > **版本**：V1.0 | **日期**：2026-08-14 | **状态**：待评审
 >
 > **前置文档**：
