@@ -1,11 +1,13 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.SystemModels;
 
 namespace VOL.Entity.CertPlatform.DocExtraction
 {
     [Table("cert_ai_usage_log")]
-    public class AIUsageLog
+    [Entity(TableCnName = "AI调用日志", DBServer = "VOLContext")]
+    public class AIUsageLog : BaseEntity
     {
         [Key]
         [Column(TypeName = "bigint")]

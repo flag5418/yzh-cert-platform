@@ -16,6 +16,8 @@
     "clean": "rimraf node_modules"
   },
   "dependencies": {
+    "@logicflow/core": "^2.0.0",
+    "@logicflow/extension": "^2.0.0",
     "@microsoft/signalr": "^8.0.7",
     "@vue-office/docx": "^1.6.3",
     "@vue-office/excel": "^1.7.14",

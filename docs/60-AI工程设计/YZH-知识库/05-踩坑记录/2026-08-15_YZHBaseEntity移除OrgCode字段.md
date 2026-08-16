@@ -148,4 +148,4 @@ Unknown column 'c.org_code' in 'field list'
 ## 相关文档
 
 - [删除确认弹窗重复问题修复](./2026-08-15_删除确认弹窗重复问题修复.md)
-- [Phase 2 实施方案](../../70-当前执行/Phase2-实体snake_case映射与业务服务重建-V1.md)
+- [Phase 2 实施方案](../../../历史文档/归档-2026-08-15-执行文档清理/Phase2-实体snake_case映射与业务服务重建-V1.md)

@@ -15,6 +15,10 @@ namespace VOL.Entity.CertPlatform.Cert
         [Column("cb_code")]
         public string CbCode { get; set; }
 
+        [StringLength(50)]
+        [Column("org_code")]
+        public string OrgCode { get; set; }
+
         [Required, StringLength(36)]
         [Column("standard_code")]
         public string StandardCode { get; set; }

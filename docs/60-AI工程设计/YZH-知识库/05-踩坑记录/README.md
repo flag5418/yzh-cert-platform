@@ -19,6 +19,7 @@
 | **2026-08-11-转换队列化实施踩坑记录.md** | **转换队列化实施 5 类踩坑：循环依赖 VOL.Builder↔VOL.WebApi / ControllerBase 缺 JsonNormal / MySQL 不支持 RETURNING / 端口 9991 冲突 / HttpClient.Headers 不存在** | 2026-08-11 |
 | **2026-08-11_Vol框架菜单配置完整指南与踩坑记录.md** | **Vol 框架菜单系统完整指南：MenuType 字段详解、top/classics 布局差异、ParentId 归属、Redis+内存双层缓存机制、SQL 模板、快速诊断命令。覆盖 90% 菜单不显示问题（MenuType错误/ParentId错误/缓存未清除）** | 2026-08-11 |
 | **2026-08-13_NOTracking静默失效与文件夹重命名级联修复.md** | **NoTracking 导致 465 个转换任务永久 stuck（ConvertQueueManager/OfficeConvertService 缺 AsTracking）/ GetMaxSequence 按 parentCode 分组导致跨父节点同级编码碰撞（改为按 Depth 全局分配）/ 文件夹重命名缺少 MinIO 级联同步（重写 RenameFolderAsync）/ 根目录级孤立文件不可见（虚拟"根目录"节点兜底）** | 2026-08-13 |
+| **2026-08-16_文件管理功能开发经验总结.md** | **文件管理功能开发 4 类踩坑（http.js put 未定义 / MinIO 未注册 DI / Force 缺 [NotMapped] / 重命名 API 返回成功但 DB 未更新）+ 调试方法论（ILogger、DLL 验证、构建缓存清理、系统化验证）** | 2026-08-16 |
 
 ## 格式约定
 

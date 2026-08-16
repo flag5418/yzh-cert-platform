@@ -111,6 +111,24 @@ let viewgird = [
     name: 'AIUsageMonitor',
     component: () => import('@/views/cert/Standard/AIUsageMonitor/index.vue'),
     meta: { title: 'AI 费用监控' }
+  },
+  // 审核规则库
+  {
+    path: '/CertPlatform/WorkflowRules',
+    name: 'WorkflowRules',
+    redirect: '/CertPlatform/WorkflowRules/Rules',
+    meta: { title: '审核规则库' },
+    children: [
+      { path: 'Rules', name: 'ValidationRuleList', component: () => import('@/views/cert/Standard/WorkflowRules/List.vue'), meta: { title: 'NC检查规则' } },
+      { path: 'ReportDef', name: 'ReportDefinition', component: () => import('@/views/cert/Standard/WorkflowRules/ReportDefinition.vue'), meta: { title: '报告章节定义' } }
+    ]
+  },
+  // 工作流设计器（独立页面，支持从规则/章节跳转）
+  {
+    path: '/CertPlatform/WorkflowDesigner',
+    name: 'WorkflowDesigner',
+    component: () => import('@/views/cert/Standard/WorkflowDesigner/Designer.vue'),
+    meta: { title: '工作流设计器' }
   }
 ]
 

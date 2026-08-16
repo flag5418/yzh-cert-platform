@@ -37,14 +37,16 @@ import {
   QuestionFilled,
   Setting,
   List,
-  Grid,
-  Memo,
-  Calendar,
-  FolderAdd,
-  OfficeBuilding,
-  Money,
-  TrendCharts,
-} from '@element-plus/icons-vue'
+   Grid,
+   Memo,
+   Calendar,
+   FolderAdd,
+   OfficeBuilding,
+   Money,
+   TrendCharts,
+   VideoPlay,
+   Checked,
+ } from '@element-plus/icons-vue'
 
 /** 统一图标表（对象形式，支持 :is 动态绑定） */
 export const YzhIcon = {
@@ -134,5 +136,7 @@ export const IconFolderAdd = FolderAdd
 export const IconOfficeBuilding = OfficeBuilding
 export const IconMoney = Money
 export const IconTrend = TrendCharts
+export const IconCircleCheck = Checked
+export const IconPlay = VideoPlay
 
 export default YzhIcon

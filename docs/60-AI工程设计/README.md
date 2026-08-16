@@ -9,7 +9,7 @@
 | [vol-csharp-coding-standards.md](./vol-csharp-coding-standards.md) | C#后端编码规范 | 草案V1.0 |
 | [vue-ts-coding-standards.md](./vue-ts-coding-standards.md) | Vue3+TS前端编码规范 | 草案V1.0 |
 | [vol-skill.md](./vol-skill.md) | Vol框架使用指南 | 成熟态 |
-| YZH-知识库/ | 问题排查知识库 | 持续更新 |
+| YZH-知识库/ | 问题排查知识库（含踩坑记录，详见 YZH-知识库/05-踩坑记录/README.md） | 持续更新 |
 
 ## 快速检索
 

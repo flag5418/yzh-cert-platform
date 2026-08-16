@@ -7,12 +7,10 @@ namespace VOL.Entity.CertPlatform.Rpt
     /// <summary>
     /// ReportSection 报告章节
     /// <para>表名：rpt_report_section</para>
-    /// <para>注意：此表仅有 create_date 审计字段</para>
     /// </summary>
     [Table("rpt_report_section")]
     public class ReportSection : YZHBaseEntity
     {
-        /// <summary>机构编码（多租户隔离，此表需要机构级数据隔离）</summary>
         [StringLength(50)]
         [Column("org_code")]
         public string OrgCode { get; set; }
@@ -32,6 +30,20 @@ namespace VOL.Entity.CertPlatform.Rpt
         [Required, StringLength(200)]
         [Column("section_name")]
         public string SectionName { get; set; }
+
+        [StringLength(200)]
+        [Column("section_name_en")]
+        public string SectionNameEn { get; set; }
+
+        [Column("section_json")]
+        public string SectionJson { get; set; }
+
+        [StringLength(500)]
+        [Column("remark")]
+        public string Remark { get; set; }
+
+        [Column("is_active")]
+        public bool IsActive { get; set; } = true;
 
         [Column("content")]
         public string Content { get; set; }
