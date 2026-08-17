@@ -188,6 +188,11 @@ namespace YZH.Core
             builder.RegisterType<WorkflowEngine>()
                    .As<IWorkflowEngine>()
                    .InstancePerLifetimeScope();
+
+            // S5: 反射 Skill 加载器（自定义 Skill 按 wf_skill_reflection.class_path 实例化，登记即用）
+            builder.RegisterType<ReflectionSkillLoader>()
+                   .As<IReflectionSkillLoader>()
+                   .InstancePerLifetimeScope();
             
             Console.WriteLine("[YZH] Workflow services registered (SkillRegistry + 6 built-in Skills + WorkflowEngine)");
         }

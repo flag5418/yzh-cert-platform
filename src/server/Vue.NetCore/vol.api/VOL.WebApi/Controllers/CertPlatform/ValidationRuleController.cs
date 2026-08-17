@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,6 +19,8 @@ namespace VOL.WebApi.Controllers.CertPlatform
         {
             _service = service;
         }
+
+        // 条款树形数据由 ISOClauseController 统一提供：GET api/iso-clause/tree
 
         [HttpPost("page")]
         public async Task<IActionResult> GetPage([FromBody] PageDataOptions options,

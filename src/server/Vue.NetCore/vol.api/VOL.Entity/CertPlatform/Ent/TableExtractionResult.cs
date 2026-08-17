@@ -49,6 +49,11 @@ namespace VOL.Entity.CertPlatform.Ent
         [Column("rule_code")]
         public string RuleCode { get; set; }
 
+        /// <summary>定义表编码（cert_doc_table_def.code；工作流 get_table 节点查询键，评审 §3.3 修复）</summary>
+        [StringLength(200)]
+        [Column("table_code")]
+        public string TableCode { get; set; }
+
         [Column("table_index")]
         public int TableIndex { get; set; } = 1;
 

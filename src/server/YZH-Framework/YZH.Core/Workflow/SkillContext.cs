@@ -20,5 +20,11 @@ namespace YZH.Core.Workflow
         public long DurationMs { get; set; }
         public int? PromptTokens { get; set; }
         public int? CompletionTokens { get; set; }
+
+        public static SkillResult Ok(IDictionary<string, object>? outputs = null, double? confidence = null)
+            => new() { Success = true, Outputs = outputs ?? new Dictionary<string, object>(), Confidence = confidence };
+
+        public static SkillResult Fail(string error)
+            => new() { Success = false, Error = error };
     }
 }

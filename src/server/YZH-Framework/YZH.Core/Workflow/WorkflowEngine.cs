@@ -184,11 +184,41 @@ var wf = JsonSerializer.Deserialize<WorkflowConfig>(workflowConfigJson, opts)
         {
             var resolved = new Dictionary<string, object>();
             foreach (var (key, val) in inputs)
-            {
-                var str = val?.ToString() ?? string.Empty;
-                resolved[key] = ResolveTemplate(str, outputs, workflowInputs);
-            }
+                resolved[key] = ResolveValue(val, outputs, workflowInputs);
             return resolved;
+        }
+
+        /// <summary>
+        /// 递归解析参数值：标量模板替换 + 数组/对象内元素模板替换（支撑 assemble 的 parts 常量+变量混合按序拼接）。
+        /// 数字/布尔/日期原样保留（不破坏类型），字符串与 JSON 字符串元素做 {{}} 替换。
+        /// </summary>
+        private static object ResolveValue(object? val, Dictionary<string, IDictionary<string, object>> outputs,
+            IDictionary<string, object> workflowInputs)
+        {
+            switch (val)
+            {
+                case string s:
+                    return ResolveTemplate(s, outputs, workflowInputs);
+                case JsonElement je:
+                    return je.ValueKind switch
+                    {
+                        JsonValueKind.String => ResolveTemplate(je.GetString() ?? string.Empty, outputs, workflowInputs),
+                        JsonValueKind.Array => je.EnumerateArray()
+                            .Select(e => ResolveValue(e.Clone(), outputs, workflowInputs)).ToList(),
+                        JsonValueKind.Object => je.EnumerateObject()
+                            .ToDictionary(p => p.Name, p => ResolveValue(p.Value.Clone(), outputs, workflowInputs)),
+                        _ => je // number/boolean/null 原样保留
+                    };
+                case System.Collections.IEnumerable enumerable when val is not string:
+                {
+                    var list = new List<object>();
+                    foreach (var item in enumerable)
+                        list.Add(ResolveValue(item, outputs, workflowInputs));
+                    return list;
+                }
+                default:
+                    return val ?? string.Empty;
+            }
         }
 
         private static object ResolveTemplate(string str, Dictionary<string, IDictionary<string, object>> outputs,

@@ -7,21 +7,41 @@ using YZH.Core.Workflow;
 namespace YZH.Core.Skills
 {
     /// <summary>
-    /// 确定性比较 Skill：compare / date_diff。
-    /// SkillCode = "compare"（date_diff 作为别名通过同一实例处理）。
+    /// 确定性比较 Skill：compare。
+    /// 支持三种形态：① 数值比较（value + operator + threshold）；② 日期差（date_a + date_b + unit）；③ 非空判断（operator=not_empty）。
+    /// 纯函数（SideEffect=false），输出 result（数值模式为 boolean，日期模式为 number）。
     /// </summary>
-    public class CompareSkill : ISkillNode
+    public class CompareSkill : SkillBase
     {
-        public string SkillCode => "compare";
+        public override string SkillCode => "compare";
+        public override string SkillName => "值比较";
+        public override string Category => "data_process";
+        public override bool SideEffect => false;
+        public override string ReturnType => "boolean";
 
-        public Task<SkillResult> ExecuteAsync(SkillContext context, CancellationToken ct = default)
+        public override IReadOnlyList<SkillParam> InputDecls { get; } = new[]
         {
-            var value = context.Inputs.TryGetValue("value", out var v) ? v : null;
-            var op = context.Inputs.TryGetValue("operator", out var o) ? o?.ToString() : string.Empty;
-            var threshold = context.Inputs.TryGetValue("threshold", out var t) ? t : null;
-            var dateA = context.Inputs.TryGetValue("date_a", out var da) ? da : null;
-            var dateB = context.Inputs.TryGetValue("date_b", out var db) ? db : null;
-            var unit = context.Inputs.TryGetValue("unit", out var u) ? u?.ToString() : "day";
+            new SkillParam { Name = "value", Type = "json", Required = false, Description = "待比较值（数值/字符串）" },
+            new SkillParam { Name = "operator", Type = "string", Required = false, Description = "比较运算符：> >= < <= == != equals not_equals not_empty" },
+            new SkillParam { Name = "threshold", Type = "json", Required = false, Description = "比较阈值" },
+            new SkillParam { Name = "date_a", Type = "date", Required = false, Description = "日期 A（日期差模式）" },
+            new SkillParam { Name = "date_b", Type = "date", Required = false, Description = "日期 B（日期差模式）" },
+            new SkillParam { Name = "unit", Type = "string", Required = false, Description = "日期差单位：day/month/year" }
+        };
+
+        public override IReadOnlyList<SkillParam> OutputDecls { get; } = new[]
+        {
+            new SkillParam { Name = "result", Type = "json", Required = true, Description = "比较结果（boolean，日期模式为 number）" }
+        };
+
+        protected override Task<SkillResult> ExecuteCoreAsync(SkillContext context, CancellationToken ct)
+        {
+            var value = Get(context, "value");
+            var op = GetString(context, "operator");
+            var threshold = Get(context, "threshold");
+            var dateA = Get(context, "date_a");
+            var dateB = Get(context, "date_b");
+            var unit = string.IsNullOrWhiteSpace(GetString(context, "unit")) ? "day" : GetString(context, "unit");
 
             object result;
 
@@ -41,7 +61,7 @@ namespace YZH.Core.Skills
                 }
                 else
                 {
-                    return Task.FromResult(new SkillResult { Success = false, Error = "date_a/date_b 无法解析为日期" });
+                    return Task.FromResult(SkillResult.Fail("date_a/date_b 无法解析为日期"));
                 }
             }
             else if (op == "not_empty")
@@ -65,15 +85,21 @@ namespace YZH.Core.Skills
                 }
                 else
                 {
-                    return Task.FromResult(new SkillResult { Success = false, Error = "value 或 threshold 无法解析为数字" });
+                    return Task.FromResult(SkillResult.Fail("value 或 threshold 无法解析为数字"));
                 }
             }
             else
             {
-                return Task.FromResult(new SkillResult { Success = false, Error = "compare 需要 value+operator 或 date_a+date_b 入参" });
+                return Task.FromResult(SkillResult.Fail("compare 需要 value+operator 或 date_a+date_b 入参"));
             }
 
-            return Task.FromResult(new SkillResult { Success = true, Outputs = new Dictionary<string, object> { ["result"] = result } });
+            return Task.FromResult(SkillResult.Ok(new Dictionary<string, object> { ["result"] = result }));
         }
+
+        private static object? Get(SkillContext context, string key)
+            => context.Inputs.TryGetValue(key, out var v) ? v : null;
+
+        private static string GetString(SkillContext context, string key)
+            => context.Inputs.TryGetValue(key, out var v) ? v?.ToString() ?? string.Empty : string.Empty;
     }
 }

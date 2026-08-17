@@ -66,6 +66,15 @@ namespace VOL.Builder.Services.CertPlatform
             return await _templateRepo.FindFirstAsync(x => x.Code == code);
         }
 
+        /// <summary>
+        /// 按 org+std+phase 查询唯一报告模板，不存在返回 null
+        /// </summary>
+        public async Task<ReportTemplate> GetByContextAsync(string orgCode, string standardCode, string phaseCode)
+        {
+            return await _templateRepo.FindFirstAsync(x =>
+                x.OrgCode == orgCode && x.StandardCode == standardCode && x.PhaseCode == phaseCode && x.Enable == true);
+        }
+
         public async Task<bool> SaveTemplateAsync(ReportTemplate entity)
         {
             if (entity.Id > 0)
@@ -75,15 +84,31 @@ namespace VOL.Builder.Services.CertPlatform
                 existing.OrgCode = entity.OrgCode; existing.StandardCode = entity.StandardCode;
                 existing.PhaseCode = entity.PhaseCode; existing.CbCode = entity.CbCode;
                 existing.TemplateName = entity.TemplateName; existing.TemplateFilePath = entity.TemplateFilePath;
-                existing.SectionConfig = entity.SectionConfig; existing.IsDefault = entity.IsDefault;
+                existing.SectionConfig = entity.SectionConfig;
                 existing.Remark = entity.Remark;
                 _templateRepo.Update(existing, new[] { "OrgCode","StandardCode","PhaseCode","CbCode","TemplateName",
-                    "TemplateFilePath","SectionConfig","IsDefault","Remark" }, true);
+                    "TemplateFilePath","SectionConfig","Remark" }, true);
                 return true;
             }
+            // 新建前检查是否已存在（org+std+phase 唯一）
+            var existingByContext = await _templateRepo.FindFirstAsync(x =>
+                x.OrgCode == entity.OrgCode && x.StandardCode == entity.StandardCode && x.PhaseCode == entity.PhaseCode && x.Enable == true);
+            if (existingByContext != null)
+            {
+                // 已存在则更新
+                existingByContext.TemplateName = entity.TemplateName;
+                existingByContext.TemplateFilePath = entity.TemplateFilePath ?? existingByContext.TemplateFilePath;
+                existingByContext.Remark = entity.Remark;
+                existingByContext.CbCode = entity.CbCode;
+                _templateRepo.Update(existingByContext, new[] { "TemplateName","TemplateFilePath","Remark","CbCode" }, true);
+                return true;
+            }
+            // 新建
+            if (string.IsNullOrWhiteSpace(entity.Code))
+                entity.Code = System.Guid.NewGuid().ToString("N");
             entity.CreateDate = System.DateTime.Now;
             entity.Creator = UserContext.Current?.UserName;
-            await _templateRepo.AddAsync(entity);
+            _templateRepo.Add(entity, true);
             return true;
         }
 
@@ -109,17 +134,22 @@ namespace VOL.Builder.Services.CertPlatform
                 var existing = await _sectionRepo.FindFirstAsync(x => x.Id == entity.Id);
                 if (existing == null) return false;
                 existing.ReportCode = entity.ReportCode; existing.ClauseCode = entity.ClauseCode;
-                existing.WorkflowCode = entity.WorkflowCode; existing.SectionName = entity.SectionName;
+                existing.WorkflowCode = entity.WorkflowCode; existing.WorkflowConfig = entity.WorkflowConfig;
+                existing.SectionName = entity.SectionName;
                 existing.SectionNameEn = entity.SectionNameEn; existing.SectionJson = entity.SectionJson;
                 existing.Remark = entity.Remark; existing.IsActive = entity.IsActive;
                 existing.Content = entity.Content; existing.SortOrder = entity.SortOrder;
-                _sectionRepo.Update(existing, new[] { "ReportCode","ClauseCode","WorkflowCode","SectionName",
-                    "SectionNameEn","SectionJson","Remark","IsActive","Content","SortOrder" }, true);
+                existing.OrgCode = entity.OrgCode;
+                _sectionRepo.Update(existing, new[] { "ReportCode","ClauseCode","WorkflowCode","WorkflowConfig","SectionName",
+                    "SectionNameEn","SectionJson","Remark","IsActive","Content","SortOrder","OrgCode" }, true);
                 return true;
             }
+            // 新建时自动生成 Code
+            if (string.IsNullOrWhiteSpace(entity.Code))
+                entity.Code = System.Guid.NewGuid().ToString("N");
             entity.CreateDate = System.DateTime.Now;
             entity.Creator = UserContext.Current?.UserName;
-            await _sectionRepo.AddAsync(entity);
+            _sectionRepo.Add(entity, true);
             return true;
         }
 
@@ -137,7 +167,8 @@ namespace VOL.Builder.Services.CertPlatform
             var copy = new ReportSection
             {
                 OrgCode = source.OrgCode, ReportCode = source.ReportCode, ClauseCode = source.ClauseCode,
-                WorkflowCode = source.WorkflowCode, SectionName = $"{source.SectionName}（副本）",
+                WorkflowCode = source.WorkflowCode, WorkflowConfig = source.WorkflowConfig,
+                SectionName = $"{source.SectionName}（副本）",
                 SectionNameEn = source.SectionNameEn, SectionJson = source.SectionJson,
                 Remark = source.Remark, IsActive = false, Content = source.Content,
                 SortOrder = source.SortOrder + 1, CreateDate = System.DateTime.Now,

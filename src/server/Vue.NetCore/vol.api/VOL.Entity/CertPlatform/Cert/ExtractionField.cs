@@ -23,9 +23,8 @@ namespace VOL.Entity.CertPlatform.Cert
         [Column("field_code")]
         public string FieldCode { get; set; }
 
-        [Required, StringLength(500)]
-        [Column("label_tag")]
-        public string LabelTag { get; set; }
+        // label_tag 列已删除（方案 C 整改）：原 label_tag 与 field_code 语义冗余，
+        // 工作流 get_field 节点改用 field_code 作为查询键，field_name 存中文名展示用
 
         [Required, StringLength(100)]
         [Column("field_name")]

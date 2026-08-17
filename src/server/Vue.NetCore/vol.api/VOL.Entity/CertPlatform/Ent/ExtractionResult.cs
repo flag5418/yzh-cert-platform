@@ -53,9 +53,10 @@ namespace VOL.Entity.CertPlatform.Ent
         [Column("field_code")]
         public string FieldCode { get; set; }
 
-        [StringLength(500)]
-        [Column("label_tag")]
-        public string LabelTag { get; set; }
+        /// <summary>字段名称（中文名，展示用，不作为查询键；工作流 get_field 节点按 field_code 查询）</summary>
+        [StringLength(200)]
+        [Column("field_name")]
+        public string FieldName { get; set; }
 
         [Column("extracted_value")]
         public string ExtractedValue { get; set; }

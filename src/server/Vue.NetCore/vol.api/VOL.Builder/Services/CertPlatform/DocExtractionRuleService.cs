@@ -489,11 +489,20 @@ namespace VOL.Builder.Services.CertPlatform
             var fileCode = rule.StandardFileCode;
 
             // 已保存定义中的合法 code 集合（与保存字段/表格定义时的生成逻辑一致）
-            var validFieldCodes = request.Fields?
-                .Where(f => f != null)
-                .Select(f => string.IsNullOrEmpty(f.Code) ? f.Name.ToPascalCase() : f.Code)
-                .Where(c => !string.IsNullOrEmpty(c))
-                .ToHashSet() ?? new HashSet<string>();
+            // 同时构建 fieldCode → fieldNames 中文映射，供落库时填充 field_name 列
+            var fieldNameMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var validFieldCodes = new HashSet<string>();
+            if (request.Fields != null)
+            {
+                foreach (var f in request.Fields)
+                {
+                    if (f == null) continue;
+                    var code = string.IsNullOrEmpty(f.Code) ? f.Name.ToPascalCase() : f.Code;
+                    if (string.IsNullOrEmpty(code)) continue;
+                    validFieldCodes.Add(code);
+                    fieldNameMap[code] = f.Name ?? code; // 中文名，兜底用 code
+                }
+            }
             var validTableCodes = request.Tables?
                 .Where(t => t != null)
                 .Select(t => string.IsNullOrEmpty(t.Code) ? t.Name.ToPascalCase() : t.Code)
@@ -511,7 +520,7 @@ namespace VOL.Builder.Services.CertPlatform
                 "DELETE FROM ent_table_extraction_result WHERE enterprise_code = {0} AND file_code = {1}",
                 yzhStdEnt, fileCode);
 
-            // 2. 字段级 → B-08（每字段一条；label_tag = field_code，工作流引用键）
+            // 2. 字段级 → B-08（每字段一条；field_code 为查询键，field_name 为中文名展示用）
             if (extractionData.Fields != null && extractionData.Fields.Count > 0)
             {
                 foreach (var kv in extractionData.Fields)
@@ -534,7 +543,7 @@ namespace VOL.Builder.Services.CertPlatform
                         VersionNumber = 1,
                         RuleCode = rule.Code,
                         FieldCode = kv.Key,
-                        LabelTag = kv.Key,
+                        FieldName = fieldNameMap.TryGetValue(kv.Key, out var fn) ? fn : kv.Key,
                         ExtractedValue = value,
                         Confidence = null,        // 标准目录数据为人工确认，无可信度
                         PositionInfo = null,

@@ -150,7 +150,7 @@ onBeforeUnmount(() => { diagram.value?.destroy() })
 
 async function loadSkills() {
   try {
-    const res = await proxy.http.get('api/wf-skill/list', null, false)
+    const res = await proxy.http.get('api/skill/list-active', null, false)
     if (res?.status) skillList.value = res.data || []
   } catch (e) { skillList.value = getDefaultSkills() }
 }

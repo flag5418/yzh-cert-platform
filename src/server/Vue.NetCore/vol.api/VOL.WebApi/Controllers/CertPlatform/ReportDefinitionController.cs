@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using VOL.Core.BaseProvider;
 using VOL.Core.Extensions.AutofacManager;
@@ -48,11 +50,21 @@ namespace VOL.WebApi.Controllers.CertPlatform
             return Ok(new { status = true, data = entity });
         }
 
+        [HttpGet("template/context")]
+        public async Task<IActionResult> GetByContext([FromQuery] string orgCode, [FromQuery] string standardCode, [FromQuery] string phaseCode)
+        {
+            var entity = await _service.GetByContextAsync(orgCode, standardCode, phaseCode);
+            return Ok(new { status = true, data = entity });
+        }
+
         [HttpPost("template")]
         public async Task<IActionResult> SaveTemplate([FromBody] ReportTemplate entity)
         {
             var result = await _service.SaveTemplateAsync(entity);
-            return Ok(new { status = result, message = result ? "保存成功" : "保存失败" });
+            if (!result) return Ok(new { status = false, message = "保存失败" });
+            // 返回保存后的完整实体（前端直接拿 id）
+            var saved = await _service.GetByContextAsync(entity.OrgCode, entity.StandardCode, entity.PhaseCode);
+            return Ok(new { status = true, message = "保存成功", data = saved });
         }
 
         [HttpPost("template/delete/{id}")]
@@ -91,6 +103,42 @@ namespace VOL.WebApi.Controllers.CertPlatform
             var copy = await _service.CopySectionAsync(sourceId);
             if (copy == null) return Ok(new { status = false, message = "源章节不存在" });
             return Ok(new { status = true, data = copy });
+        }
+
+        // ── 报告模板文件上传 ──
+
+        [HttpPost("template/upload")]
+        [RequestSizeLimit(100_000_000)]
+        public async Task<IActionResult> UploadTemplateFile(
+            [FromForm] IFormFile file,
+            [FromForm] string orgCode,
+            [FromForm] string standardCode,
+            [FromForm] string phaseCode)
+        {
+            if (file == null || file.Length == 0)
+                return Ok(new { status = false, message = "请选择文件" });
+            if (string.IsNullOrWhiteSpace(orgCode) || string.IsNullOrWhiteSpace(standardCode) || string.IsNullOrWhiteSpace(phaseCode))
+                return Ok(new { status = false, message = "机构、标准、阶段编码不能为空" });
+
+            try
+            {
+                var minio = AutofacContainerModule.GetService<IMinIOHelper>();
+                if (minio == null)
+                    return Ok(new { status = false, message = "MinIO 服务未注册" });
+
+                // 构建路径：report/机构code/标准code/阶段code/report/文件名
+                var safeFileName = Path.GetFileName(file.FileName).Replace(" ", "_");
+                var objectName = $"report/{orgCode}/{standardCode}/{phaseCode}/report/{safeFileName}";
+
+                using var stream = file.OpenReadStream();
+                await minio.UploadAsync(objectName, stream, file.Length, file.ContentType);
+
+                return Ok(new { status = true, data = new { path = objectName, fileName = safeFileName, size = file.Length } });
+            }
+            catch (System.Exception ex)
+            {
+                return Ok(new { status = false, message = $"上传失败：{ex.Message}" });
+            }
         }
 
         // ── 树形结构：机构→标准→阶段→检查项 ──

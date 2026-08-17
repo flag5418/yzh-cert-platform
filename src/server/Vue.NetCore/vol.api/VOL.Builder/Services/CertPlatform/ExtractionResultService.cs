@@ -63,7 +63,7 @@ namespace VOL.Builder.Services.CertPlatform
                         VersionNumber = versionNumber,
                         RuleCode = ruleCode,
                         FieldCode = field.Key,
-                        LabelTag = $"{ruleCode}.{field.Key}",
+                        FieldName = field.Key, // 兜底用 field_code，后续由定义表回填中文名
                         ExtractedValue = field.Value?.ToString(),
                         Confidence = 0.95m,
                         IsManualEdited = false,
@@ -117,7 +117,7 @@ namespace VOL.Builder.Services.CertPlatform
                     x.StandardFileCode,
                     x.RuleCode,
                     x.FieldCode,
-                    x.LabelTag,
+                    x.FieldName,
                     x.ExtractedValue,
                     x.Confidence,
                     x.IsManualEdited,

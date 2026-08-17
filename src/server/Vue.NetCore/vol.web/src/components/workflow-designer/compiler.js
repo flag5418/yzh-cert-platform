@@ -1,175 +1,170 @@
 /**
  * workflow-designer/compiler.js
- * 将 LogicFlow getGraphData() 结果编译为 workflow_config JSON（发布态）
+ * LogicFlow getGraphData() ⇄ workflow_config JSON（自定义工作流引擎 V1.2 §5.7 节点模型）
+ *
+ * 节点模型（V1.2）：
+ *   { nodeId, nodeType: 'start'|'skill'|'logic'|'end', title, skillCode?, config?, inputs?, outputs? }
+ * 边模型：
+ *   { source, target, sourceHandle? (anchor: success/failure), targetHandle? }
  */
 
 /**
  * 编译 LogicFlow 画布数据 → workflow_config
  */
-export function compileToWorkflowConfig(graphData) {
-  const nodes = graphData.nodes.map(n => ({
-    nodeId: n.id,
-    skillCode: n.data?.skillCode || '',
-    config: n.data?.config || {},
-    inputs: n.data?.inputs || {},
-    outputs: n.data?.outputs || {}
-  }))
-
-  const normalEdges = []
-  const branches = []
-
-  for (const e of graphData.edges) {
-    const condition = e.data?.condition || null
-    if (condition) {
-      branches.push({
-        from: e.sourceNodeId,
-        condition,
-        then: [{
-          nodeId: e.targetNodeId,
-          skillCode: nodes.find(n => n.nodeId === e.targetNodeId)?.skillCode || '',
-          inputs: nodes.find(n => n.nodeId === e.targetNodeId)?.inputs || {},
-          outputs: nodes.find(n => n.nodeId === e.targetNodeId)?.outputs || {}
-        }]
-      })
-    } else {
-      normalEdges.push({
-        source: e.sourceNodeId,
-        target: e.targetNodeId,
-        sourceHandle: e.data?.sourceHandle || null,
-        targetHandle: e.data?.targetHandle || null
-      })
+export function compileToWorkflowConfig(graphData, meta = {}) {
+  const nodes = graphData.nodes.map(n => {
+    const d = n.data || {}
+    const node = {
+      nodeId: n.id,
+      nodeType: d.nodeType || 'skill',
+      title: d.title || n.text || d.skillCode || n.id
     }
-  }
+    if (d.skillCode) node.skillCode = d.skillCode
+    if (d.config && Object.keys(d.config).length > 0) node.config = d.config
+    if (d.inputs && Object.keys(d.inputs).length > 0) node.inputs = d.inputs
+    if (d.outputs && Object.keys(d.outputs).length > 0) node.outputs = d.outputs
+    return node
+  })
+
+  const edges = graphData.edges.map(e => {
+    const edge = { source: e.sourceNodeId, target: e.targetNodeId }
+    if (e.data?.sourceHandle) edge.sourceHandle = e.data.sourceHandle
+    if (e.data?.targetHandle) edge.targetHandle = e.data.targetHandle
+    return edge
+  })
 
   return {
-    version: graphData.meta?.version ?? 1,
-    workflowType: graphData.meta?.workflowType ?? 'validation',
+    version: meta.version ?? graphData.meta?.version ?? 1,
+    workflowType: meta.workflowType ?? graphData.meta?.workflowType ?? 'validation',
     nodes,
-    edges: normalEdges,
-    branches,
-    outputConfig: graphData.meta?.outputConfig || {}
+    edges,
+    outputConfig: meta.outputConfig ?? graphData.meta?.outputConfig ?? {},
+    glossary: meta.glossary ?? graphData.meta?.glossary ?? ''
   }
 }
 
 /**
- * 反编译 workflow_config → LogicFlow getGraphData() 格式
+ * 反编译 workflow_config → LogicFlow 渲染数据（自动布局：拓扑序）
  */
-export function decompileToGraphData(config, nodes = [], xStep = 220, yStep = 120) {
+export function decompileToGraphData(config, layoutJson = null) {
+  const ordered = topologicalOrder(config)
   const nodeMap = {}
   const lfNodes = []
   const lfEdges = []
 
-  // 按拓扑序放置节点
-  const ordered = topologicalOrder(config)
+  // 节点布局：优先使用 layoutJson（画布恢复），否则拓扑自动布局
+  const positions = layoutJson?.nodePositions || {}
+
   ordered.forEach((nodeId, idx) => {
     const node = config.nodes.find(n => n.nodeId === nodeId)
     if (!node) return
+    const pos = positions[nodeId]
     const col = idx % 4
     const row = Math.floor(idx / 4)
-    const x = 100 + col * xStep
-    const y = 80 + row * yStep
+    const x = pos?.x ?? 100 + col * 220
+    const y = pos?.y ?? 80 + row * 130
+    const type = node.nodeType || 'skill'
 
     const lfNode = {
       id: nodeId,
-      type: 'rect',
+      type: lfNodeType(type),
       x,
       y,
-      text: node.skillCode,
-      style: {
-        fill: skillNodeColor(node.skillCode),
-        stroke: skillNodeStroke(node.skillCode),
-        strokeWidth: 2
+      text: node.title || node.skillCode || nodeId,
+      style: nodeStyle(type, node.skillCode),
+      properties: {
+        ...(node.config || {})
       },
       data: {
-        skillCode: node.skillCode,
+        nodeType: type,
+        title: node.title || '',
+        skillCode: node.skillCode || '',
         config: node.config || {},
         inputs: node.inputs || {},
-        outputs: node.outputs || {},
-        condition: null
+        outputs: node.outputs || {}
       }
     }
     lfNodes.push(lfNode)
     nodeMap[nodeId] = lfNode
   })
 
-  // 普通边
   for (const e of config.edges || []) {
-    const src = nodeMap[e.source]
-    const tgt = nodeMap[e.target]
-    if (!src || !tgt) continue
+    if (!nodeMap[e.source] || !nodeMap[e.target]) continue
+    const isLogicBranch = e.sourceHandle === 'success' || e.sourceHandle === 'failure'
     lfEdges.push({
-      id: `${e.source}-->${e.target}`,
-      type: 'smooth',
+      id: `${e.source}-->${e.target}${e.sourceHandle ? '-' + e.sourceHandle : ''}`,
+      type: 'polyline',
       sourceNodeId: e.source,
       targetNodeId: e.target,
-      style: { stroke: '#5B8FF9', strokeWidth: 2 },
+      text: isLogicBranch ? (e.sourceHandle === 'success' ? '成功' : '失败') : '',
+      style: isLogicBranch
+        ? { stroke: e.sourceHandle === 'success' ? '#67C23A' : '#F56C6C', strokeWidth: 2 }
+        : { stroke: '#5B8FF9', strokeWidth: 2 },
       data: {
-        sourceHandle: e.sourceHandle,
-        targetHandle: e.targetHandle,
-        condition: null
+        sourceHandle: e.sourceHandle || null,
+        targetHandle: e.targetHandle || null
       }
     })
-  }
-
-  // 条件分支边（橙色虚线）
-  for (const b of config.branches || []) {
-    const src = nodeMap[b.from]
-    for (const thenNode of b.then || []) {
-      const tgt = nodeMap[thenNode.nodeId]
-      if (!src || !tgt) continue
-      lfEdges.push({
-        id: `${b.from}-->${thenNode.nodeId}-branch`,
-        type: 'polyline',
-        sourceNodeId: b.from,
-        targetNodeId: thenNode.nodeId,
-        style: { stroke: '#F5A623', strokeWidth: 2, strokeDasharray: '5,5' },
-        data: {
-          sourceHandle: null,
-          targetHandle: null,
-          condition: b.condition
-        }
-      })
-    }
   }
 
   return {
     graphData: {
       nodes: lfNodes,
       edges: lfEdges,
-      transforms: { x: 0, y: 0, zoom: 1 },
+      transforms: layoutJson?.transforms || { x: 0, y: 0, zoom: 1 },
       meta: {
-        version: config.version,
-        workflowType: config.workflowType,
-        outputConfig: config.outputConfig
+        version: config.version || 1,
+        workflowType: config.workflowType || 'validation',
+        outputConfig: config.outputConfig || {},
+        glossary: config.glossary || ''
       }
     },
     nodeMap
   }
 }
 
-// ── 辅助函数 ──
-
-function skillNodeColor(skillCode) {
-  const map = {
-    get_field: '#E3F2FD', get_table: '#E3F2FD',
-    compare: '#E8F5E9', date_diff: '#E8F5E9', text_merge: '#E8F5E9',
-    llm_judge: '#FFF3E0', llm_generate: '#FCE4EC',
-    create_nc: '#F3E5F5', save_result: '#F3E5F5', assemble_text: '#F3E5F5'
+/** 从画布 getGraphData 提取 layoutJson（节点坐标 + 画布变换） */
+export function extractLayoutJson(graphData) {
+  const nodePositions = {}
+  for (const n of graphData.nodes || []) {
+    nodePositions[n.id] = { x: n.x, y: n.y }
   }
-  return map[skillCode] ?? '#F5F5F5'
+  return {
+    nodePositions,
+    transforms: graphData.transforms || { x: 0, y: 0, zoom: 1 }
+  }
 }
 
-function skillNodeStroke(skillCode) {
-  const map = {
-    get_field: '#1565C0', get_table: '#1565C0',
-    compare: '#2E7D32', date_diff: '#2E7D32', text_merge: '#2E7D32',
-    llm_judge: '#E65100', llm_generate: '#880E4F',
-    create_nc: '#6A1B9A', save_result: '#6A1B9A', assemble_text: '#6A1B9A'
+// ==================== 节点类型映射 ====================
+
+function lfNodeType(nodeType) {
+  switch (nodeType) {
+    case 'start': return 'circle'
+    case 'end': return 'circle'
+    case 'logic': return 'diamond'
+    default: return 'rect'
   }
-  return map[skillCode] ?? '#9E9E9E'
 }
 
-function topologicalOrder(config) {
+/** 节点配色：按 nodeType / skill category */
+export function nodeStyle(nodeType, skillCode, category = '') {
+  const catColors = {
+    data_access: { fill: '#E3F2FD', stroke: '#1565C0' },
+    data_process: { fill: '#E8F5E9', stroke: '#2E7D32' },
+    ai_judge: { fill: '#FFF3E0', stroke: '#E65100' },
+    ai_generate: { fill: '#FCE4EC', stroke: '#880E4F' },
+    output: { fill: '#F3E5F5', stroke: '#6A1B9A' }
+  }
+  if (nodeType === 'start') return { fill: '#E8F5E9', stroke: '#2E7D32', strokeWidth: 2, radius: 24 }
+  if (nodeType === 'end') return { fill: '#FFEBEE', stroke: '#C62828', strokeWidth: 2, radius: 24 }
+  if (nodeType === 'logic') return { fill: '#FFF8E1', stroke: '#F57F17', strokeWidth: 2 }
+  const c = catColors[category] || { fill: '#F5F5F5', stroke: '#9E9E9E' }
+  return { fill: c.fill, stroke: c.stroke, strokeWidth: 2, radius: 8 }
+}
+
+// ==================== 辅助 ====================
+
+export function topologicalOrder(config) {
   const nodeIds = new Set(config.nodes.map(n => n.nodeId))
   const inDegree = {}
   const adj = {}

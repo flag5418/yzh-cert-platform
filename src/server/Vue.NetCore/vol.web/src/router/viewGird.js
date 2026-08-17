@@ -112,6 +112,13 @@ let viewgird = [
     component: () => import('@/views/cert/Standard/AIUsageMonitor/index.vue'),
     meta: { title: 'AI 费用监控' }
   },
+  // 标准条款管理
+  {
+    path: '/CertPlatform/ISOClause',
+    name: 'ISOClause',
+    component: () => import('@/views/cert/Standard/ISOClause.vue'),
+    meta: { title: '标准条款管理' }
+  },
   // 审核规则库
   {
     path: '/CertPlatform/WorkflowRules',
@@ -129,6 +136,20 @@ let viewgird = [
     name: 'WorkflowDesigner',
     component: () => import('@/views/cert/Standard/WorkflowDesigner/Designer.vue'),
     meta: { title: '工作流设计器' }
+  },
+  // Skill 管理（工作流节点技能配置：输入/输出/反射/API）
+  {
+    path: '/CertPlatform/SkillManage',
+    name: 'SkillManage',
+    component: () => import('@/views/cert/Standard/SkillManage/index.vue'),
+    meta: { title: 'Skill 管理' }
+  },
+  // NC 规则配置（三栏：机构树 + NC 检查项 + 工作流画布，独立菜单）
+  {
+    path: '/CertPlatform/NCConfig',
+    name: 'NCConfig',
+    component: () => import('@/views/cert/Standard/NCConfig/index.vue'),
+    meta: { title: 'NC 规则配置' }
   }
 ]
 

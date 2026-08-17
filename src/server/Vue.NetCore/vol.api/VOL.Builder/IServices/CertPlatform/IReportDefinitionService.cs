@@ -13,6 +13,8 @@ namespace VOL.Builder.IServices.CertPlatform
         Task<PageGridData<ReportTemplate>> GetPageDataAsync(PageDataOptions options, string orgCode = null, string standardCode = null, string phaseCode = null);
         Task<List<ReportTemplate>> GetByOrgStandardPhaseAsync(string orgCode, string standardCode, string phaseCode);
         Task<ReportTemplate> GetTemplateAsync(string code);
+        /// <summary>按 org+std+phase 查询唯一报告模板，不存在返回 null</summary>
+        Task<ReportTemplate> GetByContextAsync(string orgCode, string standardCode, string phaseCode);
         Task<bool> SaveTemplateAsync(ReportTemplate entity);
         Task<bool> DeleteTemplateAsync(long id);
 

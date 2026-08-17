@@ -1,8 +1,12 @@
-# LogicFlow 工作流设计器实施分析与建议
+# LogicFlow 工作流设计器实施分析与建议（实施指南）
 
-> **版本**：V1.0 | **日期**：2026-08-14 | **状态**：成熟态（基于用户决策更新）
+> **版本**：V1.1 | **日期**：2026-08-14 | **最近修订**：2026-08-17 | **状态**：实施指南
+>
+> **定位**：本稿为工作流引擎的**实施指南**——Phase E 数据管道 / Phase F 设计器 / Phase G 引擎接入的任务分解、代码位置、工时与验收标准。
+> **权威设计**：`自定义工作流引擎-功能设计-V1.md`（V1.2）为唯一权威设计稿（解释器/节点/Skill 体系）。**本稿与之冲突的内容一律以新稿为准**（见 §1.5 冲突对照表），实施时按新稿 JSON 结构执行。
 >
 > **前置文档**：
+> - `自定义工作流引擎-功能设计-V1.md`（**权威设计**，本稿实施依据）
 > - `YZH-AI引擎详细设计-V1.md`（七件套四件套已完成，S1-S4 通过）
 > - `工作流引擎选型与技术研究-V1.md`（LogicFlow 选型已定，PoC 强制前置）
 > - `核心工作原理-V1.md`（三引擎复用原理、F-03/F-04 数据链路）
@@ -16,6 +20,7 @@
 > | 版本 | 日期 | 变更说明 |
 > |------|------|---------|
 > | V1.0 | 2026-08-14 | 基于项目现状核实 + 用户补充需求（自定义数据节点配置），形成完整实施分析与建议 |
+> | V1.1 | 2026-08-17 | 降级为**实施指南**：权威设计改为 `自定义工作流引擎-功能设计-V1.md`（V1.2）；新增 §1.5 冲突对照表（branches→logic 双锚点、label_tag→field_name、F-02/F-03 表废弃、8 Skill 种子→7 行等）；相关章节加 ⚠️ 冲突标注 |
 
 ---
 
@@ -34,6 +39,23 @@
   └─ Phase F：LogicFlow 设计器（P1，依赖 Phase E）
   └─ Phase G：校验/报告引擎接入（P2，依赖 Phase F）
 ```
+
+### 1.5 冲突对照（以新稿为准）
+
+> 本稿 V1.0 基于 2026-08-14 的设计状态编写；`自定义工作流引擎-功能设计-V1.md`（V1.2）已按 V4 评审整改与后续讨论演进。**以下旧概念全部以新稿为准**；本稿其余内容（Phase E/F/G 任务分解、工时、代码位置）仍作实施参考。
+
+| # | 本稿旧概念 | 新稿 V1.2 取代方案 | 影响位置 |
+|---|-----------|-------------------|---------|
+| 1 | branches 条件边 + BranchConditionForm | **logic 节点 success/failure 双锚点** + conditions[]（8 操作符 + and/or），双分支必连 | §4.2 F2 / §5.5 |
+| 2 | label_tag（F-02 标签树） | **field_name**（cert_doc_field_def/cert_doc_table_def，data-source-tree；phase9 已整改） | §5.3/§5.4 |
+| 3 | F-02 wf_field_label_mapping / F-03 wf_workflow_definition 表 + publish | **表废弃（V4 缺陷 I）**，行内 JSON（rule_json/workflow_config）+ layout_json 独立列 | §4.2 F3/F4 |
+| 4 | 8 个 Skill 种子（date_diff/llm_judge/llm_generate/create_nc/assemble_text） | **7 行种子**（停用不匹配项，新增 ai_node），见新稿 §5.10 | §8.2 |
+| 5 | get_field 输入 label_tag | **fieldCode/enterpriseCode/fileCode**（ctx.* 引用 + start 节点注入） | §5.3/§6.4 |
+| 6 | 节点无需命名 | **拖入画布必须命名**（nodeId + 可编辑 title），nX.port 引用不依赖连线 | 全篇 |
+| 7 | 无调试能力 | **单步调试（断点 stopAt + 调参重跑）+ run-node 独立测试** | 缺，以新稿 §3.11 补 |
+| 8 | Skill 输出单值/简单端口 | **输出契约分级**（output_strict 强/弱）+ 统一 5 类型 | §5.3 |
+| 9 | B-08/B-09 新增 enterprise_code/phase_code | **已实施（V4 缺陷 C）**；阶段 0-1 另需 **B-09 加 table_code 列** | §六 |
+| 10 | 画布布局不入 JSON | **layout_json 独立列**保存/恢复（解释器不读） | §4.2 F4 |
 
 ---
 
@@ -273,6 +295,8 @@ LlmExtractSkill（LLM 补全 + 结构化 → fields[] + tables[]）
 
 #### F2：workflow-designer 独立模块（3 天）
 
+> ⚠️ 冲突标注（§1.5-1/3）：目录中 `BranchConditionForm.vue`（branches 条件边）已废弃——条件分支改由 **logic 节点 success/failure 双锚点**实现；compiler.js 输出的 branches 字段改为 logic 节点 + 双锚点边（新稿 §4.2.3/§5.7）。模块封装/compiler/decompiler 思路不变。
+
 **目录结构**：
 
 ```
@@ -433,6 +457,8 @@ views/cert/Standard/WorkflowDesigner/
 
 ## 五、数据节点可视化配置设计（核心需求响应）
 
+> ⚠️ 冲突标注（§1.5-2/5）：以下属性面板中的 label_tag 已废弃，改为 **field_name**；F-02 标签树改由 data-source-tree（机构→标准→文档→字段/表格）；"高级"区 file_code 自由文本纳入统一命名参数体系（新稿 §4.4）。三栏布局与树形选择器交互形态不变。
+
 ### 5.1 问题重述
 
 > "图形化地配置自定义数据节点：需要先选择对应的那个文档，勾选哪些字段、哪些表格，再调用其他 Skill 节点进行运算和组合"
@@ -552,6 +578,8 @@ views/cert/Standard/WorkflowDesigner/
 ---
 
 ## 六、数据节点新增的运行时字段（影响 B-08/B-09 表结构）
+
+> ⚠️ 冲突标注（§1.5-9）：enterprise_code/phase_code 已实施（V4 缺陷 C，无需重复 ALTER）；阶段 0-1 需按新稿给 B-09 `ent_table_extraction_result` 加 **table_code** 列（新稿阶段 0-1）。
 
 ### 6.1 需新增的列
 
@@ -683,10 +711,11 @@ E3 上传触发提取链路接入（yzh_queue）               ↓              
 docker exec -i yzh-mysql mysql -uroot -pYzh123456. yzh_cert_platform \
   < src/server/Vue.NetCore/DB/mysql/cert_phase_workflow_node_context.sql
 
-# 2. 确认 F-01 wf_skill 表有基础 Skill 数据（以下 8 条）
+# 2. 确认 wf_skill 表有基础 Skill 数据（以下 8 条为旧清单）
 #    get_field / get_table / compare / date_diff
 #    llm_judge / llm_generate / create_nc / assemble_text
-#    如不存在，执行以下 SQL 插入
+#    ⚠️ 冲突标注（§1.5-4）：已按新稿 §5.10 整改为 7 行种子
+#    （停用 date_diff/llm_judge/llm_generate/create_nc/assemble_text 等，新增 ai_node），勿按此清单插入
 ```
 
 ### 8.3 前端技术依赖（Phase F 启动前安装）

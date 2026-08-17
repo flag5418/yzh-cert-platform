@@ -50,6 +50,10 @@ namespace VOL.Entity.CertPlatform.Cert
         [Column("rule_json")]
         public string RuleJson { get; set; }
 
+        /// <summary>画布布局 JSON（节点坐标/缩放/平移，UI 恢复用，解释器不读）</summary>
+        [Column("layout_json")]
+        public string LayoutJson { get; set; }
+
         [Column("nc_description_template")]
         public string NcDescriptionTemplate { get; set; }
 

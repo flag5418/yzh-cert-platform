@@ -27,6 +27,10 @@ namespace VOL.Entity.CertPlatform.Rpt
         [Column("workflow_code")]
         public string WorkflowCode { get; set; }
 
+        /// <summary>章节工作流 DAG JSON（图形化设计器导出的 workflow_config）</summary>
+        [Column("workflow_config")]
+        public string WorkflowConfig { get; set; }
+
         [Required, StringLength(200)]
         [Column("section_name")]
         public string SectionName { get; set; }
@@ -40,7 +44,7 @@ namespace VOL.Entity.CertPlatform.Rpt
 
         [StringLength(500)]
         [Column("remark")]
-        public string Remark { get; set; }
+        public new string Remark { get; set; }
 
         [Column("is_active")]
         public bool IsActive { get; set; } = true;

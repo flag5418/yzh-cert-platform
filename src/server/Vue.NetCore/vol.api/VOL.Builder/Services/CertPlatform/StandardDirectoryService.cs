@@ -148,6 +148,7 @@ namespace VOL.Builder.Services.CertPlatform
                             label = $"{std.StandardCode} - {std.StandardName}",
                             type = "standard",
                             cbCode = org.Code,
+                            stdCode = std.Code,
                             standardCode = std.StandardCode,
                             standardName = std.StandardName,
                             children = new List<object>()
@@ -171,6 +172,7 @@ namespace VOL.Builder.Services.CertPlatform
                                 label = $"{stage.StageCode} - {stage.StageName}",
                                 type = "phase",
                                 cbCode = org.Code,
+                                stdCode = std.Code,
                                 standardCode = std.StandardCode,
                                 phaseCode = stage.StageCode,
                                 phaseName = stage.StageName,

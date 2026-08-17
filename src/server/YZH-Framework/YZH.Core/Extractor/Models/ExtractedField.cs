@@ -6,14 +6,11 @@ namespace YZH.Core.Extractor.Models;
 /// </summary>
 public class ExtractedField
 {
-    /// <summary>字段名（对应 A-09 ExtractionField 的字段名 / 工作流输入端口）</summary>
+    /// <summary>字段名/中文名（对应 A-09 ExtractionField.FieldName；工作流 get_field 节点按 field_code 查询，此字段仅展示用）</summary>
     public string FieldName { get; set; } = string.Empty;
 
     /// <summary>字段值（对齐 B-08 ExtractedValue）</summary>
     public string? FieldValue { get; set; }
-
-    /// <summary>字段标签（对齐 F-02 label_tag，工作流 get_field 节点的引用键）</summary>
-    public string? LabelTag { get; set; }
 
     /// <summary>置信度 0.00-1.00（对齐 B-08 Confidence；文本层提取通常 1.0，AI/OCR 按模型返回）</summary>
     public decimal? Confidence { get; set; }

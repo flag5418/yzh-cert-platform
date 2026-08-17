@@ -25,9 +25,34 @@ namespace VOL.Builder.Services.CertPlatform
         public static IValidationRuleService Instance =>
             AutofacContainerModule.GetService<IValidationRuleService>();
 
-        public async Task<PageGridData<ValidationRule>> GetPageDataAsync(PageDataOptions options, string orgCode = null, string standardCode = null, string phaseCode = null)
+        public async Task<PageGridData<dynamic>> GetPageDataAsync(PageDataOptions options, string orgCode = null, string standardCode = null, string phaseCode = null)
         {
-            var query = _repository.FindAsIQueryable(x => true);
+            var query = from r in _repository.FindAsIQueryable(x => true)
+                        join c in _repository.DbContext.Set<ISOClause>() on r.ClauseCode equals c.Code into rc
+                        from c in rc.DefaultIfEmpty()
+                        select new
+                        {
+                            r.Id,
+                            r.Code,
+                            r.OrgCode,
+                            r.StandardCode,
+                            r.PhaseCode,
+                            r.ClauseCode,
+                            r.WorkflowCode,
+                            r.RuleCode,
+                            r.RuleName,
+                            r.RuleNameEn,
+                            r.SeverityIfViolated,
+                            r.RuleJson,
+                            r.LayoutJson,
+                            r.NcDescriptionTemplate,
+                            r.Remark,
+                            r.IsActive,
+                            r.CreateDate,
+                            ClauseNumber = c != null ? c.ClauseNumber : null,
+                            ClauseTitle = c != null ? c.Title : null
+                        };
+
             if (!string.IsNullOrWhiteSpace(orgCode)) query = query.Where(x => x.OrgCode == orgCode);
             if (!string.IsNullOrWhiteSpace(standardCode)) query = query.Where(x => x.StandardCode == standardCode);
             if (!string.IsNullOrWhiteSpace(phaseCode)) query = query.Where(x => x.PhaseCode == phaseCode);
@@ -48,7 +73,8 @@ namespace VOL.Builder.Services.CertPlatform
             int page = options.Page > 0 ? options.Page : 1;
             int rows = options.Rows > 0 ? options.Rows : 20;
             var list = await query.Skip((page - 1) * rows).Take(rows).ToListAsync();
-            return new PageGridData<ValidationRule> { rows = list, total = totalCount };
+            var resultList = list.Select(x => (object)x).ToList();
+            return new PageGridData<dynamic> { rows = resultList, total = totalCount };
         }
 
         public async Task<List<ValidationRule>> GetByOrgStandardPhaseAsync(string orgCode, string standardCode, string phaseCode)
@@ -91,12 +117,25 @@ namespace VOL.Builder.Services.CertPlatform
                 existing.PhaseCode = entity.PhaseCode; existing.ClauseCode = entity.ClauseCode;
                 existing.WorkflowCode = entity.WorkflowCode; existing.RuleName = entity.RuleName;
                 existing.RuleNameEn = entity.RuleNameEn; existing.SeverityIfViolated = entity.SeverityIfViolated;
-                existing.RuleJson = entity.RuleJson; existing.NcDescriptionTemplate = entity.NcDescriptionTemplate;
-                existing.Remark = entity.Remark;
+                existing.RuleJson = entity.RuleJson; existing.LayoutJson = entity.LayoutJson;
+                existing.NcDescriptionTemplate = entity.NcDescriptionTemplate;
+                existing.Remark = entity.Remark; existing.IsActive = entity.IsActive;
                 _repository.Update(existing, new[] { "OrgCode","StandardCode","PhaseCode","ClauseCode","WorkflowCode",
-                    "RuleName","RuleNameEn","SeverityIfViolated","RuleJson","NcDescriptionTemplate","Remark" }, true);
+                    "RuleName","RuleNameEn","SeverityIfViolated","RuleJson","LayoutJson","NcDescriptionTemplate","Remark","IsActive" }, true);
                 return true;
             }
+            // 新建时自动生成 Code 和 RuleCode
+            if (string.IsNullOrWhiteSpace(entity.Code))
+                entity.Code = System.Guid.NewGuid().ToString("N");
+            if (string.IsNullOrWhiteSpace(entity.RuleCode))
+            {
+                var seq = await _repository.FindAsIQueryable(x => x.StandardCode == entity.StandardCode).CountAsync();
+                entity.RuleCode = $"NC-{entity.StandardCode}-{(seq + 1):D3}";
+            }
+            if (string.IsNullOrWhiteSpace(entity.SeverityIfViolated))
+                entity.SeverityIfViolated = "minor";
+            if (string.IsNullOrWhiteSpace(entity.WorkflowCode))
+                entity.WorkflowCode = entity.Code;
             entity.CreateDate = System.DateTime.Now;
             entity.Creator = UserContext.Current?.UserName;
             await _repository.AddAsync(entity);

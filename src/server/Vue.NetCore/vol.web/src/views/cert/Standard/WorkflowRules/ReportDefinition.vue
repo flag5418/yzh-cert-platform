@@ -1,6 +1,6 @@
 <template>
   <div class="report-def-page">
-    <CertPageHeader title="报告章节定义" :icon="IconSetting" />
+    <CertPageHeader title="报告内容配置" :icon="IconSetting" />
 
     <div class="page-body">
       <!-- 左侧树形导航 -->
@@ -13,195 +13,130 @@
             </el-button>
           </div>
         </template>
-        <el-tree
-          ref="treeRef"
-          :data="treeData"
-          :props="{ label: 'label', children: 'children' }"
-          node-key="key"
-          highlight-current
-          default-expand-all
-          @node-click="handleNodeClick"
-        >
-          <template #default="{ node, data }">
-            <span class="tree-node">
-              <el-icon class="tree-icon" :style="{ color: data.color || '#909399' }">
-                <component :is="data.icon" />
-              </el-icon>
-              <span>{{ data.label }}</span>
-              <el-tag v-if="data.tplCount" size="small" :type="data.tplCount > 0 ? 'success' : 'info'" class="node-count">
-                {{ data.tplCount }}
-              </el-tag>
-            </span>
-          </template>
-        </el-tree>
+        <YzhStdTree ref="stdTreeRef" @select="handleTreeSelect" />
       </el-card>
 
       <!-- 右侧内容区 -->
       <div class="content-area">
-        <el-card shadow="never" class="filter-card">
-          <el-form :inline="true">
-            <el-form-item label="当前节点">
-              <el-tag type="primary">{{ currentLabel || '全部报告' }}</el-tag>
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" @click="loadTemplates">查询</el-button>
-              <el-button @click="resetFilter">重置</el-button>
-            </el-form-item>
-          </el-form>
-        </el-card>
+        <template v-if="currentFilter.standardCode">
+          <!-- 报告主表（单条：org+std+phase 唯一） -->
+          <el-card shadow="never" class="template-card">
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">报告模板</span>
+                <el-tag v-if="templateForm.id" size="small" type="success">已创建</el-tag>
+                <el-tag v-else size="small" type="warning">未创建</el-tag>
+              </div>
+            </template>
 
-        <el-card shadow="never" class="table-card">
-          <template #header>
-            <div class="card-header">
-              <span class="card-title">报告模板</span>
-              <el-button type="primary" size="small" @click="openTplEdit(null)">
-                <el-icon><IconAdd /></el-icon> 新建报告
-              </el-button>
-            </div>
-          </template>
+            <el-form :model="templateForm" label-width="100px" class="template-form" @submit.prevent>
+              <el-row :gutter="16">
+                <el-col :span="12">
+                  <el-form-item label="报告名称" prop="templateName" :rules="[{ required: true, message: '请输入报告名称' }]">
+                    <el-input v-model="templateForm.templateName" placeholder="如：ISO13485第一阶段审核报告" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="备注">
+                    <el-input v-model="templateForm.remark" placeholder="备注信息" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-form-item label="模板文件">
+                <div class="file-row">
+                  <el-input
+                    v-if="templateForm.templateFilePath"
+                    :model-value="getFileName(templateForm.templateFilePath)"
+                    readonly
+                    style="flex:1"
+                  >
+                    <template #append>
+                      <el-button link @click="templateForm.templateFilePath = ''">清除</el-button>
+                    </template>
+                  </el-input>
+                  <el-text v-else type="info" style="flex:1">尚未上传模板文件</el-text>
+                  <el-upload
+                    ref="uploadRef"
+                    :action="uploadUrl"
+                    :headers="uploadHeaders"
+                    :data="uploadData"
+                    :on-success="onUploadSuccess"
+                    :on-error="onUploadError"
+                    :before-upload="beforeUpload"
+                    :limit="1"
+                    :auto-upload="true"
+                    :show-file-list="false"
+                    style="margin-left:8px"
+                  >
+                    <el-button type="primary" size="small">
+                      <el-icon><IconUpload /></el-icon> 上传文件
+                    </el-button>
+                  </el-upload>
+                </div>
+              </el-form-item>
+              <div class="form-footer">
+                <el-button type="primary" @click="saveTemplate" :loading="saving">
+                  {{ templateForm.id ? '保存' : '创建' }}
+                </el-button>
+              </div>
+            </el-form>
+          </el-card>
 
-          <el-table :data="templateData" stripe border v-loading="tplLoading" style="width:100%">
-            <el-table-column prop="code" label="编码" width="140" />
-            <el-table-column prop="templateName" label="报告名称" width="200" />
-            <el-table-column prop="standardCode" label="标准" width="100" />
-            <el-table-column prop="phaseCode" label="阶段" width="80" />
-            <el-table-column prop="templateFilePath" label="报告路径" width="200" show-overflow-tooltip />
-            <el-table-column prop="isDefault" label="默认" width="60" align="center">
-              <template #default="{ row }">
-                <el-tag :type="row.isDefault ? 'success' : 'info'" size="small">{{ row.isDefault ? '是' : '否' }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="220" fixed="right">
-              <template #default="{ row }">
-                <el-button type="primary" link size="small" @click="openSections(row)">章节配置</el-button>
-                <el-button type="primary" link size="small" @click="openTplEdit(row)">编辑</el-button>
-                <el-button type="danger" link size="small" @click="deleteTemplate(row)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-card>
+          <!-- 报告章节（依赖主表已保存） -->
+          <el-card shadow="never" class="section-card">
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">报告章节</span>
+                <el-button type="primary" size="small" @click="openSecEdit(null)" :disabled="!templateForm.id">
+                  <el-icon><IconAdd /></el-icon> 新建章节
+                </el-button>
+              </div>
+            </template>
 
-        <!-- 章节列表（选中模板后显示） -->
-        <el-card shadow="never" class="table-card" v-if="selectedTpl" style="flex:1">
-          <template #header>
-            <div class="card-header">
-              <span class="card-title">报告章节 — {{ selectedTpl.templateName }}</span>
-              <el-button type="primary" size="small" @click="openSecEdit(null)">
-                <el-icon><IconAdd /></el-icon> 新建章节
-              </el-button>
-            </div>
-          </template>
-          <el-table :data="sectionData" stripe border v-loading="secLoading" style="width:100%">
-            <el-table-column prop="sectionName" label="章节名称" width="180" />
-            <el-table-column prop="sectionNameEn" label="英文名称" width="150" />
-            <el-table-column prop="clauseCode" label="关联条款" width="100" />
-            <el-table-column prop="workflowCode" label="工作流" width="140" />
-            <el-table-column prop="sortOrder" label="排序" width="60" align="center" />
-            <el-table-column prop="isActive" label="状态" width="70" align="center">
-              <template #default="{ row }">
-                <el-tag :type="row.isActive ? 'success' : 'info'" size="small">{{ row.isActive ? '启用' : '禁用' }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="220" fixed="right">
-              <template #default="{ row }">
-                <el-button type="primary" link size="small" @click="openSecEdit(row)">编辑</el-button>
-                <el-button type="success" link size="small" @click="openSectionDesigner(row)">工作流</el-button>
-                <el-button type="warning" link size="small" @click="copySection(row)">复制</el-button>
-                <el-button type="danger" link size="small" @click="deleteSection(row)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-card>
+            <el-table v-if="templateForm.id" :data="sectionData" stripe border v-loading="secLoading" style="width:100%">
+              <el-table-column prop="sectionName" label="章节名称" min-width="180" />
+              <el-table-column prop="sectionNameEn" label="英文名称" width="150" />
+              <el-table-column prop="sortOrder" label="排序" width="80" align="center" />
+              <el-table-column label="启用" width="80" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="row.isActive ? 'success' : 'info'" size="small">{{ row.isActive ? '是' : '否' }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="140" fixed="right">
+                <template #default="{ row }">
+                  <div class="row-actions">
+                    <el-button type="primary" link size="small" @click="openSecEdit(row)">编辑</el-button>
+                    <el-button type="danger" link size="small" @click="deleteSection(row)">删除</el-button>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-else description="请先创建报告模板，再编辑章节" :image-size="60" />
+          </el-card>
+        </template>
+
+        <!-- 未选择标准时的空状态 -->
+        <el-empty v-else description="请先在左侧选择机构 → 标准 → 阶段" :image-size="100" style="margin:auto" />
       </div>
     </div>
 
-    <!-- 模板编辑弹窗 -->
-    <el-dialog v-model="tplDialogVisible" :title="tplForm.id ? '编辑报告' : '新建报告'" width="600px" destroy-on-close>
-      <el-form :model="tplForm" label-width="100px">
-        <el-form-item label="报告名称">
-          <el-input v-model="tplForm.templateName" />
-        </el-form-item>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="机构编码">
-              <el-input v-model="tplForm.orgCode" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="标准编码">
-              <el-input v-model="tplForm.standardCode" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="阶段编码">
-              <el-input v-model="tplForm.phaseCode" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="认证机构">
-              <el-input v-model="tplForm.cbCode" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item label="报告路径">
-          <el-input v-model="tplForm.templateFilePath" placeholder="MinIO文件路径" />
-        </el-form-item>
-        <el-form-item label="是否默认">
-          <el-switch v-model="tplForm.isDefault" active-value="1" inactive-value="0" />
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="tplForm.remark" type="textarea" :rows="2" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="tplDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveTemplate">保存</el-button>
-      </template>
-    </el-dialog>
-
     <!-- 章节编辑弹窗 -->
-    <el-dialog v-model="secDialogVisible" :title="secForm.id ? '编辑章节' : '新建章节'" width="650px" destroy-on-close>
-      <el-form :model="secForm" label-width="100px">
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="章节名称">
-              <el-input v-model="secForm.sectionName" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="英文名称">
-              <el-input v-model="secForm.sectionNameEn" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="关联条款">
-              <el-input v-model="secForm.clauseCode" placeholder="如 6.1" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="工作流编码">
-              <el-input v-model="secForm.workflowCode" placeholder="绑定工作流" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item label="章节内容">
-          <el-input v-model="secForm.content" type="textarea" :rows="3" placeholder="初始内容或占位文本" />
+    <el-dialog v-model="secDialogVisible" :title="secForm.id ? '编辑章节' : '新建章节'" width="500px" destroy-on-close>
+      <el-form :model="secForm" label-width="100px" ref="secFormRef">
+        <el-form-item label="章节名称" prop="sectionName" :rules="[{ required: true, message: '请输入章节名称' }]">
+          <el-input v-model="secForm.sectionName" placeholder="如：审核发现" />
         </el-form-item>
-        <el-form-item label="工作流DAG JSON">
-          <el-input v-model="secForm.sectionJson" type="textarea" :rows="4" placeholder="DAG JSON配置" />
-          <el-link type="primary" @click="openSectionDesigner(secForm)" style="margin-top:4px;display:inline-block">
-            在工作流设计器中可视化编辑 →
-          </el-link>
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="secForm.remark" type="textarea" :rows="2" />
+        <el-form-item label="英文名称">
+          <el-input v-model="secForm.sectionNameEn" placeholder="English name" />
         </el-form-item>
         <el-form-item label="排序">
           <el-input-number v-model="secForm.sortOrder" :min="0" :max="999" />
+        </el-form-item>
+        <el-form-item label="是否启用">
+          <el-switch v-model="secForm.isActive" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="secForm.remark" type="textarea" :rows="2" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -213,163 +148,257 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, getCurrentInstance } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, computed, getCurrentInstance } from 'vue'
+import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CertPageHeader } from '@/certcore'
-import { IconSetting, IconAdd, IconRefresh } from '@/yzh/icons'
-import { OfficeBuilding, Folder, Document } from '@element-plus/icons-vue'
+import { YzhStdTree } from '@/yzh'
+import { IconSetting, IconAdd, IconRefresh, IconUpload } from '@/yzh/icons'
 
-const router = useRouter()
+const store = useStore()
 const { proxy } = getCurrentInstance()
-const tplLoading = ref(false)
+const saving = ref(false)
 const secLoading = ref(false)
-const templateData = ref([])
 const sectionData = ref([])
-const selectedTpl = ref(null)
-const treeData = ref([])
-const currentLabel = ref('全部报告')
-const currentFilter = reactive({ orgCode: '', standardCode: '', phaseCode: '' })
+const stdTreeRef = ref(null)
+const uploadRef = ref(null)
 
-const tplDialogVisible = ref(false)
+// 当前选中的上下文（统一用 standardCode 即标准编码如 ISO13485-CODE）
+const currentFilter = reactive({
+  orgCode: '',
+  standardCode: '',  // 如 ISO13485-CODE
+  phaseCode: ''
+})
+
+// 报告模板表单（单条记录：org+std+phase 唯一）
+const templateForm = reactive({
+  id: null,
+  code: '',
+  templateName: '',
+  orgCode: '',
+  standardCode: '',
+  phaseCode: '',
+  cbCode: '',
+  templateFilePath: '',
+  remark: ''
+})
+
+// 章节弹窗
 const secDialogVisible = ref(false)
-const tplForm = reactive({ id: null, templateName: '', orgCode: '', standardCode: '', phaseCode: '', cbCode: '', templateFilePath: '', isDefault: 0, remark: '' })
-const secForm = reactive({ id: null, reportCode: '', sectionName: '', sectionNameEn: '', clauseCode: '', workflowCode: '', sectionJson: '', content: '', remark: '', sortOrder: 0, isActive: true })
+const secFormRef = ref(null)
+const secForm = reactive({ id: null, code: '', reportCode: '', orgCode: '', sectionName: '', sectionNameEn: '', sortOrder: 0, isActive: true, remark: '' })
 
-const loadTemplates = async () => {
-  tplLoading.value = true
-  try {
-    const res = await proxy.http.post('api/report-definition/template/page', { Page: 1, Rows: 100, Sort: 'Id', Order: 'asc' }, true,
-      { params: { ...currentFilter } })
-    if (res?.status) templateData.value = res.data?.rows || []
-  } catch (e) { console.error(e) } finally { tplLoading.value = false }
+// ── 工具函数 ──
+
+function getFileName(path) {
+  if (!path) return ''
+  return path.split('/').pop() || path
 }
 
-const resetFilter = () => {
-  Object.assign(currentFilter, { orgCode: '', standardCode: '', phaseCode: '' })
-  currentLabel.value = '全部报告'
-  loadTemplates()
+// ── 公共树组件事件 ──
+
+function handleTreeSelect({ orgCode, standardCode, phaseCode }) {
+  // 统一用 standardCode（标准编码如 ISO13485-CODE），不用 stdCode（UUID）
+  Object.assign(currentFilter, { orgCode, standardCode, phaseCode })
+  loadTemplate()
 }
 
-const loadTree = async () => {
-  try {
-    const res = await proxy.http.get('api/report-definition/template/list', null, false)
-    if (res?.status) {
-      const tpls = res.data || []
-      const groups = {}
-      for (const t of tpls) {
-        const org = t.orgCode || '全局'
-        const std = t.standardCode || '未分类'
-        const phase = t.phaseCode || '未指定'
-        if (!groups[org]) groups[org] = {}
-        if (!groups[org][std]) groups[org][std] = {}
-        if (!groups[org][std][phase]) groups[org][std][phase] = []
-        groups[org][std][phase].push(t)
-      }
-      treeData.value = Object.entries(groups).map(([org, stds]) => ({
-        key: `org_${org}`, label: org, icon: OfficeBuilding, color: '#409eff',
-        tplCount: Object.values(stds).reduce((s, ps) => s + Object.values(ps).flat().length, 0),
-        children: Object.entries(stds).map(([std, phases]) => ({
-          key: `std_${org}_${std}`, label: std, icon: Folder, color: '#67c23a',
-          children: Object.entries(phases).map(([phase, tls]) => ({
-            key: `phase_${org}_${std}_${phase}`, label: phase, icon: Document, color: '#e6a23c',
-            tplCount: tls.length, _filter: { orgCode: org, standardCode: std, phaseCode: phase }
-          }))
-        }))
-      }))
-    }
-  } catch (e) { console.error(e) }
+const refreshTree = () => {
+  stdTreeRef.value?.reload()
+  loadTemplate()
 }
 
-const handleNodeClick = (data) => {
-  if (data._filter) {
-    Object.assign(currentFilter, data._filter)
-    currentLabel.value = data.label
-  } else if (data.key?.startsWith('std_')) {
-    const p = data.key.split('_')
-    currentFilter.orgCode = p[1]; currentFilter.standardCode = p[2]; currentFilter.phaseCode = ''
-    currentLabel.value = p[2]
-  } else if (data.key?.startsWith('org_')) {
-    currentFilter.orgCode = data.key.replace('org_', '')
-    currentFilter.standardCode = ''; currentFilter.phaseCode = ''
-    currentLabel.value = currentFilter.orgCode
-  } else {
-    Object.assign(currentFilter, { orgCode: '', standardCode: '', phaseCode: '' })
-    currentLabel.value = '全部报告'
+// ── 模板操作（单条 upsert 模式） ──
+
+const loadTemplate = async () => {
+  if (!currentFilter.standardCode || !currentFilter.phaseCode) {
+    resetTemplateForm()
+    return
   }
-  loadTemplates()
+  try {
+    // 注意：proxy.http.get 的第二个 param 参数不会自动拼接为 query string
+    // 必须手动拼接到 URL
+    const query = `orgCode=${encodeURIComponent(currentFilter.orgCode)}&standardCode=${encodeURIComponent(currentFilter.standardCode)}&phaseCode=${encodeURIComponent(currentFilter.phaseCode)}`
+    const res = await proxy.http.get(`api/report-definition/template/context?${query}`, null, false)
+    if (res?.status && res.data) {
+      Object.assign(templateForm, {
+        id: res.data.id,
+        code: res.data.code || '',
+        templateName: res.data.templateName || '',
+        orgCode: res.data.orgCode || currentFilter.orgCode,
+        standardCode: res.data.standardCode || currentFilter.standardCode,
+        phaseCode: res.data.phaseCode || currentFilter.phaseCode,
+        cbCode: res.data.cbCode || currentFilter.orgCode,
+        templateFilePath: res.data.templateFilePath || '',
+        remark: res.data.remark || ''
+      })
+      loadSections()
+    } else {
+      resetTemplateForm()
+    }
+  } catch (e) { console.error('加载模板失败', e) }
 }
 
-const refreshTree = () => { loadTree(); loadTemplates() }
-
-const openTplEdit = (row) => {
-  if (row) Object.assign(tplForm, row)
-  else Object.assign(tplForm, { id: null, templateName: '', orgCode: currentFilter.orgCode, standardCode: currentFilter.standardCode, phaseCode: currentFilter.phaseCode, cbCode: '', templateFilePath: '', isDefault: 0, remark: '' })
-  tplDialogVisible.value = true
+function resetTemplateForm() {
+  Object.assign(templateForm, {
+    id: null, code: '', templateName: '', templateFilePath: '', remark: '',
+    orgCode: currentFilter.orgCode,
+    standardCode: currentFilter.standardCode,
+    phaseCode: currentFilter.phaseCode,
+    cbCode: currentFilter.orgCode
+  })
+  sectionData.value = []
 }
 
 const saveTemplate = async () => {
+  if (!templateForm.templateName?.trim()) {
+    ElMessage.warning('请输入报告名称')
+    return
+  }
+  saving.value = true
   try {
-    const res = await proxy.http.post('api/report-definition/template', tplForm, true)
-    if (res?.status) { ElMessage.success('保存成功'); tplDialogVisible.value = false; loadTemplates(); loadTree() }
-    else ElMessage.error(res?.message || '保存失败')
-  } catch (e) { ElMessage.error('保存失败') }
+    // 确保上下文字段正确
+    templateForm.orgCode = currentFilter.orgCode
+    templateForm.standardCode = currentFilter.standardCode
+    templateForm.phaseCode = currentFilter.phaseCode
+    templateForm.cbCode = currentFilter.orgCode
+
+    const res = await proxy.http.post('api/report-definition/template', { ...templateForm }, true)
+    if (res?.status) {
+      ElMessage.success(res.message || '保存成功')
+      // 用返回的实体直接更新表单状态
+      if (res.data) {
+        Object.assign(templateForm, {
+          id: res.data.id,
+          code: res.data.code || '',
+          templateName: res.data.templateName || templateForm.templateName,
+          templateFilePath: res.data.templateFilePath || '',
+          remark: res.data.remark || ''
+        })
+      }
+      loadSections()
+    } else {
+      ElMessage.error(res?.message || '保存失败')
+    }
+  } catch (e) {
+    ElMessage.error('保存失败')
+  } finally {
+    saving.value = false
+  }
 }
 
-const deleteTemplate = async (row) => {
-  try {
-    await ElMessageBox.confirm(`确认删除报告「${row.templateName}」？`, '确认', { type: 'warning' })
-    const res = await proxy.http.post(`api/report-definition/template/delete/${row.id}`, null, true)
-    if (res?.status) { ElMessage.success('删除成功'); loadTemplates(); loadTree() }
-  } catch (e) { if (e !== 'cancel') ElMessage.error('删除失败') }
+// ── 文件上传 ──
+
+const uploadUrl = computed(() => '/api/report-definition/template/upload')
+const uploadHeaders = computed(() => {
+  // Vol 框架 token 存在 Vuex store 中，不在 localStorage
+  const token = store.getters.getToken()
+  return { Authorization: token || '' }
+})
+const uploadData = computed(() => ({
+  orgCode: currentFilter.orgCode,
+  standardCode: currentFilter.standardCode,
+  phaseCode: currentFilter.phaseCode,
+}))
+
+const beforeUpload = (file) => {
+  const allowed = ['.docx', '.xlsx', '.pdf', '.doc', '.xls']
+  const ext = '.' + (file.name.split('.').pop() || '').toLowerCase()
+  if (!allowed.includes(ext)) {
+    ElMessage.error('仅支持 .docx / .xlsx / .pdf 格式')
+    return false
+  }
+  if (file.size > 100 * 1024 * 1024) {
+    ElMessage.error('文件大小不能超过 100MB')
+    return false
+  }
+  return true
 }
 
-const openSections = async (row) => {
-  selectedTpl.value = row
-  sectionData.value = []
+const onUploadSuccess = async (response) => {
+  if (response?.status && response.data?.path) {
+    ElMessage.success('文件上传成功')
+    templateForm.templateFilePath = response.data.path
+    // 如果主表已存在，自动保存路径
+    if (templateForm.id) {
+      await proxy.http.post('api/report-definition/template', { ...templateForm }, true)
+    }
+  } else {
+    ElMessage.error(response?.message || '上传失败')
+  }
+}
+
+const onUploadError = () => {
+  ElMessage.error('上传失败，请重试')
+}
+
+// ── 章节操作 ──
+
+const loadSections = async () => {
+  if (!templateForm.code) { sectionData.value = []; return }
   secLoading.value = true
   try {
-    const res = await proxy.http.get(`api/report-definition/section/${row.code}`, null, false)
+    const res = await proxy.http.get(`api/report-definition/section/${templateForm.code}`, null, false)
     if (res?.status) sectionData.value = res.data || []
   } catch (e) { console.error(e) } finally { secLoading.value = false }
 }
 
 const openSecEdit = (row) => {
-  if (row) Object.assign(secForm, row)
-  else Object.assign(secForm, { id: null, reportCode: selectedTpl.value?.code || '', sectionName: '', sectionNameEn: '', clauseCode: '', workflowCode: '', sectionJson: '', content: '', remark: '', sortOrder: sectionData.value.length, isActive: true })
+  if (!templateForm.id) {
+    ElMessage.warning('请先创建报告模板')
+    return
+  }
+  if (row) {
+    Object.assign(secForm, {
+      id: row.id, code: row.code || '',
+      reportCode: row.reportCode || templateForm.code || '',
+      orgCode: row.orgCode || currentFilter.orgCode,
+      sectionName: row.sectionName || '',
+      sectionNameEn: row.sectionNameEn || '',
+      sortOrder: row.sortOrder ?? 0,
+      isActive: row.isActive !== false,
+      remark: row.remark || ''
+    })
+  } else {
+    Object.assign(secForm, {
+      id: null, code: '',
+      reportCode: templateForm.code || '',
+      orgCode: currentFilter.orgCode,
+      sectionName: '', sectionNameEn: '',
+      sortOrder: sectionData.value.length,
+      isActive: true, remark: ''
+    })
+  }
   secDialogVisible.value = true
 }
 
-const openSectionDesigner = (row) => {
-  const params = { ...currentFilter }
-  if (row?.workflowCode) params.id = row.workflowCode
-  router.push({ path: '/CertPlatform/WorkflowDesigner/new', query: params })
-}
-
 const saveSection = async () => {
-  try {
-    const res = await proxy.http.post('api/report-definition/section', secForm, true)
-    if (res?.status) { ElMessage.success('保存成功'); secDialogVisible.value = false; openSections(selectedTpl.value) }
-    else ElMessage.error(res?.message || '保存失败')
-  } catch (e) { ElMessage.error('保存失败') }
-}
-
-const copySection = async (row) => {
-  try {
-    const res = await proxy.http.post(`api/report-definition/section/copy/${row.id}`, null, true)
-    if (res?.status) { ElMessage.success('复制成功'); openSections(selectedTpl.value) }
-  } catch (e) { ElMessage.error('复制失败') }
+  if (!secFormRef.value) return
+  await secFormRef.value.validate(async (valid) => {
+    if (!valid) return
+    try {
+      const res = await proxy.http.post('api/report-definition/section', secForm, true)
+      if (res?.status) {
+        ElMessage.success('保存成功')
+        secDialogVisible.value = false
+        await loadSections()
+      } else {
+        ElMessage.error(res?.message || '保存失败')
+      }
+    } catch (e) { ElMessage.error('保存失败') }
+  })
 }
 
 const deleteSection = async (row) => {
   try {
     await ElMessageBox.confirm(`确认删除章节「${row.sectionName}」？`, '确认', { type: 'warning' })
     const res = await proxy.http.post(`api/report-definition/section/delete/${row.id}`, null, true)
-    if (res?.status) { ElMessage.success('删除成功'); openSections(selectedTpl.value) }
+    if (res?.status) {
+      ElMessage.success('删除成功')
+      await loadSections()
+    }
   } catch (e) { if (e !== 'cancel') ElMessage.error('删除失败') }
 }
-
-onMounted(() => { loadTree(); loadTemplates() })
 </script>
 
 <style scoped lang="less">
@@ -377,12 +406,14 @@ onMounted(() => { loadTree(); loadTemplates() })
 .page-body { display: flex; gap: 16px; height: calc(100vh - 140px); }
 .tree-card { width: 260px; min-width: 260px; display: flex; flex-direction: column; }
 .tree-header { display: flex; align-items: center; justify-content: space-between; }
-.tree-node { display: flex; align-items: center; gap: 4px; font-size: 13px; }
-.tree-icon { font-size: 14px; }
-.node-count { margin-left: 4px; }
-.content-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.filter-card { margin-bottom: 12px; }
-.table-card { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
-.card-header { display:flex; align-items:center; justify-content:space-between; }
+.content-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; gap: 16px; }
+.template-card { flex-shrink: 0; }
+.template-form { padding: 8px 0; }
+.section-card { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.section-card :deep(.el-card__body) { flex: 1; overflow-y: auto; }
+.card-header { display:flex; align-items:center; justify-content:space-between; gap: 8px; }
 .card-title { font-size:15px; font-weight:600; }
+.row-actions { display: flex; gap: 4px; white-space: nowrap; }
+.form-footer { text-align: right; padding-top: 8px; }
+.file-row { display: flex; align-items: center; width: 100%; }
 </style>
