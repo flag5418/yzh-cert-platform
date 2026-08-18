@@ -562,8 +562,8 @@ onMounted(() => { loadCategories(); loadData() })
 </script>
 
 <style scoped lang="less">
-.skill-manage-page { padding: var(--yzh-space-5, 20px); }
-.page-body { display: flex; gap: 16px; height: calc(100vh - 140px); }
+.skill-manage-page { padding: 16px; height: 100%; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
+.page-body { display: flex; gap: 16px; flex: 1; min-height: 0; }
 .category-card { width: 200px; min-width: 200px; display: flex; flex-direction: column; }
 .category-header { display: flex; align-items: center; justify-content: space-between; }
 .category-list { overflow-y: auto; }

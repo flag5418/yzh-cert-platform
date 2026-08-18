@@ -1296,55 +1296,8 @@ const onDragLeave = (event) => {
   }
 }
 
-// 拖拽放下（核心处理）
-const handleDrop = (event) => {
-  event.preventDefault()
-  dragActive.value = false
-  
-  console.log('[Drop] 文件拖放事件触发', event.dataTransfer)
-  
-  // 阻止事件冒泡和默认行为
-  if (event.stopPropagation) event.stopPropagation()
-  
-  // 处理拖拽的文件和文件夹（支持 DataTransferItemList）
-  let files = []
-  
-  // 方式1：使用 DataTransferItemList（现代浏览器，支持文件夹）
-  const items = event.dataTransfer?.items
-  if (items && items.length > 0) {
-    console.log('[Drop] 检测到', items.length, '个拖拽项')
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
-      console.log('[Drop] 项目', i, ': kind=', item.kind, 'type=', item.type)
-      if (item.kind === 'file') {
-        const file = item.getAsFile()
-        if (file) {
-          files.push(file)
-          console.log('[Drop] 获取到文件:', file.name, 'size:', file.size, 'path:', file.webkitRelativePath || '(无)')
-        }
-      }
-    }
-  }
-  
-  // 方式2：回退到 dataTransfer.files（旧浏览器，不支持文件夹）
-  if (files.length === 0 && event.dataTransfer?.files) {
-    files = Array.from(event.dataTransfer.files)
-    console.log('[Drop] 使用回退方式获取到', files.length, '个文件')
-  }
-  
-  // 如果有文件，添加到上传列表
-  if (files.length > 0) {
-    console.log('[Drop] 准备添加', files.length, '个文件到上传列表')
-    appendAllowedFiles(files)
-    
-    // 显示反馈
-    const fileNames = files.map(f => f.webkitRelativePath || f.name).join(', ')
-    console.log('[Drop] 已添加文件:', fileNames)
-  } else {
-    console.warn('[Drop] 未检测到任何文件')
-    ElMessage.warning('未检测到有效的文件，请确保拖拽的是文件或文件夹')
-  }
-}
+// 拖拽放下由 YzhFolderUpload 组件统一处理（支持 webkitGetAsEntry 递归遍历文件夹）
+// onDialogDrop 仅处理落在 YzhFolderUpload 组件外部区域的拖拽（回退方案）
 
 const removeFile = (index) => uploadFileList.value.splice(index, 1)
 const clearUploadList = () => {
@@ -1387,181 +1340,67 @@ const onUploadError = (error) => {
 }
 
 /**
- * Dialog 级别的拖拽事件（后备方案，当组件内拖拽失效时触发）
- * 支持文件和文件夹拖拽
- * 
- * 注意：由于浏览器安全限制，从桌面拖拽的文件夹可能无法递归读取。
- * 此时应该提示用户使用"选择文件夹"按钮代替。
+ * Dialog 级别的拖拽事件（后备方案）
+ * 仅处理落在 YzhFolderUpload 组件外部区域的拖拽。
+ * 文件夹递归遍历由 YzhFolderUpload 组件内部统一处理（通过 webkitGetAsEntry + traverseDirectory）。
+ * 若用户拖拽文件夹到组件外部区域，提示用户拖到组件内。
  */
 const onDialogDrop = async (event) => {
-  console.log('[DialogDrop] Dialog 拖拽事件触发！', event.dataTransfer)
-  
-  // 拖拽发生在 YzhFolderUpload 组件区域内时，由组件自身处理（含递归），避免重复添加
+  // 拖拽发生在 YzhFolderUpload 组件区域内时，由组件自身处理（stopPropagation 已阻止冒泡，此处为双重保险）
   if (event.target?.closest?.('.yzh-folder-upload')) {
-    console.log('[DialogDrop] 拖拽发生在 YzhFolderUpload 组件内，跳过（由组件处理）')
     return
   }
-  
+
   const items = event.dataTransfer?.items
-  const files = event.dataTransfer?.files
-  
-  // 情况1：有 DataTransferItemList（现代浏览器）
-  if (items && items.length > 0) {
-    console.log(`[DialogDrop] 检测到 ${items.length} 个拖拽项`)
-    
-    let collectedFiles = []
-    let folderCount = 0
-    
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
-      console.log(`[DialogDrop] 项目 ${i}: kind=${item.kind}, type=${item.type}`)
-      
-      if (item.kind === 'file') {
-        const entry = item.webkitGetAsEntry?.()
-        
-        if (entry?.isDirectory) {
-          folderCount++
-          console.log(`[DialogDrop] 📁 发现文件夹: ${entry.name}，尝试递归...`)
-          
-          const beforeCount = collectedFiles.length
-          await traverseDirectoryWithRetry(entry, entry.name + '/', collectedFiles)
-          
-          const afterCount = collectedFiles.length
-          if (afterCount === beforeCount) {
-            console.warn(`[DialogDrop] ⚠️ 文件夹 "${entry.name}" 无法读取（浏览器安全限制）`)
-            // 将文件夹本身作为一个占位项
-            const placeholderFile = new File(['(文件夹)'], entry.name, { type: 'directory' })
-            Object.defineProperty(placeholderFile, 'webkitRelativePath', {
-              value: entry.name + '/',
-              writable: false
-            })
-            collectedFiles.push(placeholderFile)
-          }
-        } else if (entry?.isFile) {
-          // 普通文件
-          try {
-            const file = await getFileFromEntryForDialog(entry)
-            if (file) collectedFiles.push(file)
-          } catch (err) {
-            console.warn(`[DialogDrop] ⚠️ 读取文件失败:`, err)
-          }
-        } else {
-          // 最终回退到 getAsFile
-          const file = item.getAsFile()
-          if (file) collectedFiles.push(file)
-        }
-      }
+  if (!items?.length) {
+    // 回退到 dataTransfer.files（旧浏览器）
+    const files = event.dataTransfer?.files
+    if (files?.length) {
+      appendAllowedFiles(files)
     }
-    
-    // 添加结果
-    if (collectedFiles.length > 0) {
-      const actualFileCount = collectedFiles.filter(f => f.type !== 'directory').length
-      console.log(`[DialogDrop] ✅ 收集完成: ${actualFileCount} 个文件 + ${folderCount} 个文件夹占位`)
-      
-      uploadFileList.value = [...uploadFileList.value, ...collectedFiles]
-      
-      if (folderCount > 0 && actualFileCount === 0) {
-        ElMessage.warning('检测到文件夹但无法展开（浏览器限制），请使用"选择文件夹"按钮上传')
+    return
+  }
+
+  // 同步收集所有 entry（webkitGetAsEntry 必须在拖拽事件同步阶段调用）
+  const entries = []
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    if (item.kind === 'file') {
+      const entry = item.webkitGetAsEntry?.()
+      if (entry?.isDirectory) {
+        // 文件夹拖拽到组件外部：提示用户拖到组件内
+        ElMessage.warning('请将文件夹拖拽到上传区域内（虚线框区域），以支持递归读取文件夹内所有文件')
+        return
+      }
+      if (entry) {
+        entries.push(entry)
       } else {
-        ElMessage.success(`添加了 ${actualFileCount} 个文件${folderCount > 0 ? `（${folderCount} 个文件夹未展开）` : ''}`)
-      }
-    } else {
-      ElMessage.warning('未检测到有效的文件')
-    }
-    return
-  }
-  
-  // 情况2：回退到 files 属性（旧浏览器或无 items）
-  if (files && files.length > 0) {
-    const fileList = Array.from(files)
-    console.log('[DialogDrop] 回退模式 - 获取到文件:', fileList.map(f => `${f.name} (${f.size} bytes)`))
-    
-    // 检查是否有 webkitRelativePath（说明来自文件夹选择器）
-    const hasFolderFiles = fileList.some(f => f.webkitRelativePath && f.webkitRelativePath.includes('/'))
-    
-    uploadFileList.value = [...uploadFileList.value, ...fileList]
-    ElMessage.success(`添加了 ${fileList.length} 个文件${hasFolderFiles ? '（含文件夹内文件）' : ''}`)
-    return
-  }
-  
-  console.warn('[DialogDrop] 未获取到任何文件')
-}
-
-/**
- * 带重试机制的递归遍历文件夹（无深度限制，完整递归所有层级）
- * @param {FileSystemDirectoryEntry} directoryEntry - 目录条目
- * @param {string} path - 当前路径前缀
- * @param {Array} fileList - 收集的文件列表
- */
-const traverseDirectoryWithRetry = async (directoryEntry, path, fileList) => {
-  return new Promise((resolve) => {
-    const reader = directoryEntry.createReader()
-    let allEntries = []
-    let retryCount = 0
-    const maxRetries = 3 // 最多重试3次
-    
-    const readAllEntries = () => {
-      reader.readEntries((entries) => {
-        if (!entries.length) {
-          // 没有更多条目
-          processEntries(allEntries).then(resolve)
-          return
-        }
-        
-        allEntries = allEntries.concat(entries)
-        readAllEntries() // 继续读取
-      }, (error) => {
-        console.error(`[DialogDrop] ❌ 读取目录失败 (第${retryCount + 1}次):`, error)
-        retryCount++
-        
-        if (retryCount < maxRetries) {
-          console.log(`[DialogDrop] 🔁 重试读取... (${retryCount}/${maxRetries})`)
-          setTimeout(() => readAllEntries(), 100 * retryCount) // 延迟重试
-        } else {
-          console.error('[DialogDrop] ❌ 重试耗尽，处理已收集的条目')
-          processEntries(allEntries).finally(resolve)
-        }
-      })
-    }
-    
-    const processEntries = async (entries) => {
-      for (const entry of entries) {
-        if (entry.isFile) {
-          try {
-            const file = await getFileFromEntryForDialog(entry, path)
-            if (file) fileList.push(file)
-          } catch (err) {
-            console.warn(`[DialogDrop] ⚠️ 读取文件失败: ${entry.name}`, err)
-          }
-        } else if (entry.isDirectory) {
-          console.log(`[DialogDrop] 📁 进入子目录: ${path}${entry.name}/`)
-          await traverseDirectoryWithRetry(entry, path + entry.name + '/', fileList)
+        // 浏览器不支持 webkitGetAsEntry
+        const file = item.getAsFile()
+        if (file) {
+          const list = []
+          list.push(file)
+          appendAllowedFiles(list)
         }
       }
     }
-    
-    // 开始首次读取
-    readAllEntries()
-  })
-}
+  }
 
-/**
- * 从 FileEntry 获取 File 对象（用于 Dialog 级别拖拽）
- */
-const getFileFromEntryForDialog = (fileEntry, path = '') => {
-  return new Promise((resolve, reject) => {
-    fileEntry.file((file) => {
-      // 保留相对路径
-      if (path && !file.webkitRelativePath) {
-        Object.defineProperty(file, 'webkitRelativePath', {
-          value: path + file.name,
-          writable: false,
-          configurable: true
+  // 普通文件（非文件夹）
+  if (entries.length > 0) {
+    const files = []
+    for (const entry of entries) {
+      if (entry.isFile) {
+        const file = await new Promise((resolve) => {
+          entry.file(resolve, () => resolve(null))
         })
+        if (file) files.push(file)
       }
-      resolve(file)
-    }, reject)
-  })
+    }
+    if (files.length > 0) {
+      appendAllowedFiles(files)
+    }
+  }
 }
 
 // 暴露给模板的 ref

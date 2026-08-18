@@ -282,7 +282,10 @@ onBeforeUnmount(() => {
 
 <style scoped lang="less">
 .ai-usage-page {
-  padding: var(--yzh-space-5, 20px);
+  padding: 16px;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
 }
 
 .quick-range-card {

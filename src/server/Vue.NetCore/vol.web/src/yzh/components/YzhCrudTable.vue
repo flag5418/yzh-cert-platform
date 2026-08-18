@@ -1355,17 +1355,26 @@ function calcTableHeight() {
     if (el) {
       const top = el.getBoundingClientRect().top
       const winHeight = window.innerHeight
-      tableHeight.value = Math.max(300, winHeight - top - 80) // 80 = 分页 + padding
+      // 底部预留：分页区(padding 12 + 高度~36) + 容器底部 padding 16 = ~64，取 72 留余量
+      const bottomOffset = 72
+      tableHeight.value = Math.max(300, winHeight - top - bottomOffset)
     }
   })
 }
+
+// 当搜索列变化时（配置异步加载后），重新计算表格高度
+watch(
+  () => searchableColumns.value.length,
+  () => {
+    calcTableHeight()
+  }
+)
 
 // ============================================================
 // 初始化（V2.5：支持配置驱动）
 // ============================================================
 onMounted(async () => {
   initSearchForm()
-  calcTableHeight()
   window.addEventListener('resize', calcTableHeight)
 
   // V2.5: 如果有 pageKey，先从后端（或 Store）加载 UI 配置
@@ -1378,6 +1387,9 @@ onMounted(async () => {
 
   // 加载数据
   await loadData()
+
+  // 配置和字典加载完毕后，DOM 已渲染搜索栏 / alert 等元素，此时再计算表格高度
+  calcTableHeight()
 
   // 暴露实例
   emit('ready', exposedApi)
@@ -1503,14 +1515,14 @@ defineExpose(exposedApi)
 <style lang="less">
 /* 注意：不使用 scoped！因为 el-dialog 渲染在 body 层级，scoped 样式无法穿透 */
 
-/* ====== 主容器：四周 padding，对齐 Vol 标准页面（如 Sys_Menu） ====== */
+/* ====== 主容器：四周 padding，上下左右统一 16px ====== */
 .yzh-crud-table {
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
   position: relative;
-  padding: 16px 24px 16px 24px; /* 上16 / 左右24 / 下16：与截图标准页面的「四周留白」完全一致 */
+  padding: 16px; /* 上下左右统一 16px */
   box-sizing: border-box;
   gap: 0;
 }

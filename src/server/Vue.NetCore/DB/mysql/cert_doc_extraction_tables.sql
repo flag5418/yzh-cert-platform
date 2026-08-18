@@ -157,10 +157,20 @@ WHERE NOT EXISTS (SELECT 1 FROM `Sys_Dictionary` WHERE `DicNo` = 'rule_status');
 SET @rule_status_id = (SELECT `Dic_ID` FROM `Sys_Dictionary` WHERE `DicNo` = 'rule_status');
 
 -- 规则状态字典项
+-- 注意：DicValue 必须与后端代码 (DocExtractionRuleService.cs L361) 写入的 Status 值一致
+-- 后端写入：rule.Status = request.IsValid ? "configured" : "failed"
+-- 前端读取：none / configured / failed（见 CertDirectoryTree.vue, DocExtractionRule/index.vue）
+-- 因此字典值用 none/configured/failed，而非 0/1/2
 INSERT INTO `Sys_DictionaryList` (`Dic_ID`, `DicName`, `DicValue`, `OrderNo`, `Remark`, `Enable`, `CreateDate`)
-VALUES
-  (@rule_status_id, '未验证', '0', 1, '规则尚未验证', 1, NOW()),
-  (@rule_status_id, '验证通过', '1', 2, '规则验证成功', 1, NOW()),
-  (@rule_status_id, '验证失败', '2', 3, '规则验证失败', 1, NOW())
-ON DUPLICATE KEY UPDATE `DicName` = VALUES(`DicName`);
+SELECT @rule_status_id, '未配置', 'none', 1, '未制定提取规则', 1, NOW()
+WHERE NOT EXISTS (SELECT 1 FROM `Sys_DictionaryList` WHERE `Dic_ID` = @rule_status_id AND `DicValue` = 'none')
+  AND NOT EXISTS (SELECT 1 FROM `Sys_DictionaryList` WHERE `Dic_ID` = @rule_status_id AND `DicName` = '未配置');
+INSERT INTO `Sys_DictionaryList` (`Dic_ID`, `DicName`, `DicValue`, `OrderNo`, `Remark`, `Enable`, `CreateDate`)
+SELECT @rule_status_id, '已配置', 'configured', 2, '规则已配置且验证通过', 1, NOW()
+WHERE NOT EXISTS (SELECT 1 FROM `Sys_DictionaryList` WHERE `Dic_ID` = @rule_status_id AND `DicValue` = 'configured')
+  AND NOT EXISTS (SELECT 1 FROM `Sys_DictionaryList` WHERE `Dic_ID` = @rule_status_id AND `DicName` = '已配置');
+INSERT INTO `Sys_DictionaryList` (`Dic_ID`, `DicName`, `DicValue`, `OrderNo`, `Remark`, `Enable`, `CreateDate`)
+SELECT @rule_status_id, '配置失败', 'failed', 3, '规则配置验证失败', 1, NOW()
+WHERE NOT EXISTS (SELECT 1 FROM `Sys_DictionaryList` WHERE `Dic_ID` = @rule_status_id AND `DicValue` = 'failed')
+  AND NOT EXISTS (SELECT 1 FROM `Sys_DictionaryList` WHERE `Dic_ID` = @rule_status_id AND `DicName` = '配置失败');
 

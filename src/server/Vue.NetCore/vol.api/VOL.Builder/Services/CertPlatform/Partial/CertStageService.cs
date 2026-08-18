@@ -10,18 +10,20 @@
  * 
  * V3 适配说明：
  * - 数据库表 cert_cert_stage 使用 phase_code/phase_name 列名
- * - 无 v_cert_stage 视图，GetPageData 直接查表 + 内存字典翻译
+ * - GetPageData 使用原生 SQL 查询 v_cert_stage 视图（含字典翻译后的 CategoryName/StatusName）
  */
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using VOL.Core.BaseProvider;
 using VOL.Core.Extensions.AutofacManager;
 using VOL.Core.Utilities;
 using VOL.Entity.CertPlatform.Cert;
 using VOL.Entity.DomainModels;
+using VOL.Core.DBManager;
 using VOL.Builder.IRepositories.CertPlatform;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -80,37 +82,49 @@ namespace VOL.Builder.Services.CertPlatform
         }
 
         /// <summary>
-        /// 重写 GetPageData：直接查询 cert_cert_stage 表 + 内存字典翻译
+        /// 重写 GetPageData：原生 SQL 查询 v_cert_stage 视图，直接返回含中文字段的 CertStageView
         /// 
-        /// V3 适配：无 v_cert_stage 视图，直接查表并做内存翻译
-        /// 前端直接显示中文字段，无需任何字典处理
+        /// 视图 v_cert_stage 已通过 LEFT JOIN Sys_DictionaryList 完成字典翻译，
+        /// 返回 CategoryName/StatusName 中文字段，前端无需做任何字典拼接。
         /// </summary>
         public override PageGridData<CertStage> GetPageData(PageDataOptions options)
         {
-            var query = _repository.FindAsIQueryable(x => true);
-
-            // 排序
+            // 排序字段映射（前端传 PascalCase → 视图列名已统一为 PascalCase）
             string sortField = options.Sort ?? "SortOrder";
             bool isAsc = options.Order?.ToLower() == "asc";
-
-            query = sortField.ToUpper() switch
+            string orderClause = sortField.ToUpper() switch
             {
-                "SORTORDER" => isAsc ? query.OrderBy(x => x.SortOrder) : query.OrderByDescending(x => x.SortOrder),
-                "STAGECODE" or "PHASECODE" => isAsc ? query.OrderBy(x => x.StageCode) : query.OrderByDescending(x => x.StageCode),
-                "CREATEDATE" => isAsc ? query.OrderBy(x => x.CreateDate) : query.OrderByDescending(x => x.CreateDate),
-                _ => query.OrderByDescending(x => x.Id),
+                "SORTORDER" => isAsc ? "SortOrder ASC" : "SortOrder DESC",
+                "STAGECODE" => isAsc ? "StageCode ASC" : "StageCode DESC",
+                "CREATEDATE" => isAsc ? "CreateDate ASC" : "CreateDate DESC",
+                _ => "Id DESC",
             };
 
-            int totalCount = query.Count();
-
-            // 分页
             int page = options.Page > 0 ? options.Page : 1;
             int rows = options.Rows > 0 ? options.Rows : 20;
-            var list = query.Skip((page - 1) * rows).Take(rows).ToList();
+            int offset = (page - 1) * rows;
 
-            // 转换为 PageGridData
+            // 原生 SQL：查视图总数 + 分页数据
+            string countSql = "SELECT COUNT(*) FROM v_cert_stage";
+            string dataSql = $@"
+                SELECT Id, Code, StageCode, StageName, Description, SortOrder,
+                       Category, CategoryName, Status, StatusName,
+                       Remark, Enable, CreateID, Creator, CreateDate,
+                       ModifyID, Modifier, ModifyDate, DeleteID, Deleter, DeleteTime
+                FROM v_cert_stage
+                ORDER BY {orderClause}
+                LIMIT {offset}, {rows}";
+
+            var dapper = DBServerProvider.SqlDapper;
+
+            int totalCount = dapper.ExecuteScalar(countSql, null) as int? ?? 0;
+
+            // Dapper 查出的 CertStageView（继承 CertStage）可直接放入 PageGridData<CertStage>
+            var viewList = dapper.QueryList<CertStageView>(dataSql, null)
+                .Cast<CertStage>().ToList();
+
             var result = new PageGridData<CertStage>();
-            result.rows = list;
+            result.rows = viewList;
             result.total = totalCount;
             return result;
         }

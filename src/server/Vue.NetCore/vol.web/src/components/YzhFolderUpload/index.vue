@@ -143,15 +143,18 @@ const onDragLeave = (e) => {
 const onDrop = async (event) => {
   if (props.disabled) return
   isDragging.value = false
-  
+
+  // 阻止事件冒泡，防止父容器（如 el-dialog）重复处理同一个 drop 事件
+  if (event.stopPropagation) event.stopPropagation()
+
   const items = event.dataTransfer?.items
   if (!items?.length) {
     ElMessage.warning('未检测到有效的文件')
     return
   }
 
-  // 先同步收集所有目录项（webkitGetAsEntry 必须在拖拽事件中同步调用），
-  // 再统一异步遍历，避免 dataTransfer.items 在 await 过程中失效
+  // 先同步收集所有目录项（webkitGetAsEntry 必须在拖拽事件的同步阶段调用），
+  // 再统一异步遍历，避免 dataTransfer.items 在 await 过程中被浏览器回收
   const entries = []
   const files = []
   for (let i = 0; i < items.length; i++) {
@@ -168,6 +171,7 @@ const onDrop = async (event) => {
     }
   }
 
+  // 异步递归遍历所有 entry（文件夹会被完整展开）
   for (const entry of entries) {
     if (entry.isDirectory) {
       await traverseDirectory(entry, entry.name + '/', files)

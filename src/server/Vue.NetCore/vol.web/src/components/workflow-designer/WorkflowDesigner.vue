@@ -43,7 +43,11 @@ export default {
     this.initDiagram()
   },
   beforeUnmount() {
-    this.diagram?.destroy()
+    // LogicFlow 2.0 没有 destroy()，用 clearData() 清空 + 释放引用
+    if (this.diagram) {
+      this.diagram.clearData?.()
+      this.diagram = null
+    }
   },
   methods: {
     initDiagram() {

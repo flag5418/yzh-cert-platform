@@ -22,8 +22,6 @@
         <el-empty v-if="!standardList.length" description="请先在标准管理中添加标准" :image-size="60" />
       </el-card>
 
-      <!-- 左侧：标准选择结束 -->
-
       <!-- 右侧：条款树 + CRUD -->
       <div class="clause-area">
         <el-card shadow="never" class="toolbar-card">
@@ -253,8 +251,8 @@ onMounted(() => { loadStandards() })
 </script>
 
 <style scoped lang="less">
-.iso-clause-page { padding: var(--yzh-space-5, 20px); }
-.page-body { display: flex; gap: 16px; height: calc(100vh - 140px); }
+.iso-clause-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.page-body { display: flex; gap: 16px; flex: 1; min-height: 0; padding: 16px; }
 .std-card { width: 220px; min-width: 220px; overflow-y: auto; }
 .std-list { display: flex; flex-direction: column; gap: 4px; }
 .std-item {
@@ -271,11 +269,11 @@ onMounted(() => { loadStandards() })
 .std-item.active { background: #ecf5ff; border-color: #409eff; }
 .std-item .std-name { font-size: 13px; font-weight: 500; color: #303133; }
 .std-item.active .std-name { color: #409eff; }
-.clause-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.toolbar-card { margin-bottom: 12px; }
+.clause-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+.toolbar-card { flex-shrink: 0; }
 .toolbar { display: flex; align-items: center; justify-content: space-between; }
 .toolbar-title { font-size: 15px; font-weight: 600; }
-.tree-card { flex: 1; overflow: auto; }
+.tree-card { flex: 1; overflow: auto; min-height: 0; }
 .clause-node { display: flex; align-items: center; gap: 6px; font-size: 13px; width: 100%; }
 .clause-number { font-weight: 600; color: #409eff; min-width: 50px; }
 .clause-title { flex: 1; }

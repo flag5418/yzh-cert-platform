@@ -3,37 +3,83 @@
     <CertPageHeader title="NC 规则配置" :icon="IconSetting" />
 
     <div class="page-body">
-      <!-- ===== 左栏：树 + NC 项列表 ===== -->
+      <!-- ===== 左栏：统一4级树 ===== -->
       <div class="left-panel">
         <el-card shadow="never" class="tree-card">
           <template #header>
             <div class="panel-header">
-              <span>机构 / 标准 / 阶段</span>
+              <span>机构 / 标准 / 阶段 / NC检查项</span>
               <el-button link size="small" @click="refreshTree"><el-icon><IconRefresh /></el-icon></el-button>
             </div>
           </template>
-          <YzhStdTree ref="stdTreeRef" @select="handleTreeSelect" />
-        </el-card>
-        <el-card shadow="never" class="rule-list-card">
-          <template #header>
-            <div class="panel-header">
-              <span>NC 检查项</span>
-              <el-button link size="small" @click="loadRules"><el-icon><IconRefresh /></el-icon></el-button>
+          <div class="tree-search">
+            <el-input
+              v-model="searchText"
+              placeholder="搜索..."
+              size="small"
+              clearable
+              :prefix-icon="IconSearch"
+            />
+          </div>
+          <div class="tree-body">
+            <template v-for="org in treeData" :key="org.id">
+            <div v-if="org.visible" class="tree-group">
+              <!-- 机构 -->
+              <div class="tree-node level-0" @click="toggleExpand(org)">
+                <el-icon class="tree-toggle" :class="{ expanded: org.expanded }"><IconForward /></el-icon>
+                <el-icon class="tree-icon org"><IconOfficeBuilding /></el-icon>
+                <span class="tree-label">{{ org.label }}</span>
+                <el-badge v-if="org.children?.length" :value="org.children.length" type="info" />
+              </div>
+
+              <!-- 标准 -->
+              <template v-if="org.expanded && org.children">
+                <template v-for="std in org.children" :key="std.id">
+                  <div v-if="std.visible" class="tree-node level-1" @click="toggleExpand(std)">
+                    <el-icon class="tree-toggle" :class="{ expanded: std.expanded }"><IconForward /></el-icon>
+                    <el-icon class="tree-icon standard"><IconFile /></el-icon>
+                    <span class="tree-label">{{ std.label }}</span>
+                    <el-badge v-if="std.children?.length" :value="std.children.length" type="info" />
+                  </div>
+
+                  <!-- 阶段 -->
+                  <template v-if="std.expanded && std.children && std.visible">
+                    <template v-for="phase in std.children" :key="phase.id">
+                      <div v-if="phase.visible" class="tree-node level-2" @click="togglePhase(phase, std, org)">
+                        <el-icon class="tree-toggle" :class="{ expanded: phase.expanded }"><IconForward /></el-icon>
+                        <el-icon class="tree-icon phase"><IconCalendar /></el-icon>
+                        <span class="tree-label">{{ phase.label }}</span>
+                        <el-badge v-if="phase.children?.length" :value="phase.children.length" type="info" />
+                      </div>
+
+                      <!-- NC检查项 -->
+                      <div v-if="phase.visible && phase.expanded && phase.ruleLoaded">
+                        <div
+                          v-for="rule in phase.children"
+                          :key="rule.id"
+                          class="tree-node level-3"
+                          :class="{ active: currentRule?.id === rule.id }"
+                          @click="selectRule(rule, phase)"
+                        >
+                          <el-icon class="tree-toggle" style="visibility: hidden"><IconForward /></el-icon>
+                          <el-icon class="tree-icon rule"><IconDocument /></el-icon>
+                          <span class="tree-label">{{ rule.ruleName }}</span>
+                          <el-tag v-if="rule.clauseNumber" size="small" type="info" class="node-badge">{{ rule.clauseNumber }}</el-tag>
+                        </div>
+                        <div v-if="!phase.children.length" class="rule-empty">该阶段暂无检查项</div>
+                      </div>
+                      <div v-if="phase.visible && phase.expanded && phase.ruleLoading" class="rule-loading">
+                        <el-icon class="is-loading"><IconLoading /></el-icon>
+                        <span>加载中...</span>
+                      </div>
+                    </template>
+                  </template>
+                </template>
+              </template>
             </div>
-          </template>
-          <div class="rule-list" v-loading="ruleLoading">
-            <div
-              v-for="rule in ruleList"
-              :key="rule.id"
-              class="rule-item"
-              :class="{ active: currentRule?.id === rule.id }"
-              @click="selectRule(rule)"
-            >
-              <span class="rule-name">{{ rule.ruleName }}</span>
-              <el-tag v-if="rule.clauseNumber" size="small" type="info" class="rule-clause">{{ rule.clauseNumber }}</el-tag>
-            </div>
-            <div v-if="!ruleLoading && !ruleList.length" class="rule-empty">
-              {{ currentFilter.standardCode ? '该阶段暂无检查项' : '请先选择机构/标准/阶段' }}
+            </template>
+            <div v-if="!treeData.length" class="tree-empty">
+              <el-empty description="暂无数据" :image-size="60" />
             </div>
           </div>
         </el-card>
@@ -45,13 +91,19 @@
           <span class="canvas-title">{{ currentRule ? `工作流：${currentRule.ruleName}` : '请选择 NC 检查项' }}</span>
           <div class="toolbar-actions">
             <el-button size="small" @click="autoLayout"><el-icon><IconGrid /></el-icon> 自动布局</el-button>
+            <el-button size="small" type="danger" plain @click="handleClearCanvas"><el-icon><IconDelete /></el-icon> 清空画布</el-button>
             <el-button size="small" @click="validateGraph"><el-icon><IconCircleCheck /></el-icon> 校验</el-button>
             <el-button type="primary" size="small" :disabled="!currentRule" @click="handleSave">
               <el-icon><IconDownload /></el-icon> 保存工作流
             </el-button>
           </div>
         </div>
-        <div ref="canvasRef" class="canvas-container"></div>
+        <div
+          ref="canvasRef"
+          class="canvas-container"
+          @dragover.prevent="onCanvasDragOver"
+          @drop.prevent="onCanvasDrop"
+        ></div>
         <div class="canvas-status">
           <span>节点: {{ nodeCount }} | 边: {{ edgeCount }}</span>
           <span v-if="currentRule" class="rule-code-text">{{ currentRule.ruleCode }}</span>
@@ -73,13 +125,16 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
+import { ref, reactive, watch, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import LogicFlow from '@logicflow/core'
 import '@logicflow/core/dist/index.css'
 import { CertPageHeader } from '@/certcore'
-import { YzhStdTree } from '@/yzh'
-import { IconSetting, IconRefresh, IconGrid, IconCircleCheck, IconDownload } from '@/yzh/icons'
+import {
+  IconSetting, IconRefresh, IconGrid, IconCircleCheck, IconDownload,
+  IconForward, IconSearch, IconFile, IconCalendar, IconOfficeBuilding,
+  IconDocument, IconLoading, IconDelete
+} from '@/yzh/icons'
 import SkillPanel from '@/components/workflow-designer/SkillPanel.vue'
 import NodePropertyForm from '@/components/workflow-designer/NodePropertyForm.vue'
 import {
@@ -88,12 +143,11 @@ import {
 
 const { proxy } = getCurrentInstance()
 const canvasRef = ref(null)
-const stdTreeRef = ref(null)
 const diagram = ref(null)
 
-// 左栏
-const ruleList = ref([])
-const ruleLoading = ref(false)
+// 左栏 - 统一4级树
+const treeData = ref([])
+const searchText = ref('')
 const currentRule = ref(null)
 const currentFilter = reactive({ orgCode: '', standardCode: '', phaseCode: '' })
 
@@ -110,11 +164,17 @@ const selectedNode = ref(null)
 // ==================== 初始化 ====================
 
 onMounted(async () => {
-  await Promise.all([loadSkills(), loadCategories()])
+  await Promise.all([loadSkills(), loadCategories(), loadTree()])
   initDiagram()
 })
 
-onBeforeUnmount(() => { diagram.value?.destroy() })
+// LogicFlow 2.0 没有 destroy()，用 clearData() 清空 + 释放引用
+onBeforeUnmount(() => {
+  if (diagram.value) {
+    diagram.value.clearData?.()
+    diagram.value = null
+  }
+})
 
 async function loadSkills() {
   try {
@@ -130,6 +190,108 @@ async function loadCategories() {
   } catch (e) { console.error('加载分类失败', e) }
 }
 
+// ==================== 树数据 ====================
+
+async function loadTree() {
+  try {
+    const res = await proxy.http.get('/api/standard-directory/organization-tree', null, false)
+    const raw = res?.Data || res?.data || []
+    treeData.value = raw.map(org => ({
+      ...org,
+      expanded: true,
+      visible: true,
+      children: (org.children || []).map(std => ({
+        ...std,
+        expanded: false,
+        visible: true,
+        children: (std.children || []).map(phase => ({
+          ...phase,
+          expanded: false,
+          visible: true,
+          children: [],
+          ruleLoading: false,
+          ruleLoaded: false
+        }))
+      }))
+    }))
+    applySearchFilter()
+  } catch (e) {
+    console.error('[NCConfig] 加载树失败:', e)
+  }
+}
+
+function applySearchFilter() {
+  const kw = searchText.value?.toLowerCase() || ''
+  if (!kw) {
+    treeData.value.forEach(org => {
+      org.visible = true
+      ;(org.children || []).forEach(std => {
+        std.visible = true
+        ;(std.children || []).forEach(p => { p.visible = true })
+      })
+    })
+    return
+  }
+  treeData.value.forEach(org => {
+    let orgHasMatch = org.label?.toLowerCase().includes(kw)
+    ;(org.children || []).forEach(std => {
+      let stdHasMatch = std.label?.toLowerCase().includes(kw)
+      ;(std.children || []).forEach(p => {
+        p.visible = p.label?.toLowerCase().includes(kw) || stdHasMatch
+        if (p.visible) stdHasMatch = true
+      })
+      std.visible = stdHasMatch || orgHasMatch
+      if (std.visible) orgHasMatch = true
+    })
+    org.visible = orgHasMatch
+  })
+}
+
+watch(searchText, () => applySearchFilter())
+
+function toggleExpand(node) {
+  node.expanded = !node.expanded
+}
+
+async function togglePhase(phase, std, org) {
+  phase.expanded = !phase.expanded
+  // 便捷字段：stdCode 是 std.Code（如 ISO13485-CODE），standardCode 是 std.StandardCode（如 ISO134852016）
+  // 数据库 cert_validation_rule.standard_code 存的是 std.Code 值
+  Object.assign(currentFilter, {
+    orgCode: org.cbCode || org.id,
+    standardCode: std.stdCode || phase.stdCode || std.standardCode,
+    phaseCode: phase.phaseCode
+  })
+  currentRule.value = null
+  selectedNode.value = null
+  clearCanvas()
+  // 懒加载 NC 检查项
+  if (phase.expanded && !phase.ruleLoaded) {
+    await loadRulesForPhase(phase)
+  }
+}
+
+async function loadRulesForPhase(phase) {
+  phase.ruleLoading = true
+  try {
+    const params = `orgCode=${encodeURIComponent(currentFilter.orgCode)}&standardCode=${encodeURIComponent(currentFilter.standardCode)}&phaseCode=${encodeURIComponent(currentFilter.phaseCode)}`
+    const res = await proxy.http.get(`api/validation-rule/list?${params}`, null, false)
+    if (res?.status) {
+      phase.children = (res.data || []).map(r => ({ ...r, id: r.id || r.ruleCode }))
+    } else {
+      phase.children = []
+    }
+    phase.ruleLoaded = true
+  } catch (e) {
+    console.error('[NCConfig] 加载NC检查项失败:', e)
+    phase.children = []
+  } finally {
+    phase.ruleLoading = false
+  }
+}
+
+const refreshTree = () => { loadTree() }
+
 // ==================== 画布 ====================
 
 function initDiagram() {
@@ -137,19 +299,28 @@ function initDiagram() {
     container: canvasRef.value,
     grid: { size: 20, visible: true, type: 'mesh' },
     background: '#fafbfc',
-    behavior: { scroll: true, zoom: true, drag: true, canDragNode: true, canZoom: true },
+    edgeType: 'polyline',
+    allowResize: true,
+    allowRotate: false,
+    isSilentMode: false,
+    stopScrollGraph: false,
+    stopZoomGraph: false,
+    stopMoveGraph: false,
+    snapline: true,
     keyboard: { enabled: true }
   })
 
   diagram.value.on('node:click', ({ data }) => {
+    // LogicFlow 2.0: 自定义数据在 data.properties 中
+    const props = data.properties || {}
     selectedNode.value = {
       nodeId: data.id,
-      nodeType: data.data?.nodeType || 'skill',
-      title: data.data?.title || data.text || '',
-      skillCode: data.data?.skillCode || '',
-      config: data.data?.config || {},
-      inputs: data.data?.inputs || {},
-      outputs: data.data?.outputs || {}
+      nodeType: props.nodeType || 'skill',
+      title: props.title || data.text || '',
+      skillCode: props.skillCode || '',
+      config: props.config || {},
+      inputs: props.inputs || {},
+      outputs: props.outputs || {}
     }
   })
   diagram.value.on('edge:click', () => { selectedNode.value = null })
@@ -162,10 +333,48 @@ function refreshCount() {
   edgeCount.value = gd?.edges?.length || 0
 }
 
+// ==================== 拖拽到画布 ====================
+
+function onCanvasDragOver(event) {
+  event.dataTransfer.dropEffect = 'copy'
+}
+
+function onCanvasDrop(event) {
+  try {
+    const raw = event.dataTransfer.getData('nodeData')
+    if (!raw) return
+    const item = JSON.parse(raw)
+    // LogicFlow 2.0: getPointByClient 返回 { canvasOverlayPosition: { x, y } }
+    const lfPoint = diagram.value.getPointByClient(event.clientX, event.clientY)
+    const pos = lfPoint?.canvasOverlayPosition || lfPoint
+    const x = pos?.x ?? 200
+    const y = pos?.y ?? 150
+    addNodeAtPosition(item, x, y)
+  } catch (e) {
+    console.error('[NCConfig] 拖拽添加节点失败:', e)
+  }
+}
+
+function addNodeAtPosition(item, x, y) {
+  const nodeId = `n${Date.now()}`
+  const data = defaultNodeData(item)
+  const category = item.category || skills.value.find(s => s.skillCode === item.skillCode)?.category || ''
+  // LogicFlow 2.0: 自定义数据通过 properties 传入
+  diagram.value.addNode({
+    id: nodeId,
+    type: data.nodeType === 'start' || data.nodeType === 'end' ? 'circle'
+      : data.nodeType === 'logic' ? 'diamond' : 'rect',
+    x, y,
+    text: data.title,
+    style: nodeStyle(data.nodeType, data.skillCode, category),
+    properties: data
+  })
+  refreshCount()
+}
+
 // ==================== 添加 / 更新 / 删除节点 ====================
 
 function defaultNodeData(item) {
-  // 特殊节点
   if (item.nodeType === 'start') return { nodeType: 'start', title: '开始', config: {}, inputs: {}, outputs: {} }
   if (item.nodeType === 'end') return { nodeType: 'end', title: '结束', config: {}, inputs: {}, outputs: {} }
   if (item.nodeType === 'logic') return {
@@ -173,7 +382,6 @@ function defaultNodeData(item) {
     config: { conditions: [{ valueA: '', operator: 'gte', valueB: '' }], conditionLogic: 'and' },
     inputs: {}, outputs: {}
   }
-  // Skill 节点：按元数据预填输入默认值
   const meta = skills.value.find(s => s.skillCode === item.skillCode)
   const inputs = {}
   for (const input of meta?.inputs || []) {
@@ -196,65 +404,42 @@ function handleAddNode(item) {
   const maxY = gd.nodes.reduce((m, n) => Math.max(m, n.y), 80)
   const data = defaultNodeData(item)
   const category = item.category || skills.value.find(s => s.skillCode === item.skillCode)?.category || ''
-  diagram.value.add([{
+  // LogicFlow 2.0: 自定义数据通过 properties 传入
+  diagram.value.addNode({
     id: nodeId,
     type: data.nodeType === 'start' || data.nodeType === 'end' ? 'circle'
       : data.nodeType === 'logic' ? 'diamond' : 'rect',
     x: 120 + (maxX % 600), y: 80 + (maxY % 400),
     text: data.title,
     style: nodeStyle(data.nodeType, data.skillCode, category),
-    data
-  }])
+    properties: data
+  })
   refreshCount()
 }
 
 function handleUpdateNode(data) {
   if (!data.nodeId) return
-  diagram.value.update(data.nodeId, {
-    text: data.title || data.skillCode,
-    data: {
-      nodeType: data.nodeType,
-      title: data.title,
-      skillCode: data.skillCode,
-      config: data.config,
-      inputs: data.inputs,
-      outputs: data.outputs
-    }
+  // LogicFlow 2.0: updateText 更新文案, setProperties 更新数据
+  diagram.value.updateText(data.nodeId, data.title || data.skillCode || '')
+  diagram.value.setProperties(data.nodeId, {
+    nodeType: data.nodeType,
+    title: data.title,
+    skillCode: data.skillCode,
+    config: data.config,
+    inputs: data.inputs,
+    outputs: data.outputs
   })
   selectedNode.value = data
 }
 
 function handleDeleteNode(nodeId) {
-  diagram.value.delete([nodeId])
+  // LogicFlow 2.0: deleteNode 逐个删除
+  diagram.value.deleteNode(nodeId)
   selectedNode.value = null
   refreshCount()
 }
 
-// ==================== 树 / 规则加载 ====================
-
-function handleTreeSelect({ orgCode, standardCode, phaseCode, phaseName }) {
-  Object.assign(currentFilter, { orgCode: orgCode || '', standardCode: standardCode || '', phaseCode: phaseCode || '' })
-  currentRule.value = null
-  selectedNode.value = null
-  clearCanvas()
-  loadRules()
-}
-
-const refreshTree = () => {
-  stdTreeRef.value?.reload()
-  loadRules()
-}
-
-async function loadRules() {
-  if (!currentFilter.standardCode) { ruleList.value = []; return }
-  ruleLoading.value = true
-  try {
-    const res = await proxy.http.get('api/validation-rule/list', null, false, {
-      params: { ...currentFilter }
-    })
-    if (res?.status) ruleList.value = res.data || []
-  } catch (e) { console.error(e) } finally { ruleLoading.value = false }
-}
+// ==================== 选中规则 → 加载工作流 ====================
 
 function clearCanvas() {
   diagram.value?.render({ nodes: [], edges: [] })
@@ -262,9 +447,25 @@ function clearCanvas() {
   edgeCount.value = 0
 }
 
-async function selectRule(rule) {
+function handleClearCanvas() {
+  const gd = diagram.value?.getGraphData()
+  if (!gd?.nodes?.length) { ElMessage.info('画布已为空'); return }
+  ElMessageBox.confirm('确认清空画布上的所有节点和连线？', '清空确认', { type: 'warning' })
+    .then(() => {
+      clearCanvas()
+      selectedNode.value = null
+      ElMessage.success('画布已清空')
+    })
+    .catch(() => {})
+}
+
+async function selectRule(rule, phase) {
   currentRule.value = rule
   savedTip.value = ''
+  // 确保过滤条件来自当前 phase
+  currentFilter.orgCode = phase.cbCode || currentFilter.orgCode
+  currentFilter.standardCode = phase.stdCode || phase.standardCode || currentFilter.standardCode
+  currentFilter.phaseCode = phase.phaseCode || currentFilter.phaseCode
   try {
     const res = await proxy.http.get(`api/validation-rule/${rule.ruleCode}`, null, false)
     if (res?.status && res.data) {
@@ -296,12 +497,6 @@ function renderWorkflow(ruleJson, layoutJson) {
 function autoLayout() {
   const gd = diagram.value.getGraphData()
   if (!gd.nodes.length) return
-  // 按拓扑序重排（模拟 dagre LR：列优先）
-  const edgeMap = {}
-  for (const e of gd.edges) {
-    if (!edgeMap[e.sourceNodeId]) edgeMap[e.sourceNodeId] = []
-    edgeMap[e.sourceNodeId].push(e.targetNodeId)
-  }
   const inDeg = {}, adj = {}
   gd.nodes.forEach(n => { inDeg[n.id] = 0; adj[n.id] = [] })
   gd.edges.forEach(e => { if (inDeg[e.targetNodeId] !== undefined) { inDeg[e.targetNodeId]++; adj[e.sourceNodeId].push(e.targetNodeId) } })
@@ -312,23 +507,28 @@ function autoLayout() {
     for (const n of adj[c]) { inDeg[n]--; if (inDeg[n] === 0) queue.push(n) }
   }
   gd.nodes.forEach(n => { if (!ordered.includes(n.id)) ordered.push(n.id) })
-  const depth = {}
+
+  // 构建带新坐标的完整 graphData，一次性 render 确保边跟随节点
+  const posMap = {}
   ordered.forEach((id, idx) => {
     const col = idx % 4, row = Math.floor(idx / 4)
-    diagram.value.update(id, { x: 120 + col * 240, y: 80 + row * 140 })
+    posMap[id] = { x: 120 + col * 240, y: 80 + row * 140 }
   })
+  const newNodes = gd.nodes.map(n => ({ ...n, x: posMap[n.id]?.x ?? n.x, y: posMap[n.id]?.y ?? n.y }))
+  // 边保持原样，render 会根据新的节点坐标重新计算路径
+  const newGraphData = { nodes: newNodes, edges: gd.edges }
+  diagram.value.render(newGraphData)
   refreshCount()
+  ElMessage.success('自动布局完成')
 }
 
 function validateGraph() {
   const gd = diagram.value.getGraphData()
   if (!gd.nodes.length) { ElMessage.warning('画布为空'); return }
-  // 结构校验：无环
   const config = compileToWorkflowConfig(gd)
   const ordered = topologicalOrder(config)
   const hasCycle = ordered.length !== config.nodes.length
   if (hasCycle) { ElMessage.error('工作流存在循环依赖'); return }
-  // 必填校验：skill 节点必须有 skillCode
   const missing = config.nodes.filter(n => n.nodeType === 'skill' && !n.skillCode)
   if (missing.length) { ElMessage.warning(`${missing.length} 个 Skill 节点未配置编码`); return }
   ElMessage.success(`结构校验通过：${config.nodes.length} 节点 / ${config.edges.length} 连线`)
@@ -370,21 +570,41 @@ async function handleSave() {
 </script>
 
 <style scoped lang="less">
-.nc-config-page { padding: var(--yzh-space-5, 20px); }
-.page-body { display: flex; gap: 12px; height: calc(100vh - 140px); }
+.nc-config-page { padding: 16px; height: 100%; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
+.page-body { display: flex; gap: 12px; flex: 1; min-height: 0; }
 
 /* 左栏 */
-.left-panel { width: 280px; min-width: 280px; display: flex; flex-direction: column; gap: 12px; }
-.tree-card { flex: 1.2; overflow: hidden; display: flex; flex-direction: column; }
-.rule-list-card { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.left-panel { width: 300px; min-width: 300px; }
+.tree-card { height: 100%; overflow: hidden; display: flex; flex-direction: column; }
+:deep(.el-card__body) { flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 0; }
 .panel-header { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 600; }
-.rule-list { flex: 1; overflow-y: auto; }
-.rule-item { display: flex; align-items: center; gap: 6px; padding: 8px 12px; cursor: pointer; font-size: 13px; color: #606266; transition: background .15s; }
-.rule-item:hover { background: #f5f7fa; }
-.rule-item.active { background: #ecf5ff; color: #409EFF; font-weight: 600; }
-.rule-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rule-clause { flex-shrink: 0; }
-.rule-empty { padding: 24px 12px; text-align: center; color: #c0c4cc; font-size: 12px; }
+.tree-search { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
+.tree-body { flex: 1; overflow-y: auto; padding: 4px 0; }
+.tree-group { margin-bottom: 2px; }
+.tree-node {
+  display: flex; align-items: center; gap: 6px; padding: 6px 12px;
+  cursor: pointer; font-size: 13px; transition: background 0.2s; user-select: none;
+  &:hover { background: #f5f7fa; }
+  &.level-0 { font-weight: 600; color: #303133; }
+  &.level-1 { padding-left: 28px; font-weight: 500; color: #606266; }
+  &.level-2 { padding-left: 52px; color: #606266; }
+  &.level-3 {
+    padding-left: 76px; color: #909399; font-size: 12px;
+    &.active { background: #ecf5ff; color: #409eff; border-right: 3px solid #409eff; }
+  }
+}
+.tree-toggle { font-size: 12px; color: #c0c4cc; transition: transform 0.2s; &.expanded { transform: rotate(90deg); } }
+.tree-icon { font-size: 14px; flex-shrink: 0;
+  &.org { color: #409eff; }
+  &.standard { color: #67c23a; }
+  &.phase { color: #e6a23c; }
+  &.rule { color: #909399; }
+}
+.tree-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node-badge { margin-left: 4px; transform: scale(0.85); }
+.rule-empty { padding: 12px 12px 12px 76px; text-align: center; color: #c0c4cc; font-size: 12px; }
+.rule-loading { display: flex; align-items: center; gap: 6px; padding: 8px 12px 8px 76px; color: #c0c4cc; font-size: 12px; }
+.tree-empty { display: flex; justify-content: center; padding: 20px 0; }
 
 /* 中栏 */
 .canvas-panel { flex: 1; display: flex; flex-direction: column; background: #fff; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,.06); overflow: hidden; }

@@ -2,7 +2,7 @@
 
 > **位置**：`src/server/Vue.NetCore/DB/mysql/`
 >
-> **最后更新**：2026-07-31
+> **最后更新**：2026-08-18
 
 ## 📋 数据库连接信息
 
@@ -47,6 +47,7 @@ mysql -h 127.0.0.1 -P 3307 -u root -p yzh_cert_platform
 | `cert_phase1_final.sql` | Phase 1 最终版（合并） |
 | `cert_phase1_user_auth.sql` | 用户认证相关 |
 | `cert_platform_menu_simple.sql` | 简化版菜单 |
+| `menu_cleanup_reorganize.sql` | 菜单清理与重组（2026-08-18：删除审核员端占位菜单/Vol无关菜单，重组体系认证平台菜单结构，9条更名，新建AI与系统配置父菜单，MES/Vol Demo移到最后保留） |
 
 ---
 

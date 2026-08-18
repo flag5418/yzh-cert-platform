@@ -278,8 +278,8 @@ onMounted(() => { loadData() })
 </script>
 
 <style scoped lang="less">
-.workflow-rules-page { padding: var(--yzh-space-5, 20px); }
-.page-body { display: flex; gap: 16px; height: calc(100vh - 140px); }
+.workflow-rules-page { padding: 16px; height: 100%; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
+.page-body { display: flex; gap: 16px; flex: 1; min-height: 0; }
 .tree-card { width: 260px; min-width: 260px; display: flex; flex-direction: column; }
 .tree-header { display: flex; align-items: center; justify-content: space-between; }
 .content-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }

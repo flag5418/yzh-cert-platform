@@ -13,7 +13,8 @@
  */
 export function compileToWorkflowConfig(graphData, meta = {}) {
   const nodes = graphData.nodes.map(n => {
-    const d = n.data || {}
+    // LogicFlow 2.0: 自定义数据在 n.properties 中
+    const d = n.properties || n.data || {}
     const node = {
       nodeId: n.id,
       nodeType: d.nodeType || 'skill',
@@ -28,8 +29,10 @@ export function compileToWorkflowConfig(graphData, meta = {}) {
 
   const edges = graphData.edges.map(e => {
     const edge = { source: e.sourceNodeId, target: e.targetNodeId }
-    if (e.data?.sourceHandle) edge.sourceHandle = e.data.sourceHandle
-    if (e.data?.targetHandle) edge.targetHandle = e.data.targetHandle
+    // LogicFlow 2.0: 边的自定义数据在 properties 中
+    const ed = e.properties || e.data || {}
+    if (ed.sourceHandle) edge.sourceHandle = ed.sourceHandle
+    if (ed.targetHandle) edge.targetHandle = ed.targetHandle
     return edge
   })
 
@@ -72,10 +75,9 @@ export function decompileToGraphData(config, layoutJson = null) {
       y,
       text: node.title || node.skillCode || nodeId,
       style: nodeStyle(type, node.skillCode),
+      // LogicFlow 2.0: 自定义数据通过 properties 传入
       properties: {
-        ...(node.config || {})
-      },
-      data: {
+        ...(node.config || {}),
         nodeType: type,
         title: node.title || '',
         skillCode: node.skillCode || '',
@@ -100,7 +102,8 @@ export function decompileToGraphData(config, layoutJson = null) {
       style: isLogicBranch
         ? { stroke: e.sourceHandle === 'success' ? '#67C23A' : '#F56C6C', strokeWidth: 2 }
         : { stroke: '#5B8FF9', strokeWidth: 2 },
-      data: {
+      // LogicFlow 2.0: 边的自定义数据通过 properties 传入
+      properties: {
         sourceHandle: e.sourceHandle || null,
         targetHandle: e.targetHandle || null
       }

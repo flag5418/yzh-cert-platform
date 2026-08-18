@@ -34,7 +34,10 @@ export const traverseDirectory = (entry, path, fileList) => {
         }
         allEntries.push(...batch)
         readBatch()
-      }, () => resolve())
+      }, () => {
+        // 错误回调：仍处理已收集的条目（部分读取总比丢弃好）
+        processEntries(allEntries).then(resolve)
+      })
     }
 
     const processEntries = async (list) => {

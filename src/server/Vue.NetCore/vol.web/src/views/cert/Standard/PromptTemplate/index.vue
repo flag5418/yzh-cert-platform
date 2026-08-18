@@ -205,10 +205,10 @@ const editRules = {
   template: [{ required: true, message: '请输入模板内容', trigger: 'blur' }]
 }
 
-const typeMap = { document_analysis: '', extract: 'warning', verify: 'success', validate: 'danger', report: 'info' }
+const typeMap = { document_analysis: 'primary', extract: 'warning', verify: 'success', validate: 'danger', report: 'info' }
 const labelMap = { document_analysis: '文档分析', extract: '字段提取', verify: '验证', validate: '校验', report: '报告' }
 
-function typeTag(t) { return typeMap[t] || '' }
+function typeTag(t) { return typeMap[t] || 'info' }
 function typeLabel(t) { return labelMap[t] || t }
 
 async function loadList() {
@@ -321,7 +321,7 @@ onMounted(loadList)
 </script>
 
 <style scoped>
-.prompt-template-page { padding: var(--yzh-space-page, 16px 24px); }
+.prompt-template-page { padding: 16px; }
 .prompt-template-page :deep(.el-dialog__body) { padding: var(--yzh-space-5, 20px); }
 .prompt-template-page :deep(.el-dialog) { border-radius: var(--yzh-radius-lg, 8px); }
 .filter-card { margin-bottom: var(--yzh-space-4, 16px); }

@@ -104,7 +104,10 @@ onMounted(() => {
 
 <style scoped lang="less">
 .sys-config-page {
-  padding: var(--yzh-space-5, 20px);
+  padding: 16px;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
 
   .readonly-value {
     color: var(--yzh-color-text-secondary, #909399);

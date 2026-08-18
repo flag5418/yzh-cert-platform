@@ -79,8 +79,11 @@ namespace VOL.Builder.Services.CertPlatform
 
         public async Task<List<ValidationRule>> GetByOrgStandardPhaseAsync(string orgCode, string standardCode, string phaseCode)
         {
+            // 容错：org_code 为空表示全局规则，同时匹配指定机构和空机构
             return await _repository.FindAsIQueryable(x =>
-                x.OrgCode == orgCode && x.StandardCode == standardCode && x.PhaseCode == phaseCode)
+                (x.OrgCode == orgCode || x.OrgCode == null || x.OrgCode == "")
+                && x.StandardCode == standardCode
+                && x.PhaseCode == phaseCode)
                 .OrderBy(x => x.RuleName).ToListAsync();
         }
 
