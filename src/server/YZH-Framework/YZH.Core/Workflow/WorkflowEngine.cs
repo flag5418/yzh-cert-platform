@@ -92,8 +92,6 @@ var wf = JsonSerializer.Deserialize<WorkflowConfig>(workflowConfigJson, opts)
         private async Task<SkillResult> ExecuteNodeAsync(WorkflowNode node, Dictionary<string, IDictionary<string, object>> outputs,
             WorkflowContext context, CancellationToken ct)
         {
-            var skill = _registry.Get(node.SkillCode)
-                        ?? throw new UnknownSkillException(node.SkillCode);
             var inputs = ResolveInputs(node.Inputs, outputs, context.Inputs);
             var skillCtx = new SkillContext
             {
@@ -106,7 +104,7 @@ var wf = JsonSerializer.Deserialize<WorkflowConfig>(workflowConfigJson, opts)
             SkillResult result;
             try
             {
-                result = await skill.ExecuteAsync(skillCtx, ct);
+                result = await _registry.ExecuteAsync(node.SkillCode, skillCtx, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

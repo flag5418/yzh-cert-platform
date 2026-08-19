@@ -157,31 +157,16 @@ namespace YZH.Core
         }
 
         /// <summary>
-        /// 注册工作流基础服务（S2/S4 补充 Skill/Engine 注册）。
+        /// 注册工作流基础服务（V2 静态方法版）。
         /// </summary>
         private void RegisterWorkflowServices(ContainerBuilder builder)
         {
-            // S2: SkillRegistry + 内置 Skill
+            // V2: 静态方法版，不需要注册 ISkillNode
+            builder.RegisterType<SkillExecutor>()
+                   .AsSelf()
+                   .InstancePerLifetimeScope();
             builder.RegisterType<SkillRegistry>()
                    .As<ISkillRegistry>()
-                   .InstancePerLifetimeScope();
-            builder.RegisterType<DocumentExtractSkill>()
-                   .As<ISkillNode>()
-                   .InstancePerLifetimeScope();
-            builder.RegisterType<LlmExtractSkill>()
-                   .As<ISkillNode>()
-                   .InstancePerLifetimeScope();
-            builder.RegisterType<CompareSkill>()
-                   .As<ISkillNode>()
-                   .InstancePerLifetimeScope();
-            builder.RegisterType<GetFieldSkill>()
-                   .As<ISkillNode>()
-                   .InstancePerLifetimeScope();
-            builder.RegisterType<GetTableSkill>()
-                   .As<ISkillNode>()
-                   .InstancePerLifetimeScope();
-            builder.RegisterType<AssembleSkill>()
-                   .As<ISkillNode>()
                    .InstancePerLifetimeScope();
             
             // S4: WorkflowEngine

@@ -163,14 +163,9 @@ builder.Services.AddScoped<YZH.Core.AI.Clients.ILlmProvider, YZH.Core.AI.Clients
 builder.Services.AddScoped<YZH.Core.AI.Clients.ILlmClient, YZH.Core.AI.Clients.LlmClient>();
 builder.Services.AddScoped<YZH.Core.AI.Prompt.IPromptInterpreter, YZH.Core.AI.Prompt.PromptInterpreter>();
 
-// 工作流服务
+// 工作流服务（V2 静态方法版）
+builder.Services.AddScoped<YZH.Core.Workflow.SkillExecutor>();
 builder.Services.AddScoped<YZH.Core.Workflow.ISkillRegistry, YZH.Core.Workflow.SkillRegistry>();
-builder.Services.AddScoped<YZH.Core.Workflow.ISkillNode, YZH.Core.Skills.DocumentExtractSkill>();
-builder.Services.AddScoped<YZH.Core.Workflow.ISkillNode, YZH.Core.Skills.LlmExtractSkill>();
-builder.Services.AddScoped<YZH.Core.Workflow.ISkillNode, YZH.Core.Skills.CompareSkill>();
-builder.Services.AddScoped<YZH.Core.Workflow.ISkillNode, YZH.Core.Skills.GetFieldSkill>();
-builder.Services.AddScoped<YZH.Core.Workflow.ISkillNode, YZH.Core.Skills.GetTableSkill>();
-builder.Services.AddScoped<YZH.Core.Workflow.ISkillNode, YZH.Core.Skills.AssembleSkill>();
 builder.Services.AddScoped<YZH.Core.Workflow.IWorkflowEngine, YZH.Core.Workflow.WorkflowEngine>();
 
 // 新增Helper服务

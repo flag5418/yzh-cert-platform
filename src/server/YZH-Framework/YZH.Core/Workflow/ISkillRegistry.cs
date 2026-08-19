@@ -4,11 +4,12 @@ using System.Threading.Tasks;
 
 namespace YZH.Core.Workflow
 {
+    /// <summary>
+    /// Skill 注册表接口（V2 静态方法版）。
+    /// </summary>
     public interface ISkillRegistry
     {
-        ISkillNode? Get(string skillCode);
-        Task RegisterAsync(ISkillNode skill, CancellationToken ct = default);
-        Task UnregisterAsync(string skillCode, CancellationToken ct = default);
-        IReadOnlyCollection<string> AllCodes();
+        Task<SkillMetadata?> LoadAsync(string skillCode, CancellationToken ct = default);
+        Task<SkillResult> ExecuteAsync(string skillCode, SkillContext context, CancellationToken ct = default);
     }
 }

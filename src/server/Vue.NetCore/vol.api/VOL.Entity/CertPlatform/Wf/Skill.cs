@@ -5,11 +5,12 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace VOL.Entity.CertPlatform.Wf
 {
     /// <summary>
-    /// Skill — 工作流节点技能（自定义工作流引擎 V1.2 §5.2）
+    /// Skill — 工作流节点技能（自定义工作流引擎 V1.3 §5.2）
     /// <para>表名：wf_skill</para>
-    /// <para>skill_type：method（后台方法/反射）/ api（接口）</para>
+    /// <para>skill_type：固定为 method（反射执行）；api 型已废弃，第三方 API 调用封装在方法内部</para>
     /// <para>category：data_access / data_process / ai_judge / ai_generate / output</para>
     /// <para>output_strict：1=强约束（按 wf_skill_output 校验） 0=弱约束（ai_node 放行）</para>
+    /// <para>V1.3：input_schema/output_schema/endpoint_config 三个旧列已删除</para>
     /// </summary>
     [Table("wf_skill")]
     public class Skill : YZHBaseEntity
@@ -36,25 +37,13 @@ namespace VOL.Entity.CertPlatform.Wf
         public string SkillName { get; set; }
 
         [Required][StringLength(20)][Column("skill_type")]
-        public string SkillType { get; set; }
+        public string SkillType { get; set; } = "method";
 
         [StringLength(50)][Column("category")]
         public string Category { get; set; } = "data_process";
 
         [Column("side_effect")]
         public bool SideEffect { get; set; }
-
-        /// <summary>旧列：输入 Schema JSON（保留兼容，新结构用 wf_skill_input 表单模板）</summary>
-        [Column("input_schema")]
-        public string InputSchema { get; set; }
-
-        /// <summary>旧列：输出 Schema JSON（保留兼容，新结构用 wf_skill_output 契约）</summary>
-        [Column("output_schema")]
-        public string OutputSchema { get; set; }
-
-        /// <summary>旧列：API 端点配置 JSON（保留兼容，新结构用 wf_skill_api）</summary>
-        [Column("endpoint_config")]
-        public string EndpointConfig { get; set; }
 
         [Column("description")]
         public string Description { get; set; }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -12,6 +13,7 @@ namespace VOL.Builder.Services.CertPlatform
     /// <summary>
     /// Workflow Skill 服务实现
     /// </summary>
+    [Obsolete("请使用 WfSkillService，此类保留仅为向后兼容")]
     public class SkillService : ISkillService, IDependency
     {
         private readonly VOLContext _db;

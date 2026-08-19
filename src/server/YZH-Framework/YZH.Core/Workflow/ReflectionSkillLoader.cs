@@ -5,45 +5,27 @@ using System.Reflection;
 namespace YZH.Core.Workflow
 {
     /// <summary>
-    /// 反射 Skill 加载器：按 wf_skill_reflection.class_path 实例化自定义 Skill（登记即用）。
-    /// - 优先走 DI 容器解析（构造依赖如 VOLContext/ILlmClient），失败降级无参构造；
-    /// - SkillBase 声明式元数据让反射加载的 Skill 无需额外代码配置，代码声明与 wf_skill 表登记互相校验。
+    /// 反射 Skill 加载器（V2 静态方法版）。
+    /// 不再创建实例，仅负责定位静态类和方法，委托给 SkillExecutor 执行。
+    /// 保留此接口供 SkillRegistry 按需调用。
     /// </summary>
     public interface IReflectionSkillLoader
     {
-        ISkillNode? Create(string typeName);
+        /// <summary>分析 classPath + methodName，返回 Skill 元数据</summary>
+        SkillMetadata? Analyze(string classPath, string methodName = "ExecuteAsync");
     }
 
     public class ReflectionSkillLoader : IReflectionSkillLoader
     {
-        private readonly IServiceProvider _serviceProvider;
-        public ReflectionSkillLoader(IServiceProvider serviceProvider)
+        private readonly SkillExecutor _executor;
+        public ReflectionSkillLoader(SkillExecutor executor)
         {
-            _serviceProvider = serviceProvider;
+            _executor = executor;
         }
 
-        public ISkillNode? Create(string typeName)
+        public SkillMetadata? Analyze(string classPath, string methodName = "ExecuteAsync")
         {
-            var type = Type.GetType(typeName)
-                       ?? AppDomain.CurrentDomain.GetAssemblies()
-                           .Select(a => SafeGetType(a, typeName))
-                           .FirstOrDefault(t => t != null);
-            if (type == null)
-                return null;
-            if (!typeof(ISkillNode).IsAssignableFrom(type))
-                return null;
-
-            var fromDi = _serviceProvider.GetService(type);
-            if (fromDi is ISkillNode diSkill)
-                return diSkill;
-
-            return Activator.CreateInstance(type) as ISkillNode;
-        }
-
-        private static Type? SafeGetType(Assembly assembly, string typeName)
-        {
-            try { return assembly.GetType(typeName, false); }
-            catch { return null; }
+            return _executor.Analyze(classPath, methodName);
         }
     }
 }

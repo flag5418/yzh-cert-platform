@@ -11,56 +11,38 @@ using YZH.Core.Workflow;
 namespace YZH.Core.Skills
 {
     /// <summary>
-    /// get_table Skill：按 table_code + enterprise_code 查询表格提取结果（B-09）。
-    /// 评审 §3.3 修复：原实现未按 table_code 过滤（查询条件缺失），导致多表数据混淆；补上 table_code + enterprise_code 过滤。
-    /// 依赖：ent_table_extraction_result 新增 table_code 列（phase10_wf_skill_upgrade.sql）。
+    /// 获取表格数据：按 table_code + enterprise_code 查询表格提取结果。
     /// </summary>
-    public class GetTableSkill : SkillBase
+    [Skill(
+        Code = "get_table",
+        Name = "获取表格数据",
+        ReturnType = "json",
+        Description = "按表格编码和企业编码查询已提取的表格数据"
+    )]
+    public static class GetTableSkill
     {
-        public override string SkillCode => "get_table";
-        public override string SkillName => "获取表格数据";
-        public override string Category => "data_access";
-        public override bool SideEffect => true;
-        public override string ReturnType => "json";
-
-        public override IReadOnlyList<SkillParam> InputDecls { get; } = new[]
+        public static async Task<SkillResult> ExecuteAsync(
+            string table_code,
+            string enterprise_code,
+            [SkillParam(Description = "文件编码，可选")]
+            string? file_code = null,
+            [SkillParam(Description = "表格序号，可选")]
+            int? table_index = null,
+            [FromService] VOLContext db = null!,
+            CancellationToken ct = default)
         {
-            new SkillParam { Name = "table_code", Type = "string", Required = true, Description = "定义表编码（cert_doc_table_def.code）" },
-            new SkillParam { Name = "enterprise_code", Type = "string", Required = true, Description = "企业编码（多租户隔离）" },
-            new SkillParam { Name = "file_code", Type = "string", Required = false, Description = "文件编码（可选，文件级过滤）" },
-            new SkillParam { Name = "table_index", Type = "number", Required = false, Description = "表格序号（可选，默认最新一条）" }
-        };
+            var query = db.Set<TableExtractionResult>()
+                .Where(x => x.TableCode == table_code && x.EnterpriseCode == enterprise_code);
 
-        public override IReadOnlyList<SkillParam> OutputDecls { get; } = new[]
-        {
-            new SkillParam { Name = "rows", Type = "json", Required = true, Description = "表格行数据（extracted_json 解析结果）" },
-            new SkillParam { Name = "extracted_json", Type = "json", Required = true, Description = "原始提取 JSON（兼容引用）" },
-            new SkillParam { Name = "table_code", Type = "string", Required = true, Description = "定义表编码" },
-            new SkillParam { Name = "confidence", Type = "number", Required = true, Description = "AI 提取可信度" }
-        };
+            if (!string.IsNullOrWhiteSpace(file_code))
+                query = query.Where(x => x.FileCode == file_code);
 
-        private readonly VOLContext _db;
-        public GetTableSkill(VOLContext db) { _db = db; }
-
-        protected override async Task<SkillResult> ExecuteCoreAsync(SkillContext context, CancellationToken ct)
-        {
-            var tableCode = GetString(context, "table_code");
-            var enterpriseCode = GetString(context, "enterprise_code");
-            var fileCode = GetString(context, "file_code");
-            var tableIndex = GetInt(context, "table_index");
-
-            var query = _db.Set<TableExtractionResult>()
-                .Where(x => x.TableCode == tableCode && x.EnterpriseCode == enterpriseCode);
-
-            if (!string.IsNullOrWhiteSpace(fileCode))
-                query = query.Where(x => x.FileCode == fileCode);
-
-            if (tableIndex.HasValue)
-                query = query.Where(x => x.TableIndex == tableIndex.Value);
+            if (table_index.HasValue)
+                query = query.Where(x => x.TableIndex == table_index.Value);
 
             var table = await query.OrderByDescending(x => x.ExtractedAt).FirstOrDefaultAsync(ct);
             if (table == null)
-                return SkillResult.Fail($"未找到 table_code={tableCode}, enterprise_code={enterpriseCode}");
+                return SkillResult.Fail($"未找到 table_code={table_code}, enterprise_code={enterprise_code}");
 
             var confidence = (double?)(table.Confidence ?? 0m);
             return SkillResult.Ok(new Dictionary<string, object>
@@ -86,11 +68,5 @@ namespace YZH.Core.Skills
                 return json;
             }
         }
-
-        private static string GetString(SkillContext context, string key)
-            => context.Inputs.TryGetValue(key, out var v) ? v?.ToString() ?? string.Empty : string.Empty;
-
-        private static int? GetInt(SkillContext context, string key)
-            => context.Inputs.TryGetValue(key, out var v) && int.TryParse(v?.ToString(), out var i) ? i : null;
     }
 }

@@ -7,99 +7,90 @@ using YZH.Core.Workflow;
 namespace YZH.Core.Skills
 {
     /// <summary>
-    /// 确定性比较 Skill：compare。
-    /// 支持三种形态：① 数值比较（value + operator + threshold）；② 日期差（date_a + date_b + unit）；③ 非空判断（operator=not_empty）。
-    /// 纯函数（SideEffect=false），输出 result（数值模式为 boolean，日期模式为 number）。
+    /// 值比较：接收两个值 + 运算符，执行确定性比较。纯函数，无副作用。
+    /// 日期/数值/字符串类型在函数内部自动判断和转换，无需调用方区分。
     /// </summary>
-    public class CompareSkill : SkillBase
+    [Skill(
+        Code = "compare",
+        Name = "值比较",
+        ReturnType = "boolean",
+        Description = "确定性比较：支持数值比较（> >= < <= == !=）和日期比较（自动解析日期格式，按天计算差值）"
+    )]
+    public static class CompareSkill
     {
-        public override string SkillCode => "compare";
-        public override string SkillName => "值比较";
-        public override string Category => "data_process";
-        public override bool SideEffect => false;
-        public override string ReturnType => "boolean";
+        public static Task<SkillResult> ExecuteAsync(
+            [SkillParam(Description = "比较值 A（数值/日期/字符串）", BindMode = SkillParamBindMode.LinkOrConstant)]
+            object? value_a = null,
 
-        public override IReadOnlyList<SkillParam> InputDecls { get; } = new[]
+            [SkillParam(Description = "比较值 B（数值/日期/字符串）", BindMode = SkillParamBindMode.LinkOrConstant)]
+            object? value_b = null,
+
+            [SkillParam(Description = "运算符", BindMode = SkillParamBindMode.Enum, EnumSource = "compare_operator")]
+            string? @operator = null,
+
+            CancellationToken ct = default)
         {
-            new SkillParam { Name = "value", Type = "json", Required = false, Description = "待比较值（数值/字符串）" },
-            new SkillParam { Name = "operator", Type = "string", Required = false, Description = "比较运算符：> >= < <= == != equals not_equals not_empty" },
-            new SkillParam { Name = "threshold", Type = "json", Required = false, Description = "比较阈值" },
-            new SkillParam { Name = "date_a", Type = "date", Required = false, Description = "日期 A（日期差模式）" },
-            new SkillParam { Name = "date_b", Type = "date", Required = false, Description = "日期 B（日期差模式）" },
-            new SkillParam { Name = "unit", Type = "string", Required = false, Description = "日期差单位：day/month/year" }
-        };
+            if (value_a == null || value_b == null)
+                return Task.FromResult(SkillResult.Fail("value_a 和 value_b 均不能为空"));
 
-        public override IReadOnlyList<SkillParam> OutputDecls { get; } = new[]
-        {
-            new SkillParam { Name = "result", Type = "json", Required = true, Description = "比较结果（boolean，日期模式为 number）" }
-        };
+            if (string.IsNullOrWhiteSpace(@operator))
+                return Task.FromResult(SkillResult.Fail("operator 不能为空"));
 
-        protected override Task<SkillResult> ExecuteCoreAsync(SkillContext context, CancellationToken ct)
-        {
-            var value = Get(context, "value");
-            var op = GetString(context, "operator");
-            var threshold = Get(context, "threshold");
-            var dateA = Get(context, "date_a");
-            var dateB = Get(context, "date_b");
-            var unit = string.IsNullOrWhiteSpace(GetString(context, "unit")) ? "day" : GetString(context, "unit");
+            var op = @operator!.Trim();
 
-            object result;
-
-            if (dateA != null && dateB != null)
+            // 尝试数值比较
+            if (double.TryParse(value_a.ToString(), out var va) && double.TryParse(value_b.ToString(), out var vb))
             {
-                if (DateTime.TryParse(dateA.ToString() ?? string.Empty, out var da2) &&
-                    DateTime.TryParse(dateB.ToString() ?? string.Empty, out var db2))
+                var result = op switch
                 {
-                    var diff = da2 - db2;
-                    result = unit.ToLowerInvariant() switch
-                    {
-                        "day" => (double)diff.TotalDays,
-                        "month" => diff.TotalDays / 30.0,
-                        "year" => diff.TotalDays / 365.0,
-                        _ => (double)diff.TotalDays
-                    };
-                }
-                else
+                    ">" => va > vb,
+                    ">=" => va >= vb,
+                    "<" => va < vb,
+                    "<=" => va <= vb,
+                    "==" => Math.Abs(va - vb) < 0.000001,
+                    "!=" => Math.Abs(va - vb) >= 0.000001,
+                    _ => throw new InvalidOperationException($"未知运算符: {op}")
+                };
+                return Task.FromResult(SkillResult.Ok(new Dictionary<string, object>
                 {
-                    return Task.FromResult(SkillResult.Fail("date_a/date_b 无法解析为日期"));
-                }
-            }
-            else if (op == "not_empty")
-            {
-                result = !string.IsNullOrWhiteSpace(value?.ToString());
-            }
-            else if (threshold != null && value != null)
-            {
-                if (double.TryParse(value.ToString(), out var val) && double.TryParse(threshold.ToString(), out var thr))
-                {
-                    result = op switch
-                    {
-                        ">" => val > thr,
-                        ">=" => val >= thr,
-                        "<" => val < thr,
-                        "<=" => val <= thr,
-                        "==" or "equals" => val == thr,
-                        "!=" or "not_equals" => val != thr,
-                        _ => throw new InvalidOperationException($"未知比较运算符: {op}")
-                    };
-                }
-                else
-                {
-                    return Task.FromResult(SkillResult.Fail("value 或 threshold 无法解析为数字"));
-                }
-            }
-            else
-            {
-                return Task.FromResult(SkillResult.Fail("compare 需要 value+operator 或 date_a+date_b 入参"));
+                    ["compare_result"] = result
+                }));
             }
 
-            return Task.FromResult(SkillResult.Ok(new Dictionary<string, object> { ["result"] = result }));
+            // 尝试日期比较
+            if (DateTime.TryParse(value_a.ToString(), out var da) && DateTime.TryParse(value_b.ToString(), out var db))
+            {
+                var diffDays = (da - db).TotalDays;
+                var result = op switch
+                {
+                    ">" => diffDays > 0,
+                    ">=" => diffDays >= 0,
+                    "<" => diffDays < 0,
+                    "<=" => diffDays <= 0,
+                    "==" => Math.Abs(diffDays) < 1, // 同一天视为相等
+                    "!=" => Math.Abs(diffDays) >= 1,
+                    _ => throw new InvalidOperationException($"未知运算符: {op}")
+                };
+                return Task.FromResult(SkillResult.Ok(new Dictionary<string, object>
+                {
+                    ["compare_result"] = result,
+                    ["diff_days"] = diffDays
+                }));
+            }
+
+            // 字符串比较
+            var sa = value_a.ToString()!;
+            var sb = value_b.ToString()!;
+            var strResult = op switch
+            {
+                "==" => sa == sb,
+                "!=" => sa != sb,
+                _ => throw new InvalidOperationException($"运算符 {op} 不支持字符串比较，仅支持 == 和 !=")
+            };
+            return Task.FromResult(SkillResult.Ok(new Dictionary<string, object>
+            {
+                ["compare_result"] = strResult
+            }));
         }
-
-        private static object? Get(SkillContext context, string key)
-            => context.Inputs.TryGetValue(key, out var v) ? v : null;
-
-        private static string GetString(SkillContext context, string key)
-            => context.Inputs.TryGetValue(key, out var v) ? v?.ToString() ?? string.Empty : string.Empty;
     }
 }

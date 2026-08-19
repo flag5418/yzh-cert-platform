@@ -1,5 +1,7 @@
 # YZH-AI引擎实施文档-V1
 
+> **⚠️ 过时标注（2026-08-19）**：本文件架构图中的 `LlmExtractSkill` 已删除（信息提取走独立流程），`ISkillNode` / `SkillRegistry(IEnumerable<ISkillNode>)` 已废弃。当前 Skill 架构为静态方法 + SkillExecutor 反射调用。权威文档：`docs/60-AI工程设计/Skill清单-V1.md`（V1.1）。
+
 > **版本**：V1.0 | **日期**：2026-08-11 | **状态**：已完成
 > **关联设计文档**：[YZH-AI引擎详细设计-V1.md](./YZH-AI引擎详细设计-V1.md)
 > **实施TODO清单**：[YZH-AI引擎-实施TODO清单-V1.md](./YZH-AI引擎-实施TODO清单-V1.md)

@@ -60,274 +60,168 @@
           </div>
         </template>
 
-        <el-table :data="tableData" stripe border v-loading="loading" style="width: 100%">
-          <el-table-column prop="skillCode" label="编码" width="140" />
-          <el-table-column prop="skillName" label="名称" width="160" show-overflow-tooltip />
-          <el-table-column label="类型" width="80" align="center">
-            <template #default="{ row }">
-              <el-tag :type="row.skillType === 'api' ? 'warning' : 'primary'" size="small">
-                {{ row.skillType === 'api' ? 'API' : '方法' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="性质" width="80" align="center">
-            <template #default="{ row }">{{ row.sideEffect ? '功能性' : '逻辑性' }}</template>
-          </el-table-column>
-          <el-table-column label="输出约束" width="90" align="center">
-            <template #default="{ row }">
-              <el-tag :type="row.outputStrict ? 'danger' : 'info'" size="small">
-                {{ row.outputStrict ? '强约束' : '弱约束' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="returnType" label="返回类型" width="90" align="center" />
-          <el-table-column prop="version" label="版本" width="70" align="center" />
-          <el-table-column label="启用" width="80" align="center">
-            <template #default="{ row }">
-              <el-switch :model-value="row.isActive" @change="toggleActive(row)" />
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="140" fixed="right">
-            <template #default="{ row }">
-              <div class="row-actions">
-                <el-button type="primary" link size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
-              </div>
-            </template>
-          </el-table-column>
-        </el-table>
+        <div class="table-wrapper">
+          <el-table :data="tableData" stripe border v-loading="loading" style="width: 100%" height="100%">
+            <el-table-column prop="skillCode" label="编码" width="160" />
+            <el-table-column prop="skillName" label="名称" width="160" show-overflow-tooltip />
+            <el-table-column label="分类" width="120" align="center">
+              <template #default="{ row }">
+                <el-tag size="small">{{ getCategoryName(row.category) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="description" label="说明" min-width="200" show-overflow-tooltip />
+            <el-table-column label="启用" width="80" align="center">
+              <template #default="{ row }">
+                <el-switch :model-value="row.isActive" @change="toggleActive(row)" />
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="140" fixed="right">
+              <template #default="{ row }">
+                <div class="row-actions">
+                  <el-button type="primary" link size="small" @click="openEdit(row)">编辑</el-button>
+                  <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
         <el-pagination
           v-model:current-page="page"
           :page-size="pageSize"
           :total="total"
           layout="total, prev, pager, next"
-          style="margin-top: 16px; justify-content: flex-end"
+          style="margin-top: 12px; justify-content: flex-end; flex-shrink: 0"
           @current-change="loadData"
         />
       </el-card>
     </div>
 
-    <!-- ============ Skill 编辑弹窗：5 Tab ============ -->
+    <!-- ============ Skill 编辑弹窗 ============ -->
     <el-dialog
       v-model="dialogVisible"
-      :title="editForm.id ? `编辑 Skill：${editForm.skillName}` : '新建 Skill'"
-      width="920px"
-      top="4vh"
+      :title="editForm.id ? `编辑 Skill：${editForm.skillCode}` : '新建 Skill'"
+      width="800px"
+      top="8vh"
       destroy-on-close
+      :close-on-click-modal="false"
     >
-      <el-tabs v-model="activeTab">
-        <el-tab-pane label="基本信息" name="base">
-          <el-form :model="editForm" label-width="110px" ref="baseFormRef">
-            <el-row :gutter="16">
-              <el-col :span="12">
-                <el-form-item label="Skill 编码" prop="skillCode" :rules="[{ required: true, message: '请输入 Skill 编码（唯一，如 get_field）' }]">
-                  <el-input v-model="editForm.skillCode" :disabled="!!editForm.id" placeholder="get_field" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="Skill 名称" prop="skillName" :rules="[{ required: true, message: '请输入 Skill 名称' }]">
-                  <el-input v-model="editForm.skillName" placeholder="字段提取" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="类型" prop="skillType">
-                  <el-select v-model="editForm.skillType" style="width: 100%">
-                    <el-option label="后台方法（method）" value="method" />
-                    <el-option label="API 接口（api）" value="api" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="功能分类" prop="category">
-                  <el-select v-model="editForm.category" style="width: 100%">
-                    <el-option v-for="cat in categories" :key="cat.categoryCode" :label="cat.categoryName" :value="cat.categoryCode" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="性质">
-                  <el-switch v-model="editForm.sideEffect" active-text="功能性" inactive-text="逻辑性" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="输出约束">
-                  <el-switch v-model="editForm.outputStrict" active-text="强约束" inactive-text="弱约束" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="返回类型">
-                  <el-select v-model="editForm.returnType" style="width: 100%">
-                    <el-option v-for="t in ['json', 'string', 'number', 'boolean', 'date']" :key="t" :label="t" :value="t" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="版本">
-                  <el-input v-model="editForm.version" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="图标">
-                  <el-input v-model="editForm.icon" placeholder="面板图标" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="颜色">
-                  <el-input v-model="editForm.color" placeholder="#409EFF" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="排序">
-                  <el-input-number v-model="editForm.sortOrder" :min="0" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="启用">
-                  <el-switch v-model="editForm.isActive" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="24">
-                <el-form-item label="作用说明">
-                  <el-input v-model="editForm.description" type="textarea" :rows="2" placeholder="该 Skill 的作用说明" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="24">
-                <el-form-item label="AI 提示词">
-                  <el-input v-model="editForm.skillPrompt" type="textarea" :rows="3" placeholder="解释器组装给 AI 使用的 Skill 使用提示词（名词解释），可选" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="24">
-                <el-form-item label="备注">
-                  <el-input v-model="editForm.remark" type="textarea" :rows="1" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-form>
-        </el-tab-pane>
-
-        <el-tab-pane label="输入项" name="inputs">
-          <div class="subtable-tip">输入表单模板（画布生成输入表单用，非硬校验；ai_node 等动态输入可留空）</div>
-          <el-table :data="editForm.inputs" border size="small">
-            <el-table-column label="参数名" min-width="130">
-              <template #default="{ row }"><el-input v-model="row.inputName" placeholder="fieldCode" size="small" /></template>
-            </el-table-column>
-            <el-table-column label="显示名" min-width="120">
-              <template #default="{ row }"><el-input v-model="row.inputLabel" placeholder="字段编码" size="small" /></template>
-            </el-table-column>
-            <el-table-column label="类型" width="130">
-              <template #default="{ row }">
-                <el-select v-model="row.inputType" size="small" style="width: 100%">
-                  <el-option v-for="t in ['text', 'number', 'date', 'boolean', 'enum', 'field_ref', 'table_ref', 'json']" :key="t" :label="t" :value="t" />
+      <div class="dialog-body">
+        <!-- ===== 基本信息 ===== -->
+        <el-form :model="editForm" label-width="110px" ref="baseFormRef" class="edit-form">
+          <el-row :gutter="16">
+            <el-col :span="12">
+              <el-form-item label="Skill 编码" prop="skillCode" :rules="[{ required: true, message: '请输入 Skill 编码' }]">
+                <el-input v-model="editForm.skillCode" :disabled="!!editForm.id" placeholder="get_field" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="功能分类" prop="category">
+                <el-select v-model="editForm.category" style="width: 100%">
+                  <el-option v-for="cat in categories" :key="cat.categoryCode" :label="cat.categoryName" :value="cat.categoryCode" />
                 </el-select>
-              </template>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="启用">
+                <el-switch v-model="editForm.isActive" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <!-- ===== 反射信息（必填，验证后展示只读端口） ===== -->
+          <el-divider content-position="left">反射信息</el-divider>
+          <el-row :gutter="16">
+            <el-col :span="16">
+              <el-form-item
+                label="实现类全名"
+                prop="reflection.classPath"
+                :rules="[{ required: true, message: '请输入实现类全名' }]"
+              >
+                <el-input v-model="editForm.reflection.classPath" placeholder="YZH.Core.Skills.GetFieldSkill" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="方法名">
+                <el-input v-model="editForm.reflection.methodName" placeholder="ExecuteAsync" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <div style="text-align: center; margin-bottom: 16px">
+            <el-button type="warning" @click="analyzeReflection" :loading="analyzing">
+              <el-icon><IconSuccess /></el-icon> 验证反射
+            </el-button>
+          </div>
+        </el-form>
+
+        <!-- ===== 反射分析结果（验证后展示，只读） ===== -->
+        <div v-if="analyzed" class="port-section">
+          <el-alert type="success" :closable="false" show-icon style="margin-bottom: 12px">
+            <template #title>
+              反射验证通过：{{ analyzed.name }}（{{ analyzed.code }}）| 返回类型：{{ analyzed.returnType }}
+            </template>
+            <template #default>
+              {{ analyzed.description }}
+            </template>
+          </el-alert>
+
+          <!-- 输入端口 -->
+          <div class="section-title">输入端口（反射提取，只读）</div>
+          <el-table :data="analyzed.inputPorts" border size="small">
+            <el-table-column label="端口名" min-width="140">
+              <template #default="{ row }"><span class="port-name">{{ row.name }}</span></template>
             </el-table-column>
-            <el-table-column label="枚举值" min-width="110">
-              <template #default="{ row }"><el-input v-model="row.enumValues" placeholder="a,b,c" size="small" /></template>
+            <el-table-column label="类型" width="100" align="center">
+              <template #default="{ row }"><el-tag size="small" :type="getTypeTagType(row.type)">{{ row.type }}</el-tag></template>
             </el-table-column>
             <el-table-column label="必填" width="60" align="center">
-              <template #default="{ row }"><el-switch v-model="row.isRequired" size="small" /></template>
+              <template #default="{ row }"><el-tag :type="row.required ? 'danger' : 'info'" size="small">{{ row.required ? '是' : '否' }}</el-tag></template>
             </el-table-column>
-            <el-table-column label="默认值" min-width="110">
-              <template #default="{ row }"><el-input v-model="row.defaultValue" size="small" /></template>
+            <el-table-column label="默认值" width="100">
+              <template #default="{ row }"><span class="code-desc">{{ row.defaultValue || '—' }}</span></template>
             </el-table-column>
-            <el-table-column label="排序" width="70">
-              <template #default="{ row }"><el-input-number v-model="row.sortOrder" :min="0" size="small" controls-position="right" style="width: 100%" /></template>
-            </el-table-column>
-            <el-table-column label="操作" width="70" align="center">
-              <template #default="{ $index }">
-                <el-button type="danger" link size="small" @click="removeRow(editForm.inputs, $index)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-          <el-button type="primary" plain size="small" style="margin-top: 8px" @click="addInputRow">+ 添加输入项</el-button>
-        </el-tab-pane>
-
-        <el-tab-pane label="输出项" name="outputs">
-          <div class="subtable-tip">强约束输出契约（output_strict=1 时解释器按此校验）；弱约束可留空</div>
-          <el-table :data="editForm.outputs" border size="small">
-            <el-table-column label="端口名" min-width="130">
-              <template #default="{ row }"><el-input v-model="row.outputName" placeholder="fieldValue" size="small" /></template>
-            </el-table-column>
-            <el-table-column label="类型" width="110">
+            <el-table-column label="绑定模式" width="120" align="center">
               <template #default="{ row }">
-                <el-select v-model="row.outputType" size="small" style="width: 100%">
-                  <el-option v-for="t in ['json', 'string', 'number', 'boolean', 'date']" :key="t" :label="t" :value="t" />
-                </el-select>
+                <el-tag size="small" :type="getBindModeTagType(row.bindMode)">{{ getBindModeLabel(row.bindMode) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="解读提示词" min-width="180">
-              <template #default="{ row }"><el-input v-model="row.outputPrompt" placeholder="该输出的解读提示词" size="small" /></template>
+            <el-table-column label="字典来源" width="140">
+              <template #default="{ row }"><span class="code-desc">{{ row.enumSource || '—' }}</span></template>
             </el-table-column>
-            <el-table-column label="说明" min-width="120">
-              <template #default="{ row }"><el-input v-model="row.description" size="small" /></template>
-            </el-table-column>
-            <el-table-column label="排序" width="70">
-              <template #default="{ row }"><el-input-number v-model="row.sortOrder" :min="0" size="small" controls-position="right" style="width: 100%" /></template>
-            </el-table-column>
-            <el-table-column label="操作" width="70" align="center">
-              <template #default="{ $index }">
-                <el-button type="danger" link size="small" @click="removeRow(editForm.outputs, $index)">删除</el-button>
-              </template>
+            <el-table-column label="描述" min-width="180">
+              <template #default="{ row }"><span class="code-desc">{{ row.description || '—' }}</span></template>
             </el-table-column>
           </el-table>
-          <el-button type="primary" plain size="small" style="margin-top: 8px" @click="addOutputRow">+ 添加输出项</el-button>
-        </el-tab-pane>
 
-        <el-tab-pane label="反射信息" name="reflection">
-          <el-alert type="info" :closable="false" show-icon title="method 型 Skill 通过反射执行：填写类型全名，ReflectionSkillLoader 加载（DI 优先，找不到则反射创建）" style="margin-bottom: 12px" />
-          <el-form label-width="120px">
-            <el-form-item label="反射地址">
-              <el-input v-model="editForm.reflection.classPath" placeholder="YZH.Core.Skills.GetFieldSkill" />
-            </el-form-item>
-            <el-form-item label="反射方法">
-              <el-input v-model="editForm.reflection.methodName" placeholder="ExecuteAsync" />
-            </el-form-item>
-            <el-form-item label="参数绑定">
-              <el-input v-model="editForm.reflection.paramBinding" type="textarea" :rows="3" placeholder='{"输入项名":"方法参数名或顺序"}' />
-            </el-form-item>
-          </el-form>
-        </el-tab-pane>
+          <!-- 输出端口 -->
+          <div class="section-title" style="margin-top: 12px">输出端口（标准输出 + 业务输出）</div>
+          <el-table :data="standardOutputs" border size="small">
+            <el-table-column label="端口名" min-width="140">
+              <template #default="{ row }"><span class="port-name">{{ row.name }}</span></template>
+            </el-table-column>
+            <el-table-column label="类型" width="100" align="center">
+              <template #default="{ row }"><el-tag size="small" :type="getTypeTagType(row.type)">{{ row.type }}</el-tag></template>
+            </el-table-column>
+            <el-table-column label="说明" min-width="200">
+              <template #default="{ row }"><span class="code-desc">{{ row.description }}</span></template>
+            </el-table-column>
+          </el-table>
+        </div>
 
-        <el-tab-pane label="API 信息" name="api">
-          <el-alert type="warning" :closable="false" show-icon title="api 型 Skill 信息维护（执行由 HttpApiSkillNode 后续实现，本期仅配置）" style="margin-bottom: 12px" />
-          <el-form label-width="120px">
-            <el-form-item label="接口地址">
-              <el-input v-model="editForm.api.url" placeholder="https://api.example.com/v1/xxx" />
-            </el-form-item>
-            <el-form-item label="请求方法">
-              <el-select v-model="editForm.api.httpMethod" style="width: 200px">
-                <el-option label="POST" value="POST" />
-                <el-option label="GET" value="GET" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="请求头">
-              <el-input v-model="editForm.api.headers" type="textarea" :rows="2" placeholder='{"Content-Type":"application/json"}' />
-            </el-form-item>
-            <el-form-item label="鉴权配置">
-              <el-input v-model="editForm.api.authConfig" type="textarea" :rows="2" placeholder='{"type":"bearer","tokenSource":"$sys.xxx"}' />
-            </el-form-item>
-            <el-form-item label="参数映射">
-              <el-input v-model="editForm.api.paramMapping" type="textarea" :rows="2" placeholder='{"输入项名":"请求参数名"}' />
-            </el-form-item>
-            <el-form-item label="响应解析">
-              <el-input v-model="editForm.api.responseMapping" type="textarea" :rows="2" placeholder='{"输出项名":"$.data.xxx"}' />
-            </el-form-item>
-            <el-form-item label="超时（秒）">
-              <el-input-number v-model="editForm.api.timeoutSeconds" :min="1" :max="300" />
-            </el-form-item>
-          </el-form>
-        </el-tab-pane>
-      </el-tabs>
+        <!-- 未验证提示 -->
+        <div v-if="!analyzed && analyzeError" class="empty-tip">
+          <el-alert type="error" :closable="false" show-icon :title="analyzeError" />
+        </div>
+      </div>
 
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSave">保存</el-button>
+        <el-button type="primary" @click="handleSave" :disabled="!analyzed">保存</el-button>
       </template>
     </el-dialog>
 
     <!-- ============ 分类管理弹窗 ============ -->
-    <el-dialog v-model="categoryDialogVisible" title="Skill 分类管理" width="760px" destroy-on-close>
-      <el-alert type="info" :closable="false" show-icon title="分类为基础资料：左侧导航 + 面板分组；分类下仍有启用 Skill 时不可删除" style="margin-bottom: 12px" />
+    <el-dialog v-model="categoryDialogVisible" title="Skill 分类管理" width="760px" destroy-on-close :close-on-click-modal="false">
+      <el-alert type="info" :closable="false" show-icon title="分类为基础资料：左侧导航 + 面板分组" style="margin-bottom: 12px" />
       <el-table :data="categories" border size="small">
         <el-table-column label="编码" width="140">
           <template #default="{ row }"><el-input v-model="row.categoryCode" size="small" placeholder="data_access" /></template>
@@ -367,7 +261,7 @@
 import { ref, reactive, onMounted, getCurrentInstance } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CertPageHeader } from '@/certcore'
-import { IconSetting, IconAdd } from '@/yzh/icons'
+import { IconSetting, IconAdd, IconSuccess } from '@/yzh/icons'
 
 const { proxy } = getCurrentInstance()
 const loading = ref(false)
@@ -377,7 +271,6 @@ const pageSize = ref(20)
 const total = ref(0)
 const keyword = ref('')
 const dialogVisible = ref(false)
-const activeTab = ref('base')
 const baseFormRef = ref(null)
 
 // 分类
@@ -386,18 +279,24 @@ const currentCategory = ref('')
 const currentCategoryName = ref('')
 const categoryDialogVisible = ref(false)
 
+// 反射分析
+const analyzing = ref(false)
+const analyzed = ref(null)
+const analyzeError = ref('')
+
+const standardOutputs = [
+  { name: 'success', type: 'boolean', description: '是否执行成功' },
+  { name: 'error', type: 'string', description: '失败时的错误信息' },
+  { name: 'result', type: 'json', description: '执行结果（业务数据）' }
+]
+
 const emptyReflection = () => ({ id: 0, skillCode: '', classPath: '', methodName: 'ExecuteAsync', paramBinding: '' })
-const emptyApi = () => ({
-  id: 0, skillCode: '', url: '', httpMethod: 'POST', headers: '',
-  authConfig: '', paramMapping: '', responseMapping: '', timeoutSeconds: 30
-})
 
 const editForm = reactive({
-  id: null, code: '', skillCode: '', skillName: '', skillType: 'method',
-  category: 'data_access', sideEffect: true, description: '', skillPrompt: '',
-  isActive: true, outputStrict: true, returnType: 'json', version: '1.0',
-  icon: '', color: '', sortOrder: 0, remark: '',
-  inputs: [], outputs: [], reflection: emptyReflection(), api: emptyApi()
+  id: null, code: '', skillCode: '',
+  category: 'data_access',
+  isActive: true,
+  inputs: [], outputs: [], reflection: emptyReflection()
 })
 
 // ── 分类 ──
@@ -407,6 +306,11 @@ async function loadCategories() {
     const res = await proxy.http.get('api/skill-category/list', null, false)
     if (res?.status) categories.value = res.data || []
   } catch (e) { console.error('加载分类失败', e) }
+}
+
+function getCategoryName(code) {
+  const cat = categories.value.find(c => c.categoryCode === code)
+  return cat?.categoryName || code
 }
 
 function selectCategory(code, name) {
@@ -431,76 +335,122 @@ async function loadData() {
   } catch (e) { console.error(e) } finally { loading.value = false }
 }
 
+// ── 端口类型标签 ──
+
+function getTypeTagType(type) {
+  const map = {
+    boolean: 'success',
+    string: '',
+    number: 'warning',
+    date: 'info',
+    json: 'danger'
+  }
+  return map[type] || ''
+}
+
+function getBindModeLabel(mode) {
+  const map = {
+    Link: '仅连线',
+    LinkOrConstant: '连线/常量',
+    Enum: '字典选择'
+  }
+  return map[mode] || mode || '连线/常量'
+}
+
+function getBindModeTagType(mode) {
+  const map = {
+    Link: 'primary',
+    LinkOrConstant: 'warning',
+    Enum: 'success'
+  }
+  return map[mode] || ''
+}
+
+// ── 反射验证（POST /api/skill/analyze） ──
+
+async function analyzeReflection() {
+  if (!editForm.reflection.classPath) {
+    ElMessage.warning('请先填写实现类全名')
+    return
+  }
+  analyzing.value = true
+  analyzed.value = null
+  analyzeError.value = ''
+  try {
+    const res = await proxy.http.post('api/skill/analyze', {
+      classPath: editForm.reflection.classPath,
+      methodName: editForm.reflection.methodName || 'ExecuteAsync'
+    }, true)
+    if (res?.status && res.data) {
+      analyzed.value = res.data
+      ElMessage.success('反射验证通过')
+    } else {
+      analyzeError.value = res?.message || '反射验证失败'
+      ElMessage.error(analyzeError.value)
+    }
+  } catch (e) {
+    analyzeError.value = '反射验证请求失败'
+    ElMessage.error('反射验证请求失败')
+  } finally {
+    analyzing.value = false
+  }
+}
+
 // ── Skill 编辑弹窗 ──
 
 function resetForm() {
   Object.assign(editForm, {
-    id: null, code: '', skillCode: '', skillName: '', skillType: 'method',
-    category: currentCategory.value || 'data_access', sideEffect: true, description: '', skillPrompt: '',
-    isActive: true, outputStrict: true, returnType: 'json', version: '1.0',
-    icon: '', color: '', sortOrder: 0, remark: '',
-    inputs: [], outputs: [], reflection: emptyReflection(), api: emptyApi()
+    id: null, code: '', skillCode: '',
+    category: currentCategory.value || 'data_access',
+    isActive: true,
+    inputs: [], outputs: [], reflection: emptyReflection()
   })
+  analyzed.value = null
+  analyzeError.value = ''
 }
 
 async function openEdit(row) {
   resetForm()
-  activeTab.value = 'base'
   if (row) {
     try {
       const res = await proxy.http.get(`api/skill/${row.skillCode}`, null, true)
       if (res?.status && res.data) {
         const d = res.data
         Object.assign(editForm, {
-          id: d.id, code: d.code || '', skillCode: d.skillCode, skillName: d.skillName,
-          skillType: d.skillType || 'method', category: d.category || 'data_access',
-          sideEffect: !!d.sideEffect, description: d.description || '', skillPrompt: d.skillPrompt || '',
-          isActive: d.isActive !== false, outputStrict: d.outputStrict !== false,
-          returnType: d.returnType || 'json', version: d.version || '1.0',
-          icon: d.icon || '', color: d.color || '', sortOrder: d.sortOrder || 0, remark: d.remark || '',
+          id: d.id, code: d.code || '', skillCode: d.skillCode,
+          category: d.category || 'data_access',
+          isActive: d.isActive !== false,
           inputs: (d.inputs || []).map(i => ({ ...i })),
           outputs: (d.outputs || []).map(o => ({ ...o })),
-          reflection: d.reflection ? { ...d.reflection } : emptyReflection(),
-          api: d.api ? { ...d.api } : emptyApi()
+          reflection: d.reflection ? { ...d.reflection } : emptyReflection()
         })
+        // 编辑模式不自动验证，用户手动点击验证按钮
+        if (editForm.reflection.classPath) {
+          // 仅回填，不触发 analyzeReflection
+        }
       }
     } catch (e) { console.error('加载详情失败', e) }
   }
   dialogVisible.value = true
 }
 
-// ── 子表行操作 ──
-
-function addInputRow() {
-  editForm.inputs.push({ id: 0, inputName: '', inputLabel: '', inputType: 'text', enumValues: '', isRequired: false, defaultValue: '', sortOrder: editForm.inputs.length + 1 })
-}
-
-function addOutputRow() {
-  editForm.outputs.push({ id: 0, outputName: '', outputType: 'json', outputPrompt: '', description: '', sortOrder: editForm.outputs.length + 1 })
-}
-
-function removeRow(list, index) {
-  list.splice(index, 1)
-}
-
 // ── Skill 保存 / 删除 / 启停 ──
 
 async function handleSave() {
+  if (!analyzed.value) {
+    ElMessage.warning('请先验证反射信息')
+    return
+  }
   const valid = await baseFormRef.value?.validate().catch(() => false)
   if (!valid) return
   try {
     const body = {
       id: editForm.id, code: editForm.code,
-      skillCode: editForm.skillCode, skillName: editForm.skillName,
-      skillType: editForm.skillType, category: editForm.category,
-      sideEffect: editForm.sideEffect, description: editForm.description,
-      skillPrompt: editForm.skillPrompt, isActive: editForm.isActive,
-      outputStrict: editForm.outputStrict, returnType: editForm.returnType,
-      version: editForm.version, icon: editForm.icon, color: editForm.color,
-      sortOrder: editForm.sortOrder, remark: editForm.remark,
-      inputs: editForm.inputs, outputs: editForm.outputs,
-      reflection: editForm.reflection,
-      api: editForm.api
+      skillCode: editForm.skillCode,
+      category: editForm.category,
+      isActive: editForm.isActive,
+      inputs: [], outputs: [],
+      reflection: editForm.reflection
     }
     const res = await proxy.http.post('api/skill', body, true)
     if (res?.status) { ElMessage.success('保存成功'); dialogVisible.value = false; loadData() }
@@ -510,7 +460,7 @@ async function handleSave() {
 
 const handleDelete = async (row) => {
   try {
-    await ElMessageBox.confirm(`确认删除 Skill「${row.skillName}」（${row.skillCode}）？子表将一并删除`, '确认', { type: 'warning' })
+    await ElMessageBox.confirm(`确认删除 Skill「${row.skillName}」（${row.skillCode}）？`, '确认', { type: 'warning' })
     const res = await proxy.http.post(`api/skill/delete/${row.id}`, null, true)
     if (res?.status) { ElMessage.success('删除成功'); loadData() }
   } catch (e) { if (e !== 'cancel') ElMessage.error('删除失败') }
@@ -524,9 +474,7 @@ const toggleActive = async (row) => {
 
 // ── 分类管理 ──
 
-function openCategoryManage() {
-  categoryDialogVisible.value = true
-}
+function openCategoryManage() { categoryDialogVisible.value = true }
 
 function addCategory() {
   categories.value.push({ id: 0, categoryCode: '', categoryName: '', icon: '', color: '#409EFF', sortOrder: categories.value.length + 1, enable: true })
@@ -562,11 +510,16 @@ onMounted(() => { loadCategories(); loadData() })
 </script>
 
 <style scoped lang="less">
-.skill-manage-page { padding: 16px; height: 100%; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
+.skill-manage-page {
+  padding: 16px; height: 100%;
+  display: flex; flex-direction: column; overflow: hidden;
+  box-sizing: border-box;
+}
 .page-body { display: flex; gap: 16px; flex: 1; min-height: 0; }
-.category-card { width: 200px; min-width: 200px; display: flex; flex-direction: column; }
+.category-card { width: 200px; min-width: 200px; display: flex; flex-direction: column; overflow: hidden; }
+:deep(.category-card .el-card__body) { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
 .category-header { display: flex; align-items: center; justify-content: space-between; }
-.category-list { overflow-y: auto; }
+.category-list { overflow-y: auto; flex: 1; }
 .category-item {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 12px; margin-bottom: 4px; border-radius: 6px;
@@ -576,10 +529,19 @@ onMounted(() => { loadCategories(); loadData() })
 .category-item:hover { background: #f5f7fa; }
 .category-item.active { background: #ecf5ff; color: #409EFF; font-weight: 600; }
 .cat-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
 .table-card { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
-.card-header { display: flex; align-items: center; justify-content: space-between; }
+:deep(.table-card .el-card__body) { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.card-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
 .card-title { font-size: 15px; font-weight: 600; }
 .card-actions { display: flex; align-items: center; }
+.table-wrapper { flex: 1; min-height: 0; overflow: hidden; }
 .row-actions { display: flex; gap: 4px; white-space: nowrap; }
-.subtable-tip { color: #909399; font-size: 12px; margin-bottom: 8px; }
+.empty-tip { padding: 24px 0; text-align: center; }
+.section-title { font-size: 13px; font-weight: 600; color: #303133; margin-bottom: 8px; }
+.port-name { font-family: 'SF Mono', Monaco, monospace; font-size: 13px; color: #303133; font-weight: 600; }
+.code-desc { font-size: 12px; color: #909399; }
+
+.dialog-body { max-height: 70vh; overflow-y: auto; padding-right: 8px; }
+.edit-form { margin-bottom: 0; }
 </style>

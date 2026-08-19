@@ -11,16 +11,19 @@ using VOL.Entity.CertPlatform.Wf;
 using VOL.Entity.DomainModels;
 using VOL.Builder.IRepositories.CertPlatform;
 using VOL.Builder.IServices.CertPlatform;
+using YZH.Core.Workflow;
 
 namespace VOL.Builder.Services.CertPlatform
 {
     public class WfSkillService : IWfSkillService
     {
         private readonly IWfSkillRepository _repository;
+        private readonly SkillExecutor _executor;
 
-        public WfSkillService(IWfSkillRepository repository)
+        public WfSkillService(IWfSkillRepository repository, SkillExecutor executor)
         {
             _repository = repository;
+            _executor = executor;
         }
 
         public static IWfSkillService Instance =>
@@ -49,9 +52,9 @@ namespace VOL.Builder.Services.CertPlatform
 
             var resultList = list.Select(x => (object)new
             {
-                x.Id, x.Code, x.SkillCode, x.SkillName, x.SkillType, x.Category,
-                x.SideEffect, x.Description, x.IsActive, x.OutputStrict, x.ReturnType,
-                x.Version, x.Icon, x.Color, x.SortOrder, x.Remark,
+                x.Id, x.Code, x.SkillCode, x.SkillName, x.Category,
+                x.Description, x.IsActive,
+                x.SortOrder,
                 x.CreateDate, x.ModifyDate
             }).ToList();
             return new PageGridData<dynamic> { rows = resultList, total = totalCount };
@@ -88,30 +91,45 @@ namespace VOL.Builder.Services.CertPlatform
                 .OrderBy(x => x.SortOrder).ToListAsync();
             var reflection = await db.Set<WfSkillReflection>()
                 .FirstOrDefaultAsync(x => x.SkillCode == main.SkillCode);
-            var api = await db.Set<WfSkillApi>()
-                .FirstOrDefaultAsync(x => x.SkillCode == main.SkillCode);
 
             return new SkillDetailDto
             {
                 Id = main.Id, Code = main.Code, SkillCode = main.SkillCode,
-                SkillName = main.SkillName, SkillType = main.SkillType, Category = main.Category,
-                SideEffect = main.SideEffect, Description = main.Description,
-                SkillPrompt = main.SkillPrompt, IsActive = main.IsActive,
-                OutputStrict = main.OutputStrict, ReturnType = main.ReturnType,
-                Version = main.Version, Icon = main.Icon, Color = main.Color,
-                SortOrder = main.SortOrder, Remark = main.Remark,
-                Inputs = inputs, Outputs = outputs, Reflection = reflection, Api = api
+                SkillName = main.SkillName, Category = main.Category,
+                Description = main.Description, IsActive = main.IsActive,
+                SortOrder = main.SortOrder,
+                Inputs = inputs, Outputs = outputs, Reflection = reflection
             };
         }
 
-        // ==================== 保存（主子表事务） ====================
+        // ==================== 保存（含反射验证 + 唯一校验） ====================
 
         public async Task<(bool ok, string message)> SaveAsync(SkillDetailDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto.SkillCode)) return (false, "Skill 编码不能为空");
-            if (string.IsNullOrWhiteSpace(dto.SkillName)) return (false, "Skill 名称不能为空");
+            if (dto.Reflection == null || string.IsNullOrWhiteSpace(dto.Reflection.ClassPath))
+                return (false, "实现类全名必填");
 
-            await using var tx = await _repository.DbContext.Database.BeginTransactionAsync();
+            var classPath = dto.Reflection.ClassPath;
+            var methodName = string.IsNullOrWhiteSpace(dto.Reflection.MethodName)
+                ? "ExecuteAsync" : dto.Reflection.MethodName;
+
+            // ① 反射验证：确认 classPath + methodName 可反射分析
+            var metadata = _executor.Analyze(classPath, methodName);
+            if (metadata == null)
+                return (false, $"反射验证失败：找不到类型 {classPath} 或方法 {methodName}，或缺少 [Skill] 特性");
+
+            // ② 唯一性校验：classPath + methodName 在数据库中唯一
+            var db = _repository.DbContext;
+            var dupReflection = await db.Set<WfSkillReflection>()
+                .Where(r => r.ClassPath == classPath && r.MethodName == methodName && r.Enable == true)
+                .Join(db.Set<Skill>(), r => r.SkillCode, s => s.SkillCode, (r, s) => new { r.SkillCode, s.Id })
+                .Where(x => x.Id != dto.Id)
+                .AnyAsync();
+            if (dupReflection)
+                return (false, $"反射验证失败：{classPath}.{methodName} 已被其他 Skill 注册");
+
+            await using var tx = await db.Database.BeginTransactionAsync();
             try
             {
                 Skill main;
@@ -122,19 +140,16 @@ namespace VOL.Builder.Services.CertPlatform
                     if (await _repository.ExistsAsync(x => x.SkillCode == dto.SkillCode && x.Id != dto.Id))
                         return (false, $"Skill 编码 {dto.SkillCode} 已存在");
 
-                    main.SkillCode = dto.SkillCode; main.SkillName = dto.SkillName;
-                    main.SkillType = dto.SkillType; main.Category = dto.Category;
-                    main.SideEffect = dto.SideEffect; main.Description = dto.Description;
-                    main.SkillPrompt = dto.SkillPrompt; main.IsActive = dto.IsActive;
-                    main.OutputStrict = dto.OutputStrict; main.ReturnType = dto.ReturnType;
-                    main.Version = dto.Version; main.Icon = dto.Icon; main.Color = dto.Color;
-                    main.SortOrder = dto.SortOrder; main.Remark = dto.Remark;
+                    main.SkillName = metadata.Name;  // 从反射同步
+                    main.Description = metadata.Description;  // 从反射同步
+                    main.Category = dto.Category;
+                    main.IsActive = dto.IsActive;
+                    main.SortOrder = dto.SortOrder;
                     main.ModifyDate = DateTime.Now; main.Modifier = UserContext.Current?.UserName;
                     _repository.Update(main, new[]
                     {
-                        "SkillCode", "SkillName", "SkillType", "Category", "SideEffect",
-                        "Description", "SkillPrompt", "IsActive", "OutputStrict", "ReturnType",
-                        "Version", "Icon", "Color", "SortOrder", "Remark", "ModifyDate", "Modifier"
+                        "SkillName", "Category", "Description", "IsActive",
+                        "SortOrder", "ModifyDate", "Modifier"
                     }, false);
                 }
                 else
@@ -145,24 +160,22 @@ namespace VOL.Builder.Services.CertPlatform
                     main = new Skill
                     {
                         Code = Guid.NewGuid().ToString("N"),
-                        SkillCode = dto.SkillCode, SkillName = dto.SkillName,
-                        SkillType = string.IsNullOrWhiteSpace(dto.SkillType) ? "method" : dto.SkillType,
+                        SkillCode = dto.SkillCode,
+                        SkillName = metadata.Name,  // 从反射同步
+                        SkillType = "method",
                         Category = string.IsNullOrWhiteSpace(dto.Category) ? "data_process" : dto.Category,
-                        SideEffect = dto.SideEffect, Description = dto.Description,
-                        SkillPrompt = dto.SkillPrompt, IsActive = dto.IsActive,
-                        OutputStrict = dto.OutputStrict,
-                        ReturnType = string.IsNullOrWhiteSpace(dto.ReturnType) ? "json" : dto.ReturnType,
-                        Version = string.IsNullOrWhiteSpace(dto.Version) ? "1.0" : dto.Version,
-                        Icon = dto.Icon, Color = dto.Color, SortOrder = dto.SortOrder,
-                        Remark = dto.Remark, Enable = true, Status = "active",
+                        Description = metadata.Description,  // 从反射同步
+                        IsActive = dto.IsActive,
+                        SortOrder = dto.SortOrder,
+                        Enable = true, Status = "active",
                         CreateDate = DateTime.Now, Creator = UserContext.Current?.UserName
                     };
                     await _repository.AddAsync(main);
                 }
                 await _repository.SaveChangesAsync();
 
-                // 子表全量替换（先删后插）
-                await ReplaceChildrenAsync(dto, main.SkillCode);
+                // ③ 同步反射信息到子表
+                await ReplaceChildrenAsync(dto, main.SkillCode, metadata);
                 await _repository.SaveChangesAsync();
 
                 await tx.CommitAsync();
@@ -175,76 +188,64 @@ namespace VOL.Builder.Services.CertPlatform
             }
         }
 
-        private async Task ReplaceChildrenAsync(SkillDetailDto dto, string skillCode)
+        /// <summary>
+        /// 子表同步：反射信息写入 wf_skill_reflection，端口镜像写入 wf_skill_input / wf_skill_output（只读镜像）。
+        /// </summary>
+        private async Task ReplaceChildrenAsync(SkillDetailDto dto, string skillCode, SkillMetadata metadata)
         {
-            var db = _repository.DbContext;
-            // 删除旧子表（ExecuteDelete 立即执行，不依赖 SaveChanges）
-            db.Set<WfSkillInput>().Where(x => x.SkillCode == skillCode).ExecuteDelete();
-            db.Set<WfSkillOutput>().Where(x => x.SkillCode == skillCode).ExecuteDelete();
-            db.Set<WfSkillReflection>().Where(x => x.SkillCode == skillCode).ExecuteDelete();
-            db.Set<WfSkillApi>().Where(x => x.SkillCode == skillCode).ExecuteDelete();
+            var dbSet = _repository.DbContext;
+            dbSet.Set<WfSkillInput>().Where(x => x.SkillCode == skillCode).ExecuteDelete();
+            dbSet.Set<WfSkillOutput>().Where(x => x.SkillCode == skillCode).ExecuteDelete();
+            dbSet.Set<WfSkillReflection>().Where(x => x.SkillCode == skillCode).ExecuteDelete();
 
             var now = DateTime.Now;
             var operatorName = UserContext.Current?.UserName;
 
-            // 输入模板
-            var inputs = (dto.Inputs ?? new List<WfSkillInput>())
-                .Where(x => !string.IsNullOrWhiteSpace(x.InputName))
-                .Select(x => new WfSkillInput
-                {
-                    Code = Guid.NewGuid().ToString("N"), SkillCode = skillCode,
-                    InputName = x.InputName, InputLabel = x.InputLabel,
-                    InputType = string.IsNullOrWhiteSpace(x.InputType) ? "text" : x.InputType,
-                    EnumValues = x.EnumValues, IsRequired = x.IsRequired,
-                    DefaultValue = x.DefaultValue, SortOrder = x.SortOrder,
-                    Enable = true, Status = "active",
-                    CreateDate = now, Creator = operatorName
-                }).ToList();
-            if (inputs.Count > 0) await db.Set<WfSkillInput>().AddRangeAsync(inputs);
-
-            // 输出契约
-            var outputs = (dto.Outputs ?? new List<WfSkillOutput>())
-                .Where(x => !string.IsNullOrWhiteSpace(x.OutputName))
-                .Select(x => new WfSkillOutput
-                {
-                    Code = Guid.NewGuid().ToString("N"), SkillCode = skillCode,
-                    OutputName = x.OutputName,
-                    OutputType = string.IsNullOrWhiteSpace(x.OutputType) ? "json" : x.OutputType,
-                    OutputPrompt = x.OutputPrompt, Description = x.Description,
-                    SortOrder = x.SortOrder, Enable = true, Status = "active",
-                    CreateDate = now, Creator = operatorName
-                }).ToList();
-            if (outputs.Count > 0) await db.Set<WfSkillOutput>().AddRangeAsync(outputs);
-
             // 反射信息
-            if (dto.Reflection != null && !string.IsNullOrWhiteSpace(dto.Reflection.ClassPath))
+            await dbSet.Set<WfSkillReflection>().AddAsync(new WfSkillReflection
             {
-                await db.Set<WfSkillReflection>().AddAsync(new WfSkillReflection
+                Code = Guid.NewGuid().ToString("N"), SkillCode = skillCode,
+                ClassPath = dto.Reflection.ClassPath,
+                MethodName = string.IsNullOrWhiteSpace(dto.Reflection.MethodName) ? "ExecuteAsync" : dto.Reflection.MethodName,
+                ParamBinding = dto.Reflection?.ParamBinding,
+                Enable = true, Status = "active",
+                CreateDate = now, Creator = operatorName
+            });
+
+            // 输入端口镜像（从反射分析结果写入）
+            var existingInputs = dto.Inputs ?? new List<WfSkillInput>();
+            for (int i = 0; i < metadata.InputPorts.Count; i++)
+            {
+                var port = metadata.InputPorts[i];
+                var existing = existingInputs.FirstOrDefault(x => x.InputName == port.Name);
+                await dbSet.Set<WfSkillInput>().AddAsync(new WfSkillInput
                 {
                     Code = Guid.NewGuid().ToString("N"), SkillCode = skillCode,
-                    ClassPath = dto.Reflection.ClassPath,
-                    MethodName = string.IsNullOrWhiteSpace(dto.Reflection.MethodName) ? "ExecuteAsync" : dto.Reflection.MethodName,
-                    ParamBinding = dto.Reflection.ParamBinding,
+                    InputName = port.Name,
+                    InputLabel = existing?.InputLabel ?? port.Description,
+                    InputType = port.Type,
+                    IsRequired = port.Required,
+                    DefaultValue = port.DefaultValue,
+                    EnumValues = existing?.EnumValues ?? "",
+                    SortOrder = i + 1,
                     Enable = true, Status = "active",
                     CreateDate = now, Creator = operatorName
                 });
             }
 
-            // API 信息
-            if (dto.Api != null && !string.IsNullOrWhiteSpace(dto.Api.Url))
+            // 输出端口镜像：标准输出 result + 业务自定义输出
+            var existingOutputs = dto.Outputs ?? new List<WfSkillOutput>();
+            // result 端口
+            await dbSet.Set<WfSkillOutput>().AddAsync(new WfSkillOutput
             {
-                await db.Set<WfSkillApi>().AddAsync(new WfSkillApi
-                {
-                    Code = Guid.NewGuid().ToString("N"), SkillCode = skillCode,
-                    Url = dto.Api.Url,
-                    HttpMethod = string.IsNullOrWhiteSpace(dto.Api.HttpMethod) ? "POST" : dto.Api.HttpMethod,
-                    Headers = dto.Api.Headers, AuthConfig = dto.Api.AuthConfig,
-                    ParamMapping = dto.Api.ParamMapping, ResponseMapping = dto.Api.ResponseMapping,
-                    TimeoutSeconds = dto.Api.TimeoutSeconds > 0 ? dto.Api.TimeoutSeconds : 30,
-                    Enable = true, Status = "active",
-                    CreateDate = now, Creator = operatorName
-                });
-            }
+                Code = Guid.NewGuid().ToString("N"), SkillCode = skillCode,
+                OutputName = "result",
+                OutputType = metadata.ReturnType,
+                Description = "执行结果",
+                SortOrder = 1,
+                Enable = true, Status = "active",
+                CreateDate = now, Creator = operatorName
+            });
         }
 
         // ==================== 删除 / 启停 ====================
@@ -253,12 +254,10 @@ namespace VOL.Builder.Services.CertPlatform
         {
             var entity = await _repository.FindFirstAsync(x => x.Id == id);
             if (entity == null) return false;
-            // 先删子表（wf_skill_reflection 有 FK 约束，必须先删）
             var db = _repository.DbContext;
             db.Set<WfSkillInput>().Where(x => x.SkillCode == entity.SkillCode).ExecuteDelete();
             db.Set<WfSkillOutput>().Where(x => x.SkillCode == entity.SkillCode).ExecuteDelete();
             db.Set<WfSkillReflection>().Where(x => x.SkillCode == entity.SkillCode).ExecuteDelete();
-            db.Set<WfSkillApi>().Where(x => x.SkillCode == entity.SkillCode).ExecuteDelete();
             _repository.Delete(entity, true);
             return true;
         }
@@ -272,6 +271,55 @@ namespace VOL.Builder.Services.CertPlatform
             entity.Modifier = UserContext.Current?.UserName;
             _repository.Update(entity, new[] { "IsActive", "ModifyDate", "Modifier" }, true);
             return true;
+        }
+
+        // ==================== 功能节点目录 ====================
+
+        public async Task<List<object>> GetCatalogAsync()
+        {
+            var db = _repository.DbContext;
+            var skills = await db.Set<Skill>()
+                .Where(s => s.IsActive && s.Enable)
+                .OrderBy(s => s.SortOrder)
+                .Join(db.Set<WfSkillReflection>().Where(r => r.Enable),
+                    s => s.SkillCode, r => r.SkillCode,
+                    (s, r) => new { s, r })
+                .ToListAsync();
+
+            var result = new List<object>();
+            foreach (var item in skills)
+            {
+                var metadata = _executor.Analyze(item.r.ClassPath,
+                    string.IsNullOrWhiteSpace(item.r.MethodName) ? "ExecuteAsync" : item.r.MethodName);
+
+                if (metadata == null) continue;
+
+                result.Add(new
+                {
+                    classCode = metadata.Code,
+                    className = metadata.Name,
+                    category = item.s.Category,
+                    description = metadata.Description,
+                    returnType = metadata.ReturnType,
+                    classPath = item.r.ClassPath,
+                    methodName = item.r.MethodName,
+                    inputPorts = metadata.InputPorts.Select(p => new
+                    {
+                        name = p.Name,
+                        type = p.Type,
+                        required = p.Required,
+                        defaultValue = p.DefaultValue,
+                        description = p.Description
+                    }),
+                    outputPorts = new[]
+                    {
+                        new { name = "success", type = "boolean", description = "是否执行成功" },
+                        new { name = "error", type = "string", description = "失败时的错误信息" },
+                        new { name = "result", type = metadata.ReturnType, description = "执行结果" }
+                    }
+                });
+            }
+            return result;
         }
     }
 }

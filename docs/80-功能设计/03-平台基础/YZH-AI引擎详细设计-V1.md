@@ -11,6 +11,8 @@ AIGC:
 
 # YZH-AI引擎详细设计-V1
 
+> **⚠️ 过时标注（2026-08-19）**：本文件中 `LlmExtractSkill` / `ISkillNode` / `SkillBase` 相关设计已过时。信息提取不再依赖 AI 临时提取，走独立文档提取流程。当前 Skill 权威文档：`docs/60-AI工程设计/Skill清单-V1.md`（V1.1）。
+
 > **版本**：V1.2 | **日期**：2026-08-11 | **状态**：待实施
 > **V1.1→V1.2 更新点**：① 补旧版 Office convertStatus 与 DocumentExtractSkill 衔接；② 补 branches condition.field 定义 + skipped 留痕；③ 补 LlmClient 重试/熔断/信号量；④ 补 PromptInterpreter 边界 + LlmExtractSkill 1 次 JSON 失败重试；⑤ 补 S5 验收 Office 联动 + http.js 声明
 

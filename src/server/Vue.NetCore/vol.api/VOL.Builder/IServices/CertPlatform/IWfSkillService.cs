@@ -26,5 +26,12 @@ namespace VOL.Builder.IServices.CertPlatform
 
         /// <summary>启用 Skill 完整描述（供工作流配置面板引用）</summary>
         Task<List<SkillDetailDto>> GetActiveSkillsAsync();
+
+        /// <summary>
+        /// 获取功能节点目录（V1.3 新增）
+        /// 返回启用的功能性 Skill 列表（含输入/输出端口声明），供画布设计器渲染节点面板。
+        /// 特殊节点不在此返回，由前端硬编码。
+        /// </summary>
+        Task<List<object>> GetCatalogAsync();
     }
 }

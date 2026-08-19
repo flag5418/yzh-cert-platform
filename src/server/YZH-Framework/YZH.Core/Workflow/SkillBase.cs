@@ -24,7 +24,12 @@ namespace YZH.Core.Workflow
     /// - 内置 Skill 继承本类实现 ExecuteCoreAsync；
     /// - 自定义 Skill 经反射加载（wf_skill_reflection.class_path → ReflectionSkillLoader，DI 优先实例化），
     ///   声明式元数据即"登记即用"的落点——代码声明与 wf_skill 表登记互相校验；
-    /// - ExecuteAsync 统一处理：必填校验 → 执行 → 强约束输出校验 → 异常包装，子类只需关注业务逻辑。
+    /// - ExecuteAsync 统一处理：必填校验 → 执行 → 标准输出包装 → 强约束输出契约校验 → 异常包装，子类只需关注业务逻辑。
+    /// 
+    /// V1.3 标准输出端口约定：
+    /// - 所有功能节点自动包含 success(boolean) / error(string) / result(json) 三个标准输出端口
+    /// - 子类只需声明业务自定义输出端口（OutputDecls），标准端口由基类自动包装
+    /// - 下游节点统一引用 nX.success 判断是否成功，nX.result 取结果
     /// </summary>
     public abstract class SkillBase : ISkillNode
     {
@@ -41,13 +46,36 @@ namespace YZH.Core.Workflow
 
         /// <summary>输入声明（表单模板 + 必填校验）；ai_node 等动态输入返回空</summary>
         public virtual IReadOnlyList<SkillParam> InputDecls { get; } = Array.Empty<SkillParam>();
-        /// <summary>输出声明（OutputStrict=true 时强约束校验）</summary>
+        /// <summary>业务自定义输出声明（不含标准端口）；OutputStrict=true 时强约束校验</summary>
         public virtual IReadOnlyList<SkillParam> OutputDecls { get; } = Array.Empty<SkillParam>();
+
+        /// <summary>
+        /// 标准输出端口（所有功能节点自动包含，子类无需声明）。
+        /// </summary>
+        public static IReadOnlyList<SkillParam> StandardOutputDecls { get; } = new[]
+        {
+            new SkillParam { Name = "success", Type = "boolean", Required = true, Description = "是否执行成功" },
+            new SkillParam { Name = "error", Type = "string", Required = false, Description = "失败时的错误信息" },
+            new SkillParam { Name = "result", Type = "json", Required = true, Description = "执行结果（业务数据）" }
+        };
+
+        /// <summary>最终输出声明 = 标准端口 + 业务自定义端口</summary>
+        public IReadOnlyList<SkillParam> AllOutputDecls =>
+            StandardOutputDecls.Concat(OutputDecls).ToList();
 
         public async Task<SkillResult> ExecuteAsync(SkillContext context, CancellationToken ct = default)
         {
+            // 标准输出结构
+            var standardOutputs = new Dictionary<string, object>
+            {
+                ["success"] = false,
+                ["error"] = string.Empty,
+                ["result"] = new Dictionary<string, object>()
+            };
+
             try
             {
+                // ① 必填入参校验
                 var missing = InputDecls
                     .Where(p => p.Required && (context.Inputs == null
                                                || !context.Inputs.TryGetValue(p.Name, out var v)
@@ -56,28 +84,65 @@ namespace YZH.Core.Workflow
                     .Select(p => p.Name)
                     .ToList();
                 if (missing.Count > 0)
-                    return SkillResult.Fail($"{SkillCode} 缺少必填入参: {string.Join(", ", missing)}");
+                {
+                    standardOutputs["error"] = $"{SkillCode} 缺少必填入参: {string.Join(", ", missing)}";
+                    return SkillResult.Ok(standardOutputs, null);
+                }
 
+                // ② 执行子类业务逻辑
                 var result = await ExecuteCoreAsync(context, ct);
 
-                if (result.Success && OutputStrict)
+                // ③ 包装标准输出
+                if (result.Success)
                 {
-                    var missingOut = OutputDecls
-                        .Where(p => p.Required && (!result.Outputs.TryGetValue(p.Name, out var v) || v == null))
-                        .Select(p => p.Name)
-                        .ToList();
-                    if (missingOut.Count > 0)
-                        return SkillResult.Fail($"{SkillCode} 输出契约校验失败，缺少输出端口: {string.Join(", ", missingOut)}");
+                    standardOutputs["success"] = true;
+                    standardOutputs["error"] = string.Empty;
+                    standardOutputs["result"] = result.Outputs ?? new Dictionary<string, object>();
+
+                    // 业务自定义输出端口平铺到顶层（供下游兼容引用 nX.field_value 等）
+                    if (result.Outputs != null)
+                    {
+                        foreach (var kv in result.Outputs)
+                            standardOutputs[kv.Key] = kv.Value;
+                    }
+
+                    // ④ 强约束输出契约校验（校验业务自定义端口）
+                    if (OutputStrict)
+                    {
+                        var missingOut = OutputDecls
+                            .Where(p => p.Required && (!result.Outputs.TryGetValue(p.Name, out var v) || v == null))
+                            .Select(p => p.Name)
+                            .ToList();
+                        if (missingOut.Count > 0)
+                        {
+                            standardOutputs["success"] = false;
+                            standardOutputs["error"] = $"{SkillCode} 输出契约校验失败，缺少输出端口: {string.Join(", ", missingOut)}";
+                            standardOutputs["result"] = new Dictionary<string, object>();
+                        }
+                    }
                 }
-                return result;
+                else
+                {
+                    standardOutputs["success"] = false;
+                    standardOutputs["error"] = result.Error ?? string.Empty;
+                    standardOutputs["result"] = new Dictionary<string, object>();
+                }
+
+                var finalResult = SkillResult.Ok(standardOutputs, result.Confidence);
+                finalResult.PromptTokens = result.PromptTokens;
+                finalResult.CompletionTokens = result.CompletionTokens;
+                return finalResult;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                return SkillResult.Fail($"{SkillCode} 执行异常: {ex.Message}");
+                standardOutputs["success"] = false;
+                standardOutputs["error"] = $"{SkillCode} 执行异常: {ex.Message}";
+                standardOutputs["result"] = new Dictionary<string, object>();
+                return SkillResult.Ok(standardOutputs, null);
             }
         }
 
-        /// <summary>子类实现真实业务逻辑</summary>
+        /// <summary>子类实现真实业务逻辑，返回业务输出（标准端口由基类自动包装）</summary>
         protected abstract Task<SkillResult> ExecuteCoreAsync(SkillContext context, CancellationToken ct);
     }
 }
