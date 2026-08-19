@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -8,15 +9,16 @@ using Microsoft.Extensions.Logging;
 namespace YZH.Core.Workflow
 {
     /// <summary>
-    /// Skill 注册表（V2 静态方法版）。
-    /// 从 wf_skill_reflection 表加载 classPath + methodName，
-    /// 执行时委托给 SkillExecutor 反射调用静态方法。
+    /// Skill 注册表（V2 静态方法版 + ISkillNode 回退）。
+    /// 优先从 wf_skill_reflection 表加载 classPath + methodName，
+    /// 找不到时回退到 DI 容器中注册的 ISkillNode 实例（如 llm_extract）。
     /// </summary>
     public class SkillRegistry : ISkillRegistry
     {
         private readonly SkillExecutor _executor;
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<SkillRegistry> _logger;
+        private readonly Dictionary<string, ISkillNode> _diSkills;
 
         // 缓存：skillCode → (classPath, methodName)
         private readonly Dictionary<string, (string classPath, string methodName)> _cache = new();
@@ -25,11 +27,13 @@ namespace YZH.Core.Workflow
         public SkillRegistry(
             IServiceProvider serviceProvider,
             SkillExecutor executor,
+            IEnumerable<ISkillNode> skills,
             ILogger<SkillRegistry> logger)
         {
             _serviceProvider = serviceProvider;
             _executor = executor;
             _logger = logger;
+            _diSkills = skills.ToDictionary(s => s.SkillCode, s => s);
         }
 
         public async Task<SkillMetadata?> LoadAsync(string skillCode, CancellationToken ct = default)
@@ -42,10 +46,17 @@ namespace YZH.Core.Workflow
         public async Task<SkillResult> ExecuteAsync(string skillCode, SkillContext context, CancellationToken ct = default)
         {
             var (classPath, methodName) = await GetReflectionInfo(skillCode, ct);
-            if (string.IsNullOrEmpty(classPath))
-                return SkillResult.Fail($"Skill '{skillCode}' 未在数据库中登记反射配置");
+            if (!string.IsNullOrEmpty(classPath))
+                return await _executor.ExecuteAsync(classPath, methodName, context, ct);
 
-            return await _executor.ExecuteAsync(classPath, methodName, context, ct);
+            // 回退：从 DI 容器查找 ISkillNode 实例（如 llm_extract）
+            if (_diSkills.TryGetValue(skillCode, out var skillNode))
+            {
+                _logger.LogInformation("Skill '{SkillCode}' 从 DI 容器执行（非反射模式）", skillCode);
+                return await skillNode.ExecuteAsync(context, ct);
+            }
+
+            return SkillResult.Fail($"Skill '{skillCode}' 未在数据库中登记反射配置，也未在 DI 容器中注册");
         }
 
         /// <summary>

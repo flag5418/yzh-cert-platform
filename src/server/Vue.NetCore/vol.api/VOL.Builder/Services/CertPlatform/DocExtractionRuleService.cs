@@ -814,6 +814,68 @@ namespace VOL.Builder.Services.CertPlatform
             return _skills;
         }
 
+        /// <summary>
+        /// 获取已配置提取规则的文档列表（供工作流配置页面选择文档）
+        /// 关联 cert_standard_directory_file 获取文档名称
+        /// </summary>
+        public async Task<List<object>> GetConfiguredRulesAsync()
+        {
+            var db = repository.DbContext;
+            var rules = await (from r in db.Set<CertDocExtractionRule>().Where(x => x.Enable)
+                               join f in db.Set<VOL.Entity.CertPlatform.Dir.StandardDirectoryFile>()
+                                   on r.StandardFileCode equals f.FileCode into fileJoin
+                               from f in fileJoin.DefaultIfEmpty()
+                               orderby (r.ModifyDate ?? r.CreateDate) descending
+                               select new
+                               {
+                                   ruleCode = r.Code,
+                                   standardFileCode = r.StandardFileCode,
+                                   fileName = f != null ? f.FileName : r.StandardFileCode,
+                                   standardCode = r.StandardCode,
+                                   phaseCode = r.PhaseCode,
+                                   skill = r.Skill,
+                                   isValid = r.IsValid,
+                                   status = r.Status,
+                                   createDate = r.CreateDate,
+                                   modifyDate = r.ModifyDate
+                               }).ToListAsync();
+
+            return rules.Cast<object>().ToList();
+        }
+
+        /// <summary>
+        /// 获取规则的字段和表格定义（供 docField/docTable 节点选择）
+        /// </summary>
+        public async Task<object> GetFieldsAndTablesAsync(string ruleCode)
+        {
+            var db = repository.DbContext;
+
+            var fields = await db.Set<CertDocFieldDef>()
+                .Where(x => x.RuleCode == ruleCode && x.Enable)
+                .OrderBy(x => x.SortOrder)
+                .Select(x => new
+                {
+                    fieldCode = x.FieldCode,
+                    fieldName = x.FieldName,
+                    dataType = x.DataType,
+                    description = x.Description
+                })
+                .ToListAsync();
+
+            var tables = await db.Set<CertDocTableDef>()
+                .Where(x => x.RuleCode == ruleCode && x.Enable)
+                .OrderBy(x => x.SortOrder)
+                .Select(x => new
+                {
+                    tableCode = x.TableCode,
+                    tableName = x.TableName,
+                    description = x.Description
+                })
+                .ToListAsync();
+
+            return new { fields, tables };
+        }
+
         #region 私有方法
 
         /// <summary>

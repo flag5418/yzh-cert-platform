@@ -168,6 +168,9 @@ builder.Services.AddScoped<YZH.Core.Workflow.SkillExecutor>();
 builder.Services.AddScoped<YZH.Core.Workflow.ISkillRegistry, YZH.Core.Workflow.SkillRegistry>();
 builder.Services.AddScoped<YZH.Core.Workflow.IWorkflowEngine, YZH.Core.Workflow.WorkflowEngine>();
 
+// ISkillNode 实例注册（供 SkillRegistry DI 回退，非工作流静态 Skill）
+builder.Services.AddScoped<YZH.Core.Workflow.ISkillNode, YZH.Core.Skills.LlmExtractSkill>();
+
 // 新增Helper服务
             // 注册MinIO客户端
             builder.Services.AddSingleton<IMinioClient>(sp =>

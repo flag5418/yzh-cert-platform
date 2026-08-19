@@ -113,11 +113,27 @@
 
       <!-- ===== 右栏：节点库 + 属性面板 ===== -->
       <div class="right-panel">
+        <!-- 文档选择（工作流配置前需先选择文档） -->
+        <div class="doc-select-bar">
+          <span class="doc-label">参考文档：</span>
+          <el-select v-model="selectedDocRule" placeholder="选择已配置提取规则的文档" size="small" style="flex: 1" @change="onDocRuleChange">
+            <el-option v-for="r in docRules" :key="r.ruleCode" :label="r.fileName || r.standardFileCode" :value="r.ruleCode" />
+          </el-select>
+        </div>
         <div class="skill-panel-wrapper">
           <SkillPanel :skills="skills" :categories="categories" @add-node="handleAddNode" />
         </div>
         <div class="prop-panel-wrapper">
-          <NodePropertyForm :selected-node="selectedNode" :skills="skills" @update-node="handleUpdateNode" @delete-node="handleDeleteNode" />
+          <NodePropertyForm
+            :selected-node="selectedNode"
+            :skills="skills"
+            :doc-rules="docRules"
+            :doc-fields="currentDocFields"
+            :doc-tables="currentDocTables"
+            @update-node="handleUpdateNode"
+            @delete-node="handleDeleteNode"
+            @load-doc-fields="onNodeDocChange"
+          />
         </div>
       </div>
     </div>
@@ -161,10 +177,16 @@ const skills = ref([])
 const categories = ref([])
 const selectedNode = ref(null)
 
+// 文档选择（工作流配置前需先选择文档）
+const docRules = ref([])
+const selectedDocRule = ref(null)
+const currentDocFields = ref([])
+const currentDocTables = ref([])
+
 // ==================== 初始化 ====================
 
 onMounted(async () => {
-  await Promise.all([loadSkills(), loadCategories(), loadTree()])
+  await Promise.all([loadSkills(), loadCategories(), loadTree(), loadDocRules()])
   initDiagram()
 })
 
@@ -188,6 +210,40 @@ async function loadCategories() {
     const res = await proxy.http.get('api/skill-category/list', null, false)
     if (res?.status) categories.value = res.data || []
   } catch (e) { console.error('加载分类失败', e) }
+}
+
+async function loadDocRules() {
+  try {
+    const res = await proxy.http.get('api/DocExtractionRule/configured-rules', null, false)
+    if (res?.status) docRules.value = res.data || []
+  } catch (e) { console.error('加载文档规则失败', e) }
+}
+
+/** 顶部栏选择文档时加载字段/表格 */
+async function onDocRuleChange(ruleCode) {
+  if (!ruleCode) {
+    currentDocFields.value = []
+    currentDocTables.value = []
+    return
+  }
+  await loadFieldsAndTables(ruleCode)
+}
+
+/** 节点属性面板选择文档时加载字段/表格（docField/docTable 节点） */
+async function onNodeDocChange(ruleCode) {
+  if (!ruleCode) return
+  await loadFieldsAndTables(ruleCode)
+}
+
+/** 通用：加载字段和表格定义 */
+async function loadFieldsAndTables(ruleCode) {
+  try {
+    const res = await proxy.http.get(`api/DocExtractionRule/${ruleCode}/fields-tables`, null, false)
+    if (res?.status && res.data) {
+      currentDocFields.value = res.data.fields || []
+      currentDocTables.value = res.data.tables || []
+    }
+  } catch (e) { console.error('加载文档字段/表格失败', e) }
 }
 
 // ==================== 树数据 ====================
@@ -255,8 +311,6 @@ function toggleExpand(node) {
 
 async function togglePhase(phase, std, org) {
   phase.expanded = !phase.expanded
-  // 便捷字段：stdCode 是 std.Code（如 ISO13485-CODE），standardCode 是 std.StandardCode（如 ISO134852016）
-  // 数据库 cert_validation_rule.standard_code 存的是 std.Code 值
   Object.assign(currentFilter, {
     orgCode: org.cbCode || org.id,
     standardCode: std.stdCode || phase.stdCode || std.standardCode,
@@ -265,7 +319,6 @@ async function togglePhase(phase, std, org) {
   currentRule.value = null
   selectedNode.value = null
   clearCanvas()
-  // 懒加载 NC 检查项
   if (phase.expanded && !phase.ruleLoaded) {
     await loadRulesForPhase(phase)
   }
@@ -311,7 +364,6 @@ function initDiagram() {
   })
 
   diagram.value.on('node:click', ({ data }) => {
-    // LogicFlow 2.0: 自定义数据在 data.properties 中
     const props = data.properties || {}
     selectedNode.value = {
       nodeId: data.id,
@@ -320,7 +372,9 @@ function initDiagram() {
       skillCode: props.skillCode || '',
       config: props.config || {},
       inputs: props.inputs || {},
-      outputs: props.outputs || {}
+      outputs: props.outputs || {},
+      inputPorts: props.inputPorts || [],
+      outputPorts: props.outputPorts || []
     }
   })
   diagram.value.on('edge:click', () => { selectedNode.value = null })
@@ -344,7 +398,6 @@ function onCanvasDrop(event) {
     const raw = event.dataTransfer.getData('nodeData')
     if (!raw) return
     const item = JSON.parse(raw)
-    // LogicFlow 2.0: getPointByClient 返回 { canvasOverlayPosition: { x, y } }
     const lfPoint = diagram.value.getPointByClient(event.clientX, event.clientY)
     const pos = lfPoint?.canvasOverlayPosition || lfPoint
     const x = pos?.x ?? 200
@@ -359,7 +412,6 @@ function addNodeAtPosition(item, x, y) {
   const nodeId = `n${Date.now()}`
   const data = defaultNodeData(item)
   const category = item.category || skills.value.find(s => s.skillCode === item.skillCode)?.category || ''
-  // LogicFlow 2.0: 自定义数据通过 properties 传入
   diagram.value.addNode({
     id: nodeId,
     type: data.nodeType === 'start' || data.nodeType === 'end' ? 'circle'
@@ -375,25 +427,38 @@ function addNodeAtPosition(item, x, y) {
 // ==================== 添加 / 更新 / 删除节点 ====================
 
 function defaultNodeData(item) {
-  if (item.nodeType === 'start') return { nodeType: 'start', title: '开始', config: {}, inputs: {}, outputs: {} }
-  if (item.nodeType === 'end') return { nodeType: 'end', title: '结束', config: {}, inputs: {}, outputs: {} }
-  if (item.nodeType === 'logic') return {
-    nodeType: 'logic', title: '逻辑判断',
-    config: { conditions: [{ valueA: '', operator: 'gte', valueB: '' }], conditionLogic: 'and' },
-    inputs: {}, outputs: {}
+  const nodeType = item.nodeType || 'skill'
+  const inputPorts = item.inputPorts || []
+  const outputPorts = item.outputPorts || []
+  const defaults = {}
+  for (const port of inputPorts) {
+    if (port.defaultValue) defaults[port.name] = port.defaultValue
   }
-  const meta = skills.value.find(s => s.skillCode === item.skillCode)
-  const inputs = {}
-  for (const input of meta?.inputs || []) {
-    if (input.defaultValue) inputs[input.inputName] = input.defaultValue
+  const configMap = {
+    start: {},
+    end: { result: {} },
+    logic: { conditions: [{ valueA: '', operator: 'gte', valueB: '' }], conditionLogic: 'and' },
+    ai_node: { prompt: '' },
+    loop: {},
+    docField: { docCode: '', fieldCode: '' },
+    docTable: { docCode: '', tableCode: '' },
+    skill: {}
   }
+  const titleMap = {
+    start: '开始', end: '结束', logic: '逻辑判断',
+    ai_node: 'AI 节点', loop: '循环节点',
+    docField: '文档字段', docTable: '文档表格'
+  }
+  const title = titleMap[nodeType] || item.skillName || item.skillCode || nodeType
   return {
-    nodeType: 'skill',
-    title: item.skillName || meta?.skillName || item.skillCode,
-    skillCode: item.skillCode,
-    config: {},
-    inputs,
-    outputs: {}
+    nodeType,
+    title,
+    skillCode: item.skillCode || '',
+    config: configMap[nodeType] || {},
+    inputs: defaults,
+    outputs: {},
+    inputPorts,
+    outputPorts
   }
 }
 
@@ -404,7 +469,6 @@ function handleAddNode(item) {
   const maxY = gd.nodes.reduce((m, n) => Math.max(m, n.y), 80)
   const data = defaultNodeData(item)
   const category = item.category || skills.value.find(s => s.skillCode === item.skillCode)?.category || ''
-  // LogicFlow 2.0: 自定义数据通过 properties 传入
   diagram.value.addNode({
     id: nodeId,
     type: data.nodeType === 'start' || data.nodeType === 'end' ? 'circle'
@@ -419,7 +483,6 @@ function handleAddNode(item) {
 
 function handleUpdateNode(data) {
   if (!data.nodeId) return
-  // LogicFlow 2.0: updateText 更新文案, setProperties 更新数据
   diagram.value.updateText(data.nodeId, data.title || data.skillCode || '')
   diagram.value.setProperties(data.nodeId, {
     nodeType: data.nodeType,
@@ -427,13 +490,14 @@ function handleUpdateNode(data) {
     skillCode: data.skillCode,
     config: data.config,
     inputs: data.inputs,
-    outputs: data.outputs
+    outputs: data.outputs,
+    inputPorts: data.inputPorts,
+    outputPorts: data.outputPorts
   })
   selectedNode.value = data
 }
 
 function handleDeleteNode(nodeId) {
-  // LogicFlow 2.0: deleteNode 逐个删除
   diagram.value.deleteNode(nodeId)
   selectedNode.value = null
   refreshCount()
@@ -462,7 +526,6 @@ function handleClearCanvas() {
 async function selectRule(rule, phase) {
   currentRule.value = rule
   savedTip.value = ''
-  // 确保过滤条件来自当前 phase
   currentFilter.orgCode = phase.cbCode || currentFilter.orgCode
   currentFilter.standardCode = phase.stdCode || phase.standardCode || currentFilter.standardCode
   currentFilter.phaseCode = phase.phaseCode || currentFilter.phaseCode
@@ -508,14 +571,12 @@ function autoLayout() {
   }
   gd.nodes.forEach(n => { if (!ordered.includes(n.id)) ordered.push(n.id) })
 
-  // 构建带新坐标的完整 graphData，一次性 render 确保边跟随节点
   const posMap = {}
   ordered.forEach((id, idx) => {
     const col = idx % 4, row = Math.floor(idx / 4)
     posMap[id] = { x: 120 + col * 240, y: 80 + row * 140 }
   })
   const newNodes = gd.nodes.map(n => ({ ...n, x: posMap[n.id]?.x ?? n.x, y: posMap[n.id]?.y ?? n.y }))
-  // 边保持原样，render 会根据新的节点坐标重新计算路径
   const newGraphData = { nodes: newNodes, edges: gd.edges }
   diagram.value.render(newGraphData)
   refreshCount()
@@ -617,7 +678,9 @@ async function handleSave() {
 .saved-text { color: #67C23A; }
 
 /* 右栏 */
-.right-panel { width: 300px; min-width: 300px; display: flex; flex-direction: column; gap: 12px; }
-.skill-panel-wrapper { height: 45%; background: #fff; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,.06); overflow: hidden; }
+.right-panel { width: 300px; min-width: 300px; display: flex; flex-direction: column; gap: 8px; }
+.doc-select-bar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: #f0f9eb; border-radius: 4px; border: 1px solid #e1f3d8; }
+.doc-label { font-size: 12px; color: #606266; white-space: nowrap; }
+.skill-panel-wrapper { height: 35%; background: #fff; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,.06); overflow: hidden; }
 .prop-panel-wrapper { flex: 1; background: #fff; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,.06); overflow: hidden; }
 </style>

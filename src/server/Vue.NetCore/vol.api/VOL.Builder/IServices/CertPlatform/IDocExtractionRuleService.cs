@@ -55,5 +55,15 @@ namespace VOL.Builder.IServices.CertPlatform
         /// 获取可用技能列表
         /// </summary>
         List<SkillInfo> GetSkills();
+
+        /// <summary>
+        /// 获取已配置提取规则的文档列表（供工作流配置页面选择文档）
+        /// </summary>
+        Task<List<object>> GetConfiguredRulesAsync();
+
+        /// <summary>
+        /// 获取规则的字段和表格定义（供 docField/docTable 节点选择）
+        /// </summary>
+        Task<object> GetFieldsAndTablesAsync(string ruleCode);
     }
 }

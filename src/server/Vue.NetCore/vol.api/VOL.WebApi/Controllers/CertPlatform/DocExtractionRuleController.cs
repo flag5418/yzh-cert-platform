@@ -70,6 +70,17 @@ namespace VOL.WebApi.Controllers.CertPlatform
         }
 
         /// <summary>
+        /// 获取已配置提取规则的文档列表（供工作流配置页面选择文档）
+        /// 注意：放在 {standardFileCode} 之前，避免路由参数拦截
+        /// </summary>
+        [HttpGet, Route("configured-rules")]
+        public async Task<IActionResult> GetConfiguredRules()
+        {
+            var rules = await _service.GetConfiguredRulesAsync();
+            return Ok(new { status = true, data = rules });
+        }
+
+        /// <summary>
         /// 获取规则详情
         /// </summary>
         [HttpGet, Route("{standardFileCode}")]
@@ -79,6 +90,17 @@ namespace VOL.WebApi.Controllers.CertPlatform
             if (result == null)
                 return JsonNormal(new { success = false, message = "规则不存在" });
             return JsonNormal(new { success = true, data = result });
+        }
+
+        /// <summary>
+        /// 获取规则的字段和表格定义（供 docField/docTable 节点选择）
+        /// 注意：放在 {standardFileCode} 之后是安全的，因为 {ruleCode}/fields-tables 有子路径
+        /// </summary>
+        [HttpGet, Route("{ruleCode}/fields-tables")]
+        public async Task<IActionResult> GetFieldsAndTables(string ruleCode)
+        {
+            var result = await _service.GetFieldsAndTablesAsync(ruleCode);
+            return Ok(new { status = true, data = result });
         }
 
         /// <summary>

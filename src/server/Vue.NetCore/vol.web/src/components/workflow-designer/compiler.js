@@ -24,6 +24,9 @@ export function compileToWorkflowConfig(graphData, meta = {}) {
     if (d.config && Object.keys(d.config).length > 0) node.config = d.config
     if (d.inputs && Object.keys(d.inputs).length > 0) node.inputs = d.inputs
     if (d.outputs && Object.keys(d.outputs).length > 0) node.outputs = d.outputs
+    // 端口声明（特殊节点 + 功能节点）
+    if (d.inputPorts && d.inputPorts.length > 0) node.inputPorts = d.inputPorts
+    if (d.outputPorts && d.outputPorts.length > 0) node.outputPorts = d.outputPorts
     return node
   })
 
@@ -83,7 +86,9 @@ export function decompileToGraphData(config, layoutJson = null) {
         skillCode: node.skillCode || '',
         config: node.config || {},
         inputs: node.inputs || {},
-        outputs: node.outputs || {}
+        outputs: node.outputs || {},
+        inputPorts: node.inputPorts || [],
+        outputPorts: node.outputPorts || []
       }
     }
     lfNodes.push(lfNode)
@@ -151,6 +156,18 @@ function lfNodeType(nodeType) {
 
 /** 节点配色：按 nodeType / skill category */
 export function nodeStyle(nodeType, skillCode, category = '') {
+  // 特殊节点固定配色
+  const specialStyles = {
+    start:    { fill: '#E8F5E9', stroke: '#2E7D32', strokeWidth: 2, radius: 24 },
+    end:      { fill: '#FFEBEE', stroke: '#C62828', strokeWidth: 2, radius: 24 },
+    logic:    { fill: '#FFF8E1', stroke: '#F57F17', strokeWidth: 2 },
+    ai_node:  { fill: '#F3E5F5', stroke: '#7B1FA2', strokeWidth: 2, radius: 8 },
+    loop:     { fill: '#E0F7FA', stroke: '#00838F', strokeWidth: 2, radius: 8 },
+    docField: { fill: '#E8F5E9', stroke: '#2E7D32', strokeWidth: 2, radius: 8 },
+    docTable: { fill: '#FFF3E0', stroke: '#E65100', strokeWidth: 2, radius: 8 }
+  }
+  if (specialStyles[nodeType]) return specialStyles[nodeType]
+  // 功能节点按分类配色
   const catColors = {
     data_access: { fill: '#E3F2FD', stroke: '#1565C0' },
     data_process: { fill: '#E8F5E9', stroke: '#2E7D32' },
@@ -158,9 +175,6 @@ export function nodeStyle(nodeType, skillCode, category = '') {
     ai_generate: { fill: '#FCE4EC', stroke: '#880E4F' },
     output: { fill: '#F3E5F5', stroke: '#6A1B9A' }
   }
-  if (nodeType === 'start') return { fill: '#E8F5E9', stroke: '#2E7D32', strokeWidth: 2, radius: 24 }
-  if (nodeType === 'end') return { fill: '#FFEBEE', stroke: '#C62828', strokeWidth: 2, radius: 24 }
-  if (nodeType === 'logic') return { fill: '#FFF8E1', stroke: '#F57F17', strokeWidth: 2 }
   const c = catColors[category] || { fill: '#F5F5F5', stroke: '#9E9E9E' }
   return { fill: c.fill, stroke: c.stroke, strokeWidth: 2, radius: 8 }
 }

@@ -68,11 +68,69 @@ const emit = defineEmits(['add-node'])
 
 const searchText = ref('')
 
-// 特殊节点：start / end / logic（V1.2 内置，端口契约与表注册一致，不落表）
+// 特殊节点：V1.4 内置，端口契约与表注册一致，不落表
 const specialNodes = [
-  { nodeType: 'start', title: '开始', color: '#67C23A' },
-  { nodeType: 'end', title: '结束', color: '#F56C6C' },
-  { nodeType: 'logic', title: '逻辑判断', color: '#E6A23C' }
+  {
+    nodeType: 'start', title: '开始', color: '#67C23A', category: 'special',
+    inputPorts: [],
+    outputPorts: [
+      { name: 'enterpriseCode', type: 'string', description: '企业编码' },
+      { name: 'standardCode', type: 'string', description: '标准编码' },
+      { name: 'phaseCode', type: 'string', description: '阶段编码' },
+      { name: 'fileCode', type: 'string', description: '文件编码' }
+    ]
+  },
+  {
+    nodeType: 'end', title: '结束', color: '#F56C6C', category: 'special',
+    inputPorts: [
+      { name: 'signal', type: 'json', description: '汇聚输入', maxIn: 999 }
+    ],
+    outputPorts: []
+  },
+  {
+    nodeType: 'logic', title: '逻辑判断', color: '#E6A23C', category: 'special',
+    inputPorts: [
+      { name: 'valueA', type: 'json', description: '比较值 A', bindMode: 'LinkOrConstant' },
+      { name: 'valueB', type: 'json', description: '比较值 B', bindMode: 'LinkOrConstant' }
+    ],
+    outputPorts: [
+      { name: 'result', type: 'boolean', description: '条件判断结果' },
+      { name: 'success', type: 'signal', description: '条件满足', anchor: 'right-top' },
+      { name: 'failure', type: 'signal', description: '条件不满足', anchor: 'right-bottom' }
+    ]
+  },
+  {
+    nodeType: 'ai_node', title: 'AI 节点', color: '#9C27B0', category: 'special',
+    inputPorts: [],  // 动态：由用户在 config.prompt 中引用上游节点
+    outputPorts: [
+      { name: 'content', type: 'string', description: 'AI 输出文本' },
+      { name: 'json', type: 'json', description: 'AI 输出结构化数据' },
+      { name: 'confidence', type: 'number', description: 'AI 输出置信度' }
+    ]
+  },
+  {
+    nodeType: 'loop', title: '循环节点', color: '#00BCD4', category: 'special',
+    inputPorts: [
+      { name: 'collection', type: 'json', description: '循环集合（上游输出数组）', bindMode: 'Link' }
+    ],
+    outputPorts: [
+      { name: 'results', type: 'json', description: '循环执行结果数组' }
+    ]
+  },
+  {
+    nodeType: 'docField', title: '文档字段', color: '#4CAF50', category: 'special',
+    inputPorts: [],
+    outputPorts: [
+      { name: 'fieldValue', type: 'string', description: '字段值' }
+    ]
+  },
+  {
+    nodeType: 'docTable', title: '文档表格', color: '#FF9800', category: 'special',
+    inputPorts: [],
+    outputPorts: [
+      { name: 'rows', type: 'json', description: '表格数据行' }
+    ]
+  }
 ]
 
 const categoryState = ref({})

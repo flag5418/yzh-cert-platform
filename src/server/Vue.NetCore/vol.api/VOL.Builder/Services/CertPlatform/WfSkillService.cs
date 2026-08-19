@@ -226,7 +226,8 @@ namespace VOL.Builder.Services.CertPlatform
                     InputType = port.Type,
                     IsRequired = port.Required,
                     DefaultValue = port.DefaultValue,
-                    EnumValues = existing?.EnumValues ?? "",
+                    BindMode = port.BindMode,
+                    EnumSource = port.EnumSource,
                     SortOrder = i + 1,
                     Enable = true, Status = "active",
                     CreateDate = now, Creator = operatorName
@@ -309,7 +310,9 @@ namespace VOL.Builder.Services.CertPlatform
                         type = p.Type,
                         required = p.Required,
                         defaultValue = p.DefaultValue,
-                        description = p.Description
+                        description = p.Description,
+                        bindMode = p.BindMode,
+                        enumSource = p.EnumSource
                     }),
                     outputPorts = new[]
                     {

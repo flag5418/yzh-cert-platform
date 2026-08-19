@@ -40,8 +40,13 @@ namespace VOL.Entity.CertPlatform.Wf
         [StringLength(20)][Column("input_type")]
         public string InputType { get; set; } = "text";
 
-        [Column("enum_values")]
-        public string EnumValues { get; set; }
+        /// <summary>绑定模式：Link / LinkOrConstant / Enum</summary>
+        [StringLength(20)][Column("bind_mode")]
+        public string BindMode { get; set; } = "LinkOrConstant";
+
+        /// <summary>字典编码（BindMode=Enum 时必填），对应 Sys_Dictionary.DicNo</summary>
+        [StringLength(100)][Column("enum_source")]
+        public string EnumSource { get; set; }
 
         [Column("is_required")]
         public bool IsRequired { get; set; }
