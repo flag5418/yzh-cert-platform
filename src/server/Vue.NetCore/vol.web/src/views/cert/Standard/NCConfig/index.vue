@@ -141,7 +141,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
+import { ref, reactive, watch, onMounted, onActivated, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import LogicFlow from '@logicflow/core'
 import '@logicflow/core/dist/index.css'
@@ -188,6 +188,11 @@ const currentDocTables = ref([])
 onMounted(async () => {
   await Promise.all([loadSkills(), loadCategories(), loadTree(), loadDocRules()])
   initDiagram()
+})
+
+// keep-alive 重新激活时重新加载 Skill 列表（确保 catalog 数据最新）
+onActivated(() => {
+  loadSkills()
 })
 
 // LogicFlow 2.0 没有 destroy()，用 clearData() 清空 + 释放引用
