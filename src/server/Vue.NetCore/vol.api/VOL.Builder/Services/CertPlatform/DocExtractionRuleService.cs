@@ -298,6 +298,36 @@ namespace VOL.Builder.Services.CertPlatform
                     };
                 }
 
+                // 5. 验证成功，将提取结果保存到 sample_data（供工作流节点测试使用）
+                if (rule != null && extractionResult != null)
+                {
+                    var sampleDict = new Dictionary<string, object>();
+                    // 字段值（Dictionary<string, object>）
+                    if (extractionResult.Fields != null)
+                    {
+                        foreach (var kv in extractionResult.Fields)
+                        {
+                            if (!string.IsNullOrEmpty(kv.Key) && kv.Value != null)
+                                sampleDict[kv.Key] = kv.Value;
+                        }
+                    }
+                    // 表格数据（Dictionary<string, List<Dictionary<string, object>>>）
+                    if (extractionResult.Tables != null)
+                    {
+                        foreach (var kv in extractionResult.Tables)
+                        {
+                            if (!string.IsNullOrEmpty(kv.Key) && kv.Value != null)
+                                sampleDict[kv.Key] = kv.Value;
+                        }
+                    }
+                    rule.SampleData = System.Text.Json.JsonSerializer.Serialize(sampleDict);
+                    rule.IsValid = true;
+                    rule.VerifyMessage = "验证成功";
+                    rule.ModifyDate = DateTime.Now;
+                    await repository.SaveChangesAsync();
+                    Console.WriteLine($"[DocExtractionRule] 💾 样本数据已保存 (StandardFileCode={request.FileCode}, keys={sampleDict.Count})");
+                }
+
                 return new VerifyPromptResponse
                 {
                     Success = true,
@@ -876,7 +906,161 @@ namespace VOL.Builder.Services.CertPlatform
             return new { fields, tables };
         }
 
+        /// <summary>
+        /// 测试字段提取（配置期验证）
+        /// 标准文档模式：从 sample_data 或 doc_content 中提取指定字段的值
+        /// </summary>
+        public async Task<object> TestFieldAsync(string ruleCode, string fieldCode, string docType)
+        {
+            var db = repository.DbContext;
+
+            // 1. 获取规则
+            var rule = await db.Set<CertDocExtractionRule>()
+                .FirstOrDefaultAsync(x => x.Code == ruleCode);
+            if (rule == null)
+                return new { success = false, message = "规则不存在" };
+
+            // 2. 获取字段定义
+            var field = await db.Set<CertDocFieldDef>()
+                .FirstOrDefaultAsync(x => x.RuleCode == ruleCode && x.FieldCode == fieldCode && x.Enable);
+            if (field == null)
+                return new { success = false, message = $"字段 {fieldCode} 不存在" };
+
+            // 3. 标准文档模式：从 sample_data 提取
+            if (docType == "standard")
+            {
+                if (string.IsNullOrWhiteSpace(rule.SampleData))
+                    return new { success = false, message = "该规则尚未执行验证，请先在文档提取规则页面执行验证" };
+
+                try
+                {
+                    var sampleDict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(rule.SampleData);
+                    if (sampleDict != null && sampleDict.TryGetValue(fieldCode, out var fieldValue))
+                    {
+                        // JsonElement 需要转为实际类型
+                        var actualValue = ConvertJsonElement(fieldValue);
+                        return new
+                        {
+                            success = true,
+                            data = new
+                            {
+                                fieldValue = actualValue?.ToString() ?? "",
+                                fieldName = field.FieldName,
+                                fieldCode = field.FieldCode,
+                                dataType = field.DataType,
+                                confidence = 1.0,
+                                source = "sample_data"
+                            }
+                        };
+                    }
+                }
+                catch { /* JSON 解析失败，走兜底 */ }
+
+                // 兜底：尝试从 doc_content 解析
+                if (!string.IsNullOrWhiteSpace(rule.DocContent))
+                {
+                    return new
+                    {
+                        success = true,
+                        data = new
+                        {
+                            fieldValue = "(文档内容已缓存，字段值需通过 AI 提取)",
+                            fieldName = field.FieldName,
+                            fieldCode = field.FieldCode,
+                            dataType = field.DataType,
+                            confidence = 0.0,
+                            source = "doc_content_hint"
+                        }
+                    };
+                }
+
+                return new { success = false, message = "无法从标准文档中提取该字段值" };
+            }
+
+            // 4. 企业文档模式（后续实现）
+            return new { success = false, message = "企业文档模式暂未实现" };
+        }
+
+        /// <summary>
+        /// 测试表格提取（配置期验证）
+        /// 标准文档模式：从 sample_data 中提取指定表格的数据
+        /// </summary>
+        public async Task<object> TestTableAsync(string ruleCode, string tableCode, string docType)
+        {
+            var db = repository.DbContext;
+
+            // 1. 获取规则
+            var rule = await db.Set<CertDocExtractionRule>()
+                .FirstOrDefaultAsync(x => x.Code == ruleCode);
+            if (rule == null)
+                return new { success = false, message = "规则不存在" };
+
+            // 2. 获取表格定义
+            var table = await db.Set<CertDocTableDef>()
+                .FirstOrDefaultAsync(x => x.RuleCode == ruleCode && x.TableCode == tableCode && x.Enable);
+            if (table == null)
+                return new { success = false, message = $"表格 {tableCode} 不存在" };
+
+            // 3. 标准文档模式：从 sample_data 提取
+            if (docType == "standard")
+            {
+                if (string.IsNullOrWhiteSpace(rule.SampleData))
+                    return new { success = false, message = "该规则尚未执行验证，请先在文档提取规则页面执行验证" };
+
+                try
+                {
+                    var sampleDict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(rule.SampleData);
+                    if (sampleDict != null && sampleDict.TryGetValue(tableCode, out var tableData))
+                    {
+                        // JsonElement 需要转为实际类型，否则序列化会输出 {"valueKind":2}
+                        var rows = ConvertJsonElement(tableData);
+                        return new
+                        {
+                            success = true,
+                            data = new
+                            {
+                                rows,
+                                tableName = table.TableName,
+                                tableCode = table.TableCode,
+                                confidence = 1.0,
+                                source = "sample_data"
+                            }
+                        };
+                    }
+                }
+                catch { /* JSON 解析失败 */ }
+
+                return new { success = false, message = "无法从标准文档中提取该表格数据" };
+            }
+
+            // 4. 企业文档模式（后续实现）
+            return new { success = false, message = "企业文档模式暂未实现" };
+        }
+
         #region 私有方法
+
+        /// <summary>
+        /// 将 JsonElement 转换为实际 .NET 类型（string/bool/number/list/dict）
+        /// 避免直接返回 JsonElement 导致序列化输出 {"valueKind":2}
+        /// </summary>
+        private static object ConvertJsonElement(object value)
+        {
+            if (value is System.Text.Json.JsonElement je)
+            {
+                return je.ValueKind switch
+                {
+                    System.Text.Json.JsonValueKind.String => je.GetString() ?? "",
+                    System.Text.Json.JsonValueKind.Number => je.TryGetInt64(out var l) ? l : (object)je.GetDouble(),
+                    System.Text.Json.JsonValueKind.True => true,
+                    System.Text.Json.JsonValueKind.False => false,
+                    System.Text.Json.JsonValueKind.Null => null,
+                    System.Text.Json.JsonValueKind.Array => je.EnumerateArray().Select(x => ConvertJsonElement(x)).ToList(),
+                    System.Text.Json.JsonValueKind.Object => je.EnumerateObject().ToDictionary(p => p.Name, p => ConvertJsonElement(p.Value)),
+                    _ => je.ToString()
+                };
+            }
+            return value;
+        }
 
         /// <summary>
         /// 生成规则编码

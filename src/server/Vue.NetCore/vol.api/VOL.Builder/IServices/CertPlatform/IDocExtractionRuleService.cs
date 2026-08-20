@@ -65,5 +65,15 @@ namespace VOL.Builder.IServices.CertPlatform
         /// 获取规则的字段和表格定义（供 docField/docTable 节点选择）
         /// </summary>
         Task<object> GetFieldsAndTablesAsync(string ruleCode);
+
+        /// <summary>
+        /// 测试字段提取（配置期验证）
+        /// </summary>
+        Task<object> TestFieldAsync(string ruleCode, string fieldCode, string docType);
+
+        /// <summary>
+        /// 测试表格提取（配置期验证）
+        /// </summary>
+        Task<object> TestTableAsync(string ruleCode, string tableCode, string docType);
     }
 }

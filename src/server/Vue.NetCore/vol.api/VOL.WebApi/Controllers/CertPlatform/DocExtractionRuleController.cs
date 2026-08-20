@@ -208,6 +208,26 @@ namespace VOL.WebApi.Controllers.CertPlatform
         // }
 
         /// <summary>
+        /// 测试字段提取（配置期验证）
+        /// </summary>
+        [HttpPost, Route("test-field")]
+        public async Task<IActionResult> TestField([FromBody] TestFieldRequest request)
+        {
+            var result = await _service.TestFieldAsync(request.RuleCode, request.FieldCode, request.DocType);
+            return Ok(new { status = true, data = result });
+        }
+
+        /// <summary>
+        /// 测试表格提取（配置期验证）
+        /// </summary>
+        [HttpPost, Route("test-table")]
+        public async Task<IActionResult> TestTable([FromBody] TestTableRequest request)
+        {
+            var result = await _service.TestTableAsync(request.RuleCode, request.TableCode, request.DocType);
+            return Ok(new { status = true, data = result });
+        }
+
+        /// <summary>
         /// 获取规则列表（分页）
         /// </summary>
         [HttpPost, Route("list")]

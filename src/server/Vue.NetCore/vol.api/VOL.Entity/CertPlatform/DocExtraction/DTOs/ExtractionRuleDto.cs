@@ -292,4 +292,34 @@ namespace VOL.Entity.CertPlatform.DocExtraction.DTOs
         public string Description { get; set; }
         public List<string> SupportedExtensions { get; set; }
     }
+
+    /// <summary>
+    /// 测试字段提取请求（工作流 docField 节点配置期验证）
+    /// </summary>
+    public class TestFieldRequest
+    {
+        [Required(ErrorMessage = "规则编码不能为空")]
+        public string RuleCode { get; set; }
+
+        [Required(ErrorMessage = "字段编码不能为空")]
+        public string FieldCode { get; set; }
+
+        /// <summary>文档类型：standard=标准文档，enterprise=企业文档</summary>
+        public string DocType { get; set; } = "standard";
+    }
+
+    /// <summary>
+    /// 测试表格提取请求（工作流 docTable 节点配置期验证）
+    /// </summary>
+    public class TestTableRequest
+    {
+        [Required(ErrorMessage = "规则编码不能为空")]
+        public string RuleCode { get; set; }
+
+        [Required(ErrorMessage = "表格编码不能为空")]
+        public string TableCode { get; set; }
+
+        /// <summary>文档类型：standard=标准文档，enterprise=企业文档</summary>
+        public string DocType { get; set; } = "standard";
+    }
 }

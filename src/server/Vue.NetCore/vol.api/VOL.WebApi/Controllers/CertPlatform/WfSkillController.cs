@@ -43,8 +43,8 @@ namespace VOL.WebApi.Controllers.CertPlatform
             return Ok(new { status = true, data = list });
         }
 
-        [HttpGet("catalog")]
-        public async Task<IActionResult> GetCatalog()
+        [HttpGet("query-nodes")]
+        public async Task<IActionResult> GetNodeCatalog()
         {
             var catalog = await _service.GetCatalogAsync();
             return Ok(new { status = true, data = catalog });

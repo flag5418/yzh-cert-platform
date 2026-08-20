@@ -1,31 +1,17 @@
 <template>
   <div class="node-property-form">
     <div v-if="selectedNode" class="node-form">
+      <!-- ===== 标题栏：类型标签 + 名称 + 帮助 ===== -->
       <div class="form-title">
         <el-tag :type="nodeTypeTag" size="small">{{ nodeTypeName }}</el-tag>
-        <span class="node-id">{{ selectedNode.nodeId }}</span>
+        <span class="node-title-display">{{ props.selectedNode?.title || form.title }}</span>
+        <el-tooltip v-if="nodeDescription" :content="nodeDescription" placement="left">
+          <el-icon class="help-icon"><IconWarning /></el-icon>
+        </el-tooltip>
       </div>
 
       <el-form label-width="80px" size="small">
-        <!-- 通用：节点标题 -->
-        <el-form-item label="节点标题">
-          <el-input v-model="form.title" placeholder="节点作用说明" @change="applyChanges" />
-        </el-form-item>
-
-        <!-- 开始节点：说明运行时注入的参数 -->
-        <template v-if="form.nodeType === 'start'">
-          <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px">
-            <template #title>运行时注入</template>
-            <template #default>以下参数由引擎在执行时自动注入，无需手动配置</template>
-          </el-alert>
-          <div v-for="port in (form.outputPorts || [])" :key="port.name" class="runtime-param">
-            <el-tag size="small" type="success">{{ port.name }}</el-tag>
-            <span class="runtime-type">{{ port.type }}</span>
-            <span class="runtime-desc">{{ port.description }}</span>
-          </div>
-        </template>
-
-        <!-- 功能节点：Skill 编码 + 描述 -->
+        <!-- ===== 功能节点：Skill 编码 + 说明 ===== -->
         <template v-if="isSkillNode">
           <el-form-item label="Skill">
             <el-input :model-value="form.skillCode" disabled />
@@ -35,207 +21,370 @@
           </el-form-item>
         </template>
 
-        <!-- ===== 输入端口（从 inputPorts 声明渲染） ===== -->
-        <template v-if="inputPorts.length > 0">
+        <!-- ===== 输入端口（按 bindMode 统一渲染） ===== -->
+        <template v-if="visibleInputPorts.length > 0">
           <el-divider content-position="left">输入端口</el-divider>
-          <div v-for="port in inputPorts" :key="port.name" class="port-row">
+          <div v-for="port in visibleInputPorts" :key="port.name" class="port-row">
             <div class="port-label">
-              <span class="port-name">{{ port.name }}</span>
+              <span class="port-name">{{ port.label || port.name }}</span>
               <el-tag v-if="port.required" size="small" type="danger">必填</el-tag>
               <el-tag size="small" :type="getBindModeTagType(port.bindMode)">{{ getBindModeLabel(port.bindMode) }}</el-tag>
             </div>
-            <div class="port-desc">{{ port.description }}</div>
+            <div v-if="port.description" class="port-desc">{{ port.description }}</div>
             <div class="port-value">
-              <!-- Enum 模式：下拉选择 -->
-              <el-select
-                v-if="port.bindMode === 'Enum'"
+              <PortControl
                 :model-value="getInputValue(port.name)"
-                placeholder="请选择"
-                style="width: 100%"
-                @change="v => setInputValue(port.name, v)"
-              >
-                <el-option v-for="opt in getEnumOptions(port.enumSource)" :key="opt.value" :label="opt.label" :value="opt.value" />
-              </el-select>
-              <!-- Link 模式：仅连线提示 -->
-              <div v-else-if="port.bindMode === 'Link'" class="link-only-hint">
-                <el-icon><Link /></el-icon> 通过连线绑定
-              </div>
-              <!-- LinkOrConstant 模式：文本输入 -->
-              <el-input
-                v-else
-                :model-value="getInputValue(port.name)"
-                :placeholder="getInputPlaceholder(port)"
-                @change="v => setInputValue(port.name, v)"
+                :bind-mode="port.bindMode || 'LinkOrConstant'"
+                :enum-source="port.enumSource"
+                :linkable-nodes="linkableNodes"
+                :placeholder="getPortPlaceholder(port)"
+                @update:model-value="v => setInputValue(port.name, v)"
+                @link-node="({ sourceNodeId }) => onLinkNode(port.name, sourceNodeId)"
               />
             </div>
           </div>
         </template>
 
-        <!-- ===== 特殊节点：logic 条件编辑 ===== -->
-        <template v-if="form.nodeType === 'logic'">
-          <el-divider content-position="left">判断条件</el-divider>
-          <div v-for="(cond, idx) in conditions" :key="idx" class="condition-row">
-            <el-input v-model="cond.valueA" placeholder="值 A（如 n1.fieldValue）" size="small" @change="applyConditions" />
-            <el-select v-model="cond.operator" size="small" style="width: 100px" @change="applyConditions">
-              <el-option v-for="op in logicOperators" :key="op.value" :label="op.label" :value="op.value" />
-            </el-select>
-            <el-input v-model="cond.valueB" placeholder="值 B（如 60）" size="small" @change="applyConditions" />
-            <el-button type="danger" link size="small" @click="removeCondition(idx)">删</el-button>
+        <!-- ===== branch 条件编辑器 ===== -->
+        <template v-if="form.nodeType === 'branch'">
+          <el-divider content-position="left">分支条件</el-divider>
+          <div class="branch-hint">
+            <el-icon><IconInfo /></el-icon>
+            <span>条件分支节点不包含比较逻辑。请将上游 <strong>compare</strong> 节点的布尔输出连接到此节点的「条件值」输入端口。</span>
           </div>
-          <div style="display: flex; gap: 8px; align-items: center">
-            <el-button link type="primary" size="small" @click="addCondition">+ 添加条件</el-button>
-            <el-select v-model="form.config.conditionLogic" size="small" style="width: 80px" @change="applyConditions">
-              <el-option label="且(and)" value="and" />
-              <el-option label="或(or)" value="or" />
-            </el-select>
+          <div v-if="getInputValue('condition')" class="branch-source">
+            <el-tag type="success" size="small">
+              <el-icon><IconEdit /></el-icon>
+              条件来源：{{ getLinkedNodeTitle(getInputValue('condition')) }}
+            </el-tag>
+          </div>
+          <div v-else class="branch-warning">
+            <el-icon><IconWarning /></el-icon>
+            <span>尚未绑定条件输入，请在画布上连线或从下拉选择</span>
+          </div>
+
+          <!-- 输出分支选择 -->
+          <el-divider content-position="left">输出分支</el-divider>
+          <div class="branch-output-row">
+            <div class="branch-output-item">
+              <el-tag type="success" size="small">✅ 成功</el-tag>
+              <el-select
+                :model-value="getBranchOutput('success')"
+                placeholder="选择成功分支目标"
+                style="flex: 1"
+                @change="v => setBranchOutput('success', v)"
+              >
+                <el-option v-for="n in branchTargetNodes" :key="n.id" :label="n.label" :value="n.id" />
+              </el-select>
+            </div>
+            <div class="branch-output-item">
+              <el-tag type="danger" size="small">❌ 失败</el-tag>
+              <el-select
+                :model-value="getBranchOutput('failure')"
+                placeholder="选择失败分支目标"
+                style="flex: 1"
+                @change="v => setBranchOutput('failure', v)"
+              >
+                <el-option v-for="n in branchTargetNodes" :key="n.id" :label="n.label" :value="n.id" />
+              </el-select>
+            </div>
           </div>
         </template>
 
-        <!-- ===== 特殊节点：ai_node 提示词 ===== -->
-        <template v-if="form.nodeType === 'ai_node'">
-          <el-divider content-position="left">提示词 (prompt)</el-divider>
-          <el-input
-            v-model="aiPrompt"
-            type="textarea"
-            :rows="6"
-            placeholder="输入提示词，用 {{n1.fieldValue}} 引用上游节点输出"
-            @change="applyAiPrompt"
-          />
-          <div class="port-hint">引用语法：{{nX.portName}} 引用上游节点输出</div>
+        <!-- ===== 节点特有配置（panelSchema） ===== -->
+        <template v-if="visiblePanelSchema.length > 0 && form.nodeType !== 'branch'">
+          <el-divider content-position="left">节点配置</el-divider>
+          <template v-for="field in visiblePanelSchema" :key="field.field">
+            <!-- textarea（AI prompt 等） -->
+            <el-form-item v-if="field.type === 'textarea'" :label="field.label">
+              <el-input
+                v-model="panelFieldValues[field.field]"
+                type="textarea"
+                :rows="6"
+                :placeholder="field.description || ''"
+                @change="applyPanelField(field)"
+              />
+              <div v-if="field.description" class="field-hint">{{ field.description }}</div>
+            </el-form-item>
+            <!-- 文档选择 -->
+            <el-form-item v-else-if="field.type === 'doc-select'" :label="field.label">
+              <el-select
+                v-model="panelFieldValues[field.field]"
+                placeholder="选择文档"
+                style="width: 100%"
+                @change="v => onDocSelect(field.field, v)"
+              >
+                <el-option v-for="d in docList" :key="d.ruleCode" :label="d.fileName || d.standardFileCode" :value="d.ruleCode" />
+              </el-select>
+            </el-form-item>
+            <!-- 字段选择 -->
+            <el-form-item v-else-if="field.type === 'field-select'" :label="field.label">
+              <el-select
+                v-model="panelFieldValues[field.field]"
+                placeholder="选择字段"
+                style="width: 100%"
+                :disabled="!panelFieldValues['config.ruleCode']"
+                @change="applyPanelFields"
+              >
+                <el-option v-for="f in fieldList" :key="f.fieldCode" :label="`${f.fieldName} (${f.fieldCode})`" :value="f.fieldCode" />
+              </el-select>
+            </el-form-item>
+            <!-- 表格选择 -->
+            <el-form-item v-else-if="field.type === 'table-select'" :label="field.label">
+              <el-select
+                v-model="panelFieldValues[field.field]"
+                placeholder="选择表格"
+                style="width: 100%"
+                :disabled="!panelFieldValues['config.ruleCode']"
+                @change="applyPanelFields"
+              >
+                <el-option v-for="t in tableList" :key="t.tableCode" :label="`${t.tableName} (${t.tableCode})`" :value="t.tableCode" />
+              </el-select>
+            </el-form-item>
+            <!-- select -->
+            <el-form-item v-else-if="field.type === 'select'" :label="field.label">
+              <el-select
+                v-model="panelFieldValues[field.field]"
+                style="width: 100%"
+                @change="applyPanelFields"
+              >
+                <el-option v-for="opt in field.options" :key="opt.value" :label="opt.label" :value="opt.value" />
+              </el-select>
+              <div v-if="field.description" class="field-hint">{{ field.description }}</div>
+            </el-form-item>
+            <!-- switch -->
+            <el-form-item v-else-if="field.type === 'switch'" :label="field.label">
+              <el-switch v-model="panelFieldValues[field.field]" @change="applyPanelFields" />
+              <span v-if="field.description" class="field-hint-inline">{{ field.description }}</span>
+            </el-form-item>
+          </template>
         </template>
 
-        <!-- ===== 特殊节点：end 输出结论 ===== -->
-        <template v-if="form.nodeType === 'end'">
-          <el-divider content-position="left">输出结论</el-divider>
-          <el-input
-            v-model="endResultJson"
-            type="textarea"
-            :rows="4"
-            placeholder='{"isViolated": true, "conclusion": "不合格"}'
-            @change="applyEndResult"
-          />
-        </template>
-
-        <!-- ===== 特殊节点：docField / docTable 选择 ===== -->
-        <template v-if="form.nodeType === 'docField'">
-          <el-divider content-position="left">字段选择</el-divider>
-          <el-form-item label="文档">
-            <el-select v-model="form.config.docCode" placeholder="选择文档" style="width: 100%" @change="onDocFieldChange">
-              <el-option v-for="d in docList" :key="d.ruleCode" :label="d.fileName || d.standardFileCode" :value="d.ruleCode" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="字段">
-            <el-select v-model="form.config.fieldCode" placeholder="选择字段" style="width: 100%" @change="applyChanges" :disabled="!form.config.docCode">
-              <el-option v-for="f in fieldList" :key="f.fieldCode" :label="`${f.fieldName} (${f.fieldCode})`" :value="f.fieldCode" />
-            </el-select>
-          </el-form-item>
-        </template>
-
-        <template v-if="form.nodeType === 'docTable'">
-          <el-divider content-position="left">表格选择</el-divider>
-          <el-form-item label="文档">
-            <el-select v-model="form.config.docCode" placeholder="选择文档" style="width: 100%" @change="onDocTableChange">
-              <el-option v-for="d in docList" :key="d.ruleCode" :label="d.fileName || d.standardFileCode" :value="d.ruleCode" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="表格">
-            <el-select v-model="form.config.tableCode" placeholder="选择表格" style="width: 100%" @change="applyChanges" :disabled="!form.config.docCode">
-              <el-option v-for="t in tableList" :key="t.tableCode" :label="`${t.tableName} (${t.tableCode})`" :value="t.tableCode" />
-            </el-select>
-          </el-form-item>
-        </template>
-
-        <!-- ===== 输出端口（只读，start 节点不展示） ===== -->
-        <template v-if="form.nodeType !== 'start' && outputList.length">
+        <!-- ===== 输出端口（只读提示） ===== -->
+        <template v-if="visibleOutputPorts.length > 0">
           <el-divider content-position="left">输出端口</el-divider>
-          <div v-for="out in outputList" :key="out.outputName" class="output-item">
-            <el-tag size="small" type="info">{{ out.outputName }}</el-tag>
-            <span class="output-type">{{ out.outputType }}</span>
-            <span class="output-desc">{{ out.description || '' }}</span>
+          <div v-for="out in visibleOutputPorts" :key="out.name" class="output-item">
+            <el-tag size="small" type="info">{{ out.label || out.name }}</el-tag>
+            <span class="output-type">{{ out.type }}</span>
+            <span v-if="out.description" class="output-desc">{{ out.description }}</span>
           </div>
         </template>
 
+        <!-- ===== AI 节点底部提示 ===== -->
+        <div v-if="form.nodeType === 'ai_node'" class="ai-output-hint">
+          执行后自动输出结果，下游节点可通过 <code>{{ aiOutputRefSyntax }}</code> 引用
+        </div>
+
+        <!-- ===== start 节点帮助信息 ===== -->
+        <div v-if="form.nodeType === 'start'" class="start-hint">
+          <el-icon><IconInfo /></el-icon>
+          <span>开始节点是工作流起点。运行时引擎自动注入上下文参数（企业编码、标准编码、阶段编码、文件编码），无需手动配置。</span>
+        </div>
+
+        <!-- ===== end 节点帮助信息 ===== -->
+        <div v-if="form.nodeType === 'end'" class="end-hint">
+          <el-icon><IconInfo /></el-icon>
+          <span>结束节点汇聚上游路径结果。可允许多个上游连线（多分支汇聚），执行到此节点时输出上游节点结果作为最终输出。</span>
+        </div>
+
+        <!-- ===== docField/docTable 测试结果 ===== -->
+        <template v-if="form.nodeType === 'docField' || form.nodeType === 'docTable'">
+          <el-divider content-position="left">测试结果</el-divider>
+          <div v-if="testLoading" class="test-loading">
+            <el-icon class="is-loading"><IconPlay /></el-icon>
+            <span>正在测试提取...</span>
+          </div>
+          <div v-else-if="testResult" class="test-result" :class="{ 'test-success': testResult.success, 'test-fail': !testResult.success }">
+            <div v-if="testResult.success && testResult.data" class="test-data">
+              <div class="test-field-row">
+                <span class="test-label">{{ form.nodeType === 'docField' ? '字段值' : '表格数据' }}：</span>
+                <span v-if="form.nodeType === 'docField'" class="test-value">{{ testResult.data.fieldValue }}</span>
+                <pre v-else class="test-table-data">{{ JSON.stringify(testResult.data.rows, null, 2) }}</pre>
+              </div>
+              <div v-if="testResult.data.confidence !== undefined" class="test-field-row">
+                <span class="test-label">置信度：</span>
+                <span class="test-value">{{ (testResult.data.confidence * 100).toFixed(0) }}%</span>
+              </div>
+              <div v-if="testResult.data.source" class="test-field-row">
+                <span class="test-label">来源：</span>
+                <span class="test-value test-source">{{ testResult.data.source }}</span>
+              </div>
+            </div>
+            <div v-else-if="!testResult.success" class="test-error">
+              <el-icon><IconWarning /></el-icon>
+              <span>{{ testResult.message || '测试失败' }}</span>
+            </div>
+          </div>
+          <div v-else class="test-empty">
+            <span>配置完成后点击下方按钮测试提取结果</span>
+          </div>
+        </template>
+
+        <!-- ===== 操作区 ===== -->
         <el-divider content-position="left">操作</el-divider>
-        <el-button type="danger" size="small" @click="deleteNode">删除节点</el-button>
+        <div class="action-row">
+          <el-button
+            v-if="(form.nodeType === 'docField' || form.nodeType === 'docTable')"
+            type="success" size="small"
+            :loading="testLoading"
+            @click="testDocExtract"
+          >
+            <el-icon v-if="!testLoading"><IconPlay /></el-icon> 测试提取
+          </el-button>
+          <el-button v-else-if="testable && form.nodeType !== 'start' && form.nodeType !== 'end'" type="primary" size="small" @click="testNode">
+            <el-icon><IconPlay /></el-icon> 测试节点
+          </el-button>
+          <el-button
+            v-if="form.nodeType !== 'start'"
+            type="danger"
+            size="small"
+            @click="deleteNode"
+          >
+            <el-icon><IconDelete /></el-icon> 删除节点
+          </el-button>
+        </div>
       </el-form>
     </div>
+
+    <!-- ===== 空状态 ===== -->
     <div v-else class="form-empty">
-      <p>点击画布节点配置属性</p>
-      <p class="hint">拖动左侧节点到画布，或点击添加</p>
+      <div class="empty-icon">
+        <el-icon :size="48"><IconInfo /></el-icon>
+      </div>
+      <p class="empty-title">点击画布节点配置属性</p>
+      <p class="empty-hint">从左侧节点库拖动节点到画布，或点击节点查看和编辑属性</p>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { ElMessage } from 'element-plus'
+import { IconWarning, IconEdit, IconPlay, IconDelete, IconInfo } from '@/yzh/icons'
+import { getSpecialNode } from '@/views/cert/Standard/WorkflowDesigner/specialNodes.js'
+import PortControl from './panels/PortControl.vue'
 
 const props = defineProps({
   selectedNode: { type: Object, default: null },
   skills: { type: Array, default: () => [] },
-  /** 已加载的文档提取规则列表 */
   docRules: { type: Array, default: () => [] },
-  /** 当前选中文档的字段列表 */
   docFields: { type: Array, default: () => [] },
-  /** 当前选中文档的表格列表 */
-  docTables: { type: Array, default: () => [] }
+  docTables: { type: Array, default: () => [] },
+  canvasNodes: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['update-node', 'delete-node', 'load-doc-fields'])
+const emit = defineEmits(['update-node', 'delete-node', 'load-doc-fields', 'link-node', 'test-node', 'test-doc-extract'])
 
 const form = ref({ nodeId: '', nodeType: 'skill', title: '', skillCode: '', inputs: {}, outputs: {}, config: {}, inputPorts: [], outputPorts: [] })
 const inputValues = ref({})
-const conditions = ref([])
-const aiPrompt = ref('')
-const endResultJson = ref('{}')
+const panelFieldValues = ref({})
 const docList = ref([])
 const fieldList = ref([])
 const tableList = ref([])
 
-const logicOperators = [
-  { label: '等于', value: 'eq' },
-  { label: '不等于', value: 'neq' },
-  { label: '大于', value: 'gt' },
-  { label: '大于等于', value: 'gte' },
-  { label: '小于', value: 'lt' },
-  { label: '小于等于', value: 'lte' },
-  { label: '包含', value: 'contains' },
-  { label: '不为空', value: 'notEmpty' }
-]
+// docField/docTable 测试结果
+const testResult = ref(null)
+const testLoading = ref(false)
+
+// ===== 计算属性 =====
 
 const isSkillNode = computed(() => form.value.nodeType === 'skill')
-const inputPorts = computed(() => form.value.inputPorts || [])
 
-const nodeTypeName = computed(() => ({
-  start: '开始', end: '结束', logic: '逻辑判断', skill: 'Skill 节点',
-  ai_node: 'AI 节点', loop: '循环节点', docField: '文档字段', docTable: '文档表格'
-}[form.value.nodeType] || form.value.nodeType))
+const specialMeta = computed(() => getSpecialNode(form.value.nodeType))
 
-const nodeTypeTag = computed(() => ({
-  start: 'success', end: 'danger', logic: 'warning', skill: 'primary',
-  ai_node: '', loop: 'info', docField: 'success', docTable: 'warning'
-}[form.value.nodeType] || 'info'))
-
-const skillMeta = computed(() => props.skills.find(s => s.skillCode === form.value.skillCode) || null)
-const skillDesc = computed(() => skillMeta.value?.description || '')
-
-const outputList = computed(() => {
-  if (form.value.nodeType === 'start') return []  // start 不展示输出
-  const nodePorts = form.value.outputPorts || []
-  if (nodePorts.length) {
-    return nodePorts.map(p => ({
-      outputName: p.name || p.outputName,
-      outputType: p.type || p.outputType,
-      description: p.description || ''
-    }))
-  }
-  if (isSkillNode.value) {
-    const declared = skillMeta.value?.outputs || []
-    if (declared.length) return declared
-  }
-  return Object.keys(form.value.outputs || {}).map(k => ({ outputName: k, outputType: form.value.outputs[k] }))
+const nodeTypeName = computed(() => {
+  if (specialMeta.value) return specialMeta.value.className
+  const sk = props.skills.find(s => s.skillCode === form.value.skillCode)
+  return sk?.skillName || form.value.nodeType
 })
 
-// --- 输入端口值管理 ---
+const nodeTypeTag = computed(() => ({
+  start: 'success', end: 'danger', branch: 'warning', skill: 'primary',
+  ai_node: 'info', loop: 'info', docField: 'success', docTable: 'warning'
+}[form.value.nodeType] || 'info'))
+
+const nodeDescription = computed(() => {
+  if (specialMeta.value) return specialMeta.value.description
+  const sk = props.skills.find(s => s.skillCode === form.value.skillCode)
+  return sk?.description || ''
+})
+
+const testable = computed(() => {
+  if (specialMeta.value) return specialMeta.value.testable
+  return form.value.nodeType === 'skill'
+})
+
+const aiOutputRefSyntax = computed(() => {
+  const title = form.value.title || 'ai'
+  return `{{${title}.content}}`
+})
+
+const visibleInputPorts = computed(() => {
+  const ports = form.value.inputPorts || []
+  return ports.filter(p => p.display !== 'hidden')
+})
+
+const visibleOutputPorts = computed(() => {
+  const ports = form.value.outputPorts || []
+  return ports.filter(p => p.display !== 'hidden' && p.role !== 'anchor')
+})
+
+const visiblePanelSchema = computed(() => {
+  if (specialMeta.value) return specialMeta.value.panelSchema || []
+  return []
+})
+
+const skillDesc = computed(() => {
+  const sk = props.skills.find(s => s.skillCode === form.value.skillCode)
+  return sk?.description || ''
+})
+
+const linkableNodes = computed(() => {
+  return props.canvasNodes
+    .filter(n => n.id !== form.value.nodeId)
+    .map(n => ({
+      id: n.id,
+      label: `${n.title || n.id}${n.nodeType ? ' (' + n.nodeType + ')' : ''}`
+    }))
+})
+
+/** branch 节点可选的目标节点（排除自身） */
+const branchTargetNodes = computed(() => {
+  return props.canvasNodes
+    .filter(n => n.id !== form.value.nodeId)
+    .map(n => ({
+      id: n.id,
+      label: `${n.title || n.id}`
+    }))
+})
+
+/** 获取 branch 指定输出分支的目标节点 */
+function getBranchOutput(handle) {
+  // 优先从 selectedNode.branchEdges 中读取
+  if (form.value._branchEdges?.length) {
+    const edge = form.value._branchEdges.find(e => e.handle === handle)
+    if (edge) return edge.targetId
+  }
+  return form.value.config?.[`_${handle}Target`] || ''
+}
+
+/** 设置 branch 输出分支目标 → emit link-node 事件 */
+function setBranchOutput(handle, targetNodeId) {
+  // 保存到 config（用于恢复）
+  const config = { ...form.value.config }
+  config[`_${handle}Target`] = targetNodeId
+  form.value.config = config
+  // emit 到父组件创建/更新边
+  emit('link-node', {
+    portName: handle,
+    sourceNodeId: targetNodeId ? form.value.nodeId : null,
+    targetNodeId: targetNodeId || form.value.nodeId,
+    sourceHandle: handle
+  })
+  applyChanges()
+}
+
+// ===== 输入端口值管理 =====
 
 function getInputValue(portName) {
   return inputValues.value[portName] ?? ''
@@ -248,102 +397,164 @@ function setInputValue(portName, value) {
   applyChanges()
 }
 
-function getInputPlaceholder(port) {
-  if (port.bindMode === 'Link') return '连线引用'
-  return `常量 / {{n1.portName}} / ctx.xxx`
+function onLinkNode(portName, sourceNodeId) {
+  if (!sourceNodeId) {
+    emit('link-node', { portName, sourceNodeId: null, targetNodeId: form.value.nodeId })
+    inputValues.value[portName] = ''
+    const inputs = { ...form.value.inputs }
+    delete inputs[portName]
+    form.value.inputs = inputs
+    applyChanges()
+  } else {
+    emit('link-node', { portName, sourceNodeId, targetNodeId: form.value.nodeId })
+    inputValues.value[portName] = sourceNodeId
+    const inputs = { ...form.value.inputs, [portName]: sourceNodeId }
+    form.value.inputs = inputs
+    applyChanges()
+  }
 }
 
-function getEnumOptions(enumSource) {
-  if (enumSource === 'compare_operator') {
-    return [
-      { label: '大于 (>)', value: '>' },
-      { label: '大于等于 (>=)', value: '>=' },
-      { label: '小于 (<)', value: '<' },
-      { label: '小于等于 (<=)', value: '<=' },
-      { label: '等于 (==)', value: '==' },
-      { label: '不等于 (!=)', value: '!=' }
-    ]
-  }
-  return []
+function getPortPlaceholder(port) {
+  if (port.bindMode === 'Link') return '请在画布上连线'
+  if (port.bindMode === 'Enum') return '请选择'
+  return '输入常量或 {{n1.portName}}'
 }
+
+/** 获取已连线节点的标题 */
+function getLinkedNodeTitle(nodeId) {
+  if (!nodeId) return ''
+  const node = props.canvasNodes.find(n => n.id === nodeId)
+  return node ? (node.title || node.id) : nodeId
+}
+
+// ===== 绑定模式标签 =====
 
 function getBindModeLabel(mode) {
-  const map = { Link: '仅连线', LinkOrConstant: '可连线', Enum: '字典选择' }
-  return map[mode] || '可连线'
+  return { Link: '仅连线', LinkOrConstant: '可连线', Enum: '字典' }[mode] || '可连线'
 }
 
 function getBindModeTagType(mode) {
-  const map = { Link: 'danger', LinkOrConstant: '', Enum: 'success' }
-  return map[mode] || ''
+  return { Link: 'danger', LinkOrConstant: '', Enum: 'success' }[mode] || ''
 }
 
-// --- Logic 条件 ---
+// ===== panelSchema 字段 =====
 
-function addCondition() {
-  conditions.value.push({ valueA: '', operator: 'gte', valueB: '' })
-  applyConditions()
-}
-
-function removeCondition(idx) {
-  conditions.value.splice(idx, 1)
-  applyConditions()
-}
-
-function applyConditions() {
-  form.value.config = { ...form.value.config, conditions: conditions.value, conditionLogic: form.value.config.conditionLogic || 'and' }
+function applyPanelField(field) {
+  const config = { ...form.value.config }
+  const parts = field.field.split('.')
+  if (parts.length === 2 && parts[0] === 'config') {
+    config[parts[1]] = panelFieldValues.value[field.field]
+  } else {
+    config[field.field] = panelFieldValues.value[field.field]
+  }
+  form.value.config = config
   applyChanges()
 }
 
-// --- AI 提示词 ---
-
-function applyAiPrompt() {
-  form.value.config = { ...form.value.config, prompt: aiPrompt.value }
+function applyPanelFields() {
+  const config = { ...form.value.config }
+  for (const [key, val] of Object.entries(panelFieldValues.value)) {
+    const parts = key.split('.')
+    if (parts.length === 2 && parts[0] === 'config') {
+      config[parts[1]] = val
+    }
+  }
+  form.value.config = config
   applyChanges()
 }
 
-// --- End 结论 ---
-
-function applyEndResult() {
-  try {
-    form.value.config = { ...form.value.config, result: JSON.parse(endResultJson.value || '{}') }
-    applyChanges()
-  } catch (e) { /* JSON 不合法时暂不提交 */ }
-}
-
-// --- docField / docTable 文档选择 ---
-
-function onDocFieldChange(ruleCode) {
-  form.value.config = { ...form.value.config, docCode: ruleCode, fieldCode: '' }
-  // 通知父组件加载字段/表格
+function onDocSelect(field, ruleCode) {
+  const config = { ...form.value.config }
+  const parts = field.split('.')
+  const key = parts.length === 2 ? parts[1] : field
+  config[key] = ruleCode
+  // 选择新文档时清空字段/表格
+  if (key === 'ruleCode' || key === 'docCode') {
+    config.fieldCode = ''
+    config.tableCode = ''
+    panelFieldValues.value['config.fieldCode'] = ''
+    panelFieldValues.value['config.tableCode'] = ''
+    testResult.value = null // 清空测试结果
+  }
+  form.value.config = config
   emit('load-doc-fields', ruleCode)
   applyChanges()
 }
 
-function onDocTableChange(ruleCode) {
-  form.value.config = { ...form.value.config, docCode: ruleCode, tableCode: '' }
-  // 通知父组件加载字段/表格
-  emit('load-doc-fields', ruleCode)
-  applyChanges()
+// ===== 测试/删除 =====
+
+function testNode() {
+  emit('test-node', {
+    nodeId: form.value.nodeId,
+    nodeType: form.value.nodeType,
+    title: form.value.title,
+    skillCode: form.value.skillCode,
+    config: form.value.config,
+    inputs: form.value.inputs
+  })
 }
 
-// --- watch ---
+function deleteNode() {
+  if (form.value.nodeId) emit('delete-node', form.value.nodeId)
+}
 
-// 监听 docRules 变化，同步到 docList
-watch(() => props.docRules, (rules) => {
-  docList.value = rules || []
-}, { immediate: true })
+// ===== docField/docTable 测试 =====
 
-// 监听 docFields/docTables 变化
-watch(() => props.docFields, (fields) => {
-  fieldList.value = fields || []
-}, { immediate: true })
+function testDocExtract() {
+  const nodeType = form.value.nodeType
+  const config = form.value.config
+  if (!config.ruleCode) {
+    ElMessage.warning('请先选择文档')
+    return
+  }
+  if (nodeType === 'docField' && !config.fieldCode) {
+    ElMessage.warning('请先选择字段')
+    return
+  }
+  if (nodeType === 'docTable' && !config.tableCode) {
+    ElMessage.warning('请先选择表格')
+    return
+  }
 
-watch(() => props.docTables, (tables) => {
-  tableList.value = tables || []
-}, { immediate: true })
+  testLoading.value = true
+  testResult.value = null
+
+  const body = nodeType === 'docField'
+    ? { ruleCode: config.ruleCode, fieldCode: config.fieldCode, docType: config.docType || 'standard' }
+    : { ruleCode: config.ruleCode, tableCode: config.tableCode, docType: config.docType || 'standard' }
+
+  // emit 到父组件处理 API 调用（父组件有 proxy.http）
+  emit('test-doc-extract', {
+    nodeType,
+    body,
+    onSuccess: (data) => {
+      testResult.value = data
+      testLoading.value = false
+      ElMessage.success('测试完成')
+    },
+    onError: (msg) => {
+      testResult.value = { success: false, message: msg }
+      testLoading.value = false
+      ElMessage.error(msg)
+    }
+  })
+}
+
+// ===== watch =====
+
+watch(() => props.docRules, (rules) => { docList.value = rules || [] }, { immediate: true })
+watch(() => props.docFields, (fields) => { fieldList.value = fields || [] }, { immediate: true })
+watch(() => props.docTables, (tables) => { tableList.value = tables || [] }, { immediate: true })
+
+// 记录上次处理的 nodeId + title 快照，避免完全相同的重复通知
+let _lastSnapshot = null
 
 watch(() => props.selectedNode, (node) => {
   if (node) {
+    // 生成快照用于去重比较（只对比关键字段）
+    const snap = `${node.nodeId || node.id}|${node.title || ''}|${node.nodeType || ''}`
+    if (_lastSnapshot === snap) return
+    _lastSnapshot = snap
     form.value = {
       nodeId: node.nodeId || node.id,
       nodeType: node.nodeType || 'skill',
@@ -353,39 +564,51 @@ watch(() => props.selectedNode, (node) => {
       outputs: { ...(node.outputs || {}) },
       config: { ...(node.config || {}) },
       inputPorts: node.inputPorts || [],
-      outputPorts: node.outputPorts || []
+      outputPorts: node.outputPorts || [],
+      _branchEdges: node.branchEdges || []
     }
+    // 触发 form 内部响应式更新（确保 title 等字段被模板正确读取）
     const vals = {}
     for (const port of form.value.inputPorts) {
       vals[port.name] = form.value.inputs[port.name] ?? ''
     }
     inputValues.value = vals
-    conditions.value = form.value.config.conditions || [{ valueA: '', operator: 'gte', valueB: '' }]
-    aiPrompt.value = form.value.config.prompt || ''
-    endResultJson.value = JSON.stringify(form.value.config.result || {}, null, 2)
-    // docField/docTable：同步文档列表和字段/表格
+
+    // panelSchema 字段值
+    const pfv = {}
+    const schema = specialMeta.value?.panelSchema || []
+    for (const field of schema) {
+      const parts = field.field.split('.')
+      if (parts.length === 2 && parts[0] === 'config') {
+        pfv[field.field] = form.value.config[parts[1]] ?? field.defaultValue ?? ''
+      } else {
+        pfv[field.field] = form.value.config[field.field] ?? field.defaultValue ?? ''
+      }
+    }
+    panelFieldValues.value = pfv
+
     docList.value = props.docRules || []
     fieldList.value = props.docFields || []
     tableList.value = props.docTables || []
-    // 如果 docField/docTable 节点已有 docCode，通知父组件加载字段/表格
-    if ((node.nodeType === 'docField' || node.nodeType === 'docTable') && node.config?.docCode) {
-      emit('load-doc-fields', node.config.docCode)
+
+    if ((node.nodeType === 'docField' || node.nodeType === 'docTable') && (node.config?.ruleCode || node.config?.docCode)) {
+      emit('load-doc-fields', node.config.ruleCode || node.config.docCode)
     }
   } else {
     form.value = { nodeId: '', nodeType: 'skill', title: '', skillCode: '', inputs: {}, outputs: {}, config: {}, inputPorts: [], outputPorts: [] }
     inputValues.value = {}
-    conditions.value = []
-    aiPrompt.value = ''
-    endResultJson.value = '{}'
+    panelFieldValues.value = {}
   }
-}, { immediate: true })
+}, { immediate: true, deep: true })
 
 function applyChanges() {
   if (!form.value.nodeId) return
   const inputs = { ...inputValues.value }
+  // 始终从 form.value.title 读取（watch 已确保与 store 同步）
   emit('update-node', {
     nodeId: form.value.nodeId,
     nodeType: form.value.nodeType,
+    classCode: form.value.nodeType,
     title: form.value.title,
     skillCode: form.value.skillCode,
     inputs,
@@ -395,38 +618,76 @@ function applyChanges() {
     outputPorts: form.value.outputPorts
   })
 }
-
-function deleteNode() {
-  if (form.value.nodeId) emit('delete-node', form.value.nodeId)
-}
 </script>
 
 <style scoped lang="less">
 .node-property-form { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
 .node-form { padding: 12px; overflow-y: auto; flex: 1; }
-.form-title { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.node-id { font-size: 12px; color: #909399; }
 
-.runtime-param { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 6px 8px; background: #f0f9eb; border-radius: 4px; }
-.runtime-type { font-family: monospace; font-size: 12px; color: #67C23A; }
-.runtime-desc { font-size: 12px; color: #909399; }
+.form-title { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.node-title-display { font-size: 14px; font-weight: 600; color: #303133; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.help-icon { color: #909399; cursor: pointer; flex-shrink: 0; }
 
 .port-row {
   margin-bottom: 12px; padding: 8px; background: #f9fafc; border-radius: 6px; border: 1px solid #ebeef5;
+  &:hover { border-color: #d0d7de; }
 }
 .port-label { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 .port-name { font-family: 'SF Mono', Monaco, monospace; font-size: 13px; font-weight: 600; color: #303133; }
 .port-desc { font-size: 12px; color: #909399; margin-bottom: 6px; }
-.port-value { }
-.port-hint { font-size: 11px; color: #c0c4cc; margin-top: 4px; }
-.link-only-hint { font-size: 12px; color: #909399; padding: 6px 0; display: flex; align-items: center; gap: 4px; }
 
-.condition-row { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; }
+/* branch 条件提示 */
+.branch-hint {
+  display: flex; gap: 6px; align-items: flex-start; padding: 8px 10px;
+  background: #FDF6EC; border-radius: 4px; font-size: 12px; color: #E6A23C; line-height: 1.5;
+  .el-icon { margin-top: 2px; flex-shrink: 0; }
+}
+.branch-source { margin-top: 8px; }
+.branch-warning {
+  display: flex; gap: 6px; align-items: center; margin-top: 8px;
+  font-size: 12px; color: #F56C6C;
+}
+.branch-output-row { display: flex; flex-direction: column; gap: 8px; }
+.branch-output-item { display: flex; align-items: center; gap: 8px; }
+
+.field-hint { font-size: 11px; color: #c0c4cc; margin-top: 4px; }
+.field-hint-inline { font-size: 11px; color: #c0c4cc; margin-left: 8px; }
 
 .output-item { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 12px; }
 .output-type { color: #409EFF; font-family: monospace; }
 .output-desc { color: #909399; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.form-empty { padding: 40px 12px; text-align: center; color: #909399; font-size: 13px; }
-.hint { font-size: 12px; color: #c0c4cc; margin-top: 4px; }
+.ai-output-hint { font-size: 11px; color: #9C27B0; background: #F3E5F5; padding: 6px 8px; border-radius: 4px; margin: 8px 0; }
+.start-hint, .end-hint {
+  display: flex; gap: 6px; align-items: flex-start; padding: 8px 10px;
+  border-radius: 4px; font-size: 12px; line-height: 1.5; margin: 8px 0;
+  .el-icon { margin-top: 2px; flex-shrink: 0; }
+}
+.start-hint { background: #F0F9EB; color: #67C23A; }
+.end-hint { background: #FEF0F0; color: #F56C6C; }
+
+/* 测试结果 */
+.test-loading { display: flex; align-items: center; gap: 6px; padding: 8px; color: #409EFF; font-size: 12px; }
+.test-result { padding: 8px; border-radius: 6px; font-size: 12px; }
+.test-result.test-success { background: #F0F9EB; border: 1px solid #C2E7B0; }
+.test-result.test-fail { background: #FEF0F0; border: 1px solid #FBC4C4; }
+.test-data { }
+.test-field-row { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 4px; }
+.test-label { color: #606266; font-weight: 500; flex-shrink: 0; }
+.test-value { color: #303133; word-break: break-all; }
+.test-source { color: #67C23A; font-style: italic; }
+.test-table-data { margin: 0; padding: 6px; background: #fff; border-radius: 4px; font-size: 11px; max-height: 150px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+.test-error { display: flex; align-items: center; gap: 6px; color: #F56C6C; }
+.test-empty { padding: 8px; color: #c0c4cc; font-size: 12px; text-align: center; }
+
+.action-row { display: flex; gap: 8px; }
+
+/* 空状态 */
+.form-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; padding: 20px; text-align: center;
+}
+.empty-icon { color: #dcdfe6; margin-bottom: 12px; }
+.empty-title { font-size: 14px; color: #909399; font-weight: 500; margin: 0 0 6px; }
+.empty-hint { font-size: 12px; color: #c0c4cc; margin: 0; }
 </style>

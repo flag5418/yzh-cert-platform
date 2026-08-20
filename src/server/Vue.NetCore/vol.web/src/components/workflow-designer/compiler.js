@@ -1,19 +1,23 @@
 /**
  * workflow-designer/compiler.js
- * LogicFlow getGraphData() ⇄ workflow_config JSON（自定义工作流引擎 V1.2 §5.7 节点模型）
+ * LogicFlow getGraphData() ⇄ workflow_config JSON
  *
- * 节点模型（V1.2）：
- *   { nodeId, nodeType: 'start'|'skill'|'logic'|'end', title, skillCode?, config?, inputs?, outputs? }
+ * 节点模型：
+ *   { nodeId, nodeType: 'start'|'end'|'branch'|'ai_node'|'loop'|'docField'|'docTable'|'skill', title, skillCode?, config?, inputs?, outputs? }
  * 边模型：
  *   { source, target, sourceHandle? (anchor: success/failure), targetHandle? }
+ *
+ * 拓扑线路：
+ *   从 start 到 end 的所有路径，含节点序列和边序列
  */
+
+import { getSpecialNode, getSpecialNodeStyle } from '@/views/cert/Standard/WorkflowDesigner/specialNodes.js'
 
 /**
  * 编译 LogicFlow 画布数据 → workflow_config
  */
 export function compileToWorkflowConfig(graphData, meta = {}) {
   const nodes = graphData.nodes.map(n => {
-    // LogicFlow 2.0: 自定义数据在 n.properties 中
     const d = n.properties || n.data || {}
     const node = {
       nodeId: n.id,
@@ -24,7 +28,6 @@ export function compileToWorkflowConfig(graphData, meta = {}) {
     if (d.config && Object.keys(d.config).length > 0) node.config = d.config
     if (d.inputs && Object.keys(d.inputs).length > 0) node.inputs = d.inputs
     if (d.outputs && Object.keys(d.outputs).length > 0) node.outputs = d.outputs
-    // 端口声明（特殊节点 + 功能节点）
     if (d.inputPorts && d.inputPorts.length > 0) node.inputPorts = d.inputPorts
     if (d.outputPorts && d.outputPorts.length > 0) node.outputPorts = d.outputPorts
     return node
@@ -32,7 +35,6 @@ export function compileToWorkflowConfig(graphData, meta = {}) {
 
   const edges = graphData.edges.map(e => {
     const edge = { source: e.sourceNodeId, target: e.targetNodeId }
-    // LogicFlow 2.0: 边的自定义数据在 properties 中
     const ed = e.properties || e.data || {}
     if (ed.sourceHandle) edge.sourceHandle = ed.sourceHandle
     if (ed.targetHandle) edge.targetHandle = ed.targetHandle
@@ -50,7 +52,7 @@ export function compileToWorkflowConfig(graphData, meta = {}) {
 }
 
 /**
- * 反编译 workflow_config → LogicFlow 渲染数据（自动布局：拓扑序）
+ * 反编译 workflow_config → LogicFlow 渲染数据
  */
 export function decompileToGraphData(config, layoutJson = null) {
   const ordered = topologicalOrder(config)
@@ -58,7 +60,6 @@ export function decompileToGraphData(config, layoutJson = null) {
   const lfNodes = []
   const lfEdges = []
 
-  // 节点布局：优先使用 layoutJson（画布恢复），否则拓扑自动布局
   const positions = layoutJson?.nodePositions || {}
 
   ordered.forEach((nodeId, idx) => {
@@ -71,6 +72,18 @@ export function decompileToGraphData(config, layoutJson = null) {
     const y = pos?.y ?? 80 + row * 130
     const type = node.nodeType || 'skill'
 
+    const nodeProps = {
+      ...(node.config || {}),
+      nodeType: type,
+      title: node.title || '',
+      skillCode: node.skillCode || '',
+      config: node.config || {},
+      inputs: node.inputs || {},
+      outputs: node.outputs || {},
+      inputPorts: node.inputPorts || [],
+      outputPorts: node.outputPorts || []
+    }
+    if (type === 'branch') nodeProps.points = [[0, -30], [50, 0], [0, 30]]
     const lfNode = {
       id: nodeId,
       type: lfNodeType(type),
@@ -78,18 +91,7 @@ export function decompileToGraphData(config, layoutJson = null) {
       y,
       text: node.title || node.skillCode || nodeId,
       style: nodeStyle(type, node.skillCode),
-      // LogicFlow 2.0: 自定义数据通过 properties 传入
-      properties: {
-        ...(node.config || {}),
-        nodeType: type,
-        title: node.title || '',
-        skillCode: node.skillCode || '',
-        config: node.config || {},
-        inputs: node.inputs || {},
-        outputs: node.outputs || {},
-        inputPorts: node.inputPorts || [],
-        outputPorts: node.outputPorts || []
-      }
+      properties: nodeProps
     }
     lfNodes.push(lfNode)
     nodeMap[nodeId] = lfNode
@@ -97,17 +99,16 @@ export function decompileToGraphData(config, layoutJson = null) {
 
   for (const e of config.edges || []) {
     if (!nodeMap[e.source] || !nodeMap[e.target]) continue
-    const isLogicBranch = e.sourceHandle === 'success' || e.sourceHandle === 'failure'
+    const isBranchAnchor = e.sourceHandle === 'success' || e.sourceHandle === 'failure'
     lfEdges.push({
       id: `${e.source}-->${e.target}${e.sourceHandle ? '-' + e.sourceHandle : ''}`,
       type: 'polyline',
       sourceNodeId: e.source,
       targetNodeId: e.target,
-      text: isLogicBranch ? (e.sourceHandle === 'success' ? '成功' : '失败') : '',
-      style: isLogicBranch
+      text: isBranchAnchor ? (e.sourceHandle === 'success' ? '成功' : '失败') : '',
+      style: isBranchAnchor
         ? { stroke: e.sourceHandle === 'success' ? '#67C23A' : '#F56C6C', strokeWidth: 2 }
         : { stroke: '#5B8FF9', strokeWidth: 2 },
-      // LogicFlow 2.0: 边的自定义数据通过 properties 传入
       properties: {
         sourceHandle: e.sourceHandle || null,
         targetHandle: e.targetHandle || null
@@ -131,7 +132,7 @@ export function decompileToGraphData(config, layoutJson = null) {
   }
 }
 
-/** 从画布 getGraphData 提取 layoutJson（节点坐标 + 画布变换） */
+/** 从画布 getGraphData 提取 layoutJson */
 export function extractLayoutJson(graphData) {
   const nodePositions = {}
   for (const n of graphData.nodes || []) {
@@ -143,30 +144,89 @@ export function extractLayoutJson(graphData) {
   }
 }
 
+// ==================== 拓扑线路提取 ====================
+
+/**
+ * 提取从 start 到 end 的所有拓扑线路
+ * @param {Object} graphData - LogicFlow getGraphData()
+ * @returns {Array<{nodes: string[], edges: string[], label: string}>} 拓扑线路列表
+ */
+export function extractTopologicalPaths(graphData) {
+  const nodes = graphData.nodes || []
+  const edges = graphData.edges || []
+
+  // 构建邻接表
+  const adj = {}
+  for (const n of nodes) {
+    adj[n.id] = edges
+      .filter(e => e.sourceNodeId === n.id)
+      .map(e => ({ target: e.targetNodeId, edgeId: e.id, handle: e.properties?.sourceHandle }))
+  }
+
+  // 找 start 节点
+  const startNodes = nodes.filter(n => {
+    const nt = n.properties?.nodeType || n.properties?.nodeType
+    return nt === 'start'
+  })
+
+  if (!startNodes.length) return []
+
+  const paths = []
+
+  function dfs(nodeId, pathNodes, pathEdges, pathLabels) {
+    const node = nodes.find(n => n.id === nodeId)
+    if (!node) return
+
+    const nodeType = node.properties?.nodeType
+    if (nodeType === 'end') {
+      paths.push({
+        nodes: [...pathNodes],
+        edges: [...pathEdges],
+        label: pathLabels.length ? pathLabels.join(' → ') : '主线路'
+      })
+      return
+    }
+
+    const outEdges = adj[nodeId] || []
+    if (!outEdges.length) return
+
+    for (const edge of outEdges) {
+      const label = edge.handle || ''
+      dfs(
+        edge.target,
+        [...pathNodes, edge.target],
+        [...pathEdges, edge.edgeId],
+        label ? [...pathLabels, label] : pathLabels
+      )
+    }
+  }
+
+  for (const start of startNodes) {
+    dfs(start.id, [start.id], [], [])
+  }
+
+  return paths
+}
+
 // ==================== 节点类型映射 ====================
 
 function lfNodeType(nodeType) {
   switch (nodeType) {
     case 'start': return 'circle'
     case 'end': return 'circle'
-    case 'logic': return 'diamond'
+    case 'branch': return 'polygon'
     default: return 'rect'
   }
 }
 
-/** 节点配色：按 nodeType / skill category */
+/** 节点配色：优先从 specialNodes 元数据获取 */
 export function nodeStyle(nodeType, skillCode, category = '') {
-  // 特殊节点固定配色
-  const specialStyles = {
-    start:    { fill: '#E8F5E9', stroke: '#2E7D32', strokeWidth: 2, radius: 24 },
-    end:      { fill: '#FFEBEE', stroke: '#C62828', strokeWidth: 2, radius: 24 },
-    logic:    { fill: '#FFF8E1', stroke: '#F57F17', strokeWidth: 2 },
-    ai_node:  { fill: '#F3E5F5', stroke: '#7B1FA2', strokeWidth: 2, radius: 8 },
-    loop:     { fill: '#E0F7FA', stroke: '#00838F', strokeWidth: 2, radius: 8 },
-    docField: { fill: '#E8F5E9', stroke: '#2E7D32', strokeWidth: 2, radius: 8 },
-    docTable: { fill: '#FFF3E0', stroke: '#E65100', strokeWidth: 2, radius: 8 }
+  // 特殊节点从元数据获取配色
+  const specialStyle = getSpecialNodeStyle(nodeType)
+  if (specialStyle) {
+    const radius = (nodeType === 'start' || nodeType === 'end') ? 24 : 8
+    return { ...specialStyle, radius }
   }
-  if (specialStyles[nodeType]) return specialStyles[nodeType]
   // 功能节点按分类配色
   const catColors = {
     data_access: { fill: '#E3F2FD', stroke: '#1565C0' },
