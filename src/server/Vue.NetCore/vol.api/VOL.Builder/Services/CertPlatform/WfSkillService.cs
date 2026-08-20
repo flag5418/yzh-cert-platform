@@ -319,8 +319,8 @@ namespace VOL.Builder.Services.CertPlatform
 
                 result.Add(new
                 {
-                    classCode = metadata.Code,
-                    className = metadata.Name,
+                    skillCode = metadata.Code,
+                    skillName = metadata.Name,
                     category = item.s.Category,
                     description = metadata.Description,
                     returnType = metadata.ReturnType,

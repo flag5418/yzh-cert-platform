@@ -200,7 +200,7 @@ onBeforeUnmount(() => {
 
 async function loadSkills() {
   try {
-    const res = await proxy.http.get('api/skill/list-active', null, false)
+    const res = await proxy.http.get('api/skill/catalog', null, false)
     if (res?.status) skills.value = res.data || []
   } catch (e) { console.error('加载 Skill 失败', e) }
 }
