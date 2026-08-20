@@ -234,8 +234,30 @@ namespace VOL.Builder.Services.CertPlatform
                 });
             }
 
-            // 输出端口镜像：标准输出 result + 业务自定义输出
+            // 输出端口镜像：标准输出 success + error + result
             var existingOutputs = dto.Outputs ?? new List<WfSkillOutput>();
+            // success 端口
+            await dbSet.Set<WfSkillOutput>().AddAsync(new WfSkillOutput
+            {
+                Code = Guid.NewGuid().ToString("N"), SkillCode = skillCode,
+                OutputName = "success",
+                OutputType = "boolean",
+                Description = "是否执行成功",
+                SortOrder = 1,
+                Enable = true, Status = "active",
+                CreateDate = now, Creator = operatorName
+            });
+            // error 端口
+            await dbSet.Set<WfSkillOutput>().AddAsync(new WfSkillOutput
+            {
+                Code = Guid.NewGuid().ToString("N"), SkillCode = skillCode,
+                OutputName = "error",
+                OutputType = "string",
+                Description = "失败时的错误信息",
+                SortOrder = 2,
+                Enable = true, Status = "active",
+                CreateDate = now, Creator = operatorName
+            });
             // result 端口
             await dbSet.Set<WfSkillOutput>().AddAsync(new WfSkillOutput
             {
@@ -243,7 +265,7 @@ namespace VOL.Builder.Services.CertPlatform
                 OutputName = "result",
                 OutputType = metadata.ReturnType,
                 Description = "执行结果",
-                SortOrder = 1,
+                SortOrder = 3,
                 Enable = true, Status = "active",
                 CreateDate = now, Creator = operatorName
             });

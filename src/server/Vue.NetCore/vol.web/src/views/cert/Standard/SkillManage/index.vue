@@ -204,7 +204,7 @@
 
           <!-- 输出端口 -->
           <div class="section-title" style="margin-top: 12px">输出端口（标准输出 + 业务输出）</div>
-          <el-table :data="getStandardOutputs(analyzed?.returnType)" border size="small">
+          <el-table :data="analyzed.outputPorts || getStandardOutputs(analyzed?.returnType)" border size="small">
             <el-table-column label="端口名" min-width="140">
               <template #default="{ row }"><span class="port-name">{{ row.name }}</span></template>
             </el-table-column>
@@ -437,13 +437,13 @@ async function openEdit(row) {
           reflection: d.reflection ? { ...d.reflection } : emptyReflection()
         })
         // 编辑模式：有反射数据时自动恢复端口展示（从 DB 镜像重建 analyzed）
-        if (editForm.reflection.classPath && d.inputs?.length > 0) {
+        if (editForm.reflection.classPath && (d.inputs?.length > 0 || d.outputs?.length > 0)) {
           analyzed.value = {
             code: d.skillCode,
             name: editForm.skillName,
             returnType: d.outputs?.find(o => o.outputName === 'result')?.outputType || 'json',
             description: editForm.description || '',
-            inputPorts: d.inputs.map(i => ({
+            inputPorts: (d.inputs || []).map(i => ({
               name: i.inputName,
               type: i.inputType,
               required: i.isRequired,
@@ -451,6 +451,11 @@ async function openEdit(row) {
               description: i.inputLabel || '',
               bindMode: i.bindMode || 'LinkOrConstant',
               enumSource: i.enumSource || null
+            })),
+            outputPorts: (d.outputs || []).map(o => ({
+              name: o.outputName,
+              type: o.outputType,
+              description: o.description || ''
             }))
           }
         }
