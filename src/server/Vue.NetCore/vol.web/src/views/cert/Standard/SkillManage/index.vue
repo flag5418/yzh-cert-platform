@@ -115,10 +115,20 @@
               </el-form-item>
             </el-col>
             <el-col :span="12">
+              <el-form-item label="Skill 名称" prop="skillName" :rules="[{ required: true, message: '请输入 Skill 名称' }]">
+                <el-input v-model="editForm.skillName" placeholder="值比较" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
               <el-form-item label="功能分类" prop="category">
                 <el-select v-model="editForm.category" style="width: 100%">
                   <el-option v-for="cat in categories" :key="cat.categoryCode" :label="cat.categoryName" :value="cat.categoryCode" />
                 </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="24">
+              <el-form-item label="说明" prop="description">
+                <el-input v-model="editForm.description" type="textarea" :rows="2" placeholder="Skill 功能说明" />
               </el-form-item>
             </el-col>
             <el-col :span="12">
@@ -294,6 +304,7 @@ const emptyReflection = () => ({ id: 0, skillCode: '', classPath: '', methodName
 
 const editForm = reactive({
   id: null, code: '', skillCode: '',
+  skillName: '', description: '',
   category: 'data_access',
   isActive: true,
   inputs: [], outputs: [], reflection: emptyReflection()
@@ -418,6 +429,7 @@ async function openEdit(row) {
         const d = res.data
         Object.assign(editForm, {
           id: d.id, code: d.code || '', skillCode: d.skillCode,
+          skillName: d.skillName || '', description: d.description || '',
           category: d.category || 'data_access',
           isActive: d.isActive !== false,
           inputs: (d.inputs || []).map(i => ({ ...i })),
@@ -428,9 +440,9 @@ async function openEdit(row) {
         if (editForm.reflection.classPath && d.inputs?.length > 0) {
           analyzed.value = {
             code: d.skillCode,
-            name: d.skillName,
+            name: editForm.skillName,
             returnType: d.outputs?.find(o => o.outputName === 'result')?.outputType || 'json',
-            description: d.description || '',
+            description: editForm.description || '',
             inputPorts: d.inputs.map(i => ({
               name: i.inputName,
               type: i.inputType,
@@ -458,9 +470,11 @@ async function handleSave() {
   const valid = await baseFormRef.value?.validate().catch(() => false)
   if (!valid) return
   try {
-    const body = {
+      const body = {
       id: editForm.id, code: editForm.code,
       skillCode: editForm.skillCode,
+      skillName: editForm.skillName,
+      description: editForm.description,
       category: editForm.category,
       isActive: editForm.isActive,
       inputs: editForm.inputs || [],

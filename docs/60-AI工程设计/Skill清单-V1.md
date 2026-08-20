@@ -33,6 +33,7 @@
 | `[Skill(Category)]` 特性字段 | 分类由字典维护 |
 | `LlmExtractSkill` | 臆想的 AI 提取 Skill，信息提取走独立流程，不依赖 AI |
 | `SideEffect` / `OutputStrict` | 引擎内部概念，不暴露给管理页面 |
+| `document_extract` | 文档提取走独立子系统（DocExtractionRuleService），不经过 Skill 体系 |
 | `get_field` / `get_table` | 已从 Skill 体系移除，改为前端特殊节点（数据源节点） |
 
 ### 1.3 Skill 不做什么
@@ -274,31 +275,31 @@ SkillExecutor.ExecuteAsync(skillCode, context, sp, ct)
 
 ## 六、当前 Skill 清单
 
-### 6.1 已建立的 Skill（3 个）
+### 6.1 已建立的 Skill（2 个）
 
 | # | SkillCode | 中文名 | 分类（字典） | ReturnType | C# 实现类 | 依赖 | 说明 |
 |---|---|---|---|---|---|---|---|
 | 1 | `compare` | 值比较 | data_process | boolean | `YZH.Core.Skills.CompareSkill` | 无 | 数值/日期/字符串比较，纯函数 |
-| 2 | `assemble` | 文本拼接 | data_process | string | `YZH.Core.Skills.AssembleSkill` | 无 | 任意数量片段按序拼接，纯函数 |
-| 3 | `document_extract` | 文档内容提取 | data_access | json | `YZH.Core.Skills.DocumentExtractSkill` | IFileExtractor | 本地解析 Word/Excel/PDF/Text，输出段落+表格+全文 |
+| 2 | `assemble` | 文本拼接 | data_process | string | `YZH.Core.Skills.AssembleSkill` | 无 | 前后两段文本按连接符拼接，纯函数 |
 
-### 6.2 已移除的 Skill（2 个 → 改为前端特殊节点）
+### 6.2 已移除的 Skill
 
 | SkillCode | 原名称 | 移除原因 |
 |---|---|---|
 | `get_field` | 获取字段值 | 数据源节点，行为与功能性节点不一致，改为前端硬编码特殊节点 |
 | `get_table` | 获取表格数据 | 同上 |
+| `document_extract` | 文档内容提取 | 文档提取走独立子系统（DocExtractionRuleService），有自己的 Service/Controller/页面，不经过 Skill 体系 |
 
 ### 6.3 各 Skill 输入输出端口明细
 
 #### 6.3.1 compare — 值比较
 
-**作用**：接收两个值 + 运算符，执行确定性比较。函数内部自动判断类型（数值/日期/字符串），日期格式由后台统一解析。
+**作用**：接收两个字符串值 + 运算符，执行确定性比较。函数内部自动判断类型（数值/日期/字符串），日期格式由后台统一解析。
 
 | 输入端口 | 类型 | 必填 | 默认值 | 绑定模式 | 字典来源 | 说明 |
 |---|---|---|---|---|---|---|
-| `value_a` | json | 否 | null | LinkOrConstant | — | 比较值 A（数值/日期/字符串） |
-| `value_b` | json | 否 | null | LinkOrConstant | — | 比较值 B（数值/日期/字符串） |
+| `value_a` | string | 否 | null | LinkOrConstant | — | 比较值 A（数值/日期/字符串） |
+| `value_b` | string | 否 | null | LinkOrConstant | — | 比较值 B（数值/日期/字符串） |
 | `operator` | string | 否 | null | Enum | compare_operator | 运算符：> >= < <= == != |
 
 **输出 result**（boolean）：`compare_result`（true/false），日期比较额外输出 `diff_days`。
@@ -316,38 +317,19 @@ SkillExecutor.ExecuteAsync(skillCode, context, sp, ct)
 
 #### 6.3.2 assemble — 文本拼接
 
-**作用**：将任意数量片段按序拼接为一个字符串。纯函数，无副作用。
+**作用**：将前半部分文本和后半部分文本按连接符拼接为一个字符串。纯函数，无副作用。
 
 | 输入端口 | 类型 | 必填 | 默认值 | 绑定模式 | 说明 |
 |---|---|---|---|---|---|
-| `parts` | json | 是 | — | LinkOrConstant | 片段数组（常量/变量按序混合） |
+| `prefix_text` | string | 否 | null | LinkOrConstant | 前半部分文本（合并前） |
+| `suffix_text` | string | 否 | null | LinkOrConstant | 后半部分文本（合并后） |
 | `joiner` | string | 否 | null | LinkOrConstant | 连接符（空=直接拼接） |
 
 **输出 result**（string）：`assembled_text`。
 
-#### 6.3.3 document_extract — 文档内容提取
+#### 6.3.3 document_extract — 已移除
 
-**作用**：本地解析 Word/Excel/PDF/Text 文件，输出结构化段落+表格+全文文本。非 AI，纯文件解析。
-
-| 输入端口 | 类型 | 必填 | 默认值 | 绑定模式 | 说明 |
-|---|---|---|---|---|---|
-| `storage_path` | string | 是 | — | LinkOrConstant | 源文件存储路径 |
-| `converted_storage_path` | string | 否 | null | LinkOrConstant | 转换后文件路径（旧版文件） |
-| `convert_status` | string | 否 | null | LinkOrConstant | 转换状态：pending/failed/converted |
-| `convert_message` | string | 否 | null | LinkOrConstant | 转换消息（失败原因） |
-
-**输出 result**（json）：
-```json
-{
-  "sections": "段落JSON",
-  "tables": "表格JSON",
-  "full_text": "全文文本",
-  "source_type": "Word/Excel/PDF/Text",
-  "file_name": "源文件名",
-  "effective_path": "实际提取路径",
-  "is_converted_version": false
-}
-```
+> **已移除**（2026-08-19）：文档内容提取走独立子系统（`DocExtractionRuleService`），有自己的 Service/Controller/页面，不经过 Skill 体系。C# 代码文件保留但不注册。
 
 ---
 
@@ -358,6 +340,8 @@ SkillExecutor.ExecuteAsync(skillCode, context, sp, ct)
 | 字段 | 可编辑 | 说明 |
 |---|---|---|
 | Skill 编码 | 是（新建时） | 唯一标识，如 `compare` |
+| Skill 名称 | 是 | 中文名，如「值比较」，反射验证后可用反射值覆盖 |
+| 说明 | 是 | Skill 功能说明，反射验证后可用反射值覆盖 |
 | 实现类全名 | 是 | 如 `YZH.Core.Skills.CompareSkill`，必填 |
 | 方法名 | 是 | 如 `ExecuteAsync`，必填，默认值 `ExecuteAsync` |
 | 分类 | 是 | 从字典下拉选择 |
@@ -427,10 +411,10 @@ SkillExecutor.ExecuteAsync(skillCode, context, sp, ct)
 ## 九、典型工作流链路
 
 ```
-document_extract → 提取结果存入数据库 → [特殊节点] get_field / get_table 查询 → compare 比较 → assemble 拼接 → 输出报告
+[文档提取子系统] 提取结果存入数据库 → [特殊节点] get_field / get_table 查询 → compare 比较 → assemble 拼接 → 输出报告
 ```
 
-- 文档提取走 `document_extract`（本地解析，非 AI）
+- 文档提取走独立子系统（`DocExtractionRuleService`），不经过 Skill 体系
 - 提取结果按规则保存到数据库
 - `get_field` / `get_table` 为前端特殊节点（数据源节点），不在此清单管理
 - 报告编写按特定流程组织，调 `compare` 做比较判断，`assemble` 拼接文本

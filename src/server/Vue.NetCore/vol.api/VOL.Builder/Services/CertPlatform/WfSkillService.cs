@@ -140,8 +140,8 @@ namespace VOL.Builder.Services.CertPlatform
                     if (await _repository.ExistsAsync(x => x.SkillCode == dto.SkillCode && x.Id != dto.Id))
                         return (false, $"Skill 编码 {dto.SkillCode} 已存在");
 
-                    main.SkillName = metadata.Name;  // 从反射同步
-                    main.Description = metadata.Description;  // 从反射同步
+                    main.SkillName = string.IsNullOrWhiteSpace(dto.SkillName) ? metadata.Name : dto.SkillName;
+                    main.Description = string.IsNullOrWhiteSpace(dto.Description) ? metadata.Description : dto.Description;
                     main.Category = dto.Category;
                     main.IsActive = dto.IsActive;
                     main.SortOrder = dto.SortOrder;
@@ -161,10 +161,10 @@ namespace VOL.Builder.Services.CertPlatform
                     {
                         Code = Guid.NewGuid().ToString("N"),
                         SkillCode = dto.SkillCode,
-                        SkillName = metadata.Name,  // 从反射同步
+                        SkillName = string.IsNullOrWhiteSpace(dto.SkillName) ? metadata.Name : dto.SkillName,
                         SkillType = "method",
                         Category = string.IsNullOrWhiteSpace(dto.Category) ? "data_process" : dto.Category,
-                        Description = metadata.Description,  // 从反射同步
+                        Description = string.IsNullOrWhiteSpace(dto.Description) ? metadata.Description : dto.Description,
                         IsActive = dto.IsActive,
                         SortOrder = dto.SortOrder,
                         Enable = true, Status = "active",

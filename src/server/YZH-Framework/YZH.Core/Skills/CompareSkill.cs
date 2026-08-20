@@ -7,7 +7,7 @@ using YZH.Core.Workflow;
 namespace YZH.Core.Skills
 {
     /// <summary>
-    /// 值比较：接收两个值 + 运算符，执行确定性比较。纯函数，无副作用。
+    /// 值比较：接收两个字符串值 + 运算符，执行确定性比较。纯函数，无副作用。
     /// 日期/数值/字符串类型在函数内部自动判断和转换，无需调用方区分。
     /// </summary>
     [Skill(
@@ -20,17 +20,17 @@ namespace YZH.Core.Skills
     {
         public static Task<SkillResult> ExecuteAsync(
             [SkillParam(Description = "比较值 A（数值/日期/字符串）", BindMode = SkillParamBindMode.LinkOrConstant)]
-            object? value_a = null,
+            string? value_a = null,
 
             [SkillParam(Description = "比较值 B（数值/日期/字符串）", BindMode = SkillParamBindMode.LinkOrConstant)]
-            object? value_b = null,
+            string? value_b = null,
 
             [SkillParam(Description = "运算符", BindMode = SkillParamBindMode.Enum, EnumSource = "compare_operator")]
             string? @operator = null,
 
             CancellationToken ct = default)
         {
-            if (value_a == null || value_b == null)
+            if (string.IsNullOrWhiteSpace(value_a) || string.IsNullOrWhiteSpace(value_b))
                 return Task.FromResult(SkillResult.Fail("value_a 和 value_b 均不能为空"));
 
             if (string.IsNullOrWhiteSpace(@operator))
@@ -39,7 +39,7 @@ namespace YZH.Core.Skills
             var op = @operator!.Trim();
 
             // 尝试数值比较
-            if (double.TryParse(value_a.ToString(), out var va) && double.TryParse(value_b.ToString(), out var vb))
+            if (double.TryParse(value_a, out var va) && double.TryParse(value_b, out var vb))
             {
                 var result = op switch
                 {
@@ -58,7 +58,7 @@ namespace YZH.Core.Skills
             }
 
             // 尝试日期比较
-            if (DateTime.TryParse(value_a.ToString(), out var da) && DateTime.TryParse(value_b.ToString(), out var db))
+            if (DateTime.TryParse(value_a, out var da) && DateTime.TryParse(value_b, out var db))
             {
                 var diffDays = (da - db).TotalDays;
                 var result = op switch
@@ -79,12 +79,10 @@ namespace YZH.Core.Skills
             }
 
             // 字符串比较
-            var sa = value_a.ToString()!;
-            var sb = value_b.ToString()!;
             var strResult = op switch
             {
-                "==" => sa == sb,
-                "!=" => sa != sb,
+                "==" => value_a == value_b,
+                "!=" => value_a != value_b,
                 _ => throw new InvalidOperationException($"运算符 {op} 不支持字符串比较，仅支持 == 和 !=")
             };
             return Task.FromResult(SkillResult.Ok(new Dictionary<string, object>
