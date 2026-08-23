@@ -74,8 +74,9 @@ const emit = defineEmits(['add-node'])
 
 const searchText = ref('')
 
-// 特殊节点从统一元数据导入，排除 start（自动创建不需要拖拽）
-const specialNodesForPanel = SPECIAL_NODES.filter(n => n.classCode !== 'start')
+// 特殊节点从统一元数据导入
+// 排除 start（自动创建）和 loop（已废弃）
+const specialNodesForPanel = SPECIAL_NODES.filter(n => n.classCode !== 'start' && n.classCode !== 'loop')
 
 const categoryState = ref({})
 

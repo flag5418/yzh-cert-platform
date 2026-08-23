@@ -12,6 +12,20 @@
  */
 
 import { getSpecialNode, getSpecialNodeStyle } from '@/views/cert/Standard/WorkflowDesigner/specialNodes.js'
+// 拓扑分析引擎（详细日志输出）
+import {
+  analyzeTopology,
+  validateTopology,
+  topologicalSort,
+  extractAllPaths,
+  detectCycles,
+  buildDependencyGraph,
+  findUnreachableNodes,
+  formatPath,
+  summarizePaths,
+  setLogLevel,
+  setLogEnabled
+} from './model/topology.js'
 
 /**
  * 编译 LogicFlow 画布数据 → workflow_config
@@ -144,68 +158,77 @@ export function extractLayoutJson(graphData) {
   }
 }
 
-// ==================== 拓扑线路提取 ====================
+// ==================== 拓扑线路提取（使用 topology.js） ====================
 
 /**
- * 提取从 start 到 end 的所有拓扑线路
- * @param {Object} graphData - LogicFlow getGraphData()
- * @returns {Array<{nodes: string[], edges: string[], label: string}>} 拓扑线路列表
+ * 从 workflow_config 提取拓扑路径（代理到 topology.js）
+ * @param {Object} config - workflow_config JSON
+ * @returns {Array<PathResult>} 拓扑路径列表
  */
-export function extractTopologicalPaths(graphData) {
-  const nodes = graphData.nodes || []
-  const edges = graphData.edges || []
+export function extractTopologicalPaths(config) {
+  const graph = buildDependencyGraph(config)
+  return extractAllPaths(graph)
+}
 
-  // 构建邻接表
-  const adj = {}
-  for (const n of nodes) {
-    adj[n.id] = edges
-      .filter(e => e.sourceNodeId === n.id)
-      .map(e => ({ target: e.targetNodeId, edgeId: e.id, handle: e.properties?.sourceHandle }))
+/**
+ * 从 LogicFlow graphData 提取拓扑路径（兼容旧接口）
+ * @param {Object} graphData - LogicFlow getGraphData()
+ * @returns {Array<PathResult>} 拓扑路径列表
+ */
+export function extractTopologicalPathsFromGraphData(graphData) {
+  // 将 graphData 转换为 workflow_config 格式
+  const config = compileToWorkflowConfig(graphData)
+  return extractTopologicalPaths(config)
+}
+
+/**
+ * 综合拓扑分析（一站式）
+ * @param {Object} config - workflow_config JSON
+ * @returns {TopologyAnalysis}
+ */
+export function analyzeWorkflowTopology(config) {
+  return analyzeTopology(config)
+}
+
+/**
+ * 拓扑校验
+ * @param {Object} config
+ * @returns {TopologyValidation}
+ */
+export function validateWorkflowTopology(config) {
+  const graph = buildDependencyGraph(config)
+  return validateTopology(graph)
+}
+
+/**
+ * 格式化路径（用于 UI 展示）
+ * @param {PathResult} path
+ * @param {Map<string, Object>|Object} nodeMap
+ * @returns {string}
+ */
+export function formatWorkflowPath(path, nodeMap) {
+  // 支持 Map 或 plain object
+  const getNode = (id) => {
+    if (nodeMap instanceof Map) return nodeMap.get(id)
+    return nodeMap[id]
   }
+  return formatPath(path, { get: getNode })
+}
 
-  // 找 start 节点
-  const startNodes = nodes.filter(n => {
-    const nt = n.properties?.nodeType || n.properties?.nodeType
-    return nt === 'start'
-  })
-
-  if (!startNodes.length) return []
-
-  const paths = []
-
-  function dfs(nodeId, pathNodes, pathEdges, pathLabels) {
-    const node = nodes.find(n => n.id === nodeId)
-    if (!node) return
-
-    const nodeType = node.properties?.nodeType
-    if (nodeType === 'end') {
-      paths.push({
-        nodes: [...pathNodes],
-        edges: [...pathEdges],
-        label: pathLabels.length ? pathLabels.join(' → ') : '主线路'
-      })
-      return
-    }
-
-    const outEdges = adj[nodeId] || []
-    if (!outEdges.length) return
-
-    for (const edge of outEdges) {
-      const label = edge.handle || ''
-      dfs(
-        edge.target,
-        [...pathNodes, edge.target],
-        [...pathEdges, edge.edgeId],
-        label ? [...pathLabels, label] : pathLabels
-      )
-    }
-  }
-
-  for (const start of startNodes) {
-    dfs(start.id, [start.id], [], [])
-  }
-
-  return paths
+/**
+ * 导出拓扑模块的原始函数（高级场景直接使用）
+ */
+export {
+  setLogLevel,
+  setLogEnabled,
+  topologicalSort,
+  detectCycles,
+  findUnreachableNodes,
+  buildDependencyGraph,
+  summarizePaths,
+  extractAllPaths,
+  validateTopology,
+  analyzeTopology
 }
 
 // ==================== 节点类型映射 ====================

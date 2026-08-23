@@ -33,6 +33,7 @@
             <div v-if="port.description" class="port-desc">{{ port.description }}</div>
             <div class="port-value">
               <PortControl
+                :key="`port_${port.name}_${form._updateTick || 0}`"
                 :model-value="getInputValue(port.name)"
                 :bind-mode="port.bindMode || 'LinkOrConstant'"
                 :enum-source="port.enumSource"
@@ -546,17 +547,21 @@ watch(() => props.docRules, (rules) => { docList.value = rules || [] }, { immedi
 watch(() => props.docFields, (fields) => { fieldList.value = fields || [] }, { immediate: true })
 watch(() => props.docTables, (tables) => { tableList.value = tables || [] }, { immediate: true })
 
-// 记录上次处理的 nodeId + title 快照，避免完全相同的重复通知
-let _lastSnapshot = null
+// 记录上次处理的 nodeId，用于判断是否是同一个节点的更新
+let _lastNodeId = null
+let _updateTick = 0
 
 watch(() => props.selectedNode, (node) => {
   if (node) {
-    // 生成快照用于去重比较（只对比关键字段）
-    const snap = `${node.nodeId || node.id}|${node.title || ''}|${node.nodeType || ''}`
-    if (_lastSnapshot === snap) return
-    _lastSnapshot = snap
+    const currentNodeId = node.nodeId || node.id
+    if (_lastNodeId === currentNodeId && form.value.title === node.title) {
+      return
+    }
+    _lastNodeId = currentNodeId
+    _updateTick++
+
     form.value = {
-      nodeId: node.nodeId || node.id,
+      nodeId: currentNodeId,
       nodeType: node.nodeType || 'skill',
       title: node.title || '',
       skillCode: node.skillCode || '',
@@ -565,9 +570,9 @@ watch(() => props.selectedNode, (node) => {
       config: { ...(node.config || {}) },
       inputPorts: node.inputPorts || [],
       outputPorts: node.outputPorts || [],
-      _branchEdges: node.branchEdges || []
+      _branchEdges: node.branchEdges || [],
+      _updateTick
     }
-    // 触发 form 内部响应式更新（确保 title 等字段被模板正确读取）
     const vals = {}
     for (const port of form.value.inputPorts) {
       vals[port.name] = form.value.inputs[port.name] ?? ''
@@ -595,11 +600,12 @@ watch(() => props.selectedNode, (node) => {
       emit('load-doc-fields', node.config.ruleCode || node.config.docCode)
     }
   } else {
+    _lastNodeId = null
     form.value = { nodeId: '', nodeType: 'skill', title: '', skillCode: '', inputs: {}, outputs: {}, config: {}, inputPorts: [], outputPorts: [] }
     inputValues.value = {}
     panelFieldValues.value = {}
   }
-}, { immediate: true, deep: true })
+}, { immediate: true })
 
 function applyChanges() {
   if (!form.value.nodeId) return

@@ -143,7 +143,6 @@
 </template>
 
 <script setup>
-console.log('[NCConfig] 🔥🔥🔥 index.vue 代码已加载!!! 版本: 2026-08-20-fix-rename')
 import { ref, reactive, computed, watch, onMounted, onActivated, onBeforeUnmount, getCurrentInstance, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import LogicFlow from '@logicflow/core'
@@ -159,6 +158,11 @@ import NodePropertyForm from '@/components/workflow-designer/NodePropertyForm.vu
 import { nodeStyle } from '@/components/workflow-designer/compiler'
 import { useWorkflowStore } from '@/components/workflow-designer/store/useWorkflowStore.js'
 import { deserialize, serialize, extractLayout } from '@/components/workflow-designer/model/serializer.js'
+import { analyzeWorkflowTopology, setLogLevel, setLogEnabled, summarizePaths, formatWorkflowPath } from '@/components/workflow-designer/compiler'
+
+// 开启详细日志（生产环境可关闭）
+setLogEnabled(true)
+setLogLevel('INFO')
 
 
 const { proxy } = getCurrentInstance()
@@ -399,9 +403,8 @@ function initDiagram() {
     selectedNode.value = nodeData
   })
 
-  diagram.value.on('node:dblclick', ({ data }) => {
+  diagram.value.on('node:dbclick', ({ data }) => {
     const nodeType = data.properties?.nodeType || data.properties?.classCode
-    console.log('[NCConfig] node:dblclick 触发, id:', data.id, 'type:', nodeType)
     if (nodeType === 'start') return
     promptEditNodeName(data.id, data.properties?.title || data.text || '')
   })
@@ -414,13 +417,7 @@ function initDiagram() {
     selectedEdgeId.value = data.id
   })
   diagram.value.on('blank:click', () => {
-    // 改名过程中不清空 selectedNode（防止 ElMessageBox 关闭时误触发）
-    // 使用时间戳判断：在改名保护窗口内不执行清空
-    if (_renamingNodeId && (Date.now() - _renamingTimestamp) < RENAMING_GUARD_MS) {
-      console.log('[NCConfig] blank:click 被拦截 (时间戳保护), _renamingNodeId:', _renamingNodeId, '剩余:', (RENAMING_GUARD_MS - (Date.now() - _renamingTimestamp)) + 'ms')
-      return
-    }
-    console.log('[NCConfig] blank:click 执行, 清空 selectedNode')
+    if (_renamingNodeId && (Date.now() - _renamingTimestamp) < RENAMING_GUARD_MS) return
     selectedNode.value = null
     selectedEdgeId.value = null
   })
@@ -561,12 +558,15 @@ function onEdgeChange() {
 
 /** 画布上所有节点（供面板 Link 模式下拉选择） */
 const canvasNodesForPanel = computed(() => {
-  return store.state.nodes.map(n => ({
-    id: n.id,
-    title: n.title || n.id,
-    text: n.title || n.id,
-    nodeType: n.nodeType
-  }))
+  return store.state.nodes.map(n => {
+    const _title = n.title
+    return {
+      id: n.id,
+      title: _title || n.id,
+      text: _title || n.id,
+      nodeType: n.nodeType
+    }
+  })
 })
 
 // ==================== 拖拽到画布 ====================
@@ -733,7 +733,6 @@ const RENAMING_GUARD_MS = 1000 // 改名保护窗口：1秒内不允许 blank:cl
 function promptEditNodeName(nodeId, currentName) {
   _renamingNodeId = nodeId
   _renamingTimestamp = Date.now()
-  console.log('[NCConfig] promptEditNodeName 开始, nodeId:', nodeId, '当前名称:', currentName)
 
   ElMessageBox.prompt('请输入节点名称', '编辑节点名称', {
     inputValue: currentName,
@@ -749,8 +748,6 @@ function promptEditNodeName(nodeId, currentName) {
       return
     }
 
-    console.log('[NCConfig] 用户输入新名称:', name)
-
     if (!store.renameNode(nodeId, name)) {
       ElMessage.warning(`节点名称「${name}」已存在，请使用其他名称`)
       _renamingNodeId = null
@@ -762,10 +759,8 @@ function promptEditNodeName(nodeId, currentName) {
     diagram.value.updateText(nodeId, name)
     diagram.value.setProperties(nodeId, { title: name })
 
-    // 用 setTimeout 延迟刷新 selectedNode（比 nextTick 更长延迟，确保在 blank:click 之后执行）
     setTimeout(() => {
       const storeNode = store.getNodeById(nodeId)
-      console.log('[NCConfig] setTimeout 300ms 执行, storeNode:', storeNode?.title, '_renamingNodeId:', _renamingNodeId)
       if (storeNode) {
         let branchEdges = undefined
         if (storeNode.nodeType === 'branch' || storeNode.classCode === 'branch') {
@@ -777,7 +772,7 @@ function promptEditNodeName(nodeId, currentName) {
             edgeId: e.id
           }))
         }
-        const newNodeVal = {
+        selectedNode.value = {
           nodeId: storeNode.id,
           nodeType: storeNode.nodeType,
           classCode: storeNode.classCode,
@@ -790,21 +785,15 @@ function promptEditNodeName(nodeId, currentName) {
           outputPorts: storeNode.outputPorts || [],
           branchEdges
         }
-        console.log('[NCConfig] ✅ 设置 selectedNode 成功, title:', newNodeVal.title)
-        selectedNode.value = newNodeVal
-        // 强制自增刷新计数器 → 触发 NodePropertyForm 的 :key 变化 → 组件强制重建
         forceRefreshTick.value++
-      } else {
-        console.warn('[NCConfig] ❌ storeNode 为 null!')
       }
       _renamingNodeId = null
       _renamingTimestamp = 0
-    }, 300) // 300ms 延迟，确保在 ElMessageBox 关闭触发的 blank:click 之后
+    }, 300)
     ElMessage.success('节点名称已更新')
   }).catch(() => {
     _renamingNodeId = null
     _renamingTimestamp = 0
-    console.log('[NCConfig] 用户取消改名')
   })
 }
 
@@ -1102,46 +1091,75 @@ function autoLayout() {
 
 function validateGraph() {
   const nodes = store.state.nodes
+  const edges = store.state.edges
   if (!nodes.length) { ElMessage.warning('画布为空'); return }
 
-  // 1. 必须有 start 节点
-  if (!nodes.some(n => n.classCode === 'start')) { ElMessage.error('缺少开始节点'); return }
+  // 转换为 workflow_config 格式
+  const config = serialize(nodes, edges, {
+    version: 1,
+    workflowType: 'validation'
+  })
 
-  // 2. 必须有 end 节点
-  if (!nodes.some(n => n.classCode === 'end')) { ElMessage.error('缺少结束节点'); return }
+  // 执行综合拓扑分析（含详细日志输出到控制台）
+  console.group('[NCConfig] 🔍 拓扑校验')
+  const analysis = analyzeWorkflowTopology(config)
+  console.groupEnd()
 
-  // 3. 名称唯一性校验
-  const nameMap = {}
-  const duplicates = []
-  for (const n of nodes) {
-    const name = n.title || n.id
-    if (nameMap[name]) duplicates.push(name)
-    else nameMap[name] = true
+  const { validation, sortResult, paths, unreachable, summary } = analysis
+
+  // 构建节点 title 映射（用于友好显示）
+  const nodeTitleMap = {}
+  for (const n of nodes) { nodeTitleMap[n.id] = n.title || n.id }
+
+  // 格式化路径显示
+  const pathSummary = summarizePaths(paths)
+  const pathDetails = paths.map((p, idx) => {
+    const nodeNames = p.nodes.map(id => nodeTitleMap[id] || id)
+    const branchInfo = p.branchDecisions.length > 0
+      ? ` (${p.branchDecisions.map(d => `${nodeTitleMap[d.at]||d.at}:${d.choice==='success'?'✓':'✗'}`).join(', ')})`
+      : ''
+    return `  路径${idx + 1}: ${nodeNames.join(' → ')}${branchInfo}`
+  }).join('\n')
+
+  // 有错误 → 显示错误信息
+  if (!validation.valid) {
+    const errorMessages = validation.errors.map(e => `  ✗ ${e.message}`).join('\n')
+    const warnMessages = validation.warnings.length > 0
+      ? '\n\n' + validation.warnings.map(w => `  ⚠ ${w.message}`).join('\n')
+      : ''
+
+    // 路径信息
+    const pathInfo = paths.length > 0 ? `\n\n📋 拓扑路径 (${pathSummary}):\n${pathDetails}` : '\n\n📋 无有效路径'
+
+    ElMessageBox.alert(
+      `校验失败！发现 ${validation.errors.length} 个错误：\n\n${errorMessages}${warnMessages}${pathInfo}`,
+      '拓扑校验结果',
+      { type: 'error', confirmButtonText: '确定' }
+    )
+    return false
   }
-  if (duplicates.length) {
-    ElMessage.error(`存在重复节点名称：${duplicates.join('、')}`)
-    return
+
+  // 仅有警告
+  if (validation.warnings.length > 0) {
+    const warnMessages = validation.warnings.map(w => `  ⚠ ${w.message}`).join('\n')
+    const pathInfo = paths.length > 0 ? `\n\n📋 拓扑路径 (${pathSummary}):\n${pathDetails}` : '\n\n📋 无有效路径'
+
+    ElMessageBox.alert(
+      `校验通过（有警告）：\n\n${warnMessages}${pathInfo}`,
+      '拓扑校验结果',
+      { type: 'warning', confirmButtonText: '确定' }
+    )
+    return true
   }
 
-  // 4. Skill 节点编码检查
-  const missingSkill = nodes.filter(n => n.nodeType === 'skill' && !n.skillCode)
-  if (missingSkill.length) {
-    ElMessage.warning(`${missingSkill.length} 个 Skill 节点未配置编码`)
-    return
-  }
-
-  // 5. 输出端口存在性检查
-  for (const n of nodes) {
-    if (n.classCode === 'branch') {
-      const hasCondition = Object.values(n.inputs || {}).some(v => v && v !== '')
-      if (!hasCondition) {
-        ElMessage.warning(`分支节点「${n.title}」未绑定条件输入`)
-        return
-      }
-    }
-  }
-
-  ElMessage.success(`校验通过：${nodes.length} 节点 / ${store.state.edges.length} 连线`)
+  // 完全通过
+  const pathInfo = paths.length > 0 ? `\n\n📋 拓扑路径 (${pathSummary}):\n${pathDetails}` : ''
+  ElMessageBox.alert(
+    `✓ 校验通过！\n\n节点: ${summary.totalNodes} | 边: ${summary.totalEdges} | 路径: ${summary.totalPaths}${pathInfo}`,
+    '拓扑校验结果',
+    { type: 'success', confirmButtonText: '确定' }
+  )
+  return true
 }
 
 async function handleSave() {
