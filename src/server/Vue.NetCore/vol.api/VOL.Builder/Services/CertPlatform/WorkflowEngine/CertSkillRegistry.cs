@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -5,32 +6,32 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using YZH.Core.Workflow;
 
-namespace YZH.Core.Workflow
+namespace VOL.Builder.Services.CertPlatform.WorkflowEngine
 {
     /// <summary>
     /// Skill 注册表（V2 静态方法版 + ISkillNode 回退）。
     /// 优先从 wf_skill_reflection 表加载 classPath + methodName，
     /// 找不到时回退到 DI 容器中注册的 ISkillNode 实例（如 llm_extract）。
-    /// [Obsolete] 项目侧应使用 CertSkillRegistry（VOL.Builder/Services/CertPlatform/WorkflowEngine/）
+    /// 项目独有：依赖认证平台的 WfSkillReflection 实体。
     /// </summary>
-    [System.Obsolete("使用 CertSkillRegistry 替代（项目侧实现）")]
-    public class SkillRegistry : ISkillRegistry
+    public class CertSkillRegistry : ISkillRegistry
     {
         private readonly SkillExecutor _executor;
         private readonly IServiceProvider _serviceProvider;
-        private readonly ILogger<SkillRegistry> _logger;
+        private readonly ILogger<CertSkillRegistry> _logger;
         private readonly Dictionary<string, ISkillNode> _diSkills;
 
         // 缓存：skillCode → (classPath, methodName)
         private readonly Dictionary<string, (string classPath, string methodName)> _cache = new();
         private readonly object _cacheLock = new();
 
-        public SkillRegistry(
+        public CertSkillRegistry(
             IServiceProvider serviceProvider,
             SkillExecutor executor,
             IEnumerable<ISkillNode> skills,
-            ILogger<SkillRegistry> logger)
+            ILogger<CertSkillRegistry> logger)
         {
             _serviceProvider = serviceProvider;
             _executor = executor;
@@ -79,7 +80,7 @@ namespace YZH.Core.Workflow
             var db = scope.ServiceProvider.GetService<VOL.Core.EFDbContext.VOLContext>();
             if (db == null)
             {
-                _logger.LogError("无法获取 VOLContext，SkillRegistry 无法加载反射配置");
+                _logger.LogError("无法获取 VOLContext，CertSkillRegistry 无法加载反射配置");
                 return (string.Empty, string.Empty);
             }
 

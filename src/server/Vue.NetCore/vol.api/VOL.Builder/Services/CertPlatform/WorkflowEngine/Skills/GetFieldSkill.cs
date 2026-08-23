@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -6,10 +7,11 @@ using VOL.Core.EFDbContext;
 using VOL.Entity.CertPlatform.Ent;
 using YZH.Core.Workflow;
 
-namespace YZH.Core.Skills
+namespace VOL.Builder.Services.CertPlatform.WorkflowEngine.Skills
 {
     /// <summary>
     /// 获取字段值：按 field_code + enterprise_code 查询提取结果。
+    /// 项目独有 Skill：依赖认证平台的 ExtractionResult 实体。
     /// </summary>
     [Skill(
         Code = "get_field",

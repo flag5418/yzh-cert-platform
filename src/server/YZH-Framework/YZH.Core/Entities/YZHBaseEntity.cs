@@ -7,30 +7,33 @@ namespace YZH.Core.Entities
 {
     /// <summary>
     /// YZH 实体基类，继承 Vol 的 BaseEntity（空基类），扩展统一审计和业务字段。
-    ///
+    /// 
     /// 设计原则（严格遵循 YZH-建设原则-V1.md §4.1）：
     /// 1. CreateID / ModifyID / DeleteID → int? 类型（对应 UserContext.Current.UserId）
     /// 2. Creator / Modifier / Deleter → string 类型（操作人姓名）
     /// 3. Code 作为业务编码，与数据库主键 Id 分离（不依赖自增 ID 做业务标识）
     /// 4. Enable 字段统一处理逻辑删除（true = 启用，false = 禁用/已删除）
-    /// 5. OrgCode 字段支持多租户隔离（由 [YZHMultiTenant] 特性自动填充）
-    ///
+    /// 5. OrgCode 不在基类定义，由需要多租户隔离的子类自行声明
+    /// 
     /// 自动填充规则（由 YZHServiceBase 接管，业务代码禁止手动设置）：
-    /// - 新建: CreateID + Creator + CreateDate + OrgCode
+    /// - 新建: CreateID + Creator + CreateDate
     /// - 编辑: ModifyID + Modifier + ModifyDate
     /// - 删除: DeleteID + Deleter + DeleteTime + Enable = false
-    ///
+    /// 
     /// 状态：[DONE] Phase 1 基础字段定义完成
+    /// 同步规则：本文件与 VOL.Entity/CertPlatform/YZHBaseEntity.cs 保持一致
     /// </summary>
-    public class YZHBaseEntity : BaseEntity
+    public abstract class YZHBaseEntity : BaseEntity
     {
         #region 主键
 
         /// <summary>
         /// 主键（自增，由数据库生成）
         /// EF Core 要求每个实体必须有主键
+        /// Vol 框架的 ValidationValueForDbType 依赖 [Column(TypeName)] 获取数据库类型
         /// </summary>
         [Key]
+        [Column(TypeName = "bigint")]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public long Id { get; set; }
 
@@ -39,18 +42,13 @@ namespace YZH.Core.Entities
         #region 业务编码
 
         /// <summary>
-        /// 业务编码（由 YZHCodeRule 生成，非主键，用于业务标识）
-        /// 示例：CB001-2026001（机构编号-年份流水号）
+        /// 业务编码（自动生成，非主键，用于业务标识）
+        /// 新建时自动赋值 Guid 短格式，无需前端传参、无需钩子干预
+        /// 示例：a1b2c3d4e5f6...
         /// </summary>
         [MaxLength(100)]
-        public string Code { get; set; }
-
-        /// <summary>
-        /// 多租户组织编码（用于数据隔离）
-        /// 由 [YZHMultiTenant] 特性自动填充，值为 UserContext.Current.OrgCode
-        /// </summary>
-        [MaxLength(50)]
-        public string OrgCode { get; set; }
+        [Column("code")]
+        public string Code { get; set; } = Guid.NewGuid().ToString("N");
 
         #endregion
 
@@ -61,6 +59,7 @@ namespace YZH.Core.Entities
         /// 由框架在新增时自动填充 UserContext.Current.UserId
         /// 禁止业务代码手动设置！
         /// </summary>
+        [Column("create_id")]
         public int? CreateID { get; set; }
 
         /// <summary>
@@ -68,13 +67,15 @@ namespace YZH.Core.Entities
         /// 由框架在新增时自动填充 UserContext.Current.UserName
         /// </summary>
         [MaxLength(50)]
+        [Column("creator")]
         public string Creator { get; set; }
 
         /// <summary>
         /// 创建时间
         /// 由框架在新增时自动填充 DateTime.Now
         /// </summary>
-        public DateTime? CreateDate { get; set; }
+        [Column("create_date")]
+        public DateTime? CreateDate { get; set; } = DateTime.Now;
 
         #endregion
 
@@ -85,6 +86,7 @@ namespace YZH.Core.Entities
         /// 由框架在更新时自动填充 UserContext.Current.UserId
         /// 禁止业务代码手动设置！
         /// </summary>
+        [Column("modify_id")]
         public int? ModifyID { get; set; }
 
         /// <summary>
@@ -92,13 +94,15 @@ namespace YZH.Core.Entities
         /// 由框架在更新时自动填充 UserContext.Current.UserName
         /// </summary>
         [MaxLength(50)]
+        [Column("modifier")]
         public string Modifier { get; set; }
 
         /// <summary>
         /// 修改时间
         /// 由框架在更新时自动填充 DateTime.Now
         /// </summary>
-        public DateTime? ModifyDate { get; set; }
+        [Column("modify_date")]
+        public DateTime? ModifyDate { get; set; } = DateTime.Now;
 
         #endregion
 
@@ -109,6 +113,7 @@ namespace YZH.Core.Entities
         /// 由框架在逻辑删除时自动填充 UserContext.Current.UserId
         /// 仅当 Enable = false 时有值
         /// </summary>
+        [Column("delete_id")]
         public int? DeleteID { get; set; }
 
         /// <summary>
@@ -117,6 +122,7 @@ namespace YZH.Core.Entities
         /// 仅当 Enable = false 时有值
         /// </summary>
         [MaxLength(50)]
+        [Column("deleter")]
         public string Deleter { get; set; }
 
         /// <summary>
@@ -124,7 +130,8 @@ namespace YZH.Core.Entities
         /// 由框架在逻辑删除时自动填充 DateTime.Now
         /// 仅当 Enable = false 时有值
         /// </summary>
-        public DateTime? DeleteTime { get; set; }
+        [Column("delete_time")]
+        public DateTime? DeleteTime { get; set; } = DateTime.Now;
 
         #endregion
 
@@ -136,24 +143,25 @@ namespace YZH.Core.Entities
         /// 默认值：active
         /// </summary>
         [MaxLength(50)]
+        [Column("status")]
         public string Status { get; set; } = "active";
 
         /// <summary>
         /// 启用状态（true = 启用, false = 禁用/逻辑删除）
         /// 默认值：true
         /// </summary>
+        [Column("enable")]
         public bool Enable { get; set; } = true;
 
-        /// <summary>
-        /// 排序号（默认 0，数字越小越靠前）
-        /// 用于前端列表排序
-        /// </summary>
-        public int Sort { get; set; } = 0;
+        #endregion
+
+        #region 辅助字段
 
         /// <summary>
         /// 备注
         /// </summary>
         [MaxLength(500)]
+        [Column("remark")]
         public string Remark { get; set; }
 
         #endregion
@@ -197,16 +205,11 @@ namespace YZH.Core.Entities
         /// <summary>
         /// 填充创建信息（由 YZHServiceBase 在新增时调用）
         /// </summary>
-        public void FillCreateInfo(int userId, string userName, string orgCode = null)
+        public void FillCreateInfo(int userId, string userName)
         {
             CreateID = userId;
             Creator = userName;
             CreateDate = DateTime.Now;
-
-            if (!string.IsNullOrEmpty(orgCode))
-            {
-                OrgCode = orgCode;
-            }
         }
 
         /// <summary>

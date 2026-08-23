@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace VOL.Entity.CertPlatform.Wf
+namespace VOL.Builder.Services.CertPlatform.WorkflowEngine.Models
 {
     /// <summary>
     /// 节点执行结果模型 — 单个节点执行后的标准输出

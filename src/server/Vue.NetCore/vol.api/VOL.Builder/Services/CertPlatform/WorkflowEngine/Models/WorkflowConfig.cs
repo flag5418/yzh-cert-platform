@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace VOL.Entity.CertPlatform.Wf
+namespace VOL.Builder.Services.CertPlatform.WorkflowEngine.Models
 {
     /// <summary>
     /// 工作流配置顶层模型 — 对应 rule_json 反序列化后的完整结构

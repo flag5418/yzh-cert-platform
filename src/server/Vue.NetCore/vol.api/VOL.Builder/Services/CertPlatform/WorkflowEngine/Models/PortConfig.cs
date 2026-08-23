@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace VOL.Entity.CertPlatform.Wf
+namespace VOL.Builder.Services.CertPlatform.WorkflowEngine.Models
 {
     /// <summary>
     /// 端口声明模型 — 节点的输入/输出端口定义

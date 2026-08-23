@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using VOL.Entity.CertPlatform.Wf;
+using VOL.Builder.Services.CertPlatform.WorkflowEngine.Models;
 
 namespace VOL.Builder.Services.CertPlatform.WorkflowEngine
 {

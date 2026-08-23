@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,10 +9,11 @@ using VOL.Core.EFDbContext;
 using VOL.Entity.CertPlatform.Ent;
 using YZH.Core.Workflow;
 
-namespace YZH.Core.Skills
+namespace VOL.Builder.Services.CertPlatform.WorkflowEngine.Skills
 {
     /// <summary>
     /// 获取表格数据：按 table_code + enterprise_code 查询表格提取结果。
+    /// 项目独有 Skill：依赖认证平台的 TableExtractionResult 实体。
     /// </summary>
     [Skill(
         Code = "get_table",

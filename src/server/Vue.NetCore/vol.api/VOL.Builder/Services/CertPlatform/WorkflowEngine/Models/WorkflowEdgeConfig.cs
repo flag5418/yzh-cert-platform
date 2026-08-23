@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace VOL.Entity.CertPlatform.Wf
+namespace VOL.Builder.Services.CertPlatform.WorkflowEngine.Models
 {
     /// <summary>
     /// 单条边的数据模型 — 对应 rule_json 中 edges[] 的一个元素

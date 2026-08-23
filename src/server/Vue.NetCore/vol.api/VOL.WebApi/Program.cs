@@ -165,7 +165,8 @@ builder.Services.AddScoped<YZH.Core.AI.Prompt.IPromptInterpreter, YZH.Core.AI.Pr
 
 // 工作流服务（V2 静态方法版）
 builder.Services.AddScoped<YZH.Core.Workflow.SkillExecutor>();
-builder.Services.AddScoped<YZH.Core.Workflow.ISkillRegistry, YZH.Core.Workflow.SkillRegistry>();
+// CertSkillRegistry 替代 SkillRegistry（项目侧实现，依赖 WfSkillReflection）
+builder.Services.AddScoped<YZH.Core.Workflow.ISkillRegistry, VOL.Builder.Services.CertPlatform.WorkflowEngine.CertSkillRegistry>();
 builder.Services.AddScoped<YZH.Core.Workflow.IWorkflowEngine, YZH.Core.Workflow.WorkflowEngine>();
 
 // ISkillNode 实例注册（供 SkillRegistry DI 回退，非工作流静态 Skill）

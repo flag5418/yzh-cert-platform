@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace VOL.Entity.CertPlatform.Wf
+namespace VOL.Builder.Services.CertPlatform.WorkflowEngine.Models
 {
     /// <summary>
     /// 单个节点的配置模型 — 对应 rule_json 中 nodes[] 的一个元素
