@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace YZH.CertPlatform.Services
+namespace YZH.Core.Services
 {
     /// <summary>
     /// YZH V3.0 页面 UI 配置服务接口

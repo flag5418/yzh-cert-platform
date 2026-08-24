@@ -858,35 +858,18 @@ const loadCurrentContent = async () => {
       const res = await http.get(`/api/standard-directory/configs/${directoryCode}/folders`)
       if (res.Status === true || res.status === 0) {
         const data = res.Data || res.data || []
-        // 根级别：取tree根节点的直接子节点（Depth=2的文件夹）
-        // 如果根节点没有子节点（新建的根文件夹），直接用它
+        // 根级别：只显示 Depth=1 的一级文件夹（不展开子节点）
+        // 注：后端返回的是树形结构，每个节点有 Children 属性
         const rootChildren = []
         for (const root of (Array.isArray(data) ? data : [data])) {
-          if (root.Children && root.Children.length > 0) {
-            rootChildren.push(...root.Children)
-          } else if (!root.Children || root.Children.length === 0) {
-            // 无子节点时，检查是否为新建的根文件夹（有FolderName）
-            if (root.FolderName || root.folderName) {
-              rootChildren.push(root)
-            }
+          if ((root.Depth || root.depth) === 1) {
+            rootChildren.push(root)  // 只取一级文件夹
           }
         }
         currentFolders.value = rootChildren.map(f => normalizeItem(f, 'folder'))
-        // 根级别：只加载在根文件夹下的文件（FolderCode以根文件夹code开头）
-        const filesRes = await http.get(`/api/standard-directory/directory-files?directoryCode=${directoryCode}`)
-        if (filesRes.Status === true || filesRes.status === 0) {
-          const allFiles = filesRes.Data || filesRes.data || []
-          // 根级别文件过滤：只保留在L01根文件夹下的文件（不包含子文件夹L02+中的文件）
-          currentFiles.value = Array.isArray(allFiles)
-            ? allFiles.filter((f) => {
-                const fc = f.FolderCode || f.folderCode || ''
-                const valid = f.IsValid !== false
-                // L01表示根级别文件夹，L02+表示子文件夹
-                const inRoot = !fc.includes('|L02|') && !fc.includes('|L03|') && !fc.includes('|L04|')
-                return valid && inRoot
-              }).map(f => normalizeItem(f, 'file'))
-            : []
-        }
+        // 根级别不显示文件：用户需要点击进入具体文件夹后才能看到该文件夹下的文件
+        // 文件归属由 FolderCode 精确匹配到对应的一级/二级文件夹
+        currentFiles.value = []
       }
     } else {
       // 子文件夹级别：分别获取子文件夹列表和文件

@@ -82,10 +82,13 @@ namespace VOL.Builder.Services.CertPlatform.WorkflowEngine
                 }
             }
 
-            // 4. 拓扑校验
+            // 4. 根据边填充节点 inputs（端到端执行时需要）
+            PopulateInputsFromEdges(config.Nodes, inEdges);
+
+            // 5. 拓扑校验
             ValidateTopology(config, nodeMap, adjacency, inEdges);
 
-            // 5. 找到 start 节点
+            // 6. 找到 start 节点
             var startNode = config.Nodes.FirstOrDefault(n =>
                 string.Equals(n.NodeType, "start", StringComparison.OrdinalIgnoreCase));
 
@@ -113,6 +116,52 @@ namespace VOL.Builder.Services.CertPlatform.WorkflowEngine
                 InEdges = inEdges,
                 Paths = paths
             };
+        }
+
+        // ── 根据边填充节点 inputs ──
+
+        /// <summary>
+        /// 根据入边表自动填充节点的 inputs 字典
+        /// <para>规则：遍历每个节点的入边，将 source 节点 ID 绑定到 targetHandle 对应的输入端口</para>
+        /// <para>多个入边绑定到不同端口（通过 targetHandle 区分）；相同端口的多个入边取第一个</para>
+        /// </summary>
+        private static void PopulateInputsFromEdges(
+            List<WorkflowNodeConfig> nodes,
+            Dictionary<string, List<WorkflowEdgeConfig>> inEdges)
+        {
+            foreach (var node in nodes)
+            {
+                if (!inEdges.TryGetValue(node.NodeId, out var edges) || edges.Count == 0)
+                    continue;
+
+                // 确保 inputs 字典已初始化
+                node.Inputs ??= new Dictionary<string, string>();
+
+                // 获取节点的输入端口列表（用于推断端口名）
+                var inputPorts = node.InputPorts;
+
+                foreach (var edge in edges)
+                {
+                    // 确定端口名：优先使用 targetHandle，否则使用第一个输入端口名
+                    var portName = !string.IsNullOrEmpty(edge.TargetHandle)
+                        ? edge.TargetHandle
+                        : inputPorts?.FirstOrDefault()?.Name
+                        ?? "result";
+
+                    // 端口未绑定过才设置（避免重复覆盖）
+                    if (!node.Inputs.ContainsKey(portName))
+                    {
+                        node.Inputs[portName] = edge.Source;
+
+                        // 同时设置 inputType 为 link（如果未声明）
+                        node.InputTypes ??= new Dictionary<string, string>();
+                        if (!node.InputTypes.ContainsKey(portName))
+                        {
+                            node.InputTypes[portName] = "link";
+                        }
+                    }
+                }
+            }
         }
 
         // ── 拓扑校验 ──

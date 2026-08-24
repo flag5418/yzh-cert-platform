@@ -32,13 +32,14 @@ echo ""
 
 # 显示资源使用
 echo -e "${CYAN}资源使用:${NC}"
-docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}" yzh-mysql yzh-redis yzh-minio 2>/dev/null || echo "  容器未运行"
+docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}" yzh-libreoffice yzh-mysql yzh-redis yzh-minio 2>/dev/null || echo "  容器未运行"
 echo ""
 
 # 显示连接信息
 echo -e "${CYAN}连接信息:${NC}"
-echo "  MySQL:    mysql -h 127.0.0.1 -P 3307 -u root -p"
-echo "  Redis:    redis-cli -p 6380"
-echo "  MinIO:    http://127.0.0.1:9001 (Console)"
-echo "            http://127.0.0.1:9000 (API)"
+echo "  MySQL:        mysql -h 127.0.0.1 -P 3307 -u root -p"
+echo "  Redis:        redis-cli -p 6380"
+echo "  MinIO:        http://127.0.0.1:9001 (Console)"
+echo "                http://127.0.0.1:9000 (API)"
+echo "  LibreOffice:  docker exec yzh-libreoffice libreoffice --headless --version"
 echo ""

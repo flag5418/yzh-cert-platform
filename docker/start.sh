@@ -80,6 +80,9 @@ docker compose up -d redis
 echo -e "${GREEN}[3/3] 启动 MinIO (端口 9000/9001)...${NC}"
 docker compose up -d minio
 
+echo -e "${GREEN}[4/4] 启动 LibreOffice (文档转换)...${NC}"
+docker compose up -d libreoffice
+
 # 等待就绪
 echo ""
 echo -e "${YELLOW}等待服务就绪...${NC}"
@@ -118,6 +121,18 @@ for i in $(seq 1 10); do
     echo -n "."
     sleep 1
     [ "$i" -eq 10 ] && echo -e " ${RED}超时${NC}"
+done
+
+# 等待 LibreOffice 就绪
+echo -n "  LibreOffice"
+for i in $(seq 1 15); do
+    if docker exec yzh-libreoffice libreoffice --headless --version &>/dev/null; then
+        echo -e " ${GREEN}✓${NC}"
+        break
+    fi
+    echo -n "."
+    sleep 1
+    [ "$i" -eq 15 ] && echo -e " ${RED}超时${NC}"
 done
 
 # 状态

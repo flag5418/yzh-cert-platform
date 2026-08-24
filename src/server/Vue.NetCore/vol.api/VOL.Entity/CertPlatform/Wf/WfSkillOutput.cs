@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.CertPlatform;
 
 namespace VOL.Entity.CertPlatform.Wf
 {
@@ -27,7 +28,7 @@ namespace VOL.Entity.CertPlatform.Wf
         [Column("enable")] public new bool Enable { get; set; } = true;
         [Column("remark")] public new string Remark { get; set; }
 
-        [Required][StringLength(100)][Column("skill_code")]
+        [Required][StringLength(100)][UniqueField("技能编码", WithFields = new[] { "OutputName" })][Column("skill_code")]
         public string SkillCode { get; set; }
 
         [Required][StringLength(100)][Column("output_name")]

@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.CertPlatform;
 
 namespace VOL.Entity.CertPlatform.Cert
 {
@@ -17,6 +18,7 @@ namespace VOL.Entity.CertPlatform.Cert
         /// </summary>
         [Required]
         [StringLength(20)]
+        [UniqueField("阶段编码")]
         [Column("phase_code")]
         public string PhaseCode { get; set; }
 

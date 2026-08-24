@@ -28,10 +28,14 @@ namespace VOL.Builder.Services.CertPlatform.WorkflowEngine.Models
         public static NodeExecutionResult Ok(Dictionary<string, object> output, int durationMs = 0)
             => new() { Success = true, Output = output ?? new(), DurationMs = durationMs };
 
-        /// <summary>快速创建失败结果</summary>
-        public static NodeExecutionResult Fail(string error, int durationMs = 0)
-            => new() { Success = false, Error = error, DurationMs = durationMs };
-    }
+    /// <summary>快速创建失败结果 </summary>
+    public static NodeExecutionResult Fail(string error, int durationMs = 0)
+        => new() { Success = false, Error = error, DurationMs = durationMs };
+
+    /// <summary>快速创建失败结果（带输出字典，可携带 errorCode 等结构化信息）</summary>
+    public static NodeExecutionResult Fail(string error, int durationMs, Dictionary<string, object> output)
+        => new() { Success = false, Error = error, DurationMs = durationMs, Output = output ?? new() };
+}
 
     /// <summary>
     /// 路径执行结果 — 一条路径（start → ... → end）执行完成后的状态

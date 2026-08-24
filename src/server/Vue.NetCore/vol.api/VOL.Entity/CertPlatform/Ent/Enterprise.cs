@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.CertPlatform;
 
 namespace VOL.Entity.CertPlatform.Ent
 {
@@ -19,6 +20,7 @@ namespace VOL.Entity.CertPlatform.Ent
 
         /// <summary>企业短编码(如 ENT-2026-0001，用于OSS路径)</summary>
         [Required, StringLength(20)]
+        [UniqueField("企业编号")]
         [Column("enterprise_no")]
         public string EnterpriseNo { get; set; }
 
@@ -34,6 +36,7 @@ namespace VOL.Entity.CertPlatform.Ent
 
         /// <summary>统一社会信用代码</summary>
         [StringLength(50)]
+        [UniqueField("统一社会信用代码")]
         [Column("credit_code")]
         public string CreditCode { get; set; }
 

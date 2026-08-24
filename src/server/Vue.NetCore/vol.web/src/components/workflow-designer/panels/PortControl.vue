@@ -40,13 +40,26 @@
       </div>
     </div>
 
-    <!-- ===== LinkOrConstant 模式：下拉/编辑切换 ===== -->
+    <!-- ===== LinkOrConstant 模式：类型切换 + 对应输入控件 ===== -->
     <div v-else class="link-or-constant">
-      <template v-if="!isEditing">
+      <!-- 类型切换按钮组 -->
+      <div class="input-type-switch">
+        <el-radio-group
+          :model-value="inputType"
+          size="small"
+          @change="v => onInputTypeChange(v)"
+        >
+          <el-radio-button value="link">连线</el-radio-button>
+          <el-radio-button value="constant">常量</el-radio-button>
+        </el-radio-group>
+      </div>
+
+      <!-- 连线模式：下拉选择画布节点 -->
+      <div v-if="inputType === 'link'" class="link-input-area">
         <el-select
           :model-value="modelValue"
-          placeholder="选择节点或点击编辑输入"
-          style="flex: 1"
+          placeholder="选择上游节点"
+          style="width: 100%"
           @change="v => onLinkChange(v)"
         >
           <el-option
@@ -55,26 +68,25 @@
             :label="n.label"
             :value="n.id"
           />
+          <template #empty>
+            <span class="empty-hint">无可连接的节点</span>
+          </template>
         </el-select>
-        <el-tooltip content="切换为手动输入" placement="top">
-          <el-button size="small" @click="enterEditMode">
-            <el-icon><IconEdit /></el-icon>
-          </el-button>
-        </el-tooltip>
-      </template>
-      <template v-else>
+        <div v-if="modelValue && isNodeRef" class="link-badge">
+          <el-icon><IconEdit /></el-icon>
+          <span>已连线</span>
+        </div>
+      </div>
+
+      <!-- 常量模式：文本输入 -->
+      <div v-else class="constant-input-area">
         <el-input
           :model-value="modelValue"
           :placeholder="inputPlaceholder"
-          style="flex: 1"
-          @change="v => onInputChange(v)"
+          style="width: 100%"
+          @input="v => onConstantInput(v)"
         />
-        <el-tooltip content="切换为节点选择" placement="top">
-          <el-button size="small" @click="exitEditMode">
-            <el-icon><IconEdit /></el-icon>
-          </el-button>
-        </el-tooltip>
-      </template>
+      </div>
     </div>
   </div>
 </template>
@@ -97,23 +109,22 @@ const props = defineProps({
   /** 手动输入时的 placeholder */
   inputPlaceholder: { type: String, default: '输入常量值或 {{n1.portName}}' },
   /** 选择器 placeholder */
-  placeholder: { type: String, default: '' }
+  placeholder: { type: String, default: '' },
+  /** 输入类型：link（连线）/ constant（常量） */
+  inputType: { type: String, default: 'link' }
 })
 
-const emit = defineEmits(['update:modelValue', 'link-node'])
-
-const isEditing = ref(false)
+const emit = defineEmits(['update:modelValue', 'link-node', 'update:inputType'])
 
 // 判断当前值是否为节点引用
 const isNodeRef = computed(() => {
   const v = props.modelValue
-  return typeof v === 'string' && v.includes('_n') && props.linkableNodes.some(n => n.id === v)
+  return typeof v === 'string' && v.length > 0 && props.linkableNodes.some(n => n.id === v)
 })
 
 // Enum 选项：优先用外部传入的，否则用内置的
 const enumOptions = computed(() => {
   if (props.options?.length) return props.options
-  // 内置 compare_operator 选项
   if (props.enumSource === 'compare_operator') {
     return [
       { label: '大于 (>)', value: '>' },
@@ -127,11 +138,11 @@ const enumOptions = computed(() => {
   return []
 })
 
-// 初始化编辑模式状态
+// 根据当前值自动推断 inputType（仅初始化时）
 watch(() => props.modelValue, (val) => {
-  // 如果当前值是节点引用，不是编辑模式
-  if (val && isNodeRef.value) {
-    isEditing.value = false
+  // 如果有值且不是节点引用 → 常量模式
+  if (val && !isNodeRef.value && props.bindMode === 'LinkOrConstant') {
+    // 不在此处自动切换，由父组件控制
   }
 }, { immediate: true })
 
@@ -145,17 +156,20 @@ function onLinkChange(sourceNodeId) {
   }
 }
 
-function onInputChange(val) {
+function onConstantInput(val) {
   emit('update:modelValue', val)
-  isEditing.value = false
 }
 
-function enterEditMode() {
-  isEditing.value = true
-}
-
-function exitEditMode() {
-  isEditing.value = false
+function onInputTypeChange(newType) {
+  emit('update:inputType', newType)
+  // 切换类型时清空当前值（仅更新数据，不触发画布连线操作）
+  if (newType === 'link') {
+    // 切到连线模式：清空常量值
+    emit('update:modelValue', '')
+  } else {
+    // 切到常量模式：清空连线值（仅清数据，不 emit link-node）
+    emit('update:modelValue', '')
+  }
 }
 </script>
 
@@ -169,7 +183,19 @@ function exitEditMode() {
 }
 
 .link-or-constant {
-  display: flex; gap: 4px; align-items: center;
+  width: 100%;
+}
+
+.input-type-switch {
+  margin-bottom: 6px;
+}
+
+.link-input-area {
+  position: relative;
+}
+
+.constant-input-area {
+  width: 100%;
 }
 
 .empty-hint { font-size: 12px; color: #c0c4cc; padding: 4px 8px; }

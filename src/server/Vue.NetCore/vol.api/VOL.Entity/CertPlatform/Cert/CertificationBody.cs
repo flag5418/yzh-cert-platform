@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using VOL.Entity;
+using VOL.Entity.CertPlatform;
 
 namespace VOL.Entity.CertPlatform.Cert
 {
@@ -16,6 +17,7 @@ namespace VOL.Entity.CertPlatform.Cert
     {
         [Required, StringLength(200)]
         [Editable(true)]
+        [UniqueField("机构名称")]
         [Column("name")]
         public string Name { get; set; }
 
@@ -26,6 +28,7 @@ namespace VOL.Entity.CertPlatform.Cert
 
         [StringLength(50)]
         [Editable(true)]
+        [UniqueField("机构编号")]
         [Column("cb_code")]
         public string CbCode { get; set; }
 

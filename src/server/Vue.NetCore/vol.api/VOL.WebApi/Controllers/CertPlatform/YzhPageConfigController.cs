@@ -12,7 +12,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using VOL.Core.Filters;  // JWTAuthorize 所在命名空间
-using YZH.CertPlatform.Services;
+using YZH.Core.Services;
 
 namespace VOL.WebApi.Controllers.CertPlatform
 {

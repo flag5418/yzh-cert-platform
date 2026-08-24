@@ -50,7 +50,7 @@ export { mergeDefaultButtons, DEFAULT_BUTTONS } from './presets/defaultButtons'
 // ====== 统一图标管理（V3 新增） ======
 export { YzhIcon } from './icons'
 export {
-  IconBack, IconForward, IconMenu, IconClose,
+  IconBack, IconForward, IconLink, IconMenu, IconClose,
   IconAdd, IconDelete, IconEdit, IconEditPen, IconSearch, IconRefresh,
   IconDownload, IconUpload, IconCopy,
   IconFolder, IconFolderOpen, IconFolderChecked, IconFile, IconFileChecked, IconDocument,

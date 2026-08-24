@@ -132,7 +132,9 @@ function post(url, params, loading, config) {
           resolve(response.data)
         },
         (err) => {
-          reject(err && err.data && err.data.message ? err.data.message : '服务器处理异常')
+          // 优先取 message，其次取 error（兼容后端返回 { success: false, error: '...' } 的格式）
+          const errMsg = err && err.data && (err.data.message || err.data.error) ? (err.data.message || err.data.error) : '服务器处理异常'
+          reject(errMsg)
         }
       )
       .catch((error) => {

@@ -35,8 +35,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddModule(builder.Configuration);
 
 // ====== YZH Framework 服务注册 ======
-// YZH V3.0 配置驱动 UI 服务（业务逻辑在 YZH-Framework，Controller 只做 HTTP 适配）
-builder.Services.AddScoped<YZH.CertPlatform.Services.IYzhPageConfigService, YZH.CertPlatform.Services.YzhPageConfigService>();
+// YZH V3.0 配置驱动 UI 服务（业务逻辑在 YZH.Core，Controller 只做 HTTP 适配）
+builder.Services.AddScoped<YZH.Core.Services.IYzhPageConfigService, YZH.Core.Services.YzhPageConfigService>();
 
 
 builder.Services
@@ -171,6 +171,14 @@ builder.Services.AddScoped<YZH.Core.Workflow.IWorkflowEngine, YZH.Core.Workflow.
 
 // ISkillNode 实例注册（供 SkillRegistry DI 回退，非工作流静态 Skill）
 builder.Services.AddScoped<YZH.Core.Workflow.ISkillNode, YZH.Core.Skills.LlmExtractSkill>();
+
+// 工作流执行引擎（V3 模块注册）
+builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.WorkflowEngine.WorkflowConfigParser>();
+builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.WorkflowEngine.NodeExecutor>();
+builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.WorkflowEngine.WorkflowInterpreter>();
+builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.WorkflowEngine.TaskCacheService>();
+builder.Services.AddSingleton<VOL.Builder.Services.CertPlatform.WorkflowEngine.WorkflowLogger>();
+builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.WorkflowEngine.WfExecutionTaskService>();
 
 // 新增Helper服务
             // 注册MinIO客户端

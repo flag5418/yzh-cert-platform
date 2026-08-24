@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.CertPlatform;
 
 namespace VOL.Entity.CertPlatform.Wf
 {
@@ -26,11 +27,11 @@ namespace VOL.Entity.CertPlatform.Wf
         [Column("enable")] public new bool Enable { get; set; } = true;
         [Column("remark")] public new string Remark { get; set; }
 
-        [Required][StringLength(100)][Column("skill_code")]
+        [Required][StringLength(100)][UniqueField("技能编码")][Column("skill_code")]
         public string SkillCode { get; set; }
 
         /// <summary>反射的地址（类型全名，ReflectionSkillLoader 按此加载）</summary>
-        [Required][StringLength(500)][Column("class_path")]
+        [Required][StringLength(500)][UniqueField("类路径", WithFields = new[] { "MethodName" })][Column("class_path")]
         public string ClassPath { get; set; }
 
         /// <summary>反射的方法（默认 ExecuteAsync）</summary>

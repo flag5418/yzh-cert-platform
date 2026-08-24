@@ -33,6 +33,7 @@ namespace VOL.Entity.CertPlatform.DocExtraction
         [Column("standard_file_code")]
         [Display(Name = "规则文件编码")]
         [MaxLength(200)]
+        [UniqueField("规则文件编码")]
         public string StandardFileCode { get; set; }
 
         /// <summary>

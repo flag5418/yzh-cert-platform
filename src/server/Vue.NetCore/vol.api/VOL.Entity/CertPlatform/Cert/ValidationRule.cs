@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.CertPlatform;
 
 namespace VOL.Entity.CertPlatform.Cert
 {
@@ -32,6 +33,7 @@ namespace VOL.Entity.CertPlatform.Cert
         public string WorkflowCode { get; set; }
 
         [Required, StringLength(50)]
+        [UniqueField("规则编码")]
         [Column("rule_code")]
         public string RuleCode { get; set; }
 

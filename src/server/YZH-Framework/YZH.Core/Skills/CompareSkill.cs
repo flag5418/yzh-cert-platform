@@ -53,6 +53,7 @@ namespace YZH.Core.Skills
                 };
                 return Task.FromResult(SkillResult.Ok(new Dictionary<string, object>
                 {
+                    ["result"] = result,
                     ["compare_result"] = result
                 }));
             }
@@ -73,6 +74,7 @@ namespace YZH.Core.Skills
                 };
                 return Task.FromResult(SkillResult.Ok(new Dictionary<string, object>
                 {
+                    ["result"] = result,
                     ["compare_result"] = result,
                     ["diff_days"] = diffDays
                 }));
@@ -87,6 +89,7 @@ namespace YZH.Core.Skills
             };
             return Task.FromResult(SkillResult.Ok(new Dictionary<string, object>
             {
+                ["result"] = strResult,
                 ["compare_result"] = strResult
             }));
         }

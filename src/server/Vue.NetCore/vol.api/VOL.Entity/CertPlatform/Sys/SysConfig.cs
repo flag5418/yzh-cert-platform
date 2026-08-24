@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.CertPlatform;
 using VOL.Entity.SystemModels;
 
 namespace VOL.Entity.CertPlatform.Sys
@@ -17,6 +18,7 @@ namespace VOL.Entity.CertPlatform.Sys
         [Column("id")]
         public long Id { get; set; }
 
+        [UniqueField("配置键")]
         [Column("config_key")]
         public string ConfigKey { get; set; }
 

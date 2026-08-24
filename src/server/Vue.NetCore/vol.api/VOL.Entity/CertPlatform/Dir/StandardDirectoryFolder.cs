@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.CertPlatform;
 // using System.ComponentModel.DataAnnotations.The;
 using VOL.Entity.SystemModels;
 
@@ -23,6 +24,7 @@ namespace VOL.Entity.CertPlatform.Dir
         public string Code { get; set; }
 
         [MaxLength(150)]
+        [UniqueField("文件夹编码")]
         [Column("FolderCode")]
         public string FolderCode { get; set; }
 

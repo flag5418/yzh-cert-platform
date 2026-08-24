@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.CertPlatform;
 
 namespace VOL.Entity.CertPlatform.Cert
 {
@@ -18,11 +19,13 @@ namespace VOL.Entity.CertPlatform.Cert
 
         /// <summary>关联 Sys_User.User_Id</summary>
         [Required]
+        [UniqueField("用户ID")]
         [Column("user_id")]
         public long UserId { get; set; }
 
         /// <summary>审核员资格证号</summary>
         [Required, StringLength(50)]
+        [UniqueField("审核员资格证号")]
         [Column("auditor_no")]
         public string AuditorNo { get; set; }
 

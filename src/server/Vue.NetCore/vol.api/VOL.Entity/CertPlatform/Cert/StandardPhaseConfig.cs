@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.CertPlatform;
 
 namespace VOL.Entity.CertPlatform.Cert
 {
@@ -12,6 +13,7 @@ namespace VOL.Entity.CertPlatform.Cert
     public class StandardPhaseConfig : YZHBaseEntity
     {
         [Required, StringLength(36)]
+        [UniqueField("标准编码", WithFields = new[] { "PhaseCode" })]
         [Column("standard_code")]
         public string StandardCode { get; set; }
 

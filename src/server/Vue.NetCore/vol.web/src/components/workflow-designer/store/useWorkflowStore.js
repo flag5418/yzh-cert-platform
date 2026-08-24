@@ -97,6 +97,7 @@ export function useWorkflowStore() {
       y,
       config: buildDefaultConfig(classCode),
       inputs: buildDefaultInputs(inputPorts),
+      inputTypes: {},
       outputs: {},
       inputPorts,
       outputPorts
@@ -138,6 +139,10 @@ export function useWorkflowStore() {
       for (const [port, val] of Object.entries(other.inputs)) {
         if (val === nodeId) {
           other.inputs[port] = ''
+          // 同时重置 inputType
+          if (other.inputTypes) {
+            delete other.inputTypes[port]
+          }
         }
       }
     }
@@ -256,6 +261,9 @@ export function useWorkflowStore() {
       const targetNode = state.nodes.find(n => n.id === target)
       if (targetNode) {
         targetNode.inputs[targetHandle] = source
+        // 同时设置 inputType 为 link
+        if (!targetNode.inputTypes) targetNode.inputTypes = {}
+        targetNode.inputTypes[targetHandle] = 'link'
       }
     }
 
@@ -279,6 +287,10 @@ export function useWorkflowStore() {
       const targetNode = state.nodes.find(n => n.id === edge.target)
       if (targetNode && targetNode.inputs[edge.targetHandle] === edge.source) {
         targetNode.inputs[edge.targetHandle] = ''
+        // 同时清理 inputType
+        if (targetNode.inputTypes) {
+          delete targetNode.inputTypes[edge.targetHandle]
+        }
       }
     }
 

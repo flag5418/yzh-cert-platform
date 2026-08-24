@@ -109,33 +109,70 @@ export const SPECIAL_NODES = [
     singleton: false,
     testable: true,
     renameable: true,
-    description: '调用 LLM 执行提示词，输出结果自动传递给下游节点（下游可通过 {{节点名称.content}} 引用）',
+    description: '调用大语言模型执行智能判断/分析，支持引用节点输出、调用 Skill 方法、常量输入，结果自动传递给下游',
     inputPorts: [
       {
         name: 'input',
         label: '输入数据',
         type: 'json',
-        description: '上游节点输出或手动输入，可在提示词中通过 {{input}} 引用',
+        description: '上游节点输出（可选），可在提示词中通过 {{参数名}} 引用',
         bindMode: 'LinkOrConstant',
         required: false
       }
     ],
-    // AI 节点不展示输出端口（引擎内部有 content/json/confidence）
+    // AI 节点不展示输出端口（引擎内部包装为 { success, error, result }）
     outputPorts: [],
     panelSchema: [
       {
-        field: 'config.prompt',
-        label: '提示词',
-        type: 'textarea',
+        field: 'config.promptTemplate',
+        label: '提示词模板',
+        type: 'promptWithRef',
         required: true,
-        description: '支持 {{n1.portName}} 引用上游节点输出，执行时自动渲染'
+        rows: 6,
+        description: '点击「+ 引用」插入画布节点输出，格式 {{节点名.端口}}'
       },
       {
-        field: 'config.jsonMode',
-        label: 'JSON 模式',
-        type: 'switch',
-        defaultValue: true,
-        description: '强制 LLM 输出 JSON 格式'
+        field: 'config.outputType',
+        label: '输出类型',
+        type: 'select',
+        required: true,
+        options: [
+          { label: '文本', value: 'string' },
+          { label: '数字', value: 'number' },
+          { label: '是/否', value: 'boolean' },
+          { label: '日期', value: 'date' },
+          { label: 'JSON', value: 'json' }
+        ],
+        defaultValue: 'string',
+        description: 'LLM 输出将自动转换为此类型'
+      }
+    ]
+  },
+
+  // ==================== 常量节点 ====================
+  {
+    classCode: 'constant',
+    className: '常量',
+    category: 'data',
+    color: '#909399',
+    icon: 'EditPen',
+    singleton: false,
+    testable: false,
+    renameable: true,
+    description: '定义一个常量值，供 AI 节点或其他节点通过 {{常量名.result}} 引用',
+    inputPorts: [],
+    outputPorts: [
+      { name: 'result', label: '值', type: 'string', description: '配置的常量值', display: 'visible' }
+    ],
+    panelSchema: [
+      {
+        field: 'config.value',
+        label: '常量值',
+        type: 'textarea',
+        required: true,
+        rows: 2,
+        defaultValue: '',
+        description: '输入常量内容（文本/数字/JSON 均可）'
       }
     ]
   },

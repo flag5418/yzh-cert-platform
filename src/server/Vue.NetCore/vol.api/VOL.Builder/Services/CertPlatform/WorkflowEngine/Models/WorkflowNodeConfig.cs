@@ -30,6 +30,15 @@ namespace VOL.Builder.Services.CertPlatform.WorkflowEngine.Models
         /// <summary>输入参数绑定（portName → 值，值格式见 V3 §2.4）</summary>
         public Dictionary<string, string> Inputs { get; set; } = new();
 
+        /// <summary>
+        /// 输入参数类型绑定（portName → "link" | "constant"）
+        /// <para>link: 值为上游节点 ID，从 sharedOutputs 读取</para>
+        /// <para>constant: 值为常量字符串，直接使用</para>
+        /// <para>如果该字段不存在或某端口未声明，则回退到旧逻辑（constant: 前缀 / 节点 ID 猜测）</para>
+        /// </summary>
+        [JsonPropertyName("inputTypes")]
+        public Dictionary<string, string> InputTypes { get; set; } = new();
+
         /// <summary>输入端口声明</summary>
         [JsonPropertyName("inputPorts")]
         public List<PortConfig> InputPorts { get; set; } = new();

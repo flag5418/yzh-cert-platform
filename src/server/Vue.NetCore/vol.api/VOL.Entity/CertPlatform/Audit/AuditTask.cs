@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using VOL.Entity;
+using VOL.Entity.CertPlatform;
 
 namespace VOL.Entity.CertPlatform.Audit
 {
@@ -23,6 +24,7 @@ namespace VOL.Entity.CertPlatform.Audit
         public string PhaseCode { get; set; }
 
         [Required, StringLength(50)]
+        [UniqueField("任务编号")]
         [Column("task_number")]
         public string TaskNumber { get; set; }
 

@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.CertPlatform;
 using VOL.Entity.SystemModels;
 
 namespace VOL.Entity.CertPlatform.Dir
@@ -33,6 +34,7 @@ namespace VOL.Entity.CertPlatform.Dir
         /// 文件编码（FL-{FolderCode}|{FileName}|{Type}）
         /// </summary>
         [MaxLength(150)]
+        [UniqueField("文件编码")]
         [Column("FileCode")]
         public string FileCode { get; set; }
 

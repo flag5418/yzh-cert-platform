@@ -70,6 +70,7 @@ export function deserialize(config, layoutJson = null) {
       y: pos.y ?? 0,
       config: n.config || {},
       inputs: n.inputs || {},
+      inputTypes: n.inputTypes || {},
       outputs: n.outputs || {},
       inputPorts,
       outputPorts
@@ -124,6 +125,7 @@ export function serialize(nodes, edges, meta = {}) {
     if (n.skillCode) node.skillCode = n.skillCode
     if (n.config && Object.keys(n.config).length > 0) node.config = n.config
     if (n.inputs && Object.keys(n.inputs).length > 0) node.inputs = n.inputs
+    if (n.inputTypes && Object.keys(n.inputTypes).length > 0) node.inputTypes = n.inputTypes
     if (n.outputs && Object.keys(n.outputs).length > 0) node.outputs = n.outputs
     // 端口声明进 JSON（供引擎和校验使用）
     if (n.inputPorts?.length) node.inputPorts = n.inputPorts

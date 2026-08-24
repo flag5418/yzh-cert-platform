@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.CertPlatform;
 using VOL.Entity.SystemModels;
 
 namespace VOL.Entity.CertPlatform.DocExtraction
@@ -15,6 +16,7 @@ namespace VOL.Entity.CertPlatform.DocExtraction
 
         [Column("call_id")]
         [MaxLength(64)]
+        [UniqueField("调用ID")]
         public string CallId { get; set; }
 
         [Column("business_type")]

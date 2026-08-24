@@ -41,8 +41,7 @@
 <ProjectReference Include="..\VOL.Entity\VOL.Entity.csproj" />
 <ProjectReference Include="..\VOL.MES\VOL.MES.csproj" />
 <ProjectReference Include="..\VOL.Sys\VOL.Sys.csproj" />
-<!-- YZH Framework：配置驱动 UI 服务 -->
-<ProjectReference Include="..\..\..\YZH-Framework\YZH.CertPlatform\YZH.CertPlatform.csproj" />
+<!-- YZH.Core 已通过 VOL.Builder 传递引用，无需单独引用 -->
 </ItemGroup>
 
   <ItemGroup>

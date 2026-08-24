@@ -97,6 +97,9 @@
             <el-button size="small" @click="autoLayout"><el-icon><IconGrid /></el-icon> 自动布局</el-button>
             <el-button size="small" type="danger" plain @click="handleClearCanvas"><el-icon><IconDelete /></el-icon> 清空画布</el-button>
             <el-button size="small" @click="validateGraph"><el-icon><IconCircleCheck /></el-icon> 校验</el-button>
+            <el-button type="success" size="small" :loading="executing" :disabled="!currentRule" @click="handleExecuteTest">
+              <el-icon><IconPlay /></el-icon> 执行验证
+            </el-button>
             <el-button type="primary" size="small" :disabled="!currentRule || !store.state.dirty" @click="handleSave">
               <el-icon><IconDownload /></el-icon> 保存工作流
             </el-button>
@@ -113,6 +116,8 @@
           <span v-if="currentRule" class="rule-code-text">{{ currentRule.ruleCode }}</span>
           <span v-if="savedTip" class="saved-text">✓ {{ savedTip }}</span>
         </div>
+        <!-- 执行结果面板 -->
+        <ExecutionResultPanel v-if="executionResult" :result="executionResult" @close="executionResult = null" />
       </div>
 
       <!-- ===== 右栏：节点库 + 属性面板 ===== -->
@@ -134,6 +139,7 @@
             @load-doc-fields="onNodeDocChange"
             @link-node="handleLinkNode"
             @test-node="handleTestNode"
+            @test-workflow="handleTestWorkflow"
             @test-doc-extract="handleTestDocExtract"
           />
         </div>
@@ -151,10 +157,11 @@ import { CertPageHeader } from '@/certcore'
 import {
   IconSetting, IconRefresh, IconGrid, IconCircleCheck, IconDownload,
   IconForward, IconSearch, IconFile, IconCalendar, IconOfficeBuilding,
-  IconDocument, IconLoading, IconDelete
+  IconDocument, IconLoading, IconDelete, IconPlay
 } from '@/yzh/icons'
 import SkillPanel from '@/components/workflow-designer/SkillPanel.vue'
 import NodePropertyForm from '@/components/workflow-designer/NodePropertyForm.vue'
+import ExecutionResultPanel from '@/components/workflow-designer/ExecutionResultPanel.vue'
 import { nodeStyle } from '@/components/workflow-designer/compiler'
 import { useWorkflowStore } from '@/components/workflow-designer/store/useWorkflowStore.js'
 import { deserialize, serialize, extractLayout } from '@/components/workflow-designer/model/serializer.js'
@@ -168,6 +175,7 @@ setLogLevel('INFO')
 const { proxy } = getCurrentInstance()
 const canvasRef = ref(null)
 const diagram = ref(null)
+let _resizeObserver = null
 
 // ===== 操作层 store（唯一变更入口） =====
 const store = useWorkflowStore()
@@ -194,6 +202,10 @@ const currentDocTables = ref([])
 // 保存提示
 const savedTip = ref('')
 
+// 执行验证
+const executing = ref(false)
+const executionResult = ref(null)
+
 // 选中的边（供键盘删除）
 const selectedEdgeId = ref(null)
 
@@ -201,6 +213,8 @@ const selectedEdgeId = ref(null)
 
 onMounted(async () => {
   await Promise.all([loadSkills(), loadCategories(), loadTree(), loadDocRules()])
+  // 等待 DOM 完全渲染后再初始化 LogicFlow（确保容器有尺寸，避免 resize 错误）
+  await nextTick()
   initDiagram()
 })
 
@@ -210,6 +224,11 @@ onActivated(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeyDown)
+  // 断开 ResizeObserver
+  if (_resizeObserver) {
+    _resizeObserver.disconnect()
+    _resizeObserver = null
+  }
   if (diagram.value) {
     diagram.value.clearData?.()
     diagram.value = null
@@ -378,6 +397,24 @@ function initDiagram() {
     const props = data.properties || {}
     // 始终从 store 读取 title（确保改名后显示最新值）
     const storeNode = store.getNodeById(data.id)
+
+    // 根据画布连线实时计算 inputs（解决连线后未选中节点 inputs 不更新问题）
+    const { inputs: syncedInputs, inputTypes: syncedInputTypes } = computeNodeInputsFromEdges(
+      data.id,
+      storeNode?.inputs || props.inputs || {},
+      storeNode?.inputTypes || props.inputTypes || {}
+    )
+
+    // 如果计算结果与 store 不同，更新 store
+    if (JSON.stringify(syncedInputs) !== JSON.stringify(storeNode?.inputs || {}) ||
+        JSON.stringify(syncedInputTypes) !== JSON.stringify(storeNode?.inputTypes || {})) {
+      store.setInputValue(data.id, null, null)
+      if (storeNode) {
+        storeNode.inputs = syncedInputs
+        storeNode.inputTypes = syncedInputTypes
+      }
+    }
+
     const nodeData = {
       nodeId: data.id,
       nodeType: props.nodeType || 'skill',
@@ -385,7 +422,8 @@ function initDiagram() {
       title: storeNode?.title || props.title || data.text || '',
       skillCode: props.skillCode || '',
       config: storeNode?.config || props.config || {},
-      inputs: storeNode?.inputs || props.inputs || {},
+      inputs: syncedInputs,
+      inputTypes: syncedInputTypes,
       outputs: storeNode?.outputs || props.outputs || {},
       inputPorts: storeNode?.inputPorts || props.inputPorts || [],
       outputPorts: storeNode?.outputPorts || props.outputPorts || []
@@ -434,6 +472,18 @@ function initDiagram() {
 
   // 键盘事件：Delete 删除选中的边或节点
   document.addEventListener('keydown', handleKeyDown)
+
+  // ResizeObserver：监听容器尺寸变化时通知 LogicFlow resize
+  // 解决初始化时容器尺寸为 0 导致的「无法获取画布宽高」错误
+  _resizeObserver = new ResizeObserver(() => {
+    if (diagram.value && canvasRef.value) {
+      const { clientWidth, clientHeight } = canvasRef.value
+      if (clientWidth > 0 && clientHeight > 0) {
+        diagram.value.resize(clientWidth, clientHeight)
+      }
+    }
+  })
+  _resizeObserver.observe(canvasRef.value)
 }
 
 function handleKeyDown(e) {
@@ -454,15 +504,21 @@ function handleKeyDown(e) {
   }
 }
 
-/** 边变化后同步 selectedNode 的 inputs */
-function syncSelectedNodeInputs() {
-  if (!selectedNode.value || !diagram.value) return
+/**
+ * 根据画布连线计算指定节点的 inputs/inputTypes
+ * @param {string} nodeId - 目标节点 ID
+ * @param {Object} [currentInputs] - 当前 inputs（用于保留常量值）
+ * @param {Object} [currentInputTypes] - 当前 inputTypes
+ * @returns {{ inputs: Object, inputTypes: Object }} 计算后的 inputs 和 inputTypes
+ */
+function computeNodeInputsFromEdges(nodeId, currentInputs = {}, currentInputTypes = {}) {
+  if (!diagram.value) return { inputs: currentInputs, inputTypes: currentInputTypes }
   const gd = diagram.value.getGraphData()
-  const nodeId = selectedNode.value.nodeId
   const inEdges = (gd.edges || []).filter(e => e.targetNodeId === nodeId)
   const nodeProps = gd.nodes.find(n => n.id === nodeId)?.properties || {}
-  const inputPorts = nodeProps.inputPorts || selectedNode.value.inputPorts || []
+  const inputPorts = nodeProps.inputPorts || []
   const newInputs = {}
+  const newTypes = {}
 
   for (const port of inputPorts) {
     if (port.bindMode !== 'Link' && port.bindMode !== 'LinkOrConstant') continue
@@ -471,33 +527,53 @@ function syncSelectedNodeInputs() {
       return !handle || handle === port.name
     })
     if (edge) {
-      const existing = selectedNode.value.inputs?.[port.name]
-      if (existing && !gd.nodes.find(n => n.id === existing)) {
-        continue // 当前值是常量，不覆盖
+      // 如果当前值是常量类型，不覆盖（保留用户手动输入的常量）
+      if (currentInputTypes[port.name] === 'constant' && currentInputs[port.name]) {
+        continue
       }
       newInputs[port.name] = edge.sourceNodeId
+      newTypes[port.name] = 'link'
     }
   }
 
-  const merged = { ...selectedNode.value.inputs, ...newInputs }
+  const merged = { ...currentInputs, ...newInputs }
+  const mergedTypes = { ...currentInputTypes, ...newTypes }
   // 删除已断开的节点引用
   for (const port of inputPorts) {
     if (port.bindMode !== 'Link' && port.bindMode !== 'LinkOrConstant') continue
     const val = merged[port.name]
-    if (val && gd.nodes.find(n => n.id === val)) {
+    if (val && gd.nodes.some(n => n.id === val)) {
       const stillConnected = inEdges.some(e => e.sourceNodeId === val)
-      if (!stillConnected) delete merged[port.name]
+      if (!stillConnected) {
+        delete merged[port.name]
+        delete mergedTypes[port.name]
+      }
     }
   }
 
-  if (JSON.stringify(merged) !== JSON.stringify(selectedNode.value.inputs)) {
-    diagram.value.setProperties(nodeId, { inputs: merged })
-    selectedNode.value = { ...selectedNode.value, inputs: merged }
+  return { inputs: merged, inputTypes: mergedTypes }
+}
+
+/** 边变化后同步 selectedNode 的 inputs */
+function syncSelectedNodeInputs() {
+  if (!selectedNode.value || !diagram.value) return
+  const nodeId = selectedNode.value.nodeId
+  const { inputs: merged, inputTypes: mergedTypes } = computeNodeInputsFromEdges(
+    nodeId,
+    selectedNode.value.inputs || {},
+    selectedNode.value.inputTypes || {}
+  )
+
+  if (JSON.stringify(merged) !== JSON.stringify(selectedNode.value.inputs) ||
+      JSON.stringify(mergedTypes) !== JSON.stringify(selectedNode.value.inputTypes || {})) {
+    diagram.value.setProperties(nodeId, { inputs: merged, inputTypes: mergedTypes })
+    selectedNode.value = { ...selectedNode.value, inputs: merged, inputTypes: mergedTypes }
     // 同步 store
     store.setInputValue(nodeId, null, null) // 标记脏
     const storeNode = store.getNodeById(nodeId)
     if (storeNode) {
       storeNode.inputs = merged
+      storeNode.inputTypes = mergedTypes
     }
   }
 }
@@ -598,6 +674,7 @@ function onCanvasDrop(event) {
       skillCode: node.skillCode,
       config: node.config,
       inputs: node.inputs,
+      inputTypes: node.inputTypes,
       outputs: node.outputs,
       inputPorts: node.inputPorts,
       outputPorts: node.outputPorts
@@ -641,6 +718,7 @@ function handleAddNode(item) {
     skillCode: node.skillCode,
     config: node.config,
     inputs: node.inputs,
+    inputTypes: node.inputTypes,
     outputs: node.outputs,
     inputPorts: node.inputPorts,
     outputPorts: node.outputPorts
@@ -671,6 +749,7 @@ function handleUpdateNode(data) {
     skillCode: data.skillCode,
     config: data.config,
     inputs: data.inputs,
+    inputTypes: data.inputTypes,
     inputPorts: data.inputPorts,
     outputPorts: data.outputPorts
   })
@@ -688,6 +767,7 @@ function handleUpdateNode(data) {
     skillCode: data.skillCode,
     config: data.config,
     inputs: data.inputs,
+    inputTypes: data.inputTypes,
     inputPorts: data.inputPorts,
     outputPorts: data.outputPorts
   })
@@ -715,6 +795,7 @@ function handleUpdateNode(data) {
         skillCode: sn.skillCode,
         config: { ...sn.config },
         inputs: { ...sn.inputs },
+        inputTypes: { ...(sn.inputTypes || {}) },
         outputs: { ...sn.outputs },
         inputPorts: sn.inputPorts || [],
         outputPorts: sn.outputPorts || [],
@@ -780,6 +861,7 @@ function promptEditNodeName(nodeId, currentName) {
           skillCode: storeNode.skillCode,
           config: { ...storeNode.config },
           inputs: { ...storeNode.inputs },
+          inputTypes: { ...(storeNode.inputTypes || {}) },
           outputs: { ...storeNode.outputs },
           inputPorts: storeNode.inputPorts || [],
           outputPorts: storeNode.outputPorts || [],
@@ -844,6 +926,28 @@ function handleLinkNode({ portName, sourceNodeId, targetNodeId, sourceHandle }) 
 
   if (!targetNodeId) return
 
+  // sourceNodeId 为 null → 断开连线模式（从面板切换类型时触发）
+  if (!sourceNodeId) {
+    // 删除 target 端口上已有的入边
+    const toDelete = (gd.edges || []).filter(e =>
+      e.targetNodeId === targetNodeId &&
+      (e.properties?.targetHandle === portName || (!e.properties?.targetHandle && !portName))
+    )
+    for (const existing of toDelete) {
+      diagram.value.deleteEdge(existing.id)
+    }
+    // 同步 store
+    const storeNode = store.getNodeById(targetNodeId)
+    if (storeNode && storeNode.inputs) {
+      delete storeNode.inputs[portName]
+    }
+    if (storeNode && storeNode.inputTypes) {
+      delete storeNode.inputTypes[portName]
+    }
+    onEdgeChange()
+    return
+  }
+
   // 普通连线模式
   const edge = store.connect(sourceNodeId, targetNodeId, null, portName)
   if (!edge) return
@@ -878,10 +982,225 @@ function handleLinkNode({ portName, sourceNodeId, targetNodeId, sourceHandle }) 
   })
 }
 
+// ==================== 执行验证（调用后端工作流引擎） ====================
+
+async function handleExecuteTest() {
+  if (!currentRule.value) { ElMessage.warning('请先选择 NC 检查项'); return }
+  if (!store.state.nodes.length) { ElMessage.warning('画布为空，请添加节点'); return }
+
+  // 先执行前端拓扑校验（与「校验」按钮一致的完整校验）
+  const config = serialize(store.state.nodes, store.state.edges, {
+    version: 1,
+    workflowType: 'validation'
+  })
+
+  console.group('[NCConfig] 执行验证 - 前端拓扑校验')
+  const analysis = analyzeWorkflowTopology(config)
+  console.groupEnd()
+
+  if (!analysis.validation.valid) {
+    // 拓扑校验不通过 → 显示所有错误，不调后端
+    const errorMessages = analysis.validation.errors.map(e => `  ✗ ${e.message}`).join('\n')
+    const warnMessages = analysis.validation.warnings.length > 0
+      ? '\n\n' + analysis.validation.warnings.map(w => `  ⚠ ${w.message}`).join('\n')
+      : ''
+    ElMessageBox.alert(
+      `拓扑校验失败，请先修复以下问题后再执行验证：\n\n${errorMessages}${warnMessages}`,
+      '执行验证 - 拓扑校验失败',
+      { type: 'error', confirmButtonText: '确定' }
+    )
+    return
+  }
+
+  executing.value = true
+  executionResult.value = null
+
+  try {
+    const res = await proxy.http.post('api/workflow/test/run', {
+      taskType: 'TEST',
+      ruleCode: currentRule.value.ruleCode,
+      enterpriseCode: currentRule.value.enterpriseCode || 'YZH-STD-ENT',
+      standardCode: currentRule.value.standardCode || currentFilter.standardCode,
+      phaseCode: currentRule.value.phaseCode || currentFilter.phaseCode,
+      configJson: JSON.stringify(config)
+    }, false)
+
+    if (res?.success !== false && res?.data) {
+      executionResult.value = res.data
+      if (res.data.status === 'completed' && res.data.isSuccess) {
+        ElMessage.success(`执行完成：${res.data.status} (${res.data.durationMs}ms)`)
+      } else {
+        // 后端执行失败 → 显示后端返回的错误信息
+        const errorMsg = res.data.ncResult?.error || res.data.status || '执行失败'
+        ElMessageBox.alert(
+          `工作流执行失败：\n\n${errorMsg}`,
+          '执行验证 - 执行失败',
+          { type: 'error', confirmButtonText: '确定' }
+        )
+      }
+    } else {
+      // 后端返回 success=false → 显示后端错误
+      const errorMsg = res?.error || res?.message || '执行失败'
+      ElMessageBox.alert(
+        `工作流执行失败：\n\n${errorMsg}`,
+        '执行验证 - 执行失败',
+        { type: 'error', confirmButtonText: '确定' }
+      )
+    }
+  } catch (e) {
+    console.error('[NCConfig] 执行验证失败:', e)
+    ElMessage.error('执行验证失败: ' + (e.message || e))
+  } finally {
+    executing.value = false
+  }
+}
+
 // ==================== 节点测试 ====================
 
-function handleTestNode(nodeData) {
-  ElMessage.info(`节点「${nodeData.title}」测试功能开发中...`)
+async function handleTestNode(nodeData) {
+  try {
+    // AI 节点走专用测试接口
+    if (nodeData.nodeType === 'ai_node') {
+      await handleTestAiNode(nodeData)
+      return
+    }
+
+    const res = await proxy.http.post('api/workflow/test/node', {
+      nodeId: nodeData.nodeId,
+      nodeType: nodeData.nodeType,
+      title: nodeData.title,
+      skillCode: nodeData.skillCode,
+      config: nodeData.config,
+      inputs: nodeData.inputs,
+      inputTypes: nodeData.inputTypes,
+      inputPorts: nodeData.inputPorts,
+      outputPorts: nodeData.outputPorts
+    }, false)
+
+    if (res?.success && res.data) {
+      nodeData.onSuccess(res.data)
+    } else {
+      nodeData.onError(res?.error || '测试失败', null)
+    }
+  } catch (e) {
+    console.error('[NCConfig] 节点测试失败:', e)
+    nodeData.onError('请求失败: ' + (e.message || e), null)
+  }
+}
+
+/** AI 节点测试 — 需要完整工作流上下文 */
+async function handleTestAiNode(nodeData) {
+  try {
+    // 收集上游节点的输出作为 mockOutputs
+    const mockOutputs = {}
+    const nodes = store.state.nodes
+    const edges = store.state.edges
+    const customParams = nodeData.config?.customParams || []
+
+    // 解析 customParams JSON 如果是字符串
+    let parsedCustomParams = customParams
+    if (typeof customParams === 'string') {
+      try {
+        parsedCustomParams = JSON.parse(customParams)
+      } catch { parsedCustomParams = [] }
+    }
+
+    // 为每个 link 类型的参数，从连线中找到对应的上游节点
+    for (const param of parsedCustomParams) {
+      if (param?.sourceType === 'link' && param?.sourceConfig?.nodeId) {
+        const sourceNodeId = param.sourceConfig.nodeId
+        // 从 store 中找到该节点的输出信息
+        const sourceNode = nodes.find(n => n.id === sourceNodeId || n.nodeId === sourceNodeId)
+        if (sourceNode) {
+          // 使用节点ID作为 key，输出 result 默认值
+          mockOutputs[sourceNodeId] = {
+            result: `[${sourceNode.title || sourceNodeId} 的测试输出]`,
+            success: true
+          }
+        }
+      }
+    }
+
+    // 序列化当前工作流作为 ruleJson
+    let ruleJson = ''
+    try {
+      const serialized = serialize(nodes, edges, { version: 1, workflowType: 'validation' })
+      ruleJson = JSON.stringify(serialized)
+    } catch { ruleJson = '' }
+
+    const testBody = {
+      nodeId: nodeData.nodeId,
+      nodeType: 'ai_node',
+      title: nodeData.title,
+      config: {
+        ...(nodeData.config || {}),
+        customParams: JSON.stringify(parsedCustomParams)
+      },
+      inputs: nodeData.inputs || {},
+      inputTypes: nodeData.inputTypes || {},
+      inputPorts: nodeData.inputPorts || [],
+      outputPorts: nodeData.outputPorts || [],
+      workflowContext: {
+        ruleJson,
+        contextParams: currentRule.value ? {
+          enterpriseCode: currentRule.value.enterpriseCode || 'YZH-STD-ENT',
+          standardCode: currentRule.value.standardCode,
+          phaseCode: currentRule.value.phaseCode
+        } : {},
+        mockOutputs
+      }
+    }
+
+    const res = await proxy.http.post('api/workflow/test/ai-node', testBody, false)
+
+    if (res?.success && res.data) {
+      nodeData.onSuccess(res.data)
+    } else {
+      nodeData.onError(res?.error || 'AI 节点测试失败', null)
+    }
+  } catch (e) {
+    console.error('[NCConfig] AI 节点测试失败:', e)
+    nodeData.onError('请求失败: ' + (e.message || e), null)
+  }
+}
+
+/** 结束节点测试 — 执行整条工作流 */
+async function handleTestWorkflow(nodeData) {
+  if (!currentRule.value) {
+    nodeData.onError('请先选择 NC 检查项', null)
+    return
+  }
+  if (!store.state.nodes.length) {
+    nodeData.onError('画布为空，请添加节点', null)
+    return
+  }
+
+  try {
+    // 序列化当前画布为工作流配置
+    const config = serialize(store.state.nodes, store.state.edges, {
+      version: 1,
+      workflowType: 'validation'
+    })
+
+    const res = await proxy.http.post('api/workflow/test/run', {
+      taskType: 'TEST',
+      ruleCode: currentRule.value.ruleCode,
+      enterpriseCode: currentRule.value.enterpriseCode || 'YZH-STD-ENT',
+      standardCode: currentRule.value.standardCode || currentFilter.standardCode,
+      phaseCode: currentRule.value.phaseCode || currentFilter.phaseCode,
+      configJson: JSON.stringify(config)
+    }, false)
+
+    if (res?.success && res.data) {
+      nodeData.onSuccess(res.data)
+    } else {
+      const errorMsg = res?.error || res?.message || '测试失败'
+      nodeData.onError(errorMsg, null)
+    }
+  } catch (e) {
+    console.error('[NCConfig] 流程测试失败:', e)
+    nodeData.onError('请求失败: ' + (e.message || e), null)
+  }
 }
 
 /** docField/docTable 测试提取 */
@@ -913,6 +1232,7 @@ function handleClearCanvas() {
     .then(() => {
       clearCanvas()
       selectedNode.value = null
+      ensureStartNode()
       ElMessage.success('画布已清空')
     })
     .catch(() => {})
@@ -995,6 +1315,7 @@ function renderWorkflow(ruleJson, layoutJson) {
         skillCode: n.skillCode,
         config: n.config,
         inputs: n.inputs,
+        inputTypes: n.inputTypes || {},
         outputs: n.outputs,
         inputPorts: n.inputPorts,
         outputPorts: n.outputPorts
@@ -1161,6 +1482,8 @@ function validateGraph() {
   )
   return true
 }
+
+// ==================== 保存工作流（到 NC 检查项） ====================
 
 async function handleSave() {
   if (!currentRule.value) { ElMessage.warning('请先选择 NC 检查项'); return }

@@ -10,6 +10,8 @@
  * - 前端新增时生成 Code（CB + 年月日时分 + 3位随机数）
  * - 编辑时通过 Code 定位真实实体，修正 Id 后交由框架处理
  * - 彻底解决 EF Core "expected 1 row but affected 0" 并发异常
+ *
+ * 唯一性校验：通过 [UniqueField] 特性 + 通用扩展方法，无需硬编码
  */
 
 using System;
@@ -18,6 +20,7 @@ using VOL.Core.BaseProvider;
 using VOL.Core.Extensions.AutofacManager;
 using VOL.Entity.CertPlatform.Cert;
 using VOL.Builder.IRepositories.CertPlatform;
+using VOL.Builder.Extensions;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
@@ -40,7 +43,7 @@ namespace VOL.Builder.Services.CertPlatform
         }
 
         /// <summary>
-        /// 重写 Update 方法：用 Code（业务主键）定位真实实体，修正 Id
+        /// 重写 Update 方法：用 Code（业务主键）定位真实实体，修正 Id + 通用唯一性校验
         /// 
         /// 问题根因：
         ///   EF Core 生成 UPDATE ... WHERE Id = @p0
@@ -51,46 +54,99 @@ namespace VOL.Builder.Services.CertPlatform
         ///   2. 用 Code 查数据库获取真实 Id
         ///   3. 将真实 Id 写入实体，再调 base.Update()
         ///   4. EF Core 就能正确定位到行了
+        ///   
+        /// 唯一性校验：
+        ///   通过实体上的 [UniqueField] 特性自动校验，无需在此手写
         /// </summary>
         public override WebResponseContent Update(SaveModel saveDataModel)
         {
+            if (saveDataModel?.MainData == null)
+                return new WebResponseContent().Error("提交数据为空");
+
+            var mainData = saveDataModel.MainData;
+
             // ====== 关键：用 Code 修正 Id ======
-            if (saveDataModel?.MainData != null && saveDataModel.MainData.ContainsKey("Code"))
+            long currentId = 0;
+            if (mainData.ContainsKey("Code"))
             {
-                string code = saveDataModel.MainData["Code"]?.ToString();
+                string code = mainData["Code"]?.ToString();
                 if (!string.IsNullOrEmpty(code))
                 {
                     var dbEntity = _repository.FindFirst(x => x.Code == code);
                     if (dbEntity != null)
                     {
+                        currentId = dbEntity.Id;
                         // 将数据库真实 Id 写回前端传来的数据中
-                        // 后续 base.Update() 内部 DicToEntity 时会用到这个 Id
-                        saveDataModel.MainData["Id"] = dbEntity.Id;
+                        mainData["Id"] = dbEntity.Id;
                     }
                 }
             }
 
-            // 调用基类 Update，后续流程完全不变
-            return base.Update(saveDataModel);
+            // ====== 通用唯一性校验（基于 [UniqueField] 特性，反射自动检查） ======
+            var uniqueResult = _repository.ValidateUniqueFieldsFromDict<CertificationBody>(
+                mainData, isAdd: false, excludeId: currentId);
+            if (!uniqueResult.Status)
+                return uniqueResult;
+
+            // ====== 调用基类 Update，try-catch 兜底并发冲突 ======
+            try
+            {
+                return base.Update(saveDataModel);
+            }
+            catch (DbUpdateException ex)
+            {
+                string innerMsg = ex.InnerException?.Message ?? ex.Message;
+                return new WebResponseContent().Error($"保存失败：{innerMsg}");
+            }
+            catch (Exception ex)
+            {
+                string innerMsg = ex.InnerException?.Message ?? ex.Message;
+                return new WebResponseContent().Error($"保存失败：{innerMsg}");
+            }
         }
 
         /// <summary>
-        /// 重写 Add 方法：确保 Code 有值（兜底前端未生成的情况）
+        /// 重写 Add 方法：确保 Code 有值 + 通用唯一性校验
+        /// 
+        /// 唯一性校验通过实体上的 [UniqueField] 特性自动完成，无需在此手写。
+        /// try-catch 兜底处理并发场景下的 DB 唯一键冲突。
         /// </summary>
         public override WebResponseContent Add(SaveModel saveDataModel)
         {
-            // 如果前端没传 Code，自动生成一个
-            if (saveDataModel?.MainData != null)
+            if (saveDataModel?.MainData == null)
+                return new WebResponseContent().Error("提交数据为空");
+
+            var mainData = saveDataModel.MainData;
+
+            // ====== 如果前端没传 Code，自动生成一个 ======
+            if (!mainData.ContainsKey("Code") ||
+                string.IsNullOrEmpty(mainData["Code"]?.ToString()))
             {
-                if (!saveDataModel.MainData.ContainsKey("Code") ||
-                    string.IsNullOrEmpty(saveDataModel.MainData["Code"]?.ToString()))
-                {
-                    saveDataModel.MainData["Code"] =
-                        $"CB{DateTime.Now:yyyyMMddHHmmss}{new Random().Next(100, 999)}";
-                }
+                mainData["Code"] =
+                    $"CB{DateTime.Now:yyyyMMddHHmmss}{new Random().Next(100, 999)}";
             }
 
-            return base.Add(saveDataModel);
+            // ====== 通用唯一性校验（基于 [UniqueField] 特性，反射自动检查） ======
+            var uniqueResult = _repository.ValidateUniqueFieldsFromDict<CertificationBody>(
+                mainData, isAdd: true);
+            if (!uniqueResult.Status)
+                return uniqueResult;
+
+            // ====== 调用基类 Add，try-catch 兜底处理并发导致的 DB 唯一键冲突 ======
+            try
+            {
+                return base.Add(saveDataModel);
+            }
+            catch (DbUpdateException ex)
+            {
+                string innerMsg = ex.InnerException?.Message ?? ex.Message;
+                return new WebResponseContent().Error($"保存失败：{innerMsg}");
+            }
+            catch (Exception ex)
+            {
+                string innerMsg = ex.InnerException?.Message ?? ex.Message;
+                return new WebResponseContent().Error($"保存失败：{innerMsg}");
+            }
         }
 
         /// <summary>

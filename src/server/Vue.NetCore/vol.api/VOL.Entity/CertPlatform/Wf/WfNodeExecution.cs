@@ -17,6 +17,7 @@ namespace VOL.Entity.CertPlatform.Wf
         /// <summary>wf_execution_task.code</summary>
         [Required]
         [MaxLength(36)]
+        [UniqueField("任务编码", WithFields = new[] { "ItemCode", "NodeId" })]
         [Column("task_code")]
         public string TaskCode { get; set; }
 

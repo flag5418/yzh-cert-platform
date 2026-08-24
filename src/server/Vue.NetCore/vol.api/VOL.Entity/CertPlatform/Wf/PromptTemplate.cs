@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.CertPlatform;
 
 namespace VOL.Entity.CertPlatform.Wf
 {
@@ -25,7 +26,7 @@ namespace VOL.Entity.CertPlatform.Wf
         [Column("sort")]        public new int Sort { get; set; }
         [Column("remark")]      public new string Remark { get; set; }
 
-        [Required][StringLength(100)][Column("prompt_code")]
+        [Required][StringLength(100)][UniqueField("Prompt编码")][Column("prompt_code")]
         public string PromptCode { get; set; }
 
         [Required][StringLength(200)][Column("prompt_name")]

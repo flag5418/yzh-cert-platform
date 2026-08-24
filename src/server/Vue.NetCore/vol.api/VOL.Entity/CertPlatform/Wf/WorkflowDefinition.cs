@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.CertPlatform;
 
 namespace VOL.Entity.CertPlatform.Wf
 {
@@ -11,8 +12,7 @@ namespace VOL.Entity.CertPlatform.Wf
     [Table("wf_workflow_definition")]
     public class WorkflowDefinition : YZHBaseEntity
     {
-        [Required][StringLength(100)]
-        [Column("workflow_code")]
+        [Required][StringLength(100)][UniqueField("工作流编码")][Column("workflow_code")]
         public string WorkflowCode { get; set; }
 
         [Required][StringLength(200)]

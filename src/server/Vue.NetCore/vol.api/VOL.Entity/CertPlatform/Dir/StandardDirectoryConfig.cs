@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.CertPlatform;
 using VOL.Entity.SystemModels;
 
 namespace VOL.Entity.CertPlatform.Dir
@@ -33,6 +34,7 @@ namespace VOL.Entity.CertPlatform.Dir
         /// 目录编码（SDC-{标准}|{阶段}）
         /// </summary>
         [MaxLength(100)]
+        [UniqueField("目录编码")]
         [Column("DirectoryCode")]
         public string DirectoryCode { get; set; }
 
@@ -44,6 +46,7 @@ namespace VOL.Entity.CertPlatform.Dir
         /// 标准编码
         /// </summary>
         [MaxLength(50)]
+        [UniqueField("标准编码", WithFields = new[] { "PhaseCode" })]
         [Column("StandardCode")]
         public string StandardCode { get; set; }
 

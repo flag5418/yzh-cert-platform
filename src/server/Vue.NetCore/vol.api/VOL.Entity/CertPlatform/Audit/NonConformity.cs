@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.CertPlatform;
 
 namespace VOL.Entity.CertPlatform.Audit
 {
@@ -26,6 +27,7 @@ namespace VOL.Entity.CertPlatform.Audit
         public string ClauseCode { get; set; }
 
         [Required, StringLength(50)]
+        [UniqueField("不符合项编号")]
         [Column("nc_number")]
         public string NcNumber { get; set; }
 

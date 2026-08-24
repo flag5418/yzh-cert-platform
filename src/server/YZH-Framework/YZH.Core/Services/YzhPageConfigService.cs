@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using VOL.Core.EFDbContext;
 using VOL.Entity.CertPlatform.Sys;
 
-namespace YZH.CertPlatform.Services
+namespace YZH.Core.Services
 {
     /// <summary>
     /// YZH V3.0 页面 UI 配置服务实现

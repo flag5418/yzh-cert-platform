@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.CertPlatform;
 
 namespace VOL.Entity.CertPlatform.Rpt
 {
@@ -22,6 +23,7 @@ namespace VOL.Entity.CertPlatform.Rpt
         public string ReportTaskCode { get; set; }
 
         [Required, StringLength(50)]
+        [UniqueField("报告编号")]
         [Column("report_number")]
         public string ReportNumber { get; set; }
 

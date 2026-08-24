@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using VOL.Entity;
+using VOL.Entity.CertPlatform;
 using VOL.Entity.SystemModels;
 
 namespace VOL.Entity.CertPlatform.Sys
@@ -21,6 +22,7 @@ namespace VOL.Entity.CertPlatform.Sys
 
         [Required]
         [StringLength(50)]
+        [UniqueField("页面标识", WithFields = new[] { "FieldName", "OrgCode" })]
         [Column("page_key")]
         public string PageKey { get; set; }
 

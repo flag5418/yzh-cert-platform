@@ -9,6 +9,7 @@
 import {
   ArrowLeft,
   ArrowRight,
+  Link,
   Menu,
   Close,
   Plus,
@@ -46,7 +47,7 @@ import {
    TrendCharts,
    VideoPlay,
    Checked,
- } from '@element-plus/icons-vue'
+} from '@element-plus/icons-vue'
 
 /** 统一图标表（对象形式，支持 :is 动态绑定） */
 export const YzhIcon = {
@@ -100,6 +101,7 @@ export const YzhIcon = {
 /* ===== 语义常量（模板中直接使用，如 <el-icon><IconBack /></el-icon>） ===== */
 export const IconBack = ArrowLeft
 export const IconForward = ArrowRight
+export const IconLink = Link
 export const IconMenu = Menu
 export const IconClose = Close
 export const IconAdd = Plus

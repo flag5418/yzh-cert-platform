@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using VOL.Entity.CertPlatform;
 
 namespace VOL.Entity.CertPlatform.Ent
 {
@@ -38,6 +39,7 @@ namespace VOL.Entity.CertPlatform.Ent
         public string PhaseCode { get; set; }
 
         [Required, StringLength(200)]
+        [UniqueField("文件编码", WithFields = new[] { "EnterpriseCode", "FieldCode" })]
         [Column("file_code")]
         public string FileCode { get; set; }
 

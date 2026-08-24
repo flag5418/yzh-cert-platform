@@ -1,9 +1,9 @@
 <template>
   <div class="node-property-form">
     <div v-if="selectedNode" class="node-form">
-      <!-- ===== 标题栏：类型标签 + 名称 + 帮助 ===== -->
+      <!-- ===== 标题栏：类型 + 别名 + 帮助 ===== -->
       <div class="form-title">
-        <el-tag :type="nodeTypeTag" size="small">{{ nodeTypeName }}</el-tag>
+        <el-tag :type="nodeTypeTag || 'info'" size="small">{{ nodeTypeName }}</el-tag>
         <span class="node-title-display">{{ props.selectedNode?.title || form.title }}</span>
         <el-tooltip v-if="nodeDescription" :content="nodeDescription" placement="left">
           <el-icon class="help-icon"><IconWarning /></el-icon>
@@ -11,16 +11,6 @@
       </div>
 
       <el-form label-width="80px" size="small">
-        <!-- ===== 功能节点：Skill 编码 + 说明 ===== -->
-        <template v-if="isSkillNode">
-          <el-form-item label="Skill">
-            <el-input :model-value="form.skillCode" disabled />
-          </el-form-item>
-          <el-form-item label="说明">
-            <el-input :model-value="skillDesc" type="textarea" :rows="2" disabled />
-          </el-form-item>
-        </template>
-
         <!-- ===== 输入端口（按 bindMode 统一渲染） ===== -->
         <template v-if="visibleInputPorts.length > 0">
           <el-divider content-position="left">输入端口</el-divider>
@@ -38,8 +28,10 @@
                 :bind-mode="port.bindMode || 'LinkOrConstant'"
                 :enum-source="port.enumSource"
                 :linkable-nodes="linkableNodes"
+                :input-type="getInputType(port.name)"
                 :placeholder="getPortPlaceholder(port)"
                 @update:model-value="v => setInputValue(port.name, v)"
+                @update:input-type="v => setInputType(port.name, v)"
                 @link-node="({ sourceNodeId }) => onLinkNode(port.name, sourceNodeId)"
               />
             </div>
@@ -96,12 +88,12 @@
         <template v-if="visiblePanelSchema.length > 0 && form.nodeType !== 'branch'">
           <el-divider content-position="left">节点配置</el-divider>
           <template v-for="field in visiblePanelSchema" :key="field.field">
-            <!-- textarea（AI prompt 等） -->
-            <el-form-item v-if="field.type === 'textarea'" :label="field.label">
+            <!-- textarea（AI prompt 等）—— label-position="top" 上下布局 -->
+            <el-form-item v-if="field.type === 'textarea'" :label="field.label" label-position="top">
               <el-input
                 v-model="panelFieldValues[field.field]"
                 type="textarea"
-                :rows="6"
+                :rows="field.rows || 4"
                 :placeholder="field.description || ''"
                 @change="applyPanelField(field)"
               />
@@ -158,6 +150,23 @@
               <el-switch v-model="panelFieldValues[field.field]" @change="applyPanelFields" />
               <span v-if="field.description" class="field-hint-inline">{{ field.description }}</span>
             </el-form-item>
+            <!-- slider（温度等） -->
+            <el-form-item v-else-if="field.type === 'slider'" :label="field.label">
+              <el-slider
+                v-model="panelFieldValues[field.field]" :min="field.min || 0" :max="field.max || 1"
+                :step="field.step || 0.1" show-input @change="applyPanelFields"
+              />
+              <div v-if="field.description" class="field-hint">{{ field.description }}</div>
+            </el-form-item>
+            <!-- promptWithRef（AI 提示词 + 引用插入器）—— 自带标题，不需要 el-form-item label -->
+            <div v-else-if="field.type === 'promptWithRef'" class="pwr">
+              <PromptRefEditor
+                v-model="panelFieldValues[field.field]"
+                :rows="field.rows || 6"
+                :linkable-nodes="linkableNodes"
+                @update:model-value="applyPanelField(field)"
+              />
+            </div>
           </template>
         </template>
 
@@ -221,6 +230,43 @@
           </div>
         </template>
 
+        <!-- ===== 功能节点测试结果（skill / ai_node） ===== -->
+        <template v-if="form.nodeType !== 'docField' && form.nodeType !== 'docTable' && form.nodeType !== 'start' && form.nodeType !== 'end' && testable">
+          <el-divider content-position="left">测试结果</el-divider>
+          <div v-if="testLoading" class="test-loading">
+            <el-icon class="is-loading"><IconPlay /></el-icon>
+            <span>正在测试节点...</span>
+          </div>
+          <div v-else-if="testResult" class="test-result" :class="{ 'test-success': testResult.success, 'test-fail': !testResult.success }">
+            <div v-if="testResult.success && testResult.data" class="test-data">
+              <div v-if="testResult.data.durationMs !== undefined" class="test-field-row">
+                <span class="test-label">执行耗时：</span>
+                <span class="test-value">{{ testResult.data.durationMs }}ms</span>
+              </div>
+              <template v-if="testResult.data.output && typeof testResult.data.output === 'object'">
+                <div v-for="(val, key) in testResult.data.output" :key="key" class="test-field-row">
+                  <span class="test-label">{{ key }}：</span>
+                  <span class="test-value">
+                    <pre v-if="typeof val === 'object'" class="test-output-json">{{ JSON.stringify(val, null, 2) }}</pre>
+                    <span v-else>{{ typeof val === 'boolean' ? (val ? '是' : '否') : val }}</span>
+                  </span>
+                </div>
+              </template>
+              <div v-else-if="testResult.data.output" class="test-field-row">
+                <span class="test-label">输出：</span>
+                <span class="test-value">{{ testResult.data.output }}</span>
+              </div>
+            </div>
+            <div v-else-if="!testResult.success" class="test-error">
+              <el-icon><IconWarning /></el-icon>
+              <span>{{ testResult.data?.error || testResult.message || '测试失败' }}</span>
+            </div>
+          </div>
+          <div v-else class="test-empty">
+            <span>配置完成后点击下方按钮测试节点执行</span>
+          </div>
+        </template>
+
         <!-- ===== 操作区 ===== -->
         <el-divider content-position="left">操作</el-divider>
         <div class="action-row">
@@ -234,6 +280,9 @@
           </el-button>
           <el-button v-else-if="testable && form.nodeType !== 'start' && form.nodeType !== 'end'" type="primary" size="small" @click="testNode">
             <el-icon><IconPlay /></el-icon> 测试节点
+          </el-button>
+          <el-button v-else-if="form.nodeType === 'end'" type="primary" size="small" @click="testWorkflow">
+            <el-icon><IconPlay /></el-icon> 测试流程
           </el-button>
           <el-button
             v-if="form.nodeType !== 'start'"
@@ -264,6 +313,7 @@ import { ElMessage } from 'element-plus'
 import { IconWarning, IconEdit, IconPlay, IconDelete, IconInfo } from '@/yzh/icons'
 import { getSpecialNode } from '@/views/cert/Standard/WorkflowDesigner/specialNodes.js'
 import PortControl from './panels/PortControl.vue'
+import PromptRefEditor from './panels/PromptRefEditor.vue'
 
 const props = defineProps({
   selectedNode: { type: Object, default: null },
@@ -274,10 +324,11 @@ const props = defineProps({
   canvasNodes: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['update-node', 'delete-node', 'load-doc-fields', 'link-node', 'test-node', 'test-doc-extract'])
+const emit = defineEmits(['update-node', 'delete-node', 'load-doc-fields', 'link-node', 'test-node', 'test-workflow', 'test-doc-extract'])
 
-const form = ref({ nodeId: '', nodeType: 'skill', title: '', skillCode: '', inputs: {}, outputs: {}, config: {}, inputPorts: [], outputPorts: [] })
+const form = ref({ nodeId: '', nodeType: 'skill', title: '', skillCode: '', inputs: {}, outputs: {}, config: {}, inputPorts: [], outputPorts: [], inputTypes: {} })
 const inputValues = ref({})
+const inputTypes = ref({})
 const panelFieldValues = ref({})
 const docList = ref([])
 const fieldList = ref([])
@@ -341,11 +392,21 @@ const skillDesc = computed(() => {
 })
 
 const linkableNodes = computed(() => {
+  // 排除控制节点（start/end/branch）和自身
+  const excludeTypes = new Set(['start', 'end', 'branch'])
+  const getOutputPorts = (nodeType) => {
+    const meta = getSpecialNode(nodeType)
+    return meta?.outputPorts?.filter(p => p.display !== 'hidden') || [{ name: 'result', label: '结果', type: 'string' }]
+  }
+
   return props.canvasNodes
-    .filter(n => n.id !== form.value.nodeId)
+    .filter(n => n && n.id !== form.value.nodeId && !excludeTypes.has(n.nodeType))
     .map(n => ({
       id: n.id,
-      label: `${n.title || n.id}${n.nodeType ? ' (' + n.nodeType + ')' : ''}`
+      title: n.title || n.id,
+      nodeType: n.nodeType,
+      color: getSpecialNode(n.nodeType)?.color || '',
+      outputPorts: getOutputPorts(n.nodeType)
     }))
 })
 
@@ -391,6 +452,38 @@ function getInputValue(portName) {
   return inputValues.value[portName] ?? ''
 }
 
+function getInputType(portName) {
+  // 优先从 inputTypes 读取
+  if (inputTypes.value[portName]) return inputTypes.value[portName]
+  // 兼容旧数据：如果当前值是节点 ID → link，否则根据值是否存在判断
+  const val = inputValues.value[portName]
+  if (val && linkableNodes.value.some(n => n.id === val)) return 'link'
+  if (val) return 'constant'
+  return 'link'
+}
+
+function setInputType(portName, type) {
+  const prevValue = inputValues.value[portName]
+  const prevType = inputTypes.value[portName]
+
+  inputTypes.value[portName] = type
+  form.value.inputTypes = { ...inputTypes.value }
+
+  // 如果从 link 切到 constant，且之前有连线值 → 通知父组件断开画布连线
+  if (prevType === 'link' && type === 'constant' && prevValue) {
+    // emit link-node 让父组件删除画布上的边（sourceNodeId 是之前的源节点）
+    // 这里传 null 表示断开，父组件用 targetNodeId + portName 找到对应边删除
+    emit('link-node', { portName, sourceNodeId: null, targetNodeId: form.value.nodeId })
+  }
+
+  // 切换类型时清空当前值
+  inputValues.value[portName] = ''
+  const inputs = { ...form.value.inputs }
+  delete inputs[portName]
+  form.value.inputs = inputs
+  applyChanges()
+}
+
 function setInputValue(portName, value) {
   inputValues.value[portName] = value
   const inputs = { ...form.value.inputs, [portName]: value }
@@ -399,6 +492,9 @@ function setInputValue(portName, value) {
 }
 
 function onLinkNode(portName, sourceNodeId) {
+  // 连线操作自动设置 inputType 为 link
+  inputTypes.value[portName] = 'link'
+  form.value.inputTypes = { ...inputTypes.value }
   if (!sourceNodeId) {
     emit('link-node', { portName, sourceNodeId: null, targetNodeId: form.value.nodeId })
     inputValues.value[portName] = ''
@@ -435,7 +531,7 @@ function getBindModeLabel(mode) {
 }
 
 function getBindModeTagType(mode) {
-  return { Link: 'danger', LinkOrConstant: '', Enum: 'success' }[mode] || ''
+  return { Link: 'danger', LinkOrConstant: 'info', Enum: 'success' }[mode] || 'info'
 }
 
 // ===== panelSchema 字段 =====
@@ -485,13 +581,45 @@ function onDocSelect(field, ruleCode) {
 // ===== 测试/删除 =====
 
 function testNode() {
+  testLoading.value = true
+  testResult.value = null
+
   emit('test-node', {
     nodeId: form.value.nodeId,
     nodeType: form.value.nodeType,
     title: form.value.title,
     skillCode: form.value.skillCode,
     config: form.value.config,
-    inputs: form.value.inputs
+    inputs: form.value.inputs,
+    inputTypes: form.value.inputTypes,
+    inputPorts: form.value.inputPorts,
+    outputPorts: form.value.outputPorts,
+    onSuccess: (data) => {
+      testResult.value = { success: true, data }
+      testLoading.value = false
+    },
+    onError: (msg, errorData) => {
+      testResult.value = { success: false, message: msg, data: errorData }
+      testLoading.value = false
+    }
+  })
+}
+
+function testWorkflow() {
+  testLoading.value = true
+  testResult.value = null
+
+  emit('test-workflow', {
+    nodeId: form.value.nodeId,
+    title: form.value.title,
+    onSuccess: (data) => {
+      testResult.value = { success: true, data }
+      testLoading.value = false
+    },
+    onError: (msg, errorData) => {
+      testResult.value = { success: false, message: msg, data: errorData }
+      testLoading.value = false
+    }
   })
 }
 
@@ -570,14 +698,31 @@ watch(() => props.selectedNode, (node) => {
       config: { ...(node.config || {}) },
       inputPorts: node.inputPorts || [],
       outputPorts: node.outputPorts || [],
+      inputTypes: { ...(node.inputTypes || {}) },
       _branchEdges: node.branchEdges || [],
       _updateTick
     }
     const vals = {}
+    const types = {}
     for (const port of form.value.inputPorts) {
       vals[port.name] = form.value.inputs[port.name] ?? ''
+      // 推断 inputType：优先从已有 inputTypes 读取
+      if (form.value.inputTypes[port.name]) {
+        types[port.name] = form.value.inputTypes[port.name]
+      } else {
+        // 兼容旧数据：推断类型
+        const val = vals[port.name]
+        if (val && props.canvasNodes.some(n => n.id === val)) {
+          types[port.name] = 'link'
+        } else if (val) {
+          types[port.name] = 'constant'
+        } else {
+          types[port.name] = 'link'
+        }
+      }
     }
     inputValues.value = vals
+    inputTypes.value = types
 
     // panelSchema 字段值
     const pfv = {}
@@ -601,8 +746,9 @@ watch(() => props.selectedNode, (node) => {
     }
   } else {
     _lastNodeId = null
-    form.value = { nodeId: '', nodeType: 'skill', title: '', skillCode: '', inputs: {}, outputs: {}, config: {}, inputPorts: [], outputPorts: [] }
+    form.value = { nodeId: '', nodeType: 'skill', title: '', skillCode: '', inputs: {}, outputs: {}, config: {}, inputPorts: [], outputPorts: [], inputTypes: {} }
     inputValues.value = {}
+    inputTypes.value = {}
     panelFieldValues.value = {}
   }
 }, { immediate: true })
@@ -610,6 +756,7 @@ watch(() => props.selectedNode, (node) => {
 function applyChanges() {
   if (!form.value.nodeId) return
   const inputs = { ...inputValues.value }
+  const types = { ...inputTypes.value }
   // 始终从 form.value.title 读取（watch 已确保与 store 同步）
   emit('update-node', {
     nodeId: form.value.nodeId,
@@ -618,6 +765,7 @@ function applyChanges() {
     title: form.value.title,
     skillCode: form.value.skillCode,
     inputs,
+    inputTypes: types,
     outputs: form.value.outputs,
     config: form.value.config,
     inputPorts: form.value.inputPorts,
@@ -659,6 +807,11 @@ function applyChanges() {
 .field-hint { font-size: 11px; color: #c0c4cc; margin-top: 4px; }
 .field-hint-inline { font-size: 11px; color: #c0c4cc; margin-left: 8px; }
 
+.cpe-wrapper,
+.pwr {
+  padding: 2px 0;
+}
+
 .output-item { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 12px; }
 .output-type { color: #409EFF; font-family: monospace; }
 .output-desc { color: #909399; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -683,6 +836,7 @@ function applyChanges() {
 .test-value { color: #303133; word-break: break-all; }
 .test-source { color: #67C23A; font-style: italic; }
 .test-table-data { margin: 0; padding: 6px; background: #fff; border-radius: 4px; font-size: 11px; max-height: 150px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+.test-output-json { margin: 4px 0 0; padding: 6px; background: #f5f7fa; border-radius: 4px; font-size: 11px; max-height: 120px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; font-family: 'SF Mono', Monaco, monospace; }
 .test-error { display: flex; align-items: center; gap: 6px; color: #F56C6C; }
 .test-empty { padding: 8px; color: #c0c4cc; font-size: 12px; text-align: center; }
 
