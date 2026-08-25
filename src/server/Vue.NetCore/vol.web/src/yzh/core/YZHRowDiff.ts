@@ -73,10 +73,6 @@ export function replaceByKey<TKey, TEntity extends object>(
     }
   }
   if (idx < 0) {
-    // 打印当前所有行的 key 值便于调试
-    if (rows.length <= 5) {
-      rows.forEach((r, i) => )
-    }
     return { index: -1, replaced: false }
   }
   // 原地 splice 替换：Vue 响应式系统会检测到变化
@@ -107,10 +103,6 @@ export function removeByKeys<TKey, TEntity extends object>(
     }
   }
   if (removed === 0 && rows.length > 0) {
-    // 打印当前所有行的 key 值便于调试
-    if (rows.length <= 5) {
-      rows.forEach((r, i) => )
-    }
   }
   return { removed }
 }
