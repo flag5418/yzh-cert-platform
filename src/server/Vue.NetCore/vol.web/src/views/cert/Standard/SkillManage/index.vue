@@ -316,7 +316,7 @@ async function loadCategories() {
   try {
     const res = await proxy.http.get('api/skill-category/list', null, false)
     if (res?.status) categories.value = res.data || []
-  } catch (e) { console.error('加载分类失败', e) }
+  } catch (e) { ElMessage.error('加载分类失败') }
 }
 
 function getCategoryName(code) {
@@ -343,7 +343,7 @@ async function loadData() {
       tableData.value = res.data?.rows || []
       total.value = res.data?.total || 0
     }
-  } catch (e) { console.error(e) } finally { loading.value = false }
+  } catch (e) { ElMessage.error('操作失败') } finally { loading.value = false }
 }
 
 // ── 端口类型标签 ──
@@ -460,7 +460,7 @@ async function openEdit(row) {
           }
         }
       }
-    } catch (e) { console.error('加载详情失败', e) }
+    } catch (e) { ElMessage.error('加载详情失败') }
   }
   dialogVisible.value = true
 }

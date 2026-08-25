@@ -190,7 +190,7 @@ async function loadClauseTree(stdCode) {
     if (res?.status) {
       clauseTreeData.value = res.data || []
     }
-  } catch (e) { console.error('加载条款树失败', e) }
+  } catch (e) { ElMessage.error('加载条款树失败') }
 }
 
 // ── 数据操作 ──
@@ -205,7 +205,7 @@ async function loadData() {
       tableData.value = res.data?.rows || []
       total.value = res.data?.total || 0
     }
-  } catch (e) { console.error(e) } finally { loading.value = false }
+  } catch (e) { ElMessage.error('操作失败') } finally { loading.value = false }
 }
 
 const resetFilter = () => {

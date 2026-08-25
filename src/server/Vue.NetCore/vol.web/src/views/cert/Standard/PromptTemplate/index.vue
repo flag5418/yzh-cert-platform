@@ -230,7 +230,6 @@ async function loadList() {
       creator: item.Creator || item.creator
     }))
   } catch (error) {
-    console.error('加载提示词列表失败:', error)
     tableData.value = []
   } finally {
     loading.value = false

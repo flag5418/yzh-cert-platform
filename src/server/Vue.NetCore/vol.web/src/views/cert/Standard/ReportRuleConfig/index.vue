@@ -233,21 +233,21 @@ async function loadSkills() {
   try {
     const res = await proxy.http.get('api/skill/query-nodes', null, false)
     if (res?.status) skills.value = res.data || []
-  } catch (e) { console.error('加载 Skill 失败', e) }
+  } catch (e) { ElMessage.error('加载 Skill 失败') }
 }
 
 async function loadCategories() {
   try {
     const res = await proxy.http.get('api/skill-category/list', null, false)
     if (res?.status) categories.value = res.data || []
-  } catch (e) { console.error('加载分类失败', e) }
+  } catch (e) { ElMessage.error('加载分类失败') }
 }
 
 async function loadDocRules() {
   try {
     const res = await proxy.http.get('api/DocExtractionRule/configured-rules', null, false)
     if (res?.status) docRules.value = res.data || []
-  } catch (e) { console.error('加载文档规则失败', e) }
+  } catch (e) { ElMessage.error('加载文档规则失败') }
 }
 
 async function onNodeDocChange(ruleCode) {
@@ -262,7 +262,7 @@ async function loadFieldsAndTables(ruleCode) {
       currentDocFields.value = res.data.fields || []
       currentDocTables.value = res.data.tables || []
     }
-  } catch (e) { console.error('加载文档字段/表格失败', e) }
+  } catch (e) { ElMessage.error('加载文档字段/表格失败') }
 }
 
 // ==================== 树数据 ====================
@@ -291,7 +291,6 @@ async function loadTree() {
     }))
     applySearchFilter()
   } catch (e) {
-    console.error('[ReportRuleConfig] 加载树失败:', e)
   }
 }
 
@@ -355,7 +354,6 @@ async function loadSectionsForPhase(phase) {
     }
     phase.sectionLoaded = true
   } catch (e) {
-    console.error('[ReportRuleConfig] 加载报告章节失败:', e)
     phase.children = []
   } finally {
     phase.sectionLoading = false
@@ -686,7 +684,6 @@ function onCanvasDrop(event) {
       properties: props
     })
   } catch (e) {
-    console.error('[ReportRuleConfig] 拖拽添加节点失败:', e)
   }
 }
 
@@ -1004,7 +1001,6 @@ async function handleTestNode(nodeData) {
       nodeData.onError(res?.error || '测试失败', null)
     }
   } catch (e) {
-    console.error('[ReportRuleConfig] 节点测试失败:', e)
     nodeData.onError('请求失败: ' + (e.message || e), null)
   }
 }
@@ -1080,7 +1076,6 @@ async function handleTestAiNode(nodeData) {
       nodeData.onError(res?.error || 'AI 节点测试失败', null)
     }
   } catch (e) {
-    console.error('[ReportRuleConfig] AI 节点测试失败:', e)
     nodeData.onError('请求失败: ' + (e.message || e), null)
   }
 }
@@ -1119,7 +1114,6 @@ async function handleTestWorkflow(nodeData) {
       nodeData.onError(errorMsg, null)
     }
   } catch (e) {
-    console.error('[ReportRuleConfig] 流程测试失败:', e)
     nodeData.onError('请求失败: ' + (e.message || e), null)
   }
 }
@@ -1135,7 +1129,6 @@ async function handleTestDocExtract({ nodeType, body, onSuccess, onError }) {
       onError(res?.message || '测试失败')
     }
   } catch (e) {
-    console.error('测试提取失败:', e)
     onError('请求失败: ' + (e.message || e))
   }
 }
@@ -1267,7 +1260,6 @@ function renderWorkflow(workflowConfig, layoutJson) {
         sessionStorage.setItem('_wf_migration_tip_shown', '1')
       }
   } catch (e) {
-    console.error('工作流解析失败', e)
     ElMessage.error('工作流配置解析失败')
   }
 }

@@ -146,7 +146,7 @@ async function loadStandards() {
         loadClauses()
       }
     }
-  } catch (e) { console.error('加载标准失败', e) }
+  } catch (e) { ElMessage.error('加载标准失败') }
 }
 
 // ── 标准切换 ──
@@ -168,7 +168,7 @@ async function loadClauses() {
     if (res?.status) {
       clauseTreeData.value = res.data || []
     }
-  } catch (e) { console.error('加载条款失败', e) }
+  } catch (e) { ElMessage.error('加载条款失败') }
 }
 
 // ── 树节点点击 ──

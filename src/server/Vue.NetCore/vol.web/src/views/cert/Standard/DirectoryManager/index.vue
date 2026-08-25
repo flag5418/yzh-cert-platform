@@ -579,7 +579,6 @@ const loadFolderTreeForUpload = async () => {
       folderTreeOptions.value = buildCascaderOptions(Array.isArray(data) ? data : [data])
     }
   } catch (error) {
-    console.error('加载文件夹树失败:', error)
     folderTreeOptions.value = []
   }
 }
@@ -695,7 +694,6 @@ const initSignalR = () => {
   })
 
   signalRConnection.value.start().catch(err => {
-    console.warn('[SignalR] 连接失败，将使用轮询降级:', err.message)
   })
 }
 
@@ -748,14 +746,12 @@ const subscribeToTask = async (taskId) => {
     try {
       await conn.start()
     } catch (err) {
-      console.warn('[SignalR] 连接失败，无法订阅实时进度:', err.message)
       return
     }
   }
   try {
     await conn.invoke('BroadcastUploadProgress', taskId, {})
   } catch (err) {
-    console.warn('[SignalR] 订阅失败:', err)
   }
 }
 
@@ -807,7 +803,6 @@ const loadTree = async () => {
       }))
     }
   } catch (error) {
-    console.error('加载组织树失败:', error)
   }
 }
 
@@ -836,7 +831,6 @@ const refreshActiveQueue = async () => {
   try {
     activeQueue.value = await getActiveQueue(dc)
   } catch (e) {
-    console.warn('[DirectoryManager] 队列查询失败:', e)
   }
 }
 
@@ -889,7 +883,6 @@ const loadCurrentContent = async () => {
     }
     allSelected.value = false
   } catch (error) {
-    console.error('加载内容失败:', error)
     currentFolders.value = []
     currentFiles.value = []
   }
@@ -1196,17 +1189,14 @@ const triggerFolderUpload = () => folderInputRef.value?.click()
 const triggerFolderSelect = () => {
   if (folderUploadRef.value && typeof folderUploadRef.value.triggerFolderSelect === 'function') {
     folderUploadRef.value.triggerFolderSelect()
-    console.log('[Upload] 已触发组件的文件夹选择功能')
   } else if (folderUploadRef.value) {
     // 如果组件没有暴露该方法，尝试直接点击隐藏的 input
     const inputEl = document.querySelector('.yzh-folder-upload [type="file"][webkitdirectory]')
     if (inputEl) {
       inputEl.click()
-      console.log('[Upload] 已通过 DOM 点击触发文件夹选择')
     } else {
       // 最终回退：使用原生文件选择器
       triggerFolderUpload()
-      console.log('[Upload] 使用回退方案：原生文件夹选择器')
     }
   } else {
     ElMessage.warning('上传组件未就绪，请稍后再试')
@@ -1307,7 +1297,6 @@ const onUploadFileListChange = (newFileList) => {
   const list = newFileList || []
   const filtered = list.filter(isAllowedUploadFile)
   if (filtered.length !== list.length) {
-    console.log(`[Upload] 已静默过滤 ${list.length - filtered.length} 个系统/不支持的文件`)
     // 回写过滤后的列表（v-model 指向同一数组，组件展示会同步更新）
     uploadFileList.value = filtered
   }
@@ -1318,7 +1307,6 @@ const onUploadFileListChange = (newFileList) => {
  * @param {Error} error - 错误对象
  */
 const onUploadError = (error) => {
-  console.error('[Upload] 组件错误:', error)
   ElMessage.error('上传组件错误: ' + (error?.message || '未知错误'))
 }
 
@@ -1573,7 +1561,6 @@ const submitUpload = async () => {
       await refreshActiveQueue()
     }
   } catch (error) {
-    console.error('上传流程异常:', error)
     uploadProgress.status = 'done'
     if (taskId) {
       try {
@@ -1676,7 +1663,6 @@ const loadPromptTemplates = async () => {
       promptTemplates.value = []
     }
   } catch (error) {
-    console.error('加载提示词模板失败:', error)
     promptTemplates.value = []
     ElMessage.warning('加载提示词模板失败')
   }
@@ -1710,7 +1696,6 @@ const submitAiAnalyze = async () => {
       }
     }
   } catch (error) {
-    console.error('AI 分析失败:', error)
     aiAnalyzeResult.value = {
       success: false,
       message: error.message || 'AI 分析请求失败'

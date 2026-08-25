@@ -95,7 +95,6 @@ const loadData = async () => {
       ElMessage.error(res.Message || '加载失败')
     }
   } catch (error) {
-    console.error('[ConfigTab] 加载失败:', error)
   } finally {
     loading.value = false
   }
@@ -136,7 +135,6 @@ const handleSubmit = async () => {
     dialogVisible.value = false
     loadData()
   } catch (error) {
-    console.error('[ConfigTab] 保存失败:', error)
     ElMessage.error('保存失败')
   } finally {
     submitting.value = false

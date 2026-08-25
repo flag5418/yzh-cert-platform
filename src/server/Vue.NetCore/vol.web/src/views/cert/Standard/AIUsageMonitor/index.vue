@@ -187,7 +187,6 @@ async function loadData() {
     }
     if (aliyunRes?.status) aliyunConfigured.value = aliyunRes.data?.configured || false
   } catch (e) {
-    console.error('加载数据失败', e)
   }
 }
 
@@ -204,7 +203,6 @@ async function loadCalls() {
       total.value = res.total || 0
     }
   } catch (e) {
-    console.error('加载调用记录失败', e)
   } finally {
     tableLoading.value = false
   }

@@ -70,10 +70,8 @@ export function useYZHIncrementSync<TKey, TEntity extends object>(
     try {
       const { sf, so } = _sortCtx()
       const { index } = insertByOrder(pageRows.value, newRow, sf, so)
-      console.log(`[incSync] applyInsert: 在位置 ${index} splice 插入新行, key=${(newRow as any)[schema.keyField]}`)
       return { affected: true, count: 1 }
     } catch (e: any) {
-      console.error('[incSync] applyInsert 异常:', e?.message || e)
       return { affected: false, count: 0 }
     }
   }
@@ -85,14 +83,11 @@ export function useYZHIncrementSync<TKey, TEntity extends object>(
     try {
       const { index, replaced } = replaceByKey(pageRows.value, updatedRow, schema.keyField)
       if (replaced) {
-        console.log(`[incSync] applyReplace: 在位置 ${index} splice 替换行, key=${(updatedRow as any)[schema.keyField]}`)
         return { affected: true, count: 1 }
       } else {
-        console.warn(`[incSync] applyReplace: 未找到 key=${(updatedRow as any)[schema.keyField]} 的行，需全量刷新`)
         return { affected: false, count: 0 }
       }
     } catch (e: any) {
-      console.error('[incSync] applyReplace 异常:', e?.message || e)
       return { affected: false, count: 0 }
     }
   }
@@ -116,19 +111,14 @@ export function useYZHIncrementSync<TKey, TEntity extends object>(
             pager.total.value = newTotal
           }
         }
-        console.log(`[incSync] applyRemove: splice 移除 ${removed} 条, keys=${JSON.stringify(deletedKeys)}, 剩余 ${pageRows.value.length} 条`)
         return { affected: true, count: removed }
       } else {
-        console.warn(`[incSync] applyRemove: 当前页未找到匹配行, keys=${JSON.stringify(deletedKeys)}, 当前行数=${pageRows.value?.length}`)
         if (pageRows.value?.length) {
           const existingKeys = pageRows.value.map((r) => `( ${(r as any)[schema.keyField]} )`)
-          console.warn(`[incSync] applyRemove: 当前行 keys: [${existingKeys.join(', ')}]`)
-          console.warn(`[incSync] applyRemove: 目标删除 keys: [${deletedKeys.join(', ')}]`)
         }
         return { affected: false, count: 0 }
       }
     } catch (e: any) {
-      console.error('[incSync] applyRemove 异常:', e?.message || e)
       return { affected: false, count: 0 }
     }
   }

@@ -310,7 +310,6 @@ const handleStageClick = async (data, node) => {
     emit('stage-load', data)
   } catch (e) {
     ElMessage.error('加载文件列表失败')
-    console.error('[CertDirectoryTree] 加载阶段文件失败:', e)
   } finally {
     data._loading = false
   }

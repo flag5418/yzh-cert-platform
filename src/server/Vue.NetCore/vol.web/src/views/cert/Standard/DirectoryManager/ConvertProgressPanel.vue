@@ -121,7 +121,6 @@ const fetchProgress = async (taskId) => {
       progress.value = data
     }
   } catch (e) {
-    console.error('获取进度失败', e)
   }
 }
 

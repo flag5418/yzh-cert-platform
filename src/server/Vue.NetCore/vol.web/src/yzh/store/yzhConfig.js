@@ -71,7 +71,6 @@ export default {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(configs))
         localStorage.setItem(VERSION_KEY, version)
       } catch (e) {
-        console.warn('[YZHConfigStore] localStorage 写入失败:', e)
       }
     },
 
@@ -93,10 +92,8 @@ export default {
         if (cached && cachedVersion) {
           state.configs = JSON.parse(cached)
           state.version = cachedVersion
-          console.log(`[YZHConfigStore] 📦 从本地缓存恢复 ${Object.keys(state.configs).length} 个页面配置 (v${cachedVersion})`)
         }
       } catch (e) {
-        console.warn('[YZHConfigStore] localStorage 读取失败，清除损坏数据')
         localStorage.removeItem(STORAGE_KEY)
         localStorage.removeItem(VERSION_KEY)
       }
@@ -189,11 +186,9 @@ export default {
 
         commit('SET_CONFIGS', { version, configs })
 
-        console.log(`[YZHConfigStore] ✅ 配置刷新成功: v${version}, ${Object.keys(configs || {}).length} 个页面`)
 
         return { success: true, version, count: Object.keys(configs || {}).length }
       } catch (e) {
-        console.error('[YZHConfigStore] ❌ 配置刷新失败:', e)
         commit('SET_ERROR', e)
 
         return { success: false, error: e.message }

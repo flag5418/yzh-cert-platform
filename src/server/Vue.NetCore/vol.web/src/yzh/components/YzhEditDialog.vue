@@ -191,7 +191,6 @@ async function validate(): Promise<boolean> {
   }
 
   if (errors.length > 0) {
-    console.warn('[YzhEditDialog] 校验失败:', errors)
     return false
   }
 

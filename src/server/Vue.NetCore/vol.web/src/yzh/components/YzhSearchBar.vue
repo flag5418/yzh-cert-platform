@@ -235,7 +235,6 @@ async function loadDictOptions(field: IYzhFieldConfig): Promise<void> {
       }
     }
   } catch (err) {
-    console.warn(`[YzhSearchBar] 字典加载失败 (${dataKey}):`, err)
   }
 }
 

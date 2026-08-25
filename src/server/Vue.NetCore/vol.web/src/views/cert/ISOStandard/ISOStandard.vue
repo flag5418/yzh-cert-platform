@@ -82,7 +82,6 @@ const lifecycles = markRaw({
    * 页面加载后：加载左侧机构树数据
    */
   onReady: async (instance: any) => {
-    console.log('[ISOStandard] TreeTable ready, loading tree data...')
     // YzhTreeTable 会根据 treeControllerName 自动加载树数据
     // 如果需要自定义加载逻辑，可以在这里调用 instance.loadTree()
   },
@@ -99,11 +98,9 @@ const lifecycles = markRaw({
 
 // —— ③ 事件处理 ——
 function onReady(instance: any) {
-  console.log('[ISOStandard] YzhTreeTable 实例就绪:', instance)
 }
 
 function onTreeNodeSelect(node: any, data: any) {
-  console.log('[ISOStandard] 切换机构:', data.Name, '(', data.Code, ')')
 }
 
 // —— ④ 辅助方法（树节点渲染用）——

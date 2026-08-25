@@ -60,7 +60,6 @@ async function loadStages(params: any) {
     
     return { data: rows, total }
   } catch (e) {
-    console.error('[OrgStage] 加载阶段列表失败', e)
     return { data: [], total: 0 }
   }
 }
@@ -70,6 +69,5 @@ async function loadStages(params: any) {
 // ============================================================
 
 function handleTreeSelect(data: any) {
-  console.log('[OrgStage] 选择机构:', data.Name, data.Code)
 }
 </script>

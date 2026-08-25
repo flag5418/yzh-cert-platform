@@ -385,18 +385,15 @@ async function loadDbPageConfig(): Promise<boolean> {
   if (!props.pageKey) return false
 
   try {
-    console.log(`[YzhCrudTable] 🔄 正在加载配置: ${props.pageKey}`)
     const config = await loadPageConfig(props.pageKey)
     if (config) {
       dbPageConfig.value = config.pageMeta || null
       dbFieldConfigs.value = config.fieldConfigs || []
       dbConfigLoaded.value = true
-      console.log(`[YzhCrudTable] ✅ 配置加载成功: ${dbFieldConfigs.value.length} 个字段`)
       return true
     }
     return false
   } catch (e: any) {
-    console.warn(`[YzhCrudTable] ⚠️ 配置加载失败，回退到 options.js: ${e?.message}`)
     dbConfigLoaded.value = true // 标记已尝试过，避免重复请求
     return false
   }
@@ -700,25 +697,18 @@ async function loadData() {
     // 调试：检查加载后的数据中 keyField 字段是否存在
     if (tableData.value?.length > 0) {
       const firstRow = tableData.value[0]
-      console.log('[YzhCrudTable] loadData 完成:')
-      console.log('  - keyField:', schema.value.keyField)
-      console.log('  - 首行 keyField 值:', firstRow[schema.value.keyField])
-      console.log('  - 首行所有字段:', Object.keys(firstRow))
       // 检查大小写变体
       const kfLower = schema.value.keyField.toLowerCase()
       const kfUpper = schema.value.keyField.toUpperCase()
       if (firstRow[kfLower] !== undefined && firstRow[schema.value.keyField] === undefined) {
-        console.warn(`  - ⚠️ 字段名大小写不匹配: 期望 "${schema.value.keyField}", 实际为 "${kfLower}"`)
       }
       if (firstRow[kfUpper] !== undefined && firstRow[schema.value.keyField] === undefined) {
-        console.warn(`  - ⚠️ 字段名大小写不匹配: 期望 "${schema.value.keyField}", 实际为 "${kfUpper}"`)
       }
     }
 
     // 同步到增量同步器
     incSync.setRows(tableData.value)
   } catch (e: any) {
-    console.error('[YzhCrudTable] loadData error:', e)
     proxy?.$message?.error?.(e?.message || '加载数据失败')
   } finally {
     loading.value = false
@@ -974,7 +964,6 @@ async function loadDictionaryData() {
       applyDictData(dataToApply)
     }
   } catch (e: any) {
-    console.warn('[YzhCrudTable] 字典加载失败:', e?.message || e)
     // 字典加载失败不影响主流程，静默处理
   }
 }
@@ -1017,7 +1006,6 @@ async function handleSave() {
             serverData = rawData?.data || rawData
           }
         } catch (e) {
-          console.warn('[YzhCrudTable] 解析 serverData 失败:', e)
         }
 
         // 用服务端数据构建新行（包含服务端生成的 Id/Code/CreateDate 等）
@@ -1032,7 +1020,6 @@ async function handleSave() {
         // 增量插入：affected=false 时回退到全量刷新
         const result = await incSync.applyInsert(newRow)
         if (!result.affected) {
-          console.warn('[YzhCrudTable] applyInsert 未生效，回退到 loadData')
           loadData()
         }
 
@@ -1060,7 +1047,6 @@ async function handleSave() {
         const updatedRow = { ...editForm }
         const result = await incSync.applyReplace(updatedRow)
         if (!result.affected) {
-          console.warn('[YzhCrudTable] applyReplace 未生效，回退到 loadData')
           loadData()
         }
 
@@ -1071,7 +1057,6 @@ async function handleSave() {
       }
     }
   } catch (e: any) {
-    console.error('[YzhCrudTable] handleSave error:', e)
     proxy?.$message?.error?.(e?.message || '操作失败')
   } finally {
     saving.value = false
@@ -1083,7 +1068,6 @@ async function handleSave() {
 // ============================================================
 async function handleDelete(row: any) {
   const id = row[schema.value.keyField]
-  console.log(`[YzhCrudTable] 🗑️ 开始删除: keyField=${schema.value.keyField}, id=${id}`, row)
 
   const ok = await guard.confirmDeleteOne(row.Name || row.Title || id)
   if (!ok) return
@@ -1092,9 +1076,7 @@ async function handleDelete(row: any) {
   if (!delOk) return
 
   try {
-    console.log(`[YzhCrudTable] 调用 api.del([${id}])...`)
     const res = await api.del([id])
-    console.log(`[YzhCrudTable] 删除响应:`, JSON.stringify(res))
 
     if (res?.status || res?.Status) {
       proxy?.$message?.success?.(res?.message || res?.Message || '删除成功')
@@ -1102,7 +1084,6 @@ async function handleDelete(row: any) {
       // 增量移除：affected=false 说明当前页找不到该行，回退到全量刷新
       const result = await incSync.applyRemove([id], pagination)
       if (!result.affected) {
-        console.warn('[YzhCrudTable] applyRemove 未生效（可能已翻页），回退到 loadData')
         loadData()
       }
 
@@ -1110,7 +1091,6 @@ async function handleDelete(row: any) {
     } else {
       // 错误信息可能是多行引用详情（含 \n），用 alert 弹窗展示更友好
       const errorMsg = res?.message || res?.Message || '删除失败'
-      console.error(`[YzhCrudTable] 删除失败: ${errorMsg}`)
       if (errorMsg.includes('\n') && proxy?.$alert) {
         proxy.$alert(errorMsg, '无法删除', { type: 'error', dangerouslyUseHTMLString: false })
       } else {
@@ -1118,7 +1098,6 @@ async function handleDelete(row: any) {
       }
     }
   } catch (e: any) {
-    console.error('[YzhCrudTable] 删除异常:', e)
     proxy?.$message?.error?.(e?.message || '删除异常')
   }
 }
@@ -1146,7 +1125,6 @@ async function handleBatchDelete() {
 
       const result = await incSync.applyRemove(ids, pagination)
       if (!result.affected) {
-        console.warn('[YzhCrudTable] batch applyRemove 未生效，回退到 loadData')
         loadData()
       }
 
@@ -1272,7 +1250,6 @@ async function handleExport() {
       throw exportErr
     }
   } catch (e: any) {
-    console.error('[YzhCrudTable] handleExport error:', e)
     proxy?.$message?.error?.(e?.message || '导出失败')
   }
 }

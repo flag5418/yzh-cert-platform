@@ -55,7 +55,6 @@ async function loadStandards(params: any) {
     
     return { data: rows, total }
   } catch (e) {
-    console.error('[OrgStandard] 加载标准列表失败', e)
     return { data: [], total: 0 }
   }
 }
@@ -65,6 +64,5 @@ async function loadStandards(params: any) {
 // ============================================================
 
 function handleTreeSelect(data: any) {
-  console.log('[OrgStandard] 选择机构:', data.Name, data.Code)
 }
 </script>

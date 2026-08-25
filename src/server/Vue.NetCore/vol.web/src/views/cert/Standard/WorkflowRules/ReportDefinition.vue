@@ -236,7 +236,7 @@ const loadTemplate = async () => {
     } else {
       resetTemplateForm()
     }
-  } catch (e) { console.error('加载模板失败', e) }
+  } catch (e) { ElMessage.error('加载模板失败') }
 }
 
 function resetTemplateForm() {
@@ -340,7 +340,7 @@ const loadSections = async () => {
   try {
     const res = await proxy.http.get(`api/report-definition/section/${templateForm.code}`, null, false)
     if (res?.status) sectionData.value = res.data || []
-  } catch (e) { console.error(e) } finally { secLoading.value = false }
+  } catch (e) { ElMessage.error('操作失败') } finally { secLoading.value = false }
 }
 
 const openSecEdit = (row) => {

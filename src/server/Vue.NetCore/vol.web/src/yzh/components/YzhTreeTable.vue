@@ -289,7 +289,6 @@ async function loadTree(data?: any[] | null, url?: string) {
       handleTreeNodeClick(treeData.value[0])
     }
   } catch (e: any) {
-    console.error('[YzhTreeTable] 加载树数据失败:', e)
   } finally {
     treeLoading.value = false
   }

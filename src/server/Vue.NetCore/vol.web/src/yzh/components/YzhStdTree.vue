@@ -139,7 +139,6 @@ async function loadTree() {
     }))
     emit('loaded', treeData.value)
   } catch (e) {
-    console.error('[YzhStdTree] 加载树失败:', e)
   }
 }
 

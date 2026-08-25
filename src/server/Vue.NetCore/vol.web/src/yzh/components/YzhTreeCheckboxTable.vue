@@ -243,7 +243,6 @@ async function loadDictData(keys: string[]) {
       })
     }
   } catch (e) {
-    console.warn('[YzhTreeCheckboxTable] 字典加载失败', e)
   }
 }
 
@@ -303,7 +302,6 @@ async function doSync() {
       }
     }
   } catch (e: any) {
-    console.error('[YzhTreeCheckboxTable] 同步失败', e)
     ElMessage.error(e?.message || '保存失败')
   } finally {
     saving.value = false
@@ -326,7 +324,6 @@ async function handleTreeNodeClick(data: any) {
       checkedIdsFromDb.value = new Set(ids || [])
       checkedIds.value = new Set(checkedIdsFromDb.value)
     } catch (e) {
-      console.warn('[YzhTreeCheckboxTable] 加载已关联 ID 失败', e)
       checkedIdsFromDb.value = new Set()
       checkedIds.value = new Set()
     }
@@ -351,7 +348,6 @@ async function loadTableData() {
     await nextTick()
     syncCheckboxes()
   } catch (e) {
-    console.error('[YzhTreeCheckboxTable] 加载数据失败', e)
     tableData.value = []
     total.value = 0
   } finally {

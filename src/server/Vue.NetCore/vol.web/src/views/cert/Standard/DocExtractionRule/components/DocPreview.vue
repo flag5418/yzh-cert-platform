@@ -150,10 +150,7 @@ import { ElMessage } from 'element-plus'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { downloadBlob } from '@/certcore'
 
-/* ============ 0. 锚点日志（最高优先级 console.log，级别过滤不会拦截） ============ */
-console.log(
-  '[DocPreview] 🔵 script setup 已初始化 ✅（这条没出现 = 组件根本没挂载 / import 抛异常）'
-)
+/* ============ 0. 文档预览主体 ============ */
 
 // vue-office 组件（严格按官方 2025-05 README / NPM 描述）
 //   支持：docx / xls+xlsx / pptx / pdf
@@ -376,7 +373,6 @@ const loadPreview = async () => {
   pdfFallback.value = false /* 重置 PDF 降级标记 */
   imageFallback.value = false /* 重置图片降级标记 */
   if (!props.file) {
-    console.log('[DocPreview] 无 props.file，返回')
     return
   }
 
@@ -387,17 +383,14 @@ const loadPreview = async () => {
     return
   }
   const fileName = props.file?.name || '(unknown)'
-  console.log(`[DocPreview] 开始预览 ${fileName}  URL=${url}`)
 
   /* ---- 6.1 文本：直接读 text ---- */
   if (isText.value) {
     try {
       textContent.value = (await _httpGetText(url)) ?? ''
-      console.log(`[DocPreview] 文本预览加载完成, 字节=${textContent.value.length}`)
     } catch (e) {
       const msg = typeof e === 'string' ? e : e?.message || e || '加载失败'
       textContent.value = '加载失败: ' + msg
-      console.warn('[DocPreview] 文本加载异常:', e)
     }
     return
   }
@@ -406,12 +399,10 @@ const loadPreview = async () => {
   let buf = null
   try {
     buf = await _httpGetArrayBuffer(url)
-    console.log(`[DocPreview] 二进制下载完成, byteLength=${buf?.byteLength}`)
   } catch (e) {
     const msg = typeof e === 'string' ? e : e?.message || e || '未知错误'
     const is401 = /401|unauthorized|登录|token/i.test(msg)
     previewError.value = is401 ? '登录已失效，请重新登录后再预览' : '下载接口请求失败: ' + msg
-    console.warn('[DocPreview] 二进制下载异常:', { e, msg, is401 })
     return
   }
   if (!buf || buf.byteLength === 0) {
@@ -422,10 +413,8 @@ const loadPreview = async () => {
   const pre = _looksLikeAuthRedirect(buf)
   if (pre.redirect) {
     previewError.value = '下载接口返回的不是文件内容（当前登录状态失效，请重新登录后再试）'
-    console.warn('[DocPreview] payload 检测到登录重定向：', pre)
     return
   }
-  console.log('[DocPreview] 魔数检测：', pre)
 
   /* Layer 3：图片 / PDF → ObjectURL */
   if (isImage.value || isPdf.value) {
@@ -439,13 +428,9 @@ const loadPreview = async () => {
       else if (pre.kind === 'pdf') mime = 'application/pdf'
       const blob = new Blob([buf], { type: mime || 'application/octet-stream' })
       previewUrl.value = URL.createObjectURL(blob)
-      console.log(
-        `[DocPreview] 图片/PDF 预览构建完成，mime=${mime || 'application/octet-stream'}, size=${buf.byteLength}`
-      )
       return
     } catch (e) {
       previewError.value = '文件读取失败: ' + (e?.message || e)
-      console.warn('[DocPreview] 图片/PDF Blob 构建失败：', e)
       return
     }
   }
@@ -458,11 +443,7 @@ const loadPreview = async () => {
     let detected = null
     if (ext.value !== 'xls') {
       detected = _detectOfficeKindFromZip(buf)
-      console.log(
-        `[DocPreview] ZIP Central Directory 子类型检测：ext=${ext.value} detected=${detected}`
-      )
     } else {
-      console.log(`[DocPreview] ext=.xls 跳过 ZIP Central Directory 检测，走 exceljs BIFF 兼容解析`)
     }
 
     if (ext.value !== 'xls') {
@@ -502,18 +483,13 @@ const loadPreview = async () => {
     }
 
     previewBuffer.value = buf.slice(0) /* vue-office 内部可能会 detach，给独立副本 */
-    console.log(
-      `[DocPreview] ✅ 已交付给 vue-office：ext=${ext.value} byteLength=${buf.byteLength} kind=${pre?.kind ?? detected ?? 'xls-biff'}`
-    )
     return
   }
   /* 其它格式 → template 走兜底 unsupported */
-  console.log('[DocPreview] 命中 template 兜底 unsupported 分支：ext=', ext.value)
 }
 
 /* ============ 7. 事件 & 生命周期 ============ */
 const onRendered = () => {
-  console.log('[DocPreview] rendered:', props.file?.name)
 }
 const onError = (e) => {
   previewError.value = '文档渲染失败: ' + (e?.message || e || '未知错误')
@@ -526,7 +502,6 @@ const onError = (e) => {
  */
 const onPdfError = (e) => {
   const msg = e?.message || e || '未知错误'
-  console.warn('[DocPreview] vue-office-pdf 渲染失败，自动降级为 iframe:', msg)
   pdfFallback.value = true
   // 静默降级，不显示提示（用户体验优先）
 }
@@ -536,7 +511,6 @@ const onPdfError = (e) => {
  * 自动降级为原生 <img> 标签，浏览器原生解码器支持更多格式
  */
 const onImageError = () => {
-  console.warn('[DocPreview] el-image 加载失败，自动降级为原生 img')
   imageFallback.value = true
 }
 const refresh = () => loadPreview()
@@ -553,9 +527,6 @@ const download = async () => {
 }
 
 watch(() => props.file, loadPreview, { immediate: true, deep: true })
-console.log(
-  '[DocPreview] 🟢 watcher 已注册 ✅（这条没出现 = watch 之前代码抛异常） immediate=true → loadPreview 已同步执行'
-)
 onBeforeUnmount(() => _revoke())
 </script>
 

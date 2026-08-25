@@ -61,7 +61,6 @@ export function replaceByKey<TKey, TEntity extends object>(
 ): { index: number; replaced: boolean } {
   const targetKey = safeGetKey(updatedRow as any, keyField)
   if (!targetKey || targetKey === 'undefined' || targetKey === 'null') {
-    console.warn('[YZHRowDiff] replaceByKey: 目标行的 keyField="' + keyField + '" 值为空:', updatedRow)
     return { index: -1, replaced: false }
   }
 
@@ -74,10 +73,9 @@ export function replaceByKey<TKey, TEntity extends object>(
     }
   }
   if (idx < 0) {
-    console.warn(`[YZHRowDiff] replaceByKey: 未找到 key="${targetKey}" 的行(共${rows.length}行), keyField="${keyField}"`)
     // 打印当前所有行的 key 值便于调试
     if (rows.length <= 5) {
-      rows.forEach((r, i) => console.warn(`  [${i}] key=${safeGetKey(r as any, keyField)}, rawKeys=${Object.keys(r).filter(k => k.length < 10).join(',')}`))
+      rows.forEach((r, i) => )
     }
     return { index: -1, replaced: false }
   }
@@ -95,11 +93,9 @@ export function removeByKeys<TKey, TEntity extends object>(
 ): { removed: number } {
   // 🔧 强制转为 string，防止 undefined 导致 toLowerCase 报错
   const kf = String(keyField || '')
-  console.log(`[YZHRowDiff] 🗑️ removeByKeys 调用: keyField="${kf}", deletedKeys=`, deletedKeys, `, rows.length=${rows?.length}`)
   
   if (!deletedKeys || !deletedKeys.length) return { removed: 0 }
   const keySet = new Set((deletedKeys as any[]).map(k => String(k)))
-  console.log(`[YZHRowDiff] 🗑️ keySet=[${[...keySet].join(',')}], typeof keyField=${typeof keyField}`)
   
   let removed = 0
   // 从后往前遍历，splice 不会影响未处理元素的索引
@@ -111,13 +107,11 @@ export function removeByKeys<TKey, TEntity extends object>(
     }
   }
   if (removed === 0 && rows.length > 0) {
-    console.warn(`[YZHRowDiff] removeByKeys: 0 行被删除! 目标keys=[${[...keySet].join(',')}], keyField="${kf}"`)
     // 打印当前所有行的 key 值便于调试
     if (rows.length <= 5) {
-      rows.forEach((r, i) => console.warn(`  [${i}] key=${safeGetKey(r as any, kf)}, rawKeys=${Object.keys(r).filter(k => k.length < 10).join(',')}`))
+      rows.forEach((r, i) => )
     }
   }
-  console.log(`[YZHRowDiff] ✅ removeByKeys 完成: removed=${removed}, 剩余rows=${rows.length}`)
   return { removed }
 }
 

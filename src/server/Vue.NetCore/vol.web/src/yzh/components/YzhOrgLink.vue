@@ -93,7 +93,6 @@ async function loadOrgTree() {
       }))
     }
   } catch (e) {
-    console.error('[YzhOrgLink] 加载机构树失败', e)
   }
 }
 

@@ -169,8 +169,6 @@ const tableCount = computed(() => analysisTables.value.length)
 
 // 方法
 const onFileSelect = async (file) => {
-  console.log('[DocExtractionRule] ✅ onFileSelect 触发:',
-    { id: file?.id, name: file?.name, type: file?.type, storagePath: file?.storagePath, mimeType: file?.mimeType })
   currentFile.value = file
   lockReason.value = ''
   // 重置状态
@@ -209,7 +207,6 @@ const loadExistingRule = async (file) => {
     }
   } catch (err) {
     // 加载失败不影响页面使用，保持空状态
-    console.warn('[DocExtractionRule] 加载已有规则失败:', err?.message ?? err)
   }
 }
 
@@ -230,11 +227,9 @@ const onAIAnalyze = async () => {
   // skill 由后端按文件扩展名权威推导（单一约束原则：后端唯一控制），前端不再推断
   const skill = 'word'
 
-  console.log('[DocExtractionRule] 🔍 开始分析:', { fileCode, skill: '(后端推导)' })
   analyzing.value = true
   try {
     const res = await aiAnalyzeDocument({ fileCode, skill })
-    console.log('[DocExtractionRule] 📦 analyze 响应:', JSON.stringify(res, null, 2))
 
     // 解析响应数据（兼容后端 PascalCase Fields/Tables 与 camelCase/snake_case 各键名）
     const data = res?.Data ?? res?.data ?? res
@@ -254,7 +249,6 @@ const onAIAnalyze = async () => {
       ElMessage.success('分析完成')
     }
   } catch (err) {
-    console.error('[DocExtractionRule] ❌ 分析失败:', err)
     ElMessage.error('AI分析失败: ' + (err?.message ?? '未知错误'))
   } finally {
     analyzing.value = false
@@ -581,7 +575,6 @@ const onRetryFailed = async () => {
       ElMessage.info(message || '没有需要重试的文件')
     }
   } catch (err) {
-    console.error('[DocExtractionRule] 重试失败转换出错:', err)
     ElMessage.error('重试失败：' + (err?.message ?? '未知错误'))
   } finally {
     retrying.value = false

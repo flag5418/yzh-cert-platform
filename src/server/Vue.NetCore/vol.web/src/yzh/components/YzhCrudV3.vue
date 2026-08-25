@@ -375,7 +375,6 @@ async function loadData() {
 
     tableData.value = rows
   } catch (e: any) {
-    console.error('[YzhCrudV3] loadData error:', e)
     proxy?.$message?.error?.(e?.message || '加载数据失败')
   } finally {
     loading.value = false
@@ -511,7 +510,6 @@ async function handleSave(formData: Record<string, any>) {
       }
     }
   } catch (e: any) {
-    console.error('[YzhCrudV3] save error:', e)
     proxy?.$message?.error?.(e?.message || '操作失败')
   } finally {
     saving.value = false
@@ -652,7 +650,6 @@ onMounted(async () => {
     // 5. 暴露实例
     emit('ready', exposedApi)
   } catch (e: any) {
-    console.error('[YzhCrudV3] 初始化失败:', e)
     // 使用默认配置继续运行
     pageConfig.value = {
       pageMeta: defaultPageMeta(),

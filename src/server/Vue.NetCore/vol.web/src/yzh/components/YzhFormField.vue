@@ -238,7 +238,6 @@ async function loadDictData() {
       }
     }
   } catch (err) {
-    console.warn(`[YzhFormField] 字典加载失败 (${props.config.dataKey}):`, err)
   }
 }
 

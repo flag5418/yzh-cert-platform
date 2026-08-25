@@ -66,7 +66,6 @@ export class YZHBaseApiClient<TKey, TEntity> {
    * - 前端 POST 的 body 直接是 ids 数组: [id1, id2, ...]
    */
   del = (ids: TKey[]) => {
-    console.log(`[YZHApiClient] 🗑️ 删除请求: ${this.base}Del, ids=`, ids)
     return this.proxy.http.post(`${this.base}Del`, ids)
   }
 
