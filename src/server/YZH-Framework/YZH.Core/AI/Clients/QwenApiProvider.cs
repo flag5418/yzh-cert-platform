@@ -19,6 +19,9 @@ namespace YZH.Core.AI.Clients
 
         private readonly IConfiguration _config;
 
+        // 复用单一 HttpClient 实例，避免每次请求 new HttpClient 导致连接池/Socket 耗尽（批量提取场景关键）
+        private static readonly HttpClient HttpClient = new() { Timeout = Timeout.InfiniteTimeSpan };
+
         public QwenApiProvider(IConfiguration config)
         {
             _config = config;
@@ -41,14 +44,17 @@ namespace YZH.Core.AI.Clients
         public async Task<LlmResponse> ChatAsync(LlmRequest request, CancellationToken ct = default)
         {
             var apiKey = GetApiKey();
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(request.TimeoutSeconds) };
+
+            // 按请求级超时派生 CancellationToken（共享 HttpClient 不能设 per-request Timeout）
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(request.TimeoutSeconds));
 
             // 过滤非文本内容，移除图片引用以避免模型报错
-            var cleanedMessages = request.Messages.Select(m => new { 
-                role = m.Role, 
-                content = CleanContent(m.Content) 
+            var cleanedMessages = request.Messages.Select(m => new {
+                role = m.Role,
+                content = CleanContent(m.Content)
             }).ToArray();
-            
+
             var payload = new
             {
                 model = request.Model,
@@ -58,14 +64,17 @@ namespace YZH.Core.AI.Clients
                 response_format = request.JsonMode ? (object)new { type = "json_object" } : null
             };
 
-            using var content = new StringContent(
+            var content = new StringContent(
                 JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+
+            // 鉴权头设在请求消息上（线程安全），不改动共享 HttpClient.DefaultRequestHeaders
+            using var httpReq = new HttpRequestMessage(HttpMethod.Post, Endpoint) { Content = content };
+            httpReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
 
             var sw = System.Diagnostics.Stopwatch.StartNew();
             try
             {
-                var resp = await http.PostAsync(Endpoint, content, ct);
+                var resp = await HttpClient.SendAsync(httpReq, cts.Token);
                 var body = await resp.Content.ReadAsStringAsync(ct);
                 sw.Stop();
 
@@ -80,7 +89,7 @@ namespace YZH.Core.AI.Clients
                 return ParseOpenAiResponse(body, Name, request.Model, sw.ElapsedMilliseconds);
             }
             catch (AI.LlmCallException) { throw; }
-            catch (TaskCanceledException)
+            catch (OperationCanceledException)
             {
                 sw.Stop();
                 throw new AI.LlmCallException("Qwen 调用超时", true);

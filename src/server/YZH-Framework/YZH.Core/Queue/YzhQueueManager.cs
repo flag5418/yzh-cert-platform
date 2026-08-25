@@ -25,6 +25,10 @@ namespace YZH.Core.Queue
     /// </summary>
     public class YzhQueueManager
     {
+        // 资源类型标识（被业务层 StandardDirectoryService 引用，不可删除）
+        public const string RESOURCE_DIR = "cert_standard_directory";
+        public const string RESOURCE_FILE = "cert_standard_directory_file";
+
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<YzhQueueManager> _logger;
         private readonly YzhQueueOptions _options;
@@ -51,10 +55,6 @@ namespace YZH.Core.Queue
             _semaphore = new SemaphoreSlim(_options.MaxConcurrent, _options.MaxConcurrent);
             _logger.LogInformation($"[YzhQueueManager] 队列引擎已初始化：并发 {_options.MaxConcurrent}，超时 {_options.TimeoutSeconds}s，租约 {_options.LeaseMinutes}min");
         }
-
-        /// <summary>资源表名常量（业务侧可按需扩展）</summary>
-        public const string RESOURCE_DIR = "cert_standard_directory";
-        public const string RESOURCE_FILE = "cert_standard_directory_file";
 
         #region 入参 DTO
 
@@ -1078,28 +1078,6 @@ namespace YZH.Core.Queue
                     releaseTime = r.ReleaseTime?.ToString("yyyy-MM-dd HH:mm:ss")
                 }).ToList()
             };
-        }
-
-        private static object TryParsePayload(string payload)
-        {
-            if (string.IsNullOrEmpty(payload)) return null;
-            try { return JsonSerializer.Deserialize<JsonElement>(payload); }
-            catch { return payload; }
-        }
-
-        /// <summary>从 JSON payload 字符串中提取指定字段值（避免反射开销）</summary>
-        private static string ExtractJsonValue(string json, string key)
-        {
-            var k = $"\"{key}\"";
-            var idx = json.IndexOf(k);
-            if (idx < 0) return null;
-            var colon = json.IndexOf(':', idx + k.Length);
-            if (colon < 0) return null;
-            var start = json.IndexOf('"', colon + 1);
-            if (start < 0) return null;
-            var end = json.IndexOf('"', start + 1);
-            if (end < 0) return null;
-            return json.Substring(start + 1, end - start - 1);
         }
 
         #endregion

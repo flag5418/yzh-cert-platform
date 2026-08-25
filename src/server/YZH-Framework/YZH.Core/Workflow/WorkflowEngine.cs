@@ -135,7 +135,7 @@ var wf = JsonSerializer.Deserialize<WorkflowConfig>(workflowConfigJson, opts)
             return result;
         }
 
-        private static IReadOnlyList<string> TopoSort(IReadOnlyList<WorkflowNode> nodes, IReadOnlyList<WorkflowEdge> edges)
+        private IReadOnlyList<string> TopoSort(IReadOnlyList<WorkflowNode> nodes, IReadOnlyList<WorkflowEdge> edges)
         {
             var inDegree = new Dictionary<string, int>();
             var adj = new Dictionary<string, List<string>>();
@@ -169,9 +169,8 @@ var wf = JsonSerializer.Deserialize<WorkflowConfig>(workflowConfigJson, opts)
             }
             if (result.Count != nodes.Count)
             {
-                System.Console.WriteLine("[TopoSort] nodes.Count=" + nodes.Count + " result.Count=" + result.Count);
-                foreach (var n in nodes) System.Console.WriteLine("[TopoSort] node=" + n.NodeId);
-                foreach (var e in edges) System.Console.WriteLine("[TopoSort] edge=" + e.From + "->" + e.To);
+                _logger.LogError("工作流存在环，无法拓扑排序：nodes.Count={Nodes} result.Count={Result} edges={Edges}",
+                    nodes.Count, result.Count, string.Join(",", edges.Select(e => $"{e.From}->{e.To}")));
                 throw new WorkflowExecutionException("工作流存在环，无法拓扑排序");
             }
             return result;

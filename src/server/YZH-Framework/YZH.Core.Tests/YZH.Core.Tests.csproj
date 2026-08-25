@@ -1,26 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!--
+    定向验证工程：仅引用被测框架 YZH.Core。
+    测试框架 / 版本 / 编译选项统一由 YZH-Framework/Directory.Build.props 注入，
+    此处不再重复声明 PackageReference（避免 NU1504 重复引用警告）。
+  -->
+
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- 本验证工程使用可空注解（覆盖 Directory.Build.props 的 Nullable=disable）-->
+    <Nullable>enable</Nullable>
   </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
-    <PackageReference Include="xunit" Version="2.6.6" />
-    <PackageReference Include="Moq" Version="4.20.70" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.6">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="coverlet.collector" Version="6.0.0">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\YZH.Core\YZH.Core.csproj" />

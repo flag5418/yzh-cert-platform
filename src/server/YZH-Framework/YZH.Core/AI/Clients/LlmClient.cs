@@ -20,13 +20,12 @@ namespace YZH.Core.AI.Clients
         private readonly ILogger<LlmClient> _logger;
 
         // 全局并发信号量（防止批量提取触发 Qwen 429 限流 / Ollama GPU 过载）
-        private static readonly SemaphoreSlim DefaultGate = new(2, 2);
         private SemaphoreSlim _callGate;
 
-        // 熔断：连续失败 5 次 → 30s 内快速失败
-        private static int _consecutiveFailures;
-        private static DateTime _circuitBreakerUntil = DateTime.MinValue;
-        private static readonly object _circuitLock = new();
+        // 熔断：连续失败 5 次 → 30s 内快速失败（实例级，避免多 Provider/调用方共享进程级状态互相污染）
+        private int _consecutiveFailures;
+        private DateTime _circuitBreakerUntil = DateTime.MinValue;
+        private readonly object _circuitLock = new();
 
         // 重试退避：429 / 5xx / Timeout → 1s / 3s / 7s
         private static readonly int[] RetryDelaysMs = { 1000, 3000, 7000 };
