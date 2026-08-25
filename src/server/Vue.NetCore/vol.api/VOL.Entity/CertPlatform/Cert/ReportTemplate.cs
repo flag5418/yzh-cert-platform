@@ -28,6 +28,7 @@ namespace VOL.Entity.CertPlatform.Cert
         public string PhaseCode { get; set; }
 
         [Required, StringLength(200)]
+        [UniqueField("模板名称", WithFields = new[] { "CbCode", "StandardCode", "PhaseCode" })]
         [Column("template_name")]
         public string TemplateName { get; set; }
 

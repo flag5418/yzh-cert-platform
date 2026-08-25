@@ -27,6 +27,7 @@ using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using VOL.Core.Utilities;
 using VOL.Entity.DomainModels;
+using YZH.Core.Exceptions;
 
 namespace VOL.CERT.Services.CertPlatform
 {
@@ -43,20 +44,10 @@ namespace VOL.CERT.Services.CertPlatform
         }
 
         /// <summary>
-        /// 重写 Update 方法：用 Code（业务主键）定位真实实体，修正 Id + 通用唯一性校验
+        /// 重写 Update 方法：用 Code（业务主键）定位真实实体，修正 Id
         /// 
-        /// 问题根因：
-        ///   EF Core 生成 UPDATE ... WHERE Id = @p0
-        ///   前端传的 Id 可能=0 或与数据库不一致 → 受影响行数=0 → 抛异常
-        ///
-        /// 解决方案：
-        ///   1. 从前端 SaveModel.MainData 取出 Code
-        ///   2. 用 Code 查数据库获取真实 Id
-        ///   3. 将真实 Id 写入实体，再调 base.Update()
-        ///   4. EF Core 就能正确定位到行了
-        ///   
-        /// 唯一性校验：
-        ///   通过实体上的 [UniqueField] 特性自动校验，无需在此手写
+        /// 唯一性校验和异常脱敏由 YZHServiceBase.Update 自动处理，
+        /// 此处仅修正 Id 后委托给 base.Update(saveDataModel)。
         /// </summary>
         public override WebResponseContent Update(SaveModel saveDataModel)
         {
@@ -66,7 +57,6 @@ namespace VOL.CERT.Services.CertPlatform
             var mainData = saveDataModel.MainData;
 
             // ====== 关键：用 Code 修正 Id ======
-            long currentId = 0;
             if (mainData.ContainsKey("Code"))
             {
                 string code = mainData["Code"]?.ToString();
@@ -75,41 +65,20 @@ namespace VOL.CERT.Services.CertPlatform
                     var dbEntity = _repository.FindFirst(x => x.Code == code);
                     if (dbEntity != null)
                     {
-                        currentId = dbEntity.Id;
-                        // 将数据库真实 Id 写回前端传来的数据中
                         mainData["Id"] = dbEntity.Id;
                     }
                 }
             }
 
-            // ====== 通用唯一性校验（基于 [UniqueField] 特性，反射自动检查） ======
-            var uniqueResult = _repository.ValidateUniqueFieldsFromDict<CertificationBody>(
-                mainData, isAdd: false, excludeId: currentId);
-            if (!uniqueResult.Status)
-                return uniqueResult;
-
-            // ====== 调用基类 Update，try-catch 兜底并发冲突 ======
-            try
-            {
-                return base.Update(saveDataModel);
-            }
-            catch (DbUpdateException ex)
-            {
-                string innerMsg = ex.InnerException?.Message ?? ex.Message;
-                return new WebResponseContent().Error($"保存失败：{innerMsg}");
-            }
-            catch (Exception ex)
-            {
-                string innerMsg = ex.InnerException?.Message ?? ex.Message;
-                return new WebResponseContent().Error($"保存失败：{innerMsg}");
-            }
+            // ====== 委托给 YZHServiceBase.Update（含自动校验 + 异常脱敏） ======
+            return base.Update(saveDataModel);
         }
 
         /// <summary>
-        /// 重写 Add 方法：确保 Code 有值 + 通用唯一性校验
+        /// 重写 Add 方法：确保 Code 有值
         /// 
-        /// 唯一性校验通过实体上的 [UniqueField] 特性自动完成，无需在此手写。
-        /// try-catch 兜底处理并发场景下的 DB 唯一键冲突。
+        /// 唯一性校验和异常脱敏由 YZHServiceBase.Add 自动处理，
+        /// 此处仅补充 Code 后委托给 base.Add(saveDataModel)。
         /// </summary>
         public override WebResponseContent Add(SaveModel saveDataModel)
         {
@@ -126,27 +95,8 @@ namespace VOL.CERT.Services.CertPlatform
                     $"CB{DateTime.Now:yyyyMMddHHmmss}{new Random().Next(100, 999)}";
             }
 
-            // ====== 通用唯一性校验（基于 [UniqueField] 特性，反射自动检查） ======
-            var uniqueResult = _repository.ValidateUniqueFieldsFromDict<CertificationBody>(
-                mainData, isAdd: true);
-            if (!uniqueResult.Status)
-                return uniqueResult;
-
-            // ====== 调用基类 Add，try-catch 兜底处理并发导致的 DB 唯一键冲突 ======
-            try
-            {
-                return base.Add(saveDataModel);
-            }
-            catch (DbUpdateException ex)
-            {
-                string innerMsg = ex.InnerException?.Message ?? ex.Message;
-                return new WebResponseContent().Error($"保存失败：{innerMsg}");
-            }
-            catch (Exception ex)
-            {
-                string innerMsg = ex.InnerException?.Message ?? ex.Message;
-                return new WebResponseContent().Error($"保存失败：{innerMsg}");
-            }
+            // ====== 委托给 YZHServiceBase.Add（含自动校验 + 异常脱敏） ======
+            return base.Add(saveDataModel);
         }
 
         /// <summary>
@@ -208,7 +158,7 @@ namespace VOL.CERT.Services.CertPlatform
             }
             catch (Exception ex)
             {
-                return new WebResponseContent().Error($"删除失败: {ex.Message}");
+                return ExceptionSanitizer.Sanitize(ex, "删除");
             }
         }
 

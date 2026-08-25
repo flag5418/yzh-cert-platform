@@ -39,6 +39,7 @@ namespace VOL.Entity.CertPlatform.DocExtraction
         [Display(Name = "表格编码")]
         [Required(ErrorMessage = "表格编码不能为空")]
         [MaxLength(100)]
+        [UniqueField("表格编码", WithFields = new[] { "RuleCode" })]
         public string TableCode { get; set; }
 
         /// <summary>

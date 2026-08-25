@@ -29,7 +29,7 @@ AIGC:
 ## 项目速览
 
 - **项目**：映智汇认证审核管理系统（yzh-cert-platform），ISO 体系认证全流程（建档→任务分派→预审→复核→报告→NC）
-- **技术栈**：.NET 8 + Vol（后端）/ Vue 3 + TypeScript + Element Plus + Vite（admin 与 auditor 双端）/ MySQL 8.0 / Redis 7 / MinIO / Docker Compose（OrbStack）
+- **技术栈**：.NET 8 + Vol（后端）/ Vue 3 + TypeScript + Vite（admin 端 Element Plus、auditor 端 Naive UI）/ MySQL 8.0 / Redis 7 / MinIO / Docker Compose（OrbStack）
 - **端口**：后端 9992 / 后台管理 9990 / 审核员前端 9991 / MySQL 3307 / Redis 6380 / MinIO 9000+9001
 - **开发模式**：独立开发，多 AI 协作机制不适用（项目全局规则 §十三）
 

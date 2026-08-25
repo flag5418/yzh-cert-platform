@@ -40,6 +40,12 @@ namespace YZH.Core.Skills
             if (string.IsNullOrWhiteSpace(template))
                 return new SkillResult { Success = false, Error = "缺少 prompt 入参" };
 
+            // 从上下文读取外部注入的模型名（由调用方从系统参数 cert_sys_config.ai_model_name 注入）
+            // 确保实际调用的模型与系统参数一致，费用可控
+            var model = context.Inputs.TryGetValue("__model", out var m) && !string.IsNullOrWhiteSpace(m?.ToString())
+                ? m.ToString()
+                : "qwen-turbo"; // 兜底默认值
+
             var baseRender = _interpreter.Render(template, new RenderContext(new Dictionary<string, object>
             {
                 ["document_content"] = doc,
@@ -56,6 +62,7 @@ namespace YZH.Core.Skills
                     : baseRender + "\n\n注意：上一轮输出存在 JSON 格式错误。请仅输出符合要求 Schema 的 JSON，不要包含任何解释文字或 Markdown 围栏。";
                 resp = await _llm.CompleteAsync(new LlmRequest
                 {
+                    Model = model,
                     Messages = new List<LlmMessage>
                     {
                         new() { Role = "system", Content = "你是专业的文档信息提取助手，只输出 JSON。" },

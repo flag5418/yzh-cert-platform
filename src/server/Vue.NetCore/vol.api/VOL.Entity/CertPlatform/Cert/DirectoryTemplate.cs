@@ -20,6 +20,7 @@ namespace VOL.Entity.CertPlatform.Cert
         public string ParentCode { get; set; }
 
         [Required, StringLength(200)]
+        [UniqueField("文件夹名称", WithFields = new[] { "ConfigCode", "ParentCode" })]
         [Column("folder_name")]
         public string FolderName { get; set; }
 

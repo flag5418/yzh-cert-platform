@@ -11,10 +11,11 @@ using VOL.CERT.IServices.CertPlatform;
 using VOL.Core.BaseProvider;
 using VOL.Core.Extensions.AutofacManager;
 using VOL.Entity.CertPlatform.Cert;
+using YZH.Core;
 
 namespace VOL.CERT.Services.CertPlatform
 {
-    public partial class ISOStandardService : ServiceBase<ISOStandard, IISOStandardRepository>
+    public partial class ISOStandardService : YZHTableServiceBase<ISOStandard, IISOStandardRepository>
     , IISOStandardService, IDependency
     {
         public static IISOStandardService Instance

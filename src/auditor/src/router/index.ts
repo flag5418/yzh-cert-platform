@@ -34,4 +34,20 @@ const router = createRouter({
   ]
 })
 
+const APP_TITLE = '审核员端'
+
+// 全局守卫：未登录且非 noAuth 页面 → 跳转登录；登录后按 meta.title 设置 document.title
+router.beforeEach((to) => {
+  const token = localStorage.getItem('token')
+  if (!token && !to.meta.noAuth) {
+    return { path: '/login', query: { redirect: to.fullPath } }
+  }
+  return true
+})
+
+router.afterEach((to) => {
+  const title = to.meta.title as string | undefined
+  document.title = title ? `${title} - ${APP_TITLE}` : APP_TITLE
+})
+
 export default router

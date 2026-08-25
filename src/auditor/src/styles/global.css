@@ -25,12 +25,21 @@ html, body, #app {
   background: var(--yzh-bg);
 }
 
-/* Element Plus 主题覆盖 */
-.el-button--primary {
-  --el-button-bg-color: var(--yzh-primary);
-  --el-button-border-color: var(--yzh-primary);
+/* 暗色模式适配（随 appStore.themeMode 同步 data-theme 属性） */
+html[data-theme='dark'] body {
+  background: #101014;
 }
 
-.el-menu {
-  border-right: none;
+/* 审核员端布局辅助 */
+.yzh-logo {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  border-bottom: 1px solid var(--yzh-border);
+}
+
+.yzh-header {
+  height: 56px;
 }

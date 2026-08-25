@@ -131,6 +131,8 @@ builder.Services.AddMvc(options =>
 {
     options.Filters.Add(typeof(ApiAuthorizeFilter));
     options.Filters.Add(typeof(ActionExecuteFilter));
+    // YZH 全局异常过滤器：Controller 层最终兜底，脱敏后返回友好提示
+    options.Filters.Add(typeof(YZH.Core.Exceptions.YZHExceptionFilter));
 });
 
 // ====== Office 文档转换后台服务 ======

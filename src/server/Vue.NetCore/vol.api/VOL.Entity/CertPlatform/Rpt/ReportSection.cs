@@ -36,6 +36,7 @@ namespace VOL.Entity.CertPlatform.Rpt
         public string LayoutJson { get; set; }
 
         [Required, StringLength(200)]
+        [UniqueField("章节名称", WithFields = new[] { "ReportCode" })]
         [Column("section_name")]
         public string SectionName { get; set; }
 

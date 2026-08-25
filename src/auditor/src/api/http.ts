@@ -1,5 +1,6 @@
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { message } from '@/utils/message'
+import router from '@/router'
 
 const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -21,23 +22,28 @@ http.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// 响应拦截器 - 统一错误处理
+// 响应拦截器 - 统一错误处理（兼容 Vol 的 {code, message, data} 结构）
 http.interceptors.response.use(
   (response) => {
     const res = response.data
-    // Vol 框架统一返回 {"code": 0, "message": "...", "data": ...}
+    // 非标准结构（如文件流 / 原始对象）直接返回
+    if (res === null || typeof res !== 'object' || !('code' in res)) {
+      return res
+    }
     if (res.code !== 0) {
-      ElMessage.error(res.message || '请求失败')
-      return Promise.reject(new Error(res.message))
+      message.error(res.message || '请求失败')
+      return Promise.reject(new Error(res.message || '请求失败'))
     }
     return res.data
   },
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
-      window.location.href = '/login'
+      message.error('登录已过期，请重新登录')
+      router.replace('/login')
+    } else {
+      message.error(error.response?.data?.message || error.message || '网络异常')
     }
-    ElMessage.error(error.message || '网络异常')
     return Promise.reject(error)
   }
 )

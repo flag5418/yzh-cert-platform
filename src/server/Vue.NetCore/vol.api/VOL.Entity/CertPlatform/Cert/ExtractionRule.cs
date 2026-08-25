@@ -16,6 +16,7 @@ namespace VOL.Entity.CertPlatform.Cert
         public string FileRequirementCode { get; set; }
 
         [Required, StringLength(36)]
+        [UniqueField("技能编码", WithFields = new[] { "FileRequirementCode" })]
         [Column("skill_code")]
         public string SkillCode { get; set; }
 

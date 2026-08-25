@@ -11,10 +11,11 @@ using VOL.CERT.IServices.CertPlatform;
 using VOL.Core.BaseProvider;
 using VOL.Core.Extensions.AutofacManager;
 using VOL.Entity.CertPlatform.Cert;
+using YZH.Core;
 
 namespace VOL.CERT.Services.CertPlatform
 {
-    public partial class CertStageService : ServiceBase<CertStage, ICertStageRepository>
+    public partial class CertStageService : YZHTableServiceBase<CertStage, ICertStageRepository>
     , ICertStageService, IDependency
     {
         public static ICertStageService Instance

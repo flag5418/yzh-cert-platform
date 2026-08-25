@@ -18,6 +18,7 @@ namespace VOL.Entity.CertPlatform.Cert
         public string FolderCode { get; set; }
 
         [Required, StringLength(200)]
+        [UniqueField("文件名称", WithFields = new[] { "FolderCode" })]
         [Column("file_name_template")]
         public string FileNameTemplate { get; set; }
 

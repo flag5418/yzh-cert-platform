@@ -32,6 +32,7 @@ namespace VOL.Entity.CertPlatform.Cert
         /// </summary>
         [Required]
         [StringLength(20)]
+        [UniqueField("条款编号", WithFields = new[] { "StandardCode" })]
         [Column("clause_number")]
         public string ClauseNumber { get; set; }
 

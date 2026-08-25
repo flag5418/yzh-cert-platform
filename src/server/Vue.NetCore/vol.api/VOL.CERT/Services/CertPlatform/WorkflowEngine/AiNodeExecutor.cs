@@ -7,7 +7,9 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using VOL.CERT.IServices.CertPlatform;
 using VOL.CERT.Services.CertPlatform.WorkflowEngine.Models;
+using VOL.Core.Extensions.AutofacManager;
 using YZH.Core.AI.Clients;
 using YZH.Core.AI.Clients.Models;
 using YZH.Core.AI.Prompt;
@@ -73,7 +75,10 @@ namespace VOL.CERT.Services.CertPlatform.WorkflowEngine
                 var config = node.Config ?? new();
                 var template = config.GetValueOrDefault("promptTemplate")?.ToString() ?? "";
                 var outputType = config.GetValueOrDefault("outputType")?.ToString() ?? "string";
-                var model = config.GetValueOrDefault("model")?.ToString() ?? "qwen-turbo";
+                // 优先使用节点配置的模型；未配置时从系统参数 cert_sys_config.ai_model_name 读取（受控）
+                var model = config.GetValueOrDefault("model")?.ToString();
+                if (string.IsNullOrWhiteSpace(model))
+                    model = GetActiveModelFromSysConfig();
 
                 double temperature = 0.1;
                 if (config.TryGetValue("temperature", out var tVal) &&
@@ -208,7 +213,10 @@ namespace VOL.CERT.Services.CertPlatform.WorkflowEngine
                 var config = node.Config ?? new();
                 var template = config.GetValueOrDefault("promptTemplate")?.ToString() ?? "";
                 var outputType = config.GetValueOrDefault("outputType")?.ToString() ?? "string";
-                var model = config.GetValueOrDefault("model")?.ToString() ?? "qwen-turbo";
+                // 优先使用节点配置的模型；未配置时从系统参数 cert_sys_config.ai_model_name 读取（受控）
+                var model = config.GetValueOrDefault("model")?.ToString();
+                if (string.IsNullOrWhiteSpace(model))
+                    model = GetActiveModelFromSysConfig();
 
                 double temperature = 0.1;
                 if (config.TryGetValue("temperature", out var tVal) &&
@@ -720,6 +728,28 @@ namespace VOL.CERT.Services.CertPlatform.WorkflowEngine
             {
                 return null;
             }
+        }
+
+        /// <summary>
+        /// 从系统参数 cert_sys_config 读取当前生效的 AI 模型名。
+        /// 唯一真相源：ai_model_name 参数。未配置时兜底 qwen-turbo。
+        /// </summary>
+        private static string GetActiveModelFromSysConfig()
+        {
+            try
+            {
+                var sysConfig = AutofacContainerModule.GetService<ISysConfigService>();
+                var model = sysConfig?.Get("ai_model_name");
+                if (!string.IsNullOrWhiteSpace(model))
+                    return model;
+            }
+            catch (Exception ex)
+            {
+                Microsoft.Extensions.Logging.LoggerFactory.Create(b => { })
+                    .CreateLogger<AiNodeExecutor>()
+                    .LogWarning("[GetActiveModel] 读取系统参数失败，使用默认值: {Msg}", ex.Message);
+            }
+            return "qwen-turbo";
         }
     }
 }

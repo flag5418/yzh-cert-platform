@@ -41,6 +41,7 @@ namespace VOL.Entity.CertPlatform.DocExtraction
         [Column("model")]
         [Required]
         [MaxLength(100)]
+        [UniqueField("模型", WithFields = new[] { "Provider" })]
         public string Model { get; set; } = "qwen-turbo";
 
         [Column("temperature")]

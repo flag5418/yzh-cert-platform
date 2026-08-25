@@ -18,9 +18,11 @@ using VOL.Entity.CertPlatform.Ent;
 using VOL.CERT.IRepositories.CertPlatform;
 using VOL.CERT.IServices.CertPlatform;
 
+using YZH.Core;
+
 namespace VOL.CERT.Services.CertPlatform
 {
-    public partial class DocExtractionRuleService : ServiceBase<CertDocExtractionRule, ICertDocExtractionRuleRepository>
+    public partial class DocExtractionRuleService : YZHTableServiceBase<CertDocExtractionRule, ICertDocExtractionRuleRepository>
     , IDocExtractionRuleService, IDependency
     {
         [ActivatorUtilitiesConstructor]

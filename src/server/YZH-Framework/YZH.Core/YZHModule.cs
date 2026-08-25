@@ -4,7 +4,7 @@ using System.Reflection;
 using Autofac;
 using YZH.Core.Audit;
 using YZH.Core.CodeRule;
-using YZH.Core.DeleteStrategy;
+// 删除策略（DeleteMode / YZHDeleteStrategyAttribute）已合并至 YZHServiceBase.cs
 using YZH.Core.Extractor;
 using YZH.Core.Extractor.Excel;
 using YZH.Core.Extractor.Models;
@@ -223,15 +223,13 @@ namespace YZH.Core
         #region Phase 3: 高级能力（待实现）
 
         /// <summary>
-        /// 注册删除策略相关服务
-        /// TODO:P3 - Phase 3 实现
+        /// 删除策略已合并至 YZHServiceBase.Del()，通过 [YZHDeleteStrategy] 特性声明。
+        /// 此方法保留为空壳，标记"已迁移"。
         /// </summary>
         private void RegisterDeleteStrategyServices(ContainerBuilder builder)
         {
-            // TODO: 注册删除策略工厂
-            // builder.RegisterType<YZHDeleteStrategyFactory>()
-            //        .As<IDeleteStrategyFactory>()
-            //        .InstancePerLifetimeScope();
+            // 已迁移：删除策略逻辑已融入 YZHServiceBase.Del()
+            // 通过 [YZHDeleteStrategy(Mode=Logical|Physical|Cascade)] 特性声明
         }
 
         /// <summary>

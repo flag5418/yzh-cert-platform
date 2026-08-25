@@ -19,6 +19,7 @@ namespace VOL.Entity.CertPlatform.Sys
         /// </summary>
         [Required]
         [StringLength(50)]
+        [UniqueField("机构编码", WithFields = new[] { "StdCode" })]
         [Column("org_code")]
         public string OrgCode { get; set; }
 

@@ -109,6 +109,7 @@ docs/
 | `60-AI工程设计/vol-framework-complete-guide.md` | Vol 框架完整指南 |
 | `60-AI工程设计/vol-framework-troubleshooting.md` | Vol 框架问题排查 |
 | `60-AI工程设计/cert-platform-page-development-guide.md` | 认证平台页面开发指南 |
+| `60-AI工程设计/auditor-前端基础框架-V1.md` | 审核员前端（Naive UI）基础框架：技术栈/结构/主题/路由/消息约定、启动命令、端口 9991、与 admin 端边界 |
 | `60-AI工程设计/YZH-知识库/` | YZH 知识底座：Vol 能力清单、YZH 增量、边界约束、代码模板、踩坑记录（子目录文件见 README） |
 
 ## 五、80-功能设计（★ 功能设计中枢）

@@ -11,10 +11,11 @@ using VOL.CERT.IServices.CertPlatform;
 using VOL.Core.BaseProvider;
 using VOL.Core.Extensions.AutofacManager;
 using VOL.Entity.CertPlatform.Audit;
+using YZH.Core;
 
 namespace VOL.CERT.Services.CertPlatform
 {
-    public partial class AuditTaskService : ServiceBase<AuditTask, IAuditTaskRepository>
+    public partial class AuditTaskService : YZHTableServiceBase<AuditTask, IAuditTaskRepository>
     , IAuditTaskService, IDependency
     {
         public static IAuditTaskService Instance

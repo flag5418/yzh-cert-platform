@@ -193,6 +193,9 @@ namespace VOL.CERT.Services.CertPlatform
             if (workflowEngine == null)
                 return new AIAnalyzeResponse { Fields = new(), Tables = new(), Message = "AI 分析服务未配置（LLM 工作流未注册），文档内容已提取成功，可先在“提示词与验证”页签配置提取规则" };
 
+            // 从系统参数读取受控模型名（唯一真相源：cert_sys_config.ai_model_name）
+            var activeModel = GetActiveModelFromSysConfig();
+
             var analyzePrompt = await BuildAnalysisPromptAsync(skill);
             var workflowJson = BuildExtractWorkflow(analyzePrompt);
             var ctx = new WorkflowContext
@@ -202,7 +205,8 @@ namespace VOL.CERT.Services.CertPlatform
                 Inputs = new Dictionary<string, object>
                 {
                     ["document_content"] = docContent,
-                    ["prompt"] = analyzePrompt
+                    ["prompt"] = analyzePrompt,
+                    ["__model"] = activeModel  // 注入系统参数的模型名，LlmExtractSkill 会读取此值
                 }
             };
 
@@ -235,6 +239,9 @@ namespace VOL.CERT.Services.CertPlatform
             if (workflowEngine == null)
                 return new ExtractionData { Fields = new(), Tables = new(), Message = "AI 工作流引擎未注册" };
 
+            // 从系统参数读取受控模型名（唯一真相源：cert_sys_config.ai_model_name）
+            var activeModel = GetActiveModelFromSysConfig();
+
             var workflowJson = BuildExtractWorkflow(prompt);
             var ctx = new WorkflowContext
             {
@@ -243,7 +250,8 @@ namespace VOL.CERT.Services.CertPlatform
                 Inputs = new Dictionary<string, object>
                 {
                     ["document_content"] = docContent,
-                    ["prompt"] = prompt
+                    ["prompt"] = prompt,
+                    ["__model"] = activeModel  // 注入系统参数的模型名，LlmExtractSkill 会读取此值
                 }
             };
 
@@ -556,12 +564,8 @@ namespace VOL.CERT.Services.CertPlatform
         {
             try
             {
-                var aiConfig = await repository.DbContext.Set<AIConfig>()
-                    .Where(c => c.IsEnabled)
-                    .FirstOrDefaultAsync();
-
-                var model = aiConfig?.Model ?? "qwen-turbo";
-                var provider = aiConfig?.Provider ?? "qwen";
+                // 统一从系统参数读取模型名（与实际调用一致）
+                var model = GetActiveModelFromSysConfig();
                 var totalTokens = (promptTokens ?? 0) + (completionTokens ?? 0);
                 var costUsd = AIUsageLogService.CalculateCost(model, promptTokens ?? 0, completionTokens ?? 0);
 
@@ -570,7 +574,7 @@ namespace VOL.CERT.Services.CertPlatform
                     CallId = Guid.NewGuid().ToString("N"),
                     BusinessType = "doc_extraction",
                     Skill = skill,
-                    Provider = provider,
+                    Provider = "qwen",
                     Model = model,
                     PromptTokens = promptTokens ?? 0,
                     CompletionTokens = completionTokens ?? 0,
@@ -589,6 +593,26 @@ namespace VOL.CERT.Services.CertPlatform
             {
                 System.Console.WriteLine($"[AIUsageLog] 记录失败: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// 从系统参数 cert_sys_config 读取当前生效的 AI 模型名。
+        /// 唯一真相源：ai_model_name 参数。未配置时兜底 qwen-turbo。
+        /// </summary>
+        private string GetActiveModelFromSysConfig()
+        {
+            try
+            {
+                var sysConfig = AutofacContainerModule.GetService<ISysConfigService>();
+                var model = sysConfig?.Get("ai_model_name");
+                if (!string.IsNullOrWhiteSpace(model))
+                    return model;
+            }
+            catch (Exception ex)
+            {
+                System.Console.WriteLine($"[GetActiveModel] 读取系统参数失败，使用默认值: {ex.Message}");
+            }
+            return "qwen-turbo";
         }
 
         #endregion

@@ -31,6 +31,7 @@ namespace VOL.Entity.CertPlatform.Cert
         [Required]
         [StringLength(200)]
         [Editable(true)]
+        [UniqueField("标准名称")]
         [Column("standard_name")]
         public string StandardName { get; set; }
 
