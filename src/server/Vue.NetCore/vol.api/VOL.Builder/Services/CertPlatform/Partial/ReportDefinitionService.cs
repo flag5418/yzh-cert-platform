@@ -127,6 +127,16 @@ namespace VOL.Builder.Services.CertPlatform
                 .OrderBy(x => x.SortOrder).ToListAsync();
         }
 
+        /// <summary>
+        /// 按 org+std+phase 查询章节列表（先查模板再查章节）
+        /// </summary>
+        public async Task<List<ReportSection>> GetSectionsByContextAsync(string orgCode, string standardCode, string phaseCode)
+        {
+            var template = await GetByContextAsync(orgCode, standardCode, phaseCode);
+            if (template == null) return new List<ReportSection>();
+            return await GetSectionsAsync(template.Code);
+        }
+
         public async Task<bool> SaveSectionAsync(ReportSection entity)
         {
             if (entity.Id > 0)
@@ -135,12 +145,13 @@ namespace VOL.Builder.Services.CertPlatform
                 if (existing == null) return false;
                 existing.ReportCode = entity.ReportCode; existing.ClauseCode = entity.ClauseCode;
                 existing.WorkflowCode = entity.WorkflowCode; existing.WorkflowConfig = entity.WorkflowConfig;
+                existing.LayoutJson = entity.LayoutJson;
                 existing.SectionName = entity.SectionName;
                 existing.SectionNameEn = entity.SectionNameEn; existing.SectionJson = entity.SectionJson;
                 existing.Remark = entity.Remark; existing.IsActive = entity.IsActive;
                 existing.Content = entity.Content; existing.SortOrder = entity.SortOrder;
                 existing.OrgCode = entity.OrgCode;
-                _sectionRepo.Update(existing, new[] { "ReportCode","ClauseCode","WorkflowCode","WorkflowConfig","SectionName",
+                _sectionRepo.Update(existing, new[] { "ReportCode","ClauseCode","WorkflowCode","WorkflowConfig","LayoutJson","SectionName",
                     "SectionNameEn","SectionJson","Remark","IsActive","Content","SortOrder","OrgCode" }, true);
                 return true;
             }
@@ -168,6 +179,7 @@ namespace VOL.Builder.Services.CertPlatform
             {
                 OrgCode = source.OrgCode, ReportCode = source.ReportCode, ClauseCode = source.ClauseCode,
                 WorkflowCode = source.WorkflowCode, WorkflowConfig = source.WorkflowConfig,
+                LayoutJson = source.LayoutJson,
                 SectionName = $"{source.SectionName}（副本）",
                 SectionNameEn = source.SectionNameEn, SectionJson = source.SectionJson,
                 Remark = source.Remark, IsActive = false, Content = source.Content,

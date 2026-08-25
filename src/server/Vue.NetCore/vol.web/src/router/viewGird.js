@@ -208,6 +208,13 @@ let viewgird = [
     name: 'NCConfig',
     component: () => import('@/views/cert/Standard/NCConfig/index.vue'),
     meta: { title: 'NC 规则配置' }
+  },
+  // 报告规则配置（三栏：机构树 + 报告章节 + 工作流画布，独立菜单）
+  {
+    path: '/CertPlatform/ReportRuleConfig',
+    name: 'ReportRuleConfig',
+    component: () => import('@/views/cert/Standard/ReportRuleConfig/index.vue'),
+    meta: { title: '报告规则配置' }
   }
 ]
 

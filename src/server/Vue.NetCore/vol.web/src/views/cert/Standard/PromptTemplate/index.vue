@@ -52,7 +52,6 @@
             <el-tag v-else size="small">{{ row.skillTarget }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="version" label="版本" width="70" align="center" />
         <el-table-column prop="isActive" label="生效" width="70" align="center">
           <template #default="{ row }">
             <el-tag :type="row.isActive ? 'success' : 'info'" size="small">
@@ -86,7 +85,7 @@
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="编码" prop="promptCode">
-              <el-input v-model="editForm.promptCode" placeholder="如：analyze_word_v1" :disabled="!!editForm.id" />
+              <el-input v-model="editForm.promptCode" placeholder="如：analyze_word" :disabled="!!editForm.id" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -153,10 +152,9 @@
           <el-tag v-if="!viewData.skillTarget" size="small" type="info">全部</el-tag>
           <el-tag v-else size="small">{{ viewData.skillTarget }}</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="版本">{{ viewData.version }}</el-descriptions-item>
         <el-descriptions-item label="生效状态">
           <el-tag :type="viewData.isActive ? 'success' : 'info'" size="small">
-            {{ viewData.isActive ? '生效中' : '历史版本' }}
+            {{ viewData.isActive ? '生效中' : '未生效' }}
           </el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="说明" :span="2">{{ viewData.description || '-' }}</el-descriptions-item>
@@ -167,7 +165,7 @@
       </div>
       <template #footer>
         <el-button @click="viewVisible = false">关闭</el-button>
-        <el-button v-if="viewData && !viewData.isActive" type="warning" @click="doActivate(viewData); viewVisible=false">激活此版本</el-button>
+        <el-button v-if="viewData && !viewData.isActive" type="warning" @click="doActivate(viewData); viewVisible=false">设为生效</el-button>
       </template>
     </el-dialog>
   </div>
@@ -225,7 +223,6 @@ async function loadList() {
       skillTarget: item.SkillTarget || item.skillTarget,
       template: item.Template || item.template,
       description: item.Description || item.description,
-      version: item.Version || item.version,
       isActive: item.IsActive ?? item.isActive,
       enable: item.Enable ?? item.enable,
       code: item.Code || item.code,

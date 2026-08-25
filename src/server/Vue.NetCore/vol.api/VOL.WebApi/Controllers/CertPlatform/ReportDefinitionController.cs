@@ -83,6 +83,13 @@ namespace VOL.WebApi.Controllers.CertPlatform
             return Ok(new { status = true, data = list });
         }
 
+        [HttpGet("section/by-context")]
+        public async Task<IActionResult> GetSectionsByContext([FromQuery] string orgCode, [FromQuery] string standardCode, [FromQuery] string phaseCode)
+        {
+            var list = await _service.GetSectionsByContextAsync(orgCode, standardCode, phaseCode);
+            return Ok(new { status = true, data = list });
+        }
+
         [HttpPost("section")]
         public async Task<IActionResult> SaveSection([FromBody] ReportSection entity)
         {

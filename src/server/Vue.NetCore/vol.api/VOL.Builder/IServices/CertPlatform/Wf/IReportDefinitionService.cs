@@ -19,6 +19,8 @@ namespace VOL.Builder.IServices.CertPlatform
         Task<bool> DeleteTemplateAsync(long id);
 
         Task<List<ReportSection>> GetSectionsAsync(string reportCode);
+        /// <summary>按 org+std+phase 查询章节列表（先查模板再查章节）</summary>
+        Task<List<ReportSection>> GetSectionsByContextAsync(string orgCode, string standardCode, string phaseCode);
         Task<bool> SaveSectionAsync(ReportSection entity);
         Task<bool> DeleteSectionAsync(long id);
         Task<ReportSection> CopySectionAsync(long sourceId);

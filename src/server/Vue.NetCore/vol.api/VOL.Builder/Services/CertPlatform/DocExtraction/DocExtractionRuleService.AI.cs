@@ -264,28 +264,17 @@ namespace VOL.Builder.Services.CertPlatform
         #region 私有辅助方法
 
         /// <summary>
-        /// 构建 AI 分析提示词（analyze 模式）：优先从 DB 读取 V2 模板，其次 V1，最后回退到内嵌默认。
+        /// 构建 AI 分析提示词（analyze 模式）：从 DB 读取 analyze_{skill} 模板，找不到回退到内嵌默认。
         /// </summary>
         private async Task<string> BuildAnalysisPromptAsync(string skill)
         {
-            // 优先尝试 V2 版本（中英文双名 + 提取值预览）
-            var promptCodeV2 = $"analyze_{skill}_v2";
-            var dbPromptV2 = await repository.DbContext.Set<PromptTemplate>()
-                .FirstOrDefaultAsync(x => x.PromptCode == promptCodeV2 && x.IsActive == true && x.Enable == true);
-            if (dbPromptV2 != null && !string.IsNullOrWhiteSpace(dbPromptV2.Template))
+            var promptCode = $"analyze_{skill}";
+            var dbPrompt = await repository.DbContext.Set<PromptTemplate>()
+                .FirstOrDefaultAsync(x => x.PromptCode == promptCode && x.IsActive == true && x.Enable == true);
+            if (dbPrompt != null && !string.IsNullOrWhiteSpace(dbPrompt.Template))
             {
-                Console.WriteLine($"[DocExtractionRule] 📝 使用数据库提示词 V2: {promptCodeV2} (v{dbPromptV2.Version})");
-                return dbPromptV2.Template;
-            }
-
-            // 其次尝试 V1 版本
-            var promptCodeV1 = $"analyze_{skill}_v1";
-            var dbPromptV1 = await repository.DbContext.Set<PromptTemplate>()
-                .FirstOrDefaultAsync(x => x.PromptCode == promptCodeV1 && x.IsActive == true && x.Enable == true);
-            if (dbPromptV1 != null && !string.IsNullOrWhiteSpace(dbPromptV1.Template))
-            {
-                Console.WriteLine($"[DocExtractionRule] 📝 使用数据库提示词 V1: {promptCodeV1} (v{dbPromptV1.Version})");
-                return dbPromptV1.Template;
+                Console.WriteLine($"[DocExtractionRule] 📝 使用数据库提示词: {promptCode} (v{dbPrompt.Version})");
+                return dbPrompt.Template;
             }
 
             // 回退到内嵌默认

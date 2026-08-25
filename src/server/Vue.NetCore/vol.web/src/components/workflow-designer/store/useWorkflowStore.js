@@ -444,6 +444,7 @@ export function useWorkflowStore() {
     updateNode,
     clearAll,
     loadFromData,
+    markDirty,
     markClean,
     // 查询
     getNodeById,

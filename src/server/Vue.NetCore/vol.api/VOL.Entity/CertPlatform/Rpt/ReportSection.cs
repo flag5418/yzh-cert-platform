@@ -31,6 +31,10 @@ namespace VOL.Entity.CertPlatform.Rpt
         [Column("workflow_config")]
         public string WorkflowConfig { get; set; }
 
+        /// <summary>章节工作流布局 JSON（节点坐标）</summary>
+        [Column("layout_json")]
+        public string LayoutJson { get; set; }
+
         [Required, StringLength(200)]
         [Column("section_name")]
         public string SectionName { get; set; }
