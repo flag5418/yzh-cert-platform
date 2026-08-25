@@ -8,7 +8,7 @@ namespace VOL.WebApi.Controllers.CertPlatform
 {
     using Microsoft.AspNetCore.Authorization;
     using Microsoft.AspNetCore.Mvc;
-    using VOL.Builder.IServices.CertPlatform;
+    using VOL.CERT.IServices.CertPlatform;
     using VOL.Entity.DomainModels;
 
     [Route("api/workflow-definition")]

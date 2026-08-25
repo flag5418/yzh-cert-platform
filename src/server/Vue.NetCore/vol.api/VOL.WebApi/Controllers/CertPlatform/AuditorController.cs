@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
-using VOL.Builder.IServices.CertPlatform;
+using VOL.CERT.IServices.CertPlatform;
 using VOL.Core.Controllers.Basic;
 using VOL.Entity.AttributeManager;
 

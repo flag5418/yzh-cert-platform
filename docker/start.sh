@@ -34,6 +34,10 @@ check_port() {
     if [ -n "$pid" ]; then
         local container=$(docker ps --filter "publish=$port" --format "{{.Names}}" 2>/dev/null || true)
         if [ -n "$container" ]; then
+            # 若占用容器属于本项目 compose 服务，视为已启动，允许幂等
+            if docker compose ps --format "{{.Names}}" 2>/dev/null | grep -qx "$container"; then
+                return 0
+            fi
             echo -e "${RED}端口 $port 被容器 [$container] 占用，无法启动 $name${NC}"
             echo -e "${YELLOW}提示: 可执行 docker stop $container 停止占用容器${NC}"
         else
@@ -71,17 +75,20 @@ fi
 echo ""
 
 # 启动服务
-echo -e "${GREEN}[1/3] 启动 MySQL 8.0 (端口 3307)...${NC}"
+echo -e "${GREEN}[1/5] 启动 MySQL 8.0 (端口 3307)...${NC}"
 docker compose up -d mysql
 
-echo -e "${GREEN}[2/3] 启动 Redis 7 (端口 6380)...${NC}"
+echo -e "${GREEN}[2/5] 启动 Redis 7 (端口 6380)...${NC}"
 docker compose up -d redis
 
-echo -e "${GREEN}[3/3] 启动 MinIO (端口 9000/9001)...${NC}"
+echo -e "${GREEN}[3/5] 启动 MinIO (端口 9000/9001)...${NC}"
 docker compose up -d minio
 
-echo -e "${GREEN}[4/4] 启动 LibreOffice (文档转换)...${NC}"
+echo -e "${GREEN}[4/5] 启动 LibreOffice (文档转换)...${NC}"
 docker compose up -d libreoffice
+
+echo -e "${GREEN}[5/5] 启动 anydoc (文档转 Markdown)...${NC}"
+docker compose up -d --build anydoc
 
 # 等待就绪
 echo ""
@@ -135,6 +142,18 @@ for i in $(seq 1 15); do
     [ "$i" -eq 15 ] && echo -e " ${RED}超时${NC}"
 done
 
+# 等待 anydoc 就绪
+echo -n "  anydoc"
+for i in $(seq 1 15); do
+    if docker exec yzh-anydoc anydoc --version &>/dev/null; then
+        echo -e " ${GREEN}✓${NC}"
+        break
+    fi
+    echo -n "."
+    sleep 1
+    [ "$i" -eq 15 ] && echo -e " ${RED}超时${NC}"
+done
+
 # 状态
 echo ""
 echo -e "${GREEN}========================================${NC}"
@@ -144,7 +163,8 @@ docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 echo ""
 echo -e "${CYAN}MySQL:    mysql -h 127.0.0.1 -P 3307 -u root -p yzh_cert_platform"
 echo -e "${CYAN}Redis:    redis-cli -p 6380"
-echo -e "${CYAN}MinIO:    http://127.0.0.1:9001 (Console) / http://127.0.0.1:9000 (API)${NC}"
+echo -e "${CYAN}MinIO:    http://127.0.0.1:9001 (Console) / http://127.0.0.1:9000 (API)"
+echo -e "${CYAN}anydoc:   docker exec yzh-anydoc anydoc /tmp/anydoc/文件.docx${NC}"
 echo ""
 echo -e "${GREEN}提示: 使用 ./stop.sh 停止服务${NC}"
 echo ""

@@ -51,6 +51,7 @@ node_modules/
 docker/data/
 docker/*/data/
 docker/libreoffice/tmp/
+docker/anydoc/tmp/
 
 # 环境变量（含敏感信息）
 .env

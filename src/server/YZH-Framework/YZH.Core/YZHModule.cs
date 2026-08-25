@@ -165,9 +165,9 @@ namespace YZH.Core
             builder.RegisterType<SkillExecutor>()
                    .AsSelf()
                    .InstancePerLifetimeScope();
-            builder.RegisterType<SkillRegistry>()
-                   .As<ISkillRegistry>()
-                   .InstancePerLifetimeScope();
+            
+            // 注意：ISkillRegistry 的实现（CertSkillRegistry）由业务模块（VOL.CERT）注册
+            // YZH-Framework 只提供 SkillExecutor 和 WorkflowEngine
             
             // S4: WorkflowEngine
             builder.RegisterType<WorkflowEngine>()
@@ -179,7 +179,7 @@ namespace YZH.Core
                    .As<IReflectionSkillLoader>()
                    .InstancePerLifetimeScope();
             
-            Console.WriteLine("[YZH] Workflow services registered (SkillRegistry + 6 built-in Skills + WorkflowEngine)");
+            Console.WriteLine("[YZH] Workflow services registered (SkillExecutor + WorkflowEngine, ISkillRegistry deferred to business module)");
         }
 
         /// <summary>

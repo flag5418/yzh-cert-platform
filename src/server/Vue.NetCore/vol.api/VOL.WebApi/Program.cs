@@ -134,19 +134,19 @@ builder.Services.AddMvc(options =>
 });
 
 // ====== Office 文档转换后台服务 ======
-builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.OfficeConvertService>();
+builder.Services.AddScoped<VOL.CERT.Services.CertPlatform.OfficeConvertService>();
 
 // ====== yzh 队列中心（YZH.Core.Queue 框架核心） ======
 builder.Services.Configure<YZH.Core.Queue.YzhQueueOptions>(builder.Configuration.GetSection(YZH.Core.Queue.YzhQueueOptions.SectionName));
 builder.Services.AddSingleton<YZH.Core.Queue.YzhQueueManager>();
-builder.Services.AddSingleton<YZH.Core.Queue.IYzhTaskExecutor, VOL.Builder.Services.CertPlatform.OfficeConvertTaskExecutor>();
+builder.Services.AddSingleton<YZH.Core.Queue.IYzhTaskExecutor, VOL.CERT.Services.CertPlatform.OfficeConvertTaskExecutor>();
 // 队列取消后的业务清理钩子：上传任务取消时彻底清理数据库记录 + MinIO 对象
-builder.Services.AddScoped<YZH.Core.Queue.IYzhQueueCancelHandler, VOL.Builder.Services.CertPlatform.UploadQueueCancelHandler>();
+builder.Services.AddScoped<YZH.Core.Queue.IYzhQueueCancelHandler, VOL.CERT.Services.CertPlatform.UploadQueueCancelHandler>();
 builder.Services.AddHostedService<YZH.Core.Queue.YzhQueueHostedService>();
 
 // ====== SignalR 转换进度通知（桥接队列引擎与 Hub） ======
-builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IConvertNotifier, VOL.WebApi.Hubs.ConvertNotifier>();
-builder.Services.AddSingleton<YZH.Core.Queue.IYzhQueueNotifier, VOL.Builder.Services.CertPlatform.CertQueueNotifier>();
+builder.Services.AddScoped<VOL.CERT.IServices.CertPlatform.IConvertNotifier, VOL.WebApi.Hubs.ConvertNotifier>();
+builder.Services.AddSingleton<YZH.Core.Queue.IYzhQueueNotifier, VOL.CERT.Services.CertPlatform.CertQueueNotifier>();
 
 // ====== YZH Framework 核心服务注册（替代 YZHModule Autofac 注册）======
 // 文件提取服务：仅注册 IFileExtractor。
@@ -166,19 +166,19 @@ builder.Services.AddScoped<YZH.Core.AI.Prompt.IPromptInterpreter, YZH.Core.AI.Pr
 // 工作流服务（V2 静态方法版）
 builder.Services.AddScoped<YZH.Core.Workflow.SkillExecutor>();
 // CertSkillRegistry 替代 SkillRegistry（项目侧实现，依赖 WfSkillReflection）
-builder.Services.AddScoped<YZH.Core.Workflow.ISkillRegistry, VOL.Builder.Services.CertPlatform.WorkflowEngine.CertSkillRegistry>();
+builder.Services.AddScoped<YZH.Core.Workflow.ISkillRegistry, VOL.CERT.Services.CertPlatform.WorkflowEngine.CertSkillRegistry>();
 builder.Services.AddScoped<YZH.Core.Workflow.IWorkflowEngine, YZH.Core.Workflow.WorkflowEngine>();
 
 // ISkillNode 实例注册（供 SkillRegistry DI 回退，非工作流静态 Skill）
 builder.Services.AddScoped<YZH.Core.Workflow.ISkillNode, YZH.Core.Skills.LlmExtractSkill>();
 
 // 工作流执行引擎（V3 模块注册）
-builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.WorkflowEngine.WorkflowConfigParser>();
-builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.WorkflowEngine.NodeExecutor>();
-builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.WorkflowEngine.WorkflowInterpreter>();
-builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.WorkflowEngine.TaskCacheService>();
-builder.Services.AddSingleton<VOL.Builder.Services.CertPlatform.WorkflowEngine.WorkflowLogger>();
-builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.WorkflowEngine.WfExecutionTaskService>();
+builder.Services.AddScoped<VOL.CERT.Services.CertPlatform.WorkflowEngine.WorkflowConfigParser>();
+builder.Services.AddScoped<VOL.CERT.Services.CertPlatform.WorkflowEngine.NodeExecutor>();
+builder.Services.AddScoped<VOL.CERT.Services.CertPlatform.WorkflowEngine.WorkflowInterpreter>();
+builder.Services.AddScoped<VOL.CERT.Services.CertPlatform.WorkflowEngine.TaskCacheService>();
+builder.Services.AddSingleton<VOL.CERT.Services.CertPlatform.WorkflowEngine.WorkflowLogger>();
+builder.Services.AddScoped<VOL.CERT.Services.CertPlatform.WorkflowEngine.WfExecutionTaskService>();
 
 // 新增Helper服务
             // 注册MinIO客户端
@@ -193,9 +193,9 @@ builder.Services.AddScoped<VOL.Builder.Services.CertPlatform.WorkflowEngine.WfEx
                     .WithSSL(false)
                     .Build();
             });
-            builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IMinIOHelper, VOL.Builder.Services.CertPlatform.MinIOHelper>();
-builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IFolderFileManager, VOL.Builder.Services.CertPlatform.FolderFileManager>();
-builder.Services.AddScoped<VOL.Builder.IServices.CertPlatform.IFileStorageService, VOL.Builder.Services.CertPlatform.FileStorageService>();
+            builder.Services.AddScoped<VOL.CERT.IServices.CertPlatform.IMinIOHelper, VOL.CERT.Services.CertPlatform.MinIOHelper>();
+builder.Services.AddScoped<VOL.CERT.IServices.CertPlatform.IFolderFileManager, VOL.CERT.Services.CertPlatform.FolderFileManager>();
+builder.Services.AddScoped<VOL.CERT.IServices.CertPlatform.IFileStorageService, VOL.CERT.Services.CertPlatform.FileStorageService>();
             // 注册文件提取器（YZH.Core），供文档提取规则 analyze/content 链路使用
             builder.Services.AddScoped<YZH.Core.Extractor.IFileExtractor, YZH.Core.Extractor.FileExtractorService>();
 

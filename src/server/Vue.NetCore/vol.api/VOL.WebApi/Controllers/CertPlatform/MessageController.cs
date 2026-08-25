@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using VOL.Builder.IServices.CertPlatform;
+using VOL.CERT.IServices.CertPlatform;
 using VOL.Core.Extensions;
 using VOL.Core.Infrastructure;
 using VOL.Core.ManageUser;

@@ -95,6 +95,24 @@ services:
     networks:
       - yzh-net
 
+  ##############################################################################
+  # anydoc - 文档转 Markdown 转换服务 (Word/PPT/Excel/PDF/EPUB/CSV -> Markdown)
+  # 基于 node:22-slim + @firecrawl/anydoc 自建镜像，无官方镜像
+  # 用法: docker exec yzh-anydoc anydoc /tmp/anydoc/xxx.docx
+  ##############################################################################
+  anydoc:
+    build: ./anydoc
+    container_name: yzh-anydoc
+    restart: "no"
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./anydoc/tmp:/tmp/anydoc
+    # 保持容器运行，等待转换任务
+    command: tail -f /dev/null
+    networks:
+      - yzh-net
+
 networks:
   yzh-net:
     driver: bridge

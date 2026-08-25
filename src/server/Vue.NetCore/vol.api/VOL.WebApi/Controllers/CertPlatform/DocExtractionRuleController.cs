@@ -9,7 +9,7 @@ using VOL.Core.Extensions.AutofacManager;
 using VOL.Entity.CertPlatform.DocExtraction;
 using VOL.Entity.CertPlatform.DocExtraction.DTOs;
 // using VOL.Entity.CertPlatform.Dir; // 废弃，待企业文件实体重建后恢复
-using VOL.Builder.IServices.CertPlatform;
+using VOL.CERT.IServices.CertPlatform;
 using YZH.Core.Extractor.Models;
 
 namespace VOL.WebApi.Controllers.CertPlatform

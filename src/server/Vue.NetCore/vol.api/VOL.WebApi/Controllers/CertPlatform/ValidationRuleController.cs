@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using VOL.Core.BaseProvider;
 using VOL.Core.ManageUser;
 using VOL.Entity.DomainModels;
-using VOL.Builder.IServices.CertPlatform;
+using VOL.CERT.IServices.CertPlatform;
 using VOL.Entity.CertPlatform.Cert;
 
 namespace VOL.WebApi.Controllers.CertPlatform

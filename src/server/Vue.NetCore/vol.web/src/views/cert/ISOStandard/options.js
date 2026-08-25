@@ -43,10 +43,36 @@ export default function () {
     editFormFields,
     searchFormFields,
 
-    // ===== V3.0：以下内容由数据库 yzh_field_config 驱动 =====
-    columns: [],
-    editFormOptions: [],
-    searchFormOptions: [],
+    columns: [
+      { field: 'Id', title: 'ID', width: 70, align: 'center', hidden: true },
+      { field: 'StandardCode', title: '标准编号', width: 150, sortable: true },
+      { field: 'StandardName', title: '标准名称', width: 250, sortable: true, showOverflow: true },
+      { field: 'VersionYear', title: '版本', width: 80, align: 'center' },
+      { field: 'CategoryName', title: '分类', width: 100, align: 'center' },
+      { field: 'StatusName', title: '状态', width: 80, align: 'center' },
+      { field: 'CbCode', title: '机构编号', width: 120 },
+    ],
+    editFormOptions: [
+      [
+        { field: 'CbCode', title: '机构编号', type: 'input', required: true, colSize: 1 },
+        { field: 'StandardCode', title: '标准编号', type: 'input', required: true, placeholder: '如 ISO 9001:2015', colSize: 1 },
+      ],
+      [
+        { field: 'StandardName', title: '标准名称', type: 'input', required: true, colSize: 2 },
+      ],
+      [
+        { field: 'VersionYear', title: '版本年份', type: 'number', colSize: 1 },
+        { field: 'Category', title: '分类', type: 'select', dataKey: 'iso_category', colSize: 1 },
+        { field: 'Status', title: '状态', type: 'select', dataKey: 'standard_status', colSize: 1 },
+        { field: 'Remark', title: '备注', type: 'textarea', rows: 2, colSize: 1 },
+      ],
+    ],
+    searchFormOptions: [
+      [
+        { field: 'keyword', title: '关键词', type: 'input', placeholder: '标准编号/名称' },
+        { field: 'Status', title: '状态', type: 'select', dataKey: 'standard_status' },
+      ],
+    ],
     detail: { columns: [] },
     details: [],
   };

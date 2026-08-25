@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
-using VOL.Builder.Services.CertPlatform;
+using VOL.CERT.Services.CertPlatform;
 using VOL.Entity.CertPlatform.Cert;
-using VOL.Builder.IServices.CertPlatform;
+using VOL.CERT.IServices.CertPlatform;
 
 namespace VOL.WebApi.Controllers.CertPlatform
 {

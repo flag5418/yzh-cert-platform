@@ -78,14 +78,7 @@
           <div class="h-link">
             <vol-menu-filter :on-select="onSelect"></vol-menu-filter>
           </div>
-          <!-- YZH V3.0 刷新配置按钮（开发阶段使用） -->
-          <div class="h-link" title="刷新页面 UI 配置（从服务端重新加载）" @click="refreshYzhConfig">
-            <a :style="{ opacity: yzhConfigLoading ? 0.6 : 1, cursor: yzhConfigLoading ? 'not-allowed' : 'pointer' }">
-              <i :class="yzhConfigLoading ? 'el-icon-loading' : 'icon icon-refresh'"></i>
-              <span>配置</span>
-              <span v-if="yzhConfigVersion" style="font-size: 11px; color: #909399;">v{{ yzhConfigVersion }}</span>
-            </a>
-          </div>
+
           <div class="h-link h-link-icons">
             <a v-for="(item, index) in icons" @click="linkClick(item)" :key="index" :class="item.icon"></a>
             <!-- <a><i class="el-icon-message-solid"></i></a> -->
@@ -176,7 +169,7 @@ import HomeSetting from './index/Setting.vue'
 import inintMenu, { registerTopNav } from './index/IndexMethods.js'
 import IndexRouterView from './index/IndexRouterView'
 
-import { reactive, ref, watch, onMounted, onUnmounted, getCurrentInstance, computed } from 'vue'
+import { reactive, ref, computed, watch, onMounted, onUnmounted, getCurrentInstance } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import store from '../store/index'
 
@@ -382,29 +375,6 @@ inintMenu(proxy, dataConfig, router, onSelect)
 Object.assign(proxy.$tabs, { open: open, close: close })
 
 let interval
-// ============================================================
-// YZH V3.0 配置驱动初始化（登录后全量加载 UI 配置）
-// ============================================================
-const yzhConfigLoading = ref(false)
-const yzhConfigVersion = computed(() => store.getters['yzhConfig/version'])
-
-/** 刷新 YZH 页面配置 */
-async function refreshYzhConfig() {
-  if (yzhConfigLoading.value) return
-  yzhConfigLoading.value = true
-  try {
-    const result = await store.dispatch('yzhConfig/refresh')
-    if (result?.success) {
-      proxy.$message.success(`配置已刷新: v${result.version}, ${result.count} 个页面`)
-    } else {
-      proxy.$message.warning(`配置刷新失败: ${result?.error || '未知错误'}`)
-    }
-  } catch (e) {
-    proxy.$message.error('配置刷新异常')
-  } finally {
-    yzhConfigLoading.value = false
-  }
-}
 
 onMounted(() => {
   indexDate.value = proxy.base.getDate(true)
@@ -412,15 +382,6 @@ onMounted(() => {
     indexDate.value = proxy.base.getDate(true)
   }, 1000)
   mountTopNav()
-
-  // YZH V3.0：登录后立即全量加载页面 UI 配置
-  store.dispatch('yzhConfig/init').then((result) => {
-    if (result?.success) {
-      console.log(`[Index] ✅ YZH 配置加载完成: v${result.version}, ${result.count} 个页面`)
-    } else {
-      console.warn('[Index] ⚠️ YZH 配置加载失败，使用本地缓存或 options.js')
-    }
-  })
 })
 onUnmounted(() => {
   clearInterval(interval);

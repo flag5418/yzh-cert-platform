@@ -9,13 +9,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Vue.NetCore\vol.api\VOL.Core\VOL.Core.csproj" />
-  </ItemGroup>
-
-  <!--
-    页面配置服务（YzhPageConfigService）需要访问 Vol 实体（YzhPageConfig, YzhFieldConfig）
-    通过项目引用保持与 Vol 框架同步
-  -->
-  <ItemGroup>
     <ProjectReference Include="..\..\Vue.NetCore\vol.api\VOL.Entity\VOL.Entity.csproj" />
   </ItemGroup>
 

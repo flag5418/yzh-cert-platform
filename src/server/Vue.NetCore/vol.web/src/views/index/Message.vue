@@ -1,12 +1,13 @@
 <template>
-  <div class="notification" @click="showMsg">
-    <el-badge :is-dot="msgCount > 0" :max="99" :show-zero="false" class="item" :offset="[3, -3]">
-      <el-icon size="15">
-        <Bell />
-      </el-icon>
-    </el-badge>
-  </div>
-  <vol-box v-model="model" :width="460" :padding="0">
+  <div class="message-wrapper">
+    <div class="notification" @click="showMsg">
+      <el-badge :is-dot="msgCount > 0" :max="99" :show-zero="false" class="item" :offset="[3, -3]">
+        <el-icon size="15">
+          <Bell />
+        </el-icon>
+      </el-badge>
+    </div>
+    <vol-box v-model="model" :width="460" :padding="0">
     <div class="msg-header">
       <el-tabs v-model="activeName" class="msg-tabs" @tab-change="loadMessages">
         <el-tab-pane name="unread">
@@ -45,6 +46,7 @@
       </div>
     </el-scrollbar>
   </vol-box>
+  </div>
 </template>
 
 <script setup>
@@ -222,6 +224,10 @@ onMounted(() => {
 </script>
 
 <style scoped lang="less">
+.message-wrapper {
+  display: inline-block;
+}
+
 .notification {
   outline: none;
   color: #000;

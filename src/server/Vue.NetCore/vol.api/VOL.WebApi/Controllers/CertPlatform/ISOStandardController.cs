@@ -5,7 +5,7 @@
 using Microsoft.AspNetCore.Mvc;
 using VOL.Core.Controllers.Basic;
 using VOL.Entity.AttributeManager;
-using VOL.Builder.IServices.CertPlatform;
+using VOL.CERT.IServices.CertPlatform;
 
 namespace VOL.WebApi.Controllers.CertPlatform
 {

@@ -67,4 +67,4 @@ export { YzhBaseCard, YzhTitledCard, YzhEmptyState, YzhStatusBadge, YzhLockStatu
 export { default as YzhStdTree } from './components/YzhStdTree.vue'
 
 // ====== 文件上传组件（支持文件夹拖拽） ======
-export { default as YzhFolderUpload } from '../components/YzhFolderUpload/index.vue'
+export { default as YzhFolderUpload } from './components/YzhFolderUpload/index.vue'

@@ -12,7 +12,7 @@ cd "$SCRIPT_DIR"
 GREEN='\033[0;32m'
 NC='\033[0m'
 
-echo -e "${GREEN}停止体系认证平台容器 (yzh-mysql / yzh-redis / yzh-minio)...${NC}"
+echo -e "${GREEN}停止体系认证平台容器 (yzh-mysql / yzh-redis / yzh-minio / yzh-libreoffice / yzh-anydoc)...${NC}"
 docker compose down
 
 echo ""

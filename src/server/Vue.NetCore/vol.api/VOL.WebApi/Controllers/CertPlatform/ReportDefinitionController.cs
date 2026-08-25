@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using VOL.Core.BaseProvider;
 using VOL.Core.Extensions.AutofacManager;
 using VOL.Entity.DomainModels;
-using VOL.Builder.IServices.CertPlatform;
+using VOL.CERT.IServices.CertPlatform;
 using VOL.Entity.CertPlatform.Cert;
 using VOL.Entity.CertPlatform.Rpt;
 
