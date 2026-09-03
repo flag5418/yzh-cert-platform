@@ -174,29 +174,43 @@ function onInputTypeChange(newType) {
 </script>
 
 <style scoped lang="less">
-.port-control { width: 100%; }
-
-.link-only { position: relative; }
-.link-badge {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 11px; color: #67C23A; margin-top: 4px;
-}
-
-.link-or-constant {
+.port-control {
   width: 100%;
 }
 
+.link-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #10b981;
+  margin-top: 4px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
 .input-type-switch {
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: flex-end;
 }
 
-.link-input-area {
-  position: relative;
+/* 压缩 radio-button 尺寸 */
+:deep(.el-radio-button--small .el-radio-button__inner) {
+  padding: 4px 8px !important;
+  font-size: 10px !important;
+  border-radius: 2px !important;
 }
 
+.link-input-area,
 .constant-input-area {
   width: 100%;
 }
 
-.empty-hint { font-size: 12px; color: #c0c4cc; padding: 4px 8px; }
+.empty-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  padding: 8px;
+  text-align: center;
+}
 </style>

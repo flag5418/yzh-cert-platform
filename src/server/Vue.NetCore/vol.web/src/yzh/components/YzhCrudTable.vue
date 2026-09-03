@@ -3,15 +3,29 @@
     <!-- ====== 0. 业务工具栏（顶部额外按钮） ====== -->
     <div v-if="$slots.toolbarLeft || $slots.toolbarRight" class="yzh-toolbar-extra">
       <div class="yzh-toolbar-extra__left">
-        <slot name="toolbarLeft" :selectedRow="singleSelectedRow" :selectedRows="selectedRows" :editMode="editMode" />
+        <slot
+          name="toolbarLeft"
+          :selectedRow="singleSelectedRow"
+          :selectedRows="selectedRows"
+          :editMode="editMode"
+        />
       </div>
       <div class="yzh-toolbar-extra__right">
-        <slot name="toolbarRight" :selectedRow="singleSelectedRow" :selectedRows="selectedRows" :editMode="editMode" />
+        <slot
+          name="toolbarRight"
+          :selectedRow="singleSelectedRow"
+          :selectedRows="selectedRows"
+          :editMode="editMode"
+        />
       </div>
     </div>
 
     <!-- ====== 1. 搜索区 ====== -->
-    <div v-if="searchMode !== 'hidden' && searchableColumns.length" class="yzh-search-bar" :class="{ 'is-fixed': searchMode === 'fixed' }">
+    <div
+      v-if="searchMode !== 'hidden' && searchableColumns.length"
+      class="yzh-search-bar"
+      :class="{ 'is-fixed': searchMode === 'fixed' }"
+    >
       <el-form :model="searchForm" inline label-width="auto" size="default" class="yzh-search-form">
         <el-form-item
           v-for="col in searchableColumns"
@@ -29,7 +43,7 @@
             @change="onSearchChange"
           >
             <el-option
-              v-for="item in (col.data || [])"
+              v-for="item in col.data || []"
               :key="item.key"
               :label="item.value"
               :value="item.key"
@@ -48,7 +62,12 @@
         <el-form-item>
           <el-button type="primary" icon="Search" @click="handleSearch">查询</el-button>
           <el-button icon="RefreshRight" @click="handleResetSearch">重置</el-button>
-          <el-button v-if="searchMode === 'togglable'" link type="info" @click="searchExpanded = !searchExpanded">
+          <el-button
+            v-if="searchMode === 'togglable'"
+            link
+            type="info"
+            @click="searchExpanded = !searchExpanded"
+          >
             {{ searchExpanded ? '收起' : '展开' }}
             <el-icon><ArrowUp v-if="searchExpanded" /><ArrowDown v-else /></el-icon>
           </el-button>
@@ -126,7 +145,10 @@
       :border="true"
       :stripe="true"
       :row-key="schema.keyField"
-      :default-sort="{ prop: defaultSortField, order: sortOrderMap[defaultSortOrder] || 'descending' }"
+      :default-sort="{
+        prop: defaultSortField,
+        order: sortOrderMap[defaultSortOrder] || 'descending'
+      }"
       :height="tableHeight"
       style="width: 100%"
       highlight-current-row
@@ -138,10 +160,10 @@
       <!-- 多选列（始终显示，支持批量删除） -->
       <el-table-column type="selection" width="48" align="center" reserve-selection />
 
-<!-- 数据列 -->
-<el-table-column
-v-for="col in actualVisibleColumns"
-:key="col.field"
+      <!-- 数据列 -->
+      <el-table-column
+        v-for="col in actualVisibleColumns"
+        :key="col.field"
         :prop="col.field"
         :label="col.title || col.field"
         :width="col.width || (col.width === 0 ? 0 : undefined)"
@@ -156,7 +178,7 @@ v-for="col in actualVisibleColumns"
         <template #default="{ row }">
           <!-- 自定义 render 函数优先 -->
           <template v-if="col.render">
-            <component :is="() => col.render($createElement, { row, column: col })" />
+            <component :is="() => renderCell(col, row)" />
           </template>
           <!-- 字典 Tag 色映射 -->
           <el-tag
@@ -228,7 +250,7 @@ v-for="col in actualVisibleColumns"
                 v-if="!item.hidden && item.type !== 'hidden'"
                 :label="item.title || item.field"
                 :prop="item.field"
-                :style="{ display: (item.hidden || item.type === 'hidden') ? 'none' : undefined }"
+                :style="{ display: item.hidden || item.type === 'hidden' ? 'none' : undefined }"
               >
                 <!-- select -->
                 <el-select
@@ -241,7 +263,7 @@ v-for="col in actualVisibleColumns"
                   style="width: 100%"
                 >
                   <el-option
-                    v-for="opt in (item.data || [])"
+                    v-for="opt in item.data || []"
                     :key="opt.key"
                     :label="opt.value"
                     :value="opt.key"
@@ -309,36 +331,18 @@ v-for="col in actualVisibleColumns"
  * 4. 手动搜索：填条件 → 点查询 → 执行搜索（不自动触发）
  * 5. 接口兼容后端 Vol ApiBaseController 标准格式
  */
-import {
-  ref,
-  reactive,
-  computed,
-  watch,
-  onMounted,
-  getCurrentInstance,
-  nextTick,
-  shallowRef,
-} from 'vue'
-import {
-  Search,
-  RefreshRight,
-  Plus,
-  Upload,
-  Download,
-  Delete,
-  ArrowUp,
-  ArrowDown,
-  Setting,
-} from '@element-plus/icons-vue'
-import type { IYZHCrudTableProps } from '../types/YZHPageProps'
-import type { IYZHEntitySchema } from '../types/YZHEntitySchema'
-import { YZHBaseApiClient } from '../core/YZHBaseApiClient'
-import { createDefaultLifecycles, runGuard } from '../core/YZHPageLifecycle'
-import { YZHEditGuard } from '../core/YZHEditGuard'
+import { ArrowDown, ArrowUp, Setting } from '@element-plus/icons-vue'
+import { computed, getCurrentInstance, h, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useYZHEditMode } from '../composables/useYZHEditMode'
 import { useYZHIncrementSync } from '../composables/useYZHIncrementSync'
-import { mergeDefaultButtons } from '../presets/defaultButtons'
+import { YZHBaseApiClient } from '../core/YZHBaseApiClient'
 import { loadPageConfig } from '../core/YZHConfigLoader'
+import { YZHEditGuard } from '../core/YZHEditGuard'
+import { createDefaultLifecycles, runGuard } from '../core/YZHPageLifecycle'
+import { mergeDefaultButtons } from '../presets/defaultButtons'
+import type { IYZHEntitySchema } from '../types/YZHEntitySchema'
+import type { IYZHCrudTableProps } from '../types/YZHPageProps'
+import type { IYZHProxy } from '../types/YZHProxy'
 
 // ============================================================
 // Props & Emits
@@ -347,14 +351,15 @@ const props = withDefaults(defineProps<IYZHCrudTableProps<any, any>>(), {
   incrementalUpdate: true,
   searchMode: 'fixed',
   showActionColumn: true,
-  dialogWidth: 960,
+  dialogWidth: 960
 })
 
 const emit = defineEmits<{
   (e: 'ready', instance: any): void
 }>()
 
-const { proxy } = getCurrentInstance()
+const instance = getCurrentInstance()
+const proxy = instance?.proxy as IYZHProxy
 
 // ============================================================
 // Schema & Options 解析（V2.5：支持数据库配置驱动）
@@ -408,7 +413,13 @@ function buildColumnsFromDbConfig(): any[] {
   if (!fields.length) return []
 
   return fields
-    .filter((f: any) => !!f.xsFlag && f.controlType !== 'hidden' && f.controlType !== 'none' && f.controlType !== 'readonly')
+    .filter(
+      (f: any) =>
+        !!f.xsFlag &&
+        f.controlType !== 'hidden' &&
+        f.controlType !== 'none' &&
+        f.controlType !== 'readonly'
+    )
     .sort((a: any, b: any) => (a.columnSxh || 0) - (b.columnSxh || 0))
     .map((f: any) => ({
       field: f.fieldName,
@@ -417,7 +428,7 @@ function buildColumnsFromDbConfig(): any[] {
       align: f.align || 'left',
       sortable: !!f.sortable,
       showOverflow: !!f.showOverflow,
-      render: undefined, // 可由 lifecycles.onRenderColumn 覆盖
+      render: undefined // 可由 lifecycles.onRenderColumn 覆盖
     }))
 }
 
@@ -434,7 +445,13 @@ function buildEditFormFromDbConfig(): any[][] {
   fields.forEach((f: any) => {
     // bcFlag is 0/1 from backend (byte type), not boolean
     // Filter out: bc_flag=0 (not saveable), hidden, none, readonly (display-only audit fields)
-    if (!f.bcFlag || f.controlType === 'hidden' || f.controlType === 'none' || f.controlType === 'readonly') return
+    if (
+      !f.bcFlag ||
+      f.controlType === 'hidden' ||
+      f.controlType === 'none' ||
+      f.controlType === 'readonly'
+    )
+      return
     const gi = f.groupIndex ?? 0
     if (!groups[gi]) groups[gi] = []
     groups[gi].push(f)
@@ -459,7 +476,7 @@ function buildEditFormFromDbConfig(): any[][] {
           maxlength: f.maxlength || 200,
           placeholder: f.placeholder || `请输入${f.formTitle || f.columnTitle}`,
           dataKey: f.dataKey || null,
-          colSize: f.gridColSpan || 1, // Element Plus 栅格占位
+          colSize: f.gridColSpan || 1 // Element Plus 栅格占位
         }))
     )
 
@@ -475,7 +492,11 @@ function buildSearchFormFromDbConfig(): any[][] {
   if (!fields.length) return []
 
   const searchFields = fields.filter(
-    (f: any) => !!f.searchFlag && f.controlType !== 'hidden' && f.controlType !== 'none' && f.controlType !== 'readonly'
+    (f: any) =>
+      !!f.searchFlag &&
+      f.controlType !== 'hidden' &&
+      f.controlType !== 'none' &&
+      f.controlType !== 'readonly'
   )
 
   if (!searchFields.length) return [[]]
@@ -487,8 +508,8 @@ function buildSearchFormFromDbConfig(): any[][] {
       type: f.searchControlType || f.controlType || 'input',
       placeholder: f.searchPlaceholder || `请输入${f.searchTitle || f.formTitle || f.columnTitle}`,
       width: f.searchWidth || 180,
-      dataKey: f.dataKey || null,
-    })),
+      dataKey: f.dataKey || null
+    }))
   ]
 }
 
@@ -520,14 +541,24 @@ const boxOptions = computed(() => opts.value.boxOptions || {})
 
 // 默认排序
 const defaultSortField = computed(() => tableConfig.value.sortName || schema.value.defaultSortField)
-const defaultSortOrder = computed(() => (tableConfig.value.sortOrder as any) || schema.value.defaultSortOrder)
+const defaultSortOrder = computed(
+  () => (tableConfig.value.sortOrder as any) || schema.value.defaultSortOrder
+)
 const sortOrderMap: Record<string, string> = { asc: 'ascending', desc: 'descending' }
 
 // ============================================================
 // API 客户端
 // ============================================================
-const api = new YZHBaseApiClient(schema.value, proxy as any)
+const api = new YZHBaseApiClient(schema.value as any, proxy as any)
 const guard = new YZHEditGuard(proxy as any)
+
+/** 自定义列渲染逻辑 */
+const renderCell = (col: any, row: any) => {
+  if (typeof col.render === 'function') {
+    return col.render(h, { row, column: col })
+  }
+  return null
+}
 
 // ============================================================
 // 生命周期钩子（合并默认空实现）
@@ -546,10 +577,10 @@ const {
   setSingleSelected,
   clearSelected,
   selectedRowObjects,
-  hasSelection,
-} = useYZHEditMode(schema.value, {
+  hasSelection
+} = useYZHEditMode(schema.value as any, {
   onEditModeChange: (v) => lc.onEditModeChange?.(v),
-  onSelectChange: (rows) => lc.onRowSelect?.(singleSelectedRow.value, rows),
+  onSelectChange: (rows) => lc.onRowSelect?.(singleSelectedRow.value, rows)
 })
 
 // ============================================================
@@ -572,10 +603,10 @@ const tableHeight = ref(500)
 // ============================================================
 const incSync = useYZHIncrementSync({
   enabled: computed(() => !!props.incrementalUpdate),
-  schema,
+  schema: schema.value as any,
   pageRows: tableData,
   currentSortField: currentSortProp,
-  currentSortOrder: currentSortOrder,
+  currentSortOrder: currentSortOrder
 })
 
 // ============================================================
@@ -625,9 +656,7 @@ function onSearchChange() {
 // 可见列过滤（隐藏列 + 无 title 的内部列）
 // ============================================================
 const visibleColumns = computed(() =>
-  columns.value.filter(
-    (c: any) => !c.hidden && c.field && c.field !== '__yzh_action' && c.title
-  )
+  columns.value.filter((c: any) => !c.hidden && c.field && c.field !== '__yzh_action' && c.title)
 )
 
 // ============================================================
@@ -662,12 +691,15 @@ async function loadData() {
       rows: pagination.size,
       sort: currentSortProp.value || defaultSortField.value,
       order: currentSortOrder.value === 'asc' ? 'asc' : 'desc',
-      filter: buildFilter(),
+      filter: buildFilter()
     }
 
     // onLoadBefore 钩子
     const ok = await runGuard(lc.onLoadBefore, [param])
-    if (!ok) { loading.value = false; return }
+    if (!ok) {
+      loading.value = false
+      return
+    }
 
     const res = await api.getPageData(param)
 
@@ -797,7 +829,7 @@ const editFormRules = computed(() => {
     ;(row || []).forEach((item: any) => {
       if (item.required && item.field) {
         rules[item.field] = [
-          { required: true, message: `${item.title || item.field}不能为空`, trigger: 'blur' },
+          { required: true, message: `${item.title || item.field}不能为空`, trigger: 'blur' }
         ]
       }
     })
@@ -872,7 +904,7 @@ function collectDictKeys(): string[] {
   const keys = new Set<string>()
   editFormOptions.value.forEach((row: any[]) => {
     ;(row || []).forEach((item: any) => {
-      if ((item.type === 'select') && item.dataKey && (!item.data || !item.data.length)) {
+      if (item.type === 'select' && item.dataKey && (!item.data || !item.data.length)) {
         keys.add(item.dataKey)
       }
     })
@@ -885,67 +917,67 @@ function collectDictKeys(): string[] {
   return Array.from(keys)
 }
 
-  /** 解析 GetVueDictionary 返回的字典数据并填充到对应字段 */
-  /**
-   * 后端实际返回格式（GetVueDictionary → Content(Serialize())）：
-   *   [{ dicNo: "org_status", config: "...", data: [{ key, value, color }] }, ...]
-   * 注意：最终字段名是 "data" 而非中间变量 "list"
-   */
-  function applyDictData(dictResponse: any) {
-    if (!dictResponse) return
+/** 解析 GetVueDictionary 返回的字典数据并填充到对应字段 */
+/**
+ * 后端实际返回格式（GetVueDictionary → Content(Serialize())）：
+ *   [{ dicNo: "org_status", config: "...", data: [{ key, value, color }] }, ...]
+ * 注意：最终字段名是 "data" 而非中间变量 "list"
+ */
+function applyDictData(dictResponse: any) {
+  if (!dictResponse) return
 
-    // 统一转为 { dicNo: [{key,value}] } 的 Map 结构
-    const dictMap: Record<string, any[]> = {}
+  // 统一转为 { dicNo: [{key,value}] } 的 Map 结构
+  const dictMap: Record<string, any[]> = {}
 
-    if (Array.isArray(dictResponse)) {
-      // 格式A：后端 GetVueDictionary 实际返回数组
-      // 每项结构: { dicNo, config, data: [{key, value, color}] }
-      ;(dictResponse as any[]).forEach((item: any) => {
-        if (item.dicNo) {
-          // 优先取 data 字段（后端实际返回的字段名）
-          const list = item.data || item.list
-          if (Array.isArray(list)) {
-            dictMap[item.dicNo] = list.map((d: any) => ({
-              key: String(d.key ?? d.value ?? ''),
-              value: String(d.value ?? d.key ?? ''),
-            }))
-          }
-        }
-      })
-    } else if (typeof dictResponse === 'object') {
-      // 格式B：对象格式（兼容其他接口）
-      Object.keys(dictResponse).forEach((k) => {
-        const v = dictResponse[k]
-        if (Array.isArray(v)) {
-          dictMap[k] = v.map((d: any) => ({
+  if (Array.isArray(dictResponse)) {
+    // 格式A：后端 GetVueDictionary 实际返回数组
+    // 每项结构: { dicNo, config, data: [{key, value, color}] }
+    ;(dictResponse as any[]).forEach((item: any) => {
+      if (item.dicNo) {
+        // 优先取 data 字段（后端实际返回的字段名）
+        const list = item.data || item.list
+        if (Array.isArray(list)) {
+          dictMap[item.dicNo] = list.map((d: any) => ({
             key: String(d.key ?? d.value ?? ''),
-            value: String(d.value ?? d.key ?? ''),
+            value: String(d.value ?? d.key ?? '')
           }))
         }
-      })
-    }
-
-    // 填充编辑表单的 select 字典
-    editFormOptions.value.forEach((row: any[]) => {
-      ;(row || []).forEach((item: any) => {
-        if (item.type === 'select' && item.dataKey && dictMap[item.dataKey]) {
-          item.data = dictMap[item.dataKey]
-        }
-      })
-    })
-    // 填充搜索区的 select 字典
-    searchableColumns.value.forEach((col: any) => {
-      if (col.type === 'select' && col.dataKey && dictMap[col.dataKey]) {
-        col.data = dictMap[col.dataKey]
       }
     })
-    // 填充表格列的字典数据（用于 formatDictValue 翻译显示）
-    columns.value.forEach((col: any) => {
-      if (col.dataKey && dictMap[col.dataKey]) {
-        col.data = dictMap[col.dataKey]
+  } else if (typeof dictResponse === 'object') {
+    // 格式B：对象格式（兼容其他接口）
+    Object.keys(dictResponse).forEach((k) => {
+      const v = dictResponse[k]
+      if (Array.isArray(v)) {
+        dictMap[k] = v.map((d: any) => ({
+          key: String(d.key ?? d.value ?? ''),
+          value: String(d.value ?? d.key ?? '')
+        }))
       }
     })
   }
+
+  // 填充编辑表单的 select 字典
+  editFormOptions.value.forEach((row: any[]) => {
+    ;(row || []).forEach((item: any) => {
+      if (item.type === 'select' && item.dataKey && dictMap[item.dataKey]) {
+        item.data = dictMap[item.dataKey]
+      }
+    })
+  })
+  // 填充搜索区的 select 字典
+  searchableColumns.value.forEach((col: any) => {
+    if (col.type === 'select' && col.dataKey && dictMap[col.dataKey]) {
+      col.data = dictMap[col.dataKey]
+    }
+  })
+  // 填充表格列的字典数据（用于 formatDictValue 翻译显示）
+  columns.value.forEach((col: any) => {
+    if (col.dataKey && dictMap[col.dataKey]) {
+      col.data = dictMap[col.dataKey]
+    }
+  })
+}
 
 /** 加载字典数据到 select 类型的选项中 */
 async function loadDictionaryData() {
@@ -982,12 +1014,12 @@ async function handleSave() {
   try {
     const isAdd = dialogAction.value === 'add'
 
-  if (isAdd) {
-    // ———— 新增 ————
-    // 基类默认行为：将 null/undefined 的字符串字段填充为空字符串（避免 DB 写入 null）
-    applyStringFieldDefaults(editForm)
+    if (isAdd) {
+      // ———— 新增 ————
+      // 基类默认行为：将 null/undefined 的字符串字段填充为空字符串（避免 DB 写入 null）
+      applyStringFieldDefaults(editForm)
 
-    const ok = await runGuard(lc.onAddSaveBefore, [editForm])
+      const ok = await runGuard(lc.onAddSaveBefore, [editForm])
       if (!ok) return
 
       const res = await api.add(editForm)
@@ -1005,8 +1037,7 @@ async function handleSave() {
           } else if (rawData && typeof rawData === 'object') {
             serverData = rawData?.data || rawData
           }
-        } catch (e) {
-        }
+        } catch (e) {}
 
         // 用服务端数据构建新行（包含服务端生成的 Id/Code/CreateDate 等）
         const serverKey = serverData?.[schema.value.keyField]
@@ -1014,7 +1045,7 @@ async function handleSave() {
         const newRow = {
           ...editForm,
           ...(serverData || {}),
-          [schema.value.keyField]: serverKey || clientKey,
+          [schema.value.keyField]: serverKey || clientKey
         }
 
         // 增量插入：affected=false 时回退到全量刷新
@@ -1158,13 +1189,13 @@ function handleRefresh() {
 // ============================================================
 /**
  * 导出 Excel
- * 
+ *
  * 问题修复说明（2026-08-07）：
  * 原来调用 api.export() → http.post(url, param, isBlob=true)
  * 但 http.js 的 post 签名是 post(url, params, loading, config)
  * isBlob=true 被错误传给 loading 参数，config 为 undefined
  * 导致 axios 没有设置 responseType:'blob'，返回 JSON 而非文件流
- * 
+ *
  * 修复方案：直接用 axios 请求 blob，再用 <a> 标签触发浏览器下载
  */
 async function handleExport() {
@@ -1177,7 +1208,7 @@ async function handleExport() {
       sort: currentSortProp.value || defaultSortField.value,
       order: currentSortOrder.value || defaultSortOrder.value || 'desc',
       // 关键：把可见列的 field 名传给后端，EPPlus 用它决定导出哪些列
-      columns: visibleCols.map((c: any) => c.field).filter(Boolean),
+      columns: visibleCols.map((c: any) => c.field).filter(Boolean)
     }
     const ok = await runGuard(lc.onExportBefore, [param])
     if (!ok) return
@@ -1186,14 +1217,15 @@ async function handleExport() {
     const loadingInstance = (window as any).ElLoading?.service({
       lock: true,
       text: '正在导出...',
-      background: 'rgba(0, 0, 0, 0.3)',
+      background: 'rgba(0, 0, 0, 0.3)'
     })
 
     try {
       // 直接用 axios 请求，确保 responseType: 'blob'
       const axiosInst = (await import('axios')).default
       // 获取 token（与 http.js 的 getToken 同款）
-      const { default: store } = await import('@/store/index')
+      // @ts-ignore
+      const { default: store } = (await import('@/store/index')) as any
       const token = store.getters.getToken()
       const baseUrl = schema.value.apiPrefix || '/api/'
       const exportUrl = `${baseUrl}${schema.value.controllerName}/Export`
@@ -1201,17 +1233,17 @@ async function handleExport() {
       const response = await axiosInst.post(exportUrl, param, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': token,
+          Authorization: token
         },
         responseType: 'blob', // 关键：告诉 axios 返回 Blob 对象
-        timeout: 120000, // 导出可能较慢，给 2 分钟
+        timeout: 120000 // 导出可能较慢，给 2 分钟
       })
 
       // 关闭加载
       loadingInstance?.close()
 
       // 检查响应：如果后端返回 JSON 错误信息（blob 类型），需要特殊处理
-      const contentType = response.headers['content-type'] || ''
+      const contentType = String(response.headers['content-type'] || '')
       if (contentType.includes('application/json')) {
         // 后端返回了 JSON 错误（如 "没有数据"）
         const text = await response.data.text()
@@ -1222,11 +1254,11 @@ async function handleExport() {
 
       // 创建 Blob 并触发下载
       const blob = new Blob([response.data], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       })
 
       // 从 schema 或 options 中获取文件名
-      const fileName = `${(schema.value.controllerName || 'export')}_${new Date().toISOString().slice(0, 10)}.xlsx`
+      const fileName = `${schema.value.controllerName || 'export'}_${new Date().toISOString().slice(0, 10)}.xlsx`
 
       // 使用 <a> 标签下载
       const url = window.URL.createObjectURL(blob)
@@ -1236,7 +1268,7 @@ async function handleExport() {
       link.download = fileName
       document.body.appendChild(link)
       link.click()
-      
+
       // 清理
       setTimeout(() => {
         window.URL.revokeObjectURL(url)
@@ -1308,9 +1340,9 @@ function getTagType(value: any, field: string): '' | 'success' | 'warning' | 'da
     disabled: 'danger',
     blocked: 'danger',
     pending: 'warning',
-    implemented: 'info',  // 兼容旧值，映射为 info 色
+    implemented: 'info' // 兼容旧值，映射为 info 色
   }
-  return colorMap[String(value)] || 'info'
+  return (colorMap[String(value)] || 'info') as any
 }
 
 function formatDictValue(value: any, col: any): string {
@@ -1412,13 +1444,13 @@ function toggleColumnVisibility(col: any, visible: boolean) {
 
 /**
  * 基类默认行为：将表单中 null/undefined 的字符串字段填充为空字符串
- * 
+ *
  * 为什么需要：
  * - 前端 v-model 绑定的 input 在用户未输入时值为空字符串 ''
  * - 但某些场景下（如程序化设置、部分字段未绑定 v-model）可能为 null/undefined
  * - 后端 EF Core / MySQL 对字符串字段写入 null 可能导致意外行为
  * - 此函数确保所有字符串字段至少为 ''，业务钩子 onAddSaveBefore 可覆盖
- * 
+ *
  * @param formData 编辑表单对象（会被原地修改）
  */
 function applyStringFieldDefaults(formData: any) {
@@ -1459,7 +1491,9 @@ function getSortIcon(field: string): string {
 
 /** 重置列设置为默认全部显示 */
 function resetColumnSettings() {
-  columns.value.forEach((c: any) => { if (c._origHidden !== undefined) c.hidden = c._origHidden })
+  columns.value.forEach((c: any) => {
+    if (c._origHidden !== undefined) c.hidden = c._origHidden
+  })
   currentSortProp.value = defaultSortField.value
   currentSortOrder.value = defaultSortOrder.value
 }
@@ -1473,9 +1507,15 @@ function applyColumnSettings() {
 // 对外暴露的方法
 // ============================================================
 const exposedApi = {
-  get table() { return tableRef.value },
-  get selectedRow() { return singleSelectedRow.value },
-  get selectedRows() { return selectedRowObjects() },
+  get table() {
+    return tableRef.value
+  },
+  get selectedRow() {
+    return singleSelectedRow.value
+  },
+  get selectedRows() {
+    return selectedRowObjects()
+  },
   refresh: handleRefresh,
   search: handleSearch,
   getData: () => tableData.value,
@@ -1483,7 +1523,7 @@ const exposedApi = {
   // 暴露 loadData：供 YzhTreeTable 在树节点切换时直接调用刷新右侧表格
   loadData,
   // 暴露 pagination：供外部重置分页（如切换树节点时回到第1页）
-  pagination,
+  pagination
 }
 
 defineExpose(exposedApi)
@@ -1499,82 +1539,59 @@ defineExpose(exposedApi)
   display: flex;
   flex-direction: column;
   position: relative;
-  padding: 16px; /* 上下左右统一 16px */
+  padding: 24px; /* 增加到 24px，更具大气感 */
   box-sizing: border-box;
   gap: 0;
-}
-
-/* 弹窗样式 —— el-dialog 挂载在 body 下，必须用全局选择器 */
-.el-dialog {
-  .el-dialog__header {
-    padding: 16px 20px 12px;
-    border-bottom: 1px solid #ebeef5;
-    margin-right: 0;
-  }
-  .el-dialog__body {
-    padding: 20px;
-  }
-  .el-dialog__footer {
-    padding: 12px 20px 16px;
-    border-top: 1px solid #ebeef5;
-  }
-}
-
-.yzh-toolbar-extra {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px 4px;
-
-  &__left,
-  &__right {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
+  background-color: var(--yzh-color-bg-page);
 }
 
 .yzh-search-bar {
-  padding: 12px 16px;
-  background: #fafafa;
-  border: 1px solid #ebeef5;
-  border-radius: 4px;
-  margin-bottom: 12px;
-
-  &.is-fixed {
-    // 固定展开模式
-  }
+  padding: 20px 24px;
+  background: #fff;
+  border: 1px solid var(--yzh-color-border-light);
+  border-radius: 12px;
+  margin-bottom: 20px;
+  box-shadow: var(--yzh-shadow-sm);
 
   .yzh-search-form {
     .el-form-item {
-      margin-bottom: 8px;
+      margin-bottom: 0;
+      margin-right: 24px;
+    }
+    .el-form-item__label {
+      font-weight: 600;
+      color: var(--yzh-color-text-regular);
     }
   }
 }
 
-/* 工具栏：左操作 + 右设置 分离布局 */
 .yzh-btn-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding: 8px 0;
-  margin-bottom: 8px;
+  padding: 0 0 16px 0;
+  margin-bottom: 0;
 
   &__left {
     display: flex;
-    gap: 6px;
+    gap: 12px;
     align-items: center;
-    flex-wrap: wrap;
   }
 
-  &__right {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    margin-left: auto;
+  .el-button--small {
+    padding: 10px 16px;
+    font-size: 14px;
+    height: 36px;
+    border-radius: 8px;
   }
+}
+
+/* 表格容器圆角化 */
+.el-table {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--yzh-shadow-sm);
+  border: 1px solid var(--yzh-color-border-light) !important;
 }
 
 /* 列设置面板样式 */

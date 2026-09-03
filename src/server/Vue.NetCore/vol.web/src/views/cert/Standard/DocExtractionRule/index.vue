@@ -45,25 +45,34 @@
           />
         </div>
         <div v-else class="empty-preview">
-          <YzhEmptyState :icon="IconFile" title="请选择左侧文档进行预览" description="从目录树中选择一份文档查看内容" />
+          <YzhEmptyState
+            :icon="IconFile"
+            title="请选择左侧文档进行预览"
+            description="从目录树中选择一份文档查看内容"
+          />
         </div>
       </div>
 
       <!-- 右侧：操作区 -->
-      <div class="right-panel" v-loading="analyzing" element-loading-text="AI 分析中，请稍候…" element-loading-background="rgba(255,255,255,0.7)">
+      <div
+        class="right-panel"
+        v-loading="analyzing"
+        element-loading-text="AI 分析中，请稍候…"
+        element-loading-background="rgba(255,255,255,0.7)"
+      >
         <!-- 状态栏 -->
         <div class="status-bar" v-if="currentFile">
           <div class="status-item">
-            <span class="label">规则状态：</span>
             <YzhStatusBadge :type="ruleStatusType" :text="ruleStatusText" />
+            <span class="label">规则状态</span>
           </div>
           <div class="status-item">
-            <span class="label">字段数：</span>
-            <span class="value">{{ fieldCount }}个</span>
+            <span class="value">{{ fieldCount }}</span>
+            <span class="label">字段数</span>
           </div>
           <div class="status-item">
-            <span class="label">表格数：</span>
-            <span class="value">{{ tableCount }}个</span>
+            <span class="value">{{ tableCount }}</span>
+            <span class="label">表格数</span>
           </div>
         </div>
 
@@ -71,7 +80,9 @@
         <el-tabs v-model="activeTab" class="right-tabs">
           <el-tab-pane name="analysis">
             <template #label>
-              <span class="tab-label"><el-icon><IconAnalyze /></el-icon>自动分析</span>
+              <span class="tab-label"
+                ><el-icon><IconAnalyze /></el-icon>自动分析</span
+              >
             </template>
             <AIAnalysisTab
               :fields="analysisFields"
@@ -85,7 +96,9 @@
           </el-tab-pane>
           <el-tab-pane name="prompt">
             <template #label>
-              <span class="tab-label"><el-icon><IconPrompt /></el-icon>提示词与验证</span>
+              <span class="tab-label"
+                ><el-icon><IconPrompt /></el-icon>提示词与验证</span
+              >
             </template>
             <PromptVerifyTab
               :prompt="generatedPrompt"
@@ -110,14 +123,27 @@
 </template>
 
 <script setup>
+import { CertDirectoryTree } from '@/certcore'
+import {
+  IconAnalyze,
+  IconFile,
+  IconPrompt,
+  IconRefresh,
+  YzhEmptyState,
+  YzhLockStatus,
+  YzhStatusBadge
+} from '@/yzh'
+import { useYzhQueue } from '@/yzh/composables/useYzhQueue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { CertDirectoryTree } from '@/certcore'
-import { YzhEmptyState, YzhStatusBadge, YzhLockStatus } from '@/yzh'
-import { IconFile, IconAnalyze, IconPrompt, IconRefresh, IconLoading } from '@/yzh'
-import { useYzhQueue } from '@/yzh/composables/useYzhQueue'
-import { aiAnalyzeDocument, getExtractionRule, generatePrompt, verifyPrompt, saveExtractionRule } from './api'
+import {
+  aiAnalyzeDocument,
+  generatePrompt,
+  getExtractionRule,
+  saveExtractionRule,
+  verifyPrompt
+} from './api'
 import AIAnalysisTab from './components/AIAnalysisTab.vue'
 import DocPreview from './components/DocPreview.vue'
 import PromptVerifyTab from './components/PromptVerifyTab.vue'
@@ -148,7 +174,7 @@ const verifyRawData = ref(null)
 const rawJsonDisplay = ref('')
 const generating = ref(false)
 const verifying = ref(false)
-const verifiedIsValid = ref(false)  // 最近一次验证是否通过（saveRule 时推断 isValid）
+const verifiedIsValid = ref(false) // 最近一次验证是否通过（saveRule 时推断 isValid）
 
 // 规则状态
 const ruleStatus = ref('none') // none, configured, failed
@@ -211,9 +237,10 @@ const loadExistingRule = async (file) => {
 }
 
 const onFileLockWarning = (info) => {
-  const reason = info.queueCode === 'uploading'
-    ? `文件「${info.fileName}」正在上传处理中，请稍后再试`
-    : `文件「${info.fileName}」正被队列 ${info.queueCode} 处理中，请稍后再试`
+  const reason =
+    info.queueCode === 'uploading'
+      ? `文件「${info.fileName}」正在上传处理中，请稍后再试`
+      : `文件「${info.fileName}」正被队列 ${info.queueCode} 处理中，请稍后再试`
   lockReason.value = reason
   ElMessage.warning(reason)
 }
@@ -265,35 +292,42 @@ const pick = (obj, ...keys) => {
 }
 
 // 字段/表格列表映射（AI 分析结果与已保存规则共用；NameEn 缺失时回退到 Code，保证英文名能回显）
-const mapFields = (data) => (data.fields || data.Fields || []).map(f => ({
-  name: pick(f, 'Name', 'name', 'fieldName', 'field_name_cn', 'field_name') ?? '',
-  nameEn: pick(f, 'NameEn', 'nameEn', 'field_name_en') ?? pick(f, 'Code', 'code', 'field_code') ?? '',
-  code: pick(f, 'Code', 'code', 'field_code') ?? '',
-  dataType: pick(f, 'DataType', 'dataType', 'field_type') ?? 'string',
-  description: pick(f, 'Description', 'description') ?? '',
-  isRequired: pick(f, 'IsRequired', 'isRequired', 'is_required') ?? false,
-  isManual: pick(f, 'IsManual', 'isManual') ?? false,
-  isAiRecommended: pick(f, 'IsAiRecommended', 'isAiRecommended') ?? true,
-  extractedValue: pick(f, 'ExtractedValue', 'extractedValue', 'extracted_value') ?? ''
-}));
-
-const mapTables = (data) => (data.tables || data.Tables || []).map(t => ({
-  name: pick(t, 'Name', 'name', 'tableName', 'table_name_cn', 'table_name') ?? '',
-  nameEn: pick(t, 'NameEn', 'nameEn', 'table_name_en') ?? pick(t, 'Code', 'code', 'table_code') ?? '',
-  code: pick(t, 'Code', 'code', 'table_code') ?? '',
-  description: pick(t, 'Description', 'description') ?? '',
-  sheetName: pick(t, 'SheetName', 'sheetName', 'sheet_name') ?? '',
-  // 提取数据预览行（后端 ExtractedData 是「列名→值」字典数组，必须透传否则表格数据不显示）
-  extractedData: pick(t, 'ExtractedData', 'extractedData', 'extracted_data') ?? [],
-  isAiRecommended: pick(t, 'IsAiRecommended', 'isAiRecommended') ?? true,
-  columns: (t.columns ?? t.Columns ?? []).map(c => ({
-    name: pick(c, 'Name', 'name', 'columnName', 'column_name_cn', 'column_name') ?? '',
-    nameEn: pick(c, 'NameEn', 'nameEn', 'column_name_en') ?? pick(c, 'Code', 'code', 'column_code') ?? '',
-    code: pick(c, 'Code', 'code', 'column_code') ?? '',
-    dataType: pick(c, 'DataType', 'dataType', 'column_type') ?? 'string',
-    isRequired: pick(c, 'IsRequired', 'isRequired', 'column_is_required') ?? false
+const mapFields = (data) =>
+  (data.fields || data.Fields || []).map((f) => ({
+    name: pick(f, 'Name', 'name', 'fieldName', 'field_name_cn', 'field_name') ?? '',
+    nameEn:
+      pick(f, 'NameEn', 'nameEn', 'field_name_en') ?? pick(f, 'Code', 'code', 'field_code') ?? '',
+    code: pick(f, 'Code', 'code', 'field_code') ?? '',
+    dataType: pick(f, 'DataType', 'dataType', 'field_type') ?? 'string',
+    description: pick(f, 'Description', 'description') ?? '',
+    isRequired: pick(f, 'IsRequired', 'isRequired', 'is_required') ?? false,
+    isManual: pick(f, 'IsManual', 'isManual') ?? false,
+    isAiRecommended: pick(f, 'IsAiRecommended', 'isAiRecommended') ?? true,
+    extractedValue: pick(f, 'ExtractedValue', 'extractedValue', 'extracted_value') ?? ''
   }))
-}));
+
+const mapTables = (data) =>
+  (data.tables || data.Tables || []).map((t) => ({
+    name: pick(t, 'Name', 'name', 'tableName', 'table_name_cn', 'table_name') ?? '',
+    nameEn:
+      pick(t, 'NameEn', 'nameEn', 'table_name_en') ?? pick(t, 'Code', 'code', 'table_code') ?? '',
+    code: pick(t, 'Code', 'code', 'table_code') ?? '',
+    description: pick(t, 'Description', 'description') ?? '',
+    sheetName: pick(t, 'SheetName', 'sheetName', 'sheet_name') ?? '',
+    // 提取数据预览行（后端 ExtractedData 是「列名→值」字典数组，必须透传否则表格数据不显示）
+    extractedData: pick(t, 'ExtractedData', 'extractedData', 'extracted_data') ?? [],
+    isAiRecommended: pick(t, 'IsAiRecommended', 'isAiRecommended') ?? true,
+    columns: (t.columns ?? t.Columns ?? []).map((c) => ({
+      name: pick(c, 'Name', 'name', 'columnName', 'column_name_cn', 'column_name') ?? '',
+      nameEn:
+        pick(c, 'NameEn', 'nameEn', 'column_name_en') ??
+        pick(c, 'Code', 'code', 'column_code') ??
+        '',
+      code: pick(c, 'Code', 'code', 'column_code') ?? '',
+      dataType: pick(c, 'DataType', 'dataType', 'column_type') ?? 'string',
+      isRequired: pick(c, 'IsRequired', 'isRequired', 'column_is_required') ?? false
+    }))
+  }))
 
 // 验证结果映射：字段 code→中文名（只展示当前 analysisFields 中存在的字段，过滤已删除的）
 const mapVerifyFields = (rawData) => {
@@ -302,7 +336,7 @@ const mapVerifyFields = (rawData) => {
   // 构建 code→中文名 映射表（只包含当前字段列表中的字段）
   const codeToName = {}
   const validCodes = new Set()
-  analysisFields.value.forEach(f => {
+  analysisFields.value.forEach((f) => {
     const code = f.nameEn || f.code
     if (code) {
       codeToName[code] = f.name
@@ -327,9 +361,9 @@ const mapVerifyTables = (rawData) => {
   // 构建 tableCode→中文表名 + 列名 code→中文列名 映射表
   const tableCodeToName = {}
   // 同时构建 每个表的 columnCode→columnName 映射 + 有效列集合
-  const tableColMap = {}  // { tableCode: { colCode: colNameCn } }
-  const tableValidCols = {}  // { tableCode: Set<colCode> }
-  analysisTables.value.forEach(t => {
+  const tableColMap = {} // { tableCode: { colCode: colNameCn } }
+  const tableValidCols = {} // { tableCode: Set<colCode> }
+  analysisTables.value.forEach((t) => {
     const code = t.nameEn || t.code
     if (code) {
       tableCodeToName[code] = t.name
@@ -337,7 +371,7 @@ const mapVerifyTables = (rawData) => {
       const colMap = {}
       const validCols = new Set()
       if (t.columns) {
-        t.columns.forEach(c => {
+        t.columns.forEach((c) => {
           const colCode = c.nameEn || c.code
           if (colCode) {
             colMap[colCode] = c.name
@@ -357,7 +391,7 @@ const mapVerifyTables = (rawData) => {
     const colMap = tableColMap[key] || {}
     const validCols = tableValidCols[key] || new Set()
     // 将每行数据的 key 从英文 code 替换为中文列名，只展示当前列定义中存在的列
-    const mappedRows = (rows || []).map(row => {
+    const mappedRows = (rows || []).map((row) => {
       const newRow = {}
       for (const [colKey, colVal] of Object.entries(row)) {
         // 只展示当前列定义中存在的列，已删除的列不展示
@@ -400,8 +434,8 @@ const onTablesUpdate = (tables) => {
 
 const onGeneratePrompt = async () => {
   // 校验：至少有一个字段或一个表格
-  const aiFields = analysisFields.value.filter(f => f.isAiRecommended !== false)
-  const aiTables = analysisTables.value.filter(t => t.isAiRecommended !== false)
+  const aiFields = analysisFields.value.filter((f) => f.isAiRecommended !== false)
+  const aiTables = analysisTables.value.filter((t) => t.isAiRecommended !== false)
   if (aiFields.length === 0 && aiTables.length === 0) {
     ElMessage.warning('请先在「自动分析」页签添加至少一个字段或表格')
     return
@@ -417,7 +451,7 @@ const onGeneratePrompt = async () => {
     const prompt = data?.Prompt ?? data?.prompt
     if (prompt) {
       generatedPrompt.value = prompt
-      verifyResult.value = null  // 清空旧验证结果
+      verifyResult.value = null // 清空旧验证结果
       verifyRawData.value = null
       verifiedIsValid.value = false
       ElMessage.success('Prompt 生成成功')
@@ -497,16 +531,19 @@ const saveRule = async () => {
   // 组装提取数据（供后端落 B-08/B-09 工作流验证数据）：验证结果优先，分析预览值兜底
   let extractionData = null
   const raw = verifyRawData.value
-  if (raw && (Object.keys(raw.Fields || {}).length > 0 || Object.keys(raw.Tables || {}).length > 0)) {
+  if (
+    raw &&
+    (Object.keys(raw.Fields || {}).length > 0 || Object.keys(raw.Tables || {}).length > 0)
+  ) {
     extractionData = { Fields: raw.Fields || {}, Tables: raw.Tables || {} }
   } else {
     const fields = {}
-    analysisFields.value.forEach(f => {
+    analysisFields.value.forEach((f) => {
       const code = f.nameEn || f.code
       if (code && f.extractedValue) fields[code] = f.extractedValue
     })
     const tables = {}
-    analysisTables.value.forEach(t => {
+    analysisTables.value.forEach((t) => {
       const code = t.nameEn || t.code
       if (code && t.extractedData?.length > 0) tables[code] = t.extractedData
     })
@@ -622,7 +659,7 @@ const startResizeLeft = (e) => {
   flex-direction: column;
   gap: var(--yzh-space-4, 16px);
   background: var(--yzh-color-bg-page, #f5f7fa);
-  border-radius: var(--yzh-radius-sm, 4px);
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -640,8 +677,8 @@ const startResizeLeft = (e) => {
   flex-shrink: 0;
   background: var(--yzh-color-bg-card, #fff);
   border: 1px solid var(--yzh-color-border, #e4e7ed);
-  border-radius: var(--yzh-radius-sm, 4px);
-  box-shadow: var(--yzh-shadow-sm, 0 1px 4px rgba(0, 0, 0, 0.04));
+  border-radius: 0;
+  box-shadow: none;
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -692,8 +729,8 @@ const startResizeLeft = (e) => {
   justify-content: center;
   background: var(--yzh-color-bg-card, #fff);
   border: 1px solid var(--yzh-color-border, #e4e7ed);
-  border-radius: var(--yzh-radius-sm, 4px);
-  box-shadow: var(--yzh-shadow-sm, 0 1px 4px rgba(0, 0, 0, 0.04));
+  border-radius: 0;
+  box-shadow: none;
 }
 
 /* 右侧面板：独立白色卡片 */
@@ -704,8 +741,8 @@ const startResizeLeft = (e) => {
   flex-direction: column;
   background: var(--yzh-color-bg-card, #fff);
   border: 1px solid var(--yzh-color-border, #e4e7ed);
-  border-radius: var(--yzh-radius-sm, 4px);
-  box-shadow: var(--yzh-shadow-sm, 0 1px 4px rgba(0, 0, 0, 0.04));
+  border-radius: 0;
+  box-shadow: none;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -715,26 +752,36 @@ const startResizeLeft = (e) => {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: var(--yzh-space-8, 32px);
-  padding: var(--yzh-space-3, 12px) var(--yzh-space-5, 20px);
-  background: var(--yzh-color-bg-page, #f5f7fa);
+  justify-content: space-between;
+  padding: var(--yzh-space-4, 16px) var(--yzh-space-5, 20px);
+  background: var(--yzh-color-bg-card, #fff);
   border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
 }
 
 .status-item {
+  flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: var(--yzh-space-2, 8px);
-  font-size: var(--yzh-font-size-sm, 13px);
+  justify-content: center;
+  gap: var(--yzh-space-1, 4px);
+  border-right: 1px solid var(--yzh-color-border-light, #ebeef5);
+}
+
+.status-item:last-child {
+  border-right: none;
 }
 
 .status-item .label {
-  color: var(--yzh-color-text-regular, #606266);
+  font-size: 12px;
+  color: var(--yzh-color-text-secondary, #909399);
 }
 
 .status-item .value {
-  font-weight: var(--yzh-font-weight-bold, 600);
+  font-size: 18px;
+  font-weight: 700;
   color: var(--yzh-color-text-primary, #303133);
+  line-height: 1;
 }
 
 /* Tab */

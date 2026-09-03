@@ -1,133 +1,168 @@
+<template>
+  <div ref="canvas" class="workflow-designer-canvas"></div>
+</template>
+
+<script setup>
 import { Diagram } from '@logicflow/core'
-import { HtmlPlugin } from '@logicflow/extension'
 import '@logicflow/core/dist/index.css'
+import { HtmlPlugin } from '@logicflow/extension'
 import '@logicflow/extension/dist/index.css'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { compileToWorkflowConfig, decompileToGraphData } from './compiler'
 
-/**
- * WorkflowDesigner.vue
- * LogicFlow 工作流设计器容器组件
- * 
- * 用法：
- * <WorkflowDesigner
- *   ref="designer"
- *   :initial-config="workflowConfig"
- *   :skills="skillList"
- *   @save="onSave"
- * />
- */
-export default {
-  name: 'WorkflowDesigner',
-  props: {
-    // 初始 workflow_config JSON 对象（编辑已有工作流时传入）
-    initialConfig: {
-      type: Object,
-      default: () => ({ nodes: [], edges: [], branches: [], version: 1, workflowType: 'validation', outputConfig: {} })
-    },
-    // 可用 Skill 列表
-    skills: {
-      type: Array,
-      default: () => []
-    },
-    // 当前选中的节点 ID
-    selectedNodeId: {
-      type: String,
-      default: null
-    }
+const props = defineProps({
+  // 初始 workflow_config JSON 对象
+  initialConfig: {
+    type: Object,
+    default: () => ({
+      nodes: [],
+      edges: [],
+      branches: [],
+      version: 1,
+      workflowType: 'validation',
+      outputConfig: {}
+    })
   },
-  emits: ['node-selected', 'config-change', 'save'],
-  setup(props, { emit }) {
-    // 由父组件通过 ref 调用
-    return {}
+  // 可用 Skill 列表
+  skills: {
+    type: Array,
+    default: () => []
   },
-  mounted() {
-    this.initDiagram()
-  },
-  beforeUnmount() {
-    // LogicFlow 2.0 没有 destroy()，用 clearData() 清空 + 释放引用
-    if (this.diagram) {
-      this.diagram.clearData?.()
-      this.diagram = null
-    }
-  },
-  methods: {
-    initDiagram() {
-      this.diagram = new Diagram({
-        container: this.$refs.canvas,
-        grid: true,
-        background: '#fafafa',
-        plugins: [HtmlPlugin],
-        behavior: {
-          scroll: true,
-          zoom: true,
-          drag: true
-        }
-      })
+  // 当前选中的节点 ID
+  selectedNodeId: {
+    type: String,
+    default: null
+  }
+})
 
-      // 注册自定义 Skill 节点
-      this.registerSkillNode()
+const emit = defineEmits(['node-selected', 'config-change', 'save'])
 
-      // 加载初始数据
-      if (props.initialConfig?.nodes?.length > 0) {
-        const { decompileToGraphData } = require('./compiler')
-        const { graphData } = decompileToGraphData(props.initialConfig)
-        this.diagram.render(graphData)
+const canvas = ref(null)
+const diagram = ref(null)
+
+const initDiagram = () => {
+  diagram.value = new Diagram({
+    container: canvas.value,
+    grid: {
+      size: 20,
+      visible: true,
+      type: 'dot',
+      config: {
+        color: '#cbd5e1',
+        thickness: 2
       }
-
-      // 节点选中事件
-      this.diagram.on('node:click', ({ data }) => {
-        emit('node-selected', data.id, data)
-      })
-
-      this.diagram.on('edge:click', ({ data }) => {
-        emit('node-selected', null)
-      })
-
-      this.diagram.on('blank:click', () => {
-        emit('node-selected', null)
-      })
     },
-
-    registerSkillNode() {
-      const { Node, Path } = window.lf || require('@logicflow/core')
-      // LogicFlow v2 通过 extend 注册
-      // 简化处理：使用内置 rect 节点，通过 data.skillCode 区分
+    background: {
+      color: '#f8fafc'
     },
-
-    /**
-     * 导出 workflow_config JSON
-     */
-    exportConfig() {
-      const { compileToWorkflowConfig } = require('./compiler')
-      const graphData = this.diagram?.getGraphData()
-      if (!graphData) return null
-      return compileToWorkflowConfig(graphData)
+    plugins: [HtmlPlugin],
+    behavior: {
+      scroll: true,
+      zoom: true,
+      drag: true
     },
-
-    /**
-     * 导入 workflow_config JSON
-     */
-    importConfig(config) {
-      const { decompileToGraphData } = require('./compiler')
-      const { graphData } = decompileToGraphData(config)
-      this.diagram?.render(graphData)
-    },
-
-    /**
-     * 清空画布
-     */
-    clear() {
-      this.diagram?.render({ nodes: [], edges: [] })
-    },
-
-    /**
-     * 自动布局
-     */
-    autoLayout() {
-      // LogicFlow 内置 DAG 布局
-      if (this.diagram?.layout) {
-        this.diagram.layout({ type: 'dagre', rankdir: 'LR' })
+    style: {
+      rect: {
+        radius: 16,
+        strokeWidth: 2,
+        stroke: '#cbd5e1',
+        fill: '#ffffff'
+      },
+      circle: {
+        strokeWidth: 2,
+        stroke: '#cbd5e1',
+        fill: '#ffffff'
+      },
+      polyline: {
+        strokeWidth: 3,
+        stroke: '#94a3b8',
+        outlineColor: '#f8fafc',
+        hoverStroke: 'var(--yzh-color-primary)',
+        selectedStroke: 'var(--yzh-color-primary)'
+      },
+      edgeText: {
+        background: {
+          fill: '#fff'
+        },
+        fontSize: 14,
+        fontWeight: 600
+      },
+      nodeText: {
+        fontSize: 15,
+        fontWeight: 600,
+        color: '#0f172a'
       }
     }
-  },
-  template: `<div ref="canvas" style="width:100%;height:100%;min-height:500px"></div>`
+  })
+
+  // 监听画布尺寸变化，确保点阵网格正确渲染
+  const resizeObserver = new ResizeObserver(() => {
+    if (diagram.value) {
+      diagram.value.resize()
+    }
+  })
+  if (canvas.value) {
+    resizeObserver.observe(canvas.value)
+  }
+
+  // 加载初始数据
+  if (props.initialConfig?.nodes?.length > 0) {
+    const { graphData } = decompileToGraphData(props.initialConfig)
+    diagram.value.render(graphData)
+  }
+
+  // 节点选中事件
+  diagram.value.on('node:click', ({ data }) => {
+    emit('node-selected', data.id, data)
+  })
+
+  diagram.value.on('edge:click', () => {
+    emit('node-selected', null)
+  })
+
+  diagram.value.on('blank:click', () => {
+    emit('node-selected', null)
+  })
 }
+
+onMounted(() => {
+  initDiagram()
+})
+
+onBeforeUnmount(() => {
+  if (diagram.value) {
+    diagram.value.clearData?.()
+    diagram.value = null
+  }
+})
+
+// 暴露方法给父组件
+defineExpose({
+  exportConfig: () => {
+    const graphData = diagram.value?.getGraphData()
+    if (!graphData) return null
+    return compileToWorkflowConfig(graphData)
+  },
+  importConfig: (config) => {
+    const { graphData } = decompileToGraphData(config)
+    diagram.value?.render(graphData)
+  },
+  clear: () => {
+    diagram.value?.render({ nodes: [], edges: [] })
+  },
+  autoLayout: () => {
+    if (diagram.value?.layout) {
+      diagram.value.layout({ type: 'dagre', rankdir: 'LR' })
+    }
+  }
+})
+</script>
+
+<style scoped lang="less">
+.workflow-designer-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  background-color: #f8fafc;
+}
+</style>

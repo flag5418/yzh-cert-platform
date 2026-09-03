@@ -9,6 +9,7 @@
 | [vol-csharp-coding-standards.md](./vol-csharp-coding-standards.md) | C#后端编码规范 | 草案V1.0 |
 | [vue-ts-coding-standards.md](./vue-ts-coding-standards.md) | Vue3+TS前端编码规范 | 草案V1.0 |
 | [vol-skill.md](./vol-skill.md) | Vol框架使用指南 | 成熟态 |
+| [auditor-前端基础框架-V1.md](./auditor-前端基础框架-V1.md) | 审核员前端（Naive UI）基础框架：技术栈/结构/主题/路由/消息约定、启动命令、端口 9991、与 admin 端边界 | 成熟态 V1.0 |
 | YZH-知识库/ | 问题排查知识库（含踩坑记录，详见 YZH-知识库/05-踩坑记录/README.md） | 持续更新 |
 
 ## 快速检索

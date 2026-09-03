@@ -185,77 +185,119 @@ watch(() => props.apiUrl, () => {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  background: #fff;
 }
 
 .tree-search {
-  padding: 8px 12px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 16px;
+  border-bottom: 1px solid #f1f5f9;
+
+  :deep(.el-input__wrapper) {
+    background: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: none !important;
+    border-radius: 12px !important;
+    height: 40px !important;
+    padding: 0 16px !important;
+
+    &.is-focus {
+      background: #fff !important;
+      border-color: var(--yzh-color-primary) !important;
+      box-shadow: 0 0 0 2px rgba(47, 84, 235, 0.1) !important;
+    }
+  }
 }
 
 .tree-body {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 0;
+  padding: 12px 8px;
+
+  /* 滚动条美化 */
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #e2e8f0;
+    border-radius: 3px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }
 
 .tree-group {
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 .tree-node {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 10px;
+  padding: 10px 16px;
   cursor: pointer;
-  font-size: 13px;
-  transition: background 0.2s;
+  border-radius: 12px;
+  margin-bottom: 2px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
 
   &:hover {
-    background: #f5f7fa;
+    background: #f1f5ff;
+    .tree-toggle { color: var(--yzh-color-primary); }
   }
 
   &.level-0 {
-    font-weight: 600;
-    color: #303133;
+    font-weight: 800;
+    color: #0f172a;
+    font-size: 15px;
   }
 
   &.level-1 {
-    padding-left: 28px;
-    font-weight: 500;
-    color: #606266;
+    margin-left: 20px;
+    font-weight: 700;
+    color: #334155;
+    font-size: 14px;
   }
 
   &.level-2 {
-    padding-left: 52px;
-    color: #909399;
+    margin-left: 40px;
+    font-weight: 500;
+    color: #64748b;
+    font-size: 14px;
 
     &.active {
-      background: #ecf5ff;
-      color: #409eff;
-      border-right: 3px solid #409eff;
+      background: #f0f5ff;
+      color: var(--yzh-color-primary);
+      font-weight: 800;
+      box-shadow: inset 4px 0 0 var(--yzh-color-primary);
     }
   }
 }
 
 .tree-toggle {
-  font-size: 12px;
-  color: #c0c4cc;
-  transition: transform 0.2s;
+  font-size: 14px;
+  color: #94a3b8;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
   &.expanded {
     transform: rotate(90deg);
+    color: var(--yzh-color-primary);
   }
 }
 
 .tree-icon {
-  font-size: 14px;
+  font-size: 18px;
   flex-shrink: 0;
+  opacity: 0.9;
 
-  &.org { color: #409eff; }
-  &.standard { color: #67c23a; }
-  &.phase { color: #e6a23c; }
+  &.org { color: #2f54eb; }
+  &.standard { color: #10b981; }
+  &.phase { color: #f59e0b; }
 }
 
 .tree-label {
@@ -263,16 +305,33 @@ watch(() => props.apiUrl, () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+
+:deep(.el-badge) {
+  .el-badge__content {
+    background: #f1f5f9 !important;
+    color: #64748b !important;
+    border: none !important;
+    font-weight: 700 !important;
+    height: 18px !important;
+    line-height: 18px !important;
+    padding: 0 6px !important;
+    border-radius: 9px !important;
+  }
 }
 
 .node-badge {
-  margin-left: 4px;
-  transform: scale(0.85);
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: #10b981 !important;
+  border: none !important;
+  font-weight: 800 !important;
+  border-radius: 8px !important;
 }
 
 .tree-empty {
   display: flex;
   justify-content: center;
-  padding: 20px 0;
+  padding: 40px 0;
 }
 </style>

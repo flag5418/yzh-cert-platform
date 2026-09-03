@@ -16,6 +16,7 @@ const dataConfig = () => {
     selectId: ref('1'),
     links: ref([]),
     navCurrentMenuId:ref(null),
+    currentLabel: ref('仪表盘'),
     
     // 【首页】标签序号(当前右键选中的菜单)
     selectMenuIndex: ref('0'),

@@ -4,7 +4,8 @@
  */
 :root {
   --yzh-shadow-none: none;
-  --yzh-shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.04);   /* 卡片 */
-  --yzh-shadow-md: 0 2px 12px rgba(0, 0, 0, 0.06);  /* 悬浮卡片 */
-  --yzh-shadow-lg: 0 6px 24px rgba(0, 0, 0, 0.10);  /* 弹窗 */
+  --yzh-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);   /* 轻微投影 */
+  --yzh-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.06);  /* 标准投影 */
+  --yzh-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.12); /* 弹窗投影 */
+  --yzh-shadow-commercial: 0 10px 40px rgba(0, 0, 0, 0.05); /* 商业化大投影 */
 }

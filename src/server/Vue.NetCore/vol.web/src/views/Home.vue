@@ -3,567 +3,584 @@
     <el-scrollbar style="height: 100%">
       <div class="home-content">
         <div class="home-left">
-          <div>
-            <el-alert
-              style="margin-bottom: 10px"
-              class="alert-primary"
-              :closable="false"
-              title="2026.05后台代码、前端代码生成器全新版本发布;增加了大量功能、优化了框架扩展性，具体见gitee中的更新说明"
-            ></el-alert>
+          <!-- 1. 配置管理概览横幅 -->
+          <div class="welcome-banner">
+            <div class="banner-text">
+              <h2>后台管理控制台</h2>
+              <p>
+                映智汇认证核心引擎配置中心已就绪，当前系统运行稳定，包含
+                <span class="highlight">12</span> 套认证标准定义。
+              </p>
+            </div>
+            <div class="banner-actions">
+              <el-button type="primary" size="large" @click="handleAction('standard')"
+                >标准管理</el-button
+              >
+            </div>
           </div>
+
+          <!-- 2. 系统资产指标 -->
           <div class="home-list">
             <div class="list-item" v-for="(item, index) in list" :key="index">
-              <div class="content">
-                <div class="content-right">
-                  <div class="name">
-                    {{ item.name }}
-                  </div>
+              <div class="content" :class="'item-' + (index + 1)">
+                <div class="content-left">
+                  <div class="name">{{ item.name }}</div>
                   <div class="data">
                     {{ (item.qty + '').replace(/\B(?=(\d{3})+(?!\d))/g, ',') }}
                   </div>
                 </div>
                 <div class="content-icon">
-                  <img :src="item.icon" />
+                  <el-icon :size="32"><component :is="item.icon" /></el-icon>
                 </div>
               </div>
             </div>
           </div>
 
+          <!-- 3. 配置更新趋势 -->
           <div class="home-list-chart">
-            <div class="radio-group">
-              <el-radio-group v-model="radioValue" size="small">
-                <el-radio-button value="本月" label="本月" />
-                <el-radio-button value="上月" label="上月" />
-                <el-radio-button value="近三月" label="近三月" />
-                <el-radio-button value="近半年" label="近半年" />
-              </el-radio-group>
+            <div class="chart-header">
+              <div class="title-main">配置资产分布与更新</div>
             </div>
-            <div id="h-chart1" style="height: 250px; background: white; width: 100%"></div>
+            <div id="h-chart1" style="height: 320px; width: 100%"></div>
           </div>
-          <div class="table" style="margin-top: ">
-            <div class="title">
-              <div class="txt">部门支出记录</div>
-              <div class="radio-group-table">
-                <el-radio-group v-model="radioValue2" size="small">
-                  <el-radio-button value="本月" label="本月" />
-                  <el-radio-button value="上月" label="上月" />
-                  <el-radio-button value="近三月" label="近三月" />
-                  <el-radio-button value="近半年" label="近半年" />
-                </el-radio-group>
-              </div>
+
+          <!-- 4. 核心配置状态 -->
+          <div class="table-container">
+            <div class="table-header">
+              <div class="title-main">认证标准定义状态</div>
+              <el-button link type="primary">进入规则库</el-button>
             </div>
 
-            <table>
+            <table class="yzh-table">
               <thead>
                 <tr>
-                  <td style="width: 15px">#</td>
-                  <td>部门</td>
-                  <td>日期</td>
-                  <td>收入</td>
-                  <td>支出</td>
-                  <td>消费</td>
-                  <td>结余</td>
-                  <td>备注</td>
+                  <th style="width: 60px">#</th>
+                  <th>标准名称</th>
+                  <th>版本号</th>
+                  <th>规则数量</th>
+                  <th>工作流定义</th>
+                  <th>最后修改人</th>
+                  <th>最后更新时间</th>
+                  <th>状态</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="(row, index) in tableData" :key="index">
-                  <td style="width: 15px">{{ index + 1 }}.</td>
-                  <td style="width: 100px">{{ row.dept }}</td>
-                  <td style="width: 100px">{{ row.date }}</td>
-                  <td>{{ (row.income + '').replace(/\B(?=(\d{3})+(?!\d))/g, ',') }}</td>
+                  <td>{{ index + 1 }}</td>
+                  <td class="bold">{{ row.name }}</td>
+                  <td>{{ row.version }}</td>
+                  <td>{{ row.ruleCount }}</td>
                   <td>
-                    {{ (row.expenditure + '').replace(/\B(?=(\d{3})+(?!\d))/g, ',') }}
+                    <el-tag size="small" :type="row.workflow ? 'success' : 'info'">{{
+                      row.workflow ? '已部署' : '未配置'
+                    }}</el-tag>
                   </td>
-                  <td>{{ (row.consum + '').replace(/\B(?=(\d{3})+(?!\d))/g, ',') }}</td>
-                  <td>{{ (row.balance + '').replace(/\B(?=(\d{3})+(?!\d))/g, ',') }}</td>
-                  <td style="width: 200px">{{ row.remark }}</td>
+                  <td>{{ row.updater }}</td>
+                  <td>{{ row.updateTime }}</td>
+                  <td>
+                    <el-tag :type="row.statusType" size="small" effect="dark">{{
+                      row.status
+                    }}</el-tag>
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
-        <div class="home-right">
-          <div style="background: #fff; padding: 15px">
-            <div class="title">
-              <div class="txt">生产数量统计</div>
-            </div>
-            <div id="chart-pie" style="height: 300px"></div>
-          </div>
-          <div class="table">
-            <div class="title">
-              <div class="txt">站内消息</div>
-            </div>
 
-            <table style="font-size: 12px">
-              <tbody>
-                <tr v-for="(item, index) in msg" :key="index">
-                  <td>
-                    <el-tag size="small" type="primary">消息</el-tag>
-                    <!-- <div class="item-bg">资讯</div> -->
-                  </td>
-                  <td>{{ item.name }}</td>
-                </tr>
-              </tbody>
-            </table>
+        <div class="home-right">
+          <!-- 5. 资源分布 -->
+          <div class="right-card">
+            <div class="card-header">
+              <div class="title-main">配置类型占比</div>
+            </div>
+            <div id="chart-pie" style="height: 320px"></div>
+          </div>
+
+          <!-- 6. AI 引擎状态与日志 -->
+          <div class="right-card msg-card">
+            <div class="card-header">
+              <div class="title-main">系统日志与 AI 监控</div>
+            </div>
+            <div class="msg-list">
+              <div v-for="(item, index) in msg" :key="index" class="msg-item">
+                <div class="msg-icon" :class="item.type">
+                  <el-icon><component :is="item.icon" /></el-icon>
+                </div>
+                <div class="msg-body">
+                  <div class="msg-title">{{ item.name }}</div>
+                  <div class="msg-time">{{ item.time }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 7. 核心配置入口 -->
+          <div class="right-card quick-actions">
+            <div class="card-header">
+              <div class="title-main">核心配置入口</div>
+            </div>
+            <div class="action-grid">
+              <div class="action-item" @click="handleAction('prompt')">
+                <el-icon><Cpu /></el-icon>
+                <span>AI 提示词</span>
+              </div>
+              <div class="action-item" @click="handleAction('nc')">
+                <el-icon><Connection /></el-icon>
+                <span>NC 逻辑</span>
+              </div>
+              <div class="action-item" @click="handleAction('report')">
+                <el-icon><Files /></el-icon>
+                <span>报告章节</span>
+              </div>
+              <div class="action-item" @click="handleAction('setting')">
+                <el-icon><Setting /></el-icon>
+                <span>系统参数</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-      <br /><br /><br /><br />
+      <div class="footer-spacer"></div>
     </el-scrollbar>
   </div>
 </template>
+
 <script setup>
-import {
-  defineComponent,
-  ref,
-  reactive,
-  toRefs,
-  getCurrentInstance,
-  onMounted,
-  onUnmounted
-} from 'vue'
 import * as echarts from 'echarts'
-
-const msg = ref([
-  { name: '健身房突然倒闭，会员们的钱该如何追回？' },
-  { name: '智能家电频繁死机，技术瓶颈待突破？' },
-  { name: '热门综艺抄袭争议不断，原创之路在何方？' },
-  { name: '宠物食品质量堪忧，毛孩子的健康谁守护？' },
-  { name: '航空公司超售机票，乘客权益如何保障？' },
-  { name: '服装快时尚品牌的环保 “谎言” 被戳破？' },
-  { name: '共享充电宝收费乱象，为何屡禁不止？' },
-  { name: '新兴职业高薪背后，隐藏着哪些挑战？' },
-  { name: '酒店卫生乱象又现，出门住宿该如何选？' },
-  { name: '美妆博主推荐产品翻车，信任危机爆发？' },
-  { name: '热门景点游客过度拥挤，管理困境如何解？' }
-])
-
-//图标库
-const list = ref([
-  {
-    name: '本月入库数量',
-    qty: 2200,
-    icon: '/static/imgs/icon1.png'
-  },
-  {
-    name: '本月出库数量',
-    qty: 1400,
-    icon: '/static//imgs/icon2.png'
-  },
-  {
-    name: '累计入库数量',
-    qty: 28000,
-    icon: '/static//imgs/icon3.png'
-  },
-  {
-    name: '累计出库数量',
-    qty: 14000,
-    icon: '/static//imgs/icon4.png'
-  }
-])
-const radioValue = ref('本月')
-const radioValue2 = ref('')
-
-onMounted(() => {
-  let $chart = echarts.init(document.getElementById('h-chart1'))
-  console.log(getChartData())
-  $chart.setOption(getChartData())
-  let $pie = echarts.init(document.getElementById('chart-pie'))
-  $pie.setOption(chartPie())
-})
+import { getCurrentInstance, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
 const { proxy } = getCurrentInstance()
+const userInfo = proxy.$store.getters.getUserInfo()
 
-let dateArr = new Array(10).fill(0).map((x, i) => {
-  let date = proxy.base.getDate()
-  return proxy.base.addDays(date, i * -1)
+const handleAction = (type) => {
+  console.log('Navigate to:', type)
+}
+
+const msg = ref([
+  { name: 'AI 审核引擎 3.0 模型参数已更新', time: '10分钟前', type: 'success', icon: 'Cpu' },
+  { name: 'ISO 9001:2015 规则库完成版本冻结', time: '1小时前', type: 'info', icon: 'Lock' },
+  { name: '系统检测到 AI 接口响应延迟波动', time: '3小时前', type: 'warning', icon: 'Warning' },
+  { name: '新增 5 条 NC 自动检查逻辑定义', time: '昨天', type: 'info', icon: 'Connection' },
+  { name: '管理员执行了全局参数备份', time: '2026-08-30', type: 'info', icon: 'Box' }
+])
+
+const list = ref([
+  { name: '认证标准总数', qty: 12, icon: 'Document' },
+  { name: 'NC 规则库条目', qty: 850, icon: 'Connection' },
+  { name: '工作流定义', qty: 24, icon: 'Share' },
+  { name: 'AI 提示词模板', qty: 156, icon: 'Cpu' }
+])
+
+let chart1, chartPie
+
+const initCharts = () => {
+  chart1 = echarts.init(document.getElementById('h-chart1'))
+  chart1.setOption(getChartData())
+
+  chartPie = echarts.init(document.getElementById('chart-pie'))
+  chartPie.setOption(getChartPieData())
+
+  window.addEventListener('resize', () => {
+    chart1.resize()
+    chartPie.resize()
+  })
+}
+
+onMounted(() => {
+  initCharts()
 })
 
-const tableData = reactive([])
-tableData.push(
-  ...dateArr.map((x) => {
-    return {
-      date: x,
-      dept: '公共事业部',
-      income: ~~(Math.random() * 100) + '00',
-      expenditure: ~~(Math.random() * 100) + '00',
-      consum: ~~(Math.random() * 100) + '00',
-      balance: ~~(Math.random() * 100) + '00',
-      remark: '这家伙很懒,没有说明信息...'
-    }
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', () => {
+    chart1?.resize()
+    chartPie?.resize()
   })
-)
+})
+
+const tableData = reactive([
+  {
+    name: 'ISO 9001:2015',
+    version: 'V2.1',
+    ruleCount: 124,
+    workflow: true,
+    updater: 'Admin',
+    updateTime: '2026-09-01',
+    status: '已发布',
+    statusType: 'success'
+  },
+  {
+    name: 'ISO 14001:2015',
+    version: 'V1.5',
+    ruleCount: 98,
+    workflow: true,
+    updater: 'Admin',
+    updateTime: '2026-08-28',
+    status: '已发布',
+    statusType: 'success'
+  },
+  {
+    name: 'ISO 45001:2018',
+    version: 'V1.2',
+    ruleCount: 112,
+    workflow: false,
+    updater: 'Yzh',
+    updateTime: '2026-08-30',
+    status: '草稿',
+    statusType: 'info'
+  },
+  {
+    name: 'ISO 27001:2022',
+    version: 'V1.0',
+    ruleCount: 156,
+    workflow: true,
+    updater: 'Admin',
+    updateTime: '2026-08-25',
+    status: '已下线',
+    statusType: 'danger'
+  }
+])
 
 const getChartData = () => {
   return {
-    title: {
-      text: '出入库数量',
-      textStyle: {
-        fontSize: 16
-      }
-    },
-    tooltip: {
-      trigger: 'axis'
-    },
-    legend: {
-      padding: 5,
-      textStyle: {
-        fontSize: 12
-        // color: '#afe3ff'
-      },
-      itemHeight: 9,
-      itemWidth: 12,
-      icon: 'roundRect', // 'circle',
-      data: ['入库', '出库']
-    },
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['配置更新次数', '规则增长'], right: 0 },
+    grid: { left: '0%', right: '2%', bottom: '0%', containLabel: true },
     xAxis: {
-      show: true,
-      axisTick: {
-        show: false // 不显示坐标轴刻度线
-      },
-      axisLine: {
-        show: false // 不显示坐标轴线
-      },
       type: 'category',
-      // boundaryGap: false,
-      data: dateArr // ['05-17', '05-18', '05-19', '05-20', '05-21', '05-22', '05-23'],
-    },
-    grid: {
-      left: 50,
-      bottom: 20,
-      top: 40,
-      right: 50
+      data: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+      axisLine: { lineStyle: { color: '#e2e8f0' } }
     },
     yAxis: {
-      splitNumber: 3,
-      splitLine: { show: false },
-      type: 'value'
+      type: 'value',
+      splitLine: { lineStyle: { type: 'dashed', color: '#f1f5f9' } }
     },
     series: [
       {
-        name: '收入',
-        type: 'bar',
+        name: '配置更新次数',
+        type: 'line',
         smooth: true,
-        lineStyle: {
-          // 阴影部分
-          shadowOffsetX: 0, // 折线的X偏移
-          shadowOffsetY: 6, // 折线的Y偏移
-          shadowBlur: 8, // 折线模糊
-          shadowColor: '#e3d6fd' //折线颜色
-        },
-
-        showSymbol: false,
-
-        emphasis: {
-          focus: 'series'
-        },
-        data: [
-          330, 765, 456, 697, 23, 564, 400, 345, 478, 123, 45, 789, 231, 654, 98, 34, 56, 78, 192,
-          321, 645, 700, 213, 546, 600, 312
-        ]
-      },
-      {
-        name: '支出',
-        type: 'bar',
-        smooth: true,
-        lineStyle: {
-          // 阴影部分
-          shadowOffsetX: 0, // 折线的X偏移
-          shadowOffsetY: 7, // 折线的Y偏移
-          shadowBlur: 8, // 折线模糊
-          shadowColor: '#9fceff' //折线颜色
-        },
-
-        itemStyle: {
-          color: '#2196F3'
-        },
-        showSymbol: false,
-
-        emphasis: {
-          focus: 'series'
-        },
-        data: [
-          200, 456, 789, 280, 800, 470, 213, 546, 98, 312, 432, 567, 891, 234, 561, 784, 325, 647,
-          892, 135, 462, 781, 700, 236, 578, 899
-        ]
+        data: [45, 52, 48, 70, 65, 85, 80],
+        itemStyle: { color: '#2f54eb' },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(47, 84, 235, 0.2)' },
+            { offset: 1, color: 'rgba(47, 84, 235, 0)' }
+          ])
+        }
       }
     ]
   }
 }
 
-const chartPie = () => {
+const getChartPieData = () => {
   return {
-    color: [
-      '#7020ff',
-      '#2EC7C9',
-      '#c3a4ff',
-      '#00d4f9',
-      '#FF6384', // 亮粉色
-      '#36A2EB', // 天蓝色
-      '#FFCE56', // 亮黄色
-      '#4BC0C0', // 青绿色
-      '#9966FF', // 深紫色
-      '#FF9F40', // 橙色
-      '#00CC96', // 清新绿色
-      '#E7717D', // 浅红色
-      '#5D9CEC', // 淡蓝色
-      '#F67280' // 淡粉色
-    ],
-    tooltip: {
-      trigger: 'item'
-    },
-    title: {
-      show: true,
-      text: '合计',
-      subtext: 3270,
-      x: '50%',
-      y: '30%',
-      subtextStyle: {
-        color: 'rgba(0,0,0,0.85)',
-        fontSize: 25,
-        fontWeight: '700'
-      },
-      textAlign: 'center'
-    },
-    grid: {
-      left: 40,
-      bottom: 20,
-      top: 40,
-      right: 10
-    },
-    legend: {
-      icon: 'circle',
-      itemWidth: 12,
-      itemHeight: 12,
-      orient: 'horizontal',
-      data: null,
-      bottom: 'bottom'
-    },
-    graphic: {
-      type: 'text',
-      left: 'center',
-      top: 'center',
-      style: {
-        textAlign: 'center',
-        fill: '#000',
-        fontSize: 20
-      }
-    },
+    tooltip: { trigger: 'item' },
+    legend: { bottom: '0%', left: 'center', icon: 'circle' },
     series: [
       {
+        name: '资源占比',
         type: 'pie',
-        radius: ['45%', '60%'],
-        center: ['50%', '40%'],
-        avoidLabelOverlap: false,
-        label: {
-          show: true,
-          position: 'outside'
-        },
-        emphasis: {
-          label: {
-            show: true,
-            fontWeight: 'bold'
-          }
-        },
-        labelLine: {
-          show: true
-        },
+        radius: ['50%', '75%'],
+        itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
+        label: { show: false },
         data: [
-          {
-            value: 1000,
-            name: '排产数量'
-          },
-          {
-            value: 700,
-            name: '计划数量'
-          },
-          {
-            value: 450,
-            name: '成品数量'
-          },
-          {
-            value: 300,
-            name: '报废数量'
-          },
-          {
-            value: 820,
-            name: '入库数量'
-          },
-          {
-            value: 320,
-            name: '调拨数量'
-          },
-          {
-            value: 620,
-            name: '待产数量'
-          },
-          {
-            value: 370,
-            name: '已产数量'
-          }
+          { value: 40, name: '标准定义', itemStyle: { color: '#2f54eb' } },
+          { value: 30, name: '规则配置', itemStyle: { color: '#1890ff' } },
+          { value: 20, name: '工作流', itemStyle: { color: '#13c2c2' } },
+          { value: 10, name: 'AI 模板', itemStyle: { color: '#722ed1' } }
         ]
       }
     ]
   }
 }
 </script>
+
 <style lang="less" scoped>
 .home-container {
-  position: absolute;
-  height: 100vh;
-  width: 100%;
-  background: #f3f7fb;
-  padding-bottom: 15px;
+  height: 100%;
+  background-color: #f8fafc;
 }
 
 .home-content {
-  padding: 15px;
+  padding: 32px;
   display: flex;
-
-  .home-left {
-    flex: 1;
-  }
-
-  .home-right {
-    width: 350px;
-  }
+  gap: 32px;
+  max-width: 1680px;
+  margin: 0 auto;
 }
 
-.home-list {
-  display: grid;
-  -moz-column-gap: 12px;
-  column-gap: 15px;
-  grid-template-columns: repeat(4, auto);
-}
-
-.list-item {
-  position: relative;
-  cursor: pointer;
-  margin-bottom: 15px;
-
-  .content {
-    position: relative;
-    height: 90px;
-    // padding-left: 40px;
-    background: #ffffff;
-    display: flex;
-    align-items: center;
-    transition: all 1.5s;
-    border-radius: 5px;
-    overflow: hidden;
-
-    .content-right {
-      color: #1d252f;
-      padding: 0 15px;
-
-      .el-icon-warning-outline {
-        margin-right: 5px;
-      }
-    }
-
-    .name {
-      color: #7d7b7b;
-      font-size: 14px;
-      font-weight: 400;
-      padding-bottom: 5px;
-    }
-
-    .data {
-      font-size: 19px;
-      font-family: Source Han Sans CN, sans-serif;
-      color: #505050;
-      font-weight: bold;
-      letter-spacing: 1px;
-    }
-  }
-}
-
-.content-icon {
+.home-left {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 23px;
-  padding-top: 8px;
-
-  img {
-    width: 40px;
-    height: 40px;
-    box-shadow: 5px 3px 5px 0px #ecf9ffed;
-    border-radius: 11px;
-  }
-}
-
-.home-list-chart {
-  // margin: -12px 12px;
-  background: #ffff;
-  padding: 15px;
-  display: flex;
-  margin-bottom: 12px;
-  position: relative;
-
-  .radio-group {
-    position: absolute;
-    right: 10px;
-    top: 10px;
-    z-index: 999;
-  }
-}
-
-.title {
-  font-size: 14px;
-  font-weight: bolder;
-  display: flex;
-  margin-bottom: 5px;
-  .txt {
-    flex: 1;
-  }
-}
-.table {
-  background: #ffff;
-  font-size: 14px;
-  padding: 15px;
-  position: relative;
-
-  table {
-    width: 100%;
-  }
-
-  thead {
-    font-weight: bolder;
-
-    td {
-      color: #101111 !important;
-    }
-  }
-
-  tr {
-    border-bottom: 1px solid #eee;
-  }
-  tr:nth-child(even) {
-    background: #f4fcff;
-  }
-  td {
-    padding: 9px 3px;
-    font-size: 13px;
-    color: #3d3c3c;
-    cursor: pointer;
-    border-bottom: 1px solid #f7f7f7;
-  }
+  flex-direction: column;
+  gap: 32px;
 }
 
 .home-right {
-  margin-left: 15px;
+  width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
 
-  .item-bg {
-    font-size: 12px;
-    padding: 2px 4px;
-    background: #daf3ff;
-    border-radius: 3px;
-    text-align: center;
-    width: 36px;
-    color: #339aed;
+.title-main {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.5px;
+}
+
+/* 欢迎横幅 - 修正为管理后台风格 */
+.welcome-banner {
+  background: #ffffff;
+  padding: 60px 64px; /* 增加内边距 */
+  border-radius: 32px; /* 更大的圆角 */
+  color: #0f172a;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: var(--yzh-shadow-lg);
+  border: 1px solid #f1f5f9;
+  position: relative;
+  overflow: hidden;
+  background-image:
+    radial-gradient(at 0% 0%, rgba(47, 84, 235, 0.05) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(24, 144, 255, 0.05) 0px, transparent 50%);
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 8px;
+    height: 100%;
+    background: var(--yzh-gradient-primary);
   }
+
+  .banner-text {
+    h2 {
+      font-size: 40px; /* 进一步增大标题 */
+      margin: 0 0 16px 0;
+      font-weight: 900;
+      letter-spacing: -1px;
+    }
+    p {
+      font-size: 19px; /* 提升正文字号 */
+      margin: 0;
+      color: #475569;
+      .highlight {
+        color: var(--yzh-color-primary);
+        font-weight: 900;
+        font-size: 28px;
+        margin: 0 6px;
+      }
+    }
+  }
+}
+
+/* 指标卡片 */
+.home-list {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+
+.list-item .content {
+  background: #fff;
+  padding: 28px;
+  border-radius: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+  border: 1px solid #f1f5f9;
+  transition: all 0.3s ease;
+
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--yzh-shadow-md);
+    border-color: var(--yzh-color-primary);
+  }
+
+  .name {
+    color: #64748b;
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .data {
+    font-size: 30px;
+    font-weight: 800;
+    color: #0f172a;
+  }
+
+  .content-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+.item-1 .content-icon {
+  background: #eff6ff;
+  color: #2563eb;
+}
+.item-2 .content-icon {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+.item-3 .content-icon {
+  background: #fffbeb;
+  color: #d97706;
+}
+.item-4 .content-icon {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+/* 容器通用样式 */
+.home-list-chart,
+.right-card,
+.table-container {
+  background: #fff;
+  padding: 32px;
+  border-radius: 32px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+  border: 1px solid #f1f5f9;
+}
+
+.chart-header,
+.table-header,
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+/* 表格样式 */
+.yzh-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  th {
+    text-align: left;
+    padding: 16px;
+    color: #64748b;
+    font-weight: 700;
+    border-bottom: 2px solid #f1f5f9;
+    font-size: 14px;
+  }
+
+  td {
+    padding: 18px 16px;
+    color: #334155;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 15px;
+    &.bold {
+      font-weight: 700;
+      color: #0f172a;
+    }
+  }
+
+  tr:hover td {
+    background-color: #f8fafc;
+  }
+}
+
+/* 消息列表 */
+.msg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.msg-item {
+  display: flex;
+  gap: 14px;
+  padding: 10px;
+  border-radius: 12px;
+
+  .msg-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    &.info {
+      background: #eff6ff;
+      color: #2563eb;
+    }
+    &.success {
+      background: #f0fdf4;
+      color: #16a34a;
+    }
+    &.warning {
+      background: #fffbeb;
+      color: #d97706;
+    }
+  }
+
+  .msg-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 2px;
+  }
+  .msg-time {
+    font-size: 13px;
+    color: #94a3b8;
+  }
+}
+
+/* 快速操作 */
+.action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.action-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: #f8fafc;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  gap: 10px;
+
+  i {
+    font-size: 24px;
+    color: #2f54eb;
+  }
+  span {
+    font-size: 14px;
+    font-weight: 700;
+    color: #334155;
+  }
+
+  &:hover {
+    background: #2f54eb;
+    i,
+    span {
+      color: #fff;
+    }
+    transform: translateY(-2px);
+  }
+}
+
+.footer-spacer {
+  height: 40px;
 }
 </style>

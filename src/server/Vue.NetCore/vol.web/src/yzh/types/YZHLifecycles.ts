@@ -3,6 +3,8 @@
 //  对齐后端：ServiceBase / Partial Service 的 OnExecuting/OnExecuted
 // ============================================================
 
+import type { IYZHEntitySchema } from './YZHEntitySchema'
+
 // false = 阻断当前操作，true / Promise<true> / void = 继续
 export type YZHGuardResult = boolean | void | Promise<boolean | void>
 
@@ -17,6 +19,7 @@ export interface ILifecycleLoad<TEntity = any, TParam = any> {
 // 新增阶段
 export interface ILifecycleAdd<TEntity = any, TResult = any> {
   onAddBefore?: (formData: Partial<TEntity>) => YZHGuardResult
+  onAddAfter?: (row: TEntity | null, action: 'add' | 'edit') => void | Promise<void>
   onAddSaveBefore?: (main: TEntity) => YZHGuardResult
   onAddSaveAfter?: (main: TEntity, result?: TResult) => void | Promise<void>
 }

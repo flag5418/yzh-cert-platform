@@ -27,7 +27,9 @@ export default function (proxy, dataConfig, router) {
     const selectNav = (item) => {
         const navigation = dataConfig.navigation;
         dataConfig.selectId.value = item.props.name;
-        let _path = navigation[item.index].path;
+        let navItem = navigation[item.index];
+        let _path = navItem.path;
+        dataConfig.currentLabel.value = navItem.name;
         dataConfig.currentMenuId.value =
             (
                 dataConfig.menuOptions.value.find((c) => {
@@ -36,10 +38,10 @@ export default function (proxy, dataConfig, router) {
             ).id * 1;
 
         router.push({
-            path: navigation[item.index].path,
-            query: navigation[item.index].query,
+            path: navItem.path,
+            query: navItem.query,
         });
-        toDynamicPage(proxy,dataConfig,navigation[item.index],router)
+        toDynamicPage(proxy, dataConfig, navItem, router)
     };
     return {
         navCloseTabs,
@@ -53,15 +55,15 @@ export default function (proxy, dataConfig, router) {
 }
 
 
-const toDynamicPage=(proxy,dataConfig,item,router)=>{
+const toDynamicPage = (proxy, dataConfig, item, router) => {
     if (!item) {
         console.log('item is null')
         return;
     }
-    const navigation=dataConfig.navigation;
-    if (checkDynamicPage(router,item)) {//navigation[item.index]
-        const _path=item.path;
-        router.push({ path: _path, query:item.query})// navigation[item.index].query 
+    const navigation = dataConfig.navigation;
+    if (checkDynamicPage(router, item)) {//navigation[item.index]
+        const _path = item.path;
+        router.push({ path: _path, query: item.query })// navigation[item.index].query 
         nextTick(() => {
             setTimeout(() => {
                 proxy.$tabs.reload && proxy.$tabs.reload(getRouteOption(router, _path).name || router.currentRoute.value.name)
@@ -76,9 +78,9 @@ const onNavCloseTabs = (proxy, dataConfig, value) => {
     const selectId = dataConfig.selectId;
     const selectMenuIndex = dataConfig.selectMenuIndex;
     //首页右键
-    if (selectId.value=='-1') {
-        selectId.value=0
-        value=''
+    if (selectId.value == '-1') {
+        selectId.value = 0
+        value = ''
     }
     let _menuId = navigation[selectId.value * 1].id
     let currnetIndex = selectId.value * 1 // navigation.findIndex(c => { return c.id == selectId.value });
@@ -92,7 +94,7 @@ const onNavCloseTabs = (proxy, dataConfig, value) => {
             // 删除右侧tab标签
             if (selectMenuIndex.value == 0) {
                 navigation.splice(currnetIndex) // 删除右侧tab标签
-                toHome(proxy,navigation)
+                toHome(proxy, navigation)
             } else {
                 navigation.splice(currnetIndex + 1) // 删除右侧tab标签
                 if (selectMenuIndex.value < currnetIndex) {
@@ -110,7 +112,7 @@ const onNavCloseTabs = (proxy, dataConfig, value) => {
         default: {
             //关闭所有
             navigation.splice(1, navigation.length)
-            toHome(proxy,navigation)
+            toHome(proxy, navigation)
             break
         }
     }
@@ -131,7 +133,7 @@ const toHome = (proxy, navigation) => {
 }
 //动态页面
 const checkDynamicPage = (router, item) => {
-    const b= router.getRoutes().some((x) => {
+    const b = router.getRoutes().some((x) => {
         return x.path == item.path && x.meta && x.meta.dynamic
     })
     return b;
@@ -176,6 +178,7 @@ const openTabs = (proxy, dataConfig, item, useRoute, router) => {
         navigation[_index].query = item.query
         selectId.value = _index + ''
     }
+    dataConfig.currentLabel.value = item.name || item.text || '仪表盘';
     if (useRoute === undefined) {
         //非标准菜单，记录最后一次跳转的页面，用于刷新
         setItem(item)
@@ -183,7 +186,7 @@ const openTabs = (proxy, dataConfig, item, useRoute, router) => {
         // this.$router.push(item);
     }
     if (dynamicPage) {
-        toDynamicPage(proxy,dataConfig,item,router)
+        toDynamicPage(proxy, dataConfig, item, router)
         // router.push({ path: item.path, query: item.query })
         // nextTick(() => {
         //     // proxy.$tabs.reload && proxy.$tabs.reload(getRouteOption(router, item.path).name)
@@ -233,7 +236,7 @@ export const onRemoveNav = (proxy, dataConfig, router, index) => {
             })
             navigation.splice(index, 1)
             selectId.value = selectId.value - 1 + ''
-            toDynamicPage(proxy,dataConfig,dataConfig.navigation[index-1],router)
+            toDynamicPage(proxy, dataConfig, dataConfig.navigation[index - 1], router)
             return
         }
         if (index < selectId.value) {

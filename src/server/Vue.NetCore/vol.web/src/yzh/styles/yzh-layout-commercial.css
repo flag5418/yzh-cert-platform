@@ -1,0 +1,294 @@
+/**
+ * YZH 后台管理系统商业化布局重写 - 严谨商用版
+ * 目标：去框架化、提升专业感、极致线条感、对齐精准
+ */
+
+/* 全局字体大气化重写 */
+body {
+  font-size: 14px !important;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+  color: #303133 !important;
+  line-height: 1.5 !important;
+  background-color: #f5f7fa !important;
+}
+
+/* 侧边栏字体与间距 */
+.vol-aside-project-name {
+  font-size: 18px !important;
+  padding: 0 20px !important;
+  letter-spacing: 0 !important;
+  font-weight: 600 !important;
+}
+
+.vol-aside .el-menu-item,
+.vol-aside .el-sub-menu__title {
+  font-size: 14px !important;
+  height: 50px !important;
+  line-height: 50px !important;
+}
+
+/* 侧边栏商业化重塑 - Ant Design 严谨风格 */
+.vol-aside {
+  background: #001529 !important;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15) !important;
+  border-right: none !important;
+  z-index: 1000 !important;
+}
+
+/* 彻底解决左侧菜单背景白块问题 - 全局 CSS 不应使用 ::v-deep */
+.vol-aside,
+.vol-aside .el-menu,
+.vol-aside .el-scrollbar,
+.vol-aside .el-scrollbar__wrap,
+.vol-aside .el-scrollbar__view,
+.vol-aside .vol-menu,
+.vol-aside .vol-el-menu,
+.vol-aside .vol-el-menu .el-menu {
+  background-color: #001529 !important;
+  border: none !important;
+}
+
+.vol-aside .el-menu--collapse {
+  width: 64px !important;
+  background-color: #001529 !important;
+}
+
+.vol-aside .header {
+  background: #002140 !important;
+  height: 60px !important;
+  line-height: 60px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.vol-aside-project-name {
+  color: #fff !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  background: none !important; /* 移除渐变文字，恢复严肃感 */
+  -webkit-text-fill-color: #fff !important;
+}
+
+.vol-aside .vol-menu {
+  background: transparent !important;
+  height: calc(100vh - 60px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+/* 侧边栏搜索框深度重构 */
+.vol-el-menu .menu-search {
+  padding: 12px 16px !important;
+  background: transparent !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.vol-el-menu .menu-search .el-select__wrapper {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-radius: 2px !important; /* 严谨圆角 */
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  height: 32px !important;
+  margin-top: 0 !important;
+  box-shadow: none !important;
+}
+
+.vol-el-menu .menu-search .el-select__wrapper .el-select__placeholder,
+.vol-el-menu .menu-search .el-select__wrapper .el-select__selected-item,
+.vol-el-menu .menu-search .el-select__wrapper input {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+.vol-el-menu .menu-search .el-select__wrapper:hover,
+.vol-el-menu .menu-search .el-select__wrapper.is-focus {
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
+.vol-el-menu .menu-search .el-select__wrapper:hover .el-select__placeholder,
+.vol-el-menu .menu-search .el-select__wrapper.is-focus .el-select__placeholder,
+.vol-el-menu .menu-search .el-select__wrapper:hover input,
+.vol-el-menu .menu-search .el-select__wrapper.is-focus input {
+  color: #fff !important;
+}
+
+/* 菜单项美化 - 严谨风格 */
+.el-menu-item,
+.el-sub-menu__title {
+  height: 40px !important;
+  line-height: 40px !important;
+  font-size: 14px !important;
+  color: rgba(255, 255, 255, 0.65) !important;
+  margin: 2px 8px !important; /* 减小间距 */
+  padding: 0 16px !important;
+  border-radius: 2px !important;
+}
+
+/* 侧边栏菜单层级缩进 - 深度重塑方案 */
+.vol-aside .el-menu {
+  --el-menu-base-level-padding: 20px !important;
+  --el-menu-level-padding: 24px !important; /* 每级递增 24px */
+}
+
+/* 强制覆盖一级菜单以后的所有项 */
+.vol-aside .el-sub-menu .el-menu-item,
+.vol-aside .el-sub-menu .el-sub-menu__title {
+  padding-left: 56px !important; /* 二级菜单起始位置 */
+}
+
+.vol-aside .el-sub-menu .el-sub-menu .el-menu-item,
+.vol-aside .el-sub-menu .el-sub-menu .el-sub-menu__title {
+  padding-left: 80px !important; /* 三级菜单起始位置 */
+}
+
+/* 垂直引导线 - 重新定位并加固 */
+.vol-aside .el-sub-menu > .el-menu {
+  position: relative !important;
+}
+
+.vol-aside .el-sub-menu > .el-menu::before {
+  content: '';
+  position: absolute;
+  left: 36px !important; /* 引导线位置对齐 */
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.2) !important;
+  z-index: 10;
+  display: block !important;
+}
+
+/* 针对多级菜单的引导线位移 */
+.vol-aside .el-sub-menu .el-sub-menu > .el-menu::before {
+  left: 60px !important;
+}
+
+/* 增强层级感：为展开的子菜单添加微弱背景色区分 */
+.vol-aside .el-sub-menu.is-opened > .el-menu {
+  background-color: rgba(0, 0, 0, 0.2) !important;
+}
+
+/* 针对 Element Plus 的内部变量进行覆盖 */
+.vol-aside .el-sub-menu {
+  --el-menu-level: 1;
+}
+
+.vol-aside .el-sub-menu .el-sub-menu {
+  --el-menu-level: 2;
+}
+
+.vol-aside .el-sub-menu .el-sub-menu .el-sub-menu {
+  --el-menu-level: 3;
+}
+
+/* 菜单项激活态垂直装饰条 */
+.el-menu-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  background: #fff;
+  border-radius: 0 2px 2px 0;
+}
+
+.el-menu-item.is-active {
+  background: var(--yzh-color-primary) !important;
+  color: #fff !important;
+  box-shadow: none !important; /* 移除阴影 */
+}
+
+.el-menu-item:hover,
+.el-sub-menu__title:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #fff !important;
+}
+
+/* 顶栏 (Header) 严谨化 */
+.vol-header {
+  height: 60px !important;
+  background: #fff !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08) !important;
+  padding: 0 24px !important;
+  display: flex !important;
+  align-items: center !important;
+  z-index: 1001 !important;
+}
+
+/* 顶栏导航链接 */
+.nav-top-link {
+  color: #606266 !important;
+  font-weight: 500 !important;
+  padding: 0 16px !important;
+  height: 60px !important;
+  line-height: 60px !important;
+  border-radius: 0 !important;
+  transition: all 0.2s !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  position: relative;
+}
+
+.nav-top-link:hover {
+  background: #f5f7fa !important;
+  color: var(--yzh-color-primary) !important;
+}
+
+.nav-top-link.h-link-a-acitve {
+  background: transparent !important;
+  color: var(--yzh-color-primary) !important;
+  font-weight: 600 !important;
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 16px;
+    right: 16px;
+    height: 2px;
+    background: var(--yzh-color-primary);
+  }
+}
+
+/* 页签栏 (Tabs) - 严谨商用设计 */
+.vol-path {
+  background: #ffffff !important;
+  padding: 8px 24px !important;
+  border-bottom: 1px solid #ebeef5 !important;
+}
+
+.header-navigation .el-tabs__item {
+  height: 32px !important;
+  line-height: 30px !important;
+  padding: 0 12px !important;
+  border: 1px solid #dcdfe6 !important;
+  border-radius: 2px !important; /* 2px 圆角 */
+  margin-right: 8px !important;
+  background: #fafafa !important;
+  color: #606266 !important;
+  font-weight: 400 !important;
+  font-size: 13px !important;
+}
+
+.header-navigation .el-tabs__item.is-active {
+  background-color: var(--yzh-color-primary) !important;
+  color: #ffffff !important;
+  border-color: var(--yzh-color-primary) !important;
+  box-shadow: none !important;
+}
+
+/* 强制覆盖页签文字颜色 */
+#vol-container .header-navigation .el-tabs__item.is-active {
+  color: #ffffff !important;
+}
+
+/* 响应式布局适配 */
+@media screen and (max-width: 992px) {
+  .vol-aside {
+    width: 64px !important;
+  }
+  .vol-aside-project-name,
+  .menu-search {
+    display: none !important;
+  }
+}

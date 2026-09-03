@@ -52,6 +52,9 @@ export default {
 </script>
 
 <style scoped lang="less">
+.vol-el-menu-item {
+  background: transparent !important;
+}
 .vol-el-menu-item ::v-deep(.el-menu-item) {
   height: 42px !important;
   line-height: 42px !important;

@@ -1,33 +1,36 @@
 <template>
-  <div class="nc-config-page">
+  <div class="nc-config-page studio-layout">
     <CertPageHeader title="NC 规则配置" :icon="IconSetting" />
 
     <div class="page-body">
       <!-- ===== 左栏：统一4级树 ===== -->
-      <div class="left-panel">
-        <el-card shadow="never" class="tree-card">
-          <template #header>
-            <div class="panel-header">
-              <span>机构 / 标准 / 阶段 / NC检查项</span>
-              <el-button link size="small" @click="refreshTree"><el-icon><IconRefresh /></el-icon></el-button>
-            </div>
-          </template>
-          <div class="tree-search">
-            <el-input
-              v-model="searchText"
-              placeholder="搜索..."
-              size="small"
-              clearable
-              :prefix-icon="IconSearch"
-            />
-          </div>
-          <div class="tree-body">
-            <template v-for="org in treeData" :key="org.id">
+      <aside class="left-panel">
+        <div class="panel-header">
+          <span>机构 / 标准 / 阶段 / NC检查项</span>
+          <el-button link size="small" @click="refreshTree"
+            ><el-icon><IconRefresh /></el-icon
+          ></el-button>
+        </div>
+        <div class="tree-search">
+          <el-input
+            v-model="searchText"
+            placeholder="搜索..."
+            size="small"
+            clearable
+            :prefix-icon="IconSearch"
+          />
+        </div>
+        <div class="tree-container">
+          <template v-for="org in treeData" :key="org.id">
             <div v-if="org.visible" class="tree-group">
               <!-- 机构 -->
-              <div class="tree-node level-0" @click="toggleExpand(org)">
-                <el-icon class="tree-toggle" :class="{ expanded: org.expanded }"><IconForward /></el-icon>
-                <el-icon class="tree-icon org"><IconOfficeBuilding /></el-icon>
+              <div
+                class="tree-node level-0"
+                :class="{ expanded: org.expanded }"
+                @click="toggleExpand(org)"
+              >
+                <el-icon class="toggle-icon"><IconForward /></el-icon>
+                <el-icon class="type-icon org"><IconOfficeBuilding /></el-icon>
                 <span class="tree-label">{{ org.label }}</span>
                 <el-badge v-if="org.children?.length" :value="org.children.length" type="info" />
               </div>
@@ -35,21 +38,39 @@
               <!-- 标准 -->
               <template v-if="org.expanded && org.children">
                 <template v-for="std in org.children" :key="std.id">
-                  <div v-if="std.visible" class="tree-node level-1" @click="toggleExpand(std)">
-                    <el-icon class="tree-toggle" :class="{ expanded: std.expanded }"><IconForward /></el-icon>
-                    <el-icon class="tree-icon standard"><IconFile /></el-icon>
+                  <div
+                    v-if="std.visible"
+                    class="tree-node level-1"
+                    :class="{ expanded: std.expanded }"
+                    @click="toggleExpand(std)"
+                  >
+                    <el-icon class="toggle-icon"><IconForward /></el-icon>
+                    <el-icon class="type-icon standard"><IconFile /></el-icon>
                     <span class="tree-label">{{ std.label }}</span>
-                    <el-badge v-if="std.children?.length" :value="std.children.length" type="info" />
+                    <el-badge
+                      v-if="std.children?.length"
+                      :value="std.children.length"
+                      type="info"
+                    />
                   </div>
 
                   <!-- 阶段 -->
                   <template v-if="std.expanded && std.children && std.visible">
                     <template v-for="phase in std.children" :key="phase.id">
-                      <div v-if="phase.visible" class="tree-node level-2" @click="togglePhase(phase, std, org)">
-                        <el-icon class="tree-toggle" :class="{ expanded: phase.expanded }"><IconForward /></el-icon>
-                        <el-icon class="tree-icon phase"><IconCalendar /></el-icon>
+                      <div
+                        v-if="phase.visible"
+                        class="tree-node level-2"
+                        :class="{ expanded: phase.expanded }"
+                        @click="togglePhase(phase, std, org)"
+                      >
+                        <el-icon class="toggle-icon"><IconForward /></el-icon>
+                        <el-icon class="type-icon phase"><IconCalendar /></el-icon>
                         <span class="tree-label">{{ phase.label }}</span>
-                        <el-badge v-if="phase.children?.length" :value="phase.children.length" type="info" />
+                        <el-badge
+                          v-if="phase.children?.length"
+                          :value="phase.children.length"
+                          type="info"
+                        />
                       </div>
 
                       <!-- NC检查项 -->
@@ -58,50 +79,60 @@
                           v-for="rule in phase.children"
                           :key="rule.id"
                           class="tree-node level-3"
-                          :class="{ active: currentRule?.id === rule.id, configured: !!rule.ruleJson }"
+                          :class="{
+                            active: currentRule?.id === rule.id,
+                            configured: !!rule.ruleJson
+                          }"
                           @click="selectRule(rule, phase)"
                         >
-                          <el-icon class="tree-toggle" style="visibility: hidden"><IconForward /></el-icon>
-                          <el-icon class="tree-icon rule" :class="{ configured: !!rule.ruleJson }">
+                          <el-icon class="type-icon rule" :class="{ configured: !!rule.ruleJson }">
                             <IconCircleCheck v-if="rule.ruleJson" />
                             <IconDocument v-else />
                           </el-icon>
                           <span class="tree-label">{{ rule.ruleName }}</span>
-                          <span v-if="rule.ruleJson" class="config-dot"></span>
-                          <el-tag v-if="rule.clauseNumber" size="small" type="info" class="node-badge">{{ rule.clauseNumber }}</el-tag>
                         </div>
-                        <div v-if="!phase.children.length" class="rule-empty">该阶段暂无检查项</div>
-                      </div>
-                      <div v-if="phase.visible && phase.expanded && phase.ruleLoading" class="rule-loading">
-                        <el-icon class="is-loading"><IconLoading /></el-icon>
-                        <span>加载中...</span>
                       </div>
                     </template>
                   </template>
                 </template>
               </template>
             </div>
-            </template>
-            <div v-if="!treeData.length" class="tree-empty">
-              <el-empty description="暂无数据" :image-size="60" />
-            </div>
-          </div>
-        </el-card>
-      </div>
+          </template>
+        </div>
+      </aside>
 
       <!-- ===== 中栏：LogicFlow 画布 ===== -->
-      <div class="canvas-panel">
+      <main class="main-content">
         <div class="canvas-toolbar">
-          <span class="canvas-title">{{ currentRule ? `工作流：${currentRule.ruleName}` : '请选择 NC 检查项' }}</span>
+          <span class="canvas-title">{{
+            currentRule ? `工作流：${currentRule.ruleName}` : '请选择 NC 检查项'
+          }}</span>
           <div class="toolbar-actions">
-            <el-button size="small" @click="autoLayout"><el-icon><IconGrid /></el-icon> 自动布局</el-button>
-            <el-button size="small" type="danger" plain @click="handleClearCanvas"><el-icon><IconDelete /></el-icon> 清空画布</el-button>
-            <el-button size="small" @click="validateGraph"><el-icon><IconCircleCheck /></el-icon> 校验</el-button>
-            <el-button type="success" size="small" :loading="executing" :disabled="!currentRule" @click="handleExecuteTest">
-              <el-icon><IconPlay /></el-icon> 执行验证
+            <el-button size="small" @click="autoLayout"
+              ><el-icon><IconGrid /></el-icon> 布局</el-button
+            >
+            <el-button size="small" type="danger" plain @click="handleClearCanvas"
+              ><el-icon><IconDelete /></el-icon> 清空</el-button
+            >
+            <el-button size="small" @click="validateGraph"
+              ><el-icon><IconCircleCheck /></el-icon> 校验</el-button
+            >
+            <el-button
+              type="success"
+              size="small"
+              :loading="executing"
+              :disabled="!currentRule"
+              @click="handleExecuteTest"
+            >
+              <el-icon><IconPlay /></el-icon> 运行
             </el-button>
-            <el-button type="primary" size="small" :disabled="!currentRule || !store.state.dirty" @click="handleSave">
-              <el-icon><IconDownload /></el-icon> 保存工作流
+            <el-button
+              type="primary"
+              size="small"
+              :disabled="!currentRule || !store.state.dirty"
+              @click="handleSave"
+            >
+              <el-icon><IconDownload /></el-icon> 保存
             </el-button>
           </div>
         </div>
@@ -111,67 +142,108 @@
           @dragover.prevent="onCanvasDragOver"
           @drop.prevent="onCanvasDrop"
         ></div>
-        <div class="canvas-status">
-          <span>节点: {{ store.state.nodes.length }} | 边: {{ store.state.edges.length }} | 脏标记: {{ store.state.dirty ? '是' : '否' }}</span>
+        <div class="canvas-footer">
+          <span
+            >节点: {{ store.state.nodes.length }} | 边: {{ store.state.edges.length }} | 状态:
+            {{ store.state.dirty ? '未保存' : '已保存' }}</span
+          >
           <span v-if="currentRule" class="rule-code-text">{{ currentRule.ruleCode }}</span>
-          <span v-if="savedTip" class="saved-text">✓ {{ savedTip }}</span>
         </div>
         <!-- 执行结果面板 -->
-        <ExecutionResultPanel v-if="executionResult" :result="executionResult" @close="executionResult = null" />
-      </div>
+        <ExecutionResultPanel
+          v-if="executionResult"
+          :result="executionResult"
+          @close="executionResult = null"
+        />
+      </main>
 
       <!-- ===== 右栏：节点库 + 属性面板 ===== -->
-      <div class="right-panel">
-        <div class="skill-panel-wrapper">
-          <SkillPanel :skills="skills" :categories="categories" @add-node="handleAddNode" />
-        </div>
-        <div class="prop-panel-wrapper">
-          <NodePropertyForm
-            :key="`panel_${forceRefreshTick}`"
-            :selected-node="selectedNode"
-            :skills="skills"
-            :doc-rules="docRules"
-            :doc-fields="currentDocFields"
-            :doc-tables="currentDocTables"
-            :canvas-nodes="canvasNodesForPanel"
-            @update-node="handleUpdateNode"
-            @delete-node="handleDeleteNode"
-            @load-doc-fields="onNodeDocChange"
-            @link-node="handleLinkNode"
-            @test-node="handleTestNode"
-            @test-workflow="handleTestWorkflow"
-            @test-doc-extract="handleTestDocExtract"
-          />
-        </div>
-      </div>
+      <aside class="right-panel">
+        <el-tabs v-model="activeRightTab" class="studio-tabs">
+          <el-tab-pane label="节点库" name="nodes">
+            <div class="nodes-panel">
+              <SkillPanel :skills="skills" :categories="categories" @add-node="handleAddNode" />
+            </div>
+          </el-tab-pane>
+          <el-tab-pane label="属性" name="props">
+            <div class="prop-panel-wrapper">
+              <NodePropertyForm
+                :key="`panel_${forceRefreshTick}`"
+                :selected-node="selectedNode"
+                :skills="skills"
+                :doc-rules="docRules"
+                :doc-fields="currentDocFields"
+                :doc-tables="currentDocTables"
+                :canvas-nodes="canvasNodesForPanel"
+                @update-node="handleUpdateNode"
+                @delete-node="handleDeleteNode"
+                @load-doc-fields="onNodeDocChange"
+                @link-node="handleLinkNode"
+                @test-node="handleTestNode"
+                @test-workflow="handleTestWorkflow"
+                @test-doc-extract="handleTestDocExtract"
+              />
+            </div>
+          </el-tab-pane>
+        </el-tabs>
+      </aside>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted, onActivated, onBeforeUnmount, getCurrentInstance, nextTick } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { CertPageHeader } from '@/certcore'
+import ExecutionResultPanel from '@/components/workflow-designer/ExecutionResultPanel.vue'
+import NodePropertyForm from '@/components/workflow-designer/NodePropertyForm.vue'
+import SkillPanel from '@/components/workflow-designer/SkillPanel.vue'
+import {
+  analyzeWorkflowTopology,
+  nodeStyle,
+  setLogEnabled,
+  setLogLevel,
+  summarizePaths
+} from '@/components/workflow-designer/compiler'
+import {
+  deserialize,
+  extractLayout,
+  serialize
+} from '@/components/workflow-designer/model/serializer.js'
+import { useWorkflowStore } from '@/components/workflow-designer/store/useWorkflowStore.js'
+import {
+  IconCalendar,
+  IconCircleCheck,
+  IconDelete,
+  IconDocument,
+  IconDownload,
+  IconFile,
+  IconForward,
+  IconGrid,
+  IconOfficeBuilding,
+  IconPlay,
+  IconRefresh,
+  IconSearch,
+  IconSetting
+} from '@/yzh/icons'
 import LogicFlow from '@logicflow/core'
 import '@logicflow/core/dist/index.css'
-import { CertPageHeader } from '@/certcore'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  IconSetting, IconRefresh, IconGrid, IconCircleCheck, IconDownload,
-  IconForward, IconSearch, IconFile, IconCalendar, IconOfficeBuilding,
-  IconDocument, IconLoading, IconDelete, IconPlay
-} from '@/yzh/icons'
-import SkillPanel from '@/components/workflow-designer/SkillPanel.vue'
-import NodePropertyForm from '@/components/workflow-designer/NodePropertyForm.vue'
-import ExecutionResultPanel from '@/components/workflow-designer/ExecutionResultPanel.vue'
-import { nodeStyle } from '@/components/workflow-designer/compiler'
-import { useWorkflowStore } from '@/components/workflow-designer/store/useWorkflowStore.js'
-import { deserialize, serialize, extractLayout } from '@/components/workflow-designer/model/serializer.js'
-import { analyzeWorkflowTopology, setLogLevel, setLogEnabled, summarizePaths, formatWorkflowPath } from '@/components/workflow-designer/compiler'
+  computed,
+  getCurrentInstance,
+  nextTick,
+  onActivated,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch
+} from 'vue'
 
 // 开启详细日志（生产环境可关闭）
 setLogEnabled(true)
 setLogLevel('INFO')
 
-
+const activeRightTab = ref('nodes')
 const { proxy } = getCurrentInstance()
 const canvasRef = ref(null)
 const diagram = ref(null)
@@ -239,21 +311,27 @@ async function loadSkills() {
   try {
     const res = await proxy.http.get('api/skill/query-nodes', null, false)
     if (res?.status) skills.value = res.data || []
-  } catch (e) { ElMessage.error('加载 Skill 失败') }
+  } catch (e) {
+    ElMessage.error('加载 Skill 失败')
+  }
 }
 
 async function loadCategories() {
   try {
     const res = await proxy.http.get('api/skill-category/list', null, false)
     if (res?.status) categories.value = res.data || []
-  } catch (e) { ElMessage.error('加载分类失败') }
+  } catch (e) {
+    ElMessage.error('加载分类失败')
+  }
 }
 
 async function loadDocRules() {
   try {
     const res = await proxy.http.get('api/DocExtractionRule/configured-rules', null, false)
     if (res?.status) docRules.value = res.data || []
-  } catch (e) { ElMessage.error('加载文档规则失败') }
+  } catch (e) {
+    ElMessage.error('加载文档规则失败')
+  }
 }
 
 async function onNodeDocChange(ruleCode) {
@@ -268,7 +346,9 @@ async function loadFieldsAndTables(ruleCode) {
       currentDocFields.value = res.data.fields || []
       currentDocTables.value = res.data.tables || []
     }
-  } catch (e) { ElMessage.error('加载文档字段/表格失败') }
+  } catch (e) {
+    ElMessage.error('加载文档字段/表格失败')
+  }
 }
 
 // ==================== 树数据 ====================
@@ -277,15 +357,15 @@ async function loadTree() {
   try {
     const res = await proxy.http.get('/api/standard-directory/organization-tree', null, false)
     const raw = res?.Data || res?.data || []
-    treeData.value = raw.map(org => ({
+    treeData.value = raw.map((org) => ({
       ...org,
       expanded: true,
       visible: true,
-      children: (org.children || []).map(std => ({
+      children: (org.children || []).map((std) => ({
         ...std,
         expanded: false,
         visible: true,
-        children: (std.children || []).map(phase => ({
+        children: (std.children || []).map((phase) => ({
           ...phase,
           expanded: false,
           visible: true,
@@ -296,27 +376,28 @@ async function loadTree() {
       }))
     }))
     applySearchFilter()
-  } catch (e) {
-  }
+  } catch (e) {}
 }
 
 function applySearchFilter() {
   const kw = searchText.value?.toLowerCase() || ''
   if (!kw) {
-    treeData.value.forEach(org => {
+    treeData.value.forEach((org) => {
       org.visible = true
-      ;(org.children || []).forEach(std => {
+      ;(org.children || []).forEach((std) => {
         std.visible = true
-        ;(std.children || []).forEach(p => { p.visible = true })
+        ;(std.children || []).forEach((p) => {
+          p.visible = true
+        })
       })
     })
     return
   }
-  treeData.value.forEach(org => {
+  treeData.value.forEach((org) => {
     let orgHasMatch = org.label?.toLowerCase().includes(kw)
-    ;(org.children || []).forEach(std => {
+    ;(org.children || []).forEach((std) => {
       let stdHasMatch = std.label?.toLowerCase().includes(kw)
-      ;(std.children || []).forEach(p => {
+      ;(std.children || []).forEach((p) => {
         p.visible = p.label?.toLowerCase().includes(kw) || stdHasMatch
         if (p.visible) stdHasMatch = true
       })
@@ -354,7 +435,7 @@ async function loadRulesForPhase(phase) {
     const params = `orgCode=${encodeURIComponent(currentFilter.orgCode)}&standardCode=${encodeURIComponent(currentFilter.standardCode)}&phaseCode=${encodeURIComponent(currentFilter.phaseCode)}`
     const res = await proxy.http.get(`api/validation-rule/list?${params}`, null, false)
     if (res?.status) {
-      phase.children = (res.data || []).map(r => ({ ...r, id: r.id || r.ruleCode }))
+      phase.children = (res.data || []).map((r) => ({ ...r, id: r.id || r.ruleCode }))
     } else {
       phase.children = []
     }
@@ -366,7 +447,9 @@ async function loadRulesForPhase(phase) {
   }
 }
 
-const refreshTree = () => { loadTree() }
+const refreshTree = () => {
+  loadTree()
+}
 
 // ==================== 画布 ====================
 
@@ -389,8 +472,6 @@ function initDiagram() {
     textEditMode: false
   })
 
-
-
   diagram.value.on('node:click', ({ data }) => {
     const props = data.properties || {}
     // 始终从 store 读取 title（确保改名后显示最新值）
@@ -404,8 +485,10 @@ function initDiagram() {
     )
 
     // 如果计算结果与 store 不同，更新 store
-    if (JSON.stringify(syncedInputs) !== JSON.stringify(storeNode?.inputs || {}) ||
-        JSON.stringify(syncedInputTypes) !== JSON.stringify(storeNode?.inputTypes || {})) {
+    if (
+      JSON.stringify(syncedInputs) !== JSON.stringify(storeNode?.inputs || {}) ||
+      JSON.stringify(syncedInputTypes) !== JSON.stringify(storeNode?.inputTypes || {})
+    ) {
       store.setInputValue(data.id, null, null)
       if (storeNode) {
         storeNode.inputs = syncedInputs
@@ -429,14 +512,15 @@ function initDiagram() {
     // branch 节点：传递已有出边信息
     if (nodeData.nodeType === 'branch') {
       const gd = diagram.value?.getGraphData()
-      const outEdges = (gd.edges || []).filter(e => e.sourceNodeId === data.id)
-      nodeData.branchEdges = outEdges.map(e => ({
+      const outEdges = (gd.edges || []).filter((e) => e.sourceNodeId === data.id)
+      nodeData.branchEdges = outEdges.map((e) => ({
         handle: e.properties?.sourceHandle || '',
         targetId: e.targetNodeId,
         edgeId: e.id
       }))
     }
     selectedNode.value = nodeData
+    activeRightTab.value = 'props' // 自动切换到属性面板
   })
 
   diagram.value.on('node:dbclick', ({ data }) => {
@@ -453,7 +537,7 @@ function initDiagram() {
     selectedEdgeId.value = data.id
   })
   diagram.value.on('blank:click', () => {
-    if (_renamingNodeId && (Date.now() - _renamingTimestamp) < RENAMING_GUARD_MS) return
+    if (_renamingNodeId && Date.now() - _renamingTimestamp < RENAMING_GUARD_MS) return
     selectedNode.value = null
     selectedEdgeId.value = null
   })
@@ -512,15 +596,15 @@ function handleKeyDown(e) {
 function computeNodeInputsFromEdges(nodeId, currentInputs = {}, currentInputTypes = {}) {
   if (!diagram.value) return { inputs: currentInputs, inputTypes: currentInputTypes }
   const gd = diagram.value.getGraphData()
-  const inEdges = (gd.edges || []).filter(e => e.targetNodeId === nodeId)
-  const nodeProps = gd.nodes.find(n => n.id === nodeId)?.properties || {}
+  const inEdges = (gd.edges || []).filter((e) => e.targetNodeId === nodeId)
+  const nodeProps = gd.nodes.find((n) => n.id === nodeId)?.properties || {}
   const inputPorts = nodeProps.inputPorts || []
   const newInputs = {}
   const newTypes = {}
 
   for (const port of inputPorts) {
     if (port.bindMode !== 'Link' && port.bindMode !== 'LinkOrConstant') continue
-    const edge = inEdges.find(e => {
+    const edge = inEdges.find((e) => {
       const handle = e.properties?.targetHandle
       return !handle || handle === port.name
     })
@@ -540,8 +624,8 @@ function computeNodeInputsFromEdges(nodeId, currentInputs = {}, currentInputType
   for (const port of inputPorts) {
     if (port.bindMode !== 'Link' && port.bindMode !== 'LinkOrConstant') continue
     const val = merged[port.name]
-    if (val && gd.nodes.some(n => n.id === val)) {
-      const stillConnected = inEdges.some(e => e.sourceNodeId === val)
+    if (val && gd.nodes.some((n) => n.id === val)) {
+      const stillConnected = inEdges.some((e) => e.sourceNodeId === val)
       if (!stillConnected) {
         delete merged[port.name]
         delete mergedTypes[port.name]
@@ -562,8 +646,10 @@ function syncSelectedNodeInputs() {
     selectedNode.value.inputTypes || {}
   )
 
-  if (JSON.stringify(merged) !== JSON.stringify(selectedNode.value.inputs) ||
-      JSON.stringify(mergedTypes) !== JSON.stringify(selectedNode.value.inputTypes || {})) {
+  if (
+    JSON.stringify(merged) !== JSON.stringify(selectedNode.value.inputs) ||
+    JSON.stringify(mergedTypes) !== JSON.stringify(selectedNode.value.inputTypes || {})
+  ) {
     diagram.value.setProperties(nodeId, { inputs: merged, inputTypes: mergedTypes })
     selectedNode.value = { ...selectedNode.value, inputs: merged, inputTypes: mergedTypes }
     // 同步 store
@@ -581,7 +667,7 @@ function autoSetBranchHandle(edgeData) {
   if (!edgeData?.sourceNodeId || !edgeData?.targetNodeId) return
   const gd = diagram.value?.getGraphData()
   if (!gd) return
-  const sourceNode = gd.nodes.find(n => n.id === edgeData.sourceNodeId)
+  const sourceNode = gd.nodes.find((n) => n.id === edgeData.sourceNodeId)
   if (!sourceNode) return
   const sourceType = sourceNode.properties?.nodeType || sourceNode.properties?.classCode
   if (sourceType !== 'branch') return
@@ -591,10 +677,10 @@ function autoSetBranchHandle(edgeData) {
   if (existingProps.sourceHandle) return
 
   // 统计 branch 节点已有的出边
-  const existingEdges = (gd.edges || []).filter(e =>
-    e.sourceNodeId === edgeData.sourceNodeId && e.id !== edgeData.id
+  const existingEdges = (gd.edges || []).filter(
+    (e) => e.sourceNodeId === edgeData.sourceNodeId && e.id !== edgeData.id
   )
-  const hasSuccess = existingEdges.some(e => e.properties?.sourceHandle === 'success')
+  const hasSuccess = existingEdges.some((e) => e.properties?.sourceHandle === 'success')
 
   // 自动分配：第一个出边 = success，第二个 = failure
   const handle = hasSuccess ? 'failure' : 'success'
@@ -606,7 +692,7 @@ function autoSetBranchHandle(edgeData) {
   diagram.value.updateText(edgeData.id, label)
 
   // 更新边样式
-  const edge = gd.edges.find(e => e.id === edgeData.id)
+  const edge = gd.edges.find((e) => e.id === edgeData.id)
   if (edge) {
     edge.properties = { ...edge.properties, sourceHandle: handle }
     edge.text = label
@@ -620,7 +706,7 @@ function onEdgeChange() {
   // 同步 store edges
   const gd = diagram.value?.getGraphData()
   if (gd) {
-    store.state.edges = (gd.edges || []).map(e => ({
+    store.state.edges = (gd.edges || []).map((e) => ({
       id: e.id,
       source: e.sourceNodeId,
       target: e.targetNodeId,
@@ -632,7 +718,7 @@ function onEdgeChange() {
 
 /** 画布上所有节点（供面板 Link 模式下拉选择） */
 const canvasNodesForPanel = computed(() => {
-  return store.state.nodes.map(n => {
+  return store.state.nodes.map((n) => {
     const _title = n.title
     return {
       id: n.id,
@@ -664,7 +750,8 @@ function onCanvasDrop(event) {
     if (!node) return
 
     // 同步到 LogicFlow 画布
-    const category = item.category || skills.value.find(s => s.skillCode === item.skillCode)?.category || ''
+    const category =
+      item.category || skills.value.find((s) => s.skillCode === item.skillCode)?.category || ''
     const props = {
       classCode: node.classCode,
       nodeType: node.nodeType,
@@ -679,18 +766,22 @@ function onCanvasDrop(event) {
     }
     // branch 节点使用三角形
     if (node.nodeType === 'branch') {
-      props.points = [[0, -30], [50, 0], [0, 30]]
+      props.points = [
+        [0, -30],
+        [50, 0],
+        [0, 30]
+      ]
     }
     diagram.value.addNode({
       id: node.id,
       type: lfShapeType(node.nodeType),
-      x, y,
+      x,
+      y,
       text: node.title,
       style: nodeStyle(node.nodeType, node.skillCode, category),
       properties: props
     })
-  } catch (e) {
-  }
+  } catch (e) {}
 }
 
 /** LogicFlow 图形类型映射 */
@@ -707,7 +798,8 @@ function handleAddNode(item) {
   const node = store.addNode(item, 120 + (maxX % 600), 80 + (maxY % 400))
   if (!node) return
 
-  const category = item.category || skills.value.find(s => s.skillCode === item.skillCode)?.category || ''
+  const category =
+    item.category || skills.value.find((s) => s.skillCode === item.skillCode)?.category || ''
   const addProps = {
     classCode: node.classCode,
     nodeType: node.nodeType,
@@ -720,11 +812,17 @@ function handleAddNode(item) {
     inputPorts: node.inputPorts,
     outputPorts: node.outputPorts
   }
-  if (node.nodeType === 'branch') addProps.points = [[0, -30], [50, 0], [0, 30]]
+  if (node.nodeType === 'branch')
+    addProps.points = [
+      [0, -30],
+      [50, 0],
+      [0, 30]
+    ]
   diagram.value.addNode({
     id: node.id,
     type: lfShapeType(node.nodeType),
-    x: node.x, y: node.y,
+    x: node.x,
+    y: node.y,
     text: node.title,
     style: nodeStyle(node.nodeType, node.skillCode, category),
     properties: addProps
@@ -777,8 +875,8 @@ function handleUpdateNode(data) {
       let branchEdges = undefined
       if (sn.nodeType === 'branch' || sn.classCode === 'branch') {
         const gd = diagram.value?.getGraphData()
-        const outEdges = (gd?.edges || []).filter(e => e.sourceNodeId === data.nodeId)
-        branchEdges = outEdges.map(e => ({
+        const outEdges = (gd?.edges || []).filter((e) => e.sourceNodeId === data.nodeId)
+        branchEdges = outEdges.map((e) => ({
           handle: e.properties?.sourceHandle || '',
           targetId: e.targetNodeId,
           edgeId: e.id
@@ -818,62 +916,64 @@ function promptEditNodeName(nodeId, currentName) {
     inputErrorMessage: '名称不能为空',
     confirmButtonText: '确定',
     cancelButtonText: '取消'
-  }).then(({ value }) => {
-    const name = (value || '').trim()
-    if (!name) {
-      _renamingNodeId = null
-      _renamingTimestamp = 0
-      return
-    }
-
-    if (!store.renameNode(nodeId, name)) {
-      ElMessage.warning(`节点名称「${name}」已存在，请使用其他名称`)
-      _renamingNodeId = null
-      _renamingTimestamp = 0
-      return
-    }
-
-    // 同步更新画布
-    diagram.value.updateText(nodeId, name)
-    diagram.value.setProperties(nodeId, { title: name })
-
-    setTimeout(() => {
-      const storeNode = store.getNodeById(nodeId)
-      if (storeNode) {
-        let branchEdges = undefined
-        if (storeNode.nodeType === 'branch' || storeNode.classCode === 'branch') {
-          const gd = diagram.value?.getGraphData()
-          const outEdges = (gd?.edges || []).filter(e => e.sourceNodeId === nodeId)
-          branchEdges = outEdges.map(e => ({
-            handle: e.properties?.sourceHandle || '',
-            targetId: e.targetNodeId,
-            edgeId: e.id
-          }))
-        }
-        selectedNode.value = {
-          nodeId: storeNode.id,
-          nodeType: storeNode.nodeType,
-          classCode: storeNode.classCode,
-          title: storeNode.title,
-          skillCode: storeNode.skillCode,
-          config: { ...storeNode.config },
-          inputs: { ...storeNode.inputs },
-          inputTypes: { ...(storeNode.inputTypes || {}) },
-          outputs: { ...storeNode.outputs },
-          inputPorts: storeNode.inputPorts || [],
-          outputPorts: storeNode.outputPorts || [],
-          branchEdges
-        }
-        forceRefreshTick.value++
-      }
-      _renamingNodeId = null
-      _renamingTimestamp = 0
-    }, 300)
-    ElMessage.success('节点名称已更新')
-  }).catch(() => {
-    _renamingNodeId = null
-    _renamingTimestamp = 0
   })
+    .then(({ value }) => {
+      const name = (value || '').trim()
+      if (!name) {
+        _renamingNodeId = null
+        _renamingTimestamp = 0
+        return
+      }
+
+      if (!store.renameNode(nodeId, name)) {
+        ElMessage.warning(`节点名称「${name}」已存在，请使用其他名称`)
+        _renamingNodeId = null
+        _renamingTimestamp = 0
+        return
+      }
+
+      // 同步更新画布
+      diagram.value.updateText(nodeId, name)
+      diagram.value.setProperties(nodeId, { title: name })
+
+      setTimeout(() => {
+        const storeNode = store.getNodeById(nodeId)
+        if (storeNode) {
+          let branchEdges = undefined
+          if (storeNode.nodeType === 'branch' || storeNode.classCode === 'branch') {
+            const gd = diagram.value?.getGraphData()
+            const outEdges = (gd?.edges || []).filter((e) => e.sourceNodeId === nodeId)
+            branchEdges = outEdges.map((e) => ({
+              handle: e.properties?.sourceHandle || '',
+              targetId: e.targetNodeId,
+              edgeId: e.id
+            }))
+          }
+          selectedNode.value = {
+            nodeId: storeNode.id,
+            nodeType: storeNode.nodeType,
+            classCode: storeNode.classCode,
+            title: storeNode.title,
+            skillCode: storeNode.skillCode,
+            config: { ...storeNode.config },
+            inputs: { ...storeNode.inputs },
+            inputTypes: { ...(storeNode.inputTypes || {}) },
+            outputs: { ...storeNode.outputs },
+            inputPorts: storeNode.inputPorts || [],
+            outputPorts: storeNode.outputPorts || [],
+            branchEdges
+          }
+          forceRefreshTick.value++
+        }
+        _renamingNodeId = null
+        _renamingTimestamp = 0
+      }, 300)
+      ElMessage.success('节点名称已更新')
+    })
+    .catch(() => {
+      _renamingNodeId = null
+      _renamingTimestamp = 0
+    })
 }
 
 function handleDeleteNode(nodeId) {
@@ -894,14 +994,14 @@ function handleLinkNode({ portName, sourceNodeId, targetNodeId, sourceHandle }) 
   // branch 输出选择模式：portName 是 success/failure，sourceNodeId 是当前节点，targetNodeId 是目标
   if (sourceHandle && portName === sourceHandle) {
     // 先删除该 handle 已有的所有边
-    const toDelete = (gd.edges || []).filter(e =>
-      e.sourceNodeId === sourceNodeId && e.properties?.sourceHandle === sourceHandle
+    const toDelete = (gd.edges || []).filter(
+      (e) => e.sourceNodeId === sourceNodeId && e.properties?.sourceHandle === sourceHandle
     )
     for (const existing of toDelete) {
       diagram.value.deleteEdge(existing.id)
     }
     // 如果当前选中的边就是被删的，清空选中
-    if (selectedEdgeId.value && toDelete.some(e => e.id === selectedEdgeId.value)) {
+    if (selectedEdgeId.value && toDelete.some((e) => e.id === selectedEdgeId.value)) {
       selectedEdgeId.value = null
     }
     // 创建新边
@@ -926,9 +1026,10 @@ function handleLinkNode({ portName, sourceNodeId, targetNodeId, sourceHandle }) 
   // sourceNodeId 为 null → 断开连线模式（从面板切换类型时触发）
   if (!sourceNodeId) {
     // 删除 target 端口上已有的入边
-    const toDelete = (gd.edges || []).filter(e =>
-      e.targetNodeId === targetNodeId &&
-      (e.properties?.targetHandle === portName || (!e.properties?.targetHandle && !portName))
+    const toDelete = (gd.edges || []).filter(
+      (e) =>
+        e.targetNodeId === targetNodeId &&
+        (e.properties?.targetHandle === portName || (!e.properties?.targetHandle && !portName))
     )
     for (const existing of toDelete) {
       diagram.value.deleteEdge(existing.id)
@@ -950,20 +1051,21 @@ function handleLinkNode({ portName, sourceNodeId, targetNodeId, sourceHandle }) 
   if (!edge) return
 
   // 同步到 LogicFlow 画布
-  const existingEdges = (gd.edges || []).filter(e =>
-    e.targetNodeId === targetNodeId &&
-    (e.properties?.targetHandle === portName || (!e.properties?.targetHandle && !portName))
+  const existingEdges = (gd.edges || []).filter(
+    (e) =>
+      e.targetNodeId === targetNodeId &&
+      (e.properties?.targetHandle === portName || (!e.properties?.targetHandle && !portName))
   )
   for (const existing of existingEdges) {
     diagram.value.deleteEdge(existing.id)
   }
 
-  const sourceNode = gd.nodes.find(n => n.id === sourceNodeId)
+  const sourceNode = gd.nodes.find((n) => n.id === sourceNodeId)
   const sourceType = sourceNode?.properties?.nodeType || sourceNode?.properties?.classCode
   let autoHandle = null
   if (sourceType === 'branch') {
-    const branchEdges = (gd.edges || []).filter(e => e.sourceNodeId === sourceNodeId)
-    const hasSuccess = branchEdges.some(e => e.properties?.sourceHandle === 'success')
+    const branchEdges = (gd.edges || []).filter((e) => e.sourceNodeId === sourceNodeId)
+    const hasSuccess = branchEdges.some((e) => e.properties?.sourceHandle === 'success')
     autoHandle = hasSuccess ? 'failure' : 'success'
   }
 
@@ -982,8 +1084,14 @@ function handleLinkNode({ portName, sourceNodeId, targetNodeId, sourceHandle }) 
 // ==================== 执行验证（调用后端工作流引擎） ====================
 
 async function handleExecuteTest() {
-  if (!currentRule.value) { ElMessage.warning('请先选择 NC 检查项'); return }
-  if (!store.state.nodes.length) { ElMessage.warning('画布为空，请添加节点'); return }
+  if (!currentRule.value) {
+    ElMessage.warning('请先选择 NC 检查项')
+    return
+  }
+  if (!store.state.nodes.length) {
+    ElMessage.warning('画布为空，请添加节点')
+    return
+  }
 
   // 先执行前端拓扑校验（与「校验」按钮一致的完整校验）
   const config = serialize(store.state.nodes, store.state.edges, {
@@ -997,10 +1105,11 @@ async function handleExecuteTest() {
 
   if (!analysis.validation.valid) {
     // 拓扑校验不通过 → 显示所有错误，不调后端
-    const errorMessages = analysis.validation.errors.map(e => `  ✗ ${e.message}`).join('\n')
-    const warnMessages = analysis.validation.warnings.length > 0
-      ? '\n\n' + analysis.validation.warnings.map(w => `  ⚠ ${w.message}`).join('\n')
-      : ''
+    const errorMessages = analysis.validation.errors.map((e) => `  ✗ ${e.message}`).join('\n')
+    const warnMessages =
+      analysis.validation.warnings.length > 0
+        ? '\n\n' + analysis.validation.warnings.map((w) => `  ⚠ ${w.message}`).join('\n')
+        : ''
     ElMessageBox.alert(
       `拓扑校验失败，请先修复以下问题后再执行验证：\n\n${errorMessages}${warnMessages}`,
       '执行验证 - 拓扑校验失败',
@@ -1013,14 +1122,18 @@ async function handleExecuteTest() {
   executionResult.value = null
 
   try {
-    const res = await proxy.http.post('api/workflow/test/run', {
-      taskType: 'TEST',
-      ruleCode: currentRule.value.ruleCode,
-      enterpriseCode: currentRule.value.enterpriseCode || 'YZH-STD-ENT',
-      standardCode: currentRule.value.standardCode || currentFilter.standardCode,
-      phaseCode: currentRule.value.phaseCode || currentFilter.phaseCode,
-      configJson: JSON.stringify(config)
-    }, false)
+    const res = await proxy.http.post(
+      'api/workflow/test/run',
+      {
+        taskType: 'TEST',
+        ruleCode: currentRule.value.ruleCode,
+        enterpriseCode: currentRule.value.enterpriseCode || 'YZH-STD-ENT',
+        standardCode: currentRule.value.standardCode || currentFilter.standardCode,
+        phaseCode: currentRule.value.phaseCode || currentFilter.phaseCode,
+        configJson: JSON.stringify(config)
+      },
+      false
+    )
 
     if (res?.success !== false && res?.data) {
       executionResult.value = res.data
@@ -1029,20 +1142,18 @@ async function handleExecuteTest() {
       } else {
         // 后端执行失败 → 显示后端返回的错误信息
         const errorMsg = res.data.ncResult?.error || res.data.status || '执行失败'
-        ElMessageBox.alert(
-          `工作流执行失败：\n\n${errorMsg}`,
-          '执行验证 - 执行失败',
-          { type: 'error', confirmButtonText: '确定' }
-        )
+        ElMessageBox.alert(`工作流执行失败：\n\n${errorMsg}`, '执行验证 - 执行失败', {
+          type: 'error',
+          confirmButtonText: '确定'
+        })
       }
     } else {
       // 后端返回 success=false → 显示后端错误
       const errorMsg = res?.error || res?.message || '执行失败'
-      ElMessageBox.alert(
-        `工作流执行失败：\n\n${errorMsg}`,
-        '执行验证 - 执行失败',
-        { type: 'error', confirmButtonText: '确定' }
-      )
+      ElMessageBox.alert(`工作流执行失败：\n\n${errorMsg}`, '执行验证 - 执行失败', {
+        type: 'error',
+        confirmButtonText: '确定'
+      })
     }
   } catch (e) {
     ElMessage.error('执行验证失败: ' + (e.message || e))
@@ -1061,17 +1172,21 @@ async function handleTestNode(nodeData) {
       return
     }
 
-    const res = await proxy.http.post('api/workflow/test/node', {
-      nodeId: nodeData.nodeId,
-      nodeType: nodeData.nodeType,
-      title: nodeData.title,
-      skillCode: nodeData.skillCode,
-      config: nodeData.config,
-      inputs: nodeData.inputs,
-      inputTypes: nodeData.inputTypes,
-      inputPorts: nodeData.inputPorts,
-      outputPorts: nodeData.outputPorts
-    }, false)
+    const res = await proxy.http.post(
+      'api/workflow/test/node',
+      {
+        nodeId: nodeData.nodeId,
+        nodeType: nodeData.nodeType,
+        title: nodeData.title,
+        skillCode: nodeData.skillCode,
+        config: nodeData.config,
+        inputs: nodeData.inputs,
+        inputTypes: nodeData.inputTypes,
+        inputPorts: nodeData.inputPorts,
+        outputPorts: nodeData.outputPorts
+      },
+      false
+    )
 
     if (res?.success && res.data) {
       nodeData.onSuccess(res.data)
@@ -1097,7 +1212,9 @@ async function handleTestAiNode(nodeData) {
     if (typeof customParams === 'string') {
       try {
         parsedCustomParams = JSON.parse(customParams)
-      } catch { parsedCustomParams = [] }
+      } catch {
+        parsedCustomParams = []
+      }
     }
 
     // 为每个 link 类型的参数，从连线中找到对应的上游节点
@@ -1105,7 +1222,7 @@ async function handleTestAiNode(nodeData) {
       if (param?.sourceType === 'link' && param?.sourceConfig?.nodeId) {
         const sourceNodeId = param.sourceConfig.nodeId
         // 从 store 中找到该节点的输出信息
-        const sourceNode = nodes.find(n => n.id === sourceNodeId || n.nodeId === sourceNodeId)
+        const sourceNode = nodes.find((n) => n.id === sourceNodeId || n.nodeId === sourceNodeId)
         if (sourceNode) {
           // 使用节点ID作为 key，输出 result 默认值
           mockOutputs[sourceNodeId] = {
@@ -1121,7 +1238,9 @@ async function handleTestAiNode(nodeData) {
     try {
       const serialized = serialize(nodes, edges, { version: 1, workflowType: 'validation' })
       ruleJson = JSON.stringify(serialized)
-    } catch { ruleJson = '' }
+    } catch {
+      ruleJson = ''
+    }
 
     const testBody = {
       nodeId: nodeData.nodeId,
@@ -1137,11 +1256,13 @@ async function handleTestAiNode(nodeData) {
       outputPorts: nodeData.outputPorts || [],
       workflowContext: {
         ruleJson,
-        contextParams: currentRule.value ? {
-          enterpriseCode: currentRule.value.enterpriseCode || 'YZH-STD-ENT',
-          standardCode: currentRule.value.standardCode,
-          phaseCode: currentRule.value.phaseCode
-        } : {},
+        contextParams: currentRule.value
+          ? {
+              enterpriseCode: currentRule.value.enterpriseCode || 'YZH-STD-ENT',
+              standardCode: currentRule.value.standardCode,
+              phaseCode: currentRule.value.phaseCode
+            }
+          : {},
         mockOutputs
       }
     }
@@ -1176,14 +1297,18 @@ async function handleTestWorkflow(nodeData) {
       workflowType: 'validation'
     })
 
-    const res = await proxy.http.post('api/workflow/test/run', {
-      taskType: 'TEST',
-      ruleCode: currentRule.value.ruleCode,
-      enterpriseCode: currentRule.value.enterpriseCode || 'YZH-STD-ENT',
-      standardCode: currentRule.value.standardCode || currentFilter.standardCode,
-      phaseCode: currentRule.value.phaseCode || currentFilter.phaseCode,
-      configJson: JSON.stringify(config)
-    }, false)
+    const res = await proxy.http.post(
+      'api/workflow/test/run',
+      {
+        taskType: 'TEST',
+        ruleCode: currentRule.value.ruleCode,
+        enterpriseCode: currentRule.value.enterpriseCode || 'YZH-STD-ENT',
+        standardCode: currentRule.value.standardCode || currentFilter.standardCode,
+        phaseCode: currentRule.value.phaseCode || currentFilter.phaseCode,
+        configJson: JSON.stringify(config)
+      },
+      false
+    )
 
     if (res?.success && res.data) {
       nodeData.onSuccess(res.data)
@@ -1199,7 +1324,10 @@ async function handleTestWorkflow(nodeData) {
 /** docField/docTable 测试提取 */
 async function handleTestDocExtract({ nodeType, body, onSuccess, onError }) {
   try {
-    const url = nodeType === 'docField' ? 'api/DocExtractionRule/test-field' : 'api/DocExtractionRule/test-table'
+    const url =
+      nodeType === 'docField'
+        ? 'api/DocExtractionRule/test-field'
+        : 'api/DocExtractionRule/test-table'
     const res = await proxy.http.post(url, body, false)
     if (res?.status && res.data) {
       onSuccess(res.data)
@@ -1219,7 +1347,10 @@ function clearCanvas() {
 }
 
 function handleClearCanvas() {
-  if (!store.state.nodes.length) { ElMessage.info('画布已为空'); return }
+  if (!store.state.nodes.length) {
+    ElMessage.info('画布已为空')
+    return
+  }
   ElMessageBox.confirm('确认清空画布上的所有节点和连线？', '清空确认', { type: 'warning' })
     .then(() => {
       clearCanvas()
@@ -1248,13 +1379,15 @@ async function selectRule(rule, phase) {
       clearCanvas()
       ensureStartNode()
     }
-  } catch (e) { ElMessage.error('加载规则详情失败') }
+  } catch (e) {
+    ElMessage.error('加载规则详情失败')
+  }
 }
 
 /** 确保画布有 start 节点（空画布自动放置） */
 function ensureStartNode() {
   if (!diagram.value) return
-  const hasStart = store.state.nodes.some(n => n.classCode === 'start' || n.nodeType === 'start')
+  const hasStart = store.state.nodes.some((n) => n.classCode === 'start' || n.nodeType === 'start')
   if (!hasStart) {
     const startItem = { classCode: 'start', className: '开始' }
     const node = store.addNode(startItem, 100, 150)
@@ -1262,7 +1395,8 @@ function ensureStartNode() {
       diagram.value.addNode({
         id: node.id,
         type: 'circle',
-        x: 100, y: 150,
+        x: 100,
+        y: 150,
         text: node.title,
         style: nodeStyle('start'),
         properties: {
@@ -1299,7 +1433,7 @@ function renderWorkflow(ruleJson, layoutJson) {
     store.idGenerator = idGenerator
 
     // 渲染到 LogicFlow 画布
-    const lfNodes = nodes.map(n => {
+    const lfNodes = nodes.map((n) => {
       const nodeProps = {
         classCode: n.classCode,
         nodeType: n.nodeType,
@@ -1312,7 +1446,12 @@ function renderWorkflow(ruleJson, layoutJson) {
         inputPorts: n.inputPorts,
         outputPorts: n.outputPorts
       }
-      if (n.nodeType === 'branch') nodeProps.points = [[0, -30], [50, 0], [0, 30]]
+      if (n.nodeType === 'branch')
+        nodeProps.points = [
+          [0, -30],
+          [50, 0],
+          [0, 30]
+        ]
       return {
         id: n.id,
         type: lfShapeType(n.nodeType),
@@ -1324,7 +1463,7 @@ function renderWorkflow(ruleJson, layoutJson) {
       }
     })
 
-    const lfEdges = edges.map(e => {
+    const lfEdges = edges.map((e) => {
       const isBranchAnchor = e.sourceHandle === 'success' || e.sourceHandle === 'failure'
       return {
         id: e.id,
@@ -1344,9 +1483,9 @@ function renderWorkflow(ruleJson, layoutJson) {
 
     diagram.value.render({ nodes: lfNodes, edges: lfEdges })
     if (migrated && !sessionStorage.getItem('_wf_migration_tip_shown')) {
-        ElMessage.info('旧格式节点 ID 已自动迁移重编号')
-        sessionStorage.setItem('_wf_migration_tip_shown', '1')
-      }
+      ElMessage.info('旧格式节点 ID 已自动迁移重编号')
+      sessionStorage.setItem('_wf_migration_tip_shown', '1')
+    }
   } catch (e) {
     ElMessage.error('工作流配置解析失败')
   }
@@ -1359,23 +1498,37 @@ function autoLayout() {
   if (!nodes.length) return
 
   // 拓扑排序
-  const inDeg = {}, adj = {}
-  nodes.forEach(n => { inDeg[n.id] = 0; adj[n.id] = [] })
-  store.state.edges.forEach(e => {
-    if (inDeg[e.target] !== undefined) { inDeg[e.target]++; adj[e.source].push(e.target) }
+  const inDeg = {},
+    adj = {}
+  nodes.forEach((n) => {
+    inDeg[n.id] = 0
+    adj[n.id] = []
   })
-  const queue = nodes.filter(n => inDeg[n.id] === 0).map(n => n.id)
+  store.state.edges.forEach((e) => {
+    if (inDeg[e.target] !== undefined) {
+      inDeg[e.target]++
+      adj[e.source].push(e.target)
+    }
+  })
+  const queue = nodes.filter((n) => inDeg[n.id] === 0).map((n) => n.id)
   const ordered = []
   while (queue.length) {
-    const c = queue.shift(); ordered.push(c)
-    for (const n of (adj[c] || [])) { inDeg[n]--; if (inDeg[n] === 0) queue.push(n) }
+    const c = queue.shift()
+    ordered.push(c)
+    for (const n of adj[c] || []) {
+      inDeg[n]--
+      if (inDeg[n] === 0) queue.push(n)
+    }
   }
-  nodes.forEach(n => { if (!ordered.includes(n.id)) ordered.push(n.id) })
+  nodes.forEach((n) => {
+    if (!ordered.includes(n.id)) ordered.push(n.id)
+  })
 
   // 只更新坐标（两层模型：改 model → 重派生画布）
   const posMap = {}
   ordered.forEach((id, idx) => {
-    const col = idx % 4, row = Math.floor(idx / 4)
+    const col = idx % 4,
+      row = Math.floor(idx / 4)
     posMap[id] = { x: 120 + col * 240, y: 80 + row * 140 }
   })
 
@@ -1404,7 +1557,10 @@ function autoLayout() {
 function validateGraph() {
   const nodes = store.state.nodes
   const edges = store.state.edges
-  if (!nodes.length) { ElMessage.warning('画布为空'); return }
+  if (!nodes.length) {
+    ElMessage.warning('画布为空')
+    return
+  }
 
   // 转换为 workflow_config 格式
   const config = serialize(nodes, edges, {
@@ -1421,27 +1577,34 @@ function validateGraph() {
 
   // 构建节点 title 映射（用于友好显示）
   const nodeTitleMap = {}
-  for (const n of nodes) { nodeTitleMap[n.id] = n.title || n.id }
+  for (const n of nodes) {
+    nodeTitleMap[n.id] = n.title || n.id
+  }
 
   // 格式化路径显示
   const pathSummary = summarizePaths(paths)
-  const pathDetails = paths.map((p, idx) => {
-    const nodeNames = p.nodes.map(id => nodeTitleMap[id] || id)
-    const branchInfo = p.branchDecisions.length > 0
-      ? ` (${p.branchDecisions.map(d => `${nodeTitleMap[d.at]||d.at}:${d.choice==='success'?'✓':'✗'}`).join(', ')})`
-      : ''
-    return `  路径${idx + 1}: ${nodeNames.join(' → ')}${branchInfo}`
-  }).join('\n')
+  const pathDetails = paths
+    .map((p, idx) => {
+      const nodeNames = p.nodes.map((id) => nodeTitleMap[id] || id)
+      const branchInfo =
+        p.branchDecisions.length > 0
+          ? ` (${p.branchDecisions.map((d) => `${nodeTitleMap[d.at] || d.at}:${d.choice === 'success' ? '✓' : '✗'}`).join(', ')})`
+          : ''
+      return `  路径${idx + 1}: ${nodeNames.join(' → ')}${branchInfo}`
+    })
+    .join('\n')
 
   // 有错误 → 显示错误信息
   if (!validation.valid) {
-    const errorMessages = validation.errors.map(e => `  ✗ ${e.message}`).join('\n')
-    const warnMessages = validation.warnings.length > 0
-      ? '\n\n' + validation.warnings.map(w => `  ⚠ ${w.message}`).join('\n')
-      : ''
+    const errorMessages = validation.errors.map((e) => `  ✗ ${e.message}`).join('\n')
+    const warnMessages =
+      validation.warnings.length > 0
+        ? '\n\n' + validation.warnings.map((w) => `  ⚠ ${w.message}`).join('\n')
+        : ''
 
     // 路径信息
-    const pathInfo = paths.length > 0 ? `\n\n📋 拓扑路径 (${pathSummary}):\n${pathDetails}` : '\n\n📋 无有效路径'
+    const pathInfo =
+      paths.length > 0 ? `\n\n📋 拓扑路径 (${pathSummary}):\n${pathDetails}` : '\n\n📋 无有效路径'
 
     ElMessageBox.alert(
       `校验失败！发现 ${validation.errors.length} 个错误：\n\n${errorMessages}${warnMessages}${pathInfo}`,
@@ -1453,14 +1616,14 @@ function validateGraph() {
 
   // 仅有警告
   if (validation.warnings.length > 0) {
-    const warnMessages = validation.warnings.map(w => `  ⚠ ${w.message}`).join('\n')
-    const pathInfo = paths.length > 0 ? `\n\n📋 拓扑路径 (${pathSummary}):\n${pathDetails}` : '\n\n📋 无有效路径'
+    const warnMessages = validation.warnings.map((w) => `  ⚠ ${w.message}`).join('\n')
+    const pathInfo =
+      paths.length > 0 ? `\n\n📋 拓扑路径 (${pathSummary}):\n${pathDetails}` : '\n\n📋 无有效路径'
 
-    ElMessageBox.alert(
-      `校验通过（有警告）：\n\n${warnMessages}${pathInfo}`,
-      '拓扑校验结果',
-      { type: 'warning', confirmButtonText: '确定' }
-    )
+    ElMessageBox.alert(`校验通过（有警告）：\n\n${warnMessages}${pathInfo}`, '拓扑校验结果', {
+      type: 'warning',
+      confirmButtonText: '确定'
+    })
     return true
   }
 
@@ -1477,8 +1640,14 @@ function validateGraph() {
 // ==================== 保存工作流（到 NC 检查项） ====================
 
 async function handleSave() {
-  if (!currentRule.value) { ElMessage.warning('请先选择 NC 检查项'); return }
-  if (!store.state.nodes.length) { ElMessage.warning('画布为空，请添加节点'); return }
+  if (!currentRule.value) {
+    ElMessage.warning('请先选择 NC 检查项')
+    return
+  }
+  if (!store.state.nodes.length) {
+    ElMessage.warning('画布为空，请添加节点')
+    return
+  }
 
   // 通过 serialize 生成落库 JSON
   const config = serialize(store.state.nodes, store.state.edges, {
@@ -1488,24 +1657,32 @@ async function handleSave() {
   const layout = extractLayout(store.state.nodes)
 
   try {
-    await ElMessageBox.confirm(`保存工作流到检查项「${currentRule.value.ruleName}」？`, '保存确认', { type: 'info' })
-    const res = await proxy.http.post('api/validation-rule', {
-      id: currentRule.value.id,
-      orgCode: currentRule.value.orgCode || currentFilter.orgCode,
-      standardCode: currentRule.value.standardCode || currentFilter.standardCode,
-      phaseCode: currentRule.value.phaseCode || currentFilter.phaseCode,
-      clauseCode: currentRule.value.clauseCode,
-      workflowCode: currentRule.value.workflowCode,
-      ruleCode: currentRule.value.ruleCode,
-      ruleName: currentRule.value.ruleName,
-      ruleNameEn: currentRule.value.ruleNameEn,
-      severityIfViolated: currentRule.value.severityIfViolated || 'minor',
-      ruleJson: JSON.stringify(config),
-      layoutJson: JSON.stringify(layout),
-      ncDescriptionTemplate: currentRule.value.ncDescriptionTemplate,
-      isActive: currentRule.value.isActive !== false,
-      remark: currentRule.value.remark
-    }, true)
+    await ElMessageBox.confirm(
+      `保存工作流到检查项「${currentRule.value.ruleName}」？`,
+      '保存确认',
+      { type: 'info' }
+    )
+    const res = await proxy.http.post(
+      'api/validation-rule',
+      {
+        id: currentRule.value.id,
+        orgCode: currentRule.value.orgCode || currentFilter.orgCode,
+        standardCode: currentRule.value.standardCode || currentFilter.standardCode,
+        phaseCode: currentRule.value.phaseCode || currentFilter.phaseCode,
+        clauseCode: currentRule.value.clauseCode,
+        workflowCode: currentRule.value.workflowCode,
+        ruleCode: currentRule.value.ruleCode,
+        ruleName: currentRule.value.ruleName,
+        ruleNameEn: currentRule.value.ruleNameEn,
+        severityIfViolated: currentRule.value.severityIfViolated || 'minor',
+        ruleJson: JSON.stringify(config),
+        layoutJson: JSON.stringify(layout),
+        ncDescriptionTemplate: currentRule.value.ncDescriptionTemplate,
+        isActive: currentRule.value.isActive !== false,
+        remark: currentRule.value.remark
+      },
+      true
+    )
     if (res?.status) {
       savedTip.value = `${new Date().toLocaleTimeString()} 已保存`
       currentRule.value.ruleJson = JSON.stringify(config)
@@ -1513,62 +1690,30 @@ async function handleSave() {
       store.markClean()
       ElMessage.success('工作流保存成功')
     } else ElMessage.error(res?.message || '保存失败')
-  } catch (e) { if (e !== 'cancel') ElMessage.error('保存失败') }
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error('保存失败')
+  }
 }
 </script>
 
 <style scoped lang="less">
-.nc-config-page { padding: 16px; height: 100%; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
-.page-body { display: flex; gap: 12px; flex: 1; min-height: 0; }
-
-/* 左栏 */
-.left-panel { width: 300px; min-width: 300px; }
-.tree-card { height: 100%; overflow: hidden; display: flex; flex-direction: column; }
-:deep(.el-card__body) { flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 0; }
-.panel-header { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 600; }
-.tree-search { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
-.tree-body { flex: 1; overflow-y: auto; padding: 4px 0; }
-.tree-group { margin-bottom: 2px; }
-.tree-node {
-  display: flex; align-items: center; gap: 6px; padding: 6px 12px;
-  cursor: pointer; font-size: 13px; transition: background 0.2s; user-select: none;
-  &:hover { background: #f5f7fa; }
-  &.level-0 { font-weight: 600; color: #303133; }
-  &.level-1 { padding-left: 28px; font-weight: 500; color: #606266; }
-  &.level-2 { padding-left: 52px; color: #606266; }
-  &.level-3 {
-    padding-left: 76px; color: #909399; font-size: 12px;
-    &.active { background: #ecf5ff; color: #409eff; border-right: 3px solid #409eff; }
-  }
+/* 基础布局已在 yzh-workflow-commercial.css 中定义 */
+.tree-node .tree-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.tree-toggle { font-size: 12px; color: #c0c4cc; transition: transform 0.2s; &.expanded { transform: rotate(90deg); } }
-.tree-icon { font-size: 14px; flex-shrink: 0;
-  &.org { color: #409eff; }
-  &.standard { color: #67c23a; }
-  &.phase { color: #e6a23c; }
-  &.rule { color: #909399; }
+
+.tree-node .type-icon.configured {
+  color: #10b981 !important;
 }
-.tree-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.node-badge { margin-left: 4px; transform: scale(0.85); }
-.config-dot { width: 6px; height: 6px; border-radius: 50%; background: #67C23A; flex-shrink: 0; }
-.tree-icon.rule.configured { color: #67C23A; }
-.tree-node.level-3.configured { color: #606266; }
-.rule-empty { padding: 12px 12px 12px 76px; text-align: center; color: #c0c4cc; font-size: 12px; }
-.rule-loading { display: flex; align-items: center; gap: 6px; padding: 8px 12px 8px 76px; color: #c0c4cc; font-size: 12px; }
-.tree-empty { display: flex; justify-content: center; padding: 20px 0; }
 
-/* 中栏 */
-.canvas-panel { flex: 1; display: flex; flex-direction: column; background: #fff; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,.06); overflow: hidden; }
-.canvas-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
-.canvas-title { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.toolbar-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.canvas-container { flex: 1; min-height: 0; }
-.canvas-status { display: flex; align-items: center; gap: 12px; padding: 6px 12px; font-size: 12px; color: #909399; border-top: 1px solid #f0f0f0; }
-.rule-code-text { margin-left: auto; }
-.saved-text { color: #67C23A; }
-
-/* 右栏 */
-.right-panel { width: 300px; min-width: 300px; display: flex; flex-direction: column; gap: 8px; }
-.skill-panel-wrapper { flex: 1; min-height: 0; background: #fff; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,.06); overflow: hidden; }
-.prop-panel-wrapper { flex: 1; min-height: 0; background: #fff; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,.06); overflow: hidden; }
+.rule-code-text {
+  font-family: 'JetBrains Mono', monospace;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 2px;
+  color: #64748b;
+}
 </style>

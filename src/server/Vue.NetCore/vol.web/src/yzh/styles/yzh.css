@@ -1,32 +1,65 @@
-/**
- * YZH 设计令牌 —— 统一出口（对齐 vidlang design_tokens.dart）
- *
- * 引用方式（业务页面）：
- *   @import '@/yzh/styles/yzh.css';
- *
- * 禁止单独 import 子文件（对齐 barrel 规则）。
- */
-@import './yzh-colors.css';
-@import './yzh-spacing.css';
-@import './yzh-radius.css';
-@import './yzh-shadows.css';
+/* YZH 商业化全局样式入口 */
+
+/* 1. 基础令牌 */
 @import './yzh-typography.css';
+@import './yzh-layout-commercial.css';
+@import './yzh-workflow-commercial.css';
+@import './yzh-viewgrid-commercial.css';
 
+/* 2. 全局覆盖与微调 */
 :root {
-  /* ===== 断点（响应式） ===== */
-  --yzh-bp-sm: 768px;
-  --yzh-bp-md: 1280px;
-  --yzh-bp-lg: 1600px;
+  /* 品牌色 - 采用更鲜明、更高饱和度的 Geek Blue */
+  --yzh-color-primary: #2f54eb;
+  --yzh-color-primary-hover: #597ef7;
+  --yzh-color-primary-active: #1d39c4;
+  --yzh-color-primary-outline: rgba(47, 84, 235, 0.1);
+  --yzh-color-primary-light-9: #f0f5ff;
 
-  /* ===== z-index 层级（对齐 vidlang zIndex map） ===== */
-  --yzh-z-dropdown: 100;
-  --yzh-z-sticky: 200;
-  --yzh-z-fixed: 300;
-  --yzh-z-modal: 500;
-  --yzh-z-notification: 800;
+  /* 状态色 - 极高饱和度商业配色 */
+  --yzh-color-success: #52c41a; /* 成功绿 */
+  --yzh-color-warning: #faad14; /* 警告黄 */
+  --yzh-color-danger: #ff4d4f; /* 危险红 */
+  --yzh-color-info: #1890ff; /* 信息蓝 */
 
-  /* ===== 动画时长 ===== */
-  --yzh-duration-fast: 0.15s;
-  --yzh-duration-normal: 0.3s;
-  --yzh-duration-slow: 0.5s;
+  /* 渐变色 - 用于背景与卡片提升层次感 */
+  --yzh-gradient-primary: linear-gradient(135deg, #2f54eb 0%, #597ef7 100%);
+  --yzh-gradient-dark: linear-gradient(180deg, #001529 0%, #002140 100%);
+
+  /* 文本色 - 深度黑以增强可读性 */
+  --yzh-color-text-primary: #1f1f1f;
+  --yzh-color-text-regular: #434343;
+  --yzh-color-text-secondary: #8c8c8c;
+  --yzh-color-text-placeholder: #bfbfbf;
+
+  /* 边框与背景 */
+  --yzh-color-border: #d9d9d9;
+  --yzh-color-border-light: #f0f0f0;
+  --yzh-color-bg-page: #f0f2f5;
+
+  /* 阴影 - 增强立体感 */
+  --yzh-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --yzh-shadow-md: 0 6px 16px -4px rgba(0, 0, 0, 0.08), 0 9px 28px 0 rgba(0, 0, 0, 0.05);
+  --yzh-shadow-lg: 0 12px 32px -8px rgba(0, 0, 0, 0.12), 0 16px 48px 0 rgba(0, 0, 0, 0.08);
+
+  /* Element Plus 颜色覆盖 */
+  --el-color-primary: var(--yzh-color-primary) !important;
+  --el-color-success: var(--yzh-color-success) !important;
+  --el-color-warning: var(--yzh-color-warning) !important;
+  --el-color-danger: var(--yzh-color-danger) !important;
+  --el-color-info: var(--yzh-color-info) !important;
+}
+
+/* 修正 el-scrollbar 内部高度问题，确保页面有呼吸感 */
+.vol-main .el-scrollbar__view {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 全局字阶提升 */
+html,
+body {
+  font-size: var(--yzh-font-size-md);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }

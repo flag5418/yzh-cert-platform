@@ -1,8 +1,8 @@
 .vol-aside ::v-deep(.el-sub-menu.is-opened) {
-  background: #eef8ffee !important;
+  background: transparent !important;
 
   .vol-el-menu-item {
-    background: #f9fcfff3 !important;
+    background: transparent !important;
   }
 }
 
@@ -70,15 +70,15 @@
     }
   }
 
-  .vol-aside {
-    .header {
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: 1px;
+  .vol-aside .header {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0;
+    background: #001529 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 
-      img {
-        display: none;
-      }
+    img {
+      display: none;
     }
   }
 
@@ -170,7 +170,6 @@
   }
 
   .vol-aside {
-
     ::v-deep(.el-sub-menu.is-opened),
     ::v-deep(.el-sub-menu.is-opened .vol-el-menu-item) {
       background: rgb(246, 236, 226) !important;
@@ -195,7 +194,6 @@
 
   // ::v-deep(.el-input__wrapper),
   .vol-main {
-
     // background: #f3f7fb;
     ::v-deep(.el-input__wrapper.is-focus),
     ::v-deep(.el-range-editor.is-active),
@@ -258,14 +256,16 @@
 
   .vol-header,
   ::v-deep(.header-navigation .el-tabs__header) {
-    background: linear-gradient(to left,
-        rgba(88, 78, 78, 0),
-        #ebf9ff,
-        #fffbfb,
-        #faf0ef24,
-        #ecf9ff4d,
-        #f1f6ffab,
-        #fafdff);
+    background: linear-gradient(
+      to left,
+      rgba(88, 78, 78, 0),
+      #ebf9ff,
+      #fffbfb,
+      #faf0ef24,
+      #ecf9ff4d,
+      #f1f6ffab,
+      #fafdff
+    );
   }
 
   ::v-deep(.header-navigation .el-tabs__header) {

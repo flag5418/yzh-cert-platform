@@ -1,16 +1,73 @@
 <template>
-  <vol-box :lazy="false" v-model="model" :title="isAdd ? '新建流程' : '编辑流程'" :width="width" :padding="0">
-    <div :style="{ height: height + 'px' }">
+  <vol-box :lazy="false" v-model="model" :title="isAdd ? '新建流程设计' : '流程架构设计'" :width="width" :padding="0">
+    <div class="workflow-editor-wrapper" :style="{ height: height + 'px' }">
+      <div class="editor-header-bar">
+        <div class="header-left">
+          <el-tag effect="dark" type="primary" class="version-tag">V1.0</el-tag>
+          <span class="workflow-name">{{ flow?.formFields?.WorkName || '未命名流程' }}</span>
+        </div>
+        <div class="header-right">
+          <el-button @click="model = false" size="default">退出设计</el-button>
+          <el-button type="primary" @click="save" size="default" class="save-btn">发布流程</el-button>
+        </div>
+      </div>
       <flow-panel ref="flow"></flow-panel>
     </div>
     <template #footer>
-      <div style="text-align: center">
-        <el-button type="default" size="small" @click="model = false">取消</el-button>
-        <el-button type="primary" size="small" @click="save">保存</el-button>
-      </div>
+      <!-- 底部留空，使用顶部工具栏 -->
+      <div style="display: none"></div>
     </template>
   </vol-box>
 </template>
+
+<style scoped lang="less">
+.workflow-editor-wrapper {
+  display: flex;
+  flex-direction: column;
+  background-color: #f8fafc;
+}
+
+.editor-header-bar {
+  height: 64px;
+  background: #fff;
+  border-bottom: 1px solid #edf2f7;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 100;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.version-tag {
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.workflow-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a202c;
+}
+
+.save-btn {
+  padding-left: 24px;
+  padding-right: 24px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.3);
+}
+
+:deep(.flow-panel) {
+  flex: 1;
+  min-height: 0;
+}
+</style>
 
 <script setup>
 import FlowPanel from '@/components/workflow/panel'

@@ -26,30 +26,35 @@ defineProps({
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
-  height: 56px;
-  padding: 0 var(--yzh-space-6, 24px);
-  background: var(--yzh-color-bg-card, #fff);
-  border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
-  box-shadow: var(--yzh-shadow-sm, 0 1px 4px rgba(0, 0, 0, 0.04));
+  height: 48px; /* 压缩高度 */
+  padding: 0 16px;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .cert-page-header__title {
   display: flex;
   align-items: center;
-  gap: var(--yzh-space-2, 8px);
-  font-size: var(--yzh-font-size-lg, 16px);
-  font-weight: var(--yzh-font-weight-bold, 600);
-  color: var(--yzh-color-text-primary, #303133);
+  gap: 12px;
+  font-size: 15px; /* 严谨字号 */
+  font-weight: 700;
+  color: #1e293b;
 }
 
 .cert-page-header__icon {
-  font-size: 20px;
-  color: var(--yzh-color-primary, #409eff);
+  font-size: 18px;
+  color: var(--yzh-color-primary, #2f54eb);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0; /* 彻底去圆角 */
 }
 
 .cert-page-header__actions {
   display: flex;
   align-items: center;
-  gap: var(--yzh-space-2, 8px);
+  gap: 8px;
 }
 </style>

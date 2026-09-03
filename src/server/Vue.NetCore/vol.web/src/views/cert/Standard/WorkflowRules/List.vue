@@ -42,32 +42,77 @@
             <div class="card-header">
               <span class="card-title">NC检查项列表</span>
               <div class="card-actions">
-                <el-button type="primary" size="small" @click="openEdit(null)" :disabled="!currentFilter.standardCode">
+                <el-button
+                  type="primary"
+                  size="small"
+                  @click="openEdit(null)"
+                  :disabled="!currentFilter.standardCode"
+                >
                   <el-icon><IconAdd /></el-icon> 新建检查项
                 </el-button>
               </div>
             </div>
           </template>
 
-          <el-table :data="tableData" stripe border v-loading="loading" style="width:100%">
-            <el-table-column prop="ruleName" label="中文名称" width="200" />
-            <el-table-column prop="ruleNameEn" label="英文名称" width="150" show-overflow-tooltip />
-            <el-table-column label="关联条款" width="120">
+          <el-table
+            :data="tableData"
+            stripe
+            border
+            v-loading="loading"
+            style="width: 100%"
+            class="yzh-commercial-table"
+          >
+            <el-table-column prop="ruleName" label="中文名称" min-width="180">
               <template #default="{ row }">
-                <span v-if="row.clauseNumber">{{ row.clauseNumber }} {{ row.clauseTitle }}</span>
-                <span v-else>-</span>
+                <div class="cell-main-text">{{ row.ruleName }}</div>
               </template>
             </el-table-column>
-            <el-table-column label="启用" width="80" align="center">
+            <el-table-column
+              prop="ruleNameEn"
+              label="英文名称"
+              min-width="150"
+              show-overflow-tooltip
+            >
               <template #default="{ row }">
-                <el-tag :type="row.isActive ? 'success' : 'info'" size="small">{{ row.isActive ? '是' : '否' }}</el-tag>
+                <div class="cell-sub-text">{{ row.ruleNameEn || '-' }}</div>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="140" fixed="right">
+            <el-table-column label="关联条款" min-width="220">
+              <template #default="{ row }">
+                <div class="clause-cell" v-if="row.clauseNumber">
+                  <el-tag size="small" effect="plain" class="clause-tag">{{
+                    row.clauseNumber
+                  }}</el-tag>
+                  <span class="clause-title">{{ row.clauseTitle }}</span>
+                </div>
+                <span v-else class="empty-text">-</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="启用状态" width="120" align="center">
+              <template #default="{ row }">
+                <div class="status-wrapper">
+                  <el-switch
+                    v-model="row.isActive"
+                    :active-value="true"
+                    :inactive-value="false"
+                    inline-prompt
+                    active-text="启用"
+                    inactive-text="禁用"
+                    @change="(val) => handleStatusChange(row, val)"
+                  />
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="160" fixed="right" align="center">
               <template #default="{ row }">
                 <div class="row-actions">
-                  <el-button type="primary" link size="small" @click="openEdit(row)">编辑</el-button>
-                  <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+                  <el-button type="primary" link @click="openEdit(row)">
+                    <el-icon><IconEdit /></el-icon>编辑
+                  </el-button>
+                  <el-divider direction="vertical" />
+                  <el-button type="danger" link @click="handleDelete(row)">
+                    <el-icon><IconDelete /></el-icon>删除
+                  </el-button>
                 </div>
               </template>
             </el-table-column>
@@ -77,7 +122,7 @@
             :page-size="pageSize"
             :total="total"
             layout="total, prev, pager, next"
-            style="margin-top:16px;justify-content:flex-end"
+            style="margin-top: 16px; justify-content: flex-end"
             @current-change="loadData"
           />
         </el-card>
@@ -85,15 +130,28 @@
     </div>
 
     <!-- 编辑弹窗（极简 5 字段） -->
-    <el-dialog v-model="dialogVisible" :title="editForm.id ? '编辑检查项' : '新建检查项'" width="500px" destroy-on-close>
+    <el-dialog
+      v-model="dialogVisible"
+      :title="editForm.id ? '编辑检查项' : '新建检查项'"
+      width="500px"
+      destroy-on-close
+    >
       <el-form :model="editForm" label-width="100px" ref="formRef">
-        <el-form-item label="中文名称" prop="ruleName" :rules="[{ required: true, message: '请输入中文名称' }]">
+        <el-form-item
+          label="中文名称"
+          prop="ruleName"
+          :rules="[{ required: true, message: '请输入中文名称' }]"
+        >
           <el-input v-model="editForm.ruleName" placeholder="如：资源提供检查" />
         </el-form-item>
         <el-form-item label="英文名称">
           <el-input v-model="editForm.ruleNameEn" placeholder="English name" />
         </el-form-item>
-        <el-form-item label="关联条款" prop="clauseCode" :rules="[{ required: true, message: '请选择关联条款' }]">
+        <el-form-item
+          label="关联条款"
+          prop="clauseCode"
+          :rules="[{ required: true, message: '请选择关联条款' }]"
+        >
           <el-tree-select
             v-model="editForm.clauseCode"
             :data="clauseTreeData"
@@ -120,11 +178,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, getCurrentInstance } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import { CertPageHeader } from '@/certcore'
 import { YzhStdTree } from '@/yzh'
-import { IconSetting, IconAdd, IconRefresh } from '@/yzh/icons'
+import { IconAdd, IconDelete, IconEdit, IconRefresh, IconSetting } from '@/yzh/icons'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getCurrentInstance, onMounted, reactive, ref } from 'vue'
 
 const { proxy } = getCurrentInstance()
 const loading = ref(false)
@@ -158,7 +216,16 @@ const editForm = reactive({
 
 // ── 公共树组件事件 ──
 
-function handleTreeSelect({ phase, standard, org, orgCode, stdCode, standardCode, phaseCode, phaseName }) {
+function handleTreeSelect({
+  phase,
+  standard,
+  org,
+  orgCode,
+  stdCode,
+  standardCode,
+  phaseCode,
+  phaseName
+}) {
   Object.assign(currentFilter, { orgCode, standardCode: stdCode || standardCode, phaseCode })
   currentLabel.value = `${standard?.label || ''} / ${phase.label}`
   page.value = 1
@@ -184,13 +251,21 @@ async function loadClauseTree(stdCode) {
     return
   }
   try {
-    const res = await proxy.http.get(
-      `api/iso-clause/tree?standardCode=${code}`, null, false
-    )
+    const res = await proxy.http.get(`api/iso-clause/tree?standardCode=${code}`, null, false)
     if (res?.status) {
-      clauseTreeData.value = res.data || []
+      // 转换数据，确保有 label 字段供 el-tree-select 使用
+      const transform = (list) => {
+        return (list || []).map((item) => ({
+          ...item,
+          label: `${item.clauseNumber} ${item.title}`,
+          children: transform(item.children)
+        }))
+      }
+      clauseTreeData.value = transform(res.data || [])
     }
-  } catch (e) { ElMessage.error('加载条款树失败') }
+  } catch (e) {
+    ElMessage.error('加载条款树失败')
+  }
 }
 
 // ── 数据操作 ──
@@ -198,14 +273,26 @@ async function loadClauseTree(stdCode) {
 async function loadData() {
   loading.value = true
   try {
-    const res = await proxy.http.post('api/validation-rule/page', {
-      Page: page.value, Rows: pageSize.value, Sort: 'Id', Order: 'desc'
-    }, true, { params: { ...currentFilter } })
+    const res = await proxy.http.post(
+      'api/validation-rule/page',
+      {
+        Page: page.value,
+        Rows: pageSize.value,
+        Sort: 'Id',
+        Order: 'desc'
+      },
+      true,
+      { params: { ...currentFilter } }
+    )
     if (res?.status) {
       tableData.value = res.data?.rows || []
       total.value = res.data?.total || 0
     }
-  } catch (e) { ElMessage.error('操作失败') } finally { loading.value = false }
+  } catch (e) {
+    ElMessage.error('操作失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 const resetFilter = () => {
@@ -237,19 +324,27 @@ const openEdit = (row) => {
     })
   } else {
     Object.assign(editForm, {
-      id: null, code: '', ruleCode: '',
+      id: null,
+      code: '',
+      ruleCode: '',
       orgCode: currentFilter.orgCode,
       standardCode: currentFilter.standardCode,
       phaseCode: currentFilter.phaseCode,
-      clauseCode: '', workflowCode: '',
-      ruleName: '', ruleNameEn: '',
-      severityIfViolated: '', ncDescriptionTemplate: '',
-      ruleJson: '', remark: '', isActive: true
+      clauseCode: '',
+      workflowCode: '',
+      ruleName: '',
+      ruleNameEn: '',
+      severityIfViolated: '',
+      ncDescriptionTemplate: '',
+      ruleJson: '',
+      remark: '',
+      isActive: true
     })
   }
-  // 确保条款树已加载
-  if (currentFilter.standardCode && clauseTreeData.value.length === 0) {
-    loadClauseTree(currentFilter.standardCode)
+  // 始终根据当前编辑的 standardCode 加载条款树
+  const stdCode = editForm.standardCode || currentFilter.standardCode
+  if (stdCode) {
+    loadClauseTree(stdCode)
   }
   dialogVisible.value = true
 }
@@ -260,32 +355,304 @@ const handleSave = async () => {
     if (!valid) return
     try {
       const res = await proxy.http.post('api/validation-rule', editForm, true)
-      if (res?.status) { ElMessage.success('保存成功'); dialogVisible.value = false; loadData() }
-      else ElMessage.error(res?.message || '保存失败')
-    } catch (e) { ElMessage.error('保存失败') }
+      if (res?.status) {
+        ElMessage.success('保存成功')
+        dialogVisible.value = false
+        loadData()
+      } else ElMessage.error(res?.message || '保存失败')
+    } catch (e) {
+      ElMessage.error('保存失败')
+    }
   })
+}
+
+const handleStatusChange = async (row, val) => {
+  try {
+    const res = await proxy.http.post('api/validation-rule', { ...row, isActive: val }, true)
+    if (res?.status) ElMessage.success(`检查项「${row.ruleName}」已${val ? '启用' : '禁用'}`)
+    else {
+      row.isActive = !val // 回滚
+      ElMessage.error(res?.message || '状态更新失败')
+    }
+  } catch (e) {
+    row.isActive = !val // 回滚
+    ElMessage.error('状态更新失败')
+  }
 }
 
 const handleDelete = async (row) => {
   try {
     await ElMessageBox.confirm(`确认删除检查项「${row.ruleName}」？`, '确认', { type: 'warning' })
     const res = await proxy.http.post(`api/validation-rule/delete/${row.id}`, null, true)
-    if (res?.status) { ElMessage.success('删除成功'); loadData() }
-  } catch (e) { if (e !== 'cancel') ElMessage.error('删除失败') }
+    if (res?.status) {
+      ElMessage.success('删除成功')
+      loadData()
+    }
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error('删除失败')
+  }
 }
 
-onMounted(() => { loadData() })
+onMounted(() => {
+  loadData()
+})
 </script>
 
 <style scoped lang="less">
-.workflow-rules-page { padding: 16px; height: 100%; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
-.page-body { display: flex; gap: 16px; flex: 1; min-height: 0; }
-.tree-card { width: 260px; min-width: 260px; display: flex; flex-direction: column; }
-.tree-header { display: flex; align-items: center; justify-content: space-between; }
-.content-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.filter-card { margin-bottom: 12px; }
-.table-card { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
-.card-header { display:flex; align-items:center; justify-content:space-between; }
-.card-title { font-size:15px; font-weight:600; }
-.row-actions { display: flex; gap: 4px; white-space: nowrap; }
+.workflow-rules-page {
+  padding: 32px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #f8fafc;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.page-body {
+  display: flex;
+  gap: 24px;
+  flex: 1;
+  min-height: 0;
+}
+
+.tree-card {
+  width: 320px;
+  min-width: 320px;
+  border-radius: 24px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+
+  :deep(.el-card__header) {
+    padding: 24px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  :deep(.el-card__body) {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+  }
+}
+
+.tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  span {
+    font-size: 16px;
+    font-weight: 800;
+    color: #0f172a;
+  }
+}
+
+.content-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  gap: 24px;
+}
+
+.filter-card {
+  border-radius: 24px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+
+  :deep(.el-card__body) {
+    padding: 20px 32px;
+  }
+
+  .filter-form {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    :deep(.el-form-item) {
+      margin-bottom: 0;
+      margin-right: 0;
+    }
+
+    :deep(.el-form-item__label) {
+      font-weight: 700;
+      color: #64748b;
+      font-size: 15px;
+    }
+
+    :deep(.el-tag) {
+      height: 36px;
+      padding: 0 20px;
+      border-radius: 18px;
+      font-weight: 700;
+      font-size: 15px;
+    }
+
+    .el-button {
+      height: 44px;
+      padding: 0 24px;
+      border-radius: 22px;
+      font-weight: 600;
+      &.el-button--primary {
+        box-shadow: 0 4px 12px rgba(47, 84, 235, 0.2);
+      }
+    }
+  }
+}
+
+.table-card {
+  flex: 1;
+  border-radius: 32px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  overflow: hidden;
+
+  :deep(.el-card__header) {
+    padding: 24px 32px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  :deep(.el-card__body) {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+  }
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+
+  &::before {
+    content: '';
+    width: 4px;
+    height: 20px;
+    background: var(--yzh-color-primary);
+    border-radius: 2px;
+    margin-right: 12px;
+  }
+}
+
+.card-actions {
+  .el-button {
+    height: 48px;
+    padding: 0 24px;
+    border-radius: 24px;
+    font-weight: 600;
+    font-size: 15px;
+    box-shadow: 0 4px 12px rgba(47, 84, 235, 0.2);
+  }
+}
+
+/* 表格商业化样式适配 */
+.yzh-commercial-table {
+  --el-table-header-bg-color: #f8fafc;
+  --el-table-header-text-color: #0f172a;
+  --el-table-row-hover-bg-color: #f1f5ff;
+
+  :deep(.el-table__header) {
+    th {
+      height: 72px;
+      font-size: 17px;
+      font-weight: 900;
+      border-bottom: 2px solid #e2e8f0;
+    }
+  }
+
+  :deep(.el-table__row) {
+    td {
+      padding: 16px 0;
+      font-size: 16px;
+    }
+  }
+
+  .cell-main-text {
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1.5;
+  }
+
+  .cell-sub-text {
+    color: #64748b;
+    font-size: 14px;
+  }
+
+  .clause-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .clause-tag {
+      flex-shrink: 0;
+      font-weight: 700;
+      background: #f1f5f9;
+      border: none;
+      color: #475569;
+    }
+
+    .clause-title {
+      font-size: 14px;
+      color: #64748b;
+      line-height: 1.4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  .row-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+
+    .el-button {
+      font-size: 15px;
+      font-weight: 600;
+      padding: 0 4px;
+
+      .el-icon {
+        margin-right: 4px;
+        font-size: 16px;
+      }
+    }
+  }
+}
+
+:deep(.el-pagination) {
+  padding: 24px 0 0;
+  .el-pagination__total {
+    font-size: 14px;
+    font-weight: 600;
+    color: #64748b;
+  }
+  .el-pager li {
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    border-radius: 8px;
+    font-weight: 700;
+    margin: 0 4px;
+    &.is-active {
+      background: var(--yzh-color-primary);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(47, 84, 235, 0.2);
+    }
+  }
+}
 </style>

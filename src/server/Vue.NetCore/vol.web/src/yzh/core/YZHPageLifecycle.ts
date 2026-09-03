@@ -34,6 +34,7 @@ export function createDefaultLifecycles<TKey, TEntity>(): Partial<
     onLoadBefore: undefined,
     onLoadAfter: undefined,
     onAddBefore: undefined,
+    onAddAfter: undefined,
     onAddSaveBefore: undefined,
     onAddSaveAfter: undefined,
     onUpdateBefore: undefined,

@@ -11,12 +11,14 @@
 
     <!-- Prompt 编辑区 -->
     <div class="section">
-      <div class="section-title"><el-icon class="section-title-icon"><IconPrompt /></el-icon>提取 Prompt</div>
+      <div class="section-title">
+        <el-icon class="section-title-icon"><IconPrompt /></el-icon>提取 Prompt
+      </div>
       <el-input
         :model-value="prompt"
         @update:model-value="onPromptUpdate"
         type="textarea"
-        :rows="12"
+        :rows="22"
         placeholder="点击「生成 Prompt」按钮，AI 将根据字段和表格定义自动生成提取 Prompt..."
         class="prompt-editor"
       />
@@ -37,7 +39,9 @@
 
     <!-- 验证结果 -->
     <div class="section" v-if="verifyResult">
-      <div class="section-title"><el-icon class="section-title-icon is-success"><IconCircleSuccess /></el-icon>验证结果</div>
+      <div class="section-title">
+        <el-icon class="section-title-icon is-success"><IconCircleSuccess /></el-icon>验证结果
+      </div>
 
       <el-alert
         :title="verifyResult.success ? '验证通过' : '验证失败'"
@@ -64,11 +68,7 @@
 
         <div class="result-section" v-if="verifyResult.data.tables">
           <h5>提取表格数据</h5>
-          <div
-            v-for="(table, name) in verifyResult.data.tables"
-            :key="name"
-            class="table-preview"
-          >
+          <div v-for="(table, name) in verifyResult.data.tables" :key="name" class="table-preview">
             <div class="table-name">{{ name }}</div>
             <el-table :data="table" size="small" border>
               <el-table-column
@@ -85,12 +85,7 @@
 
     <!-- 验证按钮 -->
     <div class="verify-actions" v-if="prompt">
-      <el-button
-        type="success"
-        @click="verifyPrompt"
-        :loading="verifying"
-        :disabled="!prompt"
-      >
+      <el-button type="success" @click="verifyPrompt" :loading="verifying" :disabled="!prompt">
         <el-icon><IconCircleSuccess /></el-icon>
         验证 Prompt
       </el-button>
@@ -99,9 +94,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { ElMessage } from 'element-plus';
-import { IconPrompt, IconInfo, IconCircleSuccess, IconCopy, IconRefresh } from '@/yzh';
+import { IconCircleSuccess, IconCopy, IconInfo, IconPrompt, IconRefresh } from '@/yzh'
+import { ElMessage } from 'element-plus'
 
 const props = defineProps({
   prompt: {
@@ -120,32 +114,32 @@ const props = defineProps({
     type: Boolean,
     default: false
   }
-});
+})
 
-const emit = defineEmits(['generate', 'verify', 'update:prompt']);
+const emit = defineEmits(['generate', 'verify', 'update:prompt'])
 
 const onPromptUpdate = (val) => {
-  emit('update:prompt', val);
-};
+  emit('update:prompt', val)
+}
 
 const generatePrompt = () => {
-  emit('generate');
-};
+  emit('generate')
+}
 
 const verifyPrompt = () => {
-  emit('verify');
-};
+  emit('verify')
+}
 
 const copyPrompt = () => {
   navigator.clipboard.writeText(props.prompt).then(() => {
-    ElMessage.success('已复制到剪贴板');
-  });
-};
+    ElMessage.success('已复制到剪贴板')
+  })
+}
 
 const getTableColumns = (tableData) => {
-  if (!tableData || tableData.length === 0) return [];
-  return Object.keys(tableData[0]);
-};
+  if (!tableData || tableData.length === 0) return []
+  return Object.keys(tableData[0])
+}
 </script>
 
 <style scoped>
@@ -204,18 +198,18 @@ const getTableColumns = (tableData) => {
 /* Prompt 编辑器 - 更精致的代码编辑区 */
 .prompt-editor :deep(.el-textarea__inner) {
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.7;
   background: #1e1e1e;
   color: #d4d4d4;
   border: 1px solid #3e3e3e;
-  border-radius: 6px;
+  border-radius: 0;
   padding: 16px;
 }
 
 .prompt-editor :deep(.el-textarea__inner:focus) {
   border-color: #409eff;
-  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+  box-shadow: none;
 }
 
 /* Prompt 工具栏 */
@@ -233,11 +227,11 @@ const getTableColumns = (tableData) => {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13px;
   color: #909399;
   padding: 10px 12px;
   background: #f5f7fa;
-  border-radius: 6px;
+  border-radius: 0;
 }
 
 .prompt-hint :deep(.el-icon) {
@@ -249,7 +243,7 @@ const getTableColumns = (tableData) => {
   margin-top: 20px;
   padding: 16px;
   background: #f5f7fa;
-  border-radius: 8px;
+  border-radius: 0;
   border: 1px solid #e4e7ed;
 }
 
@@ -275,8 +269,9 @@ const getTableColumns = (tableData) => {
   margin-bottom: 16px;
   background: #fff;
   padding: 12px;
-  border-radius: 6px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  border-radius: 0;
+  box-shadow: none;
+  border: 1px solid #e4e7ed;
 }
 
 .table-name {
@@ -292,7 +287,7 @@ const getTableColumns = (tableData) => {
   justify-content: center;
   padding: 20px;
   background: #f5f7fa;
-  border-radius: 8px;
+  border-radius: 0;
   margin-top: 20px;
 }
 </style>

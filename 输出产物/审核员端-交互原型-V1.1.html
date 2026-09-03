@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>映智汇·审核员端 交互原型 V1.1</title>
+<style>
+:root{
+  --primary:#1a5fb4;--primary-d:#14509c;--primary-l:#e8f1fb;
+  --ok:#18a058;--ok-l:#e8f7ef;--warn:#f0a020;--warn-l:#fdf3e3;
+  --err:#d03050;--err-l:#fbe9ed;--info:#2080f0;--info-l:#e8f2fe;
+  --t1:#333639;--t2:#6b6e74;--t3:#aeb1b7;--bd:#e5e7ea;--bg:#f5f7fa;--card:#fff;
+  --sb-w:212px;--tb-h:54px;--sh:0 1px 4px rgba(0,0,0,.05);--r:8px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font:13.5px/1.6 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--t1);background:var(--bg);min-width:1240px}
+::-webkit-scrollbar{width:7px;height:7px}::-webkit-scrollbar-thumb{background:#cdd1d8;border-radius:4px}
+b{font-weight:600}
+/* ===== 骨架 ===== */
+.app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.tb{height:var(--tb-h);background:#fff;border-bottom:1px solid var(--bd);display:flex;align-items:center;padding:0 16px;gap:14px;flex-shrink:0}
+.tb .logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;color:var(--primary);cursor:pointer}
+.tb .logo .dot{width:26px;height:26px;border-radius:6px;background:linear-gradient(135deg,#1a5fb4,#3b82d6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px}
+.tb .crumb{color:var(--t2);font-size:12.5px}
+.tb .sp{flex:1}
+.quota{display:inline-flex;align-items:center;gap:6px;font-size:12px;background:var(--primary-l);color:var(--primary);border-radius:12px;padding:3px 10px}
+.quota b{font-size:13px}
+.quota .low{color:var(--err);font-weight:700}
+.iconbtn{position:relative;width:34px;height:34px;border-radius:50%;border:none;background:transparent;cursor:pointer;color:var(--t2);display:flex;align-items:center;justify-content:center}
+.iconbtn:hover{background:var(--bg)}
+.iconbtn .bdg{position:absolute;top:2px;right:0;background:var(--err);color:#fff;font-size:10px;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--primary-l);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:600;cursor:pointer}
+.body{display:flex;flex:1;overflow:hidden}
+.sb{width:var(--sb-w);background:#fff;border-right:1px solid var(--bd);padding:10px 8px;display:flex;flex-direction:column;gap:2px;flex-shrink:0;overflow-y:auto}
+.sb .grp{font-size:11px;color:var(--t3);padding:12px 12px 4px;letter-spacing:1px}
+.sb a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:6px;color:var(--t2);cursor:pointer;font-size:13.5px}
+.sb a:hover{background:var(--bg);color:var(--t1)}
+.sb a.on{background:var(--primary-l);color:var(--primary);font-weight:600}
+.sb a .ic{width:17px;height:17px;flex-shrink:0}
+.sb a .tag{margin-left:auto;font-size:10.5px;background:var(--err);color:#fff;border-radius:8px;padding:0 6px}
+.sb a .tag.b{background:var(--warn)}
+.main{flex:1;overflow-y:auto;padding:16px 20px}
+.page{display:none}.page.on{display:block}
+.pg-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.pg-head h2{font-size:17px}
+.pg-head .sub{color:var(--t2);font-size:12.5px}
+.pg-head .sp{flex:1}
+/* ===== 通用组件 ===== */
+.card{background:var(--card);border:1px solid var(--bd);border-radius:var(--r);box-shadow:var(--sh)}
+.card .ch{padding:12px 16px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px}
+.card .ch b{font-size:14px}
+.card .cb{padding:16px}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--bd-2,#dcdfe3);background:#fff;color:var(--t1);border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px;white-space:nowrap}
+.btn:hover{border-color:var(--primary);color:var(--primary)}
+.btn.pri{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.pri:hover{background:var(--primary-d)}
+.btn.sm{padding:3px 10px;font-size:12.5px}
+.btn.txt{border:none;background:none;color:var(--primary);padding:3px 6px}
+.btn.txt.r{color:var(--err)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.inp,.sel{border:1px solid #dcdfe3;border-radius:6px;padding:6px 10px;font-size:13px;outline:none;background:#fff;color:var(--t1)}
+.inp:focus,.sel:focus{border-color:var(--primary)}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;border-radius:12px;padding:1px 10px;white-space:nowrap}
+.pill.ok{background:var(--ok-l);color:var(--ok)}.pill.warn{background:var(--warn-l);color:#c07d10}
+.pill.err{background:var(--err-l);color:var(--err)}.pill.info{background:var(--info-l);color:var(--info)}
+.pill.gray{background:#f0f1f3;color:var(--t2)}.pill.blue{background:var(--primary-l);color:var(--primary)}
+.pill.run{background:var(--info-l);color:var(--info)}
+table.tb-t{width:100%;border-collapse:collapse;font-size:13px}
+.tb-t th{text-align:left;color:var(--t2);font-weight:500;padding:9px 12px;border-bottom:1px solid var(--bd);background:#fafbfc;white-space:nowrap}
+.tb-t td{padding:9px 12px;border-bottom:1px solid #f0f1f3;vertical-align:middle}
+.tb-t tr:hover td{background:#fafcff}
+.empty{padding:40px;text-align:center;color:var(--t3)}
+.tabbar{display:flex;gap:2px;border-bottom:1px solid var(--bd);margin-bottom:14px;flex-wrap:wrap}
+.tabbar a{padding:9px 16px;cursor:pointer;color:var(--t2);border-bottom:2px solid transparent;font-size:13.5px;display:flex;gap:6px;align-items:center}
+.tabbar a.on{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+.tabbar a .n{font-size:11px;background:var(--err);color:#fff;border-radius:8px;padding:0 6px}
+.tabc{display:none}.tabc.on{display:block}
+.grid{display:grid;gap:14px}
+.row{display:flex;gap:14px;flex-wrap:wrap}
+.kv{display:flex;font-size:13px;padding:5px 0}
+.kv .k{width:110px;color:var(--t2);flex-shrink:0}
+.kv .v{flex:1}
+.bar{height:6px;border-radius:3px;background:#edeff2;overflow:hidden;flex:1}
+.bar i{display:block;height:100%;background:var(--primary);border-radius:3px}
+.toast{position:fixed;top:66px;right:20px;z-index:99;display:flex;flex-direction:column;gap:8px}
+.toast div{background:#fff;border:1px solid var(--bd);border-left:3px solid var(--ok);box-shadow:var(--sh);border-radius:6px;padding:10px 16px;font-size:13px;animation:tin .25s}
+@keyframes tin{from{opacity:0;transform:translateX(20px)}to{opacity:1}}
+/* ===== 弹层 ===== */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:90;display:none;align-items:center;justify-content:center}
+.mask.on{display:flex}
+.modal{background:#fff;border-radius:10px;width:640px;max-width:92vw;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.18)}
+.modal .mh{padding:14px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center}
+.modal .mh b{font-size:15px}
+.modal .mh .x{margin-left:auto;cursor:pointer;color:var(--t3);font-size:18px;border:none;background:none}
+.modal .mb{padding:18px 20px;overflow-y:auto}
+.modal .mf{padding:12px 20px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:10px}
+/* 抽屉(消息) */
+.drawer{position:fixed;top:0;right:-380px;width:370px;height:100vh;background:#fff;z-index:95;box-shadow:-6px 0 20px rgba(0,0,0,.1);transition:right .25s;display:flex;flex-direction:column}
+.drawer.on{right:0}
+.drawer .dh{padding:14px 18px;border-bottom:1px solid var(--bd);font-weight:600;display:flex;align-items:center}
+.drawer .dh .x{margin-left:auto;cursor:pointer;color:var(--t3);border:none;background:none;font-size:17px}
+.drawer .db{flex:1;overflow-y:auto}
+.msg{padding:12px 18px;border-bottom:1px solid #f0f1f3;display:flex;gap:10px;cursor:pointer}
+.msg:hover{background:#fafcff}
+.msg .mi{width:34px;height:34px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:15px}
+.msg .mt{font-size:13px;font-weight:600}
+.msg .md{font-size:12px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msg .ms{font-size:11px;color:var(--t3)}
+.msg.unread .mt::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--err);margin-right:6px}
+/* ===== 工作台 ===== */
+.todo{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.todo .it{flex:1;min-width:140px;background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:12px 14px;cursor:pointer}
+.todo .it:hover{border-color:var(--primary)}
+.todo .it .n{font-size:22px;font-weight:700}
+.todo .it .l{font-size:12px;color:var(--t2)}
+.tcard{padding:16px;cursor:pointer;position:relative;transition:box-shadow .15s}
+.tcard:hover{box-shadow:0 3px 12px rgba(26,95,180,.12)}
+.tcard .tt{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.tcard .tno{font-family:ui-monospace,monospace;font-size:11.5px;color:var(--t3)}
+.tcard .ent{font-size:15px;font-weight:600;margin-bottom:2px}
+.tcard .meta{color:var(--t2);font-size:12.5px;margin-bottom:10px}
+.tcard .acts{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.tcard .unf{position:absolute;top:12px;right:12px}
+.ecard{display:flex;flex-direction:column;gap:8px}
+.ecard .en{font-size:15px;font-weight:600}
+.ecard .em{color:var(--t2);font-size:12.5px}
+/* ===== 步骤条 ===== */
+.steps{display:flex;margin-bottom:22px}
+.step{flex:1;text-align:center;position:relative;color:var(--t3)}
+.step .sn{width:28px;height:28px;border-radius:50%;background:#e9ebef;color:var(--t3);display:inline-flex;align-items:center;justify-content:center;font-weight:600;margin-bottom:6px}
+.step.done .sn{background:var(--ok);color:#fff}
+.step.on .sn{background:var(--primary);color:#fff;box-shadow:0 0 0 4px var(--primary-l)}
+.step::before{content:"";position:absolute;top:14px;left:-50%;width:100%;height:2px;background:#e9ebef}
+.step:first-child::before{display:none}
+.step.done::before{background:var(--ok)}
+.step .sl{font-size:12.5px}
+.step.on .sl{color:var(--primary);font-weight:600}
+/* 选择卡 */
+.pick{border:1.5px solid var(--bd);border-radius:8px;padding:12px 14px;cursor:pointer;display:flex;gap:10px;align-items:center}
+.pick:hover{border-color:var(--primary)}
+.pick.on{border-color:var(--primary);background:var(--primary-l)}
+.pick .pc{width:18px;height:18px;border-radius:4px;border:1.5px solid #cbd0d8;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px}
+.pick.on .pc{background:var(--primary);border-color:var(--primary)}
+.pick .pd{font-size:11.5px;color:var(--t2)}
+/* 次级导航(企业详情) */
+.subnav{display:flex;gap:2px;border-bottom:1px solid var(--bd);margin-bottom:14px;flex-wrap:wrap}
+.subnav a{padding:9px 16px;cursor:pointer;color:var(--t2);border-bottom:2px solid transparent;font-size:13.5px;display:flex;gap:6px;align-items:center}
+.subnav a.on{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+.subnav a .n{font-size:11px;background:var(--err);color:#fff;border-radius:8px;padding:0 6px}
+.subnav a .tag{font-size:10.5px;background:var(--warn);color:#fff;border-radius:8px;padding:0 6px}
+/* 执行轨迹节点 */
+.node{display:flex;gap:12px;padding:10px 0}
+.node .nd{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.node.ok .nd{background:var(--ok-l);color:var(--ok)}
+.node.run .nd{background:var(--info-l);color:var(--info);animation:pulse 1.6s infinite}
+.node.err .nd{background:var(--err-l);color:var(--err)}
+.node.wait .nd{background:#f0f1f3;color:var(--t3)}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(32,128,240,.3)}50%{box-shadow:0 0 0 7px rgba(32,128,240,0)}}
+.node .nb{flex:1;border-bottom:1px dashed #eceef1;padding-bottom:10px}
+.node:last-child .nb{border:none}
+.node .nh{display:flex;align-items:center;gap:8px}
+.node .nh b{font-size:13.5px}
+.node .ndt{font-size:11.5px;color:var(--t3)}
+.node .nc{font-size:12.5px;color:var(--t2);margin-top:2px}
+/* 复核条目 */
+.rv{border:1px solid var(--bd);border-radius:8px;padding:12px 14px;margin-bottom:10px}
+.rv.ok{border-left:3px solid var(--ok)}
+.rv.warn{border-left:3px solid var(--warn)}
+.rv.err{border-left:3px solid var(--err)}
+.rv .rh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.rv .src{font-size:12px;color:var(--t2);background:#f6f7f9;border-radius:5px;padding:2px 8px;margin-top:6px;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.rv .src:hover{background:var(--primary-l);color:var(--primary)}
+/* 条款树 */
+.tree{font-size:13px}
+.tree .tn{padding:5px 8px;border-radius:5px;display:flex;align-items:center;gap:7px;cursor:pointer;color:var(--t2)}
+.tree .tn:hover{background:var(--bg)}
+.tree .tn.on{background:var(--primary-l);color:var(--primary);font-weight:600}
+.tree .kids{margin-left:20px;border-left:1px dashed #dfe2e7;padding-left:8px}
+/* 提醒设置开关 */
+.sw{position:relative;width:38px;height:20px;border-radius:10px;background:#d5d8de;cursor:pointer;transition:.2s;flex-shrink:0}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.sw.on{background:var(--ok)}
+.sw.on::after{left:20px}
+.setrow{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #f0f1f3}
+.setrow .sd{flex:1}
+.setrow .sd .st{font-size:13.5px;font-weight:600}
+.setrow .sd .ss{font-size:12px;color:var(--t2)}
+.note{background:var(--info-l);border:1px solid #cfe3fd;color:#3a6dab;border-radius:6px;padding:9px 13px;font-size:12.5px;margin-bottom:14px}
+.note.y{background:var(--warn-l);border-color:#f5deb8;color:#9c6d10}
+.p2mask{position:relative}
+.p2mask::after{content:"P2 规划模块 · 本原型为占位示意";position:absolute;inset:0;background:rgba(255,255,255,.72);backdrop-filter:blur(1.5px);display:flex;align-items:center;justify-content:center;color:var(--t2);font-weight:600;border-radius:var(--r);letter-spacing:1px}
+.legend{display:flex;gap:16px;font-size:12px;color:var(--t2);margin-bottom:12px;flex-wrap:wrap;align-items:center}
+.spin{display:inline-block;width:13px;height:13px;border:2px solid #bcd3f5;border-top-color:var(--primary);border-radius:50%;animation:sp 0.8s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ver{color:var(--t3);font-size:11px;text-align:right;padding:10px 4px 2px}
+</style>
+</head>
+<body>
+<div class="app" id="app" style="display:none">
+  <!-- ============ 顶栏（V1.1：Logo | 全局搜索 | 剩余次数 | 消息铃铛 | 头像） ============ -->
+  <div class="tb">
+    <div class="logo" onclick="go('workspace')"><span class="dot">审</span>映智汇 · 审核员端</div>
+    <span class="crumb" id="crumb">工作台</span>
+    <div class="sp"></div>
+    <button class="btn sm" onclick="toast('全量任务/企业请前往「企业管理」「资源管理」')">🔍 搜索任务/企业…</button>
+    <span class="quota" title="剩余次数由后台配置下发（sys 配置），前端仅展示">剩余次数 <b id="quotaVal">8</b><span style="font-weight:400">（免费2 + 充值6）</span></span>
+    <button class="iconbtn" title="消息提醒" onclick="openDrawer()">🔔<span class="bdg" id="ubdg">3</span></button>
+    <div class="avatar" title="王审核 · 绑定机构：CB001" onclick="go('profile')">王</div>
+  </div>
+  <div class="body">
+    <!-- ============ 侧边导航（V1.1：企业维度 5 项） ============ -->
+    <div class="sb" id="sb">
+      <div class="grp">工作台</div>
+      <a data-pg="workspace" class="on" onclick="go('workspace')">🏠 工作台</a>
+      <a data-pg="ent" onclick="go('ent')">🏢 企业管理</a>
+      <a data-pg="files" onclick="go('files')">📁 资源管理</a>
+      <div class="grp">沟通</div>
+      <a data-pg="msg" onclick="go('msg')">💬 消息中心<span class="tag">3</span></a>
+      <div class="grp">账户</div>
+      <a data-pg="profile" onclick="go('profile')">👤 个人中心</a>
+    </div>
+    <!-- ============ 主区 ============ -->
+    <div class="main" id="main"></div>
+  </div>
+</div>
+
+<!-- 登录页（V1.1：账号密码登录 / 注册走注册向导） -->
+<div id="login" style="height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#16324f 0%,#1a5fb4 100%)">
+  <div class="card" style="width:380px;padding:34px 32px">
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">
+      <div style="width:38px;height:38px;border-radius:9px;background:linear-gradient(135deg,#1a5fb4,#3b82d6);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700">审</div>
+      <div><div style="font-size:17px;font-weight:700">映智汇 · 审核员端</div><div style="font-size:12px;color:var(--t2)">审核员的个人辅助工具</div></div>
+    </div>
+    <div style="margin:18px 0 22px;border-bottom:1px solid var(--bd)"></div>
+    <div style="margin-bottom:14px"><div style="font-size:12.5px;color:var(--t2);margin-bottom:5px">账号（手机号）</div><input class="inp" style="width:100%;padding:9px" placeholder="138****8888" value="13800008888"></div>
+    <div style="margin-bottom:18px"><div style="font-size:12.5px;color:var(--t2);margin-bottom:5px">密码</div><input class="inp" type="password" style="width:100%;padding:9px" placeholder="请输入密码"></div>
+    <button class="btn pri" style="width:100%;justify-content:center;padding:9px;font-size:14px" onclick="enter()">登 录</button>
+    <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:12px;color:var(--t3)">
+      <a style="cursor:pointer;color:var(--primary)" onclick="showRegister()">新用户注册</a>
+      <a style="cursor:pointer" onclick="toast('找回密码走验证码重置')">忘记密码</a>
+    </div>
+  </div>
+</div>
+
+<!-- 注册页（V1.1：手机验证码 → 选机构 → 微信绑定预留步骤位） -->
+<div id="reg" style="height:100vh;display:none;align-items:center;justify-content:center;background:linear-gradient(135deg,#16324f 0%,#1a5fb4 100%)">
+  <div class="card" style="width:420px;padding:34px 32px">
+    <div style="display:flex;align-items:center;margin-bottom:6px">
+      <div style="width:38px;height:38px;border-radius:9px;background:linear-gradient(135deg,#1a5fb4,#3b82d6);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700">审</div>
+      <div style="margin-left:10px"><div style="font-size:17px;font-weight:700">审核员注册</div><div style="font-size:12px;color:var(--t2)">三步完成注册</div></div>
+    </div>
+    <div class="steps" style="margin:18px 0 22px">
+      <div class="step on"><div class="sn">1</div><div class="sl">手机验证</div></div>
+      <div class="step"><div class="sn">2</div><div class="sl">选择机构</div></div>
+      <div class="step"><div class="sn">3</div><div class="sl">微信绑定<span class="pill gray" style="font-size:10px;margin-left:4px">预留</span></div></div>
+    </div>
+    <div style="margin-bottom:14px"><div style="font-size:12.5px;color:var(--t2);margin-bottom:5px">手机号</div><input class="inp" style="width:100%;padding:9px" placeholder="请输入手机号"></div>
+    <div style="display:flex;gap:10px;margin-bottom:14px"><div style="flex:1"><div style="font-size:12.5px;color:var(--t2);margin-bottom:5px">验证码</div><input class="inp" style="width:100%;padding:9px" placeholder="6 位验证码"></div><button class="btn" style="height:38px">获取验证码</button></div>
+    <div class="note" style="margin-bottom:14px">免费额度由后台配置下发，前端仅展示（示例：注册赠送 10 次，实际以系统配置为准）</div>
+    <button class="btn pri" style="width:100%;justify-content:center;padding:9px" onclick="regStep2()">下一步：选择机构</button>
+    <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--t3)"><a style="cursor:pointer;color:var(--primary)" onclick="backToLogin()">← 返回登录</a></div>
+  </div>
+</div>
+
+<!-- ============ 消息抽屉 ============ -->
+<div class="drawer" id="dw">
+  <div class="dh">🔔 消息提醒 <span class="pill blue" style="margin-left:8px">3 条未读</span><button class="x" onclick="closeDrawer()">✕</button></div>
+  <div style="display:flex;gap:0;border-bottom:1px solid var(--bd);font-size:13px"><a style="padding:9px 18px;cursor:pointer;border-bottom:2px solid var(--primary);color:var(--primary);font-weight:600">系统通知</a><a style="padding:9px 18px;cursor:pointer;color:var(--t2)" onclick="toast('会话消息为 P2 协同系统功能，见消息中心')">会话（P2）</a></div>
+  <div class="db" id="dwList"></div>
+  <div style="padding:10px;text-align:center;border-top:1px solid var(--bd)"><button class="btn txt" onclick="toast('已全部标记为已读');document.getElementById('ubdg').style.display='none'">全部已读</button></div>
+</div>
+
+<!-- ============ 通用弹层 ============ -->
+<div class="mask" id="mask" onclick="if(event.target===this)closeModal()"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= 数据 ================= */
+/* 剩余次数由后台配置下发（sys 配置：免费额度 + 充值包），前端仅展示 */
+const QUOTA={free:2,recharge:6,total:8,low:3,freeInit:10};
+const ENTERPRISES=[
+ {no:'ENT-2026-0001',name:'河北雄安尚龙医疗科技有限公司',short:'尚龙医疗',stds:['ISO 13485:2016'],phase:'初审阶段 · 进行中',progress:62,contacts:[
+   {n:'李美琳',r:'体系负责人',p:'138 3122 6688',e:'liml@shanglong-med.cn',prim:1},
+   {n:'赵大勇',r:'办公室主任',p:'139 0312 4455',e:'zhaody@shanglong-med.cn',prim:0}],
+  files:'12/15',nc:'2 项待整改',cert:'医疗器械灭菌设备的开发与生产',lastTask:{no:'NC-2026-0031',type:'NC 检查',st:'run',t:'10 分钟前'},archives:[['08-01','注册建档','系统自动'],['08-02','开启初审阶段','李美琳（企业）']]},
+ {no:'ENT-2026-0002',name:'XX精密制造有限公司',short:'XX精密',stds:['ISO 9001:2015','ISO 14001:2015','ISO 45001:2018'],phase:'监督审核(一监) · 进行中',progress:45,contacts:[
+   {n:'周建国',r:'总经理',p:'137 1111 2222',e:'',prim:1}],
+  files:'8/10',nc:'无未关闭 NC',cert:'精密金属零件加工',lastTask:{no:'RPT-2026-0008',type:'报告生成',st:'review',t:'昨天 17:40'},archives:[['07-20','注册建档','系统自动'],['08-10','开启一监阶段','周建国（企业）']]},
+ {no:'ENT-2026-0003',name:'YY电子科技股份有限公司',short:'YY电子',stds:['ISO 9001:2015'],phase:'初审 · 已归档',progress:100,archived:1,contacts:[{n:'陈晓',r:'质量部',p:'136 6666 8888',e:'',prim:1}],files:'15/15',nc:'全部关闭',cert:'消费电子组装',lastTask:{no:'NC-2026-0028',type:'NC 检查',st:'archived',t:'08-25'},archives:[['06-18','注册建档','系统自动'],['06-20','开启初审阶段','陈晓（企业）'],['08-25','归档企业','王审核']]}];
+const FOCUS=[
+ {no:'NC-2026-0031',ent:0,type:'NC 检查',status:'run',q:{done:9,total:14},nc:0,rpt:0,f:'10 分钟前'},
+ {no:'NC-2026-0030',ent:0,type:'NC 检查',status:'done',q:{done:14,total:14},nc:3,rpt:0,f:'今天 09:12'},
+ {no:'RPT-2026-0008',ent:1,type:'报告生成',status:'review',q:{done:1,total:1},nc:0,rpt:1,f:'昨天 17:40'},
+ {no:'NC-2026-0029',ent:0,type:'NC 检查',status:'fail',q:{done:6,total:14},err:'Skill「Word 表格提取」超时（节点 N-04）',f:'昨天 15:02'},
+ {no:'NC-2026-0027',ent:0,type:'NC 检查',status:'done',q:{done:14,total:14},nc:0,rpt:0,f:'08-28'}];
+const ALLTASKS=FOCUS.concat([
+ {no:'NC-2026-0028',ent:2,type:'NC 检查',status:'archived',q:{done:14,total:14},nc:1,rpt:1,f:'08-25'},
+ {no:'RPT-2026-0007',ent:2,type:'报告生成',status:'archived',q:{done:1,total:1},nc:0,rpt:1,f:'08-25'},
+ {no:'NC-2026-0026',ent:1,type:'NC 检查',status:'done',q:{done:14,total:14},nc:0,rpt:0,f:'08-20'}]);
+const CLAUSE=[
+ {c:'4',t:'组织环境',kids:[{c:'4.1',t:'理解组织及其环境'},{c:'4.2',t:'理解相关方的需求和期望'},{c:'4.3',t:'确定质量管理体系的范围'},{c:'4.4',t:'质量管理体系及其过程'}]},
+ {c:'5',t:'领导作用',kids:[{c:'5.1',t:'领导作用和承诺'},{c:'5.2',t:'方针'},{c:'5.3',t:'组织的岗位、职责和权限'}]},
+ {c:'6',t:'策划',kids:[{c:'6.1',t:'应对风险和机遇的措施'},{c:'6.2',t:'质量目标及其实现的策划'},{c:'6.3',t:'变更的策划'}]},
+ {c:'7',t:'支持',kids:[{c:'7.1',t:'资源'},{c:'7.2',t:'能力',on:1},{c:'7.5',t:'成文信息',on:1}]},
+ {c:'8',t:'运行',kids:[{c:'8.1',t:'运行的策划和控制'},{c:'8.2',t:'产品和服务的要求'},{c:'8.3',t:'产品和服务的设计和开发'}]},
+ {c:'9',t:'绩效评价',kids:[{c:'9.1',t:'监视、测量、分析和评价'},{c:'9.2',t:'内部审核'},{c:'9.3',t:'管理评审'}]},
+ {c:'10',t:'改进',kids:[{c:'10.1',t:'总则'},{c:'10.2',t:'不合格和纠正措施'},{c:'10.3',t:'持续改进'}]}];
+const ST={run:['执行中','run'],done:['已完成','ok'],review:['待复核','warn'],fail:['失败','err'],archived:['已归档','gray'],pend:['排队中','info']};
+/* 阶段资料：预审状态列（未预审/通过/警告/阻断），以及 _base 企业基础资料分段 */
+const FILES=[['1质量手册','质量手册 XASL-QM-V2.docx','v2','已提取 5 字段','ok','通过'],['1质量手册','程序文件汇编.docx','v1','已提取 3 字段','ok','通过'],['2管理记录','管理评审记录 2026.docx','v1','⚠ 2 字段低可信度','warn','警告'],['2管理记录','内审计划.xlsx','v1','已提取 3 字段','ok','通过'],['3人员资质','特种作业人员证书.pdf','v1','待 OCR','info','未预审'],['4整改证据','NC-001 整改报告.docx','v1','已确认','ok','阻断']];
+const BASE_FILES=[['灭菌验证报告.pdf','企业上传 · 待确认','0.8MB'],['营业执照 扫描件.jpg','已归档 · _base','1.2MB'],['质量管理体系认证证书.pdf','已归档 · _base','2.1MB']];
+const NCS=[['7.2 能力','minor','3 名焊接岗位人员未能提供培训记录','整改中 · 09-15 到期','warn'],['7.5 成文信息','observation','程序文件未标注现行版本号','待验证','info'],['8.3 设计开发','major','设计变更记录缺少评审签字','已整改待验证','err']];
+const MSGS=[[1,'✅','var(--ok-l);color:var(--ok)','NC-2026-0030 检查完成','尚龙医疗 · 14 项检查完成，3 项待复核','09:12'],[1,'⚠️','var(--warn-l);color:#c07d10','NC-2026-0029 执行失败','Skill「Word 表格提取」超时（节点 N-04），可一键重试','昨天 15:02'],[1,'📄','var(--info-l);color:var(--info)','报告 RPT-2026-0008 已生成','XX精密 · 报告草稿待复核签发','昨天 17:40'],[0,'📬','var(--bg);color:var(--t2)','资料待确认','尚龙医疗上传了「灭菌验证报告.pdf」','08-30']];
+const RESOURCES=[['尚龙医疗','13485 · 初审','质量手册 XASL-QM-V2.docx','v2','a3f9…e21'],['尚龙医疗','13485 · 初审','管理评审记录 2026.docx','v1','7b02…9cc'],['XX精密','9001 · 一监','内审计划.xlsx','v1','c18d…4f0'],['YY电子','9001 · 已归档','程序文件汇编.docx','v3','9e4a…b77']];
+/* ================= 工具 ================= */
+const $=s=>document.querySelector(s);
+function toast(m){const t=document.createElement('div');t.textContent=m;$('#toast').appendChild(t);setTimeout(()=>t.remove(),2600)}
+function enter(){ $('#login').style.display='none'; $('#reg').style.display='none'; $('#app').style.display='flex'; render('workspace'); }
+function showRegister(){ $('#login').style.display='none'; $('#reg').style.display='flex'; }
+function backToLogin(){ $('#reg').style.display='none'; $('#login').style.display='flex'; }
+function regStep2(){ toast('注册向导 Step2：选择机构（CB001 四川映智汇认证）→ Step3 微信绑定（预留步骤位，可跳过）'); }
+function pillOf(st){const [l,c]=ST[st];return `<span class="pill ${c}">${l}</span>`}
+function openDrawer(){$('#dw').classList.add('on');const MC={'✅':'var(--ok-l)','⚠️':'var(--warn-l)','📄':'var(--info-l)','📬':'#f0f1f3'};const l=$('#dwList');l.innerHTML=MSGS.map(m=>`<div class="msg ${m[0]?'unread':''}" onclick="toast('已跳转对应任务详情')"><div class="mi" style="background:${MC[m[1]]||'#f0f1f3'}">${m[1]}</div><div style="flex:1;min-width:0"><div class="mt">${m[3]}</div><div class="md">${m[4]}</div><div class="ms">${m[5]}</div></div></div>`).join('')}
+function closeDrawer(){$('#dw').classList.remove('on')}
+function closeModal(){$('#mask').classList.remove('on')}
+function modal(h,b,f){$('#modal').innerHTML=`<div class="mh"><b>${h}</b><button class="x" onclick="closeModal()">✕</button></div><div class="mb">${b}</div>${f?`<div class="mf">${f}</div>`:''}`;$('#mask').classList.add('on')}
+/* ================= 路由（V1.1：5 项企业维度导航 + 任务详情 + 企业/阶段详情） ================= */
+let curTab='t1',curTask=FOCUS[0],curEnt=0;
+let entView='list';           /* list | detail | stage */
+let entDetailTab='info';      /* 企业详情次级导航 */
+let stageTab='t1';            /* 阶段详情四 Tab */
+let curStageIdx=0;            /* 企业下选中的阶段（多标准） */
+function go(pg){ entView='list'; render(pg); }
+function render(pg){
+ document.querySelectorAll('.sb a').forEach(a=>a.classList.toggle('on',a.dataset.pg===pg));
+ const M=$('#main'),C=$('#crumb');
+ const R={workspace:['工作台',pgWorkspace],ent:['企业管理',pgEnt],files:['资源管理',pgFiles],msg:['消息中心',pgMsg],profile:['个人中心',pgProfile],detail:['任务详情',()=>pgTaskDetail(curTask)]};
+ const [title,fn]=R[pg];C.textContent=title;M.innerHTML=`<div class="page on">${fn()}</div>`;
+ M.scrollTop=0;
+}
+/* ================= ① 工作台（V1.1：企业维度聚合：待办聚合条 + 企业卡片最近任务） ================= */
+function pgWorkspace(){
+ const todos=[['待复核',3,'warn'],['排队中',1,'info'],['NC 逾期',1,'err'],['资料待确认',2,'warn'],['失败重试',1,'err']];
+ return `<div class="pg-head"><h2>🏠 工作台</h2><span class="sub">按企业维度聚合：待办 + 每家企业最近任务状态</span><div class="sp"></div>
+  <button class="btn pri" onclick="wizard()">＋ 发起新任务</button></div>
+ <div class="todo">${todos.map(t=>`<div class="it" onclick="toast('筛选到「${t[0]}」列表')"><div class="n" style="color:${t[2]==='err'?'var(--err)':t[2]==='warn'?'#c07d10':'var(--primary)'}">${t[1]}</div><div class="l">${t[0]}</div></div>`).join('')}</div>
+ <div class="legend">企业为行维度：每家企业显示最近创建任务的状态；[进入企业] 查看档案与阶段，[发起任务] 直接为该企业开任务</div>
+ <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(400px,1fr))">
+ ${ENTERPRISES.map((e,i)=>`
+  <div class="card tcard" onclick="curEnt=${i};entView='detail';entDetailTab='info';render('ent')">
+   ${e.archived?'<span class="pill gray" style="position:absolute;top:12px;right:14px">已归档</span>':''}
+   <div class="tt">${pillOf(e.lastTask.st)}<span class="tno">${e.lastTask.no}</span><span style="font-size:11px;color:var(--t3)">最近任务 · ${e.lastTask.t}</span></div>
+   <div class="ent">${e.name}</div>
+   <div class="meta">${e.no} · ${e.cert}</div>
+   <div style="margin:6px 0">${e.stds.map(s=>`<span class="pill blue">${s}</span>`).join(' ')} · <span>${e.phase}</span></div>
+   <div style="display:flex;gap:14px;font-size:12.5px;color:var(--t2);margin:8px 0">
+     <span>📁 资料 ${e.files}</span><span>⚠ ${e.nc}</span><span>👤 ${e.contacts[0].n}</span>
+   </div>
+   <div class="acts">
+     <button class="btn sm" onclick="event.stopPropagation();curEnt=${i};entView='detail';entDetailTab='info';render('ent')">进入企业</button>
+     <button class="btn sm pri" onclick="event.stopPropagation();curEnt=${i};wizard(1)">发起任务</button>
+   </div>
+  </div>`).join('')}
+ </div>`;
+}
+/* ================= ② 企业管理 ================= */
+function pgEnt(){
+ const e=ENTERPRISES[curEnt];
+ if(entView==='detail') return entDetail(e);
+ if(entView==='stage') return stageDetail(e);
+ /* —— 企业列表 —— */
+ return `<div class="pg-head"><h2>🏢 企业管理</h2><span class="sub">企业档案（审核员私有）· 归档可逆 · 多标准绑定</span><div class="sp"></div>
+  <input class="inp" placeholder="🔍 企业名 / 信用代码 / 联系人" style="width:220px" oninput="toast('前端本地过滤示意')">
+  <select class="sel"><option>全部状态</option><option>进行中</option><option>已归档</option></select>
+  <button class="btn pri" onclick="wizard(1)">＋ 新建企业</button></div>
+ <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(380px,1fr))">
+ ${ENTERPRISES.map((e,i)=>`<div class="card tcard" onclick="curEnt=${i};entView='detail';entDetailTab='info';render('ent')">
+   ${e.archived?'<span class="pill gray" style="position:absolute;top:12px;right:14px">已归档</span>':''}
+   <div class="ent">${e.name}</div>
+   <div class="meta">${e.no} · ${e.cert}</div>
+   <div style="margin:6px 0">${e.stds.map(s=>`<span class="pill blue">${s}</span>`).join(' ')}</div>
+   <div style="display:flex;gap:14px;font-size:12.5px;color:var(--t2);margin:8px 0">
+     <span>📁 资料 ${e.files}</span><span>📄 阶段 ${e.archived?'3(全部归档)':'1 进行中'}</span><span>⚠ ${e.nc}</span>
+   </div>
+   <div style="font-size:12px;color:var(--t2)">👤 ${e.contacts[0].n}（${e.contacts[0].r}）· 📱 ${e.contacts[0].p}</div>
+   <div class="acts">
+     <button class="btn sm" onclick="event.stopPropagation();curEnt=${i};entView='detail';entDetailTab='info';render('ent')">企业详情</button>
+     ${e.archived?`<button class="btn sm pri" onclick="event.stopPropagation();toast('已重新激活，自动创建新阶段（closed → in_progress）')">取档激活</button>`:`<button class="btn sm" onclick="event.stopPropagation();toast('校验无进行中任务后归档（资料转只读）')">归档</button>`}
+     <button class="btn sm" onclick="event.stopPropagation();toast('企业信息导出（P3：供导入另一审核员端）')">📤 导出</button>
+   </div>
+ </div>`).join('')}
+ </div>
+ <div class="note" style="margin-top:14px">决策 D1：企业为审核员私有语义（查询按 create_id 过滤，DB 全局唯一约束不改）；同一企业换机构 / 换审核员 = 新建独立档案，资料迁移走"导出/导入"（P3）。多标准：企业可绑定 1..N 标准，各标准独立阶段/检查/报告（详见《多标准认证-结合审核-功能设计-V1》方案 A）。</div>`;
+}
+/* —— 企业详情（V1.1 新增：次级导航 基本信息/阶段/企业用户预留/归档记录） —— */
+function entDetail(e){
+ const nav=[['info','基本信息'],['stages','阶段'],['users','企业用户','tag','P2'],['archives','归档记录']];
+ return `<div class="pg-head"><h2>🏢 ${e.name}</h2>${e.archived?'<span class="pill gray">已归档</span>':''}<span class="sub">${e.no} · ${e.cert}</span><div class="sp"></div>
+  <button class="btn sm" onclick="entView='list';render('ent')">← 返回列表</button></div>
+ <div class="subnav">${nav.map(n=>`<a class="${entDetailTab===n[0]?'on':''}" onclick="entDetailTab='${n[0]}';render('ent')">${n[1]}${n[2]?`<span class="${n[2]}">${n[3]}</span>`:''}</a>`).join('')}</div>
+ ${entDetailTab==='info'?entInfo(e):entDetailTab==='stages'?entStages(e):entDetailTab==='users'?entUsers():entArchives(e)}`;
+}
+function entInfo(e){
+ return `<div class="row">
+  <div class="card" style="flex:1.4;min-width:420px"><div class="ch"><b>企业基本信息</b><span class="pill blue">${e.no}</span></div><div class="cb">
+   <div class="kv"><span class="k">企业全称</span><span class="v">${e.name}</span></div>
+   <div class="kv"><span class="k">统一信用代码</span><span class="v">91130600MA0D1XXXXX<span style="font-size:11px;color:var(--t3)">（允许为空，查重仅弱提示，决策 D1）</span></span></div>
+   <div class="kv"><span class="k">认证范围</span><span class="v">${e.cert}</span></div>
+   <div class="kv"><span class="k">绑定标准</span><span class="v">${e.stds.map(s=>`<span class="pill blue">${s}</span>`).join(' ')} <button class="btn txt" onclick="toast('多标准绑定：可追加/移除（有阶段记录不可直接移除）')">管理</button></span></div>
+   <div class="kv"><span class="k">当前阶段</span><span class="v">${e.phase} · 进度 ${e.progress}%</span></div>
+   <div class="kv"><span class="k">资料齐套</span><span class="v">${e.files} · ${e.nc}</span></div>
+  </div></div>
+  <div class="card" style="flex:1;min-width:360px"><div class="ch"><b>联系方式</b><span class="pill gray">高频</span><div class="sp"></div><button class="btn sm" onclick="toast('新增联系人（ent_enterprise_contact）')">＋ 新增</button></div><div class="cb" style="padding-top:6px">
+   ${e.contacts.map(c=>`<div class="setrow"><div class="sd"><div class="st">${c.n}${c.prim?' <span class="pill ok">主联系人</span>':''}<span style="font-weight:400;font-size:12px;color:var(--t2)"> · ${c.r}</span></div><div class="ss">📱 ${c.p}${c.e?' · ✉ '+c.e:''}</div></div><div style="display:flex;gap:4px"><button class="btn txt" onclick="toast('tel:${c.p}')">📞</button><button class="btn txt" onclick="toast('已复制 ${c.p}')">复制</button></div></div>`).join('')}
+  </div></div>
+ </div>
+ <div class="note" style="margin-top:14px">企业基础资料（scope=enterprise）落在 OSS <code>_base</code> 路径，跨标准共享一份；阶段资料按标准+阶段隔离（多标准专项方案 A）。</div>`;
+}
+function entStages(e){
+ return `<div class="card"><div class="ch"><b>阶段列表（各标准独立推进）</b><span class="pill blue">标准切换器</span><select class="sel sm" style="margin-left:4px" onchange="toast('切换标准上下文（全局状态）')"><option>ISO 13485</option><option>ISO 9001</option></select><div class="sp"></div><button class="btn sm" onclick="toast('新建阶段')">＋ 开启新阶段</button></div><div class="cb">
+ ${e.stds.map((s,si)=>`
+  <div class="card tcard" style="margin-bottom:10px" onclick="curStageIdx=${si};stageTab='t1';entView='stage';render('ent')">
+   <div class="tt"><span class="pill blue">${s}</span><span class="pill ok">${si===0&&!e.archived?'进行中':'已归档'}</span><span class="tno">${e.no}</span></div>
+   <div class="meta">阶段：${e.archived?'初审（全部归档）':'初审 · 进行中'} · 资料 ${e.files} · NC ${e.nc}</div>
+   <div style="display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--t2)"><div class="bar" style="max-width:170px"><i style="width:${e.progress}%"></i></div><span>进度 ${e.progress}%</span></div>
+   <div class="acts"><button class="btn sm" onclick="event.stopPropagation();toast('任务详情六 Tab')">查看任务</button><button class="btn sm" onclick="event.stopPropagation();toast('进入阶段详情：资料库/NC检查/报告/标准目录')">阶段详情</button></div>
+  </div>`).join('')}
+  <div class="note" style="margin-top:6px">每个标准独立阶段、独立 NC 检查、独立报告（每张证书独立）；阶段状态机 pending → in_progress → completed → closed。</div>
+ </div></div>`;
+}
+function entUsers(){
+ return `<div class="card"><div class="ch"><b>企业用户管理</b><span class="pill gray">P2 · 随协同系统上线</span></div><div class="cb p2mask" style="min-height:140px">
+  <div class="note">企业用户由审核员创建账号，可按企业/资料目录/模块授权（ent_user_permission）；NC 整改回传权限默认开启。本原型占位示意。</div>
+ </div></div>`;
+}
+function entArchives(e){
+ return `<div class="card"><div class="ch"><b>归档记录</b><span class="pill gray">归档可逆</span></div><table class="tb-t"><tr><th>时间</th><th>事件</th><th>操作人</th></tr>
+ ${e.archives.map(a=>`<tr><td style="color:var(--t2)">${a[0]}</td><td><b>${a[1]}</b></td><td style="color:var(--t2)">${a[2]}</td></tr>`).join('')}
+ </table></div>`;
+}
+/* —— 阶段详情（V1.1 新增：标准切换器 + 四 Tab：资料库/NC检查/报告/标准目录预留导出） —— */
+function stageDetail(e){
+ const std=e.stds[curStageIdx];
+ const tabs=[['t1','📁 资料库'],['t2','🔎 NC 检查'],['t3','📄 报告'],['t4','📖 标准目录','预留']];
+ return `<div class="pg-head"><h2>阶段详情 · ${std}</h2><span class="sub">${e.short} · ${e.archived?'初审（已归档）':'初审 · 进行中'}</span><div class="sp"></div>
+  <button class="btn sm" onclick="entView='detail';entDetailTab='stages';render('ent')">← 返回阶段列表</button></div>
+ <div class="tabbar">${tabs.map(x=>`<a class="${stageTab===x[0]?'on':''}" onclick="stageTab='${x[0]}';render('ent')">${x[1]}${x[2]?`<span class="n" style="background:var(--warn)">${x[2]}</span>`:''}</a>`).join('')}</div>
+ ${stageTab==='t1'?stageFiles():stageTab==='t2'?stageNc():stageTab==='t3'?stageRpt():stageStd()}`;
+}
+function stageFiles(){
+ return `<div class="card"><div class="ch"><b>企业基础资料（_base · 跨标准共享）</b><span class="pill gray">待确认 / 已归档</span></div><table class="tb-t"><tr><th>文件</th><th>状态</th><th>大小</th><th>操作</th></tr>
+ ${BASE_FILES.map(f=>`<tr><td>📄 ${f[0]}</td><td><span class="pill ${f[1].indexOf('待确认')>-1?'warn':'ok'}">${f[1]}</span></td><td style="color:var(--t2)">${f[2]}</td><td><button class="btn txt" onclick="toast('预览 / 归档到阶段资料')">预览</button><button class="btn txt" onclick="toast('确认后归档至阶段资料库')">${f[1].indexOf('待确认')>-1?'确认归档':'历史'}</button></td></tr>`).join('')}
+ </table></div>
+ <div class="card" style="margin-top:14px"><div class="ch"><b>阶段资料（按标准+阶段隔离 · 含质量预审状态）</b><div class="sp"></div>
+  <button class="btn sm" onclick="toast('打开资料上传：分片上传 → 质量预审 → 即时提取')">⬆ 上传资料</button>
+  <button class="btn sm" onclick="toast('替换后仅该文件增量重审（file_hash 判定）')">🔄 更换</button></div>
+ <table class="tb-t"><tr><th>目录</th><th>文件名</th><th>版本</th><th>提取状态</th><th>质量预审</th><th>操作</th></tr>
+ ${FILES.map(f=>`<tr><td style="color:var(--t2)">${f[0]}</td><td>📄 ${f[1]}</td><td>v${f[2]}</td><td><span class="pill ${f[4]}">${f[3]}</span></td><td><span class="pill ${f[5]==='通过'?'ok':f[5]==='警告'?'warn':'err'}">${f[5]}</span></td><td><button class="btn txt" onclick="toast('在线预览（PDF/图片双分支）')">预览</button><button class="btn txt" onclick="toast('版本链 v1→v2（file_hash 对照）')">历史</button></td></tr>`).join('')}
+ </table>
+ <div class="note" style="margin-top:10px">质量预审（P1 缺陷治理项）：上传后即时预审（完整性/可读性/敏感信息），未预审/警告/阻断状态在资料库明确展示，阻断项不进入提取。</div></div>`;
+}
+function stageNc(){
+ return `<div class="card"><div class="ch"><b>NC 台账（本阶段）</b></div><table class="tb-t"><tr><th>NC 编号</th><th>条款</th><th>严重度</th><th>状态</th><th>到期日</th><th>操作</th></tr>
+ ${NCS.map((n,i)=>`<tr><td>NC-2026-00${i+1}</td><td>${n[0]}</td><td><span class="pill ${n[1]==='major'?'err':n[1]==='minor'?'warn':'info'}">${n[1]}</span></td><td>${n[2]}</td><td>${n[1]==='major'?'09-08':'09-15'}</td><td><button class="btn txt" onclick="toast('NC 详情：整改时间线 / 证据 / 验证')">详情</button></td></tr>`).join('')}
+ </table></div>`;
+}
+function stageRpt(){
+ return `<div class="card"><div class="ch"><b>报告（本阶段 · 独立）</b><span class="pill blue">模板：ISO13485 · 初审 · CB001</span></div><div class="cb">
+  <div class="kv"><span class="k">最近报告</span><span class="v">RPT-2026-0008 · 草稿待复核（XX精密）</span></div>
+  <div style="margin-top:10px"><button class="btn sm pri" onclick="toast('跳转报告编辑：章节+数据来源面板')">进入报告编辑</button> <button class="btn sm" onclick="toast('导出 PDF/Word 已提交队列')">📤 导出</button></div>
+ </div></div>`;
+}
+function stageStd(){
+ return `<div class="card"><div class="ch"><b>标准目录</b><span class="pill gray">模板区 · 导出功能预留</span><div class="sp"></div>
+  <button class="btn sm" disabled title="标准目录导出为 P1 缺陷治理项，功能预留">📥 导出标准目录（预留）</button></div><div class="cb">
+  <div class="note y">标准目录导出为权威设计预留入口（模板预览可展示，导出按钮占位），MVP 不实现，避免与后台管理端标准管理重复。</div>
+  <div style="font-size:12.5px;color:var(--t2)">ISO 13485:2016 条款树（4 组织环境 / 5 领导作用 / 6 策划 / 7 支持 / 8 运行 / 9 绩效评价 / 10 改进）…</div>
+ </div></div>`;
+}
+/* ================= ③ 资源管理（V1.1：跨企业全局检索，原"企业资料"升级） ================= */
+function pgFiles(){
+ return `<div class="pg-head"><h2>📁 资源管理</h2><span class="sub">跨企业资料库（任意企业 / 任意标准 / 任意阶段）</span><div class="sp"></div>
+  <input class="inp" placeholder="🔍 文件名 / 企业 / 条款 / 标签" style="width:260px">
+  <select class="sel"><option>全部企业</option><option>尚龙医疗</option><option>XX精密</option><option>YY电子</option></select>
+  <select class="sel"><option>全部标准</option><option>ISO 13485</option><option>ISO 9001</option></select></div>
+ <div class="card"><table class="tb-t"><tr><th>企业</th><th>标准/阶段</th><th>文件</th><th>版本</th><th>hash</th><th>操作</th></tr>
+ ${RESOURCES.map(f=>`<tr><td>${f[0]}</td><td><span class="pill blue" style="font-size:11px">${f[1]}</span></td><td>📄 ${f[2]}</td><td>v${f[3].slice(1)}</td><td style="font-family:monospace;font-size:11.5px;color:var(--t3)">${f[4]}</td><td><button class="btn txt" onclick="toast('在线预览')">预览</button><button class="btn txt" onclick="toast('版本历史（file_hash 对照 / 增量重审判定）')">历史</button><button class="btn txt" onclick="toast('从 NC/报告任务一键跳转定位')">任务内直达</button></td></tr>`).join('')}
+ </table></div>
+ <div class="note" style="margin-top:14px">基础资料层（scope=enterprise）落在 OSS <code>_base</code> 路径，跨标准共享一份；阶段资料按标准+阶段隔离（多标准专项方案 A）。</div>`;
+}
+/* ================= ④ 消息中心（V1.1：会话 / 系统通知 / 微信推送设置预留） ================= */
+function pgMsg(){
+ return `<div class="pg-head"><h2>💬 消息中心</h2><span class="sub">会话（P2）+ 系统通知 + 推送设置</span></div>
+ <div class="tabbar"><a class="on" onclick="toast('Tab：系统通知')">系统通知</a><a onclick="toast('会话为 P2 协同系统功能，本原型占位')">会话（P2）</a><a onclick="toast('微信推送设置（预留，置灰）')">微信推送设置 <span class="n" style="background:var(--warn)">预留</span></a></div>
+ <div class="card"><div class="ch"><b>系统通知</b><span class="pill blue">3 条未读</span><div class="sp"></div><button class="btn sm" onclick="toast('已全部标记为已读')">全部已读</button></div><div class="cb" style="padding:4px 0">
+ ${MSGS.map(m=>`<div class="msg ${m[0]?'unread':''}" onclick="toast('已跳转对应任务详情')"><div class="mi" style="background:${m[2].split(';')[0]}">${m[1]}</div><div style="flex:1;min-width:0"><div class="mt">${m[3]}</div><div class="md">${m[4]}</div><div class="ms">${m[5]}</div></div></div>`).join('')}
+ </div></div>
+ <div class="card" style="margin-top:14px"><div class="ch"><b>微信推送设置</b><span class="pill gray">预留（P3 微信绑定后可用）</span></div><div class="cb">
+  <div class="setrow"><div class="sd"><div class="st">微信服务通知</div><div class="ss">任务完成 / 失败 / 待复核 / NC 逾期等即时推送（需先绑定微信，P3）</div></div><div class="sw" onclick="toast('微信推送为预留功能，未绑定微信不可开启')"></div></div>
+ </div></div>`;
+}
+/* ================= ⑤ 个人中心（V1.1：个人信息 / 账户 / 设置 / 系统日志 / 权限管理） ================= */
+function pgProfile(){
+ return `<div class="pg-head"><h2>👤 个人中心</h2><span class="sub">个人信息 · 账户 · 设置 · 系统日志</span></div>
+ <div class="row">
+ <div class="card" style="flex:1;min-width:400px"><div class="ch"><b>个人信息</b></div><div class="cb">
+  <div class="kv"><span class="k">姓名</span><span class="v">王审核 <button class="btn txt" onclick="toast('编辑')">编辑</button></span></div>
+  <div class="kv"><span class="k">手机号</span><span class="v">138****8888</span></div>
+  <div class="kv"><span class="k">所属机构</span><span class="v">CB001 · 四川映智汇认证（注册后不可更换）</span></div>
+  <div class="kv"><span class="k">审核资质</span><span class="v"><span class="pill blue">QMS · 高级</span> <span class="pill blue">EMS · 中级</span>（cert_auditor_profile.qualification）</span></div>
+  <div class="kv"><span class="k">微信绑定</span><span class="v"><button class="btn sm" onclick="toast('微信绑定为 P3 预留功能（注册 Step3 预留步骤位 + 本入口），开发中')">绑定微信（预留）</button></span></div>
+ </div></div>
+ <div class="card" style="flex:1;min-width:400px"><div class="ch"><b>账户（次数由后台配置下发）</b></div><div class="cb">
+  <div style="display:flex;gap:24px"><div><div style="font-size:12px;color:var(--t2)">免费剩余</div><div style="font-size:26px;font-weight:700;color:var(--ok)">${QUOTA.free} <span style="font-size:13px">次</span></div></div>
+  <div><div style="font-size:12px;color:var(--t2)">充值剩余</div><div style="font-size:26px;font-weight:700">${QUOTA.recharge} <span style="font-size:13px">次</span></div></div></div>
+  <button class="btn pri" style="margin-top:12px" onclick="toast('充值为预留入口：套餐档位由后台配置下发（100元=12次 / 200元=25次 仅为示例）')">充值（预留）</button>
+  <div style="margin-top:14px"><b style="font-size:13px">消费记录</b> <span class="pill gray">占位</span><div class="empty" style="padding:14px">暂无消费记录（P2 计费上线后展示）</div></div>
+ </div></div></div>
+ <div class="card" style="margin-top:14px"><div class="ch"><b>设置</b></div><div class="cb" style="padding-top:4px">
+  ${[['任务完成','任务队列执行完成通知',1],['任务失败','执行失败与重试提醒',1],['待复核','检查完成待复核提醒',1],['NC 整改逾期','整改到期/逾期升级',1],['资料待确认','企业上传资料待确认',1],['余额不足','剩余次数 ≤3 弱提醒（P2）',0]].map(n=>`<div class="setrow"><div class="sd"><div class="st">${n[0]}</div><div class="ss">${n[1]}</div></div><div class="sw ${n[2]?'on':''}" onclick="this.classList.toggle('on');toast('已保存（sys_notify_config）')"></div></div>`).join('')}
+  <div class="setrow"><div class="sd"><div class="st">修改密码</div><div class="ss">短信验证码验证后重置</div></div><button class="btn sm" onclick="toast('发送验证码 → 重置密码')">修改</button></div>
+ </div></div>
+ <div class="card" style="margin-top:14px"><div class="ch"><b>系统日志</b><span class="pill gray">操作留痕 + 队列执行（不可篡改、可回溯）</span></div><table class="tb-t"><tr><th>时间</th><th>操作</th><th>对象</th><th>详情</th></tr>
+ ${[['09-01 09:12','提交任务','NC-2026-0031','尚龙医疗 · 初审 · NC 检查'],['09-01 09:40','复核确认','检查项 4.1','原始结果保留 · 操作人王审核'],['08-31 17:40','报告签发','RPT-2026-0008','签发后锁定只读'],['08-31 16:02','标记 NC','NC-2026-0012','7.2 能力 · Minor · AI 润色后确认'],['08-30 11:15','资料上传','灭菌验证报告.pdf','企业上传 → 待确认'],['08-29 10:00','企业归档','ENT-2026-0003','校验无进行中任务通过']].map(l=>`<tr><td style="color:var(--t2);white-space:nowrap">${l[0]}</td><td><b>${l[1]}</b></td><td style="font-family:monospace">${l[2]}</td><td style="color:var(--t2)">${l[3]}</td></tr>`).join('')}
+ </table></div>
+ <div class="card" style="margin-top:14px"><div class="ch"><b>权限管理（企业用户）</b><span class="pill gray">P2 · 随协同系统上线</span></div><div class="cb p2mask" style="min-height:100px">
+  <div class="note">企业用户由审核员创建账号，可按企业/资料目录/模块授权（ent_user_permission）；NC 整改回传权限默认开启。</div>
+ </div></div>`;
+}
+/* ================= 任务详情（六 Tab） ================= */
+function pgTaskDetail(t){
+ const e=ENTERPRISES[t.ent];
+ const tabs=[['t1','🏢 企业信息'],['t2','📁 资料管理'],['t3','⚡ 执行情况'],['t4','🔎 检查结论',(t.status==='review'?3:0)],['t5','📄 报告'],['t6','📖 标准条款']];
+ return `<div class="pg-head">
+   <button class="btn sm" onclick="go('workspace')">← 返回</button>
+   <h2>${t.no}</h2>${pillOf(t.status)}
+   <span class="sub">${e.name} · ${e.stds.map(s=>`<span class="pill blue">${s}</span>`).join(' ')} · ${e.phase}</span>
+   <div class="sp"></div>
+   <button class="btn" onclick="toast('取消关注成功，任务仍在工作平台')">取消关注</button>
+   <button class="btn" onclick="expMenu()">📦 打包导出 ▾</button>
+   <button class="btn pri" onclick="wizard()">＋ 发起新任务</button>
+ </div>
+ ${t.status==='fail'?`<div class="note y">⚠ 执行失败：${t.err}　<button class="btn sm pri" onclick="toast('已重新入队（不重复扣次）')">一键重试</button>　<button class="btn sm" onclick="toast('已提交人工排查工单')">转人工排查</button></div>`:''}
+ ${t.status==='review'?`<div class="note">任务已完成自动检查，共 <b>3 项待复核</b>。自动结果必须经复核后方可生效（报告生成仅引用已确认字段）。</div>`:''}
+ <div class="tabbar">${tabs.map(x=>`<a class="${curTab===x[0]?'on':''}" onclick="curTab='${x[0]}';render('detail')">${x[1]}${x[2]?`<span class="n">${x[2]}</span>`:''}</a>`).join('')}</div>
+ <div class="tabc ${curTab==='t1'?'on':''}">${tabEnt(t)}</div>
+ <div class="tabc ${curTab==='t2'?'on':''}">${tabFiles()}</div>
+ <div class="tabc ${curTab==='t3'?'on':''}">${tabTrace(t)}</div>
+ <div class="tabc ${curTab==='t4'?'on':''}">${tabNc()}</div>
+ <div class="tabc ${curTab==='t5'?'on':''}">${tabRpt()}</div>
+ <div class="tabc ${curTab==='t6'?'on':''}">${tabClause()}</div>`;
+}
+function tabEnt(t){
+ const e=ENTERPRISES[t.ent];
+ return `<div class="row"><div class="card" style="flex:1.4;min-width:420px"><div class="ch"><b>企业基本信息</b><span class="pill blue">${e.no}</span></div><div class="cb">
+  <div class="kv"><span class="k">企业全称</span><span class="v">${e.name}</span></div>
+  <div class="kv"><span class="k">统一信用代码</span><span class="v">91130600MA0D1XXXXX</span></div>
+  <div class="kv"><span class="k">认证范围</span><span class="v">${e.cert}</span></div>
+  <div class="kv"><span class="k">绑定标准</span><span class="v">${e.stds.map(s=>`<span class="pill blue">${s}</span>`).join(' ')}</span></div>
+  <div class="kv"><span class="k">当前阶段</span><span class="v">${e.phase} · 进度 ${e.progress}%</span></div>
+  <div class="kv"><span class="k">资料齐套</span><span class="v">${e.files} · ${e.nc}</span></div>
+ </div></div>
+ <div class="card" style="flex:1;min-width:360px"><div class="ch"><b>联系方式</b><span class="pill gray">高频</span><div class="sp"></div><button class="btn sm" onclick="toast('新增联系人（ent_enterprise_contact）')">＋ 新增</button></div><div class="cb" style="padding-top:6px">
+  ${e.contacts.map(c=>`<div class="setrow"><div class="sd"><div class="st">${c.n}${c.prim?' <span class="pill ok">主联系人</span>':''}<span style="font-weight:400;font-size:12px;color:var(--t2)"> · ${c.r}</span></div><div class="ss">📱 ${c.p}${c.e?' · ✉ '+c.e:''}</div></div><div style="display:flex;gap:4px"><button class="btn txt" onclick="toast('tel:${c.p}')">📞</button><button class="btn txt" onclick="toast('已复制 ${c.p}')">复制</button></div></div>`).join('')}
+  <div style="font-size:11.5px;color:var(--t3);margin-top:8px">信用代码允许为空，查重仅弱提示（辅助工具定位，决策 D1）</div>
+ </div></div></div>`;
+}
+function tabFiles(){
+ return `<div class="card"><div class="ch"><b>企业基础资料（_base · 跨标准共享）</b><span class="pill gray">待确认 / 已归档</span></div><table class="tb-t"><tr><th>文件</th><th>状态</th><th>操作</th></tr>
+ ${BASE_FILES.map(f=>`<tr><td>📄 ${f[0]}</td><td><span class="pill ${f[1].indexOf('待确认')>-1?'warn':'ok'}">${f[1]}</span></td><td><button class="btn txt" onclick="toast('确认后归档至阶段资料库')">${f[1].indexOf('待确认')>-1?'确认归档':'历史'}</button></td></tr>`).join('')}
+ </table></div>
+ <div class="card" style="margin-top:14px"><div class="ch"><b>阶段资料（未归档可上传 / 更换 · 含质量预审状态）</b><div class="sp"></div>
+  <button class="btn sm" onclick="toast('打开资料上传：分片上传 → 质量预审 → 即时提取')">⬆ 上传资料</button>
+  <button class="btn sm" onclick="toast('替换后仅该文件增量重审（file_hash 判定）')">🔄 更换</button></div>
+ <table class="tb-t"><tr><th>目录</th><th>文件名</th><th>版本</th><th>提取状态</th><th>质量预审</th><th>操作</th></tr>
+ ${FILES.map(f=>`<tr><td style="color:var(--t2)">${f[0]}</td><td>📄 ${f[1]}</td><td>v${f[2]}</td><td><span class="pill ${f[4]}">${f[3]}</span></td><td><span class="pill ${f[5]==='通过'?'ok':f[5]==='警告'?'warn':'err'}">${f[5]}</span></td><td><button class="btn txt" onclick="toast('在线预览（PDF/图片双分支）')">预览</button><button class="btn txt" onclick="toast('版本链 v1→v2（file_hash 对照）')">历史</button></td></tr>`).join('')}
+ </table>
+ <div class="note" style="margin-top:10px">质量预审（权威设计 P1 治理项）：上传后即时预审，未预审/警告/阻断状态明确展示，阻断项不进入提取。</div></div>`;
+}
+function tabTrace(t){
+ const nodes=[['ok','📥 预处理','文件格式转换 · 14 个文件 · 8s'],['ok','🧩 Skill 字段提取','OCR / Word 表格 / PDF 提取 · 含位置溯源 · 42s'],['ok','🏷️ 标签落库','iso13485.stage1.* 共 38 个字段'],['run','⚙️ 规则引擎执行','N-04：管理评审日期有效性检查（12 项规则完成 9）'],['wait','📊 结果汇总','排队中'],['wait','🔔 通知','排队中']];
+ return `<div class="row"><div class="card" style="flex:1.5;min-width:520px"><div class="ch"><b>工作流执行轨迹</b><span class="pill run"><span class="spin"></span>执行中</span><div class="sp"></div><span style="font-size:12px;color:var(--t2)">wf_execution_task · wf_node_execution</span></div><div class="cb">
+ ${nodes.map(n=>`<div class="node ${n[0]}"><div class="nd">${n[0]==='ok'?'✓':n[0]==='run'?'◉':'·'}</div><div class="nb"><div class="nh"><b>${n[1]}</b>${n[0]==='run'?'<span class="pill run">RUNNING</span>':n[0]==='ok'?'<span class="ndt">✓ 完成</span>':''}</div><div class="nc">${n[2]}</div></div></div>`).join('')}
+ </div></div>
+ <div class="card" style="flex:1;min-width:340px"><div class="ch"><b>执行概览</b></div><div class="cb">
+  <div class="kv"><span class="k">任务编号</span><span class="v" style="font-family:monospace">${t.no}</span></div>
+  <div class="kv"><span class="k">队列</span><span class="v">yzh 队列框架 · 优先级普通</span></div>
+  <div class="kv"><span class="k">开始时间</span><span class="v">2026-09-01 09:12:04</span></div>
+  <div class="kv"><span class="k">已耗时</span><span class="v">02:18（进行中）</span></div>
+  <div class="kv"><span class="k">AI 调用</span><span class="v">11 次 · tokens 48.2k · ¥0.61</span></div>
+  <div style="margin-top:10px"><button class="btn sm" onclick="toast('二次确认后已终止任务')">终止任务</button> <button class="btn sm" onclick="toast('已刷新（MVP 轮询 60s + visibilitychange 刷新）')">刷新</button></div>
+ </div></div></div>`;
+}
+function tabNc(){
+ const items=[['7.2 能力','minor','焊接岗位人员（3 名）未能提供培训记录，无法证明其具备相应能力。','培训档案.xlsx → Sheet2 B5:D8 · 可信度 92%'],['7.5 成文信息','observation','程序文件汇编部分文件未标注现行版本号。','程序文件汇编.docx → P12 L3-L9 · 可信度 78%'],['8.3 设计开发','major','设计变更 ECN-0042 记录缺少评审签字。','设计变更台账.xlsx → Sheet1 C15 · 可信度 88%']];
+ return `<div class="card"><div class="ch"><b>自动检查结论 · 复核</b><span class="pill warn">3 待复核</span><span class="pill ok">11 已确认</span><div class="sp"></div>
+  <button class="btn sm" onclick="toast('已批量确认全部通过项')">一键确认通过项</button>
+  <button class="btn sm pri" onclick="toast('导出 NC 检查项（Excel）已提交队列')">📥 导出检查项</button></div><div class="cb">
+ ${items.map(i=>`<div class="rv ${i[1]==='major'?'err':'warn'}"><div class="rh"><b>${i[0]}</b><span class="pill ${i[1]==='major'?'err':i[1]==='minor'?'warn':'info'}">${{major:'严重 Major',minor:'一般 Minor',observation:'观察项'}[i[1]]}</span><span class="pill gray">待复核</span><div class="sp"></div>
+   <button class="btn sm" onclick="toast('已确认（原始结果保留留痕）')">✓ 确认</button>
+   <button class="btn sm" onclick="toast('打开修正（记录：原值→新值/操作人/时间）')">✎ 修正</button>
+   <button class="btn sm" onclick="toast('调整严重度（major/minor/observation 下拉）')">调整严重度</button>
+   <button class="btn sm" onclick="toast('补充证据（关联文件/截图/说明）')">补充证据</button>
+   <button class="btn sm pri" onclick="toast('已标记 NC（带入条款+证据，AI 润色描述）')">标记 NC</button>
+   <button class="btn sm" onclick="toast('打开企业资料库（定位相关源文件）')">打开企业资料库</button></div>
+  <div style="margin-top:6px">${i[2]}</div>
+  <div class="src" onclick="toast('新窗口打开源文件 → 滚动定位 → 高亮')">📎 来源：${i[3]}　<span style="color:var(--primary)">点击溯源定位 →</span></div></div>`).join('')}
+ <div class="rv ok"><div class="rh"><b>4.1 组织环境</b><span class="pill ok">符合</span><div class="sp"></div><button class="btn sm" disabled>已确认 09-01 09:40</button></div><div style="margin-top:6px;color:var(--t2)">质量手册 4.1 章节与环境因素识别表内容一致。</div><div class="src">📎 来源：质量手册.docx → P5 L2-L14 · 可信度 95%</div></div>
+ </div></div>
+ <div class="card" style="margin-top:14px"><div class="ch"><b>NC 台账（本阶段）</b></div><table class="tb-t"><tr><th>NC 编号</th><th>条款</th><th>严重度</th><th>状态</th><th>到期日</th><th>操作</th></tr>
+ ${NCS.map((n,i)=>`<tr><td>NC-2026-00${i+1}</td><td>${n[0]}</td><td><span class="pill ${n[1]==='major'?'err':n[1]==='minor'?'warn':'info'}">${n[1]}</span></td><td>${n[2]}</td><td>${n[1]==='major'?'09-08':'09-15'}</td><td><button class="btn txt" onclick="toast('NC 详情：整改时间线 / 证据 / 验证')">详情</button></td></tr>`).join('')}
+ </table></div>`;
+}
+function tabRpt(){
+ return `<div class="row"><div class="card" style="flex:1.6;min-width:560px"><div class="ch"><b>审核报告（草稿 · 待复核）</b><span class="pill blue">模板：ISO13485 · 初审 · CB001</span><div class="sp"></div><button class="btn sm" onclick="toast('已保存草稿')">保存</button><button class="btn sm pri" onclick="toast('签发后锁定只读（修订留痕保留）')">复核签发</button></div><div class="cb">
+  <div style="border:1px dashed var(--bd);border-radius:6px;padding:12px;margin-bottom:10px"><b>一、审核概况</b> <span class="pill gray">AI 生成 · 可信度 85%</span><div style="color:var(--t2);margin-top:4px">本次审核依据 ISO 13485:2016，覆盖灭菌设备的开发与生产过程……</div></div>
+  <div style="border:1px dashed var(--bd);border-radius:6px;padding:12px;margin-bottom:10px"><b>二、审核发现</b> <span class="pill gray">AI 生成 · 可信度 78%</span><div style="color:var(--t2);margin-top:4px">共发现 3 项不符合（1 严重 / 1 一般 / 1 观察项）……</div></div>
+  <div style="border:1px solid var(--primary);border-radius:6px;padding:12px"><b>三、审核结论</b> <span class="pill blue">手动编辑区</span><div style="color:var(--t2);margin-top:4px">[建议在 NC 整改验证完成后推荐认证……]</div></div>
+ </div></div>
+ <div class="card" style="flex:1;min-width:330px"><div class="ch"><b>数据来源面板</b></div><div class="cb">
+  <div class="kv"><span class="k">检查项汇总</span><span class="v">共 14 · 符合 11 · 不符合 3</span></div>
+  <div class="kv"><span class="k">NC 摘要</span><span class="v">7.2 / 7.5 / 8.3</span></div>
+  <div class="kv"><span class="k">引用文件</span><span class="v">6 份（可点击溯源）</span></div>
+  <button class="btn sm" style="margin-top:8px" onclick="toast('插入选中数据到正文光标处')">插入选中内容</button>
+  <div style="margin-top:14px"><button class="btn" onclick="toast('导出 Word 已提交队列')">📤 Word</button> <button class="btn" onclick="toast('导出 PDF 已提交队列')">📤 PDF</button></div>
+ </div></div></div>`;
+}
+function tabClause(){
+ return `<div class="row"><div class="card" style="width:340px;flex-shrink:0"><div class="ch"><b>ISO 13485:2016 条款树</b></div><div class="cb" style="padding-top:8px"><div class="tree">
+ ${CLAUSE.map(c=>`<div class="tn" onclick="const k=this.nextElementSibling;k.style.display=k.style.display==='none'?'':'none'"><span>▾</span><b>${c.c}</b> ${c.t}</div><div class="kids">${c.kids.map(k=>`<div class="tn ${k.on?'on':''}" onclick="toast('定位条款 ${k.c} ${k.t} 原文')">${k.c} ${k.t}${k.on?' <span class="pill warn" style="font-size:10px">NC</span>':''}</div>`).join('')}</div>`).join('')}
+ </div></div></div>
+ <div class="card" style="flex:1"><div class="ch"><b>7.2 能力</b><span class="pill warn">关联 1 项 NC</span><div class="sp"></div><span style="font-size:12px;color:var(--t3)">页面内直接查看，不跳转外部文件</span></div><div class="cb" style="font-size:13.5px;color:var(--t2);line-height:1.9">
+  <p><b>7.2.1</b> 组织应：a) 确定其控制下的人员所需具备的能力，这些人员从事的工作影响质量管理体系有效性和符合性；b) 确保这些人员基于适当的教育、培训、技能和经验具备能力……</p>
+  <p><b>7.2.2</b> 组织应对培训的有效性进行评价并保持记录（见 4.2.5）。</p>
+  <div class="note" style="margin-top:12px">本条款触发规则：R-13485-7.2.1-TRAIN · <a onclick="toast('查看规则工作流 DAG（后台规则库）')">点击查看工作流配置 →</a></div>
+ </div></div></div>`;
+}
+function expMenu(){
+ modal('📦 打包导出',`<div class="grid" style="grid-template-columns:1fr 1fr">
+ <div class="pick" onclick="toast('打包企业上传资料（zip）已提交队列');closeModal()"><div><b>打包企业上传资料</b><div class="pd">本任务范围内企业上传的全部文件（zip · 异步队列）</div></div></div>
+ <div class="pick" onclick="toast('打包标准文档已提交队列');closeModal()"><div><b>打包标准文档</b><div class="pd">该标准（ISO 13485）标准目录模板区文件</div></div></div>
+ <div class="pick" onclick="toast('导出 NC 检查项（Excel）已提交队列');closeModal()"><div><b>导出 NC 检查项</b><div class="pd">条款 / 严重度 / 结论 / 证据 / 状态</div></div></div>
+ <div class="pick" onclick="toast('导出报告已提交队列');closeModal()"><div><b>导出报告</b><div class="pd">PDF / Word（报告需已生成）</div></div></div></div>
+ <div class="note" style="margin-top:14px">导出走 yzh 队列框架，完成后右上角消息通知；系统日志可查执行轨迹；超 2GB 拒绝并提示分批。</div>`);
+}
+/* ================= 新建任务向导（V1.1：新增企业 Step1 基本信息，免费额度/档位不写死） ================= */
+let wzStep=1,wzEnt=0,wzStds=[0];
+function wizard(entMode){wzStep=1;wzStds=[0];renderWz(entMode)}
+function renderWz(entMode){
+ const stdOpts=['ISO 9001:2015 · 质量管理','ISO 14001:2015 · 环境管理','ISO 45001:2018 · 职业健康安全','ISO 13485:2016 · 医疗器械'];
+ let body='';
+ if(entMode){
+  if(wzStep===1){body=`<div class="note">新建企业（企业档案为审核员私有，create_id 过滤）</div>
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div style="grid-column:1/-1"><div style="font-size:12.5px;color:var(--t2);margin-bottom:5px">企业名称 *</div><input class="inp" style="width:100%" placeholder="请输入企业全称"></div>
+    <div><div style="font-size:12.5px;color:var(--t2);margin-bottom:5px">统一信用代码</div><input class="inp" style="width:100%" placeholder="可空，查重仅弱提示（决策 D1）"></div>
+    <div><div style="font-size:12.5px;color:var(--t2);margin-bottom:5px">认证范围</div><input class="inp" style="width:100%" placeholder="如：精密金属零件加工"></div>
+    <div><div style="font-size:12.5px;color:var(--t2);margin-bottom:5px">联系人</div><input class="inp" style="width:100%" placeholder="姓名"></div>
+    <div><div style="font-size:12.5px;color:var(--t2);margin-bottom:5px">联系电话</div><input class="inp" style="width:100%" placeholder="手机号"></div>
+   </div>`;}
+  if(wzStep===2){body=`<div class="note">选择认证标准（可多选 = 多标准并行；详见《多标准认证-结合审核-功能设计-V1》）</div>
+   ${stdOpts.map((s,i)=>`<div class="pick ${wzStds.includes(i)?'on':''}" style="margin-bottom:8px" onclick="wzStds.includes(${i})?wzStds=wzStds.filter(x=>x!==${i}):wzStds.push(${i});renderWz(${entMode?1:0})"><div class="pc">${wzStds.includes(i)?'✓':''}</div><div><b>${s}</b><div class="pd">机构 CB001 可用 · 已配置 ${5+i*3} 条检查规则 · ${2+i} 个报告模板</div></div></div>`).join('')}
+   <div class="note y">⚠ 各标准将独立创建阶段、独立执行 NC 检查、独立生成报告（每张证书独立）。</div>`;}
+  if(wzStep===3){body=`<div class="note">开启阶段（企业建档后首阶段）</div>
+   ${['初审阶段','监督审核（一监）','监督审核（二监）','再认证'].map((p,i)=>`<div class="pick ${i===0?'on':''}" style="margin-bottom:8px"><div class="pc">${i===0?'✓':''}</div>${p}</div>`).join('')}
+   <div class="note">提交即完成建档并返回任务入口（不阻塞）；MVP 阶段不计费（P2 上线扣次，免费额度/档位由后台配置下发）。</div>`;}
+ }else{
+  if(wzStep===1){body=`<div class="note">选择企业（企业档案为审核员私有，create_id 过滤）</div>
+   ${ENTERPRISES.map((e,i)=>`<div class="pick ${wzEnt===i?'on':''}" style="margin-bottom:8px" onclick="wzEnt=${i};renderWz(${entMode?1:0})"><div class="pc">${wzEnt===i?'✓':''}</div><div><b>${e.name}</b><div class="pd">${e.no} · ${e.cert}</div></div></div>`).join('')}
+   <div class="pick" style="border-style:dashed" onclick="wizard(1)"><div class="pc">＋</div><b>新建企业…</b></div>`;}
+  if(wzStep===2){body=`<div class="note">选择认证标准（可多选 = 多标准并行；三体系为市场主流。详见《多标准认证-结合审核-功能设计-V1》）</div>
+   ${stdOpts.map((s,i)=>`<div class="pick ${wzStds.includes(i)?'on':''}" style="margin-bottom:8px" onclick="wzStds.includes(${i})?wzStds=wzStds.filter(x=>x!==${i}):wzStds.push(${i});renderWz(${entMode?1:0})"><div class="pc">${wzStds.includes(i)?'✓':''}</div><div><b>${s}</b><div class="pd">机构 CB001 可用 · 已配置 ${5+i*3} 条检查规则 · ${2+i} 个报告模板</div></div></div>`).join('')}
+   <div class="note y">⚠ 各标准将独立创建阶段、独立执行 NC 检查、独立生成报告（每张证书独立）。</div>`;}
+  if(wzStep===3){body=`<div class="grid" style="grid-template-columns:1fr 1fr">
+   <div><div style="font-size:13px;font-weight:600;margin-bottom:8px">选择阶段</div>
+    ${['初审阶段','监督审核（一监）','监督审核（二监）','再认证'].map((p,i)=>`<div class="pick ${i===0?'on':''}" style="margin-bottom:8px"><div class="pc">${i===0?'✓':''}</div>${p}</div>`).join('')}</div>
+   <div><div style="font-size:13px;font-weight:600;margin-bottom:8px">任务类型</div>
+    <div class="pick on" style="margin-bottom:8px"><div class="pc">✓</div><div><b>NC 检查</b><div class="pd">上传资料 → 质量预审 → 提取 → 规则引擎 → 复核</div></div></div>
+    <div class="pick" style="margin-bottom:14px"><div class="pc"></div><div><b>报告生成</b><div class="pd">从已复核字段组装报告草稿</div></div></div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px">审核范围（可选）</div>
+    <textarea class="inp" style="width:100%;height:52px" placeholder="如：覆盖设计开发与生产全过程条款 4-8"></textarea>
+   </div></div>
+   <div class="note">提交即返回任务号（不阻塞）；新任务自动置为当前任务（关注）。MVP 阶段不计费（P2 上线扣次，免费额度/档位由后台配置下发）。</div>`;}
+ }
+ modal(entMode?'新建企业':'新建任务',`
+  <div class="steps">${(entMode?['基本信息','选择标准','开启阶段']:['选择企业','选择标准','阶段与类型']).map((s,i)=>`<div class="step ${wzStep>i+1?'done':wzStep===i+1?'on':''}"><div class="sn">${wzStep>i+1?'✓':i+1}</div><div class="sl">${s}</div></div>`).join('')}</div>${body}`,
+  `${wzStep>1?'<button class="btn" onclick="wzStep--;renderWz('+(entMode?1:0)+')">上一步</button>':''}
+   ${wzStep<3?'<button class="btn pri" onclick="wzStep++;renderWz('+(entMode?1:0)+')">下一步</button>':'<button class="btn pri" onclick="closeModal();toast(\'任务已提交队列 · NC-2026-0032 · 已自动关注\')">提交</button>'}`);
+}
+</script>
+<div class="ver" style="position:fixed;right:16px;bottom:8px;background:rgba(255,255,255,.85);border-radius:6px;padding:4px 10px;z-index:5">映智汇·审核员端 交互原型 V1.1 · 对齐《审核员端功能设计-V1》(V1.1) 与《审核员端界面设计-页面结构-V1》 · 2026-09-01 修订（企业维度导航 / 工作台 / 企业·阶段详情 / 预留入口）</div>
+</body>
+</html>

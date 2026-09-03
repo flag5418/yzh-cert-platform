@@ -9,59 +9,70 @@
 
     <!-- 统一滚动区域：特殊节点 + 动态 Skill -->
     <div class="skill-scroll">
-      <!-- 特殊节点（内置，不落表）—— 排除 start（自动创建） -->
-      <div class="special-section">
-        <div class="section-label">控制流节点</div>
-        <div
-          v-for="sp in specialNodesForPanel"
-          :key="sp.classCode"
-          class="skill-item"
-          draggable="true"
-          @dragstart="onDragStart($event, sp)"
-          @click="addNode(sp)"
-        >
-          <span class="skill-dot" :style="{ background: sp.color }"></span>
-          <span class="skill-name">{{ sp.className }}</span>
-          <span class="skill-code">{{ sp.classCode }}</span>
+      <!-- 控制流节点（内置） -->
+      <div v-if="specialNodesForPanel.length > 0" class="skill-category">
+        <div class="category-header">
+          <span class="cat-dot" style="background: #64748b"></span>
+          <span class="category-name">控制流节点</span>
+          <span class="category-count">{{ specialNodesForPanel.length }}</span>
+        </div>
+        <div class="skill-list">
+          <div
+            v-for="sp in specialNodesForPanel"
+            :key="sp.classCode"
+            class="skill-panel-item"
+            draggable="true"
+            @dragstart="onDragStart($event, sp)"
+            @click="addNode(sp)"
+          >
+            <div class="skill-dot" :style="{ background: sp.color }">
+              <el-icon v-if="sp.classCode === 'start'"><IconPlay /></el-icon>
+              <el-icon v-else-if="sp.classCode === 'end'"><IconSwitchButton /></el-icon>
+              <el-icon v-else-if="sp.classCode === 'branch'"><IconShare /></el-icon>
+              <el-icon v-else-if="sp.classCode === 'ai_node'"><IconCpu /></el-icon>
+              <span v-else>{{ sp.className.charAt(0) }}</span>
+            </div>
+            <span class="skill-name">{{ sp.className }}</span>
+          </div>
         </div>
       </div>
 
       <!-- Skill 分类（动态） -->
       <div class="skill-categories">
-      <div
-        v-for="cat in filteredCategories"
-        :key="cat.categoryCode"
-        class="skill-category"
-      >
-        <div class="category-header" @click="cat.collapsed = !cat.collapsed">
-          <span class="cat-dot" :style="{ background: cat.color || '#409EFF' }"></span>
-          <span class="category-name">{{ cat.categoryName }}</span>
-          <span class="category-count">{{ cat.skills.length }}</span>
-        </div>
-        <div v-show="!cat.collapsed" class="skill-list">
-          <div
-            v-for="skill in cat.skills"
-            :key="skill.skillCode"
-            class="skill-item"
-            draggable="true"
-            @dragstart="onDragStart($event, skill)"
-            @click="addNode(skill)"
-          >
-            <span class="skill-dot" :style="{ background: cat.color || '#409EFF' }"></span>
-            <span class="skill-name">{{ skill.skillName }}</span>
-            <span class="skill-code">{{ skill.skillCode }}</span>
+        <div v-for="cat in filteredCategories" :key="cat.categoryCode" class="skill-category">
+          <div class="category-header" @click="cat.collapsed = !cat.collapsed">
+            <span class="cat-dot" :style="{ background: cat.color || '#409EFF' }"></span>
+            <span class="category-name">{{ cat.categoryName }}</span>
+            <span class="category-count">{{ cat.skills.length }}</span>
+          </div>
+          <div v-show="!cat.collapsed" class="skill-list">
+            <div
+              v-for="skill in cat.skills"
+              :key="skill.skillCode"
+              class="skill-panel-item"
+              draggable="true"
+              @dragstart="onDragStart($event, skill)"
+              @click="addNode(skill)"
+            >
+              <div class="skill-dot" :style="{ background: cat.color || '#409EFF' }">
+                {{ skill.skillName.charAt(0) }}
+              </div>
+              <span class="skill-name">{{ skill.skillName }}</span>
+            </div>
           </div>
         </div>
-      </div>
-        <div v-if="!filteredCategories.length" class="panel-empty">暂无 Skill（请在 Skill 管理中维护）</div>
+        <div v-if="!filteredCategories.length" class="panel-empty">
+          暂无 Skill（请在 Skill 管理中维护）
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
 import { SPECIAL_NODES } from '@/views/cert/Standard/WorkflowDesigner/specialNodes.js'
+import { IconCpu, IconPlay, IconShare, IconSwitchButton } from '@/yzh/icons'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
   /** api/skill/query-nodes 返回的启用 Skill（含 category） */
@@ -76,7 +87,9 @@ const searchText = ref('')
 
 // 特殊节点从统一元数据导入
 // 排除 start（自动创建）和 loop（已废弃）
-const specialNodesForPanel = SPECIAL_NODES.filter(n => n.classCode !== 'start' && n.classCode !== 'loop')
+const specialNodesForPanel = SPECIAL_NODES.filter(
+  (n) => n.classCode !== 'start' && n.classCode !== 'loop'
+)
 
 const categoryState = ref({})
 
@@ -103,8 +116,8 @@ const categoryMap = computed(() => {
     result.push(groups[code])
   }
   result.sort((a, b) => {
-    const ao = props.categories.find(c => c.categoryCode === a.categoryCode)?.sortOrder ?? 99
-    const bo = props.categories.find(c => c.categoryCode === b.categoryCode)?.sortOrder ?? 99
+    const ao = props.categories.find((c) => c.categoryCode === a.categoryCode)?.sortOrder ?? 99
+    const bo = props.categories.find((c) => c.categoryCode === b.categoryCode)?.sortOrder ?? 99
     return ao - bo
   })
   return result
@@ -114,14 +127,15 @@ const filteredCategories = computed(() => {
   if (!searchText.value) return categoryMap.value
   const term = searchText.value.toLowerCase()
   return categoryMap.value
-    .map(cat => ({
+    .map((cat) => ({
       ...cat,
-      skills: cat.skills.filter(s =>
-        (s.skillName || '').toLowerCase().includes(term) ||
-        (s.skillCode || '').toLowerCase().includes(term)
+      skills: cat.skills.filter(
+        (s) =>
+          (s.skillName || '').toLowerCase().includes(term) ||
+          (s.skillCode || '').toLowerCase().includes(term)
       )
     }))
-    .filter(cat => cat.skills.length > 0)
+    .filter((cat) => cat.skills.length > 0)
 })
 
 function onDragStart(event, item) {
@@ -134,20 +148,106 @@ function addNode(item) {
 </script>
 
 <style scoped lang="less">
-.skill-panel { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
-.panel-title { padding: 10px 12px; font-size: 14px; font-weight: 600; border-bottom: 1px solid #f0f0f0; flex-shrink: 0; }
-.skill-search { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; flex-shrink: 0; }
-.skill-scroll { flex: 1; overflow-y: auto; min-height: 0; }
-.special-section { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
-.section-label { font-size: 12px; color: #909399; margin-bottom: 6px; }
-.skill-categories { padding: 4px 0; }
-.category-header { display: flex; align-items: center; gap: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px; font-weight: 600; color: #606266; }
-.cat-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.category-count { margin-left: auto; font-size: 11px; color: #c0c4cc; }
-.skill-item { display: flex; align-items: center; gap: 6px; padding: 6px 12px 6px 24px; cursor: pointer; font-size: 13px; color: #606266; transition: background .15s; }
-.skill-item:hover { background: #ecf5ff; }
-.skill-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-.skill-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.skill-code { font-size: 11px; color: #c0c4cc; }
-.panel-empty { padding: 20px; text-align: center; color: #c0c4cc; font-size: 12px; }
+.skill-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: #fff;
+}
+.panel-title {
+  padding: 24px 20px;
+  font-size: 18px;
+  font-weight: 800;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
+  color: var(--yzh-color-text-primary);
+}
+.skill-search {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
+}
+.skill-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 12px 0;
+}
+.special-section {
+  padding: 0 0 16px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+.section-label {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 0 20px 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.skill-categories {
+  padding: 16px 0;
+}
+.category-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--yzh-color-text-regular);
+  transition: all 0.2s;
+}
+.category-header:hover {
+  background: #f8fafc;
+}
+.cat-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+.category-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: #cbd5e1;
+  background: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.skill-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.skill-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.skill-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--yzh-color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.skill-code {
+  font-size: 11px;
+  color: #94a3b8;
+  font-family: monospace;
+}
+.panel-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: #cbd5e1;
+  font-size: 14px;
+}
 </style>
