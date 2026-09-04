@@ -101,6 +101,7 @@ import http from '../../api/http.js'
 import { getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import store from '../../store/index'
+import { isAdminRole, isAuditorRole } from '@/router/index'
 
 const router = useRouter()
 const { proxy } = getCurrentInstance()
@@ -165,23 +166,29 @@ const handleLogin = () => {
       return $message.error(result.message)
     }
     store.commit('setUserInfo', result.data)
-    http.get('/api/AuditorAuth/GetCurrentUser', null, false).then((userInfo) => {
-      if (userInfo.status && userInfo.data) {
+    http.get('/api/AuditorAuth/GetCurrentUser', null, false).then((userInfoRes) => {
+      if (userInfoRes.status && userInfoRes.data) {
+        // 保存完整用户信息（包含 roleName）
         store.commit('setUserInfo', {
           ...result.data,
-          roleId: userInfo.data.roleId,
-          userTrueName: userInfo.data.userTrueName
+          roleId: userInfoRes.data.roleId,
+          roleName: userInfoRes.data.roleName,
+          userTrueName: userInfoRes.data.userTrueName
         })
-        if (userInfo.data.isAuditor) {
-          router.push('/auditor/workspace')
-        } else {
+        // 根据角色跳转
+        const roleName = userInfoRes.data.roleName
+        if (isAuditorRole(roleName)) {
+          router.push('/cert_admin/workspace')
+        } else if (isAdminRole(roleName)) {
           router.push('/home')
+        } else {
+          router.push('/cert_admin/workspace')
         }
       } else {
-        router.push('/home')
+        router.push('/cert_admin/workspace')
       }
     }).catch(() => {
-      router.push('/home')
+      router.push('/cert_admin/workspace')
     })
   }).catch(() => {
     loading.value = false

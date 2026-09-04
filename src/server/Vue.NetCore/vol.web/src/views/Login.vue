@@ -46,6 +46,7 @@ import lang from '@/components/lang/lang'
 import { getCurrentInstance, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import store from '../store/index'
+import { isAdminRole, isAuditorRole } from '@/router/index'
 const loading = ref(false)
 const codeImgSrc = ref('')
 const userInfo = reactive({
@@ -80,9 +81,34 @@ const login = () => {
       getVierificationCode()
       return $message.error(result.message)
     }
-    //  $message.success($ts("登录成功,正在跳转!"));
+    // 登录成功，先保存基础信息
     store.commit('setUserInfo', result.data)
-    router.push({ path: '/' })
+    
+    // 获取用户详细信息（包含 roleName）
+    http.get('/api/AuditorAuth/GetCurrentUser', null, false).then((userInfoRes) => {
+      if (userInfoRes.status && userInfoRes.data) {
+        // 合并用户信息，保存 roleName
+        store.commit('setUserInfo', {
+          ...result.data,
+          roleId: userInfoRes.data.roleId,
+          roleName: userInfoRes.data.roleName,
+          userTrueName: userInfoRes.data.userTrueName
+        })
+        // 根据角色跳转到对应首页
+        const roleName = userInfoRes.data.roleName
+        if (isAdminRole(roleName)) {
+          router.push('/home')
+        } else if (isAuditorRole(roleName)) {
+          router.push('/cert_admin/workspace')
+        } else {
+          router.push('/home')
+        }
+      } else {
+        router.push('/home')
+      }
+    }).catch(() => {
+      router.push('/home')
+    })
   })
 }
 const loginPress = (e) => {

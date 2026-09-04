@@ -8,14 +8,35 @@ import redirect from './redirect'
  * 路由结构说明（V1.0 - Phase 1 实施）：
  * 
  * /                     → 管理员主空间（原 Index.vue 布局）
- * /auditor              → 审核员主空间（Phase 2 启用）
+ * /cert_admin           → 审核员主空间
  * /login                → 管理员登录（兼容旧版）
  * /admin-login          → 管理员登录（新版命名）
- * /auditor-login        → 审核员登录（Phase 2 启用）
+ * /auditor-login        → 审核员登录
  */
 
-// 审核员角色 ID（与数据库 Sys_Role 一致）
-export const AUDITOR_ROLE_ID = 100
+// 角色名称常量（与数据库 Sys_Role.RoleName 一致）
+export const ROLE_NAMES = {
+  SUPER_ADMIN: '主管理员',           // 超级管理员
+  MAINTAINER: '维护人员',            // 系统维护人员
+  AUDITOR_ADMIN: '体系认证客户端管理员', // 审核端管理员
+  AUDITOR: '审核员'                  // 基础审核员
+}
+
+// 系统管理模块可访问的角色
+export const ADMIN_ROLES = [ROLE_NAMES.SUPER_ADMIN, ROLE_NAMES.MAINTAINER]
+
+// 审核端模块可访问的角色
+export const AUDITOR_ROLES = [ROLE_NAMES.AUDITOR_ADMIN, ROLE_NAMES.AUDITOR]
+
+// 判断是否为管理员角色
+export function isAdminRole(roleName) {
+  return ADMIN_ROLES.includes(roleName)
+}
+
+// 判断是否为审核员角色
+export function isAuditorRole(roleName) {
+  return AUDITOR_ROLES.includes(roleName)
+}
 
 const routes = [
   // ==================== 管理员主空间 ====================
@@ -125,13 +146,49 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   if (to.matched.length == 0) return next({ path: '/404' });
-  //2020.06.03增加路由切换时加载提示
+  
+  // 加载提示
   store.dispatch("onLoading", true);
-  if ((to.hasOwnProperty('meta') && to.meta.anonymous) || store.getters.isLogin() || to.path == '/login') {
+  
+  // 公开页面直接放行
+  if (to.hasOwnProperty('meta') && to.meta.anonymous) {
     return next();
   }
-
-  next({ path: '/login', query: { redirect: Math.random() } });
+  
+  // 未登录跳转到登录页
+  if (!store.getters.isLogin()) {
+    return next({ path: '/login', query: { redirect: Math.random() } });
+  }
+  
+  // 已登录，获取用户角色信息
+  const userInfo = store.getters.getUserInfo()
+  const roleName = userInfo?.roleName || ''
+  
+  // 管理员路由：只有管理员角色可访问
+  if (to.path.startsWith('/CertPlatform') || to.path.startsWith('/Sys_') || to.path === '/home' || to.path === '/') {
+    if (!isAdminRole(roleName)) {
+      // 审核员尝试访问管理员路由 → 重定向到审核端
+      if (isAuditorRole(roleName)) {
+        return next('/cert_admin/workspace');
+      }
+      // 其他角色 → 跳转到登录页
+      return next('/login');
+    }
+  }
+  
+  // 审核员路由：只有审核端角色可访问
+  if (to.path.startsWith('/cert_admin') || to.path.startsWith('/auditor')) {
+    if (!isAuditorRole(roleName)) {
+      // 管理员尝试访问审核员路由 → 重定向到管理员首页
+      if (isAdminRole(roleName)) {
+        return next('/home');
+      }
+      // 其他角色 → 跳转到登录页
+      return next('/login');
+    }
+  }
+  
+  return next();
 })
 router.afterEach((to, from) => {
   store.dispatch("onLoading", false);
