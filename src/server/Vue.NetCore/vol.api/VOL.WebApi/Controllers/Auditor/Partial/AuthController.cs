@@ -34,16 +34,19 @@ namespace VOL.WebApi.Controllers.Auditor
     {
         private readonly ISys_UserService _userService;
         private readonly ISys_UserRepository _userRepository;
+        private readonly ISys_RoleRepository _roleRepository;
 
         [ActivatorUtilitiesConstructor]
         public AuthController(
             ISys_UserService userService,
-            ISys_UserRepository userRepository
+            ISys_UserRepository userRepository,
+            ISys_RoleRepository roleRepository
         )
         : base(userService)
         {
             _userService = userService;
             _userRepository = userRepository;
+            _roleRepository = roleRepository;
         }
 
         /// <summary>
@@ -153,12 +156,17 @@ namespace VOL.WebApi.Controllers.Auditor
             if (user == null)
                 return Json(webResponse.Error("用户不存在"));
 
+            // 查询角色名称
+            var role = _roleRepository.FindFirst(x => x.Role_Id == user.Role_Id);
+            var roleName = role?.RoleName ?? "";
+
             return Json(webResponse.OK("获取成功", new
             {
                 userId = user.User_Id,
                 userName = user.UserName,
                 userTrueName = user.UserTrueName,
                 roleId = user.Role_Id,
+                roleName = roleName,
                 orgId = user.OrgId,
                 orgCode = user.OrgCode,
                 isAuditor = user.Role_Id == AUDITOR_ROLE_ID || user.Role_Id == AUDITOR_CLIENT_ADMIN_ROLE_ID
