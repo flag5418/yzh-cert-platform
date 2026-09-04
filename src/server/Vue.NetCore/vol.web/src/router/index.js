@@ -14,28 +14,40 @@ import redirect from './redirect'
  * /auditor-login        → 审核员登录
  */
 
-// 角色名称常量（与数据库 Sys_Role.RoleName 一致）
-export const ROLE_NAMES = {
-  SUPER_ADMIN: '主管理员',           // 超级管理员
-  MAINTAINER: '维护人员',            // 系统维护人员
-  AUDITOR_ADMIN: '体系认证客户端管理员', // 审核端管理员
-  AUDITOR: '审核员'                  // 基础审核员
+// 角色 ID 常量（与数据库 Sys_Role.Role_Id 一致）
+export const ROLE_IDS = {
+  SUPER_ADMIN: 1,                    // 超级管理员
+  MAINTAINER: 10,                    // 系统维护人员
+  AUDITOR_ADMIN: 200,                // 审核端管理员
+  AUDITOR: 20                        // 基础审核员
 }
 
-// 系统管理模块可访问的角色
-export const ADMIN_ROLES = [ROLE_NAMES.SUPER_ADMIN, ROLE_NAMES.MAINTAINER]
+// 系统管理模块可访问的角色 ID
+export const ADMIN_ROLE_IDS = [ROLE_IDS.SUPER_ADMIN, ROLE_IDS.MAINTAINER]
 
-// 审核端模块可访问的角色
-export const AUDITOR_ROLES = [ROLE_NAMES.AUDITOR_ADMIN, ROLE_NAMES.AUDITOR]
+// 审核端模块可访问的角色 ID
+export const AUDITOR_ROLE_IDS = [ROLE_IDS.AUDITOR_ADMIN, ROLE_IDS.AUDITOR]
 
 // 判断是否为管理员角色
-export function isAdminRole(roleName) {
-  return ADMIN_ROLES.includes(roleName)
+export function isAdminRole(roleNameOrId) {
+  // 支持通过角色名或角色ID判断
+  if (typeof roleNameOrId === 'number') {
+    return ADMIN_ROLE_IDS.includes(roleNameOrId)
+  }
+  // 如果是角色名，也检查常见名称
+  const nameStr = String(roleNameOrId || '')
+  return nameStr.includes('管理员') || nameStr.includes('维护') || ADMIN_ROLE_IDS.includes(roleNameOrId)
 }
 
 // 判断是否为审核员角色
-export function isAuditorRole(roleName) {
-  return AUDITOR_ROLES.includes(roleName)
+export function isAuditorRole(roleNameOrId) {
+  // 支持通过角色名或角色ID判断
+  if (typeof roleNameOrId === 'number') {
+    return AUDITOR_ROLE_IDS.includes(roleNameOrId)
+  }
+  // 如果是角色名，也检查常见名称
+  const nameStr = String(roleNameOrId || '')
+  return nameStr.includes('审核') || AUDITOR_ROLE_IDS.includes(roleNameOrId)
 }
 
 const routes = [
@@ -162,13 +174,14 @@ router.beforeEach((to, from, next) => {
   
   // 已登录，获取用户角色信息
   const userInfo = store.getters.getUserInfo()
+  const roleId = userInfo?.roleId
   const roleName = userInfo?.roleName || ''
   
   // 管理员路由：只有管理员角色可访问
   if (to.path.startsWith('/CertPlatform') || to.path.startsWith('/Sys_') || to.path === '/home' || to.path === '/') {
-    if (!isAdminRole(roleName)) {
+    if (!isAdminRole(roleId) && !isAdminRole(roleName)) {
       // 审核员尝试访问管理员路由 → 重定向到审核端
-      if (isAuditorRole(roleName)) {
+      if (isAuditorRole(roleId) || isAuditorRole(roleName)) {
         return next('/cert_admin/workspace');
       }
       // 其他角色 → 跳转到登录页
@@ -178,9 +191,9 @@ router.beforeEach((to, from, next) => {
   
   // 审核员路由：只有审核端角色可访问
   if (to.path.startsWith('/cert_admin') || to.path.startsWith('/auditor')) {
-    if (!isAuditorRole(roleName)) {
+    if (!isAuditorRole(roleId) && !isAuditorRole(roleName)) {
       // 管理员尝试访问审核员路由 → 重定向到管理员首页
-      if (isAdminRole(roleName)) {
+      if (isAdminRole(roleId) || isAdminRole(roleName)) {
         return next('/home');
       }
       // 其他角色 → 跳转到登录页

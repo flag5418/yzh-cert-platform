@@ -95,10 +95,11 @@ const login = () => {
           userTrueName: userInfoRes.data.userTrueName
         })
         // 根据角色跳转到对应首页
+        const roleId = userInfoRes.data.roleId
         const roleName = userInfoRes.data.roleName
-        if (isAdminRole(roleName)) {
+        if (isAdminRole(roleId) || isAdminRole(roleName)) {
           router.push('/home')
-        } else if (isAuditorRole(roleName)) {
+        } else if (isAuditorRole(roleId) || isAuditorRole(roleName)) {
           router.push('/cert_admin/workspace')
         } else {
           router.push('/home')

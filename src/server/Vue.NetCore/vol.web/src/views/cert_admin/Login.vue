@@ -176,10 +176,11 @@ const handleLogin = () => {
           userTrueName: userInfoRes.data.userTrueName
         })
         // 根据角色跳转
+        const roleId = userInfoRes.data.roleId
         const roleName = userInfoRes.data.roleName
-        if (isAuditorRole(roleName)) {
+        if (isAuditorRole(roleId) || isAuditorRole(roleName)) {
           router.push('/cert_admin/workspace')
-        } else if (isAdminRole(roleName)) {
+        } else if (isAdminRole(roleId) || isAdminRole(roleName)) {
           router.push('/home')
         } else {
           router.push('/cert_admin/workspace')
