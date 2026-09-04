@@ -179,17 +179,17 @@ const handleLogin = () => {
         const roleId = userInfoRes.data.roleId
         const roleName = userInfoRes.data.roleName
         if (isAuditorRole(roleId) || isAuditorRole(roleName)) {
-          router.push('/cert_admin/workspace')
+          router.push('/auditor/workspace')
         } else if (isAdminRole(roleId) || isAdminRole(roleName)) {
           router.push('/home')
         } else {
-          router.push('/cert_admin/workspace')
+          router.push('/auditor/workspace')
         }
       } else {
-        router.push('/cert_admin/workspace')
+        router.push('/auditor/workspace')
       }
     }).catch(() => {
-      router.push('/cert_admin/workspace')
+      router.push('/auditor/workspace')
     })
   }).catch(() => {
     loading.value = false

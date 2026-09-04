@@ -74,52 +74,22 @@ const routes = [
         path: '/sysMenu',
         name: 'sysMenu',
         component: () => import('@/views/sys/system/Sys_Menu.vue')
-      }, {
-        path: '/coder',
-        name: 'coder',
-        component: () => import('@/views/builder/coder.vue')
-      },
-      {
-        path: '/formDraggable',  //表单设计
-        name: 'formDraggable',
-        component: () => import('@/views/formDraggable/formDraggable.vue')
-      },
-      {
-        path: '/formSubmit',  //表单提交页面
-        name: 'formSubmit',
-        component: () => import('@/views/formDraggable/FormSubmit.vue'),
-        meta:{
-          keepAlive:false
-        }
-      },
-      {
-        path: '/formCollectionResultTree',  //显示收集的数据表单
-        name: 'formCollectionResultTree',
-        component: () => import('@/views/formDraggable/FormCollectionResultTree.vue'),
-        meta:{
-          keepAlive:false
-        }
-      },
-      {
-        path: '/signalR',  //消息推送
-        name: 'signalR',
-        component: () => import('@/views/signalR/Index.vue'),
-        meta:{
-          keepAlive:false
-        }
       }
     ]
   },
 
-  // ==================== 审核员主空间（Phase 2 启用） ====================
+  // ==================== 审核员主空间 ====================
+  // 审核员登录后直接跳转到工作台（Workspace.vue 是完整页面，非布局容器）
   {
     path: '/auditor',
-    name: 'Auditor',
+    redirect: '/auditor/workspace'
+  },
+  // 审核员工作台（独立页面）
+  {
+    path: '/auditor/workspace',
+    name: 'AuditorWorkspace',
     component: () => import('@/views/cert_admin/Workspace.vue'),
-    meta: { role: 'auditor' },
-    children: [
-      ...auditorViewGird
-    ]
+    meta: { role: 'auditor' }
   },
   
   // ==================== 登录页 ====================
