@@ -70,7 +70,7 @@
 </template>
 
 <script setup>
-import { SPECIAL_NODES } from '@/views/cert_sys/Standard/WorkflowDesigner/specialNodes.js'
+import { SPECIAL_NODES } from '@/views/cert/admin/business/Standard/WorkflowDesigner/specialNodes.js'
 import { IconCpu, IconPlay, IconShare, IconSwitchButton } from '@/yzh/icons'
 import { computed, ref } from 'vue'
 

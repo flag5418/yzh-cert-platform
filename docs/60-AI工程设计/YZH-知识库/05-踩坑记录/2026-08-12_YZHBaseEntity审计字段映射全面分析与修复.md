@@ -1,8 +1,18 @@
 # 2026-08-12 YZHBaseEntity 审计字段映射全面分析与修复
 
+> **⚠️ 架构说明（2026-09-04 更新）**：
+> 
+> 本项目存在两套基类设计：
+> 1. **Vol 的 `BaseEntity`** - 不带任何 `[Column]` 映射，EF 默认行为（PascalCase 属性 → PascalCase 列名）
+> 2. **YZH 的 `YZHBaseEntity : BaseEntity`** - 设计为统一审计字段基类
+> 
+> **核心问题**：YZHBaseEntity 曾错误携带 snake_case `[Column]` 映射，导致继承它的 PascalCase 表实体生成错误 SQL。
+> 
+> **最终修复**：YZHBaseEntity 移除所有 snake_case 映射，恢复为 PascalCase 默认行为。snake_case 表实体用 `new` + `[Column]` 单独覆盖。
+
 > **问题**：`Unknown column 'w.CreateDate'` / `Unknown column 'c.org_code'` 反复出现，影响 PromptTemplate、ISOStandard、DirectoryConfig 等多个页面
-> **根因**：YZHBaseEntity 的 `[Column]` 映射与数据库实际列名风格不匹配
-> **状态**：✅ 已修复
+> **根因**：YZHBaseEntity 的 `[Column]` 映射与数据库实际列名风格不匹配（两套基类冲突）
+> **状态**：✅ 已修复（2026-09-04 最终版）
 
 ---
 

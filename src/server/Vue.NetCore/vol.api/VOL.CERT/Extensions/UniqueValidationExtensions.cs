@@ -8,7 +8,7 @@ using VOL.Core.Enums;
 using VOL.Core.Extensions;
 using VOL.Core.Utilities;
 using VOL.Entity.SystemModels;
-using VOL.Entity.CertPlatform;
+using VOL.Entity.Admin.Platform;
 
 namespace VOL.CERT.Extensions
 {

@@ -12,7 +12,7 @@
  */
 
 import { NodeIdGenerator, isValidNodeId } from './nodeIdGenerator.js'
-import { getSpecialNode, SPECIAL_NODE_CODES } from '@/views/cert_sys/Standard/WorkflowDesigner/specialNodes.js'
+import { getSpecialNode, SPECIAL_NODE_CODES } from '@/views/cert/admin/business/Standard/WorkflowDesigner/specialNodes.js'
 
 /**
  * 反编译 workflow_config JSON → 业务层节点/边数组

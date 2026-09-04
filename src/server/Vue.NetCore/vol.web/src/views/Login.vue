@@ -100,7 +100,7 @@ const login = () => {
         if (isAdminRole(roleId) || isAdminRole(roleName)) {
           router.push('/home')
         } else if (isAuditorRole(roleId) || isAuditorRole(roleName)) {
-          router.push('/cert_admin/workspace')
+          router.push('/cert/auditor/workspace')
         } else {
           router.push('/home')
         }

@@ -11,7 +11,7 @@
 
 import { reactive } from 'vue'
 import { NodeIdGenerator, isValidNodeId } from '../model/nodeIdGenerator.js'
-import { getSpecialNode } from '@/views/cert_sys/Standard/WorkflowDesigner/specialNodes.js'
+import { getSpecialNode } from '@/views/cert/admin/business/Standard/WorkflowDesigner/specialNodes.js'
 
 /**
  * 创建工作流操作层 store

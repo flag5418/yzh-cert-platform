@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Reflection;
 using VOL.Core.DBManager;
 using VOL.Entity;
-using VOL.Entity.CertPlatform;
+using VOL.Entity.Admin.Platform;
 
 namespace YZH.Core.Validation;
 

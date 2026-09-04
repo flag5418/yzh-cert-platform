@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
-using VOL.CERT.IServices.CertPlatform;
+using VOL.CERT.IServices.Admin.Platform;
 using VOL.WebApi.Controllers.Hubs;
 
 namespace VOL.WebApi.Hubs

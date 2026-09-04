@@ -6,7 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using VOL.Core.EFDbContext;
-using VOL.Entity.CertPlatform.Ent;
+using VOL.Entity.Admin.Platform.Ent;
 using YZH.Core.Workflow;
 
 namespace VOL.Builder.Services.CertPlatform.WorkflowEngine.Skills

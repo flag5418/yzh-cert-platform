@@ -8,7 +8,7 @@ import redirect from './redirect'
  * 路由结构说明（V1.0 - Phase 1 实施）：
  * 
  * /                     → 管理员主空间（原 Index.vue 布局）
- * /cert_admin           → 审核员主空间
+ * /cert/auditor           → 审核员主空间
  * /login                → 管理员登录（兼容旧版）
  * /admin-login          → 管理员登录（新版命名）
  * /auditor-login        → 审核员登录
@@ -88,7 +88,7 @@ const routes = [
   {
     path: '/auditor/workspace',
     name: 'AuditorWorkspace',
-    component: () => import('@/views/cert_admin/Workspace.vue'),
+    component: () => import('@/views/cert/auditor/Workspace.vue'),
     meta: { role: 'auditor' }
   },
   
@@ -113,7 +113,7 @@ const routes = [
   {
     path: '/auditor-login',
     name: 'AuditorLogin',
-    component: () => import('@/views/cert_admin/Login.vue'),
+    component: () => import('@/views/cert/auditor/Login.vue'),
     meta:{
       anonymous:true
     }
@@ -152,7 +152,7 @@ router.beforeEach((to, from, next) => {
     if (!isAdminRole(roleId) && !isAdminRole(roleName)) {
       // 审核员尝试访问管理员路由 → 重定向到审核端
       if (isAuditorRole(roleId) || isAuditorRole(roleName)) {
-        return next('/cert_admin/workspace');
+        return next('/cert/auditor/workspace');
       }
       // 其他角色 → 跳转到登录页
       return next('/login');
@@ -160,7 +160,7 @@ router.beforeEach((to, from, next) => {
   }
   
   // 审核员路由：只有审核端角色可访问
-  if (to.path.startsWith('/cert_admin') || to.path.startsWith('/auditor')) {
+  if (to.path.startsWith('/cert/auditor') || to.path.startsWith('/auditor')) {
     if (!isAuditorRole(roleId) && !isAuditorRole(roleName)) {
       // 管理员尝试访问审核员路由 → 重定向到管理员首页
       if (isAdminRole(roleId) || isAdminRole(roleName)) {

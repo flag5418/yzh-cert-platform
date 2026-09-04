@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using VOL.Core.EFDbContext;
-using VOL.Entity.CertPlatform.Sys;
+using VOL.Entity.Admin.Platform.Sys;
 
 namespace YZH.Core.Services
 {
