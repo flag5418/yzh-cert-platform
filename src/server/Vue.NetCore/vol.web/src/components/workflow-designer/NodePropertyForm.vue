@@ -222,7 +222,7 @@
 </template>
 
 <script setup>
-import { getSpecialNode } from '@/views/cert/Standard/WorkflowDesigner/specialNodes.js'
+import { getSpecialNode } from '@/views/cert_sys/Standard/WorkflowDesigner/specialNodes.js'
 import { IconCircleCheck, IconInfo, IconWarning } from '@/yzh/icons'
 import { ElMessage } from 'element-plus'
 import { computed, ref, watch } from 'vue'

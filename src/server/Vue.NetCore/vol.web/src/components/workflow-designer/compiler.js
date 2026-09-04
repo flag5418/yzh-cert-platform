@@ -11,7 +11,7 @@
  *   从 start 到 end 的所有路径，含节点序列和边序列
  */
 
-import { getSpecialNode, getSpecialNodeStyle } from '@/views/cert/Standard/WorkflowDesigner/specialNodes.js'
+import { getSpecialNode, getSpecialNodeStyle } from '@/views/cert_sys/Standard/WorkflowDesigner/specialNodes.js'
 // 拓扑分析引擎（详细日志输出）
 import {
   analyzeTopology,

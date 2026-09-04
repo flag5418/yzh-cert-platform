@@ -82,7 +82,7 @@ const routes = [
   {
     path: '/auditor',
     name: 'Auditor',
-    component: () => import('@/views/auditor/Workspace.vue'),
+    component: () => import('@/views/cert_admin/Workspace.vue'),
     meta: { role: 'auditor' },
     children: [
       ...auditorViewGird
@@ -110,7 +110,7 @@ const routes = [
   {
     path: '/auditor-login',
     name: 'AuditorLogin',
-    component: () => import('@/views/auditor/Login.vue'),
+    component: () => import('@/views/cert_admin/Login.vue'),
     meta:{
       anonymous:true
     }
