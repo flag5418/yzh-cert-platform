@@ -25,5 +25,28 @@ namespace VOL.Entity.DomainModels
         [MaxLength(50)]
         [Column("OrgCode", TypeName = "varchar(50)")]
         public string OrgCode { get; set; }
+
+        /// <summary>
+        /// 机构ID（关联 cert_certification_body.Id）
+        /// </summary>
+        [Display(Name = "机构ID")]
+        [Column("OrgId", TypeName = "bigint")]
+        public long? OrgId { get; set; }
+
+        /// <summary>
+        /// 微信 OpenID（用于微信登录，可选）
+        /// </summary>
+        [Display(Name = "微信OpenID")]
+        [MaxLength(64)]
+        [Column("wechat_openid", TypeName = "varchar(64)")]
+        public string WechatOpenId { get; set; }
+
+        /// <summary>
+        /// 微信 UnionID（微信开放平台统一标识，可选）
+        /// </summary>
+        [Display(Name = "微信UnionID")]
+        [MaxLength(64)]
+        [Column("wechat_unionid", TypeName = "varchar(64)")]
+        public string WechatUnionId { get; set; }
     }
 }

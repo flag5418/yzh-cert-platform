@@ -1,20 +1,37 @@
 import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router'
-import viewgird from './viewGird'
+import adminViewGird from './viewGird.admin.js'
+import auditorViewGird from './viewGird.auditor.js'
 import store from '../store/index'
 import redirect from './redirect'
+
+/**
+ * 路由结构说明（V1.0 - Phase 1 实施）：
+ * 
+ * /                     → 管理员主空间（原 Index.vue 布局）
+ * /auditor              → 审核员主空间（Phase 2 启用）
+ * /login                → 管理员登录（兼容旧版）
+ * /admin-login          → 管理员登录（新版命名）
+ * /auditor-login        → 审核员登录（Phase 2 启用）
+ */
+
+// 审核员角色 ID（与数据库 Sys_Role 一致）
+export const AUDITOR_ROLE_ID = 100
+
 const routes = [
+  // ==================== 管理员主空间 ====================
   {
     path: '/',
-    name: 'Index',
-    component: () => import('@/views/Index.vue'),
+    name: 'Admin',
+    component: () => import('@/views/Index.vue'),  // Phase 3 迁移后改为 @/views/admin/Index.vue
     redirect: '/home',
+    meta: { role: 'admin' },
     children: [
-      ...viewgird,
+      ...adminViewGird,
       ...redirect,
       {
         path: '/home',
         name: 'home',
-        component: () => import('@/views/Home.vue')
+        component: () => import('@/views/Home.vue')  // Phase 3 迁移后改为 @/views/admin/Home.vue
       }, {
         path: '/UserInfo',
         name: 'UserInfo',
@@ -60,15 +77,45 @@ const routes = [
       }
     ]
   },
+
+  // ==================== 审核员主空间（Phase 2 启用） ====================
+  {
+    path: '/auditor',
+    name: 'Auditor',
+    component: () => import('@/views/auditor/Workspace.vue'),
+    meta: { role: 'auditor' },
+    children: [
+      ...auditorViewGird
+    ]
+  },
+  
+  // ==================== 登录页 ====================
   {
     path: '/login',
     name: 'login',
-    component: () => import('@/views/Login.vue'),
+    component: () => import('@/views/Login.vue'),  // Phase 3 迁移后改为 @/views/admin/Login.vue
     meta:{
-        anonymous:true
-      }
+      anonymous:true
+    }
+  },
+  {
+    path: '/admin-login',
+    name: 'AdminLogin',
+    component: () => import('@/views/Login.vue'),  // 复用管理员登录组件
+    meta:{
+      anonymous:true
+    }
+  },
+  // 审核员登录/注册页
+  {
+    path: '/auditor-login',
+    name: 'AuditorLogin',
+    component: () => import('@/views/auditor/Login.vue'),
+    meta:{
+      anonymous:true
+    }
   }
-]
+];
 
 const router = createRouter({
   history: createWebHashHistory(), //createWebHistory(process.env.BASE_URL),
