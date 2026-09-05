@@ -12,7 +12,7 @@ using YZH.Entity.Admin.Platform.Base;
 namespace YZH.Entity.DomainModels
 {
     [Entity(TableCnName = "用户管理",TableName = "Sys_User",ApiInput = typeof(ApiSys_UserInput),ApiOutput = typeof(ApiSys_UserOutput))]
-    [YZHPage(PageKey = "sys_user", Title = "用户管理", ControllerName = "Sys_User",
+    [Page(PageKey = "sys_user", Title = "用户管理", ControllerName = "Sys_User",
         KeyField = "User_Id", SortField = "User_Id", SortOrder = "desc",
         DialogWidth = 650, VisibleButtons = new[] { "add", "refresh", "batchDelete" })]
     public partial class Sys_User:BaseEntity
@@ -20,9 +20,9 @@ namespace YZH.Entity.DomainModels
         /// <summary>
        ///帐号
        /// </summary>
-       [YZHColumn(Order = 1, Title = "帐号", Width = 120)]
-       [YZHSearch(Title = "帐号")]
-       [YZHForm(Title = "帐号", Required = true)]
+       [EntityColumn(Order = 1, Title = "帐号", Width = 120)]
+       [Search(Title = "帐号")]
+       [Form(Title = "帐号", Required = true)]
        [Display(Name ="帐号")]
        [MaxLength(100)]
        [Column(TypeName="nvarchar(100)")]
@@ -75,8 +75,8 @@ namespace YZH.Entity.DomainModels
         /// <summary>
        ///角色
        /// </summary>
-       [YZHColumn(Order = 3, Title = "角色", Width = 100)]
-       [YZHForm(Title = "角色", ControlType = "cascader", Required = true)]
+       [EntityColumn(Order = 3, Title = "角色", Width = 100)]
+       [Form(Title = "角色", ControlType = "cascader", Required = true)]
        [Display(Name ="角色")]
        [Column(TypeName="int")]
        [Editable(true)]
@@ -121,8 +121,8 @@ namespace YZH.Entity.DomainModels
         /// <summary>
        ///姓名
        /// </summary>
-       [YZHColumn(Order = 2, Title = "姓名", Width = 100)]
-       [YZHForm(Title = "姓名", Required = true)]
+       [EntityColumn(Order = 2, Title = "姓名", Width = 100)]
+       [Form(Title = "姓名", Required = true)]
        [Display(Name ="姓名")]
        [MaxLength(20)]
        [Column(TypeName="nvarchar(20)")]
@@ -156,8 +156,8 @@ namespace YZH.Entity.DomainModels
         /// <summary>
        ///手机号
        /// </summary>
-       [YZHColumn(Order = 5, Title = "手机号", Width = 120)]
-       [YZHForm(Title = "手机号")]
+       [EntityColumn(Order = 5, Title = "手机号", Width = 120)]
+       [Form(Title = "手机号")]
        [Display(Name ="手机号")]
        [MaxLength(11)]
        [Column(TypeName="nvarchar(11)")]
@@ -189,8 +189,8 @@ namespace YZH.Entity.DomainModels
         /// <summary>
        ///是否可用
        /// </summary>
-       [YZHColumn(Order = 4, Title = "是否可用", Width = 80)]
-       [YZHForm(Title = "是否可用", ControlType = "select", Required = true)]
+       [EntityColumn(Order = 4, Title = "是否可用", Width = 80)]
+       [Form(Title = "是否可用", ControlType = "select", Required = true)]
        [Display(Name ="是否可用")]
        [Column(TypeName="tinyint")]
        [Editable(true)]
@@ -276,8 +276,8 @@ namespace YZH.Entity.DomainModels
         /// <summary>
        ///Email
        /// </summary>
-       [YZHColumn(Order = 6, Title = "邮箱", Width = 150)]
-       [YZHForm(Title = "邮箱")]
+       [EntityColumn(Order = 6, Title = "邮箱", Width = 150)]
+       [Form(Title = "邮箱")]
        [Display(Name ="Email")]
        [MaxLength(100)]
        [Column(TypeName="nvarchar(100)")]

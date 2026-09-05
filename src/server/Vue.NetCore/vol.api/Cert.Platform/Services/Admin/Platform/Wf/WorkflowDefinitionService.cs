@@ -10,6 +10,7 @@ using YZH.Entity.Admin.Platform.Wf;
 using YZH.Entity.DomainModels;
 using Cert.Platform.IServices.Admin.Platform.Wf;
 using Cert.Platform.IRepositories.Admin.Platform.Wf;
+using Microsoft.Extensions.DependencyInjection;
 using YZH.Core;
 using YZH.Core.Validation;
 
@@ -17,10 +18,10 @@ namespace Cert.Platform.Services.Admin.Platform.Wf
 {
     /// <summary>
     /// 工作流定义 Service
-    /// 继承 YZHTableServiceBase：自动获得审计填充、逻辑删除、唯一校验、生命周期钩子
+    /// 继承 TableServiceBase：自动获得审计填充、逻辑删除、唯一校验、生命周期钩子
     /// </summary>
     public class WorkflowDefinitionService
-        : YZHTableServiceBase<WorkflowDefinition, IWorkflowDefinitionRepository>
+        : TableServiceBase<WorkflowDefinition, IWorkflowDefinitionRepository>
         , IWorkflowDefinitionService
         , IDependency
     {

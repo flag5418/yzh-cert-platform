@@ -12,7 +12,7 @@ namespace YZH.Entity.Admin.Platform.DocExtraction
     /// </summary>
     [Table("cert_doc_table_def")]
     [Entity(TableCnName = "文档表格定义")]
-    public class CertDocTableDef : YZHBaseEntity
+    public class CertDocTableDef : EntityBase
     {
         // 覆盖基类审计/通用字段，适配 snake_case 列名
         [Column("create_id")] public new int? CreateID { get; set; }

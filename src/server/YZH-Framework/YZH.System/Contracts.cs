@@ -4,9 +4,9 @@ using System.Collections.Generic;
 namespace YZH.System
 {
     /// <summary>
-    /// 统一 API 返回体（兼容 YZHBaseApiClient 解析：status / rows / total / data / msg）
+    /// 统一 API 返回体（兼容 BaseApiClient 解析：status / rows / total / data / msg）
     /// </summary>
-    public class YzhApiResult
+    public class ApiResult
     {
         [Newtonsoft.Json.JsonProperty("status")]
         public bool Status { get; set; } = true;
@@ -21,7 +21,7 @@ namespace YZH.System
     }
 
     /// <summary>
-    /// GetPageData 查询参数（与前端 YZHBaseApiClient 约定一致）
+    /// GetPageData 查询参数（与前端 BaseApiClient 约定一致）
     /// </summary>
     public class PageQuery
     {

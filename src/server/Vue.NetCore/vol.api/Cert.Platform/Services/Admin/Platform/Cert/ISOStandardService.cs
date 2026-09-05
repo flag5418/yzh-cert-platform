@@ -15,7 +15,7 @@ using YZH.Core;
 
 namespace Cert.Platform.Services.Admin.Platform
 {
-    public partial class ISOStandardService : YZHTableServiceBase<ISOStandard, IISOStandardRepository>
+    public partial class ISOStandardService : TableServiceBase<ISOStandard, IISOStandardRepository>
     , IISOStandardService, IDependency
     {
         public static IISOStandardService Instance

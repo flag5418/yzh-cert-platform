@@ -27,13 +27,13 @@ namespace YZH.WebApi.Controllers.Admin.Platform
         private readonly IStandardDirectoryService _service;
         private readonly ICodeGeneratorService _codeGenerator;
 
-    private readonly YzhQueueManager _queueManager;
+    private readonly QueueManager _queueManager;
 
     [ActivatorUtilitiesConstructor]
     public StandardDirectoryController(
         IStandardDirectoryService service,
         ICodeGeneratorService codeGenerator,
-        YzhQueueManager queueManager)
+        QueueManager queueManager)
     : base(service)
     {
         _service = service;

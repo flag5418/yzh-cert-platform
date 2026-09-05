@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>CertPlatform.Shared</RootNamespace>
+    <AssemblyName>CertPlatform.Shared</AssemblyName>
+    <Description>CertPlatform 业务共享层：实体定义、DTO、业务共享服务</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Minio" Version="6.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\yzh-core\YZH.Core.Stand\YZH.Core.Stand.csproj" />
+  </ItemGroup>
+
+</Project>

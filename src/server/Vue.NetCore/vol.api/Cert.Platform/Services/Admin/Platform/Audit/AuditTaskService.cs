@@ -15,7 +15,7 @@ using YZH.Core;
 
 namespace Cert.Platform.Services.Admin.Platform
 {
-    public partial class AuditTaskService : YZHTableServiceBase<AuditTask, IAuditTaskRepository>
+    public partial class AuditTaskService : TableServiceBase<AuditTask, IAuditTaskRepository>
     , IAuditTaskService, IDependency
     {
         public static IAuditTaskService Instance

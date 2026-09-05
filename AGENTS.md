@@ -30,10 +30,11 @@ AIGC:
 ## 项目速览
 
 - **项目**：映智汇认证审核管理系统（yzh-cert-platform），ISO 体系认证全流程（建档→任务分派→预审→复核→报告→NC）
-- **技术栈**：.NET 8 + Vol（后端，保留）/ Vue 3 + TypeScript + Vite + Element Plus（admin 端） / MySQL 8.0 / Redis 7 / MinIO / Docker Compose（OrbStack）
+- **技术栈**：.NET 8 + Vol（后端，保留）/ Vue 3 + TypeScript + Vite + Element Plus（admin 端）/ Naive UI（auditor 端） / MySQL 8.0 / Redis 7 / MinIO / Docker Compose（OrbStack）
 - **端口**：后端 9992 / 后台管理 9990 / 审核员前端 9991 / MySQL 3307 / Redis 6380 / MinIO 9000+9001
 - **开发模式**：独立开发，多 AI 协作机制不适用（项目全局规则 §十三）
 - **前端架构（V4 2026-09 起）**：彻底抛弃 view-grid/VolProvider/VolBox/VolForm，全部使用自研 `YzhTable` + `YzhForm` + `YzhApiClient` + 手写 API
+- **新前端结构（2026-09-05 起）**：`src/certplatform-web/` 目录，包含 `yzh.vue.core/`（核心组件库）、`share/`（业务共享层）、`admin/`（管理员端，端口 9990）、`auditor/`（审核员端，端口 9991）
 
 ## 编码强制约定
 
@@ -47,12 +48,13 @@ AIGC:
    - `07-标准页面开发流程.md`（**已废弃，请按 V4 试点页面 `src/pages/system/user/index.vue` 作为模板**）
 3. **后端**：只改 `VOL.Sys/Services/System/Partial/` 下的 Partial Service，禁改 .jsx；使用 Vol 框架 ServiceBase 钩子优先；YZH 增量能力（YZHBaseEntity / 特性体系）按 `02-YZH增量清单.md` 使用。
 4. **前端（新）**：所有新页面必须使用 V4 自研组件：
-   - 表格：`@/yzh/components/table/YzhTable.vue`
-   - 表单：`@/yzh/components/form`（YzhForm）
-   - API：`@/yzh/api/*`（手写）+ `yzhApi` 客户端
-   - 模板参考：`src/pages/system/user/index.vue`
-   - 路由位置：`src/pages/<模块>/<实体>/index.vue`
+   - 核心组件库：`@yzh-core/components/*`（yzh.vue.core）
+   - 业务共享层：`@share/*`（share）
+   - 管理员端：`src/certplatform-web/admin/`（端口 9990，Element Plus）
+   - 审核员端：`src/certplatform-web/auditor/`（端口 9991，Naive UI）
+   - API 客户端：`yzhApi`（来自 yzh.vue.core）
    - **禁止** 新页面使用 view-grid、VolBox、VolForm、VolProvider、extension 自动生成的 .jsx
+   - **注意**：旧 vol.web 保留历史版本，不删除，新代码写入 certplatform-web/
 5. **数据库**：MySQL 8.0 @ 3307（yzh-mysql）/ Redis @ 6380（yzh-redis）；SQL 脚本遵循 `项目全局规则.md` §十一（脚本放 scripts/db/，禁止散落）。
 6. **命名规范**：文档命名强制 `-V1` 后缀（见 `00-工程体系/文档生命周期管理规范-V1.md`）；脚本按 scripts/ 子目录归类。
 7. **启停规范**：后端启停一律走 `scripts/` 脚本（backend/ 子目录），禁止手动 `kill` / 裸 `dotnet run &`（见项目全局规则 §十五）。

@@ -42,8 +42,7 @@
 <ProjectReference Include="..\YZH.Entity\YZH.Entity.csproj" />
 <ProjectReference Include="..\YZH.Sys\YZH.Sys.csproj" />
 <!-- YZH.Core 已通过 YZH.Builder 传递引用，无需单独引用 -->
-<!-- YZH 全新系统模块（替代 VOL 系统设置底层，干净架构） -->
-<ProjectReference Include="..\..\..\YZH-Framework\YZH.System\YZH.System.csproj" />
+<!-- YZH.System 项目引用已移除：命名空间冲突（YZH.System 与 System.Exception 等冲突），业务已迁移到 YZH.WebApi 内部实现 -->
 </ItemGroup>
 
   <ItemGroup>

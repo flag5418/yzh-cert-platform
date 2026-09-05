@@ -18,7 +18,7 @@ namespace Cert.Platform.Extensions
     /// 设计原则：
     /// - 声明式：实体属性上标记 [UniqueField]，Service 中一行调用即可
     /// - 反射驱动：运行时扫描实体上的 [UniqueField] 特性，自动构建查询
-    /// - 通用性：适用于所有继承 YZHBaseEntity 的实体，无需逐个 Service 手写
+    /// - 通用性：适用于所有继承 EntityBase 的实体，无需逐个 Service 手写
     /// 
     /// 工作流程：
     /// 1. 反射扫描 TEntity 上所有带 [UniqueField] 的属性

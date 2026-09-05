@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>YZH.Core.Api</RootNamespace>
+    <AssemblyName>YZH.Core.Api</AssemblyName>
+    <Description>YZH Core Api - Web核心层：控制器基类、GridConfig接口、过滤器</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YZH.Core.DataBase\YZH.Core.DataBase.csproj" />
+    <ProjectReference Include="..\YZH.Core.Stand\YZH.Core.Stand.csproj" />
+  </ItemGroup>
+
+</Project>

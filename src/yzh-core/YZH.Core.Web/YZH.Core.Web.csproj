@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>YZH.Core.Web</RootNamespace>
+    <AssemblyName>YZH.Core.Web</AssemblyName>
+    <Description>YZH Core Web - 唯一启动入口：Program.cs、YzhWebBuilder、中间件、模块注册</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Vol 框架引用（保留 VOLContext 等 ORM 能力） -->
+    <ProjectReference Include="..\..\server\Vue.NetCore\vol.api\YZH.Core\YZH.Core.csproj" />
+    <ProjectReference Include="..\..\server\Vue.NetCore\vol.api\YZH.Entity\YZH.Entity.csproj" />
+    <ProjectReference Include="..\..\server\Vue.NetCore\vol.api\YZH.Sys\YZH.Sys.csproj" />
+    <!-- YZH Core 框架 -->
+    <ProjectReference Include="..\YZH.Core.Api\YZH.Core.Api.csproj" />
+    <ProjectReference Include="..\YZH.Core.DataBase\YZH.Core.DataBase.csproj" />
+    <ProjectReference Include="..\YZH.Core.Stand\YZH.Core.Stand.csproj" />
+    <!-- 业务模块（extern alias 解决与 YZH.Entity 的类型冲突） -->
+    <ProjectReference Include="..\..\certplatform-api\CertPlatform.Shared\CertPlatform.Shared.csproj" Aliases="CertPlatform" />
+    <ProjectReference Include="..\..\certplatform-api\CertPlatform.Admin\CertPlatform.Admin.csproj" />
+    <ProjectReference Include="..\..\certplatform-api\CertPlatform.Auditor\CertPlatform.Auditor.csproj" />
+    <ProjectReference Include="..\..\certplatform-api\CertPlatform.Enterprise\CertPlatform.Enterprise.csproj" />
+  </ItemGroup>
+
+</Project>

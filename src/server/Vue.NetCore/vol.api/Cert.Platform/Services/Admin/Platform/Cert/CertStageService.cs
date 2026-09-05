@@ -15,7 +15,7 @@ using YZH.Core;
 
 namespace Cert.Platform.Services.Admin.Platform
 {
-    public partial class CertStageService : YZHTableServiceBase<CertStage, ICertStageRepository>
+    public partial class CertStageService : TableServiceBase<CertStage, ICertStageRepository>
     , ICertStageService, IDependency
     {
         public static ICertStageService Instance

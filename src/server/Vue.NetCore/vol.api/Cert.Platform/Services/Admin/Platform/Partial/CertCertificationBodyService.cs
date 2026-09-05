@@ -46,7 +46,7 @@ namespace Cert.Platform.Services.Admin.Platform
         /// <summary>
         /// 重写 Update 方法：用 Code（业务主键）定位真实实体，修正 Id
         /// 
-        /// 唯一性校验和异常脱敏由 YZHServiceBase.Update 自动处理，
+        /// 唯一性校验和异常脱敏由 ServiceBase.Update 自动处理，
         /// 此处仅修正 Id 后委托给 base.Update(saveDataModel)。
         /// </summary>
         public override WebResponseContent Update(SaveModel saveDataModel)
@@ -70,14 +70,14 @@ namespace Cert.Platform.Services.Admin.Platform
                 }
             }
 
-            // ====== 委托给 YZHServiceBase.Update（含自动校验 + 异常脱敏） ======
+            // ====== 委托给 ServiceBase.Update（含自动校验 + 异常脱敏） ======
             return base.Update(saveDataModel);
         }
 
         /// <summary>
         /// 重写 Add 方法：确保 Code 有值
         /// 
-        /// 唯一性校验和异常脱敏由 YZHServiceBase.Add 自动处理，
+        /// 唯一性校验和异常脱敏由 ServiceBase.Add 自动处理，
         /// 此处仅补充 Code 后委托给 base.Add(saveDataModel)。
         /// </summary>
         public override WebResponseContent Add(SaveModel saveDataModel)
@@ -95,7 +95,7 @@ namespace Cert.Platform.Services.Admin.Platform
                     $"CB{DateTime.Now:yyyyMMddHHmmss}{new Random().Next(100, 999)}";
             }
 
-            // ====== 委托给 YZHServiceBase.Add（含自动校验 + 异常脱敏） ======
+            // ====== 委托给 ServiceBase.Add（含自动校验 + 异常脱敏） ======
             return base.Add(saveDataModel);
         }
 

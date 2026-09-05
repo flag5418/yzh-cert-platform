@@ -8,10 +8,10 @@ namespace YZH.System.Controllers
 {
     [Route("api/yzh/sys/dictionaries")]
     [ApiController]
-    public class SystemDictionaryController : YzhCrudController<SysDictionary>
+    public class SystemDictionaryController : CrudController<SysDictionary>
     {
-        private readonly YzhService<SysDictionaryList> _listSvc;
-        public SystemDictionaryController(YzhService<SysDictionary> svc, YzhService<SysDictionaryList> listSvc)
+        private readonly DomainService<SysDictionaryList> _listSvc;
+        public SystemDictionaryController(DomainService<SysDictionary> svc, DomainService<SysDictionaryList> listSvc)
             : base(svc)
         {
             _listSvc = listSvc;
@@ -35,7 +35,7 @@ namespace YZH.System.Controllers
                 .OrderBy(x => x.OrderNo ?? 0)
                 .Cast<object>()
                 .ToList();
-            return Ok(new YzhApiResult { Rows = items, Total = items.Count });
+            return Ok(new ApiResult { Rows = items, Total = items.Count });
         }
     }
 }

@@ -21,7 +21,7 @@ import {
 import { YzhForm, type YzhFormFieldV4 } from '@/yzh/components/form'
 import YzhTable from '@/yzh/components/table/YzhTable.vue'
 import type { PageParams, SearchField, YzhTableColumnV4 } from '@/yzh/components/table/types'
-import { Delete, Edit, Plus } from '@element-plus/icons-vue'
+
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { reactive, ref } from 'vue'
 
@@ -238,36 +238,45 @@ const formFields: YzhFormFieldV4[] = [
       :data-loader="loadUsers"
       :search-fields="searchFields"
       :page-size="10"
+      :search-max-fields="2"
       selectable
       :toolbar="{ columnSetting: true }"
       @selection-change="onSelectionChange"
     >
       <template #toolbar-left>
-        <el-button type="primary" :icon="Plus" @click="onAdd">新增用户</el-button>
+        <el-button type="primary" @click="onAdd">
+          <i class="bi bi-plus-lg"></i> 新增用户
+        </el-button>
         <el-button
           type="danger"
           plain
-          :icon="Delete"
           :disabled="selectedRows.length === 0"
           @click="onBatchDelete"
         >
-          批量删除
+          <i class="bi bi-trash"></i> 批量删除
           <span v-if="selectedRows.length" style="margin-left: 4px; opacity: 0.8">
             ({{ selectedRows.length }})
           </span>
         </el-button>
+        <el-button @click="tableRef?.refresh()">
+          <i class="bi bi-arrow-clockwise"></i> 刷新
+        </el-button>
       </template>
 
       <template #column-actions="{ row }">
-        <el-button text type="primary" :icon="Edit" @click="onEdit(row)">编辑</el-button>
+        <el-button text type="primary" @click="onEdit(row)">
+          <i class="bi bi-pencil"></i> 编辑
+        </el-button>
         <el-button
           text
           :type="row.enable === 1 ? 'warning' : 'success'"
           @click="onToggleEnable(row)"
         >
-          {{ row.enable === 1 ? '禁用' : '启用' }}
+          <i class="bi bi-toggle-on"></i> {{ row.enable === 1 ? '禁用' : '启用' }}
         </el-button>
-        <el-button text type="danger" :icon="Delete" @click="onDelete(row)">删除</el-button>
+        <el-button text type="danger" @click="onDelete(row)">
+          <i class="bi bi-trash"></i> 删除
+        </el-button>
       </template>
     </YzhTable>
 

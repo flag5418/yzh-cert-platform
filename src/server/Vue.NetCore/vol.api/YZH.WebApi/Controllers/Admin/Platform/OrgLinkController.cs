@@ -7,7 +7,7 @@
  *   3. GetOrgStdIds — 查询某机构已关联的标准 ID 列表
  *   4. GetOrgStageIds — 查询某机构已关联的阶段 ID 列表
  *
- * 调用方式（前端 YzhTreeCheckboxTable）：
+ * 调用方式（前端 TreeCheckboxTable）：
  *   - 切换树节点时调用 Get*Ids 加载已勾选状态
  *   - 用户勾选/取消 checkbox 时调用 Sync* 实时保存
  *

@@ -2,7 +2,6 @@
 /**
  * 系统字典管理 - 新架构实现
  */
-import { Collection, Delete, Edit, Plus, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { reactive, ref } from 'vue'
 import { deleteDict, getDictPage, saveDict, type SysDictionary } from '@/yzh/api/system-dict'
@@ -148,49 +147,67 @@ const formFields: YzhFormFieldV4[] = [
 </script>
 
 <template>
-  <div class="yzh-dict-page">
-    <YzhTable
-      ref="tableRef"
-      :columns="columns"
-      :data-loader="loadDicts"
-      :search-fields="searchFields"
-      :page-size="10"
-      selectable
-      :toolbar="{ refresh: true, columnSetting: true, density: true }"
-      @selection-change="(rows: SysDictionary[]) => (selectedRows = rows)"
-    >
-      <template #toolbar-left>
-        <el-button type="primary" :icon="Plus" @click="onAdd">新增字典</el-button>
-        <el-button type="danger" plain :icon="Delete" :disabled="!selectedRows.length" @click="onBatchDelete">
-          批量删除
-          <span v-if="selectedRows.length" style="margin-left: 4px; opacity: 0.8">({{ selectedRows.length }})</span>
-        </el-button>
-        <el-button :icon="Refresh" @click="tableRef?.refresh()">刷新</el-button>
-      </template>
-      <template #column-actions="{ row }">
-        <el-button text type="primary" :icon="Edit" @click="onEdit(row)">编辑</el-button>
-        <el-button text type="success" :icon="Collection" @click="onManageItems(row)">字典项</el-button>
-        <el-button text type="danger" :icon="Delete" @click="onDelete(row)">删除</el-button>
-      </template>
-    </YzhTable>
+  <YzhTable
+    ref="tableRef"
+    :columns="columns"
+    :data-loader="loadDicts"
+    :search-fields="searchFields"
+    :page-size="10"
+    :search-max-fields="2"
+    selectable
+    :toolbar="{ columnSetting: true }"
+    @selection-change="(rows: SysDictionary[]) => (selectedRows = rows)"
+  >
+    <template #toolbar-left>
+      <el-button type="primary" @click="onAdd">
+        <i class="bi bi-plus-lg"></i> 新增字典
+      </el-button>
+      <el-button type="danger" plain :disabled="!selectedRows.length" @click="onBatchDelete">
+        <i class="bi bi-trash"></i> 批量删除
+        <span v-if="selectedRows.length" style="margin-left: 4px; opacity: 0.8">({{ selectedRows.length }})</span>
+      </el-button>
+      <el-button @click="tableRef?.refresh()">
+        <i class="bi bi-arrow-clockwise"></i> 刷新
+      </el-button>
+    </template>
+    <template #column-actions="{ row }">
+      <el-button text type="primary" @click="onEdit(row)">
+        <i class="bi bi-pencil"></i> 编辑
+      </el-button>
+      <el-button text type="success" @click="onManageItems(row)">
+        <i class="bi bi-collection"></i> 字典项
+      </el-button>
+      <el-button text type="danger" @click="onDelete(row)">
+        <i class="bi bi-trash"></i> 删除
+      </el-button>
+    </template>
+  </YzhTable>
 
-    <el-dialog
-      v-model="dialogVisible"
-      :title="dialogMode === 'add' ? '新增字典' : '编辑字典'"
-      width="640px"
-      align-center
-      destroy-on-close
-      :close-on-click-modal="false"
-    >
-      <YzhForm
-        ref="formRef"
-        v-model="formData"
-        :fields="formFields"
-        :loading="submitting"
-        :cols="2"
-        @submit="onSubmit"
-        @reset="dialogVisible = false"
-      />
-    </el-dialog>
-  </div>
+  <el-dialog
+    v-model="dialogVisible"
+    :title="dialogMode === 'add' ? '新增字典' : '编辑字典'"
+    width="640px"
+    align-center
+    destroy-on-close
+    :close-on-click-modal="false"
+  >
+    <YzhForm
+      ref="formRef"
+      v-model="formData"
+      :fields="formFields"
+      :loading="submitting"
+      :cols="2"
+      @submit="onSubmit"
+      @reset="dialogVisible = false"
+    />
+  </el-dialog>
 </template>
+
+<style scoped>
+.yzh-dict-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--yzh-color-bg-page, #f5f7fa);
+}
+</style>

@@ -8,16 +8,16 @@ namespace YZH.System.Controllers
 {
     [Route("api/yzh/sys/users")]
     [ApiController]
-    public class SystemUserController : YzhCrudController<SysUser>
+    public class SystemUserController : CrudController<SysUser>
     {
-        public SystemUserController(YzhService<SysUser> svc) : base(svc) { }
+        public SystemUserController(DomainService<SysUser> svc) : base(svc) { }
 
         public override IActionResult GetPageData([FromBody] PageQuery q)
         {
             var (rows, total) = _svc.GetPage(q);
             // 脱敏：列表/详情不返回密码
             var safe = rows.Select(StripPwd).Cast<object>().ToList();
-            return Ok(new YzhApiResult { Rows = safe, Total = total });
+            return Ok(new ApiResult { Rows = safe, Total = total });
         }
 
         [HttpPost("Add")]

@@ -1,4 +1,5 @@
 using YZH.Core.BaseProvider;
+using YZH.Core.Extensions;
 using Cert.Platform.IRepositories.Admin.Platform;
 using Microsoft.Extensions.DependencyInjection;
 using YZH.Entity.DomainModels;
@@ -23,14 +24,17 @@ namespace Cert.Platform.Services.Admin.Platform
         }
 
         /// <summary>
-        /// 重写 GetPageData：直接查询 cert_iso_standard 表
-        /// 
-        /// 注意：v_iso_standard 视图已 DROP，后续按需重建视图或用 EF Core 投影替代
+        /// 重写 GetPageData：自动路由到 v_iso_standard 视图（如果配置了 ViewName）
+        /// 视图提供 CategoryName 等 JOIN 翻译字段。
+        /// SaveChanges 仍然操作 cert_iso_standard 表。
         /// </summary>
         public override PageGridData<ISOStandard> GetPageData(PageDataOptions options)
         {
             var db = _repository.DbContext as VOLContext ?? new VOLContext();
-            var query = db.Set<ISOStandard>().AsQueryable();
+
+            // YZH ViewName 路由：实体配置 [ViewName("v_iso_standard")] 自动生效
+            // 等效 SQL: SELECT * FROM (SELECT * FROM v_iso_standard) AS x WHERE ... ORDER BY ... LIMIT n
+            var query = db.Set<ISOStandard>().UseViewIfExists();
 
             int totalCount = query.Count();
 
@@ -41,6 +45,7 @@ namespace Cert.Platform.Services.Admin.Platform
             {
                 "STANDARDCODE" => isAsc ? query.OrderBy(x => x.StandardCode) : query.OrderByDescending(x => x.StandardCode),
                 "STANDARDNAME" => isAsc ? query.OrderBy(x => x.StandardName) : query.OrderByDescending(x => x.StandardName),
+                "CATEGORYNAME" => isAsc ? query.OrderBy(x => x.CategoryName) : query.OrderByDescending(x => x.CategoryName),
                 _ => query.OrderByDescending(x => x.Id),
             };
 

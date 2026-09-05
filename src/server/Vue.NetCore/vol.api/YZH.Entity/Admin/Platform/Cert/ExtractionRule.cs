@@ -9,29 +9,23 @@ namespace YZH.Entity.Admin.Platform.Cert
     /// <para>表名：cert_extraction_rule</para>
     /// </summary>
     [Table("cert_extraction_rule")]
-    public class ExtractionRule : YZHBaseEntity
+    public class ExtractionRule : EntityBase
     {
         [Required, StringLength(36)]
-        [Column("file_requirement_code")]
         public string FileRequirementCode { get; set; }
 
         [Required, StringLength(36)]
         [UniqueField("技能编码", WithFields = new[] { "FileRequirementCode" })]
-        [Column("skill_code")]
         public string SkillCode { get; set; }
 
         [Required, StringLength(20)]
-        [Column("rule_type")]
         public string RuleType { get; set; }
 
         [Required]
-        [Column("rule_config")]
         public string RuleConfig { get; set; }
 
-        [Column("description")]
         public string Description { get; set; }
 
-        [Column("is_active")]
         public bool IsActive { get; set; } = true;
     }
 }

@@ -8,9 +8,9 @@ namespace YZH.System.Controllers
 {
     [Route("api/yzh/sys/roles")]
     [ApiController]
-    public class SystemRoleController : YzhCrudController<SysRole>
+    public class SystemRoleController : CrudController<SysRole>
     {
-        public SystemRoleController(YzhService<SysRole> svc) : base(svc) { }
+        public SystemRoleController(DomainService<SysRole> svc) : base(svc) { }
 
         [HttpPost("Del")]
         public override IActionResult Del([FromBody] List<object> ids)

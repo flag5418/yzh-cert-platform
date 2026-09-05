@@ -8,9 +8,9 @@ namespace YZH.System.Controllers
 {
     [Route("api/yzh/sys/departments")]
     [ApiController]
-    public class SystemDepartmentController : YzhCrudController<SysDepartment>
+    public class SystemDepartmentController : CrudController<SysDepartment>
     {
-        public SystemDepartmentController(YzhService<SysDepartment> svc) : base(svc) { }
+        public SystemDepartmentController(DomainService<SysDepartment> svc) : base(svc) { }
 
         [HttpPost("Add")]
         public override IActionResult Add([FromBody] SaveModel<SysDepartment> m)
@@ -32,7 +32,7 @@ namespace YZH.System.Controllers
         public IActionResult Tree()
         {
             var all = _svc.GetAll().OrderBy(d => d.DepartmentName).ToList();
-            return Ok(new YzhApiResult { Data = all });
+            return Ok(new ApiResult { Data = all });
         }
     }
 }

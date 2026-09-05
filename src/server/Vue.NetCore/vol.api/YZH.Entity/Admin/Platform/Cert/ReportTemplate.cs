@@ -9,37 +9,29 @@ namespace YZH.Entity.Admin.Platform.Cert
     /// <para>表名：cert_report_template</para>
     /// </summary>
     [Table("cert_report_template")]
-    public class ReportTemplate : YZHBaseEntity
+    public class ReportTemplate : EntityBase
     {
         [Required, StringLength(36)]
-        [Column("cb_code")]
         public string CbCode { get; set; }
 
         [StringLength(50)]
-        [Column("org_code")]
         public string OrgCode { get; set; }
 
         [Required, StringLength(36)]
-        [Column("standard_code")]
         public string StandardCode { get; set; }
 
         [Required, StringLength(36)]
-        [Column("phase_code")]
         public string PhaseCode { get; set; }
 
         [Required, StringLength(200)]
         [UniqueField("模板名称", WithFields = new[] { "CbCode", "StandardCode", "PhaseCode" })]
-        [Column("template_name")]
         public string TemplateName { get; set; }
 
         [StringLength(500)]
-        [Column("template_file_path")]
         public string TemplateFilePath { get; set; }
 
-        [Column("section_config")]
         public string SectionConfig { get; set; }
 
-        [Column("is_default")]
         public bool IsDefault { get; set; } = false;
     }
 }

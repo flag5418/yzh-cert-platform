@@ -24,7 +24,7 @@ namespace Cert.Platform.Services.Admin.Platform
             _logger = logger;
         }
 
-        public async Task NotifyAsync(YzhQueue queue)
+        public async Task NotifyAsync(Queue queue)
         {
             try
             {

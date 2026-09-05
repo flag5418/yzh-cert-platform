@@ -1,20 +1,11 @@
 <script setup lang="ts">
 /**
  * 系统部门管理 - V4 标准布局
- *
- * 结构：
- * - 标题栏
- * - 搜索栏（查询条件 + 按钮 grid）
- * - 控制栏（新增/批量删除/刷新）
- * - 表格
- * - 分页
  */
 import { deleteDept, getDeptPage, saveDept, type SysDepartment } from '@/yzh/api/system-dept'
 import { YzhForm, type YzhFormFieldV4 } from '@/yzh/components/form'
-import YzhPageLayout from '@/yzh/components/layout/YzhPageLayout.vue'
 import YzhTable from '@/yzh/components/table/YzhTable.vue'
-import type { PageParams, YzhTableColumnV4 } from '@/yzh/components/table/types'
-import { Delete, Edit, Plus, Refresh } from '@element-plus/icons-vue'
+import type { PageParams, SearchField, YzhTableColumnV4 } from '@/yzh/components/table/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { reactive, ref } from 'vue'
 
@@ -48,34 +39,26 @@ const columns: YzhTableColumnV4<SysDepartment>[] = [
   { prop: 'actions', label: '操作', width: 160, fixed: 'right', slot: 'actions' }
 ]
 
-/** 外部搜索表单（置入 YzhPageLayout 的 #search slot） */
-const searchForm = reactive<{ keyword: string; enable: number | undefined }>({
-  keyword: '',
-  enable: undefined
-})
+const searchFields: SearchField[] = [
+  { prop: 'departmentName', label: '部门名称', type: 'text', placeholder: '请输入部门名称' },
+  {
+    prop: 'enable',
+    label: '状态',
+    type: 'select',
+    options: [
+      { label: '启用', value: 1 },
+      { label: '禁用', value: 0 }
+    ]
+  }
+]
 
-/** 数据加载器：合并外部搜索条件 + 分页排序参数 */
 async function loadDepts(params: PageParams) {
-  return getDeptPage({
-    ...params,
-    departmentName: searchForm.keyword || undefined,
-    enable: searchForm.enable
-  })
-}
-
-function handleSearch() {
-  tableRef.value?.loadData()
-}
-
-function handleSearchReset() {
-  searchForm.keyword = ''
-  searchForm.enable = undefined
-  tableRef.value?.loadData()
+  return getDeptPage(params)
 }
 
 function onAdd() {
   dialogMode.value = 'add'
-    Object.assign(formData, {
+  Object.assign(formData, {
     departmentId: undefined,
     departmentName: '',
     departmentCode: '',
@@ -166,112 +149,72 @@ const formFields: YzhFormFieldV4[] = [
 </script>
 
 <template>
-  <YzhPageLayout pageTitle="部门管理" helpText="管理组织架构，支持树形层级关系">
-    <!-- 搜索栏 -->
-    <template #search>
-      <el-form :inline="true" class="dept-search-form">
-        <el-form-item label="部门名称">
-          <el-input
-            v-model="searchForm.keyword"
-            placeholder="请输入部门名称"
-            clearable
-            style="width: 200px"
-          />
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-select
-            v-model="searchForm.enable"
-            placeholder="请选择"
-            clearable
-            style="width: 140px"
-          >
-            <el-option label="启用" :value="1" />
-            <el-option label="禁用" :value="0" />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="handleSearch">查询</el-button>
-          <el-button @click="handleSearchReset">重置</el-button>
-        </el-form-item>
-      </el-form>
-    </template>
-
-    <!-- 控制栏 -->
+  <YzhTable
+    ref="tableRef"
+    :columns="columns"
+    :data-loader="loadDepts"
+    :search-fields="searchFields"
+    :page-size="10"
+    :search-max-fields="2"
+    selectable
+    row-key="departmentId"
+    :toolbar="{ columnSetting: true }"
+    @selection-change="(rows: SysDepartment[]) => (selectedRows = rows)"
+  >
     <template #toolbar-left>
-      <el-button type="primary" :icon="Plus" @click="onAdd">新增部门</el-button>
+      <el-button type="primary" @click="onAdd">
+        <i class="bi bi-plus-lg"></i> 新增部门
+      </el-button>
       <el-button
         type="danger"
         plain
-        :icon="Delete"
         :disabled="!selectedRows.length"
         @click="onBatchDelete"
       >
-        批量删除
+        <i class="bi bi-trash"></i> 批量删除
         <span v-if="selectedRows.length" style="margin-left: 4px; opacity: 0.8"
           >({{ selectedRows.length }})</span
         >
       </el-button>
+      <el-button @click="tableRef?.refresh()">
+        <i class="bi bi-arrow-clockwise"></i> 刷新
+      </el-button>
     </template>
-    <template #toolbar-right>
-      <el-button :icon="Refresh" @click="tableRef?.refresh()">刷新</el-button>
+    <template #column-actions="{ row }">
+      <el-button text type="primary" @click="onEdit(row)">
+        <i class="bi bi-pencil"></i> 编辑
+      </el-button>
+      <el-button text type="danger" @click="onDelete(row)">
+        <i class="bi bi-trash"></i> 删除
+      </el-button>
     </template>
+  </YzhTable>
 
-    <!-- 表格 -->
-    <YzhTable
-      ref="tableRef"
-      :columns="columns"
-      :data-loader="loadDepts"
-      :search-fields="[]"
-      :page-size="10"
-      selectable
-      row-key="departmentId"
-      :toolbar="{ refresh: false, columnSetting: true, density: true }"
-      @selection-change="(rows: SysDepartment[]) => (selectedRows = rows)"
-    >
-      <template #column-actions="{ row }">
-        <el-button text type="primary" :icon="Edit" @click="onEdit(row)">编辑</el-button>
-        <el-button text type="danger" :icon="Delete" @click="onDelete(row)">删除</el-button>
-      </template>
-    </YzhTable>
-
-    <!-- 编辑对话框 -->
-    <el-dialog
-      v-model="dialogVisible"
-      :title="dialogMode === 'add' ? '新增部门' : '编辑部门'"
-      width="720px"
-      align-center
-      destroy-on-close
-      :close-on-click-modal="false"
-    >
-      <YzhForm
-        ref="formRef"
-        v-model="formData"
-        :fields="formFields"
-        :loading="submitting"
-        :cols="2"
-        @submit="onSubmit"
-        @reset="dialogVisible = false"
-      />
-    </el-dialog>
-    </YzhPageLayout>
+  <el-dialog
+    v-model="dialogVisible"
+    :title="dialogMode === 'add' ? '新增部门' : '编辑部门'"
+    width="720px"
+    align-center
+    destroy-on-close
+    :close-on-click-modal="false"
+  >
+    <YzhForm
+      ref="formRef"
+      v-model="formData"
+      :fields="formFields"
+      :loading="submitting"
+      :cols="2"
+      @submit="onSubmit"
+      @reset="dialogVisible = false"
+    />
+  </el-dialog>
 </template>
 
 <style scoped>
-/* 搜索表单 */
-.dept-search-form {
+.yzh-dept-page {
   display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.dept-search-form :deep(.el-form-item) {
-  margin-bottom: 0;
-  margin-right: 0;
-}
-
-.dept-search-form :deep(.el-form-item__label) {
-  font-weight: 500;
-  color: var(--yzh-color-text-regular, #606266);
+  flex-direction: column;
+  height: 100%;
+  background: var(--yzh-color-bg-page, #f5f7fa);
 }
 </style>
-

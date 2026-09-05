@@ -10,12 +10,12 @@ namespace YZH.Entity.Admin.Platform
     /// 
     /// 设计原则：
     /// - 声明式：只需在属性上加特性，无需在 Service 中手写校验代码
-    /// - 通用性：所有继承 YZHBaseEntity 的实体均可使用
+    /// - 通用性：所有继承 EntityBase 的实体均可使用
     /// - 支持联合唯一：通过 WithFields 指定联合唯一的其他字段
     /// 
     /// 使用示例：
     /// <code>
-    /// public class CertificationBody : YZHBaseEntity
+    /// public class CertificationBody : EntityBase
     /// {
     ///     [UniqueField("机构编号")]
     ///     [Column("cb_code")]

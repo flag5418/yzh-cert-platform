@@ -20,7 +20,7 @@ namespace Cert.Platform.Services.Admin.Platform
             _serviceProvider = serviceProvider;
         }
 
-        public async Task OnQueueCancelledAsync(YzhQueue queue)
+        public async Task OnQueueCancelledAsync(Queue queue)
         {
             // 仅处理上传任务产生的文件转换队列
             if (queue == null || queue.QueueType != "file_convert") return;

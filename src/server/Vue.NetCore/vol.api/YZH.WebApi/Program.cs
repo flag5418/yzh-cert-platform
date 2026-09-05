@@ -12,7 +12,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
-using YZH.System;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Quartz.Impl;
@@ -37,20 +36,13 @@ using Microsoft.Extensions.Configuration;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddModule(builder.Configuration);
 
-// ====== YZH 全新系统模块（替代 VOL 系统设置底层，干净架构）======
-// 独立于 VOL，使用 YzhDbContext + 干净控制器，路由前缀 /api/yzh/sys/*
-try
-{
-    builder.Services.AddYzhSystem(builder.Configuration);
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"[YZH.System] 注册失败（已跳过，不影响 VOL 启动）：{ex.Message}");
-}
+// ====== YZH 全新系统模块（已禁用）======
+// YZH.System 项目引用因命名空间冲突暂时移除，AddYzhSystem 调用已注释
+// builder.Services.AddYzhSystem(builder.Configuration);
 
 // ====== YZH Framework 服务注册 ======
 // YZH V3.0 配置驱动 UI 服务（业务逻辑在 YZH.Core，Controller 只做 HTTP 适配）
-builder.Services.AddScoped<YZH.Core.Services.IYzhPageConfigService, YZH.Core.Services.YzhPageConfigService>();
+builder.Services.AddScoped<YZH.Core.Services.IYzhPageConfigService, YZH.Core.Services.PageConfigService>();
 
 
 builder.Services
@@ -146,25 +138,25 @@ builder.Services.AddMvc(options =>
     options.Filters.Add(typeof(ApiAuthorizeFilter));
     options.Filters.Add(typeof(ActionExecuteFilter));
     // YZH 全局异常过滤器：Controller 层最终兜底，脱敏后返回友好提示
-    options.Filters.Add(typeof(YZH.Core.Exceptions.YZHExceptionFilter));
+    options.Filters.Add(typeof(YZH.Core.Exceptions.AppExceptionFilter));
 });
 
 // ====== Office 文档转换后台服务 ======
 builder.Services.AddScoped<Cert.Platform.Services.Admin.Platform.OfficeConvertService>();
 
 // ====== yzh 队列中心（YZH.Core.Queue 框架核心） ======
-builder.Services.Configure<YZH.Core.Queue.YzhQueueOptions>(builder.Configuration.GetSection(YZH.Core.Queue.YzhQueueOptions.SectionName));
-builder.Services.AddSingleton<YZH.Core.Queue.YzhQueueManager>();
+builder.Services.Configure<YZH.Core.Queue.QueueOptions>(builder.Configuration.GetSection(YZH.Core.Queue.QueueOptions.SectionName));
+builder.Services.AddSingleton<YZH.Core.Queue.QueueManager>();
 builder.Services.AddSingleton<YZH.Core.Queue.IYzhTaskExecutor, Cert.Platform.Services.Admin.Platform.OfficeConvertTaskExecutor>();
 // 队列取消后的业务清理钩子：上传任务取消时彻底清理数据库记录 + MinIO 对象
 builder.Services.AddScoped<YZH.Core.Queue.IYzhQueueCancelHandler, Cert.Platform.Services.Admin.Platform.UploadQueueCancelHandler>();
-builder.Services.AddHostedService<YZH.Core.Queue.YzhQueueHostedService>();
+builder.Services.AddHostedService<YZH.Core.Queue.QueueHostedService>();
 
 // ====== SignalR 转换进度通知（桥接队列引擎与 Hub） ======
 builder.Services.AddScoped<Cert.Platform.IServices.Admin.Platform.IConvertNotifier, YZH.WebApi.Hubs.ConvertNotifier>();
 builder.Services.AddSingleton<YZH.Core.Queue.IYzhQueueNotifier, Cert.Platform.Services.Admin.Platform.CertQueueNotifier>();
 
-// ====== YZH Framework 核心服务注册（替代 YZHModule Autofac 注册）======
+// ====== YZH Framework 核心服务注册（替代 FrameworkModule Autofac 注册）======
 // 文件提取服务：仅注册 IFileExtractor。
 // 注意：不要在这里注册未键控的 ITextExtractor —— FileExtractorService 同时有无参构造与
 // (ITextExtractor×4) 构造，MS DI 会优先选择参数最多的构造，未键控注册会导致四个参数

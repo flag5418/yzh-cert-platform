@@ -1,7 +1,7 @@
 /*
  * Office 文档转换服务（yzh 队列中心 file_convert 执行核心）
  * 由 OfficeConvertTaskExecutor 调用，负责：幂等检查 → 下载 → 转换 → 上传 → 文件状态联动
- * 任务状态机（pending/processing/completed/failed/cancelled/退避重试）由 YzhQueueManager 统一管理
+ * 任务状态机（pending/processing/completed/failed/cancelled/退避重试）由 QueueManager 统一管理
  */
 using System;
 using System.IO;

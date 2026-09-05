@@ -11,6 +11,8 @@
 @import './yzh-spacing.css';
 @import './yzh-layout.css';
 @import './yzh-menu.css';
+@import './yzh-menu-fix.css';
+@import './yzh-component-padding.css';
 
 /* 2. Element Plus 组件样式重构 */
 @import './yzh-select.css';

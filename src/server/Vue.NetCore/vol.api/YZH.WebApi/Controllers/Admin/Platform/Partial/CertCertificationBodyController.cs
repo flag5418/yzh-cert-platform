@@ -6,7 +6,7 @@
  * 独立删除接口：引用校验 + 软删除（短路校验模式）
  *
  * 前端调用方式：
- *   YZHBaseApiClient.del(ids) → POST /api/CertCertificationBody/Remove
+ *   BaseApiClient.del(ids) → POST /api/CertCertificationBody/Remove
  *   请求体格式：{ ids: ["code1", "code2"] }
  *
  * 设计原则（2026-08-07 更新）：

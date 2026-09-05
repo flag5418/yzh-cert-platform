@@ -7,47 +7,34 @@ namespace YZH.Entity.Admin.Platform.Wf
 {
     /// <summary>
     /// WorkflowDefinition - 工作流定义
-    /// <para>表名：wf_workflow_definition（列名为 snake_case）</para>
+    /// <para>表名：wf_workflow_definition（业务字段 PascalCase，审计字段 snake_case）</para>
+    /// <para>视图名：v_workflow</para>
     /// </summary>
+    [Entity(TableCnName = "工作流定义", TableName = "wf_workflow_definition", ViewName = "v_workflow", DBServer = "VOLContext")]
     [Table("wf_workflow_definition")]
-    public class WorkflowDefinition : YZHBaseEntity
+    public class WorkflowDefinition : EntityBase
     {
-        // ===== snake_case 审计字段覆盖 =====
-        [Column("create_id")] public new int? CreateID { get; set; }
-        [Column("creator")] [MaxLength(50)] public new string Creator { get; set; }
-        [Column("create_date")] public new DateTime? CreateDate { get; set; } = DateTime.Now;
-        [Column("modify_id")] public new int? ModifyID { get; set; }
-        [Column("modifier")] [MaxLength(50)] public new string Modifier { get; set; }
-        [Column("modify_date")] public new DateTime? ModifyDate { get; set; }
-        [Column("delete_id")] public new int? DeleteID { get; set; }
-        [Column("deleter")] [MaxLength(50)] public new string Deleter { get; set; }
-        [Column("delete_time")] public new DateTime? DeleteTime { get; set; }
-        [Column("code")] public new string Code { get; set; } = Guid.NewGuid().ToString("N");
-        [Column("status")] public new string Status { get; set; } = "active";
-        [Column("enable")] public new bool Enable { get; set; } = true;
-        [Column("sort")] public new int Sort { get; set; }
-        [Column("remark")] public new string Remark { get; set; }
-
-        [Required][StringLength(100)][UniqueField("工作流编码")][Column("workflow_code")]
+        // ===== 业务字段（DB 列名为 PascalCase：WorkflowCode/WorkflowName/WorkflowType/WorkflowConfig）=====
+        [Required][StringLength(100)][UniqueField("工作流编码")]
         public string WorkflowCode { get; set; }
 
         [Required][StringLength(200)]
-        [Column("workflow_name")]
         public string WorkflowName { get; set; }
 
         [Required]
-        [Column("workflow_type")]
         public string WorkflowType { get; set; }
 
-        [Column("workflow_config")]
         public string WorkflowConfig { get; set; }
 
         [Column("version")] public int Version { get; set; } = 1;
 
-        [Column("is_active")]
         public bool IsActive { get; set; } = true;
 
-        [Column("description")]
         public string Description { get; set; }
+
+        // ===== 视图扩展字段 =====
+        [NotMapped] public string WorkflowTypeName { get; set; }
+        [NotMapped] public string IsActiveName { get; set; }
+        [NotMapped] public string StatusName { get; set; }
     }
 }

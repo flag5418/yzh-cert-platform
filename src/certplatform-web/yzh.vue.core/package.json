@@ -1,0 +1,30 @@
+{
+  "name": "yzh.vue.core",
+  "version": "1.0.0",
+  "description": "YZH认证平台 - Vue核心组件库（业务无关）",
+  "private": true,
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./components/*": "./src/components/*/index.ts",
+    "./api/client": "./src/api/client.ts",
+    "./api/auth": "./src/api/auth.ts",
+    "./composables/*": "./src/composables/*.ts",
+    "./types": "./src/types/index.ts"
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "peerDependencies": {
+    "vue": "^3.4.0",
+    "element-plus": "^2.6.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "typescript": "^5.0.0",
+    "vite": "^5.0.0",
+    "vue": "^3.4.0",
+    "vue-tsc": "^2.0.0"
+  }
+}

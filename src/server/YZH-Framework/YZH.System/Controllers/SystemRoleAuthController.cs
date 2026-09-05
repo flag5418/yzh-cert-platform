@@ -10,8 +10,8 @@ namespace YZH.System.Controllers
     [ApiController]
     public class SystemRoleAuthController : ControllerBase
     {
-        private readonly YzhService<SysRoleAuth> _authSvc;
-        public SystemRoleAuthController(YzhService<SysRoleAuth> authSvc)
+        private readonly DomainService<SysRoleAuth> _authSvc;
+        public SystemRoleAuthController(DomainService<SysRoleAuth> authSvc)
         {
             _authSvc = authSvc;
         }
@@ -26,7 +26,7 @@ namespace YZH.System.Controllers
                 .Where(x => x.Role_Id == roleId)
                 .Cast<object>()
                 .ToList();
-            return Ok(new YzhApiResult { Rows = list, Total = list.Count });
+            return Ok(new ApiResult { Rows = list, Total = list.Count });
         }
 
         /// <summary>
@@ -51,11 +51,11 @@ namespace YZH.System.Controllers
                         CreateDate = DateTime.Now
                     });
                 }
-                return Ok(new YzhApiResult());
+                return Ok(new ApiResult());
             }
             catch (Exception ex)
             {
-                return Ok(new YzhApiResult { Status = false, Msg = ex.Message });
+                return Ok(new ApiResult { Status = false, Msg = ex.Message });
             }
         }
     }

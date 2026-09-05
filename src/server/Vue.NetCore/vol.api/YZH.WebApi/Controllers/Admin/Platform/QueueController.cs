@@ -16,9 +16,9 @@ namespace YZH.WebApi.Controllers.Admin.Platform
     [JWTAuthorize]
     public class QueueController : ApiBaseController<object>
     {
-        private readonly YzhQueueManager _queueManager;
+        private readonly QueueManager _queueManager;
 
-        public QueueController(YzhQueueManager queueManager)
+        public QueueController(QueueManager queueManager)
         {
             _queueManager = queueManager;
         }

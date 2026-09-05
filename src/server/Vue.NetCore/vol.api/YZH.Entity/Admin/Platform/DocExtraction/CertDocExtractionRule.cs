@@ -15,7 +15,7 @@ namespace YZH.Entity.Admin.Platform.DocExtraction
     /// </summary>
     [Table("cert_doc_extraction_rule")]
     [Entity(TableCnName = "文档提取规则")]
-    public class CertDocExtractionRule : YZHBaseEntity
+    public class CertDocExtractionRule : EntityBase
     {
         // 覆盖基类审计/通用字段，适配 snake_case 列名
         [Column("create_id")] public new int? CreateID { get; set; }

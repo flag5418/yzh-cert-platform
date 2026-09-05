@@ -25,11 +25,11 @@ namespace Cert.Platform.Services.Admin.Platform
             _serviceProvider = serviceProvider;
         }
 
-        public async Task<YzhTaskExecutionResult> ExecuteAsync(YzhQueueTask task, CancellationToken cancellationToken)
+        public async Task<TaskExecutionResult> ExecuteAsync(QueueTask task, CancellationToken cancellationToken)
         {
             var payload = ParsePayload(task.Payload);
             if (payload == null || string.IsNullOrEmpty(payload.FileCode))
-                return new YzhTaskExecutionResult { Success = false, Message = "任务数据无效（payload 解析失败）", Retryable = false };
+                return new TaskExecutionResult { Success = false, Message = "任务数据无效（payload 解析失败）", Retryable = false };
 
             using var scope = _serviceProvider.CreateScope();
             var convertService = scope.ServiceProvider.GetRequiredService<OfficeConvertService>();
@@ -37,7 +37,7 @@ namespace Cert.Platform.Services.Admin.Platform
             try
             {
                 var result = await convertService.ConvertAsync(payload, cancellationToken);
-                return new YzhTaskExecutionResult { Success = result, Message = result ? null : "转换失败" };
+                return new TaskExecutionResult { Success = result, Message = result ? null : "转换失败" };
             }
             catch (OperationCanceledException)
             {
@@ -46,7 +46,7 @@ namespace Cert.Platform.Services.Admin.Platform
             catch (Exception ex)
             {
                 var msg = ex.InnerException?.Message ?? ex.Message;
-                return new YzhTaskExecutionResult
+                return new TaskExecutionResult
                 {
                     Success = false,
                     Message = msg,
@@ -61,7 +61,7 @@ namespace Cert.Platform.Services.Admin.Platform
         /// <summary>
         /// 任务状态变更联动：退避重试/最终失败/取消时同步文件记录可见性
         /// </summary>
-        public async Task OnTaskStateChangedAsync(YzhQueueTask task, string newStatus, string message)
+        public async Task OnTaskStateChangedAsync(QueueTask task, string newStatus, string message)
         {
             var payload = ParsePayload(task.Payload);
             if (payload == null || string.IsNullOrEmpty(payload.FileCode)) return;

@@ -49,10 +49,18 @@ namespace YZH.Sys.Controllers
         }
 
         [HttpPost, HttpGet, Route("login"), AllowAnonymous]
-        [ObjectModelValidatorFilter(ValidatorModel.Login)]
         public async Task<IActionResult> Login([FromBody] LoginInfo loginInfo)
         {
+            if (loginInfo == null || string.IsNullOrEmpty(loginInfo.UserName))
+            {
+                return Json(new WebResponseContent().Error("请提交参数"));
+            }
+#if DEBUG
+            // 开发模式：跳过验证码校验 + 模型校验
+            return Json(await Service.Login(loginInfo, verificationCode: false));
+#else
             return Json(await Service.Login(loginInfo));
+#endif
         }
 
         private readonly ConcurrentDictionary<int, object> _lockCurrent = new ConcurrentDictionary<int, object>();

@@ -8,7 +8,7 @@ namespace YZH.Entity.Admin.Platform.DocExtraction
 {
     [Table("cert_ai_config")]
     [Entity(TableCnName = "AI配置")]
-    public class AIConfig : YZHBaseEntity
+    public class AIConfig : EntityBase
     {
         /// <summary>覆盖基类审计字段，适配snake_case列名</summary>
         [Column("create_id")] public new int? CreateID { get; set; }

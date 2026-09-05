@@ -34,7 +34,7 @@ namespace YZH.WebApi.Controllers
         {
             var entityType = FindEntityType(entityName);
             if (entityType == null)
-                return NotFound(new { message = $"实体 {entityName} 不存在，或未标记[YZHPage]特性" });
+                return NotFound(new { message = $"实体 {entityName} 不存在，或未标记[Page]特性" });
 
             try
             {
@@ -56,7 +56,7 @@ namespace YZH.WebApi.Controllers
         /// 获取所有实体配置列表
         /// GET /api/entity-config/list
         /// 
-        /// 返回所有标记了[YZHPage]特性的实体列表
+        /// 返回所有标记了[Page]特性的实体列表
         /// </summary>
         /// <returns>实体配置列表</returns>
         [HttpGet("list")]
@@ -71,10 +71,10 @@ namespace YZH.WebApi.Controllers
                         try { return a.GetTypes(); }
                         catch { return Array.Empty<Type>(); }
                     })
-                    .Where(t => t.GetCustomAttribute<YZHPageAttribute>() != null)
+                    .Where(t => t.GetCustomAttribute<PageAttribute>() != null)
                     .Select(t =>
                     {
-                        var pageAttr = t.GetCustomAttribute<YZHPageAttribute>();
+                        var pageAttr = t.GetCustomAttribute<PageAttribute>();
                         return new
                         {
                             EntityName = t.Name,
@@ -110,7 +110,7 @@ namespace YZH.WebApi.Controllers
                     catch { return Array.Empty<Type>(); }
                 })
                 .FirstOrDefault(t => t.Name == entityName &&
-                                   t.GetCustomAttribute<YZHPageAttribute>() != null);
+                                   t.GetCustomAttribute<PageAttribute>() != null);
 
             if (type != null) return type;
 
@@ -122,7 +122,7 @@ namespace YZH.WebApi.Controllers
                     catch { return Array.Empty<Type>(); }
                 })
                 .FirstOrDefault(t => string.Equals(t.Name, entityName, StringComparison.OrdinalIgnoreCase) &&
-                                   t.GetCustomAttribute<YZHPageAttribute>() != null);
+                                   t.GetCustomAttribute<PageAttribute>() != null);
         }
     }
 }

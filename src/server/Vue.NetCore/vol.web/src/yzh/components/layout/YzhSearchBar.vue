@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * YzhSearchBar - 单行 Grid 布局搜索栏
- * 特点：
- * - 单行布局，查询和重置按钮右对齐
- * - 使用 CSS Grid 实现响应式
- * - 与 YzhTable 联动通过 v-model:default-values + @search/@reset
+ * YzhSearchBar - 搜索栏组件
+ * 布局：左侧查询条件（一行显示，label+input），右侧按钮
+ * - 查询条件采用 flex 布局，label 和 input 在一行
+ * - 查询条件之间用 flex:1 自动填充空白
+ * - 查询和重置按钮固定在右侧
  */
 import { reactive, watch } from 'vue'
 import type { SearchField } from '../table/types'
@@ -14,8 +14,10 @@ const props = withDefaults(
     fields: SearchField[]
     defaultValues?: Record<string, any>
     cols?: number
+    maxFields?: number
+    inputWidth?: string | number
   }>(),
-  { cols: 4 }
+  { cols: 2, maxFields: 2, inputWidth: '200px' }
 )
 
 const emit = defineEmits<{
@@ -36,16 +38,12 @@ watch(
   { immediate: true, deep: true }
 )
 
-function getDefault(field: SearchField) {
-  if (formValues[field.prop] !== undefined) return formValues[field.prop]
-  if (field.defaultValue !== undefined) return field.defaultValue
-  if (field.type === 'dateRange') return []
-  return ''
-}
+// 只取前 maxFields 个字段作为查询条件
+const searchFields = props.fields.slice(0, props.maxFields)
 
 function onSearch() {
   const payload: Record<string, any> = {}
-  props.fields.forEach((f) => {
+  searchFields.forEach((f) => {
     const v = formValues[f.prop]
     if (v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)) {
       payload[f.prop] = v
@@ -55,7 +53,7 @@ function onSearch() {
 }
 
 function onReset() {
-  props.fields.forEach((f) => {
+  searchFields.forEach((f) => {
     delete formValues[f.prop]
   })
   emit('reset')
@@ -64,65 +62,68 @@ function onReset() {
 
 <template>
   <div class="yzh-search-bar">
-    <div class="yzh-search-bar__grid">
-      <div 
-        v-for="field in fields" 
-        :key="field.prop" 
-        class="yzh-search-bar__item"
-      >
-        <div class="yzh-search-bar__field">
-          <label class="yzh-search-bar__label">{{ field.label }}</label>
-          <el-input
-            v-if="!field.type || field.type === 'text'"
-            v-model="formValues[field.prop]"
-            :placeholder="field.placeholder || `请输入${field.label}`"
-            clearable
-            @keyup.enter="onSearch"
-          />
-          <el-input-number
-            v-else-if="field.type === 'number'"
-            v-model="formValues[field.prop]"
-            :placeholder="field.placeholder || `请输入${field.label}`"
-            style="width: 100%"
-          />
-          <el-select
-            v-else-if="field.type === 'select'"
-            v-model="formValues[field.prop]"
-            :placeholder="field.placeholder || `请选择${field.label}`"
-            clearable
-            filterable
-            style="width: 100%"
-          >
-            <el-option
-              v-for="opt in field.options || []"
-              :key="opt.value"
-              :label="opt.label"
-              :value="opt.value"
-            />
-          </el-select>
-          <el-date-picker
-            v-else-if="field.type === 'date'"
-            v-model="formValues[field.prop]"
-            type="date"
-            :placeholder="field.placeholder || `请选择${field.label}`"
-            value-format="YYYY-MM-DD"
-            style="width: 100%"
-          />
-          <el-date-picker
-            v-else-if="field.type === 'dateRange'"
-            v-model="formValues[field.prop]"
-            type="daterange"
-            :placeholder="field.placeholder || `请选择${field.label}`"
-            value-format="YYYY-MM-DD"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-            style="width: 100%"
-          />
+    <div class="yzh-search-bar__inner">
+      <!-- 查询条件区域 -->
+      <div class="yzh-search-bar__fields">
+        <div 
+          v-for="field in searchFields" 
+          :key="field.prop" 
+          class="yzh-search-bar__field"
+        >
+          <div class="yzh-search-bar__field-row">
+            <label class="yzh-search-bar__label">{{ field.label }}</label>
+            <div class="yzh-search-bar__input-wrap" :style="{ width: inputWidth }">
+              <el-input
+                v-if="!field.type || field.type === 'text'"
+                v-model="formValues[field.prop]"
+                :placeholder="field.placeholder || `请输入${field.label}`"
+                clearable
+                @keyup.enter="onSearch"
+              />
+              <el-input-number
+                v-else-if="field.type === 'number'"
+                v-model="formValues[field.prop]"
+                :placeholder="field.placeholder || `请输入${field.label}`"
+              />
+              <el-select
+                v-else-if="field.type === 'select'"
+                v-model="formValues[field.prop]"
+                :placeholder="field.placeholder || `请选择${field.label}`"
+                clearable
+                filterable
+              >
+                <el-option
+                  v-for="opt in field.options || []"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
+              <el-date-picker
+                v-else-if="field.type === 'date'"
+                v-model="formValues[field.prop]"
+                type="date"
+                :placeholder="field.placeholder || `请选择${field.label}`"
+                value-format="YYYY-MM-DD"
+              />
+              <el-date-picker
+                v-else-if="field.type === 'dateRange'"
+                v-model="formValues[field.prop]"
+                type="daterange"
+                :placeholder="field.placeholder || `请选择${field.label}`"
+                value-format="YYYY-MM-DD"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+              />
+            </div>
+          </div>
         </div>
+        <!-- 自动填充空白 -->
+        <div class="yzh-search-bar__spacer" />
       </div>
       
-      <!-- 查询和重置按钮 -->
+      <!-- 右侧按钮 -->
       <div class="yzh-search-bar__actions">
         <el-button type="primary" @click="onSearch">
           <i class="bi bi-search"></i>
@@ -142,48 +143,71 @@ function onReset() {
   width: 100%;
 }
 
-.yzh-search-bar__grid {
-  display: grid;
-  grid-template-columns: repeat(v-bind('props.cols'), 1fr);
-  gap: 12px;
-  align-items: end;
+.yzh-search-bar__inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
-.yzh-search-bar__item {
+.yzh-search-bar__fields {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
 }
 
 .yzh-search-bar__field {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.yzh-search-bar__field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .yzh-search-bar__label {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--yzh-color-text-secondary, #64748b);
-  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.yzh-search-bar__input-wrap {
+  flex-shrink: 0;
+}
+
+.yzh-search-bar__spacer {
+  flex: 1;
+  min-width: 16px;
 }
 
 .yzh-search-bar__actions {
   display: flex;
-  align-items: flex-end;
-  justify-content: flex-end;
+  align-items: center;
   gap: 8px;
-  padding-bottom: 2px;
-  grid-column: span 1;
+  flex-shrink: 0;
 }
 
 @media (max-width: 768px) {
-  .yzh-search-bar__grid {
-    grid-template-columns: 1fr;
+  .yzh-search-bar__inner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .yzh-search-bar__fields {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .yzh-search-bar__spacer {
+    display: none;
   }
   
   .yzh-search-bar__actions {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
+    justify-content: flex-end;
   }
 }
 </style>

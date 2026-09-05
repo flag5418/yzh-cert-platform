@@ -6,7 +6,7 @@
  * 独立删除接口：短路引用校验 + 软删除
  *
  * 前端调用方式：
- *   YZHBaseApiClient.del(ids) → POST /api/ISOStandard/Remove
+ *   BaseApiClient.del(ids) → POST /api/ISOStandard/Remove
  *
  * 设计原则（2026-08-07）：
  * 1. 短路校验：只检查最近一层直接关联

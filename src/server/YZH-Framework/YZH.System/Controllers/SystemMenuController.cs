@@ -8,9 +8,9 @@ namespace YZH.System.Controllers
 {
     [Route("api/yzh/sys/menus")]
     [ApiController]
-    public class SystemMenuController : YzhCrudController<SysMenu>
+    public class SystemMenuController : CrudController<SysMenu>
     {
-        public SystemMenuController(YzhService<SysMenu> svc) : base(svc) { }
+        public SystemMenuController(DomainService<SysMenu> svc) : base(svc) { }
 
         [HttpPost("Del")]
         public override IActionResult Del([FromBody] List<object> ids)
@@ -26,7 +26,7 @@ namespace YZH.System.Controllers
         public IActionResult Tree()
         {
             var all = _svc.GetAll().OrderBy(m => m.OrderNo ?? 0).ThenBy(m => m.Menu_Id).ToList();
-            return Ok(new YzhApiResult { Data = all });
+            return Ok(new ApiResult { Data = all });
         }
     }
 }

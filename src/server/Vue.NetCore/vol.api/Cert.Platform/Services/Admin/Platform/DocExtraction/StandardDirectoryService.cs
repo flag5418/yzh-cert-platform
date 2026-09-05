@@ -50,7 +50,7 @@ namespace Cert.Platform.Services.Admin.Platform
         private readonly IMinIOHelper _minioHelper;
         private readonly IFolderFileManager _folderFileManager;
         private readonly IFileStorageService _fileStorageService;
-        private readonly YzhQueueManager _queueManager;
+        private readonly QueueManager _queueManager;
 
         public StandardDirectoryService(VOLContext db, ICodeGeneratorService codeGenerator,
                                         IConfiguration configuration, OfficeConvertService convertService,
@@ -58,7 +58,7 @@ namespace Cert.Platform.Services.Admin.Platform
                                         IMinIOHelper minioHelper,
                                         IFolderFileManager folderFileManager,
                                         IFileStorageService fileStorageService,
-                                        YzhQueueManager queueManager)
+                                        QueueManager queueManager)
         {
             _db = db;
             _codeGenerator = codeGenerator;
@@ -1204,7 +1204,7 @@ namespace Cert.Platform.Services.Admin.Platform
                         ConvertType = convertType
                     };
                     var scopeKey = $"{orgCode}|{config.StandardCode}|{config.PhaseCode}";
-                    var req = new YzhQueueManager.CreateQueueRequest
+                    var req = new QueueManager.CreateQueueRequest
                     {
                         QueueType = "file_convert",
                         QueueName = $"文档转换-1个文件",
@@ -1214,14 +1214,14 @@ namespace Cert.Platform.Services.Admin.Platform
                         UserId = UserContext.Current.UserId,
                         UserName = UserContext.Current.UserName,
                         OrgCode = orgCode,
-                        ResourceLocks = new List<YzhQueueManager.ResourceLockItem>
+                        ResourceLocks = new List<QueueManager.ResourceLockItem>
                         {
-                            new YzhQueueManager.ResourceLockItem { ResourceTable = YzhQueueManager.RESOURCE_DIR, ResourceCode = directoryCode, ResourceName = directoryCode, TaskNo = null },
-                            new YzhQueueManager.ResourceLockItem { ResourceTable = YzhQueueManager.RESOURCE_FILE, ResourceCode = fileRecord.FileCode, ResourceName = fileName, TaskNo = 1 }
+                            new QueueManager.ResourceLockItem { ResourceTable = QueueManager.RESOURCE_DIR, ResourceCode = directoryCode, ResourceName = directoryCode, TaskNo = null },
+                            new QueueManager.ResourceLockItem { ResourceTable = QueueManager.RESOURCE_FILE, ResourceCode = fileRecord.FileCode, ResourceName = fileName, TaskNo = 1 }
                         },
-                        Tasks = new List<YzhQueueManager.TaskItem>
+                        Tasks = new List<QueueManager.TaskItem>
                         {
-                            new YzhQueueManager.TaskItem { TaskType = "file_convert", Payload = JsonSerializer.Serialize(payload, _payloadJsonOptions), TaskId = null }
+                            new QueueManager.TaskItem { TaskType = "file_convert", Payload = JsonSerializer.Serialize(payload, _payloadJsonOptions), TaskId = null }
                         }
                     };
                     var (qOk, qErr, qCode, qCount) = await _queueManager.CreateQueueAsync(req);
@@ -1310,7 +1310,7 @@ namespace Cert.Platform.Services.Admin.Platform
         /// <summary>
         /// 查询某目录（机构/标准/阶段）下运行中的队列
         /// </summary>
-        private async Task<YzhQueue> GetRunningQueueForDirectoryAsync(string directoryCode, string preferredOrgCode = null)
+        private async Task<Queue> GetRunningQueueForDirectoryAsync(string directoryCode, string preferredOrgCode = null)
         {
             var config = _db.Set<StandardDirectoryConfig>()
                 .FirstOrDefault(x => x.DirectoryCode == directoryCode && x.Enable == true);
@@ -1350,7 +1350,7 @@ namespace Cert.Platform.Services.Admin.Platform
         public async Task<Dictionary<string, string>> GetFileLockStatusAsync(List<string> fileCodes)
         {
             if (fileCodes == null || fileCodes.Count == 0) return new Dictionary<string, string>();
-            var hit = await _queueManager.FindResourceLockAsync(YzhQueueManager.RESOURCE_FILE, fileCodes);
+            var hit = await _queueManager.FindResourceLockAsync(QueueManager.RESOURCE_FILE, fileCodes);
             if (hit == null) return new Dictionary<string, string>();
             return new Dictionary<string, string> { [hit.ResourceCode] = hit.QueueCode };
         }
@@ -1371,7 +1371,7 @@ namespace Cert.Platform.Services.Admin.Platform
         private async Task<string> CheckDirLockErrorAsync(string directoryCode)
         {
             if (string.IsNullOrEmpty(directoryCode)) return null;
-            var hit = await _queueManager.FindResourceLockAsync(YzhQueueManager.RESOURCE_DIR, new List<string> { directoryCode });
+            var hit = await _queueManager.FindResourceLockAsync(QueueManager.RESOURCE_DIR, new List<string> { directoryCode });
             if (hit == null) return null;
             return $"该目录正被队列 {hit.QueueCode}（文档转换）处理中，队列完成前禁止修改，请稍后操作";
         }
@@ -1386,7 +1386,7 @@ namespace Cert.Platform.Services.Admin.Platform
             if (file == null) return null;
             var dirErr = await CheckDirLockErrorAsync(file.DirectoryCode);
             if (dirErr != null) return dirErr;
-            var hit = await _queueManager.FindResourceLockAsync(YzhQueueManager.RESOURCE_FILE, new List<string> { fileCode });
+            var hit = await _queueManager.FindResourceLockAsync(QueueManager.RESOURCE_FILE, new List<string> { fileCode });
             if (hit == null) return null;
             return $"文件「{hit.ResourceName ?? fileCode}」正被队列 {hit.QueueCode}（文档转换）处理中，请稍后操作";
         }
@@ -2035,26 +2035,26 @@ namespace Cert.Platform.Services.Admin.Platform
                         directoryCode = task.DirectoryCode
                     });
 
-                    var locks = new List<YzhQueueManager.ResourceLockItem>
+                    var locks = new List<QueueManager.ResourceLockItem>
                     {
                         // 队列级目录锁（整个目录在队列期间禁止增删改）
-                        new YzhQueueManager.ResourceLockItem
+                        new QueueManager.ResourceLockItem
                         {
-                            ResourceTable = YzhQueueManager.RESOURCE_DIR,
+                            ResourceTable = QueueManager.RESOURCE_DIR,
                             ResourceCode = task.DirectoryCode,
                             ResourceName = task.DirectoryCode,
                             TaskNo = null
                         }
                     };
-                    locks.AddRange(specs.Select((s, i) => new YzhQueueManager.ResourceLockItem
+                    locks.AddRange(specs.Select((s, i) => new QueueManager.ResourceLockItem
                     {
-                        ResourceTable = YzhQueueManager.RESOURCE_FILE,
+                        ResourceTable = QueueManager.RESOURCE_FILE,
                         ResourceCode = s.FileCode,
                         ResourceName = s.FileName,
                         TaskNo = i + 1
                     }));
 
-                    var req = new YzhQueueManager.CreateQueueRequest
+                    var req = new QueueManager.CreateQueueRequest
                     {
                         QueueType = "file_convert",
                         QueueName = $"文档转换-{specs.Count}个文件",
@@ -2066,7 +2066,7 @@ namespace Cert.Platform.Services.Admin.Platform
                         UserName = userName,
                         OrgCode = orgCode,
                         ResourceLocks = locks,
-                        Tasks = specs.Select(s => new YzhQueueManager.TaskItem
+                        Tasks = specs.Select(s => new QueueManager.TaskItem
                         {
                             TaskType = "file_convert",
                             Payload = JsonSerializer.Serialize(s, _payloadJsonOptions),
@@ -2125,7 +2125,7 @@ namespace Cert.Platform.Services.Admin.Platform
             try
             {
                 // 0. 该上传任务若仍有未结束的转换队列，先取消队列（幂等：已取消/已结束则跳过）
-                var activeQueue = _db.Set<YzhQueue>()
+                var activeQueue = _db.Set<Queue>()
                     .FirstOrDefault(q => q.SourceType == "upload_task"
                                       && q.SourceId == taskId
                                       && q.Status != "completed" && q.Status != "failed" && q.Status != "cancelled");
@@ -2363,8 +2363,8 @@ namespace Cert.Platform.Services.Admin.Platform
                     return new WebResponseContent().OK("没有需要重试的失败转换文件", new { enqueued = 0, queueCount = 0 });
 
                 // 2. 排除仍在队列中（有活跃资源锁）的文件；源文件在 MinIO 已不存在的无法转换，跳过并提示
-                var activeLocks = _db.Set<YzhQueueResourceLock>().AsNoTracking()
-                    .Where(r => r.Status == "locked" && r.ResourceTable == YzhQueueManager.RESOURCE_FILE)
+                var activeLocks = _db.Set<QueueResourceLock>().AsNoTracking()
+                    .Where(r => r.Status == "locked" && r.ResourceTable == QueueManager.RESOURCE_FILE)
                     .Select(r => r.ResourceCode)
                     .ToList();
                 var toRetry = new List<StandardDirectoryFile>();
@@ -2417,25 +2417,25 @@ namespace Cert.Platform.Services.Admin.Platform
                         });
                     }
 
-                    var locks = new List<YzhQueueManager.ResourceLockItem>
+                    var locks = new List<QueueManager.ResourceLockItem>
                     {
-                        new YzhQueueManager.ResourceLockItem
+                        new QueueManager.ResourceLockItem
                         {
-                            ResourceTable = YzhQueueManager.RESOURCE_DIR,
+                            ResourceTable = QueueManager.RESOURCE_DIR,
                             ResourceCode = group.Key,
                             ResourceName = group.Key,
                             TaskNo = null
                         }
                     };
-                    locks.AddRange(specs.Select((s, i) => new YzhQueueManager.ResourceLockItem
+                    locks.AddRange(specs.Select((s, i) => new QueueManager.ResourceLockItem
                     {
-                        ResourceTable = YzhQueueManager.RESOURCE_FILE,
+                        ResourceTable = QueueManager.RESOURCE_FILE,
                         ResourceCode = s.FileCode,
                         ResourceName = s.FileName,
                         TaskNo = i + 1
                     }));
 
-                    var req = new YzhQueueManager.CreateQueueRequest
+                    var req = new QueueManager.CreateQueueRequest
                     {
                         QueueType = "file_convert",
                         QueueName = $"失败重试-{specs.Count}个文件",
@@ -2447,7 +2447,7 @@ namespace Cert.Platform.Services.Admin.Platform
                         UserName = userName,
                         OrgCode = orgCode,
                         ResourceLocks = locks,
-                        Tasks = specs.Select(s => new YzhQueueManager.TaskItem
+                        Tasks = specs.Select(s => new QueueManager.TaskItem
                         {
                             TaskType = "file_convert",
                             Payload = JsonSerializer.Serialize(s, _payloadJsonOptions),

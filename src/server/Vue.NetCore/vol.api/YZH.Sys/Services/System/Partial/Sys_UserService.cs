@@ -39,8 +39,12 @@ namespace YZH.Sys.Services
         public async Task<WebResponseContent> Login(LoginInfo loginInfo, bool verificationCode = true)
         {
             string msg = string.Empty;
-            //   2020.06.12增加验证码
             IMemoryCache memoryCache = _context.GetService<IMemoryCache>();
+
+#if DEBUG
+            // 开发模式：跳过验证码
+#else
+            // 生产模式：校验验证码
             string cacheCode = (memoryCache.Get(loginInfo.UUID) ?? "").ToString();
             if (string.IsNullOrEmpty(cacheCode))
             {
@@ -51,6 +55,7 @@ namespace YZH.Sys.Services
                 memoryCache.Remove(loginInfo.UUID);
                 return webResponse.Error("验证码不正确");
             }
+#endif
             try
             {
                 Sys_User user = await repository.FindAsIQueryable(x => x.UserName == loginInfo.UserName)

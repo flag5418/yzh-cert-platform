@@ -9,7 +9,6 @@
  * - 搜索栏联动
  * - 插槽扩展（#column-prop）
  */
-import { Setting } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { dictStore } from '../../store/dict'
@@ -39,6 +38,7 @@ const props = withDefaults(
     rowKey?: string
     emptyText?: string
     toolbar?: boolean | YzhTableToolbar
+    searchMaxFields?: number
   }>(),
   {
     selectable: false,
@@ -46,7 +46,8 @@ const props = withDefaults(
     pageSize: 20,
     rowKey: 'id',
     emptyText: '暂无数据',
-    toolbar: true
+    toolbar: true,
+    searchMaxFields: 2
   }
 )
 
@@ -202,7 +203,7 @@ function onSearch(params: Record<string, any>) {
 function onSearchReset() {
   Object.keys(searchParams).forEach((k) => delete searchParams[k])
   if (props.searchFields) {
-    props.searchFields.forEach((f) => {
+    props.searchFields.slice(0, props.searchMaxFields).forEach((f) => {
       if (f.defaultValue !== undefined) searchParams[f.prop] = f.defaultValue
     })
   }
@@ -236,7 +237,7 @@ function refresh() {
 // 初始化默认值
 onMounted(() => {
   if (props.searchFields) {
-    props.searchFields.forEach((f) => {
+    props.searchFields.slice(0, props.searchMaxFields).forEach((f) => {
       if (f.defaultValue !== undefined) {
         searchParams[f.prop] = f.defaultValue
       }
@@ -263,6 +264,8 @@ defineExpose({
       v-if="searchFields && searchFields.length"
       :fields="searchFields"
       :default-values="searchParams"
+      :cols="2"
+      :max-fields="searchMaxFields"
       @search="onSearch"
       @reset="onSearchReset"
     />
@@ -318,71 +321,74 @@ defineExpose({
       </template>
     </YzhToolbar>
 
-    <!-- 表格 -->
-    <div
-      class="yzh-table__body"
-      :style="height ? { height: typeof height === 'number' ? height + 'px' : height } : {}"
-    >
-      <el-table
-        v-loading="loading"
-        :data="rows"
-        :row-key="rowKey"
-        :height="height ? '100%' : undefined"
-        stripe
-        border
-        @selection-change="onSelectionChange"
-        @sort-change="onSortChange"
-        @row-click="onRowClick"
+    <!-- 表格容器 -->
+    <div class="yzh-table__wrapper">
+      <!-- 表格 -->
+      <div
+        class="yzh-table__body"
+        :style="height ? { height: typeof height === 'number' ? height + 'px' : height } : {}"
       >
-        <el-table-column v-if="selectable" type="selection" width="48" :reserve-selection="false" />
+        <el-table
+          v-loading="loading"
+          :data="rows"
+          :row-key="rowKey"
+          :height="height ? '100%' : undefined"
+          stripe
+          border
+          @selection-change="onSelectionChange"
+          @sort-change="onSortChange"
+          @row-click="onRowClick"
+        >
+          <el-table-column v-if="selectable" type="selection" width="48" :reserve-selection="false" />
 
-        <template v-for="col in visibleColumns" :key="col.prop">
-          <el-table-column
-            :prop="col.prop as string"
-            :label="col.label"
-            :width="col.width"
-            :min-width="col.minWidth"
-            :fixed="col.fixed"
-            :sortable="col.sortable"
-            :align="col.align || 'left'"
-            :show-overflow-tooltip="!col.slot"
-            :class-name="col.className"
-          >
-            <template #default="{ row, $index }">
-              <slot
-                v-if="col.slot"
-                :name="`column-${String(col.prop)}`"
-                :row="row"
-                :index="$index"
-                :value="row[col.prop]"
-              >
-                <!-- 默认 fallback 渲染 -->
-                {{ col.formatter ? col.formatter(row[col.prop], row, $index) : row[col.prop] }}
-              </slot>
-              <template v-else-if="col.dictCode">
-                <el-tag v-if="col.tagType" :type="col.tagType" disable-transitions>
-                  {{ dictStore.translate(col.dictCode, row[col.prop]) }}
-                </el-tag>
-                <span v-else>{{ dictStore.translate(col.dictCode, row[col.prop]) }}</span>
+          <template v-for="col in visibleColumns" :key="col.prop">
+            <el-table-column
+              :prop="col.prop as string"
+              :label="col.label"
+              :width="col.width"
+              :min-width="col.minWidth"
+              :fixed="col.fixed"
+              :sortable="col.sortable"
+              :align="col.align || 'left'"
+              :show-overflow-tooltip="!col.slot"
+              :class-name="col.className"
+            >
+              <template #default="{ row, $index }">
+                <slot
+                  v-if="col.slot"
+                  :name="`column-${String(col.prop)}`"
+                  :row="row"
+                  :index="$index"
+                  :value="row[col.prop]"
+                >
+                  <!-- 默认 fallback 渲染 -->
+                  {{ col.formatter ? col.formatter(row[col.prop], row, $index) : row[col.prop] }}
+                </slot>
+                <template v-else-if="col.dictCode">
+                  <el-tag v-if="col.tagType" :type="col.tagType" disable-transitions>
+                    {{ dictStore.translate(col.dictCode, row[col.prop]) }}
+                  </el-tag>
+                  <span v-else>{{ dictStore.translate(col.dictCode, row[col.prop]) }}</span>
+                </template>
+                <template v-else>
+                  {{ col.formatter ? col.formatter(row[col.prop], row, $index) : row[col.prop] }}
+                </template>
               </template>
-              <template v-else>
-                {{ col.formatter ? col.formatter(row[col.prop], row, $index) : row[col.prop] }}
-              </template>
-            </template>
-          </el-table-column>
-        </template>
+            </el-table-column>
+          </template>
 
-        <template #empty>
-          <div class="yzh-table__empty">
-            <el-empty v-if="!loading && !error" :description="emptyText" />
-            <div v-else-if="error" class="yzh-table__error">
-              <i class="bi bi-exclamation-triangle"></i>
-              <span>{{ error }}</span>
-              <el-button text type="primary" @click="refresh">重试</el-button>
+          <template #empty>
+            <div class="yzh-table__empty">
+              <el-empty v-if="!loading && !error" :description="emptyText" />
+              <div v-else-if="error" class="yzh-table__error">
+                <i class="bi bi-exclamation-triangle"></i>
+                <span>{{ error }}</span>
+                <el-button text type="primary" @click="refresh">重试</el-button>
+              </div>
             </div>
-          </div>
-        </template>
-      </el-table>
+          </template>
+        </el-table>
+      </div>
     </div>
 
     <!-- 分页 -->
@@ -408,10 +414,19 @@ defineExpose({
   height: 100%;
 }
 
-.yzh-table__body {
+/* 表格容器 - 白色背景，与外部卡片一致 */
+.yzh-table__wrapper {
   flex: 1;
   min-height: 0;
+  padding: 16px;
   overflow: hidden;
+  background: #fff;
+}
+
+.yzh-table__body {
+  height: 100%;
+  overflow: hidden;
+  background: #fff;
 }
 
 .yzh-table__pagination {
@@ -419,6 +434,7 @@ defineExpose({
   border-top: 1px solid var(--yzh-color-border-light, #ebeef5);
   display: flex;
   justify-content: flex-end;
+  background: #fff;
 }
 
 .yzh-table__empty {

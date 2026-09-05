@@ -22,7 +22,7 @@ using YZH.Core;
 
 namespace Cert.Platform.Services.Admin.Platform
 {
-    public partial class DocExtractionRuleService : YZHTableServiceBase<CertDocExtractionRule, ICertDocExtractionRuleRepository>
+    public partial class DocExtractionRuleService : TableServiceBase<CertDocExtractionRule, ICertDocExtractionRuleRepository>
     , IDocExtractionRuleService, IDependency
     {
         [ActivatorUtilitiesConstructor]
@@ -366,7 +366,7 @@ namespace Cert.Platform.Services.Admin.Platform
 
                 if (rule == null)
                 {
-                    // Code 由 YZHBaseEntity 默认生成 GUID（项目统一规范：所有表关联通过 code(GUID)）
+                    // Code 由 EntityBase 默认生成 GUID（项目统一规范：所有表关联通过 code(GUID)）
                     rule = new CertDocExtractionRule
                     {
                         StandardFileCode = request.FileCode,
@@ -635,7 +635,7 @@ namespace Cert.Platform.Services.Admin.Platform
             // 读取 YZH 标准企业提取结果（B-08 字段值 / B-09 表格行数据），保存后重新进入可完整回显提取数据
             // 关联：docs/80-功能设计/提取结果落库-功能设计-V1.md
             const string yzhStdEnt = CertPlatformConstants.YZH_STANDARD_ENTERPRISE_CODE;
-            // 注意：YZHBaseEntity.DeleteTime 默认赋当前时间（新建即非空），有效态由 Enable=true 区分，
+            // 注意：EntityBase.DeleteTime 默认赋当前时间（新建即非空），有效态由 Enable=true 区分，
             // 查询必须用 Enable 过滤（DeleteTime == null 会误伤所有新建记录）
             var b08 = await repository.DbContext.Set<ExtractionResult>()
                 .Where(x => x.EnterpriseCode == yzhStdEnt && x.FileCode == standardFileCode && x.Enable)
