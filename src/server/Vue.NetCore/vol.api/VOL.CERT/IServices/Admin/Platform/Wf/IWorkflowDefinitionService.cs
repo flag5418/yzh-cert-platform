@@ -5,13 +5,13 @@ using VOL.Core.Extensions.AutofacManager;
 using VOL.Entity.Admin.Platform.Wf;
 using VOL.Entity.DomainModels;
 
-namespace VOL.CERT.IServices.Admin.Platform
+namespace VOL.CERT.IServices.Admin.Platform.Wf
 {
     public interface IWorkflowDefinitionService : IDependency
     {
         Task<PageGridData<WorkflowDefinition>> GetPageDataAsync(PageDataOptions options, string workflowType = null, bool? isActive = null);
         Task<List<WorkflowDefinition>> GetListAsync(string workflowType = null, bool? isActive = null);
-        Task<WorkflowDefinition> GetByCodeAsync(string workflowCode);
+        Task<WorkflowDefinition?> GetByCodeAsync(string workflowCode);
         Task<bool> SaveAsync(WorkflowDefinition entity);
         Task<bool> DeleteAsync(long id);
         Task<bool> ToggleActiveAsync(long id);

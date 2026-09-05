@@ -5,7 +5,7 @@ using VOL.Entity.Admin.Platform.Rpt;
 using VOL.CERT.IRepositories.Admin.Platform;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace VOL.CERT.Repositories.CertPlatform
+namespace VOL.CERT.Repositories.Admin.Platform.Wf
 {
     public partial class ReportSectionRepository : RepositoryBase<ReportSection>, IReportSectionRepository, IDependency
     {

@@ -7,13 +7,29 @@ namespace VOL.Entity.Admin.Platform.Wf
 {
     /// <summary>
     /// WfExecutionTaskItem - 执行项
-    /// <para>表名：wf_execution_task_item</para>
+    /// <para>表名：wf_execution_task_item（列名为 snake_case，需覆盖审计字段）</para>
     /// <para>定位：一个NC检查项的独立执行单元，对应 yzh_queue_task 层</para>
     /// <para>item 之间默认并行，单 item 内节点按路径驱动串行</para>
     /// </summary>
     [Table("wf_execution_task_item")]
     public class WfExecutionTaskItem : YZHBaseEntity
     {
+        // ===== snake_case 审计字段覆盖 =====
+        [Column("create_id")] public new int? CreateID { get; set; }
+        [Column("creator")] [MaxLength(50)] public new string Creator { get; set; }
+        [Column("create_date")] public new DateTime? CreateDate { get; set; } = DateTime.Now;
+        [Column("modify_id")] public new int? ModifyID { get; set; }
+        [Column("modifier")] [MaxLength(50)] public new string Modifier { get; set; }
+        [Column("modify_date")] public new DateTime? ModifyDate { get; set; }
+        [Column("delete_id")] public new int? DeleteID { get; set; }
+        [Column("deleter")] [MaxLength(50)] public new string Deleter { get; set; }
+        [Column("delete_time")] public new DateTime? DeleteTime { get; set; }
+        [Column("code")] public new string Code { get; set; } = Guid.NewGuid().ToString("N");
+        [Column("status")] public new string Status { get; set; } = "active";
+        [Column("enable")] public new bool Enable { get; set; } = true;
+        [Column("sort")] public new int Sort { get; set; }
+        [Column("remark")] public new string Remark { get; set; }
+
         /// <summary>wf_execution_task.code（所属任务）</summary>
         [Required]
         [MaxLength(36)]

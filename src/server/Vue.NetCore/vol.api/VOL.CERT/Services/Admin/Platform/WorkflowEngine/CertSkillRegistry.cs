@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using YZH.Core.Workflow;
@@ -22,21 +23,23 @@ namespace VOL.CERT.Services.Admin.Platform.WorkflowEngine
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<CertSkillRegistry> _logger;
         private readonly Dictionary<string, ISkillNode> _diSkills;
+        private readonly IMemoryCache _cache;
 
-        // 缓存：skillCode → (classPath, methodName)
-        private readonly Dictionary<string, (string classPath, string methodName)> _cache = new();
-        private readonly object _cacheLock = new();
+        // 缓存过期时间（分钟）：Skill 反射信息变更频率低，但必须支持运行期刷新
+        private static readonly TimeSpan CacheExpiration = TimeSpan.FromMinutes(5);
 
         public CertSkillRegistry(
             IServiceProvider serviceProvider,
             SkillExecutor executor,
             IEnumerable<ISkillNode> skills,
-            ILogger<CertSkillRegistry> logger)
+            ILogger<CertSkillRegistry> logger,
+            IMemoryCache cache)
         {
             _serviceProvider = serviceProvider;
             _executor = executor;
             _logger = logger;
             _diSkills = skills.ToDictionary(s => s.SkillCode, s => s);
+            _cache = cache;
         }
 
         public async Task<SkillMetadata?> LoadAsync(string skillCode, CancellationToken ct = default)
@@ -65,15 +68,13 @@ namespace VOL.CERT.Services.Admin.Platform.WorkflowEngine
         /// <summary>
         /// 从数据库 wf_skill_reflection 表读取 classPath + methodName。
         /// 通过 DI 容器获取 DbContext，避免直接依赖 VOLContext（保持框架独立性）。
+        /// 缓存策略：5 分钟过期，运行期修改 wf_skill_reflection 后可调用 InvalidateCache 刷新。
         /// </summary>
         private async Task<(string classPath, string methodName)> GetReflectionInfo(string skillCode, CancellationToken ct)
         {
-            // 先查缓存
-            lock (_cacheLock)
-            {
-                if (_cache.TryGetValue(skillCode, out var cached))
-                    return cached;
-            }
+            // 先查缓存（IMemoryCache 线程安全，无需 lock）
+            if (_cache.TryGetValue(skillCode, out var cached) && cached is (string cp, string mn))
+                return (cp, mn);
 
             // 从数据库加载
             using var scope = _serviceProvider.CreateScope();
@@ -96,12 +97,29 @@ namespace VOL.CERT.Services.Admin.Platform.WorkflowEngine
             var methodName = string.IsNullOrWhiteSpace(entity.MethodName) ? "ExecuteAsync" : entity.MethodName;
             var info = (entity.ClassPath, methodName);
 
-            lock (_cacheLock)
-            {
-                _cache[skillCode] = info;
-            }
+            // 写入缓存，设 5 分钟过期
+            _cache.Set(skillCode, info, CacheExpiration);
 
             return info;
+        }
+
+        /// <summary>
+        /// 手动失效缓存（Skill 配置变更后刷新）
+        /// </summary>
+        public void InvalidateCache(string skillCode)
+        {
+            _cache.Remove(skillCode);
+            _logger.LogInformation("Skill '{SkillCode}' 缓存已失效", skillCode);
+        }
+
+        /// <summary>
+        /// 清空全部缓存
+        /// </summary>
+        public void InvalidateAll()
+        {
+            if (_cache is MemoryCache memCache)
+                memCache.Compact(1.0); // 100% 清除
+            _logger.LogInformation("CertSkillRegistry 全部缓存已清空");
         }
     }
 }

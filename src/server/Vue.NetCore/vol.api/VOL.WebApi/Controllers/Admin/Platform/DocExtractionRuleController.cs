@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using VOL.Core.Filters;
+using VOL.Core.ManageUser;
 using Microsoft.AspNetCore.Mvc;
 using VOL.Core.Controllers.Basic;
 using VOL.Core.Enums;
@@ -208,21 +209,31 @@ namespace VOL.WebApi.Controllers.Admin.Platform
         // }
 
         /// <summary>
-        /// 测试字段提取（配置期验证）
+        /// 测试字段提取（配置期验证）- 仅管理员可调用（会触发 LLM 消耗 token）
         /// </summary>
         [HttpPost, Route("test-field")]
         public async Task<IActionResult> TestField([FromBody] TestFieldRequest request)
         {
+            var user = UserContext.Current;
+            if (!user.IsSuperAdmin && user.RoleId != 10)
+            {
+                return Ok(new { status = false, message = "无权访问：仅管理员可执行 TEST 操作" });
+            }
             var result = await _service.TestFieldAsync(request.RuleCode, request.FieldCode, request.DocType);
             return Ok(new { status = true, data = result });
         }
 
         /// <summary>
-        /// 测试表格提取（配置期验证）
+        /// 测试表格提取（配置期验证）- 仅管理员可调用（会触发 LLM 消耗 token）
         /// </summary>
         [HttpPost, Route("test-table")]
         public async Task<IActionResult> TestTable([FromBody] TestTableRequest request)
         {
+            var user = UserContext.Current;
+            if (!user.IsSuperAdmin && user.RoleId != 10)
+            {
+                return Ok(new { status = false, message = "无权访问：仅管理员可执行 TEST 操作" });
+            }
             var result = await _service.TestTableAsync(request.RuleCode, request.TableCode, request.DocType);
             return Ok(new { status = true, data = result });
         }

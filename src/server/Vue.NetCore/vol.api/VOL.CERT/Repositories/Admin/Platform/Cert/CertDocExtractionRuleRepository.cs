@@ -5,7 +5,7 @@ using VOL.Entity.Admin.Platform.DocExtraction;
 using VOL.CERT.IRepositories.Admin.Platform;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace VOL.CERT.Repositories.CertPlatform
+namespace VOL.CERT.Repositories.Admin.Platform.Cert
 {
     public partial class CertDocExtractionRuleRepository : RepositoryBase<CertDocExtractionRule>, ICertDocExtractionRuleRepository, IDependency
     {

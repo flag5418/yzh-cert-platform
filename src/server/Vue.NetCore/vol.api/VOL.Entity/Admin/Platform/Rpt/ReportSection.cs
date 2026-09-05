@@ -6,11 +6,26 @@ namespace VOL.Entity.Admin.Platform.Rpt
 {
     /// <summary>
     /// ReportSection 报告章节
-    /// <para>表名：rpt_report_section</para>
+    /// <para>表名：rpt_report_section（列名为 snake_case，需覆盖审计字段）</para>
     /// </summary>
     [Table("rpt_report_section")]
     public class ReportSection : YZHBaseEntity
     {
+        // ===== snake_case 审计字段覆盖 =====
+        [Column("create_id")] public new int? CreateID { get; set; }
+        [Column("creator")] [MaxLength(50)] public new string Creator { get; set; }
+        [Column("create_date")] public new DateTime? CreateDate { get; set; } = DateTime.Now;
+        [Column("modify_id")] public new int? ModifyID { get; set; }
+        [Column("modifier")] [MaxLength(50)] public new string Modifier { get; set; }
+        [Column("modify_date")] public new DateTime? ModifyDate { get; set; }
+        [Column("delete_id")] public new int? DeleteID { get; set; }
+        [Column("deleter")] [MaxLength(50)] public new string Deleter { get; set; }
+        [Column("delete_time")] public new DateTime? DeleteTime { get; set; }
+        [Column("code")] public new string Code { get; set; } = Guid.NewGuid().ToString("N");
+        [Column("status")] public new string Status { get; set; } = "active";
+        [Column("enable")] public new bool Enable { get; set; } = true;
+        [Column("sort")] public new int Sort { get; set; }
+
         [StringLength(50)]
         [Column("org_code")]
         public string OrgCode { get; set; }
@@ -49,7 +64,7 @@ namespace VOL.Entity.Admin.Platform.Rpt
 
         [StringLength(500)]
         [Column("remark")]
-        public new string Remark { get; set; }
+        public new string Remark { get; set; }  // 章节备注（覆盖基类）
 
         [Column("is_active")]
         public bool IsActive { get; set; } = true;

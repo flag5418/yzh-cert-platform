@@ -7,13 +7,29 @@ namespace VOL.Entity.Admin.Platform.Wf
 {
     /// <summary>
     /// WfNodeExecution - 节点执行状态
-    /// <para>表名：wf_node_execution</para>
+    /// <para>表名：wf_node_execution（列名为 snake_case，需覆盖审计字段）</para>
     /// <para>定位：每个节点一次执行的状态记录，是结果复用和断点续跑的核心载体</para>
     /// <para>跨路径复用：同一 item 下同 node_id 已执行 → 读库复用，不重跑</para>
     /// </summary>
     [Table("wf_node_execution")]
     public class WfNodeExecution : YZHBaseEntity
     {
+        // ===== snake_case 审计字段覆盖 =====
+        [Column("create_id")] public new int? CreateID { get; set; }
+        [Column("creator")] [MaxLength(50)] public new string Creator { get; set; }
+        [Column("create_date")] public new DateTime? CreateDate { get; set; } = DateTime.Now;
+        [Column("modify_id")] public new int? ModifyID { get; set; }
+        [Column("modifier")] [MaxLength(50)] public new string Modifier { get; set; }
+        [Column("modify_date")] public new DateTime? ModifyDate { get; set; }
+        [Column("delete_id")] public new int? DeleteID { get; set; }
+        [Column("deleter")] [MaxLength(50)] public new string Deleter { get; set; }
+        [Column("delete_time")] public new DateTime? DeleteTime { get; set; }
+        [Column("code")] public new string Code { get; set; } = Guid.NewGuid().ToString("N");
+        [Column("status")] public new string Status { get; set; } = "active";
+        [Column("enable")] public new bool Enable { get; set; } = true;
+        [Column("sort")] public new int Sort { get; set; }
+        [Column("remark")] public new string Remark { get; set; }
+
         /// <summary>wf_execution_task.code</summary>
         [Required]
         [MaxLength(36)]

@@ -8,7 +8,7 @@ namespace VOL.WebApi.Controllers.Admin.Platform
 {
     using Microsoft.AspNetCore.Authorization;
     using Microsoft.AspNetCore.Mvc;
-    using VOL.CERT.IServices.Admin.Platform;
+    using VOL.CERT.IServices.Admin.Platform.Wf;
     using VOL.Entity.DomainModels;
 
     [Route("api/workflow-definition")]
