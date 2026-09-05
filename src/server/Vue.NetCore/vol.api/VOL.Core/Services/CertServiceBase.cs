@@ -3,19 +3,19 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Reflection;
-using VOL.Core.BaseProvider;
-using VOL.Core.DBManager;
-using VOL.Core.Enums;
-using VOL.Core.Exceptions;
-using VOL.Core.Extensions;
-using VOL.Core.Services;
-using VOL.Core.Utilities;
-using VOL.Core.Validation;
-using VOL.Entity.DomainModels;
-using VOL.Entity.SystemModels;
-using VOL.Entity.Admin.Platform.Base;
+using YZH.Core.BaseProvider;
+using YZH.Core.DBManager;
+using YZH.Core.Enums;
+using YZH.Core.Exceptions;
+using YZH.Core.Extensions;
+using YZH.Core.Services;
+using YZH.Core.Utilities;
+using YZH.Core.Validation;
+using YZH.Entity.DomainModels;
+using YZH.Entity.SystemModels;
+using YZH.Entity.Admin.Platform.Base;
 
-namespace VOL.Core.Services
+namespace YZH.Core.Services
 {
     /// <summary>
     /// 体系认证平台统一Service基类
@@ -421,7 +421,7 @@ namespace VOL.Core.Services
         /// </summary>
         protected string GetTableName()
         {
-            var entityAttr = typeof(TEntity).GetCustomAttribute<VOL.Entity.EntityAttribute>();
+            var entityAttr = typeof(TEntity).GetCustomAttribute<YZH.Entity.EntityAttribute>();
             return entityAttr?.TableName ?? typeof(TEntity).Name;
         }
 

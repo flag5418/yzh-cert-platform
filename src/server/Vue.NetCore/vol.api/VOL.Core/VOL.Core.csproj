@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup Label="Globals">
     <SccProjectName></SccProjectName>
@@ -75,7 +75,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\VOL.Entity\VOL.Entity.csproj" />
+    <ProjectReference Include="..\YZH.Entity\YZH.Entity.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -6,16 +6,16 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using VOL.Core.CacheManager;
-using VOL.Core.DBManager;
-using VOL.Core.Enums;
-using VOL.Core.Extensions;
-using VOL.Core.Extensions.AutofacManager;
-using VOL.Core.UserManager;
-using VOL.Entity;
-using VOL.Entity.DomainModels;
+using YZH.Core.CacheManager;
+using YZH.Core.DBManager;
+using YZH.Core.Enums;
+using YZH.Core.Extensions;
+using YZH.Core.Extensions.AutofacManager;
+using YZH.Core.UserManager;
+using YZH.Entity;
+using YZH.Entity.DomainModels;
 
-namespace VOL.Core.ManageUser
+namespace YZH.Core.ManageUser
 {
     public class UserContext
     {

@@ -1,13 +1,13 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Mail;
 using System.Text;
-using VOL.Core.Configuration;
-using VOL.Core.Extensions;
+using YZH.Core.Configuration;
+using YZH.Core.Extensions;
 
-namespace VOL.Core.Utilities
+namespace YZH.Core.Utilities
 {
     public static class MailHelper
     {

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using System.Threading.Tasks;
 
-namespace VOL.Core.SignalR
+namespace YZH.Core.SignalR
 {
     /// <summary>
     /// 上传进度 SignalR Hub

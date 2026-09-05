@@ -1,14 +1,14 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Filters;
 using System;
 using System.Net;
 using System.Security.Claims;
-using VOL.Core.Configuration;
-using VOL.Core.Extensions;
-using VOL.Core.ManageUser;
-using VOL.Core.Utilities;
+using YZH.Core.Configuration;
+using YZH.Core.Extensions;
+using YZH.Core.ManageUser;
+using YZH.Core.Utilities;
 
-namespace VOL.Core.Filters
+namespace YZH.Core.Filters
 {
     public interface IFixedTokenFilter : IFilterMetadata
     {

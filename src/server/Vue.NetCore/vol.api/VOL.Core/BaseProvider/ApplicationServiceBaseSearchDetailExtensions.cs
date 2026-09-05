@@ -5,13 +5,13 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using VOL.Core.Enums;
-using VOL.Core.Extensions;
-using VOL.Entity;
-using VOL.Entity.DomainModels;
-using VOL.Entity.SystemModels;
+using YZH.Core.Enums;
+using YZH.Core.Extensions;
+using YZH.Entity;
+using YZH.Entity.DomainModels;
+using YZH.Entity.SystemModels;
 
-namespace VOL.Core.BaseProvider
+namespace YZH.Core.BaseProvider
 {
     public static class ApplicationServiceBaseSearchDetailExtensions
     {

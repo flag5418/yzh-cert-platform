@@ -1,4 +1,4 @@
-﻿
+
 using Dapper;
 using MySqlConnector;
 using Oracle.ManagedDataAccess.Client;
@@ -11,12 +11,12 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
-using VOL.Core.Const;
-using VOL.Core.DBManager;
-using VOL.Core.Enums;
-using VOL.Core.Extensions;
+using YZH.Core.Const;
+using YZH.Core.DBManager;
+using YZH.Core.Enums;
+using YZH.Core.Extensions;
 
-namespace VOL.Core.Dapper
+namespace YZH.Core.Dapper
 {
     public class SqlDapper : ISqlDapper
     {

@@ -2,16 +2,16 @@ using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using VOL.Core.BaseProvider;
-using VOL.Core.DBManager;
-using VOL.Core.Enums;
-using VOL.Core.Extensions;
-using VOL.Core.ManageUser;
-using VOL.Core.Services;
-using VOL.Core.Utilities;
-using VOL.Entity.Admin.Platform;
-using VOL.Entity.DomainModels;
-using VOL.Entity.SystemModels;
+using YZH.Core.BaseProvider;
+using YZH.Core.DBManager;
+using YZH.Core.Enums;
+using YZH.Core.Extensions;
+using YZH.Core.ManageUser;
+using YZH.Core.Services;
+using YZH.Core.Utilities;
+using YZH.Entity.Admin.Platform;
+using YZH.Entity.DomainModels;
+using YZH.Entity.SystemModels;
 using YZH.Core.Attributes;
 using YZH.Core.Exceptions;
 using YZH.Core.Validation;
@@ -846,7 +846,7 @@ public abstract class YZHServiceBase<TEntity, TRepository>
     /// <summary>获取实体表名</summary>
     protected string GetTableName()
     {
-        var entityAttr = typeof(TEntity).GetCustomAttribute<VOL.Entity.EntityAttribute>();
+        var entityAttr = typeof(TEntity).GetCustomAttribute<YZH.Entity.EntityAttribute>();
         return entityAttr?.TableName ?? typeof(TEntity).Name;
     }
 

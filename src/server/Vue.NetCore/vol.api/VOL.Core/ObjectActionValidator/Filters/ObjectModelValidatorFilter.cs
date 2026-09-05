@@ -1,10 +1,10 @@
-﻿using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.Filters;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 
-namespace VOL.Core.ObjectActionValidator
+namespace YZH.Core.ObjectActionValidator
 {
     public class ObjectModelValidatorFilter : Attribute
     {

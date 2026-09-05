@@ -1,7 +1,7 @@
-﻿using VOL.Core.Enums;
-using VOL.Core.Extensions;
+using YZH.Core.Enums;
+using YZH.Core.Extensions;
 
-namespace VOL.Core.Utilities
+namespace YZH.Core.Utilities
 {
     public class WebResponseContent
     {

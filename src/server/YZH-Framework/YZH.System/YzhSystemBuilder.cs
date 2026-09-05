@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace YZH.System
 {
     /// <summary>
-    /// YZH 系统模块服务注册（独立于 VOL，直接接入 VOL.WebApi）。
+    /// YZH 系统模块服务注册（独立于 VOL，直接接入 YZH.WebApi）。
     /// 使用项目自身连接字符串与 YzhDbContext，不依赖 VOLContext。
     /// </summary>
     public static class YzhSystemBuilder

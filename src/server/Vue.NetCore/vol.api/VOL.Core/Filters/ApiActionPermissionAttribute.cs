@@ -1,7 +1,7 @@
-﻿using System;
-using VOL.Core.Enums;
+using System;
+using YZH.Core.Enums;
 
-namespace VOL.Core.Filters
+namespace YZH.Core.Filters
 {
     public class ApiActionPermissionAttribute : ActionPermissionAttribute
     {

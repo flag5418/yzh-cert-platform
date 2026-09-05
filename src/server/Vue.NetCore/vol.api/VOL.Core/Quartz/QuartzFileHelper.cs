@@ -1,12 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
-using VOL.Core.Configuration;
-using VOL.Core.Extensions;
-using VOL.Core.Utilities;
+using YZH.Core.Configuration;
+using YZH.Core.Extensions;
+using YZH.Core.Utilities;
 
 
-namespace VOL.Core.Quartz
+namespace YZH.Core.Quartz
 {
   public static  class QuartzFileHelper
     {

@@ -1,14 +1,14 @@
-﻿//using Confluent.Kafka;
+//using Confluent.Kafka;
 //using System;
 //using System.Collections.Generic;
 //using System.Text;
 //using System.Threading.Tasks;
-//using VOL.Core.Configuration;
-//using VOL.Core.Enums;
-//using VOL.Core.KafkaManager.IService;
-//using VOL.Core.Services;
+//using YZH.Core.Configuration;
+//using YZH.Core.Enums;
+//using YZH.Core.KafkaManager.IService;
+//using YZH.Core.Services;
 
-//namespace VOL.Core.KafkaManager.Service
+//namespace YZH.Core.KafkaManager.Service
 //{
 //    /// <summary>
 //    /// 消费者 (Message.Key的数据类型为string、Message.Value的数据类型为string）

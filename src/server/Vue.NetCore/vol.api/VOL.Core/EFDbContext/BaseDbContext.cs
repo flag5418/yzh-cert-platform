@@ -1,6 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System.Linq;
-namespace VOL.Core.EFDbContext
+namespace YZH.Core.EFDbContext
 {
     public abstract class BaseDbContext : DbContext
     {

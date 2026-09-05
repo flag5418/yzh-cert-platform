@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Routing;
@@ -7,14 +7,14 @@ using System;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
-using VOL.Core.Const;
-using VOL.Core.EFDbContext;
-using VOL.Core.Enums;
-using VOL.Core.Extensions;
-using VOL.Core.ManageUser;
-using VOL.Core.Services;
+using YZH.Core.Const;
+using YZH.Core.EFDbContext;
+using YZH.Core.Enums;
+using YZH.Core.Extensions;
+using YZH.Core.ManageUser;
+using YZH.Core.Services;
 
-namespace VOL.Core.Middleware
+namespace YZH.Core.Middleware
 {
 
     public class ExceptionHandlerMiddleWare

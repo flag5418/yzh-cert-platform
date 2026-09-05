@@ -1,10 +1,10 @@
-﻿using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using VOL.Entity.DomainModels;
+using YZH.Entity.DomainModels;
 
-namespace VOL.Core.ModelBinder
+namespace YZH.Core.ModelBinder
 {
     public class BaseModelBinder : IModelBinder
     {

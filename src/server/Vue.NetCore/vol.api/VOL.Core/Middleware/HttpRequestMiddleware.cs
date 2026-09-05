@@ -1,10 +1,10 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Text;
 
-namespace VOL.Core.Middleware
+namespace YZH.Core.Middleware
 {
     public class HttpRequestMiddleware
     {

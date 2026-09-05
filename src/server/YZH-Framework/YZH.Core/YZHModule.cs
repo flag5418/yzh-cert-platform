@@ -166,7 +166,7 @@ namespace YZH.Core
                    .AsSelf()
                    .InstancePerLifetimeScope();
             
-            // 注意：ISkillRegistry 的实现（CertSkillRegistry）由业务模块（VOL.CERT）注册
+            // 注意：ISkillRegistry 的实现（CertSkillRegistry）由业务模块（Cert.Platform）注册
             // YZH-Framework 只提供 SkillExecutor 和 WorkflowEngine
             
             // S4: WorkflowEngine

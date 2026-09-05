@@ -1,14 +1,14 @@
-﻿using Npgsql.EntityFrameworkCore.PostgreSQL.Query.Expressions;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Query.Expressions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using VOL.Core.Const;
-using VOL.Core.Enums;
-using VOL.Entity.DomainModels;
+using YZH.Core.Const;
+using YZH.Core.Enums;
+using YZH.Entity.DomainModels;
 
-namespace VOL.Core.Extensions
+namespace YZH.Core.Extensions
 {
     public static class LambdaExtensions
     {

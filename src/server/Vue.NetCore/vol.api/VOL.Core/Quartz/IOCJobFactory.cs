@@ -1,11 +1,11 @@
-﻿using Quartz;
+using Quartz;
 using Quartz.Spi;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace VOL.Core.Quartz
+namespace YZH.Core.Quartz
 {
     public class IOCJobFactory: IJobFactory
     {

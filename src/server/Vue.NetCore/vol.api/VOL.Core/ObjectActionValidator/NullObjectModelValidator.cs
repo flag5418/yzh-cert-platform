@@ -1,14 +1,14 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
-using VOL.Core.Extensions;
-using VOL.Core.Filters;
+using YZH.Core.Extensions;
+using YZH.Core.Filters;
 
-namespace VOL.Core.ObjectActionValidator
+namespace YZH.Core.ObjectActionValidator
 {
     public class NullObjectModelValidator : IObjectModelValidator
     {

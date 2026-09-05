@@ -1,10 +1,10 @@
-﻿using VOL.Core.Extensions;
+using YZH.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace VOL.Core.Extensions
+namespace YZH.Core.Extensions
 {
     public static class ServiceProviderManagerExtension
     {

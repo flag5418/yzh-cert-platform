@@ -1,18 +1,18 @@
-﻿using Microsoft.AspNetCore.Mvc.Authorization;
+using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.AspNetCore.Mvc.Filters;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using VOL.Core.Configuration;
-using VOL.Core.Enums;
-using VOL.Core.Filters;
-using VOL.Core.ManageUser;
-using VOL.Core.Services;
-using VOL.Core.Utilities;
-using VOL.Entity.AttributeManager;
-using VOL.Core.UserManager;
+using YZH.Core.Configuration;
+using YZH.Core.Enums;
+using YZH.Core.Filters;
+using YZH.Core.ManageUser;
+using YZH.Core.Services;
+using YZH.Core.Utilities;
+using YZH.Entity.AttributeManager;
+using YZH.Core.UserManager;
 
-namespace VOL.Core.Filters
+namespace YZH.Core.Filters
 {
     /// <summary>
     /// 1、控制器或controller设置了AllowAnonymousAttribute直接返回

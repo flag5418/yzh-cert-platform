@@ -1,15 +1,15 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using OfficeOpenXml.FormulaParsing.Excel.Functions.Text;
 using System;
 using System.Collections.Generic;
 using System.Text;
-using VOL.Core.Const;
-using VOL.Core.Enums;
-using VOL.Core.ManageUser;
-using VOL.Core.UserManager;
-using VOL.Entity.DomainModels;
+using YZH.Core.Const;
+using YZH.Core.Enums;
+using YZH.Core.ManageUser;
+using YZH.Core.UserManager;
+using YZH.Entity.DomainModels;
 
-namespace VOL.Core.Infrastructure
+namespace YZH.Core.Infrastructure
 {
     public static class DictionaryHandler
     {

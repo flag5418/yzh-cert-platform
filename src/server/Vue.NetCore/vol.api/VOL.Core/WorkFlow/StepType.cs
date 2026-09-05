@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace VOL.Core.WorkFlow
+namespace YZH.Core.WorkFlow
 {
     public enum StepType
     {

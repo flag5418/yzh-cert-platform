@@ -1,8 +1,8 @@
 using System;
-using VOL.Core.Services;
-using VOL.Core.Utilities;
+using YZH.Core.Services;
+using YZH.Core.Utilities;
 
-namespace VOL.Core.Exceptions
+namespace YZH.Core.Exceptions
 {
     /// <summary>
     /// 异常消息脱敏器。
@@ -15,7 +15,7 @@ namespace VOL.Core.Exceptions
     /// - SQL 语句（SELECT/INSERT/UPDATE/DELETE ...）
     /// - 连接字符串（Server=/Password=/Database=）
     /// - 表结构信息（列名、约束名、索引名）
-    /// - 堆栈信息（at VOL.Core...）
+    /// - 堆栈信息（at YZH.Core...）
     /// </summary>
     public static class ExceptionSanitizer
     {

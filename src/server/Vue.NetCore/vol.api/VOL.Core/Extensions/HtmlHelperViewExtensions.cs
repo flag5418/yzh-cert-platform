@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Html;
+using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
@@ -11,7 +11,7 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace VOL.Core.Extensions
+namespace YZH.Core.Extensions
 {
     public static class HtmlHelperViewExtensions
     {

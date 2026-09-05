@@ -1,13 +1,13 @@
-﻿using CSRedis;
+using CSRedis;
 using Newtonsoft.Json;
 using StackExchange.Redis;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using VOL.Core.Configuration;
-using VOL.Core.Const;
+using YZH.Core.Configuration;
+using YZH.Core.Const;
 
-namespace VOL.Core.CacheManager
+namespace YZH.Core.CacheManager
 {
     public class RedisCacheService : ICacheService
     {

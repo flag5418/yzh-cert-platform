@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using VOL.Core.Extensions;
+using YZH.Core.Extensions;
 
-namespace VOL.Core.Utilities
+namespace YZH.Core.Utilities
 {
     public class FileHelper
     {

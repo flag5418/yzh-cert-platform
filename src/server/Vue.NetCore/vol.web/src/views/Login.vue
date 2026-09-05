@@ -1,52 +1,96 @@
 <template>
   <div class="login-container">
-    <div v-if="$global.lang" class="app-lang">
-      <lang color="#409eff"></lang>
+    <!-- 左侧品牌区 -->
+    <div class="login-brand">
+      <div class="brand-content">
+        <div class="brand-logo">
+          <!-- 使用文字 Logo，避免依赖图片 -->
+          <div class="logo-text">YZH</div>
+        </div>
+        <h1 class="brand-title">映智汇认证管理平台</h1>
+        <p class="brand-subtitle">AUTHENTICATION MANAGEMENT SYSTEM</p>
+        <div class="brand-features">
+          <div class="feature-item">
+            <i class="bi bi-check-circle-fill icon-lg"></i>
+            <span>严谨 · 规范 · 专业</span>
+          </div>
+          <div class="feature-item">
+            <i class="bi bi-shield-check icon-lg"></i>
+            <span>ISO 体系认证全流程</span>
+          </div>
+          <div class="feature-item">
+            <i class="bi bi-cpu icon-lg"></i>
+            <span>AI 智能审核引擎</span>
+          </div>
+        </div>
+      </div>
+      <div class="brand-footer">© 2026 映智汇 (YZH) 版权所有</div>
     </div>
-    <div class="login-form">
-      <div class="form-user" @keypress="loginPress">
-        <div class="login-text">
-          <div>
-            <div>映智汇认证管理平台</div>
-            <div class="login-line"></div>
+
+    <!-- 右侧登录区 -->
+    <div class="login-form-wrap">
+      <div class="login-form">
+        <div class="form-header">
+          <div class="form-title">账号登录</div>
+          <div class="form-subtitle">请输入您的账号信息</div>
+        </div>
+        
+        <div class="form-user" @keypress="loginPress">
+          <div class="input-wrapper">
+            <i class="bi bi-person input-icon"></i>
+            <input 
+              type="text" 
+              v-model="userInfo.userName" 
+              placeholder="请输入账号"
+              class="yzh-input"
+            />
           </div>
-          <div style="flex: 1"></div>
-        </div>
-        <div class="login-text-small">AUTHENTICATION MANAGEMENT SYSTEM</div>
-        <div class="item">
-          <div class="input-icon el-icon-user"></div>
-          <input type="text" v-model="userInfo.userName" placeholder="请输入账号" />
-        </div>
-        <div class="item">
-          <div class="input-icon el-icon-lock"></div>
-          <input type="password" v-model="userInfo.password" placeholder="请输入密码" />
-        </div>
-        <div class="item">
-          <div class="input-icon el-icon-mobile"></div>
-          <input type="text" v-model="userInfo.verificationCode" placeholder="请输入验证码" />
-          <div class="code" @click="getVierificationCode">
-            <img v-show="codeImgSrc != ''" :src="codeImgSrc" />
+          <div class="input-wrapper">
+            <i class="bi bi-lock input-icon"></i>
+            <input 
+              type="password" 
+              v-model="userInfo.password" 
+              placeholder="请输入密码"
+              class="yzh-input"
+            />
           </div>
+          <div class="input-wrapper">
+            <i class="bi bi-shield-lock input-icon"></i>
+            <input 
+              type="text" 
+              v-model="userInfo.verificationCode" 
+              placeholder="请输入验证码"
+              class="yzh-input yzh-input--code"
+            />
+            <div class="code" @click="getVierificationCode">
+              <img v-show="codeImgSrc != ''" :src="codeImgSrc" />
+            </div>
+          </div>
+        </div>
+        
+        <div class="loging-btn">
+          <button 
+            type="button" 
+            class="yzh-btn yzh-btn--primary"
+            :disabled="loading"
+            @click="login"
+          >
+            <span v-if="!loading">登 录</span>
+            <span v-else>正在登录...</span>
+          </button>
         </div>
       </div>
-      <div class="loging-btn">
-        <el-button size="large" :loading="loading" color="#1e3a8a" :dark="true" @click="login" long>
-          <span v-if="!loading">{{ $ts('登录') }}</span>
-          <span v-else>{{ $ts('正在登录') }}...</span>
-        </el-button>
-      </div>
-      <div class="login-copyright">© 2026 映智汇 (YZH) 版权所有</div>
     </div>
   </div>
 </template>
 
 <script setup>
 import http from '@/../src/api/http.js'
-import lang from '@/components/lang/lang'
 import { getCurrentInstance, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import store from '../store/index'
 import { isAdminRole, isAuditorRole } from '@/router/index'
+
 const loading = ref(false)
 const codeImgSrc = ref('')
 const userInfo = reactive({
@@ -68,6 +112,7 @@ const { proxy } = getCurrentInstance()
 let $message = proxy.$message
 let router = useRouter()
 let $ts = proxy.$ts
+
 const login = () => {
   if (!userInfo.userName) return $message.error($ts(['请输入', '账号']))
   if (!userInfo.password) return $message.error($ts(['请输入', '密码']))
@@ -112,154 +157,249 @@ const login = () => {
     })
   })
 }
+
 const loginPress = (e) => {
   if (e.keyCode == 13) {
     login()
   }
 }
 </script>
+
 <style lang="less" scoped>
 .login-container {
   display: flex;
   width: 100%;
   height: 100%;
-  background: #f8fafc;
-  background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
-  background-size: 20px 20px;
+  background: var(--yzh-color-bg-page, #f5f7fa);
+}
+
+/* 左侧品牌区 */
+.login-brand {
+  flex: 1;
+  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 50%, #0f172a 100%);
+  display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
+  padding: 60px 40px;
+  position: relative;
+  overflow: hidden;
+
+  /* 装饰性几何图形 */
+  &::before {
+    content: '';
+    position: absolute;
+    top: -20%;
+    right: -10%;
+    width: 600px;
+    height: 600px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 50%;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: -10%;
+    left: -5%;
+    width: 400px;
+    height: 400px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 50%;
+  }
+
+  .brand-content {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    color: #fff;
+  }
+
+  .logo-text {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    font-weight: 700;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .brand-title {
+    font-size: 32px;
+    font-weight: 700;
+    margin: 0 0 12px 0;
+    letter-spacing: 2px;
+    color: #fff;
+  }
+
+  .brand-subtitle {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+    letter-spacing: 3px;
+    margin-bottom: 48px;
+  }
+
+  .brand-features {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      font-size: 16px;
+      color: rgba(255, 255, 255, 0.9);
+
+      .bi {
+        font-size: 20px;
+        color: rgba(255, 255, 255, 0.8);
+      }
+    }
+  }
+
+  .brand-footer {
+    position: absolute;
+    bottom: 40px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+}
+
+/* 右侧登录区 */
+.login-form-wrap {
+  width: 480px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  padding: 0 40px;
 }
 
 .login-form {
-  align-items: center;
   width: 100%;
-  max-width: 420px;
-  display: flex;
-  flex-direction: column;
-  z-index: 999;
-  background: #fff;
-  padding: 40px 30px;
-  box-shadow:
-    0 10px 25px -5px rgba(0, 0, 0, 0.1),
-    0 8px 10px -6px rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
-  border: 1px solid #f1f5f9;
+  max-width: 360px;
+
+  .form-header {
+    margin-bottom: 40px;
+
+    .form-title {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--yzh-color-text-primary, #1e293b);
+      margin-bottom: 8px;
+    }
+
+    .form-subtitle {
+      font-size: 14px;
+      color: var(--yzh-color-text-secondary, #64748b);
+    }
+  }
 
   .form-user {
-    width: 100%;
+    .input-wrapper {
+      position: relative;
+      margin-bottom: 20px;
 
-    .item {
-      border-radius: 8px;
-      border: 1px solid #e2e8f0;
-      display: flex;
-      margin-bottom: 24px;
-      background: #ffff;
-      height: 48px;
-      padding-left: 16px;
-      transition: all 0.3s;
+      .input-icon {
+        position: absolute;
+        left: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 18px;
+        color: var(--yzh-color-text-secondary, #94a3b8);
+        line-height: 1;
+      }
 
-      &:focus-within {
-        border-color: #1e3a8a;
-        box-shadow: 0 0 0 2px rgba(30, 58, 138, 0.1);
+      .yzh-input {
+        width: 100%;
+        height: 48px;
+        padding: 0 16px 0 48px;
+        font-size: 15px;
+        color: var(--yzh-color-text-primary, #1e293b);
+        background: #fff;
+        border: 1px solid var(--yzh-color-border, #e2e8f0);
+        border-radius: var(--yzh-radius-none, 0);
+        outline: none;
+        transition: all 0.2s;
+
+        &::placeholder {
+          color: var(--yzh-color-text-placeholder, #cbd5e1);
+        }
+
+        &:focus {
+          border-color: var(--yzh-color-primary, #1e3a8a);
+          box-shadow: none;
+        }
+
+        &.yzh-input--code {
+          padding-right: 110px;
+        }
       }
 
       .code {
-        position: relative;
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
         cursor: pointer;
-        width: 90px;
-        padding: 4px 10px 0 0;
-      }
+        height: 32px;
 
-      .input-icon {
-        line-height: 48px;
-        color: #94a3b8;
-        padding-right: 12px;
-        font-size: 18px;
+        img {
+          height: 100%;
+          width: auto;
+          border-radius: var(--yzh-radius-none, 0);
+        }
       }
     }
   }
 
-  input:-webkit-autofill {
-    box-shadow: 0 0 0px 1000px white inset;
-    -webkit-box-shadow: 0 0 0px 1000px white inset !important;
-  }
-
-  input {
-    background: white;
-    display: block;
-    box-sizing: border-box;
+  .loging-btn {
     width: 100%;
-    min-width: 0;
-    margin: 0;
-    padding: 0;
-    color: #1e293b;
-    line-height: inherit;
-    text-align: left;
-    border: 0;
-    outline: none;
-    font-size: 15px;
-  }
-}
+    margin-top: 8px;
 
-.loging-btn {
-  width: 100%;
-  margin-top: 8px;
+    .yzh-btn {
+      width: 100%;
+      height: 48px;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 4px;
+      border: none;
+      border-radius: var(--yzh-radius-none, 0);
+      cursor: pointer;
+      transition: all 0.2s;
 
-  button {
-    height: 48px;
-    border-radius: 8px;
-    font-size: 16px !important;
-    font-weight: 500;
-    background-color: #1e3a8a !important;
-    border: none;
+      &--primary {
+        background: var(--yzh-color-primary, #1e3a8a);
+        color: #fff;
 
-    &:hover {
-      background-color: #1e40af !important;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        &:hover {
+          background: var(--yzh-color-primary-light-3, #1e40af);
+        }
+
+        &:disabled {
+          background: var(--yzh-color-text-disabled, #94a3b8);
+          cursor: not-allowed;
+        }
+      }
     }
   }
-}
-
-.login-text {
-  font-weight: 700;
-  font-size: 24px;
-  color: #0f172a;
-  margin-bottom: 8px;
-  width: 100%;
-  text-align: left;
-
-  .login-line {
-    height: 3px;
-    width: 40px;
-    background: #1e3a8a;
-    margin-top: 4px;
-    border-radius: 2px;
-  }
-}
-
-.login-text-small {
-  margin-bottom: 32px;
-  font-size: 12px;
-  color: #64748b;
-  width: 100%;
-  text-align: left;
-  letter-spacing: 1px;
-}
-
-.login-copyright {
-  margin-top: 40px;
-  font-size: 12px;
-  color: #94a3b8;
-  text-align: center;
 }
 
 @media screen and (max-width: 700px) {
-  .login-container {
-    padding: 20px;
+  .login-brand {
+    display: none;
   }
-  .login-form {
-    padding: 30px 20px;
+  
+  .login-form-wrap {
+    width: 100%;
+    padding: 20px;
   }
 }
 </style>

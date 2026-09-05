@@ -1,0 +1,213 @@
+/**
+ * YZH 侧边栏菜单样式 - 独立组件方案
+ * 目标：解决 Element Plus el-menu 层级样式问题
+ * 方案：使用自定义菜单组件替代 VolMenu
+ */
+
+/* 侧边栏容器 */
+.yzh-aside {
+  width: 240px;
+  height: 100%;
+  background: #001529;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: width 0.3s ease;
+}
+
+.yzh-aside--collapse {
+  width: 64px;
+}
+
+/* 侧边栏头部 */
+.yzh-aside__header {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 0 20px;
+}
+
+.yzh-aside__title {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.yzh-aside--collapse .yzh-aside__title {
+  display: none;
+}
+
+/* 菜单搜索框 */
+.yzh-aside__search {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.yzh-aside--collapse .yzh-aside__search {
+  display: none;
+}
+
+/* 菜单滚动容器 */
+.yzh-aside__menu-wrap {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* 自定义菜单项 */
+.yzh-menu {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+}
+
+.yzh-menu__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 20px;
+  color: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+  }
+  
+  &.is-active {
+    background: var(--yzh-color-primary, #1e3a8a);
+    color: #fff;
+    font-weight: 600;
+    
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 8px;
+      bottom: 8px;
+      width: 3px;
+      background: #fff;
+    }
+  }
+}
+
+.yzh-menu__icon {
+  font-size: 18px;
+  margin-right: 10px;
+  display: flex;
+  align-items: center;
+}
+
+.yzh-menu__text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yzh-menu__arrow {
+  font-size: 12px;
+  transition: transform 0.3s;
+  
+  .is-opened & {
+    transform: rotate(90deg);
+  }
+}
+
+/* 子菜单 */
+.yzh-menu__submenu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.yzh-menu__submenu-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 20px 0 44px; /* 二级菜单向右偏移 24px */
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  transition: all 0.2s;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+  }
+  
+  &.is-active {
+    background: rgba(30, 58, 138, 0.6);
+    color: #fff;
+  }
+  
+  /* 左侧引导线 */
+  &::before {
+    content: '';
+    position: absolute;
+    left: 20px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.15);
+  }
+}
+
+/* 三级菜单 */
+.yzh-menu__submenu-level2 {
+  .yzh-menu__submenu-item {
+    padding-left: 68px; /* 再偏移 24px */
+    
+    &::before {
+      left: 44px;
+    }
+  }
+}
+
+/* 折叠状态 */
+.yzh-aside--collapse {
+  .yzh-menu__item {
+    justify-content: center;
+    padding: 0;
+    
+    .yzh-menu__icon {
+      margin-right: 0;
+    }
+    
+    .yzh-menu__text,
+    .yzh-menu__arrow {
+      display: none;
+    }
+  }
+  
+  .yzh-menu__submenu-item {
+    justify-content: center;
+    padding: 0;
+    
+    &::before {
+      display: none;
+    }
+  }
+}
+
+/* 折叠按钮 */
+.yzh-aside__collapse-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  font-size: 18px;
+  transition: color 0.2s;
+  
+  &:hover {
+    color: #fff;
+  }
+}

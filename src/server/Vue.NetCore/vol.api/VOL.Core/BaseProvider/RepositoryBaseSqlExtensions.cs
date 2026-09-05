@@ -6,7 +6,7 @@ using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace VOL.Core.BaseProvider
+namespace YZH.Core.BaseProvider
 {
     public static class RepositoryBaseSqlExtensions
     {

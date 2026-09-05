@@ -1,9 +1,9 @@
-﻿//using System;
+//using System;
 //using System.Collections.Generic;
 //using System.Text;
 //using System.Threading.Tasks;
 
-//namespace VOL.Core.KafkaManager.IService
+//namespace YZH.Core.KafkaManager.IService
 //{
 //    public interface IKafkaProducer<TKey, TValue>
 //    {

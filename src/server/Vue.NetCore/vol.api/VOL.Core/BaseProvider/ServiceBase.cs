@@ -6,16 +6,16 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading.Tasks;
-using VOL.Core.CacheManager;
-using VOL.Core.DBManager;
-using VOL.Core.Enums;
-using VOL.Core.Extensions;
-using VOL.Core.Utilities;
-using VOL.Core.WorkFlow;
-using VOL.Entity.DomainModels;
-using VOL.Entity.SystemModels;
+using YZH.Core.CacheManager;
+using YZH.Core.DBManager;
+using YZH.Core.Enums;
+using YZH.Core.Extensions;
+using YZH.Core.Utilities;
+using YZH.Core.WorkFlow;
+using YZH.Entity.DomainModels;
+using YZH.Entity.SystemModels;
 
-namespace VOL.Core.BaseProvider
+namespace YZH.Core.BaseProvider
 {
     public abstract class ServiceBase<TEntity, TRepository> : ApplicationServiceBase<TEntity, TRepository>
             where TEntity : BaseEntity

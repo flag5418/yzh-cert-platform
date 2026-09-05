@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -8,7 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Web;
 
-namespace VOL.Core.Extensions
+namespace YZH.Core.Extensions
 {
     public static class HttpClientFactoryExtension
     {

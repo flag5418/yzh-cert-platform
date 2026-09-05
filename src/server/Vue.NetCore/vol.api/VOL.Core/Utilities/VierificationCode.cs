@@ -1,11 +1,11 @@
-﻿﻿using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Text;
 
-namespace VOL.Core.Utilities
+namespace YZH.Core.Utilities
 {
     public static class VierificationCode
     {

@@ -7,7 +7,7 @@
  *       <el-button>新增</el-button>
  *     </template>
  *     <template #right>
- *       <el-button text>刷新</el-button>
+ *       <el-button text>列设置</el-button>
  *     </template>
  *   </YzhToolbar>
  */

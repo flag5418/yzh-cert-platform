@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
-using VOL.Core.Extensions;
-using VOL.Core.Utilities;
+using YZH.Core.Extensions;
+using YZH.Core.Utilities;
 
-namespace VOL.Core.BaseProvider
+namespace YZH.Core.BaseProvider
 {
     public static class ApplicationServiceBaseUploadFileExtensions
     {

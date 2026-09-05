@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
 using System.IO;
 using System.Collections;
 
-namespace VOL.Core.Utilities
+namespace YZH.Core.Utilities
 {
   public static class DateTimeExtension
   {

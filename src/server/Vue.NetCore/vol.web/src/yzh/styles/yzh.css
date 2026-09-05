@@ -5,50 +5,19 @@
 @import './yzh-layout-commercial.css';
 @import './yzh-workflow-commercial.css';
 @import './yzh-viewgrid-commercial.css';
+@import './yzh-colors.css';
+@import './yzh-radius.css';
+@import './yzh-shadows.css';
+@import './yzh-spacing.css';
+@import './yzh-layout.css';
+@import './yzh-menu.css';
 
 /* 2. Element Plus 组件样式重构 */
 @import './yzh-select.css';
 
 /* 3. 全局覆盖与微调 */
 :root {
-  /* 品牌色 - Geek Blue 深蓝 */
-  --yzh-color-primary: #1e3a8a;
-  --yzh-color-primary-hover: #1e40af;
-  --yzh-color-primary-active: #1e3a8a;
-  --yzh-color-primary-outline: rgba(30, 58, 138, 0.1);
-  --yzh-color-primary-light-9: #eff6ff;
-
-  /* 状态色 */
-  --yzh-color-success: #10b981;
-  --yzh-color-warning: #f59e0b;
-  --yzh-color-danger: #ef4444;
-  --yzh-color-info: #64748b;
-
-  /* 渐变色 */
-  --yzh-gradient-primary: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
-  --yzh-gradient-dark: linear-gradient(180deg, #001529 0%, #002140 100%);
-
-  /* 文本色 */
-  --yzh-color-text-primary: #1f1f1f;
-  --yzh-color-text-regular: #434343;
-  --yzh-color-text-secondary: #8c8c8c;
-  --yzh-color-text-placeholder: #bfbfbf;
-
-  /* 边框与背景 */
-  --yzh-color-border: #d9d9d9;
-  --yzh-color-border-light: #f0f0f0;
-  --yzh-color-bg-page: #f0f2f5;
-
-  /* hover / active 背景 */
-  --yzh-color-bg-hover: #f1f5ff;
-  --yzh-color-bg-active: #eff6ff;
-
-  /* 阴影 */
-  --yzh-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
-  --yzh-shadow-md: 0 6px 16px -4px rgba(0, 0, 0, 0.08), 0 9px 28px 0 rgba(0, 0, 0, 0.05);
-  --yzh-shadow-lg: 0 12px 32px -8px rgba(0, 0, 0, 0.12), 0 16px 48px 0 rgba(0, 0, 0, 0.08);
-
-  /* Element Plus 颜色覆盖 */
+  /* Element Plus 颜色覆盖 - 使用统一的 YZH 品牌色 */
   --el-color-primary: var(--yzh-color-primary) !important;
   --el-color-success: var(--yzh-color-success) !important;
   --el-color-warning: var(--yzh-color-warning) !important;

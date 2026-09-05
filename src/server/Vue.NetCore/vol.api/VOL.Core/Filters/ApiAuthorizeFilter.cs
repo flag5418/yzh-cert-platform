@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.AspNetCore.Mvc.Filters;
 using System;
@@ -6,12 +6,12 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Net;
 using System.Security.Claims;
-using VOL.Core.Configuration;
-using VOL.Core.Extensions;
-using VOL.Core.ManageUser;
-using static VOL.Core.Filters.ApiTaskAttribute;
+using YZH.Core.Configuration;
+using YZH.Core.Extensions;
+using YZH.Core.ManageUser;
+using static YZH.Core.Filters.ApiTaskAttribute;
 
-namespace VOL.Core.Filters
+namespace YZH.Core.Filters
 {
     public class ApiAuthorizeFilter : IAuthorizationFilter
     {

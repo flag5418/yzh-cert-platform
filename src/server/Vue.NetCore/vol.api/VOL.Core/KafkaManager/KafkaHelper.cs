@@ -1,4 +1,4 @@
-﻿////using Confluent.Kafka;
+////using Confluent.Kafka;
 //using Newtonsoft.Json;
 //using System;
 //using System.Collections.Generic;
@@ -7,7 +7,7 @@
 //using System.Text;
 //using System.Text.RegularExpressions;
 
-//namespace VOL.Core.KafkaManager
+//namespace YZH.Core.KafkaManager
 //{
 //    /// <summary>
 //    /// 辅助类

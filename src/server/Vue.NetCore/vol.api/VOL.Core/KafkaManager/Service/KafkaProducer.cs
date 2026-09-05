@@ -1,13 +1,13 @@
-﻿//using Confluent.Kafka;
+//using Confluent.Kafka;
 //using System;
 //using System.Collections.Generic;
 //using System.Text;
 //using System.Threading.Tasks;
-//using VOL.Core.Enums;
-//using VOL.Core.KafkaManager.IService;
-//using VOL.Core.Services;
+//using YZH.Core.Enums;
+//using YZH.Core.KafkaManager.IService;
+//using YZH.Core.Services;
 
-//namespace VOL.Core.KafkaManager.Service
+//namespace YZH.Core.KafkaManager.Service
 //{
 //    /// <summary>
 //    /// 生产者 控制器或Service里面构造函数注入即可调用

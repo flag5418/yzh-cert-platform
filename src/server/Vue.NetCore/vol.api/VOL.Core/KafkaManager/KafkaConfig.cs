@@ -1,10 +1,10 @@
-﻿////using Confluent.Kafka;
+////using Confluent.Kafka;
 //using System;
 //using System.Collections.Generic;
 //using System.Text;
-//using VOL.Core.Configuration;
+//using YZH.Core.Configuration;
 
-//namespace VOL.Core.KafkaManager
+//namespace YZH.Core.KafkaManager
 //{
 //    /// <summary>
 //    /// 配置类

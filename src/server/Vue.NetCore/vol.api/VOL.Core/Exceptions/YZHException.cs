@@ -1,6 +1,6 @@
 using System;
 
-namespace VOL.Core.Exceptions
+namespace YZH.Core.Exceptions
 {
     /// <summary>
     /// 业务异常。消息内容可以直接展示给前端用户。

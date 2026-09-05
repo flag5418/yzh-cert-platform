@@ -4,9 +4,9 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq.Expressions;
 using System.Text;
-using VOL.Entity.DomainModels;
+using YZH.Entity.DomainModels;
 
-namespace VOL.Core.WorkFlow
+namespace YZH.Core.WorkFlow
 {
     [NotMapped]
     public class WorkFlowTableOptions:Sys_WorkFlow

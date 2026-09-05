@@ -1,9 +1,9 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace VOL.Core.Utilities
+namespace YZH.Core.Utilities
 {
     public static class HttpContext
     {

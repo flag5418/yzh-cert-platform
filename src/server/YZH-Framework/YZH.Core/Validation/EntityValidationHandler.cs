@@ -1,9 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Reflection;
-using VOL.Core.DBManager;
-using VOL.Entity;
-using VOL.Entity.Admin.Platform;
+using YZH.Core.DBManager;
+using YZH.Entity;
+using YZH.Entity.Admin.Platform;
 
 namespace YZH.Core.Validation;
 

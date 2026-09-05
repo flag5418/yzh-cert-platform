@@ -2,7 +2,7 @@
 ﻿//using WkHtmlToPdfDotNet;
 //using WkHtmlToPdfDotNet.Contracts;
 
-//namespace VOL.Core.Utilities.PDFHelper
+//namespace YZH.Core.Utilities.PDFHelper
 //{
 //    /// <summary>
 //    /// pdf实现

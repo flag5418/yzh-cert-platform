@@ -1,14 +1,14 @@
-﻿using Microsoft.IdentityModel.Tokens;
+using Microsoft.IdentityModel.Tokens;
 using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using VOL.Core.Configuration;
-using VOL.Core.Extensions;
-using VOL.Entity.DomainModels;
+using YZH.Core.Configuration;
+using YZH.Core.Extensions;
+using YZH.Entity.DomainModels;
 
-namespace VOL.Core.Utilities
+namespace YZH.Core.Utilities
 {
     public class JwtHelper
     {

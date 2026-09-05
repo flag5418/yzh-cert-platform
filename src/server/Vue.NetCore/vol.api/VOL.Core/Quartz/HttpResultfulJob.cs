@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Quartz;
 using Quartz.Impl;
@@ -8,10 +8,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
-using VOL.Core.EFDbContext;
-using VOL.Entity.DomainModels;
+using YZH.Core.EFDbContext;
+using YZH.Entity.DomainModels;
 
-namespace VOL.Core.Quartz
+namespace YZH.Core.Quartz
 {
     public class HttpResultfulJob : IJob
     {

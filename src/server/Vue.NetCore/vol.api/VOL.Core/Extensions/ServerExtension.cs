@@ -1,10 +1,10 @@
-﻿using VOL.Core.BaseProvider.ServerMapPath;
+using YZH.Core.BaseProvider.ServerMapPath;
 using System;
 using System.Collections.Generic;
 using System.Text;
-using VOL.Core.Extensions.AutofacManager;
+using YZH.Core.Extensions.AutofacManager;
 
-namespace VOL.Core.Extensions
+namespace YZH.Core.Extensions
 {
     public static class ServerExtension
     {

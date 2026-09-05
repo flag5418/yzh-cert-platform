@@ -1,0 +1,25 @@
+/**
+ * YZH 全局布局样式
+ * 统一所有页面的背景色和全局 padding
+ */
+
+/* 全局背景色 */
+body,
+#app {
+  background: var(--yzh-color-bg-page, #f5f7fa) !important;
+}
+
+/* 主内容区全局 padding */
+.vol-main {
+  padding: 16px 20px !important;
+  background: var(--yzh-color-bg-page, #f5f7fa) !important;
+}
+
+/* 页面容器 */
+.yzh-page-wrapper {
+  background: var(--yzh-color-bg-page, #f5f7fa);
+  padding: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}

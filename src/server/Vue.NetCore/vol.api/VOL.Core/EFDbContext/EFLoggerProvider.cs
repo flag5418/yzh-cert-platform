@@ -1,4 +1,4 @@
-﻿using VOL.Core.Utilities;
+using YZH.Core.Utilities;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -6,7 +6,7 @@ using System.Text;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Data.Common;
 
-namespace VOL.Core.EFDbContext
+namespace YZH.Core.EFDbContext
 {
     public class EFLoggerProvider : ILoggerProvider
     {

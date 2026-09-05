@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using VOL.Core.EFDbContext;
+using YZH.Core.EFDbContext;
 
 namespace YZH.Core.Queue
 {

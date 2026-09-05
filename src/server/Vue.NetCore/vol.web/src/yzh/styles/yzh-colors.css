@@ -4,17 +4,17 @@
  * 只通过 yzh.css 统一引用，禁止单独 import
  */
 :root {
-  /* ===== 品牌色（商业深蓝风格 - Geek Blue） ===== */
-  --yzh-color-primary: #2f54eb;
-  --yzh-color-primary-light-3: #597ef7;
-  --yzh-color-primary-light-5: #85a5ff;
-  --yzh-color-primary-light-7: #adc6ff;
-  --yzh-color-primary-light-9: #f0f5ff;
-  --yzh-color-primary-dark-2: #1d39c4;
+  /* ===== 品牌色（商业深蓝风格 - 业务色 #1e3a8a）===== */
+  --yzh-color-primary: #1e3a8a;
+  --yzh-color-primary-light-3: #1e40af;
+  --yzh-color-primary-light-5: #3b82f6;
+  --yzh-color-primary-light-7: #93c5fd;
+  --yzh-color-primary-light-9: #eff6ff;
+  --yzh-color-primary-dark-2: #1e3a8a;
 
   /* ===== 渐变色 ===== */
   --yzh-gradient-dark: linear-gradient(180deg, #001529 0%, #002140 100%);
-  --yzh-gradient-primary: linear-gradient(135deg, #2f54eb 0%, #597ef7 100%);
+  --yzh-gradient-primary: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
 
   /* ===== 语义色 ===== */
   --yzh-color-success: #10b981;
@@ -29,18 +29,18 @@
   --yzh-color-info: #64748b;
   --yzh-color-info-light-9: #f8fafc;
 
-  /* ===== 中性色（文字层级，对齐 vidlang textPrimary/Secondary/Weak） ===== */
-  --yzh-color-text-primary: #0f172a;
+  /* ===== 中性色（文字层级，对齐 vidlang textPrimary/Secondary/Weak）===== */
+  --yzh-color-text-primary: #1e293b;
   --yzh-color-text-regular: #334155;
   --yzh-color-text-secondary: #64748b;
   --yzh-color-text-disabled: #94a3b8;
   --yzh-color-text-placeholder: #cbd5e1;
 
   /* ===== 表面层级 ===== */
-  --yzh-color-bg-page: #f8fafc; /* 页面灰底 */
-  --yzh-color-bg-card: #ffffff; /* 卡片白 */
-  --yzh-color-bg-hover: #f1f5f9; /* 悬停 */
-  --yzh-color-bg-active: #eff6ff; /* 选中 */
+  --yzh-color-bg-page: #f5f7fa;
+  --yzh-color-bg-card: #ffffff;
+  --yzh-color-bg-hover: #f1f5f9;
+  --yzh-color-bg-active: #eff6ff;
 
   /* ===== 边框 ===== */
   --yzh-color-border: #e2e8f0;

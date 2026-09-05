@@ -1,10 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace VOL.Core.Configuration
+namespace YZH.Core.Configuration
 {
     /// <summary>
     /// 国密 SM2/SM3/SM4 配置（对应 appsettings.json 中 GmCrypto 节点）

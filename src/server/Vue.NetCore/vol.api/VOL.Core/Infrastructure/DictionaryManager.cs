@@ -1,14 +1,14 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using VOL.Core.CacheManager;
-using VOL.Core.DBManager;
-using VOL.Core.Extensions.AutofacManager;
-using VOL.Core.Services;
-using VOL.Entity.DomainModels;
+using YZH.Core.CacheManager;
+using YZH.Core.DBManager;
+using YZH.Core.Extensions.AutofacManager;
+using YZH.Core.Services;
+using YZH.Entity.DomainModels;
 
-namespace VOL.Core.Infrastructure
+namespace YZH.Core.Infrastructure
 {
     public static class DictionaryManager
     {

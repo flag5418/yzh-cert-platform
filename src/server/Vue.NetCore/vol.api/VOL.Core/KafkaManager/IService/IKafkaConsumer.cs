@@ -1,9 +1,9 @@
-﻿//using Confluent.Kafka;
+//using Confluent.Kafka;
 //using System;
 //using System.Collections.Generic;
 //using System.Text;
 
-//namespace VOL.Core.KafkaManager.IService
+//namespace YZH.Core.KafkaManager.IService
 //{
 //    public interface IKafkaConsumer<TKey, TValue> : IDisposable
 //    {

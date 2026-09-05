@@ -1,4 +1,4 @@
-﻿namespace VOL.Core.Const
+namespace YZH.Core.Const
 {
     public static class DBType
     {

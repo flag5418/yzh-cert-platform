@@ -4,7 +4,7 @@
  * 只通过 yzh.css 统一引用，禁止单独 import
  */
 :root {
-  /* ===== 基础档位（4px 网格） ===== */
+  /* ===== 基础档位（4px 网格）===== */
   --yzh-space-1: 4px;
   --yzh-space-2: 8px;
   --yzh-space-3: 12px;

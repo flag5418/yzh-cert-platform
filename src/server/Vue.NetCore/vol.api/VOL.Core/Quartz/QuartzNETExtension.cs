@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
@@ -11,12 +11,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using VOL.Core.EFDbContext;
-using VOL.Core.Quartz;
-using VOL.Core.Utilities;
-using VOL.Entity.DomainModels;
+using YZH.Core.EFDbContext;
+using YZH.Core.Quartz;
+using YZH.Core.Utilities;
+using YZH.Entity.DomainModels;
 
-namespace VOL.Core.Quartz
+namespace YZH.Core.Quartz
 {
     public static class QuartzNETExtension
     {

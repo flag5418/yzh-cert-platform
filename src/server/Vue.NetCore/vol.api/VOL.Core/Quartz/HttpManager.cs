@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -7,9 +7,9 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
-using VOL.Core.Extensions;
+using YZH.Core.Extensions;
 
-namespace VOL.Core.Quartz
+namespace YZH.Core.Quartz
 {
     public static class HttpManager
     {

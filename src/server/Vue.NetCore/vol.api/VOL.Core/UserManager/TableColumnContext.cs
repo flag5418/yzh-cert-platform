@@ -1,12 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
-using VOL.Core.DBManager;
-using VOL.Entity.DomainModels;
+using YZH.Core.DBManager;
+using YZH.Entity.DomainModels;
 
-namespace VOL.Core.UserManager
+namespace YZH.Core.UserManager
 {
 
 	public static class TableColumnContext

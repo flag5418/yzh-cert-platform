@@ -1,0 +1,26 @@
+/**
+ * YZH 图标字体文件引用
+ * 统一在此处引用，便于管理和更换
+ */
+
+/* Element Plus 图标字体 */
+@font-face {
+  font-family: 'element-icons';
+  src: url('./fonts/element-icons.woff2') format('woff2'),
+       url('./fonts/element-icons.woff') format('woff'),
+       url('./fonts/element-icons.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+  font-style: normal;
+}
+
+/* Bootstrap Icons 字体 */
+@font-face {
+  font-family: 'bootstrap-icons';
+  src: url('./fonts/bootstrap-icons.woff2') format('woff2'),
+       url('./fonts/bootstrap-icons.woff') format('woff'),
+       url('./fonts/bootstrap-icons.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+  font-style: normal;
+}

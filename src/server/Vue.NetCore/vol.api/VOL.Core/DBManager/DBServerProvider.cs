@@ -1,4 +1,4 @@
-﻿using Dm;
+using Dm;
 using Microsoft.EntityFrameworkCore;
 using MySqlConnector;
 using Npgsql;
@@ -7,14 +7,14 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
-using VOL.Core.Configuration;
-using VOL.Core.Const;
-using VOL.Core.Dapper;
-using VOL.Core.EFDbContext;
-using VOL.Core.Enums;
-using VOL.Core.Extensions;
+using YZH.Core.Configuration;
+using YZH.Core.Const;
+using YZH.Core.Dapper;
+using YZH.Core.EFDbContext;
+using YZH.Core.Enums;
+using YZH.Core.Extensions;
 
-namespace VOL.Core.DBManager
+namespace YZH.Core.DBManager
 {
     public partial class DBServerProvider
     {

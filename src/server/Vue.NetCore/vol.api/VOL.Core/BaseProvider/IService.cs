@@ -4,13 +4,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
-using VOL.Core.CacheManager;
-using VOL.Core.Utilities;
-using VOL.Core.WorkFlow;
-using VOL.Entity.DomainModels;
-using VOL.Entity.SystemModels;
+using YZH.Core.CacheManager;
+using YZH.Core.Utilities;
+using YZH.Core.WorkFlow;
+using YZH.Entity.DomainModels;
+using YZH.Entity.SystemModels;
 
-namespace VOL.Core.BaseProvider
+namespace YZH.Core.BaseProvider
 {
     public interface IService<TEntity> where TEntity : BaseEntity
     {

@@ -1,8 +1,8 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using VOL.Entity;
-using VOL.Entity.SystemModels;
+using YZH.Entity;
+using YZH.Entity.SystemModels;
 
 namespace YZH.Core.Queue
 {

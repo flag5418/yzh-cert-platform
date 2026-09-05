@@ -1,11 +1,11 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
-using VOL.Core.Services;
+using YZH.Core.Services;
 
-namespace VOL.Core.Utilities
+namespace YZH.Core.Utilities
 {
     public class SecurityEncDecrypt
     {

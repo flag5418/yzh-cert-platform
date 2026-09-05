@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace VOL.Core.ObjectActionValidator
+namespace YZH.Core.ObjectActionValidator
 {
     public class ObjectModelValidatorState
     {

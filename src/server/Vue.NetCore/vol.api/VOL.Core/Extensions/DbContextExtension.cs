@@ -1,4 +1,4 @@
-﻿﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -7,10 +7,10 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading.Tasks;
-using VOL.Core.BaseProvider;
-using VOL.Core.EFDbContext;
+using YZH.Core.BaseProvider;
+using YZH.Core.EFDbContext;
 
-namespace VOL.Core.Extensions
+namespace YZH.Core.Extensions
 {
     public static class DbContextExtension
     {

@@ -7,16 +7,16 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Loader;
-using VOL.Core.Configuration;
-using VOL.Core.Const;
-using VOL.Core.DBManager;
-using VOL.Core.Enums;
-using VOL.Core.Extensions;
-using VOL.Core.Extensions.AutofacManager;
-using VOL.Entity;
-using VOL.Entity.SystemModels;
+using YZH.Core.Configuration;
+using YZH.Core.Const;
+using YZH.Core.DBManager;
+using YZH.Core.Enums;
+using YZH.Core.Extensions;
+using YZH.Core.Extensions.AutofacManager;
+using YZH.Entity;
+using YZH.Entity.SystemModels;
 
-namespace VOL.Core.EFDbContext
+namespace YZH.Core.EFDbContext
 {
     public class VOLContext : BaseDbContext, IDependency
     {

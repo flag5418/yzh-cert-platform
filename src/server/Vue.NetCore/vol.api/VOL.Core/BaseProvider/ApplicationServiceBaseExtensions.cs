@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using VOL.Core.Configuration;
-using VOL.Core.Extensions;
-using VOL.Core.Utilities;
-using VOL.Core.WorkFlow;
+using YZH.Core.Configuration;
+using YZH.Core.Extensions;
+using YZH.Core.Utilities;
+using YZH.Core.WorkFlow;
 
-namespace VOL.Core.BaseProvider
+namespace YZH.Core.BaseProvider
 {
     public static class ApplicationServiceBaseExtensions
     {

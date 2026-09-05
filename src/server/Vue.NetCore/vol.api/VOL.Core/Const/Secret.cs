@@ -1,4 +1,4 @@
-﻿namespace VOL.Core.Const
+namespace YZH.Core.Const
 {
     /// <summary>
     /// 加密对应密钥Key

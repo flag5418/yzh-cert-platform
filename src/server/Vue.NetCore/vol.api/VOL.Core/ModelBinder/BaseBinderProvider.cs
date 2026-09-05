@@ -1,9 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace VOL.Core.ModelBinder
+namespace YZH.Core.ModelBinder
 {
     public class BaseBinderProvider : IModelBinderProvider
     {
@@ -28,8 +28,8 @@ namespace VOL.Core.ModelBinder
             AddType(typeof(Dictionary<string, object>));
             AddType(typeof(List<Dictionary<string, object>>));
             AddType(typeof(List<object>));
-            AddType(typeof(List<VOL.Entity.DomainModels.Sys_TableColumn>));
-            AddType(typeof(VOL.Entity.DomainModels.Sys_TableInfo));
+            AddType(typeof(List<YZH.Entity.DomainModels.Sys_TableColumn>));
+            AddType(typeof(YZH.Entity.DomainModels.Sys_TableInfo));
         }
         /// <summary>
         /// 增加一个委托用于调用 return new BaseModelBinder();时对参数进行行校验，待完..

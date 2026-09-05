@@ -1,11 +1,11 @@
 using System.Reflection;
-using VOL.Core.BaseProvider;
-using VOL.Core.DBManager;
-using VOL.Core.Extensions;
-using VOL.Core.Services;
-using VOL.Core.Utilities;
-using VOL.Entity.DomainModels;
-using VOL.Entity.SystemModels;
+using YZH.Core.BaseProvider;
+using YZH.Core.DBManager;
+using YZH.Core.Extensions;
+using YZH.Core.Services;
+using YZH.Core.Utilities;
+using YZH.Entity.DomainModels;
+using YZH.Entity.SystemModels;
 using YZH.Core.Attributes;
 using YZH.Core.Validation;
 
@@ -92,7 +92,7 @@ public abstract class YZHTableServiceBase<TEntity, TRepository>
     protected virtual PageGridData<TEntity> GetPageDataFromView(
         PageDataOptions options, Type viewType)
     {
-        var tableName = viewType.GetCustomAttribute<VOL.Entity.EntityAttribute>()?.TableName
+        var tableName = viewType.GetCustomAttribute<YZH.Entity.EntityAttribute>()?.TableName
             ?? viewType.Name;
         var parameters = new Dictionary<string, object>();
         var whereClause = "1=1";

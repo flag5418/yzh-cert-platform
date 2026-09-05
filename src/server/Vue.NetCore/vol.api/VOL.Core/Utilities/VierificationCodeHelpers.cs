@@ -1,9 +1,9 @@
-﻿using SkiaSharp;
+using SkiaSharp;
 using System;
 using System.IO;
 using System.Linq;
 
-namespace VOL.Core.Utilities
+namespace YZH.Core.Utilities
 {
     public static class VierificationCodeHelpers
     {        //验证码字体集合

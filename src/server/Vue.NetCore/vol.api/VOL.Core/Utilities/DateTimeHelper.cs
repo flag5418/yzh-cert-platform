@@ -1,9 +1,9 @@
-﻿using System.IO;
+using System.IO;
 
 using System.Text;
 using System;
 
-namespace VOL.Core.Utilities
+namespace YZH.Core.Utilities
 {
   public class DateTimeHelper
   {

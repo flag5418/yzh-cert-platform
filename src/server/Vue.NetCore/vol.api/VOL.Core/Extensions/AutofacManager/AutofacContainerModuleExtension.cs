@@ -1,4 +1,4 @@
-﻿using Autofac;
+using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using Dapper;
 using Microsoft.EntityFrameworkCore;
@@ -13,21 +13,21 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Text;
-using VOL.Core.CacheManager;
-using VOL.Core.Configuration;
-using VOL.Core.Const;
-using VOL.Core.Dapper;
-using VOL.Core.DBManager;
-using VOL.Core.EFDbContext;
-using VOL.Core.Enums;
-using VOL.Core.Extensions.AutofacManager;
-//using VOL.Core.KafkaManager.IService;
-//using VOL.Core.KafkaManager.Service;
-using VOL.Core.ManageUser;
-using VOL.Core.ObjectActionValidator;
-using VOL.Core.Services;
+using YZH.Core.CacheManager;
+using YZH.Core.Configuration;
+using YZH.Core.Const;
+using YZH.Core.Dapper;
+using YZH.Core.DBManager;
+using YZH.Core.EFDbContext;
+using YZH.Core.Enums;
+using YZH.Core.Extensions.AutofacManager;
+//using YZH.Core.KafkaManager.IService;
+//using YZH.Core.KafkaManager.Service;
+using YZH.Core.ManageUser;
+using YZH.Core.ObjectActionValidator;
+using YZH.Core.Services;
 
-namespace VOL.Core.Extensions
+namespace YZH.Core.Extensions
 {
     public static class AutofacContainerModuleExtension
     {

@@ -1,5 +1,5 @@
-﻿using System;
-namespace VOL.Core.Utilities
+using System;
+namespace YZH.Core.Utilities
 {
     public class IdWorker
     {

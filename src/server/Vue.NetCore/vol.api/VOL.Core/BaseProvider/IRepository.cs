@@ -6,12 +6,12 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
-using VOL.Core.Dapper;
-using VOL.Core.Enums;
-using VOL.Core.Utilities;
-using VOL.Entity.SystemModels;
+using YZH.Core.Dapper;
+using YZH.Core.Enums;
+using YZH.Core.Utilities;
+using YZH.Entity.SystemModels;
 
-namespace VOL.Core.BaseProvider
+namespace YZH.Core.BaseProvider
 {
     public interface IRepository<TEntity> : IRepositoryDbContext where TEntity : BaseEntity
     {

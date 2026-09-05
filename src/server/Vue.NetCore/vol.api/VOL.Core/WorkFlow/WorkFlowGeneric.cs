@@ -1,17 +1,17 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
-using VOL.Core.BaseProvider;
-using VOL.Core.DBManager;
-using VOL.Core.Extensions;
-using VOL.Core.Infrastructure;
-using VOL.Core.ManageUser;
-using VOL.Entity.DomainModels;
+using YZH.Core.BaseProvider;
+using YZH.Core.DBManager;
+using YZH.Core.Extensions;
+using YZH.Core.Infrastructure;
+using YZH.Core.ManageUser;
+using YZH.Entity.DomainModels;
 
-namespace VOL.Core.WorkFlow
+namespace YZH.Core.WorkFlow
 {
     public static class WorkFlowGeneric
     {

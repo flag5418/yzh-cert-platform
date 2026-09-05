@@ -12,8 +12,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Vue.NetCore\vol.api\VOL.Core\VOL.Core.csproj" />
-    <ProjectReference Include="..\..\Vue.NetCore\vol.api\VOL.Entity\VOL.Entity.csproj" />
+    <ProjectReference Include="..\..\Vue.NetCore\vol.api\YZH.Core\YZH.Core.csproj" />
+    <ProjectReference Include="..\..\Vue.NetCore\vol.api\YZH.Entity\YZH.Entity.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -4,17 +4,17 @@
  *
  * 统一所有单页面的整体结构：
  * ┌────────────────────────────────────────────────┐
- * │ 标题栏（页面标题 + 面包屑）                       │  ← #title
+ * │  [全局 padding: 16px 20px]                      │
  * ├────────────────────────────────────────────────┤
- * │ 搜索栏（查询条件 grid 布局）                      │  ← #search
+ * │  搜索栏（单行 Grid 布局，查询/重置按钮右对齐）   │  ← #search
  * ├────────────────────────────────────────────────┤
- * │ 控制栏（左侧：新增/批量删除  右侧：刷新/列设置）    │  ← #toolbar
+ * │  控制栏（左侧：操作按钮  右侧：列设置）          │  ← #toolbar
  * ├────────────────────────────────────────────────┤
  * │                                                │
- * │ 表格区域                                        │  ← #table（默认插槽）
+ * │  表格区域（弹性填充剩余空间）                     │  ← #table（默认插槽）
  * │                                                │
  * ├────────────────────────────────────────────────┤
- * │ 分页                                            │  ← #pagination
+ * │  分页（置底显示）                                │  ← #pagination
  * └────────────────────────────────────────────────┘
  */
 defineProps<{
@@ -29,16 +29,6 @@ defineProps<{
 
 <template>
   <div class="yzh-page-layout">
-    <!-- 标题栏 -->
-    <div v-if="showTitle || pageTitle || helpText" class="yzh-page-layout__header">
-      <slot name="title">
-        <div class="yzh-page-layout__title-bar">
-          <h2 class="yzh-page-layout__title">{{ pageTitle }}</h2>
-          <span v-if="helpText" class="yzh-page-layout__help">{{ helpText }}</span>
-        </div>
-      </slot>
-    </div>
-
     <!-- 搜索栏 -->
     <div v-if="$slots.search" class="yzh-page-layout__search">
       <slot name="search" />
@@ -79,33 +69,6 @@ defineProps<{
   overflow: hidden;
   background: var(--yzh-color-bg-page, #f5f7fa);
 
-  /* === 标题栏 === */
-  &__header {
-    flex-shrink: 0;
-    padding: 16px 20px;
-    background: #fff;
-    border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
-  }
-
-  &__title-bar {
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-  }
-
-  &__title {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--yzh-color-text-primary, #303133);
-    line-height: 1.4;
-  }
-
-  &__help {
-    font-size: 13px;
-    color: var(--yzh-color-text-secondary, #909399);
-  }
-
   /* === 搜索栏 === */
   &__search {
     flex-shrink: 0;
@@ -145,8 +108,9 @@ defineProps<{
   &__content {
     flex: 1;
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
     padding: 16px 20px;
+    background: var(--yzh-color-bg-page, #f5f7fa);
   }
 
   /* === 底部栏（分页） === */

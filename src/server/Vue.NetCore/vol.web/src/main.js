@@ -5,8 +5,8 @@ import store from './store'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import './yzh/styles/yzh.css'
-import './assets/element-icon/icon.css'
-import './assets/bootstrap-icons/font/bootstrap-icons.min.css'
+import './assets/icons/icon.css'
+import './assets/icons/icon-fonts.css'
 import base from './uitils/common'
 import VolProvider from './components/VolProvider'
 import http from './api/http'
@@ -55,6 +55,8 @@ import VolTitle from './components/basic/VolTitle'
 import VolTable from './components/basic/VolTable/index'
 import VolForm from './components/basic/VolForm/index'
 import VolBox from './components/basic/VolBox/index'
+import { YzhIcon } from './components/icons'
+
 app
   .use(store)
   .use(ElementPlus, { size: 'default' })
@@ -64,5 +66,6 @@ app
   .use(VolForm)
   .use(VolBox)
   .use(viewgird)
+  .use(YzhIcon)
   .mount('#app')
 app.config.globalProperties.$Message = app.config.globalProperties.$message

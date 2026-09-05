@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace VOL.Core.Quartz
+namespace YZH.Core.Quartz
 {
     public enum JobAction
     {

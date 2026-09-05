@@ -1,15 +1,15 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
-using VOL.Core.CacheManager;
-using VOL.Core.DBManager;
-using VOL.Core.Extensions.AutofacManager;
-using VOL.Core.Utilities;
-using VOL.Entity.DomainModels;
+using YZH.Core.CacheManager;
+using YZH.Core.DBManager;
+using YZH.Core.Extensions.AutofacManager;
+using YZH.Core.Utilities;
+using YZH.Entity.DomainModels;
 
-namespace VOL.Core.UserManager
+namespace YZH.Core.UserManager
 {
    public static class DepartmentContext
     {

@@ -1,10 +1,10 @@
-﻿using SkiaSharp;
+using SkiaSharp;
 using System;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 
-namespace VOL.Core.Utilities
+namespace YZH.Core.Utilities
 {
     public static class VierificationCodeServices
     {        //验证码字体集合

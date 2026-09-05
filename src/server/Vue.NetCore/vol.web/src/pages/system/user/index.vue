@@ -21,7 +21,7 @@ import {
 import { YzhForm, type YzhFormFieldV4 } from '@/yzh/components/form'
 import YzhTable from '@/yzh/components/table/YzhTable.vue'
 import type { PageParams, SearchField, YzhTableColumnV4 } from '@/yzh/components/table/types'
-import { Delete, Edit, Plus, Refresh } from '@element-plus/icons-vue'
+import { Delete, Edit, Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { reactive, ref } from 'vue'
 
@@ -239,7 +239,7 @@ const formFields: YzhFormFieldV4[] = [
       :search-fields="searchFields"
       :page-size="10"
       selectable
-      :toolbar="{ refresh: true, columnSetting: true, density: true }"
+      :toolbar="{ columnSetting: true }"
       @selection-change="onSelectionChange"
     >
       <template #toolbar-left>
@@ -256,7 +256,6 @@ const formFields: YzhFormFieldV4[] = [
             ({{ selectedRows.length }})
           </span>
         </el-button>
-        <el-button :icon="Refresh" @click="tableRef?.refresh()">刷新</el-button>
       </template>
 
       <template #column-actions="{ row }">
@@ -302,7 +301,7 @@ const formFields: YzhFormFieldV4[] = [
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #f5f7fa;
+  background: var(--yzh-color-bg-page, #f5f7fa);
   padding: 0;
 }
 </style>

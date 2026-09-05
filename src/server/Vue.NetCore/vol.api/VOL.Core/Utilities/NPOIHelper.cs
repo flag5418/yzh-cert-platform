@@ -1,4 +1,4 @@
-﻿//using NPOI.HPSF;
+//using NPOI.HPSF;
 //using NPOI.HSSF.UserModel;
 //using NPOI.SS.UserModel;
 //using System;
@@ -7,7 +7,7 @@
 //using System.IO;
 //using System.Text;
 
-//namespace VOL.Core.Utilities
+//namespace YZH.Core.Utilities
 //{
 //    public class NPOIHelper
 //    {

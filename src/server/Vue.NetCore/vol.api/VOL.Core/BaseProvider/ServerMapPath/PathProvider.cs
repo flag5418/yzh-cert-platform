@@ -1,10 +1,10 @@
-﻿
+
 using Microsoft.AspNetCore.Hosting;
 using System.IO;
-using VOL.Core.Extensions;
-using VOL.Core.Extensions.AutofacManager;
+using YZH.Core.Extensions;
+using YZH.Core.Extensions.AutofacManager;
 
-namespace VOL.Core.BaseProvider.ServerMapPath
+namespace YZH.Core.BaseProvider.ServerMapPath
 {
     public interface IPathProvider : IDependency
     {

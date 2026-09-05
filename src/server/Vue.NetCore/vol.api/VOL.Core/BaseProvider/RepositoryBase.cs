@@ -12,18 +12,18 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading.Tasks;
-using VOL.Core.Configuration;
-using VOL.Core.Dapper;
-using VOL.Core.DBManager;
-using VOL.Core.EFDbContext;
-using VOL.Core.Enums;
-using VOL.Core.Extensions;
-using VOL.Core.Services;
-using VOL.Core.Utilities;
-using VOL.Entity;
-using VOL.Entity.SystemModels;
+using YZH.Core.Configuration;
+using YZH.Core.Dapper;
+using YZH.Core.DBManager;
+using YZH.Core.EFDbContext;
+using YZH.Core.Enums;
+using YZH.Core.Extensions;
+using YZH.Core.Services;
+using YZH.Core.Utilities;
+using YZH.Entity;
+using YZH.Entity.SystemModels;
 
-namespace VOL.Core.BaseProvider
+namespace YZH.Core.BaseProvider
 {
     public abstract class RepositoryBase<TEntity> where TEntity : BaseEntity
     {

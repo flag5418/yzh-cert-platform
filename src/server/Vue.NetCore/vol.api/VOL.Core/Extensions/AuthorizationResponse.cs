@@ -1,14 +1,14 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Security.Claims;
-using VOL.Core.Configuration;
-using VOL.Core.Enums;
-using VOL.Core.Services;
-using VOL.Core.Utilities;
+using YZH.Core.Configuration;
+using YZH.Core.Enums;
+using YZH.Core.Services;
+using YZH.Core.Utilities;
 
-namespace VOL.Core.Extensions
+namespace YZH.Core.Extensions
 {
     public static class AuthorizationResponse
     {

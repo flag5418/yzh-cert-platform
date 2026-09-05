@@ -1,14 +1,14 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Primitives;
 using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
-using VOL.Core.Configuration;
-using VOL.Core.Extensions;
+using YZH.Core.Configuration;
+using YZH.Core.Extensions;
 
-namespace VOL.Core.Quartz
+namespace YZH.Core.Quartz
 {
     public static class QuartzAuthorization
     {

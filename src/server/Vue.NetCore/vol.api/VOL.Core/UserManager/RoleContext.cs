@@ -1,14 +1,14 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using VOL.Core.CacheManager;
-using VOL.Core.DBManager;
-using VOL.Core.Extensions.AutofacManager;
-using VOL.Core.ManageUser;
-using VOL.Core.Services;
-using VOL.Entity.DomainModels;
+using YZH.Core.CacheManager;
+using YZH.Core.DBManager;
+using YZH.Core.Extensions.AutofacManager;
+using YZH.Core.ManageUser;
+using YZH.Core.Services;
+using YZH.Entity.DomainModels;
 
-namespace VOL.Core.UserManager
+namespace YZH.Core.UserManager
 {
     public static class RoleContext
     {

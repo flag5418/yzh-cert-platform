@@ -4,9 +4,9 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Reflection;
-using VOL.Entity.Admin.Platform.Base;
+using YZH.Entity.Admin.Platform.Base;
 
-namespace VOL.Core.Utilities
+namespace YZH.Core.Utilities
 {
     /// <summary>
     /// 实体配置生成器

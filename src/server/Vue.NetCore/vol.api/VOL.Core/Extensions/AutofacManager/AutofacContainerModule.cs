@@ -1,8 +1,8 @@
-﻿using VOL.Core.Extensions;
+using YZH.Core.Extensions;
 using System;
-using VOL.Core.Configuration;
+using YZH.Core.Configuration;
 
-namespace VOL.Core.Extensions.AutofacManager
+namespace YZH.Core.Extensions.AutofacManager
 {
     public class AutofacContainerModule
     {

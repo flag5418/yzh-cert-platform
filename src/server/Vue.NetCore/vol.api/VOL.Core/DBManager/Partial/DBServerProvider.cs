@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
-using VOL.Core.Configuration;
-using VOL.Core.Dapper;
-using VOL.Core.Enums;
+using YZH.Core.Configuration;
+using YZH.Core.Dapper;
+using YZH.Core.Enums;
 
-namespace VOL.Core.DBManager
+namespace YZH.Core.DBManager
 {
     /// <summary>
     /// 2022.11.21增加其他数据库(sqlserver、mysql、pgsql、oracle)连接配置说明

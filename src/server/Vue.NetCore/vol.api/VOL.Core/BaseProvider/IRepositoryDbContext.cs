@@ -1,6 +1,6 @@
-﻿using VOL.Core.EFDbContext;
+using YZH.Core.EFDbContext;
 
-namespace VOL.Core.BaseProvider
+namespace YZH.Core.BaseProvider
 {
     public interface IRepositoryDbContext
     {

@@ -5,12 +5,12 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using VOL.Core.EFDbContext;
-using VOL.Core.Enums;
-using VOL.Core.Extensions;
-using VOL.Entity;
+using YZH.Core.EFDbContext;
+using YZH.Core.Enums;
+using YZH.Core.Extensions;
+using YZH.Entity;
 
-namespace VOL.Core.BaseProvider
+namespace YZH.Core.BaseProvider
 {
     public static class ApplicationServiceBaseDeleteExtensions
     {

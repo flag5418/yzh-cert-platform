@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -8,18 +8,17 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
-using VOL.Core.Configuration;
-using VOL.Core.Const;
-using VOL.Core.Enums;
-using VOL.Core.Utilities;
-using VOL.Entity;
-using VOL.Entity.DomainModels;
+using YZH.Core.Configuration;
+using YZH.Core.Const;
+using YZH.Core.Enums;
+using YZH.Core.Utilities;
+using YZH.Entity;
+using YZH.Entity.DomainModels;
 /*
-* jxx 2017-08-09 
 * 通用实体属操作
 */
 
-namespace VOL.Core.Extensions
+namespace YZH.Core.Extensions
 {
     public static class EntityProperties
     {

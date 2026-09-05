@@ -5,16 +5,16 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using VOL.Core.EFDbContext;
-using VOL.Core.Enums;
-using VOL.Core.Extensions;
-using VOL.Core.UserManager;
-using VOL.Core.Utilities;
-using VOL.Entity;
-using VOL.Entity.DomainModels;
-using VOL.Entity.SystemModels;
+using YZH.Core.EFDbContext;
+using YZH.Core.Enums;
+using YZH.Core.Extensions;
+using YZH.Core.UserManager;
+using YZH.Core.Utilities;
+using YZH.Entity;
+using YZH.Entity.DomainModels;
+using YZH.Entity.SystemModels;
 
-namespace VOL.Core.BaseProvider
+namespace YZH.Core.BaseProvider
 {
     public static class ApplicationServiceBaseUpdateOrAddExtensions
     {

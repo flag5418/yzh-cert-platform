@@ -1,7 +1,7 @@
-﻿using VOL.Core.Enums;
+using YZH.Core.Enums;
 using System;
 
-namespace VOL.Core.Extensions
+namespace YZH.Core.Extensions
 {
     public static class CacheKeyExtensions
     {

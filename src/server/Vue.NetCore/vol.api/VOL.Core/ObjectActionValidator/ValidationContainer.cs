@@ -1,12 +1,12 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Text;
-using VOL.Core.Extensions;
-using VOL.Entity.DomainModels;
+using YZH.Core.Extensions;
+using YZH.Entity.DomainModels;
 
-namespace VOL.Core.ObjectActionValidator
+namespace YZH.Core.ObjectActionValidator
 {
     /// <summary>
     /// 对方法指定属性校验,此处配置完成就不用每处都写if esle判断值是合法

@@ -1,6 +1,6 @@
-﻿using System;
+using System;
 
-namespace VOL.Core.ModelBinder
+namespace YZH.Core.ModelBinder
 {
     public class BinderObject<T> where T : class
     {

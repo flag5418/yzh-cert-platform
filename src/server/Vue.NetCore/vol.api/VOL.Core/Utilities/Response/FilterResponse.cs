@@ -1,13 +1,13 @@
-﻿using VOL.Core.Enums;
-using VOL.Core.Extensions;
+using YZH.Core.Enums;
+using YZH.Core.Extensions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Newtonsoft.Json;
 using System.Net;
 using System.Text;
-using VOL.Core.Const;
+using YZH.Core.Const;
 
-namespace VOL.Core.Utilities
+namespace YZH.Core.Utilities
 {
     public static class FilterResponse
     {

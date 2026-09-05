@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
-using VOL.Core.Const;
-using VOL.Core.Enums;
-using VOL.Core.ManageUser;
+using YZH.Core.Const;
+using YZH.Core.Enums;
+using YZH.Core.ManageUser;
 
-namespace VOL.Core.Extensions
+namespace YZH.Core.Extensions
 {
     public static class StringExtension
     {

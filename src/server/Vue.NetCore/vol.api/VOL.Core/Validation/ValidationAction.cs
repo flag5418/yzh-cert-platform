@@ -1,4 +1,4 @@
-namespace VOL.Core.Validation
+namespace YZH.Core.Validation
 {
     /// <summary>
     /// 校验动作类型。

@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace VOL.Core.Extensions
+namespace YZH.Core.Extensions
 {
     public static class SecurityEncDecryptExtensions
     {

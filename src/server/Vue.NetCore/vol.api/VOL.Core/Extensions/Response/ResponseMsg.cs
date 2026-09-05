@@ -1,6 +1,6 @@
-﻿using VOL.Core.Enums;
+using YZH.Core.Enums;
 
-namespace VOL.Core.Extensions
+namespace YZH.Core.Extensions
 {
     public static class ResponseMsg
     {

@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace VOL.Core.Utilities
+namespace YZH.Core.Utilities
 {
     public class HttpManager
     {

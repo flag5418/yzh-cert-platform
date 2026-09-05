@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace VOL.Core.Filters
+namespace YZH.Core.Filters
 {
     public class ActionPermissionRequirement
     {

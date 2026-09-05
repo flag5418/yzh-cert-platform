@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 using Arric.Crypto.SM.SM2;
 using Arric.Crypto.SM.SM3;
 using Arric.Crypto.SM.SM4;
-using VOL.Core.Configuration;
+using YZH.Core.Configuration;
 
-namespace VOL.Core.Utilities
+namespace YZH.Core.Utilities
 {
     /// <summary>
     /// 国密 SM2 / SM3 / SM4 工具（密钥取自 AppSetting.GmCrypto）

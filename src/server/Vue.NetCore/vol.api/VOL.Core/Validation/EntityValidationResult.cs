@@ -1,6 +1,6 @@
-using VOL.Core.Utilities;
+using YZH.Core.Utilities;
 
-namespace VOL.Core.Validation
+namespace YZH.Core.Validation
 {
     /// <summary>
     /// 校验结果。只承载校验状态和错误信息，不涉及数据持久化。

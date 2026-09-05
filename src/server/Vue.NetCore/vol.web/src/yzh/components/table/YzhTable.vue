@@ -5,11 +5,11 @@
  * 特性：
  * - 加载/空/错误三态
  * - 排序、分页、多选
- * - 工具栏（刷新/列设置/密度）
+ * - 工具栏（列设置）
  * - 搜索栏联动
  * - 插槽扩展（#column-prop）
  */
-import { CircleCloseFilled, Refresh, Setting } from '@element-plus/icons-vue'
+import { Setting } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { dictStore } from '../../store/dict'
@@ -39,7 +39,6 @@ const props = withDefaults(
     rowKey?: string
     emptyText?: string
     toolbar?: boolean | YzhTableToolbar
-    searchCollapsible?: boolean
   }>(),
   {
     selectable: false,
@@ -47,8 +46,7 @@ const props = withDefaults(
     pageSize: 20,
     rowKey: 'id',
     emptyText: '暂无数据',
-    toolbar: true,
-    searchCollapsible: true
+    toolbar: true
   }
 )
 
@@ -72,9 +70,6 @@ const sort = ref<DefaultSort | null>(props.defaultSort || null)
 
 // 搜索状态
 const searchParams = reactive<Record<string, any>>({})
-
-// 密度
-const density = ref<'default' | 'compact' | 'loose'>('default')
 
 // 用户手动隐藏的列 field 集合
 const hiddenColumnFields = ref<Set<string>>(new Set())
@@ -136,7 +131,7 @@ const selectable = computed(() => props.selectable)
 // 工具栏配置
 const toolbarConfig = computed<YzhTableToolbar>(() => {
   if (props.toolbar === false) return {}
-  if (props.toolbar === true) return { refresh: true, columnSetting: true, density: true }
+  if (props.toolbar === true) return { columnSetting: true }
   return props.toolbar
 })
 
@@ -267,7 +262,6 @@ defineExpose({
     <YzhSearchBar
       v-if="searchFields && searchFields.length"
       :fields="searchFields"
-      :collapsible="searchCollapsible"
       :default-values="searchParams"
       @search="onSearch"
       @reset="onSearchReset"
@@ -280,23 +274,13 @@ defineExpose({
       </template>
       <template #right>
         <slot name="toolbar-right" :selected="selectedRows" :refresh="refresh">
-          <el-button v-if="toolbarConfig.refresh" text :icon="Refresh" @click="refresh">
-            刷新
-          </el-button>
-          <el-button
-            v-if="toolbarConfig.density"
-            text
-            @click="
-              density =
-                density === 'default' ? 'compact' : density === 'compact' ? 'loose' : 'default'
-            "
-          >
-            {{ density === 'default' ? '紧凑' : density === 'compact' ? '舒适' : '默认' }}
-          </el-button>
           <!-- 列设置 popover -->
           <el-popover v-if="toolbarConfig.columnSetting" trigger="click" placement="bottom-end" :width="240">
             <template #reference>
-              <el-button text :icon="Setting">列设置</el-button>
+              <el-button text>
+                <i class="bi bi-columns"></i>
+                列设置
+              </el-button>
             </template>
             <div class="yzh-column-settings">
               <div class="yzh-column-settings__header">列筛选与排序</div>
@@ -343,7 +327,6 @@ defineExpose({
         v-loading="loading"
         :data="rows"
         :row-key="rowKey"
-        :size="density"
         :height="height ? '100%' : undefined"
         stripe
         border
@@ -393,7 +376,7 @@ defineExpose({
           <div class="yzh-table__empty">
             <el-empty v-if="!loading && !error" :description="emptyText" />
             <div v-else-if="error" class="yzh-table__error">
-              <el-icon><CircleCloseFilled /></el-icon>
+              <i class="bi bi-exclamation-triangle"></i>
               <span>{{ error }}</span>
               <el-button text type="primary" @click="refresh">重试</el-button>
             </div>
@@ -412,7 +395,6 @@ defineExpose({
         @update:page-size="onSizeChange"
       />
     </div>
-
   </div>
 </template>
 
@@ -423,6 +405,7 @@ defineExpose({
   background: var(--yzh-color-bg-card, #fff);
   border-radius: 0;
   overflow: hidden;
+  height: 100%;
 }
 
 .yzh-table__body {

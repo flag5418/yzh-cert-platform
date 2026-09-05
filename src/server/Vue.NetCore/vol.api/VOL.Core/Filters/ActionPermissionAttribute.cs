@@ -1,11 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using VOL.Core.Enums;
-using VOL.Core.Extensions;
+using YZH.Core.Enums;
+using YZH.Core.Extensions;
 
-namespace VOL.Core.Filters
+namespace YZH.Core.Filters
 {
     public class ActionPermissionAttribute : TypeFilterAttribute
     {

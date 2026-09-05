@@ -4,12 +4,12 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Reflection;
-using VOL.Core.DBManager;
-using VOL.Core.Enums;
-using VOL.Entity;
-using VOL.Entity.Admin.Platform;
+using YZH.Core.DBManager;
+using YZH.Core.Enums;
+using YZH.Entity;
+using YZH.Entity.Admin.Platform;
 
-namespace VOL.Core.Validation
+namespace YZH.Core.Validation
 {
     /// <summary>
     /// 实体校验处理器。只做校验（SELECT COUNT），不做数据持久化。

@@ -1,9 +1,9 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
-using VOL.Core.Configuration;
-using VOL.Core.WorkFlow;
+using YZH.Core.Configuration;
+using YZH.Core.WorkFlow;
 
-namespace VOL.Core.BaseProvider
+namespace YZH.Core.BaseProvider
 {
     public static class ApplicationServiceBaseConfig
     {

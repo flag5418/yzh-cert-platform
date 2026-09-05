@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
-using VOL.Core.ManageUser;
+using YZH.Core.ManageUser;
 
-namespace VOL.Core.Tenancy
+namespace YZH.Core.Tenancy
 {
     public static class TenancyManager<T> where T : class
     {
