@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -10,6 +11,8 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
+using YZH.System;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Quartz.Impl;
@@ -33,6 +36,17 @@ using Microsoft.Extensions.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddModule(builder.Configuration);
+
+// ====== YZH 全新系统模块（替代 VOL 系统设置底层，干净架构）======
+// 独立于 VOL，使用 YzhDbContext + 干净控制器，路由前缀 /api/yzh/sys/*
+try
+{
+    builder.Services.AddYzhSystem(builder.Configuration);
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[YZH.System] 注册失败（已跳过，不影响 VOL 启动）：{ex.Message}");
+}
 
 // ====== YZH Framework 服务注册 ======
 // YZH V3.0 配置驱动 UI 服务（业务逻辑在 YZH.Core，Controller 只做 HTTP 适配）

@@ -1,60 +1,74 @@
-//多个页面指向同一个菜单时请加上属性：
-// meta: {
-//   dynamic: true,
-// }
-let viewgird = [
-  {
-    path: '/Sys_Log',
-    name: 'sys_Log',
-    component: () => import('@/views/sys/system/Sys_Log.vue')
-  },
+/**
+ * 路由配置（统一入口）
+ * 注意：viewGird.admin.js 是旧版过渡文件，已被此文件取代
+ */
+
+// 系统管理页面路由（V4 新架构）
+const systemRoutes = [
   {
     path: '/Sys_User',
     name: 'Sys_User',
-    component: () => import('@/views/sys/system/Sys_User.vue')
+    component: () => import('@/pages/system/user/index.vue')
   },
   {
     path: '/permission',
     name: 'permission',
-    component: () => import('@/views/sys/Permission.vue')
+    component: () => import('@/views/cert/admin/system/Permission.vue')
   },
-
   {
     path: '/Sys_Dictionary',
     name: 'Sys_Dictionary',
-    component: () => import('@/views/sys/system/Sys_Dictionary.vue')
+    component: () => import('@/pages/system/dict/index.vue')
+  },
+  {
+    path: '/Sys_Dictionary/List',
+    name: 'Sys_Dictionary_List',
+    component: () => import('@/pages/system/dict/list.vue')
   },
   {
     path: '/Sys_Role',
     name: 'Sys_Role',
-    component: () => import('@/views/sys/system/Sys_Role.vue')
+    component: () => import('@/pages/system/role/index.vue')
   },
   {
     path: '/Sys_Department',
     name: 'Sys_Department',
-    component: () => import('@/views/sys/system/Sys_Department.vue')
+    component: () => import('@/pages/system/dept/index.vue')
+  },
+  {
+    path: '/Sys_Menu',
+    name: 'Sys_Menu',
+    component: () => import('@/pages/system/menu/index.vue')
+  },
+  {
+    path: '/Sys_Log',
+    name: 'Sys_Log',
+    component: () => import('@/pages/system/log/index.vue')
   },
   {
     path: '/Sys_QuartzOptions',
     name: 'Sys_QuartzOptions',
-    component: () => import('@/views/sys/quartz/Sys_QuartzOptions.vue')
+    component: () => import('@/views/cert/admin/system/quartz/Sys_QuartzOptions.vue')
   },
   {
     path: '/Sys_QuartzLog',
     name: 'Sys_QuartzLog',
-    component: () => import('@/views/sys/quartz/Sys_QuartzLog.vue')
+    component: () => import('@/views/cert/admin/system/quartz/Sys_QuartzLog.vue')
   },
   {
     path: '/Sys_WorkFlow',
     name: 'Sys_WorkFlow',
-    component: () => import('@/views/sys/flow/Sys_WorkFlow.vue')
+    component: () => import('@/views/cert/admin/system/flow/Sys_WorkFlow.vue')
   },
   {
     path: '/Sys_WorkFlowTable',
     name: 'Sys_WorkFlowTable',
-    component: () => import('@/views/sys/flow/Sys_WorkFlowTable.vue')
-  },
-  // ==================== CertPlatform 模块路由 ====================
+    component: () => import('@/views/cert/admin/system/flow/Sys_WorkFlowTable.vue')
+  }
+]
+
+// 业务模块路由
+const businessRoutes = [
   {
     path: '/CertPlatform/Cert/CertificationBody',
     name: 'CertificationBody',
@@ -85,91 +99,111 @@ let viewgird = [
     component: () => import('@/views/cert/admin/business/Link/OrgStage/OrgStage.vue'),
     meta: { title: '机构-阶段关联' }
   },
-  
-  // 标准文件管理（扁平路由，菜单 URL 直接匹配）
   {
     path: '/CertPlatform/Standard/DirectoryConfig',
     name: 'DirectoryConfig',
     component: () => import('@/views/cert/admin/business/Standard/DirectoryManager/index.vue'),
     meta: { title: '标准文件管理' }
   },
-  // 文档提取规则管理（独立菜单）
   {
     path: '/CertPlatform/DocExtractionRule',
     name: 'DocExtractionRule',
     component: () => import('@/views/cert/admin/business/Standard/DocExtractionRule/index.vue'),
     meta: { title: '文档提取规则' }
   },
-  // 系统参数配置
   {
     path: '/CertPlatform/SysConfig',
     name: 'SysConfig',
     component: () => import('@/views/cert/admin/business/Standard/SysConfigManager/index.vue'),
     meta: { title: '系统参数配置' }
   },
-  // 队列监控（yzh 队列中心通用页面）
   {
     path: '/CertPlatform/ConvertQueueMonitor',
     name: 'ConvertQueueMonitor',
     component: () => import('@/yzh/views/QueueMonitor/index.vue'),
     meta: { title: '队列监控' }
   },
-  // Prompt 模板管理
   {
     path: '/CertPlatform/PromptTemplate',
     name: 'PromptTemplate',
     component: () => import('@/views/cert/admin/business/Standard/PromptTemplate/index.vue'),
     meta: { title: 'Prompt 模板管理' }
   },
-  // AI 费用监控
   {
     path: '/CertPlatform/AIUsageMonitor',
     name: 'AIUsageMonitor',
     component: () => import('@/views/cert/admin/business/Standard/AIUsageMonitor/index.vue'),
     meta: { title: 'AI 费用监控' }
   },
-  // 标准条款管理
   {
     path: '/CertPlatform/ISOClause',
     name: 'ISOClause',
     component: () => import('@/views/cert/admin/business/Standard/ISOClause.vue'),
     meta: { title: '标准条款管理' }
   },
-  // NC 检查规则（扁平路由）
   {
     path: '/CertPlatform/WorkflowRules/Rules',
     name: 'ValidationRuleList',
     component: () => import('@/views/cert/admin/business/Standard/WorkflowRules/List.vue'),
     meta: { title: 'NC 检查规则' }
   },
-  // 报告章节定义（扁平路由）
   {
     path: '/CertPlatform/WorkflowRules/ReportDef',
     name: 'ReportDefinition',
     component: () => import('@/views/cert/admin/business/Standard/WorkflowRules/ReportDefinition.vue'),
     meta: { title: '报告章节定义' }
   },
-  // Skill 管理（工作流节点技能配置：输入/输出/反射/API）
   {
     path: '/CertPlatform/SkillManage',
     name: 'SkillManage',
     component: () => import('@/views/cert/admin/business/Standard/SkillManage/index.vue'),
     meta: { title: 'Skill 管理' }
   },
-  // NC 规则配置（三栏：机构树 + NC 检查项 + 工作流画布，独立菜单）
   {
     path: '/CertPlatform/NCConfig',
     name: 'NCConfig',
     component: () => import('@/views/cert/admin/business/Standard/NCConfig/index.vue'),
     meta: { title: 'NC 规则配置' }
   },
-  // 报告规则配置（三栏：机构树 + 报告章节 + 工作流画布，独立菜单）
   {
     path: '/CertPlatform/ReportRuleConfig',
     name: 'ReportRuleConfig',
     component: () => import('@/views/cert/admin/business/Standard/ReportRuleConfig/index.vue'),
     meta: { title: '报告规则配置' }
+  },
+  // ====== V4 业务基础数据维护（彻底脱离 view-grid） ======
+  {
+    path: '/Business/ISOStandard',
+    name: 'Business_ISOStandard',
+    component: () => import('@/pages/business/iso-standard/index.vue'),
+    meta: { title: 'ISO 标准注册' }
+  },
+  {
+    path: '/Business/ISOClause',
+    name: 'Business_ISOClause',
+    component: () => import('@/pages/business/iso-clause/index.vue'),
+    meta: { title: 'ISO 条款' }
+  },
+  {
+    path: '/Business/CertStage',
+    name: 'Business_CertStage',
+    component: () => import('@/pages/business/cert-stage/index.vue'),
+    meta: { title: '认证阶段' }
+  },
+  {
+    path: '/Business/CertBody',
+    name: 'Business_CertBody',
+    component: () => import('@/pages/business/cert-body/index.vue'),
+    meta: { title: '认证机构' }
+  },
+  {
+    path: '/Business/Enterprise',
+    name: 'Business_Enterprise',
+    component: () => import('@/pages/business/enterprise/index.vue'),
+    meta: { title: '企业管理' }
   }
 ]
+
+let viewgird = [...systemRoutes, ...businessRoutes]
 
 export default viewgird

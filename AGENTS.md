@@ -21,7 +21,8 @@ AIGC:
 - **文档导航**：`docs/00-工程体系/README.md` — 全项目文档索引（00/20/50/60/80/90 + 历史文档）
 - **业务域设计**：按 `docs/00-工程体系/README.md` 导航进入对应目录（架构/全局 → 20-架构决策；功能细节 → 80-功能设计；AI 工程 → 60-AI工程设计）
 - **知识底座**：`docs/60-AI工程设计/YZH-知识库/README.md` — Vol 能力清单 / YZH 增量 / 边界约束 / 代码模板 / 踩坑记录 / 速查手册
-- **Vol 框架指南**：`docs/60-AI工程设计/vol-skill.md`
+- **Vol 框架指南**：`docs/60-AI工程设计/vol-skill.md`（**已弃用，仅供历史参考**）
+- **新架构指南（V4）**：`docs/00-工程体系/前端架构重设计-V1.md` + `docs/60-AI工程设计/YZH-知识库/10-架构迁移指南-V1.md`
 - **编码规范**：`docs/60-AI工程设计/vol-csharp-coding-standards.md`（C#）、`docs/60-AI工程设计/vue-ts-coding-standards.md`（Vue3+TS）
 - **脚本规范**：`scripts/README.md`（backend/db/frontend/storage/generate/tools 子目录）
 - **Skill 清单**：`docs/60-AI工程设计/Skill清单-V1.md` — 全部 Skill 的编码/输入输出/绑定模式/实现类/编写规范
@@ -29,21 +30,29 @@ AIGC:
 ## 项目速览
 
 - **项目**：映智汇认证审核管理系统（yzh-cert-platform），ISO 体系认证全流程（建档→任务分派→预审→复核→报告→NC）
-- **技术栈**：.NET 8 + Vol（后端）/ Vue 3 + TypeScript + Vite（admin 端 Element Plus、auditor 端 Naive UI）/ MySQL 8.0 / Redis 7 / MinIO / Docker Compose（OrbStack）
+- **技术栈**：.NET 8 + Vol（后端，保留）/ Vue 3 + TypeScript + Vite + Element Plus（admin 端） / MySQL 8.0 / Redis 7 / MinIO / Docker Compose（OrbStack）
 - **端口**：后端 9992 / 后台管理 9990 / 审核员前端 9991 / MySQL 3307 / Redis 6380 / MinIO 9000+9001
 - **开发模式**：独立开发，多 AI 协作机制不适用（项目全局规则 §十三）
+- **前端架构（V4 2026-09 起）**：彻底抛弃 view-grid/VolProvider/VolBox/VolForm，全部使用自研 `YzhTable` + `YzhForm` + `YzhApiClient` + 手写 API
 
 ## 编码强制约定
 
 1. **文档即宪法**：生成任何代码前，先查阅 `docs/` 中对应业务域的设计文档（见快速指针链路）；发现文档与实现不一致 → 更新文档，而非迁就代码。
 2. **知识库前置**：编码前查 `YZH-知识库/` 以下条目，避免重复踩坑：
-   - `08-Vol框架实战速查手册.md` / `09-常见错误对照表.md`（★★★ 必读）
+   - `10-架构迁移指南-V1.md`（**V4 新架构首选**）
+   - `08-Vol框架实战速查手册.md` / `09-常见错误对照表.md`（**仅历史参考，新页面不再使用**）
    - `03-边界与约束.md` / `06-YZH与Vol边界定义.md`（不能碰的、不能改的）
    - `01-Vol能力清单.md` / `02-YZH增量清单.md`（能力索引）
    - `04-代码模板/`、`05-踩坑记录/`（直接引用/查重）
-   - `07-标准页面开发流程.md`（前端页面标准流程）
+   - `07-标准页面开发流程.md`（**已废弃，请按 V4 试点页面 `src/pages/system/user/index.vue` 作为模板**）
 3. **后端**：只改 `VOL.Sys/Services/System/Partial/` 下的 Partial Service，禁改 .jsx；使用 Vol 框架 ServiceBase 钩子优先；YZH 增量能力（YZHBaseEntity / 特性体系）按 `02-YZH增量清单.md` 使用。
-4. **前端**：使用 Vol 框架 view-grid 组件模式（参考 `vol-skill.md` §12 与 `YZH-知识库/07、08`）；YZH 自有组件优先。
+4. **前端（新）**：所有新页面必须使用 V4 自研组件：
+   - 表格：`@/yzh/components/table/YzhTable.vue`
+   - 表单：`@/yzh/components/form`（YzhForm）
+   - API：`@/yzh/api/*`（手写）+ `yzhApi` 客户端
+   - 模板参考：`src/pages/system/user/index.vue`
+   - 路由位置：`src/pages/<模块>/<实体>/index.vue`
+   - **禁止** 新页面使用 view-grid、VolBox、VolForm、VolProvider、extension 自动生成的 .jsx
 5. **数据库**：MySQL 8.0 @ 3307（yzh-mysql）/ Redis @ 6380（yzh-redis）；SQL 脚本遵循 `项目全局规则.md` §十一（脚本放 scripts/db/，禁止散落）。
 6. **命名规范**：文档命名强制 `-V1` 后缀（见 `00-工程体系/文档生命周期管理规范-V1.md`）；脚本按 scripts/ 子目录归类。
 7. **启停规范**：后端启停一律走 `scripts/` 脚本（backend/ 子目录），禁止手动 `kill` / 裸 `dotnet run &`（见项目全局规则 §十五）。

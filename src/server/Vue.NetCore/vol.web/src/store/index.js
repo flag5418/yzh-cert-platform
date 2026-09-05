@@ -42,9 +42,6 @@ export default createStore({
       state.userInfo = null
       localStorage.removeItem(keys.USER)
     },
-    test(state) {
-      return 113344
-    },
     updateLoadingState(state, flag) {
       state.isLoading = flag
     },
@@ -101,10 +98,7 @@ export default createStore({
   },
   actions: {
     setPermission(context, data) {
-      context.commit('setPermission', data) //调用方式 store.dispatch('push')
-    },
-    toDo(context) {
-      return context.Store.m
+      context.commit('setPermission', data)
     },
     onLoading(context, flag) {
       context.commit('updateLoadingState', flag)

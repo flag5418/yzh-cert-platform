@@ -1,8 +1,4 @@
 using Newtonsoft.Json;
-/*
- *代码由框架生成,任何更改都可能导致被代码生成器覆盖
- *如果数据库字段发生变化，请在代码生器重新生成此Model
- */
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -11,15 +7,22 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using VOL.Entity.SystemModels;
+using VOL.Entity.Admin.Platform.Base;
 
 namespace VOL.Entity.DomainModels
 {
     [Entity(TableCnName = "用户管理",TableName = "Sys_User",ApiInput = typeof(ApiSys_UserInput),ApiOutput = typeof(ApiSys_UserOutput))]
+    [YZHPage(PageKey = "sys_user", Title = "用户管理", ControllerName = "Sys_User",
+        KeyField = "User_Id", SortField = "User_Id", SortOrder = "desc",
+        DialogWidth = 650, VisibleButtons = new[] { "add", "refresh", "batchDelete" })]
     public partial class Sys_User:BaseEntity
     {
         /// <summary>
        ///帐号
        /// </summary>
+       [YZHColumn(Order = 1, Title = "帐号", Width = 120)]
+       [YZHSearch(Title = "帐号")]
+       [YZHForm(Title = "帐号", Required = true)]
        [Display(Name ="帐号")]
        [MaxLength(100)]
        [Column(TypeName="nvarchar(100)")]
@@ -69,9 +72,11 @@ namespace VOL.Entity.DomainModels
        [Editable(true)]
        public string DeptName { get; set; }
 
-       /// <summary>
+        /// <summary>
        ///角色
        /// </summary>
+       [YZHColumn(Order = 3, Title = "角色", Width = 100)]
+       [YZHForm(Title = "角色", ControlType = "cascader", Required = true)]
        [Display(Name ="角色")]
        [Column(TypeName="int")]
        [Editable(true)]
@@ -113,9 +118,11 @@ namespace VOL.Entity.DomainModels
        [Editable(true)]
        public string DeptIds { get; set; }
 
-       /// <summary>
+        /// <summary>
        ///姓名
        /// </summary>
+       [YZHColumn(Order = 2, Title = "姓名", Width = 100)]
+       [YZHForm(Title = "姓名", Required = true)]
        [Display(Name ="姓名")]
        [MaxLength(20)]
        [Column(TypeName="nvarchar(20)")]
@@ -146,9 +153,11 @@ namespace VOL.Entity.DomainModels
        [Column(TypeName="int")]
        public int? IsRegregisterPhone { get; set; }
 
-       /// <summary>
+        /// <summary>
        ///手机号
        /// </summary>
+       [YZHColumn(Order = 5, Title = "手机号", Width = 120)]
+       [YZHForm(Title = "手机号")]
        [Display(Name ="手机号")]
        [MaxLength(11)]
        [Column(TypeName="nvarchar(11)")]
@@ -177,9 +186,11 @@ namespace VOL.Entity.DomainModels
        [Column(TypeName="nvarchar(200)")]
        public string Creator { get; set; }
 
-       /// <summary>
+        /// <summary>
        ///是否可用
        /// </summary>
+       [YZHColumn(Order = 4, Title = "是否可用", Width = 80)]
+       [YZHForm(Title = "是否可用", ControlType = "select", Required = true)]
        [Display(Name ="是否可用")]
        [Column(TypeName="tinyint")]
        [Editable(true)]
@@ -262,9 +273,11 @@ namespace VOL.Entity.DomainModels
        [Editable(true)]
        public string Mobile { get; set; }
 
-       /// <summary>
+        /// <summary>
        ///Email
        /// </summary>
+       [YZHColumn(Order = 6, Title = "邮箱", Width = 150)]
+       [YZHForm(Title = "邮箱")]
        [Display(Name ="Email")]
        [MaxLength(100)]
        [Column(TypeName="nvarchar(100)")]

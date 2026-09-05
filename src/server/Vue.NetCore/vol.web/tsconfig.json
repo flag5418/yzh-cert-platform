@@ -8,8 +8,16 @@
     "sourceMap": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "lib": ["ESNext", "DOM"]
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "lib": ["ESNext", "DOM"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "types": ["vite/client"]
   },
-  "include": ["src/**/*.js", "src/**/*.vue"],
+  "include": ["src/**/*.js", "src/**/*.ts", "src/**/*.vue", "src/**/*.d.ts"],
   "exclude": ["node_modules", "dist"]
 }

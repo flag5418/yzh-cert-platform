@@ -68,12 +68,12 @@ const routes = [
       }, {
         path: '/UserInfo',
         name: 'UserInfo',
-        component: () => import('@/views/sys/UserInfo.vue')
+        component: () => import('@/views/cert/admin/system/UserInfo.vue')
       },
       {
         path: '/sysMenu',
         name: 'sysMenu',
-        component: () => import('@/views/sys/system/Sys_Menu.vue')
+        component: () => import('@/pages/system/menu/index.vue')
       }
     ]
   },

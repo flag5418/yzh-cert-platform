@@ -160,6 +160,7 @@ import {
 } from 'vue'
 import type { IYzhPageUIConfig, IYzhPageMeta, IYzhFieldConfig, IYzhColumnConfig } from '../types/YZHV3Config'
 import { loadPageConfig } from '../core/YZHConfigLoader'
+import { getEntityConfig } from '../api/entity-config'
 import { YZHBaseApiClient } from '../core/YZHBaseApiClient'
 
 // 子组件
@@ -176,7 +177,11 @@ import YzhEditDialog from './YzhEditDialog.vue'
 // ============================================================
 const props = withDefaults(defineProps<{
   /** 页面唯一标识（对应 yzh_page_config.page_key） */
-  pageKey: string
+  pageKey?: string
+  /** 实体名称（从后端实体特性加载配置） */
+  entityName?: string
+  /** 直接传入配置对象（优先级最高） */
+  config?: IYzhPageUIConfig
   /** API 前缀 */
   apiPrefix?: string
   /** 是否显示列设置 */
@@ -215,7 +220,7 @@ const fieldConfigs = computed<IYzhFieldConfig[]>(() => pageConfig.value?.fieldCo
 /** 默认页面元数据（加载中或失败时的回退） */
 function defaultPageMeta(): IYzhPageMeta {
   return {
-    pageKey: props.pageKey,
+    pageKey: props.pageKey || props.entityName || '',
     pageTitle: '',
     entityName: '',
     tableName: '',
@@ -634,8 +639,18 @@ function calcTableHeight() {
 // ============================================================
 onMounted(async () => {
   try {
-    // 1. 从数据库加载 UI 配置
-    pageConfig.value = await loadPageConfig(props.pageKey)
+    // 1. 优先使用直接传入的 config
+    if (props.config) {
+      pageConfig.value = props.config
+    }
+    // 2. 通过 entityName 从后端实体特性加载配置
+    else if (props.entityName) {
+      pageConfig.value = await getEntityConfig(props.entityName)
+    }
+    // 3. 通过 pageKey 从数据库加载配置（兼容旧模式）
+    else if (props.pageKey) {
+      pageConfig.value = await loadPageConfig(props.pageKey)
+    }
 
     // 2. 初始化 API 客户端
     initApiClient()
