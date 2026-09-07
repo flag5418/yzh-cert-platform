@@ -28,8 +28,8 @@ namespace YZH.Entity.Admin.Platform.Cert
         /// <summary>
         /// 创建人 ID（覆盖基类 PascalCase → snake_case）
         /// </summary>
-        [Column("create_id")]
-        public new int? CreateID { get; set; }
+        [Column("create_by")]
+        public new string CreateBy { get; set; }
 
         /// <summary>
         /// 创建时间（覆盖基类 PascalCase → snake_case）
@@ -40,8 +40,8 @@ namespace YZH.Entity.Admin.Platform.Cert
         /// <summary>
         /// 修改人 ID（覆盖基类 PascalCase → snake_case）
         /// </summary>
-        [Column("modify_id")]
-        public new int? ModifyID { get; set; }
+        [Column("update_by")]
+        public new string UpdateBy { get; set; }
 
         /// <summary>
         /// 修改时间（覆盖基类 PascalCase → snake_case）
@@ -52,8 +52,8 @@ namespace YZH.Entity.Admin.Platform.Cert
         /// <summary>
         /// 删除人 ID（覆盖基类 PascalCase → snake_case）
         /// </summary>
-        [Column("delete_id")]
-        public new int? DeleteID { get; set; }
+        [Column("delete_by")]
+        public new string DeleteBy { get; set; }
 
         /// <summary>
         /// 删除时间（覆盖基类 PascalCase → snake_case）

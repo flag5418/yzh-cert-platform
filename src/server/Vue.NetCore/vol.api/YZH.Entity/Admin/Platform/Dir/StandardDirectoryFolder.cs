@@ -47,48 +47,41 @@ namespace YZH.Entity.Admin.Platform.Dir
         public int SortOrder { get; set; } = 0;
 
         [MaxLength(20)]
-        [Column("Status")]
+        [Column("status")]
         public string Status { get; set; } = "draft";
 
-        [Column("Enable")]
+        [Column("enable")]
         public bool Enable { get; set; } = true;
 
-        [Column("CreateID")]
-        public int? CreateID { get; set; }
+        [Column("CreateBy")]
+        public string CreateBy { get; set; }
 
         [MaxLength(50)]
-        [Column("Creator")]
+        [Column("creator")]
         public string Creator { get; set; }
 
         [Column("CreateDate")]
         public DateTime? CreateDate { get; set; } = DateTime.Now;
 
-        [Column("ModifyID")]
-        public int? ModifyID { get; set; }
+        [Column("UpdateBy")]
+        public string UpdateBy { get; set; }
 
         [MaxLength(50)]
-        [Column("Modifier")]
+        [Column("modifier")]
         public string Modifier { get; set; }
 
         [Column("ModifyDate")]
         public DateTime? ModifyDate { get; set; }
 
-        [Column("DeleteID")]
-        public int? DeleteID { get; set; }
+        [Column("DeleteBy")]
+        public string DeleteBy { get; set; }
 
         [MaxLength(50)]
-        [Column("Deleter")]
+        [Column("deleter")]
         public string Deleter { get; set; }
 
         [Column("DeleteTime")]
         public DateTime? DeleteTime { get; set; }
-
-        [MaxLength(50)]
-        [Column("Status_field")]
-        public string Status_field { get; set; } = "active";
-
-        [Column("Enable_field")]
-        public bool Enable_field { get; set; } = true;
 
         [Column("Sort")]
         public int Sort { get; set; } = 0;

@@ -11,13 +11,13 @@ namespace YZH.Entity.Admin.Platform.DocExtraction
     public class AIConfig : EntityBase
     {
         /// <summary>覆盖基类审计字段，适配snake_case列名</summary>
-        [Column("create_id")] public new int? CreateID { get; set; }
+        [Column("create_by")] public new string CreateBy { get; set; }
         [Column("creator")]   [MaxLength(50)] public new string Creator { get; set; }
         [Column("create_date")] public new DateTime? CreateDate { get; set; } = DateTime.Now;
-        [Column("modify_id")] public new int? ModifyID { get; set; }
+        [Column("update_by")] public new string UpdateBy { get; set; }
         [Column("modifier")]  [MaxLength(50)] public new string Modifier { get; set; }
         [Column("modify_date")] public new DateTime? ModifyDate { get; set; }
-        [Column("delete_id")] public new int? DeleteID { get; set; }
+        [Column("delete_by")] public new string DeleteBy { get; set; }
         [Column("deleter")]   [MaxLength(50)] public new string Deleter { get; set; }
         [Column("delete_time")] public new DateTime? DeleteTime { get; set; }
         /// <summary>覆盖基类字段，适配snake_case列名</summary>

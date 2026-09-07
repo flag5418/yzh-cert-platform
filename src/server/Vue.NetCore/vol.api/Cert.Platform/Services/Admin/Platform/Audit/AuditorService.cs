@@ -94,7 +94,7 @@ namespace Cert.Platform.Services.Admin.Platform
 
             var userId = UserContext.Current?.UserId ?? 0;
             var userName = UserContext.Current?.UserName ?? "system";
-            profile.FillCreateInfo(userId, userName);
+            profile.FillCreateInfo($"USER_{userId:D6}", userName);
 
             _db.Set<AuditorProfile>().Add(profile);
             await _db.SaveChangesAsync();
@@ -169,7 +169,7 @@ namespace Cert.Platform.Services.Admin.Platform
 
             var userId = UserContext.Current?.UserId ?? 0;
             var userName = UserContext.Current?.UserName ?? "system";
-            existing.FillModifyInfo(userId, userName);
+            existing.FillModifyInfo($"USER_{userId:D6}", userName);
 
             await _db.SaveChangesAsync();
             return new WebResponseContent().OK("更新成功");

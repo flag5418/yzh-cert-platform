@@ -137,7 +137,7 @@ namespace Cert.Platform.Services.Admin.Platform
                 return false;
 
             // 软删除
-            entity.MarkAsDeleted(UserContext.Current?.UserId ?? 0, UserContext.Current?.UserName);
+            entity.MarkAsDeleted((UserContext.Current?.UserId ?? 0).ToString(), UserContext.Current?.UserName);
             _repository.Update(entity, new[] { "Enable", "DeleteID", "Deleter", "DeleteTime" }, true);
             return true;
         }

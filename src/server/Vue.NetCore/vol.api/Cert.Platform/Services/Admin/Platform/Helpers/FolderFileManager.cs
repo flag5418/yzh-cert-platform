@@ -255,7 +255,7 @@ namespace Cert.Platform.Services.Admin.Platform
 
                         // 软删除文件记录
                         file.Enable = false;
-                        file.DeleteID = 1; // TODO: 从UserContext获取
+                        file.DeleteBy = "SYSTEM"; // TODO: 从UserContext获取用户Code
                         file.Deleter = "system";
                         file.DeleteTime = DateTime.Now;
                         file.Status = "archived";
@@ -270,7 +270,7 @@ namespace Cert.Platform.Services.Admin.Platform
                 if (folder != null && !dryRun)
                 {
                     folder.Enable = false;
-                    folder.DeleteID = 1;
+                    folder.DeleteBy = "SYSTEM"; // TODO: 从UserContext获取用户Code
                     folder.Deleter = "system";
                     folder.DeleteTime = DateTime.Now;
                     folder.Status = "archived";

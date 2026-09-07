@@ -97,10 +97,10 @@ namespace Cert.Platform.Services.Admin.Platform
                 entity.Code = existing.Code;
                 entity.Version = existing.Version + 1;
                 entity.IsActive = true;
-                entity.CreateID = existing.CreateID;
+                entity.CreateBy = existing.CreateBy;
                 entity.Creator = existing.Creator;
                 entity.CreateDate = existing.CreateDate;
-                entity.DeleteID = null;
+                entity.DeleteBy = null;
                 entity.Deleter = null;
                 entity.DeleteTime = null;
                 entity.Enable = true;

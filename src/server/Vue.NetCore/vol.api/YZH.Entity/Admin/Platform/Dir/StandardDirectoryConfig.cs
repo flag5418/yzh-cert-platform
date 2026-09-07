@@ -76,13 +76,13 @@ namespace YZH.Entity.Admin.Platform.Dir
         /// 状态（draft/active/archived）
         /// </summary>
         [MaxLength(20)]
-        [Column("Status")]
+        [Column("status")]
         public string Status { get; set; } = "draft";
 
         /// <summary>
         /// 是否启用
         /// </summary>
-        [Column("Enable")]
+        [Column("enable")]
         public bool Enable { get; set; } = true;
 
         #endregion
@@ -92,14 +92,14 @@ namespace YZH.Entity.Admin.Platform.Dir
         /// <summary>
         /// 创建人ID
         /// </summary>
-        [Column("CreateID")]
-        public int? CreateID { get; set; }
+        [Column("CreateBy")]
+        public string CreateBy { get; set; }
 
         /// <summary>
         /// 创建人姓名
         /// </summary>
         [MaxLength(50)]
-        [Column("Creator")]
+        [Column("creator")]
         public string Creator { get; set; }
 
         /// <summary>
@@ -111,14 +111,14 @@ namespace YZH.Entity.Admin.Platform.Dir
         /// <summary>
         /// 修改人ID
         /// </summary>
-        [Column("ModifyID")]
-        public int? ModifyID { get; set; }
+        [Column("UpdateBy")]
+        public string UpdateBy { get; set; }
 
         /// <summary>
         /// 修改人姓名
         /// </summary>
         [MaxLength(50)]
-        [Column("Modifier")]
+        [Column("modifier")]
         public string Modifier { get; set; }
 
         /// <summary>
@@ -130,14 +130,14 @@ namespace YZH.Entity.Admin.Platform.Dir
         /// <summary>
         /// 删除人ID
         /// </summary>
-        [Column("DeleteID")]
-        public int? DeleteID { get; set; }
+        [Column("DeleteBy")]
+        public string DeleteBy { get; set; }
 
         /// <summary>
         /// 删除人姓名
         /// </summary>
         [MaxLength(50)]
-        [Column("Deleter")]
+        [Column("deleter")]
         public string Deleter { get; set; }
 
         /// <summary>
@@ -145,19 +145,6 @@ namespace YZH.Entity.Admin.Platform.Dir
         /// </summary>
         [Column("DeleteTime")]
         public DateTime? DeleteTime { get; set; }
-
-        /// <summary>
-        /// 业务状态
-        /// </summary>
-        [MaxLength(50)]
-        [Column("Status_field")]
-        public string Status_field { get; set; } = "active";
-
-        /// <summary>
-        /// 启用状态
-        /// </summary>
-        [Column("Enable_field")]
-        public bool Enable_field { get; set; } = true;
 
         /// <summary>
         /// 排序

@@ -70,7 +70,7 @@ namespace Cert.Platform.Services.Admin.Platform
             // 填充创建信息
             var userId = UserContext.Current?.UserId ?? 0;
             var userName = UserContext.Current?.UserName ?? "system";
-            entity.FillCreateInfo(userId, userName);
+            entity.FillCreateInfo($"USER_{userId:D6}", userName);
 
             _db.Set<Enterprise>().Add(entity);
             await _db.SaveChangesAsync();
@@ -109,7 +109,7 @@ namespace Cert.Platform.Services.Admin.Platform
             // 填充修改信息
             var userId = UserContext.Current?.UserId ?? 0;
             var userName = UserContext.Current?.UserName ?? "system";
-            existing.FillModifyInfo(userId, userName);
+            existing.FillModifyInfo($"USER_{userId:D6}", userName);
 
             await _db.SaveChangesAsync();
             return new WebResponseContent().OK("更新成功");
@@ -127,7 +127,7 @@ namespace Cert.Platform.Services.Admin.Platform
 
             var userId = UserContext.Current?.UserId ?? 0;
             var userName = UserContext.Current?.UserName ?? "system";
-            entity.MarkAsDeleted(userId, userName);
+            entity.MarkAsDeleted(userId.ToString(), userName);
 
             await _db.SaveChangesAsync();
             return new WebResponseContent().OK("删除成功");

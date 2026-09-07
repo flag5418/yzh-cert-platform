@@ -86,7 +86,7 @@ namespace Cert.Platform.Services.Admin.Platform
             var userId = UserContext.Current?.UserId ?? 0;
             var userName = UserContext.Current?.UserName ?? "system";
             file.OrgCode = enterprise.OrgCode;
-            file.FillCreateInfo(userId, userName);
+            file.FillCreateInfo($"USER_{userId:D6}", userName);
 
             _db.Set<EnterpriseFile>().Add(file);
 
@@ -354,7 +354,7 @@ namespace Cert.Platform.Services.Admin.Platform
 
             var userId = UserContext.Current?.UserId ?? 0;
             var userName = UserContext.Current?.UserName ?? "system";
-            file.MarkAsDeleted(userId, userName);
+            file.MarkAsDeleted(userId.ToString(), userName);
             file.UploadStatus = "deleted";
 
             await _db.SaveChangesAsync();

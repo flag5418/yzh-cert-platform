@@ -76,11 +76,14 @@ namespace Cert.Platform.Services.Admin.Platform
                 };
 
                 // 消息落库（供消息中心 + 下次进入未读汇总）
-                if (queue.CreateID != null)
+                // 从 CreateID 获取 userId
+                int? creatorUserId = queue.CreateID;
+
+                if (creatorUserId.HasValue)
                 {
                     using var mScope = _serviceProvider.CreateScope();
                     var messageService = mScope.ServiceProvider.GetRequiredService<IMessageService>();
-                    await messageService.CreateAsync(queue.CreateID.Value, queue.Creator, title, content, "queue",
+                    await messageService.CreateAsync(creatorUserId.Value, queue.Creator, title, content, "queue",
                         JsonSerializer.Serialize(extra));
                 }
 

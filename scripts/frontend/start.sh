@@ -12,16 +12,19 @@ set -e
 PROJECT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 CERTPLATFORM_DIR="$PROJECT_DIR/src/certplatform-web"
 
-# 端口映射
-declare -A PORTS=(
-  [admin]=9990
-  [auditor]=9991
-)
+# 端口映射（兼容 bash 3.2，不使用关联数组）
+get_port() {
+  case "$1" in
+    admin)   echo 9990 ;;
+    auditor) echo 9991 ;;
+    *)       echo "" ;;
+  esac
+}
 
 # 启动前端
 start() {
   local role=$1
-  local port=${PORTS[$role]}
+  local port=$(get_port "$role")
   local dir="$CERTPLATFORM_DIR/$role"
   
   if [[ ! -d "$dir" ]]; then
@@ -43,9 +46,10 @@ start() {
 # 停止前端
 stop() {
   local role=$1
-  local port=${PORTS[$role]}
+  local port=$(get_port "$role")
   
-  local pid=$(lsof -iTCP:$port -sTCP:LISTEN -t 2>/dev/null || echo "")
+  local pid
+  pid=$(lsof -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null || echo "")
   if [[ -z "$pid" ]]; then
     echo "$role 端未运行"
     return
@@ -67,9 +71,10 @@ restart() {
 # 检查状态
 status() {
   local role=$1
-  local port=${PORTS[$role]}
+  local port=$(get_port "$role")
   
-  local pid=$(lsof -iTCP:$port -sTCP:LISTEN -t 2>/dev/null || echo "")
+  local pid
+  pid=$(lsof -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null || echo "")
   if [[ -n "$pid" ]]; then
     echo "$role 端运行中 (PID: $pid, 端口: $port)"
     echo "访问地址: http://127.0.0.1:$port"

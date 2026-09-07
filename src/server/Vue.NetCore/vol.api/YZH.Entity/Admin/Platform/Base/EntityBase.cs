@@ -9,18 +9,18 @@ namespace YZH.Entity.Admin.Platform
     /// YZH 实体基类，继承 Vol 的 BaseEntity（空基类），扩展统一审计和业务字段。
     /// 
     /// 设计原则（严格遵循 YZH-建设原则-V1.md §4.1）：
-    /// 1. CreateID / ModifyID / DeleteID → int? 类型（对应 UserContext.Current.UserId）
+    /// 1. CreateBy / UpdateBy / DeleteBy → string 类型（存储用户 Code，如 USER_000001）
     /// 2. Creator / Modifier / Deleter → string 类型（操作人姓名）
     /// 3. Code 作为业务编码，与数据库主键 Id 分离（不依赖自增 ID 做业务标识）
     /// 4. Enable 字段统一处理逻辑删除（true = 启用，false = 禁用/已删除）
     /// 5. OrgCode 不在基类定义，由需要多租户隔离的子类自行声明
     /// 
     /// 自动填充规则（由 ServiceBase 接管，业务代码禁止手动设置）：
-    /// - 新建: CreateID + Creator + CreateDate
-    /// - 编辑: ModifyID + Modifier + ModifyDate
-    /// - 删除: DeleteID + Deleter + DeleteTime + Enable = false
+    /// - 新建: CreateBy + Creator + CreateDate
+    /// - 编辑: UpdateBy + Modifier + UpdateDate (ModifyDate)
+    /// - 删除: DeleteBy + Deleter + DeleteTime + Enable = false
     /// 
-    /// 状态：[DONE] Phase 1 基础字段定义完成
+    /// 状态：[DONE] 审计字段改为 Code 关联（2026-09-07）
     /// </summary>
     public abstract class EntityBase : BaseEntity
     {
@@ -54,12 +54,13 @@ namespace YZH.Entity.Admin.Platform
         #region 审计字段 - 创建信息
 
         /// <summary>
-        /// 创建人 ID（对应 Sys_User.Id，int 类型）
-        /// 由框架在新增时自动填充 UserContext.Current.UserId
+        /// 创建人 Code（对应 Sys_User.Code，varchar 类型，如 USER_000001）
+        /// 由框架在新增时自动填充
         /// 禁止业务代码手动设置！
-        /// 注意：无 [Column] 映射，PascalCase 表自动映射 CreateID；snake_case 表需用 new + [Column("create_id")] 覆盖
+        /// 注意：无 [Column] 映射；PascalCase 表自动映射 CreateBy；snake_case 表需用 new + [Column("create_by")] 覆盖
         /// </summary>
-        public int? CreateID { get; set; }
+        [MaxLength(50)]
+        public string CreateBy { get; set; }
 
         /// <summary>
         /// 创建人姓名（对应 Sys_User.UserName）
@@ -81,12 +82,13 @@ namespace YZH.Entity.Admin.Platform
         #region 审计字段 - 修改信息
 
         /// <summary>
-        /// 修改人 ID（对应 Sys_User.Id，int 类型）
-        /// 由框架在更新时自动填充 UserContext.Current.UserId
+        /// 修改人 Code（对应 Sys_User.Code，varchar 类型，如 USER_000001）
+        /// 由框架在更新时自动填充
         /// 禁止业务代码手动设置！
-        /// 注意：无 [Column] 映射；snake_case 表需用 new + [Column("modify_id")] 覆盖
+        /// 注意：无 [Column] 映射；PascalCase 表需映射为 UpdateBy；snake_case 表需用 new + [Column("update_by")] 覆盖
         /// </summary>
-        public int? ModifyID { get; set; }
+        [MaxLength(50)]
+        public string UpdateBy { get; set; }
 
         /// <summary>
         /// 修改人姓名（对应 Sys_User.UserName）
@@ -97,23 +99,34 @@ namespace YZH.Entity.Admin.Platform
         public string Modifier { get; set; }
 
         /// <summary>
-        /// 修改时间
+        /// 修改时间（原 ModifyDate，语义更名）
         /// 由框架在更新时自动填充 DateTime.Now
         /// 注意：无 [Column] 映射；snake_case 表需用 new + [Column("modify_date")] 覆盖
         /// </summary>
         public DateTime? ModifyDate { get; set; } = DateTime.Now;
+
+        /// <summary>
+        /// 修改时间（ModifyDate 的别名，与 UpdateBy 对齐命名）
+        /// </summary>
+        [NotMapped]
+        public DateTime? UpdateDate
+        {
+            get => ModifyDate;
+            set => ModifyDate = value;
+        }
 
         #endregion
 
         #region 审计字段 - 删除信息
 
         /// <summary>
-        /// 删除人 ID（对应 Sys_User.Id，int 类型）
-        /// 由框架在逻辑删除时自动填充 UserContext.Current.UserId
+        /// 删除人 Code（对应 Sys_User.Code，varchar 类型，如 USER_000001）
+        /// 由框架在逻辑删除时自动填充
         /// 仅当 Enable = false 时有值
-        /// 注意：无 [Column] 映射；snake_case 表需用 new + [Column("delete_id")] 覆盖
+        /// 注意：无 [Column] 映射；snake_case 表需用 new + [Column("delete_by")] 覆盖
         /// </summary>
-        public int? DeleteID { get; set; }
+        [MaxLength(50)]
+        public string DeleteBy { get; set; }
 
         /// <summary>
         /// 删除人姓名（对应 Sys_User.UserName）
@@ -184,10 +197,10 @@ namespace YZH.Entity.Admin.Platform
         /// <summary>
         /// 标记为逻辑删除（由框架调用，禁止业务代码直接调用）
         /// </summary>
-        public void MarkAsDeleted(int userId, string userName)
+        public void MarkAsDeleted(string userCode, string userName)
         {
             Enable = false;
-            DeleteID = userId;
+            DeleteBy = userCode;
             Deleter = userName;
             DeleteTime = DateTime.Now;
         }
@@ -198,25 +211,29 @@ namespace YZH.Entity.Admin.Platform
         public void MarkAsDisabled()
         {
             Enable = false;
-            // 不设置 DeleteID/DeleteTime，表示只是禁用而非删除
+            // 不设置 DeleteBy/DeleteTime，表示只是禁用而非删除
         }
 
         /// <summary>
         /// 填充创建信息（由 ServiceBase 在新增时调用）
+        /// userCode: 用户 Code（如 USER_000001）
+        /// userName: 用户姓名
         /// </summary>
-        public void FillCreateInfo(int userId, string userName)
+        public void FillCreateInfo(string userCode, string userName)
         {
-            CreateID = userId;
+            CreateBy = userCode;
             Creator = userName;
             CreateDate = DateTime.Now;
         }
 
         /// <summary>
         /// 填充修改信息（由 ServiceBase 在更新时调用）
+        /// userCode: 用户 Code（如 USER_000001）
+        /// userName: 用户姓名
         /// </summary>
-        public void FillModifyInfo(int userId, string userName)
+        public void FillModifyInfo(string userCode, string userName)
         {
-            ModifyID = userId;
+            UpdateBy = userCode;
             Modifier = userName;
             ModifyDate = DateTime.Now;
         }

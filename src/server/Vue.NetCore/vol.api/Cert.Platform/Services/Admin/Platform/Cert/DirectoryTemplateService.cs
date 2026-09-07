@@ -67,7 +67,7 @@ namespace Cert.Platform.Services.Admin.Platform
 
             var userId = UserContext.Current?.UserId ?? 0;
             var userName = UserContext.Current?.UserName ?? "system";
-            entity.FillCreateInfo(userId, userName);
+            entity.FillCreateInfo($"USER_{userId:D6}", userName);
 
             _db.Set<DirectoryTemplate>().Add(entity);
             await _db.SaveChangesAsync();
@@ -94,7 +94,7 @@ namespace Cert.Platform.Services.Admin.Platform
 
             var userId = UserContext.Current?.UserId ?? 0;
             var userName = UserContext.Current?.UserName ?? "system";
-            existing.FillModifyInfo(userId, userName);
+            existing.FillModifyInfo($"USER_{userId:D6}", userName);
 
             await _db.SaveChangesAsync();
             return new WebResponseContent().OK("更新成功");
@@ -164,7 +164,7 @@ namespace Cert.Platform.Services.Admin.Platform
                 entity.Code = Guid.NewGuid().ToString("N");
                 entity.Enable = true;
                 entity.Status = "active";
-                entity.FillCreateInfo(userId, userName);
+                entity.FillCreateInfo($"USER_{userId:D6}", userName);
                 _db.Set<FileRequirement>().Add(entity);
             }
             else
@@ -182,7 +182,7 @@ namespace Cert.Platform.Services.Admin.Platform
                 existing.Description = entity.Description;
                 existing.SortOrder = entity.SortOrder;
                 existing.StandardCode = entity.StandardCode;
-                existing.FillModifyInfo(userId, userName);
+                existing.FillModifyInfo($"USER_{userId:D6}", userName);
             }
 
             await _db.SaveChangesAsync();
@@ -269,7 +269,7 @@ namespace Cert.Platform.Services.Admin.Platform
 
             var userId = UserContext.Current?.UserId ?? 0;
             var userName = UserContext.Current?.UserName ?? "system";
-            req.FillModifyInfo(userId, userName);
+            req.FillModifyInfo($"USER_{userId:D6}", userName);
 
             // 同时更新 standard_code（冗余字段）
             if (string.IsNullOrEmpty(req.StandardCode))
@@ -323,7 +323,7 @@ namespace Cert.Platform.Services.Admin.Platform
 
             var userId = UserContext.Current?.UserId ?? 0;
             var userName = UserContext.Current?.UserName ?? "system";
-            req.FillModifyInfo(userId, userName);
+            req.FillModifyInfo($"USER_{userId:D6}", userName);
 
             await _db.SaveChangesAsync();
             return new WebResponseContent().OK("模板文件已删除");
@@ -359,7 +359,7 @@ namespace Cert.Platform.Services.Admin.Platform
 
             var userId = UserContext.Current?.UserId ?? 0;
             var userName = UserContext.Current?.UserName ?? "system";
-            req.FillModifyInfo(userId, userName);
+            req.FillModifyInfo($"USER_{userId:D6}", userName);
 
             await _db.SaveChangesAsync();
             return new WebResponseContent().OK("重命名成功", new { newPath });

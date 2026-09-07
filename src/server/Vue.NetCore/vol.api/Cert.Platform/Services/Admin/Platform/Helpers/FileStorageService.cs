@@ -127,7 +127,7 @@ namespace Cert.Platform.Services.Admin.Platform
 
             // 软删除
             file.Enable = false;
-            file.DeleteID = 1; // TODO: 从UserContext获取
+            file.DeleteBy = "SYSTEM"; // TODO: 从UserContext获取用户Code
             file.Deleter = "system";
             file.DeleteTime = DateTime.Now;
             file.Status = "archived";

@@ -119,7 +119,7 @@ public abstract class ServiceBase<TEntity, TRepository>
         foreach (var entity in entities)
         {
             if (entity is EntityBase yzhEntity)
-                yzhEntity.MarkAsDeleted(userId, userName);
+                yzhEntity.MarkAsDeleted(userId.ToString(), userName);
             repository.Update(entity, logicalFields, saveChanges: false);
         }
         repository.SaveChanges();
@@ -730,7 +730,7 @@ public abstract class ServiceBase<TEntity, TRepository>
 
     /// <summary>YZH 实体需要回写的审计字段</summary>
     private static readonly string[] AuditFieldNames =
-        { "CreateID", "Creator", "CreateDate", "ModifyID", "Modifier", "ModifyDate" };
+        { "CreateBy", "Creator", "CreateDate", "UpdateBy", "Modifier", "ModifyDate" };
 
     /// <summary>
     /// 填充审计字段。仅对 EntityBase 派生实体生效；
@@ -743,10 +743,10 @@ public abstract class ServiceBase<TEntity, TRepository>
         var userId = SafeGetUserId();
         var userName = SafeGetUserName();
 
-        if (isAdd && yzhEntity.CreateID == null)
-            yzhEntity.FillCreateInfo(userId, userName);
+        if (isAdd && yzhEntity.CreateBy == null)
+            yzhEntity.FillCreateInfo(SafeGetUserCode(userId), userName);
         else
-            yzhEntity.FillModifyInfo(userId, userName);
+            yzhEntity.FillModifyInfo(SafeGetUserCode(userId), userName);
     }
 
     /// <summary>按主键批量加载实体（生成 IN 表达式，单条 SQL）</summary>
@@ -803,6 +803,19 @@ public abstract class ServiceBase<TEntity, TRepository>
     {
         try { return UserContext.Current.UserTrueName ?? UserContext.Current.UserName ?? "system"; }
         catch { return "system"; }
+    }
+
+    private static string SafeGetUserCode(int userId)
+    {
+        // TODO: 后续从 UserContext.Current 获取 UserCode（需扩展 UserContext 或 Claims）
+        // 临时方案：根据 userId 构造 Code 格式
+        try
+        {
+            if (userId > 0)
+                return $"USER_{userId:D6}";
+            return "SYSTEM";
+        }
+        catch { return "SYSTEM"; }
     }
 
     private static void SafeRun(Action action, string hookName)

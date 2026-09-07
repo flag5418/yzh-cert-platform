@@ -299,7 +299,7 @@ namespace Cert.Platform.Services.Admin.Platform
 
                 // 软删除
                 config.Enable = false;
-                config.DeleteID = UserContext.Current?.UserId;
+                config.DeleteBy = UserContext.Current != null ? $"USER_{UserContext.Current.UserId:D6}" : "SYSTEM";
                 config.Deleter = UserContext.Current?.UserName;
                 config.DeleteTime = DateTime.Now;
                 config.Status = "archived";
