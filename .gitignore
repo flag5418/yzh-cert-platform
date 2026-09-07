@@ -153,3 +153,34 @@ src/server/Vue.NetCore/vol.web/dist/
 
 # .dotnet-cli 工具缓存
 .dotnet-cli/
+
+# FreeBuff AI 工具
+.freebuff/
+
+# Playwright MCP
+.playwright-mcp/
+
+# WorkBuddy AI
+.workbuddy-ai/
+
+# VS Code（全部忽略，不保留共享配置）
+.vscode/
+
+# Vue 前端构建产物
+src/certplatform-web/admin/dist/
+src/certplatform-web/auditor/dist/
+src/certplatform-web/share/dist/
+src/certplatform-web/yzh.vue.core/dist/
+
+# npm 缓存
+.npm/
+.npmrc
+package-lock.json.bak
+
+# C# 项目 bin/obj 文件夹（递归）
+**/bin/
+**/obj/
+
+# .NET 用户级缓存
+.nuget/
+*.nupkg
