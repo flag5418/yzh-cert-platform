@@ -9,7 +9,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using YZH.Core.Api.Filters;
+using YZH.Core.Api.Services;
 using YZH.Core.DataBase;
+using YZH.Core.DataBase.NoSql;
+using YZH.Core.Stand.Models;
 using YZH.Core.Web.Middlewares;
 
 namespace YZH.Core.Web;
@@ -29,16 +32,58 @@ public static class YzhWebBuilderExtensions
         var options = new YzhCoreOptions();
         configure?.Invoke(options);
 
+        // 注册 HttpContextAccessor（UserContext 获取 IP 必须）
+        builder.Services.AddHttpContextAccessor();
+
         // 注册通用仓储
         builder.Services.AddScoped(typeof(IRepository<>), typeof(BaseRepository<>));
+
+        // 注册用户上下文 (获取 IP、UserId、UserName)
+        builder.Services.AddScoped<IUserContext, UserContext>();
+
+        // 注册审计日志服务
+        builder.Services.AddScoped<IAuditLogger, AuditLogger>();
+
+        // 注册实体操作服务
+        builder.Services.AddScoped(typeof(EntityService<>));
+
+        // 注册事务工作单元
+        builder.Services.AddScoped<WorkUnit>();
+
+        // 注册 GridConfig 加载器
+        builder.Services.AddScoped<IGridConfigLoader, GridConfigLoader>();
+
+        // 注册缓存管理器（使用完全限定名避免命名空间冲突）
+        builder.Services.AddScoped<ICacheManager, YZH.Core.Api.Services.CacheManager>();
+
+        // 注册字典服务（单例，跨 Controller 共享字典注册表）
+        builder.Services.AddSingleton<IDictService, DictService>();
+
+        // 注册轻量级 SQL 查询服务（Dapper + 多数据库方言）
+        builder.Services.AddScoped<ISqlBaseService, SqlBaseService>();
+
+        // 注册 NoSQL 工厂
+        var noSqlOptions = new NoSqlOptions();
+        builder.Services.AddSingleton(noSqlOptions);
+        builder.Services.AddSingleton<INoSqlFactory>(sp =>
+        {
+            var loggerFactory = sp.GetService<ILoggerFactory>();
+            return new NoSqlFactory(noSqlOptions, loggerFactory);
+        });
+        builder.Services.AddScoped<INoSql>(sp =>
+        {
+            var factory = sp.GetRequiredService<INoSqlFactory>();
+            return factory.DefaultProvider;
+        });
 
         // 注册内存缓存（GridConfig缓存用）
         builder.Services.AddMemoryCache();
 
-        // 注册全局异常过滤器
+        // 注册全局异常过滤器 + 防重复提交过滤器
         builder.Services.AddControllers(opts =>
         {
             opts.Filters.Add<GlobalExceptionFilter>();
+            opts.Filters.Add<IdempotentFilter>(); // 全局防重复提交
         })
         .AddJsonOptions(json =>
         {

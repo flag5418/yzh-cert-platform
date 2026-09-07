@@ -35,4 +35,11 @@
     <ProjectReference Include="..\..\certplatform-api\CertPlatform.Enterprise\CertPlatform.Enterprise.csproj" />
   </ItemGroup>
 
+  <!-- 配置文件复制到输出目录 -->
+  <ItemGroup>
+    <Content Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

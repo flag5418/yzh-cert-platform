@@ -20,3 +20,6 @@ export { useAuth } from './composables/useAuth'
 
 // Types
 export * from './types'
+
+// Utils
+export { default as http, type ApiResponse as HttpApiResponse, type LoginData } from './utils/http'

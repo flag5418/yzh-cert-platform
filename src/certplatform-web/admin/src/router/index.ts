@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
+import { useAuthStore } from '@/store/auth'
+import { useMenuStore } from '@/store/menu'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -42,6 +44,30 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+// 路由导航守卫
+router.beforeEach(async (to, _from, next) => {
+  const authStore = useAuthStore()
+  const menuStore = useMenuStore()
+
+  // 登录页直接放行
+  if (to.path === '/login') {
+    next()
+    return
+  }
+
+  // 检查是否已登录
+  if (authStore.isAuthenticated()) {
+    // 如果菜单未加载，异步加载菜单
+    if (!menuStore.loaded) {
+      await menuStore.loadMenus()
+    }
+    next()
+  } else {
+    // 未登录，跳转到登录页
+    next('/login')
+  }
 })
 
 export default router

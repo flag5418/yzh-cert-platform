@@ -28,11 +28,27 @@ namespace YZH.Entity.DomainModels
        public int? Role_Id { get; set; }
 
        /// <summary>
+       ///角色编码（Code关联）
+       /// </summary>
+       [Display(Name ="角色编码")]
+       [MaxLength(50)]
+       [Column(TypeName="varchar(50)")]
+       public string? RoleCode { get; set; }
+
+       /// <summary>
        ///
        /// </summary>
        [Display(Name ="")]
        [Column(TypeName="int")]
        public int? User_Id { get; set; }
+
+       /// <summary>
+       ///用户编码（Code关联）
+       /// </summary>
+       [Display(Name ="用户编码")]
+       [MaxLength(50)]
+       [Column(TypeName="varchar(50)")]
+       public string? UserCode { get; set; }
 
        /// <summary>
        ///
@@ -41,6 +57,14 @@ namespace YZH.Entity.DomainModels
        [Column(TypeName="int")]
        [Required(AllowEmptyStrings=false)]
        public int Menu_Id { get; set; }
+
+       /// <summary>
+       ///菜单编码（Code关联）
+       /// </summary>
+       [Display(Name ="菜单编码")]
+       [MaxLength(50)]
+       [Column(TypeName="varchar(50)")]
+       public string? MenuCode { get; set; }
 
        /// <summary>
        ///用户权限

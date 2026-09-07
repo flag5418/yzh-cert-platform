@@ -30,6 +30,24 @@ namespace YZH.Entity.DomainModels
        public int Menu_Id { get; set; }
 
        /// <summary>
+       ///业务唯一编码（稳定标识符）
+       /// </summary>
+       [Display(Name ="编码")]
+       [MaxLength(50)]
+       [Column(TypeName="varchar(50)")]
+       [Editable(true)]
+       public string? Code { get; set; }
+
+       /// <summary>
+       ///菜单分类标签：admin/auditor/enterprise/common
+       /// </summary>
+       [Display(Name ="Tag")]
+       [MaxLength(20)]
+       [Column(TypeName="varchar(20)")]
+       [Editable(true)]
+       public string? Tag { get; set; }
+
+       /// <summary>
        ///父级ID
        /// </summary>
        [Display(Name ="父级ID")]

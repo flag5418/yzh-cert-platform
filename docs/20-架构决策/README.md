@@ -31,6 +31,7 @@ AIGC:
 | Phase1_实施报告.md | Phase 1 实施总结、经验教训 | 成熟态 |
 | YZH-Framework架构设计评审报告-V1.md | YZH-Framework 架构设计评审分析 | 成熟态 |
 | cert_phase2_implementation_summary.md | Phase 2 实施总结 | 成熟态 |
+| Ape.Volo与Vol及YZH-Core架构对比分析-V1.md | **三架构对比分析**：Ape.Volo / Vol / YZH.Core.Web 的 ORM/实体/Repository/Controller/AOP/响应模型全维度对比 + 建设建议 | 成熟态 |
 
 > 注：功能细节设计（标准目录、文档提取、Office 转换、队列、工作流、审核端前端等）已移至 `80-功能设计/`，本目录不再存放功能细节。
 

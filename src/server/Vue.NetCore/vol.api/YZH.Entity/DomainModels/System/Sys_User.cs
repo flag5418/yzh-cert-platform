@@ -40,6 +40,15 @@ namespace YZH.Entity.DomainModels
        public int User_Id { get; set; }
 
        /// <summary>
+       ///业务唯一编码（稳定标识符）
+       /// </summary>
+       [Display(Name ="编码")]
+       [MaxLength(50)]
+       [Column(TypeName="varchar(50)")]
+       [Editable(true)]
+       public string? Code { get; set; }
+
+       /// <summary>
        ///性别
        /// </summary>
        [Display(Name ="性别")]

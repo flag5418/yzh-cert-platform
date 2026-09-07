@@ -16,7 +16,7 @@ public class GridConfigController : ControllerBase
     public GridConfigController(IMemoryCache cache, IWebHostEnvironment env)
     {
         _cache = cache;
-        _configsPath = System.IO.Path.Combine(env.ContentRootPath, "GridConfigs");
+        _configsPath = System.IO.Path.Combine(env.ContentRootPath, "Assets", "GridConfigs");
     }
 
     [HttpGet("{tableName}")]
@@ -54,9 +54,7 @@ public static class GridConfigLoader
         var config = new GridConfig
         {
             ConfigName = System.IO.Path.GetFileName(xmlPath),
-            TableName = table?.Attribute("TableName")?.Value ?? string.Empty,
-            FloorFlag = table?.Attribute("FloorFlag")?.Value == "True",
-            FillMode = table?.Attribute("FillMode")?.Value == "1" ? FillMode.PixFix : FillMode.AutoFix
+            TableName = table?.Attribute("TableName")?.Value ?? string.Empty
         };
         if (table == null) return config;
 

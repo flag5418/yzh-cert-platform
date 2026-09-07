@@ -31,6 +31,16 @@ public class ApiResponse<T>
 
     public static ApiResponse<T> Error(string message, int code = 500) =>
         new() { Success = false, Code = code, Message = message };
+
+    /// <summary>
+    /// 从 IOperationResult&lt;T&gt; 自动转换（基类便捷方法）
+    /// </summary>
+    public static ApiResponse<T> FromOperationResult(IOperationResult<T> result)
+    {
+        return result.Success
+            ? Ok(result.Data!, result.Message)
+            : Fail(result.Message);
+    }
 }
 
 /// <summary>无数据 API 响应</summary>
@@ -53,4 +63,14 @@ public class ApiResponse
 
     public static ApiResponse Error(string message) =>
         new() { Success = false, Message = message };
+
+    /// <summary>
+    /// 从 IOperationResult 自动转换（基类便捷方法）
+    /// </summary>
+    public static ApiResponse FromOperationResult(IOperationResult result)
+    {
+        return result.Success
+            ? Ok(result.Message)
+            : Fail(result.Message);
+    }
 }

@@ -1,0 +1,12 @@
+-- ============================================================================
+-- 脚本：add_soft_delete_columns.sql（已执行）
+-- 功能：为 Sys_User 表添加软删除字段
+-- 日期：2026-09-06
+-- 说明：YZH Core 架构升级 - 软删除字段添加（MySQL 不支撑 ALTER TABLE IF NOT EXISTS）
+-- 状态：✅ 2026-09-06 已执行
+-- ============================================================================
+
+-- ALTER TABLE Sys_User ADD COLUMN IsDeleted TINYINT NOT NULL DEFAULT 0 COMMENT '软删除标记' AFTER Enable;
+-- ALTER TABLE Sys_User ADD COLUMN DeleteTime DATETIME NULL COMMENT '删除时间' AFTER IsDeleted;
+-- ALTER TABLE Sys_User ADD COLUMN DeleteBy VARCHAR(64) NULL COMMENT '删除人Code' AFTER DeleteTime;
+-- CREATE INDEX IX_Sys_User_IsDeleted ON Sys_User (IsDeleted);

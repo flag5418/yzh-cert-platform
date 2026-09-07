@@ -1,0 +1,95 @@
+{
+  "ConfigName": "ISOStandard",
+  "TableName": "cert_iso_standard",
+  "PrimaryKey": "Id",
+  "Title": "ISO 标准管理",
+  "LayoutColumns": 2,
+  "Toolbar": {
+    "Add": true,
+    "Edit": true,
+    "Delete": true,
+    "Export": true,
+    "Import": false,
+    "CustomButtons": []
+  },
+  "RowButtons": {
+    "Edit": true,
+    "Delete": true,
+    "View": true,
+    "CustomButtons": {
+      "启用": "Enable",
+      "禁用": "Disable"
+    }
+  },
+  "Columns": [
+    {
+      "FieldName": "StandardCode",
+      "DesName": "标准编号",
+      "Type": 0,
+      "Width": 150,
+      "BCFlag": true,
+      "XSFlag": true,
+      "YXK": false,
+      "Sortable": true,
+      "Row": 1,
+      "Col": 1,
+      "ColSpan": 1,
+      "SXH": 1
+    },
+    {
+      "FieldName": "StandardName",
+      "DesName": "标准名称",
+      "Type": 0,
+      "Width": 250,
+      "BCFlag": true,
+      "XSFlag": true,
+      "YXK": false,
+      "Sortable": true,
+      "Row": 1,
+      "Col": 2,
+      "ColSpan": 1,
+      "SXH": 2
+    },
+    {
+      "FieldName": "Description",
+      "DesName": "描述",
+      "Type": 0,
+      "Width": 300,
+      "BCFlag": true,
+      "XSFlag": true,
+      "YXK": true,
+      "Row": 2,
+      "Col": 1,
+      "ColSpan": 2,
+      "SXH": 3
+    },
+    {
+      "FieldName": "Enable",
+      "DesName": "启用",
+      "Type": 3,
+      "Width": 80,
+      "BCFlag": true,
+      "XSFlag": true,
+      "YXK": true,
+      "Sortable": false,
+      "Row": 3,
+      "Col": 1,
+      "ColSpan": 1,
+      "SXH": 4
+    },
+    {
+      "FieldName": "Sort",
+      "DesName": "排序",
+      "Type": 1,
+      "Width": 80,
+      "BCFlag": true,
+      "XSFlag": true,
+      "YXK": true,
+      "Sortable": true,
+      "Row": 3,
+      "Col": 2,
+      "ColSpan": 1,
+      "SXH": 5
+    }
+  ]
+}

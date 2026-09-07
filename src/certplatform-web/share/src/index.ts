@@ -17,6 +17,7 @@ export { downloadBlob, parseFileNameFromDisposition } from './utils/download'
 export { CONVERT_STATUS_MAP, convertStatusBadgeType, convertStatusLabel } from './utils/convertStatus'
 
 // API
+export * from './api/auth'
 export * from './api/system-user'
 export * from './api/system-role'
 export * from './api/system-dept'

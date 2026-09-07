@@ -23,22 +23,29 @@ public class JwtHelper
     public JwtHelper(IOptions<JwtOptions> options) : this(options.Value) { }
     public JwtHelper(JwtOptions options) { _options = options; }
 
-    /// <summary>生成 JWT Token</summary>
-    public string GenerateToken(int userId, string userName, int? roleId = null, TimeSpan? expiration = null)
+    /// <summary>生成 JWT Token（Code 版）</summary>
+    public string GenerateToken(string userCode, string userName, IEnumerable<string>? roleCodes = null, TimeSpan? expiration = null)
     {
         var expireTime = DateTime.UtcNow.Add(expiration ?? TimeSpan.FromMinutes(_options.ExpirationMinutes));
 
         var claims = new List<Claim>
         {
-            new(JwtRegisteredClaimNames.Jti, userId.ToString()),
+            new(JwtRegisteredClaimNames.Jti, userCode),
             new(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
             new(JwtRegisteredClaimNames.Nbf, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
             new(JwtRegisteredClaimNames.Exp, expireTime.Subtract(DateTime.UnixEpoch).TotalSeconds.ToString("F0")),
             new(JwtRegisteredClaimNames.Iss, _options.Issuer),
             new(JwtRegisteredClaimNames.Aud, _options.Audience),
             new(ClaimTypes.Name, userName),
-            new(ClaimTypes.Role, roleId?.ToString() ?? "0")
+            new("code", userCode)
         };
+
+        // 角色 Codes（支持多角色）
+        if (roleCodes != null)
+        {
+            foreach (var rc in roleCodes)
+                claims.Add(new Claim(ClaimTypes.Role, rc));
+        }
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SecretKey));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -90,14 +97,14 @@ public static class JwtHelperExtensions
         catch { return null; }
     }
 
-    public static int GetUserId(string token)
+    public static string GetUserCode(string token)
     {
         try
         {
             token = token?.Replace("Bearer ", "");
-            return int.Parse(new JwtSecurityTokenHandler().ReadJwtToken(token).Id);
+            return new JwtSecurityTokenHandler().ReadJwtToken(token).Payload["code"]?.ToString() ?? "";
         }
-        catch { return 0; }
+        catch { return ""; }
     }
 
     public static bool IsExpired(string token)

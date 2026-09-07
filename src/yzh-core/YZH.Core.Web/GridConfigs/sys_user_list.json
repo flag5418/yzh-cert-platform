@@ -1,0 +1,72 @@
+{
+  "configName": "sys_user_list",
+  "tableName": "Sys_User",
+  "floorFlag": false,
+  "fillMode": "AutoFix",
+  "columns": [
+    {
+      "row": 0,
+      "rowSpan": 1,
+      "col": 0,
+      "colSpan": 1,
+      "fieldName": "UserName",
+      "desName": "用户名",
+      "width": 120,
+      "type": "TextBox",
+      "yxk": false,
+      "bcFlag": true,
+      "xsFlag": true,
+      "groupIndex": "0",
+      "sxh": 1,
+      "mrz": ""
+    },
+    {
+      "row": 0,
+      "rowSpan": 1,
+      "col": 1,
+      "colSpan": 1,
+      "fieldName": "UserTrueName",
+      "desName": "真实姓名",
+      "width": 100,
+      "type": "TextBox",
+      "yxk": false,
+      "bcFlag": true,
+      "xsFlag": true,
+      "groupIndex": "0",
+      "sxh": 2,
+      "mrz": ""
+    },
+    {
+      "row": 0,
+      "rowSpan": 1,
+      "col": 2,
+      "colSpan": 1,
+      "fieldName": "RoleName",
+      "desName": "角色",
+      "width": 100,
+      "type": "TextBox",
+      "yxk": false,
+      "bcFlag": false,
+      "xsFlag": true,
+      "groupIndex": "0",
+      "sxh": 3,
+      "mrz": ""
+    },
+    {
+      "row": 0,
+      "rowSpan": 1,
+      "col": 3,
+      "colSpan": 1,
+      "fieldName": "Enable",
+      "desName": "状态",
+      "width": 80,
+      "type": "TextBox",
+      "yxk": false,
+      "bcFlag": true,
+      "xsFlag": true,
+      "groupIndex": "0",
+      "sxh": 4,
+      "mrz": ""
+    }
+  ]
+}

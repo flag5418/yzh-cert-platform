@@ -21,6 +21,7 @@
     "element-plus": "^2.6.0"
   },
   "dependencies": {
+    "axios": "^1.6.0",
     "yzh.vue.core": "file:../yzh.vue.core"
   },
   "devDependencies": {

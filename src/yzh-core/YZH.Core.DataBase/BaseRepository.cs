@@ -7,6 +7,8 @@ namespace YZH.Core.DataBase;
 
 /// <summary>
 ///     通用仓储的 EF Core 实现
+///     
+///     软删除过滤：所有查询方法默认过滤 IsDeleted=true，传入 includeDeleted: true 时不过滤
 /// </summary>
 public class BaseRepository<T> : IRepository<T> where T : BaseEntity
 {
@@ -19,17 +21,42 @@ public class BaseRepository<T> : IRepository<T> where T : BaseEntity
         DbSet = context.Set<T>();
     }
 
-    public virtual T? GetById(string id) => DbSet.Find(id);
+    // ==================== 查询（默认过滤软删除） ====================
 
-    public virtual T? GetOne(Expression<Func<T, bool>> predicate) 
-        => DbSet.FirstOrDefault(predicate);
-
-    public virtual List<T> GetList(Expression<Func<T, bool>>? predicate = null)
-        => predicate == null ? DbSet.ToList() : DbSet.Where(predicate).ToList();
-
-    public virtual (List<T> items, int total) GetPage(PagerOptions options)
+    public virtual T? GetById(string id, bool includeDeleted = false)
     {
         var query = DbSet.AsQueryable();
+        if (!includeDeleted) query = query.Where(e => !e.IsDeleted);
+        return query.FirstOrDefault(e => e.Id == id);
+    }
+
+    /// <summary>根据业务 Code 获取实体</summary>
+    public virtual T? GetByCode(string code, bool includeDeleted = false)
+    {
+        var query = DbSet.AsQueryable();
+        if (!includeDeleted) query = query.Where(e => !e.IsDeleted);
+        return query.FirstOrDefault(e => e.Code == code);
+    }
+
+    public virtual T? GetOne(Expression<Func<T, bool>> predicate, bool includeDeleted = false)
+    {
+        var query = DbSet.AsQueryable();
+        if (!includeDeleted) query = query.Where(e => !e.IsDeleted);
+        return query.FirstOrDefault(predicate);
+    }
+
+    public virtual List<T> GetList(Expression<Func<T, bool>>? predicate = null, bool includeDeleted = false)
+    {
+        var query = DbSet.AsQueryable();
+        if (!includeDeleted) query = query.Where(e => !e.IsDeleted);
+        if (predicate != null) query = query.Where(predicate);
+        return query.ToList();
+    }
+
+    public virtual (List<T> items, int total) GetPage(PagerOptions options, bool includeDeleted = false)
+    {
+        var query = DbSet.AsQueryable();
+        if (!includeDeleted) query = query.Where(e => !e.IsDeleted);
 
         // 过滤
         if (options.Filters != null)
@@ -64,44 +91,68 @@ public class BaseRepository<T> : IRepository<T> where T : BaseEntity
         return (query.ToList(), total);
     }
 
-    public virtual int Count(Expression<Func<T, bool>>? predicate = null)
-        => predicate == null ? DbSet.Count() : DbSet.Count(predicate);
+    public virtual int Count(Expression<Func<T, bool>>? predicate = null, bool includeDeleted = false)
+    {
+        var query = DbSet.AsQueryable();
+        if (!includeDeleted) query = query.Where(e => !e.IsDeleted);
+        if (predicate != null) query = query.Where(predicate);
+        return query.Count();
+    }
 
-    public virtual bool Exists(Expression<Func<T, bool>> predicate)
-        => DbSet.Any(predicate);
+    public virtual bool Exists(Expression<Func<T, bool>> predicate, bool includeDeleted = false)
+    {
+        var query = DbSet.AsQueryable();
+        if (!includeDeleted) query = query.Where(e => !e.IsDeleted);
+        return query.Any(predicate);
+    }
+
+    // ==================== 写入 ====================
 
     public virtual T Insert(T entity)
     {
-        entity.CreateTime = DateTime.UtcNow;
-        entity.UpdateTime = DateTime.UtcNow;
         entity.Id = string.IsNullOrEmpty(entity.Id) ? Guid.NewGuid().ToString("N") : entity.Id;
         DbSet.Add(entity);
         Context.SaveChanges();
         return entity;
     }
 
+    /// <summary>新增（支持 saveChanges 参数）</summary>
+    public virtual T Insert(T entity, bool saveChanges)
+    {
+        entity.Id = string.IsNullOrEmpty(entity.Id) ? Guid.NewGuid().ToString("N") : entity.Id;
+        DbSet.Add(entity);
+        if (saveChanges) Context.SaveChanges();
+        return entity;
+    }
+
     public virtual void InsertBatch(IEnumerable<T> entities)
     {
-        foreach (var entity in entities)
-        {
-            entity.CreateTime = DateTime.UtcNow;
-            entity.UpdateTime = DateTime.UtcNow;
-        }
         DbSet.AddRange(entities);
         Context.SaveChanges();
     }
 
+    public virtual void InsertBatch(IEnumerable<T> entities, bool saveChanges)
+    {
+        DbSet.AddRange(entities);
+        if (saveChanges) Context.SaveChanges();
+    }
+
     public virtual T Update(T entity)
     {
-        entity.UpdateTime = DateTime.UtcNow;
         DbSet.Update(entity);
         Context.SaveChanges();
         return entity;
     }
 
+    public virtual T Update(T entity, bool saveChanges)
+    {
+        DbSet.Update(entity);
+        if (saveChanges) Context.SaveChanges();
+        return entity;
+    }
+
     public virtual T Update(T entity, params string[] fields)
     {
-        entity.UpdateTime = DateTime.UtcNow;
         var entry = Context.Entry(entity);
         foreach (var field in fields)
         {
@@ -111,6 +162,24 @@ public class BaseRepository<T> : IRepository<T> where T : BaseEntity
         return entity;
     }
 
+    public virtual T Update(T entity, bool saveChanges, string[]? fields)
+    {
+        var entry = Context.Entry(entity);
+        if (fields != null)
+        {
+            foreach (var field in fields)
+                entry.Property(field).IsModified = true;
+        }
+        else
+        {
+            DbSet.Update(entity);
+        }
+        if (saveChanges) Context.SaveChanges();
+        return entity;
+    }
+
+    // ==================== 删除 ====================
+
     public virtual void Delete(string id)
     {
         var entity = DbSet.Find(id);
@@ -118,6 +187,16 @@ public class BaseRepository<T> : IRepository<T> where T : BaseEntity
         {
             DbSet.Remove(entity);
             Context.SaveChanges();
+        }
+    }
+
+    public virtual void Delete(string id, bool saveChanges)
+    {
+        var entity = DbSet.Find(id);
+        if (entity != null)
+        {
+            DbSet.Remove(entity);
+            if (saveChanges) Context.SaveChanges();
         }
     }
 
@@ -132,46 +211,78 @@ public class BaseRepository<T> : IRepository<T> where T : BaseEntity
         }
     }
 
-    public virtual void DeleteWhere(Expression<Func<T, bool>> predicate)
+    public virtual void DeleteBatch(IEnumerable<string> ids, bool saveChanges)
+    {
+        var idList = ids.ToList();
+        var entities = DbSet.Where(x => idList.Contains(x.Id)).ToList();
+        if (entities.Any())
+        {
+            DbSet.RemoveRange(entities);
+            if (saveChanges) Context.SaveChanges();
+        }
+    }
+
+    public virtual void DeleteWhere(Expression<Func<T, bool>> predicate, bool saveChanges)
     {
         var entities = DbSet.Where(predicate).ToList();
         if (entities.Any())
         {
             DbSet.RemoveRange(entities);
-            Context.SaveChanges();
+            if (saveChanges) Context.SaveChanges();
         }
     }
 
-    public virtual void ExecuteInTransaction(Action action)
+    public virtual int SaveChanges() => Context.SaveChanges();
+
+    // ==================== 事务 ====================
+
+    public virtual (bool success, string? err) ExecuteInTransaction(Action action)
     {
         using var tx = Context.Database.BeginTransaction();
         try
         {
             action();
             tx.Commit();
+            return (true, null);
         }
-        catch
+        catch (Exception ex)
         {
-            tx.Rollback();
-            throw;
+            try { tx.Rollback(); }
+            catch (Exception rollbackEx)
+            {
+                return (false, $"事务回滚失败：{rollbackEx.Message}");
+            }
+            return (false, ex.Message);
         }
     }
 
-    public virtual TResult ExecuteInTransaction<TResult>(Func<TResult> func)
+    public virtual (TResult? result, string? err) ExecuteInTransaction<TResult>(Func<TResult> func)
     {
         using var tx = Context.Database.BeginTransaction();
         try
         {
             var result = func();
             tx.Commit();
-            return result;
+            return (result, null);
         }
-        catch
+        catch (Exception ex)
         {
-            tx.Rollback();
-            throw;
+            try { tx.Rollback(); }
+            catch (Exception rollbackEx)
+            {
+                return (default, $"事务回滚失败：{rollbackEx.Message}");
+            }
+            return (default, ex.Message);
         }
     }
+
+    public virtual IRepositoryTransaction BeginTransaction()
+    {
+        var dbTx = Context.Database.BeginTransaction();
+        return new RepositoryTransaction(dbTx);
+    }
+
+    // ==================== 过滤/排序 ====================
 
     /// <summary>应用过滤条件</summary>
     protected virtual IQueryable<T> ApplyFilter(IQueryable<T> query, FilterItem filter)
@@ -253,6 +364,41 @@ public class BaseRepository<T> : IRepository<T> where T : BaseEntity
         {
             // 排序字段不存在时回退
             return query;
+        }
+    }
+}
+
+/// <summary>
+///     仓储事务实现
+/// </summary>
+internal class RepositoryTransaction : IRepositoryTransaction
+{
+    private readonly Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction _transaction;
+    private bool _disposed;
+
+    public RepositoryTransaction(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction)
+    {
+        _transaction = transaction;
+    }
+
+    public void Commit()
+    {
+        if (!_disposed)
+            _transaction.Commit();
+    }
+
+    public void Rollback()
+    {
+        if (!_disposed)
+            _transaction.Rollback();
+    }
+
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            _transaction.Dispose();
+            _disposed = true;
         }
     }
 }

@@ -61,9 +61,6 @@ public class DefineColumn
     /// <summary>是否可排序</summary>
     public bool Sortable { get; set; }
 
-    /// <summary>是否可搜索</summary>
-    public bool Searchable { get; set; }
-
     /// <summary>列固定方式：left/right/null</summary>
     public string? Fixed { get; set; }
 
