@@ -177,6 +177,10 @@ src/certplatform-web/yzh.vue.core/dist/
 .npmrc
 package-lock.json.bak
 
+# Node 依赖
+node_modules/
+node_modules_link/
+
 # C# 项目 bin/obj 文件夹（递归）
 **/bin/
 **/obj/
