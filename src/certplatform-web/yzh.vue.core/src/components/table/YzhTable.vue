@@ -38,6 +38,8 @@ const props = withDefaults(
     emptyText?: string
     toolbar?: boolean | YzhTableToolbar
     searchMaxFields?: number
+    /** 是否禁用内部 padding（用于嵌套在卡片/TreeTable 中时避免双层 padding） */
+    noPadding?: boolean
   }>(),
   {
     selectable: false,
@@ -46,7 +48,8 @@ const props = withDefaults(
     rowKey: 'id',
     emptyText: '暂无数据',
     toolbar: true,
-    searchMaxFields: 2
+    searchMaxFields: 2,
+    noPadding: false
   }
 )
 
@@ -277,7 +280,7 @@ defineExpose({
       <template #right>
         <slot name="toolbar-right" :selected="selectedRows" :refresh="refresh">
           <!-- 列设置 popover -->
-          <el-popover v-if="toolbarConfig.columnSetting" trigger="click" placement="bottom-end" :width="240">
+          <el-popover v-if="toolbarConfig.columnSetting" trigger="click" placement="bottom-end" :width="200">
             <template #reference>
               <el-button text>
                 <i class="bi bi-columns"></i>
@@ -299,9 +302,7 @@ defineExpose({
                     {{ col.label }}
                   </el-checkbox>
                   <el-button
-                    size="small"
-                    link
-                    type="primary"
+                    class="yzh-column-settings__sort-btn"
                     :class="{ 'is-active': sort?.prop === col.prop }"
                     :disabled="col.sortable === false"
                     @click="toggleSortInSettings(col)"
@@ -321,7 +322,7 @@ defineExpose({
     </YzhToolbar>
 
     <!-- 表格容器 -->
-    <div class="yzh-table__wrapper">
+    <div class="yzh-table__wrapper" :class="{ 'yzh-table__wrapper--no-padding': noPadding }">
       <!-- 表格 -->
       <div
         class="yzh-table__body"
@@ -423,6 +424,11 @@ defineExpose({
   background: #fff;
 }
 
+/* 无内部 padding 模式（用于嵌套场景，但仍保留一定内边距） */
+.yzh-table__wrapper--no-padding {
+  padding: 16px;
+}
+
 .yzh-table__body {
   height: 100%;
   overflow: hidden;
@@ -469,14 +475,22 @@ defineExpose({
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 4px 0;
+    padding: 6px 0;
 
     .el-checkbox {
       flex: 1;
       min-width: 0;
     }
+  }
 
-    .is-active {
+  &__sort-btn {
+    flex-shrink: 0;
+    margin-left: 8px;
+    font-size: 12px;
+    padding: 4px 8px;
+    min-width: 50px;
+
+    &.is-active {
       color: var(--el-color-primary);
       font-weight: 600;
     }
@@ -484,8 +498,8 @@ defineExpose({
 
   &__footer {
     display: flex;
-    justify-content: flex-end;
-    gap: 8px;
+    justify-content: center;
+    gap: 12px;
     padding-top: 10px;
     margin-top: 8px;
     border-top: 1px solid #ebeef5;

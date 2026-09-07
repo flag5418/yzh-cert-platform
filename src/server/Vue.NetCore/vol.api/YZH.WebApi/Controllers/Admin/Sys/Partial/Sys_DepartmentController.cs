@@ -22,6 +22,14 @@ using YZH.Core.UserManager;
 
 namespace YZH.Sys.Controllers
 {
+    /// <summary>
+    /// TreeTable 子节点请求 DTO
+    /// </summary>
+    public class TreeTableChildrenRequest
+    {
+        public Guid DepartmentId { get; set; }
+    }
+
     public partial class Sys_DepartmentController
     {
         private readonly ISys_DepartmentService _service;//访问业务代码
@@ -104,9 +112,10 @@ namespace YZH.Sys.Controllers
         /// <returns></returns>
         [HttpPost, Route("getTreeTableChildrenData")]
         [ApiActionPermission(ActionPermissionOptions.Search)]
-        public async Task<ActionResult> GetTreeTableChildrenData(Guid departmentId)
+        public async Task<ActionResult> GetTreeTableChildrenData([FromBody] TreeTableChildrenRequest request)
         {
             //点击节点时，加载子节点数据
+            var departmentId = request.DepartmentId;
             var query = _repository.FindAsIQueryable(x => true);
             var rows = await query.Where(x => x.ParentId == departmentId)
                 .Select(s => new
