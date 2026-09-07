@@ -12,7 +12,7 @@ namespace YZH.Core.DataBase;
 ///     - 所有查询方法默认 includeDeleted: false，自动过滤 IsDeleted=true 的记录
 ///     - 传入 includeDeleted: true 时返回全部记录（含已软删）
 /// </summary>
-public interface IRepository<T> where T : BaseEntity
+public interface IRepository<T> where T : class
 {
     // === 查询（默认过滤软删除） ===
     

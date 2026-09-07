@@ -15,7 +15,7 @@ export const useMenuStore = defineStore('menu', () => {
     loading.value = true
     try {
       const res = await getMenuTree()
-      menus.value = res.data?.menu ?? []
+      menus.value = res.data ?? []
       loaded.value = true
     } catch (e) {
       console.error('加载菜单失败:', e)

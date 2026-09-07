@@ -15,13 +15,31 @@ AIGC:
 > **编码任务（生成/修改任何代码）必须启用本文件**，启用要求见 `项目全局规则.md` §8.0。
 > 本文件为权威源；知识库副本位于 `docs/60-AI工程设计/YZH-知识库/AGENTS.md`，两处须保持一致。
 
+## ⚠️ 核心目的（最高优先级）
+
+> **当前项目核心目的：完善新架构，用新架构重新构造原项目的接口和业务功能。**
+
+| 层级 | 路径 | 状态 | 说明 |
+|------|------|------|------|
+| **新后端** | `src/certplatform-api/` | ✅ 唯一开发目标 | `CertPlatform.Shared/` + `Admin/` + `Auditor/` + `Enterprise/`，启动入口 `YZH.Core.Web` |
+| **新前端** | `src/certplatform-web/` | ✅ 唯一开发目标 | `yzh.vue.core/` + `share/` + `admin/` + `auditor/` |
+| **旧后端** | `src/server/Vue.NetCore/` | ⛔ **禁止修改** | Vol 框架，仅作参考 |
+| **旧前端** | `src/admin/`、`src/auditor/` | ⛔ **禁止修改** | Vol 自带前端，仅作参考 |
+
+**强制约束**：
+- ❌ 禁止修改 `src/server/`、`src/admin/`、`src/auditor/` 下任何文件
+- ❌ 禁止在新架构中调用旧架构的控制器/服务
+- ✅ 新架构开发可参考旧架构的业务逻辑
+- ✅ 所有接口/Bug 修复在新架构中实现
+
 ## 快速指针（编码前必读链路）
 
 - **项目宪法**：`项目全局规则.md` — 项目概述/技术栈锁定/文档目录结构/AI 检索协议/端口规划/快速开始/禁止事项
 - **文档导航**：`docs/00-工程体系/README.md` — 全项目文档索引（00/20/50/60/80/90 + 历史文档）
 - **业务域设计**：按 `docs/00-工程体系/README.md` 导航进入对应目录（架构/全局 → 20-架构决策；功能细节 → 80-功能设计；AI 工程 → 60-AI工程设计）
 - **知识底座**：`docs/60-AI工程设计/YZH-知识库/README.md` — Vol 能力清单 / YZH 增量 / 边界约束 / 代码模板 / 踩坑记录 / 速查手册
-- **Vol 框架指南**：`docs/60-AI工程设计/vol-skill.md`
+- **Vol 框架指南**：`docs/60-AI工程设计/vol-skill.md`（**已弃用，仅供历史参考**）
+- **前端架构总纲（V4）**：`docs/00-工程体系/前端架构设计-V1.md`（原子化组件 + CrudPageLogic 基类 + 后端驱动 UI）
 - **编码规范**：`docs/60-AI工程设计/vol-csharp-coding-standards.md`（C#）、`docs/60-AI工程设计/vue-ts-coding-standards.md`（Vue3+TS）
 - **脚本规范**：`scripts/README.md`（backend/db/frontend/storage/generate/tools 子目录）
 - **Skill 清单**：`docs/60-AI工程设计/Skill清单-V1.md` — 全部 Skill 的编码/输入输出/绑定模式/实现类/编写规范
@@ -29,9 +47,13 @@ AIGC:
 ## 项目速览
 
 - **项目**：映智汇认证审核管理系统（yzh-cert-platform），ISO 体系认证全流程（建档→任务分派→预审→复核→报告→NC）
-- **技术栈**：.NET 8 + Vol（后端）/ Vue 3 + TypeScript + Vite（admin 端 Element Plus、auditor 端 Naive UI）/ MySQL 8.0 / Redis 7 / MinIO / Docker Compose（OrbStack）
+- **核心目的**：完善 YZH.Core 新架构，重构原 Vol 框架的接口和业务功能
+- **技术栈（新架构）**：.NET 8 + YZH.Core（后端）/ Vue 3 + TypeScript + Vite + Element Plus / MySQL 8.0 / Redis 7 / MinIO / Docker Compose
+- **技术栈（旧架构，仅参考）**：.NET 8 + Vol（后端）/ Vue 3 + Element Plus（保留不修改）
 - **端口**：后端 9992 / 后台管理 9990 / 审核员前端 9991 / MySQL 3307 / Redis 6380 / MinIO 9000+9001
 - **开发模式**：独立开发，多 AI 协作机制不适用（项目全局规则 §十三）
+- **新后端结构（2026-09 起）**：`src/certplatform-api/` 目录，包含 `CertPlatform.Shared/`（共享层）、`Admin/`、`Auditor/`、`Enterprise/`，启动入口 `YZH.Core.Web`
+- **新前端结构（2026-09-05 起）**：`src/certplatform-web/` 目录，包含 `yzh.vue.core/`（核心组件库）、`share/`（业务共享层）、`admin/`（管理员端，端口 9990）、`auditor/`（审核员端，端口 9991）
 
 ## 编码强制约定
 

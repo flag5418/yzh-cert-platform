@@ -5,12 +5,21 @@
 
 /* 设计令牌 - 颜色 */
 :root {
-  /* 主色系 */
+  /* 主色系 - #1e3a8a 深蓝主题 */
   --yzh-color-primary: #1e3a8a;
-  --yzh-color-primary-light: #1e40af;
+  --yzh-color-primary-light: #2563eb;
   --yzh-color-primary-lighter: #3b82f6;
   --yzh-color-primary-dark: #1e40af;
   --yzh-color-primary-disabled: #94a3b8;
+
+  /* Element Plus 主题色覆盖 */
+  --el-color-primary: #1e3a8a;
+  --el-color-primary-light-3: #3b82f6;
+  --el-color-primary-light-5: #60a5fa;
+  --el-color-primary-light-7: #93c5fd;
+  --el-color-primary-light-8: #bfdbfe;
+  --el-color-primary-light-9: #dbeafe;
+  --el-color-primary-dark-2: #1e40af;
 
   /* 功能色 */
   --yzh-color-success: #16a34a;

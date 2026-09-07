@@ -6,9 +6,9 @@
 
 ```
 YZH.Core/
-├── YZH.Core.Stand/      ← 基础模型层：BaseEntity, GridConfig, ApiResponse, 工具类
+├── YZH.Core.Stand/      ← 基础模型层：BaseEntity, EntityConfig, ApiResponse, 工具类
 ├── YZH.Core.DataBase/   ← 数据访问层：EF Core封装, IRepository, BaseRepository
-├── YZH.Core.Api/        ← Web核心层：BaseController, GridConfigController, Filters
+├── YZH.Core.Api/        ← Web核心层：BaseController, EntityConfigController, Filters
 └── YZH.Core.Web/        ← Web启动层：YzhWebBuilder, GlobalExceptionMiddleware
 ```
 
@@ -23,9 +23,9 @@ YZH.Core.Web
 
 ## 核心能力
 
-1. **配置驱动UI（GridConfig）**
+1. **配置驱动UI（EntityConfig）**
    - 表格/表单布局由 JSON/XML 配置决定
-   - 前端通过 `/api/gridconfig/{tableName}` 获取配置
+   - 前端通过 `/api/entityconfig/{tableName}` 获取配置
    - 修改配置文件即可调整界面，无需后端代码变更
 
 2. **通用 CRUD（BaseController）**
@@ -46,7 +46,7 @@ YZH.Core.Web
 1. 引用 YZH.Core.Web
 2. 继承 BaseDbContext 注册实体
 3. 继承 BaseController<T> 创建 API
-4. 编写 GridConfig JSON 配置文件
+4. 编写 EntityConfig JSON 配置文件
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);

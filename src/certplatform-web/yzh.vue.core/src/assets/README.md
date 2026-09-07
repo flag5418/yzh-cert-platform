@@ -6,17 +6,17 @@
 
 ```
 assets/
-├── gridconfig/          # 默认表格/表单配置 JSON
+├── entityconfig/          # 默认表格/表单配置 JSON
 └── README.md
 ```
 
 ## 设计原则
 
 1. **核心默认**：此目录提供组件的 fallback 配置，当项目未覆盖时使用
-2. **项目可覆盖**：业务项目在 `src/assets/gridconfig/` 放置同名文件即可覆盖
-3. **运行时加载**：配置通过 HTTP API (`/api/gridconfig/{name}`) 按需加载
+2. **项目可覆盖**：业务项目在 `src/assets/entityconfig/` 放置同名文件即可覆盖
+3. **运行时加载**：配置通过 HTTP API (`/api/entityconfig/{name}`) 按需加载
 
-## GridConfig JSON 格式
+## EntityConfig JSON 格式
 
 ```json
 {

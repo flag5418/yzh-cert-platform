@@ -104,7 +104,7 @@ namespace YZH.WebApi.Controllers.Admin.Platform
                     if (entity != null)
                     {
                         entity.MarkAsDeleted(
-                            UserContext.Current.UserId,
+                            UserContext.Current.UserId.ToString(),
                             UserContext.Current.UserName
                         );
                         _repository.Update(entity, new[] { "Enable", "DeleteID", "Deleter", "DeleteTime" }, saveChanges: true);

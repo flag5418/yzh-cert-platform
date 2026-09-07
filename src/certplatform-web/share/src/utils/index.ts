@@ -1,3 +1,5 @@
 export { formatFileSize, formatDate, formatDateTime } from './format'
 export { downloadBlob, downloadBlobPost, parseFileNameFromDisposition, fileNameOf } from './download'
 export { CONVERT_STATUS_MAP, convertStatusInfo, convertStatusBadgeType, convertStatusLabel } from './convertStatus'
+export { treeUtils, buildTree, entityToNode, nodeToEntity, flattenTree, getDescendants, getDescendantsWithSelf, getAncestors, getPath, getPathNames, findNode, findNodeBy, findNodesBy, getParent, filterByType, search, searchWithAncestors, filterTree, getChildrenCount, getDepth, getTotalCount, getNodesAtLevel, validate, hasCycle } from './treeUtils'
+export { treeOps, addNode, removeSubtree, moveSubtree, updateNode, mergeRoots, diff, validate as validateTree, flatten } from './treeOps'

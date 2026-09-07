@@ -25,8 +25,8 @@ export interface YzhTableColumn<T = any> {
   align?: 'left' | 'center' | 'right'
   /** 自定义格式化 */
   formatter?: (value: any, row: T, index: number) => any
-  /** 自定义插槽名（用于操作列等） */
-  slot?: string
+  /** 是否使用自定义插槽（用于操作列等，插槽名为 column-{prop}） */
+  slot?: boolean
   /** 是否隐藏 */
   hidden?: boolean
   /** 自定义 class */

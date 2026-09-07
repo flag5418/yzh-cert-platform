@@ -1,12 +1,12 @@
 # Assets - 项目资源目录
 
-此目录存放当前项目的静态资源，包括表格/表单的 GridConfig JSON 配置。
+此目录存放当前项目的静态资源，包括表格/表单的 EntityConfig JSON 配置。
 
 ## 目录结构
 
 ```
 assets/
-├── gridconfig/          # 项目级表格/表单配置 JSON
+├── entityconfig/          # 项目级表格/表单配置 JSON
 │   ├── sys_user_list.json
 │   ├── sys_user_form.json
 │   └── ...
@@ -21,11 +21,11 @@ assets/
 
 ## 如何新增配置
 
-1. 在 `gridconfig/` 下创建 `{tableName}_list.json`（列表）或 `{tableName}_form.json`（表单）
-2. 前端通过 `/api/gridconfig/{tableName}` 获取配置
+1. 在 `entityconfig/` 下创建 `{tableName}_list.json`（列表）或 `{tableName}_form.json`（表单）
+2. 前端通过 `/api/entityconfig/{tableName}` 获取配置
 3. 后端会缓存 24 小时，修改后需重启或等待缓存过期
 
-## GridConfig JSON 完整格式
+## EntityConfig JSON 完整格式
 
 ```json
 {

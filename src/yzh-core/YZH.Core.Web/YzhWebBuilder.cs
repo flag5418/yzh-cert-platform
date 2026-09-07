@@ -35,14 +35,18 @@ public static class YzhWebBuilderExtensions
         // 注册 HttpContextAccessor（UserContext 获取 IP 必须）
         builder.Services.AddHttpContextAccessor();
 
-        // 注册通用仓储
+        // 注册 Dapper 数据库操作（统一核心，废弃 EF Core 双路）
+        builder.Services.AddScoped<IDbOrm, DapperDbOrm>();
+
+        // 注册通用仓储（兼容旧代码，后续逐步迁移）
         builder.Services.AddScoped(typeof(IRepository<>), typeof(BaseRepository<>));
 
         // 注册用户上下文 (获取 IP、UserId、UserName)
         builder.Services.AddScoped<IUserContext, UserContext>();
 
-        // 注册审计日志服务
-        builder.Services.AddScoped<IAuditLogger, AuditLogger>();
+        // 注册审计日志服务（新版 IYzhAuditLogger + YzhAuditLogger 后台服务）
+        builder.Services.AddHostedService<YzhAuditLogger>();
+        builder.Services.AddScoped<IYzhAuditLogger, YzhAuditLogger>();
 
         // 注册实体操作服务
         builder.Services.AddScoped(typeof(EntityService<>));
@@ -50,8 +54,8 @@ public static class YzhWebBuilderExtensions
         // 注册事务工作单元
         builder.Services.AddScoped<WorkUnit>();
 
-        // 注册 GridConfig 加载器
-        builder.Services.AddScoped<IGridConfigLoader, GridConfigLoader>();
+        // 注册 EntityConfig 加载器
+        builder.Services.AddScoped<IEntityConfigLoader, EntityConfigLoader>();
 
         // 注册缓存管理器（使用完全限定名避免命名空间冲突）
         builder.Services.AddScoped<ICacheManager, YZH.Core.Api.Services.CacheManager>();
@@ -76,14 +80,18 @@ public static class YzhWebBuilderExtensions
             return factory.DefaultProvider;
         });
 
-        // 注册内存缓存（GridConfig缓存用）
+        // 注册内存缓存（EntityConfig缓存用）
         builder.Services.AddMemoryCache();
 
-        // 注册全局异常过滤器 + 防重复提交过滤器
+        // 注册验证码服务
+        builder.Services.AddScoped<ICaptchaService, CaptchaService>();
+
+        // 注册全局过滤器
         builder.Services.AddControllers(opts =>
         {
             opts.Filters.Add<GlobalExceptionFilter>();
             opts.Filters.Add<IdempotentFilter>(); // 全局防重复提交
+            opts.Filters.Add<YzhAuditingFilter>(); // 全局审计
         })
         .AddJsonOptions(json =>
         {

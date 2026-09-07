@@ -10,6 +10,10 @@ export { usePolling } from './composables/usePolling'
 
 // Types
 export * from './types/cert'
+export * from './types/grid'
+
+// Logic
+export * from './logic'
 
 // Utils
 export { formatFileSize, formatDate, formatDateTime } from './utils/format'

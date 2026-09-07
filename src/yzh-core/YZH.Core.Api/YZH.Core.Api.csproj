@@ -6,25 +6,29 @@
     <Nullable>enable</Nullable>
     <RootNamespace>YZH.Core.Api</RootNamespace>
     <AssemblyName>YZH.Core.Api</AssemblyName>
-    <Description>YZH Core Api - Web核心层：控制器基类、GridConfig接口、过滤器</Description>
+    <Description>YZH Core Api - Web核心层：控制器基类、EntityConfig接口、过滤器</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\server\Vue.NetCore\vol.api\YZH.Entity\YZH.Entity.csproj" />
     <ProjectReference Include="..\YZH.Core.DataBase\YZH.Core.DataBase.csproj" />
     <ProjectReference Include="..\YZH.Core.Stand\YZH.Core.Stand.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.35" />
+    <PackageReference Include="SkiaSharp" Version="2.88.8" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.88.8" />
   </ItemGroup>
 
-  <!-- Assets/GridConfigs 复制到输出目录 -->
+  <!-- Assets/EntityConfigs 复制到输出目录 -->
   <ItemGroup>
-    <Content Include="Assets\GridConfigs\**">
+    <Content Include="Assets\EntityConfigs\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

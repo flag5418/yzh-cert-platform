@@ -141,6 +141,8 @@ function onReset() {
 <style scoped>
 .yzh-search-bar {
   width: 100%;
+  padding: 16px;
+  border-bottom: 1px solid var(--yzh-color-border-light, #f1f5f9);
 }
 
 .yzh-search-bar__inner {

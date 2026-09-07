@@ -6,7 +6,7 @@ export { YzhTable } from './components/table'
 export type { YzhTableColumn, YzhTableColumnV4, PageParams, Page, YzhTableDataLoader, YzhTableToolbar, DefaultSort, SearchField } from './components/table/types'
 export { YzhForm } from './components/form'
 export type { YzhFormField, YzhFieldType } from './components/form/YzhForm.vue'
-export { YzhSearchBar, YzhToolbar, YzhPagination, YzhPageLayout } from './components/layout'
+export { YzhSearchBar, YzhToolbar, YzhPagination, YzhPageLayout, YzhDialog } from './components/layout'
 export { YzhEmptyState, YzhStatusBadge, YzhCard } from './components/ui'
 
 // API

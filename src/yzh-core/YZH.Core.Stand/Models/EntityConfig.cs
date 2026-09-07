@@ -1,11 +1,11 @@
 namespace YZH.Core.Stand.Models;
 
 /// <summary>
-///     表格/表单的UI配置模型
-///     对标老YZH架构的 GridConfig
+///     实体页面的UI配置模型（驱动表格+表单+工具栏+搜索）
+///     实体页面的UI配置（表格+表单+工具栏+搜索）
 ///     XML/JSON 文件中的配置将反序列化为该模型
 /// </summary>
-public class GridConfig
+public class EntityConfig
 {
     /// <summary>配置文件名</summary>
     public string ConfigName { get; set; } = string.Empty;
@@ -16,7 +16,7 @@ public class GridConfig
     /// <summary>主键字段名</summary>
     public string PrimaryKey { get; set; } = "Id";
 
-    /// <summary>表格标题</summary>
+    /// <summary>页面/表格标题</summary>
     public string Title { get; set; } = string.Empty;
 
     /// <summary>所有列/字段定义</summary>
@@ -38,32 +38,32 @@ public class GridConfig
     public List<FormGroup>? FormGroups { get; set; }
 
     /// <summary>
-    ///     从 JSON 配置文件加载 GridConfig
-    ///     配置文件路径：Assets/GridConfigs/{TypeName}.json
+    ///     从 JSON 配置文件加载 EntityConfig
+    ///     配置文件路径：Assets/EntityConfigs/{TypeName}.json
     ///     如果配置文件不存在，返回默认配置
     /// </summary>
-    public static GridConfig GetGridConfig<T>() where T : BaseEntity
+    public static EntityConfig GetEntityConfig<T>() where T : BaseEntity
     {
-        return GetGridConfig<T>(null);
+        return GetEntityConfig<T>(null);
     }
 
     /// <summary>
-    ///     从 JSON 配置文件加载 GridConfig（支持自定义配置名）
-    ///     配置文件路径：Assets/GridConfigs/{configName}.json
+    ///     从 JSON 配置文件加载 EntityConfig（支持自定义配置名）
+    ///     配置文件路径：Assets/EntityConfigs/{configName}.json
     ///     如果配置文件不存在，返回默认配置
     /// </summary>
-    public static GridConfig GetGridConfig<T>(string? configName) where T : BaseEntity
+    public static EntityConfig GetEntityConfig<T>(string? configName) where T : BaseEntity
     {
         var name = configName ?? typeof(T).Name;
-        var configPath = Path.Combine("Assets", "GridConfigs", $"{name}.json");
+        var configPath = Path.Combine("Assets", "EntityConfigs", $"{name}.json");
 
         try
         {
             if (File.Exists(configPath))
             {
                 var json = File.ReadAllText(configPath);
-                return System.Text.Json.JsonSerializer.Deserialize<GridConfig>(json)
-                    ?? new GridConfig { ConfigName = name, Title = name };
+                return System.Text.Json.JsonSerializer.Deserialize<EntityConfig>(json)
+                    ?? new EntityConfig { ConfigName = name, Title = name };
             }
         }
         catch
@@ -71,7 +71,7 @@ public class GridConfig
             // 配置文件读取失败时返回默认配置
         }
 
-        return new GridConfig
+        return new EntityConfig
         {
             ConfigName = name,
             TableName = name,

@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>YZH.Core.Stand</RootNamespace>
     <AssemblyName>YZH.Core.Stand</AssemblyName>
-    <Description>YZH Core Stand - 基础模型层：实体基类、GridConfig、ApiResponse、工具类</Description>
+    <Description>YZH Core Stand - 基础模型层：实体基类、EntityConfig、ApiResponse、工具类</Description>
   </PropertyGroup>
 
   <ItemGroup>

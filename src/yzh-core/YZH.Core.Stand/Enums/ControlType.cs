@@ -3,7 +3,7 @@ namespace YZH.Core.Stand.Enums;
 /// <summary>
 ///     控件/列类型枚举
 ///     对标老YZH架构的 ControlType
-///     定义前端根据 GridConfig 动态渲染时使用的控件类型
+///     定义前端根据 EntityConfig 动态渲染时使用的控件类型
 /// </summary>
 public enum ControlType
 {

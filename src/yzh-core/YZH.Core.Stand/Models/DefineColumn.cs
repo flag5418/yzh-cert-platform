@@ -3,7 +3,7 @@ using YZH.Core.Stand.Enums;
 namespace YZH.Core.Stand.Models;
 
 /// <summary>
-///     GridConfig 的列/字段定义
+///     EntityConfig 的列/字段定义
 ///     对标老YZH架构的 DefineColumn，定义单个字段的UI行为
 /// </summary>
 public class DefineColumn

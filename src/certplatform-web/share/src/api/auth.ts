@@ -37,12 +37,11 @@ export interface CurrentUser {
 }
 
 /**
- * 用户登录
- * 后端 API: POST /api/Auth/login
- * 请求: { userName, password, captcha?, uuid? }
+ * 用户登录（Vol 框架原生接口）
+ * 后端 API: POST /api/User/login
  */
 export async function login(params: LoginParams): Promise<HttpApiResponse<LoginResult>> {
-  return http.post('/Auth/login', {
+  return http.post('/User/login', {
     userName: params.userName,
     password: params.password,
     captcha: params.captcha || '',
@@ -51,24 +50,23 @@ export async function login(params: LoginParams): Promise<HttpApiResponse<LoginR
 }
 
 /**
- * 获取登录验证码
- * 后端 API: GET /api/Auth/captcha
- * 返回: { img: base64图片, uuid: 验证码ID }
+ * 获取登录验证码（Vol 框架原生接口）
+ * 后端 API: GET /api/User/getVierificationCode
  */
 export async function getCaptcha(): Promise<HttpApiResponse<CaptchaData>> {
-  return http.get('/Auth/captcha')
+  return http.get('/User/getVierificationCode')
 }
 
 /**
  * 获取当前登录用户信息
  */
 export async function getCurrentUser(): Promise<HttpApiResponse<CurrentUser>> {
-  return http.get('/Auth/getCurrentUser')
+  return http.get('/User/getCurrentUserInfo')
 }
 
 /**
  * 健康检查
  */
 export async function ping(): Promise<HttpApiResponse<string>> {
-  return http.get('/Auth/ping')
+  return http.get('/User/ping')
 }

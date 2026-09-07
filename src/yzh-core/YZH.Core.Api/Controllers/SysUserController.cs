@@ -8,7 +8,7 @@ using YZH.Core.Stand.Models;
 namespace YZH.Core.Api.Controllers;
 
 /// <summary>
-///     用户管理控制器
+///     用户管理控制器（新架构版）
 ///     
 ///     继承 YzhControllerBase 获得：
 ///     - 标准 CRUD（Add/Update/Delete/GetPage/GetConfig）
@@ -16,27 +16,42 @@ namespace YZH.Core.Api.Controllers;
 ///     - 生命周期钩子
 ///     - 行操作注册
 ///     
-///     路由：api/sysuser
+///     路由：api/User（与 Vol 框架原生路由保持一致）
 /// </summary>
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/User")]
 [Authorize]
 public class SysUserController : YzhControllerBase<Sys_User>
 {
     private readonly PasswordHelper _passwordHelper;
+    private readonly ICaptchaService _captchaService;
 
     public SysUserController(
         EntityService<Sys_User> entityService,
         IUserContext userContext,
-        PasswordHelper passwordHelper)
+        PasswordHelper passwordHelper,
+        ICaptchaService captchaService)
         : base(entityService, userContext)
     {
         _passwordHelper = passwordHelper;
+        _captchaService = captchaService;
 
         // 注册行操作（按钮名称 → 处理函数）
         RegisterRowAction("Enable", EnableUser);
         RegisterRowAction("Disable", DisableUser);
         RegisterRowAction("ResetPassword", ResetPassword);
+    }
+
+    /// <summary>
+    ///     获取登录验证码（允许匿名访问）
+    ///     路由：GET api/User/getVierificationCode
+    /// </summary>
+    [HttpGet("getVierificationCode")]
+    [AllowAnonymous]
+    public IActionResult GetVierificationCode()
+    {
+        var imageBase64 = _captchaService.Generate(out var code, out var uuid);
+        return new JsonResult(new { img = imageBase64, uuid });
     }
 
     #region 查询钩子
@@ -71,11 +86,11 @@ public class SysUserController : YzhControllerBase<Sys_User>
     #region 新增钩子
 
     /// <summary>新增前处理 - 校验账号唯一性、加密密码</summary>
-    protected override void OnBeforeAdd(Sys_User entity)
+    protected override async Task OnBeforeAdd(Sys_User entity)
     {
         // 校验账号唯一性
-        var (exists, err) = Entity.Exists(e => e.UserName == entity.UserName);
-        if (exists)
+        var result = await Entity.ExistsByCodeAsync(entity.UserName);
+        if (result.Data == true)
         {
             throw new InvalidOperationException($"账号 {entity.UserName} 已存在");
         }
@@ -93,76 +108,73 @@ public class SysUserController : YzhControllerBase<Sys_User>
     #region 修改钩子
 
     /// <summary>修改前处理 - 如果传了新密码则加密</summary>
-    protected override void OnBeforeUpdate(Sys_User entity)
+    protected override Task OnBeforeUpdate(Sys_User entity)
     {
         // 如果传了新密码（长度 < 50 认为是明文），则加密
         if (!string.IsNullOrEmpty(entity.UserPwd) && entity.UserPwd.Length < 50)
         {
             entity.UserPwd = _passwordHelper.AesEncrypt(entity.UserPwd);
         }
-    }
-
-    /// <summary>修改前校验 - 禁止修改 admin 账号</summary>
-    protected override string? OnCustomValidate(Sys_User entity)
-    {
-        // 账号长度校验
-        if (!string.IsNullOrEmpty(entity.UserName) && entity.UserName.Length < 3)
-        {
-            return "账号至少需要 3 位";
-        }
-
-        return null;
+        return Task.CompletedTask;
     }
 
     #endregion
 
     #region 行操作
 
-    /// <summary>启用用户（POST api/sysuser/action/Enable）</summary>
-    private (ApiResponse? result, string? err) EnableUser(Sys_User entity)
+    /// <summary>启用用户（POST api/SysUser/action/Enable）</summary>
+    private async Task<Result<ApiResponse<object?>>> EnableUser(Sys_User entity)
     {
-        var existing = Entity.GetById(entity.Id);
-        if (existing == null)
-            return (null, "用户不存在");
+        var result = await Entity.GetByCode(entity.Code);
+        if (!result.Success || result.Data == null)
+            return Result<ApiResponse<object?>>.Fail("用户不存在");
 
-        existing.Enable = 1;
-        var (_, err) = Entity.Update(existing, UserContext.ClientIp);
-        if (err != null) return (null, err);
+        var user = result.Data;
+        user.Enable = 1;
+        var updateResult = await Entity.Update(user, UserContext.ClientIp);
+        if (!updateResult.Success)
+            return Result<ApiResponse<object?>>.Fail(updateResult.Error);
 
-        return (ApiResponse.Ok("已启用该用户"), null);
+        return Result<ApiResponse<object?>>.Ok(ApiResponse<object?>.Ok("已启用该用户"));
     }
 
-    /// <summary>禁用用户（POST api/sysuser/action/Disable）</summary>
-    private (ApiResponse? result, string? err) DisableUser(Sys_User entity)
+    /// <summary>禁用用户（POST api/SysUser/action/Disable）</summary>
+    private async Task<Result<ApiResponse<object?>>> DisableUser(Sys_User entity)
     {
-        var existing = Entity.GetById(entity.Id);
-        if (existing == null)
-            return (null, "用户不存在");
+        var result = await Entity.GetByCode(entity.Code);
+        if (!result.Success || result.Data == null)
+            return Result<ApiResponse<object?>>.Fail("用户不存在");
 
+        var user = result.Data;
+        
         // 禁止禁用超级管理员
-        if (existing.RoleId == 1)
-            return (null, "不能禁用超级管理员账号");
+        if (user.RoleId == 1)
+            return Result<ApiResponse<object?>>.Fail("不能禁用超级管理员账号");
 
-        existing.Enable = 0;
-        var (_, err) = Entity.Update(existing, UserContext.ClientIp);
-        if (err != null) return (null, err);
+        user.Enable = 0;
+        var updateResult = await Entity.Update(user, UserContext.ClientIp);
+        if (!updateResult.Success)
+            return Result<ApiResponse<object?>>.Fail(updateResult.Error);
 
-        return (ApiResponse.Ok("已禁用该用户"), null);
+        return Result<ApiResponse<object?>>.Ok(ApiResponse<object?>.Ok("已禁用该用户"));
     }
 
-    /// <summary>重置密码（POST api/sysuser/action/ResetPassword）</summary>
-    private (ApiResponse? result, string? err) ResetPassword(Sys_User entity)
+    /// <summary>重置密码（POST api/SysUser/action/ResetPassword）</summary>
+    private async Task<Result<ApiResponse<object?>>> ResetPassword(Sys_User entity)
     {
-        var existing = Entity.GetById(entity.Id);
-        if (existing == null)
-            return (null, "用户不存在");
+        var result = await Entity.GetByCode(entity.Code);
+        if (!result.Success || result.Data == null)
+            return Result<ApiResponse<object?>>.Fail("用户不存在");
 
-        existing.UserPwd = _passwordHelper.AesEncrypt("123456");
-        existing.LastModifyPwdDate = DateTime.UtcNow;
-        var (_, err) = Entity.Update(existing, UserContext.ClientIp);
-        if (err != null) return (null, err);
+        var user = result.Data;
+        user.UserPwd = _passwordHelper.AesEncrypt("123456");
+        user.LastModifyPwdDate = DateTime.UtcNow;
+        
+        var updateResult = await Entity.Update(user, UserContext.ClientIp);
+        if (!updateResult.Success)
+            return Result<ApiResponse<object?>>.Fail(updateResult.Error);
 
-        return (ApiResponse.Ok("密码已重置为 123456"), null);
+        return Result<ApiResponse<object?>>.Ok(ApiResponse<object?>.Ok("密码已重置为 123456"));
     }
 
     #endregion

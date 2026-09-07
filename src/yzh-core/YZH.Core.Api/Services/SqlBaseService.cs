@@ -252,25 +252,44 @@ public class SqlBaseService : ISqlBaseService
     /// <summary>构建基础 SELECT SQL（不含分页）</summary>
     private string BuildBaseSql(SqlPageOptions options)
     {
-        var fields = string.IsNullOrWhiteSpace(options.SelectFields) ? "*" : options.SelectFields;
+        // 安全校验表名
+        if (!SqlSecurityHelper.IsValidIdentifier(options.TableName))
+            throw new ArgumentException($"非法的表名: {options.TableName}");
+
+        var fields = string.IsNullOrWhiteSpace(options.SelectFields) ? "*" : 
+                     SqlSecurityHelper.ValidateSqlFragment(options.SelectFields, "SelectFields");
         var sql = new StringBuilder();
 
-        sql.Append($"SELECT {fields} FROM {options.TableName}");
+        sql.Append($"SELECT {fields} FROM {SqlSecurityHelper.EscapeIdentifier(options.TableName)}");
 
         if (!string.IsNullOrWhiteSpace(options.JoinClause))
-            sql.Append($" {options.JoinClause}");
+        {
+            var joinClause = SqlSecurityHelper.ValidateSqlFragment(options.JoinClause, "JoinClause");
+            sql.Append($" {joinClause}");
+        }
 
         AppendWhereClause(sql, options.Conditions);
 
         if (!string.IsNullOrWhiteSpace(options.GroupBy))
-            sql.Append($" GROUP BY {options.GroupBy}");
+        {
+            var groupBy = SqlSecurityHelper.ValidateSqlFragment(options.GroupBy, "GroupBy");
+            sql.Append($" GROUP BY {groupBy}");
+        }
 
         if (!string.IsNullOrWhiteSpace(options.Having))
-            sql.Append($" HAVING {options.Having}");
+        {
+            var having = SqlSecurityHelper.ValidateSqlFragment(options.Having, "Having");
+            sql.Append($" HAVING {having}");
+        }
 
         // 排序（SQL Server 分页必须带 ORDER BY）
         if (!string.IsNullOrWhiteSpace(options.SortField))
-            sql.Append($" ORDER BY {options.SortField} {options.SortDirection}");
+        {
+            var sortField = SqlSecurityHelper.IsValidIdentifier(options.SortField) 
+                ? SqlSecurityHelper.EscapeIdentifier(options.SortField)
+                : throw new ArgumentException($"非法的排序字段: {options.SortField}");
+            sql.Append($" ORDER BY {sortField} {options.SortDirection}");
+        }
 
         // 对于 SQL Server，如果分页没有排序，需要给一个默认排序以避免错误
         if (DatabaseTypeDetector.Detect(_connectionString) == DatabaseType.SqlServer &&
@@ -288,18 +307,31 @@ public class SqlBaseService : ISqlBaseService
         if (options == null)
             return "SELECT * FROM (SELECT 1 WHERE 1=0) AS __empty"; // 返回空的 SQL
 
-        var fields = string.IsNullOrWhiteSpace(options.SelectFields) ? "*" : options.SelectFields;
+        // 安全校验表名
+        if (!SqlSecurityHelper.IsValidIdentifier(options.TableName))
+            throw new ArgumentException($"非法的表名: {options.TableName}");
+
+        var fields = string.IsNullOrWhiteSpace(options.SelectFields) ? "*" :
+                     SqlSecurityHelper.ValidateSqlFragment(options.SelectFields, "SelectFields");
         var sql = new StringBuilder();
 
-        sql.Append($"SELECT {fields} FROM {options.TableName}");
+        sql.Append($"SELECT {fields} FROM {SqlSecurityHelper.EscapeIdentifier(options.TableName)}");
 
         if (!string.IsNullOrWhiteSpace(options.JoinClause))
-            sql.Append($" {options.JoinClause}");
+        {
+            var joinClause = SqlSecurityHelper.ValidateSqlFragment(options.JoinClause, "JoinClause");
+            sql.Append($" {joinClause}");
+        }
 
         AppendWhereClause(sql, options.Conditions);
 
         if (!string.IsNullOrWhiteSpace(options.SortField))
-            sql.Append($" ORDER BY {options.SortField} {options.SortDirection}");
+        {
+            var sortField = SqlSecurityHelper.IsValidIdentifier(options.SortField)
+                ? SqlSecurityHelper.EscapeIdentifier(options.SortField)
+                : throw new ArgumentException($"非法的排序字段: {options.SortField}");
+            sql.Append($" ORDER BY {sortField} {options.SortDirection}");
+        }
 
         // 处理 Top N
         if (options.Top.HasValue && options.Top.Value > 0)

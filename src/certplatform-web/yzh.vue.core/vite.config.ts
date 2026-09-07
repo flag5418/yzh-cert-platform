@@ -6,7 +6,8 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
-      '@yzh-core': resolve(__dirname, 'src')
+      '@yzh-core': resolve(__dirname, 'src'),
+      '@share': resolve(__dirname, '../share/src')
     }
   },
   build: {

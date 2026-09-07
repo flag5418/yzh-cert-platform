@@ -12,7 +12,7 @@ namespace YZH.Core.Api.Models;
 public class PageContext<T> where T : BaseEntity
 {
     /// <summary>页面配置</summary>
-    public GridConfig Config { get; set; } = null!;
+    public EntityConfig Config { get; set; } = null!;
 
     /// <summary>查询条件</summary>
     public RequestCondition[] Conditions { get; set; } = Array.Empty<RequestCondition>();

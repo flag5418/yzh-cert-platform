@@ -22,7 +22,7 @@ const columns: YzhTableColumn<SysUser>[] = [
   { prop: 'phoneNo', label: '手机号', width: 140 },
   { prop: 'email', label: '邮箱', width: 200 },
   { prop: 'createDate', label: '创建时间', width: 180 },
-  { prop: 'actions', label: '操作', width: 180, fixed: 'right', slot: 'actions' }
+  { prop: 'actions', label: '操作', width: 180, fixed: 'right', slot: true }
 ]
 
 const searchFields: SearchField[] = [

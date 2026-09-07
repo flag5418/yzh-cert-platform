@@ -7,51 +7,51 @@ using YZH.Core.Stand.Models;
 namespace YZH.Core.Api;
 
 [ApiController]
-[Route("api/gridconfig")]
-public class GridConfigController : ControllerBase
+[Route("api/entityconfig")]
+public class EntityConfigController : ControllerBase
 {
     private readonly IMemoryCache _cache;
     private readonly string _configsPath;
 
-    public GridConfigController(IMemoryCache cache, IWebHostEnvironment env)
+    public EntityConfigController(IMemoryCache cache, IWebHostEnvironment env)
     {
         _cache = cache;
-        _configsPath = System.IO.Path.Combine(env.ContentRootPath, "Assets", "GridConfigs");
+        _configsPath = System.IO.Path.Combine(env.ContentRootPath, "Assets", "EntityConfigs");
     }
 
     [HttpGet("{tableName}")]
     public IActionResult Get(string tableName)
     {
-        var cacheKey = $"gridconfig_{tableName}";
+        var cacheKey = $"entityconfig_{tableName}";
 
-        if (_cache.TryGetValue(cacheKey, out GridConfig? cached) && cached != null)
-            return Ok(ApiResponse<GridConfig>.Ok(cached));
+        if (_cache.TryGetValue(cacheKey, out EntityConfig? cached) && cached != null)
+            return Ok(ApiResponse<EntityConfig>.Ok(cached));
 
         var jsonPath = System.IO.Path.Combine(_configsPath, $"{tableName}.json");
         if (System.IO.File.Exists(jsonPath))
         {
             var json = System.IO.File.ReadAllText(jsonPath);
-            var config = System.Text.Json.JsonSerializer.Deserialize<GridConfig>(json,
+            var config = System.Text.Json.JsonSerializer.Deserialize<EntityConfig>(json,
                 new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (config != null)
             {
                 _cache.Set(cacheKey, config, TimeSpan.FromHours(24));
-                return Ok(ApiResponse<GridConfig>.Ok(config));
+                return Ok(ApiResponse<EntityConfig>.Ok(config));
             }
         }
 
-        return Ok(ApiResponse<GridConfig>.Fail($"未找到 {tableName} 的配置", 404));
+        return Ok(ApiResponse<EntityConfig>.Fail($"未找到 {tableName} 的配置", 404));
     }
 }
 
-public static class GridConfigLoader
+public static class EntityConfigLoader
 {
-    public static GridConfig FromXml(string xmlPath)
+    public static EntityConfig FromXml(string xmlPath)
     {
         var doc = System.Xml.Linq.XDocument.Load(xmlPath);
         var table = doc.Root;
-        var config = new GridConfig
+        var config = new EntityConfig
         {
             ConfigName = System.IO.Path.GetFileName(xmlPath),
             TableName = table?.Attribute("TableName")?.Value ?? string.Empty
