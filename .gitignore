@@ -1,4 +1,8 @@
-# Build results
+# ========================================================
+# 构建产物
+# ========================================================
+[Bb]in/
+[Oo]bj/
 [Dd]ebug/
 [Rr]elease/
 x64/
@@ -6,12 +10,15 @@ x86/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
 bld/
-[Bb]in/
-[Oo]bj/
 [Ll]og/
 [Ll]ogs/
+artifacts/
+TestResults/
+Coverage/
 
-# Visual Studio / Rider
+# ========================================================
+# IDE / 编辑器
+# ========================================================
 .vs/
 .idea/
 *.suo
@@ -21,57 +28,71 @@ bld/
 *.sln.iml
 *.v12.suo
 *.vssscc
+_ReSharper.Caches/
+**/_ReSharper.Caches/
 
-# VS Code (保留核心配置)
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
+# VS Code（全部忽略）
+.vscode/
 
-# NuGet
+# ========================================================
+# .NET / NuGet
+# ========================================================
 *.nupkg
 *.snupkg
 **/[Pp]ackages/*
 !**/[Pp]ackages/build/
-
-# .NET Core
 project.lock.json
 project.fragment.lock.json
-artifacts/
-TestResults/
-Coverage/
+.nuget/
 
-# Node
+# ========================================================
+# Node / npm
+# ========================================================
 node_modules/
+node_modules_link/
+.npm/
+.npmrc
+package-lock.json.bak
 */dist/
 .vite-cache/
 
-# Docker 运行时数据（不纳入版本控制）
+# Vue 前端构建产物
+src/certplatform-web/admin/dist/
+src/certplatform-web/auditor/dist/
+src/certplatform-web/share/dist/
+src/certplatform-web/yzh.vue.core/dist/
+src/server/Vue.NetCore/vol.web/dist/
+
+# ========================================================
+# AI 工具缓存
+# ========================================================
+.agnes/
+.dotnet-cli/
+.freebuff/
+.playwright-mcp/
+.workbuddy-ai/
+
+# ========================================================
+# Docker 运行时数据
+# ========================================================
 docker/data/
 docker/*/data/
 docker/libreoffice/tmp/
 docker/anydoc/tmp/
 
+# ========================================================
 # 环境变量（含敏感信息）
+# ========================================================
 .env
 .env.local
 .env.*.local
 !.env.example
 
-# 日志
+# ========================================================
+# 日志 / 临时文件
+# ========================================================
 logs/
 *.log
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-venv/
-.venv/
-*.egg-info/
-
-# 临时文件
 *.tmp
 *.bak
 *.backup
@@ -79,112 +100,57 @@ venv/
 .swp
 .swo
 
+# ========================================================
 # OS
+# ========================================================
 .DS_Store
 .DS_Store?
 ._*
 Thumbs.db
 Desktop.ini
 
-# 框架自动生成文件
-ScaffoldingReadMe.txt
-
-# 文档草稿/临时
-*.doc
-*.docx
-*.xlsx
-!docs/**/*.docx
-!docs/**/*.xlsx
-
-# 压缩包
-*.zip
-!docs/**/*.zip
-
-# SQLite
+# ========================================================
+# 私密凭据
+# ========================================================
+*.pem
+*.key
+*.pfx
+*.snk
 *.db
 *.db-shm
 *.db-wal
 *.sqlite
 *.sqlite3
 
-# 私密凭据
-*.pem
-*.key
-*.pfx
-*.snk
-
-# 关键信息速查（含密码/Token）
+# ========================================================
+# 敏感配置
+# ========================================================
 关键信息速查.md
-
-# API Key / 敏感配置文件（CSV/JSON 含密钥）
 docs/**/*.csv
 !docs/**/*.example.csv
-
-# 应用配置文件（含数据库连接串/密钥）
-# Vue.NetCore 已纳入主仓库管理，配置文件含敏感信息需排除
 **/appsettings.json
 **/appsettings.Development.json
 **/appsettings.Production.json
 **/launchSettings.json
 
-# JetBrains IDE
-.idea/
-
-# VS Code 个人配置（保留共享配置）
-.vscode/launch.json
-
-# === Vue.NetCore (.NET 后端) 构建产物 ===
-_ReSharper.Caches/
-**/_ReSharper.Caches/
-# 上传文件目录（运行时数据）
+# ========================================================
+# Vue.NetCore 运行时数据
+# ========================================================
 **/wwwroot/Upload/
 **/Upload/
-# 下载/日志临时目录
 **/Download/ExcelExport/
 **/Download/Logger/
 **/Download/SqlLog/
-# 发布配置
 **/Properties/PublishProfiles/
-# vol.web 前端构建产物
-src/server/Vue.NetCore/vol.web/dist/
 
-# Agnes AI 工具缓存
-.agnes/
-
-# .dotnet-cli 工具缓存
-.dotnet-cli/
-
-# FreeBuff AI 工具
-.freebuff/
-
-# Playwright MCP
-.playwright-mcp/
-
-# WorkBuddy AI
-.workbuddy-ai/
-
-# VS Code（全部忽略，不保留共享配置）
-.vscode/
-
-# Vue 前端构建产物
-src/certplatform-web/admin/dist/
-src/certplatform-web/auditor/dist/
-src/certplatform-web/share/dist/
-src/certplatform-web/yzh.vue.core/dist/
-
-# npm 缓存
-.npm/
-.npmrc
-package-lock.json.bak
-
-# Node 依赖
-node_modules/
-node_modules_link/
-
-# C# 项目 bin/obj 文件夹（递归）
-**/bin/
-**/obj/
-
-# .NET 用户级缓存
-.nuget/
-*.nupkg
+# ========================================================
+# 其他
+# ========================================================
+ScaffoldingReadMe.txt
+*.doc
+*.docx
+*.xlsx
+!docs/**/*.docx
+!docs/**/*.xlsx
+*.zip
+!docs/**/*.zip
