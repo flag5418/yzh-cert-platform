@@ -147,3 +147,9 @@ _ReSharper.Caches/
 **/Properties/PublishProfiles/
 # vol.web 前端构建产物
 src/server/Vue.NetCore/vol.web/dist/
+
+# Agnes AI 工具缓存
+.agnes/
+
+# .dotnet-cli 工具缓存
+.dotnet-cli/
