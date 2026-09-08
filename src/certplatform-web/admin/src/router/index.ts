@@ -19,6 +19,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'system/user', name: 'SystemUser', component: () => import('@/pages/system/user/index.vue') },
       { path: 'system/role', name: 'SystemRole', component: () => import('@/pages/system/role/index.vue') },
       { path: 'system/dept', name: 'SystemDept', component: () => import('@/pages/system/dept/index.vue') },
+      { path: 'system/org', name: 'SystemOrg', component: () => import('@/pages/system/org/index.vue') },
       { path: 'system/dict', name: 'SystemDict', component: () => import('@/pages/system/dict/index.vue') },
       { path: 'system/menu', name: 'SystemMenu', component: () => import('@/pages/system/menu/index.vue') },
       { path: 'system/log', name: 'SystemLog', component: () => import('@/pages/system/log/index.vue') },

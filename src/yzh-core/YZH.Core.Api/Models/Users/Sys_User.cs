@@ -58,6 +58,14 @@ public class Sys_User : BaseEntity
     [Display(Name = "性别")]
     public int? Gender { get; set; }
 
+    /// <summary>性别描述（视图字段，OnQueried 中翻译）</summary>
+    [NotMapped]
+    public string? GenderDesc { get; set; }
+
+    /// <summary>启用状态描述（视图字段，OnQueried 中翻译）</summary>
+    [NotMapped]
+    public string? EnableDesc { get; set; }
+
     /// <summary>手机号</summary>
     [StringLength(11)]
     [Display(Name = "手机号")]
@@ -76,6 +84,12 @@ public class Sys_User : BaseEntity
     /// <summary>地址</summary>
     [StringLength(200)]
     public string? Address { get; set; }
+
+    /// <summary>所属机构编码（关联 Sys_Organization.Code，用于组织-人员联动过滤）</summary>
+    [StringLength(64)]
+    [Display(Name = "所属机构")]
+    [Column("org_code")]
+    public string? OrgCode { get; set; }
 
     /// <summary>备注</summary>
     [StringLength(200)]

@@ -90,17 +90,6 @@ function handleAdd() {
   logic.openAddDialog(parentNode)
 }
 
-// 删除选中节点
-async function handleDelete() {
-  if (!logic.selectedNode.value) {
-    ElMessage.warning('请先选择要删除的节点')
-    return
-  }
-  const node = logic.selectedNode.value
-  await logic.handleDelete(node)
-  ElMessage.success('删除成功')
-}
-
 // 刷新树+表格
 async function handleRefresh() {
   await logic.initTree()
@@ -188,7 +177,7 @@ onMounted(async () => {
             :data-loader="loadTableData"
             :search-fields="searchFields"
             :selectable="true"
-            :show-pagination="true"
+            :show-pagination="!logic.selectedNode.value"
             :no-padding="true"
             @selection-change="handleSelectionChange"
           >

@@ -8,6 +8,7 @@ export { YzhForm } from './components/form'
 export type { YzhFormField, YzhFieldType } from './components/form/YzhForm.vue'
 export { YzhSearchBar, YzhToolbar, YzhPagination, YzhPageLayout, YzhDialog } from './components/layout'
 export { YzhEmptyState, YzhStatusBadge, YzhCard } from './components/ui'
+export { default as YzhCrudPage } from './components/page/YzhCrudPage.vue'
 
 // API
 export { YzhApiClient, yzhApi, tokenStore } from './api/client'
@@ -20,6 +21,9 @@ export { useAuth } from './composables/useAuth'
 
 // Types
 export * from './types'
+
+// Logic（页面逻辑基类 - Config 驱动渲染的核心，从 share 导出）
+export { CrudPageLogic, TreeTableLogic } from '@share/logic'
 
 // Utils
 export { default as http, type ApiResponse as HttpApiResponse, type LoginData } from './utils/http'

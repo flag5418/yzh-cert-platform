@@ -59,7 +59,16 @@ public interface IDbOrm
     /// <summary>执行 SQL 查询（返回强类型）</summary>
     Task<Result<List<T>>> SqlQueryAsync<T>(string sql, object? param = null) where T : class;
 
-    /// <summary>执行 SQL 命令（INSERT/UPDATE/DELETE）</summary>
+    /// <summary>
+    ///     执行 SQL 查询并返回单条记录（强类型 + 参数化）
+    ///     内部调用 Dapper 的 QueryFirstOrDefaultAsync，天然支持参数化防注入
+    /// </summary>
+    Task<Result<T?>> QueryFirstOrDefaultAsync<T>(string sql, object? param = null) where T : class;
+
+    /// <summary>
+    ///     执行 SQL 命令（INSERT/UPDATE/DELETE）
+    ///     内部调用 Dapper 的 ExecuteAsync，天然支持参数化防注入
+    /// </summary>
     Task<Result<int>> SqlExecuteAsync(string sql, object? param = null);
 
     /// <summary>执行标量查询</summary>

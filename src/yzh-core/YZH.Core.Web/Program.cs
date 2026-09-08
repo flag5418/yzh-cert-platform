@@ -15,6 +15,8 @@ using YZH.Core.Api.Middleware;
 using YZH.Core.Api.Services;
 using YZH.Core.DataBase;
 using YZH.Core.DataBase.NoSql;
+using YZH.Core.Api.Attributes;
+using YZH.Core.Stand.Helpers;
 using YZH.Core.Web.Middlewares;
 
 namespace YZH.Core.Web;
@@ -42,6 +44,9 @@ public static class Program
             
             // 注册审计过滤器
             options.Filters.Add<YzhAuditingFilter>();
+            
+            // 注册 YZH 认证过滤器（SSO 校验 + Token 续租）
+            options.Filters.AddService<YzhAuthFilter>();
         });
         
         // 配置 JWT 认证
@@ -96,6 +101,19 @@ public static class Program
         
         // 注册 YZH Core 服务
         builder.UseYzhCore();
+
+        // 注册 Token 版本服务（SSO 挤号）
+        builder.Services.AddScoped<TokenVersionService>();
+
+        // 配置授权策略（认证特性使用）
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddPolicy("YZHAuthorizePolicy", policy =>
+            {
+                policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                policy.RequireAuthenticatedUser();
+            });
+        });
         
         var app = builder.Build();
         
@@ -127,7 +145,7 @@ public static class Program
             {
                 ValidateIssuer = true,
                 ValidateAudience = true,
-                ValidateLifetime = true,
+                ValidateLifetime = true, // Token 用于生产环境启用过期校验
                 ValidateIssuerSigningKey = true,
                 ValidIssuer = issuer,
                 ValidAudience = audience,

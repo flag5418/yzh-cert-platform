@@ -41,7 +41,8 @@ AIGC:
 - **Vol 框架指南**：`docs/60-AI工程设计/vol-skill.md`（**已弃用，仅供历史参考**）
 - **前端架构总纲（V4）**：`docs/00-工程体系/前端架构设计-V1.md`（原子化组件 + CrudPageLogic 基类 + 后端驱动 UI）
 - **树形结构设计（V2）**：`docs/00-工程体系/树形结构设计-V2.md`（统一 TreeNode 虚拟结构 + treeUtils/treeOps 工具集 + TreeTableLogic 基类 + ActionPipeline + 后端 TreeControllerBase）
-- **TreeTable 架构设计**：`docs/20-架构决策/TreeTableController-架构设计-V1.md`（左树右表架构、前后端协议、同构/异构树设计、Vol TreeTable 适配）
+- **TreeTable 架构设计（最新）**：`docs/20-架构决策/左树右表统一架构设计-V1.md`（← **V1 强制规范**：统一控制器体系 YzhControllerBase + TreeTableControllerBase、配置驱动 UI（EntityConfig + TreeConfig）、统一 API（config/page/add/update/delete/tree/*）、前端 Logic 基类、开发约束清单）
+- **TreeTable 架构设计（旧版参考）**：`docs/20-架构决策/TreeTableController-架构设计-V1.md`（← 已被上方 V1 替代，仅历史参考）
 - **架构迁移指南**：`docs/60-工程设计/YZH-知识库/10-架构迁移指南-V1.md`（从旧 vol.web 迁移到 certplatform-web 的步骤）
 - **编码规范**：`docs/60-AI工程设计/vol-csharp-coding-standards.md`（C#）、`docs/60-AI工程设计/vue-ts-coding-standards.md`（Vue3+TS）
 - **脚本规范**：`scripts/README.md`（backend/db/frontend/storage/generate/tools 子目录）

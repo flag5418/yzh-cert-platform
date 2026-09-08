@@ -24,8 +24,10 @@ public class DapperDbOrm : IDbOrm
     public DapperDbOrm(IConfiguration configuration, ILogger<DapperDbOrm> logger)
     {
         _logger = logger;
-        _connectionString = configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException("缺少数据库连接字符串: DefaultConnection");
+        // 优先 CertPlatform，兼容 DefaultConnection
+        _connectionString = configuration.GetConnectionString("CertPlatform")
+            ?? configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException("缺少数据库连接字符串: CertPlatform 或 DefaultConnection");
         _dialect = DatabaseDialectFactory.Create(DatabaseTypeDetector.Detect(_connectionString));
     }
 
@@ -71,14 +73,15 @@ public class DapperDbOrm : IDbOrm
     {
         try
         {
-            var sql = BuildBaseSql(options);
+            var parameters = new DynamicParameters();
+            var sql = BuildBaseSql(options, parameters);
             var countSql = _dialect.BuildCountSql(sql);
             
             using var connection = CreateConnection();
-            var total = await connection.ExecuteScalarAsync<int>(countSql);
+            var total = await connection.ExecuteScalarAsync<int>(countSql, parameters);
             
             var pageSql = BuildPagedSql(sql, options);
-            var items = (await connection.QueryAsync<T>(pageSql)).ToList();
+            var items = (await connection.QueryAsync<T>(pageSql, parameters)).ToList();
             
             return Result<(List<T>, int)>.Ok((items, total));
         }
@@ -363,13 +366,29 @@ public class DapperDbOrm : IDbOrm
         try
         {
             using var connection = CreateConnection();
-            var result = await connection.QueryFirstOrDefaultAsync<T>(sql, param);
+            var result = await connection.ExecuteScalarAsync<T>(sql, param);
             return Result<T?>.Ok(result);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "SqlScalarAsync 失败");
             return Result<T?>.Fail($"SQL 标量查询失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>执行 SQL 查询并返回单条记录（强类型 + 参数化）</summary>
+    public async Task<Result<T?>> QueryFirstOrDefaultAsync<T>(string sql, object? param = null) where T : class
+    {
+        try
+        {
+            using var connection = CreateConnection();
+            var result = await connection.QueryFirstOrDefaultAsync<T>(sql, param);
+            return Result<T?>.Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "QueryFirstOrDefaultAsync 失败，Type={Type}", typeof(T).Name);
+            return Result<T?>.Fail($"查询失败：{ex.Message}");
         }
     }
 
@@ -406,7 +425,11 @@ public class DapperDbOrm : IDbOrm
             .ToList();
     }
 
-    private static string BuildBaseSql(SqlPageOptions options)
+    /// <summary>
+    ///     构建基础 SQL 查询（不含分页 LIMIT）
+    ///     同时填充 DynamicParameters 供 Dapper 参数化使用
+    /// </summary>
+    private static string BuildBaseSql(SqlPageOptions options, DynamicParameters parameters)
     {
         var sql = new StringBuilder();
         var fields = string.IsNullOrWhiteSpace(options.SelectFields) ? "*" : options.SelectFields;
@@ -419,7 +442,7 @@ public class DapperDbOrm : IDbOrm
         // 添加软删除过滤
         sql.Append(" WHERE IsDeleted = 0");
         
-        AppendWhereClause(sql, options.Conditions);
+        AppendWhereClause(sql, options.Conditions, parameters);
         
         if (!string.IsNullOrWhiteSpace(options.GroupBy))
             sql.Append($" GROUP BY {SqlSecurityHelper.ValidateSqlFragment(options.GroupBy, "GroupBy")}");
@@ -445,13 +468,48 @@ public class DapperDbOrm : IDbOrm
         return $"{baseSql} LIMIT {options.PageSize} OFFSET {offset}";
     }
 
-    private static void AppendWhereClause(StringBuilder sql, SqlCondition[]? conditions)
+    /// <summary>
+    ///     拼接 WHERE 条件子句（不含 WHERE 关键字）
+    ///     支持的操作符：=, !=, &gt;, &gt;=, &lt;, &lt;=, LIKE, IN, IS NULL, IS NOT NULL
+    ///     所有值通过 Dapper 参数化传递，防止 SQL 注入
+    /// </summary>
+    private static void AppendWhereClause(StringBuilder sql, SqlCondition[]? conditions, DynamicParameters parameters)
     {
         if (conditions == null || conditions.Length == 0) return;
         
         sql.Append(" AND (");
-        var clauses = conditions.Select(c => 
-            $"{SqlSecurityHelper.EscapeIdentifier(c.Field)} {c.Operator} @{c.Field}");
+        var clauses = new List<string>();
+        for (int i = 0; i < conditions.Length; i++)
+        {
+            var c = conditions[i];
+            var paramName = $"_c{i}_{c.Field}"; // 带索引前缀，避免参数名冲突
+            
+            if (c.Operator.Equals("IS NULL", StringComparison.OrdinalIgnoreCase) ||
+                c.Operator.Equals("IS NOT NULL", StringComparison.OrdinalIgnoreCase))
+            {
+                // IS NULL / IS NOT NULL 不需要参数
+                clauses.Add($"{SqlSecurityHelper.EscapeIdentifier(c.Field)} {c.Operator}");
+            }
+            else if (c.Operator.Equals("IN", StringComparison.OrdinalIgnoreCase) && c.Value is IEnumerable<object> values && c.Value is not string)
+            {
+                // IN 操作符：展开为多个参数
+                var inParams = new List<string>();
+                int j = 0;
+                foreach (var val in values)
+                {
+                    var inParamName = $"_in{i}_{j}_{c.Field}";
+                    inParams.Add($"@{inParamName}");
+                    parameters.Add(inParamName, val);
+                    j++;
+                }
+                clauses.Add($"{SqlSecurityHelper.EscapeIdentifier(c.Field)} IN ({string.Join(", ", inParams)})");
+            }
+            else
+            {
+                clauses.Add($"{SqlSecurityHelper.EscapeIdentifier(c.Field)} {c.Operator} @{paramName}");
+                parameters.Add(paramName, c.Value);
+            }
+        }
         sql.Append(string.Join(" AND ", clauses));
         sql.Append(")");
     }

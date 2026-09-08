@@ -96,11 +96,15 @@ public class EntityService<T> where T : class
         }
     }
 
-    /// <summary>分页查询</summary>
+    /// <summary>分页查询（使用 FilterOperation 安全解析 FilterItem → SqlCondition）</summary>
     public virtual async Task<Result<PagedResult<T>>> GetPageAsync(PagerOptions options, bool includeDeleted = false)
     {
         try
         {
+            // 使用 FilterOperation 安全解析 FilterItem → SqlCondition
+            // 自动处理操作符映射（eq→=, like→LIKE）、值处理（like 添加 % 通配符）、字段名安全校验
+            var conditions = FilterOperation.ParseList(options.Filters);
+
             var sqlOptions = new YZH.Core.DataBase.Sql.SqlPageOptions
             {
                 TableName = typeof(T).Name,
@@ -108,12 +112,7 @@ public class EntityService<T> where T : class
                 PageSize = options.PageSize,
                 SortField = options.SortBy,
                 SortDirection = options.SortDirection ?? "ASC",
-                Conditions = options.Filters?.Select(f => new YZH.Core.DataBase.Sql.SqlCondition
-                {
-                    Field = f.Field,
-                    Operator = f.Operator,
-                    Value = f.Value
-                }).ToArray()
+                Conditions = conditions.ToArray()
             };
             
             var result = await _dbOrm.GetPageAsync<T>(sqlOptions);
@@ -121,6 +120,11 @@ public class EntityService<T> where T : class
             
             var data = result.Data!;
             return Result<PagedResult<T>>.Ok(new PagedResult<T>(data.items, data.total, options.Page, options.PageSize));
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "GetPage 参数错误，Type={Type}", typeof(T).Name);
+            return Result<PagedResult<T>>.Fail($"查询参数错误：{ex.Message}");
         }
         catch (Exception ex)
         {
@@ -585,4 +589,35 @@ public class ChildrenCountRow
 {
     public string ParentCode { get; set; } = string.Empty;
     public int Cnt { get; set; }
+}
+
+// ==================== 树形扩展方法 ====================
+
+/// <summary>
+///     实体服务的树形扩展方法
+///     提供 GetRootNodes / GetChildren / GetChildrenCount 等树操作
+/// </summary>
+public static class TreeEntityExtensions
+{
+    /// <summary>获取根节点列表（ParentCode 为 null 或 rootParentCode 的节点）</summary>
+    public static async Task<List<T>> GetRootNodes<T>(this EntityService<T> service, string? rootParentCode = null)
+        where T : class, ITreeEntity, new()
+    {
+        return await service.GetViewList(rootParentCode ?? null);
+    }
+
+    /// <summary>获取指定父节点的直接子级</summary>
+    public static async Task<List<T>> GetChildren<T>(this EntityService<T> service, string parentCode)
+        where T : class, ITreeEntity, new()
+    {
+        return await service.GetViewList(parentCode);
+    }
+
+    /// <summary>获取指定父节点的子节点数量</summary>
+    public static async Task<int> GetChildrenCount<T>(this EntityService<T> service, string parentCode)
+        where T : class, ITreeEntity, new()
+    {
+        var counts = await service.GetChildrenCountBatch(new List<string> { parentCode });
+        return counts.GetValueOrDefault(parentCode, 0);
+    }
 }

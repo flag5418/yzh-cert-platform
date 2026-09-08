@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Models.Users;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Models;
 
-namespace YZH.Core.Api.Controllers;
+namespace YZH.Core.Web.Controllers;
 
 /// <summary>
 ///     用户管理控制器（新架构版）
@@ -86,13 +87,13 @@ public class SysUserController : YzhControllerBase<Sys_User>
     #region 新增钩子
 
     /// <summary>新增前处理 - 校验账号唯一性、加密密码</summary>
-    protected override async Task OnBeforeAdd(Sys_User entity)
+    protected override async Task<(bool ok, string? msg)> OnBeforeAdd(Sys_User entity)
     {
         // 校验账号唯一性
         var result = await Entity.ExistsByCodeAsync(entity.UserName);
         if (result.Data == true)
         {
-            throw new InvalidOperationException($"账号 {entity.UserName} 已存在");
+            return (false, $"账号 {entity.UserName} 已存在");
         }
 
         // 加密密码（默认密码 123456）
@@ -101,6 +102,7 @@ public class SysUserController : YzhControllerBase<Sys_User>
 
         // 默认启用
         entity.Enable = 1;
+        return (true, null);
     }
 
     #endregion
@@ -108,14 +110,14 @@ public class SysUserController : YzhControllerBase<Sys_User>
     #region 修改钩子
 
     /// <summary>修改前处理 - 如果传了新密码则加密</summary>
-    protected override Task OnBeforeUpdate(Sys_User entity)
+    protected override Task<(bool ok, string? msg)> OnBeforeUpdate(Sys_User entity)
     {
         // 如果传了新密码（长度 < 50 认为是明文），则加密
         if (!string.IsNullOrEmpty(entity.UserPwd) && entity.UserPwd.Length < 50)
         {
             entity.UserPwd = _passwordHelper.AesEncrypt(entity.UserPwd);
         }
-        return Task.CompletedTask;
+        return Task.FromResult<(bool, string?)>((true, null));
     }
 
     #endregion

@@ -1,10 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Models;
 using YZH.Entity.DomainModels;
 
-namespace YZH.Core.Api.Controllers;
+namespace YZH.Core.Web.Controllers;
 
 /// <summary>
 ///     角色管理控制器（新架构版）
@@ -47,17 +48,18 @@ public class SysRoleController : YzhControllerBase<Sys_Role>
     #region 新增钩子
 
     /// <summary>新增前处理 - 校验编码唯一性</summary>
-    protected override async Task OnBeforeAdd(Sys_Role entity)
+    protected override async Task<(bool ok, string? msg)> OnBeforeAdd(Sys_Role entity)
     {
         // 校验编码唯一性
         var result = await Entity.ExistsByCodeAsync(entity.Code);
         if (result.Data == true)
         {
-            throw new InvalidOperationException($"角色编码 {entity.Code} 已存在");
+            return (false, $"角色编码 {entity.Code} 已存在");
         }
 
         // 设置默认启用
         entity.Enable = 1;
+        return (true, null);
     }
 
     #endregion
@@ -65,14 +67,15 @@ public class SysRoleController : YzhControllerBase<Sys_Role>
     #region 修改钩子
 
     /// <summary>修改前处理</summary>
-    protected override async Task OnBeforeUpdate(Sys_Role entity)
+    protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(Sys_Role entity)
     {
         // 校验编码唯一性（排除自身）
         var result = await Entity.ExistsByCodeAsync(entity.Code);
         if (result.Data == true)
         {
-            throw new InvalidOperationException($"角色编码 {entity.Code} 已存在");
+            return (false, $"角色编码 {entity.Code} 已存在");
         }
+        return (true, null);
     }
 
     #endregion

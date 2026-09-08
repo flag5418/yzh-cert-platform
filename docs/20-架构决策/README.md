@@ -32,6 +32,8 @@ AIGC:
 | YZH-Framework架构设计评审报告-V1.md | YZH-Framework 架构设计评审分析 | 成熟态 |
 | cert_phase2_implementation_summary.md | Phase 2 实施总结 | 成熟态 |
 | Ape.Volo与Vol及YZH-Core架构对比分析-V1.md | **三架构对比分析**：Ape.Volo / Vol / YZH.Core.Web 的 ORM/实体/Repository/Controller/AOP/响应模型全维度对比 + 建设建议 | 成熟态 |
+| 左树右表统一架构设计-V1.md | **左树右表统一架构（V1，强制）**：前后端统一控制器（YzhControllerBase + TreeTableControllerBase）、配置驱动 UI（EntityConfig + TreeConfig）、统一 API 契约、前端 Logic 基类（CrudPageLogic + TreeTableLogic）、消除双调用机制、开发约束清单 | 已定稿 V1.0 |
+| 组织与权限架构设计-V4.md | **组织与权限架构（V4，草案）**：分层架构（通用系统层 + 体系认证业务层）、机构类型即角色类型、attach 视图即权限基础 | 草案 V4.0 |
 
 > 注：功能细节设计（标准目录、文档提取、Office 转换、队列、工作流、审核端前端等）已移至 `80-功能设计/`，本目录不再存放功能细节。
 

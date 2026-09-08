@@ -17,7 +17,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\CertPlatform.Shared\CertPlatform.Shared.csproj" />
+    <ProjectReference Include="..\..\yzh-core\YZH.Core.Api\YZH.Core.Api.csproj" />
+    <ProjectReference Include="..\..\yzh-core\YZH.Core.DataBase\YZH.Core.DataBase.csproj" />
+    <ProjectReference Include="..\CertPlatform.Shared\CertPlatform.Shared.csproj">
+      <Aliases>SharedEntities</Aliases>
+    </ProjectReference>
   </ItemGroup>
 
 </Project>

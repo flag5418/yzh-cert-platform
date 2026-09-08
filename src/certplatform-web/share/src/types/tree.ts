@@ -246,18 +246,12 @@ export interface TreePatch<T = any> {
 
 /**
  * 后端树节点 DTO（接口响应项）
+ * 从 contracts 导入，保持单一来源
  */
-export interface TreeItemDto {
-  code: string
-  name: string
-  parentCode: string | null
-  nodeType?: string
-  isLeaf?: boolean
-  sort?: number
-  extra?: Record<string, any>
-  /** 子节点（全量加载时内嵌） */
-  children?: TreeItemDto[]
-}
+import type { TreeItemDto } from './contracts'
+
+// 重新导出以保持向后兼容
+export type { TreeItemDto }
 
 /**
  * 懒加载请求参数

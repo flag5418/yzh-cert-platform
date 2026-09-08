@@ -286,7 +286,7 @@ defineExpose({
 .yzh-tree__inner {
   flex: 1;
   overflow: auto;
-  padding: 4px 0;
+  padding: 16px;
 }
 
 .yzh-tree__node {

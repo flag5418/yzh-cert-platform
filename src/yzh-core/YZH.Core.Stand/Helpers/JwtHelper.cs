@@ -13,6 +13,16 @@ public record JwtOptions
     public string Audience { get; init; } = "yzh-app";
     public string SecretKey { get; init; } = string.Empty;
     public int ExpirationMinutes { get; init; } = 43200; // 30天
+    
+    /// <summary>
+    ///     Token 续租阈值（分钟），剩余有效期低于此值时自动续租
+    /// </summary>
+    public int RenewThresholdMinutes { get; init; } = 30;
+
+    /// <summary>
+    ///     续租后 Token 有效期（分钟），默认 7 天
+    /// </summary>
+    public int RenewExpirationMinutes { get; init; } = 10080; // 7天
 }
 
 /// <summary>JWT 工具 - 生成/解析/验证 Token</summary>
@@ -23,8 +33,16 @@ public class JwtHelper
     public JwtHelper(IOptions<JwtOptions> options) : this(options.Value) { }
     public JwtHelper(JwtOptions options) { _options = options; }
 
-    /// <summary>生成 JWT Token（Code 版）</summary>
-    public string GenerateToken(string userCode, string userName, IEnumerable<string>? roleCodes = null, TimeSpan? expiration = null)
+    /// <summary>
+    ///     生成 JWT Token（含 SSO 版本号）
+    /// </summary>
+    /// <param name="userCode">用户业务代码</param>
+    /// <param name="userName">用户名</param>
+    /// <param name="roleCodes">角色列表</param>
+    /// <param name="tokenVersion">SSO 版本号（由 TokenVersionService 生成，新登录时递增）</param>
+    /// <param name="expiration">有效期</param>
+    public string GenerateToken(string userCode, string userName, IEnumerable<string>? roleCodes = null,
+        string? tokenVersion = null, TimeSpan? expiration = null)
     {
         var expireTime = DateTime.UtcNow.Add(expiration ?? TimeSpan.FromMinutes(_options.ExpirationMinutes));
 
@@ -39,6 +57,10 @@ public class JwtHelper
             new(ClaimTypes.Name, userName),
             new("code", userCode)
         };
+
+        // SSO 版本号（用于挤号校验）
+        if (!string.IsNullOrEmpty(tokenVersion))
+            claims.Add(new Claim("ver", tokenVersion));
 
         // 角色 Codes（支持多角色）
         if (roleCodes != null)
@@ -57,6 +79,14 @@ public class JwtHelper
             signingCredentials: creds);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    /// <summary>
+    ///     续租 Token（延长有效期，保持 SSO 版本号不变）
+    /// </summary>
+    public string RenewToken(string userCode, string userName, IEnumerable<string> roles, string tokenVersion, TimeSpan? expiration = null)
+    {
+        return GenerateToken(userCode, userName, roles, tokenVersion, expiration);
     }
 
     /// <summary>解析 Token</summary>

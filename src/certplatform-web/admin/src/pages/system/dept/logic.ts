@@ -24,7 +24,7 @@ import { TreeTableLogic } from '@share/logic'
 import type { TreeNode, TreeConfig } from '@share/types/tree'
 import { treeOps } from '@share/utils/treeOps'
 import type { SysDept, DeptTreeNode } from '@share/api/system-dept'
-import { getDeptRootNodes, getDeptChildren, getDeptPage, addDept, updateDept, deleteDept } from '@share/api/system-dept'
+import { getDeptRootNodes, getDeptChildren, addDept, updateDept, deleteDept } from '@share/api/system-dept'
 
 // ========================================================
 // 配置
@@ -222,44 +222,76 @@ export class DeptTreeLogic extends TreeTableLogic<SysDept> {
   // 表格数据加载
   // ========================================================
 
-  /** 带树条件的分页查询 */
+  /**
+   * 加载指定节点的子节点作为表格数据（无分页）
+   * 后端 getTreeTableChildrenData 只返回直接子节点
+   */
   async loadDataWithTreeCondition(node: TreeNode): Promise<void> {
     this.loading.value = true
     try {
-      const res = await getDeptPage({
-        page: this.pagination.page,
-        rows: this.pagination.pageSize,
-        parentId: node.code
-      })
-      this.rows.value = res.rows
-      this.pagination.total = res.total
+      const children = await getDeptChildren(node.code)
+      this.rows.value = children.map(d => this.nodeToRow(d))
+      // 选中节点时：子节点数量小，禁用分页
+      this.pagination.total = this.rows.value.length
     } finally {
       this.loading.value = false
     }
   }
 
-  /** 不带树条件的查询 */
+  /** 加载根节点数据（无选中节点时） */
   async loadData(): Promise<void> {
     this.loading.value = true
     try {
-      const res = await getDeptPage({
-        page: this.pagination.page,
-        rows: this.pagination.pageSize
-      })
-      this.rows.value = res.rows
-      this.pagination.total = res.total
+      const roots = await getDeptRootNodes()
+      this.rows.value = roots.map(d => this.nodeToRow(d))
+      this.pagination.total = this.rows.value.length
     } finally {
       this.loading.value = false
     }
   }
 
-  /** 刷新当前表格（保持当前选中节点和分页） */
+  /** 刷新当前表格（保持当前选中节点） */
   async refreshTable(): Promise<void> {
     if (this.selectedNode.value) {
       await this.loadDataWithTreeCondition(this.selectedNode.value)
     } else {
       await this.loadData()
     }
+  }
+
+  /** TreeNode DTO → 表格行（统一字段映射） */
+  private nodeToRow(d: DeptTreeNode): SysDept {
+    return {
+      departmentId: d.departmentId,
+      departmentName: d.departmentName,
+      departmentCode: d.departmentCode,
+      parentId: d.parentId,
+      enable: d.enable,
+      remark: d.remark
+    }
+  }
+
+  /** 从 rows 中移除指定 code 的行（split 方法） */
+  private removeRowByCode(code: string): void {
+    const idx = this.rows.value.findIndex(r => r.departmentId === code)
+    if (idx >= 0) {
+      this.rows.value.splice(idx, 1)
+      this.pagination.total = Math.max(0, this.pagination.total - 1)
+    }
+  }
+
+  /** 替换 rows 中指定 code 的行（用于编辑后更新） */
+  private replaceRowByCode(code: string, newRow: SysDept): void {
+    const idx = this.rows.value.findIndex(r => r.departmentId === code)
+    if (idx >= 0) {
+      this.rows.value.splice(idx, 1, newRow)
+    }
+  }
+
+  /** 在 rows 中插入新行（用于新增） */
+  private insertRow(row: SysDept): void {
+    this.rows.value.unshift(row)
+    this.pagination.total = this.pagination.total + 1
   }
 
   // ========================================================
@@ -317,14 +349,30 @@ export class DeptTreeLogic extends TreeTableLogic<SysDept> {
       newNode
     )
 
-    // ★ 局部刷新：如果当前选中节点是新增节点的父节点，刷新表格
+    // ★ Split 方法：直接往 rows 插入新行
     const parentCode = this.parentNodeForAdd.value?.code ?? null
     const selectedCode = this.selectedNode.value?.code ?? null
-    if (parentCode === selectedCode) {
-      await this.loadDataWithTreeCondition(this.selectedNode.value!)
+    if (parentCode === selectedCode && this.selectedNode.value) {
+      this.insertRow({
+        departmentId: saved.departmentId ?? '',
+        departmentName: this.addForm.departmentName,
+        departmentCode: this.addForm.departmentCode,
+        parentId: data.parentId,
+        departmentType: this.addForm.departmentType,
+        enable: this.addForm.enable,
+        remark: this.addForm.remark
+      })
     } else if (parentCode === null && selectedCode === null) {
-      // 新增根节点且当前无选中
-      await this.loadData()
+      // 新增根节点且当前无选中：插入根行
+      this.insertRow({
+        departmentId: saved.departmentId ?? '',
+        departmentName: this.addForm.departmentName,
+        departmentCode: this.addForm.departmentCode,
+        parentId: undefined,
+        departmentType: this.addForm.departmentType,
+        enable: this.addForm.enable,
+        remark: this.addForm.remark
+      })
     }
 
     this.showAddDialog.value = false
@@ -380,10 +428,16 @@ export class DeptTreeLogic extends TreeTableLogic<SysDept> {
       }
     )
 
-    // ★ 局部刷新表格
-    if (this.selectedNode.value) {
-      await this.loadDataWithTreeCondition(this.selectedNode.value)
-    }
+    // ★ Split 方法：直接替换 rows 中的行
+    this.replaceRowByCode(this.editForm.departmentId, {
+      departmentId: this.editForm.departmentId,
+      departmentName: this.editForm.departmentName,
+      departmentCode: this.editForm.departmentCode,
+      parentId: this.editingNode.value.parentCode ?? undefined,
+      departmentType: this.editForm.departmentType,
+      enable: this.editForm.enable,
+      remark: this.editForm.remark
+    })
 
     this.showEditDialog.value = false
     this.editingNode.value = null
@@ -414,13 +468,14 @@ export class DeptTreeLogic extends TreeTableLogic<SysDept> {
     const { tree } = treeOps.removeSubtree(this.treeData.value, node.code)
     this.treeData.value = tree
 
-    // 如果删除的是当前选中节点，清空选中
+    // 如果删除的是当前选中节点，清空选中并加载根数据
     if (this.selectedNode.value?.code === node.code) {
       this.selectedNode.value = null
+      await this.loadData()
+    } else {
+      // ★ Split 方法：直接从 rows 中移除该行
+      this.removeRowByCode(node.code)
     }
-
-    // ★ 局部刷新表格
-    await this.refreshTable()
 
     return true
   }
@@ -455,11 +510,16 @@ export class DeptTreeLogic extends TreeTableLogic<SysDept> {
     }
     this.treeData.value = currentTree
 
-    // 清空选中
-    this.selectedNode.value = null
-
-    // ★ 局部刷新表格
-    await this.refreshTable()
+    // 如果选中节点被删除，清空选中并加载根数据
+    if (this.selectedNode.value && codes.includes(this.selectedNode.value.code)) {
+      this.selectedNode.value = null
+      await this.loadData()
+    } else {
+      // ★ Split 方法：直接从 rows 中移除这些行
+      for (const code of codes) {
+        this.removeRowByCode(code)
+      }
+    }
 
     return true
   }

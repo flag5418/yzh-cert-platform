@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using YZH.Core.EFDbContext;
+using YZH.Core.DataBase;
+using YZH.Core.Stand.Models;
 
 namespace YZH.Core.Web.Controllers;
 
@@ -14,15 +14,15 @@ public class VolPageRequest
     public string? Order { get; set; }
 }
 
-/// <summary>ISO 标准条款 - 兼容 Vol API 路径</summary>
+/// <summary>ISO 标准条款 - 兼容 Vol API 路径（Dapper 版）</summary>
 [Route("api/[controller]")]
 [ApiController]
 [Authorize]
 public class ISOClauseController : ControllerBase
 {
-    private readonly VOLContext _db;
+    private readonly IDbOrm _db;
 
-    public ISOClauseController(VOLContext db)
+    public ISOClauseController(IDbOrm db)
     {
         _db = db;
     }
@@ -31,27 +31,23 @@ public class ISOClauseController : ControllerBase
     [HttpPost("getPageData")]
     public async Task<IActionResult> GetPageData([FromBody] VolPageRequest req)
     {
-        var query = _db.Set<YZH.Entity.Admin.Platform.Cert.ISOClause>()
-            .OrderBy(c => c.SortOrder)
-            .AsQueryable();
+        int offset = (req.Page - 1) * req.Rows;
 
-        var total = await query.CountAsync();
+        var dataResult = await _db.SqlQueryAsync(
+            @"SELECT Id, StandardCode AS standardCode, ParentCode AS parentCode, 
+              ClauseNumber AS clauseNumber, Title AS title, Description AS description, 
+              SortOrder AS sortOrder, create_date AS createDate
+              FROM cert_iso_clause 
+              WHERE delete_time IS NULL
+              ORDER BY SortOrder ASC
+              LIMIT @Limit OFFSET @Offset",
+            new { Limit = req.Rows, Offset = offset });
 
-        var items = await query
-            .Skip((req.Page - 1) * req.Rows)
-            .Take(req.Rows)
-            .Select(c => new
-            {
-                id = c.Id,
-                standardCode = c.StandardCode,
-                parentCode = c.ParentCode,
-                clauseNumber = c.ClauseNumber,
-                title = c.Title,
-                description = c.Description,
-                sortOrder = c.SortOrder,
-                createDate = c.CreateDate
-            })
-            .ToListAsync();
+        var countResult = await _db.SqlScalarAsync<int>(
+            "SELECT COUNT(*) FROM cert_iso_clause WHERE delete_time IS NULL");
+
+        var items = dataResult.Success ? dataResult.Data : new List<dynamic>();
+        int total = countResult.Success ? countResult.Data : 0;
 
         return Ok(new { status = 0, msg = "ok", rows = items, total });
     }
@@ -59,32 +55,41 @@ public class ISOClauseController : ControllerBase
     /// <summary>新增条款</summary>
     [HttpPost("add")]
     [AllowAnonymous]
-    public async Task<IActionResult> Add([FromBody] YZH.Entity.Admin.Platform.Cert.ISOClause entity)
+    public async Task<IActionResult> Add([FromBody] ISOClauseDto dto)
     {
-        entity.CreateDate = DateTime.Now;
-        entity.Enable = true;
-        _db.Set<YZH.Entity.Admin.Platform.Cert.ISOClause>().Add(entity);
-        await _db.SaveChangesAsync();
-        return Ok(new { status = 0, msg = "新增成功", data = entity });
+        var result = await _db.SqlExecuteAsync(
+            @"INSERT INTO cert_iso_clause (Code, StandardCode, ParentCode, ClauseNumber, Title, Description, SortOrder, create_date, enable)
+              VALUES (@Code, @StandardCode, @ParentCode, @ClauseNumber, @Title, @Description, @SortOrder, @CreateDate, 1)",
+            new
+            {
+                Code = Guid.NewGuid().ToString(),
+                dto.StandardCode,
+                dto.ParentCode,
+                dto.ClauseNumber,
+                dto.Title,
+                dto.Description,
+                dto.SortOrder,
+                CreateDate = DateTime.Now
+            });
+
+        return Ok(new { status = 0, msg = "新增成功", data = dto });
     }
 
     /// <summary>更新条款</summary>
     [HttpPut("update")]
-    public async Task<IActionResult> Update([FromBody] YZH.Entity.Admin.Platform.Cert.ISOClause entity)
+    public async Task<IActionResult> Update([FromBody] ISOClauseDto dto)
     {
-        var existing = await _db.Set<YZH.Entity.Admin.Platform.Cert.ISOClause>()
-            .FirstOrDefaultAsync(c => c.Id == entity.Id);
-        if (existing == null)
-            return Ok(new { status = 1, msg = "条款不存在" });
+        var result = await _db.SqlExecuteAsync(
+            @"UPDATE cert_iso_clause 
+              SET StandardCode = @StandardCode, ParentCode = @ParentCode, 
+                  ClauseNumber = @ClauseNumber, Title = @Title, 
+                  Description = @Description, SortOrder = @SortOrder
+              WHERE Id = @Id AND delete_time IS NULL",
+            dto);
 
-        existing.StandardCode = entity.StandardCode ?? existing.StandardCode;
-        existing.ParentCode = entity.ParentCode ?? existing.ParentCode;
-        existing.ClauseNumber = entity.ClauseNumber ?? existing.ClauseNumber;
-        existing.Title = entity.Title ?? existing.Title;
-        existing.Description = entity.Description ?? existing.Description;
-        existing.SortOrder = entity.SortOrder;
+        if (!result.Success)
+            return Ok(new { status = 1, msg = "更新失败" });
 
-        await _db.SaveChangesAsync();
         return Ok(new { status = 0, msg = "更新成功" });
     }
 
@@ -96,10 +101,32 @@ public class ISOClauseController : ControllerBase
             return Ok(new { status = 1, msg = "请指定要删除的ID" });
 
         var idList = ids.Split(',').Select(long.Parse).ToList();
-        var items = await _db.Set<YZH.Entity.Admin.Platform.Cert.ISOClause>()
-            .Where(c => idList.Contains(c.Id)).ToListAsync();
-        _db.Set<YZH.Entity.Admin.Platform.Cert.ISOClause>().RemoveRange(items);
-        await _db.SaveChangesAsync();
-        return Ok(new { status = 0, msg = $"已删除 {items.Count} 条记录" });
+        var paramDict = new Dictionary<string, object?>();
+        var placeholders = new List<string>();
+
+        for (int i = 0; i < idList.Count; i++)
+        {
+            placeholders.Add($"@id{i}");
+            paramDict[$"id{i}"] = idList[i];
+        }
+
+        var sql = $"UPDATE cert_iso_clause SET delete_time = @Now WHERE Id IN ({string.Join(", ", placeholders)})";
+        paramDict["Now"] = DateTime.Now;
+
+        var result = await _db.SqlExecuteAsync(sql, paramDict);
+
+        return Ok(new { status = 0, msg = $"已删除 {result.Data} 条记录" });
     }
+}
+
+/// <summary>ISO 条款 DTO</summary>
+public class ISOClauseDto
+{
+    public long Id { get; set; }
+    public string StandardCode { get; set; } = string.Empty;
+    public string ParentCode { get; set; } = string.Empty;
+    public string ClauseNumber { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public int SortOrder { get; set; }
 }

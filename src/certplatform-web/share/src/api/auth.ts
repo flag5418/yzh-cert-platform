@@ -37,20 +37,20 @@ export interface CurrentUser {
 }
 
 /**
- * 用户登录（Vol 框架原生接口）
- * 后端 API: POST /api/User/login
+ * 用户登录（YZH.Core 新架构接口）
+ * 后端 API: POST /api/Auth/login
  */
 export async function login(params: LoginParams): Promise<HttpApiResponse<LoginResult>> {
-  return http.post('/User/login', {
-    userName: params.userName,
-    password: params.password,
-    captcha: params.captcha || '',
-    uuid: params.uuid || ''
+  return http.post('/Auth/login', {
+    UserName: params.userName,
+    Password: params.password,
+    Captcha: params.captcha || '',
+    Uuid: params.uuid || ''
   })
 }
 
 /**
- * 获取登录验证码（Vol 框架原生接口）
+ * 获取登录验证码（YZH.Core 新架构接口）
  * 后端 API: GET /api/User/getVierificationCode
  */
 export async function getCaptcha(): Promise<HttpApiResponse<CaptchaData>> {

@@ -1,5 +1,7 @@
-// 业务 API 统一导出
+// 通用 CRUD API（泛型，适用于所有 YzhControllerBase 子类）
+export * from './generic'
 
+// 业务 API 统一导出
 export * from './certification-body'
 export * from './iso-standard'
 export * from './iso-clause'

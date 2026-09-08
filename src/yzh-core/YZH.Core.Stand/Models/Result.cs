@@ -82,6 +82,13 @@ public class Result<T>
             return ApiResponse<T>.Ok(Data!, successMessage);
         return ApiResponse<T>.Fail(Error!, Code ?? 400);
     }
+
+    /// <summary>解构操作（支持 C# 析构语法）</summary>
+    public void Deconstruct(out T? data, out string? error)
+    {
+        data = Data;
+        error = Error;
+    }
 }
 
 /// <summary>

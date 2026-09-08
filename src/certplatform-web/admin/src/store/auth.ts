@@ -8,6 +8,9 @@ export interface UserInfo {
   userName: string
   userTrueName: string
   roleId: number
+  email?: string
+  phone?: string
+  nickname?: string
 }
 
 export const useAuthStore = defineStore('auth', () => {

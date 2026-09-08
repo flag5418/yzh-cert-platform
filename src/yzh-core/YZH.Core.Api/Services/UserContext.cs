@@ -82,6 +82,19 @@ public class UserContext : IUserContext
 
     public bool IsAuthenticated => _httpContext?.User?.Identity?.IsAuthenticated ?? false;
 
+    /// <summary>是否 Mock 用户（开发模式）</summary>
+    public bool IsAnonymous => _httpContext?.User?.Identity?.AuthenticationType == "MockAuth";
+
+    /// <summary>角色 ID（从 Claims 获取，用于简单角色校验）</summary>
+    public int RoleId
+    {
+        get
+        {
+            var roleIdStr = _httpContext?.User?.FindFirst("role_id")?.Value;
+            return int.TryParse(roleIdStr, out var rid) ? rid : 0;
+        }
+    }
+
     public IEnumerable<string> GetRoleCodes()
     {
         return _httpContext?.User?.FindAll(ClaimTypes.Role)?.Select(c => c.Value) ?? Enumerable.Empty<string>();

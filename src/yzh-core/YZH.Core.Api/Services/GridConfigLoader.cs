@@ -121,8 +121,6 @@ public class EntityConfigLoader : IEntityConfigLoader
         // 返回默认空配置
         return new EntityConfig
         {
-            ConfigName = typeName,
-            TableName = typeName,
             Title = typeName,
             Columns = new List<DefineColumn>()
         };

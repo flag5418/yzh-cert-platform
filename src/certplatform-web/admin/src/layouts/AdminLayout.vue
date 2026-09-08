@@ -1,22 +1,18 @@
 <template>
   <el-container class="admin-layout">
     <!-- ========== 侧边栏 ========== -->
-    <el-aside :width="sidebarCollapsed ? '64px' : '230px'" class="admin-layout__aside">
+    <el-aside width="230px" class="admin-layout__aside">
       <!-- Logo 区域 -->
       <div class="admin-layout__brand">
         <div class="brand-logo">
           <span class="brand-logo__icon">YZH</span>
         </div>
-        <transition name="fade">
-          <span v-if="!sidebarCollapsed" class="brand-text">映智汇认证平台</span>
-        </transition>
+        <span class="brand-text">映智汇认证平台</span>
       </div>
 
       <!-- 菜单区域 -->
       <el-menu
         :default-active="activeMenu"
-        :collapse="sidebarCollapsed"
-        :collapse-transition="false"
         router
         class="admin-layout__menu"
       >
@@ -51,10 +47,6 @@
       <!-- 顶部导航栏 -->
       <el-header class="admin-layout__header">
         <div class="header-left">
-          <!-- 折叠按钮 -->
-          <el-button text class="header-btn" @click="sidebarCollapsed = !sidebarCollapsed">
-            <el-icon size="18"><Fold v-if="!sidebarCollapsed" /><Expand v-else /></el-icon>
-          </el-button>
           <!-- 面包屑 -->
           <el-breadcrumb separator="/" class="header-breadcrumb">
             <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
@@ -74,6 +66,7 @@
             </div>
             <template #dropdown>
               <el-dropdown-menu>
+                <el-dropdown-item command="profile">个人设置</el-dropdown-item>
                 <el-dropdown-item command="password">修改密码</el-dropdown-item>
                 <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
@@ -90,13 +83,90 @@
       </el-main>
     </el-container>
   </el-container>
+
+  <!-- 个人信息弹窗 -->
+  <el-dialog
+    v-if="authStore.userInfo"
+    v-model="profileDialogVisible"
+    title="个人信息"
+    width="480px"
+    :close-on-click-modal="false"
+  >
+    <el-form :model="profileForm" label-width="90px" class="profile-form">
+      <el-form-item label="用户账号">
+        <el-input :model-value="authStore.userInfo.userName" disabled />
+      </el-form-item>
+      <el-form-item label="昵称">
+        <el-input v-model="profileForm.nickname" placeholder="请输入昵称" />
+      </el-form-item>
+      <el-form-item label="姓名">
+        <el-input v-model="profileForm.userTrueName" placeholder="请输入真实姓名" />
+      </el-form-item>
+      <el-form-item label="邮箱">
+        <el-input v-model="profileForm.email" placeholder="请输入邮箱" />
+      </el-form-item>
+      <el-form-item label="电话">
+        <el-input v-model="profileForm.phone" placeholder="请输入电话" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="profileDialogVisible = false">取消</el-button>
+      <el-button type="primary" @click="saveProfile">保存</el-button>
+    </template>
+  </el-dialog>
+
+  <!-- 修改密码弹窗 -->
+  <el-dialog
+    v-model="passwordDialogVisible"
+    title="修改密码"
+    width="480px"
+    :close-on-click-modal="false"
+  >
+    <el-form
+      ref="passwordFormRef"
+      :model="passwordForm"
+      :rules="passwordRules"
+      label-width="90px"
+      class="profile-form"
+    >
+      <el-form-item label="原密码" prop="oldPassword">
+        <el-input
+          v-model="passwordForm.oldPassword"
+          type="password"
+          placeholder="请输入原密码"
+          show-password
+        />
+      </el-form-item>
+      <el-form-item label="新密码" prop="newPassword">
+        <el-input
+          v-model="passwordForm.newPassword"
+          type="password"
+          placeholder="至少6位字符"
+          show-password
+        />
+      </el-form-item>
+      <el-form-item label="确认密码" prop="confirmPassword">
+        <el-input
+          v-model="passwordForm.confirmPassword"
+          type="password"
+          placeholder="请再次输入新密码"
+          show-password
+        />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="passwordDialogVisible = false">取消</el-button>
+      <el-button type="primary" @click="changePassword">确认修改</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, Expand, Fold } from '@element-plus/icons-vue'
+import { ArrowDown } from '@element-plus/icons-vue'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useAuthStore } from '@/store/auth'
 import { useMenuStore } from '@/store/menu'
 
@@ -104,7 +174,6 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const menuStore = useMenuStore()
-const sidebarCollapsed = ref(false)
 
 // 当前激活的菜单
 const activeMenu = computed(() => route.path)
@@ -132,6 +201,84 @@ const userInitial = computed(() => {
   return name.charAt(0).toUpperCase()
 })
 
+// ========== 弹窗状态 ==========
+const profileDialogVisible = ref(false)
+const passwordDialogVisible = ref(false)
+const passwordFormRef = ref<FormInstance>()
+
+const profileForm = reactive({
+  nickname: authStore.userInfo?.nickname || '',
+  userTrueName: authStore.userInfo?.userTrueName || '',
+  email: authStore.userInfo?.email || '',
+  phone: authStore.userInfo?.phone || ''
+})
+
+const passwordForm = reactive({
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: ''
+})
+
+const validateConfirmPassword = (_rule: any, value: string, callback: (err?: Error) => void) => {
+  if (value !== passwordForm.newPassword) {
+    callback(new Error('两次输入的密码不一致'))
+  } else {
+    callback()
+  }
+}
+
+const passwordRules: FormRules = {
+  oldPassword: [{ required: true, message: '请输入原密码', trigger: 'blur' }],
+  newPassword: [
+    { required: true, message: '请输入新密码', trigger: 'blur' },
+    { min: 6, message: '密码长度至少6位', trigger: 'blur' }
+  ],
+  confirmPassword: [
+    { required: true, message: '请确认新密码', trigger: 'blur' },
+    { validator: validateConfirmPassword, trigger: 'blur' }
+  ]
+}
+
+function openProfileDialog() {
+  profileForm.nickname = authStore.userInfo?.nickname || ''
+  profileForm.userTrueName = authStore.userInfo?.userTrueName || ''
+  profileForm.email = authStore.userInfo?.email || ''
+  profileForm.phone = authStore.userInfo?.phone || ''
+  profileDialogVisible.value = true
+}
+
+function openPasswordDialog() {
+  passwordForm.oldPassword = ''
+  passwordForm.newPassword = ''
+  passwordForm.confirmPassword = ''
+  passwordDialogVisible.value = true
+}
+
+function saveProfile() {
+  if (!authStore.userInfo) return
+  authStore.userInfo.nickname = profileForm.nickname
+  authStore.userInfo.userTrueName = profileForm.userTrueName
+  authStore.userInfo.email = profileForm.email
+  authStore.userInfo.phone = profileForm.phone
+  ElMessage.success('个人信息已保存')
+  profileDialogVisible.value = false
+}
+
+async function changePassword() {
+  if (!passwordFormRef.value) return
+  await passwordFormRef.value.validate((valid) => {
+    if (valid) {
+      ElMessage.success('密码修改成功，请重新登录')
+      passwordDialogVisible.value = false
+      setTimeout(() => {
+        authStore.clearToken()
+        menuStore.clearMenus()
+        router.push('/login')
+      }, 1000)
+    }
+  })
+}
+
 // 格式化图标名称（el-icon-xxx → 组件名）
 function formatIcon(iconName: string): string {
   if (!iconName) return ''
@@ -147,19 +294,24 @@ function formatIcon(iconName: string): string {
 }
 
 // 下拉菜单命令处理
-async function handleCommand(command: string) {
+function handleCommand(command: string) {
   if (command === 'logout') {
-    await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
+    ElMessageBox.confirm('确定要退出登录吗？', '提示', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning'
     })
-    authStore.clearToken()
-    menuStore.clearMenus()
-    ElMessage.success('已退出登录')
-    router.push('/login')
+      .then(() => {
+        authStore.clearToken()
+        menuStore.clearMenus()
+        ElMessage.success('已退出登录')
+        router.push('/login')
+      })
+      .catch(() => {})
+  } else if (command === 'profile') {
+    openProfileDialog()
   } else if (command === 'password') {
-    ElMessage.info('功能开发中')
+    openPasswordDialog()
   }
 }
 
@@ -177,23 +329,19 @@ onMounted(() => {
 
 /* ========== 侧边栏 ========== */
 .admin-layout__aside {
-  background: #1e293b;
-  border-right: 1px solid #334155;
+  background: #1a2332;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: width 0.3s ease;
 }
 
 /* Logo 区域 */
 .admin-layout__brand {
-  height: 60px;
+  height: 64px;
   display: flex;
   align-items: center;
-  padding: 0 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: #1a2332;
-  overflow: hidden;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .brand-logo__icon {
@@ -202,10 +350,10 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  background: linear-gradient(135deg, var(--yzh-color-primary), var(--yzh-color-primary-light));
   border-radius: 8px;
   flex-shrink: 0;
   letter-spacing: 0.5px;
@@ -213,88 +361,83 @@ onMounted(() => {
 
 .brand-text {
   margin-left: 12px;
-  color: #e2e8f0;
+  color: rgba(255, 255, 255, 0.88);
   font-size: 15px;
   font-weight: 600;
   white-space: nowrap;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
 
 /* 菜单区域 */
 .admin-layout__menu {
   border-right: none;
-  background: #1e293b;
+  background: #1a2332;
   overflow-y: auto;
   overflow-x: hidden;
   flex: 1;
+  padding-top: 8px;
 }
 
-/* 覆盖 Element Plus 菜单样式 */
+/* 覆盖 el-menu 自身背景 */
+.admin-layout__menu :deep(.el-menu) {
+  background-color: transparent;
+  border-right: none;
+}
+
+/* 覆盖 Element Plus 菜单项样式 */
 .admin-layout__menu :deep(.el-menu-item),
 .admin-layout__menu :deep(.el-sub-menu__title) {
-  color: #94a3b8;
-  height: 44px;
-  line-height: 44px;
+  color: #ffffff;
+  background-color: transparent;
+  height: 42px;
+  line-height: 42px;
+  margin: 0 8px;
+  border-radius: 6px;
 }
 
 .admin-layout__menu :deep(.el-menu-item:hover),
 .admin-layout__menu :deep(.el-sub-menu__title:hover) {
-  color: #e2e8f0;
-  background: rgba(59, 130, 246, 0.08);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .admin-layout__menu :deep(.el-menu-item.is-active) {
-  color: #3b82f6;
-  background: rgba(59, 130, 246, 0.12);
+  color: #ffffff;
+  background: var(--yzh-color-primary);
   font-weight: 500;
 }
 
-/* 子菜单项缩进 */
+/* 子菜单项 */
 .admin-layout__menu :deep(.el-sub-menu .el-menu-item) {
-  background: #1a2332;
+  background: transparent;
+  padding-left: 50px !important;
 }
 
 .admin-layout__menu :deep(.el-sub-menu .el-menu-item:hover) {
-  background: rgba(59, 130, 246, 0.08);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 /* ========== 主体容器 ========== */
 .admin-layout__main-container {
   display: flex;
   flex-direction: column;
-  background: #f1f5f9;
+  background: #f5f5f5;
 }
 
 /* ========== 顶部导航栏 ========== */
 .admin-layout__header {
-  height: 60px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #fff;
-  border-bottom: 1px solid #e2e8f0;
-  padding: 0 20px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  background: #ffffff;
+  padding: 0 24px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.header-btn {
-  color: #64748b;
-  padding: 8px;
-}
-
-.header-btn:hover {
-  color: #3b82f6;
-  background: #f1f5f9;
-}
-
-.header-breadcrumb {
-  margin-left: 4px;
 }
 
 .header-breadcrumb :deep(.el-breadcrumb__inner) {
@@ -303,7 +446,7 @@ onMounted(() => {
 }
 
 .header-breadcrumb :deep(.el-breadcrumb__inner.is-link) {
-  color: #3b82f6;
+  color: var(--yzh-color-primary);
 }
 
 /* 用户区域 */
@@ -327,7 +470,7 @@ onMounted(() => {
 }
 
 .header-user__avatar {
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  background: linear-gradient(135deg, var(--yzh-color-primary), var(--yzh-color-primary-light));
   color: #fff;
   font-size: 13px;
   font-weight: 600;
@@ -341,19 +484,29 @@ onMounted(() => {
 
 /* ========== 内容区域 ========== */
 .admin-layout__content {
-  background: #f1f5f9;
-  padding: 20px;
+  background: #f5f5f5;
+  padding: 24px;
   overflow-y: auto;
 }
 
-/* ========== 动画 ========== */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
+/* ========== 弹窗内表单 ========== */
+.profile-form {
+  max-width: 100%;
 }
 
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
+.profile-form .el-form-item {
+  margin-bottom: 20px;
+}
+
+.profile-form .el-input__wrapper {
+  background: #f9fafb;
+}
+
+.profile-form .el-input.is-disabled .el-input__wrapper {
+  background: #f3f4f6;
+}
+
+.profile-form .el-input.is-disabled .el-input__inner {
+  color: #6b7280;
 }
 </style>

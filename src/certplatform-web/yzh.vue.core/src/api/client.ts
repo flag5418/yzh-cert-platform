@@ -217,6 +217,91 @@ export class YzhApiClient {
   delete<T = any>(url: string, options?: Omit<RequestOptions, 'method'>) {
     return this.request<T>(url, { ...options, method: 'DELETE' })
   }
+
+  /**
+   * POST 下载文件（导出）
+   */
+  async download(url: string, body: any, filename: string): Promise<void> {
+    const token = this.getToken()
+    const res = await fetch(this.baseURL + url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(body)
+    })
+    if (res.status === 401) {
+      tokenStore.clear()
+      this.onUnauthorized?.()
+      throw new Error('登录已过期，请重新登录')
+    }
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}))
+      throw new Error(json.message || json.msg || '下载失败')
+    }
+    const blob = await res.blob()
+    this.triggerDownload(blob, filename)
+  }
+
+  /**
+   * GET 下载文件（模板下载）
+   */
+  async downloadGet(url: string, filename: string): Promise<void> {
+    const token = this.getToken()
+    const res = await fetch(this.baseURL + url, {
+      method: 'GET',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    })
+    if (res.status === 401) {
+      tokenStore.clear()
+      this.onUnauthorized?.()
+      throw new Error('登录已过期，请重新登录')
+    }
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}))
+      throw new Error(json.message || json.msg || '下载失败')
+    }
+    const blob = await res.blob()
+    this.triggerDownload(blob, filename)
+  }
+
+  /**
+   * 上传文件（导入）
+   */
+  async upload<T = any>(url: string, formData: FormData): Promise<T> {
+    const token = this.getToken()
+    const res = await fetch(this.baseURL + url, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: formData
+    })
+    if (res.status === 401) {
+      tokenStore.clear()
+      this.onUnauthorized?.()
+      throw new Error('登录已过期，请重新登录')
+    }
+    const json: ApiResponse<T> = await res.json()
+    return this.normalizeResponse(json)
+  }
+
+  /**
+   * 触发浏览器下载
+   */
+  private triggerDownload(blob: Blob, filename: string): void {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
 }
 
 /**

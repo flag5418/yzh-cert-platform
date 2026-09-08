@@ -36,3 +36,21 @@ public interface ITreeNode
     /// <summary>是否叶子节点（后端批量计算，非持久化字段）</summary>
     bool? IsLeaf { get; set; }
 }
+
+/// <summary>
+///     树实体接口（TreeTableControllerBase 约束用）
+///     
+///     与 ITreeNode 语义相同，用于架构约束声明。
+///     实现类：继承 BaseEntity 的实体，或继承 TreeNodeViewBase 的视图实体。
+/// </summary>
+public interface ITreeEntity
+{
+    /// <summary>业务编码（唯一标识）</summary>
+    string Code { get; set; }
+
+    /// <summary>父节点编码（根节点为空或 null）</summary>
+    string? ParentCode { get; set; }
+
+    /// <summary>是否叶子节点（后端批量计算）</summary>
+    bool? IsLeaf { get; set; }
+}

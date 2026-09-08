@@ -25,7 +25,7 @@ namespace YZH.Core.Stand.Models;
 ///     - node_type: 节点类型（可选）
 ///     - sort: 排序号（可选）
 /// </summary>
-public abstract class TreeNodeViewBase : ITreeNode
+public abstract class TreeNodeViewBase : ITreeEntity
 {
     /// <summary>业务编码（唯一标识）</summary>
     public string Code { get; set; } = string.Empty;

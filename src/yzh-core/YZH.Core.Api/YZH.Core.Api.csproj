@@ -26,11 +26,4 @@
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.88.8" />
   </ItemGroup>
 
-  <!-- Assets/EntityConfigs 复制到输出目录 -->
-  <ItemGroup>
-    <Content Include="Assets\EntityConfigs\**">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
-
 </Project>

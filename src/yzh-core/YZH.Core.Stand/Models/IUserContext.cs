@@ -31,6 +31,12 @@ public interface IUserContext
 
     /// <summary>获取完整请求上下文（用于审计日志）</summary>
     RequestContext GetRequestContext();
+
+    /// <summary>是否匿名用户（开发模式 Mock 用户）</summary>
+    bool IsAnonymous { get; }
+
+    /// <summary>角色 ID</summary>
+    int RoleId { get; }
 }
 
 /// <summary>

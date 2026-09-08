@@ -89,16 +89,3 @@ public class ValidationResult
     public static ValidationResult Ok() => new() { Success = true };
     public static ValidationResult Fail(string msg) => new() { Success = false, Message = msg };
 }
-
-/// <summary>
-///     导入结果
-/// </summary>
-public class ImportResult
-{
-    public int TotalRows { get; set; }
-    public int Inserted { get; set; }
-    public int Updated { get; set; }
-    public int Skipped { get; set; }
-    public int Failed { get; set; }
-    public List<string> Errors { get; set; } = new();
-}

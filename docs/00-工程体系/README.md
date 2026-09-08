@@ -39,6 +39,10 @@ AIGC:
   3. 审核委托
   4. 检查表模板引擎
 
+### 清理备注（2026-09-08）
+
+- **已归档**至 `docs/历史文档/归档-2026-09-08-树形结构设计演进/`：`树形结构设计-V1.md`（V2 已定稿，V1 核心改动已全面替代）
+
 ---
 
 ## 关键词索引
@@ -90,6 +94,7 @@ docs/
 | `20-架构决策/Phase1_实施报告.md` | Phase 1 实施总结 |
 | `20-架构决策/cert_phase2_implementation_summary.md` | Phase 2 实施总结 |
 | `20-架构决策/YZH-Framework架构设计评审报告-V1.md` | YZH-Framework 架构评审 |
+| `20-架构决策/左树右表统一架构设计-V1.md` | **左树右表统一架构**：YzhControllerBase + TreeTableControllerBase + 配置驱动 UI（新增） |
 
 ## 三、50-规划与优先级
 

@@ -21,10 +21,11 @@
 
   <ItemGroup>
     <!-- Vol 框架引用（保留 VOLContext 等 ORM 能力） -->
-    <ProjectReference Include="..\..\server\Vue.NetCore\vol.api\YZH.Core\YZH.Core.csproj" />
+    <!-- extern alias VolFramework 避免与 YZH.Core.Stand 同名类型冲突 -->
+    <ProjectReference Include="..\..\server\Vue.NetCore\vol.api\YZH.Core\YZH.Core.csproj" Aliases="VolFramework" />
     <ProjectReference Include="..\..\server\Vue.NetCore\vol.api\YZH.Entity\YZH.Entity.csproj" />
     <ProjectReference Include="..\..\server\Vue.NetCore\vol.api\YZH.Sys\YZH.Sys.csproj" />
-    <!-- YZH Core 框架 -->
+    <!-- YZH Core框架（无前缀，直接使用） -->
     <ProjectReference Include="..\YZH.Core.Api\YZH.Core.Api.csproj" />
     <ProjectReference Include="..\YZH.Core.DataBase\YZH.Core.DataBase.csproj" />
     <ProjectReference Include="..\YZH.Core.Stand\YZH.Core.Stand.csproj" />
@@ -39,6 +40,12 @@
   <ItemGroup>
     <Content Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Update="Assets\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Update="GridConfigs\**">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 

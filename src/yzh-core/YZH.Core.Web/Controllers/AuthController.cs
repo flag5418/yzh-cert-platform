@@ -1,11 +1,12 @@
+extern alias VolFramework;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
-using YZH.Core.EFDbContext;
+using YZH.Core.DataBase;
 using YZH.Core.Stand.Models;
-using YZH.Core.Utilities;
-using YZH.Entity.DomainModels;
+using YZH.Core.Api.Models.Users;
+using YZH.Core.Stand.Helpers;
+using VolUtilities = VolFramework.YZH.Core.Utilities;
 using StandJwtHelper = YZH.Core.Stand.Helpers.JwtHelper;
 using StandPasswordHelper = YZH.Core.Stand.Helpers.PasswordHelper;
 
@@ -15,20 +16,22 @@ namespace YZH.Core.Web.Controllers;
 [ApiController]
 public class AuthController : ControllerBase
 {
-    private readonly VOLContext _db;
+    private readonly IDbOrm _db;
     private readonly StandJwtHelper _jwt;
     private readonly StandPasswordHelper _password;
     private readonly IMemoryCache _cache;
+    private readonly TokenVersionService _tokenVersion;
 
-    public AuthController(VOLContext db, StandJwtHelper jwt, StandPasswordHelper password, IMemoryCache cache)
+    public AuthController(IDbOrm db, StandJwtHelper jwt, StandPasswordHelper password, IMemoryCache cache, TokenVersionService tokenVersion)
     {
         _db = db;
         _jwt = jwt;
         _password = password;
         _cache = cache;
+        _tokenVersion = tokenVersion;
     }
 
-    /// <summary>登录</summary>
+    /// <summary>登录（兼容 Vol 路由：api/User/login）</summary>
     [HttpPost("login")]
     [AllowAnonymous]
     public async Task<IActionResult> Login([FromBody] LoginRequest req)
@@ -36,42 +39,55 @@ public class AuthController : ControllerBase
         if (string.IsNullOrEmpty(req.UserName) || string.IsNullOrEmpty(req.Password))
             return BadRequest(ApiResponse.Fail("用户名和密码不能为空"));
 
-        // 验证码校验
+        // 验证码校验（DEBUG 模式跳过验证码）
+#if DEBUG
+        // DEBUG 模式下跳过验证码校验，方便开发调试
+#else
         if (!string.IsNullOrEmpty(req.Captcha) && !string.IsNullOrEmpty(req.Uuid))
         {
-            if (!_cache.TryGetValue(req.Uuid, out string? cachedCode) ||
+            var captchaKey = $"captcha_{req.Uuid}";
+            if (!_cache.TryGetValue(captchaKey, out string? cachedCode) ||
                 string.IsNullOrEmpty(cachedCode) ||
                 !string.Equals(cachedCode, req.Captcha, StringComparison.OrdinalIgnoreCase))
             {
                 return BadRequest(ApiResponse.Fail("验证码错误或已失效"));
             }
-            // 验证成功后移除缓存（一次性使用）
-            _cache.Remove(req.Uuid);
+            _cache.Remove(captchaKey);
         }
+#endif
 
-        var user = await _db.Set<Sys_User>()
-            .FirstOrDefaultAsync(u => u.UserName == req.UserName);
+        // 查询用户（Dapper 强类型 + 参数化）
+        var userResult = await _db.QueryFirstOrDefaultAsync<Sys_User>(
+            @"SELECT UserName, UserPwd, UserTrueName, Role_Id, Enable, Code 
+              FROM Sys_User 
+              WHERE UserName = @UserName AND IsDeleted = 0",
+            new { UserName = req.UserName });
 
-        if (user == null)
+        if (!userResult.Success || userResult.Data == null)
             return Unauthorized(ApiResponse.Fail("用户不存在"));
 
+        var user = userResult.Data;
+
+        // 检查账号是否禁用
         if (user.Enable == 0)
             return Unauthorized(ApiResponse.Fail("账号已被禁用"));
 
-        // Vol 兼容密码验证
+        // 验证密码
         if (!_password.VerifyDes(req.Password, user.UserPwd ?? ""))
             return Unauthorized(ApiResponse.Fail("密码错误"));
 
-        // 生成 Token（Code 优先，兼容旧用户取 UserName）
-        var userCode = string.IsNullOrEmpty(user.Code) ? user.UserName : user.Code;
-        var roleCodes = new[] { user.Role_Id.ToString() }; // TODO: 后续改为 RoleCode
-        var token = _jwt.GenerateToken(userCode, user.UserName, roleCodes);
+        // 生成 SSO 版本号（新登录生成新版本，挤掉旧 Token）
+        string userCode = user.Code ?? user.UserName;
+        var ssoVersion = await _tokenVersion.BumpVersionAsync(userCode);
 
-        // 更新 Token
-        user.Token = token;
-        user.LastLoginDate = DateTime.Now;
-        _db.Set<Sys_User>().Update(user);
-        await _db.SaveChangesAsync();
+        // 生成 Token（含 SSO 版本号）
+        var token = _jwt.GenerateToken(userCode, user.UserName, new[] { user.RoleId.ToString() }, ssoVersion);
+
+        // 更新 Token 和登录时间（仅更新指定字段）
+        await _db.SqlExecuteAsync(
+            @"UPDATE Sys_User SET Token = @Token, LastLoginDate = @Now 
+              WHERE UserName = @UserName",
+            new { Token = token, Now = DateTime.Now, UserName = req.UserName });
 
         return Ok(ApiResponse<LoginResponse>.Ok(new LoginResponse
         {
@@ -79,7 +95,7 @@ public class AuthController : ControllerBase
             UserCode = userCode,
             UserName = user.UserName,
             UserTrueName = user.UserTrueName,
-            RoleId = user.Role_Id
+            RoleId = user.RoleId
         }, "登录成功"));
     }
 
@@ -88,13 +104,12 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public IActionResult GetCaptcha()
     {
-        string code = VierificationCode.RandomText();
+        string code = VolUtilities.VierificationCode.RandomText();
         var data = new
         {
-            img = VierificationCodeHelpers.CreateBase64Image(code),
+            img = VolUtilities.VierificationCodeHelpers.CreateBase64Image(code),
             uuid = Guid.NewGuid().ToString()
         };
-        // 缓存验证码，5 分钟有效
         _cache.Set(data.uuid, code, TimeSpan.FromMinutes(5));
         return Ok(ApiResponse<object>.Ok(data));
     }
