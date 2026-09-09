@@ -5,6 +5,8 @@ using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Models;
+using YZH.Core.Stand.Models.Config;
+using YZH.Core.Stand.Interfaces;
 
 namespace CertPlatform.Admin.Controllers;
 

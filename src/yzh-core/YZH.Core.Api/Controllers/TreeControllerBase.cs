@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Models;
+using YZH.Core.Stand.Models.Result;
+using YZH.Core.Stand.Models.Tree;
+using YZH.Core.Stand.Interfaces;
 
 namespace YZH.Core.Api.Controllers;
 
@@ -288,8 +291,7 @@ public abstract class TreeControllerBase<T> : YzhControllerBase<T>
             // 查询失败时，设置默认值（不影响主流程）
             foreach (var item in items)
             {
-                if (!item.IsLeaf.HasValue)
-                    item.IsLeaf = false;
+                item.IsLeaf = false;
             }
         }
     }

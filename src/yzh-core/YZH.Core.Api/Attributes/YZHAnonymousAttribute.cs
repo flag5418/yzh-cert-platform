@@ -78,7 +78,7 @@ public class YZHAnonymousAttribute : Attribute, IAsyncAuthorizationFilter
     /// <summary>查询用户并构建 ClaimsPrincipal</summary>
     private static async Task<ClaimsPrincipal?> TryBuildUserPrincipalAsync(AuthorizationFilterContext context, string userCode)
     {
-        var db = context.HttpContext.RequestServices.GetRequiredService<YZH.Core.DataBase.IDbOrm>();
+        var db = context.HttpContext.RequestServices.GetRequiredService<YZH.Core.DataBase.Interfaces.IDbOrm>();
         var result = await db.QueryFirstOrDefaultAsync<YZH.Core.Api.Models.Users.Sys_User>(
             @"SELECT UserName, UserTrueName, Role_Id, Enable, Code 
               FROM Sys_User 

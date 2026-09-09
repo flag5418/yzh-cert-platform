@@ -3,10 +3,16 @@ using System.Reflection;
 using Microsoft.Extensions.Logging;
 using YZH.Core.Api.Services;
 using YZH.Core.DataBase;
-using YZH.Core.DataBase.Sql;
+using YZH.Core.DataBase.Interfaces;
+using YZH.Core.DataBase.Models;
+using YZH.Core.DataBase.Query;
+using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Annotations;
 using YZH.Core.Stand.Attributes;
 using YZH.Core.Stand.Models;
+using YZH.Core.Stand.Models.Result;
+using YZH.Core.Stand.Models.Request;
+using YZH.Core.Stand.Models.Entity;
 
 namespace YZH.Core.Api.Services;
 
@@ -21,7 +27,7 @@ namespace YZH.Core.Api.Services;
 ///     
 ///     所有方法可被 Controller 或任何其他代码直接调用
 /// </summary>
-public class EntityService<T> where T : class
+public class EntityService<T> where T : class, new()
 {
     private readonly IDbOrm _dbOrm;
     private readonly IYzhAuditLogger _auditLogger;
@@ -105,7 +111,7 @@ public class EntityService<T> where T : class
             // 自动处理操作符映射（eq→=, like→LIKE）、值处理（like 添加 % 通配符）、字段名安全校验
             var conditions = FilterOperation.ParseList(options.Filters);
 
-            var sqlOptions = new YZH.Core.DataBase.Sql.SqlPageOptions
+            var sqlOptions = new SqlPageOptions
             {
                 TableName = typeof(T).Name,
                 PageNumber = options.Page,
@@ -299,21 +305,25 @@ public class EntityService<T> where T : class
     {
         try
         {
-            dynamic dynEntity = entity;
-            try
+            // 自动生成 Code（如果实体有 Code 属性且为空）
+            var codeProp = typeof(T).GetProperty("Code",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (codeProp != null && codeProp.PropertyType == typeof(string))
             {
-                if (string.IsNullOrEmpty(dynEntity.Code))
-                    dynEntity.Code = Guid.NewGuid().ToString("N");
+                var currentCode = codeProp.GetValue(entity) as string;
+                if (string.IsNullOrEmpty(currentCode))
+                {
+                    codeProp.SetValue(entity, Guid.NewGuid().ToString("N"));
+                }
             }
-            catch { /* 实体可能没有 Code 属性 */ }
 
             FillCreateAudit(entity);
             var result = await _dbOrm.InsertAsync(entity);
 
             var ctx = _userContext.GetRequestContext();
-            dynamic? dynResult = result.Data;
+            var (id, code) = GetEntityIdentifiers(result.Data);
             _auditLogger.Info($"新增{typeof(T).Name}记录", _userContext.UserCode, _userContext.UserName,
-                clientIp ?? ctx.ClientIp, $"Id={dynResult?.Id}, Code={dynResult?.Code}");
+                clientIp ?? ctx.ClientIp, $"Id={id}, Code={code}");
 
             return result;
         }
@@ -340,9 +350,9 @@ public class EntityService<T> where T : class
                 : await _dbOrm.UpdateAsync(entity);
 
             var ctx = _userContext.GetRequestContext();
-            dynamic? dynResult = result.Data;
+            var (id, code) = GetEntityIdentifiers(result.Data);
             _auditLogger.Info($"更新{typeof(T).Name}记录", _userContext.UserCode, _userContext.UserName,
-                clientIp ?? ctx.ClientIp, $"Id={dynResult?.Id}, Code={dynResult?.Code}");
+                clientIp ?? ctx.ClientIp, $"Id={id}, Code={code}");
 
             return result;
         }
@@ -400,15 +410,22 @@ public class EntityService<T> where T : class
         try
         {
             var list = entities.ToList();
+
+            // 预缓存 Code 属性反射信息（避免循环中重复反射）
+            var codeProp = typeof(T).GetProperty("Code",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
             foreach (var entity in list)
             {
-                dynamic dynEntity = entity;
-                try
+                // 自动生成 Code（如果实体有 Code 属性且为空）
+                if (codeProp != null && codeProp.PropertyType == typeof(string))
                 {
-                    if (string.IsNullOrEmpty(dynEntity.Code))
-                        dynEntity.Code = Guid.NewGuid().ToString("N");
+                    var currentCode = codeProp.GetValue(entity) as string;
+                    if (string.IsNullOrEmpty(currentCode))
+                    {
+                        codeProp.SetValue(entity, Guid.NewGuid().ToString("N"));
+                    }
                 }
-                catch { /* 实体可能没有 Code 属性 */ }
                 FillCreateAudit(entity);
             }
 
@@ -579,6 +596,32 @@ public class EntityService<T> where T : class
             return $"{operationName}失败：必填字段为空";
 
         return $"{operationName}失败：{msg}";
+    }
+
+    // ==================== 辅助方法 ====================
+
+    /// <summary>
+    ///     获取实体的 Id 和 Code 标识符（使用反射替代 dynamic）
+    /// </summary>
+    private static (object? id, string? code) GetEntityIdentifiers(T? entity)
+    {
+        if (entity == default || entity == null)
+            return (null, null);
+
+        object? id = default;
+        string? code = default;
+
+        var idProp = typeof(T).GetProperty("Id",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        if (idProp != null)
+            id = idProp.GetValue(entity);
+
+        var codeProp = typeof(T).GetProperty("Code",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        if (codeProp != null)
+            code = codeProp.GetValue(entity) as string;
+
+        return (id, code);
     }
 }
 

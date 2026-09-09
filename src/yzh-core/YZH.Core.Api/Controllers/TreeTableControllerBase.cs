@@ -3,6 +3,10 @@ using YZH.Core.Api.Helpers;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Models;
+using YZH.Core.Stand.Models.Result;
+using YZH.Core.Stand.Models.Request;
+using YZH.Core.Stand.Models.Config;
+using YZH.Core.Stand.Interfaces;
 
 namespace YZH.Core.Api.Controllers;
 
@@ -31,7 +35,7 @@ namespace YZH.Core.Api.Controllers;
 [Route("api/[controller]")]
 public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
     where T : class, ITreeEntity, new()
-    where V : class
+    where V : class, new()
 {
     // ========================================================
     // 一、属性定义

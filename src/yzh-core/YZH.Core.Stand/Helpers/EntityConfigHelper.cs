@@ -1,13 +1,14 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using YZH.Core.Stand.Models;
+using YZH.Core.Stand.Models.Config;
 
 namespace YZH.Core.Stand.Helpers;
 
 /// <summary>
-/// 实体配置加载助手
-/// 职责：从 JSON 文件加载 EntityConfig
-/// 缓存：1小时自动过期 + FileWatcher 监听文件变更自动清除
+///     实体配置加载助手
+///     职责：从 JSON 文件加载 EntityConfig
+///     缓存：1小时自动过期 + FileWatcher 监听文件变更自动清除
 /// </summary>
 public static class EntityConfigHelper
 {
@@ -24,7 +25,16 @@ public static class EntityConfigHelper
     }
 
     /// <summary>
-    /// 泛型方式获取配置（自动用 typeof(T).Name 匹配文件名）
+    ///     泛型方式获取配置（自动用 typeof(T).Name 匹配文件名）
+    /// </summary>
+    public static EntityConfig GetEntityConfig<T>()
+    {
+        var typeName = typeof(T).Name;
+        return GetConfig(typeName);
+    }
+
+    /// <summary>
+    ///     泛型方式获取配置（自动用 typeof(T).Name 匹配文件名）
     /// </summary>
     public static EntityConfig GetConfig<T>()
     {
@@ -33,7 +43,7 @@ public static class EntityConfigHelper
     }
 
     /// <summary>
-    /// 自定义名称获取配置（文件名需与此一致，大小写不敏感）
+    ///     自定义名称获取配置（文件名需与此一致，大小写不敏感）
     /// </summary>
     public static EntityConfig GetConfig(string configName)
     {
@@ -53,7 +63,7 @@ public static class EntityConfigHelper
     }
 
     /// <summary>
-    /// 清除指定缓存
+    ///     清除指定缓存
     /// </summary>
     public static void Invalidate<T>()
     {
@@ -62,7 +72,7 @@ public static class EntityConfigHelper
     }
 
     /// <summary>
-    /// 清除所有缓存
+    ///     清除所有缓存
     /// </summary>
     public static void InvalidateAll()
     {
@@ -70,7 +80,7 @@ public static class EntityConfigHelper
     }
 
     /// <summary>
-    /// 从 JSON 文件加载配置（大小写不敏感搜索）
+    ///     从 JSON 文件加载配置（大小写不敏感搜索）
     /// </summary>
     private static EntityConfig LoadFromFile(string configName)
     {
@@ -108,7 +118,7 @@ public static class EntityConfigHelper
     }
 
     /// <summary>
-    /// 监听配置文件目录，文件变更时自动清除对应缓存
+    ///     监听配置文件目录，文件变更时自动清除对应缓存
     /// </summary>
     private static void InitFileWatcher()
     {

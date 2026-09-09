@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Hosting;
 using YZH.Core.Stand.Models;
+using YZH.Core.Stand.Models.Entity;
+using YZH.Core.Stand.Interfaces;
 
 namespace YZH.Core.Api.Services;
 

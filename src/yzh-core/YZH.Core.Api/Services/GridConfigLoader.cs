@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using YZH.Core.Stand.Models;
+using YZH.Core.Stand.Models.Config;
+using YZH.Core.Stand.Models.Entity;
 
 namespace YZH.Core.Api.Services;
 

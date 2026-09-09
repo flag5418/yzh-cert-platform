@@ -1,5 +1,6 @@
 using System.Reflection;
 using YZH.Core.Stand.Models;
+using YZH.Core.Stand.Models.Config;
 
 namespace YZH.Core.Api.Helpers;
 

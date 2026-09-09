@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using YZH.Core.Stand.Attributes;
 using YZH.Core.Stand.Models;
+using YZH.Core.Stand.Models.Entity;
 
 namespace YZH.Core.Api.Models.Organization;
 

@@ -43,6 +43,7 @@ AIGC:
 - **树形结构设计（V2）**：`docs/00-工程体系/树形结构设计-V2.md`（统一 TreeNode 虚拟结构 + treeUtils/treeOps 工具集 + TreeTableLogic 基类 + ActionPipeline + 后端 TreeControllerBase）
 - **TreeTable 架构设计（最新）**：`docs/20-架构决策/左树右表统一架构设计-V1.md`（← **V1 强制规范**：统一控制器体系 YzhControllerBase + TreeTableControllerBase、配置驱动 UI（EntityConfig + TreeConfig）、统一 API（config/page/add/update/delete/tree/*）、前端 Logic 基类、开发约束清单）
 - **TreeTable 架构设计（旧版参考）**：`docs/20-架构决策/TreeTableController-架构设计-V1.md`（← 已被上方 V1 替代，仅历史参考）
+- **多角色复杂权限体系（定稿）**：`docs/20-架构决策/多角色复杂权限体系设计-V1.md`（← **强制规范**：三类组织域 Platform/VirtualOrg/Customer、六种角色层级、JWT+SSO 挤号+Token 续租、三层权限模型、OnBuildingQuery 自动数据过滤、ConfigMaintainer 配置保护、DataOwnershipChecker 拥有权校验、安全红线清单、完整 SQL 表结构）
 - **架构迁移指南**：`docs/60-工程设计/YZH-知识库/10-架构迁移指南-V1.md`（从旧 vol.web 迁移到 certplatform-web 的步骤）
 - **编码规范**：`docs/60-AI工程设计/vol-csharp-coding-standards.md`（C#）、`docs/60-AI工程设计/vue-ts-coding-standards.md`（Vue3+TS）
 - **脚本规范**：`scripts/README.md`（backend/db/frontend/storage/generate/tools 子目录）

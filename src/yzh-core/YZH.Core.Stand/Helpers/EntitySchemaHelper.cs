@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Reflection;
 using YZH.Core.Stand.Models;
+using YZH.Core.Stand.Models.Config;
 
 namespace YZH.Core.Stand.Helpers;
 

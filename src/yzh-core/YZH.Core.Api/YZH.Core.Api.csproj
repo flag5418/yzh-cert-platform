@@ -15,13 +15,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\server\Vue.NetCore\vol.api\YZH.Entity\YZH.Entity.csproj" />
     <ProjectReference Include="..\YZH.Core.DataBase\YZH.Core.DataBase.csproj" />
     <ProjectReference Include="..\YZH.Core.Stand\YZH.Core.Stand.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Dapper" Version="2.1.35" />
+    <!-- SkiaSharp 用于验证码图片生成 -->
     <PackageReference Include="SkiaSharp" Version="2.88.8" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.88.8" />
   </ItemGroup>

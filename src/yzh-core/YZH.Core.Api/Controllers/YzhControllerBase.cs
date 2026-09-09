@@ -2,11 +2,14 @@ using System.Linq.Expressions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Attributes;
-using YZH.Core.Api.Models;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Models;
-using static Microsoft.AspNetCore.Mvc.ControllerBase;
+using YZH.Core.Stand.Models.Result;
+using YZH.Core.Stand.Models.Request;
+using YZH.Core.Stand.Models.Config;
+using YZH.Core.Stand.Models.Entity;
+using YZH.Core.Stand.Interfaces;
 
 namespace YZH.Core.Api.Controllers;
 
@@ -15,19 +18,18 @@ namespace YZH.Core.Api.Controllers;
 ///
 ///     核心职责：
 ///     ┌─────────────────────────────────────────────────────────────┐
-///     │  1. 属性定义     Config, Services, HttpContext, UserContext   │
+///     │  1. 属性定义     Config, Services, UserContext               │
 ///     │  2. 生命周期     钩子（Before/After/Committed）                │
 ///     │  3. 功能方法     CRUD + 过滤 + 行操作 + 导入导出              │
 ///     │  4. 可扩展       虚方法 + 委托注册                            │
-///     └─────────────────────────────────────────────────────────────�
+///     └─────────────────────────────────────────────────────────────┘
 ///
 ///     认证约定：
 ///     - 基类标记 [YZHAuthorize]，所有子类默认强认证
 ///     - 临时测试接口：方法上标记 [YZHAnonymous]
-///     - 生产环境：AuthSettings.RequireAuth = true，[YZHAnonymous] 失效
 ///
 ///     方法分层：
-///     - *Core() 方法：原子操作，返回 (T?, string?)，供任意代码调用
+///     - *Core() 方法：原子操作，返回 Result&lt;T&gt;，供任意代码调用
 ///     - 无后缀方法：HTTP API 端点，返回 ActionResult&lt;ApiResponse&lt;T&gt;&gt;
 ///
 ///     异常控制：
@@ -38,7 +40,7 @@ namespace YZH.Core.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [YZHAuthorize]
-public abstract class YzhControllerBase<V> : ControllerBase where V : class
+public abstract class YzhControllerBase<V> : ControllerBase where V : class, new()
 {
     // ========================================================
     // 一、属性定义
@@ -71,20 +73,12 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class
     protected virtual EntityConfig LoadConfig()
     {
         if (typeof(BaseEntity).IsAssignableFrom(typeof(V)))
-            return GetEntityConfigForBaseEntity();
+            return EntityConfigHelper.GetEntityConfig<V>();
         return new EntityConfig
         {
             Title = typeof(V).Name,
             Columns = new List<DefineColumn>()
         };
-    }
-
-    private static EntityConfig GetEntityConfigForBaseEntity()
-    {
-        var method = typeof(EntityConfig).GetMethods()
-            .First(m => m.Name == "GetEntityConfig" && m.IsGenericMethod && m.GetParameters().Length == 0);
-        var generic = method.MakeGenericMethod(typeof(V));
-        return (EntityConfig)generic.Invoke(null, null)!;
     }
 
     // ========================================================
@@ -93,38 +87,12 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class
 
     #region 原子方法 - 查询
 
-    /// <summary>分页查询原子方法（/page，兼容旧版）</summary>
-    public virtual async Task<Result<PagedResult<V>>> GetPageCore(PageRequest request)
-    {
-        try
-        {
-            var filters = OnBuildingQuery(request.Conditions);
-            var result = await Entity.GetPageAsync(new PagerOptions
-            {
-                Page = request.Page,
-                PageSize = request.PageSize,
-                SortBy = request.SortField,
-                SortDirection = request.SortOrder,
-                Filters = filters,
-                SearchKey = request.SearchKey
-            });
-
-            if (!result.Success) return Result<PagedResult<V>>.Fail(result.Error);
-            OnQueried(result.Data!);
-            return Result<PagedResult<V>>.Ok(result.Data!);
-        }
-        catch (Exception ex)
-        {
-            return Result<PagedResult<V>>.Fail($"分页查询异常：{ex.Message}");
-        }
-    }
-
-    /// <summary>过滤查询原子方法（/filter，新版推荐）</summary>
+    /// <summary>过滤查询原子方法（/filter）</summary>
     public virtual async Task<Result<PagedResult<V>>> FilterCore(FilterRequest request)
     {
         try
         {
-            // 1. 将前端 FilterItem 转换为后端 FilterItem（同名类，已在 PagerOptions 中使用）
+            // 1. 将前端 FilterItem 转换为后端 FilterItem
             var filters = request.Filters?.Select(f => new FilterItem
             {
                 Field = f.Field,
@@ -340,13 +308,6 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class
         return RequestResultToActionResult(result.ToApiResponse());
     }
 
-    [HttpPost("page")]
-    public virtual async Task<ActionResult<ApiResponse<PagedResult<V>>>> GetPage([FromBody] PageRequest request)
-    {
-        var result = await GetPageCore(request);
-        return RequestResultToActionResult(result.ToApiResponse());
-    }
-
     /// <summary>
     ///     过滤查询（新版推荐）
     ///     前端传 FilterRequest，后端自动解析 FilterItem 为 SQL 条件
@@ -443,17 +404,6 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class
     // ========================================================
 
     #region 查询钩子
-
-    /// <summary>构建查询条件（覆盖以实现自定义过滤逻辑）</summary>
-    protected virtual List<FilterItem> OnBuildingQuery(RequestCondition[]? conditions)
-    {
-        return conditions?.Select(c => new FilterItem
-        {
-            Field = c.Field,
-            Operator = c.Operator,
-            Value = c.Value
-        }).ToList() ?? new List<FilterItem>();
-    }
 
     /// <summary>构建过滤条件（覆盖以实现自定义过滤逻辑，/filter 专用）</summary>
     protected virtual List<FilterItem> OnBuildingFilter(List<FilterItem> filters)
@@ -608,27 +558,4 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class
             return Ok(result.Data!);
         return BadRequest(ApiResponse<object?>.Fail(result.Error!, result.Code ?? 400));
     }
-}
-
-// ========================================================
-// 请求模型
-// ========================================================
-
-/// <summary>分页查询请求模型（旧版，兼容用）</summary>
-public class PageRequest
-{
-    public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 20;
-    public string? SortField { get; set; }
-    public string? SortOrder { get; set; }
-    public string? SearchKey { get; set; }
-    public RequestCondition[]? Conditions { get; set; }
-}
-
-/// <summary>请求查询条件（前端传入的标准格式，旧版用）</summary>
-public class RequestCondition
-{
-    public string Field { get; set; } = string.Empty;
-    public string? Value { get; set; }
-    public string Operator { get; set; } = "eq";
 }

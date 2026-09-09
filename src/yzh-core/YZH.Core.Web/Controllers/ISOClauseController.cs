@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.DataBase;
+using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Models;
 
 namespace YZH.Core.Web.Controllers;

@@ -1,8 +1,9 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using YZH.Core.DataBase.NoSql;
 using YZH.Core.Stand.Attributes;
 using YZH.Core.Stand.Models;
+using YZH.Core.Stand.Models.Entity;
+using YZH.Core.Stand.NoSql;
 
 namespace YZH.Core.Api.Services;
 
@@ -34,10 +35,10 @@ public class CacheManager : ICacheManager
         var fullKey = BuildFullKey(key);
 
         // 1. 尝试从缓存获取
-        var cacheResult = _noSql.Get<T>(fullKey);
-        if (cacheResult.Success && cacheResult.Data != null)
+        var cached = _noSql.Get<T>(fullKey);
+        if (cached != null)
         {
-            return cacheResult.Data;
+            return cached;
         }
 
         // 2. 从数据源加载
@@ -60,9 +61,9 @@ public class CacheManager : ICacheManager
 
         var fullKey = BuildFullKey(key);
 
-        var cacheResult = _noSql.Get<T>(fullKey);
-        if (cacheResult.Success && cacheResult.Data != null)
-            return cacheResult.Data;
+        var cached = _noSql.Get<T>(fullKey);
+        if (cached != null)
+            return cached;
 
         var value = await factory();
         if (value == null)
@@ -111,28 +112,23 @@ public class CacheManager : ICacheManager
     public void RemoveByPrefix(string prefix)
     {
         var fullPrefix = $"{BuildFullKey(prefix)}*";
-        var scanResult = _noSql.ScanByKey(fullPrefix);
-        if (scanResult.Success && scanResult.Data != null)
+        var keys = _noSql.ScanByKey(fullPrefix).ToList();
+        if (keys.Count > 0)
         {
-            var keys = scanResult.Data.ToList();
-            if (keys.Count > 0)
+            const int batchSize = 100;
+            for (int i = 0; i < keys.Count; i += batchSize)
             {
-                const int batchSize = 100;
-                for (int i = 0; i < keys.Count; i += batchSize)
-                {
-                    var batch = keys.Skip(i).Take(batchSize);
-                    _noSql.RemoveBatch(batch);
-                }
-                _logger.LogInformation("按前缀删除缓存: {Prefix}, 数量: {Count}", fullPrefix, keys.Count);
+                var batch = keys.Skip(i).Take(batchSize);
+                _noSql.RemoveBatch(batch);
             }
+            _logger.LogInformation("按前缀删除缓存: {Prefix}, 数量: {Count}", fullPrefix, keys.Count);
         }
     }
 
     public bool Exists(string key)
     {
         var fullKey = BuildFullKey(key);
-        var result = _noSql.Exists(fullKey);
-        return result.Success && result.Data;
+        return _noSql.Exists(fullKey);
     }
 
     public void Clear()

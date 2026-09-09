@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Models;
+using YZH.Core.Stand.Interfaces;
 using LogLevel = YZH.Core.Api.Services.LogLevel;
 using MELLogLevel = Microsoft.Extensions.Logging.LogLevel;
 

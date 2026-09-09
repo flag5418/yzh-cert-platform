@@ -10,12 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Dapper" Version="2.1.35" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.0" />
-    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="8.0.0" />
-    <PackageReference Include="MySqlConnector" Version="2.3.5" />
-    <PackageReference Include="StackExchange.Redis" Version="2.7.33" />
+    <!-- SqlSugar ORM（唯一 ORM，支持多数据库 MySQL/Oracle/SQLServer/PostgreSQL/SQLite/达梦/人大金仓） -->
+    <PackageReference Include="SqlSugarCore" Version="5.1.4.167" />
   </ItemGroup>
 
   <ItemGroup>
