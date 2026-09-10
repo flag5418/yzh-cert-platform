@@ -52,6 +52,9 @@ public abstract class BaseEntity : INotifyPropertyChanged
     /// <summary>是否删除标记（软删除标志，默认 false）</summary>
     public bool IsDeleted { get; set; }
 
+    /// <summary>有效标志（1=有效，0=无效，默认有效）</summary>
+    public int IsValid { get; set; } = 1;
+
     /// <summary>前端选中标记（不持久化）</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public bool CheckFlag { get; set; }

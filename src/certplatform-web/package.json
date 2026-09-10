@@ -4,22 +4,22 @@
   "version": "1.0.0",
   "description": "认证平台前端工作区",
   "workspaces": [
-    "admin",
-    "auditor",
-    "share",
+    "cert/*",
     "yzh.vue.core"
   ],
   "scripts": {
-    "dev:admin": "npm run dev --workspace=admin",
-    "dev:auditor": "npm run dev --workspace=auditor",
+    "dev:admin": "npm run dev --workspace=@certplatform/admin",
+    "dev:auditor": "npm run dev --workspace=@certplatform/auditor",
+    "dev:enterprise": "npm run dev --workspace=@certplatform/enterprise",
     "build:core": "npm run build --workspace=yzh.vue.core",
-    "build:share": "npm run build --workspace=share",
-    "build:admin": "npm run build --workspace=admin",
-    "build:auditor": "npm run build --workspace=auditor",
+    "build:share": "npm run build --workspace=@certplatform/share",
+    "build:admin": "npm run build --workspace=@certplatform/admin",
+    "build:auditor": "npm run build --workspace=@certplatform/auditor",
     "build:all": "npm run build:core && npm run build:share && npm run build:admin && npm run build:auditor",
     "typecheck:all": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
+    "less": "^4.9.1",
     "typescript": "^5.0.0",
     "vite": "^5.0.0"
   },

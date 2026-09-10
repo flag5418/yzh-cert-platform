@@ -27,9 +27,17 @@
           :lazy="treeLazy"
           :load-data="treeLoadData"
           :default-expand-all="treeDefaultExpandAll"
+          :node-actions="nodeActions"
+          :get-action-label="getActionLabel"
           @node-click="handleTreeNodeClick"
           @check-change="handleTreeCheckChange"
+          @node-action="handleTreeNodeAction"
         />
+
+        <!-- 树底部工具栏（slot：可由业务页面自定义按钮） -->
+        <div v-if="$slots.treeFooter" class="yzh-tree-table__tree-footer">
+          <slot name="treeFooter" />
+        </div>
       </div>
 
       <!-- 右侧：表格面板 -->
@@ -69,6 +77,10 @@ interface Props {
   treeLoadData?: (node: any, resolve: (data: TreeNode[]) => void) => void
   /** 树默认展开 */
   treeDefaultExpandAll?: boolean
+  /** 节点自定义操作按钮：{ 方法名: 显示文字 }（后端自动注入） */
+  nodeActions?: Record<string, string>
+  /** 动态操作文本函数（根据节点状态返回显示文字） */
+  getActionLabel?: (action: string, node: TreeNode) => string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -79,12 +91,15 @@ const props = withDefaults(defineProps<Props>(), {
   treeCheckable: false,
   treeCheckStrictly: false,
   treeLazy: false,
-  treeDefaultExpandAll: false
+  treeDefaultExpandAll: false,
+  nodeActions: () => ({}),
+  getActionLabel: undefined
 })
 
 const emit = defineEmits<{
   (e: 'tree-node-click', node: TreeNode): void
   (e: 'tree-check-change', checkedNodes: TreeNode[]): void
+  (e: 'tree-node-action', action: string, node: TreeNode): void
 }>()
 
 // ========================================================
@@ -113,6 +128,10 @@ function handleTreeNodeClick(node: TreeNode) {
 
 function handleTreeCheckChange(checkedNodes: TreeNode[]) {
   emit('tree-check-change', checkedNodes)
+}
+
+function handleTreeNodeAction(action: string, node: TreeNode) {
+  emit('tree-node-action', action, node)
 }
 
 function handleExpandAll() {
@@ -151,7 +170,8 @@ defineExpose({
   treeRef,
   getCheckedNodes: () => treeRef.value?.getCheckedNodes() ?? [],
   expandAll: handleExpandAll,
-  collapseAll: handleCollapseAll
+  collapseAll: handleCollapseAll,
+  appendNode: (parentCode: string | null, newNode: TreeNode) => treeRef.value?.appendNode(parentCode, newNode)
 })
 </script>
 
@@ -180,6 +200,13 @@ defineExpose({
 .yzh-tree-table__tree-toolbar {
   padding: 12px;
   border-bottom: 1px solid var(--el-border-color-lighter);
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.yzh-tree-table__tree-footer {
+  padding: 12px;
+  border-top: 1px solid var(--el-border-color-lighter);
   background: #fff;
   flex-shrink: 0;
 }

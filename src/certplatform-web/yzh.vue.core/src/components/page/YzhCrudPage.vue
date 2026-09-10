@@ -1,5 +1,12 @@
 <script setup lang="ts">
 /**
+ * 生成唯一编码（前端临时，后端最终会用自己的逻辑覆盖或验证）
+ */
+function generateCode(): string {
+  return 'TMP_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10)
+}
+
+/**
  * YzhCrudPage - 通用单表 CRUD 页面（框架级组件）
  *
  * 功能：
@@ -91,7 +98,14 @@ async function loadTableData(params: { page: number; pageSize: number; filters?:
 /** 新增 */
 function handleAdd() {
   dialogMode.value = 'add'
-  Object.assign(formData, {})
+  // 用 NewEntity 初始化表单（包含 Mrz 默认值，如 Enable=1）
+  const baseEntity = (logic.config as any)?.NewEntity || {}
+  Object.keys(formData).forEach(k => delete formData[k])
+  Object.assign(formData, baseEntity)
+  // 生成 Code（后端表要求 Code 非空）
+  if (!formData.code) {
+    formData.code = generateCode()
+  }
   dialogVisible.value = true
 }
 

@@ -7,7 +7,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using YZH.Core.Api.Filters;
-using YZH.Core.Api.Middleware;
 using YZH.Core.Stand.Helpers;
 
 namespace YZH.Core.Web;
@@ -46,6 +45,8 @@ public static class Program
             options.Filters.Add<YzhAuditingFilter>();           // 审计过滤器
             options.Filters.AddService<YzhAuthFilter>();        // YZH 认证过滤器（SSO + Token 续租）
         });
+
+        // YzhAuthFilter 已通过 AddService<YzhAuthFilter>() 注册，无需重复注册
 
         // 配置 JWT 认证
         ConfigureJwtAuthentication(builder);
@@ -161,8 +162,7 @@ public static class Program
     /// </summary>
     private static void ConfigurePipeline(WebApplication app, IWebHostEnvironment env)
     {
-        // 全局异常处理中间件（统一使用 Api 层版本）
-        app.UseMiddleware<GlobalExceptionMiddleware>();
+        // 全局异常处理统一使用 GlobalExceptionFilter（IExceptionFilter），无需中间件
 
         // 启用 CORS
         app.UseCors("AllowAll");

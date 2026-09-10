@@ -243,6 +243,7 @@ defineExpose({ validate, resetFields, formRef })
               :placeholder="field.placeholder || `请输入${field.label}`"
               :disabled="field.disabled"
               :rows="field.type === 'textarea' ? 3 : undefined"
+              :autocomplete="field.type === 'password' ? 'new-password' : 'off'"
               v-bind="field.fieldProps"
             />
 
@@ -303,6 +304,8 @@ defineExpose({ validate, resetFields, formRef })
               v-else-if="field.type === 'switch'"
               v-model="formData[field.prop]"
               :disabled="field.disabled"
+              :active-value="1"
+              :inactive-value="0"
               v-bind="field.fieldProps"
             />
 

@@ -23,6 +23,15 @@
     <!-- SkiaSharp 用于验证码图片生成 -->
     <PackageReference Include="SkiaSharp" Version="2.88.8" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.88.8" />
+    <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="2.88.8" />
+  </ItemGroup>
+
+  <!-- TODO: 以下文件为开发中的新特性，暂时排除编译 -->
+  <ItemGroup>
+    <Compile Remove="Services\ApiScanner.cs" />
+    <Compile Remove="Services\ApiSyncService.cs" />
+    <Compile Remove="Services\PermissionCacheService.cs" />
+    <Compile Remove="Repositories\ApiRepository.cs" />
   </ItemGroup>
 
 </Project>

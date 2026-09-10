@@ -68,6 +68,33 @@ public class EntityService<T> where T : class, new()
         }
     }
 
+    /// <summary>
+    ///     根据 Code 获取实体（不过滤 IsValid 和 IsDeleted）
+    ///     用途：toggle-valid 等需要操作无效记录的场景
+    /// </summary>
+    public virtual async Task<Result<T?>> GetByCodeAny(string code)
+    {
+        try
+        {
+            var tableName = typeof(T).Name;
+            // 尝试获取 [Table] 特性获取真实表名
+            var tableAttr = typeof(T).GetCustomAttribute<System.ComponentModel.DataAnnotations.Schema.TableAttribute>();
+            if (tableAttr != null)
+                tableName = tableAttr.Name;
+
+            var sql = $"SELECT * FROM {tableName} WHERE Code = @code LIMIT 1";
+            var result = await _dbOrm.QueryFirstOrDefaultAsync<T>(sql, new { code });
+            return result.Success
+                ? Result<T?>.Ok(result.Data)
+                : Result<T?>.Fail($"记录 {code} 不存在");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetByCodeAny 错误，Type={Type}, Code={Code}", typeof(T).Name, code);
+            return Result<T?>.Fail($"根据 Code 获取实体失败：{ex.Message}");
+        }
+    }
+
     /// <summary>根据条件获取单条</summary>
     public virtual async Task<Result<T?>> GetOne(Expression<Func<T, bool>> predicate, bool includeDeleted = false)
     {
@@ -111,9 +138,13 @@ public class EntityService<T> where T : class, new()
             // 自动处理操作符映射（eq→=, like→LIKE）、值处理（like 添加 % 通配符）、字段名安全校验
             var conditions = FilterOperation.ParseList(options.Filters);
 
+            // 视图路由：若实体标记了 [ViewName]，查询走视图（含关联扩展字段如 OrgName/RoleName）
+            // 增删改仍走物理表（SqlSugar 自动忽略 [NotMapped] 字段）
+            var tableName = GetQueryTableName<T>();
+
             var sqlOptions = new SqlPageOptions
             {
-                TableName = typeof(T).Name,
+                TableName = tableName,
                 PageNumber = options.Page,
                 PageSize = options.PageSize,
                 SortField = options.SortBy,
@@ -260,13 +291,17 @@ public class EntityService<T> where T : class, new()
         {
             var viewName = GetViewName<T>();
             
-            // 使用参数化 SQL 防止注入
-            var sql = $"SELECT parent_code AS ParentCode, COUNT(*) AS Cnt " +
+            // 获取 ParentCode 属性的实际 DB 列名（从 SugarColumn 特性）
+            var parentCodeColumnName = GetParentCodeColumnName();
+
+            // IN 子句需要手动展开（SqlSugar 参数化 IN 与 MySQL 兼容问题）
+            var inParams = string.Join("','", parentCodes.Select(c => c.Replace("'", "''")));
+            var sql = $"SELECT `{parentCodeColumnName}` AS ParentCode, COUNT(*) AS Cnt " +
                       $"FROM `{viewName}` " +
-                      $"WHERE parent_code IN @codes " +
-                      $"GROUP BY parent_code";
-            
-            var queryResult = await _dbOrm.SqlQueryAsync<ChildrenCountRow>(sql, new { codes = parentCodes });
+                      $"WHERE `{parentCodeColumnName}` IN ('{inParams}') " +
+                      $"GROUP BY `{parentCodeColumnName}`";
+
+            var queryResult = await _dbOrm.SqlQueryAsync<ChildrenCountRow>(sql);
             
             if (queryResult.Success && queryResult.Data != null)
             {
@@ -285,15 +320,56 @@ public class EntityService<T> where T : class, new()
     }
 
     /// <summary>
-    ///     获取视图名称（从 ViewNameAttribute 或类型名）
+    ///     获取 ParentCode 属性的数据库列名
     /// </summary>
-    private static string GetViewName<TEntity>()
+    private static string GetParentCodeColumnName()
+    {
+        var prop = typeof(T).GetProperty("ParentCode",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly);
+        
+        if (prop == null)
+            return "ParentCode"; // 默认
+        
+        // 优先使用 SqlSugar 的 SugarColumn 特性
+        var sugarColumn = prop.GetCustomAttributes(typeof(SqlSugar.SugarColumn), false)
+            .Cast<SqlSugar.SugarColumn>()
+            .FirstOrDefault();
+        if (sugarColumn?.ColumnName != null)
+            return sugarColumn.ColumnName;
+        
+        // 其次使用 EF Core 的 Column 特性
+        var columnAttr = prop.GetCustomAttributes(typeof(System.ComponentModel.DataAnnotations.Schema.ColumnAttribute), false)
+            .Cast<System.ComponentModel.DataAnnotations.Schema.ColumnAttribute>()
+            .FirstOrDefault();
+        if (columnAttr?.Name != null)
+            return columnAttr.Name;
+        
+        // 默认使用属性名
+        return prop.Name;
+    }
+
+    /// <summary>
+    ///     获取查询表名/视图名（视图路由）
+    ///     优先级：[ViewName] 特性 > 物理表类型名
+    ///     用法：GetPageAsync / GetListAsync 等查询操作使用视图；Insert/Update/Delete 走物理表
+    /// </summary>
+    private static string GetQueryTableName<TEntity>()
     {
         var type = typeof(TEntity);
         var attr = type.GetCustomAttributes(typeof(ViewNameAttribute), inherit: true)
             .Cast<ViewNameAttribute>()
             .FirstOrDefault();
         return attr?.ViewName ?? type.Name;
+    }
+
+    /// <summary>
+    ///     获取视图名称（从 ViewNameAttribute 或类型名）
+    ///     ⚠️ 已废弃，统一使用 GetQueryTableName
+    /// </summary>
+    [Obsolete("使用 GetQueryTableName 替代")]
+    private static string GetViewName<TEntity>()
+    {
+        return GetQueryTableName<TEntity>();
     }
 
     // ==================== 写入操作（返回 Result<T>） ====================

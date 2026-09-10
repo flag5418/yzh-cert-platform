@@ -21,7 +21,7 @@ AIGC:
 
 | 层级 | 路径 | 状态 | 说明 |
 |------|------|------|------|
-| **新后端** | `src/certplatform-api/` | ✅ 唯一开发目标 | `CertPlatform.Shared/` + `Admin/` + `Auditor/` + `Enterprise/`，启动入口 `YZH.Core.Web` |
+| **新后端** | `src/certplatform-api/` | ✅ 唯一开发目标 | `CertPlatform.Shared/` + `Admin/` + `Auditor/` + `Enterprise/`，启动入口 `Cert.Platform.sln`（Program.cs） |
 | **新前端** | `src/certplatform-web/` | ✅ 唯一开发目标 | `yzh.vue.core/` + `share/` + `admin/` + `auditor/` |
 | **旧后端** | `src/server/Vue.NetCore/` | ⛔ **禁止修改** | Vol 框架，仅作参考 |
 | **旧前端** | `src/admin/`、`src/auditor/` | ⛔ **禁止修改** | Vol 自带前端，仅作参考 |
@@ -35,31 +35,34 @@ AIGC:
 ## 快速指针（编码前必读链路）
 
 - **项目宪法**：`项目全局规则.md` — 项目概述/技术栈锁定/文档目录结构/AI 检索协议/端口规划/快速开始/禁止事项
-- **文档导航**：`docs/00-工程体系/README.md` — 全项目文档索引（00/20/50/60/80/90 + 历史文档）
-- **业务域设计**：按 `docs/00-工程体系/README.md` 导航进入对应目录（架构/全局 → 20-架构决策；功能细节 → 80-功能设计；AI 工程 → 60-AI工程设计）
+- **文档导航**：`docs/00-工程体系/README.md` — 全项目文档索引（00/10/20/50/60/80/90 + 历史文档）
+- **★ YZH 架构唯一入口**：`docs/10-YZH架构/README.md`（← **V1 强制规范**：编码前必读，包含架构总纲/后端基类/前端基类/数据契约/权限体系/代码结构/开发流程/常见错误）
+- **YZH 架构分章速查**：
+  - 核心理念 + 继承体系 → `docs/10-YZH架构/01-架构总纲.md`
+  - 后端基类 + EntityService → `docs/10-YZH架构/02-后端架构.md`
+  - 前端基类 + 组件 → `docs/10-YZH架构/03-前端架构.md`
+  - 数据契约（FilterRequest/EntityConfig/TreeConfig）→ `docs/10-YZH架构/04-数据契约.md`
+  - 权限体系（SSO/角色/三层权限）→ `docs/10-YZH架构/05-权限体系.md`
+  - 代码结构（三层同构/命名/路由）→ `docs/10-YZH架构/06-代码结构规范.md`
+  - 开发流程（新增页面步骤/钩子速查/常见场景）→ `docs/10-YZH架构/07-开发流程.md`
+  - 常见错误 → `docs/10-YZH架构/08-常见错误与修复.md`
 - **知识底座**：`docs/60-AI工程设计/YZH-知识库/README.md` — Vol 能力清单 / YZH 增量 / 边界约束 / 代码模板 / 踩坑记录 / 速查手册
-- **Vol 框架指南**：`docs/60-AI工程设计/vol-skill.md`（**已弃用，仅供历史参考**）
-- **前端架构总纲（V4）**：`docs/00-工程体系/前端架构设计-V1.md`（原子化组件 + CrudPageLogic 基类 + 后端驱动 UI）
-- **树形结构设计（V2）**：`docs/00-工程体系/树形结构设计-V2.md`（统一 TreeNode 虚拟结构 + treeUtils/treeOps 工具集 + TreeTableLogic 基类 + ActionPipeline + 后端 TreeControllerBase）
-- **TreeTable 架构设计（最新）**：`docs/20-架构决策/左树右表统一架构设计-V1.md`（← **V1 强制规范**：统一控制器体系 YzhControllerBase + TreeTableControllerBase、配置驱动 UI（EntityConfig + TreeConfig）、统一 API（config/page/add/update/delete/tree/*）、前端 Logic 基类、开发约束清单）
-- **TreeTable 架构设计（旧版参考）**：`docs/20-架构决策/TreeTableController-架构设计-V1.md`（← 已被上方 V1 替代，仅历史参考）
-- **多角色复杂权限体系（定稿）**：`docs/20-架构决策/多角色复杂权限体系设计-V1.md`（← **强制规范**：三类组织域 Platform/VirtualOrg/Customer、六种角色层级、JWT+SSO 挤号+Token 续租、三层权限模型、OnBuildingQuery 自动数据过滤、ConfigMaintainer 配置保护、DataOwnershipChecker 拥有权校验、安全红线清单、完整 SQL 表结构）
-- **架构迁移指南**：`docs/60-工程设计/YZH-知识库/10-架构迁移指南-V1.md`（从旧 vol.web 迁移到 certplatform-web 的步骤）
+- **Skill 清单**：`docs/60-AI工程设计/Skill清单-V1.md` — 全部 Skill 的编码/输入输出/绑定模式/实现类/编写规范
 - **编码规范**：`docs/60-AI工程设计/vol-csharp-coding-standards.md`（C#）、`docs/60-AI工程设计/vue-ts-coding-standards.md`（Vue3+TS）
 - **脚本规范**：`scripts/README.md`（backend/db/frontend/storage/generate/tools 子目录）
-- **Skill 清单**：`docs/60-AI工程设计/Skill清单-V1.md` — 全部 Skill 的编码/输入输出/绑定模式/实现类/编写规范
 
 ## 项目速览
 
 - **项目**：映智汇认证审核管理系统（yzh-cert-platform），ISO 体系认证全流程（建档→任务分派→预审→复核→报告→NC）
 - **核心目的**：完善 YZH.Core 新架构，重构原 Vol 框架的接口和业务功能
-- **技术栈（新架构）**：.NET 8 + YZH.Core（后端）/ Vue 3 + TypeScript + Vite + Element Plus / MySQL 8.0 / Redis 7 / MinIO / Docker Compose
+- **技术栈（新架构）**：.NET 8 + YZH.Core（本地源码 `src/yzh-core/`，4 个项目 Stand/DataBase/Api/Web）+ certplatform-api（`src/certplatform-api/`，3 个角色子模块 Admin/Auditor/Enterprise）/ Vue 3 + TypeScript + Vite + Element Plus / MySQL 8.0 / Redis 7 / MinIO / Docker Compose
 - **技术栈（旧架构，仅参考）**：.NET 8 + Vol（后端）/ Vue 3 + Element Plus（保留不修改）
 - **端口**：后端 9992 / 后台管理 9990 / 审核员前端 9991 / MySQL 3307 / Redis 6380 / MinIO 9000+9001
 - **开发模式**：独立开发，多 AI 协作机制不适用（项目全局规则 §十三）
 - **前端架构（V4 2026-09 起）**：彻底抛弃 view-grid/VolProvider/VolBox/VolForm，全部使用自研 `YzhTable` + `YzhForm` + `YzhApiClient` + 手写 API
 - **新前端结构（2026-09-05 起）**：`src/certplatform-web/` 目录，包含 `yzh.vue.core/`（核心组件库）、`share/`（业务共享层）、`admin/`（管理员端，端口 9990）、`auditor/`（审核员端，端口 9991）
-- **新后端结构（2026-09 起）**：`src/certplatform-api/` 目录，包含 `CertPlatform.Shared/`（共享层）、`Admin/`、`Auditor/`、`Enterprise/`，启动入口 `YZH.Core.Web`
+- **新后端结构（2026-09 起）**：`src/certplatform-api/` 目录，包含 `CertPlatform.Shared/`（共享层）、`Admin/`、`Auditor/`、`Enterprise/`，启动入口 `Cert.Platform.sln`（Program.cs 调用 `UseYzhCore`）
+- **YZH.Core 本地源码**：`src/yzh-core/` 目录，包含 `YZH.Core.Stand/`、`YZH.Core.DataBase/`、`YZH.Core.Api/`、`YZH.Core.Web/` 四个项目，是架构层，不直接对外提供服务，通过项目引用被 certplatform-api 使用
 
 ## 编码强制约定
 
@@ -71,7 +74,7 @@ AIGC:
    - `01-Vol能力清单.md` / `02-YZH增量清单.md`（能力索引）
    - `04-代码模板/`、`05-踩坑记录/`（直接引用/查重）
    - `07-标准页面开发流程.md`（**已废弃，请按 V4 试点页面 `src/pages/system/user/index.vue` 作为模板**）
-3. **后端**：只改 `VOL.Sys/Services/System/Partial/` 下的 Partial Service，禁改 .jsx；使用 Vol 框架 ServiceBase 钩子优先；YZH 增量能力（YZHBaseEntity / 特性体系）按 `02-YZH增量清单.md` 使用。
+3. **后端**：新架构只改 `src/certplatform-api/` 下的代码；业务实体继承 `BaseEntity`，Controller 继承 `YzhControllerBase<V>` 或 `TreeTableControllerBase<T,V>`；钩子通过覆盖 virtual 方法实现；YZH.Core 源码在 `src/yzh-core/`，禁止修改。
 4. **前端（新）**：所有新页面必须使用 V4 自研组件：
    - 核心组件库：`@yzh-core/components/*`（yzh.vue.core）
    - 业务共享层：`@share/*`（share）
@@ -85,6 +88,7 @@ AIGC:
 7. **启停规范**：后端启停一律走 `scripts/` 脚本（backend/ 子目录），禁止手动 `kill` / 裸 `dotnet run &`（见项目全局规则 §十五）。
 8. **路径格式**：所有文件路径使用 macOS 绝对路径格式。
 9. **沟通风格**：零表情、极简、中文回复；方案用表格对比 + 结论。
+10. **代码结构三层同构**：后端 Controller 文件、前端 API 文件、前端 Pages 文件夹必须同名同路径（详情见 `docs/60-AI工程设计/前后端代码结构统一规则-V1.md`）；新增模块必须三层同步创建；禁止在模块根目录扁平化放置文件；迁移完成后按该文档 §六 检查清单逐项验证。
 
 ## 业务菜单速览
 
@@ -106,6 +110,7 @@ AIGC:
 ## 与知识库的关系
 
 - 本文件（根目录）是 **AI 工具自动加载的入口**：负责"启动时把 AI 指向正确的位置与约束"。
+- `docs/10-YZH架构/` 是 **YZH 架构唯一权威入口**：负责"架构核心理念 + 编码规范"。
 - `docs/60-AI工程设计/YZH-知识库/` 是 **知识底座**：负责"开发中按需查阅的接口签名、踩坑经验、边界约束"。
-- 两处通过 `YZH-知识库/README.md` 登记关联；修改本文件后必须同步知识库副本。
+- 三处通过 `docs/00-工程体系/README.md` 登记关联；修改本文件后必须同步知识库副本。
 *（内容由AI生成，仅供参考）*

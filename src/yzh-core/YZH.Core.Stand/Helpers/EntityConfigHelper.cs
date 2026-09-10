@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Config;
 
@@ -80,42 +81,67 @@ public static class EntityConfigHelper
     }
 
     /// <summary>
-    ///     从 JSON 文件加载配置（大小写不敏感搜索）
+    ///     从 JSON 文件加载配置（支持子目录搜索，大小写不敏感）
+    ///     优先查找 configName 本身；失败则遍历所有子目录
+    ///     支持 "System/User" 格式直接定位
     /// </summary>
     private static EntityConfig LoadFromFile(string configName)
     {
         var targetName = configName.ToLowerInvariant();
 
-        if (Directory.Exists(_configDir))
-        {
-            foreach (var file in Directory.GetFiles(_configDir, "*.json"))
-            {
-                var fileName = System.IO.Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
-                if (fileName == targetName)
-                {
-                    try
-                    {
-                        var json = File.ReadAllText(file);
-                        var config = JsonSerializer.Deserialize<EntityConfig>(json,
-                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        if (!Directory.Exists(_configDir))
+            return NewEmptyConfig(configName);
 
-                        if (config != null) return config;
-                    }
-                    catch (Exception)
-                    {
-                        // JSON 解析失败，返回默认空配置
-                    }
-                }
-            }
+        // 1. 如果 configName 包含 '/'，视为 "Domain/Name" 直接拼接路径
+        if (configName.Contains('/'))
+        {
+            var directPath = System.IO.Path.Combine(_configDir, configName + ".json");
+            if (File.Exists(directPath))
+                return LoadAndParse(directPath, configName);
         }
 
-        // 未找到或解析失败，返回默认空配置
-        return new EntityConfig
+        // 2. 先搜索根目录（扁平兼容）
+        var rootFile = Directory.GetFiles(_configDir, "*.json")
+            .FirstOrDefault(f => System.IO.Path.GetFileNameWithoutExtension(f).ToLowerInvariant() == targetName);
+        if (rootFile != null)
+            return LoadAndParse(rootFile, configName);
+
+        // 3. 遍历子目录递归搜索
+        foreach (var file in Directory.GetFiles(_configDir, "*.json", SearchOption.AllDirectories))
         {
-            Title = configName,
-            Columns = new List<DefineColumn>()
-        };
+            var fileName = System.IO.Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
+            if (fileName == targetName)
+                return LoadAndParse(file, configName);
+        }
+
+        return NewEmptyConfig(configName);
     }
+
+    private static EntityConfig LoadAndParse(string filePath, string configName)
+    {
+        try
+        {
+            var json = File.ReadAllText(filePath);
+            var config = JsonSerializer.Deserialize<EntityConfig>(json,
+                new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    Converters = { new JsonStringEnumConverter() }  // 支持字符串枚举反序列化
+                });
+            if (config != null) return config;
+        }
+        catch (Exception)
+        {
+            // JSON 解析失败，返回默认空配置
+        }
+        return NewEmptyConfig(configName);
+    }
+
+    private static EntityConfig NewEmptyConfig(string configName) => new()
+    {
+        Title = configName,
+        Columns = new List<DefineColumn>()
+    };
 
     /// <summary>
     ///     监听配置文件目录，文件变更时自动清除对应缓存

@@ -1,1 +1,0 @@
-import{p as u,r as n}from"./index-DmyR1Cli.js";const c=u("auth",()=>{const e=n(localStorage.getItem("YZH_TOKEN")||""),t=n(null),a=()=>!!e.value;function l(o){e.value=o,localStorage.setItem("YZH_TOKEN",o)}function r(){e.value="",t.value=null,localStorage.removeItem("YZH_TOKEN")}return{token:e,userInfo:t,isAuthenticated:a,setToken:l,clearToken:r}});export{c as u};

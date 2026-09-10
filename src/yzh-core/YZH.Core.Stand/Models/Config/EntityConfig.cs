@@ -41,6 +41,9 @@ public class EntityConfig
     /// <summary>表格列填充模式（AutoFix=等比例填满，PixFix=按像素宽度，适合字段多）</summary>
     public FillMode FillMode { get; set; } = FillMode.AutoFix;
 
+    /// <summary>表单布局列数（1=单列，2=双列，0=自动：BcFlag字段≤10用1列，>10用2列）</summary>
+    public int FormCols { get; set; } = 0;
+
     /// <summary>列/字段定义集合（同时驱动表格和表单）</summary>
     public List<DefineColumn> Columns { get; set; } = new();
 
@@ -68,6 +71,9 @@ public class EntityConfig
     ///     用途：前端表单校验、控件类型推断
     /// </summary>
     public Dictionary<string, EntityFieldSchema>? Schema { get; set; }
+
+    /// <summary>启用/禁用字段名（默认 IsValid，前端根据此字段显示启用/禁用按钮）</summary>
+    public string EnableField { get; set; } = "IsValid";
 }
 
 /// <summary>

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using YZH.Core.Stand.Models;
 using YZH.Core.DataBase.Models;
 
@@ -38,19 +39,43 @@ public static class FilterOperation
         if (!System.Text.RegularExpressions.Regex.IsMatch(filter.Field, @"^[a-zA-Z_][a-zA-Z0-9_]*$"))
             throw new ArgumentException($"非法字段名: {filter.Field}");
 
+        // 将 JsonElement 转换为实际 .NET 类型（JSON 反序列化后 object 可能是 JsonElement）
+        var value = NormalizeJsonValue(filter.Value);
+
         return filter.Operator?.ToLower() switch
         {
-            "eq" or "=" or "equal" => new SqlCondition(filter.Field, "=", filter.Value),
-            "neq" or "!=" or "notEqual" => new SqlCondition(filter.Field, "!=", filter.Value),
-            "gt" or ">" => new SqlCondition(filter.Field, ">", filter.Value),
-            "gte" or ">=" => new SqlCondition(filter.Field, ">=", filter.Value),
-            "lt" or "<" => new SqlCondition(filter.Field, "<", filter.Value),
-            "lte" or "<=" => new SqlCondition(filter.Field, "<=", filter.Value),
-            "contains" or "like" => new SqlCondition(filter.Field, "LIKE", $"%{filter.Value}%"),
-            "startswith" => new SqlCondition(filter.Field, "LIKE", $"{filter.Value}%"),
-            "endswith" => new SqlCondition(filter.Field, "LIKE", $"%{filter.Value}"),
-            "in" => new SqlCondition(filter.Field, "IN", filter.Value),
-            _ => new SqlCondition(filter.Field, "=", filter.Value)
+            "eq" or "=" or "equal" => new SqlCondition(filter.Field, "=", value),
+            "neq" or "!=" or "notEqual" => new SqlCondition(filter.Field, "!=", value),
+            "gt" or ">" => new SqlCondition(filter.Field, ">", value),
+            "gte" or ">=" => new SqlCondition(filter.Field, ">=", value),
+            "lt" or "<" => new SqlCondition(filter.Field, "<", value),
+            "lte" or "<=" => new SqlCondition(filter.Field, "<=", value),
+            "contains" or "like" => new SqlCondition(filter.Field, "LIKE", $"%{value}%"),
+            "startswith" => new SqlCondition(filter.Field, "LIKE", $"{value}%"),
+            "endswith" => new SqlCondition(filter.Field, "LIKE", $"%{value}"),
+            "in" => new SqlCondition(filter.Field, "IN", value),
+            _ => new SqlCondition(filter.Field, "=", value)
         };
+    }
+
+    /// <summary>
+    ///     将 JsonElement 转换为实际 .NET 类型
+    ///     JSON 反序列化为 object 时，数字会变成 JsonElement，需转换
+    /// </summary>
+    private static object? NormalizeJsonValue(object? value)
+    {
+        if (value is JsonElement jsonElement)
+        {
+            return jsonElement.ValueKind switch
+            {
+                JsonValueKind.String => jsonElement.GetString(),
+                JsonValueKind.Number => jsonElement.TryGetInt64(out var l) ? l : jsonElement.GetDouble(),
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                JsonValueKind.Null => null,
+                _ => jsonElement.GetRawText()
+            };
+        }
+        return value;
     }
 }

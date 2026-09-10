@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SqlSugar;
@@ -61,7 +62,11 @@ public class DbContextFactory : IDbContextFactory
                     {
                         EntityService = (property, columnInfo) =>
                         {
-                            // 可以在这里全局配置实体命名映射
+                            // 忽略标记了 [NotMapped] 的属性（如 IsLeaf 等计算属性）
+                            if (property.GetCustomAttributes(typeof(NotMappedAttribute), false).Any())
+                            {
+                                columnInfo.IsIgnore = true;
+                            }
                         }
                     }
                 });

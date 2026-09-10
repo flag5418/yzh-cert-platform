@@ -1,29 +1,51 @@
 // YZH Vue Core - 核心组件库
-// 业务无关的通用底层能力
+// 与项目完全无关的通用底层能力
+// 不依赖 share / admin / auditor
 
 // 组件
-export { YzhTable } from './components/table'
-export type { YzhTableColumn, YzhTableColumnV4, PageParams, Page, YzhTableDataLoader, YzhTableToolbar, DefaultSort, SearchField } from './components/table/types'
 export { YzhForm } from './components/form'
-export type { YzhFormField, YzhFieldType } from './components/form/YzhForm.vue'
-export { YzhSearchBar, YzhToolbar, YzhPagination, YzhPageLayout, YzhDialog } from './components/layout'
-export { YzhEmptyState, YzhStatusBadge, YzhCard } from './components/ui'
+export type { YzhFieldType, YzhFormField } from './components/form/YzhForm.vue'
+export {
+  YzhDialog,
+  YzhPageLayout,
+  YzhPagination,
+  YzhSearchBar,
+  YzhToolbar,
+  YzhTree,
+  YzhTreeTable,
+} from './components/layout'
 export { default as YzhCrudPage } from './components/page/YzhCrudPage.vue'
+export { YzhTable } from './components/table'
+export type {
+  DefaultSort,
+  Page,
+  PageParams,
+  SearchField,
+  YzhTableColumn,
+  YzhTableColumnV4,
+  YzhTableDataLoader,
+  YzhTableToolbar,
+} from './components/table/types'
+export { YzhCard, YzhEmptyState, YzhStatusBadge } from './components/ui'
 
-// API
-export { YzhApiClient, yzhApi, tokenStore } from './api/client'
-export type { ApiResponse, RequestOptions, YzhApiClientOptions } from './api/client'
-export * from './api/auth'
+// API 客户端
+export { YzhApiClient, tokenStore, yzhApi } from './api/client'
+export type {
+  ApiResponse,
+  RequestOptions,
+  YzhApiClientOptions,
+} from './api/client'
 
 // Composables
-export { useTable } from './composables/useTable'
 export { useAuth } from './composables/useAuth'
+export { useTable } from './composables/useTable'
 
-// Types
+// 页面逻辑基类
+export * from './logic'
+
+// 通用类型
 export * from './types'
 
-// Logic（页面逻辑基类 - Config 驱动渲染的核心，从 share 导出）
-export { CrudPageLogic, TreeTableLogic } from '@share/logic'
-
-// Utils
-export { default as http, type ApiResponse as HttpApiResponse, type LoginData } from './utils/http'
+// 通用工具
+export * from './utils/treeOps'
+export * from './utils/treeUtils'

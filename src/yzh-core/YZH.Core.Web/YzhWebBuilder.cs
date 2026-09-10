@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using YZH.Core.Api.Filters;
+using YZH.Core.Api.Interfaces;
 using YZH.Core.Api.Services;
 using YZH.Core.DataBase;
 using YZH.Core.DataBase.Interfaces;
@@ -76,6 +77,12 @@ public static class YzhWebBuilderExtensions
             return new YZH.Core.Stand.Helpers.JwtHelper(jwtOptions);
         });
 
+        // 注册 INoSql 实现（内存缓存版，生产环境可替换为 Redis）
+        builder.Services.AddScoped<INoSql, MemoryCacheNoSql>();
+
+        // 注册 IDistributedCache（TokenVersionService 使用，开发环境用内存版）
+        builder.Services.AddDistributedMemoryCache();
+
         // 注册缓存管理器
         builder.Services.AddScoped<ICacheManager, YZH.Core.Api.Services.CacheManager>();
 
@@ -88,11 +95,23 @@ public static class YzhWebBuilderExtensions
         // 注册验证码服务
         builder.Services.AddScoped<ICaptchaService, CaptchaService>();
 
+        // 注册 YZH 认证过滤器
+        builder.Services.AddScoped<YZH.Core.Api.Filters.YzhAuthFilter>();
+
+        // TODO: 以下服务为开发中特性，暂时注释
+        // builder.Services.AddScoped<IApiRepository, ApiRepository>();
+        // builder.Services.AddScoped<IPermissionCacheService, PermissionCacheService>();
+        // builder.Services.AddScoped<ApiScanner>();
+        // builder.Services.AddScoped<ApiSyncService>();
+        // builder.Services.AddHostedService<ApiSyncHostedService>();
+
         // 注册 JSON 序列化选项
         builder.Services.AddControllers()
             .AddJsonOptions(json =>
             {
-                json.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+                // 使用 PascalCase（与数据库列名、实体属性名一致）
+                // 这样 JSON 字段名 = 实体属性名 = 数据库列名
+                json.JsonSerializerOptions.PropertyNamingPolicy = null;
                 json.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
                 json.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
             });

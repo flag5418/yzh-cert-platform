@@ -67,6 +67,9 @@ public class TreeConfig
 
     /// <summary>是否允许删除含子节点的父节点</summary>
     public bool AllowDeleteWithChildren { get; set; } = false;
+
+    /// <summary>启用/禁用字段名（默认 IsValid，前端根据此字段显示启用/禁用按钮）</summary>
+    public string EnableField { get; set; } = "IsValid";
 }
 
 /// <summary>左树右表页面配置</summary>

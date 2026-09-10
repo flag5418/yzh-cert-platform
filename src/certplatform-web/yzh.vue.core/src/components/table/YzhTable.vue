@@ -40,6 +40,10 @@ const props = withDefaults(
     searchMaxFields?: number
     /** 是否禁用内部 padding（用于嵌套在卡片/TreeTable 中时避免双层 padding） */
     noPadding?: boolean
+    /** 行自定义操作按钮：{ 方法名: 显示文字 }（后端自动注入） */
+    rowActionButtons?: Record<string, string>
+    /** 行操作按钮是否使用 link 样式（默认 true） */
+    rowActionLink?: boolean
   }>(),
   {
     selectable: false,
@@ -49,7 +53,9 @@ const props = withDefaults(
     emptyText: '暂无数据',
     toolbar: true,
     searchMaxFields: 2,
-    noPadding: false
+    noPadding: false,
+    rowActionButtons: () => ({}),
+    rowActionLink: true
   }
 )
 
@@ -57,6 +63,7 @@ const emit = defineEmits<{
   (e: 'selection-change', rows: T[]): void
   (e: 'row-click', row: T, index: number): void
   (e: 'refresh'): void
+  (e: 'row-action', action: string, row: T): void
 }>()
 
 // 数据状态
@@ -89,6 +96,12 @@ const visibleColumns = computed(() =>
     if (hiddenColumnFields.value.has(c.prop as string)) return false
     return true
   })
+)
+
+/** 是否显示动态行操作列（当 rowActionButtons 有值且 columns 中无 actions 列时自动追加） */
+const showDynamicActionColumn = computed(() =>
+  Object.keys(props.rowActionButtons).length > 0 &&
+  !props.columns.some((c) => c.prop === 'actions')
 )
 
 /** 切换列显示/隐藏 */
@@ -229,6 +242,26 @@ function onRowClick(row: T, index: number) {
 }
 
 /**
+ * 根据操作 key 返回按钮类型
+ */
+function getRowActionType(key: string): 'primary' | 'success' | 'warning' | 'danger' | 'info' {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
+    disable: 'warning',
+    enable: 'success',
+    delete: 'danger',
+    edit: 'primary',
+  }
+  return map[key] || 'primary'
+}
+
+/**
+ * 处理行操作按钮点击
+ */
+function handleRowAction(action: string, row: T) {
+  emit('row-action', action, row)
+}
+
+/**
  * 刷新
  */
 function refresh() {
@@ -248,10 +281,54 @@ onMounted(() => {
   loadData()
 })
 
+/**
+ * 插入行（局部刷新，不重新请求 API）
+ */
+function insertRow(row: T, position: 'top' | 'bottom' = 'top') {
+  if (position === 'top') {
+    rows.value.unshift(row as any)
+  } else {
+    rows.value.push(row as any)
+  }
+  total.value++
+}
+
+/**
+ * 替换行（按匹配函数查找并替换）
+ */
+function replaceRow(matchFn: (row: any) => boolean, newRow: T) {
+  const idx = rows.value.findIndex((r: any) => matchFn(r))
+  if (idx >= 0) {
+    rows.value.splice(idx, 1, newRow as any)
+  }
+}
+
+/**
+ * 移除行（按匹配函数查找并移除）
+ */
+function removeRow(matchFn: (row: any) => boolean) {
+  const idx = rows.value.findIndex((r: any) => matchFn(r))
+  if (idx >= 0) {
+    rows.value.splice(idx, 1)
+    total.value = Math.max(0, total.value - 1)
+  }
+}
+
+/**
+ * 获取当前行数
+ */
+function getRowCount(): number {
+  return rows.value.length
+}
+
 // 暴露方法给父组件
 defineExpose({
   refresh,
   loadData,
+  insertRow,
+  replaceRow,
+  removeRow,
+  getRowCount,
   getSelectedRows: () => selectedRows.value,
   clearSelection: () => {
     selectedRows.value = []
@@ -377,6 +454,28 @@ defineExpose({
               </template>
             </el-table-column>
           </template>
+
+          <!-- 动态行操作列（由 rowActionButtons 自动驱动） -->
+          <el-table-column
+            v-if="showDynamicActionColumn"
+            label="操作"
+            :width="Object.keys(rowActionButtons).length * 70"
+            fixed="right"
+            align="center"
+          >
+            <template #default="{ row }">
+              <el-button
+                v-for="(text, key) in rowActionButtons"
+                :key="key"
+                :link="rowActionLink"
+                size="small"
+                :type="getRowActionType(key)"
+                @click="handleRowAction(key, row)"
+              >
+                {{ text }}
+              </el-button>
+            </template>
+          </el-table-column>
 
           <template #empty>
             <div class="yzh-table__empty">

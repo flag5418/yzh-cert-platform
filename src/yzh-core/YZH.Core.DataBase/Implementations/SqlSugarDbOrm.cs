@@ -35,6 +35,7 @@ public class SqlSugarDbOrm : IDbOrm
             var entity = await _client.Queryable<T>()
                 .Where(predicate)
                 .Where(IsDeletedCondition<T>())
+                .Where(IsValidCondition<T>())
                 .FirstAsync();
 
             return Result<T?>.Ok(entity);
@@ -50,7 +51,7 @@ public class SqlSugarDbOrm : IDbOrm
     {
         try
         {
-            var query = _client.Queryable<T>().Where(IsDeletedCondition<T>());
+            var query = _client.Queryable<T>().Where(IsDeletedCondition<T>()).Where(IsValidCondition<T>());
             if (predicate != null)
                 query = query.Where(predicate);
             var list = await query.ToListAsync();
@@ -75,6 +76,11 @@ public class SqlSugarDbOrm : IDbOrm
             var hasIsDeleted = HasProperty<T>("IsDeleted");
             if (hasIsDeleted)
                 query = query.Where("IsDeleted = 0");
+
+            // 有效标志过滤
+            var hasIsValid = HasProperty<T>("IsValid");
+            if (hasIsValid)
+                query = query.Where("IsValid = 1");
 
             // 解析 Conditions
             if (options.Conditions?.Length > 0)
@@ -114,7 +120,7 @@ public class SqlSugarDbOrm : IDbOrm
     {
         try
         {
-            var query = _client.Queryable<T>().Where(IsDeletedCondition<T>());
+            var query = _client.Queryable<T>().Where(IsDeletedCondition<T>()).Where(IsValidCondition<T>());
             if (predicate != null)
                 query = query.Where(predicate);
             var count = await query.CountAsync();
@@ -133,6 +139,7 @@ public class SqlSugarDbOrm : IDbOrm
         {
             var exists = await _client.Queryable<T>()
                 .Where(IsDeletedCondition<T>())
+                .Where(IsValidCondition<T>())
                 .Where(predicate)
                 .AnyAsync();
             return Result<bool>.Ok(exists);
@@ -184,7 +191,7 @@ public class SqlSugarDbOrm : IDbOrm
             var codeValue = GetPropertyValue(entity, "Code");
             var count = await _client.Updateable(entity)
                 .IgnoreColumns(GetIgnoreColumnsForUpdate())
-                .Where("Code = @Code", new SugarParameter("@Code", codeValue))
+                .Where("Code = @Code", new SugarParameter[] { new SugarParameter("@Code", codeValue) })
                 .ExecuteCommandAsync();
 
             return count > 0
@@ -205,7 +212,7 @@ public class SqlSugarDbOrm : IDbOrm
             var codeValue = GetPropertyValue(entity, "Code");
             var count = await _client.Updateable(entity)
                 .UpdateColumns(fields)
-                .Where("Code = @Code", new SugarParameter("@Code", codeValue))
+                .Where("Code = @Code", new SugarParameter[] { new SugarParameter("@Code", codeValue) })
                 .ExecuteCommandAsync();
 
             return count > 0
@@ -240,7 +247,7 @@ public class SqlSugarDbOrm : IDbOrm
         try
         {
             var count = await _client.Deleteable<T>()
-                .Where("Code = @Code", new SugarParameter("@Code", code))
+                .Where("Code = @Code", new SugarParameter[] { new SugarParameter("@Code", code) })
                 .ExecuteCommandAsync();
             return Result<bool>.Ok(count > 0);
         }
@@ -366,6 +373,23 @@ public class SqlSugarDbOrm : IDbOrm
         var param = Expression.Parameter(typeof(T), "x");
         var member = Expression.Property(param, prop);
         var constant = Expression.Constant(false);
+        var body = Expression.Equal(member, constant);
+        return Expression.Lambda<Func<T, bool>>(body, param);
+    }
+
+    /// <summary>
+    ///     获取有效标志过滤条件（如果实体有 IsValid 属性）
+    ///     1=有效（默认），0=无效
+    /// </summary>
+    private static Expression<Func<T, bool>> IsValidCondition<T>() where T : class, new()
+    {
+        var prop = typeof(T).GetProperty("IsValid");
+        if (prop == null)
+            return _ => true; // 无 IsValid 字段，不过滤
+
+        var param = Expression.Parameter(typeof(T), "x");
+        var member = Expression.Property(param, prop);
+        var constant = Expression.Constant(1);
         var body = Expression.Equal(member, constant);
         return Expression.Lambda<Func<T, bool>>(body, param);
     }

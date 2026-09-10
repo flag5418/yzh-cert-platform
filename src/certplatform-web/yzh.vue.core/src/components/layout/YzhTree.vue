@@ -34,11 +34,18 @@
       @node-collapse="handleNodeCollapse"
     >
       <template #default="{ data }">
-        <div class="yzh-tree__node">
+        <div class="yzh-tree__node" @mouseenter="hoveredNode = data.code" @mouseleave="hoveredNode = null">
           <!-- 图标 -->
-          <span v-if="data.extra?.icon" class="yzh-tree__icon">{{ data.extra.icon }}</span>
-          <span v-else-if="data.isLeaf" class="yzh-tree__icon">📄</span>
-          <span v-else class="yzh-tree__icon">📁</span>
+          <el-icon v-if="data.extra?.icon && !isEmoji(data.extra.icon)" class="yzh-tree__icon">
+            <component :is="data.extra.icon" />
+          </el-icon>
+          <span v-else-if="data.extra?.icon" class="yzh-tree__icon">{{ data.extra.icon }}</span>
+          <el-icon v-else-if="data.isLeaf" class="yzh-tree__icon yzh-tree__icon--leaf">
+            <Document />
+          </el-icon>
+          <el-icon v-else class="yzh-tree__icon yzh-tree__icon--folder">
+            <Folder />
+          </el-icon>
 
           <!-- 名称 -->
           <span
@@ -52,6 +59,30 @@
           <span v-if="data.extra?.badge" class="yzh-tree__badge">
             {{ data.extra.badge }}
           </span>
+
+          <!-- 操作下拉菜单 -->
+          <el-dropdown
+            v-if="nodeActions && Object.keys(nodeActions).length"
+            trigger="click"
+            @command="(cmd: string) => handleNodeAction(cmd, data)"
+            @click.stop
+          >
+            <el-button link size="small" class="yzh-tree__more-btn">
+              ⋯
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item
+                  v-for="(text, key) in nodeActions"
+                  :key="key"
+                  :command="key"
+                  :class="getDropdownItemClass(key)"
+                >
+                  {{ getActionLabel ? getActionLabel(key, data) : text }}
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </template>
     </el-tree>
@@ -61,7 +92,18 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElTree, ElInput } from 'element-plus'
+import { Document, Folder } from '@element-plus/icons-vue'
 import type { TreeNode } from '@share/types/tree'
+
+// ========================================================
+// 工具函数
+// ========================================================
+
+/** 判断字符串是否为 emoji（用于区分 element-plus 图标组件名和 emoji 字符串） */
+function isEmoji(str: string): boolean {
+  const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u
+  return emojiRegex.test(str)
+}
 
 // ========================================================
 // Props
@@ -94,6 +136,10 @@ interface Props {
   highlightKeyword?: boolean
   /** 节点图标字段 */
   iconField?: string
+  /** 节点自定义操作按钮：{ 方法名: 显示文字 }（后端自动注入） */
+  nodeActions?: Record<string, string>
+  /** 动态操作文本函数（根据节点状态返回显示文字） */
+  getActionLabel?: (action: string, node: TreeNode) => string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -105,7 +151,9 @@ const props = withDefaults(defineProps<Props>(), {
   expandOnClickNode: true,
   highlightCurrent: true,
   searchable: false,
-  highlightKeyword: true
+  highlightKeyword: true,
+  nodeActions: () => ({}),
+  getActionLabel: undefined
 })
 
 // ========================================================
@@ -117,6 +165,7 @@ const emit = defineEmits<{
   (e: 'check-change', checkedNodes: TreeNode[]): void
   (e: 'node-expand', node: TreeNode): void
   (e: 'node-collapse', node: TreeNode): void
+  (e: 'node-action', action: string, node: TreeNode): void
 }>()
 
 // ========================================================
@@ -125,6 +174,7 @@ const emit = defineEmits<{
 
 const treeRef = ref<InstanceType<typeof ElTree>>()
 const searchKeyword = ref('')
+const hoveredNode = ref<string | null>(null)
 
 // ========================================================
 // 树配置
@@ -197,6 +247,24 @@ function handleNodeCollapse(node: TreeNode) {
 }
 
 // ========================================================
+// 节点操作按钮
+// ========================================================
+
+/** 根据操作 key 返回下拉菜单项样式类 */
+function getDropdownItemClass(key: string): string {
+  const map: Record<string, string> = {
+    'toggle-valid': 'yzh-tree__action-toggle',
+    delete: 'yzh-tree__action-danger',
+  }
+  return map[key] || ''
+}
+
+/** 处理节点操作按钮点击 */
+function handleNodeAction(action: string, node: TreeNode) {
+  emit('node-action', action, node)
+}
+
+// ========================================================
 // 搜索关键字变化时重新过滤
 // ========================================================
 
@@ -260,13 +328,34 @@ function setCurrentNode(code: string) {
   treeRef.value?.setCurrentKey(code)
 }
 
+/**
+ * 向指定父节点追加子节点（直接操作 el-tree 内部 store，不触发 API）
+ * @param parentCode 父节点 code（null = 追加到根级）
+ * @param newNode 新节点数据（TreeNode 格式）
+ */
+function appendNode(parentCode: string | null, newNode: TreeNode) {
+  if (!treeRef.value) return
+  const store = treeRef.value.store
+  if (parentCode) {
+    const parentNode = store.nodesMap[parentCode]
+    if (parentNode) {
+      // el-tree Node.append 会自动处理 children 初始化和 isLeaf 更新
+      parentNode.append(newNode)
+      return
+    }
+  }
+  // 根级：直接追加到 treeData
+  props.data.push(newNode)
+}
+
 defineExpose({
   getCheckedNodes,
   setCheckedNodes,
   setChecked,
   expandAll,
   collapseAll,
-  setCurrentNode
+  setCurrentNode,
+  appendNode
 })
 </script>
 
@@ -303,6 +392,14 @@ defineExpose({
   flex-shrink: 0;
 }
 
+.yzh-tree__icon--folder {
+  color: var(--el-color-warning);
+}
+
+.yzh-tree__icon--leaf {
+  color: var(--el-text-color-secondary);
+}
+
 .yzh-tree__label {
   flex: 1;
   overflow: hidden;
@@ -324,5 +421,26 @@ defineExpose({
   border-radius: 10px;
   line-height: 18px;
   flex-shrink: 0;
+}
+
+.yzh-tree__more-btn {
+  font-size: 16px;
+  padding: 0 4px;
+  height: 20px;
+  color: var(--el-text-color-secondary);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.yzh-tree__node:hover .yzh-tree__more-btn {
+  opacity: 1;
+}
+
+:deep(.yzh-tree__action-danger) {
+  color: var(--el-color-danger) !important;
+}
+
+:deep(.yzh-tree__action-toggle) {
+  color: var(--el-color-warning) !important;
 }
 </style>

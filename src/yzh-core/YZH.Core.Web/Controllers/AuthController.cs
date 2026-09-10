@@ -2,6 +2,7 @@ extern alias VolFramework;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using System.Text.Json.Serialization;
 using YZH.Core.DataBase;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Models;
@@ -14,7 +15,7 @@ using StandPasswordHelper = YZH.Core.Stand.Helpers.PasswordHelper;
 
 namespace YZH.Core.Web.Controllers;
 
-[Route("api/[controller]")]
+[Route("api/User")]
 [ApiController]
 public class AuthController : ControllerBase
 {

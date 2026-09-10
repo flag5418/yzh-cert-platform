@@ -15,9 +15,10 @@ CERTPLATFORM_DIR="$PROJECT_DIR/src/certplatform-web"
 # 端口映射（兼容 bash 3.2，不使用关联数组）
 get_port() {
   case "$1" in
-    admin)   echo 9990 ;;
-    auditor) echo 9991 ;;
-    *)       echo "" ;;
+    admin)      echo 9990 ;;
+    auditor)    echo 9991 ;;
+    enterprise) echo 9993 ;;
+    *)          echo "" ;;
   esac
 }
 
@@ -25,22 +26,33 @@ get_port() {
 start() {
   local role=$1
   local port=$(get_port "$role")
-  local dir="$CERTPLATFORM_DIR/$role"
+  local dir="$CERTPLATFORM_DIR/cert/cert-$role"
   
   if [[ ! -d "$dir" ]]; then
     echo "错误: $role 目录不存在: $dir"
     exit 1
   fi
   
-  if [[ ! -f "$dir/node_modules/.bin/vite" ]]; then
-    echo "错误: $role 依赖未安装，请先执行: cd $dir && npm install"
+  if [[ ! -f "$dir/package.json" ]]; then
+    echo "错误: $role package.json 不存在: $dir"
     exit 1
   fi
   
   echo "启动 $role 端 (端口 $port)..."
   cd "$dir"
   export PATH="/opt/homebrew/bin:$PATH"
-  node node_modules/.bin/vite --host 127.0.0.1 --port "$port"
+  nohup npm run dev > "/tmp/vite_${role}_${port}.log" 2>&1 &
+  echo "启动中，日志: /tmp/vite_${role}_${port}.log"
+  
+  # 等待端口就绪（最多 30 秒）
+  for i in $(seq 1 30); do
+    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
+      echo "$role 端已就绪 (耗时 ${i}s): http://127.0.0.1:$port"
+      return 0
+    fi
+    sleep 1
+  done
+  echo "启动超时，请查看日志: /tmp/vite_${role}_${port}.log"
 }
 
 # 停止前端
@@ -106,28 +118,42 @@ case "$role" in
       *)       echo "未知操作: $action"; exit 1 ;;
     esac
     ;;
+  enterprise)
+    case "$action" in
+      start)   start "enterprise" ;;
+      stop)    stop "enterprise" ;;
+      restart) restart "enterprise" ;;
+      status)  status "enterprise" ;;
+      *)       echo "未知操作: $action"; exit 1 ;;
+    esac
+    ;;
   all)
     case "$action" in
       start)
         start "admin" &
         start "auditor" &
+        start "enterprise" &
         wait
         ;;
       stop)
         stop "admin"
         stop "auditor"
+        stop "enterprise"
         ;;
       restart)
         stop "admin"
         stop "auditor"
+        stop "enterprise"
         sleep 1
         start "admin" &
         start "auditor" &
+        start "enterprise" &
         wait
         ;;
       status)
         status "admin"
         status "auditor"
+        status "enterprise"
         ;;
       *)
         echo "未知操作: $action"; exit 1 ;;
@@ -135,7 +161,7 @@ case "$role" in
     ;;
   *)
     echo "未知角色: $role"
-    echo "用法: $0 [admin|auditor|all] [start|stop|restart|status]"
+    echo "用法: $0 [admin|auditor|enterprise|all] [start|stop|restart|status]"
     exit 1
     ;;
 esac

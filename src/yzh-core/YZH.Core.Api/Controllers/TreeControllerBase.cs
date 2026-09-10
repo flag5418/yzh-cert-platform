@@ -106,7 +106,7 @@ public abstract class TreeControllerBase<T> : YzhControllerBase<T>
     // ========================================================
 
     /// <summary>
-    ///     新增节点（覆盖基类，增加 parentCode 校验）
+    ///     新增节点（覆盖基类，自动填充 Code/CreateBy/CreateTime + parentCode 校验）
     ///     POST api/{controller}/add
     /// </summary>
     [HttpPost("add")]
@@ -114,7 +114,34 @@ public abstract class TreeControllerBase<T> : YzhControllerBase<T>
     {
         try
         {
-            // 校验 parentCode 存在性
+            // 1. 自动填充 Code（如果为空）
+            var codeProp = typeof(T).GetProperty("Code",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (codeProp != null && codeProp.PropertyType == typeof(string))
+            {
+                var currentCode = codeProp.GetValue(entity) as string;
+                if (string.IsNullOrEmpty(currentCode))
+                {
+                    codeProp.SetValue(entity, Guid.NewGuid().ToString("N"));
+                }
+            }
+
+            // 2. 自动填充审计字段 CreateBy / CreateTime
+            var createByProp = typeof(T).GetProperty("CreateBy",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (createByProp != null && createByProp.PropertyType == typeof(string))
+            {
+                createByProp.SetValue(entity, UserContext.UserCode);
+            }
+
+            var createTimeProp = typeof(T).GetProperty("CreateTime",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (createTimeProp != null && createTimeProp.PropertyType == typeof(DateTime))
+            {
+                createTimeProp.SetValue(entity, DateTime.UtcNow);
+            }
+
+            // 3. 校验 parentCode 存在性
             if (!string.IsNullOrEmpty(entity.ParentCode))
             {
                 var parentResult = await Entity.GetByCode(entity.ParentCode);
@@ -122,7 +149,7 @@ public abstract class TreeControllerBase<T> : YzhControllerBase<T>
                     return BadRequest(ApiResponse.Fail($"父节点 {entity.ParentCode} 不存在"));
             }
 
-            // 调用基类 Add
+            // 4. 调用基类 Add
             return await base.Add(entity);
         }
         catch (Exception ex)

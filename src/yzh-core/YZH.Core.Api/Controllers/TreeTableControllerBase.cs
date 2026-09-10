@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Helpers;
 using YZH.Core.Api.Services;
@@ -93,22 +94,31 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
         }
     }
 
-    /// <summary>懒加载子节点</summary>
+    /// <summary>懒加载子节点（ParentCode 为空时回退加载根节点）</summary>
     [HttpPost("tree/children")]
     public virtual async Task<ActionResult<ApiResponse<TreeItemDto[]>>> GetChildren(
         [FromBody] TreeChildrenRequest request)
     {
         try
         {
-            if (string.IsNullOrEmpty(request.ParentCode))
-                return BadRequest(ApiResponse.Fail("parentCode 不能为空"));
+            List<T> items;
 
-            var items = await TreeEntity.GetChildren(request.ParentCode);
+            if (string.IsNullOrEmpty(request.ParentCode))
+            {
+                // 容错：ParentCode 为空时回退到加载根节点
+                items = await TreeEntity.GetRootNodes();
+            }
+            else
+            {
+                items = await TreeEntity.GetChildren(request.ParentCode);
+            }
+
             var dtos = new List<TreeItemDto>();
+            var baseLevel = string.IsNullOrEmpty(request.ParentCode) ? 0 : request.Level + 1;
 
             foreach (var item in items)
             {
-                dtos.Add(MapToTreeItem(item, request.Level + 1));
+                dtos.Add(MapToTreeItem(item, baseLevel));
             }
 
             // 批量计算 isLeaf
@@ -271,7 +281,7 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
     /// <summary>统一树节点操作入口</summary>
     [HttpPost("tree/action/{methodName}")]
     public virtual async Task<ActionResult<ApiResponse<object?>>> ExecuteTreeAction(
-        string methodName, [FromBody] T entity)
+        string methodName, [FromBody] JsonElement entityData)
     {
         if (string.IsNullOrEmpty(methodName))
             return BadRequest(ApiResponse.Fail("操作名称不能为空"));
@@ -279,8 +289,57 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
         if (!_treeActions.TryGetValue(methodName.ToLowerInvariant(), out var handler))
             return BadRequest(ApiResponse.Fail($"树操作 [{methodName}] 未注册，请检查 RegisterTreeAction 调用"));
 
+        // 仅传递 Code 属性到处理函数（避免 [Required] 校验失败）
+        var code = entityData.TryGetProperty("Code", out var codeProp) ? codeProp.GetString() : null;
+        var entity = new T();
+        var codePropInfo = typeof(T).GetProperty("Code");
+        if (codePropInfo != null && code != null)
+            codePropInfo.SetValue(entity, code);
+
         var result = await handler(entity);
         return Ok(ApiResponse<object?>.Ok(result));
+    }
+
+    /// <summary>
+    ///     切换树节点有效标志（IsValid: 0 ↔ 1）
+    ///     URL: POST api/{controller}/tree/toggle-valid
+    ///     Body: { "Code": "xxx" }
+    ///     返回: { "Code": "xxx", "IsValid": 0/1 }
+    /// </summary>
+    [HttpPost("tree/toggle-valid")]
+    public virtual async Task<ActionResult<ApiResponse<object?>>> ToggleTreeNodeIsValid([FromBody] JsonElement entityData)
+    {
+        try
+        {
+            var code = entityData.TryGetProperty("Code", out var codeProp) ? codeProp.GetString() : null;
+            if (string.IsNullOrEmpty(code))
+                return BadRequest(ApiResponse.Fail("Code 不能为空"));
+
+            // 查询当前实体（不过滤 IsValid）
+            var getResult = await TreeEntity.GetByCodeAny(code);
+            if (!getResult.Success || getResult.Data == null)
+                return BadRequest(ApiResponse.Fail($"节点 {code} 不存在"));
+
+            var entity = getResult.Data;
+            var isValidProp = typeof(T).GetProperty("IsValid");
+            if (isValidProp == null)
+                return BadRequest(ApiResponse.Fail("树节点实体没有 IsValid 字段"));
+
+            var currentVal = (int)(isValidProp.GetValue(entity) ?? 1);
+            var newVal = currentVal == 1 ? 0 : 1;
+            isValidProp.SetValue(entity, newVal);
+
+            // 执行更新
+            var updateResult = await TreeEntity.Update(entity, UserContext.ClientIp);
+            if (!updateResult.Success)
+                return BadRequest(ApiResponse.Fail(updateResult.Error));
+
+            return Ok(ApiResponse<object?>.Ok(new { Code = code, IsValid = newVal }));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ApiResponse.Fail($"切换树节点有效标志失败：{ex.Message}"));
+        }
     }
 
     // ========================================================
@@ -332,29 +391,153 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
     // 七、配置获取
     // ========================================================
 
-    /// <summary>覆盖 /config → 返回 TreeTableConfig（base.GetConfig 已标记 [HttpGet("config")]，此处 new 不重复标记路由）</summary>
-    public new ActionResult<ApiResponse<TreeTableConfig>> GetConfig()
+    /// <summary>覆盖 /config → 返回 TreeTableConfigDto（前端 DTO，camelCase）</summary>
+    /// <remarks>
+    /// 注意：不能使用 [HttpGet("config")]，因为与基类 virtual 方法冲突，
+    /// ASP.NET Core 会优先选择基类的 virtual 方法。
+    /// 改用 [ActionName] + 独立路由，前端通过 /api/{controller}/treepconfig 访问。
+    /// </remarks>
+    [HttpGet("treepconfig")]
+    [ActionName("treepconfig")]
+    public ActionResult<ApiResponse<TreeTableConfigDto>> GetTreeTableConfig()
     {
         var tableConfig = GetConfigCore();
         if (!tableConfig.Success)
-            return BadRequest(ApiResponse<TreeTableConfig>.Fail(tableConfig.Error!));
+            return BadRequest(ApiResponse<TreeTableConfigDto>.Fail(tableConfig.Error!));
 
-        var result = new TreeTableConfig
+        var treeFormConfig = LoadTreeFormConfig();
+
+        // 自动注入已注册的 RowActions 到 TableConfig.RowButtons
+        var tableConfigDto = ConvertToDto(tableConfig.Data!);
+        InjectRowActionsToConfig(tableConfigDto);
+
+        // 自动注入已注册的 TreeActions 到 TreeConfig.CustomActions
+        var treeConfigDto = ConvertTreeConfigToDto(TreeConfig);
+        InjectTreeActionsToConfig(treeConfigDto);
+
+        var result = new TreeTableConfigDto
         {
-            TableConfig = tableConfig.Data!,
-            TreeConfig = TreeConfig
+            TableConfig = tableConfigDto,
+            TreeConfig = treeConfigDto,
+            TreeFormConfig = treeFormConfig != null ? ConvertToDto(treeFormConfig) : null
         };
 
-        // 加载树节点表单配置（如果子类指定了文件名）
-        if (!string.IsNullOrEmpty(TreeFormConfigName))
-        {
-            result.TreeFormConfig = EntityConfigHelper.GetConfig(TreeFormConfigName);
-            // 反射树节点实体类型 T，注入空实体模板
-            result.TreeFormConfig.NewEntity = EntitySchemaHelper.GetEmptyEntity<T>();
-            result.TreeFormConfig.Schema = EntitySchemaHelper.GetSchema<T>();
-        }
+        return Ok(ApiResponse<TreeTableConfigDto>.Ok(result));
+    }
 
-        return Ok(ApiResponse<TreeTableConfig>.Ok(result));
+    /// <summary>自动注入已注册的 RowActions 到 Config.RowButtons.CustomButtons</summary>
+    private void InjectRowActionsToConfig(EntityConfigDto dto)
+    {
+        if (_rowActions.Count == 0) return;
+
+        dto.RowButtons ??= new RowButtonConfigDto();
+        if (dto.RowButtons.CustomButtons == null)
+            dto.RowButtons.CustomButtons = new Dictionary<string, string>();
+
+        // 内置按钮映射
+        var builtInMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "disable", "禁用" },
+            { "enable", "启用" }
+        };
+
+        foreach (var actionName in _rowActions.Keys)
+        {
+            if (!dto.RowButtons.CustomButtons.ContainsKey(actionName))
+            {
+                dto.RowButtons.CustomButtons[actionName] =
+                    builtInMap.GetValueOrDefault(actionName, actionName);
+            }
+        }
+    }
+
+    /// <summary>自动注入已注册的 TreeActions 到 TreeConfig.CustomActions</summary>
+    private void InjectTreeActionsToConfig(TreeBehaviorConfigDto dto)
+    {
+        if (_treeActions.Count == 0) return;
+
+        dto.CustomActions = new Dictionary<string, string>();
+
+        // 内置按钮映射
+        var builtInMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "disable", "禁用" },
+            { "enable", "启用" }
+        };
+
+        foreach (var actionName in _treeActions.Keys)
+        {
+            dto.CustomActions[actionName] =
+                builtInMap.GetValueOrDefault(actionName, actionName);
+        }
+    }
+
+    /// <summary>将后端 EntityConfig 转换为前端 EntityConfigDto</summary>
+    private EntityConfigDto ConvertToDto(EntityConfig config)
+    {
+        var dto = new EntityConfigDto
+        {
+            Title = config.Title,
+            FillMode = config.FillMode.ToString(),
+            Columns = config.Columns?.Select(c => new ColumnConfigDto
+            {
+                FieldName = c.FieldName,
+                DesName = c.DesName,
+                Type = c.Type.ToString(),
+                XsFlag = c.XSFlag,
+                BcFlag = c.BCFlag,
+                Yxk = c.YXK,
+                Enable = c.Enable,
+                Sortable = c.Sortable,
+                Width = c.Width > 0 ? (int)c.Width : null,
+                Fixed = c.Fixed,
+                Align = c.Align,
+                DictCode = c.DictCode,
+                Format = c.Format,
+                Row = c.Row,
+                Col = c.Col,
+                RowSpan = c.RowSpan,
+                ColSpan = c.ColSpan,
+                Mrz = c.MRZ
+            }).ToList() ?? new(),
+            NewEntity = config.NewEntity,
+            Schema = config.Schema,
+            EnableField = config.EnableField
+        };
+        return dto;
+    }
+
+    /// <summary>将后端 TreeConfig 转换为前端 TreeBehaviorConfigDto</summary>
+    private TreeBehaviorConfigDto ConvertTreeConfigToDto(TreeConfig config)
+    {
+        return new TreeBehaviorConfigDto
+        {
+            Lazy = config.Lazy,
+            AllowEdit = config.AllowEdit,
+            AllowDelete = config.AllowDelete,
+            AllowRename = config.AllowRename,
+            RootParentCode = config.RootParentCode,
+            NameField = config.NameField,
+            CodeField = config.CodeField,
+            ParentCodeField = config.ParentCodeField,
+            RelateField = config.RelateField,
+            NoSelectionBehavior = config.NoSelectionBehavior,
+            MaxLevel = config.MaxLevel,
+            AllowDeleteWithChildren = config.AllowDeleteWithChildren,
+            EnableField = config.EnableField
+        };
+    }
+
+    /// <summary>加载树节点表单配置（如果子类指定了文件名）</summary>
+    private EntityConfig? LoadTreeFormConfig()
+    {
+        if (string.IsNullOrEmpty(TreeFormConfigName))
+            return null;
+        var config = EntityConfigHelper.GetConfig(TreeFormConfigName);
+        // 反射树节点实体类型 T，注入空实体模板
+        config.NewEntity = EntitySchemaHelper.GetEmptyEntity<T>();
+        config.Schema = EntitySchemaHelper.GetSchema<T>();
+        return config;
     }
 
     // ========================================================

@@ -69,6 +69,15 @@ public class DefineColumn
 
     /// <summary>格式化字符串（日期/数字）</summary>
     public string? Format { get; set; }
+
+    /// <summary>对齐方式：left/center/right</summary>
+    public string? Align { get; set; }
+
+    /// <summary>字典编码</summary>
+    public string? DictCode { get; set; }
+
+    /// <summary>控件是否启用（true=可用，false=禁用）</summary>
+    public bool Enable { get; set; } = true;
 }
 
 public class SelectOption
