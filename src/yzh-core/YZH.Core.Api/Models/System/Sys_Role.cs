@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using SqlSugar;
 using YZH.Core.Stand.Attributes;
 using YZH.Core.Stand.Models.Entity;
+using YZH.Core.Stand.Models;
 
 namespace YZH.Core.Api.Models.System;
 
@@ -10,10 +11,11 @@ namespace YZH.Core.Api.Models.System;
 ///     角色管理实体（新架构版）
 ///     对应数据库表 Sys_Role
 ///     兼容 Vol 框架表结构
+///     支持树形结构：通过 ParentCode 构建层级关系
 /// </summary>
 [SugarTable("Sys_Role")]
 [YZHDeleteStrategy(Mode = DeleteMode.Soft)]
-public class Sys_Role : BaseEntity
+public class Sys_Role : BaseEntity, ITreeEntity
 {
     /// <summary>角色名称</summary>
     [Required(AllowEmptyStrings = false)]
@@ -22,11 +24,17 @@ public class Sys_Role : BaseEntity
     [SugarColumn(ColumnName = "RoleName")]
     public string RoleName { get; set; } = string.Empty;
 
-    /// <summary>父级ID</summary>
+    /// <summary>父级ID（数据库列，保持兼容）</summary>
     [Required]
     [Display(Name = "父级ID")]
     [SugarColumn(ColumnName = "ParentId")]
     public int ParentId { get; set; }
+
+    /// <summary>父节点编码（树结构，根节点为 null）</summary>
+    [StringLength(64)]
+    [Display(Name = "上级角色")]
+    [SugarColumn(ColumnName = "ParentCode")]
+    public string? ParentCode { get; set; }
 
     /// <summary>部门ID</summary>
     [Display(Name = "部门ID")]
@@ -67,4 +75,10 @@ public class Sys_Role : BaseEntity
     /// <summary>修改时间</summary>
     [SugarColumn(ColumnName = "ModifyDate")]
     public DateTime? ModifyDate { get; set; }
+
+    // === ITreeEntity 实现 ===
+
+    /// <summary>是否叶子节点（后端批量计算，非持久化）</summary>
+    [SugarColumn(IsIgnore = true)]
+    public new bool? IsLeaf { get; set; }
 }

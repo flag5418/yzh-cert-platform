@@ -2,17 +2,26 @@ import { yzhApi } from '@yzh-core/api/client'
 import type { Page, PageParams } from '@yzh-core/types'
 
 export interface SysRole {
-  role_Id: number
-  roleName: string
-  roleMark: string
-  enable: number
-  createDate: string
+  Code: string
+  RoleName: string
+  ParentCode?: string
+  ParentId: number
+  Enable: number
+  OrderNo?: number
+  CreateDate?: string
 }
 
 export async function getRolePage(params: PageParams): Promise<Page<SysRole>> {
-  return yzhApi.post<Page<SysRole>>('/api/Sys_Role/getPageData', params)
+  return yzhApi.post<Page<SysRole>>('/api/System/Role/filter', params)
 }
 
-export async function getRoleOptions(): Promise<Array<{ label: string; value: number }>> {
-  return yzhApi.post<Array<{ label: string; value: number }>>('/api/Sys_Role/getList')
+export async function getRoleOptions(): Promise<Array<{ label: string; value: string }>> {
+  const res = await yzhApi.post<Page<SysRole>>('/api/System/Role/filter', {
+    Page: 1,
+    PageSize: 1000,
+  })
+  return (res.data?.Items ?? []).map((r) => ({
+    label: r.RoleName,
+    value: r.Code,
+  }))
 }
