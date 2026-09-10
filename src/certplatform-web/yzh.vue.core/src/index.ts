@@ -13,6 +13,7 @@ export {
   YzhToolbar,
   YzhTree,
   YzhTreeTable,
+  YzhTreeTableSelector,
 } from './components/layout'
 export { default as YzhCrudPage } from './components/page/YzhCrudPage.vue'
 export { YzhTable } from './components/table'

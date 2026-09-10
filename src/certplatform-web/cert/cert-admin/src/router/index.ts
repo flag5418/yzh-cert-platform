@@ -18,6 +18,7 @@ const routes: RouteRecordRaw[] = [
       // ===== System 域 - 系统管理 =====
       { path: 'system/organization', name: 'SystemOrganization', component: () => import('@/pages/system/organization/index.vue') },
       { path: 'system/role', name: 'SystemRole', component: () => import('@/pages/system/role/index.vue') },
+      { path: 'system/role-user', name: 'SystemRoleUser', component: () => import('@/pages/system/role-user/index.vue') },
       { path: 'system/dictionary', name: 'SystemDictionary', component: () => import('@/pages/system/dictionary/index.vue') },
       { path: 'system/menu', name: 'SystemMenu', component: () => import('@/pages/system/menu/index.vue') },
       { path: 'system/dept', name: 'SystemDept', component: () => import('@/pages/system/dept/index.vue') },

@@ -158,6 +158,9 @@ async function loadData() {
   loading.value = true
   error.value = ''
   try {
+    // 记录当前选中行的 key（用于数据重新加载后恢复选择）
+    const selectedKeys = new Set(selectedRows.value.map((r: any) => r[props.rowKey]))
+
     const params: PageParams = {
       page: page.value,
       rows: pageSize.value,
@@ -167,6 +170,17 @@ async function loadData() {
     const res: Page<T> = await props.dataLoader(params)
     rows.value = res.rows || []
     total.value = res.total || 0
+
+    // 恢复选择状态：新数据中匹配之前选中 key 的行自动勾选
+    if (selectedKeys.size > 0) {
+      const restored: T[] = []
+      for (const row of rows.value) {
+        if (selectedKeys.has((row as any)[props.rowKey])) {
+          restored.push(row)
+        }
+      }
+      selectedRows.value = restored
+    }
   } catch (e: any) {
     error.value = e?.message || '数据加载失败'
     rows.value = []
@@ -321,6 +335,27 @@ function getRowCount(): number {
   return rows.value.length
 }
 
+/**
+ * 批量设置行勾选状态（用于外部联动选择）
+ * @param matchFn 匹配函数，返回 true 的行会被勾选
+ * @param checked 是否勾选
+ */
+function setCheckedRows(matchFn: (row: T) => boolean, checked: boolean) {
+  if (checked) {
+    // 勾选匹配的行（合并到已有选中行）
+    const existing = new Set(selectedRows.value)
+    for (const row of rows.value) {
+      if (matchFn(row) && !existing.has(row)) {
+        selectedRows.value.push(row)
+      }
+    }
+  } else {
+    // 取消勾选匹配的行
+    selectedRows.value = selectedRows.value.filter((r) => !matchFn(r))
+  }
+  emit('selection-change', [...selectedRows.value])
+}
+
 // 暴露方法给父组件
 defineExpose({
   refresh,
@@ -330,8 +365,10 @@ defineExpose({
   removeRow,
   getRowCount,
   getSelectedRows: () => selectedRows.value,
+  setCheckedRows,
   clearSelection: () => {
     selectedRows.value = []
+    emit('selection-change', [])
   }
 })
 </script>

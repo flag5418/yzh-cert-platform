@@ -111,7 +111,7 @@ public class RoleController : YzhControllerBase<Sys_Role>
         var role = result.Data;
         
         // 禁止禁用超级管理员角色
-        if (role.Role_Id == 1)
+        if (role.RoleName == "超级管理员")
             return Result<ApiResponse<object?>>.Fail("不能禁用超级管理员角色");
 
         role.Enable = 0;

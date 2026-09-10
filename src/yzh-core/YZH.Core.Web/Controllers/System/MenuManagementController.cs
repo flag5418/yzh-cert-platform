@@ -164,7 +164,7 @@ public class MenuManagementController : YzhControllerBase<Sys_Menu>
         {
             result.Add(menu);
             // 递归添加子节点
-            AddChildMenus(result, menus, menu.Menu_Id);
+            AddChildMenus(result, menus, menu.ParentId);
         }
         
         return result;
@@ -176,7 +176,7 @@ public class MenuManagementController : YzhControllerBase<Sys_Menu>
         foreach (var child in allMenus.Where(m => m.ParentId == parentId).OrderBy(m => m.OrderNo ?? 0))
         {
             result.Add(child);
-            AddChildMenus(result, allMenus, child.Menu_Id);
+            AddChildMenus(result, allMenus, child.ParentId);
         }
     }
 
