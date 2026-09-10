@@ -39,7 +39,7 @@ export class RolePageLogic extends TreeTableLogic<any> {
       {
         prop: 'RoleName',
         label: '角色名称',
-        type: 'input',
+        type: 'text',
         required: true,
         placeholder: '请输入角色名称',
       },
