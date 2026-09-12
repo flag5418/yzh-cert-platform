@@ -10,15 +10,15 @@ CREATE TABLE IF NOT EXISTS sys_api (
     code        VARCHAR(64) NOT NULL COMMENT '接口编码（SHA256 Hash）',
     method      VARCHAR(10) NOT NULL COMMENT 'HTTP方法: GET/POST/PUT/DELETE',
     path        VARCHAR(200) NOT NULL COMMENT '接口路径',
-    tree_path   VARCHAR(500) COMMENT '树形路径（如 System|User|filter）',
+    group_path  VARCHAR(200) NOT NULL COMMENT '业务分组（如 系统管理/用户管理）',
     name        VARCHAR(200) NOT NULL COMMENT '接口名称',
-    author      VARCHAR(50) COMMENT '负责人',
-    enable      TINYINT(1) DEFAULT 1 COMMENT '是否启用',
+    author      VARCHAR(50) COMMENT '负责人（可选）',
+    enable      TINYINT(1) DEFAULT 1 COMMENT '是否启用（0=禁用，前端不展示）',
     create_date DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_date DATETIME ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     UNIQUE INDEX uk_api_code (code),
-    INDEX idx_api_path (path),
-    INDEX idx_api_tree (tree_path)
+    INDEX idx_api_group (group_path),
+    INDEX idx_api_path (path)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接口表';
 
 -- 2. 角色-接口关联表

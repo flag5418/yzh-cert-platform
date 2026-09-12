@@ -13,7 +13,7 @@
 | 级别 | 存放位置 | 适用脚本 | 示例 |
 |------|---------|---------|------|
 | 全局/工具性 | `scripts/` 按用途分子目录 | 后端服务管理、数据库、前端代码生成、MinIO 存储、通用工具、代码生成 | `scripts/backend/run-backend.sh` |
-| 功能性（含测试） | 所属功能文档同目录 `test/` 子目录 | 与某个具体功能强绑定的测试/验证脚本 | `80-功能设计/01-系统管理/xxx功能/test/test_xxx.py` |
+| 功能性（含测试） | 所属功能文档同目录 `test/` 子目录 | 与某个具体功能强绑定的测试/验证脚本 | `20-体系认证/03-详细设计/01-系统管理/xxx功能/test/test_xxx.py` |
 
 **禁止行为**：
 - ❌ 向项目根目录散落脚本（历史教训：根目录曾散落 9 个脚本导致混乱）；
@@ -108,6 +108,7 @@ pgrep -f "YZH\.Core\.Web|dotnet run.*YZH\.Core\.Web"
 | 脚本 | 作用 | 用法 |
 |------|------|------|
 | `check_tree.py` | 输出项目目录树/检查目录结构 | `python3 check_tree.py` |
+| `docs-migration/` | **文档体系重构一次性脚本**（迁移 / 链接修复 / 路径引用更新），已执行完毕保留备查 | 见 `docs-migration/README.md` |
 
 ---
 
@@ -126,5 +127,6 @@ pgrep -f "YZH\.Core\.Web|dotnet run.*YZH\.Core\.Web"
 
 | 日期 | 变更内容 |
 |------|---------|
+| 2026-09-12 | 收编 `docs/` 根目录下 5 个文档迁移脚本至 `tools/docs-migration/`（migrate / fix_links×3 / update_refs） |
 | 2026-09-11 | 迁移历史项目至 `src/old/`；更新后端脚本指向新架构 `src/yzh-core/YZH.Core.Web`；更新前端脚本文档 |
-| 2026-08-16 | 创建：根目录 9 个散落脚本归位（3 个 backend + 1 个 tools），scripts/ 原 14 个脚本按 db/frontend/storage/generate 分类归位；并入原根目录 BASH_README.md 内容（backend 章节）；删除 5 个 test_ai_* 一次性脚本（详见 80-功能设计/README.md 变更记录） |
+| 2026-08-16 | 创建：根目录 9 个散落脚本归位（3 个 backend + 1 个 tools），scripts/ 原 14 个脚本按 db/frontend/storage/generate 分类归位；并入原根目录 BASH_README.md 内容（backend 章节）；删除 5 个 test_ai_* 一次性脚本 |

@@ -2,11 +2,11 @@
 """
 上传源文件到 MinIO 正确路径
 1. 从数据库读取所有需要修复的文件记录（StoragePath 已修复为正确格式）
-2. 将 StoragePath 映射到 docs/历史文档/案例/ 下的源文件
+2. 将 StoragePath 映射到 docs/90-归档/案例资料/ 下的源文件
 3. 上传到 MinIO
 
 StoragePath 格式: /CB001/ISO134852016/STAGE01/{folderPath}/{fileName}
-源文件路径:       docs/历史文档/案例/{folderPath}/{fileName}
+源文件路径:       docs/90-归档/案例资料/{folderPath}/{fileName}
 """
 
 import os
@@ -29,7 +29,7 @@ MINIO_BUCKET   = "cert-platform"
 
 # 项目根目录
 PROJECT_ROOT = "/Volumes/Expand/wangqingquan/Documents/work/study/体系认证平台"
-SOURCE_BASE  = os.path.join(PROJECT_ROOT, "docs/历史文档/案例")
+SOURCE_BASE  = os.path.join(PROJECT_ROOT, "docs/90-归档/案例资料")
 
 def main():
     # 连接 MySQL
