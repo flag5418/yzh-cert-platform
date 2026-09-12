@@ -115,6 +115,11 @@ export abstract class TreeTableLogic<
     return this.treeTableConfig.value?.TreeConfig ?? null
   }
 
+  /** 启用/禁用字段名（从 TreeConfig.EnableField 读取，null 表示不支持启用/禁用） */
+  get enableField(): string | null {
+    return this.treeConfig?.EnableField ?? null
+  }
+
   /** 树节点表单配置（EntityConfigDto） */
   protected get treeFormConfig(): EntityConfigDto | null {
     return this.treeTableConfig.value?.TreeFormConfig ?? null
@@ -421,20 +426,60 @@ export abstract class TreeTableLogic<
   }
 
   /**
-   * 切换树节点有效标志（IsValid: 0 ↔ 1）
+   * 切换树节点有效标志（0 ↔ 1）
+   *
+   * 自动更新 node.extra[enableField]，业务页面无需手动同步状态。
+   *
    * @param node 树节点
-   * @returns 新的 IsValid 值，失败返回 null
+   * @returns 新的值，失败返回 null
    */
   async toggleTreeNodeIsValid(node: TreeNode): Promise<{ Code: string; IsValid: number } | null> {
+    const field = this.enableField ?? 'IsValid'
     const res = await this.apiPost<ApiResponse<{ Code: string; IsValid: number }>>(
       '/tree/toggle-valid',
       { [this.treeConfig?.CodeField ?? 'Code']: node.code },
     )
     if (res.success) {
+      // 自动更新 node.extra 中的启用字段
+      const extra = (node.extra as any) || {}
+      extra[field] = res.data.IsValid
+      node.extra = { ...extra }
       ElMessage.success(res.data.IsValid === 1 ? '已启用' : '已禁用')
       return res.data
     }
     return null
+  }
+
+  /**
+   * 切换树节点有效标志（完整流程：确认弹窗 → API → 本地更新）
+   *
+   * 业务页面可直接调用，无需自行实现确认弹窗。
+   * 基类统一处理：读取当前状态 → 弹窗确认 → 调用 API → 更新 node.extra。
+   *
+   * @param node 树节点
+   * @param options.entityName 确认弹窗中显示的实体名称，默认读 node.name
+   */
+  async toggleTreeNodeWithConfirm(
+    node: TreeNode,
+    options?: { entityName?: string },
+  ): Promise<void> {
+    const field = this.enableField ?? 'IsValid'
+    const extra = (node.extra as any) || {}
+    const currentVal = extra[field] ?? 1
+    const action = currentVal === 1 ? '禁用' : '启用'
+    const name = options?.entityName ?? node.name
+
+    await ElMessageBox.confirm(
+      `确定${action}【${name}】？`,
+      `${action}确认`,
+      {
+        type: 'warning',
+        confirmButtonText: `确定${action}`,
+        cancelButtonText: '取消',
+      },
+    )
+
+    await this.toggleTreeNodeIsValid(node)
   }
 
   // ========================================================

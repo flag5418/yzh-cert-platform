@@ -9,14 +9,12 @@ namespace YZH.Core.DataBase.MultiDatabase;
 
 /// <summary>
 ///     数据库上下文工厂（多数据库支持）
-///     内部维护多个 SqlSugarClient 实例，通过别名切换
+///     注意：SqlSugarClient 不是线程安全的，每次调用 GetByAlias 创建新实例
 /// </summary>
 public class DbContextFactory : IDbContextFactory
 {
     private readonly MultiDatabaseOptions _options;
     private readonly ILoggerFactory _loggerFactory;
-    private readonly Dictionary<string, SqlSugarClient> _clients = new();
-    private readonly object _lock = new();
 
     public DbContextFactory(IOptions<MultiDatabaseOptions> options, ILoggerFactory loggerFactory)
     {
@@ -31,49 +29,38 @@ public class DbContextFactory : IDbContextFactory
 
     public IDbOrm GetByAlias(string alias)
     {
-        var client = GetOrCreateClient(alias);
+        var client = CreateClient(alias);
         return new SqlSugarDbOrm(client, _loggerFactory.CreateLogger<SqlSugarDbOrm>());
     }
 
     /// <summary>
-    ///     获取或创建 SqlSugarClient（线程安全，每个别名一个实例）
+    ///     每次创建新的 SqlSugarClient（线程安全：每次请求独立实例）
     /// </summary>
-    private SqlSugarClient GetOrCreateClient(string alias)
+    private SqlSugarClient CreateClient(string alias)
     {
-        if (_clients.TryGetValue(alias, out var existing))
-            return existing;
+        if (!_options.Connections.TryGetValue(alias, out var conn))
+            throw new ArgumentException($"数据库别名未配置: {alias}");
 
-        lock (_lock)
+        var dbType = ParseDbType(conn.Provider);
+        
+        SqlSugar.StaticConfig.Check_StringIdentity = false;
+
+        return new SqlSugarClient(new ConnectionConfig
         {
-            if (_clients.TryGetValue(alias, out existing))
-                return existing;
-
-                if (!_options.Connections.TryGetValue(alias, out var conn))
-                    throw new ArgumentException($"数据库别名未配置: {alias}");
-
-                var dbType = ParseDbType(conn.Provider);
-                
-                var client = new SqlSugarClient(new ConnectionConfig
+            ConnectionString = conn.ConnectionString,
+            DbType = dbType,
+            IsAutoCloseConnection = true,
+            ConfigureExternalServices = new ConfigureExternalServices
+            {
+                EntityService = (property, columnInfo) =>
                 {
-                    ConnectionString = conn.ConnectionString,
-                    DbType = dbType,
-                    IsAutoCloseConnection = true,
-                    ConfigureExternalServices = new ConfigureExternalServices
+                    if (property.GetCustomAttributes(typeof(NotMappedAttribute), false).Any())
                     {
-                        EntityService = (property, columnInfo) =>
-                        {
-                            // 忽略标记了 [NotMapped] 的属性（如 IsLeaf 等计算属性）
-                            if (property.GetCustomAttributes(typeof(NotMappedAttribute), false).Any())
-                            {
-                                columnInfo.IsIgnore = true;
-                            }
-                        }
+                        columnInfo.IsIgnore = true;
                     }
-                });
-
-                _clients[alias] = client;
-                return client;
-        }
+                }
+            }
+        });
     }
 
     /// <summary>

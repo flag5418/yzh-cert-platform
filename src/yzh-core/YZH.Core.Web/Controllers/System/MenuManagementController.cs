@@ -29,11 +29,15 @@ namespace YZH.Core.Web.Controllers.System;
 [Authorize]
 public class MenuManagementController : YzhControllerBase<Sys_Menu>
 {
+    private readonly MenuPermissionService _menuPermission;
+
     public MenuManagementController(
         EntityService<Sys_Menu> entityService,
+        MenuPermissionService menuPermission,
         IUserContext userContext)
         : base(entityService, userContext)
     {
+        _menuPermission = menuPermission;
         // 注册行操作
         RegisterRowAction("Enable", EnableMenu);
         RegisterRowAction("Disable", DisableMenu);
@@ -52,18 +56,19 @@ public class MenuManagementController : YzhControllerBase<Sys_Menu>
     /// <summary>
     ///     获取菜单树（特殊查询，不走分页）
     ///     GET api/SysMenu/tree
+    ///     按当前登录用户的角色过滤（超级管理员返回全部）
     /// </summary>
     [HttpGet("tree")]
     public virtual async Task<Result<List<Sys_Menu>>> GetTree()
     {
         try
         {
-            // 获取所有菜单（不分页）
-            var allMenus = (await Entity.GetListAsync()).Data ?? new List<Sys_Menu>();
-            
-            // 构建树形结构
-            var tree = BuildMenuTree(allMenus);
-            
+            // 获取当前用户可见菜单（按角色过滤 + 祖先补全）
+            var visibleMenus = await _menuPermission.GetVisibleMenusAsync(UserContext);
+
+            // 构建树形结构（扁平化输出，前端自行嵌套）
+            var tree = BuildMenuTree(visibleMenus);
+
             return Result<List<Sys_Menu>>.Ok(tree);
         }
         catch (Exception ex)
@@ -76,18 +81,25 @@ public class MenuManagementController : YzhControllerBase<Sys_Menu>
 
     #region 新增钩子
 
-    /// <summary>新增前处理 - 校验编码唯一性</summary>
+    /// <summary>新增前处理 - 自动生成编码、校验唯一性</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAdd(Sys_Menu entity)
     {
-        // 校验编码唯一性
-        var result = await Entity.ExistsByCodeAsync(entity.Code);
-        if (result.Data == true)
-        {
-            return (false, $"菜单编码 {entity.Code} 已存在");
-        }
+        // 自动生成 Code
+        if (string.IsNullOrEmpty(entity.Code))
+            entity.Code = $"MENU_{Guid.NewGuid():N}".Substring(0, 50);
 
-        // 设置默认启用
+        // 校验编码唯一性
+        var exists = await Entity.ExistsByCodeAsync(entity.Code);
+        if (exists.Data == true)
+            return (false, $"菜单编码 {entity.Code} 已存在");
+
+        // 设置默认值
         entity.Enable = 1;
+        if (entity.OrderNo == null)
+            entity.OrderNo = 0;
+        if (string.IsNullOrEmpty(entity.ParentCode))
+            entity.ParentCode = "0";
+
         return (true, null);
     }
 
@@ -95,15 +107,12 @@ public class MenuManagementController : YzhControllerBase<Sys_Menu>
 
     #region 修改钩子
 
-    /// <summary>修改前处理</summary>
+    /// <summary>修改前处理 - 校验编码唯一性（排除自身）</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(Sys_Menu entity)
     {
-        // 校验编码唯一性（排除自身）
-        var result = await Entity.ExistsByCodeAsync(entity.Code);
-        if (result.Data == true)
-        {
+        var existing = await Entity.GetByCode(entity.Code);
+        if (existing.Success && existing.Data != null)
             return (false, $"菜单编码 {entity.Code} 已存在");
-        }
         return (true, null);
     }
 
@@ -158,25 +167,24 @@ public class MenuManagementController : YzhControllerBase<Sys_Menu>
     private List<Sys_Menu> BuildMenuTree(List<Sys_Menu> menus)
     {
         var result = new List<Sys_Menu>();
-        
-        // 先添加根节点
-        foreach (var menu in menus.Where(m => m.ParentId == 0).OrderBy(m => m.OrderNo ?? 0))
+
+        // 先添加根节点（ParentCode = "0"）
+        foreach (var menu in menus.Where(m => m.ParentCode == "0").OrderBy(m => m.OrderNo ?? 0))
         {
             result.Add(menu);
-            // 递归添加子节点
-            AddChildMenus(result, menus, menu.ParentId);
+            AddChildMenus(result, menus, menu.Code);
         }
-        
+
         return result;
     }
-    
+
     /// <summary>递归添加子菜单</summary>
-    private void AddChildMenus(List<Sys_Menu> result, List<Sys_Menu> allMenus, int parentId)
+    private void AddChildMenus(List<Sys_Menu> result, List<Sys_Menu> allMenus, string parentCode)
     {
-        foreach (var child in allMenus.Where(m => m.ParentId == parentId).OrderBy(m => m.OrderNo ?? 0))
+        foreach (var child in allMenus.Where(m => m.ParentCode == parentCode).OrderBy(m => m.OrderNo ?? 0))
         {
             result.Add(child);
-            AddChildMenus(result, allMenus, child.ParentId);
+            AddChildMenus(result, allMenus, child.Code);
         }
     }
 

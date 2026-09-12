@@ -431,6 +431,41 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
     return null
   }
 
+  /**
+   * 切换行有效标志（完整流程：确认弹窗 → API → 本地更新）
+   *
+   * 业务页面可直接调用，无需自行实现确认弹窗和本地状态更新。
+   * 基类统一处理：读取当前状态 → 弹窗确认 → 调用 API → 替换行数据。
+   *
+   * @param row 行数据
+   * @param options.entityName 确认弹窗中显示的实体名称（如 "张三"），默认读 row.Name
+   * @param options.field 有效标志字段名，默认 "IsValid"
+   */
+  async toggleRowIsValidWithConfirm(
+    row: V,
+    options?: { entityName?: string; field?: string },
+  ): Promise<void> {
+    const field = options?.field ?? 'IsValid'
+    const currentVal = (row as any)[field] ?? 1
+    const action = currentVal === 1 ? '禁用' : '启用'
+    const name = options?.entityName ?? ''
+
+    await ElMessageBox.confirm(
+      name ? `确定${action}【${name}】？` : `确定${action}该记录？`,
+      `${action}确认`,
+      {
+        type: 'warning',
+        confirmButtonText: `确定${action}`,
+        cancelButtonText: '取消',
+      },
+    )
+
+    const result = await this.toggleIsValid((row as any).Code)
+    if (result) {
+      this.replaceRowByCode((row as any).Code, { ...row, [field]: result.IsValid } as V)
+    }
+  }
+
   // ========================================================
   // 导出导入
   // ========================================================

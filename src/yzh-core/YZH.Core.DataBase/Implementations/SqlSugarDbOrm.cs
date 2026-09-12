@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Reflection;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
@@ -68,19 +69,21 @@ public class SqlSugarDbOrm : IDbOrm
     {
         try
         {
-            // 基础查询
-            var tableName = GetTableName<T>();
+            // 基础查询（优先使用 options.TableName，支持 ViewName 视图路由）
+            var tableName = !string.IsNullOrEmpty(options.TableName)
+                ? options.TableName
+                : GetTableName<T>();
             var query = _client.Queryable<T>(tableName);
 
-            // 软删除过滤
+            // 软删除过滤（反引号包裹列名，避免 SQL 解析问题）
             var hasIsDeleted = HasProperty<T>("IsDeleted");
             if (hasIsDeleted)
-                query = query.Where("IsDeleted = 0");
+                query = query.Where("`IsDeleted` = 0");
 
-            // 有效标志过滤
+            // 有效标志过滤（反引号包裹列名，避免 SQL 解析问题）
             var hasIsValid = HasProperty<T>("IsValid");
             if (hasIsValid)
-                query = query.Where("IsValid = 1");
+                query = query.Where("`IsValid` = 1");
 
             // 解析 Conditions
             if (options.Conditions?.Length > 0)
@@ -370,6 +373,11 @@ public class SqlSugarDbOrm : IDbOrm
         if (prop == null)
             return _ => true; // 无 IsDeleted 字段，不过滤
 
+        // 检查 [SugarColumn(IsIgnore = true)]，如果标记了则跳过过滤
+        var sugarColumn = prop.GetCustomAttribute<SugarColumn>();
+        if (sugarColumn != null && sugarColumn.IsIgnore)
+            return _ => true;
+
         var param = Expression.Parameter(typeof(T), "x");
         var member = Expression.Property(param, prop);
         var constant = Expression.Constant(false);
@@ -380,12 +388,18 @@ public class SqlSugarDbOrm : IDbOrm
     /// <summary>
     ///     获取有效标志过滤条件（如果实体有 IsValid 属性）
     ///     1=有效（默认），0=无效
+    ///     注意：如果属性标记了 [SugarColumn(IsIgnore = true)]，则跳过过滤
     /// </summary>
     private static Expression<Func<T, bool>> IsValidCondition<T>() where T : class, new()
     {
         var prop = typeof(T).GetProperty("IsValid");
         if (prop == null)
             return _ => true; // 无 IsValid 字段，不过滤
+
+        // 检查 [SugarColumn(IsIgnore = true)]，如果标记了则跳过过滤
+        var sugarColumn = prop.GetCustomAttribute<SugarColumn>();
+        if (sugarColumn != null && sugarColumn.IsIgnore)
+            return _ => true;
 
         var param = Expression.Parameter(typeof(T), "x");
         var member = Expression.Property(param, prop);
@@ -455,11 +469,18 @@ public class SqlSugarDbOrm : IDbOrm
     }
 
     /// <summary>
-    ///     判断类型是否有指定属性
+    ///     判断类型是否有指定属性（排除 [SugarColumn(IsIgnore = true)] 标记的属性）
     /// </summary>
     private static bool HasProperty<T>(string propertyName)
     {
-        return typeof(T).GetProperty(propertyName) != null;
+        var prop = typeof(T).GetProperty(propertyName);
+        if (prop == null) return false;
+
+        // 如果标记了 [SugarColumn(IsIgnore = true)]，视为不存在（数据库无此列）
+        var sugarColumn = prop.GetCustomAttribute<SugarColumn>();
+        if (sugarColumn != null && sugarColumn.IsIgnore) return false;
+
+        return true;
     }
 
     /// <summary>

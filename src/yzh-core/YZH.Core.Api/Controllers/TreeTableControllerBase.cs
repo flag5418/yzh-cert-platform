@@ -347,6 +347,7 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
     // ========================================================
 
     /// <summary>覆盖 Filter → 自动注入树节点过滤条件</summary>
+    [NonAction]
     public override async Task<Result<PagedResult<V>>> FilterCore(FilterRequest request)
     {
         // 从前端传入的条件中查找树关联字段
@@ -624,6 +625,56 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
             }
         }
         catch { /* 忽略递归错误 */ }
+    }
+
+    // ========================================================
+    // 四、树形表格选择器（通用虚方法）
+    //     适用场景：左侧选树节点，右侧勾选关联实体
+    //     子类重写这 3 个方法即可实现角色-用户、角色-菜单等场景
+    // ========================================================
+
+    /// <summary>
+    /// 获取混合树数据（含勾选状态）
+    /// 子类重写：根据业务场景返回不同的混合树节点
+    /// </summary>
+    [HttpPost("checkTree")]
+    public virtual async Task<ActionResult<ApiResponse<CheckTreeNodeDto[]>>> GetCheckTree(
+        [FromBody] CheckTreeRequest request)
+    {
+        return NotFound(ApiResponse<CheckTreeNodeDto[]>.Fail("当前控制器未实现 GetCheckTree"));
+    }
+
+    /// <summary>
+    /// 勾选保存（增加关联）
+    /// 子类重写：根据业务场景处理关联写入
+    /// </summary>
+    [HttpPost("check/add")]
+    public virtual async Task<ActionResult<ApiResponse<object?>>> CheckAdd(
+        [FromBody] CheckActionRequest request)
+    {
+        return NotFound(ApiResponse<object?>.Fail("当前控制器未实现 CheckAdd"));
+    }
+
+    /// <summary>
+    /// 取消勾选保存（移除关联）
+    /// 子类重写：根据业务场景处理关联删除
+    /// </summary>
+    [HttpPost("check/remove")]
+    public virtual async Task<ActionResult<ApiResponse<object?>>> CheckRemove(
+        [FromBody] CheckActionRequest request)
+    {
+        return NotFound(ApiResponse<object?>.Fail("当前控制器未实现 CheckRemove"));
+    }
+
+    /// <summary>
+    /// 获取所有关联关系（用于前端本地缓存，减少切换时的网络请求）
+    /// 子类重写：返回当前控制器的全部关联对（如角色-用户、角色-菜单等）
+    /// 前端页面加载时调用一次，后续切换左侧节点时直接从本地缓存计算 CheckFlag
+    /// </summary>
+    [HttpPost("check/all")]
+    public virtual async Task<ActionResult<ApiResponse<AssociationDto[]>>> GetAllAssociations()
+    {
+        return NotFound(ApiResponse<AssociationDto[]>.Fail("当前控制器未实现 GetAllAssociations"));
     }
 
 }

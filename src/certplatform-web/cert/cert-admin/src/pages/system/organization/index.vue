@@ -31,15 +31,23 @@ const treeTableRef = ref()
 const tableRef = ref()
 const selectedRows = ref<any[]>([])
 
-// 合并行操作按钮：标准 edit/delete（后端 RowButtons 控制）+ 自定义按钮
+// 合并行操作按钮：标准 edit/delete（后端 RowButtons 控制）+ 自定义按钮（过滤旧 disable/enable）
 const mergedRowActionButtons = computed(() => {
   const buttons: Record<string, string> = {}
   // 标准按钮（受后端 RowButtons.Edit / RowButtons.Delete 控制）
   const rb = logic.config.value?.RowButtons
   if (rb?.Edit !== false) buttons['edit'] = '编辑'
   if (rb?.Delete !== false) buttons['delete'] = '删除'
-  // 自定义按钮（toggle-valid 等）
-  Object.assign(buttons, logic.rowCustomButtons)
+  // 根据 EnableField 配置动态添加 toggle-valid
+  if (logic.enableField) {
+    buttons['toggle-valid'] = '禁用/启用'
+  }
+  // 合入其他自定义按钮（过滤旧 disable/enable）
+  const customButtons = logic.rowCustomButtons
+  for (const [key, text] of Object.entries(customButtons)) {
+    if (key === 'disable' || key === 'enable') continue
+    buttons[key] = text
+  }
   return buttons
 })
 
@@ -79,11 +87,11 @@ function handleEditOrg(node: TreeNode) {
 /** 删除机构 */
 async function handleDeleteOrg(node: TreeNode) {
   await ElMessageBox.confirm(
-    `确定禁用机构【${node.name}】？将递归禁用所有子机构和人员！`,
-    '禁用确认',
+    `确定删除机构【${node.name}】？`,
+    '删除确认',
     {
       type: 'warning',
-      confirmButtonText: '确定禁用',
+      confirmButtonText: '确定删除',
       cancelButtonText: '取消',
     },
   )
@@ -91,21 +99,9 @@ async function handleDeleteOrg(node: TreeNode) {
   ElMessage.success('已删除机构')
 }
 
-/** 禁用机构 */
+/** 禁用/启用机构（基类统一处理：确认弹窗 → API → 本地更新） */
 async function handleToggleOrgIsValid(node: TreeNode) {
-  const extra = (node.extra as any) || {}
-  const isValid = extra.IsValid ?? 1
-  const action = isValid === 1 ? '禁用' : '启用'
-  await ElMessageBox.confirm(
-    `确定${action}机构【${node.name}】？${isValid === 1 ? '将递归禁用所有子机构和人员！' : ''}`,
-    `${action}确认`,
-    {
-      type: 'warning',
-      confirmButtonText: `确定${action}`,
-      cancelButtonText: '取消',
-    },
-  )
-  await logic.toggleOrgIsValid(node)
+  await logic.toggleTreeNodeWithConfirm(node)
 }
 
 // ========================================================
@@ -156,9 +152,9 @@ async function handleBatchDelete() {
   ElMessage.success('批量删除成功')
 }
 
-/** 切换人员有效标志 */
+/** 切换人员有效标志（基类统一处理：确认弹窗 → API → 本地更新） */
 async function handleToggleUserIsValid(row: any) {
-  await logic.toggleUserIsValid(row)
+  await logic.toggleRowIsValidWithConfirm(row, { entityName: row.UserTrueName })
 }
 
 /** 表格行自定义操作（edit / delete / toggle-valid） */

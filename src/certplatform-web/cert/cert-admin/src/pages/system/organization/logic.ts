@@ -104,9 +104,9 @@ export class OrgPageLogic extends TreeTableLogic<any> {
     if (tc.AllowDelete) {
       actions['delete'] = '删除'
     }
-    // 合并后端自定义操作（禁用/启用等）
-    if (tc.CustomActions) {
-      Object.assign(actions, tc.CustomActions)
+    // EnableField 存在时，显示禁用/启用按钮
+    if (this.enableField) {
+      actions['toggle-valid'] = '禁用/启用'
     }
     return actions
   }
@@ -116,9 +116,10 @@ export class OrgPageLogic extends TreeTableLogic<any> {
    */
   getNodeActionLabel(action: string, node: TreeNode): string {
     if (action === 'toggle-valid') {
+      const field = this.enableField ?? 'IsValid'
       const extra = (node.extra as any) || {}
-      const isValid = extra.IsValid ?? 1
-      return isValid === 1 ? '禁用' : '启用'
+      const val = extra[field] ?? 1
+      return val === 1 ? '禁用' : '启用'
     }
     // 其他操作使用 nodeActions 静态文本
     return this.nodeActions[action] || action
@@ -181,37 +182,6 @@ export class OrgPageLogic extends TreeTableLogic<any> {
     } else {
       await this.loadPageWithTree('')
     }
-  }
-
-  // ========================================================
-  // 行操作：启用/禁用
-  // ========================================================
-
-  /** 切换用户有效标志 */
-  async toggleUserIsValid(row: any): Promise<void> {
-    const result = await this.toggleIsValid(row.Code)
-    if (result) {
-      this.replaceRowByCode(row.Code, {
-        ...row,
-        IsValid: result.IsValid,
-      })
-    }
-  }
-
-  // ========================================================
-  // 树节点操作：启用/禁用
-  // ========================================================
-
-  /** 切换机构有效标志 */
-  async toggleOrgIsValid(treeNode: TreeNode): Promise<void> {
-    const result = await this.toggleTreeNodeIsValid(treeNode)
-    if (result) {
-      // 更新节点 extra 中的 IsValid 值
-      const extra = (treeNode.extra as any) || {}
-      extra.IsValid = result.IsValid
-      treeNode.extra = { ...extra }
-    }
-    await this.refreshTable()
   }
 
   // ========================================================

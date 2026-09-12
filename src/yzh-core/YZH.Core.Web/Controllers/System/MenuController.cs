@@ -1,25 +1,29 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using YZH.Core.DataBase;
+using YZH.Core.Api.Services;
 using YZH.Core.DataBase.Interfaces;
-using YZH.Core.Stand.Models;
+using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Result;
 
 namespace YZH.Core.Web.Controllers.System;
 
 /// <summary>
-/// 菜单管理 Controller - 基于角色的动态菜单系统（Dapper 版）
+/// 菜单管理 Controller - 基于角色的动态菜单系统（兼容旧 Vol 路由）
+/// 权限来源：Sys_RoleMenu（RoleCode + MenuCode）
 /// </summary>
 [Route("api/System/[controller]")]
 [ApiController]
 public class MenuController : ControllerBase
 {
     private readonly IDbOrm _db;
+    private readonly MenuPermissionService _menuPermission;
+    private readonly IUserContext _userContext;
 
-    public MenuController(IDbOrm db)
+    public MenuController(IDbOrm db, MenuPermissionService menuPermission, IUserContext userContext)
     {
         _db = db;
+        _menuPermission = menuPermission;
+        _userContext = userContext;
     }
 
     /// <summary>
@@ -30,41 +34,23 @@ public class MenuController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> GetTree()
     {
-        // 从 Claims 获取当前用户角色 Code
-        var roleCodes = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
-        bool isSuperAdmin = roleCodes.Contains("1") || roleCodes.Contains("super_admin");
+        // 按当前用户角色过滤菜单（超级管理员返回全部）
+        var visibleMenus = await _menuPermission.GetVisibleMenusAsync(_userContext);
 
-        // 获取所有启用的 PC 端菜单
-        var result = await _db.SqlQueryAsync(
-            @"SELECT Menu_Id AS Id, ParentId, Code, MenuName AS Name, Url, Icon, Tag, OrderNo 
-              FROM Sys_Menu 
-              WHERE Enable = 1 AND IFNULL(MenuType, 0) = 0
-              ORDER BY OrderNo DESC");
-
-        if (!result.Success)
-            return Ok(ApiResponse.Fail("获取菜单失败"));
-
-        var allMenus = result.Data ?? new List<dynamic>();
-
-        // 非超级管理员：过滤有权限的菜单
-        if (!isSuperAdmin)
+        var nodes = visibleMenus.Select(m => new MenuNode
         {
-            var primaryRoleCode = roleCodes.FirstOrDefault() ?? "0";
-            int roleId = int.TryParse(primaryRoleCode, out var rid) ? rid : 0;
-
-            var permResult = await _db.SqlQueryAsync(
-                "SELECT Menu_Id FROM Sys_RoleAuth WHERE Role_Id = @RoleId",
-                new { RoleId = roleId });
-
-            if (permResult.Success && permResult.Data != null)
-            {
-                var permittedIds = permResult.Data.Select(d => (int)d.Menu_Id).ToHashSet();
-                allMenus = allMenus.Where(m => permittedIds.Contains(m.Id)).ToList();
-            }
-        }
+            Id = int.TryParse(m.Id, out var id) ? id : 0,
+            ParentCode = m.ParentCode ?? "0",
+            Code = m.Code ?? "",
+            Name = m.MenuName,
+            Url = m.Url ?? "",
+            Icon = m.Icon ?? "",
+            Tag = m.Tag ?? "",
+            OrderNo = m.OrderNo ?? 0
+        }).ToList();
 
         // 构建树形结构
-        var tree = BuildTree(allMenus, 0);
+        var tree = BuildTree(nodes, "0");
         return Ok(ApiResponse<object>.Ok(new { menu = tree }));
     }
 
@@ -78,31 +64,32 @@ public class MenuController : ControllerBase
     public async Task<IActionResult> GetTreeMenu()
     {
         var result = await _db.SqlQueryAsync(
-            @"SELECT Menu_Id AS id, MenuName AS name, Url AS url, ParentId AS parentId,
-                     Icon AS icon, Enable AS enable, Tag AS tableName
-              FROM Sys_Menu 
-              WHERE Enable = 1
-              ORDER BY OrderNo ASC");
+            @"SELECT Menu_Id AS id, MenuName AS name, Url AS url, ParentCode AS parentId,
+                      Icon AS icon, Enable AS enable, Tag AS tableName
+               FROM Sys_Menu
+               WHERE Enable = 1
+               ORDER BY OrderNo ASC");
 
         return Ok(new { menu = result.Data ?? new List<dynamic>(), asyncApi = new List<string>() });
     }
 
     /// <summary>递归构建菜单树</summary>
-    private static List<MenuNode> BuildTree(List<dynamic> menus, int parentId)
+    private static List<MenuNode> BuildTree(List<MenuNode> menus, string parentCode)
     {
         return menus
-            .Where(m => m.ParentId == parentId)
+            .Where(m => m.ParentCode == parentCode)
             .Select(m => new MenuNode
             {
                 Id = m.Id,
-                ParentId = m.ParentId,
-                Code = m.Code ?? "",
+                ParentId = int.TryParse(parentCode, out var pid) ? pid : 0,
+                ParentCode = m.ParentCode,
+                Code = m.Code,
                 Name = m.Name,
-                Url = m.Url ?? "",
-                Icon = m.Icon ?? "",
-                Tag = m.Tag ?? "",
-                OrderNo = m.OrderNo ?? 0,
-                Children = BuildTree(menus, m.Id)
+                Url = m.Url,
+                Icon = m.Icon,
+                Tag = m.Tag,
+                OrderNo = m.OrderNo,
+                Children = BuildTree(menus, m.Code)
             })
             .Where(m => m.Children.Count > 0 || !string.IsNullOrEmpty(m.Url))
             .ToList();
@@ -114,6 +101,7 @@ public class MenuNode
     public int Id { get; set; }
     public int ParentId { get; set; }
     public string Code { get; set; } = string.Empty;
+    public string ParentCode { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
     public string Icon { get; set; } = string.Empty;

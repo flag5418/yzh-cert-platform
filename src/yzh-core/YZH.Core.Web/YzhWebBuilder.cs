@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using YZH.Core.Api.Filters;
 using YZH.Core.Api.Interfaces;
@@ -59,6 +60,9 @@ public static class YzhWebBuilderExtensions
         // 注册实体操作服务
         builder.Services.AddScoped(typeof(EntityService<>));
 
+        // 注册菜单权限服务（按角色过滤可见菜单）
+        builder.Services.AddScoped<MenuPermissionService>();
+
         // 注册密码工具（使用 PasswordSecret 配置）
         var passwordSecret = builder.Configuration["PasswordSecret"] ?? "C5ABA9E202D94C43A3CA66002BF77FAF";
         builder.Services.AddSingleton<YZH.Core.Stand.Helpers.PasswordHelper>(_ => new YZH.Core.Stand.Helpers.PasswordHelper(passwordSecret));
@@ -105,16 +109,15 @@ public static class YzhWebBuilderExtensions
         // builder.Services.AddScoped<ApiSyncService>();
         // builder.Services.AddHostedService<ApiSyncHostedService>();
 
-        // 注册 JSON 序列化选项
-        builder.Services.AddControllers()
-            .AddJsonOptions(json =>
-            {
-                // 使用 PascalCase（与数据库列名、实体属性名一致）
-                // 这样 JSON 字段名 = 实体属性名 = 数据库列名
-                json.JsonSerializerOptions.PropertyNamingPolicy = null;
-                json.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
-                json.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
-            });
+        // 注册 JSON 序列化选项（Configure 与 Program.cs 中已注册的 AddControllers 合并）
+        builder.Services.Configure<JsonOptions>(json =>
+        {
+            // 使用 PascalCase（与数据库列名、实体属性名一致）
+            // 这样 JSON 字段名 = 实体属性名 = 数据库列名
+            json.JsonSerializerOptions.PropertyNamingPolicy = null;
+            json.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+            json.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+        });
 
         return builder;
     }

@@ -73,21 +73,9 @@ async function handleDeleteRole(node: TreeNode) {
   ElMessage.success('删除成功')
 }
 
-/** 启用/禁用角色 */
+/** 启用/禁用角色（基类统一处理：确认弹窗 → API → 本地更新） */
 async function handleToggleRoleIsValid(node: TreeNode) {
-  const extra = (node.extra as any) || {}
-  const enable = extra.Enable ?? 1
-  const action = enable === 1 ? '禁用' : '启用'
-  await ElMessageBox.confirm(
-    `确定${action}角色【${node.name}】？`,
-    `${action}确认`,
-    {
-      type: 'warning',
-      confirmButtonText: `确定${action}`,
-      cancelButtonText: '取消',
-    },
-  )
-  await logic.toggleRoleIsValid(node)
+  await logic.toggleTreeNodeWithConfirm(node)
 }
 
 // ========================================================
@@ -160,10 +148,10 @@ onMounted(async () => {
               <div class="role-page__field">
                 <span class="role-page__label">状态：</span>
                 <el-tag
-                  :type="(logic.selectedNode.value.extra as any)?.Enable === 1 ? 'success' : 'info'"
+                  :type="(logic.selectedNode.value.extra as any)?.IsValid === 1 ? 'success' : 'info'"
                   size="small"
                 >
-                  {{ (logic.selectedNode.value.extra as any)?.Enable === 1 ? '启用' : '禁用' }}
+                  {{ (logic.selectedNode.value.extra as any)?.IsValid === 1 ? '启用' : '禁用' }}
                 </el-tag>
               </div>
               <div class="role-page__field">

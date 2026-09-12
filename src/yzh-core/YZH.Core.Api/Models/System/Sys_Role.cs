@@ -17,6 +17,11 @@ namespace YZH.Core.Api.Models.System;
 [YZHDeleteStrategy(Mode = DeleteMode.Soft)]
 public class Sys_Role : BaseEntity, ITreeEntity
 {
+    /// <summary>角色编码（DB: Code）</summary>
+    [SugarColumn(ColumnName = "Code")]
+    [StringLength(64)]
+    public new string Code { get; set; } = string.Empty;
+
     /// <summary>角色名称</summary>
     [Required(AllowEmptyStrings = false)]
     [StringLength(50)]
@@ -81,4 +86,8 @@ public class Sys_Role : BaseEntity, ITreeEntity
     /// <summary>是否叶子节点（后端批量计算，非持久化）</summary>
     [SugarColumn(IsIgnore = true)]
     public new bool? IsLeaf { get; set; }
+
+    /// <summary>Sys_Role 使用 Role_Id (int) 作为 PK，映射 BaseEntity.Id</summary>
+    [SugarColumn(ColumnName = "Role_Id", IsPrimaryKey = true, IsIdentity = true)]
+    public new string Id { get; set; } = string.Empty;
 }

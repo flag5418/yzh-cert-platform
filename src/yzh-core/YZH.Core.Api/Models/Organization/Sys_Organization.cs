@@ -21,6 +21,11 @@ namespace YZH.Core.Api.Models.Organization;
 [YZHDeleteStrategy(Mode = DeleteMode.Soft)]
 public class Sys_Organization : BaseEntity, ITreeEntity
 {
+    /// <summary>业务编码（DB: Code）</summary>
+    [SugarColumn(ColumnName = "Code")]
+    [StringLength(64)]
+    public new string Code { get; set; } = string.Empty;
+
     /// <summary>机构名称</summary>
     [Required(AllowEmptyStrings = false)]
     [StringLength(200)]
@@ -67,7 +72,14 @@ public class Sys_Organization : BaseEntity, ITreeEntity
     /// <summary>是否启用（1=启用，0=禁用）</summary>
     [Required]
     [Display(Name = "是否启用")]
-    public byte Enable { get; set; } = 1;
+    [SugarColumn(ColumnName = "Enable")]
+    public new byte Enable { get; set; } = 1;
+
+    /// <summary>有效标志（1=有效，0=无效）- 统一架构字段</summary>
+    [Required]
+    [Display(Name = "是否有效")]
+    [SugarColumn(ColumnName = "IsValid")]
+    public new int IsValid { get; set; } = 1;
 
     /// <summary>备注</summary>
     [StringLength(500)]
@@ -100,8 +112,8 @@ public class Sys_Organization : BaseEntity, ITreeEntity
 
     // === 忽略 BaseEntity 中不存在的数据库列 ===
 
-    /// <summary>PK - Sys_Organization 使用 Id (int auto_increment)，忽略 BaseEntity.Id (string)</summary>
-    [SugarColumn(ColumnName = "Id", IsIgnore = true)]
+    /// <summary>PK - Sys_Organization 使用 Id (int auto_increment)</summary>
+    [SugarColumn(ColumnName = "Id", IsPrimaryKey = true, IsIdentity = true)]
     public new string Id { get; set; } = string.Empty;
 
     /// <summary>前端选中标记（忽略）</summary>

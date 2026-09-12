@@ -83,8 +83,17 @@ public class AuthController : ControllerBase
         string userCode = user.Code ?? user.UserName;
         var ssoVersion = await _tokenVersion.BumpVersionAsync(userCode);
 
-        // 生成 Token（含 SSO 版本号）
-        var token = _jwt.GenerateToken(userCode, user.UserName, new[] { user.RoleId.ToString() }, ssoVersion);
+        // 查询角色编码（用于按角色过滤菜单等 Code 关联场景）
+        var roleResult = await _db.QueryFirstOrDefaultAsync<RoleCodeDto>(
+            "SELECT Code FROM Sys_Role WHERE Role_Id = @RoleId",
+            new { RoleId = user.RoleId });
+        var roleCode = roleResult.Data?.Code;
+
+        // 生成 Token（含 SSO 版本号；roles 同时携带角色ID与角色编码，保持向后兼容）
+        var roleClaims = new List<string> { user.RoleId.ToString() };
+        if (!string.IsNullOrEmpty(roleCode))
+            roleClaims.Add(roleCode);
+        var token = _jwt.GenerateToken(userCode, user.UserName, roleClaims, ssoVersion);
 
         // 更新 Token 和登录时间（仅更新指定字段）
         await _db.SqlExecuteAsync(
@@ -138,4 +147,10 @@ public class LoginResponse
     public string? UserName { get; set; }
     public string? UserTrueName { get; set; }
     public int RoleId { get; set; }
+}
+
+/// <summary>角色编码查询结果</summary>
+public class RoleCodeDto
+{
+    public string? Code { get; set; }
 }

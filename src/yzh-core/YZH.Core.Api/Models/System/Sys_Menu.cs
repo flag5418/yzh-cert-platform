@@ -15,17 +15,27 @@ namespace YZH.Core.Api.Models.System;
 [YZHDeleteStrategy(Mode = DeleteMode.Soft)]
 public class Sys_Menu : BaseEntity
 {
+    /// <summary>主键（DB: Menu_Id）</summary>
+    [SugarColumn(ColumnName = "Menu_Id", IsPrimaryKey = true, IsIdentity = true)]
+    public new string Id { get; set; } = string.Empty;
+
+    /// <summary>菜单编码（DB: Code）</summary>
+    [SugarColumn(ColumnName = "Code")]
+    [StringLength(50)]
+    public new string Code { get; set; } = string.Empty;
+
     /// <summary>菜单分类标签：admin/auditor/enterprise/common</summary>
     [StringLength(20)]
     [Display(Name = "Tag")]
     [SugarColumn(ColumnName = "Tag")]
     public string? Tag { get; set; }
 
-    /// <summary>父级ID</summary>
+    /// <summary>父级编码（Code关联，0表示根节点）</summary>
     [Required]
-    [Display(Name = "父级ID")]
-    [SugarColumn(ColumnName = "ParentId")]
-    public int ParentId { get; set; }
+    [Display(Name = "父级编码")]
+    [SugarColumn(ColumnName = "ParentCode")]
+    [StringLength(50)]
+    public string ParentCode { get; set; } = "0";
 
     /// <summary>菜单名称</summary>
     [Required(AllowEmptyStrings = false)]
@@ -33,12 +43,6 @@ public class Sys_Menu : BaseEntity
     [Display(Name = "菜单名称")]
     [SugarColumn(ColumnName = "MenuName")]
     public string MenuName { get; set; } = string.Empty;
-
-    /// <summary>表名（关联实体）</summary>
-    [StringLength(200)]
-    [Display(Name = "TableName")]
-    [SugarColumn(ColumnName = "TableName")]
-    public string? TableName { get; set; }
 
     /// <summary>菜单URL</summary>
     [StringLength(10000)]
@@ -75,26 +79,21 @@ public class Sys_Menu : BaseEntity
     [SugarColumn(ColumnName = "Enable")]
     public byte? Enable { get; set; } = 1;
 
-    /// <summary>菜单类型（0=PC端，1=移动端）</summary>
-    [Display(Name = "菜单类型")]
-    [SugarColumn(ColumnName = "MenuType")]
-    public int? MenuType { get; set; }
-
-    /// <summary>创建人</summary>
-    [StringLength(50)]
+    /// <summary>创建人（DB: Creator）</summary>
     [SugarColumn(ColumnName = "Creator")]
-    public string? Creator { get; set; }
-
-    /// <summary>创建时间</summary>
-    [SugarColumn(ColumnName = "CreateDate")]
-    public DateTime? CreateDate { get; set; }
-
-    /// <summary>修改人</summary>
     [StringLength(50)]
-    [SugarColumn(ColumnName = "Modifier")]
-    public string? Modifier { get; set; }
+    public new string? Creator { get; set; }
 
-    /// <summary>修改时间</summary>
+    /// <summary>创建时间（DB: CreateDate）</summary>
+    [SugarColumn(ColumnName = "CreateDate")]
+    public new DateTime? CreateDate { get; set; }
+
+    /// <summary>修改时间（DB: ModifyDate）</summary>
     [SugarColumn(ColumnName = "ModifyDate")]
-    public DateTime? ModifyDate { get; set; }
+    public new DateTime? ModifyDate { get; set; }
+
+    /// <summary>修改人（DB: Modifier）</summary>
+    [SugarColumn(ColumnName = "Modifier")]
+    [StringLength(50)]
+    public new string? Modifier { get; set; }
 }

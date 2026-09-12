@@ -52,7 +52,7 @@
             class="yzh-tree__label"
             :class="{ 'is-highlight': highlightKeyword && isMatchNode(data) }"
           >
-            {{ data.name }}
+            {{ data.Name || data.name }}
           </span>
 
           <!-- 徽标 -->
@@ -143,7 +143,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  nodeKey: 'code',
+  nodeKey: 'Code',
   showCheckbox: false,
   checkStrictly: false,
   lazy: false,
@@ -181,7 +181,7 @@ const hoveredNode = ref<string | null>(null)
 // ========================================================
 
 const treeProps = computed(() => ({
-  label: 'name',
+  label: 'Name',
   children: 'children',
   isLeaf: (data: Record<string, any>) => (data as TreeNode).isLeaf ?? false,
   disabled: (data: Record<string, any>) => (data as TreeNode).extra?.disabled ?? false
@@ -202,7 +202,7 @@ function filterNode(_value: string, data: Record<string, any>): boolean {
 
 function isMatchNode(node: TreeNode): boolean {
   if (!searchKeyword.value) return false
-  return node.name.toLowerCase().includes(searchKeyword.value.toLowerCase())
+  return (node.Name || node.name || '').toLowerCase().includes(searchKeyword.value.toLowerCase())
 }
 
 function filterTree(nodes: TreeNode[], keyword: string): TreeNode[] {
@@ -210,7 +210,7 @@ function filterTree(nodes: TreeNode[], keyword: string): TreeNode[] {
   const result: TreeNode[] = []
 
   for (const node of nodes) {
-    const matched = node.name.toLowerCase().includes(lower)
+    const matched = (node.Name || node.name || '').toLowerCase().includes(lower)
     const filteredChildren = filterTree(node.children, keyword)
 
     if (matched || filteredChildren.length > 0) {
@@ -329,23 +329,57 @@ function setCurrentNode(code: string) {
 }
 
 /**
- * 向指定父节点追加子节点（直接操作 el-tree 内部 store，不触发 API）
+ * 向指定父节点追加子节点（不触发 API，仅更新本地树 UI）
  * @param parentCode 父节点 code（null = 追加到根级）
  * @param newNode 新节点数据（TreeNode 格式）
  */
 function appendNode(parentCode: string | null, newNode: TreeNode) {
   if (!treeRef.value) return
-  const store = treeRef.value.store
+
   if (parentCode) {
-    const parentNode = store.nodesMap[parentCode]
-    if (parentNode) {
-      // el-tree Node.append 会自动处理 children 初始化和 isLeaf 更新
+    // 优先使用 el-tree 公开 API：append(data, nodeKey)
+    try {
+      ;(treeRef.value as any).append(newNode, parentCode)
+      return
+    } catch {
+      // append 不可用时走 fallback
+    }
+
+    // fallback：通过 store.nodesMap 获取 Node 对象
+    const store = (treeRef.value as any).store
+    const parentNode = store?.nodesMap?.[parentCode]
+    if (parentNode && typeof parentNode.append === 'function') {
       parentNode.append(newNode)
       return
     }
+
+    // 最终 fallback：直接在数据中查找父节点并插入
+    const added = addToTree(props.data, parentCode, newNode)
+    if (added) return
   }
+
   // 根级：直接追加到 treeData
   props.data.push(newNode)
+}
+
+/** 在树数据中找到 parentCode 对应节点并追加子节点 */
+function addToTree(
+  nodes: TreeNode[],
+  parentCode: string,
+  newNode: TreeNode,
+): boolean {
+  for (const node of nodes) {
+    if (node.code === parentCode) {
+      node.children = node.children || []
+      node.children.push(newNode)
+      node.isLeaf = false
+      return true
+    }
+    if (node.children?.length && addToTree(node.children, parentCode, newNode)) {
+      return true
+    }
+  }
+  return false
 }
 
 defineExpose({

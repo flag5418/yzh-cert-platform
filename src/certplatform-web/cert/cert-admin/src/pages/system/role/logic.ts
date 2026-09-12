@@ -9,6 +9,7 @@
  * 架构：
  * - 角色树（Sys_Role），懒加载 + 增删改 + 启用/禁用
  * - 右侧显示选中角色详情
+ * - 表单字段从后端 /treepconfig 自动派生，不硬编码
  */
 
 import { TreeTableLogic, type TreeNode } from '@yzh-core'
@@ -33,32 +34,6 @@ export class RolePageLogic extends TreeTableLogic<any> {
    */
   formData = reactive<Record<string, any>>({})
 
-  // ──── 表单字段 ────
-  get formFields(): any[] {
-    return [
-      {
-        prop: 'RoleName',
-        label: '角色名称',
-        type: 'text',
-        required: true,
-        placeholder: '请输入角色名称',
-      },
-      {
-        prop: 'Enable',
-        label: '是否启用',
-        type: 'switch',
-        required: false,
-      },
-      {
-        prop: 'OrderNo',
-        label: '排序号',
-        type: 'number',
-        required: false,
-        placeholder: '请输入排序号',
-      },
-    ]
-  }
-
   // ──── 树节点操作 ────
   get nodeActions(): Record<string, string> {
     const actions: Record<string, string> = {}
@@ -71,8 +46,9 @@ export class RolePageLogic extends TreeTableLogic<any> {
     if (tc.AllowDelete) {
       actions['delete'] = '删除'
     }
-    if (tc.CustomActions) {
-      Object.assign(actions, tc.CustomActions)
+    // EnableField 存在时，显示禁用/启用按钮
+    if (this.enableField) {
+      actions['toggle-valid'] = '禁用/启用'
     }
     return actions
   }
@@ -82,9 +58,10 @@ export class RolePageLogic extends TreeTableLogic<any> {
    */
   getNodeActionLabel(action: string, node: TreeNode): string {
     if (action === 'toggle-valid') {
+      const field = this.enableField ?? 'IsValid'
       const extra = (node.extra as any) || {}
-      const enable = extra.Enable ?? 1
-      return enable === 1 ? '禁用' : '启用'
+      const val = extra[field] ?? 1
+      return val === 1 ? '禁用' : '启用'
     }
     return this.nodeActions[action] || action
   }
@@ -98,11 +75,12 @@ export class RolePageLogic extends TreeTableLogic<any> {
     this.dialogMode.value = 'add'
     this.parentNode.value = parent
     Object.keys(this.formData).forEach((k) => delete this.formData[k])
-    const tmpl = (this.treeFormConfig?.NewEntity as any) || {}
+    // 从 NewEntity 模板初始化（后端 config 提供）
+    const tmpl = (this.config.value?.NewEntity as any) || {}
     Object.assign(this.formData, {
       ...tmpl,
       Code: crypto.randomUUID?.() || `${Date.now()}`,
-      Enable: 1,
+      IsValid: 1,
       ParentCode: parent?.code ?? null,
     })
     this.dialogVisible.value = true
@@ -118,7 +96,7 @@ export class RolePageLogic extends TreeTableLogic<any> {
       Code: node.code,
       RoleName: node.name,
       ParentCode: node.parentCode,
-      Enable: extra.Enable ?? 1,
+      IsValid: extra.IsValid ?? 1,
       OrderNo: extra.OrderNo ?? null,
     })
     this.dialogVisible.value = true
@@ -140,26 +118,6 @@ export class RolePageLogic extends TreeTableLogic<any> {
       this.dialogVisible.value = false
     } finally {
       this.submitting.value = false
-    }
-  }
-
-  // ========================================================
-  // 启用/禁用
-  // ========================================================
-
-  /** 切换角色启用/禁用 */
-  async toggleRoleIsValid(treeNode: TreeNode): Promise<void> {
-    const extra = (treeNode.extra as any) || {}
-    const enable = extra.Enable ?? 1
-    const action = enable === 1 ? 'Disable' : 'Enable'
-
-    try {
-      await this.apiPost(`/action/${action}`, { Code: treeNode.code })
-      // 更新节点 extra 中的 Enable 值
-      extra.Enable = enable === 1 ? 0 : 1
-      treeNode.extra = { ...extra }
-    } catch (e: any) {
-      throw e
     }
   }
 }

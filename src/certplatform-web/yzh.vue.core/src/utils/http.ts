@@ -57,7 +57,16 @@ http.interceptors.response.use(
       return Promise.reject(new Error(msg))
     }
 
-    // 2. Restful 标准格式：{code: 200, message: '...', data: ...}
+    // 2. YZH 新架构格式：{success: true, data: ..., timestamp: ...}
+    if (typeof res.success === 'boolean') {
+      if (res.success === true) {
+        return { code: 200, message: res.message || 'success', data: res.data } as any
+      }
+      const msg = res.message || '请求失败'
+      return Promise.reject(new Error(msg))
+    }
+
+    // 3. Restful 标准格式：{code: 200, message: '...', data: ...}
     if (typeof res.code === 'number') {
       if (res.code === 200) {
         return res as any

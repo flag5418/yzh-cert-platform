@@ -151,7 +151,7 @@ function filterTreeData(nodes: TreeNode[], keyword: string): TreeNode[] {
   const result: TreeNode[] = []
 
   for (const node of nodes) {
-    const matched = node.name.toLowerCase().includes(lower)
+    const matched = (node.Name || node.name || '').toLowerCase().includes(lower)
     const filteredChildren = filterTreeData(node.children, keyword)
 
     if (matched || filteredChildren.length > 0) {

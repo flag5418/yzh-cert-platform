@@ -106,18 +106,6 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
 
         // 树节点表单配置（自动加载 Assets/EntityConfigs/sys_organization_form.json）
         TreeFormConfigName = "System/OrganizationForm";
-
-        // 注册树节点（机构）自定义操作
-        // 前端调用：POST /api/Organization/tree/action/disable
-        //           请求体 = 树节点实体 { Code: "xxx" }
-        RegisterTreeAction("disable", DisableOrgRecursiveAsync);
-        RegisterTreeAction("enable", EnableOrgAsync);
-
-        // 注册表格（人员）行操作
-        // 前端调用：POST /api/Organization/action/disable
-        //           请求体 = 行实体 { Code: "xxx" }
-        RegisterRowAction("disable", DisableUserAsync);
-        RegisterRowAction("enable", EnableUserAsync);
     }
 
     // ========================================================

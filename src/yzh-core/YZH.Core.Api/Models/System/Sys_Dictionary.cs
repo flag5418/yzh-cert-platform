@@ -15,6 +15,10 @@ namespace YZH.Core.Api.Models.System;
 [YZHDeleteStrategy(Mode = DeleteMode.Soft)]
 public class Sys_Dictionary : BaseEntity
 {
+    /// <summary>主键（DB: Dic_ID）</summary>
+    [SugarColumn(ColumnName = "Dic_ID", IsPrimaryKey = true, IsIdentity = true)]
+    public new string Id { get; set; } = string.Empty;
+
     /// <summary>字典编号</summary>
     [Required(AllowEmptyStrings = false)]
     [StringLength(100)]

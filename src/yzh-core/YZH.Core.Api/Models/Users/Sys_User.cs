@@ -62,6 +62,12 @@ public class Sys_User : BaseEntity
     [SugarColumn(ColumnName = "Enable")]
     public byte Enable { get; set; } = 1;
 
+    /// <summary>有效标志（1=有效，0=无效）- 统一架构字段</summary>
+    [Required]
+    [Display(Name = "是否有效")]
+    [SugarColumn(ColumnName = "IsValid")]
+    public int IsValid { get; set; } = 1;
+
     /// <summary>性别（0=未知，1=男，2=女）</summary>
     [Display(Name = "性别")]
     [SugarColumn(ColumnName = "Gender")]
@@ -167,6 +173,24 @@ public class Sys_User : BaseEntity
     public new bool DeleteFlag { get; set; }
 
     /// <summary>Sys_User 使用 User_Id (int) 作为 PK，而非 BaseEntity.Id (string)</summary>
-    [SugarColumn(ColumnName = "User_Id", IsIgnore = true)]
+    [SugarColumn(ColumnName = "User_Id", IsPrimaryKey = true, IsIdentity = true)]
     public new string Id { get; set; } = string.Empty;
+
+    /// <summary>用户编码（DB: Code）</summary>
+    [SugarColumn(ColumnName = "Code")]
+    [StringLength(50)]
+    public new string Code { get; set; } = string.Empty;
+
+    /// <summary>是否删除（DB: IsDeleted）</summary>
+    [SugarColumn(ColumnName = "IsDeleted")]
+    public new bool IsDeleted { get; set; }
+
+    /// <summary>删除时间（DB: DeleteTime）</summary>
+    [SugarColumn(ColumnName = "DeleteTime")]
+    public new DateTime? DeleteTime { get; set; }
+
+    /// <summary>删除人（DB: DeleteBy）</summary>
+    [SugarColumn(ColumnName = "DeleteBy")]
+    [StringLength(64)]
+    public new string? DeleteBy { get; set; }
 }

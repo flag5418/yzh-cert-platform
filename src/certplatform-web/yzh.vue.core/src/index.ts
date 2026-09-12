@@ -14,6 +14,7 @@ export {
   YzhTree,
   YzhTreeTable,
   YzhTreeTableSelector,
+  YzhTreeTableCheckSelector,
 } from './components/layout'
 export { default as YzhCrudPage } from './components/page/YzhCrudPage.vue'
 export { YzhTable } from './components/table'
