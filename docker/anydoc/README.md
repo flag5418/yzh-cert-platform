@@ -118,7 +118,7 @@ docker exec yzh-anydoc anydoc /tmp/anydoc/原始文件.docx -o /tmp/anydoc/结�
 - **方案 A（当前推荐）**：`docker exec yzh-anydoc anydoc <容器内文件>`，.NET 侧通过 Process 调用；文件经 `docker/anydoc/tmp` 挂载卷交换
 - **方案 B（备选）**：在 anydoc 容器外再包一层 HTTP 服务（POST /convert），.NET 走 HTTP 调用，隔离文件系统细节
 
-> 对接 .NET 的 IFileExtractor 落地计划见 `docs/20-架构决策/技术研究-文档解析开源方案与轻量部署-V1.md`。
+> 对接 .NET 的 IFileExtractor 落地计划见 `docs/90-归档/旧版本/技术研究-文档解析开源方案与轻量部署-V1.md`。
 
 ---
 
