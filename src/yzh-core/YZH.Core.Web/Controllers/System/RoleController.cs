@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using YZH.Core.Api.Attributes;
 using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Models.Organization;
 using YZH.Core.Api.Models.System;
@@ -197,6 +198,7 @@ public class RoleController : TreeTableControllerBase<Sys_Role, Sys_Role>
     /// 获取机构+用户混合树数据（含勾选状态）
     /// 左侧选择角色后调用，返回全量数据 + 当前角色的关联标记
     /// </summary>
+    [ApiDescription("获取角色用户树", "系统", "系统管理/角色管理", true)]
     [HttpPost("checkTree")]
     public override async Task<ActionResult<ApiResponse<CheckTreeNodeDto[]>>> GetCheckTree(
         [FromBody] CheckTreeRequest request)
@@ -268,6 +270,7 @@ public class RoleController : TreeTableControllerBase<Sys_Role, Sys_Role>
     /// <summary>
     /// 勾选保存 - 给角色分配用户（写入 Sys_RoleUser 关联表，用 Code 关联）
     /// </summary>
+    [ApiDescription("保存角色用户关联", "系统", "系统管理/角色管理", true)]
     [HttpPost("check/add")]
     public override async Task<ActionResult<ApiResponse<object?>>> CheckAdd(
         [FromBody] CheckActionRequest request)
@@ -326,6 +329,7 @@ public class RoleController : TreeTableControllerBase<Sys_Role, Sys_Role>
     /// <summary>
     /// 取消勾选 - 移除角色与用户的关联（删除 Sys_RoleUser 记录，用 Code 关联）
     /// </summary>
+    [ApiDescription("移除角色用户关联", "系统", "系统管理/角色管理", true)]
     [HttpPost("check/remove")]
     public override async Task<ActionResult<ApiResponse<object?>>> CheckRemove(
         [FromBody] CheckActionRequest request)
@@ -375,6 +379,7 @@ public class RoleController : TreeTableControllerBase<Sys_Role, Sys_Role>
     /// 获取所有角色-用户关联（用于前端本地缓存）
     /// 页面加载时调用一次，后续切换角色时直接从本地缓存计算 CheckFlag
     /// </summary>
+    [ApiDescription("获取所有角色用户关联", "系统", "系统管理/角色管理", true)]
     [HttpPost("check/all")]
     public override async Task<ActionResult<ApiResponse<AssociationDto[]>>> GetAllAssociations()
     {

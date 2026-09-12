@@ -425,6 +425,15 @@ onMounted(() => {
   overflow-x: hidden;
   flex: 1;
   padding-top: 8px;
+  /* 隐藏滚动条（保留滚动功能） */
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE 10+ */
+}
+
+/* Webkit 浏览器隐藏滚动条 */
+.admin-layout__menu::-webkit-scrollbar {
+  width: 0;
+  display: none;
 }
 
 /* 覆盖 el-menu 自身背景 */

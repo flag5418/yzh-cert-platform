@@ -9,11 +9,17 @@ namespace YZH.Core.Api.Attributes;
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
 public class ApiDescriptionAttribute : Attribute
 {
-    /// <summary>接口说明</summary>
+    /// <summary>接口说明（接口名称）</summary>
     public string Description { get; set; } = "";
     
     /// <summary>负责人</summary>
     public string Author { get; set; } = "";
+
+    /// <summary>业务分组（用于前端树展示，如"系统管理/用户管理"）</summary>
+    public string Group { get; set; } = "";
+
+    /// <summary>是否启用（默认 true；设为 false 后前端不展示，用于接口废弃）</summary>
+    public bool Enable { get; set; } = true;
     
     /// <summary>创建时间（自动填充）</summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -26,10 +32,14 @@ public class ApiDescriptionAttribute : Attribute
     /// </summary>
     /// <param name="description">接口说明</param>
     /// <param name="author">负责人</param>
-    public ApiDescriptionAttribute(string description = "", string author = "")
+    /// <param name="group">业务分组</param>
+    /// <param name="enable">是否启用</param>
+    public ApiDescriptionAttribute(string description = "", string author = "", string group = "", bool enable = true)
     {
         Description = description;
         Author = author;
+        Group = group;
+        Enable = enable;
     }
 }
 

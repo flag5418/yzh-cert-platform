@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json.Serialization;
+using YZH.Core.Api.Attributes;
 using YZH.Core.DataBase;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Models;
@@ -37,6 +38,7 @@ public class AuthController : ControllerBase
     /// <summary>登录（兼容 Vol 路由：api/User/login）</summary>
     [HttpPost("login")]
     [AllowAnonymous]
+    [ApiDescription("用户登录", "系统", "系统管理/认证管理", true)]
     public async Task<IActionResult> Login([FromBody] LoginRequest req)
     {
         if (string.IsNullOrEmpty(req.UserName) || string.IsNullOrEmpty(req.Password))
@@ -114,6 +116,7 @@ public class AuthController : ControllerBase
     /// <summary>获取验证码</summary>
     [HttpGet("captcha")]
     [AllowAnonymous]
+    [ApiDescription("获取登录验证码", "系统", "系统管理/认证管理", true)]
     public IActionResult GetCaptcha()
     {
         string code = VolUtilities.VierificationCode.RandomText();
@@ -129,6 +132,7 @@ public class AuthController : ControllerBase
     /// <summary>健康检查</summary>
     [HttpGet("ping")]
     [AllowAnonymous]
+    [ApiDescription("健康检查", "系统", "系统管理/认证管理", true)]
     public IActionResult Ping() => Ok(ApiResponse.Ok("pong"));
 }
 

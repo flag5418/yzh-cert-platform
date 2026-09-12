@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using YZH.Core.Api.Filters;
 using YZH.Core.Api.Interfaces;
+using YZH.Core.Api.Repositories;
 using YZH.Core.Api.Services;
 using YZH.Core.DataBase;
 using YZH.Core.DataBase.Interfaces;
@@ -102,12 +103,11 @@ public static class YzhWebBuilderExtensions
         // 注册 YZH 认证过滤器
         builder.Services.AddScoped<YZH.Core.Api.Filters.YzhAuthFilter>();
 
-        // TODO: 以下服务为开发中特性，暂时注释
-        // builder.Services.AddScoped<IApiRepository, ApiRepository>();
-        // builder.Services.AddScoped<IPermissionCacheService, PermissionCacheService>();
-        // builder.Services.AddScoped<ApiScanner>();
-        // builder.Services.AddScoped<ApiSyncService>();
-        // builder.Services.AddHostedService<ApiSyncHostedService>();
+        // 注册接口权限相关服务
+        builder.Services.AddScoped<IApiRepository, ApiRepository>();
+        builder.Services.AddScoped<IPermissionCacheService, PermissionCacheService>();
+        builder.Services.AddScoped<ApiScanner>();
+        builder.Services.AddScoped<ApiSyncService>();
 
         // 注册 JSON 序列化选项（Configure 与 Program.cs 中已注册的 AddControllers 合并）
         builder.Services.Configure<JsonOptions>(json =>

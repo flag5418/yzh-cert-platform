@@ -6,15 +6,19 @@
  */
 
 export interface ISOStandard {
-  Id: number
+  Id?: number
+  Code?: string
   StandardCode: string
   StandardName: string
-  StandardDesc: string
-  StandardStatus: number
-  OrgId: number
-  OrgName: string
-  CreateDate: string
-  UpdateDate: string
+  VersionYear: number
+  Category?: string
+  CategoryName?: string
+  Description?: string
+  Remark?: string
+  Status?: string
+  StatusName?: string
+  CreateDate?: string
+  ModifyDate?: string
 }
 
 export interface CertificationBody {
@@ -28,19 +32,28 @@ export interface CertificationBody {
 }
 
 export interface ISOClause {
-  Id: number
-  StandardId: number
-  ClauseNo: string
-  ClauseName: string
-  CreateDate: string
+  Id?: number
+  Code?: string
+  StandardCode: string
+  ParentCode?: string
+  ClauseNumber: string
+  Title: string
+  Description?: string
+  SortOrder?: number
+  CreateDate?: string
+  ModifyDate?: string
 }
 
-export interface CertStage {
-  Id: number
-  StandardId: number
-  StageNo: number
-  StageName: string
-  CreateDate: string
+export interface PhaseDefinition {
+  Id?: number
+  Code?: string
+  PhaseCode: string
+  PhaseName: string
+  SequenceOrder: number
+  Description?: string
+  IsValid: number
+  StatusName?: string
+  CreateTime?: string
 }
 
 export interface Enterprise {

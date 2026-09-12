@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
@@ -350,16 +351,23 @@ public class EntityService<T> where T : class, new()
 
     /// <summary>
     ///     获取查询表名/视图名（视图路由）
-    ///     优先级：[ViewName] 特性 > 物理表类型名
+    ///     优先级：[ViewName] 特性 > [Table] 特性 > 类型名
     ///     用法：GetPageAsync / GetListAsync 等查询操作使用视图；Insert/Update/Delete 走物理表
     /// </summary>
     private static string GetQueryTableName<TEntity>()
     {
         var type = typeof(TEntity);
-        var attr = type.GetCustomAttributes(typeof(ViewNameAttribute), inherit: true)
+        // 1. 优先 [ViewName]（视图路由）
+        var viewAttr = type.GetCustomAttributes(typeof(ViewNameAttribute), inherit: true)
             .Cast<ViewNameAttribute>()
             .FirstOrDefault();
-        return attr?.ViewName ?? type.Name;
+        if (viewAttr != null) return viewAttr.ViewName;
+
+            // 2. 回退 [Table] 特性（EF Core 标准表名映射）
+            var tableAttr = type.GetCustomAttributes(typeof(TableAttribute), inherit: true)
+                .Cast<TableAttribute>()
+                .FirstOrDefault();
+            return tableAttr?.Name ?? type.Name;
     }
 
     /// <summary>

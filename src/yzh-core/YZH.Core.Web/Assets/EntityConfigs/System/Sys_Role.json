@@ -40,7 +40,7 @@
     {
       "FieldName": "OrderNo",
       "DesName": "排序号",
-      "Type": "NumberBox",
+      "Type": "Decimal",
       "Sxh": 3,
       "XsFlag": true,
       "BcFlag": true,

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using YZH.Core.Api.Attributes;
 using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Models.Users;
 using YZH.Core.Api.Services;
@@ -53,6 +54,7 @@ public class UserController : YzhControllerBase<Sys_User>
     [HttpGet("getVierificationCode")]
     [HttpGet("~/api/User/getVierificationCode")]
     [AllowAnonymous]
+    [ApiDescription("获取登录验证码", "系统", "系统管理/用户管理", true)]
     public IActionResult GetVierificationCode()
     {
         var imageBase64 = _captchaService.Generate(out var code, out var uuid);

@@ -38,6 +38,48 @@ public interface IApiRepository
     /// 执行原始 SQL
     /// </summary>
     Task<int> ExecuteNonQueryAsync(string sql, object? param = null);
+
+    /// <summary>
+    /// 清理 sys_role_api 中无效的 api_code
+    /// </summary>
+    Task<int> CleanupRoleApiAsync(List<string> invalidCodes);
+
+    /// <summary>
+    /// 清理 sys_user_permission 中无效的 api_code
+    /// </summary>
+    Task<int> CleanupUserPermissionAsync(List<string> invalidCodes);
+
+    // ---- SysRoleApi 方法 ----
+
+    /// <summary>插入角色-接口关联</summary>
+    Task<int> InsertRoleApiAsync(string roleCode, string apiCode);
+
+    /// <summary>删除角色的所有接口关联</summary>
+    Task<int> DeleteByRoleCodeAsync(string roleCode);
+
+    /// <summary>获取角色的接口编码列表</summary>
+    Task<List<string>> GetApiCodesByRoleCodeAsync(string roleCode);
+
+    // ---- SysUserPermission 方法 ----
+
+    /// <summary>插入用户权限</summary>
+    Task<int> InsertUserPermissionAsync(string userCode, string apiCode);
+
+    /// <summary>删除用户的所有权限</summary>
+    Task<int> DeleteByUserCodeAsync(string userCode);
+
+    /// <summary>获取用户的接口编码列表</summary>
+    Task<List<string>> GetApiCodesByUserCodeAsync(string userCode);
+
+    /// <summary>获取所有角色-接口关联</summary>
+    Task<List<RoleApiAssociation>> GetAllRoleApiAssociationsAsync();
+}
+
+/// <summary>角色-接口关联 DTO</summary>
+public class RoleApiAssociation
+{
+    public string RoleCode { get; set; } = "";
+    public string ApiCode { get; set; } = "";
 }
 
 /// <summary>

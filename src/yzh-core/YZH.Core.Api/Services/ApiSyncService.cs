@@ -63,6 +63,10 @@ public class ApiSyncService
             var codesToDelete = existingDict.Keys.Except(discoveredDict.Keys).ToList();
             if (codesToDelete.Any())
             {
+                // 先清理关联表中的无效记录
+                await _apiRepo.CleanupRoleApiAsync(codesToDelete);
+                await _apiRepo.CleanupUserPermissionAsync(codesToDelete);
+                
                 await _apiRepo.DeleteBatchAsync(codesToDelete);
                 _logger.LogInformation("删除废弃接口 {Count} 个: {Codes}", 
                     codesToDelete.Count, string.Join(", ", codesToDelete.Take(5)));
@@ -74,7 +78,7 @@ public class ApiSyncService
             if (codesToAdd.Any())
             {
                 var newApis = discoveredApis.Where(a => codesToAdd.Contains(a.ApiCode))
-                    .Select(MapToEntity).ToList();
+                    .Select(a => MapToEntity(a, GetGroupPath(a))).ToList();
                 await _apiRepo.InsertBatchAsync(newApis);
                 _logger.LogInformation("新增接口 {Count} 个: {Codes}", 
                     codesToAdd.Count, string.Join(", ", codesToAdd.Take(5)));
@@ -85,12 +89,13 @@ public class ApiSyncService
             var codesToUpdate = existingDict.Keys.Intersect(discoveredDict.Keys)
                 .Where(code => 
                     existingDict[code].Name != discoveredDict[code].Description
-                    || existingDict[code].Author != discoveredDict[code].Author)
+                    || existingDict[code].Author != discoveredDict[code].Author
+                    || existingDict[code].GroupPath != GetGroupPath(discoveredDict[code]))
                 .ToList();
             if (codesToUpdate.Any())
             {
                 var updateApis = discoveredApis.Where(a => codesToUpdate.Contains(a.ApiCode))
-                    .Select(MapToEntity).ToList();
+                    .Select(a => MapToEntity(a, GetGroupPath(a))).ToList();
                 await _apiRepo.UpdateBatchAsync(updateApis);
                 _logger.LogInformation("更新接口 {Count} 个: {Codes}", 
                     codesToUpdate.Count, string.Join(", ", codesToUpdate.Take(5)));
@@ -112,14 +117,26 @@ public class ApiSyncService
         return result;
     }
     
-    private SysApi MapToEntity(ApiDescriptor descriptor)
+    /// <summary>
+    /// 获取接口分组路径（从 TreePath 第一段 + 第二段拼接）
+    /// </summary>
+    private string GetGroupPath(ApiDescriptor descriptor)
+    {
+        if (descriptor.TreePath.Length >= 2)
+            return $"{descriptor.TreePath[0]}/{descriptor.TreePath[1]}";
+        if (descriptor.TreePath.Length == 1)
+            return descriptor.TreePath[0];
+        return descriptor.ControllerName;
+    }
+
+    private SysApi MapToEntity(ApiDescriptor descriptor, string groupPath)
     {
         return new SysApi
         {
             Code = descriptor.ApiCode,
             Method = descriptor.Method,
             Path = descriptor.Path,
-            TreePath = string.Join("|", descriptor.TreePath),
+            GroupPath = groupPath,
             Name = descriptor.Description,
             Author = descriptor.Author,
             Enable = true,

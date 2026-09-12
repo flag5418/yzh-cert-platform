@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using YZH.Core.Api.Attributes;
 using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Models.System;
 using YZH.Core.Api.Services;
@@ -62,6 +63,7 @@ public class RoleMenuController : TreeTableControllerBase<Sys_Role, Sys_Menu>
     // ========================================================
 
     /// <summary>获取菜单树数据（含勾选状态）</summary>
+    [ApiDescription("获取角色菜单树", "系统", "系统管理/菜单权限", true)]
     [HttpPost("checkTree")]
     public override async Task<ActionResult<ApiResponse<CheckTreeNodeDto[]>>> GetCheckTree(
         [FromBody] CheckTreeRequest request)

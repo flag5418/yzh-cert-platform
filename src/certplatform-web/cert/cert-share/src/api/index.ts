@@ -10,7 +10,7 @@ export * from './auth'
 // Foundation 域 API（ISO 标准体系主数据，admin + auditor 共用）
 export * from './cert/iso-standard'
 export * from './cert/iso-clause'
-export * from './cert/cert-stage'
+export * from './cert/phase-definition'
 export * from './cert/certification-body'
 
 // Workflow 域 API（审核流程与业务管理，admin + auditor 共用）

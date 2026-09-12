@@ -18,12 +18,12 @@ namespace YZH.Entity.Admin.Platform.Sys
         // ====== 视图特有字段（来自关联的阶段信息和字典翻译）======
 
         /// <summary>
-        /// 阶段名称（cert_cert_stage.StageName）
+        /// 阶段名称（cert_phase_definition.PhaseName）
         /// </summary>
         public string StageName { get; set; }
 
         /// <summary>
-        /// 排序号（cert_cert_stage.SortOrder）
+        /// 排序号（cert_phase_definition.SequenceOrder）
         /// </summary>
         public int SortOrder { get; set; }
 

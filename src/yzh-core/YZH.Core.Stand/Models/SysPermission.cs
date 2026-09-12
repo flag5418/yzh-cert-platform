@@ -25,9 +25,9 @@ public class SysApi
     [SugarColumn(Length = 200)]
     public string Path { get; set; } = "";
     
-    /// <summary>树形路径（如 System|User|filter）</summary>
-    [SugarColumn(Length = 500)]
-    public string? TreePath { get; set; }
+    /// <summary>业务分组路径（如 系统管理/用户管理）</summary>
+    [SugarColumn(Length = 200, ColumnName = "group_path")]
+    public string GroupPath { get; set; } = "";
     
     /// <summary>接口名称</summary>
     [SugarColumn(Length = 200)]

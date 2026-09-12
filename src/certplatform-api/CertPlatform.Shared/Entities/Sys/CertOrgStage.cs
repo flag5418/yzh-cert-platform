@@ -31,7 +31,7 @@ namespace YZH.Entity.Admin.Platform.Sys
         public string StdCode { get; set; }
 
         /// <summary>
-        /// 阶段编码（关联 cert_cert_stage.phase_code）
+        /// 阶段编码（关联 cert_phase_definition.phase_code）
         /// </summary>
         [Required]
         [StringLength(50)]

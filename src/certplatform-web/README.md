@@ -45,5 +45,5 @@ cd auditor && node node_modules/.bin/vite build
 node_modules 通过 symlink 复用 vol.web 的依赖，无需重复安装。
 
 ## 文档
-- 重构方案：`docs/80-功能设计/03-平台基础/certplatform-web-前端重构-V1.md`
-- 启动指南：`docs/80-功能设计/03-平台基础/certplatform-web-启动指南-V1.md`
+- 重构方案：`docs/20-体系认证/03-详细设计/03-平台基础/certplatform-web-前端重构-V1.md`
+- 启动指南：`docs/20-体系认证/03-详细设计/03-平台基础/certplatform-web-启动指南-V1.md`
