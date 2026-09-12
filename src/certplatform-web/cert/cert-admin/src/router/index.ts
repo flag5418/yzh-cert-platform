@@ -15,34 +15,34 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/layouts/AdminLayout.vue'),
     redirect: '/system/organization',
     children: [
-      // ===== System 域 - 系统管理 =====
+      // ===== 系统管理 =====
       { path: 'system/organization', name: 'SystemOrganization', component: () => import('@/pages/system/organization/index.vue') },
-      { path: 'system/role', name: 'SystemRole', component: () => import('@/pages/system/role/index.vue') },
       { path: 'system/role-user', name: 'SystemRoleUser', component: () => import('@/pages/system/role-user/index.vue') },
-      { path: 'system/dictionary', name: 'SystemDictionary', component: () => import('@/pages/system/dictionary/index.vue') },
+      { path: 'system/role-menu', name: 'SystemRoleMenu', component: () => import('@/pages/system/role-menu/index.vue') },
+      { path: 'system/role-api', name: 'SystemRoleApi', component: () => import('@/pages/system/role-api/index.vue') },
       { path: 'system/menu', name: 'SystemMenu', component: () => import('@/pages/system/menu/index.vue') },
-      { path: 'system/dept', name: 'SystemDept', component: () => import('@/pages/system/dept/index.vue') },
+      { path: 'system/api', name: 'SystemApi', component: () => import('@/pages/system/api/index.vue') },
+      { path: 'system/dict', name: 'SystemDictionary', component: () => import('@/pages/system/dictionary/index.vue') },
       { path: 'system/log', name: 'SystemLog', component: () => import('@/pages/system/log/index.vue') },
+      { path: 'system/config', name: 'SystemConfig', component: () => import('@/pages/system/config/index.vue') },
 
-      // ===== Foundation 域 - ISO 标准体系主数据 =====
-      { path: 'foundation/iso-standard', name: 'FoundationIsoStandard', component: () => import('@/pages/foundation/iso-standard/index.vue') },
-      { path: 'foundation/iso-clause', name: 'FoundationIsoClause', component: () => import('@/pages/foundation/iso-clause/index.vue') },
-      { path: 'foundation/certification-body', name: 'FoundationCertificationBody', component: () => import('@/pages/foundation/certification-body/index.vue') },
-      { path: 'foundation/cert-stage', name: 'FoundationCertStage', component: () => import('@/pages/foundation/cert-stage/index.vue') },
-
-      // ===== Workflow 域 - 审核流程与业务管理 =====
-      { path: 'workflow/enterprise', name: 'WorkflowEnterprise', component: () => import('@/pages/workflow/enterprise/index.vue') },
-      { path: 'workflow/workflow', name: 'WorkflowDefinition', component: () => import('@/pages/workflow/workflow/list.vue') },
-      { path: 'workflow/prompt-template', name: 'WorkflowPromptTemplate', component: () => import('@/pages/workflow/prompt-template/index.vue') },
-      { path: 'workflow/nc-config', name: 'WorkflowNcConfig', component: () => import('@/pages/workflow/nc-config/index.vue') },
-      { path: 'workflow/report-rule', name: 'WorkflowReportRule', component: () => import('@/pages/workflow/report-rule/index.vue') },
-      { path: 'workflow/job-skill', name: 'WorkflowJobSkill', component: () => import('@/pages/workflow/job-skill/index.vue') },
-      { path: 'workflow/doc-extraction', name: 'WorkflowDocExtraction', component: () => import('@/pages/workflow/doc-extraction/index.vue') },
-      { path: 'workflow/directory', name: 'WorkflowDirectory', component: () => import('@/pages/workflow/directory/index.vue') },
-      { path: 'workflow/queue', name: 'WorkflowQueue', component: () => import('@/pages/workflow/queue/index.vue') },
-      { path: 'workflow/ai-usage', name: 'WorkflowAiUsage', component: () => import('@/pages/workflow/ai-usage/index.vue') },
-      { path: 'workflow/file-upload', name: 'WorkflowFileUpload', component: () => import('@/pages/workflow/file-upload/index.vue') },
-      { path: 'workflow/sys-config', name: 'WorkflowSysConfig', component: () => import('@/pages/workflow/sys-config/index.vue') }
+      // ===== 业务管理 =====
+      { path: 'cert/iso-standard', name: 'CertIsoStandard', component: () => import('@/pages/foundation/iso-standard/index.vue') },
+      { path: 'cert/cert-body', name: 'CertCertificationBody', component: () => import('@/pages/foundation/certification-body/index.vue') },
+      { path: 'cert/cert-stage', name: 'CertCertStage', component: () => import('@/pages/foundation/cert-stage/index.vue') },
+      { path: 'cert/iso-clause', name: 'CertIsoClause', component: () => import('@/pages/foundation/iso-clause/index.vue') },
+      { path: 'cert/link-org-standard', name: 'CertLinkOrgStandard', component: () => import('@/pages/workflow/link-org-standard/index.vue') },
+      { path: 'cert/link-org-stage', name: 'CertLinkOrgStage', component: () => import('@/pages/workflow/link-org-stage/index.vue') },
+      { path: 'business/directory-manager', name: 'BusinessDirectoryManager', component: () => import('@/pages/workflow/directory/index.vue') },
+      { path: 'business/doc-extraction-rule', name: 'BusinessDocExtractionRule', component: () => import('@/pages/workflow/doc-extraction/index.vue') },
+      { path: 'business/report-def', name: 'BusinessReportDef', component: () => import('@/pages/workflow/report-rule/index.vue') },
+      { path: 'business/prompt-template', name: 'BusinessPromptTemplate', component: () => import('@/pages/workflow/prompt-template/index.vue') },
+      { path: 'business/skill-manage', name: 'BusinessSkillManage', component: () => import('@/pages/workflow/job-skill/index.vue') },
+      { path: 'business/nc-config', name: 'BusinessNcConfig', component: () => import('@/pages/workflow/nc-config/index.vue') },
+      { path: 'business/workflow-rules', name: 'BusinessWorkflowRules', component: () => import('@/pages/workflow/workflow-rules/index.vue') },
+      { path: 'business/report-rule-config', name: 'BusinessReportRuleConfig', component: () => import('@/pages/workflow/report-rule-config/index.vue') },
+      { path: 'business/ai-usage', name: 'BusinessAiUsage', component: () => import('@/pages/workflow/ai-usage/index.vue') },
+      { path: 'business/queue-monitor', name: 'BusinessQueueMonitor', component: () => import('@/pages/workflow/queue/index.vue') }
     ]
   }
 ]

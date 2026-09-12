@@ -12,14 +12,41 @@
   --yzh-color-primary-dark: #1e40af;
   --yzh-color-primary-disabled: #94a3b8;
 
-  /* Element Plus 主题色覆盖 */
+  /* Element Plus 主题色 - 对齐参考设计 */
   --el-color-primary: #1e3a8a;
+  --el-color-primary-rgb: 30, 58, 138;
   --el-color-primary-light-3: #3b82f6;
   --el-color-primary-light-5: #60a5fa;
   --el-color-primary-light-7: #93c5fd;
   --el-color-primary-light-8: #bfdbfe;
   --el-color-primary-light-9: #dbeafe;
   --el-color-primary-dark-2: #1e40af;
+
+  /* Element Plus 文本色 */
+  --el-text-color-primary: #303133;
+  --el-text-color-regular: #606266;
+  --el-text-color-secondary: #909399;
+  --el-text-color-placeholder: #a8abb2;
+  --el-text-color-disabled: #c0c4cc;
+
+  /* Element Plus 边框色 */
+  --el-border-color: #dcdfe6;
+  --el-border-color-light: #e4e7ed;
+  --el-border-color-lighter: #ebeef5;
+  --el-border-color-extra-light: #f2f6fc;
+
+  /* Element Plus 填充色 */
+  --el-bg-color: #ffffff;
+  --el-bg-color-page: #f8fafc;
+  --el-fill-color: #f0f2f5;
+  --el-fill-color-light: #f5f7fa;
+  --el-fill-color-lighter: #fafafa;
+  --el-fill-color-blank: #ffffff;
+
+  /* Element Plus 阴影 */
+  --el-box-shadow: 0px 12px 32px 4px rgba(0,0,0,.04), 0px 8px 20px rgba(0,0,0,.08);
+  --el-box-shadow-light: 0px 0px 12px rgba(0,0,0,.12);
+  --el-box-shadow-lighter: 0px 0px 6px rgba(0,0,0,.12);
 
   /* 功能色 */
   --yzh-color-success: #16a34a;
@@ -33,12 +60,12 @@
   --yzh-color-bg-hover: #f1f5f9;
   --yzh-color-bg-active: #eff6ff;
 
-  /* 文本色 */
-  --yzh-color-text-primary: #0f172a;
-  --yzh-color-text-secondary: #475569;
-  --yzh-color-text-tertiary: #64748b;
-  --yzh-color-text-placeholder: #cbd5e1;
-  --yzh-color-text-disabled: #94a3b8;
+  /* 文本色 - 与参考设计对齐，偏浅灰 */
+  --yzh-color-text-primary: #303133;
+  --yzh-color-text-secondary: #606266;
+  --yzh-color-text-tertiary: #909399;
+  --yzh-color-text-placeholder: #a8abb2;
+  --yzh-color-text-disabled: #c0c4cc;
 
   /* 边框色 */
   --yzh-color-border: #e2e8f0;
@@ -67,8 +94,9 @@
   --yzh-space-10: 40px;
   --yzh-space-12: 48px;
 
-  /* 字体 */
-  --yzh-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* 字体 - 与参考设计对齐 */
+  --yzh-font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+  --yzh-font-family-heading: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
   --yzh-font-size-xs: 12px;
   --yzh-font-size-sm: 13px;
   --yzh-font-size-md: 14px;
@@ -80,9 +108,12 @@
   --yzh-font-weight-medium: 500;
   --yzh-font-weight-semibold: 600;
   --yzh-font-weight-bold: 700;
-  --yzh-line-height-tight: 1.25;
-  --yzh-line-height-base: 1.5;
-  --yzh-line-height-relaxed: 1.75;
+  --yzh-line-height-tight: 1.3;
+  --yzh-line-height-base: 1.6;
+  --yzh-line-height-relaxed: 1.8;
+  --yzh-letter-spacing-normal: 0;
+  --yzh-letter-spacing-wide: 0.5px;
+  --yzh-letter-spacing-wider: 1px;
 
   /* 过渡 */
   --yzh-transition-fast: 150ms ease;
@@ -106,6 +137,20 @@ html, body {
   background-color: var(--yzh-color-bg-page);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  letter-spacing: var(--yzh-letter-spacing-normal);
+}
+
+/* 标题类文字 - 更大气严谨 */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--yzh-font-family-heading);
+  font-weight: var(--yzh-font-weight-semibold);
+  letter-spacing: var(--yzh-letter-spacing-wide);
+}
+
+/* 表格表头、按钮等强调文字 */
+.yzh-text-emphasized {
+  font-weight: var(--yzh-font-weight-medium);
+  letter-spacing: var(--yzh-letter-spacing-wide);
 }
 
 #app {
