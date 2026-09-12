@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 快速重启后端服务
-# 流程：按进程名过滤 dotnet/VOL.WebApi 直接停止 → 编译 → 后台启动
+# 流程：按进程名过滤 dotnet/YZH.Core.Web 直接停止 → 编译 → 后台启动
 # 用法: ./restart-backend.sh
 
 RED='\033[0;31m'

@@ -6,7 +6,7 @@
 # 用法: ./stop-backend.sh
 
 PORT=9992
-APP_NAME="VOL.WebApi"
+APP_NAME="YZH.Core.Web"
 
 print_info() { echo -e "\033[0;32m[INFO]\033[0m $1"; }
 print_warn() { echo -e "\033[1;33m[WARN]\033[0m $1"; }
@@ -18,7 +18,7 @@ echo "========================================="
 
 # 1) 按进程名过滤（主手段）：匹配 VOL.WebApi 可执行 / dotnet run 项目进程
 #    注意 pgrep -f 会匹配完整命令行，脚本自身不含 APP_NAME，无自匹配风险
-PIDS=$(pgrep -f "VOL\.WebApi|dotnet run.*VOL\.WebApi" 2>/dev/null | grep -v "^$$\$" | tr '\n' ' ')
+PIDS=$(pgrep -f "YZH\.Core\.Web|dotnet run.*YZH\.Core\.Web" 2>/dev/null | grep -v "^$$\$" | tr '\n' ' ')
 
     # 1.1) PID 文件兜底：run-backend.sh 用 os.setsid 启动时，dotnet run 父进程命令行
     #      可能不含 VOL.WebApi（--urls 方式），从 PID 文件补齐父进程一起关闭
@@ -37,7 +37,7 @@ if [ -n "$PIDS" ]; then
     sleep 2
 
     # 检查是否还有残留（SIGTERM 未生效则升级 SIGKILL）
-    REMAIN=$(pgrep -f "VOL\.WebApi|dotnet run.*VOL\.WebApi" 2>/dev/null | grep -v "^$$\$" | tr '\n' ' ')
+    REMAIN=$(pgrep -f "YZH\.Core\.Web|dotnet run.*YZH\.Core\.Web" 2>/dev/null | grep -v "^$$\$" | tr '\n' ' ')
     if [ -n "$REMAIN" ]; then
         print_warn "SIGTERM 未完全退出，强制 SIGKILL: $REMAIN"
         kill -9 $REMAIN 2>/dev/null

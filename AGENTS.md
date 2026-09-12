@@ -21,20 +21,22 @@ AIGC:
 
 | 层级 | 路径 | 状态 | 说明 |
 |------|------|------|------|
-| **新后端** | `src/certplatform-api/` | ✅ 唯一开发目标 | `CertPlatform.Shared/` + `Admin/` + `Auditor/` + `Enterprise/`，启动入口 `Cert.Platform.sln`（Program.cs） |
-| **新前端** | `src/certplatform-web/` | ✅ 唯一开发目标 | `yzh.vue.core/` + `share/` + `admin/` + `auditor/` |
-| **旧后端** | `src/server/Vue.NetCore/` | ⛔ **禁止修改** | Vol 框架，仅作参考 |
-| **旧前端** | `src/admin/`、`src/auditor/` | ⛔ **禁止修改** | Vol 自带前端，仅作参考 |
+| **新后端** | `src/certplatform-api/` | ✅ 唯一开发目标 | `CertPlatform.Shared/` + `Admin/` + `Auditor/` + `Enterprise/`，启动入口 `src/yzh-core/YZH.Core.Web` |
+| **新前端** | `src/certplatform-web/` | ✅ 唯一开发目标 | `yzh.vue.core/` + `cert/cert-share/` + `cert/cert-admin/` + `cert/cert-auditor/` + `cert/cert-enterprise/` |
+| **历史后端代码** | `src/old/server/Vue.NetCore/vol.api/` | ⛔ **禁止修改** | 旧 Vol 框架后端，仅作业务逻辑/接口设计/数据库结构参考 |
+| **历史前端代码** | `src/old/server/Vue.NetCore/vol.web/` | ⛔ **禁止修改** | 旧 Vol 框架前端，仅作页面结构/UI 参考 |
+| **旧审核员前端** | `src/old/auditor/` | ⛔ **禁止修改** | 未使用的旧审核员前端代码，已归档 |
 
 **强制约束**：
-- ❌ 禁止修改 `src/server/`、`src/admin/`、`src/auditor/` 下任何文件
+- ❌ 禁止修改 `src/old/` 下任何文件
 - ❌ 禁止在新架构中调用旧架构的控制器/服务
-- ✅ 新架构开发可参考旧架构的业务逻辑
+- ✅ 新架构开发可参考旧架构的业务逻辑（使用"历史后端代码"/"历史前端代码"术语检索）
 - ✅ 所有接口/Bug 修复在新架构中实现
 
 ## 快速指针（编码前必读链路）
 
 - **项目宪法**：`项目全局规则.md` — 项目概述/技术栈锁定/文档目录结构/AI 检索协议/端口规划/快速开始/禁止事项
+- **项目结构与启动指南**：`docs/00-工程体系/项目结构与启动指南-V1.md` — 新旧架构路径/启动方式/端口规划/AI 检索协议
 - **文档导航**：`docs/00-工程体系/README.md` — 全项目文档索引（00/10/20/50/60/80/90 + 历史文档）
 - **★ YZH 架构唯一入口**：`docs/10-YZH架构/README.md`（← **V1 强制规范**：编码前必读，包含架构总纲/后端基类/前端基类/数据契约/权限体系/代码结构/开发流程/常见错误）
 - **YZH 架构分章速查**：
@@ -60,8 +62,8 @@ AIGC:
 - **端口**：后端 9992 / 后台管理 9990 / 审核员前端 9991 / MySQL 3307 / Redis 6380 / MinIO 9000+9001
 - **开发模式**：独立开发，多 AI 协作机制不适用（项目全局规则 §十三）
 - **前端架构（V4 2026-09 起）**：彻底抛弃 view-grid/VolProvider/VolBox/VolForm，全部使用自研 `YzhTable` + `YzhForm` + `YzhApiClient` + 手写 API
-- **新前端结构（2026-09-05 起）**：`src/certplatform-web/` 目录，包含 `yzh.vue.core/`（核心组件库）、`share/`（业务共享层）、`admin/`（管理员端，端口 9990）、`auditor/`（审核员端，端口 9991）
-- **新后端结构（2026-09 起）**：`src/certplatform-api/` 目录，包含 `CertPlatform.Shared/`（共享层）、`Admin/`、`Auditor/`、`Enterprise/`，启动入口 `Cert.Platform.sln`（Program.cs 调用 `UseYzhCore`）
+- **新前端结构（2026-09-05 起）**：`src/certplatform-web/` 目录，包含 `yzh.vue.core/`（核心组件库）、`cert/cert-share/`（业务共享层）、`cert/cert-admin/`（管理员端，端口 9990）、`cert/cert-auditor/`（审核员端，端口 9991）
+- **新后端结构（2026-09 起）**：`src/certplatform-api/` 目录，包含 `CertPlatform.Shared/`（共享层）、`Admin/`、`Auditor/`、`Enterprise/`，启动入口 `src/yzh-core/YZH.Core.Web`（Program.cs 调用 `UseYzhCore`）
 - **YZH.Core 本地源码**：`src/yzh-core/` 目录，包含 `YZH.Core.Stand/`、`YZH.Core.DataBase/`、`YZH.Core.Api/`、`YZH.Core.Web/` 四个项目，是架构层，不直接对外提供服务，通过项目引用被 certplatform-api 使用
 
 ## 编码强制约定
@@ -78,11 +80,11 @@ AIGC:
 4. **前端（新）**：所有新页面必须使用 V4 自研组件：
    - 核心组件库：`@yzh-core/components/*`（yzh.vue.core）
    - 业务共享层：`@share/*`（share）
-   - 管理员端：`src/certplatform-web/admin/`（端口 9990，Element Plus）
-   - 审核员端：`src/certplatform-web/auditor/`（端口 9991，Naive UI）
+   - 管理员端：`src/certplatform-web/cert/cert-admin/`（端口 9990，Element Plus）
+   - 审核员端：`src/certplatform-web/cert/cert-auditor/`（端口 9991，Naive UI）
    - API 客户端：`yzhApi`（来自 yzh.vue.core）
    - **禁止** 新页面使用 view-grid、VolBox、VolForm、VolProvider、extension 自动生成的 .jsx
-   - **注意**：旧 vol.web 保留历史版本，不删除，新代码写入 certplatform-web/
+   - **注意**：旧 vol.web 保留历史版本（`src/old/server/Vue.NetCore/vol.web/`），不删除，新代码写入 certplatform-web/
 5. **数据库**：MySQL 8.0 @ 3307（yzh-mysql）/ Redis @ 6380（yzh-redis）；SQL 脚本遵循 `项目全局规则.md` §十一（脚本放 scripts/db/，禁止散落）。
 6. **命名规范**：文档命名强制 `-V1` 后缀（见 `00-工程体系/文档生命周期管理规范-V1.md`）；脚本按 scripts/ 子目录归类。
 7. **启停规范**：后端启停一律走 `scripts/` 脚本（backend/ 子目录），禁止手动 `kill` / 裸 `dotnet run &`（见项目全局规则 §十五）。

@@ -13,9 +13,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# 项目路径
-PROJECT_DIR="/Volumes/Expand/wangqingquan/Documents/work/study/体系认证平台/src/server/Vue.NetCore/vol.api"
-WEB_API_DIR="$PROJECT_DIR/YZH.WebApi"
+# 项目路径（新 YZH.Core 后端）
+PROJECT_DIR="/Volumes/Expand/wangqingquan/Documents/work/study/体系认证平台/src/yzh-core"
+WEB_API_DIR="$PROJECT_DIR/YZH.Core.Web"
 PORT=9992
 LOG_FILE="/tmp/vol_backend_9992.log"
 PID_FILE="/tmp/vol_backend_9992.pid"
@@ -40,14 +40,14 @@ build_project() {
 
 # 检查是否已在运行（按进程名）
 is_running() {
-    pgrep -f "YZH\.WebApi" >/dev/null 2>&1
+    pgrep -f "YZH\.Core\.Web" >/dev/null 2>&1
 }
 
 # 后台运行项目
 run_project() {
     # 已在运行则直接提示
     if is_running; then
-        print_warn "后端已在运行（进程: $(pgrep -f 'YZH\.WebApi' | tr '\n' ' ')）"
+        print_warn "后端已在运行（进程: $(pgrep -f 'YZH\.Core\.Web' | tr '\n' ' ')）"
         print_warn "如需重启请执行: ./restart-backend.sh"
         return 1
     fi
@@ -107,7 +107,7 @@ if pid == 0:
 # 查看状态
 show_status() {
     if is_running; then
-        print_info "后端运行中: PID $(pgrep -f 'YZH\.WebApi' | tr '\n' ' '), 端口 :$PORT"
+        print_info "后端运行中: PID $(pgrep -f 'YZH\.Core\.Web' | tr '\n' ' '), 端口 :$PORT"
     else
         print_info "后端未运行"
     fi

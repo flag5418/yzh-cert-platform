@@ -40,9 +40,10 @@
 |------|------|------|
 | `run-backend.sh` | 编译并后台运行后端（nohup，日志/PID 落盘，命令立即返回） | `./run-backend.sh`（默认）<br>`./run-backend.sh build`（只编译）<br>`./run-backend.sh run`（只运行）<br>`./run-backend.sh status`（查状态） |
 | `restart-backend.sh` | 快速重启：按进程名停止 → 重新编译 → 后台启动 | `./restart-backend.sh` |
-| `stop-backend.sh` | 停止服务：按进程名过滤 dotnet/VOL.WebApi 关闭（SIGTERM → SIGKILL），端口 9992 仅作兜底 | `./stop-backend.sh` |
+| `stop-backend.sh` | 停止服务：按进程名过滤 dotnet/YZH.Core.Web 关闭（SIGTERM → SIGKILL），端口 9992 仅作兜底 | `./stop-backend.sh` |
 
 **服务信息**：
+- 后端启动项目：`src/yzh-core/YZH.Core.Web`
 - 服务端口：9992；服务地址：http://localhost:9992
 - Swagger：http://localhost:9992/swagger
 - 日志文件：`/tmp/vol_backend_9992.log`；PID 文件：`/tmp/vol_backend_9992.pid`
@@ -50,7 +51,7 @@
 **停止策略（重要）**：停止后端不依赖端口，按进程名过滤：
 
 ```bash
-pgrep -f "VOL\.WebApi|dotnet run.*VOL\.WebApi"
+pgrep -f "YZH\.Core\.Web|dotnet run.*YZH\.Core\.Web"
 ```
 
 只有进程名匹配不到时才用 `lsof -ti:9992` 兜底排查。
@@ -76,10 +77,16 @@ pgrep -f "VOL\.WebApi|dotnet run.*VOL\.WebApi"
 
 | 脚本 | 作用 | 用法 |
 |------|------|------|
-| `update_cert_vue_files.py` | 批量更新 cert 相关 Vue 文件 | `python3 update_cert_vue_files.py` |
-| `update_cert_vue_files_v2.py` | 批量更新 cert 相关 Vue 文件（版本 2） | `python3 update_cert_vue_files_v2.py` |
-| `update_frontend_options.py` | 更新前端下拉选项配置 | `python3 update_frontend_options.py` |
-| `wrap_vue_slots.py` | 处理 Vue 模板插槽包装 | `python3 wrap_vue_slots.py` |
+| `start.sh` | 启动/停止/重启前端服务 | `./start.sh admin start`<br>`./start.sh auditor stop`<br>`./start.sh all status` |
+| `update_cert_vue_files.py` | 批量更新 cert 相关 Vue 文件（历史脚本，供参考） | `python3 update_cert_vue_files.py` |
+| `update_cert_vue_files_v2.py` | 批量更新 cert 相关 Vue 文件（版本 2，供参考） | `python3 update_cert_vue_files_v2.py` |
+| `update_frontend_options.py` | 更新前端下拉选项配置（历史脚本，供参考） | `python3 update_frontend_options.py` |
+| `wrap_vue_slots.py` | 处理 Vue 模板插槽包装（历史脚本，供参考） | `python3 wrap_vue_slots.py` |
+
+**新前端启动方式**：
+- 管理员端：`cd src/certplatform-web/cert/cert-admin && npm run dev`（端口 9990）
+- 审核员端：`cd src/certplatform-web/cert/cert-auditor && npm run dev`（端口 9991）
+- 企业端：`cd src/certplatform-web/cert/cert-enterprise && npm run dev`（端口 9993）
 
 ### 2.4 storage/ — 存储脚本
 
@@ -92,9 +99,9 @@ pgrep -f "VOL\.WebApi|dotnet run.*VOL\.WebApi"
 
 | 脚本 | 作用 | 用法 |
 |------|------|------|
-| `generate_entities.sh` | 生成后端实体类（bash） | `./generate_entities.sh` |
-| `generate_entities.ps1` | 生成后端实体类（PowerShell，Windows 用） | `powershell -File generate_entities.ps1` |
-| `check-coding-standards.sh` | 检查代码规范符合性 | `./check-coding-standards.sh` |
+| `generate_entities.sh` | 生成后端实体类（历史脚本，供参考） | `./generate_entities.sh` |
+| `generate_entities.ps1` | 生成后端实体类（PowerShell，Windows 用，历史脚本供参考） | `powershell -File generate_entities.ps1` |
+| `check-coding-standards.sh` | 检查代码规范符合性（历史脚本，供参考） | `./check-coding-standards.sh` |
 
 ### 2.6 tools/ — 通用工具
 
@@ -119,4 +126,5 @@ pgrep -f "VOL\.WebApi|dotnet run.*VOL\.WebApi"
 
 | 日期 | 变更内容 |
 |------|---------|
+| 2026-09-11 | 迁移历史项目至 `src/old/`；更新后端脚本指向新架构 `src/yzh-core/YZH.Core.Web`；更新前端脚本文档 |
 | 2026-08-16 | 创建：根目录 9 个散落脚本归位（3 个 backend + 1 个 tools），scripts/ 原 14 个脚本按 db/frontend/storage/generate 分类归位；并入原根目录 BASH_README.md 内容（backend 章节）；删除 5 个 test_ai_* 一次性脚本（详见 80-功能设计/README.md 变更记录） |
