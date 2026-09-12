@@ -18,10 +18,10 @@
       >
         <template v-for="menu in menuStore.menus" :key="menu.id">
           <!-- 有子菜单：渲染为 el-sub-menu -->
-          <el-sub-menu v-if="menu.children && menu.children.length > 0" :index="String(menu.id)">
+          <el-sub-menu v-if="menu.children && menu.children.length > 0" :index="menu.url || String(menu.id)">
             <template #title>
               <el-icon v-if="menu.icon"><component :is="formatIcon(menu.icon)" /></el-icon>
-              <span>{{ menu.name }}</span>
+              <span>{{ menu.menuName }}</span>
             </template>
             <el-menu-item
               v-for="child in menu.children"
@@ -29,14 +29,14 @@
               :index="child.url || String(child.id)"
             >
               <el-icon v-if="child.icon"><component :is="formatIcon(child.icon)" /></el-icon>
-              <span>{{ child.name }}</span>
+              <span>{{ child.menuName }}</span>
             </el-menu-item>
           </el-sub-menu>
 
           <!-- 无子菜单：渲染为 el-menu-item -->
           <el-menu-item v-else :index="menu.url || String(menu.id)">
             <el-icon v-if="menu.icon"><component :is="formatIcon(menu.icon)" /></el-icon>
-            <span>{{ menu.name }}</span>
+            <span>{{ menu.menuName }}</span>
           </el-menu-item>
         </template>
       </el-menu>
@@ -184,7 +184,7 @@ const currentPageTitle = computed(() => {
   // 递归查找菜单名称
   const findMenuName = (menus: any[]): string | null => {
     for (const m of menus) {
-      if (m.url === path) return m.name
+      if (m.url === path) return m.menuName
       if (m.children?.length) {
         const found = findMenuName(m.children)
         if (found) return found
@@ -279,18 +279,67 @@ async function changePassword() {
   })
 }
 
+// Element UI → Element Plus 图标名称映射表
+// 用于兼容旧版 Vol 框架的图标命名
+const ICON_NAME_MAP: Record<string, string> = {
+  // 系统管理
+  'setting': 'Setting',
+  's-home': 'HomeFilled',
+  'user-solid': 'UserFilled',
+  'menu': 'Menu',
+  'connection': 'Connection',
+  'folder': 'Folder',
+  'link': 'Link',
+  'receiving': 'Collection',
+  'document': 'Document',
+  's-tools': 'Tools',
+  // 业务管理
+  'document-checked': 'DocumentChecked',
+  'office-building': 'OfficeBuilding',
+  'date': 'Date',
+  'document-copy': 'DocumentCopy',
+  'operation': 'Operation',
+  'files': 'Files',
+  'tickets': 'Tickets',
+  'collection': 'Collection',
+  'chat-line-round': 'ChatLineRound',
+  'cpu': 'Cpu',
+  'edit': 'Edit',
+  'warning': 'Warning',
+  'set-up': 'SetUp',
+  'money': 'Money',
+  's-data': 'DataAnalysis',
+}
+
+// 默认图标（当找不到匹配时使用）
+const DEFAULT_ICON = 'Menu'
+
 // 格式化图标名称（el-icon-xxx → 组件名）
 function formatIcon(iconName: string): string {
-  if (!iconName) return ''
+  if (!iconName) return DEFAULT_ICON
+
   // 移除常见前缀
   let name = iconName
     .replace(/^el-icon-/, '')
     .replace(/^ivu-icon ivu-icon-/, '')
-  // 转换为 PascalCase
-  return name
+
+  // 优先使用映射表
+  if (ICON_NAME_MAP[name]) {
+    return ICON_NAME_MAP[name]
+  }
+
+  // 尝试直接转换 PascalCase（可能是已经是 Element Plus 名称）
+  const pascalName = name
     .split('-')
     .map(s => s.charAt(0).toUpperCase() + s.slice(1))
     .join('')
+
+  // 检查是否是有效的 Element Plus 图标名（首字母大写）
+  if (pascalName.length > 0 && /^[A-Z]/.test(pascalName)) {
+    return pascalName
+  }
+
+  return DEFAULT_ICON
 }
 
 // 下拉菜单命令处理

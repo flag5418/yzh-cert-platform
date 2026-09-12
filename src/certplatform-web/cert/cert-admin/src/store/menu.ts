@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { getMenuTree, type MenuNode } from '@/api/system/menu'
+import { getMenuTree, type SysMenu } from '@/api/system/menu'
 
 export const useMenuStore = defineStore('menu', () => {
-  const menus = ref<MenuNode[]>([])
+  const menus = ref<SysMenu[]>([])
   const loading = ref(false)
   const loaded = ref(false)
 

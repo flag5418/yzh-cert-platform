@@ -1,102 +1,132 @@
 import http from '@yzh-core/utils/http'
-import type { ApiResponse as HttpApiResponse } from '@yzh-core/utils/http'
-import type { PageParams, Page } from '@yzh-core/components/table/types'
+import type { Result } from '@yzh-core/utils/http'
 
-// 系统菜单实体
+/**
+ * 菜单节点（前端统一 camelCase）
+ */
 export interface SysMenu {
-  id: number
+  id: string
+  code: string
   menuName: string
-  menuUrl: string
-  menuIcon: string
-  sort: number
+  parentCode: string
+  url?: string
+  icon?: string
+  description?: string
   enable: number
-  parentId?: number
-  tableName?: string
-}
-
-// 菜单节点（树形结构，供前端组件使用）
-export interface MenuNode {
-  id: number
-  parentId: number
-  name: string
-  url: string
-  icon: string
-  children: MenuNode[]
-}
-
-// Vol 框架菜单项（扁平结构）
-export interface VolMenuItem {
-  id: number
-  name: string
-  url: string
-  parentId: number
-  icon: string
-  enable: number
-  tableName?: string
-  permission?: string[]
-}
-
-// Vol 框架响应 data 结构
-interface VolMenuResponse {
-  menu: VolMenuItem[]
-  asyncApi: string[]
+  orderNo: number
+  tag?: string
+  children?: SysMenu[]
 }
 
 /**
- * 获取当前用户的菜单树（基于角色权限）
- * 适配旧 Vol 框架 API: GET /api/Menu/getTreeMenu
- * 将扁平列表转换为树形结构
+ * 后端返回的菜单数据结构（PascalCase）
  */
-export function getMenuTree(): Promise<HttpApiResponse<MenuNode[]>> {
-  return http.get<VolMenuResponse>('/Menu/getTreeMenu').then((res) => {
-    const response = res as unknown as HttpApiResponse<VolMenuResponse>
-    const flatMenus = response.data?.menu ?? []
-    return {
-      code: response.code,
-      message: response.message,
-      data: buildTree(flatMenus)
-    }
-  })
+interface RawSysMenu {
+  Id?: string
+  Code?: string
+  ParentCode?: string
+  MenuName?: string
+  Url?: string
+  Icon?: string
+  Description?: string
+  Enable?: number
+  OrderNo?: number
+  Tag?: string
 }
 
 /**
- * 获取菜单分页列表
- * 后端 API: POST /api/System/MenuManagement/filter
+ * 将后端 PascalCase 转换为前端 camelCase
  */
-export async function getMenuPage(params: PageParams): Promise<Page<SysMenu>> {
-  const res = await http.post<Page<SysMenu>>('/System/MenuManagement/filter', params)
-  return res.data
+function normalizeMenu(raw: RawSysMenu): SysMenu {
+  return {
+    id: raw.Id ?? '',
+    code: raw.Code ?? '',
+    menuName: raw.MenuName ?? '',
+    parentCode: raw.ParentCode ?? '0',
+    url: raw.Url,
+    icon: raw.Icon,
+    description: raw.Description,
+    enable: raw.Enable ?? 1,
+    orderNo: raw.OrderNo ?? 0,
+    tag: raw.Tag,
+  }
 }
 
 /**
- * 将扁平菜单列表转换为树形结构
+ * 从扁平列表构建树形结构
  */
-function buildTree(items: VolMenuItem[]): MenuNode[] {
-  const map = new Map<number, MenuNode>()
-  const roots: MenuNode[] = []
+function buildTree(rawList: RawSysMenu[]): SysMenu[] {
+  const normalized = rawList.map(normalizeMenu)
+  const map = new Map<string, SysMenu>()
+  const roots: SysMenu[] = []
 
-  // 先创建所有启用的节点
-  for (const item of items) {
-    if (item.enable !== 1) continue
-    map.set(item.id, {
-      id: item.id,
-      parentId: item.parentId,
-      name: item.name,
-      url: item.url || '',
-      icon: item.icon || '',
-      children: []
-    })
+  // 先初始化每个节点（添加 children 数组）
+  for (const item of normalized) {
+    map.set(item.code, { ...item, children: [] })
   }
 
   // 构建父子关系
-  for (const node of map.values()) {
-    if (node.parentId === 0 || !map.has(node.parentId)) {
+  for (const item of normalized) {
+    const node = map.get(item.code)!
+    if (item.parentCode === '0' || !map.has(item.parentCode)) {
       roots.push(node)
     } else {
-      const parent = map.get(node.parentId)
-      parent?.children.push(node)
+      const parent = map.get(item.parentCode)
+      parent?.children?.push(node)
     }
   }
 
-  return roots
+  // 移除空的 children 属性（前端模板用 v-if 判断）
+  const cleanTree = (nodes: SysMenu[]): SysMenu[] =>
+    nodes.map(node => {
+      const cleaned = { ...node }
+      if (cleaned.children?.length === 0) {
+        delete cleaned.children
+      } else {
+        cleaned.children = cleanTree(cleaned.children!)
+      }
+      return cleaned
+    })
+
+  return cleanTree(roots)
+}
+
+/**
+ * 获取菜单树（自动归一化 + 构建树形结构）
+ */
+export async function getMenuTree(): Promise<Result<SysMenu[]>> {
+  const res = await http.get<Result<RawSysMenu[]>>('/System/MenuManagement/tree')
+  if (res.data && Array.isArray(res.data)) {
+    res.data = buildTree(res.data)
+  }
+  return res
+}
+
+/**
+ * 新增菜单
+ */
+export function addMenu(data: Partial<SysMenu>): Promise<Result<SysMenu>> {
+  return http.post<Result<SysMenu>>('/System/MenuManagement/add', data)
+}
+
+/**
+ * 修改菜单
+ */
+export function updateMenu(data: Partial<SysMenu>): Promise<Result<SysMenu>> {
+  return http.post<Result<SysMenu>>('/System/MenuManagement/update', data)
+}
+
+/**
+ * 批量删除菜单
+ */
+export function deleteMenu(codes: string[]): Promise<Result<number>> {
+  return http.post<Result<number>>('/System/MenuManagement/delete', { codes })
+}
+
+/**
+ * 启用/禁用菜单
+ */
+export function toggleEnable(code: string, enable: number): Promise<Result<any>> {
+  const action = enable === 1 ? 'Enable' : 'Disable'
+  return http.post<Result<any>>(`/System/MenuManagement/action/${action}`, { Code: code })
 }
