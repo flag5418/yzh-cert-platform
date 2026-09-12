@@ -174,3 +174,5 @@ ScaffoldingReadMe.txt
 *.zip
 !docs/**/*.zip
 docs/历史文档/案例/
+输出产物/
+.agnes/
