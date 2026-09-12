@@ -61,6 +61,9 @@ src/certplatform-web/admin/dist/
 src/certplatform-web/auditor/dist/
 src/certplatform-web/share/dist/
 src/certplatform-web/yzh.vue.core/dist/
+src/certplatform-web/cert/cert-admin/dist/
+src/certplatform-web/cert/cert-auditor/dist/
+src/certplatform-web/cert/cert-enterprise/dist/
 src/server/Vue.NetCore/vol.web/dist/
 
 # ========================================================
@@ -154,6 +157,12 @@ docs/**/*.csv
 **/Properties/PublishProfiles/
 
 # ========================================================
+# 旧架构代码（保留但不推送到新架构仓库）
+# ========================================================
+src/old/
+src/auditor/
+
+# =================================================
 # 其他
 # ========================================================
 ScaffoldingReadMe.txt

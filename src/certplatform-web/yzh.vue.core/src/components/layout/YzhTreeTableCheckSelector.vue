@@ -43,11 +43,11 @@
       >
         <template #default="{ row }">
           <slot :name="`column-${col.prop}`" :row="row" :column="col">
-            <!-- 节点类型标签 -->
+            <!-- 节点类型标签（可通过 typeLabels / typeTagTypes 定制） -->
             <template v-if="col.prop === nodeTypeField">
-              <el-tag v-if="row[nodeTypeField] === 'org'" type="primary" size="small">机构</el-tag>
-              <el-tag v-else-if="row[nodeTypeField] === 'user'" type="success" size="small">用户</el-tag>
-              <el-tag v-else size="small">{{ row[nodeTypeField] }}</el-tag>
+              <el-tag :type="typeTagType(row[nodeTypeField])" size="small">
+                {{ typeLabel(row[nodeTypeField]) }}
+              </el-tag>
             </template>
             <!-- 默认显示 -->
             <template v-else>
@@ -107,6 +107,8 @@ interface ColumnConfig {
 // Props
 // ========================================================
 
+type TagType = 'primary' | 'success' | 'info' | 'warning' | 'danger'
+
 interface Props {
   /** 扁平数据（后端返回） */
   flatData: FlatNode[]
@@ -124,6 +126,12 @@ interface Props {
   showTypeColumn?: boolean
   /** 默认展开所有节点 */
   defaultExpandAll?: boolean
+  /** 节点类型显示文案映射（如 { menu: '菜单' }） */
+  typeLabels?: Record<string, string>
+  /** 节点类型标签颜色映射（如 { menu: 'warning' }） */
+  typeTagTypes?: Record<string, TagType>
+  /** 「全选」时排除的节点类型（默认排除机构 org） */
+  checkAllExcludeTypes?: string[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -134,7 +142,24 @@ const props = withDefaults(defineProps<Props>(), {
   columns: () => [],
   showTypeColumn: true,
   defaultExpandAll: false,
+  typeLabels: undefined,
+  typeTagTypes: undefined,
+  checkAllExcludeTypes: () => ['org'],
 })
+
+// 默认类型文案 / 颜色（保持 role-user 原有行为）
+const DEFAULT_TYPE_LABELS: Record<string, string> = { org: '机构', user: '用户' }
+const DEFAULT_TYPE_TAG_TYPES: Record<string, TagType> = { org: 'primary', user: 'success' }
+
+/** 节点类型显示文案 */
+function typeLabel(type: string): string {
+  return props.typeLabels?.[type] ?? DEFAULT_TYPE_LABELS[type] ?? type
+}
+
+/** 节点类型标签颜色 */
+function typeTagType(type: string): TagType {
+  return props.typeTagTypes?.[type] ?? DEFAULT_TYPE_TAG_TYPES[type] ?? 'info'
+}
 
 // ========================================================
 // Emits
@@ -339,9 +364,10 @@ function handleUncheckAll() {
 }
 
 function collectUserNodes(nodes: TreeNode[]): TreeNode[] {
+  const excluded = props.checkAllExcludeTypes ?? []
   const result: TreeNode[] = []
   for (const node of nodes) {
-    if (node[props.nodeTypeField] !== 'org') {
+    if (!excluded.includes(node[props.nodeTypeField])) {
       result.push(node)
     }
     if (node.children && node.children.length > 0) {

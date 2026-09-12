@@ -143,6 +143,7 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   #region 原子方法 - 查询
 
   /// <summary>过滤查询原子方法（/filter）</summary>
+  [NonAction]
   public virtual async Task<Result<PagedResult<V>>> FilterCore(FilterRequest request)
   {
     try
@@ -186,6 +187,7 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   ///     自动注入 NewEntity（空实体模板）和 Schema（字段结构描述）
   ///     来源：后端反射实体类生成（EntitySchemaHelper）
   /// </summary>
+  [NonAction]
   public virtual Result<EntityConfig> GetConfigCore()
   {
     try
@@ -208,6 +210,7 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   #region 原子方法 - 写入
 
   /// <summary>新增原子方法</summary>
+  [NonAction]
   public virtual async Task<Result<V>> AddCore(V entity)
   {
     try
@@ -244,6 +247,7 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   }
 
   /// <summary>修改原子方法</summary>
+  [NonAction]
   public virtual async Task<Result<V>> UpdateCore(V entity)
   {
     try
@@ -282,6 +286,7 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   }
 
   /// <summary>删除原子方法（按 Code 数组批量删除）</summary>
+  [NonAction]
   public virtual async Task<Result<int>> DeleteCore(params string[] codes)
   {
     try
@@ -320,6 +325,7 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   #region 原子方法 - 导入导出
 
   /// <summary>导出原子方法（返回文件字节和文件名）</summary>
+  [NonAction]
   public virtual async Task<Result<(byte[] fileData, string fileName)>> ExportCore(ExportRequest request)
   {
     try
@@ -360,6 +366,7 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   }
 
   /// <summary>导入原子方法</summary>
+  [NonAction]
   public virtual async Task<Result<ImportResult>> ImportCore(IFormFile file)
   {
     try
