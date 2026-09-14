@@ -3,7 +3,7 @@
 import requests, json
 
 # 1. 先登录获取 token
-login_data = {"userName": "admin", "password": "admin", "verificationCode": "", "UUID": ""}
+login_data = {"userName": "yzhadmin", "password": "admin", "verificationCode": "", "UUID": ""}
 try:
     r = requests.post('http://127.0.0.1:9992/api/user/login', json=login_data)
     print(f'登录: {r.status_code}')

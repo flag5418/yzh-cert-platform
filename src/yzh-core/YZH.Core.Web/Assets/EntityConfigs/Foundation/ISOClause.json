@@ -133,7 +133,7 @@
       "Row": 1,
       "Col": 0,
       "RowSpan": 1,
-      "ColSpan": 2,
+      "ColSpan": 1,
       "GroupIndex": "1",
       "Mrz": "",
       "Enable": true,
@@ -157,7 +157,7 @@
       "Enable": true
     },
     {
-      "FieldName": "CreateDate",
+      "FieldName": "CreateTime",
       "DesName": "创建时间",
       "Type": "DateTimePicker",
       "Sxh": 5,

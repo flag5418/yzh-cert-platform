@@ -39,9 +39,23 @@
           :type-labels="TYPE_LABELS"
           :type-tag-types="TYPE_TAG_TYPES"
           :check-all-exclude-types="['group']"
-          :default-expand-all="true"
+          :default-expand-all="false"
+          cascade
+          searchable
+          :search-fields="['Name', 'Path', 'Method', 'ApiName']"
+          search-placeholder="搜索接口名称 / 路径 / 方法"
+          count-type="api"
           @check-change="handleCheckChange"
-        />
+        >
+          <!-- 分组行：分组名 + 接口数量；接口行：接口名称 -->
+          <template #column-Name="{ row }">
+            <template v-if="row.NodeType === 'group'">
+              <el-tag size="small" type="info" effect="plain">{{ row.Name }}</el-tag>
+              <span class="role-api-page__group-count">{{ row.ApiCount ?? 0 }}</span>
+            </template>
+            <span v-else>{{ row.ApiName || row.Name }}</span>
+          </template>
+        </YzhTreeTableCheckSelector>
         <div v-else class="role-api-page__empty">
           <el-empty description="请先选择左侧角色" />
         </div>
@@ -193,6 +207,12 @@ onMounted(async () => {
   font-size: 14px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+}
+
+.role-api-page__group-count {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .role-api-page__saving {

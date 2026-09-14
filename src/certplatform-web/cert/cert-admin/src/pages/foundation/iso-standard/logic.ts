@@ -13,7 +13,7 @@
  * - 继承 TreeTableLogic 获得全套左树右表能力
  */
 
-import { TreeTableLogic, type ApiResponse, type TreeNode } from '@yzh-core'
+import { TreeTableLogic, type ApiResponse, type FilterItem, type PagedData, type TreeNode } from '@yzh-core'
 import { ElMessage } from 'element-plus'
 import { reactive, ref } from 'vue'
 
@@ -73,51 +73,56 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
   }
 
   // ========================================================
-  // 带树条件的表格加载（覆盖：添加 ShowDisabled）
+  // 过滤条件构建（注入 ShowDisabled）
   // ========================================================
 
-  /** 带标准条件的分页查询 */
-  async loadPageWithTree(treeCode: string): Promise<void> {
-    this.loading.value = true
-    try {
-      const filters = this.buildFilters()
-      filters.push({
-        Field: this.relateField,
-        Value: treeCode,
-        Operator: 'eq',
-      })
-      if (this.showDisabled.value) {
-        filters.push({ Field: 'ShowDisabled', Value: 'true', Operator: 'eq' })
-      }
-      const request = {
-        Page: this.pagination.page,
-        PageSize: this.pagination.pageSize,
-        SortField: this.sortField.value,
-        SortOrder: this.sortOrder.value,
-        Filters: filters,
-      }
-      const res = await this.apiPost(`/filter`, request)
-      const page = res.data
-      if (page) {
-        this.rows.value = page.Items ?? []
-        this.pagination.total = page.TotalCount ?? 0
-      }
-    } catch (_e: any) {
-      this.rows.value = []
-      this.pagination.total = 0
-    } finally {
-      this.loading.value = false
+  /** 构建过滤条件：在基类 searchParams 基础上注入 ShowDisabled */
+  protected override buildFilters(extra?: Record<string, any>): FilterItem[] {
+    const filters = super.buildFilters(extra)
+    if (this.showDisabled.value) {
+      filters.push({ Field: 'ShowDisabled', Value: 'true', Operator: 'eq' })
     }
+    return filters
   }
 
-  /** 未选中树节点时的表格行为 */
-  async loadPageWithoutTree(): Promise<void> {
-    if (this.noSelectionBehavior === 'empty') {
-      this.rows.value = []
-      this.pagination.total = 0
-    } else {
-      await this.loadPageWithTree('')
+  // ========================================================
+  // 数据加载（供 YzhTable data-loader 使用）
+  // ========================================================
+
+  /**
+   * YzhTable 数据加载器：返回 { rows, total } 供表格渲染。
+   * 选中树节点时自动注入 StandardCode 过滤。
+   */
+  async dataLoader(params: {
+    page: number
+    rows: number
+    sort?: string
+    order?: string
+    searchParams?: Record<string, any>
+  }): Promise<{ rows: V[]; total: number }> {
+    const filters = this.buildFilters()
+    if (this.selectedNode.value) {
+      filters.push({
+        Field: this.relateField,
+        Value: this.selectedNode.value.code,
+        Operator: 'eq',
+      })
     }
+    try {
+      const res = await this.apiPost<ApiResponse<PagedData<V>>>('/filter', {
+        Page: params.page,
+        PageSize: params.rows,
+        SortField: params.sort || '',
+        SortOrder: params.order || '',
+        Filters: filters,
+      })
+      if (res.data) {
+        return { rows: res.data.Items ?? [], total: res.data.TotalCount ?? 0 }
+      }
+    } catch (_e: any) {
+      // silently ignore
+    }
+    return { rows: [], total: 0 }
   }
 
   // ========================================================
@@ -135,7 +140,6 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
     const tmpl = (this.config.value as any)?.NewEntity || {}
     Object.assign(this.formData, {
       ...tmpl,
-      Code: crypto.randomUUID?.() || `${Date.now()}`,
       StandardCode: this.selectedNode.value.code,
       SortOrder: 0,
     })
@@ -221,7 +225,7 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
       } else {
         await this.updateTreeNode(
           this.stdEditingNode.value!,
-          this.stdFormData.StandardName ?? this.stdFormData.Name ?? '',
+          this.stdFormData.StandardName ?? '',
           this.stdFormData,
         )
       }
@@ -248,11 +252,8 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
   }
 
   async refreshTable(): Promise<void> {
-    if (this.selectedNode.value) {
-      await this.loadPageWithTree(this.selectedNode.value.code)
-    } else {
-      await this.loadPageWithoutTree()
-    }
+    // 通过 YzhTable 组件的 refresh 方法触发 dataLoader 重新加载
+    ;(this as any)._tableRef?.refresh()
   }
 
   // ========================================================
@@ -262,7 +263,7 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
   async init(): Promise<void> {
     await this.loadConfig()
     await this.loadTreeRoot()
-    await this.loadPageWithoutTree()
+    // 表格通过 YzhTable 的 dataLoader 自动加载数据，无需在此调用
   }
 }
 

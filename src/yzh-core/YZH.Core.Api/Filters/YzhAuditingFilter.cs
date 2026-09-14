@@ -109,6 +109,12 @@ public class YzhAuditingFilter : IAsyncActionFilter
         }
     }
 
+    private static readonly HashSet<string> SensitiveFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Password", "UserPwd", "Token", "Secret", "ApiKey", "EncryptionKey",
+        "IdCard", "Phone", "PhoneNo", "Email", "BankAccount", "Captcha", "VerificationCode"
+    };
+
     private static bool IsExcluded(string path)
     {
         return ExcludedPaths.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase));
@@ -118,14 +124,15 @@ public class YzhAuditingFilter : IAsyncActionFilter
     {
         try
         {
-            // 脱敏处理（过滤密码等敏感字段）
             var filtered = arguments.ToDictionary(
                 kvp => kvp.Key,
-                kvp => kvp.Key.ToLower().Contains("password")
-                    || kvp.Key.ToLower().Contains("secret")
-                    || kvp.Key.ToLower().Contains("token")
-                    ? "***"
-                    : kvp.Value?.ToString() ?? "null"
+                kvp =>
+                {
+                    // 脱敏：敏感字段替换为 [REDACTED]
+                    if (SensitiveFields.Contains(kvp.Key))
+                        return "[REDACTED]";
+                    return kvp.Value?.ToString() ?? "null";
+                }
             );
             return System.Text.Json.JsonSerializer.Serialize(filtered);
         }

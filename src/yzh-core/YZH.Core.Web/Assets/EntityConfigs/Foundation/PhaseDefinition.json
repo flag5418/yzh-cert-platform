@@ -76,7 +76,7 @@
     {
       "FieldName": "SequenceOrder",
       "DesName": "顺序",
-      "Type": "NumberInput",
+      "Type": "Decimal",
       "Sxh": 3,
       "XsFlag": true,
       "BcFlag": true,
@@ -93,7 +93,7 @@
     {
       "FieldName": "Description",
       "DesName": "说明",
-      "Type": "TextArea",
+      "Type": "Memo",
       "Sxh": 4,
       "XsFlag": true,
       "BcFlag": true,
@@ -123,23 +123,6 @@
       "ColSpan": 1,
       "GroupIndex": "1",
       "Mrz": "1",
-      "Enable": true
-    },
-    {
-      "FieldName": "StatusName",
-      "DesName": "状态",
-      "Type": "Other",
-      "Sxh": 6,
-      "XsFlag": true,
-      "BcFlag": false,
-      "Yxk": false,
-      "Width": 80,
-      "Row": 0,
-      "Col": 0,
-      "RowSpan": 1,
-      "ColSpan": 1,
-      "GroupIndex": "2",
-      "Mrz": "",
       "Enable": true
     },
     {

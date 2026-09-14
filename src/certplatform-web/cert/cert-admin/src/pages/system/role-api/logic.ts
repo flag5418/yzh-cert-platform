@@ -48,12 +48,11 @@ export class RoleApiLogic {
   private associationCache = reactive<Map<string, Set<string>>>(new Map())
   private cacheLoaded = false
 
-  // ──── 表格列配置 ────
+  // ──── 表格列配置（分组列已在页面上定制，这里只需接口信息） ────
   columns = [
-    { prop: 'Name', label: '接口名称', minWidth: 250 },
-    { prop: 'Method', label: '方法', width: 80 },
-    { prop: 'Path', label: '路径', minWidth: 220 },
-    { prop: 'ApiName', label: '描述', minWidth: 180 },
+    { prop: 'Name', label: '分组 / 接口名称', minWidth: 260 },
+    { prop: 'Method', label: '方法', width: 90 },
+    { prop: 'Path', label: '路径', minWidth: 280 },
   ]
 
   // ========================================================
@@ -143,6 +142,13 @@ export class RoleApiLogic {
       const cached = this.associationCache.get(role.Code) ?? new Set<string>()
       for (const node of data) {
         node.CheckFlag = cached.has(node.Code)
+      }
+
+      // 分组节点跟随子级：全部已授权则显示为勾选（便于快速取消整组）
+      for (const node of data.filter((n) => n.NodeType === 'group')) {
+        const children = data.filter((n) => n.ParentCode === node.Code)
+        node.CheckFlag =
+          children.length > 0 && children.every((child) => cached.has(child.Code))
       }
 
       this.checkTreeData.value = data

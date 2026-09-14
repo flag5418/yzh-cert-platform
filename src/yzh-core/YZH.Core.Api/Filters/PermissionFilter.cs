@@ -1,42 +1,54 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
+using YZH.Core.Api.Services;
 using YZH.Core.Stand.Interfaces;
-using YZH.Core.Stand.Models;
 using AbstractionsActionDescriptor = Microsoft.AspNetCore.Mvc.Abstractions.ActionDescriptor;
 
 namespace YZH.Core.Api.Filters
 {
     /// <summary>
-    /// 权限校验过滤器
+    ///     权限校验过滤器（异步版）
     ///
-    /// 功能：
-    /// 1. 接口级权限校验（RequirePermission 特性）
-    /// 2. 数据权限过滤（RequireDataScope 特性）
-    /// 3. 操作日志记录
+    ///     功能：
+    ///     1. 接口级权限校验（RequirePermission 特性）
+    ///     2. 数据权限过滤（RequireDataScope 特性）
+    ///     3. 操作日志记录
+    ///
+    ///     安全策略：
+    ///     - 超级管理员（配置文件 YZH:SuperAdmin）→ 全部放行
+    ///     - 超级管理员角色（RoleId=1 或 ROLE_SUPER_ADMIN）→ 全部放行
+    ///     - 其他用户 → 按 IPermissionService 校验
+    ///     - 未标记 RequirePermission 的接口 → 仅要求已认证
     /// </summary>
-    public class PermissionFilter : IAuthorizationFilter, IActionFilter
+    public class PermissionFilter : IAsyncAuthorizationFilter, IActionFilter
     {
         private readonly IUserContext _userContext;
         private readonly ILogger<PermissionFilter> _logger;
+        private readonly IPermissionService _permissionService;
+        private readonly string _superAdminUserName;
 
-        public PermissionFilter(IUserContext userContext, ILogger<PermissionFilter> logger)
+        public PermissionFilter(
+            IUserContext userContext,
+            ILogger<PermissionFilter> logger,
+            IPermissionService permissionService,
+            IConfiguration configuration)
         {
             _userContext = userContext;
             _logger = logger;
+            _permissionService = permissionService;
+            _superAdminUserName = configuration["YZH:SuperAdmin"] ?? "admin";
         }
 
         /// <summary>
-        /// 授权校验（在 Action 执行前调用）
+        ///     授权校验（异步，在 Action 执行前调用）
         /// </summary>
-        public void OnAuthorization(AuthorizationFilterContext context)
+        public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
         {
             // 1. 检查是否跳过授权
             var actionDescriptor = context.ActionDescriptor;
@@ -57,13 +69,15 @@ namespace YZH.Core.Api.Filters
 
             if (requirePermission != null)
             {
-                var hasPermission = CheckPermission(_userContext, requirePermission.PermissionCode);
+                var hasPermission = await CheckPermissionAsync(_userContext, requirePermission.PermissionCode);
                 if (!hasPermission)
                 {
                     _logger.LogWarning(
-                        "用户 {UserCode} 无权限访问接口 {Action}",
+                        "用户 {UserCode}({UserName}) 无权限访问接口 {Action}，所需权限：{PermissionCode}",
                         _userContext.UserCode,
-                        context.ActionDescriptor.DisplayName
+                        _userContext.UserName,
+                        context.ActionDescriptor.DisplayName,
+                        requirePermission.PermissionCode
                     );
                     context.Result = new ForbidResult();
                     return;
@@ -81,66 +95,79 @@ namespace YZH.Core.Api.Filters
         }
 
         /// <summary>
-        /// Action 执行前
+        ///     Action 执行前（记录操作日志）
         /// </summary>
         public void OnActionExecuting(ActionExecutingContext context)
         {
-            // 记录操作日志
             _logger.LogInformation(
-                "[权限校验] 用户: {UserCode}, 接口: {Action}, IP: {Ip}",
+                "[权限校验] 用户: {UserCode}({UserName}), 接口: {Action}, IP: {Ip}",
                 _userContext.UserCode,
+                _userContext.UserName,
                 context.ActionDescriptor.DisplayName,
                 _userContext.ClientIp
             );
         }
 
         /// <summary>
-        /// Action 执行后
+        ///     Action 执行后（记录执行结果）
         /// </summary>
         public void OnActionExecuted(ActionExecutedContext context)
         {
-            // 记录执行结果
             _logger.LogInformation(
-                "[权限校验] 用户: {UserCode}, 接口: {Action}, 状态: {Status}",
+                "[权限校验] 用户: {UserCode}({UserName}), 接口: {Action}, 状态: {Status}",
                 _userContext.UserCode,
+                _userContext.UserName,
                 context.ActionDescriptor.DisplayName,
                 context.HttpContext.Response.StatusCode
             );
         }
 
         /// <summary>
-        /// 检查用户权限
+        ///     检查用户权限（分层策略）
         /// </summary>
-        private bool CheckPermission(IUserContext userContext, string permissionCode)
+        private async Task<bool> CheckPermissionAsync(IUserContext userContext, string permissionCode)
         {
-            // TODO: 实现权限检查逻辑
-            // 1. 从缓存或数据库获取用户权限列表
-            // 2. 检查是否包含所需权限
+            // 1. 配置文件超级管理员白名单
+            if (string.Equals(userContext.UserName, _superAdminUserName, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogDebug(
+                    "用户 {UserName} 是配置文件指定的超级管理员（YZH:SuperAdmin={SuperAdmin}），直接放行",
+                    userContext.UserName, _superAdminUserName);
+                return true;
+            }
 
-            // 临时实现：所有已认证用户都有权限
-            return true;
+            // 2. 超级管理员角色白名单
+            if (MenuPermissionService.IsSuperAdmin(userContext))
+            {
+                _logger.LogDebug("用户 {UserName} 是超级管理员角色，直接放行", userContext.UserName);
+                return true;
+            }
+
+            // 3. 接口级权限校验
+            return await _permissionService.HasPermissionAsync(userContext, permissionCode);
         }
 
         /// <summary>
-        /// 获取数据权限范围
+        ///     获取数据权限范围
         /// </summary>
         private DataScope GetDataScope(IUserContext userContext, DataScopeType scopeType)
         {
             var scope = new DataScope
             {
                 UserCode = userContext.UserCode,
-                RoleId = 0, // TODO: 从 userContext 获取角色 ID
+                RoleId = userContext.RoleId,
                 Type = scopeType
             };
 
             // TODO: 根据用户角色和部门查询数据权限
+            // 框架提供注入点，具体实现由各项目自定义
 
             return scope;
         }
     }
 
     /// <summary>
-    /// 权限校验特性
+    ///     权限校验特性
     /// </summary>
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
     public class RequirePermissionAttribute : Attribute
@@ -154,7 +181,7 @@ namespace YZH.Core.Api.Filters
     }
 
     /// <summary>
-    /// 数据权限校验特性
+    ///     数据权限校验特性
     /// </summary>
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
     public class RequireDataScopeAttribute : Attribute
@@ -168,7 +195,7 @@ namespace YZH.Core.Api.Filters
     }
 
     /// <summary>
-    /// 数据权限类型
+    ///     数据权限类型
     /// </summary>
     public enum DataScopeType
     {
@@ -189,11 +216,11 @@ namespace YZH.Core.Api.Filters
     }
 
     /// <summary>
-    /// 数据权限对象
+    ///     数据权限对象
     /// </summary>
     public class DataScope
     {
-        public string UserCode { get; set; }
+        public string UserCode { get; set; } = string.Empty;
         public int RoleId { get; set; }
         public DataScopeType Type { get; set; }
         public List<string> DeptCodes { get; set; } = new();

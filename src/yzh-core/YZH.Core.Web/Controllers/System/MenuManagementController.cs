@@ -44,6 +44,15 @@ public class MenuManagementController : YzhControllerBase<Sys_Menu>
         RegisterRowAction("GetTree", GetMenuTreeAsync);
     }
 
+    /// <summary>
+    ///     菜单采用物理删除
+    ///
+    ///     原因：Sys_Menu 表没有 DeleteTime / DeleteBy 列，而基类默认软删除会执行
+    ///     UpdateAsync(entity, ["IsDeleted", "DeleteTime", "DeleteBy"])（EntityService.SoftDelete），
+    ///     必然 SQL 异常 → 删除功能整体不可用。禁用请走 action/Disable（Enable=0）。
+    /// </summary>
+    protected override bool HardDelete => true;
+
     #region 查询钩子
 
     /// <summary>查询后处理 - 填充子菜单数量</summary>
@@ -77,6 +86,28 @@ public class MenuManagementController : YzhControllerBase<Sys_Menu>
         }
     }
 
+    /// <summary>
+    ///     获取全量菜单树（管理端维护用：不做当前用户权限过滤）
+    ///     GET api/System/MenuManagement/tree/all
+    ///
+    ///     与 /tree 的区别：
+    ///     - /tree     = 当前登录用户【可见】菜单（侧边栏与权限展示使用）
+    ///     - /tree/all = 全量菜单（菜单管理页维护使用），否则非超管只能看到被授权的子集
+    /// </summary>
+    [HttpGet("tree/all")]
+    public virtual async Task<Result<List<Sys_Menu>>> GetAllTree()
+    {
+        try
+        {
+            var all = await _menuPermission.GetAllMenusAsync();
+            return Result<List<Sys_Menu>>.Ok(BuildMenuTree(all));
+        }
+        catch (Exception ex)
+        {
+            return Result<List<Sys_Menu>>.Fail($"获取全量菜单失败：{ex.Message}");
+        }
+    }
+
     #endregion
 
     #region 新增钩子
@@ -107,12 +138,33 @@ public class MenuManagementController : YzhControllerBase<Sys_Menu>
 
     #region 修改钩子
 
-    /// <summary>修改前处理 - 校验编码唯一性（排除自身）</summary>
+    /// <summary>
+    ///     修改前处理 - 同级菜单名称唯一性（排除自身）
+    ///
+    ///     ⚠️ 旧实现用 GetByCode(entity.Code) 判断"编码已存在"，但 Code 就是待修改记录的定位键，
+    ///     该查询命中的永远是记录自身 → 所有修改请求都被拒绝（修改功能整体失效）。
+    ///     Code 由唯一索引保证，不需要在这里重复校验。
+    /// </summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(Sys_Menu entity)
     {
-        var existing = await Entity.GetByCode(entity.Code);
-        if (existing.Success && existing.Data != null)
-            return (false, $"菜单编码 {entity.Code} 已存在");
+        if (string.IsNullOrEmpty(entity.Code))
+            return (false, "菜单编码不能为空");
+
+        // 上级编码缺省为根（NULL 会破坏 ParentCode NOT NULL 约束）
+        entity.ParentCode = string.IsNullOrEmpty(entity.ParentCode) ? "0" : entity.ParentCode;
+
+        // 防环：上级菜单不能是自己
+        if (entity.ParentCode == entity.Code)
+            return (false, "上级菜单不能是自己");
+
+        // 同级菜单名称唯一（排除自身）
+        var nameExists = await Entity.ExistsAsync(m =>
+            m.Code != entity.Code &&
+            m.ParentCode == entity.ParentCode &&
+            m.MenuName == entity.MenuName);
+        if (nameExists.Data)
+            return (false, $"同级下已存在菜单「{entity.MenuName}」");
+
         return (true, null);
     }
 

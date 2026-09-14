@@ -14,20 +14,19 @@ namespace YZH.Entity.Admin.Platform.Dir
         public string DirectoryCode { get; set; }
 
         /// <summary>
-        /// 机构编码（前端从组织树节点点击得到 cbCode；
-        /// 架构约定：维护/管理端机构与登录人无关，来自节点关系；审核员登录后由后端从登录信息解析）
+        /// 机构编码（可选，前端从组织树节点点击得到 cbCode）
         /// </summary>
-        public string OrgCode { get; set; }
+        public string? OrgCode { get; set; }
 
         /// <summary>
-        /// 所属标准编码（如 ISO9001）
+        /// 所属标准编码（可选，可从 DirectoryCode 解析）
         /// </summary>
-        public string StandardCode { get; set; }
+        public string? StandardCode { get; set; }
 
         /// <summary>
-        /// 所属阶段编码（如 PH01）
+        /// 所属阶段编码（可选，可从 DirectoryCode 解析）
         /// </summary>
-        public string PhaseCode { get; set; }
+        public string? PhaseCode { get; set; }
 
         /// <summary>
         /// 需要创建的文件夹列表（前端从文件路径中提取去重）
@@ -314,10 +313,16 @@ namespace YZH.Entity.Admin.Platform.Dir
         public string FileCode { get; set; }
 
         /// <summary>
-        /// MinIO存储路径
+        /// 任务ID
         /// </summary>
-        public string StoragePath { get; set; }
+        public string TaskId { get; set; }
+    }
 
+    /// <summary>
+    /// 上传确认/取消请求DTO
+    /// </summary>
+    public class UploadConfirmRequest
+    {
         /// <summary>
         /// 任务ID
         /// </summary>

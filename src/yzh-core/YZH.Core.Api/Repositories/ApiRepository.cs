@@ -57,6 +57,7 @@ public class ApiRepository : IApiRepository
 
         var sql = @"
             UPDATE sys_api SET
+                path = @Path,
                 name = @Name,
                 author = @Author,
                 group_path = @GroupPath,

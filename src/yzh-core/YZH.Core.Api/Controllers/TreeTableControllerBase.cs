@@ -473,40 +473,8 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
         }
     }
 
-    /// <summary>将后端 EntityConfig 转换为前端 EntityConfigDto</summary>
-    private EntityConfigDto ConvertToDto(EntityConfig config)
-    {
-        var dto = new EntityConfigDto
-        {
-            Title = config.Title,
-            FillMode = config.FillMode.ToString(),
-            Columns = config.Columns?.Select(c => new ColumnConfigDto
-            {
-                FieldName = c.FieldName,
-                DesName = c.DesName,
-                Type = c.Type.ToString(),
-                XsFlag = c.XSFlag,
-                BcFlag = c.BCFlag,
-                Yxk = c.YXK,
-                Enable = c.Enable,
-                Sortable = c.Sortable,
-                Width = c.Width > 0 ? (int)c.Width : null,
-                Fixed = c.Fixed,
-                Align = c.Align,
-                DictCode = c.DictCode,
-                Format = c.Format,
-                Row = c.Row,
-                Col = c.Col,
-                RowSpan = c.RowSpan,
-                ColSpan = c.ColSpan,
-                Mrz = c.MRZ
-            }).ToList() ?? new(),
-            NewEntity = config.NewEntity,
-            Schema = config.Schema,
-            EnableField = config.EnableField
-        };
-        return dto;
-    }
+    /// <summary>将后端 EntityConfig 转换为前端 EntityConfigDto（委托基类实现）</summary>
+    protected new static EntityConfigDto ConvertToDto(EntityConfig config) => ConfigDtoConverter.ToDto(config);
 
     /// <summary>将后端 TreeConfig 转换为前端 TreeBehaviorConfigDto</summary>
     private TreeBehaviorConfigDto ConvertTreeConfigToDto(TreeConfig config)

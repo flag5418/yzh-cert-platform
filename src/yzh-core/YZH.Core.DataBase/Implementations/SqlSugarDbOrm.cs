@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Security;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
@@ -69,6 +70,14 @@ public class SqlSugarDbOrm : IDbOrm
     {
         try
         {
+            // 分页上限钳制（防止单请求拉全表）
+            if (options.PageSize > PagerOptions.MaxPageSize)
+                options.PageSize = PagerOptions.MaxPageSize;
+            if (options.PageSize < 1)
+                options.PageSize = 20;
+            if (options.PageNumber < 1)
+                options.PageNumber = 1;
+
             // 基础查询（优先使用 options.TableName，支持 ViewName 视图路由）
             var tableName = !string.IsNullOrEmpty(options.TableName)
                 ? options.TableName
@@ -96,12 +105,14 @@ public class SqlSugarDbOrm : IDbOrm
             // 获取总数
             var total = await query.CountAsync();
 
-            // 排序
+            // 排序（白名单校验，防止 SQL 注入）
             if (!string.IsNullOrWhiteSpace(options.SortField))
             {
+                ValidateSortField<T>(options.SortField);
+                var safeField = QuoteIdentifier(options.SortField);
                 query = options.SortDirection?.ToUpper() == "DESC"
-                    ? query.OrderBy($"{options.SortField} DESC")
-                    : query.OrderBy($"{options.SortField} ASC");
+                    ? query.OrderBy($"{safeField} DESC")
+                    : query.OrderBy($"{safeField} ASC");
             }
 
             // 分页
@@ -506,8 +517,74 @@ public class SqlSugarDbOrm : IDbOrm
     {
         if (param == null) return null;
 
+        // 动态参数（ExpandoObject / Dictionary<string, object>）：
+        // 这类对象没有可供反射的属性，必须走 IDictionary 接口，否则参数会全部丢失，
+        // 生成“有占位符、无参数”的 SQL 并静默失败（如 IN (@c0) 的批量删除）。
+        if (param is IDictionary<string, object> dynamicParams)
+        {
+            return dynamicParams
+                .Select(kv => new SugarParameter($"@{kv.Key}", kv.Value))
+                .ToArray();
+        }
+
         var properties = param.GetType().GetProperties();
         return properties.Select(p => new SugarParameter($"@{p.Name}", p.GetValue(param))).ToArray();
+    }
+
+    /// <summary>
+    ///     排序字段白名单校验（防止 SQL 注入）
+    ///     只允许字母、数字、下划线，且必须以字母开头
+    /// </summary>
+    private static void ValidateSortField<T>(string sortField)
+    {
+        // 正则：只允许合法属性名
+        if (!System.Text.RegularExpressions.Regex.IsMatch(sortField, @"^[a-zA-Z_][a-zA-Z0-9_.]*$"))
+        {
+            throw new InvalidOperationException($"排序字段 '{sortField}' 包含非法字符");
+        }
+
+        // 验证字段是否存在于实体属性中（支持 "A.B" 格式的点号路径，取最后一段验证）
+        var fieldParts = sortField.Split('.');
+        var leafField = fieldParts[^1];
+        var prop = typeof(T).GetProperty(leafField);
+        if (prop == null)
+        {
+            throw new InvalidOperationException($"排序字段 '{leafField}' 在实体 {typeof(T).Name} 中不存在");
+        }
+    }
+
+    /// <summary>
+    ///     标识符安全引用（防止 SQL 注入）
+    ///     将排序字段包裹为安全的 SQL 标识符
+    /// </summary>
+    private static string QuoteIdentifier(string field)
+    {
+        // 如果包含点号（如 "A.B"），分段引用
+        if (field.Contains('.'))
+        {
+            return string.Join(".", field.Split('.').Select(part => $"`{part}`"));
+        }
+        return $"`{field}`";
+    }
+
+    /// <summary>
+    ///     将原始 SQL 参数安全化（防止注入）
+    ///     校验参数值不包含 SQL 注入特征
+    /// </summary>
+    private static void ValidateSqlParam(string value, string paramName)
+    {
+        if (string.IsNullOrEmpty(value)) return;
+
+        // 简单检测 SQL 注入特征
+        var dangerous = new[] { "DROP", "ALTER", "EXEC", "TRUNCATE", ";", "--", "UNION", "DELETE FROM" };
+        var upper = value.ToUpper();
+        foreach (var keyword in dangerous)
+        {
+            if (upper.Contains(keyword, StringComparison.Ordinal))
+            {
+                throw new SecurityException($"参数 '{paramName}' 包含疑似 SQL 注入内容");
+            }
+        }
     }
 
     private static string FormatError(Exception ex, string operation)

@@ -2,7 +2,6 @@
 import { onMounted } from 'vue'
 import { ElTable, ElTableColumn, ElButton, ElIcon } from 'element-plus'
 import { Plus, Delete } from '@element-plus/icons-vue'
-import IconPicker from '@/components/IconPicker.vue'
 import MenuFormDialog from '@/components/MenuFormDialog.vue'
 import { useMenuLogic } from './logic'
 import type { SysMenu } from '@/api/system/menu'
@@ -15,7 +14,6 @@ const {
   dialogTitle,
   isEdit,
   formData,
-  submitting,
   loadData,
   handleAddRoot,
   handleAddChild,
@@ -23,18 +21,8 @@ const {
   handleDelete,
   handleBatchDelete,
   handleToggleEnable,
-  handleClose,
   handleSubmit
 } = useMenuLogic()
-
-const columns = [
-  { prop: 'menuName', label: '名称', minWidth: 200 },
-  { prop: 'url', label: '路由', minWidth: 200 },
-  { prop: 'icon', label: '图标', width: 120 },
-  { prop: 'orderNo', label: '排序', width: 80 },
-  { prop: 'enable', label: '状态', width: 80 },
-  { prop: 'actions', label: '操作', width: 280, fixed: 'right' }
-]
 
 onMounted(() => loadData())
 </script>
@@ -82,13 +70,13 @@ onMounted(() => loadData())
       </el-table-column>
       <el-table-column label="操作" width="280" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="handleAddChild(row)">新增下级</el-button>
-          <el-button size="small" @click="handleEdit(row)">修改</el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+          <el-button size="small" @click="handleAddChild(row as SysMenu)">新增下级</el-button>
+          <el-button size="small" @click="handleEdit(row as SysMenu)">修改</el-button>
+          <el-button size="small" type="danger" @click="handleDelete(row as SysMenu)">删除</el-button>
           <el-button
             size="small"
             :type="row.enable === 1 ? 'warning' : 'success'"
-            @click="handleToggleEnable(row)"
+            @click="handleToggleEnable(row as SysMenu)"
           >
             {{ row.enable === 1 ? '禁用' : '启用' }}
           </el-button>

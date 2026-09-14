@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { YzhTable } from '@yzh-core/components/table'
-import { YzhForm } from '@yzh-core/components/form'
-import { onMounted, ref } from 'vue'
+import { YzhTable, YzhForm, type YzhTableColumn, type YzhFormField, type PageParams, type SearchField } from '@yzh-core'
+import { ref, reactive, computed } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { PhaseDefinition } from '@share/types/cert'
 import {
   getPhaseDefinitionPage,
@@ -11,277 +11,129 @@ import {
   togglePhaseDefinitionValid
 } from '@share/api/cert/phase-definition'
 
-// ============================================================
-// 状态
-// ============================================================
-const loading = ref(false)
-const submitting = ref(false)
+const tableRef = ref()
+const formRef = ref()
+const selectedRows = ref<PhaseDefinition[]>([])
 const dialogVisible = ref(false)
 const dialogMode = ref<'add' | 'edit'>('add')
-const formData = ref<Partial<PhaseDefinition>>({})
-const selectedRows = ref<PhaseDefinition[]>([])
-const tableData = ref<PhaseDefinition[]>([])
-const total = ref(0)
-const searchParams = ref({ keyword: '' })
-const pagination = ref({ page: 1, pageSize: 20 })
+let formData = reactive<Partial<PhaseDefinition>>({})
+const submitting = ref(false)
 
-// ============================================================
-// 表格列定义
-// ============================================================
-const columns = [
+// ── 表格列定义 ──
+const columns: YzhTableColumn<PhaseDefinition>[] = [
   { prop: 'PhaseCode', label: '阶段编码', width: 120 },
   { prop: 'PhaseName', label: '阶段名称', width: 150 },
   { prop: 'SequenceOrder', label: '顺序', width: 80 },
   { prop: 'Description', label: '说明', minWidth: 200 },
-  { prop: 'StatusName', label: '状态', width: 80 },
-  { prop: 'CreateTime', label: '创建时间', width: 180 }
+  { prop: 'IsValid', label: '状态', width: 80, formatter: (v: any) => v === 1 ? '启用' : '停用' },
+  { prop: 'CreateTime', label: '创建时间', width: 180 },
+  { prop: 'actions', label: '操作', width: 200, fixed: 'right', slot: true }
 ]
 
-// ============================================================
-// 表单字段定义（与 EntityConfig 对齐）
-// ============================================================
-const formFields = [
-  { field: 'PhaseCode', label: '阶段编码', type: 'input', required: true, placeholder: '如：S1、S2、Surv1' },
-  { field: 'PhaseName', label: '阶段名称', type: 'input', required: true, placeholder: '如：一阶段审核' },
-  { field: 'SequenceOrder', label: '顺序', type: 'number', placeholder: '如：1' },
-  { field: 'Description', label: '说明', type: 'textarea', placeholder: '阶段说明' },
-  { field: 'IsValid', label: '状态', type: 'switch', defaultValue: 1 }
+// ── 搜索字段 ──
+const searchFields: SearchField[] = [
+  { prop: 'PhaseName', label: '阶段名称', type: 'text' }
 ]
 
-// ============================================================
-// 数据加载
-// ============================================================
-async function loadData() {
-  loading.value = true
-  try {
-    const params = {
-      page: pagination.value.page,
-      pageSize: pagination.value.pageSize,
-      filters: searchParams.value.keyword
-        ? [{ field: 'PhaseName', operator: 'like', value: searchParams.value.keyword }]
-        : []
-    }
-    const res = await getPhaseDefinitionPage(params)
-    if (res.success && res.data) {
-      tableData.value = res.data.items ?? []
-      total.value = res.data.totalCount ?? 0
-    }
-  } catch (e) {
-    console.error('[PhaseDefinition] ❌ 加载数据失败:', e)
-  } finally {
-    loading.value = false
+// ── 表单字段定义（与 EntityConfig 对齐） ──
+const formFields = computed<YzhFormField[]>(() => [
+  { prop: 'PhaseCode', label: '阶段编码', type: 'text', required: true, span: 12, disabled: dialogMode.value === 'edit' },
+  { prop: 'PhaseName', label: '阶段名称', type: 'text', required: true, span: 12 },
+  { prop: 'SequenceOrder', label: '顺序', type: 'number', span: 12 },
+  { prop: 'Description', label: '说明', type: 'textarea', span: 24 },
+  { prop: 'IsValid', label: '状态', type: 'switch', span: 12, defaultValue: 1 }
+])
+
+// ── 数据加载（YzhTable 期望返回 Page<T> = { rows, total }）──
+async function loadData(params: PageParams) {
+  const res = await getPhaseDefinitionPage({
+    Page: params.page,
+    PageSize: params.rows,
+    Filters: params.PhaseName ? [{ Field: 'PhaseName', Operator: 'like', Value: params.PhaseName }] : []
+  })
+  if (res.success && res.data) {
+    return { rows: res.data.Items ?? [], total: res.data.TotalCount ?? 0 }
   }
+  return { rows: [], total: 0 }
 }
 
-// ============================================================
-// 新增
-// ============================================================
-function openAddDialog() {
+// ── 新增 ──
+function onAdd() {
   dialogMode.value = 'add'
-  formData.value = { IsValid: 1 }
+  formData = reactive<Partial<PhaseDefinition>>({ IsValid: 1 })
   dialogVisible.value = true
 }
 
-// ============================================================
-// 编辑
-// ============================================================
-function openEditDialog(row: PhaseDefinition) {
+// ── 编辑 ──
+function onEdit(row: PhaseDefinition) {
   dialogMode.value = 'edit'
-  formData.value = { ...row }
+  formData = reactive<Partial<PhaseDefinition>>({ ...row })
   dialogVisible.value = true
 }
 
-// ============================================================
-// 提交表单
-// ============================================================
-async function submitForm() {
+// ── 提交 ──
+async function onSubmit() {
+  const valid = await formRef.value?.validate().catch(() => false)
+  if (!valid) return
   submitting.value = true
   try {
-    const data = formData.value as PhaseDefinition
-    let res: any
+    const data = formData as PhaseDefinition
     if (dialogMode.value === 'add') {
-      res = await addPhaseDefinition(data)
+      await addPhaseDefinition(data)
     } else {
-      res = await updatePhaseDefinition(data)
+      await updatePhaseDefinition(data)
     }
-    if (res.success) {
-      dialogVisible.value = false
-      await loadData()
-    } else {
-      console.error('[PhaseDefinition] ❌ 操作失败:', res.message)
-    }
-  } catch (e) {
-    console.error('[PhaseDefinition] ❌ 提交失败:', e)
+    ElMessage.success('保存成功')
+    dialogVisible.value = false
+    tableRef.value?.refresh()
+  } catch (e: any) {
+    ElMessage.error(e?.message || '保存失败')
   } finally {
     submitting.value = false
   }
 }
 
-// ============================================================
-// 删除
-// ============================================================
-async function handleDelete(rows: PhaseDefinition[]) {
-  const codes = rows.map(r => r.Code!).filter(Boolean) as string[]
-  if (codes.length === 0) return
-  try {
-    const res = await deletePhaseDefinition(codes)
-    if (res.success) {
-      await loadData()
-    }
-  } catch (e) {
-    console.error('[PhaseDefinition] ❌ 删除失败:', e)
-  }
+// ── 删除 ──
+async function onDelete(row: PhaseDefinition) {
+  try { await ElMessageBox.confirm(`确定删除阶段「${row.PhaseName}」吗？`, '删除确认', { type: 'warning' }) } catch { return }
+  await deletePhaseDefinition([row.Code!])
+  ElMessage.success('删除成功')
+  tableRef.value?.refresh()
 }
 
-// ============================================================
-// 切换启用/停用
-// ============================================================
-async function handleToggleValid(row: PhaseDefinition) {
+// ── 切换启用/停用 ──
+async function onToggle(row: PhaseDefinition) {
   if (!row.Code) return
-  try {
-    const res = await togglePhaseDefinitionValid(row.Code)
-    if (res.success) {
-      await loadData()
-    }
-  } catch (e) {
-    console.error('[PhaseDefinition] ❌ 切换状态失败:', e)
-  }
+  await togglePhaseDefinitionValid(row.Code)
+  ElMessage.success('状态已更新')
+  tableRef.value?.refresh()
 }
-
-// ============================================================
-// 搜索
-// ============================================================
-function handleSearch() {
-  pagination.value.page = 1
-  loadData()
-}
-
-function handleReset() {
-  searchParams.value = { keyword: '' }
-  pagination.value.page = 1
-  loadData()
-}
-
-// ============================================================
-// 初始化
-// ============================================================
-onMounted(() => {
-  loadData()
-})
 </script>
 
 <template>
   <div class="phase-definition-page">
-    <!-- 工具栏 -->
-    <div class="toolbar">
-      <el-input
-        v-model="searchParams.keyword"
-        placeholder="搜索阶段名称"
-        clearable
-        style="width: 200px"
-        @keyup.enter="handleSearch"
-      />
-      <el-button type="primary" @click="handleSearch">搜索</el-button>
-      <el-button @click="handleReset">重置</el-button>
-      <el-button type="primary" @click="openAddDialog">新增</el-button>
-    </div>
-
-    <!-- 表格 -->
-    <el-table
-      v-loading="loading"
-      :data="tableData"
-      border
-      stripe
-      @selection-change="selectedRows = $event"
-    >
-      <el-table-column type="selection" width="50" />
-      <el-table-column prop="PhaseCode" label="阶段编码" width="120" />
-      <el-table-column prop="PhaseName" label="阶段名称" width="150" />
-      <el-table-column prop="SequenceOrder" label="顺序" width="80" />
-      <el-table-column prop="Description" label="说明" min-width="200" show-overflow-tooltip />
-      <el-table-column prop="StatusName" label="状态" width="80">
-        <template #default="{ row }">
-          <el-tag :type="row.IsValid === 1 ? 'success' : 'danger'">
-            {{ row.StatusName ?? (row.IsValid === 1 ? '启用' : '停用') }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="CreateTime" label="创建时间" width="180" />
-      <el-table-column label="操作" width="200" fixed="right">
-        <template #default="{ row }">
-          <el-button text type="primary" @click="openEditDialog(row)">编辑</el-button>
-          <el-button
-            v-if="row.IsValid === 1"
-            text type="warning"
-            @click="handleToggleValid(row)"
-          >禁用</el-button>
-          <el-button
-            v-else
-            text type="success"
-            @click="handleToggleValid(row)"
-          >启用</el-button>
-          <el-button text type="danger" @click="handleDelete([row])">删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-
-    <!-- 分页 -->
-    <el-pagination
-      v-model:current-page="pagination.page"
-      v-model:page-size="pagination.pageSize"
-      :total="total"
-      :page-sizes="[10, 20, 50, 100]"
-      layout="total, sizes, prev, pager, next"
-      @current-change="loadData"
-      @size-change="loadData"
-    />
-
-    <!-- 新增/编辑弹窗 -->
-    <el-dialog
-      v-model="dialogVisible"
-      :title="dialogMode === 'add' ? '新增认证阶段' : '编辑认证阶段'"
-      width="500px"
-      destroy-on-close
-    >
-      <el-form
-        ref="formRef"
-        :model="formData"
-        :rules="formRules"
-        label-width="100px"
-      >
-        <el-form-item label="阶段编码" prop="PhaseCode">
-          <el-input v-model="formData.PhaseCode" placeholder="如：S1、S2、Surv1" :disabled="dialogMode === 'edit'" />
-        </el-form-item>
-        <el-form-item label="阶段名称" prop="PhaseName">
-          <el-input v-model="formData.PhaseName" placeholder="如：一阶段审核" />
-        </el-form-item>
-        <el-form-item label="顺序" prop="SequenceOrder">
-          <el-input-number v-model="formData.SequenceOrder" :min="0" />
-        </el-form-item>
-        <el-form-item label="说明" prop="Description">
-          <el-input v-model="formData.Description" type="textarea" :rows="3" placeholder="阶段说明" />
-        </el-form-item>
-        <el-form-item label="状态" prop="IsValid">
-          <el-switch v-model="formData.IsValid" :active-value="1" :inactive-value="0" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitForm">
-          {{ dialogMode === 'add' ? '新增' : '保存' }}
-        </el-button>
+    <YzhTable ref="tableRef" :columns="columns" :data-loader="loadData" :search-fields="searchFields" selectable @selection-change="selectedRows = $event">
+      <template #toolbar-left>
+        <el-button type="primary" @click="onAdd"><i class="bi bi-plus"></i> 新增</el-button>
+        <el-button type="danger" plain :disabled="selectedRows.length === 0" @click="onDelete(selectedRows[0])"><i class="bi bi-trash"></i> 批量删除</el-button>
       </template>
+      <template #column-actions="{ row }">
+        <div class="action-cell">
+          <el-button text type="primary" @click="onEdit(row)">编辑</el-button>
+          <el-button text :type="row.IsValid === 1 ? 'warning' : 'success'" @click="onToggle(row)">
+            {{ row.IsValid === 1 ? '禁用' : '启用' }}
+          </el-button>
+          <el-button text type="danger" @click="onDelete(row)">删除</el-button>
+        </div>
+      </template>
+    </YzhTable>
+    <el-dialog v-model="dialogVisible" :title="dialogMode === 'add' ? '新增认证阶段' : '编辑认证阶段'" width="500px">
+      <YzhForm ref="formRef" v-model="formData" :fields="formFields" :loading="submitting" @submit="onSubmit" @reset="dialogVisible = false" />
     </el-dialog>
   </div>
 </template>
 
 <style scoped>
-.phase-definition-page {
-  padding: 20px;
-}
-.toolbar {
-  margin-bottom: 16px;
-  display: flex;
-  gap: 8px;
-}
+.phase-definition-page { padding: 20px; display: flex; flex-direction: column; height: 100%; }
+.action-cell { display: flex; flex-wrap: nowrap; gap: 2px; }
 </style>

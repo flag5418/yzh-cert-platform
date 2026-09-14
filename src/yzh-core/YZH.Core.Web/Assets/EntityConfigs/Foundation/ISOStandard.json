@@ -106,24 +106,7 @@
       "GroupIndex": "1",
       "Mrz": "quality",
       "Enable": true,
-      "DataKey": "iso_category"
-    },
-    {
-      "FieldName": "CategoryName",
-      "DesName": "类别中文名",
-      "Type": "Other",
-      "Sxh": 5,
-      "XsFlag": true,
-      "BcFlag": false,
-      "Yxk": true,
-      "Width": 120,
-      "Row": 0,
-      "Col": 0,
-      "RowSpan": 1,
-      "ColSpan": 1,
-      "GroupIndex": "2",
-      "Mrz": "",
-      "Enable": true
+      "DictCode": "iso_category"
     },
     {
       "FieldName": "Description",
@@ -160,7 +143,7 @@
       "Enable": true
     },
     {
-      "FieldName": "CreateDate",
+      "FieldName": "CreateTime",
       "DesName": "创建时间",
       "Type": "DateTimePicker",
       "Sxh": 8,

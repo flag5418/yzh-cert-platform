@@ -31,7 +31,7 @@
     <ProjectReference Include="..\YZH.Core.DataBase\YZH.Core.DataBase.csproj" />
     <ProjectReference Include="..\YZH.Core.Stand\YZH.Core.Stand.csproj" />
     <!-- 业务模块（extern alias 解决与 YZH.Entity 的类型冲突） -->
-    <ProjectReference Include="..\..\certplatform-api\CertPlatform.Shared\CertPlatform.Shared.csproj" Aliases="CertPlatform" />
+    <ProjectReference Include="..\..\certplatform-api\CertPlatform.Shared\CertPlatform.Shared.csproj" Aliases="CertPlatform,SharedEntities" />
     <ProjectReference Include="..\..\certplatform-api\CertPlatform.Admin\CertPlatform.Admin.csproj" />
     <ProjectReference Include="..\..\certplatform-api\CertPlatform.Auditor\CertPlatform.Auditor.csproj" />
     <ProjectReference Include="..\..\certplatform-api\CertPlatform.Enterprise\CertPlatform.Enterprise.csproj" />

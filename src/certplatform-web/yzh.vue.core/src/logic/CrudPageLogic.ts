@@ -4,8 +4,8 @@
  * 数据访问规则（与 YZH.Core.Stand 严格一致）：
  * - res.data：ApiResponse 顶层（camelCase）
  * - res.data.Items / res.data.TotalCount：业务实体（PascalCase）
- * - formData：camelCase key（NewEntity 字典 key，反射 ToCamelCase）
- * - 表格行：PascalCase 访问（与后端实体属性一致）
+ * - formData / 表格行 / formFields[].prop：统一 PascalCase（架构铁律：JSON 字段名 = 实体属性名 = 列名）
+ * - 组件内部（YzhTable/YzhForm）直接按 prop 取值，不做大小写转换
  *
  * 设计理念：
  * - 80% 的单表 CRUD 逻辑由此基类封装
@@ -16,7 +16,12 @@
  */
 
 import type { YzhFormField } from '@yzh-core/components/form'
-import type { SearchField, YzhTableColumn } from '@yzh-core/components/table'
+import type {
+  Page,
+  PageParams,
+  SearchField,
+  YzhTableColumn,
+} from '@yzh-core/components/table'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { reactive, ref } from 'vue'
 import type {
@@ -41,6 +46,7 @@ function mapControlType(type: string): YzhFormField['type'] {
     TextBox: 'text',
     TextArea: 'textarea',
     NumberBox: 'number',
+    Decimal: 'number',
     DatePicker: 'date',
     DateTimePicker: 'datetime',
     ComboBox: 'select',
@@ -134,8 +140,8 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
   submitting = ref(false)
 
   /**
-   * 表单数据：camelCase key（NewEntity 字典 key，反射 ToCamelCase）
-   * 例：{ code: "", userName: "", enable: 1 }
+   * 表单数据：PascalCase key（与 formFields[].prop、NewEntity、实体属性名一致）
+   * 例：{ Code: "", UserName: "", Enable: 1 }
    */
   formData = reactive<Record<string, any>>({}) as Record<string, any>
 
@@ -361,6 +367,52 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
     } catch (e: any) {
       this.rows.value = []
       this.pagination.total = 0
+    } finally {
+      this.loading.value = false
+    }
+  }
+
+  /**
+   * YzhTable 数据加载器（页面直接绑定：`:data-loader="logic.dataLoader.bind(logic)"`）
+   *
+   * 入参由 YzhTable 传入：{ page, rows, sort, order, ...搜索条件 }
+   * 搜索条件的 key = EntityConfig.SearchFields[].Field（PascalCase）
+   * Operator 取自 SearchFields 配置（未配置时默认 eq）
+   *
+   * 与 loadPage 的区别：
+   * - 分页/排序/搜索条件以组件传入的 params 为准，Logic 侧只做同步
+   * - 返回 { rows, total }，符合 YzhTableDataLoader 契约
+   * - 失败时抛出异常，由 YzhTable 统一渲染错误态
+   */
+  async dataLoader(params: PageParams): Promise<Page<V>> {
+    const {
+      page = 1,
+      rows = this.pagination.pageSize,
+      sort,
+      order,
+      ...searchValues
+    } = params
+    this.loading.value = true
+    try {
+      const request: FilterRequest = {
+        Page: page,
+        PageSize: rows,
+        SortField: sort,
+        SortOrder: order as 'asc' | 'desc' | undefined,
+        Filters: this.buildFilters(searchValues as Record<string, any>),
+      }
+      const res = await this.apiPost<ApiResponse<PagedData<V>>>(
+        '/filter',
+        request,
+      )
+      const data = res?.data
+      const items = (data?.Items ?? []) as V[]
+      this.pagination.page = page
+      this.pagination.pageSize = rows
+      this.pagination.total = data?.TotalCount ?? 0
+      this.rows.value = items
+      this.onDataLoaded(items)
+      return { rows: items, total: this.pagination.total }
     } finally {
       this.loading.value = false
     }
@@ -677,19 +729,16 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
 
   /**
    * 初始化表单数据
-   * - NewEntity 是 camelCase key（反射 ToCamelCase）
-   * - 编辑模式时用 row 覆盖：row 是 PascalCase 字段，需要转 camelCase 写回 formData
+   *
+   * 字段名约定（架构铁律）：JSON 字段名 = 实体属性名 = PascalCase。
+   * NewEntity / 行数据 / formFields[].prop 全部是 PascalCase，此处不做任何大小写转换，
+   * 否则 YzhForm 按 prop（PascalCase）取值会取不到数据（表单空白）。
    */
   private initFormData(row?: V): void {
     const baseEntity = this.config.value?.NewEntity || {}
     const initial: Record<string, any> = { ...baseEntity }
     if (row) {
-      // row 是 PascalCase 字段，转 camelCase 写回 formData
-      const rowCamel: Record<string, any> = {}
-      for (const [k, v] of Object.entries(row as any)) {
-        rowCamel[toCamelCase(k)] = v
-      }
-      Object.assign(initial, rowCamel)
+      Object.assign(initial, row as Record<string, any>)
     }
     this.resetObject(this.formData)
     Object.assign(this.formData, initial)
@@ -704,14 +753,14 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
     try {
       if (this.dialogMode.value === 'add') {
         this.onBeforeAdd(this.formData)
-        // formData 是 camelCase key，转 PascalCase 提交给后端
-        const submitData = pascalCaseFormData(this.formData)
+        // formData 已是 PascalCase（与实体属性名一致），直接提交
+        const submitData = { ...this.formData }
         const saved = await this.add(submitData)
         this.onAfterAdd(this.formData)
         this.insertRow(saved as V)
       } else {
         this.onBeforeUpdate(this.formData)
-        const submitData = pascalCaseFormData(this.formData)
+        const submitData = { ...this.formData }
         const saved = await this.update(submitData)
         this.onAfterUpdate(this.formData)
         const pk = this.primaryKey

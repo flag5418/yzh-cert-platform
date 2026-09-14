@@ -28,10 +28,11 @@ const routes: RouteRecordRaw[] = [
 
       // ===== 业务管理 =====
 { path: 'cert/iso-standard', name: 'CertIsoStandard', component: () => import('@/pages/foundation/iso-standard/index.vue') },
-{ path: 'cert/cert-body', name: 'CertCertificationBody', component: () => import('@/pages/foundation/certification-body/index.vue') },
-{ path: 'foundation/phase-definition', name: 'FoundationPhaseDefinition', component: () => import('@/pages/foundation/phase-definition/index.vue') },
-      { path: 'cert/link-org-standard', name: 'CertLinkOrgStandard', component: () => import('@/pages/workflow/link-org-standard/index.vue') },
-      { path: 'cert/link-org-stage', name: 'CertLinkOrgStage', component: () => import('@/pages/workflow/link-org-stage/index.vue') },
+      { path: 'foundation/certification-body', name: 'FoundationCertificationBody', component: () => import('@/pages/foundation/certification-body/index.vue') },
+      { path: 'foundation/phase-definition', name: 'FoundationPhaseDefinition', component: () => import('@/pages/foundation/phase-definition/index.vue') },
+      { path: 'cert/cert-stage', name: 'CertCertStage', component: () => import('@/pages/foundation/cert-stage/index.vue') },
+      { path: 'cert/link-org-standard', name: 'CertLinkOrgStandard', component: () => import('@/pages/foundation/cert-org-standard/index.vue') },
+      { path: 'cert/link-org-stage', name: 'CertLinkOrgStage', component: () => import('@/pages/foundation/cert-org-stage/index.vue') },
       { path: 'business/directory-manager', name: 'BusinessDirectoryManager', component: () => import('@/pages/workflow/directory/index.vue') },
       { path: 'business/doc-extraction-rule', name: 'BusinessDocExtractionRule', component: () => import('@/pages/workflow/doc-extraction/index.vue') },
       { path: 'business/report-def', name: 'BusinessReportDef', component: () => import('@/pages/workflow/report-rule/index.vue') },

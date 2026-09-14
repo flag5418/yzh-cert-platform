@@ -1,6 +1,7 @@
 {
   "Title": "机构表单",
   "FillMode": "AutoFix",
+  "FormCols": 2,
   "Columns": [
     {
       "Row": 0,

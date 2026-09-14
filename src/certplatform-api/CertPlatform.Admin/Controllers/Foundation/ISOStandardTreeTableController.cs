@@ -81,6 +81,22 @@ public class ISOStandardTreeTableController
         return EntityConfigHelper.GetConfig("Foundation/ISOClause");
     }
 
+    /// <summary>
+    /// 实体 → TreeItemDto 映射：将 ISOStandard 特有字段加入 Extra，
+    /// 使前端编辑标准时能回填 StandardCode、VersionYear、Category、Description、Remark。
+    /// </summary>
+    protected override TreeItemDto MapToTreeItem(
+        SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOStandard entity, int level)
+    {
+        var dto = base.MapToTreeItem(entity, level);
+        dto.Extra["StandardCode"] = entity.StandardCode ?? "";
+        dto.Extra["VersionYear"] = entity.VersionYear;
+        dto.Extra["Category"] = entity.Category ?? "";
+        dto.Extra["Description"] = entity.Description ?? "";
+        dto.Extra["Remark"] = entity.Remark ?? "";
+        return dto;
+    }
+
     // ========================================================
     // 树节点（标准）生命周期钩子
     // ========================================================

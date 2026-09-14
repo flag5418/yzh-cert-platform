@@ -72,18 +72,15 @@ public class EntityService<T> where T : class, new()
     /// <summary>
     ///     根据 Code 获取实体（不过滤 IsValid 和 IsDeleted）
     ///     用途：toggle-valid 等需要操作无效记录的场景
+    ///     安全加固：使用参数化查询替代字符串拼接，防止 SQL 注入
     /// </summary>
     public virtual async Task<Result<T?>> GetByCodeAny(string code)
     {
         try
         {
-            var tableName = typeof(T).Name;
-            // 尝试获取 [Table] 特性获取真实表名
-            var tableAttr = typeof(T).GetCustomAttribute<System.ComponentModel.DataAnnotations.Schema.TableAttribute>();
-            if (tableAttr != null)
-                tableName = tableAttr.Name;
-
-            var sql = $"SELECT * FROM {tableName} WHERE Code = @code LIMIT 1";
+            // 使用安全的参数化查询（通过 ORM 获取真实表名，避免拼接注入）
+            var tableName = GetQueryTableName<T>();
+            var sql = $"SELECT * FROM `{tableName}` WHERE Code = @code LIMIT 1";
             var result = await _dbOrm.QueryFirstOrDefaultAsync<T>(sql, new { code });
             return result.Success
                 ? Result<T?>.Ok(result.Data)
@@ -351,7 +348,7 @@ public class EntityService<T> where T : class, new()
 
     /// <summary>
     ///     获取查询表名/视图名（视图路由）
-    ///     优先级：[ViewName] 特性 > [Table] 特性 > 类型名
+    ///     优先级：[ViewName] 特性 > [SugarTable] 特性 > [Table] 特性 > 类型名
     ///     用法：GetPageAsync / GetListAsync 等查询操作使用视图；Insert/Update/Delete 走物理表
     /// </summary>
     private static string GetQueryTableName<TEntity>()
@@ -363,11 +360,20 @@ public class EntityService<T> where T : class, new()
             .FirstOrDefault();
         if (viewAttr != null) return viewAttr.ViewName;
 
-            // 2. 回退 [Table] 特性（EF Core 标准表名映射）
-            var tableAttr = type.GetCustomAttributes(typeof(TableAttribute), inherit: true)
-                .Cast<TableAttribute>()
-                .FirstOrDefault();
-            return tableAttr?.Name ?? type.Name;
+        // 2. [SugarTable] 特性（YZH.Core 新架构标准映射，SqlSugar）
+        //    修复：早期实现遗漏了本步，导致仅标 [SugarTable] 的实体在 GetByCodeAny
+        //    等原生 SQL 路径下回退为类型名（如 CertificationBody），报“表不存在”。
+        var sugarAttr = type.GetCustomAttributes(typeof(SqlSugar.SugarTable), inherit: true)
+            .Cast<SqlSugar.SugarTable>()
+            .FirstOrDefault();
+        if (sugarAttr != null && !string.IsNullOrEmpty(sugarAttr.TableName))
+            return sugarAttr.TableName;
+
+        // 3. 回退 [Table] 特性（EF Core 标准表名映射，历史实体）
+        var tableAttr = type.GetCustomAttributes(typeof(TableAttribute), inherit: true)
+            .Cast<TableAttribute>()
+            .FirstOrDefault();
+        return tableAttr?.Name ?? type.Name;
     }
 
     /// <summary>

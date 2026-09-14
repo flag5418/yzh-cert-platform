@@ -5,6 +5,15 @@
       <div class="yzh-tree-table-check-selector__selection-info">
         已选择 <strong>{{ checkedCount }}</strong> 条记录
       </div>
+      <div v-if="searchable" class="yzh-tree-table-check-selector__search">
+        <el-input
+          v-model="searchKeyword"
+          :placeholder="searchPlaceholder"
+          clearable
+          size="small"
+          prefix-icon="Search"
+        />
+      </div>
       <div class="yzh-tree-table-check-selector__toolbar-actions">
         <el-button size="small" @click="handleExpandAll">展开全部</el-button>
         <el-button size="small" @click="handleCollapseAll">折叠全部</el-button>
@@ -19,7 +28,7 @@
       :data="treeData"
       :row-key="nodeKey"
       :tree-props="{ children: 'children' }"
-      :default-expand-all="true"
+      :default-expand-all="defaultExpandAll"
       :expand-on-click-node="false"
       :check-on-click-node="false"
       style="width: 100%"
@@ -75,6 +84,7 @@
  * - 角色-菜单关联（菜单树，勾选菜单）
  */
 import { ref, computed, watch, nextTick } from 'vue'
+import { ElInput } from 'element-plus'
 import type { ElTable } from 'element-plus'
 
 // ========================================================
@@ -132,6 +142,16 @@ interface Props {
   typeTagTypes?: Record<string, TagType>
   /** 「全选」时排除的节点类型（默认排除机构 org） */
   checkAllExcludeTypes?: string[]
+  /** 父子级联勾选：勾选父节点自动勾选全部子孙，反之回填父节点（默认 false，保持独立勾选） */
+  cascade?: boolean
+  /** 是否显示搜索框（命中节点保留其祖先层级） */
+  searchable?: boolean
+  /** 搜索字段（默认 Name） */
+  searchFields?: string[]
+  /** 「已选择」只统计该类型节点（如 api）；不传则统计全部 */
+  countType?: string
+  /** 搜索框占位文字 */
+  searchPlaceholder?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -145,6 +165,11 @@ const props = withDefaults(defineProps<Props>(), {
   typeLabels: undefined,
   typeTagTypes: undefined,
   checkAllExcludeTypes: () => ['org'],
+  cascade: false,
+  searchable: false,
+  searchFields: () => ['Name'],
+  countType: undefined,
+  searchPlaceholder: '搜索接口名称 / 路径',
 })
 
 // 默认类型文案 / 颜色（保持 role-user 原有行为）
@@ -175,6 +200,7 @@ const emit = defineEmits<{
 
 const tableRef = ref<InstanceType<typeof ElTable>>()
 const treeData = ref<TreeNode[]>([])
+const searchKeyword = ref('')
 const checkedKeys = ref<Set<string>>(new Set())
 const allNodeMap = ref<Map<string, TreeNode>>(new Map())
 const expandedKeys = ref<Set<string>>(new Set())
@@ -184,7 +210,42 @@ const isBulkUpdating = ref(false)
 // 计算属性
 // ========================================================
 
-const checkedCount = computed(() => checkedKeys.value.size)
+const checkedCount = computed(() => {
+  if (!props.countType) return checkedKeys.value.size
+
+  let count = 0
+  for (const key of checkedKeys.value) {
+    if (allNodeMap.value.get(key)?.[props.nodeTypeField] === props.countType) count++
+  }
+  return count
+})
+
+/** 搜索过滤后的扁平数据（命中节点保留祖先） */
+const visibleFlatData = computed<FlatNode[]>(() => {
+  const keyword = searchKeyword.value.trim().toLowerCase()
+  if (!keyword) return props.flatData
+
+  const matched = new Set<string>()
+  for (const item of props.flatData) {
+    const hit = props.searchFields.some((field) =>
+      String(item[field] ?? '').toLowerCase().includes(keyword),
+    )
+    if (hit) matched.add(String(item[props.nodeKey]))
+  }
+
+  // 向上收集祖先
+  const byCode = new Map(props.flatData.map((i) => [String(i[props.nodeKey]), i]))
+  const keep = new Set(matched)
+  for (const code of matched) {
+    let parent = byCode.get(code)?.[props.parentKey]
+    while (parent && !keep.has(String(parent))) {
+      keep.add(String(parent))
+      parent = byCode.get(String(parent))?.[props.parentKey]
+    }
+  }
+
+  return props.flatData.filter((item) => keep.has(String(item[props.nodeKey])))
+})
 
 // ========================================================
 // 扁平数据 → 嵌套树转换
@@ -265,35 +326,53 @@ function syncTableCheckState() {
 // 监听数据变化
 // ========================================================
 
+/**
+ * 重建树结构
+ * @param data       要渲染的扁平数据（可能是搜索过滤后的）
+ * @param resetChecks 是否以 CheckFlag 重置勾选（数据源变化时重置；搜索时保留）
+ */
+function rebuildTree(data: FlatNode[], resetChecks: boolean): void {
+  allNodeMap.value.clear()
+
+  if (!data || data.length === 0) {
+    treeData.value = []
+    if (resetChecks) checkedKeys.value = new Set()
+    return
+  }
+
+  // 转换为嵌套树
+  treeData.value = flatToTree(data)
+
+  // 初始化勾选状态
+  if (resetChecks) {
+    initCheckedState(treeData.value)
+  }
+
+  // 展开所有节点（如果需要）
+  if (props.defaultExpandAll) {
+    expandedKeys.value.clear()
+    expandAllNodes(treeData.value)
+  }
+
+  // 同步表格勾选状态
+  nextTick(() => {
+    syncTableCheckState()
+  })
+}
+
+// 数据源变化（切换角色 / 重新拉取）：以 CheckFlag 为准重置勾选
 watch(
   () => props.flatData,
-  (newData) => {
-    if (!newData || newData.length === 0) {
-      treeData.value = []
-      checkedKeys.value.clear()
-      allNodeMap.value.clear()
-      return
-    }
-
-    // 转换为嵌套树
-    treeData.value = flatToTree(newData)
-
-    // 初始化勾选状态
-    initCheckedState(treeData.value)
-
-    // 展开所有节点（如果需要）
-    if (props.defaultExpandAll) {
-      expandedKeys.value.clear()
-      expandAllNodes(treeData.value)
-    }
-
-    // 同步表格勾选状态
-    nextTick(() => {
-      syncTableCheckState()
-    })
+  (data) => {
+    rebuildTree(data, true)
   },
   { immediate: true },
 )
+
+// 搜索过滤变化：只重建可见树，保留已有勾选（含级联产生的勾选）
+watch(searchKeyword, () => {
+  rebuildTree(visibleFlatData.value, false)
+})
 
 // ========================================================
 // 展开/折叠
@@ -381,25 +460,84 @@ function collectUserNodes(nodes: TreeNode[]): TreeNode[] {
 // 勾选事件处理
 // ========================================================
 
+/** 收集全部子孙节点（不含自身） */
+function collectSubtree(node: TreeNode): TreeNode[] {
+  const result: TreeNode[] = []
+  const walk = (items: TreeNode[]) => {
+    for (const item of items) {
+      result.push(item)
+      if (item.children?.length) walk(item.children)
+    }
+  }
+  walk(node.children ?? [])
+  return result
+}
+
+/**
+ * 级联勾选：父节点 → 全部子孙，叶子节点 → 回填父节点状态
+ * 程序化设置的选择状态不会触发 el-table 事件（isBulkUpdating 兼作双保险）
+ */
+function emitCascadeChange(row: TreeNode, checked: boolean) {
+  const added = new Set<string>()
+  const removed = new Set<string>()
+  const next = new Set(checkedKeys.value)
+
+  const apply = (node: TreeNode, value: boolean) => {
+    const key = String(node[props.nodeKey])
+    if (value) {
+      if (!next.has(key)) {
+        next.add(key)
+        added.add(key)
+      }
+    } else if (next.delete(key)) {
+      removed.add(key)
+    }
+    tableRef.value?.toggleRowSelection(node, value)
+  }
+
+  isBulkUpdating.value = true
+
+  apply(row, checked)
+  for (const child of collectSubtree(row)) apply(child, checked)
+
+  // 回填祖先：子级（排除分组/机构类节点）全选 → 勾上父，否则取消父
+  const excluded = props.checkAllExcludeTypes ?? []
+  let parentCode = row[props.parentKey]
+  while (parentCode) {
+    const parent = allNodeMap.value.get(String(parentCode))
+    if (!parent) break
+
+    const children = parent.children.filter(
+      (c) => !excluded.includes(String(c[props.nodeTypeField])),
+    )
+    apply(parent, children.length > 0 && children.every((c) => next.has(String(c[props.nodeKey]))))
+    parentCode = parent[props.parentKey]
+  }
+
+  isBulkUpdating.value = false
+
+  checkedKeys.value = next
+  emitCheckChange([...removed], [...added])
+}
+
 function handleCheckChange(row: TreeNode, checked: boolean) {
   if (isBulkUpdating.value) return
 
-  const key = row[props.nodeKey]
-
-  if (checked) {
-    const newSet = new Set(checkedKeys.value)
-    newSet.add(key)
-    checkedKeys.value = newSet
-  } else {
-    const newSet = new Set(checkedKeys.value)
-    newSet.delete(key)
-    checkedKeys.value = newSet
+  if (props.cascade) {
+    emitCascadeChange(row, checked)
+    return
   }
 
-  // 触发事件
+  const key = String(row[props.nodeKey])
+  const newSet = new Set(checkedKeys.value)
+
   if (checked) {
+    newSet.add(key)
+    checkedKeys.value = newSet
     emitCheckChange([], [key])
   } else {
+    newSet.delete(key)
+    checkedKeys.value = newSet
     emitCheckChange([key], [])
   }
 }
@@ -411,13 +549,18 @@ function handleSelect(selection: TreeNode[], row: TreeNode) {
   const key = row[props.nodeKey]
   const isSelected = selection.some((s) => s[props.nodeKey] === key)
 
+  if (props.cascade) {
+    emitCascadeChange(row, isSelected)
+    return
+  }
+
+  const newSet = new Set(checkedKeys.value)
+
   if (isSelected) {
-    const newSet = new Set(checkedKeys.value)
     newSet.add(key)
     checkedKeys.value = newSet
     emitCheckChange([], [key])
   } else {
-    const newSet = new Set(checkedKeys.value)
     newSet.delete(key)
     checkedKeys.value = newSet
     emitCheckChange([key], [])
@@ -491,6 +634,10 @@ defineExpose({
 .yzh-tree-table-check-selector__toolbar-actions {
   display: flex;
   gap: 8px;
+}
+
+.yzh-tree-table-check-selector__search {
+  width: 240px;
 }
 
 .yzh-tree-table-check-selector__table {

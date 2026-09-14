@@ -37,6 +37,8 @@ export interface YzhTableColumn<T = any> {
   dictCode?: string
   /** 标签类型（仅当 dictCode 生效时）：success/warning/info/primary/danger */
   tagType?: 'success' | 'warning' | 'info' | 'primary' | 'danger'
+  /** 是否掩码显示（敏感字段如 key/secret/password） */
+  mask?: boolean
 }
 
 // V4 命名空间别名（避免和旧版 YzhDataTable 冲突）

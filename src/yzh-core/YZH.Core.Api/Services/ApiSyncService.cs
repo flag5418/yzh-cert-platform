@@ -67,10 +67,10 @@ public class ApiSyncService
                 await _apiRepo.CleanupRoleApiAsync(codesToDelete);
                 await _apiRepo.CleanupUserPermissionAsync(codesToDelete);
                 
-                await _apiRepo.DeleteBatchAsync(codesToDelete);
-                _logger.LogInformation("删除废弃接口 {Count} 个: {Codes}", 
-                    codesToDelete.Count, string.Join(", ", codesToDelete.Take(5)));
-                result.Deleted = codesToDelete.Count;
+                var deleted = await _apiRepo.DeleteBatchAsync(codesToDelete);
+                _logger.LogInformation("删除废弃接口 {Planned} 个（实际 {Deleted}）: {Codes}",
+                    codesToDelete.Count, deleted, string.Join(", ", codesToDelete.Take(5)));
+                result.Deleted = deleted;
             }
             
             // 2. 计算需要新增的接口
@@ -78,11 +78,11 @@ public class ApiSyncService
             if (codesToAdd.Any())
             {
                 var newApis = discoveredApis.Where(a => codesToAdd.Contains(a.ApiCode))
-                    .Select(a => MapToEntity(a, GetGroupPath(a))).ToList();
-                await _apiRepo.InsertBatchAsync(newApis);
-                _logger.LogInformation("新增接口 {Count} 个: {Codes}", 
-                    codesToAdd.Count, string.Join(", ", codesToAdd.Take(5)));
-                result.Added = codesToAdd.Count;
+                    .Select(a => MapToEntity(a)).ToList();
+                var added = await _apiRepo.InsertBatchAsync(newApis);
+                _logger.LogInformation("新增接口 {Planned} 个（实际 {Added}）: {Codes}",
+                    codesToAdd.Count, added, string.Join(", ", codesToAdd.Take(5)));
+                result.Added = added;
             }
             
             // 3. 计算需要更新的接口
@@ -90,16 +90,17 @@ public class ApiSyncService
                 .Where(code => 
                     existingDict[code].Name != discoveredDict[code].Description
                     || existingDict[code].Author != discoveredDict[code].Author
-                    || existingDict[code].GroupPath != GetGroupPath(discoveredDict[code]))
+                    || existingDict[code].Path != discoveredDict[code].Path
+                    || existingDict[code].GroupPath != discoveredDict[code].GroupPath)
                 .ToList();
             if (codesToUpdate.Any())
             {
                 var updateApis = discoveredApis.Where(a => codesToUpdate.Contains(a.ApiCode))
-                    .Select(a => MapToEntity(a, GetGroupPath(a))).ToList();
-                await _apiRepo.UpdateBatchAsync(updateApis);
-                _logger.LogInformation("更新接口 {Count} 个: {Codes}", 
-                    codesToUpdate.Count, string.Join(", ", codesToUpdate.Take(5)));
-                result.Updated = codesToUpdate.Count;
+                    .Select(a => MapToEntity(a)).ToList();
+                var updated = await _apiRepo.UpdateBatchAsync(updateApis);
+                _logger.LogInformation("更新接口 {Planned} 个（实际 {Updated}）: {Codes}",
+                    codesToUpdate.Count, updated, string.Join(", ", codesToUpdate.Take(5)));
+                result.Updated = updated;
             }
             
             // 4. 刷新权限缓存
@@ -117,26 +118,14 @@ public class ApiSyncService
         return result;
     }
     
-    /// <summary>
-    /// 获取接口分组路径（从 TreePath 第一段 + 第二段拼接）
-    /// </summary>
-    private string GetGroupPath(ApiDescriptor descriptor)
-    {
-        if (descriptor.TreePath.Length >= 2)
-            return $"{descriptor.TreePath[0]}/{descriptor.TreePath[1]}";
-        if (descriptor.TreePath.Length == 1)
-            return descriptor.TreePath[0];
-        return descriptor.ControllerName;
-    }
-
-    private SysApi MapToEntity(ApiDescriptor descriptor, string groupPath)
+    private SysApi MapToEntity(ApiDescriptor descriptor)
     {
         return new SysApi
         {
             Code = descriptor.ApiCode,
             Method = descriptor.Method,
             Path = descriptor.Path,
-            GroupPath = groupPath,
+            GroupPath = descriptor.GroupPath,
             Name = descriptor.Description,
             Author = descriptor.Author,
             Enable = true,

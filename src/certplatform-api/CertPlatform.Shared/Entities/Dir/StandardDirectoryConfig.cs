@@ -1,176 +1,74 @@
 using System;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+using SqlSugar;
 using YZH.Entity.Admin.Platform;
 using YZH.Entity.SystemModels;
 
 namespace YZH.Entity.Admin.Platform.Dir
 {
-    /// <summary>
-    /// 标准目录配置实体
-    /// 
-    /// 职责：定义标准目录结构（机构无关）
-    /// 编码规则：SDC-{StandardCode}|{PhaseCode}
-    /// 示例：SDC-ISO9001|PH01
-    /// </summary>
-    [Entity(TableCnName = "标准目录配置", TableName = "cert_standard_directory_config", DBServer = "VOLContext")]
-    [Table("cert_standard_directory_config")]
+    [SugarTable("cert_standard_directory_config")]
     public class StandardDirectoryConfig : BaseEntity
     {
-        [Key]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
         public long Id { get; set; }
 
-        #region 编码字段
-
-        /// <summary>
-        /// 全局唯一编码（GUID）
-        /// </summary>
-        [MaxLength(36)]
-        [Column("Code")]
+        [SugarColumn(ColumnName = "Code", Length = 36)]
         public string Code { get; set; }
 
-        /// <summary>
-        /// 目录编码（SDC-{标准}|{阶段}）
-        /// </summary>
-        [MaxLength(100)]
-        [UniqueField("目录编码")]
-        [Column("DirectoryCode")]
+        [SugarColumn(ColumnName = "DirectoryCode", Length = 100)]
         public string DirectoryCode { get; set; }
 
-        #endregion
-
-        #region 关联字段
-
-        /// <summary>
-        /// 标准编码
-        /// </summary>
-        [MaxLength(50)]
-        [UniqueField("标准编码", WithFields = new[] { "PhaseCode" })]
-        [Column("StandardCode")]
+        [SugarColumn(ColumnName = "StandardCode", Length = 50)]
         public string StandardCode { get; set; }
 
-        /// <summary>
-        /// 阶段编码
-        /// </summary>
-        [MaxLength(50)]
-        [Column("PhaseCode")]
+        [SugarColumn(ColumnName = "PhaseCode", Length = 50)]
         public string PhaseCode { get; set; }
 
-        #endregion
-
-        #region 目录配置
-
-        /// <summary>
-        /// 根文件夹名称
-        /// </summary>
-        [MaxLength(200)]
-        [Column("RootFolderName")]
+        [SugarColumn(ColumnName = "RootFolderName", Length = 200, IsNullable = true)]
         public string RootFolderName { get; set; }
 
-        #endregion
-
-        #region 状态字段
-
-        /// <summary>
-        /// 状态（draft/active/archived）
-        /// </summary>
-        [MaxLength(20)]
-        [Column("Status")]
+        [SugarColumn(ColumnName = "Status", Length = 20, IsNullable = true)]
         public string Status { get; set; } = "draft";
 
-        /// <summary>
-        /// 是否启用
-        /// </summary>
-        [Column("Enable")]
+        [SugarColumn(ColumnName = "Enable")]
         public bool Enable { get; set; } = true;
 
-        #endregion
-
-        #region 审计字段
-
-        /// <summary>
-        /// 创建人ID
-        /// </summary>
-        [Column("CreateID")]
+        [SugarColumn(ColumnName = "CreateID", IsNullable = true)]
         public int? CreateID { get; set; }
 
-        /// <summary>
-        /// 创建人姓名
-        /// </summary>
-        [MaxLength(50)]
-        [Column("Creator")]
+        [SugarColumn(ColumnName = "CreateBy", Length = 50, IsNullable = true)]
         public string Creator { get; set; }
 
-        /// <summary>
-        /// 创建时间
-        /// </summary>
-        [Column("CreateDate")]
+        [SugarColumn(ColumnName = "CreateDate")]
         public DateTime? CreateDate { get; set; } = DateTime.Now;
 
-        /// <summary>
-        /// 修改人ID
-        /// </summary>
-        [Column("ModifyID")]
+        [SugarColumn(ColumnName = "ModifyID", IsNullable = true)]
         public int? ModifyID { get; set; }
 
-        /// <summary>
-        /// 修改人姓名
-        /// </summary>
-        [MaxLength(50)]
-        [Column("Modifier")]
+        [SugarColumn(ColumnName = "UpdateBy", Length = 50, IsNullable = true)]
         public string Modifier { get; set; }
 
-        /// <summary>
-        /// 修改时间
-        /// </summary>
-        [Column("ModifyDate")]
+        [SugarColumn(ColumnName = "ModifyDate", IsNullable = true)]
         public DateTime? ModifyDate { get; set; }
 
-        /// <summary>
-        /// 删除人ID
-        /// </summary>
-        [Column("DeleteID")]
+        [SugarColumn(ColumnName = "DeleteID", IsNullable = true)]
         public int? DeleteID { get; set; }
 
-        /// <summary>
-        /// 删除人姓名
-        /// </summary>
-        [MaxLength(50)]
-        [Column("Deleter")]
+        [SugarColumn(ColumnName = "DeleteBy", Length = 50, IsNullable = true)]
         public string Deleter { get; set; }
 
-        /// <summary>
-        /// 删除时间
-        /// </summary>
-        [Column("DeleteTime")]
+        [SugarColumn(ColumnName = "DeleteTime", IsNullable = true)]
         public DateTime? DeleteTime { get; set; }
 
-        /// <summary>
-        /// 业务状态
-        /// </summary>
-        [MaxLength(50)]
-        [Column("Status_field")]
+        [SugarColumn(ColumnName = "Status_field", Length = 50, IsNullable = true)]
         public string Status_field { get; set; } = "active";
 
-        /// <summary>
-        /// 启用状态
-        /// </summary>
-        [Column("Enable_field")]
+        [SugarColumn(ColumnName = "Enable_field")]
         public bool Enable_field { get; set; } = true;
 
-        /// <summary>
-        /// 排序
-        /// </summary>
-        [Column("Sort")]
+        [SugarColumn(ColumnName = "Sort")]
         public int Sort { get; set; } = 0;
 
-        /// <summary>
-        /// 备注
-        /// </summary>
-        [Column("Remark")]
+        [SugarColumn(ColumnName = "Remark", ColumnDataType = "text", IsNullable = true)]
         public string Remark { get; set; }
-
-        #endregion
     }
 }

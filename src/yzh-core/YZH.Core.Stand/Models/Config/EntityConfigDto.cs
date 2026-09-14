@@ -28,6 +28,8 @@ public class ColumnConfigDto
     public object? Mrz { get; set; }
     /// <summary>分组索引（编辑模式控制）："0"=默认可编辑，"1"+=特定模式只读，"99"=详情全部只读</summary>
     public string? GroupIndex { get; set; }
+    /// <summary>是否掩码显示（敏感字段如 key/secret/password）</summary>
+    public bool Mask { get; set; }
 }
 
 /// <summary>

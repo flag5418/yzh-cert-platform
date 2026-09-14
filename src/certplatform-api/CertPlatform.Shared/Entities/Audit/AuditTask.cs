@@ -1,64 +1,45 @@
 using System;
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using YZH.Entity;
-using YZH.Entity.Admin.Platform;
+using SqlSugar;
+using YZH.Core.Stand.Models.Entity;
 
 namespace YZH.Entity.Admin.Platform.Audit
 {
     /// <summary>
-    /// AuditTask 审核任务
-    /// <para>表名：audit_task（列名为 snake_case，需覆盖审计字段）</para>
+    /// 审核任务
+    /// <para>表名：audit_task</para>
+    /// <para>ORM：SqlSugar（§16 铁律：DB列名 == C#属性名，PascalCase）</para>
     /// </summary>
-    [Entity(TableCnName = "审核任务", TableName = "audit_task", DBServer = "VOLContext")]
-    [Table("audit_task")]
-    public class AuditTask : EntityBase
+    [SugarTable("audit_task")]
+    public class AuditTask : BaseEntity
     {
-        // ===== snake_case 审计字段覆盖 =====
-        [Column("create_id")] public new int? CreateID { get; set; }
-        [Column("creator")] [MaxLength(50)] public new string Creator { get; set; }
-        [Column("create_date")] public new DateTime? CreateDate { get; set; } = DateTime.Now;
-        [Column("modify_id")] public new int? ModifyID { get; set; }
-        [Column("modifier")] [MaxLength(50)] public new string Modifier { get; set; }
-        [Column("modify_date")] public new DateTime? ModifyDate { get; set; }
-        [Column("delete_id")] public new int? DeleteID { get; set; }
-        [Column("deleter")] [MaxLength(50)] public new string Deleter { get; set; }
-        [Column("delete_time")] public new DateTime? DeleteTime { get; set; }
-        [Column("code")] public new string Code { get; set; } = Guid.NewGuid().ToString("N");
-        [Column("status")] public new string Status { get; set; } = "active";
-        [Column("enable")] public new bool Enable { get; set; } = true;
-        [Column("sort")] public new int Sort { get; set; }
-
-        /// <summary>机构编码（多租户隔离，此表需要机构级数据隔离）</summary>
+        /// <summary>机构编码（多租户隔离）</summary>
         [StringLength(50)]
-        [Column("org_code")]
         public string OrgCode { get; set; }
 
+        /// <summary>阶段编码</summary>
         [Required, StringLength(36)]
-        [Column("phase_code")]
         public string PhaseCode { get; set; }
 
+        /// <summary>任务编号</summary>
         [Required, StringLength(50)]
         [UniqueField("任务编号")]
-        [Column("task_number")]
         public string TaskNumber { get; set; }
 
+        /// <summary>审核员ID</summary>
         [Required]
-        [Column("auditor_id")]
         public long AuditorId { get; set; }
 
-        [Column("planned_date")]
+        /// <summary>计划日期</summary>
         public DateTime? PlannedDate { get; set; }
 
-        [Column("actual_start_date")]
+        /// <summary>实际开始日期</summary>
         public DateTime? ActualStartDate { get; set; }
 
-        [Column("actual_complete_date")]
+        /// <summary>实际完成日期</summary>
         public DateTime? ActualCompleteDate { get; set; }
 
-        [Column("audit_scope")]
+        /// <summary>审核范围</summary>
         public string AuditScope { get; set; }
-
-        // Status 继承自 EntityBase
     }
 }

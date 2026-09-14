@@ -5,11 +5,37 @@ namespace YZH.Core.Stand.Models;
 /// </summary>
 public class PagerOptions
 {
+    /// <summary>服务端最大分页大小（钳制，防止单请求拉全表）</summary>
+    public const int MaxPageSize = 500;
+
     /// <summary>当前页（从1开始）</summary>
     public int Page { get; set; } = 1;
 
-    /// <summary>每页行数</summary>
+    /// <summary>每页行数（服务端钳制到 [1, MaxPageSize]）</summary>
     public int PageSize { get; set; } = 20;
+
+    /// <summary>钳制后的分页大小（供 SQL 层使用）</summary>
+    public int SafePageSize
+    {
+        get
+        {
+            var p = PageSize;
+            if (p < 1) p = 20;
+            if (p > MaxPageSize) p = MaxPageSize;
+            return p;
+        }
+    }
+
+    /// <summary>钳制后的页码（供 SQL 层使用）</summary>
+    public int SafePage
+    {
+        get
+        {
+            var p = Page;
+            if (p < 1) p = 1;
+            return p;
+        }
+    }
 
     /// <summary>排序列名</summary>
     public string? SortBy { get; set; }

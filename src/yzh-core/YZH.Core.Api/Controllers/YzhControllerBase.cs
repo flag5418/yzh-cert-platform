@@ -260,9 +260,9 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
       var (ok, cancelMsg) = await OnBeforeUpdate(entity);
       if (!ok) return Result<V>.Fail(cancelMsg ?? "操作已取消");
 
-      // 3. 获取可保存字段（基于 BCFlag）
+      // 3. 获取可保存字段（基于 BcFlag）
       var saveableFields = Config.Columns
-          .Where(c => c.BCFlag)
+          .Where(c => c.BcFlag)
           .Select(c => c.FieldName)
           .ToArray();
 
@@ -344,9 +344,9 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
             "导出功能未启用：IExcelService 未注册。请在 YzhWebBuilder 中注册 EPPlus/NPOI 实现，" +
             "或子类 override ExportCore 自定义导出。");
 
-      // 3. 列映射：默认取 BCFlag=true 的字段
+      // 3. 列映射：默认取 BcFlag=true 的字段
       var columnMapping = Config.Columns
-          .Where(c => c.BCFlag)
+          .Where(c => c.BcFlag)
           .ToDictionary(c => c.FieldName, c => c.DesName);
 
       // 4. 生成 Excel
@@ -421,10 +421,12 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   // ========================================================
 
   [HttpGet("config")]
-  public virtual ActionResult<ApiResponse<EntityConfig>> GetConfig()
+  public virtual ActionResult<ApiResponse<EntityConfigDto>> GetConfig()
   {
     var result = GetConfigCore();
-    return RequestResultToActionResult(result.ToApiResponse());
+    if (!result.Success)
+      return BadRequest(ApiResponse<EntityConfigDto>.Fail(result.Error ?? "配置加载失败"));
+    return Ok(ApiResponse<EntityConfigDto>.Ok(ConfigDtoConverter.ToDto(result.Data!)));
   }
 
   /// <summary>
@@ -490,9 +492,9 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
         return BadRequest(ApiResponse.Fail(
             "模板下载功能未启用：IExcelService 未注册。请在 YzhWebBuilder 中注册 EPPlus/NPOI 实现。"));
 
-      // 默认取 BCFlag=true 的字段名作为模板列
+      // 默认取 BcFlag=true 的字段名作为模板列
       var fieldNames = Config.Columns
-          .Where(c => c.BCFlag)
+          .Where(c => c.BcFlag)
           .Select(c => c.FieldName)
           .ToList();
 
@@ -717,12 +719,12 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   // ========================================================
 
   /// <summary>
-  ///     实体校验（基于 EntityConfig 配置的 BCFlag/YXK 自动校验 + 自定义校验）
+  ///     实体校验（基于 EntityConfig 配置的 BcFlag/Yxk 自动校验 + 自定义校验）
   ///     返回 (isValid, errorMessage)
   /// </summary>
   protected virtual (bool ok, string? msg) ValidateEntity(V entity)
   {
-    foreach (var col in Config.Columns.Where(c => c.BCFlag && !c.YXK))
+    foreach (var col in Config.Columns.Where(c => c.BcFlag && !c.Yxk))
     {
       var prop = typeof(V).GetProperty(col.FieldName,
           System.Reflection.BindingFlags.IgnoreCase |

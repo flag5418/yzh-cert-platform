@@ -292,7 +292,7 @@ onMounted(() => {
                       + 添加字段
                     </el-button>
                   </el-form>
-                </el-collapse>
+                </el-collapse-item>
               </el-collapse>
             </div>
 

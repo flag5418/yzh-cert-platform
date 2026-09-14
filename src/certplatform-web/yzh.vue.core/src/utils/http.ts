@@ -1,3 +1,7 @@
+/**
+ * @deprecated 请使用 @yzh-core/api/client 中的 yzhApi，本文件将在 v2.0 移除
+ * 保留原因：历史业务页面仍引用此模块
+ */
 import axios, { type AxiosInstance, type AxiosResponse } from 'axios'
 
 // API 响应结构（与后端 WebResponseContent 对齐）

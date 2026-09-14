@@ -8,6 +8,18 @@
       "RowSpan": 1,
       "Col": 0,
       "ColSpan": 1,
+      "FieldName": "ParentCode",
+      "DesName": "父级编码",
+      "Type": "TextBox",
+      "BcFlag": false,
+      "XsFlag": false,
+      "Enable": true
+    },
+    {
+      "Row": 0,
+      "RowSpan": 1,
+      "Col": 0,
+      "ColSpan": 1,
       "FieldName": "StandardCode",
       "DesName": "标准编号",
       "Width": 180,
@@ -72,7 +84,7 @@
       "Sxh": 4,
       "Mrz": "quality",
       "Enable": true,
-      "DataKey": "iso_category"
+      "DictCode": "iso_category"
     },
     {
       "Row": 2,

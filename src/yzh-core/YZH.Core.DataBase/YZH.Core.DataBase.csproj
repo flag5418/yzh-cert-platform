@@ -12,6 +12,10 @@
   <ItemGroup>
     <!-- SqlSugar ORM（唯一 ORM，支持多数据库 MySQL/Oracle/SQLServer/PostgreSQL/SQLite/达梦/人大金仓） -->
     <PackageReference Include="SqlSugarCore" Version="5.1.4.167" />
+    <!-- MinIO 对象存储（IObjectStorage 的 MinIO 实现） -->
+    <PackageReference Include="Minio" Version="6.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>

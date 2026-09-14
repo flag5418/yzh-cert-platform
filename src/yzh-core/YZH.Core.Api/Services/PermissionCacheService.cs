@@ -56,12 +56,18 @@ public class PermissionCacheService : IPermissionCacheService
     /// </summary>
     private async Task ExpandPermissionsAsync()
     {
-        // 清空旧数据
+        // 清空旧数据（展开表是派生缓存：按「用户-角色-接口」重新推导）
+        // 只 INSERT 不 DELETE 会导致撤销授权后残留旧权限，而 HasPermissionAsync
+        // 优先命中用户级权限 → 撤销形同无效。
+        await _apiRepo.ExecuteNonQueryAsync("DELETE FROM sys_user_permission");
+
+        // 注意：用户-角色关联表是 Sys_RoleUser（不存在 sys_user_role，写错会导致
+        // 整条权限展开语句失败 → sys_user_permission 永远为空、用户级接口权限失效）
         var sql = @"
             INSERT INTO sys_user_permission (user_code, api_code)
-            SELECT ur.user_code, ra.api_code
-            FROM sys_user_role ur
-            JOIN sys_role_api ra ON ur.role_code = ra.role_code
+            SELECT ur.UserCode, ra.api_code
+            FROM Sys_RoleUser ur
+            JOIN sys_role_api ra ON ur.RoleCode = ra.role_code
             ON DUPLICATE KEY UPDATE update_date = NOW()";
         await _apiRepo.ExecuteNonQueryAsync(sql);
     }
@@ -74,10 +80,10 @@ public class PermissionCacheService : IPermissionCacheService
         // 重新展开
         var sql = @"
             INSERT INTO sys_user_permission (user_code, api_code)
-            SELECT ur.user_code, ra.api_code
-            FROM sys_user_role ur
-            JOIN sys_role_api ra ON ur.role_code = ra.role_code
-            WHERE ur.user_code = @userCode
+            SELECT ur.UserCode, ra.api_code
+            FROM Sys_RoleUser ur
+            JOIN sys_role_api ra ON ur.RoleCode = ra.role_code
+            WHERE ur.UserCode = @userCode
             ON DUPLICATE KEY UPDATE update_date = NOW()";
         await _apiRepo.ExecuteNonQueryAsync(sql, new { userCode });
     }

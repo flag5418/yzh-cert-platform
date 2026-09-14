@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { getMenuTree, addMenu, updateMenu, deleteMenu, toggleEnable } from '@/api/system/menu'
+import { getAllMenuTree, addMenu, updateMenu, deleteMenu, toggleEnable } from '@/api/system/menu'
 import type { SysMenu } from '@/api/system/menu'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -17,7 +17,8 @@ export function useMenuLogic() {
   async function loadData() {
     loading.value = true
     try {
-      const res = await getMenuTree()
+      // 管理端维护页：取全量菜单（/tree 会按当前用户权限过滤，导致菜单树残缺）
+      const res = await getAllMenuTree()
       if (res.code === 200) {
         tableData.value = res.data ?? []
       } else {

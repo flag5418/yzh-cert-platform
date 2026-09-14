@@ -10,10 +10,12 @@ using YZH.Core.Api.Services;
 using YZH.Core.DataBase;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.DataBase.MultiDatabase;
+using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Result;
 using YZH.Core.Stand.NoSql;
+using YZH.Core.Web.Extensions;
 
 namespace YZH.Core.Web;
 
@@ -65,19 +67,27 @@ public static class YzhWebBuilderExtensions
         builder.Services.AddScoped<MenuPermissionService>();
 
         // 注册密码工具（使用 PasswordSecret 配置）
-        var passwordSecret = builder.Configuration["PasswordSecret"] ?? "C5ABA9E202D94C43A3CA66002BF77FAF";
+        var passwordSecret = builder.Configuration["PasswordSecret"];
+        if (string.IsNullOrWhiteSpace(passwordSecret) || passwordSecret.Length < 32)
+            throw new InvalidOperationException("PasswordSecret 必须在 appsettings.json 中配置，且长度不得小于 32 字符");
         builder.Services.AddSingleton<YZH.Core.Stand.Helpers.PasswordHelper>(_ => new YZH.Core.Stand.Helpers.PasswordHelper(passwordSecret));
 
         // 注册 JWT 工具
         var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+        var jwtSecret = jwtSettings["SecretKey"];
+        if (string.IsNullOrWhiteSpace(jwtSecret) || jwtSecret.Length < 32)
+            throw new InvalidOperationException("JwtSettings:SecretKey 必须在 appsettings.json 中配置，且长度不得小于 32 字符");
+        var jwtIssuer = jwtSettings["Issuer"] ?? "YZH.Core";
+        var jwtAudience = jwtSettings["Audience"] ?? "YZH.Core.Client";
+        var jwtExpiration = int.TryParse(jwtSettings["ExpirationMinutes"], out var exp) ? exp : 43200;
         builder.Services.AddSingleton<YZH.Core.Stand.Helpers.JwtHelper>(_ =>
         {
             var jwtOptions = new YZH.Core.Stand.Helpers.JwtOptions
             {
-                Issuer = jwtSettings["Issuer"] ?? "vol.core.owner",
-                Audience = jwtSettings["Audience"] ?? "vol.core",
-                SecretKey = jwtSettings["SecretKey"] ?? "AA3627441FFA4B5DB4E64A29B53CE525",
-                ExpirationMinutes = 43200 // 30天
+                Issuer = jwtIssuer,
+                Audience = jwtAudience,
+                SecretKey = jwtSecret,
+                ExpirationMinutes = jwtExpiration
             };
             return new YZH.Core.Stand.Helpers.JwtHelper(jwtOptions);
         });
@@ -88,6 +98,9 @@ public static class YzhWebBuilderExtensions
         // 注册 IDistributedCache（TokenVersionService 使用，开发环境用内存版）
         builder.Services.AddDistributedMemoryCache();
 
+        // 注册 TokenVersionService（JWT 版本校验/SSO 挤号核心）
+        builder.Services.AddScoped<TokenVersionService>();
+
         // 注册缓存管理器
         builder.Services.AddScoped<ICacheManager, YZH.Core.Api.Services.CacheManager>();
 
@@ -96,6 +109,12 @@ public static class YzhWebBuilderExtensions
 
         // 注册内存缓存（EntityConfig + 验证码 + 数据缓存用）
         builder.Services.AddMemoryCache();
+
+        // 注册对象存储（IObjectStorage：MinIO / 阿里 OSS，配置驱动）
+        builder.Services.AddYzhStorage(builder.Configuration);
+
+        // 注册队列引擎（QueueManager + QueueHostedService）
+        builder.Services.AddYzhQueue();
 
         // 注册验证码服务
         builder.Services.AddScoped<ICaptchaService, CaptchaService>();
@@ -106,6 +125,7 @@ public static class YzhWebBuilderExtensions
         // 注册接口权限相关服务
         builder.Services.AddScoped<IApiRepository, ApiRepository>();
         builder.Services.AddScoped<IPermissionCacheService, PermissionCacheService>();
+        builder.Services.AddScoped<IPermissionService, PermissionService>();
         builder.Services.AddScoped<ApiScanner>();
         builder.Services.AddScoped<ApiSyncService>();
 

@@ -1,5 +1,22 @@
 import http from '@yzh-core/utils/http'
-import type { Result } from '@yzh-core/utils/http'
+
+/**
+ * http 拦截器已把后端响应（{status}/{success}/{code} 三种风格）统一归一化为 { code, message, data }，
+ * 但 axios 实例的返回类型仍是 AxiosResponse → 用这两个小包装把运行时真实形状表达出来。
+ */
+interface HttpResult<T> {
+  code: number
+  message: string
+  data: T
+}
+
+async function httpGet<T>(url: string): Promise<HttpResult<T>> {
+  return (await http.get(url)) as unknown as HttpResult<T>
+}
+
+async function httpPost<T>(url: string, body?: unknown): Promise<HttpResult<T>> {
+  return (await http.post(url, body)) as unknown as HttpResult<T>
+}
 
 /**
  * 菜单节点（前端统一 camelCase）
@@ -92,41 +109,52 @@ function buildTree(rawList: RawSysMenu[]): SysMenu[] {
 }
 
 /**
- * 获取菜单树（自动归一化 + 构建树形结构）
+ * 获取当前用户可见菜单树（侧边栏使用，后端按角色权限过滤）
  */
-export async function getMenuTree(): Promise<Result<SysMenu[]>> {
-  const res = await http.get<Result<RawSysMenu[]>>('/System/MenuManagement/tree')
-  if (res.data && Array.isArray(res.data)) {
-    res.data = buildTree(res.data)
-  }
-  return res
+export async function getMenuTree(): Promise<HttpResult<SysMenu[]>> {
+  const res = await httpGet<RawSysMenu[]>('/System/MenuManagement/tree')
+  return { ...res, data: Array.isArray(res.data) ? buildTree(res.data) : [] }
+}
+
+/**
+ * 获取全量菜单树（菜单管理页使用，不做角色权限过滤）
+ *
+ * 菜单管理是管理端全量维护页：用 /tree 会只看到当前用户被授权的子集，
+ * 导致菜单树残缺、无法维护未授权菜单。
+ */
+export async function getAllMenuTree(): Promise<HttpResult<SysMenu[]>> {
+  const res = await httpGet<RawSysMenu[]>('/System/MenuManagement/tree/all')
+  return { ...res, data: Array.isArray(res.data) ? buildTree(res.data) : [] }
 }
 
 /**
  * 新增菜单
  */
-export function addMenu(data: Partial<SysMenu>): Promise<Result<SysMenu>> {
-  return http.post<Result<SysMenu>>('/System/MenuManagement/add', data)
+export function addMenu(data: Partial<SysMenu>): Promise<HttpResult<SysMenu>> {
+  return httpPost<SysMenu>('/System/MenuManagement/add', data)
 }
 
 /**
  * 修改菜单
  */
-export function updateMenu(data: Partial<SysMenu>): Promise<Result<SysMenu>> {
-  return http.post<Result<SysMenu>>('/System/MenuManagement/update', data)
+export function updateMenu(data: Partial<SysMenu>): Promise<HttpResult<SysMenu>> {
+  return httpPost<SysMenu>('/System/MenuManagement/update', data)
 }
 
 /**
  * 批量删除菜单
+ *
+ * ⚠️ 后端签名为 Delete([FromBody] string[] codes)，必须直接提交裸数组；
+ * 传 { codes: [...] } 无法绑定 → 400「未指定要删除的记录」。
  */
-export function deleteMenu(codes: string[]): Promise<Result<number>> {
-  return http.post<Result<number>>('/System/MenuManagement/delete', { codes })
+export function deleteMenu(codes: string[]): Promise<HttpResult<number>> {
+  return httpPost<number>('/System/MenuManagement/delete', codes)
 }
 
 /**
  * 启用/禁用菜单
  */
-export function toggleEnable(code: string, enable: number): Promise<Result<any>> {
+export function toggleEnable(code: string, enable: number): Promise<HttpResult<any>> {
   const action = enable === 1 ? 'Enable' : 'Disable'
-  return http.post<Result<any>>(`/System/MenuManagement/action/${action}`, { Code: code })
+  return httpPost<any>(`/System/MenuManagement/action/${action}`, { Code: code })
 }

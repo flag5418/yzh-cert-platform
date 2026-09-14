@@ -1,168 +1,127 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+/**
+ * 系统参数配置 — YzhTable + YzhForm 配置驱动
+ */
+import { ref, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { YzhPageLayout } from '@yzh-core'
+import { Plus } from '@element-plus/icons-vue'
+import {
+  YzhTable,
+  YzhForm,
+  YzhPageLayout,
+  type YzhTableColumn,
+  type YzhFormField,
+  type PageParams,
+  type SearchField
+} from '@yzh-core'
 import {
   getParamList,
+  getParamPage,
   saveParam,
   deleteParam,
   type SysParam
 } from '@/api/system/param'
 
-const loading = ref(false)
-const saving = ref(false)
-const tableData = ref<SysParam[]>([])
-const editVisible = ref(false)
-const editFormRef = ref()
+const tableRef = ref()
+const formRef = ref()
+const dialogVisible = ref(false)
+const dialogMode = ref<'add' | 'edit'>('add')
+let formData = reactive<Partial<SysParam>>({})
+const submitting = ref(false)
 
-const editForm = reactive<Partial<SysParam>>({
-  paramCode: '',
-  paramName: '',
-  paramValue: '',
-  paramType: 'string',
-  description: ''
-})
+// ── 表格列定义 ──
+const columns: YzhTableColumn<SysParam>[] = [
+  { prop: 'paramCode', label: '参数编码', width: 200 },
+  { prop: 'paramName', label: '参数名称', width: 180 },
+  {
+    prop: 'paramType', label: '类型', width: 100, align: 'center',
+    formatter: (v: any) => ({ string: '字符串', number: '数字', boolean: '布尔', json: 'JSON' }[v] ?? v)
+  },
+  { prop: 'paramValue', label: '参数值', minWidth: 200 },
+  { prop: 'description', label: '说明', minWidth: 200 },
+  { prop: 'actions', label: '操作', width: 150, fixed: 'right', slot: true }
+]
 
-const editRules = {
-  paramCode: [{ required: true, message: '请输入参数编码', trigger: 'blur' }],
-  paramName: [{ required: true, message: '请输入参数名称', trigger: 'blur' }],
-  paramType: [{ required: true, message: '请选择参数类型', trigger: 'change' }]
+// ── 搜索字段 ──
+const searchFields: SearchField[] = [
+  { prop: 'paramCode', label: '参数编码', type: 'text' },
+  { prop: 'paramName', label: '参数名称', type: 'text' }
+]
+
+// ── 表单字段定义 ──
+const formFields: YzhFormField[] = [
+  { prop: 'paramCode', label: '参数编码', type: 'text', required: true, span: 12, placeholder: '如：AI_Qwen_Model' },
+  { prop: 'paramName', label: '参数名称', type: 'text', required: true, span: 12, placeholder: '如：千问AI模型' },
+  { prop: 'paramType', label: '参数类型', type: 'select', required: true, span: 12, options: [
+    { label: '字符串', value: 'string' },
+    { label: '数字', value: 'number' },
+    { label: '布尔', value: 'boolean' },
+    { label: 'JSON', value: 'json' }
+  ] },
+  { prop: 'paramValue', label: '参数值', type: 'text', span: 12 },
+  { prop: 'description', label: '说明', type: 'textarea', span: 24 }
+]
+
+// ── 数据加载（YzhTable 期望返回 Page<T> = { rows, total }）──
+async function loadData(params: PageParams) {
+  const res = await getParamPage(params)
+  return { rows: res?.rows ?? [], total: res?.total ?? 0 }
 }
 
-const typeTagMap: Record<string, string> = {
-  string: 'primary',
-  number: 'warning',
-  boolean: 'success',
-  json: 'danger'
+// ── 新增 ──
+function onAdd() {
+  dialogMode.value = 'add'
+  formData = reactive<Partial<SysParam>>({ paramType: 'string' })
+  dialogVisible.value = true
 }
 
-async function loadData() {
-  loading.value = true
-  try {
-    const res = await getParamList()
-    tableData.value = res || []
-  } catch (e: any) {
-    ElMessage.error(e?.message || '加载失败')
-  } finally {
-    loading.value = false
-  }
+// ── 编辑 ──
+function onEdit(row: SysParam) {
+  dialogMode.value = 'edit'
+  formData = reactive<Partial<SysParam>>({ ...row })
+  dialogVisible.value = true
 }
 
-function openEdit(row: SysParam | null) {
-  if (row) {
-    Object.assign(editForm, { ...row })
-  } else {
-    Object.assign(editForm, {
-      id: undefined,
-      paramCode: '',
-      paramName: '',
-      paramValue: '',
-      paramType: 'string',
-      description: ''
-    })
-  }
-  editVisible.value = true
-}
-
-async function doSave() {
-  const valid = await editFormRef.value?.validate().catch(() => false)
+// ── 提交 ──
+async function onSubmit() {
+  const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
-  saving.value = true
+  submitting.value = true
   try {
-    await saveParam(editForm as SysParam)
+    await saveParam(formData as SysParam)
     ElMessage.success('保存成功')
-    editVisible.value = false
-    loadData()
+    dialogVisible.value = false
+    tableRef.value?.refresh()
   } catch (e: any) {
     ElMessage.error(e?.message || '保存失败')
   } finally {
-    saving.value = false
+    submitting.value = false
   }
 }
 
-async function doDelete(row: SysParam) {
-  try {
-    await ElMessageBox.confirm(`确定删除参数「${row.paramName}」？`, '确认删除', { type: 'warning' })
-  } catch { return }
-  try {
-    await deleteParam(row.id!)
-    ElMessage.success('删除成功')
-    loadData()
-  } catch (e: any) {
-    ElMessage.error(e?.message || '删除失败')
-  }
+// ── 删除 ──
+async function onDelete(row: SysParam) {
+  try { await ElMessageBox.confirm(`确定删除参数「${row.paramName}」？`, '确认删除', { type: 'warning' }) } catch { return }
+  await deleteParam(row.id!)
+  ElMessage.success('删除成功')
+  tableRef.value?.refresh()
 }
-
-onMounted(loadData)
 </script>
 
 <template>
   <YzhPageLayout title="系统参数配置">
-    <template #toolbar>
-      <el-button type="primary" @click="openEdit(null)">
-        <el-icon><Plus /></el-icon> 新建参数
-      </el-button>
-    </template>
-
-    <el-card shadow="never">
-      <el-table :data="tableData" stripe border v-loading="loading">
-        <el-table-column prop="paramCode" label="参数编码" width="200" />
-        <el-table-column prop="paramName" label="参数名称" width="180" />
-        <el-table-column prop="paramType" label="类型" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag :type="typeTagMap[row.paramType]" size="small">{{ row.paramType }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="paramValue" label="参数值" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="description" label="说明" min-width="200" show-overflow-tooltip />
-        <el-table-column label="操作" width="150" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button link type="danger" size="small" @click="doDelete(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
-
-    <el-dialog v-model="editVisible" :title="editForm.id ? '编辑参数' : '新建参数'" width="600px">
-      <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="100px">
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="参数编码" prop="paramCode">
-              <el-input v-model="editForm.paramCode" placeholder="如：AI_Qwen_Model" :disabled="!!editForm.id" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="参数名称" prop="paramName">
-              <el-input v-model="editForm.paramName" placeholder="如：千问AI模型" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="参数类型" prop="paramType">
-              <el-select v-model="editForm.paramType" style="width: 100%">
-                <el-option label="字符串" value="string" />
-                <el-option label="数字" value="number" />
-                <el-option label="布尔" value="boolean" />
-                <el-option label="JSON" value="json" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="参数值" prop="paramValue">
-              <el-input v-model="editForm.paramValue" :type="editForm.paramType === 'json' ? 'textarea' : 'text'" :rows="editForm.paramType === 'json' ? 4 : 1" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item label="说明">
-          <el-input v-model="editForm.description" type="textarea" :rows="2" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="editVisible = false">取消</el-button>
-        <el-button type="primary" @click="doSave" :loading="saving">保存</el-button>
+    <YzhTable ref="tableRef" :columns="columns" :data-loader="loadData" :search-fields="searchFields">
+      <template #toolbar-left>
+        <el-button type="primary" :icon="Plus" @click="onAdd">新建参数</el-button>
       </template>
+      <template #column-actions="{ row }">
+        <el-button link type="primary" size="small" @click="onEdit(row)">编辑</el-button>
+        <el-button link type="danger" size="small" @click="onDelete(row)">删除</el-button>
+      </template>
+    </YzhTable>
+
+    <el-dialog v-model="dialogVisible" :title="dialogMode === 'add' ? '新建参数' : '编辑参数'" width="600px">
+      <YzhForm ref="formRef" v-model="formData" :fields="formFields" :loading="submitting" @submit="onSubmit" @reset="dialogVisible = false" />
     </el-dialog>
   </YzhPageLayout>
 </template>

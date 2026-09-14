@@ -75,56 +75,74 @@ public class RoleApiController : TreeTableControllerBase<Sys_Role, SysApi>
             // 3. 当前角色已授权的接口 Code
             var granted = await _apiRepo.GetApiCodesByRoleCodeAsync(request.ContextCode);
 
-            // 4. 构建扁平节点（分组作为父节点）
+            // 4. 按分组路径逐级构建分组节点（System/Config → System + Config 两级）
+            //    接口挂在最末级分组下，前端才能“按控制器整组勾选”
             var grantedSet = granted.ToHashSet();
-            var groupPaths = apis
-                .Where(a => !string.IsNullOrEmpty(a.GroupPath))
-                .Select(a => a.GroupPath)
-                .Distinct()
-                .OrderBy(g => g)
-                .ToList();
-
             var nodes = new List<CheckTreeNodeDto>();
+            var groupCodes = new Dictionary<string, string>(StringComparer.Ordinal);
+            var groupCounts = new Dictionary<string, int>(StringComparer.Ordinal);
 
-            foreach (var groupPath in groupPaths)
+            foreach (var api in apis
+                .OrderBy(a => a.GroupPath, StringComparer.Ordinal)
+                .ThenBy(a => a.Path, StringComparer.Ordinal))
             {
-                // 父节点：分组
-                var groupCode = $"group:{groupPath}";
+                var segments = (string.IsNullOrWhiteSpace(api.GroupPath) ? "未分组" : api.GroupPath)
+                    .Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+                string? parentCode = null;
+                var accumulated = "";
+
+                foreach (var segment in segments)
+                {
+                    accumulated = string.IsNullOrEmpty(accumulated) ? segment : $"{accumulated}/{segment}";
+
+                    if (!groupCodes.TryGetValue(accumulated, out var groupCode))
+                    {
+                        groupCode = $"group:{accumulated}";
+                        groupCodes[accumulated] = groupCode;
+                        nodes.Add(new CheckTreeNodeDto
+                        {
+                            Code = groupCode,
+                            Name = segment,
+                            ParentCode = parentCode,
+                            NodeType = "group",
+                            CheckFlag = false,
+                            Extra = new Dictionary<string, object>
+                            {
+                                ["IsGroup"] = true,
+                                ["GroupPath"] = accumulated,
+                            },
+                        });
+                    }
+
+                    groupCounts[accumulated] = groupCounts.GetValueOrDefault(accumulated) + 1;
+                    parentCode = groupCode;
+                }
+
                 nodes.Add(new CheckTreeNodeDto
                 {
-                    Code = groupCode,
-                    Name = groupPath,
-                    ParentCode = null,
-                    NodeType = "group",
-                    CheckFlag = false,
+                    Code = api.Code,
+                    Name = string.IsNullOrWhiteSpace(api.Name) ? api.Path : api.Name,
+                    ParentCode = parentCode,
+                    NodeType = "api",
+                    CheckFlag = grantedSet.Contains(api.Code),
                     Extra = new Dictionary<string, object>
                     {
-                        ["IsGroup"] = true,
+                        ["Method"] = api.Method,
+                        ["Path"] = api.Path,
+                        ["ApiName"] = api.Name,
+                        ["GroupPath"] = api.GroupPath,
+                        ["Enable"] = api.Enable,
                     },
                 });
+            }
 
-                // 子节点：接口
-                var groupApis = apis
-                    .Where(a => a.GroupPath == groupPath)
-                    .OrderBy(a => a.Path);
-                foreach (var api in groupApis)
-                {
-                    nodes.Add(new CheckTreeNodeDto
-                    {
-                        Code = api.Code,
-                        Name = $"{api.Method} {api.Path} - {api.Name}",
-                        ParentCode = groupCode,
-                        NodeType = "api",
-                        CheckFlag = grantedSet.Contains(api.Code),
-                        Extra = new Dictionary<string, object>
-                        {
-                            ["Method"] = api.Method,
-                            ["Path"] = api.Path,
-                            ["ApiName"] = api.Name,
-                            ["Enable"] = api.Enable,
-                        },
-                    });
-                }
+            // 5. 回填每个分组的接口数量（含子级），供前端显示与整组勾选使用
+            foreach (var node in nodes.Where(n => n.NodeType == "group"))
+            {
+                var groupPath = node.Code["group:".Length..];
+                node.Extra ??= new Dictionary<string, object>();
+                node.Extra["ApiCount"] = groupCounts.GetValueOrDefault(groupPath);
             }
 
             return Ok(ApiResponse<CheckTreeNodeDto[]>.Ok(nodes.ToArray()));
@@ -198,7 +216,8 @@ public class RoleApiController : TreeTableControllerBase<Sys_Role, SysApi>
                 return Ok(ApiResponse<object?>.Ok(new { Updated = 0 }));
 
             string apiCodesStr = string.Join(",", apiCodes);
-            var sql = "DELETE FROM sys_role_api WHERE role_code = @roleCode AND api_code IN @apiCodes";
+            // 数组参数必须写成 IN (@param)（带括号），SqlSugar 才会展开为 (值1,值2,...)
+            var sql = "DELETE FROM sys_role_api WHERE role_code = @roleCode AND api_code IN (@apiCodes)";
             var result = await _apiRepo.ExecuteNonQueryAsync(sql, new { roleCode, apiCodes });
 
             return Ok(ApiResponse<object?>.Ok(new { Updated = result }));

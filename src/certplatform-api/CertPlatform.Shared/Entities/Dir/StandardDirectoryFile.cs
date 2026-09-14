@@ -1,321 +1,134 @@
 using System;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+using SqlSugar;
 using YZH.Entity.Admin.Platform;
 using YZH.Entity.SystemModels;
 
 namespace YZH.Entity.Admin.Platform.Dir
 {
-    /// <summary>
-    /// 标准目录文件实体
-    /// 
-    /// 职责：定义标准目录中每个文件夹要求的文件规格
-    /// 编码规则：FL-{FolderCode}|{FileName}|{Type}
-    /// 示例：FL-FD-SDC-ISO9001|PH01|L01|S001|营业执照|pdf
-    /// </summary>
-    [Entity(TableCnName = "标准目录文件", TableName = "cert_standard_directory_file", DBServer = "VOLContext")]
-    [Table("cert_standard_directory_file")]
+    [SugarTable("cert_standard_directory_file")]
     public class StandardDirectoryFile : BaseEntity
     {
-        [Key]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
         public long Id { get; set; }
 
-        #region 编码字段
-
-        /// <summary>
-        /// 全局唯一编码（GUID）
-        /// </summary>
-        [MaxLength(36)]
-        [Column("Code")]
+        [SugarColumn(ColumnName = "Code", Length = 36)]
         public string Code { get; set; }
 
-        /// <summary>
-        /// 文件编码（FL-{FolderCode}|{FileName}|{Type}）
-        /// </summary>
-        [MaxLength(150)]
-        [UniqueField("文件编码")]
-        [Column("FileCode")]
+        [SugarColumn(ColumnName = "FileCode", Length = 150)]
         public string FileCode { get; set; }
 
-        #endregion
-
-        #region 关联字段
-
-        /// <summary>
-        /// 所属文件夹编码
-        /// </summary>
-        [MaxLength(150)]
-        [Column("FolderCode")]
+        [SugarColumn(ColumnName = "FolderCode", Length = 150)]
         public string FolderCode { get; set; }
 
-        /// <summary>
-        /// 目录编码
-        /// </summary>
-        [MaxLength(100)]
-        [Column("DirectoryCode")]
+        [SugarColumn(ColumnName = "DirectoryCode", Length = 100)]
         public string DirectoryCode { get; set; }
 
-        #endregion
-
-        #region 文件信息
-
-        /// <summary>
-        /// 文件名称模板
-        /// </summary>
-        [MaxLength(500)]
-        [Column("FileName")]
+        [SugarColumn(ColumnName = "FileName", Length = 500)]
         public string FileName { get; set; }
 
-        /// <summary>
-        /// 文件类型（pdf/docx/xlsx/png等）
-        /// </summary>
-        [MaxLength(50)]
-        [Column("FileType")]
+        [SugarColumn(ColumnName = "FileType", Length = 50)]
         public string FileType { get; set; }
 
-        /// <summary>
-        /// 文件名正则匹配规则
-        /// </summary>
-        [MaxLength(200)]
-        [Column("FilePattern")]
+        [SugarColumn(ColumnName = "FilePattern", Length = 200, IsNullable = true)]
         public string FilePattern { get; set; }
 
-        /// <summary>
-        /// 文件大小（字节），上传成功后由后端从 IFormFile.Length 记录（权威值，不依赖前端）
-        /// </summary>
-        [Column("file_size")]
+        [SugarColumn(ColumnName = "file_size", IsNullable = true)]
         public long? FileSize { get; set; }
 
-        #endregion
-
-        #region 文件要求
-
-        /// <summary>
-        /// 是否必须提供
-        /// </summary>
-        [Column("IsRequired")]
+        [SugarColumn(ColumnName = "IsRequired")]
         public bool IsRequired { get; set; } = true;
 
-        /// <summary>
-        /// 最大文件大小（MB）
-        /// </summary>
-        [Column("MaxFileSizeMB")]
+        [SugarColumn(ColumnName = "MaxFileSizeMB")]
         public int MaxFileSizeMB { get; set; } = 10;
 
-        /// <summary>
-        /// 文件说明/要求描述
-        /// </summary>
-        [Column("Description")]
+        [SugarColumn(ColumnName = "Description", ColumnDataType = "text", IsNullable = true)]
         public string Description { get; set; }
 
-        /// <summary>
-        /// 排序
-        /// </summary>
-        [Column("SortOrder")]
+        [SugarColumn(ColumnName = "SortOrder")]
         public int SortOrder { get; set; } = 0;
 
-        #endregion
-
-        #region 提取规则
-
-        /// <summary>
-        /// 是否启用自动提取
-        /// </summary>
-        [Column("ExtractionEnabled")]
+        [SugarColumn(ColumnName = "ExtractionEnabled")]
         public bool ExtractionEnabled { get; set; } = false;
 
-        /// <summary>
-        /// 提取规则配置（JSON）
-        /// </summary>
-        [Column("ExtractionRules")]
+        [SugarColumn(ColumnName = "ExtractionRules", ColumnDataType = "text", IsNullable = true)]
         public string ExtractionRules { get; set; }
 
-        #endregion
-
-        #region 校验规则
-
-        /// <summary>
-        /// 是否要求预审
-        /// </summary>
-        [Column("PreCheckRequired")]
+        [SugarColumn(ColumnName = "PreCheckRequired")]
         public bool PreCheckRequired { get; set; } = true;
 
-        /// <summary>
-        /// 是否要求合规检查
-        /// </summary>
-        [Column("ComplianceRequired")]
+        [SugarColumn(ColumnName = "ComplianceRequired")]
         public bool ComplianceRequired { get; set; } = false;
 
-        #endregion
-
-        #region 状态字段
-
-        /// <summary>
-        /// 状态（draft/active/archived）
-        /// </summary>
-        [MaxLength(20)]
-        [Column("Status")]
+        [SugarColumn(ColumnName = "status", Length = 20, IsNullable = true)]
         public string Status { get; set; } = "draft";
 
-        /// <summary>
-        /// 是否启用
-        /// </summary>
-        [Column("Enable")]
+        [SugarColumn(ColumnName = "Enable")]
         public bool Enable { get; set; } = true;
 
-        /// <summary>
-        /// 上传任务ID
-        /// </summary>
-        [MaxLength(64)]
-        [Column("TaskId")]
+        [SugarColumn(ColumnName = "TaskId", Length = 64, IsNullable = true)]
         public string TaskId { get; set; }
 
-        /// <summary>
-        /// 有效标志: 0=无效(预创建), 1=有效(已确认)
-        /// </summary>
-        [Column("IsValid")]
-        public bool IsValid { get; set; } = true;
+        [SugarColumn(ColumnName = "IsValid")]
+        public new int IsValid { get; set; } = 1;
 
-        /// <summary>
-        /// 上传状态: pending/uploading/active/failed
-        /// </summary>
-        [MaxLength(20)]
-        [Column("UploadStatus")]
+        [SugarColumn(ColumnName = "UploadStatus", Length = 20, IsNullable = true)]
         public string UploadStatus { get; set; } = "active";
 
-        /// <summary>
-        /// MinIO存储路径
-        /// </summary>
-        [MaxLength(512)]
-        [Column("StoragePath")]
+        [SugarColumn(ColumnName = "StoragePath", Length = 512, IsNullable = true)]
         public string StoragePath { get; set; }
 
-        /// <summary>
-        /// 完整路径（从根到当前文件），用于路径判定
-        /// 示例：4记录文件/内审记录/陪审人员.doc
-        /// </summary>
-        [MaxLength(1024)]
-        [Column("FullPath")]
+        [SugarColumn(ColumnName = "FullPath", Length = 1024, IsNullable = true)]
         public string FullPath { get; set; }
 
-        #endregion
-
-        #region 文件转换（旧版 Office → OOXML）
-
-        /// <summary>
-        /// 转换后文件在 MinIO 的存储路径（.docx/.xlsx）
-        /// </summary>
-        [MaxLength(512)]
-        [Column("converted_storage_path")]
+        [SugarColumn(ColumnName = "converted_storage_path", Length = 512, IsNullable = true)]
         public string ConvertedStoragePath { get; set; }
 
-        /// <summary>
-        /// 转换状态：null/pending/converting/converted/failed
-        /// </summary>
-        [MaxLength(20)]
-        [Column("convert_status")]
+        [SugarColumn(ColumnName = "convert_status", Length = 20, IsNullable = true)]
         public string ConvertStatus { get; set; }
 
-        /// <summary>
-        /// 转换失败原因或丢失的样式信息
-        /// </summary>
-        [MaxLength(1024)]
-        [Column("convert_message")]
+        [SugarColumn(ColumnName = "convert_message", Length = 1024, IsNullable = true)]
         public string ConvertMessage { get; set; }
 
-        /// <summary>
-        /// 转换完成时间
-        /// </summary>
-        [Column("convert_date")]
+        [SugarColumn(ColumnName = "convert_date", IsNullable = true)]
         public DateTime? ConvertDate { get; set; }
 
-        #endregion
-
-        #region 审计字段
-
-        /// <summary>
-        /// 创建人ID
-        /// </summary>
-        [Column("CreateID")]
+        [SugarColumn(ColumnName = "CreateID", IsNullable = true)]
         public int? CreateID { get; set; }
 
-        /// <summary>
-        /// 创建人姓名
-        /// </summary>
-        [MaxLength(50)]
-        [Column("Creator")]
+        [SugarColumn(ColumnName = "CreateBy", Length = 50, IsNullable = true)]
         public string Creator { get; set; }
 
-        /// <summary>
-        /// 创建时间
-        /// </summary>
-        [Column("CreateDate")]
+        [SugarColumn(ColumnName = "CreateDate")]
         public DateTime? CreateDate { get; set; } = DateTime.Now;
 
-        /// <summary>
-        /// 修改人ID
-        /// </summary>
-        [Column("ModifyID")]
+        [SugarColumn(ColumnName = "ModifyID", IsNullable = true)]
         public int? ModifyID { get; set; }
 
-        /// <summary>
-        /// 修改人姓名
-        /// </summary>
-        [MaxLength(50)]
-        [Column("Modifier")]
+        [SugarColumn(ColumnName = "UpdateBy", Length = 50, IsNullable = true)]
         public string Modifier { get; set; }
 
-        /// <summary>
-        /// 修改时间
-        /// </summary>
-        [Column("ModifyDate")]
+        [SugarColumn(ColumnName = "ModifyDate", IsNullable = true)]
         public DateTime? ModifyDate { get; set; }
 
-        /// <summary>
-        /// 删除人ID
-        /// </summary>
-        [Column("DeleteID")]
+        [SugarColumn(ColumnName = "DeleteID", IsNullable = true)]
         public int? DeleteID { get; set; }
 
-        /// <summary>
-        /// 删除人姓名
-        /// </summary>
-        [MaxLength(50)]
-        [Column("Deleter")]
+        [SugarColumn(ColumnName = "DeleteBy", Length = 50, IsNullable = true)]
         public string Deleter { get; set; }
 
-        /// <summary>
-        /// 删除时间
-        /// </summary>
-        [Column("DeleteTime")]
+        [SugarColumn(ColumnName = "DeleteTime", IsNullable = true)]
         public DateTime? DeleteTime { get; set; }
 
-        /// <summary>
-        /// 业务状态
-        /// </summary>
-        [MaxLength(50)]
-        [Column("Status_field")]
+        [SugarColumn(ColumnName = "Status_field", Length = 50, IsNullable = true)]
         public string Status_field { get; set; } = "active";
 
-        /// <summary>
-        /// 启用状态
-        /// </summary>
-        [Column("Enable_field")]
+        [SugarColumn(ColumnName = "Enable_field")]
         public bool Enable_field { get; set; } = true;
 
-        /// <summary>
-        /// 排序
-        /// </summary>
-        [Column("Sort")]
+        [SugarColumn(ColumnName = "Sort")]
         public int Sort { get; set; } = 0;
 
-        /// <summary>
-        /// 备注
-        /// </summary>
-        [Column("Remark")]
+        [SugarColumn(ColumnName = "Remark", ColumnDataType = "text", IsNullable = true)]
         public string Remark { get; set; }
-
-        #endregion
     }
 }

@@ -10,7 +10,7 @@
  * - 插槽扩展（#column-prop）
  */
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, getCurrentInstance, onMounted, reactive, ref, watch } from 'vue'
 import YzhPagination from '../layout/YzhPagination.vue'
 import YzhSearchBar from '../layout/YzhSearchBar.vue'
 import YzhToolbar from '../layout/YzhToolbar.vue'
@@ -274,6 +274,27 @@ function getRowActionType(key: string): 'primary' | 'success' | 'warning' | 'dan
 function handleRowAction(action: string, row: T) {
   emit('row-action', action, row)
 }
+
+// ========================================================
+// 开发期护栏：行操作按钮必须由父组件监听 @row-action
+// ========================================================
+const instance = getCurrentInstance()
+let rowActionWarned = false
+
+watch(
+  () => Object.keys(props.rowActionButtons ?? {}).length,
+  (count) => {
+    if (count === 0 || rowActionWarned) return
+    if (!(import.meta as any).env?.DEV) return
+    if (instance?.vnode.props?.onRowAction) return
+    rowActionWarned = true
+    console.warn(
+      '[YzhTable] 已配置 rowActionButtons，但父组件未监听 @row-action：行操作按钮点击不会有任何效果。' +
+        ' 请绑定 @row-action="(action, row) => ..."（CrudPageLogic.onRowClick 可直接处理 edit/delete）。'
+    )
+  },
+  { immediate: true }
+)
 
 /**
  * 刷新

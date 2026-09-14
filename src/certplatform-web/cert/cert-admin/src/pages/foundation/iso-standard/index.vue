@@ -43,7 +43,7 @@ const rowActionButtons = computed(() => {
 /** 树节点点击 → 加载该标准下条款 */
 async function handleNodeClick(node: TreeNode) {
   await logic.onNodeClick(node)
-  tableRef.value?.refresh()
+  // 表格通过 dataLoader 自动刷新，无需手动调用 refresh
 }
 
 /** 树节点自定义操作（编辑/删除） */
@@ -108,6 +108,15 @@ async function handleDeleteClause(row: any) {
   ElMessage.success('删除成功')
 }
 
+/** 表格行自定义操作（edit / delete，与后端 RowButtons 的 key 对应） */
+async function handleRowAction(action: string, row: any) {
+  if (action === 'edit') {
+    handleEditClause(row)
+  } else if (action === 'delete') {
+    await handleDeleteClause(row)
+  }
+}
+
 /** 批量删除条款 */
 async function handleBatchDelete() {
   if (selectedRows.value.length === 0) {
@@ -127,39 +136,6 @@ async function handleBatchDelete() {
 /** 切换条款有效标志 */
 async function handleToggleClauseIsValid(row: any) {
   await (logic as any).toggleRowIsValidWithConfirm(row, { entityName: `${row.ClauseNumber} ${row.Title}` })
-}
-
-// ========================================================
-// 表格数据加载
-// ========================================================
-
-async function loadTableData(params: any) {
-  const filters: Array<{ Field: string; Operator: string; Value: any }> = []
-  if (logic.selectedNode.value) {
-    filters.push({
-      Field: logic.relateField,
-      Operator: 'eq',
-      Value: logic.selectedNode.value.code,
-    })
-  }
-  if (logic.showDisabled.value) {
-    filters.push({ Field: 'ShowDisabled', Value: 'true', Operator: 'eq' })
-  }
-  try {
-    const res = await logic.apiPost('/filter', {
-      Page: params.page,
-      PageSize: params.rows,
-      SortField: params.sort,
-      SortOrder: params.order,
-      Filters: filters,
-    })
-    if (res.data) {
-      return { rows: res.data.Items ?? [], total: res.data.TotalCount ?? 0 }
-    }
-  } catch (e: any) {
-    ElMessage.error(e.message || '数据加载失败')
-  }
-  return { rows: [], total: 0 }
 }
 
 // ========================================================
@@ -225,11 +201,13 @@ onMounted(async () => {
           <YzhTable
             ref="tableRef"
             :columns="logic.columns as any"
-            :data-loader="loadTableData"
+            :data-loader="logic.dataLoader.bind(logic)"
             :search-fields="logic.searchFields as any"
             :selectable="true"
             :row-action-buttons="rowActionButtons"
+            row-key="Code"
             @selection-change="selectedRows = $event"
+            @row-action="handleRowAction"
           >
             <!-- 工具栏左侧：操作按钮 -->
             <template #toolbar-left>

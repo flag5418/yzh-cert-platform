@@ -30,16 +30,19 @@ public class DefineColumn
     public bool SumFlag { get; set; }
 
     /// <summary>允许空（必填校验）</summary>
-    public bool YXK { get; set; }
+    public bool Yxk { get; set; }
 
     /// <summary>保存标志（是否持久化）</summary>
-    public bool BCFlag { get; set; } = true;
+    public bool BcFlag { get; set; } = true;
 
     /// <summary>显示标志</summary>
-    public bool XSFlag { get; set; } = true;
+    public bool XsFlag { get; set; } = true;
 
     /// <summary>默认值</summary>
-    public string? MRZ { get; set; }
+    public string? Mrz { get; set; }
+
+    /// <summary>是否掩码显示（敏感字段如 key/secret/password）</summary>
+    public bool Mask { get; set; }
 
     /// <summary>控件类型</summary>
     public ControlType Type { get; set; } = ControlType.TextBox;
@@ -54,7 +57,7 @@ public class DefineColumn
     public string DesName { get; set; } = string.Empty;
 
     /// <summary>显示顺序</summary>
-    public int SXH { get; set; }
+    public int Sxh { get; set; }
 
     // === 以下为Web端扩展属性 ===
     

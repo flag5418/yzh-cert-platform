@@ -70,13 +70,15 @@ run_project() {
     # 关键：用 python os.setsid() 让进程脱离当前会话（等价于 Linux setsid）
     # 避免 run_terminal_command 等执行环境在命令返回后清理子进程把后端一起带走
     # （nohup 只防 SIGHUP，挡不住执行环境对子进程的清理）
+    # 必须显式指定项目：YZH.Core.Web 目录下存在多个 .csproj 时 dotnet run 会报 MSB1011
     python3 -c "
 import os, subprocess, sys
 pid = os.fork()
 if pid == 0:
     os.setsid()
     log = open('$LOG_FILE', 'w')
-    p = subprocess.Popen(['dotnet', 'run', '--no-build', '--urls', 'http://0.0.0.0:$PORT'],
+    p = subprocess.Popen(['dotnet', 'run', '--project', 'YZH.Core.Web.csproj', '--no-build',
+                          '--urls', 'http://0.0.0.0:$PORT'],
                          stdout=log, stderr=log, stdin=subprocess.DEVNULL)
     with open('$PID_FILE', 'w') as f:
         f.write(str(p.pid))

@@ -47,6 +47,7 @@ function mapControlType(type: string): YzhFormField['type'] {
     TextBox: 'text',
     TextArea: 'textarea',
     NumberBox: 'number',
+    Decimal: 'number',
     DatePicker: 'date',
     DateTimePicker: 'datetime',
     ComboBox: 'select',
@@ -167,6 +168,7 @@ export abstract class TreeTableLogic<
           required: !c.Yxk,
           disabled: !c.Enable,
           span: ((c as any).ColSpan ?? 0) > 1 ? 24 : colSpan,
+          dictCode: c.DictCode || undefined,
           options: undefined,
           placeholder: c.Type?.includes('Picker')
             ? `请选择${c.DesName}`

@@ -1,202 +1,151 @@
-using System.Text;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
-using YZH.Core.Api.Filters;
-using YZH.Core.Stand.Helpers;
+using System.Reflection;
+using System.Text;
+using YZH.Core.Api.Services;
+using YZH.Core.Web;
+using CertPlatform.Admin.Services.StandardDirectory;
+using YZH.Core.DataBase.Services;
 
-namespace YZH.Core.Web;
+var builder = WebApplication.CreateBuilder(args);
 
-/// <summary>
-///     YZH Core Web 应用入口
-/// </summary>
-public static class Program
+// 使用 YZH Core 框架注册核心服务
+builder.UseYzhCore(options =>
 {
-    public static void Main(string[] args)
+    options.EnableSwagger = true;
+});
+
+// 注册业务服务（标准目录管理）
+builder.Services.AddScoped<CodeGeneratorService>();
+builder.Services.AddScoped<StandardDirectoryService>();
+builder.Services.AddScoped<DirectoryTemplateService>();
+builder.Services.AddScoped<OfficeConvertService>();
+
+// 注册队列相关服务（QueueManager 是单例，executor/notifier/handler 必须也是单例）
+// 这些实现内部通过 IServiceProvider.CreateScope() 获取 Scoped 服务
+builder.Services.AddSingleton<OfficeConvertTaskExecutor>();
+builder.Services.AddSingleton<CertQueueNotifier>();
+builder.Services.AddSingleton<UploadQueueCancelHandler>();
+
+// 注册 IYzhTaskExecutor 实现
+builder.Services.AddSingleton<YZH.Core.Stand.Interfaces.IYzhTaskExecutor>(sp =>
+    sp.GetRequiredService<OfficeConvertTaskExecutor>());
+
+// 注册 IYzhQueueNotifier 实现
+builder.Services.AddSingleton<YZH.Core.Stand.Interfaces.IYzhQueueNotifier>(sp =>
+    sp.GetRequiredService<CertQueueNotifier>());
+
+// 注册 IYzhQueueCancelHandler 实现
+builder.Services.AddSingleton<YZH.Core.Stand.Interfaces.IYzhQueueCancelHandler>(sp =>
+    sp.GetRequiredService<UploadQueueCancelHandler>());
+
+// 读取 JWT 配置
+var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+var jwtSecret = jwtSettings["SecretKey"] ?? "AA3627441FFA4B5DB4E64A29B53CE525";
+var jwtIssuer = jwtSettings["Issuer"] ?? "YZH.Core";
+var jwtAudience = jwtSettings["Audience"] ?? "YZH.Core.Client";
+
+// 注册 JWT 认证
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = false;
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
     {
-        var builder = WebApplication.CreateBuilder(args);
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+        ValidateIssuer = true,
+        ValidIssuer = jwtIssuer,
+        ValidateAudience = true,
+        ValidAudience = jwtAudience,
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.Zero
+    };
+});
 
-        // 配置服务
-        ConfigureServices(builder);
-
-        var app = builder.Build();
-
-        // 配置 HTTP 请求管道
-        ConfigurePipeline(app, builder.Environment);
-
-        app.Run();
-    }
-
-    /// <summary>
-    ///     配置服务注册
-    /// </summary>
-    private static void ConfigureServices(WebApplicationBuilder builder)
+// 注册 Authorization 策略
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("YZHAuthorizePolicy", policy =>
     {
-        // 注册控制器 + 全局过滤器
-        builder.Services.AddControllers(options =>
-        {
-            options.Filters.Add<GlobalExceptionFilter>();       // 全局异常过滤器
-            options.Filters.Add<ValidationFilter>();            // 输入验证过滤器
-            options.Filters.Add<PermissionFilter>();            // 权限校验过滤器
-            options.Filters.Add<YzhAuditingFilter>();           // 审计过滤器
-            options.Filters.AddService<YzhAuthFilter>();        // YZH 认证过滤器（SSO + Token 续租）
-        });
+        policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+        policy.RequireAuthenticatedUser();
+    });
+});
 
-        // YzhAuthFilter 已通过 AddService<YzhAuthFilter>() 注册，无需重复注册
+// 注册 MVC 控制器 + 全局过滤器
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<YZH.Core.Api.Filters.GlobalExceptionFilter>();
+    options.Filters.Add<YZH.Core.Api.Filters.PermissionFilter>();
+})
+.AddApplicationPart(typeof(CertPlatform.Admin.Controllers.Workflow.StandardDirectoryController).Assembly)
+.AddApplicationPart(typeof(CertPlatform.Admin.Controllers.Foundation.DirectoryTemplateController).Assembly)
+.AddApplicationPart(typeof(CertPlatform.Admin.Controllers.System.QueueMonitorController).Assembly)
+.AddJsonOptions(json =>
+{
+    // PascalCase 序列化（与实体属性名一致）
+    json.JsonSerializerOptions.PropertyNamingPolicy = null;
+    // 枚举序列化为字符串（与前端 ControlType 名称一致：TextBox/ComboBox/Switch...）
+    json.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    json.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    json.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+});
 
-        // 配置 JWT 认证
-        ConfigureJwtAuthentication(builder);
+// 注册 Swagger
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
-        // 配置 CORS
-        builder.Services.AddCors(options =>
-        {
-            options.AddPolicy("AllowAll", policy =>
-            {
-                policy.AllowAnyOrigin()
-                      .AllowAnyMethod()
-                      .AllowAnyHeader();
-            });
-        });
-
-        // 配置 Swagger
-        ConfigureSwagger(builder);
-
-        // 注册 YZH Core 框架服务（核心服务注册）
-        builder.UseYzhCore();
-
-        // 注册 Token 版本服务（SSO 挤号）
-        builder.Services.AddScoped<TokenVersionService>();
-
-        // 配置授权策略
-        builder.Services.AddAuthorization(options =>
-        {
-            options.AddPolicy("YZHAuthorizePolicy", policy =>
-            {
-                policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
-                policy.RequireAuthenticatedUser();
-            });
-        });
-    }
-
-    /// <summary>
-    ///     配置 JWT 认证
-    /// </summary>
-    private static void ConfigureJwtAuthentication(WebApplicationBuilder builder)
+// 注册 CORS
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? new[] { "http://localhost:9990", "http://localhost:9991" };
+builder.Services.AddCors(cors =>
+{
+    cors.AddDefaultPolicy(policy =>
     {
-        var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-        var secretKey = jwtSettings["SecretKey"]
-            ?? throw new InvalidOperationException("未配置 JwtSettings:SecretKey");
-        var issuer = jwtSettings["Issuer"] ?? "YZH.Core";
-        var audience = jwtSettings["Audience"] ?? "YZH.Core.Client";
+        policy.WithOrigins(corsOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
 
-        builder.Services.AddAuthentication(options =>
-        {
-            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-        })
-        .AddJwtBearer(options =>
-        {
-            options.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                ValidIssuer = issuer,
-                ValidAudience = audience,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
-                ClockSkew = TimeSpan.FromMinutes(5)
-            };
-        });
+var app = builder.Build();
 
-        builder.Services.AddAuthorization();
-    }
+// CORS 必须在 Swagger 之前：否则静态文档不返回 CORS 头，
+// 前端（9990）无法读取 swagger.json 去构建接口深链。
+app.UseCors();
 
-    /// <summary>
-    ///     配置 Swagger
-    /// </summary>
-    private static void ConfigureSwagger(WebApplicationBuilder builder)
+// 开发环境启用 Swagger
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
     {
-        builder.Services.AddSwaggerGen(c =>
-        {
-            c.SwaggerDoc("v1", new OpenApiInfo
-            {
-                Title = "YZH Core API",
-                Version = "v1",
-                Description = "YZH Core 框架 API 文档"
-            });
-
-            // 添加 JWT 认证
-            c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-            {
-                Description = "JWT 授权头，格式: Bearer {token}",
-                Name = "Authorization",
-                In = ParameterLocation.Header,
-                Type = SecuritySchemeType.ApiKey,
-                Scheme = "Bearer"
-            });
-
-            c.AddSecurityRequirement(new OpenApiSecurityRequirement
-            {
-                {
-                    new OpenApiSecurityScheme
-                    {
-                        Reference = new OpenApiReference
-                        {
-                            Type = ReferenceType.SecurityScheme,
-                            Id = "Bearer"
-                        }
-                    },
-                    Array.Empty<string>()
-                }
-            });
-        });
-    }
-
-    /// <summary>
-    ///     配置 HTTP 请求管道
-    /// </summary>
-    private static void ConfigurePipeline(WebApplication app, IWebHostEnvironment env)
-    {
-        // 全局异常处理统一使用 GlobalExceptionFilter（IExceptionFilter），无需中间件
-
-        // 启用 CORS
-        app.UseCors("AllowAll");
-
-        // 启用 HTTPS 重定向
-        app.UseHttpsRedirection();
-
-        // 启用静态文件
-        app.UseStaticFiles();
-
-        // 启用路由
-        app.UseRouting();
-
-        // 启用认证
-        app.UseAuthentication();
-
-        // 启用授权
-        app.UseAuthorization();
-
-        // 启用 Swagger（仅开发环境）
-        if (env.IsDevelopment())
-        {
-            app.UseSwagger();
-            app.UseSwaggerUI(c =>
-            {
-                c.SwaggerEndpoint("/swagger/v1/swagger.json", "YZH Core API v1");
-                c.RoutePrefix = "swagger";
-            });
-        }
-
-        // 启用控制器路由
-        app.UseEndpoints(endpoints =>
-        {
-            endpoints.MapControllers();
-        });
-    }
+        // 允许通过 #/分组/操作 定位到具体接口（接口管理页的「测试」按钮依赖此开关）
+        options.EnableDeepLinking();
+    });
 }
+
+// 认证中间件（必须在 UseAuthorization 之前）
+app.UseAuthentication();
+app.UseAuthorization();
+
+// 权限同步启动时扫描
+using (var scope = app.Services.CreateScope())
+{
+    var apiSync = scope.ServiceProvider.GetRequiredService<ApiSyncService>();
+    var scanner = scope.ServiceProvider.GetRequiredService<ApiScanner>();
+    var apis = scanner.Scan();
+    await apiSync.SyncAsync(apis);
+}
+
+app.MapControllers();
+
+app.Run();

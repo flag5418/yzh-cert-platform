@@ -74,6 +74,37 @@ public class EntityConfig
 
     /// <summary>启用/禁用字段名（默认 IsValid，前端根据此字段显示启用/禁用按钮）</summary>
     public string EnableField { get; set; } = "IsValid";
+
+    /// <summary>工具栏按钮配置（新增/删除/导出/导入/自定义）</summary>
+    public ToolbarConfig? Toolbar { get; set; }
+
+    /// <summary>行按钮配置（编辑/删除/自定义）</summary>
+    public RowButtonConfig? RowButtons { get; set; }
+
+    /// <summary>搜索字段配置</summary>
+    public List<SearchFieldConfig>? SearchFields { get; set; }
+}
+
+/// <summary>
+///     工具栏按钮配置
+/// </summary>
+public class ToolbarConfig
+{
+    public bool Add { get; set; } = true;
+    public bool Delete { get; set; } = true;
+    public bool Export { get; set; } = false;
+    public bool Import { get; set; } = false;
+    public Dictionary<string, string>? CustomButtons { get; set; }
+}
+
+/// <summary>
+///     行按钮配置
+/// </summary>
+public class RowButtonConfig
+{
+    public bool Edit { get; set; } = true;
+    public bool Delete { get; set; } = true;
+    public Dictionary<string, string>? CustomButtons { get; set; }
 }
 
 /// <summary>

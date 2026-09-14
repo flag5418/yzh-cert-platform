@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using SqlSugar;
 
 namespace YZH.Entity.Admin.Platform.Cert
 {
@@ -11,51 +12,54 @@ namespace YZH.Entity.Admin.Platform.Cert
     /// <para>模板文件 OSS 路径：/standard-directory/{OrgCode}/{StandardCode}/{PhaseCode}/{FolderPath}/{FileName}</para>
     /// </summary>
     [Table("cert_file_requirement")]
+    [SugarTable("cert_file_requirement")]
     public class FileRequirement : EntityBase
     {
         [Required, StringLength(36)]
         [Column("folder_code")]
+        [SugarColumn(ColumnName = "folder_code", Length = 36)]
         public string FolderCode { get; set; }
 
         [Required, StringLength(200)]
         [UniqueField("文件名称", WithFields = new[] { "FolderCode" })]
         [Column("file_name_template")]
+        [SugarColumn(ColumnName = "file_name_template", Length = 200)]
         public string FileNameTemplate { get; set; }
 
         [Required, StringLength(50)]
         [Column("file_type")]
+        [SugarColumn(ColumnName = "file_type", Length = 50)]
         public string FileType { get; set; }
 
         [Column("is_required")]
+        [SugarColumn(ColumnName = "is_required")]
         public bool IsRequired { get; set; } = true;
 
         [Column("max_size_mb")]
+        [SugarColumn(ColumnName = "max_size_mb")]
         public int MaxSizeMB { get; set; } = 10;
 
         [Column("description")]
+        [SugarColumn(ColumnName = "description", ColumnDataType = "text", IsNullable = true)]
         public string Description { get; set; }
 
         [Column("sort_order")]
+        [SugarColumn(ColumnName = "sort_order")]
         public int SortOrder { get; set; } = 0;
 
-        /// <summary>
-        /// 模板文件 OSS 存储路径
-        /// 格式：/standard-directory/{OrgCode}/{StandardCode}/{PhaseCode}/{FolderPath}/{FileName}
-        /// </summary>
         [StringLength(500)]
         [Column("template_storage_path")]
+        [SugarColumn(ColumnName = "template_storage_path", Length = 500, IsNullable = true)]
         public string TemplateStoragePath { get; set; }
 
-        /// <summary>
-        /// 模板文件原始名（上传时的文件名）
-        /// </summary>
         [StringLength(500)]
         [Column("template_file_name")]
+        [SugarColumn(ColumnName = "template_file_name", Length = 500, IsNullable = true)]
         public string TemplateFileName { get; set; }
 
-        /// <summary>标准编码（关联 cert_iso_standard.code）</summary>
         [StringLength(36)]
         [Column("standard_code")]
+        [SugarColumn(ColumnName = "standard_code", Length = 36, IsNullable = true)]
         public string StandardCode { get; set; }
     }
 }

@@ -81,6 +81,10 @@ public class Sys_Organization : BaseEntity, ITreeEntity
     [SugarColumn(ColumnName = "IsValid")]
     public new int IsValid { get; set; } = 1;
 
+    /// <summary>软删除标记（DB: IsDeleted）</summary>
+    [SugarColumn(ColumnName = "IsDeleted")]
+    public new bool IsDeleted { get; set; }
+
     /// <summary>备注</summary>
     [StringLength(500)]
     [Display(Name = "备注")]
