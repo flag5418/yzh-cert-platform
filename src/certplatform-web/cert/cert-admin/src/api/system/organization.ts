@@ -7,7 +7,7 @@
  * - UI 由后端 JSON Config 驱动
  */
 
-import { yzhApi, type ApiResponse, type TreeItemDto, type PagedData } from '@yzh-core'
+import { yzhApi, type TreeItemDto, type PagedData } from '@yzh-core'
 
 // ========================================================
 // 树接口 - 机构

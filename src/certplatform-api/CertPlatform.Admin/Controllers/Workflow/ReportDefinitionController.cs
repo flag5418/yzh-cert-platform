@@ -130,6 +130,11 @@ namespace CertPlatform.Admin.Controllers.Workflow
             if (string.IsNullOrEmpty(orgCode) || string.IsNullOrEmpty(standardCode) || string.IsNullOrEmpty(phaseCode))
                 return Ok(new { code = 400, message = "缺少上下文参数" });
 
+            // 安全校验：上下文参数仅允许字母数字-_，防止对象键注入（防御性双保险，
+            // MinIO 对象键无文件系统穿越风险，但防串改 bucket 内其他模块对象）
+            if (!IsValidContextSegment(orgCode) || !IsValidContextSegment(standardCode) || !IsValidContextSegment(phaseCode))
+                return Ok(new { code = 400, message = "上下文参数含非法字符" });
+
             var allowedExts = new[] { ".docx", ".xlsx", ".pdf", ".doc", ".xls" };
             var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
             if (!allowedExts.Contains(ext))
@@ -246,5 +251,12 @@ namespace CertPlatform.Admin.Controllers.Workflow
         }
 
         #endregion
+
+        /// <summary>上下文段合法性：字母/数字/连字符/下划线，长度 1-64</summary>
+        private static bool IsValidContextSegment(string value)
+        {
+            if (string.IsNullOrEmpty(value) || value.Length > 64) return false;
+            return value.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_');
+        }
     }
 }

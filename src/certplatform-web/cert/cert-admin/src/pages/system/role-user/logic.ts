@@ -15,7 +15,7 @@
 
 import { ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
-import { yzhApi } from '@yzh-core/api/client'
+import { yzhApi, type ApiResponse } from '@yzh-core/api/client'
 import {
   getCheckTree,
   checkAdd,
@@ -103,7 +103,7 @@ export class RoleUserLogic {
 
   async loadRoleTreeRoot(): Promise<RoleTreeNode[]> {
     try {
-      const res = await yzhApi.post<RoleTreeNode[]>('/api/Role/tree/root', {})
+      const res = await yzhApi.post<ApiResponse<RoleTreeNode[]>>('/api/Role/tree/root', {})
       const items = res.data ?? []
       this.roleTreeData.value = items as any
       return items as any
@@ -118,7 +118,7 @@ export class RoleUserLogic {
     resolve: (data: RoleTreeNode[]) => void,
   ): Promise<void> {
     try {
-      const res = await yzhApi.post<RoleTreeNode[]>('/api/Role/tree/children', {
+      const res = await yzhApi.post<ApiResponse<RoleTreeNode[]>>('/api/Role/tree/children', {
         ParentCode: node.data.Code,
       })
       const items = res.data ?? []

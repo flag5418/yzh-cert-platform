@@ -2,6 +2,7 @@ extern alias SharedEntities;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.Linq;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.DataBase.Services;
 using CertPlatform.Admin.Services.StandardDirectory;
@@ -161,6 +162,11 @@ public class StandardDirectoryController : ControllerBase
     [HttpGet("download")]
     public async Task<IActionResult> Download([FromQuery] string storagePath)
     {
+        // 安全校验：仅允许 standard-directory/ 前缀，禁止路径穿越（防御性双保险，
+        // MinIO 对象键虽无文件系统穿越风险，但防止越权读取 bucket 内其他模块对象）
+        if (string.IsNullOrWhiteSpace(storagePath) || !this.IsAllowedStoragePath(storagePath))
+            return BadRequest(new { code = 400, msg = "非法的文件路径" });
+
         var result = await _service.DownloadFileAsync(storagePath);
         if (result == null)
             return NotFound(new { code = 404, msg = "文件不存在" });
@@ -353,6 +359,23 @@ public class StandardDirectoryController : ControllerBase
     }
 
     #endregion
+}
+
+/// <summary>
+/// 存储路径白名单校验：必须位于 standard-directory/ 下，且不含穿越片段
+/// </summary>
+public static partial class ControllerSafetyExtensions
+{
+    private static readonly string[] AllowedPrefixes = { "standard-directory/", "/standard-directory/" };
+
+    public static bool IsAllowedStoragePath(this StandardDirectoryController _, string path)
+    {
+        var p = path.Replace('\\', '/').TrimStart('/');
+        if (!p.StartsWith("standard-directory/", StringComparison.OrdinalIgnoreCase))
+            return false;
+        // 禁止穿越片段与空段
+        return !p.Split('/').Any(seg => seg == ".." || seg == "." || seg.Length == 0);
+    }
 }
 
 /// <summary>

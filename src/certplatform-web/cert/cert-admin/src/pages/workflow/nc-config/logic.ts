@@ -17,11 +17,11 @@ import {
   toggleNCRuleActive,
   getISOClauseTree,
   type NCRule,
-  type ISOClause,
+  type ISOClauseTreeNode,
 } from '@share/api/workflow/nc-config'
 import type { TreeNode } from '@share/composables/useFileTree'
 
-export type { NCRule, ISOClause }
+export type { NCRule, ISOClauseTreeNode }
 
 // ──── 表格列定义 ────
 export const tableColumns = [
@@ -71,16 +71,16 @@ export class NCConfigLogic {
   })
 
   // ──── 条款树 ────
-  clauseTreeData = ref<ISOClause[]>([])
+  clauseTreeData = ref<ISOClauseTreeNode[]>([])
   clauseLoading = ref(false)
 
   /** 按.ParentCode 将扁平条款列表组树（按条款编号自然排序），并注入展示标签 */
-  static buildClauseTree(flat: ISOClause[]): ISOClause[] {
-    const byNumber = (a: ISOClause, b: ISOClause) =>
+  static buildClauseTree(flat: ISOClauseTreeNode[]): ISOClauseTreeNode[] {
+    const byNumber = (a: ISOClauseTreeNode, b: ISOClauseTreeNode) =>
       (a.ClauseNumber || '').localeCompare(b.ClauseNumber || '', undefined, { numeric: true })
-    const map = new Map<string, ISOClause>()
+    const map = new Map<string, ISOClauseTreeNode>()
     flat.forEach(c => map.set(c.Code!, { ...c, Label: `${c.ClauseNumber} ${c.Title}`, Children: [] }))
-    const roots: ISOClause[] = []
+    const roots: ISOClauseTreeNode[] = []
     flat.forEach(c => {
       const node = map.get(c.Code!)
       const parent = c.ParentCode ? map.get(c.ParentCode) : undefined

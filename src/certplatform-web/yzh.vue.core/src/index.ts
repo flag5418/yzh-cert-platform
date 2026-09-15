@@ -56,8 +56,23 @@ export { useTable } from './composables/useTable'
 export * from './logic'
 
 // 通用类型
-export * from './types'
+// 注：只从 contracts 导出 ApiResponse（与新架构契约一致）；
+// 旧版 types/ApiResponse（status/msg 形状）已弃用，避免 TS2308 双源歧义
+export * from './types/Page'
+export * from './types/contracts'
+export * from './types/tree'
 
 // 通用工具
-export * from './utils/treeOps'
+// 注：treeOps 与 treeUtils 均导出同名 validate，root 出口改名消歧（TS2308）
+// treeOps 独有能力（addNode/removeSubtree/moveSubtree/mergeRoots/diff/flatten）
+export {
+  addNode,
+  removeSubtree,
+  moveSubtree,
+  updateNode,
+  mergeRoots,
+  diff,
+  flatten,
+  validate as validateTreeOps,
+} from './utils/treeOps'
 export * from './utils/treeUtils'

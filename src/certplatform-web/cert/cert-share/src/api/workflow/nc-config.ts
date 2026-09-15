@@ -1,5 +1,6 @@
 import { yzhApi } from '@yzh-core/api/client'
 import type { ApiResponse } from '@yzh-core/types'
+import type { ISOClause } from '../../types/cert'
 
 export interface NCRule {
   Id?: number
@@ -18,7 +19,9 @@ export interface NCRule {
   CreateTime?: string
 }
 
-export interface ISOClause {
+// ISOClause 复用 @share/types/cert 的定义（含 ParentCode/SortOrder 等全量字段），
+// 此处补充树形展示专用字段，避免与 api/cert/iso-clause 导出同名冲突（TS2308）
+export interface ISOClauseTreeNode {
   Code: string
   ParentCode?: string
   ClauseNumber: string
@@ -26,7 +29,7 @@ export interface ISOClause {
   SortOrder?: number
   /** 展示标签（ClauseNumber + Title），组树时注入 */
   Label?: string
-  Children?: ISOClause[]
+  Children?: ISOClauseTreeNode[]
 }
 
 // ──── 规则 CRUD ────
@@ -70,10 +73,10 @@ export function copyNCRule(sourceCode: string) {
 // ──── 条款树（由 ISOClauseController 提供） ────
 
 /** 获取条款树（后端返回扁平列表，由前端按 ParentCode 组树） */
-export async function getISOClauseTree(standardCode: string): Promise<ISOClause[]> {
+export async function getISOClauseTree(standardCode: string): Promise<ISOClauseTreeNode[]> {
   const res = await yzhApi.get<ApiResponse<ISOClause[]>>(
     '/api/Foundation/ISOClause/getTree',
     { standardCode },
   )
-  return res?.data ?? []
+  return (res?.data ?? []) as ISOClauseTreeNode[]
 }

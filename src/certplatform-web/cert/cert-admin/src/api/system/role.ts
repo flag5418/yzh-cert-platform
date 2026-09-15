@@ -1,5 +1,6 @@
-import { yzhApi } from '@yzh-core/api/client'
-import type { Page, PageParams } from '@yzh-core/types'
+import { yzhApi, type ApiResponse } from '@yzh-core/api/client'
+import type { PageParams } from '@yzh-core/types'
+import type { PagedData } from '@yzh-core/types/contracts'
 
 export interface SysRole {
   Code: string
@@ -11,12 +12,13 @@ export interface SysRole {
   CreateDate?: string
 }
 
-export async function getRolePage(params: PageParams): Promise<Page<SysRole>> {
-  return yzhApi.post<Page<SysRole>>('/api/System/Role/filter', params)
+export async function getRolePage(params: PageParams): Promise<PagedData<SysRole>> {
+  const res = await yzhApi.post<ApiResponse<PagedData<SysRole>>>('/api/System/Role/filter', params)
+  return res.data ?? { Items: [], TotalCount: 0 }
 }
 
 export async function getRoleOptions(): Promise<Array<{ label: string; value: string }>> {
-  const res = await yzhApi.post<Page<SysRole>>('/api/System/Role/filter', {
+  const res = await yzhApi.post<ApiResponse<PagedData<SysRole>>>('/api/System/Role/filter', {
     Page: 1,
     PageSize: 1000,
   })
