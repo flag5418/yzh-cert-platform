@@ -1,78 +1,97 @@
-using System;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+using SqlSugar;
 
-namespace YZH.Entity.Admin.Platform.Rpt
+namespace CertPlatform.Shared.Entities.Rpt
 {
     /// <summary>
-    /// ReportSection 报告章节
-    /// <para>表名：rpt_report_section（列名为 snake_case，需覆盖审计字段）</para>
+    /// 报告章节
+    /// <para>表名：rpt_report_section</para>
+    /// <para>不继承 BaseEntity，因为 Id 是 bigint 自增且 DB 审计字段命名不同</para>
     /// </summary>
-    [Table("rpt_report_section")]
-    public class ReportSection : EntityBase
+    [SugarTable("rpt_report_section")]
+    public class ReportSection
     {
-        // ===== snake_case 审计字段覆盖 =====
-        [Column("create_id")] public new int? CreateID { get; set; }
-        [Column("creator")] [MaxLength(50)] public new string Creator { get; set; }
-        [Column("create_date")] public new DateTime? CreateDate { get; set; } = DateTime.Now;
-        [Column("modify_id")] public new int? ModifyID { get; set; }
-        [Column("modifier")] [MaxLength(50)] public new string Modifier { get; set; }
-        [Column("modify_date")] public new DateTime? ModifyDate { get; set; }
-        [Column("delete_id")] public new int? DeleteID { get; set; }
-        [Column("deleter")] [MaxLength(50)] public new string Deleter { get; set; }
-        [Column("delete_time")] public new DateTime? DeleteTime { get; set; }
-        [Column("code")] public new string Code { get; set; } = Guid.NewGuid().ToString("N");
-        [Column("status")] public new string Status { get; set; } = "active";
-        [Column("enable")] public new bool Enable { get; set; } = true;
-        [Column("sort")] public new int Sort { get; set; }
+        [SugarColumn(ColumnName = "Id", IsPrimaryKey = true, IsIdentity = true)]
+        public long Id { get; set; }
 
-        [StringLength(50)]
-        [Column("org_code")]
-        public string OrgCode { get; set; }
+        [SugarColumn(ColumnName = "Code", Length = 36)]
+        public string? Code { get; set; }
 
-        [Required, StringLength(36)]
-        [Column("report_code")]
-        public string ReportCode { get; set; }
+        [SugarColumn(ColumnName = "OrgCode", Length = 50, IsNullable = true)]
+        public string? OrgCode { get; set; }
 
-        [StringLength(36)]
-        [Column("clause_code")]
-        public string ClauseCode { get; set; }
+        [SugarColumn(ColumnName = "ReportCode", Length = 36)]
+        public string? ReportCode { get; set; }
 
-        [StringLength(36)]
-        [Column("workflow_code")]
-        public string WorkflowCode { get; set; }
+        [SugarColumn(ColumnName = "SectionName", Length = 200)]
+        public string? SectionName { get; set; }
 
-        /// <summary>章节工作流 DAG JSON（图形化设计器导出的 workflow_config）</summary>
-        [Column("workflow_config")]
-        public string WorkflowConfig { get; set; }
+        [SugarColumn(ColumnName = "SectionNameEn", Length = 200, IsNullable = true)]
+        public string? SectionNameEn { get; set; }
 
-        /// <summary>章节工作流布局 JSON（节点坐标）</summary>
-        [Column("layout_json")]
-        public string LayoutJson { get; set; }
+        [SugarColumn(ColumnName = "SectionContent", ColumnDataType = "text", IsNullable = true)]
+        public string? Content { get; set; }
 
-        [Required, StringLength(200)]
-        [UniqueField("章节名称", WithFields = new[] { "ReportCode" })]
-        [Column("section_name")]
-        public string SectionName { get; set; }
-
-        [StringLength(200)]
-        [Column("section_name_en")]
-        public string SectionNameEn { get; set; }
-
-        [Column("section_json")]
-        public string SectionJson { get; set; }
-
-        [StringLength(500)]
-        [Column("remark")]
-        public new string Remark { get; set; }  // 章节备注（覆盖基类）
-
-        [Column("is_active")]
-        public bool IsActive { get; set; } = true;
-
-        [Column("content")]
-        public string Content { get; set; }
-
-        [Column("sort_order")]
+        [SugarColumn(ColumnName = "SortOrder")]
         public int SortOrder { get; set; } = 0;
+
+        [SugarColumn(ColumnName = "IsActive")]
+        public int IsActive { get; set; } = 1;
+
+        [SugarColumn(ColumnName = "WorkflowCode", Length = 36, IsNullable = true)]
+        public string? WorkflowCode { get; set; }
+
+        [SugarColumn(ColumnName = "WorkflowConfig", ColumnDataType = "text", IsNullable = true)]
+        public string? WorkflowConfig { get; set; }
+
+        [SugarColumn(ColumnName = "LayoutJson", ColumnDataType = "text", IsNullable = true)]
+        public string? LayoutJson { get; set; }
+
+        [SugarColumn(ColumnName = "ClauseCode", Length = 36, IsNullable = true)]
+        public string? ClauseCode { get; set; }
+
+        [SugarColumn(ColumnName = "SectionJson", ColumnDataType = "text", IsNullable = true)]
+        public string? SectionJson { get; set; }
+
+        [SugarColumn(ColumnName = "Remark", Length = 500, IsNullable = true)]
+        public string? Remark { get; set; }
+
+        [SugarColumn(ColumnName = "creator", Length = 50, IsNullable = true)]
+        public string? Creator { get; set; }
+
+        [SugarColumn(ColumnName = "create_by", Length = 50, IsNullable = true)]
+        public string? CreateBy { get; set; }
+
+        [SugarColumn(ColumnName = "create_date", IsNullable = true)]
+        public DateTime? CreateDate { get; set; }
+
+        [SugarColumn(ColumnName = "modifier", Length = 50, IsNullable = true)]
+        public string? Modifier { get; set; }
+
+        [SugarColumn(ColumnName = "update_by", Length = 50, IsNullable = true)]
+        public string? UpdateBy { get; set; }
+
+        [SugarColumn(ColumnName = "modify_date", IsNullable = true)]
+        public DateTime? ModifyDate { get; set; }
+
+        [SugarColumn(ColumnName = "deleter", Length = 50, IsNullable = true)]
+        public string? Deleter { get; set; }
+
+        [SugarColumn(ColumnName = "delete_by", Length = 50, IsNullable = true)]
+        public string? DeleteBy { get; set; }
+
+        [SugarColumn(ColumnName = "delete_time", IsNullable = true)]
+        public DateTime? DeleteTime { get; set; }
+
+        [SugarColumn(ColumnName = "IsDeleted")]
+        public bool IsDeleted { get; set; } = false;
+
+        [SugarColumn(ColumnName = "status", Length = 50, IsNullable = true)]
+        public string? Status { get; set; }
+
+        [SugarColumn(ColumnName = "enable", IsNullable = true)]
+        public bool? Enable { get; set; }
+
+        [SugarColumn(ColumnName = "Sort")]
+        public int Sort { get; set; } = 0;
     }
 }

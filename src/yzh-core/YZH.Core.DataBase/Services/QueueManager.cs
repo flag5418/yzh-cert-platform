@@ -640,16 +640,26 @@ public class QueueManager
         using var scope = _serviceProvider.CreateScope();
         var orm = scope.ServiceProvider.GetRequiredService<IDbOrm>();
 
-        var result = await orm.GetPageAsync<YzhQueue>(new SqlPageOptions
+        var allResult = await orm.GetListAsync<YzhQueue>();
+        var query = (allResult.Data ?? new List<YzhQueue>()).AsEnumerable();
+
+        if (!string.IsNullOrEmpty(type))
+            query = query.Where(q => q.QueueType == type);
+        if (!string.IsNullOrEmpty(status))
         {
-            TableName = "yzh_queue",
-            PageNumber = page,
-            PageSize = rows,
-            SortField = "create_date",
-            SortDirection = "DESC"
-        });
-        var list = result.Data.items;
-        var total = result.Data.total;
+            if (status == "executing")
+                query = query.Where(q => q.Status == "pending" || q.Status == "running");
+            else
+                query = query.Where(q => q.Status == status);
+        }
+        if (startTime.HasValue)
+            query = query.Where(q => q.CreateDate >= startTime.Value);
+        if (endTime.HasValue)
+            query = query.Where(q => q.CreateDate <= endTime.Value);
+
+        var total = query.Count();
+        var list = query.OrderByDescending(q => q.CreateDate)
+            .Skip((page - 1) * rows).Take(rows).ToList();
 
         return new
         {
@@ -689,7 +699,71 @@ public class QueueManager
         var tasksResult = await orm.GetListAsync<YzhQueueTask>(j => j.QueueCode == queueCode);
         var locksResult = await orm.GetListAsync<YzhQueueResourceLock>(r => r.QueueCode == queueCode);
 
-        return new { queue, tasks = tasksResult.Data, locks = locksResult.Data };
+        return new
+        {
+            queue = new
+            {
+                queueCode = queue.QueueCode,
+                queueType = queue.QueueType,
+                queueName = queue.QueueName,
+                scopeKey = queue.ScopeKey,
+                status = queue.Status,
+                totalCount = queue.TotalCount,
+                completedCount = queue.CompletedCount,
+                failedCount = queue.FailedCount,
+                processingCount = queue.ProcessingCount,
+                pendingCount = queue.PendingCount,
+                cancelledCount = queue.CancelledCount,
+                progress = queue.Progress,
+                creator = queue.Creator,
+                sourceType = queue.SourceType,
+                sourceId = queue.SourceId,
+                startTime = queue.StartTime?.ToString("yyyy-MM-dd HH:mm:ss"),
+                endTime = queue.EndTime?.ToString("yyyy-MM-dd HH:mm:ss"),
+                createDate = queue.CreateDate?.ToString("yyyy-MM-dd HH:mm:ss")
+            },
+            tasks = (tasksResult.Data ?? new List<YzhQueueTask>()).Select((j, i) =>
+            {
+                string? fileCode = null, fileName = null, convertType = null;
+                if (!string.IsNullOrEmpty(j.Payload))
+                {
+                    try
+                    {
+                        var doc = System.Text.Json.JsonDocument.Parse(j.Payload);
+                        if (doc.RootElement.TryGetProperty("fileCode", out var fc)) fileCode = fc.GetString();
+                        if (doc.RootElement.TryGetProperty("fileName", out var fn)) fileName = fn.GetString();
+                        if (doc.RootElement.TryGetProperty("convertType", out var ct)) convertType = ct.GetString();
+                    }
+                    catch { }
+                }
+                return new
+                {
+                    id = j.Id,
+                    taskNo = i + 1,
+                    taskType = j.TaskType,
+                    fileCode,
+                    fileName,
+                    convertType,
+                    status = j.Status,
+                    retryCount = j.RetryCount,
+                    errorType = j.ErrorType,
+                    errorMessage = j.ErrorMessage,
+                    processTime = j.ProcessTime?.ToString("yyyy-MM-dd HH:mm:ss"),
+                    completeTime = j.CompleteTime?.ToString("yyyy-MM-dd HH:mm:ss")
+                };
+            }).ToList(),
+            locks = (locksResult.Data ?? new List<YzhQueueResourceLock>()).Select(r => new
+            {
+                code = r.Code,
+                resourceTable = r.ResourceTable,
+                resourceCode = r.ResourceCode,
+                resourceName = r.ResourceName,
+                taskNo = r.TaskNo,
+                status = r.Status,
+                createTime = r.CreateTime?.ToString("yyyy-MM-dd HH:mm:ss"),
+                releaseTime = r.ReleaseTime?.ToString("yyyy-MM-dd HH:mm:ss")
+            }).ToList()
+        };
     }
 
     #endregion

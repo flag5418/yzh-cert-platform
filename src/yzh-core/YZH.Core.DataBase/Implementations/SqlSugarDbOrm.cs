@@ -85,14 +85,14 @@ public class SqlSugarDbOrm : IDbOrm
             var query = _client.Queryable<T>(tableName);
 
             // 软删除过滤（反引号包裹列名，避免 SQL 解析问题）
-            var hasIsDeleted = HasProperty<T>("IsDeleted");
-            if (hasIsDeleted)
-                query = query.Where("`IsDeleted` = 0");
+            var isDeletedCol = GetColumnName<T>("IsDeleted");
+            if (isDeletedCol != null)
+                query = query.Where($"`{isDeletedCol}` = 0");
 
             // 有效标志过滤（反引号包裹列名，避免 SQL 解析问题）
-            var hasIsValid = HasProperty<T>("IsValid");
-            if (hasIsValid)
-                query = query.Where("`IsValid` = 1");
+            var isValidCol = GetColumnName<T>("IsValid");
+            if (isValidCol != null)
+                query = query.Where($"`{isValidCol}` = 1");
 
             // 解析 Conditions
             if (options.Conditions?.Length > 0)
@@ -171,8 +171,8 @@ public class SqlSugarDbOrm : IDbOrm
     {
         try
         {
-            await _client.Insertable(entity).ExecuteCommandAsync();
-            return Result<T>.Ok(entity);
+            var result = await _client.Insertable(entity).ExecuteReturnEntityAsync();
+            return Result<T>.Ok(result);
         }
         catch (Exception ex)
         {
@@ -492,6 +492,26 @@ public class SqlSugarDbOrm : IDbOrm
         if (sugarColumn != null && sugarColumn.IsIgnore) return false;
 
         return true;
+    }
+
+    /// <summary>
+    ///     获取属性对应的数据库列名
+    ///     优先使用 [SugarColumn(ColumnName)] 映射，否则回退到属性名
+    ///     如果属性不存在或标记了 IsIgnore，返回 null
+    /// </summary>
+    private static string? GetColumnName<T>(string propertyName)
+    {
+        var prop = typeof(T).GetProperty(propertyName);
+        if (prop == null) return null;
+
+        var sugarColumn = prop.GetCustomAttribute<SugarColumn>();
+        if (sugarColumn != null)
+        {
+            if (sugarColumn.IsIgnore) return null;
+            if (!string.IsNullOrEmpty(sugarColumn.ColumnName)) return sugarColumn.ColumnName;
+        }
+
+        return propertyName;
     }
 
     /// <summary>

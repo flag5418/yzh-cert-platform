@@ -6,6 +6,7 @@ using YZH.Core.Api.Services;
 using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Config;
+using YZH.Core.Stand.Models.Result;
 using YZH.Core.Stand.Interfaces;
 
 namespace CertPlatform.Admin.Controllers.Foundation;
@@ -91,5 +92,21 @@ public class ISOClauseController : YzhControllerBase<SharedEntities::YZH.Entity.
             return (false, $"该标准下条款编号【{entity.ClauseNumber}】已存在");
 
         return (true, null);
+    }
+
+    /// <summary>获取条款树（按标准筛选，返回扁平列表由前端构建树）</summary>
+    [HttpGet("getTree")]
+    public async Task<IActionResult> GetTree([FromQuery] string standardCode)
+    {
+        var result = await Entity.GetListAsync(c =>
+            c.StandardCode == standardCode &&
+            !c.IsDeleted &&
+            c.IsValid == 1);
+
+        if (result.Error != null)
+            return BadRequest(ApiResponse.Fail(result.Error));
+
+        var list = result.Data ?? new List<SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOClause>();
+        return Ok(ApiResponse<List<SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOClause>>.Ok(list));
     }
 }

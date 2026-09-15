@@ -50,6 +50,7 @@ public class DbContextFactory : IDbContextFactory
             ConnectionString = conn.ConnectionString,
             DbType = dbType,
             IsAutoCloseConnection = true,
+            InitKeyType = InitKeyType.Attribute,
             ConfigureExternalServices = new ConfigureExternalServices
             {
                 EntityService = (property, columnInfo) =>

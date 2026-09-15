@@ -3,6 +3,7 @@ extern alias SharedEntities;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -75,6 +76,11 @@ public class StandardDirectoryService
         var orgStandards = (await _db.GetListAsync<CertOrgStandard>()).Data ?? new();
         var orgStages = (await _db.GetListAsync<CertOrgStage>()).Data ?? new();
 
+        // PhaseDefinition.Code 被 BaseEntity.IsIgnore 吞掉，用 raw SQL 读取
+        var phaseDefRows = await _db.SqlQueryAsync<PhaseDefDto>(
+            "SELECT PhaseCode, Code FROM cert_phase_definition WHERE IsValid=1 AND IsDeleted=0");
+        var phaseDefMap = phaseDefRows.Data?.ToDictionary(x => x.PhaseCode, x => x.Code) ?? new();
+
         var tree = new List<object>();
 
         foreach (var org in orgs)
@@ -121,6 +127,9 @@ public class StandardDirectoryService
 
                 foreach (var stage in linkedStages)
                 {
+                    // 尝试匹配 cert_phase_definition.Code（报告模板外键）
+                    phaseDefMap.TryGetValue(stage.StageCode, out var phaseDefCode);
+
                     var phaseNode = new Dictionary<string, object>
                     {
                         ["id"] = $"{org.Code}|{std.StandardCode}|{stage.StageCode}",
@@ -130,7 +139,8 @@ public class StandardDirectoryService
                         ["stdCode"] = std.Code,
                         ["standardCode"] = std.StandardCode,
                         ["phaseCode"] = stage.StageCode,
-                        ["phaseName"] = stage.StageName
+                        ["phaseName"] = stage.StageName,
+                        ["phaseDefinitionCode"] = phaseDefCode ?? ""
                     };
                     stdChildren.Add(phaseNode);
                 }
@@ -201,6 +211,15 @@ public class StandardDirectoryService
             root.Children = GetChildFolders(folders, root.FolderCode);
 
         return rootFolders;
+    }
+
+    /// <summary>
+    /// 获取所有文件夹（扁平列表，前端按 ParentCode 过滤实现面包屑导航）
+    /// </summary>
+    public async Task<List<StandardDirectoryFolder>> GetFoldersFlatAsync(string directoryCode)
+    {
+        return (await _db.GetListAsync<StandardDirectoryFolder>(
+            x => x.DirectoryCode == directoryCode && x.Enable == true && x.IsValid == 1)).Data ?? new();
     }
 
     private List<StandardDirectoryFolder> GetChildFolders(
@@ -732,14 +751,15 @@ public class StandardDirectoryService
                 }
             }
 
-            // 更新状态
-            file.UploadStatus = "uploaded";
-            file.FileSize = fileSize; // 以服务端实际大小为准
-            await _db.UpdateAsync(file);
+            // 更新文件状态（绕过全局过滤：新上传文件 IsValid=0）
+            await _db.SqlExecuteAsync(
+                "UPDATE cert_standard_directory_file SET UploadStatus='uploaded', FileSize=@fileSize WHERE FileCode=@fileCode AND TaskId=@taskId AND IsDeleted=0",
+                new { fileSize, fileCode, taskId });
 
             // 更新任务计数
-            task.SuccessCount++;
-            await _db.UpdateAsync(task);
+            await _db.SqlExecuteAsync(
+                "UPDATE cert_upload_task SET SuccessCount=SuccessCount+1 WHERE TaskId=@taskId AND IsDeleted=0",
+                new { taskId });
 
             return (true, null);
         }
@@ -764,7 +784,7 @@ public class StandardDirectoryService
         var queueLockErr = await GetQueueLockErrorAsync(task.DirectoryCode);
         if (queueLockErr != null) return (false, queueLockErr, null);
 
-        // 检查所有文件是否已上传（绕过全局过滤：文件 IsValid=0 处于上传中）
+        // 检查所有文件是否已上传
         var allFiles = (await _db.SqlQueryAsync<StandardDirectoryFile>(
             "SELECT * FROM cert_standard_directory_file WHERE TaskId=@taskId AND IsDeleted=0",
             new { taskId })).Data ?? new();
@@ -772,40 +792,32 @@ public class StandardDirectoryService
         if (pendingCount > 0)
             return (false, $"还有 {pendingCount} 个文件未上传完成", null);
 
-        // 激活文件夹（绕过全局过滤）
-        var folders = (await _db.SqlQueryAsync<StandardDirectoryFolder>(
-            "SELECT * FROM cert_standard_directory_folder WHERE TaskId=@taskId AND IsValid=0 AND IsDeleted=0",
-            new { taskId })).Data ?? new();
-        foreach (var f in folders)
-        {
-            f.IsValid = 1;
-            await _db.UpdateAsync(f);
-        }
-
-        // 先找出需要转换的 doc/xls 文件（在激活前，避免内存引用污染）
+        // 分类：普通文件 vs 需要转换的 doc/xls 文件
         var convertibleFiles = allFiles.Where(x =>
             x.UploadStatus == "uploaded" &&
             (x.FileType == "doc" || x.FileType == "xls")).ToList();
-        var convertibleCodes = new HashSet<string>(convertibleFiles.Select(f => f.FileCode));
+        var convertibleCodes = convertibleFiles.Select(f => $"'{f.FileCode}'");
+        var convertibleInClause = convertibleCodes.Any() ? string.Join(",", convertibleCodes) : "''";
 
-        // 激活文件（非转换文件：IsValid=1, UploadStatus=active；转换文件：保持 IsValid=0）
-        foreach (var f in allFiles.Where(x => x.UploadStatus == "uploaded"))
+        // 全部文件激活：IsValid=0→1, UploadStatus→active, TaskId→null
+        await _db.SqlExecuteAsync(
+            $"UPDATE cert_standard_directory_file SET IsValid=1, UploadStatus='active', TaskId=NULL WHERE TaskId=@taskId AND IsDeleted=0",
+            new { taskId });
+
+        // 需要转换的文件额外设置 ConvertStatus=pending（保持 IsValid=0 等待转换）
+        if (convertibleFiles.Count > 0)
         {
-            if (convertibleCodes.Contains(f.FileCode))
-            {
-                // 转换文件：保持 IsValid=0，稍后设置 ConvertStatus
-                f.UploadStatus = "uploaded"; // 保持不变
-            }
-            else
-            {
-                // 普通文件：直接激活
-                f.IsValid = 1;
-                f.UploadStatus = "active";
-            }
-            f.TaskId = null;
-            await _db.UpdateAsync(f);
+            await _db.SqlExecuteAsync(
+                $"UPDATE cert_standard_directory_file SET IsValid=0, UploadStatus='uploaded', ConvertStatus='pending', TaskId=NULL WHERE TaskId=@taskId AND FileCode IN ({convertibleInClause}) AND IsDeleted=0",
+                new { taskId });
         }
 
+        // 激活文件夹：IsValid=0→1, 清除 TaskId
+        await _db.SqlExecuteAsync(
+            "UPDATE cert_standard_directory_folder SET IsValid=1, TaskId=NULL WHERE TaskId=@taskId AND IsDeleted=0",
+            new { taskId });
+
+        // 创建转换队列（如有可转换文件）
         string? convertQueueCode = null;
         if (convertibleFiles.Count > 0)
         {
@@ -842,15 +854,6 @@ public class StandardDirectoryService
             if (ok && queueCode != null)
             {
                 convertQueueCode = queueCode;
-                // 转换中的文件重新隐藏
-                foreach (var f in convertibleFiles)
-                {
-                    f.IsValid = 0;
-                    f.ConvertStatus = "pending";
-                    f.ConvertMessage = null;
-                    f.TaskId = null;
-                    await _db.UpdateAsync(f);
-                }
             }
         }
 
@@ -867,7 +870,7 @@ public class StandardDirectoryService
     /// </summary>
     public async Task<(bool ok, string? error, int deleted, int restored)> UploadCancelAsync(string taskId)
     {
-        // 取消关联的转换队列
+        // 取消关联的转换队列（yzh_queue 无 IsValid 过滤，GetListAsync 正常）
         var activeQueues = (await _db.GetListAsync<YzhQueue>(
             x => x.SourceType == "upload_task" && x.SourceId == taskId
                 && x.Status != "completed" && x.Status != "failed" && x.Status != "cancelled")).Data ?? new();
@@ -876,8 +879,10 @@ public class StandardDirectoryService
             await _queueManager.CancelQueueAsync(q.QueueCode);
         }
 
-        var files = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.TaskId == taskId)).Data ?? new();
+        // 查询关联文件（绕过全局过滤：新上传文件 IsValid=0）
+        var files = (await _db.SqlQueryAsync<StandardDirectoryFile>(
+            "SELECT * FROM cert_standard_directory_file WHERE TaskId=@taskId AND IsDeleted=0",
+            new { taskId })).Data ?? new();
         int deletedCount = 0, restoredCount = 0;
         var replaceMarker = $"[upload-replace:{taskId}]";
 
@@ -897,39 +902,41 @@ public class StandardDirectoryService
 
             if ((file.Remark ?? "").Contains(replaceMarker))
             {
-                // 替换模式：恢复为有效状态（内容已覆盖，无法回退）
-                file.UploadStatus = "active";
-                file.TaskId = null;
-                file.ConvertStatus = null;
-                file.ConvertedStoragePath = null;
-                file.ConvertMessage = null;
-                file.Remark = (file.Remark ?? "").Replace(replaceMarker, "").Trim();
-                await _db.UpdateAsync(file);
+                // 替换模式：恢复为有效状态
+                await _db.SqlExecuteAsync(
+                    "UPDATE cert_standard_directory_file SET IsValid=1, UploadStatus='active', TaskId=NULL, ConvertStatus=NULL, ConvertedStoragePath=NULL, ConvertMessage=NULL, Remark=REPLACE(REMARK,@marker,'') WHERE Code=@code",
+                    new { marker = replaceMarker, code = file.Code });
                 restoredCount++;
             }
             else
             {
-                // 创建模式：物理删除
-                await _db.DeleteByCodeAsync<StandardDirectoryFile>(file.Code);
+                // 创建模式：物理删除（IsValid=0 记录需用原生 SQL 删除）
+                await _db.SqlExecuteAsync(
+                    "DELETE FROM cert_standard_directory_file WHERE Code=@code",
+                    new { code = file.Code });
                 deletedCount++;
             }
         }
 
         // 删除此任务创建的空文件夹
-        var taskFolders = (await _db.GetListAsync<StandardDirectoryFolder>(
-            x => x.TaskId == taskId)).Data ?? new();
+        var taskFolders = (await _db.SqlQueryAsync<StandardDirectoryFolder>(
+            "SELECT * FROM cert_standard_directory_folder WHERE TaskId=@taskId AND IsDeleted=0",
+            new { taskId })).Data ?? new();
         foreach (var folder in taskFolders)
         {
-            var hasFiles = (await _db.CountAsync<StandardDirectoryFile>(
-                x => x.FolderCode == folder.FolderCode && x.Enable == true)).Data > 0;
-            if (!hasFiles)
-                await _db.DeleteByCodeAsync<StandardDirectoryFolder>(folder.Code);
+            var countResult = await _db.SqlScalarAsync<long>(
+                "SELECT COUNT(*) FROM cert_standard_directory_file WHERE FolderCode=@folderCode AND IsValid=1 AND IsDeleted=0",
+                new { folderCode = folder.FolderCode });
+            if (countResult.Data == 0)
+                await _db.SqlExecuteAsync(
+                    "DELETE FROM cert_standard_directory_folder WHERE Code=@code",
+                    new { code = folder.Code });
         }
 
         // 删除上传任务记录
-        var task = (await _db.GetOneAsync<UploadTask>(x => x.TaskId == taskId)).Data;
-        if (task != null)
-            await _db.DeleteByCodeAsync<UploadTask>(task.Code);
+        await _db.SqlExecuteAsync(
+            "DELETE FROM cert_upload_task WHERE TaskId=@taskId",
+            new { taskId });
 
         return (true, null, deletedCount, restoredCount);
     }
@@ -939,11 +946,14 @@ public class StandardDirectoryService
     /// </summary>
     public async Task<UploadStatusResponse?> GetUploadStatusAsync(string taskId)
     {
-        var task = (await _db.GetOneAsync<UploadTask>(x => x.TaskId == taskId)).Data;
+        var task = (await _db.QueryFirstOrDefaultAsync<UploadTask>(
+            "SELECT * FROM cert_upload_task WHERE TaskId=@taskId AND IsDeleted=0",
+            new { taskId })).Data;
         if (task == null) return null;
 
-        var files = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.TaskId == taskId)).Data ?? new();
+        var files = (await _db.SqlQueryAsync<StandardDirectoryFile>(
+            "SELECT FileCode, FileName, UploadStatus FROM cert_standard_directory_file WHERE TaskId=@taskId AND IsDeleted=0",
+            new { taskId })).Data ?? new();
 
         return new UploadStatusResponse
         {
@@ -1070,6 +1080,645 @@ public class StandardDirectoryService
     }
 
     #endregion
+
+    #region 阶段文件树（文档提取规则页面）
+
+    /// <summary>
+    /// 获取阶段的完整文件树（含规则属性）
+    /// 用于文档提取规则管理页面，单次返回所有层级的文件夹和文件
+    /// </summary>
+    public async Task<StageFileTreeResponse> GetStageFileTreeAsync(string directoryCode)
+    {
+        // 1. 查询所有启用的文件夹
+        var allFolders = (await _db.GetListAsync<StandardDirectoryFolder>(
+            x => x.DirectoryCode == directoryCode && x.Enable == true && x.IsValid == 1)).Data ?? new();
+
+        // 2. 查询所有启用的文件
+        var allFiles = (await _db.GetListAsync<StandardDirectoryFile>(
+            x => x.DirectoryCode == directoryCode && x.Enable == true && x.IsValid == 1)).Data ?? new();
+
+        // 3. 规则状态权威来源：cert_doc_extraction_rule（按 StandardFileCode 关联）
+        var ruleStatusMap = new Dictionary<string, string>();
+        try
+        {
+            var stageFileCodes = allFiles.Select(f => f.FileCode).ToList();
+            if (stageFileCodes.Count > 0)
+            {
+                var rules = (await _db.SqlQueryAsync<dynamic>(
+                    "SELECT StandardFileCode, Status FROM cert_doc_extraction_rule WHERE StandardFileCode IN @codes",
+                    new { codes = stageFileCodes })).Data ?? new List<dynamic>();
+                foreach (var r in rules)
+                {
+                    string code = r.StandardFileCode;
+                    string status = r.Status;
+                    if (!string.IsNullOrEmpty(code))
+                        ruleStatusMap[code] = status; // 取最后一条（最新）
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[GetStageFileTree] 规则状态查询失败，降级为 none");
+        }
+
+        // 4. 构建根级文件夹树
+        var rootFolders = allFolders
+            .Where(x => string.IsNullOrEmpty(x.ParentCode))
+            .OrderBy(x => x.SortOrder).ToList();
+
+        var folderNodes = new List<StageFolderNode>();
+        int totalFolders = 0, totalFiles = 0, configuredFiles = 0;
+
+        foreach (var root in rootFolders)
+        {
+            var node = BuildStageFolderNode(root, allFolders, allFiles, ruleStatusMap,
+                ref totalFolders, ref totalFiles, ref configuredFiles);
+            folderNodes.Add(node);
+        }
+
+        // 5. 根目录级孤儿文件（FolderCode 不在任何文件夹中）
+        var folderCodeSet = new HashSet<string>(allFolders.Select(f => f.FolderCode));
+        var rootOrphanFiles = allFiles
+            .Where(f => !folderCodeSet.Contains(f.FolderCode)).ToList();
+
+        if (rootOrphanFiles.Count > 0)
+        {
+            var rootNode = new StageFolderNode
+            {
+                Code = directoryCode,
+                Name = "根目录",
+                ParentCode = string.Empty,
+                Depth = 0,
+                SortOrder = 0
+            };
+            foreach (var file in rootOrphanFiles)
+            {
+                totalFiles++;
+                var fileRuleStatus = ruleStatusMap.TryGetValue(file.FileCode, out var rs) ? rs : "none";
+                bool hasRule = fileRuleStatus == "configured" || fileRuleStatus == "failed";
+                if (hasRule) configuredFiles++;
+
+                rootNode.Files.Add(new StageFileNode
+                {
+                    FileCode = file.FileCode,
+                    FileName = file.FileName,
+                    FolderCode = file.FolderCode,
+                    StoragePath = file.StoragePath,
+                    ConvertedStoragePath = file.ConvertedStoragePath,
+                    ConvertStatus = file.ConvertStatus,
+                    ConvertMessage = file.ConvertMessage,
+                    FileSize = file.FileSize,
+                    MimeType = file.FileType,
+                    RuleStatus = fileRuleStatus,
+                    ExtractFieldCount = 0,
+                    TableDefCount = 0
+                });
+            }
+            folderNodes.Insert(0, rootNode);
+        }
+
+        return new StageFileTreeResponse
+        {
+            DirectoryCode = directoryCode,
+            Folders = folderNodes,
+            Statistics = new StageFileStatistics
+            {
+                TotalFolders = totalFolders,
+                TotalFiles = totalFiles,
+                ConfiguredFiles = configuredFiles
+            }
+        };
+    }
+
+    private StageFolderNode BuildStageFolderNode(
+        StandardDirectoryFolder folder,
+        List<StandardDirectoryFolder> allFolders,
+        List<StandardDirectoryFile> allFiles,
+        Dictionary<string, string> ruleStatusMap,
+        ref int totalFolders, ref int totalFiles, ref int configuredFiles)
+    {
+        totalFolders++;
+        var node = new StageFolderNode
+        {
+            Code = folder.FolderCode ?? "",
+            Name = folder.FolderName ?? "",
+            ParentCode = folder.ParentCode ?? "",
+            Depth = folder.Depth,
+            SortOrder = folder.SortOrder
+        };
+
+        // 子文件夹
+        var children = allFolders
+            .Where(x => x.ParentCode == folder.FolderCode)
+            .OrderBy(x => x.SortOrder).ToList();
+        foreach (var child in children)
+            node.Children.Add(BuildStageFolderNode(child, allFolders, allFiles, ruleStatusMap,
+                ref totalFolders, ref totalFiles, ref configuredFiles));
+
+        // 文件
+        var files = allFiles
+            .Where(x => x.FolderCode == folder.FolderCode)
+            .OrderBy(x => x.SortOrder).ToList();
+        foreach (var file in files)
+        {
+            totalFiles++;
+            var fileRuleStatus = ruleStatusMap.TryGetValue(file.FileCode, out var rs) ? rs : "none";
+            bool hasRule = fileRuleStatus == "configured" || fileRuleStatus == "failed";
+            if (hasRule) configuredFiles++;
+
+            node.Files.Add(new StageFileNode
+            {
+                FileCode = file.FileCode,
+                FileName = file.FileName,
+                FolderCode = file.FolderCode,
+                StoragePath = file.StoragePath,
+                ConvertedStoragePath = file.ConvertedStoragePath,
+                ConvertStatus = file.ConvertStatus,
+                ConvertMessage = file.ConvertMessage,
+                FileSize = file.FileSize,
+                MimeType = file.FileType,
+                RuleStatus = fileRuleStatus,
+                ExtractFieldCount = 0,
+                TableDefCount = 0
+            });
+        }
+        return node;
+    }
+
+    #endregion
+
+    #region 目录级文件查询
+
+    /// <summary>
+    /// 获取目录下所有文件（根级文件列表，用于前端展示）
+    /// </summary>
+    public async Task<List<StandardDirectoryFile>> GetFilesByDirectoryAsync(string directoryCode)
+    {
+        return (await _db.GetListAsync<StandardDirectoryFile>(
+            x => x.DirectoryCode == directoryCode && x.Enable == true && x.IsValid == 1))
+            .Data ?? new();
+    }
+
+    #endregion
+
+    #region 手动创建文件记录
+
+    /// <summary>
+    /// 手动创建文件记录（不经上传流程，直接创建）
+    /// </summary>
+    public async Task<(bool ok, string? error, StandardDirectoryFile? file)> CreateFileAsync(
+        StandardDirectoryFile file)
+    {
+        var lockErr = await GetQueueLockErrorAsync(file.DirectoryCode);
+        if (lockErr != null) return (false, lockErr, null);
+
+        file.Code = Guid.NewGuid().ToString("N");
+        file.FileCode = _codeGenerator.GenerateFileCode(
+            file.FolderCode ?? file.DirectoryCode, file.FileName);
+        file.IsValid = 1;
+        file.Enable = true;
+        file.Status = "draft";
+        file.UploadStatus = "active";
+        file.CreateDate = DateTime.Now;
+
+        // 计算 FullPath
+        if (!string.IsNullOrEmpty(file.FolderCode))
+        {
+            var parentFolder = (await _db.GetOneAsync<StandardDirectoryFolder>(
+                x => x.FolderCode == file.FolderCode && x.Enable == true)).Data;
+            var parentPath = parentFolder?.FullPath?.Trim('/') ?? "";
+            file.FullPath = string.IsNullOrEmpty(parentPath)
+                ? file.FileName
+                : $"{parentPath}/{file.FileName}";
+        }
+        else
+        {
+            file.FullPath = file.FileName;
+        }
+
+        var result = await _db.InsertAsync(file);
+        return result.Data != null
+            ? (true, null, result.Data)
+            : (false, "创建失败", null);
+    }
+
+    #endregion
+
+    #region 文件锁定状态批量查询
+
+    /// <summary>
+    /// 批量查询文件锁定状态，返回 {fileCode: queueCode} 字典
+    /// </summary>
+    public async Task<Dictionary<string, string>> GetFileLockStatusAsync(List<string> fileCodes)
+    {
+        if (fileCodes == null || fileCodes.Count == 0) return new Dictionary<string, string>();
+        var hit = await _queueManager.FindResourceLockAsync(QueueManager.RESOURCE_FILE, fileCodes);
+        if (hit == null) return new Dictionary<string, string>();
+        return new Dictionary<string, string> { [hit.ResourceCode] = hit.QueueCode };
+    }
+
+    #endregion
+
+    #region 导出打包 ZIP
+
+    /// <summary>
+    /// 将选中的文件夹和文件打包成 ZIP
+    /// 使用 IObjectStorage 接口（支持 MinIO / 阿里 OSS 切换）
+    /// </summary>
+    public async Task<Stream> ExportAsZipAsync(
+        string directoryCode, List<string> selectedFolderCodes, List<string> selectedFileCodes)
+    {
+        var config = (await _db.GetOneAsync<StandardDirectoryConfig>(
+            x => x.DirectoryCode == directoryCode && x.Enable == true)).Data;
+        if (config == null)
+            throw new ArgumentException("目录配置不存在");
+
+        var allFolders = (await _db.GetListAsync<StandardDirectoryFolder>(
+            x => x.DirectoryCode == directoryCode && x.Enable == true)).Data ?? new();
+
+        // 展开选中的文件夹（含子文件夹）
+        var expandedFolderCodes = ExpandFolderCodes(allFolders, selectedFolderCodes);
+        var expandedFileCodes = new HashSet<string>(selectedFileCodes ?? new List<string>());
+
+        if (expandedFolderCodes.Count > 0)
+        {
+            var folderFiles = (await _db.GetListAsync<StandardDirectoryFile>(
+                x => expandedFolderCodes.Contains(x.FolderCode) && x.Enable == true)).Data ?? new();
+            foreach (var f in folderFiles)
+                expandedFileCodes.Add(f.FileCode);
+        }
+
+        if (expandedFileCodes.Count == 0)
+            throw new ArgumentException("没有找到可导出的文件");
+
+        var filesToExport = (await _db.GetListAsync<StandardDirectoryFile>(
+            x => expandedFileCodes.Contains(x.FileCode) && x.Enable == true)).Data ?? new();
+
+        // 创建临时目录
+        var tempDir = Path.Combine(Path.GetTempPath(), $"export_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            foreach (var file in filesToExport)
+            {
+                var folderPath = GetFolderPath(allFolders, file.FolderCode);
+                var entryPath = string.IsNullOrEmpty(folderPath)
+                    ? file.FileName
+                    : $"{folderPath}/{file.FileName}";
+
+                var objectName = file.StoragePath;
+                if (string.IsNullOrEmpty(objectName))
+                    objectName = $"{config.StandardCode}/{config.PhaseCode}/{file.FolderCode}/{file.FileName}";
+                objectName = objectName.TrimStart('/');
+
+                var localPath = Path.Combine(tempDir, entryPath.Replace('/', Path.DirectorySeparatorChar));
+                var localDir = Path.GetDirectoryName(localPath);
+                if (!string.IsNullOrEmpty(localDir))
+                    Directory.CreateDirectory(localDir);
+
+                try
+                {
+                    // 使用 IObjectStorage 接口下载（非直接调 MinIO SDK）
+                    var (stream, _) = await _storage.DownloadAsync(objectName);
+                    using var fileStream = File.Create(localPath);
+                    await stream.CopyToAsync(fileStream);
+                }
+                catch (Exception ex)
+                {
+                    await File.WriteAllTextAsync(localPath,
+                        $"[文件未找到] 原始路径: {objectName}\n错误: {ex.Message}");
+                }
+            }
+
+            var ms = new MemoryStream();
+            using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, true))
+            {
+                AddDirectoryToZip(archive, tempDir, "");
+            }
+            ms.Position = 0;
+            return ms;
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); }
+            catch (Exception ex) { _logger.LogWarning(ex, "[ExportAsZip] 清理临时目录失败"); }
+        }
+    }
+
+    private HashSet<string> ExpandFolderCodes(List<StandardDirectoryFolder> allFolders, List<string> folderCodes)
+    {
+        var result = new HashSet<string>(folderCodes ?? new List<string>());
+        foreach (var code in folderCodes ?? Enumerable.Empty<string>())
+            AddChildFolderCodes(allFolders, code, result);
+        return result;
+    }
+
+    private void AddChildFolderCodes(List<StandardDirectoryFolder> allFolders, string parentCode, HashSet<string> result)
+    {
+        var children = allFolders.Where(x => x.ParentCode == parentCode);
+        foreach (var child in children)
+        {
+            result.Add(child.FolderCode);
+            AddChildFolderCodes(allFolders, child.FolderCode, result);
+        }
+    }
+
+    private string GetFolderPath(List<StandardDirectoryFolder> allFolders, string folderCode)
+    {
+        var parts = new List<string>();
+        string current = folderCode;
+        while (!string.IsNullOrEmpty(current))
+        {
+            var folder = allFolders.FirstOrDefault(x => x.FolderCode == current);
+            if (folder == null) break;
+            parts.Insert(0, folder.FolderName);
+            current = folder.ParentCode;
+        }
+        return string.Join("/", parts);
+    }
+
+    private void AddDirectoryToZip(ZipArchive archive, string sourceDir, string entryPrefix)
+    {
+        foreach (var filePath in Directory.GetFiles(sourceDir))
+        {
+            var fileName = Path.GetFileName(filePath);
+            var entryName = string.IsNullOrEmpty(entryPrefix) ? fileName : $"{entryPrefix}/{fileName}";
+            archive.CreateEntryFromFile(filePath, entryName, System.IO.Compression.CompressionLevel.Optimal);
+        }
+        foreach (var dirPath in Directory.GetDirectories(sourceDir))
+        {
+            var dirName = Path.GetFileName(dirPath);
+            var newPrefix = string.IsNullOrEmpty(entryPrefix) ? dirName : $"{entryPrefix}/{dirName}";
+            archive.CreateEntry($"{newPrefix}/");
+            AddDirectoryToZip(archive, dirPath, newPrefix);
+        }
+    }
+
+    #endregion
+
+    #region 旧版单文件上传（兼容旧前端）
+
+    /// <summary>
+    /// 旧版单文件直接上传（兼容旧前端直接上传场景）
+    ///
+    /// 与 UploadInit/UploadFile/UploadConfirm 4 步方案不同，此方法一步完成：
+    /// 接收文件流 → 写 MinIO → 写 DB 记录
+    /// </summary>
+    public async Task<(bool ok, string? error, StandardDirectoryFile? file)> UploadFileLegacyAsync(
+        Stream fileStream, string fileName, string directoryCode, string folderCode,
+        string orgCode, string? standardCode = null, string? phaseCode = null)
+    {
+        // 校验文件类型
+        var typeErr = ValidateUploadFileType(fileName);
+        if (typeErr != null) return (false, typeErr, null);
+
+        var lockErr = await GetQueueLockErrorAsync(directoryCode);
+        if (lockErr != null) return (false, lockErr, null);
+
+        // 解析 StandardCode / PhaseCode
+        if (string.IsNullOrEmpty(standardCode) || string.IsNullOrEmpty(phaseCode))
+        {
+            var parsed = ParseDirectoryCode(directoryCode);
+            standardCode ??= parsed.standardCode;
+            phaseCode ??= parsed.phaseCode;
+        }
+
+        // 确定 StoragePath
+        var storagePath = _codeGenerator.GenerateStandardDirectoryPath(
+            orgCode, standardCode ?? "", phaseCode ?? "", "", fileName);
+
+        // 上传到 MinIO（使用 IObjectStorage 接口）
+        try
+        {
+            var objectName = storagePath.TrimStart('/');
+            var contentType = GetContentType(fileName);
+            await _storage.UploadAsync(objectName, fileStream, fileStream.Length, contentType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[UploadFileLegacy] 上传文件到存储失败: {FileName}", fileName);
+            return (false, $"上传失败：{ex.Message}", null);
+        }
+
+        // 创建 DB 记录
+        var file = new StandardDirectoryFile
+        {
+            Code = Guid.NewGuid().ToString("N"),
+            FileCode = _codeGenerator.GenerateFileCode(folderCode, fileName),
+            FolderCode = folderCode,
+            DirectoryCode = directoryCode,
+            FileName = fileName,
+            FileType = Path.GetExtension(fileName)?.TrimStart('.'),
+            StoragePath = storagePath,
+            FullPath = fileName,
+            IsValid = 1,
+            UploadStatus = "active",
+            Enable = true,
+            Status = "draft",
+            CreateDate = DateTime.Now
+        };
+        var result = await _db.InsertAsync(file);
+        return result.Data != null
+            ? (true, null, result.Data)
+            : (false, "创建文件记录失败", null);
+    }
+
+    private static string GetContentType(string fileName)
+    {
+        var ext = Path.GetExtension(fileName)?.ToLower();
+        return ext switch
+        {
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".doc" => "application/msword",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".xls" => "application/vnd.ms-excel",
+            ".pdf" => "application/pdf",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".gif" => "image/gif",
+            ".bmp" => "image/bmp",
+            ".tif" or ".tiff" => "image/tiff",
+            ".txt" => "text/plain",
+            ".rtf" => "application/rtf",
+            ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ".ppt" => "application/vnd.ms-powerpoint",
+            _ => "application/octet-stream"
+        };
+    }
+
+    private static string? ValidateUploadFileType(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName)) return "文件路径不能为空";
+
+        if (fileName.StartsWith(".")) return $"不允许上传系统文件：{fileName}";
+
+        var ext = Path.GetExtension(fileName)?.TrimStart('.').ToLower() ?? "";
+        var allowedExts = new HashSet<string>
+        {
+            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "rtf",
+            "jpg", "jpeg", "png", "gif", "bmp", "webp", "tif", "tiff"
+        };
+        if (!allowedExts.Contains(ext))
+            return $"不支持的文件类型：{fileName}（仅支持文档/图片）";
+
+        return null;
+    }
+
+    #endregion
+
+    #region 重试失败转换
+
+    /// <summary>
+    /// 重试失败的文档转换
+    /// 扫描 convert_status=failed/pending 的 doc/xls 文件，按目录分组重新创建转换队列
+    /// </summary>
+    public async Task<(bool ok, string? error, int enqueued, int queueCount)> RetryFailedConversionsAsync()
+    {
+        try
+        {
+            // 1. 候选文件：doc/xls 且 failed 或 pending
+            var candidates = (await _db.SqlQueryAsync<StandardDirectoryFile>(
+                @"SELECT * FROM cert_standard_directory_file 
+                  WHERE IsDeleted=0 AND Enable=1 
+                  AND (FileType='doc' OR FileType='xls') 
+                  AND (convert_status='failed' OR convert_status='pending')"))
+                .Data ?? new();
+
+            if (candidates.Count == 0)
+                return (true, null, 0, 0);
+
+            // 2. 排除仍在队列中（有活跃资源锁）的文件
+            var allLocks = (await _db.SqlQueryAsync<dynamic>(
+                "SELECT ResourceCode FROM queue_resource_lock WHERE Status='locked' AND ResourceTable='cert_standard_directory_file'"))
+                .Data ?? new List<dynamic>();
+            var activeLockCodes = new HashSet<string>(allLocks.Select(l => (string)l.ResourceCode));
+
+            var toRetry = new List<StandardDirectoryFile>();
+            var missingSources = new List<string>();
+            foreach (var f in candidates)
+            {
+                if (activeLockCodes.Contains(f.FileCode)) continue;
+                if (!await SourceExistsAsync(f.StoragePath))
+                {
+                    missingSources.Add(f.FileName);
+                    continue;
+                }
+                toRetry.Add(f);
+            }
+
+            if (toRetry.Count == 0)
+                return (true, null, 0, 0);
+
+            // 3. 按目录分组建队
+            var groups = toRetry.GroupBy(f => f.DirectoryCode);
+            var enqueued = 0;
+            var queueCodes = new List<string>();
+            var skipped = new List<string>();
+
+            foreach (var group in groups)
+            {
+                var config = (await _db.GetOneAsync<StandardDirectoryConfig>(
+                    x => x.DirectoryCode == group.Key && x.Enable == true)).Data;
+                var orgCode = DeriveOrgCodeFromPath(group.First().StoragePath);
+                var scopeKey = $"{orgCode}|{config?.StandardCode}|{config?.PhaseCode}";
+
+                var specs = group.Select(f => new FileConvertPayload
+                {
+                    FileCode = f.FileCode,
+                    FileName = f.FileName,
+                    SourcePath = f.StoragePath,
+                    TargetPath = _codeGenerator.GenerateConvertedStoragePath(
+                        "", "", "", "", f.FileName),
+                    ConvertType = (f.FileType ?? "").ToLower() == "doc" ? "doc2docx" : "xls2xlsx"
+                }).ToList();
+
+                var locks = new List<QueueManager.ResourceLockItem>
+                {
+                    new() { ResourceTable = QueueManager.RESOURCE_DIR, ResourceCode = group.Key, ResourceName = group.Key }
+                };
+                locks.AddRange(specs.Select((s, i) => new QueueManager.ResourceLockItem
+                {
+                    ResourceTable = QueueManager.RESOURCE_FILE,
+                    ResourceCode = s.FileCode,
+                    ResourceName = s.FileName,
+                    TaskNo = i + 1
+                }));
+
+                var req = new QueueManager.CreateQueueRequest
+                {
+                    QueueType = "file_convert",
+                    QueueName = $"失败重试-{specs.Count}个文件",
+                    ScopeKey = scopeKey,
+                    SourceType = "retry_failed",
+                    SourceId = $"retry_{DateTime.Now:yyyyMMddHHmmss}_{group.Key}",
+                    ResourceLocks = locks,
+                    Tasks = specs.Select(s => new QueueManager.TaskItem
+                    {
+                        TaskType = "file_convert",
+                        Payload = JsonSerializer.Serialize(s, _payloadJsonOptions),
+                        TaskId = group.Key
+                    }).ToList()
+                };
+
+                var (ok, queueError, queueCode, count) = await _queueManager.CreateQueueAsync(req);
+                if (!ok)
+                {
+                    skipped.Add($"{group.Key}（{queueError}）");
+                    continue;
+                }
+
+                // 文件置为隐藏 + pending
+                foreach (var f in group)
+                {
+                    f.IsValid = 0;
+                    f.ConvertStatus = "pending";
+                    f.ConvertedStoragePath = null;
+                    f.ConvertMessage = null;
+                    await _db.UpdateAsync(f);
+                }
+                enqueued += count;
+                queueCodes.Add(queueCode);
+            }
+
+            _logger.LogInformation("[RetryFailedConversions] 已重新入队 {Enqueued} 个失败文件（{QQueueCount} 个队列）",
+                enqueued, queueCodes.Count);
+            return (true, null, enqueued, queueCodes.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[RetryFailedConversions] 重试失败转换出错");
+            return (false, $"重试失败转换出错：{ex.Message}", 0, 0);
+        }
+    }
+
+    /// <summary>从 MinIO 存储路径推导机构编码</summary>
+    private static string DeriveOrgCodeFromPath(string storagePath)
+    {
+        if (string.IsNullOrEmpty(storagePath)) return null;
+        var segments = storagePath.TrimStart('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length == 0) return null;
+        int idx = 0;
+        if (segments[idx] == "standard-directory") idx = 1;
+        else if (segments[idx] == "enterprise-documents") idx = 2;
+        return segments.Length > idx ? segments[idx] : null;
+    }
+
+    /// <summary>检查存储源文件是否存在（通过 IObjectStorage 接口）</summary>
+    private async Task<bool> SourceExistsAsync(string storagePath)
+    {
+        if (string.IsNullOrEmpty(storagePath)) return false;
+        try
+        {
+            return await _storage.ExistsAsync(storagePath.TrimStart('/'));
+        }
+        catch
+        {
+            return true; // 其他异常不阻塞重试
+        }
+    }
+
+    #endregion
 }
 
 #region 辅助类
@@ -1086,4 +1735,64 @@ public class FileConvertPayload
     public string ConvertType { get; set; } = ""; // doc2docx / xls2xlsx
 }
 
+/// <summary>
+/// 阶段文件树响应
+/// </summary>
+public class StageFileTreeResponse
+{
+    public string DirectoryCode { get; set; } = "";
+    public List<StageFolderNode> Folders { get; set; } = new();
+    public StageFileStatistics Statistics { get; set; } = new();
+}
+
+/// <summary>
+/// 阶段文件统计
+/// </summary>
+public class StageFileStatistics
+{
+    public int TotalFolders { get; set; }
+    public int TotalFiles { get; set; }
+    public int ConfiguredFiles { get; set; }
+}
+
+/// <summary>
+/// 阶段文件夹节点
+/// </summary>
+public class StageFolderNode
+{
+    public string Code { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string ParentCode { get; set; } = "";
+    public int Depth { get; set; }
+    public int SortOrder { get; set; }
+    public List<StageFolderNode> Children { get; set; } = new();
+    public List<StageFileNode> Files { get; set; } = new();
+}
+
+/// <summary>
+/// 阶段文件节点
+/// </summary>
+public class StageFileNode
+{
+    public string FileCode { get; set; } = "";
+    public string FileName { get; set; } = "";
+    public string FolderCode { get; set; } = "";
+    public string StoragePath { get; set; } = "";
+    public string ConvertedStoragePath { get; set; } = "";
+    public string ConvertStatus { get; set; } = "";
+    public string ConvertMessage { get; set; } = "";
+    public long? FileSize { get; set; }
+    public string MimeType { get; set; } = "";
+    public string RuleStatus { get; set; } = "none";
+    public int ExtractFieldCount { get; set; }
+    public int TableDefCount { get; set; }
+}
+
 #endregion
+
+/// <summary>PhaseDefinition raw SQL DTO（绕过 BaseEntity.IsIgnore）</summary>
+public class PhaseDefDto
+{
+    public string PhaseCode { get; set; } = "";
+    public string Code { get; set; } = "";
+}

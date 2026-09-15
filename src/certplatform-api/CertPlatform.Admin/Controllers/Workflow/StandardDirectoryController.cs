@@ -95,6 +95,13 @@ public class StandardDirectoryController : ControllerBase
         return Ok(new { code = 200, data = tree });
     }
 
+    [HttpGet("configs/{directoryCode}/folders-flat")]
+    public async Task<IActionResult> GetFoldersFlat(string directoryCode)
+    {
+        var folders = await _service.GetFoldersFlatAsync(directoryCode);
+        return Ok(new { code = 200, data = folders });
+    }
+
     [HttpPost("configs/{directoryCode}/folders/create")]
     public async Task<IActionResult> CreateFolder(string directoryCode, [FromBody] SharedEntities::YZH.Entity.Admin.Platform.Dir.StandardDirectoryFolder folder)
     {
@@ -233,4 +240,147 @@ public class StandardDirectoryController : ControllerBase
     }
 
     #endregion
+
+    #region 阶段文件树（文档提取规则页面）
+
+    /// <summary>
+    /// 获取阶段的完整文件树（含规则属性）
+    /// 用于文档提取规则管理页面
+    /// </summary>
+    [HttpGet("stage-files/{directoryCode}")]
+    public async Task<IActionResult> GetStageFileTree(string directoryCode)
+    {
+        var result = await _service.GetStageFileTreeAsync(directoryCode);
+        return Ok(new { code = 200, data = result });
+    }
+
+    #endregion
+
+    #region 目录级文件查询
+
+    /// <summary>
+    /// 获取目录下所有文件（不含子文件夹中的文件）
+    /// </summary>
+    [HttpGet("directory-files")]
+    public async Task<IActionResult> GetDirectoryFiles([FromQuery] string directoryCode)
+    {
+        var files = await _service.GetFilesByDirectoryAsync(directoryCode);
+        return Ok(new { code = 200, data = files });
+    }
+
+    #endregion
+
+    #region 手动创建文件记录
+
+    /// <summary>
+    /// 手动创建文件记录（不经上传流程）
+    /// </summary>
+    [HttpPost("folders/{folderCode}/files/create")]
+    public async Task<IActionResult> CreateFile(string folderCode, [FromBody] SharedEntities::YZH.Entity.Admin.Platform.Dir.StandardDirectoryFile file)
+    {
+        file.FolderCode = folderCode;
+        var (ok, error, result) = await _service.CreateFileAsync(file);
+        return Ok(new { code = ok ? 200 : 400, msg = error, data = result });
+    }
+
+    #endregion
+
+    #region 导出打包 ZIP
+
+    /// <summary>
+    /// 将选中的文件夹和文件打包成 ZIP
+    /// </summary>
+    [HttpPost("configs/{directoryCode}/export")]
+    public async Task<IActionResult> ExportAsZip(string directoryCode, [FromBody] ExportRequest request)
+    {
+        if ((request?.FolderCodes == null || request.FolderCodes.Count == 0) &&
+            (request?.FileCodes == null || request.FileCodes.Count == 0))
+        {
+            return BadRequest(new { code = 400, msg = "请至少选择一个文件夹或文件" });
+        }
+
+        var stream = await _service.ExportAsZipAsync(directoryCode, request.FolderCodes, request.FileCodes);
+        var fileName = $"StandardDirectory_{directoryCode}_{DateTime.Now:yyyyMMddHHmmss}.zip";
+        return File(stream, "application/zip", fileName);
+    }
+
+    #endregion
+
+    #region 旧版单文件上传（兼容旧前端）
+
+    /// <summary>
+    /// 旧版单文件直接上传（兼容旧前端直接上传场景）
+    /// </summary>
+    [HttpPost("upload-file")]
+    public async Task<IActionResult> UploadFileLegacy([FromForm] UploadFileLegacyDto dto)
+    {
+        if (dto.File == null || dto.File.Length == 0)
+            return Ok(new { code = 400, msg = "请选择文件" });
+
+        using var stream = dto.File.OpenReadStream();
+        var (ok, error, file) = await _service.UploadFileLegacyAsync(
+            stream, dto.File.FileName, dto.DirectoryCode, dto.FolderCode,
+            dto.OrgCode, dto.StandardCode, dto.PhaseCode);
+        return Ok(new { code = ok ? 200 : 400, msg = error, data = file });
+    }
+
+    #endregion
+
+    #region 文件锁定状态
+
+    /// <summary>
+    /// 批量查询文件在运行中队列中的锁定状态
+    /// </summary>
+    [HttpPost("file-lock-status")]
+    public async Task<IActionResult> GetFileLockStatus([FromBody] FileLockStatusRequest request)
+    {
+        var result = await _service.GetFileLockStatusAsync(request.FileCodes);
+        return Ok(new { code = 200, data = result });
+    }
+
+    #endregion
+
+    #region 重试失败转换
+
+    /// <summary>
+    /// 重试失败的文档转换
+    /// </summary>
+    [HttpPost("retry-failed-conversions")]
+    public async Task<IActionResult> RetryFailedConversions()
+    {
+        var (ok, error, enqueued, queueCount) = await _service.RetryFailedConversionsAsync();
+        return Ok(new { code = ok ? 200 : 400, msg = error, enqueued, queueCount });
+    }
+
+    #endregion
+}
+
+/// <summary>
+/// 导出请求 DTO
+/// </summary>
+public class ExportRequest
+{
+    public List<string> FolderCodes { get; set; } = new();
+    public List<string> FileCodes { get; set; } = new();
+}
+
+/// <summary>
+/// 旧版上传文件 DTO
+/// </summary>
+public class UploadFileLegacyDto
+{
+    public IFormFile File { get; set; }
+    public string DirectoryCode { get; set; }
+    public string FolderCode { get; set; }
+    public string OrgCode { get; set; }
+    public string StandardCode { get; set; }
+    public string PhaseCode { get; set; }
+}
+
+/// <summary>
+/// 文件锁定状态查询请求 DTO
+/// </summary>
+public class FileLockStatusRequest
+{
+    public List<string> FileCodes { get; set; } = new();
 }

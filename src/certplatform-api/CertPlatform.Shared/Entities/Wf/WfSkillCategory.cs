@@ -1,46 +1,34 @@
-using System;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using YZH.Entity.Admin.Platform;
+using SqlSugar;
+using YZH.Core.Stand.Models.Entity;
 
-namespace YZH.Entity.Admin.Platform.Wf
+namespace CertPlatform.Shared.Entities.Wf
 {
     /// <summary>
-    /// WfSkillCategory — Skill 分类（基础资料维护）
-    /// <para>表名：wf_skill_category</para>
-    /// <para>用途：页面左侧分类导航 + 面板分组；category_code 与 wf_skill.category 对应</para>
+    /// 技能分类实体 - 用于技能分类管理
+    /// 继承 BaseEntity，Override IsValid 映射到 is_valid 列
     /// </summary>
-    [Table("wf_skill_category")]
-    public class WfSkillCategory : EntityBase
+    [SugarTable("wf_skill_category")]
+    public class WfSkillCategory : BaseEntity
     {
-        // ===== snake_case 审计字段覆盖 =====
-        [Column("create_id")] public new int? CreateID { get; set; }
-        [Column("creator")] [MaxLength(50)] public new string Creator { get; set; }
-        [Column("create_date")] public new DateTime? CreateDate { get; set; } = DateTime.Now;
-        [Column("modify_id")] public new int? ModifyID { get; set; }
-        [Column("modifier")] [MaxLength(50)] public new string Modifier { get; set; }
-        [Column("modify_date")] public new DateTime? ModifyDate { get; set; }
-        [Column("delete_id")] public new int? DeleteID { get; set; }
-        [Column("deleter")] [MaxLength(50)] public new string Deleter { get; set; }
-        [Column("delete_time")] public new DateTime? DeleteTime { get; set; }
-        [Column("code")] public new string Code { get; set; } = Guid.NewGuid().ToString("N");
-        [Column("status")] public new string Status { get; set; }
-        [Column("enable")] public new bool Enable { get; set; } = true;
-        [Column("remark")] public new string Remark { get; set; }
+        [SugarColumn(ColumnName = "code", IsPrimaryKey = true, Length = 100)]
+        public new string Code { get; set; } = string.Empty;
 
-        [Required][StringLength(50)][UniqueField("分类编码")][Column("category_code")]
-        public string CategoryCode { get; set; }
+        [SugarColumn(ColumnName = "category_name", Length = 200)]
+        public string Name { get; set; } = string.Empty;
 
-        [Required][StringLength(100)][Column("category_name")]
-        public string CategoryName { get; set; }
+        [SugarColumn(ColumnName = "icon", Length = 50, IsNullable = true)]
+        public string? Icon { get; set; }
 
-        [StringLength(50)][Column("icon")]
-        public string Icon { get; set; }
+        [SugarColumn(ColumnName = "color", Length = 20, IsNullable = true)]
+        public string? Color { get; set; }
 
-        [StringLength(20)][Column("color")]
-        public string Color { get; set; }
+        [SugarColumn(ColumnName = "sort_order")]
+        public int SortOrder { get; set; } = 0;
 
-        [Column("sort_order")]
-        public int SortOrder { get; set; }
+        /// <summary>
+        /// Override 基类 IsValid，映射到 is_valid 列，基类 ToggleIsValid 直接可用
+        /// </summary>
+        [SugarColumn(ColumnName = "is_valid")]
+        public new int IsValid { get; set; } = 1;
     }
 }
