@@ -54,6 +54,12 @@ export async function getFolders(directoryCode: string): Promise<StandardDirecto
   return res.data!
 }
 
+/** 获取文件夹扁平列表（按 ParentCode 过滤用） */
+export async function getFoldersFlat(directoryCode: string): Promise<StandardDirectoryFolder[]> {
+  const res = await yzhApi.get<ApiResponse<StandardDirectoryFolder[]>>(`/api/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}/folders-flat`)
+  return res.data!
+}
+
 /** 创建文件夹 */
 export async function createFolder(directoryCode: string, folder: Partial<StandardDirectoryFolder>): Promise<StandardDirectoryFolder> {
   const res = await yzhApi.post<ApiResponse<StandardDirectoryFolder>>(`/api/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}/folders/create`, folder)
@@ -143,6 +149,8 @@ export async function uploadInit(
 
   const folderItems = Array.from(folderSet).map(p => ({ Path: p }))
 
+  console.log('[uploadInit] Sending:', { DirectoryCode: directoryCode, Folders: folderItems, Files: fileItems })
+
   const res = await yzhApi.post<ApiResponse<any>>('/api/Workflow/StandardDirectory/upload-init', {
     DirectoryCode: directoryCode,
     Folders: folderItems,
@@ -162,11 +170,22 @@ export async function uploadInit(
     }
   }
 
+  console.log('[uploadInit] Response:', { taskId, fileMapKeys: Object.keys(fileMap), enhancedFilesCount: enhancedFiles.length })
+
+  if (!taskId) {
+    console.error('[uploadInit] Failed: TaskId is empty. Response data:', data)
+  }
+
   return { taskId, fileMap }
 }
 
 /** 上传单个文件（只发 fileCode + taskId，StoragePath 由后端从 DB 读取） */
 export async function uploadFile(taskId: string, fileCode: string, file: File): Promise<void> {
+  if (!taskId) throw new Error('上传失败：TaskId 为空')
+  if (!fileCode) throw new Error('上传失败：FileCode 为空')
+
+  console.log('[uploadFile] Sending:', { taskId, fileCode, fileName: file.name, fileSize: file.size })
+
   const formData = new FormData()
   formData.append('File', file)
   formData.append('TaskId', taskId)
@@ -180,6 +199,7 @@ export async function uploadFile(taskId: string, fileCode: string, file: File): 
     body: formData,
   })
   const json = await res.json()
+  console.log('[uploadFile] Response:', { status: res.status, code: json.code, msg: json.msg || json.message })
   if (!res.ok || json.code !== 200) throw new Error(json.msg || json.message || '上传失败')
 }
 

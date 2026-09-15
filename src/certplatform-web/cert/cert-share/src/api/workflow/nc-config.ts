@@ -1,54 +1,79 @@
 import { yzhApi } from '@yzh-core/api/client'
-import type { Page, PageParams } from '@yzh-core/types'
+import type { ApiResponse } from '@yzh-core/types'
 
 export interface NCRule {
-  id: number
-  ruleCode: string
-  ruleName: string
-  ruleNameEn?: string
-  clauseCode: string
-  clauseNumber?: string
-  orgCode: string
-  standardCode: string
-  phaseCode: string
-  isActive: boolean
-  remark?: string
-  createDate?: string
+  Id?: number
+  Code?: string
+  RuleCode: string
+  RuleName: string
+  RuleNameEn?: string
+  ClauseCode: string
+  ClauseNumber?: string
+  ClauseTitle?: string
+  OrgCode?: string
+  StandardCode: string
+  PhaseCode: string
+  IsActive: boolean
+  Remark?: string
+  CreateTime?: string
 }
 
 export interface ISOClause {
-  code: string
-  clauseNumber: string
-  title: string
-  children?: ISOClause[]
+  Code: string
+  ParentCode?: string
+  ClauseNumber: string
+  Title: string
+  SortOrder?: number
+  /** 展示标签（ClauseNumber + Title），组树时注入 */
+  Label?: string
+  Children?: ISOClause[]
 }
 
-export interface ISOClauseTree {
-  label: string
-  value: string
-  children?: ISOClauseTree[]
+// ──── 规则 CRUD ────
+
+/** 分页查询（POST /filter） */
+export function getNCRulePage(params: {
+  Page: number
+  PageSize: number
+  SortField?: string
+  SortOrder?: string
+  Filters: Array<{ Field: string; Value: string; Operator: string }>
+}) {
+  return yzhApi.post<{ Items: NCRule[]; TotalCount: number }>('/api/ValidationRule/filter', params)
 }
 
-export async function getNCRulePage(params: PageParams, filters?: any): Promise<Page<NCRule>> {
-  return yzhApi.post<Page<NCRule>>('/api/ValidationRule/getPageData', params, { params: filters })
+/** 新增规则（POST /add） */
+export function saveNCRule(data: Partial<NCRule>) {
+  return yzhApi.post<NCRule>('/api/ValidationRule/add', data)
 }
 
-export async function getNCRule(ruleCode: string): Promise<NCRule> {
-  return yzhApi.get<NCRule>(`/api/ValidationRule/getDetail?ruleCode=${ruleCode}`)
+/** 修改规则（POST /update） */
+export function updateNCRule(data: Partial<NCRule>) {
+  return yzhApi.post<NCRule>('/api/ValidationRule/update', data)
 }
 
-export async function saveNCRule(data: Partial<NCRule>): Promise<any> {
-  return yzhApi.post('/api/ValidationRule/save', data)
+/** 删除规则（POST /delete） */
+export function deleteNCRule(codes: string[]) {
+  return yzhApi.post('/api/ValidationRule/delete', codes)
 }
 
-export async function deleteNCRule(id: number): Promise<any> {
-  return yzhApi.post(`/api/ValidationRule/delete?id=${id}`)
+/** 切换启用状态 */
+export function toggleNCRuleActive(code: string) {
+  return yzhApi.post(`/api/ValidationRule/toggle-active?code=${code}`)
 }
 
-export async function toggleNCRuleActive(id: number): Promise<any> {
-  return yzhApi.post(`/api/ValidationRule/toggleActive?id=${id}`)
+/** 深拷贝规则 */
+export function copyNCRule(sourceCode: string) {
+  return yzhApi.post(`/api/ValidationRule/copy?sourceCode=${sourceCode}`)
 }
 
+// ──── 条款树（由 ISOClauseController 提供） ────
+
+/** 获取条款树（后端返回扁平列表，由前端按 ParentCode 组树） */
 export async function getISOClauseTree(standardCode: string): Promise<ISOClause[]> {
-  return yzhApi.get<ISOClause[]>(`/api/ISOClause/getTree?standardCode=${standardCode}`)
+  const res = await yzhApi.get<ApiResponse<ISOClause[]>>(
+    '/api/Foundation/ISOClause/getTree',
+    { standardCode },
+  )
+  return res?.data ?? []
 }

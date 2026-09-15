@@ -115,4 +115,33 @@ AIGC:
 - `docs/10-YZH架构/` 是 **YZH 架构唯一权威入口**：负责"架构核心理念 + 编码规范"。
 - `docs/30-项目规则/知识库/` 是 **知识底座**：负责"开发中按需查阅的接口签名、踩坑经验、边界约束"。
 - 三处通过 `docs/00-工程体系/README.md` 登记关联；修改本文件后必须同步知识库副本。
+
+## 踩坑记录（ReportDefinition 迁移）
+
+### 实体设计
+- **`BaseEntity` 继承冲突**：`BaseEntity.Id` 是 `string`，但 `cert_report_template.Id` 是 `bigint` auto_increment，SqlSugar 报 `Ambiguous match found`。**解决**：不继承 BaseEntity，手动定义所有字段 + `[SugarColumn]`。
+- **`rpt_report_section` 无 `IsValid` 列**：旧表只有 `IsActive`（tinyint）。**解决**：Entity 中不定义 `IsValid`。
+
+### 外键约束
+- **`cert_report_template.CbCode` FK 失败**：`CbCode` 必须对应 `cert_certification_body.Code`。**解决**：显式设置 `CbCode = OrgCode`（同一 GUID）。
+- **`rpt_report_section` FK 阻止插入**：`fk_section_clause`（→`cert_iso_clause`）、`fk_section_workflow`（→`wf_workflow_definition`）、`fk_section_report`（→`rpt_audit_report`）均为空表或无意义。**解决**：`ALTER TABLE rpt_report_section DROP FOREIGN KEY fk_section_clause, fk_section_workflow, fk_section_report`。
+
+### 前后端映射
+- **树节点 `standardCode` 是显示码**（"ISO 13485:2016"），FK 需 GUID。**解决**：使用 `phase.stdCode`（GUID）。
+- **树节点 `phaseCode` 是阶段码**（"S1"），FK 需 `cert_phase_definition.Code`（GUID）。**解决**：使用 `phase.phaseDefinitionCode`。
+- **`YzhForm` 字段 `prop` 与 `reactive` 对象属性名不匹配**：`prop` 用 camelCase，但 `sectionForm` 用 PascalCase。**解决**：统一 PascalCase。
+
+### 后端配置
+- **`[ApiController]` 导致 400 错误**：自动验证非空属性为必填。**解决**：移除 `[ApiController]`。
+- **`InsertAsync` 不返回 ID**：`ExecuteCommandAsync` 不回填自增 ID。**解决**：改用 `ExecuteReturnEntityAsync()`。
+- **`Result<T>` 无 `.Message` 属性**：YZH.Core 的 `Result<T>` 使用 `.Error`。**解决**：改用 `Result<T>.Error`。
+
+### 前端表单与后端序列化
+- **模板保存 500 + `NullReferenceException`**：`templateForm` 用 camelCase，后端 `PropertyNamingPolicy = null` 期望 PascalCase。**解决**：`templateForm` 改为 PascalCase 属性名，`handleSaveTemplate` 显式构建 PascalCase payload。
+- **`YzhForm` 章节表单无响应**：`sectionFormFields` 的 `prop` 用 camelCase，`sectionForm` 用 PascalCase。**解决**：`prop` 改为 PascalCase。
+
+### 外键约束（补充）
+- **`fk_rpttmpl_phase` 阻止保存**：FK 引用空表 `cert_phase_definition(Code)`，实际阶段数据在 `cert_cert_stage`。**解决**：`DROP FOREIGN KEY fk_rpttmpl_phase`。
+- **`fk_rpttmpl_standard` 阻止保存**：FK 引用 `cert_iso_standard(Code)`，数据不一致。**解决**：`DROP FOREIGN KEY fk_rpttmpl_standard`。
+
 *（内容由AI生成，仅供参考）*

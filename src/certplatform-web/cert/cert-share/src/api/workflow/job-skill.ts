@@ -1,95 +1,75 @@
 import { yzhApi } from '@yzh-core/api/client'
-import type { Page, PageParams } from 'yzh.vue.core/types'
-
-export interface SkillInput {
-  inputName: string
-  inputType: string
-  isRequired: boolean
-  defaultValue?: string
-  description?: string
-  bindMode?: string
-  enumSource?: string
-}
-
-export interface SkillOutput {
-  outputName: string
-  outputType: string
-  description?: string
-}
-
-export interface SkillReflection {
-  classPath: string
-  methodName: string
-  paramBinding?: string
-}
+import type { ApiResponse, PagedData } from 'yzh.vue.core/types'
 
 export interface Skill {
-  id: number
-  skillCode: string
-  skillName: string
-  description?: string
-  category: string
-  isActive: boolean
-  inputs: SkillInput[]
-  outputs: SkillOutput[]
-  reflection: SkillReflection
+  id?: number
+  Code?: string
+  Name: string
+  Description?: string
+  CategoryCode?: string
+  SkillType: string
+  PromptTemplate?: string
+  SortOrder: number
+  IsValid: number
 }
 
 export interface SkillCategory {
-  id: number
-  categoryCode: string
-  categoryName: string
-  icon?: string
-  color?: string
-  sortOrder: number
-  enable: boolean
+  id?: number
+  Code?: string
+  Name: string
+  Description?: string
+  Icon?: string
+  Color?: string
+  SortOrder: number
+  IsValid: number
 }
 
-export interface AnalyzedSkill {
-  code: string
-  name: string
-  returnType: string
-  description: string
-  inputPorts: SkillInput[]
-  outputPorts: SkillOutput[]
+/** 技能分页查询 */
+export async function getSkillPage(params: any): Promise<ApiResponse<PagedData<Skill>>> {
+  return yzhApi.post<ApiResponse<PagedData<Skill>>>('/api/Workflow/WfSkill/filter', params)
 }
 
-export async function getSkillPage(params: PageParams, filters?: any): Promise<Page<Skill>> {
-  return yzhApi.post<Page<Skill>>('/api/Skill/getPageData', params, { params: filters })
+/** 新增技能 */
+export async function addSkill(data: Partial<Skill>): Promise<ApiResponse<Skill>> {
+  return yzhApi.post<ApiResponse<Skill>>('/api/Workflow/WfSkill/add', data)
 }
 
-export async function getSkill(skillCode: string): Promise<Skill> {
-  return yzhApi.get<Skill>(`/api/Skill/getDetail?skillCode=${skillCode}`)
+/** 修改技能 */
+export async function updateSkill(data: Partial<Skill>): Promise<ApiResponse<Skill>> {
+  return yzhApi.post<ApiResponse<Skill>>('/api/Workflow/WfSkill/update', data)
 }
 
-export async function saveSkill(data: Skill): Promise<any> {
-  return yzhApi.post('/api/Skill/save', data)
+/** 删除技能 */
+export async function deleteSkill(codes: string[]): Promise<ApiResponse<object>> {
+  return yzhApi.post<ApiResponse<object>>('/api/Workflow/WfSkill/delete', codes)
 }
 
-export async function deleteSkill(id: number): Promise<any> {
-  return yzhApi.post(`/api/Skill/delete?id=${id}`)
+/** 切换启用/停用 */
+export async function toggleSkillValid(code: string): Promise<ApiResponse<{ Code: string; IsValid: number }>> {
+  return yzhApi.post<ApiResponse<{ Code: string; IsValid: number }>>('/api/Workflow/WfSkill/toggle-valid', { Code: code })
 }
 
-export async function toggleSkillActive(id: number): Promise<any> {
-  return yzhApi.post(`/api/Skill/toggleActive?id=${id}`)
+/** 技能分类分页查询 */
+export async function getSkillCategoryPage(params: any): Promise<ApiResponse<PagedData<SkillCategory>>> {
+  return yzhApi.post<ApiResponse<PagedData<SkillCategory>>>('/api/Workflow/WfSkillCategory/filter', params)
 }
 
-export async function analyzeSkill(data: { classPath: string; methodName?: string }): Promise<AnalyzedSkill> {
-  return yzhApi.post<AnalyzedSkill>('/api/Skill/analyze', data)
+/** 新增技能分类 */
+export async function addSkillCategory(data: Partial<SkillCategory>): Promise<ApiResponse<SkillCategory>> {
+  return yzhApi.post<ApiResponse<SkillCategory>>('/api/Workflow/WfSkillCategory/add', data)
 }
 
-export async function getSkillCategories(): Promise<SkillCategory[]> {
-  return yzhApi.post<SkillCategory[]>('/api/SkillCategory/getList')
+/** 修改技能分类 */
+export async function updateSkillCategory(data: Partial<SkillCategory>): Promise<ApiResponse<SkillCategory>> {
+  return yzhApi.post<ApiResponse<SkillCategory>>('/api/Workflow/WfSkillCategory/update', data)
 }
 
-export async function saveSkillCategory(data: SkillCategory): Promise<any> {
-  return yzhApi.post('/api/SkillCategory/save', data)
+/** 删除技能分类 */
+export async function deleteSkillCategory(codes: string[]): Promise<ApiResponse<object>> {
+  return yzhApi.post<ApiResponse<object>>('/api/Workflow/WfSkillCategory/delete', codes)
 }
 
-export async function deleteSkillCategory(id: number): Promise<any> {
-  return yzhApi.post(`/api/SkillCategory/delete?id=${id}`)
-}
-
-export async function toggleSkillCategoryActive(id: number): Promise<any> {
-  return yzhApi.post(`/api/SkillCategory/toggleActive?id=${id}`)
+/** 切换分类启用/停用 */
+export async function toggleSkillCategoryValid(code: string): Promise<ApiResponse<{ Code: string; IsValid: number }>> {
+  return yzhApi.post<ApiResponse<{ Code: string; IsValid: number }>>('/api/Workflow/WfSkillCategory/toggle-valid', { Code: code })
 }

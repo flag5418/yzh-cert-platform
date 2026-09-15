@@ -1,492 +1,277 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { YzhTable, YzhForm, type YzhTableColumn, type YzhFormField, type PageParams, type SearchField } from '@yzh-core'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { YzhPageLayout } from '@yzh-core'
+import type { Skill, SkillCategory } from '@share/api/workflow/job-skill'
 import {
   getSkillPage,
-  getSkill,
-  saveSkill,
+  addSkill,
+  updateSkill,
   deleteSkill,
-  toggleSkillActive,
-  analyzeSkill,
-  getSkillCategories,
-  saveSkillCategory,
-  deleteSkillCategory,
-  toggleSkillCategoryActive,
-  type Skill,
-  type SkillCategory,
-  type AnalyzedSkill
+  toggleSkillValid,
+  getSkillCategoryPage,
+  addSkillCategory,
+  updateSkillCategory,
+  deleteSkillCategory
 } from '@share/api/workflow/job-skill'
 
-const loading = ref(false)
-const tableData = ref<Skill[]>([])
-const page = ref(1)
-const pageSize = ref(20)
-const total = ref(0)
-const keyword = ref('')
-const currentCategory = ref('')
-const currentCategoryName = ref('')
-
-// 分类
-const categories = ref<SkillCategory[]>([])
-const categoryDialogVisible = ref(false)
-
-// 编辑
+// ── 技能表格 ──
+const tableRef = ref()
+const formRef = ref()
+const selectedRows = ref<Skill[]>([])
 const dialogVisible = ref(false)
-const editFormRef = ref()
-const editForm = reactive<{
-  id?: number
-  skillCode: string
-  skillName: string
-  description?: string
-  category: string
-  isActive: boolean
-  inputs: any[]
-  outputs: any[]
-  reflection: { classPath: string; methodName: string }
-}>({
-  skillCode: '',
-  skillName: '',
-  category: 'data_access',
-  isActive: true,
-  inputs: [],
-  outputs: [],
-  reflection: { classPath: '', methodName: 'ExecuteAsync' }
-})
+const dialogMode = ref<'add' | 'edit'>('add')
+let formData = reactive<Partial<Skill>>({})
+const submitting = ref(false)
 
-// 反射分析
-const analyzing = ref(false)
-const analyzed = ref<AnalyzedSkill | null>(null)
-const analyzeError = ref('')
+const columns: YzhTableColumn<Skill>[] = [
+  { prop: 'Code', label: '编码', width: 160 },
+  { prop: 'Name', label: '名称', width: 160 },
+  { prop: 'CategoryCode', label: '分类', width: 120, formatter: (v: any) => getCategoryName(v) },
+  { prop: 'SkillType', label: '类型', width: 80 },
+  { prop: 'Description', label: '说明', minWidth: 200 },
+  { prop: 'IsValid', label: '状态', width: 80, formatter: (v: any) => v === 1 ? '启用' : '停用' },
+  { prop: 'CreateTime', label: '创建时间', width: 180 },
+  { prop: 'actions', label: '操作', width: 200, fixed: 'right', slot: true }
+]
 
-const typeMap: Record<string, string> = {
-  boolean: 'success',
-  string: '',
-  number: 'warning',
-  date: 'info',
-  json: 'danger'
-}
+const searchFields: SearchField[] = [
+  { prop: 'Name', label: '名称', type: 'text' }
+]
 
-const bindModeMap: Record<string, string> = {
-  Link: '仅连线',
-  LinkOrConstant: '连线/常量',
-  Enum: '字典选择'
-}
+const formFields = computed<YzhFormField[]>(() => [
+  { prop: 'Code', label: '编码', type: 'text', required: true, span: 12, disabled: dialogMode.value === 'edit' },
+  { prop: 'Name', label: '名称', type: 'text', required: true, span: 12 },
+  { prop: 'CategoryCode', label: '分类', type: 'select', span: 12, options: categoryOptions.value },
+  { prop: 'SkillType', label: '类型', type: 'select', span: 12, options: [{ label: '手动', value: 'manual' }, { label: 'API', value: 'api' }] },
+  { prop: 'Description', label: '说明', type: 'textarea', span: 24 },
+  { prop: 'PromptTemplate', label: 'Prompt模板', type: 'textarea', span: 24 },
+  { prop: 'SortOrder', label: '排序', type: 'number', span: 12 },
+  { prop: 'IsValid', label: '状态', type: 'switch', span: 12, defaultValue: 1 }
+])
 
-const bindModeTagMap: Record<string, string> = {
-  Link: 'primary',
-  LinkOrConstant: 'warning',
-  Enum: 'success'
-}
-
-async function loadCategories() {
-  try {
-    const res = await getSkillCategories()
-    categories.value = res || []
-  } catch (e: any) {
-    ElMessage.error('加载分类失败')
+async function loadData(params: PageParams) {
+  const filters: any[] = []
+  if (params.Name) {
+    filters.push({ Field: 'name', Operator: 'like', Value: params.Name })
   }
-}
-
-function getCategoryName(code: string) {
-  return categories.value.find(c => c.categoryCode === code)?.categoryName || code
-}
-
-function selectCategory(code: string, name: string) {
-  currentCategory.value = code
-  currentCategoryName.value = name || ''
-  page.value = 1
-  loadData()
-}
-
-async function loadData() {
-  loading.value = true
-  try {
-    const res = await getSkillPage({ page: page.value, rows: pageSize.value }, { keyword: keyword.value || null, category: currentCategory.value || null })
-    tableData.value = res?.rows || []
-    total.value = res?.total || 0
-  } catch (e: any) {
-    ElMessage.error('加载失败')
-  } finally {
-    loading.value = false
+  if (currentCategory.value) {
+    filters.push({ Field: 'category_code', Operator: 'eq', Value: currentCategory.value })
   }
+  const res = await getSkillPage({
+    Page: params.page,
+    PageSize: params.rows,
+    Filters: filters
+  })
+  if (res.success && res.data) {
+    return { rows: res.data.Items ?? [], total: res.data.TotalCount ?? 0 }
+  }
+  return { rows: [], total: 0 }
 }
 
-function openEdit(row: Skill | null) {
-  if (row) {
-    editForm.id = row.id
-    editForm.skillCode = row.skillCode
-    editForm.skillName = row.skillName
-    editForm.description = row.description
-    editForm.category = row.category
-    editForm.isActive = row.isActive
-    editForm.inputs = row.inputs || []
-    editForm.outputs = row.outputs || []
-    editForm.reflection = row.reflection || { classPath: '', methodName: 'ExecuteAsync' }
-    if (row.reflection?.classPath && (row.inputs?.length > 0 || row.outputs?.length > 0)) {
-      analyzed.value = {
-        code: row.skillCode,
-        name: row.skillName,
-        returnType: row.outputs?.find(o => o.outputName === 'result')?.outputType || 'json',
-        description: row.description || '',
-        inputPorts: (row.inputs || []).map(i => ({ ...i })),
-        outputPorts: (row.outputs || []).map(o => ({ ...o }))
-      }
-    }
-  } else {
-    editForm.id = undefined
-    editForm.skillCode = ''
-    editForm.skillName = ''
-    editForm.description = ''
-    editForm.category = currentCategory.value || 'data_access'
-    editForm.isActive = true
-    editForm.inputs = []
-    editForm.outputs = []
-    editForm.reflection = { classPath: '', methodName: 'ExecuteAsync' }
-    analyzed.value = null
-    analyzeError.value = ''
-  }
+function onAdd() {
+  dialogMode.value = 'add'
+  formData = reactive<Partial<Skill>>({ SkillType: 'manual', SortOrder: 0, IsValid: 1 })
   dialogVisible.value = true
 }
 
-async function analyzeReflection() {
-  if (!editForm.reflection.classPath) {
-    ElMessage.warning('请先填写实现类全名')
-    return
-  }
-  analyzing.value = true
-  analyzed.value = null
-  analyzeError.value = ''
-  try {
-    const res = await analyzeSkill({
-      classPath: editForm.reflection.classPath,
-      methodName: editForm.reflection.methodName || 'ExecuteAsync'
-    })
-    analyzed.value = res
-    ElMessage.success('反射验证通过')
-  } catch (e: any) {
-    analyzeError.value = e?.message || '反射验证失败'
-    ElMessage.error(analyzeError.value)
-  } finally {
-    analyzing.value = false
-  }
+function onEdit(row: Skill) {
+  dialogMode.value = 'edit'
+  formData = reactive<Partial<Skill>>({ ...row })
+  dialogVisible.value = true
 }
 
-async function handleSave() {
-  if (!analyzed.value) {
-    ElMessage.warning('请先验证反射信息')
-    return
-  }
+async function onSubmit() {
+  const valid = await formRef.value?.validate().catch(() => false)
+  if (!valid) return
+  submitting.value = true
   try {
-    const skillData: Skill = {
-      id: editForm.id,
-      skillCode: editForm.skillCode,
-      skillName: editForm.skillName,
-      description: editForm.description,
-      category: editForm.category,
-      isActive: editForm.isActive,
-      inputs: editForm.inputs,
-      outputs: editForm.outputs,
-      reflection: editForm.reflection
+    const data = formData as Skill
+    if (dialogMode.value === 'add') {
+      await addSkill(data)
+    } else {
+      await updateSkill(data)
     }
-    await saveSkill(skillData)
     ElMessage.success('保存成功')
     dialogVisible.value = false
-    loadData()
+    tableRef.value?.refresh()
   } catch (e: any) {
     ElMessage.error(e?.message || '保存失败')
+  } finally {
+    submitting.value = false
   }
 }
 
-async function handleDelete(row: Skill) {
-  try {
-    await ElMessageBox.confirm(`确认删除 Skill「${row.skillName}」？`, '确认', { type: 'warning' })
-  } catch { return }
-  try {
-    await deleteSkill(row.id!)
-    ElMessage.success('删除成功')
-    loadData()
-  } catch (e: any) {
-    ElMessage.error(e?.message || '删除失败')
+async function onDelete(row: Skill) {
+  try { await ElMessageBox.confirm(`确定删除技能「${row.Name}」吗？`, '删除确认', { type: 'warning' }) } catch { return }
+  await deleteSkill([row.Code!])
+  ElMessage.success('删除成功')
+  tableRef.value?.refresh()
+}
+
+async function onToggle(row: Skill) {
+  if (!row.Code) return
+  await toggleSkillValid(row.Code)
+  ElMessage.success('状态已更新')
+  tableRef.value?.refresh()
+}
+
+// ── 分类管理 ──
+const categories = ref<SkillCategory[]>([])
+const categoryOptions = computed(() =>
+  categories.value.filter(c => c.IsValid === 1).map(c => ({ label: c.Name, value: c.Code }))
+)
+const currentCategory = ref('')
+const categoryDialogVisible = ref(false)
+const categoryFormRef = ref()
+const categoryDialogMode = ref<'add' | 'edit'>('add')
+const categoryEditVisible = ref(false)
+let categoryFormData = reactive<Partial<SkillCategory>>({})
+
+const categoryFormFields = computed<YzhFormField[]>(() => [
+  { prop: 'Code', label: '编码', type: 'text', required: true, span: 12, disabled: categoryDialogMode.value === 'edit' },
+  { prop: 'Name', label: '名称', type: 'text', required: true, span: 12 },
+  { prop: 'SortOrder', label: '排序', type: 'number', span: 12 },
+  { prop: 'IsValid', label: '状态', type: 'switch', span: 12, defaultValue: 1 }
+])
+
+function getCategoryName(code: string) {
+  return categories.value.find(c => c.Code === code)?.Name || code || '-'
+}
+
+async function loadCategories() {
+  const res = await getSkillCategoryPage({ Page: 1, PageSize: 100 })
+  if (res.success && res.data) {
+    categories.value = res.data.Items ?? []
   }
 }
 
-async function toggleActive(row: Skill) {
-  try {
-    await toggleSkillActive(row.id!)
-    ElMessage.success('操作成功')
-    loadData()
-  } catch (e: any) {
-    ElMessage.error(e?.message || '操作失败')
-  }
+function selectCategory(code: string) {
+  currentCategory.value = code
+  tableRef.value?.refresh()
 }
 
-function addCategory() {
-  categories.value.push({ id: 0, categoryCode: '', categoryName: '', icon: '', color: '#409EFF', sortOrder: categories.value.length + 1, enable: true })
+function onAddCategory() {
+  categoryDialogMode.value = 'add'
+  categoryFormData = reactive<Partial<SkillCategory>>({ SortOrder: 0, IsValid: 1 })
+  categoryEditVisible.value = true
 }
 
-async function saveCategory(row: SkillCategory) {
-  if (!row.categoryCode || !row.categoryName) {
-    ElMessage.warning('分类编码与名称必填')
-    return
-  }
+function onEditCategory(row: SkillCategory) {
+  categoryDialogMode.value = 'edit'
+  categoryFormData = reactive<Partial<SkillCategory>>({ ...row })
+  categoryEditVisible.value = true
+}
+
+async function onSubmitCategory() {
+  const valid = await categoryFormRef.value?.validate().catch(() => false)
+  if (!valid) return
   try {
-    await saveSkillCategory(row)
+    const data = categoryFormData as SkillCategory
+    if (categoryDialogMode.value === 'add') {
+      await addSkillCategory(data)
+    } else {
+      await updateSkillCategory(data)
+    }
     ElMessage.success('保存成功')
+    categoryEditVisible.value = false
     loadCategories()
   } catch (e: any) {
     ElMessage.error(e?.message || '保存失败')
   }
 }
 
-async function deleteCategory(row: SkillCategory) {
-  if (!row.id) {
-    categories.value = categories.value.filter(c => c !== row)
-    return
-  }
-  try {
-    await ElMessageBox.confirm(`确认删除分类「${row.categoryName}」？`, '确认', { type: 'warning' })
-    await deleteSkillCategory(row.id)
-    ElMessage.success('删除成功')
-    loadCategories()
-  } catch (e: any) {
-    if (e !== 'cancel') ElMessage.error(e?.message || '删除失败')
-  }
+async function onDeleteCategory(row: SkillCategory) {
+  try { await ElMessageBox.confirm(`确定删除分类「${row.Name}」吗？`, '删除确认', { type: 'warning' }) } catch { return }
+  await deleteSkillCategory([row.Code!])
+  ElMessage.success('删除成功')
+  loadCategories()
 }
 
-function getTypeTagType(type: string) {
-  return typeMap[type] || ''
-}
-
-function getBindModeLabel(mode: string) {
-  return bindModeMap[mode] || mode || '连线/常量'
-}
-
-function getBindModeTagType(mode: string) {
-  return bindModeTagMap[mode] || ''
-}
-
-onMounted(() => { loadCategories(); loadData() })
+onMounted(() => { loadCategories() })
 </script>
 
 <template>
-  <YzhPageLayout title="Skill 管理">
-    <template #toolbar>
-      <el-button @click="categoryDialogVisible = true">
-        <el-icon><Setting /></el-icon> 管理分类
-      </el-button>
-    </template>
-
+  <div class="skill-page">
     <!-- 左侧分类 -->
     <el-card shadow="never" class="category-card">
       <template #header>
         <div class="category-header">
-          <span>Skill 分类</span>
+          <span>分类</span>
+          <el-button text type="primary" size="small" @click="categoryDialogVisible = true">管理</el-button>
         </div>
       </template>
       <div class="category-list">
-        <div class="category-item" :class="{ active: currentCategory === '' }" @click="selectCategory('', '全部')">
-          <span class="cat-dot" style="background: #909399"></span>
+        <div class="category-item" :class="{ active: currentCategory === '' }" @click="selectCategory('')">
           全部
         </div>
-        <div v-for="cat in categories" :key="cat.categoryCode" class="category-item" :class="{ active: currentCategory === cat.categoryCode }" @click="selectCategory(cat.categoryCode, cat.categoryName)">
-          <span class="cat-dot" :style="{ background: cat.color || '#409EFF' }"></span>
-          {{ cat.categoryName }}
+        <div v-for="cat in categories" :key="cat.Code" class="category-item" :class="{ active: currentCategory === cat.Code }" @click="selectCategory(cat.Code!)">
+          {{ cat.Name }}
         </div>
       </div>
     </el-card>
 
-    <!-- 右侧列表 -->
-    <el-card shadow="never" class="table-card">
-      <template #header>
-        <div class="card-header">
-          <span class="card-title">
-            Skill 列表
-            <el-tag v-if="currentCategory" size="small" style="margin-left: 8px">{{ currentCategoryName }}</el-tag>
-          </span>
-          <div class="card-actions">
-            <el-input v-model="keyword" placeholder="按编码/名称搜索" clearable style="width: 220px; margin-right: 8px" @keyup.enter="loadData" @clear="loadData" />
-            <el-button type="primary" @click="loadData">查询</el-button>
-            <el-button type="primary" @click="openEdit(null)">
-              <el-icon><Plus /></el-icon> 新建 Skill
+    <!-- 右侧表格 -->
+    <div class="table-area">
+      <YzhTable ref="tableRef" :columns="columns" :data-loader="loadData" :search-fields="searchFields" selectable @selection-change="selectedRows = $event">
+        <template #toolbar-left>
+          <el-button type="primary" @click="onAdd"><i class="bi bi-plus"></i> 新增</el-button>
+          <el-button type="danger" plain :disabled="selectedRows.length === 0" @click="onDelete(selectedRows[0])"><i class="bi bi-trash"></i> 批量删除</el-button>
+        </template>
+        <template #column-actions="{ row }">
+          <div class="action-cell">
+            <el-button text type="primary" @click="onEdit(row)">编辑</el-button>
+            <el-button text :type="row.IsValid === 1 ? 'warning' : 'success'" @click="onToggle(row)">
+              {{ row.IsValid === 1 ? '禁用' : '启用' }}
             </el-button>
+            <el-button text type="danger" @click="onDelete(row)">删除</el-button>
           </div>
-        </div>
-      </template>
+        </template>
+      </YzhTable>
+    </div>
 
-      <el-table :data="tableData" stripe border v-loading="loading">
-        <el-table-column prop="skillCode" label="编码" width="160" />
-        <el-table-column prop="skillName" label="名称" width="160" show-overflow-tooltip />
-        <el-table-column label="分类" width="120" align="center">
-          <template #default="{ row }">
-            <el-tag size="small">{{ getCategoryName(row.category) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="description" label="说明" min-width="200" show-overflow-tooltip />
-        <el-table-column label="启用" width="80" align="center">
-          <template #default="{ row }">
-            <el-switch :model-value="row.isActive" @change="toggleActive(row)" />
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right">
-          <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <el-pagination
-        v-model:current-page="page"
-        :page-size="pageSize"
-        :total="total"
-        layout="total, prev, pager, next"
-        style="margin-top: 12px; justify-content: flex-end"
-        @current-change="loadData"
-      />
-    </el-card>
-
-    <!-- 编辑弹窗 -->
-    <el-dialog v-model="dialogVisible" :title="editForm.id ? `编辑 Skill：${editForm.skillCode}` : '新建 Skill'" width="800px" destroy-on-close>
-      <el-form ref="editFormRef" :model="editForm" label-width="110px">
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="Skill 编码" prop="skillCode">
-              <el-input v-model="editForm.skillCode" :disabled="!!editForm.id" placeholder="get_field" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="Skill 名称" prop="skillName">
-              <el-input v-model="editForm.skillName" placeholder="值比较" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="功能分类">
-              <el-select v-model="editForm.category" style="width: 100%">
-                <el-option v-for="cat in categories" :key="cat.categoryCode" :label="cat.categoryName" :value="cat.categoryCode" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="说明">
-              <el-input v-model="editForm.description" type="textarea" :rows="2" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :span="16">
-            <el-form-item label="实现类全名" prop="reflection.classPath">
-              <el-input v-model="editForm.reflection.classPath" placeholder="YZH.Core.Skills.GetFieldSkill" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="方法名">
-              <el-input v-model="editForm.reflection.methodName" placeholder="ExecuteAsync" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <div style="text-align: center; margin-bottom: 16px">
-          <el-button type="warning" @click="analyzeReflection" :loading="analyzing">
-            <el-icon><Check /></el-icon> 验证反射
-          </el-button>
-        </div>
-      </el-form>
-
-      <!-- 反射分析结果 -->
-      <div v-if="analyzed" class="port-section">
-        <el-alert type="success" :closable="false" show-icon style="margin-bottom: 12px">
-          <template #title>
-            反射验证通过：{{ analyzed.name }}（{{ analyzed.code }}）| 返回类型：{{ analyzed.returnType }}
-          </template>
-        </el-alert>
-
-        <div class="section-title">输入端口（反射提取，只读）</div>
-        <el-table :data="analyzed.inputPorts" border size="small">
-          <el-table-column label="端口名" min-width="140">
-            <template #default="{ row }"><span class="port-name">{{ row.name }}</span></template>
-          </el-table-column>
-          <el-table-column label="类型" width="100" align="center">
-            <template #default="{ row }"><el-tag size="small" :type="getTypeTagType(row.type)">{{ row.type }}</el-tag></template>
-          </el-table-column>
-          <el-table-column label="必填" width="60" align="center">
-            <template #default="{ row }"><el-tag :type="row.required ? 'danger' : 'info'" size="small">{{ row.required ? '是' : '否' }}</el-tag></template>
-          </el-table-column>
-          <el-table-column label="绑定模式" width="120" align="center">
-            <template #default="{ row }">
-              <el-tag size="small" :type="getBindModeTagType(row.bindMode)">{{ getBindModeLabel(row.bindMode) }}</el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <div class="section-title" style="margin-top: 12px">输出端口</div>
-        <el-table :data="analyzed.outputPorts" border size="small">
-          <el-table-column label="端口名" min-width="140">
-            <template #default="{ row }"><span class="port-name">{{ row.name }}</span></template>
-          </el-table-column>
-          <el-table-column label="类型" width="100" align="center">
-            <template #default="{ row }"><el-tag size="small" :type="getTypeTagType(row.type)">{{ row.type }}</el-tag></template>
-          </el-table-column>
-          <el-table-column label="说明" min-width="200">
-            <template #default="{ row }"><span class="code-desc">{{ row.description }}</span></template>
-          </el-table-column>
-        </el-table>
-      </div>
-
-      <div v-if="analyzeError" class="empty-tip">
-        <el-alert type="error" :closable="false" show-icon :title="analyzeError" />
-      </div>
-
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSave" :disabled="!analyzed">保存</el-button>
-      </template>
+    <!-- 技能编辑弹窗 -->
+    <el-dialog v-model="dialogVisible" :title="dialogMode === 'add' ? '新增技能' : '编辑技能'" width="700px">
+      <YzhForm ref="formRef" v-model="formData" :fields="formFields" :loading="submitting" @submit="onSubmit" @reset="dialogVisible = false" />
     </el-dialog>
 
     <!-- 分类管理弹窗 -->
-    <el-dialog v-model="categoryDialogVisible" title="Skill 分类管理" width="760px">
+    <el-dialog v-model="categoryDialogVisible" title="分类管理" width="600px">
       <el-table :data="categories" border size="small">
         <el-table-column label="编码" width="140">
-          <template #default="{ row }"><el-input v-model="row.categoryCode" size="small" /></template>
+          <template #default="{ row }">{{ row.Code }}</template>
         </el-table-column>
         <el-table-column label="名称" width="130">
-          <template #default="{ row }"><el-input v-model="row.categoryName" size="small" /></template>
-        </el-table-column>
-        <el-table-column label="颜色" width="90" align="center">
-          <template #default="{ row }"><el-color-picker v-model="row.color" size="small" /></template>
+          <template #default="{ row }">{{ row.Name }}</template>
         </el-table-column>
         <el-table-column label="排序" width="80">
-          <template #default="{ row }"><el-input-number v-model="row.sortOrder" :min="0" size="small" controls-position="right" style="width: 100%" /></template>
+          <template #default="{ row }">{{ row.SortOrder }}</template>
         </el-table-column>
         <el-table-column label="操作" width="130" align="center">
           <template #default="{ row }">
-            <div class="row-actions">
-              <el-button type="primary" link size="small" @click="saveCategory(row)">保存</el-button>
-              <el-button type="danger" link size="small" @click="deleteCategory(row)">删除</el-button>
-            </div>
+            <el-button type="primary" link size="small" @click="onEditCategory(row)">编辑</el-button>
+            <el-button type="danger" link size="small" @click="onDeleteCategory(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
-      <el-button type="primary" plain size="small" style="margin-top: 8px" @click="addCategory">+ 新增分类</el-button>
+      <el-button type="primary" plain size="small" style="margin-top: 8px" @click="onAddCategory">+ 新增分类</el-button>
     </el-dialog>
-  </YzhPageLayout>
+
+    <!-- 分类编辑弹窗 -->
+    <el-dialog v-model="categoryEditVisible" :title="categoryDialogMode === 'add' ? '新增分类' : '编辑分类'" width="500px" destroy-on-close>
+      <YzhForm ref="categoryFormRef" v-model="categoryFormData" :fields="categoryFormFields" @submit="onSubmitCategory" @reset="categoryEditVisible = false" />
+    </el-dialog>
+  </div>
 </template>
 
 <style scoped>
+.skill-page { padding: 20px; display: flex; gap: 16px; height: 100%; }
 .category-card { width: 200px; min-width: 200px; }
+.category-header { display: flex; align-items: center; justify-content: space-between; }
 .category-list { overflow-y: auto; }
-.category-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin-bottom: 4px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.category-item { padding: 8px 12px; margin-bottom: 4px; border-radius: 6px; cursor: pointer; font-size: 13px; }
 .category-item:hover { background: #f5f7fa; }
 .category-item.active { background: #ecf5ff; color: #409EFF; font-weight: 600; }
-.cat-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.table-card { flex: 1; }
-.card-header { display: flex; align-items: center; justify-content: space-between; }
-.card-title { font-size: 15px; font-weight: 600; }
-.card-actions { display: flex; align-items: center; }
-.section-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
-.port-name { font-family: monospace; font-size: 13px; font-weight: 600; }
-.code-desc { font-size: 12px; color: #909399; }
-.row-actions { display: flex; gap: 4px; }
-.empty-tip { padding: 24px 0; text-align: center; }
+.table-area { flex: 1; min-width: 0; }
+.action-cell { display: flex; flex-wrap: nowrap; gap: 2px; }
 </style>

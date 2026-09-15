@@ -1,55 +1,83 @@
 import { yzhApi } from '@yzh-core/api/client'
-import type { Page, PageParams } from '@yzh-core/types'
+import type {
+  ReportTemplate,
+  ReportSection,
+} from '@share/types/cert'
 
-export interface ReportTemplate {
-  id: number
-  code?: string
-  templateName: string
-  isDefault: boolean
-  remark?: string
-  chapterCount?: number
-  orgCode?: string
-  standardCode?: string
-  phaseCode?: string
-  createDate?: string
+const API_PREFIX = '/api/ReportDefinition'
+
+// ========================================================
+// 模板 CRUD
+// ========================================================
+
+/** 按上下文查询模板 */
+export function getTemplateByContext(params: {
+  orgCode: string
+  standardCode: string
+  phaseCode: string
+}) {
+  return yzhApi.get<ReportTemplate>(
+    `${API_PREFIX}/template/context`,
+    params
+  )
 }
 
-export interface ReportSection {
-  id: number
-  code?: string
-  sectionName: string
-  sectionNameEn?: string
-  sortOrder: number
-  isActive: boolean
-  remark?: string
-  reportCode?: string
-  orgCode?: string
+/** 保存模板（创建/更新） */
+export function saveTemplate(data: Record<string, any>) {
+  return yzhApi.post<ReportTemplate>(
+    `${API_PREFIX}/template/save`,
+    data
+  )
 }
 
-export async function getReportTemplatePage(params: PageParams, filters?: any): Promise<Page<ReportTemplate>> {
-  return yzhApi.post<Page<ReportTemplate>>('/api/ReportDefinition/Template/getPageData', params, { params: filters })
+/** 上传模板文件 */
+export function uploadTemplateFile(
+  file: File,
+  params: { orgCode: string; standardCode: string; phaseCode: string }
+) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return yzhApi.post<{ path: string; fileName: string; size: number }>(
+    `${API_PREFIX}/template/upload`,
+    formData,
+    { params }
+  )
 }
 
-export async function getReportTemplate(code: string): Promise<ReportTemplate> {
-  return yzhApi.get<ReportTemplate>(`/api/ReportDefinition/Template/getDetail?code=${code}`)
+/** 删除模板 */
+export function deleteTemplate(id: number) {
+  return yzhApi.post<boolean>(
+    `${API_PREFIX}/template/delete`,
+    null,
+    { params: { id } }
+  )
 }
 
-export async function saveReportTemplate(data: Partial<ReportTemplate>): Promise<any> {
-  return yzhApi.post('/api/ReportDefinition/Template/save', data)
+// ========================================================
+// 章节 CRUD
+// ========================================================
+
+/** 按模板编码查询章节列表 */
+export function getSectionList(reportCode: string) {
+  return yzhApi.get<ReportSection[]>(
+    `${API_PREFIX}/section/list`,
+    { reportCode }
+  )
 }
 
-export async function deleteReportTemplate(id: number): Promise<any> {
-  return yzhApi.post(`/api/ReportDefinition/Template/delete?id=${id}`)
+/** 保存章节（创建/更新） */
+export function saveSection(data: Record<string, any>) {
+  return yzhApi.post<ReportSection>(
+    `${API_PREFIX}/section/save`,
+    data
+  )
 }
 
-export async function getReportSectionList(reportCode: string): Promise<ReportSection[]> {
-  return yzhApi.get<ReportSection[]>(`/api/ReportDefinition/Section/list?reportCode=${reportCode}`)
-}
-
-export async function saveReportSection(data: Partial<ReportSection>): Promise<any> {
-  return yzhApi.post('/api/ReportDefinition/Section/save', data)
-}
-
-export async function deleteReportSection(id: number): Promise<any> {
-  return yzhApi.post(`/api/ReportDefinition/Section/delete?id=${id}`)
+/** 删除章节 */
+export function deleteSection(id: number) {
+  return yzhApi.post<boolean>(
+    `${API_PREFIX}/section/delete`,
+    null,
+    { params: { id } }
+  )
 }

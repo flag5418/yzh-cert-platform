@@ -14,13 +14,12 @@ import {
 import { YzhFolderUpload } from '@share/components'
 import { useFileTree, type TreeNode } from '@share/composables/useFileTree'
 import {
-  getFolders,
+  getFoldersFlat,
   getFiles,
   getRootFiles,
   createFolder,
   updateFolder,
   deleteFolder,
-  updateFile,
   deleteFile,
   downloadFile,
   uploadInit,
@@ -91,7 +90,7 @@ async function loadCurrentContent() {
     if (!currentFolderCode.value) {
       // 根级别：加载文件夹 + 根级文件
       const [folders, rootFiles] = await Promise.all([
-        getFolders(directoryCode),
+        getFoldersFlat(directoryCode),
         getRootFiles(directoryCode),
       ])
       currentFolders.value = folders || []
@@ -99,7 +98,7 @@ async function loadCurrentContent() {
     } else {
       // 子文件夹级别：加载子文件夹和文件
       const [folders, files] = await Promise.all([
-        getFolders(directoryCode),
+        getFoldersFlat(directoryCode),
         getFiles(currentFolderCode.value),
       ])
       
@@ -295,7 +294,7 @@ async function onUploadSubmit() {
     ElMessage.warning('请选择文件')
     return
   }
-  
+
   uploading.value = true
   const filteredFiles = filterIgnoredFiles(uploadFiles.value)
   if (filteredFiles.length === 0) {
@@ -304,27 +303,46 @@ async function onUploadSubmit() {
     return
   }
   uploadProgress.value = { status: 'uploading', currentFile: '', completed: 0, total: filteredFiles.length }
-  
+
   try {
-    const directoryCode = currentPhase.value!.directoryCode!
+    const directoryCode = currentPhase.value?.directoryCode || ''
+    if (!directoryCode) {
+      ElMessage.error('请先选择左侧的阶段节点')
+      uploading.value = false
+      return
+    }
+    console.log('[onUploadSubmit] directoryCode:', directoryCode, 'files:', filteredFiles.map(f => ({ name: f.name, webkitRelativePath: (f as any).webkitRelativePath })))
+
     const { taskId, fileMap } = await uploadInit(directoryCode, filteredFiles)
-    
+    console.log('[onUploadSubmit] taskId:', taskId, 'fileMap keys:', Object.keys(fileMap))
+
+    if (!taskId) {
+      ElMessage.error('上传初始化失败：未获取到 TaskId')
+      uploading.value = false
+      return
+    }
+
     for (let i = 0; i < filteredFiles.length; i++) {
       const file = filteredFiles[i]
       uploadProgress.value.currentFile = file.name
       uploadProgress.value.completed = i + 1
-      
+
       const relPath = (file as any).webkitRelativePath || file.name
       const mapped = fileMap[relPath]
-      if (!mapped?.fileCode) continue
+      console.log(`[onUploadSubmit] File ${i}: ${file.name}, relPath: "${relPath}", mapped:`, mapped)
+      if (!mapped?.fileCode) {
+        console.warn(`[onUploadSubmit] Skip file ${file.name}: no fileCode found for relPath "${relPath}"`)
+        continue
+      }
       await uploadFile(taskId, mapped.fileCode, file)
     }
-    
+
     await uploadConfirm(taskId)
     ElMessage.success('上传成功')
     showUploadDialog.value = false
     loadCurrentContent()
   } catch (e: any) {
+    console.error('[onUploadSubmit] Error:', e)
     ElMessage.error('上传失败：' + (e?.message || ''))
   } finally {
     uploading.value = false

@@ -38,6 +38,16 @@ export type {
   YzhApiClientOptions,
 } from './api/client'
 
+// 文件存储（通用上传/下载能力）
+export {
+  uploadFile,
+  uploadFileBatch,
+  getFileUrl,
+  deleteFile as deleteStorageFile,
+  fileExists,
+  listFiles,
+} from './api/file-storage'
+
 // Composables
 export { useAuth } from './composables/useAuth'
 export { useTable } from './composables/useTable'

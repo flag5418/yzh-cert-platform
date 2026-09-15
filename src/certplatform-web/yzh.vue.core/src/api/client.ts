@@ -94,7 +94,8 @@ export class YzhApiClient {
       }
     }
 
-    if (method === 'GET' && params) {
+    // 构建查询参数（GET 或 POST+body 时 params 都追加到 URL）
+    if (params) {
       const qs = new URLSearchParams()
       Object.entries(params).forEach(([k, v]) => {
         if (v === undefined || v === null) return
@@ -102,10 +103,14 @@ export class YzhApiClient {
       })
       const q = qs.toString()
       if (q) finalUrl += (url.includes('?') ? '&' : '?') + q
-    } else if (body !== undefined) {
+    }
+
+    // 请求体
+    if (body !== undefined) {
       fetchOptions.body = JSON.stringify(body)
-    } else if (params) {
-      fetchOptions.body = JSON.stringify(params)
+    } else if (method !== 'GET' && !params) {
+      // 无 body 无 params 的 POST，发空 JSON
+      fetchOptions.body = '{}'
     }
 
     try {

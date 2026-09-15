@@ -386,3 +386,47 @@ export interface QueueStatus {
   maxConcurrent: number
   runningWorkers: number
 }
+
+// ========================================================
+// 报告定义
+// ========================================================
+
+/** 报告模板 */
+export interface ReportTemplate {
+  Id: number
+  Code: string
+  OrgCode: string
+  StandardCode: string
+  PhaseCode: string
+  TemplateName: string
+  TemplateFilePath: string
+  Remark: string
+  IsDefault: boolean
+  IsValid: number
+  CreateBy: string
+  CreateDate: string
+  ModifyDate: string
+}
+
+/** 报告章节 */
+export interface ReportSection {
+  Id: number
+  Code: string
+  ReportCode: string
+  ClauseCode: string
+  SectionName: string
+  SectionNameEn: string
+  Content: string
+  SortOrder: number
+  IsActive: number
+  WorkflowCode: string
+  WorkflowConfig: string
+  LayoutJson: string
+  SectionJson: string
+  OrgCode: string
+  Remark: string
+  IsValid: number
+  CreateBy: string
+  CreateDate: string
+  ModifyDate: string
+}

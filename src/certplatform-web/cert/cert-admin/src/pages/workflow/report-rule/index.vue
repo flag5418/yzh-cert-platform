@@ -1,216 +1,483 @@
 <script setup lang="ts">
 /**
- * 报告章节定义 — YzhTable 配置驱动（模板列表）
- * 右侧章节子表保留 el-table（从属数据，非标准 CRUD 页面）
+ * 报告章节定义 — 左侧组织树 + 右侧模板表单 + 章节表格
+ * 迁移自旧项目 ReportDefinition.vue，适配 YZH.Core 新架构
  */
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Upload, Document } from '@element-plus/icons-vue'
+import { YzhPageLayout, YzhForm, type YzhFormField } from '@yzh-core'
+import { useFileTree, type TreeNode } from '@share/composables/useFileTree'
 import {
-  YzhPageLayout,
-  YzhTable,
-  YzhForm,
-  type YzhTableColumn,
-  type YzhFormField,
-  type PageParams
-} from '@yzh-core'
-import {
-  getReportTemplatePage,
-  saveReportTemplate,
-  deleteReportTemplate,
-  getReportSectionList,
-  saveReportSection,
-  deleteReportSection,
-  type ReportTemplate,
-  type ReportSection
+  getTemplateByContext,
+  saveTemplate,
+  uploadTemplateFile,
+  deleteTemplate,
+  getSectionList,
+  saveSection,
+  deleteSection,
 } from '@share/api/workflow/report-rule'
+import type { ReportTemplate, ReportSection } from '@share/types/cert'
 
-const tableRef = ref()
-const formRef = ref()
+// ── 树 ──
+const { fileTreeData, loading: treeLoading, loadTree } = useFileTree()
 
-// 当前选中的模板
+// ── 右侧面板状态 ──
+const selectedPhase = ref<TreeNode | null>(null)
 const currentTemplate = ref<ReportTemplate | null>(null)
+const templateLoading = ref(false)
 const sectionLoading = ref(false)
 const sectionData = ref<ReportSection[]>([])
+const saving = ref(false)
 
-// 编辑弹窗
-const dialogVisible = ref(false)
+// ── 模板表单（PascalCase，与后端 JSON 序列化一致）──
+const templateForm = reactive({
+  TemplateName: '',
+  Remark: '',
+  IsDefault: false,
+})
+
+// ── 章节编辑 ──
 const sectionDialogVisible = ref(false)
-const editForm = reactive<Partial<ReportTemplate>>({ templateName: '', isDefault: false, remark: '' })
-const sectionForm = reactive<Partial<ReportSection>>({ sectionName: '', sectionNameEn: '', sortOrder: 0, isActive: true, remark: '' })
-const submitting = ref(false)
-const dialogMode = ref<'add' | 'edit'>('add')
+const sectionForm = reactive<Partial<ReportSection>>({
+  SectionName: '',
+  SectionNameEn: '',
+  ClauseCode: '',
+  SortOrder: 0,
+  IsActive: 1,
+  Remark: '',
+})
+const sectionFormMode = ref<'add' | 'edit'>('add')
 
-// ── 模板表格列定义 ──
-const columns: YzhTableColumn<ReportTemplate>[] = [
-  { prop: 'templateName', label: '模板名称', minWidth: 180 },
-  { prop: 'isDefault', label: '默认', width: 60, align: 'center', formatter: (v: any) => v ? '是' : '否' },
-  { prop: 'chapterCount', label: '章节数', width: 80, align: 'center' },
-  { prop: 'remark', label: '备注', minWidth: 150 },
-  { prop: 'actions', label: '操作', width: 120, fixed: 'right', slot: true }
-]
-
-// ── 模板表单字段 ──
-const templateFormFields: YzhFormField[] = [
-  { prop: 'templateName', label: '模板名称', type: 'text', required: true, span: 24, placeholder: '如：ISO9001第一阶段审核报告' },
-  { prop: 'isDefault', label: '是否默认', type: 'switch', span: 24 },
-  { prop: 'remark', label: '备注', type: 'textarea', span: 24 }
-]
-
-// ── 章节表单字段 ──
+// ── 章节表单字段定义 ──
 const sectionFormFields: YzhFormField[] = [
-  { prop: 'sectionName', label: '章节名称', type: 'text', required: true, span: 24, placeholder: '如：审核发现' },
-  { prop: 'sectionNameEn', label: '英文名称', type: 'text', span: 24, placeholder: '如：Audit Findings' },
-  { prop: 'sortOrder', label: '排序', type: 'number', span: 24 },
-  { prop: 'isActive', label: '是否启用', type: 'switch', span: 24 },
-  { prop: 'remark', label: '备注', type: 'textarea', span: 24 }
+  { prop: 'SectionName', label: '章节名称', type: 'text', required: true, span: 24, placeholder: '如：审核发现' },
+  { prop: 'SectionNameEn', label: '英文名称', type: 'text', span: 24, placeholder: '如：Audit Findings' },
+  { prop: 'ClauseCode', label: '条款编号', type: 'text', span: 24, placeholder: '如：ISO9001:2015 §8.2' },
+  { prop: 'SortOrder', label: '排序号', type: 'number', span: 24 },
+  { prop: 'IsActive', label: '是否启用', type: 'switch', span: 24 },
+  { prop: 'Remark', label: '备注', type: 'textarea', span: 24 },
 ]
 
-// ── 数据加载（YzhTable 期望返回 Page<T> = { rows, total }）──
-async function loadTemplateData(params: PageParams) {
-  const res = await getReportTemplatePage(params)
-  return { rows: res?.rows ?? [], total: res?.total ?? 0 }
+// ── 计算属性 ──
+const hasPhaseSelected = computed(() => !!selectedPhase.value)
+const hasTemplate = computed(() => !!currentTemplate.value)
+const canEdit = computed(() => hasPhaseSelected.value)
+
+// ── 树节点点击 ──
+async function handleNodeClick(node: TreeNode) {
+  if (node.type !== 'stage') return
+
+  selectedPhase.value = node
+  currentTemplate.value = null
+  sectionData.value = []
+
+  await loadTemplate()
 }
 
-// ── 章节加载 ──
-async function loadSections(template: ReportTemplate) {
-  currentTemplate.value = template
+// ── 加载模板 ──
+async function loadTemplate() {
+  const phase = selectedPhase.value
+  if (!phase || !phase.orgCode || !phase.stdCode || !phase.phaseCode) return
+
+  templateLoading.value = true
+  try {
+    const res = await getTemplateByContext({
+      orgCode: phase.orgCode,
+      standardCode: phase.stdCode,
+      phaseCode: phase.phaseDefinitionCode || phase.phaseCode,
+    })
+    const template = (res as any)?.data ?? res
+    if (template && template.Id) {
+      currentTemplate.value = template
+      Object.assign(templateForm, {
+        TemplateName: template.TemplateName || '',
+        Remark: template.Remark || '',
+        IsDefault: template.IsDefault || false,
+      })
+      await loadSections()
+    } else {
+      currentTemplate.value = null
+      Object.assign(templateForm, { TemplateName: '', Remark: '', IsDefault: false })
+    }
+  } catch {
+    currentTemplate.value = null
+  } finally {
+    templateLoading.value = false
+  }
+}
+
+// ── 保存模板 ──
+async function handleSaveTemplate() {
+  const phase = selectedPhase.value
+  if (!phase) return ElMessage.warning('请先选择阶段')
+  if (!templateForm.TemplateName) return ElMessage.warning('请输入模板名称')
+
+  saving.value = true
+  try {
+    const payload: Record<string, any> = {
+      TemplateName: templateForm.TemplateName,
+      Remark: templateForm.Remark,
+      IsDefault: templateForm.IsDefault,
+      OrgCode: phase.orgCode,
+      StandardCode: phase.stdCode,
+      PhaseCode: phase.phaseDefinitionCode || phase.phaseCode,
+    }
+    if (currentTemplate.value?.Id) {
+      payload.Id = currentTemplate.value.Id
+    }
+    const res = await saveTemplate(payload)
+    const data = (res as any)?.data ?? res
+    if (data?.Id) {
+      currentTemplate.value = data
+      ElMessage.success('保存成功')
+      await loadSections()
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.message || '保存失败')
+  } finally {
+    saving.value = false
+  }
+}
+
+// ── 上传文件 ──
+async function handleUploadFile(options: any) {
+  const phase = selectedPhase.value
+  if (!phase) return ElMessage.warning('请先选择阶段')
+
+  try {
+    const res = await uploadTemplateFile(options.file, {
+      orgCode: phase.orgCode!,
+      standardCode: phase.stdCode!,
+      phaseCode: phase.phaseDefinitionCode || phase.phaseCode!,
+    })
+    const data = (res as any)?.data ?? res
+    ElMessage.success(`上传成功：${data?.fileName}`)
+    options.onSuccess?.(data)
+  } catch (e: any) {
+    ElMessage.error(e?.message || '上传失败')
+    options.onError?.(e)
+  }
+}
+
+// ── 删除模板 ──
+async function handleDeleteTemplate() {
+  if (!currentTemplate.value) return
+  try {
+    await ElMessageBox.confirm(
+      `确定删除模板「${currentTemplate.value.TemplateName}」及其所有章节？`,
+      '确认删除',
+      { type: 'warning' }
+    )
+  } catch { return }
+
+  await deleteTemplate(currentTemplate.value.Id)
+  ElMessage.success('删除成功')
+  currentTemplate.value = null
+  sectionData.value = []
+}
+
+// ── 加载章节 ──
+async function loadSections() {
+  if (!currentTemplate.value?.Code) return
   sectionLoading.value = true
   try {
-    sectionData.value = await getReportSectionList(template.code!)
+    const res = await getSectionList(currentTemplate.value.Code)
+    const data = (res as any)?.data ?? res
+    sectionData.value = Array.isArray(data) ? data : []
   } catch {
-    ElMessage.error('加载章节失败')
+    sectionData.value = []
   } finally {
     sectionLoading.value = false
   }
 }
 
-// ── 模板操作 ──
-function onAddTemplate() {
-  dialogMode.value = 'add'
-  Object.assign(editForm, { id: undefined, templateName: '', isDefault: false, remark: '' })
-  dialogVisible.value = true
-}
-
-function onEditTemplate(row: ReportTemplate) {
-  dialogMode.value = 'edit'
-  Object.assign(editForm, { ...row })
-  dialogVisible.value = true
-}
-
-async function doSaveTemplate() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
-  submitting.value = true
-  try {
-    await saveReportTemplate(editForm as ReportTemplate)
-    ElMessage.success('保存成功')
-    dialogVisible.value = false
-    tableRef.value?.refresh()
-  } catch (e: any) {
-    ElMessage.error(e?.message || '保存失败')
-  } finally {
-    submitting.value = false
-  }
-}
-
-async function doDeleteTemplate(row: ReportTemplate) {
-  try { await ElMessageBox.confirm(`确定删除模板「${row.templateName}」？`, '确认删除', { type: 'warning' }) } catch { return }
-  await deleteReportTemplate(row.id!)
-  ElMessage.success('删除成功')
-  tableRef.value?.refresh()
-}
-
 // ── 章节操作 ──
-function openEditSection(row: ReportSection | null) {
-  if (row) Object.assign(sectionForm, { ...row })
-  else Object.assign(sectionForm, { id: undefined, sectionName: '', sectionNameEn: '', sortOrder: 0, isActive: true, remark: '' })
+function openAddSection() {
+  sectionFormMode.value = 'add'
+  Object.assign(sectionForm, {
+    Id: undefined,
+    SectionName: '',
+    SectionNameEn: '',
+    ClauseCode: '',
+    SortOrder: sectionData.value.length + 1,
+    IsActive: 1,
+    Remark: '',
+  })
   sectionDialogVisible.value = true
 }
 
-async function doSaveSection() {
-  if (!sectionForm.sectionName) { ElMessage.warning('请输入章节名称'); return }
-  if (!currentTemplate.value?.code) { ElMessage.warning('请先选择模板'); return }
-  submitting.value = true
+function openEditSection(row: ReportSection) {
+  sectionFormMode.value = 'edit'
+  Object.assign(sectionForm, { ...row })
+  sectionDialogVisible.value = true
+}
+
+async function handleSaveSection() {
+  if (!sectionForm.SectionName) return ElMessage.warning('请输入章节名称')
+  if (!currentTemplate.value?.Code) return ElMessage.warning('请先保存模板')
+
+  saving.value = true
   try {
-    await saveReportSection({ ...sectionForm, reportCode: currentTemplate.value.code } as ReportSection)
+    const payload: Partial<ReportSection> = {
+      ...sectionForm,
+      ReportCode: currentTemplate.value.Code,
+    }
+    await saveSection(payload)
     ElMessage.success('保存成功')
     sectionDialogVisible.value = false
-    loadSections(currentTemplate.value!)
+    await loadSections()
   } catch (e: any) {
     ElMessage.error(e?.message || '保存失败')
   } finally {
-    submitting.value = false
+    saving.value = false
   }
 }
 
-async function doDeleteSection(row: ReportSection) {
-  try { await ElMessageBox.confirm(`确定删除章节「${row.sectionName}」？`, '确认删除', { type: 'warning' }) } catch { return }
-  await deleteReportSection(row.id!)
+async function handleDeleteSection(row: ReportSection) {
+  try {
+    await ElMessageBox.confirm(`确定删除章节「${row.SectionName}」？`, '确认删除', { type: 'warning' })
+  } catch { return }
+
+  await deleteSection(row.Id)
   ElMessage.success('删除成功')
-  if (currentTemplate.value) loadSections(currentTemplate.value)
+  await loadSections()
 }
+
+// ── 初始化 ──
+onMounted(() => {
+  loadTree()
+})
 </script>
 
 <template>
   <YzhPageLayout title="报告章节定义">
     <el-row :gutter="16" class="report-rule-layout">
-      <!-- 左侧：模板列表（YzhTable 配置驱动） -->
-      <el-col :span="10">
-        <YzhTable ref="tableRef" :columns="columns" :data-loader="loadTemplateData" :search-fields="[{ prop: 'templateName', label: '搜索模板', type: 'text' }]">
-          <template #toolbar-left>
-            <el-button type="primary" :icon="Plus" @click="onAddTemplate">新建模板</el-button>
+      <!-- 左侧：组织 → 标准 → 阶段 树 -->
+      <el-col :span="6" class="tree-panel">
+        <el-card shadow="never" class="tree-card">
+          <template #header>
+            <span class="card-title">组织 → 标准 → 阶段</span>
           </template>
-          <template #column-actions="{ row }">
-            <el-button link type="primary" size="small" @click="loadSections(row); onEditTemplate(row)">编辑</el-button>
-            <el-button link type="danger" size="small" @click="doDeleteTemplate(row)">删除</el-button>
-          </template>
-        </YzhTable>
+          <el-tree
+            :data="fileTreeData"
+            v-loading="treeLoading"
+            node-key="id"
+            default-expand-all
+            highlight-current
+            :expand-on-click-node="false"
+            @node-click="handleNodeClick"
+          >
+            <template #default="{ data }">
+              <span class="tree-node">
+                <el-icon v-if="data.type === 'organization'" class="node-icon"><OfficeBuilding /></el-icon>
+                <el-icon v-else-if="data.type === 'standard'" class="node-icon"><Document /></el-icon>
+                <el-icon v-else class="node-icon"><Calendar /></el-icon>
+                <span class="node-label">{{ data.name }}</span>
+              </span>
+            </template>
+          </el-tree>
+        </el-card>
       </el-col>
 
-      <!-- 右侧：章节列表（从属数据，保留 el-table） -->
-      <el-col :span="14">
-        <el-card shadow="never" class="section-card">
-          <template #header>
-            <div class="card-header">
-              <span v-if="currentTemplate">章节 — {{ currentTemplate.templateName }}</span>
-              <span v-else>章节（请先选择模板）</span>
-              <el-button v-if="currentTemplate" type="primary" size="small" :icon="Plus" @click="openEditSection(null)">新建章节</el-button>
-            </div>
-          </template>
-          <el-table :data="sectionData" stripe border v-loading="sectionLoading">
-            <el-table-column prop="sectionName" label="章节名称" width="200" />
-            <el-table-column prop="sectionNameEn" label="英文名称" width="150" show-overflow-tooltip />
-            <el-table-column prop="sortOrder" label="排序" width="80" align="center" />
-            <el-table-column label="启用" width="80" align="center">
-              <template #default="{ row }"><el-switch :model-value="row.isActive" disabled /></template>
-            </el-table-column>
-            <el-table-column label="操作" width="120" fixed="right">
-              <template #default="{ row }">
-                <el-button link type="primary" size="small" @click="openEditSection(row)">编辑</el-button>
-                <el-button link type="danger" size="small" @click="doDeleteSection(row)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-          <el-empty v-if="!currentTemplate && !sectionLoading" description="请先在左侧选择报告模板" :image-size="100" />
-        </el-card>
+      <!-- 右侧：模板 + 章节 -->
+      <el-col :span="18" class="content-panel">
+        <!-- 未选中阶段 -->
+        <el-empty v-if="!hasPhaseSelected" description="请在左侧选择阶段" :image-size="120" />
+
+        <!-- 加载中 -->
+        <div v-else-if="templateLoading" v-loading="true" class="loading-container" />
+
+        <!-- 已选中阶段 -->
+        <template v-else>
+          <!-- 模板区域 -->
+          <el-card shadow="never" class="template-card">
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">模板 — {{ selectedPhase?.name || '' }}</span>
+                <div class="card-actions">
+                  <el-button v-if="hasTemplate" type="primary" size="small" @click="handleSaveTemplate" :loading="saving" :disabled="!canEdit">
+                    更新模板
+                  </el-button>
+                  <el-button v-else type="primary" size="small" @click="handleSaveTemplate" :loading="saving" :disabled="!canEdit">
+                    创建模板
+                  </el-button>
+                  <el-button v-if="hasTemplate" type="danger" size="small" text @click="handleDeleteTemplate">
+                    删除模板
+                  </el-button>
+                </div>
+              </div>
+            </template>
+
+            <el-form label-width="80px" class="template-form" :inline="true">
+              <el-form-item label="模板名称" required>
+                <el-input v-model="templateForm.TemplateName" placeholder="如：ISO9001审核报告" :disabled="!canEdit" style="width: 200px" />
+              </el-form-item>
+              <el-form-item label="上传文件">
+                <el-upload
+                  :http-request="handleUploadFile"
+                  :show-file-list="false"
+                  accept=".docx,.xlsx,.pdf,.doc,.xls"
+                  :disabled="!canEdit"
+                >
+                  <el-button size="small" :icon="Upload" :disabled="!canEdit">上传模板文件</el-button>
+                </el-upload>
+                <span class="el-upload__tip" style="margin-left: 8px">支持 .docx / .xlsx / .pdf，最大 100MB</span>
+              </el-form-item>
+              <el-form-item label="备注">
+                <el-input v-model="templateForm.Remark" :disabled="!canEdit" style="width: 240px" />
+              </el-form-item>
+            </el-form>
+          </el-card>
+
+          <!-- 章节区域（仅模板存在时显示） -->
+          <el-card shadow="never" class="section-card" v-if="hasTemplate">
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">章节列表</span>
+                <el-button type="primary" size="small" :icon="Plus" @click="openAddSection">
+                  新建章节
+                </el-button>
+              </div>
+            </template>
+
+            <el-table :data="sectionData" stripe border v-loading="sectionLoading" row-key="Id">
+              <el-table-column prop="SectionName" label="章节名称" min-width="180" />
+              <el-table-column prop="SectionNameEn" label="英文名称" width="160" show-overflow-tooltip />
+              <el-table-column prop="ClauseCode" label="条款" width="140" show-overflow-tooltip />
+              <el-table-column prop="SortOrder" label="排序" width="80" align="center" />
+              <el-table-column label="启用" width="80" align="center">
+                <template #default="{ row }">
+                  <el-switch :model-value="row.IsActive === 1" disabled size="small" />
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="120" fixed="right">
+                <template #default="{ row }">
+                  <el-button link type="primary" size="small" @click="openEditSection(row)">编辑</el-button>
+                  <el-button link type="danger" size="small" @click="handleDeleteSection(row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-card>
+        </template>
       </el-col>
     </el-row>
 
-    <!-- 模板编辑弹窗（YzhForm 配置驱动） -->
-    <el-dialog v-model="dialogVisible" :title="dialogMode === 'add' ? '新建模板' : '编辑模板'" width="500px">
-      <YzhForm ref="formRef" v-model="editForm" :fields="templateFormFields" :loading="submitting" @submit="doSaveTemplate" @reset="dialogVisible = false" />
-    </el-dialog>
-
-    <!-- 章节编辑弹窗（YzhForm 配置驱动） -->
-    <el-dialog v-model="sectionDialogVisible" :title="sectionForm.id ? '编辑章节' : '新建章节'" width="500px">
-      <YzhForm v-model="sectionForm" :fields="sectionFormFields" :loading="submitting" @submit="doSaveSection" @reset="sectionDialogVisible = false" />
+    <!-- 章节编辑弹窗 -->
+    <el-dialog
+      v-model="sectionDialogVisible"
+      :title="sectionFormMode === 'add' ? '新建章节' : '编辑章节'"
+      width="520px"
+      destroy-on-close
+    >
+      <YzhForm
+        v-model="sectionForm"
+        :fields="sectionFormFields"
+        :loading="saving"
+        @submit="handleSaveSection"
+        @reset="sectionDialogVisible = false"
+      />
     </el-dialog>
   </YzhPageLayout>
 </template>
 
 <style scoped>
-.report-rule-layout { height: 100%; }
-.section-card { height: 100%; display: flex; flex-direction: column; }
-.card-header { display: flex; align-items: center; justify-content: space-between; }
+.report-rule-layout {
+  height: 100%;
+}
+
+.tree-panel {
+  height: 100%;
+}
+
+.content-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tree-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-card :deep(.el-card__body) {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.template-card {
+  flex-shrink: 0;
+}
+
+.template-card :deep(.el-card__body) {
+  padding: 16px 20px;
+}
+
+.section-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.section-card :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.section-card :deep(.el-table) {
+  flex: 1;
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.tree-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.node-icon {
+  color: #909399;
+  font-size: 14px;
+}
+
+.node-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-form {
+  max-width: 600px;
+}
+
+.template-form :deep(.el-form-item) {
+  margin-bottom: 16px;
+}
+
+.loading-container {
+  height: 200px;
+}
 </style>
