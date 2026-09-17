@@ -43,7 +43,7 @@ namespace YZH.Entity.Admin.Platform.Cert
         public string? Description { get; set; }
 
         /// <summary>有效标志</summary>
-        public new int IsValid { get; set; } = 1;
+        public int IsValid { get; set; } = 1;
 
         /// <summary>状态（active/inactive）</summary>
         [StringLength(50)]
@@ -72,6 +72,6 @@ namespace YZH.Entity.Admin.Platform.Cert
         public new DateTime? DeleteTime { get; set; }
 
         /// <summary>软删除标记</summary>
-        public new bool IsDeleted { get; set; }
+        public bool IsDeleted { get; set; }
     }
 }

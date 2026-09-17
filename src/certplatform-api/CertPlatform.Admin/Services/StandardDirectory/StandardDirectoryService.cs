@@ -1723,17 +1723,7 @@ public class StandardDirectoryService
 
 #region 辅助类
 
-/// <summary>
-/// 文件转换载荷（队列任务 payload）
-/// </summary>
-public class FileConvertPayload
-{
-    public string FileCode { get; set; } = "";
-    public string FileName { get; set; } = "";
-    public string SourcePath { get; set; } = "";
-    public string TargetPath { get; set; } = "";
-    public string ConvertType { get; set; } = ""; // doc2docx / xls2xlsx
-}
+// FileConvertPayload 已移至 OfficeConvertService.cs（2026-09-16 扩展 ConvertType 语义）
 
 /// <summary>
 /// 阶段文件树响应

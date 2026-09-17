@@ -23,6 +23,14 @@ import {
 import { computed, onMounted, nextTick, ref } from 'vue'
 import { ISOStandardTreeTableLogic } from './logic'
 
+// 静默第三方库 ResizeObserver polyfill 的 startTime 错误（VM809:2）
+window.addEventListener('error', (event) => {
+  if (event.message?.includes("Cannot read properties of undefined (reading 'startTime')")) {
+    event.preventDefault()
+    return true
+  }
+})
+
 // 实例化 Logic
 const logic = new ISOStandardTreeTableLogic()
 
@@ -162,6 +170,26 @@ async function handleStdSubmit() {
 }
 
 // ========================================================
+// 弹窗生命周期（避免 destroy-on-close 竞态）
+// ========================================================
+
+function onClauseDialogOpened() {
+  // 弹窗完全打开后初始化
+}
+
+function onClauseDialogClosed() {
+  // 弹窗完全关闭后清理（销毁关闭竞态已通过 destroy-on-close="false" 修复）
+}
+
+function onStdDialogOpened() {
+  // 弹窗完全打开后初始化
+}
+
+function onStdDialogClosed() {
+  // 弹窗完全关闭后清理
+}
+
+// ========================================================
 // 初始化
 // ========================================================
 
@@ -217,7 +245,7 @@ onMounted(async () => {
               <el-button type="danger" :icon="Delete" @click="handleBatchDelete"
                 >批量删除</el-button
               >
-              <el-button :icon="RefreshRight" @click="logic.refreshTable()"
+              <el-button :icon="RefreshRight" @click="logic.refresh()"
                 >刷新</el-button
               >
             </template>
@@ -243,7 +271,9 @@ onMounted(async () => {
       :title="logic.dialogMode.value === 'add' ? '新增条款' : '编辑条款'"
       width="600px"
       :close-on-click-modal="false"
-      destroy-on-close
+      :destroy-on-close="false"
+      @opened="onClauseDialogOpened"
+      @closed="onClauseDialogClosed"
     >
       <YzhForm
         v-model="logic.formData"
@@ -261,7 +291,9 @@ onMounted(async () => {
       :title="logic.stdDialogMode.value === 'add' ? '新增标准' : '编辑标准'"
       width="700px"
       :close-on-click-modal="false"
-      destroy-on-close
+      :destroy-on-close="false"
+      @opened="onStdDialogOpened"
+      @closed="onStdDialogClosed"
     >
       <!-- 配置驱动的表单（字段从 ISOStandardForm.json 自动派生） -->
       <YzhForm

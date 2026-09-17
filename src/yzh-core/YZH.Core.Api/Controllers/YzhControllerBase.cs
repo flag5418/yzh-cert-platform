@@ -606,7 +606,32 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   /// <summary>构建过滤条件（覆盖以实现自定义过滤逻辑，/filter 专用）</summary>
   protected virtual List<FilterItem> OnBuildingFilter(List<FilterItem> filters)
   {
-    // 默认直接返回，子类可添加全局过滤条件（如租户隔离）
+    // 自动处理 IsValid 过滤（IIsValid 契约）
+    // 实体必须声明 own IsValid 属性（非 BaseEntity.IsIgnore 版本）才启用自动过滤
+    // 注意：不消费 ShowDisabled，留给子类控制器按需处理（如 Enable 字段）
+    var isValidProp = typeof(V).GetProperty("IsValid");
+    if (isValidProp != null && isValidProp.DeclaringType != typeof(BaseEntity))
+    {
+      // 检查前端是否传了 ShowDisabled=true（不移除，留给子类）
+      var showDisabledFilter = filters.FirstOrDefault(f =>
+          f.Field.Equals("ShowDisabled", StringComparison.OrdinalIgnoreCase));
+      var showDisabled = false;
+      if (showDisabledFilter?.Value != null
+          && bool.TryParse(showDisabledFilter.Value.ToString(), out var sd))
+      {
+        showDisabled = sd;
+      }
+
+      if (!showDisabled)
+      {
+        filters.RemoveAll(f => f.Field == "IsValid");
+        filters.Add(new FilterItem { Field = "IsValid", Operator = "eq", Value = "1" });
+      }
+    }
+
+    // 移除 ShowDisabled（不论是否消费，都不能传给 SQL）
+    filters.RemoveAll(f => f.Field.Equals("ShowDisabled", StringComparison.OrdinalIgnoreCase));
+
     return filters;
   }
 

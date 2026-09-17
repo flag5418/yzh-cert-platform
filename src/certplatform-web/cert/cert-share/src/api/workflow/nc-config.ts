@@ -42,7 +42,7 @@ export function getNCRulePage(params: {
   SortOrder?: string
   Filters: Array<{ Field: string; Value: string; Operator: string }>
 }) {
-  return yzhApi.post<{ Items: NCRule[]; TotalCount: number }>('/api/ValidationRule/filter', params)
+  return yzhApi.post<{ data: { Items: NCRule[]; TotalCount: number } }>('/api/ValidationRule/filter', params)
 }
 
 /** 新增规则（POST /add） */

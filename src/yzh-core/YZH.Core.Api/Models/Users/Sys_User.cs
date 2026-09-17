@@ -183,7 +183,7 @@ public class Sys_User : BaseEntity
 
     /// <summary>是否删除（DB: IsDeleted）</summary>
     [SugarColumn(ColumnName = "IsDeleted")]
-    public new bool IsDeleted { get; set; }
+    public bool IsDeleted { get; set; }
 
     /// <summary>删除时间（DB: DeleteTime）</summary>
     [SugarColumn(ColumnName = "DeleteTime")]

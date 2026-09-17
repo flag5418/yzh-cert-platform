@@ -128,16 +128,30 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
   /** 弹窗模式 */
   dialogMode = ref<'add' | 'edit' | 'detail'>('add')
 
-  /**
+/**
    * 表单编辑模式（GroupIndex 控制）
-   * - '0'：默认模式，所有 BcFlag=true 且 GroupIndex='0' 的字段可编辑
-   * - '1'：仅 GroupIndex='1' 的字段可编辑，其余只读
-   * - '99'：详情模式，所有字段只读（因为大部分字段 GroupIndex='0'）
+   * - '0'：新增模式，ALL BcFlag=true 字段可编辑（GroupIndex 不生效）
+   * - '1'：编辑模式，仅 GroupIndex='1' 的字段可编辑，其余只读
+   * - '99'：详情模式，仅 GroupIndex='99' 的字段可编辑（通常全部只读）
+   *
+   * 逻辑：isDisabledByGroupIndex = editMode !== '0' && fieldGroupIndex !== editMode
+   * 当 editMode='0' 时，isDisabledByGroupIndex 恒为 false，所有字段可编辑。
    */
   formGroupIndex = ref<string>('0')
 
   /** 提交中状态 */
   submitting = ref(false)
+
+  // ──── ShowDisabled 开关（基类统一管理，子类无需手动实现） ────
+
+  /** 显示已禁用记录开关 */
+  showDisabled = ref(false)
+
+  /** 切换 ShowDisabled 并刷新表格 */
+  async toggleShowDisabled(): Promise<void> {
+    this.showDisabled.value = !this.showDisabled.value
+    await this.refresh()
+  }
 
   /**
    * 表单数据：PascalCase key（与 formFields[].prop、NewEntity、实体属性名一致）
@@ -153,6 +167,11 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
   /** 设置表格引用（模板中调用：logic.setTableRef(tableRef.value)） */
   setTableRef(ref: any) {
     this._tableRef = ref
+  }
+
+  /** 刷新表格数据（触发 dataLoader 重新加载） */
+  async refresh(): Promise<void> {
+    await (this as any)._tableRef?.refresh()
   }
 
   // ========================================================
@@ -362,7 +381,7 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
       if (page) {
         this.rows.value = page.Items ?? []
         this.pagination.total = page.TotalCount ?? 0
-        this.onDataLoaded(this.rows.value)
+        this.onDataLoaded(this.rows.value as V[])
       }
     } catch (e: any) {
       this.rows.value = []
@@ -418,7 +437,7 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
     }
   }
 
-  /** 构建过滤条件（从 searchParams + 额外条件） */
+  /** 构建过滤条件（从 searchParams + 额外条件 + 自动 ShowDisabled） */
   protected buildFilters(extra?: Record<string, any>): FilterItem[] {
     const params = { ...this.searchParams, ...(extra || {}) }
     const sfMap = new Map<string, string>()
@@ -427,16 +446,23 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
         if (s.Operator) sfMap.set(s.Field, s.Operator)
       }
     }
-    return Object.entries(params)
+    const filters = Object.entries(params)
       .filter(
         ([, v]) =>
           v != null && v !== '' && !(Array.isArray(v) && v.length === 0),
       )
       .map(([field, value]) => ({
-        Field: field, // PascalCase，与后端实体属性一致
+        Field: field,
         Value: Array.isArray(value) ? value.join(',') : String(value),
         Operator: (sfMap.get(field) as any) || 'eq',
       }))
+
+    // 自动注入 ShowDisabled（当 config 有 EnableField 时）
+    if (this.config.value?.EnableField && this.showDisabled.value) {
+      filters.push({ Field: 'ShowDisabled', Value: 'true', Operator: 'eq' })
+    }
+
+    return filters
   }
 
   // ========================================================
@@ -694,7 +720,7 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
 
   openEditDialog(row: V) {
     this.dialogMode.value = 'edit'
-    this.formGroupIndex.value = '0'
+    this.formGroupIndex.value = '1'
     this.initFormData(row)
     this.dialogVisible.value = true
   }

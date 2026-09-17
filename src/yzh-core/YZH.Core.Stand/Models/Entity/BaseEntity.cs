@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Runtime.CompilerServices;
 using SqlSugar;
+using YZH.Core.Stand.Interfaces;
 
 namespace YZH.Core.Stand.Models.Entity;
 
@@ -18,14 +19,8 @@ namespace YZH.Core.Stand.Models.Entity;
 ///     删除策略通过 [YZHDeleteStrategy] 特性控制
 ///     缓存策略通过 [YZHCacheEntity] 特性控制（默认不缓存）
 /// </summary>
-public abstract class BaseEntity : INotifyPropertyChanged
+public abstract class BaseEntity : INotifyPropertyChanged, ISoftDelete, IIsValid
 {
-    /// <summary>主键标识（默认忽略，子类通过 [SugarColumn] 显式映射 DB 列名）</summary>
-    [SugarColumn(IsIgnore = true)]
-    [Key]
-    [StringLength(64)]
-    public string Id { get; set; } = Guid.NewGuid().ToString("N");
-
     /// <summary>业务编码 (GUID 业务键)</summary>
     [SugarColumn(IsIgnore = true)]
     [StringLength(64)]
@@ -58,12 +53,10 @@ public abstract class BaseEntity : INotifyPropertyChanged
     [StringLength(64)]
     public string? DeleteBy { get; set; }
 
-    /// <summary>是否删除标记（软删除标志，默认 false）</summary>
-    [SugarColumn(IsIgnore = true)]
+    /// <summary>是否删除标记（软删除标志，默认 false）— 子类必须声明此属性以映射到 DB</summary>
     public bool IsDeleted { get; set; }
 
-    /// <summary>有效标志（1=有效，0=无效，默认有效）</summary>
-    [SugarColumn(IsIgnore = true)]
+    /// <summary>有效标志（1=有效，0=无效，默认有效）— 子类必须声明此属性以映射到 DB</summary>
     public int IsValid { get; set; } = 1;
 
     /// <summary>前端选中标记（不持久化）</summary>

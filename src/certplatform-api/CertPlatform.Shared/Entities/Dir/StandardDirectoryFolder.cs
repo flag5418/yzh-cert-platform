@@ -85,7 +85,7 @@ namespace YZH.Entity.Admin.Platform.Dir
         public string? TaskId { get; set; }
 
         [SugarColumn(ColumnName = "IsValid")]
-        public new int IsValid { get; set; } = 1;
+        public int IsValid { get; set; } = 1;
 
         [SugarColumn(IsIgnore = true)]
         public bool Force { get; set; } = false;

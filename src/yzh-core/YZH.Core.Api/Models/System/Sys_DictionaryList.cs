@@ -82,11 +82,11 @@ public class Sys_DictionaryList : BaseEntity
     [Required]
     [Display(Name = "是否有效")]
     [SugarColumn(ColumnName = "IsValid")]
-    public new int IsValid { get; set; } = 1;
+    public int IsValid { get; set; } = 1;
 
     /// <summary>软删除标志。必须为 bool —— IsDeletedCondition 用 Expression.Constant(false) 比较。</summary>
     [SugarColumn(ColumnName = "IsDeleted")]
-    public new bool IsDeleted { get; set; }
+    public bool IsDeleted { get; set; }
 
     // === 审计字段覆盖（本表用非标准列名） ===
 

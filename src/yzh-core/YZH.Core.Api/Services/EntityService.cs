@@ -628,8 +628,10 @@ public class EntityService<T> where T : class, new()
 
     private async Task SoftDelete(T entity)
     {
-        dynamic dyn = entity;
-        try { dyn.IsDeleted = true; } catch { /* 实体可能没有该属性 */ }
+        if (entity is ISoftDelete softDelete)
+        {
+            softDelete.IsDeleted = true;
+        }
         await _dbOrm.UpdateAsync(entity, new[] { "IsDeleted", "DeleteTime", "DeleteBy" });
     }
 

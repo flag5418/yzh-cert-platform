@@ -40,7 +40,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
             SharedEntities::CertPlatform.Shared.Entities.Wf.Skill entity)
         {
             var result = await Entity.GetByCodeAny(entity.Code);
-            if (result.Success && result.Data != null && result.Data.Id != entity.Id)
+            if (result.Success && result.Data != null && result.Data.Code != entity.Code)
                 return (false, $"编码 {entity.Code} 已被其他记录使用");
             return (true, null);
         }

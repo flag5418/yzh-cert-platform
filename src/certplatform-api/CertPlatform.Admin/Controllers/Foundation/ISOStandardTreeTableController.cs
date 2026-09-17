@@ -107,6 +107,7 @@ public class ISOStandardTreeTableController
     {
         if (string.IsNullOrEmpty(entity.Code))
             entity.Code = Guid.NewGuid().ToString("N");
+        entity.IsValid = 1;
 
         var exists = await TreeEntity.ExistsAsync(s =>
             s.StandardCode == entity.StandardCode &&

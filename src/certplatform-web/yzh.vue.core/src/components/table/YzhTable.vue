@@ -166,7 +166,7 @@ async function loadData() {
       rows: pageSize.value,
       ...(sort.value ? { sort: sort.value.prop, order: sort.value.order } : {}),
       ...searchParams
-    }
+    } as PageParams
     const res: Page<T> = await props.dataLoader(params)
     rows.value = res.rows || []
     total.value = res.total || 0
@@ -176,7 +176,7 @@ async function loadData() {
       const restored: T[] = []
       for (const row of rows.value) {
         if (selectedKeys.has((row as any)[props.rowKey])) {
-          restored.push(row)
+          restored.push(row as T)
         }
       }
       selectedRows.value = restored
@@ -300,6 +300,7 @@ watch(
  * 刷新
  */
 function refresh() {
+  page.value = 1
   loadData()
   emit('refresh')
 }
@@ -366,15 +367,15 @@ function setCheckedRows(matchFn: (row: T) => boolean, checked: boolean) {
     // 勾选匹配的行（合并到已有选中行）
     const existing = new Set(selectedRows.value)
     for (const row of rows.value) {
-      if (matchFn(row) && !existing.has(row)) {
+      if (matchFn(row as T) && !existing.has(row as T)) {
         selectedRows.value.push(row)
       }
     }
   } else {
     // 取消勾选匹配的行
-    selectedRows.value = selectedRows.value.filter((r) => !matchFn(r))
+    selectedRows.value = selectedRows.value.filter((r) => !matchFn(r as T))
   }
-  emit('selection-change', [...selectedRows.value])
+  emit('selection-change', [...selectedRows.value as T[]])
 }
 
 // 暴露方法给父组件

@@ -11,12 +11,14 @@
 
     <div v-loading="loading" class="cert-directory-tree__content">
       <el-tree
+        v-if="fileTreeData.length > 0"
         ref="treeRef"
         :data="fileTreeData"
         :props="treeProps"
         :highlight-current="true"
         :expand-on-click-node="false"
         :filter-node-method="filterNode"
+        :default-expanded-keys="defaultExpandedKeys"
         node-key="id"
         @node-expand="onNodeExpand"
         @node-click="onNodeClick"
@@ -39,6 +41,7 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import {
   Folder,
   Document,
@@ -52,6 +55,7 @@ defineProps<{
   title?: string
   filterable?: boolean
   showConvertBadge?: boolean
+  defaultExpandedKeys?: (string | number)[]
 }>()
 
 const emit = defineEmits<{
@@ -59,7 +63,7 @@ const emit = defineEmits<{
   'node-click': [node: TreeNode]
 }>()
 
-const { fileTreeData, loading, loadTree, loadStageFiles, loadFolderFiles } = useFileTree()
+const { fileTreeData, loading, defaultExpandedKeys, loadTree, loadStageFiles } = useFileTree()
 const treeRef = ref()
 const filterText = ref('')
 const selectedId = ref<string | number | null>(null)
@@ -85,12 +89,47 @@ function isActive(data: TreeNode) {
   return selectedId.value === data.id
 }
 
-/** 懒加载：展开节点时加载子节点 */
-function onNodeExpand(data: TreeNode) {
-  if (data.type === 'stage' && !data._loaded) {
-    loadStageFiles(data)
-  } else if (data.type === 'folder' && !data._loaded) {
-    loadFolderFiles(data)
+async function onNodeExpand(data: TreeNode) {
+  if (data._loaded) return
+  if (data.type === 'stage') {
+    await loadStageFiles(data)
+    treeRef.value?.updateKeyChildren(data.id, data.children || [])
+  } else if (data.type === 'folder') {
+    const folderCode = data.folderCode
+    if (!folderCode) return
+    const { getFiles } = await import('../composables/useDirectoryApi')
+    try {
+      const files = await getFiles(folderCode)
+      const fileNodes = (files || []).map((file: any) => ({
+        id: file.FileCode || file.fileCode,
+        name: file.FileName || file.fileName,
+        type: 'file' as const,
+        fileCode: file.FileCode || file.fileCode,
+        directoryCode: data.directoryCode,
+        raw: file,
+        convertStatus: file.ConvertStatus || file.convertStatus,
+        ruleStatus: 'none' as const,
+      }))
+      data._loaded = true
+      // 先移除占位子节点，再追加真实文件节点
+      const tree = treeRef.value
+      if (tree) {
+        const node = tree.getNode(data.id)
+        if (node) {
+          // 移除所有现有子节点
+          const children = node.childNodes?.slice() || []
+          for (const child of children) {
+            tree.remove(child)
+          }
+          // 追加文件节点
+          for (const fn of fileNodes) {
+            tree.append(fn, node)
+          }
+        }
+      }
+    } catch (e: any) {
+      ElMessage.error('加载文件失败：' + (e?.message || ''))
+    }
   }
 }
 
@@ -111,8 +150,8 @@ watch(filterText, (val) => {
   treeRef.value?.filter(val)
 })
 
-onMounted(() => {
-  loadTree()
+onMounted(async () => {
+  await loadTree()
 })
 </script>
 

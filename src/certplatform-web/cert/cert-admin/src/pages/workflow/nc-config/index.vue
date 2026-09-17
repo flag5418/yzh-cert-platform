@@ -3,20 +3,62 @@
  * NC 规则设计（左树右表）
  *
  * 布局：
- * - 左侧：组织 → 标准 → 阶段 树（useFileTree）
- * - 右侧：NC 检查规则表格（YzhTable + 分页 + 筛选）
+ * - 左侧：组织 → 标准 → 阶段 树（简化版，不含文件夹）
+ * - 右侧：NC 检查规则表格 + 编辑弹窗
  */
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { Plus, RefreshRight, Search, FolderOpened, Document, Calendar } from '@element-plus/icons-vue'
-import { useFileTree, type TreeNode } from '@share/composables/useFileTree'
+import { getOrganizationTree } from '@share/composables/useDirectoryApi'
 import { NCConfigLogic } from './logic'
+import type { TreeNode } from '@share/composables/useFileTree'
 
 // ──── 实例化 ────
+const router = useRouter()
 const logic = new NCConfigLogic()
-const { fileTreeData, loading: treeLoading, loadTree } = useFileTree()
 
-// ──── 树搜索 ────
+// ──── 树状态（简化版：只加载 org→standard→stage，不含文件夹） ────
+const fileTreeData = ref<TreeNode[]>([])
+const treeLoading = ref(false)
 const treeFilter = ref('')
+
+/** 加载组织树（仅 org→standard→stage，不预加载文件夹） */
+async function loadTree() {
+  treeLoading.value = true
+  try {
+    const orgTree = await getOrganizationTree()
+    fileTreeData.value = (orgTree || []).map((org: any) => ({
+      id: org.id,
+      name: org.label || org.name,
+      type: 'organization' as const,
+      orgCode: org.cbCode,
+      children: (org.children || []).map((std: any) => ({
+        id: std.id,
+        name: std.label || std.name,
+        type: 'standard' as const,
+        orgCode: std.cbCode,
+        stdCode: std.stdCode,
+        standardCode: std.standardCode,
+        children: (std.children || []).map((phase: any) => ({
+          id: phase.id,
+          name: phase.label || phase.name,
+          type: 'stage' as const,
+          orgCode: phase.cbCode,
+          stdCode: phase.stdCode,
+          standardCode: phase.standardCode,
+          phaseCode: phase.phaseCode,
+          phaseDefinitionCode: phase.phaseDefinitionCode || '',
+          children: undefined,
+        }))
+      }))
+    }))
+  } catch (e: any) {
+    console.error('加载目录树失败', e)
+    fileTreeData.value = []
+  } finally {
+    treeLoading.value = false
+  }
+}
 
 // ========================================================
 // 树操作
@@ -121,6 +163,9 @@ onMounted(() => {
           <el-button :icon="RefreshRight" @click="logic.loadTable()">
             刷新
           </el-button>
+          <el-button type="success" plain @click="router.push('/business/nc-config')">
+            工作流设计器
+          </el-button>
         </div>
 
         <!-- 表格 -->
@@ -135,7 +180,15 @@ onMounted(() => {
           <el-table-column prop="RuleCode" label="规则编号" width="150" />
           <el-table-column prop="RuleName" label="规则名称" min-width="200" />
           <el-table-column prop="RuleNameEn" label="英文名称" width="150" show-overflow-tooltip />
-          <el-table-column prop="ClauseNumber" label="条款编号" width="120" />
+          <el-table-column label="关联条款" min-width="220">
+            <template #default="{ row }">
+              <div v-if="row.ClauseNumber" class="clause-cell">
+                <el-tag size="small" effect="plain" class="clause-tag">{{ row.ClauseNumber }}</el-tag>
+                <span class="clause-title">{{ row.ClauseTitle }}</span>
+              </div>
+              <span v-else class="empty-text">-</span>
+            </template>
+          </el-table-column>
           <el-table-column label="启用" width="80" align="center">
             <template #default="{ row }">
               <el-switch
@@ -145,9 +198,10 @@ onMounted(() => {
             </template>
           </el-table-column>
           <el-table-column prop="Remark" label="备注" min-width="150" show-overflow-tooltip />
-          <el-table-column label="操作" width="120" fixed="right">
+          <el-table-column label="操作" width="150" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" size="small" @click="logic.openEditDialog(row)">编辑</el-button>
+              <el-button link type="primary" size="small" @click="logic.handleCopy(row)">复制</el-button>
               <el-button link type="danger" size="small" @click="logic.handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
@@ -293,5 +347,32 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.clause-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.clause-tag {
+  flex-shrink: 0;
+  font-weight: 700;
+  background: #f1f5f9;
+  border: none;
+  color: #475569;
+}
+
+.clause-title {
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.empty-text {
+  color: #909399;
 }
 </style>

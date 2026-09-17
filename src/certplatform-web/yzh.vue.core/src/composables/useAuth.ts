@@ -18,7 +18,7 @@ export function useAuth() {
     tokenStore.clear()
   }
 
-  function login(username: string, password: string) {
+  function login(_username: string, _password: string) {
     // 实际调用会在页面层实现
     return Promise.resolve()
   }

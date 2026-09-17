@@ -69,7 +69,7 @@ namespace YZH.Entity.Admin.Platform.Dir
         public string TaskId { get; set; }
 
         [SugarColumn(ColumnName = "IsValid")]
-        public new int IsValid { get; set; } = 1;
+        public int IsValid { get; set; } = 1;
 
         [SugarColumn(ColumnName = "UploadStatus", Length = 20, IsNullable = true)]
         public string UploadStatus { get; set; } = "active";
@@ -91,6 +91,28 @@ namespace YZH.Entity.Admin.Platform.Dir
 
         [SugarColumn(ColumnName = "convert_date", IsNullable = true)]
         public DateTime? ConvertDate { get; set; }
+
+        // ===== 2026-09-16 新增：预览/提取双产物列（决策 D-6，脚本 20260916_doc_extraction_alter.sql）=====
+
+        /// <summary>预览 PDF 产物路径（LibreOffice 转换；PDF 文件原样透传 = StoragePath）</summary>
+        [SugarColumn(ColumnName = "preview_pdf_path", Length = 512, IsNullable = true)]
+        public string? PreviewPdfPath { get; set; }
+
+        /// <summary>提取 Markdown 产物路径（anydoc 转换）</summary>
+        [SugarColumn(ColumnName = "markdown_path", Length = 512, IsNullable = true)]
+        public string? MarkdownPath { get; set; }
+
+        /// <summary>Markdown 转换状态：none/pending/converting/completed/failed</summary>
+        [SugarColumn(ColumnName = "markdown_status", Length = 20, IsNullable = true)]
+        public string? MarkdownStatus { get; set; } = "none";
+
+        /// <summary>Markdown 转换失败原因</summary>
+        [SugarColumn(ColumnName = "markdown_message", Length = 1024, IsNullable = true)]
+        public string? MarkdownMessage { get; set; }
+
+        /// <summary>Markdown 转换完成时间</summary>
+        [SugarColumn(ColumnName = "markdown_date", IsNullable = true)]
+        public DateTime? MarkdownDate { get; set; }
 
         [SugarColumn(ColumnName = "CreateID", IsNullable = true)]
         public int? CreateID { get; set; }

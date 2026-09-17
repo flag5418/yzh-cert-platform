@@ -35,6 +35,6 @@ namespace CertPlatform.Shared.Entities.Wf
         /// Override 基类 IsValid，映射到 is_active 列，基类 ToggleIsValid 直接可用
         /// </summary>
         [SugarColumn(ColumnName = "is_valid")]
-        public new int IsValid { get; set; } = 1;
+        public int IsValid { get; set; } = 1;
     }
 }

@@ -15,6 +15,7 @@ import {
   updateNCRule,
   deleteNCRule,
   toggleNCRuleActive,
+  copyNCRule,
   getISOClauseTree,
   type NCRule,
   type ISOClauseTreeNode,
@@ -138,8 +139,8 @@ export class NCConfigLogic {
         PageSize: this.pageSize.value,
         Filters: filters,
       })
-      this.tableData.value = res?.Items ?? []
-      this.total.value = res?.TotalCount ?? 0
+      this.tableData.value = res?.data?.Items ?? []
+      this.total.value = res?.data?.TotalCount ?? 0
     } catch (e: any) {
       ElMessage.error(e?.message || '加载失败')
     } finally {
@@ -291,6 +292,22 @@ export class NCConfigLogic {
       await this.loadTable()
     } catch (e: any) {
       ElMessage.error(e?.message || '操作失败')
+    }
+  }
+
+  /** 复制规则 */
+  async handleCopy(row: NCRule) {
+    const { ElMessageBox } = await import('element-plus')
+    try {
+      await ElMessageBox.confirm(`确定复制规则「${row.RuleName}」？`, '确认复制', { type: 'info' })
+    } catch { return }
+
+    try {
+      await copyNCRule(row.Code || '')
+      ElMessage.success('复制成功')
+      await this.loadTable()
+    } catch (e: any) {
+      ElMessage.error(e?.message || '复制失败')
     }
   }
 }

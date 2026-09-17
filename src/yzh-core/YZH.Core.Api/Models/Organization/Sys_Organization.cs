@@ -79,11 +79,11 @@ public class Sys_Organization : BaseEntity, ITreeEntity
     [Required]
     [Display(Name = "是否有效")]
     [SugarColumn(ColumnName = "IsValid")]
-    public new int IsValid { get; set; } = 1;
+    public int IsValid { get; set; } = 1;
 
     /// <summary>软删除标记（DB: IsDeleted）</summary>
     [SugarColumn(ColumnName = "IsDeleted")]
-    public new bool IsDeleted { get; set; }
+    public bool IsDeleted { get; set; }
 
     /// <summary>备注</summary>
     [StringLength(500)]
@@ -118,7 +118,7 @@ public class Sys_Organization : BaseEntity, ITreeEntity
 
     /// <summary>PK - Sys_Organization 使用 Id (int auto_increment)</summary>
     [SugarColumn(ColumnName = "Id", IsPrimaryKey = true, IsIdentity = true)]
-    public new string Id { get; set; } = string.Empty;
+    public new long Id { get; set; }
 
     /// <summary>前端选中标记（忽略）</summary>
     [SugarColumn(IsIgnore = true)]

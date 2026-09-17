@@ -24,4 +24,11 @@
     </ProjectReference>
   </ItemGroup>
 
+  <!-- 业务 EntityConfig 复制到输出目录 -->
+  <ItemGroup>
+    <Content Update="Assets\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

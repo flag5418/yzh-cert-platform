@@ -281,7 +281,10 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
     /// </summary>
     protected override List<FilterItem> OnBuildingFilter(List<FilterItem> filters)
     {
-        // 从 filters 中提取 ShowDisabled 参数
+        // 先调用基类：自动处理 IsValid 过滤（IIsValid 契约）
+        filters = base.OnBuildingFilter(filters);
+
+        // 从 filters 中提取 ShowDisabled 参数（处理 Enable 字段）
         var showDisabled = false;
         var showDisabledFilter = filters.FirstOrDefault(f =>
             f.Field.Equals("ShowDisabled", StringComparison.OrdinalIgnoreCase));

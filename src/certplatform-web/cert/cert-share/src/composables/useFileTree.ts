@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   getOrganizationTree,
@@ -70,14 +70,13 @@ export function useFileTree() {
     return null
   }
 
-  /** 组织树 → el-tree 结构（阶段节点 children 空，点击懒加载） */
+  /** 组织树 → el-tree 结构（阶段节点不设 children，由预加载填充） */
   function transformOrgTree(data: any[]): TreeNode[] {
     return (data || []).map((org) => ({
       id: org.id,
       name: org.label || org.name,
       type: 'organization' as const,
       orgCode: org.cbCode,
-      expanded: true,
       children: (org.children || []).map((std: any) => ({
         id: std.id,
         name: std.label || std.name,
@@ -85,7 +84,6 @@ export function useFileTree() {
         orgCode: std.cbCode,
         stdCode: std.stdCode,
         standardCode: std.standardCode,
-        expanded: false,
         children: (std.children || []).map((phase: any) => ({
           id: phase.id,
           name: phase.label || phase.name,
@@ -96,21 +94,48 @@ export function useFileTree() {
           phaseCode: phase.phaseCode,
           phaseDefinitionCode: phase.phaseDefinitionCode || '',
           directoryCode: extractDirectoryCode(phase.id),
-          children: [],
-          expanded: false,
+          children: undefined,
           _loaded: false,
-          _loading: false,
         }))
       }))
     }))
   }
 
-  /** 加载组织树 */
+  /** 递归收集树中所有阶段节点 */
+  function collectStageNodes(nodes: TreeNode[]): TreeNode[] {
+    const stages: TreeNode[] = []
+    for (const n of nodes) {
+      if (n.type === 'stage') stages.push(n)
+      if (n.children) stages.push(...collectStageNodes(n.children))
+    }
+    return stages
+  }
+
+  /** 加载组织树，并行预加载所有阶段的文件夹 */
   async function loadTree() {
     loading.value = true
     try {
       const orgTree = await getOrganizationTree()
-      fileTreeData.value = transformOrgTree(orgTree)
+      const tree = transformOrgTree(orgTree)
+
+      // 并行预加载所有阶段的文件夹数据
+      const stages = collectStageNodes(tree)
+      await Promise.all(stages.map(async (stage) => {
+        const directoryCode = stage.directoryCode || extractDirectoryCode(String(stage.id))
+        if (!directoryCode) return
+        try {
+          const folders = await getFolders(directoryCode)
+          stage.children = buildFolderNodes(folders, directoryCode)
+          stage._loaded = true
+        } catch {
+          stage.children = []
+          stage._loaded = true
+        }
+      }))
+
+      // 只赋值一次，确保 el-tree 拿到的是完整数据
+      fileTreeData.value = tree
+
       return fileTreeData.value
     } catch (e: any) {
       ElMessage.error('加载目录树失败：' + (e?.message || '未知错误'))
@@ -121,7 +146,7 @@ export function useFileTree() {
     }
   }
 
-  /** 将后端文件夹树递归转换为前端 TreeNode 结构 */
+  /** 将后端文件夹树递归转换为前端 TreeNode 结构（递归处理 Children） */
   function buildFolderNodes(folders: any[], directoryCode: string): TreeNode[] {
     return (folders || []).map((folder: any) => ({
       id: folder.FolderCode || folder.folderCode,
@@ -130,8 +155,10 @@ export function useFileTree() {
       folderCode: folder.FolderCode || folder.folderCode,
       directoryCode,
       raw: folder,
-      children: folder.Children ? buildFolderNodes(folder.Children, directoryCode) : [],
-      _loaded: !folder.Children || folder.Children.length === 0,
+      children: (folder.Children && folder.Children.length > 0)
+        ? buildFolderNodes(folder.Children, directoryCode)
+        : [{ id: '__placeholder__' } as TreeNode],
+      _loaded: folder.Children && folder.Children.length > 0,
     }))
   }
 
@@ -218,9 +245,22 @@ export function useFileTree() {
     }
   }
 
+  /** 默认展开 keys：组织 + 标准（阶段由用户手动点击展开触发懒加载） */
+  const defaultExpandedKeys = computed(() => {
+    const keys: (string | number)[] = []
+    for (const org of fileTreeData.value) {
+      keys.push(org.id)
+      for (const std of (org.children || [])) {
+        keys.push(std.id)
+      }
+    }
+    return keys
+  })
+
   return {
     fileTreeData,
     loading,
+    defaultExpandedKeys,
     loadTree,
     loadStageFiles,
     loadFolderFiles,

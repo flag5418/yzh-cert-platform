@@ -18,23 +18,11 @@ namespace YZH.Entity.Admin.Platform.Cert
         [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
         public new long Id { get; set; }
 
-        public new string Code { get; set; } = Guid.NewGuid().ToString("N");
-
-        public new string? CreateBy { get; set; }
-
-        public new DateTime CreateTime { get; set; } = DateTime.UtcNow;
-
-        public new string? UpdateBy { get; set; }
-
-        public new DateTime? UpdateTime { get; set; }
-
-        public new string? DeleteBy { get; set; }
-
-        public new DateTime? DeleteTime { get; set; }
-
-        public new bool IsDeleted { get; set; }
-
-        public new int IsValid { get; set; } = 1;
+        /// <summary>
+        /// 业务唯一码（覆盖基类，设默认值避免 INSERT 时报错）
+        /// </summary>
+        [SugarColumn(Length = 36, IsNullable = true)]
+        public new string? Code { get; set; } = Guid.NewGuid().ToString("N");
 
         public int Sort { get; set; }
 
@@ -66,8 +54,7 @@ namespace YZH.Entity.Admin.Platform.Cert
         [StringLength(36)]
         public string? WorkflowCode { get; set; }
 
-        /// <summary>规则唯一编号（如 NC-ISO9001-001）</summary>
-        [Required]
+        /// <summary>规则唯一编号（如 NC-ISO9001-001，后端自动生成）</summary>
         [StringLength(50)]
         [UniqueField("规则编码")]
         public string RuleCode { get; set; } = string.Empty;

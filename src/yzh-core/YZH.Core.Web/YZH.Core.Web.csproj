@@ -45,7 +45,8 @@
     <Content Update="appsettings.*.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Update="Assets\**">
+    <!-- 核心模块配置（User、Role、Menu、SysConfig 等） -->
+    <Content Update="Assets\System\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Update="GridConfigs\**">

@@ -259,13 +259,11 @@ export abstract class TreeTableLogic<
   /** 节点点击 → 加载该节点下表格数据 */
   async onNodeClick(node: TreeNode): Promise<void> {
     this.selectedNode.value = node
-
-    // 检查是否只能选择叶子节点
+    this.pagination.page = 1
     if ((this.treeConfig as any)?.OnlyLeafSelectable && !node.isLeaf) {
       return
     }
-
-    await this.loadPageWithTree(node.code)
+    await (this as any)._tableRef?.refresh()
   }
 
   /** 带树条件的分页查询 */

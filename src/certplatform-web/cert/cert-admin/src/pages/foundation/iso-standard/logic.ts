@@ -13,15 +13,11 @@
  * - 继承 TreeTableLogic 获得全套左树右表能力
  */
 
-import { TreeTableLogic, type ApiResponse, type FilterItem, type PagedData, type TreeNode } from '@yzh-core'
-import { ElMessage } from 'element-plus'
+import { TreeTableLogic, type ApiResponse, type PagedData, type TreeNode } from '@yzh-core'
 import { reactive, ref } from 'vue'
 
 export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
   controllerName = 'Foundation/ISOStandardTreeTable'
-
-  // ──── ShowDisabled 开关 ────
-  showDisabled = ref(false)
 
   // ──── 条款弹窗状态 ────
   dialogVisible = ref(false)
@@ -73,19 +69,6 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
   }
 
   // ========================================================
-  // 过滤条件构建（注入 ShowDisabled）
-  // ========================================================
-
-  /** 构建过滤条件：在基类 searchParams 基础上注入 ShowDisabled */
-  protected override buildFilters(extra?: Record<string, any>): FilterItem[] {
-    const filters = super.buildFilters(extra)
-    if (this.showDisabled.value) {
-      filters.push({ Field: 'ShowDisabled', Value: 'true', Operator: 'eq' })
-    }
-    return filters
-  }
-
-  // ========================================================
   // 数据加载（供 YzhTable data-loader 使用）
   // ========================================================
 
@@ -99,7 +82,7 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
     sort?: string
     order?: string
     searchParams?: Record<string, any>
-  }): Promise<{ rows: V[]; total: number }> {
+  }): Promise<{ rows: any[]; total: number }> {
     const filters = this.buildFilters()
     if (this.selectedNode.value) {
       filters.push({
@@ -109,7 +92,7 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
       })
     }
     try {
-      const res = await this.apiPost<ApiResponse<PagedData<V>>>('/filter', {
+      const res = await this.apiPost<ApiResponse<PagedData<any>>>('/filter', {
         Page: params.page,
         PageSize: params.rows,
         SortField: params.sort || '',
@@ -135,6 +118,7 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
       return false
     }
     this.dialogMode.value = 'add'
+    this.formGroupIndex.value = '0'
     // 先清空旧数据，再从 NewEntity 模板初始化
     Object.keys(this.formData).forEach((k) => delete this.formData[k])
     const tmpl = (this.config.value as any)?.NewEntity || {}
@@ -150,6 +134,7 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
   /** 打开编辑条款弹窗 */
   openEditClauseDialog(row: any): void {
     this.dialogMode.value = 'edit'
+    this.formGroupIndex.value = '1'
     Object.keys(this.formData).forEach((k) => delete this.formData[k])
     Object.assign(this.formData, row)
     this.dialogVisible.value = true
@@ -240,20 +225,6 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
     await this.deleteTreeNode(node, true)
     // 刷新右侧表格（被删标准下的条款需要重新加载）
     await this.refreshTable()
-  }
-
-  // ========================================================
-  // ShowDisabled 开关 + 表格刷新
-  // ========================================================
-
-  async toggleShowDisabled(): Promise<void> {
-    this.showDisabled.value = !this.showDisabled.value
-    await this.refreshTable()
-  }
-
-  async refreshTable(): Promise<void> {
-    // 通过 YzhTable 组件的 refresh 方法触发 dataLoader 重新加载
-    ;(this as any)._tableRef?.refresh()
   }
 
   // ========================================================

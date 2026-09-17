@@ -38,10 +38,10 @@ namespace YZH.Entity.Admin.Platform.Sys
         public new DateTime? UpdateTime { get; set; }
 
         /// <summary>软删除标记</summary>
-        public new bool IsDeleted { get; set; }
+        public bool IsDeleted { get; set; }
 
         /// <summary>有效标志（1=有效，0=无效）</summary>
-        public new int IsValid { get; set; } = 1;
+        public int IsValid { get; set; } = 1;
 
         /// <summary>排序号</summary>
         public int Sort { get; set; }

@@ -1,8 +1,11 @@
+using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using YZH.Core.Api.Filters;
 using YZH.Core.Api.Interfaces;
 using YZH.Core.Api.Repositories;
@@ -15,6 +18,7 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Result;
 using YZH.Core.Stand.NoSql;
+using YZH.Core.Stand.Options;
 using YZH.Core.Web.Extensions;
 
 namespace YZH.Core.Web;
@@ -35,6 +39,19 @@ public static class YzhWebBuilderExtensions
     {
         var options = new YzhCoreOptions();
         configure?.Invoke(options);
+
+        // 注册 YzhCoreOptions 以供依赖注入使用
+        builder.Services.Configure<YzhCoreOptions>(opts =>
+        {
+            opts.AppName = options.AppName;
+            opts.JwtIssuer = options.JwtIssuer;
+            opts.JwtAudience = options.JwtAudience;
+            opts.JwtSecret = options.JwtSecret;
+            opts.EnableSwagger = options.EnableSwagger;
+            opts.EnableJwt = options.EnableJwt;
+            opts.CoreEntityConfigPath = options.CoreEntityConfigPath;
+            opts.BusinessEntityConfigPaths = options.BusinessEntityConfigPaths;
+        });
 
         // 注册 HttpContextAccessor（UserContext 获取 IP 必须）
         builder.Services.AddHttpContextAccessor();
@@ -110,6 +127,24 @@ public static class YzhWebBuilderExtensions
         // 注册内存缓存（EntityConfig + 验证码 + 数据缓存用）
         builder.Services.AddMemoryCache();
 
+        // 初始化 EntityConfigHelper 多目录路径（静态类，供 YzhControllerBase 使用）
+        var corePath = options.CoreEntityConfigPath
+            ?? Path.Combine(builder.Environment.ContentRootPath, "Assets", "EntityConfigs");
+        EntityConfigHelper.SetCoreConfigDir(corePath);
+        if (options.BusinessEntityConfigPaths != null)
+        {
+            EntityConfigHelper.SetBusinessConfigDirs(options.BusinessEntityConfigPaths);
+        }
+
+        // 注册 EntityConfig 加载器（支持核心模块 + 业务模块多目录）
+        builder.Services.AddSingleton<IEntityConfigLoader>(sp =>
+        {
+            var opts = sp.GetRequiredService<IOptions<YzhCoreOptions>>().Value;
+            var cache = sp.GetRequiredService<IMemoryCache>();
+            var logger = sp.GetRequiredService<ILogger<EntityConfigLoader>>();
+            return new EntityConfigLoader(cache, logger, opts);
+        });
+
         // 注册对象存储（IObjectStorage：MinIO / 阿里 OSS，配置驱动）
         builder.Services.AddYzhStorage(builder.Configuration);
 
@@ -141,17 +176,4 @@ public static class YzhWebBuilderExtensions
 
         return builder;
     }
-}
-
-/// <summary>
-///     YZH Core 核心配置项
-/// </summary>
-public class YzhCoreOptions
-{
-    public string? AppName { get; set; }
-    public string? JwtIssuer { get; set; }
-    public string? JwtAudience { get; set; }
-    public string? JwtSecret { get; set; }
-    public bool EnableSwagger { get; set; } = true;
-    public bool? EnableJwt { get; set; }
 }

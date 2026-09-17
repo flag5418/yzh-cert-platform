@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.IO;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -5,8 +7,8 @@ using System.Reflection;
 using System.Text;
 using YZH.Core.Api.Services;
 using YZH.Core.Web;
-using CertPlatform.Admin.Services.StandardDirectory;
 using YZH.Core.DataBase.Services;
+using CertPlatform.Admin;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,31 +16,19 @@ var builder = WebApplication.CreateBuilder(args);
 builder.UseYzhCore(options =>
 {
     options.EnableSwagger = true;
+    // 核心模块配置目录（YZH.Core.Web 自有：User、Role、Menu、SysConfig 等）
+    options.CoreEntityConfigPath = Path.Combine(builder.Environment.ContentRootPath, "Assets", "EntityConfigs");
+    // 业务模块配置目录（CertPlatform.Admin 的 EntityConfig）
+    var adminAssetsPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "..", "certplatform-api", "CertPlatform.Admin", "Assets", "EntityConfigs"));
+    options.BusinessEntityConfigPaths = new List<string> { adminAssetsPath };
 });
 
-// 注册业务服务（标准目录管理）
-builder.Services.AddScoped<CodeGeneratorService>();
-builder.Services.AddScoped<StandardDirectoryService>();
-builder.Services.AddScoped<DirectoryTemplateService>();
-builder.Services.AddScoped<OfficeConvertService>();
+// 业务服务自注册（启动工程不感知具体业务实现）
+builder.Services.AddCertPlatformAdminServices();
 
-// 注册队列相关服务（QueueManager 是单例，executor/notifier/handler 必须也是单例）
-// 这些实现内部通过 IServiceProvider.CreateScope() 获取 Scoped 服务
-builder.Services.AddSingleton<OfficeConvertTaskExecutor>();
-builder.Services.AddSingleton<CertQueueNotifier>();
-builder.Services.AddSingleton<UploadQueueCancelHandler>();
-
-// 注册 IYzhTaskExecutor 实现
-builder.Services.AddSingleton<YZH.Core.Stand.Interfaces.IYzhTaskExecutor>(sp =>
-    sp.GetRequiredService<OfficeConvertTaskExecutor>());
-
-// 注册 IYzhQueueNotifier 实现
-builder.Services.AddSingleton<YZH.Core.Stand.Interfaces.IYzhQueueNotifier>(sp =>
-    sp.GetRequiredService<CertQueueNotifier>());
-
-// 注册 IYzhQueueCancelHandler 实现
-builder.Services.AddSingleton<YZH.Core.Stand.Interfaces.IYzhQueueCancelHandler>(sp =>
-    sp.GetRequiredService<UploadQueueCancelHandler>());
+// 注册队列相关（QueueManager 是单例，executor/notifier/handler 必须也是单例）
+// OfficeConvertTaskExecutor、CertQueueNotifier、UploadQueueCancelHandler 的注册
+// 已通过 AddCertPlatformAdminServices() 统一注册
 
 // 读取 JWT 配置
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -86,6 +76,7 @@ builder.Services.AddControllers(options =>
     options.Filters.Add<YZH.Core.Api.Filters.PermissionFilter>();
 })
 .AddApplicationPart(typeof(CertPlatform.Admin.Controllers.Workflow.StandardDirectoryController).Assembly)
+.AddApplicationPart(typeof(CertPlatform.Admin.Controllers.Workflow.WorkflowTestController).Assembly)
 .AddApplicationPart(typeof(CertPlatform.Admin.Controllers.Foundation.DirectoryTemplateController).Assembly)
 .AddApplicationPart(typeof(CertPlatform.Admin.Controllers.System.QueueMonitorController).Assembly)
 .AddJsonOptions(json =>
@@ -147,5 +138,8 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.MapControllers();
+
+// 临时测试端点：验证 routing pipeline 是否工作
+app.MapGet("/api/test/ping", () => "pong");
 
 app.Run();

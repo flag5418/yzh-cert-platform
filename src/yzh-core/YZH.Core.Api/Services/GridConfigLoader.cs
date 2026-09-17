@@ -1,8 +1,11 @@
-using Microsoft.AspNetCore.Hosting;
+using System.Collections.Generic;
+using System.IO;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Config;
+using YZH.Core.Stand.Options;
 using YZH.Core.Stand.Models.Entity;
 
 namespace YZH.Core.Api.Services;
@@ -13,7 +16,7 @@ namespace YZH.Core.Api.Services;
 ///     
 ///     加载优先级：
 ///     1. MemoryCache（运行时缓存）
-///     2. JSON 文件系统（Assets/EntityConfigs/{TypeName}.json）
+///     2. JSON 文件系统（按配置目录顺序搜索）
 ///     3. 数据库（未来扩展）
 ///     4. 默认空配置
 /// </summary>
@@ -34,18 +37,32 @@ public interface IEntityConfigLoader
 
 /// <summary>
 ///     EntityConfig 加载器实现
+///     支持从多个目录搜索配置（核心模块 + 业务模块）
 /// </summary>
 public class EntityConfigLoader : IEntityConfigLoader
 {
     private readonly IMemoryCache _cache;
     private readonly ILogger<EntityConfigLoader> _logger;
-    private readonly string _configDirectory;
+    private readonly List<string> _configDirectories;
 
-    public EntityConfigLoader(IMemoryCache cache, ILogger<EntityConfigLoader> logger, IWebHostEnvironment environment)
+    public EntityConfigLoader(IMemoryCache cache, ILogger<EntityConfigLoader> logger, YzhCoreOptions options)
     {
         _cache = cache;
         _logger = logger;
-        _configDirectory = Path.Combine(environment.ContentRootPath, "Assets", "EntityConfigs");
+        _configDirectories = new List<string>();
+
+        // 核心模块配置目录
+        var corePath = options.CoreEntityConfigPath;
+        if (!string.IsNullOrEmpty(corePath))
+        {
+            _configDirectories.Add(corePath);
+        }
+
+        // 业务模块配置目录
+        if (options.BusinessEntityConfigPaths != null)
+        {
+            _configDirectories.AddRange(options.BusinessEntityConfigPaths);
+        }
     }
 
     public EntityConfig GetConfig<T>() where T : BaseEntity
@@ -63,8 +80,8 @@ public class EntityConfigLoader : IEntityConfigLoader
             return cached;
         }
 
-        // 2. 从文件加载
-        var config = LoadFromFile(typeName);
+        // 2. 从所有配置目录中搜索
+        var config = LoadFromDirectories(typeName);
 
         // 3. 存入缓存（滑动过期 30 分钟）
         var cacheOptions = new MemoryCacheEntryOptions()
@@ -83,36 +100,63 @@ public class EntityConfigLoader : IEntityConfigLoader
 
     public void InvalidateAll()
     {
-        // MemoryCache 不支持通配删除，实际项目中可用 CompactRC 或标记过期
         _logger.LogWarning("InvalidateAll 暂不支持，请逐个类型清除或使用绝对过期时间");
     }
 
     /// <summary>
-    ///     从 JSON 文件加载配置
+    ///     从所有配置目录中搜索指定类型的配置文件
     /// </summary>
-    private EntityConfig LoadFromFile(string typeName)
+    private EntityConfig LoadFromDirectories(string typeName)
     {
-        var configPath = Path.Combine(_configDirectory, $"{typeName}.json");
-
-        try
+        if (_configDirectories.Count == 0)
         {
-            if (File.Exists(configPath))
-            {
-                var json = File.ReadAllText(configPath);
-                var config = System.Text.Json.JsonSerializer.Deserialize<EntityConfig>(json, new System.Text.Json.JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
+            return new EntityConfig { Title = typeName, Columns = new List<DefineColumn>() };
+        }
 
-                if (config != null)
+        var targetName = typeName.ToLowerInvariant();
+
+        foreach (var dir in _configDirectories)
+        {
+            if (!Directory.Exists(dir)) continue;
+
+            // 直接查找 typeName.json
+            var directPath = Path.Combine(dir, $"{typeName}.json");
+            if (File.Exists(directPath))
+            {
+                return LoadFromFile(directPath, typeName);
+            }
+
+            // 遍历子目录递归搜索（支持 Domain/TypeName 格式）
+            foreach (var file in Directory.GetFiles(dir, "*.json", SearchOption.AllDirectories))
+            {
+                var fileName = Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
+                if (fileName == targetName)
                 {
-                    _logger.LogDebug("EntityConfig 加载成功: {Path}", configPath);
-                    return config;
+                    return LoadFromFile(file, typeName);
                 }
             }
-            else
+        }
+
+        return new EntityConfig { Title = typeName, Columns = new List<DefineColumn>() };
+    }
+
+    /// <summary>
+    ///     从文件加载配置
+    /// </summary>
+    private EntityConfig LoadFromFile(string configPath, string typeName)
+    {
+        try
+        {
+            var json = File.ReadAllText(configPath);
+            var config = System.Text.Json.JsonSerializer.Deserialize<EntityConfig>(json, new System.Text.Json.JsonSerializerOptions
             {
-                _logger.LogWarning("EntityConfig 文件不存在: {Path}", configPath);
+                PropertyNameCaseInsensitive = true
+            });
+
+            if (config != null)
+            {
+                _logger.LogDebug("EntityConfig 加载成功: {Path}", configPath);
+                return config;
             }
         }
         catch (Exception ex)
@@ -120,11 +164,6 @@ public class EntityConfigLoader : IEntityConfigLoader
             _logger.LogError(ex, "EntityConfig 加载失败: {Path}", configPath);
         }
 
-        // 返回默认空配置
-        return new EntityConfig
-        {
-            Title = typeName,
-            Columns = new List<DefineColumn>()
-        };
+        return new EntityConfig { Title = typeName, Columns = new List<DefineColumn>() };
     }
 }

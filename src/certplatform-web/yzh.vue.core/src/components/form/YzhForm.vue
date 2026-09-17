@@ -146,7 +146,11 @@ async function ensureOptions(field: YzhFormField) {
 ;(async () => {
   for (const f of props.fields) {
     if (f.loadOptions && !f.options) {
-      await ensureOptions(f)
+      try {
+        await ensureOptions(f)
+      } catch (_e) {
+        // 字典加载失败时静默降级，不阻塞表单渲染
+      }
     }
   }
 })()

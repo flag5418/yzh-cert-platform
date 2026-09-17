@@ -36,7 +36,7 @@ namespace YZH.Entity.Admin.Platform.Sys
         public string? Remark { get; set; }
 
         // ──── 审计字段重声明（BaseEntity IsIgnore=true → 这里改为 false） ────
-        public new int IsValid { get; set; } = 1;
+        public int IsValid { get; set; } = 1;
         [StringLength(50)]
         public new string? CreateBy { get; set; }
         public new DateTime CreateTime { get; set; } = DateTime.UtcNow;
@@ -46,6 +46,6 @@ namespace YZH.Entity.Admin.Platform.Sys
         [StringLength(50)]
         public new string? DeleteBy { get; set; }
         public new DateTime? DeleteTime { get; set; }
-        public new bool IsDeleted { get; set; }
+        public bool IsDeleted { get; set; }
     }
 }

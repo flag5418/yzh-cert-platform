@@ -85,6 +85,32 @@ public class ValidationRuleController
     }
 
     // ========================================================
+    // Update 覆盖：排除 Code 字段避免 SqlSugar 参数重复
+    // （BaseEntity.Code 与 ValidationRule.Code(new) 冲突）
+    // ========================================================
+
+    [HttpPost("update")]
+    public override async Task<ActionResult<ApiResponse<SharedEntities::YZH.Entity.Admin.Platform.Cert.ValidationRule>>> Update(
+        [FromBody] SharedEntities::YZH.Entity.Admin.Platform.Cert.ValidationRule entity)
+    {
+        var fields = typeof(SharedEntities::YZH.Entity.Admin.Platform.Cert.ValidationRule)
+            .GetProperties()
+            .Where(p => p.Name != "Code" && p.Name != "Id"
+                     && p.Name != "CreateTime" && p.Name != "CreateBy"
+                     && p.Name != "ClauseNumber" && p.Name != "ClauseTitle"
+                     && p.Name != "CheckFlag" && p.Name != "DeleteFlag"
+                     && p.Name != "RowVersion")
+            .Select(p => p.Name)
+            .ToArray();
+
+        var result = await Entity.Update(entity, updateFields: fields);
+        if (!result.Success)
+            return BadRequest(ApiResponse.Fail(result.Error!));
+
+        return Ok(ApiResponse<SharedEntities::YZH.Entity.Admin.Platform.Cert.ValidationRule>.Ok(result.Data));
+    }
+
+    // ========================================================
     // 新增钩子：自动生成 RuleCode
     // ========================================================
 

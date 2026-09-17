@@ -4,6 +4,7 @@ using System.Security;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
+using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Result;
 using YZH.Core.DataBase.Interfaces;
@@ -376,44 +377,32 @@ public class SqlSugarDbOrm : IDbOrm
     // ==================== 私有方法 ====================
 
     /// <summary>
-    ///     获取软删除过滤条件（如果实体有 IsDeleted 属性）
+    ///     获取软删除过滤条件（接口驱动：实现 ISoftDelete 的实体自动过滤 IsDeleted=false）
     /// </summary>
     private static Expression<Func<T, bool>> IsDeletedCondition<T>() where T : class, new()
     {
-        var prop = typeof(T).GetProperty("IsDeleted");
-        if (prop == null)
-            return _ => true; // 无 IsDeleted 字段，不过滤
-
-        // 检查 [SugarColumn(IsIgnore = true)]，如果标记了则跳过过滤
-        var sugarColumn = prop.GetCustomAttribute<SugarColumn>();
-        if (sugarColumn != null && sugarColumn.IsIgnore)
+        // 接口驱动：检查是否实现 ISoftDelete
+        if (!typeof(ISoftDelete).IsAssignableFrom(typeof(T)))
             return _ => true;
 
         var param = Expression.Parameter(typeof(T), "x");
-        var member = Expression.Property(param, prop);
+        var member = Expression.Property(param, nameof(ISoftDelete.IsDeleted));
         var constant = Expression.Constant(false);
         var body = Expression.Equal(member, constant);
         return Expression.Lambda<Func<T, bool>>(body, param);
     }
 
     /// <summary>
-    ///     获取有效标志过滤条件（如果实体有 IsValid 属性）
-    ///     1=有效（默认），0=无效
-    ///     注意：如果属性标记了 [SugarColumn(IsIgnore = true)]，则跳过过滤
+    ///     获取有效标志过滤条件（接口驱动：实现 IIsValid 的实体自动过滤 IsValid=1）
     /// </summary>
     private static Expression<Func<T, bool>> IsValidCondition<T>() where T : class, new()
     {
-        var prop = typeof(T).GetProperty("IsValid");
-        if (prop == null)
-            return _ => true; // 无 IsValid 字段，不过滤
-
-        // 检查 [SugarColumn(IsIgnore = true)]，如果标记了则跳过过滤
-        var sugarColumn = prop.GetCustomAttribute<SugarColumn>();
-        if (sugarColumn != null && sugarColumn.IsIgnore)
+        // 接口驱动：检查是否实现 IIsValid
+        if (!typeof(IIsValid).IsAssignableFrom(typeof(T)))
             return _ => true;
 
         var param = Expression.Parameter(typeof(T), "x");
-        var member = Expression.Property(param, prop);
+        var member = Expression.Property(param, nameof(IIsValid.IsValid));
         var constant = Expression.Constant(1);
         var body = Expression.Equal(member, constant);
         return Expression.Lambda<Func<T, bool>>(body, param);

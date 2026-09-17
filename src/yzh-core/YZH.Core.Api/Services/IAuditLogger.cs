@@ -47,17 +47,17 @@ public class AuditLogger : IAuditLogger
 
     public void LogInsert<T>(T entity, RequestContext context) where T : BaseEntity
     {
-        Log("INSERT", $"{context.UserName}({context.ClientIp}) 新增记录 Id={entity.Id}, Code={entity.Code}, Type={typeof(T).Name}", context);
+        Log("INSERT", $"{context.UserName}({context.ClientIp}) 新增记录 Code={entity.Code}, Type={typeof(T).Name}", context);
     }
 
     public void LogUpdate<T>(T entity, RequestContext context) where T : BaseEntity
     {
-        Log("UPDATE", $"{context.UserName}({context.ClientIp}) 更新记录 Id={entity.Id}, Code={entity.Code}, Type={typeof(T).Name}", context);
+        Log("UPDATE", $"{context.UserName}({context.ClientIp}) 更新记录 Code={entity.Code}, Type={typeof(T).Name}", context);
     }
 
     public void LogDelete<T>(T entity, RequestContext context) where T : BaseEntity
     {
-        Log("DELETE", $"{context.UserName}({context.ClientIp}) 删除记录 Id={entity.Id}, Code={entity.Code}, Type={typeof(T).Name}", context);
+        Log("DELETE", $"{context.UserName}({context.ClientIp}) 删除记录 Code={entity.Code}, Type={typeof(T).Name}", context);
     }
 
     public void LogBatchInsert<T>(List<T> entities, RequestContext context) where T : BaseEntity

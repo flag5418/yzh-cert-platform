@@ -137,7 +137,7 @@ namespace YZH.Entity.Admin.Platform.Cert
         // ========================================================
 
         /// <summary>有效标志（1=启用，0=禁用）。同步 Sys_Organization.Enable</summary>
-        public new int IsValid { get; set; } = 1;
+        public int IsValid { get; set; } = 1;
 
         /// <summary>创建人 Code</summary>
         [StringLength(50)]
@@ -161,6 +161,6 @@ namespace YZH.Entity.Admin.Platform.Cert
         public new DateTime? DeleteTime { get; set; }
 
         /// <summary>软删除标记</summary>
-        public new bool IsDeleted { get; set; }
+        public bool IsDeleted { get; set; }
     }
 }
