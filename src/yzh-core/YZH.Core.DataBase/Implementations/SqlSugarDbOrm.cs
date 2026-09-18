@@ -50,11 +50,13 @@ public class SqlSugarDbOrm : IDbOrm
         }
     }
 
-    public async Task<Result<List<T>>> GetListAsync<T>(Expression<Func<T, bool>>? predicate = null) where T : class, new()
+    public async Task<Result<List<T>>> GetListAsync<T>(Expression<Func<T, bool>>? predicate = null, bool includeDisabled = false) where T : class, new()
     {
         try
         {
-            var query = _client.Queryable<T>().Where(IsDeletedCondition<T>()).Where(IsValidCondition<T>());
+            var query = _client.Queryable<T>().Where(IsDeletedCondition<T>());
+            if (!includeDisabled)
+                query = query.Where(IsValidCondition<T>());
             if (predicate != null)
                 query = query.Where(predicate);
             var list = await query.ToListAsync();
@@ -98,7 +100,7 @@ public class SqlSugarDbOrm : IDbOrm
             // 解析 Conditions
             if (options.Conditions?.Length > 0)
             {
-                var (sql, parameters) = BuildConditionsSql(options.Conditions);
+                var (sql, parameters) = BuildConditionsSql<T>(options.Conditions);
                 if (!string.IsNullOrEmpty(sql))
                     query = query.Where(sql, parameters);
             }
@@ -377,12 +379,28 @@ public class SqlSugarDbOrm : IDbOrm
     // ==================== 私有方法 ====================
 
     /// <summary>
-    ///     获取软删除过滤条件（接口驱动：实现 ISoftDelete 的实体自动过滤 IsDeleted=false）
+    ///     检查属性是否在当前类型自身声明（排除 BaseEntity 继承的）
+    ///     用于区分：实体自身声明了 IsDeleted → 需要过滤 vs 仅从 BaseEntity 继承 → 跳过
+    /// </summary>
+    private static bool IsDeclaredOnType<T>(string propertyName) where T : class, new()
+    {
+        var prop = typeof(T).GetProperty(propertyName);
+        if (prop == null) return false;
+
+        // [SugarColumn(IsIgnore = true)] → 数据库无此列，跳过
+        var sugarColumn = prop.GetCustomAttribute<SugarColumn>();
+        if (sugarColumn != null && sugarColumn.IsIgnore) return false;
+
+        // 检查 DeclaringType：是否在当前类型自身声明（而非 BaseEntity）
+        return prop.DeclaringType == typeof(T);
+    }
+
+    /// <summary>
+    ///     获取软删除过滤条件：仅当实体自身声明了 IsDeleted 属性时才过滤
     /// </summary>
     private static Expression<Func<T, bool>> IsDeletedCondition<T>() where T : class, new()
     {
-        // 接口驱动：检查是否实现 ISoftDelete
-        if (!typeof(ISoftDelete).IsAssignableFrom(typeof(T)))
+        if (!IsDeclaredOnType<T>(nameof(ISoftDelete.IsDeleted)))
             return _ => true;
 
         var param = Expression.Parameter(typeof(T), "x");
@@ -393,12 +411,11 @@ public class SqlSugarDbOrm : IDbOrm
     }
 
     /// <summary>
-    ///     获取有效标志过滤条件（接口驱动：实现 IIsValid 的实体自动过滤 IsValid=1）
+    ///     获取有效标志过滤条件：仅当实体自身声明了 IsValid 属性时才过滤
     /// </summary>
     private static Expression<Func<T, bool>> IsValidCondition<T>() where T : class, new()
     {
-        // 接口驱动：检查是否实现 IIsValid
-        if (!typeof(IIsValid).IsAssignableFrom(typeof(T)))
+        if (!IsDeclaredOnType<T>(nameof(IIsValid.IsValid)))
             return _ => true;
 
         var param = Expression.Parameter(typeof(T), "x");
@@ -410,8 +427,9 @@ public class SqlSugarDbOrm : IDbOrm
 
     /// <summary>
     ///     将 SqlCondition 数组构建为参数化 SQL 字符串
+    ///     自动将 C# 属性名映射到 DB 列名（尊重 [SugarColumn(ColumnName)]）
     /// </summary>
-    private static (string Sql, SugarParameter[] Parameters) BuildConditionsSql(SqlCondition[] conditions)
+    private static (string Sql, SugarParameter[] Parameters) BuildConditionsSql<T>(SqlCondition[] conditions) where T : class, new()
     {
         var parameters = new List<SugarParameter>();
         var clauses = new List<string>();
@@ -419,12 +437,14 @@ public class SqlSugarDbOrm : IDbOrm
         for (int i = 0; i < conditions.Length; i++)
         {
             var c = conditions[i];
+            // 关键：将前端传入的 C# 属性名映射到实际 DB 列名
+            var dbColumn = GetColumnName<T>(c.Field) ?? c.Field;
             var paramName = $"_c{i}_{c.Field}";
 
             if (c.Operator.Equals("IS NULL", StringComparison.OrdinalIgnoreCase) ||
                 c.Operator.Equals("IS NOT NULL", StringComparison.OrdinalIgnoreCase))
             {
-                clauses.Add($"`{c.Field}` {c.Operator}");
+                clauses.Add($"`{dbColumn}` {c.Operator}");
             }
             else if (c.Operator.Equals("IN", StringComparison.OrdinalIgnoreCase) && c.Value is IEnumerable<object> values && c.Value is not string)
             {
@@ -437,11 +457,11 @@ public class SqlSugarDbOrm : IDbOrm
                     parameters.Add(new SugarParameter($"@{inParamName}", val));
                     j++;
                 }
-                clauses.Add($"`{c.Field}` IN ({string.Join(", ", inParams)})");
+                clauses.Add($"`{dbColumn}` IN ({string.Join(", ", inParams)})");
             }
             else
             {
-                clauses.Add($"`{c.Field}` {c.Operator} @{paramName}");
+                clauses.Add($"`{dbColumn}` {c.Operator} @{paramName}");
                 parameters.Add(new SugarParameter($"@{paramName}", c.Value));
             }
         }
