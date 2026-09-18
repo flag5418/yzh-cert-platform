@@ -146,19 +146,20 @@ onMounted(async () => {
 <style scoped>
 .api-page {
   height: 100%;
-  padding: 16px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: #fff;
 }
 
 .toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  padding: 16px;
   flex-shrink: 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
 .toolbar-left {
@@ -178,7 +179,7 @@ onMounted(async () => {
 }
 
 .footer-stats {
-  margin-top: 12px;
+  padding-top: 12px;
   color: #909399;
   font-size: 13px;
   text-align: right;

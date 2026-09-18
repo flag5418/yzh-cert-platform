@@ -174,7 +174,6 @@ onMounted(async () => {
 .role-menu-page__tree-content {
   flex: 1;
   overflow: auto;
-  padding: 8px 0;
 }
 
 .role-menu-page__table-panel {

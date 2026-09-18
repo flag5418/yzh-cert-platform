@@ -53,10 +53,12 @@ public abstract class BaseEntity : INotifyPropertyChanged, ISoftDelete, IIsValid
     [StringLength(64)]
     public string? DeleteBy { get; set; }
 
-    /// <summary>是否删除标记（软删除标志，默认 false）— 子类必须声明此属性以映射到 DB</summary>
+    /// <summary>是否删除标记（软删除标志，默认 false）— 子类必须用 new 重声明以映射到 DB</summary>
+    [SugarColumn(IsIgnore = true)]
     public bool IsDeleted { get; set; }
 
-    /// <summary>有效标志（1=有效，0=无效，默认有效）— 子类必须声明此属性以映射到 DB</summary>
+    /// <summary>有效标志（1=有效，0=无效，默认有效）— 子类必须用 new 重声明以映射到 DB</summary>
+    [SugarColumn(IsIgnore = true)]
     public int IsValid { get; set; } = 1;
 
     /// <summary>前端选中标记（不持久化）</summary>

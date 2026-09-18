@@ -83,7 +83,10 @@ services:
   # 使用 Alpine + LibreOffice 轻量版
   ##############################################################################
   libreoffice:
-    image: woahbase/alpine-libreoffice:latest
+    # 自建镜像：基线 alpine-libreoffice + 中文字体（CJK）
+    # 基线镜像无 CJK 字体 → 中文文档转 PDF 后汉字会显示为方块（等同无法预览）
+    build: ./libreoffice
+    image: yzh-libreoffice:local
     container_name: yzh-libreoffice
     restart: "no"
     environment:

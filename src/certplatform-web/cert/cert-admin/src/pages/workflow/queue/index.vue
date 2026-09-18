@@ -436,6 +436,10 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="less">
+:deep(.yzh-page-layout__content) {
+  background: #fff;
+}
+
 .status-cards {
   margin-bottom: 16px;
   margin-top: 16px;

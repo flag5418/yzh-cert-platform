@@ -48,7 +48,8 @@ namespace CertPlatform.Shared.DocExtraction
             {
                 // anydoc 输入文件：/tmp/anydoc/{uuid}/{fileName}
                 // 输出：-o /tmp/anydoc/{uuid}/{stem}.md
-                var args = $"anydoc {containerFile} -o {containerOut}";
+                // ⚠️ 路径必须加引号：ExecDockerAsync 走容器内 `sh -c`，未引用的空格中文名会被拆成多个参数
+                var args = $"anydoc \"{containerFile}\" -o \"{containerOut}\"";
                 return await ExecDockerAsync("yzh-anydoc", args, containerOut);
             }, ".md", "anydoc");
         }
@@ -64,8 +65,9 @@ namespace CertPlatform.Shared.DocExtraction
         {
             return await RunInWorkDirAsync("libreoffice", fileName, content, async (containerDir, containerFile, containerOut) =>
             {
+                // ⚠️ 路径必须加引号（同 ConvertToPdfAsync：sh -c 会按空格拆参）
                 var args = $"soffice --headless --norestore -env:UserInstallation=file:///tmp/libreoffice/profile-{Guid.NewGuid():N} " +
-                           $"--convert-to {targetFormat} --outdir {containerDir} {containerFile}";
+                           $"--convert-to {targetFormat} --outdir \"{containerDir}\" \"{containerFile}\"";
                 return await ExecDockerAsync("yzh-libreoffice", args, containerOut);
             }, "." + targetFormat.TrimStart('.'), "libreoffice");
         }
@@ -83,8 +85,10 @@ namespace CertPlatform.Shared.DocExtraction
             return await RunInWorkDirAsync("libreoffice", fileName, content, async (containerDir, containerFile, containerOut) =>
             {
                 // soffice --headless --norestore 独立 profile --convert-to pdf --outdir /tmp/libreoffice/{uuid}
+                // ⚠️ 路径必须加引号：ExecDockerAsync 包装为 `sh -c "..."`，未引用的路径含空格（如「XASL-QM 质量手册.doc」）
+                //    会被 shell 拆成两个参数 → soffice 找不到输入文件、退出码 0 且无产物（历史 400「未产出文件」）
                 var args = $"soffice --headless --norestore -env:UserInstallation=file:///tmp/libreoffice/profile-{Guid.NewGuid():N} " +
-                           $"--convert-to pdf --outdir {containerDir} {containerFile}";
+                           $"--convert-to pdf --outdir \"{containerDir}\" \"{containerFile}\"";
                 // LibreOffice 输出文件名 = 输入 stem + .pdf（-o 参数不可用，用 outdir 定位）
                 return await ExecDockerAsync("yzh-libreoffice", args, containerOut);
             }, ".pdf", "libreoffice");
@@ -161,15 +165,22 @@ namespace CertPlatform.Shared.DocExtraction
         /// </summary>
         private async Task<ConvertResult> ExecDockerAsync(string container, string args, string expectedOutput)
         {
+            // ⚠️ 必须用 ArgumentList 逐参传递：
+            //    Arguments 是单个字符串，.NET 会再做一次引号解析，`sh -c "..."` 中嵌套的引号会被吃掉，
+            //    使容器内 sh 把「XASL-QM 质量手册.doc」按空格拆成两个参数（历史 400「未产出文件」根因）。
             var psi = new ProcessStartInfo
             {
                 FileName = "docker",
-                Arguments = $"exec {container} sh -c \"{args}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+            psi.ArgumentList.Add("exec");
+            psi.ArgumentList.Add(container);
+            psi.ArgumentList.Add("sh");
+            psi.ArgumentList.Add("-c");
+            psi.ArgumentList.Add(args);
 
             _logger.LogInformation("[Convert] docker exec {Container}: {Args}", container, args);
 

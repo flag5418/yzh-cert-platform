@@ -1,30 +1,5 @@
 namespace YZH.Core.Stand.Models.Config;
 
-/// <summary>树懒加载请求</summary>
-public class TreeChildrenRequest
-{
-    public string ParentCode { get; set; } = string.Empty;
-    public int Level { get; set; }
-}
-
-/// <summary>树节点 DTO（前后端统一标准）</summary>
-public class TreeItemDto
-{
-    public string Code { get; set; } = string.Empty;
-    public string Name { get; set; } = string.Empty;
-    public string? ParentCode { get; set; }
-    public string? NodeType { get; set; }
-    public bool IsLeaf { get; set; }
-    public int Level { get; set; }
-    public int? Sort { get; set; }
-
-    /// <summary>扩展业务字段（enable、remark 等通过此字典传递）</summary>
-    public Dictionary<string, object>? Extra { get; set; }
-
-    /// <summary>子节点（全量加载场景）</summary>
-    public List<TreeItemDto>? Children { get; set; }
-}
-
 /// <summary>树配置</summary>
 public class TreeConfig
 {
@@ -83,26 +58,4 @@ public class TreeTableConfig
 
     /// <summary>树节点表单配置（机构/目录等树节点编辑弹窗的字段定义）</summary>
     public EntityConfig? TreeFormConfig { get; set; }
-}
-
-/// <summary>搜索条件配置</summary>
-public class SearchFieldConfig
-{
-    /// <summary>显示名称</summary>
-    public string Label { get; set; } = string.Empty;
-
-    /// <summary>字段名（对应实体属性）</summary>
-    public string Field { get; set; } = string.Empty;
-
-    /// <summary>查询类型：like/eq/gt/lt/in</summary>
-    public string Operator { get; set; } = "like";
-
-    /// <summary>控件类型：input/select/date/cascader</summary>
-    public string ControlType { get; set; } = "input";
-
-    /// <summary>下拉选项（ControlType=select时有效）</summary>
-    public List<SelectOption>? Options { get; set; }
-
-    /// <summary>宽度（px）</summary>
-    public int Width { get; set; } = 180;
 }

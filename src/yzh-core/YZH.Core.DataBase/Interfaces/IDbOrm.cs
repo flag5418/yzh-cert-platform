@@ -18,7 +18,7 @@ public interface IDbOrm
     Task<Result<T?>> GetOneAsync<T>(Expression<Func<T, bool>> predicate) where T : class, new();
 
     /// <summary>获取列表</summary>
-    Task<Result<List<T>>> GetListAsync<T>(Expression<Func<T, bool>>? predicate = null) where T : class, new();
+    Task<Result<List<T>>> GetListAsync<T>(Expression<Func<T, bool>>? predicate = null, bool includeDisabled = false) where T : class, new();
 
     /// <summary>分页查询</summary>
     Task<Result<(List<T> items, int total)>> GetPageAsync<T>(SqlPageOptions options) where T : class, new();

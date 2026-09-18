@@ -32,7 +32,7 @@
           <div v-if="field.type !== 'promptWithRef'" class="inspector-field">
             <div class="inspector-label">{{ field.label }}</div>
             <el-input v-if="field.type === 'textarea'" v-model="panelFieldValues[field.field]" type="textarea" :rows="field.rows || 3" size="small" @change="applyPanelField(field)" />
-            <el-select v-else-if="field.type === 'doc-select'" v-model="panelFieldValues[field.field]" size="small" style="width: 100%" @change="(v: string) => onDocSelect(field.field, v)"><el-option v-for="d in docList" :key="d.ruleCode" :label="d.fileName || d.standardFileCode" :value="d.ruleCode" /></el-select>
+            <el-select v-else-if="field.type === 'doc-select'" v-model="panelFieldValues[field.field]" size="small" style="width: 100%" @change="(v: string) => onDocSelect(field.field, v)"><el-option v-for="d in docList" :key="d.ruleCode || d.RuleCode" :label="d.fileName || d.FileName || d.standardFileCode || d.StandardFileCode" :value="d.ruleCode || d.RuleCode" /></el-select>
             <el-select v-else-if="field.type === 'field-select'" v-model="panelFieldValues[field.field]" size="small" style="width: 100%" :disabled="!panelFieldValues['config.ruleCode']" @change="applyPanelFields"><el-option v-for="f in fieldList" :key="f.fieldCode" :label="f.fieldName" :value="f.fieldCode" /></el-select>
             <el-switch v-else-if="field.type === 'switch'" v-model="panelFieldValues[field.field]" @change="applyPanelFields" />
             <el-slider v-else-if="field.type === 'slider'" v-model="panelFieldValues[field.field]" :min="field.min || 0" :max="field.max || 1" :step="field.step || 0.1" @change="applyPanelFields" />

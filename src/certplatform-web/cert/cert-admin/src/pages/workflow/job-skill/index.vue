@@ -265,7 +265,7 @@ onMounted(() => { loadCategories() })
 </template>
 
 <style scoped>
-.skill-page { padding: 20px; display: flex; gap: 16px; height: 100%; }
+.skill-page { display: flex; gap: 16px; height: 100%; }
 .category-card { width: 200px; min-width: 200px; }
 .category-header { display: flex; align-items: center; justify-content: space-between; }
 .category-list { overflow-y: auto; }

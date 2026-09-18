@@ -171,6 +171,62 @@ export class YzhApiClient {
   }
 
   /**
+   * GET 二进制内容（带鉴权）——用于预览场景
+   *
+   * 背景：`<iframe src>` / `<img src>` 无法携带 Authorization 头（本平台 JWT 走 Header），
+   * 直接渲染受保护的文件流必然 401。必须先带 Token 取回 Blob，再用 ObjectURL 渲染。
+   *
+   * @param url    相对路径
+   * @param params 查询参数（追加到 URL）
+   * @returns      Blob（MIME 取自响应头，缺失时调用方按魔数兜底）
+   * @throws       401 / 业务错误：抛出带 status 的 Error（错误信息优先取后端 JSON 的 message）
+   */
+  async getBlob(url: string, params?: Record<string, any>): Promise<Blob> {
+    const token = this.getToken()
+    let finalUrl = url
+    if (params) {
+      const qs = new URLSearchParams()
+      Object.entries(params).forEach(([k, v]) => {
+        if (v === undefined || v === null) return
+        qs.append(k, String(v))
+      })
+      const q = qs.toString()
+      if (q) finalUrl += (url.includes('?') ? '&' : '?') + q
+    }
+
+    const res = await fetch(this.baseURL + finalUrl, {
+      method: 'GET',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
+
+    if (res.status === 401) {
+      tokenStore.clear()
+      this.onUnauthorized?.()
+      throw new Error('登录已过期，请重新登录')
+    }
+
+    const contentType = res.headers.get('content-type') || ''
+
+    // 后端业务失败时返回 JSON（如 { code: 400, message }），需取出 message 而不是当成文件
+    if (contentType.includes('application/json')) {
+      const json = await res.json().catch(() => ({} as any))
+      const err = new Error(json?.message || json?.msg || `请求失败 (${res.status})`)
+      ;(err as any).status = res.status
+      throw err
+    }
+
+    if (!res.ok) {
+      const err = new Error(`请求失败 (${res.status})`)
+      ;(err as any).status = res.status
+      throw err
+    }
+
+    return await res.blob()
+  }
+
+  /**
    * POST 下载文件（导出）
    */
   async download(url: string, body: any, filename: string): Promise<void> {

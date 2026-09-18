@@ -251,7 +251,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <YzhPageLayout title="报告章节定义">
+  <YzhPageLayout title="报告章节定义" no-padding hide-toolbar>
     <el-row :gutter="16" class="report-rule-layout">
       <!-- 左侧：组织 → 标准 → 阶段 树 -->
       <el-col :span="6" class="tree-panel">

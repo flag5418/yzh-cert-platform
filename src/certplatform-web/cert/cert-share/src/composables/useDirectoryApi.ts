@@ -33,19 +33,18 @@ export async function getDirectoryConfig(directoryCode: string): Promise<Standar
 }
 
 /** 创建目录配置 */
-export async function createDirectoryConfig(config: Partial<StandardDirectoryConfig>): Promise<StandardDirectoryConfig> {
-  const res = await yzhApi.post<ApiResponse<StandardDirectoryConfig>>('/api/Workflow/StandardDirectory/configs/create', config)
-  return res.data!
+export async function createDirectoryConfig(config: Partial<StandardDirectoryConfig>): Promise<BizResult> {
+  return await yzhApi.post<BizResult>('/api/Workflow/StandardDirectory/configs/create', config)
 }
 
 /** 更新目录配置 */
-export async function updateDirectoryConfig(directoryCode: string, config: Partial<StandardDirectoryConfig>): Promise<void> {
-  await yzhApi.post<ApiResponse<void>>(`/api/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}`, config)
+export async function updateDirectoryConfig(directoryCode: string, config: Partial<StandardDirectoryConfig>): Promise<BizResult> {
+  return await yzhApi.post<BizResult>(`/api/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}`, config)
 }
 
 /** 删除目录配置 */
-export async function deleteDirectoryConfig(directoryCode: string): Promise<void> {
-  await yzhApi.post<ApiResponse<void>>(`/api/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}/delete`)
+export async function deleteDirectoryConfig(directoryCode: string): Promise<BizResult> {
+  return await yzhApi.post<BizResult>(`/api/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}/delete`)
 }
 
 /** 获取文件夹列表 */
@@ -61,19 +60,26 @@ export async function getFoldersFlat(directoryCode: string): Promise<StandardDir
 }
 
 /** 创建文件夹 */
-export async function createFolder(directoryCode: string, folder: Partial<StandardDirectoryFolder>): Promise<StandardDirectoryFolder> {
-  const res = await yzhApi.post<ApiResponse<StandardDirectoryFolder>>(`/api/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}/folders/create`, folder)
-  return res.data!
+export async function createFolder(directoryCode: string, folder: Partial<StandardDirectoryFolder>): Promise<BizResult> {
+  return await yzhApi.post<BizResult>(`/api/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}/folders/create`, folder)
+}
+
+/** 业务响应体：这些端点始终 HTTP 200，业务成败看 code（200/400） */
+export interface BizResult {
+  code: number
+  msg?: string
+  message?: string
+  data?: any
 }
 
 /** 更新文件夹 */
-export async function updateFolder(folderCode: string, folder: Partial<StandardDirectoryFolder>): Promise<void> {
-  await yzhApi.post<ApiResponse<void>>(`/api/Workflow/StandardDirectory/folders/${encodeURIComponent(folderCode)}`, folder)
+export async function updateFolder(folderCode: string, folder: Partial<StandardDirectoryFolder>): Promise<BizResult> {
+  return await yzhApi.post<BizResult>(`/api/Workflow/StandardDirectory/folders/${encodeURIComponent(folderCode)}`, folder)
 }
 
 /** 删除文件夹 */
-export async function deleteFolder(folderCode: string): Promise<void> {
-  await yzhApi.post<ApiResponse<void>>(`/api/Workflow/StandardDirectory/folders/${encodeURIComponent(folderCode)}/delete`)
+export async function deleteFolder(folderCode: string): Promise<BizResult> {
+  return await yzhApi.post<BizResult>(`/api/Workflow/StandardDirectory/folders/${encodeURIComponent(folderCode)}/delete`)
 }
 
 /** 获取文件列表 */
@@ -89,22 +95,35 @@ export async function getRootFiles(directoryCode: string): Promise<StandardDirec
 }
 
 /** 更新文件 */
-export async function updateFile(fileCode: string, file: Partial<StandardDirectoryFile>): Promise<void> {
-  await yzhApi.post<ApiResponse<void>>(`/api/Workflow/StandardDirectory/files/${encodeURIComponent(fileCode)}`, file)
+export async function updateFile(fileCode: string, file: Partial<StandardDirectoryFile>): Promise<BizResult> {
+  return await yzhApi.post<BizResult>(`/api/Workflow/StandardDirectory/files/${encodeURIComponent(fileCode)}`, file)
 }
 
 /** 删除文件 */
-export async function deleteFile(fileCode: string): Promise<void> {
-  await yzhApi.post<ApiResponse<void>>(`/api/Workflow/StandardDirectory/files/${encodeURIComponent(fileCode)}/delete`)
+export async function deleteFile(fileCode: string): Promise<BizResult> {
+  return await yzhApi.post<BizResult>(`/api/Workflow/StandardDirectory/files/${encodeURIComponent(fileCode)}/delete`)
 }
 
-/** 下载文件 */
+/** 下载文件（带鉴权取回 Blob；预览与下载共用） */
 export async function downloadFile(storagePath: string): Promise<Blob> {
-  const res = await yzhApi.get<Blob>('/api/Workflow/StandardDirectory/download', {
-    params: { storagePath },
-    responseType: 'blob',
-  } as any)
-  return res as any
+  return yzhApi.getBlob('/api/Workflow/StandardDirectory/download', { storagePath })
+}
+
+/** 重试转换失败的文件（重新入队） */
+export async function retryFailedConversions(): Promise<{
+  ok: boolean
+  message: string
+  enqueued: number
+  queueCount: number
+}> {
+  // 该端点始终 HTTP 200，业务结果在 code 字段（code=400 表示失败/无文件）
+  const res = await yzhApi.post<any>('/api/Workflow/StandardDirectory/retry-failed-conversions')
+  return {
+    ok: res?.code === 200,
+    message: res?.msg || res?.message || '',
+    enqueued: res?.enqueued ?? 0,
+    queueCount: res?.queueCount ?? 0,
+  }
 }
 
 /** 上传初始化（创建任务） */
@@ -227,15 +246,31 @@ export async function getActiveQueue(directoryCode: string): Promise<any[]> {
   return res.data!
 }
 
-/** 查询转换进度 */
+/**
+ * 查询转换进度
+ * ⚠️ 后端签名为 `[FromQuery] string taskId`（非空必填），参数必须走查询串：
+ *    放在 body 会被 [ApiController] 模型校验拦下，直接返回 400 validation error。
+ */
 export async function getConvertProgress(taskId: string): Promise<any> {
-  const res = await yzhApi.post<ApiResponse<any>>('/api/Workflow/StandardDirectory/convert/progress', { TaskId: taskId })
+  const res = await yzhApi.post<ApiResponse<any>>(
+    '/api/Workflow/StandardDirectory/convert/progress',
+    undefined,
+    { params: { taskId } }
+  )
   return res.data!
 }
 
-/** 取消转换 */
-export async function cancelConvert(queueCode: string): Promise<void> {
-  await yzhApi.post<ApiResponse<void>>('/api/Workflow/StandardDirectory/convert/cancel', { QueueCode: queueCode })
+/**
+ * 取消转换
+ * ⚠️ 同 getConvertProgress：后端 `[FromQuery] string queueCode` 必填，body 传参会 400。
+ * 返回业务结果（HTTP 恒 200，成败在 body.code），调用方需判断 code 而不是直接提示成功。
+ */
+export async function cancelConvert(queueCode: string): Promise<BizResult> {
+  return await yzhApi.post<BizResult>(
+    '/api/Workflow/StandardDirectory/convert/cancel',
+    undefined,
+    { params: { queueCode } }
+  )
 }
 
 // ========================================================
@@ -276,13 +311,9 @@ export async function uploadTemplateFile(file: File, configCode: string): Promis
   return res.data!
 }
 
-/** 下载模板文件 */
+/** 下载模板文件（带鉴权取回 Blob） */
 export async function downloadTemplateFile(storagePath: string): Promise<Blob> {
-  const res = await yzhApi.get<Blob>('/api/Foundation/DirectoryTemplate/downloadTemplateFile', {
-    params: { storagePath },
-    responseType: 'blob',
-  } as any)
-  return res as any
+  return yzhApi.getBlob('/api/Foundation/DirectoryTemplate/downloadTemplateFile', { storagePath })
 }
 
 /** 删除模板文件 */

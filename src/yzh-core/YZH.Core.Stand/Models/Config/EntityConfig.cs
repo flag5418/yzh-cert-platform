@@ -1,21 +1,6 @@
 namespace YZH.Core.Stand.Models.Config;
 
 /// <summary>
-///     字段结构描述（后端反射生成，前端表单用）
-/// </summary>
-public class EntityFieldSchema
-{
-    /// <summary>字段类型：string/number/boolean/datetime</summary>
-    public string Type { get; set; } = "string";
-
-    /// <summary>默认值（直接用于初始化表单）</summary>
-    public object? Default { get; set; }
-
-    /// <summary>是否可选（允许为空）</summary>
-    public bool Optional { get; set; }
-}
-
-/// <summary>
 ///     实体页面 UI 配置（一份配置同时驱动表格和表单）
 ///     
 ///     配置文件约定：
@@ -83,40 +68,4 @@ public class EntityConfig
 
     /// <summary>搜索字段配置</summary>
     public List<SearchFieldConfig>? SearchFields { get; set; }
-}
-
-/// <summary>
-///     工具栏按钮配置
-/// </summary>
-public class ToolbarConfig
-{
-    public bool Add { get; set; } = true;
-    public bool Delete { get; set; } = true;
-    public bool Export { get; set; } = false;
-    public bool Import { get; set; } = false;
-    public Dictionary<string, string>? CustomButtons { get; set; }
-}
-
-/// <summary>
-///     行按钮配置
-/// </summary>
-public class RowButtonConfig
-{
-    public bool Edit { get; set; } = true;
-    public bool Delete { get; set; } = true;
-    public Dictionary<string, string>? CustomButtons { get; set; }
-}
-
-/// <summary>
-///     表格列填充模式
-///     AutoFix：所有列等比例填满整表（适用于字段较少的页面）
-///     PixFix：每列按 width 像素渲染，超出表格宽度时横向滚动（适用于字段较多的页面）
-/// </summary>
-public enum FillMode
-{
-    /// <summary>等比例填满整表（默认）</summary>
-    AutoFix = 0,
-
-    /// <summary>按像素宽度渲染（允许横向滚动）</summary>
-    PixFix = 1
 }

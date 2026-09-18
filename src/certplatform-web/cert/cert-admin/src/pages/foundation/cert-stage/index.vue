@@ -145,6 +145,6 @@ async function onToggle(row: CertStage) {
 </template>
 
 <style scoped>
-.cert-stage-page { padding: 20px; display: flex; flex-direction: column; height: 100%; }
+.cert-stage-page { display: flex; flex-direction: column; height: 100%; }
 .action-cell { display: flex; flex-wrap: nowrap; gap: 2px; }
 </style>

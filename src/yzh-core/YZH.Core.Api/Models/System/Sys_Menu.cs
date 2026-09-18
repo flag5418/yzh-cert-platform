@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using System.Text.Json.Serialization;
 using SqlSugar;
 using YZH.Core.Stand.Attributes;
 using YZH.Core.Stand.Models.Entity;
@@ -9,7 +8,8 @@ namespace YZH.Core.Api.Models.System;
 /// <summary>
 ///     菜单配置实体（新架构版）
 ///     对应数据库表 Sys_Menu
-///     兼容 Vol 框架表结构
+///     审计字段（CreateBy/CreateTime/UpdateBy/UpdateTime）和
+///     软删除（IsDeleted）/启用禁用（IsValid）均继承自 BaseEntity
 /// </summary>
 [SugarTable("Sys_Menu")]
 [YZHDeleteStrategy(Mode = DeleteMode.Soft)]
@@ -79,21 +79,9 @@ public class Sys_Menu : BaseEntity
     [SugarColumn(ColumnName = "Enable")]
     public byte? Enable { get; set; } = 1;
 
-    /// <summary>创建人（DB: Creator）</summary>
-    [SugarColumn(ColumnName = "Creator")]
-    [StringLength(50)]
-    public new string? Creator { get; set; }
+    /// <summary>IsDeleted（DB: IsDeleted）</summary>
+    public new bool IsDeleted { get; set; }
 
-    /// <summary>创建时间（DB: CreateDate）</summary>
-    [SugarColumn(ColumnName = "CreateDate")]
-    public new DateTime? CreateDate { get; set; }
-
-    /// <summary>修改时间（DB: ModifyDate）</summary>
-    [SugarColumn(ColumnName = "ModifyDate")]
-    public new DateTime? ModifyDate { get; set; }
-
-    /// <summary>修改人（DB: Modifier）</summary>
-    [SugarColumn(ColumnName = "Modifier")]
-    [StringLength(50)]
-    public new string? Modifier { get; set; }
+    /// <summary>IsValid（DB: IsValid）</summary>
+    public new int IsValid { get; set; } = 1;
 }

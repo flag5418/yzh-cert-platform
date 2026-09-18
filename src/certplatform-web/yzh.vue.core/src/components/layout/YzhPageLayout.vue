@@ -24,6 +24,10 @@ defineProps<{
   helpText?: string
   /** 是否显示 pageTitle 行 */
   showTitle?: boolean
+  /** 内容区是否无 padding（适用于满宽布局如三栏编辑器） */
+  noPadding?: boolean
+  /** 是否隐藏工具栏（未提供 toolbar slot 时自动隐藏） */
+  hideToolbar?: boolean
 }>()
 </script>
 
@@ -35,7 +39,7 @@ defineProps<{
     </div>
 
     <!-- 控制栏 -->
-    <div class="yzh-page-layout__toolbar">
+    <div v-if="!hideToolbar && ($slots.toolbar || $slots['toolbar-left'] || $slots['toolbar-right'])" class="yzh-page-layout__toolbar">
       <slot name="toolbar">
         <div class="yzh-page-layout__toolbar-left">
           <slot name="toolbar-left" />
@@ -47,7 +51,7 @@ defineProps<{
     </div>
 
     <!-- 表格/内容区 -->
-    <div class="yzh-page-layout__content">
+    <div :class="['yzh-page-layout__content', { 'yzh-page-layout__content--no-padding': noPadding }]">
       <slot />
     </div>
 
@@ -111,6 +115,10 @@ defineProps<{
     overflow: hidden;
     padding: 16px 20px;
     background: var(--yzh-color-bg-page, #f5f7fa);
+
+    &--no-padding {
+      padding: 0;
+    }
   }
 
   /* === 底部栏（分页） === */

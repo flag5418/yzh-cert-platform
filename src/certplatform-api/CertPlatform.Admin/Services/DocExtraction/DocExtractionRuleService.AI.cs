@@ -171,11 +171,16 @@ public partial class DocExtractionRuleService
             return new FileInfoResult(null, null, null, null, null, null);
 
         // 1. 优先：文件要求的模板文件（Code=FR-xxx）
+        // ⚠️ 列名以实际表结构为准：本环境 cert_file_requirement 采用新架构 PascalCase 列
+        //    （Code/FileNameTemplate/IsValid/IsDeleted…），不存在 template_storage_path / template_file_name，
+        //    旧版 snake_case 列名会让该查询持续抛 Unknown column 并刷爆日志。
+        //    模板文件存储列缺失时该分支自然降级到「实际标准目录文件」，不影响可用性。
         var fr = (await _db.SqlQueryAsync<FrRow>(
-            "SELECT template_file_name, template_storage_path, file_name_template FROM cert_file_requirement WHERE code = @c AND IsValid = 1 AND IsDeleted = 0",
+            "SELECT FileNameTemplate, TemplateFileName, TemplateStoragePath FROM cert_file_requirement " +
+            "WHERE Code = @c AND IsValid = 1 AND IsDeleted = 0",
             new { c = standardFileCode })).Data?.FirstOrDefault();
-        if (fr != null && !string.IsNullOrEmpty(fr.template_storage_path))
-            return new FileInfoResult(fr.template_file_name ?? fr.file_name_template, fr.template_storage_path, null, null, null, null);
+        if (fr != null && !string.IsNullOrEmpty(fr.TemplateStoragePath))
+            return new FileInfoResult(fr.TemplateFileName ?? fr.FileNameTemplate, fr.TemplateStoragePath, null, null, null, null);
 
         // 2. 兜底：实际上传的标准目录文件（FileCode=FL-xxx）
         var dir = (await _db.GetOneAsync<StandardDirectoryFile>(x => x.FileCode == standardFileCode)).Data;
@@ -187,9 +192,9 @@ public partial class DocExtractionRuleService
 
     private class FrRow
     {
-        public string? template_file_name { get; set; }
-        public string? template_storage_path { get; set; }
-        public string? file_name_template { get; set; }
+        public string? TemplateFileName { get; set; }
+        public string? TemplateStoragePath { get; set; }
+        public string? FileNameTemplate { get; set; }
     }
 
     // ========================================================
@@ -430,6 +435,17 @@ public partial class DocExtractionRuleService
             var extraction = MapOutputsToExtractionData(llmResult.Json!.RootElement);
             if (extraction == null)
                 return new VerifyPromptResponse { Success = false, Message = "AI 返回内容无法解析为提取结果" };
+
+            // 映射后为空：AI 有返回但不符合提取格式（或文档确实无可提取内容）
+            // → 明确报错而不是静默「验证成功 + 空结果」，否则前端只看到空白
+            var extractedCount = (extraction.Fields?.Count ?? 0) + (extraction.Tables?.Count ?? 0);
+            if (extractedCount == 0)
+                return new VerifyPromptResponse
+                {
+                    Success = false,
+                    Message = "AI 未提取到任何字段或表格：请确认提示词为「文档数据提取任务」格式（field_code/field_value），或所选模板带 extracted_value 格式；也可先执行「自动分析」生成提示词",
+                    Data = extraction
+                };
 
             // 4. 验证成功：sample_data 落库（供工作流 test-field/test-table 使用）
             if (rule != null && extraction != null)
@@ -768,8 +784,27 @@ public partial class DocExtractionRuleService
 
     /// <summary>
     /// AI 输出 → ExtractionData（verify 用）。
-    /// 优先 field_code/field_value 数组格式（与 GeneratePromptAsync 输出对齐），兜底「中文名→值」dict
+    /// <para>支持两种提示词格式（与 analyze 的 MapAiFieldsToDtos / MapAiTablesToDtos 对齐）：</para>
+    /// <para>· V1（GeneratePromptAsync 生成的“提取任务”格式）：
+    ///   fields[].{field_code, field_value} / tables[].{table_code, rows}</para>
+    /// <para>· V2（wf_prompt_template 分析模板，如 analyze_word / extract_all）：
+    ///   fields[].{field_name_cn, field_name_en, extracted_value} /
+    ///   tables[].{table_name_cn, table_name_en, columns, extracted_data}</para>
+    /// <para>⚠️ 只认 V1 时，选“文档结构分析”这类模板会让提取结果整片丢失（映射后为空），
+    /// 表现为“点了分析没有任何字段/表格”。</para>
+    /// <para>兜底：fields 为对象时按「键→值」直接透传（中文名 → 值）。</para>
     /// </summary>
+    /// <summary>判断 JSON 值是否含实际内容（V2 空值/空串视为未提取到）</summary>
+    private static bool HasJsonValue(JsonElement? el)
+    {
+        if (el == null) return false;
+        var v = el.Value;
+        if (v.ValueKind == JsonValueKind.Null || v.ValueKind == JsonValueKind.Undefined) return false;
+        if (v.ValueKind == JsonValueKind.String) return !string.IsNullOrWhiteSpace(v.GetString());
+        if (v.ValueKind == JsonValueKind.Array) return v.GetArrayLength() > 0;
+        return true;
+    }
+
     private static ExtractionData? MapOutputsToExtractionData(JsonElement root)
     {
         var data = new ExtractionData
@@ -783,13 +818,29 @@ public partial class DocExtractionRuleService
         {
             if (fields.ValueKind == JsonValueKind.Array)
             {
-                foreach (var f in fields.EnumerateArray())
+                var fieldsList = fields.EnumerateArray().ToList();
+                // V2 判定：带 extracted_value（分析模板特有）→ 空值字段不入结果（避免把未提取到的字段写进 sample_data）
+                var usesV2 = fieldsList.Any(fd => fd.ValueKind == JsonValueKind.Object
+                    && fd.TryGetProperty("extracted_value", out _));
+
+                foreach (var f in fieldsList)
                 {
                     if (f.ValueKind != JsonValueKind.Object) continue;
-                    var code = GetString(f, "field_code") ?? GetString(f, "field_name") ?? "";
+                    // 编码优先级：V1 field_code → V2 field_name_en → V1 field_name → V2 field_name_cn
+                    var code = GetString(f, "field_code")
+                               ?? GetString(f, "field_name_en")
+                               ?? GetString(f, "field_name")
+                               ?? GetString(f, "field_name_cn")
+                               ?? "";
                     if (string.IsNullOrEmpty(code)) continue;
-                    var value = GetRaw(f, "field_value") ?? GetRaw(f, "value");
-                    data.Fields[code] = ConvertJsonElement(value!.Value) ?? "";
+
+                    var value = GetRaw(f, "field_value")
+                                ?? GetRaw(f, "value")
+                                ?? GetRaw(f, "extracted_value");
+
+                    // V2 语义（与 MapAiFieldsToDtos 一致）：丢弃未提取到实际值的字段
+                    if (usesV2 && !HasJsonValue(value)) continue;
+                    data.Fields[code] = value == null ? "" : (ConvertJsonElement(value.Value) ?? "");
                 }
             }
             else if (fields.ValueKind == JsonValueKind.Object)
@@ -805,11 +856,22 @@ public partial class DocExtractionRuleService
             foreach (var t in tables.EnumerateArray())
             {
                 if (t.ValueKind != JsonValueKind.Object) continue;
-                var tableCode = GetString(t, "table_code") ?? GetString(t, "table_name") ?? "";
+                // V2 判定（带 extracted_data / table_name_cn）：无真实提取行的表格不入结果
+                var isV2Table = t.TryGetProperty("extracted_data", out _) || t.TryGetProperty("table_name_cn", out _);
+                // 编码优先级：V1 table_code → V2 table_name_en → V1 table_name → V2 table_name_cn
+                var tableCode = GetString(t, "table_code")
+                                ?? GetString(t, "table_name_en")
+                                ?? GetString(t, "table_name")
+                                ?? GetString(t, "table_name_cn")
+                                ?? "";
                 if (string.IsNullOrEmpty(tableCode)) continue;
 
+                // 行数组：V1 rows → V2 extracted_data
                 var rows = new List<Dictionary<string, object>>();
-                if (t.TryGetProperty("rows", out var rowsEl) && rowsEl.ValueKind == JsonValueKind.Array)
+                var rowsEl = t.TryGetProperty("rows", out var r1) && r1.ValueKind == JsonValueKind.Array
+                    ? r1
+                    : (t.TryGetProperty("extracted_data", out var r2) && r2.ValueKind == JsonValueKind.Array ? r2 : default);
+                if (rowsEl.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var row in rowsEl.EnumerateArray())
                     {
@@ -820,6 +882,7 @@ public partial class DocExtractionRuleService
                         rows.Add(dict);
                     }
                 }
+                if (isV2Table && rows.Count == 0) continue;
                 data.Tables[tableCode] = rows;
             }
         }

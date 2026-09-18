@@ -1,11 +1,19 @@
 {
   "Title": "NC 检查规则",
   "FillMode": "AutoFix",
-    "RowButtons": {
+  "RowButtons": {
     "Edit": true,
     "Delete": true,
     "CustomButtons": {}
   },
+  "SearchFields": [
+    {
+      "Field": "RuleName",
+      "Label": "规则名称",
+      "ControlType": "TextBox",
+      "Operator": "like"
+    }
+  ],
   "NewEntity": {
     "Code": "",
     "OrgCode": "",

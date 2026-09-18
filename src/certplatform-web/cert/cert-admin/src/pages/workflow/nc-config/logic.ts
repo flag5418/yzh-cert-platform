@@ -1,311 +1,253 @@
 /**
- * NC 规则设计 — 左树右表 Logic
+ * NC 规则管理 — 工作流规则 Logic（YZH CrudPageLogic 架构）
  *
  * 布局：
- * - 左树：组织 → 标准 → 阶段（useFileTree composable）
- * - 右表：NC 检查规则（YzhTable + 分页）
+ * - 左树：组织 → 标准 → 阶段（通过 useFileTree composable 加载）
+ * - 右表：NC 检查规则（YzhTable + 分页 + 搜索）
  *
- * 联动：选中阶段节点后，自动注入 OrgCode/StandardCode/PhaseCode 过滤
+ * 架构：
+ * - 继承 CrudPageLogic 获得标准 CRUD 能力（filter/add/update/delete/search）
+ * - 选中树节点后，自动注入 OrgCode/StandardCode/PhaseCode 三字段联动过滤
+ * - 数据加载统一通过 dataLoader（YzhTable 驱动）
  */
-import { ref, reactive } from 'vue'
-import { ElMessage } from 'element-plus'
 import {
-  getNCRulePage,
-  saveNCRule,
-  updateNCRule,
-  deleteNCRule,
-  toggleNCRuleActive,
-  copyNCRule,
-  getISOClauseTree,
-  type NCRule,
-  type ISOClauseTreeNode,
-} from '@share/api/workflow/nc-config'
-import type { TreeNode } from '@share/composables/useFileTree'
+  CrudPageLogic,
+  type YzhTableColumn,
+  type YzhFormField,
+  type FilterItem,
+  type PageParams,
+  type Page,
+} from '@yzh-core'
+import { ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { getISOClauseTree } from '@share/api/workflow/nc-config'
+import type { NCRule, ISOClauseTreeNode } from '@share/api/workflow/nc-config'
 
 export type { NCRule, ISOClauseTreeNode }
 
-// ──── 表格列定义 ────
-export const tableColumns = [
-  { prop: 'RuleCode', label: '规则编号', width: 150 },
-  { prop: 'RuleName', label: '规则名称', minWidth: 200 },
-  { prop: 'RuleNameEn', label: '英文名称', width: 150, showOverflowTooltip: true },
-  { prop: 'ClauseNumber', label: '条款编号', width: 120 },
-  { prop: 'IsActive', label: '启用', width: 80, align: 'center' },
-  { prop: 'Remark', label: '备注', minWidth: 150, showOverflowTooltip: true },
-  { prop: 'actions', label: '操作', width: 120, fixed: 'right' },
-]
-
-// ──── 编辑表单字段 ────
-export const editFormFields = [
-  { prop: 'RuleName', label: '规则名称', required: true, placeholder: '如：资源提供检查' },
-  { prop: 'RuleNameEn', label: '英文名称', placeholder: '如：Resource Provision' },
-  { prop: 'ClauseCode', label: '关联条款', required: true, type: 'tree-select' },
-  { prop: 'IsActive', label: '是否启用', type: 'switch' },
-  { prop: 'Remark', label: '备注', type: 'textarea', rows: 2 },
-]
-
-export class NCConfigLogic {
-  // ──── 树状态 ────
-  selectedPhase = ref<TreeNode | null>(null)
-
-  // ──── 表格状态 ────
-  tableData = ref<NCRule[]>([])
-  total = ref(0)
-  loading = ref(false)
-  page = ref(1)
-  pageSize = ref(20)
-
-  // ──── 筛选 ────
-  keyword = ref('')
-
-  // ──── 编辑弹窗 ────
-  dialogVisible = ref(false)
-  dialogMode = ref<'add' | 'edit'>('add')
-  submitting = ref(false)
-  editingRule = ref<NCRule | null>(null)
-  formData = reactive<Partial<NCRule>>({
-    RuleName: '',
-    RuleNameEn: '',
-    ClauseCode: '',
-    IsActive: true,
-    Remark: '',
+// ──── 工具函数：扁平条款列表 → 树形 ────
+function buildClauseTree(flat: ISOClauseTreeNode[]): ISOClauseTreeNode[] {
+  const byNumber = (a: ISOClauseTreeNode, b: ISOClauseTreeNode) =>
+    (a.ClauseNumber || '').localeCompare(b.ClauseNumber || '', undefined, { numeric: true })
+  const map = new Map<string, ISOClauseTreeNode>()
+  flat.forEach(c => map.set(c.Code!, { ...c, Label: `${c.ClauseNumber} ${c.Title}`, Children: [] }))
+  const roots: ISOClauseTreeNode[] = []
+  flat.forEach(c => {
+    const node = map.get(c.Code!)
+    const parent = c.ParentCode ? map.get(c.ParentCode) : undefined
+    if (parent) parent.Children!.push(node!)
+    else roots.push(node!)
   })
+  roots.sort(byNumber)
+  roots.forEach(r => r.Children?.sort(byNumber))
+  return roots
+}
 
-  // ──── 条款树 ────
+export class NCConfigLogic extends CrudPageLogic<any> {
+  // ──── 控制器名称（对应后端 ValidationRuleController 路由） ────
+  controllerName = 'ValidationRule'
+
+  // ──── 树联动过滤状态 ────
+  selectedOrgCode = ref('')
+  selectedStandardCode = ref('')
+  selectedPhaseCode = ref('')
+
+  // ──── 条款树数据（编辑弹窗 tree-select 使用） ────
   clauseTreeData = ref<ISOClauseTreeNode[]>([])
   clauseLoading = ref(false)
 
-  /** 按.ParentCode 将扁平条款列表组树（按条款编号自然排序），并注入展示标签 */
-  static buildClauseTree(flat: ISOClauseTreeNode[]): ISOClauseTreeNode[] {
-    const byNumber = (a: ISOClauseTreeNode, b: ISOClauseTreeNode) =>
-      (a.ClauseNumber || '').localeCompare(b.ClauseNumber || '', undefined, { numeric: true })
-    const map = new Map<string, ISOClauseTreeNode>()
-    flat.forEach(c => map.set(c.Code!, { ...c, Label: `${c.ClauseNumber} ${c.Title}`, Children: [] }))
-    const roots: ISOClauseTreeNode[] = []
-    flat.forEach(c => {
-      const node = map.get(c.Code!)
-      const parent = c.ParentCode ? map.get(c.ParentCode) : undefined
-      if (parent) parent.Children!.push(node!)
-      else roots.push(node!)
-    })
-    roots.sort(byNumber)
-    roots.forEach(r => r.Children?.sort(byNumber))
-    return roots
+  /** 是否有选中的阶段节点 */
+  get anySelected(): boolean {
+    return !!this.selectedPhaseCode.value
   }
 
   // ========================================================
-  // 树→表格联动
+  // 树→表格联动过滤
   // ========================================================
 
-  /** 选中阶段节点 */
-  async handleNodeClick(node: TreeNode) {
-    if (node.type !== 'stage') {
-      this.selectedPhase.value = null
-      this.tableData.value = []
-      this.total.value = 0
-      return
+  /** 设置树过滤条件 → 重置分页 */
+  setTreeFilter(orgCode: string, standardCode: string, phaseCode: string) {
+    this.selectedOrgCode.value = orgCode
+    this.selectedStandardCode.value = standardCode
+    this.selectedPhaseCode.value = phaseCode
+    this.pagination.page = 1
+  }
+
+  /**
+   * 覆盖 buildFilters：注入树联动条件（OrgCode + StandardCode + PhaseCode）
+   */
+  protected override buildFilters(extra?: Record<string, any>): FilterItem[] {
+    const base = super.buildFilters(extra)
+    if (this.selectedOrgCode.value) {
+      base.push({ Field: 'OrgCode', Value: this.selectedOrgCode.value, Operator: 'eq' })
     }
-    this.selectedPhase.value = node
-    this.page.value = 1
-    await this.loadTable()
+    if (this.selectedStandardCode.value) {
+      base.push({ Field: 'StandardCode', Value: this.selectedStandardCode.value, Operator: 'eq' })
+    }
+    if (this.selectedPhaseCode.value) {
+      base.push({ Field: 'PhaseCode', Value: this.selectedPhaseCode.value, Operator: 'eq' })
+    }
+    return base
+  }
+
+  /**
+   * 新增准备钩子：注入树关联编码（OrgCode, StandardCode, PhaseCode）
+   */
+  protected onPrepareAdd(formData: Record<string, any>) {
+    formData.OrgCode = this.selectedOrgCode.value
+    formData.StandardCode = this.selectedStandardCode.value
+    formData.PhaseCode = this.selectedPhaseCode.value
+  }
+
+  /**
+   * 覆盖 init：仅加载配置（不自动加载数据，等 YzhTable 挂载后自动加载）
+   */
+  async init(): Promise<void> {
+    await this.loadConfig()
+  }
+
+  /**
+   * 覆盖 dataLoader：无树选中时返回空数据；有树选中时走基类逻辑
+   */
+  async dataLoader(params: PageParams): Promise<Page<any>> {
+    if (!this.anySelected) {
+      return { rows: [], total: 0 }
+    }
+    return super.dataLoader(params)
   }
 
   // ========================================================
-  // 表格数据加载
+  // 表格列配置（覆盖：隐藏 ClauseCode 列，表格展示 ClauseNumber）
   // ========================================================
 
-  async loadTable() {
-    const phase = this.selectedPhase.value
-    if (!phase) {
-      this.tableData.value = []
-      this.total.value = 0
-      return
-    }
+  override get columns(): YzhTableColumn<any>[] {
+    const cols = super.columns
+    return cols.filter((c: any) => c.prop !== 'ClauseCode')
+  }
 
-    this.loading.value = true
-    try {
-      const filters: Array<{ Field: string; Value: string; Operator: string }> = [
-        { Field: 'OrgCode', Value: phase.orgCode || '', Operator: 'eq' },
-        { Field: 'StandardCode', Value: phase.stdCode || '', Operator: 'eq' },
-        // PhaseCode 存 cert_cert_stage.StageCode（如 AP/S1），与树节点一致
-        { Field: 'PhaseCode', Value: phase.phaseCode || '', Operator: 'eq' },
-      ]
-      if (this.keyword.value) {
-        filters.push({ Field: 'RuleName', Value: this.keyword.value, Operator: 'contains' })
+  // ========================================================
+  // 表单字段（覆盖：ClauseCode 使用 tree-select）
+  // ========================================================
+
+  override get formFields(): YzhFormField[] {
+    const base = super.formFields
+    return base.map((f) => {
+      // ClauseCode: tree-select 类型，使用 clauseTreeData 作为选项
+      if (f.prop === 'ClauseCode') {
+        return {
+          ...f,
+          type: 'treeSelect' as any,
+          options: this.clauseTreeData.value as any[],
+          fieldProps: {
+            nodeKey: 'Code',
+            props: { label: 'Label', children: 'Children' },
+            checkStrictly: true,
+            filterable: true,
+          },
+        }
       }
-
-      const res = await getNCRulePage({
-        Page: this.page.value,
-        PageSize: this.pageSize.value,
-        Filters: filters,
-      })
-      this.tableData.value = res?.data?.Items ?? []
-      this.total.value = res?.data?.TotalCount ?? 0
-    } catch (e: any) {
-      ElMessage.error(e?.message || '加载失败')
-    } finally {
-      this.loading.value = false
-    }
-  }
-
-  /** 分页切换 */
-  handlePageChange(newPage: number) {
-    this.page.value = newPage
-    this.loadTable()
-  }
-
-  /** 搜索 */
-  handleSearch() {
-    this.page.value = 1
-    this.loadTable()
-  }
-
-  /** 重置 */
-  handleReset() {
-    this.keyword.value = ''
-    this.page.value = 1
-    this.loadTable()
+      // IsActive: boolean switch（后端 NewEntity 是 boolean true/false，
+      // 需覆盖 YzhForm 默认的 `:active-value="1"' `:inactive-value="0"' 避免类型不匹配报错)
+      if (f.prop === 'IsActive') {
+        return {
+          ...f,
+          type: 'switch' as any,
+          fieldProps: {
+            'active-value': true,
+            'inactive-value': false,
+          },
+        }
+      }
+      return f
+    })
   }
 
   // ========================================================
-  // 条款树
+  // 条款树加载
   // ========================================================
 
-  async loadClauseTree() {
-    const phase = this.selectedPhase.value
-    if (!phase?.stdCode) {
+  /** 加载条款树（编辑弹窗内 tree-select 使用） */
+  async loadClauseTree(): Promise<void> {
+    if (!this.selectedStandardCode.value) {
       this.clauseTreeData.value = []
       return
     }
     this.clauseLoading.value = true
     try {
-      const flat = await getISOClauseTree(phase.stdCode)
-      this.clauseTreeData.value = NCConfigLogic.buildClauseTree(flat)
+      const flat = await getISOClauseTree(this.selectedStandardCode.value)
+      this.clauseTreeData.value = buildClauseTree(flat)
     } catch {
       ElMessage.error('加载条款失败')
+      this.clauseTreeData.value = []
     } finally {
       this.clauseLoading.value = false
     }
   }
 
   // ========================================================
-  // 规则 CRUD
+  // 表单操作
   // ========================================================
 
-  /** 打开新增弹窗 */
-  openAddDialog() {
-    if (!this.selectedPhase.value) {
-      ElMessage.warning('请先选择阶段')
-      return
-    }
-    this.dialogMode.value = 'add'
-    this.editingRule.value = null
-    Object.assign(this.formData, {
-      RuleName: '',
-      RuleNameEn: '',
-      ClauseCode: '',
-      IsActive: true,
-      Remark: '',
-    })
-    this.dialogVisible.value = true
+  /** 打开新增弹窗：校验树选中 + 加载条款树 */
+  override openAddDialog() {
+    super.openAddDialog()
     this.loadClauseTree()
   }
 
-  /** 打开编辑弹窗 */
-  openEditDialog(row: NCRule) {
-    this.dialogMode.value = 'edit'
-    this.editingRule.value = row
-    Object.assign(this.formData, {
-      RuleName: row.RuleName,
-      RuleNameEn: row.RuleNameEn || '',
-      ClauseCode: row.ClauseCode,
-      IsActive: row.IsActive,
-      Remark: row.Remark || '',
-    })
-    this.dialogVisible.value = true
+  /** 打开编辑弹窗：加载条款树 */
+  override openEditDialog(row: any) {
+    super.openEditDialog(row)
     this.loadClauseTree()
   }
 
-  /** 提交表单 */
-  async handleSubmit() {
-    if (!this.formData.RuleName) {
-      ElMessage.warning('请输入规则名称')
-      return
-    }
-    if (!this.formData.ClauseCode) {
-      ElMessage.warning('请选择关联条款')
-      return
-    }
+  // ========================================================
+  // 自定义操作：删除 / 切换启用 / 复制
+  // ========================================================
 
-    const phase = this.selectedPhase.value
-    if (!phase) return
-
-    this.submitting.value = true
-    try {
-      if (this.dialogMode.value === 'add') {
-        const payload: Partial<NCRule> = {
-          ...this.formData,
-          OrgCode: phase.orgCode,
-          StandardCode: phase.stdCode || '',
-          // PhaseCode 存 cert_cert_stage.StageCode（如 AP/S1），与树节点/列表过滤一致
-          PhaseCode: phase.phaseCode || '',
-        }
-        await saveNCRule(payload)
-        ElMessage.success('新增成功')
-      } else {
-        await updateNCRule({
-          Code: this.editingRule.value?.Code,
-          ...this.formData,
-        } as Partial<NCRule>)
-        ElMessage.success('修改成功')
-      }
-      this.dialogVisible.value = false
-      await this.loadTable()
-    } catch (e: any) {
-      ElMessage.error(e?.message || '保存失败')
-    } finally {
-      this.submitting.value = false
-    }
-  }
-
-  /** 删除规则 */
+  /** 删除规则（带二次确认） */
   async handleDelete(row: NCRule) {
-    const { ElMessageBox } = await import('element-plus')
     try {
-      await ElMessageBox.confirm(`确定删除规则「${row.RuleName}」？`, '确认删除', { type: 'warning' })
+      await (await import('element-plus')).ElMessageBox.confirm(
+        `确定删除规则「${row.RuleName}」？`,
+        '确认删除',
+        { type: 'warning' },
+      )
     } catch { return }
 
     try {
-      await deleteNCRule([row.Code || ''])
+      await this.apiPost('/delete', [row.Code || ''])
       ElMessage.success('删除成功')
-      await this.loadTable()
+      await this.refresh()
     } catch (e: any) {
       ElMessage.error(e?.message || '删除失败')
     }
   }
 
-  /** 切换启用 */
+  /** 切换启用状态 */
   async handleToggleActive(row: NCRule) {
     try {
-      await toggleNCRuleActive(row.Code || '')
+      await this.apiPost(`/toggle-active?code=${row.Code || ''}`)
       ElMessage.success('操作成功')
-      await this.loadTable()
+      await this.refresh()
     } catch (e: any) {
       ElMessage.error(e?.message || '操作失败')
     }
   }
 
-  /** 复制规则 */
+  /** 深拷贝规则 */
   async handleCopy(row: NCRule) {
-    const { ElMessageBox } = await import('element-plus')
     try {
-      await ElMessageBox.confirm(`确定复制规则「${row.RuleName}」？`, '确认复制', { type: 'info' })
+      await (await import('element-plus')).ElMessageBox.confirm(
+        `确定复制规则「${row.RuleName}」？`,
+        '确认复制',
+        { type: 'info' },
+      )
     } catch { return }
 
     try {
-      await copyNCRule(row.Code || '')
+      await this.apiPost(`/copy?sourceCode=${row.Code || ''}`)
       ElMessage.success('复制成功')
-      await this.loadTable()
+      await this.refresh()
     } catch (e: any) {
       ElMessage.error(e?.message || '复制失败')
     }

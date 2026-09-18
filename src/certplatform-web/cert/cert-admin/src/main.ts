@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import './assets/css/main.css'
@@ -16,5 +17,6 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 
 app.use(createPinia())
 app.use(router)
-app.use(ElementPlus)
+// 中文语言包：否则 ElMessageBox / 表格空态 / 分页 / 日期选择器等内置文案为英文
+app.use(ElementPlus, { locale: zhCn })
 app.mount('#app')

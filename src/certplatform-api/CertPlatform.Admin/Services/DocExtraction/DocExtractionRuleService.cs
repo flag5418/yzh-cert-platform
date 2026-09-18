@@ -560,17 +560,42 @@ public partial class DocExtractionRuleService
         public string? ExtractedJson { get; set; }
     }
 
+    /// <summary>
+    /// 已配置规则行 DTO（供工作流设计器 docField/docTable 下拉）
+    /// <para>序列化约定（D-5 契约）：显式 camelCase — 旧后端 GetConfiguredRulesAsync 返回匿名对象 camelCase
+    /// （ruleCode/fileName/standardFileCode），前端 NodePropertyForm 按 camelCase 消费，
+    /// 迁移为 DTO 类时若依赖默认序列化会变 PascalCase 导致下拉 label/value 为空。</para>
+    /// </summary>
     private class ConfiguredRuleRow
     {
+        [System.Text.Json.Serialization.JsonPropertyName("ruleCode")]
         public string RuleCode { get; set; } = "";
+
+        [System.Text.Json.Serialization.JsonPropertyName("standardFileCode")]
         public string StandardFileCode { get; set; } = "";
+
+        [System.Text.Json.Serialization.JsonPropertyName("fileName")]
         public string FileName { get; set; } = "";
+
+        [System.Text.Json.Serialization.JsonPropertyName("standardCode")]
         public string StandardCode { get; set; } = "";
+
+        [System.Text.Json.Serialization.JsonPropertyName("phaseCode")]
         public string PhaseCode { get; set; } = "";
+
+        [System.Text.Json.Serialization.JsonPropertyName("skill")]
         public string Skill { get; set; } = "";
+
+        [System.Text.Json.Serialization.JsonPropertyName("isValid")]
         public bool DocIsValid { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("status")]
         public string Status { get; set; } = "";
+
+        [System.Text.Json.Serialization.JsonPropertyName("createDate")]
         public DateTime? CreateTime { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("modifyDate")]
         public DateTime? UpdateTime { get; set; }
     }
 }

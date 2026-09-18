@@ -198,6 +198,10 @@ onBeforeUnmount(() => { chartInstance?.dispose() })
 </template>
 
 <style scoped>
+:deep(.yzh-page-layout__content) {
+  padding: 0;
+  background: #fff;
+}
 .quick-range-card { margin-bottom: 16px; }
 .summary-row { margin-bottom: 16px; }
 .summary-card { text-align: center; padding: 8px 0; }

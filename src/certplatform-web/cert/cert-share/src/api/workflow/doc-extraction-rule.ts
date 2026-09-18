@@ -100,8 +100,18 @@ export const saveRule = (data: {
 export const deleteRule = (standardFileCode: string) =>
   yzhApi.post<{ code: number; message: string }>(`/api/Workflow/DocExtractionRule/${standardFileCode}/delete`)
 
+export interface ConfiguredRuleItem {
+  ruleCode: string
+  standardFileCode: string
+  fileName: string
+  standardCode?: string
+  phaseCode?: string
+  skill?: string
+  isValid?: boolean
+}
+
 export const getConfiguredRules = () =>
-  yzhApi.get<{ code: number; data: unknown[] }>('/api/Workflow/DocExtractionRule/configured-rules')
+  yzhApi.get<{ code: number; data: ConfiguredRuleItem[] }>('/api/Workflow/DocExtractionRule/configured-rules')
 
 export const getFieldsAndTables = (ruleCode: string) =>
   yzhApi.get<{ code: number; data: { fields: FieldDefDto[]; tables: TableDefDto[] } }>(
@@ -150,8 +160,15 @@ export const getSkills = () =>
 
 // --- 文件内容（D-6 双产物） ---
 
-export const getFilePreviewUrl = (fileCode: string) =>
-  `/api/Workflow/DocExtractionRule/file-preview?fileCode=${fileCode}`
+/**
+ * 预览 PDF 流（带鉴权取回 Blob）
+ *
+ * ⚠️ 不能用 `<iframe src="...file-preview?...">` 直接渲染：
+ *   本平台 JWT 走 Authorization 头，iframe/img 无法携带 → 必然 401。
+ *   必须先 getBlob 取回字节，再用 ObjectURL 交给渲染器。
+ */
+export const getFilePreviewBlob = (fileCode: string) =>
+  yzhApi.getBlob('/api/Workflow/DocExtractionRule/file-preview', { fileCode })
 
 export const getFileMarkdown = (fileCode: string) =>
   yzhApi.get<{ code: number; data: string }>(`/api/Workflow/DocExtractionRule/file-markdown?fileCode=${fileCode}`)

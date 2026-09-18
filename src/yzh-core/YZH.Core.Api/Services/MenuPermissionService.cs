@@ -41,17 +41,20 @@ public class MenuPermissionService
             string.Equals(c, SuperAdminRoleCode, StringComparison.OrdinalIgnoreCase)) == true;
     }
 
-    /// <summary>获取全部菜单（不过滤）</summary>
+    /// <summary>获取全部菜单（不过滤，含禁用菜单，供菜单管理页使用）</summary>
     public async Task<List<Sys_Menu>> GetAllMenusAsync()
     {
-        var result = await _menuService.GetListAsync();
+        var result = await _menuService.GetListAsync(includeDisabled: true);
         return result.Success ? result.Data ?? new() : new();
     }
 
-    /// <summary>获取当前用户可见的菜单（含祖先补全）</summary>
+    /// <summary>获取当前用户可见的菜单（含祖先补全，排除禁用菜单）</summary>
     public async Task<List<Sys_Menu>> GetVisibleMenusAsync(IUserContext? ctx)
     {
         var all = await GetAllMenusAsync();
+
+        // 排除禁用菜单（Enable=0），侧边栏不展示
+        all = all.Where(m => m.Enable != 0).ToList();
 
         // 超级管理员：全部菜单
         if (IsSuperAdmin(ctx))

@@ -176,7 +176,6 @@ onMounted(async () => {
 .role-user-page__tree-content {
   flex: 1;
   overflow: auto;
-  padding: 8px 0;
 }
 
 .role-user-page__table-panel {

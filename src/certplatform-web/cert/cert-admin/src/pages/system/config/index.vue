@@ -143,7 +143,6 @@ onMounted(async () => {
 <style scoped>
 .config-page {
   height: 100%;
-  padding: 16px;
   box-sizing: border-box;
   overflow: auto;
 }

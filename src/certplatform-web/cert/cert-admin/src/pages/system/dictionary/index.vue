@@ -341,8 +341,8 @@ onMounted(async () => {
 .dict-form-header {
   display: flex;
   align-items: center;
-  margin-bottom: 16px;
   padding: 8px 12px;
+  padding-bottom: calc(8px + 16px);
   background: var(--el-fill-color-light);
   border-radius: 4px;
 }

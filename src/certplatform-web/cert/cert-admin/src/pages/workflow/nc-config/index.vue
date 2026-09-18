@@ -1,87 +1,115 @@
 <script setup lang="ts">
 /**
- * NC 规则设计（左树右表）
+ * NC 规则管理 — 左树右表（YZH 标准架构重写）
  *
  * 布局：
- * - 左侧：组织 → 标准 → 阶段 树（简化版，不含文件夹）
- * - 右侧：NC 检查规则表格 + 编辑弹窗
+ * - 左侧：组织 → 标准 → 阶段 树（useFileTree composable）
+ * - 右侧：NC 检查规则表格（YzhTable + YzhForm + CrudPageLogic）
+ *
+ * 架构：
+ * - Logic 继承 CrudPageLogic，自动从后端 EntityConfig 获取 columns / formFields / searchFields
+ * - 选中阶段节点后，自动联动过滤 OrgCode + StandardCode + PhaseCode
+ * - 行操作按钮（编辑/删除/启用切换/复制）通过 YzhTable 配置驱动
  */
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { YzhTable, YzhForm } from '@yzh-core'
+import { ElMessage } from 'element-plus'
 import { Plus, RefreshRight, Search, FolderOpened, Document, Calendar } from '@element-plus/icons-vue'
-import { getOrganizationTree } from '@share/composables/useDirectoryApi'
 import { NCConfigLogic } from './logic'
-import type { TreeNode } from '@share/composables/useFileTree'
+import { useFileTree, type TreeNode } from '@share/composables/useFileTree'
 
-// ──── 实例化 ────
-const router = useRouter()
+// ──── 实例化 Logic ────
 const logic = new NCConfigLogic()
 
-// ──── 树状态（简化版：只加载 org→standard→stage，不含文件夹） ────
-const fileTreeData = ref<TreeNode[]>([])
-const treeLoading = ref(false)
+// ──── 表格引用（用于树节点切换后刷新） ────
+const tableRef = ref()
+
+// ──── 左树 ────
+const {
+  fileTreeData: treeData,
+  loading: treeLoading,
+  loadTree,
+} = useFileTree()
+
+// ──── 搜索栏占位（标准 TreeTable 可空白，由 YzhTable 接管搜索） ────
 const treeFilter = ref('')
 
-/** 加载组织树（仅 org→standard→stage，不预加载文件夹） */
-async function loadTree() {
-  treeLoading.value = true
-  try {
-    const orgTree = await getOrganizationTree()
-    fileTreeData.value = (orgTree || []).map((org: any) => ({
-      id: org.id,
-      name: org.label || org.name,
-      type: 'organization' as const,
-      orgCode: org.cbCode,
-      children: (org.children || []).map((std: any) => ({
-        id: std.id,
-        name: std.label || std.name,
-        type: 'standard' as const,
-        orgCode: std.cbCode,
-        stdCode: std.stdCode,
-        standardCode: std.standardCode,
-        children: (std.children || []).map((phase: any) => ({
-          id: phase.id,
-          name: phase.label || phase.name,
-          type: 'stage' as const,
-          orgCode: phase.cbCode,
-          stdCode: phase.stdCode,
-          standardCode: phase.standardCode,
-          phaseCode: phase.phaseCode,
-          phaseDefinitionCode: phase.phaseDefinitionCode || '',
-          children: undefined,
-        }))
-      }))
-    }))
-  } catch (e: any) {
-    console.error('加载目录树失败', e)
-    fileTreeData.value = []
-  } finally {
-    treeLoading.value = false
+/**
+ * 过滤树：只保留 organization → standard → stage 3 层
+ * （使用 useFileTree 会预加载 folder/file 的占位节点，需要过滤掉）
+ */
+const filteredTreeData = computed(() => {
+  function strip(node: TreeNode): TreeNode | null {
+    if (node.type === 'folder' || node.type === 'file') return null
+    if (!node.children) return node
+    const filteredChildren = node.children.map(strip).filter(Boolean) as TreeNode[]
+    return { ...node, children: filteredChildren }
   }
-}
+  return treeData.value.map(strip).filter(Boolean) as TreeNode[]
+})
+
+// ──── 行操作按钮（标准 edit/delete + 自定义 toggle-active / copy） ────
+const rowActionButtons = ref<Record<string, string>>({
+  'edit': '编辑',
+  'delete': '删除',
+  'toggle-active': '启用/禁用',
+  'copy': '复制',
+})
 
 // ========================================================
-// 树操作
+// 树→表格联动
 // ========================================================
 
-async function handleNodeClick(data: TreeNode) {
-  await logic.handleNodeClick(data)
-}
-
-function filterTreeNode(value: string, data: TreeNode) {
-  if (!value) return true
-  return data.name.toLowerCase().includes(value.toLowerCase())
-}
-
-/** 条款树筛选：按编号/标题匹配（含英文标题） */
-function filterClauseNode(value: string, data: any) {
-  if (!value) return true
-  const v = value.toLowerCase()
-  return (
-    (data.ClauseNumber || '').toLowerCase().includes(v) ||
-    (data.Title || '').toLowerCase().includes(v) ||
-    (data.Label || '').toLowerCase().includes(v)
+/** 树节点点击 → 注入联动过滤 → YzhTable 自动刷新 */
+async function handleNodeClick(node: TreeNode) {
+  if (node.type !== 'stage') {
+    // 非阶段节点：清空表格
+    logic.setTreeFilter('', '', '')
+    return
+  }
+  logic.setTreeFilter(
+    node.orgCode || '',
+    node.stdCode || '',
+    node.phaseCode || '',
   )
+  // 触发 YzhTable 刷新
+  await tableRef.value?.refresh()
+}
+
+// ========================================================
+// 表格操作事件
+// ========================================================
+
+/** 工具栏：新增 */
+function handleAdd() {
+  if (!logic.anySelected) {
+    ElMessage.warning('请先选择阶段')
+    return
+  }
+  logic.openAddDialog()
+}
+
+/** 工具栏：刷新 */
+function handleRefresh() {
+  tableRef.value?.refresh()
+}
+
+/** 行操作事件处理 */
+async function handleRowAction(action: string, row: any) {
+  switch (action) {
+    case 'edit':
+      logic.openEditDialog(row)
+      break
+    case 'delete':
+      await logic.handleDelete(row)
+      break
+    case 'toggle-active':
+      await logic.handleToggleActive(row)
+      break
+    case 'copy':
+      await logic.handleCopy(row)
+      break
+  }
 }
 
 // ========================================================
@@ -89,17 +117,55 @@ function filterClauseNode(value: string, data: any) {
 // ========================================================
 
 async function handleSubmit() {
-  await logic.handleSubmit()
+  try {
+    await logic.submitForm()
+  } catch (e: any) {
+    ElMessage.error(e.message || '保存失败')
+  }
 }
 
-onMounted(() => {
-  loadTree()
+// ========================================================
+// 初始化
+// ========================================================
+
+onMounted(async () => {
+  await loadTree()
+  await logic.init()
+  if (tableRef.value) {
+    logic.setTableRef(tableRef.value)
+  }
+  // 直接操作父容器：去掉 padding，改为 flex 列布局，使内容撑满视口
+  const elMain = document.querySelector('.admin-layout__content') as HTMLElement | null
+  if (elMain) {
+    elMain.style.padding = '0'
+    elMain.style.display = 'flex'
+    elMain.style.flexDirection = 'column'
+    elMain.style.overflow = 'hidden'
+    elMain.style.background = '#fff'
+  }
+})
+
+onUnmounted(() => {
+  // 离开页面时恢复父容器原始样式（keep-alive 下不影响下次进入，但保险起见）
+  const elMain = document.querySelector('.admin-layout__content') as HTMLElement | null
+  if (elMain) {
+    elMain.style.padding = ''
+    elMain.style.display = ''
+    elMain.style.flexDirection = ''
+    elMain.style.overflow = ''
+    elMain.style.background = ''
+  }
+})
+
+// 监听 tableRef 注入
+watch(tableRef, (el) => {
+  if (el) logic.setTableRef(el)
 })
 </script>
 
 <template>
   <div class="nc-config-page">
-    <!-- 左侧：树 -->
+    <!-- 左侧：组织 → 标准 → 阶段 树 -->
     <div class="nc-config-page__tree">
       <div class="tree-header">
         <span class="tree-title">组织 → 标准 → 阶段</span>
@@ -115,13 +181,13 @@ onMounted(() => {
         </template>
       </el-input>
       <el-tree
-        :data="fileTreeData"
+        :data="filteredTreeData"
         v-loading="treeLoading"
         node-key="id"
         default-expand-all
         highlight-current
         :expand-on-click-node="false"
-        :filter-node-method="(value: string, data: TreeNode) => filterTreeNode(value, data)"
+        :filter-node-method="(value: string, data: TreeNode) => !value || data.name.toLowerCase().includes(value.toLowerCase())"
         @node-click="handleNodeClick"
       >
         <template #default="{ data }">
@@ -135,159 +201,86 @@ onMounted(() => {
       </el-tree>
     </div>
 
-    <!-- 右侧：表格 -->
+    <!-- 右侧：NC 检查规则表格 -->
     <div class="nc-config-page__content">
       <!-- 未选中阶段 -->
-      <el-empty v-if="!logic.selectedPhase.value" description="请在左侧选择阶段" :image-size="120" />
+      <el-empty v-if="!logic.anySelected && !logic.loading.value" description="请在左侧选择阶段" :image-size="120" />
 
-      <!-- 已选中阶段 -->
-      <template v-else>
-        <!-- 筛选栏 -->
-        <div class="content-filter">
-          <el-input
-            v-model="logic.keyword.value"
-            placeholder="搜索规则名称"
-            clearable
-            style="width: 200px"
-            @keyup.enter="logic.handleSearch()"
-          />
-          <el-button type="primary" :icon="Search" @click="logic.handleSearch()">查询</el-button>
-          <el-button @click="logic.handleReset()">重置</el-button>
-        </div>
-
-        <!-- 工具栏 -->
-        <div class="content-toolbar">
-          <el-button type="primary" :icon="Plus" @click="logic.openAddDialog()">
-            新建检查项
-          </el-button>
-          <el-button :icon="RefreshRight" @click="logic.loadTable()">
-            刷新
-          </el-button>
-          <el-button type="success" plain @click="router.push('/business/nc-config')">
-            工作流设计器
-          </el-button>
-        </div>
-
-        <!-- 表格 -->
-        <el-table
-          :data="logic.tableData.value"
-          stripe
-          border
-          v-loading="logic.loading.value"
-          row-key="Code"
-          style="flex: 1"
-        >
-          <el-table-column prop="RuleCode" label="规则编号" width="150" />
-          <el-table-column prop="RuleName" label="规则名称" min-width="200" />
-          <el-table-column prop="RuleNameEn" label="英文名称" width="150" show-overflow-tooltip />
-          <el-table-column label="关联条款" min-width="220">
-            <template #default="{ row }">
-              <div v-if="row.ClauseNumber" class="clause-cell">
-                <el-tag size="small" effect="plain" class="clause-tag">{{ row.ClauseNumber }}</el-tag>
-                <span class="clause-title">{{ row.ClauseTitle }}</span>
-              </div>
-              <span v-else class="empty-text">-</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="启用" width="80" align="center">
-            <template #default="{ row }">
-              <el-switch
-                :model-value="row.IsActive"
-                @change="logic.handleToggleActive(row)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column prop="Remark" label="备注" min-width="150" show-overflow-tooltip />
-          <el-table-column label="操作" width="150" fixed="right">
-            <template #default="{ row }">
-              <el-button link type="primary" size="small" @click="logic.openEditDialog(row)">编辑</el-button>
-              <el-button link type="primary" size="small" @click="logic.handleCopy(row)">复制</el-button>
-              <el-button link type="danger" size="small" @click="logic.handleDelete(row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <!-- 分页 -->
-        <el-pagination
-          v-model:current-page="logic.page.value"
-          :page-size="logic.pageSize.value"
-          :total="logic.total.value"
-          layout="total, prev, pager, next"
-          style="justify-content: flex-end"
-          @current-change="logic.handlePageChange"
-        />
-      </template>
+      <!-- 已选中阶段 → YzhTable 配置驱动 -->
+      <YzhTable
+        v-else
+        ref="tableRef"
+        :columns="logic.columns as any"
+        :data-loader="(params: any) => logic.dataLoader(params)"
+        :search-fields="logic.searchFields as any"
+        :row-action-buttons="rowActionButtons"
+        :loading="logic.loading.value"
+        row-key="Code"
+        :stripe="true"
+        :border="false"
+        @row-action="handleRowAction"
+      >
+        <!-- 工具栏左侧：新建检查项 + 刷新 -->
+        <template #toolbar-left>
+          <el-button type="primary" :icon="Plus" @click="handleAdd">新建检查项</el-button>
+          <el-button :icon="RefreshRight" @click="handleRefresh">刷新</el-button>
+        </template>
+      </YzhTable>
     </div>
 
     <!-- 编辑弹窗 -->
     <el-dialog
       v-model="logic.dialogVisible.value"
       :title="logic.dialogMode.value === 'add' ? '新建检查项' : '编辑检查项'"
-      width="600px"
+      width="640px"
       :close-on-click-modal="false"
       destroy-on-close
     >
-      <el-form :model="logic.formData" label-width="100px">
-        <el-form-item label="规则名称" required>
-          <el-input v-model="logic.formData.RuleName" placeholder="如：资源提供检查" />
-        </el-form-item>
-        <el-form-item label="英文名称">
-          <el-input v-model="logic.formData.RuleNameEn" placeholder="如：Resource Provision" />
-        </el-form-item>
-        <el-form-item label="关联条款" required>
-          <el-tree-select
-            v-model="logic.formData.ClauseCode"
-            :data="logic.clauseTreeData.value"
-            node-key="Code"
-            :props="{ label: 'Label', value: 'Code', children: 'Children' }"
-            filterable
-            check-strictly
-            :filter-node-method="filterClauseNode"
-            placeholder="选择关联条款"
-            style="width: 100%"
-            :loading="logic.clauseLoading.value"
-          >
-            <template #default="{ data }">
-              <span>{{ data.Label || `${data.ClauseNumber} ${data.Title}` }}</span>
-            </template>
-          </el-tree-select>
-        </el-form-item>
-        <el-form-item label="是否启用">
-          <el-switch v-model="logic.formData.IsActive" />
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="logic.formData.Remark" type="textarea" :rows="2" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="logic.dialogVisible.value = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit" :loading="logic.submitting.value">保存</el-button>
-      </template>
+      <YzhForm
+        v-model="logic.formData"
+        :fields="logic.formFields as any"
+        :loading="logic.submitting.value"
+        :cols="2"
+        @submit="handleSubmit"
+        @reset="logic.dialogVisible.value = false"
+      />
     </el-dialog>
   </div>
 </template>
 
 <style scoped>
-.nc-config-page {
-  height: 100%;
-  display: flex;
-  gap: 16px;
-}
-
-.nc-config-page__tree {
-  width: 300px;
-  flex-shrink: 0;
+:deep(.admin-layout__content) {
+  padding: 0;
   background: #fff;
-  border-radius: 4px;
-  border: 1px solid var(--el-border-color-lighter);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
+.nc-config-page {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: #fff;
+  padding: 0;
+}
+
+/* ──── 左树 ──── */
+.nc-config-page__tree {
+  width: 280px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--el-border-color-lighter);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+}
+
 .tree-header {
   padding: 12px 16px;
   border-bottom: 1px solid var(--el-border-color-lighter);
+  background: #fff;
 }
 
 .tree-title {
@@ -323,56 +316,27 @@ onMounted(() => {
   white-space: nowrap;
 }
 
+/* ──── 右内容区（YzhTable） ──── */
 .nc-config-page__content {
   flex: 1;
-  min-width: 0;
-  background: #fff;
-  border-radius: 4px;
-  border: 1px solid var(--el-border-color-lighter);
   display: flex;
   flex-direction: column;
-  padding: 16px;
   overflow: hidden;
+  background: #fff;
+  padding: 0;
 }
 
-.content-filter {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
+/* ──── YzhTable 内部布局调整 ──── */
+.nc-config-page__content :deep(.yzh-table) {
+  height: 100%;
 }
 
-.content-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
+.nc-config-page__content :deep(.el-table__inner-wrapper) {
+  --el-table-header-bg-color: #f8fafc;
 }
 
-.clause-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.clause-tag {
-  flex-shrink: 0;
-  font-weight: 700;
-  background: #f1f5f9;
-  border: none;
-  color: #475569;
-}
-
-.clause-title {
-  font-size: 14px;
-  color: #64748b;
-  line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.empty-text {
-  color: #909399;
+.nc-config-page__content :deep(.el-pagination) {
+  padding: 12px 16px;
+  justify-content: flex-end;
 }
 </style>

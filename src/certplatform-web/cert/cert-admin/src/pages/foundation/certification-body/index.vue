@@ -204,7 +204,6 @@ async function onToggle(row: CertificationBody) {
 
 <style scoped>
 .cert-body-page {
-  padding: 20px;
   display: flex;
   flex-direction: column;
   height: 100%;

@@ -10,56 +10,74 @@ namespace YZH.Entity.Admin.Platform.Cert
     /// <para>表名：cert_file_requirement</para>
     /// <para>此表既存储文件要求，也存储标准目录的模板文件信息</para>
     /// <para>模板文件 OSS 路径：/standard-directory/{OrgCode}/{StandardCode}/{PhaseCode}/{FolderPath}/{FileName}</para>
+    /// <para>
+    /// ⚠️ 列映射遵循新架构惯例：数据库列为 PascalCase（与 C# 属性名一致，见 cert_sys_config /
+    /// cert_standard_directory_file）。旧架构的 snake_case 列名（folder_code / file_name_template …）
+    /// 在该表中并不存在，会让 ORM 查询抛 Unknown column。
+    /// </para>
     /// </summary>
     [Table("cert_file_requirement")]
     [SugarTable("cert_file_requirement")]
     public class FileRequirement : EntityBase
     {
+        /// <summary>所属文件夹编码</summary>
         [Required, StringLength(36)]
-        [Column("folder_code")]
-        [SugarColumn(ColumnName = "folder_code", Length = 36)]
+        [Column("FolderCode")]
+        [SugarColumn(ColumnName = "FolderCode", Length = 36)]
         public string FolderCode { get; set; }
 
+        /// <summary>文件名称模板（如「质量手册」）</summary>
         [Required, StringLength(200)]
         [UniqueField("文件名称", WithFields = new[] { "FolderCode" })]
-        [Column("file_name_template")]
-        [SugarColumn(ColumnName = "file_name_template", Length = 200)]
+        [Column("FileNameTemplate")]
+        [SugarColumn(ColumnName = "FileNameTemplate", Length = 200)]
         public string FileNameTemplate { get; set; }
 
+        /// <summary>文件类型（doc/docx/xlsx/pdf …）</summary>
         [Required, StringLength(50)]
-        [Column("file_type")]
-        [SugarColumn(ColumnName = "file_type", Length = 50)]
+        [Column("FileType")]
+        [SugarColumn(ColumnName = "FileType", Length = 50)]
         public string FileType { get; set; }
 
-        [Column("is_required")]
-        [SugarColumn(ColumnName = "is_required")]
+        /// <summary>是否必需</summary>
+        [Column("IsRequired")]
+        [SugarColumn(ColumnName = "IsRequired")]
         public bool IsRequired { get; set; } = true;
 
-        [Column("max_size_mb")]
-        [SugarColumn(ColumnName = "max_size_mb")]
+        /// <summary>单文件大小上限（MB）</summary>
+        [Column("MaxSizeMB")]
+        [SugarColumn(ColumnName = "MaxSizeMB")]
         public int MaxSizeMB { get; set; } = 10;
 
-        [Column("description")]
-        [SugarColumn(ColumnName = "description", ColumnDataType = "text", IsNullable = true)]
+        /// <summary>说明</summary>
+        [Column("Description")]
+        [SugarColumn(ColumnName = "Description", ColumnDataType = "text", IsNullable = true)]
         public string Description { get; set; }
 
-        [Column("sort_order")]
-        [SugarColumn(ColumnName = "sort_order")]
+        /// <summary>排序</summary>
+        [Column("SortOrder")]
+        [SugarColumn(ColumnName = "SortOrder")]
         public int SortOrder { get; set; } = 0;
 
+        /// <summary>
+        /// 模板文件 OSS 存储路径
+        /// 格式：/standard-directory/{OrgCode}/{StandardCode}/{PhaseCode}/{FolderPath}/{FileName}
+        /// </summary>
         [StringLength(500)]
-        [Column("template_storage_path")]
-        [SugarColumn(ColumnName = "template_storage_path", Length = 500, IsNullable = true)]
+        [Column("TemplateStoragePath")]
+        [SugarColumn(ColumnName = "TemplateStoragePath", Length = 500, IsNullable = true)]
         public string TemplateStoragePath { get; set; }
 
+        /// <summary>模板文件原始名（上传时的文件名）</summary>
         [StringLength(500)]
-        [Column("template_file_name")]
-        [SugarColumn(ColumnName = "template_file_name", Length = 500, IsNullable = true)]
+        [Column("TemplateFileName")]
+        [SugarColumn(ColumnName = "TemplateFileName", Length = 500, IsNullable = true)]
         public string TemplateFileName { get; set; }
 
+        /// <summary>标准编码（关联 cert_iso_standard.Code）</summary>
         [StringLength(36)]
-        [Column("standard_code")]
-        [SugarColumn(ColumnName = "standard_code", Length = 36, IsNullable = true)]
+        [Column("StandardCode")]
+        [SugarColumn(ColumnName = "StandardCode", Length = 36, IsNullable = true)]
         public string StandardCode { get; set; }
     }
 }

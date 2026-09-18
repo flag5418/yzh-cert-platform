@@ -356,7 +356,14 @@ async function loadCategories() {
 async function loadDocRules() {
   try {
     const res = await yzhApi.get('/api/Workflow/DocExtractionRule/configured-rules')
-    docRules.value = res?.data || res?.Data || []
+    const items = res?.data || res?.Data || []
+    // 接口返回 PascalCase（RuleCode/FileName），面板按 camelCase 消费，统一在此归一化
+    docRules.value = (Array.isArray(items) ? items : []).map((d) => ({
+      ...d,
+      ruleCode: d.RuleCode || d.ruleCode,
+      fileName: d.FileName || d.fileName,
+      standardFileCode: d.StandardFileCode || d.standardFileCode
+    }))
   } catch (e) { /* 文档规则接口尚未就绪，静默 */ }
 }
 
@@ -1398,8 +1405,8 @@ async function handleTestDocExtract({ nodeType, body, onSuccess, onError }) {
   try {
     const url =
       nodeType === 'docField'
-        ? '/api/DocExtractionRule/test-field'
-        : '/api/DocExtractionRule/test-table'
+        ? '/api/Workflow/DocExtractionRule/test-field'
+        : '/api/Workflow/DocExtractionRule/test-table'
     const res = await yzhApi.post(url, body)
     if (res?.status && res.data) {
       onSuccess(res.data)

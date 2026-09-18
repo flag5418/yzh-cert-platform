@@ -193,14 +193,17 @@ onMounted(() => {
   display: flex;
   height: 100%;
   overflow: hidden;
+  background: #fff;
 }
 
 .link-page__tree {
   width: 280px;
-  border-right: 1px solid var(--el-border-color-light);
+  flex-shrink: 0;
+  border-right: 1px solid var(--el-border-color-lighter);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: #fff;
 }
 
 .link-page__tree-title {
@@ -208,12 +211,12 @@ onMounted(() => {
   font-weight: 600;
   font-size: 14px;
   border-bottom: 1px solid var(--el-border-color-lighter);
+  background: #fff;
 }
 
 .link-page__tree :deep(.el-tree) {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
 }
 
 .link-page__content {
@@ -221,6 +224,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: #fff;
 }
 
 .link-page__header {
@@ -229,6 +233,7 @@ onMounted(() => {
   justify-content: space-between;
   padding: 12px 16px;
   border-bottom: 1px solid var(--el-border-color-lighter);
+  background: #fff;
 }
 
 .link-page__header-title {

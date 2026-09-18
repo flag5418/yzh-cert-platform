@@ -8,7 +8,12 @@ const props = defineProps<{
   fields: FieldDefDto[]
   tables: TableDefDto[]
   prompt: string
-  isValid: boolean
+  /**
+   * 验证结论（三态）：null = 尚未验证、true = 通过、false = 失败。
+   * 模板里用 `isValid !== null` 判定是否展示验证结果区，因此必须允许 null；
+   * 声明为 `boolean` 会触发 Vue 运行时 prop 类型告警（Expected Boolean, got Null）。
+   */
+  isValid: boolean | null
   verifying: boolean
   generating: boolean
 }>()

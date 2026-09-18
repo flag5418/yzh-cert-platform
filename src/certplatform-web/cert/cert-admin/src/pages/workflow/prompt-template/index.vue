@@ -290,6 +290,9 @@ onMounted(loadList)
 </template>
 
 <style scoped>
+:deep(.yzh-page-layout__content) {
+  background: #fff;
+}
 .filter-card { margin-bottom: 16px; }
 .table-card { margin-bottom: 16px; }
 .view-section { margin-top: 16px; }

@@ -111,11 +111,11 @@ public class EntityService<T> where T : class, new()
     }
 
     /// <summary>获取列表</summary>
-    public virtual async Task<Result<List<T>>> GetListAsync(Expression<Func<T, bool>>? predicate = null, bool includeDeleted = false)
+    public virtual async Task<Result<List<T>>> GetListAsync(Expression<Func<T, bool>>? predicate = null, bool includeDeleted = false, bool includeDisabled = false)
     {
         try
         {
-            var result = await _dbOrm.GetListAsync<T>(predicate);
+            var result = await _dbOrm.GetListAsync<T>(predicate, includeDisabled);
             return result.Success 
                 ? Result<List<T>>.Ok(result.Data!)
                 : Result<List<T>>.Fail(result.Error);

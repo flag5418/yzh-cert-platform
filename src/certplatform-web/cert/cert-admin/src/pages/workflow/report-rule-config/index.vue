@@ -1500,7 +1500,13 @@ async function handleSave() {
 </script>
 
 <style scoped lang="less">
-.studio-layout { display: flex; flex-direction: column; height: 100vh; background: #f1f5f9; }
+:deep(.admin-layout__content) {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.studio-layout { display: flex; flex-direction: column; flex: 1; min-height: 0; background: #f1f5f9; }
 .page-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; background: #fff; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; }
 .header-left { display: flex; align-items: center; gap: 8px; }
 .header-title { font-size: 16px; font-weight: 700; color: #1e293b; }

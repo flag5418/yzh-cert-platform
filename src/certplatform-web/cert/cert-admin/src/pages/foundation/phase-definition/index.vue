@@ -134,6 +134,6 @@ async function onToggle(row: PhaseDefinition) {
 </template>
 
 <style scoped>
-.phase-definition-page { padding: 20px; display: flex; flex-direction: column; height: 100%; }
+.phase-definition-page { display: flex; flex-direction: column; height: 100%; }
 .action-cell { display: flex; flex-wrap: nowrap; gap: 2px; }
 </style>

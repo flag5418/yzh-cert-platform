@@ -27,6 +27,9 @@ public static class CertPlatformAdminServiceExtensions
         services.AddSingleton<LlmInvokeService>();
         services.AddScoped<DocExtractionRuleService>();
 
+        // ──── Prompt 模板管理 ────
+        services.AddScoped<PromptTemplateService>();
+
         // ──── 工作流执行引擎 ────
         services.AddScoped<WorkflowConfigParser>();
         services.AddScoped<WorkflowLogger>();
