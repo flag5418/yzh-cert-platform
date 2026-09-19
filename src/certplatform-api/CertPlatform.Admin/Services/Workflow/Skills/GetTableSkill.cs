@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using System;
 using System.Collections.Generic;
@@ -8,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using YZH.Core.DataBase.Interfaces;
-using SharedEnt = SharedEntities::YZH.Entity.Admin.Platform.Ent;
+using CertPlatform.Shared.Entities.Ent;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills
 {
@@ -43,7 +42,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
             // 企业编码兜底（与 NodeExecutor docTable 节点一致）
             var entCode = string.IsNullOrWhiteSpace(enterprise_code) ? "YZH-STD-ENT" : enterprise_code;
 
-            var tables = (await db.GetListAsync<SharedEnt.TableExtractionResult>(x =>
+            var tables = (await db.GetListAsync<CertPlatform.Shared.Entities.Ent.TableExtractionResult>(x =>
                 x.TableCode == table_code && x.EnterpriseCode == entCode)).Data ?? new();
 
             if (!string.IsNullOrWhiteSpace(file_code))

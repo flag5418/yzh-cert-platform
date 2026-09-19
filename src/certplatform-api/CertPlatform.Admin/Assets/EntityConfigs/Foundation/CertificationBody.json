@@ -452,42 +452,5 @@
       "Mrz": "",
       "Enable": false
     }
-  ],
-  "Toolbar": {
-    "Add": true,
-    "Delete": true,
-    "Export": false,
-    "Import": false
-  },
-  "RowButtons": {
-    "Edit": true,
-    "Delete": true
-  },
-  "SearchFields": [
-    {
-      "Label": "机构名称",
-      "Field": "Name",
-      "Operator": "like",
-      "ControlType": "input",
-      "Width": 180
-    },
-    {
-      "Label": "机构编号",
-      "Field": "CbCode",
-      "Operator": "like",
-      "ControlType": "input",
-      "Width": 180
-    },
-    {
-      "Label": "状态",
-      "Field": "IsValid",
-      "Operator": "eq",
-      "ControlType": "select",
-      "Width": 140,
-      "Options": [
-        { "Value": "1", "Label": "启用" },
-        { "Value": "0", "Label": "停用" }
-      ]
-    }
   ]
 }

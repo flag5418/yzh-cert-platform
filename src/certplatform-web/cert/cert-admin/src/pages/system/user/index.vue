@@ -1,89 +1,95 @@
 <script setup lang="ts">
-import { YzhForm, YzhTable, type YzhFormField, type PageParams, type SearchField, type YzhTableColumn } from '@yzh-core'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { reactive, ref } from 'vue'
-import { getUserPage, saveUser, deleteUser } from '@/api/system/user'
-import type { SysUser } from '@/api/system/user'
+/**
+ * 用户管理（配置驱动 CRUD 页面）
+ */
+import { YzhForm, YzhTable } from '@yzh-core'
+import { ElMessage } from 'element-plus'
+import { computed, onMounted, nextTick, ref } from 'vue'
+import { UserLogic } from './logic'
 
+const logic = new UserLogic()
 const tableRef = ref()
-const selectedRows = ref<SysUser[]>([])
-const dialogVisible = ref(false)
-const dialogMode = ref<'add' | 'edit'>('add')
-let formData: Partial<SysUser> = reactive<Partial<SysUser>>({})
-const formRef = ref()
-const submitting = ref(false)
 
-const columns: YzhTableColumn<SysUser>[] = [
-  { prop: 'UserName', label: '用户名', width: 140, sortable: true, fixed: 'left' },
-  { prop: 'UserTrueName', label: '真实姓名', width: 120 },
-  { prop: 'Enable', label: '状态', width: 80, align: 'center', formatter: (v: any) => v === 1 ? '启用' : '禁用' },
-  { prop: 'PhoneNo', label: '手机号', width: 140 },
-  { prop: 'Email', label: '邮箱', width: 200 },
-  { prop: 'CreateTime', label: '创建时间', width: 180 },
-  { prop: 'actions', label: '操作', width: 180, fixed: 'right', slot: true }
-]
+const rowActionButtons = computed(() => logic.rowActionButtons)
+const toolbarConfig = computed(() => (logic.config.value as any)?.Toolbar || {})
 
-const searchFields: SearchField[] = [
-  { prop: 'UserName', label: '用户名', type: 'text' },
-  { prop: 'UserTrueName', label: '姓名', type: 'text' }
-]
-
-async function loadUsers(params: PageParams) { return getUserPage(params) }
-
-function onAdd() {
-  dialogMode.value = 'add'
-  formData = reactive<Partial<SysUser>>({ User_Id: undefined, UserName: '', UserTrueName: '', Enable: 1, Remark: '' })
-  dialogVisible.value = true
+function loadTableData(params: any) {
+  return logic.dataLoader(params)
 }
 
-function onEdit(row: SysUser) {
-  dialogMode.value = 'edit'
-  formData = reactive<Partial<SysUser>>({ ...row })
-  dialogVisible.value = true
+function handleAdd() {
+  logic.openAddDialog()
 }
 
-async function onDelete(row: SysUser) {
-  try { await ElMessageBox.confirm(`确定删除用户「${row.UserTrueName}」吗？`, '删除确认', { type: 'warning' }) } catch { return }
-  await deleteUser(row.User_Id)
-  ElMessage.success('删除成功')
-  tableRef.value?.refresh()
+async function handleBatchDelete() {
+  await logic.confirmDelete()
 }
 
-const formFields: YzhFormField[] = [
-  { prop: 'UserName', label: '用户名', type: 'text', required: true, span: 12 },
-  { prop: 'UserTrueName', label: '真实姓名', type: 'text', required: true, span: 12 },
-  { prop: 'Enable', label: '状态', type: 'switch', span: 12 },
-  { prop: 'Remark', label: '备注', type: 'textarea', span: 24 }
-]
-
-async function onSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
-  submitting.value = true
-  try { await saveUser(formData as SysUser); ElMessage.success('保存成功'); dialogVisible.value = false; tableRef.value?.refresh() }
-  catch (e: any) { ElMessage.error(e?.message || '保存失败') }
-  finally { submitting.value = false }
+async function handleRowAction(action: string, row: any) {
+  if (action === 'edit') {
+    logic.openEditDialog(row)
+  } else if (action === 'delete') {
+    await logic.confirmDelete([row])
+  }
 }
+
+async function handleSubmit() {
+  try {
+    await logic.submitForm()
+  } catch (e: any) {
+    ElMessage.error(e.message || '保存失败')
+  }
+}
+
+onMounted(async () => {
+  await logic.init()
+  await nextTick()
+  logic.setTableRef(tableRef.value)
+})
 </script>
 
 <template>
   <div class="user-page">
-    <YzhTable ref="tableRef" :columns="columns" :data-loader="loadUsers" :search-fields="searchFields" selectable @selection-change="selectedRows = $event">
+    <YzhTable
+      ref="tableRef"
+      :columns="logic.columns as any"
+      :data-loader="loadTableData"
+      :search-fields="logic.searchFields as any"
+      :selectable="true"
+      :row-action-buttons="rowActionButtons"
+      row-key="Id"
+      @selection-change="logic.onSelectionChange($event)"
+      @row-action="handleRowAction"
+    >
       <template #toolbar-left>
-        <el-button type="primary" @click="onAdd"><i class="bi bi-plus"></i> 新增</el-button>
-        <el-button type="danger" plain :disabled="selectedRows.length === 0" @click="onDelete(selectedRows[0])"><i class="bi bi-trash"></i> 批量删除</el-button>
-      </template>
-      <template #column-actions="{ row }">
-        <el-button text type="primary" @click="onEdit(row)">编辑</el-button>
-        <el-button text type="danger" @click="onDelete(row)">删除</el-button>
+        <el-button v-if="toolbarConfig.Add !== false" type="primary" @click="handleAdd">新增</el-button>
+        <el-button v-if="toolbarConfig.Delete !== false" type="danger" @click="handleBatchDelete">删除</el-button>
       </template>
     </YzhTable>
-    <el-dialog v-model="dialogVisible" :title="dialogMode === 'add' ? '新增用户' : '编辑用户'" width="600px">
-      <YzhForm ref="formRef" v-model="formData" :fields="formFields" :loading="submitting" @submit="onSubmit" @reset="dialogVisible = false" />
+
+    <el-dialog
+      v-model="logic.dialogVisible.value"
+      :title="logic.dialogMode.value === 'add' ? '新增用户' : '编辑用户'"
+      width="640px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <YzhForm
+        v-model="logic.formData"
+        :fields="logic.formFields as any"
+        :loading="logic.submitting.value"
+        :cols="logic.formLayoutCols as any"
+        @submit="handleSubmit"
+        @reset="logic.dialogVisible.value = false"
+      />
     </el-dialog>
   </div>
 </template>
 
 <style scoped>
-.user-page { display: flex; flex-direction: column; height: 100%; }
+.user-page {
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+}
 </style>

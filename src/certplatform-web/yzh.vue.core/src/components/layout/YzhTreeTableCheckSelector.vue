@@ -22,19 +22,26 @@
       </div>
     </div>
 
-    <!-- 树形表格 -->
+    <!--
+      树形表格
+      ⚠️ tree-props 必须带 checkStrictly: true（父子勾选独立）
+      Element Plus 的 treeProps.checkStrictly 默认为 false：此时 toggleRowStatus()
+      会把「勾选某行」级联到 row.children（见 element-plus util.mjs）。而本组件
+      在 cascade 模式下也会自己调用 toggleRowSelection(父节点, false) 回填祖先 ——
+      两者叠加会把该父节点下的所有子行从 el-table 内部 selection 里一并清掉，
+      使 store.selection 与本组件 checkedKeys 长期错位：下一次点击被误判为
+      「新增勾选」（added 而非 removed），导致取消勾选不触发后端、状态无法保存。
+      置为 true 后 el-table 不再隐式级联，级联语义完全由本组件 owning。
+    -->
     <el-table
       ref="tableRef"
       :data="treeData"
       :row-key="nodeKey"
-      :tree-props="{ children: 'children' }"
+      :tree-props="{ children: 'children', checkStrictly: true }"
+      @selection-change="handleSelectionChange"
       :default-expand-all="defaultExpandAll"
-      :expand-on-click-node="false"
-      :check-on-click-node="false"
       style="width: 100%"
       class="yzh-tree-table-check-selector__table"
-      @check-change="handleCheckChange"
-      @select="handleSelect"
     >
       <!-- Checkbox 列 -->
       <el-table-column type="selection" width="50" />
@@ -75,8 +82,13 @@
  *
  * 功能：
  * - 接收扁平数据，自动转换为嵌套树（el-table tree 模式）
- * - 支持 checkbox 勾选（checkStrictly: true，父子独立）
+ * - 支持 checkbox 勾选（treeProps.checkStrictly = true，父子独立）
  * - 勾选/取消立即触发 check-change 事件（auto-save 模式）
+ *
+ * 事件契约：以 el-table 的 selection-change 为准，用「变更前快照」做差集：
+ *   added   = 本次新增勾选的 key
+ *   removed = 本次取消勾选的 key
+ * 二者互斥，恒有 added ∩ removed = ∅。
  * - 支持展开/折叠、全选/取消全选
  *
  * 典型场景：
@@ -205,6 +217,13 @@ const checkedKeys = ref<Set<string>>(new Set())
 const allNodeMap = ref<Map<string, TreeNode>>(new Map())
 const expandedKeys = ref<Set<string>>(new Set())
 const isBulkUpdating = ref(false)
+/**
+ * 上一次 selection 快照（必须与 el-table store.selection 恒等）
+ * handleSelectionChange 用它与本次 selection 做差集得出 added/removed。
+ * 每次程序化改动 selection（syncTableCheckState / 级联）后都必须同步刷新，
+ * 否则差集会失准 → 页面收不到变更 → 后端接口不被调用。
+ */
+const prevSelectionKeys = ref<Set<string>>(new Set())
 
 // ========================================================
 // 计算属性
@@ -310,16 +329,32 @@ function initCheckedState(nodes: TreeNode[]) {
 function syncTableCheckState() {
   if (!tableRef.value) return
 
+  // checkStrictly: true 下 toggleRowSelection 只影响单行，
+  // 因此可以安全地「先 clearSelection 再逐行勾选」，store 与 checkedKeys 恒等。
+  // 期间触发的 selection-change 由 isBulkUpdating 拦截（nextTick 解除）。
+  isBulkUpdating.value = true
+
   // 清空所有勾选
   tableRef.value.clearSelection()
 
-  // 设置勾选状态
+  // 只勾选「当前可见」的节点：搜索过滤后 allNodeMap 仅含可见节点
+  const visibleKeys = new Set<string>()
   for (const key of checkedKeys.value) {
     const node = allNodeMap.value.get(key)
     if (node) {
       tableRef.value.toggleRowSelection(node, true)
+      visibleKeys.add(key)
     }
   }
+
+  // ⚠️ 快照必须与 el-table store.selection 「逐行一致」（含可见性）。
+  // 若这里直接取全部 checkedKeys，搜索态下快照会多出「已勾选但被过滤掉」的项；
+  // 此时用户再点任意一行，diff 会把这些不可见项算成 removed → 误删授权。
+  prevSelectionKeys.value = visibleKeys
+
+  nextTick(() => {
+    isBulkUpdating.value = false
+  })
 }
 
 // ========================================================
@@ -332,11 +367,33 @@ function syncTableCheckState() {
  * @param resetChecks 是否以 CheckFlag 重置勾选（数据源变化时重置；搜索时保留）
  */
 function rebuildTree(data: FlatNode[], resetChecks: boolean): void {
+  //
+  // 🔴 必须在替换 treeData 之前就举起闸门。
+  //
+  // 数据集合一变（切换角色 / 搜索过滤 / 折叠展开），el-table 自身的 data watcher
+  // 会调用 store.cleanSelection()，把「不在新数据里」的旧行从内部 selection 剔除，
+  // 并同步派发 selection-change。该事件发生在本函数的 nextTick(syncTableCheckState)
+  // 之前，若此刻闸门未举起，handleSelectionChange 会以
+  //     prevSelectionKeys = 上一个角色的勾选集合
+  //     currKeys          = 已被 cleanSelection 清空的 selection
+  // 算出 removed = 上一个角色的全部 code；而页面在切换角色时已经先更新了
+  // selectedRole，于是拿【新角色】的 Code 去调 check/remove ——
+  // 新角色中同名的菜单授权被真实删除（静默数据丢失）。
+  //
+  // 实测复现：总管理员(已勾 MENU_00002/MENU_00106) → 切到运维人员，
+  //   发出 checkRemove(ROLE_000102, [MENU_00106, MENU_00002])，运维人员授权被清空。
+  //
+  isBulkUpdating.value = true
+
   allNodeMap.value.clear()
 
   if (!data || data.length === 0) {
     treeData.value = []
     if (resetChecks) checkedKeys.value = new Set()
+    nextTick(() => {
+      syncTableCheckState()
+      releaseBulkGuard()
+    })
     return
   }
 
@@ -354,9 +411,22 @@ function rebuildTree(data: FlatNode[], resetChecks: boolean): void {
     expandAllNodes(treeData.value)
   }
 
-  // 同步表格勾选状态
+  // 同步表格勾选状态（渲染完成后），再释放闸门
   nextTick(() => {
     syncTableCheckState()
+    releaseBulkGuard()
+  })
+}
+
+/**
+ * 释放闸门
+ *
+ * 再等一个 tick 才落下，确保 el-table 因数据变化产生的 selection-change 已全部派发。
+ * syncTableCheckState 内部也会释放一次，此处是双保险。
+ */
+function releaseBulkGuard(): void {
+  nextTick(() => {
+    isBulkUpdating.value = false
   })
 }
 
@@ -394,11 +464,13 @@ function handleExpandAll() {
 function handleCollapseAll() {
   expandedKeys.value.clear()
   // el-table 没有直接的 collapseAll 方法，需要重新渲染
-  // 通过设置 data 触发重新渲染
+  // 通过设置 data 触发重新渲染 —— 这一清一还同样会触发 cleanSelection，需举闸门
+  isBulkUpdating.value = true
   const data = treeData.value
   treeData.value = []
   nextTick(() => {
     treeData.value = data
+    releaseBulkGuard()
   })
 }
 
@@ -420,6 +492,7 @@ function handleCheckAll() {
     tableRef.value.toggleRowSelection(node, true)
   }
   checkedKeys.value = newSet
+  prevSelectionKeys.value = new Set(newSet)
 
   isBulkUpdating.value = false
 
@@ -434,6 +507,7 @@ function handleUncheckAll() {
 
   const removedKeys = Array.from(checkedKeys.value)
   checkedKeys.value = new Set()
+  prevSelectionKeys.value = new Set()
   tableRef.value.clearSelection()
 
   isBulkUpdating.value = false
@@ -473,25 +547,37 @@ function collectSubtree(node: TreeNode): TreeNode[] {
   return result
 }
 
+/** 集合差集：to - from */
+function diffKeys(from: Set<string>, to: Set<string>): string[] {
+  const out: string[] = []
+  for (const k of to) if (!from.has(k)) out.push(k)
+  return out
+}
+
 /**
  * 级联勾选：父节点 → 全部子孙，叶子节点 → 回填父节点状态
- * 程序化设置的选择状态不会触发 el-table 事件（isBulkUpdating 兼作双保险）
+ *
+ * ⚠️ 两点必须成立，否则「取消勾选」会静默失效：
+ *
+ * 1) before 必须是「本次变更前的快照」（由 handleSelectionChange 传入）。
+ *    若以 checkedKeys 为基准重算，被点的那一项永远算不进差异，
+ *    最终发出 added=[]/removed=[] → 页面收不到变更 → 后端接口不被调用。
+ *
+ * 2) el-table 的 tree-props 必须带 checkStrictly: true。
+ *    本函数会用 toggleRowSelection(父节点, false) 回填祖先；若 el-table 同时
+ *    开启隐式级联，这一次调用会把该父节点下所有子行一并从 store.selection 中
+ *    移除，使 store 与本组件 checkedKeys 错位，下一次点击即被误判为「新增勾选」。
+ *
+ * 函数内部所有 toggleRowSelection 都会同步触发 el-table 的 selection-change，
+ * 因此全程由 isBulkUpdating 拦截，避免递归。
  */
-function emitCascadeChange(row: TreeNode, checked: boolean) {
-  const added = new Set<string>()
-  const removed = new Set<string>()
-  const next = new Set(checkedKeys.value)
+function emitCascadeChange(row: TreeNode, checked: boolean, before: Set<string>) {
+  const next = new Set(before)
 
   const apply = (node: TreeNode, value: boolean) => {
     const key = String(node[props.nodeKey])
-    if (value) {
-      if (!next.has(key)) {
-        next.add(key)
-        added.add(key)
-      }
-    } else if (next.delete(key)) {
-      removed.add(key)
-    }
+    if (value) next.add(key)
+    else next.delete(key)
     tableRef.value?.toggleRowSelection(node, value)
   }
 
@@ -516,55 +602,63 @@ function emitCascadeChange(row: TreeNode, checked: boolean) {
 
   isBulkUpdating.value = false
 
-  checkedKeys.value = next
-  emitCheckChange([...removed], [...added])
+  // 与实际生效状态（含级联产生的子孙/祖先）对齐后再计算差异
+  // diffKeys(from, to) 返回「在 to 中但不在 from 中」的项
+  const removed = diffKeys(next, before)
+  const added = diffKeys(before, next)
+
+  // 只对差集做增删，保留搜索过滤期间不可见但仍处于已勾选逻辑中的项
+  const nextChecked = new Set(checkedKeys.value)
+  for (const k of added) nextChecked.add(k)
+  for (const k of removed) nextChecked.delete(k)
+
+  checkedKeys.value = nextChecked
+  // 同步快照（= 本次生效后的 store 集合），避免下次 diff 误判级联变更
+  prevSelectionKeys.value = new Set(next)
+
+  emitCheckChange(removed, added)
 }
 
-function handleCheckChange(row: TreeNode, checked: boolean) {
+/** el-table selection 变化 → 快照 diff 计算 added/removed */
+function handleSelectionChange(selection: TreeNode[]) {
   if (isBulkUpdating.value) return
 
-  if (props.cascade) {
-    emitCascadeChange(row, checked)
-    return
-  }
+  const currKeys = new Set(selection.map((r) => String(r[props.nodeKey])))
+  const prevKeys = prevSelectionKeys.value
 
-  const key = String(row[props.nodeKey])
-  const newSet = new Set(checkedKeys.value)
-
-  if (checked) {
-    newSet.add(key)
-    checkedKeys.value = newSet
-    emitCheckChange([], [key])
-  } else {
-    newSet.delete(key)
-    checkedKeys.value = newSet
-    emitCheckChange([key], [])
-  }
-}
-
-function handleSelect(selection: TreeNode[], row: TreeNode) {
-  if (isBulkUpdating.value) return
-
-  // 处理 select 事件（el-table 的 checkbox 点击）
-  const key = row[props.nodeKey]
-  const isSelected = selection.some((s) => s[props.nodeKey] === key)
+  const added = diffKeys(prevKeys, currKeys)
+  const removed = diffKeys(currKeys, prevKeys)
+  if (added.length === 0 && removed.length === 0) return
 
   if (props.cascade) {
-    emitCascadeChange(row, isSelected)
-    return
+    //
+    // 级联：由触发节点算出最终勾选集合，再与变更前快照比对（含触发节点自身）
+    // checkStrictly=true 下 el-table 一次只会翻转「被点击的那一行」，
+    // 因此 added/removed 中恰好有且仅有一个 key —— 它就是触发节点。
+    // 若同一次事件里出现多个变更（异常/批量 API），则不做级联，直接按 diff 落库，
+    // 避免「猜错触发节点」导致整棵子树被错误勾选/取消。
+    //
+    const diffCount = added.length + removed.length
+    const triggerKey = diffCount === 1 ? (added[0] ?? removed[0]) : undefined
+    const triggerNode = triggerKey ? allNodeMap.value.get(triggerKey) : undefined
+    if (triggerNode) {
+      emitCascadeChange(triggerNode, added.length > 0, prevKeys)
+      return
+    }
   }
 
-  const newSet = new Set(checkedKeys.value)
+  // 非级联：以本次 diff 为准。
+  // ⚠️ 只对差集做增删，不能整体替换为 currKeys ——
+  // 搜索过滤期间不可见的已勾选项不在 store 里，整体替换会把它们丢掉。
+  prevSelectionKeys.value = currKeys
 
-  if (isSelected) {
-    newSet.add(key)
-    checkedKeys.value = newSet
-    emitCheckChange([], [key])
-  } else {
-    newSet.delete(key)
-    checkedKeys.value = newSet
-    emitCheckChange([key], [])
-  }
+  const nextChecked = new Set(checkedKeys.value)
+  for (const k of added) nextChecked.add(k)
+  for (const k of removed) nextChecked.delete(k)
+  checkedKeys.value = nextChecked
+
+  if (added.length > 0) emitCheckChange([], added)
+  if (removed.length > 0) emitCheckChange(removed, [])
 }
 
 function emitCheckChange(removed: string[], added: string[]) {

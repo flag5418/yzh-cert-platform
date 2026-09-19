@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using System;
 using System.Collections.Generic;
@@ -6,7 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
-using SharedEntities::YZH.Entity.Admin.Platform.Wf;
+using CertPlatform.Shared.Entities.Wf;
 
 namespace CertPlatform.Admin.Services.Workflow;
 
@@ -102,7 +101,7 @@ public class PromptTemplateService
             entity.Version = 1;
             entity.IsActive = true;
             entity.Enable = true;
-            entity.CreateDate ??= DateTime.Now;
+            entity.CreateTime = DateTime.UtcNow;
             if (string.IsNullOrWhiteSpace(entity.Status)) entity.Status = "active";
 
             var inserted = await _db.InsertAsync(entity);
@@ -117,10 +116,10 @@ public class PromptTemplateService
         entity.Version = existing.Version + 1;
         entity.IsActive = true;
         entity.Enable = true;
-        entity.CreateDate = existing.CreateDate;
-        entity.Creator = existing.Creator;
-        entity.ModifyDate = DateTime.Now;
-        entity.Deleter = null;
+        entity.CreateTime = existing.CreateTime;
+        entity.CreateBy = existing.CreateBy;
+        entity.UpdateTime = DateTime.Now;
+        entity.DeleteBy = null;
         entity.DeleteTime = null;
 
         var updated = await _db.UpdateAsync(entity);
@@ -136,7 +135,7 @@ public class PromptTemplateService
         if (entity == null) return false;
 
         entity.Enable = false;
-        entity.ModifyDate = DateTime.Now;
+        entity.UpdateTime = DateTime.Now;
         var result = await _db.UpdateAsync(entity);
         return result.Success;
     }
@@ -157,13 +156,13 @@ public class PromptTemplateService
             foreach (var item in siblings.Data)
             {
                 item.IsActive = false;
-                item.ModifyDate = DateTime.Now;
+                item.UpdateTime = DateTime.Now;
                 await _db.UpdateAsync(item);
             }
         }
 
         target.IsActive = true;
-        target.ModifyDate = DateTime.Now;
+        target.UpdateTime = DateTime.Now;
         var result = await _db.UpdateAsync(target);
         return result.Success;
     }

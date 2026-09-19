@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Controllers;
@@ -45,12 +44,12 @@ namespace CertPlatform.Admin.Controllers.Foundation;
 [ApiController]
 [Route("api/Foundation/[controller]")]
 public class ISOStandardTreeTableController
-    : TreeTableControllerBase<SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOStandard,
-                             SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOClause>
+    : TreeTableControllerBase<ISOStandard,
+                             ISOClause>
 {
     public ISOStandardTreeTableController(
-        EntityService<SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOStandard> treeEntityService,
-        EntityService<SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOClause> tableEntityService,
+        EntityService<ISOStandard> treeEntityService,
+        EntityService<ISOClause> tableEntityService,
         IUserContext userContext)
         : base(treeEntityService, tableEntityService, userContext)
     {
@@ -86,7 +85,7 @@ public class ISOStandardTreeTableController
     /// 使前端编辑标准时能回填 StandardCode、VersionYear、Category、Description、Remark。
     /// </summary>
     protected override TreeItemDto MapToTreeItem(
-        SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOStandard entity, int level)
+        ISOStandard entity, int level)
     {
         var dto = base.MapToTreeItem(entity, level);
         dto.Extra["StandardCode"] = entity.StandardCode ?? "";
@@ -103,7 +102,7 @@ public class ISOStandardTreeTableController
 
     /// <summary>新增标准前校验：同版本下编号唯一</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAddTree(
-        SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOStandard entity)
+        ISOStandard entity)
     {
         if (string.IsNullOrEmpty(entity.Code))
             entity.Code = Guid.NewGuid().ToString("N");
@@ -121,7 +120,7 @@ public class ISOStandardTreeTableController
 
     /// <summary>修改标准前校验：同版本下编号唯一（排除自身）</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdateTree(
-        SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOStandard entity)
+        ISOStandard entity)
     {
         var exists = await TreeEntity.ExistsAsync(s =>
             s.Code != entity.Code &&
@@ -156,10 +155,13 @@ public class ISOStandardTreeTableController
     // 表格（条款）生命周期钩子
     // ========================================================
 
-    /// <summary>新增条款前校验：同标准下条款编号唯一</summary>
+    /// <summary>新增条款前校验：StandardCode 必填 + 同标准下条款编号唯一</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAdd(
-        SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOClause entity)
+        ISOClause entity)
     {
+        if (string.IsNullOrWhiteSpace(entity.StandardCode))
+            return (false, "请先选中一个标准后再新增条款");
+
         var exists = await Entity.ExistsAsync(c =>
             c.StandardCode == entity.StandardCode &&
             c.ClauseNumber == entity.ClauseNumber);
@@ -172,7 +174,7 @@ public class ISOStandardTreeTableController
 
     /// <summary>修改条款前校验：同标准下条款编号唯一（排除自身）</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(
-        SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOClause entity)
+        ISOClause entity)
     {
         var exists = await Entity.ExistsAsync(c =>
             c.Code != entity.Code &&

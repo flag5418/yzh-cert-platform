@@ -50,7 +50,7 @@ public class EntityService<T> where T : class, new()
     // ==================== 查询操作（返回 Result<T>） ====================
 
     /// <summary>根据 Code 获取实体</summary>
-    public virtual async Task<Result<T?>> GetByCode(string code, bool includeDeleted = false)
+    public virtual async Task<Result<T?>> GetByCode(string code)
     {
         try
         {
@@ -94,7 +94,7 @@ public class EntityService<T> where T : class, new()
     }
 
     /// <summary>根据条件获取单条</summary>
-    public virtual async Task<Result<T?>> GetOne(Expression<Func<T, bool>> predicate, bool includeDeleted = false)
+    public virtual async Task<Result<T?>> GetOne(Expression<Func<T, bool>> predicate)
     {
         try
         {
@@ -111,7 +111,7 @@ public class EntityService<T> where T : class, new()
     }
 
     /// <summary>获取列表</summary>
-    public virtual async Task<Result<List<T>>> GetListAsync(Expression<Func<T, bool>>? predicate = null, bool includeDeleted = false, bool includeDisabled = false)
+    public virtual async Task<Result<List<T>>> GetListAsync(Expression<Func<T, bool>>? predicate = null, bool includeDisabled = false)
     {
         try
         {
@@ -128,7 +128,7 @@ public class EntityService<T> where T : class, new()
     }
 
     /// <summary>分页查询（使用 FilterOperation 安全解析 FilterItem → SqlCondition）</summary>
-    public virtual async Task<Result<PagedResult<T>>> GetPageAsync(PagerOptions options, bool includeDeleted = false)
+    public virtual async Task<Result<PagedResult<T>>> GetPageAsync(PagerOptions options)
     {
         try
         {
@@ -169,7 +169,7 @@ public class EntityService<T> where T : class, new()
     }
 
     /// <summary>统计数量</summary>
-    public virtual async Task<Result<int>> CountAsync(Expression<Func<T, bool>>? predicate = null, bool includeDeleted = false)
+    public virtual async Task<Result<int>> CountAsync(Expression<Func<T, bool>>? predicate = null)
     {
         try
         {
@@ -186,7 +186,7 @@ public class EntityService<T> where T : class, new()
     }
 
     /// <summary>判断是否存在</summary>
-    public virtual async Task<Result<bool>> ExistsAsync(Expression<Func<T, bool>> predicate, bool includeDeleted = false)
+    public virtual async Task<Result<bool>> ExistsAsync(Expression<Func<T, bool>> predicate)
     {
         try
         {
@@ -203,7 +203,7 @@ public class EntityService<T> where T : class, new()
     }
 
     /// <summary>根据 Code 判断是否存在</summary>
-    public virtual async Task<Result<bool>> ExistsByCodeAsync(string code, bool includeDeleted = false)
+    public virtual async Task<Result<bool>> ExistsByCodeAsync(string code)
     {
         try
         {
@@ -630,9 +630,19 @@ public class EntityService<T> where T : class, new()
     {
         if (entity is ISoftDelete softDelete)
         {
+            // 通过接口统一设置三个软删除字段
             softDelete.IsDeleted = true;
+            softDelete.DeleteBy = _userContext.UserCode;
+            softDelete.DeleteTime = DateTime.UtcNow;
+            await _dbOrm.UpdateAsync(entity, new[] { "IsDeleted", "DeleteTime", "DeleteBy" });
         }
-        await _dbOrm.UpdateAsync(entity, new[] { "IsDeleted", "DeleteTime", "DeleteBy" });
+        else
+        {
+            // 向后兼容：未实现 ISoftDelete 但有 IsDeleted 字段的实体
+            dynamic dyn = entity;
+            try { dyn.IsDeleted = true; } catch { /* 无 IsDeleted 则跳过 */ }
+            await _dbOrm.UpdateAsync(entity, new[] { "IsDeleted" });
+        }
     }
 
     // ==================== 表达式构建辅助方法 ====================
@@ -703,17 +713,42 @@ public class EntityService<T> where T : class, new()
         object? id = default;
         string? code = default;
 
-        var idProp = typeof(T).GetProperty("Id",
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        var idProp = ResolveProperty(typeof(T), "Id");
         if (idProp != null)
             id = idProp.GetValue(entity);
 
-        var codeProp = typeof(T).GetProperty("Code",
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        var codeProp = ResolveProperty(typeof(T), "Code");
         if (codeProp != null)
             code = codeProp.GetValue(entity) as string;
 
         return (id, code);
+    }
+
+    /// <summary>
+    ///     按名字取属性，优先最派生的声明
+    ///
+    ///     背景：多个实体用 <c>new</c> 隐藏了 BaseEntity 的同名列且类型不同
+    ///     （典型：<c>public new string Id</c> 遮蔽基类 <c>long Id</c>）。
+    ///     此时 <c>Type.GetProperty(name, Public|Instance)</c> 会抛
+    ///     <c>AmbiguousMatchException</c>（“Ambiguous match found for … Id”）。
+    ///     而该异常发生在 Insert 成功之后、写审计日志之前，会被 catch 转成
+    ///     <c>Result.Fail</c> —— 数据实际已落库，接口却返回失败（Updated=0），
+    ///     前端表现为“保存成功但没保存”。
+    ///
+    ///     这里逐层向上查找，命中即返回（= 最派生的那份声明）。
+    /// </summary>
+    private static System.Reflection.PropertyInfo? ResolveProperty(Type type, string name)
+    {
+        for (var t = type; t != null && t != typeof(object); t = t.BaseType)
+        {
+            var prop = t.GetProperty(name,
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.DeclaredOnly);
+            if (prop != null)
+                return prop;
+        }
+        return null;
     }
 }
 

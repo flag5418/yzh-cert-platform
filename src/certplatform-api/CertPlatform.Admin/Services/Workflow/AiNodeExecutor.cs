@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using System;
 using System.Collections.Generic;
@@ -12,7 +11,7 @@ using Microsoft.Extensions.Logging;
 using CertPlatform.Admin.Services.Workflow.Models;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using YZH.Core.DataBase.Interfaces;
-using SharedDoc = SharedEntities::CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.DocExtraction;
 
 namespace CertPlatform.Admin.Services.Workflow
 {
@@ -29,7 +28,7 @@ namespace CertPlatform.Admin.Services.Workflow
     /// </summary>
     public class AiNodeExecutor
     {
-        private readonly SharedDoc.LlmInvokeService _llm;
+        private readonly CertPlatform.Shared.DocExtraction.LlmInvokeService _llm;
         private readonly ISkillRegistry _skillRegistry;
         private readonly IDbOrm _db;
         private readonly ILogger<AiNodeExecutor> _logger;
@@ -38,7 +37,7 @@ namespace CertPlatform.Admin.Services.Workflow
         private AiSettings? _cachedSettings;
 
         public AiNodeExecutor(
-            SharedDoc.LlmInvokeService llm,
+            CertPlatform.Shared.DocExtraction.LlmInvokeService llm,
             ISkillRegistry skillRegistry,
             IDbOrm db,
             ILogger<AiNodeExecutor> logger)
@@ -333,7 +332,7 @@ namespace CertPlatform.Admin.Services.Workflow
             var systemPrompt = config.GetValueOrDefault("systemPrompt")?.ToString()
                 ?? "你是认证审核AI助手，只需输出结果，不要解释。";
 
-            var response = await _llm.CompleteAsync(new SharedDoc.LlmInvokeRequest
+            var response = await _llm.CompleteAsync(new CertPlatform.Shared.DocExtraction.LlmInvokeRequest
             {
                 BaseUrl = settings.BaseUrl,
                 ApiKey = settings.ApiKey,

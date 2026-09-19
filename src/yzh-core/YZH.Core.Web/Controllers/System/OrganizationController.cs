@@ -87,15 +87,18 @@ namespace YZH.Core.Web.Controllers.System;
 public class OrganizationController : TreeTableControllerBase<Sys_Organization, Sys_User>
 {
     private readonly PasswordHelper _passwordHelper;
+    private readonly IRoleService _roleService;
 
     public OrganizationController(
         EntityService<Sys_Organization> treeEntityService,
         EntityService<Sys_User> tableEntityService,
         IUserContext userContext,
-        PasswordHelper passwordHelper)
+        PasswordHelper passwordHelper,
+        IRoleService roleService)
         : base(treeEntityService, tableEntityService, userContext)
     {
         _passwordHelper = passwordHelper;
+        _roleService = roleService;
 
         // TreeConfig（左树配置）
         TreeConfig.NameField = "OrgName";
@@ -232,8 +235,18 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
     }
 
     /// <summary>查询后处理：字典翻译 + 手机号脱敏</summary>
-    protected override void OnQueried(PagedResult<Sys_User> result)
+    protected override async void OnQueried(PagedResult<Sys_User> result)
     {
+        // 批量查询角色名称（通过 Sys_RoleUser 关联表，Code 关联）
+        var userCodes = result.Items.Where(u => !string.IsNullOrEmpty(u.Code)).Select(u => u.Code!).ToList();
+        var roleDict = new Dictionary<string, string>();
+        if (userCodes.Any())
+        {
+            var roleResult = await _roleService.GetRoleNamesByUserCodesAsync(userCodes);
+            if (roleResult.Success && roleResult.Data != null)
+                roleDict = roleResult.Data;
+        }
+
         foreach (var item in result.Items)
         {
             // 手机号脱敏：138****5678
@@ -250,20 +263,10 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
                 _ => "未知"
             };
 
-            // 角色名称翻译
-            item.RoleName = item.RoleId switch
-            {
-                1 => "超级管理员",
-                10 => "总管理员",
-                13 => "运维人员",
-                14 => "配置人员",
-                15 => "质量专员",
-                20 => "审核管理员",
-                21 => "审核组长",
-                22 => "普通审核员",
-                30 => "企业账号",
-                _ => "未知"
-            };
+            // 角色名称翻译（从 Sys_RoleUser 关联表查询）
+            item.RoleName = !string.IsNullOrEmpty(item.Code) && roleDict.ContainsKey(item.Code)
+                ? roleDict[item.Code]
+                : "未知";
 
             // 启用状态显示
             item.EnableDesc = item.Enable == 0 ? "已禁用" : "启用";
@@ -440,8 +443,9 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         if (!result.Success || result.Data == null)
             return Result<ApiResponse<object?>>.Fail("人员不存在");
 
-        // 不能禁用超级管理员
-        if (result.Data.RoleId == 1)
+        // 不能禁用超级管理员（通过 Sys_RoleUser 关联表查询角色编码）
+        var roleResult = await _roleService.GetRoleCodeByUserCodeAsync(result.Data.Code);
+        if (roleResult.Success && roleResult.Data == MenuPermissionService.SuperAdminRoleCode)
             return Result<ApiResponse<object?>>.Fail("不能禁用超级管理员账号");
 
         var user = result.Data;

@@ -68,7 +68,7 @@ public class MenuManagementController : YzhControllerBase<Sys_Menu>
     ///     按当前登录用户的角色过滤（超级管理员返回全部）
     /// </summary>
     [HttpGet("tree")]
-    public virtual async Task<Result<List<Sys_Menu>>> GetTree()
+    public virtual async Task<ApiResponse<List<Sys_Menu>>> GetTree()
     {
         try
         {
@@ -78,11 +78,11 @@ public class MenuManagementController : YzhControllerBase<Sys_Menu>
             // 构建树形结构（扁平化输出，前端自行嵌套）
             var tree = BuildMenuTree(visibleMenus);
 
-            return Result<List<Sys_Menu>>.Ok(tree);
+            return ApiResponse<List<Sys_Menu>>.Ok(tree);
         }
         catch (Exception ex)
         {
-            return Result<List<Sys_Menu>>.Fail($"获取菜单树失败：{ex.Message}");
+            return ApiResponse<List<Sys_Menu>>.Fail($"获取菜单树失败：{ex.Message}");
         }
     }
 
@@ -95,16 +95,16 @@ public class MenuManagementController : YzhControllerBase<Sys_Menu>
     ///     - /tree/all = 全量菜单（菜单管理页维护使用），否则非超管只能看到被授权的子集
     /// </summary>
     [HttpGet("tree/all")]
-    public virtual async Task<Result<List<Sys_Menu>>> GetAllTree()
+    public virtual async Task<ApiResponse<List<Sys_Menu>>> GetAllTree()
     {
         try
         {
             var all = await _menuPermission.GetAllMenusAsync();
-            return Result<List<Sys_Menu>>.Ok(BuildMenuTree(all));
+            return ApiResponse<List<Sys_Menu>>.Ok(BuildMenuTree(all));
         }
         catch (Exception ex)
         {
-            return Result<List<Sys_Menu>>.Fail($"获取全量菜单失败：{ex.Message}");
+            return ApiResponse<List<Sys_Menu>>.Fail($"获取全量菜单失败：{ex.Message}");
         }
     }
 
@@ -208,7 +208,10 @@ public class MenuManagementController : YzhControllerBase<Sys_Menu>
     private async Task<Result<ApiResponse<object?>>> GetMenuTreeAsync(Sys_Menu entity)
     {
         var result = await GetTree();
-        return result.Map(tree => ApiResponse<object?>.Ok(tree));
+        if (!result.Success)
+            return Result<ApiResponse<object?>>.Fail(result.Message);
+
+        return Result<ApiResponse<object?>>.Ok(ApiResponse<object?>.Ok(result.Data));
     }
 
     #endregion

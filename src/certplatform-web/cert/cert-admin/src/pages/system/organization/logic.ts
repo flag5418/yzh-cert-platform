@@ -4,7 +4,10 @@
  * 数据访问规则：
  * - res.data：ApiResponse 顶层（camelCase）
  * - 业务行 r：PascalCase 字段（r.Code, r.OrgCode, r.Enable）
- * - TreeNode：el-tree 内部约定小写（node.code, node.name）
+ * - TreeNode：统一 PascalCase（node.Code / node.Name / node.IsLeaf）
+ *   ⚠️ V2 契约见 yzh.vue.core/src/types/tree.ts：所有字段 PascalCase。
+ *      历史上有几处误按小写读取（node.code / node.isLeaf），因为取到 undefined
+ *      而静默失效（叶子判定恒假、机构过滤恒空），务必不要再引入小写读法。
  * - formData：camelCase key（NewEntity 字典 key，反射 ToCamelCase）
  *
  * 架构：
@@ -90,44 +93,7 @@ export class OrgPageLogic extends TreeTableLogic<any> {
     return buttons
   }
 
-  // ──── 树节点操作（从 TreeConfig 配置驱动） ────
-  get nodeActions(): Record<string, string> {
-    const actions: Record<string, string> = {}
-    const tc = this.treeConfig
-    if (!tc) return actions
-    // AllowEdit 控制新增下级 + 编辑按钮
-    if (tc.AllowEdit) {
-      actions['add-child'] = '新增下级'
-      actions['edit'] = '编辑'
-    }
-    // AllowDelete 控制删除按钮
-    if (tc.AllowDelete) {
-      actions['delete'] = '删除'
-    }
-    // EnableField 存在时，显示禁用/启用按钮
-    if (this.enableField) {
-      actions['toggle-valid'] = '禁用/启用'
-    }
-    return actions
-  }
-
-  /**
-   * 获取树节点操作按钮文本（上下文感知：已启用→禁用，已禁用→启用）
-   */
-  getNodeActionLabel(action: string, node: TreeNode): string {
-    if (action === 'toggle-valid') {
-      const field = this.enableField ?? 'IsValid'
-      const extra = (node.extra as any) || {}
-      const val = extra[field] ?? 1
-      return val === 1 ? '禁用' : '启用'
-    }
-    // 其他操作使用 nodeActions 静态文本
-    return this.nodeActions[action] || action
-  }
-
-  // ========================================================
-  // 公共 API（供模板调用）
-  // ========================================================
+  // ──── 表格行操作扩展（从后端 config 自动注入） ────
 
   async apiPostPublic<T = any>(
     path: string,
@@ -188,13 +154,24 @@ export class OrgPageLogic extends TreeTableLogic<any> {
   // 人员 CRUD
   // ========================================================
 
-  /** 打开新增人员弹窗（仅叶子节点允许） */
+  /**
+   * 打开新增人员弹窗（仅末端机构允许）
+   *
+   * 返回 false 时**本方法已经给出对应提示**，调用方不要再补一条 ——
+   * 否则会出现「请先选择机构」和「请选择末端机构」两条互相矛盾的提示。
+   */
   openAddUserDialog(): boolean {
-    if (!this.selectedNode.value) {
+    const node = this.selectedNode.value
+    if (!node) {
+      ElMessage.warning('请先选择机构')
       return false
     }
-    // 必须选择末端机构（叶子节点）才能增加人员
-    if (!this.selectedNode.value.isLeaf) {
+    // 必须选择末端机构（叶子节点）才能增加人员。
+    // 叶子标志是 TreeNode.IsLeaf（PascalCase，后端 TreeControllerBase.FillIsLeafBatch
+    // 批量计算：无子节点即为末端）。
+    // 这里曾误读小写 node.isLeaf → 恒为 undefined → 任何节点都被判为「非末端」，
+    // 导致即使选中末端机构也提示错误、无法新增人员。
+    if ((node.IsLeaf ?? (node as any).isLeaf) !== true) {
       ElMessage.warning('请选择末端机构（不含子机构的节点）')
       return false
     }
@@ -207,7 +184,9 @@ export class OrgPageLogic extends TreeTableLogic<any> {
       ...tmpl,
       Code: crypto.randomUUID?.() || `${Date.now()}`,
       IsValid: 1,
-      OrgCode: this.selectedNode.value.code,
+      // 同样必须用 node.Code：小写 code 恒为 undefined，
+      // 会造成新建人员没有归属机构（OrgCode 为空）
+      OrgCode: node.Code,
     })
     this.dialogVisible.value = true
     return true
@@ -279,11 +258,13 @@ export class OrgPageLogic extends TreeTableLogic<any> {
     this.orgEditingNode.value = node
     // 先清空旧数据，再用 PascalCase key 还原
     Object.keys(this.orgFormData).forEach((k) => delete this.orgFormData[k])
-    const extra = (node.extra as any) || {}
+    // 注意：TreeNode 是 PascalCase，读小写会得到 undefined，
+    // 导致编辑机构弹窗各字段全空。
+    const extra = ((node.Extra as any) ?? (node as any).extra ?? {}) as Record<string, any>
     Object.assign(this.orgFormData, {
-      Code: node.code,
-      OrgName: node.name,
-      ParentCode: node.parentCode,
+      Code: node.Code,
+      OrgName: node.Name,
+      ParentCode: node.ParentCode,
       ...extra,
     })
     this.orgDialogVisible.value = true
@@ -325,14 +306,9 @@ export class OrgPageLogic extends TreeTableLogic<any> {
     await this.refreshTable()
   }
 
-  /** 刷新当前表格（保持选中节点） */
-  async refreshTable(): Promise<void> {
-    if (this.selectedNode.value) {
-      await this.loadPageWithTree(this.selectedNode.value.code)
-    } else {
-      await this.loadPageWithoutTree()
-    }
-  }
+  // ========================================================
+  // 刷新（基类 refreshTable 已实现，此处无需覆写）
+  // ========================================================
 }
 
 export default OrgPageLogic

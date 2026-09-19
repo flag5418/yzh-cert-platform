@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace YZH.Entity.Admin.Platform.Sys
+namespace CertPlatform.Shared.Entities.Sys
 {
     /// <summary>
     /// 机构-标准关联视图模型（V）— 用于列表显示，含标准信息
@@ -20,12 +20,12 @@ namespace YZH.Entity.Admin.Platform.Sys
         /// <summary>
         /// 标准编号
         /// </summary>
-        public string StandardCode { get; set; }
+        public string StandardCode2 { get; set; } = string.Empty;
 
         /// <summary>
         /// 标准名称
         /// </summary>
-        public string StandardName { get; set; }
+        public string StandardName { get; set; } = string.Empty;
 
         /// <summary>
         /// 版本年份
@@ -35,11 +35,11 @@ namespace YZH.Entity.Admin.Platform.Sys
         /// <summary>
         /// 分类中文名
         /// </summary>
-        public string CategoryName { get; set; }
+        public string CategoryName { get; set; } = string.Empty;
 
         /// <summary>
         /// 状态中文名
         /// </summary>
-        public string StatusName { get; set; }
+        public string StatusName { get; set; } = string.Empty;
     }
 }

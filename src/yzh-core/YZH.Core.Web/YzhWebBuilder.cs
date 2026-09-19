@@ -80,6 +80,9 @@ public static class YzhWebBuilderExtensions
         // 注册实体操作服务
         builder.Services.AddScoped(typeof(EntityService<>));
 
+        // 注册角色查询服务（封装跨表 SQL，从 Controller 中抽取）
+        builder.Services.AddScoped<IRoleService, RoleService>();
+
         // 注册菜单权限服务（按角色过滤可见菜单）
         builder.Services.AddScoped<MenuPermissionService>();
 

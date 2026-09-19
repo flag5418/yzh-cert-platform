@@ -3,27 +3,6 @@
     "FillMode": "AutoFix",
     "FormCols": 1,
     "EnableField": "Enable",
-    "Toolbar": {
-        "Add": true,
-        "Delete": true,
-        "Export": false,
-        "Import": false,
-        "CustomButtons": {}
-    },
-    "RowButtons": {
-        "Edit": true,
-        "Delete": true,
-        "CustomButtons": {}
-    },
-    "SearchFields": [
-        {
-            "Label": "菜单名称",
-            "Field": "MenuName",
-            "Operator": "like",
-            "ControlType": "input",
-            "Width": 180
-        }
-    ],
     "Columns": [
         {
             "FieldName": "MenuName",

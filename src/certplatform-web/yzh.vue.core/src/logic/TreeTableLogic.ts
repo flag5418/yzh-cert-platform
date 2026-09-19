@@ -6,7 +6,7 @@
  * - res.data.Items / res.data.TotalCount：业务实体（PascalCase）
  * - TreeItemDto 字段：PascalCase
  * - formData：camelCase key（NewEntity 字典 key，反射 ToCamelCase）
- * - TreeNode 内部约定：el-tree 用小写（code/name/parentCode/extra）
+ * - TreeNode 字段：PascalCase（与后端 DTO 保持一致）
  *
  * 架构：
  * - 继承 CrudPageLogic<V> 获得全部单表 CRUD 能力
@@ -73,7 +73,7 @@ export abstract class TreeTableLogic<
 > extends CrudPageLogic<V> {
   // ──── 树状态 ────
 
-  /** 树数据（el-tree 约定小写） */
+  /** 树数据（PascalCase，与后端 DTO 保持一致） */
   treeData = ref<TreeNode[]>([])
 
   /** 树加载状态 */
@@ -146,6 +146,46 @@ export abstract class TreeTableLogic<
   /** 表格行自定义操作按钮：{ 方法名: 显示文字 }（后端自动注入） */
   get rowCustomButtons(): Record<string, string> {
     return this.config.value?.RowButtons?.CustomButtons ?? {}
+  }
+
+  /**
+   * 树节点操作按钮（默认实现，子类可覆写）
+   *
+   * 根据 treeConfig.AllowEdit / AllowDelete / enableField 动态生成：
+   * - AllowEdit → edit + add-child
+   * - AllowDelete → delete
+   * - enableField → toggle-valid
+   */
+  get nodeActions(): Record<string, string> {
+    const actions: Record<string, string> = {}
+    const tc = this.treeConfig
+    if (!tc) return actions
+    if (tc.AllowEdit) {
+      actions['add-child'] = '新增下级'
+      actions['edit'] = '编辑'
+    }
+    if (tc.AllowDelete) {
+      actions['delete'] = '删除'
+    }
+    if (this.enableField) {
+      actions['toggle-valid'] = '禁用/启用'
+    }
+    return actions
+  }
+
+  /**
+   * 获取树节点操作按钮的显示文字（默认实现，子类可覆写）
+   *
+   * toggle-valid 按钮根据当前节点状态动态显示「禁用」或「启用」
+   */
+  getNodeActionLabel(action: string, node: TreeNode): string {
+    if (action === 'toggle-valid') {
+      const field = this.enableField ?? 'IsValid'
+      const extra = (node.Extra as any) || {}
+      const val = extra[field] ?? 1
+      return val === 1 ? '禁用' : '启用'
+    }
+    return this.nodeActions[action] || action
   }
 
   /** 树节点表单字段配置 */
@@ -223,8 +263,8 @@ export abstract class TreeTableLogic<
   ): Promise<TreeNode[]> {
     const isEmptyArray = Array.isArray(node?.data) && node.data.length === 0
     const data = isEmptyArray ? node : (node?.data ?? node)
-    const code = data?.code
-    const level = (data?.extra?.level as number) ?? 0
+    const code = data?.Code
+    const level = (data?.Extra?.level as number) ?? 0
 
     // 防御性：code 为空时不调用 API，直接返回空数组
     if (!code) {
@@ -260,7 +300,7 @@ export abstract class TreeTableLogic<
   async onNodeClick(node: TreeNode): Promise<void> {
     this.selectedNode.value = node
     this.pagination.page = 1
-    if ((this.treeConfig as any)?.OnlyLeafSelectable && !node.isLeaf) {
+    if ((this.treeConfig as any)?.OnlyLeafSelectable && !node.IsLeaf) {
       return
     }
     await (this as any)._tableRef?.refresh()
@@ -322,7 +362,7 @@ export abstract class TreeTableLogic<
     const requestData = {
       ...pascalData,
       [this.treeConfig?.ParentCodeField ?? 'ParentCode']:
-        parentNode?.code ?? this.treeConfig?.RootParentCode ?? null,
+        parentNode?.Code ?? this.treeConfig?.RootParentCode ?? null,
     } as Record<string, any>
     const res = await this.apiPost<ApiResponse<TreeItemDto>>(
       '/tree/add',
@@ -332,13 +372,13 @@ export abstract class TreeTableLogic<
 
     // 通过 el-tree API 直接追加节点（不 reload，不重复）
     if (this._treeTableRef) {
-      this._treeTableRef.appendNode(parentNode?.code ?? null, newNode)
+      this._treeTableRef.appendNode(parentNode?.Code ?? null, newNode)
     } else {
       // fallback：无表格引用时直接操作 treeData
       if (parentNode) {
-        parentNode.children = parentNode.children || []
-        parentNode.children.push(newNode)
-        parentNode.isLeaf = false
+        parentNode.Children = parentNode.Children || []
+        parentNode.Children.push(newNode)
+        parentNode.IsLeaf = false
       } else {
         this.treeData.value.push(newNode)
       }
@@ -357,13 +397,13 @@ export abstract class TreeTableLogic<
     // extra 是 camelCase key，转 PascalCase
     const pascalExtra = extra ? pascalCaseFormData(extra) : {}
     const requestData = {
-      [this.treeConfig?.CodeField ?? 'Code']: node.code,
+      [this.treeConfig?.CodeField ?? 'Code']: node.Code,
       [this.treeConfig?.NameField ?? 'Name']: newName,
       ...pascalExtra,
     }
     await this.apiPost<ApiResponse<TreeItemDto>>('/tree/update', requestData)
 
-    node.name = newName
+    node.Name = newName
 
     ElMessage.success('修改成功')
   }
@@ -375,15 +415,15 @@ export abstract class TreeTableLogic<
     // 前端预检：非级联删除模式下，本地有子节点则直接拦截（减少无效请求）
     if (
       !this.treeConfig?.AllowDeleteWithChildren &&
-      node.children &&
-      node.children.length > 0
+      node.Children &&
+      node.Children.length > 0
     ) {
       ElMessage.warning('该节点包含子节点，请先删除子节点')
       return
     }
 
     if (!skipConfirm) {
-      await ElMessageBox.confirm(`确定删除节点 "${node.name}"？`, '删除确认', {
+      await ElMessageBox.confirm(`确定删除节点 "${node.Name}"？`, '删除确认', {
         type: 'warning',
         confirmButtonText: '确定',
         cancelButtonText: '取消',
@@ -391,15 +431,15 @@ export abstract class TreeTableLogic<
     }
 
     // 调用后端 API（后端会校验：有子机构/有用户等场景，拒绝删除并返回错误信息）
-    const res = await this.apiPost<ApiResponse<string>>('/tree/delete', [node.code])
+    const res = await this.apiPost<ApiResponse<string>>('/tree/delete', [node.Code])
     if (!res.success) {
       ElMessage.error(res.message || '删除失败')
       return
     }
 
-    this.removeNodeFromTree(node.code)
+    this.removeNodeFromTree(node.Code)
 
-    if (this.selectedNode.value?.code === node.code) {
+    if (this.selectedNode.value?.Code === node.Code) {
       this.selectedNode.value = null
       await this.loadPageWithoutTree()
     }
@@ -417,7 +457,7 @@ export abstract class TreeTableLogic<
     const res = await this.apiPost<ApiResponse<any>>(
       `/tree/action/${methodName}`,
       {
-        [this.treeConfig?.CodeField ?? 'Code']: node.code,
+        [this.treeConfig?.CodeField ?? 'Code']: node.Code,
         ...pascalExtra,
       },
     )
@@ -428,7 +468,7 @@ export abstract class TreeTableLogic<
   /**
    * 切换树节点有效标志（0 ↔ 1）
    *
-   * 自动更新 node.extra[enableField]，业务页面无需手动同步状态。
+   * 自动更新 node.Extra[enableField]，业务页面无需手动同步状态。
    *
    * @param node 树节点
    * @returns 新的值，失败返回 null
@@ -437,13 +477,13 @@ export abstract class TreeTableLogic<
     const field = this.enableField ?? 'IsValid'
     const res = await this.apiPost<ApiResponse<{ Code: string; IsValid: number }>>(
       '/tree/toggle-valid',
-      { [this.treeConfig?.CodeField ?? 'Code']: node.code },
+      { [this.treeConfig?.CodeField ?? 'Code']: node.Code },
     )
     if (res.success) {
-      // 自动更新 node.extra 中的启用字段
-      const extra = (node.extra as any) || {}
+      // 自动更新 node.Extra 中的启用字段
+      const extra = (node.Extra as any) || {}
       extra[field] = res.data.IsValid
-      node.extra = { ...extra }
+      node.Extra = { ...extra }
       ElMessage.success(res.data.IsValid === 1 ? '已启用' : '已禁用')
       return res.data
     }
@@ -454,20 +494,20 @@ export abstract class TreeTableLogic<
    * 切换树节点有效标志（完整流程：确认弹窗 → API → 本地更新）
    *
    * 业务页面可直接调用，无需自行实现确认弹窗。
-   * 基类统一处理：读取当前状态 → 弹窗确认 → 调用 API → 更新 node.extra。
+   * 基类统一处理：读取当前状态 → 弹窗确认 → 调用 API → 更新 node.Extra。
    *
    * @param node 树节点
-   * @param options.entityName 确认弹窗中显示的实体名称，默认读 node.name
+   * @param options.entityName 确认弹窗中显示的实体名称，默认读 node.Name
    */
   async toggleTreeNodeWithConfirm(
     node: TreeNode,
     options?: { entityName?: string },
   ): Promise<void> {
     const field = this.enableField ?? 'IsValid'
-    const extra = (node.extra as any) || {}
+    const extra = (node.Extra as any) || {}
     const currentVal = extra[field] ?? 1
     const action = currentVal === 1 ? '禁用' : '启用'
-    const name = options?.entityName ?? node.name
+    const name = options?.entityName ?? node.Name
 
     await ElMessageBox.confirm(
       `确定${action}【${name}】？`,
@@ -499,18 +539,18 @@ export abstract class TreeTableLogic<
 
   /**
    * TreeItemDto → TreeNode 映射
-   * 后端 TreeItemDto 是 PascalCase，前端 TreeNode 用 el-tree 内部约定小写
+   * 后端 TreeItemDto 是 PascalCase，前端 TreeNode 也统一使用 PascalCase
    */
   protected dtoToNode(dto: TreeItemDto, parent?: TreeNode): TreeNode {
-    const level = ((parent?.extra?.level as number) ?? -1) + 1
+    const level = ((parent?.Extra?.level as number) ?? -1) + 1
     return {
-      code: dto.Code,
-      name: dto.Name,
-      parentCode: dto.ParentCode ?? null,
-      nodeType: dto.NodeType,
-      isLeaf: dto.IsLeaf,
-      extra: { ...dto.Extra, level },
-      children: [],
+      Code: dto.Code,
+      Name: dto.Name,
+      ParentCode: dto.ParentCode ?? null,
+      NodeType: dto.NodeType,
+      IsLeaf: dto.IsLeaf,
+      Extra: { ...dto.Extra, level },
+      Children: [],
     }
   }
 
@@ -521,9 +561,9 @@ export abstract class TreeTableLogic<
   protected removeNodeFromTree(code: string): void {
     const removeFromArray = (nodes: TreeNode[]): TreeNode[] => {
       return nodes.filter((n) => {
-        if (n.code === code) return false
-        if (n.children && n.children.length > 0) {
-          n.children = removeFromArray(n.children)
+        if (n.Code === code) return false
+        if (n.Children && n.Children.length > 0) {
+          n.Children = removeFromArray(n.Children)
         }
         return true
       })
@@ -534,9 +574,9 @@ export abstract class TreeTableLogic<
   protected findNode(code: string): TreeNode | null {
     const findInArray = (nodes: TreeNode[]): TreeNode | null => {
       for (const n of nodes) {
-        if (n.code === code) return n
-        if (n.children && n.children.length > 0) {
-          const found = findInArray(n.children)
+        if (n.Code === code) return n
+        if (n.Children && n.Children.length > 0) {
+          const found = findInArray(n.Children)
           if (found) return found
         }
       }
@@ -548,12 +588,12 @@ export abstract class TreeTableLogic<
   protected replaceTreeNode(code: string, newNode: TreeNode): void {
     const replaceInArray = (nodes: TreeNode[]): boolean => {
       for (let i = 0; i < nodes.length; i++) {
-        if (nodes[i].code === code) {
+        if (nodes[i].Code === code) {
           nodes[i] = newNode
           return true
         }
-        if (nodes[i].children && nodes[i].children.length > 0) {
-          if (replaceInArray(nodes[i].children)) return true
+        if (nodes[i].Children && nodes[i].Children.length > 0) {
+          if (replaceInArray(nodes[i].Children)) return true
         }
       }
       return false
@@ -566,19 +606,32 @@ export abstract class TreeTableLogic<
     const res = await this.apiPost<ApiResponse<TreeItemDto[]>>(
       '/tree/children',
       {
-        ParentCode: node.code,
-        Level: (node.extra?.level as number) ?? 0,
+        ParentCode: node.Code,
+        Level: (node.Extra?.level as number) ?? 0,
       },
     )
     const items = res.data ?? []
     const children = items.map((dto) => this.dtoToNode(dto, node))
     // 直接赋值触发 Vue 响应式 → el-tree 重新渲染
-    node.children = children
-    node.isLeaf = children.length === 0
+    node.Children = children
+    node.IsLeaf = children.length === 0
   }
 
   async refreshTree(): Promise<void> {
     await this.loadTreeRoot()
+  }
+
+  /**
+   * 刷新右侧表格（保持当前选中节点）
+   *
+   * 子类如有特殊过滤逻辑（如 ShowDisabled），可覆盖此方法。
+   */
+  async refreshTable(): Promise<void> {
+    if (this.selectedNode.value) {
+      await this.loadPageWithTree(this.selectedNode.value.Code)
+    } else {
+      await this.loadPageWithoutTree()
+    }
   }
 
   // ========================================================

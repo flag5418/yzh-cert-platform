@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Http;
 
-namespace YZH.Entity.Admin.Platform.Dir
+namespace CertPlatform.Shared.Entities.Dir
 {
     public class UploadFileDto
     {

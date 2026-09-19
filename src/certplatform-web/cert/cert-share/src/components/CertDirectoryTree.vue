@@ -30,7 +30,7 @@
         :expand-on-click-node="false"
         :filter-node-method="filterNode"
         :default-expanded-keys="defaultExpandedKeys"
-        node-key="id"
+        node-key="Code"
         @node-expand="onNodeExpand"
         @node-click="onNodeClick"
       >
@@ -39,13 +39,13 @@
             <el-icon class="cert-directory-tree__node-icon">
               <component :is="getNodeIconComponent(data)" />
             </el-icon>
-            <span class="cert-directory-tree__node-label">{{ data.name }}</span>
-            <CertConvertBadge v-if="showConvertBadge && data.type === 'file' && data.convertStatus" :status="data.convertStatus" />
+            <span class="cert-directory-tree__node-label">{{ data.Name }}</span>
+            <CertConvertBadge v-if="showConvertBadge && data.Type === 'file' && data.ConvertStatus" :status="data.ConvertStatus" />
             <span
-              v-if="showRuleStatus && data.type === 'file'"
+              v-if="showRuleStatus && data.Type === 'file'"
               class="cert-directory-tree__rule-tag"
-              :class="`is-${data.ruleStatus || 'none'}`"
-            >{{ RULE_STATUS_TEXT[data.ruleStatus || 'none'] }}</span>
+              :class="`is-${data.RuleStatus || 'none'}`"
+            >{{ RULE_STATUS_TEXT[data.RuleStatus || 'none'] }}</span>
           </div>
         </template>
       </el-tree>
@@ -91,7 +91,7 @@ const { fileTreeData, loading, defaultExpandedKeys, loadTree, loadStageFiles } =
 const treeRef = ref()
 const filterText = ref('')
 const ruleFilter = ref<'all' | 'configured' | 'none' | 'failed'>('all')
-const selectedId = ref<string | number | null>(null)
+const selectedCode = ref<string | number | null>(null)
 
 /** fileCode → 规则状态（由 configured-rules 接口推导；保存后可通过 refresh() 重建） */
 const ruleStatusMap = ref<Record<string, 'configured' | 'failed'>>({})
@@ -123,10 +123,10 @@ async function loadRuleStatuses() {
 function applyRuleStatusToLoaded() {
   const walk = (nodes: TreeNode[]) => {
     for (const n of nodes || []) {
-      if (n.type === 'file') {
-        n.ruleStatus = resolveRuleStatus(String(n.fileCode || n.id))
-      } else if (n.children?.length) {
-        walk(n.children)
+      if (n.Type === 'file') {
+        n.RuleStatus = resolveRuleStatus(String(n.FileCode || n.Code))
+      } else if (n.Children?.length) {
+        walk(n.Children)
       }
     }
   }
@@ -134,8 +134,8 @@ function applyRuleStatusToLoaded() {
 }
 
 const treeProps = {
-  children: 'children',
-  label: 'name',
+  children: 'Children',
+  label: 'Name',
 }
 
 /** 根据节点类型返回图标组件 */
@@ -147,39 +147,39 @@ function getNodeIconComponent(data: TreeNode) {
     folder: Folder,
     file: Document,
   }
-  return iconMap[data.type] || Document
+  return iconMap[data.Type] || Document
 }
 
 function isActive(data: TreeNode) {
-  return selectedId.value === data.id
+  return selectedCode.value === data.Code
 }
 
 async function onNodeExpand(data: TreeNode) {
   if (data._loaded) return
-  if (data.type === 'stage') {
+  if (data.Type === 'stage') {
     await loadStageFiles(data)
-    treeRef.value?.updateKeyChildren(data.id, data.children || [])
-  } else if (data.type === 'folder') {
-    const folderCode = data.folderCode
+    treeRef.value?.updateKeyChildren(data.Code, data.Children || [])
+  } else if (data.Type === 'folder') {
+    const folderCode = data.FolderCode
     if (!folderCode) return
     const { getFiles } = await import('../composables/useDirectoryApi')
     try {
       const files = await getFiles(folderCode)
       const fileNodes = (files || []).map((file: any) => ({
-        id: file.FileCode || file.fileCode,
-        name: file.FileName || file.fileName,
-        type: 'file' as const,
-        fileCode: file.FileCode || file.fileCode,
-        directoryCode: data.directoryCode,
-        raw: file,
-        convertStatus: file.ConvertStatus || file.convertStatus,
-        ruleStatus: resolveRuleStatus(String(file.FileCode || file.fileCode)),
+        Code: file.FileCode || file.fileCode,
+        Name: file.FileName || file.fileName,
+        Type: 'file' as const,
+        FileCode: file.FileCode || file.fileCode,
+        DirectoryCode: data.DirectoryCode,
+        Raw: file,
+        ConvertStatus: file.ConvertStatus || file.convertStatus,
+        RuleStatus: resolveRuleStatus(String(file.FileCode || file.fileCode)),
       }))
       data._loaded = true
       // 先移除占位子节点，再追加真实文件节点
       const tree = treeRef.value
       if (tree) {
-        const node = tree.getNode(data.id)
+        const node = tree.getNode(data.Code)
         if (node) {
           // 移除所有现有子节点
           const children = node.childNodes?.slice() || []
@@ -199,19 +199,19 @@ async function onNodeExpand(data: TreeNode) {
 }
 
 function onNodeClick(data: TreeNode) {
-  selectedId.value = data.id
+  selectedCode.value = data.Code
   emit('node-click', data)
-  if (data.type === 'file') {
+  if (data.Type === 'file') {
     emit('select', data)
   }
 }
 
 function filterNode(value: string, data: TreeNode) {
-  const textOk = !value || (data.name || '').toLowerCase().includes(value.toLowerCase())
+  const textOk = !value || (data.Name || '').toLowerCase().includes(value.toLowerCase())
   // 父节点（机构/标准/阶段/文件夹）始终保留，否则子树会被整体隐藏
-  if (data.type !== 'file') return true
+  if (data.Type !== 'file') return true
   if (ruleFilter.value !== 'all') {
-    return textOk && (data.ruleStatus || 'none') === ruleFilter.value
+    return textOk && (data.RuleStatus || 'none') === ruleFilter.value
   }
   return textOk
 }

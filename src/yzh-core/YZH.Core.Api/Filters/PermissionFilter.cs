@@ -22,7 +22,7 @@ namespace YZH.Core.Api.Filters
     ///
     ///     安全策略：
     ///     - 超级管理员（配置文件 YZH:SuperAdmin）→ 全部放行
-    ///     - 超级管理员角色（RoleId=1 或 ROLE_SUPER_ADMIN）→ 全部放行
+    ///     - 超级管理员角色（ROLE_SUPER_ADMIN）→ 全部放行
     ///     - 其他用户 → 按 IPermissionService 校验
     ///     - 未标记 RequirePermission 的接口 → 仅要求已认证
     /// </summary>
@@ -155,7 +155,7 @@ namespace YZH.Core.Api.Filters
             var scope = new DataScope
             {
                 UserCode = userContext.UserCode,
-                RoleId = userContext.RoleId,
+                RoleCode = userContext.RoleCode,
                 Type = scopeType
             };
 
@@ -221,7 +221,7 @@ namespace YZH.Core.Api.Filters
     public class DataScope
     {
         public string UserCode { get; set; } = string.Empty;
-        public int RoleId { get; set; }
+        public string RoleCode { get; set; } = string.Empty;
         public DataScopeType Type { get; set; }
         public List<string> DeptCodes { get; set; } = new();
         public List<string> UserCodes { get; set; } = new();

@@ -15,34 +15,37 @@ import type {
 // ========================================================
 
 export interface TreeNode {
-  id: string | number
-  name: string
-  type: 'organization' | 'standard' | 'stage' | 'folder' | 'file'
-  children?: TreeNode[]
+  /** 业务编码（唯一标识，统一使用 Code） */
+  Code: string | number
+  /** 显示名称 */
+  Name: string
+  /** 节点类型 */
+  Type: 'organization' | 'standard' | 'stage' | 'folder' | 'file'
+  Children?: TreeNode[]
   /** 原始数据引用 */
-  raw?: any
+  Raw?: any
   /** 关联的目录编码 */
-  directoryCode?: string
+  DirectoryCode?: string
   /** 机构编码（cbCode） */
-  orgCode?: string
+  OrgCode?: string
   /** 标准 GUID 编码（stdCode，数据库主键） */
-  stdCode?: string
+  StdCode?: string
   /** 标准显示编码（standardCode，如 ISO 9001:2015） */
-  standardCode?: string
+  StandardCode?: string
   /** 阶段编码 */
-  phaseCode?: string
+  PhaseCode?: string
   /** 阶段定义编码（cert_phase_definition.Code，报告模板外键） */
-  phaseDefinitionCode?: string
+  PhaseDefinitionCode?: string
   /** 文件编码 */
-  fileCode?: string
+  FileCode?: string
   /** 文件夹编码 */
-  folderCode?: string
+  FolderCode?: string
   /** 转换状态 */
-  convertStatus?: string
+  ConvertStatus?: string
   /** 规则状态 */
-  ruleStatus?: 'none' | 'configured' | 'failed'
+  RuleStatus?: 'none' | 'configured' | 'failed'
   /** 是否已展开 */
-  expanded?: boolean
+  Expanded?: boolean
   /** 是否已加载 */
   _loaded?: boolean
   /** 加载中 */
@@ -73,28 +76,28 @@ export function useFileTree() {
   /** 组织树 → el-tree 结构（阶段节点不设 children，由预加载填充） */
   function transformOrgTree(data: any[]): TreeNode[] {
     return (data || []).map((org) => ({
-      id: org.id,
-      name: org.label || org.name,
-      type: 'organization' as const,
-      orgCode: org.cbCode,
-      children: (org.children || []).map((std: any) => ({
-        id: std.id,
-        name: std.label || std.name,
-        type: 'standard' as const,
-        orgCode: std.cbCode,
-        stdCode: std.stdCode,
-        standardCode: std.standardCode,
-        children: (std.children || []).map((phase: any) => ({
-          id: phase.id,
-          name: phase.label || phase.name,
-          type: 'stage' as const,
-          orgCode: phase.cbCode,
-          stdCode: phase.stdCode,
-          standardCode: phase.standardCode,
-          phaseCode: phase.phaseCode,
-          phaseDefinitionCode: phase.phaseDefinitionCode || '',
-          directoryCode: extractDirectoryCode(phase.id),
-          children: undefined,
+      Code: org.id,
+      Name: org.label || org.name,
+      Type: 'organization' as const,
+      OrgCode: org.cbCode,
+      Children: (org.children || []).map((std: any) => ({
+        Code: std.id,
+        Name: std.label || std.name,
+        Type: 'standard' as const,
+        OrgCode: std.cbCode,
+        StdCode: std.stdCode,
+        StandardCode: std.standardCode,
+        Children: (std.children || []).map((phase: any) => ({
+          Code: phase.id,
+          Name: phase.label || phase.name,
+          Type: 'stage' as const,
+          OrgCode: phase.cbCode,
+          StdCode: phase.stdCode,
+          StandardCode: phase.standardCode,
+          PhaseCode: phase.phaseCode,
+          PhaseDefinitionCode: phase.phaseDefinitionCode || '',
+          DirectoryCode: extractDirectoryCode(phase.id),
+          Children: undefined,
           _loaded: false,
         }))
       }))
@@ -105,8 +108,8 @@ export function useFileTree() {
   function collectStageNodes(nodes: TreeNode[]): TreeNode[] {
     const stages: TreeNode[] = []
     for (const n of nodes) {
-      if (n.type === 'stage') stages.push(n)
-      if (n.children) stages.push(...collectStageNodes(n.children))
+      if (n.Type === 'stage') stages.push(n)
+      if (n.Children) stages.push(...collectStageNodes(n.Children))
     }
     return stages
   }
@@ -121,14 +124,14 @@ export function useFileTree() {
       // 并行预加载所有阶段的文件夹数据
       const stages = collectStageNodes(tree)
       await Promise.all(stages.map(async (stage) => {
-        const directoryCode = stage.directoryCode || extractDirectoryCode(String(stage.id))
+        const directoryCode = stage.DirectoryCode || extractDirectoryCode(String(stage.Code))
         if (!directoryCode) return
         try {
           const folders = await getFolders(directoryCode)
-          stage.children = buildFolderNodes(folders, directoryCode)
+          stage.Children = buildFolderNodes(folders, directoryCode)
           stage._loaded = true
         } catch {
-          stage.children = []
+          stage.Children = []
           stage._loaded = true
         }
       }))
@@ -149,24 +152,24 @@ export function useFileTree() {
   /** 将后端文件夹树递归转换为前端 TreeNode 结构（递归处理 Children） */
   function buildFolderNodes(folders: any[], directoryCode: string): TreeNode[] {
     return (folders || []).map((folder: any) => ({
-      id: folder.FolderCode || folder.folderCode,
-      name: folder.FolderName || folder.folderName,
-      type: 'folder' as const,
-      folderCode: folder.FolderCode || folder.folderCode,
-      directoryCode,
-      raw: folder,
-      children: (folder.Children && folder.Children.length > 0)
+      Code: folder.FolderCode || folder.folderCode,
+      Name: folder.FolderName || folder.folderName,
+      Type: 'folder' as const,
+      FolderCode: folder.FolderCode || folder.folderCode,
+      DirectoryCode: directoryCode,
+      Raw: folder,
+      Children: (folder.Children && folder.Children.length > 0)
         ? buildFolderNodes(folder.Children, directoryCode)
-        : [{ id: '__placeholder__' } as TreeNode],
+        : [{ Code: '__placeholder__' } as TreeNode],
       _loaded: folder.Children && folder.Children.length > 0,
     }))
   }
 
-  /** 加载阶段文件树（懒加载，挂载到 stageNode.children） */
+  /** 加载阶段文件树（懒加载，挂载到 stageNode.Children） */
   async function loadStageFiles(stageNode: TreeNode) {
     if (stageNode._loaded || stageNode._loading) return
     
-    const directoryCode = stageNode.directoryCode || extractDirectoryCode(String(stageNode.id))
+    const directoryCode = stageNode.DirectoryCode || extractDirectoryCode(String(stageNode.Code))
     if (!directoryCode) {
       throw new Error('无法获取目录编码')
     }
@@ -174,9 +177,9 @@ export function useFileTree() {
     stageNode._loading = true
     try {
       const folders = await getFolders(directoryCode)
-      stageNode.children = buildFolderNodes(folders, directoryCode)
+      stageNode.Children = buildFolderNodes(folders, directoryCode)
       stageNode._loaded = true
-      return stageNode.children
+      return stageNode.Children
     } catch (e: any) {
       ElMessage.error('加载阶段文件失败：' + (e?.message || ''))
       return []
@@ -189,24 +192,24 @@ export function useFileTree() {
   async function loadFolderFiles(folderNode: TreeNode) {
     if (folderNode._loaded || folderNode._loading) return
     
-    const folderCode = folderNode.folderCode
+    const folderCode = folderNode.FolderCode
     if (!folderCode) return
     
     folderNode._loading = true
     try {
       const files = await getFiles(folderCode)
-      folderNode.children = (files || []).map((file: any) => ({
-        id: file.FileCode || file.fileCode,
-        name: file.FileName || file.fileName,
-        type: 'file' as const,
-        fileCode: file.FileCode || file.fileCode,
-        directoryCode: folderNode.directoryCode,
-        raw: file,
-        convertStatus: file.ConvertStatus || file.convertStatus,
-        ruleStatus: 'none' as const,
+      folderNode.Children = (files || []).map((file: any) => ({
+        Code: file.FileCode || file.fileCode,
+        Name: file.FileName || file.fileName,
+        Type: 'file' as const,
+        FileCode: file.FileCode || file.fileCode,
+        DirectoryCode: folderNode.DirectoryCode,
+        Raw: file,
+        ConvertStatus: file.ConvertStatus || file.convertStatus,
+        RuleStatus: 'none' as const,
       }))
       folderNode._loaded = true
-      return folderNode.children
+      return folderNode.Children
     } catch (e: any) {
       ElMessage.error('加载文件失败：' + (e?.message || ''))
       return []
@@ -237,10 +240,10 @@ export function useFileTree() {
   /** 刷新当前节点 */
   function refreshNode(node: TreeNode) {
     node._loaded = false
-    node.children = []
-    if (node.type === 'stage') {
+    node.Children = []
+    if (node.Type === 'stage') {
       loadStageFiles(node)
-    } else if (node.type === 'folder') {
+    } else if (node.Type === 'folder') {
       loadFolderFiles(node)
     }
   }
@@ -249,9 +252,9 @@ export function useFileTree() {
   const defaultExpandedKeys = computed(() => {
     const keys: (string | number)[] = []
     for (const org of fileTreeData.value) {
-      keys.push(org.id)
-      for (const std of (org.children || [])) {
-        keys.push(std.id)
+      keys.push(org.Code)
+      for (const std of (org.Children || [])) {
+        keys.push(std.Code)
       }
     }
     return keys

@@ -1,11 +1,10 @@
-extern alias SharedEntities;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Api.Services;
-using SharedEntities::CertPlatform.Shared.Entities.Cert;
-using SharedEntities::CertPlatform.Shared.Entities.Rpt;
+using CertPlatform.Shared.Entities.Cert;
+using CertPlatform.Shared.Entities.Rpt;
 
 namespace CertPlatform.Admin.Controllers.Workflow
 {
@@ -74,7 +73,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
                 target.TemplateFilePath = entity.TemplateFilePath;
                 target.Remark = entity.Remark;
                 target.IsDefault = entity.IsDefault;
-                target.ModifyDate = DateTime.Now;
+                target.UpdateTime = DateTime.Now;
 
                 var updateResult = await _templateEntity.Update(target);
                 return Ok(new { code = updateResult.Success ? 200 : 500, data = target, message = updateResult.Error });
@@ -96,7 +95,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
                     target.TemplateFilePath = entity.TemplateFilePath;
                     target.Remark = entity.Remark;
                     target.IsDefault = entity.IsDefault;
-                    target.ModifyDate = DateTime.Now;
+                    target.UpdateTime = DateTime.Now;
 
                     var updateResult = await _templateEntity.Update(target);
                     return Ok(new { code = updateResult.Success ? 200 : 500, data = target, message = updateResult.Error });
@@ -190,6 +189,31 @@ namespace CertPlatform.Admin.Controllers.Workflow
         }
 
         /// <summary>
+        /// 按上下文（机构+标准+阶段）查询章节列表（先定位模板，再取章节）
+        /// </summary>
+        [HttpGet("section/by-context")]
+        public async Task<IActionResult> GetSectionsByContext(
+            [FromQuery] string orgCode,
+            [FromQuery] string standardCode,
+            [FromQuery] string phaseCode)
+        {
+            // 1. 按上下文定位模板
+            var template = await _templateEntity.GetOne(x =>
+                x.OrgCode == orgCode &&
+                x.StandardCode == standardCode &&
+                x.PhaseCode == phaseCode &&
+                x.IsValid == 1);
+
+            if (template.Data == null)
+                return Ok(new { code = 200, data = new List<ReportSection>() });
+
+            // 2. 按模板 Code 查章节
+            var result = await _sectionEntity.GetListAsync(x => x.ReportCode == template.Data.Code);
+            var sorted = (result.Data ?? new List<ReportSection>()).OrderBy(x => x.SortOrder).ToList();
+            return Ok(new { code = 200, data = sorted });
+        }
+
+        /// <summary>
         /// 创建/更新章节
         /// </summary>
         [HttpPost("section/save")]
@@ -220,7 +244,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
                 target.ClauseCode = entity.ClauseCode;
                 target.SectionJson = entity.SectionJson;
                 target.Remark = entity.Remark;
-                target.ModifyDate = DateTime.Now;
+                target.UpdateTime = DateTime.Now;
 
                 var updateResult = await _sectionEntity.Update(target);
                 return Ok(new { code = updateResult.Success ? 200 : 500, data = target, message = updateResult.Error });

@@ -61,9 +61,26 @@ public static class EntitySchemaHelper
   public static Dictionary<string, EntityFieldSchema> GetSchema(Type entityType)
   {
     var schema = new Dictionary<string, EntityFieldSchema>();
-    var properties = entityType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
-    foreach (var prop in properties)
+    // ★ 同名属性必须取【最派生】的那份声明。
+    //   派生类常用 `new` 隐藏基类同名属性，此时 Type.GetProperties 会把两份
+    //   都返回（例如 Sys_User.Id (string) 与 BaseEntity.Id (long)）。
+    //   若按反射返回顺序写入 schema，可能留下基类那份，于是
+    //     NewEntity.Id 生成成 number 0，而实体实际是 string，
+    //   POST /add 时 ASP.NET 直接报
+    //     "The JSON value could not be converted to System.String ... $.Id" → 400，
+    //   表现为这些实体的【新增】永远失败。
+    //   从最派生类型逐层向上走、先到者胜，即可天然得到最派生的声明。
+    var byName = new Dictionary<string, PropertyInfo>(StringComparer.Ordinal);
+    for (var type = entityType; type != null && type != typeof(object); type = type.BaseType)
+    {
+      foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+      {
+        if (!byName.ContainsKey(prop.Name)) byName[prop.Name] = prop;
+      }
+    }
+
+    foreach (var prop in byName.Values)
     {
       // 排除标记 [NotMapped] 和 [JsonIgnore] 的属性
       if (prop.GetCustomAttribute<NotMappedAttribute>() != null) continue;

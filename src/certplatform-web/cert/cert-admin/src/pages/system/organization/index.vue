@@ -84,10 +84,10 @@ function handleEditOrg(node: TreeNode) {
   logic.openEditOrgDialog(node)
 }
 
-/** 删除机构 */
+/** 删除机构（基类 deleteTreeNode 内部已弹成功提示，此处不再重复） */
 async function handleDeleteOrg(node: TreeNode) {
   await ElMessageBox.confirm(
-    `确定删除机构【${node.name}】？`,
+    `确定删除机构【${node.Name}】？`,
     '删除确认',
     {
       type: 'warning',
@@ -96,7 +96,6 @@ async function handleDeleteOrg(node: TreeNode) {
     },
   )
   await logic.deleteOrg(node)
-  ElMessage.success('已删除机构')
 }
 
 /** 禁用/启用机构（基类统一处理：确认弹窗 → API → 本地更新） */
@@ -108,12 +107,15 @@ async function handleToggleOrgIsValid(node: TreeNode) {
 // 人员操作
 // ========================================================
 
-/** 新增人员 */
+/**
+ * 新增人员
+ *
+ * 失败时不要在这里补提示：openAddUserDialog() 已按具体原因提示
+ * （未选机构 / 选中的不是末端机构）。旧实现在这里无条件补「请先选择机构」，
+ * 导致选中末端机构时同时弹出两条提示，其中一条还是错的。
+ */
 function handleAddUser() {
-  const ok = logic.openAddUserDialog()
-  if (!ok) {
-    ElMessage.warning('请先选择机构')
-  }
+  logic.openAddUserDialog()
 }
 
 /** 编辑人员 */
@@ -178,7 +180,9 @@ async function loadTableData(params: any) {
     filters.push({
       Field: 'OrgCode',
       Operator: 'eq',
-      Value: logic.selectedNode.value.code,
+      // TreeNode 是 PascalCase：读小写 code 会得到 undefined，
+      // 查询条件变成「OrgCode = undefined」→ 永远查不到人（共 0 条）。
+      Value: logic.selectedNode.value.Code,
     })
   }
   if (logic.showDisabled.value) {
@@ -329,7 +333,7 @@ onMounted(async () => {
         <!-- 所属机构只读展示 -->
         <template #orgCode>
           <el-tag v-if="logic.selectedNode.value" type="info">
-            {{ logic.selectedNode.value.name }}
+            {{ logic.selectedNode.value.Name }}
           </el-tag>
           <el-tag v-else type="info">未选择</el-tag>
         </template>
@@ -348,7 +352,7 @@ onMounted(async () => {
       <div class="org-form-header">
         <span class="org-form-header__label">上级机构：</span>
         <el-tag v-if="logic.orgParentNode.value" type="info">
-          {{ logic.orgParentNode.value.name }}
+          {{ logic.orgParentNode.value.Name }}
         </el-tag>
         <el-tag v-else type="info">根级</el-tag>
       </div>

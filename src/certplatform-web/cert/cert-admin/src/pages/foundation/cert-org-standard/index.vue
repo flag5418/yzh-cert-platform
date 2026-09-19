@@ -12,9 +12,9 @@ import type { CertOrgStandardItem } from '@share/types/cert'
 
 // ──── 左树 ────
 interface TreeNode {
-  code: string
-  name: string
-  children?: TreeNode[]
+  Code: string
+  Name: string
+  Children?: TreeNode[]
 }
 const treeData = ref<TreeNode[]>([])
 const selectedOrgCode = ref<string>('')
@@ -54,8 +54,8 @@ async function loadTree() {
   try {
     const res = await certOrgStandardApi.treeRoot()
     treeData.value = (res.data || []).map((item: any) => ({
-      code: item.Code,
-      name: item.Name,
+      Code: item.Code,
+      Name: item.Name,
     }))
   } finally {
     treeLoading.value = false
@@ -63,8 +63,8 @@ async function loadTree() {
 }
 
 async function handleNodeClick(node: TreeNode) {
-  selectedOrgCode.value = node.code
-  await loadTable(node.code)
+  selectedOrgCode.value = node.Code
+  await loadTable(node.Code)
 }
 
 // ========================================================
@@ -146,8 +146,8 @@ onMounted(() => {
       <div class="link-page__tree-title">认证机构</div>
       <el-tree
         :data="treeData"
-        :props="{ label: 'name', children: 'children' }"
-        node-key="code"
+        :props="{ label: 'Name', children: 'Children' }"
+        node-key="Code"
         highlight-current
         :expand-on-click-node="false"
         :loading="treeLoading"

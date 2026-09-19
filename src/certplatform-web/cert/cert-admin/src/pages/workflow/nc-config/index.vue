@@ -40,10 +40,10 @@ const treeFilter = ref('')
  */
 const filteredTreeData = computed(() => {
   function strip(node: TreeNode): TreeNode | null {
-    if (node.type === 'folder' || node.type === 'file') return null
-    if (!node.children) return node
-    const filteredChildren = node.children.map(strip).filter(Boolean) as TreeNode[]
-    return { ...node, children: filteredChildren }
+    if (node.Type === 'folder' || node.Type === 'file') return null
+    if (!node.Children) return node
+    const filteredChildren = node.Children.map(strip).filter(Boolean) as TreeNode[]
+    return { ...node, Children: filteredChildren }
   }
   return treeData.value.map(strip).filter(Boolean) as TreeNode[]
 })
@@ -62,15 +62,15 @@ const rowActionButtons = ref<Record<string, string>>({
 
 /** 树节点点击 → 注入联动过滤 → YzhTable 自动刷新 */
 async function handleNodeClick(node: TreeNode) {
-  if (node.type !== 'stage') {
+  if (node.Type !== 'stage') {
     // 非阶段节点：清空表格
     logic.setTreeFilter('', '', '')
     return
   }
   logic.setTreeFilter(
-    node.orgCode || '',
-    node.stdCode || '',
-    node.phaseCode || '',
+    node.OrgCode || '',
+    node.StdCode || '',
+    node.PhaseCode || '',
   )
   // 触发 YzhTable 刷新
   await tableRef.value?.refresh()
@@ -183,19 +183,19 @@ watch(tableRef, (el) => {
       <el-tree
         :data="filteredTreeData"
         v-loading="treeLoading"
-        node-key="id"
+        node-key="Code"
         default-expand-all
         highlight-current
         :expand-on-click-node="false"
-        :filter-node-method="(value: string, data: TreeNode) => !value || data.name.toLowerCase().includes(value.toLowerCase())"
+        :filter-node-method="(value: string, data: TreeNode) => !value || data.Name.toLowerCase().includes(value.toLowerCase())"
         @node-click="handleNodeClick"
       >
         <template #default="{ data }">
           <span class="tree-node">
-            <el-icon v-if="data.type === 'organization'" class="node-icon"><FolderOpened /></el-icon>
-            <el-icon v-else-if="data.type === 'standard'" class="node-icon"><Document /></el-icon>
+            <el-icon v-if="data.Type === 'organization'" class="node-icon"><FolderOpened /></el-icon>
+            <el-icon v-else-if="data.Type === 'standard'" class="node-icon"><Document /></el-icon>
             <el-icon v-else class="node-icon"><Calendar /></el-icon>
-            <span class="node-label">{{ data.name }}</span>
+            <span class="node-label">{{ data.Name }}</span>
           </span>
         </template>
       </el-tree>

@@ -166,7 +166,7 @@ export interface AuditTask {
   OrgCode?: string
   PhaseCode: string
   TaskNumber: string
-  AuditorId: number
+  AuditorCode: string
   PlannedDate?: string
   ActualStartDate?: string
   ActualCompleteDate?: string

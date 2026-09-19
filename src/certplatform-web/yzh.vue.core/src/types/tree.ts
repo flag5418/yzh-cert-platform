@@ -21,7 +21,8 @@
  * 前端标准树节点（虚拟结构）
  *
  * ★ 核心原则：
- * - 去掉 id，所有关联统一用 code
+ * - 去掉 id，所有关联统一用 Code
+ * - 所有字段统一 PascalCase（与后端 DTO 保持一致）
  * - 只承载业务数据 + 结构元数据
  * - UI 状态由组件持有，不存入此结构
  *
@@ -30,29 +31,29 @@
 export interface TreeNode<T = any> {
   // ──── 核心标识 ────
   /** 业务编码（唯一标识，关联查询用） */
-  code: string
+  Code: string
   /** 显示名称 */
-  name: string
+  Name: string
   /** 父节点编码（根节点为空字符串或 null） */
-  parentCode: string | null
+  ParentCode: string | null
 
   // ──── 结构元数据（由后端或工具函数计算） ────
   /** 节点类型（异构树区分来源，同构树可省略） */
-  nodeType?: string
+  NodeType?: string
   /** 是否有子级（后端事实，用于组件 leaf 预判） */
-  isLeaf?: boolean
+  IsLeaf?: boolean
   /** 排序号 */
-  sort?: number
+  Sort?: number
   /** 附加业务字段（图标/颜色/badge/业务键值） */
-  extra?: Record<string, any>
+  Extra?: Record<string, any>
 
   // ──── 层级结构 ────
   /** 子节点集合 */
-  children: TreeNode<T>[]
+  Children: TreeNode<T>[]
 
   // ──── 原始数据引用 ────
   /** 原始 T 实体完整数据（可选，仅需要提交时携带） */
-  raw?: T
+  Raw?: T
 }
 
 // ========================================================
@@ -69,17 +70,17 @@ export interface TreeNode<T = any> {
  * 示例：
  *   const uiNode: UiTreeNode<MyEntity> = {
  *     ...treeNode,
- *     checked: true,
- *     isExpanded: false,
- *     isLoading: false
+ *     Checked: true,
+ *     IsExpanded: false,
+ *     IsLoading: false
  *   }
  */
 export type UiTreeNode<T = any> = TreeNode<T> & {
-  checked?: boolean
-  indeterminate?: boolean
-  selected?: boolean
-  isExpanded?: boolean
-  isLoading?: boolean
+  Checked?: boolean
+  Indeterminate?: boolean
+  Selected?: boolean
+  IsExpanded?: boolean
+  IsLoading?: boolean
 }
 
 // ========================================================

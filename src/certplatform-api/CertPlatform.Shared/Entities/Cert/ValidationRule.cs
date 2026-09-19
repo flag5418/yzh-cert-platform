@@ -1,9 +1,10 @@
 using System;
+using YZH.Entity.Admin.Platform;
 using System.ComponentModel.DataAnnotations;
 using SqlSugar;
 using YZH.Core.Stand.Models.Entity;
 
-namespace YZH.Entity.Admin.Platform.Cert
+namespace CertPlatform.Shared.Entities.Cert
 {
     /// <summary>
     /// NC 检查规则（审核规则）
@@ -13,16 +14,8 @@ namespace YZH.Entity.Admin.Platform.Cert
     [SugarTable("cert_validation_rule")]
     public class ValidationRule : BaseEntity
     {
-        // ──── 覆盖基类审计字段 ────
-
-        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
-        public new long Id { get; set; }
-
-        /// <summary>
-        /// 业务唯一码（覆盖基类，设默认值避免 INSERT 时报错）
-        /// </summary>
-        [SugarColumn(Length = 36, IsNullable = true)]
-        public new string? Code { get; set; } = Guid.NewGuid().ToString("N");
+        // ──── Id / Code / 审计字段已由 BaseEntity 基类统一提供 ────
+        // ──── DB cert_validation_rule.Code 为 PascalCase，无需 new 覆盖 ────
 
         public int Sort { get; set; }
 

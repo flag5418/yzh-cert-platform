@@ -187,7 +187,10 @@ public class RoleApiController : TreeTableControllerBase<Sys_Role, SysApi>
                 if (result > 0) inserted++;
             }
 
-            return Ok(ApiResponse<object?>.Ok(new { Updated = inserted }));
+            // Applied：本次调用后「应当已授权」的完整 code 集合。
+            // 前端凭此局部更新本地关联缓存（用于刷新角色徽标 / 回填勾选状态），
+            // 不必再调一次 check/all 全量重取。
+            return Ok(ApiResponse<object?>.Ok(new { Updated = inserted, Applied = selectedApiCodes }));
         }
         catch (Exception ex)
         {

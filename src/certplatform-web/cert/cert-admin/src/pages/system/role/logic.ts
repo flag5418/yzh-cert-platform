@@ -34,38 +34,6 @@ export class RolePageLogic extends TreeTableLogic<any> {
    */
   formData = reactive<Record<string, any>>({})
 
-  // ──── 树节点操作 ────
-  get nodeActions(): Record<string, string> {
-    const actions: Record<string, string> = {}
-    const tc = this.treeConfig
-    if (!tc) return actions
-    if (tc.AllowEdit) {
-      actions['add-child'] = '新增下级'
-      actions['edit'] = '编辑'
-    }
-    if (tc.AllowDelete) {
-      actions['delete'] = '删除'
-    }
-    // EnableField 存在时，显示禁用/启用按钮
-    if (this.enableField) {
-      actions['toggle-valid'] = '禁用/启用'
-    }
-    return actions
-  }
-
-  /**
-   * 获取树节点操作按钮文本（上下文感知：已启用→禁用，已禁用→启用）
-   */
-  getNodeActionLabel(action: string, node: TreeNode): string {
-    if (action === 'toggle-valid') {
-      const field = this.enableField ?? 'IsValid'
-      const extra = (node.extra as any) || {}
-      const val = extra[field] ?? 1
-      return val === 1 ? '禁用' : '启用'
-    }
-    return this.nodeActions[action] || action
-  }
-
   // ========================================================
   // CRUD
   // ========================================================

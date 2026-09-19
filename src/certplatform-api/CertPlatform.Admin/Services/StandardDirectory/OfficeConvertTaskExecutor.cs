@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;

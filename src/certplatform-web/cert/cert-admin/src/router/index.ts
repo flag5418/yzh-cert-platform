@@ -17,12 +17,14 @@ const routes: RouteRecordRaw[] = [
     children: [
       // ===== 系统管理 =====
       { path: 'system/organization', name: 'SystemOrganization', component: () => import('@/pages/system/organization/index.vue') },
+      { path: 'system/role', name: 'SystemRole', component: () => import('@/pages/system/role/index.vue') },
       { path: 'system/role-user', name: 'SystemRoleUser', component: () => import('@/pages/system/role-user/index.vue') },
       { path: 'system/role-menu', name: 'SystemRoleMenu', component: () => import('@/pages/system/role-menu/index.vue') },
       { path: 'system/role-api', name: 'SystemRoleApi', component: () => import('@/pages/system/role-api/index.vue') },
       { path: 'system/menu', name: 'SystemMenu', component: () => import('@/pages/system/menu/index.vue') },
       { path: 'system/api', name: 'SystemApi', component: () => import('@/pages/system/api/index.vue') },
       { path: 'system/dictionary', name: 'SystemDictionary', component: () => import('@/pages/system/dictionary/index.vue') },
+      { path: 'system/user', name: 'SystemUser', component: () => import('@/pages/system/user/index.vue') },
       { path: 'system/log', name: 'SystemLog', component: () => import('@/pages/system/log/index.vue') },
       { path: 'system/config', name: 'SystemConfig', component: () => import('@/pages/system/config/index.vue') },
 
@@ -38,6 +40,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'business/report-def', name: 'BusinessReportDef', component: () => import('@/pages/workflow/report-rule/index.vue') },
       { path: 'business/prompt-template', name: 'BusinessPromptTemplate', component: () => import('@/pages/workflow/prompt-template/index.vue') },
       { path: 'business/skill-manage', name: 'BusinessSkillManage', component: () => import('@/pages/workflow/skill-manage/index.vue') },
+      { path: 'business/job-skill', name: 'BusinessJobSkill', component: () => import('@/pages/workflow/job-skill/index.vue') },
       { path: 'business/nc-config', name: 'BusinessNcConfig', component: () => import('@/pages/workflow/nc-config/designer.vue') },
       { path: 'business/workflow-rules', name: 'BusinessWorkflowRules', component: () => import('@/pages/workflow/nc-config/index.vue') },
       { path: 'business/report-rule-config', name: 'BusinessReportRuleConfig', component: () => import('@/pages/workflow/report-rule-config/index.vue') },

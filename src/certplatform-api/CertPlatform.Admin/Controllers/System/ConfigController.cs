@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Controllers;
@@ -24,10 +23,10 @@ namespace CertPlatform.Admin.Controllers.System;
 /// </summary>
 [ApiController]
 [Route("api/System/[controller]")]
-public class ConfigController : YzhControllerBase<SharedEntities::YZH.Entity.Admin.Platform.Sys.SysConfig>
+public class ConfigController : YzhControllerBase<SysConfig>
 {
     public ConfigController(
-        EntityService<SharedEntities::YZH.Entity.Admin.Platform.Sys.SysConfig> entityService,
+        EntityService<SysConfig> entityService,
         IUserContext userContext)
         : base(entityService, userContext)
     {
@@ -35,11 +34,11 @@ public class ConfigController : YzhControllerBase<SharedEntities::YZH.Entity.Adm
 
     /// <summary>加载 EntityConfig 配置（从 JSON 文件）</summary>
     protected override EntityConfig LoadConfig()
-        => EntityConfigHelper.GetConfig<SharedEntities::YZH.Entity.Admin.Platform.Sys.SysConfig>();
+        => EntityConfigHelper.GetConfig<SysConfig>();
 
     /// <summary>新增前校验：配置键唯一</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAdd(
-        SharedEntities::YZH.Entity.Admin.Platform.Sys.SysConfig entity)
+        SysConfig entity)
     {
         var exists = await Entity.ExistsAsync(e => e.ConfigKey == entity.ConfigKey);
         if (exists.Data)
@@ -49,7 +48,7 @@ public class ConfigController : YzhControllerBase<SharedEntities::YZH.Entity.Adm
 
     /// <summary>修改前校验：配置键唯一（排除自身）+ 只读参数禁止修改</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(
-        SharedEntities::YZH.Entity.Admin.Platform.Sys.SysConfig entity)
+        SysConfig entity)
     {
         var existing = await Entity.GetByCode(entity.Code);
         if (existing.Data != null && existing.Data.IsReadonly == 1)

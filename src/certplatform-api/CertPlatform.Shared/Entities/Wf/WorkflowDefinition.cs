@@ -1,53 +1,58 @@
-using System;
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+using SqlSugar;
 using YZH.Entity.Admin.Platform;
+using YZH.Core.Stand.Interfaces;
+using YZH.Core.Stand.Models.Entity;
 
-namespace YZH.Entity.Admin.Platform.Wf
+namespace CertPlatform.Shared.Entities.Wf
 {
     /// <summary>
     /// WorkflowDefinition - 工作流定义
-    /// <para>表名：wf_workflow_definition（列名为 snake_case）</para>
+    /// <para>表名：wf_workflow_definition</para>
+    ///
+    /// 命名规范（YZH 铁律）：DB 列名 = C# 属性名 = PascalCase
     /// </summary>
-    [Table("wf_workflow_definition")]
-    public class WorkflowDefinition : EntityBase
+    [SugarTable("wf_workflow_definition")]
+    public class WorkflowDefinition : BaseEntity, ISoftDelete, IIsValid
     {
-        // ===== snake_case 审计字段覆盖 =====
-        [Column("create_id")] public new int? CreateID { get; set; }
-        [Column("creator")] [MaxLength(50)] public new string Creator { get; set; }
-        [Column("create_date")] public new DateTime? CreateDate { get; set; } = DateTime.Now;
-        [Column("modify_id")] public new int? ModifyID { get; set; }
-        [Column("modifier")] [MaxLength(50)] public new string Modifier { get; set; }
-        [Column("modify_date")] public new DateTime? ModifyDate { get; set; }
-        [Column("delete_id")] public new int? DeleteID { get; set; }
-        [Column("deleter")] [MaxLength(50)] public new string Deleter { get; set; }
-        [Column("delete_time")] public new DateTime? DeleteTime { get; set; }
-        [Column("code")] public new string Code { get; set; } = Guid.NewGuid().ToString("N");
-        [Column("status")] public new string Status { get; set; } = "active";
-        [Column("enable")] public new bool Enable { get; set; } = true;
-        [Column("sort")] public new int Sort { get; set; }
-        [Column("remark")] public new string Remark { get; set; }
+        // ──── Id / Code / 审计字段由 BaseEntity 基类统一提供 ────
+        // ──── ISoftDelete / IIsValid 接口字段由接口提供 ────
 
-        [Required][StringLength(100)][UniqueField("工作流编码")][Column("workflow_code")]
-        public string WorkflowCode { get; set; }
+        // ──── 业务字段 ────
+        public string? Status { get; set; } = "active";
 
-        [Required][StringLength(200)]
-        [Column("workflow_name")]
-        public string WorkflowName { get; set; }
+        public bool Enable { get; set; } = true;
+
+        public int Sort { get; set; }
+
+        public string? Remark { get; set; }
 
         [Required]
-        [Column("workflow_type")]
-        public string WorkflowType { get; set; }
+        [StringLength(100)]
+        [UniqueField("工作流编码")]
+        public string WorkflowCode { get; set; } = string.Empty;
 
-        [Column("workflow_config")]
-        public string WorkflowConfig { get; set; }
+        [Required]
+        [StringLength(200)]
+        public string WorkflowName { get; set; } = string.Empty;
 
-        [Column("version")] public int Version { get; set; } = 1;
+        [Required]
+        public string WorkflowType { get; set; } = string.Empty;
 
-        [Column("is_active")]
+        [SugarColumn(ColumnDataType = "json")]
+        public string? WorkflowConfig { get; set; }
+
+        public int Version { get; set; } = 1;
+
         public bool IsActive { get; set; } = true;
 
-        [Column("description")]
-        public string Description { get; set; }
+        [SugarColumn(ColumnDataType = "text", IsNullable = true)]
+        public string? Description { get; set; }
+
+        // ──── ISoftDelete + IIsValid 接口显式实现 ────
+        public bool IsDeleted { get; set; }
+        public string? DeleteBy { get; set; }
+        public DateTime? DeleteTime { get; set; }
+        public int IsValid { get; set; } = 1;
     }
 }

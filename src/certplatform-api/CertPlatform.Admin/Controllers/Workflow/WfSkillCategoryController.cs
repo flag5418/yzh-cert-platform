@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Controllers;
@@ -20,15 +19,15 @@ namespace CertPlatform.Admin.Controllers.Workflow
     /// </summary>
     [ApiController]
     [Route("api/Workflow/[controller]")]
-    public class WfSkillCategoryController : YzhControllerBase<SharedEntities::CertPlatform.Shared.Entities.Wf.WfSkillCategory>
+    public class WfSkillCategoryController : YzhControllerBase<CertPlatform.Shared.Entities.Wf.WfSkillCategory>
     {
         public WfSkillCategoryController(
-            EntityService<SharedEntities::CertPlatform.Shared.Entities.Wf.WfSkillCategory> entityService,
+            EntityService<CertPlatform.Shared.Entities.Wf.WfSkillCategory> entityService,
             IUserContext userContext)
             : base(entityService, userContext) { }
 
         protected override async Task<(bool ok, string? msg)> OnBeforeAdd(
-            SharedEntities::CertPlatform.Shared.Entities.Wf.WfSkillCategory entity)
+            CertPlatform.Shared.Entities.Wf.WfSkillCategory entity)
         {
             var result = await Entity.GetByCodeAny(entity.Code);
             if (result.Success && result.Data != null)
@@ -37,7 +36,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
         }
 
         protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(
-            SharedEntities::CertPlatform.Shared.Entities.Wf.WfSkillCategory entity)
+            CertPlatform.Shared.Entities.Wf.WfSkillCategory entity)
         {
             var result = await Entity.GetByCodeAny(entity.Code);
             if (result.Success && result.Data != null && result.Data.Code != entity.Code)

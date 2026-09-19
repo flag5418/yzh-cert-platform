@@ -35,8 +35,8 @@ public interface IUserContext
     /// <summary>是否匿名用户（开发模式 Mock 用户）</summary>
     bool IsAnonymous { get; }
 
-    /// <summary>角色 ID</summary>
-    int RoleId { get; }
+    /// <summary>角色编码（Code 关联，新架构核心字段）</summary>
+    string RoleCode { get; }
 }
 
 /// <summary>

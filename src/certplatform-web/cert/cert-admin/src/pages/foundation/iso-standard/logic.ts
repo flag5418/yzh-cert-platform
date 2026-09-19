@@ -49,23 +49,14 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
     const actions: Record<string, string> = {}
     const tc = this.treeConfig
     if (!tc) return actions
-    // AllowEdit 控制新增根节点 + 编辑按钮（不再包含 add-child，标准无层级）
+    // AllowEdit 控制编辑按钮（不含 add-child，标准无层级）
     if (tc.AllowEdit) {
       actions['edit'] = '编辑'
     }
-    // AllowDelete 控制删除按钮
     if (tc.AllowDelete) {
       actions['delete'] = '删除'
     }
-    // 无 EnableField 配置，标准不需要禁用/启用
     return actions
-  }
-
-  /**
-   * 获取树节点操作按钮文本
-   */
-  getNodeActionLabel(action: string, _node: TreeNode): string {
-    return this.nodeActions[action] || action
   }
 
   // ========================================================
@@ -134,7 +125,8 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
   /** 打开编辑条款弹窗 */
   openEditClauseDialog(row: any): void {
     this.dialogMode.value = 'edit'
-    this.formGroupIndex.value = '1'
+    // 编辑模式传 '0' → GroupIndex="0"（默认）的字段可编辑，非 "0" 的字段只读
+    this.formGroupIndex.value = '0'
     Object.keys(this.formData).forEach((k) => delete this.formData[k])
     Object.assign(this.formData, row)
     this.dialogVisible.value = true

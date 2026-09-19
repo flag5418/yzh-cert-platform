@@ -1,47 +1,35 @@
 using System;
+using YZH.Entity.Admin.Platform;
 using System.ComponentModel.DataAnnotations;
 using SqlSugar;
+using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Entity;
 
-namespace YZH.Entity.Admin.Platform.Sys
+namespace CertPlatform.Shared.Entities.Sys
 {
     /// <summary>
     /// 全局系统参数配置实体
     /// <para>表名：cert_sys_config</para>
     /// <para>列名规范：PascalCase（与 BaseEntity 标准属性名完全一致，无需映射）</para>
-    /// 
-    /// 覆盖基类审计字段（Id, Code, CreateTime, UpdateTime, IsValid, Sort）
-    /// 业务字段：ConfigKey, ConfigValue, ConfigType, Category, DisplayName, Description, IsReadonly
     /// </summary>
     [SugarTable("cert_sys_config")]
-    public class SysConfig : BaseEntity
+    public class SysConfig : BaseEntity, ISoftDelete, IIsValid
     {
-        // ──── 覆盖基类审计字段（DB列名 == 属性名，自动映射） ────
+        // ──── Id 已由 BaseEntity 基类统一提供 ────
 
-        /// <summary>主键（物理自增 bigint）</summary>
-        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
-        public new long Id { get; set; }
-
-        /// <summary>业务编码</summary>
-        public new string Code { get; set; } = Guid.NewGuid().ToString("N");
-
-        /// <summary>创建人 Code</summary>
-        public new string? CreateBy { get; set; }
-
-        /// <summary>创建时间</summary>
-        public new DateTime CreateTime { get; set; } = DateTime.UtcNow;
-
-        /// <summary>更新人 Code</summary>
-        public new string? UpdateBy { get; set; }
-
-        /// <summary>更新时间</summary>
-        public new DateTime? UpdateTime { get; set; }
-
-        /// <summary>软删除标记</summary>
-        public bool IsDeleted { get; set; }
+        // ──── 接口字段（BaseEntity 不包含，由接口继承提供） ────
 
         /// <summary>有效标志（1=有效，0=无效）</summary>
         public int IsValid { get; set; } = 1;
+
+        /// <summary>软删除标记（false=正常，true=已删除）</summary>
+        public bool IsDeleted { get; set; }
+
+        /// <summary>删除人 Code（仅软删除时赋值）</summary>
+        public string? DeleteBy { get; set; }
+
+        /// <summary>删除时间（仅软删除时赋值）</summary>
+        public DateTime? DeleteTime { get; set; }
 
         /// <summary>排序号</summary>
         public int Sort { get; set; }
@@ -50,7 +38,7 @@ namespace YZH.Entity.Admin.Platform.Sys
         [MaxLength(500)]
         public string? Remark { get; set; }
 
-        // ──── 系统参数业务字段（PascalCase，自动映射） ────
+        // ──── 系统参数业务字段 ────
 
         /// <summary>配置键（唯一键）</summary>
         [Required]

@@ -12,6 +12,7 @@ using YZH.Core.Stand.Models.Request;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Entity;
 using YZH.Core.Stand.Interfaces;
+using YZH.Core.Stand.Enums;
 
 namespace YZH.Core.Api.Controllers;
 
@@ -184,18 +185,33 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
 
   /// <summary>
   ///     获取配置原子方法
-  ///     自动注入 NewEntity（空实体模板）和 Schema（字段结构描述）
-  ///     来源：后端反射实体类生成（EntitySchemaHelper）
+  ///     自动注入：
+  ///     - NewEntity（空实体模板）    → 后端反射实体类生成
+  ///     - Schema（字段结构描述）    → 后端反射实体类生成
+  ///     - SearchFields（搜索字段）  → GetSearchFields() 虚方法 → 默认智能推断
+  ///     - RowButtons（行按钮）      → GetRowButtons() 虚方法 → 默认 Edit+Delete
+  ///     - Toolbar（工具栏）        → GetToolbar() 虚方法 → 默认 Add+Delete
+  ///     子类可 override 上述虚方法自定义配置
   /// </summary>
   [NonAction]
   public virtual Result<EntityConfig> GetConfigCore()
   {
     try
     {
-      // 反射实体生成空实体模板 → 前端直接用此初始化表单
+      // 1. 反射实体生成空实体模板 → 前端直接用此初始化表单
       Config.NewEntity = EntitySchemaHelper.GetEmptyEntity<V>();
       Config.Schema = EntitySchemaHelper.GetSchema<V>();
 
+      // 2. 注入搜索字段配置（优先 JSON → 子类覆盖 → 基类默认推断）
+      Config.SearchFields = GetSearchFields();
+
+      // 3. 注入行按钮配置（优先 JSON → 子类覆盖 → 基类默认）
+      Config.RowButtons = GetRowButtons();
+
+      // 4. 注入工具栏配置（优先 JSON → 子类覆盖 → 基类默认）
+      Config.Toolbar = GetToolbar();
+
+      // 5. 配置加载后钩子（最后，允许子类覆盖以上所有配置）
       OnConfigLoading(Config);
       return Result<EntityConfig>.Ok(Config);
     }
@@ -640,6 +656,123 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
 
   /// <summary>配置加载后钩子（注入动态配置）</summary>
   protected virtual void OnConfigLoading(EntityConfig config) { }
+
+  #endregion
+
+  #region 配置虚方法（子类可覆盖）
+
+  /// <summary>
+  ///     获取搜索字段配置
+  ///
+  ///     默认行为：从 Columns 中选择前 3 个 XsFlag=true 且非 Other 类型的字段
+  ///     子类可 override 完全自定义搜索字段（如添加下拉选择、日期范围等）
+  ///
+  ///     示例（子类覆盖）：
+  ///     <code>
+  ///     protected override List＜SearchFieldConfig＞ GetSearchFields()
+  ///     {
+  ///         return new List＜SearchFieldConfig＞
+  ///         {
+  ///             new() { Label = "标准名称", Field = "StandardName", Operator = "like" },
+  ///             new() { Label = "状态", Field = "Status", ControlType = "select", Options = ... },
+  ///         };
+  ///     }
+  ///     </code>
+  /// </summary>
+  protected virtual List<SearchFieldConfig> GetSearchFields()
+  {
+    // 智能推断：选择前 3 个 XsFlag=true 且非 Other 类型的字段
+    return Config.Columns
+        .Where(c => c.XsFlag && c.Type != ControlType.Other)
+        .Take(3)
+        .Select(c => new SearchFieldConfig
+        {
+            Label = c.DesName,
+            Field = c.FieldName,
+            Operator = GetDefaultOperator(c.Type),
+            ControlType = GetDefaultControlType(c.Type),
+            Width = 180
+        })
+        .ToList();
+  }
+
+  /// <summary>
+  ///     获取行按钮配置
+  ///
+  ///     默认：Edit=true, Delete=true（显示编辑和删除按钮）
+  ///     子类可 override 自定义（如隐藏删除、添加自定义按钮）
+  ///
+  ///     自定义按钮示例：
+  ///     <code>
+  ///     protected override RowButtonConfig GetRowButtons()
+  ///     {
+  ///         return new RowButtonConfig
+  ///         {
+  ///             Edit = true,
+  ///             Delete = false,
+  ///             CustomButtons = new() { ["approve"] = "审核通过", ["reject"] = "驳回" }
+  ///         };
+  ///     }
+  ///     </code>
+  /// </summary>
+  protected virtual RowButtonConfig GetRowButtons()
+  {
+    return new RowButtonConfig
+    {
+        Edit = true,
+        Delete = true
+    };
+  }
+
+  /// <summary>
+  ///     获取工具栏按钮配置
+  ///
+  ///     默认：Add=true, Delete=true, Export=false, Import=false
+  ///     子类可 override 自定义（如开启导出导入）
+  /// </summary>
+  protected virtual ToolbarConfig GetToolbar()
+  {
+    return new ToolbarConfig
+    {
+        Add = true,
+        Delete = true,
+        Export = false,
+        Import = false
+    };
+  }
+
+  /// <summary>
+  ///     根据 ControlType 推断默认查询操作符
+  ///     - TextBox/Memo → like（模糊搜索）
+  ///     - Decimal/DatePicker/DateTimePicker → eq（精确匹配）
+  ///     - ComboBox/CheckBox/Switch → eq（精确匹配）
+  /// </summary>
+  private static string GetDefaultOperator(ControlType type)
+  {
+    return type switch
+    {
+        ControlType.TextBox or ControlType.Memo => "like",
+        _ => "eq"
+    };
+  }
+
+  /// <summary>
+  ///     根据 ControlType 推断默认搜索控件类型
+  ///     - ComboBox/Cascader/TreeSelect → select（下拉选择）
+  ///     - DatePicker → date
+  ///     - DateTimePicker → date（简化）
+  ///     - 其他 → input（文本输入）
+  /// </summary>
+  private static string GetDefaultControlType(ControlType type)
+  {
+    return type switch
+    {
+        ControlType.ComboBox or ControlType.Cascader or ControlType.TreeSelect => "select",
+        ControlType.DatePicker => "date",
+        ControlType.DateTimePicker => "date",
+        _ => "input"
+    };
+  }
 
   #endregion
 

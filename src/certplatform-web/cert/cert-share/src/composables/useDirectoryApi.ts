@@ -236,13 +236,15 @@ export async function uploadCancel(taskId: string): Promise<void> {
 
 /** 获取上传状态 */
 export async function getUploadStatus(taskId: string): Promise<FileUploadProgress[]> {
-  const res = await yzhApi.get<ApiResponse<FileUploadProgress[]>>('/api/Workflow/StandardDirectory/upload-status', { params: { taskId } })
+  // 注意：get 的第二个参数就是查询对象，不能再包一层 { params: {...} }
+  // （否则会序列化成 ?params=[object Object]，后端 400）
+  const res = await yzhApi.get<ApiResponse<FileUploadProgress[]>>('/api/Workflow/StandardDirectory/upload-status', { taskId })
   return res.data!
 }
 
 /** 获取活跃队列 */
 export async function getActiveQueue(directoryCode: string): Promise<any[]> {
-  const res = await yzhApi.get<ApiResponse<any[]>>('/api/Workflow/StandardDirectory/active-queue', { params: { directoryCode } })
+  const res = await yzhApi.get<ApiResponse<any[]>>('/api/Workflow/StandardDirectory/active-queue', { directoryCode })
   return res.data!
 }
 
@@ -279,7 +281,7 @@ export async function cancelConvert(queueCode: string): Promise<BizResult> {
 
 /** 获取目录模板树 */
 export async function getTemplateTree(configCode: string): Promise<DirectoryTemplate[]> {
-  const res = await yzhApi.get<ApiResponse<DirectoryTemplate[]>>('/api/Foundation/DirectoryTemplate/tree', { params: { configCode } })
+  const res = await yzhApi.get<ApiResponse<DirectoryTemplate[]>>('/api/Foundation/DirectoryTemplate/tree', { configCode })
   return res.data!
 }
 

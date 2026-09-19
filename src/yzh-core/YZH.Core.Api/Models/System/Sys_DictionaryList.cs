@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using SqlSugar;
 using YZH.Core.Stand.Attributes;
+using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Entity;
 
 namespace YZH.Core.Api.Models.System;
@@ -23,7 +24,7 @@ namespace YZH.Core.Api.Models.System;
 /// </summary>
 [SugarTable("Sys_DictionaryList")]
 [YZHDeleteStrategy(Mode = DeleteMode.Soft)]
-public class Sys_DictionaryList : BaseEntity
+public class Sys_DictionaryList : BaseEntity, ISoftDelete, IIsValid
 {
     /// <summary>物理主键（DB: DicList_ID）。非关联字段。</summary>
     [SugarColumn(ColumnName = "DicList_ID", IsPrimaryKey = true, IsIdentity = true)]
@@ -90,28 +91,22 @@ public class Sys_DictionaryList : BaseEntity
 
     // === 审计字段覆盖（本表用非标准列名） ===
 
-    /// <summary>创建人（DB: Creator）</summary>
-    [SugarColumn(ColumnName = "Creator", IsNullable = true)]
+    /// <summary>创建人（DB: CreateBy）</summary>
     public new string? CreateBy { get; set; }
 
-    /// <summary>创建时间（DB: CreateDate）</summary>
-    [SugarColumn(ColumnName = "CreateDate")]
+    /// <summary>创建时间（DB: CreateTime）</summary>
     public new DateTime CreateTime { get; set; }
 
-    /// <summary>修改人（DB: Modifier）</summary>
-    [SugarColumn(ColumnName = "Modifier", IsNullable = true)]
+    /// <summary>修改人（DB: UpdateBy）</summary>
     public new string? UpdateBy { get; set; }
 
-    /// <summary>修改时间（DB: ModifyDate）</summary>
-    [SugarColumn(ColumnName = "ModifyDate", IsNullable = true)]
+    /// <summary>修改时间（DB: UpdateTime）</summary>
     public new DateTime? UpdateTime { get; set; }
 
     /// <summary>删除时间（DB: DeleteTime）</summary>
-    [SugarColumn(ColumnName = "DeleteTime", IsNullable = true)]
     public new DateTime? DeleteTime { get; set; }
 
     /// <summary>删除人（DB: DeleteBy）</summary>
-    [SugarColumn(ColumnName = "DeleteBy", IsNullable = true)]
     public new string? DeleteBy { get; set; }
 
     // === 忽略 BaseEntity 中本表不存在的列 ===

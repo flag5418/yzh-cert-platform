@@ -33,7 +33,7 @@ export class SkillTreeTableLogic extends TreeTableLogic<any> {
     return buttons
   }
 
-  // ──── 树节点操作 ────
+  // ──── 树节点操作（不含 add-child，分类扁平无层级） ────
   get nodeActions(): Record<string, string> {
     const actions: Record<string, string> = {}
     const tc = this.treeConfig
@@ -41,13 +41,6 @@ export class SkillTreeTableLogic extends TreeTableLogic<any> {
     if (tc.AllowEdit) actions['edit'] = '编辑'
     if (tc.AllowDelete) actions['delete'] = '删除'
     return actions
-  }
-
-  /**
-   * 获取树节点操作按钮文本
-   */
-  getNodeActionLabel(action: string, _node: TreeNode): string {
-    return this.nodeActions[action] || action
   }
 
   // ========================================================
@@ -65,10 +58,11 @@ export class SkillTreeTableLogic extends TreeTableLogic<any> {
     searchParams?: Record<string, any>
   }): Promise<{ rows: any[]; total: number }> {
     const filters = this.buildFilters()
-    if (this.selectedNode.value) {
+    // "全部"节点（Code=__all__）不加分类过滤，加载全量技能
+    if (this.selectedNode.value && this.selectedNode.value.Code !== '__all__') {
       filters.push({
         Field: this.relateField,
-        Value: this.selectedNode.value.code,
+        Value: this.selectedNode.value.Code,
         Operator: 'eq',
       })
     }
@@ -114,9 +108,10 @@ export class SkillTreeTableLogic extends TreeTableLogic<any> {
   // 技能 CRUD
   // ========================================================
 
-  /** 打开新增技能弹窗 */
+  /** 打开新增技能弹窗（\"全部\"节点不可新增，须选中具体分类） */
   openAddSkillDialog(): boolean {
     if (!this.selectedNode.value) return false
+    if (this.selectedNode.value.Code === '__all__') return false
     this.dialogMode.value = 'add'
     this.formGroupIndex.value = '0'
     Object.keys(this.formData).forEach((k) => delete this.formData[k])
@@ -135,7 +130,8 @@ export class SkillTreeTableLogic extends TreeTableLogic<any> {
   /** 打开编辑技能弹窗 */
   openEditSkillDialog(row: any): void {
     this.dialogMode.value = 'edit'
-    this.formGroupIndex.value = '1'
+    // 编辑模式传 '0' → GroupIndex="0"（默认）的字段可编辑，非 "0" 的字段只读
+    this.formGroupIndex.value = '0'
     Object.keys(this.formData).forEach((k) => delete this.formData[k])
     Object.assign(this.formData, row)
     this.dialogVisible.value = true
@@ -238,7 +234,20 @@ export class SkillTreeTableLogic extends TreeTableLogic<any> {
   async init(): Promise<void> {
     await this.loadConfig()
     await this.loadTreeRoot()
-    // 表格通过 YzhTable 的 dataLoader 自动加载数据
+    // 注入"全部"虚拟根节点（showall = 加载全部技能，不加分类过滤）
+    this.treeData.value.unshift({
+      Code: '__all__',
+      Name: '全部',
+      ParentCode: null,
+      NodeType: 'virtual',
+      IsLeaf: true,
+      Extra: { level: 0 },
+      Children: [],
+    })
+    // 默认选中"全部"节点，加载全量技能
+    const allNode = this.treeData.value[0]
+    this.selectedNode.value = allNode
+    await (this as any)._tableRef?.refresh()
   }
 }
 

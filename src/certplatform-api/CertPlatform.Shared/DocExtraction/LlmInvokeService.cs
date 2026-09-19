@@ -172,9 +172,28 @@ namespace CertPlatform.Shared.DocExtraction
                     }
                     catch (JsonException je)
                     {
-                        _logger.LogWarning("[LLM] JSON 解析失败: {Err}，原文前 200 字符: {Head}", je.Message, content.Length > 200 ? content[..200] : content);
-                        result.Success = false;
-                        result.Message = "AI 返回内容无法解析为 JSON";
+                        // 输出被 max_tokens 截断（completion 恰好等于上限）时尽力抢救：
+                        // 裁到最后一处完整闭合，再补齐未闭合的容器——能救回大部分字段/表格，
+                        // 总比整体报「无法解析为 JSON」好。
+                        var truncated = completionTokens != null && completionTokens >= request.MaxTokens;
+                        var repaired = truncated ? TryRepairTruncatedJson(cleaned) : null;
+                        if (repaired != null)
+                        {
+                            try
+                            {
+                                result.Json = JsonDocument.Parse(repaired);
+                                _logger.LogWarning("[LLM] 输出疑似被 max_tokens({Max}) 截断，已抢救解析（原文 {Len} 字符，抢救后 {New} 字符）",
+                                    request.MaxTokens, content.Length, repaired.Length);
+                            }
+                            catch (JsonException) { result.Json = null; }
+                        }
+
+                        if (result.Json == null)
+                        {
+                            _logger.LogWarning("[LLM] JSON 解析失败: {Err}，原文前 200 字符: {Head}", je.Message, content.Length > 200 ? content[..200] : content);
+                            result.Success = false;
+                            result.Message = "AI 返回内容无法解析为 JSON";
+                        }
                     }
                 }
 
@@ -189,6 +208,46 @@ namespace CertPlatform.Shared.DocExtraction
                 _logger.LogError(ex, "[LLM] 调用异常");
                 return new LlmInvokeResponse { Success = false, Message = $"AI 调用异常：{ex.Message}", DurationMs = sw.ElapsedMilliseconds };
             }
+        }
+
+        /// <summary>
+        /// 尝试修复被截断的 JSON：裁到最后一处完整的对象/数组结尾，
+        /// 再按括号栈倒序补齐未闭合的容器。字符串被截断时返回 null（无法安全补）。
+        /// </summary>
+        private static string? TryRepairTruncatedJson(string text)
+        {
+            var end = text.LastIndexOf('}');
+            if (end < 0) return null;
+            var candidate = text[..(end + 1)];
+
+            var stack = new List<char>();
+            var inString = false;
+            var escaped = false;
+            foreach (var ch in candidate)
+            {
+                if (inString)
+                {
+                    if (escaped) escaped = false;
+                    else if (ch == '\\') escaped = true;
+                    else if (ch == '"') inString = false;
+                    continue;
+                }
+                switch (ch)
+                {
+                    case '"': inString = true; break;
+                    case '{': stack.Add('}'); break;
+                    case '[': stack.Add(']'); break;
+                    case '}':
+                    case ']':
+                        if (stack.Count > 0 && stack[^1] == ch) stack.RemoveAt(stack.Count - 1);
+                        break;
+                }
+            }
+
+            if (inString) return null;
+            var sb = new StringBuilder(candidate);
+            for (int i = stack.Count - 1; i >= 0; i--) sb.Append(stack[i]);
+            return sb.ToString();
         }
 
         /// <summary>剥离 markdown 代码围栏等包装（```json ... ```）</summary>

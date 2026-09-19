@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
@@ -10,8 +9,9 @@ using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
+using CertPlatform.Shared.Entities.Cert;
 
-using CB = SharedEntities::YZH.Entity.Admin.Platform.Cert.CertificationBody;
+using CB = CertPlatform.Shared.Entities.Cert.CertificationBody;
 
 namespace CertPlatform.Admin.Controllers.Foundation;
 

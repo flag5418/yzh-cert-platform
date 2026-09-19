@@ -21,7 +21,7 @@
  *
  * // 场景2：权限计算
  * const { tree, removed } = treeOps.removeSubtree(currentTree, code)
- * await api.delete(removed.map(n => n.code))
+ * await api.delete(removed.map(n => n.Code))
  *
  * // 场景3：多树合并导出
  * const merged = treeOps.mergeRoots(orgTree, stdTree)
@@ -45,7 +45,7 @@ import type { TreeNode, TreePatch } from '../types/tree'
  *
  * @example
  * const newTree = treeOps.addTreeNode(treeData, 'D001', {
- *   code: 'T003', name: '后端组', parentCode: 'D001', children: []
+ *   Code: 'T003', Name: '后端组', ParentCode: 'D001', Children: []
  * })
  */
 export function addNode<T>(
@@ -61,11 +61,11 @@ export function addNode<T>(
   // 递归查找父节点并添加
   const addToParent = (nodes: TreeNode<T>[]): TreeNode<T>[] => {
     return nodes.map(n => {
-      if (n.code === parentCode) {
-        return { ...n, children: [...n.children, node] }
+      if (n.Code === parentCode) {
+        return { ...n, Children: [...n.Children, node] }
       }
-      if (n.children && n.children.length > 0) {
-        return { ...n, children: addToParent(n.children) }
+      if (n.Children && n.Children.length > 0) {
+        return { ...n, Children: addToParent(n.Children) }
       }
       return n
     })
@@ -84,7 +84,7 @@ export function addNode<T>(
  *
  * @example
  * const { tree, removed } = treeOps.removeSubtree(treeData, 'D001')
- * console.log('删除的节点:', removed.map(n => n.code))
+ * console.log('删除的节点:', removed.map(n => n.Code))
  */
 export function removeSubtree<T>(
   roots: TreeNode<T>[],
@@ -95,14 +95,14 @@ export function removeSubtree<T>(
   const removeFrom = (nodes: TreeNode<T>[]): TreeNode<T>[] => {
     const result: TreeNode<T>[] = []
     for (const node of nodes) {
-      if (node.code === code) {
+      if (node.Code === code) {
         // 收集被删除的节点及其所有子孙
         removed.push(node)
         collectDescendants(node).forEach(n => removed.push(n))
         // 不加入结果（即删除）
       } else {
-        if (node.children && node.children.length > 0) {
-          result.push({ ...node, children: removeFrom(node.children) })
+        if (node.Children && node.Children.length > 0) {
+          result.push({ ...node, Children: removeFrom(node.Children) })
         } else {
           result.push(node)
         }
@@ -177,7 +177,7 @@ export function moveSubtree<T>(
   const { tree: treeAfterRemove } = removeSubtree(roots, code)
   const newTree = addNode(treeAfterRemove, newParentCode, {
     ...nodeToMove,
-    parentCode: newParentCode
+    ParentCode: newParentCode
   })
 
   return { tree: newTree }
@@ -194,8 +194,8 @@ export function moveSubtree<T>(
  *
  * @example
  * const newTree = treeOps.updateNode(treeData, 'D001', {
- *   name: '研发部',
- *   extra: { icon: 'Code' }
+ *   Name: '研发部',
+ *   Extra: { icon: 'Code' }
  * })
  */
 export function updateNode<T>(
@@ -205,11 +205,11 @@ export function updateNode<T>(
 ): TreeNode<T>[] {
   const update = (nodes: TreeNode<T>[]): TreeNode<T>[] => {
     return nodes.map(n => {
-      if (n.code === code) {
+      if (n.Code === code) {
         return { ...n, ...patch }
       }
-      if (n.children && n.children.length > 0) {
-        return { ...n, children: update(n.children) }
+      if (n.Children && n.Children.length > 0) {
+        return { ...n, Children: update(n.Children) }
       }
       return n
     })
@@ -247,14 +247,14 @@ export function mergeRoots<T>(...rootLists: TreeNode<T>[][]): TreeNode<T>[] {
  *
  * @example
  * const patch = treeOps.diff(oldTreeData, newTreeData)
- * console.log('新增:', patch.added.map(n => n.name))
+ * console.log('新增:', patch.added.map(n => n.Name))
  * console.log('删除:', patch.removed)
  */
 export function diff<T>(oldTree: TreeNode<T>[], newTree: TreeNode<T>[]): TreePatch<T> {
   const oldNodes = flattenWithLevel(oldTree)
   const newNodes = flattenWithLevel(newTree)
-  const oldMap = new Map(oldNodes.map(n => [n.node.code, n]))
-  const newMap = new Map(newNodes.map(n => [n.node.code, n]))
+  const oldMap = new Map(oldNodes.map(n => [n.node.Code, n]))
+  const newMap = new Map(newNodes.map(n => [n.node.Code, n]))
 
   const added: TreeNode<T>[] = []
   const removed: string[] = []
@@ -262,12 +262,12 @@ export function diff<T>(oldTree: TreeNode<T>[], newTree: TreeNode<T>[]): TreePat
 
   // 找出新增和更新的
   for (const [, newNode] of newMap) {
-    const old = oldMap.get(newNode.node.code)
+    const old = oldMap.get(newNode.node.Code)
     if (!old) {
       added.push(newNode.node)
     } else if (!isNodeEqual(old.node, newNode.node)) {
       const changes = getNodeChanges(old.node, newNode.node)
-      updated.push({ code: newNode.node.code, changes })
+      updated.push({ code: newNode.node.Code, changes })
     }
   }
 
@@ -292,23 +292,23 @@ export function diff<T>(oldTree: TreeNode<T>[], newTree: TreeNode<T>[]): TreePat
 export function validate<T>(roots: TreeNode<T>[]): { valid: boolean; errors: string[] } {
   const errors: string[] = []
   const nodes = flatten(roots)
-  const nodeCodes = new Set(nodes.map(n => n.code))
+  const nodeCodes = new Set(nodes.map(n => n.Code))
 
-  // 检查重复 code
+  // 检查重复 Code
   const codeCount = new Map<string, number>()
   for (const node of nodes) {
-    codeCount.set(node.code, (codeCount.get(node.code) ?? 0) + 1)
+    codeCount.set(node.Code, (codeCount.get(node.Code) ?? 0) + 1)
   }
   for (const [code, count] of codeCount) {
     if (count > 1) {
-      errors.push(`code "${code}" 重复 ${count} 次`)
+      errors.push(`Code "${code}" 重复 ${count} 次`)
     }
   }
 
   // 检查孤儿节点
   for (const node of nodes) {
-    if (node.parentCode !== null && node.parentCode !== '' && !nodeCodes.has(node.parentCode)) {
-      errors.push(`节点 "${node.name}" 的 parentCode "${node.parentCode}" 不存在`)
+    if (node.ParentCode !== null && node.ParentCode !== '' && !nodeCodes.has(node.ParentCode)) {
+      errors.push(`节点 "${node.Name}" 的 ParentCode "${node.ParentCode}" 不存在`)
     }
   }
 
@@ -335,8 +335,8 @@ export function flatten<T>(roots: TreeNode<T>[]): TreeNode<T>[] {
   const collect = (nodes: TreeNode<T>[]) => {
     for (const node of nodes) {
       result.push(node)
-      if (node.children && node.children.length > 0) {
-        collect(node.children)
+      if (node.Children && node.Children.length > 0) {
+        collect(node.Children)
       }
     }
   }
@@ -351,9 +351,9 @@ export function flatten<T>(roots: TreeNode<T>[]): TreeNode<T>[] {
 /** 查找节点 */
 function findNode<T>(roots: TreeNode<T>[], code: string): TreeNode<T> | null {
   for (const node of roots) {
-    if (node.code === code) return node
-    if (node.children && node.children.length > 0) {
-      const found = findNode(node.children, code)
+    if (node.Code === code) return node
+    if (node.Children && node.Children.length > 0) {
+      const found = findNode(node.Children, code)
       if (found) return found
     }
   }
@@ -365,16 +365,16 @@ function collectDescendants<T>(node: TreeNode<T>): TreeNode<T>[] {
   const result: TreeNode<T>[] = []
   const collect = (n: TreeNode<T>) => {
     result.push(n)
-    n.children.forEach(collect)
+    n.Children.forEach(collect)
   }
-  node.children.forEach(collect)
+  node.Children.forEach(collect)
   return result
 }
 
 /** 判断 target 是否是 node 的子孙 */
 function isDescendant<T>(node: TreeNode<T>, targetCode: string): boolean {
-  for (const child of node.children) {
-    if (child.code === targetCode) return true
+  for (const child of node.Children) {
+    if (child.Code === targetCode) return true
     if (isDescendant(child, targetCode)) return true
   }
   return false
@@ -382,9 +382,9 @@ function isDescendant<T>(node: TreeNode<T>, targetCode: string): boolean {
 
 /** 获取节点的深度（子树最大深度） */
 function getNodeDepth<T>(node: TreeNode<T>): number {
-  if (!node.children || node.children.length === 0) return 1
+  if (!node.Children || node.Children.length === 0) return 1
   let max = 0
-  for (const child of node.children) {
+  for (const child of node.Children) {
     max = Math.max(max, getNodeDepth(child))
   }
   return max + 1
@@ -394,9 +394,9 @@ function getNodeDepth<T>(node: TreeNode<T>): number {
 function getLevel<T>(roots: TreeNode<T>[], targetCode: string): number {
   const traverse = (nodes: TreeNode<T>[], level: number): number => {
     for (const node of nodes) {
-      if (node.code === targetCode) return level
-      if (node.children && node.children.length > 0) {
-        const found = traverse(node.children, level + 1)
+      if (node.Code === targetCode) return level
+      if (node.Children && node.Children.length > 0) {
+        const found = traverse(node.Children, level + 1)
         if (found >= 0) return found
       }
     }
@@ -411,17 +411,17 @@ function hasCycleCheck<T>(roots: TreeNode<T>[]): boolean {
   const stack = new Set<string>()
 
   const dfs = (node: TreeNode<T>): boolean => {
-    if (stack.has(node.code)) return true
-    if (visited.has(node.code)) return false
+    if (stack.has(node.Code)) return true
+    if (visited.has(node.Code)) return false
 
-    visited.add(node.code)
-    stack.add(node.code)
+    visited.add(node.Code)
+    stack.add(node.Code)
 
-    for (const child of node.children) {
+    for (const child of node.Children) {
       if (dfs(child)) return true
     }
 
-    stack.delete(node.code)
+    stack.delete(node.Code)
     return false
   }
 
@@ -437,8 +437,8 @@ function flattenWithLevel<T>(roots: TreeNode<T>[]): Array<{ node: TreeNode<T>; l
   const traverse = (nodes: TreeNode<T>[], level: number) => {
     for (const node of nodes) {
       result.push({ node, level })
-      if (node.children && node.children.length > 0) {
-        traverse(node.children, level + 1)
+      if (node.Children && node.Children.length > 0) {
+        traverse(node.Children, level + 1)
       }
     }
   }
@@ -448,22 +448,22 @@ function flattenWithLevel<T>(roots: TreeNode<T>[]): Array<{ node: TreeNode<T>; l
 
 /** 比较节点是否相等 */
 function isNodeEqual<T>(a: TreeNode<T>, b: TreeNode<T>): boolean {
-  return a.code === b.code &&
-    a.name === b.name &&
-    a.parentCode === b.parentCode &&
-    a.nodeType === b.nodeType &&
-    a.isLeaf === b.isLeaf &&
-    a.sort === b.sort
+  return a.Code === b.Code &&
+    a.Name === b.Name &&
+    a.ParentCode === b.ParentCode &&
+    a.NodeType === b.NodeType &&
+    a.IsLeaf === b.IsLeaf &&
+    a.Sort === b.Sort
 }
 
 /** 获取节点变更 */
 function getNodeChanges<T>(oldNode: TreeNode<T>, newNode: TreeNode<T>): Partial<TreeNode<T>> {
   const changes: Partial<TreeNode<T>> = {}
-  if (oldNode.name !== newNode.name) changes.name = newNode.name
-  if (oldNode.parentCode !== newNode.parentCode) changes.parentCode = newNode.parentCode
-  if (oldNode.nodeType !== newNode.nodeType) changes.nodeType = newNode.nodeType
-  if (oldNode.isLeaf !== newNode.isLeaf) changes.isLeaf = newNode.isLeaf
-  if (oldNode.sort !== newNode.sort) changes.sort = newNode.sort
+  if (oldNode.Name !== newNode.Name) changes.Name = newNode.Name
+  if (oldNode.ParentCode !== newNode.ParentCode) changes.ParentCode = newNode.ParentCode
+  if (oldNode.NodeType !== newNode.NodeType) changes.NodeType = newNode.NodeType
+  if (oldNode.IsLeaf !== newNode.IsLeaf) changes.IsLeaf = newNode.IsLeaf
+  if (oldNode.Sort !== newNode.Sort) changes.Sort = newNode.Sort
   return changes
 }
 

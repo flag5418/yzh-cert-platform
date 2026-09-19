@@ -77,6 +77,7 @@
 import { ref, onMounted } from 'vue'
 import { YzhTree, YzhTreeTableCheckSelector } from '@yzh-core'
 import { RoleApiLogic } from './logic'
+import { useRoleTreeBadges } from '../_shared/useRoleTreeBadges'
 
 // ========================================================
 // Logic 实例
@@ -99,32 +100,17 @@ const roleTreeRef = ref<InstanceType<typeof YzhTree>>()
 
 // ========================================================
 // 带 badge 的角色树数据
+//
+// 初始化时注入一次徽标；勾选/取消后只局部更新「当前角色」那一个节点。
+// 之前是每次勾选都深拷贝整棵树并整体替换 :data，会把 el-tree 的展开状态
+// 和懒加载出来的子角色一起重置（详见 useRoleTreeBadges 注释）。
 // ========================================================
 
-const roleTreeWithBadges = ref<any[]>([])
-
-function refreshTreeBadges(): void {
-  const source = logic.roleTreeData.value
-  if (!source || source.length === 0) {
-    roleTreeWithBadges.value = []
-    return
-  }
-  const cloned = JSON.parse(JSON.stringify(source))
-  injectBadgesRecursive(cloned)
-  roleTreeWithBadges.value = cloned
-}
-
-function injectBadgesRecursive(nodes: any[]): void {
-  for (const node of nodes) {
-    const count = logic.getApiCount(node.Code)
-    const badge = count > 0 ? String(count) : undefined
-    node.Extra = { ...node.Extra, badge }
-    node.extra = { ...node.extra, badge }
-    if (node.children && node.children.length > 0) {
-      injectBadgesRecursive(node.children)
-    }
-  }
-}
+const {
+  treeNodes: roleTreeWithBadges,
+  init: initTreeBadges,
+  updateBadge: updateRoleBadge,
+} = useRoleTreeBadges((code) => logic.getCountForRole(code))
 
 // ========================================================
 // 事件处理
@@ -136,7 +122,8 @@ function handleRoleClick(data: any) {
 
 function handleCheckChange(payload: { added: string[]; removed: string[] }) {
   logic.handleCheckChange(payload).then(() => {
-    refreshTreeBadges()
+    // 只刷新当前角色节点的徽标（局部更新，不重建整棵树）
+    updateRoleBadge(logic.selectedRole.value?.Code)
   })
 }
 
@@ -147,7 +134,7 @@ function handleCheckChange(payload: { added: string[]; removed: string[] }) {
 onMounted(async () => {
   await logic.initCache()
   await logic.loadRoleTreeRoot()
-  refreshTreeBadges()
+  initTreeBadges(logic.roleTreeData.value)
 })
 </script>
 

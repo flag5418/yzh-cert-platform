@@ -168,7 +168,10 @@ public class RoleMenuController : TreeTableControllerBase<Sys_Role, Sys_Menu>
                 if (result.Success) inserted++;
             }
 
-            return Ok(ApiResponse<object?>.Ok(new { Updated = inserted }));
+            // Applied：本次调用后「应当已授权」的完整 code 集合（含自动补全的祖先菜单）。
+            // 祖先是服务端推导的，前端无法自行得知 —— 由这里回传，
+            // 前端即可局部更新本地关联缓存，不必再调一次 check/all 全量重取。
+            return Ok(ApiResponse<object?>.Ok(new { Updated = inserted, Applied = target.ToArray() }));
         }
         catch (Exception ex)
         {

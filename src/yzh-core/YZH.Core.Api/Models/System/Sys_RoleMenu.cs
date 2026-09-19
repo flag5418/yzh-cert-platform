@@ -43,4 +43,25 @@ public class Sys_RoleMenu : BaseEntity
     [SugarColumn(ColumnName = "CreateBy")]
     [StringLength(64)]
     public new string? CreateBy { get; set; }
+
+    // ========================================================
+    // 本表缺少的 BaseEntity 强制列 —— 必须 IsIgnore
+    // ========================================================
+    // BaseEntity 无 IsIgnore 的成员会被 SqlSugar 拼进 SELECT / INSERT / UPDATE。
+    // Sys_RoleMenu 是「角色↔菜单」中间表（表列：Id/RoleCode/MenuCode/OrderNo/CreateTime/CreateBy），
+    // 不存在 Code / UpdateTime / UpdateBy，若不屏蔽会报：
+    //   MySqlException: Unknown column 'Code' in 'field list'
+    // → GetListAsync 静默返回空、InsertAsync 全部失败，整个角色-菜单页读写均不可用。
+
+    /// <summary>中间表无业务 Code 列（用 RoleCode + MenuCode 做关联）</summary>
+    [SugarColumn(IsIgnore = true)]
+    public new string Code { get; set; } = string.Empty;
+
+    /// <summary>本表无 UpdateTime 列</summary>
+    [SugarColumn(IsIgnore = true)]
+    public new DateTime? UpdateTime { get; set; }
+
+    /// <summary>本表无 UpdateBy 列</summary>
+    [SugarColumn(IsIgnore = true)]
+    public new string? UpdateBy { get; set; }
 }

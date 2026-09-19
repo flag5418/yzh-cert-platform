@@ -1,84 +1,61 @@
-using System;
+using System.ComponentModel.DataAnnotations;
 using SqlSugar;
-using YZH.Entity.Admin.Platform;
+using YZH.Core.Stand.Interfaces;
+using YZH.Core.Stand.Models.Entity;
 
-namespace YZH.Entity.Admin.Platform.Wf
+namespace CertPlatform.Shared.Entities.Wf
 {
     /// <summary>
     /// Prompt 模板实体（映射 wf_prompt_template）
-    /// <para>迁移说明：原文件为旧架构 DataAnnotations 映射（[Table]/[Column]），</para>
-    /// <para>新架构 ORM（IDbOrm/SqlSugar）只认 [SugarTable]/[SugarColumn]，故改写映射方式，</para>
-    /// <para>命名空间与属性名保持不变（对齐 Entities/Dir 与 Entities/Wf 的既有惯例）。</para>
-    /// <para>注意：表无 IsValid 列（生效标志是 is_active），因此本实体不声明 IsValid，</para>
-    /// <para>避免框架自动追加 `IsValid = 1` 过滤导致 Unknown column。</para>
+    ///
+    /// 命名规范（YZH 铁律）：DB 列名 = C# 属性名 = PascalCase
     /// </summary>
     [SugarTable("wf_prompt_template")]
-    public class PromptTemplate : BaseEntity
+    public class PromptTemplate : BaseEntity, ISoftDelete, IIsValid
     {
-        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
-        public long Id { get; set; }
+        // ──── Id / Code / 审计字段已由 BaseEntity 提供 ────
+        // ──── ISoftDelete / IIsValid 接口字段由接口提供 ────
 
-        [SugarColumn(ColumnName = "code", Length = 100)]
-        public new string? Code { get; set; }
-
-        [SugarColumn(ColumnName = "org_code", Length = 50, IsNullable = true)]
-        public string? OrgCode { get; set; }
-
-        [SugarColumn(ColumnName = "creator", Length = 50, IsNullable = true)]
-        public new string? Creator { get; set; }
-
-        [SugarColumn(ColumnName = "create_date", IsNullable = true)]
-        public new DateTime? CreateDate { get; set; }
-
-        [SugarColumn(ColumnName = "modifier", Length = 50, IsNullable = true)]
-        public new string? Modifier { get; set; }
-
-        [SugarColumn(ColumnName = "modify_date", IsNullable = true)]
-        public new DateTime? ModifyDate { get; set; }
-
-        [SugarColumn(ColumnName = "deleter", Length = 50, IsNullable = true)]
-        public new string? Deleter { get; set; }
-
-        [SugarColumn(ColumnName = "delete_time", IsNullable = true)]
-        public new DateTime? DeleteTime { get; set; }
-
-        [SugarColumn(ColumnName = "status", Length = 50, IsNullable = true)]
-        public new string? Status { get; set; }
-
-        [SugarColumn(ColumnName = "enable")]
-        public new bool Enable { get; set; } = true;
-
-        [SugarColumn(ColumnName = "sort")]
-        public new int Sort { get; set; }
-
-        [SugarColumn(ColumnName = "remark", Length = 500, IsNullable = true)]
-        public new string? Remark { get; set; }
-
-        [SugarColumn(ColumnName = "prompt_code", Length = 100)]
+        [StringLength(100)]
         public string PromptCode { get; set; } = string.Empty;
 
-        [SugarColumn(ColumnName = "prompt_name", Length = 200)]
+        [StringLength(200)]
         public string PromptName { get; set; } = string.Empty;
 
-        [SugarColumn(ColumnName = "prompt_type", Length = 50)]
+        [StringLength(50)]
         public string PromptType { get; set; } = string.Empty;
 
-        [SugarColumn(ColumnName = "skill_target", Length = 50, IsNullable = true)]
+        [StringLength(50)]
         public string? SkillTarget { get; set; }
 
-        [SugarColumn(ColumnName = "template", ColumnDataType = "mediumtext", IsNullable = true)]
+        [SugarColumn(ColumnDataType = "mediumtext", IsNullable = true)]
         public string? Template { get; set; }
 
-        [SugarColumn(ColumnName = "description", ColumnDataType = "text", IsNullable = true)]
+        [SugarColumn(ColumnDataType = "text", IsNullable = true)]
         public string? Description { get; set; }
 
-        [SugarColumn(ColumnName = "version")]
         public int Version { get; set; } = 1;
 
-        [SugarColumn(ColumnName = "is_active")]
         public bool IsActive { get; set; } = true;
 
-        [SugarColumn(ColumnName = "last_test_result", ColumnDataType = "text", IsNullable = true)]
+        public bool Enable { get; set; } = true;
+
+        [StringLength(20)]
+        public string? Status { get; set; } = "active";
+
+        // Creator/Deleter 已并入 BaseEntity 的 CreateBy/DeleteBy（YZH 统一审计列），
+        // 保留同名属性会生成不存在的列 Creator/Deleter → Unknown column。
+
+        [SugarColumn(ColumnDataType = "text", IsNullable = true)]
         public string? LastTestResult { get; set; }
+
+        [StringLength(50)]
+        public string? OrgCode { get; set; }
+
+        // ──── ISoftDelete + IIsValid 接口显式实现 ────
+        public bool IsDeleted { get; set; }
+        public string? DeleteBy { get; set; }
+        public DateTime? DeleteTime { get; set; }
+        public int IsValid { get; set; } = 1;
     }
 }

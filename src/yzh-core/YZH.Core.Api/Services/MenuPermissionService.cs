@@ -7,7 +7,7 @@ namespace YZH.Core.Api.Services;
 ///     菜单权限服务：按当前登录用户的角色过滤可见菜单
 ///
 ///     规则：
-///     1. 超级管理员（RoleId=1 或角色编码 ROLE_SUPER_ADMIN）→ 全部菜单
+///     1. 超级管理员（角色编码 ROLE_SUPER_ADMIN）→ 全部菜单
 ///     2. 其他角色 → 仅返回 Sys_RoleMenu 中已授权的菜单
 ///     3. 自动补全祖先菜单（即便历史数据缺少祖先，也不会出现断链菜单）
 ///
@@ -17,9 +17,6 @@ public class MenuPermissionService
 {
     /// <summary>超级管理员角色编码</summary>
     public const string SuperAdminRoleCode = "ROLE_SUPER_ADMIN";
-
-    /// <summary>超级管理员角色 ID</summary>
-    public const int SuperAdminRoleId = 1;
 
     private readonly EntityService<Sys_Menu> _menuService;
     private readonly EntityService<Sys_RoleMenu> _roleMenuService;
@@ -36,7 +33,6 @@ public class MenuPermissionService
     public static bool IsSuperAdmin(IUserContext? ctx)
     {
         if (ctx == null) return false;
-        if (ctx.RoleId == SuperAdminRoleId) return true;
         return ctx.GetRoleCodes()?.Any(c =>
             string.Equals(c, SuperAdminRoleCode, StringComparison.OrdinalIgnoreCase)) == true;
     }

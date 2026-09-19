@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using System;
 using System.Collections.Generic;
@@ -12,9 +11,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
-using SharedDoc = SharedEntities::CertPlatform.Shared.DocExtraction;
-using SharedEntities::YZH.Entity.Admin.Platform.Dir;
-using SharedEntities::YZH.Entity.Admin.Platform.Doc;
+using CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.Entities.Dir;
+using CertPlatform.Shared.Entities.Doc;
 
 namespace CertPlatform.Admin.Services.DocExtraction;
 
@@ -343,16 +342,21 @@ public partial class DocExtractionRuleService
         // 3. 提示词（DB 模板 analyze_{skill} 优先，回退内嵌默认）
         var analyzePrompt = await BuildAnalysisPromptAsync(skill);
 
+        // 3.1 结构化上下文（【正文】/【表格 n】分区）+ 模板占位符渲染
+        var (defFields, defTables) = await LoadRuleDefsAsync(request.FileCode);
+        var structured = BuildStructuredContext(markdown);
+        var (renderedPrompt, inlineContent) = RenderPrompt(analyzePrompt, structured, defFields, defTables, null);
+
         // 4. LLM 调用
-        var llmResult = await _llm.CompleteAsync(new SharedDoc::LlmInvokeRequest
+        var llmResult = await _llm.CompleteAsync(new CertPlatform.Shared.DocExtraction.LlmInvokeRequest
         {
             BaseUrl = settings.BaseUrl,
             ApiKey = settings.ApiKey,
             Model = settings.Model,
             Temperature = settings.Temperature,
             MaxTokens = settings.MaxTokens,
-            Prompt = analyzePrompt,
-            DocumentContent = markdown,
+            Prompt = renderedPrompt,
+            DocumentContent = inlineContent,
             ForceJson = true
         });
 
@@ -387,9 +391,10 @@ public partial class DocExtractionRuleService
             if (!settings.Enabled)
                 return new VerifyPromptResponse { Success = false, Message = "AI 提取未启用（系统参数 ai_extract_enabled=false）" };
 
-            // 1. 规则（含 doc_content 缓存定位）
+            // 1. 规则（含 doc_content 缓存定位）+ 已配置的字段/表格清单（固定提示词的唯一依据）
             var rule = (await _db.GetOneAsync<DocExtractionRule>(x => x.StandardFileCode == request.FileCode)).Data;
-            var skill = rule?.Skill ?? "word";
+            var skill = rule?.Skill ?? ResolveSkill(request.FileCode);
+            var (defFields, defTables) = await LoadRuleDefsAsync(request.FileCode);
 
             // 2. 文档内容：优先规则缓存，无缓存则提取
             string docContent;
@@ -414,16 +419,26 @@ public partial class DocExtractionRuleService
                 }
             }
 
-            // 3. AI 提取
-            var llmResult = await _llm.CompleteAsync(new SharedDoc::LlmInvokeRequest
+            // 3. 提示词：用户提示词为空 → 使用「固定提示词」
+            //    （由本文件已配置的字段/表格清单生成，保证字段与表格结构性分离；
+            //      DB 模板里的 {{fields_json}} / {{tables_json}} / {{document_content}} 占位符在这里渲染）
+            var userPrompt = (request.Prompt ?? "").Trim();
+            var useFixedPrompt = string.IsNullOrEmpty(userPrompt);
+            var promptTemplate = useFixedPrompt ? BuildFixedExtractionPrompt(defFields, defTables) : userPrompt;
+            var structured = BuildStructuredContext(docContent);
+            var (renderedPrompt, inlineContent) = RenderPrompt(promptTemplate, structured, defFields, defTables, rule?.Prompt);
+
+            // 4. AI 提取
+            var llmResult = await _llm.CompleteAsync(new CertPlatform.Shared.DocExtraction.LlmInvokeRequest
             {
                 BaseUrl = settings.BaseUrl,
                 ApiKey = settings.ApiKey,
                 Model = settings.Model,
                 Temperature = settings.Temperature,
-                MaxTokens = settings.MaxTokens,
-                Prompt = request.Prompt,
-                DocumentContent = docContent,
+                // 提取结果要包含全部字段 + 表格行，4096 会截断 JSON（表现为「AI 返回内容无法解析为 JSON」）
+                MaxTokens = Math.Max(settings.MaxTokens, 8192),
+                Prompt = renderedPrompt,
+                DocumentContent = inlineContent,
                 ForceJson = true
             });
 
@@ -432,9 +447,11 @@ public partial class DocExtractionRuleService
             if (!llmResult.Success)
                 return new VerifyPromptResponse { Success = false, Message = llmResult.Message, Data = new ExtractionData { Message = llmResult.Message } };
 
-            var extraction = MapOutputsToExtractionData(llmResult.Json!.RootElement);
+            var extraction = MapOutputsToExtractionData(llmResult.Json!.RootElement, defFields, defTables);
             if (extraction == null)
                 return new VerifyPromptResponse { Success = false, Message = "AI 返回内容无法解析为提取结果" };
+
+            // 依据定义过滤：AI 未被要求输出的字段/表格（跑偏内容）不计入，避免「表格列名混进字段」
 
             // 映射后为空：AI 有返回但不符合提取格式（或文档确实无可提取内容）
             // → 明确报错而不是静默「验证成功 + 空结果」，否则前端只看到空白
@@ -443,7 +460,7 @@ public partial class DocExtractionRuleService
                 return new VerifyPromptResponse
                 {
                     Success = false,
-                    Message = "AI 未提取到任何字段或表格：请确认提示词为「文档数据提取任务」格式（field_code/field_value），或所选模板带 extracted_value 格式；也可先执行「自动分析」生成提示词",
+                    Message = "AI 未提取到任何字段或表格：可在弹窗中清空提示词改用「固定提示词」（按本文件已配置的字段/表格生成），或先在「文档提取规则」页执行自动分析并保存规则",
                     Data = extraction
                 };
 
@@ -805,13 +822,37 @@ public partial class DocExtractionRuleService
         return true;
     }
 
-    private static ExtractionData? MapOutputsToExtractionData(JsonElement root)
+    private static ExtractionData? MapOutputsToExtractionData(
+        JsonElement root, List<FieldDefDto>? defFields = null, List<TableDefDto>? defTables = null)
     {
         var data = new ExtractionData
         {
             Fields = new Dictionary<string, object>(),
             Tables = new Dictionary<string, List<Dictionary<string, object>>>()
         };
+
+        // 定义索引：编码（不区分大小写）+ 中文名 → 编码。
+        // 传入定义时，结果键一律归一为「字段/列表编码」，中文名不再作为输出键
+        // （否则中文键既是字段名又是表格名，前端无从区分，工作流转引也拿不到值）。
+        var fieldByCode = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var fieldByCn = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var d in defFields ?? new())
+        {
+            var code = !string.IsNullOrEmpty(d.Code) ? d.Code : (d.NameEn ?? "");
+            if (string.IsNullOrEmpty(code)) continue;
+            fieldByCode[code] = code;
+            if (!string.IsNullOrEmpty(d.Name)) fieldByCn[d.Name] = code;
+        }
+
+        string? ResolveFieldCode(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            var key = raw.Trim();
+            if (fieldByCode.TryGetValue(key, out var byCode)) return byCode;
+            if (fieldByCn.TryGetValue(key, out var byCn)) return byCn;
+            // 无定义时不做任何过滤（保持旧行为：有什么取什么）
+            return defFields == null || defFields.Count == 0 ? key : null;
+        }
 
         // fields
         if (root.TryGetProperty("fields", out var fields))
@@ -825,28 +866,51 @@ public partial class DocExtractionRuleService
 
                 foreach (var f in fieldsList)
                 {
+                    // 允许 fields 项写成 {"字段名": "值"} 这种键值对象（小模型常见输出）
                     if (f.ValueKind != JsonValueKind.Object) continue;
-                    // 编码优先级：V1 field_code → V2 field_name_en → V1 field_name → V2 field_name_cn
-                    var code = GetString(f, "field_code")
-                               ?? GetString(f, "field_name_en")
-                               ?? GetString(f, "field_name")
-                               ?? GetString(f, "field_name_cn")
-                               ?? "";
-                    if (string.IsNullOrEmpty(code)) continue;
+
+                    var rawCode = GetString(f, "field_code")
+                                  ?? GetString(f, "field_name_en")
+                                  ?? GetString(f, "fieldCode")
+                                  ?? GetString(f, "field_name")
+                                  ?? GetString(f, "field_name_cn")
+                                  ?? GetString(f, "fieldName");
 
                     var value = GetRaw(f, "field_value")
                                 ?? GetRaw(f, "value")
-                                ?? GetRaw(f, "extracted_value");
+                                ?? GetRaw(f, "extracted_value")
+                                ?? GetRaw(f, "extractedValue");
+
+                    var code = ResolveFieldCode(rawCode);
+                    if (code == null)
+                    {
+                        // 无 field_code 键时，尝试把该对象当作 {中文名: 值} 单键对象
+                        foreach (var kv in f.EnumerateObject())
+                        {
+                            var k = ResolveFieldCode(kv.Name);
+                            if (k != null && HasJsonValue(kv.Value))
+                            {
+                                data.Fields[k] = ConvertJsonElement(kv.Value) ?? "";
+                                break;
+                            }
+                        }
+                        continue;
+                    }
 
                     // V2 语义（与 MapAiFieldsToDtos 一致）：丢弃未提取到实际值的字段
                     if (usesV2 && !HasJsonValue(value)) continue;
+                    // 定义内的字段即使为空也写入（前端按定义展示「未提取到」，避免整项消失）
                     data.Fields[code] = value == null ? "" : (ConvertJsonElement(value.Value) ?? "");
                 }
             }
             else if (fields.ValueKind == JsonValueKind.Object)
             {
                 foreach (var kv in fields.EnumerateObject())
-                    data.Fields[kv.Name] = ConvertJsonElement(kv.Value) ?? "";
+                {
+                    var code = ResolveFieldCode(kv.Name);
+                    if (code == null) continue;
+                    data.Fields[code] = ConvertJsonElement(kv.Value) ?? "";
+                }
             }
         }
 
@@ -859,11 +923,16 @@ public partial class DocExtractionRuleService
                 // V2 判定（带 extracted_data / table_name_cn）：无真实提取行的表格不入结果
                 var isV2Table = t.TryGetProperty("extracted_data", out _) || t.TryGetProperty("table_name_cn", out _);
                 // 编码优先级：V1 table_code → V2 table_name_en → V1 table_name → V2 table_name_cn
-                var tableCode = GetString(t, "table_code")
+                var rawTableCode = GetString(t, "table_code")
                                 ?? GetString(t, "table_name_en")
+                                ?? GetString(t, "tableCode")
                                 ?? GetString(t, "table_name")
                                 ?? GetString(t, "table_name_cn")
-                                ?? "";
+                                ?? GetString(t, "tableName");
+
+                // 定义匹配：编码或中文名命中则用定义编码（保证工作流/前端拿到稳定键）；无定义时沿用 AI 给的键
+                var defTable = MatchTableDef(defTables, rawTableCode);
+                var tableCode = defTable?.Code ?? rawTableCode ?? "";
                 if (string.IsNullOrEmpty(tableCode)) continue;
 
                 // 行数组：V1 rows → V2 extracted_data
@@ -871,23 +940,409 @@ public partial class DocExtractionRuleService
                 var rowsEl = t.TryGetProperty("rows", out var r1) && r1.ValueKind == JsonValueKind.Array
                     ? r1
                     : (t.TryGetProperty("extracted_data", out var r2) && r2.ValueKind == JsonValueKind.Array ? r2 : default);
+
+                // 列名（用于「二维数组行」按位置绑定，以及把中文行键归一为列编码）
+                var colMap = BuildColumnMap(defTable, t);
+
                 if (rowsEl.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var row in rowsEl.EnumerateArray())
                     {
-                        if (row.ValueKind != JsonValueKind.Object) continue;
-                        var dict = new Dictionary<string, object>();
-                        foreach (var prop in row.EnumerateObject())
-                            dict[prop.Name] = ConvertJsonElement(prop.Value) ?? "";
-                        rows.Add(dict);
+                        var dict = RowToDict(row, colMap);
+                        if (dict != null) rows.Add(dict);
                     }
                 }
+                else if (t.TryGetProperty("rows", out var single) && single.ValueKind == JsonValueKind.Object)
+                {
+                    // rows 直接是单行对象
+                    var dict = RowToDict(single, colMap);
+                    if (dict != null) rows.Add(dict);
+                }
+
                 if (isV2Table && rows.Count == 0) continue;
                 data.Tables[tableCode] = rows;
             }
         }
 
         return data;
+    }
+
+    /// <summary>按编码或中文名匹配表格定义（不区分大小写）</summary>
+    private static TableDefDto? MatchTableDef(List<TableDefDto>? defs, string? raw)
+    {
+        if (defs == null || defs.Count == 0 || string.IsNullOrWhiteSpace(raw)) return null;
+        var key = raw.Trim();
+        return defs.FirstOrDefault(d =>
+                   string.Equals(d.Code, key, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(d.NameEn, key, StringComparison.OrdinalIgnoreCase))
+               ?? defs.FirstOrDefault(d => string.Equals(d.Name, key, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// 构建列映射：{中文列名 / AI 列编码 → 目标列编码}
+    /// <para>目标编码优先取「表格定义的列编码」（工作流按列编码取值）；无定义时退回 AI 输出的列名</para>
+    /// </summary>
+    private static (List<string> Ordered, Dictionary<string, string> Map) BuildColumnMap(TableDefDto? defTable, JsonElement tableEl)
+    {
+        var ordered = new List<string>();
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        if (defTable != null && defTable.Columns.Count > 0)
+        {
+            foreach (var c in defTable.Columns)
+            {
+                var code = !string.IsNullOrEmpty(c.Code) ? c.Code : (c.NameEn ?? c.Name);
+                ordered.Add(code);
+                if (!string.IsNullOrEmpty(c.Name)) map[c.Name] = code;
+                if (!string.IsNullOrEmpty(c.NameEn)) map[c.NameEn] = code;
+                map[code] = code;
+            }
+        }
+
+        // AI 自报的列定义（定义缺失时用于二维数组行绑定）
+        if (tableEl.TryGetProperty("columns", out var cols) && cols.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var cd in cols.EnumerateArray())
+            {
+                if (cd.ValueKind != JsonValueKind.Object) continue;
+                var cn = GetString(cd, "column_name_cn") ?? GetString(cd, "column_name") ?? GetString(cd, "name");
+                var en = GetString(cd, "column_name_en") ?? GetString(cd, "column_code") ?? GetString(cd, "code");
+                var target = !string.IsNullOrEmpty(en) ? en : cn;
+                if (string.IsNullOrEmpty(target)) continue;
+                if (!ordered.Contains(target)) ordered.Add(target);
+                if (!string.IsNullOrEmpty(cn) && !map.ContainsKey(cn)) map[cn] = target;
+                if (!string.IsNullOrEmpty(en)) map.TryAdd(en, en);
+                map.TryAdd(target, target);
+            }
+        }
+
+        return (ordered, map);
+    }
+
+    /// <summary>
+    /// 单行 → 字典（键归一为列编码）。支持两种行形态：
+    /// <para>· 对象行 {"角色":"编制","姓名":"张三"}（V2 常见）</para>
+    /// <para>· 二维数组行 ["编制","张三"]（V1 extract_all 模板）——按列顺序绑定，
+    ///   之前只认对象行，导致这类表格全部落空（表现为「表格数据为空」）</para>
+    /// </summary>
+    private static Dictionary<string, object>? RowToDict(JsonElement row, (List<string> Ordered, Dictionary<string, string> Map) colMap)
+    {
+        var dict = new Dictionary<string, object>();
+
+        if (row.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in row.EnumerateObject())
+            {
+                var key = colMap.Map.TryGetValue(prop.Name, out var mapped) ? mapped : prop.Name;
+                dict[key] = ConvertJsonElement(prop.Value) ?? "";
+            }
+            return dict;
+        }
+
+        if (row.ValueKind == JsonValueKind.Array)
+        {
+            var cells = row.EnumerateArray().ToList();
+            for (int i = 0; i < cells.Count; i++)
+            {
+                var key = i < colMap.Ordered.Count ? colMap.Ordered[i] : $"column_{i + 1}";
+                dict[key] = ConvertJsonElement(cells[i]) ?? "";
+            }
+            return dict;
+        }
+
+        return null;
+    }
+
+    // ========================================================
+    // 结构化上下文 + 固定提示词（字段/表格结构性分离）
+    // ========================================================
+
+    /// <summary>结构化上下文体积上限（超出时截断【正文】，表格区块完整保留）</summary>
+    private const int MaxContextChars = 48000;
+
+    /// <summary>
+    /// 读取该文件已配置的字段/表格定义（无规则时返回空集合）。
+    /// <para>定义是「固定提示词」与「结果中文回显」的唯一依据。</para>
+    /// </summary>
+    private async Task<(List<FieldDefDto> Fields, List<TableDefDto> Tables)> LoadRuleDefsAsync(string? standardFileCode)
+    {
+        var fields = new List<FieldDefDto>();
+        var tables = new List<TableDefDto>();
+        if (string.IsNullOrWhiteSpace(standardFileCode)) return (fields, tables);
+
+        var ruleCode = (await _db.GetOneAsync<DocExtractionRule>(x => x.StandardFileCode == standardFileCode)).Data?.Code;
+        if (string.IsNullOrEmpty(ruleCode)) return (fields, tables);
+
+        var fRows = (await _db.GetListAsync<DocFieldDef>(x => x.RuleCode == ruleCode)).Data ?? new();
+        fields = fRows.OrderBy(x => x.Sort).Select(x => new FieldDefDto
+        {
+            Name = x.FieldName,
+            NameEn = x.FieldCode,
+            Code = x.FieldCode,
+            DataType = x.DataType,
+            Description = x.Description,
+            IsManual = x.IsManual,
+            IsAiRecommended = x.IsAiRecommended ?? true
+        }).ToList();
+
+        var tRows = (await _db.GetListAsync<DocTableDef>(x => x.RuleCode == ruleCode)).Data ?? new();
+        foreach (var t in tRows.OrderBy(x => x.Sort))
+        {
+            var cRows = (await _db.GetListAsync<DocTableFieldDef>(x => x.TableCode == t.Code)).Data ?? new();
+            tables.Add(new TableDefDto
+            {
+                Name = t.TableName,
+                NameEn = t.TableCode,
+                Code = t.TableCode,
+                Description = t.Description,
+                Columns = cRows.OrderBy(x => x.Sort).Select(x => new TableColumnDto
+                {
+                    Name = x.ColumnName,
+                    NameEn = x.ColumnCode,
+                    Code = x.ColumnCode,
+                    DataType = x.DataType
+                }).ToList()
+            });
+        }
+        return (fields, tables);
+    }
+
+    /// <summary>
+    /// 把 Markdown 拆成【正文】+【表格 n】的结构化上下文。
+    /// <para>为什么需要：直接喂裸 GFM Markdown 时，模型无法稳定区分「表格单元格」与
+    /// 「正文字段」，实测会把表格列名/单元格当成字段输出，或把表格数据留空。
+    /// 显式分区后，表格内容只能进 tables（与 DB 分析模板里已经写好的
+    /// 「表格内容处理规则」语义对齐）。</para>
+    /// </summary>
+    private static string BuildStructuredContext(string markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown)) return "";
+
+        var lines = markdown.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        var body = new List<string>();
+        var tables = new List<List<string>>();
+        List<string>? cur = null;
+
+        foreach (var raw in lines)
+        {
+            var line = raw.TrimEnd();
+            if (line.TrimStart().StartsWith("|"))
+            {
+                cur ??= new List<string>();
+                cur.Add(line.Trim());
+                continue;
+            }
+            if (cur != null) { tables.Add(cur); cur = null; }
+            body.Add(line);
+        }
+        if (cur != null) tables.Add(cur);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("【正文】（普通段落/标题，字段只能来自这里）");
+        var bodyText = CollapseBlankLines(body);
+        sb.AppendLine(bodyText.Length > MaxContextChars
+            ? bodyText[..MaxContextChars] + "\n…（正文过长已截断；表格区块完整保留）"
+            : bodyText);
+
+        for (int i = 0; i < tables.Count; i++)
+        {
+            var t = tables[i];
+            var headers = SplitTableRow(t[0]);
+            var dataRows = Math.Max(0, t.Count - 2);
+            sb.AppendLine();
+            sb.AppendLine($"【表格 {i + 1}】（{dataRows} 行数据，列：{string.Join(" | ", headers)}）");
+            foreach (var l in t) sb.AppendLine(l);
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
+    private static string CollapseBlankLines(List<string> lines)
+    {
+        var sb = new StringBuilder();
+        var blanks = 0;
+        foreach (var l in lines)
+        {
+            if (string.IsNullOrWhiteSpace(l))
+            {
+                if (++blanks > 1) continue;
+            }
+            else blanks = 0;
+            sb.AppendLine(l);
+        }
+        return sb.ToString().Trim();
+    }
+
+    private static List<string> SplitTableRow(string row)
+        => row.Trim().Trim('|').Split('|').Select(c => c.Trim()).ToList();
+
+    /// <summary>
+    /// 生成「固定提示词」：完全由本文件已配置的字段/表格清单驱动。
+    /// <para>与自由分析模板（analyze_*）的区别：这里把提取目标锁死为清单，
+    /// 并显式规定「表格区块内容不得作为字段」+「行键用 column_code」，
+    /// 从提示词层面消除“表格列名被当成字段、表格数据为空”两类错误。</para>
+    /// </summary>
+    private static string BuildFixedExtractionPrompt(List<FieldDefDto> fields, List<TableDefDto> tables)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("# 文档数据提取任务（固定契约）");
+        sb.AppendLine();
+        sb.AppendLine("你是严谨的文档信息提取助手。**只能**按下方的字段清单与表格清单提取数据，不得新增、改名、合并。");
+        sb.AppendLine();
+
+        sb.AppendLine("## 一、字段清单（只能出现在 fields 里）");
+        sb.AppendLine();
+        if (fields.Count == 0)
+        {
+            sb.AppendLine("（本文件未配置字段，fields 输出空数组 []）");
+        }
+        else
+        {
+            sb.AppendLine("| # | 字段名称(中文) | field_code | 类型 | 必填 | 说明 |");
+            sb.AppendLine("|---|---------------|------------|------|------|------|");
+            for (int i = 0; i < fields.Count; i++)
+            {
+                var f = fields[i];
+                sb.AppendLine($"| {i + 1} | {f.Name} | {f.NameEn ?? f.Code} | {f.DataType} | {(f.IsRequired ? "是" : "否")} | {f.Description} |");
+            }
+        }
+        sb.AppendLine();
+
+        sb.AppendLine("## 二、表格清单（只能出现在 tables 里）");
+        sb.AppendLine();
+        if (tables.Count == 0)
+        {
+            sb.AppendLine("（本文件未配置表格，tables 输出空数组 []）");
+        }
+        else
+        {
+            for (int i = 0; i < tables.Count; i++)
+            {
+                var t = tables[i];
+                sb.AppendLine($"### 表格 {i + 1}：{t.Name}");
+                sb.AppendLine($"- table_code: {t.NameEn ?? t.Code}");
+                if (!string.IsNullOrEmpty(t.Description)) sb.AppendLine($"- 说明：{t.Description}");
+                if (t.Columns.Count > 0)
+                {
+                    sb.AppendLine("- 列（rows 的键必须用 column_code）：");
+                    sb.AppendLine();
+                    sb.AppendLine("| # | 列名称(中文) | column_code | 类型 |");
+                    sb.AppendLine("|---|-------------|-------------|------|");
+                    for (int j = 0; j < t.Columns.Count; j++)
+                    {
+                        var c = t.Columns[j];
+                        sb.AppendLine($"| {j + 1} | {c.Name} | {c.NameEn ?? c.Code} | {c.DataType} |");
+                    }
+                }
+                sb.AppendLine();
+            }
+        }
+
+        sb.AppendLine("## 三、输出格式（严格 JSON，不要解释文字、不要 Markdown 围栏）");
+        sb.AppendLine();
+        sb.AppendLine("{");
+        sb.AppendLine("  \"fields\": [{\"field_code\": \"<字段清单里的 field_code>\", \"field_value\": \"<从文档中提取的值>\"}],");
+        sb.AppendLine("  \"tables\": [{\"table_code\": \"<表格清单里的 table_code>\", \"rows\": [{\"<column_code>\": \"值\"}]}]");
+        sb.AppendLine("}");
+        sb.AppendLine();
+
+        sb.AppendLine("## 四、硬性规则");
+        sb.AppendLine();
+        sb.AppendLine("1. fields / tables 只允许出现清单中的 field_code / table_code，清单外的内容一律忽略。");
+        sb.AppendLine("2. 【表格 n】区块属于表格：其中的表头与单元格内容**不得**作为字段输出，表格数据只能写进对应表格的 rows。");
+        sb.AppendLine("3. rows 每行的键必须是列清单里的 column_code（不要用中文列名）。");
+        sb.AppendLine("4. 文档中找不到的字段：field_value 输出空字符串 \"\"；没有数据的表格：rows 输出 []。");
+        sb.AppendLine("5. 值保持文档原文内容；日期尽量规范为 YYYY-MM-DD。");
+        sb.AppendLine("6. 清单中的每张表格都必须出现在 tables 里（即使为空数组）；单张表格最多输出 50 行，文档中不足 50 行则全部输出，不要因为篇幅省略表格或只填部分表格。");
+        sb.AppendLine("7. 字段值只给实际值（不要复制大段正文）；整个 JSON 尽量控制在 3000 tokens 内，**优先保证 JSON 完整合法**（截断的 JSON 等于提取失败）。");
+        sb.AppendLine();
+        sb.AppendLine("## 五、文档内容（【正文】为普通段落；【表格 n】为表格区块）");
+        sb.AppendLine();
+        sb.AppendLine("{{document_content}}");
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 渲染提示词占位符，并决定文档上下文是「内联进提示词」还是「由调用层追加」。
+    /// <para>支持：{{document_content}} / {document_content}、{{fields_json}}、{{tables_json}}、{{prompt}}</para>
+    /// <para>⚠️ wf_prompt_template 里的 extract_all/verify_all 带这些占位符；旧实现从不替换，
+    /// 模型拿到字面量 {{tables_json}} 只能自己编结构 → 字段/表格混在一起。</para>
+    /// </summary>
+    private static (string Prompt, string InlineContent) RenderPrompt(
+        string template, string structuredContext,
+        List<FieldDefDto> fields, List<TableDefDto> tables, string? rulePrompt)
+    {
+        var prompt = template ?? "";
+        var hasContentSlot = prompt.Contains("{{document_content}}") || prompt.Contains("{document_content}");
+
+        if (hasContentSlot)
+        {
+            prompt = prompt.Replace("{{document_content}}", structuredContext)
+                           .Replace("{document_content}", structuredContext);
+        }
+
+        prompt = prompt.Replace("{{fields_json}}", BuildFieldsJson(fields))
+                       .Replace("{{tables_json}}", BuildTablesJson(tables))
+                       .Replace("{{prompt}}", BuildDefsBrief(fields, tables, rulePrompt));
+
+        // 模板自带内容槽 → 上下文已内联，避免调用层在末尾重复追加
+        return (prompt, hasContentSlot ? "" : structuredContext);
+    }
+
+    /// <summary>{{fields_json}} 占位符的替身：显式 field_code / 中文名 / 类型 / 是否必填</summary>
+    private static string BuildFieldsJson(List<FieldDefDto> fields)
+        => JsonSerializer.Serialize(fields.Select(f => new
+        {
+            field_code = f.NameEn ?? f.Code,
+            field_name = f.Name,
+            field_type = f.DataType,
+            is_required = f.IsRequired,
+            description = f.Description
+        }), JsonOptions);
+
+    /// <summary>{{tables_json}} 占位符的替身：表格 + 列（column_code）定义</summary>
+    private static string BuildTablesJson(List<TableDefDto> tables)
+        => JsonSerializer.Serialize(tables.Select(t => new
+        {
+            table_code = t.NameEn ?? t.Code,
+            table_name = t.Name,
+            description = t.Description,
+            columns = t.Columns.Select(c => new
+            {
+                column_code = c.NameEn ?? c.Code,
+                column_name = c.Name,
+                column_type = c.DataType
+            })
+        }), JsonOptions);
+
+    /// <summary>{{prompt}} 占位符的替身：字段/表格清单的紧凑中文描述</summary>
+    private static string BuildDefsBrief(List<FieldDefDto> fields, List<TableDefDto> tables, string? rulePrompt)
+    {
+        var sb = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(rulePrompt) &&
+            !rulePrompt.Contains("{{prompt}}") &&
+            !rulePrompt.Contains("{{document_content}}"))
+        {
+            sb.AppendLine(rulePrompt.Trim());
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("【字段清单】");
+        foreach (var f in fields)
+            sb.AppendLine($"- {f.Name}（field_code={f.NameEn ?? f.Code}，类型={f.DataType}）");
+        if (fields.Count == 0) sb.AppendLine("-（无）");
+
+        sb.AppendLine();
+        sb.AppendLine("【表格清单】（rows 的键必须用 column_code）");
+        foreach (var t in tables)
+        {
+            sb.AppendLine($"- {t.Name}（table_code={t.NameEn ?? t.Code}）：" +
+                string.Join("、", t.Columns.Select(c => $"{c.Name}({c.NameEn ?? c.Code})")));
+        }
+        if (tables.Count == 0) sb.AppendLine("-（无）");
+
+        return sb.ToString().TrimEnd();
     }
 
     // ========================================================
@@ -898,7 +1353,7 @@ public partial class DocExtractionRuleService
     {
         var promptCode = $"analyze_{skill}";
         var rows = await _db.SqlQueryAsync<PromptRow>(
-            "SELECT template FROM wf_prompt_template WHERE prompt_code = @c AND is_active = 1 AND IsDeleted = 0 ORDER BY version DESC LIMIT 1",
+            "SELECT Template FROM wf_prompt_template WHERE PromptCode = @c AND IsActive = 1 AND IsDeleted = 0 ORDER BY Version DESC LIMIT 1",
             new { c = promptCode });
         var dbPrompt = rows.Data?.FirstOrDefault();
         if (!string.IsNullOrWhiteSpace(dbPrompt?.template))
@@ -945,7 +1400,7 @@ public partial class DocExtractionRuleService
 
     private static async Task LogAiUsageAsync(
         IDbOrm db, ILogger logger, string businessSkill, string skill, string fileCode,
-        AiSettings settings, SharedDoc::LlmInvokeResponse result)
+        AiSettings settings, CertPlatform.Shared.DocExtraction.LlmInvokeResponse result)
     {
         try
         {

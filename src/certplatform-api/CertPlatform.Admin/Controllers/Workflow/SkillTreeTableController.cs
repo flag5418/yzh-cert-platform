@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Controllers;
@@ -38,12 +37,12 @@ namespace CertPlatform.Admin.Controllers.Workflow;
 [ApiController]
 [Route("api/Workflow/[controller]")]
 public class SkillTreeTableController
-    : TreeTableControllerBase<SharedEntities::CertPlatform.Shared.Entities.Wf.WfSkillCategory,
-                             SharedEntities::CertPlatform.Shared.Entities.Wf.Skill>
+    : TreeTableControllerBase<CertPlatform.Shared.Entities.Wf.WfSkillCategory,
+                             CertPlatform.Shared.Entities.Wf.Skill>
 {
     public SkillTreeTableController(
-        EntityService<SharedEntities::CertPlatform.Shared.Entities.Wf.WfSkillCategory> treeEntityService,
-        EntityService<SharedEntities::CertPlatform.Shared.Entities.Wf.Skill> tableEntityService,
+        EntityService<CertPlatform.Shared.Entities.Wf.WfSkillCategory> treeEntityService,
+        EntityService<CertPlatform.Shared.Entities.Wf.Skill> tableEntityService,
         IUserContext userContext)
         : base(treeEntityService, tableEntityService, userContext)
     {
@@ -55,7 +54,7 @@ public class SkillTreeTableController
         TreeConfig.MaxLevel = 1;                     // 仅一级（扁平结构）
         TreeConfig.AllowEdit = true;                 // 允许编辑分类
         TreeConfig.AllowDelete = true;               // 允许删除分类
-        TreeConfig.NoSelectionBehavior = "empty";    // 未选中分类时右表为空
+        TreeConfig.NoSelectionBehavior = "all";      // 未选中分类（默认"全部"节点）时返回全量
         TreeConfig.EnableField = "IsValid";          // 启用/禁用字段
 
         // 树节点表单配置（弹窗新增/编辑分类时的表单字段）
@@ -79,7 +78,7 @@ public class SkillTreeTableController
     /// 实体 → TreeItemDto 映射：将 WfSkillCategory 特有字段加入 Extra
     /// </summary>
     protected override TreeItemDto MapToTreeItem(
-        SharedEntities::CertPlatform.Shared.Entities.Wf.WfSkillCategory entity, int level)
+        CertPlatform.Shared.Entities.Wf.WfSkillCategory entity, int level)
     {
         var dto = base.MapToTreeItem(entity, level);
         dto.Extra["Icon"] = entity.Icon ?? "";
@@ -95,7 +94,7 @@ public class SkillTreeTableController
 
     /// <summary>新增分类前校验：编码唯一</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAddTree(
-        SharedEntities::CertPlatform.Shared.Entities.Wf.WfSkillCategory entity)
+        CertPlatform.Shared.Entities.Wf.WfSkillCategory entity)
     {
         if (string.IsNullOrEmpty(entity.Code))
             entity.Code = Guid.NewGuid().ToString("N");
@@ -110,7 +109,7 @@ public class SkillTreeTableController
 
     /// <summary>修改分类前校验：编码唯一（排除自身）</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdateTree(
-        SharedEntities::CertPlatform.Shared.Entities.Wf.WfSkillCategory entity)
+        CertPlatform.Shared.Entities.Wf.WfSkillCategory entity)
     {
         var exists = await TreeEntity.ExistsAsync(c => c.Code != entity.Code && c.Name == entity.Name);
         if (exists.Data)
@@ -137,7 +136,7 @@ public class SkillTreeTableController
 
     /// <summary>新增技能前校验：编码唯一</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAdd(
-        SharedEntities::CertPlatform.Shared.Entities.Wf.Skill entity)
+        CertPlatform.Shared.Entities.Wf.Skill entity)
     {
         if (string.IsNullOrEmpty(entity.Code))
             entity.Code = Guid.NewGuid().ToString("N");
@@ -151,7 +150,7 @@ public class SkillTreeTableController
 
     /// <summary>修改技能前校验：编码唯一（排除自身）</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(
-        SharedEntities::CertPlatform.Shared.Entities.Wf.Skill entity)
+        CertPlatform.Shared.Entities.Wf.Skill entity)
     {
         var exists = await Entity.ExistsAsync(s => s.Code != entity.Code && s.Code == entity.Code);
         if (exists.Data)

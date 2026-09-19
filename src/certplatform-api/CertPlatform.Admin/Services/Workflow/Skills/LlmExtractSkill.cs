@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using System;
 using System.Collections.Generic;
@@ -7,7 +6,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
-using SharedDoc = SharedEntities::CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.DocExtraction;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills
 {
@@ -22,9 +21,9 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     {
         public string SkillCode => "llm_extract";
 
-        private readonly SharedDoc.LlmInvokeService _llm;
+        private readonly CertPlatform.Shared.DocExtraction.LlmInvokeService _llm;
 
-        public LlmExtractSkill(SharedDoc.LlmInvokeService llm)
+        public LlmExtractSkill(CertPlatform.Shared.DocExtraction.LlmInvokeService llm)
         {
             _llm = llm;
         }
@@ -53,7 +52,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                 ["tables_json"] = context.Inputs.TryGetValue("tables_json", out var t) ? t : string.Empty
             });
 
-            SharedDoc.LlmInvokeResponse? resp = null;
+            CertPlatform.Shared.DocExtraction.LlmInvokeResponse? resp = null;
             JsonDocument? parsed = null;
             string? parseError = null;
 
@@ -62,7 +61,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                 var prompt = attempt == 0 ? baseRender
                     : baseRender + "\n\n注意：上一轮输出存在 JSON 格式错误。请仅输出符合要求 Schema 的 JSON，不要包含任何解释文字或 Markdown 围栏。";
 
-                resp = await _llm.CompleteAsync(new SharedDoc.LlmInvokeRequest
+                resp = await _llm.CompleteAsync(new CertPlatform.Shared.DocExtraction.LlmInvokeRequest
                 {
                     BaseUrl = baseUrl,
                     ApiKey = apiKey,

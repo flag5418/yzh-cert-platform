@@ -93,7 +93,7 @@
     {
       "FieldName": "SortOrder",
       "DesName": "排序",
-      "Type": "NumberBox",
+      "Type": "Decimal",
       "Sxh": 5,
       "XsFlag": true,
       "BcFlag": true,

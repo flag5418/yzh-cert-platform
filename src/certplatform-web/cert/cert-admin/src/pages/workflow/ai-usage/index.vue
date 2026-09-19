@@ -15,7 +15,7 @@ import {
 
 const rangeType = ref('7d')
 const customRange = ref<string[] | null>(null)
-const summary = ref<AIUsageSummary>({ totalCost: 0, monthCost: 0, weekCost: 0, todayCost: 0, totalCalls: 0, monthCalls: 0, weekCalls: 0, todayCalls: 0 })
+const summary = ref<AIUsageSummary>({ TotalCost: 0, MonthCost: 0, WeekCost: 0, TodayCost: 0, TotalCalls: 0, MonthCalls: 0, WeekCalls: 0, TodayCalls: 0 })
 const dailyCosts = ref<AIUsageDaily[]>([])
 const callsList = ref<AIUsageCall[]>([])
 const tableLoading = ref(false)
@@ -48,10 +48,12 @@ async function loadData() {
       getAIUsageDaily(startDate, endDate),
       getAliyunStatus()
     ])
-    summary.value = summaryRes || {}
-    dailyCosts.value = dailyRes || []
-    aliyunConfigured.value = aliyunRes?.configured || false
-    aliyunDashboardUrl.value = aliyunRes?.dashboardUrl || ''
+    // yzhApi 返回 ApiResponse<T>，业务数据在 .data 中
+    summary.value = (summaryRes as any)?.data || {}
+    dailyCosts.value = (dailyRes as any)?.data?.data || []
+    const aliyunData = (aliyunRes as any)?.data || {}
+    aliyunConfigured.value = aliyunData.configured || false
+    aliyunDashboardUrl.value = aliyunData.dashboardUrl || ''
     renderChart()
   } catch (e: any) {
     ElMessage.error(e?.message || '加载数据失败')
@@ -63,8 +65,9 @@ async function loadCalls() {
   try {
     const { startDate, endDate } = getDateRange()
     const res = await getAIUsageCalls({ page: page.value, rows: pageSize.value, startDate, endDate })
-    callsList.value = res?.rows || []
-    total.value = res?.total || 0
+    const payload = (res as any)?.data || {}
+    callsList.value = payload.rows || []
+    total.value = payload.total || 0
   } catch (e: any) {
     ElMessage.error('加载调用记录失败')
   } finally {
@@ -79,9 +82,9 @@ function renderChart() {
     chartInstance = null
   }
   chartInstance = echarts.init(chartRef.value)
-  const dates = dailyCosts.value.map(d => d.date)
-  const costs = dailyCosts.value.map(d => parseFloat(d.cost.toFixed(4)))
-  const calls = dailyCosts.value.map(d => d.calls)
+  const dates = dailyCosts.value.map(d => d.Date)
+  const costs = dailyCosts.value.map(d => parseFloat((d.Cost ?? 0).toFixed(4)))
+  const calls = dailyCosts.value.map(d => d.Calls)
 
   chartInstance.setOption({
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
@@ -119,10 +122,10 @@ onBeforeUnmount(() => { chartInstance?.dispose() })
     <!-- 快捷时间范围 -->
     <el-card shadow="never" class="quick-range-card">
       <el-radio-group v-model="rangeType" @change="onRangeChange">
-        <el-radio-button label="7d">近 7 天</el-radio-button>
-        <el-radio-button label="30d">近 30 天</el-radio-button>
-        <el-radio-button label="90d">近 90 天</el-radio-button>
-        <el-radio-button label="custom">自定义</el-radio-button>
+        <el-radio-button value="7d">近 7 天</el-radio-button>
+        <el-radio-button value="30d">近 30 天</el-radio-button>
+        <el-radio-button value="90d">近 90 天</el-radio-button>
+        <el-radio-button value="custom">自定义</el-radio-button>
       </el-radio-group>
       <el-date-picker v-if="rangeType === 'custom'" v-model="customRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" style="margin-left: 12px" @change="loadData" />
       <el-button type="primary" size="small" @click="loadData" style="margin-left: 12px">刷新</el-button>
@@ -134,29 +137,29 @@ onBeforeUnmount(() => { chartInstance?.dispose() })
       <el-col :span="6">
         <el-card shadow="hover" class="summary-card">
           <div class="summary-label">累计总费用</div>
-          <div class="summary-value" style="color: #f56c6c">${{ summary.totalCost.toFixed(4) }}</div>
-          <div class="summary-sub">累计 {{ summary.totalCalls }} 次调用</div>
+          <div class="summary-value" style="color: #f56c6c">${{ (summary.TotalCost ?? 0).toFixed(4) }}</div>
+          <div class="summary-sub">累计 {{ summary.TotalCalls ?? 0 }} 次调用</div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="hover" class="summary-card">
           <div class="summary-label">本月费用</div>
-          <div class="summary-value" style="color: #e6a23c">${{ summary.monthCost.toFixed(4) }}</div>
-          <div class="summary-sub">{{ summary.monthCalls }} 次调用</div>
+          <div class="summary-value" style="color: #e6a23c">${{ (summary.MonthCost ?? 0).toFixed(4) }}</div>
+          <div class="summary-sub">{{ summary.MonthCalls ?? 0 }} 次调用</div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="hover" class="summary-card">
           <div class="summary-label">本周费用</div>
-          <div class="summary-value" style="color: #409eff">${{ summary.weekCost.toFixed(4) }}</div>
-          <div class="summary-sub">{{ summary.weekCalls }} 次调用</div>
+          <div class="summary-value" style="color: #409eff">${{ (summary.WeekCost ?? 0).toFixed(4) }}</div>
+          <div class="summary-sub">{{ summary.WeekCalls ?? 0 }} 次调用</div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="hover" class="summary-card">
           <div class="summary-label">今日费用</div>
-          <div class="summary-value" style="color: #67c23a">${{ summary.todayCost.toFixed(4) }}</div>
-          <div class="summary-sub">{{ summary.todayCalls }} 次调用</div>
+          <div class="summary-value" style="color: #67c23a">${{ (summary.TodayCost ?? 0).toFixed(4) }}</div>
+          <div class="summary-sub">{{ summary.TodayCalls ?? 0 }} 次调用</div>
         </el-card>
       </el-col>
     </el-row>
@@ -171,26 +174,26 @@ onBeforeUnmount(() => { chartInstance?.dispose() })
     <el-card shadow="never" class="table-card">
       <template #header><span class="card-title">最近调用记录</span></template>
       <el-table :data="callsList" border stripe v-loading="tableLoading">
-        <el-table-column prop="createDate" label="时间" width="160">
-          <template #default="{ row }">{{ formatDate(row.createDate) }}</template>
+        <el-table-column prop="CreateTime" label="时间" width="160">
+          <template #default="{ row }">{{ formatDate(row.CreateTime) }}</template>
         </el-table-column>
-        <el-table-column prop="skill" label="模式" width="80">
+        <el-table-column prop="Skill" label="模式" width="80">
           <template #default="{ row }">
-            <el-tag :type="row.skill === 'analyze' ? 'success' : 'warning'" size="small">{{ row.skill === 'analyze' ? '分析' : '提取' }}</el-tag>
+            <el-tag :type="row.Skill === 'analyze' ? 'success' : 'warning'" size="small">{{ row.Skill === 'analyze' ? '分析' : '提取' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="model" label="模型" width="120" />
-        <el-table-column prop="promptTokens" label="输入tokens" width="110" align="right" />
-        <el-table-column prop="completionTokens" label="输出tokens" width="110" align="right" />
-        <el-table-column prop="totalTokens" label="总tokens" width="100" align="right" />
-        <el-table-column prop="costUsd" label="费用(USD)" width="110" align="right">
-          <template #default="{ row }"><span :style="{ color: row.success ? '#67c23a' : '#f56c6c' }">${{ row.costUsd.toFixed(4) }}</span></template>
+        <el-table-column prop="Model" label="模型" width="120" />
+        <el-table-column prop="PromptTokens" label="输入tokens" width="110" align="right" />
+        <el-table-column prop="CompletionTokens" label="输出tokens" width="110" align="right" />
+        <el-table-column prop="TotalTokens" label="总tokens" width="100" align="right" />
+        <el-table-column prop="CostUsd" label="费用(USD)" width="110" align="right">
+          <template #default="{ row }"><span :style="{ color: row.Success ? '#67c23a' : '#f56c6c' }">${{ (row.CostUsd ?? 0).toFixed(4) }}</span></template>
         </el-table-column>
-        <el-table-column prop="durationMs" label="耗时(ms)" width="100" align="right" />
-        <el-table-column prop="success" label="状态" width="80" align="center">
-          <template #default="{ row }"><el-tag :type="row.success ? 'success' : 'danger'" size="small">{{ row.success ? '成功' : '失败' }}</el-tag></template>
+        <el-table-column prop="DurationMs" label="耗时(ms)" width="100" align="right" />
+        <el-table-column prop="Success" label="状态" width="80" align="center">
+          <template #default="{ row }"><el-tag :type="row.Success ? 'success' : 'danger'" size="small">{{ row.Success ? '成功' : '失败' }}</el-tag></template>
         </el-table-column>
-        <el-table-column prop="errorMessage" label="错误信息" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="ErrorMessage" label="错误信息" min-width="150" show-overflow-tooltip />
       </el-table>
       <el-pagination v-model:current-page="page" :page-size="pageSize" :total="total" layout="total, prev, pager, next" style="margin-top: 16px; justify-content: flex-end" @current-change="loadCalls" />
     </el-card>

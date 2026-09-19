@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using System;
 using System.IO;
@@ -6,8 +5,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
-using SharedDoc = SharedEntities::CertPlatform.Shared.DocExtraction;
-using SharedEntities::YZH.Entity.Admin.Platform.Dir;
+using CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.Entities.Dir;
 
 namespace CertPlatform.Admin.Services.StandardDirectory;
 
@@ -22,14 +21,14 @@ public class OfficeConvertService
     private readonly IDbOrm _db;
     private readonly IObjectStorage _storage;
     private readonly CodeGeneratorService _codeGenerator;
-    private readonly SharedDoc::DocumentConvertClient _convertClient;
+    private readonly CertPlatform.Shared.DocExtraction.DocumentConvertClient _convertClient;
     private readonly ILogger<OfficeConvertService> _logger;
 
     public OfficeConvertService(
         IDbOrm db,
         IObjectStorage storage,
         CodeGeneratorService codeGenerator,
-        SharedDoc::DocumentConvertClient convertClient,
+        CertPlatform.Shared.DocExtraction.DocumentConvertClient convertClient,
         ILogger<OfficeConvertService> logger)
     {
         _db = db;

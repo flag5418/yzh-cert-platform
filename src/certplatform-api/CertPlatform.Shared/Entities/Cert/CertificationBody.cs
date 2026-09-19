@@ -1,10 +1,12 @@
 using System;
+using YZH.Entity.Admin.Platform;
 using System.ComponentModel.DataAnnotations;
 using SqlSugar;
 using YZH.Core.Stand.Attributes;
+using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Entity;
 
-namespace YZH.Entity.Admin.Platform.Cert
+namespace CertPlatform.Shared.Entities.Cert
 {
     /// <summary>
     /// 认证机构（业务主体 = 机构-Attach）
@@ -22,19 +24,9 @@ namespace YZH.Entity.Admin.Platform.Cert
     /// </summary>
     [SugarTable("cert_certification_body")]
     [YZHDeleteStrategy(Mode = DeleteMode.Soft)]
-    public class CertificationBody : BaseEntity
+    public class CertificationBody : BaseEntity, ISoftDelete, IIsValid
     {
-        // ========================================================
-        // 主键 / 业务码
-        // ========================================================
-
-        /// <summary>主键（DB: bigint AUTO_INCREMENT）</summary>
-        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
-        public new long Id { get; set; }
-
-        /// <summary>业务编码（GUID）。机构-Attach 契约：同时作为 Sys_Organization.Code</summary>
-        [StringLength(36)]
-        public new string Code { get; set; } = Guid.NewGuid().ToString("N");
+        // ──── Id 已由 BaseEntity 基类统一提供 ────
 
         /// <summary>数据权限隔离键 → Sys_Organization.Code（单 Code 策略下 == Code）</summary>
         [StringLength(50)]
@@ -130,37 +122,19 @@ namespace YZH.Entity.Admin.Platform.Cert
         public string? Remark { get; set; }
 
         // ========================================================
-        // 审计与软删除字段（必须用 new 重声明）
-        //
-        // ★ BaseEntity 把这些属性标了 [SugarColumn(IsIgnore = true)]，
-        //   不重声明则：软删除列不落库、查询不过滤已删数据（§十六 16.5）
+        // 接口字段（BaseEntity 不包含，由接口继承提供）
         // ========================================================
 
         /// <summary>有效标志（1=启用，0=禁用）。同步 Sys_Organization.Enable</summary>
         public int IsValid { get; set; } = 1;
 
-        /// <summary>创建人 Code</summary>
-        [StringLength(50)]
-        public new string? CreateBy { get; set; }
-
-        /// <summary>创建时间</summary>
-        public new DateTime CreateTime { get; set; } = DateTime.UtcNow;
-
-        /// <summary>更新人 Code</summary>
-        [StringLength(50)]
-        public new string? UpdateBy { get; set; }
-
-        /// <summary>更新时间</summary>
-        public new DateTime? UpdateTime { get; set; }
-
-        /// <summary>删除人 Code（软删除）</summary>
-        [StringLength(50)]
-        public new string? DeleteBy { get; set; }
-
-        /// <summary>删除时间（软删除）</summary>
-        public new DateTime? DeleteTime { get; set; }
-
-        /// <summary>软删除标记</summary>
+        /// <summary>软删除标记（false=正常，true=已删除）</summary>
         public bool IsDeleted { get; set; }
+
+        /// <summary>删除人 Code（仅软删除时赋值）</summary>
+        public string? DeleteBy { get; set; }
+
+        /// <summary>删除时间（仅软删除时赋值）</summary>
+        public DateTime? DeleteTime { get; set; }
     }
 }

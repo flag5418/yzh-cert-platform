@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace YZH.Entity.Admin.Platform.Sys
+namespace CertPlatform.Shared.Entities.Sys
 {
     /// <summary>
     /// 机构-阶段关联视图模型（V）— 用于列表显示，含阶段信息
@@ -20,7 +20,7 @@ namespace YZH.Entity.Admin.Platform.Sys
         /// <summary>
         /// 阶段名称（cert_phase_definition.PhaseName）
         /// </summary>
-        public string StageName { get; set; }
+        public string StageName { get; set; } = string.Empty;
 
         /// <summary>
         /// 排序号（cert_phase_definition.SequenceOrder）
@@ -30,11 +30,11 @@ namespace YZH.Entity.Admin.Platform.Sys
         /// <summary>
         /// 分类中文名（字典翻译）
         /// </summary>
-        public string CategoryName { get; set; }
+        public string CategoryName { get; set; } = string.Empty;
 
         /// <summary>
         /// 状态中文名（字典翻译）
         /// </summary>
-        public string StatusName { get; set; }
+        public string StatusName { get; set; } = string.Empty;
     }
 }

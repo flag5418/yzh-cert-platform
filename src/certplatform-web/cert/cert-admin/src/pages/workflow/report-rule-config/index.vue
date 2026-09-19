@@ -412,8 +412,10 @@ async function loadSectionsForPhase(phase) {
     const orgCode = currentFilter.orgCode
     const standardCode = currentFilter.standardCode
     const phaseCode = currentFilter.phaseCode
-    const res = await yzhApi.get('/api/report-definition/section/by-context', {
-      params: { orgCode, standardCode, phaseCode }
+    // get 的第二个参数就是查询对象，不能再包一层 { params: {...} }
+    // （否则会变成 ?params=[object Object]，后端 400）
+    const res = await yzhApi.get('/api/ReportDefinition/section/by-context', {
+      orgCode, standardCode, phaseCode
     })
     const items = res?.data || res?.Data || []
     phase.children = items.map((s) => ({
@@ -1485,7 +1487,7 @@ async function handleSave() {
       workflowConfig: JSON.stringify(config),
       layoutJson: JSON.stringify(layout)
     }
-    const res = await yzhApi.post('/api/report-definition/section/save', savePayload)
+    const res = await yzhApi.post('/api/ReportDefinition/section/save', savePayload)
     if (res?.success !== false) {
       savedTip.value = `${new Date().toLocaleTimeString()} 已保存`
       currentSection.value.workflowConfig = JSON.stringify(config)

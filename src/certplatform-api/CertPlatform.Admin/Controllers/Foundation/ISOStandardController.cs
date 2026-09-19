@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Controllers;
@@ -35,10 +34,10 @@ namespace CertPlatform.Admin.Controllers.Foundation;
 /// </summary>
 [ApiController]
 [Route("api/Foundation/[controller]")]
-public class ISOStandardController : YzhControllerBase<SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOStandard>
+public class ISOStandardController : YzhControllerBase<ISOStandard>
 {
     public ISOStandardController(
-        EntityService<SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOStandard> entityService,
+        EntityService<ISOStandard> entityService,
         IUserContext userContext)
         : base(entityService, userContext)
     {
@@ -54,7 +53,7 @@ public class ISOStandardController : YzhControllerBase<SharedEntities::YZH.Entit
     /// </summary>
     protected override EntityConfig LoadConfig()
     {
-        return EntityConfigHelper.GetConfig<SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOStandard>();
+        return EntityConfigHelper.GetConfig<ISOStandard>();
     }
 
     // ========================================================
@@ -65,7 +64,7 @@ public class ISOStandardController : YzhControllerBase<SharedEntities::YZH.Entit
     /// 新增前校验：同版本下标准编号唯一
     /// </summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAdd(
-        SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOStandard entity)
+        ISOStandard entity)
     {
         var exists = await Entity.ExistsAsync(s =>
             s.StandardCode == entity.StandardCode &&
@@ -81,7 +80,7 @@ public class ISOStandardController : YzhControllerBase<SharedEntities::YZH.Entit
     /// 修改前校验：同版本下标准编号唯一（排除自身）
     /// </summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(
-        SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOStandard entity)
+        ISOStandard entity)
     {
         var exists = await Entity.ExistsAsync(s =>
             s.Code != entity.Code &&

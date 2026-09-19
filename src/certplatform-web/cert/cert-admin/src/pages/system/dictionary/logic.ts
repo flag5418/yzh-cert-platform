@@ -112,37 +112,6 @@ export class DictionaryPageLogic extends TreeTableLogic<any> {
   }
 
   // ========================================================
-  // 树节点操作按钮（由 TreeConfig 配置驱动）
-  // ========================================================
-
-  get nodeActions(): Record<string, string> {
-    const actions: Record<string, string> = {}
-    const tc = this.treeConfig
-    if (!tc) return actions
-    if (tc.AllowEdit) {
-      actions['add-child'] = '新增下级'
-      actions['edit'] = '编辑'
-    }
-    if (tc.AllowDelete) {
-      actions['delete'] = '删除'
-    }
-    if (this.enableField) {
-      actions['toggle-valid'] = '禁用/启用'
-    }
-    return actions
-  }
-
-  /** 上下文感知的按钮文案（已启用→禁用，已禁用→启用） */
-  getNodeActionLabel(action: string, node: TreeNode): string {
-    if (action === 'toggle-valid') {
-      const field = this.enableField ?? 'IsValid'
-      const extra = (node.extra as any) || {}
-      return (extra[field] ?? 1) === 1 ? '禁用' : '启用'
-    }
-    return this.nodeActions[action] || action
-  }
-
-  // ========================================================
   // 工具：数值字段归一化
   // --------------------------------------------------------
   // EntityConfig 的 Decimal 控件在前端落到 text 输入，用户键入的是字符串；
@@ -326,17 +295,8 @@ export class DictionaryPageLogic extends TreeTableLogic<any> {
   }
 
   // ========================================================
-  // 刷新
+  // 刷新（基类 refreshTable 已实现，此处无需覆写）
   // ========================================================
-
-  /** 刷新右侧表格（保持当前选中节点） */
-  async refreshTable(): Promise<void> {
-    if (this.selectedNode.value) {
-      await this.loadPageWithTree(this.selectedNode.value.code)
-    } else {
-      await this.loadPageWithoutTree()
-    }
-  }
 }
 
 export default DictionaryPageLogic

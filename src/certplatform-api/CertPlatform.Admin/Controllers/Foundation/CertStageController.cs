@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Controllers;
@@ -20,10 +19,10 @@ namespace CertPlatform.Admin.Controllers.Foundation;
 /// </summary>
 [ApiController]
 [Route("api/Foundation/[controller]")]
-public class CertStageController : YzhControllerBase<SharedEntities::YZH.Entity.Admin.Platform.Cert.CertStage>
+public class CertStageController : YzhControllerBase<CertStage>
 {
     public CertStageController(
-        EntityService<SharedEntities::YZH.Entity.Admin.Platform.Cert.CertStage> entityService,
+        EntityService<CertStage> entityService,
         IUserContext userContext)
         : base(entityService, userContext)
     {
@@ -34,12 +33,12 @@ public class CertStageController : YzhControllerBase<SharedEntities::YZH.Entity.
     /// </summary>
     protected override EntityConfig LoadConfig()
     {
-        return EntityConfigHelper.GetConfig<SharedEntities::YZH.Entity.Admin.Platform.Cert.CertStage>();
+        return EntityConfigHelper.GetConfig<CertStage>();
     }
 
     /// <summary>新增前校验：StageCode 唯一性</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAdd(
-        SharedEntities::YZH.Entity.Admin.Platform.Cert.CertStage entity)
+        CertStage entity)
     {
         var exists = await Entity.ExistsAsync(p => p.StageCode == entity.StageCode);
         if (exists.Data)
@@ -49,7 +48,7 @@ public class CertStageController : YzhControllerBase<SharedEntities::YZH.Entity.
 
     /// <summary>修改前校验：StageCode 唯一性（排除自身）</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(
-        SharedEntities::YZH.Entity.Admin.Platform.Cert.CertStage entity)
+        CertStage entity)
     {
         var exists = await Entity.ExistsAsync(p =>
             p.Code != entity.Code && p.StageCode == entity.StageCode);

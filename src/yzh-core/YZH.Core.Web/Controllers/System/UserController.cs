@@ -30,16 +30,19 @@ public class UserController : YzhControllerBase<Sys_User>
 {
     private readonly PasswordHelper _passwordHelper;
     private readonly ICaptchaService _captchaService;
+    private readonly IRoleService _roleService;
 
     public UserController(
         EntityService<Sys_User> entityService,
         IUserContext userContext,
         PasswordHelper passwordHelper,
-        ICaptchaService captchaService)
+        ICaptchaService captchaService,
+        IRoleService roleService)
         : base(entityService, userContext)
     {
         _passwordHelper = passwordHelper;
         _captchaService = captchaService;
+        _roleService = roleService;
 
         // 注册行操作（按钮名称 → 处理函数）
         RegisterRowAction("Enable", EnableUser);
@@ -64,8 +67,18 @@ public class UserController : YzhControllerBase<Sys_User>
     #region 查询钩子
 
     /// <summary>查询后处理 - 脱敏手机号、填充角色名称</summary>
-    protected override void OnQueried(PagedResult<Sys_User> result)
+    protected override async void OnQueried(PagedResult<Sys_User> result)
     {
+        // 批量查询角色名称（通过 Sys_RoleUser 关联表，Code 关联）
+        var userCodes = result.Items.Where(u => !string.IsNullOrEmpty(u.Code)).Select(u => u.Code!).ToList();
+        var roleDict = new Dictionary<string, string>();
+        if (userCodes.Any())
+        {
+            var roleResult = await _roleService.GetRoleNamesByUserCodesAsync(userCodes);
+            if (roleResult.Success && roleResult.Data != null)
+                roleDict = roleResult.Data;
+        }
+
         foreach (var item in result.Items)
         {
             // 手机号脱敏：138****5678
@@ -74,17 +87,10 @@ public class UserController : YzhControllerBase<Sys_User>
                 item.PhoneNo = $"{item.PhoneNo[..3]}****{item.PhoneNo[^4..]}";
             }
 
-            // 填充角色名称（视图字段）
-            item.RoleName = item.RoleId switch
-            {
-                1 => "超级管理员",
-                10 => "总管理员",
-                20 => "审核管理员",
-                21 => "审核组长",
-                22 => "普通审核员",
-                30 => "企业账号",
-                _ => "未知"
-            };
+            // 填充角色名称（从 Sys_RoleUser 关联表查询）
+            item.RoleName = !string.IsNullOrEmpty(item.Code) && roleDict.ContainsKey(item.Code)
+                ? roleDict[item.Code]
+                : "未知";
         }
     }
 
@@ -155,8 +161,9 @@ public class UserController : YzhControllerBase<Sys_User>
 
         var user = result.Data;
         
-        // 禁止禁用超级管理员
-        if (user.RoleId == 1)
+        // 禁止禁用超级管理员（通过 Sys_RoleUser 关联表查询角色编码）
+        var roleResult = await _roleService.GetRoleCodeByUserCodeAsync(user.Code);
+        if (roleResult.Success && roleResult.Data == MenuPermissionService.SuperAdminRoleCode)
             return Result<ApiResponse<object?>>.Fail("不能禁用超级管理员账号");
 
         user.Enable = 0;
@@ -187,3 +194,4 @@ public class UserController : YzhControllerBase<Sys_User>
 
     #endregion
 }
+

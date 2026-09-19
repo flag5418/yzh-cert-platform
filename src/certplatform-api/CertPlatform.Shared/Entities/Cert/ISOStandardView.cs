@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations.Schema;
-using YZH.Entity.Admin.Platform.Cert;
+using CertPlatform.Shared.Entities.Cert;
 
-namespace YZH.Entity.Admin.Platform.Cert
+namespace CertPlatform.Shared.Entities.Cert
 {
     /// <summary>
     /// ISO 标准视图模型（V）— 用于列表显示，含字典翻译后的中文字段

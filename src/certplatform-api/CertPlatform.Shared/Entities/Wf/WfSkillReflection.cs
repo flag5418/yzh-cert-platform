@@ -1,45 +1,46 @@
-using System;
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+using SqlSugar;
 using YZH.Entity.Admin.Platform;
+using YZH.Core.Stand.Interfaces;
+using YZH.Core.Stand.Models.Entity;
 
-namespace YZH.Entity.Admin.Platform.Wf
+namespace CertPlatform.Shared.Entities.Wf
 {
     /// <summary>
     /// WfSkillReflection — method 型 Skill 反射信息（自定义工作流引擎 V1.2 §5.5，1:1）
     /// <para>表名：wf_skill_reflection</para>
+    ///
+    /// 命名规范（YZH 铁律）：DB 列名 = C# 属性名 = PascalCase
     /// </summary>
-    [Table("wf_skill_reflection")]
-    public class WfSkillReflection : EntityBase
+    [SugarTable("wf_skill_reflection")]
+    public class WfSkillReflection : BaseEntity, ISoftDelete, IIsValid
     {
-        // ===== snake_case 审计字段覆盖 =====
-        [Column("create_id")] public new int? CreateID { get; set; }
-        [Column("creator")] [MaxLength(50)] public new string Creator { get; set; }
-        [Column("create_date")] public new DateTime? CreateDate { get; set; } = DateTime.Now;
-        [Column("modify_id")] public new int? ModifyID { get; set; }
-        [Column("modifier")] [MaxLength(50)] public new string Modifier { get; set; }
-        [Column("modify_date")] public new DateTime? ModifyDate { get; set; }
-        [Column("delete_id")] public new int? DeleteID { get; set; }
-        [Column("deleter")] [MaxLength(50)] public new string Deleter { get; set; }
-        [Column("delete_time")] public new DateTime? DeleteTime { get; set; }
-        [Column("code")] public new string Code { get; set; } = Guid.NewGuid().ToString("N");
-        [Column("status")] public new string Status { get; set; }
-        [Column("enable")] public new bool Enable { get; set; } = true;
-        [Column("remark")] public new string Remark { get; set; }
+        // ──── Id / Code / 审计字段由 BaseEntity 基类统一提供 ────
+        // ──── ISoftDelete / IIsValid 接口字段由接口提供 ────
 
-        [Required][StringLength(100)][UniqueField("技能编码")][Column("skill_code")]
-        public string SkillCode { get; set; }
+        // ──── 业务字段 ────
+        [Required]
+        [StringLength(100)]
+        [UniqueField("技能编码")]
+        public string SkillCode { get; set; } = string.Empty;
 
         /// <summary>反射的地址（类型全名，ReflectionSkillLoader 按此加载）</summary>
-        [Required][StringLength(500)][UniqueField("类路径", WithFields = new[] { "MethodName" })][Column("class_path")]
-        public string ClassPath { get; set; }
+        [Required]
+        [StringLength(500)]
+        [UniqueField("类路径", WithFields = new[] { "MethodName" })]
+        public string ClassPath { get; set; } = string.Empty;
 
         /// <summary>反射的方法（默认 ExecuteAsync）</summary>
-        [StringLength(200)][Column("method_name")]
+        [StringLength(200)]
         public string MethodName { get; set; } = "ExecuteAsync";
 
         /// <summary>参数绑定 JSON：{"输入项名":"方法参数名或顺序"}</summary>
-        [Column("param_binding")]
-        public string ParamBinding { get; set; }
+        public string? ParamBinding { get; set; }
+
+        // ──── ISoftDelete + IIsValid 接口显式实现 ────
+        public bool IsDeleted { get; set; }
+        public string? DeleteBy { get; set; }
+        public DateTime? DeleteTime { get; set; }
+        public int IsValid { get; set; } = 1;
     }
 }

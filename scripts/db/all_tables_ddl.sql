@@ -730,9 +730,7 @@ CREATE TABLE `cert_iso_clause` (
   UNIQUE KEY `uk_code` (`Code`),
   KEY `idx_standard_code` (`StandardCode`),
   KEY `idx_parent_code` (`ParentCode`),
-  KEY `idx_clause_number` (`ClauseNumber`),
-  CONSTRAINT `fk_iso_clause_parent` FOREIGN KEY (`ParentCode`) REFERENCES `cert_iso_clause` (`Code`),
-  CONSTRAINT `fk_iso_clause_standard` FOREIGN KEY (`StandardCode`) REFERENCES `cert_iso_standard` (`Code`)
+  KEY `idx_clause_number` (`ClauseNumber`)
 ) ENGINE=InnoDB AUTO_INCREMENT=44 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='标准条款'
 
 

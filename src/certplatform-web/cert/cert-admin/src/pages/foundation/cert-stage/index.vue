@@ -1,23 +1,26 @@
 <script setup lang="ts">
-import { YzhTable, YzhForm, type YzhTableColumn, type YzhFormField, type PageParams, type SearchField } from '@yzh-core'
-import { ref, reactive, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import type { CertStage } from '@share/types/cert'
-import {
-  getCertStagePage,
-  addCertStage,
-  updateCertStage,
-  deleteCertStage,
-  toggleCertStageValid
-} from '@share/api/cert/cert-stage'
+/**
+ * 认证阶段管理（配置驱动 CRUD 页面）
+ *
+ * 基于 CrudPageLogic 实现标准 CRUD
+ * 后端：CertStageController (YzhControllerBase<CertStage>)
+ */
+import { YzhForm, YzhTable } from '@yzh-core'
+import { ElMessage } from 'element-plus'
+import { computed, onMounted, nextTick, ref } from 'vue'
+import { CertStageLogic } from './logic'
 
+// 实例化 Logic
+const logic = new CertStageLogic()
+
+// 本地状态
 const tableRef = ref()
-const formRef = ref()
-const selectedRows = ref<CertStage[]>([])
-const dialogVisible = ref(false)
-const dialogMode = ref<'add' | 'edit'>('add')
-let formData = reactive<Partial<CertStage>>({})
-const submitting = ref(false)
+
+// 行操作按钮（从 logic 派生）
+const rowActionButtons = computed(() => logic.rowActionButtons)
+
+// 工具栏配置
+const toolbarConfig = computed(() => (logic.config.value as any)?.Toolbar || {})
 
 // ── 分类字典选项 ──
 const categoryOptions = [
@@ -26,125 +29,115 @@ const categoryOptions = [
   { value: 'post-cert', label: '证后阶段' }
 ]
 
-// ── 表格列定义 ──
-const columns: YzhTableColumn<CertStage>[] = [
-  { prop: 'StageCode', label: '阶段编码', width: 120 },
-  { prop: 'StageName', label: '阶段名称', width: 150 },
-  { prop: 'Category', label: '分类', width: 110, formatter: (v: any) => ({ process: '流程阶段', audit: '审核阶段', 'post-cert': '证后阶段' }[v] ?? v) },
-  { prop: 'SortOrder', label: '排序', width: 80 },
-  { prop: 'Description', label: '说明', minWidth: 200, showOverflowTooltip: true },
-  { prop: 'IsValid', label: '状态', width: 80, formatter: (v: any) => v === 1 ? '启用' : '停用' },
-  { prop: 'CreateTime', label: '创建时间', width: 170 },
-  { prop: 'actions', label: '操作', width: 200, fixed: 'right', slot: true }
-]
+// ========================================================
+// 表格数据加载
+// ========================================================
 
-// ── 搜索字段 ──
-const searchFields: SearchField[] = [
-  { prop: 'StageName', label: '阶段名称', type: 'text' },
-  { prop: 'Category', label: '分类', type: 'select', options: categoryOptions }
-]
+function loadTableData(params: any) {
+  return logic.dataLoader(params)
+}
 
-// ── 表单字段定义 ──
-const formFields = computed<YzhFormField[]>(() => [
-  { prop: 'StageCode', label: '阶段编码', type: 'text', required: true, span: 12, placeholder: '如：AP/CR/S1/S2', disabled: dialogMode.value === 'edit' },
-  { prop: 'StageName', label: '阶段名称', type: 'text', required: true, span: 12, placeholder: '如：申请受理' },
-  { prop: 'Category', label: '分类', type: 'select', span: 12, options: categoryOptions },
-  { prop: 'SortOrder', label: '排序', type: 'number', span: 12 },
-  { prop: 'Description', label: '说明', type: 'textarea', span: 24 },
-  { prop: 'Remark', label: '备注', type: 'textarea', span: 24 },
-  { prop: 'IsValid', label: '状态', type: 'switch', span: 12, defaultValue: 1 }
-])
+// ========================================================
+// 操作事件
+// ========================================================
 
-// ── 数据加载 ──
-async function loadData(params: PageParams) {
-  const res = await getCertStagePage({
-    Page: params.page,
-    PageSize: params.rows,
-    Filters: params.StageName ? [{ Field: 'StageName', Operator: 'like', Value: params.StageName }] : []
-  })
-  if (res.success && res.data) {
-    return { rows: res.data.Items ?? [], total: res.data.TotalCount ?? 0 }
+/** 新增 */
+function handleAdd() {
+  logic.openAddDialog()
+}
+
+/** 批量删除 */
+async function handleBatchDelete() {
+  await logic.confirmDelete()
+}
+
+/** 行操作 */
+async function handleRowAction(action: string, row: any) {
+  if (action === 'edit') {
+    logic.openEditDialog(row)
+  } else if (action === 'toggleValid') {
+    // 启用/禁用切换
+    const newIsValid = row.IsValid === 1 ? 0 : 1
+    logic.updateRow({ ...row, IsValid: newIsValid })
+  } else if (action === 'delete') {
+    await logic.confirmDelete([row])
   }
-  return { rows: [], total: 0 }
 }
 
-// ── 新增 ──
-function onAdd() {
-  dialogMode.value = 'add'
-  formData = reactive<Partial<CertStage>>({ IsValid: 1, SortOrder: 0, Category: 'process' })
-  dialogVisible.value = true
-}
-
-// ── 编辑 ──
-function onEdit(row: CertStage) {
-  dialogMode.value = 'edit'
-  formData = reactive<Partial<CertStage>>({ ...row })
-  dialogVisible.value = true
-}
-
-// ── 提交 ──
-async function onSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
-  submitting.value = true
+/** 提交表单 */
+async function handleSubmit() {
   try {
-    const data = formData as CertStage
-    if (dialogMode.value === 'add') {
-      await addCertStage(data)
-    } else {
-      await updateCertStage(data)
-    }
-    ElMessage.success('保存成功')
-    dialogVisible.value = false
-    tableRef.value?.refresh()
+    await logic.submitForm()
   } catch (e: any) {
-    ElMessage.error(e?.message || '保存失败')
-  } finally {
-    submitting.value = false
+    ElMessage.error(e.message || '保存失败')
   }
 }
 
-// ── 删除 ──
-async function onDelete(row: CertStage) {
-  try { await ElMessageBox.confirm(`确定删除阶段「${row.StageName}」吗？`, '删除确认', { type: 'warning' }) } catch { return }
-  await deleteCertStage([row.Code!])
-  ElMessage.success('删除成功')
-  tableRef.value?.refresh()
-}
+// ========================================================
+// 初始化
+// ========================================================
 
-// ── 切换启用/停用 ──
-async function onToggle(row: CertStage) {
-  if (!row.Code) return
-  await toggleCertStageValid(row.Code)
-  ElMessage.success('状态已更新')
-  tableRef.value?.refresh()
-}
+onMounted(async () => {
+  await logic.init()
+  await nextTick()
+  logic.setTableRef(tableRef.value)
+})
 </script>
 
 <template>
   <div class="cert-stage-page">
-    <YzhTable ref="tableRef" :columns="columns" :data-loader="loadData" :search-fields="searchFields" selectable @selection-change="selectedRows = $event">
+    <YzhTable
+      ref="tableRef"
+      :columns="logic.columns as any"
+      :data-loader="loadTableData"
+      :search-fields="logic.searchFields as any"
+      :selectable="true"
+      :row-action-buttons="rowActionButtons"
+      row-key="Code"
+      @selection-change="logic.onSelectionChange($event)"
+      @row-action="handleRowAction"
+    >
+      <!-- 工具栏左侧 -->
       <template #toolbar-left>
-        <el-button type="primary" @click="onAdd"><i class="bi bi-plus"></i> 新增</el-button>
-        <el-button type="danger" plain :disabled="selectedRows.length === 0" @click="onDelete(selectedRows[0])"><i class="bi bi-trash"></i> 批量删除</el-button>
-      </template>
-      <template #column-actions="{ row }">
-        <div class="action-cell">
-          <el-button text type="primary" @click="onEdit(row)">编辑</el-button>
-          <el-button text :type="row.IsValid === 1 ? 'warning' : 'success'" @click="onToggle(row)">
-            {{ row.IsValid === 1 ? '禁用' : '启用' }}
-          </el-button>
-          <el-button text type="danger" @click="onDelete(row)">删除</el-button>
-        </div>
+        <el-button
+          v-if="toolbarConfig.Add !== false"
+          type="primary"
+          @click="handleAdd"
+          >新增</el-button
+        >
+        <el-button
+          v-if="toolbarConfig.Delete !== false"
+          type="danger"
+          @click="handleBatchDelete"
+          >删除</el-button
+        >
       </template>
     </YzhTable>
-    <el-dialog v-model="dialogVisible" :title="dialogMode === 'add' ? '新增认证阶段' : '编辑认证阶段'" width="600px">
-      <YzhForm ref="formRef" v-model="formData" :fields="formFields" :loading="submitting" @submit="onSubmit" @reset="dialogVisible = false" />
+
+    <!-- 新增/编辑弹窗 -->
+    <el-dialog
+      v-model="logic.dialogVisible.value"
+      :title="logic.dialogMode.value === 'add' ? '新增认证阶段' : '编辑认证阶段'"
+      width="640px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <YzhForm
+        v-model="logic.formData"
+        :fields="logic.formFields as any"
+        :loading="logic.submitting.value"
+        :cols="logic.formLayoutCols as any"
+        @submit="handleSubmit"
+        @reset="logic.dialogVisible.value = false"
+      />
     </el-dialog>
   </div>
 </template>
 
 <style scoped>
-.cert-stage-page { display: flex; flex-direction: column; height: 100%; }
-.action-cell { display: flex; flex-wrap: nowrap; gap: 2px; }
+.cert-stage-page {
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+}
 </style>

@@ -23,8 +23,8 @@ import type { TreeNode, TreeConfig } from '../types/tree'
  * 核心：List → Tree（扁平集合转标准树结构）
  *
  * 算法：O(n) 两次遍历
- * 1. 第一次遍历：所有节点放入 map<code, TreeNode>
- * 2. 第二次遍历：根据 parentCode 挂载到父节点 children
+ * 1. 第一次遍历：所有节点放入 map<Code, TreeNode>
+ * 2. 第二次遍历：根据 ParentCode 挂载到父节点 Children
  *
  * @param items 扁平实体列表
  * @param config 字段映射配置
@@ -98,15 +98,15 @@ export function buildTree<T>(
     }
 
     const node: TreeNode<T> = {
-      code,
-      name,
-      parentCode,
-      nodeType,
-      isLeaf,
-      sort,
-      extra,
-      children: [],
-      raw: item
+      Code: code,
+      Name: name,
+      ParentCode: parentCode,
+      NodeType: nodeType,
+      IsLeaf: isLeaf,
+      Sort: sort,
+      Extra: extra,
+      Children: [],
+      Raw: item
     }
 
     nodeMap.set(code, node)
@@ -114,20 +114,20 @@ export function buildTree<T>(
 
   // 构建父子关系
   for (const node of nodeMap.values()) {
-    if (startFromCode && node.code === startFromCode) {
+    if (startFromCode && node.Code === startFromCode) {
       result.push(node)
-    } else if (!startFromCode && (node.parentCode === rootParentCode || node.parentCode === null || node.parentCode === '')) {
+    } else if (!startFromCode && (node.ParentCode === rootParentCode || node.ParentCode === null || node.ParentCode === '')) {
       result.push(node)
     } else {
-      const parent = nodeMap.get(node.parentCode ?? '')
+      const parent = nodeMap.get(node.ParentCode ?? '')
       if (parent) {
-        parent.children.push(node)
+        parent.Children.push(node)
       }
     }
   }
 
   // 排序
-  result.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+  result.sort((a, b) => (a.Sort ?? 0) - (b.Sort ?? 0))
 
   return result
 }
@@ -166,15 +166,15 @@ export function entityToNode<T>(
   }
 
   return {
-    code,
-    name,
-    parentCode,
-    nodeType,
-    isLeaf,
-    sort,
-    extra,
-    children: [],
-    raw: entity
+    Code: code,
+    Name: name,
+    ParentCode: parentCode,
+    NodeType: nodeType,
+    IsLeaf: isLeaf,
+    Sort: sort,
+    Extra: extra,
+    Children: [],
+    Raw: entity
   }
 }
 
@@ -186,15 +186,15 @@ export function nodeToEntity<T>(
   config: Pick<TreeConfig<T>, 'codeField' | 'nameField' | 'parentCodeField' | 'typeField' | 'sortField'>
 ): Partial<T> {
   const result: Record<string, any> = {
-    [config.codeField]: node.code,
-    [config.nameField]: node.name,
-    [config.parentCodeField]: node.parentCode
+    [config.codeField]: node.Code,
+    [config.nameField]: node.Name,
+    [config.parentCodeField]: node.ParentCode
   }
-  if (config.typeField && node.nodeType) {
-    result[config.typeField] = node.nodeType
+  if (config.typeField && node.NodeType) {
+    result[config.typeField] = node.NodeType
   }
-  if (config.sortField && node.sort !== undefined) {
-    result[config.sortField] = node.sort
+  if (config.sortField && node.Sort !== undefined) {
+    result[config.sortField] = node.Sort
   }
   return result as Partial<T>
 }
@@ -207,8 +207,8 @@ export function flattenTree<T>(roots: TreeNode<T>[]): TreeNode<T>[] {
   const collect = (nodes: TreeNode<T>[]) => {
     for (const node of nodes) {
       result.push(node)
-      if (node.children && node.children.length > 0) {
-        collect(node.children)
+      if (node.Children && node.Children.length > 0) {
+        collect(node.Children)
       }
     }
   }
@@ -228,12 +228,12 @@ export function getDescendants<T>(node: TreeNode<T>): TreeNode<T>[] {
   const collect = (children: TreeNode<T>[]) => {
     for (const child of children) {
       result.push(child)
-      if (child.children && child.children.length > 0) {
-        collect(child.children)
+      if (child.Children && child.Children.length > 0) {
+        collect(child.Children)
       }
     }
   }
-  collect(node.children)
+  collect(node.Children)
   return result
 }
 
@@ -251,8 +251,8 @@ export function getAncestors<T>(node: TreeNode<T>, rootNodes: TreeNode<T>[]): Tr
   const path: TreeNode<T>[] = []
   let current: TreeNode<T> | undefined = node
 
-  while (current && current.parentCode) {
-    const found: TreeNode<T> | null = findNode(rootNodes, current.parentCode)
+  while (current && current.ParentCode) {
+    const found: TreeNode<T> | null = findNode(rootNodes, current.ParentCode)
     if (found) {
       path.unshift(found)
       current = found
@@ -265,29 +265,29 @@ export function getAncestors<T>(node: TreeNode<T>, rootNodes: TreeNode<T>[]): Tr
 }
 
 /**
- * 获取从根到当前节点的完整路径 code[]
+ * 获取从根到当前节点的完整路径 Code[]
  */
 export function getPath<T>(rootNodes: TreeNode<T>[], node: TreeNode<T>): string[] {
   const ancestors = getAncestors(node, rootNodes)
-  return [...ancestors.map(n => n.code), node.code]
+  return [...ancestors.map(n => n.Code), node.Code]
 }
 
 /**
- * 获取从根到当前节点的完整路径 name[]
+ * 获取从根到当前节点的完整路径 Name[]
  */
 export function getPathNames<T>(rootNodes: TreeNode<T>[], node: TreeNode<T>): string[] {
   const ancestors = getAncestors(node, rootNodes)
-  return [...ancestors.map(n => n.name), node.name]
+  return [...ancestors.map(n => n.Name), node.Name]
 }
 
 /**
- * 按 code 查找节点（深度优先）
+ * 按 Code 查找节点（深度优先）
  */
 export function findNode<T>(rootNodes: TreeNode<T>[], code: string): TreeNode<T> | null {
   for (const node of rootNodes) {
-    if (node.code === code) return node
-    if (node.children && node.children.length > 0) {
-      const found = findNode(node.children, code)
+    if (node.Code === code) return node
+    if (node.Children && node.Children.length > 0) {
+      const found = findNode(node.Children, code)
       if (found) return found
     }
   }
@@ -303,8 +303,8 @@ export function findNodeBy<T>(
 ): TreeNode<T> | null {
   for (const node of rootNodes) {
     if (predicate(node)) return node
-    if (node.children && node.children.length > 0) {
-      const found = findNodeBy(node.children, predicate)
+    if (node.Children && node.Children.length > 0) {
+      const found = findNodeBy(node.Children, predicate)
       if (found) return found
     }
   }
@@ -322,8 +322,8 @@ export function findNodesBy<T>(
   const collect = (nodes: TreeNode<T>[]) => {
     for (const node of nodes) {
       if (predicate(node)) result.push(node)
-      if (node.children && node.children.length > 0) {
-        collect(node.children)
+      if (node.Children && node.Children.length > 0) {
+        collect(node.Children)
       }
     }
   }
@@ -335,8 +335,8 @@ export function findNodesBy<T>(
  * 获取父节点
  */
 export function getParent<T>(rootNodes: TreeNode<T>[], node: TreeNode<T>): TreeNode<T> | null {
-  if (!node.parentCode) return null
-  return findNode(rootNodes, node.parentCode)
+  if (!node.ParentCode) return null
+  return findNode(rootNodes, node.ParentCode)
 }
 
 // ========================================================
@@ -347,16 +347,16 @@ export function getParent<T>(rootNodes: TreeNode<T>[], node: TreeNode<T>): TreeN
  * 按节点类型过滤
  */
 export function filterByType<T>(rootNodes: TreeNode<T>[], nodeType: string): TreeNode<T>[] {
-  return findNodesBy(rootNodes, n => n.nodeType === nodeType)
+  return findNodesBy(rootNodes, n => n.NodeType === nodeType)
 }
 
 /**
- * 搜索：返回匹配节点列表（支持模糊匹配 name）
+ * 搜索：返回匹配节点列表（支持模糊匹配 Name）
  */
 export function search<T>(rootNodes: TreeNode<T>[], keyword: string): TreeNode<T>[] {
   if (!keyword || !keyword.trim()) return []
   const lower = keyword.toLowerCase()
-  return findNodesBy(rootNodes, n => n.name.toLowerCase().includes(lower))
+  return findNodesBy(rootNodes, n => n.Name.toLowerCase().includes(lower))
 }
 
 /**
@@ -386,11 +386,11 @@ export function filterTree<T>(
   const filter = (nodes: TreeNode<T>[]): TreeNode<T>[] => {
     const result: TreeNode<T>[] = []
     for (const node of nodes) {
-      const filteredChildren = filter(node.children)
+      const filteredChildren = filter(node.Children)
       if (predicate(node) || filteredChildren.length > 0) {
         result.push({
           ...node,
-          children: filteredChildren
+          Children: filteredChildren
         })
       }
     }
@@ -418,8 +418,8 @@ export function getDepth<T>(rootNodes: TreeNode<T>[]): number {
     if (nodes.length === 0) return level
     let max = level
     for (const node of nodes) {
-      if (node.children && node.children.length > 0) {
-        max = Math.max(max, getLevel(node.children, level + 1))
+      if (node.Children && node.Children.length > 0) {
+        max = Math.max(max, getLevel(node.Children, level + 1))
       }
     }
     return max
@@ -442,8 +442,8 @@ export function getNodesAtLevel<T>(rootNodes: TreeNode<T>[], targetLevel: number
   const traverse = (nodes: TreeNode<T>[], level: number) => {
     for (const node of nodes) {
       if (level === targetLevel) result.push(node)
-      if (node.children && node.children.length > 0) {
-        traverse(node.children, level + 1)
+      if (node.Children && node.Children.length > 0) {
+        traverse(node.Children, level + 1)
       }
     }
   }
@@ -458,37 +458,37 @@ export function getNodesAtLevel<T>(rootNodes: TreeNode<T>[], targetLevel: number
 /**
  * 验证树结构完整性
  * - 无循环引用
- * - 所有节点 parentCode 可找到（根节点除外）
+ * - 所有节点 ParentCode 可找到（根节点除外）
  *
  * 返回 { valid, errors }
  */
 export function validate<T>(roots: TreeNode<T>[]): { valid: boolean; errors: string[] } {
   const errors: string[] = []
   const nodes = flattenTree(roots)
-  const nodeCodes = new Set(nodes.map(n => n.code))
+  const nodeCodes = new Set(nodes.map(n => n.Code))
 
-  // 检查空 code
+  // 检查空 Code
   for (const node of nodes) {
-    if (!node.code && node.code !== null) {
-      errors.push(`节点 ${node.name} 的 code 为空`)
+    if (!node.Code && node.Code !== null) {
+      errors.push(`节点 ${node.Name} 的 Code 为空`)
     }
   }
 
-  // 检查重复 code
+  // 检查重复 Code
   const codeCount = new Map<string, number>()
   for (const node of nodes) {
-    codeCount.set(node.code, (codeCount.get(node.code) ?? 0) + 1)
+    codeCount.set(node.Code, (codeCount.get(node.Code) ?? 0) + 1)
   }
   for (const [code, count] of codeCount) {
     if (count > 1) {
-      errors.push(`code "${code}" 重复 ${count} 次`)
+      errors.push(`Code "${code}" 重复 ${count} 次`)
     }
   }
 
   // 检查孤儿节点
   for (const node of nodes) {
-    if (node.parentCode !== null && node.parentCode !== '' && !nodeCodes.has(node.parentCode)) {
-      errors.push(`节点 "${node.name}" 的 parentCode "${node.parentCode}" 不存在`)
+    if (node.ParentCode !== null && node.ParentCode !== '' && !nodeCodes.has(node.ParentCode)) {
+      errors.push(`节点 "${node.Name}" 的 ParentCode "${node.ParentCode}" 不存在`)
     }
   }
 
@@ -511,17 +511,17 @@ export function hasCycle<T>(roots: TreeNode<T>[]): boolean {
   const stack = new Set<string>()
 
   const dfs = (node: TreeNode<T>): boolean => {
-    if (stack.has(node.code)) return true
-    if (visited.has(node.code)) return false
+    if (stack.has(node.Code)) return true
+    if (visited.has(node.Code)) return false
 
-    visited.add(node.code)
-    stack.add(node.code)
+    visited.add(node.Code)
+    stack.add(node.Code)
 
-    for (const child of node.children) {
+    for (const child of node.Children) {
       if (dfs(child)) return true
     }
 
-    stack.delete(node.code)
+    stack.delete(node.Code)
     return false
   }
 

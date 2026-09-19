@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Controllers;
@@ -29,13 +28,13 @@ namespace CertPlatform.Admin.Controllers.Workflow;
 [ApiController]
 [Route("api/ValidationRule")]
 public class ValidationRuleController
-    : YzhControllerBase<SharedEntities::YZH.Entity.Admin.Platform.Cert.ValidationRule>
+    : YzhControllerBase<ValidationRule>
 {
-    private readonly EntityService<SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOClause> _clauseService;
+    private readonly EntityService<ISOClause> _clauseService;
 
     public ValidationRuleController(
-        EntityService<SharedEntities::YZH.Entity.Admin.Platform.Cert.ValidationRule> entityService,
-        EntityService<SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOClause> clauseService,
+        EntityService<ValidationRule> entityService,
+        EntityService<ISOClause> clauseService,
         IUserContext userContext)
         : base(entityService, userContext)
     {
@@ -57,7 +56,7 @@ public class ValidationRuleController
     // 查询钩子：填充条款编号/标题
     // ========================================================
 
-    protected override void OnQueried(PagedResult<SharedEntities::YZH.Entity.Admin.Platform.Cert.ValidationRule> result)
+    protected override void OnQueried(PagedResult<ValidationRule> result)
     {
         var clauseCodes = result.Items
             .Select(r => r.ClauseCode)
@@ -72,7 +71,7 @@ public class ValidationRuleController
 
         var clauseDict = clauses.Data?
             .ToDictionary(c => c.Code, c => c)
-            ?? new Dictionary<string, SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOClause>();
+            ?? new Dictionary<string, ISOClause>();
 
         foreach (var rule in result.Items)
         {
@@ -90,10 +89,10 @@ public class ValidationRuleController
     // ========================================================
 
     [HttpPost("update")]
-    public override async Task<ActionResult<ApiResponse<SharedEntities::YZH.Entity.Admin.Platform.Cert.ValidationRule>>> Update(
-        [FromBody] SharedEntities::YZH.Entity.Admin.Platform.Cert.ValidationRule entity)
+    public override async Task<ActionResult<ApiResponse<ValidationRule>>> Update(
+        [FromBody] ValidationRule entity)
     {
-        var fields = typeof(SharedEntities::YZH.Entity.Admin.Platform.Cert.ValidationRule)
+        var fields = typeof(ValidationRule)
             .GetProperties()
             .Where(p => p.Name != "Code" && p.Name != "Id"
                      && p.Name != "CreateTime" && p.Name != "CreateBy"
@@ -107,7 +106,7 @@ public class ValidationRuleController
         if (!result.Success)
             return BadRequest(ApiResponse.Fail(result.Error!));
 
-        return Ok(ApiResponse<SharedEntities::YZH.Entity.Admin.Platform.Cert.ValidationRule>.Ok(result.Data));
+        return Ok(ApiResponse<ValidationRule>.Ok(result.Data));
     }
 
     // ========================================================
@@ -115,7 +114,7 @@ public class ValidationRuleController
     // ========================================================
 
     protected override async Task<(bool ok, string? msg)> OnBeforeAdd(
-        SharedEntities::YZH.Entity.Admin.Platform.Cert.ValidationRule entity)
+        ValidationRule entity)
     {
         if (string.IsNullOrEmpty(entity.Code))
             entity.Code = Guid.NewGuid().ToString("N");
@@ -148,7 +147,7 @@ public class ValidationRuleController
         if (!result.Success)
             return BadRequest(ApiResponse.Fail(result.Error!));
 
-        return Ok(ApiResponse<SharedEntities::YZH.Entity.Admin.Platform.Cert.ValidationRule>.Ok(rule.Data));
+        return Ok(ApiResponse<ValidationRule>.Ok(rule.Data));
     }
 
     /// <summary>深拷贝规则</summary>
@@ -159,7 +158,7 @@ public class ValidationRuleController
         if (!source.Success || source.Data == null)
             return BadRequest(ApiResponse.Fail("源规则不存在"));
 
-        var copy = new SharedEntities::YZH.Entity.Admin.Platform.Cert.ValidationRule
+        var copy = new ValidationRule
         {
             Code = Guid.NewGuid().ToString("N"),
             OrgCode = source.Data.OrgCode,
@@ -184,6 +183,6 @@ public class ValidationRuleController
         if (!result.Success)
             return BadRequest(ApiResponse.Fail(result.Error!));
 
-        return Ok(ApiResponse<SharedEntities::YZH.Entity.Admin.Platform.Cert.ValidationRule>.Ok(result.Data));
+        return Ok(ApiResponse<ValidationRule>.Ok(result.Data));
     }
 }

@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Controllers;
@@ -33,10 +32,10 @@ namespace CertPlatform.Admin.Controllers.Foundation;
 /// </summary>
 [ApiController]
 [Route("api/Foundation/[controller]")]
-public class ISOClauseController : YzhControllerBase<SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOClause>
+public class ISOClauseController : YzhControllerBase<ISOClause>
 {
     public ISOClauseController(
-        EntityService<SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOClause> entityService,
+        EntityService<ISOClause> entityService,
         IUserContext userContext)
         : base(entityService, userContext)
     {
@@ -53,16 +52,19 @@ public class ISOClauseController : YzhControllerBase<SharedEntities::YZH.Entity.
     /// </summary>
     protected override EntityConfig LoadConfig()
     {
-        return EntityConfigHelper.GetConfig<SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOClause>();
+        return EntityConfigHelper.GetConfig<ISOClause>();
     }
 
     // ========================================================
     // 业务校验
     // ========================================================
 
-    /// <summary>新增前校验：同标准下条款编号唯一性</summary>
-    protected override async Task<(bool ok, string? msg)> OnBeforeAdd(SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOClause entity)
+    /// <summary>新增前校验：StandardCode 必填 + 同标准下条款编号唯一性</summary>
+    protected override async Task<(bool ok, string? msg)> OnBeforeAdd(ISOClause entity)
     {
+        if (string.IsNullOrWhiteSpace(entity.StandardCode))
+            return (false, "所属标准编码不能为空");
+
         var exists = await Entity.ExistsAsync(c =>
             c.StandardCode == entity.StandardCode &&
             c.ClauseNumber == entity.ClauseNumber);
@@ -81,7 +83,7 @@ public class ISOClauseController : YzhControllerBase<SharedEntities::YZH.Entity.
     }
 
     /// <summary>修改前校验：同标准下条款编号唯一性（排除自身）</summary>
-    protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOClause entity)
+    protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(ISOClause entity)
     {
         var exists = await Entity.ExistsAsync(c =>
             c.Code != entity.Code &&
@@ -106,7 +108,7 @@ public class ISOClauseController : YzhControllerBase<SharedEntities::YZH.Entity.
         if (result.Error != null)
             return BadRequest(ApiResponse.Fail(result.Error));
 
-        var list = result.Data ?? new List<SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOClause>();
-        return Ok(ApiResponse<List<SharedEntities::YZH.Entity.Admin.Platform.Cert.ISOClause>>.Ok(list));
+        var list = result.Data ?? new List<ISOClause>();
+        return Ok(ApiResponse<List<ISOClause>>.Ok(list));
     }
 }

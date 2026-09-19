@@ -2,8 +2,10 @@ import { ref } from 'vue'
 import { getAllMenuTree, addMenu, updateMenu, deleteMenu, toggleEnable } from '@/api/system/menu'
 import type { SysMenu } from '@/api/system/menu'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useMenuStore } from '@/store/menu'
 
 export function useMenuLogic() {
+  const menuStore = useMenuStore()
   const tableData = ref<SysMenu[]>([])
   const loading = ref(false)
   const selectedRows = ref<SysMenu[]>([])
@@ -79,6 +81,7 @@ export function useMenuLogic() {
       if (res.code === 200) {
         ElMessage.success('删除成功')
         await loadData()
+        menuStore.refreshMenus()
       } else {
         ElMessage.error(res.message || '删除失败')
       }
@@ -103,6 +106,7 @@ export function useMenuLogic() {
         ElMessage.success('批量删除成功')
         selectedRows.value = []
         await loadData()
+        menuStore.refreshMenus()
       } else {
         ElMessage.error(res.message || '批量删除失败')
       }
@@ -121,6 +125,7 @@ export function useMenuLogic() {
       if (res.code === 200) {
         ElMessage.success(`已${action}`)
         await loadData()
+        menuStore.refreshMenus()
       } else {
         ElMessage.error(res.message || `${action}失败`)
       }
@@ -147,6 +152,7 @@ export function useMenuLogic() {
         ElMessage.success(isEdit.value ? '修改成功' : '新增成功')
         dialogVisible.value = false
         await loadData()
+        menuStore.refreshMenus()
       } else {
         ElMessage.error(res.message || '操作失败')
       }

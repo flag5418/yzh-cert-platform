@@ -1,13 +1,13 @@
-extern alias SharedEntities;
-
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Result;
+using CertPlatform.Shared.Entities.Cert;
+using CertPlatform.Shared.Entities.Sys;
 
-using CB = SharedEntities::YZH.Entity.Admin.Platform.Cert.CertificationBody;
-using Phase = SharedEntities::YZH.Entity.Admin.Platform.Cert.PhaseDefinition;
-using Link = SharedEntities::YZH.Entity.Admin.Platform.Sys.CertOrgStage;
+using CB = CertPlatform.Shared.Entities.Cert.CertificationBody;
+using Phase = CertPlatform.Shared.Entities.Cert.PhaseDefinition;
+using Link = CertPlatform.Shared.Entities.Sys.CertOrgStage;
 
 namespace CertPlatform.Admin.Controllers.Foundation;
 

@@ -4,14 +4,14 @@ export interface LoginResult {
   token: string
   userName: string
   userTrueName?: string
-  roleId?: number
+  roleCode?: string
 }
 
 /**
  * 登录 API
  * 后端: POST /api/Auth/login
  * 请求: { userName: string, password: string }
- * 响应: { success: true, data: { token, userName, userTrueName, roleId }, message: "登录成功" }
+ * 响应: { success: true, data: { token, userName, userTrueName, roleCode }, message: "登录成功" }
  */
 export async function login(username: string, password: string): Promise<LoginResult> {
   const response = await fetch('/api/Auth/login', {
@@ -36,7 +36,7 @@ export async function login(username: string, password: string): Promise<LoginRe
     token,
     userName: data.data.userName,
     userTrueName: data.data.userTrueName,
-    roleId: data.data.roleId
+    roleCode: data.data.roleCode
   }
 }
 

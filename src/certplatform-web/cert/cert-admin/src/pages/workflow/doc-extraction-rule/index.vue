@@ -148,16 +148,17 @@ async function onGeneratePrompt() {
 }
 
 async function onVerifyPrompt() {
-  if (!selectedFile.value?.fileCode || !prompt.value) {
-    ElMessage.warning('请先生成 Prompt')
+  if (!selectedFile.value?.fileCode) {
+    ElMessage.warning('请先选择一个文件')
     return
   }
+  // 提示词可为空：后端会用「固定提示词」（按本文件已配置的字段/表格清单生成）
 
   verifying.value = true
   try {
     const res: any = await verifyPrompt({
       fileCode: selectedFile.value.fileCode,
-      prompt: prompt.value
+      prompt: prompt.value || ''
     })
     const data = res?.data
     if (data?.success) {
@@ -369,6 +370,7 @@ function startResizeLeft(e: MouseEvent) {
               :is-valid="isValid"
               :verifying="verifying"
               :generating="generatingPrompt"
+              :extraction-data="extractionData"
               @update:prompt="onPromptUpdate"
               @generate="onGeneratePrompt"
               @verify="onVerifyPrompt"

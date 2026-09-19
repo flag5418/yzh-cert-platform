@@ -113,7 +113,7 @@ public class QueueManager
                     Status = "locked",
                     ActiveKey = $"{item.ResourceTable}|{item.ResourceCode}",
                     OrgCode = req.OrgCode,
-                    CreateDate = DateTime.Now
+                    LockTime = DateTime.UtcNow
                 };
                 lockRows.Add(lockRow);
                 await orm.InsertAsync(lockRow);
@@ -137,9 +137,8 @@ public class QueueManager
                 Progress = 0,
                 StartTime = DateTime.Now,
                 OrgCode = req.OrgCode,
-                CreateId = req.UserId,
-                Creator = req.UserName,
-                CreateDate = DateTime.Now
+                CreateBy = req.UserName,
+                CreateTime = DateTime.UtcNow
             };
             await orm.InsertAsync(queue);
 
@@ -238,10 +237,10 @@ public class QueueManager
 
         // 领取下一个 pending（MySQL FOR UPDATE SKIP LOCKED）
         var sql = @"SELECT * FROM yzh_queue_task
-                    WHERE status = 'pending'
-                      AND retry_count < max_retry_count
-                      AND (next_retry_at IS NULL OR next_retry_at <= NOW())
-                    ORDER BY priority DESC, create_time ASC
+                    WHERE Status = 'pending'
+                      AND RetryCount < MaxRetryCount
+                      AND (NextRetryAt IS NULL OR NextRetryAt <= NOW())
+                    ORDER BY Priority DESC, CreateTime ASC
                     LIMIT 1 FOR UPDATE SKIP LOCKED";
         var result = await orm.SqlQueryAsync<YzhQueueTask>(sql);
         var task = result.Data?.FirstOrDefault();
@@ -250,9 +249,9 @@ public class QueueManager
         // 更新为 processing + 租约
         var now = DateTime.Now;
         var updateSql = @"UPDATE yzh_queue_task
-                         SET status = 'processing', locked_at = @lockedAt, locked_by = @lockedBy,
-                             process_time = @processTime, locked_until = @lockedUntil, next_retry_at = NULL
-                         WHERE id = @id";
+                         SET Status = 'processing', LockedAt = @lockedAt, LockedBy = @lockedBy,
+                             ProcessTime = @processTime, LockedUntil = @lockedUntil, NextRetryAt = NULL
+                         WHERE Id = @id";
         await orm.SqlExecuteAsync(updateSql, new { lockedAt = now, lockedBy = workerId, processTime = now, lockedUntil = now.AddMinutes(_leaseMinutes), id = task.Id });
 
         task.Status = "processing";
@@ -322,13 +321,13 @@ public class QueueManager
 
             // 续期租约
             var now = DateTime.Now;
-            await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET locked_until = @lt WHERE id = @id", new { lt = now.AddMinutes(_leaseMinutes), id = task.Id });
+            await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET LockedUntil = @lt WHERE Id = @id", new { lt = now.AddMinutes(_leaseMinutes), id = task.Id });
 
             // 队列已取消：跳过执行
             var queueResult = await orm.GetOneAsync<YzhQueue>(q => q.QueueCode == task.QueueCode);
             if (queueResult.Data?.Status == "cancelled")
             {
-                await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET status = 'cancelled', complete_time = @ct, locked_until = NULL, error_message = '队列已取消，任务跳过执行' WHERE id = @id", new { ct = now, id = task.Id });
+                await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET Status = 'cancelled', CompleteTime = @ct, LockedUntil = NULL, ErrorMessage = '队列已取消，任务跳过执行' WHERE Id = @id", new { ct = now, id = task.Id });
                 await RefreshQueueProgressAsync(orm, task.QueueCode);
                 return;
             }
@@ -342,7 +341,7 @@ public class QueueManager
                 throw new Exception(result.Message ?? "任务执行失败");
 
             // 标记完成
-            await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET status = 'completed', complete_time = @ct, locked_until = NULL WHERE id = @id", new { ct = now, id = task.Id });
+            await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET Status = 'completed', CompleteTime = @ct, LockedUntil = NULL WHERE Id = @id", new { ct = now, id = task.Id });
             await ReleaseTaskLocksByCodesAsync(orm, task.LockCodes);
             await RefreshQueueProgressAsync(orm, task.QueueCode);
         }
@@ -376,7 +375,7 @@ public class QueueManager
             var queueResult = await orm.GetOneAsync<YzhQueue>(q => q.QueueCode == taskRow.QueueCode);
             if (queueResult.Data?.Status == "cancelled")
             {
-                await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET status = 'cancelled', error_message = @msg, complete_time = @ct WHERE id = @id",
+                await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET Status = 'cancelled', ErrorMessage = @msg, CompleteTime = @ct WHERE Id = @id",
                     new { msg = message, ct = DateTime.Now, id = taskRow.Id });
                 await RefreshQueueProgressAsync(orm, taskRow.QueueCode);
                 return;
@@ -456,10 +455,10 @@ public class QueueManager
             if (_runningTokens.TryRemove(task.Id, out var cts)) cts.Cancel();
 
         // 3. pending → cancelled
-        await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET status = 'cancelled', complete_time = NOW() WHERE queue_code = @qc AND status = 'pending'", new { qc = queueCode });
+        await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET Status = 'cancelled', CompleteTime = NOW() WHERE QueueCode = @qc AND Status = 'pending'", new { qc = queueCode });
 
         // 4. 批量释放锁
-        await orm.SqlExecuteAsync("UPDATE yzh_queue_resource_lock SET status = 'released', active_key = NULL, release_time = NOW() WHERE queue_code = @qc AND status = 'locked'", new { qc = queueCode });
+        await orm.SqlExecuteAsync("UPDATE yzh_queue_resource_lock SET Status = 'released', ActiveKey = NULL, ReleaseTime = NOW() WHERE QueueCode = @qc AND Status = 'locked'", new { qc = queueCode });
 
         // 5. 业务清理钩子
         try
@@ -568,7 +567,7 @@ public class QueueManager
         if (IsTerminal(newStatus))
         {
             queue.EndTime = DateTime.Now;
-            await orm.SqlExecuteAsync("UPDATE yzh_queue_resource_lock SET status = 'released', active_key = NULL, release_time = NOW() WHERE queue_code = @qc AND status = 'locked'", new { qc = queueCode });
+            await orm.SqlExecuteAsync("UPDATE yzh_queue_resource_lock SET Status = 'released', ActiveKey = NULL, ReleaseTime = NOW() WHERE QueueCode = @qc AND Status = 'locked'", new { qc = queueCode });
         }
         await orm.UpdateAsync(queue);
     }
@@ -653,12 +652,12 @@ public class QueueManager
                 query = query.Where(q => q.Status == status);
         }
         if (startTime.HasValue)
-            query = query.Where(q => q.CreateDate >= startTime.Value);
+            query = query.Where(q => q.CreateTime >= startTime.Value);
         if (endTime.HasValue)
-            query = query.Where(q => q.CreateDate <= endTime.Value);
+            query = query.Where(q => q.CreateTime <= endTime.Value);
 
         var total = query.Count();
-        var list = query.OrderByDescending(q => q.CreateDate)
+        var list = query.OrderByDescending(q => q.CreateTime)
             .Skip((page - 1) * rows).Take(rows).ToList();
 
         return new
@@ -678,12 +677,12 @@ public class QueueManager
                 pendingCount = q.PendingCount,
                 cancelledCount = q.CancelledCount,
                 progress = q.Progress,
-                creator = q.Creator,
+                createBy = q.CreateBy,
                 sourceType = q.SourceType,
                 sourceId = q.SourceId,
                 startTime = q.StartTime?.ToString("yyyy-MM-dd HH:mm:ss"),
                 endTime = q.EndTime?.ToString("yyyy-MM-dd HH:mm:ss"),
-                createDate = q.CreateDate?.ToString("yyyy-MM-dd HH:mm:ss")
+                createTime = q.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")
             }).ToList()
         };
     }
@@ -715,12 +714,12 @@ public class QueueManager
                 pendingCount = queue.PendingCount,
                 cancelledCount = queue.CancelledCount,
                 progress = queue.Progress,
-                creator = queue.Creator,
+                createBy = queue.CreateBy,
                 sourceType = queue.SourceType,
                 sourceId = queue.SourceId,
                 startTime = queue.StartTime?.ToString("yyyy-MM-dd HH:mm:ss"),
                 endTime = queue.EndTime?.ToString("yyyy-MM-dd HH:mm:ss"),
-                createDate = queue.CreateDate?.ToString("yyyy-MM-dd HH:mm:ss")
+                createTime = queue.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")
             },
             tasks = (tasksResult.Data ?? new List<YzhQueueTask>()).Select((j, i) =>
             {
@@ -760,7 +759,7 @@ public class QueueManager
                 resourceName = r.ResourceName,
                 taskNo = r.TaskNo,
                 status = r.Status,
-                createTime = r.CreateTime?.ToString("yyyy-MM-dd HH:mm:ss"),
+                createTime = r.LockTime?.ToString("yyyy-MM-dd HH:mm:ss"),
                 releaseTime = r.ReleaseTime?.ToString("yyyy-MM-dd HH:mm:ss")
             }).ToList()
         };
@@ -777,7 +776,7 @@ public class QueueManager
         if (codes.Length == 0) return;
         foreach (var code in codes)
         {
-            await orm.SqlExecuteAsync("UPDATE yzh_queue_resource_lock SET status = 'released', active_key = NULL, release_time = NOW() WHERE code = @code AND status = 'locked'", new { code });
+            await orm.SqlExecuteAsync("UPDATE yzh_queue_resource_lock SET Status = 'released', ActiveKey = NULL, ReleaseTime = NOW() WHERE Code = @code AND Status = 'locked'", new { code });
         }
     }
 

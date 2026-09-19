@@ -1,8 +1,7 @@
-extern alias SharedEntities;
 
 using Microsoft.AspNetCore.Mvc;
 using CertPlatform.Admin.Services.DocExtraction;
-using SharedEntities::YZH.Entity.Admin.Platform.Doc;
+using CertPlatform.Shared.Entities.Doc;
 
 namespace CertPlatform.Admin.Controllers.Workflow;
 

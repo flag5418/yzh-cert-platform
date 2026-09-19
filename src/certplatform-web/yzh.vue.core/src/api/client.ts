@@ -96,8 +96,25 @@ export class YzhApiClient {
 
     // 构建查询参数（GET 或 POST+body 时 params 都追加到 URL）
     if (params) {
+      // 防御：get(url, params) 的第二个参数本身就是查询对象，
+      // 但容易照着 axios 的写法再包一层 { params: {...} }。
+      // 不拦的话会把整个对象 String() 成 "[object Object]"，
+      // 变成 `?params=[object Object]` —— 请求能发出、后端却 400，
+      // 而且类型检查发现不了（params 是 Record<string, any>）。
+      // 这里自动解包并给出告警，避免这类故障静默发生。
+      let flatParams: Record<string, any> = params
+      const keys = Object.keys(params)
+      const nested = (params as any).params
+      if (keys.length === 1 && keys[0] === 'params' && nested && typeof nested === 'object') {
+        console.warn(
+          '[YzhApi] 查询参数多包了一层 params（应为 get(url, { a, b }) 而非 get(url, { params: { a, b } })），已自动解包：',
+          nested,
+        )
+        flatParams = nested
+      }
+
       const qs = new URLSearchParams()
-      Object.entries(params).forEach(([k, v]) => {
+      Object.entries(flatParams).forEach(([k, v]) => {
         if (v === undefined || v === null) return
         qs.append(k, String(v))
       })

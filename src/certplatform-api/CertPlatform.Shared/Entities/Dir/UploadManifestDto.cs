@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace YZH.Entity.Admin.Platform.Dir
+namespace CertPlatform.Shared.Entities.Dir
 {
     /// <summary>
     /// 上传清单请求DTO（客户端基础清单）

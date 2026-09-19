@@ -115,9 +115,9 @@ async function handleLogin() {
     })
 
     // 保存 token 和用户信息（后端返回 PascalCase 字段）
-    const { Token, UserCode, UserName, UserTrueName, RoleId } = res.data
+    const { Token, UserCode, UserName, UserTrueName, RoleCode } = res.data
     authStore.setToken(Token)
-    authStore.setUserInfo({ token: Token, userId: 0, userCode: UserCode, userName: UserName, userTrueName: UserTrueName ?? '', roleId: RoleId ?? 0 })
+    authStore.setUserInfo({ token: Token, userId: 0, userCode: UserCode, userName: UserName, userTrueName: UserTrueName ?? '', roleCode: RoleCode ?? '' })
 
     ElMessage.success('登录成功')
     router.push('/')

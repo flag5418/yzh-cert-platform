@@ -4,12 +4,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json.Serialization;
 using YZH.Core.Api.Attributes;
+using YZH.Core.Api.Models.Users;
+using YZH.Core.Api.Services;
 using YZH.Core.DataBase;
 using YZH.Core.DataBase.Interfaces;
+using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Result;
-using YZH.Core.Api.Models.Users;
-using YZH.Core.Stand.Helpers;
 using VolUtilities = VolFramework.YZH.Core.Utilities;
 using StandJwtHelper = YZH.Core.Stand.Helpers.JwtHelper;
 using StandPasswordHelper = YZH.Core.Stand.Helpers.PasswordHelper;
@@ -25,14 +26,16 @@ public class AuthController : ControllerBase
     private readonly StandPasswordHelper _password;
     private readonly IMemoryCache _cache;
     private readonly TokenVersionService _tokenVersion;
+    private readonly IRoleService _roleService;
 
-    public AuthController(IDbOrm db, StandJwtHelper jwt, StandPasswordHelper password, IMemoryCache cache, TokenVersionService tokenVersion)
+    public AuthController(IDbOrm db, StandJwtHelper jwt, StandPasswordHelper password, IMemoryCache cache, TokenVersionService tokenVersion, IRoleService roleService)
     {
         _db = db;
         _jwt = jwt;
         _password = password;
         _cache = cache;
         _tokenVersion = tokenVersion;
+        _roleService = roleService;
     }
 
     /// <summary>登录（兼容 Vol 路由：api/User/login）</summary>
@@ -63,7 +66,7 @@ public class AuthController : ControllerBase
 
         // 查询用户（Dapper 强类型 + 参数化）
         var userResult = await _db.QueryFirstOrDefaultAsync<Sys_User>(
-            @"SELECT UserName, UserPwd, UserTrueName, Role_Id, Enable, Code 
+            @"SELECT UserName, UserPwd, UserTrueName, Enable, Code 
               FROM Sys_User 
               WHERE UserName = @UserName AND IsDeleted = 0",
             new { UserName = req.UserName });
@@ -85,14 +88,12 @@ public class AuthController : ControllerBase
         string userCode = user.Code ?? user.UserName;
         var ssoVersion = await _tokenVersion.BumpVersionAsync(userCode);
 
-        // 查询角色编码（用于按角色过滤菜单等 Code 关联场景）
-        var roleResult = await _db.QueryFirstOrDefaultAsync<RoleCodeDto>(
-            "SELECT Code FROM Sys_Role WHERE Role_Id = @RoleId",
-            new { RoleId = user.RoleId });
-        var roleCode = roleResult.Data?.Code;
+        // 查询角色编码（通过 Sys_RoleUser 关联表，Code 关联）
+        var roleResult = await _roleService.GetRoleCodeByUserCodeAsync(userCode);
+        var roleCode = roleResult.Data;
 
-        // 生成 Token（含 SSO 版本号；roles 同时携带角色ID与角色编码，保持向后兼容）
-        var roleClaims = new List<string> { user.RoleId.ToString() };
+        // 生成 Token（含 SSO 版本号；roles 携带角色编码）
+        var roleClaims = new List<string>();
         if (!string.IsNullOrEmpty(roleCode))
             roleClaims.Add(roleCode);
         var token = _jwt.GenerateToken(userCode, user.UserName, roleClaims, ssoVersion);
@@ -109,7 +110,7 @@ public class AuthController : ControllerBase
             UserCode = userCode,
             UserName = user.UserName,
             UserTrueName = user.UserTrueName,
-            RoleId = user.RoleId
+            RoleCode = roleCode
         }, "登录成功"));
     }
 
@@ -150,11 +151,5 @@ public class LoginResponse
     public string UserCode { get; set; } = string.Empty;
     public string? UserName { get; set; }
     public string? UserTrueName { get; set; }
-    public int RoleId { get; set; }
-}
-
-/// <summary>角色编码查询结果</summary>
-public class RoleCodeDto
-{
-    public string? Code { get; set; }
+    public string? RoleCode { get; set; }
 }

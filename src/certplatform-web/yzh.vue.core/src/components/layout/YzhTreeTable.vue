@@ -151,11 +151,11 @@ function filterTreeData(nodes: TreeNode[], keyword: string): TreeNode[] {
   const result: TreeNode[] = []
 
   for (const node of nodes) {
-    const matched = (node.Name || node.name || '').toLowerCase().includes(lower)
-    const filteredChildren = filterTreeData(node.children, keyword)
+    const matched = (node.Name || '').toLowerCase().includes(lower)
+    const filteredChildren = filterTreeData(node.Children, keyword)
 
     if (matched || filteredChildren.length > 0) {
-      result.push({ ...node, children: filteredChildren })
+      result.push({ ...node, Children: filteredChildren })
     }
   }
 

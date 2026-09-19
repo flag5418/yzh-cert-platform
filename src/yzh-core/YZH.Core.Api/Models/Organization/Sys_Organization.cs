@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using SqlSugar;
 using YZH.Core.Stand.Attributes;
+using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Entity;
 
@@ -19,7 +20,7 @@ namespace YZH.Core.Api.Models.Organization;
 /// </summary>
 [SugarTable("Sys_Organization")]
 [YZHDeleteStrategy(Mode = DeleteMode.Soft)]
-public class Sys_Organization : BaseEntity, ITreeEntity
+public class Sys_Organization : BaseEntity, ISoftDelete, IIsValid, ITreeEntity
 {
     /// <summary>业务编码（DB: Code）</summary>
     [SugarColumn(ColumnName = "Code")]
@@ -94,25 +95,23 @@ public class Sys_Organization : BaseEntity, ITreeEntity
     // 数据库列: CreateID, Creator, CreateDate, ModifyID, Modifier, ModifyDate, DeleteID, Deleter, DeleteTime
     // BaseEntity属性: Id, CreateBy, CreateTime, UpdateBy, UpdateTime, DeleteBy, DeleteTime, IsDeleted
 
-    /// <summary>创建人（DB列: Creator）</summary>
-    [SugarColumn(ColumnName = "Creator")]
+    /// <summary>创建人（DB: CreateBy）</summary>
     public new string? CreateBy { get; set; }
 
-    /// <summary>创建时间（DB列: CreateDate）</summary>
-    [SugarColumn(ColumnName = "CreateDate")]
+    /// <summary>创建时间（DB: CreateTime）</summary>
     public new DateTime CreateTime { get; set; }
 
-    /// <summary>更新人（DB列: Modifier）</summary>
-    [SugarColumn(ColumnName = "Modifier")]
+    /// <summary>更新人（DB: UpdateBy）</summary>
     public new string? UpdateBy { get; set; }
 
-    /// <summary>更新时间（DB列: ModifyDate）</summary>
-    [SugarColumn(ColumnName = "ModifyDate")]
+    /// <summary>更新时间（DB: UpdateTime）</summary>
     public new DateTime? UpdateTime { get; set; }
 
-    /// <summary>删除人（DB列: Deleter）</summary>
-    [SugarColumn(ColumnName = "Deleter")]
+    /// <summary>删除人（DB: DeleteBy）</summary>
     public new string? DeleteBy { get; set; }
+
+    /// <summary>删除时间（DB: DeleteTime）</summary>
+    public new DateTime? DeleteTime { get; set; }
 
     // === 忽略 BaseEntity 中不存在的数据库列 ===
 

@@ -16,6 +16,7 @@ import {
   CircleCheck,
   CircleClose,
   MagicStick,
+  Warning,
   QuestionFilled,
 } from '@element-plus/icons-vue'
 import { yzhApi } from '@yzh-core/api/client'
@@ -38,7 +39,14 @@ import {
   getActiveQueue,
   cancelConvert,
 } from '@share/composables/useDirectoryApi'
-import { getRuleDetail, verifyPrompt } from '@share/api/workflow/doc-extraction-rule'
+import {
+  getRuleDetail,
+  verifyPrompt,
+  type FieldDefDto,
+  type TableDefDto,
+  type ExtractionData,
+} from '@share/api/workflow/doc-extraction-rule'
+import { buildExtractionView } from '@share/utils/extractionView'
 import { getPromptList, type PromptTemplate } from '@share/api/workflow/prompt-template'
 
 const router = useRouter()
@@ -87,7 +95,29 @@ const aiLoading = ref(false)
 const aiFile = ref<any>(null)
 const aiPrompt = ref('')
 const aiTemplates = ref<PromptTemplate[]>([])
-const aiResult = ref<{ success: boolean; message: string; fields: Record<string, unknown>; tables: Record<string, any[]> } | null>(null)
+const aiResult = ref<{
+  success: boolean
+  message: string
+  fields: Record<string, unknown>
+  tables: Record<string, any[]>
+  /** 是否使用了固定提示词（提示词留空） */
+  fixedPrompt: boolean
+} | null>(null)
+
+/** 该文件已配置的字段/表格定义：既是固定提示词的依据，也是结果中文展示的依据 */
+const aiDefFields = ref<FieldDefDto[]>([])
+const aiDefTables = ref<TableDefDto[]>([])
+
+/** 提取结果的「中文视图」（按定义对齐字段/表格/列） */
+const aiView = computed(() =>
+  buildExtractionView(
+    aiDefFields.value,
+    aiDefTables.value,
+    aiResult.value
+      ? { fields: aiResult.value.fields, tables: aiResult.value.tables } as ExtractionData
+      : null
+  )
+)
 
 // ========================================================
 // 目录树：搜索过滤
@@ -101,30 +131,31 @@ const aiResult = ref<{ success: boolean; message: string; fields: Record<string,
 const filteredTree = computed(() => {
   const q = searchText.value.trim().toLowerCase()
   if (!q) return fileTreeData.value
-  const hit = (n: any) => String(n?.name || '').toLowerCase().includes(q)
+  // useFileTree 产出的 TreeNode 是 PascalCase（Code/Name/Children/Expanded）
+  const hit = (n: any) => String(n?.Name || '').toLowerCase().includes(q)
 
   const orgs: any[] = []
   for (const org of fileTreeData.value) {
     const stds: any[] = []
-    for (const std of org.children || []) {
-      const phases = (std.children || []).filter(hit)
+    for (const std of org.Children || []) {
+      const phases = (std.Children || []).filter(hit)
       if (hit(std)) {
-        stds.push({ ...std, expanded: true })
+        stds.push({ ...std, Expanded: true })
       } else if (phases.length) {
-        stds.push({ ...std, children: phases, expanded: true })
+        stds.push({ ...std, Children: phases, Expanded: true })
       }
     }
     if (hit(org)) {
-      orgs.push({ ...org, expanded: true })
+      orgs.push({ ...org, Expanded: true })
     } else if (stds.length) {
-      orgs.push({ ...org, children: stds, expanded: true })
+      orgs.push({ ...org, Children: stds, Expanded: true })
     }
   }
   return orgs
 })
 
 function toggleExpand(node: any) {
-  node.expanded = !node.expanded
+  node.Expanded = !node.Expanded
 }
 
 function selectPhase(phase: TreeNode) {
@@ -142,11 +173,11 @@ function selectPhase(phase: TreeNode) {
 // ========================================================
 
 async function loadCurrentContent() {
-  if (!currentPhase.value?.directoryCode) return
+  if (!currentPhase.value?.DirectoryCode) return
 
   detailLoading.value = true
   try {
-    const directoryCode = currentPhase.value.directoryCode
+    const directoryCode = currentPhase.value.DirectoryCode
 
     if (!currentFolderCode.value) {
       // 根级别：加载文件夹 + 根级文件
@@ -203,7 +234,7 @@ function navigateToCrumb(index: number) {
 // ========================================================
 
 async function refreshActiveQueue() {
-  const directoryCode = currentPhase.value?.directoryCode
+  const directoryCode = currentPhase.value?.DirectoryCode
   if (!directoryCode) {
     activeQueue.value = null
     return
@@ -271,8 +302,8 @@ async function submitFolder() {
   }
 
   try {
-    const res = await createFolder(currentPhase.value!.directoryCode!, {
-      DirectoryCode: currentPhase.value!.directoryCode,
+    const res = await createFolder(currentPhase.value!.DirectoryCode!, {
+      DirectoryCode: currentPhase.value!.DirectoryCode,
       FolderName: folderForm.folderName,
       ParentCode: currentFolderCode.value || undefined,
       Remark: folderForm.remark,
@@ -357,7 +388,7 @@ async function deleteSelected() {
 
 /** 导出打包：选中项（文件夹+文件）打 zip 下载 */
 async function handleExport() {
-  if (!currentPhase.value?.directoryCode) return
+  if (!currentPhase.value?.DirectoryCode) return
   if (selectedItems.size === 0) {
     ElMessage.warning('请先勾选需要导出的文件夹或文件')
     return
@@ -370,7 +401,7 @@ async function handleExport() {
     else if (currentFiles.value.some((f: any) => (f.FileCode || f.fileCode) === code)) fileCodes.push(code)
   }
 
-  const dirCode = currentPhase.value.directoryCode
+  const dirCode = currentPhase.value.DirectoryCode
   try {
     await yzhApi.download(
       `/api/Workflow/StandardDirectory/configs/${encodeURIComponent(dirCode)}/export`,
@@ -499,14 +530,18 @@ async function handleAiAnalyze(file: any) {
   aiFile.value = file
   aiResult.value = null
   aiPrompt.value = ''
+  aiDefFields.value = []
+  aiDefTables.value = []
   showAiDialog.value = true
 
   const fileCode = file.FileCode || file.fileCode
 
-  // 1. 该文件已保存的提取规则 → 预填 Prompt
+  // 1. 该文件已保存的提取规则 → 预填 Prompt + 字段/表格定义（结果按定义中文展示）
   try {
     const res: any = await getRuleDetail(fileCode)
     if (res?.data?.prompt) aiPrompt.value = res.data.prompt
+    aiDefFields.value = res.data?.fields || []
+    aiDefTables.value = res.data?.tables || []
   } catch {
     /* 未配置规则：保持空 */
   }
@@ -523,25 +558,24 @@ async function handleAiAnalyze(file: any) {
 async function runAiAnalyze() {
   const fileCode = aiFile.value?.FileCode || aiFile.value?.fileCode
   if (!fileCode) return
-  if (!aiPrompt.value.trim()) {
-    ElMessage.warning('请先输入或选择提示词')
-    return
-  }
+  // 提示词可为空：后端用「固定提示词」（按该文件已配置的字段/表格清单生成）
 
   aiLoading.value = true
+  const fixedPrompt = !aiPrompt.value.trim()
   try {
-    const res: any = await verifyPrompt({ fileCode, prompt: aiPrompt.value })
+    const res: any = await verifyPrompt({ fileCode, prompt: aiPrompt.value || '' })
     const data = res?.data
     aiResult.value = {
       success: !!data?.success,
       message: data?.message || (data?.success ? '提取成功' : '提取失败'),
       fields: (data?.data?.fields || {}) as Record<string, unknown>,
       tables: (data?.data?.tables || {}) as Record<string, any[]>,
+      fixedPrompt,
     }
     if (data?.success) ElMessage.success('AI 提取完成')
     else ElMessage.warning(data?.message || 'AI 提取失败')
   } catch (e: any) {
-    aiResult.value = { success: false, message: e?.message || 'AI 提取异常', fields: {}, tables: {} }
+    aiResult.value = { success: false, message: e?.message || 'AI 提取异常', fields: {}, tables: {}, fixedPrompt }
     ElMessage.error('AI 提取失败：' + (e?.message || ''))
   } finally {
     aiLoading.value = false
@@ -568,7 +602,7 @@ async function onUploadSubmit() {
   uploadProgress.value = { status: 'uploading', currentFile: '', completed: 0, total: filteredFiles.length }
 
   try {
-    const directoryCode = currentPhase.value?.directoryCode || ''
+    const directoryCode = currentPhase.value?.DirectoryCode || ''
     if (!directoryCode) {
       ElMessage.error('请先选择左侧的阶段节点')
       uploading.value = false
@@ -676,7 +710,7 @@ onMounted(async () => {
   await loadTree()
   // 默认展开机构层，便于快速定位
   fileTreeData.value.forEach((org: any) => {
-    org.expanded = true
+    org.Expanded = true
   })
   startQueuePolling()
 })
@@ -722,40 +756,40 @@ onUnmounted(() => {
         />
       </div>
       <div class="tree-container" v-loading="treeLoading">
-        <div v-for="org in filteredTree" :key="org.id" class="tree-group">
+        <div v-for="org in filteredTree" :key="org.Code" class="tree-group">
           <!-- 机构 -->
           <div class="tree-node level-0" @click="toggleExpand(org)">
-            <el-icon class="tree-toggle" :class="{ expanded: (org as any).expanded }">
+            <el-icon class="tree-toggle" :class="{ expanded: (org as any).Expanded }">
               <Folder />
             </el-icon>
             <el-icon class="tree-icon org"><OfficeBuilding /></el-icon>
-            <span class="tree-label">{{ org.name }}</span>
-            <el-badge :value="org.children?.length || 0" type="info" />
+            <span class="tree-label" :title="org.Name">{{ org.Name }}</span>
+            <el-badge :value="org.Children?.length || 0" type="info" />
           </div>
           <!-- 标准 -->
-          <template v-if="(org as any).expanded && org.children">
-            <template v-for="std in org.children" :key="std.id">
+          <template v-if="(org as any).Expanded && org.Children">
+            <template v-for="std in org.Children" :key="std.Code">
               <div class="tree-node level-1" @click="toggleExpand(std)">
-                <el-icon class="tree-toggle" :class="{ expanded: (std as any).expanded }">
+                <el-icon class="tree-toggle" :class="{ expanded: (std as any).Expanded }">
                   <Folder />
                 </el-icon>
                 <el-icon class="tree-icon standard"><Document /></el-icon>
-                <span class="tree-label">{{ std.name }}</span>
-                <el-badge :value="std.children?.length || 0" type="info" />
+                <span class="tree-label" :title="std.Name">{{ std.Name }}</span>
+                <el-badge :value="std.Children?.length || 0" type="info" />
               </div>
               <!-- 阶段 -->
               <div
-                v-for="phase in std.children"
-                :key="phase.id"
+                v-for="phase in std.Children"
+                :key="phase.Code"
                 class="tree-node level-2"
-                :class="{ active: currentPhase?.id === phase.id }"
+                :class="{ active: currentPhase?.Code === phase.Code }"
                 @click="selectPhase(phase)"
               >
                 <el-icon class="tree-toggle" style="visibility: hidden">
                   <Folder />
                 </el-icon>
                 <el-icon class="tree-icon phase"><Document /></el-icon>
-                <span class="tree-label">{{ phase.name }}</span>
+                <span class="tree-label" :title="phase.Name">{{ phase.Name }}</span>
               </div>
             </template>
           </template>
@@ -776,12 +810,12 @@ onUnmounted(() => {
           <el-breadcrumb separator="/">
             <el-breadcrumb-item>
               <span class="clickable-breadcrumb" @click="navigateToRoot">
-                {{ currentPhase.standardCode || currentPhase.name }}
+                {{ currentPhase.StandardCode || currentPhase.Name }}
               </span>
             </el-breadcrumb-item>
             <el-breadcrumb-item>
               <span class="clickable-breadcrumb" @click="navigateToRoot">
-                {{ currentPhase.phaseCode || currentPhase.name }}
+                {{ currentPhase.PhaseCode || currentPhase.Name }}
               </span>
             </el-breadcrumb-item>
             <el-breadcrumb-item v-for="(crumb, index) in breadcrumbPath" :key="index">
@@ -1010,22 +1044,24 @@ onUnmounted(() => {
         >
           <el-option
             v-for="tpl in aiTemplates"
-            :key="tpl.promptCode"
-            :label="tpl.promptName"
-            :value="tpl.template"
+            :key="tpl.PromptCode"
+            :label="tpl.PromptName"
+            :value="tpl.Template"
           />
         </el-select>
         <el-input
           v-model="aiPrompt"
           type="textarea"
-          :rows="10"
-          placeholder="输入提取提示词（默认载入该文件已保存的规则 Prompt）"
+          :rows="8"
+          placeholder="留空即使用「固定提示词」：按该文件已配置的字段/表格清单生成（推荐，字段与表格结构性分离）；也可选择模板或手动输入"
         />
         <div class="ai-actions">
           <el-button type="primary" size="small" :loading="aiLoading" @click="runAiAnalyze">
             <el-icon><MagicStick /></el-icon> 开始分析
           </el-button>
-          <span class="ai-hint">分析将使用当前提示词对该文件执行一次提取</span>
+          <span class="ai-hint">
+            {{ aiPrompt.trim() ? '按当前提示词提取' : '按固定提示词提取（字段/表格定义）' }}
+          </span>
         </div>
 
         <div v-if="aiResult" class="ai-result">
@@ -1036,26 +1072,68 @@ onUnmounted(() => {
             show-icon
           />
           <template v-if="aiResult.success">
-            <h5>提取字段</h5>
-            <el-descriptions v-if="Object.keys(aiResult.fields).length" :column="1" border size="small">
-              <el-descriptions-item v-for="(val, key) in aiResult.fields" :key="String(key)" :label="String(key)">
-                {{ val }}
-              </el-descriptions-item>
-            </el-descriptions>
-            <el-empty v-else description="未提取到字段" :image-size="60" />
-            <template v-for="(rows, tableKey) in aiResult.tables" :key="String(tableKey)">
-              <h5>提取表格：{{ tableKey }}</h5>
-              <el-table :data="rows" size="small" border max-height="240">
+            <!-- 字段：按规则定义（中文）逐项展示，未提取到的显式标注 -->
+            <h5>
+              提取字段
+              <span class="ai-count">{{ aiView.extractedFieldCount }} / {{ aiView.fields.length }} 已提取</span>
+            </h5>
+            <el-table v-if="aiView.fields.length" :data="aiView.fields" size="small" border max-height="240">
+              <el-table-column label="字段名称" min-width="110">
+                <template #default="{ row }">{{ row.name }}</template>
+              </el-table-column>
+              <el-table-column label="编码" min-width="110">
+                <template #default="{ row }"><code>{{ row.code }}</code></template>
+              </el-table-column>
+              <el-table-column label="提取值" min-width="140" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <span v-if="row.extracted">{{ row.value }}</span>
+                  <span v-else class="ai-missing">未提取到</span>
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-else description="该文件尚未配置字段定义" :image-size="60" />
+
+            <!-- 表格：中文表名 + 中文列头 -->
+            <h5 v-if="aiDefTables.length || Object.keys(aiResult.tables).length">
+              提取表格
+              <span class="ai-count">
+                {{ aiView.extractedTableCount }} / {{ aiView.tables.length }} 已提取，共 {{ aiView.extractedRowCount }} 行
+              </span>
+            </h5>
+            <div v-for="t in aiView.tables" :key="t.code" class="ai-table-block">
+              <div class="ai-table-head">
+                <span class="ai-table-name">{{ t.name }}</span>
+                <code class="ai-table-code">{{ t.code }}</code>
+                <el-tag v-if="t.extracted" size="small" type="success" effect="plain">{{ t.rows.length }} 行</el-tag>
+                <el-tag v-else size="small" type="info" effect="plain">未提取到数据</el-tag>
+              </div>
+              <el-table v-if="t.extracted" :data="t.rows" size="small" border max-height="240">
                 <el-table-column
-                  v-for="col in Object.keys((rows && rows[0]) || {})"
-                  :key="col"
-                  :prop="col"
-                  :label="col"
+                  v-for="col in t.columns"
+                  :key="col.key"
+                  :prop="col.key"
+                  :label="col.label"
                   min-width="100"
                   show-overflow-tooltip
                 />
               </el-table>
-            </template>
+            </div>
+
+            <!-- AI 多返回、定义中没有的条目 -->
+            <div v-if="aiView.extraFields.length || aiView.extraTables.length" class="ai-extra">
+              <el-icon><Warning /></el-icon>
+              <span>AI 额外返回（不在规则定义内）：</span>
+              <el-tag
+                v-for="e in [...aiView.extraFields, ...aiView.extraTables]"
+                :key="e.key"
+                size="small"
+                type="warning"
+                effect="plain"
+                style="margin-right: 4px"
+              >
+                {{ e.key }}
+              </el-tag>
+            </div>
           </template>
         </div>
       </div>
@@ -1143,9 +1221,11 @@ onUnmounted(() => {
   display: flex;
 }
 
-/* 左侧面板：窄屏收窄（原固定 280px 在 1000px 级窗口会挤掉操作列） */
+/* 左侧面板：窄屏收窄（原固定 280px 在 1000px 级窗口会挤掉操作列）。
+   但下限不能太小：机构名（如「河北雄安尚龙认证有限公司」）+ 展开箭头 + 图标 + 计数徽标
+   至少要 220px 才不至于全部被省略号截断。 */
 .left-panel {
-  width: clamp(180px, 20vw, 280px);
+  width: clamp(220px, 22vw, 300px);
   flex-shrink: 0;
   border-right: 1px solid #e4e7ed;
   display: flex;
@@ -1206,7 +1286,7 @@ onUnmounted(() => {
 }
 
 .tree-node.level-2 {
-  padding-left: 56px;
+  padding-left: 48px;
 }
 
 .tree-toggle {
@@ -1503,5 +1583,47 @@ onUnmounted(() => {
   margin: 12px 0 6px;
   font-size: 13px;
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-count {
+  font-weight: 400;
+  font-size: 12px;
+  color: #909399;
+}
+.ai-missing {
+  color: #c0c4cc;
+  font-style: italic;
+}
+.ai-table-block {
+  margin-bottom: 12px;
+}
+.ai-table-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.ai-table-name {
+  font-weight: 500;
+  color: #303133;
+}
+.ai-table-code {
+  color: #909399;
+  font-size: 12px;
+}
+.ai-extra {
+  margin-top: 12px;
+  padding: 8px 10px;
+  background: #fdf6ec;
+  border: 1px solid #f5dab1;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #b88230;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 </style>

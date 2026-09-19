@@ -1,32 +1,6 @@
 import { yzhApi } from '@yzh-core/api/client'
 import type { ApiResponse } from '@yzh-core/api/client'
-
-// ========================================================
-// 类型定义
-// ========================================================
-
-/** 混合树节点（后端 CheckTreeNodeDto） */
-export interface CheckTreeNode {
-  Code: string
-  Name: string
-  ParentCode?: string | null
-  NodeType: string // 'org' | 'user' | 其他
-  CheckFlag: boolean
-  Extra?: Record<string, any>
-}
-
-/** 节点选择项 */
-export interface TreeNodeSelection {
-  Code: string
-  NodeType: string
-}
-
-/** 关联关系 DTO（后端 AssociationDto） */
-export interface AssociationDto {
-  ContextCode: string  // 左侧上下文编码（如角色编码）
-  TargetCode: string   // 右侧关联节点编码（如用户编码）
-  NodeType: string     // 右侧节点类型
-}
+import type { CheckTreeNode, TreeNodeSelection, AssociationDto } from '@share/types'
 
 // ========================================================
 // API 方法
@@ -47,15 +21,19 @@ export async function getCheckTree(roleCode: string): Promise<CheckTreeNode[]> {
  * 勾选保存（给角色分配用户）
  * @param roleCode 角色编码
  * @param selections 勾选的节点集合
+ * `Applied` = 服务端确认「现已授权」的 code 集合（供前端局部更新关联缓存）
  */
 export async function checkAdd(
   roleCode: string,
   selections: TreeNodeSelection[],
-): Promise<{ Updated: number }> {
-  const res = await yzhApi.post<ApiResponse<{ Updated: number }>>('/api/Role/check/add', {
-    ContextCode: roleCode,
-    Selections: selections,
-  })
+): Promise<{ Updated: number; Applied?: string[] }> {
+  const res = await yzhApi.post<ApiResponse<{ Updated: number; Applied?: string[] }>>(
+    '/api/Role/check/add',
+    {
+      ContextCode: roleCode,
+      Selections: selections,
+    },
+  )
   return res.data ?? { Updated: 0 }
 }
 

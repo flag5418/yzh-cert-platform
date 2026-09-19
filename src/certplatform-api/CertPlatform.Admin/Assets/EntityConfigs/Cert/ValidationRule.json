@@ -1,36 +1,6 @@
 {
   "Title": "NC 检查规则",
   "FillMode": "AutoFix",
-  "RowButtons": {
-    "Edit": true,
-    "Delete": true,
-    "CustomButtons": {}
-  },
-  "SearchFields": [
-    {
-      "Field": "RuleName",
-      "Label": "规则名称",
-      "ControlType": "TextBox",
-      "Operator": "like"
-    }
-  ],
-  "NewEntity": {
-    "Code": "",
-    "OrgCode": "",
-    "StandardCode": "",
-    "PhaseCode": "",
-    "ClauseCode": "",
-    "WorkflowCode": null,
-    "RuleCode": "",
-    "RuleName": "",
-    "RuleNameEn": null,
-    "SeverityIfViolated": null,
-    "RuleJson": null,
-    "LayoutJson": null,
-    "NcDescriptionTemplate": null,
-    "Remark": null,
-    "IsActive": true
-  },
   "Columns": [
     {
       "FieldName": "Id",

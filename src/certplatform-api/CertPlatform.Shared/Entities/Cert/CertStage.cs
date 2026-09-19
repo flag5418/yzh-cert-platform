@@ -1,9 +1,11 @@
 using System;
+using YZH.Entity.Admin.Platform;
 using System.ComponentModel.DataAnnotations;
 using SqlSugar;
+using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Entity;
 
-namespace YZH.Entity.Admin.Platform.Cert
+namespace CertPlatform.Shared.Entities.Cert
 {
     /// <summary>
     /// 认证阶段（全局基础资料）
@@ -12,14 +14,9 @@ namespace YZH.Entity.Admin.Platform.Cert
     /// <para>ORM：SqlSugar（§16 铁律：DB列名 == C#属性名，PascalCase）</para>
     /// </summary>
     [SugarTable("cert_cert_stage")]
-    public class CertStage : BaseEntity
+    public class CertStage : BaseEntity, ISoftDelete, IIsValid
     {
-        /// <summary>主键</summary>
-        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
-        public new long Id { get; set; }
-
-        /// <summary>业务编码</summary>
-        public new string Code { get; set; } = Guid.NewGuid().ToString("N");
+        // ──── Id 已由 BaseEntity 基类统一提供 ────
 
         /// <summary>阶段编码（如 AP/CR/SP/S1/S2/CD/CE/SV/RC）</summary>
         [Required]
@@ -42,9 +39,6 @@ namespace YZH.Entity.Admin.Platform.Cert
         /// <summary>阶段说明</summary>
         public string? Description { get; set; }
 
-        /// <summary>有效标志</summary>
-        public int IsValid { get; set; } = 1;
-
         /// <summary>状态（active/inactive）</summary>
         [StringLength(50)]
         public string Status { get; set; } = "active";
@@ -53,25 +47,18 @@ namespace YZH.Entity.Admin.Platform.Cert
         [StringLength(500)]
         public string? Remark { get; set; }
 
-        /// <summary>创建人</summary>
-        public new string? CreateBy { get; set; }
+        // ──── 接口字段（BaseEntity 不包含，由接口继承提供） ────
 
-        /// <summary>创建时间</summary>
-        public new DateTime CreateTime { get; set; } = DateTime.UtcNow;
+        /// <summary>有效标志（1=有效，0=无效）</summary>
+        public int IsValid { get; set; } = 1;
 
-        /// <summary>更新人</summary>
-        public new string? UpdateBy { get; set; }
-
-        /// <summary>更新时间</summary>
-        public new DateTime? UpdateTime { get; set; }
-
-        /// <summary>删除人</summary>
-        public new string? DeleteBy { get; set; }
-
-        /// <summary>删除时间</summary>
-        public new DateTime? DeleteTime { get; set; }
-
-        /// <summary>软删除标记</summary>
+        /// <summary>软删除标记（false=正常，true=已删除）</summary>
         public bool IsDeleted { get; set; }
+
+        /// <summary>删除人 Code（仅软删除时赋值）</summary>
+        public string? DeleteBy { get; set; }
+
+        /// <summary>删除时间（仅软删除时赋值）</summary>
+        public DateTime? DeleteTime { get; set; }
     }
 }

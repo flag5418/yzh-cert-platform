@@ -58,7 +58,7 @@
       "FieldName": "VersionYear",
       "DesName": "版本年份",
       "Width": 120,
-      "Type": "Number",
+      "Type": "Decimal",
       "Yxk": true,
       "BcFlag": true,
       "XsFlag": true,

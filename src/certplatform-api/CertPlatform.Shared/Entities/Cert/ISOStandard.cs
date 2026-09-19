@@ -1,10 +1,12 @@
 using System;
+using YZH.Entity.Admin.Platform;
 using System.ComponentModel.DataAnnotations;
 using SqlSugar;
+using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Entity;
 using YZH.Core.Stand.Models;
 
-namespace YZH.Entity.Admin.Platform.Cert
+namespace CertPlatform.Shared.Entities.Cert
 {
     /// <summary>
     /// ISO 标准
@@ -12,38 +14,23 @@ namespace YZH.Entity.Admin.Platform.Cert
     /// <para>ORM：SqlSugar（§16 铁律：DB列名 == C#属性名，PascalCase）</para>
     /// </summary>
     [SugarTable("cert_iso_standard")]
-    public class ISOStandard : BaseEntity, ITreeEntity
+    public class ISOStandard : BaseEntity, ISoftDelete, IIsValid, ITreeEntity
     {
-        /// <summary>主键（物理自增 bigint）</summary>
-        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
-        public new long Id { get; set; }
+        // ──── Id 已由 BaseEntity 基类统一提供 ────
 
-        /// <summary>业务编码（GUID 32位，关联键）</summary>
-        public new string Code { get; set; } = Guid.NewGuid().ToString("N");
-
-        /// <summary>创建人 Code</summary>
-        public new string? CreateBy { get; set; }
-
-        /// <summary>创建时间</summary>
-        public new DateTime CreateTime { get; set; } = DateTime.UtcNow;
-
-        /// <summary>更新人 Code</summary>
-        public new string? UpdateBy { get; set; }
-
-        /// <summary>更新时间</summary>
-        public new DateTime? UpdateTime { get; set; }
-
-        /// <summary>删除人 Code</summary>
-        public new string? DeleteBy { get; set; }
-
-        /// <summary>删除时间</summary>
-        public new DateTime? DeleteTime { get; set; }
-
-        /// <summary>软删除标记</summary>
-        public bool IsDeleted { get; set; }
+        // ──── 接口字段（BaseEntity 不包含，由接口继承提供） ────
 
         /// <summary>有效标志（1=有效，0=无效）</summary>
         public int IsValid { get; set; } = 1;
+
+        /// <summary>软删除标记（false=正常，true=已删除）</summary>
+        public bool IsDeleted { get; set; }
+
+        /// <summary>删除人 Code（仅软删除时赋值）</summary>
+        public string? DeleteBy { get; set; }
+
+        /// <summary>删除时间（仅软删除时赋值）</summary>
+        public DateTime? DeleteTime { get; set; }
 
         /// <summary>排序号</summary>
         public int Sort { get; set; }

@@ -1,98 +1,82 @@
-using System;
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+using SqlSugar;
 using YZH.Entity.Admin.Platform;
+using YZH.Core.Stand.Interfaces;
+using YZH.Core.Stand.Models.Entity;
 
-namespace YZH.Entity.Admin.Platform.Wf
+namespace CertPlatform.Shared.Entities.Wf
 {
     /// <summary>
     /// WfNodeExecution - 节点执行状态
-    /// <para>表名：wf_node_execution（列名为 snake_case，需覆盖审计字段）</para>
+    /// <para>表名：wf_node_execution</para>
     /// <para>定位：每个节点一次执行的状态记录，是结果复用和断点续跑的核心载体</para>
-    /// <para>跨路径复用：同一 item 下同 node_id 已执行 → 读库复用，不重跑</para>
+    ///
+    /// 命名规范（YZH 铁律）：DB 列名 = C# 属性名 = PascalCase
     /// </summary>
-    [Table("wf_node_execution")]
-    public class WfNodeExecution : EntityBase
+    [SugarTable("wf_node_execution")]
+    public class WfNodeExecution : BaseEntity, ISoftDelete, IIsValid
     {
-        // ===== snake_case 审计字段覆盖 =====
-        [Column("create_id")] public new int? CreateID { get; set; }
-        [Column("creator")] [MaxLength(50)] public new string Creator { get; set; }
-        [Column("create_date")] public new DateTime? CreateDate { get; set; } = DateTime.Now;
-        [Column("modify_id")] public new int? ModifyID { get; set; }
-        [Column("modifier")] [MaxLength(50)] public new string Modifier { get; set; }
-        [Column("modify_date")] public new DateTime? ModifyDate { get; set; }
-        [Column("delete_id")] public new int? DeleteID { get; set; }
-        [Column("deleter")] [MaxLength(50)] public new string Deleter { get; set; }
-        [Column("delete_time")] public new DateTime? DeleteTime { get; set; }
-        [Column("code")] public new string Code { get; set; } = Guid.NewGuid().ToString("N");
-        [Column("status")] public new string Status { get; set; } = "active";
-        [Column("enable")] public new bool Enable { get; set; } = true;
-        [Column("sort")] public new int Sort { get; set; }
-        [Column("remark")] public new string Remark { get; set; }
+        // ──── Id / Code / 审计字段由 BaseEntity 基类统一提供 ────
+        // ──── ISoftDelete / IIsValid 接口字段由接口提供 ────
 
-        /// <summary>wf_execution_task.code</summary>
+        // ──── 业务字段 ────
+        /// <summary>wf_execution_task.Code</summary>
         [Required]
         [MaxLength(36)]
         [UniqueField("任务编码", WithFields = new[] { "ItemCode", "NodeId" })]
-        [Column("task_code")]
-        public string TaskCode { get; set; }
+        public string TaskCode { get; set; } = string.Empty;
 
-        /// <summary>wf_execution_task_item.code</summary>
+        /// <summary>wf_execution_task_item.Code</summary>
         [Required]
         [MaxLength(36)]
-        [Column("item_code")]
-        public string ItemCode { get; set; }
+        public string ItemCode { get; set; } = string.Empty;
 
         /// <summary>节点ID（前端生成的 classCode_n序号）</summary>
         [Required]
         [MaxLength(64)]
-        [Column("node_id")]
-        public string NodeId { get; set; }
+        public string NodeId { get; set; } = string.Empty;
 
         /// <summary>节点类型：start|end|skill|ai_node|logic|branch|docField|docTable</summary>
         [MaxLength(30)]
-        [Column("node_type")]
-        public string NodeType { get; set; }
+        public string NodeType { get; set; } = string.Empty;
 
         /// <summary>节点名称快照</summary>
         [MaxLength(128)]
-        [Column("node_title")]
-        public string NodeTitle { get; set; }
+        public string NodeTitle { get; set; } = string.Empty;
 
         /// <summary>Skill编码（功能节点）</summary>
         [MaxLength(64)]
-        [Column("skill_code")]
-        public string SkillCode { get; set; }
+        public string SkillCode { get; set; } = string.Empty;
 
         /// <summary>执行状态：pending|executing|completed|failed|skipped</summary>
         [Required]
         [MaxLength(20)]
-        [Column("exec_status")]
         public string ExecStatus { get; set; } = "pending";
 
         /// <summary>节点输出（所有端口的JSON）</summary>
-        [Column("output_json", TypeName = "json")]
-        public string OutputJson { get; set; }
+        [SugarColumn(ColumnDataType = "json")]
+        public string? OutputJson { get; set; }
 
         /// <summary>执行错误信息</summary>
         [MaxLength(1000)]
-        [Column("error_message")]
-        public string ErrorMessage { get; set; }
+        public string? ErrorMessage { get; set; }
 
         /// <summary>开始执行时间</summary>
-        [Column("started_at")]
         public DateTime? StartedAt { get; set; }
 
         /// <summary>完成时间</summary>
-        [Column("completed_at")]
         public DateTime? CompletedAt { get; set; }
 
         /// <summary>执行耗时(ms)</summary>
-        [Column("execution_time_ms")]
         public int? ExecutionTimeMs { get; set; }
 
         /// <summary>是否复用了历史结果：0=新执行 1=复用</summary>
-        [Column("is_reused")]
         public int IsReused { get; set; } = 0;
+
+        // ──── ISoftDelete + IIsValid 接口显式实现 ────
+        public bool IsDeleted { get; set; }
+        public string? DeleteBy { get; set; }
+        public DateTime? DeleteTime { get; set; }
+        public int IsValid { get; set; } = 1;
     }
 }

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace YZH.Entity.Admin.Platform.Wf
+namespace CertPlatform.Shared.Entities.Wf
 {
     /// <summary>
     /// Skill 详情/保存 DTO（V1.4 精简版）
@@ -10,20 +10,20 @@ namespace YZH.Entity.Admin.Platform.Wf
     public class SkillDetailDto
     {
         public long Id { get; set; }
-        public string Code { get; set; }
-        public string SkillCode { get; set; }
-        public string SkillName { get; set; }
-        public string Category { get; set; }
-        public string Description { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string SkillCode { get; set; } = string.Empty;
+        public string SkillName { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
         public bool IsActive { get; set; } = true;
         public string Version { get; set; } = "1.0";
-        public string Icon { get; set; }
-        public string Color { get; set; }
+        public string Icon { get; set; } = string.Empty;
+        public string Color { get; set; } = string.Empty;
         public int SortOrder { get; set; }
-        public string Remark { get; set; }
+        public string Remark { get; set; } = string.Empty;
 
         public List<WfSkillInput> Inputs { get; set; } = new();
         public List<WfSkillOutput> Outputs { get; set; } = new();
-        public WfSkillReflection Reflection { get; set; }
+        public WfSkillReflection? Reflection { get; set; }
     }
 }

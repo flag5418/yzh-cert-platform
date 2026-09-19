@@ -182,9 +182,9 @@ function handleCheckAll() {
   // 递归勾选所有节点
   const checkAllNodes = (nodes: TreeNode[]) => {
     for (const node of nodes) {
-      treeRef.value?.setChecked(node.code, true)
-      if (node.children && node.children.length > 0) {
-        checkAllNodes(node.children)
+      treeRef.value?.setChecked(node.Code, true)
+      if (node.Children && node.Children.length > 0) {
+        checkAllNodes(node.Children)
       }
     }
   }
@@ -197,7 +197,7 @@ function handleUncheckAll() {
 
 function handleTreeNodeClick(node: TreeNode) {
   // 点击节点时加载该节点的关联表格数据
-  loadTableDataForNode(node.code)
+  loadTableDataForNode(node.Code)
 }
 
 // ========================================================
@@ -276,7 +276,7 @@ async function tableDataLoader(params: any) {
   // 加载所有勾选节点的关联数据
   const allRows: any[] = []
   for (const node of checkedTreeNodes.value) {
-    const data = await loadTableDataForNode(node.code)
+    const data = await loadTableDataForNode(node.Code)
     if (data) {
       allRows.push(...data)
     }
@@ -330,11 +330,11 @@ function filterTreeData(nodes: TreeNode[], keyword: string): TreeNode[] {
   const result: TreeNode[] = []
 
   for (const node of nodes) {
-    const matched = (node.Name || node.name || '').toLowerCase().includes(lower)
-    const filteredChildren = filterTreeData(node.children, keyword)
+    const matched = (node.Name || '').toLowerCase().includes(lower)
+    const filteredChildren = filterTreeData(node.Children, keyword)
 
     if (matched || filteredChildren.length > 0) {
-      result.push({ ...node, children: filteredChildren })
+      result.push({ ...node, Children: filteredChildren })
     }
   }
 

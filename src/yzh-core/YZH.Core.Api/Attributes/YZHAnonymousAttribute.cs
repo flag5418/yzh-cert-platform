@@ -80,7 +80,7 @@ public class YZHAnonymousAttribute : Attribute, IAsyncAuthorizationFilter
     {
         var db = context.HttpContext.RequestServices.GetRequiredService<YZH.Core.DataBase.Interfaces.IDbOrm>();
         var result = await db.QueryFirstOrDefaultAsync<YZH.Core.Api.Models.Users.Sys_User>(
-            @"SELECT UserName, UserTrueName, Role_Id, Enable, Code 
+            @"SELECT UserName, UserTrueName, Enable, Code 
               FROM Sys_User 
               WHERE Code = @Code AND IsDeleted = 0",
             new { Code = userCode });
@@ -89,18 +89,29 @@ public class YZHAnonymousAttribute : Attribute, IAsyncAuthorizationFilter
             return null;
 
         var user = result.Data;
-        return BuildUserPrincipal(user.Code, user.UserName, user.UserTrueName, user.RoleId);
+
+        // 查询角色编码（通过 Sys_RoleUser 关联表，Code 关联）
+        var roleResult = await db.QueryFirstOrDefaultAsync<RoleCodeDto>(
+            @"SELECT r.Code FROM Sys_RoleUser ru 
+              INNER JOIN Sys_Role r ON ru.RoleCode = r.Code 
+              WHERE ru.UserCode = @UserCode AND ru.IsDeleted = 0 AND r.IsDeleted = 0",
+            new { UserCode = user.Code });
+        var roleCode = roleResult.Data?.Code;
+
+        return BuildUserPrincipal(user.Code, user.UserName, user.UserTrueName, roleCode);
     }
 
-    private static ClaimsPrincipal BuildUserPrincipal(string code, string userName, string? userTrueName, int roleId)
+    private static ClaimsPrincipal BuildUserPrincipal(string code, string userName, string? userTrueName, string? roleCode)
     {
         var claims = new List<Claim>
         {
             new("code", code),
             new(ClaimTypes.Name, userName ?? ""),
             new(ClaimTypes.GivenName, userTrueName ?? ""),
-            new("role_id", roleId.ToString()),
+            new("role_code", roleCode ?? ""),
         };
+        if (!string.IsNullOrEmpty(roleCode))
+            claims.Add(new Claim(ClaimTypes.Role, roleCode));
         var identity = new ClaimsIdentity(claims, "MockAuth");
         return new ClaimsPrincipal(identity);
     }
@@ -111,9 +122,15 @@ public class YZHAnonymousAttribute : Attribute, IAsyncAuthorizationFilter
         {
             new("code", "anonymous"),
             new(ClaimTypes.Name, "anonymous"),
-            new("role_id", "0"),
+            new("role_code", ""),
         };
         var identity = new ClaimsIdentity(claims, "Anonymous");
         return new ClaimsPrincipal(identity);
     }
+}
+
+/// <summary>角色编码查询结果</summary>
+public class RoleCodeDto
+{
+    public string? Code { get; set; }
 }

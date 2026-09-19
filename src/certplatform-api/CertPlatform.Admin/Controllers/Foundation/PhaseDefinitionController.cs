@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Controllers;
@@ -20,10 +19,10 @@ namespace CertPlatform.Admin.Controllers.Foundation;
 /// </summary>
 [ApiController]
 [Route("api/Foundation/[controller]")]
-public class PhaseDefinitionController : YzhControllerBase<SharedEntities::YZH.Entity.Admin.Platform.Cert.PhaseDefinition>
+public class PhaseDefinitionController : YzhControllerBase<PhaseDefinition>
 {
     public PhaseDefinitionController(
-        EntityService<SharedEntities::YZH.Entity.Admin.Platform.Cert.PhaseDefinition> entityService,
+        EntityService<PhaseDefinition> entityService,
         IUserContext userContext)
         : base(entityService, userContext)
     {
@@ -34,12 +33,12 @@ public class PhaseDefinitionController : YzhControllerBase<SharedEntities::YZH.E
     /// </summary>
     protected override EntityConfig LoadConfig()
     {
-        return EntityConfigHelper.GetConfig<SharedEntities::YZH.Entity.Admin.Platform.Cert.PhaseDefinition>();
+        return EntityConfigHelper.GetConfig<PhaseDefinition>();
     }
 
     /// <summary>新增前校验：PhaseCode 唯一性</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAdd(
-        SharedEntities::YZH.Entity.Admin.Platform.Cert.PhaseDefinition entity)
+        PhaseDefinition entity)
     {
         var exists = await Entity.ExistsAsync(p => p.PhaseCode == entity.PhaseCode);
         if (exists.Data)
@@ -49,7 +48,7 @@ public class PhaseDefinitionController : YzhControllerBase<SharedEntities::YZH.E
 
     /// <summary>修改前校验：PhaseCode 唯一性（排除自身）</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(
-        SharedEntities::YZH.Entity.Admin.Platform.Cert.PhaseDefinition entity)
+        PhaseDefinition entity)
     {
         var exists = await Entity.ExistsAsync(p =>
             p.Code != entity.Code && p.PhaseCode == entity.PhaseCode);

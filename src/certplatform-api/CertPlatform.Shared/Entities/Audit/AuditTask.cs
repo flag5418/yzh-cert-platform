@@ -1,9 +1,10 @@
 using System;
+using YZH.Entity.Admin.Platform;
 using System.ComponentModel.DataAnnotations;
 using SqlSugar;
 using YZH.Core.Stand.Models.Entity;
 
-namespace YZH.Entity.Admin.Platform.Audit
+namespace CertPlatform.Shared.Entities.Audit
 {
     /// <summary>
     /// 审核任务
@@ -26,9 +27,9 @@ namespace YZH.Entity.Admin.Platform.Audit
         [UniqueField("任务编号")]
         public string TaskNumber { get; set; }
 
-        /// <summary>审核员ID</summary>
-        [Required]
-        public long AuditorId { get; set; }
+        /// <summary>审核员编码（关联 Sys_User.Code）</summary>
+        [Required, StringLength(64)]
+        public string AuditorCode { get; set; }
 
         /// <summary>计划日期</summary>
         public DateTime? PlannedDate { get; set; }

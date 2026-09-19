@@ -34,13 +34,13 @@
       @node-collapse="handleNodeCollapse"
     >
       <template #default="{ data }">
-        <div class="yzh-tree__node" @mouseenter="hoveredNode = data.code" @mouseleave="hoveredNode = null">
+        <div class="yzh-tree__node" @mouseenter="hoveredNode = data.Code" @mouseleave="hoveredNode = null">
           <!-- 图标 -->
-          <el-icon v-if="data.extra?.icon && !isEmoji(data.extra.icon)" class="yzh-tree__icon">
-            <component :is="data.extra.icon" />
+          <el-icon v-if="nodeExtra(data).icon && !isEmoji(nodeExtra(data).icon)" class="yzh-tree__icon">
+            <component :is="nodeExtra(data).icon" />
           </el-icon>
-          <span v-else-if="data.extra?.icon" class="yzh-tree__icon">{{ data.extra.icon }}</span>
-          <el-icon v-else-if="data.isLeaf" class="yzh-tree__icon yzh-tree__icon--leaf">
+          <span v-else-if="nodeExtra(data).icon" class="yzh-tree__icon">{{ nodeExtra(data).icon }}</span>
+          <el-icon v-else-if="isLeafNode(data)" class="yzh-tree__icon yzh-tree__icon--leaf">
             <Document />
           </el-icon>
           <el-icon v-else class="yzh-tree__icon yzh-tree__icon--folder">
@@ -52,12 +52,12 @@
             class="yzh-tree__label"
             :class="{ 'is-highlight': highlightKeyword && isMatchNode(data) }"
           >
-            {{ data.Name || data.name }}
+            {{ data.Name }}
           </span>
 
           <!-- 徽标 -->
-          <span v-if="data.extra?.badge" class="yzh-tree__badge">
-            {{ data.extra.badge }}
+          <span v-if="nodeExtra(data).badge" class="yzh-tree__badge">
+            {{ nodeExtra(data).badge }}
           </span>
 
           <!-- 操作下拉菜单 -->
@@ -103,6 +103,32 @@ import type { TreeNode } from '@share/types/tree'
 function isEmoji(str: string): boolean {
   const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u
   return emojiRegex.test(str)
+}
+
+/**
+ * 节点字段读取：TreeNode 契约为 PascalCase（Code/Name/IsLeaf/Extra），
+ * 但历史上模板里按小写读过 IsLeaf/Extra —— 取到 undefined 后静默失效：
+ * - `data.isLeaf` 恒假 → 叶子节点也显示文件夹图标、也显示可展开箭头，
+ *   点开还会白跑一次 tree/children；
+ * - `data.extra` 恒空 → 图标 / 徽标 / disabled 全部失效。
+ *
+ * 这里统一按 PascalCase 优先、camelCase 兜底读取，
+ * 调用方不必再两种写法各写一份。
+ */
+function readNodeField(node: Record<string, any>, pascal: string): any {
+  if (!node) return undefined
+  const camel = pascal.charAt(0).toLowerCase() + pascal.slice(1)
+  return node[pascal] ?? node[camel]
+}
+
+/** 节点是否叶子（末端）节点 */
+function isLeafNode(node: Record<string, any> | null | undefined): boolean {
+  return readNodeField(node as Record<string, any>, 'IsLeaf') === true
+}
+
+/** 节点扩展字段（icon / badge / disabled 等） */
+function nodeExtra(node: Record<string, any> | null | undefined): Record<string, any> {
+  return (readNodeField(node as Record<string, any>, 'Extra') as Record<string, any>) ?? {}
 }
 
 // ========================================================
@@ -183,8 +209,10 @@ const hoveredNode = ref<string | null>(null)
 const treeProps = computed(() => ({
   label: 'Name',
   children: 'children',
-  isLeaf: (data: Record<string, any>) => (data as TreeNode).isLeaf ?? false,
-  disabled: (data: Record<string, any>) => (data as TreeNode).extra?.disabled ?? false
+  // 必须读 IsLeaf（后端 TreeControllerBase.FillIsLeafBatch 批量计算）。
+  // 读小写恒为 false，会让末端节点也长出展开箭头并白跑一次 tree/children。
+  isLeaf: (data: Record<string, any>) => isLeafNode(data),
+  disabled: (data: Record<string, any>) => nodeExtra(data).disabled ?? false
 }))
 
 // ========================================================
@@ -202,7 +230,7 @@ function filterNode(_value: string, data: Record<string, any>): boolean {
 
 function isMatchNode(node: TreeNode): boolean {
   if (!searchKeyword.value) return false
-  return (node.Name || node.name || '').toLowerCase().includes(searchKeyword.value.toLowerCase())
+  return (node.Name || '').toLowerCase().includes(searchKeyword.value.toLowerCase())
 }
 
 function filterTree(nodes: TreeNode[], keyword: string): TreeNode[] {
@@ -210,13 +238,13 @@ function filterTree(nodes: TreeNode[], keyword: string): TreeNode[] {
   const result: TreeNode[] = []
 
   for (const node of nodes) {
-    const matched = (node.Name || node.name || '').toLowerCase().includes(lower)
-    const filteredChildren = filterTree(node.children, keyword)
+    const matched = (node.Name || '').toLowerCase().includes(lower)
+    const filteredChildren = filterTree(node.Children, keyword)
 
     if (matched || filteredChildren.length > 0) {
       result.push({
         ...node,
-        children: filteredChildren
+        Children: filteredChildren
       })
     }
   }
@@ -296,11 +324,11 @@ function expandAll() {
   const expandRecursive = (nodes: TreeNode[]) => {
     for (const node of nodes) {
       const store = treeRef.value?.store
-      if (store && store.nodesMap[node.code]) {
-        store.nodesMap[node.code].expanded = true
+      if (store && store.nodesMap[node.Code]) {
+        store.nodesMap[node.Code].expanded = true
       }
-      if (node.children && node.children.length) {
-        expandRecursive(node.children)
+      if (node.Children && node.Children.length) {
+        expandRecursive(node.Children)
       }
     }
   }
@@ -312,11 +340,11 @@ function collapseAll() {
   const collapseRecursive = (nodes: TreeNode[]) => {
     for (const node of nodes) {
       const store = treeRef.value?.store
-      if (store && store.nodesMap[node.code]) {
-        store.nodesMap[node.code].expanded = false
+      if (store && store.nodesMap[node.Code]) {
+        store.nodesMap[node.Code].expanded = false
       }
-      if (node.children && node.children.length) {
-        collapseRecursive(node.children)
+      if (node.Children && node.Children.length) {
+        collapseRecursive(node.Children)
       }
     }
   }
@@ -369,13 +397,13 @@ function addToTree(
   newNode: TreeNode,
 ): boolean {
   for (const node of nodes) {
-    if (node.code === parentCode) {
-      node.children = node.children || []
-      node.children.push(newNode)
-      node.isLeaf = false
+    if (node.Code === parentCode) {
+      node.Children = node.Children || []
+      node.Children.push(newNode)
+      node.IsLeaf = false
       return true
     }
-    if (node.children?.length && addToTree(node.children, parentCode, newNode)) {
+    if (node.Children?.length && addToTree(node.Children, parentCode, newNode)) {
       return true
     }
   }

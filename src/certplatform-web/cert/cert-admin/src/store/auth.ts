@@ -7,7 +7,7 @@ export interface UserInfo {
   userCode: string
   userName: string
   userTrueName: string
-  roleId: number
+  roleCode: string
   email?: string
   phone?: string
   nickname?: string

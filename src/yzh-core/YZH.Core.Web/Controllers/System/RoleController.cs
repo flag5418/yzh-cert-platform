@@ -78,13 +78,10 @@ public class RoleController : TreeTableControllerBase<Sys_Role, Sys_Role>
 
         entity.Enable = 1;
 
-        if (entity.ParentId > 0 && string.IsNullOrEmpty(entity.ParentCode))
+        // 如果未指定 ParentCode，设置为根节点（null）
+        if (string.IsNullOrEmpty(entity.ParentCode))
         {
-            var parentResult = await TreeEntity.GetOne(r => r.ParentId == entity.ParentId && r.Id != entity.Id);
-            if (parentResult.Success && parentResult.Data != null)
-            {
-                entity.ParentCode = parentResult.Data.Code;
-            }
+            entity.ParentCode = null;
         }
 
         return (true, null);
@@ -103,15 +100,8 @@ public class RoleController : TreeTableControllerBase<Sys_Role, Sys_Role>
             }
         }
 
-        if (entity.ParentId > 0 && string.IsNullOrEmpty(entity.ParentCode))
-        {
-            var parentResult = await TreeEntity.GetOne(r => r.ParentId == entity.ParentId && r.Id != entity.Id);
-            if (parentResult.Success && parentResult.Data != null)
-            {
-                entity.ParentCode = parentResult.Data.Code;
-            }
-        }
-        else if (entity.ParentId == 0)
+        // 如果未指定 ParentCode，设置为根节点（null）
+        if (string.IsNullOrEmpty(entity.ParentCode))
         {
             entity.ParentCode = null;
         }
@@ -318,7 +308,10 @@ public class RoleController : TreeTableControllerBase<Sys_Role, Sys_Role>
                 if (result.Success) inserted++;
             }
 
-            return Ok(ApiResponse<object?>.Ok(new { Updated = inserted }));
+            // Applied：本次调用后「应当已授权」的完整 code 集合。
+            // 前端凭此局部更新本地关联缓存（用于刷新角色徽标 / 回填勾选状态），
+            // 不必再调一次 check/all 全量重取。
+            return Ok(ApiResponse<object?>.Ok(new { Updated = inserted, Applied = userCodes }));
         }
         catch (Exception ex)
         {

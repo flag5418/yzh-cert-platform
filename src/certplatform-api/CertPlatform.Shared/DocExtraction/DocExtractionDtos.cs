@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
-namespace YZH.Entity.Admin.Platform.Doc
+namespace CertPlatform.Shared.DocExtraction
 {
     /// <summary>
     /// 文档提取规则 DTO 集
@@ -115,7 +115,11 @@ namespace YZH.Entity.Admin.Platform.Doc
         [Required(ErrorMessage = "文件编码不能为空")]
         public string FileCode { get; set; } = "";
 
-        [Required(ErrorMessage = "Prompt 不能为空")]
+        /// <summary>
+        /// 提取提示词。**留空表示使用「固定提示词」** —— 由该文件已配置的字段/表格清单
+        /// 自动生成（推荐：能保证字段与表格结构性分离）。
+        /// 传入自定义/模板提示词时，支持 {{document_content}} / {{fields_json}} / {{tables_json}} 占位符。
+        /// </summary>
         public string Prompt { get; set; } = "";
     }
 
@@ -162,8 +166,8 @@ namespace YZH.Entity.Admin.Platform.Doc
         [JsonPropertyName("status")] public string Status { get; set; } = "none";
         [JsonPropertyName("fields")] public List<FieldDefDto> Fields { get; set; } = new();
         [JsonPropertyName("tables")] public List<TableDefDto> Tables { get; set; } = new();
-        [JsonPropertyName("createDate")] public DateTime? CreateDate { get; set; }
-        [JsonPropertyName("modifyDate")] public DateTime? ModifyDate { get; set; }
+        [JsonPropertyName("createTime")] public DateTime? CreateTime { get; set; }
+        [JsonPropertyName("updateTime")] public DateTime? UpdateTime { get; set; }
     }
 
     #endregion

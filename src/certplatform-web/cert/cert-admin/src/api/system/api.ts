@@ -1,5 +1,6 @@
 import { yzhApi } from '@yzh-core/api/client'
 import type { ApiResponse } from '@yzh-core/api/client'
+import { unwrap } from '@yzh-core/utils'
 
 // ========================================================
 // 类型定义
@@ -25,17 +26,6 @@ export interface SyncResult {
   Updated: number
   Deleted: number
   Total: number
-}
-
-// ========================================================
-// 工具：统一解包 ApiResponse
-// ========================================================
-
-function unwrap<T>(res: ApiResponse<T> | undefined, fallback: T): T {
-  if (res && res.success === false) {
-    throw new Error(res.message || '请求失败')
-  }
-  return (res?.data ?? fallback) as T
 }
 
 // ========================================================

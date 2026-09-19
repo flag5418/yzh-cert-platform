@@ -1,46 +1,37 @@
-using System;
 using SqlSugar;
-using YZH.Entity.SystemModels;
+using YZH.Core.Stand.Interfaces;
+using YZH.Core.Stand.Models.Entity;
 
-namespace YZH.Entity.Admin.Platform.Dir
+namespace CertPlatform.Shared.Entities.Dir
 {
+    /// <summary>上传任务实体</summary>
+    /// <para>命名规范（YZH 铁律）：DB 列名 = C# 属性名 = PascalCase</para>
     [SugarTable("cert_upload_task")]
-    public class UploadTask : BaseEntity
+    public class UploadTask : BaseEntity, ISoftDelete, IIsValid
     {
-        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
-        public long Id { get; set; }
+        // ──── Id / Code / 审计字段由 BaseEntity + 接口统一提供 ────
 
-        [SugarColumn(ColumnName = "code", Length = 64)]
-        public new string Code { get; set; }
+        [SugarColumn(Length = 64)]
+        public string TaskId { get; set; } = string.Empty;
 
-        [SugarColumn(ColumnName = "TaskId", Length = 64)]
-        public string TaskId { get; set; }
+        [SugarColumn(Length = 128)]
+        public string DirectoryCode { get; set; } = string.Empty;
 
-        [SugarColumn(ColumnName = "DirectoryCode", Length = 128)]
-        public string DirectoryCode { get; set; }
-
-        [SugarColumn(ColumnName = "TotalFiles")]
         public int TotalFiles { get; set; } = 0;
 
-        [SugarColumn(ColumnName = "TotalSize")]
         public long TotalSize { get; set; } = 0;
 
-        [SugarColumn(ColumnName = "SuccessCount")]
         public int SuccessCount { get; set; } = 0;
 
-        [SugarColumn(ColumnName = "status", Length = 20)]
+        [SugarColumn(Length = 20)]
         public string Status { get; set; } = "initialized";
 
-        [SugarColumn(ColumnName = "CreateBy", Length = 64)]
-        public string Creator { get; set; }
-
-        [SugarColumn(ColumnName = "CreateTime")]
-        public DateTime? CreateDate { get; set; } = DateTime.Now;
-
-        [SugarColumn(ColumnName = "UpdateTime", IsNullable = true)]
-        public DateTime? ModifyDate { get; set; }
-
-        [SugarColumn(ColumnName = "ExpireTime", IsNullable = true)]
         public DateTime? ExpireTime { get; set; }
+
+        // ──── ISoftDelete + IIsValid 接口显式实现 ────
+        public bool IsDeleted { get; set; }
+        public string? DeleteBy { get; set; }
+        public DateTime? DeleteTime { get; set; }
+        public int IsValid { get; set; } = 1;
     }
 }

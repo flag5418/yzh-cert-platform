@@ -1,4 +1,5 @@
 export * from './cert'
+export * from './role-tree'
 
 export type {
   StandardDirectoryConfig,
@@ -11,3 +12,10 @@ export type {
   FileUploadProgress,
   QueueStatus,
 } from './cert'
+
+export type {
+  CheckTreeNode,
+  TreeNodeSelection,
+  AssociationDto,
+  RoleTreeItem,
+} from './role-tree'

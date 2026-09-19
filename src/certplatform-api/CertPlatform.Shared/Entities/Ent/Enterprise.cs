@@ -1,9 +1,10 @@
 using System;
+using YZH.Entity.Admin.Platform;
 using System.ComponentModel.DataAnnotations;
 using SqlSugar;
 using YZH.Core.Stand.Models.Entity;
 
-namespace YZH.Entity.Admin.Platform.Ent
+namespace CertPlatform.Shared.Entities.Ent
 {
     /// <summary>
     /// 企业

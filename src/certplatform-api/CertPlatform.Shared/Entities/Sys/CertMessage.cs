@@ -1,47 +1,38 @@
-using System;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using YZH.Entity.SystemModels;
+using SqlSugar;
+using YZH.Core.Stand.Interfaces;
+using YZH.Core.Stand.Models.Entity;
 
-namespace YZH.Entity.Admin.Platform.Sys
+namespace CertPlatform.Shared.Entities.Sys
 {
-    /// <summary>
-    /// 站内消息实体
-    /// </summary>
-    [Entity(TableCnName = "站内消息", TableName = "cert_message", DBServer = "VOLContext")]
-    [Table("cert_message")]
-    public class CertMessage : BaseEntity
+    /// <summary>站内消息实体</summary>
+    /// <para>命名规范（YZH 铁律）：DB 列名 = C# 属性名 = PascalCase</para>
+    [SugarTable("cert_message")]
+    public class CertMessage : BaseEntity, ISoftDelete, IIsValid
     {
-        [Key]
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        [Column("id")]
-        public long Id { get; set; }
+        // ──── Id / Code / 审计字段由 BaseEntity 基类统一提供 ────
 
-        [Column("user_id")]
-        public int UserId { get; set; }
+        [SugarColumn(Length = 64)]
+        public string UserCode { get; set; } = string.Empty;
 
-        [Column("user_name")]
-        public string UserName { get; set; }
+        public string UserName { get; set; } = string.Empty;
 
-        [Column("title")]
-        public string Title { get; set; }
+        public string Title { get; set; } = string.Empty;
 
-        [Column("content")]
-        public string Content { get; set; }
+        public string Content { get; set; } = string.Empty;
 
-        [Column("message_type")]
+        [SugarColumn(Length = 20)]
         public string MessageType { get; set; } = "system";
 
-        [Column("is_read")]
         public int IsRead { get; set; }
 
-        [Column("extra_data")]
-        public string ExtraData { get; set; }
+        public string ExtraData { get; set; } = string.Empty;
 
-        [Column("create_date")]
-        public DateTime CreateDate { get; set; } = DateTime.Now;
-
-        [Column("read_date")]
         public DateTime? ReadDate { get; set; }
+
+        // ──── ISoftDelete + IIsValid 接口显式实现 ────
+        public bool IsDeleted { get; set; }
+        public string? DeleteBy { get; set; }
+        public DateTime? DeleteTime { get; set; }
+        public int IsValid { get; set; } = 1;
     }
 }

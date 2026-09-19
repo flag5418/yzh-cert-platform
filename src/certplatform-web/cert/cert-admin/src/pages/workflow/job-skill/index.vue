@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { YzhTable, YzhForm, type YzhTableColumn, type YzhFormField, type PageParams, type SearchField } from '@yzh-core'
+/**
+ * 技能管理（组合页面：左侧分类 + 右侧表格）
+ */
+import { YzhTable, YzhForm, type YzhFormField, type PageParams } from '@yzh-core'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Skill, SkillCategory } from '@share/api/workflow/job-skill'
@@ -14,6 +17,9 @@ import {
   updateSkillCategory,
   deleteSkillCategory
 } from '@share/api/workflow/job-skill'
+import { JobSkillLogic } from './logic'
+
+const logic = new JobSkillLogic()
 
 // ── 技能表格 ──
 const tableRef = ref()
@@ -23,21 +29,6 @@ const dialogVisible = ref(false)
 const dialogMode = ref<'add' | 'edit'>('add')
 let formData = reactive<Partial<Skill>>({})
 const submitting = ref(false)
-
-const columns: YzhTableColumn<Skill>[] = [
-  { prop: 'Code', label: '编码', width: 160 },
-  { prop: 'Name', label: '名称', width: 160 },
-  { prop: 'CategoryCode', label: '分类', width: 120, formatter: (v: any) => getCategoryName(v) },
-  { prop: 'SkillType', label: '类型', width: 80 },
-  { prop: 'Description', label: '说明', minWidth: 200 },
-  { prop: 'IsValid', label: '状态', width: 80, formatter: (v: any) => v === 1 ? '启用' : '停用' },
-  { prop: 'CreateTime', label: '创建时间', width: 180 },
-  { prop: 'actions', label: '操作', width: 200, fixed: 'right', slot: true }
-]
-
-const searchFields: SearchField[] = [
-  { prop: 'Name', label: '名称', type: 'text' }
-]
 
 const formFields = computed<YzhFormField[]>(() => [
   { prop: 'Code', label: '编码', type: 'text', required: true, span: 12, disabled: dialogMode.value === 'edit' },
@@ -56,7 +47,7 @@ async function loadData(params: PageParams) {
     filters.push({ Field: 'name', Operator: 'like', Value: params.Name })
   }
   if (currentCategory.value) {
-    filters.push({ Field: 'category_code', Operator: 'eq', Value: currentCategory.value })
+    filters.push({ Field: 'CategoryCode', Operator: 'eq', Value: currentCategory.value })
   }
   const res = await getSkillPage({
     Page: params.page,
@@ -188,7 +179,10 @@ async function onDeleteCategory(row: SkillCategory) {
   loadCategories()
 }
 
-onMounted(() => { loadCategories() })
+onMounted(async () => {
+  await loadCategories()
+  await logic.init()
+})
 </script>
 
 <template>
@@ -213,7 +207,7 @@ onMounted(() => { loadCategories() })
 
     <!-- 右侧表格 -->
     <div class="table-area">
-      <YzhTable ref="tableRef" :columns="columns" :data-loader="loadData" :search-fields="searchFields" selectable @selection-change="selectedRows = $event">
+      <YzhTable ref="tableRef" :columns="logic.columns as any" :data-loader="loadData" :search-fields="logic.searchFields as any" selectable @selection-change="selectedRows = $event">
         <template #toolbar-left>
           <el-button type="primary" @click="onAdd"><i class="bi bi-plus"></i> 新增</el-button>
           <el-button type="danger" plain :disabled="selectedRows.length === 0" @click="onDelete(selectedRows[0])"><i class="bi bi-trash"></i> 批量删除</el-button>

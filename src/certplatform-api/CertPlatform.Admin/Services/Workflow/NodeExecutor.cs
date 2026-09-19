@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using System;
 using System.Collections.Generic;
@@ -11,7 +10,7 @@ using Microsoft.Extensions.Logging;
 using CertPlatform.Admin.Services.Workflow.Models;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using YZH.Core.DataBase.Interfaces;
-using SharedEnt = SharedEntities::YZH.Entity.Admin.Platform.Ent;
+using CertPlatform.Shared.Entities.Ent;
 
 namespace CertPlatform.Admin.Services.Workflow
 {
@@ -330,7 +329,7 @@ namespace CertPlatform.Admin.Services.Workflow
                 throw new InvalidOperationException($"docField 节点 {node.NodeId} 缺少 fieldCode 配置");
 
             // 真实取数：ent_extraction_result 按 field_code + enterprise_code，取最新版本
-            var field = (await _db.GetOneAsync<SharedEnt.ExtractionResult>(x =>
+            var field = (await _db.GetOneAsync<CertPlatform.Shared.Entities.Ent.ExtractionResult>(x =>
                 x.FieldCode == fieldCode && x.EnterpriseCode == enterpriseCode)).Data;
 
             if (field == null)
@@ -375,7 +374,7 @@ namespace CertPlatform.Admin.Services.Workflow
                 throw new InvalidOperationException($"docTable 节点 {node.NodeId} 缺少 tableCode 配置");
 
             // 真实取数：ent_table_extraction_result 按 table_code + enterprise_code，取最新版本
-            var table = (await _db.GetOneAsync<SharedEnt.TableExtractionResult>(x =>
+            var table = (await _db.GetOneAsync<CertPlatform.Shared.Entities.Ent.TableExtractionResult>(x =>
                 x.TableCode == tableCode && x.EnterpriseCode == enterpriseCode)).Data;
 
             if (table == null)

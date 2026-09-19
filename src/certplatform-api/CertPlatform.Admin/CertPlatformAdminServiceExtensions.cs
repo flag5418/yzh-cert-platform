@@ -1,10 +1,9 @@
-extern alias SharedEntities;
 
 using CertPlatform.Admin.Services.DocExtraction;
 using CertPlatform.Admin.Services.StandardDirectory;
 using CertPlatform.Admin.Services.Workflow;
 using CertPlatform.Admin.Services.Workflow.Skills;
-using SharedEntities::CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.DocExtraction;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 using Microsoft.Extensions.DependencyInjection;

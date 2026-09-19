@@ -2,34 +2,34 @@ import { yzhApi } from '@yzh-core/api/client'
 import type { Page, PageParams } from 'yzh.vue.core/types'
 
 export interface AIUsageSummary {
-  totalCost: number
-  monthCost: number
-  weekCost: number
-  todayCost: number
-  totalCalls: number
-  monthCalls: number
-  weekCalls: number
-  todayCalls: number
+  TotalCost: number
+  MonthCost: number
+  WeekCost: number
+  TodayCost: number
+  TotalCalls: number
+  MonthCalls: number
+  WeekCalls: number
+  TodayCalls: number
 }
 
 export interface AIUsageCall {
-  id: number
-  skill: string
-  model: string
-  promptTokens: number
-  completionTokens: number
-  totalTokens: number
-  costUsd: number
-  durationMs: number
-  success: boolean
-  errorMessage?: string
-  createDate: string
+  Id: number
+  Skill: string
+  Model: string
+  PromptTokens: number
+  CompletionTokens: number
+  TotalTokens: number
+  CostUsd: number
+  DurationMs: number
+  Success: boolean
+  ErrorMessage?: string
+  CreateTime: string
 }
 
 export interface AIUsageDaily {
-  date: string
-  cost: number
-  calls: number
+  Date: string
+  Cost: number
+  Calls: number
 }
 
 export async function getAIUsageSummary(): Promise<AIUsageSummary> {
@@ -37,9 +37,15 @@ export async function getAIUsageSummary(): Promise<AIUsageSummary> {
 }
 
 export async function getAIUsageDaily(startDate: string, endDate: string): Promise<AIUsageDaily[]> {
-  return yzhApi.get<AIUsageDaily[]>('/api/AIUsage/daily-costs', { params: { startDate, endDate } })
+  // get 的第二个参数就是查询对象（不要再包一层 params）
+  return yzhApi.get<AIUsageDaily[]>('/api/AIUsage/daily-costs', { startDate, endDate })
 }
 
+/**
+ * 获取 AI 用量分页数据
+ * @deprecated 后端 AIUsageController 尚未提供 /filter 端点，当前路径为临时占位
+ * TODO: 后端提供 /filter 端点后，改为 /api/AIUsage/filter
+ */
 export async function getAIUsageCalls(params: PageParams & { startDate?: string; endDate?: string }): Promise<Page<AIUsageCall>> {
   return yzhApi.post<Page<AIUsageCall>>('/api/AIUsage/getPageData', params)
 }

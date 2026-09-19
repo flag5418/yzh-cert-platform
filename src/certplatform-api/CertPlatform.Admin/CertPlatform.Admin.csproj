@@ -17,16 +17,26 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Using Include="CertPlatform.Shared.Entities.Audit" />
+    <Using Include="CertPlatform.Shared.Entities.Cert" />
+    <Using Include="CertPlatform.Shared.Entities.Dir" />
+    <Using Include="CertPlatform.Shared.Entities.Doc" />
+    <Using Include="CertPlatform.Shared.Entities.Ent" />
+    <Using Include="CertPlatform.Shared.Entities.Rpt" />
+    <Using Include="CertPlatform.Shared.Entities.Sys" />
+    <Using Include="CertPlatform.Shared.Entities.Wf" />
+    <Using Include="CertPlatform.Shared.DocExtraction" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\yzh-core\YZH.Core.Api\YZH.Core.Api.csproj" />
     <ProjectReference Include="..\..\yzh-core\YZH.Core.DataBase\YZH.Core.DataBase.csproj" />
-    <ProjectReference Include="..\CertPlatform.Shared\CertPlatform.Shared.csproj">
-      <Aliases>SharedEntities</Aliases>
-    </ProjectReference>
+    <ProjectReference Include="..\CertPlatform.Shared\CertPlatform.Shared.csproj" />
   </ItemGroup>
 
   <!-- 业务 EntityConfig 复制到输出目录 -->
   <ItemGroup>
-    <Content Update="Assets\**">
+    <Content Include="Assets\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

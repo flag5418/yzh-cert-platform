@@ -3,34 +3,6 @@
     "FillMode": "AutoFix",
     "FormCols": 2,
     "EnableField": "IsValid",
-    "Toolbar": {
-        "Add": true,
-        "Delete": true,
-        "Export": false,
-        "Import": false,
-        "CustomButtons": {}
-    },
-    "RowButtons": {
-        "Edit": true,
-        "Delete": true,
-        "CustomButtons": {}
-    },
-    "SearchFields": [
-        {
-            "Label": "配置键",
-            "Field": "ConfigKey",
-            "Operator": "like",
-            "ControlType": "input",
-            "Width": 180
-        },
-        {
-            "Label": "分类",
-            "Field": "Category",
-            "Operator": "eq",
-            "ControlType": "input",
-            "Width": 150
-        }
-    ],
     "Columns": [
         {
             "FieldName": "ConfigKey",

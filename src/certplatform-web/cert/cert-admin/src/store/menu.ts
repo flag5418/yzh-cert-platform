@@ -33,5 +33,13 @@ export const useMenuStore = defineStore('menu', () => {
     loaded.value = false
   }
 
-  return { menus, loading, loaded, loadMenus, clearMenus }
+  /**
+   * 强制刷新菜单树（菜单数据变更后调用，重新从服务端拉取）
+   */
+  async function refreshMenus() {
+    loaded.value = false
+    await loadMenus()
+  }
+
+  return { menus, loading, loaded, loadMenus, clearMenus, refreshMenus }
 })

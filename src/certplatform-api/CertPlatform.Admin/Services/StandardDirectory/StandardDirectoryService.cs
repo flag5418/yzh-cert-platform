@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using System;
 using System.Collections.Generic;
@@ -14,9 +13,9 @@ using YZH.Core.DataBase.Models;
 using YZH.Core.DataBase.Services;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Queue;
-using SharedEntities::YZH.Entity.Admin.Platform.Dir;
-using SharedEntities::YZH.Entity.Admin.Platform.Cert;
-using SharedEntities::YZH.Entity.Admin.Platform.Sys;
+using CertPlatform.Shared.Entities.Dir;
+using CertPlatform.Shared.Entities.Cert;
+using CertPlatform.Shared.Entities.Sys;
 
 namespace CertPlatform.Admin.Services.StandardDirectory;
 
@@ -171,13 +170,13 @@ public class StandardDirectoryService
         config.DirectoryCode ??= _codeGenerator.GenerateDirectoryCode(config.StandardCode, config.PhaseCode);
         config.Enable = true;
         config.Status = "draft";
-        config.CreateDate = DateTime.Now;
+        config.CreateTime = DateTime.Now;
         return (await _db.InsertAsync(config)).Data;
     }
 
     public async Task<bool> UpdateConfigAsync(StandardDirectoryConfig config)
     {
-        config.ModifyDate = DateTime.Now;
+        config.UpdateTime = DateTime.Now;
         var result = await _db.UpdateAsync(config);
         return result.Code == 200;
     }
@@ -265,7 +264,7 @@ public class StandardDirectoryService
         folder.IsValid = 1;
         folder.Enable = true;
         folder.Status = "draft";
-        folder.CreateDate = DateTime.Now;
+        folder.CreateTime = DateTime.Now;
 
         // 重试机制：处理唯一编码冲突
         for (int attempt = 0; attempt < 100; attempt++)
@@ -299,7 +298,7 @@ public class StandardDirectoryService
         if (existing == null) return (false, "文件夹不存在");
 
         existing.FolderName = folder.FolderName;
-        existing.ModifyDate = DateTime.Now;
+        existing.UpdateTime = DateTime.Now;
         await _db.UpdateAsync(existing);
         return (true, null);
     }
@@ -388,7 +387,7 @@ public class StandardDirectoryService
     {
         // 使用原生 SQL 绕过全局过滤（根级文件可能 IsValid=0 处于上传中）
         var files = (await _db.SqlQueryAsync<StandardDirectoryFile>(
-            "SELECT * FROM cert_standard_directory_file WHERE DirectoryCode=@dir AND (FolderCode IS NULL OR FolderCode='') AND IsDeleted=0 AND UploadStatus IN ('uploaded','active') ORDER BY CreateDate DESC",
+            "SELECT * FROM cert_standard_directory_file WHERE DirectoryCode=@dir AND (FolderCode IS NULL OR FolderCode='') AND IsDeleted=0 AND UploadStatus IN ('uploaded','active') ORDER BY CreateTime DESC",
             new { dir = directoryCode })).Data ?? new();
         return files;
     }
@@ -405,7 +404,7 @@ public class StandardDirectoryService
 
         existing.FileName = file.FileName;
         existing.Description = file.Description;
-        existing.ModifyDate = DateTime.Now;
+        existing.UpdateTime = DateTime.Now;
         await _db.UpdateAsync(existing);
         return (true, null);
     }
@@ -495,7 +494,7 @@ public class StandardDirectoryService
                 PhaseCode = manifest.PhaseCode,
                 Enable = true,
                 Status = "draft",
-                CreateDate = DateTime.Now
+                CreateTime = DateTime.Now
             };
             await _db.InsertAsync(config);
         }
@@ -564,7 +563,7 @@ public class StandardDirectoryService
                     FullPath = folder.Path,
                     Enable = true,
                     Status = "draft",
-                    CreateDate = DateTime.Now
+                    CreateTime = DateTime.Now
                 };
                 await _db.InsertAsync(newFolder);
 
@@ -656,7 +655,7 @@ public class StandardDirectoryService
                     TaskId = taskId,
                     Enable = true,
                     Status = "draft",
-                    CreateDate = DateTime.Now
+                    CreateTime = DateTime.Now
                 };
                 await _db.InsertAsync(newFile);
 
@@ -690,7 +689,7 @@ public class StandardDirectoryService
             TotalFiles = enhancedFiles.Count,
             TotalSize = totalSize,
             Status = "initialized",
-            CreateDate = DateTime.Now,
+            CreateTime = DateTime.Now,
             ExpireTime = DateTime.Now.AddMinutes(30)
         };
         await _db.InsertAsync(uploadTask);
@@ -859,7 +858,7 @@ public class StandardDirectoryService
 
         // 更新任务状态
         task.Status = "completed";
-        task.ModifyDate = DateTime.Now;
+        task.UpdateTime = DateTime.Now;
         await _db.UpdateAsync(task);
 
         return (true, null, convertQueueCode);
@@ -1279,7 +1278,7 @@ public class StandardDirectoryService
         file.Enable = true;
         file.Status = "draft";
         file.UploadStatus = "active";
-        file.CreateDate = DateTime.Now;
+        file.CreateTime = DateTime.Now;
 
         // 计算 FullPath
         if (!string.IsNullOrEmpty(file.FolderCode))
@@ -1516,7 +1515,7 @@ public class StandardDirectoryService
             UploadStatus = "active",
             Enable = true,
             Status = "draft",
-            CreateDate = DateTime.Now
+            CreateTime = DateTime.Now
         };
         var result = await _db.InsertAsync(file);
         return result.Data != null
@@ -1582,7 +1581,7 @@ public class StandardDirectoryService
                 @"SELECT * FROM cert_standard_directory_file 
                   WHERE IsDeleted=0 AND Enable=1 
                   AND (FileType='doc' OR FileType='xls') 
-                  AND (convert_status='failed' OR convert_status='pending')"))
+                  AND (ConvertStatus='failed' OR ConvertStatus='pending')"))
                 .Data ?? new();
 
             if (candidates.Count == 0)

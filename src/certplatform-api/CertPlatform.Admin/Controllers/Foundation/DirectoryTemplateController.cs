@@ -1,9 +1,8 @@
-extern alias SharedEntities;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using CertPlatform.Admin.Services.StandardDirectory;
-using SharedEntities::YZH.Entity.Admin.Platform.Cert;
+using CertPlatform.Shared.Entities.Cert;
 
 namespace CertPlatform.Admin.Controllers.Foundation;
 

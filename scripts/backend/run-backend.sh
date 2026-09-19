@@ -13,9 +13,10 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# 项目路径（新 YZH.Core 后端）
-PROJECT_DIR="/Volumes/Expand/wangqingquan/Documents/work/study/体系认证平台/src/yzh-core"
-WEB_API_DIR="$PROJECT_DIR/YZH.Core.Web"
+# 项目路径
+PROJECT_DIR="/Volumes/Expand/wangqingquan/Documents/work/study/体系认证平台"
+WEB_API_DIR="$PROJECT_DIR/src/yzh-core/YZH.Core.Web"
+SOLUTION_FILE="$PROJECT_DIR/CertPlatform.sln"
 PORT=9992
 LOG_FILE="/tmp/vol_backend_9992.log"
 PID_FILE="/tmp/vol_backend_9992.pid"
@@ -28,7 +29,7 @@ print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 build_project() {
     print_info "开始编译后端项目..."
     cd "$PROJECT_DIR"
-    dotnet build --nologo
+    dotnet build "$SOLUTION_FILE" --nologo
     if [ $? -eq 0 ]; then
         print_info "编译成功!"
         return 0

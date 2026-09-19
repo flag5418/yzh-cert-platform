@@ -1,21 +1,6 @@
 {
   "Title": "ISO 标准条款管理",
   "FillMode": "AutoFix",
-  "RowButtons": {
-    "Edit": true,
-    "Delete": true,
-    "CustomButtons": {}
-  },
-  "NewEntity": {
-    "Code": "",
-    "StandardCode": "",
-    "ParentCode": null,
-    "ClauseNumber": "",
-    "Title": "",
-    "Description": "",
-    "SortOrder": 0,
-    "IsValid": 1
-  },
   "Columns": [
     {
       "FieldName": "Id",
@@ -58,7 +43,7 @@
       "Sxh": 0,
       "XsFlag": false,
       "BcFlag": true,
-      "Yxk": false,
+      "Yxk": true,
       "Width": 0,
       "Row": 0,
       "Col": 0,

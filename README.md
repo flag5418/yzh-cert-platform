@@ -57,5 +57,4 @@ src/server/
 
 ## 合规声明
 
-- 本软件包含基于 MIT 许可的第三方开源代码，详见 [NOTICE.md](./NOTICE.md)
-- 第三方依赖许可证清单见 [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md)
+- 本软件基于 MIT 开源协议的项目 [cq-panda/Vue.NetCore](https://github.com/cq-panda/Vue.NetCore) 进行二次开发，完整许可声明见 [LICENSE](./LICENSE) 文件

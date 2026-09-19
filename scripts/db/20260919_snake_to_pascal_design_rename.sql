@@ -1,0 +1,97 @@
+-- ============================================================
+-- YZH 架构治理：snake_case -> PascalCase 列名修改（设计方案）
+-- 日期：2026-09-19
+-- 
+-- 【铁律】：所有DB列名必须是PascalCase，禁止实体中 new + [SugarColumn("snake")]
+-- 
+-- 修复步骤：
+--   1. 读取本文件的映射关系
+--   2. 逐个执行 ALTER TABLE CHANGE COLUMN
+--   3. 修复所有实体 C# 代码，移除 snake_case ColumnName
+--   4. 验证编译 + 功能测试
+--
+-- 表清单（按优先级排序）：
+-- ============================================================
+
+-- ┌──────────────────────────────────────────────────────────────────────────────┐
+-- │ 表名                      │ snake_case列                     │ 改为 PascalCase          │
+-- ├──────────────────────────────────────────────────────────────────────────────┤
+-- │ cert_ai_config            │ code, api_key, is_enabled,       │ Code, ApiKey, IsEnabled, │
+-- │                           │ max_tokens                        │ MaxTokens                │
+-- │ cert_doc_extraction_rule  │ code, file_code, standard_file_code, phase_code, │ Code, FileCode, StandardFileCode, PhaseCode, │
+-- │                           │ standard_code, doc_content,       │ StandardCode, DocContent,│
+-- │                           │ sample_data, verify_message       │ SampleData, VerifyMessage│
+-- │ cert_doc_field_def        │ code, rule_code, field_name,      │ Code, RuleCode, FieldName,│
+-- │                           │ field_code, data_type, is_manual, │ FieldCode, DataType, IsManual,│
+-- │                           │ is_ai_recommended                 │ IsAiRecommended          │
+-- │ cert_doc_table_def        │ code, rule_code, table_name,      │ Code, RuleCode, TableName,│
+-- │                           │ table_code                        │ TableCode                │
+-- │ cert_doc_table_field_def  │ code, table_code, column_name,    │ Code, TableCode, ColumnName,│
+-- │                           │ column_code, data_type            │ ColumnCode, DataType     │
+-- │ cert_message              │ user_code, user_name, message_type,│ UserCode, UserName, MessageType,│
+-- │                           │ related_code, extra_data, is_read,│ RelatedCode, ExtraData, IsRead,│
+-- │                           │ read_date                         │ ReadDate                 │
+-- │ cert_org_stage            │ code, standard_code, phase_code   │ Code, StandardCode, PhaseCode│
+-- │ cert_org_standard         │ code, standard_code               │ Code, StandardCode       │
+-- │ cert_standard_directory_  │ Enable_field, Status_field        │ EnableField, StatusField │
+-- │   config/file/folder      │                                  │                          │
+-- │ cert_standard_directory_  │ (除上面的) file_size, convert_*,  │ FileSize, Convert*,      │
+-- │   file                    │ converted_storage_path,           │ ConvertedStoragePath,    │
+-- │                           │ preview_pdf_path, markdown_*      │ PreviewPdfPath, Markdown*│
+-- ├──────────────────────────────────────────────────────────────────────────────┤
+-- │ wf_skill                  │ code, skill_code, skill_type,     │ Code, SkillCode, SkillType,│
+-- │                           │ category_code, side_effect,       │ CategoryCode, SideEffect,│
+-- │                           │ prompt_template, is_active,       │ PromptTemplate, IsActive,│
+-- │                           │ output_strict, return_type,       │ OutputStrict, ReturnType,│
+-- │                           │ sort_order                        │ SortOrder                │
+-- │ wf_skill_category         │ category_code, category_name,     │ CategoryCode, CategoryName,│
+-- │                           │ sort_order                        │ SortOrder                │
+-- │ wf_skill_input            │ code, skill_code, input_name,     │ Code, SkillCode, InputName,│
+-- │                           │ input_label, input_type,          │ InputLabel, InputType,   │
+-- │                           │ bind_mode, enum_source,           │ BindMode, EnumSource,    │
+-- │                           │ enum_values, is_required,         │ EnumValues, IsRequired,  │
+-- │                           │ default_value, sort_order         │ DefaultValue, SortOrder  │
+-- │ wf_skill_output           │ code, skill_code, output_name,    │ Code, SkillCode, OutputName,│
+-- │                           │ output_type, output_prompt,       │ OutputType, OutputPrompt,│
+-- │                           │ sort_order                        │ SortOrder                │
+-- │ wf_skill_reflection       │ code, skill_code, class_path,     │ Code, SkillCode, ClassPath,│
+-- │                           │ method_name, param_binding        │ MethodName, ParamBinding │
+-- │ wf_node_execution         │ code, task_code, item_code,       │ Code, TaskCode, ItemCode,│
+-- │                           │ node_id, node_type, node_title,   │ NodeId, NodeType, NodeTitle,│
+-- │                           │ skill_code, exec_status,          │ SkillCode, ExecStatus,   │
+-- │                           │ output_json, error_message,       │ OutputJson, ErrorMessage,│
+-- │                           │ started_at, completed_at,         │ StartedAt, CompletedAt,  │
+-- │                           │ execution_time_ms, is_reused      │ ExecutionTimeMs, IsReused│
+-- │ wf_execution_task         │ code, task_type, task_status,     │ Code, TaskType, TaskStatus,│
+-- │                           │ config_snapshot, rule_code,       │ ConfigSnapshot, RuleCode,│
+-- │                           │ enterprise_code, phase_code,      │ EnterpriseCode, PhaseCode,│
+-- │                           │ queue_code, cache_keys,           │ QueueCode, CacheKeys,    │
+-- │                           │ result_summary, error_message,    │ ResultSummary, ErrorMessage,│
+-- │                           │ started_at, completed_at,         │ StartedAt, CompletedAt,  │
+-- │                           │ duration_ms                       │ DurationMs               │
+-- │ wf_execution_task_item    │ code, task_code, item_type,       │ Code, TaskCode, ItemType,│
+-- │                           │ item_status, rule_code,           │ ItemStatus, RuleCode,    │
+-- │                           │ cache_keys, result_summary,       │ CacheKeys, ResultSummary,│
+-- │                           │ error_message, started_at,        │ ErrorMessage, StartedAt, │
+-- │                           │ completed_at, duration_ms,        │ CompletedAt, DurationMs, │
+-- │                           │ is_success                        │ IsSuccess                │
+-- │ wf_prompt_template        │ code, prompt_code, prompt_name,   │ Code, PromptCode, PromptName,│
+-- │                           │ prompt_type, org_code, is_active, │ PromptType, OrgCode, IsActive,│
+-- │                           │ skill_target, last_test_result    │ SkillTarget, LastTestResult│
+-- │ wf_workflow_definition    │ workflow_code, workflow_name,     │ WorkflowCode, WorkflowName,│
+-- │                           │ workflow_type, workflow_config    │ WorkflowType, WorkflowConfig│
+-- ├──────────────────────────────────────────────────────────────────────────────┤
+-- │ yzh_field_config          │ field_name, field_alias, form_title, 所有xx_xx列                │
+-- │ yzh_page_config           │ page_key, page_title, entity_name, 所有xx_xx列               │
+-- ├──────────────────────────────────────────────────────────────────────────────┤
+-- │ cert_validation_rule      │ (无snake_case，已是PascalCase)    │ 无需修改                 │
+-- │ cert_iso_clause           │ (无snake_case，已是PascalCase)    │ 无需修改                 │
+-- │ cert_iso_standard         │ (无snake_case，已是PascalCase)    │ 无需修改                 │
+-- │ cert_certification_body   │ (无snake_case，已是PascalCase)    │ 无需修改                 │
+-- │ cert_cert_stage           │ (无snake_case，已是PascalCase)    │ 无需修改                 │
+-- └──────────────────────────────────────────────────────────────────────────────┘
+
+-- ============================================================
+-- 实施时逐个表执行，格式：
+-- ALTER TABLE table_name CHANGE COLUMN `old_name` `NewName` TYPE [NOT NULL] [DEFAULT ...];
+-- ============================================================

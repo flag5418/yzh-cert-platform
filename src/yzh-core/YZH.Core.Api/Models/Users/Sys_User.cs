@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using SqlSugar;
 using YZH.Core.Stand.Annotations;
 using YZH.Core.Stand.Attributes;
+using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Entity;
 
@@ -29,7 +30,7 @@ namespace YZH.Core.Api.Models.Users;
 [SugarTable("Sys_User")]
 [ViewName("v_sys_user")]
 [YZHDeleteStrategy(Mode = DeleteMode.Soft)]
-public class Sys_User : BaseEntity
+public class Sys_User : BaseEntity, ISoftDelete, IIsValid
 {
     /// <summary>用户账号（登录名，唯一）</summary>
     [Required(AllowEmptyStrings = false)]
@@ -49,12 +50,6 @@ public class Sys_User : BaseEntity
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     [SugarColumn(ColumnName = "UserPwd")]
     public string UserPwd { get; set; } = string.Empty;
-
-    /// <summary>角色 ID（关联 Sys_Role，Vol 兼容）→ DB: Role_Id</summary>
-    [Required]
-    [Display(Name = "角色")]
-    [SugarColumn(ColumnName = "Role_Id")]
-    public int RoleId { get; set; }
 
     /// <summary>是否启用（1=启用，0=禁用）</summary>
     [Required]
@@ -145,20 +140,16 @@ public class Sys_User : BaseEntity
 
     // === 审计字段覆盖（适配 Vol 表结构） ===
 
-    /// <summary>创建时间 → DB: CreateDate</summary>
-    [SugarColumn(ColumnName = "CreateDate")]
+    /// <summary>创建时间（DB: CreateTime）</summary>
     public new DateTime CreateTime { get; set; }
 
-    /// <summary>创建人 → DB: Creator</summary>
-    [SugarColumn(ColumnName = "Creator"), StringLength(200)]
+    /// <summary>创建人（DB: CreateBy）</summary>
     public new string? CreateBy { get; set; }
 
-    /// <summary>更新时间 → DB: ModifyDate</summary>
-    [SugarColumn(ColumnName = "ModifyDate")]
+    /// <summary>更新时间（DB: UpdateTime）</summary>
     public new DateTime? UpdateTime { get; set; }
 
-    /// <summary>更新人 → DB: Modifier</summary>
-    [SugarColumn(ColumnName = "Modifier"), StringLength(200)]
+    /// <summary>更新人（DB: UpdateBy）</summary>
     public new string? UpdateBy { get; set; }
 
     // === 忽略 BaseEntity 中不存在的列 ===
@@ -172,9 +163,18 @@ public class Sys_User : BaseEntity
     [SugarColumn(IsIgnore = true)]
     public new bool DeleteFlag { get; set; }
 
-    /// <summary>Sys_User 使用 User_Id (int) 作为 PK，而非 BaseEntity.Id (string)</summary>
+    /// <summary>
+    ///     Sys_User 使用 User_Id (int AUTO_INCREMENT) 作为物理主键。
+    ///
+    ///     ⚠️ 必须是【数值型】：SqlSugar 在 Insert 后会把数据库生成的自增值写回
+    ///     IsIdentity 标记的属性（InsertableProvider.ExecuteCommandIdentityIntoEntityAsync）。
+    ///     若该属性是 string，写回 Int32 会抛
+    ///       "Object of type 'System.Int32' cannot be converted to type 'System.String'"，
+    ///     导致 /api/Organization/add 等一切新增必然失败。
+    ///     业务主键是 Code，Id 仅作为物理主键。
+    /// </summary>
     [SugarColumn(ColumnName = "User_Id", IsPrimaryKey = true, IsIdentity = true)]
-    public new string Id { get; set; } = string.Empty;
+    public new long Id { get; set; }
 
     /// <summary>用户编码（DB: Code）</summary>
     [SugarColumn(ColumnName = "Code")]
@@ -182,15 +182,11 @@ public class Sys_User : BaseEntity
     public new string Code { get; set; } = string.Empty;
 
     /// <summary>是否删除（DB: IsDeleted）</summary>
-    [SugarColumn(ColumnName = "IsDeleted")]
     public bool IsDeleted { get; set; }
 
     /// <summary>删除时间（DB: DeleteTime）</summary>
-    [SugarColumn(ColumnName = "DeleteTime")]
     public new DateTime? DeleteTime { get; set; }
 
     /// <summary>删除人（DB: DeleteBy）</summary>
-    [SugarColumn(ColumnName = "DeleteBy")]
-    [StringLength(64)]
     public new string? DeleteBy { get; set; }
 }

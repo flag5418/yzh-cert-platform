@@ -86,7 +86,7 @@ namespace CertPlatform.Admin.Services.Workflow
             // 2. 创建数据库记录（原生 SQL 参数化写入，列名对照 all_tables_ddl.sql）
             var now = DateTime.Now;
             await _db.SqlExecuteAsync(
-                "INSERT INTO wf_execution_task (code, task_type, task_status, config_snapshot, rule_code, enterprise_code, phase_code, started_at, create_date, IsDeleted) " +
+                "INSERT INTO wf_execution_task (code, TaskType, TaskStatus, ConfigSnapshot, RuleCode, EnterpriseCode, PhaseCode, StartedAt, CreateTime, IsDeleted) " +
                 "VALUES (@code, @taskType, 'executing', @configSnapshot, @ruleCode, @enterpriseCode, @phaseCode, @startedAt, @now, 0)",
                 new
                 {
@@ -101,7 +101,7 @@ namespace CertPlatform.Admin.Services.Workflow
                 });
 
             await _db.SqlExecuteAsync(
-                "INSERT INTO wf_execution_task_item (code, task_code, rule_code, item_type, item_status, started_at, create_date, IsDeleted) " +
+                "INSERT INTO wf_execution_task_item (code, TaskCode, RuleCode, ItemType, ItemStatus, StartedAt, CreateTime, IsDeleted) " +
                 "VALUES (@code, @taskCode, @ruleCode, @itemType, 'executing', @startedAt, @now, 0)",
                 new
                 {
@@ -118,10 +118,10 @@ namespace CertPlatform.Admin.Services.Workflow
                 taskCode, parsed, request.EnterpriseCode ?? "", ct);
             var cacheKeysJson = JsonSerializer.Serialize(cacheKeys);
             await _db.SqlExecuteAsync(
-                "UPDATE wf_execution_task SET cache_keys = @cacheKeys WHERE code = @code",
+                "UPDATE wf_execution_task SET CacheKeys = @cacheKeys WHERE code = @code",
                 new { cacheKeys = cacheKeysJson, code = taskCode });
             await _db.SqlExecuteAsync(
-                "UPDATE wf_execution_task_item SET cache_keys = @cacheKeys WHERE code = @code",
+                "UPDATE wf_execution_task_item SET CacheKeys = @cacheKeys WHERE code = @code",
                 new { cacheKeys = cacheKeysJson, code = itemCode });
 
             // 4. 构造上下文参数
@@ -148,8 +148,8 @@ namespace CertPlatform.Admin.Services.Workflow
             var resultSummary = JsonSerializer.Serialize(itemResult.NcResult);
 
             await _db.SqlExecuteAsync(
-                "UPDATE wf_execution_task_item SET item_status = @status, is_success = @isSuccess, result_summary = @resultSummary, " +
-                "error_message = @errorMessage, completed_at = @completedAt, duration_ms = @durationMs WHERE code = @code",
+                "UPDATE wf_execution_task_item SET ItemStatus = @status, IsSuccess = @isSuccess, ResultSummary = @resultSummary, " +
+                "ErrorMessage = @errorMessage, CompletedAt = @completedAt, DurationMs = @durationMs WHERE code = @code",
                 new
                 {
                     status = itemStatus,
@@ -162,8 +162,8 @@ namespace CertPlatform.Admin.Services.Workflow
                 });
 
             await _db.SqlExecuteAsync(
-                "UPDATE wf_execution_task SET task_status = @status, result_summary = @resultSummary, " +
-                "error_message = @errorMessage, completed_at = @completedAt, duration_ms = @durationMs WHERE code = @code",
+                "UPDATE wf_execution_task SET TaskStatus = @status, ResultSummary = @resultSummary, " +
+                "ErrorMessage = @errorMessage, CompletedAt = @completedAt, DurationMs = @durationMs WHERE code = @code",
                 new
                 {
                     status = itemStatus,
@@ -239,8 +239,8 @@ namespace CertPlatform.Admin.Services.Workflow
                     var errorMessage = pathResult.FailedAtNodeId == nodeId ? pathResult.Error : null;
 
                     await _db.SqlExecuteAsync(
-                        "INSERT INTO wf_node_execution (code, task_code, item_code, node_id, node_type, node_title, skill_code, " +
-                        "exec_status, output_json, error_message, started_at, completed_at, execution_time_ms, is_reused, create_date, IsDeleted) " +
+                        "INSERT INTO wf_node_execution (code, TaskCode, ItemCode, NodeId, NodeType, NodeTitle, SkillCode, " +
+                        "ExecStatus, OutputJson, ErrorMessage, StartedAt, CompletedAt, ExecutionTimeMs, IsReused, CreateTime, IsDeleted) " +
                         "VALUES (@code, @taskCode, @itemCode, @nodeId, @nodeType, @nodeTitle, @skillCode, " +
                         "@execStatus, @outputJson, @errorMessage, @startedAt, @completedAt, @executionTimeMs, 0, @now, 0)",
                         new

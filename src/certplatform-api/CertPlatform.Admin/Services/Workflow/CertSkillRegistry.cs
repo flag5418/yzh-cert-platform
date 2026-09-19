@@ -80,8 +80,8 @@ namespace CertPlatform.Admin.Services.Workflow
                 return (cp, mn);
 
             var row = (await _db.QueryFirstOrDefaultAsync<ReflectionRow>(
-                "SELECT class_path AS ClassPath, method_name AS MethodName FROM wf_skill_reflection " +
-                "WHERE skill_code = @skillCode AND enable = 1 AND IsDeleted = 0",
+                "SELECT ClassPath, MethodName FROM wf_skill_reflection " +
+                "WHERE SkillCode = @skillCode AND enable = 1 AND IsDeleted = 0",
                 new { skillCode })).Data;
 
             if (row == null || string.IsNullOrWhiteSpace(row.ClassPath))

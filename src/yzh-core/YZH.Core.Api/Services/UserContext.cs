@@ -86,13 +86,14 @@ public class UserContext : IUserContext
     /// <summary>是否 Mock 用户（开发模式）</summary>
     public bool IsAnonymous => _httpContext?.User?.Identity?.AuthenticationType == "MockAuth";
 
-    /// <summary>角色 ID（从 Claims 获取，用于简单角色校验）</summary>
-    public int RoleId
+    /// <summary>
+    ///     角色编码（从 Claims 获取，用于 Code 关联场景）
+    /// </summary>
+    public string RoleCode
     {
         get
         {
-            var roleIdStr = _httpContext?.User?.FindFirst("role_id")?.Value;
-            return int.TryParse(roleIdStr, out var rid) ? rid : 0;
+            return _httpContext?.User?.FindFirst("role_code")?.Value ?? "";
         }
     }
 

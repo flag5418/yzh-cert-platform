@@ -140,13 +140,4 @@
       "Enable": true
     }
   ],
-  "SearchFields": [
-    { "Field": "RoleName", "Label": "角色名称", "ControlType": "input" },
-    { "Field": "Enable", "Label": "状态", "ControlType": "select", "Options": [{"label":"启用","value":1},{"label":"禁用","value":0}] }
-  ],
-  "NewEntity": {
-    "RoleName": "",
-    "Enable": 1,
-    "OrderNo": 0
-  }
 }

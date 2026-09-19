@@ -43,4 +43,23 @@ public class Sys_RoleUser : BaseEntity
     [SugarColumn(ColumnName = "CreateBy")]
     [StringLength(64)]
     public new string? CreateBy { get; set; }
+
+    // ========================================================
+    // 本表缺少的 BaseEntity 强制列 —— 必须 IsIgnore
+    // ========================================================
+    // 同 Sys_RoleMenu：本表列仅 Id/RoleCode/UserCode/OrderNo/CreateTime/CreateBy，
+    // 不存在 Code / UpdateTime / UpdateBy，不屏蔽会报
+    //   Unknown column 'Code' in 'field list' → 角色-人员页读写全废。
+
+    /// <summary>中间表无业务 Code 列（用 RoleCode + UserCode 做关联）</summary>
+    [SugarColumn(IsIgnore = true)]
+    public new string Code { get; set; } = string.Empty;
+
+    /// <summary>本表无 UpdateTime 列</summary>
+    [SugarColumn(IsIgnore = true)]
+    public new DateTime? UpdateTime { get; set; }
+
+    /// <summary>本表无 UpdateBy 列</summary>
+    [SugarColumn(IsIgnore = true)]
+    public new string? UpdateBy { get; set; }
 }

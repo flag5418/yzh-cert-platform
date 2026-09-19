@@ -47,8 +47,9 @@ public class OperationResult<T> : IOperationResult<T>
     public static OperationResult<T> Ok(T data, string message = "操作成功")
         => new() { Success = true, Message = message, Data = data };
 
-    public static new OperationResult<T> Fail(string message, Exception? ex = null)
-        => new() { Success = false, Message = message, Exception = ex };
+    // 返回具体泛型类型的失败结果（隐藏基类 Fail，返回更具体的类型）
+    public static OperationResult<T> Fail(string message, Exception? ex = null)
+        => new() { Success = false, Message = message, Exception = ex, Data = default };
 }
 
 /// <summary>

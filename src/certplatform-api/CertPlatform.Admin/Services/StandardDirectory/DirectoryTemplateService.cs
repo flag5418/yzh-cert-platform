@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using System;
 using System.Collections.Generic;
@@ -7,7 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
-using SharedEntities::YZH.Entity.Admin.Platform.Cert;
+using CertPlatform.Shared.Entities.Cert;
 
 namespace CertPlatform.Admin.Services.StandardDirectory;
 
@@ -47,7 +46,7 @@ public class DirectoryTemplateService
         DirectoryTemplate folder)
     {
         folder.Code = Guid.NewGuid().ToString("N");
-        folder.CreateDate = DateTime.Now;
+        folder.CreateTime = DateTime.Now;
         var result = await _db.InsertAsync(folder);
         return result.Data != null ? (true, null, result.Data) : (false, "创建失败", null);
     }

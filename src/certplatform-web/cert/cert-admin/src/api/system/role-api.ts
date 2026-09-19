@@ -1,54 +1,7 @@
 import { yzhApi } from '@yzh-core/api/client'
 import type { ApiResponse } from '@yzh-core/api/client'
-
-// ========================================================
-// 类型定义
-// ========================================================
-
-/** 接口勾选节点（后端 CheckTreeNodeDto） */
-export interface CheckTreeNode {
-  Code: string
-  Name: string
-  ParentCode?: string | null
-  NodeType: string // 'group' | 'api'
-  CheckFlag: boolean
-  Extra?: Record<string, any>
-}
-
-/** 节点选择项（后端 TreeNodeSelection） */
-export interface TreeNodeSelection {
-  Code: string
-  NodeType: string
-}
-
-/** 关联关系 DTO（后端 AssociationDto） */
-export interface AssociationDto {
-  ContextCode: string // 左侧上下文编码（角色编码）
-  TargetCode: string // 右侧关联节点编码（接口编码）
-  NodeType: string // 右侧节点类型
-}
-
-/** 树节点 DTO（后端 TreeItemDto，角色树） */
-export interface RoleTreeItem {
-  Code: string
-  Name: string
-  ParentCode?: string | null
-  NodeType?: string
-  IsLeaf?: boolean
-  Level?: number
-  Extra?: Record<string, any>
-}
-
-// ========================================================
-// 工具：统一解包 ApiResponse
-// ========================================================
-
-function unwrap<T>(res: ApiResponse<T> | undefined, fallback: T): T {
-  if (res && res.success === false) {
-    throw new Error(res.message || '请求失败')
-  }
-  return (res?.data ?? fallback) as T
-}
+import type { CheckTreeNode, TreeNodeSelection, AssociationDto, RoleTreeItem } from '@share/types'
+import { unwrap } from '@yzh-core/utils'
 
 // ========================================================
 // API 方法
@@ -77,15 +30,21 @@ export async function getCheckTree(roleCode: string): Promise<CheckTreeNode[]> {
   return unwrap(res, [])
 }
 
-/** 勾选保存（给角色授权接口） */
+/**
+ * 勾选保存（给角色授权接口）
+ * `Applied` = 服务端确认「现已授权」的 code 集合（供前端局部更新关联缓存）
+ */
 export async function checkAdd(
   roleCode: string,
   selections: TreeNodeSelection[],
-): Promise<{ Updated: number }> {
-  const res = await yzhApi.post<ApiResponse<{ Updated: number }>>('/api/RoleApi/check/add', {
-    ContextCode: roleCode,
-    Selections: selections,
-  })
+): Promise<{ Updated: number; Applied?: string[] }> {
+  const res = await yzhApi.post<ApiResponse<{ Updated: number; Applied?: string[] }>>(
+    '/api/RoleApi/check/add',
+    {
+      ContextCode: roleCode,
+      Selections: selections,
+    },
+  )
   return unwrap(res, { Updated: 0 })
 }
 

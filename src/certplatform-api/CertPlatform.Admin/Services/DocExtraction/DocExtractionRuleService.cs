@@ -1,4 +1,3 @@
-extern alias SharedEntities;
 
 using System;
 using System.Collections.Generic;
@@ -11,10 +10,10 @@ using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Extensions;
 using YZH.Core.Stand.Interfaces;
-using SharedDoc = SharedEntities::CertPlatform.Shared.DocExtraction;
-using SharedEntities::YZH.Entity.Admin.Platform.Dir;
-using SharedEntities::YZH.Entity.Admin.Platform.Doc;
-using SharedEntities::YZH.Entity.Admin.Platform.Ent;
+using CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.Entities.Dir;
+using CertPlatform.Shared.Entities.Doc;
+using CertPlatform.Shared.Entities.Ent;
 
 namespace CertPlatform.Admin.Services.DocExtraction;
 
@@ -28,8 +27,8 @@ public partial class DocExtractionRuleService
     private readonly IDbOrm _db;
     private readonly ILogger<DocExtractionRuleService> _logger;
     protected readonly IConfiguration _configuration;
-    protected readonly SharedDoc::DocumentConvertClient _convertClient;
-    protected readonly SharedDoc::LlmInvokeService _llm;
+    protected readonly CertPlatform.Shared.DocExtraction.DocumentConvertClient _convertClient;
+    protected readonly CertPlatform.Shared.DocExtraction.LlmInvokeService _llm;
     protected readonly IObjectStorage _storage;
 
     /// <summary>YZH 标准企业编码（提取结果落库目标，对照旧 CertPlatformConstants）</summary>
@@ -44,8 +43,8 @@ public partial class DocExtractionRuleService
     public DocExtractionRuleService(
         IDbOrm db,
         IObjectStorage storage,
-        SharedDoc::DocumentConvertClient convertClient,
-        SharedDoc::LlmInvokeService llm,
+        CertPlatform.Shared.DocExtraction.DocumentConvertClient convertClient,
+        CertPlatform.Shared.DocExtraction.LlmInvokeService llm,
         IConfiguration configuration,
         ILogger<DocExtractionRuleService> logger)
     {
@@ -313,7 +312,7 @@ public partial class DocExtractionRuleService
                 await _db.SqlExecuteAsync(
                     @"INSERT INTO ent_extraction_result
                       (Code, OrgCode, EnterpriseCode, StandardFileCode, StandardCode, PhaseCode, FileCode,
-                       VersionNumber, RuleCode, FieldCode, FieldName, LabelTag, ExtractedValue, ExtractedAt, CreateDate)
+                       VersionNumber, RuleCode, FieldCode, FieldName, LabelTag, ExtractedValue, ExtractedAt, CreateTime)
                       VALUES (@Code, NULL, @EnterpriseCode, @StandardFileCode, @StandardCode, @PhaseCode, @FileCode,
                        @VersionNumber, @RuleCode, @FieldCode, @FieldName, @LabelTag, @ExtractedValue, @ExtractedAt, NOW())",
                     er);
@@ -347,7 +346,7 @@ public partial class DocExtractionRuleService
                 await _db.SqlExecuteAsync(
                     @"INSERT INTO ent_table_extraction_result
                       (Code, OrgCode, EnterpriseCode, StandardFileCode, StandardCode, PhaseCode, FileCode,
-                       VersionNumber, RuleCode, TableIndex, ExtractedJson, ExtractedAt, CreateDate)
+                       VersionNumber, RuleCode, TableIndex, ExtractedJson, ExtractedAt, CreateTime)
                       VALUES (@Code, NULL, @EnterpriseCode, @StandardFileCode, @StandardCode, @PhaseCode, @FileCode,
                        @VersionNumber, @RuleCode, @TableIndex, @ExtractedJson, @ExtractedAt, NOW())",
                     tr);
@@ -384,6 +383,8 @@ public partial class DocExtractionRuleService
         var fieldDtos = fields.OrderBy(x => x.Sort).Select(x => new FieldDefDto
         {
             Name = x.FieldName,
+            // NameEn 与 Code 同源（DB 只有一列 FieldCode）——不填会让前端「英文名」输入框回显为空
+            NameEn = x.FieldCode,
             Code = x.FieldCode,
             DataType = x.DataType,
             Description = x.Description,
@@ -405,11 +406,13 @@ public partial class DocExtractionRuleService
             tableDtos.Add(new TableDefDto
             {
                 Name = table.TableName,
+                NameEn = table.TableCode,
                 Code = table.TableCode,
                 Description = table.Description,
                 Columns = columns.OrderBy(x => x.Sort).Select(x => new TableColumnDto
                 {
                     Name = x.ColumnName,
+                    NameEn = x.ColumnCode,
                     Code = x.ColumnCode,
                     DataType = x.DataType
                 }).ToList()
@@ -440,8 +443,8 @@ public partial class DocExtractionRuleService
             Status = rule.Status ?? "none",
             Fields = fieldDtos,
             Tables = tableDtos,
-            CreateDate = rule.CreateTime,
-            ModifyDate = rule.UpdateTime
+            CreateTime = rule.CreateTime,
+            UpdateTime = rule.UpdateTime
         };
     }
 
@@ -486,22 +489,22 @@ public partial class DocExtractionRuleService
 
     /// <summary>获取已配置提取规则的文档列表（供工作流配置页面选择文档）</summary>
     /// <remarks>
-    /// ⚠️ 列名对照真实表结构（2026-09-17 SHOW COLUMNS 校准）：
-    /// cert_standard_directory_file 的文件名列是 PascalCase `FileName`/`FileCode`（非 snake_case）。
+    /// ⚠️ 列名对照真实表结构（2026-09-19 snake→Pascal 迁移后校准）：
+    /// cert_doc_extraction_rule / cert_standard_directory_file 均已是 PascalCase 列名。
     /// 另：SqlSugarDbOrm.SqlQueryAsync 失败时返回 Result.Fail 而非抛异常（被 ORM 吞掉），
     /// SQL 列名错误只会表现为“接口 200 + 空数组”，需结合后端日志排查。
     /// </remarks>
     public async Task<List<object>> GetConfiguredRulesAsync()
     {
         var rules = await _db.SqlQueryAsync<ConfiguredRuleRow>(
-            @"SELECT r.code AS RuleCode, r.standard_file_code AS StandardFileCode,
-                     COALESCE(f.FileName, r.standard_file_code) AS FileName,
-                     COALESCE(r.standard_code, '') AS StandardCode,
-                     COALESCE(r.phase_code, '') AS PhaseCode,
-                     r.skill AS Skill, r.DocIsValid AS DocIsValid, r.status AS Status,
+            @"SELECT r.Code AS RuleCode, r.StandardFileCode AS StandardFileCode,
+                     COALESCE(f.FileName, r.StandardFileCode) AS FileName,
+                     COALESCE(r.StandardCode, '') AS StandardCode,
+                     COALESCE(r.PhaseCode, '') AS PhaseCode,
+                     r.Skill AS Skill, r.DocIsValid AS DocIsValid, r.Status AS Status,
                      r.CreateTime AS CreateTime, r.UpdateTime AS UpdateTime
               FROM cert_doc_extraction_rule r
-              LEFT JOIN cert_standard_directory_file f ON r.standard_file_code = f.FileCode AND f.IsDeleted = 0
+              LEFT JOIN cert_standard_directory_file f ON r.StandardFileCode = f.FileCode AND f.IsDeleted = 0
               WHERE r.IsDeleted = 0 AND r.IsValid = 1
               ORDER BY COALESCE(r.UpdateTime, r.CreateTime) DESC");
         if (!rules.Success) throw new InvalidOperationException("查询已配置规则失败: " + rules.Error);

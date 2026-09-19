@@ -49,7 +49,7 @@ const props = withDefaults(
     selectable: false,
     showPagination: true,
     pageSize: 20,
-    rowKey: 'id',
+    rowKey: 'Id',
     emptyText: '暂无数据',
     toolbar: true,
     searchMaxFields: 2,

@@ -130,12 +130,17 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
 
 /**
    * 表单编辑模式（GroupIndex 控制）
-   * - '0'：新增模式，ALL BcFlag=true 字段可编辑（GroupIndex 不生效）
-   * - '1'：编辑模式，仅 GroupIndex='1' 的字段可编辑，其余只读
-   * - '99'：详情模式，仅 GroupIndex='99' 的字段可编辑（通常全部只读）
+   *
+   * 设计：
+   * - 前端传入 formGroupIndex，JSON 字段配置 GroupIndex（默认 "0"）
+   * - 当 editMode === '0' 时，isDisabledByGroupIndex 恒为 false（新增模式全可编辑）
+   * - 当 editMode !== '0' 时，editMode === fieldGroupIndex 的字段可编辑，其余只读
+   *
+   * 典型用法：
+   * - '0'：新增/编辑模式，GroupIndex="0"（默认）的字段可编辑
+   * - '99'：详情模式，仅 GroupIndex="99" 的字段可编辑（JSON 通常不配此类字段 → 全部只读）
    *
    * 逻辑：isDisabledByGroupIndex = editMode !== '0' && fieldGroupIndex !== editMode
-   * 当 editMode='0' 时，isDisabledByGroupIndex 恒为 false，所有字段可编辑。
    */
   formGroupIndex = ref<string>('0')
 
@@ -712,6 +717,7 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
 
   openAddDialog() {
     this.dialogMode.value = 'add'
+    // 新增模式传 '0' → 框架逻辑 editMode !== '0' = false → 全部字段可编辑
     this.formGroupIndex.value = '0'
     this.initFormData()
     this.onPrepareAdd(this.formData)
@@ -720,7 +726,9 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
 
   openEditDialog(row: V) {
     this.dialogMode.value = 'edit'
-    this.formGroupIndex.value = '1'
+    // 编辑模式传 '0' → GroupIndex="0" 的字段可编辑，非 "0" 的字段只读
+    // 如需某字段在编辑时只读，在 JSON 中配置其 GroupIndex 为非 "0" 值（如 "99"）
+    this.formGroupIndex.value = '0'
     this.initFormData(row)
     this.dialogVisible.value = true
   }

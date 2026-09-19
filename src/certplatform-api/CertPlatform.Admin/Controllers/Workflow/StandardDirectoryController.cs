@@ -1,12 +1,10 @@
-extern alias SharedEntities;
-
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Linq;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.DataBase.Services;
 using CertPlatform.Admin.Services.StandardDirectory;
-using SharedEntities::YZH.Entity.Admin.Platform.Dir;
+using CertPlatform.Shared.Entities.Dir;
 
 namespace CertPlatform.Admin.Controllers.Workflow;
 
@@ -104,7 +102,7 @@ public class StandardDirectoryController : ControllerBase
     }
 
     [HttpPost("configs/{directoryCode}/folders/create")]
-    public async Task<IActionResult> CreateFolder(string directoryCode, [FromBody] SharedEntities::YZH.Entity.Admin.Platform.Dir.StandardDirectoryFolder folder)
+    public async Task<IActionResult> CreateFolder(string directoryCode, [FromBody] StandardDirectoryFolder folder)
     {
         folder.DirectoryCode = directoryCode;
         var (ok, error, result) = await _service.CreateFolderAsync(folder);
@@ -112,7 +110,7 @@ public class StandardDirectoryController : ControllerBase
     }
 
     [HttpPost("folders/{folderCode}")]
-    public async Task<IActionResult> UpdateFolder(string folderCode, [FromBody] SharedEntities::YZH.Entity.Admin.Platform.Dir.StandardDirectoryFolder folder)
+    public async Task<IActionResult> UpdateFolder(string folderCode, [FromBody] StandardDirectoryFolder folder)
     {
         folder.FolderCode = folderCode;
         var (ok, error) = await _service.UpdateFolderAsync(folder);
@@ -145,7 +143,7 @@ public class StandardDirectoryController : ControllerBase
     }
 
     [HttpPost("files/{fileCode}")]
-    public async Task<IActionResult> UpdateFile(string fileCode, [FromBody] SharedEntities::YZH.Entity.Admin.Platform.Dir.StandardDirectoryFile file)
+    public async Task<IActionResult> UpdateFile(string fileCode, [FromBody] StandardDirectoryFile file)
     {
         file.FileCode = fileCode;
         var (ok, error) = await _service.UpdateFileAsync(file);
@@ -282,7 +280,7 @@ public class StandardDirectoryController : ControllerBase
     /// 手动创建文件记录（不经上传流程）
     /// </summary>
     [HttpPost("folders/{folderCode}/files/create")]
-    public async Task<IActionResult> CreateFile(string folderCode, [FromBody] SharedEntities::YZH.Entity.Admin.Platform.Dir.StandardDirectoryFile file)
+    public async Task<IActionResult> CreateFile(string folderCode, [FromBody] StandardDirectoryFile file)
     {
         file.FolderCode = folderCode;
         var (ok, error, result) = await _service.CreateFileAsync(file);
@@ -376,15 +374,6 @@ public static partial class ControllerSafetyExtensions
         // 禁止穿越片段与空段
         return !p.Split('/').Any(seg => seg == ".." || seg == "." || seg.Length == 0);
     }
-}
-
-/// <summary>
-/// 导出请求 DTO
-/// </summary>
-public class ExportRequest
-{
-    public List<string> FolderCodes { get; set; } = new();
-    public List<string> FileCodes { get; set; } = new();
 }
 
 /// <summary>
