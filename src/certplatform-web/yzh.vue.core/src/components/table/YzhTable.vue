@@ -40,8 +40,12 @@ const props = withDefaults(
     searchMaxFields?: number
     /** 是否禁用内部 padding（用于嵌套在卡片/TreeTable 中时避免双层 padding） */
     noPadding?: boolean
-    /** 行自定义操作按钮：{ 方法名: 显示文字 }（后端自动注入） */
-    rowActionButtons?: Record<string, string>
+    /**
+     * 行自定义操作按钮（后端自动注入）
+     * - 静态: { 方法名: 显示文字 }
+     * - 动态: (row) => ({ 方法名: 显示文字 })，根据每行数据返回不同的按钮
+     */
+    rowActionButtons?: Record<string, string> | ((row: T) => Record<string, string>)
     /** 行操作按钮是否使用 link 样式（默认 true） */
     rowActionLink?: boolean
   }>(),
@@ -98,11 +102,27 @@ const visibleColumns = computed(() =>
   })
 )
 
+/**
+ * 解析某一行的操作按钮
+ * - 函数类型：调用函数获取该行按钮
+ * - 静态类型：直接返回
+ */
+function getRowButtons(row: T): Record<string, string> {
+  if (typeof props.rowActionButtons === 'function') {
+    return props.rowActionButtons(row)
+  }
+  return props.rowActionButtons || {}
+}
+
 /** 是否显示动态行操作列（当 rowActionButtons 有值且 columns 中无 actions 列时自动追加） */
-const showDynamicActionColumn = computed(() =>
-  Object.keys(props.rowActionButtons).length > 0 &&
-  !props.columns.some((c) => c.prop === 'actions')
-)
+const showDynamicActionColumn = computed(() => {
+  // 函数类型始终认为可能有按钮（因为不知道各行的数据）
+  if (typeof props.rowActionButtons === 'function') {
+    return !props.columns.some((c) => c.prop === 'actions')
+  }
+  return Object.keys(props.rowActionButtons || {}).length > 0 &&
+    !props.columns.some((c) => c.prop === 'actions')
+})
 
 /** 切换列显示/隐藏 */
 function toggleColumnVisibility(col: YzhTableColumn<T>, visible: boolean) {
@@ -262,6 +282,7 @@ function getRowActionType(key: string): 'primary' | 'success' | 'warning' | 'dan
   const map: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
     disable: 'warning',
     enable: 'success',
+    'toggle-valid': 'warning',
     delete: 'danger',
     edit: 'primary',
   }
@@ -281,8 +302,21 @@ function handleRowAction(action: string, row: T) {
 const instance = getCurrentInstance()
 let rowActionWarned = false
 
+/** 操作列宽度估算（按最大按钮数 × 70px + 间隔） */
+const actionColWidth = computed(() => {
+  if (typeof props.rowActionButtons === 'function') {
+    // 函数类型，假设最多 4 个按钮
+    return 4 * 70 + 40
+  }
+  const count = Object.keys(props.rowActionButtons || {}).length
+  return count > 0 ? count * 70 + 40 : 140
+})
+
 watch(
-  () => Object.keys(props.rowActionButtons ?? {}).length,
+  () => {
+    if (typeof props.rowActionButtons === 'function') return 1
+    return Object.keys(props.rowActionButtons || {}).length
+  },
   (count) => {
     if (count === 0 || rowActionWarned) return
     if (!(import.meta as any).env?.DEV) return
@@ -468,7 +502,7 @@ defineExpose({
           v-loading="loading"
           :data="rows"
           :row-key="rowKey"
-          :height="height ? '100%' : undefined"
+          :height="height !== undefined && height !== null ? height : '100%'"
           stripe
           border
           @selection-change="onSelectionChange"
@@ -514,17 +548,17 @@ defineExpose({
             </el-table-column>
           </template>
 
-          <!-- 动态行操作列（由 rowActionButtons 自动驱动） -->
+          <!-- 动态行操作列（由 rowActionButtons 自动驱动，支持按行动态显示） -->
           <el-table-column
             v-if="showDynamicActionColumn"
             label="操作"
-            :width="Object.keys(rowActionButtons).length * 70"
+            :width="actionColWidth"
             fixed="right"
             align="center"
           >
             <template #default="{ row }">
               <el-button
-                v-for="(text, key) in rowActionButtons"
+                v-for="(text, key) in getRowButtons(row)"
                 :key="key"
                 :link="rowActionLink"
                 size="small"

@@ -109,6 +109,14 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
 
         // 树节点表单配置（自动加载 Assets/EntityConfigs/sys_organization_form.json）
         TreeFormConfigName = "System/OrganizationForm";
+
+        // 注册行操作（表格：启用/禁用人员）
+        RegisterRowAction("disable", DisableUserAsync);
+        RegisterRowAction("enable", EnableUserAsync);
+
+        // 注册树操作（左树：启用/禁用机构）
+        RegisterTreeAction("disable", DisableOrgRecursiveAsync);
+        RegisterTreeAction("enable", EnableOrgAsync);
     }
 
     // ========================================================
@@ -274,20 +282,19 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
     }
 
     /// <summary>
-    /// 构建过滤条件
-    /// 支持 ShowDisabled 开关：控制是否显示已禁用的记录
-    /// 
-    /// 前端实现说明：
+    /// 构建过滤条件：支持 ShowDisabled 开关控制是否显示已禁用的记录。
+    ///
+    /// 【调用顺序关键】：必须在 base.OnBuildingFilter 之前提取 ShowDisabled 参数。
+    /// 原因：基类会无条件移除 ShowDisabled 过滤器（第 649 行），
+    /// 如果在此之后提取，永远读取不到，导致 Enable=1 过滤始终生效。
+    ///
+    /// 前端说明：
     /// - 默认不传 ShowDisabled 或传 false → 仅显示 Enable=1 的记录
-    /// - 传 true → 显示所有记录（含已禁用）
-    /// - 前端在每次筛选/翻页时需要带上此参数
+    /// - 传 true → 显示所有记录（含 Enable=0 的已禁用记录）
     /// </summary>
     protected override List<FilterItem> OnBuildingFilter(List<FilterItem> filters)
     {
-        // 先调用基类：自动处理 IsValid 过滤（IIsValid 契约）
-        filters = base.OnBuildingFilter(filters);
-
-        // 从 filters 中提取 ShowDisabled 参数（处理 Enable 字段）
+        // ★★★ 第一步：必须在基类处理之前提取 ShowDisabled ★★★
         var showDisabled = false;
         var showDisabledFilter = filters.FirstOrDefault(f =>
             f.Field.Equals("ShowDisabled", StringComparison.OrdinalIgnoreCase));
@@ -295,13 +302,14 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
             && bool.TryParse(showDisabledFilter.Value.ToString(), out var sd))
         {
             showDisabled = sd;
-            filters.Remove(showDisabledFilter); // 移除，不作为 SQL 条件
         }
 
-        // 如果未开启"显示已禁用"，则自动添加 Enable=1 过滤
+        // 第二步：调用基类（自动处理 IsValid + 移除 ShowDisabled）
+        filters = base.OnBuildingFilter(filters);
+
+        // 第三步：根据 ShowDisabled 决定是否添加 Enable=1 过滤
         if (!showDisabled)
         {
-            // 先移除已有的 Enable 过滤（如果有），确保不重复
             filters.RemoveAll(f => f.Field == "Enable");
             filters.Add(new FilterItem
             {
@@ -312,6 +320,21 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         }
 
         return filters;
+    }
+
+    /// <summary>
+    /// 行按钮配置：仅 Edit + Delete。
+    /// 自定义禁用/启用按钮通过 RegisterRowAction 自动注入到 CustomButtons。
+    /// 不设置 Enable = true，避免基类额外追加 toggle-valid 按钮造成重复。
+    /// </summary>
+    protected override RowButtonConfig GetRowButtons()
+    {
+        return new RowButtonConfig
+        {
+            Edit = true,
+            Delete = true,
+            Enable = false
+        };
     }
 
     // ========================================================

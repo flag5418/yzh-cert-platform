@@ -40,6 +40,28 @@ export class OrgPageLogic extends TreeTableLogic<any> {
     })
   }
 
+  // ──── 行操作按钮（按行状态动态显示） ────
+  /**
+   * 行操作按钮：edit + delete + 根据 row.Enable 显示「禁用」或「启用」（二选一）
+   */
+  get perRowActionButtons(): (row: any) => Record<string, string> {
+    const rb = this.config.value?.RowButtons
+    return (row: any) => {
+      const buttons: Record<string, string> = {}
+      if (rb?.Edit !== false) buttons['edit'] = '编辑'
+      if (rb?.Delete !== false) buttons['delete'] = '删除'
+      // 自定义按钮：根据当前行状态二选一显示
+      if (rb?.CustomButtons) {
+        if (row.Enable === 1 && rb.CustomButtons['disable']) {
+          buttons['disable'] = rb.CustomButtons['disable']
+        } else if (row.Enable === 0 && rb.CustomButtons['enable']) {
+          buttons['enable'] = rb.CustomButtons['enable']
+        }
+      }
+      return buttons
+    }
+  }
+
   // ──── 表单字段扩展 ────
   // OrgCode 不需要在表单中渲染为可编辑控件，但需要在弹窗顶部展示已选机构
   // 使用 custom 类型 + slot，让 YzhForm 渲染 #orgCode 插槽
@@ -81,19 +103,7 @@ export class OrgPageLogic extends TreeTableLogic<any> {
   orgParentNode = ref<TreeNode | null>(null)
   orgEditingNode = ref<TreeNode | null>(null)
 
-  // ──── 表格行操作扩展（从后端 config 自动注入） ────
-  get extendedRowButtons() {
-    const buttons = [...this.rowButtons]
-    // 读取后端自动注入的 CustomButtons
-    const customButtons = this.rowCustomButtons
-    for (const [key, text] of Object.entries(customButtons)) {
-      const type = key === 'toggle-valid' ? 'warning' : 'primary'
-      buttons.push({ key, text, type })
-    }
-    return buttons
-  }
-
-  // ──── 表格行操作扩展（从后端 config 自动注入） ────
+  // ──── 表格数据加载辅助方法 ────
 
   async apiPostPublic<T = any>(
     path: string,

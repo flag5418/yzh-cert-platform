@@ -116,9 +116,31 @@ export abstract class TreeTableLogic<
     return this.treeTableConfig.value?.TreeConfig ?? null
   }
 
-  /** 启用/禁用字段名（从 TreeConfig.EnableField 读取，null 表示不支持启用/禁用） */
+  /** 启用/禁用字段名（优先从 TreeConfig.EnableField 读取，fallback 到 TableConfig.EnableField） */
   get enableField(): string | null {
-    return this.treeConfig?.EnableField ?? null
+    return this.treeConfig?.EnableField ?? this.config.value?.EnableField ?? null
+  }
+
+  /**
+   * 表格行操作按钮（覆盖基类：自动注入 toggle-valid）
+   *
+   * 根据 rb.Enable === true && enableField 自动添加「禁用/启用」按钮
+   */
+  get rowActionButtons(): Record<string, string> {
+    const rb = this.config.value?.RowButtons
+    const buttons: Record<string, string> = {}
+    if (rb?.Edit !== false) buttons['edit'] = '编辑'
+    if (rb?.Delete !== false) buttons['delete'] = '删除'
+    if (rb?.Enable === true && this.enableField) {
+      buttons['toggle-valid'] = '禁用/启用'
+    }
+    // 合入自定义按钮
+    if (rb?.CustomButtons) {
+      for (const [label, method] of Object.entries(rb.CustomButtons)) {
+        buttons[method] = label
+      }
+    }
+    return buttons
   }
 
   /** 树节点表单配置（EntityConfigDto） */

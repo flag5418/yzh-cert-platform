@@ -69,14 +69,14 @@ public class EntityConfigDto
     ///     默认：Add=true, Delete=true, Export=false, Import=false
     ///     子类可 override GetToolbar() 自定义
     /// </summary>
-    public ToolbarConfigDto? Toolbar { get; set; }
+    public ToolbarConfig? Toolbar { get; set; }
 
     /// <summary>
     ///     行按钮配置（每行操作列）
     ///     默认：Edit=true, Delete=true
     ///     子类可 override GetRowButtons() 自定义
     /// </summary>
-    public RowButtonConfigDto? RowButtons { get; set; }
+    public RowButtonConfig? RowButtons { get; set; }
 
     /// <summary>
     ///     搜索字段配置（搜索栏字段列表）

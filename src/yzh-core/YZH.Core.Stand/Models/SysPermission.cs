@@ -41,10 +41,10 @@ public class SysApi
     public bool Enable { get; set; } = true;
     
     /// <summary>创建时间</summary>
-    public DateTime CreateDate { get; set; } = DateTime.UtcNow;
-    
+    public DateTime CreateTime { get; set; } = DateTime.UtcNow;
+
     /// <summary>更新时间</summary>
-    public DateTime? UpdateDate { get; set; }
+    public DateTime? UpdateTime { get; set; }
 }
 
 /// <summary>
@@ -56,17 +56,17 @@ public class SysRoleApi
     /// <summary>主键ID</summary>
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
     public long Id { get; set; }
-    
+
     /// <summary>角色编码</summary>
     [SugarColumn(Length = 50)]
     public string RoleCode { get; set; } = "";
-    
+
     /// <summary>接口编码</summary>
     [SugarColumn(Length = 64)]
     public string ApiCode { get; set; } = "";
-    
+
     /// <summary>创建时间</summary>
-    public DateTime CreateDate { get; set; } = DateTime.UtcNow;
+    public DateTime CreateTime { get; set; } = DateTime.UtcNow;
 }
 
 /// <summary>
@@ -78,18 +78,18 @@ public class SysUserPermission
     /// <summary>主键ID</summary>
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
     public long Id { get; set; }
-    
+
     /// <summary>用户编码</summary>
     [SugarColumn(Length = 36)]
     public string UserCode { get; set; } = "";
-    
+
     /// <summary>接口编码</summary>
     [SugarColumn(Length = 64)]
     public string ApiCode { get; set; } = "";
-    
+
     /// <summary>创建时间</summary>
-    public DateTime CreateDate { get; set; } = DateTime.UtcNow;
-    
+    public DateTime CreateTime { get; set; } = DateTime.UtcNow;
+
     /// <summary>更新时间</summary>
-    public DateTime? UpdateDate { get; set; }
+    public DateTime? UpdateTime { get; set; }
 }

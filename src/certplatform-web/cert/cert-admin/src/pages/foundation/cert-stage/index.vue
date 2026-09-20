@@ -16,8 +16,14 @@ const logic = new CertStageLogic()
 // 本地状态
 const tableRef = ref()
 
-// 行操作按钮（从 logic 派生）
-const rowActionButtons = computed(() => logic.rowActionButtons)
+// 行操作按钮（基类自动注入 toggle-valid）
+const rowActionButtons = computed(() => {
+  const btns = logic.rowButtons
+  return btns.reduce((acc, btn) => {
+    acc[btn.key] = btn.text
+    return acc
+  }, {} as Record<string, string>)
+})
 
 // 工具栏配置
 const toolbarConfig = computed(() => (logic.config.value as any)?.Toolbar || {})
@@ -51,14 +57,12 @@ async function handleBatchDelete() {
   await logic.confirmDelete()
 }
 
-/** 行操作 */
+/** 行操作（基类 onRowClick 已处理 edit/delete/toggle-valid） */
 async function handleRowAction(action: string, row: any) {
   if (action === 'edit') {
     logic.openEditDialog(row)
-  } else if (action === 'toggleValid') {
-    // 启用/禁用切换
-    const newIsValid = row.IsValid === 1 ? 0 : 1
-    logic.updateRow({ ...row, IsValid: newIsValid })
+  } else if (action === 'toggle-valid') {
+    await logic.toggleRowIsValidWithConfirm(row, { entityName: row.Name })
   } else if (action === 'delete') {
     await logic.confirmDelete([row])
   }
@@ -97,6 +101,13 @@ onMounted(async () => {
       @selection-change="logic.onSelectionChange($event)"
       @row-action="handleRowAction"
     >
+      <!-- 状态列：IsValid 自动渲染为 el-tag -->
+      <template #column-IsValid="{ row }">
+        <el-tag :type="row.IsValid === 1 ? 'success' : 'info'" size="small">
+          {{ row.IsValid === 1 ? '启用' : '禁用' }}
+        </el-tag>
+      </template>
+
       <!-- 工具栏左侧 -->
       <template #toolbar-left>
         <el-button

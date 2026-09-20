@@ -16,6 +16,7 @@ using YZH.Core.Stand.Models.Queue;
 using CertPlatform.Shared.Entities.Dir;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Entities.Sys;
+using CertPlatform.Shared.Entities.Wf;
 
 namespace CertPlatform.Admin.Services.StandardDirectory;
 
@@ -75,10 +76,9 @@ public class StandardDirectoryService
         var orgStandards = (await _db.GetListAsync<CertOrgStandard>()).Data ?? new();
         var orgStages = (await _db.GetListAsync<CertOrgStage>()).Data ?? new();
 
-        // PhaseDefinition.Code 被 BaseEntity.IsIgnore 吞掉，用 raw SQL 读取
-        var phaseDefRows = await _db.SqlQueryAsync<PhaseDefDto>(
-            "SELECT PhaseCode, Code FROM cert_phase_definition WHERE IsValid=1 AND IsDeleted=0");
-        var phaseDefMap = phaseDefRows.Data?.ToDictionary(x => x.PhaseCode, x => x.Code) ?? new();
+        // 使用标准CRUD查询阶段定义
+        var phaseDefs = (await _db.GetListAsync<PhaseDefinition>(x => x.IsValid == 1 && !x.IsDeleted)).Data ?? new();
+        var phaseDefMap = phaseDefs.ToDictionary(x => x.PhaseCode, x => x.Code);
 
         var tree = new List<object>();
 
@@ -385,11 +385,17 @@ public class StandardDirectoryService
     /// </summary>
     public async Task<List<StandardDirectoryFile>> GetRootFilesAsync(string directoryCode)
     {
-        // 使用原生 SQL 绕过全局过滤（根级文件可能 IsValid=0 处于上传中）
-        var files = (await _db.SqlQueryAsync<StandardDirectoryFile>(
-            "SELECT * FROM cert_standard_directory_file WHERE DirectoryCode=@dir AND (FolderCode IS NULL OR FolderCode='') AND IsDeleted=0 AND UploadStatus IN ('uploaded','active') ORDER BY CreateTime DESC",
-            new { dir = directoryCode })).Data ?? new();
-        return files;
+        // 使用视图 v_upload_task_detail 查询根级文件（包含中间状态）
+        var viewResult = await _db.GetListAsync<UploadTaskDetailView>(
+            x => x.DirectoryCode == directoryCode && x.FileIsDeleted == false);
+        return viewResult.Data?.Select(x => new StandardDirectoryFile
+        {
+            FileCode = x.FileCode,
+            FileName = x.FileName,
+            DirectoryCode = x.DirectoryCode,
+            UploadStatus = x.UploadStatus,
+            StoragePath = x.StoragePath
+        }).ToList() ?? new();
     }
 
     /// <summary>
@@ -397,9 +403,8 @@ public class StandardDirectoryService
     /// </summary>
     public async Task<(bool ok, string? error)> UpdateFileAsync(StandardDirectoryFile file)
     {
-        var existing = (await _db.QueryFirstOrDefaultAsync<StandardDirectoryFile>(
-            "SELECT * FROM cert_standard_directory_file WHERE FileCode=@fileCode AND Enable=1 AND IsDeleted=0",
-            new { fileCode = file.FileCode })).Data;
+        var existing = (await _db.GetOneAsync<StandardDirectoryFile>(
+            x => x.FileCode == file.FileCode && x.Enable == true)).Data;
         if (existing == null) return (false, "文件不存在");
 
         existing.FileName = file.FileName;
@@ -417,9 +422,8 @@ public class StandardDirectoryService
         var lockErr = await GetFileLockErrorAsync(fileCode);
         if (lockErr != null) return (false, lockErr);
 
-        var file = (await _db.QueryFirstOrDefaultAsync<StandardDirectoryFile>(
-            "SELECT * FROM cert_standard_directory_file WHERE FileCode=@fileCode AND Enable=1 AND IsDeleted=0",
-            new { fileCode })).Data;
+        var file = (await _db.GetOneAsync<StandardDirectoryFile>(
+            x => x.FileCode == fileCode && x.Enable == true)).Data;
         if (file == null) return (false, "文件不存在");
 
         await DeleteFileFromStorageAsync(file);
@@ -712,16 +716,20 @@ public class StandardDirectoryService
     public async Task<(bool ok, string? error)> UploadFileAsync(
         Stream fileStream, long fileSize, string fileCode, string taskId)
     {
-        // 验证任务（绕过全局过滤：IsValid/IsDeleted 在 SqlSugarDbOrm.GetOneAsync 中自动加，此处用原生 SQL）
-        var task = (await _db.QueryFirstOrDefaultAsync<UploadTask>(
-            "SELECT * FROM cert_upload_task WHERE TaskId=@taskId AND status='initialized' AND IsDeleted=0",
-            new { taskId })).Data;
+        // 使用视图查询上传任务（包含中间状态）
+        var task = (await _db.GetOneAsync<UploadTaskDetailView>(
+            x => x.TaskId == taskId && x.Status == "initialized")).Data;
         if (task == null) return (false, "上传任务不存在或已过期");
 
-        // 验证文件记录（绕过全局过滤：新上传文件 IsValid=0）
-        var file = (await _db.QueryFirstOrDefaultAsync<StandardDirectoryFile>(
-            "SELECT * FROM cert_standard_directory_file WHERE FileCode=@fileCode AND TaskId=@taskId AND IsDeleted=0",
-            new { fileCode, taskId })).Data;
+        // 从视图结果中提取文件信息
+        var viewFile = task;
+        var file = new StandardDirectoryFile
+        {
+            FileCode = viewFile.FileCode,
+            UploadStatus = viewFile.UploadStatus,
+            IsValid = viewFile.FileIsValid ?? 1,
+            StoragePath = viewFile.StoragePath
+        };
         if (file == null) return (false, "文件编码与任务不匹配");
 
         var isReplaceMode = file.UploadStatus == "replacing";
@@ -750,15 +758,24 @@ public class StandardDirectoryService
                 }
             }
 
-            // 更新文件状态（绕过全局过滤：新上传文件 IsValid=0）
-            await _db.SqlExecuteAsync(
-                "UPDATE cert_standard_directory_file SET UploadStatus='uploaded', FileSize=@fileSize WHERE FileCode=@fileCode AND TaskId=@taskId AND IsDeleted=0",
-                new { fileSize, fileCode, taskId });
+            // 更新文件状态（使用实体方法绕过软删除过滤）
+            var updateFile = (await _db.GetOneAsync<StandardDirectoryFile>(
+                x => x.FileCode == fileCode && x.TaskId == taskId)).Data;
+            if (updateFile != null)
+            {
+                updateFile.UploadStatus = "uploaded";
+                updateFile.FileSize = fileSize;
+                await _db.UpdateAsync(updateFile);
+            }
 
             // 更新任务计数
-            await _db.SqlExecuteAsync(
-                "UPDATE cert_upload_task SET SuccessCount=SuccessCount+1 WHERE TaskId=@taskId AND IsDeleted=0",
-                new { taskId });
+            var taskToUpdate = (await _db.GetOneAsync<UploadTask>(
+                x => x.TaskId == taskId)).Data;
+            if (taskToUpdate != null)
+            {
+                taskToUpdate.SuccessCount++;
+                await _db.UpdateAsync(taskToUpdate);
+            }
 
             return (true, null);
         }
@@ -774,19 +791,25 @@ public class StandardDirectoryService
     /// </summary>
     public async Task<(bool ok, string? error, string? convertQueueCode)> UploadConfirmAsync(string taskId)
     {
-        var task = (await _db.QueryFirstOrDefaultAsync<UploadTask>(
-            "SELECT * FROM cert_upload_task WHERE TaskId=@taskId AND IsDeleted=0",
-            new { taskId })).Data;
+        var task = (await _db.GetOneAsync<UploadTask>(
+            x => x.TaskId == taskId)).Data;
         if (task == null) return (false, "上传任务不存在", null);
 
         // 队列锁检查
         var queueLockErr = await GetQueueLockErrorAsync(task.DirectoryCode);
         if (queueLockErr != null) return (false, queueLockErr, null);
 
-        // 检查所有文件是否已上传
-        var allFiles = (await _db.SqlQueryAsync<StandardDirectoryFile>(
-            "SELECT * FROM cert_standard_directory_file WHERE TaskId=@taskId AND IsDeleted=0",
-            new { taskId })).Data ?? new();
+        // 检查所有文件是否已上传（使用视图绕过软删除过滤）
+        var viewResult = await _db.GetListAsync<UploadTaskDetailView>(
+            x => x.TaskId == taskId);
+        var allFiles = viewResult.Data?.Select(v => new StandardDirectoryFile
+        {
+            FileCode = v.FileCode,
+            UploadStatus = v.UploadStatus,
+            FileType = v.FileType,
+            StoragePath = v.StoragePath
+        }).ToList() ?? new();
+
         var pendingCount = allFiles.Count(x => x.UploadStatus == "pending");
         if (pendingCount > 0)
             return (false, $"还有 {pendingCount} 个文件未上传完成", null);
@@ -795,26 +818,48 @@ public class StandardDirectoryService
         var convertibleFiles = allFiles.Where(x =>
             x.UploadStatus == "uploaded" &&
             (x.FileType == "doc" || x.FileType == "xls")).ToList();
-        var convertibleCodes = convertibleFiles.Select(f => $"'{f.FileCode}'");
-        var convertibleInClause = convertibleCodes.Any() ? string.Join(",", convertibleCodes) : "''";
 
         // 全部文件激活：IsValid=0→1, UploadStatus→active, TaskId→null
-        await _db.SqlExecuteAsync(
-            $"UPDATE cert_standard_directory_file SET IsValid=1, UploadStatus='active', TaskId=NULL WHERE TaskId=@taskId AND IsDeleted=0",
-            new { taskId });
+        foreach (var file in allFiles)
+        {
+            var updateFile = (await _db.GetOneAsync<StandardDirectoryFile>(
+                x => x.FileCode == file.FileCode)).Data;
+            if (updateFile != null)
+            {
+                updateFile.IsValid = 1;
+                updateFile.UploadStatus = "active";
+                updateFile.TaskId = null;
+                await _db.UpdateAsync(updateFile);
+            }
+        }
 
         // 需要转换的文件额外设置 ConvertStatus=pending（保持 IsValid=0 等待转换）
         if (convertibleFiles.Count > 0)
         {
-            await _db.SqlExecuteAsync(
-                $"UPDATE cert_standard_directory_file SET IsValid=0, UploadStatus='uploaded', ConvertStatus='pending', TaskId=NULL WHERE TaskId=@taskId AND FileCode IN ({convertibleInClause}) AND IsDeleted=0",
-                new { taskId });
+            foreach (var file in convertibleFiles)
+            {
+                var updateFile = (await _db.GetOneAsync<StandardDirectoryFile>(
+                    x => x.FileCode == file.FileCode)).Data;
+                if (updateFile != null)
+                {
+                    updateFile.IsValid = 0;
+                    updateFile.UploadStatus = "uploaded";
+                    updateFile.ConvertStatus = "pending";
+                    updateFile.TaskId = null;
+                    await _db.UpdateAsync(updateFile);
+                }
+            }
         }
 
         // 激活文件夹：IsValid=0→1, 清除 TaskId
-        await _db.SqlExecuteAsync(
-            "UPDATE cert_standard_directory_folder SET IsValid=1, TaskId=NULL WHERE TaskId=@taskId AND IsDeleted=0",
-            new { taskId });
+        var folders = (await _db.GetListAsync<StandardDirectoryFolder>(
+            x => x.TaskId == taskId)).Data ?? new();
+        foreach (var folder in folders)
+        {
+            folder.IsValid = 1;
+            folder.TaskId = null;
+            await _db.UpdateAsync(folder);
+        }
 
         // 创建转换队列（如有可转换文件）
         string? convertQueueCode = null;
@@ -878,10 +923,20 @@ public class StandardDirectoryService
             await _queueManager.CancelQueueAsync(q.QueueCode);
         }
 
-        // 查询关联文件（绕过全局过滤：新上传文件 IsValid=0）
-        var files = (await _db.SqlQueryAsync<StandardDirectoryFile>(
-            "SELECT * FROM cert_standard_directory_file WHERE TaskId=@taskId AND IsDeleted=0",
-            new { taskId })).Data ?? new();
+        // 使用视图查询关联文件（包含中间状态）
+        var viewFiles = (await _db.GetListAsync<UploadTaskDetailView>(
+            x => x.TaskId == taskId)).Data ?? new();
+        var files = viewFiles.Select(v => new StandardDirectoryFile
+        {
+            FileCode = v.FileCode,
+            FileName = v.FileName,
+            UploadStatus = v.UploadStatus,
+            StoragePath = v.StoragePath,
+            ConvertedStoragePath = null,
+            ConvertStatus = null,
+            ConvertMessage = null,
+            Remark = null
+        }).ToList();
         int deletedCount = 0, restoredCount = 0;
         var replaceMarker = $"[upload-replace:{taskId}]";
 
@@ -1035,15 +1090,24 @@ public class StandardDirectoryService
 
     private async Task CleanupOrphanDataAsync(string directoryCode, string taskId)
     {
-        await _db.SqlExecuteAsync(
-            "DELETE FROM cert_standard_directory_file WHERE DirectoryCode = @dc AND IsValid = 0 AND TaskId != @tid",
-            new { dc = directoryCode, tid = taskId });
-        await _db.SqlExecuteAsync(
-            "DELETE FROM cert_standard_directory_folder WHERE DirectoryCode = @dc AND IsValid = 0 AND TaskId != @tid",
-            new { dc = directoryCode, tid = taskId });
-        await _db.SqlExecuteAsync(
-            "DELETE FROM cert_upload_task WHERE DirectoryCode = @dc AND Status != 'completed' AND TaskId != @tid",
-            new { dc = directoryCode, tid = taskId });
+        // 清理孤儿数据（物理删除 IsValid=0 的草稿记录）
+        var orphanFiles = await _db.Client.Queryable<StandardDirectoryFile>()
+            .Where(x => x.DirectoryCode == directoryCode && x.IsValid == 0 && x.TaskId != taskId)
+            .ToListAsync();
+        foreach (var f in orphanFiles)
+            await _db.Client.Deleteable(f).ExecuteCommandAsync();
+
+        var orphanFolders = await _db.Client.Queryable<StandardDirectoryFolder>()
+            .Where(x => x.DirectoryCode == directoryCode && x.IsValid == 0 && x.TaskId != taskId)
+            .ToListAsync();
+        foreach (var f in orphanFolders)
+            await _db.Client.Deleteable(f).ExecuteCommandAsync();
+
+        var orphanTasks = await _db.Client.Queryable<UploadTask>()
+            .Where(x => x.DirectoryCode == directoryCode && x.Status != "completed" && x.TaskId != taskId)
+            .ToListAsync();
+        foreach (var t in orphanTasks)
+            await _db.Client.Deleteable(t).ExecuteCommandAsync();
     }
 
     private async Task<string?> GetQueueLockErrorAsync(string directoryCode)
@@ -1103,9 +1167,8 @@ public class StandardDirectoryService
             var stageFileCodes = allFiles.Select(f => f.FileCode).ToList();
             if (stageFileCodes.Count > 0)
             {
-                var rules = (await _db.SqlQueryAsync<dynamic>(
-                    "SELECT StandardFileCode, Status FROM cert_doc_extraction_rule WHERE StandardFileCode IN @codes",
-                    new { codes = stageFileCodes })).Data ?? new List<dynamic>();
+                var rules = (await _db.GetListAsync<DocExtractionRule>(
+                    x => stageFileCodes.Contains(x.StandardFileCode))).Data ?? new();
                 foreach (var r in rules)
                 {
                     string code = r.StandardFileCode;
@@ -1577,20 +1640,20 @@ public class StandardDirectoryService
         try
         {
             // 1. 候选文件：doc/xls 且 failed 或 pending
-            var candidates = (await _db.SqlQueryAsync<StandardDirectoryFile>(
-                @"SELECT * FROM cert_standard_directory_file 
-                  WHERE IsDeleted=0 AND Enable=1 
-                  AND (FileType='doc' OR FileType='xls') 
-                  AND (ConvertStatus='failed' OR ConvertStatus='pending')"))
+            var candidates = (await _db.GetListAsync<StandardDirectoryFile>(
+                x => !x.IsDeleted && x.Enable == true 
+                    && (x.FileType == "doc" || x.FileType == "xls")
+                    && (x.ConvertStatus == "failed" || x.ConvertStatus == "pending")))
                 .Data ?? new();
 
             if (candidates.Count == 0)
                 return (true, null, 0, 0);
 
             // 2. 排除仍在队列中（有活跃资源锁）的文件
-            var allLocks = (await _db.SqlQueryAsync<dynamic>(
-                "SELECT ResourceCode FROM queue_resource_lock WHERE Status='locked' AND ResourceTable='cert_standard_directory_file'"))
-                .Data ?? new List<dynamic>();
+            var allLocks = (await _db.Client.Queryable<YzhQueueResourceLock>()
+                .Where(x => x.Status == "locked" && x.ResourceTable == QueueManager.RESOURCE_FILE)
+                .Select(x => x.ResourceCode)
+                .ToListAsync());
             var activeLockCodes = new HashSet<string>(allLocks.Select(l => (string)l.ResourceCode));
 
             var toRetry = new List<StandardDirectoryFile>();
@@ -1778,10 +1841,3 @@ public class StageFileNode
 }
 
 #endregion
-
-/// <summary>PhaseDefinition raw SQL DTO（绕过 BaseEntity.IsIgnore）</summary>
-public class PhaseDefDto
-{
-    public string PhaseCode { get; set; } = "";
-    public string Code { get; set; } = "";
-}

@@ -31,24 +31,9 @@ const treeTableRef = ref()
 const tableRef = ref()
 const selectedRows = ref<any[]>([])
 
-// 合并行操作按钮：标准 edit/delete（后端 RowButtons 控制）+ 自定义按钮（过滤旧 disable/enable）
-const mergedRowActionButtons = computed(() => {
-  const buttons: Record<string, string> = {}
-  // 标准按钮（受后端 RowButtons.Edit / RowButtons.Delete 控制）
-  const rb = logic.config.value?.RowButtons
-  if (rb?.Edit !== false) buttons['edit'] = '编辑'
-  if (rb?.Delete !== false) buttons['delete'] = '删除'
-  // 根据 EnableField 配置动态添加 toggle-valid
-  if (logic.enableField) {
-    buttons['toggle-valid'] = '禁用/启用'
-  }
-  // 合入其他自定义按钮（过滤旧 disable/enable）
-  const customButtons = logic.rowCustomButtons
-  for (const [key, text] of Object.entries(customButtons)) {
-    if (key === 'disable' || key === 'enable') continue
-    buttons[key] = text
-  }
-  return buttons
+// 行操作按钮：按行状态动态显示（edit/delete + 禁用/启用二选一）
+const rowActionButtonsFn = computed(() => {
+  return logic.perRowActionButtons
 })
 
 // ========================================================
@@ -154,19 +139,17 @@ async function handleBatchDelete() {
   ElMessage.success('批量删除成功')
 }
 
-/** 切换人员有效标志（基类统一处理：确认弹窗 → API → 本地更新） */
-async function handleToggleUserIsValid(row: any) {
-  await logic.toggleRowIsValidWithConfirm(row, { entityName: row.UserTrueName })
-}
-
-/** 表格行自定义操作（edit / delete / toggle-valid） */
+/** 表格行自定义操作（edit / delete / disable / enable） */
 async function handleRowAction(action: string, row: any) {
   if (action === 'edit') {
     handleEditUser(row)
   } else if (action === 'delete') {
     await handleDeleteUser(row)
-  } else if (action === 'toggle-valid') {
-    await handleToggleUserIsValid(row)
+  } else if (action === 'disable' || action === 'enable') {
+    // 自定义启用/禁用（调用 OrganizationController 自定义 action，带业务规则）
+    await logic.apiPostPublic(`/action/${action}`, { Code: row.Code })
+    ElMessage.success(action === 'disable' ? '已禁用' : '已启用')
+    row.Enable = action === 'disable' ? 0 : 1
   }
 }
 
@@ -272,17 +255,17 @@ onMounted(async () => {
             :data-loader="loadTableData"
             :search-fields="logic.searchFields as any"
             :selectable="true"
-            :row-action-buttons="mergedRowActionButtons"
+            :row-action-buttons="rowActionButtonsFn"
             @selection-change="selectedRows = $event"
             @row-action="handleRowAction"
           >
             <!-- 状态列 -->
             <template #column-Enable="{ row }">
               <el-tag
-                :type="row.IsValid === 1 ? 'success' : 'info'"
+                :type="row.Enable === 1 ? 'success' : 'info'"
                 size="small"
               >
-                {{ row.IsValid === 1 ? '启用' : '禁用' }}
+                {{ row.Enable === 1 ? '启用' : '禁用' }}
               </el-tag>
             </template>
 

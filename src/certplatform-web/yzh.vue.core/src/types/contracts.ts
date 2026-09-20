@@ -173,6 +173,8 @@ export interface ToolbarConfig {
 export interface RowButtonConfig {
   Edit?: boolean
   Delete?: boolean
+  /** 是否显示启用/禁用按钮（默认 false，需显式开启） */
+  Enable?: boolean
   CustomButtons?: Record<string, string>
 }
 

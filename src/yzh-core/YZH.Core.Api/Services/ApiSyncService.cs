@@ -129,8 +129,8 @@ public class ApiSyncService
             Name = descriptor.Description,
             Author = descriptor.Author,
             Enable = true,
-            CreateDate = descriptor.CreatedAt,
-            UpdateDate = descriptor.UpdatedAt
+            CreateTime = descriptor.CreatedAt,
+            UpdateTime = descriptor.UpdatedAt
         };
     }
 }

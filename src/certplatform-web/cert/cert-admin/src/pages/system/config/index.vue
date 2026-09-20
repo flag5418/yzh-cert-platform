@@ -15,7 +15,7 @@
  * - 编辑/删除复用基类逻辑（删除自带二次确认）
  */
 import { YzhForm, YzhTable } from '@yzh-core'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElTag } from 'element-plus'
 import { computed, onMounted, nextTick, ref } from 'vue'
 import { ConfigLogic } from './logic'
 
@@ -25,9 +25,13 @@ const logic = new ConfigLogic()
 // 本地状态
 const tableRef = ref()
 
-// 行操作按钮（从 config.RowButtons 自动派生）
+// 行操作按钮：从 config.RowButtons 自动派生（edit/delete/toggle-valid）→ YzhTable 要求 Record 格式
 const rowActionButtons = computed(() => {
-  return logic.rowActionButtons
+  const btns: Record<string, string> = {}
+  for (const b of logic.rowButtons) {
+    btns[b.key] = b.text
+  }
+  return btns
 })
 
 // 工具栏按钮（从 config.Toolbar 自动派生）
@@ -61,12 +65,14 @@ async function handleBatchDelete() {
   await logic.confirmDelete()
 }
 
-/** 行操作：编辑 / 删除（与后端 RowButtons 的 key 对应） */
+/** 行操作：编辑 / 删除 / toggle-valid（与后端 RowButtons 的 key 对应） */
 async function handleRowAction(action: string, row: any) {
   if (action === 'edit') {
     logic.openEditDialog(row)
   } else if (action === 'delete') {
     await logic.confirmDelete([row])
+  } else if (action === 'toggle-valid') {
+    await logic.toggleRowIsValidWithConfirm(row, { entityName: row.ConfigKey })
   }
 }
 
@@ -103,6 +109,13 @@ onMounted(async () => {
       @selection-change="logic.onSelectionChange($event)"
       @row-action="handleRowAction"
     >
+      <!-- 状态列：IsValid → 启用/禁用标签 -->
+      <template #column-IsValid="{ row }">
+        <el-tag :type="row.IsValid === 1 ? 'success' : 'info'" size="small">
+          {{ row.IsValid === 1 ? '启用' : '禁用' }}
+        </el-tag>
+      </template>
+
       <!-- 工具栏左侧：由后端 Toolbar 配置驱动 -->
       <template #toolbar-left>
         <el-button

@@ -3,6 +3,7 @@
     "FillMode": "AutoFix",
     "FormCols": 2,
     "EnableField": "IsValid",
+    "RowButtons": { "Enable": true },
     "Columns": [
         {
             "FieldName": "ConfigKey",

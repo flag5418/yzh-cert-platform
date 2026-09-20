@@ -48,7 +48,7 @@ public class ApiRepository : IApiRepository
     {
         if (!apis.Any()) return 0;
         return await _dbOrm.Client.Updateable(apis)
-            .UpdateColumns(x => new { x.Path, x.Name, x.Author, x.GroupPath, x.UpdateDate })
+            .UpdateColumns(x => new { x.Path, x.Name, x.Author, x.GroupPath, x.UpdateTime })
             .ExecuteCommandAsync();
     }
 
@@ -95,7 +95,7 @@ public class ApiRepository : IApiRepository
         {
             RoleCode = roleCode,
             ApiCode = apiCode,
-            CreateDate = DateTime.UtcNow
+            CreateTime = DateTime.UtcNow
         }).ExecuteCommandAsync();
     }
 
@@ -103,6 +103,16 @@ public class ApiRepository : IApiRepository
     {
         return await _dbOrm.Client.Deleteable<SysRoleApi>()
             .Where(x => x.RoleCode == roleCode)
+            .ExecuteCommandAsync();
+    }
+
+    /// <summary>
+    /// 按角色 + 接口编码列表批量删除（SqlSugar 方式，禁止手写 SQL）
+    /// </summary>
+    public async Task<int> DeleteByRoleAndApiCodesAsync(string roleCode, List<string> apiCodes)
+    {
+        return await _dbOrm.Client.Deleteable<SysRoleApi>()
+            .Where(x => x.RoleCode == roleCode && apiCodes.Contains(x.ApiCode))
             .ExecuteCommandAsync();
     }
 
@@ -121,7 +131,7 @@ public class ApiRepository : IApiRepository
         {
             UserCode = userCode,
             ApiCode = apiCode,
-            CreateDate = DateTime.UtcNow
+            CreateTime = DateTime.UtcNow
         }).ExecuteCommandAsync();
     }
 

@@ -218,10 +218,7 @@ public class RoleApiController : TreeTableControllerBase<Sys_Role, SysApi>
             if (apiCodes.Count == 0)
                 return Ok(ApiResponse<object?>.Ok(new { Updated = 0 }));
 
-            string apiCodesStr = string.Join(",", apiCodes);
-            // 数组参数必须写成 IN (@param)（带括号），SqlSugar 才会展开为 (值1,值2,...)
-            var sql = "DELETE FROM sys_role_api WHERE role_code = @roleCode AND api_code IN (@apiCodes)";
-            var result = await _apiRepo.ExecuteNonQueryAsync(sql, new { roleCode, apiCodes });
+            var result = await _apiRepo.DeleteByRoleAndApiCodesAsync(roleCode, apiCodes);
 
             return Ok(ApiResponse<object?>.Ok(new { Updated = result }));
         }

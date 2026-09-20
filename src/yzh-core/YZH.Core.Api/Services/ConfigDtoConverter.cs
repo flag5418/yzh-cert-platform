@@ -42,21 +42,8 @@ public static class ConfigDtoConverter
             NewEntity = config.NewEntity,
             Schema = config.Schema,
             EnableField = config.EnableField,
-            Toolbar = config.Toolbar != null ? new ToolbarConfigDto
-            {
-                Add = config.Toolbar.Add,
-                Delete = config.Toolbar.Delete,
-                Export = config.Toolbar.Export,
-                Import = config.Toolbar.Import,
-                CustomButtons = config.Toolbar.CustomButtons,
-            } : null,
-            RowButtons = config.RowButtons != null ? new RowButtonConfigDto
-            {
-                Edit = config.RowButtons.Edit,
-                Delete = config.RowButtons.Delete,
-                Enable = config.RowButtons.Enable,
-                CustomButtons = config.RowButtons.CustomButtons,
-            } : null,
+            Toolbar = config.Toolbar,
+            RowButtons = config.RowButtons,
             SearchFields = config.SearchFields?.Select(s => new SearchFieldDto
             {
                 Label = s.Label,

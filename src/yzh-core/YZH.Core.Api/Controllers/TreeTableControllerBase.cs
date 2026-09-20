@@ -431,7 +431,6 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
     {
         if (_rowActions.Count == 0) return;
 
-        dto.RowButtons ??= new RowButtonConfigDto();
         if (dto.RowButtons.CustomButtons == null)
             dto.RowButtons.CustomButtons = new Dictionary<string, string>();
 

@@ -39,9 +39,9 @@ const treeTableRef = ref()
 const tableRef = ref()
 const selectedRows = ref<any[]>([])
 
-// 行操作按钮
+// 行操作按钮（TreeTableLogic 基类自动注入 toggle-valid）
 const rowActionButtons = computed(() => {
-  return logic.rowActionButtons
+  return (logic as any).rowActionButtons || {}
 })
 
 // ========================================================
@@ -116,12 +116,14 @@ async function handleDeleteClause(row: any) {
   ElMessage.success('删除成功')
 }
 
-/** 表格行自定义操作（edit / delete，与后端 RowButtons 的 key 对应） */
+/** 表格行自定义操作（edit / delete / toggle-valid） */
 async function handleRowAction(action: string, row: any) {
   if (action === 'edit') {
     handleEditClause(row)
   } else if (action === 'delete') {
     await handleDeleteClause(row)
+  } else if (action === 'toggle-valid') {
+    await handleToggleClauseIsValid(row)
   }
 }
 
@@ -237,6 +239,13 @@ onMounted(async () => {
             @selection-change="selectedRows = $event"
             @row-action="handleRowAction"
           >
+            <!-- 状态列：IsValid 自动渲染为 el-tag -->
+            <template #column-IsValid="{ row }">
+              <el-tag :type="row.IsValid === 1 ? 'success' : 'info'" size="small">
+                {{ row.IsValid === 1 ? '启用' : '禁用' }}
+              </el-tag>
+            </template>
+
             <!-- 工具栏左侧：操作按钮 -->
             <template #toolbar-left>
               <el-button type="primary" :icon="Plus" @click="handleAddClause"

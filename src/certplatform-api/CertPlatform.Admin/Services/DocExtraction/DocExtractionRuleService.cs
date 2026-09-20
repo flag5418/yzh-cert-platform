@@ -490,18 +490,8 @@ public partial class DocExtractionRuleService
     /// </remarks>
     public async Task<List<object>> GetConfiguredRulesAsync()
     {
-        var result = await _db.Client.Ado.SqlQueryAsync<ConfiguredRuleRow>(
-            @"SELECT r.Code AS RuleCode, r.StandardFileCode AS StandardFileCode,
-                     COALESCE(f.FileName, r.StandardFileCode) AS FileName,
-                     COALESCE(r.StandardCode, '') AS StandardCode,
-                     COALESCE(r.PhaseCode, '') AS PhaseCode,
-                     r.Skill AS Skill, r.DocIsValid AS DocIsValid, r.Status AS Status,
-                     r.CreateTime AS CreateTime, r.UpdateTime AS UpdateTime
-              FROM cert_doc_extraction_rule r
-              LEFT JOIN cert_standard_directory_file f ON r.StandardFileCode = f.FileCode AND f.IsDeleted = 0
-              WHERE r.IsDeleted = 0 AND r.IsValid = 1
-              ORDER BY COALESCE(r.UpdateTime, r.CreateTime) DESC");
-        return result.Cast<object>().ToList();
+        var result = await _db.GetListAsync<ConfiguredRuleView>();
+        return result.Data?.Cast<object>().ToList() ?? new();
     }
 
     // ========================================================

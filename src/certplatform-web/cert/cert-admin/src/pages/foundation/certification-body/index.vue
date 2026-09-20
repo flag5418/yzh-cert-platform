@@ -12,7 +12,13 @@ import { CertificationBodyLogic } from './logic'
 const logic = new CertificationBodyLogic()
 const tableRef = ref()
 
-const rowActionButtons = computed(() => logic.rowActionButtons)
+// 行操作按钮（基类自动注入 toggle-valid）
+const rowActionButtons = computed(() => {
+  return logic.rowButtons.reduce((acc, btn) => {
+    acc[btn.key] = btn.text
+    return acc
+  }, {} as Record<string, string>)
+})
 const toolbarConfig = computed(() => (logic.config.value as any)?.Toolbar || {})
 
 function loadTableData(params: any) {
@@ -30,9 +36,8 @@ async function handleBatchDelete() {
 async function handleRowAction(action: string, row: any) {
   if (action === 'edit') {
     logic.openEditDialog(row)
-  } else if (action === 'toggleValid') {
-    const newIsValid = row.IsValid === 1 ? 0 : 1
-    logic.updateRow({ ...row, IsValid: newIsValid })
+  } else if (action === 'toggle-valid') {
+    await logic.toggleRowIsValidWithConfirm(row, { entityName: row.OrgName })
   } else if (action === 'delete') {
     await logic.confirmDelete([row])
   }
@@ -66,6 +71,13 @@ onMounted(async () => {
       @selection-change="logic.onSelectionChange($event)"
       @row-action="handleRowAction"
     >
+      <!-- 状态列：IsValid 自动渲染为 el-tag -->
+      <template #column-IsValid="{ row }">
+        <el-tag :type="row.IsValid === 1 ? 'success' : 'info'" size="small">
+          {{ row.IsValid === 1 ? '启用' : '禁用' }}
+        </el-tag>
+      </template>
+
       <template #toolbar-left>
         <el-button v-if="toolbarConfig.Add !== false" type="primary" @click="handleAdd">新增</el-button>
         <el-button v-if="toolbarConfig.Delete !== false" type="danger" @click="handleBatchDelete">删除</el-button>

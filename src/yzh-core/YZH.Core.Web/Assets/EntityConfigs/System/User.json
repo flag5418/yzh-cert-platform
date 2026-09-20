@@ -2,6 +2,8 @@
   "Title": "人员管理",
   "FillMode": "AutoFix",
   "FormCols": 0,
+  "EnableField": "Enable",
+  "RowButtons": { "CustomButtons": { "disable": "禁用", "enable": "启用" } },
   "Columns": [
     {
       "FieldName": "UserName",

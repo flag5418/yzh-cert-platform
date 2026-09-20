@@ -57,6 +57,9 @@ public interface IApiRepository
     /// <summary>删除角色的所有接口关联</summary>
     Task<int> DeleteByRoleCodeAsync(string roleCode);
 
+    /// <summary>按角色 + 接口编码列表批量删除角色-接口关联</summary>
+    Task<int> DeleteByRoleAndApiCodesAsync(string roleCode, List<string> apiCodes);
+
     /// <summary>获取角色的接口编码列表</summary>
     Task<List<string>> GetApiCodesByRoleCodeAsync(string roleCode);
 

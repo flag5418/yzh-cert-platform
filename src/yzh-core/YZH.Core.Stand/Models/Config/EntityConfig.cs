@@ -63,8 +63,8 @@ public class EntityConfig
     /// <summary>工具栏按钮配置（新增/删除/导出/导入/自定义）</summary>
     public ToolbarConfig? Toolbar { get; set; }
 
-    /// <summary>行按钮配置（编辑/删除/自定义）</summary>
-    public RowButtonConfig? RowButtons { get; set; }
+    /// <summary>行按钮配置（编辑/删除/自定义），默认 new() 永不为 null</summary>
+    public RowButtonConfig RowButtons { get; set; } = new();
 
     /// <summary>搜索字段配置</summary>
     public List<SearchFieldConfig>? SearchFields { get; set; }

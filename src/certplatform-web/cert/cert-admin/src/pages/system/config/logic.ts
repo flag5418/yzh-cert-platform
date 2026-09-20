@@ -3,7 +3,7 @@
  *
  * 约定（YZH 架构铁律）：
  * - 后端行 / formData / YzhForm.fields[].prop 全部 PascalCase（JSON 字段名 = 实体属性名 = 数据库列名）
- * - 行操作（edit / delete）直接复用基类 CrudPageLogic.onRowClick（删除自带确认框）
+ * - 行操作（edit / delete / toggle-valid）直接复用基类 CrudPageLogic
  * - 分页 / 排序 / 搜索由基类 dataLoader 承担（搜索条件来自 YzhTable 传入的 params，
  *   Operator 取自 EntityConfig.SearchFields）
  *
@@ -14,15 +14,6 @@ import { CrudPageLogic } from '@yzh-core'
 
 export class ConfigLogic extends CrudPageLogic<any> {
   controllerName = 'System/Config'
-
-  /** 行操作按钮（从后端 RowButtons 配置派生） */
-  get rowActionButtons(): Record<string, string> {
-    const buttons: Record<string, string> = {}
-    const rb = (this.config.value as any)?.RowButtons
-    if (rb?.Edit !== false) buttons['edit'] = '编辑'
-    if (rb?.Delete !== false) buttons['delete'] = '删除'
-    return buttons
-  }
 
   /**
    * 初始化：只加载页面配置

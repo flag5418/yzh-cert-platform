@@ -35,14 +35,7 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
   stdFormData = reactive<Record<string, any>>({})
   stdEditingNode = ref<TreeNode | null>(null)
 
-  // ──── 操作按钮（自动从后端 config 派生 + 启用/禁用） ────
-  get rowActionButtons(): Record<string, string> {
-    const buttons: Record<string, string> = {}
-    const rb = (this.config.value as any)?.RowButtons
-    if (rb?.Edit !== false) buttons['edit'] = '编辑'
-    if (rb?.Delete !== false) buttons['delete'] = '删除'
-    return buttons
-  }
+  // ──── 行操作按钮（基类 TreeTableLogic.rowActionButtons 已自动注入 toggle-valid） ────
 
   // ──── 树节点操作（从 TreeConfig 配置驱动，取消 add-child） ────
   get nodeActions(): Record<string, string> {

@@ -15,3 +15,11 @@ export {
   SPECIAL_NODE_TYPES, BRANCH_ANCHORS,
   type DependencyGraph, type PathResult, type TopologyValidation, type TopologyAnalysis
 } from './topology'
+export { useWorkflowStore } from './useWorkflowStore'
+export type { WorkflowState, WorkflowNode as WNode, WorkflowEdge as WEdge } from './useWorkflowStore'
+export {
+  analyzeWorkflowTopology, nodeStyle, compileToWorkflowConfig, decompileToGraphData,
+  extractTopologicalPaths, topologicalOrder,
+  setLogLevel, setLogEnabled,
+  type GraphNode, type GraphEdge, type GraphData, type WorkflowConfig as CompilerWorkflowConfig
+} from './compiler'

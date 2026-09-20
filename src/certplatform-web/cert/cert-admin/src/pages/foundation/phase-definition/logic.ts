@@ -9,14 +9,7 @@ import { CrudPageLogic } from '@yzh-core'
 export class PhaseDefinitionLogic extends CrudPageLogic<any> {
   controllerName = 'Foundation/PhaseDefinition'
 
-  /** 行操作按钮 */
-  get rowActionButtons(): Record<string, string> {
-    return {
-      edit: '编辑',
-      toggleValid: '启用/禁用',
-      delete: '删除'
-    }
-  }
+  /** 行操作按钮（基类已自动注入 toggle-valid） */
 
   /** 初始化 */
   async init(): Promise<void> {

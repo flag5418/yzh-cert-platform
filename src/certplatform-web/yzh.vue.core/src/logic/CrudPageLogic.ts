@@ -187,6 +187,7 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
   get columns(): YzhTableColumn<V>[] {
     const cols = this.config.value?.Columns
     if (!cols) return []
+    const enableField = this.config.value?.EnableField
     return cols
       .filter((c) => c.XsFlag)
       .map((c) => {
@@ -200,6 +201,10 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
           dictCode: c.DictCode || undefined,
         }
         if (c.Type === 'CustomSlot') {
+          col.slot = c.FieldName
+        }
+        // 自动标记 EnableField 列为自定义插槽（前端渲染状态标签）
+        if (enableField && c.FieldName === enableField) {
           col.slot = c.FieldName
         }
         return col as YzhTableColumn<V>
@@ -311,15 +316,19 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
     return btns
   }
 
-  /** 行操作按钮配置 */
+  /** 启用/禁用字段名（从 EntityConfig.EnableField 读取，null 表示不支持启用/禁用） */
+  get enableField(): string | null {
+    return this.config.value?.EnableField || null
+  }
+
+  /** 行操作按钮配置（自动注入 toggle-valid） */
   get rowButtons(): Array<{
     key: string
     text: string
     type: string
     action?: string
   }> {
-    const rb: RowButtonConfig | undefined = this.config.value?.RowButtons
-    if (!rb) return []
+    const rb: RowButtonConfig = this.config.value?.RowButtons ?? {}
     const btns: Array<{
       key: string
       text: string
@@ -329,6 +338,10 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
     if (rb.Edit !== false) btns.push({ key: 'edit', text: '编辑', type: 'primary' })
     if (rb.Delete !== false)
       btns.push({ key: 'delete', text: '删除', type: 'danger' })
+    // 自动注入启用/禁用按钮（当 Enable=true 且存在 EnableField 时）
+    if (rb.Enable === true && this.enableField) {
+      btns.push({ key: 'toggle-valid', text: '禁用/启用', type: 'warning' })
+    }
     if (rb.CustomButtons) {
       for (const [label, method] of Object.entries(rb.CustomButtons)) {
         btns.push({
@@ -702,6 +715,9 @@ export abstract class CrudPageLogic<V extends Record<string, any> = any> {
         break
       case 'delete':
         await this.confirmDelete([row])
+        break
+      case 'toggle-valid':
+        await this.toggleRowIsValidWithConfirm(row)
         break
       default:
         if (key.startsWith('custom:')) {

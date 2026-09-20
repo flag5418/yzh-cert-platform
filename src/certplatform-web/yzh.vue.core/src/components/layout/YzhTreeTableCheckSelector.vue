@@ -154,7 +154,7 @@ interface Props {
   typeTagTypes?: Record<string, TagType>
   /** 「全选」时排除的节点类型（默认排除机构 org） */
   checkAllExcludeTypes?: string[]
-  /** 父子级联勾选：勾选父节点自动勾选全部子孙，反之回填父节点（默认 false，保持独立勾选） */
+  /** 父子级联勾选：勾选父节点自动勾选全部子孙，反之回填父节点（默认 true，独立勾选需显式 :cascade="false"） */
   cascade?: boolean
   /** 是否显示搜索框（命中节点保留其祖先层级） */
   searchable?: boolean
@@ -177,7 +177,7 @@ const props = withDefaults(defineProps<Props>(), {
   typeLabels: undefined,
   typeTagTypes: undefined,
   checkAllExcludeTypes: () => ['org'],
-  cascade: false,
+  cascade: true,
   searchable: false,
   searchFields: () => ['Name'],
   countType: undefined,

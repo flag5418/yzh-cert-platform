@@ -1,6 +1,10 @@
 {
   "Title": "ISO 标准条款管理",
   "FillMode": "AutoFix",
+  "EnableField": "IsValid",
+  "RowButtons": {
+    "Enable": true
+  },
   "Columns": [
     {
       "FieldName": "Id",
