@@ -54,6 +54,7 @@ public static class ConfigDtoConverter
             {
                 Edit = config.RowButtons.Edit,
                 Delete = config.RowButtons.Delete,
+                Enable = config.RowButtons.Enable,
                 CustomButtons = config.RowButtons.CustomButtons,
             } : null,
             SearchFields = config.SearchFields?.Select(s => new SearchFieldDto

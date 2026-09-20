@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using SqlSugar;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Extensions;
 using YZH.Core.Stand.Interfaces;
@@ -277,12 +278,12 @@ public partial class DocExtractionRuleService
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // 1. 物理删除旧结果（对照旧注释：软删残留会与唯一约束冲突，必须原生 SQL）
-        await _db.SqlExecuteAsync(
-            "DELETE FROM ent_extraction_result WHERE enterprise_code = @ent AND standard_file_code = @fc",
-            new { ent = YzhStandardEnterpriseCode, fc = fileCode });
-        await _db.SqlExecuteAsync(
-            "DELETE FROM ent_table_extraction_result WHERE enterprise_code = @ent AND standard_file_code = @fc",
-            new { ent = YzhStandardEnterpriseCode, fc = fileCode });
+        await _db.Client.Deleteable<ExtractionResult>()
+            .Where(x => x.EnterpriseCode == YzhStandardEnterpriseCode && x.StandardFileCode == fileCode)
+            .ExecuteCommandAsync();
+        await _db.Client.Deleteable<TableExtractionResult>()
+            .Where(x => x.EnterpriseCode == YzhStandardEnterpriseCode && x.StandardFileCode == fileCode)
+            .ExecuteCommandAsync();
 
         // 2. 字段级 → B-08（LabelTag = field_code，对照 V4 评审报告 §7）
         if (extractionData.Fields != null)
@@ -293,7 +294,7 @@ public partial class DocExtractionRuleService
                 var value = kv.Value?.ToString();
                 if (string.IsNullOrWhiteSpace(value)) continue;
 
-                var er = new
+                var er = new ExtractionResult
                 {
                     Code = Guid.NewGuid().ToString("N"),
                     EnterpriseCode = YzhStandardEnterpriseCode,
@@ -307,15 +308,10 @@ public partial class DocExtractionRuleService
                     FieldName = fieldNameMap.TryGetValue(kv.Key, out var fn) ? fn : kv.Key,
                     LabelTag = kv.Key,
                     ExtractedValue = value,
-                    ExtractedAt = now
+                    ExtractedAt = now,
+                    CreateTime = DateTime.Now
                 };
-                await _db.SqlExecuteAsync(
-                    @"INSERT INTO ent_extraction_result
-                      (Code, OrgCode, EnterpriseCode, StandardFileCode, StandardCode, PhaseCode, FileCode,
-                       VersionNumber, RuleCode, FieldCode, FieldName, LabelTag, ExtractedValue, ExtractedAt, CreateTime)
-                      VALUES (@Code, NULL, @EnterpriseCode, @StandardFileCode, @StandardCode, @PhaseCode, @FileCode,
-                       @VersionNumber, @RuleCode, @FieldCode, @FieldName, @LabelTag, @ExtractedValue, @ExtractedAt, NOW())",
-                    er);
+                await _db.Client.Insertable(er).ExecuteCommandAsync();
             }
         }
 
@@ -329,7 +325,7 @@ public partial class DocExtractionRuleService
                 var rows = kv.Value;
                 if (rows == null || rows.Count == 0) continue;
 
-                var tr = new
+                var tr = new TableExtractionResult
                 {
                     Code = Guid.NewGuid().ToString("N"),
                     EnterpriseCode = YzhStandardEnterpriseCode,
@@ -341,15 +337,10 @@ public partial class DocExtractionRuleService
                     RuleCode = rule.Code,
                     TableIndex = tableIndex++,
                     ExtractedJson = System.Text.Json.JsonSerializer.Serialize(rows, JsonOptions),
-                    ExtractedAt = now
+                    ExtractedAt = now,
+                    CreateTime = DateTime.Now
                 };
-                await _db.SqlExecuteAsync(
-                    @"INSERT INTO ent_table_extraction_result
-                      (Code, OrgCode, EnterpriseCode, StandardFileCode, StandardCode, PhaseCode, FileCode,
-                       VersionNumber, RuleCode, TableIndex, ExtractedJson, ExtractedAt, CreateTime)
-                      VALUES (@Code, NULL, @EnterpriseCode, @StandardFileCode, @StandardCode, @PhaseCode, @FileCode,
-                       @VersionNumber, @RuleCode, @TableIndex, @ExtractedJson, @ExtractedAt, NOW())",
-                    tr);
+                await _db.Client.Insertable(tr).ExecuteCommandAsync();
             }
         }
     }
@@ -367,16 +358,19 @@ public partial class DocExtractionRuleService
         if (rule == null) return null;
 
         // 读取 YZH 标准企业提取结果（B-08 字段值 / B-09 表格行），保存后重新进入可完整回显
-        var b08Rows = await _db.SqlQueryAsync<B08Row>(
-            "SELECT FieldCode, ExtractedValue FROM ent_extraction_result WHERE enterprise_code = @ent AND standard_file_code = @fc AND IsDeleted = 0",
-            new { ent = YzhStandardEnterpriseCode, fc = standardFileCode });
-        var b08Map = (b08Rows.Data ?? new()).GroupBy(x => x.FieldCode, StringComparer.OrdinalIgnoreCase)
+        var b08Rows = await _db.Client.Queryable<ExtractionResult>()
+            .Where(x => x.EnterpriseCode == YzhStandardEnterpriseCode && x.StandardFileCode == standardFileCode && !x.IsDeleted)
+            .Select(x => new B08Row { FieldCode = x.FieldCode, ExtractedValue = x.ExtractedValue })
+            .ToListAsync();
+        var b08Map = b08Rows.GroupBy(x => x.FieldCode, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().ExtractedValue ?? "", StringComparer.OrdinalIgnoreCase);
 
-        var b09Rows = await _db.SqlQueryAsync<B09Row>(
-            "SELECT TableIndex, ExtractedJson FROM ent_table_extraction_result WHERE enterprise_code = @ent AND standard_file_code = @fc AND IsDeleted = 0 ORDER BY TableIndex",
-            new { ent = YzhStandardEnterpriseCode, fc = standardFileCode });
-        var b09List = b09Rows.Data ?? new();
+        var b09Rows = await _db.Client.Queryable<TableExtractionResult>()
+            .Where(x => x.EnterpriseCode == YzhStandardEnterpriseCode && x.StandardFileCode == standardFileCode)
+            .OrderBy(x => x.TableIndex)
+            .Select(x => new B09Row { TableIndex = x.TableIndex, ExtractedJson = x.ExtractedJson })
+            .ToListAsync();
+        var b09List = b09Rows;
 
         // 字段定义（rule_code 关联，按 Sort 排序）
         var fields = (await _db.GetListAsync<DocFieldDef>(x => x.RuleCode == rule.Code)).Data ?? new();
@@ -472,12 +466,12 @@ public partial class DocExtractionRuleService
         }
 
         // 提取结果同步删除（物理删除，与 save 逻辑对齐）
-        await _db.SqlExecuteAsync(
-            "DELETE FROM ent_extraction_result WHERE enterprise_code = @ent AND standard_file_code = @fc",
-            new { ent = YzhStandardEnterpriseCode, fc = standardFileCode });
-        await _db.SqlExecuteAsync(
-            "DELETE FROM ent_table_extraction_result WHERE enterprise_code = @ent AND standard_file_code = @fc",
-            new { ent = YzhStandardEnterpriseCode, fc = standardFileCode });
+        await _db.Client.Deleteable<ExtractionResult>()
+            .Where(x => x.EnterpriseCode == YzhStandardEnterpriseCode && x.StandardFileCode == standardFileCode)
+            .ExecuteCommandAsync();
+        await _db.Client.Deleteable<TableExtractionResult>()
+            .Where(x => x.EnterpriseCode == YzhStandardEnterpriseCode && x.StandardFileCode == standardFileCode)
+            .ExecuteCommandAsync();
 
         await _db.DeleteByCodeAsync<DocExtractionRule>(rule.Code);
         return true;
@@ -496,7 +490,7 @@ public partial class DocExtractionRuleService
     /// </remarks>
     public async Task<List<object>> GetConfiguredRulesAsync()
     {
-        var rules = await _db.SqlQueryAsync<ConfiguredRuleRow>(
+        var result = await _db.Client.Ado.SqlQueryAsync<ConfiguredRuleRow>(
             @"SELECT r.Code AS RuleCode, r.StandardFileCode AS StandardFileCode,
                      COALESCE(f.FileName, r.StandardFileCode) AS FileName,
                      COALESCE(r.StandardCode, '') AS StandardCode,
@@ -507,8 +501,7 @@ public partial class DocExtractionRuleService
               LEFT JOIN cert_standard_directory_file f ON r.StandardFileCode = f.FileCode AND f.IsDeleted = 0
               WHERE r.IsDeleted = 0 AND r.IsValid = 1
               ORDER BY COALESCE(r.UpdateTime, r.CreateTime) DESC");
-        if (!rules.Success) throw new InvalidOperationException("查询已配置规则失败: " + rules.Error);
-        return (rules.Data ?? new()).Cast<object>().ToList();
+        return result.Cast<object>().ToList();
     }
 
     // ========================================================

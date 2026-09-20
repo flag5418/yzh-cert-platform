@@ -14,6 +14,12 @@ namespace YZH.Core.DataBase.Services;
 /// yzh 通用队列引擎（框架核心，跨项目复用）
 /// <para>职责：创建队列（资源锁冲突检测）+ 并发控制 + 超时回收 + 失败重试 + 取消/重跑 + 进度汇总 + 终态通知</para>
 /// <para>ORM：SqlSugar（通过 IDbContextFactory 按需创建 SqlSugarClient）</para>
+/// <para>
+/// 保留原始 SQL 原因：本类大量使用 MySQL 特有语法（FOR UPDATE SKIP LOCKED、NOW() 内联、
+/// 批量 UPDATE ... WHERE ... IN），SqlSugar LINQ 无法优雅表达这些操作，
+/// 且队列引擎为性能关键路径，原始 SQL 可精确控制执行计划。
+/// 所有 SQL 均已参数化，不存在注入风险。
+/// </para>
 /// </summary>
 public class QueueManager
 {

@@ -222,5 +222,8 @@
       "Enable": true,
       "Align": "left"
     }
-  ]
+  ],
+  "RowButtons": {
+    "Enable": true
+  }
 }

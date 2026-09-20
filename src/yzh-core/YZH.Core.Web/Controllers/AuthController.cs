@@ -2,6 +2,7 @@ extern alias VolFramework;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using SqlSugar;
 using System.Text.Json.Serialization;
 using YZH.Core.Api.Attributes;
 using YZH.Core.Api.Models.Users;
@@ -64,17 +65,13 @@ public class AuthController : ControllerBase
         }
 #endif
 
-        // 查询用户（Dapper 强类型 + 参数化）
-        var userResult = await _db.QueryFirstOrDefaultAsync<Sys_User>(
-            @"SELECT UserName, UserPwd, UserTrueName, Enable, Code 
-              FROM Sys_User 
-              WHERE UserName = @UserName AND IsDeleted = 0",
-            new { UserName = req.UserName });
+        // 查询用户
+        var user = await _db.Client.Queryable<Sys_User>()
+            .Where(x => x.UserName == req.UserName && !x.IsDeleted)
+            .FirstAsync();
 
-        if (!userResult.Success || userResult.Data == null)
+        if (user == null)
             return Unauthorized(ApiResponse.Fail("用户不存在"));
-
-        var user = userResult.Data;
 
         // 检查账号是否禁用
         if (user.Enable == 0)
@@ -98,11 +95,11 @@ public class AuthController : ControllerBase
             roleClaims.Add(roleCode);
         var token = _jwt.GenerateToken(userCode, user.UserName, roleClaims, ssoVersion);
 
-        // 更新 Token 和登录时间（仅更新指定字段）
-        await _db.SqlExecuteAsync(
-            @"UPDATE Sys_User SET Token = @Token, LastLoginDate = @Now 
-              WHERE UserName = @UserName",
-            new { Token = token, Now = DateTime.Now, UserName = req.UserName });
+        // 更新 Token 和登录时间
+        await _db.Client.Updateable<Sys_User>()
+            .SetColumns(x => new Sys_User { Token = token, LastLoginDate = DateTime.Now })
+            .Where(x => x.UserName == req.UserName)
+            .ExecuteCommandAsync();
 
         return Ok(ApiResponse<LoginResponse>.Ok(new LoginResponse
         {

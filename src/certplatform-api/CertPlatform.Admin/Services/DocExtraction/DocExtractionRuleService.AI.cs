@@ -9,11 +9,15 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using SqlSugar;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Entities.Dir;
 using CertPlatform.Shared.Entities.Doc;
+using CertPlatform.Shared.Entities.Sys;
+using CertPlatform.Shared.Entities.Wf;
+using CertPlatform.Shared.Entities.Cert;
 
 namespace CertPlatform.Admin.Services.DocExtraction;
 
@@ -123,9 +127,11 @@ public partial class DocExtractionRuleService
     {
         var s = new AiSettings();
 
-        var rows = await _db.SqlQueryAsync<ConfigKV>(
-            "SELECT ConfigKey, ConfigValue FROM cert_sys_config WHERE Category = 'ai_model' AND IsDeleted = 0");
-        foreach (var row in rows.Data ?? new())
+        var rows = await _db.Client.Queryable<SysConfig>()
+            .Where(x => x.Category == "ai_model" && !x.IsDeleted)
+            .Select(x => new ConfigKV { ConfigKey = x.ConfigKey, ConfigValue = x.ConfigValue })
+            .ToListAsync();
+        foreach (var row in rows)
         {
             switch (row.ConfigKey)
             {
@@ -174,10 +180,16 @@ public partial class DocExtractionRuleService
         //    （Code/FileNameTemplate/IsValid/IsDeleted…），不存在 template_storage_path / template_file_name，
         //    旧版 snake_case 列名会让该查询持续抛 Unknown column 并刷爆日志。
         //    模板文件存储列缺失时该分支自然降级到「实际标准目录文件」，不影响可用性。
-        var fr = (await _db.SqlQueryAsync<FrRow>(
-            "SELECT FileNameTemplate, TemplateFileName, TemplateStoragePath FROM cert_file_requirement " +
-            "WHERE Code = @c AND IsValid = 1 AND IsDeleted = 0",
-            new { c = standardFileCode })).Data?.FirstOrDefault();
+        var fr = (await _db.Client.Queryable<FileRequirement>()
+            .Where(x => x.Code == standardFileCode)
+            .Where("IsValid = 1 AND IsDeleted = 0")
+            .Select(x => new FrRow
+            {
+                FileNameTemplate = x.FileNameTemplate,
+                TemplateFileName = x.TemplateFileName,
+                TemplateStoragePath = x.TemplateStoragePath
+            })
+            .FirstAsync());
         if (fr != null && !string.IsNullOrEmpty(fr.TemplateStoragePath))
             return new FileInfoResult(fr.TemplateFileName ?? fr.FileNameTemplate, fr.TemplateStoragePath, null, null, null, null);
 
@@ -1352,10 +1364,11 @@ public partial class DocExtractionRuleService
     private async Task<string> BuildAnalysisPromptAsync(string skill)
     {
         var promptCode = $"analyze_{skill}";
-        var rows = await _db.SqlQueryAsync<PromptRow>(
-            "SELECT Template FROM wf_prompt_template WHERE PromptCode = @c AND IsActive = 1 AND IsDeleted = 0 ORDER BY Version DESC LIMIT 1",
-            new { c = promptCode });
-        var dbPrompt = rows.Data?.FirstOrDefault();
+        var dbPrompt = await _db.Client.Queryable<PromptTemplate>()
+            .Where(x => x.PromptCode == promptCode && x.IsActive)
+            .OrderByDescending(x => x.Version)
+            .Select(x => new PromptRow { template = x.Template })
+            .FirstAsync();
         if (!string.IsNullOrWhiteSpace(dbPrompt?.template))
         {
             _logger.LogInformation("[DocExtractionRule] 使用数据库提示词: {Code}", promptCode);
@@ -1405,27 +1418,24 @@ public partial class DocExtractionRuleService
         try
         {
             var totalTokens = (result.PromptTokens ?? 0) + (result.CompletionTokens ?? 0);
-            await db.SqlExecuteAsync(
-                @"INSERT INTO cert_ai_usage_log
-                  (call_id, code, business_type, business_ref, skill, provider, model,
-                   prompt_tokens, completion_tokens, total_tokens, duration_ms, success, error_message, CreateTime)
-                  VALUES (@CallId, @Code, 'doc_extraction', @BusinessRef, @Skill, @Provider, @Model,
-                   @PromptTokens, @CompletionTokens, @TotalTokens, @DurationMs, @Success, @Error, NOW())",
-                new
-                {
-                    CallId = Guid.NewGuid().ToString("N"),
-                    Code = Guid.NewGuid().ToString("N"),
-                    BusinessRef = fileCode,
-                    Skill = businessSkill,
-                    Provider = settings.Provider,
-                    Model = settings.Model,
-                    PromptTokens = result.PromptTokens ?? 0,
-                    CompletionTokens = result.CompletionTokens ?? 0,
-                    TotalTokens = totalTokens,
-                    DurationMs = result.DurationMs,
-                    Success = result.Success,
-                    Error = result.Success ? null : (result.Message ?? "").Limit(500)
-                });
+            var log = new AiUsageLog
+            {
+                CallId = Guid.NewGuid().ToString("N"),
+                Code = Guid.NewGuid().ToString("N"),
+                BusinessType = "doc_extraction",
+                BusinessRef = fileCode,
+                Skill = businessSkill,
+                Provider = settings.Provider,
+                Model = settings.Model,
+                PromptTokens = result.PromptTokens ?? 0,
+                CompletionTokens = result.CompletionTokens ?? 0,
+                TotalTokens = totalTokens,
+                DurationMs = result.DurationMs,
+                Success = result.Success,
+                ErrorMessage = result.Success ? null : (result.Message ?? "").Limit(500),
+                CreateTime = DateTime.Now
+            };
+            await db.Client.Insertable(log).ExecuteCommandAsync();
         }
         catch (Exception ex)
         {

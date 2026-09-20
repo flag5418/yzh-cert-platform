@@ -452,5 +452,8 @@
       "Mrz": "",
       "Enable": false
     }
-  ]
+  ],
+  "RowButtons": {
+    "Enable": true
+  }
 }

@@ -8,8 +8,10 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using SqlSugar;
 using CertPlatform.Admin.Services.Workflow.Models;
 using CertPlatform.Admin.Services.Workflow.Skills;
+using CertPlatform.Shared.Entities.Sys;
 using YZH.Core.DataBase.Interfaces;
 using CertPlatform.Shared.DocExtraction;
 
@@ -68,9 +70,11 @@ namespace CertPlatform.Admin.Services.Workflow
             var s = new AiSettings();
             try
             {
-                var rows = await _db.SqlQueryAsync<ConfigKV>(
-                    "SELECT ConfigKey, ConfigValue FROM cert_sys_config WHERE Category = 'ai_model' AND IsDeleted = 0");
-                foreach (var row in rows.Data ?? new())
+                var rows = await _db.Client.Queryable<SysConfig>()
+                    .Where(x => x.Category == "ai_model" && !x.IsDeleted)
+                    .Select(x => new ConfigKV { ConfigKey = x.ConfigKey, ConfigValue = x.ConfigValue })
+                    .ToListAsync();
+                foreach (var row in rows)
                 {
                     switch (row.ConfigKey)
                     {

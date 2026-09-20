@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
+using SqlSugar;
 using YZH.Core.Api.Services;
 using YZH.Core.DataBase;
 using YZH.Core.DataBase.Interfaces;
@@ -287,26 +288,23 @@ public class EntityService<T> where T : class, new()
 
         try
         {
-            var viewName = GetViewName<T>();
-            
-            // 获取 ParentCode 属性的实际 DB 列名（从 SugarColumn 特性）
-            var parentCodeColumnName = GetParentCodeColumnName();
+            var parentCodeProp = typeof(T).GetProperty("ParentCode",
+                BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+            if (parentCodeProp == null || parentCodeProp.PropertyType != typeof(string))
+                return result;
 
-            // IN 子句需要手动展开（SqlSugar 参数化 IN 与 MySQL 兼容问题）
-            var inParams = string.Join("','", parentCodes.Select(c => c.Replace("'", "''")));
-            var sql = $"SELECT `{parentCodeColumnName}` AS ParentCode, COUNT(*) AS Cnt " +
-                      $"FROM `{viewName}` " +
-                      $"WHERE `{parentCodeColumnName}` IN ('{inParams}') " +
-                      $"GROUP BY `{parentCodeColumnName}`";
+            var parentCodeCol = parentCodeProp.Name;
+            var tableName = GetQueryTableName<T>();
+            var sql = $"SELECT `{parentCodeCol}` AS ParentCode, COUNT(*) AS Cnt " +
+                      $"FROM `{tableName}` " +
+                      $"WHERE `{parentCodeCol}` IN @codes " +
+                      $"GROUP BY `{parentCodeCol}`";
+            var queryResult = await _dbOrm.Client.Ado.SqlQueryAsync<ChildrenCountRow>(
+                sql, new { codes = parentCodes });
 
-            var queryResult = await _dbOrm.SqlQueryAsync<ChildrenCountRow>(sql);
-            
-            if (queryResult.Success && queryResult.Data != null)
+            foreach (var item in queryResult)
             {
-                foreach (var item in queryResult.Data)
-                {
-                    result[item.ParentCode] = item.Cnt;
-                }
+                result[item.ParentCode] = item.Cnt;
             }
         }
         catch (Exception ex)

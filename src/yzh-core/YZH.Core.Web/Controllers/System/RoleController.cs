@@ -350,14 +350,14 @@ public class RoleController : TreeTableControllerBase<Sys_Role, Sys_Role>
                 r => r.RoleCode == roleCode && userCodes.Contains(r.UserCode));
             var toDelete = toDeleteResult.Success ? toDeleteResult.Data ?? new() : new();
 
-            // 删除关联（Sys_RoleUser 没有 Code 列，直接用 Id 通过原生 SQL 删除）
+            // 删除关联（Sys_RoleUser 硬删除）
             int deleted = 0;
             foreach (var entity in toDelete)
             {
-                var result = await _dbOrm.SqlExecuteAsync(
-                    "DELETE FROM Sys_RoleUser WHERE Id = @Id",
-                    new { entity.Id });
-                if (result.Success && result.Data > 0) deleted++;
+                var result = await _dbOrm.Client.Deleteable<Sys_RoleUser>()
+                    .Where(x => x.Id == entity.Id)
+                    .ExecuteCommandAsync();
+                if (result > 0) deleted++;
             }
 
             return Ok(ApiResponse<object?>.Ok(new { Updated = deleted }));

@@ -6,7 +6,9 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using SqlSugar;
 using CertPlatform.Admin.Services.Workflow.Models;
+using CertPlatform.Shared.Entities.Wf;
 using YZH.Core.DataBase.Interfaces;
 
 namespace CertPlatform.Admin.Services.Workflow
@@ -85,44 +87,46 @@ namespace CertPlatform.Admin.Services.Workflow
 
             // 2. 创建数据库记录（原生 SQL 参数化写入，列名对照 all_tables_ddl.sql）
             var now = DateTime.Now;
-            await _db.SqlExecuteAsync(
-                "INSERT INTO wf_execution_task (code, TaskType, TaskStatus, ConfigSnapshot, RuleCode, EnterpriseCode, PhaseCode, StartedAt, CreateTime, IsDeleted) " +
-                "VALUES (@code, @taskType, 'executing', @configSnapshot, @ruleCode, @enterpriseCode, @phaseCode, @startedAt, @now, 0)",
-                new
-                {
-                    code = taskCode,
-                    taskType = request.TaskType,
-                    configSnapshot = request.ConfigJson,
-                    ruleCode = request.RuleCode ?? "",
-                    enterpriseCode = request.EnterpriseCode ?? "",
-                    phaseCode = request.PhaseCode ?? "",
-                    startedAt = now,
-                    now
-                });
+            var task = new WfExecutionTask
+            {
+                Code = taskCode,
+                TaskType = request.TaskType,
+                TaskStatus = "executing",
+                ConfigSnapshot = request.ConfigJson ?? "",
+                RuleCode = request.RuleCode ?? "",
+                EnterpriseCode = request.EnterpriseCode ?? "",
+                PhaseCode = request.PhaseCode ?? "",
+                StartedAt = now,
+                CreateTime = now,
+                IsDeleted = false
+            };
+            await _db.Client.Insertable(task).ExecuteCommandAsync();
 
-            await _db.SqlExecuteAsync(
-                "INSERT INTO wf_execution_task_item (code, TaskCode, RuleCode, ItemType, ItemStatus, StartedAt, CreateTime, IsDeleted) " +
-                "VALUES (@code, @taskCode, @ruleCode, @itemType, 'executing', @startedAt, @now, 0)",
-                new
-                {
-                    code = itemCode,
-                    taskCode,
-                    ruleCode = request.RuleCode ?? "",
-                    itemType = request.TaskType,
-                    startedAt = now,
-                    now
-                });
+            var taskItem = new WfExecutionTaskItem
+            {
+                Code = itemCode,
+                TaskCode = taskCode,
+                RuleCode = request.RuleCode ?? "",
+                ItemType = request.TaskType,
+                ItemStatus = "executing",
+                StartedAt = now,
+                CreateTime = now,
+                IsDeleted = false
+            };
+            await _db.Client.Insertable(taskItem).ExecuteCommandAsync();
 
             // 3. 预热缓存
             var (cachedCount, cacheKeys) = await _cacheService.WarmUpAsync(
                 taskCode, parsed, request.EnterpriseCode ?? "", ct);
             var cacheKeysJson = JsonSerializer.Serialize(cacheKeys);
-            await _db.SqlExecuteAsync(
-                "UPDATE wf_execution_task SET CacheKeys = @cacheKeys WHERE code = @code",
-                new { cacheKeys = cacheKeysJson, code = taskCode });
-            await _db.SqlExecuteAsync(
-                "UPDATE wf_execution_task_item SET CacheKeys = @cacheKeys WHERE code = @code",
-                new { cacheKeys = cacheKeysJson, code = itemCode });
+            await _db.Client.Updateable<WfExecutionTask>()
+                .SetColumns(x => x.CacheKeys == cacheKeysJson)
+                .Where(x => x.Code == taskCode)
+                .ExecuteCommandAsync();
+            await _db.Client.Updateable<WfExecutionTaskItem>()
+                .SetColumns(x => x.CacheKeys == cacheKeysJson)
+                .Where(x => x.Code == itemCode)
+                .ExecuteCommandAsync();
 
             // 4. 构造上下文参数
             var contextParams = new Dictionary<string, object>
@@ -147,32 +151,30 @@ namespace CertPlatform.Admin.Services.Workflow
             var itemStatus = itemResult.Success ? "completed" : "failed";
             var resultSummary = JsonSerializer.Serialize(itemResult.NcResult);
 
-            await _db.SqlExecuteAsync(
-                "UPDATE wf_execution_task_item SET ItemStatus = @status, IsSuccess = @isSuccess, ResultSummary = @resultSummary, " +
-                "ErrorMessage = @errorMessage, CompletedAt = @completedAt, DurationMs = @durationMs WHERE code = @code",
-                new
+            await _db.Client.Updateable<WfExecutionTaskItem>()
+                .SetColumns(x => new WfExecutionTaskItem
                 {
-                    status = itemStatus,
-                    isSuccess = sbyte.Parse(itemResult.IsSuccess ? "1" : "0"),
-                    resultSummary,
-                    errorMessage = itemResult.Error,
-                    completedAt = DateTime.Now,
-                    durationMs = (int)sw.ElapsedMilliseconds,
-                    code = itemCode
-                });
+                    ItemStatus = itemStatus,
+                    IsSuccess = itemResult.IsSuccess ? 1 : 0,
+                    ResultSummary = resultSummary,
+                    ErrorMessage = itemResult.Error ?? "",
+                    CompletedAt = DateTime.Now,
+                    DurationMs = (int)sw.ElapsedMilliseconds
+                })
+                .Where(x => x.Code == itemCode)
+                .ExecuteCommandAsync();
 
-            await _db.SqlExecuteAsync(
-                "UPDATE wf_execution_task SET TaskStatus = @status, ResultSummary = @resultSummary, " +
-                "ErrorMessage = @errorMessage, CompletedAt = @completedAt, DurationMs = @durationMs WHERE code = @code",
-                new
+            await _db.Client.Updateable<WfExecutionTask>()
+                .SetColumns(x => new WfExecutionTask
                 {
-                    status = itemStatus,
-                    resultSummary,
-                    errorMessage = itemResult.Error,
-                    completedAt = DateTime.Now,
-                    durationMs = (int)sw.ElapsedMilliseconds,
-                    code = taskCode
-                });
+                    TaskStatus = itemStatus,
+                    ResultSummary = resultSummary,
+                    ErrorMessage = itemResult.Error ?? "",
+                    CompletedAt = DateTime.Now,
+                    DurationMs = (int)sw.ElapsedMilliseconds
+                })
+                .Where(x => x.Code == taskCode)
+                .ExecuteCommandAsync();
 
             _wfLogger.TaskDone(taskCode, itemStatus, (int)sw.ElapsedMilliseconds);
 
@@ -238,28 +240,26 @@ namespace CertPlatform.Admin.Services.Workflow
                     // 如果是失败节点，记录错误
                     var errorMessage = pathResult.FailedAtNodeId == nodeId ? pathResult.Error : null;
 
-                    await _db.SqlExecuteAsync(
-                        "INSERT INTO wf_node_execution (code, TaskCode, ItemCode, NodeId, NodeType, NodeTitle, SkillCode, " +
-                        "ExecStatus, OutputJson, ErrorMessage, StartedAt, CompletedAt, ExecutionTimeMs, IsReused, CreateTime, IsDeleted) " +
-                        "VALUES (@code, @taskCode, @itemCode, @nodeId, @nodeType, @nodeTitle, @skillCode, " +
-                        "@execStatus, @outputJson, @errorMessage, @startedAt, @completedAt, @executionTimeMs, 0, @now, 0)",
-                        new
-                        {
-                            code = Guid.NewGuid().ToString("N"),
-                            taskCode,
-                            itemCode,
-                            nodeId,
-                            nodeType = node.NodeType,
-                            nodeTitle = node.Title,
-                            skillCode = node.SkillCode,
-                            execStatus = nodeExecStatus,
-                            outputJson,
-                            errorMessage,
-                            startedAt = now,
-                            completedAt = now,
-                            executionTimeMs = 0,
-                            now
-                        });
+                    var nodeExec = new WfNodeExecution
+                    {
+                        Code = Guid.NewGuid().ToString("N"),
+                        TaskCode = taskCode,
+                        ItemCode = itemCode,
+                        NodeId = nodeId,
+                        NodeType = node.NodeType,
+                        NodeTitle = node.Title,
+                        SkillCode = node.SkillCode ?? "",
+                        ExecStatus = nodeExecStatus,
+                        OutputJson = outputJson,
+                        ErrorMessage = errorMessage,
+                        StartedAt = now,
+                        CompletedAt = now,
+                        ExecutionTimeMs = 0,
+                        IsReused = 0,
+                        CreateTime = now,
+                        IsDeleted = false
+                    };
+                    await _db.Client.Insertable(nodeExec).ExecuteCommandAsync();
                 }
             }
         }

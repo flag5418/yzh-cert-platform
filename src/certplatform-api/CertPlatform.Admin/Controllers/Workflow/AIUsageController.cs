@@ -1,6 +1,9 @@
+using System.Linq;
 using Microsoft.AspNetCore.Mvc;
+using SqlSugar;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Models.Result;
+using CertPlatform.Shared.Entities.Doc;
 
 namespace CertPlatform.Admin.Controllers.Workflow;
 
@@ -78,40 +81,40 @@ public class AIUsageController : ControllerBase
         int rows = request.Rows > 0 ? request.Rows : 20;
         int offset = (page - 1) * rows;
 
-        var sql = @"SELECT id, call_id, business_type, business_ref, skill, provider, model,
-                           prompt_tokens, completion_tokens, total_tokens, cost_usd, duration_ms,
-                           success, error_message, CreateTime
-                    FROM cert_ai_usage_log
-                    WHERE IsDeleted = 0";
-        var countSql = "SELECT COUNT(*) FROM cert_ai_usage_log WHERE IsDeleted = 0";
+        var query = _db.Client.Queryable<AiUsageLog>()
+            .Where(x => !x.IsDeleted);
 
         if (!string.IsNullOrEmpty(request.StartDate))
-        {
-            sql += " AND CreateTime >= @StartDate";
-            countSql += " AND CreateTime >= @StartDate";
-        }
+            query = query.Where(x => x.CreateTime >= DateTime.Parse(request.StartDate));
         if (!string.IsNullOrEmpty(request.EndDate))
-        {
-            sql += " AND DATE(CreateTime) <= @EndDate";
-            countSql += " AND DATE(CreateTime) <= @EndDate";
-        }
+            query = query.Where(x => x.CreateTime <= DateTime.Parse(request.EndDate).Date.AddDays(1).AddTicks(-1));
 
-        sql += " ORDER BY CreateTime DESC LIMIT @Rows OFFSET @Offset";
+        var total = await query.CountAsync();
+        var list = await query
+            .OrderByDescending(x => x.CreateTime)
+            .Skip(offset)
+            .Take(rows)
+            .Select(x => new UsageRow
+            {
+                id = x.Id,
+                call_id = x.CallId,
+                business_type = x.BusinessType,
+                business_ref = x.BusinessRef,
+                skill = x.Skill,
+                provider = x.Provider,
+                model = x.Model,
+                prompt_tokens = x.PromptTokens,
+                completion_tokens = x.CompletionTokens,
+                total_tokens = x.TotalTokens,
+                cost_usd = x.CostUsd,
+                duration_ms = x.DurationMs,
+                success = x.Success ? 1 : 0,
+                error_message = x.ErrorMessage,
+                CreateTime = x.CreateTime
+            })
+            .ToListAsync();
 
-        var list = await _db.SqlQueryAsync<UsageRow>(sql, new
-        {
-            StartDate = request.StartDate,
-            EndDate = request.EndDate,
-            Rows = rows,
-            Offset = offset
-        });
-        var countResult = await _db.SqlQueryAsync<CountRow>(countSql, new
-        {
-            StartDate = request.StartDate,
-            EndDate = request.EndDate
-        });
-
-        var items = (list.Data ?? new()).Select(r => new
+        var items = list.Select(r => new
         {
             Id = r.id,
             CallId = r.call_id,
@@ -130,8 +133,6 @@ public class AIUsageController : ControllerBase
             CreateTime = r.CreateTime?.ToString("yyyy-MM-dd HH:mm:ss")
         }).ToList();
 
-        var total = countResult.Data?.FirstOrDefault()?.total ?? 0;
-
         return Ok(ApiResponse<object>.Ok(new { rows = items, total }));
     }
 
@@ -139,30 +140,49 @@ public class AIUsageController : ControllerBase
     [HttpGet("summary")]
     public async Task<IActionResult> GetSummary()
     {
-        var sql = @"SELECT
-                      SUM(cost_usd) as totalCost,
-                      SUM(CASE WHEN CreateTime >= DATE_FORMAT(NOW(), '%Y-%m-01') THEN cost_usd ELSE 0 END) as monthCost,
-                      SUM(CASE WHEN CreateTime >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY) THEN cost_usd ELSE 0 END) as weekCost,
-                      SUM(CASE WHEN DATE(CreateTime) = CURDATE() THEN cost_usd ELSE 0 END) as todayCost,
-                      COUNT(*) as totalCalls,
-                      SUM(CASE WHEN CreateTime >= DATE_FORMAT(NOW(), '%Y-%m-01') THEN 1 ELSE 0 END) as monthCalls,
-                      SUM(CASE WHEN CreateTime >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY) THEN 1 ELSE 0 END) as weekCalls,
-                      SUM(CASE WHEN DATE(CreateTime) = CURDATE() THEN 1 ELSE 0 END) as todayCalls
-                    FROM cert_ai_usage_log WHERE IsDeleted = 0";
+        var now = DateTime.Now;
+        var monthStart = new DateTime(now.Year, now.Month, 1);
+        var weekStart = now.AddDays(-(int)now.DayOfWeek);
+        var todayStart = now.Date;
 
-        var result = await _db.SqlQueryAsync<SummaryRow>(sql);
-        var data = result.Data?.FirstOrDefault();
+        var result = await _db.Client.Queryable<AiUsageLog>()
+            .Where(x => !x.IsDeleted)
+            .Select(x => new SummaryRow
+            {
+                totalCost = x.CostUsd,
+                monthCost = x.CreateTime >= monthStart ? x.CostUsd : 0,
+                weekCost = x.CreateTime >= weekStart ? x.CostUsd : 0,
+                todayCost = x.CreateTime >= todayStart ? x.CostUsd : 0,
+                totalCalls = 1,
+                monthCalls = x.CreateTime >= monthStart ? 1 : 0,
+                weekCalls = x.CreateTime >= weekStart ? 1 : 0,
+                todayCalls = x.CreateTime >= todayStart ? 1 : 0
+            })
+            .ToListAsync();
+
+        var data = new SummaryRow();
+        foreach (var row in result)
+        {
+            data.totalCost += row.totalCost;
+            data.monthCost += row.monthCost;
+            data.weekCost += row.weekCost;
+            data.todayCost += row.todayCost;
+            data.totalCalls += row.totalCalls;
+            data.monthCalls += row.monthCalls;
+            data.weekCalls += row.weekCalls;
+            data.todayCalls += row.todayCalls;
+        }
 
         return Ok(ApiResponse<object>.Ok(new
         {
-            TotalCost = data?.totalCost ?? 0m,
-            MonthCost = data?.monthCost ?? 0m,
-            WeekCost = data?.weekCost ?? 0m,
-            TodayCost = data?.todayCost ?? 0m,
-            TotalCalls = data?.totalCalls ?? 0,
-            MonthCalls = data?.monthCalls ?? 0,
-            WeekCalls = data?.weekCalls ?? 0,
-            TodayCalls = data?.todayCalls ?? 0
+            TotalCost = data.totalCost,
+            MonthCost = data.monthCost,
+            WeekCost = data.weekCost,
+            TodayCost = data.todayCost,
+            TotalCalls = data.totalCalls,
+            MonthCalls = data.monthCalls,
+            WeekCalls = data.weekCalls,
+            TodayCalls = data.todayCalls
         }));
     }
 
@@ -170,20 +190,30 @@ public class AIUsageController : ControllerBase
     [HttpGet("daily-costs")]
     public async Task<IActionResult> GetDailyCosts([FromQuery] string? startDate, [FromQuery] string? endDate)
     {
-        var sql = @"SELECT DATE_FORMAT(CreateTime, '%Y-%m-%d') as date,
-                           SUM(cost_usd) as cost,
-                           COUNT(*) as calls
-                    FROM cert_ai_usage_log
-                    WHERE IsDeleted = 0";
+        var query = _db.Client.Queryable<AiUsageLog>()
+            .Where(x => !x.IsDeleted);
+
         if (!string.IsNullOrEmpty(startDate))
-            sql += " AND CreateTime >= @StartDate";
+            query = query.Where(x => x.CreateTime >= DateTime.Parse(startDate));
         if (!string.IsNullOrEmpty(endDate))
-            sql += " AND DATE(CreateTime) <= @EndDate";
-        sql += " GROUP BY DATE_FORMAT(CreateTime, '%Y-%m-%d') ORDER BY date ASC";
+            query = query.Where(x => x.CreateTime <= DateTime.Parse(endDate).Date.AddDays(1).AddTicks(-1));
 
-        var result = await _db.SqlQueryAsync<DailyCostRow>(sql, new { StartDate = startDate, EndDate = endDate });
+        var result = await query
+            .GroupBy(x => x.CreateTime.Year.ToString() + "-" +
+                           x.CreateTime.Month.ToString("D2") + "-" +
+                           x.CreateTime.Day.ToString("D2"))
+            .Select(x => new DailyCostRow
+            {
+                date = x.CreateTime.Year.ToString() + "-" +
+                       x.CreateTime.Month.ToString("D2") + "-" +
+                       x.CreateTime.Day.ToString("D2"),
+                cost = SqlFunc.AggregateSum(x.CostUsd),
+                calls = SqlFunc.AggregateCount(x.Id)
+            })
+            .OrderBy(x => x.date)
+            .ToListAsync();
 
-        var items = (result.Data ?? new()).Select(r => new
+        var items = result.Select(r => new
         {
             Date = r.date,
             Cost = r.cost,
@@ -198,9 +228,9 @@ public class AIUsageController : ControllerBase
     public async Task<IActionResult> GetAliyunStatus()
     {
         // 检查是否配置了 AI API Key（任一启用配置即视为已配置）
-        var sql = @"SELECT COUNT(*) as configured FROM cert_ai_config WHERE IsEnabled = 1 AND IsDeleted = 0";
-        var result = await _db.SqlQueryAsync<AliyunStatusRow>(sql);
-        var configured = (result.Data?.FirstOrDefault()?.configured ?? 0) > 0;
+        var configured = await _db.Client.Queryable<AiConfig>()
+            .Where(x => x.IsEnabled && !x.IsDeleted)
+            .CountAsync() > 0;
 
         return Ok(ApiResponse<object>.Ok(new
         {

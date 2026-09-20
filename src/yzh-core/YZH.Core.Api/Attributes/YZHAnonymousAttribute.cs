@@ -4,7 +4,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using SqlSugar;
 using System.Security.Claims;
+using YZH.Core.Api.Models.System;
 
 namespace YZH.Core.Api.Attributes;
 
@@ -79,24 +81,20 @@ public class YZHAnonymousAttribute : Attribute, IAsyncAuthorizationFilter
     private static async Task<ClaimsPrincipal?> TryBuildUserPrincipalAsync(AuthorizationFilterContext context, string userCode)
     {
         var db = context.HttpContext.RequestServices.GetRequiredService<YZH.Core.DataBase.Interfaces.IDbOrm>();
-        var result = await db.QueryFirstOrDefaultAsync<YZH.Core.Api.Models.Users.Sys_User>(
-            @"SELECT UserName, UserTrueName, Enable, Code 
-              FROM Sys_User 
-              WHERE Code = @Code AND IsDeleted = 0",
-            new { Code = userCode });
 
-        if (!result.Success || result.Data == null)
+        var user = await db.Client.Queryable<YZH.Core.Api.Models.Users.Sys_User>()
+            .Where(x => x.Code == userCode && !x.IsDeleted)
+            .FirstAsync();
+
+        if (user == null)
             return null;
 
-        var user = result.Data;
-
-        // 查询角色编码（通过 Sys_RoleUser 关联表，Code 关联）
-        var roleResult = await db.QueryFirstOrDefaultAsync<RoleCodeDto>(
-            @"SELECT r.Code FROM Sys_RoleUser ru 
-              INNER JOIN Sys_Role r ON ru.RoleCode = r.Code 
-              WHERE ru.UserCode = @UserCode AND ru.IsDeleted = 0 AND r.IsDeleted = 0",
-            new { UserCode = user.Code });
-        var roleCode = roleResult.Data?.Code;
+        // 查询角色编码（Sys_RoleUser 硬删除表无 IsDeleted，Sys_Role 有 IsDeleted）
+        var roleCode = await db.Client.Queryable<Sys_RoleUser, Sys_Role>(
+                (ru, r) => ru.RoleCode == r.Code)
+            .Where((ru, r) => ru.UserCode == user.Code && !r.IsDeleted)
+            .Select((ru, r) => r.Code)
+            .FirstAsync();
 
         return BuildUserPrincipal(user.Code, user.UserName, user.UserTrueName, roleCode);
     }
@@ -127,10 +125,4 @@ public class YZHAnonymousAttribute : Attribute, IAsyncAuthorizationFilter
         var identity = new ClaimsIdentity(claims, "Anonymous");
         return new ClaimsPrincipal(identity);
     }
-}
-
-/// <summary>角色编码查询结果</summary>
-public class RoleCodeDto
-{
-    public string? Code { get; set; }
 }

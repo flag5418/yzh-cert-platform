@@ -3,7 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using YZH.Core.Stand.Interfaces;
-using YZH.Core.Stand.Models.Queue;
+using YzhQueueTask = YZH.Core.Stand.Models.Queue.YzhQueueTask;
 
 namespace CertPlatform.Admin.Services.StandardDirectory;
 

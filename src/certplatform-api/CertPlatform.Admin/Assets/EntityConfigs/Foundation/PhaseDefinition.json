@@ -1,6 +1,7 @@
 {
   "Title": "认证阶段定义",
   "FillMode": "AutoFix",
+  "EnableField": "IsValid",
     "Columns": [
     {
       "FieldName": "Id",
@@ -141,5 +142,8 @@
       "Mrz": "",
       "Enable": true
     }
-  ]
+  ],
+  "RowButtons": {
+    "Enable": true
+  }
 }

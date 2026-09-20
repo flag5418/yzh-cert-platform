@@ -19,5 +19,6 @@ public class RowButtonConfig
 {
     public bool Edit { get; set; } = true;
     public bool Delete { get; set; } = true;
+    public bool Enable { get; set; } = false;
     public Dictionary<string, string>? CustomButtons { get; set; }
 }

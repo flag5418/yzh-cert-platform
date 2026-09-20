@@ -1,6 +1,7 @@
 {
   "Title": "ISO 标准管理",
   "FillMode": "AutoFix",
+  "EnableField": "IsValid",
   "Columns": [
     {
       "FieldName": "Id",
@@ -158,5 +159,8 @@
       "Mrz": "",
       "Enable": true
     }
-  ]
+  ],
+  "RowButtons": {
+    "Enable": true
+  }
 }

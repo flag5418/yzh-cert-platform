@@ -23,6 +23,9 @@ public class SqlSugarDbOrm : IDbOrm
     private readonly SqlSugarClient _client;
     private readonly ILogger<SqlSugarDbOrm> _logger;
 
+    /// <summary>获取底层 SqlSugar 客户端（仅限 Deleteable/Insertable/Queryable 等原生 API）</summary>
+    public SqlSugarClient Client => _client;
+
     public SqlSugarDbOrm(SqlSugarClient client, ILogger<SqlSugarDbOrm> logger)
     {
         _client = client;

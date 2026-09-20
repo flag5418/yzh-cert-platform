@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SqlSugar;
+using YZH.Core.Api.Models.System;
 using YZH.Core.Api.Services;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
@@ -63,14 +65,22 @@ public class MenuController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> GetTreeMenu()
     {
-        var result = await _db.SqlQueryAsync(
-            @"SELECT Menu_Id AS id, MenuName AS name, Url AS url, ParentCode AS parentId,
-                      Icon AS icon, Enable AS enable, Tag AS tableName
-               FROM Sys_Menu
-               WHERE Enable = 1
-               ORDER BY OrderNo ASC");
+        var menus = await _db.Client.Queryable<Sys_Menu>()
+            .Where(x => x.Enable == 1)
+            .OrderBy(x => x.OrderNo)
+            .Select(x => new
+            {
+                id = x.Id,
+                name = x.MenuName,
+                url = x.Url,
+                parentId = x.ParentCode,
+                icon = x.Icon,
+                enable = x.Enable,
+                tableName = x.Tag
+            })
+            .ToListAsync();
 
-        return Ok(new { menu = result.Data ?? new List<dynamic>(), asyncApi = new List<string>() });
+        return Ok(new { menu = menus, asyncApi = new List<string>() });
     }
 
     /// <summary>递归构建菜单树</summary>

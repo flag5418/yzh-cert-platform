@@ -6,7 +6,9 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using SqlSugar;
 using CertPlatform.Admin.Services.Workflow.Skills;
+using CertPlatform.Shared.Entities.Wf;
 using YZH.Core.DataBase.Interfaces;
 
 namespace CertPlatform.Admin.Services.Workflow
@@ -79,10 +81,11 @@ namespace CertPlatform.Admin.Services.Workflow
             if (_cache.TryGetValue(skillCode, out var cached) && cached is (string cp, string mn))
                 return (cp, mn);
 
-            var row = (await _db.QueryFirstOrDefaultAsync<ReflectionRow>(
-                "SELECT ClassPath, MethodName FROM wf_skill_reflection " +
-                "WHERE SkillCode = @skillCode AND enable = 1 AND IsDeleted = 0",
-                new { skillCode })).Data;
+            var row = await _db.Client.Queryable<WfSkillReflection>()
+                .Where(x => x.SkillCode == skillCode)
+                .Where("enable = 1")
+                .Select(x => new ReflectionRow { ClassPath = x.ClassPath, MethodName = x.MethodName })
+                .FirstAsync();
 
             if (row == null || string.IsNullOrWhiteSpace(row.ClassPath))
             {

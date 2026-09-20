@@ -62,5 +62,13 @@ namespace CertPlatform.Shared.Entities.Ent
 
         [Required]
         public DateTime ExtractedAt { get; set; }
+
+        /// <summary>标签（与 FieldCode 相同值，兼容旧数据）</summary>
+        [StringLength(36)]
+        [SugarColumn(IsNullable = true)]
+        public string? LabelTag { get; set; }
+
+        /// <summary>软删除标记</summary>
+        public bool IsDeleted { get; set; }
     }
 }

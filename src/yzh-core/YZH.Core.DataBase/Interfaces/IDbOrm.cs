@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using SqlSugar;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Result;
 using YZH.Core.DataBase.Models;
@@ -12,6 +13,11 @@ namespace YZH.Core.DataBase.Interfaces;
 /// </summary>
 public interface IDbOrm
 {
+    // ==================== 原生客户端（仅限高级场景） ====================
+
+    /// <summary>获取底层 SqlSugar 客户端（仅限 Deleteable/Insertable/Queryable 等原生 API）</summary>
+    SqlSugarClient Client { get; }
+
     // ==================== 查询 ====================
 
     /// <summary>根据条件获取单条</summary>

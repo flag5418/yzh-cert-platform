@@ -203,14 +203,14 @@ public class RoleMenuController : TreeTableControllerBase<Sys_Role, Sys_Menu>
             if (menuCodes.Count == 0)
                 return Ok(ApiResponse<object?>.Ok(new { Updated = 0 }));
 
-            // Sys_RoleMenu 无业务 Code 列，按 RoleCode + MenuCode 原生删除
+            // Sys_RoleMenu 无业务 Code 列，按 RoleCode + MenuCode 删除
             int deleted = 0;
             foreach (var menuCode in menuCodes)
             {
-                var result = await _dbOrm.SqlExecuteAsync(
-                    "DELETE FROM Sys_RoleMenu WHERE RoleCode = @RoleCode AND MenuCode = @MenuCode",
-                    new { RoleCode = roleCode, MenuCode = menuCode });
-                if (result.Success && result.Data > 0) deleted++;
+                var result = await _dbOrm.Client.Deleteable<Sys_RoleMenu>()
+                    .Where(x => x.RoleCode == roleCode && x.MenuCode == menuCode)
+                    .ExecuteCommandAsync();
+                if (result > 0) deleted++;
             }
 
             return Ok(ApiResponse<object?>.Ok(new { Updated = deleted }));
