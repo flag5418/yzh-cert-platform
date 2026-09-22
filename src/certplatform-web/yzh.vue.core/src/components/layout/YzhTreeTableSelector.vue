@@ -87,7 +87,7 @@ import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import YzhTree from './YzhTree.vue'
 import YzhTable from '../table/YzhTable.vue'
-import type { TreeNode } from '../../types/tree'
+import type { YzhTreeNode } from './YzhTree.vue'
 import type { YzhTableColumn } from '../table/types'
 
 // ========================================================
@@ -96,7 +96,7 @@ import type { YzhTableColumn } from '../table/types'
 
 interface Props {
   /** 树数据 */
-  treeData: TreeNode[]
+  treeData: YzhTreeNode[]
   /** 树面板宽度 */
   treeWidth?: number
   /** 树可搜索 */
@@ -106,7 +106,7 @@ interface Props {
   /** 树懒加载 */
   treeLazy?: boolean
   /** 树懒加载函数 */
-  treeLoadData?: (node: any, resolve: (data: TreeNode[]) => void) => void
+  treeLoadData?: (node: any, resolve: (data: YzhTreeNode[]) => void) => void
   /** 树节点 key 字段 */
   nodeKey?: string
   /** 树节点严格模式（父子不关联） */
@@ -140,9 +140,9 @@ const props = withDefaults(defineProps<Props>(), {
 // ========================================================
 
 const emit = defineEmits<{
-  (e: 'update:checkedTreeNodes', nodes: TreeNode[]): void
+  (e: 'update:checkedTreeNodes', nodes: YzhTreeNode[]): void
   (e: 'update:checkedTableRows', rows: any[]): void
-  (e: 'tree-check-change', checkedNodes: TreeNode[]): void
+  (e: 'tree-check-change', checkedNodes: YzhTreeNode[]): void
   (e: 'selection-change', rows: any[]): void
 }>()
 
@@ -153,7 +153,7 @@ const emit = defineEmits<{
 const treeRef = ref<InstanceType<typeof YzhTree>>()
 const tableRef = ref<any>()
 const treeSearchKeyword = ref('')
-const checkedTreeNodes = ref<TreeNode[]>([])
+const checkedTreeNodes = ref<YzhTreeNode[]>([])
 const checkedTableRows = ref<any[]>([])
 const loadedTableData = ref<Map<string, any[]>>(new Map())
 
@@ -180,7 +180,7 @@ function handleCollapseAll() {
 
 function handleCheckAll() {
   // 递归勾选所有节点
-  const checkAllNodes = (nodes: TreeNode[]) => {
+  const checkAllNodes = (nodes: YzhTreeNode[]) => {
     for (const node of nodes) {
       treeRef.value?.setChecked(node.Code, true)
       if (node.Children && node.Children.length > 0) {
@@ -195,7 +195,7 @@ function handleUncheckAll() {
   treeRef.value?.setCheckedNodes([])
 }
 
-function handleTreeNodeClick(node: TreeNode) {
+function handleTreeNodeClick(node: YzhTreeNode) {
   // 点击节点时加载该节点的关联表格数据
   loadTableDataForNode(node.Code)
 }
@@ -207,11 +207,11 @@ function handleTreeNodeClick(node: TreeNode) {
 async function handleTreeCheckChange() {
   if (!treeRef.value) return
 
-  const checked = treeRef.value.getCheckedNodes() as unknown as TreeNode[]
+  const checked = treeRef.value.getCheckedNodes() as unknown as YzhTreeNode[]
   checkedTreeNodes.value = checked
 
   // 收集所有勾选节点的 code
-  const checkedCodes = checked.map((n) => n.code)
+  const checkedCodes = checked.map((n) => n.Code)
 
   // 加载所有勾选节点的关联表格数据
   const allTableRows: any[] = []
@@ -325,13 +325,13 @@ function handleClearSelection() {
 // 辅助函数
 // ========================================================
 
-function filterTreeData(nodes: TreeNode[], keyword: string): TreeNode[] {
+function filterTreeData(nodes: YzhTreeNode[], keyword: string): YzhTreeNode[] {
   const lower = keyword.toLowerCase()
-  const result: TreeNode[] = []
+  const result: YzhTreeNode[] = []
 
   for (const node of nodes) {
     const matched = (node.Name || '').toLowerCase().includes(lower)
-    const filteredChildren = filterTreeData(node.Children, keyword)
+    const filteredChildren = filterTreeData(node.Children ?? [], keyword)
 
     if (matched || filteredChildren.length > 0) {
       result.push({ ...node, Children: filteredChildren })

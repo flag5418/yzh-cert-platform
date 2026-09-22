@@ -20,7 +20,7 @@ export * from './workflow/job-skill'
 export * from './workflow/ai-usage'
 export * from './workflow/nc-config'
 export * from './workflow/report-rule'
-export * from './workflow/doc-extraction'
+export * from './workflow/doc-extraction-rule'
 
 // System 域 API
 export * from './system-log'

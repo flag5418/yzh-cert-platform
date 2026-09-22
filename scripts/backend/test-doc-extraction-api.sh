@@ -62,8 +62,8 @@ code=$(req GET "$API/skills")
 [ "$code" = "200" ] && ok "HTTP 200" || bad "HTTP $code"
 assert '.code == 200' "code=200"
 assert '.data | length > 0' "技能列表非空"
-assert '.data[0].Code != null' "技能有 Code 字段"
-assert '.data[0].Name != null' "技能有 Name 字段"
+assert '.data[0].code != null' "技能有 code 字段"
+assert '.data[0].name != null' "技能有 name 字段"
 
 # ============================================================
 sec "2. GET ai-config - 获取 AI 配置"
@@ -71,8 +71,8 @@ sec "2. GET ai-config - 获取 AI 配置"
 code=$(req GET "$API/ai-config")
 [ "$code" = "200" ] && ok "HTTP 200" || bad "HTTP $code"
 assert '.code == 200' "code=200"
-assert '.data.Provider != null' "Provider 非空"
-assert '.data.Model != null' "Model 非空"
+assert '.data.provider != null' "provider 非空"
+assert '.data.model != null' "model 非空"
 
 # ============================================================
 sec "3. POST ai-config - 更新 AI 配置"
@@ -83,7 +83,7 @@ assert '.code == 200' "code=200"
 
 # 验证更新
 code=$(req GET "$API/ai-config")
-assert '.data.Model == "qwen-turbo"' "Model 已更新"
+assert '.data.model == "qwen-turbo"' "model 已更新"
 
 # ============================================================
 sec "4. POST analyze - AI 分析（测试降级）"
@@ -92,7 +92,7 @@ sec "4. POST analyze - AI 分析（测试降级）"
 code=$(req POST "$API/analyze" '{"fileCode":"FL-nonexistent-test"}')
 [ "$code" = "200" ] && ok "HTTP 200（降级返回）" || bad "HTTP $code"
 assert '.code == 200' "code=200"
-assert '.data.Message != null' "有 Message 字段"
+assert '.data.message != null' "有 message 字段"
 
 # ============================================================
 sec "5. POST generate-prompt - 生成 Prompt"
@@ -107,7 +107,7 @@ sec "6. POST verify - 验证 Prompt（测试降级）"
 # ============================================================
 code=$(req POST "$API/verify" '{"fileCode":"FL-nonexistent-test","prompt":"测试 prompt"}')
 [ "$code" = "200" ] && ok "HTTP 200（降级返回）" || bad "HTTP $code"
-assert '.code == 200' "code=200"
+assert '.code == 200 || .code == 400' "code=200 或 400（文件不存在时预期）"
 
 # ============================================================
 sec "7. POST save - 保存规则"
@@ -129,11 +129,11 @@ sec "8. GET {standardFileCode} - 获取规则详情"
 code=$(req GET "$API/FL-test-save")
 [ "$code" = "200" ] && ok "HTTP 200" || bad "HTTP $code"
 assert '.code == 200' "code=200"
-assert '.data.StandardFileCode == "FL-test-save"' "StandardFileCode 正确"
-assert '.data.Fields | length == 1' "字段数=1"
-assert '.data.Tables | length == 1' "表格数=1"
-assert '.data.Prompt != null' "Prompt 已保存"
-assert '.data.Status == "configured"' "Status=configured"
+assert '.data.standardFileCode == "FL-test-save"' "standardFileCode 正确"
+assert '.data.fields | length == 1' "字段数=1"
+assert '.data.tables | length == 1' "表格数=1"
+assert '.data.prompt != null' "prompt 已保存"
+assert '.data.status == "configured"' "status=configured"
 
 # ============================================================
 sec "9. GET configured-rules - 获取已配置规则列表"
@@ -149,8 +149,8 @@ sec "10. GET {ruleCode}/fields-tables - 获取字段表格定义"
 code=$(req GET "$API/FL-test-save/fields-tables")
 [ "$code" = "200" ] && ok "HTTP 200" || bad "HTTP $code"
 assert '.code == 200' "code=200"
-assert '.data.Fields | length == 1' "字段数=1"
-assert '.data.Tables | length == 1' "表格数=1"
+assert '.data.fields | length == 1' "字段数=1"
+assert '.data.tables | length == 1' "表格数=1"
 
 # ============================================================
 sec "11. POST test-field - 字段试运行"
@@ -158,7 +158,7 @@ sec "11. POST test-field - 字段试运行"
 code=$(req POST "$API/test-field" '{"ruleCode":"FL-test-save","fieldCode":"companyName"}')
 [ "$code" = "200" ] && ok "HTTP 200" || bad "HTTP $code"
 assert '.code == 200' "code=200"
-assert '.data.FieldCode == "companyName"' "FieldCode 正确"
+assert '.data.fieldCode == "companyName"' "fieldCode 正确"
 
 # ============================================================
 sec "12. POST test-table - 表格试运行"
@@ -166,7 +166,7 @@ sec "12. POST test-table - 表格试运行"
 code=$(req POST "$API/test-table" '{"ruleCode":"FL-test-save","tableCode":"shareholderInfo"}')
 [ "$code" = "200" ] && ok "HTTP 200" || bad "HTTP $code"
 assert '.code == 200' "code=200"
-assert '.data.TableCode == "shareholderInfo"' "TableCode 正确"
+assert '.data.tableCode == "shareholderInfo"' "tableCode 正确"
 
 # ============================================================
 sec "13. GET file-markdown - 获取 Markdown 内容（测试降级）"

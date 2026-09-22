@@ -12,8 +12,7 @@ namespace YZH.Core.Api.Models.System;
 ///
 ///     架构铁律：
 ///     ① 关联一律走 Code。父字典通过 DicCode（= Sys_Dictionary.Code）关联，
-///        原 id 型关联列 Dic_ID / CreateID / ModifyID 已在
-///        add_dictionary_tree_fields_v1.sql 中删除。
+///        原 id 型关联列 Dic_ID / CreateID / ModifyID 已在 2026-09-21 全量 PascalCase 化中删除。
 ///     ② 字典项【不设业务编码字段】。字典项没有"项编码"，关联与定位只依赖 Code，
 ///        因此"没有具体项的编码也能进行关联"这一要求天然成立。
 ///
@@ -26,12 +25,11 @@ namespace YZH.Core.Api.Models.System;
 [YZHDeleteStrategy(Mode = DeleteMode.Soft)]
 public class Sys_DictionaryList : BaseEntity, ISoftDelete, IIsValid
 {
-    /// <summary>物理主键（DB: DicList_ID）。非关联字段。</summary>
-    [SugarColumn(ColumnName = "DicList_ID", IsPrimaryKey = true, IsIdentity = true)]
+    /// <summary>物理主键（DB: Id）。非关联字段。</summary>
+    [SugarColumn(ColumnName = "Id", IsPrimaryKey = true, IsIdentity = true)]
     public new string Id { get; set; } = string.Empty;
 
     /// <summary>稳定标识（DB: Code）。随机唯一，插入前生成，之后不可修改。前端下拉框的 value 即此值。</summary>
-    [SugarColumn(ColumnName = "Code")]
     [StringLength(50)]
     public new string Code { get; set; } = string.Empty;
 

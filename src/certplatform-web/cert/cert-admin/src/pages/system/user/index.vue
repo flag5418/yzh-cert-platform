@@ -1,88 +1,41 @@
 <script setup lang="ts">
 /**
  * 用户管理（配置驱动 CRUD 页面）
+ *
+ * useSingleTable 统一注入 logic/tableRef；按钮与动作全部由内核派发，
+ * 页面无手写 handleAdd/handleBatchDelete/handleRowAction/handleSubmit。
  */
-import { YzhForm, YzhTable } from '@yzh-core'
-import { ElMessage } from 'element-plus'
-import { computed, onMounted, nextTick, ref } from 'vue'
+import { YzhFormDialog, YzhTable, useSingleTable } from '@yzh-core'
 import { UserLogic } from './logic'
 
-const logic = new UserLogic()
-const tableRef = ref()
-
-const rowActionButtons = computed(() => logic.rowActionButtons)
-const toolbarConfig = computed(() => (logic.config.value as any)?.Toolbar || {})
-
-function loadTableData(params: any) {
-  return logic.dataLoader(params)
-}
-
-function handleAdd() {
-  logic.openAddDialog()
-}
-
-async function handleBatchDelete() {
-  await logic.confirmDelete()
-}
-
-async function handleRowAction(action: string, row: any) {
-  if (action === 'edit') {
-    logic.openEditDialog(row)
-  } else if (action === 'delete') {
-    await logic.confirmDelete([row])
-  }
-}
-
-async function handleSubmit() {
-  try {
-    await logic.submitForm()
-  } catch (e: any) {
-    ElMessage.error(e.message || '保存失败')
-  }
-}
-
-onMounted(async () => {
-  await logic.init()
-  await nextTick()
-  logic.setTableRef(tableRef.value)
-})
+const { logic, tableRef } = useSingleTable(UserLogic)
 </script>
 
 <template>
   <div class="user-page">
     <YzhTable
       ref="tableRef"
-      :columns="logic.columns as any"
-      :data-loader="loadTableData"
-      :search-fields="logic.searchFields as any"
-      :selectable="true"
-      :row-action-buttons="rowActionButtons"
-      row-key="Id"
+      :columns="logic.columns"
+      :data-loader="logic.dataLoader.bind(logic)"
+      :search-fields="logic.searchFields"
+      :toolbar-actions="logic.toolbarActions"
+      :row-action-buttons="logic.rowActions"
+      select-mode="multiple"
       @selection-change="logic.onSelectionChange($event)"
-      @row-action="handleRowAction"
-    >
-      <template #toolbar-left>
-        <el-button v-if="toolbarConfig.Add !== false" type="primary" @click="handleAdd">新增</el-button>
-        <el-button v-if="toolbarConfig.Delete !== false" type="danger" @click="handleBatchDelete">删除</el-button>
-      </template>
-    </YzhTable>
+      @row-action="logic.onRowAction"
+      @toolbar-action="logic.onToolbarAction"
+    />
 
-    <el-dialog
-      v-model="logic.dialogVisible.value"
-      :title="logic.dialogMode.value === 'add' ? '新增用户' : '编辑用户'"
-      width="640px"
-      :close-on-click-modal="false"
-      destroy-on-close
-    >
-      <YzhForm
-        v-model="logic.formData"
-        :fields="logic.formFields as any"
-        :loading="logic.submitting.value"
-        :cols="logic.formLayoutCols as any"
-        @submit="handleSubmit"
-        @reset="logic.dialogVisible.value = false"
-      />
-    </el-dialog>
+    <YzhFormDialog
+      v-model:visible="logic.dialogVisible.value"
+      v-model="logic.formData"
+      :mode="logic.dialogMode.value"
+      entity-name="用户"
+      :fields="logic.formFields"
+      :loading="logic.submitting.value"
+      :cols="logic.formLayoutCols as any"
+      @submit="logic.submitForm()"
+    />
   </div>
 </template>
 

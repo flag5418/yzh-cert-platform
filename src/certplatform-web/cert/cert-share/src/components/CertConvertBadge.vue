@@ -1,18 +1,17 @@
 <template>
   <span class="cert-convert-badge" :class="badgeClass">
-    <el-icon v-if="icon"><component :is="icon" /></el-icon>
     {{ label }}
   </span>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
 const props = defineProps({
   status: { type: String, default: '' }
 })
 
-const STATUS_MAP = {
+const STATUS_MAP: Record<string, { class: string; label: string; color: string }> = {
   pending: { class: 'is-pending', label: '待转换', color: '#909399' },
   converting: { class: 'is-converting', label: '转换中', color: '#409eff' },
   completed: { class: 'is-completed', label: '已转换', color: '#67c23a' },

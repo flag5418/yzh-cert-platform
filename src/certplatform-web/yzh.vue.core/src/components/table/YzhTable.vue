@@ -1,15 +1,23 @@
 <script setup lang="ts" generic="T extends Record<string, any> = any">
 /**
- * YzhTable - 自研表格组件
+ * YzhTable - 自研表格组件（原子组件，零领域依赖）
  *
  * 特性：
  * - 加载/空/错误三态
- * - 排序、分页、多选
- * - 工具栏（列设置）
+ * - 排序、分页、选择模式（selectMode）
+ * - 工具栏（声明式 toolbarActions + 列设置）
  * - 搜索栏联动
+ * - 行操作按钮下沉：icon / type / disabled / visible / confirm / 溢出折叠（actionMaxInline）
+ * - render:'tag' 列级标签渲染（valueMap/tagTypeMap 由调用方传入）
  * - 插槽扩展（#column-prop）
+ *
+ * 事件契约（C-A10）：
+ * - row-action(key, row, action)
+ * - toolbar-action(key, action)
+ *
+ * 独立可用性（C-A11）：仅传 columns + dataLoader 即可渲染与交互。
  */
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, getCurrentInstance, onMounted, reactive, ref, watch } from 'vue'
 import YzhPagination from '../layout/YzhPagination.vue'
 import YzhSearchBar from '../layout/YzhSearchBar.vue'
@@ -19,6 +27,7 @@ import type {
   Page,
   PageParams,
   SearchField,
+  YzhAction,
   YzhTableColumn,
   YzhTableDataLoader,
   YzhTableToolbar
@@ -29,37 +38,49 @@ const props = withDefaults(
     columns: YzhTableColumn<T>[]
     dataLoader: YzhTableDataLoader<T>
     searchFields?: SearchField[]
+    /** 兼容旧属性：等价 selectMode='multiple' */
     selectable?: boolean
+    /** 选择模式（C-A7）：none=无选择列；single=单选（行高亮）；multiple=多选（checkbox） */
+    selectMode?: 'none' | 'single' | 'multiple'
     showPagination?: boolean
     pageSize?: number
     defaultSort?: DefaultSort
     height?: string | number
+    /** 行键字段名。中立默认 'Code'（平台主键约定），不绑定 Id */
     rowKey?: string
     emptyText?: string
     toolbar?: boolean | YzhTableToolbar
+    /** 声明式工具栏按钮（C-A9），配合 @toolbar-action 使用；#toolbar-left 插槽保留并排渲染 */
+    toolbarActions?: YzhAction[]
     searchMaxFields?: number
     /** 是否禁用内部 padding（用于嵌套在卡片/TreeTable 中时避免双层 padding） */
     noPadding?: boolean
     /**
-     * 行自定义操作按钮（后端自动注入）
-     * - 静态: { 方法名: 显示文字 }
-     * - 动态: (row) => ({ 方法名: 显示文字 })，根据每行数据返回不同的按钮
+     * 行自定义操作按钮（C-A3 能力下沉）
+     * - YzhAction[]：静态声明（含 type/icon/disabled/confirm）
+     * - (row) => YzhAction[]：按行动态解析（可见性/禁用随行变化）
+     * - 兼容旧 Record<string,string>（等价 [{key,text}]）
      */
-    rowActionButtons?: Record<string, string> | ((row: T) => Record<string, string>)
+    rowActionButtons?: Record<string, string> | YzhAction[] | ((row: T) => Record<string, string> | YzhAction[])
     /** 行操作按钮是否使用 link 样式（默认 true） */
     rowActionLink?: boolean
+    /** 行按钮超过 N 个时折叠为「更多」下拉（0 = 不折叠） */
+    actionMaxInline?: number
   }>(),
   {
     selectable: false,
+    selectMode: undefined,
     showPagination: true,
     pageSize: 20,
-    rowKey: 'Id',
+    rowKey: 'Code',
     emptyText: '暂无数据',
     toolbar: true,
+    toolbarActions: () => [],
     searchMaxFields: 2,
     noPadding: false,
-    rowActionButtons: () => ({}),
-    rowActionLink: true
+    rowActionButtons: () => [],
+    rowActionLink: true,
+    actionMaxInline: 0
   }
 )
 
@@ -67,7 +88,10 @@ const emit = defineEmits<{
   (e: 'selection-change', rows: T[]): void
   (e: 'row-click', row: T, index: number): void
   (e: 'refresh'): void
-  (e: 'row-action', action: string, row: T): void
+  /** 行操作（载荷含动作描述符） */
+  (e: 'row-action', key: string, row: T, action?: YzhAction): void
+  /** 工具栏动作 */
+  (e: 'toolbar-action', key: string, action: YzhAction): void
 }>()
 
 // 数据状态
@@ -88,6 +112,13 @@ const searchParams = reactive<Record<string, any>>({})
 // 用户手动隐藏的列 field 集合
 const hiddenColumnFields = ref<Set<string>>(new Set())
 
+/** 实际生效的选择模式（selectable 兼容 selectMode） */
+const effectiveSelectMode = computed<'none' | 'single' | 'multiple'>(() => {
+  if (props.selectMode) return props.selectMode
+  return props.selectable ? 'multiple' : 'none'
+})
+const isMultiple = computed(() => effectiveSelectMode.value === 'multiple')
+
 /** 可被列设置的列（有 label 且非操作列） */
 const columnSettingList = computed(() =>
   props.columns.filter((c) => c.label && c.prop !== '__yzh_action')
@@ -102,27 +133,78 @@ const visibleColumns = computed(() =>
   })
 )
 
-/**
- * 解析某一行的操作按钮
- * - 函数类型：调用函数获取该行按钮
- * - 静态类型：直接返回
- */
-function getRowButtons(row: T): Record<string, string> {
-  if (typeof props.rowActionButtons === 'function') {
-    return props.rowActionButtons(row)
-  }
-  return props.rowActionButtons || {}
+// ========================================================
+// 行/工具栏动作解析
+// ========================================================
+
+/** Record<string,string> → YzhAction[]（兼容旧形状） */
+function fromRecord(rec: Record<string, string>): YzhAction[] {
+  return Object.entries(rec).map(([key, text]) => ({ key, text }))
 }
 
-/** 是否显示动态行操作列（当 rowActionButtons 有值且 columns 中无 actions 列时自动追加） */
+/** 解析某行的操作按钮为 YzhAction[] */
+function resolveRowActions(row: T): YzhAction[] {
+  const raw = typeof props.rowActionButtons === 'function'
+    ? props.rowActionButtons(row)
+    : props.rowActionButtons
+  const list = Array.isArray(raw) ? raw : fromRecord(raw || {})
+  return list.filter((a) => a.visible !== false)
+}
+
+/** 是否显示动态行操作列 */
 const showDynamicActionColumn = computed(() => {
-  // 函数类型始终认为可能有按钮（因为不知道各行的数据）
-  if (typeof props.rowActionButtons === 'function') {
-    return !props.columns.some((c) => c.prop === 'actions')
-  }
-  return Object.keys(props.rowActionButtons || {}).length > 0 &&
-    !props.columns.some((c) => c.prop === 'actions')
+  const hasActionsCol = props.columns.some((c) => c.prop === 'actions')
+  if (typeof props.rowActionButtons === 'function') return !hasActionsCol
+  const count = Array.isArray(props.rowActionButtons)
+    ? props.rowActionButtons.length
+    : Object.keys(props.rowActionButtons || {}).length
+  return count > 0 && !hasActionsCol
 })
+
+/** 溢出折叠：前 N 个平铺，其余收进「更多」下拉 */
+const inlineOverflow = computed(() => props.actionMaxInline > 0)
+
+function splitRowActions(list: YzhAction[]): { inline: YzhAction[]; overflow: YzhAction[] } {
+  if (!inlineOverflow.value || list.length <= props.actionMaxInline) {
+    return { inline: list, overflow: [] }
+  }
+  return { inline: list.slice(0, props.actionMaxInline), overflow: list.slice(props.actionMaxInline) }
+}
+
+/** 工具栏按钮（声明式） */
+const toolbarButtons = computed<YzhAction[]>(() =>
+  props.toolbarActions.filter((a) => a.visible !== false)
+)
+
+/** 行动作点击：confirm → 确认弹窗 → emit */
+async function onRowActionClick(action: YzhAction, row: T) {
+  if (action.disabled) return
+  if (action.confirm) {
+    try {
+      await ElMessageBox.confirm(action.confirm, '操作确认', { type: 'warning' })
+    } catch {
+      return
+    }
+  }
+  emit('row-action', action.key, row, action)
+}
+
+/** 工具栏动作点击 */
+async function onToolbarActionClick(action: YzhAction) {
+  if (action.disabled) return
+  if (action.confirm) {
+    try {
+      await ElMessageBox.confirm(action.confirm, '操作确认', { type: 'warning' })
+    } catch {
+      return
+    }
+  }
+  emit('toolbar-action', action.key, action)
+}
+
+// ========================================================
+// 列设置
+// ========================================================
 
 /** 切换列显示/隐藏 */
 function toggleColumnVisibility(col: YzhTableColumn<T>, visible: boolean) {
@@ -162,13 +244,17 @@ function resetColumnSettings() {
 function applyColumnSettings() {
   loadData()
 }
-const selectable = computed(() => props.selectable)
 
 // 工具栏配置
 const toolbarConfig = computed<YzhTableToolbar>(() => {
   if (props.toolbar === false) return {}
   if (props.toolbar === true) return { columnSetting: true }
   return props.toolbar
+})
+
+/** 是否渲染工具栏（有配置 或 有声明式按钮 或 有插槽内容） */
+const showToolbar = computed(() => {
+  return Object.keys(toolbarConfig.value).length > 0 || toolbarButtons.value.length > 0
 })
 
 /**
@@ -275,27 +361,6 @@ function onRowClick(row: T, index: number) {
   emit('row-click', row, index)
 }
 
-/**
- * 根据操作 key 返回按钮类型
- */
-function getRowActionType(key: string): 'primary' | 'success' | 'warning' | 'danger' | 'info' {
-  const map: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
-    disable: 'warning',
-    enable: 'success',
-    'toggle-valid': 'warning',
-    delete: 'danger',
-    edit: 'primary',
-  }
-  return map[key] || 'primary'
-}
-
-/**
- * 处理行操作按钮点击
- */
-function handleRowAction(action: string, row: T) {
-  emit('row-action', action, row)
-}
-
 // ========================================================
 // 开发期护栏：行操作按钮必须由父组件监听 @row-action
 // ========================================================
@@ -305,17 +370,20 @@ let rowActionWarned = false
 /** 操作列宽度估算（按最大按钮数 × 70px + 间隔） */
 const actionColWidth = computed(() => {
   if (typeof props.rowActionButtons === 'function') {
-    // 函数类型，假设最多 4 个按钮
     return 4 * 70 + 40
   }
-  const count = Object.keys(props.rowActionButtons || {}).length
+  const count = Array.isArray(props.rowActionButtons)
+    ? props.rowActionButtons.length
+    : Object.keys(props.rowActionButtons || {}).length
   return count > 0 ? count * 70 + 40 : 140
 })
 
 watch(
   () => {
     if (typeof props.rowActionButtons === 'function') return 1
-    return Object.keys(props.rowActionButtons || {}).length
+    return Array.isArray(props.rowActionButtons)
+      ? props.rowActionButtons.length
+      : Object.keys(props.rowActionButtons || {}).length
   },
   (count) => {
     if (count === 0 || rowActionWarned) return
@@ -324,7 +392,7 @@ watch(
     rowActionWarned = true
     console.warn(
       '[YzhTable] 已配置 rowActionButtons，但父组件未监听 @row-action：行操作按钮点击不会有任何效果。' +
-        ' 请绑定 @row-action="(action, row) => ..."（CrudPageLogic.onRowClick 可直接处理 edit/delete）。'
+        ' 请绑定 @row-action（SingleTableCore.onRowAction 可直接派发 edit/delete/toggle-valid）。'
     )
   },
   { immediate: true }
@@ -399,10 +467,10 @@ function getRowCount(): number {
 function setCheckedRows(matchFn: (row: T) => boolean, checked: boolean) {
   if (checked) {
     // 勾选匹配的行（合并到已有选中行）
-    const existing = new Set(selectedRows.value)
+    const existing = new Set<any>(selectedRows.value)
     for (const row of rows.value) {
-      if (matchFn(row as T) && !existing.has(row as T)) {
-        selectedRows.value.push(row)
+      if (matchFn(row as T) && !existing.has(row)) {
+        selectedRows.value.push(row as any)
       }
     }
   } else {
@@ -443,7 +511,7 @@ defineExpose({
     />
 
     <!-- 工具栏 -->
-    <YzhToolbar v-if="Object.keys(toolbarConfig).length > 0">
+    <YzhToolbar v-if="showToolbar" :buttons="toolbarButtons" @action="(_key, action) => onToolbarActionClick(action)">
       <template #left>
         <slot name="toolbar-left" />
       </template>
@@ -503,13 +571,14 @@ defineExpose({
           :data="rows"
           :row-key="rowKey"
           :height="height !== undefined && height !== null ? height : '100%'"
+          :highlight-current-row="effectiveSelectMode === 'single'"
           stripe
           border
           @selection-change="onSelectionChange"
           @sort-change="onSortChange"
           @row-click="onRowClick"
         >
-          <el-table-column v-if="selectable" type="selection" width="48" :reserve-selection="false" />
+          <el-table-column v-if="isMultiple" type="selection" width="48" :reserve-selection="false" />
 
           <template v-for="col in visibleColumns" :key="col.prop">
             <el-table-column
@@ -541,6 +610,12 @@ defineExpose({
                   </el-tag>
                   <span v-else>{{ row[col.prop] }}</span>
                 </template>
+                <!-- 通用标签渲染（valueMap/tagTypeMap 由调用方传入，组件不内置业务语义） -->
+                <template v-else-if="col.tagMap">
+                  <el-tag :type="col.tagTypeMap?.[row[col.prop]] ?? 'info'" size="small" disable-transitions>
+                    {{ col.tagMap![row[col.prop]] ?? row[col.prop] }}
+                  </el-tag>
+                </template>
                 <template v-else>
                   {{ col.formatter ? col.formatter(row[col.prop], row, $index) : row[col.prop] }}
                 </template>
@@ -548,7 +623,7 @@ defineExpose({
             </el-table-column>
           </template>
 
-          <!-- 动态行操作列（由 rowActionButtons 自动驱动，支持按行动态显示） -->
+          <!-- 动态行操作列（YzhAction[] 驱动：icon/type/disabled/confirm/溢出折叠） -->
           <el-table-column
             v-if="showDynamicActionColumn"
             label="操作"
@@ -557,16 +632,37 @@ defineExpose({
             align="center"
           >
             <template #default="{ row }">
-              <el-button
-                v-for="(text, key) in getRowButtons(row)"
-                :key="key"
-                :link="rowActionLink"
-                size="small"
-                :type="getRowActionType(key)"
-                @click="handleRowAction(key, row)"
+              <template v-for="action in splitRowActions(resolveRowActions(row)).inline" :key="action.key">
+                <el-button
+                  :link="rowActionLink"
+                  size="small"
+                  :type="action.type ?? 'primary'"
+                  :disabled="action.disabled"
+                  @click="onRowActionClick(action, row)"
+                >
+                  {{ action.text }}
+                </el-button>
+              </template>
+              <el-dropdown
+                v-if="splitRowActions(resolveRowActions(row)).overflow.length > 0"
+                trigger="click"
+                @command="(key: string) => { const a = splitRowActions(resolveRowActions(row)).overflow.find(x => x.key === key); if (a) onRowActionClick(a, row) }"
               >
-                {{ text }}
-              </el-button>
+                <el-button link size="small">更多</el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item
+                      v-for="action in splitRowActions(resolveRowActions(row)).overflow"
+                      :key="action.key"
+                      :command="action.key"
+                      :disabled="action.disabled"
+                      :class="{ 'yzh-row-action-danger': action.type === 'danger' }"
+                    >
+                      {{ action.text }}
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </template>
           </el-table-column>
 
@@ -645,6 +741,10 @@ defineExpose({
   align-items: center;
   gap: 8px;
   color: #f56c6c;
+}
+
+.yzh-row-action-danger {
+  color: var(--el-color-danger) !important;
 }
 
 /* 列设置 popover 内层 */

@@ -17,6 +17,9 @@ import {
 import { computed, onMounted, ref, watch, nextTick } from 'vue'
 import DictionaryPageLogic from './logic'
 
+// 模板用：选中节点响应式代理（内核 getter 已内置响应性，勿再加 .value）
+const selectedNode = computed(() => logic.selectedNode)
+
 // 实例化 Logic
 const logic = new DictionaryPageLogic()
 
@@ -55,7 +58,6 @@ const mergedRowActionButtons = computed(() => {
 /** 树节点点击 → 加载该字典下的字典项 */
 async function handleNodeClick(node: TreeNode) {
   await logic.onNodeClick(node)
-  await nextTick()
   tableRef.value?.refresh()
 }
 
@@ -80,7 +82,7 @@ function handleAddDictCategory() {
 /** 删除字典/分类 */
 async function handleDeleteDict(node: TreeNode) {
   await ElMessageBox.confirm(
-    `确定删除字典/分类【${node.name}】？\n（子节点将一并被软删除）`,
+    `确定删除字典/分类【${node.Name}】？\n（子节点将一并被软删除）`,
     '删除确认',
     {
       type: 'warning',
@@ -196,9 +198,10 @@ async function handleItemSubmit() {
 
 onMounted(async () => {
   await logic.init()
-  await nextTick()
-  logic.setTreeTableRef(treeTableRef.value)
-  if (tableRef.value) logic.setTableRef(tableRef.value)
+  nextTick(() => {
+    logic.setTreeTableRef(treeTableRef.value)
+    if (tableRef.value) logic.setTableRef(tableRef.value)
+  })
 })
 </script>
 
@@ -206,7 +209,7 @@ onMounted(async () => {
   <div class="dict-page">
     <YzhTreeTable
       ref="treeTableRef"
-      :tree-data="logic.treeData.value"
+      :tree-data="logic.treeData"
       :tree-width="260"
       :tree-toolbar="true"
       :tree-searchable="true"
@@ -229,7 +232,7 @@ onMounted(async () => {
           <!-- 字典项表格 -->
           <YzhTable
             ref="tableRef"
-            :key="logic.selectedNode.value?.code ?? 'none'"
+            :key="selectedNode?.Code ?? 'none'"
             :columns="logic.columnsWithActions as any"
             :data-loader="loadTableData"
             :search-fields="logic.searchFields as any"
@@ -277,7 +280,7 @@ onMounted(async () => {
       <div class="dict-form-header">
         <span class="dict-form-header__label">上级节点：</span>
         <el-tag v-if="logic.treeParentNode.value" type="info">
-          {{ logic.treeParentNode.value.name }}
+          {{ logic.treeParentNode.value.Name }}
         </el-tag>
         <el-tag v-else type="info">根级</el-tag>
       </div>
@@ -302,8 +305,8 @@ onMounted(async () => {
     >
       <div class="dict-form-header">
         <span class="dict-form-header__label">所属字典：</span>
-        <el-tag v-if="logic.selectedNode.value" type="info">
-          {{ logic.selectedNode.value.name }}
+        <el-tag v-if="selectedNode" type="info">
+          {{ selectedNode.Name }}
         </el-tag>
         <el-tag v-else type="info">未选择</el-tag>
       </div>

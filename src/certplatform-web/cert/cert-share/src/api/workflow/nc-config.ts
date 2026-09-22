@@ -60,15 +60,10 @@ export function deleteNCRule(codes: string[]) {
   return yzhApi.post('/api/ValidationRule/delete', codes)
 }
 
-/** 切换启用状态 */
-export function toggleNCRuleActive(code: string) {
-  return yzhApi.post(`/api/ValidationRule/toggle-active?code=${code}`)
-}
-
-/** 深拷贝规则 */
-export function copyNCRule(sourceCode: string) {
-  return yzhApi.post(`/api/ValidationRule/copy?sourceCode=${sourceCode}`)
-}
+// ⚠️ 切换启用/复制规则已迁至标准行自定义操作约定：
+//    POST /api/ValidationRule/action/{ToggleActive|Copy}
+//    按钮由 Cert/ValidationRule.json 的 RowButtons.CustomButtons 配置驱动，
+//    前端经 SingleTableCore.dispatch('custom:{method}') 直达，无需手写 api 函数。
 
 // ──── 条款树（由 ISOClauseController 提供） ────
 

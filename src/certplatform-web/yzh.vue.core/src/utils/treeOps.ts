@@ -62,7 +62,7 @@ export function addNode<T>(
   const addToParent = (nodes: TreeNode<T>[]): TreeNode<T>[] => {
     return nodes.map(n => {
       if (n.Code === parentCode) {
-        return { ...n, Children: [...n.Children, node] }
+        return { ...n, Children: [...(n.Children ?? []), node] }
       }
       if (n.Children && n.Children.length > 0) {
         return { ...n, Children: addToParent(n.Children) }
@@ -307,7 +307,7 @@ export function validate<T>(roots: TreeNode<T>[]): { valid: boolean; errors: str
 
   // 检查孤儿节点
   for (const node of nodes) {
-    if (node.ParentCode !== null && node.ParentCode !== '' && !nodeCodes.has(node.ParentCode)) {
+    if (node.ParentCode != null && node.ParentCode !== '' && !nodeCodes.has(node.ParentCode)) {
       errors.push(`节点 "${node.Name}" 的 ParentCode "${node.ParentCode}" 不存在`)
     }
   }
@@ -365,15 +365,15 @@ function collectDescendants<T>(node: TreeNode<T>): TreeNode<T>[] {
   const result: TreeNode<T>[] = []
   const collect = (n: TreeNode<T>) => {
     result.push(n)
-    n.Children.forEach(collect)
+    for (const child of n.Children ?? []) collect(child)
   }
-  node.Children.forEach(collect)
+  collect(node)
   return result
 }
 
 /** 判断 target 是否是 node 的子孙 */
 function isDescendant<T>(node: TreeNode<T>, targetCode: string): boolean {
-  for (const child of node.Children) {
+  for (const child of node.Children ?? []) {
     if (child.Code === targetCode) return true
     if (isDescendant(child, targetCode)) return true
   }
@@ -417,7 +417,7 @@ function hasCycleCheck<T>(roots: TreeNode<T>[]): boolean {
     visited.add(node.Code)
     stack.add(node.Code)
 
-    for (const child of node.Children) {
+    for (const child of node.Children ?? []) {
       if (dfs(child)) return true
     }
 

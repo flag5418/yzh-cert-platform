@@ -52,6 +52,7 @@ public class SkillTreeTableController
         TreeConfig.ParentCodeField = "ParentCode";
         TreeConfig.RelateField = "CategoryCode";     // 右表通过 CategoryCode 关联左树
         TreeConfig.MaxLevel = 1;                     // 仅一级（扁平结构）
+        TreeConfig.AllowAddChild = false;            // 扁平无层级：不显示「新增下级」（前端按钮由本配置驱动）
         TreeConfig.AllowEdit = true;                 // 允许编辑分类
         TreeConfig.AllowDelete = true;               // 允许删除分类
         TreeConfig.NoSelectionBehavior = "all";      // 未选中分类（默认"全部"节点）时返回全量

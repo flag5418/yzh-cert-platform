@@ -17,6 +17,8 @@ public class TreeBehaviorConfigDto
 {
     public bool Lazy { get; set; } = true;
     public bool AllowEdit { get; set; } = true;
+    /// <summary>是否允许「新增下级」节点动作（扁平无层级的树设为 false）</summary>
+    public bool AllowAddChild { get; set; } = true;
     public bool AllowDelete { get; set; } = true;
     public bool AllowRename { get; set; } = true;
     public object? RootParentCode { get; set; }

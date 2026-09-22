@@ -5,7 +5,8 @@
 export * from './components'
 
 // 业务 Composables
-export { useDirectoryApi } from './composables/useDirectoryApi'
+// 注：useDirectoryApi 是 API 层模块（导出接口函数，无 useXxx 组合式函数），
+// 不从根出口再导出（TS2305）；使用方直接 from '@share/composables/useDirectoryApi'
 export { useFileTree } from './composables/useFileTree'
 export { usePolling } from './composables/usePolling'
 

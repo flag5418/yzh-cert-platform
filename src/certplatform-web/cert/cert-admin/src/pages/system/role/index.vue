@@ -7,121 +7,34 @@
  * - 右侧：选中角色详情面板
  *
  * 后端：RoleController 继承 TreeTableControllerBase<Sys_Role, Sys_Role>
- * 前端：YzhTreeTable + TreeTableLogic
+ * 前端：useTreeTable + YzhTreeTable + YzhFormDialog，节点动作由内核 onNodeAction 派发
  */
 import { Plus } from '@element-plus/icons-vue'
-import { YzhForm, YzhTreeTable, type TreeNode } from '@yzh-core'
-import {
-  ElButton,
-  ElMessage,
-  ElMessageBox,
-  ElTag,
-} from 'element-plus'
-import { onMounted, nextTick, ref } from 'vue'
+import { YzhFormDialog, YzhTreeTable, useTreeTable } from '@yzh-core'
+import { ElTag } from 'element-plus'
 import RolePageLogic from './logic'
 
-// 实例化 Logic
-const logic = new RolePageLogic()
-
-// 本地状态
-const treeTableRef = ref()
-
-// ========================================================
-// 树节点操作
-// ========================================================
-
-/** 树节点点击 */
-async function handleNodeClick(node: TreeNode) {
-  await logic.onNodeClick(node)
-}
-
-/** 树节点自定义操作 */
-async function handleTreeNodeAction(action: string, node: TreeNode) {
-  if (action === 'add-child') {
-    handleAddRole(node)
-  } else if (action === 'edit') {
-    handleEditRole(node)
-  } else if (action === 'delete') {
-    await handleDeleteRole(node)
-  } else if (action === 'toggle-valid') {
-    await handleToggleRoleIsValid(node)
-  }
-}
-
-/** 新增角色 */
-function handleAddRole(parentNode?: TreeNode) {
-  logic.openAddDialog(parentNode ?? logic.selectedNode.value)
-}
-
-/** 编辑角色 */
-function handleEditRole(node: TreeNode) {
-  logic.openEditDialog(node)
-}
-
-/** 删除角色 */
-async function handleDeleteRole(node: TreeNode) {
-  await ElMessageBox.confirm(
-    `确定删除角色【${node.name}】？`,
-    '删除确认',
-    {
-      type: 'warning',
-      confirmButtonText: '确定删除',
-      cancelButtonText: '取消',
-    },
-  )
-  await logic.deleteTreeNode(node, true)
-  ElMessage.success('删除成功')
-}
-
-/** 启用/禁用角色（基类统一处理：确认弹窗 → API → 本地更新） */
-async function handleToggleRoleIsValid(node: TreeNode) {
-  await logic.toggleTreeNodeWithConfirm(node)
-}
-
-// ========================================================
-// 提交弹窗
-// ========================================================
-
-async function handleSubmit() {
-  try {
-    await logic.submitForm()
-    ElMessage.success(
-      logic.dialogMode.value === 'add' ? '新增成功' : '修改成功',
-    )
-  } catch (e: any) {
-    ElMessage.error(e.message || '保存失败')
-  }
-}
-
-// ========================================================
-// 初始化
-// ========================================================
-
-onMounted(async () => {
-  await logic.init()
-  await nextTick()
-  logic.setTreeTableRef(treeTableRef.value)
-})
+// 实例化 Logic（useTreeTable 统一注入 tableRef/treeTableRef 与初始化流程）
+const { logic, treeTableRef } = useTreeTable(RolePageLogic)
 </script>
 
 <template>
   <div class="role-page">
     <YzhTreeTable
       ref="treeTableRef"
-      :tree-data="logic.treeData.value"
+      :tree-data="logic.treeData"
       :tree-width="320"
       :tree-toolbar="true"
       :tree-searchable="true"
       :tree-lazy="true"
       :tree-load-data="logic.loadChildren.bind(logic)"
       :node-actions="logic.nodeActions"
-      :get-action-label="(action: string, node: TreeNode) => logic.getNodeActionLabel(action, node)"
-      @tree-node-click="handleNodeClick"
-      @tree-node-action="handleTreeNodeAction"
+      @tree-node-click="logic.onNodeClick"
+      @tree-node-action="logic.onNodeAction"
     >
-      <!-- 树底部：新增角色按钮 -->
+      <!-- 树底部：新增角色按钮（动作仍走内核派发） -->
       <template #treeFooter>
-        <el-button type="primary" :icon="Plus" @click="handleAddRole()" style="width: 100%;">
+        <el-button type="primary" :icon="Plus" style="width: 100%;" @click="logic.openTreeNodeDialog(null, logic.selectedNode)">
           新增角色
         </el-button>
       </template>
@@ -129,7 +42,7 @@ onMounted(async () => {
       <template #default>
         <div class="role-page__detail">
           <!-- 未选中提示 -->
-          <div v-if="!logic.selectedNode.value" class="role-page__empty">
+          <div v-if="!logic.selectedNode" class="role-page__empty">
             <el-tag type="info" size="large">请在左侧选择角色查看详情</el-tag>
           </div>
 
@@ -139,28 +52,28 @@ onMounted(async () => {
             <div class="role-page__fields">
               <div class="role-page__field">
                 <span class="role-page__label">角色名称：</span>
-                <span class="role-page__value">{{ logic.selectedNode.value.name }}</span>
+                <span class="role-page__value">{{ logic.selectedNode.Name }}</span>
               </div>
               <div class="role-page__field">
                 <span class="role-page__label">角色编码：</span>
-                <span class="role-page__value">{{ logic.selectedNode.value.code }}</span>
+                <span class="role-page__value">{{ logic.selectedNode.Code }}</span>
               </div>
               <div class="role-page__field">
                 <span class="role-page__label">状态：</span>
                 <el-tag
-                  :type="(logic.selectedNode.value.extra as any)?.IsValid === 1 ? 'success' : 'info'"
+                  :type="(logic.selectedNode.Extra as any)?.IsValid === 1 ? 'success' : 'info'"
                   size="small"
                 >
-                  {{ (logic.selectedNode.value.extra as any)?.IsValid === 1 ? '启用' : '禁用' }}
+                  {{ (logic.selectedNode.Extra as any)?.IsValid === 1 ? '启用' : '禁用' }}
                 </el-tag>
               </div>
               <div class="role-page__field">
                 <span class="role-page__label">排序：</span>
-                <span class="role-page__value">{{ (logic.selectedNode.value.extra as any)?.OrderNo ?? '-' }}</span>
+                <span class="role-page__value">{{ (logic.selectedNode.Extra as any)?.OrderNo ?? '-' }}</span>
               </div>
               <div class="role-page__field">
                 <span class="role-page__label">创建时间：</span>
-                <span class="role-page__value">{{ (logic.selectedNode.value.extra as any)?.CreateDate ?? '-' }}</span>
+                <span class="role-page__value">{{ (logic.selectedNode.Extra as any)?.CreateDate ?? '-' }}</span>
               </div>
             </div>
           </div>
@@ -168,33 +81,29 @@ onMounted(async () => {
       </template>
     </YzhTreeTable>
 
-    <!-- 新增/编辑弹窗 -->
-    <el-dialog
-      v-model="logic.dialogVisible.value"
-      :title="logic.dialogMode.value === 'add' ? '新增角色' : '编辑角色'"
+    <!-- 新增/编辑角色弹窗（树节点泛型流） -->
+    <YzhFormDialog
+      v-model:visible="logic.treeDialogVisible.value"
+      v-model="logic.treeFormData"
+      :mode="logic.treeDialogMode.value"
+      entity-name="角色"
+      :fields="logic.treeFormFields"
+      :loading="logic.treeSubmitting.value"
+      :cols="1"
       width="500px"
-      :close-on-click-modal="false"
-      destroy-on-close
+      @submit="logic.submitTreeNodeForm()"
     >
       <!-- 上级角色只读展示 -->
-      <div class="role-form-header">
-        <span class="role-form-header__label">上级角色：</span>
-        <el-tag v-if="logic.parentNode.value" type="info">
-          {{ logic.parentNode.value.name }}
-        </el-tag>
-        <el-tag v-else type="info">根级</el-tag>
-      </div>
-
-      <YzhForm
-        v-model="logic.formData"
-        :fields="logic.formFields as any"
-        :loading="logic.submitting.value"
-        :cols="1"
-        label-width="100px"
-        @submit="handleSubmit"
-        @reset="logic.dialogVisible.value = false"
-      />
-    </el-dialog>
+      <template #prepend>
+        <div class="role-form-header">
+          <span class="role-form-header__label">上级角色：</span>
+          <el-tag v-if="logic.treeParentNode.value" type="info">
+            {{ logic.treeParentNode.value.Name }}
+          </el-tag>
+          <el-tag v-else type="info">根级</el-tag>
+        </div>
+      </template>
+    </YzhFormDialog>
   </div>
 </template>
 

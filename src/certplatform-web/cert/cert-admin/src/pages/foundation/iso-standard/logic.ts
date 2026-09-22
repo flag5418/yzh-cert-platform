@@ -4,7 +4,7 @@
  * 数据访问规则：
  * - res.data：ApiResponse 顶层（camelCase）
  * - 业务行 r：PascalCase 字段（r.Code, r.StandardCode, r.Enable）
- * - TreeNode：el-tree 内部约定小写（node.code, node.name）
+ * - TreeNode：统一 PascalCase（node.Code / node.Name / node.Extra，见 @yzh-core types/tree）
  * - formData：PascalCase key（YzhForm 双向绑定）
  *
  * 架构：
@@ -13,7 +13,7 @@
  * - 继承 TreeTableLogic 获得全套左树右表能力
  */
 
-import { TreeTableLogic, type ApiResponse, type PagedData, type TreeNode } from '@yzh-core'
+import { TreeTableLogic, type ApiResponse, type PagedData, type TreeNode, type YzhAction } from '@yzh-core'
 import { reactive, ref } from 'vue'
 
 export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
@@ -38,16 +38,16 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
   // ──── 行操作按钮（基类 TreeTableLogic.rowActionButtons 已自动注入 toggle-valid） ────
 
   // ──── 树节点操作（从 TreeConfig 配置驱动，取消 add-child） ────
-  get nodeActions(): Record<string, string> {
-    const actions: Record<string, string> = {}
+  // 覆盖内核 nodeActions：标准无层级，不提供「新增下级」
+  override get nodeActions(): YzhAction[] {
+    const actions: YzhAction[] = []
     const tc = this.treeConfig
     if (!tc) return actions
-    // AllowEdit 控制编辑按钮（不含 add-child，标准无层级）
     if (tc.AllowEdit) {
-      actions['edit'] = '编辑'
+      actions.push({ key: 'edit', text: '编辑' })
     }
     if (tc.AllowDelete) {
-      actions['delete'] = '删除'
+      actions.push({ key: 'delete', text: '删除', type: 'danger', danger: true })
     }
     return actions
   }
@@ -68,10 +68,10 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
     searchParams?: Record<string, any>
   }): Promise<{ rows: any[]; total: number }> {
     const filters = this.buildFilters()
-    if (this.selectedNode.value) {
+    if (this.selectedNode) {
       filters.push({
         Field: this.relateField,
-        Value: this.selectedNode.value.code,
+        Value: this.selectedNode.Code,
         Operator: 'eq',
       })
     }
@@ -98,7 +98,7 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
 
   /** 打开新增条款弹窗 */
   openAddClauseDialog(): boolean {
-    if (!this.selectedNode.value) {
+    if (!this.selectedNode) {
       return false
     }
     this.dialogMode.value = 'add'
@@ -108,7 +108,7 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
     const tmpl = (this.config.value as any)?.NewEntity || {}
     Object.assign(this.formData, {
       ...tmpl,
-      StandardCode: this.selectedNode.value.code,
+      StandardCode: this.selectedNode.Code,
       SortOrder: 0,
     })
     this.dialogVisible.value = true
@@ -177,10 +177,10 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
     this.stdDialogMode.value = 'edit'
     this.stdEditingNode.value = node
     Object.keys(this.stdFormData).forEach((k) => delete this.stdFormData[k])
-    const extra = (node.extra as any) || {}
+    const extra = (node.Extra as any) || {}
     Object.assign(this.stdFormData, {
-      Code: node.code,
-      StandardName: node.name,
+      Code: node.Code,
+      StandardName: node.Name,
       ...extra,
     })
     this.stdDialogVisible.value = true

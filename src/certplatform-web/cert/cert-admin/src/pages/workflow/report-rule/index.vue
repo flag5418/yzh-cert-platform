@@ -5,7 +5,7 @@
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Upload, Document } from '@element-plus/icons-vue'
+import { Plus, Upload, Document, OfficeBuilding, Calendar } from '@element-plus/icons-vue'
 import { YzhPageLayout, YzhForm, type YzhFormField } from '@yzh-core'
 import { useFileTree, type TreeNode } from '@share/composables/useFileTree'
 import {
@@ -66,7 +66,7 @@ const canEdit = computed(() => hasPhaseSelected.value)
 
 // ── 树节点点击 ──
 async function handleNodeClick(node: TreeNode) {
-  if (node.type !== 'stage') return
+  if (node.Type !== 'stage') return
 
   selectedPhase.value = node
   currentTemplate.value = null
@@ -78,14 +78,14 @@ async function handleNodeClick(node: TreeNode) {
 // ── 加载模板 ──
 async function loadTemplate() {
   const phase = selectedPhase.value
-  if (!phase || !phase.orgCode || !phase.stdCode || !phase.phaseCode) return
+  if (!phase || !phase.OrgCode || !phase.StdCode || !phase.PhaseCode) return
 
   templateLoading.value = true
   try {
     const res = await getTemplateByContext({
-      orgCode: phase.orgCode,
-      standardCode: phase.stdCode,
-      phaseCode: phase.phaseDefinitionCode || phase.phaseCode,
+      orgCode: phase.OrgCode,
+      standardCode: phase.StdCode,
+      phaseCode: phase.PhaseDefinitionCode || phase.PhaseCode,
     })
     const template = (res as any)?.data ?? res
     if (template && template.Id) {
@@ -119,9 +119,9 @@ async function handleSaveTemplate() {
       TemplateName: templateForm.TemplateName,
       Remark: templateForm.Remark,
       IsDefault: templateForm.IsDefault,
-      OrgCode: phase.orgCode,
-      StandardCode: phase.stdCode,
-      PhaseCode: phase.phaseDefinitionCode || phase.phaseCode,
+      OrgCode: phase.OrgCode,
+      StandardCode: phase.StdCode,
+      PhaseCode: phase.PhaseDefinitionCode || phase.PhaseCode,
     }
     if (currentTemplate.value?.Id) {
       payload.Id = currentTemplate.value.Id
@@ -147,9 +147,9 @@ async function handleUploadFile(options: any) {
 
   try {
     const res = await uploadTemplateFile(options.file, {
-      orgCode: phase.orgCode!,
-      standardCode: phase.stdCode!,
-      phaseCode: phase.phaseDefinitionCode || phase.phaseCode!,
+      orgCode: phase.OrgCode!,
+      standardCode: phase.StdCode!,
+      phaseCode: phase.PhaseDefinitionCode || phase.PhaseCode!,
     })
     const data = (res as any)?.data ?? res
     ElMessage.success(`上传成功：${data?.fileName}`)
@@ -270,10 +270,10 @@ onMounted(() => {
           >
             <template #default="{ data }">
               <span class="tree-node">
-                <el-icon v-if="data.type === 'organization'" class="node-icon"><OfficeBuilding /></el-icon>
-                <el-icon v-else-if="data.type === 'standard'" class="node-icon"><Document /></el-icon>
+                <el-icon v-if="data.Type === 'organization'" class="node-icon"><OfficeBuilding /></el-icon>
+                <el-icon v-else-if="data.Type === 'standard'" class="node-icon"><Document /></el-icon>
                 <el-icon v-else class="node-icon"><Calendar /></el-icon>
-                <span class="node-label">{{ data.name }}</span>
+                <span class="node-label">{{ data.Name }}</span>
               </span>
             </template>
           </el-tree>
@@ -293,8 +293,7 @@ onMounted(() => {
           <!-- 模板区域 -->
           <el-card shadow="never" class="template-card">
             <template #header>
-              <div class="card-header">
-                <span class="card-title">模板 — {{ selectedPhase?.name || '' }}</span>
+              <div class="card-header">                  <span class="card-title">模板 — {{ selectedPhase?.Name || '' }}</span>
                 <div class="card-actions">
                   <el-button v-if="hasTemplate" type="primary" size="small" @click="handleSaveTemplate" :loading="saving" :disabled="!canEdit">
                     更新模板

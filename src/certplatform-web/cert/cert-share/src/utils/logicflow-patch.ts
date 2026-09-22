@@ -41,7 +41,7 @@ export function installLogicFlowPatch(): void {
           return src
         })
       }
-      return origAssign.apply(this, [target, ...sources])
+      return origAssign.apply(Object, [target, ...sources])
     } as typeof Object.assign
 
     const proto = CSSStyleDeclaration.prototype as any

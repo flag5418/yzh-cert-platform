@@ -31,7 +31,7 @@ const searchFields: SearchField[] = [
   { prop: 'entName', label: '企业名称', type: 'text' }
 ]
 
-async function loadTasks(params: PageParams) {
+async function loadTasks(_params: PageParams) {
   // 模拟数据
   return {
     rows: [],

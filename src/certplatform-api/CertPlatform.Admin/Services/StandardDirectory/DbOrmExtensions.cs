@@ -32,9 +32,9 @@ namespace CertPlatform.Admin.Services.StandardDirectory
                     .Replace(" && ", " AND ")
                     .Replace(" || ", " OR ");
 
-                // 将参数值绑定到表达式树中提取的值
-                return await db.Client.Ado.ExecuteCommandAsync(
-                    $"UPDATE `{tableName}` SET {BuildSetClause(updater, fields)} WHERE {conditions}");
+                var sql = $"UPDATE `{tableName}` SET {BuildSetClause(updater, fields)} WHERE {conditions}";
+                var result = await db.Client.Ado.ExecuteCommandAsync(sql);
+                return Result<int>.Ok(result);
             }
             catch (System.Exception ex)
             {
@@ -48,7 +48,7 @@ namespace CertPlatform.Admin.Services.StandardDirectory
             if (updater.Body is MemberInitExpression initExpr)
             {
                 return string.Join(", ", initExpr.NewExpression.Arguments.Zip(
-                    initExpr.Members, (arg, member) => $"`{member.Name}`=@{member.Name}"));
+                    initExpr.Bindings, (arg, binding) => $"`{binding.Member.Name}`=@{binding.Member.Name}"));
             }
             return string.Join(", ", fields.Select(f => $"`{f}`=@{f}"));
         }
@@ -62,8 +62,9 @@ namespace CertPlatform.Admin.Services.StandardDirectory
             try
             {
                 var whereClause = BuildWhereClause(filter);
-                return await db.Client.Ado.ExecuteCommandAsync(
-                    $"DELETE FROM `{tableName}` WHERE {whereClause}");
+                var sql = $"DELETE FROM `{tableName}` WHERE {whereClause}";
+                var result = await db.Client.Ado.ExecuteCommandAsync(sql);
+                return Result<int>.Ok(result);
             }
             catch (System.Exception ex)
             {

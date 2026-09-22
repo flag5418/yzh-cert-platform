@@ -4,7 +4,7 @@
  * 适用于所有继承 YzhControllerBase 的控制器
  * 前端只需指定 controllerName，无需手写每个业务接口
  */
-import { yzhApi, type ApiResponse, type FilterRequest, type PagedResult } from '@yzh-core'
+import { yzhApi, type FilterRequest, type PagedResult } from '@yzh-core'
 
 /**
  * 泛型分页查询

@@ -806,7 +806,6 @@ public class StandardDirectoryService
         {
             FileCode = v.FileCode,
             UploadStatus = v.UploadStatus,
-            FileType = v.FileType,
             StoragePath = v.StoragePath
         }).ToList() ?? new();
 
@@ -814,10 +813,14 @@ public class StandardDirectoryService
         if (pendingCount > 0)
             return (false, $"还有 {pendingCount} 个文件未上传完成", null);
 
-        // 分类：普通文件 vs 需要转换的 doc/xls 文件
-        var convertibleFiles = allFiles.Where(x =>
-            x.UploadStatus == "uploaded" &&
-            (x.FileType == "doc" || x.FileType == "xls")).ToList();
+        // 分类：普通文件 vs 需要转换的 doc/xls 文件（FileType 从实体获取）
+        var convertibleFiles = new List<StandardDirectoryFile>();
+        foreach (var file in allFiles.Where(x => x.UploadStatus == "uploaded"))
+        {
+            var entity = (await _db.GetOneAsync<StandardDirectoryFile>(x => x.FileCode == file.FileCode)).Data;
+            if (entity != null && (entity.FileType == "doc" || entity.FileType == "xls"))
+                convertibleFiles.Add(entity);
+        }
 
         // 全部文件激活：IsValid=0→1, UploadStatus→active, TaskId→null
         foreach (var file in allFiles)
@@ -956,41 +959,51 @@ public class StandardDirectoryService
 
             if ((file.Remark ?? "").Contains(replaceMarker))
             {
-                // 替换模式：恢复为有效状态
-                await _db.SqlExecuteAsync(
-                    "UPDATE cert_standard_directory_file SET IsValid=1, UploadStatus='active', TaskId=NULL, ConvertStatus=NULL, ConvertedStoragePath=NULL, ConvertMessage=NULL, Remark=REPLACE(REMARK,@marker,'') WHERE Code=@code",
-                    new { marker = replaceMarker, code = file.Code });
-                restoredCount++;
+                // 替换模式：恢复为有效状态（直接更新实体）
+                var updateFile = (await _db.GetOneAsync<StandardDirectoryFile>(
+                    x => x.Code == file.Code)).Data;
+                if (updateFile != null)
+                {
+                    updateFile.IsValid = 1;
+                    updateFile.UploadStatus = "active";
+                    updateFile.TaskId = null;
+                    updateFile.ConvertStatus = null;
+                    updateFile.ConvertedStoragePath = null;
+                    updateFile.ConvertMessage = null;
+                    updateFile.Remark = (updateFile.Remark ?? "").Replace(replaceMarker, "");
+                    await _db.UpdateAsync(updateFile);
+                    restoredCount++;
+                }
             }
             else
             {
-                // 创建模式：物理删除（IsValid=0 记录需用原生 SQL 删除）
-                await _db.SqlExecuteAsync(
-                    "DELETE FROM cert_standard_directory_file WHERE Code=@code",
-                    new { code = file.Code });
+                // 创建模式：物理删除（IsValid=0 记录）
+                await _db.Client.Deleteable<StandardDirectoryFile>()
+                    .Where(x => x.Code == file.Code)
+                    .ExecuteCommandAsync();
                 deletedCount++;
             }
         }
 
         // 删除此任务创建的空文件夹
-        var taskFolders = (await _db.SqlQueryAsync<StandardDirectoryFolder>(
-            "SELECT * FROM cert_standard_directory_folder WHERE TaskId=@taskId AND IsDeleted=0",
-            new { taskId })).Data ?? new();
+        var taskFolders = (await _db.Client.Queryable<StandardDirectoryFolder>()
+            .Where(x => x.TaskId == taskId && !x.IsDeleted)
+            .ToListAsync());
         foreach (var folder in taskFolders)
         {
-            var countResult = await _db.SqlScalarAsync<long>(
-                "SELECT COUNT(*) FROM cert_standard_directory_file WHERE FolderCode=@folderCode AND IsValid=1 AND IsDeleted=0",
-                new { folderCode = folder.FolderCode });
-            if (countResult.Data == 0)
-                await _db.SqlExecuteAsync(
-                    "DELETE FROM cert_standard_directory_folder WHERE Code=@code",
-                    new { code = folder.Code });
+            var fileCount = await _db.Client.Queryable<StandardDirectoryFile>()
+                .Where(x => x.FolderCode == folder.FolderCode && x.IsValid == 1 && !x.IsDeleted)
+                .CountAsync();
+            if (fileCount == 0)
+                await _db.Client.Deleteable<StandardDirectoryFolder>()
+                    .Where(x => x.Code == folder.Code)
+                    .ExecuteCommandAsync();
         }
 
         // 删除上传任务记录
-        await _db.SqlExecuteAsync(
-            "DELETE FROM cert_upload_task WHERE TaskId=@taskId",
-            new { taskId });
+        await _db.Client.Deleteable<UploadTask>()
+            .Where(x => x.TaskId == taskId)
+            .ExecuteCommandAsync();
 
         return (true, null, deletedCount, restoredCount);
     }
@@ -1000,14 +1013,14 @@ public class StandardDirectoryService
     /// </summary>
     public async Task<UploadStatusResponse?> GetUploadStatusAsync(string taskId)
     {
-        var task = (await _db.QueryFirstOrDefaultAsync<UploadTask>(
-            "SELECT * FROM cert_upload_task WHERE TaskId=@taskId AND IsDeleted=0",
-            new { taskId })).Data;
-        if (task == null) return null;
+        // 使用视图查询任务详情
+        var viewResult = await _db.GetOneAsync<UploadTaskDetailView>(
+            x => x.TaskId == taskId);
+        if (viewResult.Data == null) return null;
 
-        var files = (await _db.SqlQueryAsync<StandardDirectoryFile>(
-            "SELECT FileCode, FileName, UploadStatus FROM cert_standard_directory_file WHERE TaskId=@taskId AND IsDeleted=0",
-            new { taskId })).Data ?? new();
+        var task = viewResult.Data;
+        var files = (await _db.GetListAsync<UploadTaskDetailView>(
+            x => x.TaskId == taskId)).Data ?? new();
 
         return new UploadStatusResponse
         {
@@ -1650,11 +1663,11 @@ public class StandardDirectoryService
                 return (true, null, 0, 0);
 
             // 2. 排除仍在队列中（有活跃资源锁）的文件
-            var allLocks = (await _db.Client.Queryable<YzhQueueResourceLock>()
+            var allLocks = (await _db.Client.Queryable<YZH.Core.Stand.Models.Queue.YzhQueueResourceLock>()
                 .Where(x => x.Status == "locked" && x.ResourceTable == QueueManager.RESOURCE_FILE)
                 .Select(x => x.ResourceCode)
                 .ToListAsync());
-            var activeLockCodes = new HashSet<string>(allLocks.Select(l => (string)l.ResourceCode));
+            var activeLockCodes = new HashSet<string>(allLocks);
 
             var toRetry = new List<StandardDirectoryFile>();
             var missingSources = new List<string>();

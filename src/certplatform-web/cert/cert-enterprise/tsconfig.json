@@ -1,0 +1,13 @@
+{
+  "//": "cert-enterprise 目前为占位 workspace（暂无源码），此 tsconfig 仅保证 vue-tsc --noEmit 空跑通过；后续落地页面时补 include。",
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "jsx": "preserve"
+  },
+  "include": ["src/**/*.ts", "src/**/*.vue"]
+}

@@ -48,9 +48,10 @@ AIGC:
   - 代码结构（三层同构/命名/路由）→ `docs/10-YZH架构/06-代码结构规范.md`
   - 开发流程（新增页面步骤/钩子速查/常见场景）→ `docs/10-YZH架构/07-开发流程.md`
   - 常见错误 → `docs/10-YZH架构/08-常见错误与修复.md`
-- **知识底座**：`docs/30-项目规则/知识库/README.md` — Vol 能力清单 / YZH 增量 / 边界约束 / 代码模板 / 踩坑记录 / 速查手册
+- **知识底座**：`docs/30-项目规则/知识库/README.md` — Vol 能力清单 / YZH 增量 / 边界约束 / 代码模板 / 踩坑记录 / 速查手册 / 术语表
+- **术语表**：`docs/30-项目规则/知识库/08-术语表/术语表-V1.md` — 认证行业+审核过程+系统功能+技术术语（V1.2 按 2026-09 架构更新）
 - **Skill 清单**：`docs/30-项目规则/Skill清单-V1.md` — 全部 Skill 的编码/输入输出/绑定模式/实现类/编写规范
-- **编码规范**：`docs/30-项目规则/vol-csharp-coding-standards.md`（C#）、`docs/30-项目规则/vue-ts-coding-standards.md`（Vue3+TS）
+- **编码规范**：C#/Vue/TS 编码规范已归档（Vol 专属），新架构参考 `docs/10-YZH架构/02-后端架构.md`（C#）与 `docs/10-YZH架构/03-前端架构.md`（Vue/TS）
 - **脚本规范**：`scripts/README.md`（backend/db/frontend/storage/generate/tools 子目录）
 
 ## 项目速览

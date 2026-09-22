@@ -22,7 +22,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 /**
  * YzhEmptyState —— 空状态组件（对齐 vidlang EmptyState）
  * 三种模式：

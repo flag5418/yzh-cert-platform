@@ -18,7 +18,8 @@
         <el-input v-model="form.url" placeholder="/system/menu" />
       </el-form-item>
       <el-form-item label="图标" prop="icon">
-        <IconPicker v-model="form.icon" />
+        <!-- form.icon 可选：用显式双绑定兜底空串，满足 IconPicker 的 string 必填 prop -->
+        <IconPicker :model-value="form.icon ?? ''" @update:model-value="form.icon = $event" />
       </el-form-item>
       <el-form-item label="描述">
         <el-input

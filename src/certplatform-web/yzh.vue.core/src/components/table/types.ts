@@ -7,6 +7,55 @@
 
 import type { PropType } from 'vue'
 
+// ========================================================
+// YzhAction 描述符（C-A2）
+// 统一按钮/动作声明：工具栏、行按钮、树节点动作共用同一形状。
+// 颜色语义外置：type 由调用方声明，组件不内置 edit/delete→颜色 的业务假设（C-A4）。
+// ========================================================
+
+/** 按钮语义类型（element-plus button type） */
+export type YzhActionType = 'primary' | 'success' | 'warning' | 'danger' | 'info'
+
+/** 通用动作描述符 */
+export interface YzhAction {
+  /** 动作唯一键（如 add/edit/delete/toggle-valid 或自定义方法名） */
+  key: string
+  /** 显示文字 */
+  text: string
+  /** 按钮类型（颜色语义由调用方声明） */
+  type?: YzhActionType
+  /** 图标（element-plus 图标组件名） */
+  icon?: string
+  /** 是否禁用 */
+  disabled?: boolean
+  /** 是否显示（默认 true） */
+  visible?: boolean
+  /** 工具栏分组（默认 left） */
+  group?: 'left' | 'right'
+  /** 点击时是否弹确认框（文案由调用方通过 confirmText 提供） */
+  confirm?: string
+  /** 是否作为 danger 样式下拉项（树节点动作用） */
+  danger?: boolean
+  /** 透传给处理器的附加载荷 */
+  payload?: any
+}
+
+/** 行动作描述符（在 YzhAction 基础上支持按行求值） */
+export type YzhRowActionResolver<T = any> = (row: T) => YzhAction[]
+
+/** 行动作输入：静态数组或按行解析函数 */
+export type YzhRowActions<T = any> = YzhAction[] | YzhRowActionResolver<T>
+
+/** 工具栏动作输入 */
+export type YzhToolbarActions = YzhAction[]
+
+/** 树节点动作输入：静态数组或按节点解析函数 */
+export type YzhNodeActions = YzhAction[] | ((node: any) => YzhAction[])
+
+// ========================================================
+// 表格列定义
+// ========================================================
+
 /** 表格列定义 */
 export interface YzhTableColumn<T = any> {
   /** 字段名（数据源中的 key） */
@@ -39,6 +88,10 @@ export interface YzhTableColumn<T = any> {
   tagType?: 'success' | 'warning' | 'info' | 'primary' | 'danger'
   /** 是否掩码显示（敏感字段如 key/secret/password） */
   mask?: boolean
+  /** 通用标签渲染（C-A6）：值 → 显示文字 / 标签类型的映射，由调用方传入，组件不内置业务语义 */
+  tagMap?: Record<string | number, string>
+  /** render:'tag' 时的标签类型映射（可选） */
+  tagTypeMap?: Record<string | number, YzhActionType>
 }
 
 // V4 命名空间别名（避免和旧版 YzhDataTable 冲突）

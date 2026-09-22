@@ -26,7 +26,7 @@ public class SysApi
     public string Path { get; set; } = "";
     
     /// <summary>业务分组路径（如 系统管理/用户管理）</summary>
-    [SugarColumn(Length = 200, ColumnName = "group_path")]
+    [SugarColumn(Length = 200)]
     public string GroupPath { get; set; } = "";
     
     /// <summary>接口名称</summary>

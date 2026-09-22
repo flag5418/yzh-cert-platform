@@ -4,7 +4,7 @@
  * 数据访问规则（与 YZH.Core.Stand 严格一致）：
  * - res.data：ApiResponse 顶层（camelCase）
  * - 业务行 r：PascalCase 字段（r.Code / r.DicCode / r.IsValid）
- * - TreeNode：el-tree 内部约定小写（node.code / node.name / node.extra）
+ * - TreeNode：统一 PascalCase（node.Code / node.Name / node.Extra / node.ParentCode）
  * - formData：**PascalCase** key —— 必须与 YzhForm 的 field.prop、
  *   EntityConfig 的 Columns[].FieldName 保持同一套命名（后端 EntitySchemaHelper 也返回 PascalCase）
  *
@@ -18,7 +18,7 @@
  * ② Code 随机生成且不可修改 —— 前端不生成 Code，由后端框架自动填充
  */
 
-import { TreeTableLogic, type TreeNode, type ApiResponse } from '@yzh-core'
+import { TreeTableLogic, type ApiResponse, type TreeNode } from '@yzh-core'
 import { ElMessage } from 'element-plus'
 import { ref } from 'vue'
 
@@ -29,8 +29,9 @@ import { ref } from 'vue'
 export class DictionaryPageLogic extends TreeTableLogic<any> {
   controllerName = 'Dictionary'
 
-  /** 当前正在编辑的字典项行（用于提交后与后端返回值合并，避免表格行丢字段） */
-  private editingRow = ref<any>(null)
+  /** 当前正在编辑的字典项行（用于提交后与后端返回值合并，避免表格行丢字段）
+   *  ⚠️ 不能声明为 private：与基类 ST-8 的 protected editingRow 同名会 TS2415，改名区分 */
+  protected itemEditingRow = ref<any>(null)
 
   // ========================================================
   // 表格列 / 关联字段
@@ -78,7 +79,7 @@ export class DictionaryPageLogic extends TreeTableLogic<any> {
     rows: any[]
     total: number
   }> {
-    if (!this.selectedNode.value) {
+    if (!this.selectedNode) {
       return { rows: [], total: 0 }
     }
     const filters: Array<{ Field: string; Operator: string; Value: any }> = []
@@ -89,10 +90,10 @@ export class DictionaryPageLogic extends TreeTableLogic<any> {
       if (v === '' || v === null || v === undefined) continue
       filters.push({ Field: k, Value: v, Operator: 'like' })
     }
-    // 树节点过滤（DicCode = 选中节点 code）
+    // 树节点过滤（DicCode = 选中节点 Code）
     filters.push({
       Field: this.relateFieldName,
-      Value: this.selectedNode.value.code,
+      Value: this.selectedNode.Code,
       Operator: 'eq',
     })
     const res = await this.apiPost<ApiResponse<{
@@ -163,7 +164,7 @@ export class DictionaryPageLogic extends TreeTableLogic<any> {
   ): void {
     this.treeDialogMode.value = mode
     this.treeEditingNode.value = mode === 'edit' ? node : null
-    this.treeParentNode.value = mode === 'add' ? (parent ?? this.selectedNode.value) : null
+    this.treeParentNode.value = mode === 'add' ? (parent ?? this.selectedNode) : null
 
     Object.keys(this.treeFormData).forEach((k) => delete this.treeFormData[k])
 
@@ -172,11 +173,11 @@ export class DictionaryPageLogic extends TreeTableLogic<any> {
     const base: Record<string, any> = { ...tmpl, IsValid: 1 }
 
     if (mode === 'edit' && node) {
-      const extra = (node.extra as any) || {}
+      const extra = (node.Extra as any) || {}
       Object.assign(base, this.pickFormValues(this.treeFormFields, extra), {
-        Code: node.code,
-        ParentCode: node.parentCode,
-        DicName: node.name,
+        Code: node.Code,
+        ParentCode: node.ParentCode,
+        DicName: node.Name,
         IsValid: extra.IsValid ?? 1,
       })
     }
@@ -211,7 +212,7 @@ export class DictionaryPageLogic extends TreeTableLogic<any> {
     await this.refreshTable()
   }
 
-  /** 启用/禁用字典/分类（基类统一处理：确认弹窗 → API → 更新 node.extra） */
+  /** 启用/禁用字典/分类（基类统一处理：确认弹窗 → API → 更新 node.Extra） */
   async toggleTreeValid(node: TreeNode): Promise<void> {
     await this.toggleTreeNodeWithConfirm(node)
   }
@@ -225,13 +226,13 @@ export class DictionaryPageLogic extends TreeTableLogic<any> {
    * @param row 传入则为编辑，否则为新增（需已选中左侧字典）
    */
   openItemDialog(row?: any): boolean {
-    if (!row && !this.selectedNode.value) {
+    if (!row && !this.selectedNode) {
       ElMessage.warning('请先在左侧选择字典')
       return false
     }
 
     this.dialogMode.value = row ? 'edit' : 'add'
-    this.editingRow.value = row ?? null
+    this.itemEditingRow.value = row ?? null
 
     Object.keys(this.formData).forEach((k) => delete this.formData[k])
 
@@ -243,7 +244,7 @@ export class DictionaryPageLogic extends TreeTableLogic<any> {
       Object.assign(this.formData, tmpl, {
         IsValid: 1,
         OrderNo: 0,
-        DicCode: this.selectedNode.value!.code,
+        DicCode: this.selectedNode!.Code,
       })
     }
 
@@ -253,7 +254,7 @@ export class DictionaryPageLogic extends TreeTableLogic<any> {
 
   /** 提交字典项表单 */
   async submitItemForm(): Promise<void> {
-    if (!this.selectedNode.value) throw new Error('请先在左侧选择字典')
+    if (!this.selectedNode) throw new Error('请先在左侧选择字典')
 
     this.submitting.value = true
     try {
@@ -264,7 +265,7 @@ export class DictionaryPageLogic extends TreeTableLogic<any> {
       } else {
         const saved = await this.update(payload)
         // 与后端返回值合并，避免表格行丢失未提交的字段（如 CreateTime）
-        this.replaceRowByCode(saved.Code, { ...(this.editingRow.value || {}), ...saved })
+        this.replaceRowByCode(saved.Code, { ...(this.itemEditingRow.value || {}), ...saved })
       }
       ElMessage.success(this.dialogMode.value === 'add' ? '新增成功' : '修改成功')
       this.dialogVisible.value = false

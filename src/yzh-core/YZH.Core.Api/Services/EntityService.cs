@@ -295,12 +295,17 @@ public class EntityService<T> where T : class, new()
 
             var parentCodeCol = parentCodeProp.Name;
             var tableName = GetQueryTableName<T>();
+
+            // 显式索引参数构建 IN 列表（SqlSugar 原生 SQL 的匿名对象列表参数
+            // 不会自动展开为 IN 子句，会抛参数异常被吞掉，导致所有节点被误判为叶子）
+            var parameters = parentCodes.Select((code, i) => new SugarParameter($"@c{i}", code)).ToList();
+            var inList = string.Join(", ", parentCodes.Select((_, i) => $"@c{i}"));
             var sql = $"SELECT `{parentCodeCol}` AS ParentCode, COUNT(*) AS Cnt " +
                       $"FROM `{tableName}` " +
-                      $"WHERE `{parentCodeCol}` IN @codes " +
+                      $"WHERE `{parentCodeCol}` IN ({inList}) " +
                       $"GROUP BY `{parentCodeCol}`";
             var queryResult = await _dbOrm.Client.Ado.SqlQueryAsync<ChildrenCountRow>(
-                sql, new { codes = parentCodes });
+                sql, parameters);
 
             foreach (var item in queryResult)
             {

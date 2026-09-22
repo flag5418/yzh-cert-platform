@@ -14,9 +14,10 @@ namespace CertPlatform.Shared.Entities.Sys
     {
         // ──── Id / 审计字段由 BaseEntity 基类统一提供 ────
 
-        // ──── 业务字段 ────
-        [StringLength(64)]
-        public string? UserCode { get; set; }
+        // ──── 业务字段（与物理表 sys_log / V2 设计 E-06 对齐）────
+
+        /// <summary>操作用户 ID（DB: UserId, bigint）</summary>
+        public long? UserId { get; set; }
 
         [Required, StringLength(50)]
         public string Module { get; set; }
@@ -27,8 +28,8 @@ namespace CertPlatform.Shared.Entities.Sys
         [StringLength(50)]
         public string? TargetType { get; set; }
 
-        [StringLength(64)]
-        public string? TargetCode { get; set; }
+        /// <summary>操作对象 ID（DB: TargetId, bigint）</summary>
+        public long? TargetId { get; set; }
 
         public string? Detail { get; set; }
 

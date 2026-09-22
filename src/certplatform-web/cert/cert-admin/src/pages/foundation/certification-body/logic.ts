@@ -1,30 +1,28 @@
 /**
- * CertificationBodyLogic — 认证机构管理 Logic
+ * CertificationBodyLogic — 认证机构管理 Logic（SingleTableCore 架构）
  *
- * 基于 CrudPageLogic 实现标准 CRUD 页面
  * 后端会同步 Sys_Organization 机构记录（合法差异，保留在 Controller）
  */
 
-import { CrudPageLogic } from '@yzh-core'
+import { SingleTableCore } from '@yzh-core'
 
-export class CertificationBodyLogic extends CrudPageLogic<any> {
+export class CertificationBodyLogic extends SingleTableCore<any> {
   controllerName = 'Foundation/CertificationBody'
 
-  /** 行操作按钮（基类已自动注入 toggle-valid） */
-
-  /** 初始化 */
-  async init(): Promise<void> {
-    await this.loadConfig()
+  /** 新增默认值 */
+  protected override get defaultValues(): Record<string, any> {
+    return {
+      IsValid: 1,
+      Status: 'active',
+      Sort: 0,
+      MaxUsers: 100,
+      MaxEnterprises: 1000,
+    }
   }
 
-  /** 新增弹窗：补默认值 */
-  openAddDialog(): void {
-    super.openAddDialog()
-    if (this.formData.IsValid === undefined) this.formData.IsValid = 1
-    if (this.formData.Status === undefined) this.formData.Status = 'active'
-    if (this.formData.Sort === undefined) this.formData.Sort = 0
-    if (this.formData.MaxUsers === undefined) this.formData.MaxUsers = 100
-    if (this.formData.MaxEnterprises === undefined) this.formData.MaxEnterprises = 1000
+  /** toggle-valid 确认弹窗显示机构名称 */
+  protected override get entityNameField(): string {
+    return 'OrgName'
   }
 }
 

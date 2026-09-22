@@ -3,7 +3,7 @@
 // 不依赖 share / admin / auditor
 
 // 组件
-export { YzhForm } from './components/form'
+export { YzhForm, YzhFormDialog } from './components/form'
 export type { YzhFieldType, YzhFormField } from './components/form/YzhForm.vue'
 export {
   YzhDialog,
@@ -16,19 +16,28 @@ export {
   YzhTreeTableSelector,
   YzhTreeTableCheckSelector,
 } from './components/layout'
-export { default as YzhCrudPage } from './components/page/YzhCrudPage.vue'
+export type { YzhTreeNode } from './components/layout/YzhTree.vue'
 export { YzhTable } from './components/table'
 export type {
   DefaultSort,
   Page,
   PageParams,
   SearchField,
+  YzhAction,
+  YzhActionType,
+  YzhNodeActions,
+  YzhRowActionResolver,
+  YzhRowActions,
   YzhTableColumn,
   YzhTableColumnV4,
   YzhTableDataLoader,
   YzhTableToolbar,
+  YzhToolbarActions,
 } from './components/table/types'
 export { YzhCard, YzhEmptyState, YzhStatusBadge } from './components/ui'
+
+// 适配层（AD：EntityConfig → 组件契约，纯函数）
+export * from './adapters/entityAdapters'
 
 // API 客户端
 export { YzhApiClient, tokenStore, yzhApi } from './api/client'
@@ -49,10 +58,9 @@ export {
 } from './api/file-storage'
 
 // Composables
-export { useAuth } from './composables/useAuth'
-export { useTable } from './composables/useTable'
+export * from './composables/index'
 
-// 页面逻辑基类
+// 页面逻辑内核（新命名 *Core + 废弃别名）
 export * from './logic'
 
 // 通用类型
@@ -76,3 +84,9 @@ export {
   validate as validateTreeOps,
 } from './utils/treeOps'
 export * from './utils/treeUtils'
+export {
+  toCamelCase,
+  toPascalCase,
+  pascalCaseFormData,
+  rowToFormData,
+} from './utils/case'

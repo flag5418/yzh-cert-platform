@@ -6,7 +6,7 @@
 
 CREATE OR REPLACE VIEW v_standard_directory_root_files AS
 SELECT 
-    f.Id, f.Code, f.FileCode, f.FileName, f.FileType, f.StoragePath,
+    f.Id, f.code AS Code, f.FileCode, f.FileName, f.FileType, f.StoragePath,
     f.ConvertedStoragePath, f.ConvertStatus, f.ConvertMessage,
     f.UploadStatus, f.TaskId, f.DirectoryCode, f.FolderCode,
     f.IsValid, f.IsDeleted, f.Enable, f.FileSize

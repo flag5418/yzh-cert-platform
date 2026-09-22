@@ -19,7 +19,6 @@ namespace YZH.Core.Api.Models.System;
 public class Sys_Role : BaseEntity, ISoftDelete, IIsValid, ITreeEntity
 {
     /// <summary>角色编码（DB: Code）</summary>
-    [SugarColumn(ColumnName = "Code")]
     [StringLength(64)]
     public new string Code { get; set; } = string.Empty;
 
@@ -77,16 +76,15 @@ public class Sys_Role : BaseEntity, ISoftDelete, IIsValid, ITreeEntity
     [SugarColumn(IsIgnore = true)]
     public new bool? IsLeaf { get; set; }
 
-    /// <summary>Sys_Role 使用 Role_Id (int) 作为 PK，映射 BaseEntity.Id</summary>
-    [SugarColumn(ColumnName = "Role_Id", IsPrimaryKey = true, IsIdentity = true)]
+    /// <summary>Sys_Role 使用 Id (int) 作为 PK</summary>
+    [SugarColumn(ColumnName = "Id", IsPrimaryKey = true, IsIdentity = true)]
     public new string Id { get; set; } = string.Empty;
 
     /// <summary>是否删除（DB: IsDeleted）</summary>
     public bool IsDeleted { get; set; }
 
-    /// <summary>删除时间（本表无此列，标记 IsIgnore）</summary>
-    [SugarColumn(IsIgnore = true)]
-    public new DateTime? DeleteTime { get; set; }
+    /// <summary>删除时间（DB: DeleteTime）</summary>
+    public DateTime? DeleteTime { get; set; }
 
     /// <summary>是否有效（DB: IsValid）</summary>
     public int IsValid { get; set; } = 1;

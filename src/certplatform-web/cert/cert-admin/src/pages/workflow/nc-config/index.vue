@@ -1,19 +1,18 @@
 <script setup lang="ts">
 /**
- * NC 规则管理 — 左树右表（YZH 标准架构重写）
+ * NC 规则管理 — 左树右表（YZH 标准架构）
  *
  * 布局：
  * - 左侧：组织 → 标准 → 阶段 树（useFileTree composable）
- * - 右侧：NC 检查规则表格（YzhTable + YzhForm + CrudPageLogic）
+ * - 右侧：NC 检查规则表格（YzhTable + YzhFormDialog + SingleTableCore）
  *
  * 架构：
- * - Logic 继承 CrudPageLogic，自动从后端 EntityConfig 获取 columns / formFields / searchFields
+ * - Logic 继承 SingleTableCore，自动从后端 EntityConfig 获取 columns / formFields / searchFields
  * - 选中阶段节点后，自动联动过滤 OrgCode + StandardCode + PhaseCode
- * - 行操作按钮（编辑/删除/启用切换/复制）通过 YzhTable 配置驱动
+ * - 行动作（编辑/删除/启停/复制）由内核 dispatch 派发，页面无手写 handler
  */
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
-import { YzhTable, YzhForm } from '@yzh-core'
-import { ElMessage } from 'element-plus'
+import { YzhTable, YzhFormDialog } from '@yzh-core'
 import { Plus, RefreshRight, Search, FolderOpened, Document, Calendar } from '@element-plus/icons-vue'
 import { NCConfigLogic } from './logic'
 import { useFileTree, type TreeNode } from '@share/composables/useFileTree'
@@ -48,20 +47,12 @@ const filteredTreeData = computed(() => {
   return treeData.value.map(strip).filter(Boolean) as TreeNode[]
 })
 
-// ──── 行操作按钮（标准 edit/delete + 自定义 toggle-active / copy） ────
-const rowActionButtons = ref<Record<string, string>>({
-  'edit': '编辑',
-  'delete': '删除',
-  'toggle-active': '启用/禁用',
-  'copy': '复制',
-})
-
 // ========================================================
 // 树→表格联动
 // ========================================================
 
 /** 树节点点击 → 注入联动过滤 → YzhTable 自动刷新 */
-async function handleNodeClick(node: TreeNode) {
+async function onTreeNodeClick(node: TreeNode) {
   if (node.Type !== 'stage') {
     // 非阶段节点：清空表格
     logic.setTreeFilter('', '', '')
@@ -74,54 +65,6 @@ async function handleNodeClick(node: TreeNode) {
   )
   // 触发 YzhTable 刷新
   await tableRef.value?.refresh()
-}
-
-// ========================================================
-// 表格操作事件
-// ========================================================
-
-/** 工具栏：新增 */
-function handleAdd() {
-  if (!logic.anySelected) {
-    ElMessage.warning('请先选择阶段')
-    return
-  }
-  logic.openAddDialog()
-}
-
-/** 工具栏：刷新 */
-function handleRefresh() {
-  tableRef.value?.refresh()
-}
-
-/** 行操作事件处理 */
-async function handleRowAction(action: string, row: any) {
-  switch (action) {
-    case 'edit':
-      logic.openEditDialog(row)
-      break
-    case 'delete':
-      await logic.handleDelete(row)
-      break
-    case 'toggle-active':
-      await logic.handleToggleActive(row)
-      break
-    case 'copy':
-      await logic.handleCopy(row)
-      break
-  }
-}
-
-// ========================================================
-// 弹窗提交
-// ========================================================
-
-async function handleSubmit() {
-  try {
-    await logic.submitForm()
-  } catch (e: any) {
-    ElMessage.error(e.message || '保存失败')
-  }
 }
 
 // ========================================================
@@ -188,7 +131,7 @@ watch(tableRef, (el) => {
         highlight-current
         :expand-on-click-node="false"
         :filter-node-method="(value: string, data: TreeNode) => !value || data.Name.toLowerCase().includes(value.toLowerCase())"
-        @node-click="handleNodeClick"
+        @node-click="onTreeNodeClick"
       >
         <template #default="{ data }">
           <span class="tree-node">
@@ -210,41 +153,34 @@ watch(tableRef, (el) => {
       <YzhTable
         v-else
         ref="tableRef"
-        :columns="logic.columns as any"
-        :data-loader="(params: any) => logic.dataLoader(params)"
-        :search-fields="logic.searchFields as any"
-        :row-action-buttons="rowActionButtons"
-        :loading="logic.loading.value"
+        :columns="logic.columns"
+        :data-loader="logic.dataLoader.bind(logic)"
+        :search-fields="logic.searchFields"
+        :row-action-buttons="logic.rowActions"
         row-key="Code"
-        :stripe="true"
-        :border="false"
-        @row-action="handleRowAction"
+        @row-action="logic.onRowAction"
       >
         <!-- 工具栏左侧：新建检查项 + 刷新 -->
         <template #toolbar-left>
-          <el-button type="primary" :icon="Plus" @click="handleAdd">新建检查项</el-button>
-          <el-button :icon="RefreshRight" @click="handleRefresh">刷新</el-button>
+          <el-button type="primary" :icon="Plus" @click="logic.onToolbarAction('add')">新建检查项</el-button>
+          <el-button :icon="RefreshRight" @click="tableRef?.refresh()">刷新</el-button>
         </template>
       </YzhTable>
     </div>
 
     <!-- 编辑弹窗 -->
-    <el-dialog
-      v-model="logic.dialogVisible.value"
+    <YzhFormDialog
+      v-model:visible="logic.dialogVisible.value"
+      v-model="logic.formData"
+      :mode="logic.dialogMode.value"
+      entity-name="检查项"
       :title="logic.dialogMode.value === 'add' ? '新建检查项' : '编辑检查项'"
+      :fields="logic.formFields"
+      :loading="logic.submitting.value"
+      :cols="2"
       width="640px"
-      :close-on-click-modal="false"
-      destroy-on-close
-    >
-      <YzhForm
-        v-model="logic.formData"
-        :fields="logic.formFields as any"
-        :loading="logic.submitting.value"
-        :cols="2"
-        @submit="handleSubmit"
-        @reset="logic.dialogVisible.value = false"
-      />
-    </el-dialog>
+      @submit="logic.submitForm()"
+    />
   </div>
 </template>
 

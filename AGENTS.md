@@ -50,7 +50,7 @@ AIGC:
   - 常见错误 → `docs/10-YZH架构/08-常见错误与修复.md`
 - **知识底座**：`docs/30-项目规则/知识库/README.md` — Vol 能力清单 / YZH 增量 / 边界约束 / 代码模板 / 踩坑记录 / 速查手册
 - **Skill 清单**：`docs/30-项目规则/Skill清单-V1.md` — 全部 Skill 的编码/输入输出/绑定模式/实现类/编写规范
-- **编码规范**：`docs/30-项目规则/vol-csharp-coding-standards.md`（C#）、`docs/30-项目规则/vue-ts-coding-standards.md`（Vue3+TS）
+- **编码规范**：C# 编码规范与 Vue/TS 编码规范已归档至 `docs/90-归档/历史项目/Vol框架/归档-2026-09-09-Vol框架历史文档/`（Vol 专属，新架构请参考 `docs/10-YZH架构/02-后端架构.md` 与 `docs/10-YZH架构/03-前端架构.md`）
 - **脚本规范**：`scripts/README.md`（backend/db/frontend/storage/generate/tools 子目录）
 
 ## 项目速览

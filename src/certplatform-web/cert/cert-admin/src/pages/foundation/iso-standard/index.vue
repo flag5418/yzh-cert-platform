@@ -76,7 +76,7 @@ function handleEditStd(node: TreeNode) {
 /** 删除标准 */
 async function handleDeleteStd(node: TreeNode) {
   await ElMessageBox.confirm(
-    `确定删除标准【${node.name}】？`,
+    `确定删除标准【${node.Name}】？`,
     '删除确认',
     {
       type: 'warning',
@@ -197,10 +197,12 @@ function onStdDialogClosed() {
 
 onMounted(async () => {
   await logic.init()
-  await nextTick()
   // 注入组件引用，使基类 addTreeNode/updateTreeNode/deleteTreeNode 等可局部刷新
-  logic.setTreeTableRef(treeTableRef.value)
-  logic.setTableRef(tableRef.value)
+  // （官方示例写法：nextTick 传回调，确保 DOM 更新完成后再取 ref）
+  nextTick(() => {
+    logic.setTreeTableRef(treeTableRef.value)
+    logic.setTableRef(tableRef.value)
+  })
 })
 </script>
 
@@ -208,7 +210,7 @@ onMounted(async () => {
   <div class="iso-page">
     <YzhTreeTable
       ref="treeTableRef"
-      :tree-data="logic.treeData.value"
+      :tree-data="logic.treeData"
       :tree-width="320"
       :tree-toolbar="true"
       :tree-searchable="true"

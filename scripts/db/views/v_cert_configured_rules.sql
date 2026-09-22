@@ -2,6 +2,7 @@
 -- 视图：v_cert_configured_rules
 -- 用途：已配置提取规则列表（跨表 JOIN cert_doc_extraction_rule + cert_standard_directory_file）
 -- 日期：2026-09-20
+-- 更新：审计列改为 PascalCase（code→Code, skill→Skill）
 -- ============================================================
 
 CREATE OR REPLACE VIEW v_cert_configured_rules AS

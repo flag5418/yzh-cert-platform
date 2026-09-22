@@ -1,5 +1,9 @@
 /**
  * 工作流模型层 barrel exports
+ *
+ * 注：compiler 再导出的 setLogLevel/setLogEnabled 与 topology 重复，
+ * barrel 统一从 topology 出口（单一来源，TS2300 消歧）；
+ * compiler 内部自己 import 使用不受影响。
  */
 export { NodeIdGenerator, isValidNodeId, extractClassCode } from './nodeIdGenerator'
 export { deserialize, serialize, extractLayout } from './serializer'
@@ -20,6 +24,5 @@ export type { WorkflowState, WorkflowNode as WNode, WorkflowEdge as WEdge } from
 export {
   analyzeWorkflowTopology, nodeStyle, compileToWorkflowConfig, decompileToGraphData,
   extractTopologicalPaths, topologicalOrder,
-  setLogLevel, setLogEnabled,
   type GraphNode, type GraphEdge, type GraphData, type WorkflowConfig as CompilerWorkflowConfig
 } from './compiler'

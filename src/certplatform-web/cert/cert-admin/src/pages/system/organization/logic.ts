@@ -171,7 +171,7 @@ export class OrgPageLogic extends TreeTableLogic<any> {
    * 否则会出现「请先选择机构」和「请选择末端机构」两条互相矛盾的提示。
    */
   openAddUserDialog(): boolean {
-    const node = this.selectedNode.value
+    const node = this.selectedNode
     if (!node) {
       ElMessage.warning('请先选择机构')
       return false
@@ -181,7 +181,7 @@ export class OrgPageLogic extends TreeTableLogic<any> {
     // 批量计算：无子节点即为末端）。
     // 这里曾误读小写 node.isLeaf → 恒为 undefined → 任何节点都被判为「非末端」，
     // 导致即使选中末端机构也提示错误、无法新增人员。
-    if ((node.IsLeaf ?? (node as any).isLeaf) !== true) {
+    if (node.IsLeaf !== true) {
       ElMessage.warning('请选择末端机构（不含子机构的节点）')
       return false
     }
@@ -270,7 +270,7 @@ export class OrgPageLogic extends TreeTableLogic<any> {
     Object.keys(this.orgFormData).forEach((k) => delete this.orgFormData[k])
     // 注意：TreeNode 是 PascalCase，读小写会得到 undefined，
     // 导致编辑机构弹窗各字段全空。
-    const extra = ((node.Extra as any) ?? (node as any).extra ?? {}) as Record<string, any>
+    const extra = (node.Extra as any) ?? ({} as Record<string, any>)
     Object.assign(this.orgFormData, {
       Code: node.Code,
       OrgName: node.Name,

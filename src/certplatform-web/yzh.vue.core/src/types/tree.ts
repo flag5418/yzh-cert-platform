@@ -27,6 +27,8 @@
  * - UI 状态由组件持有，不存入此结构
  *
  * 无论后端 T 实体字段如何，一律映射到此结构
+ * 注：ParentCode/Children 允许 undefined —— 与 YzhTreeNode 双向兼容，
+ * 页面可将 TreeNode[] 直接传给组件 :data，事件回调也可直接用 TreeNode 类型
  */
 export interface TreeNode<T = any> {
   // ──── 核心标识 ────
@@ -35,7 +37,7 @@ export interface TreeNode<T = any> {
   /** 显示名称 */
   Name: string
   /** 父节点编码（根节点为空字符串或 null） */
-  ParentCode: string | null
+  ParentCode?: string | null
 
   // ──── 结构元数据（由后端或工具函数计算） ────
   /** 节点类型（异构树区分来源，同构树可省略） */
@@ -48,8 +50,8 @@ export interface TreeNode<T = any> {
   Extra?: Record<string, any>
 
   // ──── 层级结构 ────
-  /** 子节点集合 */
-  Children: TreeNode<T>[]
+  /** 子节点集合（懒加载/加载中节点可能尚未填充，故允许 undefined） */
+  Children?: TreeNode<T>[]
 
   // ──── 原始数据引用 ────
   /** 原始 T 实体完整数据（可选，仅需要提交时携带） */

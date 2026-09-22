@@ -7,7 +7,7 @@
   </span>
 </template>
 
-<script setup>
+<script setup lang="ts">
 /**
  * YzhStatusBadge —— 状态徽章（对齐 vidlang Badge + 4 语义子类）
  * type: success（成功）/ warning（待处理）/ danger（失败）/ info（未配置/提示）
@@ -23,7 +23,7 @@ const props = defineProps({
 })
 
 const defaultIcon = computed(() => {
-  const map = {
+  const map: Record<string, string | null> = {
     success: null, // 后续引入图标
     warning: null,
     danger: null,

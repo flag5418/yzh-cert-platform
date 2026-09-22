@@ -1,35 +1,22 @@
 /**
- * PromptTemplateLogic — 提示词模板管理 Logic
+ * PromptTemplateLogic — 提示词模板管理 Logic（SingleTableCore 架构）
  *
- * 基于 CrudPageLogic 实现标准 CRUD 页面
  * 后端：PromptTemplateController (YzhControllerBase<PromptTemplate>)
  */
 
-import {CrudPageLogic} from '@yzh-core'
+import { SingleTableCore } from '@yzh-core'
 
-export class PromptTemplateLogic extends CrudPageLogic<any> {
+export class PromptTemplateLogic extends SingleTableCore<any> {
   controllerName = 'PromptTemplate'
 
-  /** 行操作按钮 */
-  get rowActionButtons(): Record<string, string> {
+  /** 新增默认值 */
+  protected override get defaultValues(): Record<string, any> {
     return {
-      edit: '编辑',
-      delete: '删除'
+      PromptType: 'document_analysis',
+      Version: 1,
+      IsActive: true,
+      IsValid: 1,
     }
-  }
-
-  /** 初始化 */
-  async init(): Promise<void> {
-    await this.loadConfig()
-  }
-
-  /** 新增弹窗：补默认值 */
-  openAddDialog(): void {
-    super.openAddDialog()
-    if (this.formData.PromptType === undefined) this.formData.PromptType = 'document_analysis'
-    if (this.formData.Version === undefined) this.formData.Version = 1
-    if (this.formData.IsActive === undefined) this.formData.IsActive = true
-    if (this.formData.IsValid === undefined) this.formData.IsValid = 1
   }
 }
 

@@ -482,6 +482,7 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
         {
             Lazy = config.Lazy,
             AllowEdit = config.AllowEdit,
+            AllowAddChild = config.AllowAddChild,
             AllowDelete = config.AllowDelete,
             AllowRename = config.AllowRename,
             RootParentCode = config.RootParentCode,

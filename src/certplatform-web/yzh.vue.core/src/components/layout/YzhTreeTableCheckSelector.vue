@@ -97,7 +97,6 @@
  */
 import { ref, computed, watch, nextTick } from 'vue'
 import { ElInput } from 'element-plus'
-import type { ElTable } from 'element-plus'
 
 // ========================================================
 // 类型定义
@@ -148,11 +147,11 @@ interface Props {
   showTypeColumn?: boolean
   /** 默认展开所有节点 */
   defaultExpandAll?: boolean
-  /** 节点类型显示文案映射（如 { menu: '菜单' }） */
+  /** 节点类型显示文案映射（如 { menu: '菜单' }）—— 必传，组件不内置业务类型文案（C-E1） */
   typeLabels?: Record<string, string>
-  /** 节点类型标签颜色映射（如 { menu: 'warning' }） */
+  /** 节点类型标签颜色映射（如 { menu: 'warning' }）—— 必传，组件不内置业务类型颜色 */
   typeTagTypes?: Record<string, TagType>
-  /** 「全选」时排除的节点类型（默认排除机构 org） */
+  /** 「全选」时排除的节点类型（如 ['org']）—— 必传（不需要排除时传 []） */
   checkAllExcludeTypes?: string[]
   /** 父子级联勾选：勾选父节点自动勾选全部子孙，反之回填父节点（默认 true，独立勾选需显式 :cascade="false"） */
   cascade?: boolean
@@ -176,26 +175,22 @@ const props = withDefaults(defineProps<Props>(), {
   defaultExpandAll: false,
   typeLabels: undefined,
   typeTagTypes: undefined,
-  checkAllExcludeTypes: () => ['org'],
+  checkAllExcludeTypes: () => [],
   cascade: true,
   searchable: false,
   searchFields: () => ['Name'],
   countType: undefined,
-  searchPlaceholder: '搜索接口名称 / 路径',
+  searchPlaceholder: '搜索',
 })
 
-// 默认类型文案 / 颜色（保持 role-user 原有行为）
-const DEFAULT_TYPE_LABELS: Record<string, string> = { org: '机构', user: '用户' }
-const DEFAULT_TYPE_TAG_TYPES: Record<string, TagType> = { org: 'primary', user: 'success' }
-
-/** 节点类型显示文案 */
+/** 节点类型显示文案（映射由调用方传入，未命中回退类型名本身） */
 function typeLabel(type: string): string {
-  return props.typeLabels?.[type] ?? DEFAULT_TYPE_LABELS[type] ?? type
+  return props.typeLabels?.[type] ?? type
 }
 
-/** 节点类型标签颜色 */
+/** 节点类型标签颜色（映射由调用方传入，未命中回退 info） */
 function typeTagType(type: string): TagType {
-  return props.typeTagTypes?.[type] ?? DEFAULT_TYPE_TAG_TYPES[type] ?? 'info'
+  return props.typeTagTypes?.[type] ?? 'info'
 }
 
 // ========================================================
@@ -210,7 +205,7 @@ const emit = defineEmits<{
 // 内部状态
 // ========================================================
 
-const tableRef = ref<InstanceType<typeof ElTable>>()
+const tableRef = ref<any>()
 const treeData = ref<TreeNode[]>([])
 const searchKeyword = ref('')
 const checkedKeys = ref<Set<string>>(new Set())

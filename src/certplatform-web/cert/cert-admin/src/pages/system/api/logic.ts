@@ -7,7 +7,7 @@
  * - 跳转到 Swagger 测试（可定位到具体接口）
  *
  * 分组说明：
- * sys_api.group_path 形如 System/Config、Foundation/ISOClause（模块/控制器），
+ * sys_api.GroupPath 形如 System/Config、Foundation/ISOClause（模块/控制器），
  * 这里按 “/” 拆成层级节点，接口挂在最末级分组下，避免一屏几百行平铺。
  */
 

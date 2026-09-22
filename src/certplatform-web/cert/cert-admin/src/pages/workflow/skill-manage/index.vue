@@ -58,7 +58,7 @@ function handleAddCategory() {
 /** 删除分类 */
 async function handleDeleteCategory(node: TreeNode) {
   await ElMessageBox.confirm(
-    `确定删除分类【${node.name}】？`,
+    `确定删除分类【${node.Name}】？`,
     '删除确认',
     {
       type: 'warning',
@@ -157,9 +157,11 @@ async function handleCategorySubmit() {
 
 onMounted(async () => {
   await logic.init()
-  await nextTick()
-  logic.setTreeTableRef(treeTableRef.value)
-  logic.setTableRef(tableRef.value)
+  // （官方示例写法：nextTick 传回调，确保 DOM 更新完成后再取 ref）
+  nextTick(() => {
+    logic.setTreeTableRef(treeTableRef.value)
+    logic.setTableRef(tableRef.value)
+  })
 })
 </script>
 
@@ -167,7 +169,7 @@ onMounted(async () => {
   <div class="skill-page">
     <YzhTreeTable
       ref="treeTableRef"
-      :tree-data="logic.treeData.value"
+      :tree-data="logic.treeData"
       :tree-width="280"
       :tree-toolbar="true"
       :tree-searchable="true"

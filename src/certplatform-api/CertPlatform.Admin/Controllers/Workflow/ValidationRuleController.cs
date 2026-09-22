@@ -20,10 +20,8 @@ namespace CertPlatform.Admin.Controllers.Workflow;
 /// - 修改：POST /update
 /// - 删除：POST /delete（codes 数组）
 /// - 配置：GET /config
-///
-/// 自定义端点：
-/// - POST /toggle-active?code=  切换启用状态
-/// - POST /copy?sourceCode=    深拷贝规则
+/// - 行自定义操作：POST /action/{methodName}（RegisterRowAction 注册，
+///   按钮由 EntityConfig.RowButtons.CustomButtons 配置驱动）
 /// </summary>
 [ApiController]
 [Route("api/ValidationRule")]
@@ -39,6 +37,11 @@ public class ValidationRuleController
         : base(entityService, userContext)
     {
         _clauseService = clauseService;
+
+        // 行自定义操作（走标准 /action/{method} 约定，
+        // 前端按钮由 Cert/ValidationRule.json 的 RowButtons.CustomButtons 驱动）
+        RegisterRowAction("ToggleActive", ToggleActiveAction);
+        RegisterRowAction("Copy", CopyAction);
     }
 
     // ========================================================
@@ -131,32 +134,30 @@ public class ValidationRuleController
     }
 
     // ========================================================
-    // 自定义端点
+    // 行自定义操作（RegisterRowAction，POST /action/{method}）
     // ========================================================
 
-    /// <summary>切换启用状态</summary>
-    [HttpPost("toggle-active")]
-    public async Task<IActionResult> ToggleActive([FromQuery] string code)
+    /// <summary>切换启用状态（前端按钮：RowButtons.CustomButtons["启用/禁用"]）</summary>
+    private async Task<Result<ApiResponse<object?>>> ToggleActiveAction(ValidationRule entity)
     {
-        var rule = await Entity.GetOne(r => r.Code == code);
+        var rule = await Entity.GetOne(r => r.Code == entity.Code);
         if (!rule.Success || rule.Data == null)
-            return BadRequest(ApiResponse.Fail("规则不存在"));
+            return Result<ApiResponse<object?>>.Fail("规则不存在");
 
         rule.Data.IsActive = !rule.Data.IsActive;
         var result = await Entity.Update(rule.Data);
         if (!result.Success)
-            return BadRequest(ApiResponse.Fail(result.Error!));
+            return Result<ApiResponse<object?>>.Fail(result.Error!);
 
-        return Ok(ApiResponse<ValidationRule>.Ok(rule.Data));
+        return Result<ApiResponse<object?>>.Ok(ApiResponse<object?>.Ok(rule.Data.IsActive ? "已启用" : "已禁用"));
     }
 
-    /// <summary>深拷贝规则</summary>
-    [HttpPost("copy")]
-    public async Task<IActionResult> Copy([FromQuery] string sourceCode)
+    /// <summary>深拷贝规则（前端按钮：RowButtons.CustomButtons["复制"]）</summary>
+    private async Task<Result<ApiResponse<object?>>> CopyAction(ValidationRule entity)
     {
-        var source = await Entity.GetOne(r => r.Code == sourceCode);
+        var source = await Entity.GetOne(r => r.Code == entity.Code);
         if (!source.Success || source.Data == null)
-            return BadRequest(ApiResponse.Fail("源规则不存在"));
+            return Result<ApiResponse<object?>>.Fail("源规则不存在");
 
         var copy = new ValidationRule
         {
@@ -181,8 +182,8 @@ public class ValidationRuleController
 
         var result = await Entity.Insert(copy);
         if (!result.Success)
-            return BadRequest(ApiResponse.Fail(result.Error!));
+            return Result<ApiResponse<object?>>.Fail(result.Error!);
 
-        return Ok(ApiResponse<ValidationRule>.Ok(result.Data));
+        return Result<ApiResponse<object?>>.Ok(ApiResponse<object?>.Ok("复制成功"));
     }
 }

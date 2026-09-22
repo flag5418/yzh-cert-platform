@@ -32,11 +32,15 @@
 
 import { ref, type Ref } from 'vue'
 
-/** 树节点（只用到这些字段，其余原样透传） */
-interface BadgeTreeNode {
+/**
+ * 树节点（只用到这些字段，其余原样透传）
+ * 统一 PascalCase：YzhTree 现按 PascalCase 优先、camelCase 兜底读取，
+ * 后端返回的 RoleTreeItem 就是 PascalCase，无需再写两份字段
+ */
+export interface BadgeTreeNode {
   Code: string
-  children?: BadgeTreeNode[]
-  extra?: Record<string, any>
+  Name: string
+  Children?: BadgeTreeNode[]
   Extra?: Record<string, any>
   [key: string]: any
 }
@@ -63,21 +67,20 @@ export function useRoleTreeBadges(
    */
   function applyBadge(node: BadgeTreeNode): void {
     const count = getCount(node.Code)
-    const extra = { ...(node.extra ?? node.Extra ?? {}) }
+    const extra = { ...(node.Extra ?? {}) }
     if (count > 0) {
       extra.badge = String(count)
     } else {
       delete extra.badge
     }
-    node.extra = extra
     node.Extra = extra
   }
 
   function findNode(nodes: BadgeTreeNode[], code: string): BadgeTreeNode | null {
     for (const node of nodes) {
       if (String(node.Code) === String(code)) return node
-      if (node.children?.length) {
-        const hit = findNode(node.children, code)
+      if (node.Children?.length) {
+        const hit = findNode(node.Children, code)
         if (hit) return hit
       }
     }
@@ -95,7 +98,7 @@ export function useRoleTreeBadges(
     const walk = (nodes: BadgeTreeNode[]) => {
       for (const node of nodes) {
         applyBadge(node)
-        if (node.children?.length) walk(node.children)
+        if (node.Children?.length) walk(node.Children)
       }
     }
     walk(cloned)

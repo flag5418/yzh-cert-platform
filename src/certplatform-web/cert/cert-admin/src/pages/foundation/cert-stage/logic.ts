@@ -1,28 +1,22 @@
 /**
- * CertStageLogic — 认证阶段管理 Logic
+ * CertStageLogic — 认证阶段管理 Logic（SingleTableCore 架构）
  *
- * 基于 CrudPageLogic 实现标准 CRUD 页面
  * 后端 Controller：CertStageController (YzhControllerBase<CertStage>)
+ * 差异只剩默认值；列/表单/搜索/按钮全部由后端 EntityConfig 驱动。
  */
 
-import { CrudPageLogic } from '@yzh-core'
+import { SingleTableCore } from '@yzh-core'
 
-export class CertStageLogic extends CrudPageLogic<any> {
+export class CertStageLogic extends SingleTableCore<any> {
   controllerName = 'Foundation/CertStage'
 
-  /** 行操作按钮（基类已自动注入 toggle-valid） */
-
-  /** 初始化 */
-  async init(): Promise<void> {
-    await this.loadConfig()
-  }
-
-  /** 新增弹窗：补默认值 */
-  openAddDialog(): void {
-    super.openAddDialog()
-    if (this.formData.IsValid === undefined) this.formData.IsValid = 1
-    if (this.formData.SortOrder === undefined) this.formData.SortOrder = 0
-    if (this.formData.Category === undefined) this.formData.Category = 'process'
+  /** 新增默认值 */
+  protected override get defaultValues(): Record<string, any> {
+    return {
+      IsValid: 1,
+      SortOrder: 0,
+      Category: 'process',
+    }
   }
 }
 

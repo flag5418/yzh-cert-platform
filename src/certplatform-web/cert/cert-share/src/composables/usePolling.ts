@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted } from 'vue'
+import { onUnmounted } from 'vue'
 
 export function usePolling(fn: () => Promise<void>, interval: number, options: { enabled?: boolean; immediate?: boolean } = {}) {
   let timer: number | null = null

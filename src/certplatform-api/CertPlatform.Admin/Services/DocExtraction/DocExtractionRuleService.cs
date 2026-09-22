@@ -121,6 +121,7 @@ public partial class DocExtractionRuleService
         {
             rule = new DocExtractionRule
             {
+                Code = Guid.NewGuid().ToString(),
                 StandardFileCode = request.FileCode,
                 StandardCode = request.StandardCode,
                 PhaseCode = request.PhaseCode,
@@ -166,6 +167,7 @@ public partial class DocExtractionRuleService
                 {
                     var field = new DocFieldDef
                     {
+                        Code = Guid.NewGuid().ToString("N"),
                         RuleCode = rule.Code,
                         FieldName = fieldDto.Name,
                         FieldCode = string.IsNullOrEmpty(fieldDto.Code) ? ToCamel(fieldDto.Name) : fieldDto.Code,
@@ -216,10 +218,11 @@ public partial class DocExtractionRuleService
                         var colSortOrder = 0;
                         foreach (var colDto in tableDto.Columns)
                         {
-                            var col = new DocTableFieldDef
-                            {
-                                TableCode = tableCode,
-                                ColumnName = colDto.Name,
+                    var col = new DocTableFieldDef
+                    {
+                        Code = Guid.NewGuid().ToString("N"),
+                        TableCode = tableCode,
+                        ColumnName = colDto.Name,
                                 ColumnCode = string.IsNullOrEmpty(colDto.Code) ? ToCamel(colDto.Name) : colDto.Code,
                                 DataType = colDto.DataType,
                                 Sort = colSortOrder++,

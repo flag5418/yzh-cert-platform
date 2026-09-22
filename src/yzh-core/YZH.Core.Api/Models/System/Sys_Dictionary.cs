@@ -32,17 +32,15 @@ namespace YZH.Core.Api.Models.System;
 [YZHDeleteStrategy(Mode = DeleteMode.Soft)]
 public class Sys_Dictionary : BaseEntity, ISoftDelete, IIsValid, ITreeEntity
 {
-    /// <summary>物理主键（DB: Dic_ID）。非关联字段，仅作表主键存在。</summary>
-    [SugarColumn(ColumnName = "Dic_ID", IsPrimaryKey = true, IsIdentity = true)]
+    /// <summary>物理主键（DB: Id）。非关联字段，仅作表主键存在。</summary>
+    [SugarColumn(ColumnName = "Id", IsPrimaryKey = true, IsIdentity = true)]
     public new string Id { get; set; } = string.Empty;
 
     /// <summary>稳定标识 + 关联键（DB: Code）。随机唯一，插入前生成，之后不可修改。</summary>
-    [SugarColumn(ColumnName = "Code")]
     [StringLength(50)]
     public new string Code { get; set; } = string.Empty;
 
     /// <summary>父节点 Code（DB: ParentCode）。树结构的唯一关联方式，根节点为 null。</summary>
-    [SugarColumn(ColumnName = "ParentCode")]
     [StringLength(64)]
     public new string? ParentCode { get; set; }
 

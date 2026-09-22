@@ -6,8 +6,11 @@ public class TreeConfig
     /// <summary>是否懒加载（true=点击展开时加载子节点）</summary>
     public bool Lazy { get; set; } = true;
 
-    /// <summary>是否允许编辑树节点（true=显示添加/修改/删除按钮）</summary>
+    /// <summary>是否允许编辑树节点（true=显示修改按钮）</summary>
     public bool AllowEdit { get; set; } = true;
+
+    /// <summary>是否允许「新增下级」节点动作（扁平无层级的树设为 false，前端按钮由本配置驱动）</summary>
+    public bool AllowAddChild { get; set; } = true;
 
     /// <summary>是否允许删除树节点</summary>
     public bool AllowDelete { get; set; } = true;

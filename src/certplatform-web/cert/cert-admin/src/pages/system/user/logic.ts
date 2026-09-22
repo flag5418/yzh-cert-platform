@@ -1,32 +1,18 @@
 /**
- * UserLogic — 用户管理 Logic
+ * UserLogic — 用户管理 Logic（SingleTableCore 架构）
  *
- * 基于 CrudPageLogic 实现标准 CRUD 页面
  * 后端：UserController (YzhControllerBase<Sys_User>)
+ * 差异只剩默认值；列/表单/搜索/按钮全部由后端 EntityConfig 驱动。
  */
 
-import { CrudPageLogic } from '@yzh-core'
+import { SingleTableCore } from '@yzh-core'
 
-export class UserLogic extends CrudPageLogic<any> {
+export class UserLogic extends SingleTableCore<any> {
   controllerName = 'System/User'
 
-  /** 行操作按钮 */
-  get rowActionButtons(): Record<string, string> {
-    return {
-      edit: '编辑',
-      delete: '删除'
-    }
-  }
-
-  /** 初始化 */
-  async init(): Promise<void> {
-    await this.loadConfig()
-  }
-
-  /** 新增弹窗：补默认值 */
-  openAddDialog(): void {
-    super.openAddDialog()
-    if (this.formData.Enable === undefined) this.formData.Enable = 1
+  /** 新增默认值 */
+  protected override get defaultValues(): Record<string, any> {
+    return { Enable: 1 }
   }
 }
 

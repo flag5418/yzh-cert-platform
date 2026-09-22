@@ -75,6 +75,8 @@ export interface TreeChildrenRequest {
 export interface TreeBehaviorConfig {
   Lazy: boolean
   AllowEdit: boolean
+  /** 是否允许「新增下级」节点动作（扁平无层级的树后端配置 false，前端按钮由本配置驱动） */
+  AllowAddChild?: boolean
   AllowDelete: boolean
   AllowRename: boolean
   RootParentCode?: any

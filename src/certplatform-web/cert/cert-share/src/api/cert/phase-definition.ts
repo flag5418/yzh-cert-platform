@@ -1,5 +1,5 @@
 import { yzhApi } from '@yzh-core/api/client'
-import type { ApiResponse, PagedData } from '@share/types/contracts'
+import type { ApiResponse, PagedData } from '@yzh-core'
 import type { PhaseDefinition } from '../../types/cert'
 
 /** 获取认证阶段分页列表 */

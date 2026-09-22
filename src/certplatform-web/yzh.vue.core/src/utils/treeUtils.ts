@@ -121,7 +121,7 @@ export function buildTree<T>(
     } else {
       const parent = nodeMap.get(node.ParentCode ?? '')
       if (parent) {
-        parent.Children.push(node)
+        parent.Children = [...(parent.Children ?? []), node]
       }
     }
   }
@@ -233,7 +233,7 @@ export function getDescendants<T>(node: TreeNode<T>): TreeNode<T>[] {
       }
     }
   }
-  collect(node.Children)
+  collect(node.Children ?? [])
   return result
 }
 
@@ -386,7 +386,7 @@ export function filterTree<T>(
   const filter = (nodes: TreeNode<T>[]): TreeNode<T>[] => {
     const result: TreeNode<T>[] = []
     for (const node of nodes) {
-      const filteredChildren = filter(node.Children)
+      const filteredChildren = filter(node.Children ?? [])
       if (predicate(node) || filteredChildren.length > 0) {
         result.push({
           ...node,
@@ -487,7 +487,7 @@ export function validate<T>(roots: TreeNode<T>[]): { valid: boolean; errors: str
 
   // 检查孤儿节点
   for (const node of nodes) {
-    if (node.ParentCode !== null && node.ParentCode !== '' && !nodeCodes.has(node.ParentCode)) {
+    if (node.ParentCode != null && node.ParentCode !== '' && !nodeCodes.has(node.ParentCode)) {
       errors.push(`节点 "${node.Name}" 的 ParentCode "${node.ParentCode}" 不存在`)
     }
   }
@@ -517,7 +517,7 @@ export function hasCycle<T>(roots: TreeNode<T>[]): boolean {
     visited.add(node.Code)
     stack.add(node.Code)
 
-    for (const child of node.Children) {
+    for (const child of node.Children ?? []) {
       if (dfs(child)) return true
     }
 

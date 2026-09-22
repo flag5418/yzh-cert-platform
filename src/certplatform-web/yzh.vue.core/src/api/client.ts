@@ -48,7 +48,8 @@ export const tokenStore = {
 }
 
 export class YzhApiClient {
-  private baseURL: string
+  /** 服务根地址（文件下载等场景需要读取） */
+  public baseURL: string
   private getToken: () => string | null
   private onUnauthorized?: () => void
   private onError?: (err: Error) => void
@@ -74,7 +75,7 @@ export class YzhApiClient {
       body,
       headers = {},
       requireAuth = true,
-      raw = false,
+      raw: _raw = false,
     } = options
 
     let finalUrl = url

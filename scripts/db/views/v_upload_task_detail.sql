@@ -20,4 +20,4 @@ SELECT
     f.IsDeleted AS FileIsDeleted
 FROM cert_upload_task t
 LEFT JOIN cert_standard_directory_file f 
-    ON t.TaskId = f.TaskId AND f.IsDeleted = 0;
+    ON t.TaskId = f.TaskId COLLATE utf8mb4_unicode_ci AND f.IsDeleted = 0;

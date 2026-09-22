@@ -225,5 +225,13 @@
       "Mrz": "",
       "Enable": true
     }
-  ]
+  ],
+  "RowButtons": {
+    "Edit": true,
+    "Delete": true,
+    "CustomButtons": {
+      "启用/禁用": "ToggleActive",
+      "复制": "Copy"
+    }
+  }
 }

@@ -4,7 +4,7 @@
     <div v-if="searchable" class="yzh-tree__search">
       <el-input
         v-model="searchKeyword"
-        placeholder="搜索节点"
+        :placeholder="searchPlaceholder"
         clearable
         prefix-icon="Search"
         size="small"
@@ -14,7 +14,7 @@
     <!-- 树组件 -->
     <el-tree
       ref="treeRef"
-      :data="filteredData"
+      :data="data"
       :props="treeProps"
       :show-checkbox="showCheckbox"
       :check-strictly="checkStrictly"
@@ -34,7 +34,7 @@
       @node-collapse="handleNodeCollapse"
     >
       <template #default="{ data }">
-        <div class="yzh-tree__node" @mouseenter="hoveredNode = data.Code" @mouseleave="hoveredNode = null">
+        <div class="yzh-tree__node" @mouseenter="hoveredNode = getNodeKey(data)" @mouseleave="hoveredNode = null">
           <!-- 图标 -->
           <el-icon v-if="nodeExtra(data).icon && !isEmoji(nodeExtra(data).icon)" class="yzh-tree__icon">
             <component :is="nodeExtra(data).icon" />
@@ -52,7 +52,7 @@
             class="yzh-tree__label"
             :class="{ 'is-highlight': highlightKeyword && isMatchNode(data) }"
           >
-            {{ data.Name }}
+            {{ getLabel(data) }}
           </span>
 
           <!-- 徽标 -->
@@ -62,7 +62,7 @@
 
           <!-- 操作下拉菜单 -->
           <el-dropdown
-            v-if="nodeActions && Object.keys(nodeActions).length"
+            v-if="resolveNodeActions(data).length"
             trigger="click"
             @command="(cmd: string) => handleNodeAction(cmd, data)"
             @click.stop
@@ -73,12 +73,13 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item
-                  v-for="(text, key) in nodeActions"
-                  :key="key"
-                  :command="key"
-                  :class="getDropdownItemClass(key)"
+                  v-for="action in resolveNodeActions(data)"
+                  :key="action.key"
+                  :command="action.key"
+                  :disabled="action.disabled"
+                  :class="getDropdownItemClass(action)"
                 >
-                  {{ getActionLabel ? getActionLabel(key, data) : text }}
+                  {{ action.text }}
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -90,10 +91,33 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * YzhTree - 通用树组件（原子组件，零领域依赖）
+ *
+ * 设计（C-C1..C-C5）：
+ * - 零实体依赖：不 import 任何 @share / 业务类型，使用组件自身结构化类型 YzhTreeNode
+ * - 字段参数化：nodeKey / labelField / childrenField / isLeafField / extraField 可配
+ * - 节点动作下沉：nodeActions 支持 YzhAction[] 或 (node) => YzhAction[]（动态文案/禁用/danger）
+ * - 搜索防抖 + 不深拷贝：过滤完全交给 el-tree filter-node-method（原地过滤，不克隆数据）
+ */
 import { computed, ref, watch } from 'vue'
 import { ElTree, ElInput } from 'element-plus'
 import { Document, Folder } from '@element-plus/icons-vue'
-import type { TreeNode } from '@share/types/tree'
+import type { YzhAction } from '../table/types'
+
+/** 组件内结构化树节点（字段参数化的默认形状） */
+export interface YzhTreeNode {
+  [key: string]: any
+  Code: string
+  Name: string
+  // ParentCode/Children 允许 undefined：与内核 TreeNode（types/tree）双向兼容，
+  // 页面可直接把 TreeNode[] 传入 :data，组件事件回调也可直接绑定 (node: TreeNode) => void
+  ParentCode?: string | null
+  NodeType?: string
+  IsLeaf?: boolean
+  Extra?: Record<string, any>
+  Children?: YzhTreeNode[]
+}
 
 // ========================================================
 // 工具函数
@@ -106,29 +130,13 @@ function isEmoji(str: string): boolean {
 }
 
 /**
- * 节点字段读取：TreeNode 契约为 PascalCase（Code/Name/IsLeaf/Extra），
- * 但历史上模板里按小写读过 IsLeaf/Extra —— 取到 undefined 后静默失效：
- * - `data.isLeaf` 恒假 → 叶子节点也显示文件夹图标、也显示可展开箭头，
- *   点开还会白跑一次 tree/children；
- * - `data.extra` 恒空 → 图标 / 徽标 / disabled 全部失效。
- *
- * 这里统一按 PascalCase 优先、camelCase 兜底读取，
- * 调用方不必再两种写法各写一份。
+ * 节点字段读取：默认契约 PascalCase（Code/Name/IsLeaf/Extra），
+ * 历史上模板里曾按小写读过导致静默失效 —— 统一 PascalCase 优先、camelCase 兜底。
  */
 function readNodeField(node: Record<string, any>, pascal: string): any {
   if (!node) return undefined
   const camel = pascal.charAt(0).toLowerCase() + pascal.slice(1)
   return node[pascal] ?? node[camel]
-}
-
-/** 节点是否叶子（末端）节点 */
-function isLeafNode(node: Record<string, any> | null | undefined): boolean {
-  return readNodeField(node as Record<string, any>, 'IsLeaf') === true
-}
-
-/** 节点扩展字段（icon / badge / disabled 等） */
-function nodeExtra(node: Record<string, any> | null | undefined): Record<string, any> {
-  return (readNodeField(node as Record<string, any>, 'Extra') as Record<string, any>) ?? {}
 }
 
 // ========================================================
@@ -137,9 +145,17 @@ function nodeExtra(node: Record<string, any> | null | undefined): Record<string,
 
 interface Props {
   /** 树数据 */
-  data: TreeNode[]
-  /** 节点唯一键 */
+  data: YzhTreeNode[]
+  /** 节点唯一键字段名（默认 Code） */
   nodeKey?: string
+  /** 显示文字字段名（默认 Name） */
+  labelField?: string
+  /** 子节点集合字段名（默认 Children） */
+  childrenField?: string
+  /** 叶子标志字段名（默认 IsLeaf） */
+  isLeafField?: string
+  /** 扩展字段名（icon/badge/disabled 等，默认 Extra） */
+  extraField?: string
   /** 显示复选框 */
   showCheckbox?: boolean
   /** 严格模式（父子不联动） */
@@ -147,7 +163,7 @@ interface Props {
   /** 懒加载 */
   lazy?: boolean
   /** 懒加载函数 */
-  loadData?: (node: any, resolve: (data: TreeNode[]) => void) => void
+  loadData?: (node: any, resolve: (data: YzhTreeNode[]) => void) => void
   /** 默认展开全部 */
   defaultExpandAll?: boolean
   /** 点击节点展开 */
@@ -158,18 +174,24 @@ interface Props {
   currentKey?: string
   /** 可搜索 */
   searchable?: boolean
+  /** 搜索框占位文字 */
+  searchPlaceholder?: string
   /** 高亮关键字（搜索时） */
   highlightKeyword?: boolean
-  /** 节点图标字段 */
-  iconField?: string
-  /** 节点自定义操作按钮：{ 方法名: 显示文字 }（后端自动注入） */
-  nodeActions?: Record<string, string>
-  /** 动态操作文本函数（根据节点状态返回显示文字） */
-  getActionLabel?: (action: string, node: TreeNode) => string
+  /** 节点操作按钮：YzhAction[] 或 (node) => YzhAction[] */
+  nodeActions?: YzhAction[] | ((node: YzhTreeNode) => YzhAction[])
+  /** 兼容旧属性：{ 方法名: 显示文字 } */
+  legacyNodeActions?: Record<string, string>
+  /** 兼容旧属性：动态操作文本函数 */
+  getActionLabel?: (action: string, node: YzhTreeNode) => string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   nodeKey: 'Code',
+  labelField: 'Name',
+  childrenField: 'Children',
+  isLeafField: 'IsLeaf',
+  extraField: 'Extra',
   showCheckbox: false,
   checkStrictly: false,
   lazy: false,
@@ -177,8 +199,10 @@ const props = withDefaults(defineProps<Props>(), {
   expandOnClickNode: true,
   highlightCurrent: true,
   searchable: false,
+  searchPlaceholder: '搜索节点',
   highlightKeyword: true,
-  nodeActions: () => ({}),
+  nodeActions: () => [],
+  legacyNodeActions: () => ({}),
   getActionLabel: undefined
 })
 
@@ -187,11 +211,11 @@ const props = withDefaults(defineProps<Props>(), {
 // ========================================================
 
 const emit = defineEmits<{
-  (e: 'node-click', node: TreeNode): void
-  (e: 'check-change', checkedNodes: TreeNode[]): void
-  (e: 'node-expand', node: TreeNode): void
-  (e: 'node-collapse', node: TreeNode): void
-  (e: 'node-action', action: string, node: TreeNode): void
+  (e: 'node-click', node: YzhTreeNode): void
+  (e: 'check-change', checkedNodes: YzhTreeNode[]): void
+  (e: 'node-expand', node: YzhTreeNode): void
+  (e: 'node-collapse', node: YzhTreeNode): void
+  (e: 'node-action', action: string, node: YzhTreeNode): void
 }>()
 
 // ========================================================
@@ -203,114 +227,129 @@ const searchKeyword = ref('')
 const hoveredNode = ref<string | null>(null)
 
 // ========================================================
-// 树配置
+// 字段参数化读取
+// ========================================================
+
+function getNodeKey(node: YzhTreeNode): string {
+  return String(readNodeField(node, props.nodeKey) ?? '')
+}
+
+function getLabel(node: YzhTreeNode): string {
+  return String(readNodeField(node, props.labelField) ?? '')
+}
+
+function getChildren(node: YzhTreeNode): YzhTreeNode[] {
+  return readNodeField(node, props.childrenField) ?? []
+}
+
+function isLeafNode(node: YzhTreeNode | null | undefined): boolean {
+  return readNodeField(node as Record<string, any>, props.isLeafField) === true
+}
+
+function nodeExtra(node: YzhTreeNode | null | undefined): Record<string, any> {
+  return (readNodeField(node as Record<string, any>, props.extraField) as Record<string, any>) ?? {}
+}
+
+// ========================================================
+// 树配置（el-tree props 由字段参数化派生）
 // ========================================================
 
 const treeProps = computed(() => ({
-  label: 'Name',
-  children: 'children',
-  // 必须读 IsLeaf（后端 TreeControllerBase.FillIsLeafBatch 批量计算）。
-  // 读小写恒为 false，会让末端节点也长出展开箭头并白跑一次 tree/children。
-  isLeaf: (data: Record<string, any>) => isLeafNode(data),
-  disabled: (data: Record<string, any>) => nodeExtra(data).disabled ?? false
+  label: props.labelField,
+  children: props.childrenField,
+  // 必须读叶子字段（后端 TreeControllerBase.FillIsLeafBatch 批量计算）。
+  // 读错字段会让末端节点也长出展开箭头并白跑一次 tree/children。
+  isLeaf: (data: Record<string, any>) => isLeafNode(data as YzhTreeNode),
+  disabled: (data: Record<string, any>) => nodeExtra(data as YzhTreeNode).disabled ?? false
 }))
 
 // ========================================================
-// 搜索过滤
+// 搜索过滤（el-tree 原地过滤，不深拷贝）
 // ========================================================
 
-const filteredData = computed(() => {
-  if (!searchKeyword.value) return props.data
-  return filterTree(props.data, searchKeyword.value)
+function filterNode(value: string, data: Record<string, any>): boolean {
+  if (!value) return true
+  return (getLabel(data as YzhTreeNode) || '').toLowerCase().includes(String(value).toLowerCase())
+}
+
+function isMatchNode(node: YzhTreeNode): boolean {
+  if (!searchKeyword.value) return false
+  return (getLabel(node) || '').toLowerCase().includes(searchKeyword.value.toLowerCase())
+}
+
+// 搜索防抖（C-C5）：200ms 内连续输入只触发一次 el-tree.filter
+let filterTimer: ReturnType<typeof setTimeout> | null = null
+watch(searchKeyword, (val) => {
+  if (filterTimer) clearTimeout(filterTimer)
+  filterTimer = setTimeout(() => {
+    treeRef.value?.filter(val)
+  }, 200)
 })
 
-function filterNode(_value: string, data: Record<string, any>): boolean {
-  return isMatchNode(data as TreeNode)
-}
+// ========================================================
+// 节点动作（YzhAction[] / resolver）
+// ========================================================
 
-function isMatchNode(node: TreeNode): boolean {
-  if (!searchKeyword.value) return false
-  return (node.Name || '').toLowerCase().includes(searchKeyword.value.toLowerCase())
-}
-
-function filterTree(nodes: TreeNode[], keyword: string): TreeNode[] {
-  const lower = keyword.toLowerCase()
-  const result: TreeNode[] = []
-
-  for (const node of nodes) {
-    const matched = (node.Name || '').toLowerCase().includes(lower)
-    const filteredChildren = filterTree(node.Children, keyword)
-
-    if (matched || filteredChildren.length > 0) {
-      result.push({
-        ...node,
-        Children: filteredChildren
-      })
-    }
+function resolveNodeActions(node: YzhTreeNode): YzhAction[] {
+  let list: YzhAction[]
+  if (typeof props.nodeActions === 'function') {
+    list = props.nodeActions(node) || []
+  } else {
+    list = props.nodeActions
   }
+  // 兼容旧 { 方法名: 文字 } + getActionLabel 动态文案
+  const legacy: YzhAction[] = Object.entries(props.legacyNodeActions || {}).map(([key, text]) => ({
+    key,
+    text: props.getActionLabel ? props.getActionLabel(key, node) : text
+  }))
+  return [...list, ...legacy].filter((a) => a.visible !== false)
+}
 
-  return result
+/** 根据动作返回下拉菜单项样式类 */
+function getDropdownItemClass(action: YzhAction): string {
+  if (action.danger) return 'yzh-tree__action-danger'
+  if (action.type === 'warning') return 'yzh-tree__action-toggle'
+  return ''
 }
 
 // ========================================================
 // 事件处理
 // ========================================================
 
-function handleNodeClick(node: TreeNode) {
+function handleNodeClick(node: YzhTreeNode) {
   emit('node-click', node)
 }
 
 function handleCheckChange() {
   if (!treeRef.value) return
-  const checkedNodes = treeRef.value.getCheckedNodes() as unknown as TreeNode[]
+  const checkedNodes = treeRef.value.getCheckedNodes() as unknown as YzhTreeNode[]
   emit('check-change', checkedNodes)
 }
 
-function handleNodeExpand(node: TreeNode) {
+function handleNodeExpand(node: YzhTreeNode) {
   emit('node-expand', node)
 }
 
-function handleNodeCollapse(node: TreeNode) {
+function handleNodeCollapse(node: YzhTreeNode) {
   emit('node-collapse', node)
 }
 
-// ========================================================
-// 节点操作按钮
-// ========================================================
-
-/** 根据操作 key 返回下拉菜单项样式类 */
-function getDropdownItemClass(key: string): string {
-  const map: Record<string, string> = {
-    'toggle-valid': 'yzh-tree__action-toggle',
-    delete: 'yzh-tree__action-danger',
-  }
-  return map[key] || ''
-}
-
 /** 处理节点操作按钮点击 */
-function handleNodeAction(action: string, node: TreeNode) {
+function handleNodeAction(action: string, node: YzhTreeNode) {
   emit('node-action', action, node)
 }
-
-// ========================================================
-// 搜索关键字变化时重新过滤
-// ========================================================
-
-watch(searchKeyword, (val) => {
-  treeRef.value?.filter(val)
-})
 
 // ========================================================
 // 公开方法
 // ========================================================
 
 /** 获取勾选节点 */
-function getCheckedNodes(): TreeNode[] {
-  return treeRef.value?.getCheckedNodes() as TreeNode[] ?? []
+function getCheckedNodes(): YzhTreeNode[] {
+  return treeRef.value?.getCheckedNodes() as YzhTreeNode[] ?? []
 }
 
 /** 设置勾选节点 */
-function setCheckedNodes(nodes: TreeNode[]) {
+function setCheckedNodes(nodes: YzhTreeNode[]) {
   ;(treeRef.value as any)?.setCheckedNodes(nodes)
 }
 
@@ -321,14 +360,14 @@ function setChecked(code: string, checked: boolean) {
 
 /** 展开所有节点 */
 function expandAll() {
-  const expandRecursive = (nodes: TreeNode[]) => {
+  const expandRecursive = (nodes: YzhTreeNode[]) => {
     for (const node of nodes) {
       const store = treeRef.value?.store
-      if (store && store.nodesMap[node.Code]) {
-        store.nodesMap[node.Code].expanded = true
+      if (store && store.nodesMap[getNodeKey(node)]) {
+        store.nodesMap[getNodeKey(node)].expanded = true
       }
-      if (node.Children && node.Children.length) {
-        expandRecursive(node.Children)
+      if (getChildren(node).length) {
+        expandRecursive(getChildren(node))
       }
     }
   }
@@ -337,14 +376,14 @@ function expandAll() {
 
 /** 折叠所有节点 */
 function collapseAll() {
-  const collapseRecursive = (nodes: TreeNode[]) => {
+  const collapseRecursive = (nodes: YzhTreeNode[]) => {
     for (const node of nodes) {
       const store = treeRef.value?.store
-      if (store && store.nodesMap[node.Code]) {
-        store.nodesMap[node.Code].expanded = false
+      if (store && store.nodesMap[getNodeKey(node)]) {
+        store.nodesMap[getNodeKey(node)].expanded = false
       }
-      if (node.Children && node.Children.length) {
-        collapseRecursive(node.Children)
+      if (getChildren(node).length) {
+        collapseRecursive(getChildren(node))
       }
     }
   }
@@ -358,10 +397,10 @@ function setCurrentNode(code: string) {
 
 /**
  * 向指定父节点追加子节点（不触发 API，仅更新本地树 UI）
- * @param parentCode 父节点 code（null = 追加到根级）
- * @param newNode 新节点数据（TreeNode 格式）
+ * @param parentCode 父节点 key（null = 追加到根级）
+ * @param newNode 新节点数据
  */
-function appendNode(parentCode: string | null, newNode: TreeNode) {
+function appendNode(parentCode: string | null, newNode: YzhTreeNode) {
   if (!treeRef.value) return
 
   if (parentCode) {
@@ -386,24 +425,25 @@ function appendNode(parentCode: string | null, newNode: TreeNode) {
     if (added) return
   }
 
-  // 根级：直接追加到 treeData
+  // 根级：直接追加到 data
   props.data.push(newNode)
 }
 
 /** 在树数据中找到 parentCode 对应节点并追加子节点 */
 function addToTree(
-  nodes: TreeNode[],
+  nodes: YzhTreeNode[],
   parentCode: string,
-  newNode: TreeNode,
+  newNode: YzhTreeNode,
 ): boolean {
   for (const node of nodes) {
-    if (node.Code === parentCode) {
-      node.Children = node.Children || []
-      node.Children.push(newNode)
-      node.IsLeaf = false
+    if (getNodeKey(node) === parentCode) {
+      const children = getChildren(node)
+      children.push(newNode)
+      ;(node as any)[props.childrenField] = children
+      ;(node as any)[props.isLeafField] = false
       return true
     }
-    if (node.Children?.length && addToTree(node.Children, parentCode, newNode)) {
+    if (getChildren(node).length && addToTree(getChildren(node), parentCode, newNode)) {
       return true
     }
   }

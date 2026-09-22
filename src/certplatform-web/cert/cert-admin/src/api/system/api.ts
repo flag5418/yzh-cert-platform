@@ -6,7 +6,7 @@ import { unwrap } from '@yzh-core/utils'
 // 类型定义
 // ========================================================
 
-/** 接口表实体 */
+/** 接口表实体（sys_api 表，全 PascalCase 列名） */
 export interface ApiItem {
   Id: number
   Code: string
@@ -16,8 +16,8 @@ export interface ApiItem {
   Name: string
   Author?: string
   Enable: boolean
-  CreateDate: string
-  UpdateDate?: string
+  CreateTime: string
+  UpdateTime?: string
 }
 
 /** 同步结果 */

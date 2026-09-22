@@ -23,6 +23,9 @@ import {
 import { computed, onMounted, nextTick, ref } from 'vue'
 import OrgPageLogic from './logic'
 
+// 模板用：选中节点响应式代理（内核 getter 已内置响应性，勿再加 .value）
+const selectedNode = computed(() => logic.selectedNode)
+
 // 实例化 Logic
 const logic = new OrgPageLogic()
 
@@ -61,7 +64,7 @@ async function handleTreeNodeAction(action: string, node: TreeNode) {
 
 /** 新增机构（可指定父节点） */
 function handleAddOrg(parentNode?: TreeNode) {
-  logic.openAddOrgDialog(parentNode ?? logic.selectedNode.value)
+  logic.openAddOrgDialog(parentNode ?? logic.selectedNode)
 }
 
 /** 编辑机构 */
@@ -159,13 +162,13 @@ async function handleRowAction(action: string, row: any) {
 
 async function loadTableData(params: any) {
   const filters: Array<{ Field: string; Operator: string; Value: any }> = []
-  if (logic.selectedNode.value) {
+  if (logic.selectedNode) {
     filters.push({
       Field: 'OrgCode',
       Operator: 'eq',
       // TreeNode 是 PascalCase：读小写 code 会得到 undefined，
       // 查询条件变成「OrgCode = undefined」→ 永远查不到人（共 0 条）。
-      Value: logic.selectedNode.value.Code,
+      Value: logic.selectedNode.Code,
     })
   }
   if (logic.showDisabled.value) {
@@ -217,10 +220,12 @@ async function handleOrgSubmit() {
 
 onMounted(async () => {
   await logic.init()
-  await nextTick()
   // 注入组件引用，使基类 addTreeNode/updateTreeNode/deleteTreeNode 等可局部刷新
-  logic.setTreeTableRef(treeTableRef.value)
-  logic.setTableRef(tableRef.value)
+  // （官方示例写法：nextTick 传回调，确保 DOM 更新完成后再取 ref）
+  nextTick(() => {
+    logic.setTreeTableRef(treeTableRef.value)
+    logic.setTableRef(tableRef.value)
+  })
 })
 </script>
 
@@ -228,7 +233,7 @@ onMounted(async () => {
   <div class="org-page">
     <YzhTreeTable
       ref="treeTableRef"
-      :tree-data="logic.treeData.value"
+      :tree-data="logic.treeData"
       :tree-width="260"
       :tree-toolbar="true"
       :tree-searchable="true"
@@ -315,8 +320,8 @@ onMounted(async () => {
       >
         <!-- 所属机构只读展示 -->
         <template #orgCode>
-          <el-tag v-if="logic.selectedNode.value" type="info">
-            {{ logic.selectedNode.value.Name }}
+          <el-tag v-if="selectedNode" type="info">
+            {{ selectedNode.Name }}
           </el-tag>
           <el-tag v-else type="info">未选择</el-tag>
         </template>

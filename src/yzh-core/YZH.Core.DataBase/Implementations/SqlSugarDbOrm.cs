@@ -296,6 +296,59 @@ public class SqlSugarDbOrm : IDbOrm
         }
     }
 
+    // ==================== 物理删除与批量更新（绕过软删除过滤） ====================
+
+    public async Task<Result<int>> PhysicalDeleteByConditionAsync<T>(Expression<Func<T, bool>> filter) where T : class, new()
+    {
+        try
+        {
+            var count = await _client.Deleteable<T>()
+                .Where(filter)
+                .ExecuteCommandAsync();
+            return Result<int>.Ok(count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "PhysicalDeleteByConditionAsync 失败，Type={Type}", typeof(T).Name);
+            return Result<int>.Fail($"物理删除失败：{ex.Message}");
+        }
+    }
+
+    public async Task<Result<int>> BulkUpdateByConditionAsync<T>(
+        Expression<Func<T, bool>> filter,
+        Action<T> updater,
+        params string[] fields) where T : class, new()
+    {
+        try
+        {
+            // 获取符合条件的记录
+            var entities = await _client.Queryable<T>()
+                .Where(filter)
+                .ToListAsync();
+            
+            if (entities.Count == 0)
+                return Result<int>.Ok(0);
+
+            // 应用更新器
+            foreach (var entity in entities)
+            {
+                updater(entity);
+            }
+
+            // 批量更新指定字段（按 fields 白名单）
+            var count = await _client.Updateable(entities)
+                .WhereColumns(fields.Length > 0 ? fields : null)
+                .ExecuteCommandAsync();
+            
+            return Result<int>.Ok(count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "BulkUpdateByConditionAsync 失败，Type={Type}", typeof(T).Name);
+            return Result<int>.Fail($"批量更新失败：{ex.Message}");
+        }
+    }
+
     // ==================== 原生 SQL ====================
 
     public Task<Result<List<dynamic>>> SqlQueryAsync(string sql, object? param = null)

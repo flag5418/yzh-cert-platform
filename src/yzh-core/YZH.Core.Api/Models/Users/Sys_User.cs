@@ -13,15 +13,14 @@ namespace YZH.Core.Api.Models.Users;
 /// <summary>
 ///     系统用户实体（兼容 Vol 框架表结构）
 ///     对应数据库表 Sys_User
-///     注意：Sys_User 是 Vol 遗留表，列名混合了 PascalCase 和 snake_case
+///     注意：Sys_User 是 Vol 遗留表，2026-09-21 起全量 PascalCase 化
 ///
 ///     关键映射：
-///     - BaseEntity.Id (string) → DB: User_Id (int) 需特殊处理
-///     - RoleId → Role_Id (int)
-///     - OrgCode → OrgCode (varchar, 直接匹配)
-///     - CreateTime → CreateDate, CreateBy → Creator
-///     - UpdateTime → ModifyDate, UpdateBy → Modifier
-///     - DeleteTime → DeleteTime ✓, DeleteBy → DeleteBy ✓, IsDeleted → IsDeleted ✓
+///     - Id → DB: Id (int AUTO_INCREMENT) 需特殊处理（BaseEntity.Id 是 string）
+///     - RoleId → DB: RoleId (int)
+///     - OrgCode → DB: OrgCode (varchar, 直接匹配)
+///     - CreateTime/CreateBy/UpdateTime/UpdateBy → DB 同名
+///     - DeleteTime/DeleteBy/IsDeleted → DB 同名
 ///
 ///     视图路由：
 ///     - 查询走 v_sys_user（含 OrgName、RoleName 关联字段）
@@ -164,7 +163,7 @@ public class Sys_User : BaseEntity, ISoftDelete, IIsValid
     public new bool DeleteFlag { get; set; }
 
     /// <summary>
-    ///     Sys_User 使用 User_Id (int AUTO_INCREMENT) 作为物理主键。
+    ///     Sys_User 使用 Id (int AUTO_INCREMENT) 作为物理主键。
     ///
     ///     ⚠️ 必须是【数值型】：SqlSugar 在 Insert 后会把数据库生成的自增值写回
     ///     IsIdentity 标记的属性（InsertableProvider.ExecuteCommandIdentityIntoEntityAsync）。
@@ -173,11 +172,10 @@ public class Sys_User : BaseEntity, ISoftDelete, IIsValid
     ///     导致 /api/Organization/add 等一切新增必然失败。
     ///     业务主键是 Code，Id 仅作为物理主键。
     /// </summary>
-    [SugarColumn(ColumnName = "User_Id", IsPrimaryKey = true, IsIdentity = true)]
+    [SugarColumn(ColumnName = "Id", IsPrimaryKey = true, IsIdentity = true)]
     public new long Id { get; set; }
 
     /// <summary>用户编码（DB: Code）</summary>
-    [SugarColumn(ColumnName = "Code")]
     [StringLength(50)]
     public new string Code { get; set; } = string.Empty;
 
@@ -185,8 +183,8 @@ public class Sys_User : BaseEntity, ISoftDelete, IIsValid
     public bool IsDeleted { get; set; }
 
     /// <summary>删除时间（DB: DeleteTime）</summary>
-    public new DateTime? DeleteTime { get; set; }
+    public DateTime? DeleteTime { get; set; }
 
     /// <summary>删除人（DB: DeleteBy）</summary>
-    public new string? DeleteBy { get; set; }
+    public string? DeleteBy { get; set; }
 }

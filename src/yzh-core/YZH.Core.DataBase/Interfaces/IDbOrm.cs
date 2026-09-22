@@ -58,6 +58,17 @@ public interface IDbOrm
     /// <summary>按 Code 批量删除</summary>
     Task<Result<int>> DeleteByCodeBatchAsync<T>(IEnumerable<string> codes) where T : class, new();
 
+    // ==================== 物理删除与批量更新（绕过软删除过滤） ====================
+
+    /// <summary>按条件物理删除（仅用于清理临时/草稿数据，不经过软删除过滤）</summary>
+    Task<Result<int>> PhysicalDeleteByConditionAsync<T>(Expression<Func<T, bool>> filter) where T : class, new();
+
+    /// <summary>按条件批量更新指定字段（不经过软删除过滤）</summary>
+    Task<Result<int>> BulkUpdateByConditionAsync<T>(
+        Expression<Func<T, bool>> filter,
+        Action<T> updater,
+        params string[] fields) where T : class, new();
+
     // ==================== 原生 SQL ====================
 
     /// <summary>执行 SQL 查询（返回动态对象）</summary>

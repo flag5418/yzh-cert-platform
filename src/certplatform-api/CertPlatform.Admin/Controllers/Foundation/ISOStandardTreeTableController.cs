@@ -59,6 +59,7 @@ public class ISOStandardTreeTableController
         TreeConfig.ParentCodeField = "ParentCode";
         TreeConfig.RelateField = "StandardCode";   // 右表通过 StandardCode 关联左树
         TreeConfig.MaxLevel = 1;                   // 仅一级，不允许增加下级
+        TreeConfig.AllowAddChild = false;          // 扁平无层级：不显示「新增下级」（前端按钮由本配置驱动）
         TreeConfig.AllowEdit = true;               // 允许新增/编辑/删除标准
         TreeConfig.AllowDelete = true;
         TreeConfig.NoSelectionBehavior = "empty";  // 未选中标准时右表为空

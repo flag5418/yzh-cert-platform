@@ -15,12 +15,11 @@ namespace YZH.Core.Api.Models.System;
 [YZHDeleteStrategy(Mode = DeleteMode.Soft)]
 public class Sys_Menu : BaseEntity
 {
-    /// <summary>主键（DB: Menu_Id）</summary>
-    [SugarColumn(ColumnName = "Menu_Id", IsPrimaryKey = true, IsIdentity = true)]
+    /// <summary>主键（DB: Id）</summary>
+    [SugarColumn(ColumnName = "Id", IsPrimaryKey = true, IsIdentity = true)]
     public new string Id { get; set; } = string.Empty;
 
     /// <summary>菜单编码（DB: Code）</summary>
-    [SugarColumn(ColumnName = "Code")]
     [StringLength(50)]
     public new string Code { get; set; } = string.Empty;
 
@@ -80,8 +79,8 @@ public class Sys_Menu : BaseEntity
     public byte? Enable { get; set; } = 1;
 
     /// <summary>IsDeleted（DB: IsDeleted）</summary>
-    public new bool IsDeleted { get; set; }
+    public bool IsDeleted { get; set; }
 
     /// <summary>IsValid（DB: IsValid）</summary>
-    public new int IsValid { get; set; } = 1;
+    public int IsValid { get; set; } = 1;
 }

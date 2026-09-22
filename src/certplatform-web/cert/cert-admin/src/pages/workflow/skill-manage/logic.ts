@@ -8,7 +8,7 @@
  * 继承 TreeTableLogic 获得全套左树右表能力
  */
 
-import { TreeTableLogic, type ApiResponse, type PagedData, type TreeNode } from '@yzh-core'
+import { TreeTableLogic, type ApiResponse, type PagedData, type TreeNode, type YzhAction } from '@yzh-core'
 import { reactive, ref } from 'vue'
 
 export class SkillTreeTableLogic extends TreeTableLogic<any> {
@@ -34,12 +34,13 @@ export class SkillTreeTableLogic extends TreeTableLogic<any> {
   }
 
   // ──── 树节点操作（不含 add-child，分类扁平无层级） ────
-  get nodeActions(): Record<string, string> {
-    const actions: Record<string, string> = {}
+  // 覆盖内核 nodeActions：返回 YzhAction[]（TT-9 契约）
+  override get nodeActions(): YzhAction[] {
+    const actions: YzhAction[] = []
     const tc = this.treeConfig
     if (!tc) return actions
-    if (tc.AllowEdit) actions['edit'] = '编辑'
-    if (tc.AllowDelete) actions['delete'] = '删除'
+    if (tc.AllowEdit) actions.push({ key: 'edit', text: '编辑' })
+    if (tc.AllowDelete) actions.push({ key: 'delete', text: '删除', type: 'danger', danger: true })
     return actions
   }
 
@@ -59,10 +60,10 @@ export class SkillTreeTableLogic extends TreeTableLogic<any> {
   }): Promise<{ rows: any[]; total: number }> {
     const filters = this.buildFilters()
     // "全部"节点（Code=__all__）不加分类过滤，加载全量技能
-    if (this.selectedNode.value && this.selectedNode.value.Code !== '__all__') {
+    if (this.selectedNode && this.selectedNode.Code !== '__all__') {
       filters.push({
         Field: this.relateField,
-        Value: this.selectedNode.value.Code,
+        Value: this.selectedNode.Code,
         Operator: 'eq',
       })
     }
@@ -93,15 +94,15 @@ export class SkillTreeTableLogic extends TreeTableLogic<any> {
     if (!code) return '-'
     const findInTree = (nodes: TreeNode[]): string => {
       for (const n of nodes) {
-        if (n.code === code) return n.name
-        if (n.children?.length) {
-          const found = findInTree(n.children)
+        if (n.Code === code) return n.Name
+        if (n.Children?.length) {
+          const found = findInTree(n.Children)
           if (found) return found
         }
       }
       return ''
     }
-    return findInTree(this.treeData.value) || code
+    return findInTree(this.treeData) || code
   }
 
   // ========================================================
@@ -110,15 +111,15 @@ export class SkillTreeTableLogic extends TreeTableLogic<any> {
 
   /** 打开新增技能弹窗（\"全部\"节点不可新增，须选中具体分类） */
   openAddSkillDialog(): boolean {
-    if (!this.selectedNode.value) return false
-    if (this.selectedNode.value.Code === '__all__') return false
+    if (!this.selectedNode) return false
+    if (this.selectedNode.Code === '__all__') return false
     this.dialogMode.value = 'add'
     this.formGroupIndex.value = '0'
     Object.keys(this.formData).forEach((k) => delete this.formData[k])
     const tmpl = (this.config.value as any)?.NewEntity || {}
     Object.assign(this.formData, {
       ...tmpl,
-      CategoryCode: this.selectedNode.value.code,
+      CategoryCode: this.selectedNode.Code,
       SkillType: 'manual',
       SortOrder: 0,
       IsValid: 1,
@@ -192,10 +193,10 @@ export class SkillTreeTableLogic extends TreeTableLogic<any> {
     this.categoryDialogMode.value = 'edit'
     this.categoryEditingNode.value = node
     Object.keys(this.categoryFormData).forEach((k) => delete this.categoryFormData[k])
-    const extra = (node.extra as any) || {}
+    const extra = (node.Extra as any) || {}
     Object.assign(this.categoryFormData, {
-      Code: node.code,
-      Name: node.name,
+      Code: node.Code,
+      Name: node.Name,
       ...extra,
     })
     this.categoryDialogVisible.value = true
@@ -235,19 +236,17 @@ export class SkillTreeTableLogic extends TreeTableLogic<any> {
     await this.loadConfig()
     await this.loadTreeRoot()
     // 注入"全部"虚拟根节点（showall = 加载全部技能，不加分类过滤）
-    this.treeData.value.unshift({
+    this.treeData.unshift({
       Code: '__all__',
       Name: '全部',
       ParentCode: null,
       NodeType: 'virtual',
       IsLeaf: true,
       Extra: { level: 0 },
-      Children: [],
     })
     // 默认选中"全部"节点，加载全量技能
-    const allNode = this.treeData.value[0]
-    this.selectedNode.value = allNode
-    await (this as any)._tableRef?.refresh()
+    const allNode = this.treeData[0]
+    if (allNode) await this.onNodeClick(allNode)
   }
 }
 
