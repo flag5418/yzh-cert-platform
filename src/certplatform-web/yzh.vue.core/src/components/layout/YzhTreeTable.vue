@@ -206,7 +206,8 @@ defineExpose({
   getCheckedNodes: () => treeRef.value?.getCheckedNodes() ?? [],
   expandAll: handleExpandAll,
   collapseAll: handleCollapseAll,
-  appendNode: (parentCode: string | null, newNode: YzhTreeNode) => treeRef.value?.appendNode(parentCode, newNode)
+  appendNode: (parentCode: string | null, newNode: YzhTreeNode) => treeRef.value?.appendNode(parentCode, newNode),
+  removeNode: (parentCode: string | null, code: string) => treeRef.value?.removeNode(parentCode, code),
 })
 </script>
 

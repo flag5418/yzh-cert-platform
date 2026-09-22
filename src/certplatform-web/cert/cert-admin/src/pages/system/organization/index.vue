@@ -348,7 +348,7 @@ onMounted(async () => {
         v-model="logic.orgFormData"
         :fields="logic.treeFormFields as any"
         :loading="logic.orgSubmitting.value"
-        :cols="2"
+        :cols="logic.treeFormLayoutCols as any"
         label-width="100px"
         @submit="handleOrgSubmit"
         @reset="logic.orgDialogVisible.value = false"

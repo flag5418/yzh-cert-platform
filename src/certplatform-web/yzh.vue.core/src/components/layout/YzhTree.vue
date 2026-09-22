@@ -457,8 +457,42 @@ defineExpose({
   expandAll,
   collapseAll,
   setCurrentNode,
-  appendNode
+  appendNode,
+  /** 从树中移除指定节点（不触发 API，仅更新本地树 UI） */
+  removeNode: (parentCode: string | null, code: string) => {
+    if (!treeRef.value) return
+    // 优先使用 el-tree 公开 API：remove(nodeKey)
+    try {
+      ;(treeRef.value as any).remove(code)
+      return
+    } catch {
+      // fallback
+    }
+    // fallback：通过 store.nodesMap 获取 Node 对象并删除
+    const store = (treeRef.value as any).store
+    const node = store?.nodesMap?.[code]
+    if (node && node.parentNode) {
+      node.parentNode.remove(node)
+      return
+    }
+    // 最终 fallback：在数据中递归查找并移除
+    removeFromTree(props.data, code)
+  },
 })
+
+/** 在树数据中递归查找并移除指定 code 的节点 */
+function removeFromTree(nodes: YzhTreeNode[], code: string): boolean {
+  for (let i = 0; i < nodes.length; i++) {
+    if (getNodeKey(nodes[i]) === code) {
+      nodes.splice(i, 1)
+      return true
+    }
+    if (getChildren(nodes[i]).length && removeFromTree(getChildren(nodes[i]), code)) {
+      return true
+    }
+  }
+  return false
+}
 </script>
 
 <style scoped>

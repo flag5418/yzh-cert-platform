@@ -179,7 +179,10 @@ export abstract class TreeTableCore<
     if (tc.AllowDelete) {
       actions.push({ key: 'delete', text: '删除', type: 'danger', danger: true })
     }
-    if (this.enableField) {
+    // AllowToggle 显式控制：true=显示，false=隐藏；未设置时回退到 EnableField 非空判断（兼容旧配置）
+    const shouldShowToggle =
+      tc.AllowToggle === true || (tc.AllowToggle === undefined && this.enableField)
+    if (shouldShowToggle) {
       actions.push({ key: 'toggle-valid', text: '禁用/启用', type: 'warning' })
     }
     if (tc.CustomActions) {
@@ -197,7 +200,9 @@ export abstract class TreeTableCore<
     if (action === 'toggle-valid') {
       const field = this.enableField ?? 'IsValid'
       const extra = (node.Extra as any) || {}
-      const val = extra[field] ?? 1
+      // TreeMapper 用 camelCase 写 Extra，各 Controller override 可能用 PascalCase，
+      // 此处双 Key 查找确保两种写法均生效
+      const val = extra[field] ?? extra[field.charAt(0).toLowerCase() + field.slice(1)] ?? 1
       return val === 1 ? '禁用' : '启用'
     }
     const found = this.nodeActions.find((a) => a.key === action)
@@ -605,6 +610,8 @@ export abstract class TreeTableCore<
       this.treeDialogVisible.value = false
       ElMessage.success(this.treeDialogMode.value === 'add' ? '创建成功' : '修改成功')
     } finally {
+      this.treeDialogMode.value = 'add'
+      this.treeEditingNode.value = null
       this.treeSubmitting.value = false
     }
   }
@@ -633,13 +640,23 @@ export abstract class TreeTableCore<
     parentNode: TreeNode | null,
     data: Record<string, any>,
   ): Promise<TreeNode | null> {
+    const codeField = this.treeConfig?.CodeField ?? 'Code'
     const requestData = {
       ...pascalCaseFormData(data),
       [this.treeConfig?.ParentCodeField ?? 'ParentCode']:
         parentNode?.Code ?? this.treeConfig?.RootParentCode ?? null,
     } as Record<string, any>
     const res = await this.apiPost<ApiResponse<TreeItemDto>>('/tree/add', requestData)
-    const newNode = this.dtoToNode(res.data, parentNode ?? undefined)
+    // 支持前端预分配 Code：后端未返回时使用请求中的 Code 构造本地节点
+    const backendCode = res.data?.[codeField] ?? ''
+    const localCode = backendCode || requestData[codeField]
+    const newNode = this.dtoToNode(
+      res.data ?? { Code: localCode, Name: requestData['Name'] ?? '', ParentCode: parentNode?.Code ?? null } as TreeItemDto,
+      parentNode ?? undefined,
+    )
+    if (localCode && !res.data) {
+      newNode.Code = localCode
+    }
 
     // 通过 el-tree API 直接追加节点（不 reload，不重复）
     if (this._treeTableRef) {
@@ -704,6 +721,17 @@ export abstract class TreeTableCore<
 
     this.treeSide.removeNode(node.Code)
 
+    // 尝试通过 el-tree API 局部删除（保留展开状态）；失败则 reload 树根
+    if (this._treeTableRef?.removeNode) {
+      try {
+        this._treeTableRef.removeNode(null, node.Code)
+      } catch {
+        await this.loadTreeRoot()
+      }
+    } else {
+      await this.loadTreeRoot()
+    }
+
     if (this.selectedNode?.Code === node.Code) {
       this.treeSide.selectedNode.value = null
       await this.loadPageWithoutTree()
@@ -736,7 +764,10 @@ export abstract class TreeTableCore<
     )
     if (res.success) {
       const extra = (node.Extra as any) || {}
+      // 双 Key 写入：PascalCase（业务 Controller override）+ camelCase（TreeMapper 默认）
       extra[field] = res.data.IsValid
+      const camelField = field.charAt(0).toLowerCase() + field.slice(1)
+      if (camelField !== field) extra[camelField] = res.data.IsValid
       node.Extra = { ...extra }
       ElMessage.success(res.data.IsValid === 1 ? '已启用' : '已禁用')
       return res.data
@@ -751,7 +782,9 @@ export abstract class TreeTableCore<
   ): Promise<void> {
     const field = this.enableField ?? 'IsValid'
     const extra = (node.Extra as any) || {}
-    const currentVal = extra[field] ?? 1
+    // 双 Key 读取：PascalCase（业务 Controller override）+ camelCase（TreeMapper 默认）
+    const camelField = field.charAt(0).toLowerCase() + field.slice(1)
+    const currentVal = extra[field] ?? extra[camelField] ?? 1
     const action = currentVal === 1 ? '禁用' : '启用'
     const name = options?.entityName ?? node.Name
 

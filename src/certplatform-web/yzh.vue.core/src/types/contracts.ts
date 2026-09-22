@@ -89,6 +89,8 @@ export interface TreeBehaviorConfig {
   AllowDeleteWithChildren: boolean
   /** 自定义节点操作按钮：{ 方法名: 显示文字 } */
   CustomActions?: Record<string, string>
+  /** 是否显示启用/禁用按钮（true=显示 toggle-valid；null/undefined=沿用 EnableField 非空判断的旧行为） */
+  AllowToggle?: boolean
   /** 启用/禁用字段名（默认 IsValid） */
   EnableField?: string
 }

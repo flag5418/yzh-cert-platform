@@ -106,6 +106,7 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         TreeConfig.ParentCodeField = "ParentCode";
         TreeConfig.RelateField = "OrgCode";
         TreeConfig.MaxLevel = 10;
+        TreeConfig.EnableField = "Enable";  // 机构启用/禁用字段为 Enable（byte），非 IsValid
 
         // 树节点表单配置（自动加载 Assets/EntityConfigs/sys_organization_form.json）
         TreeFormConfigName = "System/OrganizationForm";
@@ -509,6 +510,22 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         if (!updateResult.Success)
             return Result<ApiResponse<object?>>.Fail(updateResult.Error);
 
-        return Result<ApiResponse<object?>>.Ok(ApiResponse<object?>.Ok("已启用该人员"));
+        return Result<ApiResponse<object?>>).Ok(ApiResponse<object?>.Ok("已启用该人员"));
+    }
+
+    /// <summary>
+    /// 扩展树节点 Extra 载荷
+    /// 同时写入 PascalCase（Enable/IsValid）和 camelCase（enable/isValid），
+    /// 确保前端 Toggle 按钮在两种键名下均能正确读取状态。
+    /// </summary>
+    protected override TreeItemDto MapToTreeItem(Sys_Organization entity, int level)
+    {
+        var dto = base.MapToTreeItem(entity, level);
+        dto.Extra ??= new Dictionary<string, object>();
+        dto.Extra["Enable"] = entity.Enable;
+        dto.Extra["enable"] = entity.Enable;
+        dto.Extra["IsValid"] = entity.IsValid;
+        dto.Extra["isValid"] = entity.IsValid;
+        return dto;
     }
 }

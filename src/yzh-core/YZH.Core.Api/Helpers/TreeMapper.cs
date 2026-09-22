@@ -50,6 +50,8 @@ public static class TreeMapper
 
         // 自动提取常见扩展字段
         TryFillExtra(dto.Extra, entity, "Enable", "enable");
+        TryFillExtra(dto.Extra, entity, "IsValid", "isValid");
+        TryFillExtra(dto.Extra, entity, "IsValid", "IsValid");    // PascalCase，供前端 EnableField 读取
         TryFillExtra(dto.Extra, entity, "Remark", "remark");
         TryFillExtra(dto.Extra, entity, "Status", "status");
         TryFillExtra(dto.Extra, entity, "OrderNo", "orderNo");

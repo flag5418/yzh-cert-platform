@@ -48,6 +48,12 @@ export interface TreeNode<T = any> {
   Sort?: number
   /** 附加业务字段（图标/颜色/badge/业务键值） */
   Extra?: Record<string, any>
+  /**
+   * 有效标志（1=有效/启用，0=无效/禁用）。
+   * 与 node.Extra[enableField] 并存，优先读此属性。
+   * 后端通过 MapToTreeItem / override 填充。
+   */
+  IsValid?: number
 
   // ──── 层级结构 ────
   /** 子节点集合（懒加载/加载中节点可能尚未填充，故允许 undefined） */
