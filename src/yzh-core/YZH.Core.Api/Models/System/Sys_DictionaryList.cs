@@ -27,7 +27,7 @@ public class Sys_DictionaryList : BaseEntity, ISoftDelete, IIsValid
 {
     /// <summary>物理主键（DB: Id）。非关联字段。</summary>
     [SugarColumn(ColumnName = "Id", IsPrimaryKey = true, IsIdentity = true)]
-    public new string Id { get; set; } = string.Empty;
+    public new long Id { get; set; }
 
     /// <summary>稳定标识（DB: Code）。随机唯一，插入前生成，之后不可修改。前端下拉框的 value 即此值。</summary>
     [StringLength(50)]

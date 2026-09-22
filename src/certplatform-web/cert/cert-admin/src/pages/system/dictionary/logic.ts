@@ -20,7 +20,7 @@
 
 import { TreeTableLogic, type ApiResponse, type TreeNode } from '@yzh-core'
 import { ElMessage } from 'element-plus'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 // ========================================================
 // Logic
@@ -28,6 +28,39 @@ import { ref } from 'vue'
 
 export class DictionaryPageLogic extends TreeTableLogic<any> {
   controllerName = 'Dictionary'
+
+  /** 当前父节点名称（用作表单只读展示字段，嵌入 grid 第一行） */
+  get treeParentName(): string {
+    return this.treeParentNode.value?.Name ?? ''
+  }
+
+  /** 当前选中字典名称（字典项表单顶部只读展示） */
+  get dicParentName(): string {
+    return this.selectedNode?.Name ?? ''
+  }
+
+  /**
+   * 初始化：
+   * - 监听 treeParentNode 变化 → 同步到 treeFormData.ParentName
+   * - 监听 selectedNode 变化 → 同步到 formData.DicParentName
+   */
+  override async init(): Promise<void> {
+    await super.init()
+    watch(
+      () => this.treeParentNode.value,
+      (node) => {
+        this.treeFormData['ParentName'] = node?.Name ?? ''
+      },
+      { immediate: true },
+    )
+    watch(
+      () => this.selectedNode,
+      (node) => {
+        this.formData['ParentDicName'] = node?.Name ?? ''
+      },
+      { immediate: true },
+    )
+  }
 
   /** 当前正在编辑的字典项行（用于提交后与后端返回值合并，避免表格行丢字段）
    *  ⚠️ 不能声明为 private：与基类 ST-8 的 protected editingRow 同名会 TS2415，改名区分 */
@@ -239,12 +272,13 @@ export class DictionaryPageLogic extends TreeTableLogic<any> {
     // NewEntity 是 PascalCase（含 DicCode / DicName / DicValue / Color / OrderNo / IsValid / Remark）
     const tmpl = (this.config.value?.NewEntity as any) || {}
     if (row) {
-      Object.assign(this.formData, tmpl, row)
+      Object.assign(this.formData, tmpl, row, { ParentDicName: this.selectedNode?.Name ?? '' })
     } else {
       Object.assign(this.formData, tmpl, {
         IsValid: 1,
         OrderNo: 0,
         DicCode: this.selectedNode!.Code,
+        ParentDicName: this.selectedNode?.Name ?? '',
       })
     }
 

@@ -1,7 +1,7 @@
 {
   "Title": "机构表单",
   "FillMode": "AutoFix",
-  "FormCols": 2,
+  "FormCols": 1,
   "Columns": [
     {
       "Row": 0,
@@ -21,9 +21,9 @@
       "Enable": true
     },
     {
-      "Row": 0,
+      "Row": 1,
       "RowSpan": 1,
-      "Col": 1,
+      "Col": 0,
       "ColSpan": 1,
       "FieldName": "OrgCode",
       "DesName": "机构编码",
@@ -38,7 +38,7 @@
       "Enable": true
     },
     {
-      "Row": 1,
+      "Row": 2,
       "RowSpan": 1,
       "Col": 0,
       "ColSpan": 1,
@@ -56,9 +56,9 @@
       "Enable": true
     },
     {
-      "Row": 1,
+      "Row": 3,
       "RowSpan": 1,
-      "Col": 1,
+      "Col": 0,
       "ColSpan": 1,
       "FieldName": "Enable",
       "DesName": "是否启用",
@@ -73,7 +73,7 @@
       "Enable": true
     },
     {
-      "Row": 2,
+      "Row": 4,
       "RowSpan": 1,
       "Col": 0,
       "ColSpan": 1,
@@ -90,9 +90,9 @@
       "Enable": true
     },
     {
-      "Row": 2,
+      "Row": 5,
       "RowSpan": 1,
-      "Col": 1,
+      "Col": 0,
       "ColSpan": 1,
       "FieldName": "LeaderPhone",
       "DesName": "联系电话",
@@ -107,7 +107,7 @@
       "Enable": true
     },
     {
-      "Row": 3,
+      "Row": 6,
       "RowSpan": 1,
       "Col": 0,
       "ColSpan": 1,
@@ -124,7 +124,7 @@
       "Enable": true
     },
     {
-      "Row": 4,
+      "Row": 7,
       "RowSpan": 1,
       "Col": 0,
       "ColSpan": 2,

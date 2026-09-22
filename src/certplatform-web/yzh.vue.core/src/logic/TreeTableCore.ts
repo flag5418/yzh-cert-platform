@@ -1,5 +1,5 @@
 /**
- * TreeTableCore - 左树右表内核（TT 阶段，由 TreeTableLogic 演进改名）
+ * TreeTableCore - 左树右表内核
  *
  * 数据访问规则（与 YZH.Core.Stand 严格一致）：
  * - res.data：ApiResponse 顶层（camelCase）
@@ -36,6 +36,7 @@ import type {
 import type { TreeNode } from '../types/tree'
 import { toCamelCase } from '../utils/case'
 import { pascalCaseFormData } from '../utils/case'
+import { toFormLayoutCols } from '../adapters/entityAdapters'
 import { SingleTableCore } from './SingleTableCore'
 import { TreeSide } from './TreeSide'
 
@@ -203,12 +204,18 @@ export abstract class TreeTableCore<
     return found?.text ?? action
   }
 
-  /** 树节点表单字段配置（保留 TreeFormConfig 专用布局规则：2 列 + ColSpan>1 占满） */
+  /** 树节点表单布局列数（从 TreeFormConfig.FormCols 读取） */
+  get treeFormLayoutCols(): number {
+    return toFormLayoutCols(this.treeFormConfig)
+  }
+
+  /** 树节点表单字段配置（保留 TreeFormConfig 专用布局规则：ColSpan>1 占满整行） */
   get treeFormFields(): YzhFormField[] {
     const cols = this.treeFormConfig?.Columns
     const schema = this.treeFormConfig?.Schema
     if (!cols) return []
-    const colSpan = 12
+    const layoutCols = this.treeFormLayoutCols
+    const baseSpan = Math.floor(24 / layoutCols)
     return cols
       .filter((c) => c.BcFlag && c.Type !== 'Other')
       .map((c) => {
@@ -221,7 +228,7 @@ export abstract class TreeTableCore<
           type: mapTreeControlType(c.Type),
           required: !c.Yxk,
           disabled: c.Enable === false,
-          span: ((c as any).ColSpan ?? 0) > 1 ? 24 : colSpan,
+          span: ((c as any).ColSpan ?? 0) > 1 ? 24 : baseSpan,
           dictCode: c.DictCode || undefined,
           options: undefined,
           placeholder: c.Type?.includes('Picker')

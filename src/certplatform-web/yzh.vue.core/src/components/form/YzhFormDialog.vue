@@ -15,6 +15,7 @@
         :loading="loading"
         :cols="cols"
         :label-width="labelWidth"
+        :show-actions="false"
         @submit="handleSubmit"
         @reset="handleCancel"
       />

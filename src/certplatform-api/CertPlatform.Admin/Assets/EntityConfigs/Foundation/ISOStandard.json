@@ -64,8 +64,8 @@
       "BcFlag": true,
       "Yxk": false,
       "Width": 280,
-      "Row": 0,
-      "Col": 1,
+      "Row": 1,
+      "Col": 0,
       "RowSpan": 1,
       "ColSpan": 1,
       "GroupIndex": "1",
@@ -82,7 +82,7 @@
       "BcFlag": true,
       "Yxk": true,
       "Width": 100,
-      "Row": 1,
+      "Row": 2,
       "Col": 0,
       "RowSpan": 1,
       "ColSpan": 1,
@@ -99,8 +99,8 @@
       "BcFlag": true,
       "Yxk": true,
       "Width": 120,
-      "Row": 1,
-      "Col": 1,
+      "Row": 3,
+      "Col": 0,
       "RowSpan": 1,
       "ColSpan": 1,
       "GroupIndex": "1",
@@ -117,10 +117,10 @@
       "BcFlag": true,
       "Yxk": true,
       "Width": 400,
-      "Row": 2,
+      "Row": 4,
       "Col": 0,
       "RowSpan": 1,
-      "ColSpan": 2,
+      "ColSpan": 1,
       "GroupIndex": "1",
       "Mrz": "",
       "Enable": true
@@ -134,7 +134,7 @@
       "BcFlag": true,
       "Yxk": true,
       "Width": 400,
-      "Row": 3,
+      "Row": 5,
       "Col": 0,
       "RowSpan": 1,
       "ColSpan": 2,
@@ -162,5 +162,6 @@
   ],
   "RowButtons": {
     "Enable": true
-  }
+  },
+  "FormCols": 1
 }

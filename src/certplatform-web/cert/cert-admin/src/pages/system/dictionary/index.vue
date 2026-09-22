@@ -33,23 +33,8 @@ watch(tableRef, (el) => {
   if (el) logic.setTableRef(el)
 })
 
-// 合并行操作按钮：标准 edit/delete + toggle-valid
-const mergedRowActionButtons = computed(() => {
-  const buttons: Record<string, string> = {}
-  const rb = logic.config.value?.RowButtons
-  if (rb?.Edit !== false) buttons['edit'] = '编辑'
-  if (rb?.Delete !== false) buttons['delete'] = '删除'
-  if (logic.enableField) {
-    buttons['toggle-valid'] = '禁用/启用'
-  }
-  // 合入其他自定义按钮（过滤旧 disable/enable）
-  const customButtons = logic.rowCustomButtons
-  for (const [key, text] of Object.entries(customButtons)) {
-    if (key === 'disable' || key === 'enable') continue
-    buttons[key] = text
-  }
-  return buttons
-})
+// 行操作按钮：直接消费基类自动注入的 rowActionButtons（含 toggle-valid）
+const rowActionButtons = computed(() => (logic as any).rowActionButtons)
 
 // ========================================================
 // 树节点操作
@@ -145,7 +130,7 @@ async function handleBatchDeleteItems() {
 
 /** 切换字典项有效标志 */
 async function handleToggleItemValid(row: any) {
-  await logic.toggleItemValid(row)
+  await (logic as any).toggleRowIsValidWithConfirm(row, { entityName: row.DicName })
 }
 
 /** 表格行自定义操作（edit / delete / toggle-valid） */
@@ -237,7 +222,7 @@ onMounted(async () => {
             :data-loader="loadTableData"
             :search-fields="logic.searchFields as any"
             :selectable="true"
-            :row-action-buttons="mergedRowActionButtons"
+            :row-action-buttons="rowActionButtons"
             row-key="Code"
             @selection-change="selectedRows = $event"
             @row-action="handleRowAction"
@@ -277,18 +262,11 @@ onMounted(async () => {
       :close-on-click-modal="false"
       destroy-on-close
     >
-      <div class="dict-form-header">
-        <span class="dict-form-header__label">上级节点：</span>
-        <el-tag v-if="logic.treeParentNode.value" type="info">
-          {{ logic.treeParentNode.value.Name }}
-        </el-tag>
-        <el-tag v-else type="info">根级</el-tag>
-      </div>
       <YzhForm
         v-model="logic.treeFormData"
         :fields="logic.treeFormFields as any"
         :loading="logic.treeSubmitting.value"
-        :cols="2"
+        :cols="logic.treeFormLayoutCols as any"
         label-width="100px"
         @submit="handleTreeSubmit"
         @reset="logic.treeDialogVisible.value = false"
@@ -303,13 +281,6 @@ onMounted(async () => {
       :close-on-click-modal="false"
       destroy-on-close
     >
-      <div class="dict-form-header">
-        <span class="dict-form-header__label">所属字典：</span>
-        <el-tag v-if="selectedNode" type="info">
-          {{ selectedNode.Name }}
-        </el-tag>
-        <el-tag v-else type="info">未选择</el-tag>
-      </div>
       <YzhForm
         v-model="logic.formData"
         :fields="logic.formFields as any"
@@ -339,20 +310,5 @@ onMounted(async () => {
   min-height: 0;
   background: #fff;
   overflow: hidden;
-}
-
-.dict-form-header {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  padding-bottom: calc(8px + 16px);
-  background: var(--el-fill-color-light);
-  border-radius: 4px;
-}
-
-.dict-form-header__label {
-  font-size: 14px;
-  color: var(--el-text-color-regular);
-  font-weight: 500;
 }
 </style>

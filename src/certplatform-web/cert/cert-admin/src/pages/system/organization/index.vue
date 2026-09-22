@@ -320,10 +320,9 @@ onMounted(async () => {
       >
         <!-- 所属机构只读展示 -->
         <template #orgCode>
-          <el-tag v-if="selectedNode" type="info">
-            {{ selectedNode.Name }}
-          </el-tag>
-          <el-tag v-else type="info">未选择</el-tag>
+          <span class="org-form-header__value">
+            {{ selectedNode?.Name ?? '未选择' }}
+          </span>
         </template>
       </YzhForm>
     </el-dialog>
@@ -339,10 +338,9 @@ onMounted(async () => {
       <!-- 上级机构只读展示 -->
       <div class="org-form-header">
         <span class="org-form-header__label">上级机构：</span>
-        <el-tag v-if="logic.orgParentNode.value" type="info">
-          {{ logic.orgParentNode.value.Name }}
-        </el-tag>
-        <el-tag v-else type="info">根级</el-tag>
+        <span class="org-form-header__value">
+          {{ logic.orgParentNode.value?.Name ?? '根级' }}
+        </span>
       </div>
 
       <!-- 配置驱动的表单（字段从后端 sys_organization_form.json 自动派生） -->
@@ -391,15 +389,18 @@ onMounted(async () => {
 .org-form-header {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
-  padding-bottom: calc(8px + 16px);
-  background: var(--el-fill-color-light);
-  border-radius: 4px;
+  margin-bottom: 12px;
 }
 
 .org-form-header__label {
   font-size: 14px;
   color: var(--el-text-color-regular);
+  font-weight: 500;
+}
+
+.org-form-header__value {
+  font-size: 14px;
+  color: var(--el-text-color-primary);
   font-weight: 500;
 }
 </style>

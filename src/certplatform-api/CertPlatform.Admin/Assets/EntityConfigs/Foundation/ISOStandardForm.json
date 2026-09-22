@@ -33,9 +33,9 @@
       "Placeholder": "如：ISO 13485:2016"
     },
     {
-      "Row": 0,
+      "Row": 1,
       "RowSpan": 1,
-      "Col": 1,
+      "Col": 0,
       "ColSpan": 1,
       "FieldName": "StandardName",
       "DesName": "标准名称",
@@ -51,7 +51,7 @@
       "Placeholder": "如：医疗器械质量管理体系"
     },
     {
-      "Row": 1,
+      "Row": 2,
       "RowSpan": 1,
       "Col": 0,
       "ColSpan": 1,
@@ -68,9 +68,9 @@
       "Enable": true
     },
     {
-      "Row": 1,
+      "Row": 3,
       "RowSpan": 1,
-      "Col": 1,
+      "Col": 0,
       "ColSpan": 1,
       "FieldName": "Category",
       "DesName": "类别",
@@ -86,10 +86,10 @@
       "DictCode": "iso_category"
     },
     {
-      "Row": 2,
+      "Row": 4,
       "RowSpan": 1,
       "Col": 0,
-      "ColSpan": 2,
+      "ColSpan": 1,
       "FieldName": "Description",
       "DesName": "描述",
       "Width": 500,
@@ -104,7 +104,7 @@
       "Placeholder": "标准描述（可选）"
     },
     {
-      "Row": 3,
+      "Row": 5,
       "RowSpan": 1,
       "Col": 0,
       "ColSpan": 2,
@@ -121,10 +121,10 @@
       "Enable": true
     },
     {
-      "Row": 4,
+      "Row": 0,
       "RowSpan": 1,
       "Col": 0,
-      "ColSpan": 2,
+      "ColSpan": 1,
       "FieldName": "Id",
       "DesName": "ID",
       "Type": "Other",
@@ -134,9 +134,9 @@
       "Enable": false
     },
     {
-      "Row": 4,
+      "Row": 0,
       "RowSpan": 1,
-      "Col": 1,
+      "Col": 0,
       "ColSpan": 1,
       "FieldName": "Code",
       "DesName": "编码",
@@ -152,11 +152,15 @@
       "Type": "Switch",
       "BcFlag": true,
       "XsFlag": true,
-      "GroupIndex": "1",
+      "GroupIndex": "0",
       "Enable": true,
       "Sxh": 99,
       "Yxk": false,
-      "Mrz": ""
+      "Mrz": "",
+      "Row": 6,
+      "Col": 0,
+      "ColSpan": 1
     }
-  ]
+  ],
+  "FormCols": 1
 }

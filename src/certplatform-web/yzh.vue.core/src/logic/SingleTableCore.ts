@@ -1,5 +1,5 @@
 /**
- * SingleTableCore - 单表 CRUD 内核（ST 阶段，由 CrudPageLogic 演进改名）
+ * SingleTableCore - 单表 CRUD 内核
  *
  * 数据访问规则（与 YZH.Core.Stand 严格一致）：
  * - res.data：ApiResponse 顶层（camelCase）

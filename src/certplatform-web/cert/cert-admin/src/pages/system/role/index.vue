@@ -97,10 +97,9 @@ const { logic, treeTableRef } = useTreeTable(RolePageLogic)
       <template #prepend>
         <div class="role-form-header">
           <span class="role-form-header__label">上级角色：</span>
-          <el-tag v-if="logic.treeParentNode.value" type="info">
-            {{ logic.treeParentNode.value.Name }}
-          </el-tag>
-          <el-tag v-else type="info">根级</el-tag>
+          <span class="role-form-header__value">
+            {{ logic.treeParentNode.value?.Name ?? '根级' }}
+          </span>
         </div>
       </template>
     </YzhFormDialog>
@@ -167,15 +166,18 @@ const { logic, treeTableRef } = useTreeTable(RolePageLogic)
 .role-form-header {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
-  padding-bottom: calc(8px + 16px);
-  background: var(--el-fill-color-light);
-  border-radius: 4px;
+  margin-bottom: 12px;
 }
 
 .role-form-header__label {
   font-size: 14px;
   color: var(--el-text-color-regular);
+  font-weight: 500;
+}
+
+.role-form-header__value {
+  font-size: 14px;
+  color: var(--el-text-color-primary);
   font-weight: 500;
 }
 </style>
