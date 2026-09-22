@@ -648,7 +648,7 @@ export abstract class TreeTableCore<
     } as Record<string, any>
     const res = await this.apiPost<ApiResponse<TreeItemDto>>('/tree/add', requestData)
     // 支持前端预分配 Code：后端未返回时使用请求中的 Code 构造本地节点
-    const backendCode = res.data?.[codeField] ?? ''
+    const backendCode = (res.data as any)?.[codeField] ?? ''
     const localCode = backendCode || requestData[codeField]
     const newNode = this.dtoToNode(
       res.data ?? { Code: localCode, Name: requestData['Name'] ?? '', ParentCode: parentNode?.Code ?? null } as TreeItemDto,

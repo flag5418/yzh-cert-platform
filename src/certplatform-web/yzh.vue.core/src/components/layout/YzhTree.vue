@@ -459,7 +459,7 @@ defineExpose({
   setCurrentNode,
   appendNode,
   /** 从树中移除指定节点（不触发 API，仅更新本地树 UI） */
-  removeNode: (parentCode: string | null, code: string) => {
+  removeNode: (_parentCode: string | null, code: string) => {
     if (!treeRef.value) return
     // 优先使用 el-tree 公开 API：remove(nodeKey)
     try {
