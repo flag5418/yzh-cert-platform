@@ -33,4 +33,6 @@ public class TreeBehaviorConfigDto
     public Dictionary<string, string>? CustomActions { get; set; }
     /// <summary>启用/禁用字段名（默认 IsValid）</summary>
     public string EnableField { get; set; } = "IsValid";
+    /// <summary>是否显示启用/禁用按钮（true=显示，false=隐藏；null/未设置=沿用旧行为）</summary>
+    public bool? AllowToggle { get; set; }
 }

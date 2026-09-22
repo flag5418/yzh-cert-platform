@@ -57,8 +57,10 @@ async function handleTreeNodeAction(action: string, node: TreeNode) {
     handleEditOrg(node)
   } else if (action === 'delete') {
     await handleDeleteOrg(node)
-  } else if (action === 'toggle-valid') {
-    await handleToggleOrgIsValid(node)
+  } else if (action === 'custom:disable') {
+    await handleToggleOrgDisable(node)
+  } else if (action === 'custom:enable') {
+    await handleToggleOrgEnable(node)
   }
 }
 
@@ -86,9 +88,26 @@ async function handleDeleteOrg(node: TreeNode) {
   await logic.deleteOrg(node)
 }
 
-/** 禁用/启用机构（基类统一处理：确认弹窗 → API → 本地更新） */
-async function handleToggleOrgIsValid(node: TreeNode) {
-  await logic.toggleTreeNodeWithConfirm(node)
+/** 禁用/启用机构（调用自定义树操作，带业务规则：递归禁用子机构和人员） */
+async function handleToggleOrgDisable(node: TreeNode) {
+  await ElMessageBox.confirm(`确定禁用机构【${node.Name}】？（将级联禁用子机构和人员）`, '禁用确认', { type: 'warning' })
+  await logic.apiPostPublic(`/tree/action/disable`, { Code: node.Code })
+  // 本地更新节点状态：Extra.enable = 0
+  const extra = (node.Extra as any) || {}
+  extra['enable'] = 0
+  extra['Enable'] = 0
+  node.Extra = { ...extra }
+  ElMessage.success('已禁用该机构')
+}
+
+async function handleToggleOrgEnable(node: TreeNode) {
+  await ElMessageBox.confirm(`确定启用机构【${node.Name}】？`, '启用确认', { type: 'warning' })
+  await logic.apiPostPublic(`/tree/action/enable`, { Code: node.Code })
+  const extra = (node.Extra as any) || {}
+  extra['enable'] = 1
+  extra['Enable'] = 1
+  node.Extra = { ...extra }
+  ElMessage.success('已启用该机构')
 }
 
 // ========================================================

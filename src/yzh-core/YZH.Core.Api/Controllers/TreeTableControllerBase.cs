@@ -493,7 +493,8 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
             NoSelectionBehavior = config.NoSelectionBehavior,
             MaxLevel = config.MaxLevel,
             AllowDeleteWithChildren = config.AllowDeleteWithChildren,
-            EnableField = config.EnableField
+            EnableField = config.EnableField,
+            AllowToggle = config.AllowToggle
         };
     }
 

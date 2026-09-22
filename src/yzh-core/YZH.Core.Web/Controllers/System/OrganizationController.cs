@@ -107,6 +107,7 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         TreeConfig.RelateField = "OrgCode";
         TreeConfig.MaxLevel = 10;
         TreeConfig.EnableField = "Enable";  // 机构启用/禁用字段为 Enable（byte），非 IsValid
+        TreeConfig.AllowToggle = false;     // 禁用基类 toggle-valid 按钮，使用自定义 disable/enable 操作
 
         // 树节点表单配置（自动加载 Assets/EntityConfigs/sys_organization_form.json）
         TreeFormConfigName = "System/OrganizationForm";
@@ -510,7 +511,7 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         if (!updateResult.Success)
             return Result<ApiResponse<object?>>.Fail(updateResult.Error);
 
-        return Result<ApiResponse<object?>>).Ok(ApiResponse<object?>.Ok("已启用该人员"));
+        return Result<ApiResponse<object?>>.Ok(ApiResponse<object?>.Ok("已启用该人员"));
     }
 
     /// <summary>
