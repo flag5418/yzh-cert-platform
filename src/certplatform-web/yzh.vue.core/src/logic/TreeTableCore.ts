@@ -161,14 +161,14 @@ export abstract class TreeTableCore<
    * 树节点操作按钮（YzhAction[]，TT-9：完全由后端 TreeConfig 配置驱动）
    *
    * AllowEdit → 编辑（+ 新增下级，取决于 AllowAddChild）；AllowDelete → 删除；
-   * EnableField → 禁用/启用；CustomActions → 自定义动作。前端零硬编码。
+   * EnableField → 禁用/启用（按节点状态动态显示单个）；CustomActions → 自定义动作。前端零硬编码。
    */
-  get nodeActions(): YzhAction[] {
-    return this.resolveTreeActions()
+  get nodeActions(): (node: TreeNode) => YzhAction[] {
+    return (node: TreeNode) => this.resolveTreeActions(node)
   }
 
   /** 树动作解析（子类可覆盖以追加自定义动作） */
-  protected resolveTreeActions(): YzhAction[] {
+  protected resolveTreeActions(node: TreeNode): YzhAction[] {
     const actions: YzhAction[] = []
     const tc = this.treeConfig
     if (!tc) return actions
@@ -179,13 +179,21 @@ export abstract class TreeTableCore<
     if (tc.AllowDelete) {
       actions.push({ key: 'delete', text: '删除', type: 'danger', danger: true })
     }
-    // AllowToggle 显式控制：true=显示，false=隐藏；未设置时回退到 EnableField 非空判断（兼容旧配置）
-    const shouldShowToggle =
-      tc.AllowToggle === true || (tc.AllowToggle === undefined && this.enableField)
-    if (shouldShowToggle) {
-      actions.push({ key: 'toggle-valid', text: '禁用/启用', type: 'warning' })
+    // 禁用/启用按钮：根据节点状态动态显示（只显示一个）
+    if (tc.EnableField || this.enableField) {
+      const field = tc.EnableField ?? this.enableField
+      const extra = (node.Extra as any) || {}
+      const val = extra[field] ?? extra[field.charAt(0).toLowerCase() + field.slice(1)] ?? 1
+      if (val === 1) {
+        // 已启用 → 只显示禁用
+        actions.push({ key: 'toggle-disable', text: '禁用', type: 'warning' })
+      } else {
+        // 已禁用 → 只显示启用
+        actions.push({ key: 'toggle-enable', text: '启用', type: 'warning' })
+      }
     }
-    if (tc.CustomActions) {
+    // CustomActions：仅当无内置 toggle 时才显示（避免重复）
+    if (!tc.EnableField && !this.enableField && tc.CustomActions) {
       for (const [method, label] of Object.entries(tc.CustomActions)) {
         actions.push({ key: `custom:${method}`, text: label, type: 'info' })
       }
@@ -194,18 +202,14 @@ export abstract class TreeTableCore<
   }
 
   /**
-   * 获取树节点操作按钮的显示文字（toggle-valid 按节点状态动态显示）
+   * 获取树节点操作按钮的显示文字（toggle 按节点状态动态显示）
    */
   getNodeActionLabel(action: string, node: TreeNode): string {
-    if (action === 'toggle-valid') {
-      const field = this.enableField ?? 'IsValid'
-      const extra = (node.Extra as any) || {}
-      // TreeMapper 用 camelCase 写 Extra，各 Controller override 可能用 PascalCase，
-      // 此处双 Key 查找确保两种写法均生效
-      const val = extra[field] ?? extra[field.charAt(0).toLowerCase() + field.slice(1)] ?? 1
-      return val === 1 ? '禁用' : '启用'
+    // 动态计算的 toggle 动作
+    if (action === 'toggle-disable' || action === 'toggle-enable') {
+      return action === 'toggle-disable' ? '禁用' : '启用'
     }
-    const found = this.nodeActions.find((a) => a.key === action)
+    const found = this.nodeActions(node).find((a) => a.key === action)
     return found?.text ?? action
   }
 

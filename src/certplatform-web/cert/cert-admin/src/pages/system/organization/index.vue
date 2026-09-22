@@ -57,9 +57,9 @@ async function handleTreeNodeAction(action: string, node: TreeNode) {
     handleEditOrg(node)
   } else if (action === 'delete') {
     await handleDeleteOrg(node)
-  } else if (action === 'custom:disable') {
+  } else if (action === 'toggle-disable') {
     await handleToggleOrgDisable(node)
-  } else if (action === 'custom:enable') {
+  } else if (action === 'toggle-enable') {
     await handleToggleOrgEnable(node)
   }
 }
