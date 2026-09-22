@@ -48,6 +48,12 @@ public class TreeConfig
 
     /// <summary>启用/禁用字段名（默认 IsValid，前端根据此字段显示启用/禁用按钮）</summary>
     public string EnableField { get; set; } = "IsValid";
+
+    /// <summary>
+    /// 是否显示启用/禁用按钮（true=显示，false=隐藏；null/未设置=沿用 EnableField 非空判断的旧行为）
+    /// 当 Controller 使用自定义 disable/enable 操作时，设为 false 避免与基类 toggle-valid 重复。
+    /// </summary>
+    public bool? AllowToggle { get; set; }
 }
 
 /// <summary>左树右表页面配置</summary>

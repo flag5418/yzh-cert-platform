@@ -294,6 +294,9 @@ export class OrgPageLogic extends TreeTableLogic<any> {
         )
       }
       this.orgDialogVisible.value = false
+      // 重置编辑状态，防止快速连续操作时模式误判
+      this.orgDialogMode.value = 'add'
+      this.orgEditingNode.value = null
     } finally {
       this.orgSubmitting.value = false
     }
