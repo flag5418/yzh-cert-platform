@@ -85,6 +85,6 @@
 | 项 | 值 |
 |----|-----|
 | 备份 Commit SHA | `32dbfff` |
-| 规范 Commit SHA | （Commit B 后回填） |
+| 规范 Commit SHA | `c70d619` |
 | 完成日期 | 2026-09-23 |
 | 备注 | Commit B 排除同期无关改动：`scripts/db/*` collation、`docker/*`、`项目全局规则.md` 铁律八、`AGENTS.md` 字符集、菜单共享层重构 |
