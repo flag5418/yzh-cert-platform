@@ -18,7 +18,8 @@
     "build:all": "npm run build:core && npm run build:share && npm run build:admin && npm run build:auditor",
     "typecheck:all": "npm run typecheck --workspaces --if-present",
     "guard": "node scripts/guards.mjs",
-    "guard:report": "node scripts/guards.mjs --report"
+    "guard:report": "node scripts/guards.mjs --report",
+    "hooks:install": "bash scripts/install-hooks.sh"
   },
   "devDependencies": {
     "less": "^4.9.1",

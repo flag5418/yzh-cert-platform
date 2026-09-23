@@ -24,6 +24,18 @@ namespace CertPlatform.Shared.Entities.Wf
         [MaxLength(20)]
         public string TaskType { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 测试范围：FULL | NODE | AI_NODE（仅 TaskType=TEST 时有效）
+        /// <para>FULL    = 整流完整测试（start → … → end，穷举所有路径）</para>
+        /// <para>NODE    = 任意单节点测试（路径只有目标节点本身）</para>
+        /// <para>AI_NODE = AI 节点测试（路径 = 上游链 + 目标 AI 节点）</para>
+        /// <para>存在意义：三种入口共用同一套落库/日志结构，靠本列区分来源，
+        /// 使「任意节点测试」在 wf_execution_task 里可被检索、可被回溯。</para>
+        /// </summary>
+        [Required]
+        [MaxLength(20)]
+        public string TestScope { get; set; } = "FULL";
+
         /// <summary>执行状态：queued|executing|completed|failed|cancelled</summary>
         [Required]
         [MaxLength(20)]

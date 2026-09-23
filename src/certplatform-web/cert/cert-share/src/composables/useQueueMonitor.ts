@@ -28,12 +28,12 @@ export interface QueueListItem {
   pendingCount: number
   cancelledCount: number
   progress: number
-  creator: string
+  createBy: string
   sourceType: string
   sourceId: string
   startTime: string
   endTime: string
-  createDate: string
+  createTime: string
 }
 
 export interface QueueListResult {

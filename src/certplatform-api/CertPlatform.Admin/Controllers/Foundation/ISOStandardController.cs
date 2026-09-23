@@ -61,11 +61,19 @@ public class ISOStandardController : YzhControllerBase<ISOStandard>
     // ========================================================
 
     /// <summary>
-    /// 新增前校验：同版本下标准编号唯一
+    /// 新增前校验：标准名称唯一 + 同版本下标准编号唯一
     /// </summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAdd(
         ISOStandard entity)
     {
+        if (string.IsNullOrWhiteSpace(entity.StandardName))
+            return (false, "标准名称不能为空");
+
+        var nameExists = await Entity.ExistsAsync(s =>
+            s.StandardName == entity.StandardName);
+        if (nameExists.Data)
+            return (false, $"标准名称【{entity.StandardName}】已存在");
+
         var exists = await Entity.ExistsAsync(s =>
             s.StandardCode == entity.StandardCode &&
             s.VersionYear == entity.VersionYear);
@@ -77,11 +85,20 @@ public class ISOStandardController : YzhControllerBase<ISOStandard>
     }
 
     /// <summary>
-    /// 修改前校验：同版本下标准编号唯一（排除自身）
+    /// 修改前校验：标准名称唯一（排除自身）+ 同版本下标准编号唯一（排除自身）
     /// </summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(
         ISOStandard entity)
     {
+        if (string.IsNullOrWhiteSpace(entity.StandardName))
+            return (false, "标准名称不能为空");
+
+        var nameExists = await Entity.ExistsAsync(s =>
+            s.Code != entity.Code &&
+            s.StandardName == entity.StandardName);
+        if (nameExists.Data)
+            return (false, $"标准名称【{entity.StandardName}】已存在");
+
         var exists = await Entity.ExistsAsync(s =>
             s.Code != entity.Code &&
             s.StandardCode == entity.StandardCode &&

@@ -14,6 +14,7 @@
 import { ref, watch, computed, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Download, Refresh, WarningFilled, Loading, Document } from '@element-plus/icons-vue'
+import VueOfficePdf from '@vue-office/pdf'
 import { getFilePreviewBlob } from '@share/api/workflow/doc-extraction-rule'
 import { downloadFile } from '@share/composables/useDirectoryApi'
 
@@ -28,34 +29,49 @@ const imageFallback = ref(false)
 /** Office 文件首次预览需服务端转换（秒级，高峰期可能更久），超过 2.5s 时给出说明 */
 const slowHint = ref(false)
 let slowTimer: any = null
-
-/** 浏览器内置 PDF 查看器可用性（Chrome/Edge/Firefox 均支持；不可用时直接提示下载） */
-const pdfViewerAvailable = computed(() => (navigator as any).pdfViewerEnabled !== false)
-
-/** 兼容树节点与原始行两种数据形态（PascalCase / camelCase 双写） */
+/** 兼容树节点与原始行两种数据形态（PascalCase / camelCase 双写，树节点为 FileCode/Name/Raw） */
 const fileName = computed(
-  () => props.file?.name || props.file?.fileName || props.file?.FileName || '未命名文件'
+  () =>
+    props.file?.fileName ||
+    props.file?.FileName ||
+    props.file?.Name ||
+    props.file?.name ||
+    props.file?.Raw?.FileName ||
+    '未命名文件'
 )
 const fileCode = computed(
-  () => props.file?.fileCode || props.file?.FileCode || props.file?.raw?.FileCode || ''
+  () => props.file?.fileCode || props.file?.FileCode || props.file?.Raw?.FileCode || props.file?.raw?.FileCode || ''
 )
 const storagePath = computed(
   () =>
     props.file?.storagePath ||
     props.file?.StoragePath ||
+    props.file?.Raw?.StoragePath ||
     props.file?.raw?.StoragePath ||
-    props.file?.raw?.storagePath ||
     ''
 )
 const convertedPath = computed(
-  () => props.file?.convertedStoragePath || props.file?.raw?.ConvertedStoragePath || ''
+  () =>
+    props.file?.convertedStoragePath ||
+    props.file?.ConvertedStoragePath ||
+    props.file?.Raw?.ConvertedStoragePath ||
+    props.file?.raw?.ConvertedStoragePath ||
+    ''
 )
 const convertStatus = computed(() =>
-  String(props.file?.convertStatus || props.file?.raw?.ConvertStatus || '').toLowerCase()
+  String(
+    props.file?.convertStatus ||
+      props.file?.ConvertStatus ||
+      props.file?.Raw?.ConvertStatus ||
+      props.file?.raw?.ConvertStatus ||
+      ''
+  ).toLowerCase()
 )
 const convertMessage = computed(
   () =>
     props.file?.convertMessage ||
+    props.file?.ConvertMessage ||
+    props.file?.Raw?.ConvertMessage ||
     props.file?.raw?.ConvertMessage ||
     '转换失败，可点击左侧「重试失败转换」后重试'
 )
@@ -195,6 +211,11 @@ async function loadPreview() {
   }
 }
 
+function onOfficePdfError(e: any) {
+  error.value = e?.message || 'PDF 渲染失败'
+  errorHint.value = '可点击「下载」后用本地软件打开查看'
+}
+
 async function download() {
   if (!storagePath.value && !fileCode.value) return
   try {
@@ -265,18 +286,17 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
       </template>
 
       <template v-else-if="isPdf || isOffice">
-        <!-- 使用浏览器内置 PDF 查看器渲染本地 Blob（无需 pdfjs 独立渲染器，规避 worker/版本兼容问题） -->
-        <iframe
-          v-if="pdfViewerAvailable"
+        <!-- vue-office-pdf：canvas 渲染，无浏览器内置查看器的侧边栏/工具栏 -->
+        <VueOfficePdf
+          v-if="previewUrl"
           :key="previewUrl"
           :src="previewUrl"
-          class="pdf-frame"
-          frameborder="0"
-          title="PDF 预览"
+          class="pdf-viewer"
+          @error="onOfficePdfError"
         />
         <div v-else class="state-panel">
           <el-icon :size="48"><Document /></el-icon>
-          <p class="state-desc">当前浏览器未启用内置 PDF 查看器</p>
+          <p class="state-desc">暂无预览内容</p>
           <el-button type="primary" @click="download">下载查看</el-button>
         </div>
       </template>
@@ -381,10 +401,9 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
   object-fit: contain;
   margin: auto;
 }
-.pdf-frame {
+.pdf-viewer {
   width: 100%;
   height: 100%;
-  border: none;
   flex: 1;
   min-height: 0;
 }

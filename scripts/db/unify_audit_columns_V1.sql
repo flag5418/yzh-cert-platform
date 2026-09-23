@@ -6,6 +6,10 @@
 -- 使用：mysql -uroot -p yzh_cert_platform < unify_audit_columns_V1.sql
 -- ============================================================
 
+-- ★ 2026-09-23：本脚本会重建视图，视图内字面量派生列的 collation 取自连接，
+--   故必须显式固定连接排序规则（原先缺失）。
+SET NAMES utf8mb4 COLLATE utf8mb4_general_ci;
+
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- ============================================================

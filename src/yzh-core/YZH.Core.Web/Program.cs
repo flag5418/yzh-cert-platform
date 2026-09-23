@@ -9,6 +9,7 @@ using YZH.Core.Api.Services;
 using YZH.Core.Web;
 using YZH.Core.DataBase.Services;
 using CertPlatform.Admin;
+using CertPlatform.Auditor;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +26,11 @@ builder.UseYzhCore(options =>
 
 // 业务服务自注册（启动工程不感知具体业务实现）
 builder.Services.AddCertPlatformAdminServices();
+// 专家端（专家注册 / 专家登录）业务服务
+builder.Services.AddCertPlatformAuditorServices();
+
+// 注册审计日志数据库写入初始化服务（在启动时设置 IYzhAuditLogger.DbWriter）
+builder.Services.AddSingleton<IHostedService, AuditLogDbWriterInitializer>();
 
 // 注册队列相关（QueueManager 是单例，executor/notifier/handler 必须也是单例）
 // OfficeConvertTaskExecutor、CertQueueNotifier、UploadQueueCancelHandler 的注册
@@ -74,11 +80,14 @@ builder.Services.AddControllers(options =>
 {
     options.Filters.Add<YZH.Core.Api.Filters.GlobalExceptionFilter>();
     options.Filters.Add<YZH.Core.Api.Filters.PermissionFilter>();
+    options.Filters.Add<YZH.Core.Api.Filters.YzhAuditingFilter>();
 })
 .AddApplicationPart(typeof(CertPlatform.Admin.Controllers.Workflow.StandardDirectoryController).Assembly)
 .AddApplicationPart(typeof(CertPlatform.Admin.Controllers.Workflow.WorkflowTestController).Assembly)
 .AddApplicationPart(typeof(CertPlatform.Admin.Controllers.Foundation.DirectoryTemplateController).Assembly)
 .AddApplicationPart(typeof(CertPlatform.Admin.Controllers.System.QueueMonitorController).Assembly)
+// 专家端控制器（api/AuditorAuth/*）
+.AddApplicationPart(typeof(CertPlatform.Auditor.Controllers.AuditorAuthController).Assembly)
 .AddJsonOptions(json =>
 {
     // PascalCase 序列化（与实体属性名一致）
@@ -87,6 +96,10 @@ builder.Services.AddControllers(options =>
     json.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
     json.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
     json.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+    // 敏感字段脱敏：带 [YzhSensitive] 的属性永不写出（输入绑定不受影响）
+    // 详见 YZH.Core.Stand/Extensions/JsonSensitiveFieldExtensions.cs
+    YZH.Core.Stand.Extensions.JsonSensitiveFieldExtensions
+        .ApplySensitiveFieldMasking(json.JsonSerializerOptions);
 });
 
 // 注册 Swagger
@@ -127,6 +140,30 @@ if (app.Environment.IsDevelopment())
 // 认证中间件（必须在 UseAuthorization 之前）
 app.UseAuthentication();
 app.UseAuthorization();
+
+// ── 业务实体命名自检（启动期强校验：违规直接抛异常，阻止服务启动）──
+// 规则来源：YZH.Core.Stand/BizConventions/BizNamingRules.cs
+// 双重黑名单 = 静态清单 + 框架程序集动态推导（框架新增实体时无需再维护静态清单）
+{
+    // CertPlatform.Admin / Auditor 已由上方 AddApplicationPart 强制加载；
+    // CertPlatform.Shared 作为其依赖一并加载（注意：该程序集挂了 extern alias，不能直接 typeof 引用）
+    var bizAssemblies = AppDomain.CurrentDomain.GetAssemblies()
+        .Where(a => a.GetName().Name is "CertPlatform.Shared" or "CertPlatform.Admin"
+                                             or "CertPlatform.Auditor" or "CertPlatform.Enterprise")
+        .ToArray();
+
+    var frameworkAssemblies = new[]
+    {
+        typeof(YZH.Core.Api.Controllers.YzhControllerBase<>).Assembly,
+        typeof(YZH.Core.Stand.BizConventions.BizNamingRules).Assembly,
+    };
+
+    var checkedTypes = YZH.Core.Stand.BizConventions.BizNamingRules
+        .ValidateWithFrameworkGuard(bizAssemblies, frameworkAssemblies);
+
+    Console.WriteLine($"[YZH] 业务实体命名自检通过：校验 {checkedTypes} 个类型，"
+                    + $"框架黑名单 {frameworkAssemblies.Length} 个程序集。");
+}
 
 // 权限同步启动时扫描
 using (var scope = app.Services.CreateScope())

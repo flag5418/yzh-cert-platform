@@ -19,6 +19,9 @@ public class YzhAuditLogger : BackgroundService, IYzhAuditLogger
     private readonly SemaphoreSlim _semaphore = new(1, 1);
     private bool _flushing;
 
+    /// <summary>数据库写入回调（由上层注入）</summary>
+    public Func<AuditLogEntry, Task>? DbWriter { get; set; }
+
     public YzhAuditLogger(
         ILogger<YzhAuditLogger> logger,
         IHostEnvironment environment)
@@ -179,6 +182,23 @@ public class YzhAuditLogger : BackgroundService, IYzhAuditLogger
         catch (Exception ex)
         {
             _logger.LogError(ex, "[AuditLogger] 文件写入失败");
+        }
+
+        // 调用数据库写入回调
+        if (DbWriter != null)
+        {
+            try
+            {
+                await DbWriter(entry);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[AuditLogger] 数据库写入回调失败: {Action}", entry.Action);
+            }
+        }
+        else
+        {
+            _logger.LogWarning("[AuditLogger] DbWriter 未设置，跳过数据库写入");
         }
     }
 

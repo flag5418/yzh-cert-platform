@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using CertPlatform.Admin.Services.Workflow.Models;
 
 namespace CertPlatform.Admin.Services.Workflow
@@ -19,18 +18,24 @@ namespace CertPlatform.Admin.Services.Workflow
     /// <para>4. 跨路径复用：同一 node_id 已执行 → 从结果池读取，不重跑</para>
     /// <para>5. 节点失败 → 当前路径终止，继续下一路径</para>
     /// <para>6. 所有路径终结后聚合 NC 结果</para>
+    ///
+    /// <para>2026-09-22 修复（G1–G5）：原实现只把节点 ID 列表塞进 <see cref="PathResult.NodeIds"/>，
+    /// per-node 的<b>输出/耗时/时序/复用标记</b>在路径聚合时被丢弃，
+    /// 导致 wf_node_execution 只能靠路径级 Status 反推 —— 所有节点同状态、耗时恒 0、
+    /// 只有路径最后一个节点有输出。现改为逐节点记录 <see cref="NodeExecutionRecord"/>。</para>
+    /// <para>2026-09-22 修复（G11）：日志全部改走 <see cref="WorkflowLogger"/>，不再裸用 ILogger 拼字符串。</para>
     /// </summary>
     public class WorkflowInterpreter
     {
         private readonly NodeExecutor _nodeExecutor;
-        private readonly ILogger<WorkflowInterpreter> _logger;
+        private readonly WorkflowLogger _wfLogger;
 
         public WorkflowInterpreter(
             NodeExecutor nodeExecutor,
-            ILogger<WorkflowInterpreter> logger)
+            WorkflowLogger wfLogger)
         {
             _nodeExecutor = nodeExecutor;
-            _logger = logger;
+            _wfLogger = wfLogger;
         }
 
         /// <summary>
@@ -39,24 +44,21 @@ namespace CertPlatform.Admin.Services.Workflow
         /// <param name="parsed">解析后的工作流模型</param>
         /// <param name="taskCode">任务编码</param>
         /// <param name="itemCode">执行项编码</param>
+        /// <param name="ruleCode">规则编码（仅用于日志，不参与执行）</param>
         /// <param name="contextParams">start 节点注入的上下文</param>
         /// <param name="ct">取消令牌</param>
         public async Task<ItemExecutionResult> ExecuteItemAsync(
             ParsedWorkflow parsed,
             string taskCode,
             string itemCode,
+            string ruleCode,
             Dictionary<string, object> contextParams,
             CancellationToken ct = default)
         {
             var sw = Stopwatch.StartNew();
 
-            _logger.LogInformation(
-                "[ITEM_START] taskCode={TaskCode}, itemCode={ItemCode}",
-                taskCode, itemCode);
-
-            _logger.LogInformation(
-                "[PATH_ENUM] taskCode={TaskCode}, itemCode={ItemCode}, pathCount={PathCount}",
-                taskCode, itemCode, parsed.Paths.Count);
+            _wfLogger.ItemStart(taskCode, itemCode, ruleCode);
+            _wfLogger.PathEnum(taskCode, itemCode, parsed.Paths.Count);
 
             // 共享输出池：nodeId → 输出（跨路径复用的核心）
             // 所有路径共享同一份已执行节点的输出
@@ -79,15 +81,11 @@ namespace CertPlatform.Admin.Services.Workflow
 
                 pathResults.Add(pathResult);
 
-                _logger.LogInformation(
-                    "[PATH_DONE] taskCode={TaskCode}, itemCode={ItemCode}, pathIndex={PathIndex}, status={Status}",
-                    taskCode, itemCode, pathIndex, pathResult.Status);
+                _wfLogger.PathDone(taskCode, itemCode, pathIndex, pathResult.Status);
 
                 if (pathResult.Status == "failed")
                 {
-                    _logger.LogWarning(
-                        "[PATH_FAIL] taskCode={TaskCode}, itemCode={ItemCode}, pathIndex={PathIndex}, failedAt={FailedAt}, error={Error}",
-                        taskCode, itemCode, pathIndex, pathResult.FailedAtNodeId, pathResult.Error);
+                    _wfLogger.PathFail(taskCode, itemCode, pathIndex, pathResult.FailedAtNodeId, pathResult.Error);
                 }
             }
 
@@ -97,9 +95,7 @@ namespace CertPlatform.Admin.Services.Workflow
 
             sw.Stop();
 
-            _logger.LogInformation(
-                "[ITEM_DONE] taskCode={TaskCode}, itemCode={ItemCode}, isSuccess={IsSuccess}, durationMs={DurationMs}",
-                taskCode, itemCode, isSuccess, sw.ElapsedMilliseconds);
+            _wfLogger.ItemDone(taskCode, itemCode, isSuccess, (int)sw.ElapsedMilliseconds);
 
             return new ItemExecutionResult
             {
@@ -129,15 +125,17 @@ namespace CertPlatform.Admin.Services.Workflow
         {
             var nodeIds = path.Select(n => n.NodeId).ToList();
 
-            _logger.LogInformation(
-                "[PATH_START] taskCode={TaskCode}, itemCode={ItemCode}, pathIndex={PathIndex}, nodeCount={NodeCount}",
-                taskCode, itemCode, pathIndex, path.Count);
+            _wfLogger.PathStart(taskCode, itemCode, pathIndex, path.Count);
+
+            var pathStartedAt = DateTime.Now;
+            var pathSw = Stopwatch.StartNew();
 
             var pathResult = new PathResult
             {
                 PathIndex = pathIndex,
                 Status = "executing",
-                NodeIds = nodeIds
+                NodeIds = nodeIds,
+                StartedAt = pathStartedAt
             };
 
             // 逐节点串行执行
@@ -148,18 +146,17 @@ namespace CertPlatform.Admin.Services.Workflow
                 // 跨路径复用检查
                 if (executedNodes.TryGetValue(node.NodeId, out var existingResult))
                 {
-                    _logger.LogInformation(
-                        "[NODE_REUSE] taskCode={TaskCode}, itemCode={ItemCode}, nodeId={NodeId}",
-                        taskCode, itemCode, node.NodeId);
+                    _wfLogger.NodeReuse(taskCode, itemCode, node.NodeId, node.NodeId);
+
+                    // 复用也要留下明细：IsReused=true，输出/耗时/时序取自原始执行那次
+                    pathResult.NodeResults.Add(
+                        NodeExecutionRecord.From(node.NodeId, existingResult, isReused: true));
 
                     // 已执行过的节点，直接使用结果（不重跑）
                     // 失败的节点也需要记录，让路径终止
                     if (!existingResult.Success)
                     {
-                        pathResult.Status = "failed";
-                        pathResult.FailedAtNodeId = node.NodeId;
-                        pathResult.Error = existingResult.Error;
-                        return pathResult;
+                        return FinishPath(pathResult, "failed", node.NodeId, existingResult.Error, pathSw);
                     }
 
                     // branch 节点复用时不影响路径（路径已在枚举时确定）
@@ -173,13 +170,14 @@ namespace CertPlatform.Admin.Services.Workflow
                 // 记录到已执行池
                 executedNodes[node.NodeId] = result;
 
+                // 记录 per-node 明细（真执行，IsReused=false）——中间节点的输出在此保留，不再丢失
+                pathResult.NodeResults.Add(
+                    NodeExecutionRecord.From(node.NodeId, result, isReused: false));
+
                 // 节点失败 → 当前路径终止
                 if (!result.Success)
                 {
-                    pathResult.Status = "failed";
-                    pathResult.FailedAtNodeId = node.NodeId;
-                    pathResult.Error = result.Error;
-                    return pathResult;
+                    return FinishPath(pathResult, "failed", node.NodeId, result.Error, pathSw);
                 }
 
                 // 节点成功 → 输出写入共享池（同时写入 nodeId 和 title 作为 key）
@@ -190,15 +188,30 @@ namespace CertPlatform.Admin.Services.Workflow
             }
 
             // 路径中所有节点执行成功
-            pathResult.Status = "completed";
+            var finished = FinishPath(pathResult, "completed", null, null, pathSw);
 
             // 路径最终输出 = 最后一个节点（通常是 end）的输出
             var lastNode = path.Last();
             if (executedNodes.TryGetValue(lastNode.NodeId, out var lastResult) && lastResult.Success)
             {
-                pathResult.Output = lastResult.Output;
+                finished.Output = lastResult.Output;
             }
 
+            return finished;
+        }
+
+        /// <summary>
+        /// 收口路径结果：写入终态、失败点、耗时与时序（成功/失败两条出口共用，避免时序漏写）
+        /// </summary>
+        private static PathResult FinishPath(
+            PathResult pathResult, string status, string? failedAtNodeId, string? error, Stopwatch pathSw)
+        {
+            pathSw.Stop();
+            pathResult.Status = status;
+            pathResult.FailedAtNodeId = failedAtNodeId;
+            pathResult.Error = error;
+            pathResult.DurationMs = (int)pathSw.ElapsedMilliseconds;
+            pathResult.CompletedAt = DateTime.Now;
             return pathResult;
         }
 

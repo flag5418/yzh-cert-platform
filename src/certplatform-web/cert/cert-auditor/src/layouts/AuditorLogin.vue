@@ -1,67 +1,420 @@
 <template>
-  <div class="auditor-login">
-    <div class="auditor-login__box">
-      <div class="auditor-login__header">
-        <h1>映智汇认证审核管理系统</h1>
-        <p>审核员端</p>
+  <div class="login-page">
+    <!-- 全屏背景 -->
+    <div class="login-bg">
+      <div class="login-bg__overlay"></div>
+    </div>
+
+    <!-- 中央登录卡片 -->
+    <div class="login-card">
+      <!-- 左侧品牌区 -->
+      <div class="login-card__brand">
+        <div class="brand-inner">
+          <div class="brand-logo">YZH</div>
+          <h1 class="brand-title">映智汇认证专家平台</h1>
+          <p class="brand-subtitle">CERTIFICATION EXPERT PLATFORM</p>
+          <div class="brand-features">
+            <div class="feature-item">
+              <el-icon class="feature-icon"><Check /></el-icon>
+              <span>一键 NC 检查</span>
+            </div>
+            <div class="feature-item">
+              <el-icon class="feature-icon"><Document /></el-icon>
+              <span>一键自动出报告</span>
+            </div>
+            <div class="feature-item">
+              <el-icon class="feature-icon"><Cpu /></el-icon>
+              <span>AI 智能审核引擎</span>
+            </div>
+          </div>
+        </div>
+        <div class="brand-footer">© 2026 映智汇 (YZH) 版权所有</div>
       </div>
-      <el-form ref="formRef" :model="form" :rules="rules" class="auditor-login__form">
-        <el-form-item prop="userName">
-          <el-input v-model="form.userName" placeholder="用户名" prefix-icon="User" />
-        </el-form-item>
-        <el-form-item prop="password">
-          <el-input v-model="form.password" type="password" placeholder="密码" prefix-icon="Lock" show-password @keyup.enter="handleLogin" />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" :loading="loading" class="auditor-login__btn" @click="handleLogin">登录</el-button>
-        </el-form-item>
-      </el-form>
+
+      <!-- 右侧登录表单 -->
+      <div class="login-card__form">
+        <div class="form-header">
+          <h2 class="form-title">专家登录</h2>
+          <p>请输入您的专家账号</p>
+        </div>
+
+        <el-form ref="formRef" :model="form" :rules="rules" class="form-body" @submit.prevent="handleLogin">
+          <el-form-item prop="userName">
+            <el-input v-model="form.userName" placeholder="请输入账号" :prefix-icon="User" size="large" />
+          </el-form-item>
+          <el-form-item prop="password">
+            <el-input v-model="form.password" type="password" placeholder="请输入密码" :prefix-icon="Lock" size="large" show-password @keyup.enter="handleLogin" />
+          </el-form-item>
+          <el-form-item prop="captcha">
+            <div class="verify-row">
+              <el-input v-model="form.captcha" placeholder="请输入验证码" :prefix-icon="PictureRounded" size="large" maxlength="4" />
+              <div class="verify-img" @click="refreshCaptcha" title="点击刷新验证码">
+                <img v-if="captchaImg" :src="`data:image/png;base64,${captchaImg}`" alt="验证码" />
+                <span v-else class="verify-placeholder">加载中...</span>
+              </div>
+            </div>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" native-type="submit" size="large" :loading="loading" class="login-btn">登 录</el-button>
+          </el-form-item>
+        </el-form>
+
+        <div class="form-footer">
+          <span>还没有专家账号？</span>
+          <router-link to="/register" class="register-link">立即注册</router-link>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
+import { User, Lock, PictureRounded, Check, Cpu, Document } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/store/auth'
+import { login, getCaptcha } from '@share/api/auth'
 
+const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
+const captchaImg = ref('')
+const captchaUuid = ref('')
 
-const form = reactive({ userName: '', password: '' })
+const form = reactive({
+  userName: '',
+  password: '',
+  captcha: ''
+})
+
 const rules = {
-  userName: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
+  userName: [{ required: true, message: '请输入账号', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+  captcha: [{ required: true, message: '请输入验证码', trigger: 'blur' }]
+}
+
+async function refreshCaptcha() {
+  try {
+    const res = await getCaptcha()
+    // ⚠️ `/api/User/getVierificationCode` 返回的是**裸对象** `{ img, uuid }`，
+    //    没有 ApiResponse 信封（后端 `new JsonResult(new { img, uuid })`），
+    //    而 yzhApi 是原样透传、不拆信封 —— 所以字段在 res 顶层，读 res.data.img 会抛错。
+    captchaImg.value = res?.img ?? res?.data?.img ?? ''
+    captchaUuid.value = res?.uuid ?? res?.data?.uuid ?? ''
+    if (!captchaImg.value) throw new Error('验证码响应为空')
+  } catch {
+    ElMessage.error('验证码加载失败')
+  }
 }
 
 async function handleLogin() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
+
   loading.value = true
   try {
-    const mockToken = 'mock-auditor-token-' + Date.now()
-    authStore.setToken(mockToken)
-    authStore.userInfo = { userName: form.userName, roles: ['auditor'] }
+    const res = await login({
+      userName: form.userName,
+      password: form.password,
+      captcha: form.captcha,
+      uuid: captchaUuid.value
+    })
+
+    // 保存 token 和用户信息（后端返回 PascalCase 字段，store 模型与实体同名，§16.9 铁律）
+    const { Token, UserCode, UserName, UserTrueName, RoleCode } = res.data
+    authStore.setToken(Token)
+    authStore.setUserInfo({
+      UserCode,
+      UserName,
+      UserTrueName: UserTrueName ?? '',
+      RoleCode: RoleCode ?? '',
+      Token
+    })
+
     ElMessage.success('登录成功')
     router.push('/')
   } catch (e: any) {
     ElMessage.error(e?.message || '登录失败')
+    refreshCaptcha()
+    form.captcha = ''
   } finally {
     loading.value = false
   }
 }
+
+onMounted(() => {
+  // 从注册页跳回时预填登录名，减少一次输入
+  const preset = route.query.userName
+  if (typeof preset === 'string' && preset) form.userName = preset
+  refreshCaptcha()
+})
 </script>
 
 <style scoped>
-.auditor-login { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-.auditor-login__box { width: 400px; padding: 40px; background: #fff; border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15); }
-.auditor-login__header { text-align: center; margin-bottom: 32px; }
-.auditor-login__header h1 { font-size: 24px; color: #303133; margin-bottom: 8px; }
-.auditor-login__header p { font-size: 14px; color: #909399; }
-.auditor-login__form { width: 100%; }
-.auditor-login__btn { width: 100%; }
+/* 全屏登录页 */
+.login-page {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* 全屏背景 - 渐变 + 纹理 */
+.login-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #0b2b1f 0%, #0f5132 40%, #146c43 70%, #0b2b1f 100%);
+  z-index: 0;
+}
+
+.login-bg__overlay {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(25, 135, 84, 0.18) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(20, 108, 67, 0.12) 0%, transparent 50%);
+}
+
+/* 中央登录卡片 */
+.login-card {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 860px;
+  height: 500px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+/* 左侧品牌区 */
+.login-card__brand {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+  background: linear-gradient(135deg, #0f5132 0%, #146c43 50%, #0b2b1f 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.login-card__brand::before {
+  content: '';
+  position: absolute;
+  top: -30%;
+  right: -20%;
+  width: 300px;
+  height: 300px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+}
+
+.login-card__brand::after {
+  content: '';
+  position: absolute;
+  bottom: -20%;
+  left: -15%;
+  width: 200px;
+  height: 200px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 50%;
+}
+
+.brand-inner {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  color: #fff;
+}
+
+.brand-logo {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 14px;
+}
+
+.brand-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  letter-spacing: 1px;
+  color: #fff;
+}
+
+.brand-subtitle {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 2px;
+  margin-bottom: 40px;
+}
+
+.brand-features {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.feature-icon {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.brand-footer {
+  position: absolute;
+  bottom: 24px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* 右侧登录表单 */
+.login-card__form {
+  width: 340px;
+  padding: 44px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.form-header {
+  margin-bottom: 28px;
+}
+
+.form-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 6px;
+}
+
+.form-header p {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+
+.form-body {
+  width: 100%;
+}
+
+.form-body .el-form-item {
+  margin-bottom: 18px;
+}
+
+/* 验证码 */
+.verify-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.verify-row .el-input {
+  flex: 1;
+}
+
+.verify-img {
+  width: 100px;
+  height: 40px;
+  border-radius: 6px;
+  border: 1px solid #dcdfe6;
+  cursor: pointer;
+  background: #f5f7fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.verify-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.verify-placeholder {
+  font-size: 12px;
+  color: #909399;
+}
+
+/* 登录按钮 */
+.login-btn {
+  width: 100%;
+  height: 44px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 4px;
+  border-radius: 6px;
+}
+
+/* 底部注册入口 */
+.form-footer {
+  margin-top: 4px;
+  text-align: center;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.register-link {
+  color: #146c43;
+  font-weight: 600;
+  text-decoration: none;
+  margin-left: 4px;
+}
+
+.register-link:hover {
+  text-decoration: underline;
+}
+
+/* 响应式 */
+@media screen and (max-width: 768px) {
+  .login-card {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    flex-direction: column;
+  }
+
+  .login-card__brand {
+    flex: none;
+    padding: 30px 20px;
+  }
+
+  .brand-features,
+  .brand-footer {
+    display: none;
+  }
+
+  .login-card__form {
+    width: 100%;
+    flex: 1;
+    padding: 30px 24px;
+  }
+}
 </style>

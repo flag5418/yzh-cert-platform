@@ -26,7 +26,7 @@ namespace CertPlatform.Shared.Entities.Rpt
         [SugarColumn(Length = 200, IsNullable = true)]
         public string? SectionNameEn { get; set; }
 
-        [SugarColumn(ColumnDataType = "text", IsNullable = true)]
+        [SugarColumn(ColumnDataType = "text", IsNullable = true, ColumnName = "SectionContent")]
         public string? Content { get; set; }
 
         public int SortOrder { get; set; } = 0;
@@ -51,9 +51,10 @@ namespace CertPlatform.Shared.Entities.Rpt
         [SugarColumn(Length = 500, IsNullable = true)]
         public string? Remark { get; set; }
 
-        [SugarColumn(Length = 50, IsNullable = true)]
+        [SugarColumn(Length = 50, IsNullable = true, ColumnName = "status")]
         public string? Status { get; set; }
 
+        [SugarColumn(ColumnName = "enable")]
         public bool? Enable { get; set; }
 
         public int Sort { get; set; } = 0;

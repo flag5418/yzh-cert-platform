@@ -34,14 +34,16 @@ export class SkillTreeTableLogic extends TreeTableLogic<any> {
   }
 
   // ──── 树节点操作（不含 add-child，分类扁平无层级） ────
-  // 覆盖内核 nodeActions：返回 YzhAction[]（TT-9 契约）
-  override get nodeActions(): YzhAction[] {
-    const actions: YzhAction[] = []
-    const tc = this.treeConfig
-    if (!tc) return actions
-    if (tc.AllowEdit) actions.push({ key: 'edit', text: '编辑' })
-    if (tc.AllowDelete) actions.push({ key: 'delete', text: '删除', type: 'danger', danger: true })
-    return actions
+  // 覆盖内核 nodeActions：返回 (node) => YzhAction[]（与基类签名一致）
+  override get nodeActions(): (node: TreeNode) => YzhAction[] {
+    return (_node: TreeNode) => {
+      const actions: YzhAction[] = []
+      const tc = this.treeConfig
+      if (!tc) return actions
+      if (tc.AllowEdit) actions.push({ key: 'edit', text: '编辑' })
+      if (tc.AllowDelete) actions.push({ key: 'delete', text: '删除', type: 'danger', danger: true })
+      return actions
+    }
   }
 
   // ========================================================

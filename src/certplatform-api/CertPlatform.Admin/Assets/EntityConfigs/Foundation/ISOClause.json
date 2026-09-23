@@ -58,23 +58,6 @@
       "Enable": false
     },
     {
-      "FieldName": "ParentCode",
-      "DesName": "父条款编码",
-      "Type": "Other",
-      "Sxh": 0,
-      "XsFlag": false,
-      "BcFlag": false,
-      "Yxk": true,
-      "Width": 0,
-      "Row": 0,
-      "Col": 0,
-      "RowSpan": 1,
-      "ColSpan": 1,
-      "GroupIndex": "0",
-      "Mrz": "",
-      "Enable": false
-    },
-    {
       "FieldName": "ClauseNumber",
       "DesName": "条款编号",
       "Type": "TextBox",
@@ -109,6 +92,24 @@
       "Mrz": "",
       "Enable": true,
       "Placeholder": "如：资源"
+    },
+    {
+      "FieldName": "ParentCode",
+      "DesName": "上级条款",
+      "Type": "TreeSelect",
+      "Sxh": 3,
+      "XsFlag": false,
+      "BcFlag": true,
+      "Yxk": true,
+      "Width": 0,
+      "Row": 2,
+      "Col": 0,
+      "RowSpan": 1,
+      "ColSpan": 1,
+      "GroupIndex": "1",
+      "Mrz": "",
+      "Enable": true,
+      "Placeholder": "选择上级条款，留空为顶级"
     },
     {
       "FieldName": "Description",

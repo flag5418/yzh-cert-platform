@@ -74,8 +74,9 @@ public static class YzhWebBuilderExtensions
         builder.Services.AddScoped<IUserContext, UserContext>();
 
         // 注册审计日志服务（IYzhAuditLogger + YzhAuditLogger 后台服务）
+        // 注意：必须用 AddSingleton 保证 Filter 和 BackgroundService 使用同一个实例
+        builder.Services.AddSingleton<IYzhAuditLogger, YzhAuditLogger>();
         builder.Services.AddHostedService<YzhAuditLogger>();
-        builder.Services.AddScoped<IYzhAuditLogger, YzhAuditLogger>();
 
         // 注册实体操作服务
         builder.Services.AddScoped(typeof(EntityService<>));
@@ -175,6 +176,10 @@ public static class YzhWebBuilderExtensions
             json.JsonSerializerOptions.PropertyNamingPolicy = null;
             json.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
             json.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+            // 敏感字段脱敏：带 [YzhSensitive] 的属性永不写出（输入绑定不受影响）
+            // 详见 YZH.Core.Stand/Extensions/JsonSensitiveFieldExtensions.cs
+            YZH.Core.Stand.Extensions.JsonSensitiveFieldExtensions
+                .ApplySensitiveFieldMasking(json.JsonSerializerOptions);
         });
 
         return builder;

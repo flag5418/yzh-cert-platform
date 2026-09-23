@@ -138,16 +138,16 @@ export function useMenuLogic() {
     dialogVisible.value = false
   }
 
-  async function handleSubmit() {
-    if (!formData.value.menuName) {
+  async function handleSubmit(formValue: Partial<SysMenu>) {
+    if (!formValue.menuName) {
       ElMessage.warning('请输入菜单名称')
       return
     }
     submitting.value = true
     try {
       const res = isEdit.value
-        ? await updateMenu(formData.value)
-        : await addMenu(formData.value)
+        ? await updateMenu(formValue)
+        : await addMenu(formValue)
       if (res.code === 200) {
         ElMessage.success(isEdit.value ? '修改成功' : '新增成功')
         dialogVisible.value = false

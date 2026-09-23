@@ -9,7 +9,11 @@
 --   b. 视图补全字段 → filter 查询能返回完整机构信息
 -- ============================================================================
 
-SET NAMES utf8mb4;
+-- ★ 2026-09-23：原为 `SET NAMES utf8mb4;` —— 那会把 collation_connection 设成
+--   服务端 utf8mb4 的默认排序规则 `utf8mb4_0900_ai_ci`，导致本脚本重建的视图里
+--   字面量派生列被固化成 0900_ai_ci，与全库 general_ci 冲突（ERROR 1267）。
+--   必须显式带 COLLATE。
+SET NAMES utf8mb4 COLLATE utf8mb4_general_ci;
 
 DROP VIEW IF EXISTS v_sys_user;
 

@@ -452,6 +452,11 @@ namespace CertPlatform.Shared.Entities.Dir
         public string ConvertMessage { get; set; }
 
         /// <summary>
+        /// 上传状态：pending/uploading/uploaded/active/failed/replacing
+        /// </summary>
+        public string UploadStatus { get; set; } = "";
+
+        /// <summary>
         /// 文件大小（字节）
         /// </summary>
         public long? FileSize { get; set; }

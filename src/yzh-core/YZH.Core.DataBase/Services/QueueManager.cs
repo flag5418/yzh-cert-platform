@@ -134,7 +134,8 @@ public class QueueManager
                 QueueType = req.QueueType,
                 QueueName = req.QueueName ?? $"{req.QueueType}-{req.Tasks.Count}个任务",
                 ScopeKey = req.ScopeKey,
-                ScopeInfo = req.ScopeInfoJson,
+                // ScopeInfo 映射到 JSON 列：空串不是合法 JSON 会导致整条 INSERT 静默失败，必须归一为 null
+                ScopeInfo = string.IsNullOrWhiteSpace(req.ScopeInfoJson) ? null : req.ScopeInfoJson,
                 SourceType = req.SourceType,
                 SourceId = req.SourceId,
                 Status = "running",
@@ -146,7 +147,14 @@ public class QueueManager
                 CreateBy = req.UserName,
                 CreateTime = DateTime.UtcNow
             };
-            await orm.InsertAsync(queue);
+            // 主表必须先落库：InsertAsync 失败只返回 Fail 不抛异常，这里必须检查，
+            // 否则会出现「锁/任务已插入而主表无记录」的幽灵队列（监测页永远看不到）
+            var insertResult = await orm.InsertAsync(queue);
+            if (!insertResult.Success)
+            {
+                _logger.LogError("[QueueManager] 队列主表插入失败：{QueueCode}, {Error}", queueCode, insertResult.Error);
+                return (false, $"队列主表插入失败：{insertResult.Error}", null, 0);
+            }
 
             // 3. 子任务
             taskNo = 1;

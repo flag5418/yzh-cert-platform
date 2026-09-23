@@ -2,7 +2,16 @@
 -- 重建受列名变更影响的视图
 -- 创建时间：2026-09-13
 -- 原因：DB 列名从 snake_case 重命名为 PascalCase 后，视图引用旧列名会报错
+--
+-- ★ 2026-09-23 补充（勿删）：必须固定连接排序规则。
+--   视图里 `CASE ... THEN '启用' ELSE '停用'` 这类**字面量派生列**，其 collation 取自
+--   建视图时的 `collation_connection` 并**固化**在视图定义中。
+--   本脚本原先无此设置 → 视图列被固化成当时连接的 `utf8mb4_0900_ai_ci`，
+--   与全库 `utf8mb4_general_ci` 不一致，跨表比较即报 ERROR 1267。
+--   （实际残留：`v_cert_phase_definition.StatusName`）
 -- ============================================================
+
+SET NAMES utf8mb4 COLLATE utf8mb4_general_ci;
 
 -- ────────────────────────────────────────────────────────────
 -- 1. v_certification_body（认证机构视图）

@@ -96,6 +96,23 @@ namespace CertPlatform.Admin.Services.Workflow.Models
 
         /// <summary>工作流上下文</summary>
         public AiNodeWorkflowContext WorkflowContext { get; set; } = new();
+
+        // ──── 测试上下文元数据（2026-09-22 阶段二新增，全部可选）────
+        // 与 NodeTestRequest 的同名属性对齐：AI 节点测试改为走 WfExecutionTaskService
+        // 落库后，需要这些字段填充 wf_execution_task / wf_node_execution 的归属信息。
+        // 兼容性：均为可选；未传时回退到 WorkflowContext.ContextParams 里的同名键。
+
+        /// <summary>规则编码（cert_validation_rule.Code），用于落库归属</summary>
+        public string? RuleCode { get; set; }
+
+        /// <summary>企业编码（运行时绑定，默认 YZH-STD-ENT 测试企业）</summary>
+        public string? EnterpriseCode { get; set; }
+
+        /// <summary>标准编码</summary>
+        public string? StandardCode { get; set; }
+
+        /// <summary>审核阶段编码</summary>
+        public string? PhaseCode { get; set; }
     }
 
     /// <summary>
@@ -104,45 +121,43 @@ namespace CertPlatform.Admin.Services.Workflow.Models
     public class AiNodeDebugInfo
     {
         /// <summary>替换后的真实提示词</summary>
-        [System.Text.Json.Serialization.JsonPropertyName("renderedPrompt")]
         public string RenderedPrompt { get; set; } = string.Empty;
 
         /// <summary>参数池（参数名 → 值）</summary>
-        [System.Text.Json.Serialization.JsonPropertyName("paramPool")]
         public Dictionary<string, object> ParamPool { get; set; } = new();
 
         /// <summary>LLM 原始返回</summary>
-        [System.Text.Json.Serialization.JsonPropertyName("llmResponse")]
         public string LlmResponse { get; set; } = string.Empty;
 
         /// <summary>转换后的结果</summary>
-        [System.Text.Json.Serialization.JsonPropertyName("convertedResult")]
         public object? ConvertedResult { get; set; }
     }
 
     /// <summary>
     /// AI 节点测试响应（含 debug 信息）
+    /// <para>字段命名遵循 YZH 命名铁律：C# 属性名 = JSON 字段名 = TS 字段名（PascalCase）。</para>
     /// </summary>
     public class AiNodeTestResponse
     {
+        /// <summary>
+        /// 任务编码 —— 本次 AI 节点测试在 wf_execution_task 里的 Code
+        /// <para>2026-09-22 阶段二新增：与 NodeTestResponse.TaskCode 对齐。</para>
+        /// </summary>
+        public string TaskCode { get; set; } = "";
+
         /// <summary>执行是否成功</summary>
-        [System.Text.Json.Serialization.JsonPropertyName("success")]
         public bool Success { get; set; }
 
         /// <summary>失败原因</summary>
-        [System.Text.Json.Serialization.JsonPropertyName("error")]
         public string? Error { get; set; }
 
         /// <summary>最终结果（按 outputType 转换后）</summary>
-        [System.Text.Json.Serialization.JsonPropertyName("result")]
         public object? Result { get; set; }
 
         /// <summary>执行耗时(ms)</summary>
-        [System.Text.Json.Serialization.JsonPropertyName("durationMs")]
         public int DurationMs { get; set; }
 
         /// <summary>Debug 信息</summary>
-        [System.Text.Json.Serialization.JsonPropertyName("debug")]
         public AiNodeDebugInfo Debug { get; set; } = new();
     }
 }

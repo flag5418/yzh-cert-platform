@@ -160,7 +160,7 @@ namespace CertPlatform.Admin.Services.Workflow
 
                 // ③④ LLM 调用
                 var swLlm = Stopwatch.StartNew();
-                var (success, error, content, result) = await CallLlmAsync(node, renderedPrompt, ct);
+                var (success, error, content, result, promptTokens, completionTokens, llmDurationMs) = await CallLlmAsync(node, renderedPrompt, ct);
                 swLlm.Stop();
 
                 if (!success)
@@ -194,10 +194,14 @@ namespace CertPlatform.Admin.Services.Workflow
                 sw.Stop();
 
                 _logger.LogInformation(
-                    "[AI_DONE] nodeId={NodeId}, result={Result}, durationMs={DurationMs}",
-                    node.NodeId, JsonSerializer.Serialize(converted), sw.ElapsedMilliseconds);
+                    "[AI_DONE] nodeId={NodeId}, result={Result}, durationMs={DurationMs}, llmMs={LlmMs}, tokens={P}/{C}",
+                    node.NodeId, JsonSerializer.Serialize(converted), sw.ElapsedMilliseconds, llmDurationMs, promptTokens, completionTokens);
 
-                return NodeExecutionResult.Ok(output, (int)sw.ElapsedMilliseconds);
+                var okResult = NodeExecutionResult.Ok(output, (int)sw.ElapsedMilliseconds);
+                okResult.PromptTokens = promptTokens;
+                okResult.CompletionTokens = completionTokens;
+                okResult.LlmDurationMs = llmDurationMs;
+                return okResult;
             }
             catch (Exception ex)
             {
@@ -261,7 +265,7 @@ namespace CertPlatform.Admin.Services.Workflow
                 var renderedPrompt = PromptRenderer.Render(template, paramPool);
 
                 // LLM 调用
-                var (success, error, content, _) = await CallLlmAsync(node, renderedPrompt, ct);
+                var (success, error, content, _, promptTokens, completionTokens, llmDurationMs) = await CallLlmAsync(node, renderedPrompt, ct);
 
                 if (!success)
                 {
@@ -287,7 +291,11 @@ namespace CertPlatform.Admin.Services.Workflow
                     ["result"] = result ?? new { }
                 };
 
-                return NodeExecutionResult.Ok(output, (int)sw.ElapsedMilliseconds);
+                var testOkResult = NodeExecutionResult.Ok(output, (int)sw.ElapsedMilliseconds);
+                testOkResult.PromptTokens = promptTokens;
+                testOkResult.CompletionTokens = completionTokens;
+                testOkResult.LlmDurationMs = llmDurationMs;
+                return testOkResult;
             }
             catch (Exception ex)
             {
@@ -313,9 +321,9 @@ namespace CertPlatform.Admin.Services.Workflow
 
         /// <summary>
         /// 调用 LLM：节点 config 优先（model/temperature/maxTokens/systemPrompt），六键配置兜底
-        /// <para>返回 (success, error, content, rawResponse)</para>
+        /// <para>返回 (success, error, content, rawResponse, promptTokens, completionTokens, durationMs)</para>
         /// </summary>
-        private async Task<(bool success, string? error, string content, object? raw)> CallLlmAsync(
+        private async Task<(bool success, string? error, string content, object? raw, int? promptTokens, int? completionTokens, int durationMs)> CallLlmAsync(
             WorkflowNodeConfig node,
             string renderedPrompt,
             CancellationToken ct)
@@ -350,9 +358,9 @@ namespace CertPlatform.Admin.Services.Workflow
             });
 
             if (!response.Success)
-                return (false, response.Message, "", null);
+                return (false, response.Message, "", null, response.PromptTokens, response.CompletionTokens, (int)response.DurationMs);
 
-            return (true, null, response.Content, response.Content);
+            return (true, null, response.Content, response.Content, response.PromptTokens, response.CompletionTokens, (int)response.DurationMs);
         }
 
         // ── 参数解析 ──

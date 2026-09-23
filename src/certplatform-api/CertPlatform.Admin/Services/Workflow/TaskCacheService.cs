@@ -20,18 +20,30 @@ namespace CertPlatform.Admin.Services.Workflow
     /// <para>  wf:task:{taskCode}:ent:field:{entCode}:{ruleCode}:{fieldCode}  → 企业文档字段值</para>
     /// <para>  wf:task:{taskCode}:ent:table:{entCode}:{ruleCode}:{tableCode}  → 企业文档表格数据</para>
     /// <para>  wf:task:{taskCode}:skill:{skillCode}  → Skill 配置</para>
+    ///
+    /// <para><b>2026-09-22 阶段二：日志收敛</b> —— 原先本类用 <c>ILogger</c> 自行拼
+    /// <c>[CACHE_WARMUP_START]</c> / <c>[CACHE_WARMUP_DONE]</c> / <c>[CACHE_CLEANUP]</c>，
+    /// 造成两个问题：① <see cref="WorkflowLogger.CacheWarmupStart"/> / <c>CacheWarmupDone</c>
+    /// 声明了却从无调用点（死方法）；② <c>[CACHE_CLEANUP]</c> 与
+    /// <c>WfExecutionTaskService.FinishRunAsync</c> 各打一次，**每次执行重复两行**。
+    /// 现统一走 <see cref="WorkflowLogger"/> —— 它是全引擎日志格式的唯一出口。</para>
     /// </summary>
     public class TaskCacheService
     {
         private readonly IMemoryCache _cache;
+        private readonly WorkflowLogger _wfLogger;
         private readonly ILogger<TaskCacheService> _logger;
 
         /// <summary>缓存键前缀</summary>
         private const string KeyPrefix = "wf:task:";
 
-        public TaskCacheService(IMemoryCache cache, ILogger<TaskCacheService> logger)
+        public TaskCacheService(
+            IMemoryCache cache,
+            WorkflowLogger wfLogger,
+            ILogger<TaskCacheService> logger)
         {
             _cache = cache;
+            _wfLogger = wfLogger;
             _logger = logger;
         }
 
@@ -139,9 +151,7 @@ namespace CertPlatform.Admin.Services.Workflow
             string enterpriseCode,
             CancellationToken ct = default)
         {
-            _logger.LogInformation(
-                "[CACHE_WARMUP_START] taskCode={TaskCode}, nodeCount={NodeCount}",
-                taskCode, parsed.NodeMap.Count);
+            _wfLogger.CacheWarmupStart(taskCode, parsed.NodeMap.Count);
 
             var cacheKeys = new List<string>();
             var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -225,9 +235,7 @@ namespace CertPlatform.Admin.Services.Workflow
 
             sw.Stop();
 
-            _logger.LogInformation(
-                "[CACHE_WARMUP_DONE] taskCode={TaskCode}, cachedKeys={Count}, durationMs={DurationMs}",
-                taskCode, cachedCount, sw.ElapsedMilliseconds);
+            _wfLogger.CacheWarmupDone(taskCode, cachedCount, sw.ElapsedMilliseconds);
 
             return (cachedCount, cacheKeys);
         }
@@ -237,6 +245,8 @@ namespace CertPlatform.Admin.Services.Workflow
         /// <summary>
         /// 清理任务级缓存
         /// <para>IMemoryCache 无键枚举能力 → 依赖任务执行期间记录的键列表精确清除（语义与旧 Redis KEYS+DEL 一致）</para>
+        /// <para>⚠️ 本方法<b>不</b>打 <c>[CACHE_CLEANUP]</c> 日志 —— 由调用方
+        /// <c>WfExecutionTaskService.FinishRunAsync</c> 统一打（避免重复两行）。</para>
         /// </summary>
         public async Task<int> CleanUpAsync(string taskCode, List<string>? knownKeys, CancellationToken ct = default)
         {
@@ -253,10 +263,6 @@ namespace CertPlatform.Admin.Services.Workflow
                         cleanedCount++;
                     }
                 }
-
-                _logger.LogInformation(
-                    "[CACHE_CLEANUP] taskCode={TaskCode}, cleanedKeys={Count}",
-                    taskCode, cleanedCount);
             }
             catch (Exception ex)
             {

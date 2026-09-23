@@ -66,6 +66,8 @@ const props = withDefaults(
     rowActionLink?: boolean
     /** 行按钮超过 N 个时折叠为「更多」下拉（0 = 不折叠） */
     actionMaxInline?: number
+    /** 树形数据默认全部展开（children 字段驱动，透传 el-table default-expand-all） */
+    defaultExpandAll?: boolean
   }>(),
   {
     selectable: false,
@@ -80,7 +82,8 @@ const props = withDefaults(
     noPadding: false,
     rowActionButtons: () => [],
     rowActionLink: true,
-    actionMaxInline: 0
+    actionMaxInline: 0,
+    defaultExpandAll: false
   }
 )
 
@@ -570,6 +573,7 @@ defineExpose({
           v-loading="loading"
           :data="rows"
           :row-key="rowKey"
+          :default-expand-all="defaultExpandAll"
           :height="height !== undefined && height !== null ? height : '100%'"
           :highlight-current-row="effectiveSelectMode === 'single'"
           stripe
@@ -693,7 +697,7 @@ defineExpose({
   </div>
 </template>
 
-<style scoped>
+<style lang="less" scoped>
 .yzh-table {
   display: flex;
   flex-direction: column;

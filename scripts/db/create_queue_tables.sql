@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS yzh_queue (
   KEY idx_queue_scope (scope_key),
   KEY idx_queue_source (source_type, source_id),
   KEY idx_queue_create_date (create_date)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='yzh 队列主表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='yzh 队列主表';
 
 -- 2. 队列子任务表
 CREATE TABLE IF NOT EXISTS yzh_queue_task (
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS yzh_queue_task (
   KEY idx_task_pending (status, priority DESC, create_time),
   KEY idx_task_task_id (task_id),
   KEY idx_task_locked (status, locked_until)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='yzh 队列子任务表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='yzh 队列子任务表';
 
 -- 3. 队列资源锁定表
 CREATE TABLE IF NOT EXISTS yzh_queue_resource_lock (
@@ -116,4 +116,4 @@ CREATE TABLE IF NOT EXISTS yzh_queue_resource_lock (
   KEY idx_lock_active (status, active_key),
   KEY idx_lock_resource (resource_table, resource_code),
   KEY idx_lock_expire (status, expire_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='yzh 队列资源锁定表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='yzh 队列资源锁定表';

@@ -146,7 +146,7 @@
 | 2 | 用户页主键用 `User_Id`（旧 Vol 命名），违背 `Code` 主键约定 | `api/system/user.ts` | 改 `Code` |
 | 3 | 控制器路由注释与实现不一致：`DictionaryController` 注释写 `api/SysDictionary`，实际 `api/System/Dictionary` | 后端 | 修注释 |
 | 4 | 三个控制器挂双路由（`api/System/X` + `api/X`）未说明原因 | `Organization` / `Role` / `RoleMenu` | 补注释或收敛 |
-| 5 | `BizNamingRules` 黑名单含不存在的类名（`Sys_UserRole`、`Sys_AuditLog`） | `YZH.Core.Stand/BizConventions/` | 清理 |
+| 5 | ~~`BizNamingRules` 黑名单含不存在的类名~~ ✅ **2026-09-23 已完成**：黑名单校准 + `DeriveFromFramework()` 动态推导 + `Program.cs` 接线生效 | `YZH.Core.Stand/BizConventions/` | 完成 |
 
 ---
 

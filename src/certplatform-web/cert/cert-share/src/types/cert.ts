@@ -274,6 +274,7 @@ export interface StandardDirectoryFolder {
   FullPath?: string
   Creator?: string
   CreateDate?: string
+  CreateTime?: string
   Modifier?: string
   ModifyDate?: string
   Remark?: string
@@ -312,6 +313,7 @@ export interface StandardDirectoryFile {
   ConvertDate?: string
   Creator?: string
   CreateDate?: string
+  CreateTime?: string
   Modifier?: string
   ModifyDate?: string
   Remark?: string

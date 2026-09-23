@@ -57,18 +57,19 @@
                         <el-badge v-if="phase.children?.length" :value="phase.children.length" type="info" />
                       </div>
                       <div v-if="phase.visible && phase.expanded && phase.leafLoaded">
-                        <div
-                          v-for="leaf in phase.children"
-                          :key="leaf.id"
-                          class="tree-node level-3"
-                          :class="{ active: currentLeaf?.id === leaf.id, configured: !!leaf.workflowConfig }"
-                          @click="selectLeaf(leaf, phase)"
-                        >
-                          <el-icon class="type-icon rule" :class="{ configured: !!leaf.workflowConfig }">
-                            <CircleCheck v-if="leaf.workflowConfig" /><Document v-else />
-                          </el-icon>
-                          <span class="tree-label">{{ leaf._label || leaf[treeConfig.textField] || leaf.label }}</span>
-                        </div>
+                        <template v-for="leaf in phase.children" :key="leaf.id">
+                          <div
+                            v-if="leaf.visible !== false"
+                            class="tree-node level-3"
+                            :class="{ active: currentLeaf?.id === leaf.id, configured: hasWorkflow(leaf) }"
+                            @click="selectLeaf(leaf, phase)"
+                          >
+                            <el-icon class="type-icon rule" :class="{ configured: hasWorkflow(leaf) }">
+                              <CircleCheck v-if="hasWorkflow(leaf)" /><Document v-else />
+                            </el-icon>
+                            <span class="tree-label">{{ leaf._Label || leaf[treeConfig.textField] || leaf[treeConfig.codeField] || leaf.id }}</span>
+                          </div>
+                        </template>
                       </div>
                     </template>
                   </template>
@@ -85,11 +86,12 @@
 
       <main class="main-content">
         <div class="canvas-toolbar">
-          <span class="canvas-title">{{ currentLeaf ? `工作流：${currentLeaf[treeConfig.textField] || currentLeaf.label || '未命名'}` : '请选择项目' }}</span>
+          <span class="canvas-title">{{ currentLeaf ? `工作流：${currentLeaf[treeConfig.textField] || currentLeaf[treeConfig.codeField] || '未命名'}` : '请选择项目' }}</span>
           <div class="toolbar-actions">
             <el-button size="small" @click="autoLayout"><el-icon><Grid /></el-icon> 布局</el-button>
             <el-button size="small" type="danger" plain @click="handleClearCanvas"><el-icon><Delete /></el-icon> 清空</el-button>
             <el-button size="small" @click="validateGraph"><el-icon><CircleCheck /></el-icon> 校验</el-button>
+            <el-button size="small" :disabled="!currentLeaf" @click="historyVisible = true"><el-icon><Clock /></el-icon> 测试历史</el-button>
             <el-button v-if="executeConfig.enabled" type="success" size="small" :loading="executing" :disabled="!currentLeaf" @click="handleExecuteTest">
               <el-icon><VideoPlay /></el-icon> 运行
             </el-button>
@@ -99,10 +101,15 @@
           </div>
         </div>
         <ExecutionResultPanel v-if="executionResult" :result="executionResult" @close="executionResult = null" />
+        <ExecutionHistoryDrawer
+          v-model="historyVisible"
+          :rule-code="currentRuleCode"
+          :test-scope="'FULL'"
+        />
         <div ref="canvasRef" class="canvas-container" @dragover.prevent="onCanvasDragOver" @drop.prevent="onCanvasDrop"></div>
         <div class="canvas-footer">
           <span>节点: {{ store.state.nodes.length }} | 边: {{ store.state.edges.length }} | 状态: {{ store.state.dirty ? '未保存' : '已保存' }}</span>
-          <span v-if="currentLeaf" class="rule-code-text">{{ currentLeaf[treeConfig.codeField] || currentLeaf.code || currentLeaf.ruleCode }}</span>
+          <span v-if="currentLeaf" class="rule-code-text">{{ currentLeaf[treeConfig.codeField] }}</span>
         </div>
       </main>
 
@@ -144,6 +151,7 @@
 <script setup lang="ts">
 import { yzhApi } from '@yzh-core/api/client'
 import ExecutionResultPanel from './ExecutionResultPanel.vue'
+import ExecutionHistoryDrawer from './ExecutionHistoryDrawer.vue'
 import NodePropertyForm from './NodePropertyForm.vue'
 import SkillPanel from './SkillPanel.vue'
 import { analyzeWorkflowTopology, nodeStyle, setLogEnabled, setLogLevel } from '@share/composables/workflow/compiler'
@@ -151,7 +159,7 @@ import { deserialize, extractLayout, serialize } from '@share/composables/workfl
 import { useWorkflowStore } from '@share/composables/workflow/useWorkflowStore'
 import { installLogicFlowPatch } from '@share/utils/logicflow-patch'
 import {
-  Calendar, CircleCheck, Delete, Document, Download, Grid,
+  Calendar, CircleCheck, Clock, Delete, Document, Download, Grid,
   OfficeBuilding, Refresh, Search, Setting, VideoPlay, ArrowRight
 } from '@element-plus/icons-vue'
 import LogicFlow from '@logicflow/core'
@@ -164,11 +172,19 @@ setLogEnabled(true)
 setLogLevel('INFO')
 
 // ==================== Props ====================
+/**
+ * 树配置
+ *
+ * ⚠️ 命名铁律（项目全局规则 §16.9）：textField / codeField 必须填写后端实体的
+ *    PascalCase 属性名（与 DB 列名、C# 属性名逐字一致），禁止写成 camelCase。
+ *    字段名写错时本组件会输出控制台错误 + 页面提示（见 loadLeavesForPhase）。
+ */
 interface TreeConfig {
   loadApi: string
   loadMethod?: 'get' | 'post'
   loadBodyBuilder?: (filter: any) => Record<string, any>
-  childrenApi?: string
+  /** 详情接口前缀；选中叶子后 GET `${detailApi}/${Code}` 拉取最新详情（含工作流/布局大字段） */
+  detailApi?: string
   textField: string
   codeField: string
 }
@@ -209,7 +225,10 @@ const store = useWorkflowStore() as any
 const treeData = ref<any[]>([])
 const searchText = ref('')
 const currentLeaf = ref<any>(null)
-const currentFilter = reactive({ orgCode: '', standardCode: '', phaseCode: '' })
+/** 当前叶子所属阶段节点（保留引用，用于保存后回写树缓存） */
+const currentPhase = ref<any>(null)
+/** 当前树上下文过滤值 —— 与实体字段同名，PascalCase（§16.9 铁律） */
+const currentFilter = reactive({ OrgCode: '', StandardCode: '', PhaseCode: '' })
 const skills = ref<any[]>([])
 const categories = ref<any[]>([])
 const selectedNode = ref<any>(null)
@@ -220,10 +239,22 @@ const currentDocTables = ref<any[]>([])
 const savedTip = ref('')
 const executing = ref(false)
 const executionResult = ref<any>(null)
+/** 测试历史抽屉可见性（阶段四） */
+const historyVisible = ref(false)
 const selectedEdgeId = ref<string | null>(null)
 const _renamingNodeId = ref<string | null>(null)
 const _renamingTimestamp = ref(0)
 const RENAMING_GUARD_MS = 1000
+
+/**
+ * 当前选中叶子节点的规则编码 —— 传给测试历史抽屉作预置筛选。
+ * 与 handleTestNode 里取 meta.RuleCode 的口径保持一致（先 Code 再 treeConfig.codeField）。
+ */
+const currentRuleCode = computed<string>(() => {
+  const leaf = currentLeaf.value
+  if (!leaf) return ''
+  return leaf.Code || leaf[props.treeConfig.codeField] || ''
+})
 
 const treeLabel = computed(() => {
   const field = props.treeConfig.textField
@@ -233,6 +264,27 @@ const canvasNodesForPanel = computed(() =>
   store.state.nodes.map((n: any) => ({ id: n.id, title: n.title || n.id, text: n.title || n.id, nodeType: n.nodeType }))
 )
 
+/**
+ * 该叶子是否已配置工作流
+ * 兼容两套实体字段：ValidationRule.RuleJson / ReportSection.WorkflowConfig（均为 PascalCase）
+ */
+function hasWorkflow(leaf: any): boolean {
+  if (!leaf) return false
+  return !!(leaf.WorkflowConfig || leaf.RuleJson)
+}
+
+/** 取叶子的工作流配置串 */
+function getWorkflowConfig(leaf: any): string | null {
+  if (!leaf) return null
+  return leaf.WorkflowConfig || leaf.RuleJson || null
+}
+
+/** 取叶子的布局串 */
+function getLayoutJson(leaf: any): string | null {
+  if (!leaf) return null
+  return leaf.LayoutJson || null
+}
+
 // ==================== Lifecycle ====================
 onMounted(async () => {
   await Promise.all([loadSkills(), loadCategories(), loadTree(), loadDocRules()])
@@ -241,24 +293,43 @@ onMounted(async () => {
 })
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeyDown)
+  // 卸载前最后一道防线：若此刻画布与 store 已经脱节，说明有交互路径绕过了
+  // onNodeMoved / syncPositionsFromDiagram，坐标将在下次打开时回滚。仅开发构建告警。
+  assertCanvasStoreConsistency('组件卸载前')
   _resizeObserver?.disconnect()
   diagram.value?.clearData?.()
   diagram.value = null
 })
 
 // ==================== Data Loading ====================
+// 说明：实体接口（PagedResult<V>）返回 PascalCase —— ApiResponse 外层 data 为 camelCase，
+//       其内的分页对象属性名为 Items/TotalCount/PageIndex/PageSize（§16.9 铁律）。
 async function loadSkills() {
   try {
     const res = await yzhApi.post('/api/Workflow/WfSkill/filter', { Page: 1, PageSize: 200, Filters: [] })
-    const items = res?.data?.Items || res?.data?.items || []
-    skills.value = items.map((s: any) => ({ ...s, skillCode: s.Code || s.skillCode, skillName: s.Name || s.skillName, category: s.CategoryCode || s.category || '_default', skillType: s.SkillType || s.skillType || 'manual' }))
+    const items = res?.data?.Items || []
+    // skillCode/skillName/category/skillType 是节点模型内部字段（workflow schema），
+    // 由实体字段 Code/Name/CategoryCode/SkillType 派生，属组件内部模型而非实体字段。
+    skills.value = items.map((s: any) => ({
+      ...s,
+      skillCode: s.Code,
+      skillName: s.Name,
+      category: s.CategoryCode || '_default',
+      skillType: s.SkillType || 'manual'
+    }))
   } catch {}
 }
 async function loadCategories() {
   try {
     const res = await yzhApi.post('/api/Workflow/WfSkillCategory/filter', { Page: 1, PageSize: 200, Filters: [] })
-    const items = res?.data?.Items || res?.data?.items || []
-    categories.value = items.map((c: any) => ({ ...c, categoryCode: c.Code || c.categoryCode, categoryName: c.Name || c.categoryName, color: c.Color || c.color || '#409EFF', sortOrder: c.SortOrder ?? c.sortOrder ?? 99 }))
+    const items = res?.data?.Items || []
+    categories.value = items.map((c: any) => ({
+      ...c,
+      categoryCode: c.Code,
+      categoryName: c.Name,
+      color: c.Color || '#409EFF',
+      sortOrder: c.SortOrder ?? 99
+    }))
   } catch {}
 }
 async function loadTree() {
@@ -294,26 +365,56 @@ async function loadFieldsAndTables(ruleCode: string) {
 }
 
 // ==================== Tree Operations ====================
+/**
+ * 搜索过滤（补齐历史项目遗漏的叶子级过滤）
+ *
+ * 过滤层级：机构 → 标准 → 阶段 → NC检查项/报告章节
+ * - 上级命中：展示其下全部子树
+ * - 叶子命中：反向上卷，逐级点亮祖先并自动展开阶段
+ * - 叶子仅在「已加载」（phase.leafLoaded）时参与匹配；未展开阶段的叶子不预加载，避免搜索触发全量请求
+ */
 function applySearchFilter() {
-  const kw = searchText.value?.toLowerCase() || ''
-  if (!kw) {
-    treeData.value.forEach((org: any) => {
-      org.visible = true
-      ;(org.children || []).forEach((std: any) => { std.visible = true; (std.children || []).forEach((p: any) => { p.visible = true }) })
-    })
-    return
-  }
+  const kw = searchText.value?.toLowerCase().trim() || ''
+  const { textField, codeField } = props.treeConfig
+
   treeData.value.forEach((org: any) => {
-    let orgHasMatch = org.label?.toLowerCase().includes(kw)
+    const orgHit = !!kw && String(org.label ?? '').toLowerCase().includes(kw)
+    let orgHasMatch = !kw || orgHit
+
     ;(org.children || []).forEach((std: any) => {
-      let stdHasMatch = std.label?.toLowerCase().includes(kw)
-      ;(std.children || []).forEach((p: any) => {
-        p.visible = p.label?.toLowerCase().includes(kw) || stdHasMatch
-        if (p.visible) stdHasMatch = true
+      const stdHit = !!kw && String(std.label ?? '').toLowerCase().includes(kw)
+      // 上级（机构/标准）命中 → 该标准整棵子树放行；否则由叶子命中反向上卷
+      const ancestorHit = !kw || orgHit || stdHit
+      let stdHasMatch = !kw || stdHit
+
+      ;(std.children || []).forEach((phase: any) => {
+        const phaseHit = !!kw && String(phase.label ?? '').toLowerCase().includes(kw)
+        // 注意：passThrough 只取「自身/祖先」命中，不能取兄弟阶段的命中结果，
+        //       否则第一个命中阶段之后的所有兄弟阶段会被连带放行，把无关叶子也显示出来。
+        const passThrough = ancestorHit || phaseHit
+        let leafHit = false
+
+        ;(phase.children || []).forEach((leaf: any) => {
+          if (passThrough) { leaf.visible = true; return }
+          const label = String(leaf._Label ?? leaf[textField] ?? leaf[codeField] ?? leaf.id ?? '')
+          const code = String(leaf[codeField] ?? '')
+          const hit = label.toLowerCase().includes(kw) || code.toLowerCase().includes(kw)
+          leaf.visible = hit
+          if (hit) leafHit = true
+        })
+
+        phase.visible = passThrough || leafHit
+        if (leafHit) {
+          phase.expanded = true   // 命中叶子时自动展开，否则用户看不到结果
+          stdHasMatch = true
+          orgHasMatch = true
+        }
       })
-      std.visible = stdHasMatch || orgHasMatch
-      if (std.visible) orgHasMatch = true
+
+      std.visible = ancestorHit || stdHasMatch
+      if (stdHasMatch) orgHasMatch = true
     })
+
     org.visible = orgHasMatch
   })
 }
@@ -322,9 +423,24 @@ function toggleExpand(node: any) { node.expanded = !node.expanded }
 function toggleLeftPanel() { leftPanelVisible.value = !leftPanelVisible.value }
 function toggleRightPanel() { rightPanelVisible.value = !rightPanelVisible.value }
 async function togglePhase(phase: any, std: any, org: any) {
+  // 切换阶段会重建画布 —— 存在未保存改动时先确认，避免静默丢失
+  if (store.state.dirty) {
+    try {
+      await ElMessageBox.confirm('当前工作流有未保存的改动，切换阶段后将丢失。是否继续？', '未保存提示', {
+        type: 'warning', confirmButtonText: '继续切换', cancelButtonText: '留在当前'
+      })
+    } catch { return }
+  }
   phase.expanded = !phase.expanded
-  Object.assign(currentFilter, { orgCode: org.cbCode || org.id, standardCode: std.stdCode || phase.stdCode || std.standardCode, phaseCode: phase.phaseCode })
+  // 读：组织树是服务层手写 DTO（camelCase，已登记例外）
+  // 写：currentFilter 的键为实体字段名（PascalCase，§16.9 铁律）
+  Object.assign(currentFilter, {
+    OrgCode: org.cbCode || org.id,
+    StandardCode: std.stdCode || phase.stdCode || std.standardCode,
+    PhaseCode: phase.phaseCode
+  })
   currentLeaf.value = null
+  currentPhase.value = null
   selectedNode.value = null
   clearCanvas()
   if (phase.expanded && !phase.leafLoaded) await loadLeavesForPhase(phase)
@@ -338,35 +454,73 @@ async function loadLeavesForPhase(phase: any) {
       const body = props.treeConfig.loadBodyBuilder ? props.treeConfig.loadBodyBuilder(filter) : { Page: 1, PageSize: 200, Filters: [] }
       res = await yzhApi.post(props.treeConfig.loadApi, body)
     } else {
-      const params = new URLSearchParams({ orgCode: filter.orgCode, standardCode: filter.standardCode, phaseCode: filter.phaseCode }).toString()
+      // 查询串键名对应后端 C# 形参名（[FromQuery] string orgCode…），与 C# 侧逐字一致
+      const params = new URLSearchParams({ orgCode: filter.OrgCode, standardCode: filter.StandardCode, phaseCode: filter.PhaseCode }).toString()
       res = await yzhApi.get(`${props.treeConfig.loadApi}?${params}`)
     }
-    const items = res?.data?.Items || res?.data?.items || res?.data || res?.Data || []
-    const textField = props.treeConfig.textField
-    phase.children = items.map((item: any) => ({ ...item, id: item.Code || item.code || item.RuleCode || item.ruleCode, _label: item[textField] || item.label }))
+    const items: any[] = res?.data?.Items || res?.data || []
+    const { textField, codeField } = props.treeConfig
+    // ── 契约校验 ──
+    // 字段名写错（典型：实体是 PascalCase 却填了 camelCase）会让叶子渲染成空行，
+    // 历史上该故障排查成本极高，此处主动暴露。
+    if (items.length > 0 && items[0][textField] === undefined) {
+      console.error(
+        `[WorkflowDesigner] treeConfig.textField="${textField}" 在接口 ${props.treeConfig.loadApi} 返回数据中不存在。` +
+        `依据 YZH 命名铁律（DB列名 = C#属性名 = TS字段名，PascalCase），请修正 treeConfig。`,
+        '实际返回字段：', Object.keys(items[0])
+      )
+      ElMessage.error(`树配置字段「${textField}」与后端返回不一致，请按 PascalCase 修正 treeConfig`)
+    }
+    phase.children = items.map((item: any) => ({
+      ...item,
+      id: item.Code || item[codeField],
+      _Label: item[textField],
+      visible: true
+    }))
     phase.leafLoaded = true
+    applySearchFilter()   // 新加载的叶子立即套用当前搜索条件
   } catch { phase.children = [] } finally { phase.leafLoading = false }
 }
 const refreshTree = () => { loadTree() }
 
 async function selectLeaf(leaf: any, phase: any) {
-  currentLeaf.value = { ...leaf }
-  savedTip.value = ''
-  currentFilter.orgCode = phase.cbCode || currentFilter.orgCode
-  currentFilter.standardCode = phase.stdCode || phase.standardCode || currentFilter.standardCode
-  currentFilter.phaseCode = phase.phaseCode || currentFilter.phaseCode
-  const code = leaf.Code || leaf.code || leaf.RuleCode || leaf.ruleCode
-  if (props.treeConfig.childrenApi && code) {
+  // 切走会覆盖画布 —— 存在未保存改动时先确认
+  if (store.state.dirty && currentLeaf.value?.id !== leaf.id) {
     try {
-      const res = await yzhApi.get(`${props.treeConfig.childrenApi}/${code}`)
-      const d = res?.data || res?.Data || {}
-      Object.assign(leaf, d)
-      currentLeaf.value = leaf
-      renderWorkflow(d.workflowConfig || d.WorkflowConfig || d.ruleJson || d.RuleJson, d.layoutJson || d.LayoutJson || null)
-      return
-    } catch {}
+      await ElMessageBox.confirm('当前工作流有未保存的改动，切换后将丢失。是否继续？', '未保存提示', {
+        type: 'warning', confirmButtonText: '继续切换', cancelButtonText: '留在当前'
+      })
+    } catch { return }
   }
-  renderWorkflow(leaf.workflowConfig || leaf.WorkflowConfig || leaf.ruleJson || leaf.RuleJson, leaf.layoutJson || leaf.LayoutJson || null)
+  // ★ 引用同一性：currentLeaf 必须指向 phase.children 中的那个对象。
+  //   若写成 { ...leaf } 浅拷贝，保存后的回写会落到副本上，
+  //   切走再切回时读到树里未更新的旧值 → 表现为「保存的布局没有保存」。
+  currentLeaf.value = leaf
+  currentPhase.value = phase
+  savedTip.value = ''
+  currentFilter.OrgCode = phase.cbCode || currentFilter.OrgCode
+  currentFilter.StandardCode = phase.stdCode || phase.standardCode || currentFilter.StandardCode
+  currentFilter.PhaseCode = phase.phaseCode || currentFilter.PhaseCode
+
+  // 先用列表数据渲染（列表已含工作流/布局字段时秒开）
+  renderWorkflow(getWorkflowConfig(leaf), getLayoutJson(leaf))
+
+  // 再按需拉详情覆盖（历史项目 selectRule 的等价能力，补齐后保证拿到最新大字段）
+  const code = leaf.Code || leaf[props.treeConfig.codeField]
+  if (props.treeConfig.detailApi && code) {
+    try {
+      const before = JSON.stringify([getWorkflowConfig(leaf), getLayoutJson(leaf)])
+      const res = await yzhApi.get(`${props.treeConfig.detailApi}/${code}`)
+      const d = res?.data
+      if (d) {
+        Object.assign(leaf, d)                              // 回写树里的原对象
+        leaf._Label = leaf[props.treeConfig.textField]
+        if (JSON.stringify([getWorkflowConfig(leaf), getLayoutJson(leaf)]) !== before) {
+          renderWorkflow(getWorkflowConfig(leaf), getLayoutJson(leaf))
+        }
+      }
+    } catch { /* 详情接口不可用时沿用列表数据，不阻断编辑 */ }
+  }
 }
 
 // ==================== Diagram Initialization ====================
@@ -433,6 +587,22 @@ function createLogicFlowInstance() {
   })
   diagram.value.on('edge:add', (_event: any) => { autoSetBranchHandle(_event.data); onEdgeChange() })
   diagram.value.on('edge:delete', (_event: any) => { onEdgeChange() })
+
+  // ── 节点拖拽结束 → 坐标同步回 store（补齐历史项目遗漏的能力）──
+  // LogicFlow 2.2.5 事件：node:dragstart / node:drag / node:drop（payload = { e, data }）
+  // 不监听会同时引发两个故障：
+  //   ① store.nodes[].x/y 与画布脱节 → 保存的 LayoutJson 是拖动前的旧坐标
+  //   ② store.dirty 不置位 → 「保存」按钮恒为禁用，用户无法保存自己排好的布局
+  const onNodeMoved = ({ data }: any) => {
+    if (!data?.id) return
+    const storeNode = store.getNodeById(data.id)
+    if (!storeNode) return
+    if (storeNode.x === data.x && storeNode.y === data.y) return
+    store.moveNode(data.id, data.x, data.y)
+  }
+  diagram.value.on('node:drop', onNodeMoved)
+  diagram.value.on('node:drag', onNodeMoved)
+
   document.addEventListener('keydown', handleKeyDown)
 
   _resizeObserver = new ResizeObserver(() => {
@@ -686,7 +856,9 @@ function ensureStartNode() {
   }
 }
 function renderWorkflow(workflowConfig: any, layoutJson: any) {
-  if (!workflowConfig) { clearCanvas(); ensureStartNode(); return }
+  // 未配置工作流：清空 + 放一个起始节点，并标记为「已保存」
+  // （ensureStartNode → store.addNode 会置脏，此处必须复位，否则选中空白叶子就出现未保存态）
+  if (!workflowConfig) { clearCanvas(); ensureStartNode(); store.markClean(); return }
   try {
     const config = typeof workflowConfig === 'string' ? JSON.parse(workflowConfig) : workflowConfig
     const layout = layoutJson ? (typeof layoutJson === 'string' ? JSON.parse(layoutJson) : layoutJson) : null
@@ -710,6 +882,71 @@ function renderWorkflow(workflowConfig: any, layoutJson: any) {
 }
 
 // ==================== Layout / Validate / Save ====================
+/**
+ * 开发期一致性断言：比对 store 中的节点坐标与画布实际坐标。
+ *
+ * 背景：本项目历史上出现过「画布看起来动了、store 没动」类缺陷 —— 落库的
+ * `LayoutJson` 与所见不一致，切走再切回坐标回滚、刷新后也保持不住。
+ * 根因是 LogicFlow 的部分 API（如 `nodeModel.setProperties`）只写 `properties`
+ * 而**不移动坐标**，而 `store.state.nodes` 才是序列化落库的唯一来源。
+ *
+ * 因此凡是「画布 → 落库」的临界点（保存前、卸载前）都要比对一次。
+ * 仅开发构建生效（`import.meta.env.DEV`），生产构建整段被 tree-shake 掉。
+ *
+ * 坐标口径说明：`graphModel` 的 `node.x / node.y` 是**节点中心**，与
+ * `store.state.nodes[].x / y` 同一口径（`syncPositionsFromDiagram` 依赖该等价关系）。
+ */
+function assertCanvasStoreConsistency(stage: string) {
+  if (!import.meta.env.DEV) return
+  const gd = diagram.value?.getGraphData?.()
+  if (!gd?.nodes?.length) return
+
+  const canvasMap = new Map<string, { x: number; y: number }>(
+    gd.nodes.map((n: any) => [n.id, { x: Number(n.x) || 0, y: Number(n.y) || 0 }])
+  )
+  const drifts: string[] = []
+  // 容差 0.5px：LogicFlow 内部存在取整，避免把浮点误差报成缺陷
+  const TOLERANCE = 0.5
+
+  for (const n of store.state.nodes as any[]) {
+    const c = canvasMap.get(n.id)
+    if (!c) { drifts.push(`${n.id} —— store 有 / 画布无`); continue }
+    const sx = Number(n.x) || 0
+    const sy = Number(n.y) || 0
+    if (Math.abs(sx - c.x) > TOLERANCE || Math.abs(sy - c.y) > TOLERANCE) {
+      drifts.push(`${n.id} —— store(${sx}, ${sy}) ≠ 画布(${c.x}, ${c.y})`)
+    }
+  }
+  for (const gn of gd.nodes) {
+    if (!store.getNodeById?.(gn.id)) drifts.push(`${gn.id} —— 画布有 / store 无`)
+  }
+
+  if (drifts.length) {
+    console.error(
+      `[WorkflowDesigner] 画布与 store 坐标脱节（${stage}）：落库的 LayoutJson 将与所见不符。\n` +
+      drifts.map((d) => `  • ${d}`).join('\n') +
+      '\n  排查方向：该交互是否绕过了 node:drop / node:drag 监听，或改用了只写 properties 的 API。'
+    )
+  }
+}
+
+/**
+ * 以画布为准回读节点坐标写入 store（保存 / 切换前的兜底）。
+ * 即使 node:drop 因 LogicFlow 版本差异未触发，也不会保存出与所见不符的坐标。
+ */
+function syncPositionsFromDiagram() {
+  const gd = diagram.value?.getGraphData?.()
+  if (!gd?.nodes?.length) return
+  for (const gn of gd.nodes) {
+    const storeNode = store.getNodeById(gn.id)
+    if (storeNode && (storeNode.x !== gn.x || storeNode.y !== gn.y)) {
+      storeNode.x = gn.x
+      storeNode.y = gn.y
+      store.markDirty()
+    }
+  }
+}
+
 function autoLayout() {
   const nodes = store.state.nodes
   if (!nodes.length) return
@@ -722,9 +959,27 @@ function autoLayout() {
   nodes.forEach((n: any) => { if (!ordered.includes(n.id)) ordered.push(n.id) })
   const posMap: any = {}
   ordered.forEach((id: string, idx: number) => { posMap[id] = { x: 120 + (idx % 4) * 240, y: 80 + Math.floor(idx / 4) * 140 } })
+  // ⚠️ 必须先「移动画布」再「改 store」。
+  //    setProperties 只把键值写进 node.properties，不会移动节点坐标（画布看起来纹丝不动，
+  //    但 store 已改 → 保存下来的坐标与所见不一致）。必须走 graphModel.moveNode2Coordinate。
+  //    而 moveNode 的兜底分支要靠「画布当前坐标」算增量 —— 若先把 store 改成目标值，
+  //    增量会恒为 0，画布依旧不动，正是「脱节」缺陷本身。
+  const gm = diagram.value?.graphModel
+  for (const n of nodes) {
+    const p = posMap[n.id]
+    if (!p || !gm) continue
+    if (typeof gm.moveNode2Coordinate === 'function') {
+      gm.moveNode2Coordinate(n.id, p.x, p.y)
+    } else if (typeof gm.moveNode === 'function') {
+      const gn = typeof gm.getNodeModelById === 'function' ? gm.getNodeModelById(n.id) : null
+      const fromX = Number(gn?.x ?? n.x) || 0
+      const fromY = Number(gn?.y ?? n.y) || 0
+      gm.moveNode(n.id, p.x - fromX, p.y - fromY)
+    }
+  }
   for (const n of nodes) { if (posMap[n.id]) { n.x = posMap[n.id].x; n.y = posMap[n.id].y } }
   store.markDirty()
-  for (const n of nodes) { if (posMap[n.id]) diagram.value.setProperties(n.id, { x: posMap[n.id].x, y: posMap[n.id].y }) }
+  assertCanvasStoreConsistency('自动布局后')
   ElMessage.success('自动布局完成')
 }
 
@@ -762,19 +1017,38 @@ function validateGraph() {
 async function handleSave() {
   if (!currentLeaf.value) { ElMessage.warning('请先选择项目'); return }
   if (!store.state.nodes.length) { ElMessage.warning('画布为空，请添加节点'); return }
+  // 开发期守卫：保存前先比对一次，若已脱节则报出具体节点（仅在同步之前才检测得到）
+  assertCanvasStoreConsistency('保存前')
+  // 兜底：以画布为准同步一次坐标，确保落库的 LayoutJson 与所见一致
+  syncPositionsFromDiagram()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const config = serialize(store.state.nodes, store.state.edges, { version: 1 as any, workflowType: props.workflowType } as any) as any
   const layout = extractLayout(store.state.nodes)
+  const leafName = currentLeaf.value[props.treeConfig.textField] || currentLeaf.value[props.treeConfig.codeField] || ''
   try {
-    await ElMessageBox.confirm(`保存工作流到「${currentLeaf.value[props.treeConfig.textField] || currentLeaf.value.label}」？`, '保存确认', { type: 'info' })
+    await ElMessageBox.confirm(`保存工作流到「${leafName}」？`, '保存确认', { type: 'info' })
     const ctx = { leaf: currentLeaf.value, filter: currentFilter, config, layout }
     const url = props.saveConfig.getUrl ? props.saveConfig.getUrl(ctx) : props.saveConfig.api
-    const payload = props.saveConfig.buildPayload ? props.saveConfig.buildPayload(ctx) : { code: currentLeaf.value.Code || currentLeaf.value.code, workflowConfig: JSON.stringify(config), layoutJson: JSON.stringify(layout) }
+    const payload = props.saveConfig.buildPayload ? props.saveConfig.buildPayload(ctx) : {
+      Code: currentLeaf.value.Code,
+      WorkflowConfig: JSON.stringify(config),
+      LayoutJson: JSON.stringify(layout)
+    }
     const res = await yzhApi.post(url, payload)
-    if (res?.success !== false) {
+    // 兼容两种返回体：ApiResponse（success 布尔）/ 自定义 { code, message }
+    const failed = res?.success === false || (typeof res?.code === 'number' && res.code >= 400)
+    if (!failed) {
       savedTip.value = `${new Date().toLocaleTimeString()} 已保存`
-      currentLeaf.value.workflowConfig = JSON.stringify(config)
-      currentLeaf.value.layoutJson = JSON.stringify(layout)
+      // ★ 回写「树里的那个对象」—— currentLeaf 是引用而非拷贝，因此这次回写
+      //   会同时更新 phase.children 的缓存，切走再切回不会再回滚。
+      //   两套实体字段名同时覆盖：ValidationRule.RuleJson / ReportSection.WorkflowConfig
+      const configStr = JSON.stringify(config)
+      const layoutStr = JSON.stringify(layout)
+      Object.assign(currentLeaf.value, {
+        RuleJson: configStr,
+        LayoutJson: layoutStr,
+        WorkflowConfig: configStr
+      })
       store.markClean()
       emit('save-success', res)
       ElMessage.success('工作流保存成功')
@@ -798,21 +1072,23 @@ async function handleExecuteTest() {
   executionResult.value = null
   try {
     const runApi = props.executeConfig?.runApi || '/api/Workflow/test/run'
+    // 请求体字段名与后端 TaskExecutionRequest 的 C# 属性名逐字一致（PascalCase，YZH 命名铁律）
     const res = await yzhApi.post(runApi, {
-      taskType: 'TEST',
-      ruleCode: currentLeaf.value.Code || currentLeaf.value.code || currentLeaf.value.RuleCode || currentLeaf.value.ruleCode,
-      enterpriseCode: currentLeaf.value.enterpriseCode || 'YZH-STD-ENT',
-      standardCode: currentLeaf.value.standardCode || currentFilter.standardCode,
-      phaseCode: currentLeaf.value.phaseCode || currentFilter.phaseCode,
-      configJson: JSON.stringify(config)
+      TaskType: 'TEST',
+      RuleCode: currentLeaf.value.Code || currentLeaf.value.RuleCode,
+      EnterpriseCode: currentLeaf.value.EnterpriseCode || 'YZH-STD-ENT',
+      StandardCode: currentLeaf.value.StandardCode || currentFilter.StandardCode,
+      PhaseCode: currentLeaf.value.PhaseCode || currentFilter.PhaseCode,
+      ConfigJson: JSON.stringify(config)
     })
     if (res?.success !== false && res?.data) {
+      // TaskExecutionResponse 同为 PascalCase（§16.9 铁律）
       executionResult.value = res.data
-      if (res.data.status === 'completed' && res.data.isSuccess) {
-        ElMessage.success(`执行完成：${res.data.status} (${res.data.durationMs}ms)`)
+      if (res.data.Status === 'completed' && res.data.IsSuccess) {
+        ElMessage.success(`执行完成：${res.data.Status} (${res.data.DurationMs}ms)`)
         emit('execute-success', res.data)
       } else {
-        const errorMsg = res.data.ncResult?.error || res.data.status || '执行失败'
+        const errorMsg = res.data.NcResult?.error || res.data.Status || '执行失败'
         ElMessageBox.alert(`工作流执行失败：\n\n${errorMsg}`, '执行验证 - 执行失败', { type: 'error', confirmButtonText: '确定' })
       }
     } else {
@@ -824,7 +1100,22 @@ async function handleExecuteTest() {
 }
 
 // ==================== Node Test ====================
+/**
+ * 单节点 / AI 节点测试
+ *
+ * ⚠️ 2026-09-22 阶段二：后端两个入口已统一走 WfExecutionTaskService 并**落库**
+ *   （wf_execution_task.TestScope = NODE / AI_NODE，wf_node_execution 有对应行），
+ *   因此这里必须补发测试上下文元数据，否则落库的任务无法归属到规则/企业/阶段，也就无法回溯。
+ *   响应新增 TaskCode（本次测试的任务编码），可凭它去日志/DB 里定位这次测试。
+ */
 async function handleTestNode(nodeData: any) {
+  // 测试上下文元数据（可选字段，后端缺省时按 FULL / YZH-STD-ENT 兜底）
+  const meta = {
+    RuleCode: currentLeaf.value?.Code || currentLeaf.value?.RuleCode || '',
+    EnterpriseCode: currentLeaf.value?.EnterpriseCode || 'YZH-STD-ENT',
+    StandardCode: currentLeaf.value?.StandardCode || currentFilter.StandardCode || '',
+    PhaseCode: currentLeaf.value?.PhaseCode || currentFilter.PhaseCode || ''
+  }
   try {
     if (nodeData.nodeType === 'ai_node') {
       const mockOutputs: any = {}
@@ -840,29 +1131,32 @@ async function handleTestNode(nodeData: any) {
       }
       let ruleJson = ''
       try { ruleJson = JSON.stringify(serialize(nodes, store.state.edges, { version: 1, workflowType: props.workflowType })) } catch { ruleJson = '' }
+      // 请求体字段名与后端 AiNodeTestRequest / WorkflowContext 的 C# 属性名逐字一致（PascalCase）
       const testBody = {
-        nodeId: nodeData.nodeId, nodeType: 'ai_node', title: nodeData.title,
-        config: { ...nodeData.config, customParams: JSON.stringify(parsedCustomParams) },
-        inputs: nodeData.inputs || {}, inputTypes: nodeData.inputTypes || {},
-        inputPorts: nodeData.inputPorts || [], outputPorts: nodeData.outputPorts || [],
-        workflowContext: {
-          ruleJson,
-          contextParams: currentLeaf.value ? { enterpriseCode: currentLeaf.value.enterpriseCode || 'YZH-STD-ENT', standardCode: currentLeaf.value.standardCode, phaseCode: currentLeaf.value.phaseCode } : {},
-          mockOutputs
+        ...meta,
+        NodeId: nodeData.nodeId, NodeType: 'ai_node', Title: nodeData.title,
+        Config: { ...nodeData.config, customParams: JSON.stringify(parsedCustomParams) },
+        Inputs: nodeData.inputs || {}, InputTypes: nodeData.inputTypes || {},
+        InputPorts: nodeData.inputPorts || [], OutputPorts: nodeData.outputPorts || [],
+        WorkflowContext: {
+          RuleJson: ruleJson,
+          ContextParams: currentLeaf.value ? { EnterpriseCode: meta.EnterpriseCode, StandardCode: meta.StandardCode, PhaseCode: meta.PhaseCode } : {},
+          MockOutputs: mockOutputs
         }
       }
       const res = await yzhApi.post('/api/Workflow/test/ai-node', testBody)
       if (res?.success && res.data) nodeData.onSuccess(res.data)
-      else nodeData.onError(res?.error || 'AI 节点测试失败', null)
+      else nodeData.onError(res?.error || res?.message || 'AI 节点测试失败', null)
       return
     }
     const res = await yzhApi.post('/api/Workflow/test/node', {
-      nodeId: nodeData.nodeId, nodeType: nodeData.nodeType, title: nodeData.title,
-      skillCode: nodeData.skillCode, config: nodeData.config, inputs: nodeData.inputs,
-      inputTypes: nodeData.inputTypes, inputPorts: nodeData.inputPorts, outputPorts: nodeData.outputPorts
+      ...meta,
+      NodeId: nodeData.nodeId, NodeType: nodeData.nodeType, Title: nodeData.title,
+      SkillCode: nodeData.skillCode, Config: nodeData.config, Inputs: nodeData.inputs,
+      InputTypes: nodeData.inputTypes, InputPorts: nodeData.inputPorts, OutputPorts: nodeData.outputPorts
     })
     if (res?.success && res.data) nodeData.onSuccess(res.data)
-    else nodeData.onError(res?.error || '测试失败', null)
+    else nodeData.onError(res?.error || res?.message || '测试失败', null)
   } catch (e: any) { nodeData.onError('请求失败: ' + (e?.message || e), null) }
 }
 
@@ -873,24 +1167,44 @@ async function handleTestWorkflow(nodeData: any) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const config = serialize(store.state.nodes, store.state.edges, { version: 1 as any, workflowType: props.workflowType } as any) as any
     const res = await yzhApi.post('/api/Workflow/test/run', {
-      taskType: 'TEST',
-      ruleCode: currentLeaf.value.Code || currentLeaf.value.code,
-      enterpriseCode: currentLeaf.value.enterpriseCode || 'YZH-STD-ENT',
-      standardCode: currentLeaf.value.standardCode || currentFilter.standardCode,
-      phaseCode: currentLeaf.value.phaseCode || currentFilter.phaseCode,
-      configJson: JSON.stringify(config)
+      TaskType: 'TEST',
+      RuleCode: currentLeaf.value.Code || currentLeaf.value.RuleCode,
+      EnterpriseCode: currentLeaf.value.EnterpriseCode || 'YZH-STD-ENT',
+      StandardCode: currentLeaf.value.StandardCode || currentFilter.StandardCode,
+      PhaseCode: currentLeaf.value.PhaseCode || currentFilter.PhaseCode,
+      ConfigJson: JSON.stringify(config)
     })
     if (res?.success && res.data) nodeData.onSuccess(res.data)
-    else nodeData.onError(res?.error || '测试失败', null)
+    else nodeData.onError(res?.error || res?.message || '测试失败', null)
   } catch (e: any) { nodeData.onError('请求失败: ' + (e?.message || e), null) }
 }
 
+/**
+ * 文档提取节点配置期试运行（docField / docTable）
+ *
+ * ⚠️ 响应风格与 ApiResponse 不同（已登记例外 E7）：
+ *    DocExtractionRuleController 全系列返回 `Ok(new { code, data, message })`，
+ *    **没有 `success` 字段**；`yzhApi` 原样透传、不拆信封也不做 key 转换，
+ *    所以判定必须是 `res.code === 200` 或读 `res.data`，绝不能用 `res.success`。
+ *    （曾因此恒走 onError → 页面显示"执行失败"，2026-09-22 修复）
+ *
+ * ⚠️ 后端 TestFieldAsync / TestTableAsync 永不抛异常、恒返回 code=200，
+ *    失败语义藏在 payload 内（value / rows 为空，message 说明原因），
+ *    故这里按 payload 实际内容判定成功与否，而非只看 HTTP 状态。
+ */
 async function handleTestDocExtract({ nodeType, body, onSuccess, onError }: any) {
   try {
     const url = nodeType === 'docField' ? '/api/Workflow/DocExtractionRule/test-field' : '/api/Workflow/DocExtractionRule/test-table'
-    const res = await yzhApi.post(url, body)
-    if (res?.status && res.data) onSuccess(res.data)
-    else onError(res?.message || '测试失败')
+    const res: any = await yzhApi.post(url, body)
+    const data = res?.data ?? res?.Data
+    if (res?.code !== undefined && res.code !== 200) { onError(res?.message || '测试失败', data); return }
+    if (!data) { onError(res?.message || '测试失败：后端未返回数据'); return }
+    // 成功判据：字段有实际值 / 表格有数据行
+    const ok = nodeType === 'docField'
+      ? data.value !== undefined && data.value !== null && data.value !== ''
+      : Array.isArray(data.rows) && data.rows.length > 0
+    if (ok) onSuccess(data)
+    else onError(data.message || '提取失败：未取到值', data)
   } catch (e: any) { onError('请求失败: ' + (e?.message || e)) }
 }
 

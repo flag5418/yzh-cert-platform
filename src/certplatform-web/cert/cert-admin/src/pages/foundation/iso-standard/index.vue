@@ -4,7 +4,7 @@
  *
  * 布局结构：
  * - 左侧：标准树（扁平，所有标准为根节点，含搜索、增删改）
- * - 右侧：条款表格（分页、搜索、增删改、显示已禁用开关）
+ * - 右侧：条款树形表格（菜单模式：整树、默认全展开、行内新增下级、无分页）
  *
  * 配置驱动：
  * - 表格列从 logic.columns 自动获取（Foundation/ISOClause.json）
@@ -14,12 +14,7 @@
  */
 import { Delete, Plus, RefreshRight } from '@element-plus/icons-vue'
 import { YzhForm, YzhTreeTable, YzhTable, type TreeNode } from '@yzh-core'
-import {
-  ElButton,
-  ElMessage,
-  ElMessageBox,
-  ElSwitch,
-} from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, nextTick, ref } from 'vue'
 import { ISOStandardTreeTableLogic } from './logic'
 
@@ -39,10 +34,12 @@ const treeTableRef = ref()
 const tableRef = ref()
 const selectedRows = ref<any[]>([])
 
-// 行操作按钮（TreeTableLogic 基类自动注入 toggle-valid）
-const rowActionButtons = computed(() => {
-  return (logic as any).rowActionButtons || {}
-})
+// 行操作按钮（含 add-child；基类注入 edit/delete/toggle-valid）
+const rowActionButtons = computed(() => logic.rowActions)
+
+const dialogTitle = computed(() =>
+  logic.dialogMode.value === 'add' ? '新增条款' : '编辑条款',
+)
 
 // ========================================================
 // 树节点操作
@@ -92,17 +89,17 @@ async function handleDeleteStd(node: TreeNode) {
 // 条款操作
 // ========================================================
 
-/** 新增条款 */
-function handleAddClause() {
-  const ok = logic.openAddClauseDialog()
+/** 新增顶级条款（ParentCode = null，弹窗内可改上级） */
+async function handleAddClause() {
+  const ok = await logic.openAddClauseDialog()
   if (!ok) {
     ElMessage.warning('请先选择标准')
   }
 }
 
-/** 编辑条款 */
-function handleEditClause(row: any) {
-  logic.openEditClauseDialog(row)
+/** 编辑条款（可修改上级调整层级） */
+async function handleEditClause(row: any) {
+  await logic.openEditClauseDialog(row)
 }
 
 /** 删除条款 */
@@ -116,10 +113,15 @@ async function handleDeleteClause(row: any) {
   ElMessage.success('删除成功')
 }
 
-/** 表格行自定义操作（edit / delete / toggle-valid） */
+/** 表格行自定义操作（add-child / edit / delete / toggle-valid） */
 async function handleRowAction(action: string, row: any) {
-  if (action === 'edit') {
-    handleEditClause(row)
+  if (action === 'add-child') {
+    const ok = await logic.openAddClauseChild(row)
+    if (!ok) {
+      ElMessage.warning('请先选择标准')
+    }
+  } else if (action === 'edit') {
+    await handleEditClause(row)
   } else if (action === 'delete') {
     await handleDeleteClause(row)
   } else if (action === 'toggle-valid') {
@@ -127,7 +129,7 @@ async function handleRowAction(action: string, row: any) {
   }
 }
 
-/** 批量删除条款 */
+/** 批量删除条款（整批提交，父子同批由后端判定） */
 async function handleBatchDelete() {
   if (selectedRows.value.length === 0) {
     ElMessage.warning('请先选择要删除的条款')
@@ -140,12 +142,16 @@ async function handleBatchDelete() {
   )
   await logic.batchDeleteClauses(selectedRows.value)
   selectedRows.value = []
+  tableRef.value?.clearSelection?.()
   ElMessage.success('批量删除成功')
 }
 
-/** 切换条款有效标志 */
+/** 切换条款有效标志（树模式：API 成功后整树刷新） */
 async function handleToggleClauseIsValid(row: any) {
-  await (logic as any).toggleRowIsValidWithConfirm(row, { entityName: `${row.ClauseNumber} ${row.Title}` })
+  await (logic as any).toggleRowIsValidWithConfirm(row, {
+    entityName: `${row.ClauseNumber} ${row.Title}`,
+  })
+  await logic.refresh()
 }
 
 // ========================================================
@@ -166,6 +172,9 @@ async function handleClauseSubmit() {
 async function handleStdSubmit() {
   try {
     await logic.submitStdForm()
+    ElMessage.success(
+      logic.stdDialogMode.value === 'add' ? '新增成功' : '修改成功',
+    )
   } catch (e: any) {
     ElMessage.error(e.message || '保存失败')
   }
@@ -229,7 +238,7 @@ onMounted(async () => {
 
       <template #default>
         <div class="iso-page__content">
-          <!-- 条款表格 -->
+          <!-- 条款树形表格（菜单模式：整树 + 默认全展开 + 无分页） -->
           <YzhTable
             ref="tableRef"
             :columns="logic.columns as any"
@@ -237,6 +246,9 @@ onMounted(async () => {
             :search-fields="logic.searchFields as any"
             :selectable="true"
             :row-action-buttons="rowActionButtons"
+            :show-pagination="false"
+            :default-expand-all="true"
+            select-mode="multiple"
             row-key="Code"
             @selection-change="selectedRows = $event"
             @row-action="handleRowAction"
@@ -251,7 +263,7 @@ onMounted(async () => {
             <!-- 工具栏左侧：操作按钮 -->
             <template #toolbar-left>
               <el-button type="primary" :icon="Plus" @click="handleAddClause"
-                >新增条款</el-button
+                >新增顶级条款</el-button
               >
               <el-button type="danger" :icon="Delete" @click="handleBatchDelete"
                 >批量删除</el-button
@@ -279,7 +291,7 @@ onMounted(async () => {
     <!-- 条款新增/编辑弹窗 -->
     <el-dialog
       v-model="logic.dialogVisible.value"
-      :title="logic.dialogMode.value === 'add' ? '新增条款' : '编辑条款'"
+      :title="dialogTitle"
       width="600px"
       :close-on-click-modal="false"
       :destroy-on-close="false"
@@ -306,7 +318,6 @@ onMounted(async () => {
       @opened="onStdDialogOpened"
       @closed="onStdDialogClosed"
     >
-      <!-- 配置驱动的表单（字段从 ISOStandardForm.json 自动派生） -->
       <YzhForm
         v-model="logic.stdFormData"
         :fields="logic.treeFormFields as any"

@@ -70,6 +70,15 @@ namespace CertPlatform.Shared.Entities.Wf
         /// <summary>执行耗时(ms)</summary>
         public int? ExecutionTimeMs { get; set; }
 
+        /// <summary>LLM Prompt Tokens（仅 ai_node 有值）</summary>
+        public int? PromptTokens { get; set; }
+
+        /// <summary>LLM Completion Tokens（仅 ai_node 有值）</summary>
+        public int? CompletionTokens { get; set; }
+
+        /// <summary>纯 LLM API 调用耗时(ms)（不含参数解析、模板渲染、类型转换）</summary>
+        public int? LlmDurationMs { get; set; }
+
         /// <summary>是否复用了历史结果：0=新执行 1=复用</summary>
         public int IsReused { get; set; } = 0;
 

@@ -2,8 +2,7 @@ import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   getOrganizationTree,
-  getFolders,
-  getFiles,
+  getStageFileTree,
   downloadFile,
 } from './useDirectoryApi'
 import type {
@@ -121,14 +120,14 @@ export function useFileTree() {
       const orgTree = await getOrganizationTree()
       const tree = transformOrgTree(orgTree)
 
-      // 并行预加载所有阶段的文件夹数据
+      // 并行预加载所有阶段（stage-files 单请求：文件夹+文件+规则状态一次到位）
       const stages = collectStageNodes(tree)
       await Promise.all(stages.map(async (stage) => {
         const directoryCode = stage.DirectoryCode || extractDirectoryCode(String(stage.Code))
         if (!directoryCode) return
         try {
-          const folders = await getFolders(directoryCode)
-          stage.Children = buildFolderNodes(folders, directoryCode)
+          const { folders } = await getStageFileTree(directoryCode)
+          stage.Children = buildStageNodes(folders, directoryCode)
           stage._loaded = true
         } catch {
           stage.Children = []
@@ -149,23 +148,11 @@ export function useFileTree() {
     }
   }
 
-  /** 将后端文件夹树递归转换为前端 TreeNode 结构（递归处理 Children） */
-  function buildFolderNodes(folders: any[], directoryCode: string): TreeNode[] {
-    return (folders || []).map((folder: any) => ({
-      Code: folder.FolderCode || folder.folderCode,
-      Name: folder.FolderName || folder.folderName,
-      Type: 'folder' as const,
-      FolderCode: folder.FolderCode || folder.folderCode,
-      DirectoryCode: directoryCode,
-      Raw: folder,
-      Children: (folder.Children && folder.Children.length > 0)
-        ? buildFolderNodes(folder.Children, directoryCode)
-        : [{ Code: '__placeholder__' } as TreeNode],
-      _loaded: folder.Children && folder.Children.length > 0,
-    }))
-  }
-
-  /** 加载阶段文件树（懒加载，挂载到 stageNode.Children） */
+  /**
+   * 加载阶段文件树（懒加载，挂载到 stageNode.Children）。
+   * 对齐历史老项目：单请求 stage-files 返回文件夹+文件+规则状态+根目录孤儿文件，
+   * 替代旧实现「folders-only + 逐文件夹再查文件」的两级请求模式。
+   */
   async function loadStageFiles(stageNode: TreeNode) {
     if (stageNode._loaded || stageNode._loading) return
     
@@ -176,8 +163,8 @@ export function useFileTree() {
     
     stageNode._loading = true
     try {
-      const folders = await getFolders(directoryCode)
-      stageNode.Children = buildFolderNodes(folders, directoryCode)
+      const { folders } = await getStageFileTree(directoryCode)
+      stageNode.Children = buildStageNodes(folders, directoryCode)
       stageNode._loaded = true
       return stageNode.Children
     } catch (e: any) {
@@ -188,15 +175,51 @@ export function useFileTree() {
     }
   }
 
-  /** 加载文件夹文件（懒加载） */
+  /** 后端 StageFolderNode（含 Files/根目录虚拟节点）→ 前端 TreeNode */
+  function buildStageNodes(folderNodes: any[], directoryCode: string): TreeNode[] {
+    return (folderNodes || []).map((folder: any) => {
+      const node: TreeNode = {
+        Code: folder.Code || folder.FolderCode,
+        Name: folder.Name || folder.FolderName,
+        Type: 'folder' as const,
+        FolderCode: folder.FolderCode || folder.Code,
+        DirectoryCode: directoryCode,
+        Raw: folder,
+        Children: [],
+        _loaded: true,
+      }
+      // 子文件夹
+      if (folder.Children?.length) {
+        node.Children!.push(...buildStageNodes(folder.Children, directoryCode))
+      }
+      // 文件夹直属文件
+      for (const f of folder.Files || []) {
+        node.Children!.push({
+          Code: f.FileCode,
+          Name: f.FileName,
+          Type: 'file' as const,
+          FileCode: f.FileCode,
+          DirectoryCode: directoryCode,
+          FolderCode: f.FolderCode,
+          ConvertStatus: f.ConvertStatus || '',
+          RuleStatus: f.RuleStatus || 'none',
+          Raw: f,
+        })
+      }
+      return node
+    })
+  }
+
+  /** 加载文件夹文件（懒加载兜底；stage-files 整树模式下一般不再触发） */
   async function loadFolderFiles(folderNode: TreeNode) {
     if (folderNode._loaded || folderNode._loading) return
-    
+
     const folderCode = folderNode.FolderCode
     if (!folderCode) return
-    
+
     folderNode._loading = true
     try {
+      const { getFiles } = await import('./useDirectoryApi')
       const files = await getFiles(folderCode)
       folderNode.Children = (files || []).map((file: any) => ({
         Code: file.FileCode || file.fileCode,

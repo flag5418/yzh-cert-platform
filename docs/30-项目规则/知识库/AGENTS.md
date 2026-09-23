@@ -1,4 +1,5 @@
 ---
+status: living
 AIGC:
     Label: "1"
     ContentProducer: 001191440300708461136T1XGW3
@@ -14,6 +15,34 @@ AIGC:
 > 本文件是 AI 编程助手（Cursor / Claude Code / Copilot / Aider 等）的自动加载入口。
 > **编码任务（生成/修改任何代码）必须启用本文件**，启用要求见 `项目全局规则.md` §8.0。
 > 本文件为权威源；知识库副本位于 `docs/30-项目规则/知识库/AGENTS.md`，两处须保持一致。
+
+## ⚠️ AI 编码前必读 3 条（违反 = 返工）
+
+> AI 绕过 YZH 架构的**头号原因不是"不听话"，而是文档给了错的地址**。
+> 以下 3 条是纠偏后的正确地址，**编码前逐条执行**。
+
+**① 前端新建/修改页面 → 先读 `docs/10-YZH架构/样板页面指南-V1.md`，照抄指定样板。**
+
+- 单表 CRUD 唯一模板：`src/certplatform-web/cert/cert-admin/src/pages/system/user/`（67 行，零手写 CRUD）
+- 左树右表唯一模板：`.../foundation/iso-standard/`（⚠️ **只抄 `logic.ts` 的 `dataLoader` 骨架**，`index.vue` 不抄）
+- 纯树节点模板：`.../system/role/`（`logic.ts` 仅 16 行、零覆写）
+- ⛔ **不要**参考 `system/menu`、`system/api`、`system/role-api`、`system/role-menu`、`system/role-user`（自建逻辑、待迁移），**不要**参考 `src/old/**`
+- ⛔ 禁止 `view-grid` / `VolBox` / `VolForm` / `VolProvider`；禁止 `axios`；`.vue` 内禁止直接 `fetch(`
+- ⛔ 禁止手写 `handleAdd` / `handleBatchDelete` / `handleRowAction` / `handleSubmit` —— 由 `useSingleTable` 内核派发
+
+**② 后端新建/修改控制器 → 必须继承基类，禁止裸 `ControllerBase`。**
+
+- 单表：`YzhControllerBase<{实体}>`；左树右表：`TreeTableControllerBase<T, V>`
+- 现状：10 个裸 `ControllerBase` 承载 90/96 端点（93.75%）—— **它们是坏榜样，不要学**
+- 改控制器名/动作名 → `ApiCode` 变化 → 角色-接口关联**静默断裂**（须重跑 ApiSync 并重关联）
+
+**③ 字段名 = PascalCase 逐字一致（DB列名 = C#属性名 = TS字段名）。**
+
+- 前端读 `row.RuleName`、`node.Code`、`formData.StandardCode`
+- 写成 `row.ruleName` / `node.code` → **渲染成空行且无任何报错**（最难查的一类 bug）
+- 例外（须注释标注「已登记例外」）：`ApiResponse` 信封 camelCase（E1）、裸 JSON `{img,uuid}`（E6）、`{code,data,message}` **无 `success`**（E7，须用 `res.code === 200` 且**禁用 `res.success`**）
+
+**改完必跑**：`cd src/certplatform-web && node scripts/guards.mjs`（0 违规）→ 对应端 `npm run build`（含 `vue-tsc`）。
 
 ## ⚠️ 核心目的（最高优先级）
 
@@ -39,6 +68,7 @@ AIGC:
 - **项目结构与启动指南**：`docs/00-工程体系/项目结构与启动指南-V1.md` — 新旧架构路径/启动方式/端口规划/AI 检索协议
 - **文档导航**：`docs/00-工程体系/README.md` — 全项目文档索引（00/10/20/50/60/80/90 + 历史文档）
 - **★ YZH 架构唯一入口**：`docs/10-YZH架构/README.md`（← **V1 强制规范**：编码前必读，包含架构总纲/后端基类/前端基类/数据契约/权限体系/代码结构/开发流程/常见错误）
+- **★ 样板页面指南**：`docs/10-YZH架构/样板页面指南-V1.md`（← **新建页面唯一入口**：指定 3 个唯一样板 + "照抄时必须改的 5 处" + 明确"不要参考"清单）
 - **YZH 架构分章速查**：
   - 核心理念 + 继承体系 → `docs/10-YZH架构/01-架构总纲.md`
   - 后端基类 + EntityService → `docs/10-YZH架构/02-后端架构.md`
@@ -76,13 +106,15 @@ AIGC:
    - `03-边界与约束.md` / `06-YZH与Vol边界定义.md`（不能碰的、不能改的）
    - `01-Vol能力清单.md` / `02-YZH增量清单.md`（能力索引）
    - `04-代码模板/`、`05-踩坑记录/`（直接引用/查重）
-   - `07-标准页面开发流程.md`（**已废弃，请按 V4 试点页面 `src/pages/system/user/index.vue` 作为模板**）
-3. **后端**：新架构只改 `src/certplatform-api/` 下的代码；业务实体继承 `BaseEntity`，Controller 继承 `YzhControllerBase<V>` 或 `TreeTableControllerBase<T,V>`；钩子通过覆盖 virtual 方法实现；YZH.Core 源码在 `src/yzh-core/`，禁止修改。
+   - `07-标准页面开发流程.md`（**已废弃，请按 `docs/10-YZH架构/样板页面指南-V1.md` 的唯一样板 `cert/cert-admin/src/pages/system/user/` 作为模板**）
+3. **后端**：业务代码写 `src/certplatform-api/`；业务实体继承 `BaseEntity`，Controller **按职能选用** `YzhControllerBase<V>` / `TreeTableControllerBase<T,V>`（**非强制**——职能特殊的控制器直接继承 `ControllerBase` 是允许的）；钩子通过覆盖 virtual 方法实现。
+   - ★ **`src/yzh-core/`（框架层）可以且鼓励合理改造** —— YZH 架构正在持续完善中，**不存在"禁止修改"这条规则**。改造须遵守第 11 条「框架层改造准入」。
+   - ⛔ **真正禁止修改的是 `src/old/`**（历史 Vol 项目，已冻结，仅作参考）。
 4. **前端（新）**：所有新页面必须使用 V4 自研组件：
    - 核心组件库：`@yzh-core/components/*`（yzh.vue.core）
    - 业务共享层：`@share/*`（share）
    - 管理员端：`src/certplatform-web/cert/cert-admin/`（端口 9990，Element Plus）
-   - 审核员端：`src/certplatform-web/cert/cert-auditor/`（端口 9991，Naive UI）
+   - 审核员端：`src/certplatform-web/cert/cert-auditor/`（端口 9991，**Element Plus**）
    - API 客户端：`yzhApi`（来自 yzh.vue.core）
    - **禁止** 新页面使用 view-grid、VolBox、VolForm、VolProvider、extension 自动生成的 .jsx
    - **注意**：旧 vol.web 保留历史版本（`src/old/server/Vue.NetCore/vol.web/`），不删除，新代码写入 certplatform-web/
@@ -92,6 +124,12 @@ AIGC:
 8. **路径格式**：所有文件路径使用 macOS 绝对路径格式。
 9. **沟通风格**：零表情、极简、中文回复；方案用表格对比 + 结论。
 10. **代码结构三层同构**：后端 Controller 文件、前端 API 文件、前端 Pages 文件夹必须同名同路径（详情见 `docs/30-项目规则/前后端代码结构统一规则-V1.md`）；新增模块必须三层同步创建；禁止在模块根目录扁平化放置文件；迁移完成后按该文档 §六 检查清单逐项验证。
+11. **框架层改造准入**（`src/yzh-core/`，2026-09-23 明确）：框架层**允许且鼓励合理改造**（架构正在完善中），但必须同时满足以下 5 条——
+    - ① **有明确理由**：消除真实缺陷 / 补齐真实缺口 / 提供扩展点。**禁止**"为了统一风格"而改。
+    - ② **不破坏既有契约**：列名铁律（PascalCase 三处一致）、`ApiResponse` 信封、已登记例外 E1–E7 一律不动。
+    - ③ **优先走扩展点**：能通过 `virtual` 钩子 / 特性 / 配置 / 新增类解决的，**不改核心逻辑**。
+    - ④ **改动记档**：在 `.workbuddy-ai/memory/REFERENCE.md` 的「框架层已改动清单」登记（文件 / 改动 / 理由）。
+    - ⑤ **改完回归验证**：后端编译 0 错误 + 服务能起来 + 前端 `node scripts/guards.mjs` 通过。
 
 ## 业务菜单速览
 

@@ -17,7 +17,7 @@
     "./utils": "./src/utils/index.ts"
   },
   "scripts": {
-    "build": "vite build",
+    "build": "node ../../scripts/guards.mjs && vite build",
     "typecheck": "vue-tsc --noEmit"
   },
   "peerDependencies": {

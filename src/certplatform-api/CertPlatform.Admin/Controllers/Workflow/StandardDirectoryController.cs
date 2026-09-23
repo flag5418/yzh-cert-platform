@@ -210,6 +210,20 @@ public class StandardDirectoryController : ControllerBase
         return Ok(new { code = ok ? 200 : 400, msg = error, deleted, restored });
     }
 
+    /// <summary>
+    /// 单文件替换（一步完成：覆盖上传 + 回填大小 + doc/xls 进转换队列）
+    /// </summary>
+    [HttpPost("files/{fileCode}/replace")]
+    public async Task<IActionResult> ReplaceFile(string fileCode, [FromForm] IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+            return Ok(new { code = 400, msg = "请选择文件" });
+
+        using var stream = file.OpenReadStream();
+        var (ok, error, convertQueueCode) = await _service.ReplaceFileAsync(fileCode, stream, file.Length);
+        return Ok(new { code = ok ? 200 : 400, msg = error, convertQueueCode });
+    }
+
     [HttpGet("upload-status")]
     public async Task<IActionResult> GetUploadStatus([FromQuery] string taskId)
     {
@@ -357,6 +371,29 @@ public class StandardDirectoryController : ControllerBase
     }
 
     #endregion
+
+    #region 存量上传任务修复
+
+    /// <summary>
+    /// 修复卡死的存量上传任务（历史缺陷：GetOneAsync 的 IsValid=1 过滤导致状态机卡死）。
+    /// 对指定任务（缺省 = 全部 initialized 且已过期的任务）逐文件检查 MinIO 对象：
+    /// 存在则回填 FileSize 并激活（doc/xls 置入转换队列，其余直接 active）。
+    /// </summary>
+    [HttpPost("repair-stuck-uploads")]
+    public async Task<IActionResult> RepairStuckUploads([FromBody] RepairStuckUploadsRequest? req)
+    {
+        var (ok, error, repaired, enqueued) = await _service.RepairStuckUploadsAsync(req?.TaskId);
+        return Ok(new { code = ok ? 200 : 400, msg = error, repaired, enqueued });
+    }
+
+    #endregion
+}
+
+/// <summary>修复存量上传任务请求</summary>
+public class RepairStuckUploadsRequest
+{
+    /// <summary>指定任务 ID；空 = 修复全部卡死任务</summary>
+    public string? TaskId { get; set; }
 }
 
 /// <summary>

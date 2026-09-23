@@ -5,8 +5,9 @@
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Upload, Document, OfficeBuilding, Calendar } from '@element-plus/icons-vue'
+import { Plus, Upload } from '@element-plus/icons-vue'
 import { YzhPageLayout, YzhForm, type YzhFormField } from '@yzh-core'
+import { CertBizTree } from '@share/components'
 import { useFileTree, type TreeNode } from '@share/composables/useFileTree'
 import {
   getTemplateByContext,
@@ -20,7 +21,7 @@ import {
 import type { ReportTemplate, ReportSection } from '@share/types/cert'
 
 // ── 树 ──
-const { fileTreeData, loading: treeLoading, loadTree } = useFileTree()
+const { loadTree } = useFileTree()
 
 // ── 右侧面板状态 ──
 const selectedPhase = ref<TreeNode | null>(null)
@@ -66,7 +67,11 @@ const canEdit = computed(() => hasPhaseSelected.value)
 
 // ── 树节点点击 ──
 async function handleNodeClick(node: TreeNode) {
-  if (node.Type !== 'stage') return
+  if (node.Type !== 'stage') {
+    // 机构/标准节点：提示用户在左侧选择叶子阶段
+    ElMessage.info('请在左侧选择阶段（叶子节点）以查看报告模板和章节')
+    return
+  }
 
   selectedPhase.value = node
   currentTemplate.value = null
@@ -255,29 +260,11 @@ onMounted(() => {
     <el-row :gutter="16" class="report-rule-layout">
       <!-- 左侧：组织 → 标准 → 阶段 树 -->
       <el-col :span="6" class="tree-panel">
-        <el-card shadow="never" class="tree-card">
-          <template #header>
-            <span class="card-title">组织 → 标准 → 阶段</span>
-          </template>
-          <el-tree
-            :data="fileTreeData"
-            v-loading="treeLoading"
-            node-key="id"
-            default-expand-all
-            highlight-current
-            :expand-on-click-node="false"
-            @node-click="handleNodeClick"
-          >
-            <template #default="{ data }">
-              <span class="tree-node">
-                <el-icon v-if="data.Type === 'organization'" class="node-icon"><OfficeBuilding /></el-icon>
-                <el-icon v-else-if="data.Type === 'standard'" class="node-icon"><Document /></el-icon>
-                <el-icon v-else class="node-icon"><Calendar /></el-icon>
-                <span class="node-label">{{ data.Name }}</span>
-              </span>
-            </template>
-          </el-tree>
-        </el-card>
+        <CertBizTree
+          title="组织 → 标准 → 阶段"
+          :node-types="['organization', 'standard', 'stage']"
+          @select="handleNodeClick"
+        />
       </el-col>
 
       <!-- 右侧：模板 + 章节 -->
@@ -383,10 +370,12 @@ onMounted(() => {
 <style scoped>
 .report-rule-layout {
   height: 100%;
+  overflow: hidden;
 }
 
 .tree-panel {
   height: 100%;
+  overflow: hidden;
 }
 
 .content-panel {
@@ -394,6 +383,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow: hidden;
 }
 
 .tree-card {

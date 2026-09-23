@@ -23,9 +23,10 @@ namespace CertPlatform.Admin.Controllers.Foundation;
 ///
 ///     业务规则：
 ///     1. 标准无层级（MaxLevel=1），不显示"新增下级"按钮
-///     2. 标准编号 + 版本年份 唯一
-///     3. 条款编号在同一标准下唯一
-///     4. 删除标准前校验：无条款关联才可删除
+///     2. 标准名称全局唯一（ExistsAsync 自动排除 IsDeleted）
+///     3. 标准编号 + 版本年份 唯一
+///     4. 条款编号在同一标准下唯一
+///     5. 删除标准前校验：无条款关联才可删除
 ///
 ///     API 路由：
 ///     --- 树（标准） ---
@@ -101,13 +102,21 @@ public class ISOStandardTreeTableController
     // 树节点（标准）生命周期钩子
     // ========================================================
 
-    /// <summary>新增标准前校验：同版本下编号唯一</summary>
+    /// <summary>新增标准前校验：标准名称唯一 + 同版本下编号唯一</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAddTree(
         ISOStandard entity)
     {
         if (string.IsNullOrEmpty(entity.Code))
             entity.Code = Guid.NewGuid().ToString("N");
         entity.IsValid = 1;
+
+        if (string.IsNullOrWhiteSpace(entity.StandardName))
+            return (false, "标准名称不能为空");
+
+        var nameExists = await TreeEntity.ExistsAsync(s =>
+            s.StandardName == entity.StandardName);
+        if (nameExists.Data)
+            return (false, $"标准名称【{entity.StandardName}】已存在");
 
         var exists = await TreeEntity.ExistsAsync(s =>
             s.StandardCode == entity.StandardCode &&
@@ -119,10 +128,19 @@ public class ISOStandardTreeTableController
         return (true, null);
     }
 
-    /// <summary>修改标准前校验：同版本下编号唯一（排除自身）</summary>
+    /// <summary>修改标准前校验：标准名称唯一（排除自身）+ 同版本下编号唯一（排除自身）</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdateTree(
         ISOStandard entity)
     {
+        if (string.IsNullOrWhiteSpace(entity.StandardName))
+            return (false, "标准名称不能为空");
+
+        var nameExists = await TreeEntity.ExistsAsync(s =>
+            s.Code != entity.Code &&
+            s.StandardName == entity.StandardName);
+        if (nameExists.Data)
+            return (false, $"标准名称【{entity.StandardName}】已存在");
+
         var exists = await TreeEntity.ExistsAsync(s =>
             s.Code != entity.Code &&
             s.StandardCode == entity.StandardCode &&
@@ -156,7 +174,7 @@ public class ISOStandardTreeTableController
     // 表格（条款）生命周期钩子
     // ========================================================
 
-    /// <summary>新增条款前校验：StandardCode 必填 + 同标准下条款编号唯一</summary>
+    /// <summary>新增条款前校验：StandardCode 必填 + 同标准下条款编号唯一 + 父条款合法</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAdd(
         ISOClause entity)
     {
@@ -170,10 +188,10 @@ public class ISOStandardTreeTableController
         if (exists.Data)
             return (false, $"该标准下条款编号【{entity.ClauseNumber}】已存在");
 
-        return (true, null);
+        return await ValidateClauseParentAsync(entity);
     }
 
-    /// <summary>修改条款前校验：同标准下条款编号唯一（排除自身）</summary>
+    /// <summary>修改条款前校验：同标准下条款编号唯一（排除自身）+ 父条款合法/防环</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(
         ISOClause entity)
     {
@@ -184,6 +202,61 @@ public class ISOStandardTreeTableController
 
         if (exists.Data)
             return (false, $"该标准下条款编号【{entity.ClauseNumber}】已存在");
+
+        return await ValidateClauseParentAsync(entity);
+    }
+
+    /// <summary>删除条款前校验：有子禁删（子条款不在同批删除集合中则拒绝）</summary>
+    protected override async Task<(bool ok, string? msg)> OnBeforeDelete(string[] codes)
+    {
+        if (codes == null || codes.Length == 0)
+            return (true, null);
+
+        var codeSet = new HashSet<string>(codes);
+        var childrenResult = await Entity.GetListAsync(c => codes.Contains(c.ParentCode) && !c.IsDeleted);
+        var blockers = (childrenResult.Data ?? new List<ISOClause>())
+            .Where(c => !codeSet.Contains(c.Code))
+            .ToList();
+
+        if (blockers.Count > 0)
+        {
+            var first = blockers[0];
+            return (false, $"条款【{first.ClauseNumber} {first.Title}】存在子条款，请先删除子条款");
+        }
+
+        return (true, null);
+    }
+
+    /// <summary>
+    ///     父条款校验：存在性 + 同标准 + 防环（不能挂到自身或子孙下）
+    /// </summary>
+    private async Task<(bool ok, string? msg)> ValidateClauseParentAsync(ISOClause entity)
+    {
+        if (string.IsNullOrEmpty(entity.ParentCode))
+            return (true, null);
+
+        if (entity.ParentCode == entity.Code)
+            return (false, "父条款不能是自身");
+
+        var parentResult = await Entity.GetListAsync(c => c.Code == entity.ParentCode);
+        var parent = parentResult.Data?.FirstOrDefault();
+        if (parent == null)
+            return (false, "指定的父条款不存在");
+
+        if (parent.StandardCode != entity.StandardCode)
+            return (false, "父条款与子条款必须属于同一标准");
+
+        var visited = new HashSet<string>();
+        var current = parent;
+        while (current != null && !string.IsNullOrEmpty(current.ParentCode))
+        {
+            if (current.ParentCode == entity.Code)
+                return (false, "不能将条款挂到自身或其子条款下");
+            if (!visited.Add(current.ParentCode))
+                break;
+            var next = await Entity.GetListAsync(c => c.Code == current.ParentCode);
+            current = next.Data?.FirstOrDefault();
+        }
 
         return (true, null);
     }

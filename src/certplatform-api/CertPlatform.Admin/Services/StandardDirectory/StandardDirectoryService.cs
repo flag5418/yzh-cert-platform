@@ -72,13 +72,13 @@ public class StandardDirectoryService
     {
         var orgs = (await _db.GetListAsync<CertificationBody>(x => x.IsValid == 1)).Data ?? new();
         var standards = (await _db.GetListAsync<ISOStandard>(x => x.IsValid == 1)).Data ?? new();
-        var stages = (await _db.GetListAsync<CertStage>(x => x.IsValid == 1)).Data ?? new();
         var orgStandards = (await _db.GetListAsync<CertOrgStandard>()).Data ?? new();
         var orgStages = (await _db.GetListAsync<CertOrgStage>()).Data ?? new();
 
-        // 使用标准CRUD查询阶段定义
-        var phaseDefs = (await _db.GetListAsync<PhaseDefinition>(x => x.IsValid == 1 && !x.IsDeleted)).Data ?? new();
-        var phaseDefMap = phaseDefs.ToDictionary(x => x.PhaseCode, x => x.Code);
+        // PhaseDefinition 是机构-阶段关联（cert_org_stage.StageCode）的权威来源
+        // 5 阶段：S1/S2/Surv1/Surv2/Recert（认证生命周期），不是 CertStage 的 9 阶段
+        var phaseDefs = (await _db.GetListAsync<PhaseDefinition>(x => x.IsValid == 1 && !x.IsDeleted))
+                        .Data?.OrderBy(x => x.SequenceOrder).ToList() ?? new();
 
         var tree = new List<object>();
 
@@ -116,30 +116,31 @@ public class StandardDirectoryService
                 };
                 var stdChildren = (List<object>)stdNode["children"];
 
-                // 该机构+标准关联的阶段（StandardCode==null 表示适用于所有标准）
+                // 该机构+标准关联的阶段：cert_org_stage.StageCode == PhaseDefinition.PhaseCode
+                // StandardCode==null 表示适用于所有标准
                 var orgStageCodes = orgStages
                     .Where(x => x.OrgCode == org.Code
                         && (x.StandardCode == null || x.StandardCode == std.Code))
-                    .Select(x => x.StageCode).ToList();
-                var linkedStages = stages
-                    .Where(x => orgStageCodes.Contains(x.StageCode)).ToList();
+                    .Select(x => x.StageCode).ToHashSet();
 
-                foreach (var stage in linkedStages)
+                // PhaseDefinition 是权威数据源，按 SequenceOrder 排序展示
+                var linkedPhases = phaseDefs
+                    .Where(p => orgStageCodes.Contains(p.PhaseCode))
+                    .ToList();
+
+                foreach (var phase in linkedPhases)
                 {
-                    // 尝试匹配 cert_phase_definition.Code（报告模板外键）
-                    phaseDefMap.TryGetValue(stage.StageCode, out var phaseDefCode);
-
                     var phaseNode = new Dictionary<string, object>
                     {
-                        ["id"] = $"{org.Code}|{std.StandardCode}|{stage.StageCode}",
-                        ["label"] = $"{stage.StageCode} - {stage.StageName}",
+                        ["id"] = $"{org.Code}|{std.StandardCode}|{phase.PhaseCode}",
+                        ["label"] = $"{phase.PhaseCode} - {phase.PhaseName}",
                         ["type"] = "phase",
                         ["cbCode"] = org.Code,
                         ["stdCode"] = std.Code,
                         ["standardCode"] = std.StandardCode,
-                        ["phaseCode"] = stage.StageCode,
-                        ["phaseName"] = stage.StageName,
-                        ["phaseDefinitionCode"] = phaseDefCode ?? ""
+                        ["phaseCode"] = phase.PhaseCode,
+                        ["phaseName"] = phase.PhaseName,
+                        ["phaseDefinitionCode"] = phase.Code
                     };
                     stdChildren.Add(phaseNode);
                 }
@@ -708,29 +709,23 @@ public class StandardDirectoryService
             Folders = enhancedFolders,
             Files = enhancedFiles
         });
-    }
-
-    /// <summary>
+    }    /// <summary>
     /// Step 2: 逐文件上传到 MinIO
     /// </summary>
     public async Task<(bool ok, string? error)> UploadFileAsync(
         Stream fileStream, long fileSize, string fileCode, string taskId)
     {
-        // 使用视图查询上传任务（包含中间状态）
-        var task = (await _db.GetOneAsync<UploadTaskDetailView>(
+        // 任务校验：上传任务表本身无 IsValid 中间态问题，可安全使用 GetOneAsync
+        var task = (await _db.GetOneAsync<UploadTask>(
             x => x.TaskId == taskId && x.Status == "initialized")).Data;
         if (task == null) return (false, "上传任务不存在或已过期");
 
-        // 从视图结果中提取文件信息
-        var viewFile = task;
-        var file = new StandardDirectoryFile
-        {
-            FileCode = viewFile.FileCode,
-            UploadStatus = viewFile.UploadStatus,
-            IsValid = viewFile.FileIsValid ?? 1,
-            StoragePath = viewFile.StoragePath
-        };
+        // 文件校验：pending/replacing 文件 IsValid=0，必须用 GetOneIgnoreValidAsync 才能读到
+        //（历史缺陷：GetOneAsync 强制 IsValid=1，永远查不到，导致状态机卡死）
+        var file = (await _db.GetOneIgnoreValidAsync<StandardDirectoryFile>(
+            x => x.FileCode == fileCode && x.TaskId == taskId)).Data;
         if (file == null) return (false, "文件编码与任务不匹配");
+
 
         var isReplaceMode = file.UploadStatus == "replacing";
         if (!isReplaceMode && (file.IsValid == 1 || file.UploadStatus != "pending"))
@@ -758,15 +753,10 @@ public class StandardDirectoryService
                 }
             }
 
-            // 更新文件状态（使用实体方法绕过软删除过滤）
-            var updateFile = (await _db.GetOneAsync<StandardDirectoryFile>(
-                x => x.FileCode == fileCode && x.TaskId == taskId)).Data;
-            if (updateFile != null)
-            {
-                updateFile.UploadStatus = "uploaded";
-                updateFile.FileSize = fileSize;
-                await _db.UpdateAsync(updateFile);
-            }
+            // 更新文件状态：复用上面 IgnoreValid 查到的实体（含 Code 主键），按字段精准更新
+            file.UploadStatus = "uploaded";
+            file.FileSize = fileSize;
+            await _db.UpdateAsync(file, nameof(StandardDirectoryFile.UploadStatus), nameof(StandardDirectoryFile.FileSize));
 
             // 更新任务计数
             var taskToUpdate = (await _db.GetOneAsync<UploadTask>(
@@ -787,6 +777,94 @@ public class StandardDirectoryService
     }
 
     /// <summary>
+    /// 单文件替换（一步完成，不经过 UploadTask 状态机）：
+    /// 校验锁 → 覆盖上传 MinIO（沿用原 StoragePath）→ 回填 FileSize → doc/xls 置入转换队列。
+    /// </summary>
+    public async Task<(bool ok, string? error, string? convertQueueCode)> ReplaceFileAsync(
+        string fileCode, Stream fileStream, long fileSize)
+    {
+        // 锁检查（队列运行中/上传中禁止替换）
+        var lockErr = await GetFileLockErrorAsync(fileCode);
+        if (lockErr != null) return (false, lockErr, null);
+
+        var file = (await _db.GetOneAsync<StandardDirectoryFile>(
+            x => x.FileCode == fileCode && x.Enable == true)).Data;
+        if (file == null) return (false, "文件不存在", null);
+        if (string.IsNullOrEmpty(file.StoragePath))
+            return (false, "原文件从未上传过物理内容，请删除后重新上传", null);
+
+        var objectName = file.StoragePath.TrimStart('/');
+        try
+        {
+            // 1. 覆盖上传（沿用原路径，预览/提取的路径引用不变）
+            await _storage.UploadAsync(objectName, fileStream, fileSize, "application/octet-stream");
+
+            // 2. 回填大小与时间
+            file.FileSize = fileSize;
+            file.UploadStatus = "active";
+            await _db.UpdateAsync(file, nameof(StandardDirectoryFile.FileSize), nameof(StandardDirectoryFile.UploadStatus));
+
+            // 3. doc/xls 重新进入转换队列（内容已变，旧转换产物作废）
+            string? queueCode = null;
+            var ft = (file.FileType ?? "").ToLowerInvariant();
+            if (ft == "doc" || ft == "xls")
+            {
+                // 旧转换产物先删除
+                if (!string.IsNullOrEmpty(file.ConvertedStoragePath))
+                {
+                    try { await _storage.DeleteAsync(file.ConvertedStoragePath.TrimStart('/')); } catch { /* 非阻塞 */ }
+                    file.ConvertedStoragePath = null;
+                }
+
+                var spec = new FileConvertPayload
+                {
+                    FileCode = file.FileCode,
+                    FileName = file.FileName,
+                    SourcePath = file.StoragePath,
+                    TargetPath = _codeGenerator.GenerateConvertedStoragePath("", "", "", "", file.FileName),
+                    ConvertType = ft == "doc" ? "doc2docx" : "xls2xlsx"
+                };
+                var req = new QueueManager.CreateQueueRequest
+                {
+                    QueueType = "file_convert",
+                    QueueName = $"文件替换转换 - {file.FileName}",
+                    ScopeKey = file.DirectoryCode,
+                    SourceType = "file_replace",
+                    SourceId = file.FileCode,
+                    ResourceLocks = new List<QueueManager.ResourceLockItem>
+                    {
+                        new() { ResourceTable = QueueManager.RESOURCE_DIR, ResourceCode = file.DirectoryCode, ResourceName = file.DirectoryCode },
+                        new() { ResourceTable = QueueManager.RESOURCE_FILE, ResourceCode = file.FileCode, ResourceName = file.FileName, TaskNo = 1 }
+                    },
+                    Tasks = new List<QueueManager.TaskItem>
+                    {
+                        new() { TaskType = "file_convert", Payload = JsonSerializer.Serialize(spec, _payloadJsonOptions), TaskId = file.DirectoryCode }
+                    }
+                };
+                var (qok, qerr, qcode, _) = await _queueManager.CreateQueueAsync(req);                if (qok)
+                {
+                    queueCode = qcode;
+                    // 与 confirm 流程同一约定：树可见（IsValid=1），等待转换完成回写 completed
+                    file.UploadStatus = "uploaded";
+                    file.ConvertStatus = "pending";
+                    await _db.UpdateAsync(file, nameof(StandardDirectoryFile.UploadStatus), nameof(StandardDirectoryFile.ConvertStatus));
+                }
+                else
+                {
+                    return (true, $"替换成功，但转换队列创建失败：{qerr}", null);
+                }
+            }
+
+            return (true, null, queueCode);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[ReplaceFile] 替换文件失败: {FileCode}", fileCode);
+            return (false, $"替换失败：{ex.Message}", null);
+        }
+    }
+
+    /// <summary>
     /// Step 3: 确认上传 — 激活文件、创建转换队列
     /// </summary>
     public async Task<(bool ok, string? error, string? convertQueueCode)> UploadConfirmAsync(string taskId)
@@ -799,64 +877,41 @@ public class StandardDirectoryService
         var queueLockErr = await GetQueueLockErrorAsync(task.DirectoryCode);
         if (queueLockErr != null) return (false, queueLockErr, null);
 
-        // 检查所有文件是否已上传（使用视图绕过软删除过滤）
-        var viewResult = await _db.GetListAsync<UploadTaskDetailView>(
-            x => x.TaskId == taskId);
-        var allFiles = viewResult.Data?.Select(v => new StandardDirectoryFile
-        {
-            FileCode = v.FileCode,
-            UploadStatus = v.UploadStatus,
-            StoragePath = v.StoragePath
-        }).ToList() ?? new();
+        // 检查所有文件是否已上传（IgnoreValid：pending/replacing 文件 IsValid=0，GetListAsync 默认过滤会漏掉）
+        var allFiles = (await _db.GetListAsync<StandardDirectoryFile>(
+            x => x.TaskId == taskId, includeDisabled: true)).Data ?? new();
 
         var pendingCount = allFiles.Count(x => x.UploadStatus == "pending");
         if (pendingCount > 0)
             return (false, $"还有 {pendingCount} 个文件未上传完成", null);
 
-        // 分类：普通文件 vs 需要转换的 doc/xls 文件（FileType 从实体获取）
-        var convertibleFiles = new List<StandardDirectoryFile>();
+        // 分类：需要转换的 doc/xls 文件（直接用上面查到的实体，避免二次查询）
+        var convertibleFiles = allFiles
+            .Where(x => x.UploadStatus == "uploaded" && (x.FileType == "doc" || x.FileType == "xls"))
+            .ToList();
+
+        // 全部文件激活：IsValid=0→1, UploadStatus→active, TaskId→null（普通文件）
         foreach (var file in allFiles.Where(x => x.UploadStatus == "uploaded"))
         {
-            var entity = (await _db.GetOneAsync<StandardDirectoryFile>(x => x.FileCode == file.FileCode)).Data;
-            if (entity != null && (entity.FileType == "doc" || entity.FileType == "xls"))
-                convertibleFiles.Add(entity);
+            file.IsValid = 1;
+            file.UploadStatus = "active";
+            file.TaskId = null;
+            await _db.UpdateAsync(file, nameof(StandardDirectoryFile.IsValid), nameof(StandardDirectoryFile.UploadStatus), nameof(StandardDirectoryFile.TaskId));
         }
 
-        // 全部文件激活：IsValid=0→1, UploadStatus→active, TaskId→null
-        foreach (var file in allFiles)
+        // 需要转换的文件额外设置 ConvertStatus=pending（保持 IsValid=0 等待转换，转换完成由 OfficeConvertService 置回 1）
+        foreach (var file in convertibleFiles)
         {
-            var updateFile = (await _db.GetOneAsync<StandardDirectoryFile>(
-                x => x.FileCode == file.FileCode)).Data;
-            if (updateFile != null)
-            {
-                updateFile.IsValid = 1;
-                updateFile.UploadStatus = "active";
-                updateFile.TaskId = null;
-                await _db.UpdateAsync(updateFile);
-            }
-        }
-
-        // 需要转换的文件额外设置 ConvertStatus=pending（保持 IsValid=0 等待转换）
-        if (convertibleFiles.Count > 0)
-        {
-            foreach (var file in convertibleFiles)
-            {
-                var updateFile = (await _db.GetOneAsync<StandardDirectoryFile>(
-                    x => x.FileCode == file.FileCode)).Data;
-                if (updateFile != null)
-                {
-                    updateFile.IsValid = 0;
-                    updateFile.UploadStatus = "uploaded";
-                    updateFile.ConvertStatus = "pending";
-                    updateFile.TaskId = null;
-                    await _db.UpdateAsync(updateFile);
-                }
-            }
+            file.UploadStatus = "uploaded";
+            file.ConvertStatus = "pending";
+            file.TaskId = null;
+            await _db.UpdateAsync(file, nameof(StandardDirectoryFile.UploadStatus), nameof(StandardDirectoryFile.ConvertStatus), nameof(StandardDirectoryFile.TaskId));
         }
 
         // 激活文件夹：IsValid=0→1, 清除 TaskId
+        // includeDisabled：草稿文件夹 IsValid=0，缺省过滤会永远查不到 → 激活空转 → 目录文件列表全空
         var folders = (await _db.GetListAsync<StandardDirectoryFolder>(
-            x => x.TaskId == taskId)).Data ?? new();
+            x => x.TaskId == taskId, includeDisabled: true)).Data ?? new();
         foreach (var folder in folders)
         {
             folder.IsValid = 1;
@@ -929,17 +984,14 @@ public class StandardDirectoryService
         // 使用视图查询关联文件（包含中间状态）
         var viewFiles = (await _db.GetListAsync<UploadTaskDetailView>(
             x => x.TaskId == taskId)).Data ?? new();
-        var files = viewFiles.Select(v => new StandardDirectoryFile
+        var viewFileCodes = viewFiles.Where(v => !string.IsNullOrEmpty(v.FileCode)).Select(v => v.FileCode!).ToList();
+        // 用 IgnoreValid 直查实体（上传中间态文件 IsValid=0；且需要 Code/Remark/ConvertedStoragePath 等完整字段）
+        var files = new List<StandardDirectoryFile>();
+        foreach (var fc in viewFileCodes)
         {
-            FileCode = v.FileCode,
-            FileName = v.FileName,
-            UploadStatus = v.UploadStatus,
-            StoragePath = v.StoragePath,
-            ConvertedStoragePath = null,
-            ConvertStatus = null,
-            ConvertMessage = null,
-            Remark = null
-        }).ToList();
+            var entity = (await _db.GetOneIgnoreValidAsync<StandardDirectoryFile>(x => x.FileCode == fc)).Data;
+            if (entity != null) files.Add(entity);
+        }
         int deletedCount = 0, restoredCount = 0;
         var replaceMarker = $"[upload-replace:{taskId}]";
 
@@ -1072,8 +1124,9 @@ public class StandardDirectoryService
 
     private async Task<int> GetMaxSequenceAsync(string directoryCode, int depth)
     {
+        // includeDisabled：草稿文件夹（IsValid=0）已占用 FolderCode 序号，漏掉会生成重复码
         var folders = (await _db.GetListAsync<StandardDirectoryFolder>(
-            x => x.DirectoryCode == directoryCode && x.Depth == depth)).Data ?? new();
+            x => x.DirectoryCode == directoryCode && x.Depth == depth, includeDisabled: true)).Data ?? new();
         int max = 0;
         foreach (var f in folders)
         {
@@ -1242,6 +1295,7 @@ public class StandardDirectoryService
                     ConvertedStoragePath = file.ConvertedStoragePath,
                     ConvertStatus = file.ConvertStatus,
                     ConvertMessage = file.ConvertMessage,
+                    UploadStatus = file.UploadStatus ?? "",
                     FileSize = file.FileSize,
                     MimeType = file.FileType,
                     RuleStatus = fileRuleStatus,
@@ -1310,6 +1364,7 @@ public class StandardDirectoryService
                 ConvertedStoragePath = file.ConvertedStoragePath,
                 ConvertStatus = file.ConvertStatus,
                 ConvertMessage = file.ConvertMessage,
+                UploadStatus = file.UploadStatus ?? "",
                 FileSize = file.FileSize,
                 MimeType = file.FileType,
                 RuleStatus = fileRuleStatus,
@@ -1642,6 +1697,192 @@ public class StandardDirectoryService
 
     #endregion
 
+    #region 存量上传任务修复
+
+    /// <summary>
+    /// 修复卡死的存量上传任务。
+    /// 历史缺陷：UploadFileAsync/UploadConfirmAsync 用 GetOneAsync（强制 IsValid=1）读 pending 文件，
+    /// 永远查不到 → SuccessCount 虽然计数，但文件记录停留 pending/IsValid=0，confirm 报「未上传完成」。
+    /// 修复策略：对卡死任务逐文件检查 MinIO 对象是否存在，存在则回填 FileSize 并走 confirm 同款激活流程。
+    /// </summary>
+    /// <param name="taskId">指定任务；空 = 修复全部 initialized 且已过期的任务</param>
+    public async Task<(bool ok, string? error, int repaired, int enqueued)> RepairStuckUploadsAsync(string? taskId = null)
+    {
+        try
+        {
+            // 1. 以「仍有中间态文件」为准找卡死任务（历史缺陷会把任务提前置 completed，不能只看任务状态）
+            var stuckFileScan = (await _db.GetListAsync<StandardDirectoryFile>(
+                x => x.UploadStatus == "pending" || x.UploadStatus == "replacing", includeDisabled: true)).Data ?? new();
+            if (!string.IsNullOrEmpty(taskId))
+                stuckFileScan = stuckFileScan.Where(x => x.TaskId == taskId).ToList();
+
+            if (stuckFileScan.Count == 0)
+                return (true, "没有需要修复的任务", 0, 0);
+
+            var stuckTaskIds = stuckFileScan.Where(x => !string.IsNullOrEmpty(x.TaskId))
+                .Select(x => x.TaskId!).Distinct().ToList();
+            var stuckTasks = new List<UploadTask>();
+            foreach (var tid in stuckTaskIds)
+            {
+                var one = (await _db.GetOneIgnoreValidAsync<UploadTask>(x => x.TaskId == tid)).Data;
+                if (one != null) stuckTasks.Add(one);
+            }
+            var orphanFiles = stuckFileScan.Where(x => string.IsNullOrEmpty(x.TaskId)).ToList();
+
+            int totalRepaired = 0;
+            int totalEnqueued = 0;
+
+            foreach (var task in stuckTasks)
+            {
+                // 2. 任务下所有中间态文件（IgnoreValid 读 pending/replacing/uploaded）
+                var files = (await _db.GetListAsync<StandardDirectoryFile>(
+                    x => x.TaskId == task.TaskId, includeDisabled: true)).Data ?? new();
+                if (files.Count == 0)
+                {
+                    // 无关联文件：直接关任务
+                    task.Status = "completed";
+                    await _db.UpdateAsync(task, nameof(UploadTask.Status));
+                    continue;
+                }
+
+                // 3. 逐文件检查 MinIO：存在则回填大小
+                var activated = new List<StandardDirectoryFile>();
+                foreach (var f in files.Where(x => x.UploadStatus == "pending" || x.UploadStatus == "replacing"))
+                {
+                    var objectName = (f.StoragePath ?? "").TrimStart('/');
+                    if (string.IsNullOrEmpty(objectName) || !await _storage.ExistsAsync(objectName))
+                        continue; // 物理文件缺失，保留原状（用户需重传）
+
+                    // MinIO stat 拿实际大小：用 DownloadAsync 的 stat（接口无独立 Stat，借用 ListObjects 不可行，直接下载统计太重）。
+                    // 这里采用「上传时已知 manifest.FileSize」不可靠，直接用 Exists + 保留原 FileSize；
+                    // 但历史缺陷下 FileSize=NULL，因此用小流下载统计真实大小（一次性修复，可接受）。
+                    try
+                    {
+                        var (stream, _) = await _storage.DownloadAsync(objectName);
+                        using (stream)
+                        {
+                            long size = 0;
+                            var buf = new byte[81920];
+                            int n;
+                            while ((n = await stream.ReadAsync(buf, 0, buf.Length)) > 0) size += n;
+                            f.FileSize = size;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "[RepairStuck] 读取对象大小失败（跳过回填）: {Path}", objectName);
+                    }
+
+                    f.UploadStatus = "uploaded";
+                    totalRepaired++;
+                    activated.Add(f);
+                }
+
+                // 4. confirm 同款激活：普通文件 active+IsValid=1；doc/xls 进转换队列
+                var convertible = activated.Where(x => x.FileType == "doc" || x.FileType == "xls").ToList();
+                foreach (var f in activated.Where(x => !(x.FileType == "doc" || x.FileType == "xls")))
+                {
+                    f.IsValid = 1;
+                    f.UploadStatus = "active";
+                    f.TaskId = null;
+                    await _db.UpdateAsync(f, nameof(StandardDirectoryFile.IsValid), nameof(StandardDirectoryFile.UploadStatus),
+                        nameof(StandardDirectoryFile.TaskId), nameof(StandardDirectoryFile.FileSize));
+                }
+                foreach (var f in convertible)
+                {
+                    f.UploadStatus = "uploaded";
+                    f.ConvertStatus = "pending";
+                    f.TaskId = null;
+                    await _db.UpdateAsync(f, nameof(StandardDirectoryFile.UploadStatus), nameof(StandardDirectoryFile.ConvertStatus),
+                        nameof(StandardDirectoryFile.TaskId), nameof(StandardDirectoryFile.FileSize));
+                }
+
+                // 5. 激活任务内文件夹
+                var folders = (await _db.GetListAsync<StandardDirectoryFolder>(
+                    x => x.TaskId == task.TaskId, includeDisabled: true)).Data ?? new();
+                foreach (var fd in folders)
+                {
+                    fd.IsValid = 1;
+                    fd.TaskId = null;
+                    await _db.UpdateAsync(fd, nameof(StandardDirectoryFolder.IsValid), nameof(StandardDirectoryFolder.TaskId));
+                }
+
+                // 6. 建 file_convert 队列（与 confirm 同款结构）
+                if (convertible.Count > 0)
+                {
+                    var specs = convertible.Select(f => new FileConvertPayload
+                    {
+                        FileCode = f.FileCode,
+                        FileName = f.FileName,
+                        SourcePath = f.StoragePath,
+                        TargetPath = _codeGenerator.GenerateConvertedStoragePath("", "", "", "", f.FileName),
+                        ConvertType = (f.FileType ?? "").ToLower() == "doc" ? "doc2docx" : "xls2xlsx"
+                    }).ToList();
+
+                    var locks = new List<QueueManager.ResourceLockItem>
+                    {
+                        new() { ResourceTable = QueueManager.RESOURCE_DIR, ResourceCode = task.DirectoryCode, ResourceName = task.DirectoryCode }
+                    };
+                    locks.AddRange(specs.Select((s, i) => new QueueManager.ResourceLockItem
+                    {
+                        ResourceTable = QueueManager.RESOURCE_FILE,
+                        ResourceCode = s.FileCode,
+                        ResourceName = s.FileName,
+                        TaskNo = i + 1
+                    }));
+
+                    var req = new QueueManager.CreateQueueRequest
+                    {
+                        QueueType = "file_convert",
+                        QueueName = $"存量修复转换 - {specs.Count}个文件",
+                        ScopeKey = task.DirectoryCode,
+                        SourceType = "repair_stuck_upload",
+                        SourceId = task.TaskId,
+                        ResourceLocks = locks,
+                        Tasks = specs.Select(s => new QueueManager.TaskItem
+                        {
+                            TaskType = "file_convert",
+                            Payload = JsonSerializer.Serialize(s, _payloadJsonOptions),
+                            TaskId = task.TaskId
+                        }).ToList()
+                    };
+
+                    var (qok, qerr, qcode, qcount) = await _queueManager.CreateQueueAsync(req);
+                    if (qok) totalEnqueued += qcount;
+                    else _logger.LogWarning("[RepairStuck] 建队列失败 {DirCode}: {Err}", task.DirectoryCode, qerr);
+                }
+
+                // 7. 关任务
+                task.Status = "completed";
+                task.UpdateTime = DateTime.Now;
+                await _db.UpdateAsync(task, nameof(UploadTask.Status), nameof(UploadTask.UpdateTime));
+            }
+
+            // 8. 无任务的孤儿中间态文件（replace 流残留）：物理文件存在则直接激活（doc/xls 转换由 replace 自身队列负责）
+            foreach (var f in orphanFiles)
+            {
+                var objectName = (f.StoragePath ?? "").TrimStart('/');
+                if (string.IsNullOrEmpty(objectName) || !await _storage.ExistsAsync(objectName))
+                    continue;
+                f.IsValid = 1;
+                f.UploadStatus = "active";
+                totalRepaired++;
+                await _db.UpdateAsync(f, nameof(StandardDirectoryFile.IsValid), nameof(StandardDirectoryFile.UploadStatus));
+            }
+
+            _logger.LogInformation("[RepairStuck] 修复完成：{Tasks} 个任务，{Repaired} 个文件激活，{Enqueued} 个进入转换",
+                stuckTasks.Count, totalRepaired, totalEnqueued);
+            return (true, null, totalRepaired, totalEnqueued);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[RepairStuck] 修复存量上传任务出错");
+            return (false, $"修复出错：{ex.Message}", 0, 0);
+        }
+    }
+
+    #endregion
+
     #region 重试失败转换
 
     /// <summary>
@@ -1653,10 +1894,12 @@ public class StandardDirectoryService
         try
         {
             // 1. 候选文件：doc/xls 且 failed 或 pending
+            // includeDisabled：等转换文件按设计 IsValid=0（转换完成才置 1），默认过滤会永久漏掉它们
             var candidates = (await _db.GetListAsync<StandardDirectoryFile>(
                 x => !x.IsDeleted && x.Enable == true 
                     && (x.FileType == "doc" || x.FileType == "xls")
-                    && (x.ConvertStatus == "failed" || x.ConvertStatus == "pending")))
+                    && (x.ConvertStatus == "failed" || x.ConvertStatus == "pending"),
+                includeDisabled: true))
                 .Data ?? new();
 
             if (candidates.Count == 0)
@@ -1846,6 +2089,7 @@ public class StageFileNode
     public string ConvertedStoragePath { get; set; } = "";
     public string ConvertStatus { get; set; } = "";
     public string ConvertMessage { get; set; } = "";
+    public string UploadStatus { get; set; } = "";
     public long? FileSize { get; set; }
     public string MimeType { get; set; } = "";
     public string RuleStatus { get; set; } = "none";

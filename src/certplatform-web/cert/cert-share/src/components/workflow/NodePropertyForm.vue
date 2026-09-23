@@ -48,7 +48,7 @@
 
       <div class="inspector-section">
         <div class="inspector-section-header"><span class="inspector-section-title">操作</span></div>
-        <div v-if="testResult" class="test-result-wrapper"><div :class="['test-result', testResult.success ? 'test-success' : 'test-fail']"><div class="test-header"><el-icon><CircleCheck v-if="testResult.success" /><Warning v-else /></el-icon><span>{{ testResult.success ? '执行成功' : '执行失败' }}</span></div><pre v-if="testResult.data" class="test-output-json">{{ JSON.stringify(testResult.data, null, 2) }}</pre></div></div>
+        <div v-if="testResult" class="test-result-wrapper"><div :class="['test-result', testResult.success ? 'test-success' : 'test-fail']"><div class="test-header"><el-icon><CircleCheck v-if="testResult.success" /><Warning v-else /></el-icon><span>{{ testResult.success ? '执行成功' : '执行失败' }}</span></div><div v-if="testResult.message" class="test-message">{{ testResult.message }}</div><pre v-if="testResult.data" class="test-output-json">{{ JSON.stringify(testResult.data, null, 2) }}</pre></div></div>
         <div class="action-row">
           <el-button v-if="form.nodeType === 'docField' || form.nodeType === 'docTable'" type="success" size="small" :loading="testLoading" @click="testDocExtract">测试提取</el-button>
           <el-button v-else-if="testable && form.nodeType !== 'start' && form.nodeType !== 'end'" type="primary" size="small" :loading="testLoading" @click="testNode">运行测试</el-button>
@@ -168,7 +168,9 @@ function testDocExtract() {
   if (nodeType === 'docTable' && !config.tableCode) { ElMessage.warning('请先选择表格'); return }
   testLoading.value = true; testResult.value = null
   const body = nodeType === 'docField' ? { ruleCode: config.ruleCode, fieldCode: config.fieldCode, docType: config.docType || 'standard' } : { ruleCode: config.ruleCode, tableCode: config.tableCode, docType: config.docType || 'standard' }
-  emit('test-doc-extract', { nodeType, body, onSuccess: (data: any) => { testResult.value = data; testLoading.value = false; ElMessage.success('测试完成') }, onError: (msg: string) => { testResult.value = { success: false, message: msg }; testLoading.value = false; ElMessage.error(msg) } })
+  // 注意：父组件传入的 data 是 DocExtractionRule 的原始 payload（{fieldCode,value,confidence,message}
+  // 或 {tableCode,rows,confidence,message}），本身没有 success 字段，必须在此包裹后再交给模板判定
+  emit('test-doc-extract', { nodeType, body, onSuccess: (data: any) => { testResult.value = { success: true, data }; testLoading.value = false; ElMessage.success(data?.message || '测试完成') }, onError: (msg: string, errorData?: any) => { testResult.value = { success: false, message: msg, data: errorData }; testLoading.value = false; ElMessage.error(msg) } })
 }
 
 let _lastNodeId: string | null = null; let _updateTick = 0
@@ -227,6 +229,7 @@ function applyChanges() {
 .test-result.test-success { background: #f0fdf4; border-color: #dcfce7; color: #166534; }
 .test-result.test-fail { background: #fef2f2; border-color: #fee2e2; color: #991b1b; }
 .test-header { display: flex; align-items: center; gap: 6px; font-weight: 700; margin-bottom: 8px; }
+.test-message { margin-bottom: 8px; line-height: 1.5; word-break: break-all; }
 .test-output-json { background: #f5f7fa; padding: 8px; border-radius: 4px; font-size: 11px; font-family: monospace; max-height: 150px; overflow-y: auto; margin: 0; }
 .action-row { display: flex; gap: 8px; margin-top: 12px; .el-button { flex: 1; height: 32px; border-radius: 2px; font-weight: 700; } }
 .form-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 32px; text-align: center; }

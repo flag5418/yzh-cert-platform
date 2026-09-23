@@ -11,11 +11,12 @@
  * - 选中阶段节点后，自动联动过滤 OrgCode + StandardCode + PhaseCode
  * - 行动作（编辑/删除/启停/复制）由内核 dispatch 派发，页面无手写 handler
  */
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { YzhTable, YzhFormDialog } from '@yzh-core'
-import { Plus, RefreshRight, Search, FolderOpened, Document, Calendar } from '@element-plus/icons-vue'
+import { Plus, RefreshRight } from '@element-plus/icons-vue'
+import { CertBizTree } from '@share/components'
 import { NCConfigLogic } from './logic'
-import { useFileTree, type TreeNode } from '@share/composables/useFileTree'
+import { useFileTree } from '@share/composables/useFileTree'
 
 // ──── 实例化 Logic ────
 const logic = new NCConfigLogic()
@@ -25,34 +26,15 @@ const tableRef = ref()
 
 // ──── 左树 ────
 const {
-  fileTreeData: treeData,
-  loading: treeLoading,
   loadTree,
 } = useFileTree()
-
-// ──── 搜索栏占位（标准 TreeTable 可空白，由 YzhTable 接管搜索） ────
-const treeFilter = ref('')
-
-/**
- * 过滤树：只保留 organization → standard → stage 3 层
- * （使用 useFileTree 会预加载 folder/file 的占位节点，需要过滤掉）
- */
-const filteredTreeData = computed(() => {
-  function strip(node: TreeNode): TreeNode | null {
-    if (node.Type === 'folder' || node.Type === 'file') return null
-    if (!node.Children) return node
-    const filteredChildren = node.Children.map(strip).filter(Boolean) as TreeNode[]
-    return { ...node, Children: filteredChildren }
-  }
-  return treeData.value.map(strip).filter(Boolean) as TreeNode[]
-})
 
 // ========================================================
 // 树→表格联动
 // ========================================================
 
 /** 树节点点击 → 注入联动过滤 → YzhTable 自动刷新 */
-async function onTreeNodeClick(node: TreeNode) {
+async function onTreeNodeClick(node: any) {
   if (node.Type !== 'stage') {
     // 非阶段节点：清空表格
     logic.setTreeFilter('', '', '')
@@ -110,38 +92,11 @@ watch(tableRef, (el) => {
   <div class="nc-config-page">
     <!-- 左侧：组织 → 标准 → 阶段 树 -->
     <div class="nc-config-page__tree">
-      <div class="tree-header">
-        <span class="tree-title">组织 → 标准 → 阶段</span>
-      </div>
-      <el-input
-        v-model="treeFilter"
-        placeholder="搜索节点"
-        clearable
-        class="tree-search"
-      >
-        <template #prefix>
-          <el-icon><Search /></el-icon>
-        </template>
-      </el-input>
-      <el-tree
-        :data="filteredTreeData"
-        v-loading="treeLoading"
-        node-key="Code"
-        default-expand-all
-        highlight-current
-        :expand-on-click-node="false"
-        :filter-node-method="(value: string, data: TreeNode) => !value || data.Name.toLowerCase().includes(value.toLowerCase())"
-        @node-click="onTreeNodeClick"
-      >
-        <template #default="{ data }">
-          <span class="tree-node">
-            <el-icon v-if="data.Type === 'organization'" class="node-icon"><FolderOpened /></el-icon>
-            <el-icon v-else-if="data.Type === 'standard'" class="node-icon"><Document /></el-icon>
-            <el-icon v-else class="node-icon"><Calendar /></el-icon>
-            <span class="node-label">{{ data.Name }}</span>
-          </span>
-        </template>
-      </el-tree>
+      <CertBizTree
+        title="组织 → 标准 → 阶段"
+        :node-types="['organization', 'standard', 'stage']"
+        @select="onTreeNodeClick"
+      />
     </div>
 
     <!-- 右侧：NC 检查规则表格 -->

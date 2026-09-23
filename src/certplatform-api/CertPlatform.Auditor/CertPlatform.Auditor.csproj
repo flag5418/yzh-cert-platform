@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>CertPlatform.Auditor</RootNamespace>
     <AssemblyName>CertPlatform.Auditor</AssemblyName>
+    <Description>CertPlatform 认证专家端（专家注册 / 专家登录 / 专家工作区）</Description>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +18,21 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 业务实体全局 using（与 CertPlatform.Admin 保持一致） -->
+    <Using Include="CertPlatform.Shared.Entities.Audit" />
+    <Using Include="CertPlatform.Shared.Entities.Cert" />
+    <Using Include="CertPlatform.Shared.Entities.Dir" />
+    <Using Include="CertPlatform.Shared.Entities.Doc" />
+    <Using Include="CertPlatform.Shared.Entities.Ent" />
+    <Using Include="CertPlatform.Shared.Entities.Rpt" />
+    <Using Include="CertPlatform.Shared.Entities.Sys" />
+    <Using Include="CertPlatform.Shared.Entities.Wf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 框架层：Sys_User / Sys_Organization / Sys_RoleUser 等实体与 EntityService<> 均在 YZH.Core.Api -->
+    <ProjectReference Include="..\..\yzh-core\YZH.Core.Api\YZH.Core.Api.csproj" />
+    <ProjectReference Include="..\..\yzh-core\YZH.Core.DataBase\YZH.Core.DataBase.csproj" />
     <ProjectReference Include="..\CertPlatform.Shared\CertPlatform.Shared.csproj" />
   </ItemGroup>
 

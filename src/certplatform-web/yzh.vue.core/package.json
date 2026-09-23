@@ -14,7 +14,7 @@
     "./utils/*": "./src/utils/*.ts"
   },
   "scripts": {
-    "build": "vite build",
+    "build": "node ../scripts/guards.mjs && vite build",
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {

@@ -16,7 +16,7 @@ namespace YZH.Core.Stand.Helpers;
 ///     反射策略：
 ///     - 包含所有 public instance 属性
 ///     - 排除标记了 [NotMapped] 的属性（非持久化字段）
-///     - 排除标记了 [JsonIgnore] 的属性（密码等敏感字段）
+///     - 排除标记了 [JsonIgnore] / [YzhSensitive] 的属性（密码等敏感字段）
 ///     - 排除 CheckFlag/DeleteFlag 等纯前端状态字段
 ///
 ///     输出格式（PascalCase 字段名，与 Columns[].FieldName 一致）：
@@ -82,9 +82,10 @@ public static class EntitySchemaHelper
 
     foreach (var prop in byName.Values)
     {
-      // 排除标记 [NotMapped] 和 [JsonIgnore] 的属性
+      // 排除标记 [NotMapped] 和 [JsonIgnore] / [YzhSensitive] 的属性
       if (prop.GetCustomAttribute<NotMappedAttribute>() != null) continue;
       if (prop.GetCustomAttribute<System.Text.Json.Serialization.JsonIgnoreAttribute>() != null) continue;
+      if (prop.GetCustomAttribute<YZH.Core.Stand.Annotations.YzhSensitiveAttribute>() != null) continue;
 
       // 排除纯前端状态字段
       if (ExcludedProps.Contains(prop.Name)) continue;

@@ -31,6 +31,7 @@ namespace CertPlatform.Shared.Entities.Sys
         /// <summary>操作对象 ID（DB: TargetId, bigint）</summary>
         public long? TargetId { get; set; }
 
+        [SugarColumn(Length = 2000, IsNullable = true)]
         public string? Detail { get; set; }
 
         [StringLength(50)]

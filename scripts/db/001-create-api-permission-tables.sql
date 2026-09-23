@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS sys_api (
     UNIQUE INDEX uk_api_code (code),
     INDEX idx_api_group (group_path),
     INDEX idx_api_path (path)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接口表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='接口表';
 
 -- 2. 角色-接口关联表
 CREATE TABLE IF NOT EXISTS sys_role_api (
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS sys_role_api (
     create_date DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     UNIQUE INDEX uk_role_api (role_code, api_code),
     INDEX idx_api_code (api_code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色-接口关联表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='角色-接口关联表';
 
 -- 3. 用户权限缓存表（角色-接口关联的展开表）
 CREATE TABLE IF NOT EXISTS sys_user_permission (
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS sys_user_permission (
     update_date DATETIME ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     UNIQUE INDEX uk_user_api (user_code, api_code),
     INDEX idx_user_code (user_code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户权限缓存表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户权限缓存表';
 
 -- 4. 初始化数据（超级管理员拥有所有接口权限）
 -- 注意：此脚本应在接口同步完成后执行

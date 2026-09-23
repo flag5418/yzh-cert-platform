@@ -22,7 +22,11 @@ CREATE TABLE IF NOT EXISTS Sys_RoleMenu (
     UNIQUE KEY uk_role_menu (RoleCode, MenuCode),
     KEY idx_rm_role (RoleCode),
     KEY idx_rm_menu (MenuCode)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色-菜单关联表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='角色-菜单关联表';
+-- ★ COLLATE 必须显式声明为 utf8mb4_general_ci（勿删）：
+--   本表两个关联目标 Sys_Role.Code / Sys_Menu.Code 均为历史导入的 utf8mb4_general_ci，
+--   若随 MySQL 8 服务端默认落到 utf8mb4_0900_ai_ci，任何 `列 vs 列` 关联都会抛
+--   ERROR 1267 Illegal mix of collations。详见 20260923_fix_rolemenu_collation_V1.sql。
 
 -- ------------------------------------------------------------
 -- 2. 迁移历史数据（来自 Sys_RoleAuth）

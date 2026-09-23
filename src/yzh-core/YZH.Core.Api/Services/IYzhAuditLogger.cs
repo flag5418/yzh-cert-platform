@@ -25,6 +25,9 @@ public interface IYzhAuditLogger
 
     /// <summary>异步记录（推荐用于请求管道）</summary>
     Task LogApiCallAsync(AuditLogEntry entry);
+
+    /// <summary>数据库写入回调（由上层注入，如 certplatform-api 写入 sys_log 表）</summary>
+    Func<AuditLogEntry, Task>? DbWriter { get; set; }
 }
 
 /// <summary>

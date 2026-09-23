@@ -5,22 +5,22 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc && vite build",
+    "build": "node ../../scripts/guards.mjs && vue-tsc && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "vue": "^3.4.0",
-    "vue-router": "^4.2.0",
+    "@certplatform/share": "file:../cert-share",
+    "@element-plus/icons-vue": "^2.3.0",
+    "element-plus": "^2.6.0",
     "pinia": "^2.1.0",
-    "naive-ui": "^2.38.0",
-    "@certplatform/share": "file:../cert-share"
+    "vue": "^3.4.0",
+    "vue-router": "^4.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",
     "typescript": "^5.0.0",
     "vite": "^5.0.0",
-    "vue-tsc": "^2.0.0",
-    "@vicons/ionicons5": "^0.13.0"
+    "vue-tsc": "^2.0.0"
   }
 }

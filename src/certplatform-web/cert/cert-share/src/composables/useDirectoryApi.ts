@@ -222,9 +222,31 @@ export async function uploadFile(taskId: string, fileCode: string, file: File): 
   if (!res.ok || json.code !== 200) throw new Error(json.msg || json.message || '上传失败')
 }
 
-/** 上传确认（激活文件 + 创建转换队列） */
+/** 单文件替换（一步完成：覆盖上传 + 回填大小 + doc/xls 自动进转换队列） */
+export async function replaceFile(fileCode: string, file: File): Promise<{ queueCode: string }> {
+  if (!fileCode) throw new Error('替换失败：FileCode 为空')
+
+  const formData = new FormData()
+  formData.append('File', file)
+  const token = tokenStore.get()
+  const res = await fetch(`/api/Workflow/StandardDirectory/files/${encodeURIComponent(fileCode)}/replace`, {
+    method: 'POST',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  })
+  const json = await res.json()
+  if (!res.ok || json.code !== 200) throw new Error(json.msg || json.message || '替换失败')
+  return { queueCode: json.convertQueueCode || '' }
+}
+
+/** 上传确认（激活文件 + 创建转换队列）；业务失败（code≠200）必须抛错，否则页面误报「上传成功」 */
 export async function uploadConfirm(taskId: string): Promise<{ queueCode: string }> {
-  const res = await yzhApi.post<ApiResponse<any>>('/api/Workflow/StandardDirectory/upload-confirm', { TaskId: taskId })
+  const res = await yzhApi.post<any>('/api/Workflow/StandardDirectory/upload-confirm', { TaskId: taskId })
+  if (res?.code !== 200) {
+    throw new Error(res?.msg || res?.message || '上传确认失败')
+  }
   const data = res.data
   return { queueCode: data?.convertQueueCode || data?.ConvertQueueCode || '' }
 }
@@ -240,6 +262,41 @@ export async function getUploadStatus(taskId: string): Promise<FileUploadProgres
   // （否则会序列化成 ?params=[object Object]，后端 400）
   const res = await yzhApi.get<ApiResponse<FileUploadProgress[]>>('/api/Workflow/StandardDirectory/upload-status', { taskId })
   return res.data!
+}
+
+/**
+ * 获取阶段完整文件树（单请求返回文件夹+文件+规则状态+根目录孤儿文件）。
+ * 对齐历史老项目 stage-files 接口；后端：GET stage-files/{directoryCode}。
+ */
+export interface StageFileNode {
+  FileCode: string
+  FileName: string
+  FolderCode?: string
+  StoragePath?: string
+  ConvertedStoragePath?: string
+  ConvertStatus?: string
+  ConvertMessage?: string
+  UploadStatus?: string
+  FileSize?: number | null
+  MimeType?: string
+  RuleStatus?: 'none' | 'configured' | 'failed'
+}
+
+export interface StageFolderNode {
+  Code: string
+  Name: string
+  ParentCode?: string
+  Depth?: number
+  SortOrder?: number
+  Children?: StageFolderNode[]
+  Files?: StageFileNode[]
+}
+
+export async function getStageFileTree(directoryCode: string): Promise<{ folders: StageFolderNode[]; statistics?: { TotalFolders: number; TotalFiles: number; ConfiguredFiles: number } }> {
+  const res = await yzhApi.get<ApiResponse<{ Folders: StageFolderNode[]; Statistics?: any }>>(
+    `/api/Workflow/StandardDirectory/stage-files/${encodeURIComponent(directoryCode)}`,
+  )
+  return { folders: res.data?.Folders ?? [], statistics: res.data?.Statistics }
 }
 
 /** 获取活跃队列 */

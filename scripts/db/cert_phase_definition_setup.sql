@@ -8,7 +8,12 @@
 --    3. 插入初始五阶段数据
 --    4. 清理旧表 cert_cert_stage（如存在）
 --  注意：本脚本为幂等设计，可重复执行
+--  ★ 2026-09-23：建表已显式 COLLATE=utf8mb4_general_ci；视图含字面量派生列
+--    （`CASE p.is_valid WHEN 1 THEN '启用'`），故须固定连接排序规则，否则视图列
+--    会被固化成连接默认的 utf8mb4_0900_ai_ci，跨表比较报 ERROR 1267。
 -- ============================================================
+
+SET NAMES utf8mb4 COLLATE utf8mb4_general_ci;
 
 -- 0. 清理旧视图（如有）
 DROP VIEW IF EXISTS v_cert_cert_stage;
@@ -41,7 +46,7 @@ CREATE TABLE cert_phase_definition (
     UNIQUE KEY uk_phase_code (phase_code),
     KEY idx_is_valid (is_valid),
     KEY idx_is_deleted (is_deleted)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='认证阶段定义（通用五阶段，ISO 17021）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='认证阶段定义（通用五阶段，ISO 17021）';
 
 -- 3. 插入初始数据（幂等）
 INSERT IGNORE INTO cert_phase_definition (code, phase_code, phase_name, sequence_order, description) VALUES

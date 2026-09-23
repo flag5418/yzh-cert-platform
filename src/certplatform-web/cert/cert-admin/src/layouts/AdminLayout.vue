@@ -16,7 +16,7 @@
         router
         class="admin-layout__menu"
       >
-        <template v-for="menu in menuStore.menus" :key="menu.id">
+        <template v-for="menu in visibleMenus" :key="menu.id">
           <!-- 有子菜单：渲染为 el-sub-menu -->
           <el-sub-menu v-if="menu.children && menu.children.length > 0" :index="menu.url || String(menu.id)">
             <template #title>
@@ -61,7 +61,7 @@
               <el-avatar :size="32" class="header-user__avatar">
                 {{ userInitial }}
               </el-avatar>
-              <span class="header-user__name">{{ authStore.userInfo?.userName || '管理员' }}</span>
+              <span class="header-user__name">{{ authStore.userInfo?.UserTrueName || authStore.userInfo?.UserName || '管理员' }}</span>
               <el-icon><ArrowDown /></el-icon>
             </div>
             <template #dropdown>
@@ -94,19 +94,19 @@
   >
     <el-form :model="profileForm" label-width="90px" class="profile-form">
       <el-form-item label="用户账号">
-        <el-input :model-value="authStore.userInfo.userName" disabled />
-      </el-form-item>
-      <el-form-item label="昵称">
-        <el-input v-model="profileForm.nickname" placeholder="请输入昵称" />
+        <el-input :model-value="authStore.userInfo?.UserName" disabled />
       </el-form-item>
       <el-form-item label="姓名">
-        <el-input v-model="profileForm.userTrueName" placeholder="请输入真实姓名" />
+        <el-input v-model="profileForm.UserTrueName" placeholder="请输入真实姓名" />
       </el-form-item>
       <el-form-item label="邮箱">
-        <el-input v-model="profileForm.email" placeholder="请输入邮箱" />
+        <el-input v-model="profileForm.Email" placeholder="请输入邮箱" />
       </el-form-item>
       <el-form-item label="电话">
-        <el-input v-model="profileForm.phone" placeholder="请输入电话" />
+        <el-input v-model="profileForm.PhoneNo" placeholder="请输入电话" />
+      </el-form-item>
+      <el-form-item label="备注">
+        <el-input v-model="profileForm.Remark" type="textarea" :rows="2" placeholder="请输入备注" />
       </el-form-item>
     </el-form>
     <template #footer>
@@ -169,6 +169,9 @@ import { ArrowDown } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useAuthStore } from '@/store/auth'
 import { useMenuStore } from '@/store/menu'
+import { getCurrentUser, modifyPwd, updateUserInfo } from '@share/api/auth'
+// 图标归一化 + 分类分流：与专家端共用同一实现（勿在 App 内重复定义）
+import { filterMenuTreeByTag, formatMenuIcon as formatIcon } from '@share/utils'
 
 const route = useRoute()
 const router = useRouter()
@@ -177,6 +180,9 @@ const menuStore = useMenuStore()
 
 // 当前激活的菜单
 const activeMenu = computed(() => route.path)
+
+/** 管理端侧边栏菜单：按 Tag 分流（超管全量菜单需滤掉 auditor 分组） */
+const visibleMenus = computed(() => filterMenuTreeByTag(menuStore.menus, 'admin'))
 
 // 当前页面标题（从菜单中查找）
 const currentPageTitle = computed(() => {
@@ -192,12 +198,12 @@ const currentPageTitle = computed(() => {
     }
     return null
   }
-  return findMenuName(menuStore.menus) || '首页'
+  return findMenuName(visibleMenus.value) || '首页'
 })
 
 // 用户头像首字母
 const userInitial = computed(() => {
-  const name = authStore.userInfo?.userName || 'A'
+  const name = authStore.userInfo?.UserTrueName || authStore.userInfo?.UserName || 'A'
   return name.charAt(0).toUpperCase()
 })
 
@@ -205,12 +211,22 @@ const userInitial = computed(() => {
 const profileDialogVisible = ref(false)
 const passwordDialogVisible = ref(false)
 const passwordFormRef = ref<FormInstance>()
+const profileSaving = ref(false)
+const passwordSaving = ref(false)
 
+/**
+ * 个人资料表单
+ *
+ * ⚠️ 字段名与后端 `Sys_User` 的 C# 属性名逐字一致（`项目全局规则.md` §16.9 铁律）。
+ *    原实现用的是 camelCase（`userTrueName` / `email` / `phone`）外加一个库里根本不存在的
+ *    `nickname` 字段 —— 提交后端全部落空，保存等于没保存。已按铁律改名，并把
+ *    无对应列的「昵称」换成真实存在的 `Remark`（历史个人中心页也是「备注」）。
+ */
 const profileForm = reactive({
-  nickname: authStore.userInfo?.nickname || '',
-  userTrueName: authStore.userInfo?.userTrueName || '',
-  email: authStore.userInfo?.email || '',
-  phone: authStore.userInfo?.phone || ''
+  UserTrueName: '',
+  Email: '',
+  PhoneNo: '',
+  Remark: ''
 })
 
 const passwordForm = reactive({
@@ -239,11 +255,33 @@ const passwordRules: FormRules = {
   ]
 }
 
+/**
+ * 加载当前登录用户信息（个人中心）
+ *
+ * 登录响应只给 Token/UserCode/UserName/UserTrueName/RoleCode，且**未持久化** ——
+ * 刷新页面后 `userInfo` 为空，顶栏会退化成「管理员」、个人中心各字段全空。
+ * 因此布局挂载时必须回填一次。
+ */
+async function loadCurrentUser() {
+  if (!authStore.token) return
+  try {
+    const res = await getCurrentUser()
+    if (res?.success === false) {
+      ElMessage.error(res?.message || '获取用户信息失败')
+      return
+    }
+    const data = res?.data
+    if (data) authStore.setUserInfo({ ...data, Token: authStore.token })
+  } catch {
+    // 静默失败：顶栏已有兜底文案，不打断用户操作
+  }
+}
+
 function openProfileDialog() {
-  profileForm.nickname = authStore.userInfo?.nickname || ''
-  profileForm.userTrueName = authStore.userInfo?.userTrueName || ''
-  profileForm.email = authStore.userInfo?.email || ''
-  profileForm.phone = authStore.userInfo?.phone || ''
+  profileForm.UserTrueName = authStore.userInfo?.UserTrueName || ''
+  profileForm.Email = authStore.userInfo?.Email || ''
+  profileForm.PhoneNo = authStore.userInfo?.PhoneNo || ''
+  profileForm.Remark = authStore.userInfo?.Remark || ''
   profileDialogVisible.value = true
 }
 
@@ -254,92 +292,60 @@ function openPasswordDialog() {
   passwordDialogVisible.value = true
 }
 
-function saveProfile() {
-  if (!authStore.userInfo) return
-  authStore.userInfo.nickname = profileForm.nickname
-  authStore.userInfo.userTrueName = profileForm.userTrueName
-  authStore.userInfo.email = profileForm.email
-  authStore.userInfo.phone = profileForm.phone
-  ElMessage.success('个人信息已保存')
-  profileDialogVisible.value = false
+async function saveProfile() {
+  if (profileSaving.value) return
+  profileSaving.value = true
+  try {
+    const res = await updateUserInfo({
+      UserTrueName: profileForm.UserTrueName,
+      Email: profileForm.Email,
+      PhoneNo: profileForm.PhoneNo,
+      Remark: profileForm.Remark
+    })
+    if (res?.success === false) {
+      ElMessage.error(res?.message || '保存失败')
+      return
+    }
+    authStore.patchUserInfo({
+      UserTrueName: profileForm.UserTrueName,
+      Email: profileForm.Email,
+      PhoneNo: profileForm.PhoneNo,
+      Remark: profileForm.Remark
+    })
+    ElMessage.success('个人信息已保存')
+    profileDialogVisible.value = false
+  } catch (e: any) {
+    ElMessage.error(e?.message || '保存失败')
+  } finally {
+    profileSaving.value = false
+  }
 }
 
 async function changePassword() {
   if (!passwordFormRef.value) return
-  await passwordFormRef.value.validate((valid) => {
-    if (valid) {
-      ElMessage.success('密码修改成功，请重新登录')
+  await passwordFormRef.value.validate(async (valid) => {
+    if (!valid) return
+    if (passwordSaving.value) return
+    passwordSaving.value = true
+    try {
+      const res = await modifyPwd(passwordForm.oldPassword, passwordForm.newPassword)
+      if (res?.success === false) {
+        ElMessage.error(res?.message || '密码修改失败')
+        return
+      }
+      ElMessage.success(res?.message || '密码修改成功，请重新登录')
       passwordDialogVisible.value = false
       setTimeout(() => {
         authStore.clearToken()
         menuStore.clearMenus()
         router.push('/login')
       }, 1000)
+    } catch (e: any) {
+      ElMessage.error(e?.message || '密码修改失败')
+    } finally {
+      passwordSaving.value = false
     }
   })
-}
-
-// Element UI → Element Plus 图标名称映射表
-// 用于兼容旧版 Vol 框架的图标命名
-const ICON_NAME_MAP: Record<string, string> = {
-  // 系统管理
-  'setting': 'Setting',
-  's-home': 'HomeFilled',
-  'user-solid': 'UserFilled',
-  'menu': 'Menu',
-  'connection': 'Connection',
-  'folder': 'Folder',
-  'link': 'Link',
-  'receiving': 'Collection',
-  'document': 'Document',
-  's-tools': 'Tools',
-  // 业务管理
-  'document-checked': 'DocumentChecked',
-  'office-building': 'OfficeBuilding',
-  'date': 'Date',
-  'document-copy': 'DocumentCopy',
-  'operation': 'Operation',
-  'files': 'Files',
-  'tickets': 'Tickets',
-  'collection': 'Collection',
-  'chat-line-round': 'ChatLineRound',
-  'cpu': 'Cpu',
-  'edit': 'Edit',
-  'warning': 'Warning',
-  'set-up': 'SetUp',
-  'money': 'Money',
-  's-data': 'DataAnalysis',
-}
-
-// 默认图标（当找不到匹配时使用）
-const DEFAULT_ICON = 'Menu'
-
-// 格式化图标名称（el-icon-xxx → 组件名）
-function formatIcon(iconName: string): string {
-  if (!iconName) return DEFAULT_ICON
-
-  // 移除常见前缀
-  let name = iconName
-    .replace(/^el-icon-/, '')
-    .replace(/^ivu-icon ivu-icon-/, '')
-
-  // 优先使用映射表
-  if (ICON_NAME_MAP[name]) {
-    return ICON_NAME_MAP[name]
-  }
-
-  // 尝试直接转换 PascalCase（可能是已经是 Element Plus 名称）
-  const pascalName = name
-    .split('-')
-    .map(s => s.charAt(0).toUpperCase() + s.slice(1))
-    .join('')
-
-  // 检查是否是有效的 Element Plus 图标名（首字母大写）
-  if (pascalName.length > 0 && /^[A-Z]/.test(pascalName)) {
-    return pascalName
-  }
-
-  return DEFAULT_ICON
 }
 
 // 下拉菜单命令处理
@@ -364,9 +370,10 @@ function handleCommand(command: string) {
   }
 }
 
-// 加载菜单
+// 加载菜单 + 回填当前用户信息
 onMounted(() => {
   menuStore.loadMenus()
+  loadCurrentUser()
 })
 </script>
 

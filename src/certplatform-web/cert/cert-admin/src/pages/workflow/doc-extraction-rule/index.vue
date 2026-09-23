@@ -51,16 +51,33 @@ const ruleStatusText = computed(() => {
   return map[ruleStatus.value] || '未知'
 })
 
+/** 当前选中文件编码：树节点为 PascalCase（FileCode），此处统一收敛为唯一读取点 */
+const selectedFileCode = computed(
+  () => selectedFile.value?.fileCode || selectedFile.value?.FileCode || selectedFile.value?.Raw?.FileCode || ''
+)
+
 async function onFileSelect(file: any) {
-  selectedFile.value = file
+  // 树节点是 PascalCase 形态（FileCode/Name/Raw/ConvertStatus…），归一化为 camelCase，
+  // 供本页守卫与 DocPreview 统一读取
+  selectedFile.value = {
+    ...file,
+    fileCode: file.fileCode || file.FileCode || file.Raw?.FileCode || file.Code || '',
+    fileName: file.fileName || file.FileName || file.Name || '',
+    storagePath: file.storagePath || file.StoragePath || file.Raw?.StoragePath || '',
+    convertedStoragePath:
+      file.convertedStoragePath || file.ConvertedStoragePath || file.Raw?.ConvertedStoragePath || '',
+    convertStatus: file.convertStatus || file.ConvertStatus || file.Raw?.ConvertStatus || '',
+    convertMessage: file.convertMessage || file.ConvertMessage || file.Raw?.ConvertMessage || '',
+    ruleStatus: file.ruleStatus || file.RuleStatus || 'none'
+  }
   fields.value = []
   tables.value = []
   prompt.value = ''
   isValid.value = null
   extractionData.value = null
-  ruleStatus.value = file?.ruleStatus || 'none'
+  ruleStatus.value = selectedFile.value.ruleStatus || 'none'
   activeTab.value = 'analysis'
-  await loadExistingRule(file.fileCode || file.FileCode)
+  await loadExistingRule(selectedFileCode.value)
 }
 
 async function loadExistingRule(fileCode: string) {
@@ -71,7 +88,7 @@ async function loadExistingRule(fileCode: string) {
     const data = res?.data
     if (!data) return
     // 防止快速切换文件时旧响应覆盖新选择
-    if ((selectedFile.value?.fileCode || selectedFile.value?.FileCode) !== fileCode) return
+    if (selectedFileCode.value !== fileCode) return
 
     skill.value = data.skill || ''
     fields.value = data.fields || []
@@ -92,13 +109,13 @@ async function loadExistingRule(fileCode: string) {
 }
 
 async function onAIAnalyze() {
-  if (!selectedFile.value?.fileCode) {
+  if (!selectedFileCode.value) {
     ElMessage.warning('请先选择一个文件')
     return
   }
   analyzing.value = true
   try {
-    const res: any = await analyzeDoc(selectedFile.value.fileCode, skill.value)
+    const res: any = await analyzeDoc(selectedFileCode.value, skill.value)
     const data = res?.data
     if (data?.message && data.message !== 'AI分析完成') {
       ElMessage.warning(data.message)
@@ -118,7 +135,7 @@ async function onAIAnalyze() {
 }
 
 async function onGeneratePrompt() {
-  if (!selectedFile.value?.fileCode) return
+  if (!selectedFileCode.value) return
   if (!fields.value.length && !tables.value.length) {
     ElMessage.warning('请先在「自动分析」页签添加至少一个字段或表格')
     return
@@ -127,7 +144,7 @@ async function onGeneratePrompt() {
   generatingPrompt.value = true
   try {
     const res: any = await generatePrompt({
-      fileCode: selectedFile.value.fileCode,
+      fileCode: selectedFileCode.value,
       fields: fields.value,
       tables: tables.value
     })
@@ -148,7 +165,7 @@ async function onGeneratePrompt() {
 }
 
 async function onVerifyPrompt() {
-  if (!selectedFile.value?.fileCode) {
+  if (!selectedFileCode.value) {
     ElMessage.warning('请先选择一个文件')
     return
   }
@@ -157,7 +174,7 @@ async function onVerifyPrompt() {
   verifying.value = true
   try {
     const res: any = await verifyPrompt({
-      fileCode: selectedFile.value.fileCode,
+      fileCode: selectedFileCode.value,
       prompt: prompt.value || ''
     })
     const data = res?.data
@@ -179,7 +196,7 @@ async function onVerifyPrompt() {
 }
 
 async function onSave() {
-  if (!selectedFile.value?.fileCode) {
+  if (!selectedFileCode.value) {
     ElMessage.warning('请先选择一个文件')
     return
   }
@@ -187,7 +204,7 @@ async function onSave() {
   saving.value = true
   try {
     await saveRule({
-      fileCode: selectedFile.value.fileCode,
+      fileCode: selectedFileCode.value,
       skill: skill.value,
       fields: fields.value,
       tables: tables.value,

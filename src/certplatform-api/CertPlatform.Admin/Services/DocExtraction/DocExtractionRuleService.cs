@@ -494,7 +494,23 @@ public partial class DocExtractionRuleService
     public async Task<List<object>> GetConfiguredRulesAsync()
     {
         var result = await _db.GetListAsync<ConfiguredRuleView>();
-        return result.Data?.Cast<object>().ToList() ?? new();
+        // D-5 契约：显式经 ConfiguredRuleRow 输出 camelCase；直接序列化实体会是 PascalCase，
+        // 前端读 r.standardFileCode 全部 undefined → 状态 map 为空 → 树标签恒为「未配置」
+        var rows = (result.Data ?? new List<ConfiguredRuleView>())
+            .Select(x => new ConfiguredRuleRow
+            {
+                RuleCode = x.RuleCode,
+                StandardFileCode = x.StandardFileCode,
+                FileName = x.FileName,
+                StandardCode = x.StandardCode,
+                PhaseCode = x.PhaseCode,
+                Skill = x.Skill,
+                DocIsValid = x.DocIsValid,
+                Status = x.Status
+            })
+            .Cast<object>()
+            .ToList();
+        return rows;
     }
 
     // ========================================================

@@ -35,7 +35,9 @@ public class OfficeConvertTaskExecutor : IYzhTaskExecutor
 
         try
         {
-            var payload = JsonSerializer.Deserialize<FileConvertPayload>(task.Payload);
+            // 大小写不敏感：队列 payload 由 camelCase 序列化（fileCode），旧数据是 PascalCase（FileCode），统一兼容
+            var payload = JsonSerializer.Deserialize<FileConvertPayload>(task.Payload,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (payload == null)
                 return new TaskExecutionResult { Success = false, Message = "Payload 解析失败", Retryable = false };
 

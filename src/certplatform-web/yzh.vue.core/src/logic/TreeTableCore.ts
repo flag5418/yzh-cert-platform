@@ -182,14 +182,17 @@ export abstract class TreeTableCore<
     // 禁用/启用按钮：根据节点状态动态显示（只显示一个）
     if (tc.EnableField || this.enableField) {
       const field = tc.EnableField ?? this.enableField
-      const extra = (node.Extra as any) || {}
-      const val = extra[field] ?? extra[field.charAt(0).toLowerCase() + field.slice(1)] ?? 1
-      if (val === 1) {
-        // 已启用 → 只显示禁用
-        actions.push({ key: 'toggle-disable', text: '禁用', type: 'warning' })
-      } else {
-        // 已禁用 → 只显示启用
-        actions.push({ key: 'toggle-enable', text: '启用', type: 'warning' })
+      if (field) {
+        const extra = (node.Extra as any) || {}
+        const camel = field.charAt(0).toLowerCase() + field.slice(1)
+        const val = extra[field] ?? extra[camel] ?? 1
+        if (val === 1) {
+          // 已启用 → 只显示禁用
+          actions.push({ key: 'toggle-disable', text: '禁用', type: 'warning' })
+        } else {
+          // 已禁用 → 只显示启用
+          actions.push({ key: 'toggle-enable', text: '启用', type: 'warning' })
+        }
       }
     }
     // CustomActions：仅当无内置 toggle 时才显示（避免重复）

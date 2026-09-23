@@ -53,6 +53,26 @@ public class SqlSugarDbOrm : IDbOrm
         }
     }
 
+    /// <inheritdoc />
+    public async Task<Result<T?>> GetOneIgnoreValidAsync<T>(Expression<Func<T, bool>> predicate) where T : class, new()
+    {
+        try
+        {
+            // 仅过滤软删除，不过滤 IsValid —— 上传/转换状态机需读取 pending/replacing 中间态
+            var entity = await _client.Queryable<T>()
+                .Where(predicate)
+                .Where(IsDeletedCondition<T>())
+                .FirstAsync();
+
+            return Result<T?>.Ok(entity);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetOneIgnoreValidAsync 失败，Type={Type}", typeof(T).Name);
+            return Result<T?>.Fail($"获取单条失败：{ex.Message}");
+        }
+    }
+
     public async Task<Result<List<T>>> GetListAsync<T>(Expression<Func<T, bool>>? predicate = null, bool includeDisabled = false) where T : class, new()
     {
         try

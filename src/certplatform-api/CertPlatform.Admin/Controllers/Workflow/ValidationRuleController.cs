@@ -56,6 +56,65 @@ public class ValidationRuleController
     protected override bool StrictConfigLoad => true;
 
     // ========================================================
+    // 查询覆盖：默认按规则名称排序（对齐历史 NCConfig 列表行为）
+    // ========================================================
+
+    /// <summary>
+    /// 过滤查询覆盖 — 未显式指定排序时默认 RuleName 升序。
+    /// <para>历史项目 NCConfig 左侧树依赖稳定顺序，新架构未设默认排序导致顺序随存储引擎漂移。</para>
+    /// </summary>
+    [NonAction]
+    public override async Task<Result<PagedResult<ValidationRule>>> FilterCore(FilterRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.SortField))
+        {
+            request.SortField = "RuleName";
+            request.SortOrder = "asc";
+        }
+
+        return await base.FilterCore(request);
+    }
+
+    // ========================================================
+    // 单条详情：GET /api/ValidationRule/{code}
+    // ========================================================
+
+    /// <summary>
+    /// 获取单条规则详情（含 RuleJson 工作流定义 / LayoutJson 布局）。
+    /// <para>用途：NC 规则设计页（WorkflowDesigner）选中叶子后懒加载完整字段，
+    /// 避免列表接口裁剪大字段导致「已配置」状态判定失败。</para>
+    /// <para>字段命名遵循 YZH 命名铁律：DB 列名 = C# 属性名 = TS 字段名（PascalCase）。</para>
+    /// </summary>
+    /// <param name="code">规则 Code（业务唯一标识，非 Id）</param>
+    [HttpGet("{code}")]
+    public async Task<ActionResult<ApiResponse<ValidationRule>>> GetByCode(string code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+            return BadRequest(ApiResponse.Fail("规则编码不能为空"));
+
+        var result = await Entity.GetOne(r => r.Code == code);
+        if (!result.Success)
+            return BadRequest(ApiResponse.Fail(result.Error!));
+
+        var rule = result.Data;
+        if (rule == null)
+            return NotFound(ApiResponse.Fail($"规则不存在：{code}"));
+
+        // 回填条款编号/标题，与列表接口保持一致
+        if (!string.IsNullOrEmpty(rule.ClauseCode))
+        {
+            var clause = await _clauseService.GetOne(c => c.Code == rule.ClauseCode);
+            if (clause.Success && clause.Data != null)
+            {
+                rule.ClauseNumber = clause.Data.ClauseNumber;
+                rule.ClauseTitle = clause.Data.Title;
+            }
+        }
+
+        return Ok(ApiResponse<ValidationRule>.Ok(rule));
+    }
+
+    // ========================================================
     // 查询钩子：填充条款编号/标题
     // ========================================================
 

@@ -1,7 +1,7 @@
 <template>
   <el-container class="auditor-layout">
     <el-aside width="200px" class="auditor-layout__aside">
-      <div class="auditor-layout__logo"><span>映智汇审核端</span></div>
+      <div class="auditor-layout__logo"><span>映智汇认证专家平台</span></div>
       <el-menu :default-active="activeMenu" router class="auditor-layout__menu" background-color="#304156" text-color="#bfcbd9" active-text-color="#409eff">
         <el-menu-item index="/workspace">
           <span>工作台</span>
@@ -17,7 +17,7 @@
         <div class="auditor-layout__header-right">
           <el-dropdown>
             <span class="auditor-layout__user">
-              {{ authStore.userInfo?.userName || '审核员' }}
+              {{ displayName }}
               <el-icon><arrow-down /></el-icon>
             </span>
             <template #dropdown>
@@ -53,8 +53,17 @@ const authStore = useAuthStore()
 const activeMenu = computed(() => route.path)
 const pageTitle = computed(() => {
   const map: Record<string, string> = { '/workspace': '工作台' }
-  return map[route.path] || '审核员端'
+  return map[route.path] || '专家端'
 })
+
+/**
+ * 顶栏显示名
+ * ⚠️ 字段名必须 PascalCase（§16.9 铁律）——`UserTrueName` / `UserName` 直接来自
+ *    `/api/User/login` 响应 data；写成 `userTrueName` 会读到 undefined 且不报错。
+ */
+const displayName = computed(
+  () => authStore.userInfo?.UserTrueName || authStore.userInfo?.UserName || '专家'
+)
 
 function handleLogout() { authStore.clearToken(); router.push('/login') }
 </script>

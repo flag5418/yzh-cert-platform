@@ -44,9 +44,19 @@ public class Sys_User : BaseEntity, ISoftDelete, IIsValid
     [SugarColumn(ColumnName = "UserTrueName")]
     public string UserTrueName { get; set; } = string.Empty;
 
-    /// <summary>密码（加密存储，仅输入时绑定，输出时忽略）</summary>
+    /// <summary>
+    ///     密码（AES 密文存储）
+    ///
+    ///     安全约定：**只进不出** —— 允许从请求体绑定（登录/新增/改密），
+    ///     但任何响应体都不得回吐该字段。
+    ///
+    ///     ⚠️ 曾用 [JsonIgnore(Condition = WhenWritingDefault)] —— 那是错的：
+    ///     该条件只在「值为默认值」时跳过写出，而库里存的是非空密文，
+    ///     导致 /api/System/User/filter 等端点把密文原样返回（实测已确认）。
+    ///     现改用 [YzhSensitive]（全局 ShouldSerialize=false，见 JsonSensitiveFieldExtensions）。
+    /// </summary>
     [StringLength(200)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    [YzhSensitive]
     [SugarColumn(ColumnName = "UserPwd")]
     public string UserPwd { get; set; } = string.Empty;
 

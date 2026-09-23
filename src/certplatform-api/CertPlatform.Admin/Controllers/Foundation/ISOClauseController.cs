@@ -59,7 +59,7 @@ public class ISOClauseController : YzhControllerBase<ISOClause>
     // 业务校验
     // ========================================================
 
-    /// <summary>新增前校验：StandardCode 必填 + 同标准下条款编号唯一性</summary>
+    /// <summary>新增前校验：StandardCode 必填 + 同标准下条款编号唯一 + 父条款合法</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAdd(ISOClause entity)
     {
         if (string.IsNullOrWhiteSpace(entity.StandardCode))
@@ -72,17 +72,10 @@ public class ISOClauseController : YzhControllerBase<ISOClause>
         if (exists.Data)
             return (false, $"该标准下条款编号【{entity.ClauseNumber}】已存在");
 
-        if (!string.IsNullOrEmpty(entity.ParentCode))
-        {
-            var parentExists = await Entity.ExistsAsync(c => c.Code == entity.ParentCode);
-            if (!parentExists.Data)
-                return (false, "指定的父条款不存在");
-        }
-
-        return (true, null);
+        return await ValidateParentAsync(entity);
     }
 
-    /// <summary>修改前校验：同标准下条款编号唯一性（排除自身）</summary>
+    /// <summary>修改前校验：同标准下条款编号唯一（排除自身）+ 父条款合法/防环</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(ISOClause entity)
     {
         var exists = await Entity.ExistsAsync(c =>
@@ -93,17 +86,86 @@ public class ISOClauseController : YzhControllerBase<ISOClause>
         if (exists.Data)
             return (false, $"该标准下条款编号【{entity.ClauseNumber}】已存在");
 
+        return await ValidateParentAsync(entity);
+    }
+
+    /// <summary>删除前校验：存在未同批删除的子条款则拒绝（有子禁删）</summary>
+    protected override async Task<(bool ok, string? msg)> OnBeforeDelete(string[] codes)
+    {
+        return await ValidateDeleteHasChildrenAsync(codes);
+    }
+
+    /// <summary>
+    ///     父条款校验：存在性 + 同标准 + 防环（不能挂到自身或子孙下）
+    /// </summary>
+    protected async Task<(bool ok, string? msg)> ValidateParentAsync(ISOClause entity)
+    {
+        if (string.IsNullOrEmpty(entity.ParentCode))
+            return (true, null);
+
+        if (entity.ParentCode == entity.Code)
+            return (false, "父条款不能是自身");
+
+        var parentResult = await Entity.GetListAsync(c => c.Code == entity.ParentCode);
+        var parent = parentResult.Data?.FirstOrDefault();
+        if (parent == null)
+            return (false, "指定的父条款不存在");
+
+        if (parent.StandardCode != entity.StandardCode)
+            return (false, "父条款与子条款必须属于同一标准");
+
+        // 防环：沿候选父级向上遍历，不得经过自身
+        var visited = new HashSet<string>();
+        var current = parent;
+        while (current != null && !string.IsNullOrEmpty(current.ParentCode))
+        {
+            if (current.ParentCode == entity.Code)
+                return (false, "不能将条款挂到自身或其子条款下");
+            if (!visited.Add(current.ParentCode))
+                break;
+            var next = await Entity.GetListAsync(c => c.Code == current.ParentCode);
+            current = next.Data?.FirstOrDefault();
+        }
+
+        return (true, null);
+    }
+
+    /// <summary>
+    ///     有子禁删：若存在 ParentCode 指向待删节点、但自身不在本批删除集合中的条款，则拒绝
+    /// </summary>
+    protected async Task<(bool ok, string? msg)> ValidateDeleteHasChildrenAsync(string[] codes)
+    {
+        if (codes == null || codes.Length == 0)
+            return (true, null);
+
+        var codeSet = new HashSet<string>(codes);
+        var childrenResult = await Entity.GetListAsync(c => codes.Contains(c.ParentCode) && !c.IsDeleted);
+        var blockers = (childrenResult.Data ?? new List<ISOClause>())
+            .Where(c => !codeSet.Contains(c.Code))
+            .ToList();
+
+        if (blockers.Count > 0)
+        {
+            var first = blockers[0];
+            return (false, $"条款【{first.ClauseNumber} {first.Title}】存在子条款，请先删除子条款");
+        }
+
         return (true, null);
     }
 
     /// <summary>获取条款树（按标准筛选，返回扁平列表由前端构建树）</summary>
+    /// <param name="standardCode">标准编码</param>
+    /// <param name="includeDisabled">是否包含已禁用条款（默认 false，兼容 NC 配置页）</param>
     [HttpGet("getTree")]
-    public async Task<IActionResult> GetTree([FromQuery] string standardCode)
+    public async Task<IActionResult> GetTree(
+        [FromQuery] string standardCode,
+        [FromQuery] bool includeDisabled = false)
     {
-        var result = await Entity.GetListAsync(c =>
-            c.StandardCode == standardCode &&
-            !c.IsDeleted &&
-            c.IsValid == 1);
+        // includeDisabled 必须下传 EntityService：SqlSugarDbOrm.GetListAsync
+        // 在 includeDisabled=false 时会强制追加 IsValid=1 过滤，仅靠 predicate 无法绕过。
+        var result = await Entity.GetListAsync(
+            c => c.StandardCode == standardCode,
+            includeDisabled);
 
         if (result.Error != null)
             return BadRequest(ApiResponse.Fail(result.Error));

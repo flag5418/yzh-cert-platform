@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS `Sys_Organization` (
     KEY `idx_org_type` (`OrgType`),
     KEY `idx_enable` (`Enable`),
     KEY `idx_is_deleted` (`IsDeleted`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='组织机构表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='组织机构表';
 
 -- ============================================================
 -- 预初始化三类根节点

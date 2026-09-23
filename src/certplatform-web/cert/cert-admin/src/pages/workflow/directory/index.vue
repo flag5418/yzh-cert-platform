@@ -5,22 +5,18 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Folder,
   Document,
-  OfficeBuilding,
   Upload,
   FolderAdd,
   Refresh,
   Delete,
-  Search,
   Download,
   Loading,
   CircleCheck,
   CircleClose,
-  MagicStick,
-  Warning,
   QuestionFilled,
 } from '@element-plus/icons-vue'
 import { yzhApi } from '@yzh-core/api/client'
-import { YzhFolderUpload, CertStatusBar } from '@share/components'
+import { YzhFolderUpload, CertStatusBar, CertBizTree } from '@share/components'
 import { useFileTree, type TreeNode } from '@share/composables/useFileTree'
 import {
   getFoldersFlat,
@@ -32,31 +28,25 @@ import {
   updateFile,
   deleteFile,
   downloadFile,
+  replaceFile as replaceFileApi,
   uploadInit,
   uploadFile,
   uploadConfirm,
   filterIgnoredFiles,
   getActiveQueue,
   cancelConvert,
+  getStageFileTree,
+  type StageFolderNode,
+  type StageFileNode,
 } from '@share/composables/useDirectoryApi'
-import {
-  getRuleDetail,
-  verifyPrompt,
-  type FieldDefDto,
-  type TableDefDto,
-  type ExtractionData,
-} from '@share/api/workflow/doc-extraction-rule'
-import { buildExtractionView } from '@share/utils/extractionView'
-import { getPromptList, type PromptTemplate } from '@share/api/workflow/prompt-template'
 
 const router = useRouter()
-const { fileTreeData, loading: treeLoading, loadTree } = useFileTree()
+const { fileTreeData, loadTree } = useFileTree()
 
 // ========================================================
 // 状态
 // ========================================================
 
-const searchText = ref('')
 const currentPhase = ref<TreeNode | null>(null)
 const currentFolders = ref<any[]>([])
 const currentFiles = ref<any[]>([])
@@ -89,85 +79,6 @@ let queueTimer: any = null
 // 使用帮助
 const showHelpDialog = ref(false)
 
-// AI 分析
-const showAiDialog = ref(false)
-const aiLoading = ref(false)
-const aiFile = ref<any>(null)
-const aiPrompt = ref('')
-const aiTemplates = ref<PromptTemplate[]>([])
-const aiResult = ref<{
-  success: boolean
-  message: string
-  fields: Record<string, unknown>
-  tables: Record<string, any[]>
-  /** 是否使用了固定提示词（提示词留空） */
-  fixedPrompt: boolean
-} | null>(null)
-
-/** 该文件已配置的字段/表格定义：既是固定提示词的依据，也是结果中文展示的依据 */
-const aiDefFields = ref<FieldDefDto[]>([])
-const aiDefTables = ref<TableDefDto[]>([])
-
-/** 提取结果的「中文视图」（按定义对齐字段/表格/列） */
-const aiView = computed(() =>
-  buildExtractionView(
-    aiDefFields.value,
-    aiDefTables.value,
-    aiResult.value
-      ? { fields: aiResult.value.fields, tables: aiResult.value.tables } as ExtractionData
-      : null
-  )
-)
-
-// ========================================================
-// 目录树：搜索过滤
-// ========================================================
-
-/**
- * 搜索过滤（历史项目搜索框的行为）：
- * 命中名称的机构/标准/阶段保留；父节点命中时保留其整棵子树。
- * 过滤态下强制展开，便于直接看到匹配结果。
- */
-const filteredTree = computed(() => {
-  const q = searchText.value.trim().toLowerCase()
-  if (!q) return fileTreeData.value
-  // useFileTree 产出的 TreeNode 是 PascalCase（Code/Name/Children/Expanded）
-  const hit = (n: any) => String(n?.Name || '').toLowerCase().includes(q)
-
-  const orgs: any[] = []
-  for (const org of fileTreeData.value) {
-    const stds: any[] = []
-    for (const std of org.Children || []) {
-      const phases = (std.Children || []).filter(hit)
-      if (hit(std)) {
-        stds.push({ ...std, Expanded: true })
-      } else if (phases.length) {
-        stds.push({ ...std, Children: phases, Expanded: true })
-      }
-    }
-    if (hit(org)) {
-      orgs.push({ ...org, Expanded: true })
-    } else if (stds.length) {
-      orgs.push({ ...org, Children: stds, Expanded: true })
-    }
-  }
-  return orgs
-})
-
-function toggleExpand(node: any) {
-  node.Expanded = !node.Expanded
-}
-
-function selectPhase(phase: TreeNode) {
-  currentPhase.value = phase
-  currentFolderCode.value = ''
-  breadcrumbPath.value = []
-  selectedItems.clear()
-  allSelected.value = false
-  loadCurrentContent()
-  refreshActiveQueue()
-}
-
 // ========================================================
 // 文件内容加载
 // ========================================================
@@ -179,29 +90,39 @@ async function loadCurrentContent() {
   try {
     const directoryCode = currentPhase.value.DirectoryCode
 
+    const [folders, stageTree] = await Promise.all([
+      getFoldersFlat(directoryCode),
+      getStageFileTree(directoryCode).catch(() => ({ folders: [] as StageFolderNode[] })),
+    ])
+    buildFolderAgg(stageTree.folders || [])
+
     if (!currentFolderCode.value) {
-      // 根级别：加载文件夹 + 根级文件
-      const [folders, rootFiles] = await Promise.all([
-        getFoldersFlat(directoryCode),
-        getRootFiles(directoryCode),
-      ])
-      currentFolders.value = folders || []
-      currentFiles.value = rootFiles || []
+      // 根级别：只展示一级文件夹（ParentCode 空）；数量/大小走 stage 树递归聚合
+      // 注意：folders-flat 可能缺省 ParentCode 字段（根节点 null 被序列化忽略），需兼容
+      currentFolders.value = (folders || []).filter((f: any) => !f.ParentCode)
+      currentFiles.value = await getRootFiles(directoryCode)
     } else {
-      // 子文件夹级别：加载子文件夹和文件
-      const [folders, files] = await Promise.all([
-        getFoldersFlat(directoryCode),
-        getFiles(currentFolderCode.value),
-      ])
+      // 子文件夹级别：子文件夹 + 当前层文件；数量/大小走该文件夹的递归聚合
       const parentCode = currentFolderCode.value
       currentFolders.value = (folders || []).filter((f: any) => f.ParentCode === parentCode)
-      currentFiles.value = files || []
+      currentFiles.value = await getFiles(parentCode)
     }
   } catch (e: any) {
     ElMessage.error('加载内容失败：' + (e?.message || ''))
   } finally {
     detailLoading.value = false
   }
+}
+
+/** 选中左侧树阶段节点（CertBizTree @select）→ 加载该阶段内容 */
+function selectPhase(phase: TreeNode) {
+  currentPhase.value = phase
+  currentFolderCode.value = ''
+  breadcrumbPath.value = []
+  selectedItems.clear()
+  allSelected.value = false
+  loadCurrentContent()
+  refreshActiveQueue()
 }
 
 function enterFolder(folder: any) {
@@ -498,8 +419,41 @@ async function deleteItem(item: any, options: { skipConfirm?: boolean } = {}) {
   }
 }
 
-function replaceFile() {
-  ElMessage.info('替换文件功能开发中（历史项目同为占位）')
+const replaceInputRef = ref<HTMLInputElement | null>(null)
+let replaceTarget: { code: string; name: string; type: string } | null = null
+
+function startReplace(file: any) {
+  const code = file?.FileCode || file?.fileCode
+  const name = file?.FileName || file?.fileName
+  if (!code) return
+  replaceTarget = { code, name: name || code, type: (file?.FileType || file?.fileType || '').toLowerCase() }
+  replaceInputRef.value?.click()
+}
+
+async function onReplacePicked(e: Event) {
+  const input = e.target as HTMLInputElement
+  const picked = input.files?.[0]
+  input.value = '' // 允许重复选择同一文件
+  if (!picked || !replaceTarget) return
+  const t = replaceTarget
+  try {
+    await ElMessageBox.confirm(
+      `确定用「${picked.name}」替换「${t.name}」吗？${['doc', 'xls'].includes(t.type) ? '替换后将自动重新转换。' : ''}`,
+      '替换确认',
+      { type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  try {
+    const { queueCode } = await replaceFileApi(t.code, picked)
+    if (queueCode) ElMessage.success('替换成功，已进入转换队列')
+    else ElMessage.success('替换成功')
+    loadCurrentContent()
+    loadTree()
+  } catch (err: any) {
+    ElMessage.error(err?.message || '替换失败')
+  }
 }
 
 async function downloadItem(item: any) {
@@ -519,66 +473,6 @@ async function downloadItem(item: any) {
     URL.revokeObjectURL(url)
   } catch (e: any) {
     ElMessage.error('下载失败：' + (e?.message || ''))
-  }
-}
-
-// ========================================================
-// AI 分析（历史项目：针对单个文件跑提取规则/提示词）
-// ========================================================
-
-async function handleAiAnalyze(file: any) {
-  aiFile.value = file
-  aiResult.value = null
-  aiPrompt.value = ''
-  aiDefFields.value = []
-  aiDefTables.value = []
-  showAiDialog.value = true
-
-  const fileCode = file.FileCode || file.fileCode
-
-  // 1. 该文件已保存的提取规则 → 预填 Prompt + 字段/表格定义（结果按定义中文展示）
-  try {
-    const res: any = await getRuleDetail(fileCode)
-    if (res?.data?.prompt) aiPrompt.value = res.data.prompt
-    aiDefFields.value = res.data?.fields || []
-    aiDefTables.value = res.data?.tables || []
-  } catch {
-    /* 未配置规则：保持空 */
-  }
-
-  // 2. 提示词模板列表（可选，用于替换 Prompt）
-  try {
-    const list: any = await getPromptList({ page: 1, rows: 100 })
-    aiTemplates.value = (list?.data || list || []) as PromptTemplate[]
-  } catch {
-    aiTemplates.value = []
-  }
-}
-
-async function runAiAnalyze() {
-  const fileCode = aiFile.value?.FileCode || aiFile.value?.fileCode
-  if (!fileCode) return
-  // 提示词可为空：后端用「固定提示词」（按该文件已配置的字段/表格清单生成）
-
-  aiLoading.value = true
-  const fixedPrompt = !aiPrompt.value.trim()
-  try {
-    const res: any = await verifyPrompt({ fileCode, prompt: aiPrompt.value || '' })
-    const data = res?.data
-    aiResult.value = {
-      success: !!data?.success,
-      message: data?.message || (data?.success ? '提取成功' : '提取失败'),
-      fields: (data?.data?.fields || {}) as Record<string, unknown>,
-      tables: (data?.data?.tables || {}) as Record<string, any[]>,
-      fixedPrompt,
-    }
-    if (data?.success) ElMessage.success('AI 提取完成')
-    else ElMessage.warning(data?.message || 'AI 提取失败')
-  } catch (e: any) {
-    aiResult.value = { success: false, message: e?.message || 'AI 提取异常', fields: {}, tables: {}, fixedPrompt }
-    ElMessage.error('AI 提取失败：' + (e?.message || ''))
-  } finally {
-    aiLoading.value = false
   }
 }
 
@@ -682,6 +576,10 @@ function fileStatus(file: any): string {
   const upload = String(file.UploadStatus || file.uploadStatus || '').toLowerCase()
   if (upload === 'uploading') return 'uploading'
   if (upload === 'active' || upload === 'uploaded') return 'uploaded'
+  if (upload === 'pending' || upload === 'replacing') return 'uploading'
+  if (upload === 'failed') return 'failed'
+  // stage 树仅返回有效文件；无转换状态且无上传字段时视为已就绪
+  if (!upload && file?.FileCode) return 'uploaded'
   return 'none'
 }
 
@@ -695,10 +593,134 @@ const STATUS_TEXT: Record<string, string> = {
   none: '—',
 }
 
-const totalSize = computed(() =>
-  currentFiles.value.reduce((sum: number, f: any) => sum + (f.FileSize || f.fileSize || 0), 0)
-)
+/** 状态优先级：失败 > 转换中/上传中 > 待转换 > 已就绪/已上传 > 空 */
+const STATUS_RANK: Record<string, number> = {
+  failed: 6,
+  converting: 5,
+  uploading: 5,
+  pending: 4,
+  completed: 3,
+  uploaded: 2,
+  none: 0,
+}
+
+function mergeStatus(statuses: string[]): string {
+  let best = 'none'
+  let bestRank = -1
+  for (const s of statuses) {
+    const rank = STATUS_RANK[s] ?? 0
+    if (rank > bestRank) {
+      bestRank = rank
+      best = s
+    }
+  }
+  return best
+}
+
+interface FolderAgg {
+  size: number
+  fileCount: number
+  folderCount: number
+  status: string
+}
+
+/** folderCode → 递归聚合（含子树文件/子文件夹） */
+const folderAggMap = ref(new Map<string, FolderAgg>())
+/** 根级整棵 stage 树：递归文件夹数 / 文件数 / 总大小 */
+const scopeFolderCount = ref(0)
+const scopeFileCount = ref(0)
+const scopeTotalSize = ref(0)
+
+function buildFolderAgg(stageFolders: StageFolderNode[]) {
+  const map = new Map<string, FolderAgg>()
+  let rootFolderCount = 0
+  let scopeCount = 0
+  let scopeSize = 0
+
+  const walk = (node: StageFolderNode, isRealFolder: boolean): FolderAgg => {
+    let size = 0
+    let fileCount = 0
+    let folderCount = isRealFolder ? 1 : 0
+    const statuses: string[] = []
+    for (const f of (node.Files || []) as StageFileNode[]) {
+      fileCount++
+      size += f.FileSize || 0
+      statuses.push(fileStatus(f))
+    }
+    for (const child of node.Children || []) {
+      const childAgg = walk(child, true)
+      size += childAgg.size
+      fileCount += childAgg.fileCount
+      folderCount += childAgg.folderCount
+      if (childAgg.status && childAgg.status !== 'none') statuses.push(childAgg.status)
+    }
+    const status = mergeStatus(statuses)
+    const agg: FolderAgg = { size, fileCount, folderCount, status }
+    // 后端「根目录」虚拟节点 Code === directoryCode，不是真实文件夹
+    if (isRealFolder && node.Code && node.Name !== '根目录') map.set(node.Code, agg)
+    return agg
+  }
+
+  for (const node of stageFolders) {
+    const isRootVirtual = node.Name === '根目录'
+    const agg = walk(node, !isRootVirtual)
+    if (!isRootVirtual) rootFolderCount += agg.folderCount
+    scopeCount += agg.fileCount
+    scopeSize += agg.size
+  }
+
+  folderAggMap.value = map
+  scopeFolderCount.value = rootFolderCount
+  scopeFileCount.value = scopeCount
+  scopeTotalSize.value = scopeSize
+}
+
+function folderAgg(folder: any): FolderAgg {
+  const code = folder?.FolderCode || folder?.folderCode || ''
+  return folderAggMap.value.get(code) || { size: 0, fileCount: 0, folderCount: 0, status: 'none' }
+}
+
+function folderSizeText(folder: any): string {
+  const agg = folderAgg(folder)
+  if (agg.fileCount === 0) return '--'
+  return formatFileSize(agg.size)
+}
+
+function folderStatusText(folder: any): string {
+  return STATUS_TEXT[folderAgg(folder).status] || '—'
+}
+
+const totalSize = computed(() => {
+  if (currentFolderCode.value) {
+    const agg = folderAggMap.value.get(currentFolderCode.value)
+    if (agg) return agg.size
+  } else if (scopeTotalSize.value > 0 || scopeFileCount.value > 0) {
+    return scopeTotalSize.value
+  }
+  return currentFiles.value.reduce((sum: number, f: any) => sum + (f.FileSize || f.fileSize || 0), 0)
+})
 const totalSizeFormatted = computed(() => formatFileSize(totalSize.value))
+
+/** 状态栏「文件 N 个」：当前路径递归文件数 */
+const statusFileCount = computed(() => {
+  if (currentFolderCode.value) {
+    const agg = folderAggMap.value.get(currentFolderCode.value)
+    if (agg) return agg.fileCount
+  }
+  if (scopeFileCount.value > 0 || currentFolders.value.length > 0) return scopeFileCount.value
+  return currentFiles.value.length
+})
+
+/** 状态栏「文件夹 N 个」：当前路径递归文件夹数（进入子目录后只统计该子树） */
+const statusFolderCount = computed(() => {
+  if (currentFolderCode.value) {
+    const agg = folderAggMap.value.get(currentFolderCode.value)
+    // 当前文件夹自身的子文件夹（不含当前文件夹本身）
+    if (agg) return Math.max(agg.folderCount - 1, currentFolders.value.length)
+  }
+  if (scopeFolderCount.value > 0) return scopeFolderCount.value
+  return currentFolders.value.length
+})
 
 const isBusy = computed(() => uploading.value || !!activeQueue.value)
 
@@ -722,6 +744,8 @@ onUnmounted(() => {
 
 <template>
   <div class="directory-manager">
+    <!-- 替换文件用隐藏选择器 -->
+    <input ref="replaceInputRef" type="file" style="display: none" @change="onReplacePicked" />
     <!-- 转换队列状态条（历史项目位于面包屑下方，此处作为整页顶部通知） -->
     <div v-if="activeQueue" class="queue-banner">
       <el-icon class="is-spinning"><Loading /></el-icon>
@@ -743,63 +767,12 @@ onUnmounted(() => {
     <div class="main-row">
     <!-- 左侧面板 -->
     <div class="left-panel">
-      <div class="left-header">
-        <span class="left-title">目录结构</span>
-      </div>
-      <div class="search-box">
-        <el-input
-          v-model="searchText"
-          placeholder="搜索机构 / 标准 / 阶段..."
-          size="small"
-          clearable
-          :prefix-icon="Search"
-        />
-      </div>
-      <div class="tree-container" v-loading="treeLoading">
-        <div v-for="org in filteredTree" :key="org.Code" class="tree-group">
-          <!-- 机构 -->
-          <div class="tree-node level-0" @click="toggleExpand(org)">
-            <el-icon class="tree-toggle" :class="{ expanded: (org as any).Expanded }">
-              <Folder />
-            </el-icon>
-            <el-icon class="tree-icon org"><OfficeBuilding /></el-icon>
-            <span class="tree-label" :title="org.Name">{{ org.Name }}</span>
-            <el-badge :value="org.Children?.length || 0" type="info" />
-          </div>
-          <!-- 标准 -->
-          <template v-if="(org as any).Expanded && org.Children">
-            <template v-for="std in org.Children" :key="std.Code">
-              <div class="tree-node level-1" @click="toggleExpand(std)">
-                <el-icon class="tree-toggle" :class="{ expanded: (std as any).Expanded }">
-                  <Folder />
-                </el-icon>
-                <el-icon class="tree-icon standard"><Document /></el-icon>
-                <span class="tree-label" :title="std.Name">{{ std.Name }}</span>
-                <el-badge :value="std.Children?.length || 0" type="info" />
-              </div>
-              <!-- 阶段 -->
-              <div
-                v-for="phase in std.Children"
-                :key="phase.Code"
-                class="tree-node level-2"
-                :class="{ active: currentPhase?.Code === phase.Code }"
-                @click="selectPhase(phase)"
-              >
-                <el-icon class="tree-toggle" style="visibility: hidden">
-                  <Folder />
-                </el-icon>
-                <el-icon class="tree-icon phase"><Document /></el-icon>
-                <span class="tree-label" :title="phase.Name">{{ phase.Name }}</span>
-              </div>
-            </template>
-          </template>
-        </div>
-        <el-empty
-          v-if="!treeLoading && filteredTree.length === 0"
-          :description="searchText ? '未匹配到目录' : '暂无目录数据'"
-          :image-size="80"
-        />
-      </div>
+      <CertBizTree
+        title="目录结构"
+        search-placeholder="搜索机构 / 标准 / 阶段..."
+        :default-expand-level="3"
+        @select="selectPhase"
+      />
     </div>
 
     <!-- 右侧内容区 -->
@@ -889,14 +862,38 @@ onUnmounted(() => {
                   />
                 </td>
                 <td class="name-cell">
-                  <el-icon class="folder-icon"><Folder /></el-icon>
-                  <span class="name-text folder-name" @dblclick.stop="enterFolder(folder)">
-                    {{ folder.FolderName || folder.folderName }}
-                  </span>
+                  <div class="cell-flex">
+                    <el-icon class="folder-icon"><Folder /></el-icon>
+                    <span class="name-text folder-name" @dblclick.stop="enterFolder(folder)">
+                      {{ folder.FolderName || folder.folderName }}
+                    </span>
+                  </div>
                 </td>
-                <td class="size-cell">--</td>
-                <td class="status-cell">—</td>
-                <td class="date-cell">{{ formatDate(folder.CreateDate || folder.createDate) }}</td>
+                <td class="size-cell">{{ folderSizeText(folder) }}</td>
+                <td class="status-cell">
+                  <div class="cell-flex">
+                    <el-icon
+                      v-if="folderAgg(folder).status === 'converting' || folderAgg(folder).status === 'uploading'"
+                      class="is-spinning"
+                      color="#409eff"
+                    >
+                      <Loading />
+                    </el-icon>
+                    <el-icon
+                      v-else-if="folderAgg(folder).status === 'completed' || folderAgg(folder).status === 'uploaded'"
+                      color="#67c23a"
+                    >
+                      <CircleCheck />
+                    </el-icon>
+                    <el-icon v-else-if="folderAgg(folder).status === 'failed'" color="#f56c6c">
+                      <CircleClose />
+                    </el-icon>
+                    <span :class="['status-text', 'is-' + folderAgg(folder).status]">
+                      {{ folderStatusText(folder) }}
+                    </span>
+                  </div>
+                </td>
+                <td class="date-cell">{{ formatDate(folder.CreateTime || folder.createTime || folder.CreateDate || folder.createDate) }}</td>
                 <td class="action-cell">
                   <el-button link type="primary" size="small" :disabled="isBusy" @click.stop="showRenameDialog(folder)">重命名</el-button>
                   <el-button link type="danger" size="small" :disabled="isBusy" @click.stop="deleteItem(folder)">删除</el-button>
@@ -916,32 +913,33 @@ onUnmounted(() => {
                   />
                 </td>
                 <td class="name-cell">
-                  <el-icon class="file-type-icon" :class="getFileIconClass(file.FileName || file.fileName)">
-                    <Document />
-                  </el-icon>
-                  <span class="name-text">{{ file.FileName || file.fileName }}</span>
+                  <div class="cell-flex">
+                    <el-icon class="file-type-icon" :class="getFileIconClass(file.FileName || file.fileName)">
+                      <Document />
+                    </el-icon>
+                    <span class="name-text">{{ file.FileName || file.fileName }}</span>
+                  </div>
                 </td>
                 <td class="size-cell">{{ formatFileSize(file.FileSize || file.fileSize) }}</td>
                 <td class="status-cell">
-                  <el-icon v-if="fileStatus(file) === 'converting' || fileStatus(file) === 'uploading'" class="is-spinning" color="#409eff">
-                    <Loading />
-                  </el-icon>
-                  <el-icon v-else-if="fileStatus(file) === 'completed' || fileStatus(file) === 'uploaded'" color="#67c23a">
-                    <CircleCheck />
-                  </el-icon>
-                  <el-icon v-else-if="fileStatus(file) === 'failed'" color="#f56c6c">
-                    <CircleClose />
-                  </el-icon>
-                  <span :class="['status-text', 'is-' + fileStatus(file)]">{{ STATUS_TEXT[fileStatus(file)] }}</span>
+                  <div class="cell-flex">
+                    <el-icon v-if="fileStatus(file) === 'converting' || fileStatus(file) === 'uploading'" class="is-spinning" color="#409eff">
+                      <Loading />
+                    </el-icon>
+                    <el-icon v-else-if="fileStatus(file) === 'completed' || fileStatus(file) === 'uploaded'" color="#67c23a">
+                      <CircleCheck />
+                    </el-icon>
+                    <el-icon v-else-if="fileStatus(file) === 'failed'" color="#f56c6c">
+                      <CircleClose />
+                    </el-icon>
+                    <span :class="['status-text', 'is-' + fileStatus(file)]">{{ STATUS_TEXT[fileStatus(file)] }}</span>
+                  </div>
                 </td>
-                <td class="date-cell">{{ formatDate(file.CreateDate || file.createDate) }}</td>
+                <td class="date-cell">{{ formatDate(file.CreateTime || file.createTime || file.CreateDate || file.createDate) }}</td>
                 <td class="action-cell">
                   <el-button link type="primary" size="small" :disabled="isBusy" @click.stop="showRenameDialog(file)">重命名</el-button>
-                  <el-button link type="primary" size="small" :disabled="isBusy" @click.stop="replaceFile()">替换</el-button>
+                  <el-button link type="primary" size="small" :disabled="isBusy" @click.stop="startReplace(file)">替换</el-button>
                   <el-button link type="primary" size="small" @click.stop="downloadItem(file)">下载</el-button>
-                  <el-button link type="success" size="small" @click.stop="handleAiAnalyze(file)">
-                    <el-icon><MagicStick /></el-icon> AI 分析
-                  </el-button>
                   <el-button link type="danger" size="small" :disabled="isBusy" @click.stop="deleteItem(file)">删除</el-button>
                 </td>
               </tr>
@@ -959,8 +957,8 @@ onUnmounted(() => {
         <!-- 底部状态栏 -->
         <CertStatusBar class="directory-status-bar">
           <span>
-            共 {{ currentFolders.length + currentFiles.length }} 项 | 文件夹 {{ currentFolders.length }} 个，文件
-            {{ currentFiles.length }} 个
+            共 {{ statusFolderCount + statusFileCount }} 项 | 文件夹 {{ statusFolderCount }} 个，文件
+            {{ statusFileCount }} 个
           </span>
           <span>总大小 {{ totalSizeFormatted }}</span>
         </CertStatusBar>
@@ -1025,118 +1023,6 @@ onUnmounted(() => {
       <template #footer>
         <el-button type="primary" @click="showHelpDialog = false">我知道了</el-button>
       </template>
-    </el-dialog>
-
-    <!-- AI 分析 -->
-    <el-dialog v-model="showAiDialog" title="AI 提取分析" width="720px" top="6vh">
-      <div class="ai-dialog">
-        <div class="ai-file">
-          <el-icon><Document /></el-icon>
-          <span>{{ aiFile?.FileName || aiFile?.fileName }}</span>
-        </div>
-        <el-select
-          v-if="aiTemplates.length"
-          v-model="aiPrompt"
-          filterable
-          placeholder="选择提示词模板（或直接编辑下方提示词）"
-          style="width: 100%; margin-bottom: 8px"
-          @change="(v: any) => (aiPrompt = v)"
-        >
-          <el-option
-            v-for="tpl in aiTemplates"
-            :key="tpl.PromptCode"
-            :label="tpl.PromptName"
-            :value="tpl.Template"
-          />
-        </el-select>
-        <el-input
-          v-model="aiPrompt"
-          type="textarea"
-          :rows="8"
-          placeholder="留空即使用「固定提示词」：按该文件已配置的字段/表格清单生成（推荐，字段与表格结构性分离）；也可选择模板或手动输入"
-        />
-        <div class="ai-actions">
-          <el-button type="primary" size="small" :loading="aiLoading" @click="runAiAnalyze">
-            <el-icon><MagicStick /></el-icon> 开始分析
-          </el-button>
-          <span class="ai-hint">
-            {{ aiPrompt.trim() ? '按当前提示词提取' : '按固定提示词提取（字段/表格定义）' }}
-          </span>
-        </div>
-
-        <div v-if="aiResult" class="ai-result">
-          <el-alert
-            :type="aiResult.success ? 'success' : 'warning'"
-            :title="aiResult.message"
-            :closable="false"
-            show-icon
-          />
-          <template v-if="aiResult.success">
-            <!-- 字段：按规则定义（中文）逐项展示，未提取到的显式标注 -->
-            <h5>
-              提取字段
-              <span class="ai-count">{{ aiView.extractedFieldCount }} / {{ aiView.fields.length }} 已提取</span>
-            </h5>
-            <el-table v-if="aiView.fields.length" :data="aiView.fields" size="small" border max-height="240">
-              <el-table-column label="字段名称" min-width="110">
-                <template #default="{ row }">{{ row.name }}</template>
-              </el-table-column>
-              <el-table-column label="编码" min-width="110">
-                <template #default="{ row }"><code>{{ row.code }}</code></template>
-              </el-table-column>
-              <el-table-column label="提取值" min-width="140" show-overflow-tooltip>
-                <template #default="{ row }">
-                  <span v-if="row.extracted">{{ row.value }}</span>
-                  <span v-else class="ai-missing">未提取到</span>
-                </template>
-              </el-table-column>
-            </el-table>
-            <el-empty v-else description="该文件尚未配置字段定义" :image-size="60" />
-
-            <!-- 表格：中文表名 + 中文列头 -->
-            <h5 v-if="aiDefTables.length || Object.keys(aiResult.tables).length">
-              提取表格
-              <span class="ai-count">
-                {{ aiView.extractedTableCount }} / {{ aiView.tables.length }} 已提取，共 {{ aiView.extractedRowCount }} 行
-              </span>
-            </h5>
-            <div v-for="t in aiView.tables" :key="t.code" class="ai-table-block">
-              <div class="ai-table-head">
-                <span class="ai-table-name">{{ t.name }}</span>
-                <code class="ai-table-code">{{ t.code }}</code>
-                <el-tag v-if="t.extracted" size="small" type="success" effect="plain">{{ t.rows.length }} 行</el-tag>
-                <el-tag v-else size="small" type="info" effect="plain">未提取到数据</el-tag>
-              </div>
-              <el-table v-if="t.extracted" :data="t.rows" size="small" border max-height="240">
-                <el-table-column
-                  v-for="col in t.columns"
-                  :key="col.key"
-                  :prop="col.key"
-                  :label="col.label"
-                  min-width="100"
-                  show-overflow-tooltip
-                />
-              </el-table>
-            </div>
-
-            <!-- AI 多返回、定义中没有的条目 -->
-            <div v-if="aiView.extraFields.length || aiView.extraTables.length" class="ai-extra">
-              <el-icon><Warning /></el-icon>
-              <span>AI 额外返回（不在规则定义内）：</span>
-              <el-tag
-                v-for="e in [...aiView.extraFields, ...aiView.extraTables]"
-                :key="e.key"
-                size="small"
-                type="warning"
-                effect="plain"
-                style="margin-right: 4px"
-              >
-                {{ e.key }}
-              </el-tag>
-            </div>
-          </template>
-        </div>
-      </div>
     </el-dialog>
 
     <!-- 上传对话框 -->
@@ -1376,6 +1262,7 @@ onUnmounted(() => {
   padding: 10px 16px;
   text-align: left;
   border-bottom: 1px solid #ebeef5;
+  vertical-align: middle;
 }
 
 .file-table th {
@@ -1396,14 +1283,16 @@ onUnmounted(() => {
   background: #ecf5ff;
 }
 
-.name-cell {
+.cell-flex {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .folder-icon {
   color: #e6a23c;
+  flex-shrink: 0;
 }
 
 .file-type-icon {
@@ -1449,9 +1338,7 @@ onUnmounted(() => {
   color: #909399;
 }
 
-.status-cell {
-  display: flex;
-  align-items: center;
+.status-cell .cell-flex {
   gap: 4px;
 }
 .status-text.is-failed {
@@ -1557,73 +1444,4 @@ onUnmounted(() => {
   gap: 12px;
 }
 
-/* AI 分析弹窗 */
-.ai-file {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 12px;
-  font-size: 13px;
-  color: #303133;
-}
-.ai-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 12px;
-}
-.ai-hint {
-  font-size: 12px;
-  color: #909399;
-}
-.ai-result {
-  margin-top: 16px;
-}
-.ai-result h5 {
-  margin: 12px 0 6px;
-  font-size: 13px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.ai-count {
-  font-weight: 400;
-  font-size: 12px;
-  color: #909399;
-}
-.ai-missing {
-  color: #c0c4cc;
-  font-style: italic;
-}
-.ai-table-block {
-  margin-bottom: 12px;
-}
-.ai-table-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-.ai-table-name {
-  font-weight: 500;
-  color: #303133;
-}
-.ai-table-code {
-  color: #909399;
-  font-size: 12px;
-}
-.ai-extra {
-  margin-top: 12px;
-  padding: 8px 10px;
-  background: #fdf6ec;
-  border: 1px solid #f5dab1;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #b88230;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
 </style>

@@ -94,8 +94,12 @@ const rules = {
 async function refreshCaptcha() {
   try {
     const res = await getCaptcha()
-    captchaImg.value = res.data.img
-    captchaUuid.value = res.data.uuid
+    // ⚠️ `/api/User/getVierificationCode` 返回的是**裸对象** `{ img, uuid }`，
+    //    没有 ApiResponse 信封（后端 `new JsonResult(new { img, uuid })`），
+    //    而 yzhApi 是原样透传、不拆信封 —— 所以字段在 res 顶层，读 res.data.img 会抛错。
+    captchaImg.value = res?.img ?? res?.data?.img ?? ''
+    captchaUuid.value = res?.uuid ?? res?.data?.uuid ?? ''
+    if (!captchaImg.value) throw new Error('验证码响应为空')
   } catch (e: any) {
     ElMessage.error('验证码加载失败')
   }
@@ -114,10 +118,16 @@ async function handleLogin() {
       uuid: captchaUuid.value
     })
 
-    // 保存 token 和用户信息（后端返回 PascalCase 字段）
+    // 保存 token 和用户信息（后端返回 PascalCase 字段，store 模型与实体同名，§16.9 铁律）
     const { Token, UserCode, UserName, UserTrueName, RoleCode } = res.data
     authStore.setToken(Token)
-    authStore.setUserInfo({ token: Token, userId: 0, userCode: UserCode, userName: UserName, userTrueName: UserTrueName ?? '', roleCode: RoleCode ?? '' })
+    authStore.setUserInfo({
+      Token,
+      UserCode,
+      UserName,
+      UserTrueName: UserTrueName ?? '',
+      RoleCode: RoleCode ?? ''
+    })
 
     ElMessage.success('登录成功')
     router.push('/')

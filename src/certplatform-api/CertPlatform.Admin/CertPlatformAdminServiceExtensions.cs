@@ -1,9 +1,11 @@
 
 using CertPlatform.Admin.Services.DocExtraction;
 using CertPlatform.Admin.Services.StandardDirectory;
+using CertPlatform.Admin.Services.Audit;
 using CertPlatform.Admin.Services.Workflow;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using CertPlatform.Shared.DocExtraction;
+using YZH.Core.Api.Services;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,6 +52,17 @@ public static class CertPlatformAdminServiceExtensions
         services.AddSingleton<IYzhTaskExecutor>(sp => sp.GetRequiredService<OfficeConvertTaskExecutor>());
         services.AddSingleton<IYzhQueueNotifier>(sp => sp.GetRequiredService<CertQueueNotifier>());
         services.AddSingleton<IYzhQueueCancelHandler>(sp => sp.GetRequiredService<UploadQueueCancelHandler>());
+
+        // ──── 操作日志数据库写入 ────
+        // SysLogDbWriter 是 scoped（需要 IDbOrm），DbWriter 回调在调用时创建 scope
+        services.AddScoped<SysLogDbWriter>();
+        // 注册一个回调工厂，供 Program.cs 注入到 IYzhAuditLogger.DbWriter
+        services.AddSingleton<Func<AuditLogEntry, Task>>(sp => async entry =>
+        {
+            using var scope = sp.CreateScope();
+            var writer = scope.ServiceProvider.GetRequiredService<SysLogDbWriter>();
+            await writer.WriteAsync(entry);
+        });
 
         return services;
     }

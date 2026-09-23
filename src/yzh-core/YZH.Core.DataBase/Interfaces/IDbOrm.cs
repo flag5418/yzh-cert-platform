@@ -23,6 +23,12 @@ public interface IDbOrm
     /// <summary>根据条件获取单条</summary>
     Task<Result<T?>> GetOneAsync<T>(Expression<Func<T, bool>> predicate) where T : class, new();
 
+    /// <summary>
+    /// 根据条件获取单条（绕过 IsValid 过滤，仅过滤软删除）
+    /// <para>用场景：上传/转换状态机中需要读取 IsValid=0 的中间态记录（pending/replacing）。</para>
+    /// </summary>
+    Task<Result<T?>> GetOneIgnoreValidAsync<T>(Expression<Func<T, bool>> predicate) where T : class, new();
+
     /// <summary>获取列表</summary>
     Task<Result<List<T>>> GetListAsync<T>(Expression<Func<T, bool>>? predicate = null, bool includeDisabled = false) where T : class, new();
 

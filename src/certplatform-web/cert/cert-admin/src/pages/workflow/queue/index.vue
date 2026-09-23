@@ -283,7 +283,7 @@ onUnmounted(() => {
             <span class="scope-text">{{ formatScopeKey(row.scopeKey) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="creator" label="创建人" width="110" />
+        <el-table-column prop="createBy" label="创建人" width="110" />
         <el-table-column label="状态" width="90" align="center">
           <template #default="{ row }">
             <el-tag :type="statusTagType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
@@ -366,7 +366,7 @@ onUnmounted(() => {
           <el-descriptions-item label="范围">
             {{ formatScopeKey(detail.queue.scopeKey) || '—' }}
           </el-descriptions-item>
-          <el-descriptions-item label="创建人">{{ detail.queue.creator || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="创建人">{{ detail.queue.createBy || '—' }}</el-descriptions-item>
           <el-descriptions-item label="状态">
             <el-tag :type="statusTagType(detail.queue.status)" size="small">{{ statusText(detail.queue.status) }}</el-tag>
           </el-descriptions-item>
