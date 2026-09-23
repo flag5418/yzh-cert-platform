@@ -17,7 +17,7 @@ export {
   YzhTreeTableCheckSelector,
 } from './components/layout'
 export type { YzhTreeNode } from './components/layout/YzhTree.vue'
-export { YzhTable } from './components/table'
+export { YzhTable, YzhTreeTable } from './components/table'
 export type {
   DefaultSort,
   Page,

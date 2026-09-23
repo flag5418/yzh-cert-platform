@@ -1,4 +1,5 @@
 export { default as YzhTable } from './YzhTable.vue'
+export { default as YzhTreeTable } from './YzhTreeTable.vue'
 export type {
   YzhTableColumn,
   YzhTableColumnV4,

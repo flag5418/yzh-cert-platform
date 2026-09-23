@@ -68,6 +68,8 @@ const props = withDefaults(
     actionMaxInline?: number
     /** 树形数据默认全部展开（children 字段驱动，透传 el-table default-expand-all） */
     defaultExpandAll?: boolean
+    /** 树形字段映射（透传 el-table tree-props；children 默认 'children'） */
+    treeProps?: { children?: string; hasChildren?: string }
   }>(),
   {
     selectable: false,
@@ -83,7 +85,8 @@ const props = withDefaults(
     rowActionButtons: () => [],
     rowActionLink: true,
     actionMaxInline: 0,
-    defaultExpandAll: false
+    defaultExpandAll: false,
+    treeProps: undefined
   }
 )
 
@@ -95,6 +98,8 @@ const emit = defineEmits<{
   (e: 'row-action', key: string, row: T, action?: YzhAction): void
   /** 工具栏动作 */
   (e: 'toolbar-action', key: string, action: YzhAction): void
+  /** 树表展开/收起（el-table expand-change 透传） */
+  (e: 'expand-change', row: T, expandedRows: T[]): void
 }>()
 
 // 数据状态
@@ -483,6 +488,44 @@ function setCheckedRows(matchFn: (row: T) => boolean, checked: boolean) {
   emit('selection-change', [...selectedRows.value as T[]])
 }
 
+// ========================================================
+// 树表展开/收起（el-table tree-props + toggleRowExpansion）
+// ========================================================
+const tableRef = ref()
+
+/** 子级字段名（treeProps.children，默认 'children'） */
+const childrenField = computed(() => props.treeProps?.children || 'children')
+
+/** 生效的 tree-props（未显式传时使用默认 children） */
+const effectiveTreeProps = computed(() => ({
+  children: childrenField.value,
+  hasChildren: props.treeProps?.hasChildren || 'hasChildren',
+  ...props.treeProps
+}))
+
+/** 深度遍历行树 */
+function walkRows(list: T[], fn: (row: T) => void) {
+  for (const row of list) {
+    fn(row)
+    const kids = (row as any)[childrenField.value]
+    if (Array.isArray(kids) && kids.length) walkRows(kids as T[], fn)
+  }
+}
+
+/** 全部展开（树表） */
+function expandAll() {
+  walkRows(rows.value as T[], (row) => tableRef.value?.toggleRowExpansion?.(row, true))
+}
+
+/** 全部收起（树表） */
+function collapseAll() {
+  walkRows(rows.value as T[], (row) => tableRef.value?.toggleRowExpansion?.(row, false))
+}
+
+function onExpandChange(row: T, expandedRows: T[]) {
+  emit('expand-change', row, expandedRows as T[])
+}
+
 // 暴露方法给父组件
 defineExpose({
   refresh,
@@ -496,7 +539,9 @@ defineExpose({
   clearSelection: () => {
     selectedRows.value = []
     emit('selection-change', [])
-  }
+  },
+  expandAll,
+  collapseAll
 })
 </script>
 
@@ -570,10 +615,12 @@ defineExpose({
         :style="height ? { height: typeof height === 'number' ? height + 'px' : height } : {}"
       >
         <el-table
+          ref="tableRef"
           v-loading="loading"
           :data="rows"
           :row-key="rowKey"
           :default-expand-all="defaultExpandAll"
+          :tree-props="effectiveTreeProps"
           :height="height !== undefined && height !== null ? height : '100%'"
           :highlight-current-row="effectiveSelectMode === 'single'"
           stripe
@@ -581,6 +628,7 @@ defineExpose({
           @selection-change="onSelectionChange"
           @sort-change="onSortChange"
           @row-click="onRowClick"
+          @expand-change="onExpandChange"
         >
           <el-table-column v-if="isMultiple" type="selection" width="48" :reserve-selection="false" />
 

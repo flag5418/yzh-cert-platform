@@ -71,7 +71,7 @@
 
 ## 后续（本批不执行，仅登记）
 
-- [ ] **F1** 新建原子组件 `YzhTreeTable`（树形数据表；配置行按钮含 add-child）
+- [x] **F1** 新建原子组件 `YzhTreeTable`（树形数据表；配置行按钮含 add-child）——2026-09-23：`components/table/YzhTreeTable.vue` 薄封装 + `YzhTable` 增强 `treeProps`/`expandAll`；前端 `allowAddChild` 兜底，F2 后端契约仍另做；`iso-standard` 右表已换名冒烟
 - [ ] **F2** `RowButtons.AddChild` 适配器扩展
 - [ ] **F3** YzhForm 保存成功 → 树表 `refresh` 约定
 - [ ] **F4** `SingleTreeTableCore`（暂缓）

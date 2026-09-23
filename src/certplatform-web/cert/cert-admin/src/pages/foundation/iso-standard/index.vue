@@ -13,7 +13,7 @@
  * - toolbar 按钮根据配置动态渲染
  */
 import { Delete, Plus, RefreshRight } from '@element-plus/icons-vue'
-import { YzhForm, YzhTreeTableLayout, YzhTable, type TreeNode } from '@yzh-core'
+import { YzhForm, YzhTreeTableLayout, YzhTreeTable, type TreeNode } from '@yzh-core'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, nextTick, ref } from 'vue'
 import { ISOStandardTreeTableLogic } from './logic'
@@ -238,18 +238,17 @@ onMounted(async () => {
 
       <template #default>
         <div class="iso-page__content">
-          <!-- 条款树形表格（菜单模式：整树 + 默认全展开 + 无分页） -->
-          <YzhTable
+          <!-- 条款树形表格（YzhTreeTable：整树 + 默认全展开 + 无分页 + allowAddChild） -->
+          <YzhTreeTable
             ref="tableRef"
             :columns="logic.columns as any"
             :data-loader="logic.dataLoader.bind(logic)"
             :search-fields="logic.searchFields as any"
             :selectable="true"
             :row-action-buttons="rowActionButtons"
-            :show-pagination="false"
-            :default-expand-all="true"
             select-mode="multiple"
             row-key="Code"
+            :allow-add-child="true"
             @selection-change="selectedRows = $event"
             @row-action="handleRowAction"
           >
@@ -283,7 +282,7 @@ onMounted(async () => {
                 />
               </div>
             </template>
-          </YzhTable>
+          </YzhTreeTable>
         </div>
       </template>
     </YzhTreeTableLayout>
