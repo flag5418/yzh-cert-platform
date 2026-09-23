@@ -17,7 +17,7 @@
 | **机构-人员（标准模板）** | `system/organization/` | 左树右表标准实现 |
 | **后端 Controller** | `YZH.Core.Web/Controllers/Foundation/ISOStandardController.cs` | 继承 `YzhControllerBase<T>` 或 `TreeTableControllerBase<T,V>` |
 | **前端 Logic** | `yzh.vue.core/src/logic/TreeTableLogic.ts` | 基类：自动 columns/formFields/CRUD |
-| **前端 Vue** | `system/organization/index.vue` | `<YzhTreeTable>` + `<YzhTable>` + `<YzhForm>` |
+| **前端 Vue** | `system/organization/index.vue` | `<YzhTreeTableLayout>` + `<YzhTable>` + `<YzhForm>` |
 | **数据契约** | `docs/10-YZH架构/04-数据契约.md` | 前后端通信规范 |
 
 ### 1.2 架构决策

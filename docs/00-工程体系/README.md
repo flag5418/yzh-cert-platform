@@ -103,7 +103,7 @@ docs/
 | `10-YZH架构/README.md` | **AI 第一入口**：架构全景图 + 快速导航 + 关键文件路径速查 |
 | `10-YZH架构/01-架构总纲.md` | 核心理念 + 前后端继承体系 + Code 作为业务主键 + 统一 API 端点 + 生命周期钩子速查 + 开发约束清单 |
 | `10-YZH架构/02-后端架构.md` | YzhControllerBase<V> 完整钩子 + TreeTableControllerBase<T,V> + EntityService<T> 方法 + BaseEntity 字段 + OrganizationController 完整示例 |
-| `10-YZH架构/03-前端架构.md` | CrudPageLogic<V> 完整方法 + TreeTableLogic<V> + YzhTable/YzhForm/YzhTreeTable 组件 + 类型契约 + 页面开发模式 |
+| `10-YZH架构/03-前端架构.md` | CrudPageLogic<V> 完整方法 + TreeTableLogic<V> + YzhTable/YzhForm/YzhTreeTableLayout 组件 + 类型契约 + 页面开发模式 |
 | `10-YZH架构/04-数据契约.md` | FilterRequest / TreeItemDto / EntityConfigDto / TreeBehaviorConfigDto 完整字段 + 控件类型映射表 + JSON 配置示例 |
 | `10-YZH架构/05-权限体系.md` | 三类组织域 + 角色矩阵 + JWT/SSO 挤号 + Token 续租 + 三层权限模型 + 配置保护机制 + 安全红线 |
 | `10-YZH架构/06-代码结构规范.md` | 三层同构 + 域映射表 + 命名规范 + 路由约定 + 新增模块完整流程 + 检查清单 |

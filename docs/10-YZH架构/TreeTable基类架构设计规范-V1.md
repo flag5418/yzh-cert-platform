@@ -283,13 +283,13 @@ export class XxxTreeTableLogic extends TreeTableLogic<any> {
 
 ```vue
 <script setup lang="ts">
-import { YzhForm, YzhTable, YzhTreeTable, useTreeTable } from '@yzh-core'
+import { YzhForm, YzhTable, YzhTreeTableLayout, useTreeTable } from '@yzh-core'
 import { XxxTreeTableLogic } from './logic'
 const t = useTreeTable(XxxTreeTableLogic)
 </script>
 
 <template>
-  <YzhTreeTable ref="t.treeTableRef" :tree-data="t.logic.treeData.value"
+  <YzhTreeTableLayout ref="t.treeTableRef" :tree-data="t.logic.treeData.value"
     :tree-lazy="t.logic.treeLazy" :node-actions="t.nodeActions.value"
     :get-action-label="t.getNodeActionLabel"
     @tree-node-click="t.handleNodeClick" @tree-node-action="t.handleNodeAction">
@@ -307,7 +307,7 @@ const t = useTreeTable(XxxTreeTableLogic)
         </template>
       </YzhTable>
     </template>
-  </YzhTreeTable>
+  </YzhTreeTableLayout>
 
   <el-dialog v-model="t.logic.dialogVisible.value" width="640px">
     <YzhForm v-model="t.logic.formData" :fields="t.logic.formFields as any"

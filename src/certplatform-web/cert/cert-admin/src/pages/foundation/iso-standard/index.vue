@@ -13,7 +13,7 @@
  * - toolbar 按钮根据配置动态渲染
  */
 import { Delete, Plus, RefreshRight } from '@element-plus/icons-vue'
-import { YzhForm, YzhTreeTable, YzhTable, type TreeNode } from '@yzh-core'
+import { YzhForm, YzhTreeTableLayout, YzhTable, type TreeNode } from '@yzh-core'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, nextTick, ref } from 'vue'
 import { ISOStandardTreeTableLogic } from './logic'
@@ -217,7 +217,7 @@ onMounted(async () => {
 
 <template>
   <div class="iso-page">
-    <YzhTreeTable
+    <YzhTreeTableLayout
       ref="treeTableRef"
       :tree-data="logic.treeData"
       :tree-width="320"
@@ -286,7 +286,7 @@ onMounted(async () => {
           </YzhTable>
         </div>
       </template>
-    </YzhTreeTable>
+    </YzhTreeTableLayout>
 
     <!-- 条款新增/编辑弹窗 -->
     <el-dialog

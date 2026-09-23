@@ -8,7 +8,7 @@
 > **关联代码**:
 > - `src/certplatform-web/yzh.vue.core/src/logic/CrudPageLogic.ts`
 > - `src/certplatform-web/yzh.vue.core/src/logic/TreeTableLogic.ts`
-> - `src/certplatform-web/yzh.vue.core/src/components/layout/YzhTreeTable.vue`
+> - `src/certplatform-web/yzh.vue.core/src/components/layout/YzhTreeTableLayout.vue`
 > - `src/certplatform-web/yzh.vue.core/src/components/layout/YzhTree.vue`
 > - `src/certplatform-web/yzh.vue.core/src/types/tree.ts`
 
@@ -101,7 +101,7 @@ TreeTable（左树右表）是本系统的高频页面形态：左侧树承载�
 ### 2.4 大量节点（可扩展性）现状
 
 - 5 个页面 `:tree-lazy="false"`，全部一次性加载整棵树。
-- `YzhTree.filterTree` / `YzhTreeTable.filterTreeData` 每次输入都**深拷贝节点**（`{ ...node, Children: filteredChildren }`），大树下搜索是 O(n) 拷贝。
+- `YzhTree.filterTree` / `YzhTreeTableLayout.filterTreeData` 每次输入都**深拷贝节点**（`{ ...node, Children: filteredChildren }`），大树下搜索是 O(n) 拷贝。
 - `findNode / removeNodeFromTree / replaceTreeNode` 均为递归线性查找，无节点索引。
 - 无虚拟滚动（`el-tree` 不支持；Element Plus 提供 `el-tree-v2` / `ElTreeV2` 支持虚拟化）。
 
@@ -115,7 +115,7 @@ TreeTable（左树右表）是本系统的高频页面形态：左侧树承载�
 ┌──────────────────────────────────────────────────────────────┐
 │                     业务页面 index.vue                         │
 │   const t = useTreeTable(ISOStandardTreeTableLogic)           │
-│   <YzhTreeTable :tree-data="t.logic.treeData.value" ...>      │
+│   <YzhTreeTableLayout :tree-data="t.logic.treeData.value" ...>      │
 │     @tree-node-click="t.handleNodeClick"                      │
 │     @tree-node-action="t.handleNodeAction" ...                │
 │     <YzhTable :data-loader="t.dataLoader" ...                 │
@@ -558,9 +558,9 @@ export function useTreeTable<L extends TreeTableLogic<any>>(
 
 | 能力 | 设计 | 备注 |
 |------|------|------|
-| **懒加载** | 基类暴露 `get treeLazy()` = `treeConfig?.Lazy ?? false`；`YzhTreeTable :tree-lazy="t.logic.treeLazy"`，`loadChildren` 已实现 | 大树必开 |
-| **搜索防抖 + 不拷贝** | `YzhTree/YzhTreeTable` 的 `filterTree` 改为：命中即保留**同引用**节点，用 `VisibleChildren`/`filteredIds` 控制渲染，避免深拷贝；输入 200ms 防抖 | 搜索从 O(n) 拷贝 → O(n) 标记 |
-| **虚拟滚动** | 当 `treeConfig.VirtualScroll` 为真或节点数 > `treeVirtualThreshold`（默认 2000），`YzhTreeTable` 内部切换到 `ElTreeV2`（Element Plus 自带虚拟化，需 `height` + 扁平化数据） | P6 可选项，需回归测试 |
+| **懒加载** | 基类暴露 `get treeLazy()` = `treeConfig?.Lazy ?? false`；`YzhTreeTableLayout :tree-lazy="t.logic.treeLazy"`，`loadChildren` 已实现 | 大树必开 |
+| **搜索防抖 + 不拷贝** | `YzhTree/YzhTreeTableLayout` 的 `filterTree` 改为：命中即保留**同引用**节点，用 `VisibleChildren`/`filteredIds` 控制渲染，避免深拷贝；输入 200ms 防抖 | 搜索从 O(n) 拷贝 → O(n) 标记 |
+| **虚拟滚动** | 当 `treeConfig.VirtualScroll` 为真或节点数 > `treeVirtualThreshold`（默认 2000），`YzhTreeTableLayout` 内部切换到 `ElTreeV2`（Element Plus 自带虚拟化，需 `height` + 扁平化数据） | P6 可选项，需回归测试 |
 | **子节点分页** | `loadChildren` 支持 `PageSize`/`HasMore`，大兄弟节点集合分页追加 | 极端场景 |
 
 > 建议策略：**默认开启懒加载与节点索引；虚拟滚动作为开关**，先在 `organization`（机构可能上千）试点验证后再全量。
@@ -623,7 +623,7 @@ export function useTreeTable<L extends TreeTableLogic<any>>(
 | `rowButtons`（数组）→ `rowActionButtons`（字典）影响单表页 | 低 | cert-stage 等 4 页 | 保留 `rowButtons` 派生 getter，逐步迁移 |
 | 统一 `dataLoader` 后覆盖不了特殊逻辑 | 中 | iso-standard/skill-manage | 提供 `shouldApplyTreeFilter / postprocessRows / buildFilters` 钩子 |
 | `useTreeTable` 的 `onMounted` 生命周期 | 低 | 在 setup 中调用即可，行为等同组件内声明 | 明确文档要求 |
-| 虚拟滚动引入渲染差异 | 中 | `YzhTreeTable` | 作为开关，先在 organization 试点 |
+| 虚拟滚动引入渲染差异 | 中 | `YzhTreeTableLayout` | 作为开关，先在 organization 试点 |
 | 基类 `confirmDelete` 增加实体名展示 | 低 | 删除确认文案变化 | 逐步迁移，保留旧文案兜底 |
 
 ---
@@ -693,7 +693,7 @@ export class XxxTreeTableLogic extends TreeTableLogic<any> {
 
 ```vue
 <script setup lang="ts">
-import { YzhForm, YzhTable, YzhTreeTable, useTreeTable } from '@yzh-core'
+import { YzhForm, YzhTable, YzhTreeTableLayout, useTreeTable } from '@yzh-core'
 import { XxxTreeTableLogic } from './logic'
 
 const t = useTreeTable(XxxTreeTableLogic)
@@ -701,7 +701,7 @@ const t = useTreeTable(XxxTreeTableLogic)
 
 <template>
   <div class="xxx-page">
-    <YzhTreeTable
+    <YzhTreeTableLayout
       ref="t.treeTableRef"
       :tree-data="t.logic.treeData.value"
       :tree-lazy="t.logic.treeLazy"
@@ -732,7 +732,7 @@ const t = useTreeTable(XxxTreeTableLogic)
           </template>
         </YzhTable>
       </template>
-    </YzhTreeTable>
+    </YzhTreeTableLayout>
 
     <!-- 行弹窗 -->
     <el-dialog v-model="t.logic.dialogVisible.value" width="640px" :close-on-click-modal="false">

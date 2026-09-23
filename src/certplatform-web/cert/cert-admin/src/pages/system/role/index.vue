@@ -7,10 +7,10 @@
  * - 右侧：选中角色详情面板
  *
  * 后端：RoleController 继承 TreeTableControllerBase<Sys_Role, Sys_Role>
- * 前端：useTreeTable + YzhTreeTable + YzhFormDialog，节点动作由内核 onNodeAction 派发
+ * 前端：useTreeTable + YzhTreeTableLayout + YzhFormDialog，节点动作由内核 onNodeAction 派发
  */
 import { Plus } from '@element-plus/icons-vue'
-import { YzhFormDialog, YzhTreeTable, useTreeTable } from '@yzh-core'
+import { YzhFormDialog, YzhTreeTableLayout, useTreeTable } from '@yzh-core'
 import { ElTag } from 'element-plus'
 import RolePageLogic from './logic'
 
@@ -20,7 +20,7 @@ const { logic, treeTableRef } = useTreeTable(RolePageLogic)
 
 <template>
   <div class="role-page">
-    <YzhTreeTable
+    <YzhTreeTableLayout
       ref="treeTableRef"
       :tree-data="logic.treeData"
       :tree-width="320"
@@ -79,7 +79,7 @@ const { logic, treeTableRef } = useTreeTable(RolePageLogic)
           </div>
         </div>
       </template>
-    </YzhTreeTable>
+    </YzhTreeTableLayout>
 
     <!-- 新增/编辑角色弹窗（树节点泛型流） -->
     <YzhFormDialog

@@ -1040,7 +1040,7 @@ namespace YZH.Core
 | 后端基类 | 前端组件 | 关键特性 | 典型页面 |
 |---------|---------|---------|---------|
 | `YZHTableServiceBase` | `YzhCrudTable.vue` | 标准 CRUD + QueryView | 认证机构、审核阶段、NC规则 |
-| `YZHTreeTableServiceBase` | `YzhTreeTable.vue` | 左树数据接口 + 自动过滤 | ISO标准(机构→标准) |
+| `YZHTreeTableServiceBase` | `YzhTreeTableLayout.vue` | 左树数据接口 + 自动过滤 | ISO标准(机构→标准) |
 | `YZHLinkTableServiceBase` | `YzhTreeCheckboxTable.vue` | 关联查询 + 勾选即保存 | 机构-标准关联 |
 | `YZHTreeServiceBase` | 待开发 `YzhTree.vue` | 树形数据 + 级联删除 | 标准目录模板 |
 
@@ -1311,6 +1311,6 @@ Delete:
 | 后端基类 | 前端组件 | 对应关系 |
 |---------|---------|---------|
 | `YZHTableServiceBase` | `YzhCrudTable` | 单表 CRUD |
-| `YZHTreeTableServiceBase` | `YzhTreeTable` | 左树右表 |
+| `YZHTreeTableServiceBase` | `YzhTreeTableLayout` | 左树右表 |
 | `YZHLinkTableServiceBase` | `YzhTreeCheckboxTable` | 关联表 |
 | `YZHTreeServiceBase` | 待开发 `YzhTree` | 树形管理 |

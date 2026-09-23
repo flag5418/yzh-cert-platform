@@ -12,7 +12,7 @@
  * - 树节点表单从 logic.treeFormFields 自动获取（Workflow/SkillCategoryForm.json）
  */
 import { Delete, Plus, RefreshRight } from '@element-plus/icons-vue'
-import { YzhForm, YzhTreeTable, YzhTable, type TreeNode } from '@yzh-core'
+import { YzhForm, YzhTreeTableLayout, YzhTable, type TreeNode } from '@yzh-core'
 import {
   ElButton,
   ElMessage,
@@ -167,7 +167,7 @@ onMounted(async () => {
 
 <template>
   <div class="skill-page">
-    <YzhTreeTable
+    <YzhTreeTableLayout
       ref="treeTableRef"
       :tree-data="logic.treeData"
       :tree-width="280"
@@ -209,7 +209,7 @@ onMounted(async () => {
           </YzhTable>
         </div>
       </template>
-    </YzhTreeTable>
+    </YzhTreeTableLayout>
 
     <!-- 技能新增/编辑弹窗 -->
     <el-dialog

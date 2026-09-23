@@ -23,7 +23,7 @@ NC（不合格项）规则设计页面用于配置检查项，定义哪些 ISO �
   配置：TreeConfig（NameField, RelateField, MaxLevel...）
   API：/tree/root, /tree/children, /tree/add, /filter, /add, /update, /delete
 
-前端：TreeTableLogic + YzhTreeTable + YzhTable
+前端：TreeTableLogic + YzhTreeTableLayout + YzhTable
   左树：YzhTree（el-tree 封装，支持搜索/节点操作/懒加载）
   右表：YzhTable（分页/搜索/排序/行操作）
   联动：选中树节点 → 自动注入 RelateField 过滤右表
@@ -49,7 +49,7 @@ NC（不合格项）规则设计页面用于配置检查项，定义哪些 ISO �
 - `/api/ValidationRule/toggle-active` — 切换启用
 - `/api/ValidationRule/copy` — 深拷贝
 
-前端使用 `YzhTable`（分页表格）+ `useFileTree`（左树），不使用 `YzhTreeTable` 组件。
+前端使用 `YzhTable`（分页表格）+ `useFileTree`（左树），不使用 `YzhTreeTableLayout` 组件。
 
 ---
 

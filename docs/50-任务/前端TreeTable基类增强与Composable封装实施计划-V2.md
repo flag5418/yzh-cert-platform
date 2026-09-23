@@ -376,7 +376,7 @@
 
 见 V1 第十五章；V2 仅强调：
 - `logic.ts` 只声明 `controllerName` + 覆盖点 getter。
-- `.vue` 只做 `useTreeTable(Logic) + <YzhTreeTable> + <YzhTable> + 两个 <el-dialog>`。
+- `.vue` 只做 `useTreeTable(Logic) + <YzhTreeTableLayout> + <YzhTable> + 两个 <el-dialog>`。
 - 不出现任何 `node.code`、`res.code`、手写 `handle*`、手写端点。
 
 ### 6.2 页面决策树（放哪个基类）

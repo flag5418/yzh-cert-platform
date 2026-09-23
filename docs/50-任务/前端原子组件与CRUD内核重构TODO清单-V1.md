@@ -109,7 +109,7 @@ P0 约定与守卫 ──▶ AD 适配层 ──▶ ST SingleTableCore ──▶
 - [ ] **C-C6 虚拟滚动开关** `virtual`（大树切 `ElTreeV2`）
 - [ ] **C-C7 懒加载节点级 loading**
 
-### C-D `YzhTreeTable`
+### C-D `YzhTreeTableLayout`
 
 - [ ] **C-D1 零实体**：移除 `@share/types/tree` 依赖
 - [ ] **C-D2 字段参数化**：`labelField`/`childrenField` 透传 `YzhTree` 并修正 `filterTreeData`

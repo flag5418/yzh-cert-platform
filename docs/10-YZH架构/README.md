@@ -139,7 +139,7 @@ docs/10-YZH架构/
 | `cert/cert-share/src/types/tree.ts` | 树节点类型定义 |
 | `yzh.vue.core/src/components/table/YzhTable.vue` | 数据表格组件 |
 | `yzh.vue.core/src/components/form/YzhForm.vue` | 表单组件 |
-| `yzh.vue.core/src/components/layout/YzhTreeTable.vue` | 左树右表布局组件 |
+| `yzh.vue.core/src/components/layout/YzhTreeTableLayout.vue` | 左树右表布局组件 |
 | `cert/cert-admin/src/pages/system/user/index.vue` | 单表页面示例（参考） |
 | `cert/cert-admin/src/pages/system/organization/index.vue` | 左树右表页面示例 |
 

@@ -108,7 +108,7 @@ const RULES = [
     debt: [
       // 待 C-C1 / C-D1 / C-H1 处理
       'yzh.vue.core/src/components/layout/YzhTree.vue',
-      'yzh.vue.core/src/components/layout/YzhTreeTable.vue',
+      'yzh.vue.core/src/components/layout/YzhTreeTableLayout.vue',
     ],
   },
   {

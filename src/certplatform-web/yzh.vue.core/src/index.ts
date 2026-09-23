@@ -12,7 +12,7 @@ export {
   YzhSearchBar,
   YzhToolbar,
   YzhTree,
-  YzhTreeTable,
+  YzhTreeTableLayout,
   YzhTreeTableSelector,
   YzhTreeTableCheckSelector,
 } from './components/layout'

@@ -56,7 +56,7 @@
 
 <script setup lang="ts">
 /**
- * YzhTreeTable - 左树右表布局容器（原子组件，零领域依赖）
+ * YzhTreeTableLayout - 左树右表布局容器（布局壳，零领域依赖）
  *
  * 设计（C-D1..D4）：
  * - 零实体依赖：不 import 任何 @share / 业务类型，使用组件自身结构化类型

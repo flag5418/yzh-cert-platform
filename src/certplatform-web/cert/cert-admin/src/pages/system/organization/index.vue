@@ -12,7 +12,7 @@
  * - toolbar 按钮根据配置动态渲染
  */
 import { Delete, Plus, RefreshRight } from '@element-plus/icons-vue'
-import { YzhForm, YzhTreeTable, YzhTable, type TreeNode } from '@yzh-core'
+import { YzhForm, YzhTreeTableLayout, YzhTable, type TreeNode } from '@yzh-core'
 import {
   ElButton,
   ElMessage,
@@ -250,7 +250,7 @@ onMounted(async () => {
 
 <template>
   <div class="org-page">
-    <YzhTreeTable
+    <YzhTreeTableLayout
       ref="treeTableRef"
       :tree-data="logic.treeData"
       :tree-width="260"
@@ -319,7 +319,7 @@ onMounted(async () => {
           </YzhTable>
         </div>
       </template>
-    </YzhTreeTable>
+    </YzhTreeTableLayout>
 
     <!-- 人员新增/编辑弹窗 -->
     <el-dialog

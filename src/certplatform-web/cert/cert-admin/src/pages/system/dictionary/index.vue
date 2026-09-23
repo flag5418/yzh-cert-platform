@@ -7,7 +7,7 @@
  * - 右侧：字典项表格（分页、搜索、增删改、启用/禁用）
  */
 import { Delete, Plus, RefreshRight } from '@element-plus/icons-vue'
-import { YzhForm, YzhTreeTable, YzhTable, type TreeNode } from '@yzh-core'
+import { YzhForm, YzhTreeTableLayout, YzhTable, type TreeNode } from '@yzh-core'
 import {
   ElButton,
   ElMessage,
@@ -192,7 +192,7 @@ onMounted(async () => {
 
 <template>
   <div class="dict-page">
-    <YzhTreeTable
+    <YzhTreeTableLayout
       ref="treeTableRef"
       :tree-data="logic.treeData"
       :tree-width="260"
@@ -252,7 +252,7 @@ onMounted(async () => {
           </YzhTable>
         </div>
       </template>
-    </YzhTreeTable>
+    </YzhTreeTableLayout>
 
     <!-- 字典/分类 新增/编辑弹窗 -->
     <el-dialog
