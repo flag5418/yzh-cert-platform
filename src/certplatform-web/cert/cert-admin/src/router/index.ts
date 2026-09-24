@@ -19,9 +19,8 @@ const routes: RouteRecordRaw[] = [
     props: { menuTag: 'admin', logoText: 'YZH', appTitle: '映智汇认证平台' },
     redirect: '/system/organization',
     children: [
-      // ===== 系统管理（core 原子路由单一来源：log/config/role/user/role-user/role-menu/role-api/menu/api 由 P3~P4 下沉，勿在本表重复注册同 path） =====
+      // ===== 系统管理（core 原子路由单一来源：log/config/role/user/role-user/role-menu/role-api/menu/api/organization 由 P3~P5 下沉，勿在本表重复注册同 path） =====
       ...yzhSystemRoutes,
-      { path: 'system/organization', name: 'SystemOrganization', component: () => import('@/pages/system/organization/index.vue') },
       { path: 'system/dictionary', name: 'SystemDictionary', component: () => import('@/pages/system/dictionary/index.vue') },
 
       // ===== 业务管理 =====

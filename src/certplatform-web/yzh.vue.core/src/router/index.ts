@@ -33,6 +33,7 @@ export const yzhHomeRoute: RouteRecordSingleView = {
  *
  * P3 Wave A 已迁：log / config / role / user
  * P4 Wave B 已迁：role-user / role-menu / role-api / menu / api
+ * P5 Wave C 已迁：organization
  */
 export const yzhSystemRoutes: RouteRecordRaw[] = [
   { path: 'system/log', name: 'SystemLog', component: () => import('../pages/system/log/index.vue') },
@@ -44,6 +45,7 @@ export const yzhSystemRoutes: RouteRecordRaw[] = [
   { path: 'system/role-api', name: 'SystemRoleApi', component: () => import('../pages/system/role-api/index.vue') },
   { path: 'system/menu', name: 'SystemMenu', component: () => import('../pages/system/menu/index.vue') },
   { path: 'system/api', name: 'SystemApi', component: () => import('../pages/system/api/index.vue') },
+  { path: 'system/organization', name: 'SystemOrganization', component: () => import('../pages/system/organization/index.vue') },
 ]
 
 export interface YzhRoutesOptions {
