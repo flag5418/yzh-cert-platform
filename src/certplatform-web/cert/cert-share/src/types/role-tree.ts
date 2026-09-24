@@ -1,40 +1,9 @@
 /**
  * 角色树相关公共类型
  *
- * 来源：role-user.ts / role-menu.ts / role-api.ts 重复定义
- * 统一抽取到此处，三处 import 替换
+ * P4：定义已上移 yzh.vue.core/src/types/association.ts（单一来源），
+ * 本文件保留为 re-export 垫片，既有 `@share/types` 消费者不受影响；
+ * role-user/role-menu/role-api 下沉完成后本垫片可随 P6 清理删除。
  */
 
-/** 混合树节点（后端 CheckTreeNodeDto） */
-export interface CheckTreeNode {
-  Code: string
-  Name: string
-  ParentCode?: string | null
-  NodeType: string
-  CheckFlag: boolean
-  Extra?: Record<string, any>
-}
-
-/** 节点选择项（后端 TreeNodeSelection） */
-export interface TreeNodeSelection {
-  Code: string
-  NodeType: string
-}
-
-/** 关联关系 DTO（后端 AssociationDto） */
-export interface AssociationDto {
-  ContextCode: string
-  TargetCode: string
-  NodeType: string
-}
-
-/** 树节点 DTO（后端 TreeItemDto，角色树） */
-export interface RoleTreeItem {
-  Code: string
-  Name: string
-  ParentCode?: string | null
-  NodeType?: string
-  IsLeaf?: boolean
-  Level?: number
-  Extra?: Record<string, any>
-}
+export type { CheckTreeNode, TreeNodeSelection, AssociationDto, RoleTreeItem } from '@yzh-core'

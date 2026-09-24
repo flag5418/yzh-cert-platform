@@ -69,6 +69,7 @@ export * from './logic'
 export * from './types/Page'
 export * from './types/contracts'
 export * from './types/tree'
+export * from './types/association'
 
 // 通用工具
 // 注：treeOps 与 treeUtils 均导出同名 validate，root 出口改名消歧（TS2308）

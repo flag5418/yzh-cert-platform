@@ -105,6 +105,7 @@ export abstract class AssociationTreeCore {
     try {
       const items = await this.api.getTreeRoot()
       this.treeData.value = items
+      this.applyBadgesDeep(items)
       return items
     } catch (e: any) {
       ElMessage.error(e.message || '加载树失败')
@@ -118,6 +119,7 @@ export abstract class AssociationTreeCore {
   ): Promise<void> {
     try {
       const items = await this.api.getTreeChildren(node.data.Code, node.level ?? 0)
+      this.applyBadgesDeep(items)
       resolve(items)
     } catch (e: any) {
       ElMessage.error(e.message || '加载子节点失败')
@@ -136,6 +138,45 @@ export abstract class AssociationTreeCore {
   getNodeBadge(nodeCode: string): string | undefined {
     const count = this.getCountForNode(nodeCode)
     return count > 0 ? String(count) : undefined
+  }
+
+  /** 写入/清除单节点 Extra.badge（原地改 → 仅该节点重渲染，el-tree 不重置展开/懒加载态） */
+  protected applyBadge(node: TreeNode): void {
+    const count = this.getCountForNode(node.Code)
+    const extra = { ...(node.Extra ?? {}) }
+    if (count > 0) {
+      extra.badge = String(count)
+    } else {
+      delete extra.badge
+    }
+    node.Extra = extra
+  }
+
+  /** 递归注入徽标（树根 / 懒加载子节点 resolve 前调用） */
+  protected applyBadgesDeep(nodes: TreeNode[]): void {
+    for (const node of nodes) {
+      this.applyBadge(node)
+      if (node.Children?.length) this.applyBadgesDeep(node.Children)
+    }
+  }
+
+  /** 按 Code 递归查找（懒加载子节点不在 treeData 时返回 null） */
+  protected findNodeByCode(nodes: TreeNode[], code: string): TreeNode | null {
+    for (const node of nodes) {
+      if (String(node.Code) === String(code)) return node
+      if (node.Children?.length) {
+        const hit = this.findNodeByCode(node.Children, code)
+        if (hit) return hit
+      }
+    }
+    return null
+  }
+
+  /** 局部刷新单个节点徽标；找不到（如懒加载子节点未挂进 treeData）静默跳过，不退回整树替换 */
+  protected refreshBadge(nodeCode?: string | null): void {
+    if (!nodeCode) return
+    const node = this.findNodeByCode(this.treeData.value, nodeCode)
+    if (node) this.applyBadge(node)
   }
 
   // ========================================================
@@ -212,6 +253,8 @@ export abstract class AssociationTreeCore {
     } catch (e: any) {
       ElMessage.error(e.message || '保存失败')
     } finally {
+      // 缓存可能已部分更新（如 add 成功 remove 失败）→ 以缓存现状刷新该节点徽标
+      this.refreshBadge(nodeCode)
       this.saving.value = false
     }
   }
