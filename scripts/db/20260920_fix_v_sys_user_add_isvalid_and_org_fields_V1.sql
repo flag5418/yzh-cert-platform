@@ -60,7 +60,7 @@ SELECT
 
 FROM Sys_User u
 LEFT JOIN Sys_Role r ON u.Role_Id = r.Role_Id
-LEFT JOIN Sys_Organization o ON u.OrgCode = o.Code COLLATE utf8mb4_unicode_ci
+LEFT JOIN Sys_Organization o ON u.OrgCode = o.Code COLLATE utf8mb4_general_ci
 ;
 
 SELECT '✅ v_sys_user 视图已更新（补全 IsValid + 机构字段）' AS Result;

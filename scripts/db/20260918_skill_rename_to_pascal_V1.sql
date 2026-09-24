@@ -88,7 +88,7 @@ ALTER TABLE wf_skill DROP COLUMN delete_by;
 -- ============================================
 
 -- 3.1 恢复外键（修改 wf_field_label_mapping.SkillCode 的 collation 以匹配 wf_skill.Code）
-ALTER TABLE wf_field_label_mapping MODIFY COLUMN SkillCode VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL;
+ALTER TABLE wf_field_label_mapping MODIFY COLUMN SkillCode VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL;
 ALTER TABLE wf_field_label_mapping ADD CONSTRAINT fk_flm_skill FOREIGN KEY (SkillCode) REFERENCES wf_skill(Code);
 
 -- 3.2 验证

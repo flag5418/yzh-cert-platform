@@ -114,10 +114,11 @@ public partial class DocExtractionRuleService
         if (request == null || string.IsNullOrWhiteSpace(request.FileCode))
             return (false, "文件编码不能为空");
 
-        // 1. 查找或创建规则（按 StandardFileCode）
+        // 1. 查找或创建规则（按 StandardFileCode；准则 A：存在性=Code，不靠 Id 分流）
         var rule = (await _db.GetOneAsync<DocExtractionRule>(x => x.StandardFileCode == request.FileCode)).Data;
+        var isNew = rule == null;
 
-        if (rule == null)
+        if (isNew)
         {
             rule = new DocExtractionRule
             {
@@ -144,13 +145,14 @@ public partial class DocExtractionRuleService
         using var tx = _db.BeginTransaction();
         try
         {
-            if (rule.Id == 0)
+            if (isNew)
             {
                 var add = await _db.InsertAsync(rule);
                 if (!add.Success) { tx.Rollback(); return (false, add.Error ?? "创建规则失败"); }
             }
             else
             {
+                if (string.IsNullOrWhiteSpace(rule.Code)) { tx.Rollback(); return (false, "更新失败：缺少业务键 Code"); }
                 var upd = await _db.UpdateAsync(rule);
                 if (!upd.Success) { tx.Rollback(); return (false, upd.Error ?? "更新规则失败"); }
             }

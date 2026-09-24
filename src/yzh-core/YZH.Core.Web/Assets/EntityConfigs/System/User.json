@@ -2,7 +2,7 @@
   "Title": "人员管理",
   "FillMode": "AutoFix",
   "FormCols": 1,
-  "EnableField": "Enable",
+  "EnableField": "IsValid",
   "RowButtons": {
     "CustomButtons": {
       "disable": "禁用",
@@ -62,7 +62,7 @@
       "Enable": true
     },
     {
-      "FieldName": "Enable",
+      "FieldName": "IsValid",
       "DesName": "状态",
       "Type": "Switch",
       "Sxh": 5,

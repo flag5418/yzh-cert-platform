@@ -27,7 +27,7 @@ export async function deleteCertificationBody(codes: string[]): Promise<ApiRespo
   return yzhApi.post<ApiResponse<object>>('/api/Foundation/CertificationBody/delete', codes)
 }
 
-/** 启用/禁用认证机构（同步 Sys_Organization.Enable） */
+/** 启用/禁用认证机构（同步 Sys_Organization.IsValid） */
 export async function toggleCertificationBodyValid(code: string): Promise<ApiResponse<{ Code: string; IsValid: number }>> {
   return yzhApi.post<ApiResponse<{ Code: string; IsValid: number }>>('/api/Foundation/CertificationBody/toggle-valid', { Code: code })
 }

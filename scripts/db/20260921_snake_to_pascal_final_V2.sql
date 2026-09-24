@@ -29,7 +29,7 @@ USE yzh_cert_platform;
 -- 先 DROP 外键，改名后重建
 ALTER TABLE wf_skill_api DROP FOREIGN KEY fk_api_skill;
 ALTER TABLE wf_skill_api
-  CHANGE COLUMN skill_code SkillCode varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  CHANGE COLUMN skill_code SkillCode varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   CHANGE COLUMN http_method HttpMethod varchar(10) NOT NULL DEFAULT 'POST',
   CHANGE COLUMN auth_config AuthConfig text NULL,
   CHANGE COLUMN param_mapping ParamMapping text NULL,

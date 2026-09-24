@@ -93,7 +93,6 @@ SELECT
     (CASE w.Status WHEN 'active' THEN '启用' WHEN 'inactive' THEN '停用' ELSE w.Status END) AS StatusName,
     w.Sort,
     w.Remark,
-    w.Enable,
     w.CreateTime,
     w.CreateBy,
     w.UpdateTime,

@@ -25,6 +25,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CertPlatform.Auditor", "src
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CertPlatform.Enterprise", "src\certplatform-api\CertPlatform.Enterprise\CertPlatform.Enterprise.csproj", "{8FECCCA6-6262-4464-B8C6-EFC40B97BA02}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YZH.Core.Api.Tests", "src\yzh-core\YZH.Core.Api.Tests\YZH.Core.Api.Tests.csproj", "{AFF81452-6A1A-43B0-AF15-48F61C6F177E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -131,6 +133,18 @@ Global
 		{8FECCCA6-6262-4464-B8C6-EFC40B97BA02}.Release|x64.Build.0 = Release|Any CPU
 		{8FECCCA6-6262-4464-B8C6-EFC40B97BA02}.Release|x86.ActiveCfg = Release|Any CPU
 		{8FECCCA6-6262-4464-B8C6-EFC40B97BA02}.Release|x86.Build.0 = Release|Any CPU
+		{AFF81452-6A1A-43B0-AF15-48F61C6F177E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AFF81452-6A1A-43B0-AF15-48F61C6F177E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AFF81452-6A1A-43B0-AF15-48F61C6F177E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{AFF81452-6A1A-43B0-AF15-48F61C6F177E}.Debug|x64.Build.0 = Debug|Any CPU
+		{AFF81452-6A1A-43B0-AF15-48F61C6F177E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{AFF81452-6A1A-43B0-AF15-48F61C6F177E}.Debug|x86.Build.0 = Debug|Any CPU
+		{AFF81452-6A1A-43B0-AF15-48F61C6F177E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AFF81452-6A1A-43B0-AF15-48F61C6F177E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AFF81452-6A1A-43B0-AF15-48F61C6F177E}.Release|x64.ActiveCfg = Release|Any CPU
+		{AFF81452-6A1A-43B0-AF15-48F61C6F177E}.Release|x64.Build.0 = Release|Any CPU
+		{AFF81452-6A1A-43B0-AF15-48F61C6F177E}.Release|x86.ActiveCfg = Release|Any CPU
+		{AFF81452-6A1A-43B0-AF15-48F61C6F177E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -146,5 +160,6 @@ Global
 		{64CF0DDE-8529-4B4C-A9E6-C5D07B8FBF2C} = {BE54D6AB-2CD1-685A-29CD-104B793051EB}
 		{40051B29-67F7-4449-A387-FC8F79C20A23} = {BE54D6AB-2CD1-685A-29CD-104B793051EB}
 		{8FECCCA6-6262-4464-B8C6-EFC40B97BA02} = {BE54D6AB-2CD1-685A-29CD-104B793051EB}
+		{AFF81452-6A1A-43B0-AF15-48F61C6F177E} = {78C4FAAB-8011-42EB-9302-9F5DB6638C80}
 	EndGlobalSection
 EndGlobal

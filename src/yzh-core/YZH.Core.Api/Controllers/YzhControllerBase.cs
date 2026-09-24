@@ -157,17 +157,21 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
         Value = f.Value
       }).ToList() ?? new List<FilterItem>();
 
+      // ★ 必须在 OnBuildingFilter 之前提取 ShowDisabled（基类会无条件移除该过滤器）
+      var showDisabled = request.ShowDisabled || ExtractShowDisabled(filters);
+
       // 2. 构建查询条件（子类可覆盖添加额外过滤）
       filters = OnBuildingFilter(filters);
 
-      // 3. 执行分页查询
+      // 3. 执行分页查询（ShowDisabled=true 时跳过 IsValid 硬过滤）
       var result = await Entity.GetPageAsync(new PagerOptions
       {
         Page = request.Page,
         PageSize = request.PageSize,
         SortBy = request.SortField,
         SortDirection = request.SortOrder,
-        Filters = filters
+        Filters = filters,
+        IncludeDisabled = showDisabled
       });
 
       if (!result.Success) return Result<PagedResult<V>>.Fail(result.Error);
@@ -654,6 +658,18 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   /// <summary>查询后钩子（字典翻译、字段格式化、脱敏等）</summary>
   protected virtual void OnQueried(PagedResult<V> result) { }
 
+  /// <summary>
+  ///     从过滤器列表提取 ShowDisabled 开关（须在 OnBuildingFilter 移除该字段前调用）
+  /// </summary>
+  [NonAction]
+  protected static bool ExtractShowDisabled(List<FilterItem> filters)
+  {
+    var f = filters.FirstOrDefault(x =>
+        x.Field.Equals("ShowDisabled", StringComparison.OrdinalIgnoreCase));
+    if (f?.Value == null) return false;
+    return bool.TryParse(f.Value.ToString(), out var sd) && sd;
+  }
+
   /// <summary>配置加载后钩子（注入动态配置）</summary>
   protected virtual void OnConfigLoading(EntityConfig config) { }
 
@@ -833,11 +849,16 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   {
     try
     {
+      // 导出同样尊重 ShowDisabled（须在可能移除前提取）
+      var showDisabled = ExtractShowDisabled(filters);
+      filters = OnBuildingFilter(filters);
+
       var result = await Entity.GetPageAsync(new PagerOptions
       {
         Page = 1,
         PageSize = int.MaxValue,
-        Filters = filters
+        Filters = filters,
+        IncludeDisabled = showDisabled
       });
 
       if (!result.Success) return Result<List<V>>.Fail(result.Error);

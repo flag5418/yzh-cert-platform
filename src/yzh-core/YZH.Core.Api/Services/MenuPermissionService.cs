@@ -49,8 +49,8 @@ public class MenuPermissionService
     {
         var all = await GetAllMenusAsync();
 
-        // 排除禁用菜单（Enable=0），侧边栏不展示
-        all = all.Where(m => m.Enable != 0).ToList();
+        // 排除禁用菜单（IsValid=0），侧边栏不展示
+        all = all.Where(m => m.IsValid == 1).ToList();
 
         // 超级管理员：全部菜单
         if (IsSuperAdmin(ctx))

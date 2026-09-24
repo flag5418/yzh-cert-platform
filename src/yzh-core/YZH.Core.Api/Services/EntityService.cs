@@ -148,7 +148,8 @@ public class EntityService<T> where T : class, new()
                 PageSize = options.PageSize,
                 SortField = options.SortBy,
                 SortDirection = options.SortDirection ?? "ASC",
-                Conditions = conditions.ToArray()
+                Conditions = conditions.ToArray(),
+                IncludeDisabled = options.IncludeDisabled
             };
             
             var result = await _dbOrm.GetPageAsync<T>(sqlOptions);
@@ -230,8 +231,9 @@ public class EntityService<T> where T : class, new()
     ///     用于 TreeControllerBase 的 GetTree/GetChildren
     /// </summary>
     /// <param name="parentCode">父节点编码（null 或空返回根节点）</param>
+    /// <param name="includeDisabled">是否包含已禁用节点（树默认包含，禁用节点仍需可见以便重新启用）</param>
     /// <returns>直接子级列表</returns>
-    public virtual async Task<List<T>> GetViewList(string? parentCode)
+    public virtual async Task<List<T>> GetViewList(string? parentCode, bool includeDisabled = true)
     {
         try
         {
@@ -242,7 +244,7 @@ public class EntityService<T> where T : class, new()
                 var nullPredicate = BuildStringNullExpression("ParentCode");
                 if (nullPredicate != null)
                 {
-                    var queryResult = await _dbOrm.GetListAsync<T>(nullPredicate);
+                    var queryResult = await _dbOrm.GetListAsync<T>(nullPredicate, includeDisabled);
                     result = queryResult.Data ?? new List<T>();
                 }
                 else
@@ -256,7 +258,7 @@ public class EntityService<T> where T : class, new()
                 var equalityPredicate = BuildStringEqualsExpression("ParentCode", parentCode);
                 if (equalityPredicate != null)
                 {
-                    var queryResult = await _dbOrm.GetListAsync<T>(equalityPredicate);
+                    var queryResult = await _dbOrm.GetListAsync<T>(equalityPredicate, includeDisabled);
                     result = queryResult.Data ?? new List<T>();
                 }
                 else

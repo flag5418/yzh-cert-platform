@@ -134,7 +134,7 @@ public class DictionaryController : TreeTableControllerBase<Sys_Dictionary, Sys_
                 return (false, $"字典编码【{entity.DicNo}】已存在");
         }
 
-        entity.Enable = 1;
+        // IsValid 默认 1，无需显式写入
         return (true, null);
     }
 

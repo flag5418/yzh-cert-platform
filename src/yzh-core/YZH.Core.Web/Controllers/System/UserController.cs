@@ -115,8 +115,8 @@ public class UserController : YzhControllerBase<Sys_User>
         var plainPwd = string.IsNullOrEmpty(entity.UserPwd) ? "123456" : entity.UserPwd;
         entity.UserPwd = _passwordHelper.AesEncrypt(plainPwd);
 
-        // 默认启用
-        entity.Enable = 1;
+        // 默认启用（IsValid=1）
+        entity.IsValid = 1;
         return (true, null);
     }
 
@@ -142,12 +142,13 @@ public class UserController : YzhControllerBase<Sys_User>
     /// <summary>启用用户（POST api/SysUser/action/Enable）</summary>
     private async Task<Result<ApiResponse<object?>>> EnableUser(Sys_User entity)
     {
-        var result = await Entity.GetByCode(entity.Code);
+        // GetByCodeAny：已禁用用户 IsValid=0，GetByCode 查不到
+        var result = await Entity.GetByCodeAny(entity.Code);
         if (!result.Success || result.Data == null)
             return Result<ApiResponse<object?>>.Fail("用户不存在");
 
         var user = result.Data;
-        user.Enable = 1;
+        user.IsValid = 1;
         var updateResult = await Entity.Update(user, UserContext.ClientIp);
         if (!updateResult.Success)
             return Result<ApiResponse<object?>>.Fail(updateResult.Error);
@@ -169,7 +170,7 @@ public class UserController : YzhControllerBase<Sys_User>
         if (roleResult.Success && roleResult.Data == MenuPermissionService.SuperAdminRoleCode)
             return Result<ApiResponse<object?>>.Fail("不能禁用超级管理员账号");
 
-        user.Enable = 0;
+        user.IsValid = 0;
         var updateResult = await Entity.Update(user, UserContext.ClientIp);
         if (!updateResult.Success)
             return Result<ApiResponse<object?>>.Fail(updateResult.Error);
@@ -335,7 +336,7 @@ public class UserController : YzhControllerBase<Sys_User>
     ///       历史代码的更新字段白名单漏掉了 `Email` / `PhoneNo`，但前端表单却在编辑并提交它们
     ///       —— 保存后邮箱/手机号静默丢失。新实现把这两个字段纳入白名单。
     ///
-    ///     安全：只允许改「个人资料」字段；`Code` / `Enable` / `UserPwd` / `OrgCode` 等
+    ///     安全：只允许改「个人资料」字段；`Code` / `IsValid` / `UserPwd` / `OrgCode` 等
     ///          均取自库中原值，不接受请求体传入（防越权与提权）。
     /// </summary>
     [HttpPost("updateUserInfo")]

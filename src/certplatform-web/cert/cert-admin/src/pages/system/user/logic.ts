@@ -12,7 +12,7 @@ export class UserLogic extends SingleTableCore<any> {
 
   /** 新增默认值 */
   protected override get defaultValues(): Record<string, any> {
-    return { Enable: 1 }
+    return { IsValid: 1 }
   }
 }
 

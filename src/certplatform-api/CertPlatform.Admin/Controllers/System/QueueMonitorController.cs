@@ -50,7 +50,7 @@ public class QueueMonitorController : ControllerBase
     [HttpPost("task/retry")]
     public async Task<IActionResult> RetryTask([FromBody] TaskRetryRequest req)
     {
-        var (ok, error) = await _queueManager.RetryTaskAsync(req.TaskId);
+        var (ok, error) = await _queueManager.RetryTaskAsync(req.TaskCode);
         return Ok(new { code = ok ? 200 : 400, msg = error });
     }
 
@@ -98,7 +98,7 @@ public class QueueRetryRequest
 
 public class TaskRetryRequest
 {
-    public long TaskId { get; set; }
+    public string TaskCode { get; set; } = "";
 }
 
 public class ResourceLockRequest

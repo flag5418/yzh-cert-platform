@@ -72,15 +72,9 @@ public class Sys_Menu : BaseEntity
     [SugarColumn(ColumnName = "OrderNo")]
     public int? OrderNo { get; set; }
 
-    /// <summary>是否启用（1=启用，0=禁用）</summary>
-    [Required]
-    [Display(Name = "是否启用")]
-    [SugarColumn(ColumnName = "Enable")]
-    public byte? Enable { get; set; } = 1;
-
     /// <summary>IsDeleted（DB: IsDeleted）</summary>
     public bool IsDeleted { get; set; }
 
-    /// <summary>IsValid（DB: IsValid）</summary>
+    /// <summary>IsValid（DB: IsValid）- 启用/禁用唯一字段（1=启用，0=禁用）</summary>
     public int IsValid { get; set; } = 1;
 }

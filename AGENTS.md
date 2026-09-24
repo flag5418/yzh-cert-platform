@@ -41,6 +41,14 @@ AIGC:
 - 前端读 `row.RuleName`、`node.Code`、`formData.StandardCode`
 - 写成 `row.ruleName` / `node.code` → **渲染成空行且无任何报错**（最难查的一类 bug）
 - 例外（须注释标注「已登记例外」）：`ApiResponse` 信封 camelCase（E1）、裸 JSON `{img,uuid}`（E6）、`{code,data,message}` **无 `success`**（E7，须用 `res.code === 200` 且**禁用 `res.success`**）
+- **启用/禁用唯一字段 = `IsValid`（int，0/1）**：新实体/新列**禁止**再声明 `Enable` / `EnableField`；业务开关用 `IsActive`；软删除用 `IsDeleted`。例外：`sys_api.Enable`（ApiSync 同步源，已登记）。守卫：`guards.mjs` R7。
+
+**④ 双关键字准则 A（Id/Code · 2026-09-24 · 违反 = 返工）**
+
+- `Id` **永不**进 WHERE / 关联 / `Id>0`·`Id==0` 的 add·update 分流 / 存在性判定；`OrderBy(Id)` 与 `new` 实体 Id=`0`/`null`（未落库信号）**允许**。
+- 定位 / 删除 / 更新 / 前后端传参 **只用 `Code`**；中间表：`Sys_RoleUser`→`RoleCode+UserCode`，`Sys_RoleMenu`→`RoleCode+MenuCode`。
+- 新增 vs 更新 **唯一合法**：`GetByCode(entity.Code)` 有→更新、无→新增；Code 空却要更新 → `更新失败：缺少业务键 Code`（禁止回退 Id）。
+- 前端：`data.Code ? update : add`，`deleteXxx(row.Code)`。权威：`docs/10-YZH架构/01-架构总纲.md` §2.1 · E201。
 
 **改完必跑**：`cd src/certplatform-web && node scripts/guards.mjs`（0 违规）→ 对应端 `npm run build`（含 `vue-tsc`）。
 
@@ -118,6 +126,10 @@ AIGC:
    - **禁止** 新页面使用 view-grid、VolBox、VolForm、VolProvider、extension 自动生成的 .jsx
    - **注意**：旧 vol.web 保留历史版本（`src/old/server/Vue.NetCore/vol.web/`），不删除，新代码写入 certplatform-web/
 5. **数据库**：MySQL 8.0 @ 3307（yzh-mysql）/ Redis @ 6380（yzh-redis）；SQL 脚本遵循 `项目全局规则.md` §十一（脚本放 scripts/db/，禁止散落）。
+   ★ **字符集/排序规则全库统一 `utf8mb4` + `utf8mb4_general_ci`**（`项目全局规则.md` §16.10 铁律八）：
+   建表**必须显式**写 `COLLATE=utf8mb4_general_ci`；含 `CREATE VIEW` 的脚本**必须**开头写 `SET NAMES utf8mb4 COLLATE utf8mb4_general_ci;`。
+   ⛔ 只写 `DEFAULT CHARSET=utf8mb4`（不带 COLLATE）会落到 `utf8mb4_0900_ai_ci`（**不是**库默认值）；⛔ 禁用 `utf8mb3`。
+   违反后果：跨表「列 vs 列」关联报 `ERROR 1267 Illegal mix of collations`，且**单表测试全绿**、只在关联时暴露。
 6. **命名规范**：文档命名强制 `-V1` 后缀（见 `00-工程体系/文档生命周期管理规范-V1.md`）；脚本按 scripts/ 子目录归类。
 7. **启停规范**：后端启停一律走 `scripts/` 脚本（backend/ 子目录），禁止手动 `kill` / 裸 `dotnet run &`（见项目全局规则 §十五）。
 8. **路径格式**：所有文件路径使用 macOS 绝对路径格式。

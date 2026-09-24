@@ -192,7 +192,6 @@ public class AuditorRegisterService
                 LeaderName = trueName,
                 LeaderPhone = req.PhoneNo,
                 Sort = 0,
-                Enable = 1,
                 IsValid = 1,
                 Remark = $"专家工作区｜所属认证机构：{certBody.Name}（{certBody.Code}）"
             };
@@ -220,7 +219,6 @@ public class AuditorRegisterService
                     OrgLevel = GroupLevel,
                     OrgPath = $"/{rootCode}/{workspaceCode}/{groupCode}",
                     Sort = (i + 1) * 10,
-                    Enable = 1,
                     IsValid = 1,
                     Remark = $"{groupName}分组（专家工作区默认）"
                 };
@@ -253,7 +251,6 @@ public class AuditorRegisterService
                 OrgCode = ownerGroupCode,
                 PhoneNo = string.IsNullOrWhiteSpace(req.PhoneNo) ? null : req.PhoneNo!.Trim(),
                 Email = string.IsNullOrWhiteSpace(req.Email) ? null : req.Email!.Trim(),
-                Enable = 1,
                 IsValid = 1,
                 IsDeleted = false,
                 Remark = $"专家注册｜认证机构：{certBody.Name}（{certBody.Code}）"
@@ -322,8 +319,8 @@ public class AuditorRegisterService
             }
 
             var stampRoleUser = await _dbOrm.SqlExecuteAsync(
-                "UPDATE Sys_RoleUser SET CreateBy = @createBy WHERE Id = @id",
-                new { createBy = RegisterOrigin, id = roleUser.Id });
+                "UPDATE Sys_RoleUser SET CreateBy = @createBy WHERE RoleCode = @roleCode AND UserCode = @userCode",
+                new { createBy = RegisterOrigin, roleCode = roleUser.RoleCode, userCode = roleUser.UserCode });
             if (!stampRoleUser.Success)
             {
                 tx.Rollback();
@@ -376,7 +373,6 @@ public class AuditorRegisterService
             OrgPath = $"/{VirtualOrgRootCode}",
             ParentCode = null,
             Sort = 0,
-            Enable = 1,
             IsValid = 1,
             Remark = "专家注册工作区根节点（由 AuditorRegisterService 幂等创建）"
         };

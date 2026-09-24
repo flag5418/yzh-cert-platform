@@ -51,6 +51,13 @@ public class PagerOptions
 
     /// <summary>跳过分页取全量</summary>
     public bool NoPage { get; set; }
+
+    /// <summary>
+    ///     是否包含已禁用记录（IsValid=0）
+    ///     false（默认）：分页查询硬过滤 IsValid=1
+    ///     true：跳过 IsValid 硬过滤（ShowDisabled 开关使用）
+    /// </summary>
+    public bool IncludeDisabled { get; set; }
 }
 
 public class FilterItem

@@ -24,6 +24,9 @@ export async function updateEnterprise(data: Partial<Enterprise>): Promise<any> 
   return yzhApi.post('/api/Enterprise/update', data)
 }
 
-export async function deleteEnterprise(id: number): Promise<any> {
-  return yzhApi.post(`/api/Enterprise/delete?id=${id}`)
+/**
+ * @deprecated 占位 — 后端无 Enterprise 控制器。删除传业务键 Code（准则 A）
+ */
+export async function deleteEnterprise(code: string): Promise<any> {
+  return yzhApi.post(`/api/Enterprise/delete`, null, { params: { code } })
 }

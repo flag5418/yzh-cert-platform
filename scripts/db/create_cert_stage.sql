@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS `cert_cert_stage` (
   UNIQUE KEY `uk_stage_code` (`StageCode`),
   KEY `idx_category` (`Category`),
   KEY `idx_sort_order` (`SortOrder`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='认证阶段（全局基础资料）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='认证阶段（全局基础资料）';
 
 -- 预置 9 个标准阶段（基于 ISO/IEC 17021-1:2015）
 INSERT INTO `cert_cert_stage` (`Code`, `StageCode`, `StageName`, `Category`, `SortOrder`, `Description`, `IsValid`) VALUES

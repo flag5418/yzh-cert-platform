@@ -69,9 +69,6 @@ namespace CertPlatform.Shared.Entities.Dir
         [SugarColumn(ColumnName = "IsDeleted")]
         public bool IsDeleted { get; set; }
 
-        [SugarColumn(ColumnName = "Enable")]
-        public bool Enable { get; set; }
-
         [SugarColumn(ColumnName = "FileSize")]
         public long? FileSize { get; set; }
 

@@ -38,8 +38,6 @@ namespace CertPlatform.Shared.Entities.Wf
 
         public bool IsActive { get; set; } = true;
 
-        public bool Enable { get; set; } = true;
-
         [StringLength(20)]
         public string? Status { get; set; } = "active";
 

@@ -260,13 +260,13 @@ public class QueueManager
         var task = result.Data?.FirstOrDefault();
         if (task == null) return null;
 
-        // 更新为 processing + 租约
+        // 更新为 processing + 租约（业务键 Code — 准则 A）
         var now = DateTime.Now;
         var updateSql = @"UPDATE yzh_queue_task
                          SET Status = 'processing', LockedAt = @lockedAt, LockedBy = @lockedBy,
                              ProcessTime = @processTime, LockedUntil = @lockedUntil, NextRetryAt = NULL
-                         WHERE Id = @id";
-        await orm.SqlExecuteAsync(updateSql, new { lockedAt = now, lockedBy = workerId, processTime = now, lockedUntil = now.AddMinutes(_leaseMinutes), id = task.Id });
+                         WHERE Code = @code";
+        await orm.SqlExecuteAsync(updateSql, new { lockedAt = now, lockedBy = workerId, processTime = now, lockedUntil = now.AddMinutes(_leaseMinutes), code = task.Code });
 
         task.Status = "processing";
         task.LockedAt = now;
@@ -335,13 +335,13 @@ public class QueueManager
 
             // 续期租约
             var now = DateTime.Now;
-            await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET LockedUntil = @lt WHERE Id = @id", new { lt = now.AddMinutes(_leaseMinutes), id = task.Id });
+            await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET LockedUntil = @lt WHERE Code = @code", new { lt = now.AddMinutes(_leaseMinutes), code = task.Code });
 
             // 队列已取消：跳过执行
             var queueResult = await orm.GetOneAsync<YzhQueue>(q => q.QueueCode == task.QueueCode);
             if (queueResult.Data?.Status == "cancelled")
             {
-                await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET Status = 'cancelled', CompleteTime = @ct, LockedUntil = NULL, ErrorMessage = '队列已取消，任务跳过执行' WHERE Id = @id", new { ct = now, id = task.Id });
+                await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET Status = 'cancelled', CompleteTime = @ct, LockedUntil = NULL, ErrorMessage = '队列已取消，任务跳过执行' WHERE Code = @code", new { ct = now, code = task.Code });
                 await RefreshQueueProgressAsync(orm, task.QueueCode);
                 return;
             }
@@ -355,7 +355,7 @@ public class QueueManager
                 throw new Exception(result.Message ?? "任务执行失败");
 
             // 标记完成
-            await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET Status = 'completed', CompleteTime = @ct, LockedUntil = NULL WHERE Id = @id", new { ct = now, id = task.Id });
+            await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET Status = 'completed', CompleteTime = @ct, LockedUntil = NULL WHERE Code = @code", new { ct = now, code = task.Code });
             await ReleaseTaskLocksByCodesAsync(orm, task.LockCodes);
             await RefreshQueueProgressAsync(orm, task.QueueCode);
         }
@@ -380,7 +380,7 @@ public class QueueManager
     {
         using var scope = _serviceProvider.CreateScope();
         var orm = scope.ServiceProvider.GetRequiredService<IDbOrm>();
-        var result = await orm.GetOneAsync<YzhQueueTask>(j => j.Id == task.Id);
+        var result = await orm.GetOneAsync<YzhQueueTask>(j => j.Code == task.Code);
         var taskRow = result.Data;
         if (taskRow == null) return;
 
@@ -389,8 +389,8 @@ public class QueueManager
             var queueResult = await orm.GetOneAsync<YzhQueue>(q => q.QueueCode == taskRow.QueueCode);
             if (queueResult.Data?.Status == "cancelled")
             {
-                await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET Status = 'cancelled', ErrorMessage = @msg, CompleteTime = @ct WHERE Id = @id",
-                    new { msg = message, ct = DateTime.Now, id = taskRow.Id });
+                await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET Status = 'cancelled', ErrorMessage = @msg, CompleteTime = @ct WHERE Code = @code",
+                    new { msg = message, ct = DateTime.Now, code = taskRow.Code });
                 await RefreshQueueProgressAsync(orm, taskRow.QueueCode);
                 return;
             }
@@ -489,11 +489,11 @@ public class QueueManager
         return (true, null);
     }
 
-    public async Task<(bool ok, string? error)> RetryTaskAsync(long taskId)
+    public async Task<(bool ok, string? error)> RetryTaskAsync(string taskCode)
     {
         using var scope = _serviceProvider.CreateScope();
         var orm = scope.ServiceProvider.GetRequiredService<IDbOrm>();
-        var result = await orm.GetOneAsync<YzhQueueTask>(j => j.Id == taskId);
+        var result = await orm.GetOneAsync<YzhQueueTask>(j => j.Code == taskCode);
         var task = result.Data;
         if (task == null) return (false, "任务不存在");
         if (task.Status != "failed") return (false, "仅失败的任务可重试");
@@ -751,7 +751,7 @@ public class QueueManager
                 }
                 return new
                 {
-                    id = j.Id,
+                    code = j.Code,
                     taskNo = i + 1,
                     taskType = j.TaskType,
                     fileCode,

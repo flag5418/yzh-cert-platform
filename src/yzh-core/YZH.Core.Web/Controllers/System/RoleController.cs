@@ -76,7 +76,7 @@ public class RoleController : TreeTableControllerBase<Sys_Role, Sys_Role>
             return (false, $"角色编码 {entity.Code} 已存在");
         }
 
-        entity.Enable = 1;
+        entity.IsValid = 1;
 
         // 如果未指定 ParentCode，设置为根节点（null）
         if (string.IsNullOrEmpty(entity.ParentCode))
@@ -141,12 +141,13 @@ public class RoleController : TreeTableControllerBase<Sys_Role, Sys_Role>
     /// <summary>启用角色</summary>
     private async Task<Result<ApiResponse<object?>>> EnableRole(Sys_Role entity)
     {
-        var result = await Entity.GetByCode(entity.Code);
+        // GetByCodeAny：已禁用角色 IsValid=0，GetByCode 查不到
+        var result = await Entity.GetByCodeAny(entity.Code);
         if (!result.Success || result.Data == null)
             return Result<ApiResponse<object?>>.Fail("角色不存在");
 
         var role = result.Data;
-        role.Enable = 1;
+        role.IsValid = 1;
         var updateResult = await Entity.Update(role, UserContext.ClientIp);
         if (!updateResult.Success)
             return Result<ApiResponse<object?>>.Fail(updateResult.Error);
@@ -165,7 +166,7 @@ public class RoleController : TreeTableControllerBase<Sys_Role, Sys_Role>
         if (role.RoleName == "超级管理员")
             return Result<ApiResponse<object?>>.Fail("不能禁用超级管理员角色");
 
-        role.Enable = 0;
+        role.IsValid = 0;
         var updateResult = await Entity.Update(role, UserContext.ClientIp);
         if (!updateResult.Success)
             return Result<ApiResponse<object?>>.Fail(updateResult.Error);
@@ -350,12 +351,12 @@ public class RoleController : TreeTableControllerBase<Sys_Role, Sys_Role>
                 r => r.RoleCode == roleCode && userCodes.Contains(r.UserCode));
             var toDelete = toDeleteResult.Success ? toDeleteResult.Data ?? new() : new();
 
-            // 删除关联（Sys_RoleUser 硬删除）
+            // 删除关联（Sys_RoleUser 硬删除，业务列定位 — 准则 A）
             int deleted = 0;
             foreach (var entity in toDelete)
             {
                 var result = await _dbOrm.Client.Deleteable<Sys_RoleUser>()
-                    .Where(x => x.Id == entity.Id)
+                    .Where(x => x.RoleCode == entity.RoleCode && x.UserCode == entity.UserCode)
                     .ExecuteCommandAsync();
                 if (result > 0) deleted++;
             }

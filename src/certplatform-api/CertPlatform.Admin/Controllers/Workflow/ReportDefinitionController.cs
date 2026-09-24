@@ -61,14 +61,14 @@ namespace CertPlatform.Admin.Controllers.Workflow
             if (string.IsNullOrWhiteSpace(entity.TemplateName))
                 return Ok(new { code = 400, message = "模板名称不能为空" });
 
-            if (entity.Id > 0)
+            // 准则 A：新增 vs 更新只看业务键 Code（禁止 Id > 0 分流）
+            if (!string.IsNullOrWhiteSpace(entity.Code))
             {
-                // 更新
-                var existing = await _templateEntity.GetOne(x => x.Id == entity.Id);
-                if (existing.Data == null)
+                var byCode = await _templateEntity.GetByCode(entity.Code);
+                if (byCode.Data == null)
                     return Ok(new { code = 404, message = "模板不存在" });
 
-                var target = existing.Data;
+                var target = byCode.Data;
                 target.TemplateName = entity.TemplateName;
                 target.TemplateFilePath = entity.TemplateFilePath;
                 target.Remark = entity.Remark;
@@ -80,7 +80,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
             }
             else
             {
-                // 创建 — 先检查是否已存在
+                // 创建 — 先检查是否已存在（业务键：org+std+phase）
                 var existing = await _templateEntity.GetOne(x =>
                     x.OrgCode == entity.OrgCode &&
                     x.StandardCode == entity.StandardCode &&
@@ -101,7 +101,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
                     return Ok(new { code = updateResult.Success ? 200 : 500, data = target, message = updateResult.Error });
                 }
 
-                // 新建
+                // 新建（Id 保持默认，不赋值）
                 entity.Code = Guid.NewGuid().ToString("N");
                 entity.CbCode = entity.OrgCode;  // 同步设置 CbCode（外键约束）
                 entity.CreateBy = _userContext.UserCode;
@@ -152,9 +152,12 @@ namespace CertPlatform.Admin.Controllers.Workflow
         /// 删除模板（级联删除章节）
         /// </summary>
         [HttpPost("template/delete")]
-        public async Task<IActionResult> DeleteTemplate([FromQuery] long id)
+        public async Task<IActionResult> DeleteTemplate([FromQuery] string code)
         {
-            var existing = await _templateEntity.GetOne(x => x.Id == id);
+            if (string.IsNullOrWhiteSpace(code))
+                return Ok(new { code = 400, message = "缺少业务键 Code" });
+
+            var existing = await _templateEntity.GetByCode(code);
             if (existing.Data == null)
                 return Ok(new { code = 404, message = "模板不存在" });
 
@@ -225,14 +228,14 @@ namespace CertPlatform.Admin.Controllers.Workflow
             if (string.IsNullOrWhiteSpace(entity.ReportCode))
                 return Ok(new { code = 400, message = "缺少报告编码" });
 
-            if (entity.Id > 0)
+            // 准则 A：新增 vs 更新只看业务键 Code（禁止 Id > 0 分流）
+            if (!string.IsNullOrWhiteSpace(entity.Code))
             {
-                // 更新
-                var existing = await _sectionEntity.GetOne(x => x.Id == entity.Id);
-                if (existing.Data == null)
+                var byCode = await _sectionEntity.GetByCode(entity.Code);
+                if (byCode.Data == null)
                     return Ok(new { code = 404, message = "章节不存在" });
 
-                var target = existing.Data;
+                var target = byCode.Data;
                 target.SectionName = entity.SectionName;
                 target.SectionNameEn = entity.SectionNameEn;
                 target.Content = entity.Content;
@@ -264,9 +267,12 @@ namespace CertPlatform.Admin.Controllers.Workflow
         /// 删除章节
         /// </summary>
         [HttpPost("section/delete")]
-        public async Task<IActionResult> DeleteSection([FromQuery] long id)
+        public async Task<IActionResult> DeleteSection([FromQuery] string code)
         {
-            var existing = await _sectionEntity.GetOne(x => x.Id == id);
+            if (string.IsNullOrWhiteSpace(code))
+                return Ok(new { code = 400, message = "缺少业务键 Code" });
+
+            var existing = await _sectionEntity.GetByCode(code);
             if (existing.Data == null)
                 return Ok(new { code = 404, message = "章节不存在" });
 

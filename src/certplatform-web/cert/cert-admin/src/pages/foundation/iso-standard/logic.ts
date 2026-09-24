@@ -3,7 +3,7 @@
  *
  * 数据访问规则：
  * - res.data：ApiResponse 顶层（camelCase）
- * - 业务行 r：PascalCase 字段（r.Code, r.StandardCode, r.Enable）
+ * - 业务行 r：PascalCase 字段（r.Code, r.StandardCode, r.IsValid）
  * - TreeNode：统一 PascalCase（node.Code / node.Name / node.Extra，见 @yzh-core types/tree）
  * - formData：PascalCase key（YzhForm 双向绑定）
  *

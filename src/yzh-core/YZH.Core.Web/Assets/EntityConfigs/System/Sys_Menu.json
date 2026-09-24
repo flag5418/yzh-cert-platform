@@ -2,7 +2,7 @@
   "Title": "菜单管理",
   "FillMode": "AutoFix",
   "FormCols": 1,
-  "EnableField": "Enable",
+  "EnableField": "IsValid",
   "Columns": [
     {
       "FieldName": "MenuName",
@@ -77,7 +77,7 @@
       "Mask": false
     },
     {
-      "FieldName": "Enable",
+      "FieldName": "IsValid",
       "DesName": "状态",
       "Type": "Switch",
       "Sxh": 5,

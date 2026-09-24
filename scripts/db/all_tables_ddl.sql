@@ -217,7 +217,7 @@ CREATE TABLE `audit_project` (
   UNIQUE KEY `uk_code` (`Code`),
   UNIQUE KEY `uk_project_no` (`ProjectNo`),
   KEY `idx_application_code` (`ApplicationCode`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='审核项目表'
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='审核项目表'
 
 
 -- ============================================================
@@ -301,29 +301,29 @@ CREATE TABLE `audit_task` (
 -- ============================================================
 CREATE TABLE `cert_ai_config` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '配置编码（唯一标识）',
-  `OrgCode` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `provider` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'qwen' COMMENT 'AI提供商：qwen/deepseek等',
-  `api_key` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'API Key（加密存储）',
-  `model` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'qwen-turbo' COMMENT '模型名称',
+  `code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '配置编码（唯一标识）',
+  `OrgCode` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `provider` varchar(50) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'qwen' COMMENT 'AI提供商：qwen/deepseek等',
+  `api_key` varchar(500) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'API Key（加密存储）',
+  `model` varchar(100) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'qwen-turbo' COMMENT '模型名称',
   `temperature` float NOT NULL DEFAULT '0.7' COMMENT '温度参数',
   `max_tokens` int NOT NULL DEFAULT '4096' COMMENT '最大Token数',
   `is_enabled` tinyint(1) NOT NULL DEFAULT '1' COMMENT '是否启用：0-否 1-是',
-  `Remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '备注',
-  `CreateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `Remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '备注',
+  `CreateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `CreateTime` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `UpdateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `UpdateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `UpdateTime` datetime DEFAULT NULL,
-  `DeleteBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `DeleteBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `DeleteTime` datetime DEFAULT NULL,
   `IsDeleted` tinyint(1) NOT NULL DEFAULT '0',
   `IsValid` tinyint(1) DEFAULT '1',
-  `status` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'active',
+  `status` varchar(50) COLLATE utf8mb4_general_ci DEFAULT 'active',
   `Sort` int DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_code` (`code`),
   UNIQUE KEY `uk_provider_model` (`provider`,`model`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI配置表'
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='AI配置表'
 
 
 -- ============================================================
@@ -361,7 +361,7 @@ CREATE TABLE `cert_ai_usage_log` (
   KEY `idx_create_date` (`CreateTime`),
   KEY `idx_model` (`model`),
   KEY `idx_success` (`success`)
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AI 调用日志（用于费用统计）'
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='AI 调用日志（用于费用统计）'
 
 
 -- ============================================================
@@ -393,7 +393,7 @@ CREATE TABLE `cert_application` (
   UNIQUE KEY `uk_application_no` (`ApplicationNo`),
   KEY `idx_cb_code` (`CbCode`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='认证申请表'
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='认证申请表'
 
 
 -- ============================================================
@@ -424,7 +424,7 @@ CREATE TABLE `cert_auditor_profile` (
   UNIQUE KEY `code` (`code`),
   UNIQUE KEY `auditor_no` (`auditor_no`),
   KEY `idx_org_code` (`OrgCode`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='审核员资质档案'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='审核员资质档案'
 
 
 -- ============================================================
@@ -536,24 +536,24 @@ CREATE TABLE `cert_directory_template` (
 -- ============================================================
 CREATE TABLE `cert_doc_extraction_rule` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '规则编码（唯一标识）',
-  `file_code` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `standard_file_code` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '规则键：实际文件 FileCode 或文件要求模板 Code',
-  `standard_code` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '标准编码(冗余)',
-  `phase_code` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '阶段编码(冗余)',
-  `skill` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '技能类型：word/excel/pdf',
-  `prompt` text COLLATE utf8mb4_unicode_ci COMMENT '提取Prompt',
+  `code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '规则编码（唯一标识）',
+  `file_code` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `standard_file_code` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '规则键：实际文件 FileCode 或文件要求模板 Code',
+  `standard_code` varchar(36) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '标准编码(冗余)',
+  `phase_code` varchar(36) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '阶段编码(冗余)',
+  `skill` varchar(50) COLLATE utf8mb4_general_ci NOT NULL COMMENT '技能类型：word/excel/pdf',
+  `prompt` text COLLATE utf8mb4_general_ci COMMENT '提取Prompt',
   `DocIsValid` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否验证通过：0-否 1-是',
-  `verify_message` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '验证结果信息',
+  `verify_message` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '验证结果信息',
   `sample_data` json DEFAULT NULL COMMENT '验证时提取的样本数据（JSON格式）',
-  `doc_content` longtext COLLATE utf8mb4_unicode_ci COMMENT '提取的文档内容缓存',
-  `status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'none' COMMENT '规则状态：none/configured/failed',
-  `Remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '备注',
-  `CreateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `doc_content` longtext COLLATE utf8mb4_general_ci COMMENT '提取的文档内容缓存',
+  `status` varchar(20) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'none' COMMENT '规则状态：none/configured/failed',
+  `Remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '备注',
+  `CreateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `CreateTime` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `UpdateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `UpdateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `UpdateTime` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `DeleteBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `DeleteBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `DeleteTime` datetime DEFAULT NULL COMMENT '删除时间',
   `IsDeleted` tinyint(1) NOT NULL DEFAULT '0',
   `IsValid` tinyint(1) NOT NULL DEFAULT '1' COMMENT '启用状态',
@@ -561,7 +561,7 @@ CREATE TABLE `cert_doc_extraction_rule` (
   UNIQUE KEY `uk_code` (`code`),
   UNIQUE KEY `uk_standard_file_code` (`standard_file_code`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB AUTO_INCREMENT=2088559573848952833 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档提取规则主表'
+) ENGINE=InnoDB AUTO_INCREMENT=2088559573848952833 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='文档提取规则主表'
 
 
 -- ============================================================
@@ -569,31 +569,31 @@ CREATE TABLE `cert_doc_extraction_rule` (
 -- ============================================================
 CREATE TABLE `cert_doc_field_def` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '字段定义编码（唯一标识）',
-  `rule_code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '规则编码（关联cert_doc_extraction_rule.code）',
-  `field_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '字段名称',
-  `field_code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '字段编码（用于工作流引用）',
-  `data_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'string' COMMENT '数据类型：string/number/date/boolean',
-  `description` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '字段描述（AI提取依据）',
+  `code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '字段定义编码（唯一标识）',
+  `rule_code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '规则编码（关联cert_doc_extraction_rule.code）',
+  `field_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '字段名称',
+  `field_code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '字段编码（用于工作流引用）',
+  `data_type` varchar(20) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'string' COMMENT '数据类型：string/number/date/boolean',
+  `description` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '字段描述（AI提取依据）',
   `is_manual` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否需手动补充：0-否 1-是',
   `Sort` int NOT NULL DEFAULT '0' COMMENT '显示顺序',
-  `Remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '备注',
-  `CreateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `Remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '备注',
+  `CreateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `CreateTime` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `UpdateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `UpdateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `UpdateTime` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `is_ai_recommended` tinyint(1) DEFAULT '1' COMMENT '是否AI推荐字段(1=是,0=手动添加)',
-  `DeleteBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `DeleteBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `DeleteTime` datetime DEFAULT NULL COMMENT '删除时间',
   `IsDeleted` tinyint(1) NOT NULL DEFAULT '0',
   `IsValid` tinyint(1) NOT NULL DEFAULT '1' COMMENT '启用状态',
-  `status` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active' COMMENT '业务状态',
+  `status` varchar(50) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'active' COMMENT '业务状态',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_code` (`code`),
   UNIQUE KEY `uk_rule_field` (`rule_code`,`field_code`),
   KEY `idx_rule_code` (`rule_code`),
   KEY `idx_field_code` (`field_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=40 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档字段定义表'
+) ENGINE=InnoDB AUTO_INCREMENT=40 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='文档字段定义表'
 
 
 -- ============================================================
@@ -601,28 +601,28 @@ CREATE TABLE `cert_doc_field_def` (
 -- ============================================================
 CREATE TABLE `cert_doc_table_def` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '表格定义编码（唯一标识）',
-  `rule_code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '规则编码（关联cert_doc_extraction_rule.code）',
-  `table_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '表格名称',
-  `table_code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '表格编码（用于工作流引用）',
-  `description` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '表格描述（AI提取依据）',
+  `code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '表格定义编码（唯一标识）',
+  `rule_code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '规则编码（关联cert_doc_extraction_rule.code）',
+  `table_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '表格名称',
+  `table_code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '表格编码（用于工作流引用）',
+  `description` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '表格描述（AI提取依据）',
   `Sort` int NOT NULL DEFAULT '0' COMMENT '显示顺序',
-  `Remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '备注',
-  `CreateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `Remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '备注',
+  `CreateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `CreateTime` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `UpdateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `UpdateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `UpdateTime` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `DeleteBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `DeleteBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `DeleteTime` datetime DEFAULT NULL COMMENT '删除时间',
   `IsDeleted` tinyint(1) NOT NULL DEFAULT '0',
   `IsValid` tinyint(1) NOT NULL DEFAULT '1' COMMENT '启用状态',
-  `status` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active' COMMENT '业务状态',
+  `status` varchar(50) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'active' COMMENT '业务状态',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_code` (`code`),
   UNIQUE KEY `uk_rule_table` (`rule_code`,`table_code`),
   KEY `idx_rule_code` (`rule_code`),
   KEY `idx_table_code` (`table_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档表格定义表'
+) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='文档表格定义表'
 
 
 -- ============================================================
@@ -630,28 +630,28 @@ CREATE TABLE `cert_doc_table_def` (
 -- ============================================================
 CREATE TABLE `cert_doc_table_field_def` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '表格字段定义编码（唯一标识）',
-  `table_code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '表格编码（关联cert_doc_table_def.code）',
-  `column_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '列名称',
-  `column_code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '列编码',
-  `data_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'string' COMMENT '数据类型：string/number/date',
+  `code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '表格字段定义编码（唯一标识）',
+  `table_code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '表格编码（关联cert_doc_table_def.code）',
+  `column_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '列名称',
+  `column_code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '列编码',
+  `data_type` varchar(20) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'string' COMMENT '数据类型：string/number/date',
   `Sort` int NOT NULL DEFAULT '0' COMMENT '显示顺序',
-  `Remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '备注',
-  `CreateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `Remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '备注',
+  `CreateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `CreateTime` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `UpdateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `UpdateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `UpdateTime` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `DeleteBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `DeleteBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `DeleteTime` datetime DEFAULT NULL COMMENT '删除时间',
   `IsDeleted` tinyint(1) NOT NULL DEFAULT '0',
   `IsValid` tinyint(1) NOT NULL DEFAULT '1' COMMENT '启用状态',
-  `status` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active' COMMENT '业务状态',
+  `status` varchar(50) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'active' COMMENT '业务状态',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_code` (`code`),
   UNIQUE KEY `uk_table_column` (`table_code`,`column_code`),
   KEY `idx_table_code` (`table_code`),
   KEY `idx_column_code` (`column_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=66 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档表格字段定义表'
+) ENGINE=InnoDB AUTO_INCREMENT=66 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='文档表格字段定义表'
 
 
 -- ============================================================
@@ -685,7 +685,7 @@ CREATE TABLE `cert_enterprise` (
   PRIMARY KEY (`Id`),
   UNIQUE KEY `uk_code` (`Code`),
   UNIQUE KEY `uk_credit_code` (`CreditCode`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='企业信息表'
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='企业信息表'
 
 
 -- ============================================================
@@ -814,7 +814,7 @@ CREATE TABLE `cert_message` (
   `Remark` varchar(500) DEFAULT NULL,
   PRIMARY KEY (`Id`),
   KEY `idx_is_read` (`is_read`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 
 
 -- ============================================================
@@ -822,27 +822,27 @@ CREATE TABLE `cert_message` (
 -- ============================================================
 CREATE TABLE `cert_org_stage` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `code` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `OrgCode` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `standard_code` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `phase_code` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `code` varchar(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `OrgCode` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `standard_code` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `phase_code` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
   `IsValid` tinyint(1) DEFAULT '1',
-  `status` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'active',
-  `CreateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(50) COLLATE utf8mb4_general_ci DEFAULT 'active',
+  `CreateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `CreateTime` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `UpdateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `UpdateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `UpdateTime` datetime DEFAULT NULL,
-  `DeleteBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `DeleteBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `DeleteTime` datetime DEFAULT NULL,
   `IsDeleted` tinyint(1) NOT NULL DEFAULT '0',
-  `Remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `Remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_code` (`code`),
   UNIQUE KEY `uk_org_std_stage` (`OrgCode`,`standard_code`,`phase_code`),
   KEY `idx_org_code` (`OrgCode`),
   KEY `idx_standard_code` (`standard_code`),
   KEY `idx_phase_code` (`phase_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 
 
 -- ============================================================
@@ -850,25 +850,25 @@ CREATE TABLE `cert_org_stage` (
 -- ============================================================
 CREATE TABLE `cert_org_standard` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `code` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `OrgCode` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `standard_code` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `code` varchar(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `OrgCode` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `standard_code` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
   `IsValid` tinyint(1) DEFAULT '1',
-  `status` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'active',
-  `CreateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(50) COLLATE utf8mb4_general_ci DEFAULT 'active',
+  `CreateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `CreateTime` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `UpdateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `UpdateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `UpdateTime` datetime DEFAULT NULL,
-  `DeleteBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `DeleteBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `DeleteTime` datetime DEFAULT NULL,
   `IsDeleted` tinyint(1) NOT NULL DEFAULT '0',
-  `Remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `Remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_code` (`code`),
   UNIQUE KEY `uk_org_std` (`OrgCode`,`standard_code`),
   KEY `idx_org_code` (`OrgCode`),
   KEY `idx_standard_code` (`standard_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 
 
 -- ============================================================
@@ -896,7 +896,7 @@ CREATE TABLE `cert_phase_definition` (
   UNIQUE KEY `uk_phase_code` (`phase_code`),
   KEY `idx_is_valid` (`IsValid`),
   KEY `idx_is_deleted` (`IsDeleted`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='认证阶段定义（通用五阶段，ISO 17021）'
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='认证阶段定义（通用五阶段，ISO 17021）'
 
 
 -- ============================================================
@@ -919,7 +919,7 @@ CREATE TABLE `cert_report_template` (
   `Remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '备注',
   `CbCode` varchar(36) COLLATE utf8mb4_general_ci NOT NULL COMMENT '认证机构编码',
   `StandardCode` varchar(36) COLLATE utf8mb4_general_ci NOT NULL COMMENT '标准编码',
-  `PhaseCode` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `PhaseCode` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `TemplateName` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '模板名称',
   `TemplateFilePath` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '空白文档文件路径（MinIO）',
   `SectionConfig` json DEFAULT NULL COMMENT '报告章节配置（含每章节的 workflow_id、clause_id 映射）',
@@ -940,30 +940,30 @@ CREATE TABLE `cert_report_template` (
 -- ============================================================
 CREATE TABLE `cert_standard_directory_config` (
   `Id` bigint NOT NULL AUTO_INCREMENT,
-  `Code` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `DirectoryCode` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `StandardCode` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `PhaseCode` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `RootFolderName` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `status` enum('draft','active','archived') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `Code` varchar(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `DirectoryCode` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `StandardCode` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `PhaseCode` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `RootFolderName` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `status` enum('draft','active','archived') COLLATE utf8mb4_general_ci DEFAULT NULL,
   `IsValid` tinyint(1) DEFAULT NULL,
-  `CreateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `CreateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `CreateTime` datetime DEFAULT NULL,
   `CreateDate` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `UpdateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `UpdateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `ModifyDate` datetime DEFAULT NULL,
-  `DeleteBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `DeleteBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `DeleteTime` datetime DEFAULT NULL,
   `IsDeleted` tinyint(1) NOT NULL DEFAULT '0',
-  `Status_field` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'active',
+  `Status_field` varchar(50) COLLATE utf8mb4_general_ci DEFAULT 'active',
   `Enable_field` tinyint(1) DEFAULT '1',
   `Sort` int DEFAULT '0',
-  `Remark` text COLLATE utf8mb4_unicode_ci,
+  `Remark` text COLLATE utf8mb4_general_ci,
   PRIMARY KEY (`Id`),
   UNIQUE KEY `uk_code` (`Code`),
   UNIQUE KEY `uk_directory_code` (`DirectoryCode`),
   UNIQUE KEY `uk_standard_phase` (`StandardCode`,`PhaseCode`)
-) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 
 
 -- ============================================================
@@ -971,50 +971,50 @@ CREATE TABLE `cert_standard_directory_config` (
 -- ============================================================
 CREATE TABLE `cert_standard_directory_file` (
   `Id` bigint NOT NULL AUTO_INCREMENT,
-  `Code` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `FileCode` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `FolderCode` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `DirectoryCode` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `FileName` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `FileType` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `Code` varchar(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `FileCode` varchar(150) COLLATE utf8mb4_general_ci NOT NULL,
+  `FolderCode` varchar(150) COLLATE utf8mb4_general_ci NOT NULL,
+  `DirectoryCode` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `FileName` varchar(500) COLLATE utf8mb4_general_ci NOT NULL,
+  `FileType` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `file_size` bigint DEFAULT NULL COMMENT '文件大小(字节)',
-  `FilePattern` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `FilePattern` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `IsRequired` tinyint(1) DEFAULT '1',
   `MaxFileSizeMB` int DEFAULT '10',
-  `Description` text COLLATE utf8mb4_unicode_ci,
+  `Description` text COLLATE utf8mb4_general_ci,
   `SortOrder` int DEFAULT '0',
   `ExtractionEnabled` tinyint(1) DEFAULT '0',
   `ExtractionRules` json DEFAULT NULL,
   `PreCheckRequired` tinyint(1) DEFAULT '1',
   `ComplianceRequired` tinyint(1) DEFAULT '0',
-  `status` enum('draft','active','archived') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `CreateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` enum('draft','active','archived') COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `CreateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `CreateTime` datetime DEFAULT NULL,
   `CreateDate` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `UpdateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `UpdateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `ModifyDate` datetime DEFAULT NULL,
-  `DeleteBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `DeleteBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `DeleteTime` datetime DEFAULT NULL,
   `IsDeleted` tinyint(1) NOT NULL DEFAULT '0',
-  `Status_field` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'active',
+  `Status_field` varchar(50) COLLATE utf8mb4_general_ci DEFAULT 'active',
   `Enable_field` tinyint(1) DEFAULT '1',
   `Sort` int DEFAULT '0',
-  `Remark` text COLLATE utf8mb4_unicode_ci,
-  `TaskId` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `Remark` text COLLATE utf8mb4_general_ci,
+  `TaskId` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `IsValid` tinyint(1) DEFAULT '1',
-  `UploadStatus` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT 'active',
-  `StoragePath` varchar(512) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `FullPath` varchar(1024) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `converted_storage_path` varchar(512) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `convert_status` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `convert_message` varchar(1024) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `UploadStatus` varchar(20) COLLATE utf8mb4_general_ci DEFAULT 'active',
+  `StoragePath` varchar(512) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `FullPath` varchar(1024) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `converted_storage_path` varchar(512) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `convert_status` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `convert_message` varchar(1024) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `convert_date` datetime DEFAULT NULL,
   PRIMARY KEY (`Id`),
   UNIQUE KEY `uk_code` (`Code`),
   UNIQUE KEY `uk_file_code` (`FileCode`),
   KEY `idx_folder_code` (`FolderCode`),
   KEY `idx_directory_code` (`DirectoryCode`)
-) ENGINE=InnoDB AUTO_INCREMENT=1026 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+) ENGINE=InnoDB AUTO_INCREMENT=1026 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 
 
 -- ============================================================
@@ -1022,35 +1022,35 @@ CREATE TABLE `cert_standard_directory_file` (
 -- ============================================================
 CREATE TABLE `cert_standard_directory_folder` (
   `Id` bigint NOT NULL AUTO_INCREMENT,
-  `Code` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `FolderCode` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `DirectoryCode` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `ParentCode` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `FolderName` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `Code` varchar(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `FolderCode` varchar(150) COLLATE utf8mb4_general_ci NOT NULL,
+  `DirectoryCode` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `ParentCode` varchar(150) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `FolderName` varchar(200) COLLATE utf8mb4_general_ci NOT NULL,
   `Depth` int DEFAULT '1',
   `SortOrder` int DEFAULT '0',
-  `status` enum('draft','active','archived') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `CreateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` enum('draft','active','archived') COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `CreateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `CreateTime` datetime DEFAULT NULL,
   `CreateDate` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `UpdateBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `UpdateBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `ModifyDate` datetime DEFAULT NULL,
-  `DeleteBy` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `DeleteBy` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `DeleteTime` datetime DEFAULT NULL,
   `IsDeleted` tinyint(1) NOT NULL DEFAULT '0',
-  `Status_field` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'active',
+  `Status_field` varchar(50) COLLATE utf8mb4_general_ci DEFAULT 'active',
   `Enable_field` tinyint(1) DEFAULT '1',
   `Sort` int DEFAULT '0',
-  `Remark` text COLLATE utf8mb4_unicode_ci,
-  `TaskId` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `Remark` text COLLATE utf8mb4_general_ci,
+  `TaskId` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `IsValid` tinyint(1) DEFAULT '0',
-  `FullPath` varchar(1024) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `FullPath` varchar(1024) COLLATE utf8mb4_general_ci DEFAULT NULL,
   PRIMARY KEY (`Id`),
   UNIQUE KEY `uk_code` (`Code`),
   UNIQUE KEY `uk_folder_code` (`FolderCode`),
   KEY `idx_directory_code` (`DirectoryCode`),
   KEY `idx_parent_code` (`ParentCode`)
-) ENGINE=InnoDB AUTO_INCREMENT=115 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+) ENGINE=InnoDB AUTO_INCREMENT=115 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 
 
 -- ============================================================
@@ -1073,7 +1073,7 @@ CREATE TABLE `cert_standard_phase_config` (
   `Sort` int DEFAULT '0' COMMENT '排序号',
   `Remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '备注',
   `StandardCode` varchar(36) COLLATE utf8mb4_general_ci NOT NULL COMMENT '标准编码',
-  `PhaseCode` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `PhaseCode` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `RequiredClauses` json DEFAULT NULL COMMENT '此阶段需检查的条款编码列表',
   `RequiredFiles` json DEFAULT NULL COMMENT '此阶段必需的文件清单编码列表',
   PRIMARY KEY (`Id`),
@@ -1114,7 +1114,7 @@ CREATE TABLE `cert_sys_config` (
   UNIQUE KEY `uk_config_key` (`ConfigKey`),
   UNIQUE KEY `code` (`Code`),
   KEY `idx_category` (`Category`)
-) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='全局系统参数配置'
+) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='全局系统参数配置'
 
 
 -- ============================================================
@@ -1140,7 +1140,7 @@ CREATE TABLE `cert_upload_task` (
   PRIMARY KEY (`Id`),
   UNIQUE KEY `UK_TaskId` (`TaskId`),
   UNIQUE KEY `code` (`code`)
-) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='上传任务追踪表'
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='上传任务追踪表'
 
 
 -- ============================================================
@@ -1162,7 +1162,7 @@ CREATE TABLE `cert_validation_rule` (
   `Sort` int DEFAULT '0' COMMENT '排序号',
   `Remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '备注',
   `StandardCode` varchar(36) COLLATE utf8mb4_general_ci NOT NULL COMMENT '适用标准编码',
-  `PhaseCode` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `PhaseCode` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `ClauseCode` varchar(36) COLLATE utf8mb4_general_ci NOT NULL COMMENT '对应条款编码',
   `WorkflowCode` varchar(36) COLLATE utf8mb4_general_ci NOT NULL COMMENT '关联的工作流定义编码',
   `RuleCode` varchar(50) COLLATE utf8mb4_general_ci NOT NULL COMMENT '规则编码',
@@ -1352,7 +1352,7 @@ CREATE TABLE `ent_enterprise_phase` (
   `Sort` int DEFAULT '0' COMMENT '排序号',
   `Remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '备注',
   `EnterpriseCode` varchar(36) COLLATE utf8mb4_general_ci NOT NULL COMMENT '所属企业编码',
-  `PhaseCode` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+  `PhaseCode` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `StandardCode` varchar(36) COLLATE utf8mb4_general_ci NOT NULL COMMENT '认证标准编码',
   `StartedAt` datetime DEFAULT NULL COMMENT '开始时间',
   `CompletedAt` datetime DEFAULT NULL COMMENT '完成时间',
@@ -1813,7 +1813,7 @@ CREATE TABLE `sys_api` (
   UNIQUE KEY `uk_api_code` (`code`),
   KEY `idx_api_group` (`group_path`),
   KEY `idx_api_path` (`path`)
-) ENGINE=InnoDB AUTO_INCREMENT=240 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='接口表'
+) ENGINE=InnoDB AUTO_INCREMENT=240 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='接口表'
 
 
 -- ============================================================
@@ -1984,27 +1984,27 @@ CREATE TABLE `Sys_Menu` (
 -- ============================================================
 CREATE TABLE `Sys_Organization` (
   `Id` int NOT NULL AUTO_INCREMENT,
-  `Code` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `OrgName` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `OrgCode` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `ParentCode` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `OrgType` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'Dept',
+  `Code` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `OrgName` varchar(200) COLLATE utf8mb4_general_ci NOT NULL,
+  `OrgCode` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `ParentCode` varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `OrgType` varchar(50) COLLATE utf8mb4_general_ci DEFAULT 'Dept',
   `OrgLevel` int DEFAULT NULL,
-  `OrgPath` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `LeaderName` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `LeaderPhone` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `OrgPath` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `LeaderName` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `LeaderPhone` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `Sort` int DEFAULT '0',
   `Enable` tinyint DEFAULT '1',
   `IsValid` tinyint NOT NULL DEFAULT '1' COMMENT '有效标志: 1=有效, 0=无效',
-  `Remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `Remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `CreateID` int DEFAULT NULL,
-  `Creator` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `Creator` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `CreateDate` datetime DEFAULT CURRENT_TIMESTAMP,
   `ModifyID` int DEFAULT NULL,
-  `Modifier` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `Modifier` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `ModifyDate` datetime DEFAULT NULL,
   `DeleteID` int DEFAULT NULL,
-  `Deleter` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `Deleter` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `DeleteTime` datetime DEFAULT NULL,
   `IsDeleted` tinyint DEFAULT '0',
   PRIMARY KEY (`Id`),
@@ -2012,7 +2012,7 @@ CREATE TABLE `Sys_Organization` (
   KEY `idx_parent_code` (`ParentCode`),
   KEY `idx_org_code` (`OrgCode`),
   KEY `idx_enable` (`Enable`)
-) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 
 
 -- ============================================================
@@ -2112,7 +2112,7 @@ CREATE TABLE `sys_role_api` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_role_api` (`role_code`,`api_code`),
   KEY `idx_api_code` (`api_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='角色-接口关联表'
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='角色-接口关联表'
 
 
 -- ============================================================
@@ -2152,7 +2152,7 @@ CREATE TABLE `Sys_RoleMenu` (
   UNIQUE KEY `uk_role_menu` (`RoleCode`,`MenuCode`),
   KEY `idx_rm_role` (`RoleCode`),
   KEY `idx_rm_menu` (`MenuCode`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='角色-菜单关联表'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='角色-菜单关联表'
 
 
 -- ============================================================
@@ -2169,7 +2169,7 @@ CREATE TABLE `Sys_RoleUser` (
   UNIQUE KEY `uk_role_user` (`RoleCode`,`UserCode`),
   KEY `idx_role_code` (`RoleCode`),
   KEY `idx_user_code` (`UserCode`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='角色-用户关联表'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='角色-用户关联表'
 
 
 -- ============================================================
@@ -2336,7 +2336,7 @@ CREATE TABLE `sys_user_permission` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_user_api` (`user_code`,`api_code`),
   KEY `idx_user_code` (`user_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=64 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户权限缓存表'
+) ENGINE=InnoDB AUTO_INCREMENT=64 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户权限缓存表'
 
 
 -- ============================================================
@@ -2759,7 +2759,7 @@ CREATE TABLE `wf_prompt_template` (
   UNIQUE KEY `uk_prompt_code` (`prompt_code`),
   KEY `idx_prompt_type` (`prompt_type`),
   KEY `idx_prompt_active` (`is_active`,`prompt_type`)
-) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Prompt模板表'
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Prompt模板表'
 
 
 -- ============================================================
@@ -2767,32 +2767,32 @@ CREATE TABLE `wf_prompt_template` (
 -- ============================================================
 CREATE TABLE `wf_skill_api` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `skill_code` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '所属 Skill（与 wf_skill.skill_code 同 collation）',
-  `url` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `http_method` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'POST',
-  `headers` text COLLATE utf8mb4_unicode_ci COMMENT '请求头 JSON（值可含 $sys. 引用）',
-  `auth_config` text COLLATE utf8mb4_unicode_ci COMMENT '鉴权 JSON: {"type":"bearer","tokenSource":"$sys.XXX"}——密钥不落库',
-  `param_mapping` text COLLATE utf8mb4_unicode_ci COMMENT '参数映射: {"输入项名":"请求参数名"}',
-  `response_mapping` text COLLATE utf8mb4_unicode_ci COMMENT '响应解析: {"输出项名":"$.data.xxx"}',
+  `code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `skill_code` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '所属 Skill（与 wf_skill.skill_code 同 collation）',
+  `url` varchar(500) COLLATE utf8mb4_general_ci NOT NULL,
+  `http_method` varchar(10) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'POST',
+  `headers` text COLLATE utf8mb4_general_ci COMMENT '请求头 JSON（值可含 $sys. 引用）',
+  `auth_config` text COLLATE utf8mb4_general_ci COMMENT '鉴权 JSON: {"type":"bearer","tokenSource":"$sys.XXX"}——密钥不落库',
+  `param_mapping` text COLLATE utf8mb4_general_ci COMMENT '参数映射: {"输入项名":"请求参数名"}',
+  `response_mapping` text COLLATE utf8mb4_general_ci COMMENT '响应解析: {"输出项名":"$.data.xxx"}',
   `timeout_seconds` int NOT NULL DEFAULT '30',
   `enable` tinyint(1) NOT NULL DEFAULT '1',
-  `creator` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `creator` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `create_date` datetime DEFAULT NULL,
-  `modifier` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `modifier` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `modify_date` datetime DEFAULT NULL,
-  `deleter` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `deleter` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `delete_time` datetime DEFAULT NULL,
-  `status` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'active',
-  `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `delete_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(50) COLLATE utf8mb4_general_ci DEFAULT 'active',
+  `remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `create_by` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `update_by` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `delete_by` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `IsDeleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_skill_api` (`skill_code`),
   CONSTRAINT `fk_api_skill` FOREIGN KEY (`skill_code`) REFERENCES `wf_skill` (`skill_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='api 型 Skill 信息（1:1，预留）'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='api 型 Skill 信息（1:1，预留）'
 
 
 -- ============================================================
@@ -2800,28 +2800,28 @@ CREATE TABLE `wf_skill_api` (
 -- ============================================================
 CREATE TABLE `wf_skill_category` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `category_code` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '分类编码（与 wf_skill.category 对应）',
-  `category_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '分类名称',
-  `icon` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '图标',
-  `color` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '颜色',
+  `code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `category_code` varchar(50) COLLATE utf8mb4_general_ci NOT NULL COMMENT '分类编码（与 wf_skill.category 对应）',
+  `category_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '分类名称',
+  `icon` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '图标',
+  `color` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '颜色',
   `sort_order` int NOT NULL DEFAULT '0' COMMENT '排序',
   `enable` tinyint(1) NOT NULL DEFAULT '1',
-  `creator` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `creator` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `create_date` datetime DEFAULT NULL,
-  `modifier` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `modifier` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `modify_date` datetime DEFAULT NULL,
-  `deleter` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `deleter` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `delete_time` datetime DEFAULT NULL,
-  `status` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'active',
-  `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `delete_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(50) COLLATE utf8mb4_general_ci DEFAULT 'active',
+  `remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `create_by` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `update_by` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `delete_by` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `IsDeleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_skill_category_code` (`category_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Skill 分类（基础资料维护：面板分组 + 页面左侧导航）'
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Skill 分类（基础资料维护：面板分组 + 页面左侧导航）'
 
 
 -- ============================================================
@@ -2829,34 +2829,34 @@ CREATE TABLE `wf_skill_category` (
 -- ============================================================
 CREATE TABLE `wf_skill_input` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `skill_code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `input_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `input_label` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `input_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'text' COMMENT 'text/number/date/boolean/enum/field_ref/table_ref/json',
-  `enum_values` text COLLATE utf8mb4_unicode_ci,
+  `code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `skill_code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `input_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `input_label` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `input_type` varchar(20) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'text' COMMENT 'text/number/date/boolean/enum/field_ref/table_ref/json',
+  `enum_values` text COLLATE utf8mb4_general_ci,
   `is_required` tinyint(1) NOT NULL DEFAULT '0',
-  `default_value` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `bind_mode` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'LinkOrConstant' COMMENT '绑定模式：Link/LinkOrConstant/Enum',
-  `enum_source` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '字典编码（BindMode=Enum 时必填），对应 Sys_Dictionary.DicNo',
+  `default_value` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `bind_mode` varchar(20) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'LinkOrConstant' COMMENT '绑定模式：Link/LinkOrConstant/Enum',
+  `enum_source` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '字典编码（BindMode=Enum 时必填），对应 Sys_Dictionary.DicNo',
   `sort_order` int NOT NULL DEFAULT '0',
   `enable` tinyint(1) NOT NULL DEFAULT '1',
-  `creator` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `creator` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `create_date` datetime DEFAULT NULL,
-  `modifier` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `modifier` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `modify_date` datetime DEFAULT NULL,
-  `deleter` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `deleter` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `delete_time` datetime DEFAULT NULL,
-  `status` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'active',
-  `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `delete_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(50) COLLATE utf8mb4_general_ci DEFAULT 'active',
+  `remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `create_by` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `update_by` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `delete_by` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `IsDeleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_skill_input` (`skill_code`,`input_name`),
   KEY `idx_skill_input_skill` (`skill_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=40 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Skill 输入表单模板（画布生成输入表单用，非硬校验）'
+) ENGINE=InnoDB AUTO_INCREMENT=40 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Skill 输入表单模板（画布生成输入表单用，非硬校验）'
 
 
 -- ============================================================
@@ -2864,30 +2864,30 @@ CREATE TABLE `wf_skill_input` (
 -- ============================================================
 CREATE TABLE `wf_skill_output` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `skill_code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `output_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `output_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'json' COMMENT 'string/number/date/boolean/json',
-  `output_prompt` text COLLATE utf8mb4_unicode_ci COMMENT '输出解读提示词（解释器组装用）',
-  `description` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `skill_code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `output_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `output_type` varchar(20) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'json' COMMENT 'string/number/date/boolean/json',
+  `output_prompt` text COLLATE utf8mb4_general_ci COMMENT '输出解读提示词（解释器组装用）',
+  `description` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `sort_order` int NOT NULL DEFAULT '0',
   `enable` tinyint(1) NOT NULL DEFAULT '1',
-  `creator` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `creator` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `create_date` datetime DEFAULT NULL,
-  `modifier` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `modifier` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `modify_date` datetime DEFAULT NULL,
-  `deleter` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `deleter` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `delete_time` datetime DEFAULT NULL,
-  `status` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'active',
-  `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `delete_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(50) COLLATE utf8mb4_general_ci DEFAULT 'active',
+  `remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `create_by` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `update_by` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `delete_by` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `IsDeleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_skill_output` (`skill_code`,`output_name`),
   KEY `idx_skill_output_skill` (`skill_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=36 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='强约束 Skill 输出契约（output_strict=1 时解释器强校验）'
+) ENGINE=InnoDB AUTO_INCREMENT=36 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='强约束 Skill 输出契约（output_strict=1 时解释器强校验）'
 
 
 -- ============================================================
@@ -2895,29 +2895,29 @@ CREATE TABLE `wf_skill_output` (
 -- ============================================================
 CREATE TABLE `wf_skill_reflection` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `code` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `skill_code` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '所属 Skill（与 wf_skill.skill_code 同 collation）',
-  `class_path` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '反射的地址（类型全名）',
-  `method_name` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'ExecuteAsync' COMMENT '反射的方法',
-  `param_binding` text COLLATE utf8mb4_unicode_ci COMMENT '参数绑定 JSON: {"输入项名":"方法参数名或顺序"}',
+  `code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `skill_code` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '所属 Skill（与 wf_skill.skill_code 同 collation）',
+  `class_path` varchar(500) COLLATE utf8mb4_general_ci NOT NULL COMMENT '反射的地址（类型全名）',
+  `method_name` varchar(200) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'ExecuteAsync' COMMENT '反射的方法',
+  `param_binding` text COLLATE utf8mb4_general_ci COMMENT '参数绑定 JSON: {"输入项名":"方法参数名或顺序"}',
   `enable` tinyint(1) NOT NULL DEFAULT '1',
-  `creator` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `creator` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `create_date` datetime DEFAULT NULL,
-  `modifier` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `modifier` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `modify_date` datetime DEFAULT NULL,
-  `deleter` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `deleter` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `delete_time` datetime DEFAULT NULL,
-  `status` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'active',
-  `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `update_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `delete_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(50) COLLATE utf8mb4_general_ci DEFAULT 'active',
+  `remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `create_by` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `update_by` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `delete_by` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `IsDeleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_skill_reflection` (`skill_code`),
   UNIQUE KEY `uk_class_method` (`class_path`,`method_name`),
   CONSTRAINT `fk_reflection_skill` FOREIGN KEY (`skill_code`) REFERENCES `wf_skill` (`skill_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='method 型 Skill 反射信息（1:1）'
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='method 型 Skill 反射信息（1:1）'
 
 
 -- ============================================================
@@ -3007,54 +3007,54 @@ CREATE TABLE `wf_workflow_execution_log` (
 -- ============================================================
 CREATE TABLE `yzh_field_config` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `page_key` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `field_name` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `field_alias` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT '',
+  `page_key` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `field_name` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `field_alias` varchar(100) COLLATE utf8mb4_general_ci DEFAULT '',
   `xs_flag` tinyint DEFAULT '1',
   `column_sxh` int DEFAULT '0',
-  `column_title` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT '',
+  `column_title` varchar(100) COLLATE utf8mb4_general_ci DEFAULT '',
   `column_width` int DEFAULT '120',
-  `column_fixed` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `column_fixed` varchar(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `sortable` tinyint DEFAULT '1',
-  `column_formatter` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT '',
+  `column_formatter` varchar(50) COLLATE utf8mb4_general_ci DEFAULT '',
   `show_overflow` tinyint DEFAULT '1',
-  `align` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT 'left',
+  `align` varchar(10) COLLATE utf8mb4_general_ci DEFAULT 'left',
   `bc_flag` tinyint DEFAULT '1',
-  `form_title` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT '',
-  `control_type` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT 'input',
+  `form_title` varchar(100) COLLATE utf8mb4_general_ci DEFAULT '',
+  `control_type` varchar(20) COLLATE utf8mb4_general_ci DEFAULT 'input',
   `grid_row` int DEFAULT '0',
   `grid_col` int DEFAULT '0',
   `grid_row_span` int DEFAULT '1',
   `grid_col_span` int DEFAULT '1',
   `required` tinyint DEFAULT '0',
   `maxlength` int DEFAULT '0',
-  `placeholder` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT '',
-  `default_value` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT '',
+  `placeholder` varchar(200) COLLATE utf8mb4_general_ci DEFAULT '',
+  `default_value` varchar(500) COLLATE utf8mb4_general_ci DEFAULT '',
   `readonly` tinyint DEFAULT '0',
   `disabled` tinyint DEFAULT '0',
   `precision` int DEFAULT NULL,
   `min_val` decimal(18,6) DEFAULT NULL,
   `max_val` decimal(18,6) DEFAULT NULL,
   `textarea_rows` int DEFAULT '3',
-  `data_key` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `remote_url` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `data_key` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `remote_url` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `group_index` int DEFAULT '0',
   `search_flag` tinyint DEFAULT '0',
-  `search_title` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT '',
-  `search_placeholder` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT '',
-  `search_control_type` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `search_title` varchar(100) COLLATE utf8mb4_general_ci DEFAULT '',
+  `search_placeholder` varchar(100) COLLATE utf8mb4_general_ci DEFAULT '',
+  `search_control_type` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `search_width` int DEFAULT '180',
-  `org_code` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT '',
+  `org_code` varchar(50) COLLATE utf8mb4_general_ci DEFAULT '',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT '',
-  `code` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT '',
+  `code` varchar(64) COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `code` (`code`),
   UNIQUE KEY `uk_page_field` (`page_key`,`field_name`,`org_code`),
   KEY `idx_page_key` (`page_key`),
   KEY `idx_field_name` (`field_name`)
-) ENGINE=InnoDB AUTO_INCREMENT=49 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+) ENGINE=InnoDB AUTO_INCREMENT=49 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 
 
 -- ============================================================
@@ -3062,37 +3062,37 @@ CREATE TABLE `yzh_field_config` (
 -- ============================================================
 CREATE TABLE `yzh_page_config` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `page_key` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `page_title` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `entity_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `table_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `controller_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `key_field` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'Id',
-  `key_field_type` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT 'number',
-  `sort_field` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `sort_order` varchar(5) COLLATE utf8mb4_unicode_ci DEFAULT 'desc',
+  `page_key` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
+  `page_title` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `entity_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `table_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `controller_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `key_field` varchar(50) COLLATE utf8mb4_general_ci DEFAULT 'Id',
+  `key_field_type` varchar(10) COLLATE utf8mb4_general_ci DEFAULT 'number',
+  `sort_field` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `sort_order` varchar(5) COLLATE utf8mb4_general_ci DEFAULT 'desc',
   `dialog_width` int DEFAULT '960',
-  `dialog_max_height` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT '85vh',
+  `dialog_max_height` varchar(20) COLLATE utf8mb4_general_ci DEFAULT '85vh',
   `dialog_label_width` int DEFAULT '120',
-  `row_height` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT 'default',
+  `row_height` varchar(10) COLLATE utf8mb4_general_ci DEFAULT 'default',
   `stripe` tinyint DEFAULT '1',
   `show_row_number` tinyint DEFAULT '1',
-  `search_mode` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT 'fixed',
-  `visible_buttons` text COLLATE utf8mb4_unicode_ci,
+  `search_mode` varchar(10) COLLATE utf8mb4_general_ci DEFAULT 'fixed',
+  `visible_buttons` text COLLATE utf8mb4_general_ci,
   `show_action_column` tinyint DEFAULT '1',
   `checkbox_selection` tinyint DEFAULT '1',
   `incremental_update` tinyint DEFAULT '1',
-  `org_code` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT '',
+  `org_code` varchar(50) COLLATE utf8mb4_general_ci DEFAULT '',
   `is_active` tinyint DEFAULT '1',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `remark` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT '',
-  `code` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT '',
+  `code` varchar(64) COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `code` (`code`),
   UNIQUE KEY `uk_page_org` (`page_key`,`org_code`),
   KEY `idx_page_key` (`page_key`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 
 
 -- ============================================================
@@ -3136,7 +3136,7 @@ CREATE TABLE `yzh_queue` (
   KEY `idx_scope_status` (`queue_type`,`scope_key`,`status`),
   KEY `idx_status` (`status`),
   KEY `idx_create_date` (`create_date`)
-) ENGINE=InnoDB AUTO_INCREMENT=35 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='yzh队列主表（通用队列中心）'
+) ENGINE=InnoDB AUTO_INCREMENT=35 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='yzh队列主表（通用队列中心）'
 
 
 -- ============================================================
@@ -3171,7 +3171,7 @@ CREATE TABLE `yzh_queue_resource_lock` (
   KEY `idx_queue` (`queue_code`,`status`),
   KEY `idx_locked` (`resource_table`,`resource_code`,`status`),
   KEY `idx_expire` (`status`,`expire_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=2393 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='yzh队列资源锁定表'
+) ENGINE=InnoDB AUTO_INCREMENT=2393 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='yzh队列资源锁定表'
 
 
 -- ============================================================
@@ -3217,6 +3217,6 @@ CREATE TABLE `yzh_queue_task` (
   KEY `idx_lease` (`status`,`locked_until`),
   KEY `idx_task_id` (`task_id`),
   KEY `idx_type` (`task_type`)
-) ENGINE=InnoDB AUTO_INCREMENT=2358 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='yzh队列子任务表（通用任务）'
+) ENGINE=InnoDB AUTO_INCREMENT=2358 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='yzh队列子任务表（通用任务）'
 
 

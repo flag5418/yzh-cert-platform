@@ -157,7 +157,7 @@ public class StandardDirectoryService
 
     public async Task<List<StandardDirectoryConfig>> GetConfigsAsync()
     {
-        return (await _db.GetListAsync<StandardDirectoryConfig>(x => x.Enable == true)).Data ?? new();
+        return (await _db.GetListAsync<StandardDirectoryConfig>(x => x.IsValid == 1)).Data ?? new();
     }
 
     public async Task<StandardDirectoryConfig?> GetConfigAsync(string directoryCode)
@@ -169,7 +169,7 @@ public class StandardDirectoryService
     {
         config.Code = Guid.NewGuid().ToString("N");
         config.DirectoryCode ??= _codeGenerator.GenerateDirectoryCode(config.StandardCode, config.PhaseCode);
-        config.Enable = true;
+        config.IsValid = 1;
         config.Status = "draft";
         config.CreateTime = DateTime.Now;
         return (await _db.InsertAsync(config)).Data;
@@ -186,7 +186,7 @@ public class StandardDirectoryService
     {
         var config = (await _db.GetOneAsync<StandardDirectoryConfig>(x => x.DirectoryCode == directoryCode)).Data;
         if (config == null) return false;
-        config.Enable = false;
+        config.IsValid = 0;
         config.DeleteTime = DateTime.Now;
         var result = await _db.UpdateAsync(config);
         return result.Code == 200;
@@ -202,7 +202,7 @@ public class StandardDirectoryService
     public async Task<List<StandardDirectoryFolder>> GetFolderTreeAsync(string directoryCode)
     {
         var folders = (await _db.GetListAsync<StandardDirectoryFolder>(
-            x => x.DirectoryCode == directoryCode && x.Enable == true && x.IsValid == 1)).Data ?? new();
+            x => x.DirectoryCode == directoryCode && x.IsValid == 1)).Data ?? new();
 
         var rootFolders = folders.Where(x => string.IsNullOrEmpty(x.ParentCode))
             .OrderBy(x => x.SortOrder).ToList();
@@ -219,7 +219,7 @@ public class StandardDirectoryService
     public async Task<List<StandardDirectoryFolder>> GetFoldersFlatAsync(string directoryCode)
     {
         return (await _db.GetListAsync<StandardDirectoryFolder>(
-            x => x.DirectoryCode == directoryCode && x.Enable == true && x.IsValid == 1)).Data ?? new();
+            x => x.DirectoryCode == directoryCode && x.IsValid == 1)).Data ?? new();
     }
 
     private List<StandardDirectoryFolder> GetChildFolders(
@@ -263,7 +263,6 @@ public class StandardDirectoryService
         folder.FolderCode = _codeGenerator.GenerateFolderCode(folder.DirectoryCode, folder.Depth, maxSeq + 1);
         folder.FullPath = await BuildFolderFullPathAsync(folder);
         folder.IsValid = 1;
-        folder.Enable = true;
         folder.Status = "draft";
         folder.CreateTime = DateTime.Now;
 
@@ -295,7 +294,7 @@ public class StandardDirectoryService
         if (lockErr != null) return (false, lockErr);
 
         var existing = (await _db.GetOneAsync<StandardDirectoryFolder>(
-            x => x.FolderCode == folder.FolderCode && x.Enable == true)).Data;
+            x => x.FolderCode == folder.FolderCode && x.IsValid == 1)).Data;
         if (existing == null) return (false, "文件夹不存在");
 
         existing.FolderName = folder.FolderName;
@@ -311,7 +310,7 @@ public class StandardDirectoryService
         string folderCode)
     {
         var folder = (await _db.GetOneAsync<StandardDirectoryFolder>(
-            x => x.FolderCode == folderCode && x.Enable == true)).Data;
+            x => x.FolderCode == folderCode && x.IsValid == 1)).Data;
         if (folder == null) return (false, "文件夹不存在", 0, 0);
 
         var lockErr = await GetQueueLockErrorAsync(folder.DirectoryCode);
@@ -327,7 +326,7 @@ public class StandardDirectoryService
 
         // 递归删除子文件夹
         var children = (await _db.GetListAsync<StandardDirectoryFolder>(
-            x => x.ParentCode == folderCode && x.Enable == true)).Data ?? new();
+            x => x.ParentCode == folderCode && x.IsValid == 1)).Data ?? new();
         foreach (var child in children)
         {
             var (fd, fild) = await DeleteFolderRecursiveAsync(child.FolderCode);
@@ -337,11 +336,11 @@ public class StandardDirectoryService
 
         // 删除文件夹下的文件（MinIO + DB）
         var files = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.FolderCode == folderCode && x.Enable == true)).Data ?? new();
+            x => x.FolderCode == folderCode && x.IsValid == 1)).Data ?? new();
         foreach (var file in files)
         {
             await DeleteFileFromStorageAsync(file);
-            file.Enable = false;
+            file.IsValid = 0;
             file.Status = "archived";
             file.DeleteTime = DateTime.Now;
             await _db.UpdateAsync(file);
@@ -353,7 +352,7 @@ public class StandardDirectoryService
             x => x.FolderCode == folderCode)).Data;
         if (folderEntity != null)
         {
-            folderEntity.Enable = false;
+            folderEntity.IsValid = 0;
             folderEntity.Status = "archived";
             folderEntity.DeleteTime = DateTime.Now;
             await _db.UpdateAsync(folderEntity);
@@ -375,10 +374,10 @@ public class StandardDirectoryService
         if (string.IsNullOrEmpty(folderCode))
         {
             return (await _db.GetListAsync<StandardDirectoryFile>(
-                x => x.Enable == true && x.IsValid == 1)).Data ?? new();
+                x => x.IsValid == 1)).Data ?? new();
         }
         return (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.FolderCode == folderCode && x.Enable == true && x.IsValid == 1)).Data ?? new();
+            x => x.FolderCode == folderCode && x.IsValid == 1)).Data ?? new();
     }
 
     /// <summary>
@@ -405,7 +404,7 @@ public class StandardDirectoryService
     public async Task<(bool ok, string? error)> UpdateFileAsync(StandardDirectoryFile file)
     {
         var existing = (await _db.GetOneAsync<StandardDirectoryFile>(
-            x => x.FileCode == file.FileCode && x.Enable == true)).Data;
+            x => x.FileCode == file.FileCode && x.IsValid == 1)).Data;
         if (existing == null) return (false, "文件不存在");
 
         existing.FileName = file.FileName;
@@ -424,11 +423,11 @@ public class StandardDirectoryService
         if (lockErr != null) return (false, lockErr);
 
         var file = (await _db.GetOneAsync<StandardDirectoryFile>(
-            x => x.FileCode == fileCode && x.Enable == true)).Data;
+            x => x.FileCode == fileCode && x.IsValid == 1)).Data;
         if (file == null) return (false, "文件不存在");
 
         await DeleteFileFromStorageAsync(file);
-        file.Enable = false;
+        file.IsValid = 0;
         file.Status = "archived";
         file.DeleteTime = DateTime.Now;
         await _db.UpdateAsync(file);
@@ -497,7 +496,7 @@ public class StandardDirectoryService
                 DirectoryCode = manifest.DirectoryCode,
                 StandardCode = manifest.StandardCode,
                 PhaseCode = manifest.PhaseCode,
-                Enable = true,
+                IsValid = 1,
                 Status = "draft",
                 CreateTime = DateTime.Now
             };
@@ -566,7 +565,6 @@ public class StandardDirectoryService
                     IsValid = 0,
                     TaskId = taskId,
                     FullPath = folder.Path,
-                    Enable = true,
                     Status = "draft",
                     CreateTime = DateTime.Now
                 };
@@ -658,7 +656,6 @@ public class StandardDirectoryService
                     IsValid = 0,
                     UploadStatus = "pending",
                     TaskId = taskId,
-                    Enable = true,
                     Status = "draft",
                     CreateTime = DateTime.Now
                 };
@@ -788,7 +785,7 @@ public class StandardDirectoryService
         if (lockErr != null) return (false, lockErr, null);
 
         var file = (await _db.GetOneAsync<StandardDirectoryFile>(
-            x => x.FileCode == fileCode && x.Enable == true)).Data;
+            x => x.FileCode == fileCode && x.IsValid == 1)).Data;
         if (file == null) return (false, "文件不存在", null);
         if (string.IsNullOrEmpty(file.StoragePath))
             return (false, "原文件从未上传过物理内容，请删除后重新上传", null);
@@ -1220,11 +1217,11 @@ public class StandardDirectoryService
     {
         // 1. 查询所有启用的文件夹
         var allFolders = (await _db.GetListAsync<StandardDirectoryFolder>(
-            x => x.DirectoryCode == directoryCode && x.Enable == true && x.IsValid == 1)).Data ?? new();
+            x => x.DirectoryCode == directoryCode && x.IsValid == 1)).Data ?? new();
 
         // 2. 查询所有启用的文件
         var allFiles = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.DirectoryCode == directoryCode && x.Enable == true && x.IsValid == 1)).Data ?? new();
+            x => x.DirectoryCode == directoryCode && x.IsValid == 1)).Data ?? new();
 
         // 3. 规则状态权威来源：cert_doc_extraction_rule（按 StandardFileCode 关联）
         var ruleStatusMap = new Dictionary<string, string>();
@@ -1385,7 +1382,7 @@ public class StandardDirectoryService
     public async Task<List<StandardDirectoryFile>> GetFilesByDirectoryAsync(string directoryCode)
     {
         return (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.DirectoryCode == directoryCode && x.Enable == true && x.IsValid == 1))
+            x => x.DirectoryCode == directoryCode && x.IsValid == 1))
             .Data ?? new();
     }
 
@@ -1406,7 +1403,6 @@ public class StandardDirectoryService
         file.FileCode = _codeGenerator.GenerateFileCode(
             file.FolderCode ?? file.DirectoryCode, file.FileName);
         file.IsValid = 1;
-        file.Enable = true;
         file.Status = "draft";
         file.UploadStatus = "active";
         file.CreateTime = DateTime.Now;
@@ -1415,7 +1411,7 @@ public class StandardDirectoryService
         if (!string.IsNullOrEmpty(file.FolderCode))
         {
             var parentFolder = (await _db.GetOneAsync<StandardDirectoryFolder>(
-                x => x.FolderCode == file.FolderCode && x.Enable == true)).Data;
+                x => x.FolderCode == file.FolderCode && x.IsValid == 1)).Data;
             var parentPath = parentFolder?.FullPath?.Trim('/') ?? "";
             file.FullPath = string.IsNullOrEmpty(parentPath)
                 ? file.FileName
@@ -1459,12 +1455,12 @@ public class StandardDirectoryService
         string directoryCode, List<string> selectedFolderCodes, List<string> selectedFileCodes)
     {
         var config = (await _db.GetOneAsync<StandardDirectoryConfig>(
-            x => x.DirectoryCode == directoryCode && x.Enable == true)).Data;
+            x => x.DirectoryCode == directoryCode && x.IsValid == 1)).Data;
         if (config == null)
             throw new ArgumentException("目录配置不存在");
 
         var allFolders = (await _db.GetListAsync<StandardDirectoryFolder>(
-            x => x.DirectoryCode == directoryCode && x.Enable == true)).Data ?? new();
+            x => x.DirectoryCode == directoryCode && x.IsValid == 1)).Data ?? new();
 
         // 展开选中的文件夹（含子文件夹）
         var expandedFolderCodes = ExpandFolderCodes(allFolders, selectedFolderCodes);
@@ -1473,7 +1469,7 @@ public class StandardDirectoryService
         if (expandedFolderCodes.Count > 0)
         {
             var folderFiles = (await _db.GetListAsync<StandardDirectoryFile>(
-                x => expandedFolderCodes.Contains(x.FolderCode) && x.Enable == true)).Data ?? new();
+                x => expandedFolderCodes.Contains(x.FolderCode) && x.IsValid == 1)).Data ?? new();
             foreach (var f in folderFiles)
                 expandedFileCodes.Add(f.FileCode);
         }
@@ -1482,7 +1478,7 @@ public class StandardDirectoryService
             throw new ArgumentException("没有找到可导出的文件");
 
         var filesToExport = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => expandedFileCodes.Contains(x.FileCode) && x.Enable == true)).Data ?? new();
+            x => expandedFileCodes.Contains(x.FileCode) && x.IsValid == 1)).Data ?? new();
 
         // 创建临时目录
         var tempDir = Path.Combine(Path.GetTempPath(), $"export_{Guid.NewGuid():N}");
@@ -1644,7 +1640,6 @@ public class StandardDirectoryService
             FullPath = fileName,
             IsValid = 1,
             UploadStatus = "active",
-            Enable = true,
             Status = "draft",
             CreateTime = DateTime.Now
         };
@@ -1896,7 +1891,7 @@ public class StandardDirectoryService
             // 1. 候选文件：doc/xls 且 failed 或 pending
             // includeDisabled：等转换文件按设计 IsValid=0（转换完成才置 1），默认过滤会永久漏掉它们
             var candidates = (await _db.GetListAsync<StandardDirectoryFile>(
-                x => !x.IsDeleted && x.Enable == true 
+                x => !x.IsDeleted
                     && (x.FileType == "doc" || x.FileType == "xls")
                     && (x.ConvertStatus == "failed" || x.ConvertStatus == "pending"),
                 includeDisabled: true))
@@ -1937,7 +1932,7 @@ public class StandardDirectoryService
             foreach (var group in groups)
             {
                 var config = (await _db.GetOneAsync<StandardDirectoryConfig>(
-                    x => x.DirectoryCode == group.Key && x.Enable == true)).Data;
+                    x => x.DirectoryCode == group.Key && x.IsValid == 1)).Data;
                 var orgCode = DeriveOrgCodeFromPath(group.First().StoragePath);
                 var scopeKey = $"{orgCode}|{config?.StandardCode}|{config?.PhaseCode}";
 

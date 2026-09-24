@@ -54,9 +54,6 @@ namespace CertPlatform.Shared.Entities.Rpt
         [SugarColumn(Length = 50, IsNullable = true, ColumnName = "status")]
         public string? Status { get; set; }
 
-        [SugarColumn(ColumnName = "enable")]
-        public bool? Enable { get; set; }
-
         public int Sort { get; set; } = 0;
 
         // ──── ISoftDelete 接口显式实现 ────

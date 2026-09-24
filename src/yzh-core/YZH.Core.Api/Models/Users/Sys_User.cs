@@ -60,13 +60,7 @@ public class Sys_User : BaseEntity, ISoftDelete, IIsValid
     [SugarColumn(ColumnName = "UserPwd")]
     public string UserPwd { get; set; } = string.Empty;
 
-    /// <summary>是否启用（1=启用，0=禁用）</summary>
-    [Required]
-    [Display(Name = "是否可用")]
-    [SugarColumn(ColumnName = "Enable")]
-    public byte Enable { get; set; } = 1;
-
-    /// <summary>有效标志（1=有效，0=无效）- 统一架构字段</summary>
+    /// <summary>有效标志（1=有效，0=无效）- 统一架构字段（启用/禁用唯一字段）</summary>
     [Required]
     [Display(Name = "是否有效")]
     [SugarColumn(ColumnName = "IsValid")]
@@ -145,7 +139,7 @@ public class Sys_User : BaseEntity, ISoftDelete, IIsValid
 
     /// <summary>启用状态描述（运行时翻译）</summary>
     [SugarColumn(IsIgnore = true)]
-    public string? EnableDesc { get; set; }
+    public string? IsValidDesc { get; set; }
 
     // === 审计字段覆盖（适配 Vol 表结构） ===
 

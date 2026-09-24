@@ -116,8 +116,9 @@ public class SqlSugarDbOrm : IDbOrm
                 query = query.Where($"`{isDeletedCol}` = 0");
 
             // 有效标志过滤（反引号包裹列名，避免 SQL 解析问题）
+            // ShowDisabled=true 时由调用方设置 IncludeDisabled 跳过硬过滤
             var isValidCol = GetColumnName<T>("IsValid");
-            if (isValidCol != null)
+            if (isValidCol != null && !options.IncludeDisabled)
                 query = query.Where($"`{isValidCol}` = 1");
 
             // 解析 Conditions
@@ -227,16 +228,16 @@ public class SqlSugarDbOrm : IDbOrm
     {
         try
         {
-            // 使用 Code 作为更新条件（业务键）
-            var codeValue = GetPropertyValue(entity, "Code");
+            var locator = BuildUpdateLocator(entity);
+            if (locator == null)
+                return Result<T>.Fail("更新失败：缺少业务键 Code");
+
             var count = await _client.Updateable(entity)
                 .IgnoreColumns(GetIgnoreColumnsForUpdate())
-                .Where("Code = @Code", new SugarParameter[] { new SugarParameter("@Code", codeValue) })
+                .Where(locator.Value.Sql, locator.Value.Params)
                 .ExecuteCommandAsync();
 
-            return count > 0
-                ? Result<T>.Ok(entity)
-                : Result<T>.Fail("更新失败：记录不存在或无变化");
+            return await ResolveUpdateResultAsync(entity, count, locator.Value);
         }
         catch (Exception ex)
         {
@@ -249,21 +250,53 @@ public class SqlSugarDbOrm : IDbOrm
     {
         try
         {
-            var codeValue = GetPropertyValue(entity, "Code");
+            var locator = BuildUpdateLocator(entity);
+            if (locator == null)
+                return Result<T>.Fail("更新失败：缺少业务键 Code");
+
             var count = await _client.Updateable(entity)
                 .UpdateColumns(fields)
-                .Where("Code = @Code", new SugarParameter[] { new SugarParameter("@Code", codeValue) })
+                .Where(locator.Value.Sql, locator.Value.Params)
                 .ExecuteCommandAsync();
 
-            return count > 0
-                ? Result<T>.Ok(entity)
-                : Result<T>.Fail("更新失败：记录不存在或无变化");
+            return await ResolveUpdateResultAsync(entity, count, locator.Value);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "UpdateAsync(fields) 失败，Type={Type}", typeof(T).Name);
             return Result<T>.Fail(FormatError(ex, "更新"));
         }
+    }
+
+    /// <summary>
+    ///     构建更新定位条件：**仅** Code（准则 A）。
+    ///     Code 为空 → 返回 null → 调用方响亮失败「缺少业务键 Code」。
+    ///     ⛔ 禁止回退 Id（Id 永不作 WHERE 定位）。
+    /// </summary>
+    private static (string Sql, SugarParameter[] Params)? BuildUpdateLocator<T>(T entity)
+    {
+        if (GetPropertyValue(entity, "Code") is string code && !string.IsNullOrWhiteSpace(code))
+            return ("Code = @__locator", new[] { new SugarParameter("@__locator", code) });
+        return null;
+    }
+
+    /// <summary>
+    ///     归纳更新结果：MySQL 默认返回「实际变更行数」——记录存在但字段无变化时为 0。
+    ///     无变化视为成功；仅在记录确实不存在时才失败。
+    /// </summary>
+    private async Task<Result<T>> ResolveUpdateResultAsync<T>(
+        T entity, int affected, (string Sql, SugarParameter[] Params) locator) where T : class, new()
+    {
+        if (affected > 0)
+            return Result<T>.Ok(entity);
+
+        var exists = await _client.Queryable<T>()
+            .Where(locator.Sql, locator.Params)
+            .AnyAsync();
+
+        return exists
+            ? Result<T>.Ok(entity)
+            : Result<T>.Fail("更新失败：记录不存在");
     }
 
     public async Task<Result<int>> UpdateBatchAsync<T>(IEnumerable<T> entities) where T : class, new()

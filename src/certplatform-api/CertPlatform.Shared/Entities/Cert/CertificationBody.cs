@@ -19,7 +19,7 @@ namespace CertPlatform.Shared.Entities.Cert
     ///   <item><c>Sys_Organization</c> 是权限主体，本实体是业务扩展（Attach）</item>
     ///   <item><c>Code</c> == <c>OrgCode</c> == <c>Sys_Organization.Code</c>（单 Code 策略）</item>
     ///   <item>挂载点：<c>Sys_Organization</c> 中 <c>OrgType='CertBody'</c> 且 <c>ParentCode</c> 为空的根节点之下</item>
-    ///   <item>同步规则：<c>Name→OrgName</c>、<c>CbCode→OrgCode</c>、<c>IsValid→Enable</c>（1↔1，0↔0）</item>
+    ///   <item>同步规则：<c>Name→OrgName</c>、<c>CbCode→OrgCode</c>、<c>IsValid→IsValid</c>（1↔1，0↔0）</item>
     /// </list>
     /// </summary>
     [SugarTable("cert_certification_body")]
@@ -125,7 +125,7 @@ namespace CertPlatform.Shared.Entities.Cert
         // 接口字段（BaseEntity 不包含，由接口继承提供）
         // ========================================================
 
-        /// <summary>有效标志（1=启用，0=禁用）。同步 Sys_Organization.Enable</summary>
+        /// <summary>有效标志（1=启用，0=禁用）。同步 Sys_Organization.IsValid</summary>
         public int IsValid { get; set; } = 1;
 
         /// <summary>软删除标记（false=正常，true=已删除）</summary>

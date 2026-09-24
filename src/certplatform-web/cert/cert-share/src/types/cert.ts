@@ -56,7 +56,7 @@ export interface CertificationBody {
   /** 运营状态：active / suspended / inactive */
   Status?: string
   Sort?: number
-  /** 有效标志（1=启用，0=禁用）；同步 Sys_Organization.Enable */
+  /** 有效标志（1=启用，0=禁用）；同步 Sys_Organization.IsValid */
   IsValid?: number
   Remark?: string
   CreateBy?: string
@@ -244,15 +244,12 @@ export interface StandardDirectoryConfig {
   PhaseName?: string
   RootFolderName?: string
   Status?: string
-  Enable?: boolean
   Creator?: string
   CreateDate?: string
   Modifier?: string
   ModifyDate?: string
   Deleter?: string
   DeleteTime?: string
-  Status_field?: string
-  Enable_field?: boolean
   Sort?: number
   Remark?: string
 }
@@ -268,8 +265,7 @@ export interface StandardDirectoryFolder {
   Depth?: number
   SortOrder?: number
   Status?: string
-  Enable?: boolean
-  IsValid?: boolean
+  IsValid?: number
   TaskId?: string
   FullPath?: string
   Creator?: string
@@ -301,8 +297,7 @@ export interface StandardDirectoryFile {
   PreCheckRequired?: boolean
   ComplianceRequired?: boolean
   Status?: string
-  Enable?: boolean
-  IsValid?: boolean
+  IsValid?: number
   TaskId?: string
   UploadStatus?: string
   StoragePath?: string

@@ -73,7 +73,8 @@ public partial class DocExtractionRuleService
         try
         {
             var entity = (await _db.GetOneAsync<AiConfig>(x => x.Code == "default-ai-config")).Data;
-            if (entity == null)
+            var isNew = entity == null;
+            if (isNew)
             {
                 entity = new AiConfig
                 {
@@ -89,10 +90,15 @@ public partial class DocExtractionRuleService
             entity.MaxTokens = configDto.MaxTokens;
             entity.UpdateTime = DateTime.Now;
 
-            if (entity.Id == 0)
+            // 准则 A：新增 vs 更新只看 Code 是否已落库（禁止 Id == 0 分流）
+            if (isNew)
                 await _db.InsertAsync(entity);
             else
+            {
+                if (string.IsNullOrWhiteSpace(entity.Code))
+                    return (false, "更新失败：缺少业务键 Code");
                 await _db.UpdateAsync(entity);
+            }
 
             return (true, "保存成功");
         }

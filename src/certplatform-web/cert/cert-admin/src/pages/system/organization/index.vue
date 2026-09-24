@@ -92,11 +92,13 @@ async function handleDeleteOrg(node: TreeNode) {
 async function handleToggleOrgDisable(node: TreeNode) {
   await ElMessageBox.confirm(`确定禁用机构【${node.Name}】？（将级联禁用子机构和人员）`, '禁用确认', { type: 'warning' })
   await logic.apiPostPublic(`/tree/action/disable`, { Code: node.Code })
-  // 本地更新节点状态：Extra.enable = 0
+  // 本地更新节点状态：Extra.IsValid = 0，并强制刷新树（级联禁用的子孙节点状态需重取）
   const extra = (node.Extra as any) || {}
-  extra['enable'] = 0
-  extra['Enable'] = 0
+  extra['IsValid'] = 0
+  extra['isValid'] = 0
   node.Extra = { ...extra }
+  await logic.refreshTree()
+  await logic.refreshTable()
   ElMessage.success('已禁用该机构')
 }
 
@@ -104,9 +106,11 @@ async function handleToggleOrgEnable(node: TreeNode) {
   await ElMessageBox.confirm(`确定启用机构【${node.Name}】？`, '启用确认', { type: 'warning' })
   await logic.apiPostPublic(`/tree/action/enable`, { Code: node.Code })
   const extra = (node.Extra as any) || {}
-  extra['enable'] = 1
-  extra['Enable'] = 1
+  extra['IsValid'] = 1
+  extra['isValid'] = 1
   node.Extra = { ...extra }
+  await logic.refreshTree()
+  await logic.refreshTable()
   ElMessage.success('已启用该机构')
 }
 
@@ -171,7 +175,7 @@ async function handleRowAction(action: string, row: any) {
     // 自定义启用/禁用（调用 OrganizationController 自定义 action，带业务规则）
     await logic.apiPostPublic(`/action/${action}`, { Code: row.Code })
     ElMessage.success(action === 'disable' ? '已禁用' : '已启用')
-    row.Enable = action === 'disable' ? 0 : 1
+    row.IsValid = action === 'disable' ? 0 : 1
   }
 }
 
@@ -284,12 +288,12 @@ onMounted(async () => {
             @row-action="handleRowAction"
           >
             <!-- 状态列 -->
-            <template #column-Enable="{ row }">
+            <template #column-IsValid="{ row }">
               <el-tag
-                :type="row.Enable === 1 ? 'success' : 'info'"
+                :type="row.IsValid === 1 ? 'success' : 'info'"
                 size="small"
               >
-                {{ row.Enable === 1 ? '启用' : '禁用' }}
+                {{ row.IsValid === 1 ? '启用' : '禁用' }}
               </el-tag>
             </template>
 

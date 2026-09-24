@@ -1,6 +1,9 @@
 <script setup lang="ts">
 /**
- * 审核员工作台 - V4 新架构页面
+ * 任务中心 - 跨企业任务视角（V4 新架构页面）
+ *
+ * 由原 `pages/workspace/index.vue` 归位而来 —— 该页内容本就是任务列表，
+ * 与菜单「任务中心」（`/tasks`）对应，而非独立的「工作台」。
  */
 import { YzhTable } from '@yzh-core/components/table'
 import type { PageParams, SearchField, YzhTableColumn } from '@yzh-core/components/table/types'

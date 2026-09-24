@@ -6,7 +6,7 @@ import { yzhApi, type ApiResponse } from '@yzh-core/api/client'
  * 对应后端：`api/System/MenuManagement/*`
  *
  * ⚠️ 契约要点：
- *   - 后端返回**扁平**列表且字段为 **PascalCase**（`Code` / `MenuName` / `ParentCode` / `Url` / `Icon` / `Enable` / `OrderNo` / `Tag`）
+ *   - 后端返回**扁平**列表且字段为 **PascalCase**（`Code` / `MenuName` / `ParentCode` / `Url` / `Icon` / `IsValid` / `OrderNo` / `Tag`）
  *   - 前端在此层归一化为 **camelCase** 并用 `buildTree()` 组树 → 这是**手写展示 DTO**，属已登记例外 E4，不受 §16.9 列名铁律约束
  *   - 树形结构**只支持渲染 2 层**（见 `AdminLayout.vue` / `AuditorLayout.vue` 的 `el-sub-menu` + `el-menu-item`）
  *     → 菜单层级设计必须 ≤ 2 层，更深层级请用页面内 Tab / 子路由承载
@@ -39,7 +39,7 @@ interface RawSysMenu {
   Url?: string
   Icon?: string
   Description?: string
-  Enable?: number
+  IsValid?: number
   OrderNo?: number
   Tag?: string
 }
@@ -54,7 +54,7 @@ export function normalizeMenu(raw: RawSysMenu): SysMenu {
     url: raw.Url,
     icon: raw.Icon,
     description: raw.Description,
-    enable: raw.Enable ?? 1,
+    enable: raw.IsValid ?? 1,
     orderNo: raw.OrderNo ?? 0,
     tag: raw.Tag,
   }

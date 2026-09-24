@@ -21,8 +21,6 @@ namespace CertPlatform.Shared.Entities.Wf
         // ──── 业务字段 ────
         public string? Status { get; set; } = "active";
 
-        public bool Enable { get; set; } = true;
-
         public int Sort { get; set; }
 
         public string? Remark { get; set; }

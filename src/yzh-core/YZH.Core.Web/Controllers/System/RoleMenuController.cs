@@ -100,7 +100,7 @@ public class RoleMenuController : TreeTableControllerBase<Sys_Role, Sys_Menu>
                         ["Url"] = m.Url ?? string.Empty,
                         ["Icon"] = m.Icon ?? string.Empty,
                         ["Tag"] = m.Tag ?? string.Empty,
-                        ["Enable"] = m.Enable ?? 0,
+                        ["IsValid"] = m.IsValid,
                     },
                 })
                 .ToArray();

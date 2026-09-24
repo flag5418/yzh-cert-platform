@@ -22,7 +22,6 @@ export interface PromptTemplate {
   Description?: string
   Version: number
   IsActive: boolean
-  Enable: boolean
   Status?: string
   IsValid: number
   IsDeleted: boolean
@@ -59,7 +58,8 @@ export async function getPromptList(filters?: Record<string, any>): Promise<Prom
  * 保存 Prompt 模板（标准 add/update）
  */
 export async function savePrompt(data: Partial<PromptTemplate>): Promise<any> {
-  if (data.Id && data.Id > 0) {
+  // 准则 A：新增 vs 更新只看业务键 Code（禁止 Id > 0 分流）
+  if (data.Code) {
     const res = await yzhApi.post<ApiResponse<any>>('/api/PromptTemplate/update', data)
     return res.data
   }

@@ -44,12 +44,12 @@ export function uploadTemplateFile(
   )
 }
 
-/** 删除模板 */
-export function deleteTemplate(id: number) {
+/** 删除模板（准则 A：业务键 Code） */
+export function deleteTemplate(code: string) {
   return yzhApi.post<boolean>(
     `${API_PREFIX}/template/delete`,
     null,
-    { params: { id } }
+    { params: { code } }
   )
 }
 
@@ -73,11 +73,11 @@ export function saveSection(data: Record<string, any>) {
   )
 }
 
-/** 删除章节 */
-export function deleteSection(id: number) {
+/** 删除章节（准则 A：业务键 Code） */
+export function deleteSection(code: string) {
   return yzhApi.post<boolean>(
     `${API_PREFIX}/section/delete`,
     null,
-    { params: { id } }
+    { params: { code } }
   )
 }

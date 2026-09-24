@@ -31,7 +31,7 @@ namespace CertPlatform.Admin.Controllers.Foundation;
 /// <list type="bullet">
 ///   <item>Attach.Code == Attach.OrgCode == Sys_Organization.Code</item>
 ///   <item>挂载点 = Sys_Organization 中 OrgType='CertBody' 且无父节点的根节点</item>
-///   <item>Name→OrgName、CbCode→OrgCode、IsValid→Enable</item>
+///   <item>Name→OrgName、CbCode→OrgCode、IsValid→IsValid（Sys_Organization 同步）</item>
 /// </list>
 ///
 /// <para>事务说明：IDbOrm 与 EntityService&lt;T&gt; 均为 Scoped（YzhWebBuilder.cs:49/63），
@@ -230,7 +230,7 @@ public class CertificationBodyController : YzhControllerBase<CB>
 
     /// <summary>
     /// 启用 / 禁用认证机构（IsValid: 0 ↔ 1）
-    /// <para>禁用时同步 Sys_Organization.Enable = 0，启用时同步为 1</para>
+    /// <para>禁用时同步 Sys_Organization.IsValid = 0，启用时同步为 1</para>
     /// </summary>
     [HttpPost("toggle-valid")]
     public override async Task<ActionResult<ApiResponse<object?>>> ToggleIsValid([FromBody] JsonElement entityData)
@@ -307,8 +307,7 @@ public class CertificationBodyController : YzhControllerBase<CB>
         LeaderName = entity.ContactName,
         LeaderPhone = entity.ContactPhone,
         Sort = entity.Sort,
-        Enable = (byte)(entity.IsValid == 1 ? 1 : 0),
-        IsValid = 1,
+        IsValid = entity.IsValid,
         Remark = entity.Remark
     };
 
@@ -317,14 +316,15 @@ public class CertificationBodyController : YzhControllerBase<CB>
     {
         var orgCode = string.IsNullOrEmpty(entity.OrgCode) ? entity.Code : entity.OrgCode!;
 
-        var orgResult = await _orgService.GetByCode(orgCode);
+        // GetByCodeAny：cert.IsValid=0 时 org 也可能已禁用，须能读到
+        var orgResult = await _orgService.GetByCodeAny(orgCode);
         if (!orgResult.Success || orgResult.Data == null)
             return (false, $"未找到对应的系统机构记录（Sys_Organization.Code={orgCode}），数据可能不一致");
 
         var org = orgResult.Data;
         org.OrgName = entity.Name;
         org.OrgCode = entity.CbCode;
-        org.Enable = (byte)(entity.IsValid == 1 ? 1 : 0);
+        org.IsValid = entity.IsValid;
 
         if (org.OrgLevel == null)
             org.OrgLevel = CertBodyOrgLevel;

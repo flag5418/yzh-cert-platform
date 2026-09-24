@@ -87,7 +87,7 @@ WHERE c.IsDeleted = 0
   -- 两表排序规则不同（general_ci vs unicode_ci），比较时需显式 COLLATE
   AND NOT EXISTS (
         SELECT 1 FROM Sys_Organization o
-        WHERE o.Code COLLATE utf8mb4_unicode_ci = c.Code COLLATE utf8mb4_unicode_ci
+        WHERE o.Code COLLATE utf8mb4_general_ci = c.Code COLLATE utf8mb4_general_ci
       );
 
 -- ------------------------------------------------------------
@@ -101,6 +101,6 @@ FROM cert_certification_body c
 WHERE c.IsDeleted = 0
   AND EXISTS (
         SELECT 1 FROM Sys_Organization o
-        WHERE o.Code COLLATE utf8mb4_unicode_ci = c.Code COLLATE utf8mb4_unicode_ci
+        WHERE o.Code COLLATE utf8mb4_general_ci = c.Code COLLATE utf8mb4_general_ci
           AND o.IsDeleted = 0
       );

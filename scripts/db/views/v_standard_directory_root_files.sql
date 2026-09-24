@@ -9,7 +9,7 @@ SELECT
     f.Id, f.code AS Code, f.FileCode, f.FileName, f.FileType, f.StoragePath,
     f.ConvertedStoragePath, f.ConvertStatus, f.ConvertMessage,
     f.UploadStatus, f.TaskId, f.DirectoryCode, f.FolderCode,
-    f.IsValid, f.IsDeleted, f.Enable, f.FileSize
+    f.IsValid, f.IsDeleted, f.FileSize
 FROM cert_standard_directory_file f
 WHERE (f.FolderCode IS NULL OR f.FolderCode = '')
    OR NOT EXISTS (

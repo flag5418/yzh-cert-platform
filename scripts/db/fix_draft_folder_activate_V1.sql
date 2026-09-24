@@ -7,7 +7,7 @@
 SELECT f.FolderCode, f.FolderName, f.TaskId, t.Status AS task_status
 FROM cert_standard_directory_folder f
 LEFT JOIN cert_upload_task t
-  ON t.TaskId = f.TaskId COLLATE utf8mb4_0900_ai_ci
+  ON t.TaskId = f.TaskId COLLATE utf8mb4_general_ci
 WHERE f.IsValid = 0 AND f.IsDeleted = 0
   AND (t.Status = 'completed' OR t.Status IS NULL);
 
@@ -15,7 +15,7 @@ WHERE f.IsValid = 0 AND f.IsDeleted = 0
 -- JOIN 条件显式 COLLATE：两表 TaskId 列 collation 不同（unicode_ci vs 0900_ai_ci），隐式比较报 1267
 UPDATE cert_standard_directory_folder f
 LEFT JOIN cert_upload_task t
-  ON t.TaskId = f.TaskId COLLATE utf8mb4_0900_ai_ci
+  ON t.TaskId = f.TaskId COLLATE utf8mb4_general_ci
 SET f.IsValid = 1, f.TaskId = NULL
 WHERE f.IsValid = 0 AND f.IsDeleted = 0
   AND (t.Status = 'completed' OR t.TaskId IS NULL);

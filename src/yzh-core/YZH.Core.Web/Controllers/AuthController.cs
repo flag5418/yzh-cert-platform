@@ -1,4 +1,3 @@
-extern alias VolFramework;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
@@ -12,7 +11,6 @@ using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Result;
-using VolUtilities = VolFramework.YZH.Core.Utilities;
 using StandJwtHelper = YZH.Core.Stand.Helpers.JwtHelper;
 using StandPasswordHelper = YZH.Core.Stand.Helpers.PasswordHelper;
 
@@ -73,8 +71,8 @@ public class AuthController : ControllerBase
         if (user == null)
             return Unauthorized(ApiResponse.Fail("用户不存在"));
 
-        // 检查账号是否禁用
-        if (user.Enable == 0)
+        // 检查账号是否禁用（IsValid=0 表示已禁用）
+        if (user.IsValid == 0)
             return Unauthorized(ApiResponse.Fail("账号已被禁用"));
 
         // 验证密码
@@ -109,22 +107,6 @@ public class AuthController : ControllerBase
             UserTrueName = user.UserTrueName,
             RoleCode = roleCode
         }, "登录成功"));
-    }
-
-    /// <summary>获取验证码</summary>
-    [HttpGet("captcha")]
-    [AllowAnonymous]
-    [ApiDescription("获取登录验证码", "系统", "系统管理/认证管理", true)]
-    public IActionResult GetCaptcha()
-    {
-        string code = VolUtilities.VierificationCode.RandomText();
-        var data = new
-        {
-            img = VolUtilities.VierificationCodeHelpers.CreateBase64Image(code),
-            uuid = Guid.NewGuid().ToString()
-        };
-        _cache.Set(data.uuid, code, TimeSpan.FromMinutes(5));
-        return Ok(ApiResponse<object>.Ok(data));
     }
 
     /// <summary>健康检查</summary>

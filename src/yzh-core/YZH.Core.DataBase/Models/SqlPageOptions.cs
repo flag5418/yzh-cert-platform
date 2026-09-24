@@ -35,4 +35,11 @@ public class SqlPageOptions
 
     /// <summary>查询条件数组</summary>
     public SqlCondition[]? Conditions { get; set; }
+
+    /// <summary>
+    ///     是否包含已禁用记录（IsValid=0）
+    ///     false（默认）：硬过滤 IsValid=1
+    ///     true：跳过 IsValid 硬过滤，由调用方决定是否过滤
+    /// </summary>
+    public bool IncludeDisabled { get; set; }
 }

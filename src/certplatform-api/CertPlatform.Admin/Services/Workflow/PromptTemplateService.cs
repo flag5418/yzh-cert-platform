@@ -33,7 +33,7 @@ public class PromptTemplateService
     public async Task<List<PromptTemplate>> GetListAsync(string? promptType = null, string? skillTarget = null)
     {
         var result = await _db.GetListAsync<PromptTemplate>(x =>
-            x.Enable == true
+            x.IsValid == 1
             && (string.IsNullOrEmpty(promptType) || x.PromptType == promptType)
             && (string.IsNullOrEmpty(skillTarget) || x.SkillTarget == skillTarget || x.SkillTarget == null));
 
@@ -54,7 +54,7 @@ public class PromptTemplateService
     {
         if (string.IsNullOrWhiteSpace(promptCode)) return null;
         var result = await _db.GetOneAsync<PromptTemplate>(
-            x => x.PromptCode == promptCode && x.Enable == true);
+            x => x.PromptCode == promptCode && x.IsValid == 1);
         return result.Success ? result.Data : null;
     }
 
@@ -66,7 +66,7 @@ public class PromptTemplateService
         if (string.IsNullOrWhiteSpace(promptType)) return null;
 
         var result = await _db.GetListAsync<PromptTemplate>(x =>
-            x.PromptType == promptType && x.IsActive == true && x.Enable == true);
+            x.PromptType == promptType && x.IsActive == true && x.IsValid == 1);
 
         if (!result.Success || result.Data == null) return null;
 
@@ -96,11 +96,11 @@ public class PromptTemplateService
 
         if (existing == null)
         {
-            entity.Id = 0;
+            // 准则 A：新增 — Id 不参与分流（保持实体默认 0）
             entity.Code = Guid.NewGuid().ToString("N");
             entity.Version = 1;
             entity.IsActive = true;
-            entity.Enable = true;
+            entity.IsValid = 1;
             entity.CreateTime = DateTime.UtcNow;
             if (string.IsNullOrWhiteSpace(entity.Status)) entity.Status = "active";
 
@@ -110,12 +110,14 @@ public class PromptTemplateService
             return (true, "保存成功");
         }
 
-        // 更新：保留业务键与创建审计信息，版本递增
-        entity.Id = existing.Id;
+        // 更新：靠 Code 定位（禁止回填 Id 作 WHERE / 分流键）
+        if (string.IsNullOrWhiteSpace(existing.Code))
+            return (false, "更新失败：缺少业务键 Code");
+
         entity.Code = existing.Code;
         entity.Version = existing.Version + 1;
         entity.IsActive = true;
-        entity.Enable = true;
+        entity.IsValid = 1;
         entity.CreateTime = existing.CreateTime;
         entity.CreateBy = existing.CreateBy;
         entity.UpdateTime = DateTime.Now;
@@ -128,13 +130,13 @@ public class PromptTemplateService
         return (true, "保存成功");
     }
 
-    /// <summary>删除提示词（逻辑删除：enable = 0）</summary>
+    /// <summary>删除提示词（逻辑禁用：IsValid = 0）</summary>
     public async Task<bool> DeleteAsync(string promptCode)
     {
         var entity = await GetByCodeAsync(promptCode);
         if (entity == null) return false;
 
-        entity.Enable = false;
+        entity.IsValid = 0;
         entity.UpdateTime = DateTime.Now;
         var result = await _db.UpdateAsync(entity);
         return result.Success;
@@ -149,7 +151,7 @@ public class PromptTemplateService
         if (target == null) return false;
 
         var siblings = await _db.GetListAsync<PromptTemplate>(x =>
-            x.PromptType == target.PromptType && x.PromptCode != promptCode && x.Enable == true);
+            x.PromptType == target.PromptType && x.PromptCode != promptCode && x.IsValid == 1);
 
         if (siblings.Success && siblings.Data != null)
         {

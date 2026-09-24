@@ -49,7 +49,7 @@ public class MenuManagementController : YzhControllerBase<Sys_Menu>
     ///
     ///     原因：Sys_Menu 表没有 DeleteTime / DeleteBy 列，而基类默认软删除会执行
     ///     UpdateAsync(entity, ["IsDeleted", "DeleteTime", "DeleteBy"])（EntityService.SoftDelete），
-    ///     必然 SQL 异常 → 删除功能整体不可用。禁用请走 action/Disable（Enable=0）。
+    ///     必然 SQL 异常 → 删除功能整体不可用。禁用请走 action/Disable（IsValid=0）。
     /// </summary>
     protected override bool HardDelete => true;
 
@@ -125,7 +125,7 @@ public class MenuManagementController : YzhControllerBase<Sys_Menu>
             return (false, $"菜单编码 {entity.Code} 已存在");
 
         // 设置默认值
-        entity.Enable = 1;
+        entity.IsValid = 1;
         if (entity.OrderNo == null)
             entity.OrderNo = 0;
         if (string.IsNullOrEmpty(entity.ParentCode))
@@ -175,12 +175,13 @@ public class MenuManagementController : YzhControllerBase<Sys_Menu>
     /// <summary>启用菜单（POST api/SysMenu/action/Enable）</summary>
     private async Task<Result<ApiResponse<object?>>> EnableMenu(Sys_Menu entity)
     {
-        var result = await Entity.GetByCode(entity.Code);
+        // GetByCodeAny：已禁用菜单 IsValid=0，GetByCode 查不到
+        var result = await Entity.GetByCodeAny(entity.Code);
         if (!result.Success || result.Data == null)
             return Result<ApiResponse<object?>>.Fail("菜单不存在");
 
         var menu = result.Data;
-        menu.Enable = 1;
+        menu.IsValid = 1;
         var updateResult = await Entity.Update(menu, UserContext.ClientIp);
         if (!updateResult.Success)
             return Result<ApiResponse<object?>>.Fail(updateResult.Error);
@@ -196,7 +197,7 @@ public class MenuManagementController : YzhControllerBase<Sys_Menu>
             return Result<ApiResponse<object?>>.Fail("菜单不存在");
 
         var menu = result.Data;
-        menu.Enable = 0;
+        menu.IsValid = 0;
         var updateResult = await Entity.Update(menu, UserContext.ClientIp);
         if (!updateResult.Success)
             return Result<ApiResponse<object?>>.Fail(updateResult.Error);

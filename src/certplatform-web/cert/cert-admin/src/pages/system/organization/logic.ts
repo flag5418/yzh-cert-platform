@@ -3,7 +3,7 @@
  *
  * 数据访问规则：
  * - res.data：ApiResponse 顶层（camelCase）
- * - 业务行 r：PascalCase 字段（r.Code, r.OrgCode, r.Enable）
+ * - 业务行 r：PascalCase 字段（r.Code, r.OrgCode, r.IsValid）
  * - TreeNode：统一 PascalCase（node.Code / node.Name / node.IsLeaf）
  *   ⚠️ V2 契约见 yzh.vue.core/src/types/tree.ts：所有字段 PascalCase。
  *      历史上有几处误按小写读取（node.code / node.isLeaf），因为取到 undefined
@@ -33,7 +33,7 @@ export class OrgPageLogic extends TreeTableLogic<any> {
   get columnsWithActions(): any[] {
     const cols = this.columns as any[]
     return cols.map((c) => {
-      if (c.prop === 'Enable') {
+      if (c.prop === 'IsValid') {
         return { ...c, slot: true }
       }
       return c
@@ -42,7 +42,7 @@ export class OrgPageLogic extends TreeTableLogic<any> {
 
   // ──── 行操作按钮（按行状态动态显示） ────
   /**
-   * 行操作按钮：edit + delete + 根据 row.Enable 显示「禁用」或「启用」（二选一）
+   * 行操作按钮：edit + delete + 根据 row.IsValid 显示「禁用」或「启用」（二选一）
    */
   get perRowActionButtons(): (row: any) => Record<string, string> {
     const rb = this.config.value?.RowButtons
@@ -52,9 +52,9 @@ export class OrgPageLogic extends TreeTableLogic<any> {
       if (rb?.Delete !== false) buttons['delete'] = '删除'
       // 自定义按钮：根据当前行状态二选一显示
       if (rb?.CustomButtons) {
-        if (row.Enable === 1 && rb.CustomButtons['disable']) {
+        if (row.IsValid === 1 && rb.CustomButtons['disable']) {
           buttons['disable'] = rb.CustomButtons['disable']
-        } else if (row.Enable === 0 && rb.CustomButtons['enable']) {
+        } else if (row.IsValid === 0 && rb.CustomButtons['enable']) {
           buttons['enable'] = rb.CustomButtons['enable']
         }
       }
@@ -87,8 +87,8 @@ export class OrgPageLogic extends TreeTableLogic<any> {
   dialogMode = ref<'add' | 'edit'>('add')
   submitting = ref(false)
   /**
-   * 人员表单数据：camelCase key（NewEntity 字典 key）
-   * 例：{ code: "", userName: "", enable: 1, orgCode: "root" }
+   * 人员表单数据：PascalCase key
+   * 例：{ code: "", userName: "", IsValid: 1, orgCode: "root" }
    */
   formData = reactive<Record<string, any>>({})
 

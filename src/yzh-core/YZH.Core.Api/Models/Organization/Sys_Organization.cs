@@ -70,13 +70,7 @@ public class Sys_Organization : BaseEntity, ISoftDelete, IIsValid, ITreeEntity
     [Display(Name = "排序")]
     public int? Sort { get; set; }
 
-    /// <summary>是否启用（1=启用，0=禁用）</summary>
-    [Required]
-    [Display(Name = "是否启用")]
-    [SugarColumn(ColumnName = "Enable")]
-    public new byte Enable { get; set; } = 1;
-
-    /// <summary>有效标志（1=有效，0=无效）- 统一架构字段</summary>
+    /// <summary>有效标志（1=有效，0=无效）- 统一架构字段（启用/禁用唯一字段）</summary>
     [Required]
     [Display(Name = "是否有效")]
     [SugarColumn(ColumnName = "IsValid")]

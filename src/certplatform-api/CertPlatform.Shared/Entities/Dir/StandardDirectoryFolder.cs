@@ -40,10 +40,6 @@ namespace CertPlatform.Shared.Entities.Dir
         [SugarColumn(Length = 20, IsNullable = true)]
         public string? StatusField { get; set; } = "active";
 
-        public bool Enable { get; set; } = true;
-
-        public bool EnableField { get; set; } = true;
-
         public int Sort { get; set; } = 0;
 
         [SugarColumn(ColumnDataType = "text", IsNullable = true)]

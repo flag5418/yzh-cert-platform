@@ -108,9 +108,9 @@ export async function retryQueue(queueCode: string): Promise<void> {
   await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/retry', { QueueCode: queueCode })
 }
 
-/** 单个子任务重试 */
-export async function retryTask(taskId: number): Promise<void> {
-  await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/task/retry', { TaskId: taskId })
+/** 单个子任务重试（准则 A：业务键 TaskCode） */
+export async function retryTask(taskCode: string): Promise<void> {
+  await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/task/retry', { TaskCode: taskCode })
 }
 
 /** 查找资源锁 */

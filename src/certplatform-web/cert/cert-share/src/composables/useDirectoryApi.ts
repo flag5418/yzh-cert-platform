@@ -411,9 +411,9 @@ export async function retryQueue(queueCode: string): Promise<void> {
   await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/retry', { QueueCode: queueCode })
 }
 
-/** 重试任务 */
-export async function retryTask(taskId: number): Promise<void> {
-  await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/task/retry', { TaskId: taskId })
+/** 重试任务（准则 A：业务键 TaskCode） */
+export async function retryTask(taskCode: string): Promise<void> {
+  await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/task/retry', { TaskCode: taskCode })
 }
 
 /** 获取队列状态统计 */

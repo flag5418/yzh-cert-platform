@@ -123,9 +123,9 @@ const handleCancelQueue = async (row: QueueListItem) => {
   }
 }
 
-const handleRetryTask = async (row: { id: number }) => {
+const handleRetryTask = async (row: { code: string }) => {
   try {
-    await retryTask(row.id)
+    await retryTask(row.code)
     ElMessage.success('任务已重新排队')
     if (detail.value) {
       const dData = await getQueueDetail(detail.value.queue.queueCode)

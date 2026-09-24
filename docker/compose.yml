@@ -19,10 +19,14 @@ services:
     volumes:
       - ./mysql/data:/var/lib/mysql
       - ./mysql/conf:/etc/mysql/conf.d
+    # ⚠️ command 是多行标量，**不可在中间插入 # 注释**（会破坏 YAML 解析）。
+    #    --collation-server 必须为 utf8mb4_general_ci，且与 ./mysql/conf/my.cnf 保持一致，
+    #    否则跨表「列 vs 列」关联报 ERROR 1267 Illegal mix of collations。
+    #    详见 项目全局规则.md §十六 铁律八。
     command:
       --default-authentication-plugin=mysql_native_password
       --character-set-server=utf8mb4
-      --collation-server=utf8mb4_unicode_ci
+      --collation-server=utf8mb4_general_ci
       --max_connections=500
       --innodb_buffer_pool_size=256M
     healthcheck:

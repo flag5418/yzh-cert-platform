@@ -66,7 +66,7 @@ public class MenuController : ControllerBase
     public async Task<IActionResult> GetTreeMenu()
     {
         var menus = await _db.Client.Queryable<Sys_Menu>()
-            .Where(x => x.Enable == 1)
+            .Where(x => x.IsValid == 1)
             .OrderBy(x => x.OrderNo)
             .Select(x => new
             {
@@ -75,7 +75,7 @@ public class MenuController : ControllerBase
                 url = x.Url,
                 parentId = x.ParentCode,
                 icon = x.Icon,
-                enable = x.Enable,
+                enable = x.IsValid,
                 tableName = x.Tag
             })
             .ToListAsync();

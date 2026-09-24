@@ -70,14 +70,9 @@ public class Sys_DictionaryList : BaseEntity, ISoftDelete, IIsValid
     [SugarColumn(ColumnName = "Remark", IsNullable = true)]
     public string? Remark { get; set; }
 
-    /// <summary>历史启用列（DB: Enable）。已被 IsValid 取代，保留仅为兼容旧数据。</summary>
-    [Display(Name = "历史启用")]
-    [SugarColumn(ColumnName = "Enable", IsNullable = true)]
-    public byte? Enable { get; set; } = 1;
-
     // === 框架必需：显式重映射到真实列 ===
 
-    /// <summary>有效标志（1=有效，0=无效）。被禁用（IsValid=0）的字典项不会出现在下拉框中。</summary>
+    /// <summary>有效标志（1=有效，0=无效）。启用/禁用唯一字段。被禁用（IsValid=0）的字典项不会出现在下拉框中。</summary>
     [Required]
     [Display(Name = "是否有效")]
     [SugarColumn(ColumnName = "IsValid")]

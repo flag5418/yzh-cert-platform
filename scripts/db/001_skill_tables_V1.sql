@@ -13,12 +13,12 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- Skill主表（CREATE TABLE IF NOT EXISTS 为 MySQL 标准语法，安全）
 CREATE TABLE IF NOT EXISTS `wf_skill` (
   `id` bigint NOT NULL AUTO_INCREMENT,
-  `code` varchar(100) COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '唯一编码',
-  `name` varchar(200) COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT 'Skill名称',
-  `description` text COLLATE utf8mb4_0900_ai_ci COMMENT '说明',
-  `category_code` varchar(100) COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '分类编码',
-  `skill_type` varchar(50) COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'manual' COMMENT '类型：manual/api',
-  `prompt_template` text COLLATE utf8mb4_0900_ai_ci COMMENT 'Prompt模板',
+  `code` varchar(100) COLLATE utf8mb4_general_ci NOT NULL COMMENT '唯一编码',
+  `name` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Skill名称',
+  `description` text COLLATE utf8mb4_general_ci COMMENT '说明',
+  `category_code` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '分类编码',
+  `skill_type` varchar(50) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'manual' COMMENT '类型：manual/api',
+  `prompt_template` text COLLATE utf8mb4_general_ci COMMENT 'Prompt模板',
   `sort_order` int NOT NULL DEFAULT '0' COMMENT '排序',
   `is_valid` tinyint(1) NOT NULL DEFAULT '1' COMMENT '有效标志（1=有效 0=无效）',
   `creator` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS `wf_skill` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_skill_code` (`code`),
   KEY `idx_skill_category` (`category_code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Skill主表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Skill主表';
 
 -- wf_skill_category 补齐 is_valid 列
 -- MySQL 8.0 不支持 ADD COLUMN IF NOT EXISTS（MariaDB 语法），改用存储过程判存

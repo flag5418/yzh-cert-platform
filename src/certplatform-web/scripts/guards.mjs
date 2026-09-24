@@ -195,6 +195,19 @@ const RULES = [
       'workflow/report-rule/',
     ],
   },
+  {
+    id: 'R7',
+    desc: '业务实体禁声明 Enable 列（启用/禁用唯一字段 = IsValid；sys_api 同步 Enable 除外）',
+    roots: [resolve(WEB, '../certplatform-api/CertPlatform.Shared/Entities')],
+    exts: ['.cs'],
+    forbid: [
+      /public\s+bool\s+Enable\b/,
+      /ColumnName\s*=\s*"enable"/i,
+      /public\s+bool\s+EnableField\b/,
+    ],
+    skipComments: true,
+    debt: [],
+  },
 ]
 
 const failures = []

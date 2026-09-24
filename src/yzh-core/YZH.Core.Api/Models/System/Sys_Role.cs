@@ -46,12 +46,6 @@ public class Sys_Role : BaseEntity, ISoftDelete, IIsValid, ITreeEntity
     [SugarColumn(ColumnName = "OrderNo")]
     public int? OrderNo { get; set; }
 
-    /// <summary>是否启用（1=启用，0=禁用）</summary>
-    [Required]
-    [Display(Name = "是否启用")]
-    [SugarColumn(ColumnName = "Enable")]
-    public byte? Enable { get; set; } = 1;
-
     /// <summary>创建人（DB: CreateBy）</summary>
     [StringLength(50)]
     public new string? CreateBy { get; set; }

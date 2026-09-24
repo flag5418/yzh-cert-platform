@@ -20,17 +20,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Vol 框架引用（保留 VOLContext 等 ORM 能力） -->
-    <!-- extern alias VolFramework 避免与 YZH.Core.Stand 同名类型冲突 -->
-    <!-- 历史项目路径：src/old/server/Vue.NetCore/vol.api/ -->
-    <ProjectReference Include="..\..\old\server\Vue.NetCore\vol.api\YZH.Core\YZH.Core.csproj" Aliases="VolFramework" />
-    <ProjectReference Include="..\..\old\server\Vue.NetCore\vol.api\YZH.Entity\YZH.Entity.csproj" />
-    <ProjectReference Include="..\..\old\server\Vue.NetCore\vol.api\YZH.Sys\YZH.Sys.csproj" />
+    <!-- ⛔ 不引用 src/old/**（Vol 旧框架）。原 YZH.Core / YZH.Entity / YZH.Sys 三条引用已于 2026-09-24 移除：
+         · YZH.Entity / YZH.Sys —— 新架构已由 CertPlatform.Shared/Compat/YzhCompatShims.cs 自建同命名空间垫片，冗余
+         · YZH.Core（Aliases="VolFramework"）—— 唯一用途是登录验证码，已迁移至自建实现（见 AuthController.GetCaptcha） -->
     <!-- YZH Core框架（无前缀，直接使用） -->
     <ProjectReference Include="..\YZH.Core.Api\YZH.Core.Api.csproj" />
     <ProjectReference Include="..\YZH.Core.DataBase\YZH.Core.DataBase.csproj" />
     <ProjectReference Include="..\YZH.Core.Stand\YZH.Core.Stand.csproj" />
-    <!-- 业务模块（extern alias 解决与 YZH.Entity 的类型冲突） -->
+    <!-- 业务模块。CertPlatform.Shared 挂 extern alias：其类型不暴露到全局命名空间（本层只用 AddApplicationPart 按程序集名加载，不直接 typeof），
+         与 Program.cs:149 的说明保持一致。 -->
     <ProjectReference Include="..\..\certplatform-api\CertPlatform.Shared\CertPlatform.Shared.csproj" Aliases="CertPlatform,SharedEntities" />
     <ProjectReference Include="..\..\certplatform-api\CertPlatform.Admin\CertPlatform.Admin.csproj" />
     <ProjectReference Include="..\..\certplatform-api\CertPlatform.Auditor\CertPlatform.Auditor.csproj" />

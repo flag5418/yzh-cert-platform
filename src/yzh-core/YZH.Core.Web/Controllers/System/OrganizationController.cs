@@ -40,17 +40,17 @@ namespace YZH.Core.Web.Controllers.System;
 ///     │  [🔍 搜索...]              ☑ 显示已禁用的企业和用户        │
 ///     └─────────────────────────────────────────────────────────────┘
 ///     
-///     开关关闭（默认）→ 仅显示 Enable=1 的记录
-///     开关开启 → 显示所有记录（含 Enable=0 的已禁用记录）
+///     开关关闭（默认）→ 仅显示 IsValid=1 的记录
+///     开关开启 → 显示所有记录（含 IsValid=0 的已禁用记录）
 ///     前端实现：在 FilterRequest.Filters 中追加 { Field: "ShowDisabled", Value: "true/false" }
 ///     
 ///     【禁用逻辑 - 递归】
 ///     禁用机构 A 时：
-///     ├── 机构 A → Enable = 0
-///     ├── 子机构 A1 → Enable = 0（递归）
-///     │   └── 子机构 A1.1 → Enable = 0（递归）
-///     │       └── 用户 U1（A1.1 下）→ Enable = 0
-///     └── 用户 U2（A 下）→ Enable = 0
+///     ├── 机构 A → IsValid = 0
+///     ├── 子机构 A1 → IsValid = 0（递归）
+///     │   └── 子机构 A1.1 → IsValid = 0（递归）
+///     │       └── 用户 U1（A1.1 下）→ IsValid = 0
+///     └── 用户 U2（A 下）→ IsValid = 0
 ///     ═══════════════════════════════════════════════════════════════
 ///     
 ///     业务规则：
@@ -58,7 +58,7 @@ namespace YZH.Core.Web.Controllers.System;
 ///     2. 禁止删除包含子机构的父级机构
 ///     3. 人员必须归属到具体机构（OrgCode 必填）
 ///     4. 删除/修改操作默认是软删除（仅标记 IsDeleted=true）
-///     5. 启用/禁用操作仅设置 Enable 字段（1=启用，0=禁用），不删除数据
+///     5. 启用/禁用操作仅设置 IsValid 字段（1=启用，0=禁用），不删除数据
 ///     6. 禁用机构时，该机构及所有子机构下的用户全部禁用
 ///     7. 启用人员时，所属机构必须已启用（否则拒绝）
 ///     8. 不能禁用超级管理员（RoleId=1）
@@ -106,7 +106,7 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         TreeConfig.ParentCodeField = "ParentCode";
         TreeConfig.RelateField = "OrgCode";
         TreeConfig.MaxLevel = 10;
-        TreeConfig.EnableField = "Enable";  // 机构启用/禁用字段为 Enable（byte），非 IsValid
+        // EnableField 默认 IsValid（启用/禁用唯一字段）
         TreeConfig.AllowToggle = false;     // 禁用基类 toggle-valid 按钮，使用自定义 disable/enable 操作
 
         // 树节点表单配置（自动加载 Assets/EntityConfigs/sys_organization_form.json）
@@ -213,13 +213,11 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         if (string.IsNullOrEmpty(entity.OrgCode))
             return (false, "请选择所属机构");
 
-        var orgExists = await TreeEntity.ExistsAsync(o => o.Code == entity.OrgCode);
-        if (!orgExists.Data)
+        // 须用 GetByCodeAny：ExistsAsync/GetByCode 过滤 IsValid=1，禁用机构会误报「不存在」
+        var orgResult = await TreeEntity.GetByCodeAny(entity.OrgCode);
+        if (!orgResult.Success || orgResult.Data == null)
             return (false, "所属机构不存在");
-
-        // 检查所属机构是否启用
-        var orgResult = await TreeEntity.GetByCode(entity.OrgCode);
-        if (orgResult.Success && orgResult.Data?.Enable == 0)
+        if (orgResult.Data.IsValid == 0)
             return (false, "所属机构已禁用，无法添加人员");
 
         var userExists = await Entity.ExistsAsync(u => u.UserName == entity.UserName);
@@ -228,7 +226,7 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
 
         var plainPwd = string.IsNullOrEmpty(entity.UserPwd) ? "123456" : entity.UserPwd;
         entity.UserPwd = _passwordHelper.AesEncrypt(plainPwd);
-        entity.Enable = 1;
+        entity.IsValid = 1;
 
         return (true, null);
     }
@@ -279,49 +277,19 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
                 : "未知";
 
             // 启用状态显示
-            item.EnableDesc = item.Enable == 0 ? "已禁用" : "启用";
+            item.IsValidDesc = item.IsValid == 0 ? "已禁用" : "启用";
         }
     }
 
     /// <summary>
     /// 构建过滤条件：支持 ShowDisabled 开关控制是否显示已禁用的记录。
-    ///
-    /// 【调用顺序关键】：必须在 base.OnBuildingFilter 之前提取 ShowDisabled 参数。
-    /// 原因：基类会无条件移除 ShowDisabled 过滤器（第 649 行），
-    /// 如果在此之后提取，永远读取不到，导致 Enable=1 过滤始终生效。
-    ///
-    /// 前端说明：
-    /// - 默认不传 ShowDisabled 或传 false → 仅显示 Enable=1 的记录
-    /// - 传 true → 显示所有记录（含 Enable=0 的已禁用记录）
+    /// 基类已按 ShowDisabled 自动注入/跳过 IsValid=1 过滤，本覆盖仅保留 ShowDisabled 提取时序说明。
     /// </summary>
     protected override List<FilterItem> OnBuildingFilter(List<FilterItem> filters)
     {
-        // ★★★ 第一步：必须在基类处理之前提取 ShowDisabled ★★★
-        var showDisabled = false;
-        var showDisabledFilter = filters.FirstOrDefault(f =>
-            f.Field.Equals("ShowDisabled", StringComparison.OrdinalIgnoreCase));
-        if (showDisabledFilter != null && showDisabledFilter.Value != null
-            && bool.TryParse(showDisabledFilter.Value.ToString(), out var sd))
-        {
-            showDisabled = sd;
-        }
-
-        // 第二步：调用基类（自动处理 IsValid + 移除 ShowDisabled）
-        filters = base.OnBuildingFilter(filters);
-
-        // 第三步：根据 ShowDisabled 决定是否添加 Enable=1 过滤
-        if (!showDisabled)
-        {
-            filters.RemoveAll(f => f.Field == "Enable");
-            filters.Add(new FilterItem
-            {
-                Field = "Enable",
-                Operator = "eq",
-                Value = "1"
-            });
-        }
-
-        return filters;
+        // 基类已处理：ShowDisabled=true → 不注入 IsValid=1；否则注入 IsValid=1；最后移除 ShowDisabled。
+        // 前端默认不传 ShowDisabled → 仅显示 IsValid=1；传 true → 显示所有（含已禁用）。
+        return base.OnBuildingFilter(filters);
     }
 
     /// <summary>
@@ -349,15 +317,16 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
     /// 请求体：{ Code: "机构编码" }
     /// 
     /// 递归逻辑：
-    /// 1. 查找该机构 → 设置 Enable=0
-    /// 2. 递归查找所有子机构 → 全部设置 Enable=0
-    /// 3. 根据机构 Code 查找所有关联用户 → 全部设置 Enable=0
+    /// 1. 查找该机构 → 设置 IsValid=0
+    /// 2. 递归查找所有子机构 → 全部设置 IsValid=0
+    /// 3. 根据机构 Code 查找所有关联用户 → 全部设置 IsValid=0
     /// 
     /// 前端调用时机：点击树节点上的"禁用"按钮
     /// </summary>
     private async Task<object?> DisableOrgRecursiveAsync(Sys_Organization entity)
     {
-        var result = await TreeEntity.GetByCode(entity.Code);
+        // GetByCodeAny：禁用后 IsValid=0，GetByCode 会被过滤掉导致无法再次操作
+        var result = await TreeEntity.GetByCodeAny(entity.Code);
         if (!result.Success || result.Data == null)
             return "机构不存在";
 
@@ -365,7 +334,7 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         var affectedCount = 0;
 
         // 1. 禁用当前机构
-        org.Enable = 0;
+        org.IsValid = 0;
         await TreeEntity.Update(org, UserContext.ClientIp);
         affectedCount++;
 
@@ -380,27 +349,27 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
     {
         int count = 0;
 
-        // 获取子机构
+        // 获取子机构（GetViewList 默认 includeDisabled，已禁用节点仍可继续级联）
         var children = await TreeEntity.GetChildren(parentCode);
         foreach (var child in children)
         {
             // 禁用子机构
-            child.Enable = 0;
+            child.IsValid = 0;
             await TreeEntity.Update(child, UserContext.ClientIp);
             count++;
 
             // 递归处理子机构的子机构
             count += await DisableChildrenRecursive(child.Code);
 
-            // 禁用该子机构下的所有用户
-            var users = await Entity.GetListAsync(u => u.OrgCode == child.Code);
+            // 禁用该子机构下的所有用户（includeDisabled：已禁用用户需能被再次更新）
+            var users = await Entity.GetListAsync(u => u.OrgCode == child.Code, includeDisabled: true);
             if (users.Success && users.Data != null)
             {
                 foreach (var user in users.Data)
                 {
-                    if (user.Enable == 1) // 只更新当前启用的，避免无意义操作
+                    if (user.IsValid == 1) // 只更新当前启用的，避免无意义操作
                     {
-                        user.Enable = 0;
+                        user.IsValid = 0;
                         await Entity.Update(user, UserContext.ClientIp);
                         count++;
                     }
@@ -409,14 +378,14 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         }
 
         // 禁用当前父机构下的直属用户
-        var directUsers = await Entity.GetListAsync(u => u.OrgCode == parentCode);
+        var directUsers = await Entity.GetListAsync(u => u.OrgCode == parentCode, includeDisabled: true);
         if (directUsers.Success && directUsers.Data != null)
         {
             foreach (var user in directUsers.Data)
             {
-                if (user.Enable == 1)
+                if (user.IsValid == 1)
                 {
-                    user.Enable = 0;
+                    user.IsValid = 0;
                     await Entity.Update(user, UserContext.ClientIp);
                     count++;
                 }
@@ -436,12 +405,13 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
     /// </summary>
     private async Task<object?> EnableOrgAsync(Sys_Organization entity)
     {
-        var result = await TreeEntity.GetByCode(entity.Code);
+        // GetByCodeAny：已禁用机构 IsValid=0，GetByCode 查不到
+        var result = await TreeEntity.GetByCodeAny(entity.Code);
         if (!result.Success || result.Data == null)
             return "机构不存在";
 
         var org = result.Data;
-        org.Enable = 1;
+        org.IsValid = 1;
         var updateResult = await TreeEntity.Update(org, UserContext.ClientIp);
         if (!updateResult.Success)
             return updateResult.Error;
@@ -474,7 +444,7 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
             return Result<ApiResponse<object?>>.Fail("不能禁用超级管理员账号");
 
         var user = result.Data;
-        user.Enable = 0;
+        user.IsValid = 0;
         var updateResult = await Entity.Update(user, UserContext.ClientIp);
         if (!updateResult.Success)
             return Result<ApiResponse<object?>>.Fail(updateResult.Error);
@@ -488,11 +458,12 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
     /// 请求体 = 行实体 { Code: "用户编码" }
     /// 
     /// 业务规则：
-    /// - 所属机构必须已启用（Enable=1）才能启用人员
+    /// - 所属机构必须已启用（IsValid=1）才能启用人员
     /// </summary>
     private async Task<Result<ApiResponse<object?>>> EnableUserAsync(Sys_User entity)
     {
-        var result = await Entity.GetByCode(entity.Code);
+        // GetByCodeAny：已禁用人员 IsValid=0，GetByCode 查不到
+        var result = await Entity.GetByCodeAny(entity.Code);
         if (!result.Success || result.Data == null)
             return Result<ApiResponse<object?>>.Fail("人员不存在");
 
@@ -501,12 +472,12 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         // 检查所属机构是否启用
         if (!string.IsNullOrEmpty(user.OrgCode))
         {
-            var orgResult = await TreeEntity.GetByCode(user.OrgCode);
-            if (orgResult.Success && orgResult.Data != null && orgResult.Data.Enable == 0)
+            var orgResult = await TreeEntity.GetByCodeAny(user.OrgCode);
+            if (orgResult.Success && orgResult.Data != null && orgResult.Data.IsValid == 0)
                 return Result<ApiResponse<object?>>.Fail("所属机构已禁用，请先启用机构");
         }
 
-        user.Enable = 1;
+        user.IsValid = 1;
         var updateResult = await Entity.Update(user, UserContext.ClientIp);
         if (!updateResult.Success)
             return Result<ApiResponse<object?>>.Fail(updateResult.Error);
@@ -516,15 +487,12 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
 
     /// <summary>
     /// 扩展树节点 Extra 载荷
-    /// 同时写入 PascalCase（Enable/IsValid）和 camelCase（enable/isValid），
-    /// 确保前端 Toggle 按钮在两种键名下均能正确读取状态。
+    /// 写入 IsValid / isValid（启用/禁用唯一字段），前端 Toggle 按钮与状态标签读取。
     /// </summary>
     protected override TreeItemDto MapToTreeItem(Sys_Organization entity, int level)
     {
         var dto = base.MapToTreeItem(entity, level);
         dto.Extra ??= new Dictionary<string, object>();
-        dto.Extra["Enable"] = entity.Enable;
-        dto.Extra["enable"] = entity.Enable;
         dto.Extra["IsValid"] = entity.IsValid;
         dto.Extra["isValid"] = entity.IsValid;
         return dto;

@@ -93,7 +93,8 @@ async function loadTemplate() {
       phaseCode: phase.PhaseDefinitionCode || phase.PhaseCode,
     })
     const template = (res as any)?.data ?? res
-    if (template && template.Id) {
+    // 准则 A：存在性看业务键 Code（禁止 Id 判定）
+    if (template && template.Code) {
       currentTemplate.value = template
       Object.assign(templateForm, {
         TemplateName: template.TemplateName || '',
@@ -128,12 +129,12 @@ async function handleSaveTemplate() {
       StandardCode: phase.StdCode,
       PhaseCode: phase.PhaseDefinitionCode || phase.PhaseCode,
     }
-    if (currentTemplate.value?.Id) {
-      payload.Id = currentTemplate.value.Id
+    if (currentTemplate.value?.Code) {
+      payload.Code = currentTemplate.value.Code
     }
     const res = await saveTemplate(payload)
     const data = (res as any)?.data ?? res
-    if (data?.Id) {
+    if (data?.Code) {
       currentTemplate.value = data
       ElMessage.success('保存成功')
       await loadSections()
@@ -176,7 +177,7 @@ async function handleDeleteTemplate() {
     )
   } catch { return }
 
-  await deleteTemplate(currentTemplate.value.Id)
+  await deleteTemplate(currentTemplate.value.Code)
   ElMessage.success('删除成功')
   currentTemplate.value = null
   sectionData.value = []
@@ -201,7 +202,7 @@ async function loadSections() {
 function openAddSection() {
   sectionFormMode.value = 'add'
   Object.assign(sectionForm, {
-    Id: undefined,
+    Code: undefined,
     SectionName: '',
     SectionNameEn: '',
     ClauseCode: '',
@@ -244,7 +245,7 @@ async function handleDeleteSection(row: ReportSection) {
     await ElMessageBox.confirm(`确定删除章节「${row.SectionName}」？`, '确认删除', { type: 'warning' })
   } catch { return }
 
-  await deleteSection(row.Id)
+  await deleteSection(row.Code)
   ElMessage.success('删除成功')
   await loadSections()
 }

@@ -46,12 +46,19 @@ public class ConfigController : YzhControllerBase<SysConfig>
         return (true, null);
     }
 
-    /// <summary>修改前校验：配置键唯一（排除自身）+ 只读参数禁止修改</summary>
+    /// <summary>修改前校验：准则 A（Code 定位）+ 配置键唯一（排除自身）+ 只读参数禁止修改</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(
         SysConfig entity)
     {
+        // 准则 A：更新必须带业务键 Code，空 → 响亮失败（禁止回退 Id / ConfigKey 分流）
+        if (string.IsNullOrWhiteSpace(entity.Code))
+            return (false, "更新失败：缺少业务键 Code");
+
         var existing = await Entity.GetByCode(entity.Code);
-        if (existing.Data != null && existing.Data.IsReadonly == 1)
+        if (existing.Data == null)
+            return (false, "记录不存在");
+
+        if (existing.Data.IsReadonly == 1)
         {
             if (existing.Data.ConfigValue != entity.ConfigValue ||
                 existing.Data.ConfigType != entity.ConfigType ||
