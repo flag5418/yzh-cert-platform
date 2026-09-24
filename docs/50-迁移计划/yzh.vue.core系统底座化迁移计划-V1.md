@@ -1,10 +1,11 @@
 # yzh.vue.core 系统底座化迁移计划-V1
 
-> status: 已批准，执行中
+> status: 已完成（P0–P8 · 2026-09-24 收口）
 > 日期: 2026-09-24
 > 范围: 前端 certplatform-web（四端）+ 后端对称项（yzh-core / certplatform-api）
 > 前置必读: `docs/10-YZH架构/样板页面指南-V1.md`、`01-架构总纲.md`、`06-代码结构规范.md`、`docs/30-项目规则/前后端代码结构统一规则-V1.md`
 > 执行方式: 逐阶段推进，每阶段过门禁后进入下一阶段；每模块独立 commit 可回滚
+> 关键结果: system 11 页 + 登录/布局/首页 + api/system + yzhSystemRoutes(11) 全在 `yzh.vue.core`；P7 后端 Config/SysLog 下沉；P8 样板路径与文档同步完成
 
 ---
 

@@ -23,11 +23,11 @@ AIGC:
 
 **① 前端新建/修改页面 → 先读 `docs/10-YZH架构/样板页面指南-V1.md`，照抄指定样板。**
 
-- 单表 CRUD 唯一模板：`src/certplatform-web/cert/cert-admin/src/pages/system/user/`（67 行，零手写 CRUD）
-  - ⚠️ **迁移预告（2026-09-24）**：system 11 页面 + 登录/布局/首页应用壳正迁入 `src/certplatform-web/yzh.vue.core/src/{pages,layouts,router,api/system}`（计划：`docs/50-迁移计划/yzh.vue.core系统底座化迁移计划-V1.md`）。样板正式切换至 `yzh.vue.core/src/pages/system/user/` 以 P8 收口为准，**改样板路径须同批更新本文件 + 知识库副本 + 样板页面指南**。
+- 单表 CRUD 唯一模板：`src/certplatform-web/yzh.vue.core/src/pages/system/user/`（67 行，零手写 CRUD）
+  - ✅ **P8 已收口（2026-09-24）**：system 11 页面 + 登录/布局/首页应用壳已全部位于 `src/certplatform-web/yzh.vue.core/src/{pages,layouts,router,api/system}`（计划：`docs/50-迁移计划/yzh.vue.core系统底座化迁移计划-V1.md`）。宿主（cert-admin 等）只组装路由，**不要再往 cert-admin 抄 system 页面**。
 - 左树右表唯一模板：`.../foundation/iso-standard/`（⚠️ **只抄 `logic.ts` 的 `dataLoader` 骨架**，`index.vue` 不抄）
-- 纯树节点模板：`.../system/role/`（`logic.ts` 仅 16 行、零覆写；将随 system 迁入 yzh.vue.core）
-- ⛔ **不要**参考 `system/menu`、`system/api`、`system/role-api`、`system/role-menu`、`system/role-user`（自建逻辑、整改中），**不要**参考 `src/old/**`
+- 纯树节点模板：`src/certplatform-web/yzh.vue.core/src/pages/system/role/`（`logic.ts` 仅 16 行、零覆写）
+- ⛔ **不要**参考 `src/old/**`（历史项目，禁止参考、禁止修改）
 - ⛔ 禁止 `view-grid` / `VolBox` / `VolForm` / `VolProvider`；禁止 `axios`；`.vue` 内禁止直接 `fetch(`
 - ⛔ 禁止手写 `handleAdd` / `handleBatchDelete` / `handleRowAction` / `handleSubmit` —— 由 `useSingleTable` 内核派发
 
@@ -108,7 +108,7 @@ AIGC:
    - `03-边界与约束.md` / `06-YZH与Vol边界定义.md`（不能碰的、不能改的）
    - `01-Vol能力清单.md` / `02-YZH增量清单.md`（能力索引）
    - `04-代码模板/`、`05-踩坑记录/`（直接引用/查重）
-   - `07-标准页面开发流程.md`（**已废弃，请按 `docs/10-YZH架构/样板页面指南-V1.md` 的唯一样板 `cert/cert-admin/src/pages/system/user/` 作为模板**）
+   - `07-标准页面开发流程.md`（**已废弃，请按 `docs/10-YZH架构/样板页面指南-V1.md` 的唯一样板 `yzh.vue.core/src/pages/system/user/` 作为模板**）
 3. **后端**：业务代码写 `src/certplatform-api/`；业务实体继承 `BaseEntity`，Controller **按职能选用** `YzhControllerBase<V>` / `TreeTableControllerBase<T,V>`（**非强制**——职能特殊的控制器直接继承 `ControllerBase` 是允许的）；钩子通过覆盖 virtual 方法实现。
    - ★ **`src/yzh-core/`（框架层）可以且鼓励合理改造** —— YZH 架构正在持续完善中，**不存在"禁止修改"这条规则**。改造须遵守第 11 条「框架层改造准入」。
    - ⛔ **真正禁止修改的是 `src/old/`**（历史 Vol 项目，已冻结，仅作参考）。

@@ -142,8 +142,9 @@ docs/10-YZH架构/
 | `yzh.vue.core/src/components/table/YzhTable.vue` | 数据表格组件 |
 | `yzh.vue.core/src/components/form/YzhForm.vue` | 表单组件 |
 | `yzh.vue.core/src/components/layout/YzhTreeTableLayout.vue` | 左树右表布局组件 |
-| `cert/cert-admin/src/pages/system/user/index.vue` | 单表页面示例（参考） |
-| `cert/cert-admin/src/pages/system/organization/index.vue` | 左树右表页面示例 |
+| `yzh.vue.core/src/pages/system/user/index.vue` | 单表页面示例（唯一样板） |
+| `yzh.vue.core/src/pages/system/role/index.vue` | 纯树节点页面示例 |
+| `cert/cert-admin/src/pages/foundation/iso-standard/` | 左树右表页面示例（只抄 logic.ts 骨架） |
 
 ---
 
