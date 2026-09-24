@@ -167,7 +167,14 @@ export abstract class TreeTableCore<
     return (node: TreeNode) => this.resolveTreeActions(node)
   }
 
-  /** 树动作解析（子类可覆盖以追加自定义动作） */
+  /**
+   * 树动作解析（子类可覆盖以追加自定义动作）
+   *
+   * AllowToggle 三态（对齐 TreeConfig.AllowToggle）：
+   * - false   → 不出内置 toggle，按 CustomActions 状态二选一（disable/enable）
+   * - true    → EnableField 存在则出 toggle；无 EnableField 再看 CustomActions
+   * - 未设置  → 旧行为：EnableField 存在则出 toggle；否则 CustomActions 全显
+   */
   protected resolveTreeActions(node: TreeNode): YzhAction[] {
     const actions: YzhAction[] = []
     const tc = this.treeConfig
@@ -179,26 +186,38 @@ export abstract class TreeTableCore<
     if (tc.AllowDelete) {
       actions.push({ key: 'delete', text: '删除', type: 'danger', danger: true })
     }
-    // 禁用/启用按钮：根据节点状态动态显示（只显示一个）
-    if (tc.EnableField || this.enableField) {
-      const field = tc.EnableField ?? this.enableField
-      if (field) {
-        const extra = (node.Extra as any) || {}
-        const camel = field.charAt(0).toLowerCase() + field.slice(1)
-        const val = extra[field] ?? extra[camel] ?? 1
-        if (val === 1) {
-          // 已启用 → 只显示禁用
-          actions.push({ key: 'toggle-disable', text: '禁用', type: 'warning' })
-        } else {
-          // 已禁用 → 只显示启用
-          actions.push({ key: 'toggle-enable', text: '启用', type: 'warning' })
-        }
+
+    const field = tc.EnableField ?? this.enableField
+    const allowToggle = tc.AllowToggle !== false
+
+    if (allowToggle && field) {
+      const extra = (node.Extra as any) || {}
+      const camel = field.charAt(0).toLowerCase() + field.slice(1)
+      const val = extra[field] ?? extra[camel] ?? 1
+      if (val === 1) {
+        actions.push({ key: 'toggle-disable', text: '禁用', type: 'warning' })
+      } else {
+        actions.push({ key: 'toggle-enable', text: '启用', type: 'warning' })
       }
-    }
-    // CustomActions：仅当无内置 toggle 时才显示（避免重复）
-    if (!tc.EnableField && !this.enableField && tc.CustomActions) {
-      for (const [method, label] of Object.entries(tc.CustomActions)) {
-        actions.push({ key: `custom:${method}`, text: label, type: 'info' })
+    } else if (tc.CustomActions) {
+      if (!allowToggle) {
+        const extra = (node.Extra as any) || {}
+        const statusField = field ?? 'IsValid'
+        const camel = statusField.charAt(0).toLowerCase() + statusField.slice(1)
+        const val = extra[statusField] ?? extra[camel] ?? 1
+        for (const [method, label] of Object.entries(tc.CustomActions)) {
+          if (method === 'disable') {
+            if (val === 1) actions.push({ key: `custom:${method}`, text: label, type: 'warning' })
+          } else if (method === 'enable') {
+            if (val !== 1) actions.push({ key: `custom:${method}`, text: label, type: 'warning' })
+          } else {
+            actions.push({ key: `custom:${method}`, text: label, type: 'info' })
+          }
+        }
+      } else {
+        for (const [method, label] of Object.entries(tc.CustomActions)) {
+          actions.push({ key: `custom:${method}`, text: label, type: 'info' })
+        }
       }
     }
     return actions
@@ -268,6 +287,11 @@ export abstract class TreeTableCore<
   /** 新增行是否要求先选中树节点（无层级树可覆盖为 false，ROL-2） */
   protected get requireTreeSelectionForAdd(): boolean {
     return true
+  }
+
+  /** 未选中树节点时的提示文案（organization=请先选择机构） */
+  protected get requireTreeSelectionMessage(): string {
+    return '请先在左侧选择节点'
   }
 
   /** 是否允许在指定节点下新增（organization=仅叶子；返回 false 时给出提示） */
@@ -507,7 +531,7 @@ export abstract class TreeTableCore<
     if (!row) {
       const node = this.selectedNode
       if (this.requireTreeSelectionForAdd && !node) {
-        ElMessage.warning('请先在左侧选择节点')
+        ElMessage.warning(this.requireTreeSelectionMessage)
         return false
       }
       if (node && !this.isVirtualNode(node) && !this.canAddUnderNode(node)) {
@@ -575,7 +599,7 @@ export abstract class TreeTableCore<
     // 新增
     const targetParent = parent ?? this.selectedNode
     if (this.requireTreeSelectionForAdd && !targetParent) {
-      ElMessage.warning('请先在左侧选择节点')
+      ElMessage.warning(this.requireTreeSelectionMessage)
       return false
     }
     if (targetParent && !this.canAddUnderNode(targetParent)) {
@@ -857,9 +881,32 @@ export abstract class TreeTableCore<
         return
       default:
         if (key.startsWith('custom:')) {
-          await this.executeTreeAction(key.slice(7), node)
+          const method = key.slice(7)
+          const confirmMsg = this.confirmTreeActionMessage(method, node)
+          if (confirmMsg) {
+            await ElMessageBox.confirm(confirmMsg, '操作确认', {
+              type: 'warning',
+              confirmButtonText: '确定',
+              cancelButtonText: '取消',
+            })
+          }
+          const result = await this.executeTreeAction(method, node)
+          await this.refreshTable()
+          if (typeof result === 'string' && result) {
+            ElMessage.success(result)
+          }
         }
     }
+  }
+
+  /**
+   * 树自定义动作确认文案（返回 null = 不弹确认）。
+   * organization 可覆写为级联禁用提示等。
+   */
+  protected confirmTreeActionMessage(method: string, node: TreeNode): string | null {
+    if (method === 'disable') return `确定禁用【${node.Name}】？`
+    if (method === 'enable') return `确定启用【${node.Name}】？`
+    return null
   }
 
   // ========================================================

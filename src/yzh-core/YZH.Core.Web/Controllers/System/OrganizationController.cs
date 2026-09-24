@@ -495,6 +495,8 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         dto.Extra ??= new Dictionary<string, object>();
         dto.Extra["IsValid"] = entity.IsValid;
         dto.Extra["isValid"] = entity.IsValid;
+        // 编辑弹窗回填：OrganizationForm 字段白名单从 Extra 取值（OrgCode 基类 TreeMapper 未提取）
+        dto.Extra["OrgCode"] = entity.OrgCode ?? string.Empty;
         return dto;
     }
 }

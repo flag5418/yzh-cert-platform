@@ -2,254 +2,16 @@
 /**
  * OrgPage - 组织机构-人员管理（左树右表，配置驱动）
  *
- * 布局结构：
- * - 左侧：机构树（懒加载，含搜索、增删改、启用/禁用）
- * - 右侧：人员表格（分页、搜索、增删改、启用/禁用、显示已禁用开关）
- *
- * 配置驱动：
- * - 表格列从 logic.columns 自动获取
- * - 表单字段从 logic.formFields 自动获取
- * - toolbar 按钮根据配置动态渲染
+ * - 左树：机构树（懒加载 + 增删改 + 级联启停），底部「新增机构」
+ * - 右表：选中机构下人员（新增仅限末端机构）
+ * - 节点动作由内核 onNodeAction 派发；行按钮由 logic.rowActions 函数驱动
  */
-import { Delete, Plus, RefreshRight } from '@element-plus/icons-vue'
-import { YzhForm, YzhTreeTableLayout, YzhTable, type TreeNode } from '@yzh-core'
-import {
-  ElButton,
-  ElMessage,
-  ElMessageBox,
-  ElSwitch,
-  ElTag,
-} from 'element-plus'
-import { computed, onMounted, nextTick, ref } from 'vue'
+import { Plus } from '@element-plus/icons-vue'
+import { YzhFormDialog, YzhTable, YzhTreeTableLayout, useTreeTable } from '@yzh-core'
+import { ElSwitch, ElTag } from 'element-plus'
 import OrgPageLogic from './logic'
 
-// 模板用：选中节点响应式代理（内核 getter 已内置响应性，勿再加 .value）
-const selectedNode = computed(() => logic.selectedNode)
-
-// 实例化 Logic
-const logic = new OrgPageLogic()
-
-// 本地状态
-const treeTableRef = ref()
-const tableRef = ref()
-const selectedRows = ref<any[]>([])
-
-// 行操作按钮：按行状态动态显示（edit/delete + 禁用/启用二选一）
-const rowActionButtonsFn = computed(() => {
-  return logic.perRowActionButtons
-})
-
-// ========================================================
-// 树节点操作
-// ========================================================
-
-/** 树节点点击 → 加载该机构下人员 */
-async function handleNodeClick(node: TreeNode) {
-  await logic.onNodeClick(node)
-  tableRef.value?.refresh()
-}
-
-/** 树节点自定义操作（新增下级/编辑/删除/禁用/启用） */
-async function handleTreeNodeAction(action: string, node: TreeNode) {
-  if (action === 'add-child') {
-    handleAddOrg(node)
-  } else if (action === 'edit') {
-    handleEditOrg(node)
-  } else if (action === 'delete') {
-    await handleDeleteOrg(node)
-  } else if (action === 'toggle-disable') {
-    await handleToggleOrgDisable(node)
-  } else if (action === 'toggle-enable') {
-    await handleToggleOrgEnable(node)
-  }
-}
-
-/** 新增机构（可指定父节点） */
-function handleAddOrg(parentNode?: TreeNode) {
-  logic.openAddOrgDialog(parentNode ?? logic.selectedNode)
-}
-
-/** 编辑机构 */
-function handleEditOrg(node: TreeNode) {
-  logic.openEditOrgDialog(node)
-}
-
-/** 删除机构（基类 deleteTreeNode 内部已弹成功提示，此处不再重复） */
-async function handleDeleteOrg(node: TreeNode) {
-  await ElMessageBox.confirm(
-    `确定删除机构【${node.Name}】？`,
-    '删除确认',
-    {
-      type: 'warning',
-      confirmButtonText: '确定删除',
-      cancelButtonText: '取消',
-    },
-  )
-  await logic.deleteOrg(node)
-}
-
-/** 禁用/启用机构（调用自定义树操作，带业务规则：递归禁用子机构和人员） */
-async function handleToggleOrgDisable(node: TreeNode) {
-  await ElMessageBox.confirm(`确定禁用机构【${node.Name}】？（将级联禁用子机构和人员）`, '禁用确认', { type: 'warning' })
-  await logic.apiPostPublic(`/tree/action/disable`, { Code: node.Code })
-  // 本地更新节点状态：Extra.IsValid = 0，并强制刷新树（级联禁用的子孙节点状态需重取）
-  const extra = (node.Extra as any) || {}
-  extra['IsValid'] = 0
-  extra['isValid'] = 0
-  node.Extra = { ...extra }
-  await logic.refreshTree()
-  await logic.refreshTable()
-  ElMessage.success('已禁用该机构')
-}
-
-async function handleToggleOrgEnable(node: TreeNode) {
-  await ElMessageBox.confirm(`确定启用机构【${node.Name}】？`, '启用确认', { type: 'warning' })
-  await logic.apiPostPublic(`/tree/action/enable`, { Code: node.Code })
-  const extra = (node.Extra as any) || {}
-  extra['IsValid'] = 1
-  extra['isValid'] = 1
-  node.Extra = { ...extra }
-  await logic.refreshTree()
-  await logic.refreshTable()
-  ElMessage.success('已启用该机构')
-}
-
-// ========================================================
-// 人员操作
-// ========================================================
-
-/**
- * 新增人员
- *
- * 失败时不要在这里补提示：openAddUserDialog() 已按具体原因提示
- * （未选机构 / 选中的不是末端机构）。旧实现在这里无条件补「请先选择机构」，
- * 导致选中末端机构时同时弹出两条提示，其中一条还是错的。
- */
-function handleAddUser() {
-  logic.openAddUserDialog()
-}
-
-/** 编辑人员 */
-function handleEditUser(row: any) {
-  logic.openEditUserDialog(row)
-}
-
-/** 删除人员 */
-async function handleDeleteUser(row: any) {
-  await ElMessageBox.confirm(
-    `确定删除人员【${row.UserTrueName}】？`,
-    '删除确认',
-    {
-      type: 'warning',
-    },
-  )
-  await logic.deleteUser(row)
-  ElMessage.success('删除成功')
-}
-
-/** 批量删除 */
-async function handleBatchDelete() {
-  if (selectedRows.value.length === 0) {
-    ElMessage.warning('请先选择要删除的人员')
-    return
-  }
-  await ElMessageBox.confirm(
-    `确定删除选中的 ${selectedRows.value.length} 个人员？`,
-    '批量删除',
-    {
-      type: 'warning',
-    },
-  )
-  await logic.batchDeleteUsers(selectedRows.value)
-  selectedRows.value = []
-  ElMessage.success('批量删除成功')
-}
-
-/** 表格行自定义操作（edit / delete / disable / enable） */
-async function handleRowAction(action: string, row: any) {
-  if (action === 'edit') {
-    handleEditUser(row)
-  } else if (action === 'delete') {
-    await handleDeleteUser(row)
-  } else if (action === 'disable' || action === 'enable') {
-    // 自定义启用/禁用（调用 OrganizationController 自定义 action，带业务规则）
-    await logic.apiPostPublic(`/action/${action}`, { Code: row.Code })
-    ElMessage.success(action === 'disable' ? '已禁用' : '已启用')
-    row.IsValid = action === 'disable' ? 0 : 1
-  }
-}
-
-// ========================================================
-// 表格数据加载
-// ========================================================
-
-async function loadTableData(params: any) {
-  const filters: Array<{ Field: string; Operator: string; Value: any }> = []
-  if (logic.selectedNode) {
-    filters.push({
-      Field: 'OrgCode',
-      Operator: 'eq',
-      // TreeNode 是 PascalCase：读小写 code 会得到 undefined，
-      // 查询条件变成「OrgCode = undefined」→ 永远查不到人（共 0 条）。
-      Value: logic.selectedNode.Code,
-    })
-  }
-  if (logic.showDisabled.value) {
-    filters.push({ Field: 'ShowDisabled', Value: 'true', Operator: 'eq' })
-  }
-  try {
-    const res = await logic.apiPostPublic('/filter', {
-      Page: params.page,
-      PageSize: params.rows,
-      SortField: params.sort,
-      SortOrder: params.order,
-      Filters: filters,
-    })
-    if (res.data) {
-      return { rows: res.data.Items ?? [], total: res.data.TotalCount ?? 0 }
-    }
-  } catch (e: any) {
-    ElMessage.error(e.message || '数据加载失败')
-  }
-  return { rows: [], total: 0 }
-}
-
-// ========================================================
-// 提交弹窗
-// ========================================================
-
-async function handleUserSubmit() {
-  try {
-    await logic.submitUserForm()
-    ElMessage.success(
-      logic.dialogMode.value === 'add' ? '新增成功' : '修改成功',
-    )
-  } catch (e: any) {
-    ElMessage.error(e.message || '保存失败')
-  }
-}
-
-async function handleOrgSubmit() {
-  try {
-    await logic.submitOrgForm()
-  } catch (e: any) {
-    ElMessage.error(e.message || '保存失败')
-  }
-}
-
-// ========================================================
-// 初始化
-// ========================================================
-
-onMounted(async () => {
-  await logic.init()
-  // 注入组件引用，使基类 addTreeNode/updateTreeNode/deleteTreeNode 等可局部刷新
-  // （官方示例写法：nextTick 传回调，确保 DOM 更新完成后再取 ref）
-  nextTick(() => {
-    logic.setTreeTableRef(treeTableRef.value)
-    logic.setTableRef(tableRef.value)
-  })
-})
+const { logic, tableRef, treeTableRef } = useTreeTable(OrgPageLogic)
 </script>
 
 <template>
@@ -263,57 +25,45 @@ onMounted(async () => {
       :tree-lazy="true"
       :tree-load-data="logic.loadChildren.bind(logic)"
       :node-actions="logic.nodeActions"
-      :get-action-label="(action: string, node: TreeNode) => logic.getNodeActionLabel(action, node)"
-      @tree-node-click="handleNodeClick"
-      @tree-node-action="handleTreeNodeAction"
+      :get-action-label="(action: string, node: any) => logic.getNodeActionLabel(action, node)"
+      @tree-node-click="logic.onNodeClick"
+      @tree-node-action="logic.onNodeAction"
     >
-      <!-- 树底部：新增机构按钮 -->
       <template #treeFooter>
-        <el-button type="primary" :icon="Plus" @click="handleAddOrg()" style="width: 100%;">
+        <el-button
+          type="primary"
+          :icon="Plus"
+          style="width: 100%"
+          @click="logic.openOrgAddFromFooter()"
+        >
           新增机构
         </el-button>
       </template>
 
       <template #default>
-        <div class="org-page__content">
-          <!-- 人员表格 -->
+        <div class="org-page__table">
           <YzhTable
             ref="tableRef"
-            :columns="logic.columnsWithActions as any"
-            :data-loader="loadTableData"
-            :search-fields="logic.searchFields as any"
-            :selectable="true"
-            :row-action-buttons="rowActionButtonsFn"
-            @selection-change="selectedRows = $event"
-            @row-action="handleRowAction"
+            :columns="logic.columns"
+            :data-loader="logic.dataLoader.bind(logic)"
+            :search-fields="logic.searchFields"
+            :toolbar-actions="logic.toolbarActions"
+            :row-action-buttons="logic.rowActions"
+            select-mode="multiple"
+            row-key="Code"
+            @selection-change="logic.onSelectionChange($event)"
+            @row-action="logic.onRowAction"
+            @toolbar-action="logic.onToolbarAction"
           >
-            <!-- 状态列 -->
             <template #column-IsValid="{ row }">
-              <el-tag
-                :type="row.IsValid === 1 ? 'success' : 'info'"
-                size="small"
-              >
+              <el-tag :type="row.IsValid === 1 ? 'success' : 'info'" size="small">
                 {{ row.IsValid === 1 ? '启用' : '禁用' }}
               </el-tag>
             </template>
 
-            <!-- 工具栏左侧：操作按钮 -->
-            <template #toolbar-left>
-              <el-button type="primary" :icon="Plus" @click="handleAddUser"
-                >新增人员</el-button
-              >
-              <el-button type="danger" :icon="Delete" @click="handleBatchDelete"
-                >批量删除</el-button
-              >
-              <el-button :icon="RefreshRight" @click="logic.refreshTable()"
-                >刷新</el-button
-              >
-            </template>
-
-            <!-- 工具栏右侧：显示已禁用开关 -->
             <template #toolbar-right>
-              <div class="toolbar-switch">
-                <span class="toolbar-switch__label">显示已禁用</span>
+              <div class="org-toolbar-switch">
+                <span class="org-toolbar-switch__label">显示已禁用</span>
                 <el-switch
                   :model-value="logic.showDisabled.value"
                   @change="logic.toggleShowDisabled()"
@@ -326,57 +76,48 @@ onMounted(async () => {
     </YzhTreeTableLayout>
 
     <!-- 人员新增/编辑弹窗 -->
-    <el-dialog
-      v-model="logic.dialogVisible.value"
-      :title="logic.dialogMode.value === 'add' ? '新增人员' : '编辑人员'"
+    <YzhFormDialog
+      v-model:visible="logic.dialogVisible.value"
+      v-model="logic.formData"
+      :mode="logic.dialogMode.value"
+      entity-name="人员"
+      :fields="logic.formFields"
+      :loading="logic.submitting.value"
+      :cols="logic.formLayoutCols as any"
       width="600px"
-      :close-on-click-modal="false"
-      destroy-on-close
+      @submit="logic.submitForm()"
     >
-      <YzhForm
-        v-model="logic.formData"
-        :fields="logic.formFieldsWithHidden as any"
-        :loading="logic.submitting.value"
-        :cols="logic.formLayoutCols as any"
-        @submit="handleUserSubmit"
-        @reset="logic.dialogVisible.value = false"
-      >
-        <!-- 所属机构只读展示 -->
-        <template #orgCode>
+      <template #prepend>
+        <div class="org-form-header">
+          <span class="org-form-header__label">所属机构：</span>
           <span class="org-form-header__value">
-            {{ selectedNode?.Name ?? '未选择' }}
+            {{ logic.selectedNode?.Name ?? '未选择' }}
           </span>
-        </template>
-      </YzhForm>
-    </el-dialog>
+        </div>
+      </template>
+    </YzhFormDialog>
 
     <!-- 机构新增/编辑弹窗 -->
-    <el-dialog
-      v-model="logic.orgDialogVisible.value"
-      :title="logic.orgDialogMode.value === 'add' ? '新增机构' : '编辑机构'"
+    <YzhFormDialog
+      v-model:visible="logic.treeDialogVisible.value"
+      v-model="logic.treeFormData"
+      :mode="logic.treeDialogMode.value"
+      entity-name="机构"
+      :fields="logic.treeFormFields"
+      :loading="logic.treeSubmitting.value"
+      :cols="logic.treeFormLayoutCols as any"
       width="700px"
-      :close-on-click-modal="false"
-      destroy-on-close
+      @submit="logic.submitTreeNodeForm()"
     >
-      <!-- 上级机构只读展示 -->
-      <div class="org-form-header">
-        <span class="org-form-header__label">上级机构：</span>
-        <span class="org-form-header__value">
-          {{ logic.orgParentNode.value?.Name ?? '根级' }}
-        </span>
-      </div>
-
-      <!-- 配置驱动的表单（字段从后端 sys_organization_form.json 自动派生） -->
-      <YzhForm
-        v-model="logic.orgFormData"
-        :fields="logic.treeFormFields as any"
-        :loading="logic.orgSubmitting.value"
-        :cols="logic.treeFormLayoutCols as any"
-        label-width="100px"
-        @submit="handleOrgSubmit"
-        @reset="logic.orgDialogVisible.value = false"
-      />
-    </el-dialog>
+      <template #prepend>
+        <div class="org-form-header">
+          <span class="org-form-header__label">上级机构：</span>
+          <span class="org-form-header__value">
+            {{ logic.treeParentNode.value?.Name ?? '根级' }}
+          </span>
+        </div>
+      </template>
+    </YzhFormDialog>
   </div>
 </template>
 
@@ -389,7 +130,7 @@ onMounted(async () => {
   box-sizing: border-box;
 }
 
-.org-page__content {
+.org-page__table {
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -398,13 +139,13 @@ onMounted(async () => {
   overflow: hidden;
 }
 
-.toolbar-switch {
+.org-toolbar-switch {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.toolbar-switch__label {
+.org-toolbar-switch__label {
   font-size: 13px;
   color: var(--el-text-color-regular);
 }

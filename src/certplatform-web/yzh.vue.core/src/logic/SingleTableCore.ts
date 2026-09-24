@@ -403,8 +403,20 @@ export abstract class SingleTableCore<V extends Record<string, any> = any> {
 
   /** 行操作（/api/{controller}/action/{methodName}） */
   async executeAction(methodName: string, row: V): Promise<void> {
-    await this.apiPost<ApiResponse<any>>(`/action/${methodName}`, row)
-    await this.loadPage()
+    const res = await this.apiPost<ApiResponse<any>>(`/action/${methodName}`, row)
+    if (res && (res as any).success === false) {
+      ElMessage.error(res.message || '操作失败')
+      return
+    }
+    if (typeof res?.data === 'string' && res.data) {
+      ElMessage.success(res.data)
+    }
+    // YzhTable 经 dataLoader 自持行数据：优先 tableRef.refresh，否则退回 loadPage
+    if (this._tableRef) {
+      await this._tableRef.refresh()
+    } else {
+      await this.loadPage()
+    }
   }
 
   /**

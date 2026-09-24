@@ -1,327 +1,151 @@
 /**
- * OrgPageLogic - 组织机构-人员管理 Logic（左树右表，V1.1 - 对齐 YZH.Core.Stand）
+ * OrgPageLogic - 组织机构-人员管理 Logic（左树右表，TreeTableCore 架构）
  *
- * 数据访问规则：
- * - res.data：ApiResponse 顶层（camelCase）
- * - 业务行 r：PascalCase 字段（r.Code, r.OrgCode, r.IsValid）
- * - TreeNode：统一 PascalCase（node.Code / node.Name / node.IsLeaf）
- *   ⚠️ V2 契约见 yzh.vue.core/src/types/tree.ts：所有字段 PascalCase。
- *      历史上有几处误按小写读取（node.code / node.isLeaf），因为取到 undefined
- *      而静默失效（叶子判定恒假、机构过滤恒空），务必不要再引入小写读法。
- * - formData：camelCase key（NewEntity 字典 key，反射 ToCamelCase）
+ * 后端：OrganizationController (TreeTableControllerBase<Sys_Organization, Sys_User>)
+ * - 左树：Sys_Organization（懒加载 + 增删改 + 自定义级联 disable/enable，AllowToggle=false）
+ * - 右表：Sys_User（RelateField=OrgCode；行动作走 /action/{method}）
  *
- * 架构：
- * - 左侧：机构树（Sys_Organization），懒加载 + 增删改 + 启用/禁用
- * - 右侧：人员表格（Sys_User），选中机构后加载 + 启用/禁用
+ * 保留的 virtual 覆写（业务差异）：
+ * - entityNameField / defaultValues / defaultTreeValues
+ * - requireTreeSelectionMessage（请先选择机构）
+ * - openRowDialog：行新增仅限末端机构（树 add-child 不受限）
+ * - onPrepareAdd（注入 OrgCode，不生成 Code）
+ * - confirmTreeActionMessage（级联禁用文案）
+ * - rowActions 函数（CustomButtons 为 {method:label}，按行状态二选一）
+ * - openOrgAddFromFooter（树底：有选中加子级，无选中加根）
+ *
+ * TreeNode 一律 PascalCase（node.Code / node.Name / node.IsLeaf / node.Extra）。
  */
 
-import { TreeTableLogic, type ApiResponse, type TreeNode } from '@yzh-core'
 import { ElMessage } from 'element-plus'
-import { reactive, ref } from 'vue'
+import { TreeTableCore, type TreeNode, type YzhAction } from '@yzh-core'
 
-// ========================================================
-// Logic（前端不维护具体实体 interface，用 any 兜底）
-// ========================================================
-
-export class OrgPageLogic extends TreeTableLogic<any> {
+export class OrgPageLogic extends TreeTableCore<any> {
   controllerName = 'Organization'
 
-  // ──── ShowDisabled 开关 ────
-  showDisabled = ref(false)
-
-  // ──── 表格列扩展 ────
-  get columnsWithActions(): any[] {
-    const cols = this.columns as any[]
-    return cols.map((c) => {
-      if (c.prop === 'IsValid') {
-        return { ...c, slot: true }
-      }
-      return c
-    })
+  /** 删除确认显示真实姓名 */
+  protected override get entityNameField(): string {
+    return 'UserTrueName'
   }
 
-  // ──── 行操作按钮（按行状态动态显示） ────
+  protected override get defaultValues(): Record<string, any> {
+    return { IsValid: 1 }
+  }
+
+  protected override get defaultTreeValues(): Record<string, any> {
+    return { IsValid: 1 }
+  }
+
+  /** 未选机构提示（内核默认「请先在左侧选择节点」，本页业务文案） */
+  protected override get requireTreeSelectionMessage(): string {
+    return '请先选择机构'
+  }
+
+  /** 工具栏「新增人员」与行新增同走 openRowDialog（含末端/未选中校验） */
+  override openAddDialog(): void {
+    this.openRowDialog(null)
+  }
+
   /**
-   * 行操作按钮：edit + delete + 根据 row.IsValid 显示「禁用」或「启用」（二选一）
+   * 行「新增人员」：必须已选机构且为末端机构。
+   * 树「新增下级机构」仍走内核 openTreeNodeDialog（canAddUnderNode 默认 true 不动）。
    */
-  get perRowActionButtons(): (row: any) => Record<string, string> {
-    const rb = this.config.value?.RowButtons
+  override openRowDialog(row?: any | null): boolean {
+    if (!row) {
+      const node = this.selectedNode
+      if (!node) {
+        ElMessage.warning(this.requireTreeSelectionMessage)
+        return false
+      }
+      if (node.IsLeaf !== true) {
+        ElMessage.warning(this.canAddUnderNodeMessage(node))
+        return false
+      }
+    }
+    return super.openRowDialog(row)
+  }
+
+  protected override canAddUnderNodeMessage(_node: TreeNode): string {
+    return '请选择末端机构（不含子机构的节点）'
+  }
+
+  /** 新增人员注入所属机构 Code（Code 由后端生成） */
+  protected override onPrepareAdd(entity: Record<string, any>): void {
+    entity.OrgCode = this.selectedNode?.Code
+  }
+
+  /** 树自定义动作确认文案（级联禁用业务规则） */
+  protected override confirmTreeActionMessage(method: string, node: TreeNode): string | null {
+    if (method === 'disable') {
+      return `确定禁用机构【${node.Name}】？（将级联禁用子机构和人员）`
+    }
+    if (method === 'enable') {
+      return `确定启用机构【${node.Name}】？`
+    }
+    return null
+  }
+
+  /**
+   * 行按钮：edit + delete + 按 row.IsValid 二选一 disable/enable。
+   * User.json / 后端 InjectRowActions 的 CustomButtons 形状为 { method: label }，
+   * 与 toRowActions 期望的 { label: method } 相反 —— 故在本页函数式覆写，不走适配层。
+   */
+  override get rowActions(): YzhAction[] | ((row: any) => YzhAction[]) {
     return (row: any) => {
-      const buttons: Record<string, string> = {}
-      if (rb?.Edit !== false) buttons['edit'] = '编辑'
-      if (rb?.Delete !== false) buttons['delete'] = '删除'
-      // 自定义按钮：根据当前行状态二选一显示
-      if (rb?.CustomButtons) {
-        if (row.IsValid === 1 && rb.CustomButtons['disable']) {
-          buttons['disable'] = rb.CustomButtons['disable']
-        } else if (row.IsValid === 0 && rb.CustomButtons['enable']) {
-          buttons['enable'] = rb.CustomButtons['enable']
-        }
+      const rb = this.config.value?.RowButtons
+      const actions: YzhAction[] = []
+      if (rb?.Edit !== false) {
+        actions.push({ key: 'edit', text: '编辑', type: 'primary' })
       }
-      return buttons
+      if (rb?.Delete !== false) {
+        actions.push({ key: 'delete', text: '删除', type: 'danger' })
+      }
+      const cb = rb?.CustomButtons ?? {}
+      if (row?.IsValid === 1 && cb['disable']) {
+        actions.push({ key: 'custom:disable', text: cb['disable'], type: 'warning' })
+      } else if (row?.IsValid === 0 && cb['enable']) {
+        actions.push({ key: 'custom:enable', text: cb['enable'], type: 'warning' })
+      }
+      return actions
     }
   }
 
-  // ──── 表单字段扩展 ────
-  // OrgCode 不需要在表单中渲染为可编辑控件，但需要在弹窗顶部展示已选机构
-  // 使用 custom 类型 + slot，让 YzhForm 渲染 #orgCode 插槽
-  get formFieldsWithHidden() {
-    const fields = [...this.formFields]
-    if (this.dialogMode.value === 'add') {
-      fields.unshift({
-        prop: 'OrgCode',
-        label: '所属机构',
-        type: 'custom',
-        slot: 'orgCode',
-        required: false,
-        disabled: true,
-        span: 24,
-        placeholder: '',
-      } as any)
-    }
-    return fields
+  /** 工具栏：新增人员 + 批量删除 + 刷新 */
+  override get toolbarActions(): YzhAction[] {
+    return [
+      { key: 'add', text: '新增人员', type: 'primary' },
+      { key: 'delete', text: '批量删除', type: 'danger' },
+      { key: 'refresh', text: '刷新', type: 'info' },
+    ]
   }
-
-  // ──── 弹窗状态 ────
-  dialogVisible = ref(false)
-  dialogMode = ref<'add' | 'edit'>('add')
-  submitting = ref(false)
-  /**
-   * 人员表单数据：PascalCase key
-   * 例：{ code: "", userName: "", IsValid: 1, orgCode: "root" }
-   */
-  formData = reactive<Record<string, any>>({})
-
-  // 机构弹窗状态
-  orgDialogVisible = ref(false)
-  orgDialogMode = ref<'add' | 'edit'>('add')
-  orgSubmitting = ref(false)
-  /**
-   * 机构表单数据：camelCase key（NewEntity 字典 key）
-   */
-  orgFormData = reactive<Record<string, any>>({})
-  orgParentNode = ref<TreeNode | null>(null)
-  orgEditingNode = ref<TreeNode | null>(null)
-
-  // ──── 表格数据加载辅助方法 ────
-
-  async apiPostPublic<T = any>(
-    path: string,
-    body?: any,
-  ): Promise<ApiResponse<T>> {
-    return this.apiPost<ApiResponse<T>>(path, body)
-  }
-
-  // ========================================================
-  // 覆盖：构建过滤器（添加 ShowDisabled）
-  // ========================================================
-
-  /** 带树条件的表格加载 */
-  async loadPageWithTree(treeCode: string): Promise<void> {
-    this.loading.value = true
-    try {
-      const filters = this.buildFilters()
-      filters.push({
-        Field: this.relateField,
-        Value: treeCode,
-        Operator: 'eq',
-      })
-      if (this.showDisabled.value) {
-        filters.push({ Field: 'ShowDisabled', Value: 'true', Operator: 'eq' })
-      }
-      const request = {
-        Page: this.pagination.page,
-        PageSize: this.pagination.pageSize,
-        SortField: this.sortField.value,
-        SortOrder: this.sortOrder.value,
-        Filters: filters,
-      }
-      const res = await this.apiPost(`/filter`, request)
-      const page = res.data
-      if (page) {
-        this.rows.value = page.Items ?? []
-        this.pagination.total = page.TotalCount ?? 0
-      }
-    } catch (e: any) {
-      this.rows.value = []
-      this.pagination.total = 0
-    } finally {
-      this.loading.value = false
-    }
-  }
-
-  /** 未选中树节点时的表格加载 */
-  async loadPageWithoutTree(): Promise<void> {
-    if (this.noSelectionBehavior === 'empty') {
-      this.rows.value = []
-      this.pagination.total = 0
-    } else {
-      await this.loadPageWithTree('')
-    }
-  }
-
-  // ========================================================
-  // 人员 CRUD
-  // ========================================================
 
   /**
-   * 打开新增人员弹窗（仅末端机构允许）
-   *
-   * 返回 false 时**本方法已经给出对应提示**，调用方不要再补一条 ——
-   * 否则会出现「请先选择机构」和「请选择末端机构」两条互相矛盾的提示。
+   * 树底部「新增机构」：有选中加子级；无选中加根（旧语义）。
+   * 绕开 requireTreeSelectionForAdd（本页树允许根新增）。
    */
-  openAddUserDialog(): boolean {
-    const node = this.selectedNode
-    if (!node) {
-      ElMessage.warning('请先选择机构')
-      return false
+  openOrgAddFromFooter(): boolean {
+    if (this.selectedNode) {
+      return this.openTreeNodeDialog(null, this.selectedNode)
     }
-    // 必须选择末端机构（叶子节点）才能增加人员。
-    // 叶子标志是 TreeNode.IsLeaf（PascalCase，后端 TreeControllerBase.FillIsLeafBatch
-    // 批量计算：无子节点即为末端）。
-    // 这里曾误读小写 node.isLeaf → 恒为 undefined → 任何节点都被判为「非末端」，
-    // 导致即使选中末端机构也提示错误、无法新增人员。
-    if (node.IsLeaf !== true) {
-      ElMessage.warning('请选择末端机构（不含子机构的节点）')
-      return false
-    }
-    this.dialogMode.value = 'add'
-    // 先清空旧数据，再从 NewEntity 模板初始化（避免上次编辑的残留）
-    Object.keys(this.formData).forEach((k) => delete this.formData[k])
-    // NewEntity 和 formFields 都是 PascalCase key，直接使用
-    const tmpl = (this.config.value?.NewEntity as any) || {}
-    Object.assign(this.formData, {
-      ...tmpl,
-      Code: crypto.randomUUID?.() || `${Date.now()}`,
-      IsValid: 1,
-      // 同样必须用 node.Code：小写 code 恒为 undefined，
-      // 会造成新建人员没有归属机构（OrgCode 为空）
-      OrgCode: node.Code,
+    this.treeDialogMode.value = 'add'
+    this.treeEditingNode.value = null
+    this.treeParentNode.value = null
+    this.resetObject(this.treeFormData)
+    const tmpl = (this.treeFormConfig?.NewEntity as any) || {}
+    Object.assign(this.treeFormData, tmpl, this.defaultTreeValues, {
+      [this.treeEntityNameField]: '',
+      ParentCode: (this.treeConfig?.RootParentCode as string) ?? null,
     })
-    this.dialogVisible.value = true
+    this.treeDialogVisible.value = true
     return true
   }
 
-  /** 打开编辑人员弹窗 */
-  openEditUserDialog(row: any): void {
-    this.dialogMode.value = 'edit'
-    // formData 使用 PascalCase key（与 formFields prop 一致）
-    Object.keys(this.formData).forEach((k) => delete this.formData[k])
-    Object.assign(this.formData, row)
-    this.dialogVisible.value = true
-  }
-
-  /** 提交人员表单 */
-  async submitUserForm(): Promise<void> {
-    this.submitting.value = true
-    try {
-      // formData 已经是 PascalCase key，直接提交
-      const submitData = { ...this.formData }
-      if (this.dialogMode.value === 'add') {
-        const saved = await this.add(submitData)
-        this.insertRow(saved)
-      } else {
-        const saved = await this.update(submitData)
-        this.replaceRowByCode(saved.Code, saved)
-      }
-      this.dialogVisible.value = false
-    } finally {
-      this.submitting.value = false
-    }
-  }
-
-  /** 删除人员 */
-  async deleteUser(row: any): Promise<void> {
-    await this.delete([row.Code])
-    this.removeRowByCode(row.Code)
-  }
-
-  /** 批量删除人员 */
-  async batchDeleteUsers(rows: any[]): Promise<void> {
-    const codes = rows.map((r) => r.Code)
-    await this.delete(codes)
-    codes.forEach((code) => this.removeRowByCode(code))
-  }
-
-  // ========================================================
-  // 机构 CRUD
-  // ========================================================
-
-  /** 打开新增机构弹窗 */
-  openAddOrgDialog(parentNode: TreeNode | null = null): void {
-    this.orgDialogMode.value = 'add'
-    this.orgParentNode.value = parentNode
-    // 先清空旧数据，再从 NewEntity 模板初始化
-    Object.keys(this.orgFormData).forEach((k) => delete this.orgFormData[k])
-    const tmpl = (this.treeFormConfig?.NewEntity as any) || {}
-    Object.assign(this.orgFormData, {
-      ...tmpl,
-      Code: crypto.randomUUID?.() || `${Date.now()}`,
-      IsValid: 1,
+  constructor() {
+    super()
+    this.registerHandler('refresh', async () => {
+      await this.refreshTable()
     })
-    this.orgDialogVisible.value = true
   }
-
-  /** 打开编辑机构弹窗 */
-  openEditOrgDialog(node: TreeNode): void {
-    this.orgDialogMode.value = 'edit'
-    this.orgEditingNode.value = node
-    // 先清空旧数据，再用 PascalCase key 还原
-    Object.keys(this.orgFormData).forEach((k) => delete this.orgFormData[k])
-    // 注意：TreeNode 是 PascalCase，读小写会得到 undefined，
-    // 导致编辑机构弹窗各字段全空。
-    const extra = (node.Extra as any) ?? ({} as Record<string, any>)
-    Object.assign(this.orgFormData, {
-      Code: node.Code,
-      OrgName: node.Name,
-      ParentCode: node.ParentCode,
-      ...extra,
-    })
-    this.orgDialogVisible.value = true
-  }
-
-  /** 提交机构表单（基类 addTreeNode/updateTreeNode 已做局部更新，无需 reload 树） */
-  async submitOrgForm(): Promise<void> {
-    this.orgSubmitting.value = true
-    try {
-      if (this.orgDialogMode.value === 'add') {
-        await this.addTreeNode(this.orgParentNode.value, this.orgFormData)
-      } else {
-        await this.updateTreeNode(
-          this.orgEditingNode.value!,
-          this.orgFormData.OrgName ?? this.orgFormData.Name ?? '',
-          this.orgFormData,
-        )
-      }
-      this.orgDialogVisible.value = false
-      // 重置编辑状态，防止快速连续操作时模式误判
-      this.orgDialogMode.value = 'add'
-      this.orgEditingNode.value = null
-    } finally {
-      this.orgSubmitting.value = false
-    }
-  }
-
-  /** 删除机构（skipConfirm=true，由页面 handleDeleteOrg 处理确认弹窗） */
-  async deleteOrg(node: TreeNode): Promise<void> {
-    await this.deleteTreeNode(node, true)
-    // 刷新右侧表格（被删机构下的人员需要重新加载）
-    await this.refreshTable()
-  }
-
-  // ========================================================
-  // ShowDisabled 开关
-  // ========================================================
-
-  /** 切换 ShowDisabled 并刷新 */
-  async toggleShowDisabled(): Promise<void> {
-    this.showDisabled.value = !this.showDisabled.value
-    await this.refreshTable()
-  }
-
-  // ========================================================
-  // 刷新（基类 refreshTable 已实现，此处无需覆写）
-  // ========================================================
 }
 
 export default OrgPageLogic
