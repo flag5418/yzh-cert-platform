@@ -24,9 +24,10 @@ AIGC:
 **① 前端新建/修改页面 → 先读 `docs/10-YZH架构/样板页面指南-V1.md`，照抄指定样板。**
 
 - 单表 CRUD 唯一模板：`src/certplatform-web/cert/cert-admin/src/pages/system/user/`（67 行，零手写 CRUD）
+  - ⚠️ **迁移预告（2026-09-24）**：system 11 页面 + 登录/布局/首页应用壳正迁入 `src/certplatform-web/yzh.vue.core/src/{pages,layouts,router,api/system}`（计划：`docs/50-迁移计划/yzh.vue.core系统底座化迁移计划-V1.md`）。样板正式切换至 `yzh.vue.core/src/pages/system/user/` 以 P8 收口为准，**改样板路径须同批更新本文件 + 知识库副本 + 样板页面指南**。
 - 左树右表唯一模板：`.../foundation/iso-standard/`（⚠️ **只抄 `logic.ts` 的 `dataLoader` 骨架**，`index.vue` 不抄）
-- 纯树节点模板：`.../system/role/`（`logic.ts` 仅 16 行、零覆写）
-- ⛔ **不要**参考 `system/menu`、`system/api`、`system/role-api`、`system/role-menu`、`system/role-user`（自建逻辑、待迁移），**不要**参考 `src/old/**`
+- 纯树节点模板：`.../system/role/`（`logic.ts` 仅 16 行、零覆写；将随 system 迁入 yzh.vue.core）
+- ⛔ **不要**参考 `system/menu`、`system/api`、`system/role-api`、`system/role-menu`、`system/role-user`（自建逻辑、整改中），**不要**参考 `src/old/**`
 - ⛔ 禁止 `view-grid` / `VolBox` / `VolForm` / `VolProvider`；禁止 `axios`；`.vue` 内禁止直接 `fetch(`
 - ⛔ 禁止手写 `handleAdd` / `handleBatchDelete` / `handleRowAction` / `handleSubmit` —— 由 `useSingleTable` 内核派发
 

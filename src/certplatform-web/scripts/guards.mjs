@@ -21,8 +21,10 @@
  *    历史存量走 debt 白名单豁免，随修复逐条删除；删完即代表全站达标。
  *    基线不为 0 的规则若强行启用，报错会被存量淹没 → 规则立即失效。
  *
- * ⚠️ 扫描范围：cert-admin / cert-auditor / cert-enterprise / cert-share。
+ * ⚠️ 扫描范围：cert-admin / cert-auditor / cert-enterprise / cert-share / yzh.vue.core(新层)。
  *    新增端时必须在 PAGE_ROOTS / API_ROOTS 登记，否则该端处于守卫盲区。
+ *    yzh.vue.core 的 pages/ layouts/ 属页面层、api/ 属 API 层，纳入同一套规则；
+ *    components/ 仍由 R1 单独圈定（零领域依赖）。
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'
@@ -40,6 +42,9 @@ const PAGE_ROOTS = [
   join(WEB, 'cert/cert-admin/src/pages'),
   join(WEB, 'cert/cert-auditor/src/pages'),
   join(WEB, 'cert/cert-enterprise/src/pages'),
+  // 系统底座包新层（原子界面）：pages/ 与 layouts/ 按页面层规则约束
+  join(WEB, 'yzh.vue.core/src/pages'),
+  join(WEB, 'yzh.vue.core/src/layouts'),
 ]
 
 /** API 模块扫描根 —— 新增端必须在此登记 */
@@ -47,7 +52,21 @@ const API_ROOTS = [
   join(WEB, 'cert/cert-admin/src/api'),
   join(WEB, 'cert/cert-auditor/src/api'),
   join(WEB, 'cert/cert-share/src/api'),
+  // 系统底座包原子 API（含 api/system/）
+  join(WEB, 'yzh.vue.core/src/api'),
 ]
+
+/** yzh.vue.core 新层（原子路由/界面/API）——禁宿主反向依赖（R10） */
+const CORE_APP_ROOTS = [
+  join(WEB, 'yzh.vue.core/src/pages'),
+  join(WEB, 'yzh.vue.core/src/layouts'),
+  join(WEB, 'yzh.vue.core/src/router'),
+  join(WEB, 'yzh.vue.core/src/composables'),
+  join(WEB, 'yzh.vue.core/src/api'),
+]
+
+/** yzh.vue.core 全源码 —— 禁硬编码后端地址（R11） */
+const CORE_ALL = join(WEB, 'yzh.vue.core/src')
 
 /** 递归收集文件（目录不存在时返回空数组） */
 function walk(dir, exts, out = []) {
@@ -207,6 +226,27 @@ const RULES = [
     ],
     skipComments: true,
     debt: [],
+  },
+  {
+    id: 'R10',
+    desc: 'yzh.vue.core 新层禁宿主反向依赖（禁 @/ 与 @share/）',
+    roots: CORE_APP_ROOTS,
+    exts: ['.ts', '.vue'],
+    forbid: [/from\s+['"]@\//, /from\s+['"]@share\//],
+    skipComments: true,
+    debt: [],
+  },
+  {
+    id: 'R11',
+    desc: 'yzh.vue.core 禁硬编码后端地址（地址由宿主 configureYzhApi 注入）',
+    roots: [CORE_ALL],
+    exts: ['.ts', '.vue'],
+    forbid: [/127\.0\.0\.1/, /localhost:\d+/, /https?:\/\/[a-zA-Z0-9]/],
+    skipComments: true,
+    debt: [
+      // P1.6 后台地址解耦后摘除（删硬编码默认值 + 增 configureYzhApi）
+      'yzh.vue.core/src/api/client.ts',
+    ],
   },
 ]
 
