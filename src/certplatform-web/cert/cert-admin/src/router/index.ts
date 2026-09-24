@@ -5,14 +5,17 @@ import { useMenuStore } from '@/store/menu'
 
 const routes: RouteRecordRaw[] = [
   {
+    // 原子登录页（yzh.vue.core 系统底座）—— 想换皮肤则整条手写覆盖本 path（path 单一来源）
     path: '/login',
     name: 'Login',
-    component: () => import('@/layouts/AdminLogin.vue')
+    component: () => import('@yzh-core/pages/auth/Login.vue')
   },
   {
+    // 原子应用壳（yzh.vue.core 系统底座）—— admin 首页仍跳机构管理（业务决定，core 缺省首页见 yzhHomeRoute）
     path: '/',
     name: 'Home',
-    component: () => import('@/layouts/AdminLayout.vue'),
+    component: () => import('@yzh-core/layouts/YzhAppLayout.vue'),
+    props: { menuTag: 'admin', logoText: 'YZH', appTitle: '映智汇认证平台' },
     redirect: '/system/organization',
     children: [
       // ===== 系统管理 =====

@@ -7,35 +7,27 @@
 
     <!-- 中央登录卡片 -->
     <div class="login-card">
-      <!-- 左侧品牌区 -->
+      <!-- 左侧品牌区（props 注入，宿主可整页覆盖 /login） -->
       <div class="login-card__brand">
         <div class="brand-inner">
-          <div class="brand-logo">YZH</div>
-          <h1 class="brand-title">映智汇认证管理平台</h1>
-          <p class="brand-subtitle">CERTIFICATION MANAGEMENT SYSTEM</p>
-          <div class="brand-features">
-            <div class="feature-item">
-              <el-icon class="feature-icon"><Check /></el-icon>
-              <span>严谨 · 规范 · 专业</span>
-            </div>
-            <div class="feature-item">
-              <el-icon class="feature-icon"><Lock /></el-icon>
-              <span>ISO 体系认证全流程</span>
-            </div>
-            <div class="feature-item">
-              <el-icon class="feature-icon"><Cpu /></el-icon>
-              <span>AI 智能审核引擎</span>
+          <div class="brand-logo">{{ appLogo }}</div>
+          <h1 class="brand-title">{{ appTitle }}</h1>
+          <p class="brand-subtitle">{{ appSubtitle }}</p>
+          <div v-if="featureList.length" class="brand-features">
+            <div v-for="(f, i) in featureList" :key="i" class="feature-item">
+              <el-icon class="feature-icon"><component :is="f.icon" /></el-icon>
+              <span>{{ f.text }}</span>
             </div>
           </div>
         </div>
-        <div class="brand-footer">© 2026 映智汇 (YZH) 版权所有</div>
+        <div v-if="footerText" class="brand-footer">{{ footerText }}</div>
       </div>
 
       <!-- 右侧登录表单 -->
       <div class="login-card__form">
         <div class="form-header">
           <h2 class="form-title">账号登录</h2>
-          <p form-subtitle>请输入您的账号信息</p>
+          <p class="form-subtitle">请输入您的账号信息</p>
         </div>
 
         <el-form ref="formRef" :model="form" :rules="rules" class="form-body" @submit.prevent="handleLogin">
@@ -64,16 +56,61 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import type { Component } from 'vue'
 import type { FormInstance } from 'element-plus'
 import { User, Lock, PictureRounded, Check, Cpu } from '@element-plus/icons-vue'
-import { useAuthStore } from '@/store/auth'
-import { login, getCaptcha } from '@yzh-core/api/auth'
+import { login, getCaptcha } from '../../api/auth'
+import { useAuthState } from '../../composables/useAuthState'
+
+/**
+ * 原子登录页（系统底座默认皮肤）
+ *
+ * 宿主定制（二选一）：
+ *   A. props/slots 注入品牌 —— 本组件全部品牌内容走 props
+ *   B. 整页手写覆盖 `/login` 路径（per-path 覆盖，契约铁律 #1：path 单一来源）
+ *
+ * 登录态写入模块单例 `useAuthState`（与宿主 pinia 薄适配同源）。
+ */
+
+interface LoginFeature {
+  icon: Component
+  text: string
+}
+
+const props = withDefaults(defineProps<{
+  /** 品牌 Logo 文字（左区大字） */
+  appLogo?: string
+  /** 品牌主标题 */
+  appTitle?: string
+  /** 品牌副标题 */
+  appSubtitle?: string
+  /** 卖点列表（隐藏传 []） */
+  features?: LoginFeature[]
+  /** 品牌区页脚（隐藏传 ''） */
+  footerText?: string
+  /** 登录成功后的跳转目标 */
+  redirect?: string
+}>(), {
+  appLogo: 'YZH',
+  appTitle: '映智汇认证管理平台',
+  appSubtitle: 'CERTIFICATION MANAGEMENT SYSTEM',
+  // ⚠️ defineProps 默认值不能引用 setup 内局部变量 —— 默认项须内联（引用 import 合法）
+  features: () => [
+    { icon: Check, text: '严谨 · 规范 · 专业' },
+    { icon: Lock, text: 'ISO 体系认证全流程' },
+    { icon: Cpu, text: 'AI 智能审核引擎' }
+  ],
+  footerText: '© 2026 映智汇 (YZH) 版权所有',
+  redirect: '/'
+})
+
+const featureList = computed(() => props.features)
 
 const router = useRouter()
-const authStore = useAuthStore()
+const { setToken, setUserInfo } = useAuthState()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const captchaImg = ref('')
@@ -94,13 +131,12 @@ const rules = {
 async function refreshCaptcha() {
   try {
     const res = await getCaptcha()
-    // ⚠️ `/api/User/getVierificationCode` 返回的是**裸对象** `{ img, uuid }`，
-    //    没有 ApiResponse 信封（后端 `new JsonResult(new { img, uuid })`），
-    //    而 yzhApi 是原样透传、不拆信封 —— 所以字段在 res 顶层，读 res.data.img 会抛错。
+    // ⚠️ `/api/User/getVierificationCode` 返回**裸对象** `{ img, uuid }`（无信封，已登记例外 E6）——
+    //    yzhApi 原样透传，字段在 res 顶层；防御性兼容 res.data.*
     captchaImg.value = res?.img ?? res?.data?.img ?? ''
     captchaUuid.value = res?.uuid ?? res?.data?.uuid ?? ''
     if (!captchaImg.value) throw new Error('验证码响应为空')
-  } catch (e: any) {
+  } catch {
     ElMessage.error('验证码加载失败')
   }
 }
@@ -118,10 +154,10 @@ async function handleLogin() {
       uuid: captchaUuid.value
     })
 
-    // 保存 token 和用户信息（后端返回 PascalCase 字段，store 模型与实体同名，§16.9 铁律）
+    // 后端返回 PascalCase 字段，模型与实体同名（§16.9 铁律）
     const { Token, UserCode, UserName, UserTrueName, RoleCode } = res.data
-    authStore.setToken(Token)
-    authStore.setUserInfo({
+    setToken(Token)
+    setUserInfo({
       Token,
       UserCode,
       UserName,
@@ -130,7 +166,7 @@ async function handleLogin() {
     })
 
     ElMessage.success('登录成功')
-    router.push('/')
+    router.push(props.redirect)
   } catch (e: any) {
     ElMessage.error(e?.message || '登录失败')
     refreshCaptcha()

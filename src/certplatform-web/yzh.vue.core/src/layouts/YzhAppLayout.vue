@@ -1,20 +1,22 @@
 <template>
-  <el-container class="admin-layout">
+  <el-container class="yzh-layout">
     <!-- ========== 侧边栏 ========== -->
-    <el-aside width="230px" class="admin-layout__aside">
-      <!-- Logo 区域 -->
-      <div class="admin-layout__brand">
-        <div class="brand-logo">
-          <span class="brand-logo__icon">YZH</span>
-        </div>
-        <span class="brand-text">映智汇认证平台</span>
+    <el-aside width="230px" class="yzh-layout__aside">
+      <!-- Logo 区域（#brand slot 可整块替换） -->
+      <div class="yzh-layout__brand">
+        <slot name="brand">
+          <div class="brand-logo">
+            <span class="brand-logo__icon">{{ logoText }}</span>
+          </div>
+          <span class="brand-text">{{ appTitle }}</span>
+        </slot>
       </div>
 
-      <!-- 菜单区域 -->
+      <!-- 菜单区域（按 menuTag 分流；数据来自 useMenuTree 模块单例） -->
       <el-menu
         :default-active="activeMenu"
         router
-        class="admin-layout__menu"
+        class="yzh-layout__menu"
       >
         <template v-for="menu in visibleMenus" :key="menu.id">
           <!-- 有子菜单：渲染为 el-sub-menu -->
@@ -43,9 +45,9 @@
     </el-aside>
 
     <!-- ========== 主体区域 ========== -->
-    <el-container class="admin-layout__main-container">
+    <el-container class="yzh-layout__main-container">
       <!-- 顶部导航栏 -->
-      <el-header class="admin-layout__header">
+      <el-header class="yzh-layout__header">
         <div class="header-left">
           <!-- 面包屑 -->
           <el-breadcrumb separator="/" class="header-breadcrumb">
@@ -55,28 +57,32 @@
         </div>
 
         <div class="header-right">
-          <!-- 用户信息下拉 -->
-          <el-dropdown trigger="click" @command="handleCommand">
-            <div class="header-user">
-              <el-avatar :size="32" class="header-user__avatar">
-                {{ userInitial }}
-              </el-avatar>
-              <span class="header-user__name">{{ authStore.userInfo?.UserTrueName || authStore.userInfo?.UserName || '管理员' }}</span>
-              <el-icon><ArrowDown /></el-icon>
-            </div>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="profile">个人设置</el-dropdown-item>
-                <el-dropdown-item command="password">修改密码</el-dropdown-item>
-                <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          <!-- 宿主附加顶栏项（slot） -->
+          <slot name="header-right" />
+          <!-- 用户信息下拉（#user-dropdown 可整块替换） -->
+          <slot name="user-dropdown">
+            <el-dropdown trigger="click" @command="handleCommand">
+              <div class="header-user">
+                <el-avatar :size="32" class="header-user__avatar">
+                  {{ userInitial }}
+                </el-avatar>
+                <span class="header-user__name">{{ userInfo?.UserTrueName || userInfo?.UserName || '管理员' }}</span>
+                <el-icon><ArrowDown /></el-icon>
+              </div>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="profile">个人设置</el-dropdown-item>
+                  <el-dropdown-item command="password">修改密码</el-dropdown-item>
+                  <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </slot>
         </div>
       </el-header>
 
       <!-- 内容区域 -->
-      <el-main class="admin-layout__content">
+      <el-main class="yzh-layout__content">
         <router-view v-slot="{ Component }">
           <keep-alive><component :is="Component" /></keep-alive>
         </router-view>
@@ -86,7 +92,7 @@
 
   <!-- 个人信息弹窗 -->
   <el-dialog
-    v-if="authStore.userInfo"
+    v-if="userInfo"
     v-model="profileDialogVisible"
     title="个人信息"
     width="480px"
@@ -94,7 +100,7 @@
   >
     <el-form :model="profileForm" label-width="90px" class="profile-form">
       <el-form-item label="用户账号">
-        <el-input :model-value="authStore.userInfo?.UserName" disabled />
+        <el-input :model-value="userInfo?.UserName" disabled />
       </el-form-item>
       <el-form-item label="姓名">
         <el-input v-model="profileForm.UserTrueName" placeholder="请输入真实姓名" />
@@ -167,29 +173,52 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { useAuthStore } from '@/store/auth'
-import { useMenuStore } from '@/store/menu'
-import { getCurrentUser, modifyPwd, updateUserInfo } from '@yzh-core/api/auth'
-// 图标归一化 + 分类分流：与专家端共用同一实现（勿在 App 内重复定义）
-import { filterMenuTreeByTag, formatMenuIcon as formatIcon } from '@yzh-core/utils/menu'
+import { getCurrentUser, modifyPwd, updateUserInfo } from '../api/auth'
+import { useAuthState } from '../composables/useAuthState'
+import { useMenuTree } from '../composables/useMenuTree'
+import { filterMenuTreeByTag, formatMenuIcon as formatIcon } from '../utils/menu'
+
+/**
+ * 原子应用布局（系统底座默认壳：侧栏 + 顶栏 + 个人中心 + 改密）
+ *
+ * 宿主定制：
+ *   - props：logoText / appTitle（品牌）、menuTag（侧栏菜单分流，如 'admin' / 'auditor'）
+ *   - slots：#brand（Logo 区整块替换）、#header-right（顶栏附加项）、#user-dropdown（用户区整块替换）
+ *   - 路由：本组件仅是 '/' 的 component —— path 归宿主（契约铁律 #1）
+ *
+ * 状态全部走 core 模块单例（useAuthState / useMenuTree），零 pinia、零宿主 store 依赖（守卫 R10）。
+ * 品牌色 `--yzh-color-primary` 等 CSS 变量由宿主全局样式注入。
+ */
+
+const props = withDefaults(defineProps<{
+  /** Logo 方块文字 */
+  logoText?: string
+  /** 品牌名（Logo 旁） */
+  appTitle?: string
+  /** 侧边栏菜单按 Sys_Menu.Tag 分流（超管全量菜单需滤掉其他端分组） */
+  menuTag?: string
+}>(), {
+  logoText: 'YZH',
+  appTitle: '映智汇认证平台',
+  menuTag: 'admin'
+})
 
 const route = useRoute()
 const router = useRouter()
-const authStore = useAuthStore()
-const menuStore = useMenuStore()
+const { token, userInfo, setUserInfo, patchUserInfo, clearToken } = useAuthState()
+const { menus, loadMenus, clearMenus } = useMenuTree()
 
 // 当前激活的菜单
 const activeMenu = computed(() => route.path)
 
-/** 管理端侧边栏菜单：按 Tag 分流（超管全量菜单需滤掉 auditor 分组） */
-const visibleMenus = computed(() => filterMenuTreeByTag(menuStore.menus, 'admin'))
+/** 侧边栏菜单：按 menuTag 分流 */
+const visibleMenus = computed(() => filterMenuTreeByTag(menus.value, props.menuTag))
 
 // 当前页面标题（从菜单中查找）
 const currentPageTitle = computed(() => {
   const path = route.path
-  // 递归查找菜单名称
-  const findMenuName = (menus: any[]): string | null => {
-    for (const m of menus) {
+  const findMenuName = (list: typeof menus.value): string | null => {
+    for (const m of list) {
       if (m.url === path) return m.menuName
       if (m.children?.length) {
         const found = findMenuName(m.children)
@@ -203,7 +232,7 @@ const currentPageTitle = computed(() => {
 
 // 用户头像首字母
 const userInitial = computed(() => {
-  const name = authStore.userInfo?.UserTrueName || authStore.userInfo?.UserName || 'A'
+  const name = userInfo.value?.UserTrueName || userInfo.value?.UserName || 'A'
   return name.charAt(0).toUpperCase()
 })
 
@@ -218,9 +247,7 @@ const passwordSaving = ref(false)
  * 个人资料表单
  *
  * ⚠️ 字段名与后端 `Sys_User` 的 C# 属性名逐字一致（`项目全局规则.md` §16.9 铁律）。
- *    原实现用的是 camelCase（`userTrueName` / `email` / `phone`）外加一个库里根本不存在的
- *    `nickname` 字段 —— 提交后端全部落空，保存等于没保存。已按铁律改名，并把
- *    无对应列的「昵称」换成真实存在的 `Remark`（历史个人中心页也是「备注」）。
+ *    camelCase 提交后端会全部落空；无对应列的「昵称」用真实存在的 `Remark`。
  */
 const profileForm = reactive({
   UserTrueName: '',
@@ -258,12 +285,11 @@ const passwordRules: FormRules = {
 /**
  * 加载当前登录用户信息（个人中心）
  *
- * 登录响应只给 Token/UserCode/UserName/UserTrueName/RoleCode，且**未持久化** ——
- * 刷新页面后 `userInfo` 为空，顶栏会退化成「管理员」、个人中心各字段全空。
- * 因此布局挂载时必须回填一次。
+ * 登录响应只给 Token/UserCode/UserName/UserTrueName/RoleCode 且未持久化 ——
+ * 刷新页面后 userInfo 为空，顶栏退化成「管理员」、个人中心字段全空。挂载时必须回填。
  */
 async function loadCurrentUser() {
-  if (!authStore.token) return
+  if (!token.value) return
   try {
     const res = await getCurrentUser()
     if (res?.success === false) {
@@ -271,17 +297,17 @@ async function loadCurrentUser() {
       return
     }
     const data = res?.data
-    if (data) authStore.setUserInfo({ ...data, Token: authStore.token })
+    if (data) setUserInfo({ ...data, Token: token.value })
   } catch {
     // 静默失败：顶栏已有兜底文案，不打断用户操作
   }
 }
 
 function openProfileDialog() {
-  profileForm.UserTrueName = authStore.userInfo?.UserTrueName || ''
-  profileForm.Email = authStore.userInfo?.Email || ''
-  profileForm.PhoneNo = authStore.userInfo?.PhoneNo || ''
-  profileForm.Remark = authStore.userInfo?.Remark || ''
+  profileForm.UserTrueName = userInfo.value?.UserTrueName || ''
+  profileForm.Email = userInfo.value?.Email || ''
+  profileForm.PhoneNo = userInfo.value?.PhoneNo || ''
+  profileForm.Remark = userInfo.value?.Remark || ''
   profileDialogVisible.value = true
 }
 
@@ -306,7 +332,7 @@ async function saveProfile() {
       ElMessage.error(res?.message || '保存失败')
       return
     }
-    authStore.patchUserInfo({
+    patchUserInfo({
       UserTrueName: profileForm.UserTrueName,
       Email: profileForm.Email,
       PhoneNo: profileForm.PhoneNo,
@@ -336,8 +362,8 @@ async function changePassword() {
       ElMessage.success(res?.message || '密码修改成功，请重新登录')
       passwordDialogVisible.value = false
       setTimeout(() => {
-        authStore.clearToken()
-        menuStore.clearMenus()
+        clearToken()
+        clearMenus()
         router.push('/login')
       }, 1000)
     } catch (e: any) {
@@ -357,8 +383,8 @@ function handleCommand(command: string) {
       type: 'warning'
     })
       .then(() => {
-        authStore.clearToken()
-        menuStore.clearMenus()
+        clearToken()
+        clearMenus()
         ElMessage.success('已退出登录')
         router.push('/login')
       })
@@ -372,19 +398,19 @@ function handleCommand(command: string) {
 
 // 加载菜单 + 回填当前用户信息
 onMounted(() => {
-  menuStore.loadMenus()
+  loadMenus()
   loadCurrentUser()
 })
 </script>
 
 <style scoped>
 /* ========== 整体布局 ========== */
-.admin-layout {
+.yzh-layout {
   height: 100vh;
 }
 
 /* ========== 侧边栏 ========== */
-.admin-layout__aside {
+.yzh-layout__aside {
   background: #1a2332;
   display: flex;
   flex-direction: column;
@@ -392,7 +418,7 @@ onMounted(() => {
 }
 
 /* Logo 区域 */
-.admin-layout__brand {
+.yzh-layout__brand {
   height: 64px;
   display: flex;
   align-items: center;
@@ -409,7 +435,7 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, var(--yzh-color-primary), var(--yzh-color-primary-light));
+  background: linear-gradient(135deg, var(--yzh-color-primary, #2563eb), var(--yzh-color-primary-light, #3b82f6));
   border-radius: 8px;
   flex-shrink: 0;
   letter-spacing: 0.5px;
@@ -425,7 +451,7 @@ onMounted(() => {
 }
 
 /* 菜单区域 */
-.admin-layout__menu {
+.yzh-layout__menu {
   border-right: none;
   background: #1a2332;
   overflow-y: auto;
@@ -438,20 +464,20 @@ onMounted(() => {
 }
 
 /* Webkit 浏览器隐藏滚动条 */
-.admin-layout__menu::-webkit-scrollbar {
+.yzh-layout__menu::-webkit-scrollbar {
   width: 0;
   display: none;
 }
 
 /* 覆盖 el-menu 自身背景 */
-.admin-layout__menu :deep(.el-menu) {
+.yzh-layout__menu :deep(.el-menu) {
   background-color: transparent;
   border-right: none;
 }
 
 /* 覆盖 Element Plus 菜单项样式 */
-.admin-layout__menu :deep(.el-menu-item),
-.admin-layout__menu :deep(.el-sub-menu__title) {
+.yzh-layout__menu :deep(.el-menu-item),
+.yzh-layout__menu :deep(.el-sub-menu__title) {
   color: #ffffff;
   background-color: transparent;
   height: 42px;
@@ -460,37 +486,37 @@ onMounted(() => {
   border-radius: 6px;
 }
 
-.admin-layout__menu :deep(.el-menu-item:hover),
-.admin-layout__menu :deep(.el-sub-menu__title:hover) {
+.yzh-layout__menu :deep(.el-menu-item:hover),
+.yzh-layout__menu :deep(.el-sub-menu__title:hover) {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.1);
 }
 
-.admin-layout__menu :deep(.el-menu-item.is-active) {
+.yzh-layout__menu :deep(.el-menu-item.is-active) {
   color: #ffffff;
-  background: var(--yzh-color-primary);
+  background: var(--yzh-color-primary, #2563eb);
   font-weight: 500;
 }
 
 /* 子菜单项 */
-.admin-layout__menu :deep(.el-sub-menu .el-menu-item) {
+.yzh-layout__menu :deep(.el-sub-menu .el-menu-item) {
   background: transparent;
   padding-left: 50px !important;
 }
 
-.admin-layout__menu :deep(.el-sub-menu .el-menu-item:hover) {
+.yzh-layout__menu :deep(.el-sub-menu .el-menu-item:hover) {
   background: rgba(255, 255, 255, 0.1);
 }
 
 /* ========== 主体容器 ========== */
-.admin-layout__main-container {
+.yzh-layout__main-container {
   display: flex;
   flex-direction: column;
   background: #f5f5f5;
 }
 
 /* ========== 顶部导航栏 ========== */
-.admin-layout__header {
+.yzh-layout__header {
   height: 56px;
   display: flex;
   align-items: center;
@@ -511,13 +537,14 @@ onMounted(() => {
 }
 
 .header-breadcrumb :deep(.el-breadcrumb__inner.is-link) {
-  color: var(--yzh-color-primary);
+  color: var(--yzh-color-primary, #2563eb);
 }
 
 /* 用户区域 */
 .header-right {
   display: flex;
   align-items: center;
+  gap: 8px;
 }
 
 .header-user {
@@ -535,7 +562,7 @@ onMounted(() => {
 }
 
 .header-user__avatar {
-  background: linear-gradient(135deg, var(--yzh-color-primary), var(--yzh-color-primary-light));
+  background: linear-gradient(135deg, var(--yzh-color-primary, #2563eb), var(--yzh-color-primary-light, #3b82f6));
   color: #fff;
   font-size: 13px;
   font-weight: 600;
@@ -548,7 +575,7 @@ onMounted(() => {
 }
 
 /* ========== 内容区域 ========== */
-.admin-layout__content {
+.yzh-layout__content {
   background: #f5f5f5;
   padding: 24px;
   overflow-y: auto;
