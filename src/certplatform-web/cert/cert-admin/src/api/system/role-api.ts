@@ -1,6 +1,6 @@
 import { yzhApi } from '@yzh-core/api/client'
 import type { ApiResponse } from '@yzh-core/api/client'
-import type { CheckTreeNode, TreeNodeSelection, AssociationDto, RoleTreeItem } from '@share/types'
+import type { AssociationSelection, CheckTreeNode, AssociationDto, RoleTreeItem } from '@yzh-core'
 import { unwrap } from '@yzh-core/utils'
 
 // ========================================================
@@ -36,7 +36,7 @@ export async function getCheckTree(roleCode: string): Promise<CheckTreeNode[]> {
  */
 export async function checkAdd(
   roleCode: string,
-  selections: TreeNodeSelection[],
+  selections: AssociationSelection[],
 ): Promise<{ Updated: number; Applied?: string[] }> {
   const res = await yzhApi.post<ApiResponse<{ Updated: number; Applied?: string[] }>>(
     '/api/RoleApi/check/add',
@@ -51,7 +51,7 @@ export async function checkAdd(
 /** 取消勾选（移除角色与接口的关联） */
 export async function checkRemove(
   roleCode: string,
-  selections: TreeNodeSelection[],
+  selections: AssociationSelection[],
 ): Promise<{ Updated: number }> {
   const res = await yzhApi.post<ApiResponse<{ Updated: number }>>('/api/RoleApi/check/remove', {
     ContextCode: roleCode,
