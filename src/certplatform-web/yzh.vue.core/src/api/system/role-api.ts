@@ -1,7 +1,7 @@
-import { yzhApi } from '@yzh-core/api/client'
-import type { ApiResponse } from '@yzh-core/api/client'
-import type { AssociationSelection, CheckTreeNode, AssociationDto, RoleTreeItem } from '@yzh-core'
-import { unwrap } from '@yzh-core/utils'
+import { yzhApi } from '../client'
+import type { ApiResponse } from '../client'
+import type { AssociationSelection, CheckTreeNode, AssociationDto, RoleTreeItem } from '../../types/association'
+import { unwrap } from '../../utils'
 
 // ========================================================
 // API 方法

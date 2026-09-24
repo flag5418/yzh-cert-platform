@@ -143,8 +143,6 @@ const RULES = [
     ],
     skipComments: true,
     debt: [
-      // 关联型页面（role-user/menu/api）待 PG-C 迁移
-      'system/_shared/useRoleTreeBadges.ts',
       // ★ 真实偏离（非误报）：自建 Record<string,any> 小写 children 树，应改用核心 TreeNode + treeUtils
       'foundation/iso-standard/logic.ts',
     ],
