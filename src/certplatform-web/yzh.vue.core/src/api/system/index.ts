@@ -3,3 +3,4 @@
  * 后端镜像：src/yzh-core/YZH.Core.Web/Controllers/System/
  */
 export * from './menu'
+export * from './role-user'

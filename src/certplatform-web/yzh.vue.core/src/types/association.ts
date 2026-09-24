@@ -15,6 +15,12 @@ export interface CheckTreeNode {
   Extra?: Record<string, any>
 }
 
+/** 关联选择项（提交给后端的最小形状；AssociationApi.add/remove 入参） */
+export interface AssociationSelection {
+  Code: string
+  NodeType?: string
+}
+
 /** 节点选择项（后端 TreeNodeSelection） */
 export interface TreeNodeSelection {
   Code: string

@@ -32,12 +32,14 @@ export const yzhHomeRoute: RouteRecordSingleView = {
  * path 恒定 = `Sys_Menu.Url`（对外 URL 永不因下沉而变化）
  *
  * P3 Wave A 已迁：log / config / role / user
+ * P4 Wave B：role-user / role-menu / role-api / menu / api
  */
 export const yzhSystemRoutes: RouteRecordRaw[] = [
   { path: 'system/log', name: 'SystemLog', component: () => import('../pages/system/log/index.vue') },
   { path: 'system/config', name: 'SystemConfig', component: () => import('../pages/system/config/index.vue') },
   { path: 'system/role', name: 'SystemRole', component: () => import('../pages/system/role/index.vue') },
   { path: 'system/user', name: 'SystemUser', component: () => import('../pages/system/user/index.vue') },
+  { path: 'system/role-user', name: 'SystemRoleUser', component: () => import('../pages/system/role-user/index.vue') },
 ]
 
 export interface YzhRoutesOptions {

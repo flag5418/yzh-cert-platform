@@ -13,12 +13,11 @@
 import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { TreeNode } from '../types/tree'
+import type { AssociationSelection } from '../types/association'
 
-/** 关联选择项（提交给后端的最小形状） */
-export interface AssociationSelection {
-  Code: string
-  NodeType?: string
-}
+// AssociationSelection 定义上移 types/association.ts（与 CheckTreeNode 等同源）；
+// 此处保留再导出，维持既有 `import type { AssociationSelection } from './AssociationTreeCore'` 消费者兼容。
+export type { AssociationSelection } from '../types/association'
 
 /** 关联型 API 约定（由页面/api 模块注入，内核不拼端点） */
 export interface AssociationApi {
