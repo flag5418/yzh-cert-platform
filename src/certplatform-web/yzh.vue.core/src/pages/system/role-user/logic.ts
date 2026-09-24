@@ -14,7 +14,7 @@ import {
   checkAdd,
   checkRemove,
   getAllAssociations,
-} from '@/api/system/role-user'
+} from '../../../api/system/role-user'
 
 export class RoleUserLogic extends CheckTreeCore {
   columns = [
