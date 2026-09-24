@@ -2,192 +2,16 @@
 /**
  * DictionaryPage - 数据字典管理（左树右表，配置驱动）
  *
- * 布局结构：
- * - 左侧：字典/分类树（懒加载，含搜索、增删改、启用/禁用）
- * - 右侧：字典项表格（分页、搜索、增删改、启用/禁用）
+ * - 左树：字典/分类树（懒加载 + 增删改 + 启停），底部「新增字典分类」
+ * - 右表：选中字典下字典项（未选中 = empty）
+ * - 节点动作由内核 onNodeAction 派发；行按钮由后端 RowButtons 驱动
  */
-import { Delete, Plus, RefreshRight } from '@element-plus/icons-vue'
-import { YzhForm, YzhTreeTableLayout, YzhTable, type TreeNode } from '@yzh-core'
-import {
-  ElButton,
-  ElMessage,
-  ElMessageBox,
-  ElTag,
-} from 'element-plus'
-import { computed, onMounted, ref, watch, nextTick } from 'vue'
+import { Plus } from '@element-plus/icons-vue'
+import { YzhFormDialog, YzhTable, YzhTreeTableLayout, useTreeTable } from '@yzh-core'
+import { ElSwitch, ElTag } from 'element-plus'
 import DictionaryPageLogic from './logic'
 
-// 模板用：选中节点响应式代理（内核 getter 已内置响应性，勿再加 .value）
-const selectedNode = computed(() => logic.selectedNode)
-
-// 实例化 Logic
-const logic = new DictionaryPageLogic()
-
-// 本地状态
-const treeTableRef = ref()
-const tableRef = ref()
-const selectedRows = ref<any[]>([])
-
-// 监听 tableRef 变化（含 :key 重挂载后重新注入）
-watch(tableRef, (el) => {
-  if (el) logic.setTableRef(el)
-})
-
-// 行操作按钮：直接消费基类自动注入的 rowActionButtons（含 toggle-valid）
-const rowActionButtons = computed(() => (logic as any).rowActionButtons)
-
-// ========================================================
-// 树节点操作
-// ========================================================
-
-/** 树节点点击 → 加载该字典下的字典项 */
-async function handleNodeClick(node: TreeNode) {
-  await logic.onNodeClick(node)
-  tableRef.value?.refresh()
-}
-
-/** 树节点自定义操作（新增下级/编辑/删除/禁用/启用） */
-async function handleTreeNodeAction(action: string, node: TreeNode) {
-  if (action === 'add-child') {
-    logic.openTreeDialog('add', null, node)
-  } else if (action === 'edit') {
-    logic.openTreeDialog('edit', node)
-  } else if (action === 'delete') {
-    await handleDeleteDict(node)
-  } else if (action === 'toggle-valid') {
-    await handleToggleDictValid(node)
-  }
-}
-
-/** 新增字典分类（根级） */
-function handleAddDictCategory() {
-  logic.openTreeDialog('add', null, null)
-}
-
-/** 删除字典/分类 */
-async function handleDeleteDict(node: TreeNode) {
-  await ElMessageBox.confirm(
-    `确定删除字典/分类【${node.Name}】？\n（子节点将一并被软删除）`,
-    '删除确认',
-    {
-      type: 'warning',
-      confirmButtonText: '确定删除',
-      cancelButtonText: '取消',
-    },
-  )
-  await logic.deleteTree(node)
-  ElMessage.success('已删除')
-}
-
-/** 启用/禁用字典/分类 */
-async function handleToggleDictValid(node: TreeNode) {
-  await logic.toggleTreeValid(node)
-}
-
-// ========================================================
-// 字典项操作
-// ========================================================
-
-/** 新增字典项 */
-function handleAddItem() {
-  const ok = logic.openItemDialog()
-  if (!ok) {
-    ElMessage.warning('请先在左侧选择字典')
-  }
-}
-
-/** 编辑字典项 */
-function handleEditItem(row: any) {
-  logic.openItemDialog(row)
-}
-
-/** 删除字典项 */
-async function handleDeleteItem(row: any) {
-  await ElMessageBox.confirm(
-    `确定删除字典项【${row.DicName}】？`,
-    '删除确认',
-    { type: 'warning' },
-  )
-  await logic.deleteItem(row)
-  ElMessage.success('删除成功')
-}
-
-/** 批量删除字典项 */
-async function handleBatchDeleteItems() {
-  if (selectedRows.value.length === 0) {
-    ElMessage.warning('请先选择要删除的字典项')
-    return
-  }
-  await ElMessageBox.confirm(
-    `确定删除选中的 ${selectedRows.value.length} 个字典项？`,
-    '批量删除',
-    { type: 'warning' },
-  )
-  await logic.batchDeleteItems(selectedRows.value)
-  selectedRows.value = []
-  ElMessage.success('批量删除成功')
-}
-
-/** 切换字典项有效标志 */
-async function handleToggleItemValid(row: any) {
-  await (logic as any).toggleRowIsValidWithConfirm(row, { entityName: row.DicName })
-}
-
-/** 表格行自定义操作（edit / delete / toggle-valid） */
-async function handleRowAction(action: string, row: any) {
-  if (action === 'edit') {
-    handleEditItem(row)
-  } else if (action === 'delete') {
-    await handleDeleteItem(row)
-  } else if (action === 'toggle-valid') {
-    await handleToggleItemValid(row)
-  }
-}
-
-/** 表格数据加载 */
-async function loadTableData(params: any) {
-  try {
-    return await logic.fetchItems(params)
-  } catch (e: any) {
-    ElMessage.error(e.message || '数据加载失败')
-    return { rows: [], total: 0 }
-  }
-}
-
-// ========================================================
-// 提交弹窗
-// ========================================================
-
-async function handleTreeSubmit() {
-  try {
-    await logic.submitTreeForm()
-    ElMessage.success(
-      logic.treeDialogMode.value === 'add' ? '新增成功' : '修改成功',
-    )
-  } catch (e: any) {
-    ElMessage.error(e.message || '保存失败')
-  }
-}
-
-async function handleItemSubmit() {
-  try {
-    await logic.submitItemForm()
-  } catch (e: any) {
-    ElMessage.error(e.message || '保存失败')
-  }
-}
-
-// ========================================================
-// 初始化
-// ========================================================
-
-onMounted(async () => {
-  await logic.init()
-  nextTick(() => {
-    logic.setTreeTableRef(treeTableRef.value)
-    if (tableRef.value) logic.setTableRef(tableRef.value)
-  })
-})
+const { logic, tableRef, treeTableRef } = useTreeTable(DictionaryPageLogic)
 </script>
 
 <template>
@@ -201,96 +25,99 @@ onMounted(async () => {
       :tree-lazy="true"
       :tree-load-data="logic.loadChildren.bind(logic)"
       :node-actions="logic.nodeActions"
-      :get-action-label="(action: string, node: TreeNode) => logic.getNodeActionLabel(action, node)"
-      @tree-node-click="handleNodeClick"
-      @tree-node-action="handleTreeNodeAction"
+      :get-action-label="(action: string, node: any) => logic.getNodeActionLabel(action, node)"
+      @tree-node-click="logic.onNodeClick"
+      @tree-node-action="logic.onNodeAction"
     >
-      <!-- 树底部：新增字典分类按钮 -->
       <template #treeFooter>
-        <el-button type="primary" :icon="Plus" @click="handleAddDictCategory" style="width: 100%;">
+        <el-button
+          type="primary"
+          :icon="Plus"
+          style="width: 100%"
+          @click="logic.openRootDictDialog()"
+        >
           新增字典分类
         </el-button>
       </template>
 
       <template #default>
-        <div class="dict-page__content">
-          <!-- 字典项表格 -->
+        <div class="dict-page__table">
           <YzhTable
             ref="tableRef"
-            :key="selectedNode?.Code ?? 'none'"
-            :columns="logic.columnsWithActions as any"
-            :data-loader="loadTableData"
-            :search-fields="logic.searchFields as any"
-            :selectable="true"
-            :row-action-buttons="rowActionButtons"
+            :columns="logic.columns"
+            :data-loader="logic.dataLoader.bind(logic)"
+            :search-fields="logic.searchFields"
+            :toolbar-actions="logic.toolbarActions"
+            :row-action-buttons="logic.rowActions"
+            select-mode="multiple"
             row-key="Code"
-            @selection-change="selectedRows = $event"
-            @row-action="handleRowAction"
+            @selection-change="logic.onSelectionChange($event)"
+            @row-action="logic.onRowAction"
+            @toolbar-action="logic.onToolbarAction"
           >
-            <!-- 状态列 -->
             <template #column-IsValid="{ row }">
-              <el-tag
-                :type="row.IsValid === 1 ? 'success' : 'info'"
-                size="small"
-              >
+              <el-tag :type="row.IsValid === 1 ? 'success' : 'info'" size="small">
                 {{ row.IsValid === 1 ? '启用' : '禁用' }}
               </el-tag>
             </template>
 
-            <!-- 工具栏左侧 -->
-            <template #toolbar-left>
-              <el-button type="primary" :icon="Plus" @click="handleAddItem">
-                新增字典项
-              </el-button>
-              <el-button type="danger" :icon="Delete" @click="handleBatchDeleteItems">
-                批量删除
-              </el-button>
-              <el-button :icon="RefreshRight" @click="tableRef?.refresh()">
-                刷新
-              </el-button>
+            <template #toolbar-right>
+              <div class="dict-toolbar-switch">
+                <span class="dict-toolbar-switch__label">显示已禁用</span>
+                <el-switch
+                  :model-value="logic.showDisabled.value"
+                  @change="logic.toggleShowDisabled()"
+                />
+              </div>
             </template>
           </YzhTable>
         </div>
       </template>
     </YzhTreeTableLayout>
 
-    <!-- 字典/分类 新增/编辑弹窗 -->
-    <el-dialog
-      v-model="logic.treeDialogVisible.value"
-      :title="logic.treeDialogMode.value === 'add' ? '新增字典分类' : '编辑字典分类'"
-      width="700px"
-      :close-on-click-modal="false"
-      destroy-on-close
-    >
-      <YzhForm
-        v-model="logic.treeFormData"
-        :fields="logic.treeFormFields as any"
-        :loading="logic.treeSubmitting.value"
-        :cols="logic.treeFormLayoutCols as any"
-        label-width="100px"
-        @submit="handleTreeSubmit"
-        @reset="logic.treeDialogVisible.value = false"
-      />
-    </el-dialog>
-
     <!-- 字典项 新增/编辑弹窗 -->
-    <el-dialog
-      v-model="logic.dialogVisible.value"
-      :title="logic.dialogMode.value === 'add' ? '新增字典项' : '编辑字典项'"
+    <YzhFormDialog
+      v-model:visible="logic.dialogVisible.value"
+      v-model="logic.formData"
+      :mode="logic.dialogMode.value"
+      entity-name="字典项"
+      :fields="logic.formFields"
+      :loading="logic.submitting.value"
+      :cols="logic.formLayoutCols as any"
       width="700px"
-      :close-on-click-modal="false"
-      destroy-on-close
+      @submit="logic.submitForm()"
     >
-      <YzhForm
-        v-model="logic.formData"
-        :fields="logic.formFields as any"
-        :loading="logic.submitting.value"
-        :cols="logic.formLayoutCols as any"
-        label-width="100px"
-        @submit="handleItemSubmit"
-        @reset="logic.dialogVisible.value = false"
-      />
-    </el-dialog>
+      <template #prepend>
+        <div class="dict-form-header">
+          <span class="dict-form-header__label">所属字典：</span>
+          <span class="dict-form-header__value">
+            {{ logic.selectedNode?.Name ?? '未选择' }}
+          </span>
+        </div>
+      </template>
+    </YzhFormDialog>
+
+    <!-- 字典/分类 新增/编辑弹窗 -->
+    <YzhFormDialog
+      v-model:visible="logic.treeDialogVisible.value"
+      v-model="logic.treeFormData"
+      :mode="logic.treeDialogMode.value"
+      entity-name="字典分类"
+      :fields="logic.treeFormFields"
+      :loading="logic.treeSubmitting.value"
+      :cols="logic.treeFormLayoutCols as any"
+      width="700px"
+      @submit="logic.submitTreeNodeForm()"
+    >
+      <template #prepend>
+        <div class="dict-form-header">
+          <span class="dict-form-header__label">上级节点：</span>
+          <span class="dict-form-header__value">
+            {{ logic.treeParentNode.value?.Name ?? '根级' }}
+          </span>
+        </div>
+      </template>
+    </YzhFormDialog>
   </div>
 </template>
 
@@ -303,12 +130,41 @@ onMounted(async () => {
   box-sizing: border-box;
 }
 
-.dict-page__content {
+.dict-page__table {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
   background: #fff;
   overflow: hidden;
+}
+
+.dict-toolbar-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dict-toolbar-switch__label {
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+}
+
+.dict-form-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.dict-form-header__label {
+  font-size: 14px;
+  color: var(--el-text-color-regular);
+  font-weight: 500;
+}
+
+.dict-form-header__value {
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+  font-weight: 500;
 }
 </style>

@@ -1,95 +1,92 @@
 /**
- * DictionaryPageLogic - 数据字典管理 Logic（左树右表）
+ * DictionaryPageLogic - 数据字典管理 Logic（左树右表，TreeTableCore 架构）
  *
- * 数据访问规则（与 YZH.Core.Stand 严格一致）：
- * - res.data：ApiResponse 顶层（camelCase）
- * - 业务行 r：PascalCase 字段（r.Code / r.DicCode / r.IsValid）
- * - TreeNode：统一 PascalCase（node.Code / node.Name / node.Extra / node.ParentCode）
- * - formData：**PascalCase** key —— 必须与 YzhForm 的 field.prop、
- *   EntityConfig 的 Columns[].FieldName 保持同一套命名（后端 EntitySchemaHelper 也返回 PascalCase）
+ * 后端：DictionaryController (TreeTableControllerBase<Sys_Dictionary, Sys_DictionaryList>)
+ * - 左树：Sys_Dictionary（字典/分类树，懒加载 + 增删改 + 启停，AllowDeleteWithChildren）
+ * - 右表：Sys_DictionaryList（RelateField=DicCode；未选中树节点时 empty）
  *
- * 架构：
- * - 左侧：字典/分类树（Sys_Dictionary），懒加载 + 增删改 + 启用/禁用
- * - 右侧：字典项表格（Sys_DictionaryList），选中字典后加载
- * - 后端 TreeConfig 驱动：RelateField=DicCode，EnableField=IsValid
+ * 保留的 virtual 覆写（业务差异）：
+ * - entityNameField / defaultValues / defaultTreeValues
+ * - requireTreeSelectionMessage（请先在左侧选择字典）
+ * - normalizeBeforeSubmit（OrderNo Decimal 字符串→数值）
+ * - onPrepareAdd（注入 DicParentName 展示；DicCode 由 buildFilters 注入查询，
+ *   提交时 DicCode 仍须带上 —— openRowDialog 的 onPrepareAdd 补）
+ * - fallbackSearchFields（treepconfig 不映射 SearchFields 的历史场景）
+ * - toolbarActions（本页 Toolbar：新增字典项/批量删除/刷新）
+ * - openRootDictDialog（树底部「新增字典分类」绕开 requireTreeSelectionForAdd）
+ * - deleteTreeNodeWithConfirm（级联软删除确认文案）
  *
- * 两条架构铁律：
- * ① 关联一律走 Code —— 所有入参都是记录 Code
- * ② Code 随机生成且不可修改 —— 前端不生成 Code，由后端框架自动填充
+ * TreeNode 一律 PascalCase（node.Code / node.Name / node.Extra）。
  */
 
-import { TreeTableLogic, type ApiResponse, type TreeNode } from '@yzh-core'
-import { ElMessage } from 'element-plus'
-import { ref, watch } from 'vue'
+import { TreeTableCore, type SearchField, type TreeNode, type YzhAction } from '@yzh-core'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
-// ========================================================
-// Logic
-// ========================================================
-
-export class DictionaryPageLogic extends TreeTableLogic<any> {
+export class DictionaryPageLogic extends TreeTableCore<any> {
   controllerName = 'Dictionary'
 
-  /** 当前父节点名称（用作表单只读展示字段，嵌入 grid 第一行） */
-  get treeParentName(): string {
-    return this.treeParentNode.value?.Name ?? ''
+  /** 删除确认显示真实姓名 */
+  protected override get entityNameField(): string {
+    return 'DicName'
   }
 
-  /** 当前选中字典名称（字典项表单顶部只读展示） */
-  get dicParentName(): string {
-    return this.selectedNode?.Name ?? ''
+  protected override get defaultValues(): Record<string, any> {
+    return { IsValid: 1, OrderNo: 0 }
   }
 
-  /**
-   * 初始化：
-   * - 监听 treeParentNode 变化 → 同步到 treeFormData.ParentName
-   * - 监听 selectedNode 变化 → 同步到 formData.DicParentName
-   */
-  override async init(): Promise<void> {
-    await super.init()
-    watch(
-      () => this.treeParentNode.value,
-      (node) => {
-        this.treeFormData['ParentName'] = node?.Name ?? ''
-      },
-      { immediate: true },
-    )
-    watch(
-      () => this.selectedNode,
-      (node) => {
-        this.formData['ParentDicName'] = node?.Name ?? ''
-      },
-      { immediate: true },
-    )
+  protected override get defaultTreeValues(): Record<string, any> {
+    return { IsValid: 1, OrderNo: 0 }
   }
 
-  /** 当前正在编辑的字典项行（用于提交后与后端返回值合并，避免表格行丢字段）
-   *  ⚠️ 不能声明为 private：与基类 ST-8 的 protected editingRow 同名会 TS2415，改名区分 */
-  protected itemEditingRow = ref<any>(null)
+  /** 未选中树节点提示 */
+  protected override get requireTreeSelectionMessage(): string {
+    return '请先在左侧选择字典'
+  }
 
-  // ========================================================
-  // 表格列 / 关联字段
-  // ========================================================
-
-  /** 关联字段名（DicCode），供页面构建 /filter 条件使用 */
-  get relateFieldName(): string {
-    return this.relateField
+  /** 工具栏「新增字典项」与行新增同走 openRowDialog（含未选中校验） */
+  override openAddDialog(): void {
+    this.openRowDialog(null)
   }
 
   /**
-   * 表格列：IsValid 列改为自定义插槽渲染状态标签
-   * （其余列完全由后端 EntityConfig 驱动）
+   * 行「新增字典项」：必须已选中字典。
+   * 树「新增下级」仍走内核 openTreeNodeDialog。
    */
-  get columnsWithActions(): any[] {
-    return (this.columns as any[]).map((c) =>
-      c.prop === 'IsValid' ? { ...c, slot: true } : c,
-    )
+  protected override onPrepareAdd(entity: Record<string, any>): void {
+    entity.DicCode = this.selectedNode?.Code
+    entity.ParentDicName = this.selectedNode?.Name ?? ''
   }
 
   /**
-   * 搜索栏字段（覆盖：框架 treepconfig 的 ConvertToDto 不映射 SearchFields，
-   * 故 config 中永远取不到后端定义的 SearchFields，此处直接声明唯一有意义的搜索项）
+   * 编辑行补 ParentDicName（表只读展示字段，行数据未必带）。
+   * openEditDialog → initFormData(row) 后再走本钩子路径不覆盖 row，
+   * 故在 openRowDialog(row) 分支手工补。
    */
-  get searchFields(): any[] {
+  override openRowDialog(row?: any | null): boolean {
+    if (row && !row.ParentDicName) {
+      row = { ...row, ParentDicName: this.selectedNode?.Name ?? '' }
+    }
+    return super.openRowDialog(row)
+  }
+
+  /** Decimal 字段（OrderNo）字符串→数值，规避 System.Text.Json 400 */
+  protected override normalizeBeforeSubmit(payload: Record<string, any>): Record<string, any> {
+    if ('OrderNo' in payload) {
+      const v = payload.OrderNo
+      if (v === '' || v === null || v === undefined) {
+        payload.OrderNo = null
+      } else if (typeof v === 'string' && !Number.isNaN(Number(v))) {
+        payload.OrderNo = Number(v)
+      }
+    }
+    return payload
+  }
+
+  /**
+   * treepconfig 的 ConvertToDto 历史场景可能不带 SearchFields；
+   * 声明唯一有意义的搜索项（显示文本 like）。
+   */
+  protected override get fallbackSearchFields(): SearchField[] {
     return [
       {
         prop: 'DicName',
@@ -100,238 +97,66 @@ export class DictionaryPageLogic extends TreeTableLogic<any> {
     ]
   }
 
-  // ========================================================
-  // 公共数据方法（供页面 dataLoader 调用）
-  // ========================================================
+  /** 树表单：过滤 ParentName 只读展示字段（改用 #prepend 上级节点） */
+  override get treeFormFields() {
+    return super.treeFormFields.filter((f) => f.prop !== 'ParentName')
+  }
+
+  /** 右表单：过滤 ParentDicName 只读展示字段（改用 #prepend 所属字典） */
+  override get formFields() {
+    return super.formFields.filter((f) => f.prop !== 'ParentDicName')
+  }
+
+  /** 工具栏：新增字典项 + 批量删除 + 刷新 */
+  override get toolbarActions(): YzhAction[] {
+    return [
+      { key: 'add', text: '新增字典项', type: 'primary' },
+      { key: 'delete', text: '批量删除', type: 'danger' },
+      { key: 'refresh', text: '刷新', type: 'info' },
+    ]
+  }
 
   /**
-   * 加载字典项分页数据
-   * @param params YzhTable 传入的 {page, rows, sort, order, ...searchParams}
+   * 树底部「新增字典分类」：根级新增（绕开 requireTreeSelectionForAdd）。
    */
-  async fetchItems(params: Record<string, any>): Promise<{
-    rows: any[]
-    total: number
-  }> {
-    if (!this.selectedNode) {
-      return { rows: [], total: 0 }
-    }
-    const filters: Array<{ Field: string; Operator: string; Value: any }> = []
-    // 搜索条件（排除分页/排序/...内部字段）
-    const reserved = new Set(['page', 'rows', 'sort', 'order'])
-    for (const [k, v] of Object.entries(params)) {
-      if (reserved.has(k)) continue
-      if (v === '' || v === null || v === undefined) continue
-      filters.push({ Field: k, Value: v, Operator: 'like' })
-    }
-    // 树节点过滤（DicCode = 选中节点 Code）
-    filters.push({
-      Field: this.relateFieldName,
-      Value: this.selectedNode.Code,
-      Operator: 'eq',
-    })
-    const res = await this.apiPost<ApiResponse<{
-      Items?: any[]
-      TotalCount?: number
-    }>>('/filter', {
-      Page: params.page,
-      PageSize: params.rows,
-      SortField: params.sort,
-      SortOrder: params.order,
-      Filters: filters,
-    })
-    return {
-      rows: res.data?.Items ?? [],
-      total: res.data?.TotalCount ?? 0,
-    }
-  }
-
-  // ========================================================
-  // 工具：数值字段归一化
-  // --------------------------------------------------------
-  // EntityConfig 的 Decimal 控件在前端落到 text 输入，用户键入的是字符串；
-  // 后端 System.Text.Json 默认不允许「字符串 → 数值」，直接提交会 400。
-  // 故提交前统一把数值字段转成 number（空值转 null）。
-  // ========================================================
-
-  private static readonly NUMERIC_FIELDS = ['OrderNo']
-
-  private normalizeNumbers(payload: Record<string, any>): Record<string, any> {
-    for (const key of DictionaryPageLogic.NUMERIC_FIELDS) {
-      if (!(key in payload)) continue
-      const v = payload[key]
-      if (v === '' || v === null || v === undefined) {
-        payload[key] = null
-      } else if (typeof v === 'string' && !Number.isNaN(Number(v))) {
-        payload[key] = Number(v)
-      }
-    }
-    return payload
-  }
-
-  /** 按声明的表单字段白名单从 extra 取回填值（规避 Extra 里 camelCase/PascalCase 混用） */
-  private pickFormValues(
-    fields: Array<{ prop: string }>,
-    extra: Record<string, any>,
-  ): Record<string, any> {
-    const out: Record<string, any> = {}
-    for (const f of fields) {
-      if (f.prop in extra) out[f.prop] = extra[f.prop]
-    }
-    return out
-  }
-
-  // ========================================================
-  // 字典/分类（树节点）弹窗
-  // ========================================================
-
-  /**
-   * 打开字典/分类弹窗
-   * @param mode 'add' | 'edit'
-   * @param node 编辑时的目标节点
-   * @param parent 新增时的父节点（缺省取当前选中节点）
-   */
-  openTreeDialog(
-    mode: 'add' | 'edit',
-    node: TreeNode | null = null,
-    parent: TreeNode | null = null,
-  ): void {
-    this.treeDialogMode.value = mode
-    this.treeEditingNode.value = mode === 'edit' ? node : null
-    this.treeParentNode.value = mode === 'add' ? (parent ?? this.selectedNode) : null
-
-    Object.keys(this.treeFormData).forEach((k) => delete this.treeFormData[k])
-
-    // NewEntity 是 PascalCase（EntitySchemaHelper V4 约定），与 treeFormFields[].prop 一致
+  openRootDictDialog(): boolean {
+    this.treeDialogMode.value = 'add'
+    this.treeEditingNode.value = null
+    this.treeParentNode.value = null
+    this.resetObject(this.treeFormData)
     const tmpl = (this.treeFormConfig?.NewEntity as any) || {}
-    const base: Record<string, any> = { ...tmpl, IsValid: 1 }
-
-    if (mode === 'edit' && node) {
-      const extra = (node.Extra as any) || {}
-      Object.assign(base, this.pickFormValues(this.treeFormFields, extra), {
-        Code: node.Code,
-        ParentCode: node.ParentCode,
-        DicName: node.Name,
-        IsValid: extra.IsValid ?? 1,
-      })
-    }
-
-    Object.assign(this.treeFormData, base)
+    Object.assign(this.treeFormData, tmpl, this.defaultTreeValues, {
+      DicName: '',
+      ParentCode: (this.treeConfig?.RootParentCode as string) ?? null,
+    })
     this.treeDialogVisible.value = true
-  }
-
-  /** 提交字典/分类表单 */
-  async submitTreeForm(): Promise<void> {
-    this.treeSubmitting.value = true
-    try {
-      const payload = this.normalizeNumbers({ ...this.treeFormData })
-      if (this.treeDialogMode.value === 'add') {
-        await this.addTreeNode(this.treeParentNode.value, payload)
-      } else {
-        await this.updateTreeNode(
-          this.treeEditingNode.value!,
-          payload.DicName ?? '',
-          payload,
-        )
-      }
-      this.treeDialogVisible.value = false
-    } finally {
-      this.treeSubmitting.value = false
-    }
-  }
-
-  /** 删除字典/分类（软删除；确认弹窗由页面负责） */
-  async deleteTree(node: TreeNode): Promise<void> {
-    await this.deleteTreeNode(node, true)
-    await this.refreshTable()
-  }
-
-  /** 启用/禁用字典/分类（基类统一处理：确认弹窗 → API → 更新 node.Extra） */
-  async toggleTreeValid(node: TreeNode): Promise<void> {
-    await this.toggleTreeNodeWithConfirm(node)
-  }
-
-  // ========================================================
-  // 字典项弹窗
-  // ========================================================
-
-  /**
-   * 打开字典项弹窗
-   * @param row 传入则为编辑，否则为新增（需已选中左侧字典）
-   */
-  openItemDialog(row?: any): boolean {
-    if (!row && !this.selectedNode) {
-      ElMessage.warning('请先在左侧选择字典')
-      return false
-    }
-
-    this.dialogMode.value = row ? 'edit' : 'add'
-    this.itemEditingRow.value = row ?? null
-
-    Object.keys(this.formData).forEach((k) => delete this.formData[k])
-
-    // NewEntity 是 PascalCase（含 DicCode / DicName / DicValue / Color / OrderNo / IsValid / Remark）
-    const tmpl = (this.config.value?.NewEntity as any) || {}
-    if (row) {
-      Object.assign(this.formData, tmpl, row, { ParentDicName: this.selectedNode?.Name ?? '' })
-    } else {
-      Object.assign(this.formData, tmpl, {
-        IsValid: 1,
-        OrderNo: 0,
-        DicCode: this.selectedNode!.Code,
-        ParentDicName: this.selectedNode?.Name ?? '',
-      })
-    }
-
-    this.dialogVisible.value = true
     return true
   }
 
-  /** 提交字典项表单 */
-  async submitItemForm(): Promise<void> {
-    if (!this.selectedNode) throw new Error('请先在左侧选择字典')
-
-    this.submitting.value = true
-    try {
-      const payload = this.normalizeNumbers({ ...this.formData })
-      if (this.dialogMode.value === 'add') {
-        const saved = await this.add(payload)
-        this.insertRow(saved)
-      } else {
-        const saved = await this.update(payload)
-        // 与后端返回值合并，避免表格行丢失未提交的字段（如 CreateTime）
-        this.replaceRowByCode(saved.Code, { ...(this.itemEditingRow.value || {}), ...saved })
-      }
-      ElMessage.success(this.dialogMode.value === 'add' ? '新增成功' : '修改成功')
-      this.dialogVisible.value = false
-    } finally {
-      this.submitting.value = false
-    }
+  /** 树删除：级联软删除确认文案（AllowDeleteWithChildren=true） */
+  override async deleteTreeNodeWithConfirm(node: TreeNode): Promise<void> {
+    const ok = await this.onBeforeDeleteTree(node)
+    if (!ok) return
+    await ElMessageBox.confirm(
+      `确定删除字典/分类【${node.Name}】？\n（子节点将一并被软删除）`,
+      '删除确认',
+      {
+        type: 'warning',
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+      },
+    )
+    await this.deleteTreeNode(node, true)
+    this.onAfterDeleteTree(node)
+    ElMessage.success('已删除')
   }
 
-  /** 删除单个字典项 */
-  async deleteItem(row: any): Promise<void> {
-    await this.delete([row.Code])
-    this.removeRowByCode(row.Code)
-  }
-
-  /** 批量删除字典项 */
-  async batchDeleteItems(rows: any[]): Promise<void> {
-    const codes = rows.map((r) => r.Code)
-    await this.delete(codes)
-    codes.forEach((code) => this.removeRowByCode(code))
-  }
-
-  /** 启用/禁用字典项（基类统一处理：确认弹窗 → API → 更新行） */
-  async toggleItemValid(row: any): Promise<void> {
-    await this.toggleRowIsValidWithConfirm(row, {
-      entityName: row.DicName,
-      field: this.config.value?.EnableField ?? 'IsValid',
+  constructor() {
+    super()
+    this.registerHandler('refresh', async () => {
+      await this.refreshTable()
     })
   }
-
-  // ========================================================
-  // 刷新（基类 refreshTable 已实现，此处无需覆写）
-  // ========================================================
 }
 
 export default DictionaryPageLogic
