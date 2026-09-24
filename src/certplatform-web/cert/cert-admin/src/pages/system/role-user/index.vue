@@ -7,22 +7,21 @@
       </div>
       <div class="role-user-page__tree-content">
         <YzhTree
-          ref="roleTreeRef"
-          :data="roleTreeWithBadges"
+          :data="logic.treeData.value"
           :lazy="true"
-          :load-data="logic.loadRoleTreeChildren.bind(logic)"
+          :load-data="logic.loadChildren.bind(logic)"
           :default-expand-all="false"
           node-key="Code"
-          @node-click="handleRoleClick"
+          @node-click="handleNodeClick"
         />
       </div>
     </div>
 
-    <!-- 右侧：机构+用户混合树形表格 -->
+    <!-- 右侧：机构+用户混合勾选树 -->
     <div class="role-user-page__table-panel">
-      <div v-if="logic.selectedRole.value" class="role-user-page__table-header">
+      <div v-if="logic.selectedNode.value" class="role-user-page__table-header">
         <span class="role-user-page__table-title">
-          {{ logic.selectedRole.value.Name }} - 用户关联
+          {{ logic.selectedNode.value.Name }} - 用户关联
         </span>
         <span v-if="logic.saving.value" class="role-user-page__saving">保存中...</span>
       </div>
@@ -32,9 +31,8 @@
 
       <div class="role-user-page__table-content">
         <YzhTreeTableCheckSelector
-          v-if="logic.selectedRole.value"
-          ref="checkSelectorRef"
-          :flat-data="logic.checkTreeData.value"
+          v-if="logic.selectedNode.value"
+          :flat-data="logic.associationData.value"
           :columns="logic.columns"
           node-key="Code"
           parent-key="ParentCode"
@@ -56,71 +54,22 @@
 /**
  * 角色-用户管理页面
  *
- * 功能：
- * - 左侧：角色树（懒加载）+ 用户数量 badge
- * - 右侧：机构+用户混合树形表格（el-table tree 模式，带 checkbox）
- * - 勾选/取消立即保存（auto-save）
- * - 本地缓存：页面加载获取全部关联，切换角色无需 API
+ * - 左侧：角色树（懒加载）+ 用户数量 badge（内核内建局部刷新）
+ * - 右侧：机构+用户混合勾选树
+ * - 勾选/取消立即保存（auto-save）；本地缓存初始化，切换角色无请求
  */
-import { ref, onMounted } from 'vue'
-import { YzhTree, YzhTreeTableCheckSelector } from '@yzh-core'
+import { YzhTree, YzhTreeTableCheckSelector, useCheckTree } from '@yzh-core'
 import { RoleUserLogic } from './logic'
-import { useRoleTreeBadges } from '../_shared/useRoleTreeBadges'
 
-// ========================================================
-// Logic 实例
-// ========================================================
+const { logic } = useCheckTree(RoleUserLogic)
 
-const logic = new RoleUserLogic()
-
-// ========================================================
-// Refs
-// ========================================================
-
-const roleTreeRef = ref<InstanceType<typeof YzhTree>>()
-const checkSelectorRef = ref<InstanceType<typeof YzhTreeTableCheckSelector>>()
-
-// ========================================================
-// 带 badge 的角色树数据
-//
-// 初始化时注入一次徽标；勾选/取消后只局部更新「当前角色」那一个节点。
-// 之前是每次勾选都深拷贝整棵树并整体替换 :data，会把 el-tree 的展开状态
-// 和懒加载出来的子角色一起重置（详见 useRoleTreeBadges 注释）。
-// ========================================================
-
-const {
-  treeNodes: roleTreeWithBadges,
-  init: initTreeBadges,
-  updateBadge: updateRoleBadge,
-} = useRoleTreeBadges((code) => logic.getUserCount(code))
-
-// ========================================================
-// 事件处理
-// ========================================================
-
-function handleRoleClick(data: any) {
-  logic.handleRoleSelect(data)
+function handleNodeClick(data: any) {
+  logic.handleNodeSelect(data)
 }
 
 function handleCheckChange(payload: { added: string[]; removed: string[] }) {
-  logic.handleCheckChange(payload).then(() => {
-    // 只刷新当前角色节点的徽标（局部更新，不重建整棵树）
-    updateRoleBadge(logic.selectedRole.value?.Code)
-  })
+  logic.handleCheckChange(payload)
 }
-
-// ========================================================
-// 初始化
-// ========================================================
-
-onMounted(async () => {
-  // 1. 先加载本地缓存（所有角色-用户关联）
-  await logic.initCache()
-  // 2. 再加载角色树（此时缓存已就绪，badge 可以正确计算）
-  await logic.loadRoleTreeRoot()
-  // 3. 注入 badge 到树数据（仅初始化一次）
-  initTreeBadges(logic.roleTreeData.value)
-})
 </script>
 
 <style scoped>

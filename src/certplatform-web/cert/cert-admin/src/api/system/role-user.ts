@@ -1,9 +1,49 @@
 import { yzhApi } from '@yzh-core/api/client'
 import type { ApiResponse } from '@yzh-core/api/client'
-import type { CheckTreeNode, TreeNodeSelection, AssociationDto } from '@share/types'
+import type { AssociationSelection, CheckTreeNode, AssociationDto, RoleTreeItem } from '@yzh-core'
+import { unwrap } from '@yzh-core/utils'
 
 // ========================================================
-// API 方法
+// 角色树（role-user 无独立树端点，复用 /api/Role/tree/*）
+// ========================================================
+
+/** 角色树节点（后端直接返回） */
+interface RoleTreeNode {
+  Code: string
+  Name: string
+  ParentCode?: string | null
+  NodeType: string
+  IsLeaf: boolean
+  Extra?: Record<string, any>
+  children?: RoleTreeNode[]
+}
+
+/** 转换为 RoleTreeItem（children 不透传：懒加载由 el-tree 挂载） */
+const toRoleTreeItem = (n: RoleTreeNode): RoleTreeItem => ({
+  Code: n.Code,
+  Name: n.Name,
+  ParentCode: n.ParentCode ?? undefined,
+  NodeType: n.NodeType,
+  IsLeaf: n.IsLeaf,
+  Extra: n.Extra,
+})
+
+/** 左侧角色树 - 根节点 */
+export async function getRoleTreeRoot(): Promise<RoleTreeItem[]> {
+  const res = await yzhApi.post<ApiResponse<RoleTreeNode[]>>('/api/Role/tree/root', {})
+  return (res.data ?? []).map(toRoleTreeItem)
+}
+
+/** 左侧角色树 - 子节点（懒加载；载荷保持与原实现一致，仅 ParentCode） */
+export async function getRoleTreeChildren(parentCode: string, _level?: number): Promise<RoleTreeItem[]> {
+  const res = await yzhApi.post<ApiResponse<RoleTreeNode[]>>('/api/Role/tree/children', {
+    ParentCode: parentCode,
+  })
+  return (res.data ?? []).map(toRoleTreeItem)
+}
+
+// ========================================================
+// 关联（勾选授权）API
 // ========================================================
 
 /**
@@ -14,18 +54,16 @@ export async function getCheckTree(roleCode: string): Promise<CheckTreeNode[]> {
   const res = await yzhApi.post<ApiResponse<CheckTreeNode[]>>('/api/Role/checkTree', {
     ContextCode: roleCode,
   })
-  return res.data ?? []
+  return unwrap(res, [])
 }
 
 /**
  * 勾选保存（给角色分配用户）
- * @param roleCode 角色编码
- * @param selections 勾选的节点集合
  * `Applied` = 服务端确认「现已授权」的 code 集合（供前端局部更新关联缓存）
  */
 export async function checkAdd(
   roleCode: string,
-  selections: TreeNodeSelection[],
+  selections: AssociationSelection[],
 ): Promise<{ Updated: number; Applied?: string[] }> {
   const res = await yzhApi.post<ApiResponse<{ Updated: number; Applied?: string[] }>>(
     '/api/Role/check/add',
@@ -34,23 +72,19 @@ export async function checkAdd(
       Selections: selections,
     },
   )
-  return res.data ?? { Updated: 0 }
+  return unwrap(res, { Updated: 0 })
 }
 
-/**
- * 取消勾选（移除角色与用户的关联）
- * @param roleCode 角色编码
- * @param selections 取消勾选的节点集合
- */
+/** 取消勾选（移除角色与用户的关联） */
 export async function checkRemove(
   roleCode: string,
-  selections: TreeNodeSelection[],
+  selections: AssociationSelection[],
 ): Promise<{ Updated: number }> {
   const res = await yzhApi.post<ApiResponse<{ Updated: number }>>('/api/Role/check/remove', {
     ContextCode: roleCode,
     Selections: selections,
   })
-  return res.data ?? { Updated: 0 }
+  return unwrap(res, { Updated: 0 })
 }
 
 /**
@@ -59,5 +93,5 @@ export async function checkRemove(
  */
 export async function getAllAssociations(): Promise<AssociationDto[]> {
   const res = await yzhApi.post<ApiResponse<AssociationDto[]>>('/api/Role/check/all', {})
-  return res.data ?? []
+  return unwrap(res, [])
 }
