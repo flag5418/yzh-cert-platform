@@ -21,7 +21,7 @@ import {
   SWAGGER_UI_URL,
   type ApiItem,
   type SyncResult,
-} from '@/api/system/api'
+} from '../../../api/system/api'
 
 /** 树形表格行（分组节点 + 接口节点） */
 export interface ApiTreeRow {

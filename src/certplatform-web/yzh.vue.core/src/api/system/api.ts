@@ -1,6 +1,6 @@
-import { yzhApi } from '@yzh-core/api/client'
-import type { ApiResponse } from '@yzh-core/api/client'
-import { unwrap } from '@yzh-core/utils'
+import { yzhApi } from '../client'
+import type { ApiResponse } from '../client'
+import { unwrap } from '../../utils'
 
 // ========================================================
 // 类型定义
