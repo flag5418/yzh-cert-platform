@@ -6,7 +6,7 @@ import { useMenuTree } from '@yzh-core/composables/useMenuTree'
  *
  * 真实实现已上移系统底座 `@yzh-core/composables/useMenuTree`（admin + auditor 唯一实现）。
  * 本文件只保留 pinia store 外观，使既有调用方（`router/index.ts`、
- * `pages/system/menu/logic.ts`）无需改动。（YzhAppLayout 已直接用 core composables）
+ * `yzh.vue.core/src/pages/system/menu/logic.ts`）无需改动。（YzhAppLayout 已直接用 core composables）
  *
  * ⚠️ 退出登录时必须调用 `clearMenus()`，否则共享层的模块级缓存会残留上一个账号的菜单。
  */
