@@ -1,8 +1,8 @@
 var Dt = Object.defineProperty;
 var $t = (a, o, e) => o in a ? Dt(a, o, { enumerable: !0, configurable: !0, writable: !0, value: e }) : a[o] = e;
 var z = (a, o, e) => $t(a, typeof o != "symbol" ? o + "" : o, e);
-import { defineComponent as ne, ref as k, computed as j, reactive as Ce, watch as Se, resolveComponent as $, openBlock as y, createBlock as N, withCtx as T, createVNode as L, createElementBlock as R, Fragment as ae, renderList as ce, mergeProps as be, createTextVNode as V, toDisplayString as I, renderSlot as W, createCommentVNode as H, createElementVNode as B, unref as ze, normalizeStyle as Ne, withKeys as Rt, normalizeClass as ke, createSlots as dt, resolveDynamicComponent as Ie, withModifiers as Pt, getCurrentInstance as Bt, onMounted as Be, resolveDirective as Vt, withDirectives as Lt, nextTick as xe, normalizeProps as Et, guardReactiveProps as Mt } from "vue";
-import { ElInput as Qe, ElTree as Ut, ElMessageBox as _e, ElMessage as J } from "element-plus";
+import { defineComponent as ne, ref as k, computed as j, reactive as Ce, watch as _e, resolveComponent as $, openBlock as m, createBlock as N, withCtx as T, createVNode as L, createElementBlock as R, Fragment as ae, renderList as ce, mergeProps as be, createTextVNode as V, toDisplayString as I, renderSlot as W, createCommentVNode as H, createElementVNode as P, unref as ze, normalizeStyle as Ne, withKeys as Rt, normalizeClass as ke, createSlots as dt, resolveDynamicComponent as Ie, withModifiers as Bt, getCurrentInstance as Pt, onMounted as Pe, resolveDirective as Vt, withDirectives as Lt, nextTick as xe, normalizeProps as Et, guardReactiveProps as Mt } from "vue";
+import { ElInput as Qe, ElTree as Ut, ElMessageBox as Se, ElMessage as J } from "element-plus";
 const It = {
   key: 0,
   class: "yzh-form__actions"
@@ -57,11 +57,11 @@ const It = {
         c[h.prop] === void 0 && h.defaultValue !== void 0 && (c[h.prop] = h.defaultValue);
       });
     }
-    b(), Se(
+    b(), _e(
       () => t.modelValue,
       () => b(),
       { deep: !0 }
-    ), Se(
+    ), _e(
       c,
       (h) => {
         n("update:modelValue", { ...h });
@@ -76,7 +76,7 @@ const It = {
           n("validate", !1, h);
         }
     }
-    function m() {
+    function y() {
       var h;
       b(), (h = l.value) == null || h.clearValidate(), n("reset");
     }
@@ -89,8 +89,8 @@ const It = {
       (h = l.value) == null || h.resetFields();
     }
     return o({ validate: p, resetFields: A, formRef: l }), (h, x) => {
-      const K = $("el-input"), ee = $("el-input-number"), le = $("el-option"), re = $("el-select"), se = $("el-radio"), F = $("el-radio-group"), E = $("el-checkbox"), q = $("el-checkbox-group"), G = $("el-switch"), X = $("el-date-picker"), te = $("el-tree-select"), Z = $("el-cascader"), ye = $("el-form-item"), fe = $("el-col"), me = $("el-row"), we = $("el-button"), ie = $("el-form");
-      return y(), N(ie, {
+      const K = $("el-input"), ee = $("el-input-number"), le = $("el-option"), re = $("el-select"), se = $("el-radio"), F = $("el-radio-group"), E = $("el-checkbox"), q = $("el-checkbox-group"), G = $("el-switch"), X = $("el-date-picker"), te = $("el-tree-select"), Z = $("el-cascader"), me = $("el-form-item"), fe = $("el-col"), ye = $("el-row"), we = $("el-button"), ie = $("el-form");
+      return m(), N(ie, {
         ref_key: "formRef",
         ref: l,
         model: c,
@@ -101,22 +101,22 @@ const It = {
         class: "yzh-form"
       }, {
         default: T(() => [
-          L(me, { gutter: 20 }, {
+          L(ye, { gutter: 20 }, {
             default: T(() => [
-              (y(!0), R(ae, null, ce(a.fields, (i) => (y(), R(ae, {
+              (m(!0), R(ae, null, ce(a.fields, (i) => (m(), R(ae, {
                 key: i.prop
               }, [
-                i.hidden ? H("", !0) : (y(), N(fe, {
+                i.hidden ? H("", !0) : (m(), N(fe, {
                   key: 0,
                   span: i.span || r.value
                 }, {
                   default: T(() => [
-                    L(ye, {
+                    L(me, {
                       label: i.label,
                       prop: i.prop
                     }, {
                       default: T(() => [
-                        !i.type || i.type === "text" || i.type === "textarea" || i.type === "password" ? (y(), N(K, be({
+                        !i.type || i.type === "text" || i.type === "textarea" || i.type === "password" ? (m(), N(K, be({
                           key: 0,
                           modelValue: c[i.prop],
                           "onUpdate:modelValue": (u) => c[i.prop] = u,
@@ -125,14 +125,14 @@ const It = {
                           disabled: i.disabled,
                           rows: i.type === "textarea" ? 3 : void 0,
                           autocomplete: i.type === "password" ? "new-password" : "off"
-                        }, { ref_for: !0 }, i.fieldProps), null, 16, ["modelValue", "onUpdate:modelValue", "type", "placeholder", "disabled", "rows", "autocomplete"])) : i.type === "number" ? (y(), N(ee, be({
+                        }, { ref_for: !0 }, i.fieldProps), null, 16, ["modelValue", "onUpdate:modelValue", "type", "placeholder", "disabled", "rows", "autocomplete"])) : i.type === "number" ? (m(), N(ee, be({
                           key: 1,
                           modelValue: c[i.prop],
                           "onUpdate:modelValue": (u) => c[i.prop] = u,
                           placeholder: i.placeholder,
                           disabled: i.disabled,
                           style: { width: "100%" }
-                        }, { ref_for: !0 }, i.fieldProps), null, 16, ["modelValue", "onUpdate:modelValue", "placeholder", "disabled"])) : i.type === "select" ? (y(), N(re, be({
+                        }, { ref_for: !0 }, i.fieldProps), null, 16, ["modelValue", "onUpdate:modelValue", "placeholder", "disabled"])) : i.type === "select" ? (m(), N(re, be({
                           key: 2,
                           modelValue: c[i.prop],
                           "onUpdate:modelValue": (u) => c[i.prop] = u,
@@ -143,7 +143,7 @@ const It = {
                           style: { width: "100%" }
                         }, { ref_for: !0 }, i.fieldProps), {
                           default: T(() => [
-                            (y(!0), R(ae, null, ce(i.options || d[i.prop] || [], (u) => (y(), N(le, {
+                            (m(!0), R(ae, null, ce(i.options || d[i.prop] || [], (u) => (m(), N(le, {
                               key: u.value,
                               label: u.label,
                               value: u.value,
@@ -151,14 +151,14 @@ const It = {
                             }, null, 8, ["label", "value", "disabled"]))), 128))
                           ]),
                           _: 2
-                        }, 1040, ["modelValue", "onUpdate:modelValue", "placeholder", "multiple", "filterable", "disabled"])) : i.type === "radio" ? (y(), N(F, {
+                        }, 1040, ["modelValue", "onUpdate:modelValue", "placeholder", "multiple", "filterable", "disabled"])) : i.type === "radio" ? (m(), N(F, {
                           key: 3,
                           modelValue: c[i.prop],
                           "onUpdate:modelValue": (u) => c[i.prop] = u,
                           disabled: i.disabled
                         }, {
                           default: T(() => [
-                            (y(!0), R(ae, null, ce(i.options || [], (u) => (y(), N(se, {
+                            (m(!0), R(ae, null, ce(i.options || [], (u) => (m(), N(se, {
                               key: u.value,
                               value: u.value
                             }, {
@@ -169,14 +169,14 @@ const It = {
                             }, 1032, ["value"]))), 128))
                           ]),
                           _: 2
-                        }, 1032, ["modelValue", "onUpdate:modelValue", "disabled"])) : i.type === "checkbox" ? (y(), N(q, {
+                        }, 1032, ["modelValue", "onUpdate:modelValue", "disabled"])) : i.type === "checkbox" ? (m(), N(q, {
                           key: 4,
                           modelValue: c[i.prop],
                           "onUpdate:modelValue": (u) => c[i.prop] = u,
                           disabled: i.disabled
                         }, {
                           default: T(() => [
-                            (y(!0), R(ae, null, ce(i.options || [], (u) => (y(), N(E, {
+                            (m(!0), R(ae, null, ce(i.options || [], (u) => (m(), N(E, {
                               key: u.value,
                               value: u.value
                             }, {
@@ -187,14 +187,14 @@ const It = {
                             }, 1032, ["value"]))), 128))
                           ]),
                           _: 2
-                        }, 1032, ["modelValue", "onUpdate:modelValue", "disabled"])) : i.type === "switch" ? (y(), N(G, be({
+                        }, 1032, ["modelValue", "onUpdate:modelValue", "disabled"])) : i.type === "switch" ? (m(), N(G, be({
                           key: 5,
                           modelValue: c[i.prop],
                           "onUpdate:modelValue": (u) => c[i.prop] = u,
                           disabled: i.disabled,
                           "active-value": 1,
                           "inactive-value": 0
-                        }, { ref_for: !0 }, i.fieldProps), null, 16, ["modelValue", "onUpdate:modelValue", "disabled"])) : i.type === "date" ? (y(), N(X, be({
+                        }, { ref_for: !0 }, i.fieldProps), null, 16, ["modelValue", "onUpdate:modelValue", "disabled"])) : i.type === "date" ? (m(), N(X, be({
                           key: 6,
                           modelValue: c[i.prop],
                           "onUpdate:modelValue": (u) => c[i.prop] = u,
@@ -203,7 +203,7 @@ const It = {
                           disabled: i.disabled,
                           "value-format": "YYYY-MM-DD",
                           style: { width: "100%" }
-                        }, { ref_for: !0 }, i.fieldProps), null, 16, ["modelValue", "onUpdate:modelValue", "placeholder", "disabled"])) : i.type === "datetime" ? (y(), N(X, be({
+                        }, { ref_for: !0 }, i.fieldProps), null, 16, ["modelValue", "onUpdate:modelValue", "placeholder", "disabled"])) : i.type === "datetime" ? (m(), N(X, be({
                           key: 7,
                           modelValue: c[i.prop],
                           "onUpdate:modelValue": (u) => c[i.prop] = u,
@@ -212,7 +212,7 @@ const It = {
                           disabled: i.disabled,
                           "value-format": "YYYY-MM-DD HH:mm:ss",
                           style: { width: "100%" }
-                        }, { ref_for: !0 }, i.fieldProps), null, 16, ["modelValue", "onUpdate:modelValue", "placeholder", "disabled"])) : i.type === "dateRange" ? (y(), N(X, be({
+                        }, { ref_for: !0 }, i.fieldProps), null, 16, ["modelValue", "onUpdate:modelValue", "placeholder", "disabled"])) : i.type === "dateRange" ? (m(), N(X, be({
                           key: 8,
                           modelValue: c[i.prop],
                           "onUpdate:modelValue": (u) => c[i.prop] = u,
@@ -224,7 +224,7 @@ const It = {
                           "start-placeholder": "开始日期",
                           "end-placeholder": "结束日期",
                           style: { width: "100%" }
-                        }, { ref_for: !0 }, i.fieldProps), null, 16, ["modelValue", "onUpdate:modelValue", "placeholder", "disabled"])) : i.type === "treeSelect" ? (y(), N(te, be({
+                        }, { ref_for: !0 }, i.fieldProps), null, 16, ["modelValue", "onUpdate:modelValue", "placeholder", "disabled"])) : i.type === "treeSelect" ? (m(), N(te, be({
                           key: 9,
                           modelValue: c[i.prop],
                           "onUpdate:modelValue": (u) => c[i.prop] = u,
@@ -234,7 +234,7 @@ const It = {
                           "check-strictly": "",
                           clearable: "",
                           style: { width: "100%" }
-                        }, { ref_for: !0 }, i.fieldProps), null, 16, ["modelValue", "onUpdate:modelValue", "data", "placeholder", "disabled"])) : i.type === "cascader" ? (y(), N(Z, be({
+                        }, { ref_for: !0 }, i.fieldProps), null, 16, ["modelValue", "onUpdate:modelValue", "data", "placeholder", "disabled"])) : i.type === "cascader" ? (m(), N(Z, be({
                           key: 10,
                           modelValue: c[i.prop],
                           "onUpdate:modelValue": (u) => c[i.prop] = u,
@@ -261,12 +261,12 @@ const It = {
             ]),
             _: 3
           }),
-          a.showActions ? (y(), R("div", It, [
+          a.showActions ? (m(), R("div", It, [
             W(h.$slots, "actions", {
               submit: w,
-              reset: m
+              reset: y
             }, () => [
-              L(we, { onClick: m }, {
+              L(we, { onClick: y }, {
                 default: T(() => [
                   V(I(a.resetText), 1)
                 ]),
@@ -330,8 +330,8 @@ const It = {
       t("cancel"), t("update:visible", !1);
     }
     return (c, b) => {
-      const w = $("el-button"), m = $("el-dialog");
-      return y(), N(m, {
+      const w = $("el-button"), y = $("el-dialog");
+      return m(), N(y, {
         modelValue: n.value,
         "onUpdate:modelValue": b[1] || (b[1] = (p) => n.value = p),
         title: r.value,
@@ -392,7 +392,7 @@ const It = {
   emits: ["search", "reset"],
   setup(a, { emit: o }) {
     const e = a, t = o, n = Ce({});
-    Se(
+    _e(
       () => e.defaultValues,
       (d) => {
         d && (Object.keys(n).forEach((f) => delete n[f]), Object.assign(n, d));
@@ -413,33 +413,33 @@ const It = {
       }), t("reset");
     }
     return (d, f) => {
-      const c = $("el-input"), b = $("el-input-number"), w = $("el-option"), m = $("el-select"), p = $("el-date-picker"), A = $("el-button");
-      return y(), R("div", jt, [
-        B("div", Yt, [
-          B("div", Wt, [
-            (y(!0), R(ae, null, ce(ze(l), (h) => (y(), R("div", {
+      const c = $("el-input"), b = $("el-input-number"), w = $("el-option"), y = $("el-select"), p = $("el-date-picker"), A = $("el-button");
+      return m(), R("div", jt, [
+        P("div", Yt, [
+          P("div", Wt, [
+            (m(!0), R(ae, null, ce(ze(l), (h) => (m(), R("div", {
               key: h.prop,
               class: "yzh-search-bar__field"
             }, [
-              B("div", qt, [
-                B("label", Gt, I(h.label), 1),
-                B("div", {
+              P("div", qt, [
+                P("label", Gt, I(h.label), 1),
+                P("div", {
                   class: "yzh-search-bar__input-wrap",
                   style: Ne({ width: a.inputWidth })
                 }, [
-                  !h.type || h.type === "text" ? (y(), N(c, {
+                  !h.type || h.type === "text" ? (m(), N(c, {
                     key: 0,
                     modelValue: n[h.prop],
                     "onUpdate:modelValue": (x) => n[h.prop] = x,
                     placeholder: h.placeholder || `请输入${h.label}`,
                     clearable: "",
                     onKeyup: Rt(r, ["enter"])
-                  }, null, 8, ["modelValue", "onUpdate:modelValue", "placeholder"])) : h.type === "number" ? (y(), N(b, {
+                  }, null, 8, ["modelValue", "onUpdate:modelValue", "placeholder"])) : h.type === "number" ? (m(), N(b, {
                     key: 1,
                     modelValue: n[h.prop],
                     "onUpdate:modelValue": (x) => n[h.prop] = x,
                     placeholder: h.placeholder || `请输入${h.label}`
-                  }, null, 8, ["modelValue", "onUpdate:modelValue", "placeholder"])) : h.type === "select" ? (y(), N(m, {
+                  }, null, 8, ["modelValue", "onUpdate:modelValue", "placeholder"])) : h.type === "select" ? (m(), N(y, {
                     key: 2,
                     modelValue: n[h.prop],
                     "onUpdate:modelValue": (x) => n[h.prop] = x,
@@ -448,21 +448,21 @@ const It = {
                     filterable: ""
                   }, {
                     default: T(() => [
-                      (y(!0), R(ae, null, ce(h.options || [], (x) => (y(), N(w, {
+                      (m(!0), R(ae, null, ce(h.options || [], (x) => (m(), N(w, {
                         key: x.value,
                         label: x.label,
                         value: x.value
                       }, null, 8, ["label", "value"]))), 128))
                     ]),
                     _: 2
-                  }, 1032, ["modelValue", "onUpdate:modelValue", "placeholder"])) : h.type === "date" ? (y(), N(p, {
+                  }, 1032, ["modelValue", "onUpdate:modelValue", "placeholder"])) : h.type === "date" ? (m(), N(p, {
                     key: 3,
                     modelValue: n[h.prop],
                     "onUpdate:modelValue": (x) => n[h.prop] = x,
                     type: "date",
                     placeholder: h.placeholder || `请选择${h.label}`,
                     "value-format": "YYYY-MM-DD"
-                  }, null, 8, ["modelValue", "onUpdate:modelValue", "placeholder"])) : h.type === "dateRange" ? (y(), N(p, {
+                  }, null, 8, ["modelValue", "onUpdate:modelValue", "placeholder"])) : h.type === "dateRange" ? (m(), N(p, {
                     key: 4,
                     modelValue: n[h.prop],
                     "onUpdate:modelValue": (x) => n[h.prop] = x,
@@ -476,22 +476,22 @@ const It = {
                 ], 4)
               ])
             ]))), 128)),
-            f[0] || (f[0] = B("div", { class: "yzh-search-bar__spacer" }, null, -1))
+            f[0] || (f[0] = P("div", { class: "yzh-search-bar__spacer" }, null, -1))
           ]),
-          B("div", Ht, [
+          P("div", Ht, [
             L(A, {
               type: "primary",
               onClick: r
             }, {
               default: T(() => [...f[1] || (f[1] = [
-                B("i", { class: "bi bi-search" }, null, -1),
+                P("i", { class: "bi bi-search" }, null, -1),
                 V(" 查询 ", -1)
               ])]),
               _: 1
             }),
             L(A, { onClick: s }, {
               default: T(() => [...f[2] || (f[2] = [
-                B("i", { class: "bi bi-arrow-counterclockwise" }, null, -1),
+                P("i", { class: "bi bi-arrow-counterclockwise" }, null, -1),
                 V(" 重置 ", -1)
               ])]),
               _: 1
@@ -514,9 +514,9 @@ const It = {
     }
     return (n, l) => {
       const r = $("el-button");
-      return y(), R("div", Zt, [
-        B("div", Qt, [
-          (y(!0), R(ae, null, ce(a.buttons.filter((s) => s.group !== "right"), (s) => (y(), N(r, {
+      return m(), R("div", Zt, [
+        P("div", Qt, [
+          (m(!0), R(ae, null, ce(a.buttons.filter((s) => s.group !== "right"), (s) => (m(), N(r, {
             key: s.key,
             type: s.type ?? "default",
             disabled: s.disabled,
@@ -529,8 +529,8 @@ const It = {
           }, 1032, ["type", "disabled", "onClick"]))), 128)),
           W(n.$slots, "left", {}, void 0, !0)
         ]),
-        B("div", eo, [
-          (y(!0), R(ae, null, ce(a.buttons.filter((s) => s.group === "right"), (s) => (y(), N(r, {
+        P("div", eo, [
+          (m(!0), R(ae, null, ce(a.buttons.filter((s) => s.group === "right"), (s) => (m(), N(r, {
             key: s.key,
             type: s.type ?? "default",
             disabled: s.disabled,
@@ -568,7 +568,7 @@ const It = {
     });
     return (r, s) => {
       const d = $("el-pagination");
-      return y(), N(d, {
+      return m(), N(d, {
         "current-page": n.value,
         "onUpdate:currentPage": s[0] || (s[0] = (f) => n.value = f),
         "page-size": l.value,
@@ -600,31 +600,31 @@ const It = {
     hideToolbar: { type: Boolean }
   },
   setup(a) {
-    return (o, e) => (y(), R("div", lo, [
-      o.$slots.search ? (y(), R("div", so, [
+    return (o, e) => (m(), R("div", lo, [
+      o.$slots.search ? (m(), R("div", so, [
         W(o.$slots, "search", {}, void 0, !0)
       ])) : H("", !0),
-      !a.hideToolbar && (o.$slots.toolbar || o.$slots["toolbar-left"] || o.$slots["toolbar-right"]) ? (y(), R("div", ro, [
+      !a.hideToolbar && (o.$slots.toolbar || o.$slots["toolbar-left"] || o.$slots["toolbar-right"]) ? (m(), R("div", ro, [
         W(o.$slots, "toolbar", {}, () => [
-          B("div", io, [
+          P("div", io, [
             W(o.$slots, "toolbar-left", {}, void 0, !0)
           ]),
-          B("div", co, [
+          P("div", co, [
             W(o.$slots, "toolbar-right", {}, void 0, !0)
           ])
         ], !0)
       ])) : H("", !0),
-      B("div", {
+      P("div", {
         class: ke(["yzh-page-layout__content", { "yzh-page-layout__content--no-padding": a.noPadding }])
       }, [
         W(o.$slots, "default", {}, void 0, !0)
       ], 2),
-      o.$slots.pagination ? (y(), R("div", uo, [
+      o.$slots.pagination ? (m(), R("div", uo, [
         W(o.$slots, "pagination", {}, void 0, !0)
       ])) : H("", !0)
     ]));
   }
-}), ln = /* @__PURE__ */ he(ho, [["__scopeId", "data-v-756b5466"]]), fo = { class: "yzh-dialog__body" }, po = { class: "yzh-dialog__footer" }, mo = /* @__PURE__ */ ne({
+}), ln = /* @__PURE__ */ he(ho, [["__scopeId", "data-v-756b5466"]]), fo = { class: "yzh-dialog__body" }, po = { class: "yzh-dialog__footer" }, yo = /* @__PURE__ */ ne({
   __name: "YzhDialog",
   props: {
     modelValue: { type: Boolean },
@@ -656,14 +656,14 @@ const It = {
     function s() {
       t("cancel"), l();
     }
-    return Se(
+    return _e(
       () => e.modelValue,
       (d) => {
         d && t("open");
       }
     ), (d, f) => {
       const c = $("el-button"), b = $("el-dialog");
-      return y(), N(b, {
+      return m(), N(b, {
         "model-value": a.modelValue,
         title: a.title,
         width: a.fullscreen ? "100%" : n.value,
@@ -677,7 +677,7 @@ const It = {
         "onUpdate:modelValue": f[0] || (f[0] = (w) => t("update:modelValue", w))
       }, dt({
         default: T(() => [
-          B("div", fo, [
+          P("div", fo, [
             W(d.$slots, "default", {}, void 0, !0)
           ])
         ]),
@@ -690,7 +690,7 @@ const It = {
               confirm: r,
               cancel: s
             }, () => [
-              B("div", po, [
+              P("div", po, [
                 L(c, { onClick: s }, {
                   default: T(() => [
                     V(I(a.cancelText), 1)
@@ -716,31 +716,31 @@ const It = {
       ]), 1032, ["model-value", "title", "width", "fullscreen", "show-close", "close-on-click-modal", "z-index", "class", "top", "destroy-on-close"]);
     };
   }
-}), sn = /* @__PURE__ */ he(mo, [["__scopeId", "data-v-dbdcca59"]]);
+}), sn = /* @__PURE__ */ he(yo, [["__scopeId", "data-v-dbdcca59"]]);
 /*! Element Plus Icons Vue v2.3.2 */
-var yo = /* @__PURE__ */ ne({
+var mo = /* @__PURE__ */ ne({
   name: "Document",
   __name: "document",
   setup(a) {
-    return (o, e) => (y(), R("svg", {
+    return (o, e) => (m(), R("svg", {
       xmlns: "http://www.w3.org/2000/svg",
       viewBox: "0 0 1024 1024"
     }, [
-      B("path", {
+      P("path", {
         fill: "currentColor",
         d: "M832 384H576V128H192v768h640zm-26.496-64L640 154.496V320zM160 64h480l256 256v608a32 32 0 0 1-32 32H160a32 32 0 0 1-32-32V96a32 32 0 0 1 32-32m160 448h384v64H320zm0-192h160v64H320zm0 384h384v64H320z"
       })
     ]));
   }
-}), go = yo, vo = /* @__PURE__ */ ne({
+}), go = mo, vo = /* @__PURE__ */ ne({
   name: "Folder",
   __name: "folder",
   setup(a) {
-    return (o, e) => (y(), R("svg", {
+    return (o, e) => (m(), R("svg", {
       xmlns: "http://www.w3.org/2000/svg",
       viewBox: "0 0 1024 1024"
     }, [
-      B("path", {
+      P("path", {
         fill: "currentColor",
         d: "M128 192v640h768V320H485.76L357.504 192zm-32-64h287.872l128.384 128H928a32 32 0 0 1 32 32v576a32 32 0 0 1-32 32H96a32 32 0 0 1-32-32V160a32 32 0 0 1 32-32"
       })
@@ -756,7 +756,7 @@ const Co = { class: "yzh-tree" }, wo = {
 }, xo = {
   key: 4,
   class: "yzh-tree__badge"
-}, _o = /* @__PURE__ */ ne({
+}, So = /* @__PURE__ */ ne({
   __name: "YzhTree",
   props: {
     data: {},
@@ -800,7 +800,7 @@ const Co = { class: "yzh-tree" }, wo = {
     function w(i) {
       return n(i, l.childrenField) ?? [];
     }
-    function m(i) {
+    function y(i) {
       return n(i, l.isLeafField) === !0;
     }
     function p(i) {
@@ -811,7 +811,7 @@ const Co = { class: "yzh-tree" }, wo = {
       children: l.childrenField,
       // 必须读叶子字段（后端 TreeControllerBase.FillIsLeafBatch 批量计算）。
       // 读错字段会让末端节点也长出展开箭头并白跑一次 tree/children。
-      isLeaf: (i) => m(i),
+      isLeaf: (i) => y(i),
       disabled: (i) => p(i).disabled ?? !1
     }));
     function h(i, u) {
@@ -821,7 +821,7 @@ const Co = { class: "yzh-tree" }, wo = {
       return d.value ? (b(i) || "").toLowerCase().includes(d.value.toLowerCase()) : !1;
     }
     let K = null;
-    Se(d, (i) => {
+    _e(d, (i) => {
       K && clearTimeout(K), K = setTimeout(() => {
         var u;
         (u = s.value) == null || u.filter(i);
@@ -830,9 +830,9 @@ const Co = { class: "yzh-tree" }, wo = {
     function ee(i) {
       let u;
       typeof l.nodeActions == "function" ? u = l.nodeActions(i) || [] : u = l.nodeActions;
-      const g = Object.entries(l.legacyNodeActions || {}).map(([C, _]) => ({
+      const g = Object.entries(l.legacyNodeActions || {}).map(([C, S]) => ({
         key: C,
-        text: l.getActionLabel ? l.getActionLabel(C, i) : _
+        text: l.getActionLabel ? l.getActionLabel(C, i) : S
       }));
       return [...u, ...g].filter((C) => C.visible !== !1);
     }
@@ -872,18 +872,18 @@ const Co = { class: "yzh-tree" }, wo = {
       const i = (u) => {
         var g;
         for (const C of u) {
-          const _ = (g = s.value) == null ? void 0 : g.store;
-          _ && _.nodesMap[c(C)] && (_.nodesMap[c(C)].expanded = !0), w(C).length && i(w(C));
+          const S = (g = s.value) == null ? void 0 : g.store;
+          S && S.nodesMap[c(C)] && (S.nodesMap[c(C)].expanded = !0), w(C).length && i(w(C));
         }
       };
       i(l.data);
     }
-    function ye() {
+    function me() {
       const i = (u) => {
         var g;
         for (const C of u) {
-          const _ = (g = s.value) == null ? void 0 : g.store;
-          _ && _.nodesMap[c(C)] && (_.nodesMap[c(C)].expanded = !1), w(C).length && i(w(C));
+          const S = (g = s.value) == null ? void 0 : g.store;
+          S && S.nodesMap[c(C)] && (S.nodesMap[c(C)].expanded = !1), w(C).length && i(w(C));
         }
       };
       i(l.data);
@@ -892,7 +892,7 @@ const Co = { class: "yzh-tree" }, wo = {
       var u;
       (u = s.value) == null || u.setCurrentKey(i);
     }
-    function me(i, u) {
+    function ye(i, u) {
       var g;
       if (s.value) {
         if (i) {
@@ -901,9 +901,9 @@ const Co = { class: "yzh-tree" }, wo = {
             return;
           } catch {
           }
-          const C = s.value.store, _ = (g = C == null ? void 0 : C.nodesMap) == null ? void 0 : g[i];
-          if (_ && typeof _.append == "function") {
-            _.append(u);
+          const C = s.value.store, S = (g = C == null ? void 0 : C.nodesMap) == null ? void 0 : g[i];
+          if (S && typeof S.append == "function") {
+            S.append(u);
             return;
           }
           if (we(l.data, i, u)) return;
@@ -914,8 +914,8 @@ const Co = { class: "yzh-tree" }, wo = {
     function we(i, u, g) {
       for (const C of i) {
         if (c(C) === u) {
-          const _ = w(C);
-          return _.push(g), C[l.childrenField] = _, C[l.isLeafField] = !1, !0;
+          const S = w(C);
+          return S.push(g), C[l.childrenField] = S, C[l.isLeafField] = !1, !0;
         }
         if (w(C).length && we(w(C), u, g))
           return !0;
@@ -927,19 +927,19 @@ const Co = { class: "yzh-tree" }, wo = {
       setCheckedNodes: X,
       setChecked: te,
       expandAll: Z,
-      collapseAll: ye,
+      collapseAll: me,
       setCurrentNode: fe,
-      appendNode: me,
+      appendNode: ye,
       /** 从树中移除指定节点（不触发 API，仅更新本地树 UI） */
       removeNode: (i, u) => {
-        var _;
+        var S;
         if (!s.value) return;
         try {
           s.value.remove(u);
           return;
         } catch {
         }
-        const g = s.value.store, C = (_ = g == null ? void 0 : g.nodesMap) == null ? void 0 : _[u];
+        const g = s.value.store, C = (S = g == null ? void 0 : g.nodesMap) == null ? void 0 : S[u];
         if (C && C.parentNode) {
           C.parentNode.remove(C);
           return;
@@ -957,9 +957,9 @@ const Co = { class: "yzh-tree" }, wo = {
       return !1;
     }
     return (i, u) => {
-      const g = $("el-icon"), C = $("el-button"), _ = $("el-dropdown-item"), M = $("el-dropdown-menu"), Q = $("el-dropdown");
-      return y(), R("div", Co, [
-        a.searchable ? (y(), R("div", wo, [
+      const g = $("el-icon"), C = $("el-button"), S = $("el-dropdown-item"), M = $("el-dropdown-menu"), Q = $("el-dropdown");
+      return m(), R("div", Co, [
+        a.searchable ? (m(), R("div", wo, [
           L(ze(Qe), {
             modelValue: d.value,
             "onUpdate:modelValue": u[0] || (u[0] = (D) => d.value = D),
@@ -992,20 +992,20 @@ const Co = { class: "yzh-tree" }, wo = {
           onNodeCollapse: E
         }, {
           default: T(({ data: D }) => [
-            B("div", {
+            P("div", {
               class: "yzh-tree__node",
               onMouseenter: (Y) => f.value = c(D),
               onMouseleave: u[2] || (u[2] = (Y) => f.value = null)
             }, [
-              p(D).icon && !t(p(D).icon) ? (y(), N(g, {
+              p(D).icon && !t(p(D).icon) ? (m(), N(g, {
                 key: 0,
                 class: "yzh-tree__icon"
               }, {
                 default: T(() => [
-                  (y(), N(Ie(p(D).icon)))
+                  (m(), N(Ie(p(D).icon)))
                 ]),
                 _: 2
-              }, 1024)) : p(D).icon ? (y(), R("span", To, I(p(D).icon), 1)) : m(D) ? (y(), N(g, {
+              }, 1024)) : p(D).icon ? (m(), R("span", To, I(p(D).icon), 1)) : y(D) ? (m(), N(g, {
                 key: 2,
                 class: "yzh-tree__icon yzh-tree__icon--leaf"
               }, {
@@ -1013,7 +1013,7 @@ const Co = { class: "yzh-tree" }, wo = {
                   L(ze(go))
                 ]),
                 _: 1
-              })) : (y(), N(g, {
+              })) : (m(), N(g, {
                 key: 3,
                 class: "yzh-tree__icon yzh-tree__icon--folder"
               }, {
@@ -1022,21 +1022,21 @@ const Co = { class: "yzh-tree" }, wo = {
                 ]),
                 _: 1
               })),
-              B("span", {
+              P("span", {
                 class: ke(["yzh-tree__label", { "is-highlight": a.highlightKeyword && x(D) }])
               }, I(b(D)), 3),
-              p(D).badge ? (y(), R("span", xo, I(p(D).badge), 1)) : H("", !0),
-              ee(D).length ? (y(), N(Q, {
+              p(D).badge ? (m(), R("span", xo, I(p(D).badge), 1)) : H("", !0),
+              ee(D).length ? (m(), N(Q, {
                 key: 5,
                 trigger: "click",
                 onCommand: (Y) => q(Y, D),
-                onClick: u[1] || (u[1] = Pt(() => {
+                onClick: u[1] || (u[1] = Bt(() => {
                 }, ["stop"]))
               }, {
                 dropdown: T(() => [
                   L(M, null, {
                     default: T(() => [
-                      (y(!0), R(ae, null, ce(ee(D), (Y) => (y(), N(_, {
+                      (m(!0), R(ae, null, ce(ee(D), (Y) => (m(), N(S, {
                         key: Y.key,
                         command: Y.key,
                         disabled: Y.disabled,
@@ -1072,7 +1072,7 @@ const Co = { class: "yzh-tree" }, wo = {
       ]);
     };
   }
-}), ct = /* @__PURE__ */ he(_o, [["__scopeId", "data-v-ef58d20f"]]), So = { class: "yzh-tree-table" }, Ao = { class: "yzh-tree-table__main" }, Fo = {
+}), ct = /* @__PURE__ */ he(So, [["__scopeId", "data-v-ef58d20f"]]), _o = { class: "yzh-tree-table" }, Ao = { class: "yzh-tree-table__main" }, Fo = {
   key: 0,
   class: "yzh-tree-table__tree-toolbar"
 }, zo = {
@@ -1101,7 +1101,7 @@ const Co = { class: "yzh-tree" }, wo = {
   },
   emits: ["tree-node-click", "tree-check-change", "tree-node-action"],
   setup(a, { expose: o, emit: e }) {
-    const t = a, n = e, l = k(), r = k(""), s = j(() => r.value ? m(t.treeData, r.value) : t.treeData);
+    const t = a, n = e, l = k(), r = k(""), s = j(() => r.value ? y(t.treeData, r.value) : t.treeData);
     function d(p) {
       n("tree-node-click", p);
     }
@@ -1119,10 +1119,10 @@ const Co = { class: "yzh-tree" }, wo = {
       var p;
       (p = l.value) == null || p.collapseAll();
     }
-    function m(p, A) {
+    function y(p, A) {
       const h = A.toLowerCase(), x = [];
       for (const K of p) {
-        const le = String(K[t.labelField] ?? "").toLowerCase().includes(h), re = K[t.childrenField] ?? [], se = m(re, A);
+        const le = String(K[t.labelField] ?? "").toLowerCase().includes(h), re = K[t.childrenField] ?? [], se = y(re, A);
         (le || se.length > 0) && x.push({ ...K, [t.childrenField]: se });
       }
       return x;
@@ -1143,14 +1143,14 @@ const Co = { class: "yzh-tree" }, wo = {
         var h;
         return (h = l.value) == null ? void 0 : h.removeNode(p, A);
       }
-    }), (p, A) => (y(), R("div", So, [
-      B("div", Ao, [
-        B("div", {
+    }), (p, A) => (m(), R("div", _o, [
+      P("div", Ao, [
+        P("div", {
           class: "yzh-tree-table__tree-panel",
           style: Ne({ width: a.treeWidth + "px" })
         }, [
-          a.treeToolbar ? (y(), R("div", Fo, [
-            a.treeSearchable ? (y(), N(ze(Qe), {
+          a.treeToolbar ? (m(), R("div", Fo, [
+            a.treeSearchable ? (m(), N(ze(Qe), {
               key: 0,
               modelValue: r.value,
               "onUpdate:modelValue": A[0] || (A[0] = (h) => r.value = h),
@@ -1180,17 +1180,17 @@ const Co = { class: "yzh-tree" }, wo = {
             onCheckChange: f,
             onNodeAction: c
           }, null, 8, ["data", "node-key", "label-field", "children-field", "is-leaf-field", "extra-field", "show-checkbox", "check-strictly", "lazy", "load-data", "default-expand-all", "node-actions", "legacy-node-actions", "get-action-label"]),
-          p.$slots.treeFooter ? (y(), R("div", zo, [
+          p.$slots.treeFooter ? (m(), R("div", zo, [
             W(p.$slots, "treeFooter", {}, void 0, !0)
           ])) : H("", !0)
         ], 4),
-        B("div", No, [
+        P("div", No, [
           W(p.$slots, "default", {}, void 0, !0)
         ])
       ])
     ]));
   }
-}), rn = /* @__PURE__ */ he(Do, [["__scopeId", "data-v-d15619e1"]]), $o = { class: "yzh-table" }, Ro = { class: "yzh-column-settings" }, Po = { class: "yzh-column-settings__body" }, Bo = { class: "yzh-column-settings__footer" }, Vo = { key: 1 }, Lo = { class: "yzh-table__empty" }, Eo = {
+}), rn = /* @__PURE__ */ he(Do, [["__scopeId", "data-v-d15619e1"]]), $o = { class: "yzh-table" }, Ro = { class: "yzh-column-settings" }, Bo = { class: "yzh-column-settings__body" }, Po = { class: "yzh-column-settings__footer" }, Vo = { key: 1 }, Lo = { class: "yzh-table__empty" }, Eo = {
   key: 1,
   class: "yzh-table__error"
 }, Mo = {
@@ -1222,17 +1222,17 @@ const Co = { class: "yzh-tree" }, wo = {
   },
   emits: ["selection-change", "row-click", "refresh", "row-action", "toolbar-action", "expand-change"],
   setup(a, { expose: o, emit: e }) {
-    const t = a, n = e, l = k(!1), r = k(""), s = k([]), d = k(0), f = k([]), c = k(1), b = k(t.pageSize), w = k(t.defaultSort || null), m = Ce({}), p = k(/* @__PURE__ */ new Set()), A = j(() => t.selectMode ? t.selectMode : t.selectable ? "multiple" : "none"), h = j(() => A.value === "multiple"), x = j(
+    const t = a, n = e, l = k(!1), r = k(""), s = k([]), d = k(0), f = k([]), c = k(1), b = k(t.pageSize), w = k(t.defaultSort || null), y = Ce({}), p = k(/* @__PURE__ */ new Set()), A = j(() => t.selectMode ? t.selectMode : t.selectable ? "multiple" : "none"), h = j(() => A.value === "multiple"), x = j(
       () => t.columns.filter((v) => v.label && v.prop !== "__yzh_action")
     ), K = j(
       () => t.columns.filter((v) => !(v.hidden || p.value.has(v.prop)))
     );
     function ee(v) {
-      return Object.entries(v).map(([S, U]) => ({ key: S, text: U }));
+      return Object.entries(v).map(([_, U]) => ({ key: _, text: U }));
     }
     function le(v) {
-      const S = typeof t.rowActionButtons == "function" ? t.rowActionButtons(v) : t.rowActionButtons;
-      return (Array.isArray(S) ? S : ee(S || {})).filter((oe) => oe.visible !== !1);
+      const _ = typeof t.rowActionButtons == "function" ? t.rowActionButtons(v) : t.rowActionButtons;
+      return (Array.isArray(_) ? _ : ee(_ || {})).filter((oe) => oe.visible !== !1);
     }
     const re = j(() => {
       const v = t.columns.some((U) => U.prop === "actions");
@@ -1244,56 +1244,56 @@ const Co = { class: "yzh-tree" }, wo = {
     const E = j(
       () => t.toolbarActions.filter((v) => v.visible !== !1)
     );
-    async function q(v, S) {
+    async function q(v, _) {
       if (!v.disabled) {
         if (v.confirm)
           try {
-            await _e.confirm(v.confirm, "操作确认", { type: "warning" });
+            await Se.confirm(v.confirm, "操作确认", { type: "warning" });
           } catch {
             return;
           }
-        n("row-action", v.key, S, v);
+        n("row-action", v.key, _, v);
       }
     }
     async function G(v) {
       if (!v.disabled) {
         if (v.confirm)
           try {
-            await _e.confirm(v.confirm, "操作确认", { type: "warning" });
+            await Se.confirm(v.confirm, "操作确认", { type: "warning" });
           } catch {
             return;
           }
         n("toolbar-action", v.key, v);
       }
     }
-    function X(v, S) {
-      S ? p.value.delete(v.prop) : p.value.add(v.prop), p.value = new Set(p.value);
+    function X(v, _) {
+      _ ? p.value.delete(v.prop) : p.value.add(v.prop), p.value = new Set(p.value);
     }
     function te(v) {
       if (v.sortable === !1) return;
-      const S = v.prop;
-      w.value && w.value.prop === S ? w.value = { ...w.value, order: w.value.order === "asc" ? "desc" : "asc" } : w.value = { prop: S, order: "asc" };
+      const _ = v.prop;
+      w.value && w.value.prop === _ ? w.value = { ...w.value, order: w.value.order === "asc" ? "desc" : "asc" } : w.value = { prop: _, order: "asc" };
     }
     function Z(v) {
-      const S = v.prop;
-      return !w.value || w.value.prop !== S ? "排序" : w.value.order === "asc" ? "↑ 升序" : "↓ 降序";
+      const _ = v.prop;
+      return !w.value || w.value.prop !== _ ? "排序" : w.value.order === "asc" ? "↑ 升序" : "↓ 降序";
     }
-    function ye() {
+    function me() {
       p.value = /* @__PURE__ */ new Set(), w.value = t.defaultSort || null;
     }
     function fe() {
       ie();
     }
-    const me = j(() => t.toolbar === !1 ? {} : t.toolbar === !0 ? { columnSetting: !0 } : t.toolbar), we = j(() => Object.keys(me.value).length > 0 || E.value.length > 0);
+    const ye = j(() => t.toolbar === !1 ? {} : t.toolbar === !0 ? { columnSetting: !0 } : t.toolbar), we = j(() => Object.keys(ye.value).length > 0 || E.value.length > 0);
     async function ie() {
       l.value = !0, r.value = "";
       try {
-        const v = new Set(f.value.map((oe) => oe[t.rowKey])), S = {
+        const v = new Set(f.value.map((oe) => oe[t.rowKey])), _ = {
           page: c.value,
           rows: b.value,
           ...w.value ? { sort: w.value.prop, order: w.value.order } : {},
-          ...m
-        }, U = await t.dataLoader(S);
+          ...y
+        }, U = await t.dataLoader(_);
         if (s.value = U.rows || [], d.value = U.total || 0, v.size > 0) {
           const oe = [];
           for (const Le of s.value)
@@ -1306,10 +1306,10 @@ const Co = { class: "yzh-tree" }, wo = {
         l.value = !1;
       }
     }
-    function i({ prop: v, order: S }) {
-      S ? w.value = {
+    function i({ prop: v, order: _ }) {
+      _ ? w.value = {
         prop: v,
-        order: S === "ascending" ? "asc" : "desc"
+        order: _ === "ascending" ? "asc" : "desc"
       } : w.value = null, ie();
     }
     function u(v) {
@@ -1319,20 +1319,20 @@ const Co = { class: "yzh-tree" }, wo = {
       b.value = v, c.value = 1, ie();
     }
     function C(v) {
-      Object.assign(m, v), c.value = 1, ie();
+      Object.assign(y, v), c.value = 1, ie();
     }
-    function _() {
-      Object.keys(m).forEach((v) => delete m[v]), t.searchFields && t.searchFields.slice(0, t.searchMaxFields).forEach((v) => {
-        v.defaultValue !== void 0 && (m[v.prop] = v.defaultValue);
+    function S() {
+      Object.keys(y).forEach((v) => delete y[v]), t.searchFields && t.searchFields.slice(0, t.searchMaxFields).forEach((v) => {
+        v.defaultValue !== void 0 && (y[v.prop] = v.defaultValue);
       }), c.value = 1, ie();
     }
     function M(v) {
       f.value = v, n("selection-change", v);
     }
-    function Q(v, S) {
-      n("row-click", v, S);
+    function Q(v, _) {
+      n("row-click", v, _);
     }
-    Bt();
+    Pt();
     let D = !1;
     const Y = j(() => {
       if (typeof t.rowActionButtons == "function")
@@ -1340,7 +1340,7 @@ const Co = { class: "yzh-tree" }, wo = {
       const v = Array.isArray(t.rowActionButtons) ? t.rowActionButtons.length : Object.keys(t.rowActionButtons || {}).length;
       return v > 0 ? v * 70 + 40 : 140;
     });
-    Se(
+    _e(
       () => typeof t.rowActionButtons == "function" ? 1 : Array.isArray(t.rowActionButtons) ? t.rowActionButtons.length : Object.keys(t.rowActionButtons || {}).length,
       (v) => {
       },
@@ -1349,27 +1349,27 @@ const Co = { class: "yzh-tree" }, wo = {
     function ge() {
       c.value = 1, ie(), n("refresh");
     }
-    Be(() => {
+    Pe(() => {
       t.searchFields && t.searchFields.slice(0, t.searchMaxFields).forEach((v) => {
-        v.defaultValue !== void 0 && (m[v.prop] = v.defaultValue);
+        v.defaultValue !== void 0 && (y[v.prop] = v.defaultValue);
       }), ie();
     });
-    function $e(v, S = "top") {
-      S === "top" ? s.value.unshift(v) : s.value.push(v), d.value++;
+    function $e(v, _ = "top") {
+      _ === "top" ? s.value.unshift(v) : s.value.push(v), d.value++;
     }
-    function de(v, S) {
+    function de(v, _) {
       const U = s.value.findIndex((oe) => v(oe));
-      U >= 0 && s.value.splice(U, 1, S);
+      U >= 0 && s.value.splice(U, 1, _);
     }
     function Fe(v) {
-      const S = s.value.findIndex((U) => v(U));
-      S >= 0 && (s.value.splice(S, 1), d.value = Math.max(0, d.value - 1));
+      const _ = s.value.findIndex((U) => v(U));
+      _ >= 0 && (s.value.splice(_, 1), d.value = Math.max(0, d.value - 1));
     }
     function Te() {
       return s.value.length;
     }
-    function Ve(v, S) {
-      if (S) {
+    function Ve(v, _) {
+      if (_) {
         const U = new Set(f.value);
         for (const oe of s.value)
           v(oe) && !U.has(oe) && f.value.push(oe);
@@ -1388,27 +1388,27 @@ const Co = { class: "yzh-tree" }, wo = {
         ...t.treeProps
       };
     });
-    function We(v, S) {
+    function We(v, _) {
       for (const U of v) {
-        S(U);
+        _(U);
         const oe = U[lt.value];
-        Array.isArray(oe) && oe.length && We(oe, S);
+        Array.isArray(oe) && oe.length && We(oe, _);
       }
     }
     function kt() {
       We(s.value, (v) => {
-        var S, U;
-        return (U = (S = Ye.value) == null ? void 0 : S.toggleRowExpansion) == null ? void 0 : U.call(S, v, !0);
+        var _, U;
+        return (U = (_ = Ye.value) == null ? void 0 : _.toggleRowExpansion) == null ? void 0 : U.call(_, v, !0);
       });
     }
     function Tt() {
       We(s.value, (v) => {
-        var S, U;
-        return (U = (S = Ye.value) == null ? void 0 : S.toggleRowExpansion) == null ? void 0 : U.call(S, v, !1);
+        var _, U;
+        return (U = (_ = Ye.value) == null ? void 0 : _.toggleRowExpansion) == null ? void 0 : U.call(_, v, !1);
       });
     }
-    function xt(v, S) {
-      n("expand-change", v, S);
+    function xt(v, _) {
+      n("expand-change", v, _);
     }
     return o({
       refresh: ge,
@@ -1424,22 +1424,22 @@ const Co = { class: "yzh-tree" }, wo = {
       },
       expandAll: kt,
       collapseAll: Tt
-    }), (v, S) => {
-      const U = $("el-button"), oe = $("el-checkbox"), Le = $("el-popover"), qe = $("el-table-column"), st = $("el-tag"), _t = $("el-dropdown-item"), St = $("el-dropdown-menu"), At = $("el-dropdown"), Ft = $("el-empty"), zt = $("el-table"), Nt = Vt("loading");
-      return y(), R("div", $o, [
-        a.searchFields && a.searchFields.length ? (y(), N(Jt, {
+    }), (v, _) => {
+      const U = $("el-button"), oe = $("el-checkbox"), Le = $("el-popover"), qe = $("el-table-column"), st = $("el-tag"), St = $("el-dropdown-item"), _t = $("el-dropdown-menu"), At = $("el-dropdown"), Ft = $("el-empty"), zt = $("el-table"), Nt = Vt("loading");
+      return m(), R("div", $o, [
+        a.searchFields && a.searchFields.length ? (m(), N(Jt, {
           key: 0,
           fields: a.searchFields,
-          "default-values": m,
+          "default-values": y,
           cols: 2,
           "max-fields": a.searchMaxFields,
           onSearch: C,
-          onReset: _
+          onReset: S
         }, null, 8, ["fields", "default-values", "max-fields"])) : H("", !0),
-        we.value ? (y(), N(oo, {
+        we.value ? (m(), N(oo, {
           key: 1,
           buttons: E.value,
-          onAction: S[0] || (S[0] = (P, O) => G(O))
+          onAction: _[0] || (_[0] = (B, O) => G(O))
         }, {
           left: T(() => [
             W(v.$slots, "toolbar-left", {}, void 0, !0)
@@ -1449,7 +1449,7 @@ const Co = { class: "yzh-tree" }, wo = {
               selected: f.value,
               refresh: ge
             }, () => [
-              me.value.columnSetting ? (y(), N(Le, {
+              ye.value.columnSetting ? (m(), N(Le, {
                 key: 0,
                 trigger: "click",
                 placement: "bottom-end",
@@ -1457,51 +1457,51 @@ const Co = { class: "yzh-tree" }, wo = {
               }, {
                 reference: T(() => [
                   L(U, { text: "" }, {
-                    default: T(() => [...S[1] || (S[1] = [
-                      B("i", { class: "bi bi-columns" }, null, -1),
+                    default: T(() => [..._[1] || (_[1] = [
+                      P("i", { class: "bi bi-columns" }, null, -1),
                       V(" 列设置 ", -1)
                     ])]),
                     _: 1
                   })
                 ]),
                 default: T(() => [
-                  B("div", Ro, [
-                    S[4] || (S[4] = B("div", { class: "yzh-column-settings__header" }, "列筛选与排序", -1)),
-                    B("div", Po, [
-                      (y(!0), R(ae, null, ce(x.value, (P) => {
+                  P("div", Ro, [
+                    _[4] || (_[4] = P("div", { class: "yzh-column-settings__header" }, "列筛选与排序", -1)),
+                    P("div", Bo, [
+                      (m(!0), R(ae, null, ce(x.value, (B) => {
                         var O;
-                        return y(), R("div", {
-                          key: P.prop,
+                        return m(), R("div", {
+                          key: B.prop,
                           class: "yzh-column-settings__item"
                         }, [
                           L(oe, {
-                            "model-value": !p.value.has(P.prop) && !P.hidden,
-                            onChange: (ve) => X(P, ve)
+                            "model-value": !p.value.has(B.prop) && !B.hidden,
+                            onChange: (ve) => X(B, ve)
                           }, {
                             default: T(() => [
-                              V(I(P.label), 1)
+                              V(I(B.label), 1)
                             ]),
                             _: 2
                           }, 1032, ["model-value", "onChange"]),
                           L(U, {
-                            class: ke(["yzh-column-settings__sort-btn", { "is-active": ((O = w.value) == null ? void 0 : O.prop) === P.prop }]),
-                            disabled: P.sortable === !1,
-                            onClick: (ve) => te(P)
+                            class: ke(["yzh-column-settings__sort-btn", { "is-active": ((O = w.value) == null ? void 0 : O.prop) === B.prop }]),
+                            disabled: B.sortable === !1,
+                            onClick: (ve) => te(B)
                           }, {
                             default: T(() => [
-                              V(I(Z(P)), 1)
+                              V(I(Z(B)), 1)
                             ]),
                             _: 2
                           }, 1032, ["class", "disabled", "onClick"])
                         ]);
                       }), 128))
                     ]),
-                    B("div", Bo, [
+                    P("div", Po, [
                       L(U, {
                         size: "small",
-                        onClick: ye
+                        onClick: me
                       }, {
-                        default: T(() => [...S[2] || (S[2] = [
+                        default: T(() => [..._[2] || (_[2] = [
                           V("重置", -1)
                         ])]),
                         _: 1
@@ -1511,7 +1511,7 @@ const Co = { class: "yzh-tree" }, wo = {
                         type: "primary",
                         onClick: fe
                       }, {
-                        default: T(() => [...S[3] || (S[3] = [
+                        default: T(() => [..._[3] || (_[3] = [
                           V("确定", -1)
                         ])]),
                         _: 1
@@ -1525,14 +1525,14 @@ const Co = { class: "yzh-tree" }, wo = {
           ]),
           _: 3
         }, 8, ["buttons"])) : H("", !0),
-        B("div", {
+        P("div", {
           class: ke(["yzh-table__wrapper", { "yzh-table__wrapper--no-padding": a.noPadding }])
         }, [
-          B("div", {
+          P("div", {
             class: "yzh-table__body",
             style: Ne(a.height ? { height: typeof a.height == "number" ? a.height + "px" : a.height } : {})
           }, [
-            Lt((y(), N(zt, {
+            Lt((m(), N(zt, {
               ref_key: "tableRef",
               ref: Ye,
               data: s.value,
@@ -1549,19 +1549,19 @@ const Co = { class: "yzh-tree" }, wo = {
               onExpandChange: xt
             }, {
               empty: T(() => [
-                B("div", Lo, [
-                  !l.value && !r.value ? (y(), N(Ft, {
+                P("div", Lo, [
+                  !l.value && !r.value ? (m(), N(Ft, {
                     key: 0,
                     description: a.emptyText
-                  }, null, 8, ["description"])) : r.value ? (y(), R("div", Eo, [
-                    S[7] || (S[7] = B("i", { class: "bi bi-exclamation-triangle" }, null, -1)),
-                    B("span", null, I(r.value), 1),
+                  }, null, 8, ["description"])) : r.value ? (m(), R("div", Eo, [
+                    _[7] || (_[7] = P("i", { class: "bi bi-exclamation-triangle" }, null, -1)),
+                    P("span", null, I(r.value), 1),
                     L(U, {
                       text: "",
                       type: "primary",
                       onClick: ge
                     }, {
-                      default: T(() => [...S[6] || (S[6] = [
+                      default: T(() => [..._[6] || (_[6] = [
                         V("重试", -1)
                       ])]),
                       _: 1
@@ -1570,94 +1570,94 @@ const Co = { class: "yzh-tree" }, wo = {
                 ])
               ]),
               default: T(() => [
-                h.value ? (y(), N(qe, {
+                h.value ? (m(), N(qe, {
                   key: 0,
                   type: "selection",
                   width: "48",
                   "reserve-selection": !1
                 })) : H("", !0),
-                (y(!0), R(ae, null, ce(K.value, (P) => (y(), N(qe, {
-                  key: P.prop,
-                  prop: P.prop,
-                  label: P.label,
-                  width: P.width,
-                  "min-width": P.minWidth,
-                  fixed: P.fixed,
-                  sortable: P.sortable,
-                  align: P.align || "left",
-                  "show-overflow-tooltip": !P.slot,
-                  "class-name": P.className
+                (m(!0), R(ae, null, ce(K.value, (B) => (m(), N(qe, {
+                  key: B.prop,
+                  prop: B.prop,
+                  label: B.label,
+                  width: B.width,
+                  "min-width": B.minWidth,
+                  fixed: B.fixed,
+                  sortable: B.sortable,
+                  align: B.align || "left",
+                  "show-overflow-tooltip": !B.slot,
+                  "class-name": B.className
                 }, {
                   default: T(({ row: O, $index: ve }) => {
                     var Ee;
                     return [
-                      P.slot ? W(v.$slots, `column-${String(P.prop)}`, {
+                      B.slot ? W(v.$slots, `column-${String(B.prop)}`, {
                         row: O,
                         index: ve,
-                        value: O[P.prop]
+                        value: O[B.prop]
                       }, () => [
-                        V(I(P.formatter ? P.formatter(O[P.prop], O, ve) : O[P.prop]), 1)
-                      ], !0, 0) : P.dictCode ? (y(), R(ae, { key: 1 }, [
-                        P.tagType ? (y(), N(st, {
+                        V(I(B.formatter ? B.formatter(O[B.prop], O, ve) : O[B.prop]), 1)
+                      ], !0, 0) : B.dictCode ? (m(), R(ae, { key: 1 }, [
+                        B.tagType ? (m(), N(st, {
                           key: 0,
-                          type: P.tagType,
+                          type: B.tagType,
                           "disable-transitions": ""
                         }, {
                           default: T(() => [
-                            V(I(O[P.prop]), 1)
+                            V(I(O[B.prop]), 1)
                           ]),
                           _: 2
-                        }, 1032, ["type"])) : (y(), R("span", Vo, I(O[P.prop]), 1))
-                      ], 64)) : P.tagMap ? (y(), N(st, {
+                        }, 1032, ["type"])) : (m(), R("span", Vo, I(O[B.prop]), 1))
+                      ], 64)) : B.tagMap ? (m(), N(st, {
                         key: 2,
-                        type: ((Ee = P.tagTypeMap) == null ? void 0 : Ee[O[P.prop]]) ?? "info",
+                        type: ((Ee = B.tagTypeMap) == null ? void 0 : Ee[O[B.prop]]) ?? "info",
                         size: "small",
                         "disable-transitions": ""
                       }, {
                         default: T(() => [
-                          V(I(P.tagMap[O[P.prop]] ?? O[P.prop]), 1)
+                          V(I(B.tagMap[O[B.prop]] ?? O[B.prop]), 1)
                         ]),
                         _: 2
-                      }, 1032, ["type"])) : (y(), R(ae, { key: 3 }, [
-                        V(I(P.formatter ? P.formatter(O[P.prop], O, ve) : O[P.prop]), 1)
+                      }, 1032, ["type"])) : (m(), R(ae, { key: 3 }, [
+                        V(I(B.formatter ? B.formatter(O[B.prop], O, ve) : O[B.prop]), 1)
                       ], 64))
                     ];
                   }),
                   _: 2
                 }, 1032, ["prop", "label", "width", "min-width", "fixed", "sortable", "align", "show-overflow-tooltip", "class-name"]))), 128)),
-                re.value ? (y(), N(qe, {
+                re.value ? (m(), N(qe, {
                   key: 1,
                   label: "操作",
                   width: Y.value,
                   fixed: "right",
                   align: "center"
                 }, {
-                  default: T(({ row: P }) => [
-                    (y(!0), R(ae, null, ce(F(le(P)).inline, (O) => (y(), N(U, {
+                  default: T(({ row: B }) => [
+                    (m(!0), R(ae, null, ce(F(le(B)).inline, (O) => (m(), N(U, {
                       key: O.key,
                       link: a.rowActionLink,
                       size: "small",
                       type: O.type ?? "primary",
                       disabled: O.disabled,
-                      onClick: (ve) => q(O, P)
+                      onClick: (ve) => q(O, B)
                     }, {
                       default: T(() => [
                         V(I(O.text), 1)
                       ]),
                       _: 2
                     }, 1032, ["link", "type", "disabled", "onClick"]))), 128)),
-                    F(le(P)).overflow.length > 0 ? (y(), N(At, {
+                    F(le(B)).overflow.length > 0 ? (m(), N(At, {
                       key: 0,
                       trigger: "click",
                       onCommand: (O) => {
-                        const ve = F(le(P)).overflow.find((Ee) => Ee.key === O);
-                        ve && q(ve, P);
+                        const ve = F(le(B)).overflow.find((Ee) => Ee.key === O);
+                        ve && q(ve, B);
                       }
                     }, {
                       dropdown: T(() => [
-                        L(St, null, {
+                        L(_t, null, {
                           default: T(() => [
-                            (y(!0), R(ae, null, ce(F(le(P)).overflow, (O) => (y(), N(_t, {
+                            (m(!0), R(ae, null, ce(F(le(B)).overflow, (O) => (m(), N(St, {
                               key: O.key,
                               command: O.key,
                               disabled: O.disabled,
@@ -1677,7 +1677,7 @@ const Co = { class: "yzh-tree" }, wo = {
                           link: "",
                           size: "small"
                         }, {
-                          default: T(() => [...S[5] || (S[5] = [
+                          default: T(() => [..._[5] || (_[5] = [
                             V("更多", -1)
                           ])]),
                           _: 1
@@ -1695,7 +1695,7 @@ const Co = { class: "yzh-tree" }, wo = {
             ])
           ], 4)
         ], 2),
-        a.showPagination ? (y(), R("div", Mo, [
+        a.showPagination ? (m(), R("div", Mo, [
           L(no, {
             page: c.value,
             "page-size": b.value,
@@ -1737,7 +1737,7 @@ const Co = { class: "yzh-tree" }, wo = {
       var F;
       (F = l.value) == null || F.expandAll();
     }
-    function m() {
+    function y() {
       var F;
       (F = l.value) == null || F.collapseAll();
     }
@@ -1788,12 +1788,12 @@ const Co = { class: "yzh-tree" }, wo = {
       if (d.value.length === 0)
         return { rows: [], total: 0 };
       const E = [];
-      for (const ye of d.value) {
-        const fe = await K(ye.Code);
+      for (const me of d.value) {
+        const fe = await K(me.Code);
         fe && E.push(...fe);
       }
-      const q = /* @__PURE__ */ new Set(), G = E.filter((ye) => {
-        const fe = ye[t.rowKey];
+      const q = /* @__PURE__ */ new Set(), G = E.filter((me) => {
+        const fe = me[t.rowKey];
         return q.has(fe) ? !1 : (q.add(fe), !0);
       }), X = (F.page - 1) * F.rows, te = X + F.rows;
       return { rows: G.slice(X, te), total: G.length };
@@ -1823,12 +1823,12 @@ const Co = { class: "yzh-tree" }, wo = {
       }
     }), (F, E) => {
       const q = $("el-input"), G = $("el-button");
-      return y(), R("div", Io, [
-        B("div", {
+      return m(), R("div", Io, [
+        P("div", {
           class: "yzh-tree-table-selector__tree-panel",
           style: Ne({ width: a.treeWidth + "px" })
         }, [
-          a.treeSearchable ? (y(), R("div", Oo, [
+          a.treeSearchable ? (m(), R("div", Oo, [
             L(q, {
               modelValue: s.value,
               "onUpdate:modelValue": E[0] || (E[0] = (X) => s.value = X),
@@ -1838,7 +1838,7 @@ const Co = { class: "yzh-tree" }, wo = {
               size: "small"
             }, null, 8, ["modelValue"])
           ])) : H("", !0),
-          B("div", Ko, [
+          P("div", Ko, [
             L(G, {
               size: "small",
               onClick: w
@@ -1850,7 +1850,7 @@ const Co = { class: "yzh-tree" }, wo = {
             }),
             L(G, {
               size: "small",
-              onClick: m
+              onClick: y
             }, {
               default: T(() => [...E[2] || (E[2] = [
                 V("折叠全部", -1)
@@ -1889,15 +1889,15 @@ const Co = { class: "yzh-tree" }, wo = {
             onCheckChange: x,
             onNodeClick: h
           }, null, 8, ["data", "check-strictly", "lazy", "load-data", "default-expand-all", "node-key"]),
-          F.$slots.treeFooter ? (y(), R("div", jo, [
+          F.$slots.treeFooter ? (m(), R("div", jo, [
             W(F.$slots, "treeFooter", {}, void 0, !0)
           ])) : H("", !0)
         ], 4),
-        B("div", Yo, [
-          B("div", Wo, [
-            B("div", qo, [
+        P("div", Yo, [
+          P("div", Wo, [
+            P("div", qo, [
               E[5] || (E[5] = V(" 已选择 ", -1)),
-              B("strong", null, I(f.value.length), 1),
+              P("strong", null, I(f.value.length), 1),
               E[6] || (E[6] = V(" 条记录 ", -1))
             ]),
             L(G, {
@@ -1961,7 +1961,7 @@ const Co = { class: "yzh-tree" }, wo = {
       var g;
       return ((g = t.typeTagTypes) == null ? void 0 : g[u]) ?? "info";
     }
-    const r = e, s = k(), d = k([]), f = k(""), c = k(/* @__PURE__ */ new Set()), b = k(/* @__PURE__ */ new Map()), w = k(/* @__PURE__ */ new Set()), m = k(!1), p = k(/* @__PURE__ */ new Set()), A = j(() => {
+    const r = e, s = k(), d = k([]), f = k(""), c = k(/* @__PURE__ */ new Set()), b = k(/* @__PURE__ */ new Map()), w = k(/* @__PURE__ */ new Set()), y = k(!1), p = k(/* @__PURE__ */ new Set()), A = j(() => {
       var g;
       if (!t.countType) return c.value.size;
       let u = 0;
@@ -1977,51 +1977,51 @@ const Co = { class: "yzh-tree" }, wo = {
         t.searchFields.some(
           (ge) => String(D[ge] ?? "").toLowerCase().includes(u)
         ) && g.add(String(D[t.nodeKey]));
-      const C = new Map(t.flatData.map((D) => [String(D[t.nodeKey]), D])), _ = new Set(g);
+      const C = new Map(t.flatData.map((D) => [String(D[t.nodeKey]), D])), S = new Set(g);
       for (const D of g) {
         let Y = (M = C.get(D)) == null ? void 0 : M[t.parentKey];
-        for (; Y && !_.has(String(Y)); )
-          _.add(String(Y)), Y = (Q = C.get(String(Y))) == null ? void 0 : Q[t.parentKey];
+        for (; Y && !S.has(String(Y)); )
+          S.add(String(Y)), Y = (Q = C.get(String(Y))) == null ? void 0 : Q[t.parentKey];
       }
-      return t.flatData.filter((D) => _.has(String(D[t.nodeKey])));
+      return t.flatData.filter((D) => S.has(String(D[t.nodeKey])));
     });
     function x(u) {
       const g = /* @__PURE__ */ new Map(), C = [];
-      for (const _ of u) {
+      for (const S of u) {
         const M = {
-          ..._,
+          ...S,
           children: []
         };
-        g.set(_[t.nodeKey], M), b.value.set(_[t.nodeKey], M);
+        g.set(S[t.nodeKey], M), b.value.set(S[t.nodeKey], M);
       }
-      for (const _ of u) {
-        const M = g.get(_[t.nodeKey]), Q = _[t.parentKey];
+      for (const S of u) {
+        const M = g.get(S[t.nodeKey]), Q = S[t.parentKey];
         Q && g.has(Q) ? g.get(Q).children.push(M) : C.push(M);
       }
       return C;
     }
     function K(u) {
       const g = /* @__PURE__ */ new Set();
-      function C(_) {
-        for (const M of _)
+      function C(S) {
+        for (const M of S)
           M[t.checkField] && g.add(M[t.nodeKey]), M.children && M.children.length > 0 && C(M.children);
       }
       C(u), c.value = g;
     }
     function ee() {
       if (!s.value) return;
-      m.value = !0, s.value.clearSelection();
+      y.value = !0, s.value.clearSelection();
       const u = /* @__PURE__ */ new Set();
       for (const g of c.value) {
         const C = b.value.get(g);
         C && (s.value.toggleRowSelection(C, !0), u.add(g));
       }
       p.value = u, xe(() => {
-        m.value = !1;
+        y.value = !1;
       });
     }
     function le(u, g) {
-      if (m.value = !0, b.value.clear(), !u || u.length === 0) {
+      if (y.value = !0, b.value.clear(), !u || u.length === 0) {
         d.value = [], g && (c.value = /* @__PURE__ */ new Set()), xe(() => {
           ee(), re();
         });
@@ -2033,16 +2033,16 @@ const Co = { class: "yzh-tree" }, wo = {
     }
     function re() {
       xe(() => {
-        m.value = !1;
+        y.value = !1;
       });
     }
-    Se(
+    _e(
       () => t.flatData,
       (u) => {
         le(u, !0);
       },
       { immediate: !0 }
-    ), Se(f, () => {
+    ), _e(f, () => {
       le(h.value, !1);
     });
     function se(u) {
@@ -2053,7 +2053,7 @@ const Co = { class: "yzh-tree" }, wo = {
       se(d.value);
     }
     function E() {
-      w.value.clear(), m.value = !0;
+      w.value.clear(), y.value = !0;
       const u = d.value;
       d.value = [], xe(() => {
         d.value = u, re();
@@ -2061,44 +2061,44 @@ const Co = { class: "yzh-tree" }, wo = {
     }
     function q() {
       if (!s.value) return;
-      m.value = !0;
+      y.value = !0;
       const u = X(d.value), g = new Set(c.value);
       for (const C of u)
         g.add(C[t.nodeKey]), s.value.toggleRowSelection(C, !0);
-      c.value = g, p.value = new Set(g), m.value = !1, me([], u.map((C) => C[t.nodeKey]));
+      c.value = g, p.value = new Set(g), y.value = !1, ye([], u.map((C) => C[t.nodeKey]));
     }
     function G() {
       if (!s.value) return;
-      m.value = !0;
+      y.value = !0;
       const u = Array.from(c.value);
-      c.value = /* @__PURE__ */ new Set(), p.value = /* @__PURE__ */ new Set(), s.value.clearSelection(), m.value = !1, me(u, []);
+      c.value = /* @__PURE__ */ new Set(), p.value = /* @__PURE__ */ new Set(), s.value.clearSelection(), y.value = !1, ye(u, []);
     }
     function X(u) {
       const g = t.checkAllExcludeTypes ?? [], C = [];
-      for (const _ of u)
-        g.includes(_[t.nodeTypeField]) || C.push(_), _.children && _.children.length > 0 && C.push(...X(_.children));
+      for (const S of u)
+        g.includes(S[t.nodeTypeField]) || C.push(S), S.children && S.children.length > 0 && C.push(...X(S.children));
       return C;
     }
     function te(u) {
-      const g = [], C = (_) => {
+      const g = [], C = (S) => {
         var M;
-        for (const Q of _)
+        for (const Q of S)
           g.push(Q), (M = Q.children) != null && M.length && C(Q.children);
       };
       return C(u.children ?? []), g;
     }
     function Z(u, g) {
       const C = [];
-      for (const _ of g) u.has(_) || C.push(_);
+      for (const S of g) u.has(S) || C.push(S);
       return C;
     }
-    function ye(u, g, C) {
-      const _ = new Set(C), M = (de, Fe) => {
+    function me(u, g, C) {
+      const S = new Set(C), M = (de, Fe) => {
         var Ve;
         const Te = String(de[t.nodeKey]);
-        Fe ? _.add(Te) : _.delete(Te), (Ve = s.value) == null || Ve.toggleRowSelection(de, Fe);
+        Fe ? S.add(Te) : S.delete(Te), (Ve = s.value) == null || Ve.toggleRowSelection(de, Fe);
       };
-      m.value = !0, M(u, g);
+      y.value = !0, M(u, g);
       for (const de of te(u)) M(de, g);
       const Q = t.checkAllExcludeTypes ?? [];
       let D = u[t.parentKey];
@@ -2108,32 +2108,32 @@ const Co = { class: "yzh-tree" }, wo = {
         const Fe = de.children.filter(
           (Te) => !Q.includes(String(Te[t.nodeTypeField]))
         );
-        M(de, Fe.length > 0 && Fe.every((Te) => _.has(String(Te[t.nodeKey])))), D = de[t.parentKey];
+        M(de, Fe.length > 0 && Fe.every((Te) => S.has(String(Te[t.nodeKey])))), D = de[t.parentKey];
       }
-      m.value = !1;
-      const Y = Z(_, C), ge = Z(C, _), $e = new Set(c.value);
+      y.value = !1;
+      const Y = Z(S, C), ge = Z(C, S), $e = new Set(c.value);
       for (const de of ge) $e.add(de);
       for (const de of Y) $e.delete(de);
-      c.value = $e, p.value = new Set(_), me(Y, ge);
+      c.value = $e, p.value = new Set(S), ye(Y, ge);
     }
     function fe(u) {
-      if (m.value) return;
-      const g = new Set(u.map((D) => String(D[t.nodeKey]))), C = p.value, _ = Z(C, g), M = Z(g, C);
-      if (_.length === 0 && M.length === 0) return;
+      if (y.value) return;
+      const g = new Set(u.map((D) => String(D[t.nodeKey]))), C = p.value, S = Z(C, g), M = Z(g, C);
+      if (S.length === 0 && M.length === 0) return;
       if (t.cascade) {
-        const Y = _.length + M.length === 1 ? _[0] ?? M[0] : void 0, ge = Y ? b.value.get(Y) : void 0;
+        const Y = S.length + M.length === 1 ? S[0] ?? M[0] : void 0, ge = Y ? b.value.get(Y) : void 0;
         if (ge) {
-          ye(ge, _.length > 0, C);
+          me(ge, S.length > 0, C);
           return;
         }
       }
       p.value = g;
       const Q = new Set(c.value);
-      for (const D of _) Q.add(D);
+      for (const D of S) Q.add(D);
       for (const D of M) Q.delete(D);
-      c.value = Q, _.length > 0 && me([], _), M.length > 0 && me(M, []);
+      c.value = Q, S.length > 0 && ye([], S), M.length > 0 && ye(M, []);
     }
-    function me(u, g) {
+    function ye(u, g) {
       r("check-change", { added: g, removed: u });
     }
     function we() {
@@ -2161,15 +2161,15 @@ const Co = { class: "yzh-tree" }, wo = {
       checkAll: q,
       uncheckAll: G
     }), (u, g) => {
-      const C = $("el-button"), _ = $("el-table-column"), M = $("el-tag"), Q = $("el-table");
-      return y(), R("div", Ho, [
-        B("div", Xo, [
-          B("div", Jo, [
+      const C = $("el-button"), S = $("el-table-column"), M = $("el-tag"), Q = $("el-table");
+      return m(), R("div", Ho, [
+        P("div", Xo, [
+          P("div", Jo, [
             g[1] || (g[1] = V(" 已选择 ", -1)),
-            B("strong", null, I(A.value), 1),
+            P("strong", null, I(A.value), 1),
             g[2] || (g[2] = V(" 条记录 ", -1))
           ]),
-          a.searchable ? (y(), R("div", Zo, [
+          a.searchable ? (m(), R("div", Zo, [
             L(ze(Qe), {
               modelValue: f.value,
               "onUpdate:modelValue": g[0] || (g[0] = (D) => f.value = D),
@@ -2179,7 +2179,7 @@ const Co = { class: "yzh-tree" }, wo = {
               "prefix-icon": "Search"
             }, null, 8, ["modelValue", "placeholder"])
           ])) : H("", !0),
-          B("div", Qo, [
+          P("div", Qo, [
             L(C, {
               size: "small",
               onClick: F
@@ -2230,11 +2230,11 @@ const Co = { class: "yzh-tree" }, wo = {
           class: "yzh-tree-table-check-selector__table"
         }, {
           default: T(() => [
-            L(_, {
+            L(S, {
               type: "selection",
               width: "50"
             }),
-            (y(!0), R(ae, null, ce(a.columns, (D) => (y(), N(_, {
+            (m(!0), R(ae, null, ce(a.columns, (D) => (m(), N(S, {
               key: D.prop,
               prop: D.prop,
               label: D.label,
@@ -2248,7 +2248,7 @@ const Co = { class: "yzh-tree" }, wo = {
                   row: Y,
                   column: D
                 }, () => [
-                  D.prop === a.nodeTypeField ? (y(), N(M, {
+                  D.prop === a.nodeTypeField ? (m(), N(M, {
                     key: 0,
                     type: l(Y[a.nodeTypeField]),
                     size: "small"
@@ -2257,7 +2257,7 @@ const Co = { class: "yzh-tree" }, wo = {
                       V(I(n(Y[a.nodeTypeField])), 1)
                     ]),
                     _: 2
-                  }, 1032, ["type"])) : (y(), R(ae, { key: 1 }, [
+                  }, 1032, ["type"])) : (m(), R(ae, { key: 1 }, [
                     V(I(Y[D.prop]), 1)
                   ], 64))
                 ], !0)
@@ -2299,75 +2299,75 @@ const Co = { class: "yzh-tree" }, wo = {
   emits: ["selection-change", "row-click", "refresh", "row-action", "toolbar-action", "expand-change"],
   setup(a, { expose: o, emit: e }) {
     const t = a, n = e, l = k(null);
-    function r(m) {
-      return typeof t.allowAddChild == "function" ? !!t.allowAddChild(m) : !!t.allowAddChild;
+    function r(y) {
+      return typeof t.allowAddChild == "function" ? !!t.allowAddChild(y) : !!t.allowAddChild;
     }
     const s = j(() => {
-      const m = t.rowActionButtons;
-      if (!t.allowAddChild) return m;
+      const y = t.rowActionButtons;
+      if (!t.allowAddChild) return y;
       const p = (A) => {
         const h = Array.isArray(A) ? [...A] : Object.entries(A || {}).map(([K, ee]) => ({ key: K, text: ee }));
         return h.some((K) => K.key === "add-child") ? h : [{ key: "add-child", text: t.addChildText, type: "primary" }, ...h];
       };
-      return typeof m == "function" ? (A) => {
-        const h = p(m(A));
+      return typeof y == "function" ? (A) => {
+        const h = p(y(A));
         return Array.isArray(h) && !r(A) ? h.map((x) => x.key === "add-child" ? { ...x, visible: !1 } : x) : h;
-      } : p(m);
+      } : p(y);
     }), d = j(() => ({
       children: t.childrenField,
       hasChildren: "hasChildren"
     }));
     function f() {
-      var m;
-      (m = l.value) == null || m.refresh();
+      var y;
+      (y = l.value) == null || y.refresh();
     }
     function c() {
-      var m;
-      (m = l.value) == null || m.loadData();
+      var y;
+      (y = l.value) == null || y.loadData();
     }
     function b() {
-      var m;
-      (m = l.value) == null || m.expandAll();
+      var y;
+      (y = l.value) == null || y.expandAll();
     }
     function w() {
-      var m;
-      (m = l.value) == null || m.collapseAll();
+      var y;
+      (y = l.value) == null || y.collapseAll();
     }
     return o({
       refresh: f,
       loadData: c,
       expandAll: b,
       collapseAll: w,
-      insertRow: (...m) => {
+      insertRow: (...y) => {
         var p;
-        return (p = l.value) == null ? void 0 : p.insertRow(...m);
+        return (p = l.value) == null ? void 0 : p.insertRow(...y);
       },
-      replaceRow: (...m) => {
+      replaceRow: (...y) => {
         var p;
-        return (p = l.value) == null ? void 0 : p.replaceRow(...m);
+        return (p = l.value) == null ? void 0 : p.replaceRow(...y);
       },
-      removeRow: (...m) => {
+      removeRow: (...y) => {
         var p;
-        return (p = l.value) == null ? void 0 : p.removeRow(...m);
+        return (p = l.value) == null ? void 0 : p.removeRow(...y);
       },
       getRowCount: () => {
-        var m, p;
-        return ((p = (m = l.value) == null ? void 0 : m.getRowCount) == null ? void 0 : p.call(m)) ?? 0;
+        var y, p;
+        return ((p = (y = l.value) == null ? void 0 : y.getRowCount) == null ? void 0 : p.call(y)) ?? 0;
       },
       getSelectedRows: () => {
-        var m, p;
-        return ((p = (m = l.value) == null ? void 0 : m.getSelectedRows) == null ? void 0 : p.call(m)) ?? [];
+        var y, p;
+        return ((p = (y = l.value) == null ? void 0 : y.getSelectedRows) == null ? void 0 : p.call(y)) ?? [];
       },
-      setCheckedRows: (...m) => {
+      setCheckedRows: (...y) => {
         var p;
-        return (p = l.value) == null ? void 0 : p.setCheckedRows(...m);
+        return (p = l.value) == null ? void 0 : p.setCheckedRows(...y);
       },
       clearSelection: () => {
-        var m, p;
-        return (p = (m = l.value) == null ? void 0 : m.clearSelection) == null ? void 0 : p.call(m);
+        var y, p;
+        return (p = (y = l.value) == null ? void 0 : y.clearSelection) == null ? void 0 : p.call(y);
       },
       tableRef: l
-    }), (m, p) => (y(), N(ut, be({
+    }), (y, p) => (m(), N(ut, be({
       ref_key: "tableRef",
       ref: l,
       columns: a.columns,
@@ -2390,7 +2390,7 @@ const Co = { class: "yzh-tree" }, wo = {
       "action-max-inline": a.actionMaxInline,
       "default-expand-all": a.defaultExpandAll,
       "tree-props": d.value
-    }, m.$attrs, {
+    }, y.$attrs, {
       onSelectionChange: p[0] || (p[0] = (A) => n("selection-change", A)),
       onRowClick: p[1] || (p[1] = (A, h) => n("row-click", A, h)),
       onRefresh: p[2] || (p[2] = (A) => n("refresh")),
@@ -2398,10 +2398,10 @@ const Co = { class: "yzh-tree" }, wo = {
       onToolbarAction: p[4] || (p[4] = (A, h) => n("toolbar-action", A, h)),
       onExpandChange: p[5] || (p[5] = (A, h) => n("expand-change", A, h))
     }), dt({ _: 2 }, [
-      ce(m.$slots, (A, h) => ({
+      ce(y.$slots, (A, h) => ({
         name: h,
         fn: T((x) => [
-          W(m.$slots, h, Et(Mt(x)))
+          W(y.$slots, h, Et(Mt(x)))
         ])
       }))
     ]), 1040, ["columns", "data-loader", "search-fields", "selectable", "select-mode", "show-pagination", "page-size", "default-sort", "height", "row-key", "empty-text", "toolbar", "toolbar-actions", "search-max-fields", "no-padding", "row-action-buttons", "row-action-link", "action-max-inline", "default-expand-all", "tree-props"]));
@@ -2429,11 +2429,11 @@ const Co = { class: "yzh-tree" }, wo = {
   setup(a) {
     return (o, e) => {
       const t = $("el-icon"), n = $("el-button");
-      return y(), R("div", {
+      return m(), R("div", {
         class: ke(["yzh-empty-state", { "is-compact": a.compact, "is-icon-bg": a.iconBackgroundColor }])
       }, [
-        B("div", ta, [
-          a.iconBackgroundColor ? (y(), R("div", {
+        P("div", ta, [
+          a.iconBackgroundColor ? (m(), R("div", {
             key: 0,
             class: "yzh-empty-state__icon-wrap",
             style: Ne({ backgroundColor: a.iconBackgroundColor })
@@ -2443,23 +2443,23 @@ const Co = { class: "yzh-tree" }, wo = {
               style: Ne({ fontSize: a.iconSize + "px", color: a.iconColor })
             }, {
               default: T(() => [
-                (y(), N(Ie(a.icon)))
+                (m(), N(Ie(a.icon)))
               ]),
               _: 1
             }, 8, ["style"])
-          ], 4)) : (y(), N(t, {
+          ], 4)) : (m(), N(t, {
             key: 1,
             class: "yzh-empty-state__icon",
             style: Ne({ fontSize: a.iconSize + "px", color: a.iconColor })
           }, {
             default: T(() => [
-              (y(), N(Ie(a.icon)))
+              (m(), N(Ie(a.icon)))
             ]),
             _: 1
           }, 8, ["style"])),
-          B("div", oa, I(a.title), 1),
-          a.description ? (y(), R("div", aa, I(a.description), 1)) : H("", !0),
-          a.actionLabel && a.onAction ? (y(), R("div", na, [
+          P("div", oa, I(a.title), 1),
+          a.description ? (m(), R("div", aa, I(a.description), 1)) : H("", !0),
+          a.actionLabel && a.onAction ? (m(), R("div", na, [
             W(o.$slots, "action", {}, () => [
               L(n, {
                 size: "small",
@@ -2496,15 +2496,15 @@ const Co = { class: "yzh-tree" }, wo = {
     })[o.type] || null);
     return (t, n) => {
       const l = $("el-icon");
-      return y(), R("span", {
+      return m(), R("span", {
         class: ke(["yzh-status-badge", [`is-${a.type}`, `is-${a.size}`]])
       }, [
-        a.icon || e.value ? (y(), N(l, {
+        a.icon || e.value ? (m(), N(l, {
           key: 0,
           class: "yzh-status-badge__icon"
         }, {
           default: T(() => [
-            (y(), N(Ie(a.icon || e.value)))
+            (m(), N(Ie(a.icon || e.value)))
           ]),
           _: 1
         })) : H("", !0),
@@ -2526,16 +2526,16 @@ const Co = { class: "yzh-tree" }, wo = {
     title: { type: String, default: "" }
   },
   setup(a) {
-    return (o, e) => (y(), R("div", ra, [
-      o.$slots.header || a.title ? (y(), R("div", ia, [
+    return (o, e) => (m(), R("div", ra, [
+      o.$slots.header || a.title ? (m(), R("div", ia, [
         W(o.$slots, "header", {}, () => [
           V(I(a.title), 1)
         ], !0)
       ])) : H("", !0),
-      B("div", da, [
+      P("div", da, [
         W(o.$slots, "default", {}, void 0, !0)
       ]),
-      o.$slots.footer ? (y(), R("div", ca, [
+      o.$slots.footer ? (m(), R("div", ca, [
         W(o.$slots, "footer", {}, void 0, !0)
       ])) : H("", !0)
     ]));
@@ -2579,7 +2579,7 @@ function pa(a) {
     cascader: "cascader"
   }[a] || "text";
 }
-function ma(a) {
+function ya(a) {
   const o = a == null ? void 0 : a.Columns;
   if (!o) return [];
   const e = a == null ? void 0 : a.EnableField;
@@ -2601,19 +2601,19 @@ function et(a) {
   const o = a == null ? void 0 : a.FormCols;
   return o && o > 0 ? o : (((t = a == null ? void 0 : a.Columns) == null ? void 0 : t.filter((n) => n.BcFlag).length) ?? 0) <= 10 ? 1 : 2;
 }
-function ya(a, o = "0", e) {
+function ma(a, o = "0", e) {
   const t = a == null ? void 0 : a.Columns, n = a == null ? void 0 : a.Schema;
   if (!t) return [];
   const l = et(a), r = Math.floor(24 / l), s = (e == null ? void 0 : e.withDefaults) ?? !1;
   return t.filter((d) => d.BcFlag && d.Type !== "Other").map((d) => {
     var p;
-    const f = d.FieldName, c = va(f), b = n == null ? void 0 : n[c], w = d.GroupIndex || "0", m = o !== "0" && w !== o;
+    const f = d.FieldName, c = va(f), b = n == null ? void 0 : n[c], w = d.GroupIndex || "0", y = o !== "0" && w !== o;
     return {
       prop: f,
       label: d.DesName,
       type: ha(d.Type),
       required: !d.Yxk,
-      disabled: d.Enable === !1 || m,
+      disabled: d.Enable === !1 || y,
       span: r,
       dictCode: d.DictCode || void 0,
       options: void 0,
@@ -2659,12 +2659,12 @@ function ht(a, o) {
       t.push({ key: `custom:${l}`, text: n, type: "info" });
   return t;
 }
-function mn(a, o) {
+function yn(a, o) {
   const e = {};
   for (const t of ht(a, o)) e[t.key] = t.text;
   return e;
 }
-function yn(a, o, e) {
+function mn(a, o, e) {
   const t = [], n = a;
   if (!n) return t;
   if (n.AllowEdit && ((e == null ? void 0 : e.allowAddChild) !== !1 && t.push({ key: "add-child", text: "新增下级" }), t.push({ key: "edit", text: "编辑" })), n.AllowDelete && t.push({ key: "delete", text: "删除", type: "danger", danger: !0 }), o && t.push({ key: "toggle-valid", text: "禁用/启用", type: "warning" }), n.CustomActions)
@@ -2729,18 +2729,18 @@ class ft {
       }
     };
     if (s !== !1) {
-      const m = this.getToken();
-      m && (c.headers.Authorization = `Bearer ${m}`);
+      const y = this.getToken();
+      y && (c.headers.Authorization = `Bearer ${y}`);
     }
     if (n) {
-      let m = n;
+      let y = n;
       const p = Object.keys(n), A = n.params;
       p.length === 1 && p[0] === "params" && A && typeof A == "object" && (console.warn(
         "[YzhApi] 查询参数多包了一层 params（应为 get(url, { a, b }) 而非 get(url, { params: { a, b } })），已自动解包：",
         A
-      ), m = A);
+      ), y = A);
       const h = new URLSearchParams();
-      Object.entries(m).forEach(([K, ee]) => {
+      Object.entries(y).forEach(([K, ee]) => {
         ee != null && h.append(K, String(ee));
       });
       const x = h.toString();
@@ -2748,17 +2748,17 @@ class ft {
     }
     l !== void 0 ? c.body = JSON.stringify(l) : t !== "GET" && !n && (c.body = "{}");
     try {
-      const m = await fetch(this.baseURL + f, c);
-      if (m.status === 401)
+      const y = await fetch(this.baseURL + f, c);
+      if (y.status === 401)
         throw pe.clear(), (b = this.onUnauthorized) == null || b.call(this), new Error("登录已过期，请重新登录");
-      const p = await m.json();
-      if (!m.ok) {
-        const A = (p == null ? void 0 : p.message) || (p == null ? void 0 : p.msg) || `请求失败 (${m.status})`, h = new Error(A);
-        throw h.status = m.status, h.data = p, h;
+      const p = await y.json();
+      if (!y.ok) {
+        const A = (p == null ? void 0 : p.message) || (p == null ? void 0 : p.msg) || `请求失败 (${y.status})`, h = new Error(A);
+        throw h.status = y.status, h.data = p, h;
       }
       return p;
-    } catch (m) {
-      throw (w = this.onError) == null || w.call(this, m), m;
+    } catch (y) {
+      throw (w = this.onError) == null || w.call(this, y), y;
     }
   }
   get(o, e, t) {
@@ -2942,26 +2942,26 @@ function xn() {
     logout: r
   };
 }
-const Oe = k(pe.get() || ""), Pe = k(null), tt = k([]), ba = () => !!Oe.value;
+const Oe = k(pe.get() || ""), Be = k(null), tt = k([]), ba = () => !!Oe.value;
 function Ca(a) {
   Oe.value = a, pe.set(a);
 }
 function wa(a) {
-  Pe.value = a;
+  Be.value = a;
 }
 function ka(a) {
-  Pe.value = { ...Pe.value || {}, ...a };
+  Be.value = { ...Be.value || {}, ...a };
 }
 function Ta(a) {
   tt.value = a;
 }
 function xa() {
-  Oe.value = "", Pe.value = null, tt.value = [], pe.clear();
+  Oe.value = "", Be.value = null, tt.value = [], pe.clear();
 }
-function _n() {
+function Sn() {
   return {
     token: Oe,
-    userInfo: Pe,
+    userInfo: Be,
     roles: tt,
     isAuthenticated: ba,
     setToken: Ca,
@@ -2971,7 +2971,7 @@ function _n() {
     clearToken: xa
   };
 }
-function _a(a) {
+function Sa(a) {
   return {
     id: a.Id ?? "",
     code: a.Code ?? "",
@@ -2985,9 +2985,9 @@ function _a(a) {
     tag: a.Tag
   };
 }
-function Sa(a) {
+function _a(a) {
   var l;
-  const o = a.map(_a).sort((r, s) => r.orderNo - s.orderNo), e = /* @__PURE__ */ new Map(), t = [];
+  const o = a.map(Sa).sort((r, s) => r.orderNo - s.orderNo), e = /* @__PURE__ */ new Map(), t = [];
   for (const r of o)
     e.set(r.code, { ...r, children: [] });
   for (const r of o) {
@@ -3008,10 +3008,10 @@ function Sa(a) {
 }
 async function Aa() {
   const a = await Ae.get("/api/System/MenuManagement/tree");
-  return { ...a, data: Array.isArray(a.data) ? Sa(a.data) : [] };
+  return { ...a, data: Array.isArray(a.data) ? _a(a.data) : [] };
 }
 const Me = k([]), He = k(!1), Ue = k(!1);
-function Sn() {
+function _n() {
   async function a(e = !1) {
     if (!(Ue.value && !e)) {
       He.value = !0;
@@ -3073,7 +3073,7 @@ function zn() {
 function Nn() {
   async function a(o) {
     try {
-      return await _e.confirm(o.message, o.title ?? "操作确认", {
+      return await Se.confirm(o.message, o.title ?? "操作确认", {
         type: o.type ?? "warning",
         confirmButtonText: o.confirmButtonText ?? "确定",
         cancelButtonText: o.cancelButtonText ?? "取消"
@@ -3086,25 +3086,25 @@ function Nn() {
 }
 function Dn(a, ...o) {
   const e = new a(...o), t = k(null);
-  return Be(async () => {
+  return Pe(async () => {
     await e.init(), await xe(), e.setTableRef(t.value);
   }), { logic: e, tableRef: t };
 }
 function $n(a, ...o) {
   const e = new a(...o), t = k(null), n = k(null);
-  return Be(async () => {
+  return Pe(async () => {
     await e.init(), await xe(), e.setTableRef(t.value), e.setTreeTableRef(n.value);
   }), { logic: e, tableRef: t, treeTableRef: n };
 }
 function Rn(a, ...o) {
   const e = new a(...o);
-  return Be(async () => {
+  return Pe(async () => {
     await e.init();
   }), { logic: e };
 }
-function Pn(a, ...o) {
+function Bn(a, ...o) {
   const e = new a(...o);
-  return Be(async () => {
+  return Pe(async () => {
     await e.init();
   }), { logic: e };
 }
@@ -3120,7 +3120,7 @@ function Xe(a) {
     o[Fa(e)] = t;
   return o;
 }
-function Bn(a) {
+function Pn(a) {
   const o = {};
   for (const [e, t] of Object.entries(a))
     o[pt(e)] = t;
@@ -3232,7 +3232,7 @@ class za {
   // ========================================================
   /** 表格列配置（AD-1） */
   get columns() {
-    return ma(this.config.value);
+    return ya(this.config.value);
   }
   /** 表单布局列数（从后端 EntityConfig.FormCols 读取，0=自动） */
   get formLayoutCols() {
@@ -3240,7 +3240,7 @@ class za {
   }
   /** 表单字段配置（AD-2） */
   get formFields() {
-    return ya(this.config.value, this.formGroupIndex.value);
+    return ma(this.config.value, this.formGroupIndex.value);
   }
   /** 搜索栏字段（config.SearchFields 优先；为空时走 fallbackSearchFields 钩子再走列推导） */
   get searchFields() {
@@ -3436,7 +3436,7 @@ class za {
    */
   async toggleRowIsValidWithConfirm(o, e) {
     const t = (e == null ? void 0 : e.field) ?? this.enableField ?? "IsValid", l = (o[t] ?? 1) === 1 ? "禁用" : "启用", r = (e == null ? void 0 : e.entityName) ?? this.entityName(o);
-    await _e.confirm(
+    await Se.confirm(
       r ? `确定${l}【${r}】？` : `确定${l}该记录？`,
       `${l}确认`,
       {
@@ -3628,7 +3628,7 @@ class za {
     if (!await this.onDelete(n)) return;
     const r = e.map((d) => this.entityName(d)).filter(Boolean);
     let s;
-    r.length === 1 ? s = `确定删除【${r[0]}】？` : r.length > 1 && r.length <= 3 ? s = `确定删除 ${r.length} 条记录（${r.join("、")}）？` : s = `确定删除 ${n.length} 条记录？`, await _e.confirm(s, "删除确认", {
+    r.length === 1 ? s = `确定删除【${r[0]}】？` : r.length > 1 && r.length <= 3 ? s = `确定删除 ${r.length} 条记录（${r.join("、")}）？` : s = `确定删除 ${n.length} 条记录？`, await Se.confirm(s, "删除确认", {
       type: "warning",
       confirmButtonText: "确定删除",
       cancelButtonText: "取消"
@@ -4186,7 +4186,7 @@ class Vn extends za {
   /** 删除树节点（完整流程：确认弹窗 → API → 本地更新 → 表格联动） */
   async deleteTreeNodeWithConfirm(e) {
     const t = e.Name;
-    await this.onBeforeDeleteTree(e) && (await _e.confirm(`确定删除【${t}】？`, "删除确认", {
+    await this.onBeforeDeleteTree(e) && (await Se.confirm(`确定删除【${t}】？`, "删除确认", {
       type: "warning",
       confirmButtonText: "确定删除",
       cancelButtonText: "取消"
@@ -4197,11 +4197,11 @@ class Vn extends za {
   // ========================================================
   /** 新增树节点（/api/{controller}/tree/add） */
   async addTreeNode(e, t) {
-    var c, b, w, m;
+    var c, b, w, y;
     const n = ((c = this.treeConfig) == null ? void 0 : c.CodeField) ?? "Code", l = {
       ...Xe(t),
       [((b = this.treeConfig) == null ? void 0 : b.ParentCodeField) ?? "ParentCode"]: (e == null ? void 0 : e.Code) ?? ((w = this.treeConfig) == null ? void 0 : w.RootParentCode) ?? null
-    }, r = await this.apiPost("/tree/add", l), d = (((m = r.data) == null ? void 0 : m[n]) ?? "") || l[n], f = this.dtoToNode(
+    }, r = await this.apiPost("/tree/add", l), d = (((y = r.data) == null ? void 0 : y[n]) ?? "") || l[n], f = this.dtoToNode(
       r.data ?? { Code: d, Name: l.Name ?? "", ParentCode: (e == null ? void 0 : e.Code) ?? null },
       e ?? void 0
     );
@@ -4227,7 +4227,7 @@ class Vn extends za {
       J.warning("该节点包含子节点，请先删除子节点");
       return;
     }
-    t || await _e.confirm(`确定删除节点 "${e.Name}"？`, "删除确认", {
+    t || await Se.confirm(`确定删除节点 "${e.Name}"？`, "删除确认", {
       type: "warning",
       confirmButtonText: "确定",
       cancelButtonText: "取消"
@@ -4274,7 +4274,7 @@ class Vn extends za {
   /** 切换树节点有效标志（完整流程：确认弹窗 → API → 本地更新） */
   async toggleTreeNodeWithConfirm(e, t) {
     const n = this.enableField ?? "IsValid", l = e.Extra || {}, r = n.charAt(0).toLowerCase() + n.slice(1), d = (l[n] ?? l[r] ?? 1) === 1 ? "禁用" : "启用", f = (t == null ? void 0 : t.entityName) ?? e.Name;
-    await _e.confirm(`确定${d}【${f}】？`, `${d}确认`, {
+    await Se.confirm(`确定${d}【${f}】？`, `${d}确认`, {
       type: "warning",
       confirmButtonText: `确定${d}`,
       cancelButtonText: "取消"
@@ -4339,7 +4339,7 @@ class Vn extends za {
     await this.updateTreeNode(e, t);
   }
 }
-class mt {
+class yt {
   constructor(o) {
     // ──── 左树 ────
     z(this, "treeData", k([]));
@@ -4382,7 +4382,7 @@ class mt {
   async loadTreeRoot() {
     try {
       const o = await this.api.getTreeRoot();
-      return this.treeData.value = o, o;
+      return this.treeData.value = o, this.applyBadgesDeep(o), o;
     } catch (o) {
       return J.error(o.message || "加载树失败"), [];
     }
@@ -4390,7 +4390,7 @@ class mt {
   async loadChildren(o, e) {
     try {
       const t = await this.api.getTreeChildren(o.data.Code, o.level ?? 0);
-      e(t);
+      this.applyBadgesDeep(t), e(t);
     } catch (t) {
       J.error(t.message || "加载子节点失败"), e([]);
     }
@@ -4405,6 +4405,35 @@ class mt {
   getNodeBadge(o) {
     const e = this.getCountForNode(o);
     return e > 0 ? String(e) : void 0;
+  }
+  /** 写入/清除单节点 Extra.badge（原地改 → 仅该节点重渲染，el-tree 不重置展开/懒加载态） */
+  applyBadge(o) {
+    const e = this.getCountForNode(o.Code), t = { ...o.Extra ?? {} };
+    e > 0 ? t.badge = String(e) : delete t.badge, o.Extra = t;
+  }
+  /** 递归注入徽标（树根 / 懒加载子节点 resolve 前调用） */
+  applyBadgesDeep(o) {
+    var e;
+    for (const t of o)
+      this.applyBadge(t), (e = t.Children) != null && e.length && this.applyBadgesDeep(t.Children);
+  }
+  /** 按 Code 递归查找（懒加载子节点不在 treeData 时返回 null） */
+  findNodeByCode(o, e) {
+    var t;
+    for (const n of o) {
+      if (String(n.Code) === String(e)) return n;
+      if ((t = n.Children) != null && t.length) {
+        const l = this.findNodeByCode(n.Children, e);
+        if (l) return l;
+      }
+    }
+    return null;
+  }
+  /** 局部刷新单个节点徽标；找不到（如懒加载子节点未挂进 treeData）静默跳过，不退回整树替换 */
+  refreshBadge(o) {
+    if (!o) return;
+    const e = this.findNodeByCode(this.treeData.value, o);
+    e && this.applyBadge(e);
   }
   // ========================================================
   // 节点选择 → 加载关联态
@@ -4456,7 +4485,7 @@ class mt {
     } catch (t) {
       J.error(t.message || "保存失败");
     } finally {
-      this.saving.value = !1;
+      this.refreshBadge(e), this.saving.value = !1;
     }
   }
   syncCacheAdd(o, e) {
@@ -4485,13 +4514,13 @@ class mt {
     return e;
   }
 }
-class Ln extends mt {
+class Ln extends yt {
   /** 可勾选的节点类型（如 ['menu']）—— 子类必须声明 */
   get selectableNodeTypes() {
     return [];
   }
 }
-class En extends mt {
+class En extends yt {
   /** 构造：linkApi 负责树/列表/保存；baseApi 可传 null 走空实现 */
   constructor(e) {
     super({
@@ -4549,8 +4578,8 @@ class En extends mt {
       this.associationData.value.filter((c) => c.Linked).map((c) => c[this.linkedKeyField])
     ), r = [], s = [];
     for (const c of this.associationData.value) {
-      const b = c[this.linkedKeyField], w = e.has(b), m = l.has(b);
-      w && !m && r.push(c), !w && m && s.push(c);
+      const b = c[this.linkedKeyField], w = e.has(b), y = l.has(b);
+      w && !y && r.push(c), !w && y && s.push(c);
     }
     for (const c of this.associationData.value)
       c.Linked = e.has(c[this.linkedKeyField]);
@@ -4636,7 +4665,7 @@ function Ra(a, o) {
   const e = [], t = (n) => {
     const l = [];
     for (const r of n)
-      r.Code === o ? (e.push(r), Ba(r).forEach((s) => e.push(s))) : r.Children && r.Children.length > 0 ? l.push({ ...r, Children: t(r.Children) }) : l.push(r);
+      r.Code === o ? (e.push(r), Pa(r).forEach((s) => e.push(s))) : r.Children && r.Children.length > 0 ? l.push({ ...r, Children: t(r.Children) }) : l.push(r);
     return l;
   };
   return { tree: t(a), removed: e };
@@ -4650,7 +4679,7 @@ function Un(a, o, e, t) {
   if (e !== null && e !== "") {
     if (!Ze(a, e))
       return { tree: a, error: `目标父节点 "${e}" 不存在` };
-    if (yt(n, e))
+    if (mt(n, e))
       return { tree: a, error: "不能移动到自己的子树下（会形成循环）" };
   }
   if (t !== void 0 && t > 0) {
@@ -4690,7 +4719,7 @@ function Kn(a, o) {
   return { added: r, removed: s, updated: d };
 }
 function jn(a) {
-  const o = [], e = Pa(a), t = new Set(e.map((l) => l.Code)), n = /* @__PURE__ */ new Map();
+  const o = [], e = Ba(a), t = new Set(e.map((l) => l.Code)), n = /* @__PURE__ */ new Map();
   for (const l of e)
     n.set(l.Code, (n.get(l.Code) ?? 0) + 1);
   for (const [l, r] of n)
@@ -4702,7 +4731,7 @@ function jn(a) {
     errors: o
   };
 }
-function Pa(a) {
+function Ba(a) {
   const o = [], e = (t) => {
     for (const n of t)
       o.push(n), n.Children && n.Children.length > 0 && e(n.Children);
@@ -4719,16 +4748,16 @@ function Ze(a, o) {
   }
   return null;
 }
-function Ba(a) {
+function Pa(a) {
   const o = [], e = (t) => {
     o.push(t);
     for (const n of t.Children ?? []) e(n);
   };
   return e(a), o;
 }
-function yt(a, o) {
+function mt(a, o) {
   for (const e of a.Children ?? [])
-    if (e.Code === o || yt(e, o)) return !0;
+    if (e.Code === o || mt(e, o)) return !0;
   return !1;
 }
 function gt(a) {
@@ -4789,8 +4818,8 @@ function Ua(a, o, e) {
     sortField: d,
     extraFields: f,
     rootParentCode: c
-  } = o, b = (e == null ? void 0 : e.maxLevel) ?? 0, w = e == null ? void 0 : e.startFromCode, m = (e == null ? void 0 : e.currentLevel) ?? 0;
-  if (b > 0 && m >= b) return [];
+  } = o, b = (e == null ? void 0 : e.maxLevel) ?? 0, w = e == null ? void 0 : e.startFromCode, y = (e == null ? void 0 : e.currentLevel) ?? 0;
+  if (b > 0 && y >= b) return [];
   const p = /* @__PURE__ */ new Map(), A = [];
   for (const h of a) {
     const x = ue(h, t), K = ue(h, n), ee = ue(h, l) ?? null, le = r ? ue(h, r) : void 0, re = s ? ue(h, s) : void 0, se = d ? ue(h, d) : void 0;
@@ -4833,7 +4862,7 @@ function Ia(a, o, e) {
     leafField: s,
     sortField: d,
     extraFields: f
-  } = o, c = ue(a, t), b = ue(a, n), w = ue(a, l) ?? null, m = r ? ue(r, r) : void 0, p = s ? ue(s, s) : void 0, A = d ? ue(a, d) : void 0;
+  } = o, c = ue(a, t), b = ue(a, n), w = ue(a, l) ?? null, y = r ? ue(r, r) : void 0, p = s ? ue(s, s) : void 0, A = d ? ue(a, d) : void 0;
   let h;
   if (f && f.length > 0) {
     h = {};
@@ -4844,7 +4873,7 @@ function Ia(a, o, e) {
     Code: c,
     Name: b,
     ParentCode: w,
-    NodeType: m,
+    NodeType: y,
     IsLeaf: p,
     Sort: A,
     Extra: h,
@@ -5046,7 +5075,7 @@ const Yn = {
   hasCycle: Ct
 };
 export {
-  mt as AssociationTreeCore,
+  yt as AssociationTreeCore,
   Ln as CheckTreeCore,
   En as LinkTableCore,
   Je as MENU_CHANGED_EVENT,
@@ -5083,7 +5112,7 @@ export {
   je as findNode,
   vt as findNodeBy,
   nt as findNodesBy,
-  Pa as flatten,
+  Ba as flatten,
   ot as flattenTree,
   Ke as getAncestors,
   Xa as getChildrenCount,
@@ -5108,19 +5137,19 @@ export {
   Fn as onMenuChanged,
   Xe as pascalCaseFormData,
   Ra as removeSubtree,
-  Bn as rowToFormData,
+  Pn as rowToFormData,
   bt as search,
   Ga as searchWithAncestors,
   pt as toCamelCase,
-  ya as toFormFields,
+  ma as toFormFields,
   et as toFormLayoutCols,
   Fa as toPascalCase,
-  mn as toRowActionButtons,
+  yn as toRowActionButtons,
   ht as toRowActions,
   rt as toSearchFields,
-  ma as toTableColumns,
+  ya as toTableColumns,
   ga as toToolbarActions,
-  yn as toTreeActions,
+  mn as toTreeActions,
   pe as tokenStore,
   gn as treeItemToNode,
   Yn as treeUtils,
@@ -5128,11 +5157,11 @@ export {
   vn as uploadFile,
   bn as uploadFileBatch,
   xn as useAuth,
-  _n as useAuthState,
+  Sn as useAuthState,
   Rn as useCheckTree,
   Nn as useConfirm,
-  Pn as useLinkTable,
-  Sn as useMenuTree,
+  Bn as useLinkTable,
+  _n as useMenuTree,
   Dn as useSingleTable,
   zn as useTable,
   $n as useTreeTable,

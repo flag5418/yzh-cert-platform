@@ -14,7 +14,7 @@ import {
   checkAdd,
   checkRemove,
   getAllAssociations,
-} from '@/api/system/role-menu'
+} from '../../../api/system/role-menu'
 
 export class RoleMenuLogic extends CheckTreeCore {
   columns = [
