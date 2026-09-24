@@ -42,6 +42,7 @@ export const yzhSystemRoutes: RouteRecordRaw[] = [
   { path: 'system/role-user', name: 'SystemRoleUser', component: () => import('../pages/system/role-user/index.vue') },
   { path: 'system/role-menu', name: 'SystemRoleMenu', component: () => import('../pages/system/role-menu/index.vue') },
   { path: 'system/role-api', name: 'SystemRoleApi', component: () => import('../pages/system/role-api/index.vue') },
+  { path: 'system/menu', name: 'SystemMenu', component: () => import('../pages/system/menu/index.vue') },
 ]
 
 export interface YzhRoutesOptions {
