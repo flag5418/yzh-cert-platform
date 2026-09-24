@@ -77,11 +77,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/store/auth'
 import { useMenuTree } from '@yzh-core/composables/useMenuTree'
+import { onMenuChanged } from '@yzh-core/composables/useMenuChanged'
 import { filterMenuTreeByTag, formatMenuIcon } from '@yzh-core/utils/menu'
 import type { SysMenu } from '@yzh-core/api/system/menu'
 
@@ -135,8 +136,17 @@ function handleLogout() {
   router.push('/login')
 }
 
+// 订阅菜单变更：菜单管理页 notifyMenuChanged 后侧栏强刷（force 绕过 loaded 缓存）
+let stopMenuWatch: (() => void) | null = null
 onMounted(() => {
   loadMenus()
+  stopMenuWatch = onMenuChanged(() => {
+    loadMenus(true)
+  })
+})
+onUnmounted(() => {
+  stopMenuWatch?.()
+  stopMenuWatch = null
 })
 </script>
 

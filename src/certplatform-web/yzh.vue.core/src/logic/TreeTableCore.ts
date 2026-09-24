@@ -851,6 +851,8 @@ export abstract class TreeTableCore<
         return
       case 'toggle-valid':
       case 'node-toggle-valid':
+      case 'toggle-disable':
+      case 'toggle-enable':
         await this.toggleTreeNodeWithConfirm(node)
         return
       default:

@@ -68,13 +68,13 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
     // 三、树数据加载
     // ========================================================
 
-    /// <summary>加载根节点</summary>
+    /// <summary>加载根节点（回退值 = TreeConfig.RootParentCode，而非 null→IS NULL）</summary>
     [HttpPost("tree/root")]
     public virtual async Task<ActionResult<ApiResponse<TreeItemDto[]>>> GetRootNodes()
     {
         try
         {
-            var items = await TreeEntity.GetRootNodes();
+            var items = await TreeEntity.GetRootNodes(TreeConfig.RootParentCode);
             var dtos = new List<TreeItemDto>();
 
             foreach (var item in items)
@@ -105,8 +105,8 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
 
             if (string.IsNullOrEmpty(request.ParentCode))
             {
-                // 容错：ParentCode 为空时回退到加载根节点
-                items = await TreeEntity.GetRootNodes();
+                // 容错：ParentCode 为空时回退到加载根节点（RootParentCode 哨兵）
+                items = await TreeEntity.GetRootNodes(TreeConfig.RootParentCode);
             }
             else
             {
@@ -142,20 +142,25 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
     {
         try
         {
-            // 1. 校验
-            if (string.IsNullOrEmpty(entity.Code))
-                entity.Code = Guid.NewGuid().ToString("N");
-
-            // 2. 新增前钩子（可取消）
+            // 1. 新增前钩子（可取消；可在此生成业务前缀 Code，如 MENU_）
             var (ok, cancelMsg) = await OnBeforeAddTree(entity);
             if (!ok) return BadRequest(ApiResponse.Fail(cancelMsg ?? "操作已取消"));
 
-            // 3. 校验父节点存在性
-            if (!string.IsNullOrEmpty(entity.ParentCode))
+            // 2. 钩子未生成 Code 时兜底填 Guid（顺序：钩子先、兜底后）
+            if (string.IsNullOrEmpty(entity.Code))
+                entity.Code = Guid.NewGuid().ToString("N");
+
+            // 3. 校验父节点存在性（RootParentCode 哨兵 = 根级，无父记录）
+            var rootParent = TreeConfig.RootParentCode;
+            var parentCode = entity.ParentCode;
+            if (string.IsNullOrEmpty(parentCode))
+                parentCode = rootParent;
+
+            if (!string.IsNullOrEmpty(parentCode) && parentCode != rootParent)
             {
-                var parentResult = await TreeEntity.GetByCode(entity.ParentCode);
+                var parentResult = await TreeEntity.GetByCode(parentCode);
                 if (!parentResult.Success || parentResult.Data == null)
-                    return BadRequest(ApiResponse.Fail($"父节点 {entity.ParentCode} 不存在"));
+                    return BadRequest(ApiResponse.Fail($"父节点 {parentCode} 不存在"));
             }
 
             // 4. 执行新增

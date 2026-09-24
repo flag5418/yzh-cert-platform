@@ -1,185 +1,113 @@
-import { ref } from 'vue'
-import { getAllMenuTree, addMenu, updateMenu, deleteMenu, toggleEnable } from '@/api/system/menu'
-import type { SysMenu } from '@/api/system/menu'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { useMenuStore } from '@/store/menu'
+/**
+ * MenuPageLogic - 菜单管理 Logic（左树右表，TreeTableCore 架构）
+ *
+ * 架构：
+ * - 左树：Sys_Menu 菜单树（懒加载 + 增删改 + 启停），TreeConfig 由后端驱动
+ * - 右表：选中节点的子级菜单（RelateField=ParentCode）；未选中时展示根级
+ * - 写操作全部走树（右表仅查看/编辑/删除行）；根级新增走 openRootMenuDialog
+ *
+ * 菜单变更后 notifyMenuChanged → 宿主侧栏（YzhAppLayout/AuditorLayout）强刷。
+ */
 
-export function useMenuLogic() {
-  const menuStore = useMenuStore()
-  const tableData = ref<SysMenu[]>([])
-  const loading = ref(false)
-  const selectedRows = ref<SysMenu[]>([])
+import { TreeTableCore, notifyMenuChanged, type YzhFormField } from '@yzh-core'
 
-  const dialogVisible = ref(false)
-  const dialogTitle = ref('')
-  const isEdit = ref(false)
-  const formData = ref<Partial<SysMenu>>({})
-  const submitting = ref(false)
+export class MenuPageLogic extends TreeTableCore<any> {
+  controllerName = 'System/MenuManagement'
 
-  async function loadData() {
-    loading.value = true
-    try {
-      // 管理端维护页：取全量菜单（/tree 会按当前用户权限过滤，导致菜单树残缺）
-      const res = await getAllMenuTree()
-      if (res.code === 200) {
-        tableData.value = res.data ?? []
-      } else {
-        ElMessage.error(res.message || '加载菜单失败')
-      }
-    } catch (e: any) {
-      ElMessage.error(e.message || '加载菜单失败')
-    } finally {
-      loading.value = false
-    }
+  /** 右表始终按 ParentCode 过滤（未选中时 = RootParentCode，展示根级） */
+  protected override shouldApplyTreeFilter(): boolean {
+    return true
   }
 
-  function handleAddRoot() {
-    isEdit.value = false
-    dialogTitle.value = '新增根菜单'
-    formData.value = {
-      menuName: '',
-      parentCode: '0',
-      url: '',
-      icon: '',
-      description: '',
-      enable: 1,
-      orderNo: 0
-    }
-    dialogVisible.value = true
+  protected override relatedValue(): string | null {
+    return this.selectedNode?.Code ?? (this.treeConfig?.RootParentCode as string) ?? '0'
   }
 
-  function handleAddChild(row: SysMenu) {
-    isEdit.value = false
-    dialogTitle.value = `新增子菜单 - ${row.menuName}`
-    formData.value = {
-      menuName: '',
-      parentCode: row.code ?? '0',
-      url: '',
-      icon: '',
-      description: '',
-      enable: 1,
-      orderNo: 0
-    }
-    dialogVisible.value = true
+  /** 无选中时也要加载（不能走 NoSelectionBehavior=empty 清空） */
+  override async loadPageWithoutTree(): Promise<void> {
+    await this.loadPage()
   }
 
-  function handleEdit(row: SysMenu) {
-    isEdit.value = true
-    dialogTitle.value = '修改菜单'
-    formData.value = { ...row }
-    dialogVisible.value = true
+  protected override get defaultValues(): Record<string, any> {
+    return { IsValid: 1, OrderNo: 0 }
   }
 
-  async function handleDelete(row: SysMenu) {
-    try {
-      await ElMessageBox.confirm(
-        `确定删除菜单「${row.menuName}」？`,
-        '提示',
-        { type: 'warning' }
+  /** 右表新增：注入当前选中节点 Code 作 ParentCode（未选中 = 根） */
+  protected override onPrepareAdd(entity: Record<string, any>): void {
+    entity.ParentCode =
+      this.selectedNode?.Code ?? (this.treeConfig?.RootParentCode as string) ?? '0'
+  }
+
+  /** 树表单：Icon 字段改为 custom slot（IconPicker 穿透 YzhFormDialog） */
+  override get treeFormFields(): YzhFormField[] {
+    return super.treeFormFields.map((f) =>
+      f.prop === 'Icon' ? { ...f, type: 'custom' as const, slot: 'Icon' } : f
+    )
+  }
+
+  /** 右表单：排除 ParentCode（由逻辑注入），Icon 走 slot */
+  override get formFields(): YzhFormField[] {
+    return super.formFields
+      .filter((f) => f.prop !== 'ParentCode')
+      .map((f) =>
+        f.prop === 'Icon' ? { ...f, type: 'custom' as const, slot: 'Icon' } : f
       )
-      const res = await deleteMenu([row.code!])
-      if (res.code === 200) {
-        ElMessage.success('删除成功')
-        await loadData()
-        menuStore.refreshMenus()
-      } else {
-        ElMessage.error(res.message || '删除失败')
-      }
-    } catch (e: any) {
-      if (e !== 'cancel') {
-        ElMessage.error(e.message || '删除失败')
-      }
-    }
   }
 
-  async function handleBatchDelete() {
-    if (!selectedRows.value.length) return
-    try {
-      await ElMessageBox.confirm(
-        `确定删除选中的 ${selectedRows.value.length} 个菜单？`,
-        '提示',
-        { type: 'warning' }
-      )
-      const codes = selectedRows.value.map(r => r.code!).filter(Boolean)
-      const res = await deleteMenu(codes)
-      if (res.code === 200) {
-        ElMessage.success('批量删除成功')
-        selectedRows.value = []
-        await loadData()
-        menuStore.refreshMenus()
-      } else {
-        ElMessage.error(res.message || '批量删除失败')
-      }
-    } catch (e: any) {
-      if (e !== 'cancel') {
-        ElMessage.error(e.message || '批量删除失败')
-      }
-    }
+  /**
+   * 新增根菜单（绕开 openTreeNodeDialog 的 requireTreeSelectionForAdd）。
+   * 供树底部「新增根菜单」调用。
+   */
+  openRootMenuDialog(): boolean {
+    this.treeDialogMode.value = 'add'
+    this.treeEditingNode.value = null
+    this.treeParentNode.value = null
+    this.resetObject(this.treeFormData)
+    const tmpl = (this.treeFormConfig?.NewEntity as any) || {}
+    Object.assign(this.treeFormData, tmpl, this.defaultTreeValues, {
+      MenuName: '',
+      ParentCode: (this.treeConfig?.RootParentCode as string) ?? '0',
+    })
+    this.treeDialogVisible.value = true
+    return true
   }
 
-  async function handleToggleEnable(row: SysMenu) {
-    const newEnable = row.enable === 1 ? 0 : 1
-    const action = newEnable === 1 ? '启用' : '禁用'
-    try {
-      const res = await toggleEnable(row.code!, newEnable)
-      if (res.code === 200) {
-        ElMessage.success(`已${action}`)
-        await loadData()
-        menuStore.refreshMenus()
-      } else {
-        ElMessage.error(res.message || `${action}失败`)
-      }
-    } catch (e: any) {
-      ElMessage.error(e.message || `${action}失败`)
-    }
+  // ──── 菜单变更广播（侧栏刷新） ────
+
+  protected override onAfterAddTree(): void {
+    notifyMenuChanged()
+    void this.refreshTable()
   }
 
-  function handleClose() {
-    dialogVisible.value = false
+  protected override onAfterUpdateTree(): void {
+    notifyMenuChanged()
+    void this.refreshTable()
   }
 
-  async function handleSubmit(formValue: Partial<SysMenu>) {
-    if (!formValue.menuName) {
-      ElMessage.warning('请输入菜单名称')
-      return
-    }
-    submitting.value = true
-    try {
-      const res = isEdit.value
-        ? await updateMenu(formValue)
-        : await addMenu(formValue)
-      if (res.code === 200) {
-        ElMessage.success(isEdit.value ? '修改成功' : '新增成功')
-        dialogVisible.value = false
-        await loadData()
-        menuStore.refreshMenus()
-      } else {
-        ElMessage.error(res.message || '操作失败')
-      }
-    } catch (e: any) {
-      ElMessage.error(e.message || '操作失败')
-    } finally {
-      submitting.value = false
-    }
+  protected override onAfterDeleteTree(): void {
+    notifyMenuChanged()
+    void this.refreshTable()
   }
 
-  return {
-    tableData,
-    loading,
-    selectedRows,
-    dialogVisible,
-    dialogTitle,
-    isEdit,
-    formData,
-    submitting,
-    loadData,
-    handleAddRoot,
-    handleAddChild,
-    handleEdit,
-    handleDelete,
-    handleBatchDelete,
-    handleToggleEnable,
-    handleClose,
-    handleSubmit
+  protected override onAfterAdd(): void {
+    notifyMenuChanged()
+  }
+
+  protected override onAfterUpdate(): void {
+    notifyMenuChanged()
+  }
+
+  protected override onAfterDelete(): void {
+    notifyMenuChanged()
+  }
+
+  override async toggleTreeNodeIsValid(
+    node: Parameters<TreeTableCore<any>['toggleTreeNodeIsValid']>[0],
+  ): Promise<{ Code: string; IsValid: number } | null> {
+    const result = await super.toggleTreeNodeIsValid(node)
+    if (result) notifyMenuChanged()
+    return result
   }
 }
+
+export default MenuPageLogic

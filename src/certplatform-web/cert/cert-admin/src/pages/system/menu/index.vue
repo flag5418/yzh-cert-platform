@@ -1,112 +1,144 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { ElTable, ElTableColumn, ElButton, ElIcon } from 'element-plus'
-import { Plus, Delete } from '@element-plus/icons-vue'
-import MenuFormDialog from '@/components/MenuFormDialog.vue'
-import { useMenuLogic } from './logic'
-import type { SysMenu } from '@/api/system/menu'
+/**
+ * MenuPage - 菜单管理（左树右表，配置驱动）
+ *
+ * - 左树：菜单树（懒加载 + 增删改 + 启停），底部「新增根菜单」
+ * - 右表：选中节点子级（未选中 = 根级）
+ * - 表单：YzhFormDialog + Icon slot（IconPicker）；节点动作由内核 onNodeAction 派发
+ */
+import { Plus } from '@element-plus/icons-vue'
+import { YzhFormDialog, YzhTable, YzhTreeTableLayout, useTreeTable } from '@yzh-core'
+import IconPicker from './IconPicker.vue'
+import MenuPageLogic from './logic'
 
-const {
-  tableData,
-  loading,
-  selectedRows,
-  dialogVisible,
-  dialogTitle,
-  isEdit,
-  formData,
-  loadData,
-  handleAddRoot,
-  handleAddChild,
-  handleEdit,
-  handleDelete,
-  handleBatchDelete,
-  handleToggleEnable,
-  handleSubmit
-} = useMenuLogic()
-
-onMounted(() => loadData())
+const { logic, tableRef, treeTableRef } = useTreeTable(MenuPageLogic)
 </script>
 
 <template>
-  <div class="menu-manage">
-    <!-- 工具栏 -->
-    <div class="toolbar">
-      <el-button type="primary" @click="handleAddRoot">
-        <el-icon><Plus /></el-icon> 新增根菜单
-      </el-button>
-      <el-button
-        type="danger"
-        :disabled="!selectedRows.length"
-        @click="handleBatchDelete"
-      >
-        <el-icon><Delete /></el-icon> 批量删除
-      </el-button>
-    </div>
-
-    <!-- 树形表格 -->
-    <el-table
-      v-loading="loading"
-      :data="tableData"
-      row-key="code"
-      default-expand-all
-      @selection-change="selectedRows = $event"
+  <div class="menu-page">
+    <YzhTreeTableLayout
+      ref="treeTableRef"
+      :tree-data="logic.treeData"
+      :tree-width="300"
+      :tree-toolbar="true"
+      :tree-searchable="true"
+      :tree-lazy="true"
+      :tree-load-data="logic.loadChildren.bind(logic)"
+      :node-actions="logic.nodeActions"
+      :get-action-label="(action: string, node: any) => logic.getNodeActionLabel(action, node)"
+      @tree-node-click="logic.onNodeClick"
+      @tree-node-action="logic.onNodeAction"
     >
-      <el-table-column type="selection" width="50" />
-      <el-table-column prop="menuName" label="名称" min-width="200" />
-      <el-table-column prop="url" label="路由" min-width="200" />
-      <el-table-column prop="icon" label="图标" width="120">
-        <template #default="{ row }">
-          <el-icon v-if="row.icon"><component :is="row.icon" /></el-icon>
-          <span v-else class="text-muted">-</span>
-        </template>
-      </el-table-column>
-      <el-table-column prop="orderNo" label="排序" width="80" />
-      <el-table-column prop="enable" label="状态" width="80">
-        <template #default="{ row }">
-          <el-tag :type="row.enable === 1 ? 'success' : 'danger'">
-            {{ row.enable === 1 ? '启用' : '禁用' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="280" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" @click="handleAddChild(row as SysMenu)">新增下级</el-button>
-          <el-button size="small" @click="handleEdit(row as SysMenu)">修改</el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row as SysMenu)">删除</el-button>
-          <el-button
-            size="small"
-            :type="row.enable === 1 ? 'warning' : 'success'"
-            @click="handleToggleEnable(row as SysMenu)"
-          >
-            {{ row.enable === 1 ? '禁用' : '启用' }}
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+      <template #treeFooter>
+        <el-button
+          type="primary"
+          :icon="Plus"
+          style="width: 100%"
+          @click="logic.openRootMenuDialog()"
+        >
+          新增根菜单
+        </el-button>
+      </template>
 
-    <!-- 新增/编辑对话框 -->
-    <MenuFormDialog
-      v-model="dialogVisible"
-      :title="dialogTitle"
-      :data="formData"
-      :is-edit="isEdit"
-      @submit="handleSubmit"
-    />
+      <template #default>
+        <div class="menu-page__table">
+          <YzhTable
+            ref="tableRef"
+            :columns="logic.columns"
+            :data-loader="logic.dataLoader.bind(logic)"
+            :search-fields="logic.searchFields"
+            :row-action-buttons="logic.rowActions"
+            row-key="Code"
+            @selection-change="logic.onSelectionChange($event)"
+            @row-action="logic.onRowAction"
+          />
+        </div>
+      </template>
+    </YzhTreeTableLayout>
+
+    <!-- 树节点新增/编辑弹窗（Icon 走 custom slot） -->
+    <YzhFormDialog
+      v-model:visible="logic.treeDialogVisible.value"
+      v-model="logic.treeFormData"
+      :mode="logic.treeDialogMode.value"
+      entity-name="菜单"
+      :fields="logic.treeFormFields"
+      :loading="logic.treeSubmitting.value"
+      :cols="logic.treeFormLayoutCols as any"
+      width="520px"
+      @submit="logic.submitTreeNodeForm()"
+    >
+      <template #prepend>
+        <div class="menu-form-header">
+          <span class="menu-form-header__label">上级菜单：</span>
+          <span class="menu-form-header__value">
+            {{ logic.treeParentNode.value?.Name ?? '根级' }}
+          </span>
+        </div>
+      </template>
+      <template #Icon="{ value }">
+        <IconPicker
+          :model-value="value ?? ''"
+          @update:model-value="logic.treeFormData.Icon = $event"
+        />
+      </template>
+    </YzhFormDialog>
+
+    <!-- 右表行编辑弹窗 -->
+    <YzhFormDialog
+      v-model:visible="logic.dialogVisible.value"
+      v-model="logic.formData"
+      :mode="logic.dialogMode.value"
+      entity-name="菜单"
+      :fields="logic.formFields"
+      :loading="logic.submitting.value"
+      :cols="logic.formLayoutCols as any"
+      width="520px"
+      @submit="logic.submitForm()"
+    >
+      <template #Icon="{ value }">
+        <IconPicker
+          :model-value="value ?? ''"
+          @update:model-value="logic.formData.Icon = $event"
+        />
+      </template>
+    </YzhFormDialog>
   </div>
 </template>
 
 <style scoped>
-.menu-manage {
-  background: #fff;
+.menu-page {
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
-.toolbar {
-  padding: 16px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+.menu-page__table {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: #fff;
+  overflow: hidden;
 }
 
-.text-muted {
-  color: #999;
+.menu-form-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.menu-form-header__label {
+  font-size: 14px;
+  color: var(--el-text-color-regular);
+  font-weight: 500;
+}
+
+.menu-form-header__value {
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+  font-weight: 500;
 }
 </style>

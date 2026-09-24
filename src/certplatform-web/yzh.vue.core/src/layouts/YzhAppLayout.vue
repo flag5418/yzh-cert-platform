@@ -168,7 +168,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
@@ -176,6 +176,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { getCurrentUser, modifyPwd, updateUserInfo } from '../api/auth'
 import { useAuthState } from '../composables/useAuthState'
 import { useMenuTree } from '../composables/useMenuTree'
+import { onMenuChanged } from '../composables/useMenuChanged'
 import { filterMenuTreeByTag, formatMenuIcon as formatIcon } from '../utils/menu'
 
 /**
@@ -396,10 +397,18 @@ function handleCommand(command: string) {
   }
 }
 
-// 加载菜单 + 回填当前用户信息
+// 加载菜单 + 回填当前用户信息；订阅菜单变更（菜单管理页 notifyMenuChanged 后侧栏强刷）
+let stopMenuWatch: (() => void) | null = null
 onMounted(() => {
   loadMenus()
   loadCurrentUser()
+  stopMenuWatch = onMenuChanged(() => {
+    loadMenus(true)
+  })
+})
+onUnmounted(() => {
+  stopMenuWatch?.()
+  stopMenuWatch = null
 })
 </script>
 

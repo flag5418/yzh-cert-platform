@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using SqlSugar;
 using YZH.Core.Stand.Attributes;
+using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Entity;
 
 namespace YZH.Core.Api.Models.System;
@@ -13,7 +14,7 @@ namespace YZH.Core.Api.Models.System;
 /// </summary>
 [SugarTable("Sys_Menu")]
 [YZHDeleteStrategy(Mode = DeleteMode.Soft)]
-public class Sys_Menu : BaseEntity
+public class Sys_Menu : BaseEntity, ITreeEntity
 {
     /// <summary>主键（DB: Id）</summary>
     [SugarColumn(ColumnName = "Id", IsPrimaryKey = true, IsIdentity = true)]
@@ -22,6 +23,10 @@ public class Sys_Menu : BaseEntity
     /// <summary>菜单编码（DB: Code）</summary>
     [StringLength(50)]
     public new string Code { get; set; } = string.Empty;
+
+    /// <summary>是否叶子节点（后端批量计算，非持久化）</summary>
+    [SugarColumn(IsIgnore = true)]
+    public new bool? IsLeaf { get; set; }
 
     /// <summary>菜单分类标签：admin/auditor/enterprise/common</summary>
     [StringLength(20)]

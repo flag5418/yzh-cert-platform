@@ -18,7 +18,12 @@
         :show-actions="false"
         @submit="handleSubmit"
         @reset="handleCancel"
-      />
+      >
+        <!-- 字段级 slot 透传：#Icon / #field-xxx 等穿透弹窗层落到内层 YzhForm -->
+        <template v-for="name in fieldSlotNames" :key="name" #[name]="slotProps">
+          <slot :name="name" v-bind="slotProps ?? {}" />
+        </template>
+      </YzhForm>
     </slot>
 
     <template #footer>
@@ -53,7 +58,7 @@
  *     @submit="logic.submitForm()"
  *   />
  */
-import { computed } from 'vue'
+import { computed, useSlots } from 'vue'
 import YzhForm from './YzhForm.vue'
 import type { YzhFormField } from './YzhForm.vue'
 
@@ -107,6 +112,14 @@ const emit = defineEmits<{
   (e: 'cancel'): void
   (e: 'closed'): void
 }>()
+
+// 弹窗自身保留的 slot（不转发给 YzhForm）
+const RESERVED_SLOTS = new Set(['default', 'prepend', 'footer'])
+const slots = useSlots()
+/** 字段级 slot 名（#Icon、#field-xxx 等）→ 转发到内层 YzhForm */
+const fieldSlotNames = computed(() =>
+  Object.keys(slots).filter((name) => !RESERVED_SLOTS.has(name) && typeof slots[name] === 'function')
+)
 
 const visible = computed({
   get: () => props.visible,

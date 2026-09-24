@@ -155,8 +155,6 @@ const RULES = [
     forbid: [/\.code\s*===\s*200/, /\.code\s*!==\s*200/],
     skipComments: true,
     debt: [
-      // menu 页面待 PG-D1 迁移
-      'system/menu/logic.ts',
       // 手写页面待 PG-E1（后端迁基类）后重写
       'workflow/directory/',
     ],
@@ -168,7 +166,7 @@ const RULES = [
     exts: ['.ts'],
     forbid: [/\.code\s*===\s*200/, /\.code\s*!==\s*200/],
     skipComments: true,
-    debt: ['api/system/menu.ts'],
+    debt: [],
   },
   {
     id: 'R4',
@@ -202,7 +200,6 @@ const RULES = [
       'foundation/cert-org-stage/',
       'foundation/cert-org-standard/',
       'system/api/',
-      'system/menu/',
       'workflow/ai-usage/',
       'workflow/directory/components/ConfigTab.vue',
       'workflow/doc-extraction-rule/components/AIAnalysisTab.vue',
