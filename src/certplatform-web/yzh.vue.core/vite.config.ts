@@ -18,10 +18,11 @@ export default defineConfig({
       fileName: 'yzh-vue-core'
     },
     rollupOptions: {
-      external: ['vue', 'element-plus'],
+      external: ['vue', 'vue-router', 'element-plus'],
       output: {
         globals: {
           vue: 'Vue',
+          'vue-router': 'VueRouter',
           'element-plus': 'ElementPlus'
         }
       }

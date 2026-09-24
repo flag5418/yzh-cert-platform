@@ -4,8 +4,12 @@ import ElementPlus from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
+import { configureYzhApi } from '@yzh-core/api/client'
 import App from './App.vue'
 import router from './router'
+
+// 宿主注入后台地址（契约：core 零硬编码地址）——缺省 '' 走 vite proxy / 同源
+configureYzhApi({ baseURL: (import.meta as any).env?.VITE_API_BASE ?? '' })
 
 const app = createApp(App)
 

@@ -1,10 +1,10 @@
 import { defineStore } from 'pinia'
-import { useMenuTree } from '@share/composables/useMenuTree'
+import { useMenuTree } from '@yzh-core/composables/useMenuTree'
 
 /**
  * 菜单 store（**薄适配层**）
  *
- * 真实实现已上移到共享层 `@share/composables/useMenuTree`（admin + auditor 唯一实现）。
+ * 真实实现已上移系统底座 `@yzh-core/composables/useMenuTree`（admin + auditor 唯一实现）。
  * 本文件只保留 pinia store 外观，使既有调用方（`AdminLayout.vue`、`router/index.ts`、
  * `pages/system/menu/logic.ts`）无需改动。
  *

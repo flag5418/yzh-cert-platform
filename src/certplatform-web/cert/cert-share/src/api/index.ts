@@ -1,13 +1,10 @@
 // Share API 入口 - admin + auditor 共用业务 API
-// System 域 API：user / role / role-menu 等仍为 admin 独有（在 admin/src/api/system/ 下）；
-//   menu 已上移到本层（cert-share/src/api/system/menu.ts），admin 与 auditor 共用。
-//   使用方请直接 `from '@share/api/system/menu'` 导入 —— 未从本 barrel 再导出，避免命名冲突。
+// System 域：user / role / role-menu 等为 admin 独有（在 admin/src/api/system/ 下）；
+//   menu / 认证域 auth 已上移 **yzh.vue.core**（系统底座五原子之原子 API），
+//   使用方请 `from '@yzh-core/api/system/menu'` / `'@yzh-core/api/auth'` 导入。
 
 // 通用 CRUD 客户端（admin + auditor 共用）
 export * from './generic'
-
-// 认证域 API（admin + auditor 共用）
-export * from './auth'
 
 // Foundation 域 API（ISO 标准体系主数据，admin + auditor 共用）
 export * from './cert/iso-standard'

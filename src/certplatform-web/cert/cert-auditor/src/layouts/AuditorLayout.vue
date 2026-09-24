@@ -81,9 +81,9 @@ import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/store/auth'
-import { useMenuTree } from '@share/composables/useMenuTree'
-import { filterMenuTreeByTag, formatMenuIcon } from '@share/utils'
-import type { SysMenu } from '@share/api/system/menu'
+import { useMenuTree } from '@yzh-core/composables/useMenuTree'
+import { filterMenuTreeByTag, formatMenuIcon } from '@yzh-core/utils/menu'
+import type { SysMenu } from '@yzh-core/api/system/menu'
 
 const route = useRoute()
 const router = useRouter()

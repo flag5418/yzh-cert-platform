@@ -1,4 +1,4 @@
-import { yzhApi, type ApiResponse } from '@yzh-core/api/client'
+import { yzhApi, type ApiResponse } from '../client'
 
 /**
  * 菜单 API（admin + auditor 共用）

@@ -243,10 +243,7 @@ const RULES = [
     exts: ['.ts', '.vue'],
     forbid: [/127\.0\.0\.1/, /localhost:\d+/, /https?:\/\/[a-zA-Z0-9]/],
     skipComments: true,
-    debt: [
-      // P1.6 后台地址解耦后摘除（删硬编码默认值 + 增 configureYzhApi）
-      'yzh.vue.core/src/api/client.ts',
-    ],
+    debt: [],
   },
 ]
 

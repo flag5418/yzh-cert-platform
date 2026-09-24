@@ -62,6 +62,20 @@ export class YzhApiClient {
   }
 
   /**
+   * 动态配置客户端（宿主 main.ts 启动时调用 `configureYzhApi`）
+   * baseURL 缺省为 ''（相对路径 /api/*）—— dev 由宿主 vite proxy 承接、prod 同源承接；
+   * 跨域部署才由宿主显式注入绝对地址。core 永不硬编码地址（守卫 R11）。
+   */
+  configure(options: Partial<YzhApiClientOptions>): void {
+    if (options.baseURL !== undefined) {
+      this.baseURL = options.baseURL.replace(/\/$/, '')
+    }
+    if (options.getToken) this.getToken = options.getToken
+    if (options.onUnauthorized !== undefined) this.onUnauthorized = options.onUnauthorized
+    if (options.onError !== undefined) this.onError = options.onError
+  }
+
+  /**
    * 通用请求方法
    * 原样透传：返回后端 JSON，不做 key 转换
    */
@@ -332,10 +346,25 @@ export class YzhApiClient {
 
 /**
  * 默认实例（业务可直接使用）
+ *
+ * baseURL 缺省 '' → 相对路径 `/api/*`：
+ * - dev：宿主 vite proxy（cert-admin / cert-auditor 均已配 `/api → 9992`）
+ * - prod：同源部署 / nginx
+ * 跨域部署时由宿主 main.ts 调 `configureYzhApi({ baseURL })` 注入（值来自宿主 env/配置）。
  */
 export const yzhApi = new YzhApiClient({
-  baseURL: (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:9992',
+  baseURL: '',
   onUnauthorized: () => {
     console.warn('[YzhApi] 401 未授权，请重新登录')
   },
 })
+
+/**
+ * 宿主注入后台地址/钩子（契约：core 零硬编码地址，项目决定「对谁说」）
+ * @example // 宿主 main.ts
+ * import { configureYzhApi } from '@yzh-core/api/client'
+ * configureYzhApi({ baseURL: import.meta.env.VITE_API_BASE ?? '' })
+ */
+export function configureYzhApi(options: Partial<YzhApiClientOptions>): void {
+  yzhApi.configure(options)
+}

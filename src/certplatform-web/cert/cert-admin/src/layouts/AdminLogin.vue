@@ -70,7 +70,7 @@ import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { User, Lock, PictureRounded, Check, Cpu } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/store/auth'
-import { login, getCaptcha } from '@share/api/auth'
+import { login, getCaptcha } from '@yzh-core/api/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()

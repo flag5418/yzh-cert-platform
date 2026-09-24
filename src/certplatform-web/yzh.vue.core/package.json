@@ -1,7 +1,7 @@
 {
   "name": "yzh.vue.core",
   "version": "1.0.0",
-  "description": "YZH认证平台 - Vue核心组件库（业务无关）",
+  "description": "YZH认证平台 - 系统底座 npm 包（五原子：原子组件/方法/API/路由/界面；不启动、不感知后端地址）",
   "private": true,
   "main": "src/index.ts",
   "exports": {
@@ -9,7 +9,12 @@
     "./components/*": "./src/components/*/index.ts",
     "./api/client": "./src/api/client.ts",
     "./api/auth": "./src/api/auth.ts",
+    "./api/system": "./src/api/system/index.ts",
+    "./api/system/*": "./src/api/system/*.ts",
     "./composables/*": "./src/composables/*.ts",
+    "./router": "./src/router/index.ts",
+    "./pages/*": "./src/pages/*",
+    "./layouts": "./src/layouts/index.ts",
     "./types": "./src/types/index.ts",
     "./utils/*": "./src/utils/*.ts"
   },
@@ -22,6 +27,7 @@
   },
   "peerDependencies": {
     "vue": "^3.4.0",
+    "vue-router": "^4.3.0",
     "element-plus": "^2.6.0"
   },
   "devDependencies": {
@@ -29,6 +35,7 @@
     "typescript": "^5.0.0",
     "vite": "^5.0.0",
     "vue": "^3.4.0",
+    "vue-router": "^4.3.0",
     "vue-tsc": "^2.0.0"
   }
 }

@@ -169,9 +169,9 @@ import { ArrowDown } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useAuthStore } from '@/store/auth'
 import { useMenuStore } from '@/store/menu'
-import { getCurrentUser, modifyPwd, updateUserInfo } from '@share/api/auth'
+import { getCurrentUser, modifyPwd, updateUserInfo } from '@yzh-core/api/auth'
 // 图标归一化 + 分类分流：与专家端共用同一实现（勿在 App 内重复定义）
-import { filterMenuTreeByTag, formatMenuIcon as formatIcon } from '@share/utils'
+import { filterMenuTreeByTag, formatMenuIcon as formatIcon } from '@yzh-core/utils/menu'
 
 const route = useRoute()
 const router = useRouter()
