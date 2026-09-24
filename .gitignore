@@ -69,6 +69,9 @@ src/certplatform-web/cert/cert-auditor/dist/
 src/certplatform-web/cert/cert-enterprise/dist/
 src/server/Vue.NetCore/vol.web/dist/
 
+# TypeScript 增量编译缓存（永不提交）
+*.tsbuildinfo
+
 # ========================================================
 # AI 工具缓存
 # ========================================================
