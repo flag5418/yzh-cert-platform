@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Attributes;
 using YZH.Core.Api.Services;
 using YZH.Core.Api.Interfaces;
+using YZH.Core.Stand.Helpers;
+using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
 
 namespace YZH.Core.Web.Controllers.System;
@@ -29,6 +31,18 @@ public class ApiSyncController : ControllerBase
         _scanner = scanner;
         _syncService = syncService;
         _apiRepo = apiRepo;
+    }
+
+    /// <summary>
+    /// 页面配置（EntityConfig JSON = Assets/EntityConfigs/System/SysApi.json）
+    /// 本控制器为职能特殊控制器（不继承 YzhControllerBase），Toolbar/SearchFields/RowButtons 全量来自 JSON
+    /// </summary>
+    [ApiDescription("接口页面配置", "系统", "系统管理/接口权限", true)]
+    [HttpGet("config")]
+    public ActionResult<ApiResponse<EntityConfigDto>> GetConfig()
+    {
+        var config = EntityConfigHelper.GetConfig("System/SysApi");
+        return Ok(ApiResponse<EntityConfigDto>.Ok(ConfigDtoConverter.ToDto(config)));
     }
 
     /// <summary>

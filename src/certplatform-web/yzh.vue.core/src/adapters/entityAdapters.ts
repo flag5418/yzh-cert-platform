@@ -170,8 +170,9 @@ export function toSearchFields(config: EntityConfigDto | null): SearchField[] {
       prop: s.Field,
       label: s.Label,
       type: mapSearchControlType(s.ControlType),
-      placeholder: `请输入${s.Label}`,
-      options: (s.Options as any) ?? undefined,
+      placeholder: s.ControlType === 'select' ? `请选择${s.Label}` : `请输入${s.Label}`,
+      // SearchFieldDto.Options 为 PascalCase {Label,Value} → 组件层 SearchField.options 为 camelCase {label,value}
+      options: s.Options?.map((o) => ({ label: o.Label, value: o.Value })) ?? undefined,
     }))
   }
   // fallback：从列配置推导（最多 4 个可搜索字段）

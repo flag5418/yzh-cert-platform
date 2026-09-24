@@ -54,8 +54,8 @@ export async function scanApis(): Promise<{ Total: number; Apis: any[] }> {
 // Swagger 定位（按接口直接打开 Swagger UI 中的对应操作）
 // ========================================================
 
-/** 后端地址：与 yzh.vue.core 的 API 客户端保持同一来源 */
-const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:9992'
+/** 后端地址：与 yzhApi 同一来源（缺省 '' = 相对路径，dev 走 vite proxy /swagger，prod 同源） */
+const API_BASE_URL = yzhApi.baseURL
 
 /** Swagger UI 首页 */
 export const SWAGGER_UI_URL = `${API_BASE_URL}/swagger/index.html`

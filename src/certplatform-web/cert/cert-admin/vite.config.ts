@@ -20,6 +20,11 @@ export default defineConfig({
       '/api': {
         target: 'http://127.0.0.1:9992',
         changeOrigin: true
+      },
+      // Swagger UI/JSON（接口管理页「测试」深链；相对路径与 yzhApi.baseURL='' 同源）
+      '/swagger': {
+        target: 'http://127.0.0.1:9992',
+        changeOrigin: true
       }
     }
   }

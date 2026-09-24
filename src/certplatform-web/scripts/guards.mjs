@@ -199,7 +199,6 @@ const RULES = [
       // 以下为 cert-admin 冻结存量（97 处）。修复某个页面后，把对应行从本清单删除。
       'foundation/cert-org-stage/',
       'foundation/cert-org-standard/',
-      'system/api/',
       'workflow/ai-usage/',
       'workflow/directory/components/ConfigTab.vue',
       'workflow/doc-extraction-rule/components/AIAnalysisTab.vue',

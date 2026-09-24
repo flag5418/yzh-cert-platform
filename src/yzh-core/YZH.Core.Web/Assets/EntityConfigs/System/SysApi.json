@@ -1,0 +1,217 @@
+{
+  "Title": "接口管理",
+  "FillMode": "AutoFix",
+  "FormCols": 1,
+  "EnableField": "Enable",
+  "Toolbar": {
+    "Add": false,
+    "Delete": false,
+    "Export": false,
+    "Import": false,
+    "CustomButtons": {
+      "更新接口": "Sync",
+      "Swagger 测试": "Swagger",
+      "展开/折叠": "Expand"
+    }
+  },
+  "RowButtons": {
+    "Edit": false,
+    "Delete": false,
+    "Enable": false,
+    "CustomButtons": {
+      "测试": "Swagger"
+    }
+  },
+  "SearchFields": [
+    {
+      "Label": "接口名称",
+      "Field": "Name",
+      "Operator": "like",
+      "ControlType": "input",
+      "Width": 200
+    },
+    {
+      "Label": "请求方法",
+      "Field": "Method",
+      "Operator": "eq",
+      "ControlType": "select",
+      "Width": 140,
+      "Options": [
+        { "Label": "GET", "Value": "GET" },
+        { "Label": "POST", "Value": "POST" },
+        { "Label": "PUT", "Value": "PUT" },
+        { "Label": "DELETE", "Value": "DELETE" },
+        { "Label": "PATCH", "Value": "PATCH" }
+      ]
+    },
+    {
+      "Label": "路径",
+      "Field": "Path",
+      "Operator": "like",
+      "ControlType": "input",
+      "Width": 220
+    },
+    {
+      "Label": "分组",
+      "Field": "GroupPath",
+      "Operator": "like",
+      "ControlType": "input",
+      "Width": 180
+    }
+  ],
+  "Columns": [
+    {
+      "FieldName": "Name",
+      "DesName": "接口名称",
+      "Type": "TextBox",
+      "Sxh": 1,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": false,
+      "Width": 280,
+      "Row": 0,
+      "Col": 0,
+      "RowSpan": 1,
+      "ColSpan": 1,
+      "GroupIndex": "0",
+      "Mrz": "",
+      "Enable": true
+    },
+    {
+      "FieldName": "Method",
+      "DesName": "方法",
+      "Type": "TextBox",
+      "Sxh": 2,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": false,
+      "Width": 90,
+      "Row": 0,
+      "Col": 0,
+      "RowSpan": 1,
+      "ColSpan": 1,
+      "GroupIndex": "0",
+      "Mrz": "",
+      "Enable": true
+    },
+    {
+      "FieldName": "Path",
+      "DesName": "路径",
+      "Type": "TextBox",
+      "Sxh": 3,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": false,
+      "Width": 320,
+      "Row": 0,
+      "Col": 0,
+      "RowSpan": 1,
+      "ColSpan": 1,
+      "GroupIndex": "0",
+      "Mrz": "",
+      "Enable": true
+    },
+    {
+      "FieldName": "GroupPath",
+      "DesName": "分组",
+      "Type": "TextBox",
+      "Sxh": 4,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": false,
+      "Width": 180,
+      "Row": 0,
+      "Col": 0,
+      "RowSpan": 1,
+      "ColSpan": 1,
+      "GroupIndex": "0",
+      "Mrz": "",
+      "Enable": true
+    },
+    {
+      "FieldName": "Enable",
+      "DesName": "状态",
+      "Type": "Switch",
+      "Sxh": 5,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": false,
+      "Width": 80,
+      "Row": 0,
+      "Col": 0,
+      "RowSpan": 1,
+      "ColSpan": 1,
+      "GroupIndex": "0",
+      "Mrz": "",
+      "Enable": true
+    },
+    {
+      "FieldName": "Author",
+      "DesName": "负责人",
+      "Type": "TextBox",
+      "Sxh": 6,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 100,
+      "Row": 0,
+      "Col": 0,
+      "RowSpan": 1,
+      "ColSpan": 1,
+      "GroupIndex": "0",
+      "Mrz": "",
+      "Enable": true
+    },
+    {
+      "FieldName": "CreateTime",
+      "DesName": "创建时间",
+      "Type": "DateTimePicker",
+      "Sxh": 7,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 170,
+      "Row": 0,
+      "Col": 0,
+      "RowSpan": 1,
+      "ColSpan": 1,
+      "GroupIndex": "0",
+      "Mrz": "",
+      "Enable": true
+    },
+    {
+      "FieldName": "Code",
+      "DesName": "编码",
+      "Type": "Other",
+      "Sxh": 0,
+      "XsFlag": false,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 140,
+      "Row": 0,
+      "Col": 0,
+      "RowSpan": 1,
+      "ColSpan": 1,
+      "GroupIndex": "0",
+      "Mrz": "",
+      "Enable": false
+    },
+    {
+      "FieldName": "Id",
+      "DesName": "ID",
+      "Type": "Other",
+      "Sxh": 0,
+      "XsFlag": false,
+      "BcFlag": false,
+      "Yxk": false,
+      "Width": 0,
+      "Row": 0,
+      "Col": 0,
+      "RowSpan": 1,
+      "ColSpan": 1,
+      "GroupIndex": "0",
+      "Mrz": "",
+      "Enable": false
+    }
+  ]
+}
