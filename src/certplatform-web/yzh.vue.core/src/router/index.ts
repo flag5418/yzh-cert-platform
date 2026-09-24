@@ -28,10 +28,17 @@ export const yzhHomeRoute: RouteRecordSingleView = {
 }
 
 /**
- * 系统管理原子路由（相对 shell 子路由；由 P3~P5 逐页充实）
+ * 系统管理原子路由（相对 shell 子路由；P3~P5 逐页充实）
  * path 恒定 = `Sys_Menu.Url`（对外 URL 永不因下沉而变化）
+ *
+ * P3 Wave A 已迁：log / config / role / user
  */
-export const yzhSystemRoutes: RouteRecordRaw[] = []
+export const yzhSystemRoutes: RouteRecordRaw[] = [
+  { path: 'system/log', name: 'SystemLog', component: () => import('../pages/system/log/index.vue') },
+  { path: 'system/config', name: 'SystemConfig', component: () => import('../pages/system/config/index.vue') },
+  { path: 'system/role', name: 'SystemRole', component: () => import('../pages/system/role/index.vue') },
+  { path: 'system/user', name: 'SystemUser', component: () => import('../pages/system/user/index.vue') },
+]
 
 export interface YzhRoutesOptions {
   /** 侧栏菜单 Tag 分流（缺省 'admin'） */

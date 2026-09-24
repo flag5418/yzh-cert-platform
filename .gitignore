@@ -12,6 +12,9 @@ x86/
 bld/
 [Ll]og/
 [Ll]ogs/
+
+# 放行系统日志页（pages/system/log 与 .NET 输出日志目录区分，勿删）
+!src/certplatform-web/**/pages/system/log/
 artifacts/
 TestResults/
 Coverage/

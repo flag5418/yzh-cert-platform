@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
+import { yzhSystemRoutes } from '@yzh-core/router'
 import { useAuthStore } from '@/store/auth'
 import { useMenuStore } from '@/store/menu'
 
@@ -18,18 +19,15 @@ const routes: RouteRecordRaw[] = [
     props: { menuTag: 'admin', logoText: 'YZH', appTitle: '映智汇认证平台' },
     redirect: '/system/organization',
     children: [
-      // ===== 系统管理 =====
+      // ===== 系统管理（core 原子路由单一来源：log/config/role/user 由 P3 下沉，勿在本表重复注册同 path） =====
+      ...yzhSystemRoutes,
       { path: 'system/organization', name: 'SystemOrganization', component: () => import('@/pages/system/organization/index.vue') },
-      { path: 'system/role', name: 'SystemRole', component: () => import('@/pages/system/role/index.vue') },
       { path: 'system/role-user', name: 'SystemRoleUser', component: () => import('@/pages/system/role-user/index.vue') },
       { path: 'system/role-menu', name: 'SystemRoleMenu', component: () => import('@/pages/system/role-menu/index.vue') },
       { path: 'system/role-api', name: 'SystemRoleApi', component: () => import('@/pages/system/role-api/index.vue') },
       { path: 'system/menu', name: 'SystemMenu', component: () => import('@/pages/system/menu/index.vue') },
       { path: 'system/api', name: 'SystemApi', component: () => import('@/pages/system/api/index.vue') },
       { path: 'system/dictionary', name: 'SystemDictionary', component: () => import('@/pages/system/dictionary/index.vue') },
-      { path: 'system/user', name: 'SystemUser', component: () => import('@/pages/system/user/index.vue') },
-      { path: 'system/log', name: 'SystemLog', component: () => import('@/pages/system/log/index.vue') },
-      { path: 'system/config', name: 'SystemConfig', component: () => import('@/pages/system/config/index.vue') },
 
       // ===== 业务管理 =====
 { path: 'cert/iso-standard', name: 'CertIsoStandard', component: () => import('@/pages/foundation/iso-standard/index.vue') },
