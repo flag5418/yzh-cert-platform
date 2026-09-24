@@ -1,16 +1,17 @@
 
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Controllers;
+using YZH.Core.Api.Models.System;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Interfaces;
 
-namespace CertPlatform.Admin.Controllers.System;
+namespace YZH.Core.Web.Controllers.System;
 
 /// <summary>
-///     系统参数配置控制器
+///     系统参数配置控制器（框架层底座）
 ///
 ///     路由前缀：/api/System/Config
 ///     数据库：cert_sys_config
@@ -32,7 +33,7 @@ public class ConfigController : YzhControllerBase<SysConfig>
     {
     }
 
-    /// <summary>加载 EntityConfig 配置（从 JSON 文件）</summary>
+    /// <summary>加载 EntityConfig 配置（Assets/EntityConfigs/System/SysConfig.json）</summary>
     protected override EntityConfig LoadConfig()
         => EntityConfigHelper.GetConfig<SysConfig>();
 

@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 using SqlSugar;
 using CertPlatform.Admin.Services.Workflow.Models;
 using CertPlatform.Admin.Services.Workflow.Skills;
-using CertPlatform.Shared.Entities.Sys;
+using YZH.Core.Api.Models.System;
 using YZH.Core.DataBase.Interfaces;
 using CertPlatform.Shared.DocExtraction;
 

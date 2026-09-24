@@ -1,4 +1,4 @@
-using CertPlatform.Shared.Entities.Sys;
+using YZH.Core.Api.Models.System;
 using YZH.Core.Api.Services;
 using YZH.Core.DataBase.Interfaces;
 

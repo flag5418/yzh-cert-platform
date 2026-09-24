@@ -15,7 +15,7 @@ using YZH.Core.Stand.Interfaces;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Entities.Dir;
 using CertPlatform.Shared.Entities.Doc;
-using CertPlatform.Shared.Entities.Sys;
+using YZH.Core.Api.Models.System;
 using CertPlatform.Shared.Entities.Wf;
 using CertPlatform.Shared.Entities.Cert;
 
