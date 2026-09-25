@@ -150,6 +150,7 @@
 
 <script setup lang="ts">
 import { yzhApi } from '@yzh-core/api/client'
+import { expectOk } from '@yzh-core/utils/apiResponse'
 import ExecutionResultPanel from './ExecutionResultPanel.vue'
 import ExecutionHistoryDrawer from './ExecutionHistoryDrawer.vue'
 import NodePropertyForm from './NodePropertyForm.vue'
@@ -307,6 +308,7 @@ onBeforeUnmount(() => {
 async function loadSkills() {
   try {
     const res = await yzhApi.post('/api/Workflow/WfSkill/filter', { Page: 1, PageSize: 200, Filters: [] })
+    expectOk(res as any, '技能列表加载失败')
     const items = res?.data?.Items || []
     // skillCode/skillName/category/skillType 是节点模型内部字段（workflow schema），
     // 由实体字段 Code/Name/CategoryCode/SkillType 派生，属组件内部模型而非实体字段。
@@ -317,11 +319,14 @@ async function loadSkills() {
       category: s.CategoryCode || '_default',
       skillType: s.SkillType || 'manual'
     }))
-  } catch {}
+  } catch (e: any) {
+    ElMessage.error(e?.err || e?.message || '技能列表加载失败')
+  }
 }
 async function loadCategories() {
   try {
     const res = await yzhApi.post('/api/Workflow/WfSkillCategory/filter', { Page: 1, PageSize: 200, Filters: [] })
+    expectOk(res as any, '技能分类加载失败')
     const items = res?.data?.Items || []
     categories.value = items.map((c: any) => ({
       ...c,
@@ -330,11 +335,14 @@ async function loadCategories() {
       color: c.Color || '#409EFF',
       sortOrder: c.SortOrder ?? 99
     }))
-  } catch {}
+  } catch (e: any) {
+    ElMessage.error(e?.err || e?.message || '技能分类加载失败')
+  }
 }
 async function loadTree() {
   try {
     const res = await yzhApi.get('/api/Workflow/StandardDirectory/organization-tree')
+    expectOk(res as any, '标准树加载失败')
     const raw = res?.data?.Data || res?.data || res?.Data || []
     treeData.value = (raw as any[]).map((org: any) => ({
       ...org, expanded: true, visible: true,
@@ -344,24 +352,32 @@ async function loadTree() {
       }))
     }))
     applySearchFilter()
-  } catch {}
+  } catch (e: any) {
+    ElMessage.error(e?.err || e?.message || '标准树加载失败')
+  }
 }
 async function loadDocRules() {
   try {
     const res = await yzhApi.get('/api/Workflow/DocExtractionRule/configured-rules')
+    expectOk(res as any, '文档提取规则加载失败')
     docRules.value = res?.data || res?.Data || []
-  } catch {}
+  } catch (e: any) {
+    ElMessage.error(e?.err || e?.message || '文档提取规则加载失败')
+  }
 }
 async function loadFieldsAndTables(ruleCode: string) {
   if (!ruleCode) return
   try {
     const res = await yzhApi.get(`/api/Workflow/DocExtractionRule/${ruleCode}/fields-tables`)
+    expectOk(res as any, '文档字段加载失败')
     const d = res?.data || res?.Data
     if (d) {
       currentDocFields.value = d.fields || d.Fields || []
       currentDocTables.value = d.tables || d.Tables || []
     }
-  } catch {}
+  } catch (e: any) {
+    ElMessage.error(e?.err || e?.message || '文档字段加载失败')
+  }
 }
 
 // ==================== Tree Operations ====================

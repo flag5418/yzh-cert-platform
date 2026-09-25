@@ -90,6 +90,8 @@ builder.Services.AddControllers(options =>
     options.Filters.Add<YZH.Core.Api.Filters.GlobalExceptionFilter>();
     options.Filters.Add<YZH.Core.Api.Filters.PermissionFilter>();
     options.Filters.Add<YZH.Core.Api.Filters.YzhAuditingFilter>();
+    // ★ B-R4（信封统一改造 P3）：放行前校验 ApiResponse 三条不变量，违规即抛（防回潮绊线）
+    options.Filters.Add<YZH.Core.Api.Filters.ApiResponseContractFilter>();
 })
 .AddApplicationPart(typeof(CertPlatform.Admin.Controllers.Workflow.StandardDirectoryController).Assembly)
 .AddApplicationPart(typeof(CertPlatform.Admin.Controllers.Workflow.WorkflowTestController).Assembly)

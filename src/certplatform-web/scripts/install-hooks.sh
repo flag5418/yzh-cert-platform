@@ -39,8 +39,9 @@ cat > "$HOOK" << 'HOOK_EOF'
 #
 # 由 src/certplatform-web/scripts/install-hooks.sh 生成 —— 请勿手改，改脚本后重装
 #
-# 前端架构守卫：违规即拒绝提交。
-#   查看详情：node src/certplatform-web/scripts/guards.mjs
+# 前端架构守卫 + 后端信封守卫：违规即拒绝提交。
+#   前端：node src/certplatform-web/scripts/guards.mjs
+#   后端：node scripts/backend/guards.mjs
 #   确需跳过：git commit --no-verify
 #
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -63,6 +64,15 @@ fi
 if ! "$NODE_BIN" "$GUARD"; then
     echo ""
     echo "❌ 前端架构守卫未通过，提交已阻止。"
+    echo "   修复后重试；确需跳过：git commit --no-verify"
+    exit 1
+fi
+
+# 后端信封守卫（B-R1..B-R4）：违规即拒绝提交。
+BACK_GUARD="$REPO_ROOT/scripts/backend/guards.mjs"
+if [ -f "$BACK_GUARD" ] && ! "$NODE_BIN" "$BACK_GUARD"; then
+    echo ""
+    echo "❌ 后端信封守卫未通过，提交已阻止。"
     echo "   修复后重试；确需跳过：git commit --no-verify"
     exit 1
 fi

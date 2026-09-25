@@ -210,6 +210,101 @@ function checkRouteMenuConsistency() {
   return { violations, skipped: false }
 }
 
+/** ── 信封统一 P3 / F3 自定义规则（R14–R16：需跨行上下文，走 type:'custom'） ── */
+
+const CUSTOM_ROOTS = [
+  ...PAGE_ROOTS,
+  ...API_ROOTS,
+  // 业务共享层（组件/composables）—— WorkflowDesigner 等在此，必须纳入信封防回潮面
+  join(WEB, 'cert/cert-share/src'),
+  CORE_ALL,
+]
+const CUSTOM_EXTS = ['.ts', '.vue']
+
+/** 取文本行号（1-based） */
+function lineOf(text, index) {
+  return text.slice(0, index).split('\n').length
+}
+
+/**
+ * R14 空 catch 吞错 —— 只抓「try 块内含 await」的（真 I/O 失败被吞）。
+ * 纯同步的防御性空 catch（如 setSelectionRange 兼容、画布清理）不在此列。
+ */
+function runR14() {
+  const violations = []
+  for (const file of walkAll(CUSTOM_ROOTS, CUSTOM_EXTS)) {
+    const text = readFileSync(file, 'utf8')
+    const tryBraces = [...text.matchAll(/\btry\s*\{/g)].map((m) => m.index + m[0].length - 1)
+    const re = /catch\s*(?:\([^)]*\))?\s*\{\s*\}/g
+    let m
+    while ((m = re.exec(text)) !== null) {
+      const catchIdx = m.index
+      const braceIdx = [...tryBraces].reverse().find((b) => b < catchIdx)
+      if (braceIdx === undefined) continue
+      let depth = 0
+      let end = -1
+      for (let i = braceIdx; i < text.length; i++) {
+        const c = text[i]
+        if (c === '{') depth++
+        else if (c === '}') {
+          depth--
+          if (depth === 0) { end = i; break }
+        }
+      }
+      if (end < 0 || end > catchIdx) continue // catch 不属于这个 try
+      if (!/\bawait\b/.test(text.slice(braceIdx, end))) continue // 非 I/O，豁免
+      violations.push({
+        file: rel(file),
+        line: lineOf(text, catchIdx),
+        text: text.slice(catchIdx, catchIdx + 40).split('\n')[0],
+      })
+    }
+  }
+  return { violations, skipped: false }
+}
+
+/**
+ * R15 ElMessageBox.confirm 无 catch（文件内一个 catch 都没有 → 确认后失败无人提示）。
+ * 近似口径：文件级「有 confirm 且无 catch」，基线 0。
+ */
+function runR15() {
+  const violations = []
+  for (const file of walkAll(CUSTOM_ROOTS, CUSTOM_EXTS)) {
+    const text = readFileSync(file, 'utf8')
+    if (!/ElMessageBox\.confirm/.test(text)) continue
+    if (/\bcatch\b/.test(text)) continue
+    violations.push({
+      file: rel(file),
+      line: lineOf(text, text.indexOf('ElMessageBox.confirm')),
+      text: '文件内 ElMessageBox.confirm 无任何 catch —— 确认后的失败会被静默吞掉',
+    })
+  }
+  return { violations, skipped: false }
+}
+
+/**
+ * R16 ElMessage.success 出现在 expectOk 之前（先弹成功、后校验信封 → 失败也已报喜）。
+ * 近似口径：同文件顺序，基线 0。
+ */
+function runR16() {
+  const violations = []
+  for (const file of walkAll(CUSTOM_ROOTS, CUSTOM_EXTS)) {
+    const text = readFileSync(file, 'utf8')
+    const si = text.indexOf('ElMessage.success')
+    if (si < 0) continue
+    const ei = text.search(/expectOk|unwrapOk/)
+    if (ei < 0) continue
+    if (si < ei) {
+      violations.push({
+        file: rel(file),
+        line: lineOf(text, si),
+        text: 'ElMessage.success 出现在 expectOk/unwrapOk 之前 —— 信封校验前就报成功',
+      })
+    }
+  }
+  return { violations, skipped: false }
+}
+
 /**
  * 规则定义
  * - id / desc: 标识与说明
@@ -357,6 +452,36 @@ const RULES = [
     run: checkRouteMenuConsistency,
     debt: [],
   },
+  {
+    id: 'R13',
+    desc: '信封判定唯一（禁裸 if (!res.success)，必须走 expectOk/unwrapOk）',
+    roots: CUSTOM_ROOTS,
+    exts: CUSTOM_EXTS,
+    forbid: [/if\s*\(\s*!\s*\w+\.success\s*\)/],
+    skipComments: true,
+    debt: [],
+  },
+  {
+    id: 'R14',
+    type: 'custom',
+    desc: '空 catch 禁吞 I/O 错误（try 内含 await 的 catch {} 一律出声）',
+    run: runR14,
+    debt: [],
+  },
+  {
+    id: 'R15',
+    type: 'custom',
+    desc: 'ElMessageBox.confirm 必须有 catch（确认后的失败不能静默）',
+    run: runR15,
+    debt: [],
+  },
+  {
+    id: 'R16',
+    type: 'custom',
+    desc: 'ElMessage.success 不得出现在 expectOk 之前（信封校验后才准报成功）',
+    run: runR16,
+    debt: [],
+  },
 ]
 
 const failures = []
@@ -364,7 +489,7 @@ const crossSkipped = []
 let scannedFiles = 0
 
 for (const rule of RULES) {
-  if (rule.type === 'cross') continue // ★ 交叉规则不做文件扫描，见下方单独执行
+  if (rule.type === 'cross' || rule.type === 'custom') continue // ★ 自定义规则不做文件扫描，见下方单独执行
   const files = walkAll(rule.roots, rule.exts)
   scannedFiles += files.length
   const violations = []
@@ -386,8 +511,8 @@ for (const rule of RULES) {
   else if (REPORT_ONLY) console.log(`✓ ${rule.id} ${rule.desc}`)
 }
 
-/** ★ 交叉规则（R12）：多事实源集合比对，无「文件 + 行号」概念 */
-for (const rule of RULES.filter((r) => r.type === 'cross')) {
+/** ★ 自定义规则（R12 交叉比对 / R14–R16 信封防回潮）：自带 run()，无「文件 + 行号」概念 */
+for (const rule of RULES.filter((r) => r.type === 'cross' || r.type === 'custom')) {
   const { violations, skipped } = rule.run()
   if (skipped) {
     crossSkipped.push(rule)
