@@ -9,6 +9,7 @@
  * - 支持 async validator
  * - 内置提交/重置/校验
  */
+import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { computed, reactive, ref, watch } from 'vue'
 
@@ -81,6 +82,13 @@ const props = withDefaults(
     resetText?: string
     /** 加载态 */
     loading?: boolean
+    /**
+     * 校验失败时是否**额外**弹一条 warning（决策 D3：**默认关**）
+     * el-form 已就地标红，重复弹窗是噪音；需要显式提示的页面再开。
+     */
+    showValidateMessage?: boolean
+    /** 校验失败提示文案（showValidateMessage=true 时生效） */
+    validateMessage?: string
   }>(),
   {
     labelWidth: '100px',
@@ -90,7 +98,9 @@ const props = withDefaults(
     cols: 2,
     submitText: '保存',
     resetText: '取消',
-    loading: false
+    loading: false,
+    showValidateMessage: false,
+    validateMessage: '表单校验未通过，请检查标红字段'
   }
 )
 
@@ -193,6 +203,8 @@ async function onSubmit() {
     emit('submit', { ...formData } as T)
     emit('validate', true)
   } catch (fields: any) {
+    // D3：额外提示默认关（标红已足够）；开 = 独立 ElMessage.warning 一条
+    if (props.showValidateMessage) ElMessage.warning(props.validateMessage)
     emit('validate', false, fields)
   }
 }

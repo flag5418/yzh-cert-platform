@@ -7,11 +7,12 @@
     :destroy-on-close="destroyOnClose"
     :close-on-press-escape="!loading"
     :show-close="!loading"
-    @closed="emit('closed')"
+    @closed="handleClosed"
   >
     <slot name="default">
       <slot name="prepend" />
       <YzhForm
+        ref="formRef"
         v-model="innerModel"
         :fields="fields"
         :loading="loading"
@@ -31,8 +32,16 @@
 
     <template #footer>
       <slot name="footer">
-        <el-button :disabled="loading" @click="handleCancel">取消</el-button>
-        <el-button type="primary" :loading="loading" @click="handleSubmit">
+        <el-button :disabled="loading" @click="handleCancel">
+          {{ mode === 'detail' ? '关闭' : '取消' }}
+        </el-button>
+        <!-- F4：detail 模式只读 → 主按钮禁用，避免「详情」误触发保存 -->
+        <el-button
+          type="primary"
+          :loading="loading"
+          :disabled="mode === 'detail'"
+          @click="handleSubmit"
+        >
           {{ submitText }}
         </el-button>
       </slot>
@@ -61,7 +70,7 @@
  *     @submit="logic.submitForm()"
  *   />
  */
-import { computed, useSlots } from 'vue'
+import { computed, ref, useSlots } from 'vue'
 import { ElMessage } from 'element-plus'
 import YzhForm from './YzhForm.vue'
 import type { YzhFormField } from './YzhForm.vue'
@@ -135,6 +144,9 @@ const fieldSlotNames = computed(() =>
   Object.keys(slots).filter((name) => !RESERVED_SLOTS.has(name) && typeof slots[name] === 'function')
 )
 
+/** 内层 YzhForm 实例（F5：关窗后 resetFields 清残留校验态） */
+const formRef = ref<any>(null)
+
 const visible = computed({
   get: () => props.visible,
   set: (v: boolean) => emit('update:visible', v)
@@ -156,9 +168,25 @@ const dialogTitle = computed(() => {
 
 const submitText = computed(() => props.submitText ?? (props.mode === 'detail' ? '关闭' : '保存'))
 
-function handleSubmit() {
+/**
+ * F-12：页脚「保存」必须先跑内层 YzhForm 校验。
+ * 否则校验失败也会发请求（实测：空表单点保存 → 照样 POST /add，红字要等 blur 才出现）。
+ * 校验失败 → 只发 validate 事件（D3 可选提示），**不 emit submit、不发任何请求**。
+ * `#default` 被覆盖（无内层 YzhForm）时 formRef 为空 → 跳过校验，保持原行为。
+ */
+async function handleSubmit() {
   // 提交进行中禁止重复触发（避免并发两次 add/update）
   if (props.loading) return
+  const form = formRef.value
+  if (form?.validate) {
+    try {
+      await form.validate()
+    } catch (fields: any) {
+      handleValidate(false, fields)
+      return
+    }
+    emit('validate', true)
+  }
   emit('submit')
 }
 
@@ -175,5 +203,16 @@ function handleValidate(valid: boolean, fields?: any) {
     ElMessage.warning(props.validateMessage)
   }
   emit('validate', valid, fields)
+}
+
+/**
+ * F5：关窗后清残留校验态（红字 / validate 状态）。
+ * 字段**值**的重置由宿主 `initFormData`（ST-3）+ YzhForm 的 `props.modelValue` watcher 负责，
+ * 这里只负责 el-form 自身的校验状态，避免下次打开时旧红字残留。
+ * `destroyOnClose=true`（默认）时内层已销毁 → formRef 为 null，安全 no-op。
+ */
+function handleClosed() {
+  formRef.value?.resetFields?.()
+  emit('closed')
 }
 </script>
