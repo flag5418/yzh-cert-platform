@@ -76,7 +76,7 @@
     {
       "FieldName": "VersionYear",
       "DesName": "版本年份",
-      "Type": "Number",
+      "Type": "Decimal",
       "Sxh": 3,
       "XsFlag": true,
       "BcFlag": true,

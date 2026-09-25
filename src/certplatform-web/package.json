@@ -10,7 +10,6 @@
   "scripts": {
     "dev:admin": "npm run dev --workspace=@certplatform/admin",
     "dev:auditor": "npm run dev --workspace=@certplatform/auditor",
-    "dev:enterprise": "npm run dev --workspace=@certplatform/enterprise",
     "build:core": "npm run build --workspace=yzh.vue.core",
     "build:share": "npm run build --workspace=@certplatform/share",
     "build:admin": "npm run build --workspace=@certplatform/admin",
@@ -25,8 +24,5 @@
     "less": "^4.9.1",
     "typescript": "^5.0.0",
     "vite": "^5.0.0"
-  },
-  "dependencies": {
-    "axios": "^1.6.0"
   }
 }

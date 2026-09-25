@@ -87,8 +87,8 @@ export class OrgPageLogic extends TreeTableCore<any> {
 
   /**
    * 行按钮：edit + delete + 按 row.IsValid 二选一 disable/enable。
-   * User.json / 后端 InjectRowActions 的 CustomButtons 形状为 { method: label }，
-   * 与 toRowActions 期望的 { label: method } 相反 —— 故在本页函数式覆写，不走适配层。
+   * CustomButtons 形状为 { method: label }（与 toRowActions 一致）；
+   * 本页保留显式覆写以维持确认文案与按钮文案的独立控制。
    */
   override get rowActions(): YzhAction[] | ((row: any) => YzhAction[]) {
     return (row: any) => {

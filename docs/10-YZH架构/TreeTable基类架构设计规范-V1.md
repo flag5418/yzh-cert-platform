@@ -16,7 +16,7 @@
 
 ### 1.1 是什么
 
-TreeTable 基类逻辑块（`TreeTableLogic`）是**左树右表页面的统一内核**：它继承单表 CRUD 基类 `CrudPageLogic` 获得全部表格能力，再叠加"树"的全部能力（加载 / 选中 / 懒加载 / 节点增删改 / 树表联动 / 大树可扩展）。
+TreeTable 基类逻辑块（`TreeTableLogic`）是**左树右表页面的统一内核**：它继承单表 CRUD 基类 `SingleTableCore` 获得全部表格能力，再叠加"树"的全部能力（加载 / 选中 / 懒加载 / 节点增删改 / 树表联动 / 大树可扩展）。
 
 ### 1.2 为什么能成立
 
@@ -54,7 +54,7 @@ TreeTable 基类逻辑块（`TreeTableLogic`）是**左树右表页面的统一�
         ┌────────────────────────────────┴───────────────────────────────┐
         │                                                                │
 ┌───────▼────────────────┐                            ┌──────────────────▼─────────────┐
-│      CrudPageLogic      │                            │      BaseLogic（轻量根）        │
+│      SingleTableCore      │                            │      BaseLogic（轻量根）        │
 │  单表 CRUD 内核（已有）  │                            │  （无 CRUD，仅状态/钩子骨架）    │
 │  config/rows/分页/搜索   │                            └──────────────────┬─────────────┘
 │  add/update/delete      │                                               │
@@ -76,7 +76,7 @@ TreeTable 基类逻辑块（`TreeTableLogic`）是**左树右表页面的统一�
 
 ### 2.1 为什么用 Mixin 而不是复制
 
-TS 单继承下，`TreeTableLogic` 根是 `CrudPageLogic`，`AssociationTreeLogic` 根不是 CRUD。两者需要**同一套树能力**。选择：
+TS 单继承下，`TreeTableLogic` 根是 `SingleTableCore`，`AssociationTreeLogic` 根不是 CRUD。两者需要**同一套树能力**。选择：
 
 | 方案 | 说明 | 取舍 |
 |------|------|------|
@@ -112,7 +112,7 @@ TS 单继承下，`TreeTableLogic` 根是 `CrudPageLogic`，`AssociationTreeLogi
 | `treeParentNode / treeEditingNode` | `Ref<TreeNode\|null>` | 新增父节点 / 编辑节点 |
 | `nodeIndex` | `Map<string, TreeNode>`（内部） | Code → 节点，O(1) 查找 |
 
-### 3.2 表侧（继承自 CrudPageLogic）
+### 3.2 表侧（继承自 SingleTableCore）
 
 `config / rows / loading / selectedRows / pagination / searchParams / sortField / sortOrder / dialogVisible / dialogMode / formData / submitting / showDisabled`。
 
@@ -512,7 +512,7 @@ onMounted → loadTree()                 POST tree/root → 机构树
 ```
 yzh.vue.core/src/
 ├─ logic/
-│  ├─ CrudPageLogic.ts            单表内核
+│  ├─ SingleTableCore.ts            单表内核
 │  ├─ TreeTableLogic.ts           左树右表（CRUD）
 │  ├─ AssociationTreeLogic.ts     关联型父类（新增）
 │  ├─ CheckTreeLogic.ts           类型A（新增）

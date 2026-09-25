@@ -128,7 +128,7 @@ public class ApiSyncService
             GroupPath = descriptor.GroupPath,
             Name = descriptor.Description,
             Author = descriptor.Author,
-            Enable = true,
+            IsValid = 1,
             CreateTime = descriptor.CreatedAt,
             UpdateTime = descriptor.UpdatedAt
         };

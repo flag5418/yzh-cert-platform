@@ -35,7 +35,7 @@
 | **启用标识** | 各表 `Enable` 语义不一 | 统一 `IsValid` + `tree/toggle-valid` 端点 |
 | **权限** | `[ApiActionPermission]` 特性 + 手动 Filter | `[YZHAuthorize]` + SSO 挤号（`TokenVersionService`） |
 | **缓存** | 各模块自研（如 `DictionaryManager` 105 行） | 复用 `ICacheManager` |
-| **前端绑定** | `view-grid` / `VolProvider` / `VolBox` / `VolForm` | `YzhTable` / `YzhForm` / `CrudPageLogic` / `TreeTableLogic` |
+| **前端绑定** | `view-grid` / `VolProvider` / `VolBox` / `VolForm` | `YzhTable` / `YzhForm` / `SingleTableCore` / `TreeTableLogic` |
 | **配置缺失行为** | — | 缺 JSON **静默空白**（需 `StrictConfigLoad => true` 暴露） |
 
 ---

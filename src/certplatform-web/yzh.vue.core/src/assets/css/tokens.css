@@ -1,0 +1,163 @@
+/* ============================================================
+ * yzh.vue.core — 设计令牌默认层（Design Tokens · Default Layer）
+ * ------------------------------------------------------------
+ * ★ 定位：本文件是**框架层令牌的默认值**，不是主题。
+ *
+ * 穿透机制（三层，后加载者覆盖前者）：
+ *   ① element-plus/dist/index.css   （第三方基线）
+ *   ② @yzh-core/assets/css/tokens.css  ← 本文件，core 令牌默认值
+ *   ③ 宿主 src/assets/css/main.css     ← 宿主主题覆盖（只需写想改的）
+ *
+ * 宿主用法（main.ts，顺序不可颠倒）：
+ *   import 'element-plus/dist/index.css'
+ *   import '@yzh-core/assets/css/tokens.css'   // ← 默认层
+ *   import './assets/css/main.css'             // ← 覆盖层
+ *
+ * 规则：
+ *   - core 组件**只允许**使用 var(--yzh-*) / var(--el-*)，禁止硬编码颜色
+ *   - 宿主改主题 = 只覆盖令牌，不改组件
+ *   - 令牌命名契约与 cert-admin/main.css 一致（同一套命名）
+ *
+ * 修复记录（G20，2026-09-24）：
+ *   此前 core 无任何样式文件，且 6 个令牌被引用却从未定义
+ *   （--yzh-color-bg-card / --yzh-color-text-regular /
+ *     --yzh-color-{success,warning,danger,info}-light-9）
+ *   → 组件永远走内联 fallback 硬编码色，宿主改主题**不生效**。
+ *   本文件补齐全部默认值。
+ * ============================================================ */
+
+:root {
+  /* ---------- 品牌主色 ---------- */
+  --yzh-color-primary: #1e3a8a;
+  --yzh-color-primary-light: #2563eb;
+  --yzh-color-primary-lighter: #3b82f6;
+  --yzh-color-primary-dark: #1e40af;
+  --yzh-color-primary-disabled: #94a3b8;
+
+  /* ---------- 语义色（含 -light-9 浅底，用于标签/徽章） ---------- */
+  --yzh-color-success: #16a34a;
+  --yzh-color-success-light-9: #f0f9eb;
+  --yzh-color-warning: #d97706;
+  --yzh-color-warning-light-9: #fdf6ec;
+  --yzh-color-danger: #dc2626;
+  --yzh-color-danger-light-9: #fef0f0;
+  --yzh-color-info: #64748b;
+  --yzh-color-info-light-9: #f4f4f5;
+
+  /* ---------- 背景 ---------- */
+  --yzh-color-bg-page: #f8fafc;
+  --yzh-color-bg-container: #ffffff;
+  --yzh-color-bg-card: #ffffff;
+  --yzh-color-bg-hover: #f1f5f9;
+  --yzh-color-bg-active: #eff6ff;
+  --yzh-color-bg-subtle: #f9fafb;
+  --yzh-color-bg-muted: #f3f4f6;
+
+  /* ---------- 文字 ---------- */
+  --yzh-color-text-primary: #303133;
+  --yzh-color-text-body: #334155;
+  --yzh-color-text-regular: #606266;
+  --yzh-color-text-secondary: #606266;
+  --yzh-color-text-tertiary: #909399;
+  --yzh-color-text-muted: #64748b;
+  --yzh-color-text-subtle: #6b7280;
+  --yzh-color-text-placeholder: #a8abb2;
+  --yzh-color-text-disabled: #c0c4cc;
+  --yzh-color-text-inverse: #ffffff;
+
+  /* ---------- 边框 ---------- */
+  --yzh-color-border: #e2e8f0;
+  --yzh-color-border-light: #f1f5f9;
+  --yzh-color-border-input: #dcdfe6;
+
+  /* ---------- 侧边栏（宿主最常覆盖的一组） ---------- */
+  --yzh-color-sidebar-bg: #1a2332;
+  --yzh-color-sidebar-text: #ffffff;
+  --yzh-color-sidebar-text-muted: rgba(255, 255, 255, 0.88);
+  --yzh-color-sidebar-hover: rgba(255, 255, 255, 0.1);
+  --yzh-color-sidebar-divider: rgba(255, 255, 255, 0.06);
+
+  /* ---------- 阴影 ---------- */
+  --yzh-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --yzh-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --yzh-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --yzh-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --yzh-shadow-header: 0 1px 4px rgba(0, 0, 0, 0.06);
+
+  /* ---------- 圆角 ---------- */
+  --yzh-radius-sm: 4px;
+  --yzh-radius-md: 8px;
+  --yzh-radius-lg: 12px;
+  --yzh-radius-xl: 16px;
+
+  /* ---------- 间距 ---------- */
+  --yzh-space-1: 4px;
+  --yzh-space-2: 8px;
+  --yzh-space-3: 12px;
+  --yzh-space-4: 16px;
+  --yzh-space-5: 20px;
+  --yzh-space-6: 24px;
+  --yzh-space-8: 32px;
+  --yzh-space-10: 40px;
+  --yzh-space-12: 48px;
+
+  /* ---------- 字体 ---------- */
+  --yzh-font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+  --yzh-font-family-heading: var(--yzh-font-family);
+  --yzh-font-size-xs: 12px;
+  --yzh-font-size-sm: 13px;
+  --yzh-font-size-md: 14px;
+  --yzh-font-size-lg: 16px;
+  --yzh-font-size-xl: 18px;
+  --yzh-font-size-2xl: 20px;
+  --yzh-font-size-3xl: 24px;
+  --yzh-font-weight-normal: 400;
+  --yzh-font-weight-medium: 500;
+  --yzh-font-weight-semibold: 600;
+  --yzh-font-weight-bold: 700;
+  --yzh-line-height-tight: 1.3;
+  --yzh-line-height-base: 1.6;
+  --yzh-line-height-relaxed: 1.8;
+  --yzh-letter-spacing-normal: 0;
+  --yzh-letter-spacing-wide: 0.5px;
+  --yzh-letter-spacing-wider: 1px;
+
+  /* ---------- 动效 ---------- */
+  --yzh-transition-fast: 150ms ease;
+  --yzh-transition-base: 200ms ease;
+  --yzh-transition-slow: 300ms ease;
+
+  /* ---------- 组件尺寸 ---------- */
+  --yzh-header-height: 56px;
+  --yzh-sidebar-brand-height: 64px;
+  --yzh-sidebar-width: 220px;
+  --yzh-sidebar-width-collapsed: 64px;
+
+  /* ---------- Element Plus 令牌映射（core 内部 el-* 组件用） ---------- */
+  --el-color-primary: var(--yzh-color-primary);
+  --el-color-primary-light-3: var(--yzh-color-primary-lighter);
+  --el-color-primary-light-5: #60a5fa;
+  --el-color-primary-light-7: #93c5fd;
+  --el-color-primary-light-8: #bfdbfe;
+  --el-color-primary-light-9: #dbeafe;
+  --el-color-primary-dark-2: var(--yzh-color-primary-dark);
+  --el-text-color-primary: var(--yzh-color-text-primary);
+  --el-text-color-regular: var(--yzh-color-text-regular);
+  --el-text-color-secondary: var(--yzh-color-text-tertiary);
+  --el-text-color-placeholder: var(--yzh-color-text-placeholder);
+  --el-text-color-disabled: var(--yzh-color-text-disabled);
+  --el-border-color: var(--yzh-color-border-input);
+  --el-border-color-light: #e4e7ed;
+  --el-border-color-lighter: #ebeef5;
+  --el-border-color-extra-light: #f2f6fc;
+  --el-bg-color: var(--yzh-color-bg-container);
+  --el-bg-color-page: var(--yzh-color-bg-page);
+  --el-fill-color: #f0f2f5;
+  --el-fill-color-light: #f5f7fa;
+  --el-fill-color-lighter: #fafafa;
+  --el-fill-color-blank: #ffffff;
+  --el-box-shadow: 0px 12px 32px 4px rgba(0, 0, 0, 0.04), 0px 8px 20px rgba(0, 0, 0, 0.08);
+  --el-box-shadow-light: 0px 0px 12px rgba(0, 0, 0, 0.12);
+  --el-box-shadow-lighter: 0px 0px 6px rgba(0, 0, 0, 0.12);
+}

@@ -420,7 +420,7 @@ onUnmounted(() => {
 
 /* ========== 侧边栏 ========== */
 .yzh-layout__aside {
-  background: #1a2332;
+  background: var(--yzh-color-sidebar-bg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -432,7 +432,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   padding: 0 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--yzh-color-sidebar-divider);
 }
 
 .brand-logo__icon {
@@ -443,8 +443,8 @@ onUnmounted(() => {
   justify-content: center;
   font-size: 13px;
   font-weight: 700;
-  color: #fff;
-  background: linear-gradient(135deg, var(--yzh-color-primary, #2563eb), var(--yzh-color-primary-light, #3b82f6));
+  color: var(--yzh-color-text-inverse);
+  background: linear-gradient(135deg, var(--yzh-color-primary), var(--yzh-color-primary-light));
   border-radius: 8px;
   flex-shrink: 0;
   letter-spacing: 0.5px;
@@ -452,7 +452,7 @@ onUnmounted(() => {
 
 .brand-text {
   margin-left: 12px;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--yzh-color-sidebar-text-muted);
   font-size: 15px;
   font-weight: 600;
   white-space: nowrap;
@@ -462,7 +462,7 @@ onUnmounted(() => {
 /* 菜单区域 */
 .yzh-layout__menu {
   border-right: none;
-  background: #1a2332;
+  background: var(--yzh-color-sidebar-bg);
   overflow-y: auto;
   overflow-x: hidden;
   flex: 1;
@@ -487,7 +487,7 @@ onUnmounted(() => {
 /* 覆盖 Element Plus 菜单项样式 */
 .yzh-layout__menu :deep(.el-menu-item),
 .yzh-layout__menu :deep(.el-sub-menu__title) {
-  color: #ffffff;
+  color: var(--yzh-color-sidebar-text);
   background-color: transparent;
   height: 42px;
   line-height: 42px;
@@ -497,13 +497,13 @@ onUnmounted(() => {
 
 .yzh-layout__menu :deep(.el-menu-item:hover),
 .yzh-layout__menu :deep(.el-sub-menu__title:hover) {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--yzh-color-sidebar-text);
+  background: var(--yzh-color-sidebar-hover);
 }
 
 .yzh-layout__menu :deep(.el-menu-item.is-active) {
-  color: #ffffff;
-  background: var(--yzh-color-primary, #2563eb);
+  color: var(--yzh-color-sidebar-text);
+  background: var(--yzh-color-primary);
   font-weight: 500;
 }
 
@@ -514,14 +514,14 @@ onUnmounted(() => {
 }
 
 .yzh-layout__menu :deep(.el-sub-menu .el-menu-item:hover) {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--yzh-color-sidebar-hover);
 }
 
 /* ========== 主体容器 ========== */
 .yzh-layout__main-container {
   display: flex;
   flex-direction: column;
-  background: #f5f5f5;
+  background: var(--yzh-color-bg-page);
 }
 
 /* ========== 顶部导航栏 ========== */
@@ -530,9 +530,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #ffffff;
+  background: var(--yzh-color-bg-container);
   padding: 0 24px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--yzh-shadow-header);
 }
 
 .header-left {
@@ -541,12 +541,12 @@ onUnmounted(() => {
 }
 
 .header-breadcrumb :deep(.el-breadcrumb__inner) {
-  color: #64748b;
+  color: var(--yzh-color-text-muted);
   font-size: 13px;
 }
 
 .header-breadcrumb :deep(.el-breadcrumb__inner.is-link) {
-  color: var(--yzh-color-primary, #2563eb);
+  color: var(--yzh-color-primary);
 }
 
 /* 用户区域 */
@@ -567,25 +567,25 @@ onUnmounted(() => {
 }
 
 .header-user:hover {
-  background: #f1f5f9;
+  background: var(--yzh-color-bg-hover);
 }
 
 .header-user__avatar {
-  background: linear-gradient(135deg, var(--yzh-color-primary, #2563eb), var(--yzh-color-primary-light, #3b82f6));
-  color: #fff;
+  background: linear-gradient(135deg, var(--yzh-color-primary), var(--yzh-color-primary-light));
+  color: var(--yzh-color-text-inverse);
   font-size: 13px;
   font-weight: 600;
 }
 
 .header-user__name {
   font-size: 13px;
-  color: #334155;
+  color: var(--yzh-color-text-body);
   font-weight: 500;
 }
 
 /* ========== 内容区域 ========== */
 .yzh-layout__content {
-  background: #f5f5f5;
+  background: var(--yzh-color-bg-page);
   padding: 24px;
   overflow-y: auto;
 }
@@ -600,14 +600,14 @@ onUnmounted(() => {
 }
 
 .profile-form .el-input__wrapper {
-  background: #f9fafb;
+  background: var(--yzh-color-bg-subtle);
 }
 
 .profile-form .el-input.is-disabled .el-input__wrapper {
-  background: #f3f4f6;
+  background: var(--yzh-color-bg-muted);
 }
 
 .profile-form .el-input.is-disabled .el-input__inner {
-  color: #6b7280;
+  color: var(--yzh-color-text-subtle);
 }
 </style>

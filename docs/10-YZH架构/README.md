@@ -57,7 +57,7 @@ docs/10-YZH架构/
 │   ── 规范类：怎么写代码 ──
 ├── 01-架构总纲.md               核心理念 + 继承体系 + 核心约束
 ├── 02-后端架构.md               YzhControllerBase + TreeTableControllerBase + EntityService
-├── 03-前端架构.md               CrudPageLogic + TreeTableLogic + 组件体系
+├── 03-前端架构.md               SingleTableCore + TreeTableLogic + 组件体系
 ├── 04-数据契约.md               FilterRequest / TreeItemDto / EntityConfig / TreeConfig
 ├── 05-权限体系.md               三类组织域 + 角色矩阵 + SSO + 三层权限
 ├── 06-代码结构规范.md           三层同构 + 路由约定 + 命名规范
@@ -135,7 +135,7 @@ docs/10-YZH架构/
 
 | 文件/目录 | 职责 |
 |-----------|------|
-| `cert/cert-share/src/logic/CrudPageLogic.ts` | 单表 Logic 基类 |
+| `cert/cert-share/src/logic/SingleTableCore.ts` | 单表 Logic 基类 |
 | `cert/cert-share/src/logic/TreeTableLogic.ts` | 左树右表 Logic 基类 |
 | `cert/cert-share/src/types/contracts.ts` | 前后端统一契约类型 |
 | `cert/cert-share/src/types/tree.ts` | 树节点类型定义 |
@@ -176,7 +176,7 @@ EntityConfig：src/yzh-core/YZH.Core.Web/Assets/EntityConfigs/Foundation/ISOClau
 | 树形结构 | 各项目独立实现 | 统一 TreeTableControllerBase / TreeTableLogic |
 | API 接口 | 各项目自由定义 | 固定 11 个接口，命名统一 |
 | 权限校验 | 手动 Filter | 内置 [YZHAuthorize] + SSO 挤号 |
-| 前端绑定 | VolProvider / view-grid | yzhApi + CrudPageLogic / TreeTableLogic |
+| 前端绑定 | VolProvider / view-grid | yzhApi + SingleTableCore / TreeTableLogic |
 
 > ⚠️ 旧前端代码（`src/old/server/Vue.NetCore/vol.web/`、`src/old/auditor/`）**禁止修改**，仅作参考。
 

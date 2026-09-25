@@ -18,12 +18,12 @@ namespace CertPlatform.Shared.Entities.Sys
         // ====== 视图特有字段（来自关联的阶段信息和字典翻译）======
 
         /// <summary>
-        /// 阶段名称（cert_phase_definition.PhaseName）
+        /// 阶段名称（cert_cert_stage.StageName）
         /// </summary>
         public string StageName { get; set; } = string.Empty;
 
         /// <summary>
-        /// 排序号（cert_phase_definition.SequenceOrder）
+        /// 排序号（cert_cert_stage.SortOrder）
         /// </summary>
         public int SortOrder { get; set; }
 

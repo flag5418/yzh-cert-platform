@@ -31,7 +31,8 @@ export interface ApiTreeRow {
   GroupPath?: string
   Method?: string
   Path?: string
-  Enable?: boolean
+  /** 有效标志（1=有效 0=无效）—— 铁律九（原 Enable 列已迁移） */
+  IsValid?: number
   ApiCount?: number
   Author?: string
   CreateTime?: string
@@ -66,7 +67,8 @@ export class ApiPageLogic extends SingleTableCore<ApiTreeRow> {
   }
 
   // ========================================================
-  // 配置派生（slot 覆写：Name/Method 页面渲染；Enable 由 EnableField 自动 slot）
+  // 配置派生（slot 覆写：Name/Method 页面渲染；IsValid 由 EnableField 自动 slot）
+  // ⚠️ EntityConfig.EnableField 的「值」= "IsValid"（名字保留，值必须是 IsValid —— 铁律九）
   // ========================================================
 
   /** 列：Name / Method 用 #column-* 插槽（分组 vs 接口、方法标签） */
@@ -78,7 +80,11 @@ export class ApiPageLogic extends SingleTableCore<ApiTreeRow> {
 
   /** 行按钮：仅接口节点显示「测试」；分组节点无操作列 */
   override get rowActions(): YzhAction[] | ((row: ApiTreeRow) => YzhAction[]) {
-    return (row: ApiTreeRow) => (row?.NodeType === 'api' ? super.rowActions as YzhAction[] : [])
+    return (row: ApiTreeRow) => {
+      if (row?.NodeType !== 'api') return []
+      const base = super.rowActions
+      return typeof base === 'function' ? base(row) : base
+    }
   }
 
   // ========================================================
@@ -189,7 +195,7 @@ export class ApiPageLogic extends SingleTableCore<ApiTreeRow> {
               GroupPath: api.GroupPath,
               Method: api.Method,
               Path: api.Path,
-              Enable: api.Enable,
+              IsValid: api.IsValid,
               Author: api.Author,
               CreateTime: api.CreateTime,
             })),

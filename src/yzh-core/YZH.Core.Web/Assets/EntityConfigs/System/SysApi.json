@@ -2,7 +2,7 @@
   "Title": "接口管理",
   "FillMode": "AutoFix",
   "FormCols": 1,
-  "EnableField": "Enable",
+  "EnableField": "IsValid",
   "Toolbar": {
     "Add": false,
     "Delete": false,
@@ -19,7 +19,7 @@
     "Delete": false,
     "Enable": false,
     "CustomButtons": {
-      "测试": "Swagger"
+      "Swagger": "测试"
     }
   },
   "SearchFields": [
@@ -129,7 +129,7 @@
       "Enable": true
     },
     {
-      "FieldName": "Enable",
+      "FieldName": "IsValid",
       "DesName": "状态",
       "Type": "Switch",
       "Sxh": 5,

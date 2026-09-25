@@ -1,0 +1,45 @@
+/* ============================================================
+ * cert-auditor — 宿主样式覆盖层（L3 覆盖层）
+ * ------------------------------------------------------------
+ * 加载顺序（main.ts，不可颠倒）：
+ *   ① element-plus/dist/index.css
+ *   ② @yzh-core/assets/css/tokens.css   ← core 令牌默认层
+ *   ③ 本文件                            ← 宿主覆盖层（本文件）
+ *
+ * ★ 规则：本文件**只做两件事**
+ *   a) 全局 reset / 工具类（非令牌化的少量样式）
+ *   b) 覆盖 :root 令牌以形成本端主题
+ *   ⛔ 禁止在这里写组件级样式 —— 组件样式属于 core，宿主改主题只改令牌。
+ *
+ * 现状（2026-09-24）：本端暂不需要定制主题，全部继承 core 令牌默认值。
+ *   如需定制，只需在下方 :root 覆盖想改的令牌即可，例如：
+ *     :root { --yzh-color-primary: #0f766e; --yzh-color-sidebar-bg: #0b1f1a; }
+ * ============================================================ */
+
+/* ---------- 全局 reset ---------- */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--yzh-font-family);
+  font-size: var(--yzh-font-size-md);
+  line-height: var(--yzh-line-height-base);
+  color: var(--yzh-color-text-primary);
+  background: var(--yzh-color-bg-page);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---------- 本端主题覆盖（当前为空，继承 core 默认） ---------- */
+:root {
+  /* --yzh-color-primary: #1e3a8a; */
+}

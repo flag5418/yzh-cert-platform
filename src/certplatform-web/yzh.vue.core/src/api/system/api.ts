@@ -15,7 +15,8 @@ export interface ApiItem {
   GroupPath: string
   Name: string
   Author?: string
-  Enable: boolean
+  /** 有效标志（1=有效 0=无效）—— 铁律九：唯一启禁契约（原 Enable 列已迁移） */
+  IsValid: number
   CreateTime: string
   UpdateTime?: string
 }

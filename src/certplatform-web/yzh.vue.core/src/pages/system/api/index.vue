@@ -45,10 +45,10 @@
         </el-tag>
       </template>
 
-      <!-- 状态（EnableField 自动 slot） -->
-      <template #column-Enable="{ row }">
-        <el-tag v-if="row.NodeType === 'api'" :type="row.Enable ? 'success' : 'danger'" size="small">
-          {{ row.Enable ? '启用' : '禁用' }}
+      <!-- 状态（EnableField="IsValid" 自动 slot） -->
+      <template #column-IsValid="{ row }">
+        <el-tag v-if="row.NodeType === 'api'" :type="row.IsValid ? 'success' : 'danger'" size="small">
+          {{ row.IsValid ? '启用' : '禁用' }}
         </el-tag>
       </template>
     </YzhTreeTable>

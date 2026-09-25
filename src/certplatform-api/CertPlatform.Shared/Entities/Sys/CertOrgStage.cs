@@ -8,7 +8,7 @@ namespace CertPlatform.Shared.Entities.Sys
     /// <summary>
     /// 机构-阶段关联表（多对多）
     /// <para>表名：cert_org_stage</para>
-    /// <para>ORM：SqlSugar。关联 cert_certification_body.Code ↔ cert_phase_definition.PhaseCode</para>
+    /// <para>ORM：SqlSugar。关联 cert_certification_body.Code ↔ cert_cert_stage.StageCode</para>
     ///
     /// 命名规范（YZH 铁律）：DB 列名 = C# 属性名 = PascalCase
     /// </summary>
@@ -27,7 +27,7 @@ namespace CertPlatform.Shared.Entities.Sys
         [SugarColumn(Length = 50, IsNullable = true)]
         public string? StandardCode { get; set; }
 
-        /// <summary>阶段编码（关联 cert_phase_definition.PhaseCode）</summary>
+        /// <summary>阶段编码（关联 cert_cert_stage.StageCode）</summary>
         public string StageCode { get; set; } = string.Empty;
 
         /// <summary>备注</summary>

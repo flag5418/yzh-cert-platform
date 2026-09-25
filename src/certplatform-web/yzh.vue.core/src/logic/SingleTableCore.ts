@@ -206,7 +206,10 @@ export abstract class SingleTableCore<V extends Record<string, any> = any> {
    * 子类可覆盖为函数式：(row) => YzhAction[]（按行状态动态显隐/禁用）
    */
   get rowActions(): YzhAction[] | ((row: V) => YzhAction[]) {
-    return toRowActions(this.config.value, this.enableField)
+    const actions = toRowActions(this.config.value, this.enableField)
+    return typeof actions === 'function'
+      ? ((row: V) => actions(row ?? ({} as V)))
+      : actions
   }
 
   /** 行操作按钮字典（兼容旧 Record 消费方，由 rowActions 派生） */

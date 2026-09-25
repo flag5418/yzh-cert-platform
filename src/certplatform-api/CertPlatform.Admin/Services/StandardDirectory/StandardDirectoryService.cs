@@ -75,10 +75,10 @@ public class StandardDirectoryService
         var orgStandards = (await _db.GetListAsync<CertOrgStandard>()).Data ?? new();
         var orgStages = (await _db.GetListAsync<CertOrgStage>()).Data ?? new();
 
-        // PhaseDefinition 是机构-阶段关联（cert_org_stage.StageCode）的权威来源
-        // 5 阶段：S1/S2/Surv1/Surv2/Recert（认证生命周期），不是 CertStage 的 9 阶段
-        var phaseDefs = (await _db.GetListAsync<PhaseDefinition>(x => x.IsValid == 1 && !x.IsDeleted))
-                        .Data?.OrderBy(x => x.SequenceOrder).ToList() ?? new();
+        // CertStage 是机构-阶段关联（cert_org_stage.StageCode）的权威来源
+        // 与「认证阶段定义」页（/cert/cert-stage）同源
+        var phaseDefs = (await _db.GetListAsync<CertStage>(x => x.IsValid == 1 && !x.IsDeleted))
+                        .Data?.OrderBy(x => x.SortOrder).ThenBy(x => x.StageCode).ToList() ?? new();
 
         var tree = new List<object>();
 
@@ -116,30 +116,30 @@ public class StandardDirectoryService
                 };
                 var stdChildren = (List<object>)stdNode["children"];
 
-                // 该机构+标准关联的阶段：cert_org_stage.StageCode == PhaseDefinition.PhaseCode
+                // 该机构+标准关联的阶段：cert_org_stage.StageCode == CertStage.StageCode
                 // StandardCode==null 表示适用于所有标准
                 var orgStageCodes = orgStages
                     .Where(x => x.OrgCode == org.Code
                         && (x.StandardCode == null || x.StandardCode == std.Code))
                     .Select(x => x.StageCode).ToHashSet();
 
-                // PhaseDefinition 是权威数据源，按 SequenceOrder 排序展示
+                // CertStage 是权威数据源，按 SortOrder 排序展示
                 var linkedPhases = phaseDefs
-                    .Where(p => orgStageCodes.Contains(p.PhaseCode))
+                    .Where(p => orgStageCodes.Contains(p.StageCode))
                     .ToList();
 
                 foreach (var phase in linkedPhases)
                 {
                     var phaseNode = new Dictionary<string, object>
                     {
-                        ["id"] = $"{org.Code}|{std.StandardCode}|{phase.PhaseCode}",
-                        ["label"] = $"{phase.PhaseCode} - {phase.PhaseName}",
+                        ["id"] = $"{org.Code}|{std.StandardCode}|{phase.StageCode}",
+                        ["label"] = $"{phase.StageCode} - {phase.StageName}",
                         ["type"] = "phase",
                         ["cbCode"] = org.Code,
                         ["stdCode"] = std.Code,
                         ["standardCode"] = std.StandardCode,
-                        ["phaseCode"] = phase.PhaseCode,
-                        ["phaseName"] = phase.PhaseName,
+                        ["phaseCode"] = phase.StageCode,
+                        ["phaseName"] = phase.StageName,
                         ["phaseDefinitionCode"] = phase.Code
                     };
                     stdChildren.Add(phaseNode);
@@ -179,7 +179,9 @@ public class StandardDirectoryService
     {
         config.UpdateTime = DateTime.Now;
         var result = await _db.UpdateAsync(config);
-        return result.Code == 200;
+        // ⚠️ 必须用 Success（Error == null）判定：Result<T>.Ok() 的 Code 为 **null**（不设 200），
+        //    写成 `result.Code == 200` 会恒为 false → 更新已落库却回报「更新失败」。
+        return result.Success;
     }
 
     public async Task<bool> DeleteConfigAsync(string directoryCode)
@@ -189,7 +191,8 @@ public class StandardDirectoryService
         config.IsValid = 0;
         config.DeleteTime = DateTime.Now;
         var result = await _db.UpdateAsync(config);
-        return result.Code == 200;
+        // ⚠️ 同上：`result.Code == 200` 恒 false → 软删已生效却回报「删除失败」。
+        return result.Success;
     }
 
     #endregion

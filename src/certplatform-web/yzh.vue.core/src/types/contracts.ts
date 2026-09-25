@@ -179,6 +179,7 @@ export interface RowButtonConfig {
   Delete?: boolean
   /** 是否显示启用/禁用按钮（默认 false，需显式开启） */
   Enable?: boolean
+  /** 自定义行按钮：{ 后端方法名: 按钮文字 }（与 InjectRowActions 一致） */
   CustomButtons?: Record<string, string>
 }
 

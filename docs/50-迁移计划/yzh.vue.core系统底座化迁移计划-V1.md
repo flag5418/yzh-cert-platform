@@ -209,7 +209,7 @@ const routes = [
 | 0.2 | 守卫扩展：`PAGE_ROOTS += yzh.vue.core/src/{pages,layouts}`、`API_ROOTS += yzh.vue.core/src/api`；新增 R10、R11 | `scripts/guards.mjs` |
 | 0.3 | 登记「系统底座包」定位与五原子模型 | `docs/10-YZH架构/03-前端架构.md`、`06-代码结构规范.md` |
 | 0.4 | 三层同构 System 域映射修订：`YZH.Core.Web/Controllers/System ↔ yzh.vue.core/src/api/system ↔ yzh.vue.core/src/pages/system`（业务域映射不变） | `docs/30-项目规则/前后端代码结构统一规则-V1.md`、`docs/10-YZH架构/06` |
-| 0.5 | AGENTS.md + 知识库副本预告标注（样板路径、system 归属将变） | `AGENTS.md`、`docs/30-项目规则/知识库/AGENTS.md` |
+| 0.5 | AGENTS.md 预告标注（样板路径、system 归属将变） | `AGENTS.md`（~~知识库副本~~ → 该副本已于 2026-09-24 删除，见 `项目全局规则.md` §7 唯一权威源） |
 
 **门禁**：`node scripts/guards.mjs` 0 违规。
 

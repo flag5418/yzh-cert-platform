@@ -132,7 +132,7 @@ public class RoleApiController : TreeTableControllerBase<Sys_Role, SysApi>
                         ["Path"] = api.Path,
                         ["ApiName"] = api.Name,
                         ["GroupPath"] = api.GroupPath,
-                        ["Enable"] = api.Enable,
+                        ["IsValid"] = api.IsValid,
                     },
                 });
             }

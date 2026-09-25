@@ -10,7 +10,6 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@certplatform/share": "file:../cert-share",
     "@element-plus/icons-vue": "^2.3.0",
     "element-plus": "^2.6.0",
     "pinia": "^2.1.0",

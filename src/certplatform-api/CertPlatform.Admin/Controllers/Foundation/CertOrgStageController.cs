@@ -6,7 +6,7 @@ using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Entities.Sys;
 
 using CB = CertPlatform.Shared.Entities.Cert.CertificationBody;
-using Phase = CertPlatform.Shared.Entities.Cert.PhaseDefinition;
+using Stage = CertPlatform.Shared.Entities.Cert.CertStage;
 using Link = CertPlatform.Shared.Entities.Sys.CertOrgStage;
 
 namespace CertPlatform.Admin.Controllers.Foundation;
@@ -16,7 +16,7 @@ namespace CertPlatform.Admin.Controllers.Foundation;
 ///
 /// <para>路由前缀：/api/Foundation/CertOrgStage</para>
 /// <para>左树：认证机构（cert_certification_body，扁平）</para>
-/// <para>右表：所有有效认证阶段（cert_phase_definition），带 Linked 标记</para>
+/// <para>右表：所有有效认证阶段（cert_cert_stage，与「认证阶段定义」页同源），带 Linked 标记</para>
 /// <para>交互：勾选 = 创建关联，取消 = 删除关联，无弹窗</para>
 /// </summary>
 [ApiController]
@@ -24,18 +24,18 @@ namespace CertPlatform.Admin.Controllers.Foundation;
 public class CertOrgStageController : ControllerBase
 {
     private readonly EntityService<CB> _cbService;
-    private readonly EntityService<Phase> _phaseService;
+    private readonly EntityService<Stage> _stageService;
     private readonly EntityService<Link> _linkService;
     private readonly IUserContext _userContext;
 
     public CertOrgStageController(
         EntityService<CB> cbService,
-        EntityService<Phase> phaseService,
+        EntityService<Stage> stageService,
         EntityService<Link> linkService,
         IUserContext userContext)
     {
         _cbService = cbService;
-        _phaseService = phaseService;
+        _stageService = stageService;
         _linkService = linkService;
         _userContext = userContext;
     }
@@ -89,10 +89,11 @@ public class CertOrgStageController : ControllerBase
             if (string.IsNullOrEmpty(request.OrgCode))
                 return Ok(ApiResponse<object?>.Ok(new List<object>()));
 
-            // 1. 查询所有阶段（PhaseDefinition 未重声明 IsValid/IsDeleted，直接查全量）
-            var phases = await _phaseService.GetListAsync();
-            if (!phases.Success)
-                return BadRequest(ApiResponse.Fail(phases.Error));
+            // 1. 查询所有有效阶段（与「认证阶段定义」页同源：cert_cert_stage）
+            var stages = await _stageService.GetListAsync(p =>
+                p.IsValid == 1 && !p.IsDeleted);
+            if (!stages.Success)
+                return BadRequest(ApiResponse.Fail(stages.Error));
 
             // 2. 查询该机构已关联的阶段编码
             var linked = await _linkService.GetListAsync(p =>
@@ -100,14 +101,14 @@ public class CertOrgStageController : ControllerBase
             var linkedCodes = new HashSet<string>(
                 linked.Data?.Select(p => p.StageCode) ?? Array.Empty<string>());
 
-            // 3. 合并返回
-            var items = phases.Data!.OrderBy(p => p.SequenceOrder).Select(p => new
+            // 3. 合并返回（字段名对齐前端 CertOrgStageItem：PhaseCode/PhaseName）
+            var items = stages.Data!.OrderBy(p => p.SortOrder).ThenBy(p => p.StageCode).Select(p => new
             {
                 Code = p.Code,
-                PhaseCode = p.PhaseCode,
-                PhaseName = p.PhaseName,
-                SortOrder = p.SequenceOrder,
-                Linked = linkedCodes.Contains(p.PhaseCode)
+                PhaseCode = p.StageCode,
+                PhaseName = p.StageName,
+                SortOrder = p.SortOrder,
+                Linked = linkedCodes.Contains(p.StageCode)
             }).ToList();
 
             return Ok(ApiResponse<object?>.Ok(items));

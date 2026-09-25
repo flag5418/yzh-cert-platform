@@ -5,6 +5,8 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import { configureYzhApi } from '@yzh-core/api/client'
+// ★ 样式穿透三层（顺序不可颠倒）：element-plus 基线 → core 令牌默认层 → 宿主覆盖层
+import '@yzh-core/assets/css/tokens.css'
 import './assets/css/main.css'
 import App from './App.vue'
 import router from './router'

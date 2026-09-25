@@ -439,11 +439,13 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
         if (dto.RowButtons.CustomButtons == null)
             dto.RowButtons.CustomButtons = new Dictionary<string, string>();
 
-        // 内置按钮映射
+        // 内置按钮映射（key 与 RegisterRowAction 一致：已 ToLowerInvariant）
         var builtInMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             { "disable", "禁用" },
-            { "enable", "启用" }
+            { "enable", "启用" },
+            { "setpermission", "设置权限" },
+            { "resetpassword", "重置密码" }
         };
 
         foreach (var actionName in _rowActions.Keys)

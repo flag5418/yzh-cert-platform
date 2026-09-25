@@ -1,7 +1,7 @@
 {
   "name": "@certplatform/enterprise",
   "version": "1.0.0",
-  "description": "认证平台 - 企业端",
+  "description": "认证平台 - 企业端（⛔ 未开工，仅占位 —— 见 README.md）",
   "private": true,
   "scripts": {
     "dev": "vite",
@@ -12,8 +12,7 @@
   "dependencies": {
     "vue": "^3.4.0",
     "vue-router": "^4.2.0",
-    "pinia": "^2.1.0",
-    "@certplatform/share": "file:../cert-share"
+    "pinia": "^2.1.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",

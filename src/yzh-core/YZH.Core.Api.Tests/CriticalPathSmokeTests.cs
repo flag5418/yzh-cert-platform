@@ -307,8 +307,11 @@ public class CriticalPathSmokeTests
             using (var response = await PostAuthorizedAsync("api/System/Config/add", new
                    {
                        ConfigKey = key,
-                       // ⚠️ cert_sys_config.Category 是 NOT NULL 且无默认值；EntityConfig 却标了 Yxk=true，
-                       //    省略该字段会得到误导性的「必填字段为空」。经 UI 提交时字段是空串故不会暴露。
+                       // ⚠️ cert_sys_config.Category：DB 是 NOT NULL 且无默认值，但 EntityConfig 标了 Yxk=true。
+                       //    ★ Yxk = 「允许为空」（不是必填）→ 基类校验条件 `BcFlag && !Yxk` 被跳过 →
+                       //      省略该字段会一路写到 MySQL，由 DB 层抛 cannot be null，再被归一化成
+                       //      「新增失败：必填字段为空」（**文案误导**：来源是 DB 约束，不是 EntityConfig）。
+                       //    经 UI 提交时字段是空串（空串 ≠ NULL）故不暴露，只有 API 直调省略才踩到。
                        Category = "E2E",
                        ConfigType = "String",
                        ConfigValue = "v1",

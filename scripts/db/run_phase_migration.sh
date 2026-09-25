@@ -1,71 +1,48 @@
 #!/bin/bash
-##############################################################################
-# 认证阶段定义 — 数据库迁移脚本
-# 执行：./run_phase_migration.sh
-##############################################################################
+# ============================================================
+# 认证阶段定义 — 数据库迁移（一次性脚本，保留备查）
+#
+# ⚠️ 历史脚本：`cert_phase_definition_setup.sql` 是一次性迁移，
+#    当前库**已应用完毕**。保留用于「从零重建历史环境」时备查。
+#
+# ★ 合规（scripts/README.md 铁律 B1–B7）：
+#    B3 SQL 外置 → 验证查询移到 verify/verify_phase_migration.sql
+#    B5 自定位   → docker 由 PATH 解析，无硬编码绝对路径 / socket 路径
+#    B1 单一职责 → 不再顺带启动容器（启动归 docker/start.sh）
+#
+# 用法：./run_phase_migration.sh   （前置：MySQL 容器已启动）
+# 维护人：脚本规范 V1（2026-09-24）
+# ============================================================
+set -euo pipefail
 
-set -e
+HERE="$(cd "$(dirname "$0")" && pwd)"
+SETUP_SQL="$HERE/cert_phase_definition_setup.sql"
+VERIFY_SQL="$HERE/verify/verify_phase_migration.sql"
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-DOCKER_BIN="/Applications/OrbStack.app/Contents/MacOS/xbin/docker"
-DOCKER_SOCKET="/Volumes/Expand/wangqingquan/.orbstack/run/docker.sock"
+DB="${YZH_DB_NAME:-yzh_cert_platform}"
+MYSQL_CONTAINER="${YZH_MYSQL_CONTAINER:-yzh-mysql}"
+MYSQL_PWD_ROOT="${MYSQL_PWD_ROOT:-Yzh123456.}"
 
-echo "========================================="
-echo "  认证阶段定义 — 数据库迁移"
-echo "========================================="
+[ -f "$SETUP_SQL" ]  || { echo "✗ 缺少 SQL 文件：${SETUP_SQL}"  >&2; exit 1; }
+[ -f "$VERIFY_SQL" ] || { echo "✗ 缺少 SQL 文件：${VERIFY_SQL}" >&2; exit 1; }
 
-# 设置 Docker socket 路径
-export DOCKER_HOST="unix://$DOCKER_SOCKET"
-
-# 检查 Docker/OrbStack 是否运行
-if ! "$DOCKER_BIN" info &>/dev/null; then
-    echo "[ERROR] OrbStack 未运行，请先启动 OrbStack"
-    exit 1
-fi
-
-# 检查 MySQL 容器是否运行
-if ! "$DOCKER_BIN" ps --format "{{.Names}}" 2>/dev/null | grep -q yzh-mysql; then
-    echo "[INFO] 启动 MySQL 容器..."
-    cd "$PROJECT_DIR/docker"
-    "$DOCKER_BIN" compose -f "$PROJECT_DIR/docker/compose.yml" up -d mysql
-    sleep 5
-fi
-
-# 等待 MySQL 就绪
-echo "[INFO] 等待 MySQL 就绪..."
-for i in $(seq 1 30); do
-    if "$DOCKER_BIN" exec yzh-mysql mysqladmin ping -h localhost --silent 2>/dev/null; then
-        echo "[OK] MySQL 已就绪"
-        break
-    fi
-    echo -n "."
-    sleep 1
+echo "== 1. 等待 MySQL 就绪 =="
+READY=0
+for _ in $(seq 1 30); do
+  if docker exec "$MYSQL_CONTAINER" mysqladmin ping -h localhost --silent 2>/dev/null; then
+    READY=1; echo "   MySQL 已就绪"; break
+  fi
+  printf '.'; sleep 1
 done
+[ "$READY" = "1" ] || { echo "" >&2; echo "✗ MySQL 未就绪（容器 ${MYSQL_CONTAINER} 未启动？先跑 docker/start.sh）" >&2; exit 1; }
 
-# 执行 SQL
-echo "[INFO] 执行 SQL 脚本..."
-"$DOCKER_BIN" exec -i yzh-mysql mysql -uroot -pYzh123456. yzh_cert_platform < "$SCRIPT_DIR/cert_phase_definition_setup.sql"
+echo "== 2. 执行迁移 SQL =="
+docker exec -i -e MYSQL_PWD="$MYSQL_PWD_ROOT" "$MYSQL_CONTAINER" \
+  mysql -uroot --default-character-set=utf8mb4 "$DB" < "$SETUP_SQL"
 
-if [ $? -eq 0 ]; then
-    echo "[OK] SQL 执行成功"
-else
-    echo "[WARN] SQL 执行有警告，请检查输出"
-fi
-
-# 验证
-echo ""
-echo "[INFO] 验证数据..."
-"$DOCKER_BIN" exec yzh-mysql mysql -uroot -pYzh123456. yzh_cert_platform -e "
-SELECT phase_code, phase_name, sequence_order, is_valid 
-FROM v_cert_phase_definition 
-ORDER BY sequence_order;
-" 2>/dev/null
+echo "== 3. 验证（只读，SQL 见 verify/verify_phase_migration.sql） =="
+docker exec -i -e MYSQL_PWD="$MYSQL_PWD_ROOT" "$MYSQL_CONTAINER" \
+  mysql -uroot -N -B --default-character-set=utf8mb4 "$DB" < "$VERIFY_SQL"
 
 echo ""
-echo "[SUCCESS] 数据库迁移完成"
-echo ""
-echo "下一步：编译并启动后端服务"
-echo "  cd $PROJECT_DIR"
-echo "  dotnet build CertPlatform.sln"
-echo "  ./scripts/backend/run-backend.sh"
+echo "✓ 认证阶段定义迁移完成"

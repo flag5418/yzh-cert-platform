@@ -211,25 +211,62 @@ export function toToolbarActions(config: EntityConfigDto | null): YzhAction[] {
   return btns
 }
 
+/**
+ * RowButtons.CustomButtons 统一形状：{ 后端方法名: 按钮文字 }（与后端
+ * InjectRowActions / YzhControllerBase GetRowButtons 示例 / TreeConfig.CustomActions 一致）。
+ * 注意：Toolbar.CustomButtons 仍为 { 按钮文字: 方法名 }（JSON 声明式，如 SysApi.json）。
+ */
+function isStateMethod(method: string): boolean {
+  const m = method.toLowerCase()
+  return m === 'enable' || m === 'disable'
+}
+
 /** 行操作按钮（颜色语义随声明走，不内置 edit/delete→颜色 假设） */
 export function toRowActions(
   config: EntityConfigDto | null,
   enableField?: string | null,
-): YzhAction[] {
+): YzhAction[] | ((row: Record<string, any>) => YzhAction[]) {
   const rb = config?.RowButtons ?? {}
-  const btns: YzhAction[] = []
-  if (rb.Edit !== false) btns.push({ key: 'edit', text: '编辑', type: 'primary' })
-  if (rb.Delete !== false) btns.push({ key: 'delete', text: '删除', type: 'danger' })
+  const base: YzhAction[] = []
+  if (rb.Edit !== false) base.push({ key: 'edit', text: '编辑', type: 'primary' })
+  if (rb.Delete !== false) base.push({ key: 'delete', text: '删除', type: 'danger' })
   // 自动注入启用/禁用按钮（当 Enable=true 且存在 EnableField 时）
   if (rb.Enable === true && enableField) {
-    btns.push({ key: 'toggle-valid', text: '禁用/启用', type: 'warning' })
+    base.push({ key: 'toggle-valid', text: '禁用/启用', type: 'warning' })
   }
-  if (rb.CustomButtons) {
-    for (const [label, method] of Object.entries(rb.CustomButtons)) {
-      btns.push({ key: `custom:${method}`, text: label, type: 'info' })
+
+  const cb = rb.CustomButtons ?? {}
+  const stateEntries = Object.entries(cb).filter(([method]) => isStateMethod(method))
+  const otherEntries = Object.entries(cb).filter(([method]) => !isStateMethod(method))
+  const otherActions: YzhAction[] = otherEntries.map(([method, label]) => ({
+    key: `custom:${method}`,
+    text: label,
+    type: 'info' as const,
+  }))
+
+  // enable/disable 有 EnableField 时按行状态二选一（与 organization 内核语义一致）
+  if (stateEntries.length > 0 && enableField) {
+    return (row: Record<string, any>) => {
+      const field = enableField
+      const camel = field.charAt(0).toLowerCase() + field.slice(1)
+      const val = row?.[field] ?? row?.[camel] ?? 1
+      const actions = [...base]
+      const disableEntry = stateEntries.find(([m]) => m.toLowerCase() === 'disable')
+      const enableEntry = stateEntries.find(([m]) => m.toLowerCase() === 'enable')
+      if (val === 1 && disableEntry) {
+        actions.push({ key: `custom:${disableEntry[0]}`, text: disableEntry[1], type: 'warning' })
+      } else if (val !== 1 && enableEntry) {
+        actions.push({ key: `custom:${enableEntry[0]}`, text: enableEntry[1], type: 'warning' })
+      }
+      actions.push(...otherActions)
+      return actions
     }
   }
-  return btns
+
+  for (const [method, label] of stateEntries) {
+    base.push({ key: `custom:${method}`, text: label, type: 'warning' })
+  }
+  return [...base, ...otherActions]
 }
 
 /** RowButtons → 行按钮字典（兼容旧 Record<string,string> 消费方） */
@@ -238,7 +275,9 @@ export function toRowActionButtons(
   enableField?: string | null,
 ): Record<string, string> {
   const dict: Record<string, string> = {}
-  for (const b of toRowActions(config, enableField)) dict[b.key] = b.text
+  const actions = toRowActions(config, enableField)
+  const list = typeof actions === 'function' ? actions({}) : actions
+  for (const b of list) dict[b.key] = b.text
   return dict
 }
 

@@ -1,5 +1,6 @@
 using System;
 using SqlSugar;
+using YZH.Core.Stand.Interfaces;
 
 namespace YZH.Core.Stand.Models;
 
@@ -7,7 +8,7 @@ namespace YZH.Core.Stand.Models;
 /// 接口表实体
 /// </summary>
 [SugarTable("sys_api")]
-public class SysApi
+public class SysApi : IIsValid
 {
     /// <summary>主键ID</summary>
     [SugarColumn(IsPrimaryKey = true, IsIdentity = true)]
@@ -37,8 +38,8 @@ public class SysApi
     [SugarColumn(Length = 50)]
     public string? Author { get; set; }
     
-    /// <summary>是否启用</summary>
-    public bool Enable { get; set; } = true;
+    /// <summary>有效标志（DB: IsValid，1=有效 0=无效）—— 铁律九：唯一启禁契约</summary>
+    public int IsValid { get; set; } = 1;
     
     /// <summary>创建时间</summary>
     public DateTime CreateTime { get; set; } = DateTime.UtcNow;

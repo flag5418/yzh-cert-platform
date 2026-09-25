@@ -1,4 +1,3 @@
-export { useAuth } from './useAuth'
 export { useAuthState, type UserInfo } from './useAuthState'
 export { useMenuTree } from './useMenuTree'
 export { notifyMenuChanged, onMenuChanged, MENU_CHANGED_EVENT } from './useMenuChanged'

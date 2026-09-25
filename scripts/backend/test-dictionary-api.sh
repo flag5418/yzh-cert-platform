@@ -219,27 +219,23 @@ code=$(req POST "$CTRL/tree/root" '{}')
 # ============================================================
 sec "9. 数据库侧核对：软删除而非物理删除"
 # ============================================================
-MYSQL_PWD_='Yzh123456.'
-row=$(docker exec -i -e MYSQL_PWD="$MYSQL_PWD_" yzh-mysql mysql -uroot -N -B \
-  yzh_cert_platform -e "SELECT CONCAT(IsDeleted,'|',IFNULL(DeleteBy,'NULL'),'|',IFNULL(DeleteTime,'NULL')) FROM Sys_Dictionary WHERE Code='$NEW_CODE';" 2>/dev/null)
+# ★ 职责边界：SQL 不内联在本脚本 —— 只读核对与夹具清理各走独立脚本
+#   （scripts/db/verify/verify_dict_softdelete.sh、scripts/db/fixture/cleanup_dict_test_data.sh）
+DB_SCRIPTS="$(cd "$(dirname "$0")/../db" && pwd)"
+row="$("$DB_SCRIPTS/verify/verify_dict_softdelete.sh" "$NEW_CODE" "$ITEM_CODE" | sed -n 1p)"
 echo "      行状态 IsDeleted|DeleteBy|DeleteTime = $row"
 case "$row" in
   1\|*\|* ) ok "字典为软删除：行保留，IsDeleted=1，删除人/时间已记录" ;;
   * ) bad "字典不是软删除（期望 1|...|...，实际 $row）" ;;
 esac
-item_row=$(docker exec -i -e MYSQL_PWD="$MYSQL_PWD_" yzh-mysql mysql -uroot -N -B \
-  yzh_cert_platform -e "SELECT IsDeleted FROM Sys_DictionaryList WHERE Code='$ITEM_CODE';" 2>/dev/null)
+item_row="$("$DB_SCRIPTS/verify/verify_dict_softdelete.sh" "$NEW_CODE" "$ITEM_CODE" | sed -n 2p)"
 [ "$item_row" = "1" ] && ok "字典项为软删除：行保留，IsDeleted=1" || bad "字典项不是软删除（实际 $item_row）"
 
 # ============================================================
 sec "10. 清理测试数据（物理删除，不留残留）"
 # ============================================================
-docker exec -i -e MYSQL_PWD="$MYSQL_PWD_" yzh-mysql mysql -uroot yzh_cert_platform \
-  -e "DELETE FROM Sys_DictionaryList WHERE Code='$ITEM_CODE';
-      DELETE FROM Sys_Dictionary WHERE Code='$NEW_CODE';" 2>/dev/null
-left=$(docker exec -i -e MYSQL_PWD="$MYSQL_PWD_" yzh-mysql mysql -uroot -N -B \
-  yzh_cert_platform -e "SELECT (SELECT COUNT(*) FROM Sys_Dictionary WHERE Code='$NEW_CODE')+(SELECT COUNT(*) FROM Sys_DictionaryList WHERE Code='$ITEM_CODE');" 2>/dev/null)
-[ "$left" = "0" ] && ok "测试数据已清理干净" || bad "仍有残留（$left 行）"
+left="$("$DB_SCRIPTS/fixture/cleanup_dict_test_data.sh" "$NEW_CODE" "$ITEM_CODE" 2>/dev/null || true)"
+[ "$left" = "0" ] && ok "测试数据已清理干净" || bad "仍有残留（${left:-未知} 行）"
 
 # ============================================================
 echo ""

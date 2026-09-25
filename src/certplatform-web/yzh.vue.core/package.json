@@ -11,6 +11,7 @@
     "./api/auth": "./src/api/auth.ts",
     "./api/system": "./src/api/system/index.ts",
     "./api/system/*": "./src/api/system/*.ts",
+    "./assets/*": "./src/assets/*",
     "./composables/*": "./src/composables/*.ts",
     "./router": "./src/router/index.ts",
     "./pages/*": "./src/pages/*",
@@ -19,11 +20,8 @@
     "./utils/*": "./src/utils/*.ts"
   },
   "scripts": {
-    "build": "node ../scripts/guards.mjs && vite build",
+    "build": "node ../scripts/guards.mjs && vue-tsc --noEmit && vite build",
     "typecheck": "vue-tsc --noEmit"
-  },
-  "dependencies": {
-    "axios": "^1.6.0"
   },
   "peerDependencies": {
     "vue": "^3.4.0",

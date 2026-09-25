@@ -6,6 +6,7 @@ using YZH.Core.Api.Models.Users;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Models;
+using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
 using YZH.Core.Stand.Models.Request;
 using YZH.Core.Stand.Interfaces;
@@ -51,6 +52,19 @@ public class UserController : YzhControllerBase<Sys_User>
         RegisterRowAction("Enable", EnableUser);
         RegisterRowAction("Disable", DisableUser);
         RegisterRowAction("ResetPassword", ResetPassword);
+    }
+
+    /// <summary>
+    ///     加载 EntityConfig（<c>System/User.json</c>）
+    ///     <para>⚠️ 必须显式覆写：基类默认按<b>实体类型名</b>查找配置
+    ///     （<c>typeof(Sys_User).Name = "Sys_User"</c> → 找 <c>Sys_User.json</c>），
+    ///     而配置文件实际名为 <c>User.json</c> → 不覆写会静默降级为
+    ///     <c>NewEmptyConfig</c>（<c>Columns=[]</c>，页面「有数据、无列、无报错」）。</para>
+    ///     <para>与 <c>OrganizationController.LoadConfig()</c> 保持一致（同一份配置驱动右表人员列）。</para>
+    /// </summary>
+    protected override EntityConfig LoadConfig()
+    {
+        return EntityConfigHelper.GetConfig("System/User");
     }
 
     /// <summary>

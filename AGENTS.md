@@ -14,7 +14,8 @@ AIGC:
 
 > 本文件是 AI 编程助手（Cursor / Claude Code / Copilot / Aider 等）的自动加载入口。
 > **编码任务（生成/修改任何代码）必须启用本文件**，启用要求见 `项目全局规则.md` §8.0。
-> 本文件为权威源；知识库副本位于 `docs/30-项目规则/知识库/AGENTS.md`，两处须保持一致。
+> **本文件是全项目唯一权威源**（2026-09-24 起）。原先 `docs/30-项目规则/知识库/AGENTS.md` 的副本已删除，
+> 其独有内容已迁至知识库正确位置（术语表见 `08-术语表/`，踩坑记录见 `05-踩坑记录/`）。⛔ 不得再建副本。
 
 ## ⚠️ AI 编码前必读 3 条（违反 = 返工）
 
@@ -27,6 +28,7 @@ AIGC:
   - ✅ **P8 已收口（2026-09-24）**：system 11 页面 + 登录/布局/首页应用壳已全部位于 `src/certplatform-web/yzh.vue.core/src/{pages,layouts,router,api/system}`（计划：`docs/50-迁移计划/yzh.vue.core系统底座化迁移计划-V1.md`）。宿主（cert-admin 等）只组装路由，**不要再往 cert-admin 抄 system 页面**。
 - 左树右表唯一模板：`.../foundation/iso-standard/`（⚠️ **只抄 `logic.ts` 的 `dataLoader` 骨架**，`index.vue` 不抄）
 - 纯树节点模板：`src/certplatform-web/yzh.vue.core/src/pages/system/role/`（`logic.ts` 仅 16 行、零覆写）
+- ⚠️ **`pages/system/user/` 与 `pages/system/role/` 无路由可达是正常的**（2026-09-24 用户裁决：功能已被「机构-人员管理」`system/organization`、「角色-人员管理」`system/role-user` 取代，两条路由已删除）。**它们是照抄样板，目录必须保留** —— 照抄 = 复制文件，**不需要打开页面**。⛔ 不要因为「样板页在、路由不在」就把路由加回来（守卫 **R12** 会拦）。
 - ⛔ **不要**参考 `src/old/**`（历史项目，禁止参考、禁止修改）
 - ⛔ 禁止 `view-grid` / `VolBox` / `VolForm` / `VolProvider`；禁止 `axios`；`.vue` 内禁止直接 `fetch(`
 - ⛔ 禁止手写 `handleAdd` / `handleBatchDelete` / `handleRowAction` / `handleSubmit` —— 由 `useSingleTable` 内核派发
@@ -42,7 +44,13 @@ AIGC:
 - 前端读 `row.RuleName`、`node.Code`、`formData.StandardCode`
 - 写成 `row.ruleName` / `node.code` → **渲染成空行且无任何报错**（最难查的一类 bug）
 - 例外（须注释标注「已登记例外」）：`ApiResponse` 信封 camelCase（E1）、裸 JSON `{img,uuid}`（E6）、`{code,data,message}` **无 `success`**（E7，须用 `res.code === 200` 且**禁用 `res.success`**）
-- **启用/禁用唯一字段 = `IsValid`（int，0/1）**：新实体/新列**禁止**再声明 `Enable` / `EnableField`；业务开关用 `IsActive`；软删除用 `IsDeleted`。例外：`sys_api.Enable`（ApiSync 同步源，已登记）。守卫：`guards.mjs` R7。
+- **★ 铁律九：`Enable` 零容忍。启用/禁用唯一字段 = `IsValid`（int，0/1），由 `IIsValid` 接口统一提供**：**数据库中不允许任何表存在 `Enable`/`enable` 列**；新实体/新列**禁止**声明 `Enable` / `EnableField`；业务开关用 `IsActive`；软删除用 `IsDeleted`。
+  - ⛔ **原「例外：`sys_api.Enable`」已作废**（2026-09-24 用户明确：「所有的表都统一用接口的字段」）→ `sys_api` 需迁移为 `IsValid`（改 `SysApi` 实体 + `ApiSyncService` + `RoleApiController.cs:135` + 前端 `pages/system/api/`）
+  - ⛔ **`EnableField` 配置项的「值」必须是 `'IsValid'`**（名字保留，值必须纠正）
+  - **违反症状**：① 表内 `enable` 与 `IsValid` **并存** → **列表显示的行 ≠ 能操作的行**，两边都不报错 ② 实体注释写 `// DB: Name` 而 DB 实际是 `name`（代码自证清白，DB 不是）
+  - 守卫：`guards.mjs` **R7**（前端）+ `scripts/db/fix/fix-column-naming-2026-09-24.sql` 文末 **DB 验证 SQL**
+  - ⚠️ **验证 SQL 必须用 `CONVERT(COLUMN_NAME USING utf8mb4) COLLATE utf8mb4_bin`** —— `information_schema.COLUMN_NAME` 排序规则大小写不敏感，直接 `NOT REGEXP '^[A-Z]'` 会**永远返回 0 行**（假阴性，会让人误以为已清零）
+  - 详见 `输出产物/命名规范违规清单与消灭方案-V1.md`
 
 **④ 双关键字准则 A（Id/Code · 2026-09-24 · 违反 = 返工）**
 
@@ -51,7 +59,10 @@ AIGC:
 - 新增 vs 更新 **唯一合法**：`GetByCode(entity.Code)` 有→更新、无→新增；Code 空却要更新 → `更新失败：缺少业务键 Code`（禁止回退 Id）。
 - 前端：`data.Code ? update : add`，`deleteXxx(row.Code)`。权威：`docs/10-YZH架构/01-架构总纲.md` §2.1 · E201。
 
-**改完必跑**：`cd src/certplatform-web && node scripts/guards.mjs`（0 违规）→ 对应端 `npm run build`（含 `vue-tsc`）。
+**改完必跑**：`cd src/certplatform-web && node scripts/guards.mjs`（0 违规，**含 R12 路由↔菜单一致性**）→ 对应端 `npm run build`（含 `vue-tsc`）。
+
+> **动了路由或菜单 → 额外跑一次**：`./scripts/db/verify/sync_menu_urls.sh` 刷新菜单快照，否则 R12 基于过期数据（快照缺失时 R12 会跳过并告警）。
+> R12 双向判据：菜单 `Url` 无对应路由 = **报错**（点击必白屏）；路由无对应菜单 = **报错**（孤儿路由，须补菜单 / 删路由 / 登记 `ORPHAN_ALLOW`）。
 
 ## ⚠️ 核心目的（最高优先级）
 
@@ -88,6 +99,7 @@ AIGC:
   - 开发流程（新增页面步骤/钩子速查/常见场景）→ `docs/10-YZH架构/07-开发流程.md`
   - 常见错误 → `docs/10-YZH架构/08-常见错误与修复.md`
 - **知识底座**：`docs/30-项目规则/知识库/README.md` — Vol 能力清单 / YZH 增量 / 边界约束 / 代码模板 / 踩坑记录 / 速查手册
+- **术语表**：`docs/30-项目规则/知识库/08-术语表/术语表-V1.md` — 认证行业 + 审核过程 + 系统功能 + 技术术语
 - **Skill 清单**：`docs/30-项目规则/Skill清单-V1.md` — 全部 Skill 的编码/输入输出/绑定模式/实现类/编写规范
 - **编码规范**：C# 编码规范与 Vue/TS 编码规范已归档至 `docs/90-归档/历史项目/Vol框架/归档-2026-09-09-Vol框架历史文档/`（Vol 专属，新架构请参考 `docs/10-YZH架构/02-后端架构.md` 与 `docs/10-YZH架构/03-前端架构.md`）
 - **脚本规范**：`scripts/README.md`（backend/db/frontend/storage/generate/tools 子目录）

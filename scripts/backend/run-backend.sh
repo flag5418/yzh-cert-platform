@@ -13,11 +13,27 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# 项目路径
-PROJECT_DIR="/Volumes/Expand/wangqingquan/Documents/work/study/体系认证平台"
+# 项目路径（★ 自定位：禁止硬编码绝对路径，见 scripts/README.md §2 脚本职责铁律）
+PROJECT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 WEB_API_DIR="$PROJECT_DIR/src/yzh-core/YZH.Core.Web"
 SOLUTION_FILE="$PROJECT_DIR/CertPlatform.sln"
 PORT=9992
+
+# dotnet 解析：PATH 优先，其次 $HOME/.dotnet（本机 dotnet 常不在 PATH）
+resolve_dotnet() {
+    if command -v dotnet >/dev/null 2>&1; then
+        command -v dotnet
+    elif [ -x "$HOME/.dotnet/dotnet" ]; then
+        echo "$HOME/.dotnet/dotnet"
+    else
+        echo ""
+    fi
+}
+DOTNET_BIN="${DOTNET_BIN:-$(resolve_dotnet)}"
+if [ -z "$DOTNET_BIN" ]; then
+    echo "[ERROR] 未找到 dotnet，请设置 DOTNET_BIN 或把 dotnet 加入 PATH"
+    exit 1
+fi
 LOG_FILE="/tmp/vol_backend_9992.log"
 PID_FILE="/tmp/vol_backend_9992.pid"
 
@@ -27,9 +43,9 @@ print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # 编译项目
 build_project() {
-    print_info "开始编译后端项目..."
+    print_info "开始编译后端项目... (dotnet: $DOTNET_BIN)"
     cd "$PROJECT_DIR"
-    dotnet build "$SOLUTION_FILE" --nologo
+    "$DOTNET_BIN" build "$SOLUTION_FILE" --nologo
     if [ $? -eq 0 ]; then
         print_info "编译成功!"
         return 0
@@ -78,7 +94,7 @@ pid = os.fork()
 if pid == 0:
     os.setsid()
     log = open('$LOG_FILE', 'w')
-    p = subprocess.Popen(['dotnet', 'run', '--project', 'YZH.Core.Web.csproj', '--no-build',
+    p = subprocess.Popen(['$DOTNET_BIN', 'run', '--project', 'YZH.Core.Web.csproj', '--no-build',
                           '--urls', 'http://0.0.0.0:$PORT'],
                          stdout=log, stderr=log, stdin=subprocess.DEVNULL)
     with open('$PID_FILE', 'w') as f:

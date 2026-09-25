@@ -57,7 +57,7 @@ public class MenuManagementController : TreeTableControllerBase<Sys_Menu, Sys_Me
 
         RegisterRowAction("Enable", EnableMenu);
         RegisterRowAction("Disable", DisableMenu);
-        RegisterRowAction("GetTree", GetMenuTreeAsync);
+        // GetTree 是侧栏菜单 HTTP 端点（[HttpGet("tree")]），不是行操作，禁止 RegisterRowAction
     }
 
     /// <summary>
@@ -242,15 +242,6 @@ public class MenuManagementController : TreeTableControllerBase<Sys_Menu, Sys_Me
             return Result<ApiResponse<object?>>.Fail(updateResult.Error);
 
         return Result<ApiResponse<object?>>.Ok(ApiResponse<object?>.Ok("已禁用该菜单"));
-    }
-
-    private async Task<Result<ApiResponse<object?>>> GetMenuTreeAsync(Sys_Menu entity)
-    {
-        var result = await GetTree();
-        if (!result.Success)
-            return Result<ApiResponse<object?>>.Fail(result.Message);
-
-        return Result<ApiResponse<object?>>.Ok(ApiResponse<object?>.Ok(result.Data));
     }
 
     // ========================================================

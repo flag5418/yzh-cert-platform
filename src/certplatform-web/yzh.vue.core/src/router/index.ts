@@ -31,15 +31,26 @@ export const yzhHomeRoute: RouteRecordSingleView = {
  * 系统管理原子路由（相对 shell 子路由；P3~P5 逐页充实）
  * path 恒定 = `Sys_Menu.Url`（对外 URL 永不因下沉而变化）
  *
- * P3 Wave A 已迁：log / config / role / user
+ * ⚠️ 每条 path 必须与 `Sys_Menu.Url` 逐字一致 —— 由守卫 **R12** 双向校验
+ *    （`scripts/guards.mjs`；菜单有路由无 = 报错，路由有菜单无 = 警告）。
+ *
+ * P3 Wave A 已迁：log / config
  * P4 Wave B 已迁：role-user / role-menu / role-api / menu / api
  * P5 Wave C 已迁：organization / dictionary
+ *
+ * ⛔ 2026-09-24 移除 `system/role` 与 `system/user` 两条路由（用户裁决）：
+ *    其功能已被 `system/organization`（机构-人员管理）与 `system/role-user`
+ *    （角色-人员管理）取代，`Sys_Menu` 中亦无对应菜单 → 属「孤儿路由」。
+ *
+ *    ⚠️ 但 `pages/system/user/`（单表 CRUD 唯一模板，67 行零手写）与
+ *    `pages/system/role/`（纯树节点模板，logic.ts 仅 16 行）**目录必须保留**
+ *    —— 它们是 AGENTS.md 指定的照抄样板，删除会破坏「新建页面唯一入口」。
+ *    页面无路由可达**不影响照抄**（照抄 = 复制文件，不是打开页面）。
+ *    ⛔ 不要因为「样板页在、路由不在」就把这两条路由加回来。
  */
 export const yzhSystemRoutes: RouteRecordRaw[] = [
   { path: 'system/log', name: 'SystemLog', component: () => import('../pages/system/log/index.vue') },
   { path: 'system/config', name: 'SystemConfig', component: () => import('../pages/system/config/index.vue') },
-  { path: 'system/role', name: 'SystemRole', component: () => import('../pages/system/role/index.vue') },
-  { path: 'system/user', name: 'SystemUser', component: () => import('../pages/system/user/index.vue') },
   { path: 'system/role-user', name: 'SystemRoleUser', component: () => import('../pages/system/role-user/index.vue') },
   { path: 'system/role-menu', name: 'SystemRoleMenu', component: () => import('../pages/system/role-menu/index.vue') },
   { path: 'system/role-api', name: 'SystemRoleApi', component: () => import('../pages/system/role-api/index.vue') },
@@ -74,6 +85,14 @@ export interface YzhRoutesOptions {
   home?: boolean | RouteRecordRaw
   /** 是否包含登录页原子路由（宿主整页手写 /login 时传 false） */
   login?: boolean
+  /**
+   * 应用壳首屏重定向（如 admin 首屏直达 `/system/organization`）。
+   * 典型组合：`home: false` + `redirect: '/system/organization'`
+   *   → 不注册占位首页，`/` 直接跳到业务首页。
+   * ⚠️ 目标 path 必须已在本路由表内注册（含 core 系统页 / 宿主业务页），
+   *    否则会落入 404。
+   */
+  redirect?: string
 }
 
 /**
@@ -93,6 +112,7 @@ export function createYzhRoutes(options: YzhRoutesOptions = {}): RouteRecordRaw[
     businessRoutes = [],
     home = true,
     login = true,
+    redirect,
   } = options
 
   const children: RouteRecordRaw[] = []
@@ -121,6 +141,7 @@ export function createYzhRoutes(options: YzhRoutesOptions = {}): RouteRecordRaw[
       ...(branding.logoText !== undefined ? { logoText: branding.logoText } : {}),
       ...(branding.appTitle !== undefined ? { appTitle: branding.appTitle } : {}),
     },
+    ...(redirect ? { redirect } : {}),
     children,
   })
 
