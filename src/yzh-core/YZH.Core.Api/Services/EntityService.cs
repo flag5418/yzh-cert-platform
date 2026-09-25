@@ -316,7 +316,11 @@ public class EntityService<T> where T : class, new()
         }
         catch (Exception ex)
         {
+            // B06 / P0-d：计数失败禁止兜 0。
+            // 兜 0 会让「有子节点禁删」被静默绕过、让叶子标记全错；
+            // 上抛后由调用方 catch（FillIsLeafBatch 有兜底）或 GlobalExceptionFilter 兜住。
             _logger.LogError(ex, "GetChildrenCountBatch 错误，Type={Type}", typeof(T).Name);
+            throw;
         }
 
         return result;
@@ -483,8 +487,11 @@ public class EntityService<T> where T : class, new()
             else
             {
                 FillDeleteAudit(entity);
-                await SoftDelete(entity);
-                return Result<bool>.Ok(true);
+                var softResult = await SoftDelete(entity);
+                // B06：软删除结果不判 = 假成功（P-03 要求 SQL 能查到 IsDeleted=1）
+                return softResult.Success
+                    ? Result<bool>.Ok(true)
+                    : Result<bool>.Fail(softResult.Error ?? "删除失败");
             }
         }
         catch (Exception ex)
@@ -566,8 +573,10 @@ public class EntityService<T> where T : class, new()
                 {
                     // 硬删除：直接使用 Code 批量删除
                     var deleteResult = await _dbOrm.DeleteByCodeBatchAsync<T>(codeList);
-                    if (deleteResult.Success)
-                        count = deleteResult.Data;
+                    if (!deleteResult.Success)
+                        // B06：失败不再静默 count=0 后 Ok(0)（那会让 P-02 变成绿色）
+                        return Result<int>.Fail(deleteResult.Error ?? "删除失败");
+                    count = deleteResult.Data;
                 }
                 else
                 {
@@ -581,11 +590,18 @@ public class EntityService<T> where T : class, new()
                         {
                             var entity = entityResult.Data;
                             FillDeleteAudit(entity);
-                            await SoftDelete(entity);
+                            var softResult = await SoftDelete(entity);
+                            if (!softResult.Success)
+                                // 事务内失败 → 抛出回滚，绝不返回「成功删了 N 条」
+                                throw new InvalidOperationException(softResult.Error ?? "删除失败");
                             count++;
                         }
                     }
                 }
+
+                // P-02：请求了 Code 却一条都没删到 = 记录不存在或已被删除 → 业务失败
+                if (count == 0 && codeList.Count > 0)
+                    return Result<int>.Fail("记录不存在或已被删除");
 
                 tx.Commit();
 
@@ -631,7 +647,7 @@ public class EntityService<T> where T : class, new()
         try { dyn.DeleteBy = _userContext.UserCode; } catch { /* 实体可能没有该属性 */ }
     }
 
-    private async Task SoftDelete(T entity)
+    private async Task<Result<bool>> SoftDelete(T entity)
     {
         if (entity is ISoftDelete softDelete)
         {
@@ -639,14 +655,20 @@ public class EntityService<T> where T : class, new()
             softDelete.IsDeleted = true;
             softDelete.DeleteBy = _userContext.UserCode;
             softDelete.DeleteTime = DateTime.UtcNow;
-            await _dbOrm.UpdateAsync(entity, new[] { "IsDeleted", "DeleteTime", "DeleteBy" });
+            var updateResult = await _dbOrm.UpdateAsync(entity, new[] { "IsDeleted", "DeleteTime", "DeleteBy" });
+            return updateResult.Success
+                ? Result<bool>.Ok(true)
+                : Result<bool>.Fail(updateResult.Error ?? "删除失败");
         }
         else
         {
             // 向后兼容：未实现 ISoftDelete 但有 IsDeleted 字段的实体
             dynamic dyn = entity;
             try { dyn.IsDeleted = true; } catch { /* 无 IsDeleted 则跳过 */ }
-            await _dbOrm.UpdateAsync(entity, new[] { "IsDeleted" });
+            var updateResult = await _dbOrm.UpdateAsync(entity, new[] { "IsDeleted" });
+            return updateResult.Success
+                ? Result<bool>.Ok(true)
+                : Result<bool>.Fail(updateResult.Error ?? "删除失败");
         }
     }
 

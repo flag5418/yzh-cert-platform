@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Controllers;
+using YZH.Core.Api.Exceptions;
 using YZH.Core.Api.Models.Organization;
 using YZH.Core.Api.Models.Users;
 using YZH.Core.Api.Services;
@@ -328,7 +329,8 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         // GetByCodeAny：禁用后 IsValid=0，GetByCode 会被过滤掉导致无法再次操作
         var result = await TreeEntity.GetByCodeAny(entity.Code);
         if (!result.Success || result.Data == null)
-            return "机构不存在";
+            // B02：失败必须抛，不能再用「返回字符串」表达失败（会被当成 success:true）
+            throw new YZHNotFoundException("机构不存在");
 
         var org = result.Data;
         var affectedCount = 0;
@@ -408,13 +410,14 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         // GetByCodeAny：已禁用机构 IsValid=0，GetByCode 查不到
         var result = await TreeEntity.GetByCodeAny(entity.Code);
         if (!result.Success || result.Data == null)
-            return "机构不存在";
+            // B02：失败必须抛，不能再用「返回字符串」表达失败（会被当成 success:true）
+            throw new YZHNotFoundException("机构不存在");
 
         var org = result.Data;
         org.IsValid = 1;
         var updateResult = await TreeEntity.Update(org, UserContext.ClientIp);
         if (!updateResult.Success)
-            return updateResult.Error;
+            throw new YZHBusinessException(updateResult.Error ?? "启用失败");
 
         return "已启用该机构";
     }

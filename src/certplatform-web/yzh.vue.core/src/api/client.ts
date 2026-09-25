@@ -41,6 +41,17 @@ export interface YzhApiClientOptions {
 
 const TOKEN_KEY = 'YZH_TOKEN'
 
+/**
+ * L2 HTTP 层的兜底文案（只覆盖 401/403/404/500 四种基础设施错误，22 §三矩阵）。
+ * 响应体有 err/message 时优先用响应体；空响应体（403 中间件短路、502 网关页）才落到这里。
+ */
+const STATUS_FALLBACK: Record<number, string> = {
+  401: '登录已过期，请重新登录',
+  403: '无权限执行该操作',
+  404: '接口不存在',
+  500: '服务器内部错误，请稍后重试',
+}
+
 export const tokenStore = {
   get: () => localStorage.getItem(TOKEN_KEY),
   set: (v: string) => localStorage.setItem(TOKEN_KEY, v),
@@ -161,16 +172,19 @@ export class YzhApiClient {
       // 返回 null 交给上层 expectOk 统一报错，避免裸 "Unexpected token <" 流到用户面前
       const json = (await res.json().catch(() => null)) as T
 
-      // 非 200 响应：抛出异常，携带后端错误信息（P2 后优先取 err）
+      // 非 200 响应：抛出异常，携带后端错误信息（err 优先，P0 起失败文本在 err）
       if (!res.ok) {
+        const body = json as any
         const msg =
-          (json as any)?.err ||
-          (json as any)?.message ||
-          (json as any)?.msg ||
+          body?.err ||
+          body?.message ||
+          body?.msg ||
+          // 401/403 可能是空响应体（中间件直接短路），按状态码兜底文案
+          STATUS_FALLBACK[res.status] ||
           `请求失败 (${res.status})`
         const err = new Error(msg)
         ;(err as any).status = res.status
-        ;(err as any).data = json
+        ;(err as any).data = body
         throw err
       }
 

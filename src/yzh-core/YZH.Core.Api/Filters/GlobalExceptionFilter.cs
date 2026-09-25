@@ -39,53 +39,39 @@ namespace YZH.Core.Api.Filters
         public void OnException(ExceptionContext context)
         {
             var exception = context.Exception;
-            var statusCode = StatusCodes.Status500InternalServerError;
-            var errorCode = "INTERNAL_ERROR";
-            var message = "服务器内部错误";
-            var details = (Dictionary<string, string>)null;
-            
+            int httpStatus;
+            string err;
+            object data;
+
             // 判断异常类型（注意顺序：子类必须在基类之前）
+            // ★ 信封统一（P0-b）：业务异常 → HTTP 200 + err 原文；
+            //   只有「系统异常」（未预期异常）才 500 + 脱敏。
+            //   权限不足属于基础设施信号，保持 403（22 §三矩阵）。
             switch (exception)
             {
+                case YZHForbiddenException forbiddenEx:
+                    httpStatus = StatusCodes.Status403Forbidden;
+                    err = string.IsNullOrWhiteSpace(forbiddenEx.Message) ? "权限不足" : forbiddenEx.Message;
+                    data = new { errorCode = forbiddenEx.ErrorCode };
+                    break;
+
                 case YZHValidationException validationEx:
-                    statusCode = validationEx.StatusCode;
-                    errorCode = validationEx.ErrorCode;
-                    message = validationEx.Message;
-                    details = validationEx.FieldErrors;
-                    break;
-
-                case YZHForbiddenException:
-                    statusCode = 403;
-                    errorCode = "FORBIDDEN";
-                    message = "权限不足";
-                    break;
-
-                case YZHNotFoundException:
-                    statusCode = 404;
-                    errorCode = "NOT_FOUND";
-                    message = "资源不存在";
-                    break;
-
-                case YZHDuplicateException:
-                    statusCode = 409;
-                    errorCode = "DUPLICATE";
-                    message = "数据已存在";
-                    break;
-
-                case YZHReferencedException:
-                    statusCode = 400;
-                    errorCode = "REFERENCED";
-                    message = "数据被其他业务引用，无法操作";
+                    // 校验失败：HTTP 200，字段级错误随 data 回传
+                    httpStatus = StatusCodes.Status200OK;
+                    err = validationEx.Message;
+                    data = new { errorCode = validationEx.ErrorCode, fieldErrors = validationEx.FieldErrors };
                     break;
 
                 case YZHBusinessException bizEx:
-                    statusCode = bizEx.StatusCode;
-                    errorCode = bizEx.ErrorCode;
-                    message = bizEx.Message;
+                    // 已知业务语义（NotFound / Duplicate / Referenced / Business…）
+                    // → HTTP 200 + 原文（用户必须看到「机构不存在」这类真实原因）
+                    httpStatus = StatusCodes.Status200OK;
+                    err = bizEx.Message;
+                    data = new { errorCode = bizEx.ErrorCode };
                     break;
 
                 default:
-                    // 记录详细错误日志
+                    // 系统异常：记详细日志（永不外泄给用户）
                     _logger.LogError(
                         exception,
                         "未处理异常: {Message}, Type: {Type}, Path: {Path}, Method: {Method}, User: {User}",
@@ -95,24 +81,27 @@ namespace YZH.Core.Api.Filters
                         context.HttpContext.Request.Method,
                         context.HttpContext.User?.Identity?.Name ?? "anonymous"
                     );
+                    httpStatus = StatusCodes.Status500InternalServerError;
+                    // ★ 只脱敏系统异常：业务异常上面已按原文返回，不受环境影响
+                    err = _environment.IsDevelopment()
+                        ? exception.Message
+                        : "操作失败，请联系管理员";
+                    data = new { errorCode = "INTERNAL_ERROR" };
                     break;
             }
-            
-            // 构建响应
-            var response = new ApiResponse<object>
-            {
-                Success = false,
-                Code = statusCode,
-                Message = _environment.IsDevelopment() ? message : "操作失败，请联系管理员",
-                Timestamp = DateTime.UtcNow,
-                Data = details != null ? new { errorCode, fieldErrors = details } : null
-            };
-            
+
+            // code 与 HTTP 解耦：业务拒绝恒 400，系统异常 500，403 保留 403（22 §三矩阵）
+            var envelopeCode = httpStatus == StatusCodes.Status200OK
+                ? 400
+                : httpStatus;
+
+            var response = ApiResponse<object>.FromError(err, envelopeCode, data);
+
             context.Result = new ObjectResult(response)
             {
-                StatusCode = statusCode
+                StatusCode = httpStatus
             };
-            
+
             context.ExceptionHandled = true;
         }
     }

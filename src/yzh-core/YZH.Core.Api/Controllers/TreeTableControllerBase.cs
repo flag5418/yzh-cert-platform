@@ -289,10 +289,10 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
         string methodName, [FromBody] JsonElement entityData)
     {
         if (string.IsNullOrEmpty(methodName))
-            return BadRequest(ApiResponse.Fail("操作名称不能为空"));
+            return Ok(ApiResponse.Fail("操作名称不能为空"));
 
         if (!_treeActions.TryGetValue(methodName.ToLowerInvariant(), out var handler))
-            return BadRequest(ApiResponse.Fail($"树操作 [{methodName}] 未注册，请检查 RegisterTreeAction 调用"));
+            return Ok(ApiResponse.Fail($"树操作 [{methodName}] 未注册，请检查 RegisterTreeAction 调用"));
 
         // 仅传递 Code 属性到处理函数（避免 [Required] 校验失败）
         var code = entityData.TryGetProperty("Code", out var codeProp) ? codeProp.GetString() : null;
@@ -302,8 +302,30 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
             codePropInfo.SetValue(entity, code);
 
         var result = await handler(entity);
-        return Ok(ApiResponse<object?>.Ok(result));
+
+        // ★ B01/B02（22 §七）：不再无条件 Ok —— handler 的返回值要能表达失败。
+        //   约定：
+        //     IOperationResult → 按 Success 出（失败走 BizFail，HTTP 200）
+        //     string           → 成功提示语（data=null, message=text）
+        //     null             → 成功（无提示语）
+        //     其它对象         → 成功载荷
+        //   失败请返回 OperationResult.Fail(...) 或直接 throw YZH*Exception，
+        //   ⛔ 不要用「返回一个错误字符串」表达失败（那会被当成 success:true）。
+        var envelope = result switch
+        {
+            null => ApiResponse<object?>.Ok(),
+            IOperationResult op when !op.Success =>
+                ApiResponse<object?>.BizFail(string.IsNullOrWhiteSpace(op.Message) ? "操作失败" : op.Message),
+            IOperationResult op => ApiResponse<object?>.Ok(ExtractResultData(op), op.Message),
+            string text => ApiResponse<object?>.Ok(text),
+            _ => ApiResponse<object?>.Ok(result, "操作成功"),
+        };
+        return Ok(envelope);
     }
+
+    /// <summary>尽力取出 IOperationResult 的 Data（非泛型分支下 Data 不可见）</summary>
+    private static object? ExtractResultData(IOperationResult result) =>
+        result is IOperationResult<object> withData ? withData.Data : null;
 
     /// <summary>
     ///     切换树节点有效标志（IsValid: 0 ↔ 1）
