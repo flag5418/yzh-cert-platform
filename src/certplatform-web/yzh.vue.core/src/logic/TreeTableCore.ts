@@ -19,7 +19,7 @@
  * - 生命周期（TT-3）：init() = loadConfig → loadTreeRoot → afterTreeLoaded → autoSelectFirstNode → onAfterInit
  */
 
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { reactive, ref } from 'vue'
 import type { YzhFormField } from '../components/form'
 import type { YzhAction } from '../components/table/types'
@@ -36,6 +36,8 @@ import type {
 import type { TreeNode } from '../types/tree'
 import { toCamelCase } from '../utils/case'
 import { pascalCaseFormData } from '../utils/case'
+import { expectOk } from '../utils/apiResponse'
+import { confirmOrFalse } from '../utils/confirm'
 import { toFormLayoutCols } from '../adapters/entityAdapters'
 import { SingleTableCore } from './SingleTableCore'
 import { TreeSide } from './TreeSide'
@@ -356,6 +358,8 @@ export abstract class TreeTableCore<
 
   override async loadConfig(): Promise<void> {
     const res = await this.apiGet<ApiResponse<TreeTableConfigDto>>('/treepconfig')
+    // F-1：失败必抛；先解包再取子字段，避免 res.data 为 undefined 时 TypeError
+    expectOk(res, '加载页面配置失败')
     this.treeTableConfig.value = res.data
     // 同时将 TableConfig 赋值给 config，获得单表能力
     this.config.value = res.data.TableConfig
@@ -367,14 +371,19 @@ export abstract class TreeTableCore<
 
   /** 初始化：配置 → 树 → afterTreeLoaded → 自动选中 → onAfterInit */
   override async init(): Promise<void> {
-    await this.loadConfig()
-    await this.loadTreeRoot()
-    await this.afterTreeLoaded()
-    if (this.autoSelectFirstNode && !this.selectedNode) {
-      const first = this.treeData[0]
-      if (first) await this.onNodeClick(first)
+    try {
+      await this.loadConfig()
+      await this.loadTreeRoot()
+      await this.afterTreeLoaded()
+      if (this.autoSelectFirstNode && !this.selectedNode) {
+        const first = this.treeData[0]
+        if (first) await this.onNodeClick(first)
+      }
+      await this.onAfterInit()
+    } catch (e) {
+      // 读路径最外层兜底：失败保留现状（空态/旧数据）+ 一条错误提示
+      this.reportError(e, '页面初始化失败')
     }
-    await this.onAfterInit()
   }
 
   // ========================================================
@@ -386,6 +395,8 @@ export abstract class TreeTableCore<
     this.treeSide.treeLoading.value = true
     try {
       const res = await this.apiPost<ApiResponse<TreeItemDto[]>>('/tree/root', {})
+      // F-1：失败必抛（不再 `res.data ?? []` 静默变空树）
+      expectOk(res, '加载树失败')
       const items = res.data ?? []
       this.treeSide.setNodes(items.map((dto) => this.dtoToNode(dto)))
     } finally {
@@ -408,10 +419,21 @@ export abstract class TreeTableCore<
       return []
     }
 
-    const res = await this.apiPost<ApiResponse<TreeItemDto[]>>('/tree/children', {
-      ParentCode: code,
-      Level: level,
-    })
+    // ★ 已登记例外 E8（22 §九）：el-tree 懒加载回调内抛错会卡住 loading 且无法自愈，
+    //   故此路径**不向调用方 throw**，改为就地提示 + 返回空，用户可重新展开重试。
+    let res: ApiResponse<TreeItemDto[]>
+    try {
+      res = await this.apiPost<ApiResponse<TreeItemDto[]>>('/tree/children', {
+        ParentCode: code,
+        Level: level,
+      })
+      expectOk(res, '加载子节点失败')
+    } catch (e) {
+      this.reportError(e, '加载子节点失败')
+      if (resolve) resolve([])
+      return []
+    }
+
     const items = res.data ?? []
     const children = items.map((dto: TreeItemDto) => this.dtoToNode(dto, data))
 
@@ -434,10 +456,14 @@ export abstract class TreeTableCore<
     if ((this.treeConfig as any)?.OnlyLeafSelectable && !node.IsLeaf) {
       return
     }
-    if (this._tableRef) {
-      await this._tableRef.refresh()
-    } else {
-      await this.refreshTable()
+    try {
+      if (this._tableRef) {
+        await this._tableRef.refresh()
+      } else {
+        await this.refreshTable()
+      }
+    } catch (e) {
+      this.reportError(e, '查询失败')
     }
   }
 
@@ -483,14 +509,15 @@ export abstract class TreeTableCore<
         Filters: filters,
       }
       const res = await this.apiPost<ApiResponse<PagedData<V>>>('/filter', request)
+      expectOk(res, '查询失败')
       const page = res.data
       if (page) {
         this.rows.value = this.postprocessRows((page.Items ?? []) as V[])
         this.pagination.total = page.TotalCount ?? 0
       }
-    } catch {
-      this.rows.value = []
-      this.pagination.total = 0
+    } catch (e) {
+      // D1：失败保留上次数据，只提示
+      this.reportError(e, '查询失败')
     } finally {
       this.loading.value = false
     }
@@ -619,12 +646,20 @@ export abstract class TreeTableCore<
     return true
   }
 
-  /** 提交树节点表单 */
-  async submitTreeNodeForm(): Promise<void> {
+  /**
+   * 提交树节点表单（F-1 / F-3）
+   *
+   * 只有 expectOk 通过才执行 onAfter* 钩子、成功提示、关弹窗、重置编辑态。
+   * 失败 → 只提示，**弹窗保持打开且 treeDialogMode 不重置**（否则下次提交会被当新增）。
+   *
+   * @returns true=保存成功
+   */
+  async submitTreeNodeForm(): Promise<boolean> {
     this.treeSubmitting.value = true
     try {
       const payload = this.normalizeBeforeSubmit({ ...this.treeFormData })
-      if (this.treeDialogMode.value === 'add') {
+      const isAdd = this.treeDialogMode.value === 'add'
+      if (isAdd) {
         this.onBeforeAddTree(payload, this.treeParentNode.value)
         const created = await this.addTreeNode(this.treeParentNode.value, payload)
         if (created) this.onAfterAddTree(created, this.treeParentNode.value)
@@ -639,27 +674,51 @@ export abstract class TreeTableCore<
         this.onAfterUpdateTree(node, payload)
       }
       this.treeDialogVisible.value = false
-      ElMessage.success(this.treeDialogMode.value === 'add' ? '创建成功' : '修改成功')
-    } finally {
+      ElMessage.success(isAdd ? '创建成功' : '修改成功')
+      // 成功才收尾：重置编辑态供下次新增
       this.treeDialogMode.value = 'add'
       this.treeEditingNode.value = null
+      return true
+    } catch (e) {
+      this.reportError(e, '保存失败')
+      return false
+    } finally {
       this.treeSubmitting.value = false
     }
   }
 
-  /** 删除树节点（完整流程：确认弹窗 → API → 本地更新 → 表格联动） */
-  async deleteTreeNodeWithConfirm(node: TreeNode): Promise<void> {
+  /**
+   * 删除树节点（完整流程：确认弹窗 → API → 本地更新 → 表格联动）
+   *
+   * F-1：删除成功才调 onAfterDeleteTree + 弹提示。
+   * F-4：取消静默。
+   *
+   * @returns true=删除成功；false=被预检拦截 / 业务失败（D2 签名变更）
+   */
+  async deleteTreeNodeWithConfirm(node: TreeNode): Promise<boolean> {
     const name = node.Name
     const ok = await this.onBeforeDeleteTree(node)
-    if (!ok) return
-    await ElMessageBox.confirm(`确定删除【${name}】？`, '删除确认', {
-      type: 'warning',
+    if (!ok) return false
+
+    const confirmed = await confirmOrFalse(`确定删除【${name}】？`, '删除确认', {
       confirmButtonText: '确定删除',
       cancelButtonText: '取消',
     })
-    await this.deleteTreeNode(node, true)
+    if (!confirmed) return false
+
+    let deleted = false
+    try {
+      deleted = await this.deleteTreeNode(node, true)
+    } catch (e) {
+      // 失败：节点不动、不调 onAfterDeleteTree、不弹「已删除」
+      this.reportError(e, '删除失败')
+      return false
+    }
+    if (!deleted) return false
+
     this.onAfterDeleteTree(node)
     ElMessage.success('已删除')
+    return true
   }
 
   // ========================================================
@@ -678,7 +737,9 @@ export abstract class TreeTableCore<
         parentNode?.Code ?? this.treeConfig?.RootParentCode ?? null,
     } as Record<string, any>
     const res = await this.apiPost<ApiResponse<TreeItemDto>>('/tree/add', requestData)
-    // 支持前端预分配 Code：后端未返回时使用请求中的 Code 构造本地节点
+    // F-1：失败必抛 —— 绝不在 success:false 时用请求体兜底造「幽灵节点」
+    expectOk(res, '新增节点失败')
+    // 支持前端预分配 Code：仅在 success:true 且后端未回传 data 时用请求中的 Code 构造本地节点
     const backendCode = (res.data as any)?.[codeField] ?? ''
     const localCode = backendCode || requestData[codeField]
     const newNode = this.dtoToNode(
@@ -713,6 +774,8 @@ export abstract class TreeTableCore<
       ...pascalExtra,
     }
     const res = await this.apiPost<ApiResponse<TreeItemDto>>('/tree/update', requestData)
+    // F-1：失败必抛 —— 不在业务被拒时改本地 Name（否则本地假更新）
+    expectOk(res, '修改节点失败')
 
     // O(1) 原位替换（保持展开状态）
     const newNode = this.dtoToNode(
@@ -724,8 +787,15 @@ export abstract class TreeTableCore<
     }
   }
 
-  /** 删除树节点（skipConfirm=true 时由调用方负责确认） */
-  async deleteTreeNode(node: TreeNode, skipConfirm = false): Promise<void> {
+  /**
+   * 删除树节点（skipConfirm=true 时由调用方负责确认）
+   *
+   * D2 签名变更：`Promise<void>` → `Promise<boolean>`
+   *   true  = 已删除并完成本地清理
+   *   false = 前端预检拦截（有子节点）/ 用户取消（未发起请求）
+   *   @throws BizError 业务失败（调用方 catch，不改本地）
+   */
+  async deleteTreeNode(node: TreeNode, skipConfirm = false): Promise<boolean> {
     // 前端预检：非级联删除模式下，本地有子节点则直接拦截
     if (
       !this.treeConfig?.AllowDeleteWithChildren &&
@@ -733,22 +803,20 @@ export abstract class TreeTableCore<
       node.Children.length > 0
     ) {
       ElMessage.warning('该节点包含子节点，请先删除子节点')
-      return
+      return false
     }
 
     if (!skipConfirm) {
-      await ElMessageBox.confirm(`确定删除节点 "${node.Name}"？`, '删除确认', {
-        type: 'warning',
+      const confirmed = await confirmOrFalse(`确定删除节点 "${node.Name}"？`, '删除确认', {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
       })
+      if (!confirmed) return false
     }
 
     const res = await this.apiPost<ApiResponse<string>>('/tree/delete', [node.Code])
-    if (!res.success) {
-      ElMessage.error(res.message || '删除失败')
-      return
-    }
+    // F-1：失败必抛（不再 return 静默 —— 那正是假删除的根源）
+    expectOk(res, '删除失败')
 
     this.treeSide.removeNode(node.Code)
 
@@ -767,6 +835,7 @@ export abstract class TreeTableCore<
       this.treeSide.selectedNode.value = null
       await this.loadPageWithoutTree()
     }
+    return true
   }
 
   /** 树节点执行自定义操作 */
@@ -780,30 +849,31 @@ export abstract class TreeTableCore<
       [this.treeConfig?.CodeField ?? 'Code']: node.Code,
       ...pascalExtra,
     })
+    // F-1：判定必须在刷新之前 —— 失败不再用 loadTreeRoot 掩盖（失败不刷新）
+    expectOk(res, '操作失败')
     await this.loadTreeRoot()
     return res.data
   }
 
-  /** 切换树节点有效标志（自动更新 node.Extra[enableField]） */
-  async toggleTreeNodeIsValid(
-    node: TreeNode,
-  ): Promise<{ Code: string; IsValid: number } | null> {
+  /**
+   * 切换树节点有效标志（自动更新 node.Extra[enableField]）
+   * @throws BizError 业务失败（D4：不再静默 return null）
+   */
+  async toggleTreeNodeIsValid(node: TreeNode): Promise<{ Code: string; IsValid: number }> {
     const field = this.enableField ?? 'IsValid'
     const res = await this.apiPost<ApiResponse<{ Code: string; IsValid: number }>>(
       '/tree/toggle-valid',
       { [this.treeConfig?.CodeField ?? 'Code']: node.Code },
     )
-    if (res.success) {
-      const extra = (node.Extra as any) || {}
-      // 双 Key 写入：PascalCase（业务 Controller override）+ camelCase（TreeMapper 默认）
-      extra[field] = res.data.IsValid
-      const camelField = field.charAt(0).toLowerCase() + field.slice(1)
-      if (camelField !== field) extra[camelField] = res.data.IsValid
-      node.Extra = { ...extra }
-      ElMessage.success(res.data.IsValid === 1 ? '已启用' : '已禁用')
-      return res.data
-    }
-    return null
+    expectOk(res, '切换状态失败')
+    const extra = (node.Extra as any) || {}
+    // 双 Key 写入：PascalCase（业务 Controller override）+ camelCase（TreeMapper 默认）
+    extra[field] = res.data.IsValid
+    const camelField = field.charAt(0).toLowerCase() + field.slice(1)
+    if (camelField !== field) extra[camelField] = res.data.IsValid
+    node.Extra = { ...extra }
+    ElMessage.success(res.data.IsValid === 1 ? '已启用' : '已禁用')
+    return res.data
   }
 
   /** 切换树节点有效标志（完整流程：确认弹窗 → API → 本地更新） */
@@ -819,13 +889,19 @@ export abstract class TreeTableCore<
     const action = currentVal === 1 ? '禁用' : '启用'
     const name = options?.entityName ?? node.Name
 
-    await ElMessageBox.confirm(`确定${action}【${name}】？`, `${action}确认`, {
-      type: 'warning',
+    // F-4：取消静默
+    const confirmed = await confirmOrFalse(`确定${action}【${name}】？`, `${action}确认`, {
       confirmButtonText: `确定${action}`,
       cancelButtonText: '取消',
     })
+    if (!confirmed) return
 
-    await this.toggleTreeNodeIsValid(node)
+    try {
+      await this.toggleTreeNodeIsValid(node)
+    } catch (e) {
+      // F-3：流程方法统一提示；本地 Extra 不更新
+      this.reportError(e, `${action}失败`)
+    }
   }
 
   // ========================================================
@@ -852,50 +928,62 @@ export abstract class TreeTableCore<
 
   /** 树节点动作入口（绑定 @tree-node-action="logic.onNodeAction"；箭头属性自动绑定 this） */
   onNodeAction = async (key: string, node: TreeNode): Promise<void> => {
-    // 命中自定义处理器优先
-    const handler = (this as any).handlers?.get?.(key)
-    if (handler) {
-      await handler(node, undefined)
-      return
-    }
-    switch (key) {
-      case 'add-child':
-        this.openTreeNodeDialog(null, node)
+    try {
+      // 命中自定义处理器优先
+      const handler = (this as any).handlers?.get?.(key)
+      if (handler) {
+        await handler(node, undefined)
         return
-      case 'add-root':
-        this.openTreeNodeDialog(null, null)
-        return
-      case 'edit':
-      case 'node-edit':
-        this.openTreeNodeDialog(node)
-        return
-      case 'delete':
-      case 'node-delete':
-        await this.deleteTreeNodeWithConfirm(node)
-        return
-      case 'toggle-valid':
-      case 'node-toggle-valid':
-      case 'toggle-disable':
-      case 'toggle-enable':
-        await this.toggleTreeNodeWithConfirm(node)
-        return
-      default:
-        if (key.startsWith('custom:')) {
-          const method = key.slice(7)
-          const confirmMsg = this.confirmTreeActionMessage(method, node)
-          if (confirmMsg) {
-            await ElMessageBox.confirm(confirmMsg, '操作确认', {
-              type: 'warning',
-              confirmButtonText: '确定',
-              cancelButtonText: '取消',
-            })
+      }
+      switch (key) {
+        case 'add-child':
+          this.openTreeNodeDialog(null, node)
+          return
+        case 'add-root':
+          this.openTreeNodeDialog(null, null)
+          return
+        case 'edit':
+        case 'node-edit':
+          this.openTreeNodeDialog(node)
+          return
+        case 'delete':
+        case 'node-delete':
+          await this.deleteTreeNodeWithConfirm(node)
+          return
+        case 'toggle-valid':
+        case 'node-toggle-valid':
+        case 'toggle-disable':
+        case 'toggle-enable':
+          await this.toggleTreeNodeWithConfirm(node)
+          return
+        default:
+          if (key.startsWith('custom:')) {
+            const method = key.slice(7)
+            const confirmMsg = this.confirmTreeActionMessage(method, node)
+            if (confirmMsg) {
+              // F-4：取消静默
+              const confirmed = await confirmOrFalse(confirmMsg, '操作确认', {
+                confirmButtonText: '确定',
+                cancelButtonText: '取消',
+              })
+              if (!confirmed) return
+            }
+            // F-1：executeTreeAction 内部 expectOk，失败在此抛出 → 不刷新、不弹成功
+            const result = await this.executeTreeAction(method, node)
+            try {
+              await this.refreshTable()
+            } catch (e) {
+              // 动作已成功，仅列表刷新失败：单独提示，不覆盖成功反馈
+              this.reportError(e, '刷新失败')
+            }
+            if (typeof result === 'string' && result) {
+              ElMessage.success(result)
+            }
           }
-          const result = await this.executeTreeAction(method, node)
-          await this.refreshTable()
-          if (typeof result === 'string' && result) {
-            ElMessage.success(result)
-          }
-        }
+      }
+    } catch (e) {
+      // 顶层兜底：动作失败 → 只弹错误，不刷树、不弹成功
+      this.reportError(e, '操作失败')
     }
   }
 
@@ -933,6 +1021,8 @@ export abstract class TreeTableCore<
       ParentCode: node.Code,
       Level: (node.Extra?.level as number) ?? 0,
     })
+    // F-1：失败必抛 —— 不在 success:false 时把 node.Children 清空
+    expectOk(res, '刷新子节点失败')
     const items = res.data ?? []
     const children = items.map((dto) => this.dtoToNode(dto, node))
     for (const child of children) this.treeSide.register(child, node)

@@ -31,6 +31,13 @@
 export interface ApiResponse<T = any> {
   success: boolean
   message: string
+  /**
+   * 失败原因（唯一错误出口）—— 22-接口返回规范 §二
+   * - success === false ⇒ err !== ""（不变量①）
+   * - success === true  ⇒ err === ""（不变量②）
+   * 失败时读取一律 `err || message`（P0 前后端同批前 message 仍可能承载错误）
+   */
+  err?: string
   data: T
   code: number
   timestamp: string

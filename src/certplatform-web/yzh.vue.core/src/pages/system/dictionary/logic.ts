@@ -19,8 +19,8 @@
  * TreeNode 一律 PascalCase（node.Code / node.Name / node.Extra）。
  */
 
-import { TreeTableCore, type SearchField, type TreeNode, type YzhAction } from '@yzh-core'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { TreeTableCore, confirmOrFalse, type SearchField, type TreeNode, type YzhAction } from '@yzh-core'
+import { ElMessage } from 'element-plus'
 
 export class DictionaryPageLogic extends TreeTableCore<any> {
   controllerName = 'Dictionary'
@@ -133,22 +133,38 @@ export class DictionaryPageLogic extends TreeTableCore<any> {
     return true
   }
 
-  /** 树删除：级联软删除确认文案（AllowDeleteWithChildren=true） */
-  override async deleteTreeNodeWithConfirm(node: TreeNode): Promise<void> {
+  /**
+   * 树删除：级联软删除确认文案（AllowDeleteWithChildren=true）
+   *
+   * 仅覆盖「确认文案」，其余遵循基类铁律：失败必抛并只提示一次（F-1/F-3）、
+   * 取消静默（F-4）、成功才走 onAfterDeleteTree + 成功提示。
+   *
+   * @returns true=删除成功（D2 签名与基类一致）
+   */
+  override async deleteTreeNodeWithConfirm(node: TreeNode): Promise<boolean> {
     const ok = await this.onBeforeDeleteTree(node)
-    if (!ok) return
-    await ElMessageBox.confirm(
+    if (!ok) return false
+
+    const confirmed = await confirmOrFalse(
       `确定删除字典/分类【${node.Name}】？\n（子节点将一并被软删除）`,
       '删除确认',
-      {
-        type: 'warning',
-        confirmButtonText: '确定删除',
-        cancelButtonText: '取消',
-      },
+      { confirmButtonText: '确定删除', cancelButtonText: '取消' },
     )
-    await this.deleteTreeNode(node, true)
+    if (!confirmed) return false
+
+    let deleted = false
+    try {
+      deleted = await this.deleteTreeNode(node, true)
+    } catch (e) {
+      // 失败：节点不动、不调 onAfterDeleteTree、不弹「已删除」
+      this.reportError(e, '删除失败')
+      return false
+    }
+    if (!deleted) return false
+
     this.onAfterDeleteTree(node)
     ElMessage.success('已删除')
+    return true
   }
 
   constructor() {

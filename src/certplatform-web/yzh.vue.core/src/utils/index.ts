@@ -11,4 +11,5 @@ export {
 } from './treeOps'
 export * from './treeUtils'
 export * from './apiResponse'
+export * from './confirm'
 export { toCamelCase, toPascalCase, pascalCaseFormData, rowToFormData } from './case'

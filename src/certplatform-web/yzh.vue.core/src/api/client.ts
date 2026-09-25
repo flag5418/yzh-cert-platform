@@ -151,15 +151,23 @@ export class YzhApiClient {
       if (res.status === 401) {
         tokenStore.clear()
         this.onUnauthorized?.()
-        throw new Error('登录已过期，请重新登录')
+        // 带 status 抛出：宿主 onError 据此做 401 副作用（D6 只做副作用、不弹提示）
+        const err = new Error('登录已过期，请重新登录')
+        ;(err as any).status = 401
+        throw err
       }
 
-      // 解析 JSON（无论状态码）
-      const json = (await res.json()) as T
+      // 解析 JSON（无论状态码）；响应体不是 JSON（网关 HTML / 空体）时不抛 SyntaxError，
+      // 返回 null 交给上层 expectOk 统一报错，避免裸 "Unexpected token <" 流到用户面前
+      const json = (await res.json().catch(() => null)) as T
 
-      // 非 200 响应：抛出异常，携带后端错误信息
+      // 非 200 响应：抛出异常，携带后端错误信息（P2 后优先取 err）
       if (!res.ok) {
-        const msg = (json as any)?.message || (json as any)?.msg || `请求失败 (${res.status})`
+        const msg =
+          (json as any)?.err ||
+          (json as any)?.message ||
+          (json as any)?.msg ||
+          `请求失败 (${res.status})`
         const err = new Error(msg)
         ;(err as any).status = res.status
         ;(err as any).data = json

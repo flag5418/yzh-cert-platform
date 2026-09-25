@@ -20,7 +20,7 @@
  *   删除：onDelete → delete → onAfterDelete
  */
 
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { reactive, ref } from 'vue'
 import {
   toFormFields,
@@ -44,6 +44,8 @@ import {
   toCamelCase,
   toPascalCase,
 } from '../utils/case'
+import { expectOk, unwrapOk } from '../utils/apiResponse'
+import { confirmOrFalse } from '../utils/confirm'
 import type {
   ApiResponse,
   EntityConfigDto,
@@ -263,6 +265,19 @@ export abstract class SingleTableCore<V extends Record<string, any> = any> {
     return payload
   }
 
+  /**
+   * 统一错误出口（铁律 F-3：谁 catch 谁弹，只弹一次）
+   *
+   * - 标记 `handled`，供 `unhandledrejection` 兜底判断，杜绝双弹
+   * - 底层方法只 throw 不提示；只有流程方法 / init / dispatch 调用本方法
+   */
+  protected reportError(e: unknown, fallback: string): void {
+    const err = e as { handled?: boolean; message?: string } | null | undefined
+    if (err && typeof err === 'object' && err.handled) return
+    if (err && typeof err === 'object') err.handled = true
+    ElMessage.error(err?.message || fallback)
+  }
+
   /** 数据加载后处理钩子（如编码→名称翻译） */
   protected postprocessRows(rows: V[]): V[] {
     return rows
@@ -274,13 +289,19 @@ export abstract class SingleTableCore<V extends Record<string, any> = any> {
 
   /** 初始化页面：加载配置 → onAfterInit（表格数据由 YzhTable dataLoader 自行加载） */
   async init(): Promise<void> {
-    await this.loadConfig()
-    await this.onAfterInit()
+    try {
+      await this.loadConfig()
+      await this.onAfterInit()
+    } catch (e) {
+      // 读路径最外层兜底：配置失败 → 保留 config=null（空态）+ 一条错误提示
+      this.reportError(e, '页面初始化失败')
+    }
   }
 
   /** 加载页面配置（/api/{controller}/config） */
   protected async loadConfig(): Promise<void> {
     const res = await this.apiGet<ApiResponse<EntityConfigDto>>('/config')
+    expectOk(res, '加载页面配置失败')
     this.config.value = res.data
   }
 
@@ -303,15 +324,16 @@ export abstract class SingleTableCore<V extends Record<string, any> = any> {
         Filters: this.buildFilters(),
       }
       const res = await this.apiPost<ApiResponse<PagedData<V>>>('/filter', request)
+      expectOk(res, '查询失败')
       const page = res.data
       if (page) {
         this.rows.value = this.postprocessRows((page.Items ?? []) as V[])
         this.pagination.total = page.TotalCount ?? 0
         this.onDataLoaded(this.rows.value as V[])
       }
-    } catch {
-      this.rows.value = []
-      this.pagination.total = 0
+    } catch (e) {
+      // D1：失败保留上次数据，只提示 —— 不再静默清空造成「突然没数据」误判
+      this.reportError(e, '查询失败')
     } finally {
       this.loading.value = false
     }
@@ -342,6 +364,8 @@ export abstract class SingleTableCore<V extends Record<string, any> = any> {
         Filters: this.buildFilters(searchValues as Record<string, any>),
       }
       const res = await this.apiPost<ApiResponse<PagedData<V>>>('/filter', request)
+      // F-1/F-2：业务失败必须抛出，交给 YzhTable.loadData 的既有 catch（error 条 + 提示）
+      expectOk(res, '查询失败')
       const data = res?.data
       const items = this.postprocessRows(((data?.Items ?? []) as V[]).slice())
       this.pagination.page = page
@@ -390,30 +414,30 @@ export abstract class SingleTableCore<V extends Record<string, any> = any> {
   /** 新增实体（/api/{controller}/add） */
   protected async add(entity: Record<string, any>): Promise<V> {
     const res = await this.apiPost<ApiResponse<V>>('/add', entity)
-    return res.data
+    // F-1/F-2：失败抛 BizError，不返回 undefined（否则 submitForm 会 insertRow(undefined)）
+    return unwrapOk<V>(res, '新增失败')
   }
 
   /** 修改实体（/api/{controller}/update） */
   protected async update(entity: Record<string, any>): Promise<V> {
     const res = await this.apiPost<ApiResponse<V>>('/update', entity)
-    return res.data
+    return unwrapOk<V>(res, '修改失败')
   }
 
   /** 批量删除（/api/{controller}/delete） */
   protected async delete(codes: string[]): Promise<void> {
-    await this.apiPost<ApiResponse<string>>('/delete', codes)
+    const res = await this.apiPost<ApiResponse<string>>('/delete', codes)
+    // 响应不再丢弃 —— 失败必须抛出，否则 confirmDelete 会假删除
+    expectOk(res, '删除失败')
   }
 
   /** 行操作（/api/{controller}/action/{methodName}） */
   async executeAction(methodName: string, row: V): Promise<void> {
     const res = await this.apiPost<ApiResponse<any>>(`/action/${methodName}`, row)
-    if (res && (res as any).success === false) {
-      ElMessage.error(res.message || '操作失败')
-      return
-    }
-    if (typeof res?.data === 'string' && res.data) {
-      ElMessage.success(res.data)
-    }
+    expectOk(res, '操作失败')
+    const dataMsg = typeof res.data === 'string' && res.data ? res.data : ''
+    const msg = res.message || dataMsg
+    if (msg) ElMessage.success(msg)
     // YzhTable 经 dataLoader 自持行数据：优先 tableRef.refresh，否则退回 loadPage
     if (this._tableRef) {
       await this._tableRef.refresh()
@@ -424,17 +448,16 @@ export abstract class SingleTableCore<V extends Record<string, any> = any> {
 
   /**
    * 切换有效标志（IsValid: 0 ↔ 1）
+   * @throws BizError 业务失败（铁律 F-2，D4：不再静默 return null）
    */
-  async toggleIsValid(code: string): Promise<{ Code: string; IsValid: number } | null> {
+  async toggleIsValid(code: string): Promise<{ Code: string; IsValid: number }> {
     const res = await this.apiPost<ApiResponse<{ Code: string; IsValid: number }>>(
       '/toggle-valid',
       { Code: code },
     )
-    if (res.success) {
-      ElMessage.success(res.data.IsValid === 1 ? '已启用' : '已禁用')
-      return res.data
-    }
-    return null
+    expectOk(res, '切换状态失败')
+    ElMessage.success(res.data.IsValid === 1 ? '已启用' : '已禁用')
+    return res.data
   }
 
   /**
@@ -449,19 +472,23 @@ export abstract class SingleTableCore<V extends Record<string, any> = any> {
     const action = currentVal === 1 ? '禁用' : '启用'
     const name = options?.entityName ?? this.entityName(row)
 
-    await ElMessageBox.confirm(
+    // F-4：取消不是错误 —— 静默返回，不发请求、不提示
+    const confirmed = await confirmOrFalse(
       name ? `确定${action}【${name}】？` : `确定${action}该记录？`,
       `${action}确认`,
       {
-        type: 'warning',
         confirmButtonText: `确定${action}`,
         cancelButtonText: '取消',
       },
     )
+    if (!confirmed) return
 
-    const result = await this.toggleIsValid((row as any).Code)
-    if (result) {
+    try {
+      const result = await this.toggleIsValid((row as any).Code)
       this.replaceRowByCode((row as any).Code, { ...row, [field]: result.IsValid } as V)
+    } catch (e) {
+      // F-3：流程方法统一提示；本地状态不更新
+      this.reportError(e, `${action}失败`)
     }
   }
 
@@ -487,6 +514,8 @@ export abstract class SingleTableCore<V extends Record<string, any> = any> {
     const formData = new FormData()
     formData.append('file', file)
     const res = await this.apiUpload<ApiResponse<any>>('/import', formData)
+    expectOk(res, '导入失败')
+    ElMessage.success('导入成功')
     return res.data
   }
 
@@ -566,8 +595,20 @@ export abstract class SingleTableCore<V extends Record<string, any> = any> {
    * 动作统一入口：行按钮 / 工具栏按钮 / 树节点动作都汇聚到这里。
    *
    * 内置分支：add / edit / delete / toggle-valid / export / import / batch-delete / custom:{method}
+   *
+   * ★ 顶层兜底（F-3）：任何 handler / 内置动作抛出的 ApiError / BizError 都在此统一提示，
+   *   绝不外泄成 unhandledrejection。子类若覆盖本方法，须自行 try/catch。
    */
   async dispatch(key: string, target?: V, action?: YzhAction): Promise<void> {
+    try {
+      await this.runAction(key, target, action)
+    } catch (e) {
+      this.reportError(e, '操作失败')
+    }
+  }
+
+  /** dispatch 的实际执行体（子类覆盖点保持 dispatch 不变） */
+  protected async runAction(key: string, target?: V, action?: YzhAction): Promise<void> {
     const handler = this.handlers.get(key)
     if (handler) {
       await handler(target, action)
@@ -733,10 +774,19 @@ export abstract class SingleTableCore<V extends Record<string, any> = any> {
     this.dialogVisible.value = false
   }
 
-  async submitForm() {
+  /**
+   * 表单提交流程（F-1 / F-3）。
+   *
+   * 副作用门禁：**只有 expectOk 通过**才执行 onAfter* 钩子、插/改行、成功提示、关弹窗。
+   * 失败 → 只提示，弹窗保持打开、行不动、钩子不跑。
+   *
+   * @returns true=保存成功；false=失败（调用方可据此决定是否关掉自定义弹窗）
+   */
+  async submitForm(): Promise<boolean> {
     this.submitting.value = true
     try {
-      if (this.dialogMode.value === 'add') {
+      const isAdd = this.dialogMode.value === 'add'
+      if (isAdd) {
         this.onBeforeAdd(this.formData)
         const submitData = this.normalizeBeforeSubmit({ ...this.formData })
         const saved = await this.add(submitData)
@@ -756,6 +806,10 @@ export abstract class SingleTableCore<V extends Record<string, any> = any> {
       }
       ElMessage.success('保存成功')
       this.dialogVisible.value = false
+      return true
+    } catch (e) {
+      this.reportError(e, '保存失败')
+      return false
     } finally {
       this.submitting.value = false
     }
@@ -763,9 +817,13 @@ export abstract class SingleTableCore<V extends Record<string, any> = any> {
 
   /**
    * 删除确认（ST-10：逐行名称）
+   *
+   * F-1：删除成功才弹提示 + 移行 + 调 onAfterDelete。
+   * F-4：确认框取消 → 静默返回（零提示、零请求）。
+   *
    * @param rows 待删行（缺省取选中行）
    */
-  async confirmDelete(rows?: V[]) {
+  async confirmDelete(rows?: V[]): Promise<void> {
     const targets = rows || this.selectedRows.value
     if (targets.length === 0) {
       ElMessage.warning('请先选择要删除的记录')
@@ -787,12 +845,19 @@ export abstract class SingleTableCore<V extends Record<string, any> = any> {
     } else {
       message = `确定删除 ${codes.length} 条记录？`
     }
-    await ElMessageBox.confirm(message, '删除确认', {
-      type: 'warning',
+    const confirmed = await confirmOrFalse(message, '删除确认', {
       confirmButtonText: '确定删除',
       cancelButtonText: '取消',
     })
-    await this.delete(codes)
+    if (!confirmed) return
+
+    try {
+      await this.delete(codes)
+    } catch (e) {
+      // 失败：不移行、不调 onAfterDelete —— 杜绝「假删除」
+      this.reportError(e, '删除失败')
+      return
+    }
     ElMessage.success('删除成功')
     for (const code of codes) {
       this.removeRowByCode(code)

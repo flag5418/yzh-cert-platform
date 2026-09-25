@@ -103,9 +103,9 @@ export class MenuPageLogic extends TreeTableCore<any> {
 
   override async toggleTreeNodeIsValid(
     node: Parameters<TreeTableCore<any>['toggleTreeNodeIsValid']>[0],
-  ): Promise<{ Code: string; IsValid: number } | null> {
+  ): Promise<{ Code: string; IsValid: number }> {
     const result = await super.toggleTreeNodeIsValid(node)
-    if (result) notifyMenuChanged()
+    notifyMenuChanged()
     return result
   }
 }

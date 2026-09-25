@@ -5,6 +5,8 @@
     :width="width"
     :close-on-click-modal="false"
     :destroy-on-close="destroyOnClose"
+    :close-on-press-escape="!loading"
+    :show-close="!loading"
     @closed="emit('closed')"
   >
     <slot name="default">
@@ -18,6 +20,7 @@
         :show-actions="false"
         @submit="handleSubmit"
         @reset="handleCancel"
+        @validate="handleValidate"
       >
         <!-- 字段级 slot 透传：#Icon / #field-xxx 等穿透弹窗层落到内层 YzhForm -->
         <template v-for="name in fieldSlotNames" :key="name" #[name]="slotProps">
@@ -28,7 +31,7 @@
 
     <template #footer>
       <slot name="footer">
-        <el-button @click="handleCancel">取消</el-button>
+        <el-button :disabled="loading" @click="handleCancel">取消</el-button>
         <el-button type="primary" :loading="loading" @click="handleSubmit">
           {{ submitText }}
         </el-button>
@@ -59,6 +62,7 @@
  *   />
  */
 import { computed, useSlots } from 'vue'
+import { ElMessage } from 'element-plus'
 import YzhForm from './YzhForm.vue'
 import type { YzhFormField } from './YzhForm.vue'
 
@@ -88,6 +92,13 @@ const props = withDefaults(
     submitText?: string
     /** 是否销毁内容 */
     destroyOnClose?: boolean
+    /**
+     * 表单校验失败时是否额外弹一条 warning（D3：**默认关**）
+     * 校验不通过时 el-form 已就地标红，重复弹窗属于噪音；需要显式提示的页面再开。
+     */
+    showValidateMessage?: boolean
+    /** 校验失败提示文案（showValidateMessage=true 时生效） */
+    validateMessage?: string
   }>(),
   {
     visible: false,
@@ -101,7 +112,9 @@ const props = withDefaults(
     cols: 2,
     labelWidth: '100px',
     submitText: undefined,
-    destroyOnClose: true
+    destroyOnClose: true,
+    showValidateMessage: false,
+    validateMessage: '表单校验未通过，请检查标红字段'
   }
 )
 
@@ -111,6 +124,7 @@ const emit = defineEmits<{
   (e: 'submit'): void
   (e: 'cancel'): void
   (e: 'closed'): void
+  (e: 'validate', valid: boolean, fields?: any): void
 }>()
 
 // 弹窗自身保留的 slot（不转发给 YzhForm）
@@ -143,11 +157,23 @@ const dialogTitle = computed(() => {
 const submitText = computed(() => props.submitText ?? (props.mode === 'detail' ? '关闭' : '保存'))
 
 function handleSubmit() {
+  // 提交进行中禁止重复触发（避免并发两次 add/update）
+  if (props.loading) return
   emit('submit')
 }
 
 function handleCancel() {
+  // 提交进行中不响应取消（含 YzhForm 的 @reset 入口）
+  if (props.loading) return
   emit('cancel')
   emit('update:visible', false)
+}
+
+/** 内层 YzhForm 校验结果透传（YzhFormDialog 未做任何拦截，只做 D3 可选提示） */
+function handleValidate(valid: boolean, fields?: any) {
+  if (!valid && props.showValidateMessage) {
+    ElMessage.warning(props.validateMessage)
+  }
+  emit('validate', valid, fields)
 }
 </script>

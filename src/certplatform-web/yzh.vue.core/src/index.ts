@@ -91,3 +91,13 @@ export {
   pascalCaseFormData,
   rowToFormData,
 } from './utils/case'
+// 信封判定原语（铁律 F-1/F-2）+ 取消确认（铁律 F-4）—— 页面 handler 直接可用
+export {
+  BizError,
+  envelopeErrorText,
+  expectOk,
+  isBizError,
+  unwrap,
+  unwrapOk,
+} from './utils/apiResponse'
+export { confirmOrFalse } from './utils/confirm'
