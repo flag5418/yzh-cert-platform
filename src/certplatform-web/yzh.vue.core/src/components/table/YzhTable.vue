@@ -296,9 +296,8 @@ async function loadData() {
       selectedRows.value = restored
     }
   } catch (e: any) {
-    error.value = e?.message || '数据加载失败'
-    rows.value = []
-    total.value = 0
+    // F-10：加载失败保留上次数据（不清空闪烁）；err 优先（P0 后失败时 message 为 ""）
+    error.value = (e as any)?.err || e?.message || '数据加载失败'
     ElMessage.error(error.value)
   } finally {
     loading.value = false

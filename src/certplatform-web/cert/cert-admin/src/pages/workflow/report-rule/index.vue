@@ -7,6 +7,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Upload } from '@element-plus/icons-vue'
 import { YzhPageLayout, YzhForm, type YzhFormField } from '@yzh-core'
+import { expectOk } from '@yzh-core/utils/apiResponse'
 import { CertBizTree } from '@share/components'
 import { useFileTree, type TreeNode } from '@share/composables/useFileTree'
 import {
@@ -92,6 +93,7 @@ async function loadTemplate() {
       standardCode: phase.StdCode,
       phaseCode: phase.PhaseDefinitionCode || phase.PhaseCode,
     })
+    expectOk(res as any, '加载报告模板失败')
     const template = (res as any)?.data ?? res
     // 准则 A：存在性看业务键 Code（禁止 Id 判定）
     if (template && template.Code) {
@@ -106,7 +108,8 @@ async function loadTemplate() {
       currentTemplate.value = null
       Object.assign(templateForm, { TemplateName: '', Remark: '', IsDefault: false })
     }
-  } catch {
+  } catch (e: any) {
+    ElMessage.error(e?.err || e?.message || '加载报告模板失败')
     currentTemplate.value = null
   } finally {
     templateLoading.value = false
@@ -133,12 +136,11 @@ async function handleSaveTemplate() {
       payload.Code = currentTemplate.value.Code
     }
     const res = await saveTemplate(payload)
+    expectOk(res as any, '保存模板失败')
     const data = (res as any)?.data ?? res
-    if (data?.Code) {
-      currentTemplate.value = data
-      ElMessage.success('保存成功')
-      await loadSections()
-    }
+    if (data?.Code) currentTemplate.value = data
+    ElMessage.success('保存成功')
+    await loadSections()
   } catch (e: any) {
     ElMessage.error(e?.message || '保存失败')
   } finally {
@@ -157,6 +159,7 @@ async function handleUploadFile(options: any) {
       standardCode: phase.StdCode!,
       phaseCode: phase.PhaseDefinitionCode || phase.PhaseCode!,
     })
+    expectOk(res as any, '上传模板文件失败')
     const data = (res as any)?.data ?? res
     ElMessage.success(`上传成功：${data?.fileName}`)
     options.onSuccess?.(data)
@@ -177,7 +180,12 @@ async function handleDeleteTemplate() {
     )
   } catch { return }
 
-  await deleteTemplate(currentTemplate.value.Code)
+  try {
+    expectOk((await deleteTemplate(currentTemplate.value.Code)) as any, '删除模板失败')
+  } catch (e: any) {
+    ElMessage.error(e?.err || e?.message || '删除模板失败')
+    return
+  }
   ElMessage.success('删除成功')
   currentTemplate.value = null
   sectionData.value = []
@@ -191,8 +199,9 @@ async function loadSections() {
     const res = await getSectionList(currentTemplate.value.Code)
     const data = (res as any)?.data ?? res
     sectionData.value = Array.isArray(data) ? data : []
-  } catch {
-    sectionData.value = []
+  } catch (e: any) {
+    // F-10：加载失败保留上次数据；F-3：谁 catch 谁弹
+    ElMessage.error(e?.err || e?.message || '加载章节失败')
   } finally {
     sectionLoading.value = false
   }
@@ -229,7 +238,7 @@ async function handleSaveSection() {
       ...sectionForm,
       ReportCode: currentTemplate.value.Code,
     }
-    await saveSection(payload)
+    expectOk((await saveSection(payload)) as any, '保存章节失败')
     ElMessage.success('保存成功')
     sectionDialogVisible.value = false
     await loadSections()
@@ -245,7 +254,12 @@ async function handleDeleteSection(row: ReportSection) {
     await ElMessageBox.confirm(`确定删除章节「${row.SectionName}」？`, '确认删除', { type: 'warning' })
   } catch { return }
 
-  await deleteSection(row.Code)
+  try {
+    expectOk((await deleteSection(row.Code)) as any, '删除章节失败')
+  } catch (e: any) {
+    ElMessage.error(e?.err || e?.message || '删除章节失败')
+    return
+  }
   ElMessage.success('删除成功')
   await loadSections()
 }

@@ -3,6 +3,7 @@
  * 对齐后端 QueueMonitorController (/api/System/QueueMonitor/*)
  */
 import { yzhApi } from '@yzh-core/api/client'
+import { expectOk, unwrapOk } from '@yzh-core/utils/apiResponse'
 import type { ApiResponse } from '@yzh-core/types'
 import type { QueueStatus } from '@share/types'
 
@@ -83,34 +84,43 @@ export async function getQueueList(params: QueueListParams = {}): Promise<QueueL
     Page: params.page || 1,
     Rows: params.rows || 20,
   })
-  return res.data!
+  return unwrapOk(res, '获取队列列表失败')
 }
 
 /** 队列统计卡 */
 export async function getQueueStatus(): Promise<QueueStatus> {
   const res = await yzhApi.post<ApiResponse<QueueStatus>>('/api/System/QueueMonitor/status')
-  return res.data!
+  return unwrapOk(res, '获取队列统计失败')
 }
 
 /** 队列详情（主表 + 子任务 + 资源锁） */
 export async function getQueueDetail(queueCode: string): Promise<QueueDetailResult> {
   const res = await yzhApi.post<ApiResponse<QueueDetailResult>>('/api/System/QueueMonitor/detail', { QueueCode: queueCode })
-  return res.data!
+  return unwrapOk(res, '获取队列详情失败')
 }
 
 /** 取消队列 */
 export async function cancelQueue(queueCode: string): Promise<void> {
-  await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/cancel', { QueueCode: queueCode })
+  expectOk(
+    await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/cancel', { QueueCode: queueCode }),
+    '取消队列失败',
+  )
 }
 
 /** 整队重跑 */
 export async function retryQueue(queueCode: string): Promise<void> {
-  await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/retry', { QueueCode: queueCode })
+  expectOk(
+    await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/retry', { QueueCode: queueCode }),
+    '重试队列失败',
+  )
 }
 
 /** 单个子任务重试（准则 A：业务键 TaskCode） */
 export async function retryTask(taskCode: string): Promise<void> {
-  await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/task/retry', { TaskCode: taskCode })
+  expectOk(
+    await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/task/retry', { TaskCode: taskCode }),
+    '重试子任务失败',
+  )
 }
 
 /** 查找资源锁 */
@@ -119,5 +129,5 @@ export async function findResourceLock(resourceTable: string, resourceCodes: str
     ResourceTable: resourceTable,
     ResourceCodes: resourceCodes,
   })
-  return res.data!
+  return unwrapOk(res, '查询资源锁失败')
 }
