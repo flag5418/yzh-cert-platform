@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using YZH.Core.Stand.Interfaces;
+using YZH.Core.Stand.Models.Result;
 
 namespace YZH.Core.Api.Controllers;
 
@@ -35,7 +36,7 @@ public class FileStorageController : WebControllerBase
         [FromQuery] string? subPath = null)
     {
         if (file == null || file.Length == 0)
-            return Ok(new { code = 400, message = "请选择文件" });
+            return Ok(ApiResponse<object?>.Fail("请选择文件"));
 
         // 未指定 objectName 时，使用时间戳路径
         var finalObjectName = objectName;
@@ -68,7 +69,7 @@ public class FileStorageController : WebControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "上传文件失败: {ObjectName}", finalObjectName);
-            return Ok(new { code = 500, message = $"上传失败：{ex.Message}" });
+            return Ok(ApiResponse<object?>.Error($"上传失败：{ex.Message}"));
         }
     }
 
@@ -82,7 +83,7 @@ public class FileStorageController : WebControllerBase
         [FromQuery] string? subPath = null)
     {
         if (files == null || files.Count == 0)
-            return Ok(new { code = 400, message = "请选择文件" });
+            return Ok(ApiResponse<object?>.Fail("请选择文件"));
 
         var results = new List<object>();
         foreach (var file in files)
@@ -120,7 +121,7 @@ public class FileStorageController : WebControllerBase
             }
         }
 
-        return Ok(new { code = 200, data = results });
+        return Ok(ApiResponse<object?>.Ok(data: results));
     }
 
     /// <summary>
@@ -130,7 +131,7 @@ public class FileStorageController : WebControllerBase
     public async Task<IActionResult> Download([FromQuery] string path)
     {
         if (string.IsNullOrEmpty(path))
-            return Ok(new { code = 400, message = "缺少文件路径" });
+            return Ok(ApiResponse<object?>.Fail("缺少文件路径"));
 
         try
         {
@@ -141,7 +142,7 @@ public class FileStorageController : WebControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "下载文件失败: {Path}", path);
-            return Ok(new { code = 404, message = $"文件不存在或下载失败：{ex.Message}" });
+            return Ok(ApiResponse<object?>.Fail($"文件不存在或下载失败：{ex.Message}", 404));
         }
     }
 
@@ -152,17 +153,17 @@ public class FileStorageController : WebControllerBase
     public async Task<IActionResult> Delete([FromQuery] string path)
     {
         if (string.IsNullOrEmpty(path))
-            return Ok(new { code = 400, message = "缺少文件路径" });
+            return Ok(ApiResponse<object?>.Fail("缺少文件路径"));
 
         try
         {
             await _storage.DeleteAsync(path);
-            return Ok(new { code = 200, message = "删除成功" });
+            return Ok(ApiResponse<object?>.Ok("删除成功"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "删除文件失败: {Path}", path);
-            return Ok(new { code = 500, message = $"删除失败：{ex.Message}" });
+            return Ok(ApiResponse<object?>.Error($"删除失败：{ex.Message}"));
         }
     }
 
@@ -173,10 +174,10 @@ public class FileStorageController : WebControllerBase
     public async Task<IActionResult> Exists([FromQuery] string path)
     {
         if (string.IsNullOrEmpty(path))
-            return Ok(new { code = 400, message = "缺少文件路径" });
+            return Ok(ApiResponse<object?>.Fail("缺少文件路径"));
 
         var exists = await _storage.ExistsAsync(path);
-        return Ok(new { code = 200, data = exists });
+        return Ok(ApiResponse<object?>.Ok(data: exists));
     }
 
     /// <summary>
@@ -186,9 +187,9 @@ public class FileStorageController : WebControllerBase
     public async Task<IActionResult> List([FromQuery] string prefix)
     {
         if (string.IsNullOrEmpty(prefix))
-            return Ok(new { code = 400, message = "缺少前缀路径" });
+            return Ok(ApiResponse<object?>.Fail("缺少前缀路径"));
 
         var files = await _storage.ListObjectsAsync(prefix);
-        return Ok(new { code = 200, data = files });
+        return Ok(ApiResponse<object?>.Ok(data: files));
     }
 }

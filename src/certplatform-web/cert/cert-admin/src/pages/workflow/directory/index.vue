@@ -192,14 +192,14 @@ async function cancelActiveQueue() {
     return
   }
   try {
-    // 该端点 HTTP 恒 200，成败在 body.code（「队列不存在」等要如实提示）
+    // 该端点 HTTP 恒 200，成败在信封 success（「队列不存在」等失败详情在 err）
     const res = await cancelConvert(queueCode)
-    if (res?.code === 200) {
+    if (res?.success) {
       ElMessage.success('已取消队列')
       refreshActiveQueue()
       loadCurrentContent()
     } else {
-      ElMessage.error('取消失败：' + (res?.msg || res?.message || '未知错误'))
+      ElMessage.error('取消失败：' + (res?.err || res?.message || '未知错误'))
     }
   } catch (e: any) {
     ElMessage.error('取消失败：' + (e?.message || ''))
@@ -229,7 +229,7 @@ async function submitFolder() {
       ParentCode: currentFolderCode.value || undefined,
       Remark: folderForm.remark,
     })
-    if (res?.code !== 200) throw new Error(res?.msg || res?.message || '创建失败')
+    if (!res?.success) throw new Error(res?.err || res?.message || '创建失败')
     ElMessage.success('创建成功')
     showFolderDialog.value = false
     loadCurrentContent()
@@ -294,7 +294,7 @@ async function deleteSelected() {
     const file = currentFiles.value.find((f: any) => (f.FileCode || f.fileCode) === code)
     try {
       const res = folder ? await deleteFolder(code) : file ? await deleteFile(code) : null
-      if (res && res.code !== 200) failed++
+      if (res && !res.success) failed++
     } catch {
       failed++
     }
@@ -377,7 +377,7 @@ async function confirmRename(force = false) {
         ...(force ? { Force: true } : {}),
       } as any)
     }
-    if (res?.code !== 200) throw new Error(res?.msg || res?.message || '重命名失败')
+    if (!res?.success) throw new Error(res?.err || res?.message || '重命名失败')
     ElMessage.success('重命名成功')
     showRenameDialogVisible.value = false
     loadCurrentContent()
@@ -411,7 +411,7 @@ async function deleteItem(item: any, options: { skipConfirm?: boolean } = {}) {
     const res = isFolderItem(item)
       ? await deleteFolder(item.FolderCode || item.folderCode)
       : await deleteFile(item.FileCode || item.fileCode)
-    if (res?.code !== 200) throw new Error(res?.msg || res?.message || '删除失败')
+    if (!res?.success) throw new Error(res?.err || res?.message || '删除失败')
     ElMessage.success('删除成功')
     loadCurrentContent()
   } catch (e: any) {

@@ -80,7 +80,7 @@ public class MenuController : ControllerBase
             })
             .ToListAsync();
 
-        return Ok(new { menu = menus, asyncApi = new List<string>() });
+        return Ok(ApiResponse<object?>.Ok(data: new { menu = menus, asyncApi = new List<string>() }));
     }
 
     /// <summary>递归构建菜单树</summary>

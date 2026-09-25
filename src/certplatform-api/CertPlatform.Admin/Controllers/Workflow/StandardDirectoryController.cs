@@ -40,7 +40,7 @@ public class StandardDirectoryController : ControllerBase
     public async Task<IActionResult> GetOrganizationTree()
     {
         var tree = await _service.GetOrganizationTreeAsync();
-        return Ok(new { code = 200, data = tree });
+        return Ok(ApiResponse<object?>.Ok(data: tree));
     }
 
     #endregion
@@ -51,7 +51,7 @@ public class StandardDirectoryController : ControllerBase
     public async Task<IActionResult> GetConfigs()
     {
         var configs = await _service.GetConfigsAsync();
-        return Ok(new { code = 200, data = configs });
+        return Ok(ApiResponse<object?>.Ok(data: configs));
     }
 
     [HttpGet("configs/{directoryCode}")]
@@ -59,14 +59,14 @@ public class StandardDirectoryController : ControllerBase
     {
         var config = await _service.GetConfigAsync(directoryCode);
         if (config == null) return Ok(ApiResponse.Fail("配置不存在"));
-        return Ok(new { code = 200, data = config });
+        return Ok(ApiResponse<object?>.Ok(data: config));
     }
 
     [HttpPost("configs/create")]
     public async Task<IActionResult> CreateConfig([FromBody] StandardDirectoryConfig config)
     {
         var result = await _service.CreateConfigAsync(config);
-        return Ok(new { code = 200, data = result });
+        return Ok(ApiResponse<object?>.Ok(data: result));
     }
 
     [HttpPost("configs/{directoryCode}")]
@@ -74,14 +74,14 @@ public class StandardDirectoryController : ControllerBase
     {
         config.DirectoryCode = directoryCode;
         var ok = await _service.UpdateConfigAsync(config);
-        return Ok(new { code = ok ? 200 : 400, msg = ok ? "更新成功" : "更新失败" });
+        return Ok(ok ? ApiResponse<object?>.Ok("更新成功") : ApiResponse<object?>.Fail("更新失败"));
     }
 
     [HttpPost("configs/{directoryCode}/delete")]
     public async Task<IActionResult> DeleteConfig(string directoryCode)
     {
         var ok = await _service.DeleteConfigAsync(directoryCode);
-        return Ok(new { code = ok ? 200 : 400, msg = ok ? "删除成功" : "删除失败" });
+        return Ok(ok ? ApiResponse<object?>.Ok("删除成功") : ApiResponse<object?>.Fail("删除失败"));
     }
 
     #endregion
@@ -92,14 +92,14 @@ public class StandardDirectoryController : ControllerBase
     public async Task<IActionResult> GetFolderTree(string directoryCode)
     {
         var tree = await _service.GetFolderTreeAsync(directoryCode);
-        return Ok(new { code = 200, data = tree });
+        return Ok(ApiResponse<object?>.Ok(data: tree));
     }
 
     [HttpGet("configs/{directoryCode}/folders-flat")]
     public async Task<IActionResult> GetFoldersFlat(string directoryCode)
     {
         var folders = await _service.GetFoldersFlatAsync(directoryCode);
-        return Ok(new { code = 200, data = folders });
+        return Ok(ApiResponse<object?>.Ok(data: folders));
     }
 
     [HttpPost("configs/{directoryCode}/folders/create")]
@@ -107,7 +107,7 @@ public class StandardDirectoryController : ControllerBase
     {
         folder.DirectoryCode = directoryCode;
         var (ok, error, result) = await _service.CreateFolderAsync(folder);
-        return Ok(new { code = ok ? 200 : 400, msg = error, data = result });
+        return Ok(ok ? ApiResponse<object?>.Ok(data: result) : ApiResponse<object?>.Fail(error));
     }
 
     [HttpPost("folders/{folderCode}")]
@@ -115,14 +115,14 @@ public class StandardDirectoryController : ControllerBase
     {
         folder.FolderCode = folderCode;
         var (ok, error) = await _service.UpdateFolderAsync(folder);
-        return Ok(new { code = ok ? 200 : 400, msg = error });
+        return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail(error));
     }
 
     [HttpPost("folders/{folderCode}/delete")]
     public async Task<IActionResult> DeleteFolder(string folderCode)
     {
         var (ok, error, foldersDeleted, filesDeleted) = await _service.DeleteFolderAsync(folderCode);
-        return Ok(new { code = ok ? 200 : 400, msg = error, foldersDeleted, filesDeleted });
+        return Ok(ok ? ApiResponse<object?>.Ok(data: new { foldersDeleted, filesDeleted }) : ApiResponse<object?>.Fail(error));
     }
 
     #endregion
@@ -133,14 +133,14 @@ public class StandardDirectoryController : ControllerBase
     public async Task<IActionResult> GetFiles(string folderCode)
     {
         var files = await _service.GetFilesAsync(folderCode);
-        return Ok(new { code = 200, data = files });
+        return Ok(ApiResponse<object?>.Ok(data: files));
     }
 
     [HttpGet("directories/{directoryCode}/root-files")]
     public async Task<IActionResult> GetRootFiles(string directoryCode)
     {
         var files = await _service.GetRootFilesAsync(directoryCode);
-        return Ok(new { code = 200, data = files });
+        return Ok(ApiResponse<object?>.Ok(data: files));
     }
 
     [HttpPost("files/{fileCode}")]
@@ -148,14 +148,14 @@ public class StandardDirectoryController : ControllerBase
     {
         file.FileCode = fileCode;
         var (ok, error) = await _service.UpdateFileAsync(file);
-        return Ok(new { code = ok ? 200 : 400, msg = error });
+        return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail(error));
     }
 
     [HttpPost("files/{fileCode}/delete")]
     public async Task<IActionResult> DeleteFile(string fileCode)
     {
         var (ok, error) = await _service.DeleteFileAsync(fileCode);
-        return Ok(new { code = ok ? 200 : 400, msg = error });
+        return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail(error));
     }
 
     [HttpGet("download")]
@@ -182,33 +182,33 @@ public class StandardDirectoryController : ControllerBase
     public async Task<IActionResult> UploadInit([FromBody] UploadManifestRequest manifest)
     {
         var (ok, error, response) = await _service.UploadInitAsync(manifest);
-        if (!ok) return Ok(new { code = 400, msg = error });
-        return Ok(new { code = 200, data = response });
+        if (!ok) return Ok(ApiResponse<object?>.Fail(error));
+        return Ok(ApiResponse<object?>.Ok(data: response));
     }
 
     [HttpPost("upload-file-v2")]
     public async Task<IActionResult> UploadFileV2([FromForm] UploadFileV2Dto dto)
     {
         if (dto.File == null || dto.File.Length == 0)
-            return Ok(new { code = 400, msg = "请选择文件" });
+            return Ok(ApiResponse<object?>.Fail("请选择文件"));
 
         using var stream = dto.File.OpenReadStream();
         var (ok, error) = await _service.UploadFileAsync(stream, dto.File.Length, dto.FileCode, dto.TaskId);
-        return Ok(new { code = ok ? 200 : 400, msg = error });
+        return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail(error));
     }
 
     [HttpPost("upload-confirm")]
     public async Task<IActionResult> UploadConfirm([FromBody] UploadConfirmRequest req)
     {
         var (ok, error, convertQueueCode) = await _service.UploadConfirmAsync(req.TaskId);
-        return Ok(new { code = ok ? 200 : 400, msg = error, convertQueueCode });
+        return Ok(ok ? ApiResponse<object?>.Ok(data: new { convertQueueCode }) : ApiResponse<object?>.Fail(error));
     }
 
     [HttpPost("upload-cancel")]
     public async Task<IActionResult> UploadCancel([FromBody] UploadConfirmRequest req)
     {
         var (ok, error, deleted, restored) = await _service.UploadCancelAsync(req.TaskId);
-        return Ok(new { code = ok ? 200 : 400, msg = error, deleted, restored });
+        return Ok(ok ? ApiResponse<object?>.Ok(data: new { deleted, restored }) : ApiResponse<object?>.Fail(error));
     }
 
     /// <summary>
@@ -218,11 +218,11 @@ public class StandardDirectoryController : ControllerBase
     public async Task<IActionResult> ReplaceFile(string fileCode, [FromForm] IFormFile file)
     {
         if (file == null || file.Length == 0)
-            return Ok(new { code = 400, msg = "请选择文件" });
+            return Ok(ApiResponse<object?>.Fail("请选择文件"));
 
         using var stream = file.OpenReadStream();
         var (ok, error, convertQueueCode) = await _service.ReplaceFileAsync(fileCode, stream, file.Length);
-        return Ok(new { code = ok ? 200 : 400, msg = error, convertQueueCode });
+        return Ok(ok ? ApiResponse<object?>.Ok(data: new { convertQueueCode }) : ApiResponse<object?>.Fail(error));
     }
 
     [HttpGet("upload-status")]
@@ -230,7 +230,7 @@ public class StandardDirectoryController : ControllerBase
     {
         var status = await _service.GetUploadStatusAsync(taskId);
         if (status == null) return Ok(ApiResponse.Fail("任务不存在"));
-        return Ok(new { code = 200, data = status });
+        return Ok(ApiResponse<object?>.Ok(data: status));
     }
 
     #endregion
@@ -241,21 +241,21 @@ public class StandardDirectoryController : ControllerBase
     public async Task<IActionResult> GetActiveQueue([FromQuery] string directoryCode)
     {
         var queue = await _service.GetActiveQueueAsync(directoryCode);
-        return Ok(new { code = 200, data = queue });
+        return Ok(ApiResponse<object?>.Ok(data: queue));
     }
 
     [HttpPost("convert/progress")]
     public async Task<IActionResult> GetConvertProgress([FromQuery] string taskId)
     {
         var progress = await _service.GetConvertProgressAsync(taskId);
-        return Ok(new { code = 200, data = progress });
+        return Ok(ApiResponse<object?>.Ok(data: progress));
     }
 
     [HttpPost("convert/cancel")]
     public async Task<IActionResult> CancelConvert([FromQuery] string queueCode)
     {
         var (ok, error) = await _service.CancelConvertAsync(queueCode);
-        return Ok(new { code = ok ? 200 : 400, msg = error });
+        return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail(error));
     }
 
     #endregion
@@ -270,7 +270,7 @@ public class StandardDirectoryController : ControllerBase
     public async Task<IActionResult> GetStageFileTree(string directoryCode)
     {
         var result = await _service.GetStageFileTreeAsync(directoryCode);
-        return Ok(new { code = 200, data = result });
+        return Ok(ApiResponse<object?>.Ok(data: result));
     }
 
     #endregion
@@ -284,7 +284,7 @@ public class StandardDirectoryController : ControllerBase
     public async Task<IActionResult> GetDirectoryFiles([FromQuery] string directoryCode)
     {
         var files = await _service.GetFilesByDirectoryAsync(directoryCode);
-        return Ok(new { code = 200, data = files });
+        return Ok(ApiResponse<object?>.Ok(data: files));
     }
 
     #endregion
@@ -299,7 +299,7 @@ public class StandardDirectoryController : ControllerBase
     {
         file.FolderCode = folderCode;
         var (ok, error, result) = await _service.CreateFileAsync(file);
-        return Ok(new { code = ok ? 200 : 400, msg = error, data = result });
+        return Ok(ok ? ApiResponse<object?>.Ok(data: result) : ApiResponse<object?>.Fail(error));
     }
 
     #endregion
@@ -334,13 +334,13 @@ public class StandardDirectoryController : ControllerBase
     public async Task<IActionResult> UploadFileLegacy([FromForm] UploadFileLegacyDto dto)
     {
         if (dto.File == null || dto.File.Length == 0)
-            return Ok(new { code = 400, msg = "请选择文件" });
+            return Ok(ApiResponse<object?>.Fail("请选择文件"));
 
         using var stream = dto.File.OpenReadStream();
         var (ok, error, file) = await _service.UploadFileLegacyAsync(
             stream, dto.File.FileName, dto.DirectoryCode, dto.FolderCode,
             dto.OrgCode, dto.StandardCode, dto.PhaseCode);
-        return Ok(new { code = ok ? 200 : 400, msg = error, data = file });
+        return Ok(ok ? ApiResponse<object?>.Ok(data: file) : ApiResponse<object?>.Fail(error));
     }
 
     #endregion
@@ -354,7 +354,7 @@ public class StandardDirectoryController : ControllerBase
     public async Task<IActionResult> GetFileLockStatus([FromBody] FileLockStatusRequest request)
     {
         var result = await _service.GetFileLockStatusAsync(request.FileCodes);
-        return Ok(new { code = 200, data = result });
+        return Ok(ApiResponse<object?>.Ok(data: result));
     }
 
     #endregion
@@ -368,7 +368,7 @@ public class StandardDirectoryController : ControllerBase
     public async Task<IActionResult> RetryFailedConversions()
     {
         var (ok, error, enqueued, queueCount) = await _service.RetryFailedConversionsAsync();
-        return Ok(new { code = ok ? 200 : 400, msg = error, enqueued, queueCount });
+        return Ok(ok ? ApiResponse<object?>.Ok(data: new { enqueued, queueCount }) : ApiResponse<object?>.Fail(error));
     }
 
     #endregion
@@ -384,7 +384,7 @@ public class StandardDirectoryController : ControllerBase
     public async Task<IActionResult> RepairStuckUploads([FromBody] RepairStuckUploadsRequest? req)
     {
         var (ok, error, repaired, enqueued) = await _service.RepairStuckUploadsAsync(req?.TaskId);
-        return Ok(new { code = ok ? 200 : 400, msg = error, repaired, enqueued });
+        return Ok(ok ? ApiResponse<object?>.Ok(data: new { repaired, enqueued }) : ApiResponse<object?>.Fail(error));
     }
 
     #endregion

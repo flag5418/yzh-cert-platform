@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.DataBase.Services;
+using YZH.Core.Stand.Models.Result;
 
 namespace CertPlatform.Admin.Controllers.System;
 
@@ -23,49 +24,49 @@ public class QueueMonitorController : ControllerBase
     {
         var result = await _queueManager.GetQueueListAsync(
             req.Type, req.Status, req.StartTime, req.EndTime, req.Page, req.Rows);
-        return Ok(new { code = 200, data = result });
+        return Ok(ApiResponse<object?>.Ok(data: result));
     }
 
     [HttpPost("detail")]
     public async Task<IActionResult> GetDetail([FromBody] QueueDetailRequest req)
     {
         var result = await _queueManager.GetQueueDetailAsync(req.QueueCode);
-        return Ok(new { code = 200, data = result });
+        return Ok(ApiResponse<object?>.Ok(data: result));
     }
 
     [HttpPost("cancel")]
     public async Task<IActionResult> Cancel([FromBody] QueueCancelRequest req)
     {
         var (ok, error) = await _queueManager.CancelQueueAsync(req.QueueCode);
-        return Ok(new { code = ok ? 200 : 400, msg = error });
+        return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail(error));
     }
 
     [HttpPost("retry")]
     public async Task<IActionResult> Retry([FromBody] QueueRetryRequest req)
     {
         var (ok, error) = await _queueManager.RetryQueueAsync(req.QueueCode);
-        return Ok(new { code = ok ? 200 : 400, msg = error });
+        return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail(error));
     }
 
     [HttpPost("task/retry")]
     public async Task<IActionResult> RetryTask([FromBody] TaskRetryRequest req)
     {
         var (ok, error) = await _queueManager.RetryTaskAsync(req.TaskCode);
-        return Ok(new { code = ok ? 200 : 400, msg = error });
+        return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail(error));
     }
 
     [HttpPost("status")]
     public async Task<IActionResult> GetStatus()
     {
         var result = await _queueManager.GetQueueStatsAsync();
-        return Ok(new { code = 200, data = result });
+        return Ok(ApiResponse<object?>.Ok(data: result));
     }
 
     [HttpPost("resource/locked")]
     public async Task<IActionResult> GetResourceLocked([FromBody] ResourceLockRequest req)
     {
         var result = await _queueManager.FindResourceLockAsync(req.ResourceTable, req.ResourceCodes);
-        return Ok(new { code = 200, data = result });
+        return Ok(ApiResponse<object?>.Ok(data: result));
     }
 }
 

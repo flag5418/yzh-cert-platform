@@ -43,7 +43,7 @@ status: living
 | **R5-1** | 后端基类按职能选用（**非强制**），合规看行为契约 | L5 | ❌ | `AGENTS.md §②` |
 | **R5-2** | `ApiCode` 绑定角色-接口，改控制器名/动作名 = 授权静默断裂 | L5 | ❌ | `11-接口权限自动同步设计` |
 | **R5-3** | 判成功只用 `result.Success`（`Ok()` 的 `Code` 是 `null`） | L1 | ✅ 编译期可查 | `08-常见错误 E201` |
-| **R5-4** | 统一 `ApiResponse` 信封（例外 E7） | L3 | ✅ R3/R3b | `04-数据契约` |
+| **R5-4** | 统一 `ApiResponse` 信封（原例外 E7 已消灭 2026-09-25） | L3 | ✅ R3/R3b | `04-数据契约` |
 | **R6-1** | 页面必须用内核（`SingleTableCore` / `TreeTableCore`） | L5 | ❌ | `样板页面指南-V1` |
 | **R6-2** | 页面禁手写 `handleAdd`/`handleSubmit` 等 | L3 | ✅ 守卫（部分） | `AGENTS.md §①` |
 | **R6-3** | 禁 `axios` / `.vue` 内 `fetch(` | L3 | ✅ R4/R5 | `AGENTS.md §①` |
@@ -184,7 +184,7 @@ cert-admin / cert-auditor / cert-enterprise  （宿主，独立可运行）
 |---|---|---|
 | E1 | `ApiResponse` 信封 camelCase | `success` / `message` / `data` / `code` / `timestamp` |
 | E6 | 裸 JSON `{img, uuid}` | 验证码接口 |
-| E7 | `{code, data, msg}` **无 `success`** | `StandardDirectory` 系列，须用 `res.code === 200` 且**禁用 `res.success`** |
+| ~~E7~~ | ~~`{code, data, msg}` **无 `success`**~~ | ⛔ **已消灭（2026-09-25 P2）**；现全系列标准 `ApiResponse`，断言用 `success`、错误读 `err` |
 
 **检查**：守卫 R2（TreeNode 小写读取）；后端 `BizNamingRules` 启动自检。
 
@@ -520,13 +520,13 @@ public int Sxh { get; set; }
 
 **实测事故**：`StandardDirectoryService.UpdateConfigAsync/DeleteConfigAsync` 写 `result.Code == 200` → **恒 `false`** → **软删已落库（`IsValid=0` + `DeleteTime`）却回报"删除失败"**。
 
-**检查**：`grep -rnE "\.Code\s*==\s*200" --include="*.cs" src`（全仓应仅剩 E7 相关）
+**检查**：`grep -rnE "\.Code\s*==\s*200" --include="*.cs" src`（全仓应为 0；E7 已于 2026-09-25 P2 消灭）
 
 ### R5-4 统一 `ApiResponse` 信封
 
 **规则**：`ApiResponse { success, code, message, data, timestamp }`（例外 E1：信封字段 camelCase）。
 
-**例外 E7**：`StandardDirectory` 全系列是 `{code, data, msg}`、**无 `success`** → 断言必须用 `code === 200`，**禁用 `res.success`**。
+**例外 E7（⛔ 已消灭 2026-09-25 P2）**：原 `StandardDirectory` 全系列是 `{code, data, msg}`、**无 `success`**，须用 `code === 200`。现已全改标准信封 → 断言用 `success`，错误读 `err`。
 
 **守卫**：R3（页面层禁 `.code === 200`）/ R3b（API 模块层禁）。
 

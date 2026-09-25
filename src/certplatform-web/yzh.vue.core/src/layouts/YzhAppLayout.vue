@@ -294,7 +294,7 @@ async function loadCurrentUser() {
   try {
     const res = await getCurrentUser()
     if (res?.success === false) {
-      ElMessage.error(res?.message || '获取用户信息失败')
+      ElMessage.error(res?.err || res?.message || '获取用户信息失败')
       return
     }
     const data = res?.data
@@ -330,7 +330,7 @@ async function saveProfile() {
       Remark: profileForm.Remark
     })
     if (res?.success === false) {
-      ElMessage.error(res?.message || '保存失败')
+      ElMessage.error(res?.err || res?.message || '保存失败')
       return
     }
     patchUserInfo({
@@ -357,7 +357,7 @@ async function changePassword() {
     try {
       const res = await modifyPwd(passwordForm.oldPassword, passwordForm.newPassword)
       if (res?.success === false) {
-        ElMessage.error(res?.message || '密码修改失败')
+        ElMessage.error(res?.err || res?.message || '密码修改失败')
         return
       }
       ElMessage.success(res?.message || '密码修改成功，请重新登录')

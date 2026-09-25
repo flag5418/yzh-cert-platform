@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using CertPlatform.Admin.Services.DocExtraction;
 using CertPlatform.Shared.Entities.Doc;
+using YZH.Core.Stand.Models.Result;
 
 namespace CertPlatform.Admin.Controllers.Workflow;
 
@@ -34,11 +35,11 @@ public class DocExtractionRuleController : ControllerBase
         try
         {
             var result = await _service.AIAnalyzeAsync(request);
-            return Ok(new { code = 200, data = result, message = result.Message });
+            return Ok(ApiResponse<object?>.Ok(data: result, message: result.Message));
         }
         catch (Exception ex)
         {
-            return Ok(new { code = 500, message = $"AI 分析失败：{ex.Message}" });
+            return Ok(ApiResponse<object?>.Error($"AI 分析失败：{ex.Message}"));
         }
     }
 
@@ -49,11 +50,11 @@ public class DocExtractionRuleController : ControllerBase
         try
         {
             var prompt = await _service.GeneratePromptAsync(request);
-            return Ok(new { code = 200, data = prompt });
+            return Ok(ApiResponse<object?>.Ok(data: prompt));
         }
         catch (Exception ex)
         {
-            return Ok(new { code = 500, message = $"生成 Prompt 失败：{ex.Message}" });
+            return Ok(ApiResponse<object?>.Error($"生成 Prompt 失败：{ex.Message}"));
         }
     }
 
@@ -64,11 +65,11 @@ public class DocExtractionRuleController : ControllerBase
         try
         {
             var result = await _service.VerifyPromptAsync(request);
-            return Ok(new { code = result.Success ? 200 : 400, data = result, message = result.Message });
+            return Ok(result.Success ? ApiResponse<object?>.Ok(data: result) : ApiResponse<object?>.Fail(result.Message));
         }
         catch (Exception ex)
         {
-            return Ok(new { code = 500, message = $"验证失败：{ex.Message}" });
+            return Ok(ApiResponse<object?>.Error($"验证失败：{ex.Message}"));
         }
     }
 
@@ -83,11 +84,11 @@ public class DocExtractionRuleController : ControllerBase
         try
         {
             var (ok, message) = await _service.SaveExtractionRuleAsync(request);
-            return Ok(new { code = ok ? 200 : 400, message });
+            return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail(message));
         }
         catch (Exception ex)
         {
-            return Ok(new { code = 500, message = $"保存失败：{ex.Message}" });
+            return Ok(ApiResponse<object?>.Error($"保存失败：{ex.Message}"));
         }
     }
 
@@ -96,7 +97,7 @@ public class DocExtractionRuleController : ControllerBase
     public async Task<IActionResult> GetConfiguredRules()
     {
         var rules = await _service.GetConfiguredRulesAsync();
-        return Ok(new { code = 200, data = rules });
+        return Ok(ApiResponse<object?>.Ok(data: rules));
     }
 
     /// <summary>获取规则详情（按规则键 standardFileCode）</summary>
@@ -105,8 +106,8 @@ public class DocExtractionRuleController : ControllerBase
     {
         var detail = await _service.GetRuleDetailAsync(standardFileCode);
         if (detail == null)
-            return Ok(new { code = 404, message = "该文件尚未配置提取规则" });
-        return Ok(new { code = 200, data = detail });
+            return Ok(ApiResponse<object?>.Fail("该文件尚未配置提取规则", 404));
+        return Ok(ApiResponse<object?>.Ok(data: detail));
     }
 
     /// <summary>获取规则的字段和表格定义（供工作流 docField/docTable 节点选择）</summary>
@@ -114,7 +115,7 @@ public class DocExtractionRuleController : ControllerBase
     public async Task<IActionResult> GetFieldsAndTables(string ruleCode)
     {
         var result = await _service.GetFieldsAndTablesAsync(ruleCode);
-        return Ok(new { code = 200, data = result });
+        return Ok(ApiResponse<object?>.Ok(data: result));
     }
 
     /// <summary>删除规则（级联删字段/表格定义/提取结果）</summary>
@@ -122,7 +123,7 @@ public class DocExtractionRuleController : ControllerBase
     public async Task<IActionResult> DeleteRule(string standardFileCode)
     {
         var ok = await _service.DeleteRuleAsync(standardFileCode);
-        return Ok(new { code = ok ? 200 : 404, message = ok ? "删除成功" : "规则不存在" });
+        return Ok(ok ? ApiResponse<object?>.Ok("删除成功") : ApiResponse<object?>.Fail("规则不存在", 404));
     }
 
     #endregion
@@ -134,7 +135,7 @@ public class DocExtractionRuleController : ControllerBase
     public async Task<IActionResult> GetAIConfig()
     {
         var config = await _service.GetAIConfigAsync();
-        return Ok(new { code = 200, data = config });
+        return Ok(ApiResponse<object?>.Ok(data: config));
     }
 
     /// <summary>更新 AI 配置</summary>
@@ -142,14 +143,14 @@ public class DocExtractionRuleController : ControllerBase
     public async Task<IActionResult> UpdateAIConfig([FromBody] AIConfigDto config)
     {
         var (ok, message) = await _service.UpdateAIConfigAsync(config);
-        return Ok(new { code = ok ? 200 : 400, message });
+        return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail(message));
     }
 
     /// <summary>获取可用技能列表（按扩展名推导 word/excel/pdf）</summary>
     [HttpGet("skills")]
     public IActionResult GetSkills()
     {
-        return Ok(new { code = 200, data = _service.GetSkills() });
+        return Ok(ApiResponse<object?>.Ok(data: _service.GetSkills()));
     }
 
     #endregion
@@ -161,7 +162,7 @@ public class DocExtractionRuleController : ControllerBase
     public async Task<IActionResult> TestField([FromBody] TestFieldRequest request)
     {
         var result = await _service.TestFieldAsync(request);
-        return Ok(new { code = 200, data = result });
+        return Ok(ApiResponse<object?>.Ok(data: result));
     }
 
     /// <summary>测试表格提取（工作流 docTable 节点配置期验证）</summary>
@@ -169,7 +170,7 @@ public class DocExtractionRuleController : ControllerBase
     public async Task<IActionResult> TestTable([FromBody] TestTableRequest request)
     {
         var result = await _service.TestTableAsync(request);
-        return Ok(new { code = 200, data = result });
+        return Ok(ApiResponse<object?>.Ok(data: result));
     }
 
     #endregion
@@ -181,8 +182,8 @@ public class DocExtractionRuleController : ControllerBase
     public async Task<IActionResult> GetFileMarkdown([FromQuery] string fileCode)
     {
         var (markdown, error) = await _service.GetFileMarkdownForPreviewAsync(fileCode);
-        if (error != null) return Ok(new { code = 400, message = error });
-        return Ok(new { code = 200, data = markdown });
+        if (error != null) return Ok(ApiResponse<object?>.Fail(error));
+        return Ok(ApiResponse<object?>.Ok(data: markdown));
     }
 
     /// <summary>获取文档预览 PDF 流（无产物时实时转换）</summary>
@@ -191,7 +192,7 @@ public class DocExtractionRuleController : ControllerBase
     {
         var (content, fileName, error) = await _service.GetFilePreviewPdfAsync(fileCode);
         if (error != null || content == null)
-            return Ok(new { code = 400, message = error ?? "预览产物生成失败" });
+            return Ok(ApiResponse<object?>.Fail(error ?? "预览产物生成失败"));
         return File(content, "application/pdf", $"{fileName}.pdf");
     }
 

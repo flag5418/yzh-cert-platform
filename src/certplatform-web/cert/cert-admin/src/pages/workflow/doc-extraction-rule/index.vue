@@ -185,7 +185,7 @@ async function onVerifyPrompt() {
     } else {
       isValid.value = false
       extractionData.value = null
-      ElMessage.warning(data?.message || '验证失败')
+      ElMessage.warning(res?.err || data?.message || '验证失败')
     }
   } catch (e: any) {
     isValid.value = false

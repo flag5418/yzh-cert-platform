@@ -5,6 +5,7 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Api.Services;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Entities.Rpt;
+using YZH.Core.Stand.Models.Result;
 
 namespace CertPlatform.Admin.Controllers.Workflow
 {
@@ -49,7 +50,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
                 x.PhaseCode == phaseCode &&
                 x.IsValid == 1);
 
-            return Ok(new { code = 200, data = result.Data });
+            return Ok(ApiResponse<object?>.Ok(data: result.Data));
         }
 
         /// <summary>
@@ -59,14 +60,14 @@ namespace CertPlatform.Admin.Controllers.Workflow
         public async Task<IActionResult> SaveTemplate([FromBody] ReportTemplate entity)
         {
             if (string.IsNullOrWhiteSpace(entity.TemplateName))
-                return Ok(new { code = 400, message = "模板名称不能为空" });
+                return Ok(ApiResponse<object?>.Fail("模板名称不能为空"));
 
             // 准则 A：新增 vs 更新只看业务键 Code（禁止 Id > 0 分流）
             if (!string.IsNullOrWhiteSpace(entity.Code))
             {
                 var byCode = await _templateEntity.GetByCode(entity.Code);
                 if (byCode.Data == null)
-                    return Ok(new { code = 404, message = "模板不存在" });
+                    return Ok(ApiResponse<object?>.Fail("模板不存在", 404));
 
                 var target = byCode.Data;
                 target.TemplateName = entity.TemplateName;
@@ -76,7 +77,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
                 target.UpdateTime = DateTime.Now;
 
                 var updateResult = await _templateEntity.Update(target);
-                return Ok(new { code = updateResult.Success ? 200 : 500, data = target, message = updateResult.Error });
+                return Ok(updateResult.Success ? ApiResponse<object?>.Ok(data: target) : ApiResponse<object?>.Error(updateResult.Error));
             }
             else
             {
@@ -98,7 +99,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
                     target.UpdateTime = DateTime.Now;
 
                     var updateResult = await _templateEntity.Update(target);
-                    return Ok(new { code = updateResult.Success ? 200 : 500, data = target, message = updateResult.Error });
+                    return Ok(updateResult.Success ? ApiResponse<object?>.Ok(data: target) : ApiResponse<object?>.Error(updateResult.Error));
                 }
 
                 // 新建（Id 保持默认，不赋值）
@@ -108,7 +109,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
                 entity.IsValid = 1;
 
                 var addResult = await _templateEntity.Insert(entity);
-                return Ok(new { code = addResult.Success ? 200 : 500, data = entity, message = addResult.Error });
+                return Ok(addResult.Success ? ApiResponse<object?>.Ok(data: entity) : ApiResponse<object?>.Error(addResult.Error));
             }
         }
 
@@ -124,20 +125,20 @@ namespace CertPlatform.Admin.Controllers.Workflow
             [FromQuery] string phaseCode)
         {
             if (file == null || file.Length == 0)
-                return Ok(new { code = 400, message = "请选择文件" });
+                return Ok(ApiResponse<object?>.Fail("请选择文件"));
 
             if (string.IsNullOrEmpty(orgCode) || string.IsNullOrEmpty(standardCode) || string.IsNullOrEmpty(phaseCode))
-                return Ok(new { code = 400, message = "缺少上下文参数" });
+                return Ok(ApiResponse<object?>.Fail("缺少上下文参数"));
 
             // 安全校验：上下文参数仅允许字母数字-_，防止对象键注入（防御性双保险，
             // MinIO 对象键无文件系统穿越风险，但防串改 bucket 内其他模块对象）
             if (!IsValidContextSegment(orgCode) || !IsValidContextSegment(standardCode) || !IsValidContextSegment(phaseCode))
-                return Ok(new { code = 400, message = "上下文参数含非法字符" });
+                return Ok(ApiResponse<object?>.Fail("上下文参数含非法字符"));
 
             var allowedExts = new[] { ".docx", ".xlsx", ".pdf", ".doc", ".xls" };
             var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
             if (!allowedExts.Contains(ext))
-                return Ok(new { code = 400, message = "仅支持 .docx / .xlsx / .pdf 格式" });
+                return Ok(ApiResponse<object?>.Fail("仅支持 .docx / .xlsx / .pdf 格式"));
 
             var safeFileName = file.FileName.Replace(" ", "_");
             var objectName = $"report/{orgCode}/{standardCode}/{phaseCode}/{safeFileName}";
@@ -145,7 +146,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
             using var stream = file.OpenReadStream();
             await _storage.UploadAsync(objectName, stream, file.Length, file.ContentType);
 
-            return Ok(new { code = 200, data = new { path = objectName, fileName = file.FileName, size = file.Length } });
+            return Ok(ApiResponse<object?>.Ok(data: new { path = objectName, fileName = file.FileName, size = file.Length }));
         }
 
         /// <summary>
@@ -155,11 +156,11 @@ namespace CertPlatform.Admin.Controllers.Workflow
         public async Task<IActionResult> DeleteTemplate([FromQuery] string code)
         {
             if (string.IsNullOrWhiteSpace(code))
-                return Ok(new { code = 400, message = "缺少业务键 Code" });
+                return Ok(ApiResponse<object?>.Fail("缺少业务键 Code"));
 
             var existing = await _templateEntity.GetByCode(code);
             if (existing.Data == null)
-                return Ok(new { code = 404, message = "模板不存在" });
+                return Ok(ApiResponse<object?>.Fail("模板不存在", 404));
 
             var template = existing.Data;
 
@@ -173,7 +174,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
 
             // 硬删除模板
             var deleteResult = await _templateEntity.DeleteByCode(template.Code);
-            return Ok(new { code = deleteResult.Success ? 200 : 500, message = deleteResult.Error });
+            return Ok(deleteResult.Success ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Error(deleteResult.Error));
         }
 
         #endregion
@@ -188,7 +189,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
         {
             var result = await _sectionEntity.GetListAsync(x => x.ReportCode == reportCode);
             var sorted = (result.Data ?? new List<ReportSection>()).OrderBy(x => x.SortOrder).ToList();
-            return Ok(new { code = 200, data = sorted });
+            return Ok(ApiResponse<object?>.Ok(data: sorted));
         }
 
         /// <summary>
@@ -208,12 +209,12 @@ namespace CertPlatform.Admin.Controllers.Workflow
                 x.IsValid == 1);
 
             if (template.Data == null)
-                return Ok(new { code = 200, data = new List<ReportSection>() });
+                return Ok(ApiResponse<object?>.Ok(data: new List<ReportSection>()));
 
             // 2. 按模板 Code 查章节
             var result = await _sectionEntity.GetListAsync(x => x.ReportCode == template.Data.Code);
             var sorted = (result.Data ?? new List<ReportSection>()).OrderBy(x => x.SortOrder).ToList();
-            return Ok(new { code = 200, data = sorted });
+            return Ok(ApiResponse<object?>.Ok(data: sorted));
         }
 
         /// <summary>
@@ -223,17 +224,17 @@ namespace CertPlatform.Admin.Controllers.Workflow
         public async Task<IActionResult> SaveSection([FromBody] ReportSection entity)
         {
             if (string.IsNullOrWhiteSpace(entity.SectionName))
-                return Ok(new { code = 400, message = "章节名称不能为空" });
+                return Ok(ApiResponse<object?>.Fail("章节名称不能为空"));
 
             if (string.IsNullOrWhiteSpace(entity.ReportCode))
-                return Ok(new { code = 400, message = "缺少报告编码" });
+                return Ok(ApiResponse<object?>.Fail("缺少报告编码"));
 
             // 准则 A：新增 vs 更新只看业务键 Code（禁止 Id > 0 分流）
             if (!string.IsNullOrWhiteSpace(entity.Code))
             {
                 var byCode = await _sectionEntity.GetByCode(entity.Code);
                 if (byCode.Data == null)
-                    return Ok(new { code = 404, message = "章节不存在" });
+                    return Ok(ApiResponse<object?>.Fail("章节不存在", 404));
 
                 var target = byCode.Data;
                 target.SectionName = entity.SectionName;
@@ -250,7 +251,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
                 target.UpdateTime = DateTime.Now;
 
                 var updateResult = await _sectionEntity.Update(target);
-                return Ok(new { code = updateResult.Success ? 200 : 500, data = target, message = updateResult.Error });
+                return Ok(updateResult.Success ? ApiResponse<object?>.Ok(data: target) : ApiResponse<object?>.Error(updateResult.Error));
             }
             else
             {
@@ -259,7 +260,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
                 entity.CreateBy = _userContext.UserCode;
 
                 var addResult = await _sectionEntity.Insert(entity);
-                return Ok(new { code = addResult.Success ? 200 : 500, data = entity, message = addResult.Error });
+                return Ok(addResult.Success ? ApiResponse<object?>.Ok(data: entity) : ApiResponse<object?>.Error(addResult.Error));
             }
         }
 
@@ -270,14 +271,14 @@ namespace CertPlatform.Admin.Controllers.Workflow
         public async Task<IActionResult> DeleteSection([FromQuery] string code)
         {
             if (string.IsNullOrWhiteSpace(code))
-                return Ok(new { code = 400, message = "缺少业务键 Code" });
+                return Ok(ApiResponse<object?>.Fail("缺少业务键 Code"));
 
             var existing = await _sectionEntity.GetByCode(code);
             if (existing.Data == null)
-                return Ok(new { code = 404, message = "章节不存在" });
+                return Ok(ApiResponse<object?>.Fail("章节不存在", 404));
 
             var result = await _sectionEntity.DeleteByCode(existing.Data.Code);
-            return Ok(new { code = result.Success ? 200 : 500, message = result.Error });
+            return Ok(result.Success ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Error(result.Error));
         }
 
         #endregion

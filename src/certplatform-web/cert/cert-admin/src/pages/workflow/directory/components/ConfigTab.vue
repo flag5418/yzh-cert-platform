@@ -91,7 +91,7 @@ async function handleSubmit() {
       form.directoryCode && tableData.value.some((r) => r.DirectoryCode === form.directoryCode)
         ? await updateDirectoryConfig(form.directoryCode, payload)
         : await createDirectoryConfig(payload)
-    if (res?.code !== 200) throw new Error(res?.msg || res?.message || '保存失败')
+    if (!res?.success) throw new Error(res?.err || res?.message || '保存失败')
     ElMessage.success('保存成功')
     dialogVisible.value = false
     loadConfigs()
@@ -113,7 +113,7 @@ async function handleDelete(row: StandardDirectoryConfig) {
   }
   try {
     const res = await deleteDirectoryConfig(code)
-    if (res?.code !== 200) throw new Error(res?.msg || res?.message || '删除失败')
+    if (!res?.success) throw new Error(res?.err || res?.message || '删除失败')
     ElMessage.success('删除成功')
     loadConfigs()
   } catch (e: any) {

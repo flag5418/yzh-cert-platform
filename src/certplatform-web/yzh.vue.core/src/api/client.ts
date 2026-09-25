@@ -266,7 +266,7 @@ export class YzhApiClient {
     // 后端业务失败时返回 JSON（如 { code: 400, message }），需取出 message 而不是当成文件
     if (contentType.includes('application/json')) {
       const json = await res.json().catch(() => ({} as any))
-      const err = new Error(json?.message || json?.msg || `请求失败 (${res.status})`)
+      const err = new Error(json?.err || json?.message || json?.msg || `请求失败 (${res.status})`)
       ;(err as any).status = res.status
       throw err
     }
@@ -300,7 +300,7 @@ export class YzhApiClient {
     }
     if (!res.ok) {
       const json = await res.json().catch(() => ({}))
-      throw new Error(json.message || json.msg || '下载失败')
+      throw new Error(json.err || json.message || json.msg || '下载失败')
     }
     const blob = await res.blob()
     this.triggerDownload(blob, filename)
@@ -324,7 +324,7 @@ export class YzhApiClient {
     }
     if (!res.ok) {
       const json = await res.json().catch(() => ({}))
-      throw new Error(json.message || json.msg || '下载失败')
+      throw new Error(json.err || json.message || json.msg || '下载失败')
     }
     const blob = await res.blob()
     this.triggerDownload(blob, filename)

@@ -26,39 +26,39 @@ public class DirectoryTemplateController : ControllerBase
     public async Task<IActionResult> GetTree([FromQuery] string configCode)
     {
         var tree = await _service.GetTreeAsync(configCode);
-        return Ok(new { code = 200, data = tree });
+        return Ok(ApiResponse<object?>.Ok(data: tree));
     }
 
     [HttpPost("addFolder")]
     public async Task<IActionResult> AddFolder([FromBody] DirectoryTemplate folder)
     {
         var (ok, error, result) = await _service.AddFolderAsync(folder);
-        return Ok(new { code = ok ? 200 : 400, msg = error, data = result });
+        return Ok(ok ? ApiResponse<object?>.Ok(data: result) : ApiResponse<object?>.Fail(error));
     }
 
     [HttpPost("updateFolder")]
     public async Task<IActionResult> UpdateFolder([FromBody] DirectoryTemplate folder)
     {
         var (ok, error) = await _service.UpdateFolderAsync(folder);
-        return Ok(new { code = ok ? 200 : 400, msg = error });
+        return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail(error));
     }
 
     [HttpPost("deleteFolder")]
     public async Task<IActionResult> DeleteFolder([FromQuery] string code)
     {
         var (ok, error) = await _service.DeleteFolderAsync(code);
-        return Ok(new { code = ok ? 200 : 400, msg = error });
+        return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail(error));
     }
 
     [HttpPost("uploadTemplateFile")]
     public async Task<IActionResult> UploadTemplateFile(IFormFile file, [FromQuery] string configCode)
     {
         if (file == null || file.Length == 0)
-            return Ok(new { code = 400, msg = "请选择文件" });
+            return Ok(ApiResponse<object?>.Fail("请选择文件"));
 
         using var stream = file.OpenReadStream();
         var (ok, error, storagePath) = await _service.UploadTemplateFileAsync(stream, file.FileName, configCode);
-        return Ok(new { code = ok ? 200 : 400, msg = error, data = storagePath });
+        return Ok(ok ? ApiResponse<object?>.Ok(data: storagePath) : ApiResponse<object?>.Fail(error));
     }
 
     [HttpGet("downloadTemplateFile")]
@@ -77,13 +77,13 @@ public class DirectoryTemplateController : ControllerBase
     public async Task<IActionResult> DeleteTemplateFile([FromQuery] string storagePath)
     {
         var ok = await _service.DeleteTemplateFileAsync(storagePath);
-        return Ok(new { code = ok ? 200 : 400 });
+        return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail("操作失败"));
     }
 
     [HttpPost("renameTemplateFile")]
     public async Task<IActionResult> RenameTemplateFile([FromQuery] string oldPath, [FromQuery] string newPath)
     {
         var ok = await _service.RenameTemplateFileAsync(oldPath, newPath);
-        return Ok(new { code = ok ? 200 : 400 });
+        return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail("操作失败"));
     }
 }

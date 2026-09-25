@@ -1052,7 +1052,7 @@ async function handleSave() {
       store.markClean()
       emit('save-success', res)
       ElMessage.success('工作流保存成功')
-    } else ElMessage.error(res?.message || '保存失败')
+    } else ElMessage.error(res?.err || res?.message || '保存失败')
   } catch (e: any) { if (e?.message !== 'cancel') ElMessage.error('保存失败') }
 }
 
@@ -1092,7 +1092,7 @@ async function handleExecuteTest() {
         ElMessageBox.alert(`工作流执行失败：\n\n${errorMsg}`, '执行验证 - 执行失败', { type: 'error', confirmButtonText: '确定' })
       }
     } else {
-      const errorMsg = res?.error || res?.message || '执行失败'
+      const errorMsg = res?.error || res?.err || res?.message || '执行失败'
       ElMessageBox.alert(`工作流执行失败：\n\n${errorMsg}`, '执行验证 - 执行失败', { type: 'error', confirmButtonText: '确定' })
     }
   } catch (e: any) { ElMessage.error('执行验证失败: ' + (e?.message || e)) }
@@ -1146,7 +1146,7 @@ async function handleTestNode(nodeData: any) {
       }
       const res = await yzhApi.post('/api/Workflow/test/ai-node', testBody)
       if (res?.success && res.data) nodeData.onSuccess(res.data)
-      else nodeData.onError(res?.error || res?.message || 'AI 节点测试失败', null)
+      else nodeData.onError(res?.error || res?.err || res?.message || 'AI 节点测试失败', null)
       return
     }
     const res = await yzhApi.post('/api/Workflow/test/node', {
@@ -1156,7 +1156,7 @@ async function handleTestNode(nodeData: any) {
       InputTypes: nodeData.inputTypes, InputPorts: nodeData.inputPorts, OutputPorts: nodeData.outputPorts
     })
     if (res?.success && res.data) nodeData.onSuccess(res.data)
-    else nodeData.onError(res?.error || res?.message || '测试失败', null)
+    else nodeData.onError(res?.error || res?.err || res?.message || '测试失败', null)
   } catch (e: any) { nodeData.onError('请求失败: ' + (e?.message || e), null) }
 }
 
@@ -1175,30 +1175,28 @@ async function handleTestWorkflow(nodeData: any) {
       ConfigJson: JSON.stringify(config)
     })
     if (res?.success && res.data) nodeData.onSuccess(res.data)
-    else nodeData.onError(res?.error || res?.message || '测试失败', null)
+    else nodeData.onError(res?.error || res?.err || res?.message || '测试失败', null)
   } catch (e: any) { nodeData.onError('请求失败: ' + (e?.message || e), null) }
 }
 
 /**
  * 文档提取节点配置期试运行（docField / docTable）
  *
- * ⚠️ 响应风格与 ApiResponse 不同（已登记例外 E7）：
- *    DocExtractionRuleController 全系列返回 `Ok(new { code, data, message })`，
- *    **没有 `success` 字段**；`yzhApi` 原样透传、不拆信封也不做 key 转换，
- *    所以判定必须是 `res.code === 200` 或读 `res.data`，绝不能用 `res.success`。
- *    （曾因此恒走 onError → 页面显示"执行失败"，2026-09-22 修复）
+ * ★ 2026-09-25 P2 起：原例外 E7（`Ok(new { code, data, message })` 无 success）已消灭，
+ *    DocExtractionRuleController 全系列已改标准 ApiResponse —— `yzhApi` 原样透传，
+ *    判定用 `res.success`，失败详情读 `res.err`，载荷读 `res.data`。
  *
- * ⚠️ 后端 TestFieldAsync / TestTableAsync 永不抛异常、恒返回 code=200，
+ * ⚠️ 后端 TestFieldAsync / TestTableAsync 永不抛异常、信封 success 恒为 true，
  *    失败语义藏在 payload 内（value / rows 为空，message 说明原因），
- *    故这里按 payload 实际内容判定成功与否，而非只看 HTTP 状态。
+ *    故这里按 payload 实际内容判定成功与否，而非只看信封。
  */
 async function handleTestDocExtract({ nodeType, body, onSuccess, onError }: any) {
   try {
     const url = nodeType === 'docField' ? '/api/Workflow/DocExtractionRule/test-field' : '/api/Workflow/DocExtractionRule/test-table'
     const res: any = await yzhApi.post(url, body)
     const data = res?.data ?? res?.Data
-    if (res?.code !== undefined && res.code !== 200) { onError(res?.message || '测试失败', data); return }
-    if (!data) { onError(res?.message || '测试失败：后端未返回数据'); return }
+    if (res?.success === false) { onError(res?.err || res?.message || '测试失败', data); return }
+    if (!data) { onError(res?.err || res?.message || '测试失败：后端未返回数据'); return }
     // 成功判据：字段有实际值 / 表格有数据行
     const ok = nodeType === 'docField'
       ? data.value !== undefined && data.value !== null && data.value !== ''

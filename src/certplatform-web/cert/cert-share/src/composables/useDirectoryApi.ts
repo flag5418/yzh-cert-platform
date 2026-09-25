@@ -65,10 +65,12 @@ export async function createFolder(directoryCode: string, folder: Partial<Standa
 }
 
 /** 业务响应体：这些端点始终 HTTP 200，业务成败看 code（200/400） */
+/** 标准 ApiResponse 信封（2026-09-25 P2 起；原 `{code,msg}` 已消灭） */
 export interface BizResult {
-  code: number
-  msg?: string
+  success: boolean
+  code?: number
   message?: string
+  err?: string
   data?: any
 }
 
@@ -116,13 +118,13 @@ export async function retryFailedConversions(): Promise<{
   enqueued: number
   queueCount: number
 }> {
-  // 该端点始终 HTTP 200，业务结果在 code 字段（code=400 表示失败/无文件）
+  // 该端点始终 HTTP 200，业务结果在信封 success；失败详情在 err，载荷在 data
   const res = await yzhApi.post<any>('/api/Workflow/StandardDirectory/retry-failed-conversions')
   return {
-    ok: res?.code === 200,
-    message: res?.msg || res?.message || '',
-    enqueued: res?.enqueued ?? 0,
-    queueCount: res?.queueCount ?? 0,
+    ok: !!res?.success,
+    message: res?.err || res?.message || '',
+    enqueued: res?.data?.enqueued ?? 0,
+    queueCount: res?.data?.queueCount ?? 0,
   }
 }
 
@@ -218,8 +220,8 @@ export async function uploadFile(taskId: string, fileCode: string, file: File): 
     body: formData,
   })
   const json = await res.json()
-  console.log('[uploadFile] Response:', { status: res.status, code: json.code, msg: json.msg || json.message })
-  if (!res.ok || json.code !== 200) throw new Error(json.msg || json.message || '上传失败')
+  console.log('[uploadFile] Response:', { status: res.status, success: json?.success, err: json?.err || '' })
+  if (!res.ok || !json?.success) throw new Error(json?.err || json?.message || '上传失败')
 }
 
 /** 单文件替换（一步完成：覆盖上传 + 回填大小 + doc/xls 自动进转换队列） */
@@ -237,15 +239,15 @@ export async function replaceFile(fileCode: string, file: File): Promise<{ queue
     body: formData,
   })
   const json = await res.json()
-  if (!res.ok || json.code !== 200) throw new Error(json.msg || json.message || '替换失败')
-  return { queueCode: json.convertQueueCode || '' }
+  if (!res.ok || !json?.success) throw new Error(json?.err || json?.message || '替换失败')
+  return { queueCode: json?.data?.convertQueueCode || '' }
 }
 
-/** 上传确认（激活文件 + 创建转换队列）；业务失败（code≠200）必须抛错，否则页面误报「上传成功」 */
+/** 上传确认（激活文件 + 创建转换队列）；业务失败（success=false）必须抛错，否则页面误报「上传成功」 */
 export async function uploadConfirm(taskId: string): Promise<{ queueCode: string }> {
   const res = await yzhApi.post<any>('/api/Workflow/StandardDirectory/upload-confirm', { TaskId: taskId })
-  if (res?.code !== 200) {
-    throw new Error(res?.msg || res?.message || '上传确认失败')
+  if (!res?.success) {
+    throw new Error(res?.err || res?.message || '上传确认失败')
   }
   const data = res.data
   return { queueCode: data?.convertQueueCode || data?.ConvertQueueCode || '' }

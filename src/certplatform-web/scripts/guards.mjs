@@ -262,10 +262,8 @@ const RULES = [
     exts: ['.ts', '.vue'],
     forbid: [/\.code\s*===\s*200/, /\.code\s*!==\s*200/],
     skipComments: true,
-    debt: [
-      // 手写页面待 PG-E1（后端迁基类）后重写
-      'workflow/directory/',
-    ],
+    // ★ 2026-09-25 P2：原 debt（workflow/directory/ 6 处手写 page code 判定）已全部改读 success
+    debt: [],
   },
   {
     id: 'R3b',
