@@ -238,7 +238,7 @@ public class UserController : YzhControllerBase<Sys_User>
 
         var result = await Entity.GetOne(u => u.Code == userCode);
         if (!result.Success || result.Data == null)
-            return NotFound(ApiResponse.Fail($"用户不存在：{userCode}"));
+            return Ok(ApiResponse.Fail($"用户不存在：{userCode}"));
 
         var user = result.Data;
 
@@ -293,14 +293,14 @@ public class UserController : YzhControllerBase<Sys_User>
     public async Task<IActionResult> ModifyPwd([FromBody] ModifyPwdRequest req)
     {
         if (req == null)
-            return BadRequest(ApiResponse.Fail("参数不能为空"));
+            return Ok(ApiResponse.Fail("参数不能为空"));
 
         var oldPwd = req.OldPwd?.Trim();
         var newPwd = req.NewPwd?.Trim();
 
-        if (string.IsNullOrEmpty(oldPwd)) return BadRequest(ApiResponse.Fail("旧密码不能为空"));
-        if (string.IsNullOrEmpty(newPwd)) return BadRequest(ApiResponse.Fail("新密码不能为空"));
-        if (newPwd.Length < 6) return BadRequest(ApiResponse.Fail("密码不能少于 6 位"));
+        if (string.IsNullOrEmpty(oldPwd)) return Ok(ApiResponse.Fail("旧密码不能为空"));
+        if (string.IsNullOrEmpty(newPwd)) return Ok(ApiResponse.Fail("新密码不能为空"));
+        if (newPwd.Length < 6) return Ok(ApiResponse.Fail("密码不能少于 6 位"));
 
         var userCode = UserContext.UserCode;
         if (string.IsNullOrEmpty(userCode))
@@ -308,15 +308,15 @@ public class UserController : YzhControllerBase<Sys_User>
 
         var result = await Entity.GetOne(u => u.Code == userCode);
         if (!result.Success || result.Data == null)
-            return NotFound(ApiResponse.Fail("用户不存在"));
+            return Ok(ApiResponse.Fail("用户不存在"));
 
         var user = result.Data;
         var currentPwd = user.UserPwd ?? string.Empty;
 
         if (!_passwordHelper.VerifyDes(oldPwd, currentPwd))
-            return BadRequest(ApiResponse.Fail("旧密码不正确"));
+            return Ok(ApiResponse.Fail("旧密码不正确"));
         if (_passwordHelper.VerifyDes(newPwd, currentPwd))
-            return BadRequest(ApiResponse.Fail("新密码不能与旧密码相同"));
+            return Ok(ApiResponse.Fail("新密码不能与旧密码相同"));
 
         user.UserPwd = _passwordHelper.AesEncrypt(newPwd);
         user.LastModifyPwdDate = DateTime.Now;
@@ -330,7 +330,7 @@ public class UserController : YzhControllerBase<Sys_User>
             nameof(Sys_User.UpdateBy)
         });
         if (!updateResult.Success)
-            return BadRequest(ApiResponse.Fail(updateResult.Error ?? "密码修改失败"));
+            return Ok(ApiResponse.Fail(updateResult.Error ?? "密码修改失败"));
 
         await _tokenVersion.BumpVersionAsync(userCode);
 
@@ -359,7 +359,7 @@ public class UserController : YzhControllerBase<Sys_User>
     public async Task<IActionResult> UpdateUserInfo([FromBody] UpdateUserInfoRequest req)
     {
         if (req == null)
-            return BadRequest(ApiResponse.Fail("参数不能为空"));
+            return Ok(ApiResponse.Fail("参数不能为空"));
 
         var userCode = UserContext.UserCode;
         if (string.IsNullOrEmpty(userCode))
@@ -367,7 +367,7 @@ public class UserController : YzhControllerBase<Sys_User>
 
         var result = await Entity.GetOne(u => u.Code == userCode);
         if (!result.Success || result.Data == null)
-            return NotFound(ApiResponse.Fail("用户不存在"));
+            return Ok(ApiResponse.Fail("用户不存在"));
 
         var user = result.Data;
 
@@ -398,7 +398,7 @@ public class UserController : YzhControllerBase<Sys_User>
 
         var updateResult = await Entity.Update(user, UserContext.ClientIp, updateFields);
         if (!updateResult.Success)
-            return BadRequest(ApiResponse.Fail(updateResult.Error ?? "保存失败"));
+            return Ok(ApiResponse.Fail(updateResult.Error ?? "保存失败"));
 
         return Ok(ApiResponse.Ok("修改成功"));
     }

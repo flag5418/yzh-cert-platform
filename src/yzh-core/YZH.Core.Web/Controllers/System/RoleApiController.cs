@@ -67,7 +67,7 @@ public class RoleApiController : TreeTableControllerBase<Sys_Role, SysApi>
             // 1. 校验角色存在
             var roleResult = await _roleService.GetByCode(request.ContextCode);
             if (!roleResult.Success || roleResult.Data == null)
-                return BadRequest(ApiResponse<CheckTreeNodeDto[]>.Fail("角色不存在"));
+                return Ok(ApiResponse<CheckTreeNodeDto[]>.Fail("角色不存在"));
 
             // 2. 全部接口
             var apis = await _apiRepo.GetAllAsync();
@@ -149,7 +149,7 @@ public class RoleApiController : TreeTableControllerBase<Sys_Role, SysApi>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse<CheckTreeNodeDto[]>.Fail($"获取角色接口数据失败：{ex.Message}"));
+            return Ok(ApiResponse<CheckTreeNodeDto[]>.Fail($"获取角色接口数据失败：{ex.Message}"));
         }
     }
 
@@ -194,7 +194,7 @@ public class RoleApiController : TreeTableControllerBase<Sys_Role, SysApi>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse<object?>.Fail($"保存失败：{ex.Message}"));
+            return Ok(ApiResponse<object?>.Fail($"保存失败：{ex.Message}"));
         }
     }
 
@@ -224,7 +224,7 @@ public class RoleApiController : TreeTableControllerBase<Sys_Role, SysApi>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse<object?>.Fail($"移除失败：{ex.Message}"));
+            return Ok(ApiResponse<object?>.Fail($"移除失败：{ex.Message}"));
         }
     }
 
@@ -250,7 +250,7 @@ public class RoleApiController : TreeTableControllerBase<Sys_Role, SysApi>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse<AssociationDto[]>.Fail($"获取关联数据失败：{ex.Message}"));
+            return Ok(ApiResponse<AssociationDto[]>.Fail($"获取关联数据失败：{ex.Message}"));
         }
     }
 }

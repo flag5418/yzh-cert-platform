@@ -239,11 +239,11 @@ public class CertificationBodyController : YzhControllerBase<CB>
         {
             var code = entityData.TryGetProperty("Code", out var codeProp) ? codeProp.GetString() : null;
             if (string.IsNullOrEmpty(code))
-                return BadRequest(ApiResponse.Fail("Code 不能为空"));
+                return Ok(ApiResponse.Fail("Code 不能为空"));
 
             var getResult = await Entity.GetByCodeAny(code);
             if (!getResult.Success || getResult.Data == null)
-                return BadRequest(ApiResponse.Fail($"认证机构 {code} 不存在"));
+                return Ok(ApiResponse.Fail($"认证机构 {code} 不存在"));
 
             var entity = getResult.Data;
             var newVal = entity.IsValid == 1 ? 0 : 1;
@@ -256,14 +256,14 @@ public class CertificationBodyController : YzhControllerBase<CB>
             if (!updateResult.Success)
             {
                 tx.Rollback();
-                return BadRequest(ApiResponse.Fail(updateResult.Error));
+                return Ok(ApiResponse.Fail(updateResult.Error));
             }
 
             var (ok, msg) = await SyncOrgAsync(entity);
             if (!ok)
             {
                 tx.Rollback();
-                return BadRequest(ApiResponse.Fail(msg ?? "同步系统机构记录失败"));
+                return Ok(ApiResponse.Fail(msg ?? "同步系统机构记录失败"));
             }
 
             tx.Commit();
@@ -271,7 +271,7 @@ public class CertificationBodyController : YzhControllerBase<CB>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse.Fail($"切换启用/禁用失败：{ex.Message}"));
+            return Ok(ApiResponse.Fail($"切换启用/禁用失败：{ex.Message}"));
         }
     }
 

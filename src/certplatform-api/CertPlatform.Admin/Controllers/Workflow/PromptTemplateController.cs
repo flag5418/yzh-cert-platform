@@ -53,7 +53,7 @@ public class PromptTemplateController : YzhControllerBase<PromptTemplate>
     {
         var entity = await _service.GetActiveAsync(promptType, skillTarget);
         if (entity == null)
-            return BadRequest(ApiResponse.Fail("未找到生效的提示词"));
+            return Ok(ApiResponse.Fail("未找到生效的提示词"));
 
         return Ok(ApiResponse<PromptTemplateDto>.Ok(PromptTemplateDto.From(entity)));
     }
@@ -63,7 +63,7 @@ public class PromptTemplateController : YzhControllerBase<PromptTemplate>
     public async Task<IActionResult> Activate([FromQuery] string code)
     {
         var ok = await _service.ActivateAsync(code);
-        return ok ? Ok(ApiResponse.Ok("激活成功")) : BadRequest(ApiResponse.Fail("激活失败"));
+        return ok ? Ok(ApiResponse.Ok("激活成功")) : Ok(ApiResponse.Fail("激活失败"));
     }
 
     #endregion

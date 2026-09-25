@@ -55,7 +55,7 @@ public class CertOrgStandardController : ControllerBase
         {
             var list = await _cbService.GetListAsync(p => p.IsValid == 1 && !p.IsDeleted);
             if (!list.Success)
-                return BadRequest(ApiResponse.Fail(list.Error));
+                return Ok(ApiResponse.Fail(list.Error));
 
             var nodes = list.Data!.Select(p => new
             {
@@ -71,7 +71,7 @@ public class CertOrgStandardController : ControllerBase
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse.Fail(ex.Message));
+            return Ok(ApiResponse.Fail(ex.Message));
         }
     }
 
@@ -93,7 +93,7 @@ public class CertOrgStandardController : ControllerBase
             // 1. 查询所有有效标准
             var standards = await _isoService.GetListAsync(p => p.IsValid == 1 && !p.IsDeleted);
             if (!standards.Success)
-                return BadRequest(ApiResponse.Fail(standards.Error));
+                return Ok(ApiResponse.Fail(standards.Error));
 
             // 2. 查询该机构已关联的标准编码
             var linked = await _linkService.GetListAsync(p =>
@@ -116,7 +116,7 @@ public class CertOrgStandardController : ControllerBase
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse.Fail(ex.Message));
+            return Ok(ApiResponse.Fail(ex.Message));
         }
     }
 
@@ -133,7 +133,7 @@ public class CertOrgStandardController : ControllerBase
         try
         {
             if (string.IsNullOrEmpty(request.OrgCode) || string.IsNullOrEmpty(request.StandardCode))
-                return BadRequest(ApiResponse.Fail("OrgCode 和 StandardCode 不能为空"));
+                return Ok(ApiResponse.Fail("OrgCode 和 StandardCode 不能为空"));
 
             if (request.Linked)
             {
@@ -156,7 +156,7 @@ public class CertOrgStandardController : ControllerBase
                 };
                 var result = await _linkService.Insert(entity, _userContext.ClientIp);
                 if (!result.Success)
-                    return BadRequest(ApiResponse.Fail(result.Error));
+                    return Ok(ApiResponse.Fail(result.Error));
             }
             else
             {
@@ -178,7 +178,7 @@ public class CertOrgStandardController : ControllerBase
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse.Fail(ex.Message));
+            return Ok(ApiResponse.Fail(ex.Message));
         }
     }
 

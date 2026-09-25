@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Linq;
 using YZH.Core.Stand.Interfaces;
+using YZH.Core.Stand.Models.Result;
 using YZH.Core.DataBase.Services;
 using CertPlatform.Admin.Services.StandardDirectory;
 using CertPlatform.Shared.Entities.Dir;
@@ -57,7 +58,7 @@ public class StandardDirectoryController : ControllerBase
     public async Task<IActionResult> GetConfig(string directoryCode)
     {
         var config = await _service.GetConfigAsync(directoryCode);
-        if (config == null) return NotFound(new { code = 404, msg = "配置不存在" });
+        if (config == null) return Ok(ApiResponse.Fail("配置不存在"));
         return Ok(new { code = 200, data = config });
     }
 
@@ -163,11 +164,11 @@ public class StandardDirectoryController : ControllerBase
         // 安全校验：仅允许 standard-directory/ 前缀，禁止路径穿越（防御性双保险，
         // MinIO 对象键虽无文件系统穿越风险，但防止越权读取 bucket 内其他模块对象）
         if (string.IsNullOrWhiteSpace(storagePath) || !this.IsAllowedStoragePath(storagePath))
-            return BadRequest(new { code = 400, msg = "非法的文件路径" });
+            return Ok(ApiResponse.Fail("非法的文件路径"));
 
         var result = await _service.DownloadFileAsync(storagePath);
         if (result == null)
-            return NotFound(new { code = 404, msg = "文件不存在" });
+            return Ok(ApiResponse.Fail("文件不存在"));
 
         var (stream, contentType, fileName) = result.Value;
         return File(stream, contentType, fileName);
@@ -228,7 +229,7 @@ public class StandardDirectoryController : ControllerBase
     public async Task<IActionResult> GetUploadStatus([FromQuery] string taskId)
     {
         var status = await _service.GetUploadStatusAsync(taskId);
-        if (status == null) return NotFound(new { code = 404, msg = "任务不存在" });
+        if (status == null) return Ok(ApiResponse.Fail("任务不存在"));
         return Ok(new { code = 200, data = status });
     }
 
@@ -314,7 +315,7 @@ public class StandardDirectoryController : ControllerBase
         if ((request?.FolderCodes == null || request.FolderCodes.Count == 0) &&
             (request?.FileCodes == null || request.FileCodes.Count == 0))
         {
-            return BadRequest(new { code = 400, msg = "请至少选择一个文件夹或文件" });
+            return Ok(ApiResponse.Fail("请至少选择一个文件夹或文件"));
         }
 
         var stream = await _service.ExportAsZipAsync(directoryCode, request.FolderCodes, request.FileCodes);

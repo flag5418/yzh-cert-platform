@@ -54,7 +54,7 @@ public class CertOrgStageController : ControllerBase
         {
             var list = await _cbService.GetListAsync(p => p.IsValid == 1 && !p.IsDeleted);
             if (!list.Success)
-                return BadRequest(ApiResponse.Fail(list.Error));
+                return Ok(ApiResponse.Fail(list.Error));
 
             var nodes = list.Data!.Select(p => new
             {
@@ -70,7 +70,7 @@ public class CertOrgStageController : ControllerBase
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse.Fail(ex.Message));
+            return Ok(ApiResponse.Fail(ex.Message));
         }
     }
 
@@ -93,7 +93,7 @@ public class CertOrgStageController : ControllerBase
             var stages = await _stageService.GetListAsync(p =>
                 p.IsValid == 1 && !p.IsDeleted);
             if (!stages.Success)
-                return BadRequest(ApiResponse.Fail(stages.Error));
+                return Ok(ApiResponse.Fail(stages.Error));
 
             // 2. 查询该机构已关联的阶段编码
             var linked = await _linkService.GetListAsync(p =>
@@ -115,7 +115,7 @@ public class CertOrgStageController : ControllerBase
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse.Fail(ex.Message));
+            return Ok(ApiResponse.Fail(ex.Message));
         }
     }
 
@@ -132,7 +132,7 @@ public class CertOrgStageController : ControllerBase
         try
         {
             if (string.IsNullOrEmpty(request.OrgCode) || string.IsNullOrEmpty(request.StageCode))
-                return BadRequest(ApiResponse.Fail("OrgCode 和 StageCode 不能为空"));
+                return Ok(ApiResponse.Fail("OrgCode 和 StageCode 不能为空"));
 
             if (request.Linked)
             {
@@ -155,7 +155,7 @@ public class CertOrgStageController : ControllerBase
                 };
                 var result = await _linkService.Insert(entity, _userContext.ClientIp);
                 if (!result.Success)
-                    return BadRequest(ApiResponse.Fail(result.Error));
+                    return Ok(ApiResponse.Fail(result.Error));
             }
             else
             {
@@ -177,7 +177,7 @@ public class CertOrgStageController : ControllerBase
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse.Fail(ex.Message));
+            return Ok(ApiResponse.Fail(ex.Message));
         }
     }
 

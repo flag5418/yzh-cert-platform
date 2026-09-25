@@ -19,7 +19,7 @@ namespace YZH.Core.Api.Tests;
 ///
 ///     <para>覆盖范围</para>
 ///     <list type="bullet">
-///         <item>认证：登录成功 / 密码错 401 / 缺参 400 / 未带 Token 401（全局认证兜底）</item>
+///         <item>认证：登录成功 / 密码错 401 / 缺参 → 200+信封 code=400 / 未带 Token 401（全局认证兜底）</item>
 ///         <item>验证码：<c>getVierificationCode</c> 返回裸 JSON（例外 E6）且 img 是 PNG base64</item>
 ///         <item>契约：菜单树扁平 PascalCase（<c>MenuName</c> 而非 <c>Name</c>）、filter 分页信封、<c>UserPwd</c> 脱敏</item>
 ///         <item>CRUD 往返：<c>cert_sys_config</c> 的 add → filter → update → filter → delete</item>
@@ -168,15 +168,32 @@ public class CriticalPathSmokeTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    /// <summary>
+    ///     缺参登录 → **业务失败**：HTTP 200 + 信封 <c>success:false</c> / <c>code:400</c> / <c>err</c> 非空。
+    ///
+    ///     <para>★ 2026-09-25 契约变更（前后端信封统一改造）：业务失败不再用 HTTP 状态码表达，
+    ///     一律 HTTP 200，业务码落在 payload 的 <c>code</c>。原断言 <c>BadRequest</c> 已过期。</para>
+    ///     <para>真·传输层/鉴权错误仍是 4xx（见 <see cref="Login_With_Wrong_Password_Should_Return_401"/>
+    ///     与 <see cref="Protected_Endpoint_Without_Token_Should_Return_401"/>）。</para>
+    /// </summary>
     [Fact]
-    public async Task Login_Without_Credentials_Should_Return_400()
+    public async Task Login_Without_Credentials_Should_Return_Envelope_BizFail()
     {
         await EnsureBackendReachableAsync();
 
         using var response = await Http.PostAsync("api/User/login",
             JsonBody(new { UserName = "", Password = "" }));
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // 业务失败恒 HTTP 200：HTTP 状态只表达传输层语义
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        Assert.False(root.GetProperty("success").GetBoolean());
+        Assert.Equal(400, root.GetProperty("code").GetInt32());
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("err").GetString()));
     }
 
     [Fact]

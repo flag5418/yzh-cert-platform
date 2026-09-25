@@ -1,6 +1,7 @@
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using YZH.Core.Stand.Models.Result;
 using CertPlatform.Admin.Services.StandardDirectory;
 using CertPlatform.Shared.Entities.Cert;
 
@@ -65,7 +66,7 @@ public class DirectoryTemplateController : ControllerBase
     {
         var result = await _service.DownloadTemplateFileAsync(storagePath);
         if (result == null)
-            return NotFound(new { code = 404, msg = "文件不存在" });
+            return Ok(ApiResponse.Fail("文件不存在"));
 
         var (stream, contentType) = result.Value;
         var fileName = global::System.IO.Path.GetFileName(storagePath.Replace('\\', '/'));

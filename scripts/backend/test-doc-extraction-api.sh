@@ -107,7 +107,7 @@ sec "6. POST verify - 验证 Prompt（测试降级）"
 # ============================================================
 code=$(req POST "$API/verify" '{"fileCode":"FL-nonexistent-test","prompt":"测试 prompt"}')
 [ "$code" = "200" ] && ok "HTTP 200（降级返回）" || bad "HTTP $code"
-assert '.code == 200 || .code == 400' "code=200 或 400（文件不存在时预期）"
+assert '.code == 200 or .code == 400' "code=200 或 400（文件不存在时预期）"
 
 # ============================================================
 sec "7. POST save - 保存规则"
@@ -146,7 +146,12 @@ assert '.data | length > 0' "已配置规则列表非空（或为空）"
 # ============================================================
 sec "10. GET {ruleCode}/fields-tables - 获取字段表格定义"
 # ============================================================
-code=$(req GET "$API/FL-test-save/fields-tables")
+# 该端点按 **ruleCode**（规则自身 Code）查字段/表格，不是 standardFileCode ——
+# 从上一步 configured-rules 里取出 FL-test-save 对应的 ruleCode（2026-09-25 修）
+RULE_CODE=$(jq -r '[.data[]? | select(.standardFileCode=="FL-test-save")][0].ruleCode // ""' "$TMPDIR_T/resp.json")
+if [ -n "$RULE_CODE" ]; then ok "取到 FL-test-save 的 ruleCode"; else bad "configured-rules 未返回 FL-test-save 的 ruleCode"; fi
+
+code=$(req GET "$API/$RULE_CODE/fields-tables")
 [ "$code" = "200" ] && ok "HTTP 200" || bad "HTTP $code"
 assert '.code == 200' "code=200"
 assert '.data.fields | length == 1' "字段数=1"
@@ -174,7 +179,7 @@ sec "13. GET file-markdown - 获取 Markdown 内容（测试降级）"
 code=$(req GET "$API/file-markdown?fileCode=FL-nonexistent-test")
 # 文件不存在应返回错误或降级消息
 if [ "$code" = "200" ]; then
-  assert '.code == 200 || .code == 400' "返回 200 或 400（降级）"
+  assert '.code == 200 or .code == 400' "返回 200 或 400（降级）"
   ok "file-markdown 端点可访问"
 elif [ "$code" = "400" ]; then
   ok "file-markdown 返回 400（文件不存在时预期行为）"
@@ -207,11 +212,11 @@ assert '.code == 404' "删除后查询返回 404"
 sec "16. 边界测试 - 保存规则（缺少必填字段）"
 # ============================================================
 code=$(req POST "$API/save" '{"fileCode":"","fields":[]}')
-# 应返回错误
+# 22 §三：业务拒绝 = HTTP 200 + success:false + err 非空
 if [ "$code" = "200" ]; then
-  assert '.code == 400 || .code == 500' "缺少必填字段返回错误"
+  assert '.success == false and (.err | length > 0)' "缺少必填字段被拒（success=false + err 非空）"
 else
-  ok "缺少必填字段返回 HTTP $code"
+  bad "缺少必填字段返回 HTTP $code（业务拒绝应为 200）"
 fi
 
 # ============================================================

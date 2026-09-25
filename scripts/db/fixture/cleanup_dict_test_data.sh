@@ -6,7 +6,9 @@
 #       本脚本负责**物理删除**这些测试残留，使测试可重复运行。
 #
 # 归属：测试夹具（fixture），不是业务数据清理 —— 只删 `__T__` 前缀行。
-# ⛔ 安全约束：Code 必须以 `__T__` 开头，否则拒绝执行（防止误删业务数据）。
+# ⛔ 安全约束：SQL 侧按「字典 Name 前 4 字符 = __T__」条件删除（防误删业务数据）。
+#    之所以放在 SQL 而不是 shell：框架 tree/add 未传 Code 时自动生成 32 位 GUID，
+#    调用方拿到的 Code 不可能带 `__T__` 前缀，shell 侧按 Code 前缀校验会恒拒绝（2026-09-25）。
 #
 # 用法：./cleanup_dict_test_data.sh <DictCode> <ItemCode>
 # 退出码：0 = 已清理且残留为 0；1 = 仍有残留
@@ -19,8 +21,9 @@ DICT_CODE="$1"
 ITEM_CODE="$2"
 
 case "$DICT_CODE$ITEM_CODE" in
-  __T__*__T__*|__T__*) ;;
-  *) echo "⛔ 拒绝执行：Code 必须以 __T__ 开头（防误删业务数据）：$DICT_CODE / $ITEM_CODE" >&2; exit 2 ;;
+  __T__*) ;;                       # 显式传入 __T__ 前缀 Code 的老用法，直接放行
+  "") echo "⛔ 拒绝执行：Code 不能为空" >&2; exit 2 ;;
+  *) [ -n "$DICT_CODE" ] && [ -n "$ITEM_CODE" ] || { echo "⛔ 拒绝执行：两个 Code 都必须非空" >&2; exit 2; } ;;
 esac
 
 HERE="$(cd "$(dirname "$0")" && pwd)"

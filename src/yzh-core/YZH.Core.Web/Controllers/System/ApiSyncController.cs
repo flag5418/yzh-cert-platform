@@ -72,7 +72,7 @@ public class ApiSyncController : ControllerBase
             var result = await _syncService.SyncAsync(discoveredApis);
 
             if (!result.Success)
-                return BadRequest(ApiResponse<object>.Fail(result.Error ?? "同步失败"));
+                return Ok(ApiResponse<object>.Fail(result.Error ?? "同步失败"));
 
             return Ok(ApiResponse<object>.Ok(new
             {
@@ -84,7 +84,7 @@ public class ApiSyncController : ControllerBase
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse<object>.Fail($"同步失败：{ex.Message}"));
+            return Ok(ApiResponse<object>.Fail($"同步失败：{ex.Message}"));
         }
     }
 
@@ -116,7 +116,7 @@ public class ApiSyncController : ControllerBase
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse<object>.Fail($"扫描失败：{ex.Message}"));
+            return Ok(ApiResponse<object>.Fail($"扫描失败：{ex.Message}"));
         }
     }
 }

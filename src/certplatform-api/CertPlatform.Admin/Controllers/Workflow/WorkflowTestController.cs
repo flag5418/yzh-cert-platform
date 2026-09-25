@@ -63,7 +63,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
         public async Task<IActionResult> TestRun([FromBody] TaskExecutionRequest request, CancellationToken ct)
         {
             if (string.IsNullOrEmpty(request?.ConfigJson))
-                return BadRequest(new { success = false, error = "configJson 不能为空" });
+                return Ok(ApiResponse.Fail("configJson 不能为空"));
 
             request.TaskType = "TEST";
             request.TestScope = "FULL";
@@ -78,7 +78,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[TEST_RUN_FAIL] ruleCode={RuleCode}", request.RuleCode);
-                return BadRequest(new { success = false, error = $"工作流执行失败: {ex.Message}" });
+                return Ok(ApiResponse.Fail($"工作流执行失败: {ex.Message}"));
             }
         }
 
@@ -92,7 +92,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
         public async Task<IActionResult> TestNode([FromBody] NodeTestRequest request, CancellationToken ct)
         {
             if (request == null)
-                return BadRequest(new { success = false, error = "请求体不能为空" });
+                return Ok(ApiResponse.Fail("请求体不能为空"));
 
             try
             {
@@ -115,7 +115,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
             {
                 _logger.LogError(ex, "[TEST_NODE_FAIL] nodeType={NodeType}, skillCode={SkillCode}",
                     request.NodeType, request.SkillCode);
-                return BadRequest(new { success = false, error = $"节点执行失败: {ex.Message}" });
+                return Ok(ApiResponse.Fail($"节点执行失败: {ex.Message}"));
             }
         }
 
@@ -131,7 +131,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
         public async Task<IActionResult> TestAiNode([FromBody] AiNodeTestRequest request, CancellationToken ct)
         {
             if (request == null)
-                return BadRequest(new { success = false, error = "请求体不能为空" });
+                return Ok(ApiResponse.Fail("请求体不能为空"));
 
             try
             {
@@ -154,7 +154,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[TEST_AI_NODE_FAIL] nodeId={NodeId}", request.NodeId);
-                return BadRequest(new { success = false, error = $"AI 节点执行失败: {ex.Message}" });
+                return Ok(ApiResponse.Fail($"AI 节点执行失败: {ex.Message}"));
             }
         }
 
@@ -180,7 +180,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[TEST_HISTORY_FAIL] ruleCode={RuleCode}", request?.RuleCode);
-                return BadRequest(new { success = false, error = $"测试历史查询失败: {ex.Message}" });
+                return Ok(ApiResponse.Fail($"测试历史查询失败: {ex.Message}"));
             }
         }
 
@@ -196,14 +196,14 @@ namespace CertPlatform.Admin.Controllers.Workflow
             {
                 var detail = await _taskService.GetExecutionDetailAsync(taskCode);
                 if (detail == null)
-                    return NotFound(new { success = false, error = $"执行任务不存在: {taskCode}" });
+                    return Ok(ApiResponse.Fail($"执行任务不存在: {taskCode}"));
 
                 return Ok(ApiResponse<TaskExecutionDetail>.Ok(detail, "查询完成"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[TEST_DETAIL_FAIL] taskCode={TaskCode}", taskCode);
-                return BadRequest(new { success = false, error = $"执行详情查询失败: {ex.Message}" });
+                return Ok(ApiResponse.Fail($"执行详情查询失败: {ex.Message}"));
             }
         }
 

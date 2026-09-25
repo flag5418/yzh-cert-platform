@@ -90,7 +90,7 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse<TreeItemDto[]>.Fail($"加载根节点失败：{ex.Message}"));
+            return Ok(ApiResponse<TreeItemDto[]>.Fail($"加载根节点失败：{ex.Message}"));
         }
     }
 
@@ -128,7 +128,7 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse<TreeItemDto[]>.Fail($"加载子节点失败：{ex.Message}"));
+            return Ok(ApiResponse<TreeItemDto[]>.Fail($"加载子节点失败：{ex.Message}"));
         }
     }
 
@@ -144,7 +144,7 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
         {
             // 1. 新增前钩子（可取消；可在此生成业务前缀 Code，如 MENU_）
             var (ok, cancelMsg) = await OnBeforeAddTree(entity);
-            if (!ok) return BadRequest(ApiResponse.Fail(cancelMsg ?? "操作已取消"));
+            if (!ok) return Ok(ApiResponse.Fail(cancelMsg ?? "操作已取消"));
 
             // 2. 钩子未生成 Code 时兜底填 Guid（顺序：钩子先、兜底后）
             if (string.IsNullOrEmpty(entity.Code))
@@ -160,12 +160,12 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
             {
                 var parentResult = await TreeEntity.GetByCode(parentCode);
                 if (!parentResult.Success || parentResult.Data == null)
-                    return BadRequest(ApiResponse.Fail($"父节点 {parentCode} 不存在"));
+                    return Ok(ApiResponse.Fail($"父节点 {parentCode} 不存在"));
             }
 
             // 4. 执行新增
             var result = await TreeEntity.Insert(entity, UserContext.ClientIp);
-            if (!result.Success) return BadRequest(ApiResponse.Fail(result.Error));
+            if (!result.Success) return Ok(ApiResponse.Fail(result.Error));
 
             // 5. 新增后钩子
             await OnAfterAddTree(result.Data!);
@@ -176,7 +176,7 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse.Fail($"新增树节点失败：{ex.Message}"));
+            return Ok(ApiResponse.Fail($"新增树节点失败：{ex.Message}"));
         }
     }
 
@@ -188,22 +188,22 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
         {
             // 1. 修改前钩子（可取消）
             var (ok, cancelMsg) = await OnBeforeUpdateTree(entity);
-            if (!ok) return BadRequest(ApiResponse.Fail(cancelMsg ?? "操作已取消"));
+            if (!ok) return Ok(ApiResponse.Fail(cancelMsg ?? "操作已取消"));
 
             // 2. 防环校验：不能将 parentCode 改为自身或后代
             if (!string.IsNullOrEmpty(entity.ParentCode))
             {
                 if (entity.ParentCode == entity.Code)
-                    return BadRequest(ApiResponse.Fail("不能将父节点设为自己"));
+                    return Ok(ApiResponse.Fail("不能将父节点设为自己"));
 
                 var descendants = await GetDescendantCodes(entity.Code);
                 if (descendants.Contains(entity.ParentCode))
-                    return BadRequest(ApiResponse.Fail("不能将父节点设为自己的后代（会形成循环）"));
+                    return Ok(ApiResponse.Fail("不能将父节点设为自己的后代（会形成循环）"));
             }
 
             // 3. 执行修改
             var result = await TreeEntity.Update(entity, UserContext.ClientIp);
-            if (!result.Success) return BadRequest(ApiResponse.Fail(result.Error));
+            if (!result.Success) return Ok(ApiResponse.Fail(result.Error));
 
             // 4. 修改后钩子
             await OnAfterUpdateTree(result.Data!);
@@ -213,7 +213,7 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse.Fail($"修改树节点失败：{ex.Message}"));
+            return Ok(ApiResponse.Fail($"修改树节点失败：{ex.Message}"));
         }
     }
 
@@ -224,11 +224,11 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
         try
         {
             if (codes == null || codes.Length == 0)
-                return BadRequest(ApiResponse.Fail("未指定要删除的节点"));
+                return Ok(ApiResponse.Fail("未指定要删除的节点"));
 
             // 1. 删除前钩子（可取消）
             var (ok, cancelMsg) = await OnBeforeDeleteTree(codes);
-            if (!ok) return BadRequest(ApiResponse.Fail(cancelMsg ?? "操作已取消"));
+            if (!ok) return Ok(ApiResponse.Fail(cancelMsg ?? "操作已取消"));
 
             // 2. 检查是否有子节点
             if (!TreeConfig.AllowDeleteWithChildren)
@@ -237,7 +237,7 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
                 {
                     var childCount = await TreeEntity.GetChildrenCount(code);
                     if (childCount > 0)
-                        return BadRequest(ApiResponse.Fail($"该节点下有 {childCount} 个子节点，请先删除子节点"));
+                        return Ok(ApiResponse.Fail($"该节点下有 {childCount} 个子节点，请先删除子节点"));
                 }
             }
 
@@ -252,7 +252,7 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
 
             // 4. 执行删除
             var result = await TreeEntity.DeleteBatch(allCodes, hardDelete: HardDelete, clientIp: UserContext.ClientIp);
-            if (!result.Success) return BadRequest(ApiResponse.Fail(result.Error));
+            if (!result.Success) return Ok(ApiResponse.Fail(result.Error));
 
             // 5. 删除后钩子
             await OnAfterDeleteTree(result.Data);
@@ -262,7 +262,7 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse.Fail($"删除树节点失败：{ex.Message}"));
+            return Ok(ApiResponse.Fail($"删除树节点失败：{ex.Message}"));
         }
     }
 
@@ -340,17 +340,17 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
         {
             var code = entityData.TryGetProperty("Code", out var codeProp) ? codeProp.GetString() : null;
             if (string.IsNullOrEmpty(code))
-                return BadRequest(ApiResponse.Fail("Code 不能为空"));
+                return Ok(ApiResponse.Fail("Code 不能为空"));
 
             // 查询当前实体（不过滤 IsValid）
             var getResult = await TreeEntity.GetByCodeAny(code);
             if (!getResult.Success || getResult.Data == null)
-                return BadRequest(ApiResponse.Fail($"节点 {code} 不存在"));
+                return Ok(ApiResponse.Fail($"节点 {code} 不存在"));
 
             var entity = getResult.Data;
             var isValidProp = typeof(T).GetProperty("IsValid");
             if (isValidProp == null)
-                return BadRequest(ApiResponse.Fail("树节点实体没有 IsValid 字段"));
+                return Ok(ApiResponse.Fail("树节点实体没有 IsValid 字段"));
 
             var currentVal = (int)(isValidProp.GetValue(entity) ?? 1);
             var newVal = currentVal == 1 ? 0 : 1;
@@ -359,13 +359,13 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
             // 执行更新
             var updateResult = await TreeEntity.Update(entity, UserContext.ClientIp);
             if (!updateResult.Success)
-                return BadRequest(ApiResponse.Fail(updateResult.Error));
+                return Ok(ApiResponse.Fail(updateResult.Error));
 
             return Ok(ApiResponse<object?>.Ok(new { Code = code, IsValid = newVal }));
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse.Fail($"切换树节点有效标志失败：{ex.Message}"));
+            return Ok(ApiResponse.Fail($"切换树节点有效标志失败：{ex.Message}"));
         }
     }
 
@@ -431,7 +431,7 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
     {
         var tableConfig = GetConfigCore();
         if (!tableConfig.Success)
-            return BadRequest(ApiResponse<TreeTableConfigDto>.Fail(tableConfig.Error!));
+            return Ok(ApiResponse<TreeTableConfigDto>.Fail(tableConfig.Error!));
 
         var treeFormConfig = LoadTreeFormConfig();
 
@@ -457,6 +457,9 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
     private void InjectRowActionsToConfig(EntityConfigDto dto)
     {
         if (_rowActions.Count == 0) return;
+
+        // dto.RowButtons 可空（JSON 未声明行按钮时为空）→ 先补齐，避免空引用
+        dto.RowButtons ??= new RowButtonConfig();
 
         if (dto.RowButtons.CustomButtons == null)
             dto.RowButtons.CustomButtons = new Dictionary<string, string>();
@@ -639,7 +642,7 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
     public virtual async Task<ActionResult<ApiResponse<CheckTreeNodeDto[]>>> GetCheckTree(
         [FromBody] CheckTreeRequest request)
     {
-        return NotFound(ApiResponse<CheckTreeNodeDto[]>.Fail("当前控制器未实现 GetCheckTree"));
+        return Ok(ApiResponse<CheckTreeNodeDto[]>.Fail("当前控制器未实现 GetCheckTree"));
     }
 
     /// <summary>
@@ -650,7 +653,7 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
     public virtual async Task<ActionResult<ApiResponse<object?>>> CheckAdd(
         [FromBody] CheckActionRequest request)
     {
-        return NotFound(ApiResponse<object?>.Fail("当前控制器未实现 CheckAdd"));
+        return Ok(ApiResponse<object?>.Fail("当前控制器未实现 CheckAdd"));
     }
 
     /// <summary>
@@ -661,7 +664,7 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
     public virtual async Task<ActionResult<ApiResponse<object?>>> CheckRemove(
         [FromBody] CheckActionRequest request)
     {
-        return NotFound(ApiResponse<object?>.Fail("当前控制器未实现 CheckRemove"));
+        return Ok(ApiResponse<object?>.Fail("当前控制器未实现 CheckRemove"));
     }
 
     /// <summary>
@@ -672,7 +675,7 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
     [HttpPost("check/all")]
     public virtual async Task<ActionResult<ApiResponse<AssociationDto[]>>> GetAllAssociations()
     {
-        return NotFound(ApiResponse<AssociationDto[]>.Fail("当前控制器未实现 GetAllAssociations"));
+        return Ok(ApiResponse<AssociationDto[]>.Fail("当前控制器未实现 GetAllAssociations"));
     }
 
 }

@@ -45,6 +45,18 @@ assert() {
     bad "$desc"; echo "      resp: $(head -c 400 "$TMPDIR_T/resp.json")"
   fi
 }
+# 22 §三：业务拒绝 = HTTP 200 + success:false + err 非空（P1 起）
+assert_http200_fail() {
+  local desc="$1"
+  if [ "$code" != "200" ]; then
+    bad "$desc"; echo "      HTTP $code（业务拒绝应为 200）"; return
+  fi
+  if jq -e '.success == false and (.err | length > 0) and (.message | length == 0)' "$TMPDIR_T/resp.json" >/dev/null 2>&1; then
+    ok "$desc"
+  else
+    bad "$desc"; echo "      resp: $(head -c 400 "$TMPDIR_T/resp.json")"
+  fi
+}
 
 # ============================================================
 sec "0. 登录获取 Token"
@@ -151,7 +163,7 @@ assert '.data.Name == "'"$NEW_NAME"'"' "返回节点名称正确"
 
 # 同名重复应被拒
 code=$(req POST "$API/tree/add" "{\"DicName\":\"$NEW_NAME\",\"ParentCode\":\"$ROOT_CODE\"}")
-[ "$code" = "400" ] && ok "同级重名被拒（HTTP 400）" || bad "同级重名未被拒（HTTP $code）"
+assert_http200_fail "同级重名被拒"
 
 # 修改
 NEW_NAME2="${NEW_NAME}改"
@@ -162,7 +174,7 @@ assert '.data.Code == "'"$NEW_CODE"'"'  "Code 保持不变（Code 不可修改�
 
 # 字典编码唯一性
 code=$(req POST "$API/tree/add" "{\"DicName\":\"${NEW_NAME}另一\",\"ParentCode\":\"$ROOT_CODE\",\"DicNo\":\"__t_dict_no\"}")
-[ "$code" = "400" ] && ok "字典编码重复被拒（HTTP 400）" || bad "字典编码重复未被拒（HTTP $code）"
+assert_http200_fail "字典编码重复被拒"
 
 # 树节点启用/禁用
 code=$(req POST "$API/tree/toggle-valid" "{\"Code\":\"$NEW_CODE\"}")
@@ -182,11 +194,11 @@ assert '.data.DicCode == "'"$NEW_CODE"'"' "DicCode 已写入"
 
 # 同字典内重名应被拒
 code=$(req POST "$API/add" "{\"DicCode\":\"$NEW_CODE\",\"DicName\":\"$ITEM_NAME\"}")
-[ "$code" = "400" ] && ok "同字典内重名被拒（HTTP 400）" || bad "同字典内重名未被拒（HTTP $code）"
+assert_http200_fail "同字典内重名被拒"
 
 # 缺少所属字典应被拒
 code=$(req POST "$API/add" "{\"DicCode\":\"\",\"DicName\":\"x\"}")
-[ "$code" = "400" ] && ok "缺少所属字典被拒（HTTP 400）" || bad "缺少所属字典未被拒（HTTP $code）"
+assert_http200_fail "缺少所属字典被拒"
 
 # 修改
 code=$(req POST "$API/update" "{\"Code\":\"$ITEM_CODE\",\"DicCode\":\"$NEW_CODE\",\"DicName\":\"${ITEM_NAME}改\",\"DicValue\":\"v2\",\"OrderNo\":2,\"IsValid\":1}")

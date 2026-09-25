@@ -234,12 +234,12 @@ public class DictionaryController : TreeTableControllerBase<Sys_Dictionary, Sys_
     public virtual async Task<ActionResult<ApiResponse<List<DictOptionDto>>>> GetItems(string code)
     {
         if (string.IsNullOrWhiteSpace(code))
-            return BadRequest(ApiResponse<List<DictOptionDto>>.Fail("字典 Code 不能为空"));
+            return Ok(ApiResponse<List<DictOptionDto>>.Fail("字典 Code 不能为空"));
 
         // 显式带上 IsValid 条件：与框架内置过滤形成双保险，同时让生成 SQL 中可见该过滤
         var result = await Entity.GetListAsync(x => x.DicCode == code && x.IsValid == 1);
         if (!result.Success)
-            return BadRequest(ApiResponse<List<DictOptionDto>>.Fail(result.Error!));
+            return Ok(ApiResponse<List<DictOptionDto>>.Fail(result.Error!));
 
         var options = (result.Data ?? new List<Sys_DictionaryList>())
             .OrderBy(x => x.OrderNo ?? 0)
@@ -266,7 +266,7 @@ public class DictionaryController : TreeTableControllerBase<Sys_Dictionary, Sys_
         var result = await TreeEntity.GetListAsync(d =>
             d.ParentCode == code && d.IsValid == 1);
         if (!result.Success)
-            return BadRequest(ApiResponse<List<DictOptionDto>>.Fail(result.Error!));
+            return Ok(ApiResponse<List<DictOptionDto>>.Fail(result.Error!));
 
         var options = (result.Data ?? new List<Sys_Dictionary>())
             .OrderBy(x => x.OrderNo ?? 0)

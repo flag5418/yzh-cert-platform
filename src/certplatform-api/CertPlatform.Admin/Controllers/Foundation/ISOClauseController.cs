@@ -168,7 +168,7 @@ public class ISOClauseController : YzhControllerBase<ISOClause>
             includeDisabled);
 
         if (result.Error != null)
-            return BadRequest(ApiResponse.Fail(result.Error));
+            return Ok(ApiResponse.Fail(result.Error));
 
         var list = result.Data ?? new List<ISOClause>();
         return Ok(ApiResponse<List<ISOClause>>.Ok(list));

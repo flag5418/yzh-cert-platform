@@ -73,7 +73,7 @@ public class RoleMenuController : TreeTableControllerBase<Sys_Role, Sys_Menu>
             // 1. 校验角色存在（用 Code 关联）
             var roleResult = await TreeEntity.GetByCode(request.ContextCode);
             if (!roleResult.Success || roleResult.Data == null)
-                return BadRequest(ApiResponse<CheckTreeNodeDto[]>.Fail("角色不存在"));
+                return Ok(ApiResponse<CheckTreeNodeDto[]>.Fail("角色不存在"));
 
             // 2. 全部菜单
             var menus = await LoadMenusAsync();
@@ -109,7 +109,7 @@ public class RoleMenuController : TreeTableControllerBase<Sys_Role, Sys_Menu>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse<CheckTreeNodeDto[]>.Fail($"获取角色菜单数据失败：{ex.Message}"));
+            return Ok(ApiResponse<CheckTreeNodeDto[]>.Fail($"获取角色菜单数据失败：{ex.Message}"));
         }
     }
 
@@ -123,7 +123,7 @@ public class RoleMenuController : TreeTableControllerBase<Sys_Role, Sys_Menu>
             // 验证角色存在
             var roleResult = await TreeEntity.GetByCode(request.ContextCode);
             if (!roleResult.Success || roleResult.Data == null)
-                return BadRequest(ApiResponse<object?>.Fail("角色不存在"));
+                return Ok(ApiResponse<object?>.Fail("角色不存在"));
 
             var roleCode = request.ContextCode;
 
@@ -175,7 +175,7 @@ public class RoleMenuController : TreeTableControllerBase<Sys_Role, Sys_Menu>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse<object?>.Fail($"保存失败：{ex.Message}"));
+            return Ok(ApiResponse<object?>.Fail($"保存失败：{ex.Message}"));
         }
     }
 
@@ -189,7 +189,7 @@ public class RoleMenuController : TreeTableControllerBase<Sys_Role, Sys_Menu>
             // 验证角色存在
             var roleResult = await TreeEntity.GetByCode(request.ContextCode);
             if (!roleResult.Success || roleResult.Data == null)
-                return BadRequest(ApiResponse<object?>.Fail("角色不存在"));
+                return Ok(ApiResponse<object?>.Fail("角色不存在"));
 
             var roleCode = request.ContextCode;
 
@@ -217,7 +217,7 @@ public class RoleMenuController : TreeTableControllerBase<Sys_Role, Sys_Menu>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse<object?>.Fail($"移除失败：{ex.Message}"));
+            return Ok(ApiResponse<object?>.Fail($"移除失败：{ex.Message}"));
         }
     }
 
@@ -244,7 +244,7 @@ public class RoleMenuController : TreeTableControllerBase<Sys_Role, Sys_Menu>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse<AssociationDto[]>.Fail($"获取关联数据失败：{ex.Message}"));
+            return Ok(ApiResponse<AssociationDto[]>.Fail($"获取关联数据失败：{ex.Message}"));
         }
     }
 

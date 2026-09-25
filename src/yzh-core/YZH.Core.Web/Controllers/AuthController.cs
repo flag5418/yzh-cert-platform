@@ -44,7 +44,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Login([FromBody] LoginRequest req)
     {
         if (string.IsNullOrEmpty(req.UserName) || string.IsNullOrEmpty(req.Password))
-            return BadRequest(ApiResponse.Fail("用户名和密码不能为空"));
+            return Ok(ApiResponse.Fail("用户名和密码不能为空"));
 
         // 验证码校验（DEBUG 模式跳过验证码）
 #if DEBUG
@@ -57,7 +57,7 @@ public class AuthController : ControllerBase
                 string.IsNullOrEmpty(cachedCode) ||
                 !string.Equals(cachedCode, req.Captcha, StringComparison.OrdinalIgnoreCase))
             {
-                return BadRequest(ApiResponse.Fail("验证码错误或已失效"));
+                return Ok(ApiResponse.Fail("验证码错误或已失效"));
             }
             _cache.Remove(captchaKey);
         }

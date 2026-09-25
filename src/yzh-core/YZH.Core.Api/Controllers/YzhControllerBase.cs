@@ -445,7 +445,7 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   {
     var result = GetConfigCore();
     if (!result.Success)
-      return BadRequest(ApiResponse<EntityConfigDto>.Fail(result.Error ?? "配置加载失败"));
+      return Ok(ApiResponse<EntityConfigDto>.Fail(result.Error ?? "配置加载失败"));
     return Ok(ApiResponse<EntityConfigDto>.Ok(ConfigDtoConverter.ToDto(result.Data!)));
   }
 
@@ -486,7 +486,7 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   public virtual async Task<IActionResult> Export([FromBody] ExportRequest request)
   {
     var result = await ExportCore(request);
-    if (!result.Success) return BadRequest(ApiResponse.Fail(result.Error!));
+    if (!result.Success) return Ok(ApiResponse.Fail(result.Error!));
     // 返回文件流（前端 apiPostAndDownload 接收）
     return File(result.Data.fileData,
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -497,7 +497,7 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   public virtual async Task<ActionResult<ApiResponse<ImportResult>>> Import(IFormFile file)
   {
     var result = await ImportCore(file);
-    if (!result.Success) return BadRequest(ApiResponse.Fail(result.Error!, result.Code ?? 400));
+    if (!result.Success) return Ok(ApiResponse.Fail(result.Error!, result.Code ?? 400));
     return Ok(ApiResponse<ImportResult>.Ok(result.Data!, "导入完成"));
   }
 
@@ -509,7 +509,7 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
     {
       var excelService = ResolveExcelService();
       if (excelService == null)
-        return BadRequest(ApiResponse.Fail(
+        return Ok(ApiResponse.Fail(
             "模板下载功能未启用：IExcelService 未注册。请在 YzhWebBuilder 中注册 EPPlus/NPOI 实现。"));
 
       // 默认取 BcFlag=true 的字段名作为模板列
@@ -526,11 +526,11 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
     }
     catch (NotImplementedException ex)
     {
-      return BadRequest(ApiResponse.Fail(ex.Message));
+      return Ok(ApiResponse.Fail(ex.Message));
     }
     catch (Exception ex)
     {
-      return BadRequest(ApiResponse.Fail($"模板下载异常：{ex.Message}"));
+      return Ok(ApiResponse.Fail($"模板下载异常：{ex.Message}"));
     }
   }
 
@@ -559,10 +559,10 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   public virtual async Task<ActionResult<ApiResponse<object?>>> ExecuteAction(string methodName, [FromBody] JsonElement entityData)
   {
     if (string.IsNullOrEmpty(methodName))
-      return BadRequest(ApiResponse.Fail("操作名称不能为空"));
+      return Ok(ApiResponse.Fail("操作名称不能为空"));
 
     if (!_rowActions.TryGetValue(methodName.ToLowerInvariant(), out var handler))
-      return BadRequest(ApiResponse.Fail($"操作 [{methodName}] 未注册，请检查 RegisterRowAction 调用"));
+      return Ok(ApiResponse.Fail($"操作 [{methodName}] 未注册，请检查 RegisterRowAction 调用"));
 
     // 仅传递 Code 属性到处理函数（避免 [Required] 校验失败）
     var code = entityData.TryGetProperty("Code", out var codeProp) ? codeProp.GetString() : null;
@@ -588,17 +588,17 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
     {
       var code = entityData.TryGetProperty("Code", out var codeProp) ? codeProp.GetString() : null;
       if (string.IsNullOrEmpty(code))
-        return BadRequest(ApiResponse.Fail("Code 不能为空"));
+        return Ok(ApiResponse.Fail("Code 不能为空"));
 
       // 查询当前实体（不过滤 IsValid）
       var getResult = await Entity.GetByCodeAny(code);
       if (!getResult.Success || getResult.Data == null)
-        return BadRequest(ApiResponse.Fail($"记录 {code} 不存在"));
+        return Ok(ApiResponse.Fail($"记录 {code} 不存在"));
 
       var entity = getResult.Data;
       var isValidProp = typeof(V).GetProperty("IsValid");
       if (isValidProp == null)
-        return BadRequest(ApiResponse.Fail("实体没有 IsValid 字段"));
+        return Ok(ApiResponse.Fail("实体没有 IsValid 字段"));
 
       var currentVal = (int)(isValidProp.GetValue(entity) ?? 1);
       var newVal = currentVal == 1 ? 0 : 1;
@@ -607,13 +607,13 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
       // 执行更新
       var updateResult = await Entity.Update(entity, UserContext.ClientIp);
       if (!updateResult.Success)
-        return BadRequest(ApiResponse.Fail(updateResult.Error));
+        return Ok(ApiResponse.Fail(updateResult.Error));
 
       return Ok(ApiResponse<object?>.Ok(new { Code = code, IsValid = newVal }));
     }
     catch (Exception ex)
     {
-      return BadRequest(ApiResponse.Fail($"切换有效标志失败：{ex.Message}"));
+      return Ok(ApiResponse.Fail($"切换有效标志失败：{ex.Message}"));
     }
   }
 
@@ -697,7 +697,11 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   /// </summary>
   protected virtual List<SearchFieldConfig> GetSearchFields()
   {
-    // 智能推断：选择前 3 个 XsFlag=true 且非 Other 类型的字段
+    // ① JSON 显式声明优先（SearchFields 非空即视为已声明）
+    if (Config.SearchFields is { Count: > 0 })
+      return Config.SearchFields;
+
+    // ② 智能推断（兜底）：选择前 3 个 XsFlag=true 且非 Other 类型的字段
     return Config.Columns
         .Where(c => c.XsFlag && c.Type != ControlType.Other)
         .Take(3)
@@ -733,6 +737,11 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   /// </summary>
   protected virtual RowButtonConfig GetRowButtons()
   {
+    // ① JSON 显式声明优先（RowButtonConfig.Edit/Delete 默认 true、Enable 默认 false，
+    //    因此 JSON 只写 { "Enable": true } 不会连带丢掉编辑/删除按钮）
+    if (Config.RowButtons != null) return Config.RowButtons;
+
+    // ② 基类默认
     return new RowButtonConfig
     {
         Edit = true,
@@ -748,6 +757,10 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   /// </summary>
   protected virtual ToolbarConfig GetToolbar()
   {
+    // ① JSON 显式声明优先（EntityConfig.Toolbar 可空，未声明即 null）
+    if (Config.Toolbar != null) return Config.Toolbar;
+
+    // ② 基类默认
     return new ToolbarConfig
     {
         Add = true,
@@ -926,13 +939,13 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
   {
     if (apiResponse.Success)
       return Ok(apiResponse);
-    return BadRequest(apiResponse);
+    return Ok(apiResponse);
   }
 
   private ActionResult<ApiResponse<object?>> RequestResultToApiResponse(Result<ApiResponse<object?>> result)
   {
     if (result.Success)
       return Ok(result.Data!);
-    return BadRequest(ApiResponse<object?>.Fail(result.Error!, result.Code ?? 400));
+    return Ok(ApiResponse<object?>.Fail(result.Error!, result.Code ?? 400));
   }
 }

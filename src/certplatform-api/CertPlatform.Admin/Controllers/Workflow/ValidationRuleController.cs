@@ -90,15 +90,15 @@ public class ValidationRuleController
     public async Task<ActionResult<ApiResponse<ValidationRule>>> GetByCode(string code)
     {
         if (string.IsNullOrWhiteSpace(code))
-            return BadRequest(ApiResponse.Fail("规则编码不能为空"));
+            return Ok(ApiResponse.Fail("规则编码不能为空"));
 
         var result = await Entity.GetOne(r => r.Code == code);
         if (!result.Success)
-            return BadRequest(ApiResponse.Fail(result.Error!));
+            return Ok(ApiResponse.Fail(result.Error!));
 
         var rule = result.Data;
         if (rule == null)
-            return NotFound(ApiResponse.Fail($"规则不存在：{code}"));
+            return Ok(ApiResponse.Fail($"规则不存在：{code}"));
 
         // 回填条款编号/标题，与列表接口保持一致
         if (!string.IsNullOrEmpty(rule.ClauseCode))
@@ -166,7 +166,7 @@ public class ValidationRuleController
 
         var result = await Entity.Update(entity, updateFields: fields);
         if (!result.Success)
-            return BadRequest(ApiResponse.Fail(result.Error!));
+            return Ok(ApiResponse.Fail(result.Error!));
 
         return Ok(ApiResponse<ValidationRule>.Ok(result.Data));
     }

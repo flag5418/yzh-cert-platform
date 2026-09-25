@@ -64,7 +64,7 @@ public class AuditorAuthController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "获取体系认证机构列表失败");
-            return BadRequest(ApiResponse.Fail($"获取机构列表失败：{ex.Message}"));
+            return Ok(ApiResponse.Fail($"获取机构列表失败：{ex.Message}"));
         }
     }
 
@@ -80,7 +80,7 @@ public class AuditorAuthController : ControllerBase
     public async Task<IActionResult> Register([FromBody] AuditorRegisterRequest request)
     {
         if (request == null)
-            return BadRequest(ApiResponse.Fail("请求参数不能为空"));
+            return Ok(ApiResponse.Fail("请求参数不能为空"));
 
         try
         {
@@ -88,14 +88,14 @@ public class AuditorAuthController : ControllerBase
             var result = await _registerService.RegisterAsync(request, clientIp);
 
             if (!result.Success)
-                return BadRequest(ApiResponse.Fail(result.Error ?? "注册失败"));
+                return Ok(ApiResponse.Fail(result.Error ?? "注册失败"));
 
             return Ok(ApiResponse<AuditorRegisterResultDto>.Ok(result.Data!, "注册成功，请使用该账号登录"));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "专家注册异常：UserName={UserName}", request.UserName);
-            return BadRequest(ApiResponse.Fail($"注册失败：{ex.Message}"));
+            return Ok(ApiResponse.Fail($"注册失败：{ex.Message}"));
         }
     }
 }

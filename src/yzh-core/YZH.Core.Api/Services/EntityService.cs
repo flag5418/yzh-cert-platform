@@ -585,7 +585,11 @@ public class EntityService<T> where T : class, new()
                     {
                         var predicate = BuildStringEqualsExpression("Code", code);
                         if (predicate == null) continue;
-                        var entityResult = await _dbOrm.GetOneAsync<T>(predicate);
+                        // ★ 必须用 GetOneIgnoreValidAsync（只过滤软删除、不过滤 IsValid）：
+                        //   GetOneAsync 自带 IsValid=1 过滤 → 已禁用(IsValid=0)的记录查不到
+                        //   → count 恒为 0 → 误报「记录不存在或已被删除」，导致「先禁用再删除」永远失败。
+                        //   删除是对记录本身的操作，与启禁用状态无关。
+                        var entityResult = await _dbOrm.GetOneIgnoreValidAsync<T>(predicate);
                         if (entityResult.Success && entityResult.Data != null)
                         {
                             var entity = entityResult.Data;

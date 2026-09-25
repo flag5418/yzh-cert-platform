@@ -19,9 +19,18 @@ builder.UseYzhCore(options =>
     options.EnableSwagger = true;
     // 核心模块配置目录（YZH.Core.Web 自有：User、Role、Menu、SysConfig 等）
     options.CoreEntityConfigPath = Path.Combine(builder.Environment.ContentRootPath, "Assets", "EntityConfigs");
-    // 业务模块配置目录（CertPlatform.Admin 的 EntityConfig）
-    var adminAssetsPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "..", "certplatform-api", "CertPlatform.Admin", "Assets", "EntityConfigs"));
-    options.BusinessEntityConfigPaths = new List<string> { adminAssetsPath };
+    // 业务模块配置目录（各业务模块自有的 EntityConfig）
+    // ⚠️⚠️ 新增业务模块时必须在此追加其 Assets/EntityConfigs 目录 —— 漏列不会报任何错，
+    //     但该模块的 EntityConfigHelper.GetConfig 会静默落到 NewEmptyConfig：
+    //     症状 = Title 等于实体类型名、Columns=[]、页面「有数据行却一列都不显示」。
+    //     （2026-09-25 实测：Auditor 的 Enterprise.json 因此未被加载）
+    // 搜索顺序 = 本列表顺序，同名文件先命中者生效；目录不存在会被自动跳过。
+    var bizRoot = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "..", "certplatform-api"));
+    options.BusinessEntityConfigPaths = new List<string>
+    {
+        Path.Combine(bizRoot, "CertPlatform.Admin", "Assets", "EntityConfigs"),
+        Path.Combine(bizRoot, "CertPlatform.Auditor", "Assets", "EntityConfigs"),
+    };
 });
 
 // 业务服务自注册（启动工程不感知具体业务实现）
@@ -100,6 +109,38 @@ builder.Services.AddControllers(options =>
     // 详见 YZH.Core.Stand/Extensions/JsonSensitiveFieldExtensions.cs
     YZH.Core.Stand.Extensions.JsonSensitiveFieldExtensions
         .ApplySensitiveFieldMasking(json.JsonSerializerOptions);
+});
+
+// 22 §三：模型校验失败（[Required] / JSON 绑定失败）= 业务拒绝 → HTTP 200 + success:false + err 非空。
+// 不配这里的话，[ApiController] 会自动回 400 + RFC7807 ValidationProblemDetails，
+// 既没有 success/err 字段，也与「业务失败一律 HTTP 200」相悖（P1 收口）。
+// 保留自动校验过滤器本身（SuppressModelStateInvalidFilter 仍为 false）——只替换响应工厂。
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(o =>
+{
+    o.InvalidModelStateResponseFactory = ctx =>
+    {
+        static string Friendly(string msg)
+        {
+            // DataAnnotations 默认模板是英文（"The 所属字典 field is required."）→ 转中文
+            if (msg.StartsWith("The ") && msg.EndsWith(" field is required."))
+                return msg[4..^19] + " 不能为空";
+            return msg;
+        }
+
+        var errors = ctx.ModelState
+            .Where(kv => kv.Value is { Errors.Count: > 0 })
+            .SelectMany(kv => kv.Value!.Errors.Select(e =>
+                string.IsNullOrWhiteSpace(e.ErrorMessage) ? kv.Key : e.ErrorMessage))
+            .Distinct()
+            .ToList();
+
+        var err = errors.Count > 0
+            ? string.Join("；", errors.Select(Friendly))
+            : "参数校验失败";
+
+        return new Microsoft.AspNetCore.Mvc.OkObjectResult(
+            YZH.Core.Stand.Models.Result.ApiResponse.Fail(err));
+    };
 });
 
 // 注册 Swagger

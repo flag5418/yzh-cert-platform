@@ -198,7 +198,7 @@ def main():
         "SortOrder": 0,
         "IsValid": 1,
     }, token=token)
-    msg = (d or {}).get("message") or ""
+    msg = (d or {}).get("err") or (d or {}).get("message") or ""
     check("防环：7 挂到子孙 7.1.1 被拒", not (d and d.get("success")) and ("自身" in msg or "子孙" in msg or "子条款" in msg or "挂到" in msg), f"st={st} {msg}")
 
     # 4.4 自环
@@ -211,7 +211,7 @@ def main():
         "SortOrder": 0,
         "IsValid": 1,
     }, token=token)
-    msg = (d or {}).get("message") or ""
+    msg = (d or {}).get("err") or (d or {}).get("message") or ""
     check("防环：挂到自身被拒", not (d and d.get("success")) and ("自身" in msg), f"st={st} {msg}")
 
     # 4.5 跨标准挂父
@@ -234,12 +234,12 @@ def main():
             "SortOrder": 0,
             "IsValid": 1,
         }, token=token)
-        check("父不存在被拒", not (d and d.get("success")), (d or {}).get("message"))
+        check("父不存在被拒", not (d and d.get("success")), (d or {}).get("err") or (d or {}).get("message"))
 
     print("== 5. 有子禁删 / 父子同批删 ==")
     # 仅删 7（有 7.1 子）应失败
     st, d = req("POST", "/api/Foundation/ISOClause/delete", [code7], token=token)
-    msg = (d or {}).get("message") or ""
+    msg = (d or {}).get("err") or (d or {}).get("message") or ""
     check("有子禁删：仅删 7 被拒", not (d and d.get("success")) and "子条款" in msg, f"st={st} {msg}")
 
     # 仅删 7 应仍存在
@@ -296,7 +296,7 @@ def main():
     check("新增 9", bool(code9))
     if code9:
         st, d = add_clause("9", "重复编号", None)
-        msg = (d or {}).get("message") or ""
+        msg = (d or {}).get("err") or (d or {}).get("message") or ""
         check("重复条款编号被拒", not (d and d.get("success")) and "已存在" in msg, msg)
 
     print("== 9. 清理测试数据 ==")

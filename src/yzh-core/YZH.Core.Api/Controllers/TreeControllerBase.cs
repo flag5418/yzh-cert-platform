@@ -68,7 +68,7 @@ public abstract class TreeControllerBase<T> : YzhControllerBase<T>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse<List<T>>.Fail($"获取树失败：{ex.Message}"));
+            return Ok(ApiResponse<List<T>>.Fail($"获取树失败：{ex.Message}"));
         }
     }
 
@@ -86,7 +86,7 @@ public abstract class TreeControllerBase<T> : YzhControllerBase<T>
         try
         {
             if (string.IsNullOrEmpty(request.ParentCode))
-                return BadRequest(ApiResponse.Fail("parentCode 不能为空"));
+                return Ok(ApiResponse.Fail("parentCode 不能为空"));
 
             var items = await Entity.GetViewList(request.ParentCode);
 
@@ -97,7 +97,7 @@ public abstract class TreeControllerBase<T> : YzhControllerBase<T>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse<GetChildrenResponse<T>>.Fail($"加载子节点失败：{ex.Message}"));
+            return Ok(ApiResponse<GetChildrenResponse<T>>.Fail($"加载子节点失败：{ex.Message}"));
         }
     }
 
@@ -146,7 +146,7 @@ public abstract class TreeControllerBase<T> : YzhControllerBase<T>
             {
                 var parentResult = await Entity.GetByCode(entity.ParentCode);
                 if (!parentResult.Success || parentResult.Data == null)
-                    return BadRequest(ApiResponse.Fail($"父节点 {entity.ParentCode} 不存在"));
+                    return Ok(ApiResponse.Fail($"父节点 {entity.ParentCode} 不存在"));
             }
 
             // 4. 调用基类 Add
@@ -154,7 +154,7 @@ public abstract class TreeControllerBase<T> : YzhControllerBase<T>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse.Fail($"新增节点失败：{ex.Message}"));
+            return Ok(ApiResponse.Fail($"新增节点失败：{ex.Message}"));
         }
     }
 
@@ -171,19 +171,19 @@ public abstract class TreeControllerBase<T> : YzhControllerBase<T>
             if (!string.IsNullOrEmpty(entity.ParentCode))
             {
                 if (entity.ParentCode == entity.Code)
-                    return BadRequest(ApiResponse.Fail("不能将父节点设为自己"));
+                    return Ok(ApiResponse.Fail("不能将父节点设为自己"));
 
                 // 检查是否为后代
                 var descendants = await GetDescendantCodes(entity.Code);
                 if (descendants.Contains(entity.ParentCode))
-                    return BadRequest(ApiResponse.Fail("不能将父节点设为自己的后代（会形成循环）"));
+                    return Ok(ApiResponse.Fail("不能将父节点设为自己的后代（会形成循环）"));
             }
 
             return await base.Update(entity);
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse.Fail($"修改节点失败：{ex.Message}"));
+            return Ok(ApiResponse.Fail($"修改节点失败：{ex.Message}"));
         }
     }
 
@@ -200,7 +200,7 @@ public abstract class TreeControllerBase<T> : YzhControllerBase<T>
             // 1. 校验节点存在
             var nodeResult = await Entity.GetByCode(request.Code);
             if (!nodeResult.Success || nodeResult.Data == null)
-                return BadRequest(ApiResponse.Fail("节点不存在"));
+                return Ok(ApiResponse.Fail("节点不存在"));
 
             var node = nodeResult.Data;
 
@@ -208,16 +208,16 @@ public abstract class TreeControllerBase<T> : YzhControllerBase<T>
             if (!string.IsNullOrEmpty(request.NewParentCode))
             {
                 if (request.NewParentCode == request.Code)
-                    return BadRequest(ApiResponse.Fail("不能移动到自己"));
+                    return Ok(ApiResponse.Fail("不能移动到自己"));
 
                 var newParentResult = await Entity.GetByCode(request.NewParentCode);
                 if (!newParentResult.Success || newParentResult.Data == null)
-                    return BadRequest(ApiResponse.Fail("目标父节点不存在"));
+                    return Ok(ApiResponse.Fail("目标父节点不存在"));
 
                 // 防环
                 var descendants = await GetDescendantCodes(request.Code);
                 if (descendants.Contains(request.NewParentCode))
-                    return BadRequest(ApiResponse.Fail("不能移动到自己的子树下"));
+                    return Ok(ApiResponse.Fail("不能移动到自己的子树下"));
             }
 
             // 3. 防深度越限
@@ -228,7 +228,7 @@ public abstract class TreeControllerBase<T> : YzhControllerBase<T>
                     ? 0
                     : await GetNodeLevel(request.NewParentCode);
                 if (newParentLevel + 1 + nodeDepth > MaxDepth)
-                    return BadRequest(ApiResponse.Fail($"移动后深度将超过限制 ({MaxDepth})"));
+                    return Ok(ApiResponse.Fail($"移动后深度将超过限制 ({MaxDepth})"));
             }
 
             // 4. 执行移动
@@ -237,7 +237,7 @@ public abstract class TreeControllerBase<T> : YzhControllerBase<T>
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse.Fail($"移动节点失败：{ex.Message}"));
+            return Ok(ApiResponse.Fail($"移动节点失败：{ex.Message}"));
         }
     }
 
@@ -253,7 +253,7 @@ public abstract class TreeControllerBase<T> : YzhControllerBase<T>
         try
         {
             if (codes == null || codes.Length == 0)
-                return BadRequest(ApiResponse<object?>.Fail("未指定要删除的节点"));
+                return Ok(ApiResponse<object?>.Fail("未指定要删除的节点"));
 
             // 收集所有子孙 code
             var allCodes = new List<string>(codes);
@@ -269,13 +269,13 @@ public abstract class TreeControllerBase<T> : YzhControllerBase<T>
             // 调用基类批量删除
             var result = await Entity.DeleteBatch(allCodes, hardDelete: HardDelete, clientIp: UserContext.ClientIp);
             if (!result.Success)
-                return BadRequest(ApiResponse<object?>.Fail(result.Error));
+                return Ok(ApiResponse<object?>.Fail(result.Error));
 
             return Ok(ApiResponse<object?>.Ok($"已删除 {result.Data} 个节点（含子节点）"));
         }
         catch (Exception ex)
         {
-            return BadRequest(ApiResponse<object?>.Fail($"删除失败：{ex.Message}"));
+            return Ok(ApiResponse<object?>.Fail($"删除失败：{ex.Message}"));
         }
     }
 
