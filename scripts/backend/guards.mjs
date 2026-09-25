@@ -13,7 +13,7 @@
  *   B-R1  禁**裸** `Ok(new {` —— 匿名对象响应无 success/err，前端读不到判据
  *         （已包 `ApiResponse<>.Ok(new {...})` 的内层 22 处属合法：`.Ok(` 前有 `.`
  *          故被负向后顾排除；P2 已清零，P3 起基线 0）
- *   B-R2  禁 `new ApiResponse` —— 构造已封闭，只能走静态工厂（工厂保证三条不变量）
+ *   B-R2  禁 `new ApiResponse(` / `new ApiResponse<T>(` / `new ApiResponse {` —— 构造已封闭，只能走静态工厂（工厂保证三条不变量）
  *   B-R3  禁业务语境 `return BadRequest(` / `return NotFound(` —— 业务失败一律 HTTP 200
  *         （401 `Unauthorized(` 属基础设施信号，保留，不在此规则内）
  *   B-R4  信封不变量运行时守卫存在性 —— ApiResponseContractFilter 已注册进全局过滤器
@@ -73,8 +73,8 @@ const RULES = [
   },
   {
     id: 'B-R2',
-    desc: '禁 new ApiResponse（构造已封闭，只能用静态工厂）',
-    forbid: [/new ApiResponse/],
+    desc: '禁 new ApiResponse( / new ApiResponse<T>( / new ApiResponse {（构造已封闭，只能用静态工厂）',
+    forbid: [/new ApiResponse\s*[<({]/],
   },
   {
     id: 'B-R3',

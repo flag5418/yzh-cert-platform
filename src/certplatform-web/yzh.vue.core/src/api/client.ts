@@ -52,6 +52,25 @@ const STATUS_FALLBACK: Record<number, string> = {
   500: '服务器内部错误，请稍后重试',
 }
 
+/**
+ * 网络层失败归一化（22 §三矩阵末行 / 23 §8.2 P-10、P-11）。
+ *
+ * 断网、改错 VITE_API_BASE、CORS 被拒时 `fetch` 只会 reject 一个 TypeError，
+ * 浏览器文案是英文（Chrome「Failed to fetch」、Safari「Load failed」），
+ * 直接透到 toast 会让用户看到英文错误。这里统一成契约要求的「网络错误」。
+ * 带 status 的（401/403/404/500 已在 request 内转成 Error + status）原样返回。
+ */
+function toFriendlyError(e: any): any {
+  if (e && typeof e === 'object' && e.name === 'TypeError' && !e.status) {
+    const err = new Error('网络错误')
+    ;(err as any).status = 0
+    ;(err as any).network = true
+    ;(err as any).cause = e
+    return err
+  }
+  return e
+}
+
 export const tokenStore = {
   get: () => localStorage.getItem(TOKEN_KEY),
   set: (v: string) => localStorage.setItem(TOKEN_KEY, v),
@@ -157,7 +176,7 @@ export class YzhApiClient {
     }
 
     try {
-      const res = await fetch(this.baseURL + finalUrl, fetchOptions)
+      const res = await this.safeFetch(this.baseURL + finalUrl, fetchOptions)
 
       if (res.status === 401) {
         tokenStore.clear()
@@ -248,7 +267,7 @@ export class YzhApiClient {
       if (q) finalUrl += (url.includes('?') ? '&' : '?') + q
     }
 
-    const res = await fetch(this.baseURL + finalUrl, {
+    const res = await this.safeFetch(this.baseURL + finalUrl, {
       method: 'GET',
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -285,7 +304,7 @@ export class YzhApiClient {
    */
   async download(url: string, body: any, filename: string): Promise<void> {
     const token = this.getToken()
-    const res = await fetch(this.baseURL + url, {
+    const res = await this.safeFetch(this.baseURL + url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -311,7 +330,7 @@ export class YzhApiClient {
    */
   async downloadGet(url: string, filename: string): Promise<void> {
     const token = this.getToken()
-    const res = await fetch(this.baseURL + url, {
+    const res = await this.safeFetch(this.baseURL + url, {
       method: 'GET',
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -335,7 +354,7 @@ export class YzhApiClient {
    */
   async upload<T = any>(url: string, formData: FormData): Promise<T> {
     const token = this.getToken()
-    const res = await fetch(this.baseURL + url, {
+    const res = await this.safeFetch(this.baseURL + url, {
       method: 'POST',
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -349,6 +368,18 @@ export class YzhApiClient {
     }
     // 原样返回后端 JSON
     return (await res.json()) as T
+  }
+
+  /**
+   * 统一入口：把网络层 TypeError 归一成契约文案「网络错误」（P-10/P-11）。
+   * 所有 fetch 调用都必须走这里，禁止散落裸 fetch。
+   */
+  private async safeFetch(input: string, init?: RequestInit): Promise<Response> {
+    try {
+      return await fetch(input, init)
+    } catch (e) {
+      throw toFriendlyError(e)
+    }
   }
 
   /**

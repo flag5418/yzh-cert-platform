@@ -777,12 +777,19 @@ export abstract class TreeTableCore<
     // F-1：失败必抛 —— 不在业务被拒时改本地 Name（否则本地假更新）
     expectOk(res, '修改节点失败')
 
-    // O(1) 原位替换（保持展开状态）
+    // O(1) 原位更新：**保留节点对象引用**。el-tree store 持有的是同一 data 对象，
+    // 整体换新对象会残留旧节点（Element Plus 对同引用数组 setData 短路 → 界面上新旧节点并存），
+    // 且 dtoToNode 固定返回 Children:[] 会就地吞掉子节点。
     const newNode = this.dtoToNode(
       res.data ?? ({ ...node, Name: newName } as TreeItemDto),
       this.treeSide.findParent(node.Code),
     )
-    if (!this.treeSide.replaceNode(node.Code, newNode)) {
+    const live = this.treeSide.findNode(node.Code)
+    if (live) {
+      const children = live.Children
+      Object.assign(live, newNode)
+      live.Children = children
+    } else {
       node.Name = newName
     }
   }
