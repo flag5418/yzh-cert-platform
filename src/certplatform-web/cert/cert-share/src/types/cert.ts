@@ -126,7 +126,6 @@ export interface Enterprise {
   ContactPhone?: string
   ContactEmail?: string
   ArchiveDate?: string
-  Status?: string
   Sort?: number
   IsValid?: number
   Remark?: string

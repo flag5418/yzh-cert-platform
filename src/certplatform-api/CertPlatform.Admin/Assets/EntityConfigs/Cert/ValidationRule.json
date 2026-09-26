@@ -1,6 +1,7 @@
 {
   "Title": "NC 检查规则",
   "FillMode": "AutoFix",
+  "EnableField": "IsActive",
   "Columns": [
     {
       "FieldName": "Id",
@@ -175,15 +176,33 @@
       "Enable": false
     },
     {
-      "FieldName": "IsActive",
-      "DesName": "启用",
-      "Type": "Switch",
+      "FieldName": "JudgeMode",
+      "DesName": "判定方式",
+      "Type": "ComboBox",
       "Sxh": 6,
       "XsFlag": true,
       "BcFlag": true,
       "Yxk": false,
-      "Width": 80,
+      "Width": 120,
       "Row": 3,
+      "Col": 0,
+      "RowSpan": 1,
+      "ColSpan": 1,
+      "GroupIndex": "1",
+      "Mrz": "auto",
+      "Enable": true,
+      "Placeholder": "选择判定方式"
+    },
+    {
+      "FieldName": "IsActive",
+      "DesName": "启用",
+      "Type": "Switch",
+      "Sxh": 7,
+      "XsFlag": true,
+      "BcFlag": true,
+      "Yxk": false,
+      "Width": 80,
+      "Row": 4,
       "Col": 0,
       "RowSpan": 1,
       "ColSpan": 1,
@@ -195,12 +214,12 @@
       "FieldName": "Remark",
       "DesName": "备注",
       "Type": "TextBox",
-      "Sxh": 7,
+      "Sxh": 8,
       "XsFlag": true,
       "BcFlag": true,
       "Yxk": true,
       "Width": 200,
-      "Row": 4,
+      "Row": 5,
       "Col": 0,
       "RowSpan": 1,
       "ColSpan": 2,
@@ -212,7 +231,7 @@
       "FieldName": "CreateTime",
       "DesName": "创建时间",
       "Type": "DateTimePicker",
-      "Sxh": 8,
+      "Sxh": 9,
       "XsFlag": true,
       "BcFlag": false,
       "Yxk": true,
@@ -230,8 +249,9 @@
     "Edit": true,
     "Delete": true,
     "CustomButtons": {
-      "启用/禁用": "ToggleActive",
-      "复制": "Copy"
+      "disable": "禁用",
+      "enable": "启用",
+      "Copy": "复制"
     }
   },
   "FormCols": 1

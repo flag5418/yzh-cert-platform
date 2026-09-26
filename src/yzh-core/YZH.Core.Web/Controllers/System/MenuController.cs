@@ -41,7 +41,7 @@ public class MenuController : ControllerBase
 
         var nodes = visibleMenus.Select(m => new MenuNode
         {
-            Id = int.TryParse(m.Id, out var id) ? id : 0,
+            Id = (int)m.Id,
             ParentCode = m.ParentCode ?? "0",
             Code = m.Code ?? "",
             Name = m.MenuName,
@@ -90,7 +90,7 @@ public class MenuController : ControllerBase
             .Where(m => m.ParentCode == parentCode)
             .Select(m => new MenuNode
             {
-                Id = m.Id,
+                Id = (int)m.Id,
                 ParentId = int.TryParse(parentCode, out var pid) ? pid : 0,
                 ParentCode = m.ParentCode,
                 Code = m.Code,

@@ -104,7 +104,8 @@ export class OrgPageLogic extends TreeTableCore<any> {
       if (row?.IsValid === 1 && cb['disable']) {
         actions.push({ key: 'custom:disable', text: cb['disable'], type: 'warning' })
       } else if (row?.IsValid === 0 && cb['enable']) {
-        actions.push({ key: 'custom:enable', text: cb['enable'], type: 'warning' })
+        // 配色约定：停用行 → success 绿「启用」（与全项目二选一按钮一致）
+        actions.push({ key: 'custom:enable', text: cb['enable'], type: 'success' })
       }
       return actions
     }

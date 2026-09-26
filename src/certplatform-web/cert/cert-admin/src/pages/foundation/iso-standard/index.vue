@@ -57,6 +57,9 @@ async function handleTreeNodeAction(action: string, node: TreeNode) {
     handleEditStd(node)
   } else if (action === 'delete') {
     await handleDeleteStd(node)
+  } else if (action === 'toggle-disable' || action === 'toggle-enable' || action === 'toggle-valid') {
+    // 节点启停走内核（确认弹窗 + /tree/toggle-valid + 本地 Extra 更新）
+    await logic.toggleTreeNodeWithConfirm(node)
   }
 }
 

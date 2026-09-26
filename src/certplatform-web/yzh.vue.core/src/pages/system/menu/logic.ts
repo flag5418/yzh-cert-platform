@@ -32,6 +32,11 @@ export class MenuPageLogic extends TreeTableCore<any> {
     return { IsValid: 1, OrderNo: 0 }
   }
 
+  /** 右表：Icon 列走 #column-Icon 插槽（渲染真实图标，而非图标名文本） */
+  override get columns() {
+    return super.columns.map((c) => (c.prop === 'Icon' ? { ...c, slot: true as const } : c))
+  }
+
   /** 右表新增：注入当前选中节点 Code 作 ParentCode（未选中 = 根） */
   protected override onPrepareAdd(entity: Record<string, any>): void {
     entity.ParentCode =

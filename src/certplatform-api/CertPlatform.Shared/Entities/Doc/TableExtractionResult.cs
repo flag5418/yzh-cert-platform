@@ -4,13 +4,14 @@ using System.ComponentModel.DataAnnotations;
 using SqlSugar;
 using YZH.Core.Stand.Models.Entity;
 
-namespace CertPlatform.Shared.Entities.Ent
+namespace CertPlatform.Shared.Entities.Doc
 {
     /// <summary>
-    /// TableExtractionResult 表格提取结果
-    /// <para>表名：ent_table_extraction_result</para>
+    /// 文档表格提取结果（表格级，每表格一条）
+    /// <para>表名：cert_table_extraction_result（原 ent_table_extraction_result，按命名约定 ent→cert）</para>
+    /// <para>归属：管理端「文档提取规则」+ 工作流 get_table 节点</para>
     /// </summary>
-    [SugarTable("ent_table_extraction_result")]
+    [SugarTable("cert_table_extraction_result")]
     public class TableExtractionResult : BaseEntity
     {
         // ──── Id / 审计字段由 BaseEntity 基类统一提供 ────

@@ -23,10 +23,18 @@
     <Using Include="CertPlatform.Shared.Entities.Cert" />
     <Using Include="CertPlatform.Shared.Entities.Dir" />
     <Using Include="CertPlatform.Shared.Entities.Doc" />
-    <Using Include="CertPlatform.Shared.Entities.Ent" />
     <Using Include="CertPlatform.Shared.Entities.Rpt" />
     <Using Include="CertPlatform.Shared.Entities.Sys" />
     <Using Include="CertPlatform.Shared.Entities.Wf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ★ EntityConfig 必须在构建时复制到输出目录（bin/…/Assets/EntityConfigs/**）：
+         基类 EntityConfigHelper 从 **输出目录** 读取，缺这条会「静默空配置」→
+         页面有数据行、一列都不显示、控制台零报错。与 CertPlatform.Admin 对齐。 -->
+    <Content Include="Assets\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

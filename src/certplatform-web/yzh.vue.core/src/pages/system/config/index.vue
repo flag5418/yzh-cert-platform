@@ -27,7 +27,25 @@ const { logic, tableRef } = useSingleTable(ConfigLogic)
       @selection-change="logic.onSelectionChange($event)"
       @row-action="logic.onRowAction"
       @toolbar-action="logic.onToolbarAction"
-    />
+    >
+      <!-- 状态列：IsValid 启用/禁用标签（列本身被内核标记为 slot，不给插槽会渲原值 1/0） -->
+      <template #column-IsValid="{ row }">
+        <el-tag :type="row.IsValid === 1 ? 'success' : 'info'" size="small">
+          {{ row.IsValid === 1 ? '启用' : '禁用' }}
+        </el-tag>
+      </template>
+
+      <!-- 显示已禁用：后端默认过滤 IsValid=0，不开这个开关禁用即不可逆 -->
+      <template #toolbar-right>
+        <div class="config-toolbar-switch">
+          <span class="config-toolbar-switch__label">显示已禁用</span>
+          <el-switch
+            :model-value="logic.showDisabled.value"
+            @change="logic.toggleShowDisabled()"
+          />
+        </div>
+      </template>
+    </YzhTable>
 
     <YzhFormDialog
       v-model:visible="logic.dialogVisible.value"
@@ -47,5 +65,16 @@ const { logic, tableRef } = useSingleTable(ConfigLogic)
   height: 100%;
   box-sizing: border-box;
   overflow: auto;
+}
+
+.config-toolbar-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-toolbar-switch__label {
+  font-size: 13px;
+  color: var(--el-text-color-regular);
 }
 </style>

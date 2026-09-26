@@ -36,8 +36,14 @@ export interface YzhFormField {
   type?: YzhFieldType
   /** 必填 */
   required?: boolean
-  /** Grid 占位（默认 12） */
+  /** Grid 列占位（**24 栅格制**，默认按 cols 等分；24 = 占满整行） */
   span?: number
+  /**
+   * ★ Grid **行**占位（跨几行，默认 1）。
+   * 用于「大控件」——如备注要求「跨 2 行 2 列」时：`span: 24, rowSpan: 2`。
+   * ⚠️ 必须与 `span` 配合：只给 rowSpan 而不给满行 span，会与相邻字段挤在同一行。
+   */
+  rowSpan?: number
   /** 提示 */
   placeholder?: string
   /** 选项（select/radio/checkbox） */
@@ -115,6 +121,54 @@ const formRef = ref<FormInstance>()
 
 // 计算列的 span
 const colSpan = computed(() => 24 / props.cols)
+
+/**
+ * ★ 布局容器：CSS Grid（2026-09-26 由 `el-row`/`el-col` 迁移而来）
+ *
+ * 为什么换：`el-col` 是**单方向** 24 栅格，**无法表达「跨 N 行」**（RowSpan）。
+ * 而项目的数据契约里 `ColumnConfigDto.RowSpan/ColSpan` 是一等字段（对齐 WPF `DefineColumn`），
+ * 「备注跨 2 行 2 列」这类版式必须靠 CSS Grid 的 `grid-row: span N` 才能表达。
+ *
+ * 兼容性：`el-col :span="12"`（2 列布局）与 `grid-template-columns: repeat(2,1fr)` 视觉等价
+ * （每行 2 个、间距 20px、span=24 自动换行）；未传 `rowSpan` 的旧页面**渲染结果不变**。
+ * 纵向间距沿用 `el-form-item` 自身的 margin-bottom（故 rowGap = 0，与旧行为一致）。
+ */
+const gridStyle = computed(() => ({
+  display: 'grid',
+  gridTemplateColumns: `repeat(${props.cols}, minmax(0, 1fr))`,
+  columnGap: '20px',
+  rowGap: '0'
+}))
+
+/** 24 栅格 → grid 列数（1..cols）。例：cols=2 时 span12→1 列、span24→2 列 */
+function colUnitsOf(field: YzhFormField): number {
+  const unit = colSpan.value
+  const span = field.span && field.span > 0 ? field.span : unit
+  return Math.min(props.cols, Math.max(1, Math.round(span / unit)))
+}
+
+/** 行占位（>=1 的整数） */
+function rowUnitsOf(field: YzhFormField): number {
+  const rs = field.rowSpan ?? 1
+  return rs > 1 ? Math.floor(rs) : 1
+}
+
+/** 单元格栅格样式 */
+function cellStyle(field: YzhFormField): Record<string, string> {
+  const style: Record<string, string> = { gridColumn: `span ${colUnitsOf(field)}` }
+  const rs = rowUnitsOf(field)
+  if (rs > 1) style.gridRow = `span ${rs}`
+  return style
+}
+
+/**
+ * textarea 行数：随 rowSpan 放大，否则 `grid-row: span 2` 只是"占位"、
+ * 控件本身还是 3 行高 → 用户看不到"跨 2 行"的效果。
+ */
+function rowsOf(field: YzhFormField): number | undefined {
+  if (field.type !== 'textarea') return undefined
+  return 3 * rowUnitsOf(field)
+}
 
 // 自动构建 rules
 const computedRules = computed<FormRules>(() => {
@@ -236,9 +290,9 @@ defineExpose({ validate, resetFields, formRef })
     :size="size"
     class="yzh-form"
   >
-    <el-row :gutter="20">
+    <div class="yzh-form__grid" :style="gridStyle">
       <template v-for="field in fields" :key="field.prop">
-        <el-col v-if="!field.hidden" :span="field.span || colSpan">
+        <div v-if="!field.hidden" class="yzh-form__cell" :style="cellStyle(field)">
           <el-form-item :label="field.label" :prop="field.prop">
             <!-- text / textarea / password -->
             <el-input
@@ -258,7 +312,7 @@ defineExpose({ validate, resetFields, formRef })
               "
               :placeholder="field.placeholder || `请输入${field.label}`"
               :disabled="field.disabled"
-              :rows="field.type === 'textarea' ? 3 : undefined"
+              :rows="rowsOf(field)"
               :autocomplete="field.type === 'password' ? 'new-password' : 'off'"
               v-bind="field.fieldProps"
             />
@@ -405,9 +459,9 @@ defineExpose({ validate, resetFields, formRef })
               :data="formData"
             />
           </el-form-item>
-        </el-col>
+        </div>
       </template>
-    </el-row>
+    </div>
 
     <div v-if="showActions" class="yzh-form__actions">
       <slot name="actions" :submit="onSubmit" :reset="onReset">
@@ -423,6 +477,18 @@ defineExpose({ validate, resetFields, formRef })
 <style scoped>
 .yzh-form {
   width: 100%;
+}
+
+.yzh-form__grid {
+  width: 100%;
+}
+
+/*
+ * grid item 的 min-width 默认是 auto → 内含长文本/宽控件时会撑破栅格（经典 CSS Grid 坑）。
+ * 配合 `grid-template-columns: repeat(N, minmax(0, 1fr))` 一起使用。
+ */
+.yzh-form__cell {
+  min-width: 0;
 }
 
 .yzh-form__actions {

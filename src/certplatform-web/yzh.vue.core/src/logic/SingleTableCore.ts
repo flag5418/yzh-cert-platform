@@ -23,6 +23,7 @@
 import { ElMessage } from 'element-plus'
 import { reactive, ref } from 'vue'
 import {
+  isRowEnabled,
   toFormFields,
   toFormLayoutCols,
   toRowActions,
@@ -468,8 +469,9 @@ export abstract class SingleTableCore<V extends Record<string, any> = any> {
     options?: { entityName?: string; field?: string },
   ): Promise<void> {
     const field = options?.field ?? this.enableField ?? 'IsValid'
-    const currentVal = (row as any)[field] ?? 1
-    const action = currentVal === 1 ? '禁用' : '启用'
+    const camelField = field.charAt(0).toLowerCase() + field.slice(1)
+    const currentVal = (row as any)[field] ?? (row as any)[camelField] ?? 1
+    const action = isRowEnabled(currentVal) ? '禁用' : '启用'
     const name = options?.entityName ?? this.entityName(row)
 
     // F-4：取消不是错误 —— 静默返回，不发请求、不提示

@@ -10,8 +10,10 @@
  * - 选中树节点后，自动注入 OrgCode/StandardCode/PhaseCode 三字段联动过滤
  * - 数据加载统一通过 dataLoader（YzhTable 驱动）
  * - 行按钮全部由后端 Cert/ValidationRule.json 的 RowButtons 配置驱动
- *   （Edit/Delete + CustomButtons: 启用/禁用→ToggleActive、复制→Copy），
+ *   （Edit/Delete + CustomButtons: disable/enable/Copy，EnableField=IsActive →
+ *   内核按行状态二选一：启用行只显橙「禁用」、停用行只显绿「启用」），
  *   走标准 POST /action/{method} 约定，前端零硬编码按钮
+ * - JudgeMode（判定方式）: 列/表单的**选项**在本页注入（见 JUDGE_MODE_* 常量）
  */
 import {
   SingleTableCore,
@@ -27,6 +29,40 @@ import { getISOClauseTree } from '@share/api/workflow/nc-config'
 import type { NCRule, ISOClauseTreeNode } from '@share/api/workflow/nc-config'
 
 export type { NCRule, ISOClauseTreeNode }
+
+// ──── 判定方式（JudgeMode）字典 ────
+//
+// 值域：auto=AI 自动判定 / manual=人工判定 / semi=半自动
+// 背景：部分检查项是**人为调研**发现的（如「某个该有的设备是否存在」），
+//       AI 不可能知道 → 必须由人工判定。术语是「判定方式」，不是「复核」。
+//
+// ⚠️ 为什么不走 EntityConfig 的 DictCode：
+//   ① `entityAdapters.toFormFields` 明确 `options: undefined`，且未把 DictCode
+//      映射成 loadOptions → 表单里的 select 会渲染成**没有选项的空下拉**；
+//   ② `GET /api/System/Dictionary/items/{code}` 的 Value 取的是字典项 **Code**
+//      （随机唯一值），不是 DicValue 字面量 —— 存不进 `auto/manual/semi`。
+//   故本页在 Logic 里显式给 options（与 ClauseCode 的 treeSelect 同一手法）。
+
+/** 判定方式：值 → 显示文字 */
+const JUDGE_MODE_LABEL: Record<string, string> = {
+  auto: 'AI 自动',
+  manual: '人工',
+  semi: '半自动',
+}
+
+/** 判定方式：值 → 标签颜色 */
+const JUDGE_MODE_TAG: Record<string, 'success' | 'warning' | 'primary'> = {
+  auto: 'success',
+  manual: 'warning',
+  semi: 'primary',
+}
+
+/** 判定方式下拉选项 */
+const JUDGE_MODE_OPTIONS = [
+  { label: 'AI 自动判定', value: 'auto' },
+  { label: '人工判定', value: 'manual' },
+  { label: '半自动（AI 初判 + 人工确认）', value: 'semi' },
+]
 
 // ──── 工具函数：扁平条款列表 → 树形 ────
 function buildClauseTree(flat: ISOClauseTreeNode[]): ISOClauseTreeNode[] {
@@ -137,7 +173,13 @@ export class NCConfigLogic extends SingleTableCore<any> {
 
   override get columns(): YzhTableColumn<any>[] {
     const cols = super.columns
-    return cols.filter((c: any) => c.prop !== 'ClauseCode')
+    return cols
+      .filter((c: any) => c.prop !== 'ClauseCode')
+      .map((c: any) =>
+        c.prop === 'JudgeMode'
+          ? { ...c, tagMap: JUDGE_MODE_LABEL, tagTypeMap: JUDGE_MODE_TAG }
+          : c,
+      )
   }
 
   // ========================================================
@@ -162,6 +204,15 @@ export class NCConfigLogic extends SingleTableCore<any> {
             checkStrictly: true,
             filterable: true,
           },
+        }
+      }
+      // JudgeMode: 判定方式下拉（EntityConfig 只给类型，选项由本页注入，见文件顶部说明）
+      if (f.prop === 'JudgeMode') {
+        return {
+          ...f,
+          type: 'select' as any,
+          options: JUDGE_MODE_OPTIONS,
+          placeholder: '选择判定方式',
         }
       }
       // IsActive: boolean switch（后端 NewEntity 是 boolean，覆盖默认 1/0 值避免类型不匹配）

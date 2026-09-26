@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 using CertPlatform.Admin.Services.Workflow.Models;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using YZH.Core.DataBase.Interfaces;
-using CertPlatform.Shared.Entities.Ent;
+using CertPlatform.Shared.Entities.Doc;
 
 namespace CertPlatform.Admin.Services.Workflow
 {
@@ -21,7 +21,7 @@ namespace CertPlatform.Admin.Services.Workflow
     /// <para>1. 解析节点输入参数（constant: 前缀截取 / 引用上游节点输出）</para>
     /// <para>2. 按 nodeType 分发执行：start/docField/docTable/skill/branch/end/ai_node</para>
     /// <para>3. 返回统一的 NodeExecutionResult</para>
-    /// <para>迁移改写：docField/docTable 从"模拟数据"升级为按 ent_extraction_result / ent_table_extraction_result 真实取数（D-4）</para>
+    /// <para>迁移改写：docField/docTable 从"模拟数据"升级为按 cert_extraction_result / cert_table_extraction_result 真实取数（D-4）</para>
     ///
     /// <para>2026-09-22：① 返回值补写 StartedAt/CompletedAt，与 DurationMs 同源（G5 时序还原）；
     /// ② 日志全部改走 <see cref="WorkflowLogger"/>，并按文档 §8.2.4 修正 DOCFIELD_QUERY/DOCTABLE_QUERY
@@ -314,7 +314,7 @@ namespace CertPlatform.Admin.Services.Workflow
 
         /// <summary>
         /// docField 节点：按 fieldCode + enterpriseCode 查询提取结果（真实取数，D-4）
-        /// <para>数据源：ent_extraction_result（enterpriseCode 为空时默认 YZH-STD-ENT 标准企业）</para>
+        /// <para>数据源：cert_extraction_result（enterpriseCode 为空时默认 YZH-STD-ENT 标准企业）</para>
         /// </summary>
         private async Task<Dictionary<string, object>> ExecuteDocFieldAsync(
             WorkflowNodeConfig node,
@@ -337,8 +337,8 @@ namespace CertPlatform.Admin.Services.Workflow
             if (string.IsNullOrEmpty(fieldCode))
                 throw new InvalidOperationException($"docField 节点 {node.NodeId} 缺少 fieldCode 配置");
 
-            // 真实取数：ent_extraction_result 按 field_code + enterprise_code，取最新版本
-            var field = (await _db.GetOneAsync<CertPlatform.Shared.Entities.Ent.ExtractionResult>(x =>
+            // 真实取数：cert_extraction_result 按 field_code + enterprise_code，取最新版本
+            var field = (await _db.GetOneAsync<CertPlatform.Shared.Entities.Doc.ExtractionResult>(x =>
                 x.FieldCode == fieldCode && x.EnterpriseCode == enterpriseCode)).Data;
 
             if (field == null)
@@ -359,7 +359,7 @@ namespace CertPlatform.Admin.Services.Workflow
 
         /// <summary>
         /// docTable 节点：按 tableCode + enterpriseCode 查询表格提取结果（真实取数，D-4）
-        /// <para>数据源：ent_table_extraction_result（enterpriseCode 为空时默认 YZH-STD-ENT 标准企业）</para>
+        /// <para>数据源：cert_table_extraction_result（enterpriseCode 为空时默认 YZH-STD-ENT 标准企业）</para>
         /// </summary>
         private async Task<Dictionary<string, object>> ExecuteDocTableAsync(
             WorkflowNodeConfig node,
@@ -382,8 +382,8 @@ namespace CertPlatform.Admin.Services.Workflow
             if (string.IsNullOrEmpty(tableCode))
                 throw new InvalidOperationException($"docTable 节点 {node.NodeId} 缺少 tableCode 配置");
 
-            // 真实取数：ent_table_extraction_result 按 table_code + enterprise_code，取最新版本
-            var table = (await _db.GetOneAsync<CertPlatform.Shared.Entities.Ent.TableExtractionResult>(x =>
+            // 真实取数：cert_table_extraction_result 按 table_code + enterprise_code，取最新版本
+            var table = (await _db.GetOneAsync<CertPlatform.Shared.Entities.Doc.TableExtractionResult>(x =>
                 x.TableCode == tableCode && x.EnterpriseCode == enterpriseCode)).Data;
 
             if (table == null)

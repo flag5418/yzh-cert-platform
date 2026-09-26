@@ -1,5 +1,5 @@
 # tag	code	url
-admin	MENU_00001	/
+	MENU_00001	
 admin	MENU_00101	/system/organization
 admin	MENU_00201	/cert/iso-standard
 admin	MENU_00002	/
@@ -27,6 +27,7 @@ admin	MENU_00215	/business/ai-usage
 admin	MENU_00216	/business/queue-monitor
 auditor	MENU_AUD_01	/overview
 auditor	MENU_AUD_02	/enterprises
+auditor	MENU_AUD_07	/enterprise-stages
 auditor	MENU_AUD_00	/
 auditor	MENU_AUD_03	/tasks
 auditor	MENU_AUD_04	/resources

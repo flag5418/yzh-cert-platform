@@ -44,6 +44,7 @@
           RuleName: r.RuleName,
           RuleNameEn: r.RuleNameEn,
           SeverityIfViolated: r.SeverityIfViolated || 'minor',
+          JudgeMode: r.JudgeMode || 'auto',
           RuleJson: JSON.stringify(ctx.config),
           LayoutJson: JSON.stringify(ctx.layout),
           NcDescriptionTemplate: r.NcDescriptionTemplate,

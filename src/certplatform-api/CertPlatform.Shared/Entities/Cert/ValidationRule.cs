@@ -65,6 +65,14 @@ namespace CertPlatform.Shared.Entities.Cert
         [StringLength(20)]
         public string? SeverityIfViolated { get; set; }
 
+        /// <summary>
+        /// 判定方式（auto=AI 自动判定 / manual=人工判定 / semi=半自动）
+        /// <para>存在意义：部分检查项是**人为调研**发现的（如「某个该有的设备是否存在」），
+        /// AI 不可能知道 → 必须由人工判定。术语是「判定方式」，不是「复核」。</para>
+        /// </summary>
+        [StringLength(20)]
+        public string JudgeMode { get; set; } = "auto";
+
         /// <summary>工作流定义 JSON</summary>
         public string? RuleJson { get; set; }
 

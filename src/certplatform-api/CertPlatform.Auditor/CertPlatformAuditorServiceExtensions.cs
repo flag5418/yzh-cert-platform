@@ -17,6 +17,10 @@ public static class CertPlatformAuditorServiceExtensions
         // 依赖 IDbOrm / EntityService<T> / PasswordHelper，均由 YzhWebBuilder 注册为 Scoped/Singleton
         services.AddScoped<AuditorRegisterService>();
 
+        // ──── 工作区上下文解析（★ 专家端多租户隔离的唯一入口）────
+        // 专家端所有业务数据都按工作区隔离，EnterpriseController 等均依赖它
+        services.AddScoped<WorkspaceContextService>();
+
         return services;
     }
 }

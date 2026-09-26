@@ -38,7 +38,7 @@ import { toCamelCase } from '../utils/case'
 import { pascalCaseFormData } from '../utils/case'
 import { expectOk } from '../utils/apiResponse'
 import { confirmOrFalse } from '../utils/confirm'
-import { toFormLayoutCols } from '../adapters/entityAdapters'
+import { isRowEnabled, toFormLayoutCols } from '../adapters/entityAdapters'
 import { SingleTableCore } from './SingleTableCore'
 import { TreeSide } from './TreeSide'
 
@@ -196,10 +196,10 @@ export abstract class TreeTableCore<
       const extra = (node.Extra as any) || {}
       const camel = field.charAt(0).toLowerCase() + field.slice(1)
       const val = extra[field] ?? extra[camel] ?? 1
-      if (val === 1) {
+      if (isRowEnabled(val)) {
         actions.push({ key: 'toggle-disable', text: '禁用', type: 'warning' })
       } else {
-        actions.push({ key: 'toggle-enable', text: '启用', type: 'warning' })
+        actions.push({ key: 'toggle-enable', text: '启用', type: 'success' })
       }
     } else if (tc.CustomActions) {
       if (!allowToggle) {
@@ -209,9 +209,9 @@ export abstract class TreeTableCore<
         const val = extra[statusField] ?? extra[camel] ?? 1
         for (const [method, label] of Object.entries(tc.CustomActions)) {
           if (method === 'disable') {
-            if (val === 1) actions.push({ key: `custom:${method}`, text: label, type: 'warning' })
+            if (isRowEnabled(val)) actions.push({ key: `custom:${method}`, text: label, type: 'warning' })
           } else if (method === 'enable') {
-            if (val !== 1) actions.push({ key: `custom:${method}`, text: label, type: 'warning' })
+            if (!isRowEnabled(val)) actions.push({ key: `custom:${method}`, text: label, type: 'success' })
           } else {
             actions.push({ key: `custom:${method}`, text: label, type: 'info' })
           }
@@ -893,7 +893,7 @@ export abstract class TreeTableCore<
     // 双 Key 读取：PascalCase（业务 Controller override）+ camelCase（TreeMapper 默认）
     const camelField = field.charAt(0).toLowerCase() + field.slice(1)
     const currentVal = extra[field] ?? extra[camelField] ?? 1
-    const action = currentVal === 1 ? '禁用' : '启用'
+    const action = isRowEnabled(currentVal) ? '禁用' : '启用'
     const name = options?.entityName ?? node.Name
 
     // F-4：取消静默

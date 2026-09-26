@@ -295,8 +295,14 @@ public class EntityService<T> where T : class, new()
             if (parentCodeProp == null || parentCodeProp.PropertyType != typeof(string))
                 return result;
 
-            var parentCodeCol = parentCodeProp.Name;
+            var parentCodeCol = GetMappedColumnName("ParentCode") ?? "ParentCode";
             var tableName = GetQueryTableName<T>();
+
+            // 软删除过滤：与 GetViewList/GetListAsync（IsDeleted=0）口径对齐。
+            // 漏掉该条件 → 已软删子节点仍被计数 → 「有子节点禁删」误报、叶子标记全错
+            // （表现：树上看不到子节点，删除却报「该节点下有 N 个子节点」）。
+            var softDeleteCol = GetSoftDeleteColumnName();
+            var softDeleteFilter = softDeleteCol == null ? "" : $" AND `{softDeleteCol}` = 0";
 
             // 显式索引参数构建 IN 列表（SqlSugar 原生 SQL 的匿名对象列表参数
             // 不会自动展开为 IN 子句，会抛参数异常被吞掉，导致所有节点被误判为叶子）
@@ -304,7 +310,7 @@ public class EntityService<T> where T : class, new()
             var inList = string.Join(", ", parentCodes.Select((_, i) => $"@c{i}"));
             var sql = $"SELECT `{parentCodeCol}` AS ParentCode, COUNT(*) AS Cnt " +
                       $"FROM `{tableName}` " +
-                      $"WHERE `{parentCodeCol}` IN ({inList}) " +
+                      $"WHERE `{parentCodeCol}` IN ({inList}){softDeleteFilter} " +
                       $"GROUP BY `{parentCodeCol}`";
             var queryResult = await _dbOrm.Client.Ado.SqlQueryAsync<ChildrenCountRow>(
                 sql, parameters);
@@ -327,32 +333,52 @@ public class EntityService<T> where T : class, new()
     }
 
     /// <summary>
-    ///     获取 ParentCode 属性的数据库列名
+    ///     获取属性映射的数据库列名（尊重 [SugarColumn(ColumnName)] / [Column(Name)]，否则属性名）
     /// </summary>
-    private static string GetParentCodeColumnName()
+    /// <returns>列名；属性不存在或被 [SugarColumn(IsIgnore)] 标记时返回 null</returns>
+    private static string? GetMappedColumnName(string propertyName)
     {
-        var prop = typeof(T).GetProperty("ParentCode",
+        var prop = typeof(T).GetProperty(propertyName,
             System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly);
-        
+
         if (prop == null)
-            return "ParentCode"; // 默认
-        
+            return null;
+
         // 优先使用 SqlSugar 的 SugarColumn 特性
         var sugarColumn = prop.GetCustomAttributes(typeof(SqlSugar.SugarColumn), false)
             .Cast<SqlSugar.SugarColumn>()
             .FirstOrDefault();
-        if (sugarColumn?.ColumnName != null)
-            return sugarColumn.ColumnName;
-        
+        if (sugarColumn != null)
+        {
+            if (sugarColumn.IsIgnore) return null; // 数据库无此列
+            if (!string.IsNullOrEmpty(sugarColumn.ColumnName)) return sugarColumn.ColumnName;
+        }
+
         // 其次使用 EF Core 的 Column 特性
         var columnAttr = prop.GetCustomAttributes(typeof(System.ComponentModel.DataAnnotations.Schema.ColumnAttribute), false)
             .Cast<System.ComponentModel.DataAnnotations.Schema.ColumnAttribute>()
             .FirstOrDefault();
         if (columnAttr?.Name != null)
             return columnAttr.Name;
-        
+
         // 默认使用属性名
         return prop.Name;
+    }
+
+    /// <summary>
+    ///     获取软删除列名：仅当实体【自身声明】了 IsDeleted（bool 且非 IsIgnore）时返回列名，
+    ///     否则返回 null（不追加过滤，与 SqlSugarDbOrm.IsDeletedCondition 口径一致）。
+    ///     ⚠️ 列名取自属性映射，不能硬编码 IsDeleted —— 否则列名不一致的实体直接 SQL 报错。
+    /// </summary>
+    private static string? GetSoftDeleteColumnName()
+    {
+        var prop = typeof(T).GetProperty(nameof(ISoftDelete.IsDeleted),
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly);
+
+        if (prop == null || prop.PropertyType != typeof(bool))
+            return null;
+
+        return GetMappedColumnName(nameof(ISoftDelete.IsDeleted));
     }
 
     /// <summary>

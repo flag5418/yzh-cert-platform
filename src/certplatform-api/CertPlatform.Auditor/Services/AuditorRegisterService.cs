@@ -30,7 +30,8 @@ namespace CertPlatform.Auditor.Services;
 ///         ├── 管理员                       Dept        L3   ← 注册人挂此节点
 ///         ├── 审核员                       Dept        L3
 ///         ├── 审核组长                     Dept        L3
-///         └── 企业用户                     Dept        L3   ← 文件夹
+///         └── 企业信息                     Dept        L3   ← 文件夹，企业节点挂它下面（L4）
+///               └── {企业全称}             Enterprise  L4   ← 建档时由 EnterpriseController 创建
 /// </code>
 ///
 /// <para><b>与历史实现的差异</b>（历史蓝本：<c>src/old/.../Controllers/Auditor/Partial/AuthController.cs</c>）：</para>
@@ -72,8 +73,12 @@ public class AuditorRegisterService
     /// <summary>角色分组在机构树中的层级</summary>
     private const int GroupLevel = 3;
 
-    /// <summary>工作区下的默认角色分组（注册人挂「管理员」）</summary>
-    private static readonly string[] DefaultGroups = { "管理员", "审核员", "审核组长", "企业用户" };
+    /// <summary>
+    /// 工作区下的默认分组（注册人挂「管理员」）。
+    /// ★「企业信息」是**文件夹**语义：企业节点（OrgType=Enterprise, L4）挂在它下面。
+    ///   历史命名曾为「企业用户」，EnterpriseController 会自动收敛旧名（见其 EnsureEnterpriseGroupAsync）。
+    /// </summary>
+    private static readonly string[] DefaultGroups = { "管理员", "审核员", "审核组长", "企业信息" };
 
     /// <summary>注册人默认挂靠的分组名（必须是 <see cref="DefaultGroups"/> 的成员）</summary>
     private const string OwnerGroupName = "管理员";

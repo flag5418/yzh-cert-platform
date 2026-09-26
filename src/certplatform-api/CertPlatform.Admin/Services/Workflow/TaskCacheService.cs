@@ -180,7 +180,7 @@ namespace CertPlatform.Admin.Services.Workflow
                             else
                                 cacheKey = DocFieldKey(taskCode, ruleCode, fieldCode);
 
-                            // TODO: 从 ent_extraction_result 加载真实数据（与 NodeExecutor 直查同源）
+                            // TODO: 从 cert_extraction_result 加载真实数据（与 NodeExecutor 直查同源）
                             cacheValue = JsonSerializer.Serialize(new
                             {
                                 fieldValue = "预热字段值",
@@ -201,7 +201,7 @@ namespace CertPlatform.Admin.Services.Workflow
                             else
                                 cacheKey = DocTableKey(taskCode, ruleCode, tableCode);
 
-                            // TODO: 从 ent_table_extraction_result 加载真实数据
+                            // TODO: 从 cert_table_extraction_result 加载真实数据
                             cacheValue = JsonSerializer.Serialize(new
                             {
                                 rows = Array.Empty<object>(),

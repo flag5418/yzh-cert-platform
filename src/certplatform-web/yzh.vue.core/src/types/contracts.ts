@@ -139,6 +139,12 @@ export interface FilterItem {
 export interface ColumnConfig {
   FieldName: string
   DesName: string
+  /**
+   * 显示顺序（表格列顺序 / 表单字段顺序，升序）。
+   * ⚠️ 2026-09-26 起才由后端传输（此前 `DefineColumn.Sxh` 未被转换器复制 → G18 静默丢弃）。
+   * 前端目前**只传输不消费** —— 见 `ColumnConfigDto.Sxh` 注释中关于启用排序的前置条件。
+   */
+  Sxh?: number
   Width?: number
   Type: string
   /** 是否在表格中显示 */
@@ -161,6 +167,18 @@ export interface ColumnConfig {
   Mrz?: any
   /** 分组索引（编辑模式控制）：'0'=默认可编辑，'1'+=特定模式只读，'99'=详情全部只读 */
   GroupIndex?: string
+  /**
+   * ★ 表单占位提示（可选）。为空时前端回落到 `请输入{DesName}` / `请选择{DesName}`。
+   * 对应 `ColumnConfigDto.Placeholder`（2026-09-26 新增 —— 此前 JSON 里写它会被静默丢弃）。
+   */
+  Placeholder?: string
+  /**
+   * ★ 枚举/下拉选项（可选）。双用途：
+   * - 表单：`select` / `radio` / `checkbox` 的选项来源
+   * - 表格：映射为 `tagMap`，把原始值渲染成中文标签（`YzhTable.vue` 的 `col.tagMap` 分支）
+   * 对应 `ColumnConfigDto.Options`（2026-09-26 新增）。
+   */
+  Options?: { Label: string; Value: string }[]
 }
 
 export interface SearchFieldConfig {

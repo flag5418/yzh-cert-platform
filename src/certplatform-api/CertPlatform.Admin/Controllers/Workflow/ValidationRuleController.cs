@@ -40,7 +40,10 @@ public class ValidationRuleController
 
         // 行自定义操作（走标准 /action/{method} 约定，
         // 前端按钮由 Cert/ValidationRule.json 的 RowButtons.CustomButtons 驱动）
-        RegisterRowAction("ToggleActive", ToggleActiveAction);
+        // 状态型按钮必须是 disable/enable 两个确定方法 —— 前端按行 IsActive
+        // 二选一（启用行只显「禁用」、停用行只显「启用」），不再发合并文案「启用/禁用」
+        RegisterRowAction("disable", DisableAction);
+        RegisterRowAction("enable", EnableAction);
         RegisterRowAction("Copy", CopyAction);
     }
 
@@ -196,19 +199,27 @@ public class ValidationRuleController
     // 行自定义操作（RegisterRowAction，POST /action/{method}）
     // ========================================================
 
-    /// <summary>切换启用状态（前端按钮：RowButtons.CustomButtons["启用/禁用"]）</summary>
-    private async Task<Result<ApiResponse<object?>>> ToggleActiveAction(ValidationRule entity)
+    /// <summary>行按钮「禁用」（RowButtons.CustomButtons["disable"]，POST /action/disable）</summary>
+    private Task<Result<ApiResponse<object?>>> DisableAction(ValidationRule entity)
+        => SetActiveAsync(entity, false);
+
+    /// <summary>行按钮「启用」（RowButtons.CustomButtons["enable"]，POST /action/enable）</summary>
+    private Task<Result<ApiResponse<object?>>> EnableAction(ValidationRule entity)
+        => SetActiveAsync(entity, true);
+
+    /// <summary>按 Code 置 IsActive（ValidationRule 用 bool IsActive 做启用开关，实体无 IsValid 字段）</summary>
+    private async Task<Result<ApiResponse<object?>>> SetActiveAsync(ValidationRule entity, bool active)
     {
         var rule = await Entity.GetOne(r => r.Code == entity.Code);
         if (!rule.Success || rule.Data == null)
             return Result<ApiResponse<object?>>.Fail("规则不存在");
 
-        rule.Data.IsActive = !rule.Data.IsActive;
+        rule.Data.IsActive = active;
         var result = await Entity.Update(rule.Data);
         if (!result.Success)
             return Result<ApiResponse<object?>>.Fail(result.Error!);
 
-        return Result<ApiResponse<object?>>.Ok(ApiResponse<object?>.Ok(rule.Data.IsActive ? "已启用" : "已禁用"));
+        return Result<ApiResponse<object?>>.Ok(ApiResponse<object?>.Ok(active ? "已启用" : "已禁用"));
     }
 
     /// <summary>深拷贝规则（前端按钮：RowButtons.CustomButtons["复制"]）</summary>

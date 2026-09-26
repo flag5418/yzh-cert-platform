@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using YZH.Core.DataBase.Interfaces;
-using CertPlatform.Shared.Entities.Ent;
+using CertPlatform.Shared.Entities.Doc;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills
 {
@@ -38,7 +38,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
             // 企业编码兜底（与 NodeExecutor docField 节点一致）
             var entCode = string.IsNullOrWhiteSpace(enterprise_code) ? "YZH-STD-ENT" : enterprise_code;
 
-            var fields = (await db.GetListAsync<CertPlatform.Shared.Entities.Ent.ExtractionResult>(x =>
+            var fields = (await db.GetListAsync<CertPlatform.Shared.Entities.Doc.ExtractionResult>(x =>
                 x.FieldCode == field_code && x.EnterpriseCode == entCode)).Data ?? new();
 
             if (string.IsNullOrWhiteSpace(file_code))

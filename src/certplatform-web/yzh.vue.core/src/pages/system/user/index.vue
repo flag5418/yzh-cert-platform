@@ -24,7 +24,14 @@ const { logic, tableRef } = useSingleTable(UserLogic)
       @selection-change="logic.onSelectionChange($event)"
       @row-action="logic.onRowAction"
       @toolbar-action="logic.onToolbarAction"
-    />
+    >
+      <!-- 状态列：IsValid 被内核标记为 slot，不给插槽会渲原值 1/0 -->
+      <template #column-IsValid="{ row }">
+        <el-tag :type="row.IsValid === 1 ? 'success' : 'info'" size="small">
+          {{ row.IsValid === 1 ? '启用' : '禁用' }}
+        </el-tag>
+      </template>
+    </YzhTable>
 
     <YzhFormDialog
       v-model:visible="logic.dialogVisible.value"

@@ -115,6 +115,13 @@ watch(tableRef, (el) => {
         row-key="Code"
         @row-action="logic.onRowAction"
       >
+        <!-- 启用状态列：IsActive（bool）被内核标记为 slot，不给插槽会渲原值 true/false -->
+        <template #column-IsActive="{ row }">
+          <el-tag :type="row.IsActive ? 'success' : 'info'" size="small">
+            {{ row.IsActive ? '启用' : '禁用' }}
+          </el-tag>
+        </template>
+
         <!-- 工具栏左侧：新建检查项 + 刷新 -->
         <template #toolbar-left>
           <el-button type="primary" :icon="Plus" @click="logic.onToolbarAction('add')">新建检查项</el-button>

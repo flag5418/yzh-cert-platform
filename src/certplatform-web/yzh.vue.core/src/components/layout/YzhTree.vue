@@ -35,11 +35,11 @@
     >
       <template #default="{ data }">
         <div class="yzh-tree__node" @mouseenter="hoveredNode = getNodeKey(data)" @mouseleave="hoveredNode = null">
-          <!-- 图标 -->
-          <el-icon v-if="nodeExtra(data).icon && !isEmoji(nodeExtra(data).icon)" class="yzh-tree__icon">
-            <component :is="nodeExtra(data).icon" />
+          <!-- 图标（Extra 双 Key：后端注入 PascalCase Icon，历史数据为 camel icon） -->
+          <el-icon v-if="nodeIcon(data) && !isEmoji(nodeIcon(data)!)" class="yzh-tree__icon">
+            <component :is="nodeIcon(data)" />
           </el-icon>
-          <span v-else-if="nodeExtra(data).icon" class="yzh-tree__icon">{{ nodeExtra(data).icon }}</span>
+          <span v-else-if="nodeIcon(data)" class="yzh-tree__icon">{{ nodeIcon(data) }}</span>
           <el-icon v-else-if="isLeafNode(data)" class="yzh-tree__icon yzh-tree__icon--leaf">
             <Document />
           </el-icon>
@@ -250,6 +250,13 @@ function nodeExtra(node: YzhTreeNode | null | undefined): Record<string, any> {
   return (readNodeField(node as Record<string, any>, props.extraField) as Record<string, any>) ?? {}
 }
 
+/** 节点图标名：Extra 双 Key（PascalCase 优先，camelCase 兜底，与 readNodeField 同约定） */
+function nodeIcon(node: YzhTreeNode | null | undefined): string | undefined {
+  const extra = nodeExtra(node)
+  const icon = extra.Icon ?? extra.icon
+  return icon ? String(icon) : undefined
+}
+
 // ========================================================
 // 树配置（el-tree props 由字段参数化派生）
 // ========================================================
@@ -305,9 +312,10 @@ function resolveNodeActions(node: YzhTreeNode): YzhAction[] {
   return [...list, ...legacy].filter((a) => a.visible !== false)
 }
 
-/** 根据动作返回下拉菜单项样式类 */
+/** 根据动作返回下拉菜单项样式类（二选一按钮配色：停用→绿「启用」、启用→橙「禁用」） */
 function getDropdownItemClass(action: YzhAction): string {
   if (action.danger) return 'yzh-tree__action-danger'
+  if (action.type === 'success') return 'yzh-tree__action-enable'
   if (action.type === 'warning') return 'yzh-tree__action-toggle'
   return ''
 }
@@ -574,6 +582,10 @@ function removeFromTree(nodes: YzhTreeNode[], code: string): boolean {
 
 :deep(.yzh-tree__action-danger) {
   color: var(--el-color-danger) !important;
+}
+
+:deep(.yzh-tree__action-enable) {
+  color: var(--el-color-success) !important;
 }
 
 :deep(.yzh-tree__action-toggle) {

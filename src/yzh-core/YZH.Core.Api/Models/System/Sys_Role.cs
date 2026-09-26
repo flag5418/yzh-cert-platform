@@ -70,9 +70,8 @@ public class Sys_Role : BaseEntity, ISoftDelete, IIsValid, ITreeEntity
     [SugarColumn(IsIgnore = true)]
     public new bool? IsLeaf { get; set; }
 
-    /// <summary>Sys_Role 使用 Id (int) 作为 PK</summary>
-    [SugarColumn(ColumnName = "Id", IsPrimaryKey = true, IsIdentity = true)]
-    public new string Id { get; set; } = string.Empty;
+    // 主键 Id 直接继承 BaseEntity（long / IsPrimaryKey / IsIdentity），
+    // ⛔ 禁止 `new string Id` 遮蔽（原因同 Sys_Menu，会导致新增必然失败）。
 
     /// <summary>是否删除（DB: IsDeleted）</summary>
     public bool IsDeleted { get; set; }

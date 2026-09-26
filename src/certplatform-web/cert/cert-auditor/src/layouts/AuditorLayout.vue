@@ -12,7 +12,7 @@
         :default-active="activeMenu"
         router
         class="auditor-layout__menu"
-        background-color="#304156"
+        background-color="#1a2332"
         text-color="#bfcbd9"
         active-text-color="#409eff"
       >
@@ -152,8 +152,8 @@ onUnmounted(() => {
 
 <style scoped>
 .auditor-layout { height: 100vh; }
-.auditor-layout__aside { background: #304156; overflow: hidden; }
-.auditor-layout__logo { height: 60px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; font-weight: bold; border-bottom: 1px solid #3a4a5b; }
+.auditor-layout__aside { background: #1a2332; overflow: hidden; }
+.auditor-layout__logo { height: 60px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; font-weight: bold; border-bottom: 1px solid #243146; }
 .auditor-layout__menu { border-right: none; }
 .auditor-layout__header { display: flex; align-items: center; justify-content: space-between; background: #fff; border-bottom: 1px solid #e4e7ed; padding: 0 20px; }
 .auditor-layout__page-title { font-size: 16px; font-weight: 600; }

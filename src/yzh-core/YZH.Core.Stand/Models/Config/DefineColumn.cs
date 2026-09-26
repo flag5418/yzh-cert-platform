@@ -59,6 +59,13 @@ public class DefineColumn
     /// <summary>显示顺序</summary>
     public int Sxh { get; set; }
 
+    /// <summary>
+    ///     ★ 表单占位提示（可选）。2026-09-26 新增 ——
+    ///     此前 JSON 里写 `Placeholder` **无处绑定**（`DefineColumn` 与 `ColumnConfigDto` 均无此属性），
+    ///     会被静默丢弃，属「写了就是死配置」。
+    /// </summary>
+    public string? Placeholder { get; set; }
+
     // === 以下为Web端扩展属性 ===
     
     /// <summary>是否可排序</summary>

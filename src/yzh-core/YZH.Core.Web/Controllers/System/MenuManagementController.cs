@@ -80,7 +80,11 @@ public class MenuManagementController : TreeTableControllerBase<Sys_Menu, Sys_Me
     protected override async Task<(bool ok, string? msg)> OnBeforeAddTree(Sys_Menu entity)
     {
         if (string.IsNullOrEmpty(entity.Code))
-            entity.Code = $"MENU_{Guid.NewGuid():N}".Substring(0, 50);
+        {
+            // MENU_(5) + Guid:N(32) = 37 < 50；Substring(0,50) 会因源串不足 50 而抛越界异常
+            var code = $"MENU_{Guid.NewGuid():N}";
+            entity.Code = code.Length > 50 ? code[..50] : code;
+        }
 
         var exists = await TreeEntity.ExistsByCodeAsync(entity.Code);
         if (exists.Data == true)
@@ -125,7 +129,10 @@ public class MenuManagementController : TreeTableControllerBase<Sys_Menu, Sys_Me
     protected override async Task<(bool ok, string? msg)> OnBeforeAdd(Sys_Menu entity)
     {
         if (string.IsNullOrEmpty(entity.Code))
-            entity.Code = $"MENU_{Guid.NewGuid():N}".Substring(0, 50);
+        {
+            var code = $"MENU_{Guid.NewGuid():N}";
+            entity.Code = code.Length > 50 ? code[..50] : code;
+        }
 
         var exists = await Entity.ExistsByCodeAsync(entity.Code);
         if (exists.Data == true)

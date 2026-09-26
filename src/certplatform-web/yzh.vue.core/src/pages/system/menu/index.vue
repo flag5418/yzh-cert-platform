@@ -8,6 +8,7 @@
  */
 import { Plus } from '@element-plus/icons-vue'
 import { YzhFormDialog, YzhTable, YzhTreeTableLayout, useTreeTable } from '@yzh-core'
+import { formatMenuIcon } from '../../../utils/menu'
 import IconPicker from './IconPicker.vue'
 import MenuPageLogic from './logic'
 
@@ -51,7 +52,22 @@ const { logic, tableRef, treeTableRef } = useTreeTable(MenuPageLogic)
             row-key="Code"
             @selection-change="logic.onSelectionChange($event)"
             @row-action="logic.onRowAction"
-          />
+          >
+            <!-- 图标列：渲染真实 Element Plus 图标（Icon 为空显示 -） -->
+            <template #column-Icon="{ row }">
+              <el-icon v-if="row.Icon">
+                <component :is="formatMenuIcon(row.Icon)" />
+              </el-icon>
+              <span v-else>-</span>
+            </template>
+
+            <!-- 状态列：IsValid 被内核标记为 slot，不给插槽会渲原值 1/0 -->
+            <template #column-IsValid="{ row }">
+              <el-tag :type="row.IsValid === 1 ? 'success' : 'info'" size="small">
+                {{ row.IsValid === 1 ? '启用' : '禁用' }}
+              </el-tag>
+            </template>
+          </YzhTable>
         </div>
       </template>
     </YzhTreeTableLayout>

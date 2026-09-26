@@ -189,10 +189,15 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
   }
 
   // ──── 行操作：菜单模式（新增下级 + 基类 edit/delete/toggle-valid） ────
-  override get rowActions(): YzhAction[] {
+  override get rowActions(): YzhAction[] | ((row: any) => YzhAction[]) {
     const base = super.rowActions
-    const list = Array.isArray(base) ? base : []
-    return [{ key: 'add-child', text: '新增下级' }, ...list]
+    const addChild: YzhAction = { key: 'add-child', text: '新增下级' }
+    // 基类可能是函数式（按行状态二选一的「禁用/启用」）→ 必须按行组合，
+    // 用 Array.isArray 兜空会让全部行按钮静默消失
+    if (typeof base === 'function') {
+      return (row: any) => [addChild, ...base(row)]
+    }
+    return [addChild, ...base]
   }
 
   /** 拉取当前标准全量条款并构建上级候选（编辑时排除自身及子孙） */

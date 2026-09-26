@@ -16,9 +16,10 @@ namespace YZH.Core.Api.Models.System;
 [YZHDeleteStrategy(Mode = DeleteMode.Soft)]
 public class Sys_Menu : BaseEntity, ITreeEntity
 {
-    /// <summary>主键（DB: Id）</summary>
-    [SugarColumn(ColumnName = "Id", IsPrimaryKey = true, IsIdentity = true)]
-    public new string Id { get; set; } = string.Empty;
+    // 主键 Id 直接继承 BaseEntity（long / IsPrimaryKey / IsIdentity），
+    // ⛔ 禁止再用 `new string Id` 遮蔽：DB 列是 int 自增，SqlSugar 插入后回写
+    //    Int32 到 string 属性会抛 "cannot be converted to type System.String"，
+    //    导致所有新增必然失败（详见 Sys_User.cs 同类注释）。
 
     /// <summary>菜单编码（DB: Code）</summary>
     [StringLength(50)]

@@ -4,13 +4,14 @@ using System.ComponentModel.DataAnnotations;
 using SqlSugar;
 using YZH.Core.Stand.Models.Entity;
 
-namespace CertPlatform.Shared.Entities.Ent
+namespace CertPlatform.Shared.Entities.Doc
 {
     /// <summary>
-    /// ExtractionResult 提取结果（字段级）
-    /// <para>表名：ent_extraction_result</para>
+    /// 文档字段提取结果（字段级）
+    /// <para>表名：cert_extraction_result（原 ent_extraction_result，按命名约定 ent→cert）</para>
+    /// <para>归属：管理端「文档提取规则」——SaveExtractionRuleAsync 落库、GetRuleDetailAsync 回显</para>
     /// </summary>
-    [SugarTable("ent_extraction_result")]
+    [SugarTable("cert_extraction_result")]
     public class ExtractionResult : BaseEntity
     {
         // ──── Id / 审计字段由 BaseEntity 基类统一提供 ────
@@ -25,7 +26,7 @@ namespace CertPlatform.Shared.Entities.Ent
         [StringLength(200)]
         public string? StandardFileCode { get; set; }
 
-        /// <summary>标准编码（冗余，关联 cert_iso_standard.code）</summary>
+        /// <summary>标准编码（冗余，关联 cert_iso_standard.Code）</summary>
         [StringLength(36)]
         public string? StandardCode { get; set; }
 
@@ -62,7 +63,7 @@ namespace CertPlatform.Shared.Entities.Ent
         public DateTime ExtractedAt { get; set; }
 
         /// <summary>标签（与 FieldCode 相同值，兼容旧数据）</summary>
-        [StringLength(36)]
+        [StringLength(500)]
         [SugarColumn(IsNullable = true)]
         public string? LabelTag { get; set; }
 

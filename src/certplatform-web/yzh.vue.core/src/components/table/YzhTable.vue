@@ -374,15 +374,48 @@ function onRowClick(row: T, index: number) {
 const instance = getCurrentInstance()
 let rowActionWarned = false
 
-/** 操作列宽度估算（按最大按钮数 × 70px + 间隔） */
-const actionColWidth = computed(() => {
-  if (typeof props.rowActionButtons === 'function') {
-    return 4 * 70 + 40
+/**
+ * 操作列宽度自适应（按按钮实际文案估算，非固定 70px/个）
+ * - 中文 ~14px/字、西文 ~8px/字、单按钮两侧边距 16px
+ * - 函数式 rowActionButtons：取已加载行中的最大宽度（行数据变化自动重算）
+ * - 最终宽度 = 内容宽 + 单元格内边距 24px，下限 88px（容纳表头「操作」）
+ */
+function estimateActionWidth(action: YzhAction): number {
+  const text = String(action.text ?? '')
+  let textWidth = 0
+  for (const ch of text) {
+    textWidth += /[一-鿿]/.test(ch) ? 14 : 8
   }
-  const count = Array.isArray(props.rowActionButtons)
-    ? props.rowActionButtons.length
-    : Object.keys(props.rowActionButtons || {}).length
-  return count > 0 ? count * 70 + 40 : 140
+  if (textWidth === 0 && action.icon) textWidth = 16
+  return textWidth + 16
+}
+
+/** 一组行按钮的渲染宽度（含溢出折叠时的「更多」下拉） */
+function estimateActionsWidth(list: YzhAction[]): number {
+  const { inline, overflow } = splitRowActions(list)
+  let width = inline.reduce((sum, a) => sum + estimateActionWidth(a), 0)
+  if (overflow.length > 0) width += estimateActionWidth({ key: '__overflow__', text: '更多' })
+  return width
+}
+
+const actionColWidth = computed(() => {
+  let contentWidth = 0
+  if (typeof props.rowActionButtons === 'function') {
+    contentWidth = (rows.value as T[]).reduce(
+      (max, row) => Math.max(max, estimateActionsWidth(resolveRowActions(row))),
+      0
+    )
+    // 数据未加载 / 所有行均无按钮时兜底，避免列宽塌陷
+    if (contentWidth === 0) {
+      contentWidth = estimateActionsWidth([{ key: '__placeholder__', text: '操作' }])
+    }
+  } else {
+    const raw = Array.isArray(props.rowActionButtons)
+      ? props.rowActionButtons
+      : fromRecord(props.rowActionButtons || {})
+    contentWidth = estimateActionsWidth(raw.filter((a) => a.visible !== false))
+  }
+  return Math.max(contentWidth + 24, 88)
 })
 
 watch(

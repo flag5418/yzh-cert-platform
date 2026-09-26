@@ -99,6 +99,13 @@ export function toTableColumns(config: EntityConfigDto | null): YzhTableColumn[]
       if (enableField && c.FieldName === enableField) {
         col.slot = c.FieldName
       }
+      // ★ 声明式枚举标签（2026-09-26）：列上声明 `Options` → 自动映射为 tagMap，
+      //   把原始值（如 `active`）渲染成中文标签（如「合作中」）。
+      //   消费方：YzhTable.vue 的 `v-else-if="col.tagMap"` 分支（C-A6 通用标签渲染）。
+      //   ⚠️ `dictCode` 分支在模板里**优先于** tagMap；两者同时声明时以 dictCode 为准。
+      if (c.Options && c.Options.length > 0) {
+        col.tagMap = Object.fromEntries(c.Options.map((o) => [o.Value, o.Label]))
+      }
       return col as YzhTableColumn
     })
 }
@@ -124,7 +131,7 @@ export function toFormFields(
   const schema = config?.Schema
   if (!cols) return []
   const layoutCols = toFormLayoutCols(config)
-  const colSpan = Math.floor(24 / layoutCols)
+  const unitSpan = Math.floor(24 / layoutCols)
   const withDefaults = opts?.withDefaults ?? false
   return cols
     .filter((c) => c.BcFlag && c.Type !== 'Other')
@@ -135,18 +142,31 @@ export function toFormFields(
       const fieldSchema = schema?.[camelKey]
       const fieldGroupIndex = c.GroupIndex || '0'
       const isDisabledByGroupIndex = editMode !== '0' && fieldGroupIndex !== editMode
+
+      // ★ 消费栅格坐标（2026-09-26 补齐 —— 原实现是 G19：所有字段统一 span，
+      //   导致「备注 / 企业地址」这类 Memo 被挤在半行、版式看起来"胡乱拼凑"）。
+      //   · ColSpan = **列数**（相对 FormCols）→ 换算成 24 栅格
+      //   · RowSpan = **行数** → 透传给 YzhForm（`grid-row: span N`）
+      const colUnits = Math.min(layoutCols, Math.max(1, c.ColSpan ?? 1))
+      const rowUnits = Math.max(1, c.RowSpan ?? 1)
+
       return {
         prop,
         label: c.DesName,
         type: mapControlType(c.Type),
         required: !c.Yxk,
         disabled: c.Enable === false || isDisabledByGroupIndex,
-        span: colSpan,
+        span: Math.min(24, unitSpan * colUnits),
+        rowSpan: rowUnits,
         dictCode: c.DictCode || undefined,
-        options: undefined,
-        placeholder: c.Type?.includes('Picker')
-          ? `请选择${c.DesName}`
-          : `请输入${c.DesName}`,
+        // ★ 声明式选项（2026-09-26）：列上声明 `Options` → 直接作为 select/radio/checkbox 的选项。
+        //   ⚠️ 字典路（DictCode）**仍未打通**：`YzhForm` 不读 dictCode、字典端点返回的
+        //   `Value` 是字典项 Code（GUID）而非业务值 → 需要字典时仍由页面显式注入 options。
+        options: c.Options?.length ? c.Options.map((o) => ({ label: o.Label, value: o.Value })) : undefined,
+        // ★ 声明式占位提示（2026-09-26）：JSON 的 `Placeholder` 优先，否则按控件类型回落
+        placeholder:
+          c.Placeholder ||
+          (c.Type?.includes('Picker') ? `请选择${c.DesName}` : `请输入${c.DesName}`),
         defaultValue: withDefaults
           ? c.Mrz
             ? c.Type === 'Switch'
@@ -221,6 +241,24 @@ function isStateMethod(method: string): boolean {
   return m === 'enable' || m === 'disable'
 }
 
+/**
+ * 行启用状态判据 —— IsValid(int 0/1) 与 IsActive(bool) 通吃。
+ *
+ * ★ 铁律：行按钮必须**按行状态二选一**（启用行只显「禁用」、停用行只显「启用」），
+ *   禁止合并文案「禁用/启用」—— 那样用户看不出当前行是启用还是停用。
+ *   配色约定：启用行→ warning 橙「禁用」，停用行→ success 绿「启用」。
+ */
+export function isRowEnabled(value: unknown): boolean {
+  return value === 1 || value === true
+}
+
+/** 读行状态字段（PascalCase 优先、camelCase 兜底），缺省视为已启用 */
+function readRowEnabledState(row: Record<string, any> | undefined, field: string): boolean {
+  const camel = field.charAt(0).toLowerCase() + field.slice(1)
+  const val = row?.[field] ?? row?.[camel] ?? 1
+  return isRowEnabled(val)
+}
+
 /** 行操作按钮（颜色语义随声明走，不内置 edit/delete→颜色 假设） */
 export function toRowActions(
   config: EntityConfigDto | null,
@@ -230,10 +268,6 @@ export function toRowActions(
   const base: YzhAction[] = []
   if (rb.Edit !== false) base.push({ key: 'edit', text: '编辑', type: 'primary' })
   if (rb.Delete !== false) base.push({ key: 'delete', text: '删除', type: 'danger' })
-  // 自动注入启用/禁用按钮（当 Enable=true 且存在 EnableField 时）
-  if (rb.Enable === true && enableField) {
-    base.push({ key: 'toggle-valid', text: '禁用/启用', type: 'warning' })
-  }
 
   const cb = rb.CustomButtons ?? {}
   const stateEntries = Object.entries(cb).filter(([method]) => isStateMethod(method))
@@ -244,25 +278,41 @@ export function toRowActions(
     type: 'info' as const,
   }))
 
-  // enable/disable 有 EnableField 时按行状态二选一（与 organization 内核语义一致）
+  // ── 分支 1：CustomButtons 含 enable/disable（key = custom:方法名，走 /action/{method}）
+  //    有 EnableField 时按行状态二选一（与 organization / user / enterprise 同构）
   if (stateEntries.length > 0 && enableField) {
     return (row: Record<string, any>) => {
-      const field = enableField
-      const camel = field.charAt(0).toLowerCase() + field.slice(1)
-      const val = row?.[field] ?? row?.[camel] ?? 1
+      const on = readRowEnabledState(row, enableField)
       const actions = [...base]
       const disableEntry = stateEntries.find(([m]) => m.toLowerCase() === 'disable')
       const enableEntry = stateEntries.find(([m]) => m.toLowerCase() === 'enable')
-      if (val === 1 && disableEntry) {
+      if (on && disableEntry) {
         actions.push({ key: `custom:${disableEntry[0]}`, text: disableEntry[1], type: 'warning' })
-      } else if (val !== 1 && enableEntry) {
-        actions.push({ key: `custom:${enableEntry[0]}`, text: enableEntry[1], type: 'warning' })
+      } else if (!on && enableEntry) {
+        actions.push({ key: `custom:${enableEntry[0]}`, text: enableEntry[1], type: 'success' })
       }
       actions.push(...otherActions)
       return actions
     }
   }
 
+  // ── 分支 2：RowButtons.Enable=true 且无状态型 CustomButtons（去重）
+  //    key 固定 toggle-valid → 复用内核 dispatch /toggle-valid 与确认弹窗
+  if (rb.Enable === true && enableField) {
+    const field = enableField
+    return (row: Record<string, any>) => {
+      const on = readRowEnabledState(row, field)
+      return [
+        ...base,
+        on
+          ? { key: 'toggle-valid', text: '禁用', type: 'warning' }
+          : { key: 'toggle-valid', text: '启用', type: 'success' },
+        ...otherActions,
+      ]
+    }
+  }
+
+  // ── 兜底：状态型 CustomButtons 但无 EnableField → 无法判态，按声明全量渲染（旧行为）
   for (const [method, label] of stateEntries) {
     base.push({ key: `custom:${method}`, text: label, type: 'warning' })
   }
@@ -288,7 +338,7 @@ export function toRowActionButtons(
 export function toTreeActions(
   treeConfig: TreeBehaviorConfig | null,
   enableField?: string | null,
-  options?: { allowAddChild?: boolean },
+  options?: { allowAddChild?: boolean; node?: Record<string, any> },
 ): YzhAction[] {
   const actions: YzhAction[] = []
   const tc = treeConfig
@@ -302,12 +352,36 @@ export function toTreeActions(
   if (tc.AllowDelete) {
     actions.push({ key: 'delete', text: '删除', type: 'danger', danger: true })
   }
-  if (enableField) {
-    actions.push({ key: 'toggle-valid', text: '禁用/启用', type: 'warning' })
+
+  // 状态判据：优先取节点 Extra（须传 options.node，否则按已启用处理）
+  const field = tc.EnableField ?? enableField
+  const extra =
+    (options?.node?.Extra as Record<string, any> | undefined) ??
+    (options?.node as Record<string, any> | undefined) ??
+    {}
+  const on = field ? readRowEnabledState(extra, field) : true
+
+  // 与 TreeTableCore.resolveTreeActions 同构：按状态二选一，禁止合并文案
+  if (tc.AllowToggle !== false && field) {
+    actions.push(
+      on
+        ? { key: 'toggle-disable', text: '禁用', type: 'warning' }
+        : { key: 'toggle-enable', text: '启用', type: 'success' },
+    )
   }
-  // 后端注入的自定义动作
+
+  // 后端注入的自定义动作（enable/disable 同样按状态二选一）
   if (tc.CustomActions) {
     for (const [method, label] of Object.entries(tc.CustomActions)) {
+      const m = method.toLowerCase()
+      if (m === 'disable') {
+        if (on) actions.push({ key: `custom:${method}`, text: label, type: 'warning' })
+        continue
+      }
+      if (m === 'enable') {
+        if (!on) actions.push({ key: `custom:${method}`, text: label, type: 'success' })
+        continue
+      }
       actions.push({ key: `custom:${method}`, text: label, type: 'info' })
     }
   }
