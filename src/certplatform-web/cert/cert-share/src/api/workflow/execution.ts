@@ -6,28 +6,20 @@
  *   GET  /api/Workflow/test/detail/{taskCode} 四层聚合详情（task + item + path + node）
  *
  * 字段命名遵循 YZH 命名铁律：C# 属性名 = JSON 字段名 = TS 字段名（PascalCase）。
- * 例外：`NcResult` / 输出字典内层键是运行时动态载荷（camelCase，已登记例外 E3），此处不涉及。
  */
 import { yzhApi } from '@yzh-core/api/client'
 import type { ApiResponse } from '@yzh-core/types'
 
 // ──── 请求契约 ────
 
-/** 测试历史查询条件（全部可选，彼此 AND） */
 export interface TaskHistoryRequest {
   Page?: number
   PageSize?: number
-  /** 规则编码精确匹配 */
   RuleCode?: string
-  /** TEST | NC_CHECK | REPORT_GENERATE */
   TaskType?: string
-  /** FULL | NODE | AI_NODE */
   TestScope?: string
-  /** queued | executing | completed | failed | cancelled */
   TaskStatus?: string
-  /** 起始时间（按 CreateTime） */
   StartTime?: string
-  /** 结束时间（按 CreateTime） */
   EndTime?: string
 }
 
@@ -37,10 +29,13 @@ export interface TaskHistoryRequest {
 export interface TaskHistoryItem {
   TaskCode: string
   TaskType: string
-  /** FULL | NODE | AI_NODE */
   TestScope: string
   TaskStatus: string
   RuleCode: string
+  /** 规则中文名称（执行时快照） */
+  RuleName?: string
+  /** 违规严重级别 major/minor/observation */
+  SeverityIfViolated?: string
   EnterpriseCode: string
   PhaseCode: string
   DurationMs?: number
@@ -48,9 +43,7 @@ export interface TaskHistoryItem {
   CompletedAt?: string
   ErrorMessage?: string
   CreateTime?: string
-  /** 路径条数（wf_path_execution） */
   PathCount: number
-  /** 节点条数（wf_node_execution 去重后） */
   NodeCount: number
 }
 
@@ -76,12 +69,10 @@ export interface TaskDetailItem {
 export interface TaskPathDetail {
   PathIndex: number
   Status: string
-  /** 本路径复用的节点数（DB 层体现「节点复用」的唯一字段） */
   ReusedCount: number
   NodeIds: string[]
   FailedAtNodeId?: string
   ErrorMessage?: string
-  /** 路径最终输出（已解析为对象；超 64KB 时是 { _truncated, _originalBytes, preview } 信封） */
   Output?: any
   DurationMs?: number
   StartedAt?: string
@@ -92,16 +83,59 @@ export interface TaskPathDetail {
 export interface TaskNodeDetail {
   NodeId: string
   NodeType: string
+  /** 用户在设计器中填写的节点名称（专家可见的主标识） */
   NodeTitle: string
+  /** 该节点在此工作流中的具体作用描述 */
+  NodeDescription?: string
   SkillCode: string
   ExecStatus: string
   Output?: any
+  /** 专家审批后最终输出（null=未审批或无修改） */
+  ApprovedOutput?: any
   ErrorMessage?: string
   StartedAt?: string
   CompletedAt?: string
   ExecutionTimeMs?: number
-  /** 0=新执行 1=复用（注意：去重后 DB 里恒为 0，属预期） */
+  PromptTokens?: number
+  CompletionTokens?: number
+  LlmDurationMs?: number
+  /** LLM 模型名（ai_node 有值） */
+  AiModel?: string
+  /** 渲染后送 API 的完整 prompt（ai_node 有值） */
+  AiPrompt?: string
+  /** 源文件编码 cert_extraction_result.FileCode（docField/docTable 有值） */
+  SourceFileCode?: string
+  /** 源字段中文名（docField 有值） */
+  SourceFieldName?: string
+  /** 源文件版本号 */
+  SourceVersion?: number
+  /** 0=新执行 1=复用（去重后 DB 里恒为 0） */
   IsReused: number
+}
+
+/** 节点审批详情 */
+export interface NodeApprovalDetail {
+  NodeId: string
+  ApprovalStatus: string  // pending / approved / rejected
+  ApprverCode?: string
+  ApprverName?: string
+  Comment?: string
+  Confidence?: number
+  ManualResult?: any
+  ApprovedAt?: string
+}
+
+/** 规则上下文 */
+export interface RuleContext {
+  RuleCode: string
+  RuleName?: string
+  RuleNameEn?: string
+  ClauseCode?: string
+  ClauseNumber?: string
+  ClauseTitle?: string
+  SeverityIfViolated?: string
+  JudgeMode?: string
+  NcDescriptionTemplate?: string
 }
 
 /** 四层聚合详情 */
@@ -110,11 +144,14 @@ export interface TaskExecutionDetail {
   Items: TaskDetailItem[]
   Paths: TaskPathDetail[]
   Nodes: TaskNodeDetail[]
+  /** 节点审批记录（NodeId → NodeApprovalDetail） */
+  NodeApprovals: Record<string, NodeApprovalDetail>
+  /** 规则上下文（含条款信息） */
+  RuleContext?: RuleContext
 }
 
 // ──── API ────
 
-/** 分页查询测试历史 */
 export async function getTaskHistory(
   params: TaskHistoryRequest = {},
 ): Promise<TaskHistoryPage> {
@@ -125,7 +162,26 @@ export async function getTaskHistory(
   return res.data
 }
 
-/** 查询一次执行的四层聚合详情 */
+
+/** 节点审批请求 */
+export interface NodeApprovalRequest {
+  TaskCode: string
+  NodeId: string
+  ApprovalStatus: string  // approved / rejected
+  Comment?: string
+  Confidence?: number
+  ManualResult?: any
+}
+
+/** 提交节点审批 */
+export async function approveNode(request: NodeApprovalRequest): Promise<void> {
+  const res = await yzhApi.post<ApiResponse<{ result: boolean }>>(
+    '/api/Workflow/approve',
+    request,
+  )
+  if (res.success !== true) throw new Error(res.message || res.err || '审批失败')
+}
+
 export async function getTaskDetail(taskCode: string): Promise<TaskExecutionDetail> {
   const res = await yzhApi.get<ApiResponse<TaskExecutionDetail>>(
     `/api/Workflow/test/detail/${encodeURIComponent(taskCode)}`,

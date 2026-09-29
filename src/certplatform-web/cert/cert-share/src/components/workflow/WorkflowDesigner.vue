@@ -159,6 +159,7 @@ import { analyzeWorkflowTopology, nodeStyle, setLogEnabled, setLogLevel } from '
 import { deserialize, extractLayout, serialize } from '@share/composables/workflow/serializer'
 import { useWorkflowStore } from '@share/composables/workflow/useWorkflowStore'
 import { installLogicFlowPatch } from '@share/utils/logicflow-patch'
+import { YZH_VIRTUAL_ENTERPRISE_CODE } from '@share/constants/virtualEnterprise'
 import {
   Calendar, CircleCheck, Clock, Delete, Document, Download, Grid,
   OfficeBuilding, Refresh, Search, Setting, VideoPlay, ArrowRight
@@ -325,15 +326,16 @@ async function loadSkills() {
 }
 async function loadCategories() {
   try {
-    const res = await yzhApi.post('/api/Workflow/WfSkillCategory/filter', { Page: 1, PageSize: 200, Filters: [] })
+    // 分类字典化（2026-09-26）：分类唯一数据源 = 字典 skill_category，
+    // value=DicValue（data_access 等，与 wf_skill.CategoryCode 同值）、label=DicName
+    const res = await yzhApi.get('/api/System/Dictionary/items/by-no/skill_category')
     expectOk(res as any, '技能分类加载失败')
-    const items = res?.data?.Items || []
-    categories.value = items.map((c: any) => ({
-      ...c,
-      categoryCode: c.Code,
-      categoryName: c.Name,
+    const items = (res?.data || []) as any[]
+    categories.value = items.map((c: any, i: number) => ({
+      categoryCode: c.Value,
+      categoryName: c.Label,
       color: c.Color || '#409EFF',
-      sortOrder: c.SortOrder ?? 99
+      sortOrder: i + 1,
     }))
   } catch (e: any) {
     ElMessage.error(e?.err || e?.message || '技能分类加载失败')
@@ -748,7 +750,7 @@ function handleAddNode(item: any) {
   const node = store.addNode(item, 120 + (maxX % 600), 80 + (maxY % 400))
   if (!node) return
   const category = item.category || skills.value.find((s: any) => s.skillCode === item.skillCode)?.category || ''
-  const addProps = { classCode: node.classCode, nodeType: node.nodeType, title: node.title, skillCode: node.skillCode, config: node.config, inputs: node.inputs, inputTypes: node.inputTypes, outputs: node.outputs, inputPorts: node.inputPorts, outputPorts: node.outputPorts }
+  const addProps = { classCode: node.classCode, nodeType: node.nodeType, title: node.title, description: node.description || "", skillCode: node.skillCode, config: node.config, inputs: node.inputs, inputTypes: node.inputTypes, outputs: node.outputs, inputPorts: node.inputPorts, outputPorts: node.outputPorts }
   if (node.nodeType === 'branch') (addProps as any).points = [[0, -30], [50, 0], [0, 30]]
   diagram.value.addNode({ id: node.id, type: lfShapeType(node.nodeType), x: node.x, y: node.y, text: node.title, style: nodeStyle(node.nodeType, node.skillCode, category), properties: addProps })
 }
@@ -757,10 +759,10 @@ function handleUpdateNode(data: any) {
   if (!data.nodeId) return
   const storeNode = store.getNodeById(data.nodeId)
   const latestTitle = storeNode?.title || data.title
-  const success = store.updateNode(data.nodeId, { title: latestTitle, classCode: data.classCode || data.nodeType, nodeType: data.nodeType, skillCode: data.skillCode, config: data.config, inputs: data.inputs, inputTypes: data.inputTypes, inputPorts: data.inputPorts, outputPorts: data.outputPorts })
+  const success = store.updateNode(data.nodeId, { title: latestTitle, classCode: data.classCode || data.nodeType, nodeType: data.nodeType, description: data.description || '', skillCode: data.skillCode, config: data.config, inputs: data.inputs, inputTypes: data.inputTypes, inputPorts: data.inputPorts, outputPorts: data.outputPorts })
   if (!success) { ElMessage.warning(`节点名称「${latestTitle}」已存在，请使用其他名称`); return }
   diagram.value.updateText(data.nodeId, latestTitle || data.skillCode || '')
-  diagram.value.setProperties(data.nodeId, { classCode: data.classCode || data.nodeType, nodeType: data.nodeType, title: latestTitle, skillCode: data.skillCode, config: data.config, inputs: data.inputs, inputTypes: data.inputTypes, inputPorts: data.inputPorts, outputPorts: data.outputPorts })
+  diagram.value.setProperties(data.nodeId, { classCode: data.classCode || data.nodeType, nodeType: data.nodeType, title: latestTitle, description: data.description || "", skillCode: data.skillCode, config: data.config, inputs: data.inputs, inputTypes: data.inputTypes, inputPorts: data.inputPorts, outputPorts: data.outputPorts })
   nextTick(() => {
     const sn = store.getNodeById(data.nodeId)
     if (sn) {
@@ -795,7 +797,7 @@ function promptEditNodeName(nodeId: string, currentName: string) {
             const outEdges = (gd?.edges || []).filter((e: any) => e.sourceNodeId === nodeId)
             branchEdges = outEdges.map((e: any) => ({ handle: e.properties?.sourceHandle || '', targetId: e.targetNodeId, edgeId: e.id }))
           }
-          selectedNode.value = { nodeId: storeNode.id, nodeType: storeNode.nodeType, classCode: storeNode.classCode, title: storeNode.title, skillCode: storeNode.skillCode, config: { ...storeNode.config }, inputs: { ...storeNode.inputs }, inputTypes: { ...(storeNode.inputTypes || {}) }, outputs: { ...storeNode.outputs }, inputPorts: storeNode.inputPorts || [], outputPorts: storeNode.outputPorts || [], branchEdges }
+          selectedNode.value = { nodeId: storeNode.id, nodeType: storeNode.nodeType, classCode: storeNode.classCode, title: storeNode.title, description: storeNode.description || "", skillCode: storeNode.skillCode, config: { ...storeNode.config }, inputs: { ...storeNode.inputs }, inputTypes: { ...(storeNode.inputTypes || {}) }, outputs: { ...storeNode.outputs }, inputPorts: storeNode.inputPorts || [], outputPorts: storeNode.outputPorts || [], branchEdges }
           forceRefreshTick.value++
         }
         _renamingNodeId.value = null; _renamingTimestamp.value = 0
@@ -1092,7 +1094,7 @@ async function handleExecuteTest() {
     const res = await yzhApi.post(runApi, {
       TaskType: 'TEST',
       RuleCode: currentLeaf.value.Code || currentLeaf.value.RuleCode,
-      EnterpriseCode: currentLeaf.value.EnterpriseCode || 'YZH-STD-ENT',
+      EnterpriseCode: currentLeaf.value.EnterpriseCode || YZH_VIRTUAL_ENTERPRISE_CODE,
       StandardCode: currentLeaf.value.StandardCode || currentFilter.StandardCode,
       PhaseCode: currentLeaf.value.PhaseCode || currentFilter.PhaseCode,
       ConfigJson: JSON.stringify(config)
@@ -1125,10 +1127,10 @@ async function handleExecuteTest() {
  *   响应新增 TaskCode（本次测试的任务编码），可凭它去日志/DB 里定位这次测试。
  */
 async function handleTestNode(nodeData: any) {
-  // 测试上下文元数据（可选字段，后端缺省时按 FULL / YZH-STD-ENT 兜底）
+  // 测试上下文元数据（可选字段，后端缺省时按 FULL / 虚拟企业常量兜底）
   const meta = {
     RuleCode: currentLeaf.value?.Code || currentLeaf.value?.RuleCode || '',
-    EnterpriseCode: currentLeaf.value?.EnterpriseCode || 'YZH-STD-ENT',
+    EnterpriseCode: currentLeaf.value?.EnterpriseCode || YZH_VIRTUAL_ENTERPRISE_CODE,
     StandardCode: currentLeaf.value?.StandardCode || currentFilter.StandardCode || '',
     PhaseCode: currentLeaf.value?.PhaseCode || currentFilter.PhaseCode || ''
   }
@@ -1185,7 +1187,7 @@ async function handleTestWorkflow(nodeData: any) {
     const res = await yzhApi.post('/api/Workflow/test/run', {
       TaskType: 'TEST',
       RuleCode: currentLeaf.value.Code || currentLeaf.value.RuleCode,
-      EnterpriseCode: currentLeaf.value.EnterpriseCode || 'YZH-STD-ENT',
+      EnterpriseCode: currentLeaf.value.EnterpriseCode || YZH_VIRTUAL_ENTERPRISE_CODE,
       StandardCode: currentLeaf.value.StandardCode || currentFilter.StandardCode,
       PhaseCode: currentLeaf.value.PhaseCode || currentFilter.PhaseCode,
       ConfigJson: JSON.stringify(config)

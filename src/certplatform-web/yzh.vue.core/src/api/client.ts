@@ -126,9 +126,24 @@ export class YzhApiClient {
     const fetchOptions: RequestInit = {
       method,
       headers: {
-        'Content-Type': 'application/json',
         ...headers,
       },
+    }
+    // 默认 JSON 只在「调用方没声明、body 也不是表单/二进制」时补：
+    // FormData 必须由浏览器自带 boundary，手写 'multipart/form-data'（不带 boundary）
+    // 会让后端解析不出任何字段 —— 请求发得出去、后端只看到空 form，且前端零报错。
+    const rawBody = body as unknown
+    const isRawBody =
+      rawBody instanceof FormData ||
+      rawBody instanceof Blob ||
+      rawBody instanceof URLSearchParams ||
+      rawBody instanceof ArrayBuffer ||
+      typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView(rawBody)
+    if (isRawBody) {
+      delete (fetchOptions.headers as Record<string, string>)['Content-Type']
+      delete (fetchOptions.headers as Record<string, string>)['content-type']
+    } else if (!('Content-Type' in headers) && !('content-type' in headers)) {
+      (fetchOptions.headers as Record<string, string>)['Content-Type'] = 'application/json'
     }
 
     if (requireAuth !== false) {
@@ -169,7 +184,7 @@ export class YzhApiClient {
 
     // 请求体
     if (body !== undefined) {
-      fetchOptions.body = JSON.stringify(body)
+      fetchOptions.body = isRawBody ? body : JSON.stringify(body)
     } else if (method !== 'GET' && !params) {
       // 无 body 无 params 的 POST，发空 JSON
       fetchOptions.body = '{}'

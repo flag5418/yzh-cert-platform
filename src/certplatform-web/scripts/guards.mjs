@@ -68,6 +68,12 @@ const CORE_APP_ROOTS = [
 /** yzh.vue.core 全源码 —— 禁硬编码后端地址（R11） */
 const CORE_ALL = join(WEB, 'yzh.vue.core/src')
 
+/** 后端业务源码根（R-A/R-B/R-C/R-D/R-E 用；⛔ 不含 src/old 历史项目） */
+const API_SRC = resolve(WEB, '../certplatform-api')
+
+/** 框架层源码根（R-D/R-E 覆盖；R-A 的「服务层」口径只管业务服务） */
+const YZH_CORE_SRC = resolve(WEB, '../yzh-core')
+
 /** 递归收集文件（目录不存在时返回空数组） */
 function walk(dir, exts, out = []) {
   let entries
@@ -305,6 +311,119 @@ function runR16() {
   return { violations, skipped: false }
 }
 
+/* ==========================================================================
+ * ★ R-A ~ R-E —— 标准目录链路审计（docs/50-任务/分析报告/标准目录链路-逻辑缺陷审计-V1.md §8）
+ * 均为后端 .cs 扫描；历史存量走 debt 豁免，随修复逐条删除。
+ * ========================================================================== */
+
+/**
+ * R-A 服务层禁止单参 `UpdateAsync(entity)`（全列写回 = 陷阱 ㉑ / P1-14）。
+ * 判据：`UpdateAsync(X)` 且括号内无逗号；多参 `UpdateAsync(entity, fields…)` 放行。
+ * 口径：仅 `certplatform-api/**\/Services/**`（框架 QueueManager 等框架内部状态机不在此列）。
+ */
+function runRA() {
+  const violations = []
+  const servicesRoot = walkAll([API_SRC], ['.cs']).filter((f) => f.includes('/Services/'))
+  for (const file of servicesRoot) {
+    const lines = readFileSync(file, 'utf8').split('\n')
+    lines.forEach((line, i) => {
+      if (isCommentLine(line)) return
+      if (/\.\s*UpdateAsync\s*\([^,)]*\)/.test(line)) {
+        violations.push({ file: rel(file), line: i + 1, text: line.trim().slice(0, 120) })
+      }
+    })
+  }
+  return { violations, skipped: false }
+}
+
+/**
+ * R-B 控制器禁止直接继承裸 `ControllerBase`（P0-4）。
+ * 白名单：Auth / 健康检查（无实体、无接口授权语义）。
+ * 正确姿势：有实体 → `YzhControllerBase<V>`；无实体 → `WebControllerBase`（自带 [YZHAuthorize]）。
+ */
+function runRB() {
+  const violations = []
+  const ctrlFiles = walkAll([API_SRC, YZH_CORE_SRC], ['.cs']).filter((f) => f.includes('/Controllers/'))
+  for (const file of ctrlFiles) {
+    const base = file.split('/').pop()
+    if (/Auth|Health/i.test(base)) continue
+    const text = readFileSync(file, 'utf8')
+    const m = text.match(/class\s+\w+Controller\s*:\s*ControllerBase\b/)
+    if (m) {
+      violations.push({
+        file: rel(file),
+        line: lineOf(text, m.index),
+        text: m[0],
+      })
+    }
+  }
+  return { violations, skipped: false }
+}
+
+/**
+ * R-C 树/图递归遍历必须带 `visited` 或深度上限（P0-6，环状 ParentCode → StackOverflow 崩进程）。
+ * 判据：方法体含 `ParentCode ==` 且**自调用 ≥ 2 次**（声明 + 递归），却无 visited / depth / MAX_TREE。
+ */
+function runRC() {
+  const violations = []
+  for (const file of walkAll([API_SRC], ['.cs'])) {
+    const text = readFileSync(file, 'utf8')
+    // 方法签名行（访问修饰符开头 + `{` 收尾）→ 切块
+    const sigRe = /^[ \t]*(?:public|private|protected|internal)[^\n=;{}]*?\s(\w+)\s*\([^;{]*\)\s*(?:where[^\n{]*)?\{/gm
+    const sigs = []
+    let m
+    while ((m = sigRe.exec(text)) !== null) sigs.push({ name: m[1], index: m.index })
+    if (sigs.length < 2) continue
+    for (let i = 0; i < sigs.length; i++) {
+      const start = sigs[i].index
+      const end = i + 1 < sigs.length ? sigs[i + 1].index : text.length
+      const chunk = text.slice(start, end)
+      if (!/ParentCode\s*==/.test(chunk)) continue
+      // 只认「无前缀的自调用」——`base.Foo(` / `x.Foo(` 不算递归（否则 base.DeleteCore 会误报）
+      const calls = chunk.match(new RegExp(`(?<!\\.)\\b${sigs[i].name}\\s*\\(`, 'g'))?.length ?? 0
+      if (calls < 2) continue
+      if (/visited|MAX_TREE|\bdepth\b/i.test(chunk)) continue
+      violations.push({ file: rel(file), line: lineOf(text, start), text: `递归方法 ${sigs[i].name} 缺 visited / 深度上限` })
+    }
+  }
+  return { violations, skipped: false }
+}
+
+/**
+ * R-D 禁止 `return (true, <非空 error>, …)` 形态（P1-10：ok=true 却带 error，调用方按 ok 分支 → 消息被静默丢弃）。
+ * 判据：三元及以上元组、第 2 个元素是字符串字面量或含 error/msg/message 的标识符。
+ */
+function runRD() {
+  const violations = []
+  const re = /return\s*\(\s*true\s*,\s*(\$?"[^"]*"|'[^']*'|\w*(?:[Ee]rror|[Mm]sg|[Mm]essage)\w*)\s*,/
+  for (const file of walkAll([API_SRC, YZH_CORE_SRC], ['.cs'])) {
+    const lines = readFileSync(file, 'utf8').split('\n')
+    lines.forEach((line, i) => {
+      if (isCommentLine(line)) return
+      const m = line.match(re)
+      if (m) violations.push({ file: rel(file), line: i + 1, text: line.trim().slice(0, 120) })
+    })
+  }
+  return { violations, skipped: false }
+}
+
+/**
+ * R-E 禁止在 `catch` 块内写文件到导出/产物目录（P1-18：下载失败写占位文件 → ZIP「成功」却内容是假的）。
+ * 判据：`catch` 开始的 1200 字符窗口内出现 `File.WriteAllText*`。
+ */
+function runRE() {
+  const violations = []
+  const re = /catch\s*(?:\([^)]*\))?\s*\{[^}]{0,1200}?File\.WriteAll/g
+  for (const file of walkAll([API_SRC, YZH_CORE_SRC], ['.cs'])) {
+    const text = readFileSync(file, 'utf8')
+    let m
+    while ((m = re.exec(text)) !== null) {
+      violations.push({ file: rel(file), line: lineOf(text, m.index), text: 'catch 块内写入文件（疑似导出占位文件）' })
+    }
+  }
+  return { violations, skipped: false }
+}
+
 /**
  * 规则定义
  * - id / desc: 标识与说明
@@ -482,6 +601,62 @@ const RULES = [
     run: runR16,
     debt: [],
   },
+  // ===== 审计 §8（标准目录链路）：全部为后端 .cs 扫描，debt 随修复逐条删除 =====
+  {
+    id: 'R-A',
+    type: 'custom',
+    desc: '服务层禁止单参 UpdateAsync(entity)（全列写回 = 陷阱 ㉑ / P1-14）',
+    run: runRA,
+    // §7 第 6 步「14 处列级写入」未做 → 命中文件整文件豁免，修一处也需整文件改完才摘
+    debt: [
+      'Services/DocExtraction/DocExtractionRuleService.AI.cs',
+      'Services/DocExtraction/DocExtractionRuleService.cs',
+      'Services/StandardDirectory/DirectoryTemplateService.cs',
+      'Services/StandardDirectory/StandardDirectoryService.cs',
+      'Services/StandardDirectory/UploadQueueCancelHandler.cs',
+      'Services/Workflow/PromptTemplateService.cs',
+    ],
+  },
+  {
+    id: 'R-B',
+    type: 'custom',
+    desc: '控制器禁止直接继承裸 ControllerBase（白名单 Auth / 健康检查；应继承 YzhControllerBase<V> 或 WebControllerBase）',
+    run: runRB,
+    // 迁移到 YzhControllerBase<V> / WebControllerBase（路由已显式 [Route]、ApiCode 不变）后删除对应行
+    debt: [
+      'Controllers/Foundation/CertOrgStandardController.cs',
+      'Controllers/Foundation/DirectoryTemplateController.cs',
+      'Controllers/Foundation/CertOrgStageController.cs',
+      'Controllers/System/QueueMonitorController.cs',
+      'Controllers/Workflow/DocExtractionRuleController.cs',
+      'Controllers/Workflow/AIUsageController.cs',
+      'Controllers/Workflow/WorkflowTestController.cs',
+      'Controllers/Workflow/ReportDefinitionController.cs',
+      'YZH.Core.Web/Controllers/System/ApiSyncController.cs',
+      'YZH.Core.Web/Controllers/System/MenuController.cs',
+    ],
+  },
+  {
+    id: 'R-C',
+    type: 'custom',
+    desc: '树递归遍历必须带 visited / 深度上限（P0-6：环状 ParentCode → StackOverflow 崩进程）',
+    run: runRC,
+    debt: [],
+  },
+  {
+    id: 'R-D',
+    type: 'custom',
+    desc: '禁止 return (true, 非空 error, …) 形态（P1-10：ok=true 带 error，消息被静默丢弃）',
+    run: runRD,
+    debt: [],
+  },
+  {
+    id: 'R-E',
+    type: 'custom',
+    desc: '禁止 catch 块内写导出占位文件（P1-18：下载失败写占位 → ZIP「成功」却内容是假的）',
+    run: runRE,
+    debt: [],
+  },
 ]
 
 const failures = []
@@ -511,14 +686,20 @@ for (const rule of RULES) {
   else if (REPORT_ONLY) console.log(`✓ ${rule.id} ${rule.desc}`)
 }
 
-/** ★ 自定义规则（R12 交叉比对 / R14–R16 信封防回潮）：自带 run()，无「文件 + 行号」概念 */
+/** ★ 自定义规则（R12 交叉比对 / R14–R16 + 审计 §8 后端规则）：自带 run()，无「文件 + 行号」概念 */
+const customDebtHits = []
 for (const rule of RULES.filter((r) => r.type === 'cross' || r.type === 'custom')) {
   const { violations, skipped } = rule.run()
   if (skipped) {
     crossSkipped.push(rule)
     continue
   }
-  if (violations.length) failures.push({ rule, violations })
+  const kept = rule.debt?.length
+    ? violations.filter((v) => !rule.debt.some((d) => v.file.includes(d)))
+    : violations
+  if (rule.debt?.length && violations.length > kept.length)
+    customDebtHits.push({ rule, hits: violations.length - kept.length })
+  if (kept.length) failures.push({ rule, violations: kept })
   else if (REPORT_ONLY) console.log(`✓ ${rule.id} ${rule.desc}`)
 }
 
@@ -556,6 +737,10 @@ function printDebtLedger() {
       `\nℹ 债务盘点 B：${legacyFiles} 个页面文件仍有内联 <el-table（共 ${legacyHits} 处，已豁免）。`,
     )
     console.log(`   修复某个页面后，请从 guards.mjs 的 R6.debt 中删除对应行。`)
+  }
+
+  for (const { rule, hits } of customDebtHits) {
+    console.log(`\nℹ 债务盘点 C：${rule.id} 命中 ${hits} 处（debt 已豁免）—— 修复后从 debt 删除对应文件。`)
   }
 }
 

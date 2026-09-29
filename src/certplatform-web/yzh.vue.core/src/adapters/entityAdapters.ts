@@ -160,8 +160,10 @@ export function toFormFields(
         rowSpan: rowUnits,
         dictCode: c.DictCode || undefined,
         // ★ 声明式选项（2026-09-26）：列上声明 `Options` → 直接作为 select/radio/checkbox 的选项。
-        //   ⚠️ 字典路（DictCode）**仍未打通**：`YzhForm` 不读 dictCode、字典端点返回的
-        //   `Value` 是字典项 Code（GUID）而非业务值 → 需要字典时仍由页面显式注入 options。
+        //   ★ 字典路（DictCode）**已打通**（2026-09-26，见 REFERENCE.md 框架改动清单）：
+        //   `YzhForm` 读 dictCode → GET /api/System/Dictionary/items/by-no/{dicNo}，
+        //   返回 value=DicValue 业务值（如 data_access）/ label=DicName。
+        //   需要字典时 JSON 写 `"DictCode": "skill_category"`，无需页面注入 options。
         options: c.Options?.length ? c.Options.map((o) => ({ label: o.Label, value: o.Value })) : undefined,
         // ★ 声明式占位提示（2026-09-26）：JSON 的 `Placeholder` 优先，否则按控件类型回落
         placeholder:

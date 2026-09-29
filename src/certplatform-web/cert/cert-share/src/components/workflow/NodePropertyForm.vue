@@ -7,6 +7,7 @@
           <el-tooltip v-if="nodeDescription" :content="nodeDescription" placement="left"><el-icon class="help-icon"><Warning /></el-icon></el-tooltip>
         </div>
         <div class="inspector-field"><div class="inspector-label">节点名称</div><el-input v-model="form.title" size="small" @change="applyChanges" /></div>
+        <div class="inspector-field"><div class="inspector-label">节点描述</div><el-input v-model="form.description" type="textarea" :rows="2" size="small" placeholder="说明该节点在此工作流中的作用，供专家追溯时理解" @change="applyChanges" /></div>
         <div class="inspector-field"><div class="inspector-label">节点类型</div><div class="node-type-display"><span class="type-dot" :class="nodeTypeTag"></span><span class="type-name">{{ nodeTypeName }}</span></div></div>
       </div>
 
@@ -81,7 +82,7 @@ const emit = defineEmits<{
   'link-node': [data: any]; 'test-node': [data: any]; 'test-workflow': [data: any]; 'test-doc-extract': [data: any]
 }>()
 
-const form = ref<any>({ nodeId: '', nodeType: 'skill', title: '', skillCode: '', inputs: {}, outputs: {}, config: {}, inputPorts: [], outputPorts: [], inputTypes: {} })
+const form = ref<any>({ nodeId: '', nodeType: 'skill', title: '', description: '', skillCode: '', inputs: {}, outputs: {}, config: {}, inputPorts: [], outputPorts: [], inputTypes: {} })
 const inputValues = ref<Record<string, any>>({})
 const inputTypes = ref<Record<string, string>>({})
 const panelFieldValues = ref<Record<string, any>>({})
@@ -179,7 +180,7 @@ watch(() => props.selectedNode, (node: any) => {
     const currentNodeId = node.nodeId || node.id
     if (_lastNodeId === currentNodeId && form.value.title === node.title) return
     _lastNodeId = currentNodeId; _updateTick++
-    form.value = { nodeId: currentNodeId, nodeType: node.nodeType || 'skill', title: node.title || '', skillCode: node.skillCode || '', inputs: { ...(node.inputs || {}) }, outputs: { ...(node.outputs || {}) }, config: { ...(node.config || {}) }, inputPorts: node.inputPorts || [], outputPorts: node.outputPorts || [], inputTypes: { ...(node.inputTypes || {}) }, _branchEdges: node.branchEdges || [], _updateTick }
+    form.value = { nodeId: currentNodeId, nodeType: node.nodeType || 'skill', title: node.title || '', description: node.description || '', skillCode: node.skillCode || '', inputs: { ...(node.inputs || {}) }, outputs: { ...(node.outputs || {}) }, config: { ...(node.config || {}) }, inputPorts: node.inputPorts || [], outputPorts: node.outputPorts || [], inputTypes: { ...(node.inputTypes || {}) }, _branchEdges: node.branchEdges || [], _updateTick }
     const vals: Record<string, any> = {}; const types: Record<string, string> = {}
     for (const port of form.value.inputPorts) {
       vals[port.name] = form.value.inputs[port.name] ?? ''
@@ -200,7 +201,7 @@ watch(() => props.docTables, (tables) => { tableList.value = tables || [] }, { i
 
 function applyChanges() {
   if (!form.value.nodeId) return
-  emit('update-node', { nodeId: form.value.nodeId, nodeType: form.value.nodeType, classCode: form.value.nodeType, title: form.value.title, skillCode: form.value.skillCode, inputs: { ...inputValues.value }, inputTypes: { ...inputTypes.value }, outputs: form.value.outputs, config: form.value.config, inputPorts: form.value.inputPorts, outputPorts: form.value.outputPorts })
+  emit('update-node', { nodeId: form.value.nodeId, nodeType: form.value.nodeType, classCode: form.value.nodeType, title: form.value.title, description: form.value.description, skillCode: form.value.skillCode, inputs: { ...inputValues.value }, inputTypes: { ...inputTypes.value }, outputs: form.value.outputs, config: form.value.config, inputPorts: form.value.inputPorts, outputPorts: form.value.outputPorts })
 }
 </script>
 

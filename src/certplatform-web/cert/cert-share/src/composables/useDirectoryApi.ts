@@ -38,6 +38,22 @@ export async function createDirectoryConfig(config: Partial<StandardDirectoryCon
   return await yzhApi.post<BizResult>('/api/Workflow/StandardDirectory/configs/create', config)
 }
 
+/**
+ * 总表无感懒建（决策㉑）：三键幂等 ensure —— 不存在自动创建、已软删复活同 Code、活着原样返回。
+ * 前端在「首次进入阶段 / 上传」时调用，用户无感知（不再要求手工「新建配置」）。
+ */
+export async function ensureDirectoryConfig(keys: {
+  OrgCode: string
+  StandardCode: string
+  StageCode: string
+}): Promise<StandardDirectoryConfig | null> {
+  const res = await yzhApi.post<ApiResponse<StandardDirectoryConfig>>(
+    '/api/Workflow/StandardDirectory/configs/ensure',
+    keys
+  )
+  return unwrapOk(res, '初始化目录配置失败') ?? null
+}
+
 /** 更新目录配置 */
 export async function updateDirectoryConfig(directoryCode: string, config: Partial<StandardDirectoryConfig>): Promise<BizResult> {
   return await yzhApi.post<BizResult>(`/api/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}`, config)
@@ -144,6 +160,7 @@ export function filterIgnoredFiles(files: File[]): File[] {
 export async function uploadInit(
   directoryCode: string,
   files: File[],
+  orgCode?: string,
 ): Promise<{ taskId: string; fileMap: Record<string, { fileCode: string; storagePath: string }> }> {
   const filtered = filterIgnoredFiles(files)
 
@@ -175,6 +192,8 @@ export async function uploadInit(
 
   const res = await yzhApi.post<ApiResponse<any>>('/api/Workflow/StandardDirectory/upload-init', {
     DirectoryCode: directoryCode,
+    // 决策⑳修订：主键含 OrgCode —— 兜底回退按三键定位，避免跨机构误命中
+    OrgCode: orgCode || undefined,
     Folders: folderItems,
     Files: fileItems,
   })
@@ -280,9 +299,18 @@ export interface StageFileNode {
   FileName: string
   FolderCode?: string
   StoragePath?: string
+  /** 遗留：doc→docx / xls→xlsx 中间产物路径（已停止写入新值，仅历史数据有） */
   ConvertedStoragePath?: string
   ConvertStatus?: string
   ConvertMessage?: string
+  /** 预览 PDF 产物路径（PDF/图片透传时 == StoragePath）—— 2026-09-26 双产物链 */
+  PreviewPdfPath?: string
+  /** 提取用 Markdown 产物路径 */
+  MarkdownPath?: string
+  /** Markdown 转换状态：none/pending/converting/completed/failed/unsupported */
+  MarkdownStatus?: string
+  /** Markdown 失败原因 / OCR 能力边界提示 */
+  MarkdownMessage?: string
   UploadStatus?: string
   FileSize?: number | null
   MimeType?: string

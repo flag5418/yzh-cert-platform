@@ -12,6 +12,7 @@
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { computed, reactive, ref, watch } from 'vue'
+import { yzhApi } from '../../api/client'
 
 export type YzhFieldType =
   | 'text'
@@ -50,6 +51,13 @@ export interface YzhFormField {
   options?: Array<{ label: string; value: any; disabled?: boolean }>
   /** 异步加载选项（select） */
   loadOptions?: () => Promise<Array<{ label: string; value: any }>>
+  /**
+   * 字典编码（= Sys_Dictionary.DicNo，如 skill_category / iso_category）。
+   * 声明后组件自动调 GET /api/System/Dictionary/items/by-no/{dicNo} 加载选项，
+   * value = 字典项 DicValue 业务值（如 data_access）、label = DicName 显示文本。
+   * 与 options（静态）/ loadOptions（自定义异步）互斥，options 优先。
+   */
+  dictCode?: string
   /** select 是否多选 */
   multiple?: boolean
   /** select 是否可筛选 */
@@ -197,19 +205,44 @@ const computedRules = computed<FormRules>(() => {
 // 异步加载的选项缓存
 const asyncOptions = reactive<Record<string, any[]>>({})
 
-async function ensureOptions(field: YzhFormField) {
-  if (field.options) return field.options
-  if (!field.loadOptions) return []
-  if (asyncOptions[field.prop]) return asyncOptions[field.prop]
-  const opts = await field.loadOptions()
-  asyncOptions[field.prop] = opts
-  return opts
+/**
+ * 按 DicNo 拉取字典选项（value=DicValue 业务值 / label=DicName）
+ * 契约：data 载荷 PascalCase（Value/Label/Code/Color，与 DB列=C#=TS 字段一致铁律），
+ *       组件层 options 为 camelCase（label/value）→ 此处映射。
+ * 框架层 DictCode 打通（2026-09-26，见 REFERENCE.md「框架层已改动清单」）
+ */
+async function loadDictOptions(dicNo: string) {
+  const res = await yzhApi.get<{
+    success?: boolean
+    data?: Array<{ Value: string; Label: string; Code?: string; Color?: string }>
+    err?: string
+  }>(`/api/System/Dictionary/items/by-no/${encodeURIComponent(dicNo)}`)
+  if (!res?.success || !Array.isArray(res.data)) {
+    throw new Error(res?.err || `字典【${dicNo}】加载失败`)
+  }
+  return res.data.map((o) => ({ label: o.Label, value: o.Value }))
 }
 
-// 初始化时异步加载所有 loadOptions 字段
+async function ensureOptions(field: YzhFormField) {
+  if (field.options) return field.options
+  if (asyncOptions[field.prop]) return asyncOptions[field.prop]
+  if (field.loadOptions) {
+    const opts = await field.loadOptions()
+    asyncOptions[field.prop] = opts
+    return opts
+  }
+  if (field.dictCode) {
+    const opts = await loadDictOptions(field.dictCode)
+    asyncOptions[field.prop] = opts
+    return opts
+  }
+  return []
+}
+
+// 初始化时异步加载所有 loadOptions / dictCode 字段
 ;(async () => {
   for (const f of props.fields) {
-    if (f.loadOptions && !f.options) {
+    if ((f.loadOptions || f.dictCode) && !f.options) {
       try {
         await ensureOptions(f)
       } catch (_e) {
@@ -353,7 +386,7 @@ defineExpose({ validate, resetFields, formRef })
               v-model="formData[field.prop]"
               :disabled="field.disabled"
             >
-              <el-radio v-for="opt in field.options || []" :key="opt.value" :value="opt.value">
+              <el-radio v-for="opt in field.options || asyncOptions[field.prop] || []" :key="opt.value" :value="opt.value">
                 {{ opt.label }}
               </el-radio>
             </el-radio-group>
@@ -364,7 +397,12 @@ defineExpose({ validate, resetFields, formRef })
               v-model="formData[field.prop]"
               :disabled="field.disabled"
             >
-              <el-checkbox v-for="opt in field.options || []" :key="opt.value" :value="opt.value">
+              <el-checkbox
+                v-for="opt in field.options || asyncOptions[field.prop] || []"
+                :key="opt.value"
+                :value="opt.value"
+                :disabled="opt.disabled"
+              >
                 {{ opt.label }}
               </el-checkbox>
             </el-checkbox-group>
@@ -422,7 +460,7 @@ defineExpose({ validate, resetFields, formRef })
             <el-tree-select
               v-else-if="field.type === 'treeSelect'"
               v-model="formData[field.prop]"
-              :data="field.options || []"
+              :data="field.options || asyncOptions[field.prop] || []"
               :placeholder="field.placeholder || `请选择${field.label}`"
               :disabled="field.disabled"
               check-strictly
@@ -435,7 +473,7 @@ defineExpose({ validate, resetFields, formRef })
             <el-cascader
               v-else-if="field.type === 'cascader'"
               v-model="formData[field.prop]"
-              :options="field.options || []"
+              :options="field.options || asyncOptions[field.prop] || []"
               :placeholder="field.placeholder || `请选择${field.label}`"
               :disabled="field.disabled"
               style="width: 100%"

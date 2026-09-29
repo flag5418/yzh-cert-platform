@@ -14,9 +14,11 @@ import {
   CircleCheck,
   CircleClose,
   QuestionFilled,
+  FolderOpened,
 } from '@element-plus/icons-vue'
 import { yzhApi } from '@yzh-core/api/client'
 import { YzhFolderUpload, CertStatusBar, CertBizTree } from '@share/components'
+import ConfigTab from './components/ConfigTab.vue'
 import { useFileTree, type TreeNode } from '@share/composables/useFileTree'
 import {
   getFoldersFlat,
@@ -30,6 +32,7 @@ import {
   downloadFile,
   replaceFile as replaceFileApi,
   uploadInit,
+  ensureDirectoryConfig,
   uploadFile,
   uploadConfirm,
   filterIgnoredFiles,
@@ -79,6 +82,53 @@ let queueTimer: any = null
 // 使用帮助
 const showHelpDialog = ref(false)
 
+// 目录配置（管理入口弹窗：改根名 / 状态 / 级联清理；创建已无感化，见 ensurePhaseConfig）
+const configDialogVisible = ref(false)
+const configPreset = ref<{ orgCode: string; standardCode: string; stageCode: string } | null>(null)
+
+/** 打开「目录配置」管理弹窗；选中阶段时预填该「机构 × 标准 × 阶段」 */
+function openConfigDialog() {
+  const phase = currentPhase.value
+  configPreset.value =
+    phase && phase.Type === 'stage' && phase.OrgCode && phase.StdCode && phase.PhaseDefinitionCode
+      ? { orgCode: phase.OrgCode, standardCode: phase.StdCode, stageCode: phase.PhaseDefinitionCode }
+      : null
+  configDialogVisible.value = true
+}
+
+/**
+ * 总表无感懒建（决策㉑）：阶段节点无 configCode 时静默 ensure 回填，用户无感知。
+ * 失败返回 null（调用方给错误出口），⛔ 不再弹「请先创建配置」仪式。
+ */
+async function ensurePhaseConfig(phase: TreeNode): Promise<string | null> {
+  if (phase.DirectoryCode) return phase.DirectoryCode
+  if (!phase.OrgCode || !phase.StdCode || !phase.PhaseDefinitionCode) return null
+  try {
+    const cfg = await ensureDirectoryConfig({
+      OrgCode: phase.OrgCode,
+      StandardCode: phase.StdCode,
+      StageCode: phase.PhaseDefinitionCode,
+    })
+    if (cfg?.Code) {
+      phase.DirectoryCode = cfg.Code
+      return phase.DirectoryCode
+    }
+  } catch (e: any) {
+    ElMessage.error('目录配置初始化失败：' + (e?.message || ''))
+  }
+  return null
+}
+
+/** 按 Code 在树里重新定位节点（配置增删后 loadTree 会重建节点对象） */
+function findNodeByCode(nodes: TreeNode[], code: string | number): TreeNode | null {
+  for (const n of nodes) {
+    if (n.Code === code) return n
+    const hit = n.Children ? findNodeByCode(n.Children, code) : null
+    if (hit) return hit
+  }
+  return null
+}
+
 // ========================================================
 // 文件内容加载
 // ========================================================
@@ -114,8 +164,9 @@ async function loadCurrentContent() {
   }
 }
 
-/** 选中左侧树阶段节点（CertBizTree @select）→ 加载该阶段内容 */
-function selectPhase(phase: TreeNode) {
+/** 选中左侧树阶段节点（CertBizTree @select）→ 懒建配置（无感）→ 加载该阶段内容 */
+async function selectPhase(phase: TreeNode) {
+  if (!phase.DirectoryCode) await ensurePhaseConfig(phase)
   currentPhase.value = phase
   currentFolderCode.value = ''
   breadcrumbPath.value = []
@@ -126,7 +177,8 @@ function selectPhase(phase: TreeNode) {
 }
 
 function enterFolder(folder: any) {
-  const folderCode = folder.FolderCode || folder.folderCode
+  const folderCode = folderId(folder)
+  if (!folderCode) return
   currentFolderCode.value = folderCode
   breadcrumbPath.value.push({ code: folderCode, name: folder.FolderName || folder.folderName })
   selectedItems.clear()
@@ -210,7 +262,14 @@ async function cancelActiveQueue() {
 // 工具栏操作
 // ========================================================
 
-function handleNewFolder() {
+async function handleNewFolder() {
+  if (currentPhase.value && !currentPhase.value.DirectoryCode) {
+    const code = await ensurePhaseConfig(currentPhase.value)
+    if (!code) {
+      ElMessage.error('目录配置初始化失败，请刷新页面后重试')
+      return
+    }
+  }
   folderForm.folderName = ''
   folderForm.remark = ''
   showFolderDialog.value = true
@@ -224,7 +283,7 @@ async function submitFolder() {
 
   try {
     const res = await createFolder(currentPhase.value!.DirectoryCode!, {
-      DirectoryCode: currentPhase.value!.DirectoryCode,
+      ConfigCode: currentPhase.value!.DirectoryCode,
       FolderName: folderForm.folderName,
       ParentCode: currentFolderCode.value || undefined,
       Remark: folderForm.remark,
@@ -238,7 +297,14 @@ async function submitFolder() {
   }
 }
 
-function handleUpload() {
+async function handleUpload() {
+  if (currentPhase.value && !currentPhase.value.DirectoryCode) {
+    const code = await ensurePhaseConfig(currentPhase.value)
+    if (!code) {
+      ElMessage.error('目录配置初始化失败，请刷新页面后重试')
+      return
+    }
+  }
   uploadFiles.value = []
   uploadProgress.value = { status: 'idle', currentFile: '', completed: 0, total: 0 }
   showUploadDialog.value = true
@@ -260,14 +326,14 @@ function selectAll() {
   if (allSelected.value) {
     selectedItems.clear()
   } else {
-    currentFolders.value.forEach((f: any) => selectedItems.add(f.FolderCode || f.folderCode))
-    currentFiles.value.forEach((f: any) => selectedItems.add(f.FileCode || f.fileCode))
+    currentFolders.value.forEach((f: any) => selectedItems.add(folderId(f)))
+    currentFiles.value.forEach((f: any) => selectedItems.add(fileId(f)))
   }
   allSelected.value = !allSelected.value
 }
 
 function toggleSelect(item: any) {
-  const code = item.FolderCode || item.folderCode || item.FileCode || item.fileCode
+  const code = isFolderItem(item) ? folderId(item) : fileId(item)
   if (selectedItems.has(code)) {
     selectedItems.delete(code)
   } else {
@@ -290,8 +356,8 @@ async function deleteSelected() {
 
   let failed = 0
   for (const code of [...selectedItems]) {
-    const folder = currentFolders.value.find((f: any) => (f.FolderCode || f.folderCode) === code)
-    const file = currentFiles.value.find((f: any) => (f.FileCode || f.fileCode) === code)
+    const folder = currentFolders.value.find((f: any) => folderId(f) === code)
+    const file = currentFiles.value.find((f: any) => fileId(f) === code)
     try {
       const res = folder ? await deleteFolder(code) : file ? await deleteFile(code) : null
       if (res && !res.success) failed++
@@ -318,8 +384,8 @@ async function handleExport() {
   const folderCodes: string[] = []
   const fileCodes: string[] = []
   for (const code of selectedItems) {
-    if (currentFolders.value.some((f: any) => (f.FolderCode || f.folderCode) === code)) folderCodes.push(code)
-    else if (currentFiles.value.some((f: any) => (f.FileCode || f.fileCode) === code)) fileCodes.push(code)
+    if (currentFolders.value.some((f: any) => folderId(f) === code)) folderCodes.push(code)
+    else if (currentFiles.value.some((f: any) => fileId(f) === code)) fileCodes.push(code)
   }
 
   const dirCode = currentPhase.value.DirectoryCode
@@ -345,9 +411,21 @@ function showRenameDialog(item: any) {
   showRenameDialogVisible.value = true
 }
 
-/** 文件夹判定：有 FolderName 且无 FileCode（文件同样带 FolderCode，不能用 FolderCode 判定） */
+/** 文件夹判定：有 FolderName 且无文件标识（文件带 FileName/FileCode，不能用 FolderCode 判定；⛔ 不能用 Code 判定 —— 文件夹行也有 Code） */
 function isFolderItem(item: any) {
   return !!(item?.FolderName || item?.folderName) && !(item?.FileCode || item?.fileCode)
+}
+
+/**
+ * 行主键取值（双关键字准则：只用业务键 Code）。
+ * ⚠️ 兼容三种响应形态：实体行（folders-flat / files → `Code`）、
+ * stage 树节点（StageFolderNode.Code / StageFileNode.FileCode）、历史 camelCase。
+ */
+function folderId(f: any): string {
+  return String(f?.Code || f?.FolderCode || f?.folderCode || '')
+}
+function fileId(f: any): string {
+  return String(f?.FileCode || f?.Code || f?.fileCode || '')
 }
 
 async function confirmRename(force = false) {
@@ -359,7 +437,7 @@ async function confirmRename(force = false) {
   const item = renameForm.item
   const newName = renameForm.newName
   const folder = isFolderItem(item)
-  const code = folder ? item.FolderCode || item.folderCode : item.FileCode || item.fileCode
+  const code = folder ? folderId(item) : fileId(item)
 
   try {
     let res
@@ -409,8 +487,8 @@ async function deleteItem(item: any, options: { skipConfirm?: boolean } = {}) {
 
   try {
     const res = isFolderItem(item)
-      ? await deleteFolder(item.FolderCode || item.folderCode)
-      : await deleteFile(item.FileCode || item.fileCode)
+      ? await deleteFolder(folderId(item))
+      : await deleteFile(fileId(item))
     if (!res?.success) throw new Error(res?.err || res?.message || '删除失败')
     ElMessage.success('删除成功')
     loadCurrentContent()
@@ -423,7 +501,7 @@ const replaceInputRef = ref<HTMLInputElement | null>(null)
 let replaceTarget: { code: string; name: string; type: string } | null = null
 
 function startReplace(file: any) {
-  const code = file?.FileCode || file?.fileCode
+  const code = fileId(file)
   const name = file?.FileName || file?.fileName
   if (!code) return
   replaceTarget = { code, name: name || code, type: (file?.FileType || file?.fileType || '').toLowerCase() }
@@ -498,12 +576,12 @@ async function onUploadSubmit() {
   try {
     const directoryCode = currentPhase.value?.DirectoryCode || ''
     if (!directoryCode) {
-      ElMessage.error('请先选择左侧的阶段节点')
+      ElMessage.error('目录配置初始化失败，请刷新页面后重试')
       uploading.value = false
       return
     }
 
-    const { taskId, fileMap } = await uploadInit(directoryCode, filteredFiles)
+    const { taskId, fileMap } = await uploadInit(directoryCode, filteredFiles, currentPhase.value?.OrgCode)
     if (!taskId) {
       ElMessage.error('上传初始化失败：未获取到 TaskId')
       uploading.value = false
@@ -566,20 +644,25 @@ function getFileIconClass(fileName: string) {
   return 'file-default'
 }
 
-/** 文件转换/上传状态（历史项目「上传状态」列） */
+/** 文件转换/上传状态（历史项目「上传状态」列；★ 2026-09-26 纳入 Markdown 提取链） */
 function fileStatus(file: any): string {
   const convert = String(file.ConvertStatus || file.convertStatus || '').toLowerCase()
-  if (convert === 'converting') return 'converting'
-  if (convert === 'failed') return 'failed'
-  if (convert === 'completed') return 'completed'
-  if (convert === 'pending') return 'pending'
+  const md = String(file.MarkdownStatus || file.markdownStatus || '').toLowerCase()
+
+  // 双链任一失败 → 失败；Markdown 的 unsupported 是能力边界，单列状态
+  if (convert === 'failed' || md === 'failed') return 'failed'
+  if (md === 'unsupported') return 'unsupported'
+  if (convert === 'converting' || md === 'converting') return 'converting'
+  if (convert === 'completed' || md === 'completed') return 'completed'
+  if (convert === 'pending' || md === 'pending') return 'pending'
+
   const upload = String(file.UploadStatus || file.uploadStatus || '').toLowerCase()
   if (upload === 'uploading') return 'uploading'
   if (upload === 'active' || upload === 'uploaded') return 'uploaded'
   if (upload === 'pending' || upload === 'replacing') return 'uploading'
   if (upload === 'failed') return 'failed'
   // stage 树仅返回有效文件；无转换状态且无上传字段时视为已就绪
-  if (!upload && file?.FileCode) return 'uploaded'
+  if (!upload && fileId(file)) return 'uploaded'
   return 'none'
 }
 
@@ -590,12 +673,14 @@ const STATUS_TEXT: Record<string, string> = {
   converting: '转换中',
   completed: '已就绪',
   failed: '转换失败',
+  unsupported: '需人工填写',
   none: '—',
 }
 
-/** 状态优先级：失败 > 转换中/上传中 > 待转换 > 已就绪/已上传 > 空 */
+/** 状态优先级：失败 > 需人工填写 > 转换中/上传中 > 待转换 > 已就绪/已上传 > 空 */
 const STATUS_RANK: Record<string, number> = {
-  failed: 6,
+  failed: 7,
+  unsupported: 6,
   converting: 5,
   uploading: 5,
   pending: 4,
@@ -676,7 +761,7 @@ function buildFolderAgg(stageFolders: StageFolderNode[]) {
 }
 
 function folderAgg(folder: any): FolderAgg {
-  const code = folder?.FolderCode || folder?.folderCode || ''
+  const code = folderId(folder)
   return folderAggMap.value.get(code) || { size: 0, fileCount: 0, folderCount: 0, status: 'none' }
 }
 
@@ -727,6 +812,29 @@ const isBusy = computed(() => uploading.value || !!activeQueue.value)
 // ========================================================
 // 初始化
 // ========================================================
+
+/** 目录配置增删后刷新左树（阶段节点 configCode 变化），并恢复原阶段选中态 */
+async function onConfigChanged() {
+  const prevCode = currentPhase.value?.Code
+  await loadTree()
+  fileTreeData.value.forEach((org: any) => {
+    org.Expanded = true
+  })
+  const next = prevCode !== undefined ? findNodeByCode(fileTreeData.value as TreeNode[], prevCode) : null
+  if (next?.DirectoryCode) {
+    // 补建成功 → 原阶段拿到 configCode，保持选中并加载内容
+    currentPhase.value = next
+    currentFolderCode.value = ''
+    breadcrumbPath.value = []
+    selectedItems.clear()
+    allSelected.value = false
+    await loadCurrentContent()
+    await refreshActiveQueue()
+  } else {
+    // 配置被删或原阶段无配置 → 回到空态（阶段下次进入会自动 ensure 重建）
+    currentPhase.value = null
+  }
+}
 
 onMounted(async () => {
   await loadTree()
@@ -826,6 +934,10 @@ onUnmounted(() => {
             <el-icon><Delete /></el-icon> 删除
           </el-button>
           <div style="flex: 1"></div>
+          <el-button size="small" @click="openConfigDialog()">
+            <el-icon><FolderOpened /></el-icon> 目录配置
+          </el-button>
+          <el-divider direction="vertical" />
           <el-button size="small" type="warning" plain @click="showHelpDialog = true">
             <el-icon><QuestionFilled /></el-icon> 使用帮助
           </el-button>
@@ -850,14 +962,14 @@ onUnmounted(() => {
               <!-- 文件夹 -->
               <tr
                 v-for="folder in currentFolders"
-                :key="folder.FolderCode || folder.folderCode"
-                :class="{ selected: selectedItems.has(folder.FolderCode || folder.folderCode) }"
+                :key="folderId(folder)"
+                :class="{ selected: selectedItems.has(folderId(folder)) }"
                 @click="toggleSelect(folder)"
                 @dblclick="enterFolder(folder)"
               >
                 <td>
                   <el-checkbox
-                    :model-value="selectedItems.has(folder.FolderCode || folder.folderCode)"
+                    :model-value="selectedItems.has(folderId(folder))"
                     @click.stop="toggleSelect(folder)"
                   />
                 </td>
@@ -902,13 +1014,13 @@ onUnmounted(() => {
               <!-- 文件 -->
               <tr
                 v-for="file in currentFiles"
-                :key="file.FileCode || file.fileCode"
-                :class="{ selected: selectedItems.has(file.FileCode || file.fileCode) }"
+                :key="fileId(file)"
+                :class="{ selected: selectedItems.has(fileId(file)) }"
                 @click="toggleSelect(file)"
               >
                 <td>
                   <el-checkbox
-                    :model-value="selectedItems.has(file.FileCode || file.fileCode)"
+                    :model-value="selectedItems.has(fileId(file))"
                     @click.stop="toggleSelect(file)"
                   />
                 </td>
@@ -964,9 +1076,11 @@ onUnmounted(() => {
         </CertStatusBar>
       </template>
 
-      <!-- 未选中阶段：提示选择 -->
+      <!-- 未选中阶段：管理「机构 × 标准 × 阶段」目录配置（根名/状态/级联清理；创建已无感懒建） -->
       <div v-else class="empty-state">
-        <el-empty description="请从左侧目录树选择一个阶段" :image-size="120" />
+        <div class="empty-hint">
+          <el-empty description="请从左侧目录树选择一个阶段（阶段首次进入会自动初始化目录，无需手工创建）" :image-size="100" />
+        </div>
       </div>
     </div>
     </div>
@@ -1000,11 +1114,21 @@ onUnmounted(() => {
       </template>
     </el-dialog>
 
+    <!-- 目录配置（管理入口：改根名/状态/级联清理；创建已无感懒建，见 ensurePhaseConfig） -->
+    <el-dialog v-model="configDialogVisible" title="目录配置" width="1040px" destroy-on-close>
+      <ConfigTab
+        :preset-org-code="configPreset?.orgCode"
+        :preset-standard-code="configPreset?.standardCode"
+        :preset-stage-code="configPreset?.stageCode"
+        @changed="onConfigChanged"
+      />
+    </el-dialog>
+
     <!-- 使用帮助 -->
     <el-dialog v-model="showHelpDialog" title="使用帮助" width="600px">
       <div class="help-content">
         <h4>页面功能说明</h4>
-        <p>本页面用于维护每个「机构 + 标准 + 阶段」组合下的标准文件目录结构。</p>
+        <p>本页面用于维护每个「标准 × 阶段」的标准文件目录结构（平台全局库，机构不参与目录编码）。</p>
         <h4>右侧文件管理</h4>
         <ul>
           <li><strong>新建文件夹</strong>：创建子文件夹，系统自动生成编码</li>
@@ -1015,9 +1139,9 @@ onUnmounted(() => {
         </ul>
         <h4>编码规则</h4>
         <div class="code-example">
-          <div>目录编码：SDC-{标准}|{阶段} → SDC-ISO134852016|STAGE01</div>
-          <div>文件夹编码：FD-{目录编码}|L{层级}|S{序号} → FD-SDC-ISO134852016|STAGE01|L02|S001</div>
-          <div>文件编码：FL-{文件夹编码}|{文件名} → FL-FD-...|S001|营业执照.pdf</div>
+          <div>目录配置 Code：GUID（服务端生成），标识一个「标准 × 阶段」的标准目录</div>
+          <div>文件夹 Code：GUID（服务端生成）；父级用 ParentCode（根级为空串）</div>
+          <div>文件 Code：GUID（服务端生成）；根级文件 FolderCode 为空串</div>
         </div>
       </div>
       <template #footer>
@@ -1351,6 +1475,10 @@ onUnmounted(() => {
 .status-text.is-uploading {
   color: #409eff;
 }
+/* 能力边界（图片/扫描件需人工填写）：信息色，与「失败」的红区分开 */
+.status-text.is-unsupported {
+  color: #e6a23c;
+}
 
 .action-cell {
   white-space: nowrap;
@@ -1384,6 +1512,10 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+.empty-hint {
+  padding-top: 24px;
 }
 
 /* 上传弹窗 */

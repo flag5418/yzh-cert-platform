@@ -1,30 +1,40 @@
 /**
- * NC 规则管理 — 工作流规则 Logic（YZH SingleTableCore 架构）
+ * NC 规则管理 — 工作流规则 Logic（YZH TreeTableCore 架构）
  *
  * 布局：
- * - 左树：组织 → 标准 → 阶段（通过 useFileTree composable 加载）
+ * - 左树：组织 → 标准 → 阶段（只读，数据源 = StandardDirectory 组织树）
  * - 右表：NC 检查规则（YzhTable + 分页 + 搜索）
  *
- * 架构：
- * - 继承 SingleTableCore 获得标准 CRUD 能力（filter/add/update/delete/search）
- * - 选中树节点后，自动注入 OrgCode/StandardCode/PhaseCode 三字段联动过滤
- * - 数据加载统一通过 dataLoader（YzhTable 驱动）
+ * 架构（样板页面指南-V1 §四）：
+ * - 继承 TreeTableLogic（= TreeTableCore = SingleTableCore + 树能力），
+ *   由 useTreeTable(NCConfigLogic) 注入 tableRef/treeTableRef 与初始化流程
+ * - 选中阶段节点后，内核自动注入 OrgCode / StandardCode / PhaseCode 三字段联动过滤
+ * - 数据加载走内核 dataLoader（未选中阶段 → NoSelectionBehavior=empty → 空表）
  * - 行按钮全部由后端 Cert/ValidationRule.json 的 RowButtons 配置驱动
  *   （Edit/Delete + CustomButtons: disable/enable/Copy，EnableField=IsActive →
  *   内核按行状态二选一：启用行只显橙「禁用」、停用行只显绿「启用」），
  *   走标准 POST /action/{method} 约定，前端零硬编码按钮
  * - JudgeMode（判定方式）: 列/表单的**选项**在本页注入（见 JUDGE_MODE_* 常量）
+ *
+ * ⚠️ 两个覆盖点（本页后端是 YzhControllerBase 单表控制器，不是 TreeTableControllerBase）：
+ *   loadConfig()   → 后端只有 GET /config，无 /treepconfig → 前端构造 TreeConfig
+ *   loadTreeRoot() → 树不是本实体树，取 StandardDirectory 的组织树
  */
 import {
-  SingleTableCore,
+  TreeTableLogic,
+  expectOk,
   type YzhTableColumn,
   type YzhFormField,
   type FilterItem,
-  type PageParams,
-  type Page,
+  type TreeNode,
+  type EntityConfigDto,
+  type TreeBehaviorConfig,
+  type ApiResponse,
 } from '@yzh-core'
 import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { getOrganizationTree } from '@share/composables/useDirectoryApi'
+import { useFileTree, type TreeNode as FileTreeNode } from '@share/composables/useFileTree'
 import { getISOClauseTree } from '@share/api/workflow/nc-config'
 import type { NCRule, ISOClauseTreeNode } from '@share/api/workflow/nc-config'
 
@@ -64,6 +74,70 @@ const JUDGE_MODE_OPTIONS = [
   { label: '半自动（AI 初判 + 人工确认）', value: 'semi' },
 ]
 
+// ──── 左树：树行为配置 ────
+//
+// 后端 ValidationRuleController 继承 YzhControllerBase（单表），没有 /treepconfig，
+// 故 TreeConfig 由本页构造（覆盖点 loadConfig）。字段语义对齐 YZH.Core.Stand/TreeBehaviorConfig。
+const TREE_BEHAVIOR: TreeBehaviorConfig = {
+  // 树只读：组织/标准/阶段的维护在各自业务页，本页只作筛选维度
+  Lazy: false,
+  AllowEdit: false,
+  AllowDelete: false,
+  AllowRename: false,
+  // ★ 必须显式 false：否则 resolveTreeActions 会回落到 config.EnableField(IsValid)
+  //   在树节点上吐出「启用/禁用」按钮 —— 本页树节点没有启停语义
+  AllowToggle: false,
+  NameField: 'Name',
+  CodeField: 'Code',
+  ParentCodeField: 'ParentCode',
+  // 右表 ValidationRule.PhaseCode ↔ 阶段节点关联（OrgCode/StandardCode 由 buildFilters 追加）
+  RelateField: 'PhaseCode',
+  // 未选中阶段 → 右表空（不发请求）
+  NoSelectionBehavior: 'empty',
+  MaxLevel: 3,
+  AllowDeleteWithChildren: false,
+}
+
+// ──── 左树：目录域树节点 → 内核 TreeNode ────
+
+/** 节点类型 → 图标（Element Plus 图标已在宿主 main.ts 全局注册） */
+const NODE_ICON: Record<string, string> = {
+  organization: 'OfficeBuilding',
+  standard: 'Document',
+  stage: 'Calendar',
+}
+
+/**
+ * 目录域树（组织 → 标准 → 阶段 → 目录 → 文件）→ 内核 TreeNode。
+ *
+ * 只保留 组织/标准/阶段 三层：阶段以下的目录/文件属于标准文件管理域，
+ * 与 NC 检查规则无关（原 CertBizTree 用 nodeTypes 过滤，此处等价）。
+ *
+ * TreeNode 字段一律 PascalCase（守卫 R2），阶段三编码进 Extra 供 buildFilters 读取。
+ */
+function toCoreNodes(nodes: FileTreeNode[]): TreeNode[] {
+  const result: TreeNode[] = []
+  for (const n of nodes) {
+    if (!(n.Type in NODE_ICON)) continue
+    const children = toCoreNodes(n.Children ?? [])
+    result.push({
+      Code: String(n.Code),
+      Name: n.Name,
+      NodeType: n.Type,
+      IsLeaf: children.length === 0,
+      Extra: {
+        Icon: NODE_ICON[n.Type],
+        OrgCode: n.OrgCode ?? '',
+        StdCode: n.StdCode ?? '',
+        PhaseCode: n.PhaseCode ?? '',
+        PhaseDefinitionCode: n.PhaseDefinitionCode ?? '',
+      },
+      Children: children,
+    })
+  }
+  return result
+}
+
 // ──── 工具函数：扁平条款列表 → 树形 ────
 function buildClauseTree(flat: ISOClauseTreeNode[]): ISOClauseTreeNode[] {
   const byNumber = (a: ISOClauseTreeNode, b: ISOClauseTreeNode) =>
@@ -82,22 +156,21 @@ function buildClauseTree(flat: ISOClauseTreeNode[]): ISOClauseTreeNode[] {
   return roots
 }
 
-export class NCConfigLogic extends SingleTableCore<any> {
+export class NCConfigLogic extends TreeTableLogic<any> {
   // ──── 控制器名称（对应后端 ValidationRuleController 路由） ────
   controllerName = 'ValidationRule'
 
-  // ──── 树联动过滤状态 ────
-  selectedOrgCode = ref('')
-  selectedStandardCode = ref('')
-  selectedPhaseCode = ref('')
+  /** 目录域组织树的纯转换器（不走 useFileTree.loadTree —— 它会预加载阶段目录，本页用不到） */
+  private readonly fileTree = useFileTree()
 
   // ──── 条款树数据（编辑弹窗 tree-select 使用） ────
   clauseTreeData = ref<ISOClauseTreeNode[]>([])
   clauseLoading = ref(false)
 
-  /** 是否有选中的阶段节点 */
+  /** 是否已选中「阶段」节点（右表过滤 / 新增检查项的前置条件） */
   get anySelected(): boolean {
-    return !!this.selectedPhaseCode.value
+    const node = this.selectedNode
+    return !!node && node.NodeType === 'stage' && !!node.Extra?.PhaseCode
   }
 
   constructor() {
@@ -124,47 +197,70 @@ export class NCConfigLogic extends SingleTableCore<any> {
   }
 
   // ========================================================
+  // 覆盖点①：配置加载（后端无 /treepconfig）
+  // ========================================================
+
+  /** YzhControllerBase 只有 GET /config → 单表配置 + 前端构造的 TreeConfig 合成 TreeTableConfig */
+  override async loadConfig(): Promise<void> {
+    const res = await this.apiGet<ApiResponse<EntityConfigDto>>('/config')
+    expectOk(res, '加载页面配置失败')
+    this.config.value = res.data
+    this.treeTableConfig.value = {
+      TableConfig: res.data!,
+      TreeConfig: TREE_BEHAVIOR,
+    }
+  }
+
+  // ========================================================
+  // 覆盖点②：树加载（树不是本实体树）
+  // ========================================================
+
+  /** 左树 = 组织 → 标准 → 阶段（StandardDirectory 组织树），非 /tree/root */
+  override async loadTreeRoot(): Promise<void> {
+    this.treeSide.treeLoading.value = true
+    try {
+      const orgTree = await getOrganizationTree()
+      this.treeSide.setNodes(toCoreNodes(this.fileTree.transformOrgTree(orgTree)))
+    } finally {
+      this.treeSide.treeLoading.value = false
+    }
+  }
+
+  // ========================================================
   // 树→表格联动过滤
   // ========================================================
 
-  /** 设置树过滤条件 → 重置分页 */
-  setTreeFilter(orgCode: string, standardCode: string, phaseCode: string) {
-    this.selectedOrgCode.value = orgCode
-    this.selectedStandardCode.value = standardCode
-    this.selectedPhaseCode.value = phaseCode
-    this.pagination.page = 1
+  /** 只有「阶段」节点参与右表过滤；组织/标准节点 → 右表清空 */
+  protected override shouldApplyTreeFilter(): boolean {
+    return this.anySelected
+  }
+
+  /** 关联值：阶段节点 Code 是目录树 id，右表存的关联键是 PhaseCode */
+  protected override relatedValue(): string | null {
+    return this.selectedNode?.Extra?.PhaseCode ?? null
   }
 
   /**
-   * 覆盖 buildFilters：注入树联动条件（OrgCode + StandardCode + PhaseCode）
+   * 覆盖 buildFilters：基类注入 RelateField(PhaseCode)，
+   * 这里追加 OrgCode + StandardCode —— 阶段编码（如 jd01）跨机构/标准会重复，
+   * 三字段才能唯一定位一个阶段。
    */
   protected override buildFilters(extra?: Record<string, any>): FilterItem[] {
     const base = super.buildFilters(extra)
-    if (this.selectedOrgCode.value) {
-      base.push({ Field: 'OrgCode', Value: this.selectedOrgCode.value, Operator: 'eq' })
-    }
-    if (this.selectedStandardCode.value) {
-      base.push({ Field: 'StandardCode', Value: this.selectedStandardCode.value, Operator: 'eq' })
-    }
-    if (this.selectedPhaseCode.value) {
-      base.push({ Field: 'PhaseCode', Value: this.selectedPhaseCode.value, Operator: 'eq' })
+    if (this.anySelected) {
+      const ex = this.selectedNode!.Extra!
+      base.push({ Field: 'OrgCode', Value: ex.OrgCode, Operator: 'eq' })
+      base.push({ Field: 'StandardCode', Value: ex.StdCode, Operator: 'eq' })
     }
     return base
   }
 
   /** 新增准备钩子：注入树关联编码 */
   protected override onPrepareAdd(formData: Record<string, any>) {
-    formData.OrgCode = this.selectedOrgCode.value
-    formData.StandardCode = this.selectedStandardCode.value
-    formData.PhaseCode = this.selectedPhaseCode.value
-  }
-
-  /** 无树选中时返回空数据；有树选中时走基类逻辑 */
-  override async dataLoader(params: PageParams): Promise<Page<any>> {
-    if (!this.anySelected) {
-      return { rows: [], total: 0 }
-    }
-    return super.dataLoader(params)
+    const ex = this.selectedNode?.Extra
+    formData.OrgCode = ex?.OrgCode ?? ''
+    formData.StandardCode = ex?.StdCode ?? ''
+    formData.PhaseCode = ex?.PhaseCode ?? ''
   }
 
   // ========================================================
@@ -236,13 +332,16 @@ export class NCConfigLogic extends SingleTableCore<any> {
 
   /** 加载条款树（编辑弹窗内 tree-select 使用） */
   async loadClauseTree(): Promise<void> {
-    if (!this.selectedStandardCode.value) {
+    // 新增：StandardCode 由 onPrepareAdd 注入；编辑：来自行数据
+    const stdCode =
+      (this.formData.StandardCode as string) || this.selectedNode?.Extra?.StdCode || ''
+    if (!stdCode) {
       this.clauseTreeData.value = []
       return
     }
     this.clauseLoading.value = true
     try {
-      const flat = await getISOClauseTree(this.selectedStandardCode.value)
+      const flat = await getISOClauseTree(stdCode)
       this.clauseTreeData.value = buildClauseTree(flat)
     } catch {
       ElMessage.error('加载条款失败')

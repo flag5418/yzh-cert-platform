@@ -17,3 +17,6 @@ export * from './workflow/nc-config'
 export * from './workflow/report-rule'
 export * from './workflow/doc-extraction-rule'
 export * from './workflow/execution'
+
+// Enterprise 域 API（专家端企业资料管理）
+export * from './ent'

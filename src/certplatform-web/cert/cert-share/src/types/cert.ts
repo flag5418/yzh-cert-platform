@@ -231,34 +231,38 @@ export interface CertOrgStageItem {
 // 标准目录管理
 // ========================================================
 
-/** 标准目录配置 */
+/** 标准目录配置（cert_standard_directory_config；一行 = 一个「标准 × 阶段」，平台全局、无 OrgCode） */
 export interface StandardDirectoryConfig {
   Id?: number
+  /** 业务键 GUID（复合编码 DirectoryCode/SDC-… 已删除，2026-09-26 决策 ⑦） */
   Code: string
-  DirectoryCode: string
-  OrgCode?: string
+  /** 机构 Code → certification_body.Code（决策⑳修订 2026-09-27：按机构隔离，uk 三键含本列） */
+  OrgCode: string
+  /** 标准 Code → cert_iso_standard.Code */
   StandardCode: string
-  StandardName?: string
-  PhaseCode: string
-  PhaseName?: string
+  /** 阶段 Code → cert_cert_stage.Code（原列名 PhaseCode，决策 ⑩） */
+  StageCode: string
   RootFolderName?: string
   Status?: string
+  StatusField?: string
+  Sort?: number
+  Remark?: string
+  IsValid?: number
   Creator?: string
   CreateDate?: string
+  CreateTime?: string
   Modifier?: string
   ModifyDate?: string
   Deleter?: string
   DeleteTime?: string
-  Sort?: number
-  Remark?: string
 }
 
-/** 标准目录文件夹 */
+/** 标准目录文件夹（cert_standard_directory_folder；复合编码 FolderCode/FD-… 已删除，Code 即业务键） */
 export interface StandardDirectoryFolder {
   Id?: number
   Code: string
-  FolderCode: string
-  DirectoryCode: string
+  /** 配置 Code → cert_standard_directory_config.Code（原列名 DirectoryCode） */
+  ConfigCode: string
   ParentCode?: string
   FolderName: string
   Depth?: number
@@ -276,13 +280,14 @@ export interface StandardDirectoryFolder {
   Children?: StandardDirectoryFolder[]
 }
 
-/** 标准目录文件 */
+/** 标准目录文件（cert_standard_directory_file；复合编码 FileCode/FL-… 已删除，Code 即业务键） */
 export interface StandardDirectoryFile {
   Id?: number
   Code: string
-  FileCode: string
+  /** 所属文件夹 Code → cert_standard_directory_folder.Code；根级文件恒为 "" */
   FolderCode: string
-  DirectoryCode: string
+  /** 配置 Code → cert_standard_directory_config.Code（原列名 DirectoryCode） */
+  ConfigCode: string
   FileName: string
   FileType?: string
   FilePattern?: string
@@ -305,6 +310,14 @@ export interface StandardDirectoryFile {
   ConvertStatus?: string
   ConvertMessage?: string
   ConvertDate?: string
+  /** 预览 PDF 产物路径（PDF/图片透传时 == StoragePath）—— 2026-09-26 双产物链 */
+  PreviewPdfPath?: string
+  /** 提取用 Markdown 产物路径 */
+  MarkdownPath?: string
+  /** Markdown 转换状态：none/pending/converting/completed/failed/unsupported */
+  MarkdownStatus?: string
+  /** Markdown 失败原因 / OCR 能力边界提示 */
+  MarkdownMessage?: string
   Creator?: string
   CreateDate?: string
   CreateTime?: string
@@ -313,11 +326,11 @@ export interface StandardDirectoryFile {
   Remark?: string
 }
 
-/** 上传任务 */
+/** 上传任务（cert_upload_task；原列名 DirectoryCode → ConfigCode） */
 export interface UploadTask {
   Id?: number
   TaskId: string
-  DirectoryCode: string
+  ConfigCode: string
   TotalFiles?: number
   TotalSize?: number
   SuccessCount?: number

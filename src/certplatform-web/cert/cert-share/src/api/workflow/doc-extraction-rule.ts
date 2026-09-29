@@ -1,4 +1,6 @@
 import { yzhApi } from '@yzh-core/api/client'
+import { expectOk } from '@yzh-core/utils/apiResponse'
+import type { ApiResponse } from '@yzh-core/types'
 
 // ==================== 类型定义（对齐后端 DocExtractionDtos.cs） ====================
 
@@ -45,7 +47,7 @@ export interface RuleDetailResponse {
   standardFileCode: string
   orgCode: string
   standardCode: string
-  phaseCode: string
+  stageCode: string
   skill: string
   prompt?: string
   isValid: boolean
@@ -80,32 +82,44 @@ export interface VerifyResult {
 // ==================== API 函数 ====================
 
 // --- 规则 CRUD ---
+//
+// ★ 写操作/分析类调用一律 expectOk（信封规范 22 L3 / F-1）：
+//   后端业务失败 = HTTP 200 + success:false，yzhApi 原样返回不抛 →
+//   不 expectOk 就会「静默失败」甚至假成功提示。失败统一抛 BizError，
+//   由页面 catch 弹出信封 err 文本（F-3 谁 catch 谁弹）。
 
 export const getRuleDetail = (standardFileCode: string) =>
   yzhApi.get<{ code: number; data: RuleDetailResponse }>(`/api/Workflow/DocExtractionRule/${standardFileCode}`)
 
-export const saveRule = (data: {
+export async function saveRule(data: {
   fileCode: string
   orgCode?: string
   standardCode?: string
-  phaseCode?: string
+  stageCode?: string
   skill?: string
   fields: FieldDefDto[]
   tables: TableDefDto[]
   prompt: string
   isValid: boolean
   extractionData?: ExtractionData
-}) => yzhApi.post<{ code: number; message: string }>('/api/Workflow/DocExtractionRule/save', data)
+}): Promise<ApiResponse<null>> {
+  const res = await yzhApi.post<ApiResponse<null>>('/api/Workflow/DocExtractionRule/save', data)
+  expectOk(res, '保存规则失败')
+  return res
+}
 
-export const deleteRule = (standardFileCode: string) =>
-  yzhApi.post<{ code: number; message: string }>(`/api/Workflow/DocExtractionRule/${standardFileCode}/delete`)
+export async function deleteRule(standardFileCode: string): Promise<ApiResponse<null>> {
+  const res = await yzhApi.post<ApiResponse<null>>(`/api/Workflow/DocExtractionRule/${standardFileCode}/delete`)
+  expectOk(res, '删除规则失败')
+  return res
+}
 
 export interface ConfiguredRuleItem {
   ruleCode: string
   standardFileCode: string
   fileName: string
   standardCode?: string
-  phaseCode?: string
+  stageCode?: string
   skill?: string
   isValid?: boolean
 }
@@ -120,40 +134,66 @@ export const getFieldsAndTables = (ruleCode: string) =>
 
 // --- AI 功能 ---
 
-export const analyzeDoc = (fileCode: string, skill?: string) =>
-  yzhApi.post<{ code: number; data: { fields: FieldDefDto[]; tables: TableDefDto[]; message: string } }>(
+export async function analyzeDoc(
+  fileCode: string,
+  skill?: string,
+): Promise<ApiResponse<{ fields: FieldDefDto[]; tables: TableDefDto[]; message: string }>> {
+  const res = await yzhApi.post<ApiResponse<{ fields: FieldDefDto[]; tables: TableDefDto[]; message: string }>>(
     '/api/Workflow/DocExtractionRule/analyze',
-    { fileCode, skill }
+    { fileCode, skill },
   )
+  expectOk(res, 'AI 分析失败')
+  return res
+}
 
-export const generatePrompt = (data: { fileCode: string; fields: FieldDefDto[]; tables: TableDefDto[] }) =>
-  yzhApi.post<{ code: number; data: string }>('/api/Workflow/DocExtractionRule/generate-prompt', data)
+export async function generatePrompt(
+  data: { fileCode: string; fields: FieldDefDto[]; tables: TableDefDto[] },
+): Promise<ApiResponse<string>> {
+  const res = await yzhApi.post<ApiResponse<string>>('/api/Workflow/DocExtractionRule/generate-prompt', data)
+  expectOk(res, '生成 Prompt 失败')
+  return res
+}
 
-export const verifyPrompt = (data: { fileCode: string; prompt: string }) =>
-  yzhApi.post<{ code: number; data: VerifyResult }>(
-    '/api/Workflow/DocExtractionRule/verify',
-    data
-  )
+export async function verifyPrompt(
+  data: { fileCode: string; prompt: string },
+): Promise<ApiResponse<VerifyResult>> {
+  const res = await yzhApi.post<ApiResponse<VerifyResult>>('/api/Workflow/DocExtractionRule/verify', data)
+  expectOk(res, 'Prompt 验证失败')
+  return res
+}
 
-export const testField = (data: { ruleCode: string; fieldCode: string; docType?: string }) =>
-  yzhApi.post<{ code: number; data: { fieldCode: string; value: unknown; confidence: number; message: string } }>(
+export async function testField(
+  data: { ruleCode: string; fieldCode: string; docType?: string },
+): Promise<ApiResponse<{ fieldCode: string; value: unknown; confidence: number; message: string }>> {
+  const res = await yzhApi.post<ApiResponse<{ fieldCode: string; value: unknown; confidence: number; message: string }>>(
     '/api/Workflow/DocExtractionRule/test-field',
-    data
+    data,
   )
+  expectOk(res, '字段测试失败')
+  return res
+}
 
-export const testTable = (data: { ruleCode: string; tableCode: string; docType?: string }) =>
-  yzhApi.post<{ code: number; data: { tableCode: string; rows: Record<string, unknown>[]; confidence: number; message: string } }>(
+export async function testTable(
+  data: { ruleCode: string; tableCode: string; docType?: string },
+): Promise<ApiResponse<{ tableCode: string; rows: Record<string, unknown>[]; confidence: number; message: string }>> {
+  const res = await yzhApi.post<ApiResponse<{ tableCode: string; rows: Record<string, unknown>[]; confidence: number; message: string }>>(
     '/api/Workflow/DocExtractionRule/test-table',
-    data
+    data,
   )
+  expectOk(res, '表格测试失败')
+  return res
+}
 
 // --- AI 配置 ---
 
 export const getAIConfig = () =>
   yzhApi.get<{ code: number; data: AIConfigDto }>('/api/Workflow/DocExtractionRule/ai-config')
 
-export const updateAIConfig = (config: AIConfigDto) =>
-  yzhApi.post<{ code: number; message: string }>('/api/Workflow/DocExtractionRule/ai-config', config)
+export async function updateAIConfig(config: AIConfigDto): Promise<ApiResponse<null>> {
+  const res = await yzhApi.post<ApiResponse<null>>('/api/Workflow/DocExtractionRule/ai-config', config)
+  expectOk(res, '保存 AI 配置失败')
+  return res
+}
 
 export const getSkills = () =>
   yzhApi.get<{ code: number; data: SkillInfo[] }>('/api/Workflow/DocExtractionRule/skills')

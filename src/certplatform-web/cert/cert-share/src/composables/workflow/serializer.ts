@@ -19,6 +19,8 @@ export interface WorkflowNode {
   classCode?: string
   skillCode?: string
   title?: string
+  /** 该节点在此工作流中的具体作用描述（专家可见） */
+  description?: string
   config?: Record<string, any>
   inputs?: Record<string, any>
   inputTypes?: Record<string, string>
@@ -53,6 +55,8 @@ export interface SerializedNode {
   nodeId: string
   nodeType: string
   title: string
+  /** 该节点在此工作流中的具体作用描述 */
+  description?: string
   skillCode?: string
   config?: Record<string, any>
   inputs?: Record<string, any>
@@ -137,6 +141,7 @@ export function deserialize(config: WorkflowConfig, layoutJson: LayoutJson | nul
       classCode,
       nodeType,
       title: n.title || '',
+      description: n.description || '',
       skillCode: n.skillCode || '',
       x: pos.x ?? 0,
       y: pos.y ?? 0,
@@ -182,7 +187,7 @@ export function deserialize(config: WorkflowConfig, layoutJson: LayoutJson | nul
  * 序列化业务层节点/边数组 → workflow_config JSON（落库格式）
  */
 export function serialize(
-  nodes: Array<{ id: string; classCode: string; title: string; skillCode?: string; config?: any; inputs?: any; inputTypes?: any; outputs?: any; inputPorts?: any[]; outputPorts?: any[] }>,
+  nodes: Array<{ id: string; classCode: string; title: string; description?: string; skillCode?: string; config?: any; inputs?: any; inputTypes?: any; outputs?: any; inputPorts?: any[]; outputPorts?: any[] }>,
   edges: Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>,
   meta: { version?: number; workflowType?: string; outputConfig?: any; glossary?: string } = {}
 ): WorkflowConfig {
@@ -192,6 +197,7 @@ export function serialize(
       nodeType: n.classCode || 'skill',
       title: n.title || ''
     }
+    if (n.description) node.description = n.description
     if (n.skillCode) node.skillCode = n.skillCode
     if (n.config && Object.keys(n.config).length > 0) node.config = n.config
     if (n.inputs && Object.keys(n.inputs).length > 0) node.inputs = n.inputs

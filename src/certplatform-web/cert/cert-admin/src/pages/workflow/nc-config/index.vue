@@ -1,134 +1,80 @@
 <script setup lang="ts">
 /**
- * NC 规则管理 — 左树右表（YZH 标准架构）
+ * NC 规则管理 — 左树右表（YZH 标准架构：YzhTreeTableLayout + useTreeTable）
  *
  * 布局：
- * - 左侧：组织 → 标准 → 阶段 树（useFileTree composable）
- * - 右侧：NC 检查规则表格（YzhTable + YzhFormDialog + SingleTableCore）
+ * - 左侧：组织 → 标准 → 阶段 树（只读，数据源 = StandardDirectory 组织树）
+ * - 右侧：NC 检查规则表格（YzhTable + YzhFormDialog + TreeTableCore）
  *
- * 架构：
- * - Logic 继承 SingleTableCore，自动从后端 EntityConfig 获取 columns / formFields / searchFields
- * - 选中阶段节点后，自动联动过滤 OrgCode + StandardCode + PhaseCode
+ * 架构（样板页面指南-V1 §四）：
+ * - Logic 继承 TreeTableLogic，由 useTreeTable 注入 tableRef/treeTableRef 与初始化流程
+ * - 表格列/表单字段/搜索字段/行按钮全部由后端 EntityConfig（Cert/ValidationRule.json）驱动
+ * - 选中阶段节点后，内核自动注入 OrgCode + StandardCode + PhaseCode 三字段联动过滤
+ * - 数据加载走内核 dataLoader：未选中阶段 → 右表空态（不发请求）
  * - 行动作（编辑/删除/启停/复制）由内核 dispatch 派发，页面无手写 handler
  */
-import { ref, onMounted, onUnmounted, watch } from 'vue'
-import { YzhTable, YzhFormDialog } from '@yzh-core'
+import { computed } from 'vue'
 import { Plus, RefreshRight } from '@element-plus/icons-vue'
-import { CertBizTree } from '@share/components'
+import { YzhTable, YzhFormDialog, YzhTreeTableLayout, useTreeTable, type TreeNode } from '@yzh-core'
 import { NCConfigLogic } from './logic'
-import { useFileTree } from '@share/composables/useFileTree'
 
-// ──── 实例化 Logic ────
-const logic = new NCConfigLogic()
+// 实例化 Logic（useTreeTable 统一注入 tableRef/treeTableRef 与初始化流程）
+const { logic, tableRef, treeTableRef } = useTreeTable(NCConfigLogic)
 
-// ──── 表格引用（用于树节点切换后刷新） ────
-const tableRef = ref()
+// 行操作按钮（内核 rowActions：Edit/Delete + 按行状态二选一的 启用|禁用|复制）
+const rowActions = computed(() => logic.rowActions)
 
-// ──── 左树 ────
-const {
-  loadTree,
-} = useFileTree()
+// 右表空态文案：未选中阶段时给出操作提示，避免只显示「暂无数据」
+const emptyText = computed(() => (logic.anySelected ? '暂无数据' : '请在左侧选择阶段'))
 
-// ========================================================
-// 树→表格联动
-// ========================================================
-
-/** 树节点点击 → 注入联动过滤 → YzhTable 自动刷新 */
-async function onTreeNodeClick(node: any) {
-  if (node.Type !== 'stage') {
-    // 非阶段节点：清空表格
-    logic.setTreeFilter('', '', '')
-    return
-  }
-  logic.setTreeFilter(
-    node.OrgCode || '',
-    node.StdCode || '',
-    node.PhaseCode || '',
-  )
-  // 触发 YzhTable 刷新
-  await tableRef.value?.refresh()
+// 树节点点击 → 内核选中节点并触发右表联动刷新
+async function handleNodeClick(node: TreeNode) {
+  await logic.onNodeClick(node)
 }
-
-// ========================================================
-// 初始化
-// ========================================================
-
-onMounted(async () => {
-  await loadTree()
-  await logic.init()
-  if (tableRef.value) {
-    logic.setTableRef(tableRef.value)
-  }
-  // 直接操作父容器：去掉 padding，改为 flex 列布局，使内容撑满视口
-  const elMain = document.querySelector('.admin-layout__content') as HTMLElement | null
-  if (elMain) {
-    elMain.style.padding = '0'
-    elMain.style.display = 'flex'
-    elMain.style.flexDirection = 'column'
-    elMain.style.overflow = 'hidden'
-    elMain.style.background = '#fff'
-  }
-})
-
-onUnmounted(() => {
-  // 离开页面时恢复父容器原始样式（keep-alive 下不影响下次进入，但保险起见）
-  const elMain = document.querySelector('.admin-layout__content') as HTMLElement | null
-  if (elMain) {
-    elMain.style.padding = ''
-    elMain.style.display = ''
-    elMain.style.flexDirection = ''
-    elMain.style.overflow = ''
-    elMain.style.background = ''
-  }
-})
-
-// 监听 tableRef 注入
-watch(tableRef, (el) => {
-  if (el) logic.setTableRef(el)
-})
 </script>
 
 <template>
   <div class="nc-config-page">
-    <!-- 左侧：组织 → 标准 → 阶段 树 -->
-    <div class="nc-config-page__tree">
-      <CertBizTree
-        title="组织 → 标准 → 阶段"
-        :node-types="['organization', 'standard', 'stage']"
-        @select="onTreeNodeClick"
-      />
-    </div>
+    <YzhTreeTableLayout
+      ref="treeTableRef"
+      :tree-data="logic.treeData"
+      :tree-width="280"
+      :tree-toolbar="true"
+      :tree-searchable="true"
+      :tree-lazy="false"
+      :tree-default-expand-all="true"
+      :node-actions="logic.nodeActions"
+      @tree-node-click="handleNodeClick"
+      @tree-node-action="logic.onNodeAction"
+    >
+      <template #default>
+        <div class="nc-config-page__content">
+          <YzhTable
+            ref="tableRef"
+            :columns="logic.columns as any"
+            :data-loader="logic.dataLoader.bind(logic)"
+            :search-fields="logic.searchFields as any"
+            :row-action-buttons="rowActions"
+            :empty-text="emptyText"
+            row-key="Code"
+            @row-action="logic.onRowAction"
+          >
+            <!-- 启用状态列：IsActive（bool）被内核标记为 slot，不给插槽会渲原值 true/false -->
+            <template #column-IsActive="{ row }">
+              <el-tag :type="row.IsActive ? 'success' : 'info'" size="small">
+                {{ row.IsActive ? '启用' : '禁用' }}
+              </el-tag>
+            </template>
 
-    <!-- 右侧：NC 检查规则表格 -->
-    <div class="nc-config-page__content">
-      <!-- 未选中阶段 -->
-      <el-empty v-if="!logic.anySelected && !logic.loading.value" description="请在左侧选择阶段" :image-size="120" />
-
-      <!-- 已选中阶段 → YzhTable 配置驱动 -->
-      <YzhTable
-        v-else
-        ref="tableRef"
-        :columns="logic.columns"
-        :data-loader="logic.dataLoader.bind(logic)"
-        :search-fields="logic.searchFields"
-        :row-action-buttons="logic.rowActions"
-        row-key="Code"
-        @row-action="logic.onRowAction"
-      >
-        <!-- 启用状态列：IsActive（bool）被内核标记为 slot，不给插槽会渲原值 true/false -->
-        <template #column-IsActive="{ row }">
-          <el-tag :type="row.IsActive ? 'success' : 'info'" size="small">
-            {{ row.IsActive ? '启用' : '禁用' }}
-          </el-tag>
-        </template>
-
-        <!-- 工具栏左侧：新建检查项 + 刷新 -->
-        <template #toolbar-left>
-          <el-button type="primary" :icon="Plus" @click="logic.onToolbarAction('add')">新建检查项</el-button>
-          <el-button :icon="RefreshRight" @click="tableRef?.refresh()">刷新</el-button>
-        </template>
-      </YzhTable>
-    </div>
+            <!-- 工具栏左侧：新建检查项 + 刷新 -->
+            <template #toolbar-left>
+              <el-button type="primary" :icon="Plus" @click="logic.onToolbarAction('add')">新建检查项</el-button>
+              <el-button :icon="RefreshRight" @click="tableRef?.refresh()">刷新</el-button>
+            </template>
+          </YzhTable>
+        </div>
+      </template>
+    </YzhTreeTableLayout>
 
     <!-- 编辑弹窗 -->
     <YzhFormDialog
@@ -147,94 +93,20 @@ watch(tableRef, (el) => {
 </template>
 
 <style scoped>
-:deep(.admin-layout__content) {
-  padding: 0;
-  background: #fff;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
 .nc-config-page {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  background: #fff;
-  padding: 0;
-}
-
-/* ──── 左树 ──── */
-.nc-config-page__tree {
-  width: 280px;
-  flex-shrink: 0;
-  border-right: 1px solid var(--el-border-color-lighter);
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
+  box-sizing: border-box;
 }
 
-.tree-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-  background: #fff;
-}
-
-.tree-title {
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.tree-search {
-  padding: 8px 12px;
-}
-
-.nc-config-page__tree :deep(.el-tree) {
-  flex: 1;
-  overflow-y: auto;
-  padding: 4px 0;
-}
-
-.tree-node {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-}
-
-.node-icon {
-  color: #909399;
-  font-size: 14px;
-}
-
-.node-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* ──── 右内容区（YzhTable） ──── */
 .nc-config-page__content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  min-height: 0;
   background: #fff;
-  padding: 0;
-}
-
-/* ──── YzhTable 内部布局调整 ──── */
-.nc-config-page__content :deep(.yzh-table) {
-  height: 100%;
-}
-
-.nc-config-page__content :deep(.el-table__inner-wrapper) {
-  --el-table-header-bg-color: #f8fafc;
-}
-
-.nc-config-page__content :deep(.el-pagination) {
-  padding: 12px 16px;
-  justify-content: flex-end;
+  overflow: hidden;
 }
 </style>

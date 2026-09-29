@@ -4,6 +4,7 @@ import {
   getOrganizationTree,
   getStageFileTree,
   downloadFile,
+  ensureDirectoryConfig,
 } from './useDirectoryApi'
 import type {
   StandardDirectoryFile,
@@ -39,8 +40,10 @@ export interface TreeNode {
   FileCode?: string
   /** 文件夹编码 */
   FolderCode?: string
-  /** 转换状态 */
+  /** 转换状态（预览 PDF 链） */
   ConvertStatus?: string
+  /** Markdown 提取链状态：none/pending/converting/completed/failed/unsupported */
+  MarkdownStatus?: string
   /** 规则状态 */
   RuleStatus?: 'none' | 'configured' | 'failed'
   /** 是否已展开 */
@@ -58,19 +61,6 @@ export interface TreeNode {
 export function useFileTree() {
   const fileTreeData = ref<TreeNode[]>([])
   const loading = ref(false)
-
-  /** 从阶段 ID 提取目录编码（SDC-标准|阶段） */
-  function extractDirectoryCode(stageId: string): string | null {
-    if (!stageId) return null
-    if (String(stageId).startsWith('SDC-')) return stageId
-    const parts = String(stageId).split('|')
-    if (parts.length >= 3) {
-      const standardCode = parts[1].replace(/[:\-\s]/g, '')
-      const phaseCode = parts[2].replace(/[\-\s]/g, '')
-      return `SDC-${standardCode}|${phaseCode}`
-    }
-    return null
-  }
 
   /** 组织树 → el-tree 结构（阶段节点不设 children，由预加载填充） */
   function transformOrgTree(data: any[]): TreeNode[] {
@@ -95,7 +85,8 @@ export function useFileTree() {
           StandardCode: phase.standardCode,
           PhaseCode: phase.phaseCode,
           PhaseDefinitionCode: phase.phaseDefinitionCode || '',
-          DirectoryCode: extractDirectoryCode(phase.id),
+          // ★ 阶段节点 → 目录配置 Code（后端 GetOrganizationTreeAsync 下发；无配置 = null）
+          DirectoryCode: phase.configCode || null,
           Children: undefined,
           _loaded: false,
         }))
@@ -123,7 +114,7 @@ export function useFileTree() {
       // 并行预加载所有阶段（stage-files 单请求：文件夹+文件+规则状态一次到位）
       const stages = collectStageNodes(tree)
       await Promise.all(stages.map(async (stage) => {
-        const directoryCode = stage.DirectoryCode || extractDirectoryCode(String(stage.Code))
+        const directoryCode = stage.DirectoryCode
         if (!directoryCode) return
         try {
           const { folders } = await getStageFileTree(directoryCode)
@@ -155,10 +146,24 @@ export function useFileTree() {
    */
   async function loadStageFiles(stageNode: TreeNode) {
     if (stageNode._loaded || stageNode._loading) return
-    
-    const directoryCode = stageNode.DirectoryCode || extractDirectoryCode(String(stageNode.Code))
+
+    // 总表无感懒建（决策㉑）：树节点尚无 configCode → 静默 ensure 回填，用户无感知
+    if (!stageNode.DirectoryCode && stageNode.OrgCode && stageNode.StdCode && stageNode.PhaseDefinitionCode) {
+      try {
+        const cfg = await ensureDirectoryConfig({
+          OrgCode: stageNode.OrgCode,
+          StandardCode: stageNode.StdCode,
+          StageCode: stageNode.PhaseDefinitionCode,
+        })
+        if (cfg?.Code) stageNode.DirectoryCode = cfg.Code
+      } catch {
+        // ensure 失败不在此抛：落到下面统一错误出口
+      }
+    }
+
+    const directoryCode = stageNode.DirectoryCode
     if (!directoryCode) {
-      throw new Error('无法获取目录编码')
+      throw new Error('目录配置初始化失败，请刷新页面后重试')
     }
     
     stageNode._loading = true
@@ -195,13 +200,14 @@ export function useFileTree() {
       // 文件夹直属文件
       for (const f of folder.Files || []) {
         node.Children!.push({
-          Code: f.FileCode,
+          Code: f.FileCode || f.Code,
           Name: f.FileName,
           Type: 'file' as const,
-          FileCode: f.FileCode,
+          FileCode: f.FileCode || f.Code,
           DirectoryCode: directoryCode,
           FolderCode: f.FolderCode,
           ConvertStatus: f.ConvertStatus || '',
+          MarkdownStatus: f.MarkdownStatus || '',
           RuleStatus: f.RuleStatus || 'none',
           Raw: f,
         })
@@ -222,13 +228,14 @@ export function useFileTree() {
       const { getFiles } = await import('./useDirectoryApi')
       const files = await getFiles(folderCode)
       folderNode.Children = (files || []).map((file: any) => ({
-        Code: file.FileCode || file.fileCode,
+        Code: file.FileCode || file.Code || file.fileCode,
         Name: file.FileName || file.fileName,
         Type: 'file' as const,
-        FileCode: file.FileCode || file.fileCode,
+        FileCode: file.FileCode || file.Code || file.fileCode,
         DirectoryCode: folderNode.DirectoryCode,
         Raw: file,
         ConvertStatus: file.ConvertStatus || file.convertStatus,
+        MarkdownStatus: file.MarkdownStatus || file.markdownStatus,
         RuleStatus: 'none' as const,
       }))
       folderNode._loaded = true
@@ -292,7 +299,6 @@ export function useFileTree() {
     loadFolderFiles,
     handleDownload,
     refreshNode,
-    extractDirectoryCode,
     transformOrgTree,
   }
 }

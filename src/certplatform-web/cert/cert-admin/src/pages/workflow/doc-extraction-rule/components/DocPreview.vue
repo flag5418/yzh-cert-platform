@@ -73,21 +73,47 @@ const convertMessage = computed(
     props.file?.ConvertMessage ||
     props.file?.Raw?.ConvertMessage ||
     props.file?.raw?.ConvertMessage ||
-    '转换失败，可点击左侧「重试失败转换」后重试'
+    '预览转换失败，可在左侧点击「重试失败转换」后重试'
 )
 
-const ext = computed(() => {
-  // 优先用转换后产物扩展名（.doc→.docx），其次原始文件名
-  const fromConverted = convertedPath.value.split('.').pop()?.toLowerCase() || ''
-  if (fromConverted && fromConverted !== 'converted') return fromConverted
-  return (fileName.value.split('.').pop() || '').toLowerCase()
-})
+/**
+ * 提取链状态（★ 2026-09-26 双产物链新增）
+ * - unsupported = 图片/扫描件等能力边界（不是故障）→ 引导用户手工定义字段、人工填写
+ */
+const markdownStatus = computed(() =>
+  String(
+    props.file?.markdownStatus ||
+      props.file?.MarkdownStatus ||
+      props.file?.Raw?.MarkdownStatus ||
+      props.file?.raw?.MarkdownStatus ||
+      ''
+  ).toLowerCase()
+)
+const markdownMessage = computed(
+  () =>
+    props.file?.markdownMessage ||
+    props.file?.MarkdownMessage ||
+    props.file?.Raw?.MarkdownMessage ||
+    props.file?.raw?.MarkdownMessage ||
+    ''
+)
+/** 需人工填写（图片/扫描件等）：非故障，给正向引导而非报错 */
+const needsManualFill = computed(() => markdownStatus.value === 'unsupported')
+
+/**
+ * 扩展名：**只从原始文件名推断**。
+ *
+ * ⚠️ 原实现优先从 ConvertedStoragePath 取扩展名（.doc→.docx 中间产物语义）。
+ * 双产物链后 ConvertedStoragePath 停止写入新值，且预览链已统一为「PDF 字节」，
+ * 因此扩展名必须回到原始文件名 —— 否则 .doc 会被判成 isLegacyOffice，
+ * 错误文案长期停留在「旧版格式需先转 PDF」这种过时说法上。
+ */
+const ext = computed(() => (fileName.value.split('.').pop() || '').toLowerCase())
 
 const isImage = computed(() => ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext.value))
 const isPdf = computed(() => ext.value === 'pdf')
 const isText = computed(() => ['txt', 'md', 'markdown', 'json', 'xml', 'csv'].includes(ext.value))
 const isOffice = computed(() => ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext.value))
-const isLegacyOffice = computed(() => ['doc', 'xls', 'ppt'].includes(ext.value))
 const isRenderable = computed(() => isImage.value || isText.value || isPdf.value || isOffice.value)
 
 const fileTypeText = computed(() => {
@@ -200,11 +226,10 @@ async function loadPreview() {
     errorHint.value = '可点击「下载」后用本地软件打开查看'
   } catch (e: any) {
     error.value = e?.message || '预览加载失败'
-    errorHint.value = isLegacyOffice.value
-      ? convertStatus.value === 'failed'
-        ? `旧版 ${fileTypeText.value} 转换失败：${convertMessage.value}`
-        : '旧版 Office 格式需先转换为 PDF，可在左侧点击「重试失败转换」后刷新重试'
-      : '可点击「下载」后用本地软件打开查看'
+    errorHint.value =
+      convertStatus.value === 'failed'
+        ? `预览转换失败：${convertMessage.value}`
+        : '可点击「下载」后用本地 Office / WPS 打开查看'
   } finally {
     clearTimeout(slowTimer)
     loading.value = false
@@ -257,6 +282,18 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
     -->
     <div v-if="convertStatus === 'failed' && !error" class="convert-bar">
       <span class="convert-text">{{ convertMessage }}</span>
+    </div>
+
+    <!--
+      提取链能力边界（★ 2026-09-26）：图片/扫描件无法自动提取内容。
+      这不是故障 —— 按产品设计，用户手工定义字段与表格、由人工填写即可。
+      因此用「引导」而非「报错」的语气，且不阻塞预览。
+    -->
+    <div v-if="needsManualFill" class="convert-bar manual-bar">
+      <el-icon><WarningFilled /></el-icon>
+      <span class="convert-text">
+        {{ markdownMessage || '该文件为图片/扫描件，暂不支持自动提取内容。可手工定义字段与表格，由人工填写' }}
+      </span>
     </div>
 
     <div class="preview-content">
@@ -359,6 +396,12 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
   border-bottom: 1px solid #f5dab1;
   font-size: 12px;
   color: #b88230;
+}
+/* 能力边界提示（图片/扫描件需人工填写）：用中性信息色，与「失败」的橙黄区分开 */
+.manual-bar {
+  background: #ecf5ff;
+  border-bottom-color: #b3d8ff;
+  color: #337ecc;
 }
 .preview-content {
   flex: 1;

@@ -56,8 +56,8 @@
             <span class="cert-biz-tree__node-label">{{ data.Name }}</span>
             <slot name="node-extra" :node="data">
               <CertConvertBadge
-                v-if="showConvertBadge && data.Type === 'file' && data.ConvertStatus"
-                :status="data.ConvertStatus"
+                v-if="showConvertBadge && data.Type === 'file' && badgeStatus(data)"
+                :status="badgeStatus(data)"
               />
               <span
                 v-if="showRuleStatus && data.Type === 'file'"
@@ -89,6 +89,15 @@ import {
 } from '@element-plus/icons-vue'
 import { useFileTree, type TreeNode } from '../composables/useFileTree'
 import CertConvertBadge from './CertConvertBadge.vue'
+import { mergeConvertStatus } from '../utils/convertStatus'
+
+/**
+ * 节点徽标状态：合并「预览 PDF 链」与「Markdown 提取链」两个状态，取更需关注者。
+ * ★ 2026-09-26 双产物链：只看 ConvertStatus 会漏掉「PDF 成功但 Markdown 失败/需人工填写」的文件。
+ */
+function badgeStatus(node: any): string {
+  return mergeConvertStatus(node?.ConvertStatus, node?.MarkdownStatus)
+}
 
 const props = withDefaults(defineProps<{
   /** 树标题 */

@@ -55,12 +55,32 @@ export async function getStageStandardTree(enterpriseCode: string): Promise<Chec
   return unwrap(res, [])
 }
 
+/**
+ * 企业目录初始化回执（关联建立时**预热**一次；真正的初始化在每次读资料接口时都会自动跑）
+ *
+ * ★ `Reason` 是原因码，前端据此区分「等待态」与「真故障」，⛔ 不要匹配 `Message` 文案。
+ */
+export interface DirectoryInitResult {
+  StageCode: string
+  StandardCode: string
+  Initialized: boolean
+  Message?: string | null
+  /**
+   * - `''` 成功
+   * - `template_missing` 该机构×标准×阶段**没有目录模板** —— 等待态：管理端补齐模板后
+   *   资料目录会自动初始化，**不需要重新建立关联**
+   * - `org_unbound` 企业未绑定机构 —— 等待态：补齐机构后自动初始化
+   * - `invalid_request` 入参缺失 / 写模板域等调用错误（属代码缺陷）
+   */
+  Reason?: string
+}
+
 /** 批量建关联；`Applied` = 服务端确认「现已关联」的节点 Code 集合（供前端局部更新缓存） */
 export async function checkAdd(
   enterpriseCode: string,
   selections: AssociationSelection[],
-): Promise<{ Updated: number; Applied?: string[] }> {
-  const res = await yzhApi.post<ApiResponse<{ Updated: number; Applied?: string[] }>>(
+): Promise<{ Updated: number; Applied?: string[]; DirectoryInit?: DirectoryInitResult[] }> {
+  const res = await yzhApi.post<ApiResponse<{ Updated: number; Applied?: string[]; DirectoryInit?: DirectoryInitResult[] }>>(
     `${BASE}/check/add`,
     { ContextCode: enterpriseCode, Selections: selections },
   )

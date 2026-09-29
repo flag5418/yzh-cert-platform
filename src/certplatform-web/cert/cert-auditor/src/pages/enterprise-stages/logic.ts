@@ -15,6 +15,7 @@
  */
 import { CheckTreeCore } from '@yzh-core'
 import type { AssociationApi, CheckTreeNode } from '@yzh-core'
+import { ElMessage } from 'element-plus'
 import {
   checkAdd,
   checkRemove,
@@ -69,7 +70,38 @@ export class EnterpriseStageLogic extends CheckTreeCore {
       getTreeRoot: getEnterpriseTreeRoot,
       getTreeChildren: getEnterpriseTreeChildren,
       getAssociations: getStageStandardTree,
-      add: checkAdd,
+      // G-4a 回执消费：建关联时会**预热**一次企业资料目录（复制模板槽位），失败**不阻断关联**。
+      //
+      // ★ 关键前提：目录初始化是**懒执行 + 自愈**的 —— 资料页的每个读接口
+      // （stage-overview / standard-directory / upload/plan）都会跑一次 ensure。
+      // 所以这里的失败绝大多数是「等待态」而不是「你刚做的操作失败了」：
+      //
+      //   template_missing  该机构×标准×阶段还没配目录模板 ⇒ 纯数据缺失。
+      //                    管理端补齐模板后，资料目录**自动**初始化，**不需要重新关联**。
+      //                    而且解释已经由资料页的常驻提示条给出（那才是用户看得到问题的地方），
+      //                    在这里再弹一次只会让人以为关联失败 ⇒ 静默。
+      //
+      //   org_unbound       企业没挂机构 ⇒ 同样自愈，但用户得知道去哪补 ⇒ 提示。
+      //   invalid_request   入参缺失/写模板域 ⇒ 代码缺陷，必须报。
+      add: async (nodeCode, selections) => {
+        const res = await checkAdd(nodeCode, selections)
+        const failed = (res.DirectoryInit ?? []).filter((d) => !d.Initialized)
+        const reasons = new Map(failed.map((f) => [f.StandardCode, f.Reason ?? 'invalid_request']))
+
+        const needOrg = failed.filter((f) => reasons.get(f.StandardCode) === 'org_unbound')
+        if (needOrg.length > 0) {
+          ElMessage.warning(
+            `关联已建立；该企业尚未绑定机构，资料目录暂不能初始化。请到「企业管理」补齐机构，` +
+            '补齐后会自动初始化，无需重新关联。'
+          )
+        }
+        const broken = failed.filter((f) => reasons.get(f.StandardCode) !== 'org_unbound'
+          && reasons.get(f.StandardCode) !== 'template_missing')
+        if (broken.length > 0) {
+          ElMessage.error(`关联已建立，但资料目录初始化出现异常：${broken.map((f) => f.Message).join('；')}`)
+        }
+        return res
+      },
       remove: checkRemove,
       getAll: getAllAssociations,
     }

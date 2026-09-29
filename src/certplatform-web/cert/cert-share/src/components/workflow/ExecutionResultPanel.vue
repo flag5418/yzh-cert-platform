@@ -60,11 +60,12 @@
               <div v-if="path.NodeResults?.length" class="node-detail">
                 <div class="node-detail-title">节点级明细 ({{ path.NodeResults.length }} 个)</div>
                 <el-table :data="path.NodeResults" size="small" border class="node-table">
-                  <el-table-column label="节点" min-width="150">
+                  <el-table-column label="节点" min-width="200">
                     <template #default="{ row }">
                       <div class="node-cell">
-                        <span class="node-id">{{ row.NodeId }}</span>
+                        <span class="node-id">{{ row.NodeTitle || row.NodeId }}</span>
                         <span class="node-type">{{ typeLabel(row.NodeId) }}</span>
+                        <span v-if="row.NodeDescription" class="node-desc">{{ row.NodeDescription }}</span>
                       </div>
                     </template>
                   </el-table-column>
@@ -79,6 +80,15 @@
                   <el-table-column label="LLM耗时" width="90" align="right">
                     <template #default="{ row }">
                       <span v-if="row.LlmDurationMs != null" class="llm-dur">{{ row.LlmDurationMs }}ms</span>
+                      <span v-else class="muted">—</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="来源" width="100">
+                    <template #default="{ row }">
+                      <span v-if="row.SourceFileCode" class="source-badge" :title="`文件: ${row.SourceFileCode}${row.SourceFieldName ? ' / 字段: ' + row.SourceFieldName : ''}`">
+                        📄 {{ row.SourceFieldName || '文档' }}
+                      </span>
+                      <span v-else-if="row.AiModel" class="ai-badge" :title="`模型: ${row.AiModel}`">🤖 {{ row.AiModel }}</span>
                       <span v-else class="muted">—</span>
                     </template>
                   </el-table-column>
@@ -179,7 +189,9 @@ function formatJson(obj: any) {
 .path-output { display: flex; gap: 8px; font-size: 12px; color: #909399; }
 .node-detail-title { font-size: 12px; color: #909399; margin-bottom: 4px; }
 .node-table { font-size: 12px; }
-.node-cell { display: flex; flex-direction: column; line-height: 1.3; .node-id { font-family: monospace; } .node-type { color: #909399; font-size: 11px; } }
+.node-cell { display: flex; flex-direction: column; line-height: 1.3; .node-id { font-family: monospace; } .node-type { color: #909399; font-size: 11px; } .node-desc { color: #606266; font-size: 11px; } }
+.source-badge { font-size: 11px; color: #67c23a; }
+.ai-badge { font-size: 11px; color: #9c27b0; }
 .task-info { display: flex; gap: 16px; font-size: 12px; color: #909399; .info-label { color: #606266; } }
 .token-badge { font-family: monospace; font-size: 11px; color: #409eff; background: #ecf5ff; padding: 1px 4px; border-radius: 3px; }
 .llm-dur { font-size: 11px; color: #e6a23c; }

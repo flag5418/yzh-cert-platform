@@ -1,7 +1,8 @@
 /**
  * 页面 Logic 组合式封装（CP 阶段）
  *
- * 统一 onMounted → init → nextTick → 注入 refs 的样板流程（CP-5）：
+ * 统一样板流程（CP-5）：onMounted → 注入 refs → init（TreeTableLogic.init 会触发右表
+ * refresh，refs 必须先于 init；单表页由 YzhTable 自身 onMounted 兜底首载，顺序无关）：
  * - useSingleTable(LogicClass)：注入 tableRef
  * - useTreeTable(LogicClass)：注入 tableRef + treeTableRef
  * - useCheckTree(LogicClass)：左树选择 + 勾选保存（注入 API 由 Logic 构造器处理）
@@ -44,10 +45,13 @@ export function useTreeTable<L extends TreeTableCore<any>>(
   const treeTableRef = ref<any>(null)
 
   onMounted(async () => {
-    await logic.init()
+    // 先注入 refs 再 init：TreeTableLogic.init 末尾通常选中节点触发右表 refresh，
+    // refs 未注入时 refresh 静默走 fallback（内核 rows），data-loader 模式下
+    // YzhTable 收不到加载指令 → 首载数据缺失/未经过 dataLoader 翻译
     await nextTick()
     logic.setTableRef(tableRef.value)
     logic.setTreeTableRef(treeTableRef.value)
+    await logic.init()
   })
 
   return { logic, tableRef, treeTableRef }
