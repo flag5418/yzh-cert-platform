@@ -239,7 +239,7 @@ public interface IIsValid
 ⚠️ **验证 SQL 必须用 `CONVERT(COLUMN_NAME USING utf8mb4) COLLATE utf8mb4_bin`** ——
 `information_schema.COLUMN_NAME` 排序规则大小写不敏感，直接写 `NOT REGEXP '^[A-Z]'` 会**永远返回 0 行**（假阴性）。
 
-**权威**：`AGENTS.md §③`｜`输出产物/命名规范违规清单与消灭方案-V1.md`
+**权威**：`AGENTS.md §③`｜`docs/50-任务/分析报告/命名规范违规清单与消灭方案-V1.md`
 
 ### R3-4 `Yxk` = 允许为空（★ 极易读反）
 

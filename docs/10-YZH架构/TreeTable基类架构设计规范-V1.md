@@ -5,8 +5,8 @@
 > **适用范围**: 所有"左树右表"形态页面。**后续同类业务必须遵循本规范**，不得另起炉灶。
 > **关联文档**:
 > - `docs/10-YZH架构/单页面基类架构设计规范-V1.md`（后端 `YzhControllerBase` / `TreeTableControllerBase`）
-> - `docs/50-任务/前端Logic基类增强与Composable封装实施计划-V1.md`（单表基类代码级设计）
-> - `docs/50-任务/前端TreeTable基类增强与Composable封装实施计划-V2.md`（约定矩阵 / 全量改造清单）
+> - `docs/50-任务/开发计划/前端Logic基类增强与Composable封装实施计划-V1.md`（单表基类代码级设计）
+> - `docs/50-任务/开发计划/前端TreeTable基类增强与Composable封装实施计划-V2.md`（约定矩阵 / 全量改造清单）
 >
 > **状态说明**: 本文档先定义「是什么、为什么、怎么用」，评审通过后再落代码。
 
