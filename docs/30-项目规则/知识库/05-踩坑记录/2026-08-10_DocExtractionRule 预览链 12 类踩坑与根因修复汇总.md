@@ -188,7 +188,7 @@ DirectoryConfig 路由映射 DirectoryManager 页面，AGENTS.md 要求 7 个 Ce
 最开始分支是 `if (ext==='xlsx')` 才支持，.xls 直接走旧格式不支持降级；.pptx 完全没分支，.doc 和 .ppt 降级提示也没写。
 
 ### 根因分析
-未按用户提供的 [关键信息速查.md](../../../../关键信息速查.md) 中 2025-05 GitHub vue-office/vue-office README 官方支持矩阵写分支。真实矩阵是：
+未按用户提供的 [关键信息速查.md`仓库根 关键信息速查.md`（本机文件，.gitignore 排除，不入库） 中 2025-05 GitHub vue-office/vue-office README 官方支持矩阵写分支。真实矩阵是：
 
 | 扩展名 | 是否支持 | 官方依据 |
 |---|---|---|
