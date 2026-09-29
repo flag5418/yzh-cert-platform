@@ -159,4 +159,29 @@ namespace CertPlatform.Admin.Services.Workflow.Models
 
         public int DurationMs { get; set; }
     }
+
+    /// <summary>
+    /// 节点审批请求
+    /// </summary>
+    public class NodeApprovalRequest
+    {
+        /// <summary>任务编码（wf_execution_task.Code）</summary>
+        public string TaskCode { get; set; } = "";
+
+        /// <summary>节点 ID</summary>
+        public string NodeId { get; set; } = "";
+
+        /// <summary>审批状态：approved / rejected</summary>
+        public string ApprovalStatus { get; set; } = "approved";
+
+        /// <summary>审批意见</summary>
+        public string? Comment { get; set; }
+
+        /// <summary>专家可信度评分 0.00~1.00</summary>
+        public decimal? Confidence { get; set; }
+
+        /// <summary>专家手动修改后的节点输出（JSON 字符串）</summary>
+        public string? ManualResult { get; set; }
+    }
+
 }

@@ -14,8 +14,9 @@ namespace CertPlatform.Shared.Entities.Dir
         [SugarColumn(Length = 64)]
         public string TaskId { get; set; } = string.Empty;
 
-        [SugarColumn(Length = 128)]
-        public string DirectoryCode { get; set; } = string.Empty;
+        /// <summary>目录配置 Code → <c>cert_standard_directory_config.Code</c>（原列名 <c>DirectoryCode</c>，P1 迁移已改列）</summary>
+        [SugarColumn(Length = 36)]
+        public string ConfigCode { get; set; } = string.Empty;
 
         public int TotalFiles { get; set; } = 0;
 

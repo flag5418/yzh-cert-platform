@@ -176,9 +176,11 @@ namespace CertPlatform.Admin.Services.Workflow
                 NodeId = n.NodeId,
                 NodeType = n.NodeType,
                 NodeTitle = n.NodeTitle,
+                NodeDescription = n.NodeDescription,
                 SkillCode = n.SkillCode,
                 ExecStatus = n.ExecStatus,
                 Output = DeserializeJson(n.OutputJson),
+                ApprovedOutput = string.IsNullOrEmpty(n.ApprovedOutputJson) ? null : DeserializeJson(n.ApprovedOutputJson),
                 ErrorMessage = n.ErrorMessage,
                 StartedAt = n.StartedAt,
                 CompletedAt = n.CompletedAt,
@@ -186,8 +188,51 @@ namespace CertPlatform.Admin.Services.Workflow
                 PromptTokens = n.PromptTokens,
                 CompletionTokens = n.CompletionTokens,
                 LlmDurationMs = n.LlmDurationMs,
+                AiModel = n.AiModel,
+                AiPrompt = n.AiPrompt,
+                SourceFileCode = n.SourceFileCode,
+                SourceFieldName = n.SourceFieldName,
+                SourceVersion = n.SourceVersion,
                 IsReused = n.IsReused
             }).ToList();
+
+            // 规则上下文（含条款信息，JOIN cert_iso_clause）
+            var ruleWithClause = await _db.Client.Queryable<CertPlatform.Shared.Entities.Cert.ValidationRule>()
+                .LeftJoin<CertPlatform.Shared.Entities.Cert.ISOClause>(
+                    (r, c) => r.ClauseCode == c.Code)
+                .Where((r, c) => r.RuleCode == task.RuleCode)
+                .Select((r, c) => new RuleContext
+                {
+                    RuleCode = r.RuleCode,
+                    RuleName = r.RuleName,
+                    RuleNameEn = r.RuleNameEn,
+                    ClauseCode = r.ClauseCode,
+                    ClauseNumber = c.Code,
+                    ClauseTitle = c.Title,
+                    SeverityIfViolated = r.SeverityIfViolated,
+                    JudgeMode = r.JudgeMode,
+                    NcDescriptionTemplate = r.NcDescriptionTemplate
+                })
+                .FirstAsync();
+            detail.RuleContext = ruleWithClause;
+
+            // 节点审批记录
+            var approvals = await _db.Client.Queryable<WfNodeApproval>()
+                .Where(a => a.TaskCode == taskCode && !a.IsDeleted)
+                .ToListAsync();
+            detail.NodeApprovals = approvals.ToDictionary(
+                a => a.NodeId,
+                a => new NodeApprovalDetail
+                {
+                    NodeId = a.NodeId,
+                    ApprovalStatus = a.ApprovalStatus,
+                    ApprverCode = a.ApprverCode,
+                    ApprverName = a.ApprverName,
+                    Comment = a.Comment,
+                    Confidence = a.Confidence,
+                    ManualResult = string.IsNullOrEmpty(a.ManualResult) ? null : ParseManualResult(a.ManualResult),
+                    ApprovedAt = a.ApprovedAt
+                });
 
             detail.Task.PathCount = detail.Paths.Count;
             detail.Task.NodeCount = detail.Nodes.Count;
@@ -218,6 +263,8 @@ namespace CertPlatform.Admin.Services.Workflow
             TestScope = t.TestScope,
             TaskStatus = t.TaskStatus,
             RuleCode = t.RuleCode,
+            RuleName = t.RuleName,
+            SeverityIfViolated = t.SeverityIfViolated,
             EnterpriseCode = t.EnterpriseCode,
             PhaseCode = t.PhaseCode,
             DurationMs = t.DurationMs,
@@ -250,6 +297,21 @@ namespace CertPlatform.Admin.Services.Workflow
             {
                 using var doc = JsonDocument.Parse(json);
                 // 必须 Clone：JsonDocument 释放后其 RootElement 不可用
+                return doc.RootElement.Clone();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>审批 ManualResult JSON 字符串 → JsonElement（安全解析）</summary>
+        private static JsonElement? ParseManualResult(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
                 return doc.RootElement.Clone();
             }
             catch

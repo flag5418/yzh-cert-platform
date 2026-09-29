@@ -24,6 +24,14 @@ namespace CertPlatform.Shared.Entities.Wf
         [MaxLength(20)]
         public string TaskType { get; set; } = string.Empty;
 
+        /// <summary>规则中文名称（执行时快照，防止规则改名后历史不可读）</summary>
+        [MaxLength(200)]
+        public string? RuleName { get; set; }
+
+        /// <summary>违规严重级别快照 major/minor/observation</summary>
+        [MaxLength(20)]
+        public string? SeverityIfViolated { get; set; }
+
         /// <summary>
         /// 测试范围：FULL | NODE | AI_NODE（仅 TaskType=TEST 时有效）
         /// <para>FULL    = 整流完整测试（start → … → end，穷举所有路径）</para>

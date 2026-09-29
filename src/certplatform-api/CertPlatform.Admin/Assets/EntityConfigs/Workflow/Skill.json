@@ -56,9 +56,9 @@
       "Placeholder": "Skill 名称"
     },
     {
-      "FieldName": "CategoryCode",
-      "DesName": "分类编码",
-      "Type": "TextBox",
+      "FieldName": "CategoryCodeName",
+      "DesName": "分类",
+      "Type": "Other",
       "Sxh": 3,
       "XsFlag": true,
       "BcFlag": false,
@@ -68,9 +68,28 @@
       "Col": 0,
       "RowSpan": 1,
       "ColSpan": 1,
+      "GroupIndex": "0",
+      "Mrz": "",
+      "Enable": false
+    },
+    {
+      "FieldName": "CategoryCode",
+      "DesName": "分类",
+      "Type": "ComboBox",
+      "DictCode": "skill_category",
+      "Sxh": 3,
+      "XsFlag": false,
+      "BcFlag": true,
+      "Yxk": false,
+      "Width": 120,
+      "Row": 0,
+      "Col": 0,
+      "RowSpan": 1,
+      "ColSpan": 1,
       "GroupIndex": "1",
       "Mrz": "",
-      "Enable": true
+      "Enable": true,
+      "Placeholder": "请选择分类"
     },
     {
       "FieldName": "SkillType",

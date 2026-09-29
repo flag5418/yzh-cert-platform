@@ -413,6 +413,9 @@ namespace CertPlatform.Shared.Entities.Dir
 
     /// <summary>
     /// 阶段文件节点
+    /// <para>⚠️ 与 <c>CertPlatform.Admin.Services.StandardDirectory.StageFileNode</c> **同名不同类**
+    /// （历史遗留双份定义）。当前接口序列化出去的是 Admin 命名空间的那份（同名遮蔽）；
+    /// 改字段必须**两处同步**，否则前端静默拿不到字段。</para>
     /// </summary>
     public class StageFileNode
     {
@@ -437,7 +440,7 @@ namespace CertPlatform.Shared.Entities.Dir
         public string StoragePath { get; set; }
 
         /// <summary>
-        /// 转换后文件的 MinIO 存储路径（.doc→.docx, .xls→.xlsx）
+        /// 转换后文件的 MinIO 存储路径（.doc→.docx, .xls→.xlsx）—— 遗留字段，停止写入新值
         /// </summary>
         public string ConvertedStoragePath { get; set; }
 
@@ -450,6 +453,19 @@ namespace CertPlatform.Shared.Entities.Dir
         /// 转换失败原因
         /// </summary>
         public string ConvertMessage { get; set; }
+
+        // ★ 2026-09-26 双产物链新增（与 Admin 侧同名类型同步）
+        /// <summary>预览 PDF 产物路径（PDF/图片透传时 == StoragePath）</summary>
+        public string PreviewPdfPath { get; set; }
+
+        /// <summary>提取用 Markdown 产物路径</summary>
+        public string MarkdownPath { get; set; }
+
+        /// <summary>Markdown 转换状态：none/pending/converting/completed/failed/unsupported</summary>
+        public string MarkdownStatus { get; set; }
+
+        /// <summary>Markdown 失败原因 / OCR 能力边界提示</summary>
+        public string MarkdownMessage { get; set; }
 
         /// <summary>
         /// 上传状态：pending/uploading/uploaded/active/failed/replacing

@@ -1,5 +1,7 @@
 using CertPlatform.Auditor.Services;
+using CertPlatform.Auditor.Services.Ent;
 using Microsoft.Extensions.DependencyInjection;
+using YZH.Core.Stand.Interfaces;
 
 namespace CertPlatform.Auditor;
 
@@ -14,12 +16,17 @@ public static class CertPlatformAuditorServiceExtensions
     public static IServiceCollection AddCertPlatformAuditorServices(this IServiceCollection services)
     {
         // ──── 专家注册 ────
-        // 依赖 IDbOrm / EntityService<T> / PasswordHelper，均由 YzhWebBuilder 注册为 Scoped/Singleton
         services.AddScoped<AuditorRegisterService>();
 
-        // ──── 工作区上下文解析（★ 专家端多租户隔离的唯一入口）────
-        // 专家端所有业务数据都按工作区隔离，EnterpriseController 等均依赖它
+        // ──── 工作区上下文解析 ────
         services.AddScoped<WorkspaceContextService>();
+
+        // ──── 企业资料服务 ────
+        services.AddScoped<EnterpriseFileService>();
+
+        // ──── 企业资料提取任务执行器（G-2c，TaskType=doc_extract）────
+        services.AddSingleton<EnterpriseExtractTaskExecutor>();
+        services.AddSingleton<IYzhTaskExecutor>(sp => sp.GetRequiredService<EnterpriseExtractTaskExecutor>());
 
         return services;
     }

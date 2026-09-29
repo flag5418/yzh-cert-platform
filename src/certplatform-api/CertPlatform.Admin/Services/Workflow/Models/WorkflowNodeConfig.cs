@@ -20,6 +20,9 @@ namespace CertPlatform.Admin.Services.Workflow.Models
         /// <summary>用户自定义名称（画布显示名），全流程唯一</summary>
         public string? Title { get; set; }
 
+        /// <summary>该节点在此工作流中的具体作用描述（由设计器填写，专家可见）</summary>
+        public string? Description { get; set; }
+
         /// <summary>功能节点的 Skill 编码（如 compare、assemble），非功能节点为空</summary>
         [JsonPropertyName("skillCode")]
         public string? SkillCode { get; set; }

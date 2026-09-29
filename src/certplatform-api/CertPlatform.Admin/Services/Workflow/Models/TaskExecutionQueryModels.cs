@@ -53,6 +53,12 @@ namespace CertPlatform.Admin.Services.Workflow.Models
 
         public string RuleCode { get; set; } = "";
 
+        /// <summary>规则中文名称（执行时快照）</summary>
+        public string? RuleName { get; set; }
+
+        /// <summary>违规严重级别快照</summary>
+        public string? SeverityIfViolated { get; set; }
+
         public string EnterpriseCode { get; set; } = "";
 
         public string PhaseCode { get; set; } = "";
@@ -102,6 +108,12 @@ namespace CertPlatform.Admin.Services.Workflow.Models
 
         /// <summary>第四层：节点（按 StartedAt, Id 升序 —— 与执行顺序一致）</summary>
         public List<TaskNodeDetail> Nodes { get; set; } = new();
+
+        /// <summary>节点审批记录（NodeId → NodeApprovalDetail）</summary>
+        public Dictionary<string, NodeApprovalDetail> NodeApprovals { get; set; } = new();
+
+        /// <summary>规则上下文（含条款信息，JOIN 一次性查齐）</summary>
+        public RuleContext? RuleContext { get; set; }
     }
 
     /// <summary>第二层：执行项明细</summary>
@@ -164,7 +176,11 @@ namespace CertPlatform.Admin.Services.Workflow.Models
 
         public string NodeType { get; set; } = "";
 
+        /// <summary>用户在设计器中填写的节点名称（专家可见的主标识）</summary>
         public string NodeTitle { get; set; } = "";
+
+        /// <summary>该节点在此工作流中的具体作用描述</summary>
+        public string? NodeDescription { get; set; }
 
         public string SkillCode { get; set; } = "";
 
@@ -172,6 +188,9 @@ namespace CertPlatform.Admin.Services.Workflow.Models
 
         /// <summary>节点输出（已解析为对象；超 64KB 时是 _truncated 信封）</summary>
         public JsonElement? Output { get; set; }
+
+        /// <summary>专家审批后最终输出（null=未审批或无修改）</summary>
+        public JsonElement? ApprovedOutput { get; set; }
 
         public string? ErrorMessage { get; set; }
 
@@ -190,7 +209,49 @@ namespace CertPlatform.Admin.Services.Workflow.Models
         /// <summary>纯 LLM API 调用耗时(ms)</summary>
         public int? LlmDurationMs { get; set; }
 
+        /// <summary>LLM 模型名（ai_node 有值）</summary>
+        public string? AiModel { get; set; }
+
+        /// <summary>渲染后送 API 的完整 prompt（ai_node 有值，8KB 截断）</summary>
+        public string? AiPrompt { get; set; }
+
+        /// <summary>源文件编码 cert_extraction_result.FileCode（docField/docTable 有值）</summary>
+        public string? SourceFileCode { get; set; }
+
+        /// <summary>源字段中文名（docField 有值）</summary>
+        public string? SourceFieldName { get; set; }
+
+        /// <summary>源文件版本号</summary>
+        public int? SourceVersion { get; set; }
+
         /// <summary>0=新执行 1=复用（注意：去重后 DB 里恒为 0，见 WfExecutionTaskService.SaveNodeExecutionsAsync 注释）</summary>
         public int IsReused { get; set; }
+    }
+
+    /// <summary>节点审批详情</summary>
+    public class NodeApprovalDetail
+    {
+        public string NodeId { get; set; } = "";
+        public string ApprovalStatus { get; set; } = "pending";
+        public string? ApprverCode { get; set; }
+        public string? ApprverName { get; set; }
+        public string? Comment { get; set; }
+        public decimal? Confidence { get; set; }
+        public JsonElement? ManualResult { get; set; }
+        public DateTime? ApprovedAt { get; set; }
+    }
+
+    /// <summary>规则上下文（JOIN 查齐，前端无需二次请求）</summary>
+    public class RuleContext
+    {
+        public string RuleCode { get; set; } = "";
+        public string? RuleName { get; set; }
+        public string? RuleNameEn { get; set; }
+        public string? ClauseCode { get; set; }
+        public string? ClauseNumber { get; set; }
+        public string? ClauseTitle { get; set; }
+        public string? SeverityIfViolated { get; set; }
+        public string? JudgeMode { get; set; }
+        public string? NcDescriptionTemplate { get; set; }
     }
 }

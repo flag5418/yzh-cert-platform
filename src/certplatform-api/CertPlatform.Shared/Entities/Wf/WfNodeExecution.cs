@@ -40,9 +40,13 @@ namespace CertPlatform.Shared.Entities.Wf
         [MaxLength(30)]
         public string NodeType { get; set; } = string.Empty;
 
-        /// <summary>节点名称快照</summary>
+        /// <summary>节点名称快照（用户在设计器中填写的中文名称）</summary>
         [MaxLength(128)]
         public string NodeTitle { get; set; } = string.Empty;
+
+        /// <summary>该节点在此工作流中的具体作用描述（由设计器填写，专家可见）</summary>
+        [MaxLength(500)]
+        public string? NodeDescription { get; set; }
 
         /// <summary>Skill编码（功能节点）</summary>
         [MaxLength(64)]
@@ -81,6 +85,29 @@ namespace CertPlatform.Shared.Entities.Wf
 
         /// <summary>是否复用了历史结果：0=新执行 1=复用</summary>
         public int IsReused { get; set; } = 0;
+
+        /// <summary>源文件编码 cert_extraction_result.FileCode（docField/docTable 有值）</summary>
+        [MaxLength(200)]
+        public string? SourceFileCode { get; set; }
+
+        /// <summary>源字段中文名（docField 有值）</summary>
+        [MaxLength(200)]
+        public string? SourceFieldName { get; set; }
+
+        /// <summary>源文件版本号（cert_extraction_result.VersionNumber）</summary>
+        public int? SourceVersion { get; set; }
+
+        /// <summary>LLM 模型名（ai_node 有值，如 qwen-turbo）</summary>
+        [MaxLength(100)]
+        public string? AiModel { get; set; }
+
+        /// <summary>渲染后送 API 的完整 prompt（8KB 截断，ai_node 有值）</summary>
+        [SugarColumn(ColumnDataType = "longtext")]
+        public string? AiPrompt { get; set; }
+
+        /// <summary>专家审批后最终输出（null=未审批或无修改）</summary>
+        [SugarColumn(ColumnDataType = "json")]
+        public string? ApprovedOutputJson { get; set; }
 
         // ──── ISoftDelete + IIsValid 接口显式实现 ────
         public bool IsDeleted { get; set; }

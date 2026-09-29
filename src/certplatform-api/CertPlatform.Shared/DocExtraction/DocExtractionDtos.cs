@@ -25,7 +25,7 @@ namespace CertPlatform.Shared.DocExtraction
 
         public string OrgCode { get; set; } = "";
         public string StandardCode { get; set; } = "";
-        public string PhaseCode { get; set; } = "";
+        public string StageCode { get; set; } = "";
         public string Skill { get; set; } = "";
         public List<FieldDefDto> Fields { get; set; } = new();
         public List<TableDefDto> Tables { get; set; } = new();
@@ -159,7 +159,7 @@ namespace CertPlatform.Shared.DocExtraction
         [JsonPropertyName("standardFileCode")] public string StandardFileCode { get; set; } = "";
         [JsonPropertyName("orgCode")] public string OrgCode { get; set; } = "";
         [JsonPropertyName("standardCode")] public string StandardCode { get; set; } = "";
-        [JsonPropertyName("phaseCode")] public string PhaseCode { get; set; } = "";
+        [JsonPropertyName("stageCode")] public string StageCode { get; set; } = "";
         [JsonPropertyName("skill")] public string Skill { get; set; } = "";
         [JsonPropertyName("prompt")] public string? Prompt { get; set; }
         [JsonPropertyName("isValid")] public bool IsValid { get; set; }

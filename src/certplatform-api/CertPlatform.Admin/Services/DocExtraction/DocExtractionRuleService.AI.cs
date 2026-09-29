@@ -169,7 +169,7 @@ public partial class DocExtractionRuleService
 
     /// <summary>标准文件信息（用于转换/预览定位）</summary>
     private record FileInfoResult(
-        string? FileName, string? StoragePath,
+        string? FileCode, string? FileName, string? StoragePath,
         string? PreviewPdfPath, string? MarkdownPath, string? MarkdownStatus, string? MarkdownMessage);
 
     /// <summary>
@@ -179,13 +179,15 @@ public partial class DocExtractionRuleService
     private async Task<FileInfoResult> GetFileInfoAsync(string standardFileCode)
     {
         if (string.IsNullOrEmpty(standardFileCode))
-            return new FileInfoResult(null, null, null, null, null, null);
+            return new FileInfoResult(null, null, null, null, null, null, null);
 
         // 1. 优先：文件要求的模板文件（Code=FR-xxx）
         // ⚠️ 列名以实际表结构为准：本环境 cert_file_requirement 采用新架构 PascalCase 列
         //    （Code/FileNameTemplate/IsValid/IsDeleted…），不存在 template_storage_path / template_file_name，
         //    旧版 snake_case 列名会让该查询持续抛 Unknown column 并刷爆日志。
         //    模板文件存储列缺失时该分支自然降级到「实际标准目录文件」，不影响可用性。
+        // ⚠️ 模板表**无产物列**（无 PreviewPdfPath/MarkdownPath/MarkdownStatus）→ 模板文件永远走实时转换。
+        //    这是已知缺口（见 TODO T-05），需用户裁决是否为该表补产物列。
         var fr = (await _db.Client.Queryable<FileRequirement>()
             .Where(x => x.Code == standardFileCode)
             .Where("IsValid = 1 AND IsDeleted = 0")
@@ -197,14 +199,16 @@ public partial class DocExtractionRuleService
             })
             .FirstAsync());
         if (fr != null && !string.IsNullOrEmpty(fr.TemplateStoragePath))
-            return new FileInfoResult(fr.TemplateFileName ?? fr.FileNameTemplate, fr.TemplateStoragePath, null, null, null, null);
+            return new FileInfoResult(standardFileCode, fr.TemplateFileName ?? fr.FileNameTemplate,
+                fr.TemplateStoragePath, null, null, null, null);
 
         // 2. 兜底：实际上传的标准目录文件（FileCode=FL-xxx）
-        var dir = (await _db.GetOneAsync<StandardDirectoryFile>(x => x.FileCode == standardFileCode)).Data;
+        var dir = (await _db.GetOneAsync<StandardDirectoryFile>(x => x.Code == standardFileCode)).Data;
         if (dir != null && !string.IsNullOrEmpty(dir.StoragePath))
-            return new FileInfoResult(dir.FileName, dir.StoragePath, dir.PreviewPdfPath, dir.MarkdownPath, dir.MarkdownStatus, dir.MarkdownMessage);
+            return new FileInfoResult(dir.Code, dir.FileName, dir.StoragePath,
+                dir.PreviewPdfPath, dir.MarkdownPath, dir.MarkdownStatus, dir.MarkdownMessage);
 
-        return new FileInfoResult(null, null, null, null, null, null);
+        return new FileInfoResult(standardFileCode, null, null, null, null, null, null);
     }
 
     private class FrRow
@@ -219,48 +223,159 @@ public partial class DocExtractionRuleService
     // ========================================================
 
     /// <summary>
-    /// 获取文档 Markdown 上下文：优先 MinIO 产物 → cert_doc_extraction_rule.doc_content 缓存 → 实时转换
+    /// 获取文档 Markdown 上下文。
+    /// <para>顺序：① MinIO 产物（转换队列已产出）→ ② 实时转换（成功后**回写产物**）</para>
+    /// <para>★ 2026-09-26 两条关键改动：</para>
+    /// <list type="number">
+    ///   <item><b>能力边界短路</b>：<c>MarkdownStatus == "unsupported"</c>（图片/扫描件）时**直接返回提示**，
+    ///         不再调 anydoc。原实现每次都白跑一次容器转换，且最终报一个笼统的"转换失败"，
+    ///         用户看不出「这不是故障，是需要人工填写」。</item>
+    ///   <item><b>实时转换落库（T-04）</b>：原实现"用完即弃"，导致每次预览/提取都重转，
+    ///         产物列填充率永远为 0 —— 这正是用户观察到「预览时才动态转」的直接原因。</item>
+    /// </list>
     /// </summary>
     private async Task<(string? Markdown, string? Error)> GetDocumentMarkdownAsync(string fileCode, string fileName)
     {
-        // 1. MinIO 产物（转换队列已完成）
         var fileInfo = await GetFileInfoAsync(fileCode);
+
+        // 1. MinIO 产物（转换队列已完成）
         if (!string.IsNullOrEmpty(fileInfo.MarkdownPath) && fileInfo.MarkdownStatus == "completed")
         {
-            try
-            {
-                var (stream, _) = await _storage.DownloadAsync(fileInfo.MarkdownPath.TrimStart('/'));
-                using var ms = new MemoryStream();
-                await stream.CopyToAsync(ms);
-                var md = Encoding.UTF8.GetString(ms.ToArray());
-                if (!string.IsNullOrWhiteSpace(md)) return (md, null);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "[DocExtractionRule] Markdown 产物读取失败，回退实时转换: {FileCode}", fileCode);
-            }
+            var md = await TryReadTextAsync(fileInfo.MarkdownPath);
+            if (!string.IsNullOrWhiteSpace(md)) return (md, null);
+            _logger.LogWarning("[DocExtractionRule] Markdown 产物读取失败，回退实时转换: {FileCode}", fileCode);
         }
 
-        // 2. 实时转换（anydoc 直转，毫秒级）
+        // 2. ★ 能力边界短路：已知不支持自动提取（图片/扫描件）→ 不再白跑容器转换
+        //    注：只读「持久化的产物字段」；FR 模板表（cert_file_requirement）无该字段，天然跳过
+        if (fileInfo.MarkdownStatus == "unsupported")
+        {
+            var msg = string.IsNullOrWhiteSpace(fileInfo.MarkdownMessage)
+                ? OcrResult.DefaultNotAvailableMessage
+                : fileInfo.MarkdownMessage!;
+            return (null, msg);
+        }
+
         if (string.IsNullOrEmpty(fileInfo.FileName) || string.IsNullOrEmpty(fileInfo.StoragePath))
             return (null, "未找到可分析的文件：请确认该标准已上传模板文件（文件要求），或该文件已上传到标准目录");
 
+        // 3. 实时转换（anydoc 直转），成功后**回写产物**
         try
         {
-            var (stream, _) = await _storage.DownloadAsync(fileInfo.StoragePath.TrimStart('/'));
-            using var ms = new MemoryStream();
-            await stream.CopyToAsync(ms);
+            var bytes = await TryReadBytesAsync(fileInfo.StoragePath);
+            if (bytes == null) return (null, "源文件读取失败（对象不存在或存储不可用）");
 
-            var result = await _convertClient.ConvertToMarkdownAsync(fileInfo.FileName, ms.ToArray());
+            var result = await _convertClient.ConvertToMarkdownAsync(fileInfo.FileName, bytes);
+
+            // 3a. 图片/扫描件：置 unsupported（能力边界，不是故障），并持久化提示
+            if (!result.Success && result.NeedsOcr)
+            {
+                await PersistMarkdownStatusAsync(fileCode, "unsupported", result.Message);
+                return (null, result.Message);
+            }
+
             if (!result.Success || result.Content == null)
                 return (null, result.Message);
 
-            return (Encoding.UTF8.GetString(result.Content), null);
+            var markdown = Encoding.UTF8.GetString(result.Content);
+
+            // 3b. ★ 回写产物（T-04）：让下一次读取命中产物，不再重转
+            await PersistMarkdownProductAsync(fileInfo, result.Content);
+
+            return (markdown, null);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[DocExtractionRule] 实时转换失败: {FileCode}", fileCode);
             return (null, $"文档转换失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>读取 MinIO 文本对象（失败返回 null，不抛）</summary>
+    private async Task<string?> TryReadTextAsync(string storagePath)
+    {
+        try
+        {
+            var (stream, _) = await _storage.DownloadAsync(storagePath.TrimStart('/'));
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            return Encoding.UTF8.GetString(ms.ToArray());
+        }
+        catch { return null; }
+    }
+
+    /// <summary>读取 MinIO 二进制对象（失败返回 null，不抛）</summary>
+    private async Task<byte[]?> TryReadBytesAsync(string storagePath)
+    {
+        try
+        {
+            var (stream, _) = await _storage.DownloadAsync(storagePath.TrimStart('/'));
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            return ms.ToArray();
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// 回写 Markdown 产物（T-04）：上传 MinIO + 更新产物列与状态。
+    /// <para>只对**标准目录文件**（<c>cert_standard_directory_file</c>）生效 —— 产物路径由源路径派生，
+    /// FR 模板表无 <c>StoragePath</c> 语义，跳过。</para>
+    /// </summary>
+    private async Task PersistMarkdownProductAsync(FileInfoResult fileInfo, byte[] content)
+    {
+        try
+        {
+            var dirFile = (await _db.GetOneAsync<StandardDirectoryFile>(
+                x => x.Code == fileInfo.FileCode)).Data;
+            if (dirFile == null || string.IsNullOrEmpty(dirFile.StoragePath)) return;
+
+            var targetPath = CertPlatform.Admin.Services.StandardDirectory.CodeGeneratorService.BuildProductPath(
+                dirFile.StoragePath,
+                CertPlatform.Admin.Services.StandardDirectory.CodeGeneratorService.ProductKindMarkdown,
+                ".md");
+            if (string.IsNullOrEmpty(targetPath)) return;
+
+            using (var s = new MemoryStream(content))
+                await _storage.UploadAsync(targetPath.TrimStart('/'), s, content.Length, "text/markdown");
+
+            dirFile.MarkdownPath = targetPath;
+            dirFile.MarkdownStatus = "completed";
+            dirFile.MarkdownMessage = null;
+            dirFile.MarkdownDate = DateTime.Now;
+            await _db.UpdateAsync(dirFile,
+                nameof(StandardDirectoryFile.MarkdownPath),
+                nameof(StandardDirectoryFile.MarkdownStatus),
+                nameof(StandardDirectoryFile.MarkdownMessage),
+                nameof(StandardDirectoryFile.MarkdownDate));
+
+            _logger.LogInformation("[DocExtractionRule] 实时转换产物已回写: {FileCode} → {Path}", fileInfo.FileCode, targetPath);
+        }
+        catch (Exception ex)
+        {
+            // 回写失败不影响本次提取结果（下次仍会实时转换）
+            _logger.LogWarning(ex, "[DocExtractionRule] 产物回写失败（不影响本次提取）: {FileCode}", fileInfo.FileCode);
+        }
+    }
+
+    /// <summary>持久化 Markdown 状态（能力边界/失败原因），避免下次重复尝试</summary>
+    private async Task PersistMarkdownStatusAsync(string fileCode, string status, string? message)
+    {
+        try
+        {
+            var dirFile = (await _db.GetOneAsync<StandardDirectoryFile>(
+                x => x.Code == fileCode)).Data;
+            if (dirFile == null) return;
+
+            dirFile.MarkdownStatus = status;
+            dirFile.MarkdownMessage = message;
+            await _db.UpdateAsync(dirFile,
+                nameof(StandardDirectoryFile.MarkdownStatus),
+                nameof(StandardDirectoryFile.MarkdownMessage));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[DocExtractionRule] Markdown 状态持久化失败: {FileCode}", fileCode);
         }
     }
 
@@ -310,21 +425,63 @@ public partial class DocExtractionRuleService
             }
         }
 
-        // 实时转换（LibreOffice）
+        // 实时转换（LibreOffice），成功后**回写产物**（T-04：避免每次预览都重转）
         try
         {
-            var (stream, _) = await _storage.DownloadAsync(fileInfo.StoragePath.TrimStart('/'));
-            using var ms = new MemoryStream();
-            await stream.CopyToAsync(ms);
-            var result = await _convertClient.ConvertToPdfAsync(fileInfo.FileName, ms.ToArray());
+            var sourceBytes = await TryReadBytesAsync(fileInfo.StoragePath);
+            if (sourceBytes == null) return (null, null, "源文件读取失败（对象不存在或存储不可用）");
+
+            var result = await _convertClient.ConvertToPdfAsync(fileInfo.FileName, sourceBytes);
             if (!result.Success || result.Content == null)
                 return (null, null, result.Message);
+
+            await PersistPreviewPdfProductAsync(fileInfo, result.Content);
+
             return (result.Content, Path.GetFileNameWithoutExtension(fileInfo.FileName), null);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[DocExtractionRule] 预览转换失败: {FileCode}", fileCode);
             return (null, null, $"预览转换失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 回写预览 PDF 产物（T-04）：上传 MinIO + 更新 <c>PreviewPdfPath</c>/<c>ConvertStatus</c>。
+    /// <para>只对标准目录文件生效（FR 模板表无产物列）。回写失败不影响本次预览。</para>
+    /// </summary>
+    private async Task PersistPreviewPdfProductAsync(FileInfoResult fileInfo, byte[] content)
+    {
+        try
+        {
+            var dirFile = (await _db.GetOneAsync<StandardDirectoryFile>(
+                x => x.Code == fileInfo.FileCode)).Data;
+            if (dirFile == null || string.IsNullOrEmpty(dirFile.StoragePath)) return;
+
+            var targetPath = CertPlatform.Admin.Services.StandardDirectory.CodeGeneratorService.BuildProductPath(
+                dirFile.StoragePath,
+                CertPlatform.Admin.Services.StandardDirectory.CodeGeneratorService.ProductKindPdf,
+                ".pdf");
+            if (string.IsNullOrEmpty(targetPath)) return;
+
+            using (var s = new MemoryStream(content))
+                await _storage.UploadAsync(targetPath.TrimStart('/'), s, content.Length, "application/pdf");
+
+            dirFile.PreviewPdfPath = targetPath;
+            dirFile.ConvertStatus = "completed";
+            dirFile.ConvertMessage = null;
+            dirFile.ConvertDate = DateTime.Now;
+            await _db.UpdateAsync(dirFile,
+                nameof(StandardDirectoryFile.PreviewPdfPath),
+                nameof(StandardDirectoryFile.ConvertStatus),
+                nameof(StandardDirectoryFile.ConvertMessage),
+                nameof(StandardDirectoryFile.ConvertDate));
+
+            _logger.LogInformation("[DocExtractionRule] 预览产物已回写: {FileCode} → {Path}", fileInfo.FileCode, targetPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[DocExtractionRule] 预览产物回写失败（不影响本次预览）: {FileCode}", fileInfo.FileCode);
         }
     }
 
@@ -700,6 +857,68 @@ public partial class DocExtractionRuleService
     }
 
     // ========================================================
+    // 企业域提取（G-2b）：Markdown 直入，跳过 DB 取 MD / sample 缓存
+    // ========================================================
+
+    /// <summary>
+    /// 按已配置规则对**给定 Markdown** 直接跑 LLM 提取（企业资料提取执行器用，06 册 G-2b）。
+    /// <para>与 VerifyPromptAsync 的区别：① 文档内容由调用方直传（企业行产物链已转好）；
+    /// ② **不落 rule.SampleData**（那是模板域配置期样例，写入企业数据会污染模板规则回显）。</para>
+    /// <para>提取结果由调用方（EnterpriseExtractTaskExecutor）经
+    /// <see cref="SaveEnterpriseExtractionResultsAsync"/> 落 B-08/B-09 企业域。</para>
+    /// </summary>
+    public async Task<(bool Ok, string? Error, ExtractionData? Data)> TestFieldWithMarkdownAsync(
+        string standardFileCode, string markdown, string enterpriseCode)
+    {
+        if (string.IsNullOrWhiteSpace(standardFileCode))
+            return (false, "缺少标准文件编码 StandardFileCode", null);
+        if (string.IsNullOrWhiteSpace(markdown))
+            return (false, "Markdown 内容为空", null);
+        if (string.IsNullOrWhiteSpace(enterpriseCode))
+            return (false, "更新失败：缺少业务键 EnterpriseCode", null);
+
+        var settings = await GetAiSettingsAsync();
+        if (!settings.Enabled)
+            return (false, "AI 提取未启用（系统参数 ai_extract_enabled=false）", null);
+
+        var rule = (await _db.GetOneAsync<DocExtractionRule>(x => x.StandardFileCode == standardFileCode)).Data;
+        if (rule == null)
+            return (false, "该文件未配置提取规则", null);
+
+        var (defFields, defTables) = await LoadRuleDefsAsync(standardFileCode);
+        var userPrompt = (rule.Prompt ?? "").Trim();
+        var promptTemplate = string.IsNullOrEmpty(userPrompt)
+            ? BuildFixedExtractionPrompt(defFields, defTables)
+            : userPrompt;
+        var structured = BuildStructuredContext(markdown);
+        var (renderedPrompt, inlineContent) = RenderPrompt(promptTemplate, structured, defFields, defTables, rule.Prompt);
+
+        var llmResult = await _llm.CompleteAsync(new CertPlatform.Shared.DocExtraction.LlmInvokeRequest
+        {
+            BaseUrl = settings.BaseUrl,
+            ApiKey = settings.ApiKey,
+            Model = settings.Model,
+            Temperature = settings.Temperature,
+            MaxTokens = Math.Max(settings.MaxTokens, 8192),
+            Prompt = renderedPrompt,
+            DocumentContent = inlineContent,
+            ForceJson = true
+        });
+
+        await LogAiUsageAsync(_db, _logger, "enterprise_extract",
+            rule.Skill ?? ResolveSkill(standardFileCode), standardFileCode, settings, llmResult);
+
+        if (!llmResult.Success || llmResult.Json == null)
+            return (false, string.IsNullOrEmpty(llmResult.Message) ? "AI 返回内容无法解析为 JSON" : llmResult.Message, null);
+
+        var extraction = MapOutputsToExtractionData(llmResult.Json.RootElement, defFields, defTables);
+        if (extraction == null)
+            return (false, "AI 返回内容无法解析为提取结果", null);
+
+        return (true, null, extraction);
+    }
+
+    // ========================================================
     // 输出映射（对照旧 MapAiFieldsToDtos / MapAiTablesToDtos / MapOutputsToExtractionData）
     // ========================================================
 
@@ -726,6 +945,14 @@ public partial class DocExtractionRuleService
             var nameEn = GetString(fd, "field_name_en") ?? GetString(fd, "field_code") ?? "";
             var extractedValue = GetString(fd, "extracted_value");
             var isRequired = GetBool(fd, "is_required");
+
+            // 英名列不接受中文（AI 偶发把中文/中文编码塞进 field_name_en、field_code）：
+            // 无中文名 → 中文内容回填中文列；有中文名 → 英列清空，留给人工补英文
+            if (HasCjk(nameEn))
+            {
+                if (string.IsNullOrWhiteSpace(nameCn)) nameCn = nameEn;
+                nameEn = "";
+            }
 
             // V2 模式：只保留有实际提取值的字段
             if (usesV2 && string.IsNullOrWhiteSpace(extractedValue)) continue;
@@ -766,6 +993,11 @@ public partial class DocExtractionRuleService
 
             var tableNameCn = GetString(td, "table_name_cn") ?? GetString(td, "table_name") ?? "";
             var tableNameEn = GetString(td, "table_name_en") ?? GetString(td, "table_code") ?? "";
+            if (HasCjk(tableNameEn))
+            {
+                if (string.IsNullOrWhiteSpace(tableNameCn)) tableNameCn = tableNameEn;
+                tableNameEn = "";
+            }
 
             var cols = new List<TableColumnDto>();
             if (td.TryGetProperty("columns", out var colsEl) && colsEl.ValueKind == JsonValueKind.Array)
@@ -775,6 +1007,11 @@ public partial class DocExtractionRuleService
                     if (cd.ValueKind != JsonValueKind.Object) continue;
                     var colNameCn = GetString(cd, "column_name_cn") ?? GetString(cd, "column_name") ?? "";
                     var colNameEn = GetString(cd, "column_name_en") ?? GetString(cd, "column_code") ?? "";
+                    if (HasCjk(colNameEn))
+                    {
+                        if (string.IsNullOrWhiteSpace(colNameCn)) colNameCn = colNameEn;
+                        colNameEn = "";
+                    }
                     cols.Add(new TableColumnDto
                     {
                         Name = colNameCn,
@@ -1396,10 +1633,11 @@ public partial class DocExtractionRuleService
         };
         return $@"你是专业的文档分析助手。请分析以下{skillDesc}的内容结构，推荐需要提取的字段和表格。
 输出要求：
-1. fields: 数组，每项含 field_code（英文驼峰）、field_name（中文名称）、field_type（string/number/date）、description
-2. tables: 数组，每项含 table_code（英文驼峰）、table_name（中文名称）、description、columns（列定义数组，每项含 column_code / column_name / column_type）
+1. fields: 数组，每项含 field_code（英文驼峰）、field_name（中文名称，必填，取文档原标签）、field_name_en（英文名称，仅拉丁字母/数字/下划线，与 field_name 语义一致，禁止中文）、field_type（string/number/date）、description
+2. tables: 数组，每项含 table_code（英文驼峰）、table_name（中文名称，必填）、table_name_en（英文名称，规则同上）、description、columns（列定义数组，每项含 column_code / column_name / column_name_en / column_type）
 
 规则（必须遵守）：
+- field_name_en / table_name_en / column_name_en 必须是英文（拉丁字母、数字、下划线），出现任何中文字符即为无效输出；禁止把中文名复制到 *_name_en
 - 内容中的 Markdown 表格（| 开头的行块）属于表格数据，表格内的单元格内容（如""质量方针""、""质量目标""）禁止作为 fields 提取
 - 表格内容只能通过 tables 提取，每个表格只需输出名称与列定义 columns，不要将表格内容拆成独立字段
 - fields 只从普通段落中提取，且必须能在文档中找到实际内容
@@ -1458,6 +1696,10 @@ public partial class DocExtractionRuleService
 
     private static string? GetString(JsonElement el, string name)
         => el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    /// <summary>含 CJK 汉字（用于拦截 AI 把中文写进 *_name_en 英名列）</summary>
+    private static bool HasCjk(string? s)
+        => !string.IsNullOrEmpty(s) && s.Any(c => c >= '\u4E00' && c <= '\u9FFF');
 
     private static bool GetBool(JsonElement el, string name)
         => el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.True;

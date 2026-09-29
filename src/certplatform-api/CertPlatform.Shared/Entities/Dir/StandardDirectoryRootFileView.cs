@@ -27,12 +27,6 @@ namespace CertPlatform.Shared.Entities.Dir
         [SugarColumn(IsIgnore = true)]
         public new DateTime? UpdateTime { get; set; }
 
-        [SugarColumn(IsIgnore = true)]
-        public new string? UpdateBy { get; set; }
-
-        [SugarColumn(ColumnName = "FileCode")]
-        public string FileCode { get; set; } = "";
-
         [SugarColumn(ColumnName = "FileName")]
         public string FileName { get; set; } = "";
 
@@ -51,14 +45,28 @@ namespace CertPlatform.Shared.Entities.Dir
         [SugarColumn(ColumnName = "ConvertMessage")]
         public string? ConvertMessage { get; set; }
 
+        // ★ 2026-09-26 双产物链：视图已同步加列（scripts/db/views/v_standard_directory_root_files.sql）
+        // 缺列时根级文件拿不到产物路径与提取链状态 → 前端静默显示空状态
+        [SugarColumn(ColumnName = "PreviewPdfPath")]
+        public string? PreviewPdfPath { get; set; }
+
+        [SugarColumn(ColumnName = "MarkdownPath")]
+        public string? MarkdownPath { get; set; }
+
+        [SugarColumn(ColumnName = "MarkdownStatus")]
+        public string? MarkdownStatus { get; set; }
+
+        [SugarColumn(ColumnName = "MarkdownMessage")]
+        public string? MarkdownMessage { get; set; }
+
         [SugarColumn(ColumnName = "UploadStatus")]
         public string? UploadStatus { get; set; }
 
         [SugarColumn(ColumnName = "TaskId")]
         public string? TaskId { get; set; }
 
-        [SugarColumn(ColumnName = "DirectoryCode")]
-        public string DirectoryCode { get; set; } = "";
+        [SugarColumn(ColumnName = "ConfigCode")]
+        public string ConfigCode { get; set; } = "";
 
         [SugarColumn(ColumnName = "FolderCode")]
         public string? FolderCode { get; set; }

@@ -35,7 +35,11 @@ namespace CertPlatform.Shared.Entities.Wf
         [StringLength(50)]
         public string SkillType { get; set; } = "manual";
 
-        /// <summary>分类编码（DB: CategoryCode，关联 wf_skill_category.Code）</summary>
+        /// <summary>
+        /// 分类编码（DB: CategoryCode）
+        /// 关联值 = 字典「技能分类」(DicNo='skill_category') 字典项的 DicValue（如 data_access）；
+        /// 分类本身在「字典管理」页面维护（2026-09-26 分类字典化，原 wf_skill_category 已废弃）
+        /// </summary>
         [StringLength(64)]
         public string? CategoryCode { get; set; }
 

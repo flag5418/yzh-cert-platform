@@ -182,13 +182,51 @@ namespace CertPlatform.Admin.Services.Workflow
             Dictionary<string, List<WorkflowEdgeConfig>> adjacency,
             Dictionary<string, List<WorkflowEdgeConfig>> inEdges)
         {
-            // 校验 1：每个节点至少有一条入边（start 除外）
-            foreach (var node in config.Nodes)
+            // 校验 1：每个非 start/end 节点必须能从 end 反向可达（与前端 validateTopology 语义对齐）
+            // <para>允许独立数据源节点（docField/docTable 等）不连入 start，只要下游消费链能通到 end</para>
+            var endNodes = config.Nodes.Where(n =>
+                string.Equals(n.NodeType, "end", StringComparison.OrdinalIgnoreCase))
+                .Select(n => n.NodeId).ToList();
+            if (endNodes.Count > 0)
             {
-                if (string.Equals(node.NodeType, "start", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                if (inEdges[node.NodeId].Count == 0)
-                    throw new InvalidOperationException($"节点 {node.NodeId} 没有入边（除 start 外所有节点必须有入边）");
+                var canReachEnd = new HashSet<string>();
+                var revAdj = new Dictionary<string, List<WorkflowEdgeConfig>>();
+                foreach (var eid in endNodes)
+                    canReachEnd.Add(eid);
+                foreach (var node in config.Nodes)
+                    revAdj[node.NodeId] = new List<WorkflowEdgeConfig>();
+                foreach (var node in config.Nodes)
+                {
+                    if (adjacency.TryGetValue(node.NodeId, out var outs))
+                        foreach (var e in outs)
+                            revAdj[e.Target].Add(new WorkflowEdgeConfig { Source = node.NodeId, Target = e.Source });
+                }
+                var queue = new Queue<string>();
+                foreach (var eid in endNodes)
+                {
+                    queue.Enqueue(eid);
+                    canReachEnd.Add(eid);
+                }
+                while (queue.Count > 0)
+                {
+                    var cur = queue.Dequeue();
+                    if (revAdj.TryGetValue(cur, out var revs))
+                    {
+                        foreach (var r in revs)
+                        {
+                            if (canReachEnd.Add(r.Source))
+                                queue.Enqueue(r.Source);
+                        }
+                    }
+                }
+                foreach (var node in config.Nodes)
+                {
+                    if (string.Equals(node.NodeType, "start", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(node.NodeType, "end",   StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (!canReachEnd.Contains(node.NodeId))
+                        throw new InvalidOperationException($"节点 {node.NodeId} 无法到达任何 end 节点（死路/孤立）");
+                }
             }
 
             // 校验 2：每个节点至少有一条出边（end 除外）
@@ -218,13 +256,13 @@ namespace CertPlatform.Admin.Services.Workflow
             }
 
             // 校验 4：无环（DFS 检测）
-            var startNode = config.Nodes.FirstOrDefault(n =>
+            var cycleStart = config.Nodes.FirstOrDefault(n =>
                 string.Equals(n.NodeType, "start", StringComparison.OrdinalIgnoreCase));
-            if (startNode != null)
+            if (cycleStart != null)
             {
                 var visited = new HashSet<string>();
                 var recursionStack = new HashSet<string>();
-                DetectCycle(startNode.NodeId, adjacency, visited, recursionStack);
+                DetectCycle(cycleStart.NodeId, adjacency, visited, recursionStack);
             }
 
             _logger.LogInformation("[WorkflowConfigParser] 拓扑校验通过");

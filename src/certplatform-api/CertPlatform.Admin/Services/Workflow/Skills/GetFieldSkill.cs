@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using YZH.Core.DataBase.Interfaces;
+using CertPlatform.Shared.Constants;
 using CertPlatform.Shared.Entities.Doc;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills
@@ -25,7 +26,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         public static async Task<SkillResult> ExecuteAsync(
             [SkillParam(Description = "字段编码，如 iso9001.ent_base.biz_lic.Name")]
             string field_code,
-            [SkillParam(Description = "企业编码（空=标准样例企业 YZH-STD-ENT）")]
+            [SkillParam(Description = "企业编码（空=标准样例企业=虚拟企业常量）")]
             string enterprise_code,
             [SkillParam(Description = "文件编码，可选，文件级过滤")]
             string? file_code = null,
@@ -36,7 +37,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                 return SkillResult.Fail("field_code 不能为空");
 
             // 企业编码兜底（与 NodeExecutor docField 节点一致）
-            var entCode = string.IsNullOrWhiteSpace(enterprise_code) ? "YZH-STD-ENT" : enterprise_code;
+            var entCode = string.IsNullOrWhiteSpace(enterprise_code) ? YzhVirtualEnterprise.Code : enterprise_code;
 
             var fields = (await db.GetListAsync<CertPlatform.Shared.Entities.Doc.ExtractionResult>(x =>
                 x.FieldCode == field_code && x.EnterpriseCode == entCode)).Data ?? new();

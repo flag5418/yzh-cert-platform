@@ -34,9 +34,9 @@ namespace CertPlatform.Shared.Entities.Dir
         [SugarColumn(ColumnName = "TaskId")]
         public string TaskId { get; set; } = "";
 
-        /// <summary>目录编码</summary>
-        [SugarColumn(ColumnName = "DirectoryCode")]
-        public string DirectoryCode { get; set; } = "";
+        /// <summary>目录配置 Code → 视图列 <c>ConfigCode</c>（P1 迁移：原 DirectoryCode）</summary>
+        [SugarColumn(ColumnName = "ConfigCode")]
+        public string ConfigCode { get; set; } = "";
 
         /// <summary>总文件数</summary>
         [SugarColumn(ColumnName = "TotalFiles")]

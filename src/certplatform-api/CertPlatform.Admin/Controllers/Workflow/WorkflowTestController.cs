@@ -350,5 +350,34 @@ namespace CertPlatform.Admin.Controllers.Workflow
 
             return debugInfo;
         }
+
+        // ════════════════════════════════════════
+        // 节点审批
+        // ════════════════════════════════════════
+
+        /// <summary>
+        /// 提交/更新节点审批
+        /// <para>用途：审核员对单条执行记录中的节点结果进行认可/驳回/修改。</para>
+        /// </summary>
+        [HttpPost("approve")]
+        public async Task<IActionResult> ApproveNode([FromBody] NodeApprovalRequest request, CancellationToken ct)
+        {
+            if (request == null || string.IsNullOrEmpty(request.TaskCode) || string.IsNullOrEmpty(request.NodeId))
+                return Ok(ApiResponse.Fail("TaskCode 和 NodeId 不能为空"));
+
+            if (request.ApprovalStatus != "approved" && request.ApprovalStatus != "rejected")
+                return Ok(ApiResponse.Fail("ApprovalStatus 必须为 approved 或 rejected"));
+
+            try
+            {
+                var result = await _taskService.ApproveNodeAsync(request, ct);
+                return Ok(ApiResponse<object>.Ok(new { result }, "审批成功"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[APPROVE_FAIL] taskCode={TaskCode}, nodeId={NodeId}", request.TaskCode, request.NodeId);
+                return Ok(ApiResponse.Fail($"审批失败: {ex.Message}"));
+            }
+        }
     }
 }

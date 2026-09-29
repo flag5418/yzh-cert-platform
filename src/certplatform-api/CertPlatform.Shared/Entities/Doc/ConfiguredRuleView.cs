@@ -46,9 +46,9 @@ namespace CertPlatform.Shared.Entities.Doc
         [SugarColumn(ColumnName = "StandardCode")]
         public string StandardCode { get; set; } = "";
 
-        /// <summary>阶段编码</summary>
-        [SugarColumn(ColumnName = "PhaseCode")]
-        public string PhaseCode { get; set; } = "";
+        /// <summary>阶段编码（决策 ⑩ 统一为 StageCode）</summary>
+        [SugarColumn(ColumnName = "StageCode")]
+        public string StageCode { get; set; } = "";
 
         /// <summary>技能类型</summary>
         [SugarColumn(ColumnName = "Skill")]

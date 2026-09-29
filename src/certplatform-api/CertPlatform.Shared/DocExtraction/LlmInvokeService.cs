@@ -102,6 +102,12 @@ namespace CertPlatform.Shared.DocExtraction
                 var userContent = request.DocumentContent.Length > 0
                     ? $"{request.Prompt}\n\n---\n{request.DocumentContent}\n---"
                     : request.Prompt;
+                // DashScope 兼容模式硬要求：response_format=json_object 时 messages 必须含 "json" 字样，
+                // 自定义 Prompt 未必带，ForceJson 时统一补一句，否则 400 InvalidParameter
+                if (request.ForceJson
+                    && !userContent.Contains("json", StringComparison.OrdinalIgnoreCase)
+                    && !(request.SystemPrompt ?? "").Contains("json", StringComparison.OrdinalIgnoreCase))
+                    userContent += "\n\n请严格输出一个合法的 JSON object。";
                 messages.Add(new { role = "user", content = userContent });
 
                 var bodyObj = request.ForceJson

@@ -1,7 +1,9 @@
 
 using System.Text.Json;
+using CertPlatform.Shared.Constants;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using YZH.Core.DataBase.Services;
 using YZH.Core.Stand.Interfaces;
 using YzhQueueTask = YZH.Core.Stand.Models.Queue.YzhQueueTask;
 
@@ -44,6 +46,8 @@ public class OfficeConvertTaskExecutor : IYzhTaskExecutor
             using var scope = _serviceProvider.CreateScope();
             var convertService = scope.ServiceProvider.GetRequiredService<OfficeConvertService>();
             var ok = await convertService.ConvertAsync(payload);
+            if (ok)
+                await EnqueueEnterpriseExtractAsync(payload);
             return new TaskExecutionResult
             {
                 Success = ok,
@@ -56,6 +60,38 @@ public class OfficeConvertTaskExecutor : IYzhTaskExecutor
             _logger.LogError(ex, "执行文件转换任务失败: {TaskCode}", task.Code);
             return new TaskExecutionResult { Success = false, Message = ex.Message, Retryable = true };
         }
+    }
+
+    // G-2d 提取链接线：企业域文件转换成功后自动追加 doc_extract 任务（模板域/裸转换不入队）
+    // ⚠️ QueueManager 构造注入 IEnumerable<IYzhTaskExecutor>（含本类）⇒ 构造器注入会形成 DI 循环，
+    //    必须运行时从根容器懒解析。
+    private async Task EnqueueEnterpriseExtractAsync(FileConvertPayload payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload.EnterpriseCode) || payload.EnterpriseCode == YzhVirtualEnterprise.Code)
+            return;
+
+        var queueManager = _serviceProvider.GetRequiredService<QueueManager>();
+        var fileCode = payload.Code;
+        var req = new QueueManager.CreateQueueRequest
+        {
+            QueueType = "doc_extract",
+            QueueName = $"企业资料提取 - {payload.FileName}",
+            ScopeKey = payload.EnterpriseCode,
+            SourceType = "enterprise_extract",
+            // yzh_queue.uk_source 唯一：同一文件多轮转换→提取必须逐次唯一
+            SourceId = $"{fileCode}@{DateTime.Now:yyyyMMddHHmmss}",
+            ResourceLocks = new List<QueueManager.ResourceLockItem>
+            {
+                new() { ResourceTable = QueueManager.RESOURCE_FILE, ResourceCode = fileCode, ResourceName = payload.FileName }
+            },
+            Tasks = new List<QueueManager.TaskItem>
+            {
+                new() { TaskType = "doc_extract", Payload = JsonSerializer.Serialize(new { code = fileCode, enterpriseCode = payload.EnterpriseCode, stageCode = payload.StageCode }) }
+            }
+        };
+        var (qok, qerr, _, _) = await queueManager.CreateQueueAsync(req);
+        if (!qok)
+            _logger.LogWarning("[FileConvert→Extract] 提取队列创建失败: {FileCode} {Reason}", fileCode, qerr);
     }
 
     public Task OnTaskStateChangedAsync(YzhQueueTask task, string newStatus, string message)

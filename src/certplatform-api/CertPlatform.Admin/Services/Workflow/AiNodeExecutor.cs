@@ -201,6 +201,8 @@ namespace CertPlatform.Admin.Services.Workflow
                 okResult.PromptTokens = promptTokens;
                 okResult.CompletionTokens = completionTokens;
                 okResult.LlmDurationMs = llmDurationMs;
+                okResult.AiModel = _cachedSettings?.Model;
+                okResult.AiPrompt = renderedPrompt;
                 return okResult;
             }
             catch (Exception ex)
@@ -295,6 +297,8 @@ namespace CertPlatform.Admin.Services.Workflow
                 testOkResult.PromptTokens = promptTokens;
                 testOkResult.CompletionTokens = completionTokens;
                 testOkResult.LlmDurationMs = llmDurationMs;
+                testOkResult.AiModel = _cachedSettings?.Model;
+                testOkResult.AiPrompt = renderedPrompt;
                 return testOkResult;
             }
             catch (Exception ex)

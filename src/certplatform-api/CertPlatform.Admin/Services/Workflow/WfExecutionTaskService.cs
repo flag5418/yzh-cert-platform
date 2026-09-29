@@ -204,6 +204,10 @@ namespace CertPlatform.Admin.Services.Workflow
         {
             var now = DateTime.Now;
 
+            var rule = await _db.Client.Queryable<CertPlatform.Shared.Entities.Cert.ValidationRule>()
+                .Where(x => x.RuleCode == ruleCode )
+                .FirstAsync(ct);
+
             var task = new WfExecutionTask
             {
                 Code = taskCode,
@@ -212,6 +216,8 @@ namespace CertPlatform.Admin.Services.Workflow
                 TaskStatus = "executing",
                 ConfigSnapshot = configSnapshot,
                 RuleCode = ruleCode,
+                RuleName = rule?.RuleName,
+                SeverityIfViolated = rule?.SeverityIfViolated,
                 EnterpriseCode = enterpriseCode,
                 PhaseCode = phaseCode,
                 StartedAt = now,
@@ -466,7 +472,8 @@ namespace CertPlatform.Admin.Services.Workflow
                     ItemCode = itemCode,
                     NodeId = record.NodeId,
                     NodeType = node.NodeType,
-                    NodeTitle = node.Title,
+                    NodeTitle = node.Title ?? "",
+                    NodeDescription = node.Description,
                     SkillCode = node.SkillCode ?? "",
                     // 逐节点真实状态：失败路径中失败点之前的节点同样是 completed
                     ExecStatus = record.Success ? "completed" : "failed",
@@ -478,6 +485,11 @@ namespace CertPlatform.Admin.Services.Workflow
                     PromptTokens = record.PromptTokens,
                     CompletionTokens = record.CompletionTokens,
                     LlmDurationMs = record.LlmDurationMs,
+                    AiModel = record.AiModel,
+                    AiPrompt = TruncatePrompt(record.AiPrompt),
+                    SourceFileCode = TryGetStr(record.Output, "sourceFileCode"),
+                    SourceFieldName = TryGetStr(record.Output, "sourceFieldName"),
+                    SourceVersion = TryGetInt(record.Output, "sourceVersion"),
                     IsReused = record.IsReused ? 1 : 0,
                     CreateTime = DateTime.Now,
                     IsDeleted = false
@@ -488,6 +500,93 @@ namespace CertPlatform.Admin.Services.Workflow
             _logger.LogInformation(
                 "[WorkflowEngine] 节点执行记录落库: taskCode={TaskCode}, itemCode={ItemCode}, nodeCount={NodeCount}, reusedCount={ReusedCount}",
                 taskCode, itemCode, records.Count, records.Count(r => r.IsReused));
+        }
+
+        // ════════════════════════════════════════════════════════════
+        // 输出提取辅助方法
+        // ════════════════════════════════════════════════════════════
+
+        private static string? TryGetStr(Dictionary<string, object> output, string key)
+        {
+            if (output.TryGetValue(key, out var v) && v is string s) return s;
+            return null;
+        }
+
+        private static int? TryGetInt(Dictionary<string, object> output, string key)
+        {
+            if (output.TryGetValue(key, out var v))
+                return v switch { int i => i, double d => (int?)d, long l => (int?)l, null => null };
+            return null;
+        }
+
+        /// <summary>prompt 超过 8000 字符时截断并追加原始长度信息</summary>
+        private static string? TruncatePrompt(string? prompt)
+        {
+            if (string.IsNullOrEmpty(prompt)) return null;
+            if (prompt.Length <= 8000) return prompt;
+            return prompt[..8000] + "\n...[truncated, original=" + prompt.Length + " chars]";
+        }
+
+        // ════════════════════════════════════════════════════════════
+        // 节点审批
+        // ════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// 提交/更新节点审批记录（UPSERT）
+        /// <para>同时把 ManualResult 写入 wf_node_execution.ApprovedOutputJson，形成"原始输出 vs 专家修改"对比。</para>
+        /// </summary>
+        public async Task<bool> ApproveNodeAsync(NodeApprovalRequest request, CancellationToken ct)
+        {
+            var now = DateTime.Now;
+            var userCode = "USER_000001"; // TODO: 从认证上下文取当前用户 Code
+            var appName = "admin"; // TODO: 从认证上下文取
+
+            // 1. UPSERT wf_node_approval
+            var existing = await _db.Client.Queryable<WfNodeApproval>()
+                .Where(a => a.TaskCode == request.TaskCode && a.NodeId == request.NodeId && !a.IsDeleted)
+                .FirstAsync(ct);
+
+            if (existing != null)
+            {
+                await _db.Client.Updateable(new WfNodeApproval
+                {
+                    Id = existing.Id,
+                    ApprovalStatus = request.ApprovalStatus,
+                    Comment = request.Comment,
+                    Confidence = request.Confidence,
+                    ManualResult = request.ManualResult,
+                    ApprovedAt = now
+                }).WhereColumns(a => a.Id).ExecuteCommandAsync();
+            }
+            else
+            {
+                await _db.Client.Insertable(new WfNodeApproval
+                {
+                    Code = Guid.NewGuid().ToString("N"),
+                    TaskCode = request.TaskCode,
+                    NodeId = request.NodeId,
+                    ApprverCode = userCode,
+                    ApprverName = appName,
+                    ApprovalStatus = request.ApprovalStatus,
+                    Comment = request.Comment,
+                    Confidence = request.Confidence,
+                    ManualResult = request.ManualResult,
+                    ApprovedAt = now,
+                    CreateTime = now,
+                    IsDeleted = false
+                }).ExecuteCommandAsync();
+            }
+
+            // 2. 同步写入 wf_node_execution.ApprovedOutputJson
+            if (!string.IsNullOrEmpty(request.ManualResult))
+            {
+                await _db.Client.Updateable<WfNodeExecution>()
+                    .SetColumns(n => new WfNodeExecution { ApprovedOutputJson = request.ManualResult })
+                    .Where(n => n.TaskCode == request.TaskCode && n.NodeId == request.NodeId)
+                    .ExecuteCommandAsync();
+            }
+
+            return true;
         }
     }
 }

@@ -9,6 +9,7 @@ using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Auditor.Services;
+using CertPlatform.Auditor.Services.Ent;
 using CertPlatform.Shared.Entities.Cert;
 
 using Ent = CertPlatform.Shared.Entities.Cert.Enterprise;
@@ -81,6 +82,7 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
     private readonly EntityService<Std> _stdService;
     private readonly IDbOrm _db;
     private readonly WorkspaceContextService _workspace;
+    private readonly EnterpriseFileService _fileService;
 
     public EnterpriseStageController(
         EntityService<CertEnterpriseStage> entityService,
@@ -89,7 +91,8 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
         EntityService<Std> stdService,
         IDbOrm db,
         IUserContext userContext,
-        WorkspaceContextService workspace)
+        WorkspaceContextService workspace,
+        EnterpriseFileService fileService)
         : base(entityService, userContext)
     {
         _entService = entService;
@@ -97,6 +100,7 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
         _stdService = stdService;
         _db = db;
         _workspace = workspace;
+        _fileService = fileService;
     }
 
     /// <summary>缺 EntityConfig 时直接抛错（开发期暴露，避免「页面空白且零报错」）</summary>
@@ -206,7 +210,7 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
     /// <para><b>为什么是扁平而不是嵌套</b>：<c>YzhTreeTableCheckSelector</c> 内部自己
     /// <c>flatToTree</c>，且差集勾选以 <c>Code</c> 为键 —— 扁平 + <c>ParentCode</c> 是组件契约。</para>
     ///
-    /// <para><b>叶子 Code = <c>STAGE:{阶段码}|STD:{标准Code}</c></b>（前端合成键，<b>非 DB 主键</b>）：
+    /// <para><b>叶子 Code = <c>STAGE:{阶段Code}|STD:{标准Code}</c></b>（前端合成键，<b>非 DB 主键</b>）：
     /// 勾选链路只会回传 <c>{ Code, NodeType }</c>（见 <c>AssociationTreeCore.buildSelections</c>），
     /// 所以「阶段 × 标准」这个二元组必须编码进 <c>Code</c>。</para>
     ///
@@ -254,11 +258,14 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
 
             foreach (var st in stages.Data!.OrderBy(p => p.SortOrder).ThenBy(p => p.StageCode))
             {
-                var stageNodeCode = BuildStageNodeCode(st.StageCode);
+                // ★ 阶段键 = cert_cert_stage.Code（不是 StageCode 业务码 'jd01'）：
+                //   标准目录模板/提取规则/提取结果/文件行/op_log 全部按 Code 存 StageCode，
+                //   关联若存业务码 ⇒ (Org,Std,Stage) 三列对账必然落空（见 06 册 §五 R-2）。
+                var stageNodeCode = BuildStageNodeCode(st.Code);
 
                 var children = stdList.Select(sd =>
                 {
-                    var leafCode = BuildStandardNodeCode(st.StageCode, sd.Code);
+                    var leafCode = BuildStandardNodeCode(st.Code, sd.Code);
                     return new
                     {
                         Code = leafCode,
@@ -268,7 +275,7 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
                         CheckFlag = linkedKeys.Contains(leafCode),
                         Extra = new
                         {
-                            StageCode = st.StageCode,
+                            StageCode = st.Code,
                             StageName = st.StageName,
                             StandardCode = sd.Code,
                             StandardNo = sd.StandardCode,
@@ -290,7 +297,7 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
                     CheckFlag = false,
                     Extra = new
                     {
-                        StageCode = st.StageCode,
+                        StageCode = st.Code,
                         StageName = st.StageName,
                         SortOrder = st.SortOrder,
                         ChildCount = children.Count
@@ -343,7 +350,7 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
             var stages = await _stageService.GetListAsync(p => p.IsValid == 1 && !p.IsDeleted);
             if (!stages.Success)
                 return Ok(ApiResponse.Fail(stages.Error));
-            var validStages = new HashSet<string>(stages.Data!.Select(p => p.StageCode));
+            var validStages = new HashSet<string>(stages.Data!.Select(p => p.Code));
 
             var stds = await _stdService.GetListAsync(p => p.IsValid == 1 && !p.IsDeleted);
             if (!stds.Success)
@@ -352,6 +359,25 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
 
             var applied = new List<string>();
             var inserted = 0;
+            var directoryInit = new List<object>();
+
+            // G-4a（13 号 E7）：关联建立即初始化企业目录 —— 按 (Org,Std,Stage) 复制模板 config+file 行。
+            // 幂等：已存在则只补缺失槽位。机构未配置标准目录 ⇒ 不阻断关联，只回原因给前端提示。
+            async Task InitDirectoryAsync(string stageCode, string standardCode)
+            {
+                var (ok, err, reason) = await _fileService.InitEnterpriseDirectoryAsync(
+                    request.ContextCode, ws.Data!.Code, standardCode, stageCode, UserContext.UserCode);
+                directoryInit.Add(new
+                {
+                    StageCode = stageCode,
+                    StandardCode = standardCode,
+                    Initialized = ok,
+                    Message = ok ? (string?)null : err,
+                    // ★ 原因码：让前端区分「等待态」（template_missing / org_unbound，补数据后自动恢复）
+                    //   与真故障，⛔ 不要靠匹配 Message 文案。
+                    Reason = reason
+                });
+            }
 
             foreach (var item in parsed)
             {
@@ -382,6 +408,7 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
                     }
 
                     applied.Add(nodeCode);
+                    await InitDirectoryAsync(item.StageCode, item.StandardCode);
                     continue;
                 }
 
@@ -403,9 +430,15 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
 
                 inserted++;
                 applied.Add(nodeCode);
+                await InitDirectoryAsync(item.StageCode, item.StandardCode);
             }
 
-            return Ok(ApiResponse<object?>.Ok(new { Updated = inserted, Applied = applied }));
+            return Ok(ApiResponse<object?>.Ok(new
+            {
+                Updated = inserted,
+                Applied = applied,
+                DirectoryInit = directoryInit
+            }));
         }
         catch (Exception ex)
         {
@@ -507,15 +540,15 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
     // 五、私有辅助
     // ========================================================
 
-    /// <summary>阶段节点合成键：<c>STAGE:{阶段码}</c></summary>
+    /// <summary>阶段节点合成键：<c>STAGE:{阶段Code}</c></summary>
     private static string BuildStageNodeCode(string stageCode) => $"{StagePrefix}{stageCode}";
 
-    /// <summary>标准叶子合成键：<c>STAGE:{阶段码}|STD:{标准Code}</c></summary>
+    /// <summary>标准叶子合成键：<c>STAGE:{阶段Code}|STD:{标准Code}</c></summary>
     private static string BuildStandardNodeCode(string stageCode, string standardCode) =>
         $"{StagePrefix}{stageCode}{CodeSeparator}{StdPrefix}{standardCode}";
 
     /// <summary>
-    /// 解析前端合成键 → (阶段码, 标准Code)。
+    /// 解析前端合成键 → (阶段 Code, 标准 Code)。
     ///
     /// <para>非法格式**直接丢弃**（不抛错）—— 避免一个坏 Code 让整批提交失败。</para>
     /// </summary>

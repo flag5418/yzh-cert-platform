@@ -38,11 +38,11 @@ namespace CertPlatform.Shared.Entities.Doc
         [SugarColumn(IsNullable = true)]
         public string? StandardCode { get; set; }
 
-        /// <summary>阶段编码（冗余，方便过滤）</summary>
+        /// <summary>阶段编码（冗余，方便过滤；决策 ⑩ 统一为 StageCode → cert_cert_stage.Code）</summary>
         [Display(Name = "阶段编码")]
         [StringLength(36)]
         [SugarColumn(IsNullable = true)]
-        public string? PhaseCode { get; set; }
+        public string? StageCode { get; set; }
 
         /// <summary>技能类型（word/excel/pdf，按文件扩展名权威推导）</summary>
         [Display(Name = "技能类型")]

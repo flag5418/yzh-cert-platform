@@ -9,7 +9,7 @@ namespace CertPlatform.Shared.Entities.Cert
     /// <summary>
     /// 企业-阶段-标准关联表（多对多，专家端）
     /// <para>表名：<c>cert_enterprise_stage</c></para>
-    /// <para>关联：<c>cert_enterprise.Code</c> ↔ <c>cert_cert_stage.StageCode</c> ↔ <c>cert_iso_standard.Code</c></para>
+    /// <para>关联：<c>cert_enterprise.Code</c> ↔ <c>cert_cert_stage.Code</c> ↔ <c>cert_iso_standard.Code</c></para>
     ///
     /// <para><b>为什么是三元组而不是两张关联表</b>：用户 2026-09-25 明确
     /// 「一个企业在**不同阶段**，可能申请**一个到多个标准**的认证」——
@@ -37,7 +37,7 @@ namespace CertPlatform.Shared.Entities.Cert
         [SugarColumn(Length = 50)]
         public string EnterpriseCode { get; set; } = string.Empty;
 
-        /// <summary>阶段编码（关联 cert_cert_stage.StageCode）</summary>
+        /// <summary>阶段编码（关联 cert_cert_stage.Code；★ 不是业务码 StageCode 'jd01' —— 标准目录/提取链全部按 Code 存，混用会对账落空，见 06 册 §五 R-2）</summary>
         [SugarColumn(Length = 50)]
         public string StageCode { get; set; } = string.Empty;
 

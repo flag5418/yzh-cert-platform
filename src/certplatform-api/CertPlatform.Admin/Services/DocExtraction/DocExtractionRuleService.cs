@@ -11,6 +11,7 @@ using SqlSugar;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Extensions;
 using YZH.Core.Stand.Interfaces;
+using CertPlatform.Shared.Constants;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Entities.Dir;
 using CertPlatform.Shared.Entities.Doc;
@@ -31,8 +32,8 @@ public partial class DocExtractionRuleService
     protected readonly CertPlatform.Shared.DocExtraction.LlmInvokeService _llm;
     protected readonly IObjectStorage _storage;
 
-    /// <summary>YZH 标准企业编码（提取结果落库目标，对照旧 CertPlatformConstants）</summary>
-    public const string YzhStandardEnterpriseCode = "YZH-STD-ENT";
+    /// <summary>YZH 标准企业编码（提取结果落库目标）——已收敛单点，权威定义见 <see cref="YzhVirtualEnterprise"/></summary>
+    public const string YzhStandardEnterpriseCode = YzhVirtualEnterprise.Code;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -117,21 +118,39 @@ public partial class DocExtractionRuleService
         var rule = (await _db.GetOneAsync<DocExtractionRule>(x => x.StandardFileCode == request.FileCode)).Data;
         var isNew = rule == null;
 
+        // 1.1 标准/阶段编码后端权威回填（页面不传，同 Skill 单一约束原则）：
+        //     fileCode → cert_standard_directory_file.ConfigCode → 目录配置 StandardCode/StageCode
+        var standardCode = request.StandardCode;
+        var stageCode = request.StageCode;
+        if (string.IsNullOrWhiteSpace(standardCode) || string.IsNullOrWhiteSpace(stageCode))
+        {
+            var dirFile = (await _db.GetOneAsync<StandardDirectoryFile>(x => x.Code == request.FileCode)).Data;
+            var dirConfig = dirFile == null
+                ? null
+                : (await _db.GetOneAsync<StandardDirectoryConfig>(x => x.Code == dirFile.ConfigCode)).Data;
+            if (dirConfig != null)
+            {
+                if (string.IsNullOrWhiteSpace(standardCode)) standardCode = dirConfig.StandardCode;
+                if (string.IsNullOrWhiteSpace(stageCode)) stageCode = dirConfig.StageCode;
+            }
+        }
+
         if (isNew)
         {
             rule = new DocExtractionRule
             {
                 Code = Guid.NewGuid().ToString(),
                 StandardFileCode = request.FileCode,
-                StandardCode = request.StandardCode,
-                PhaseCode = request.PhaseCode,
+                StandardCode = standardCode,
+                StageCode = stageCode,
                 CreateTime = DateTime.Now
             };
         }
         else
         {
-            rule.StandardCode = request.StandardCode;
-            rule.PhaseCode = request.PhaseCode;
+            // 非空才覆盖：回填失败时保留原值，避免把已有关联清空
+            if (!string.IsNullOrWhiteSpace(standardCode)) rule.StandardCode = standardCode;
+            if (!string.IsNullOrWhiteSpace(stageCode)) rule.StageCode = stageCode;
         }
 
         // 2. 更新规则信息（技能类型后端权威推导）
@@ -253,12 +272,13 @@ public partial class DocExtractionRuleService
     }
 
     /// <summary>
-    /// 将规则保存请求中的提取数据同步到 B-08/B-09（YZH 标准企业）。
+    /// 将规则保存请求中的提取数据同步到 B-08/B-09（G-2a：企业域参数化，默认 = 虚拟企业常量，管理端行为不变）。
     /// <para>规则对照旧 SyncExtractionResultToB08B09Async（L528-612）：</para>
     /// <para>1. extractionData 为空 → 跳过；2. 物理删除旧结果（绕过软删拦截 + 唯一约束兜底）；</para>
     /// <para>3. 一致性过滤（只写定义中存在的 code）；4. 空值/空表格不写入</para>
     /// </summary>
-    private async Task SyncExtractionResultToB08B09Async(DocExtractionRule rule, SaveExtractionRuleRequest request)
+    private async Task SyncExtractionResultToB08B09Async(DocExtractionRule rule, SaveExtractionRuleRequest request,
+        string enterpriseCode = YzhStandardEnterpriseCode)
     {
         var extractionData = request.ExtractionData;
         if (extractionData == null) return;
@@ -283,10 +303,10 @@ public partial class DocExtractionRuleService
 
         // 1. 物理删除旧结果（对照旧注释：软删残留会与唯一约束冲突，必须原生 SQL）
         await _db.Client.Deleteable<ExtractionResult>()
-            .Where(x => x.EnterpriseCode == YzhStandardEnterpriseCode && x.StandardFileCode == fileCode)
+            .Where(x => x.EnterpriseCode == enterpriseCode && x.StandardFileCode == fileCode)
             .ExecuteCommandAsync();
         await _db.Client.Deleteable<TableExtractionResult>()
-            .Where(x => x.EnterpriseCode == YzhStandardEnterpriseCode && x.StandardFileCode == fileCode)
+            .Where(x => x.EnterpriseCode == enterpriseCode && x.StandardFileCode == fileCode)
             .ExecuteCommandAsync();
 
         // 2. 字段级 → B-08（LabelTag = field_code，对照 V4 评审报告 §7）
@@ -301,10 +321,10 @@ public partial class DocExtractionRuleService
                 var er = new ExtractionResult
                 {
                     Code = Guid.NewGuid().ToString("N"),
-                    EnterpriseCode = YzhStandardEnterpriseCode,
+                    EnterpriseCode = enterpriseCode,
                     StandardFileCode = fileCode,
                     StandardCode = rule.StandardCode,
-                    PhaseCode = rule.PhaseCode,
+                    StageCode = rule.StageCode,
                     FileCode = fileCode,
                     VersionNumber = 1,
                     RuleCode = rule.Code,
@@ -332,10 +352,10 @@ public partial class DocExtractionRuleService
                 var tr = new TableExtractionResult
                 {
                     Code = Guid.NewGuid().ToString("N"),
-                    EnterpriseCode = YzhStandardEnterpriseCode,
+                    EnterpriseCode = enterpriseCode,
                     StandardFileCode = fileCode,
                     StandardCode = rule.StandardCode,
-                    PhaseCode = rule.PhaseCode,
+                    StageCode = rule.StageCode,
                     FileCode = fileCode,
                     VersionNumber = 1,
                     RuleCode = rule.Code,
@@ -347,6 +367,98 @@ public partial class DocExtractionRuleService
                 await _db.Client.Insertable(tr).ExecuteCommandAsync();
             }
         }
+    }
+
+    /// <summary>按标准文件编码取提取规则（企业提取执行器用，G-2c）。</summary>
+    public async Task<DocExtractionRule?> GetRuleByStandardFileCodeAsync(string standardFileCode)
+        => (await _db.GetOneAsync<DocExtractionRule>(x => x.StandardFileCode == standardFileCode)).Data;
+
+    // ========================================================
+    // 企业域落库（G-2c 写入段，02 号 V-P1 甲路线：旧行 IsValid=0 归档，不物理删）
+    // ========================================================
+
+    /// <summary>
+    /// 提取结果落 B-08/B-09 **企业域**（真实 EnterpriseCode + 真实 VersionNumber）。
+    /// <para>与 <see cref="SyncExtractionResultToB08B09Async"/>（模板域：物理删重写）的关键差异：
+    /// 企业域按版本链审计（02 号 §二），历史行必须归档保留 —— 先 UPDATE IsValid=0 归档同键旧行，再插新行。</para>
+    /// <para>⚠️ B-08/B-09 实体未声明 IsValid（ORM 自动过滤不生效），归档/读取过滤一律走原生 SQL 条件。</para>
+    /// </summary>
+    public async Task<(int FieldCount, int TableCount)> SaveEnterpriseExtractionResultsAsync(
+        DocExtractionRule rule, ExtractionData extractionData,
+        string enterpriseCode, string fileCode, int versionNumber)
+    {
+        var now = DateTime.Now;
+        var standardFileCode = rule.StandardFileCode ?? "";
+
+        // 1. 归档同 (企业, 文件) 旧行（IsValid=0），保留版本链
+        await _db.Client.Updateable<ExtractionResult>()
+            .SetColumns(x => new ExtractionResult { IsValid = 0, UpdateTime = now })
+            .Where(x => x.EnterpriseCode == enterpriseCode && x.FileCode == fileCode && x.IsValid == 1)
+            .ExecuteCommandAsync();
+        await _db.Client.Updateable<TableExtractionResult>()
+            .SetColumns(x => new TableExtractionResult { IsValid = 0, UpdateTime = now })
+            .Where(x => x.EnterpriseCode == enterpriseCode && x.FileCode == fileCode && x.IsValid == 1)
+            .ExecuteCommandAsync();
+
+        // 2. 字段中文名映射（规则定义为准；ExtractionData 键已由 MapOutputs 归一为 field_code）
+        var fieldDefs = (await _db.GetListAsync<DocFieldDef>(x => x.RuleCode == rule.Code)).Data ?? new();
+        var fieldNameMap = fieldDefs
+            .GroupBy(f => f.FieldCode ?? "", StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().FieldName ?? g.Key, StringComparer.OrdinalIgnoreCase);
+
+        var fieldCount = 0;
+        foreach (var kv in extractionData.Fields ?? new())
+        {
+            var value = kv.Value?.ToString();
+            if (string.IsNullOrWhiteSpace(value)) continue;
+
+            await _db.Client.Insertable(new ExtractionResult
+            {
+                Code = Guid.NewGuid().ToString("N"),
+                EnterpriseCode = enterpriseCode,
+                StandardFileCode = standardFileCode,
+                StandardCode = rule.StandardCode,
+                StageCode = rule.StageCode,
+                FileCode = fileCode,
+                VersionNumber = versionNumber,
+                RuleCode = rule.Code ?? "",
+                FieldCode = kv.Key,
+                FieldName = fieldNameMap.TryGetValue(kv.Key, out var fn) ? fn : kv.Key,
+                LabelTag = kv.Key,
+                ExtractedValue = value,
+                ExtractedAt = now,
+                CreateTime = now
+            }).ExecuteCommandAsync();
+            fieldCount++;
+        }
+
+        var tableCount = 0;
+        var tableIndex = 1;
+        foreach (var kv in extractionData.Tables ?? new())
+        {
+            var rows = kv.Value;
+            if (rows == null || rows.Count == 0) continue;
+
+            await _db.Client.Insertable(new TableExtractionResult
+            {
+                Code = Guid.NewGuid().ToString("N"),
+                EnterpriseCode = enterpriseCode,
+                StandardFileCode = standardFileCode,
+                StandardCode = rule.StandardCode,
+                StageCode = rule.StageCode,
+                FileCode = fileCode,
+                VersionNumber = versionNumber,
+                RuleCode = rule.Code ?? "",
+                TableCode = kv.Key,
+                TableIndex = tableIndex++,
+                ExtractedJson = JsonSerializer.Serialize(rows, JsonOptions),
+                ExtractedAt = now,
+                CreateTime = now
+            }).ExecuteCommandAsync();
+            tableCount++;
+        }
+
+        return (fieldCount, tableCount);
     }
 
     // ========================================================
@@ -434,7 +546,7 @@ public partial class DocExtractionRuleService
             Code = rule.Code,
             StandardFileCode = rule.StandardFileCode ?? "",
             StandardCode = rule.StandardCode ?? "",
-            PhaseCode = rule.PhaseCode ?? "",
+            StageCode = rule.StageCode ?? "",
             Skill = rule.Skill,
             Prompt = rule.Prompt,
             IsValid = rule.DocIsValid,
@@ -504,7 +616,7 @@ public partial class DocExtractionRuleService
                 StandardFileCode = x.StandardFileCode,
                 FileName = x.FileName,
                 StandardCode = x.StandardCode,
-                PhaseCode = x.PhaseCode,
+                StageCode = x.StageCode,
                 Skill = x.Skill,
                 DocIsValid = x.DocIsValid,
                 Status = x.Status
@@ -586,8 +698,8 @@ public partial class DocExtractionRuleService
         [System.Text.Json.Serialization.JsonPropertyName("standardCode")]
         public string StandardCode { get; set; } = "";
 
-        [System.Text.Json.Serialization.JsonPropertyName("phaseCode")]
-        public string PhaseCode { get; set; } = "";
+        [System.Text.Json.Serialization.JsonPropertyName("stageCode")]
+        public string StageCode { get; set; } = "";
 
         [System.Text.Json.Serialization.JsonPropertyName("skill")]
         public string Skill { get; set; } = "";

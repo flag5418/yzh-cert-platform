@@ -30,9 +30,9 @@ namespace CertPlatform.Shared.Entities.Doc
         [StringLength(36)]
         public string? StandardCode { get; set; }
 
-        /// <summary>阶段编码（冗余，方便过滤）</summary>
+        /// <summary>阶段编码（冗余，方便过滤；决策 ⑩ 统一为 StageCode → cert_cert_stage.Code）</summary>
         [StringLength(36)]
-        public string? PhaseCode { get; set; }
+        public string? StageCode { get; set; }
 
         [Required, StringLength(200)]
         [UniqueField("文件编码", WithFields = new[] { "EnterpriseCode", "TableIndex" })]
@@ -59,5 +59,11 @@ namespace CertPlatform.Shared.Entities.Doc
 
         [Required]
         public DateTime ExtractedAt { get; set; }
+
+        /// <summary>
+        /// 有效标志（DB 列 IsValid 本就存在，此前实体未声明 → ORM 自动过滤失效）。
+        /// <para>企业域版本链（02 号 V-P1）：1=当前版本行，0=归档旧版本（**不物理删**）。</para>
+        /// </summary>
+        public int IsValid { get; set; } = 1;
     }
 }

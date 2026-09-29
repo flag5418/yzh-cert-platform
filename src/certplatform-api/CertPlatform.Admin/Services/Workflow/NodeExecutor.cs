@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using CertPlatform.Admin.Services.Workflow.Models;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using YZH.Core.DataBase.Interfaces;
+using CertPlatform.Shared.Constants;
 using CertPlatform.Shared.Entities.Doc;
 
 namespace CertPlatform.Admin.Services.Workflow
@@ -314,7 +315,7 @@ namespace CertPlatform.Admin.Services.Workflow
 
         /// <summary>
         /// docField 节点：按 fieldCode + enterpriseCode 查询提取结果（真实取数，D-4）
-        /// <para>数据源：cert_extraction_result（enterpriseCode 为空时默认 YZH-STD-ENT 标准企业）</para>
+        /// <para>数据源：cert_extraction_result（enterpriseCode 为空时默认虚拟企业常量）</para>
         /// </summary>
         private async Task<Dictionary<string, object>> ExecuteDocFieldAsync(
             WorkflowNodeConfig node,
@@ -328,9 +329,9 @@ namespace CertPlatform.Admin.Services.Workflow
             var docType = config.GetValueOrDefault("docType")?.ToString() ?? "standard";
             var enterpriseCode = contextParams?.GetValueOrDefault("enterpriseCode")?.ToString() ?? "";
             if (string.IsNullOrEmpty(enterpriseCode))
-                enterpriseCode = "YZH-STD-ENT";
+                enterpriseCode = YzhVirtualEnterprise.Code;
 
-            var source = enterpriseCode == "YZH-STD-ENT" ? "sample_data" : "enterprise_doc";
+            var source = enterpriseCode == YzhVirtualEnterprise.Code ? "sample_data" : "enterprise_doc";
 
             _wfLogger.DocFieldQuery(ruleCode, fieldCode, docType, enterpriseCode);
 
@@ -359,7 +360,7 @@ namespace CertPlatform.Admin.Services.Workflow
 
         /// <summary>
         /// docTable 节点：按 tableCode + enterpriseCode 查询表格提取结果（真实取数，D-4）
-        /// <para>数据源：cert_table_extraction_result（enterpriseCode 为空时默认 YZH-STD-ENT 标准企业）</para>
+        /// <para>数据源：cert_table_extraction_result（enterpriseCode 为空时默认虚拟企业常量）</para>
         /// </summary>
         private async Task<Dictionary<string, object>> ExecuteDocTableAsync(
             WorkflowNodeConfig node,
@@ -373,9 +374,9 @@ namespace CertPlatform.Admin.Services.Workflow
             var docType = config.GetValueOrDefault("docType")?.ToString() ?? "standard";
             var enterpriseCode = contextParams?.GetValueOrDefault("enterpriseCode")?.ToString() ?? "";
             if (string.IsNullOrEmpty(enterpriseCode))
-                enterpriseCode = "YZH-STD-ENT";
+                enterpriseCode = YzhVirtualEnterprise.Code;
 
-            var source = enterpriseCode == "YZH-STD-ENT" ? "sample_data" : "enterprise_doc";
+            var source = enterpriseCode == YzhVirtualEnterprise.Code ? "sample_data" : "enterprise_doc";
 
             _wfLogger.DocTableQuery(ruleCode, tableCode, docType, enterpriseCode);
 

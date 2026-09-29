@@ -17,7 +17,6 @@ public static class CertPlatformAdminServiceExtensions
     public static IServiceCollection AddCertPlatformAdminServices(this IServiceCollection services)
     {
         // ──── 标准目录管理 ────
-        services.AddScoped<CodeGeneratorService>();
         services.AddScoped<StandardDirectoryService>();
         services.AddScoped<DirectoryTemplateService>();
         services.AddScoped<OfficeConvertService>();
@@ -27,6 +26,12 @@ public static class CertPlatformAdminServiceExtensions
         services.AddSingleton<DocumentConvertClient>();
         services.AddSingleton<LlmInvokeService>();
         services.AddScoped<DocExtractionRuleService>();
+
+        // ──── OCR 能力缝（★ 将来接入 OCR/视觉模型时，**只改这一行**） ────
+        // 当前 DefaultOcrProvider 声明"不具备能力"：图片/扫描件不自动提取，
+        // 由用户手工定义字段与表格、人工填写。接入时替换为具体实现即可，
+        // 转换链 / 提取链 / 前端零改动。详见 IOcrProvider 的 XML 注释。
+        services.AddSingleton<IOcrProvider, DefaultOcrProvider>();
 
         // ──── Prompt 模板管理 ────
         services.AddScoped<PromptTemplateService>();

@@ -42,6 +42,12 @@ namespace CertPlatform.Admin.Services.Workflow.Models
         /// <summary>纯 LLM API 调用耗时(ms)（不含参数解析、模板渲染、类型转换）</summary>
         public int? LlmDurationMs { get; set; }
 
+        /// <summary>LLM 模型名（如 qwen-turbo，仅 ai_node 有值）</summary>
+        public string? AiModel { get; set; }
+
+        /// <summary>渲染后送 API 的完整 prompt（8KB 截断，仅 ai_node 有值）</summary>
+        public string? AiPrompt { get; set; }
+
         /// <summary>快速创建成功结果</summary>
         public static NodeExecutionResult Ok(Dictionary<string, object> output, int durationMs = 0)
             => new() { Success = true, Output = output ?? new(), DurationMs = durationMs };
@@ -96,6 +102,12 @@ namespace CertPlatform.Admin.Services.Workflow.Models
         /// <summary>纯 LLM API 调用耗时(ms)</summary>
         public int? LlmDurationMs { get; set; }
 
+        /// <summary>LLM 模型名（仅 ai_node 有值）</summary>
+        public string? AiModel { get; set; }
+
+        /// <summary>渲染后送 API 的完整 prompt（仅 ai_node 有值）</summary>
+        public string? AiPrompt { get; set; }
+
         /// <summary>由一次节点执行结果构造记录（isReused=true 表示本次未真跑，取自结果池）</summary>
         public static NodeExecutionRecord From(string nodeId, NodeExecutionResult result, bool isReused)
             => new()
@@ -110,7 +122,9 @@ namespace CertPlatform.Admin.Services.Workflow.Models
                 CompletedAt = result.CompletedAt,
                 PromptTokens = result.PromptTokens,
                 CompletionTokens = result.CompletionTokens,
-                LlmDurationMs = result.LlmDurationMs
+                LlmDurationMs = result.LlmDurationMs,
+                AiModel = result.AiModel,
+                AiPrompt = result.AiPrompt
             };
     }
 
