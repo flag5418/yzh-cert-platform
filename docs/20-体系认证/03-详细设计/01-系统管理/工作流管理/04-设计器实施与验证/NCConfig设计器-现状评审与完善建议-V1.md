@@ -5,8 +5,9 @@
 > - 页面：`/business/nc-config`（`cert-admin/src/pages/workflow/nc-config/designer.vue`，LogicFlow 工作流设计器）
 > - 配套：同目录 `index.vue`（/business/workflow-rules 规则列表）、`report-rule-config/index.vue`（复用 nc-config 组件）
 > - 后端：`CertPlatform.Admin/Controllers/Workflow/*`、`CertPlatform.Shared/Entities/Wf/*`
-> - 上游文档：`01-核心引擎/工作流引擎-总体架构设计-V3.md`、`审核规则库与工作流设计器-功能设计-V4.md`、`02-NC规则配置/NC规则配置-开发计划-V3.md`、`docs/50-迁移计划/迁移代码架构审核报告-V1.md`
+> - 上游文档：`01-核心引擎/工作流引擎-总体架构设计-V3.md`、`审核规则库与工作流设计器-功能设计-V4.md`、`02-NC规则配置/NC规则配置-开发计划-V3.md`、`docs/50-任务/迁移计划/迁移代码架构审核报告-V1.md`
 > **评审方法**：文档比对 + 本地 9990 端口实测（浏览器 DOM/控制台/网络取证）
+> **⚠️ 2026-09-26 变更注记**：技能分类已字典化（字典 `skill_category`，方案A 字典唯一数据源）——`wf_skill_category` 表已 DROP、`WfSkillCategoryController` 与 `SkillCategoryForm.json` 已删除，分类数据源改为 `GET /api/Dictionary/items/by-no/skill_category`。本文提及 `WfSkillCategory` 的段落为评审时点快照，不代表当前实现。
 
 ---
 
@@ -147,7 +148,7 @@
 | 2 | V4 功能设计头部过时标注（Skill 体系）已挂 2026-08-19，正文章节未逐节标注，AI/新人易误读——建议在正文各过时节首行加引用块标注 |
 | 3 | `99-归档/README.md` 记录的"文档与实现严重脱节"问题需用本评审结论回写：设计器 M1-M6 实际完成度，更新归档原因表述 |
 | 4 | `NC规则配置-开发计划-V3.md` 与实现差异（复制功能保留、designer 传 SeverityIfViolated）——按"文档先行"回改文档或改实现，二选一留痕 |
-| 5 | 迁移审核报告行动项 #9（`50-迁移计划` 目录归位 `50-任务/`、迁移方案状态更新、PhaseCode 语义纠偏）仍待执行 |
+| 5 | 迁移审核报告行动项 #9 —— 目录归位部分 ✅ 已于 2026-09-28 执行（`50-迁移计划` 并入 `50-任务/迁移计划/`）；**迁移方案状态更新、PhaseCode 语义纠偏仍待执行** |
 | 6 | 建议每个权威文档增加"对应代码"章节（文件路径 + 关键类/函数名），形成文档↔代码双向索引 |
 
 ---
