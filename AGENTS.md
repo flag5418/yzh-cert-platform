@@ -25,7 +25,7 @@ AIGC:
 **① 前端新建/修改页面 → 先读 `docs/10-YZH架构/样板页面指南-V1.md`，照抄指定样板。**
 
 - 单表 CRUD 唯一模板：`src/certplatform-web/yzh.vue.core/src/pages/system/user/`（67 行，零手写 CRUD）
-  - ✅ **P8 已收口（2026-09-24）**：system 11 页面 + 登录/布局/首页应用壳已全部位于 `src/certplatform-web/yzh.vue.core/src/{pages,layouts,router,api/system}`（计划：`docs/50-迁移计划/yzh.vue.core系统底座化迁移计划-V1.md`）。宿主（cert-admin 等）只组装路由，**不要再往 cert-admin 抄 system 页面**。
+  - ✅ **P8 已收口（2026-09-24）**：system 11 页面 + 登录/布局/首页应用壳已全部位于 `src/certplatform-web/yzh.vue.core/src/{pages,layouts,router,api/system}`（计划：`docs/50-任务/迁移计划/yzh.vue.core系统底座化迁移计划-V1.md`）。宿主（cert-admin 等）只组装路由，**不要再往 cert-admin 抄 system 页面**。
 - 左树右表唯一模板：`.../foundation/iso-standard/`（⚠️ **只抄 `logic.ts` 的 `dataLoader` 骨架**，`index.vue` 不抄）
 - 纯树节点模板：`src/certplatform-web/yzh.vue.core/src/pages/system/role/`（`logic.ts` 仅 16 行、零覆写）
 - ⚠️ **`pages/system/user/` 与 `pages/system/role/` 无路由可达是正常的**（2026-09-24 用户裁决：功能已被「机构-人员管理」`system/organization`、「角色-人员管理」`system/role-user` 取代，两条路由已删除）。**它们是照抄样板，目录必须保留** —— 照抄 = 复制文件，**不需要打开页面**。⛔ 不要因为「样板页在、路由不在」就把路由加回来（守卫 **R12** 会拦）。
@@ -50,7 +50,7 @@ AIGC:
   - **违反症状**：① 表内 `enable` 与 `IsValid` **并存** → **列表显示的行 ≠ 能操作的行**，两边都不报错 ② 实体注释写 `// DB: Name` 而 DB 实际是 `name`（代码自证清白，DB 不是）
   - 守卫：`guards.mjs` **R7**（前端）+ `scripts/db/fix/fix-column-naming-2026-09-24.sql` 文末 **DB 验证 SQL**
   - ⚠️ **验证 SQL 必须用 `CONVERT(COLUMN_NAME USING utf8mb4) COLLATE utf8mb4_bin`** —— `information_schema.COLUMN_NAME` 排序规则大小写不敏感，直接 `NOT REGEXP '^[A-Z]'` 会**永远返回 0 行**（假阴性，会让人误以为已清零）
-  - 详见 `输出产物/命名规范违规清单与消灭方案-V1.md`
+  - 详见 `docs/50-任务/分析报告/命名规范违规清单与消灭方案-V1.md`
 
 **④ 双关键字准则 A（Id/Code · 2026-09-24 · 违反 = 返工）**
 
