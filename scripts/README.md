@@ -136,7 +136,7 @@
 | `storage/upload_files_to_minio.py` | 上传文件至 MinIO |
 | `tools/check_tree.py` | 输出目录树 / 检查目录结构 |
 | `tools/freeze-check.sh` | 冻结检查（`src/old/` 禁改校验） |
-| `tools/docs-migration/` | 文档体系重构一次性脚本（已执行完毕，保留备查） |
+| `tools/docs-migration/` | 文档迁移脚本：`cleanup_refs_20260928.py` / `rebase_relative_links_20260928.py` / `update_refs.py`（一次性，已执行）+ **`check_docs.mjs`（常驻防回归校验，随时可跑：`node scripts/tools/docs-migration/check_docs.mjs`）** |
 
 ### 2.5 仓库根 docker/ — 依赖容器
 
@@ -181,6 +181,7 @@
 
 | 日期 | 变更内容 |
 |------|---------|
+| **2026-09-28** | **V2.5**：输出产物清理落地 —— `docs/` 收口四分区（`50-任务/{分析报告,开发计划,迁移计划,迁移工作台}`）；55 份 md 按状态归属迁入 docs；新增常驻校验 `tools/docs-migration/check_docs.mjs`（S1–S6：根平铺/顶层白名单/四分区 README 登记/输出产物引用/密钥文件链接/全量死链）；`update_refs.py` 修复 REPO 路径 bug（少两级目录，此前从未生效） |
 | **2026-09-26** | **V2.4**：新增专家端企业机构树三件套（`verify/verify-enterprise-org-tree.{sh,sql}`、`verify/enterprise-org-gate.sql`、`fix/fix-enterprise-org-tree-2026-09-26.{sh,sql}`）。**B6 自锁首次落到「库名白名单 + 前置门禁 + 自动备份」三层**（此前只有 `__T__` 前缀校验一种形态）；`.sql` 内**去掉硬编码 `USE`**（改由调用方给库名，否则白名单自锁形同虚设）；修正 `verify-enterprise-org-tree.sql` 中「不涉及列 vs 列关联」的**错误声明**（实际存在跨表关联，依赖全库统一 collation） |
 | **2026-09-25** | **V2.3**：**D-E1~D-E5 全部处置** —— 执行 `fix-column-naming-2026-09-24.sql`（命名修正 87 列 + DROP 25 表 enable + sys_api.Enable→IsValid + sys_log.Enable DROP + 7 张 Vol 表整表 DROP）；代码同步 5 处（SysApi : IIsValid + ApiSyncService + RoleApiController + SysApi.json + 前端 api 页）；删除反向脚本 `fix_yzh_columns_to_snake_case.sql`；归档 24 个历史脚本至 `db/archive/2026-09/` |
 | **2026-09-25** | **V2.2**：**删除 `db/rebuild/`（7 文件）** —— 库获取方式定为「正式库备份 + 恢复」，不再提供从零重建；根因是 `schema_before.sql` 旧快照会把历史命名修正冲回 snake_case（「浪费一周」根因）。**D-E4 由此关闭**（不再需要修 schema 单一真相源） |

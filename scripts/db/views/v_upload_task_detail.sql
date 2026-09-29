@@ -2,17 +2,18 @@
 -- 视图：v_upload_task_detail
 -- 用途：上传任务详情（包含文件状态信息，用于上传流程中间状态查询）
 -- 日期：2026-09-20
+-- 更新：2026-09-26 P1 重建 —— t.DirectoryCode → t.ConfigCode；f.FileCode → f.Code（复合码已删）
 -- ============================================================
 
 CREATE OR REPLACE VIEW v_upload_task_detail AS
 SELECT 
     t.TaskId,
-    t.DirectoryCode,
+    t.ConfigCode,
     t.TotalFiles,
     t.SuccessCount,
     t.Status,
     t.ExpireTime,
-    f.FileCode,
+    f.Code AS FileCode,
     f.FileName,
     f.UploadStatus,
     f.StoragePath,
