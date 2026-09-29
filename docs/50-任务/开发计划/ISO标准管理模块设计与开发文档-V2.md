@@ -337,8 +337,8 @@ export class ISOClauseLogic extends CrudPageLogic<any> {
 
 - [YZH 后端架构](../../10-YZH架构/02-后端架构.md)
 - [数据契约](../../10-YZH架构/04-数据契约.md)
-- [机构-人员模块](../../../src/certplatform-web/cert/cert-admin/src/pages/system/organization/)
-- [CrudPageLogic 源码](../../../src/certplatform-web/yzh.vue.core/src/logic/CrudPageLogic.ts)
+- [机构-人员模块](../../../src/certplatform-web/yzh.vue.core/src/pages/system/organization/)
+- Logic 基类源码：`src/certplatform-web/yzh.vue.core/src/logic/`（`CrudPageLogic` 已演进为 `SingleTableCore` 系列，本表历史名称保留）
 - [TreeTableLogic 源码](../../../src/certplatform-web/yzh.vue.core/src/logic/TreeTableLogic.ts)
 
 ---

@@ -7,7 +7,7 @@
 > - `docs/10-YZH架构/单页面基类架构设计规范-V1.md`（后端约定）
 > - `docs/10-YZH架构/TreeTable基类架构设计规范-V1.md`（左树右表内核）
 > - `docs/10-YZH架构/前端原子组件与逻辑内核分层架构设计规范-V1.md`（分层与零依赖）
-> - `docs/50-任务/前端TreeTable基类增强与Composable封装实施计划-V2.md`（约定矩阵/改造清单）
+> - `docs/50-任务/开发计划/前端TreeTable基类增强与Composable封装实施计划-V2.md`（约定矩阵/改造清单）
 
 ---
 
