@@ -251,6 +251,60 @@ public class DictionaryController : TreeTableControllerBase<Sys_Dictionary, Sys_
     }
 
     /// <summary>
+    ///     按字典编码 DicNo 取字典项（业务页面字典下拉数据源，<b>value = DicValue 业务值</b>）
+    ///
+    ///     GET /api/System/Dictionary/items/by-no/{dicNo}
+    ///     例：GET /api/System/Dictionary/items/by-no/skill_category
+    ///     返回 [ { Value: "data_access", Label: "数据获取", Code: "字典项GUID", Color } ]
+    ///
+    ///     · value 取 DicValue（业务值）—— 供「业务字段存业务值」的场景，
+    ///       先例：iso_category 的 ISOStandard.Category 存 quality、
+    ///             skill_category 的 wf_skill.CategoryCode 存 data_access
+    ///     · label 取 DicName（显示文本）；另附 Code（字典项行标识 GUID）按需取用
+    ///     · 与 items/{code} 的区别：那个 value = 字典项 Code(GUID)，
+    ///       供「关联一律走 Code」铁律的场景；本端点供外键存 DicValue 的业务场景
+    ///     · 自动过滤已禁用（IsValid=0）与已软删除（IsDeleted=1）的字典及字典项
+    ///     · 按 OrderNo 升序、其次 DicName 升序
+    /// </summary>
+    [HttpGet("items/by-no/{dicNo}")]
+    public virtual async Task<ActionResult<ApiResponse<List<DictItemValueDto>>>> GetItemsByDicNo(string dicNo)
+    {
+        if (string.IsNullOrWhiteSpace(dicNo))
+            return Ok(ApiResponse<List<DictItemValueDto>>.Fail("字典编码 DicNo 不能为空"));
+
+        // 1. 按 DicNo 解析字典（DicNo 是普通显示属性，非关联键）
+        var dictResult = await TreeEntity.GetListAsync(d => d.DicNo == dicNo && d.IsValid == 1);
+        if (!dictResult.Success)
+            return Ok(ApiResponse<List<DictItemValueDto>>.Fail(dictResult.Error!));
+
+        var dict = (dictResult.Data ?? new List<Sys_Dictionary>())
+            .OrderBy(d => d.Id)
+            .FirstOrDefault();
+        if (dict == null)
+            return Ok(ApiResponse<List<DictItemValueDto>>.Fail($"字典编码【{dicNo}】不存在或已禁用"));
+
+        // 2. 取该字典下的字典项（GetListAsync 内置 IsValid=1 AND IsDeleted=0 过滤）
+        var itemResult = await Entity.GetListAsync(x => x.DicCode == dict.Code);
+        if (!itemResult.Success)
+            return Ok(ApiResponse<List<DictItemValueDto>>.Fail(itemResult.Error!));
+
+        var options = (itemResult.Data ?? new List<Sys_DictionaryList>())
+            .Where(x => !string.IsNullOrWhiteSpace(x.DicValue))
+            .OrderBy(x => x.OrderNo ?? 0)
+            .ThenBy(x => x.DicName)
+            .Select(x => new DictItemValueDto
+            {
+                Value = x.DicValue!,
+                Label = x.DicName,
+                Code = x.Code ?? string.Empty,
+                Color = x.Color
+            })
+            .ToList();
+
+        return Ok(ApiResponse<List<DictItemValueDto>>.Ok(options));
+    }
+
+    /// <summary>
     ///     取某个分类下的全部字典（下拉框数据源）
     ///
     ///     GET /api/System/Dictionary/category/{code}/dictionaries
@@ -325,6 +379,25 @@ public class DictOptionDto
 
     /// <summary>显示文本</summary>
     public string Label { get; set; } = string.Empty;
+
+    /// <summary>标签颜色（可选，来自 Sys_DictionaryList.Color）</summary>
+    public string? Color { get; set; }
+}
+
+/// <summary>
+///     字典项「业务值」选项 DTO（items/by-no/{dicNo} 端点返回）
+///     value = DicValue（业务值，如 data_access）—— 业务字段存业务值的场景用
+/// </summary>
+public class DictItemValueDto
+{
+    /// <summary>选项值（字典项 DicValue 业务值）</summary>
+    public string Value { get; set; } = string.Empty;
+
+    /// <summary>显示文本（字典项 DicName）</summary>
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>字典项行标识（Code，GUID，需要按 Code 关联时取用）</summary>
+    public string Code { get; set; } = string.Empty;
 
     /// <summary>标签颜色（可选，来自 Sys_DictionaryList.Color）</summary>
     public string? Color { get; set; }

@@ -19,6 +19,9 @@ public interface IObjectStorage
     /// <summary>重命名（复制新 + 删除旧）</summary>
     Task RenameAsync(string oldObjectName, string newObjectName, CancellationToken ct = default);
 
+    /// <summary>复制对象（保留源对象；06 册 G-3c 恢复归档件回当前路径用）</summary>
+    Task CopyAsync(string sourceObjectName, string targetObjectName, CancellationToken ct = default);
+
     /// <summary>列出前缀下所有对象键</summary>
     Task<List<string>> ListObjectsAsync(string prefix, CancellationToken ct = default);
 

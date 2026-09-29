@@ -96,7 +96,17 @@ public class ApiSyncService
             if (codesToUpdate.Any())
             {
                 var updateApis = discoveredApis.Where(a => codesToUpdate.Contains(a.ApiCode))
-                    .Select(a => MapToEntity(a)).ToList();
+                    .Select(a =>
+                    {
+                        var entity = MapToEntity(a);
+                        // ★ 必须带回主键 Id：MapToEntity 新建实体 Id=0 → UPDATE ... WHERE Id=0
+                        //   永远影响 0 行（2026-09-27 实测「更新接口 1 个（实际 0）」= 路径/名称同步从未生效，
+                        //   动作改名后 sys_api 留下过期 Path）。CreateTime 同理保留（非更新列，但避免写脏）。
+                        entity.Id = existingDict[a.ApiCode].Id;
+                        entity.CreateTime = existingDict[a.ApiCode].CreateTime;
+                        return entity;
+                    })
+                    .ToList();
                 var updated = await _apiRepo.UpdateBatchAsync(updateApis);
                 _logger.LogInformation("更新接口 {Planned} 个（实际 {Updated}）: {Codes}",
                     codesToUpdate.Count, updated, string.Join(", ", codesToUpdate.Take(5)));

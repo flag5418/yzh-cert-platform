@@ -66,17 +66,16 @@ public class MinioObjectStorage : IObjectStorage
         await _client.RemoveObjectAsync(args, ct);
     }
 
-    /// <summary>重命名（Copy 新 + Delete 旧）</summary>
-    public async Task RenameAsync(string oldObjectName, string newObjectName, CancellationToken ct = default)
+    /// <summary>复制对象（源对象保留）。MinIO SDK 6.0.4 的服务端 CopyObject 源对象参数类型不稳定，
+    /// 沿用与 <see cref="RenameAsync"/> 相同的下载-上传通道，行为等价。</summary>
+    public async Task CopyAsync(string sourceObjectName, string targetObjectName, CancellationToken ct = default)
     {
-        var oldPath = oldObjectName.TrimStart('/');
-        var newPath = newObjectName.TrimStart('/');
+        var sourcePath = sourceObjectName.TrimStart('/');
 
-        // 下载源文件
         var ms = new MemoryStream();
         var getArgs = new GetObjectArgs()
             .WithBucket(_bucketName)
-            .WithObject(oldPath)
+            .WithObject(sourcePath)
             .WithCallbackStream(async (stream, token) =>
             {
                 await stream.CopyToAsync(ms, token);
@@ -84,24 +83,27 @@ public class MinioObjectStorage : IObjectStorage
             });
         await _client.GetObjectAsync(getArgs, ct);
 
-        // 获取内容类型
         var statArgs = new StatObjectArgs()
             .WithBucket(_bucketName)
-            .WithObject(oldPath);
+            .WithObject(sourcePath);
         var stat = await _client.StatObjectAsync(statArgs, ct);
 
-        // 上传到新路径
+        ms.Position = 0;
         var putArgs = new PutObjectArgs()
             .WithBucket(_bucketName)
-            .WithObject(newPath)
+            .WithObject(targetObjectName.TrimStart('/'))
             .WithStreamData(ms)
             .WithObjectSize(ms.Length)
             .WithContentType(stat.ContentType ?? "application/octet-stream");
         await _client.PutObjectAsync(putArgs, ct);
         ms.Close();
+    }
 
-        // 删除旧路径
-        await DeleteAsync(oldPath, ct);
+    /// <summary>重命名（Copy 新 + Delete 旧）</summary>
+    public async Task RenameAsync(string oldObjectName, string newObjectName, CancellationToken ct = default)
+    {
+        await CopyAsync(oldObjectName, newObjectName, ct);
+        await DeleteAsync(oldObjectName, ct);
     }
 
     /// <summary>列出前缀下所有对象键</summary>

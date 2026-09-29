@@ -153,6 +153,8 @@ public class QueueManager
             if (!insertResult.Success)
             {
                 _logger.LogError("[QueueManager] 队列主表插入失败：{QueueCode}, {Error}", queueCode, insertResult.Error);
+                // 主表失败必须回滚已插入的资源锁，否则幽灵锁（ActiveKey 占用）会永久阻塞该资源的后续队列
+                await orm.SqlExecuteAsync("UPDATE yzh_queue_resource_lock SET Status = 'released', ActiveKey = NULL, ReleaseTime = NOW() WHERE QueueCode = @qc AND Status = 'locked'", new { qc = queueCode });
                 return (false, $"队列主表插入失败：{insertResult.Error}", null, 0);
             }
 

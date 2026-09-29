@@ -36,6 +36,9 @@ public class AliyunOssStorage : IObjectStorage
     public Task RenameAsync(string oldObjectName, string newObjectName, CancellationToken ct = default)
         => throw new NotImplementedException();
 
+    public Task CopyAsync(string sourceObjectName, string targetObjectName, CancellationToken ct = default)
+        => throw new NotImplementedException();
+
     public Task<List<string>> ListObjectsAsync(string prefix, CancellationToken ct = default)
         => throw new NotImplementedException();
 
