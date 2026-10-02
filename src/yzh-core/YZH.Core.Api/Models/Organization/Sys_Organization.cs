@@ -43,7 +43,17 @@ public class Sys_Organization : BaseEntity, ISoftDelete, IIsValid, ITreeEntity
     [Display(Name = "上级机构")]
     public new string? ParentCode { get; set; }
 
-    /// <summary>机构类型（Platform/CertBody/VirtualOrg/Dept）</summary>
+    /// <summary>
+    /// 机构类型（系统内部标识，**不在管理端表单中录入/编辑**）：
+    /// <list type="bullet">
+    /// <item>Platform   平台根节点（种子数据）</item>
+    /// <item>CertBody   认证机构（认证机构挂载时创建）</item>
+    /// <item>VirtualOrg 虚拟体系机构 / 专家工作区（专家系统「专家注册」创建）</item>
+    /// <item>Dept       部门/文件夹（管理端手工维护 + 业务系统建的角色分组）</item>
+    /// <item>Enterprise 企业（专家系统「新增企业」在「企业信息」分组下创建）</item>
+    /// </list>
+    /// 各类型由业务系统按用途自动写入；仅 Dept 允许在 /system/organization 改删。
+    /// </summary>
     [StringLength(50)]
     [Display(Name = "机构类型")]
     public string? OrgType { get; set; }

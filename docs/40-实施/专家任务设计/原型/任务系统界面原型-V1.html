@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>专家任务系统 · 界面原型 V1</title>
+<style>
+:root{
+  --pri:#409eff;--pri-l:#ecf5ff;--pri-b:#d9ecff;
+  --suc:#67c23a;--suc-l:#f0f9eb;--suc-b:#e1f3d8;
+  --warn:#e6a23c;--warn-l:#fdf6ec;--warn-b:#faecd8;
+  --dan:#f56c6c;--dan-l:#fef0f0;--dan-b:#fde2e2;
+  --info:#909399;--info-l:#f4f4f5;--info-b:#e9e9eb;
+  --t1:#303133;--t2:#606266;--t3:#909399;--t4:#c0c4cc;
+  --bd:#dcdfe6;--bd-l:#e4e7ed;--bd-xl:#ebeef5;
+  --bg:#f5f7fa;--bg2:#fafafa;--r:4px;--r2:8px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#fff;color:var(--t1);font-size:14px;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+.app{display:flex;min-height:100vh}
+.side{width:220px;flex:0 0 220px;border-right:1px solid var(--bd-l);background:#fff}
+.brand{padding:16px;font-size:15px;font-weight:500;border-bottom:1px solid var(--bd-xl)}
+.nav{padding:8px 0}
+.nav a{display:block;padding:10px 16px;font-size:14px;color:var(--t2);text-decoration:none;
+  cursor:pointer;border-left:3px solid transparent}
+.nav a:hover{background:var(--bg2);color:var(--pri)}
+.nav a.on{background:var(--pri-l);color:var(--pri);border-left-color:var(--pri);font-weight:500}
+.nav a.mute{color:var(--t4);cursor:default}
+.nav a.mute:hover{background:transparent;color:var(--t4)}
+.nav-sep{padding:14px 16px 6px;font-size:12px;color:var(--t4)}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg)}
+.topbar{background:#fff;border-bottom:1px solid var(--bd-l);padding:12px 20px;
+  font-size:13px;color:var(--t3);display:flex;align-items:center;gap:6px}
+.topbar b{color:var(--t1);font-weight:500}
+.content{padding:16px 20px 48px;flex:1;min-width:0}
+.page{display:none}
+.page.on{display:block}
+.page-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.page-head h1{margin:0;font-size:16px;font-weight:500}
+.page-head .sub{font-size:12px;color:var(--t3)}
+.page-head .sp{flex:1}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;font-size:13px;
+  border:1px solid var(--bd);border-radius:var(--r);background:#fff;color:var(--t2);
+  cursor:pointer;line-height:1;font-family:inherit}
+.btn:hover{color:var(--pri);border-color:#c6e2ff;background:var(--pri-l)}
+.btn.pri{background:var(--pri);border-color:var(--pri);color:#fff}
+.btn.pri:hover{background:#66b1ff;border-color:#66b1ff;color:#fff}
+.btn.dan{color:var(--dan);border-color:#fbc4c4}
+.btn.dan:hover{background:var(--dan-l);border-color:var(--dan)}
+.btn.sm{padding:5px 10px;font-size:12px}
+.btn[disabled]{opacity:.45;cursor:not-allowed;color:var(--t3)}
+.btn[disabled]:hover{background:#fff;border-color:var(--bd);color:var(--t3)}
+.card{background:#fff;border:1px solid var(--bd-xl);border-radius:var(--r2);padding:16px 20px;margin-bottom:16px}
+.card h2{margin:0 0 14px;font-size:14px;font-weight:500}
+.filter{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center}
+.field{display:flex;align-items:center;gap:8px}
+.field>label{font-size:13px;color:var(--t2);white-space:nowrap}
+input[type=text],select{font-family:inherit;font-size:13px;color:var(--t1);padding:6px 10px;
+  border:1px solid var(--bd);border-radius:var(--r);background:#fff;outline:none;min-width:150px}
+input[type=text]:focus,select:focus{border-color:var(--pri)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--bg2);color:var(--t2);font-weight:500;text-align:left;
+  padding:10px 12px;border-bottom:1px solid var(--bd-xl);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--bd-xl);color:var(--t2);vertical-align:middle}
+tbody tr:hover{background:var(--bg2)}
+.tag{display:inline-block;padding:1px 8px;font-size:12px;border-radius:var(--r);line-height:18px;white-space:nowrap}
+.tag.b{background:var(--pri-l);color:var(--pri);border:1px solid var(--pri-b)}
+.tag.s{background:var(--suc-l);color:var(--suc);border:1px solid var(--suc-b)}
+.tag.w{background:var(--warn-l);color:var(--warn);border:1px solid var(--warn-b)}
+.tag.d{background:var(--dan-l);color:var(--dan);border:1px solid var(--dan-b)}
+.tag.i{background:var(--info-l);color:var(--info);border:1px solid var(--info-b)}
+.bar{height:6px;border-radius:3px;background:var(--bd-xl);overflow:hidden;width:100px}
+.bar i{display:block;height:100%;background:var(--pri)}
+.bar.s i{background:var(--suc)}
+.bar.d i{background:var(--dan)}
+.steps{display:flex;align-items:center;margin-bottom:26px}
+.step{display:flex;align-items:center;gap:10px}
+.step .num{width:26px;height:26px;border-radius:50%;border:1px solid var(--bd);color:var(--t3);
+  display:flex;align-items:center;justify-content:center;font-size:13px;background:#fff;flex:0 0 26px}
+.step.on .num{background:var(--pri);border-color:var(--pri);color:#fff}
+.step.done .num{background:var(--pri-l);border-color:var(--pri);color:var(--pri)}
+.step .txt{font-size:13px;color:var(--t3);white-space:nowrap}
+.step.on .txt{color:var(--t1);font-weight:500}
+.step .line{flex:1;height:1px;background:var(--bd-l);margin:0 14px;min-width:24px}
+.alert{display:flex;gap:10px;padding:10px 14px;border-radius:var(--r);
+  font-size:13px;line-height:1.65;margin-bottom:16px}
+.alert.s{background:var(--suc-l);border:1px solid var(--suc-b);color:#529b2e}
+.alert.d{background:var(--dan-l);border:1px solid var(--dan-b);color:#c45656}
+.alert.w{background:var(--warn-l);border:1px solid var(--warn-b);color:#b88230}
+.alert.i{background:var(--pri-l);border:1px solid var(--pri-b);color:#337ecc}
+.alert .k{font-weight:500}
+.tabs{display:flex;border-bottom:1px solid var(--bd-l);margin-bottom:16px}
+.tabs div{padding:10px 18px;font-size:14px;color:var(--t2);cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs div.on{color:var(--pri);border-bottom-color:var(--pri)}
+.pane{display:none}
+.pane.on{display:block}
+.split{display:flex;gap:16px;align-items:flex-start}
+.split .left{width:264px;flex:0 0 264px}
+.split .right{flex:1;min-width:0}
+.tree{font-size:13px;padding:4px}
+.tree .n{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:var(--r);
+  cursor:pointer;color:var(--t2)}
+.tree .n:hover{background:var(--bg2)}
+.tree .n.on{background:var(--pri-l);color:var(--pri)}
+.tree .n.l1{padding-left:8px}
+.tree .n.l2{padding-left:26px}
+.tree .n.l3{padding-left:46px}
+.dot{width:6px;height:6px;border-radius:50%;flex:0 0 6px;display:inline-block}
+.meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.meta-grid .m{background:var(--bg2);border-radius:var(--r2);padding:12px 14px}
+.meta-grid .m .l{font-size:12px;color:var(--t3);margin-bottom:6px}
+.meta-grid .m .v{font-size:15px;font-weight:500;color:var(--t1)}
+.meta-grid .m .v small{font-size:12px;font-weight:400;color:var(--t3)}
+.q{border:1px solid var(--bd-xl);border-radius:var(--r2);padding:14px 16px;margin-bottom:12px;background:#fff}
+.q-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.q-head .name{font-size:14px;font-weight:500;color:var(--t1)}
+.q-head .sp{flex:1}
+.q-meta{display:flex;gap:22px;font-size:12px;color:var(--t3);margin-bottom:10px;flex-wrap:wrap}
+.q-meta b{color:var(--t1);font-weight:500}
+.log{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+.log .row{display:flex;gap:12px;padding:7px 0;border-bottom:1px solid var(--bd-xl);align-items:baseline}
+.log .t{color:var(--t3);flex:0 0 68px}
+.log .ev{flex:0 0 158px;color:var(--pri)}
+.log .ev.w{color:var(--warn)}
+.log .ev.d{color:var(--dan)}
+.log .ev.s{color:var(--suc)}
+.log .msg{color:var(--t2);flex:1;min-width:0;word-break:break-all}
+.radios{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.radio{border:1px solid var(--bd);border-radius:var(--r2);padding:14px 16px;cursor:pointer}
+.radio.on{border-color:var(--pri);background:var(--pri-l)}
+.radio .t{font-size:14px;font-weight:500;color:var(--t1);margin-bottom:6px}
+.radio .d{font-size:12px;color:var(--t3);line-height:1.6}
+.radio.on .t{color:var(--pri)}
+.hint{font-size:12px;color:var(--t3);line-height:1.7;margin-top:8px}
+.wiz-foot{display:flex;justify-content:flex-end;gap:10px;padding-top:16px;border-top:1px solid var(--bd-xl);margin-top:20px}
+.sum{display:grid;grid-template-columns:120px 1fr;gap:0;font-size:13px;border:1px solid var(--bd-xl);border-radius:var(--r2);overflow:hidden}
+.sum .k{background:var(--bg2);padding:10px 14px;color:var(--t2);border-bottom:1px solid var(--bd-xl)}
+.sum .v{padding:10px 14px;color:var(--t1);border-bottom:1px solid var(--bd-xl)}
+.sum .k:last-of-type,.sum .v:last-of-type{border-bottom:0}
+.legend{font-size:12px;color:var(--t3);line-height:1.9;margin-top:10px}
+.legend code{background:var(--bg2);padding:1px 5px;border-radius:3px;color:var(--t2);font-size:11px}
+.pager{display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid var(--bd-xl);font-size:13px;color:var(--t3)}
+.pager .sp{flex:1}
+.pg{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 6px;
+  border:1px solid var(--bd);border-radius:var(--r);font-size:13px;color:var(--t2);cursor:pointer;background:#fff}
+.pg.on{background:var(--pri);border-color:var(--pri);color:#fff}
+.sort{color:var(--pri);font-weight:500}
+.two{display:block;line-height:1.45}
+.two b{color:var(--t1);font-weight:400}
+.two em{font-style:normal;font-size:12px;color:var(--t3)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <aside class="side">
+    <div class="brand">专家系统</div>
+    <nav class="nav">
+      <a data-go="tasks" class="on">任务中心</a>
+      <a data-go="nc">NC 检查结果</a>
+      <a data-go="report">报告结论</a>
+      <div class="nav-sep">其他</div>
+      <a class="mute">系统一览</a>
+      <a class="mute">企业管理</a>
+      <a class="mute">阶段标准关联</a>
+      <a class="mute">资料库</a>
+      <a class="mute">组织与成员</a>
+      <a class="mute">系统设置</a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="topbar" id="crumb">专家系统 / <b>任务中心</b></div>
+    <div class="content">
+
+      <!-- ================= 1. 任务中心 ================= -->
+      <section class="page on" id="p-tasks">
+        <div class="page-head">
+          <h1>任务中心</h1>
+          <span class="sub">建立 / 导航 / 队列启动</span>
+          <span class="sp"></span>
+          <button class="btn pri" data-go="wizard">+ 新建任务</button>
+        </div>
+
+        <div class="card filter">
+          <div class="field">
+            <input type="text" style="min-width:280px" placeholder="搜索任务编号 / 企业名称">
+          </div>
+          <div class="field">
+            <select style="min-width:132px">
+              <option>全部状态</option>
+              <option>草稿</option><option>待执行</option><option>运行中</option>
+              <option>已完成</option><option>失败</option>
+            </select>
+          </div>
+          <button class="btn pri">搜索</button>
+        </div>
+
+        <div class="card" style="padding:0;overflow:hidden">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:196px">任务编号 / 名称</th>
+                <th style="width:176px">企业</th>
+                <th style="width:104px">阶段</th>
+                <th style="width:84px">分类</th>
+                <th style="width:88px">执行状态</th>
+                <th style="width:132px">进度</th>
+                <th style="width:146px"><span class="sort">创建时间 ↓</span></th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="task-rows"></tbody>
+          </table>
+          <div class="pager">
+            <span>共 4 条</span>
+            <span class="sp"></span>
+            <select style="min-width:104px"><option>10 条 / 页</option><option>20 条 / 页</option><option>50 条 / 页</option></select>
+            <button class="btn sm" disabled>上一页</button>
+            <span class="pg on">1</span>
+            <button class="btn sm" disabled>下一页</button>
+          </div>
+        </div>
+
+        <div class="legend">
+          ★ 列表<b>默认按创建时间倒序</b>（最新任务在最上）。<br>
+          ★ <b>执行状态</b> = 机器跑完没有，<b>它决定业务锁</b>；<br>
+          ★ <b>复核状态</b> = 人看完没有，<b>不影响任何逻辑</b>，只在两个<b>结果菜单</b>的每条结论上出现，任务列表不展示。<br>
+          ★ 本页只做三件事：<b>建任务</b>、<b>找任务</b>、<b>把队列跑起来</b> —— 不含「认可 / 修改 / 批准 / 导出结果」（D31）。
+        </div>
+      </section>
+
+      <!-- ================= 2. 新建任务向导 ================= -->
+      <section class="page" id="p-wizard">
+        <div class="page-head">
+          <h1>新建任务</h1>
+          <span class="sub">4 步向导</span>
+          <span class="sp"></span>
+          <button class="btn" data-go="tasks">返回列表</button>
+        </div>
+
+        <div class="card">
+          <div class="steps" id="wiz-steps">
+            <div class="step on" data-s="1"><div class="num">1</div><div class="txt">企业与阶段</div></div>
+            <div class="line"></div>
+            <div class="step" data-s="2"><div class="num">2</div><div class="txt">任务来源</div></div>
+            <div class="line"></div>
+            <div class="step" data-s="3"><div class="num">3</div><div class="txt">检查范围</div></div>
+            <div class="line"></div>
+            <div class="step" data-s="4"><div class="num">4</div><div class="txt">确认创建</div></div>
+          </div>
+
+          <!-- step 1 -->
+          <div class="pane on" id="ws-1">
+            <div class="filter" style="margin-bottom:16px">
+              <div class="field"><label>企业</label>
+                <select id="w-ent">
+                  <option>华信机械制造有限公司</option>
+                  <option>恒通电子科技有限公司</option>
+                </select></div>
+              <div class="field"><label>阶段</label>
+                <select id="w-stage">
+                  <option>初次认证审核</option>
+                  <option>监督审核</option>
+                  <option>复审</option>
+                </select></div>
+              <div class="field"><label>分类</label>
+                <select id="w-type">
+                  <option>NC 检查</option>
+                  <option>报告生成</option>
+                </select></div>
+            </div>
+
+            <div id="w-lock"></div>
+
+            <div class="meta-grid">
+              <div class="m"><div class="l">该企业该阶段已有任务</div><div class="v">3 <small>个（1 已完成 / 1 取消 / 1 运行中）</small></div></div>
+              <div class="m"><div class="l">当前生效检查项</div><div class="v">24 <small>条</small></div></div>
+              <div class="m"><div class="l">历史结果轮次</div><div class="v">2.3 <small>轮 / 检查项</small></div></div>
+              <div class="m"><div class="l">涉及标准</div><div class="v">2 <small>个</small></div></div>
+            </div>
+
+            <div class="alert i">
+              <span>分类决定后续一切：<b>NC 检查</b> 取 <code>cert_validation_rule</code>；<b>报告生成</b> 取 <code>cert_report_section</code>。
+              业务锁按「企业 + 阶段 + 分类」三段 + 工作区串行，两类互不阻塞。</span>
+            </div>
+
+            <div style="display:flex;gap:10px">
+              <button class="btn pri" data-wnext="2">创建新任务</button>
+              <button class="btn" data-wnext="2" data-from="existing">从已有任务出发</button>
+            </div>
+            <div class="hint">「从已有任务出发」= 复用上次的范围与勾选，进入第 2 步后默认选中「重新执行（整体）」。</div>
+          </div>
+
+          <!-- step 2 -->
+          <div class="pane" id="ws-2">
+            <div class="radios" id="w-src">
+              <div class="radio on" data-v="NEW">
+                <div class="t">开启全新任务</div>
+                <div class="d">按当前规则库生成检查项，不参考历史结果。适用于首次审核。</div>
+              </div>
+              <div class="radio" data-v="REDO">
+                <div class="t">重新执行（整体）</div>
+                <div class="d">重跑该企业该阶段的全部检查项。沿用检查项实体，结果追加新轮次。</div>
+              </div>
+              <div class="radio" data-v="PATCH">
+                <div class="t">局部更新</div>
+                <div class="d">只跑指定子集。适用于「上次有新文件的」「上次不符合未关闭的」。</div>
+              </div>
+            </div>
+            <div class="alert w" style="margin-top:16px">
+              <span>选「局部更新」+ 第 3 步「全部检查项」时，等价于「重新执行（整体）」，系统会提示你合并。</span>
+            </div>
+            <div class="wiz-foot">
+              <button class="btn" data-wnext="1">上一步</button>
+              <button class="btn pri" data-wnext="3">下一步</button>
+            </div>
+          </div>
+
+          <!-- step 3 -->
+          <div class="pane" id="ws-3">
+            <div class="radios" style="margin-bottom:16px">
+              <div class="radio on" data-scope="FULL">
+                <div class="t">全部检查项</div>
+                <div class="d">按企业该阶段已分配的标准全量生成。</div>
+              </div>
+              <div class="radio" data-scope="PARTIAL">
+                <div class="t">指定检查项</div>
+                <div class="d">手工勾选，仅对勾选项建立队列项。</div>
+              </div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:40px"><input type="checkbox" checked></th>
+                  <th style="width:80px">条款</th>
+                  <th>检查项</th>
+                  <th style="width:120px">标准</th>
+                  <th style="width:90px">上次结论</th>
+                  <th style="width:110px">上次检查时间</th>
+                  <th style="width:150px">系统建议</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><input type="checkbox" checked></td><td>8.1</td><td>运行策划和控制</td><td>ISO 9001</td><td><span class="tag d">不符合</span></td><td>2025-09-18</td><td><span class="tag w">建议勾选：不符合未关闭</span></td></tr>
+                <tr><td><input type="checkbox" checked></td><td>9.2</td><td>内部审核</td><td>ISO 9001</td><td><span class="tag d">不符合</span></td><td>2025-09-18</td><td><span class="tag w">建议勾选：不符合未关闭</span></td></tr>
+                <tr><td><input type="checkbox" checked></td><td>7.5.1</td><td>文件化信息控制</td><td>ISO 9001</td><td><span class="tag s">符合</span></td><td>2025-09-18</td><td><span class="tag b">建议勾选：有新上传文件</span></td></tr>
+                <tr><td><input type="checkbox"></td><td>4.1</td><td>理解组织及其环境</td><td>ISO 9001</td><td><span class="tag s">符合</span></td><td>2025-09-18</td><td><span class="tag i">沿用上次结论</span></td></tr>
+                <tr><td><input type="checkbox"></td><td>6.1</td><td>风险和机遇的应对</td><td>ISO 14001</td><td><span class="tag w">观察项</span></td><td>2025-09-18</td><td><span class="tag i">沿用上次结论</span></td></tr>
+              </tbody>
+            </table>
+            <div class="hint">★ 勾选状态随第 2 步「来源」自动预置：<b>NEW+PARTIAL</b> 不预勾选；<b>REDO+PARTIAL</b> 全预勾选；<b>PATCH</b> 只预勾选系统建议项。</div>
+
+            <div class="wiz-foot">
+              <button class="btn" data-wnext="2">上一步</button>
+              <button class="btn pri" data-wnext="4">下一步</button>
+            </div>
+          </div>
+
+          <!-- step 4 -->
+          <div class="pane" id="ws-4">
+            <div class="field" style="margin-bottom:16px">
+              <label>任务名称</label>
+              <input type="text" style="min-width:380px" value="华信机械2026初次认证审核-NC检查">
+            </div>
+            <div class="sum">
+              <div class="k">企业</div><div class="v">华信机械制造有限公司</div>
+              <div class="k">阶段</div><div class="v">初次认证审核（jd01）</div>
+              <div class="k">分类</div><div class="v">NC 检查</div>
+              <div class="k">来源</div><div class="v">开启全新任务（NEW）</div>
+              <div class="k">范围</div><div class="v">全部检查项（FULL）</div>
+              <div class="k">涉及标准</div><div class="v">ISO 9001:2015 · ISO 14001:2015（2 个）</div>
+              <div class="k">预计检查项</div><div class="v">24 条</div>
+              <div class="k">将创建</div><div class="v">1 个任务头 · 2 个标准子任务 · 24 个队列项 · 2 个执行队列</div>
+            </div>
+            <div class="alert i" style="margin-top:16px">
+              <span>创建后任务为 <b>草稿（draft）</b>，<b>已占锁</b>（同企业同阶段同分类不能再建）。点「提交执行」才进入队列。</span>
+            </div>
+            <div class="wiz-foot">
+              <button class="btn" data-wnext="3">上一步</button>
+              <button class="btn pri" data-go="detail">创建任务</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 3. 任务详情 ================= -->
+      <section class="page" id="p-detail">
+        <div class="page-head">
+          <h1>T-20260930-001</h1>
+          <span class="tag w">运行中</span>
+          <span class="sub">华信机械2026初次认证审核-NC检查</span>
+          <span class="sp"></span>
+          <button class="btn" data-go="tasks">返回列表</button>
+        </div>
+
+        <div class="card">
+          <div class="meta-grid" style="margin-bottom:14px">
+            <div class="m"><div class="l">企业</div><div class="v" style="font-size:13px">华信机械制造有限公司</div></div>
+            <div class="m"><div class="l">阶段</div><div class="v" style="font-size:13px">初次认证审核</div></div>
+            <div class="m"><div class="l">分类</div><div class="v" style="font-size:13px">NC 检查</div></div>
+            <div class="m"><div class="l">来源 / 范围</div><div class="v" style="font-size:13px">全新 · 全部</div></div>
+            <div class="m"><div class="l">执行状态</div><div class="v" style="font-size:13px">运行中 running</div></div>
+            <div class="m"><div class="l">总进度</div><div class="v" style="font-size:13px">62% <small>19 / 24 项</small></div></div>
+            <div class="m"><div class="l">待审批结论</div><div class="v" style="font-size:13px">19 <small>共 24 条</small></div></div>
+          </div>
+          <div class="bar" style="width:100%;height:8px;margin-bottom:14px"><i style="width:62%"></i></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn pri" disabled>提交执行</button>
+            <button class="btn">暂停队列</button>
+            <button class="btn">重试失败项 <span class="tag d" style="margin-left:2px">1</span></button>
+            <button class="btn">补齐数据缺口 <span class="tag w" style="margin-left:2px">1</span></button>
+            <span style="flex:1"></span>
+            <button class="btn" data-go="nc">查看 NC 结果</button>
+            <button class="btn dan">取消任务</button>
+            <button class="btn">归档</button>
+          </div>
+          <div class="hint">
+            ★ 按钮可用性由三层状态推导：<code>draft</code> 才可「提交执行」；<code>running</code> 才可「暂停队列」；
+            <code>completed</code> 才可「归档」；「取消」在任何未归档状态可用。
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="tabs" id="d-tabs">
+            <div class="on" data-t="sub">标准子任务 (2)</div>
+            <div data-t="queue">执行队列 (2)</div>
+            <div data-t="log">运行日志 (18)</div>
+            <div data-t="gap">数据缺口 (1)</div>
+          </div>
+
+          <div class="pane on" id="dp-sub">
+            <table>
+              <thead><tr>
+                <th style="width:120px">子任务</th><th>标准</th><th style="width:90px">检查项</th>
+                <th style="width:90px">执行状态</th><th style="width:90px">队列状态</th>
+                <th style="width:150px">完成 / 失败</th><th style="width:120px">操作</th>
+              </tr></thead>
+              <tbody>
+                <tr><td>ST-...-01</td><td>ISO 9001:2015</td><td>18</td>
+                  <td><span class="tag w">运行中</span></td><td><span class="tag w">running</span></td>
+                  <td>14 / 1</td><td><button class="btn sm">暂停</button></td></tr>
+                <tr><td>ST-...-02</td><td>ISO 14001:2015</td><td>6</td>
+                  <td><span class="tag b">待执行</span></td><td><span class="tag i">pending</span></td>
+                  <td>0 / 0</td><td><button class="btn sm">启动</button></td></tr>
+              </tbody>
+            </table>
+            <div class="hint">1 个任务 → N 个标准子任务 → N 个执行队列（D02）。队列项只认标准，不认「企业」以外的维度。</div>
+          </div>
+
+          <div class="pane" id="dp-queue">
+            <div class="q">
+              <div class="q-head">
+                <span class="name">ISO 9001:2015</span>
+                <span class="tag w">运行中</span>
+                <span class="sp"></span>
+                <button class="btn sm">暂停</button>
+                <button class="btn sm">重试失败项</button>
+              </div>
+              <div class="q-meta">
+                <span>队列 <b>Q-...-01</b></span>
+                <span>总数 <b>18</b></span>
+                <span>完成 <b>14</b></span>
+                <span>失败 <b>1</b></span>
+                <span>重试 <b>2 / 3</b></span>
+                <span>并发 <b>3</b></span>
+                <span>耗时 <b>4 分 12 秒</b></span>
+              </div>
+              <div class="bar" style="width:100%;height:8px"><i style="width:78%"></i></div>
+            </div>
+
+            <div class="q">
+              <div class="q-head">
+                <span class="name">ISO 14001:2015</span>
+                <span class="tag i">待执行</span>
+                <span class="sp"></span>
+                <button class="btn sm">启动</button>
+                <button class="btn sm" disabled>暂停</button>
+              </div>
+              <div class="q-meta">
+                <span>队列 <b>Q-...-02</b></span>
+                <span>总数 <b>6</b></span>
+                <span>完成 <b>0</b></span>
+                <span>失败 <b>0</b></span>
+                <span>重试 <b>0 / 3</b></span>
+                <span>并发 <b>3</b></span>
+                <span>耗时 <b>—</b></span>
+              </div>
+              <div class="bar" style="width:100%;height:8px"><i style="width:0%"></i></div>
+            </div>
+
+            <div class="alert i">
+              <span>★ <b>队列的启动是独立动作</b>：「提交执行」把任务从 <code>draft</code> 推到 <code>pending_run</code> 并生成队列；
+              队列本身还要单独「启动」才从 <code>pending</code> 进 <code>running</code>。两个标准可以分批跑。</span>
+            </div>
+          </div>
+
+          <div class="pane" id="dp-log">
+            <div class="log">
+              <div class="row"><span class="t">09:12:03</span><span class="ev s">task.created</span><span class="msg">任务创建 ExecStatus=draft · TaskSource=NEW · ScopeType=FULL</span></div>
+              <div class="row"><span class="t">09:12:03</span><span class="ev s">task.lock.acquired</span><span class="msg">业务锁获取 ActiveLockKey=ORG01|ENT-HX|STAGE-jd01|NC_CHECK</span></div>
+              <div class="row"><span class="t">09:12:04</span><span class="ev">scope.resolved</span><span class="msg">范围解析命中 24 条（规则库 24 / 勾选 24）</span></div>
+              <div class="row"><span class="t">09:12:04</span><span class="ev">item.derived</span><span class="msg">派生检查项 24 条 —— 复用 6 · 新建 18</span></div>
+              <div class="row"><span class="t">09:12:04</span><span class="ev">queue.created</span><span class="msg">队列 Q-...-01 创建（ISO 9001，18 项）</span></div>
+              <div class="row"><span class="t">09:12:05</span><span class="ev">queue.created</span><span class="msg">队列 Q-...-02 创建（ISO 14001，6 项）</span></div>
+              <div class="row"><span class="t">09:12:06</span><span class="ev s">task.submitted</span><span class="msg">提交执行 ExecStatus draft → pending_run</span></div>
+              <div class="row"><span class="t">09:12:07</span><span class="ev s">queue.started</span><span class="msg">队列 Q-...-01 pending → running（并发 3）</span></div>
+              <div class="row"><span class="t">09:12:09</span><span class="ev">item.extract.ok</span><span class="msg">8.1 运行策划和控制 —— 提取成功（pdf 4 页 · 命中 2 段）</span></div>
+              <div class="row"><span class="t">09:12:31</span><span class="ev">item.judge.ok</span><span class="msg">8.1 运行策划和控制 —— 判定「不符合」置信度 0.82</span></div>
+              <div class="row"><span class="t">09:13:41</span><span class="ev">item.judge.nc</span><span class="msg">9.2 内部审核 —— 判定「不符合」· 依据条款 9.2.2 b)</span></div>
+              <div class="row"><span class="t">09:14:02</span><span class="ev w">item.extract.retry</span><span class="msg">7.5.1 文件化信息控制 —— 提取失败（文件缺页）· 重试 1/3</span></div>
+              <div class="row"><span class="t">09:14:38</span><span class="ev d">item.extract.fail</span><span class="msg">7.5.1 文件化信息控制 —— 重试耗尽 · 写入数据缺口</span></div>
+              <div class="row"><span class="t">09:14:38</span><span class="ev w">gap.created</span><span class="msg">数据缺口 1 条：企业未提供「文件控制程序」有效版本</span></div>
+              <div class="row"><span class="t">09:15:10</span><span class="ev">item.judge.ok</span><span class="msg">5.2 方针 —— 判定「符合」置信度 0.91</span></div>
+              <div class="row"><span class="t">09:16:22</span><span class="ev">queue.progress</span><span class="msg">Q-...-01 进度 14 / 18（失败 1）</span></div>
+              <div class="row"><span class="t">09:16:22</span><span class="ev">task.progress</span><span class="msg">任务进度 19 / 24 · 62%</span></div>
+            </div>
+            <div class="hint">
+              ★ <b>日志埋点清单（V1 约定）</b>：任务级 <code>task.created</code> <code>task.lock.acquired</code> <code>task.submitted</code>
+              <code>task.progress</code> <code>task.finished</code> <code>task.cancelled</code>；
+              范围级 <code>scope.resolved</code> <code>item.derived</code>；
+              队列级 <code>queue.created</code> <code>queue.started</code> <code>queue.paused</code> <code>queue.progress</code> <code>queue.finished</code>；
+              项级 <code>item.extract.ok|fail|retry</code> <code>item.judge.ok|nc</code> <code>item.skip</code> <code>gap.created</code>。
+              全部落 <code>cert_expert_task_log</code>，带 <code>TaskCode</code> / <code>QueueCode</code> / <code>ItemCode</code> / <code>Level</code> / <code>CostMs</code>。
+            </div>
+          </div>
+
+          <div class="pane" id="dp-gap">
+            <table>
+              <thead><tr>
+                <th style="width:90px">条款</th><th>检查项</th><th style="width:200px">缺口说明</th>
+                <th style="width:110px">阻断级别</th><th style="width:110px">处理状态</th><th style="width:110px">操作</th>
+              </tr></thead>
+              <tbody>
+                <tr><td>7.5.1</td><td>文件化信息控制</td><td>企业未提供「文件控制程序」有效版本</td>
+                  <td><span class="tag d">阻断该检查项</span></td><td><span class="tag w">待补录</span></td>
+                  <td><button class="btn sm">补录</button></td></tr>
+              </tbody>
+            </table>
+            <div class="hint">缺口分三级：<b>阻断该检查项</b>（跑不了）/ <b>降级为人工</b>（转专家判断）/ <b>仅提示</b>（不影响出结果）。</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 4. NC 检查结果 ================= -->
+      <section class="page" id="p-nc">
+        <div class="page-head">
+          <h1>NC 检查结果</h1>
+          <span class="sub">TaskType = NC_CHECK · 审批与导出</span>
+          <span class="sp"></span>
+          <button class="btn">导出 Excel</button>
+          <button class="btn">导出 Word</button>
+          <button class="btn pri" id="nc-batch">批量审批 (2)</button>
+        </div>
+
+        <div class="split">
+          <div class="card left" style="padding:10px 6px">
+            <div class="tree">
+              <div class="n l1"><span style="color:var(--t4);font-size:11px">▾</span>华信机械制造有限公司</div>
+              <div class="n l2"><span style="color:var(--t4);font-size:11px">▾</span>初次认证审核 <span style="color:var(--t4);font-size:11px">jd01</span></div>
+              <div class="n l3 on"><span class="dot" style="background:#e6a23c"></span>T-20260930-001</div>
+              <div class="n l3"><span class="dot" style="background:#67c23a"></span>T-20260915-002</div>
+              <div class="n l2"><span style="color:var(--t4);font-size:11px">▾</span>监督审核 <span style="color:var(--t4);font-size:11px">jd02</span></div>
+              <div class="n l3"><span class="dot" style="background:#c0c4cc"></span>T-20261001-003</div>
+              <div class="n l1"><span style="color:var(--t4);font-size:11px">▾</span>恒通电子科技有限公司</div>
+              <div class="n l2"><span style="color:var(--t4);font-size:11px">▾</span>复审 <span style="color:var(--t4);font-size:11px">03</span></div>
+              <div class="n l3"><span class="dot" style="background:#f56c6c"></span>T-20260910-003</div>
+            </div>
+          </div>
+
+          <div class="right">
+            <div class="card" style="padding:0;overflow:hidden">
+              <div class="filter" style="padding:12px 16px;border-bottom:1px solid var(--bd-xl);margin:0">
+                <span style="font-size:13px;color:var(--t1)">任务 T-20260930-001</span>
+                <span style="font-size:12px;color:var(--t3)">24 项 · 2 标准</span>
+                <span style="flex:1"></span>
+                <div class="field"><label>标准</label>
+                  <select style="min-width:130px"><option>全部</option><option>ISO 9001:2015</option><option>ISO 14001:2015</option></select></div>
+                <div class="field"><label>结论</label>
+                  <select style="min-width:110px"><option>全部</option><option>不符合</option><option>观察项</option><option>符合</option></select></div>
+                <div class="field"><label>复核状态</label>
+                  <select style="min-width:110px"><option>全部</option><option>待审批</option><option>已审批</option><option>已修改</option></select></div>
+              </div>
+              <table>
+                <thead><tr>
+                  <th style="width:40px"><input type="checkbox" id="nc-all"></th>
+                  <th style="width:80px">条款</th>
+                  <th>检查项</th>
+                  <th style="width:120px">标准</th>
+                  <th style="width:88px">结论</th>
+                  <th style="width:120px">责任部门</th>
+                  <th style="width:96px">复核状态</th>
+                  <th style="width:120px">操作</th>
+                </tr></thead>
+                <tbody>
+                  <tr><td><input type="checkbox" class="nc-cb" checked></td><td>7.5.1</td><td>文件化信息控制</td><td>ISO 9001</td>
+                    <td><span class="tag d">不符合</span></td><td>质量部</td><td><span class="tag w">待审批</span></td>
+                    <td><button class="btn sm">修改</button> <button class="btn sm">历史</button></td></tr>
+                  <tr><td><input type="checkbox" class="nc-cb"></td><td>8.5.1</td><td>生产和服务提供控制</td><td>ISO 9001</td>
+                    <td><span class="tag s">符合</span></td><td>生产部</td><td><span class="tag s">已审批</span></td>
+                    <td><button class="btn sm">修改</button> <button class="btn sm">历史</button></td></tr>
+                  <tr><td><input type="checkbox" class="nc-cb" checked></td><td>9.2</td><td>内部审核</td><td>ISO 9001</td>
+                    <td><span class="tag d">不符合</span></td><td>管理者代表</td><td><span class="tag w">待审批</span></td>
+                    <td><button class="btn sm">修改</button> <button class="btn sm">历史</button></td></tr>
+                  <tr><td><input type="checkbox" class="nc-cb"></td><td>6.1</td><td>风险和机遇的应对</td><td>ISO 14001</td>
+                    <td><span class="tag w">观察项</span></td><td>安环部</td><td><span class="tag b">已修改</span></td>
+                    <td><button class="btn sm">修改</button> <button class="btn sm">历史</button></td></tr>
+                  <tr><td><input type="checkbox" class="nc-cb"></td><td>9.1.2</td><td>顾客满意</td><td>ISO 9001</td>
+                    <td><span class="tag s">符合</span></td><td>销售部</td><td><span class="tag s">已审批</span></td>
+                    <td><button class="btn sm">修改</button> <button class="btn sm">历史</button></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="hint">
+              ★ 右表固定三件事：<b>勾选 → 批量审批</b> · <b>单行 → 直接修改</b> · <b>顶部 → 整体导出</b>。
+              点左侧「企业」或「阶段」节点，右表<b>留空</b>（必须选到任务）。
+              「责任部门」来自企业部门字典；「历史」看该检查项的多轮结论。
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 5. 报告结论 ================= -->
+      <section class="page" id="p-report">
+        <div class="page-head">
+          <h1>报告结论</h1>
+          <span class="sub">TaskType = REPORT_GENERATE · 审批与导出</span>
+          <span class="sp"></span>
+          <button class="btn">导出 Excel</button>
+          <button class="btn">导出 Word</button>
+          <button class="btn pri">批量审批 (1)</button>
+        </div>
+
+        <div class="split">
+          <div class="card left" style="padding:10px 6px">
+            <div class="tree">
+              <div class="n l1"><span style="color:var(--t4);font-size:11px">▾</span>华信机械制造有限公司</div>
+              <div class="n l2"><span style="color:var(--t4);font-size:11px">▾</span>初次认证审核 <span style="color:var(--t4);font-size:11px">jd01</span></div>
+              <div class="n l3 on"><span class="dot" style="background:#409eff"></span>T-20260930-002</div>
+              <div class="n l1"><span style="color:var(--t4);font-size:11px">▾</span>恒通电子科技有限公司</div>
+              <div class="n l2"><span style="color:var(--t4);font-size:11px">▾</span>复审 <span style="color:var(--t4);font-size:11px">03</span></div>
+              <div class="n l3"><span class="dot" style="background:#c0c4cc"></span>T-20260928-001</div>
+            </div>
+          </div>
+
+          <div class="right">
+            <div class="card" style="padding:0;overflow:hidden">
+              <div class="filter" style="padding:12px 16px;border-bottom:1px solid var(--bd-xl);margin:0">
+                <span style="font-size:13px;color:var(--t1)">任务 T-20260930-002</span>
+                <span style="font-size:12px;color:var(--t3)">12 章 · 2 标准</span>
+                <span style="flex:1"></span>
+                <div class="field"><label>标准</label>
+                  <select style="min-width:130px"><option>全部</option><option>ISO 9001:2015</option><option>ISO 14001:2015</option></select></div>
+                <div class="field"><label>复核状态</label>
+                  <select style="min-width:110px"><option>全部</option><option>待审批</option><option>已审批</option><option>已修改</option></select></div>
+              </div>
+              <table>
+                <thead><tr>
+                  <th style="width:40px"><input type="checkbox"></th>
+                  <th style="width:80px">章节号</th>
+                  <th>章节名称</th>
+                  <th style="width:120px">标准</th>
+                  <th style="width:120px">生成方式</th>
+                  <th style="width:96px">复核状态</th>
+                  <th style="width:120px">操作</th>
+                </tr></thead>
+                <tbody>
+                  <tr><td><input type="checkbox" checked></td><td>1</td><td>审核目的与范围</td><td>ISO 9001</td>
+                    <td><span class="tag b">自动生成</span></td><td><span class="tag w">待审批</span></td>
+                    <td><button class="btn sm">修改</button> <button class="btn sm">历史</button></td></tr>
+                  <tr><td><input type="checkbox"></td><td>2</td><td>审核准则</td><td>ISO 9001</td>
+                    <td><span class="tag b">自动生成</span></td><td><span class="tag s">已审批</span></td>
+                    <td><button class="btn sm">修改</button> <button class="btn sm">历史</button></td></tr>
+                  <tr><td><input type="checkbox"></td><td>4.2</td><td>不符合项汇总</td><td>ISO 9001</td>
+                    <td><span class="tag w">引用 NC 结果</span></td><td><span class="tag w">待审批</span></td>
+                    <td><button class="btn sm">修改</button> <button class="btn sm">历史</button></td></tr>
+                  <tr><td><input type="checkbox"></td><td>5</td><td>审核结论</td><td>ISO 9001</td>
+                    <td><span class="tag i">人工撰写</span></td><td><span class="tag b">已修改</span></td>
+                    <td><button class="btn sm">修改</button> <button class="btn sm">历史</button></td></tr>
+                  <tr><td><input type="checkbox"></td><td>4.1</td><td>环境管理体系概况</td><td>ISO 14001</td>
+                    <td><span class="tag b">自动生成</span></td><td><span class="tag s">已审批</span></td>
+                    <td><button class="btn sm">修改</button> <button class="btn sm">历史</button></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="hint">
+              ★ 与 NC 结果菜单<b>同构</b>：同一套左树右表、同一套「勾选批量审批 / 单行修改 / 整体导出」，只是右表换成章节。
+              「生成方式」三档：<b>自动生成</b> / <b>引用 NC 结果</b> / <b>人工撰写</b> —— 决定专家审核时的心理预期。
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<script>
+var TASKS = [
+  {no:'T-20260930-001',name:'华信机械2026初次认证审核-NC检查',ent:'华信机械制造有限公司',stage:'初次认证审核',
+   type:'NC 检查',std:2,src:'全新',exec:'running',execTxt:'运行中',execCls:'w',pct:62,ct:'2026-09-30 09:12'},
+  {no:'T-20260930-002',name:'华信机械2026初次认证审核-报告结论',ent:'华信机械制造有限公司',stage:'初次认证审核',
+   type:'报告生成',std:2,src:'全新',exec:'draft',execTxt:'草稿',execCls:'i',pct:0,ct:'2026-09-30 09:15'},
+  {no:'T-20260915-002',name:'华信机械2025监督审核-NC检查',ent:'华信机械制造有限公司',stage:'监督审核',
+   type:'NC 检查',std:2,src:'重新执行',exec:'completed',execTxt:'已完成',execCls:'s',pct:100,ct:'2026-09-15 14:03'},
+  {no:'T-20260910-003',name:'恒通电子2026复审-NC检查',ent:'恒通电子科技有限公司',stage:'复审',
+   type:'NC 检查',std:1,src:'局部更新',exec:'failed',execTxt:'失败',execCls:'d',pct:78,ct:'2026-09-10 10:41'}
+];
+
+var OPEN = {draft:1,pending_run:1,running:1,failed:1};
+
+function locked(ent,stage,type){
+  for(var i=0;i<TASKS.length;i++){
+    var t=TASKS[i];
+    if(t.ent===ent&&t.stage===stage&&t.type===type&&OPEN[t.exec]) return t;
+  }
+  return null;
+}
+
+function rows(){
+  var list=TASKS.slice().sort(function(a,b){ return a.ct<b.ct?1:(a.ct>b.ct?-1:0); });
+  var h='';
+  for(var i=0;i<list.length;i++){
+    var t=list[i];
+    var barCls = t.exec==='failed'?'d':(t.exec==='completed'?'s':'');
+    h+='<tr>';
+    h+='<td><span class="two"><b>'+t.no+'</b><em>'+t.name+'</em></span></td>';
+    h+='<td>'+t.ent+'</td>';
+    h+='<td>'+t.stage+'</td>';
+    h+='<td>'+t.type+'</td>';
+    h+='<td><span class="tag '+t.execCls+'">'+t.execTxt+'</span></td>';
+    h+='<td><div style="display:flex;align-items:center;gap:8px"><div class="bar '+barCls+'"><i style="width:'+t.pct+'%"></i></div><span style="font-size:12px;color:var(--t3)">'+t.pct+'%</span></div></td>';
+    h+='<td>'+t.ct+'</td>';
+    h+='<td><button class="btn sm" data-go="detail">详情</button> ';
+    if(t.exec==='draft') h+='<button class="btn sm">提交执行</button>';
+    else if(t.exec==='failed') h+='<button class="btn sm">重试失败项</button>';
+    else if(t.exec==='running') h+='<button class="btn sm">暂停队列</button>';
+    else h+='<button class="btn sm" data-go="nc">看结果</button>';
+    h+='</td></tr>';
+  }
+  document.getElementById('task-rows').innerHTML=h;
+}
+
+function show(p){
+  var ps=document.querySelectorAll('.page');
+  for(var i=0;i<ps.length;i++) ps[i].classList.remove('on');
+  var el=document.getElementById('p-'+p);
+  if(el) el.classList.add('on');
+  var map={tasks:'任务中心',wizard:'任务中心 / 新建任务',detail:'任务中心 / 任务详情',nc:'NC 检查结果',report:'报告结论'};
+  document.getElementById('crumb').innerHTML='专家系统 / <b>'+(map[p]||p)+'</b>';
+  var navs=document.querySelectorAll('.nav a[data-go]');
+  for(var j=0;j<navs.length;j++){
+    var k=navs[j].getAttribute('data-go');
+    var on = (k===p) || (k==='tasks'&&(p==='wizard'||p==='detail'));
+    navs[j].classList.toggle('on',on);
+  }
+  window.scrollTo(0,0);
+}
+
+document.addEventListener('click',function(e){
+  var g=e.target.closest('[data-go]');
+  if(g){ show(g.getAttribute('data-go')); return; }
+
+  var n=e.target.closest('[data-wnext]');
+  if(n){
+    var s=n.getAttribute('data-wnext');
+    var lockHit=locked(
+      document.getElementById('w-ent').value,
+      document.getElementById('w-stage').value,
+      document.getElementById('w-type').value);
+    if(lockHit&&s!=='1'){
+      alert('已阻止：同「企业 + 阶段 + 分类」存在未结束任务 '+lockHit.no+'（'+lockHit.execTxt+'）');
+      return;
+    }
+    setStep(s);
+    if(n.getAttribute('data-from')==='existing'){
+      var rs=document.querySelectorAll('#w-src .radio');
+      for(var i=0;i<rs.length;i++) rs[i].classList.toggle('on',rs[i].getAttribute('data-v')==='REDO');
+    }
+    return;
+  }
+
+  var r=e.target.closest('.radio');
+  if(r){
+    var box=r.parentNode;
+    var sibs=box.querySelectorAll('.radio');
+    for(var k=0;k<sibs.length;k++) sibs[k].classList.remove('on');
+    r.classList.add('on');
+    return;
+  }
+
+  var tab=e.target.closest('#d-tabs div');
+  if(tab){
+    var all=document.querySelectorAll('#d-tabs div');
+    for(var a=0;a<all.length;a++) all[a].classList.remove('on');
+    tab.classList.add('on');
+    var ps=document.querySelectorAll('#p-detail .pane');
+    for(var b=0;b<ps.length;b++) ps[b].classList.remove('on');
+    var t=document.getElementById('dp-'+tab.getAttribute('data-t'));
+    if(t) t.classList.add('on');
+    return;
+  }
+
+  var tn=e.target.closest('.tree .n');
+  if(tn){
+    var ns=document.querySelectorAll('.tree .n');
+    for(var c=0;c<ns.length;c++) ns[c].classList.remove('on');
+    tn.classList.add('on');
+    return;
+  }
+});
+
+function setStep(s){
+  var sp=document.querySelectorAll('#wiz-steps .step');
+  for(var i=0;i<sp.length;i++){
+    var n=parseInt(sp[i].getAttribute('data-s'),10);
+    sp[i].classList.toggle('on',n===parseInt(s,10));
+    sp[i].classList.toggle('done',n<parseInt(s,10));
+  }
+  var ps=document.querySelectorAll('#p-wizard .pane');
+  for(var j=0;j<ps.length;j++) ps[j].classList.remove('on');
+  var el=document.getElementById('ws-'+s);
+  if(el) el.classList.add('on');
+}
+
+function lockBox(){
+  var box=document.getElementById('w-lock');
+  if(!box) return;
+  var ent=document.getElementById('w-ent').value;
+  var stage=document.getElementById('w-stage').value;
+  var type=document.getElementById('w-type').value;
+  var hit=locked(ent,stage,type);
+  if(hit){
+    box.innerHTML='<div class="alert d"><span><span class="k">已被业务锁拦截</span> —— 「'+ent+' · '+stage+' · '+type+
+      '」存在未结束任务 <b>'+hit.no+'</b>（执行状态 '+hit.execTxt+
+      '）。同分类任务必须等它跑完（ExecStatus = completed）才能新建；<b>另一分类不受影响</b>。</span></div>';
+  }else{
+    box.innerHTML='<div class="alert s"><span><span class="k">可以创建</span> —— 「'+ent+' · '+stage+' · '+type+
+      '」当前没有未结束任务，可以新建。</span></div>';
+  }
+}
+
+document.getElementById('w-ent').addEventListener('change',lockBox);
+document.getElementById('w-stage').addEventListener('change',lockBox);
+document.getElementById('w-type').addEventListener('change',lockBox);
+
+var cbs=document.querySelectorAll('.nc-cb');
+var bb=document.getElementById('nc-batch');
+function syncBtn(){
+  var c=0;
+  for(var i=0;i<cbs.length;i++){ if(cbs[i].checked) c++; }
+  bb.textContent='批量审批 ('+c+')';
+}
+for(var i=0;i<cbs.length;i++) cbs[i].addEventListener('change',syncBtn);
+var all=document.getElementById('nc-all');
+if(all) all.addEventListener('change',function(){
+  for(var i=0;i<cbs.length;i++) cbs[i].checked=all.checked;
+  syncBtn();
+});
+
+rows();
+lockBox();
+syncBtn();
+</script>
+</body>
+</html>

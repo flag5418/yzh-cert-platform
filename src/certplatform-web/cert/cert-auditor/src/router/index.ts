@@ -51,6 +51,35 @@ const routes: RouteRecordRaw[] = [
         name: 'Tasks',
         component: () => import('@/pages/tasks/index.vue')
       },
+      // ★ 任务建立向导（`/tasks/create` 必须排在 `/tasks/:code` 之前）
+      {
+        path: 'tasks/create',
+        name: 'TaskCreate',
+        component: () => import('@/pages/tasks/create.vue')
+      },
+      // ★ 任务详情（4 Tab：标准子任务 / 执行队列 / 运行日志 / 数据缺口）
+      {
+        path: 'tasks/:code',
+        name: 'TaskDetail',
+        component: () => import('@/pages/tasks/detail.vue')
+      },
+      // ★ 结果两个菜单（左树右表 + 审批 + 导出）
+      {
+        path: 'nc-results',
+        name: 'NcResults',
+        component: () => import('@/pages/nc-results/index.vue')
+      },
+      {
+        path: 'report-results',
+        name: 'ReportResults',
+        component: () => import('@/pages/report-results/index.vue')
+      },
+      // ★ 企业全局参数定义（MENU_AUD_10）—— 企业档案 × 后台参数定义的关联列表 + 填充预览
+      {
+        path: 'enterprise-fill-params',
+        name: 'EnterpriseFillParams',
+        component: () => import('@/pages/enterprise-fill-params/index.vue')
+      },
       {
         path: 'resources',
         name: 'Resources',

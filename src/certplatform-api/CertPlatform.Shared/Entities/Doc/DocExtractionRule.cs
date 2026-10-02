@@ -20,6 +20,17 @@ namespace CertPlatform.Shared.Entities.Doc
         // ──── ISoftDelete / IIsValid 接口字段由接口提供 ────
 
         // ──── 业务字段 ────
+        /// <summary>
+        /// 认证机构 Code（模板所属机构）。
+        /// <para>★ 四元组唯一键 uk_rule_scope = (OrgCode, StandardCode, StageCode, StandardFileCode)：</para>
+        /// <para>同一标准 × 阶段在不同机构下是不同的模板文档 Code，规则必须带机构才能按机构追溯。</para>
+        /// <para>取值 = 规则键所属文件行 ConfigCode → cert_standard_directory_config.OrgCode（S0）。</para>
+        /// </summary>
+        [Display(Name = "认证机构")]
+        [StringLength(36)]
+        [SugarColumn(IsNullable = true)]
+        public string? OrgCode { get; set; }
+
         /// <summary>文件编码（历史字段，保留兼容）</summary>
         [Display(Name = "文件编码")]
         [StringLength(100)]

@@ -4,7 +4,9 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using CertPlatform.Admin.Services.Workflow.Models;
+using CertPlatform.Shared.Exceptions;
 
 namespace CertPlatform.Admin.Services.Workflow
 {
@@ -29,13 +31,16 @@ namespace CertPlatform.Admin.Services.Workflow
     {
         private readonly NodeExecutor _nodeExecutor;
         private readonly WorkflowLogger _wfLogger;
+        private readonly ILogger<WorkflowInterpreter> _logger;
 
         public WorkflowInterpreter(
             NodeExecutor nodeExecutor,
-            WorkflowLogger wfLogger)
+            WorkflowLogger wfLogger,
+            ILogger<WorkflowInterpreter> logger)
         {
             _nodeExecutor = nodeExecutor;
             _wfLogger = wfLogger;
+            _logger = logger;
         }
 
         /// <summary>
@@ -69,24 +74,59 @@ namespace CertPlatform.Admin.Services.Workflow
 
             var pathResults = new List<PathResult>();
 
-            // 逐路径执行（当前版本串行，后续可改为并行）
-            for (int pathIndex = 0; pathIndex < parsed.Paths.Count; pathIndex++)
+            // ★ 2026-09-30：缺失必要数据（本项无法判定）—— 不逐路径吞掉，直接上抛。
+            //   语义：这不是「某条路径失败」，而是【整个检查项缺少必要数据】⇒ 自动失败。
+            //   NodeExecutor 已把该异常放行出来（此前会被 catch(Exception) 压成字符串，
+            //   八个结构化属性全丢 ⇒ 上层无法生成补录缺口）。
+            try
             {
-                ct.ThrowIfCancellationRequested();
-
-                var path = parsed.Paths[pathIndex];
-                var pathResult = await ExecutePathAsync(
-                    path, pathIndex, taskCode, itemCode,
-                    sharedOutputs, executedNodes, contextParams, ct);
-
-                pathResults.Add(pathResult);
-
-                _wfLogger.PathDone(taskCode, itemCode, pathIndex, pathResult.Status);
-
-                if (pathResult.Status == "failed")
+                // 逐路径执行（当前版本串行，后续可改为并行）
+                for (int pathIndex = 0; pathIndex < parsed.Paths.Count; pathIndex++)
                 {
-                    _wfLogger.PathFail(taskCode, itemCode, pathIndex, pathResult.FailedAtNodeId, pathResult.Error);
+                    ct.ThrowIfCancellationRequested();
+
+                    var path = parsed.Paths[pathIndex];
+                    var pathResult = await ExecutePathAsync(
+                        path, pathIndex, taskCode, itemCode,
+                        sharedOutputs, executedNodes, contextParams, ct);
+
+                    pathResults.Add(pathResult);
+
+                    _wfLogger.PathDone(taskCode, itemCode, pathIndex, pathResult.Status);
+
+                    if (pathResult.Status == "failed")
+                    {
+                        _wfLogger.PathFail(taskCode, itemCode, pathIndex, pathResult.FailedAtNodeId, pathResult.Error);
+                    }
                 }
+            }
+            catch (WorkflowDataMissingException ex)
+            {
+                sw.Stop();
+                _wfLogger.ItemDone(taskCode, itemCode, false, (int)sw.ElapsedMilliseconds);
+                _logger.LogWarning(
+                    "[Workflow] 缺失必要数据 task={TaskCode} item={ItemCode} rule={RuleCode} " +
+                    "kind={Kind} code={DataCode} reason={Reason}",
+                    taskCode, itemCode, ruleCode, ex.DataKind, ex.DataCode, ex.Reason);
+
+                // ★ 附在 ErrorCode 上，让 WfExecutionTaskService 能落 gap + 标记任务项 failed
+                return new ItemExecutionResult
+                {
+                    Success = false,
+                    IsSuccess = false,
+                    Error = ex.Message,
+                    ErrorCode = WorkflowErrorCodes.DataMissing,
+                    MissingData = ex,
+                    PathResults = pathResults,
+                    DurationMs = (int)sw.ElapsedMilliseconds,
+                    NcResult = new Dictionary<string, object>
+                    {
+                        ["success"] = false,
+                        ["error"] = ex.Message,
+                        ["errorCode"] = WorkflowErrorCodes.DataMissing,
+                        ["result"] = null!
+                    }
+                };
             }
 
             // 聚合 NC 结果
@@ -219,10 +259,16 @@ namespace CertPlatform.Admin.Services.Workflow
 
         /// <summary>
         /// 聚合所有路径的结果为 NC 最终结果
-        /// <para>规则：</para>
-        /// <para>  有任何路径到达 end 且成功 → NC 通过</para>
-        /// <para>  所有路径都失败 → NC 失败</para>
-        /// <para>  结果提取：优先取 result 字段；如果 result 是多 key 字典，尝试从中提取 result/compare_result 字段</para>
+        /// <summary>
+        /// 汇总多路径执行结果。
+        /// <para>★ 2026-09-29 修正（18 号 §七 B1）：原实现只取 <b>第一条</b>成功路径的输出
+        /// （<c>successPaths[0]</c>），其余路径的结果被静默丢弃。
+        /// 这在「多维度全覆盖」型工作流（NC 检查）里会导致结论失真。</para>
+        /// <para><b>修正后</b>：
+        ///   ① 新增 <c>pathResults</c> —— <b>全部</b>路径的结构化结果数组，供上层聚合判定
+        ///   ② <c>result</c> 字段保持「第一条成功路径」的语义（向后兼容，勿破坏既有工作流）
+        ///   ③ 成功判定保持「任一路径成功即成功」</para>
+        /// <para><b>成功判定规则（不变）</b>：任一路径到达 end 且成功 → NC 通过；所有路径失败 → NC 失败。</para>
         /// </summary>
         private Dictionary<string, object> AggregateNcResult(List<PathResult> pathResults)
         {
@@ -234,13 +280,25 @@ namespace CertPlatform.Admin.Services.Workflow
                 .Where(r => r.Status == "failed")
                 .ToList();
 
+            // ★ 全量路径结果（供 nc_conclusion_calc 之类做多维度聚合判定）
+            var allPathResults = pathResults
+                .OrderBy(p => p.PathIndex)
+                .Select(p => new Dictionary<string, object?>
+                {
+                    ["pathIndex"]    = p.PathIndex,
+                    ["status"]       = p.Status,
+                    ["output"]       = p.Output,
+                    ["result"]       = ExtractSingleResult(p.Output?.GetValueOrDefault("result") ?? p.Output),
+                    ["failedAtNode"] = p.FailedAtNodeId,
+                    ["error"]        = p.Error
+                })
+                .ToList();
+
             if (successPaths.Count > 0)
             {
-                // 取第一条成功路径的输出
+                // ★ result 仍是第一条成功路径（向后兼容）；★ 完整结果走 pathResults
                 var firstSuccess = successPaths[0];
                 var rawResult = firstSuccess.Output?.GetValueOrDefault("result") ?? firstSuccess.Output;
-
-                // 智能提取：如果 result 是多 key 字典（来自上游节点的完整输出），从中提取 compare_result/result 单值
                 var result = ExtractSingleResult(rawResult);
 
                 return new Dictionary<string, object>
@@ -248,6 +306,8 @@ namespace CertPlatform.Admin.Services.Workflow
                     ["success"] = true,
                     ["error"] = null!,
                     ["result"] = result ?? new { },
+                    // ★ 新增：全部路径的结构化结果，避免上层丢失多维度信息
+                    ["pathResults"] = allPathResults,
                     ["executedPaths"] = pathResults.Select(p => p.PathIndex).ToArray(),
                     ["successPaths"] = successPaths.Select(p => p.PathIndex).ToArray(),
                     ["failedPaths"] = failedPaths.Select(p => p.PathIndex).ToArray()
@@ -270,6 +330,7 @@ namespace CertPlatform.Admin.Services.Workflow
                     ["success"] = false,
                     ["error"] = errorMsg,
                     ["result"] = null!,
+                    ["pathResults"] = allPathResults,
                     ["executedPaths"] = pathResults.Select(p => p.PathIndex).ToArray(),
                     ["successPaths"] = Array.Empty<int>(),
                     ["failedPaths"] = failedPaths.Select(p => p.PathIndex).ToArray()
@@ -282,6 +343,7 @@ namespace CertPlatform.Admin.Services.Workflow
                 ["success"] = false,
                 ["error"] = "所有路径均无有效结果，工作流配置可能不合理",
                 ["result"] = null!,
+                ["pathResults"] = allPathResults,
                 ["executedPaths"] = pathResults.Select(p => p.PathIndex).ToArray(),
                 ["successPaths"] = Array.Empty<int>(),
                 ["failedPaths"] = Array.Empty<int>()

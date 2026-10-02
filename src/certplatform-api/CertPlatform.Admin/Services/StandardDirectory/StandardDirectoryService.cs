@@ -147,7 +147,16 @@ public class StandardDirectoryService
                         ["cbCode"] = org.Code,
                         ["stdCode"] = std.Code,
                         ["standardCode"] = std.StandardCode,
-                        ["phaseCode"] = phase.StageCode,
+                        // ★★ 2026-09-30 阶段口径统一（22 号 §1.1 / 06 号 §4.1）：
+                        //   phaseCode 由【业务码 'jd01'】改为【GUID = cert_cert_stage.Code】。
+                        //   原因：配置层 cert_validation_rule.PhaseCode / cert_report_section.PhaseCode
+                        //        已迁移为 GUID（scripts/db/fix/fix-stage-code-align-2026-09-30.sql）。
+                        //   影响链：树节点 phaseCode → useFileTree.Extra.PhaseCode
+                        //          → nc-config / report-rule 的 RelateField + onPrepareAdd
+                        //   ⇒ 全链路自动变 GUID，前端无需改动。
+                        //   ⛔ 不要再改回 phase.StageCode —— 那会让新规则又存业务码，
+                        //      与 cert_enterprise_stage.StageCode（GUID）永远 join 不上，静默 0 行。
+                        ["phaseCode"] = phase.Code,
                         ["phaseName"] = phase.StageName,
                         ["phaseDefinitionCode"] = phase.Code,
                         // 目录配置 Code（null = 该「标准×阶段」尚未建配置 → 前端不加载、不上传）
@@ -407,11 +416,57 @@ public class StandardDirectoryService
     /// <summary>
     /// 获取所有文件夹（扁平列表，前端按 ParentCode 过滤实现面包屑导航）
     /// </summary>
+    /// <remarks>
+    /// ★ 与 <see cref="GetStageFileTreeAsync"/> 保持一致：过滤掉「产物目录」
+    /// （pdf / markdown / _archive，见 <see cref="PathBuilder.ReservedSegments"/>），
+    /// 否则左树不显示、右侧却能列出来的两棵树会不一致。
+    /// </remarks>
     public async Task<List<StandardDirectoryFolder>> GetFoldersFlatAsync(string directoryCode)
     {
-        return (await _db.GetListAsync<StandardDirectoryFolder>(
+        var folders = (await _db.GetListAsync<StandardDirectoryFolder>(
             x => x.ConfigCode == directoryCode && x.IsValid == 1)).Data ?? new();
+
+        var reserved = CollectReservedFolderCodes(folders);
+        if (reserved.Count == 0) return folders;
+        return folders.Where(f => !reserved.Contains(f.Code ?? "")).ToList();
     }
+
+    /// <summary>
+    /// 收集「产物目录」及其全部子孙的 Code（大小写不敏感）。
+    /// <para>用于显示层过滤 <c>pdf</c> / <c>markdown</c> / <c>_archive</c> 三个保留段名文件夹。</para>
+    /// <para>★ 带环检测与深度上限 —— 脏数据 ParentCode 成环时不能无限递归。</para>
+    /// </summary>
+    private static HashSet<string> CollectReservedFolderCodes(List<StandardDirectoryFolder> folders)
+    {
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        var roots = folders.Where(f => IsReservedSegmentName(f.FolderName)).ToList();
+        if (roots.Count == 0) return result;
+
+        // 子孙展开（迭代而非递归：脏数据成环时不会栈溢出）
+        var frontier = roots.ToList();
+        while (frontier.Count > 0)
+        {
+            var next = new List<StandardDirectoryFolder>();
+            foreach (var node in frontier)
+            {
+                var code = node.Code ?? "";
+                if (string.IsNullOrEmpty(code) || !result.Add(code)) continue;
+                foreach (var child in folders.Where(f => f.ParentCode == code))
+                {
+                    if (!result.Contains(child.Code ?? "")) next.Add(child);
+                }
+            }
+            if (result.Count > MAX_TREE_NODES) break;
+            frontier = next;
+        }
+        return result;
+    }
+
+    /// <summary>文件夹名是否为产物保留段名（pdf / markdown / _archive）</summary>
+    private static bool IsReservedSegmentName(string? name)
+        => !string.IsNullOrWhiteSpace(name)
+           && PathBuilder.ReservedSegments.Any(s =>
+               string.Equals(s, name.Trim(), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// 递归取子文件夹。
@@ -1708,9 +1763,29 @@ public class StandardDirectoryService
         var allFolders = (await _db.GetListAsync<StandardDirectoryFolder>(
             x => x.ConfigCode == directoryCode && x.IsValid == 1)).Data ?? new();
 
+        // ★ 1.1 剔除「产物目录」（pdf / markdown / _archive）。
+        //   这三段是 PathBuilder 的保留段名 —— 系统把转换产物写在
+        //   `{StoragePath}/pdf/x.pdf`、`{StoragePath}/markdown/x.md`（企业库还有 `_archive/`），
+        //   与业务文件夹物理同层。正常路径下 ValidateFolderOrFileName 已挡住新建，
+        //   但历史数据 / 直改 DB / 模板导入仍可能留下同名文件夹 → 显示层统一过滤，
+        //   否则管理员会在目录树里看到自己没建过的「pdf」文件夹。
+        //   连同其下所有文件一并剔除（文件挂在被剔除的文件夹下已无意义）。
+        var reservedFolderCodes = CollectReservedFolderCodes(allFolders);
+        if (reservedFolderCodes.Count > 0)
+        {
+            allFolders = allFolders.Where(f => !reservedFolderCodes.Contains(f.Code ?? "")).ToList();
+        }
+
         // 2. 查询所有启用的文件
         var allFiles = (await _db.GetListAsync<StandardDirectoryFile>(
             x => x.ConfigCode == directoryCode && x.IsValid == 1)).Data ?? new();
+
+        if (reservedFolderCodes.Count > 0)
+        {
+            allFiles = allFiles
+                .Where(f => !reservedFolderCodes.Contains(f.FolderCode ?? ""))
+                .ToList();
+        }
 
         // 3. 规则状态权威来源：cert_doc_extraction_rule（按 StandardFileCode 关联）
         var ruleStatusMap = new Dictionary<string, string>();

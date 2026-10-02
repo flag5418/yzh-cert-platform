@@ -89,7 +89,7 @@ public class EnterpriseFileController : WebControllerBase
     {
         var (err, data) = await _service.UploadInitAsync(
             req.EnterpriseCode ?? "", req.StageCode ?? "", req.StandardCode ?? "",
-            req.Items ?? new List<UploadInitItem>());
+            req.Items ?? new List<UploadInitItem>(), req.AutoExtract);
         return err == null ? Ok(ApiResponse<object?>.Ok(data)) : Ok(ApiResponse<object?>.Fail(err));
     }
 
@@ -113,7 +113,7 @@ public class EnterpriseFileController : WebControllerBase
     [HttpPost("upload/confirm")]
     public async Task<IActionResult> UploadConfirm([FromBody] UploadTaskRequest req)
     {
-        var (err, data) = await _service.UploadConfirmAsync(req.TaskId ?? "", req.EnterpriseCode ?? "");
+        var (err, data) = await _service.UploadConfirmAsync(req.TaskId ?? "", req.EnterpriseCode ?? "", req.AutoExtract);
         return err == null ? Ok(ApiResponse<object?>.Ok(data)) : Ok(ApiResponse<object?>.Fail(err));
     }
 
@@ -136,14 +136,16 @@ public class EnterpriseFileController : WebControllerBase
         [FromForm] string? FileCode,
         [FromForm] string? EnterpriseCode,
         [FromForm] string? Reason,
-        [FromForm] string? ExpectedModifyTime)
+        [FromForm] string? ExpectedModifyTime,
+        [FromForm] bool? AutoExtract)
     {
         if (file == null || file.Length == 0)
             return Ok(ApiResponse<object?>.Fail("请选择文件"));
         using var stream = file.OpenReadStream();
         var r = await _service.ReplaceFileAsync(FileCode ?? "", EnterpriseCode ?? "", stream, file.Length, file.FileName,
-            Reason, ParseModifyTime(ExpectedModifyTime));
-        return r.Success ? Ok(ApiResponse<object?>.Ok()) : Ok(ApiResponse<object?>.Fail(r.Error));
+            Reason, ParseModifyTime(ExpectedModifyTime), AutoExtract);
+        // ★ Data 携带「人工补录值被归档」提示（可空）
+        return r.Success ? Ok(ApiResponse<object?>.Ok(r.Data)) : Ok(ApiResponse<object?>.Fail(r.Error));
     }
 
     /// <summary>槽位模式替代入口：<c>POST files/{fileCode}/replace</c>（新契约，与 <c>replace</c> 等价）</summary>
@@ -154,14 +156,16 @@ public class EnterpriseFileController : WebControllerBase
         [FromForm] IFormFile? file,
         [FromForm] string? EnterpriseCode,
         [FromForm] string? Reason,
-        [FromForm] string? ExpectedModifyTime)
+        [FromForm] string? ExpectedModifyTime,
+        [FromForm] bool? AutoExtract)
     {
         if (file == null || file.Length == 0)
             return Ok(ApiResponse<object?>.Fail("请选择文件"));
         using var stream = file.OpenReadStream();
         var r = await _service.ReplaceFileAsync(fileCode, EnterpriseCode ?? "", stream, file.Length, file.FileName,
-            Reason, ParseModifyTime(ExpectedModifyTime));
-        return r.Success ? Ok(ApiResponse<object?>.Ok()) : Ok(ApiResponse<object?>.Fail(r.Error));
+            Reason, ParseModifyTime(ExpectedModifyTime), AutoExtract);
+        // ★ Data 携带「人工补录值被归档」提示（可空）
+        return r.Success ? Ok(ApiResponse<object?>.Ok(r.Data)) : Ok(ApiResponse<object?>.Fail(r.Error));
     }
 
     [HttpPost("delete")]
@@ -332,6 +336,8 @@ public class EnterpriseFileController : WebControllerBase
         public string? EnterpriseCode { get; set; }
         public string? StageCode { get; set; }
         public string? StandardCode { get; set; }
+        /// <summary>转换完成后是否自动提取（缺省/true = 自动；D4 默认 true）</summary>
+        public bool? AutoExtract { get; set; }
         public List<UploadInitItem>? Items { get; set; }
     }
 
@@ -346,6 +352,8 @@ public class EnterpriseFileController : WebControllerBase
     {
         public string? TaskId { get; set; }
         public string? EnterpriseCode { get; set; }
+        /// <summary>确认时覆盖 init 阶段的自动提取开关（缺省 = 沿用 init 落库值）</summary>
+        public bool? AutoExtract { get; set; }
     }
 
     public class ActiveQueueRequest

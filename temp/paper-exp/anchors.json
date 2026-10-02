@@ -1,0 +1,3155 @@
+[
+ {
+  "path": "markdown/陪审人员.doc.md",
+  "group": "0根",
+  "name": "陪审人员.doc",
+  "chars": 211,
+  "lines": 9,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 10,
+  "table": {
+   "table_rows": 7,
+   "cells": 40,
+   "filled_cells": 40,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "1质量手册/markdown/XASL-QM 质量手册.doc.md",
+  "group": "1质量手册",
+  "name": "XASL-QM 质量手册.doc",
+  "chars": 19287,
+  "lines": 1066,
+  "company_hits": 4,
+  "company_short_hits": 4,
+  "code_hits": 26,
+  "distinct_codes": 26,
+  "date_hits": 9,
+  "person_hits": 4,
+  "table": {
+   "table_rows": 77,
+   "cells": 370,
+   "filled_cells": 280,
+   "fill_ratio": 0.757
+  }
+ },
+ {
+  "path": "1质量手册/markdown/目标分解考核统计报表.docx.md",
+  "group": "1质量手册",
+  "name": "目标分解考核统计报表.docx",
+  "chars": 2127,
+  "lines": 52,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 2,
+  "person_hits": 2,
+  "table": {
+   "table_rows": 46,
+   "cells": 336,
+   "filled_cells": 166,
+   "fill_ratio": 0.494
+  }
+ },
+ {
+  "path": "1质量手册/markdown/质量手册封面.doc.md",
+  "group": "1质量手册",
+  "name": "质量手册封面.doc",
+  "chars": 136,
+  "lines": 15,
+  "company_hits": 1,
+  "company_short_hits": 1,
+  "code_hits": 1,
+  "distinct_codes": 1,
+  "date_hits": 3,
+  "person_hits": 2,
+  "table": null
+ },
+ {
+  "path": "1质量手册/markdown/附录一 质量管理体系过程识别图.doc.md",
+  "group": "1质量手册",
+  "name": "附录一 质量管理体系过程识别图.doc",
+  "chars": 754,
+  "lines": 28,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 12,
+   "cells": 47,
+   "filled_cells": 47,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "1质量手册/markdown/附录三 程序文件清单.doc.md",
+  "group": "1质量手册",
+  "name": "附录三 程序文件清单.doc",
+  "chars": 897,
+  "lines": 37,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 33,
+  "distinct_codes": 33,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 34,
+   "cells": 102,
+   "filled_cells": 69,
+   "fill_ratio": 0.676
+  }
+ },
+ {
+  "path": "1质量手册/markdown/附录二 质量方针和质量目标.doc.md",
+  "group": "1质量手册",
+  "name": "附录二 质量方针和质量目标.doc",
+  "chars": 712,
+  "lines": 31,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 1,
+  "person_hits": 2,
+  "table": {
+   "table_rows": 17,
+   "cells": 71,
+   "filled_cells": 71,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-001 文件控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-001 文件控制程序.doc",
+  "chars": 3231,
+  "lines": 164,
+  "company_hits": 1,
+  "company_short_hits": 1,
+  "code_hits": 7,
+  "distinct_codes": 7,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 8,
+   "cells": 27,
+   "filled_cells": 27,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-002 记录控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-002 记录控制程序.doc",
+  "chars": 1745,
+  "lines": 74,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 3,
+  "distinct_codes": 3,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-003 职责权限和沟通控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-003 职责权限和沟通控制程序.doc",
+  "chars": 7295,
+  "lines": 304,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 1,
+  "distinct_codes": 1,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-004 管理评审控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-004 管理评审控制程序.doc",
+  "chars": 2953,
+  "lines": 202,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 6,
+  "distinct_codes": 6,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-005 培训控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-005 培训控制程序.doc",
+  "chars": 2019,
+  "lines": 79,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 6,
+  "distinct_codes": 6,
+  "date_hits": 2,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-006 基础设施及设备控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-006 基础设施及设备控制程序.doc",
+  "chars": 2553,
+  "lines": 131,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 11,
+  "distinct_codes": 11,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-007 内部审核程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-007 内部审核程序.doc",
+  "chars": 1997,
+  "lines": 100,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 7,
+  "distinct_codes": 7,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-008 产品质量控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-008 产品质量控制程序.doc",
+  "chars": 1404,
+  "lines": 74,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 7,
+  "distinct_codes": 7,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-009 风险管理控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-009 风险管理控制程序.doc",
+  "chars": 2954,
+  "lines": 189,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 21,
+   "cells": 57,
+   "filled_cells": 45,
+   "fill_ratio": 0.789
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-010 产品放行控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-010 产品放行控制程序.doc",
+  "chars": 1403,
+  "lines": 84,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 5,
+  "distinct_codes": 5,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-011 设计开发控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-011 设计开发控制程序.doc",
+  "chars": 3449,
+  "lines": 158,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 13,
+  "distinct_codes": 13,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-012 采购控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-012 采购控制程序.doc",
+  "chars": 2490,
+  "lines": 113,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 5,
+  "distinct_codes": 5,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-013 不合格品控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-013 不合格品控制程序.doc",
+  "chars": 1412,
+  "lines": 73,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 4,
+  "distinct_codes": 4,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-014 产品防护控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-014 产品防护控制程序.doc",
+  "chars": 1612,
+  "lines": 77,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 4,
+  "distinct_codes": 4,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-015 与顾客有关的过程控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-015 与顾客有关的过程控制程序.doc",
+  "chars": 2368,
+  "lines": 148,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 7,
+  "distinct_codes": 7,
+  "date_hits": 2,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-016 质量信息报警反馈控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-016 质量信息报警反馈控制程序.doc",
+  "chars": 864,
+  "lines": 75,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 2,
+  "distinct_codes": 2,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-017 验证和确认控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-017 验证和确认控制程序.doc",
+  "chars": 3584,
+  "lines": 192,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 3,
+  "distinct_codes": 3,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-018 产品标识和可追溯性控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-018 产品标识和可追溯性控制程序.doc",
+  "chars": 2028,
+  "lines": 78,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 1,
+  "person_hits": 1,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-019 顾客财产的控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-019 顾客财产的控制程序.doc",
+  "chars": 706,
+  "lines": 41,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 2,
+  "distinct_codes": 2,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-020 监视和测量装置控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-020 监视和测量装置控制程序.doc",
+  "chars": 2256,
+  "lines": 100,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 6,
+  "distinct_codes": 6,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-021 生产和服务提供控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-021 生产和服务提供控制程序.doc",
+  "chars": 1959,
+  "lines": 91,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 9,
+  "distinct_codes": 9,
+  "date_hits": 2,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-022 供方评估和复评程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-022 供方评估和复评程序.doc",
+  "chars": 2077,
+  "lines": 98,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 4,
+  "distinct_codes": 4,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-023 顾客满意度测量控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-023 顾客满意度测量控制程序.doc",
+  "chars": 1155,
+  "lines": 58,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 3,
+  "distinct_codes": 3,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-024 过程和产品监视测量程序.docx.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-024 过程和产品监视测量程序.docx",
+  "chars": 2999,
+  "lines": 123,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 11,
+  "distinct_codes": 11,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-025 纠正预防措施控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-025 纠正预防措施控制程序.doc",
+  "chars": 1786,
+  "lines": 105,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 5,
+  "distinct_codes": 5,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-026 数据分析控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-026 数据分析控制程序.doc",
+  "chars": 1808,
+  "lines": 114,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 1,
+  "distinct_codes": 1,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-027 忠告性通知和产品召回控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-027 忠告性通知和产品召回控制程序.doc",
+  "chars": 2136,
+  "lines": 124,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 7,
+  "distinct_codes": 7,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-028 顾客抱怨处理程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-028 顾客抱怨处理程序.doc",
+  "chars": 1309,
+  "lines": 83,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 7,
+  "distinct_codes": 7,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-029 计算机软件应用确认控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-029 计算机软件应用确认控制程序.doc",
+  "chars": 1357,
+  "lines": 87,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-030 医疗器械不良事件报告和再评价程序.docx.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-030 医疗器械不良事件报告和再评价程序.docx",
+  "chars": 3034,
+  "lines": 126,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 2,
+  "distinct_codes": 2,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-031 产品主文档控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-031 产品主文档控制程序.doc",
+  "chars": 946,
+  "lines": 48,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 3,
+  "distinct_codes": 2,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-032 变更控制程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-032 变更控制程序.doc",
+  "chars": 1608,
+  "lines": 108,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 6,
+  "distinct_codes": 6,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/XASL-QP-033 上市后的监督程序.doc.md",
+  "group": "2程序文件",
+  "name": "XASL-QP-033 上市后的监督程序.doc",
+  "chars": 1172,
+  "lines": 118,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 3,
+  "distinct_codes": 3,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "2程序文件/markdown/受控文件清单-程序文件.xls.md",
+  "group": "2程序文件",
+  "name": "受控文件清单-程序文件.xls",
+  "chars": 1604,
+  "lines": 39,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 34,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 36,
+   "cells": 211,
+   "filled_cells": 177,
+   "fill_ratio": 0.839
+  }
+ },
+ {
+  "path": "2程序文件/markdown/程序文件封面.doc.md",
+  "group": "2程序文件",
+  "name": "程序文件封面.doc",
+  "chars": 137,
+  "lines": 15,
+  "company_hits": 1,
+  "company_short_hits": 1,
+  "code_hits": 1,
+  "distinct_codes": 1,
+  "date_hits": 3,
+  "person_hits": 2,
+  "table": null
+ },
+ {
+  "path": "2程序文件/markdown/附录三 程序文件清单.doc.md",
+  "group": "2程序文件",
+  "name": "附录三 程序文件清单.doc",
+  "chars": 897,
+  "lines": 37,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 33,
+  "distinct_codes": 33,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 34,
+   "cells": 102,
+   "filled_cells": 69,
+   "fill_ratio": 0.676
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/制度文件/markdown/XASL-QD-001 工作环境管理制度.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-001 工作环境管理制度.doc",
+  "chars": 5380,
+  "lines": 234,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 4,
+  "distinct_codes": 4,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/制度文件/markdown/XASL-QD-004 仓库管理制度.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-004 仓库管理制度.doc",
+  "chars": 2438,
+  "lines": 102,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 5,
+  "distinct_codes": 5,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 9,
+   "cells": 19,
+   "filled_cells": 19,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/制度文件/markdown/XASL-QD-005 产品留样管理制度.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-005 产品留样管理制度.doc",
+  "chars": 1456,
+  "lines": 82,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 4,
+  "distinct_codes": 4,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/制度文件/markdown/XASL-QD-006 批号管理制度.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-006 批号管理制度.doc",
+  "chars": 562,
+  "lines": 58,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 1,
+  "distinct_codes": 1,
+  "date_hits": 3,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/制度文件/markdown/XASL-QD-007 产品退货管理制度.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-007 产品退货管理制度.doc",
+  "chars": 291,
+  "lines": 29,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 6,
+   "cells": 15,
+   "filled_cells": 15,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/制度文件/markdown/XASL-QD-008 返工管理制度.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-008 返工管理制度.doc",
+  "chars": 720,
+  "lines": 42,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 4,
+  "distinct_codes": 4,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/制度文件/markdown/XASL-QD-009 各类编码管理制度.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-009 各类编码管理制度.doc",
+  "chars": 8576,
+  "lines": 256,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 130,
+   "cells": 395,
+   "filled_cells": 377,
+   "fill_ratio": 0.954
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/制度文件/markdown/XASL-QD-010 技术文件管理制度.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-010 技术文件管理制度.doc",
+  "chars": 1973,
+  "lines": 82,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 2,
+  "distinct_codes": 2,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 11,
+   "cells": 24,
+   "filled_cells": 17,
+   "fill_ratio": 0.708
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/制度文件/markdown/XASL-QD-011 检验室管理制度.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-011 检验室管理制度.doc",
+  "chars": 917,
+  "lines": 49,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/制度文件/markdown/XASL-QD-012 检验记录管理制度.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-012 检验记录管理制度.doc",
+  "chars": 586,
+  "lines": 38,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 1,
+  "distinct_codes": 1,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/制度文件/markdown/XASL-QD-013 油品、危险品管理制度.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-013 油品、危险品管理制度.doc",
+  "chars": 655,
+  "lines": 36,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 1,
+  "distinct_codes": 1,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/制度文件/markdown/XASL-QD-014 工装、模具管理制度.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-014 工装、模具管理制度.doc",
+  "chars": 644,
+  "lines": 42,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 2,
+  "distinct_codes": 2,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/制度文件/markdown/XASL-QD-015 销售及售后服务管理制度.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-015 销售及售后服务管理制度.doc",
+  "chars": 1455,
+  "lines": 67,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 6,
+  "distinct_codes": 6,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/制度文件/markdown/XASL-QD-016采购管理制度、流程.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-016采购管理制度、流程.doc",
+  "chars": 1968,
+  "lines": 63,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": null
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/制度文件/markdown/XASL-QD-017特殊过程确认准则.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-017特殊过程确认准则.doc",
+  "chars": 1212,
+  "lines": 49,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 3,
+  "person_hits": 2,
+  "table": null
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/检验作业指导书/markdown/XASL-QD-018原材料检验验证规程.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-018原材料检验验证规程.doc",
+  "chars": 969,
+  "lines": 9,
+  "company_hits": 1,
+  "company_short_hits": 1,
+  "code_hits": 1,
+  "distinct_codes": 1,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 7,
+   "cells": 10,
+   "filled_cells": 4,
+   "fill_ratio": 0.4
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/检验作业指导书/markdown/XASL-QD-019注塑件检验规程.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-019注塑件检验规程.doc",
+  "chars": 520,
+  "lines": 9,
+  "company_hits": 1,
+  "company_short_hits": 1,
+  "code_hits": 1,
+  "distinct_codes": 1,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 7,
+   "cells": 10,
+   "filled_cells": 4,
+   "fill_ratio": 0.4
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/检验作业指导书/markdown/XASL-QD-020真空拔罐器成品检验规程.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-020真空拔罐器成品检验规程.doc",
+  "chars": 1591,
+  "lines": 17,
+  "company_hits": 2,
+  "company_short_hits": 2,
+  "code_hits": 2,
+  "distinct_codes": 1,
+  "date_hits": 2,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 12,
+   "cells": 17,
+   "filled_cells": 7,
+   "fill_ratio": 0.412
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/检验作业指导书/markdown/XASL-QD-021清场管理制度.doc.md",
+  "group": "3制度文件",
+  "name": "XASL-QD-021清场管理制度.doc",
+  "chars": 920,
+  "lines": 9,
+  "company_hits": 1,
+  "company_short_hits": 1,
+  "code_hits": 1,
+  "distinct_codes": 1,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 7,
+   "cells": 10,
+   "filled_cells": 4,
+   "fill_ratio": 0.4
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/检验作业指导书/markdown/《注塑工艺卡-真空拔罐器》.docx.md",
+  "group": "3制度文件",
+  "name": "《注塑工艺卡-真空拔罐器》.docx",
+  "chars": 1139,
+  "lines": 24,
+  "company_hits": 1,
+  "company_short_hits": 1,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 3,
+  "person_hits": 2,
+  "table": {
+   "table_rows": 22,
+   "cells": 81,
+   "filled_cells": 65,
+   "fill_ratio": 0.802
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/markdown/受控文件清单-三阶.xls.md",
+  "group": "3制度文件",
+  "name": "受控文件清单-三阶.xls",
+  "chars": 1469,
+  "lines": 83,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 22,
+  "distinct_codes": 22,
+  "date_hits": 21,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 72,
+   "cells": 169,
+   "filled_cells": 101,
+   "fill_ratio": 0.598
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/检验作业指导书/markdown/检验规程汇编封面.doc.md",
+  "group": "3制度文件",
+  "name": "检验规程汇编封面.doc",
+  "chars": 248,
+  "lines": 12,
+  "company_hits": 1,
+  "company_short_hits": 1,
+  "code_hits": 5,
+  "distinct_codes": 4,
+  "date_hits": 2,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 6,
+   "cells": 11,
+   "filled_cells": 9,
+   "fill_ratio": 0.818
+  }
+ },
+ {
+  "path": "3制度文件（可根据企业实际修改）/检验作业指导书/markdown/注塑作业指导书.docx.md",
+  "group": "3制度文件",
+  "name": "注塑作业指导书.docx",
+  "chars": 1122,
+  "lines": 24,
+  "company_hits": 1,
+  "company_short_hits": 1,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 22,
+   "cells": 79,
+   "filled_cells": 66,
+   "fill_ratio": 0.835
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-001 培训签到及有效性评价表.doc.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-001 培训签到及有效性评价表.doc",
+  "chars": 3108,
+  "lines": 123,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 22,
+  "person_hits": 27,
+  "table": {
+   "table_rows": 86,
+   "cells": 270,
+   "filled_cells": 208,
+   "fill_ratio": 0.77
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-002 新员工综合信息登记表.doc.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-002 新员工综合信息登记表.doc",
+  "chars": 1406,
+  "lines": 54,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 26,
+   "cells": 64,
+   "filled_cells": 62,
+   "fill_ratio": 0.969
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-003 培训申请表.doc.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-003 培训申请表.doc",
+  "chars": 315,
+  "lines": 12,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 10,
+   "cells": 17,
+   "filled_cells": 13,
+   "fill_ratio": 0.765
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-004 员工培训档案.xls.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-004 员工培训档案.xls",
+  "chars": 103,
+  "lines": 6,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 9,
+   "filled_cells": 8,
+   "fill_ratio": 0.889
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-005 采购申请单（企业补充）.doc.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-005 采购申请单（企业补充）.doc",
+  "chars": 310,
+  "lines": 14,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 5,
+   "cells": 16,
+   "filled_cells": 12,
+   "fill_ratio": 0.75
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-006 采购记录（企业补充）.xls.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-006 采购记录（企业补充）.xls",
+  "chars": 393,
+  "lines": 26,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 13,
+   "filled_cells": 12,
+   "fill_ratio": 0.923
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-007 采购订单（可根据实际提供）.docx.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-007 采购订单（可根据实际提供）.docx",
+  "chars": 337,
+  "lines": 50,
+  "company_hits": 1,
+  "company_short_hits": 1,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 4,
+   "cells": 13,
+   "filled_cells": 9,
+   "fill_ratio": 0.692
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-008 合格供应商名录.doc.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-008 合格供应商名录.doc",
+  "chars": 245,
+  "lines": 9,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 1,
+  "table": {
+   "table_rows": 6,
+   "cells": 24,
+   "filled_cells": 24,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-009 顾客财产接收单.doc.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-009 顾客财产接收单.doc",
+  "chars": 74,
+  "lines": 3,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 1,
+   "cells": 8,
+   "filled_cells": 8,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-010 合格供方评定记录.docx.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-010 合格供方评定记录.docx",
+  "chars": 4658,
+  "lines": 119,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 5,
+  "person_hits": 20,
+  "table": {
+   "table_rows": 95,
+   "cells": 323,
+   "filled_cells": 278,
+   "fill_ratio": 0.861
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-012 合同、订单评审表.doc.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-012 合同、订单评审表.doc",
+  "chars": 1258,
+  "lines": 37,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 2,
+  "distinct_codes": 1,
+  "date_hits": 6,
+  "person_hits": 8,
+  "table": {
+   "table_rows": 24,
+   "cells": 60,
+   "filled_cells": 50,
+   "fill_ratio": 0.833
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-013 合同、订单更改申请表.doc.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-013 合同、订单更改申请表.doc",
+  "chars": 98,
+  "lines": 7,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 5,
+   "cells": 5,
+   "filled_cells": 0,
+   "fill_ratio": 0.0
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-014 产品销售台账.docx.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-014 产品销售台账.docx",
+  "chars": 193,
+  "lines": 10,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 1,
+  "distinct_codes": 1,
+  "date_hits": 2,
+  "person_hits": 1,
+  "table": {
+   "table_rows": 3,
+   "cells": 13,
+   "filled_cells": 13,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-015 顾客档案.doc.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-015 顾客档案.doc",
+  "chars": 217,
+  "lines": 10,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 2,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 9,
+   "cells": 21,
+   "filled_cells": 13,
+   "fill_ratio": 0.619
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-016 发货通知单.doc.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-016 发货通知单.doc",
+  "chars": 229,
+  "lines": 16,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 4,
+   "cells": 15,
+   "filled_cells": 13,
+   "fill_ratio": 0.867
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-017 订货协议.doc.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-017 订货协议.doc",
+  "chars": 392,
+  "lines": 17,
+  "company_hits": 1,
+  "company_short_hits": 1,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 13,
+   "cells": 27,
+   "filled_cells": 25,
+   "fill_ratio": 0.926
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-018 顾客满意度调查表.doc.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-018 顾客满意度调查表.doc",
+  "chars": 1642,
+  "lines": 37,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 2,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 28,
+   "cells": 112,
+   "filled_cells": 104,
+   "fill_ratio": 0.929
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-019 顾客满意度调查统计表.doc.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-019 顾客满意度调查统计表.doc",
+  "chars": 475,
+  "lines": 20,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 3,
+  "person_hits": 1,
+  "table": {
+   "table_rows": 7,
+   "cells": 16,
+   "filled_cells": 12,
+   "fill_ratio": 0.75
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-020 顾客反馈信息记录表.doc.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-020 顾客反馈信息记录表.doc",
+  "chars": 206,
+  "lines": 9,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 7,
+   "cells": 9,
+   "filled_cells": 4,
+   "fill_ratio": 0.444
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-021 顾客投诉处理单.doc.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-021 顾客投诉处理单.doc",
+  "chars": 629,
+  "lines": 19,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 17,
+   "cells": 23,
+   "filled_cells": 11,
+   "fill_ratio": 0.478
+  }
+ },
+ {
+  "path": "4记录文件/其它/markdown/XASL-OR-022 顾客投诉处理登记表.doc.md",
+  "group": "4记录-其它",
+  "name": "XASL-OR-022 顾客投诉处理登记表.doc",
+  "chars": 74,
+  "lines": 3,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 1,
+   "cells": 7,
+   "filled_cells": 7,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/技术类/markdown/XASL-TR-001 年度验证计划.doc.md",
+  "group": "4记录-技术类",
+  "name": "XASL-TR-001 年度验证计划.doc",
+  "chars": 231,
+  "lines": 17,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 2,
+   "cells": 10,
+   "filled_cells": 7,
+   "fill_ratio": 0.7
+  }
+ },
+ {
+  "path": "4记录文件/技术类/markdown/XASL-TR-002 验证台账.doc.md",
+  "group": "4记录-技术类",
+  "name": "XASL-TR-002 验证台账.doc",
+  "chars": 247,
+  "lines": 16,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 12,
+   "filled_cells": 8,
+   "fill_ratio": 0.667
+  }
+ },
+ {
+  "path": "4记录文件/技术类/markdown/XASL-TR-003 工程变更通知单.doc.md",
+  "group": "4记录-技术类",
+  "name": "XASL-TR-003 工程变更通知单.doc",
+  "chars": 762,
+  "lines": 14,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 12,
+   "cells": 28,
+   "filled_cells": 16,
+   "fill_ratio": 0.571
+  }
+ },
+ {
+  "path": "4记录文件/技术类/markdown/XASL-TR-004 设计开发策划书.doc.md",
+  "group": "4记录-技术类",
+  "name": "XASL-TR-004 设计开发策划书.doc",
+  "chars": 1345,
+  "lines": 43,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 36,
+   "cells": 44,
+   "filled_cells": 42,
+   "fill_ratio": 0.955
+  }
+ },
+ {
+  "path": "4记录文件/技术类/markdown/XASL-TR-005 设计开发任务书.doc.md",
+  "group": "4记录-技术类",
+  "name": "XASL-TR-005 设计开发任务书.doc",
+  "chars": 502,
+  "lines": 26,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 18,
+   "cells": 21,
+   "filled_cells": 17,
+   "fill_ratio": 0.81
+  }
+ },
+ {
+  "path": "4记录文件/技术类/markdown/XASL-TR-006 设计开发输入 输出清单.doc.md",
+  "group": "4记录-技术类",
+  "name": "XASL-TR-006 设计开发输入 输出清单.doc",
+  "chars": 183,
+  "lines": 27,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 6,
+   "filled_cells": 4,
+   "fill_ratio": 0.667
+  }
+ },
+ {
+  "path": "4记录文件/技术类/markdown/XASL-TR-007 试产计划.doc.md",
+  "group": "4记录-技术类",
+  "name": "XASL-TR-007 试产计划.doc",
+  "chars": 385,
+  "lines": 18,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 14,
+   "cells": 27,
+   "filled_cells": 18,
+   "fill_ratio": 0.667
+  }
+ },
+ {
+  "path": "4记录文件/技术类/markdown/XASL-TR-008 试产总结报告.doc.md",
+  "group": "4记录-技术类",
+  "name": "XASL-TR-008 试产总结报告.doc",
+  "chars": 961,
+  "lines": 81,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 13,
+   "cells": 38,
+   "filled_cells": 34,
+   "fill_ratio": 0.895
+  }
+ },
+ {
+  "path": "4记录文件/技术类/markdown/XASL-TR-009 设计开发评审表.doc.md",
+  "group": "4记录-技术类",
+  "name": "XASL-TR-009 设计开发评审表.doc",
+  "chars": 192,
+  "lines": 15,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 9,
+   "cells": 14,
+   "filled_cells": 10,
+   "fill_ratio": 0.714
+  }
+ },
+ {
+  "path": "4记录文件/技术类/markdown/XASL-TR-010 设计开发验证报告.doc.md",
+  "group": "4记录-技术类",
+  "name": "XASL-TR-010 设计开发验证报告.doc",
+  "chars": 321,
+  "lines": 36,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 12,
+   "cells": 20,
+   "filled_cells": 13,
+   "fill_ratio": 0.65
+  }
+ },
+ {
+  "path": "4记录文件/技术类/markdown/XASL-TR-011 设计开发更改申请单.doc.md",
+  "group": "4记录-技术类",
+  "name": "XASL-TR-011 设计开发更改申请单.doc",
+  "chars": 253,
+  "lines": 11,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 9,
+   "cells": 13,
+   "filled_cells": 8,
+   "fill_ratio": 0.615
+  }
+ },
+ {
+  "path": "4记录文件/技术类/markdown/XASL-TR-012 设计开历史文档清单.doc.md",
+  "group": "4记录-技术类",
+  "name": "XASL-TR-012 设计开历史文档清单.doc",
+  "chars": 334,
+  "lines": 32,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 4,
+   "cells": 12,
+   "filled_cells": 4,
+   "fill_ratio": 0.333
+  }
+ },
+ {
+  "path": "4记录文件/技术类/markdown/XASL-TR-013 工程订单.doc.md",
+  "group": "4记录-技术类",
+  "name": "XASL-TR-013 工程订单.doc",
+  "chars": 248,
+  "lines": 22,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 5,
+   "cells": 10,
+   "filled_cells": 6,
+   "fill_ratio": 0.6
+  }
+ },
+ {
+  "path": "4记录文件/技术类/markdown/XASL-TR-014 产品主文档清单（DMR）.doc.md",
+  "group": "4记录-技术类",
+  "name": "XASL-TR-014 产品主文档清单（DMR）.doc",
+  "chars": 325,
+  "lines": 31,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 10,
+   "filled_cells": 5,
+   "fill_ratio": 0.5
+  }
+ },
+ {
+  "path": "4记录文件/markdown/相关方需求和期望一览表.doc.md",
+  "group": "4记录-根",
+  "name": "相关方需求和期望一览表.doc",
+  "chars": 817,
+  "lines": 14,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 2,
+  "person_hits": 2,
+  "table": {
+   "table_rows": 7,
+   "cells": 42,
+   "filled_cells": 36,
+   "fill_ratio": 0.857
+  }
+ },
+ {
+  "path": "4记录文件/markdown/第一类医疗器械适用法律法规目录.xlsx.md",
+  "group": "4记录-根",
+  "name": "第一类医疗器械适用法律法规目录.xlsx",
+  "chars": 974,
+  "lines": 32,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 3,
+  "person_hits": 1,
+  "table": {
+   "table_rows": 30,
+   "cells": 111,
+   "filled_cells": 79,
+   "fill_ratio": 0.712
+  }
+ },
+ {
+  "path": "4记录文件/markdown/需确认过程确认.doc.md",
+  "group": "4记录-根",
+  "name": "需确认过程确认.doc",
+  "chars": 644,
+  "lines": 22,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 2,
+  "person_hits": 2,
+  "table": {
+   "table_rows": 18,
+   "cells": 57,
+   "filled_cells": 51,
+   "fill_ratio": 0.895
+  }
+ },
+ {
+  "path": "4记录文件/markdown/风险与机遇识别评价和应对措施表.xls.md",
+  "group": "4记录-根",
+  "name": "风险与机遇识别评价和应对措施表.xls",
+  "chars": 4871,
+  "lines": 25,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 2,
+  "person_hits": 2,
+  "table": {
+   "table_rows": 22,
+   "cells": 250,
+   "filled_cells": 141,
+   "fill_ratio": 0.564
+  }
+ },
+ {
+  "path": "4记录文件/markdown/风险管理报告.doc.md",
+  "group": "4记录-根",
+  "name": "风险管理报告.doc",
+  "chars": 12786,
+  "lines": 399,
+  "company_hits": 4,
+  "company_short_hits": 4,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 3,
+  "person_hits": 7,
+  "table": {
+   "table_rows": 123,
+   "cells": 454,
+   "filled_cells": 380,
+   "fill_ratio": 0.837
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-001 设备台账.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-001 设备台账.doc",
+  "chars": 309,
+  "lines": 26,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 1,
+  "person_hits": 1,
+  "table": {
+   "table_rows": 23,
+   "cells": 43,
+   "filled_cells": 13,
+   "fill_ratio": 0.302
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-002 设备维护保养计划.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-002 设备维护保养计划.doc",
+  "chars": 642,
+  "lines": 16,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 2,
+  "person_hits": 2,
+  "table": {
+   "table_rows": 13,
+   "cells": 92,
+   "filled_cells": 34,
+   "fill_ratio": 0.37
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-003 设备维护保养记录.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-003 设备维护保养记录.doc",
+  "chars": 1595,
+  "lines": 94,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 5,
+  "distinct_codes": 1,
+  "date_hits": 25,
+  "person_hits": 25,
+  "table": {
+   "table_rows": 55,
+   "cells": 205,
+   "filled_cells": 135,
+   "fill_ratio": 0.659
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-004 设备安装验收报告.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-004 设备安装验收报告.doc",
+  "chars": 425,
+  "lines": 17,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 15,
+   "cells": 31,
+   "filled_cells": 25,
+   "fill_ratio": 0.806
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-005 设备增置申请表.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-005 设备增置申请表.doc",
+  "chars": 134,
+  "lines": 9,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 7,
+   "cells": 12,
+   "filled_cells": 9,
+   "fill_ratio": 0.75
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-007 设备报废申请表.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-007 设备报废申请表.doc",
+  "chars": 92,
+  "lines": 7,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 6,
+   "cells": 6,
+   "filled_cells": 3,
+   "fill_ratio": 0.5
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-007 设备维修记录.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-007 设备维修记录.doc",
+  "chars": 113,
+  "lines": 6,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 4,
+   "cells": 6,
+   "filled_cells": 3,
+   "fill_ratio": 0.5
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-008 设备档案.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-008 设备档案.doc",
+  "chars": 107,
+  "lines": 9,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 7,
+   "cells": 11,
+   "filled_cells": 10,
+   "fill_ratio": 0.909
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-009 仪器、设备使用记录.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-009 仪器、设备使用记录.doc",
+  "chars": 97,
+  "lines": 6,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 2,
+   "cells": 9,
+   "filled_cells": 9,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-010 油品、化学品使用台账.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-010 油品、化学品使用台账.doc",
+  "chars": 154,
+  "lines": 6,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 2,
+   "cells": 15,
+   "filled_cells": 15,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-024 返工单.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-024 返工单.doc",
+  "chars": 151,
+  "lines": 8,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 6,
+   "cells": 9,
+   "filled_cells": 5,
+   "fill_ratio": 0.556
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-025 生产指令单.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-025 生产指令单.doc",
+  "chars": 57,
+  "lines": 9,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 8,
+   "cells": 8,
+   "filled_cells": 8,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-026 领料申请单.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-026 领料申请单.doc",
+  "chars": 350,
+  "lines": 21,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 5,
+   "cells": 15,
+   "filled_cells": 10,
+   "fill_ratio": 0.667
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-027 生产过程自检记录.xlsx.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-027 生产过程自检记录.xlsx",
+  "chars": 1447,
+  "lines": 44,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 10,
+   "cells": 17,
+   "filled_cells": 15,
+   "fill_ratio": 0.882
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-028 随工单.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-028 随工单.doc",
+  "chars": 206,
+  "lines": 8,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 4,
+   "cells": 16,
+   "filled_cells": 16,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-029 产品报废申请单.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-029 产品报废申请单.doc",
+  "chars": 131,
+  "lines": 10,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 8,
+   "cells": 13,
+   "filled_cells": 11,
+   "fill_ratio": 0.846
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-031 外协件出、入库登记.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-031 外协件出、入库登记.doc",
+  "chars": 98,
+  "lines": 5,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 1,
+   "cells": 10,
+   "filled_cells": 10,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-032 工装、模具清单.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-032 工装、模具清单.doc",
+  "chars": 73,
+  "lines": 3,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 1,
+   "cells": 8,
+   "filled_cells": 8,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/生产类/markdown/XASL-PR-033 工装、模具使用登记表.doc.md",
+  "group": "4记录-生产类",
+  "name": "XASL-PR-033 工装、模具使用登记表.doc",
+  "chars": 59,
+  "lines": 3,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 1,
+   "cells": 6,
+   "filled_cells": 6,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-001 受控文件清单.xls.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-001 受控文件清单.xls",
+  "chars": 1604,
+  "lines": 39,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 34,
+  "distinct_codes": 34,
+  "date_hits": 34,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 36,
+   "cells": 211,
+   "filled_cells": 177,
+   "fill_ratio": 0.839
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-002 文件修订 废止申请表.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-002 文件修订 废止申请表.doc",
+  "chars": 426,
+  "lines": 21,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 12,
+   "cells": 18,
+   "filled_cells": 4,
+   "fill_ratio": 0.222
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-003 文件发放、回收记录表.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-003 文件发放、回收记录表.doc",
+  "chars": 624,
+  "lines": 23,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 2,
+  "distinct_codes": 2,
+  "date_hits": 12,
+  "person_hits": 10,
+  "table": {
+   "table_rows": 18,
+   "cells": 98,
+   "filled_cells": 70,
+   "fill_ratio": 0.714
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-004 文件补（换）申请单.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-004 文件补（换）申请单.doc",
+  "chars": 148,
+  "lines": 8,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 6,
+   "cells": 11,
+   "filled_cells": 4,
+   "fill_ratio": 0.364
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-005 文件销毁登记表.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-005 文件销毁登记表.doc",
+  "chars": 159,
+  "lines": 13,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 4,
+   "cells": 9,
+   "filled_cells": 6,
+   "fill_ratio": 0.667
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-006 监视和测量设备台账.xlsx.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-006 监视和测量设备台账.xlsx",
+  "chars": 786,
+  "lines": 46,
+  "company_hits": 1,
+  "company_short_hits": 1,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 1,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 43,
+   "cells": 71,
+   "filled_cells": 31,
+   "fill_ratio": 0.437
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-007 计量设备周期检定计划（企业根据实际完善）.xls.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-007 计量设备周期检定计划（企业根据实际完善）.xls",
+  "chars": 528,
+  "lines": 40,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 3,
+   "cells": 13,
+   "filled_cells": 11,
+   "fill_ratio": 0.846
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-008 外来文件登记表.xls.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-008 外来文件登记表.xls",
+  "chars": 2953,
+  "lines": 59,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 1,
+  "distinct_codes": 1,
+  "date_hits": 54,
+  "person_hits": 108,
+  "table": {
+   "table_rows": 56,
+   "cells": 387,
+   "filled_cells": 331,
+   "fill_ratio": 0.855
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-009 文件借阅记录.xls.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-009 文件借阅记录.xls",
+  "chars": 113,
+  "lines": 5,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 2,
+   "cells": 10,
+   "filled_cells": 10,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-010 质量记录清单.xls.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-010 质量记录清单.xls",
+  "chars": 4809,
+  "lines": 135,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 100,
+  "distinct_codes": 100,
+  "date_hits": 100,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 112,
+   "cells": 632,
+   "filled_cells": 517,
+   "fill_ratio": 0.818
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-011 管理评审计划.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-011 管理评审计划.doc",
+  "chars": 628,
+  "lines": 9,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 5,
+  "person_hits": 7,
+  "table": {
+   "table_rows": 7,
+   "cells": 16,
+   "filled_cells": 10,
+   "fill_ratio": 0.625
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-012 管理评审会议记录.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-012 管理评审会议记录.doc",
+  "chars": 477,
+  "lines": 14,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 3,
+  "person_hits": 8,
+  "table": {
+   "table_rows": 12,
+   "cells": 33,
+   "filled_cells": 30,
+   "fill_ratio": 0.909
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-013 管理评审报告.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-013 管理评审报告.doc",
+  "chars": 5413,
+  "lines": 68,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 1,
+  "distinct_codes": 1,
+  "date_hits": 8,
+  "person_hits": 9,
+  "table": {
+   "table_rows": 12,
+   "cells": 37,
+   "filled_cells": 27,
+   "fill_ratio": 0.73
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-014 年度内审计划.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-014 年度内审计划.doc",
+  "chars": 343,
+  "lines": 10,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 7,
+  "person_hits": 2,
+  "table": {
+   "table_rows": 8,
+   "cells": 22,
+   "filled_cells": 20,
+   "fill_ratio": 0.909
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-015 内部审核计划.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-015 内部审核计划.doc",
+  "chars": 1127,
+  "lines": 10,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 11,
+  "person_hits": 10,
+  "table": {
+   "table_rows": 8,
+   "cells": 9,
+   "filled_cells": 3,
+   "fill_ratio": 0.333
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-016 内部审核会议签到表（人名手签.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-016 内部审核会议签到表（人名手签.doc",
+  "chars": 432,
+  "lines": 27,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 2,
+  "person_hits": 12,
+  "table": {
+   "table_rows": 18,
+   "cells": 60,
+   "filled_cells": 58,
+   "fill_ratio": 0.967
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-017 内部审核检查表.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-017 内部审核检查表.doc",
+  "chars": 20991,
+  "lines": 108,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 6,
+  "person_hits": 11,
+  "table": {
+   "table_rows": 95,
+   "cells": 380,
+   "filled_cells": 361,
+   "fill_ratio": 0.95
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-018 内审不合格报告.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-018 内审不合格报告.doc",
+  "chars": 718,
+  "lines": 18,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 6,
+  "person_hits": 7,
+  "table": {
+   "table_rows": 12,
+   "cells": 26,
+   "filled_cells": 16,
+   "fill_ratio": 0.615
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-019 内部质量审核报告.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-019 内部质量审核报告.doc",
+  "chars": 718,
+  "lines": 21,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 3,
+  "person_hits": 4,
+  "table": {
+   "table_rows": 12,
+   "cells": 23,
+   "filled_cells": 15,
+   "fill_ratio": 0.652
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-020 不合格品通知及评审处置表.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-020 不合格品通知及评审处置表.doc",
+  "chars": 292,
+  "lines": 16,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 12,
+   "cells": 18,
+   "filled_cells": 7,
+   "fill_ratio": 0.389
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-021 让步接收申请表.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-021 让步接收申请表.doc",
+  "chars": 231,
+  "lines": 13,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 11,
+   "cells": 22,
+   "filled_cells": 17,
+   "fill_ratio": 0.773
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-022 报废申请单.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-022 报废申请单.doc",
+  "chars": 129,
+  "lines": 10,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 8,
+   "cells": 13,
+   "filled_cells": 11,
+   "fill_ratio": 0.846
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-023 质量信息反馈单.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-023 质量信息反馈单.doc",
+  "chars": 138,
+  "lines": 7,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 5,
+   "cells": 7,
+   "filled_cells": 0,
+   "fill_ratio": 0.0
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-024 原材料请验单.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-024 原材料请验单.doc",
+  "chars": 91,
+  "lines": 9,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 5,
+   "cells": 9,
+   "filled_cells": 9,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-025 来料检验报告.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-025 来料检验报告.doc",
+  "chars": 320,
+  "lines": 18,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 16,
+   "cells": 23,
+   "filled_cells": 12,
+   "fill_ratio": 0.522
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-026 成品请验单.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-026 成品请验单.doc",
+  "chars": 173,
+  "lines": 18,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 2,
+   "cells": 8,
+   "filled_cells": 6,
+   "fill_ratio": 0.75
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-027 成品检验记录.xlsx.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-027 成品检验记录.xlsx",
+  "chars": 1139,
+  "lines": 41,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 9,
+   "cells": 17,
+   "filled_cells": 14,
+   "fill_ratio": 0.824
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-028 产品放行审核记录.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-028 产品放行审核记录.doc",
+  "chars": 614,
+  "lines": 16,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 14,
+   "cells": 39,
+   "filled_cells": 23,
+   "fill_ratio": 0.59
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-029 纠正预防措施表.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-029 纠正预防措施表.doc",
+  "chars": 256,
+  "lines": 16,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 12,
+   "cells": 16,
+   "filled_cells": 7,
+   "fill_ratio": 0.438
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-030 纠正预防措施清单.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-030 纠正预防措施清单.doc",
+  "chars": 89,
+  "lines": 5,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 1,
+   "cells": 6,
+   "filled_cells": 6,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-031 忠告性通知.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-031 忠告性通知.doc",
+  "chars": 157,
+  "lines": 13,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 7,
+   "cells": 8,
+   "filled_cells": 3,
+   "fill_ratio": 0.375
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-032 医疗器械召回计划.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-032 医疗器械召回计划.doc",
+  "chars": 120,
+  "lines": 13,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 8,
+   "cells": 9,
+   "filled_cells": 9,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-033 医疗器械调查评估报告.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-033 医疗器械调查评估报告.doc",
+  "chars": 74,
+  "lines": 10,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 6,
+   "cells": 6,
+   "filled_cells": 6,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-034 医疗器械召回事件报告表.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-034 医疗器械召回事件报告表.doc",
+  "chars": 386,
+  "lines": 27,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 10,
+   "cells": 14,
+   "filled_cells": 14,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-035 召回计划实施情况报告.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-035 召回计划实施情况报告.doc",
+  "chars": 352,
+  "lines": 19,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 12,
+   "cells": 16,
+   "filled_cells": 16,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-036 温度、湿度记录表.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-036 温度、湿度记录表.doc",
+  "chars": 45,
+  "lines": 5,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 1,
+   "cells": 4,
+   "filled_cells": 4,
+   "fill_ratio": 1.0
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-037 过程检验记录.xlsx.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-037 过程检验记录.xlsx",
+  "chars": 1447,
+  "lines": 44,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 11,
+   "cells": 18,
+   "filled_cells": 16,
+   "fill_ratio": 0.889
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-038 产品终检报告.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-038 产品终检报告.doc",
+  "chars": 267,
+  "lines": 18,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 14,
+   "cells": 30,
+   "filled_cells": 21,
+   "fill_ratio": 0.7
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-039 留样台账.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-039 留样台账.doc",
+  "chars": 393,
+  "lines": 19,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 18,
+   "cells": 25,
+   "filled_cells": 8,
+   "fill_ratio": 0.32
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-040 留样观察记录.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-040 留样观察记录.doc",
+  "chars": 720,
+  "lines": 25,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 23,
+   "cells": 87,
+   "filled_cells": 11,
+   "fill_ratio": 0.126
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-041 检具台账.xls.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-041 检具台账.xls",
+  "chars": 2036,
+  "lines": 164,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 147,
+   "cells": 171,
+   "filled_cells": 30,
+   "fill_ratio": 0.175
+  }
+ },
+ {
+  "path": "4记录文件/质量类/markdown/XASL-QR-042 硬度测试记录.doc.md",
+  "group": "4记录-质量类",
+  "name": "XASL-QR-042 硬度测试记录.doc",
+  "chars": 220,
+  "lines": 14,
+  "company_hits": 0,
+  "company_short_hits": 0,
+  "code_hits": 0,
+  "distinct_codes": 0,
+  "date_hits": 0,
+  "person_hits": 0,
+  "table": {
+   "table_rows": 6,
+   "cells": 16,
+   "filled_cells": 9,
+   "fill_ratio": 0.562
+  }
+ }
+]

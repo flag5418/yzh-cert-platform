@@ -16,6 +16,14 @@ namespace CertPlatform.Admin.Services.Workflow.Models
         /// <summary>失败原因（成功时为 null）</summary>
         public string? Error { get; set; }
 
+        /// <summary>★ 失败分类码（成功时为 null）
+        /// <para>2026-09-30 新增。<b>为什么必须有</b>：缺陷 B1 未修时，「故意造的缺口」与
+        /// 「取数口径错配造成的缺口」报的是同一句「缺失必要数据」⇒ 补录夹具<b>没有信号</b>。
+        /// 分成两码后 UI 才能分别显示「去补录」（红）与「报 bug」（灰）。</para>
+        /// <para>取值见 <see cref="WorkflowErrorCodes"/>：<c>DATA_MISSING</c> / <c>SYSTEM_ERROR</c>。</para>
+        /// </summary>
+        public string? ErrorCode { get; set; }
+
         /// <summary>节点输出（所有输出端口的值，key=端口名，value=输出值）</summary>
         public Dictionary<string, object> Output { get; set; } = new();
 
@@ -59,6 +67,29 @@ namespace CertPlatform.Admin.Services.Workflow.Models
         /// <summary>快速创建失败结果（带输出字典，可携带 errorCode 等结构化信息）</summary>
         public static NodeExecutionResult Fail(string error, int durationMs, Dictionary<string, object> output)
             => new() { Success = false, Error = error, DurationMs = durationMs, Output = output ?? new() };
+
+        /// <summary>快速创建失败结果（带分类码）</summary>
+        public static NodeExecutionResult Fail(string error, int durationMs, string errorCode)
+            => new() { Success = false, Error = error, DurationMs = durationMs, ErrorCode = errorCode };
+    }
+
+    /// <summary>
+    /// ★ 工作流失败分类码（2026-09-30）
+    /// </summary>
+    /// <para><b>为什么必须有</b>：补录链路的验证依赖「故意造的缺口」与「代码 bug」可区分。
+    /// 只有一句 <c>Error</c> 文本时，UI 上两者长得一样 ⇒ 夹具失效（25 号 §6.3）。</para>
+    /// </summary>
+    public static class WorkflowErrorCodes
+    {
+        /// <summary>★ 缺失必要数据 —— 引用的字段/表格没有可用值（<c>WorkflowDataMissingException</c>）
+        /// <para>UI：红色 · 「去补录」</para>
+        /// </summary>
+        public const string DataMissing = "DATA_MISSING";
+
+        /// <summary>系统错误 —— 取数异常 / 节点配置错 / Skill 内部异常
+        /// <para>UI：灰色 · 「报 bug」（<b>不是</b>专家能补录解决的）</para>
+        /// </summary>
+        public const string SystemError = "SYSTEM_ERROR";
     }
 
     /// <summary>
@@ -77,6 +108,9 @@ namespace CertPlatform.Admin.Services.Workflow.Models
 
         /// <summary>失败原因（成功时为 null）</summary>
         public string? Error { get; set; }
+
+        /// <summary>★ 失败分类码（见 <see cref="WorkflowErrorCodes"/>）</summary>
+        public string? ErrorCode { get; set; }
 
         /// <summary>节点输出（所有输出端口的 JSON；中间节点同样保留）</summary>
         public Dictionary<string, object> Output { get; set; } = new();
@@ -115,6 +149,7 @@ namespace CertPlatform.Admin.Services.Workflow.Models
                 NodeId = nodeId,
                 Success = result.Success,
                 Error = result.Error,
+                ErrorCode = result.ErrorCode,
                 Output = result.Output ?? new(),
                 DurationMs = result.DurationMs,
                 IsReused = isReused,
@@ -178,6 +213,15 @@ namespace CertPlatform.Admin.Services.Workflow.Models
 
         /// <summary>失败原因（所有失败路径的原因汇总）</summary>
         public string? Error { get; set; }
+
+        /// <summary>★ 失败分类码（见 <see cref="WorkflowErrorCodes"/>）；成功时为 null</summary>
+        public string? ErrorCode { get; set; }
+
+        /// <summary>★ 缺失必要数据的结构化详情（<see cref="WorkflowErrorCodes.DataMissing"/> 时非空）
+        /// <para>2026-09-30 新增。上层据此生成 <c>cert_expert_task_data_gap</c> 补录记录
+        /// （<c>DataKind</c> / <c>DataCode</c> / <c>Reason</c> / <c>RuleCode</c> / 作用域四元组）。</para>
+        /// </summary>
+        public CertPlatform.Shared.Exceptions.WorkflowDataMissingException? MissingData { get; set; }
 
         /// <summary>业务成功标志（对应 wf_execution_task_item.is_success）</summary>
         public bool IsSuccess { get; set; }

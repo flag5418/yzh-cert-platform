@@ -1,9 +1,43 @@
 # 专家任务设计（NC 检查 + 体系认证报告）
 
-> 状态：**设计已定稿，待编码**
+> 状态：**V1 混合状态**。12/14/16/17 号为权威源；01-11 号为待 V2 重写的旧版。
 > 平台英文名：**CertExpert**（2026-09-29 裁决）
 > 领域定位：**工具型辅助系统** —— 输出按标准计算出的固定格式结果，**不按客户定制报表格式**
 > 本目录是「专家端任务子系统」的唯一权威源。改任何一处先改这里，再改代码。
+
+---
+
+## ⭐ 让位声明（★ 阅读前必看）
+
+| 层次 | 权威源 | 说明 |
+|---|---|---|
+| **事实**（行数/列名/FK/方法名） | **[17-实测基线](17-实测基线-V1.md)** | ★ 全部来自 MySQL 容器实测 + 源码取证。与本文冲突以 17 号为准 |
+| **业务裁决**（产品定位/状态机/任务来源/菜单边界） | **[12-业务全景图](12-业务全景图-任务平台-V1.md)** | ★ 唯一与代码实测对得上的部分 |
+| **表命名** | **[14-表命名规范](14-表命名规范-V1.md)** | N1 铁律：`cert_` 开头 |
+| **引擎能力**（N1-N5 + C1-C10 夹具） | **[16-引擎能力补强](16-引擎能力补强与验收夹具-V1.md)** | ★ 消除重复造轮子的关键 |
+| **执行顺序** | **[13-执行计划与障碍清单](13-执行计划与障碍清单-V1.md)** | ★ 32 项障碍 + 文档 V2，**动手前先看** |
+| 旧版设计（01-11） | 01-11 号 | ⚠️ **含已被推翻的内容**，各册顶部有 V1 横幅 |
+
+### ⚠️ 已被推翻的 V1 内容（不要再照着实现）
+
+| 项 | V1 说法 | 实际 |
+|---|---|---|
+| 状态机 | 单列 `TaskStatus`，含 `approved` 终态 | ★ **三层分离**（Exec/Review/Lifecycle），**无 approved**（D27/D31） |
+| 结果模型 | 统一表 `cert_expert_task_item`（NC+报告合表） | ★ **拆 4 张**（实体+结果 × NC+报告） |
+| 任务系统职责 | 含认可/修改/批准/导出 | ★ **只管执行与生死**（D31） |
+| 提取结果列名 | `PhaseCode` | ★ `StageCode`（**无 `PhaseCode` 列**） |
+| 阶段迁移 SQL | `JOIN cert_phase_definition` | ★ `JOIN cert_cert_stage ON StageCode`（原版是**静默 no-op**） |
+| 工作流节点 | `docField`/`aiJudge`/`aiGenerate`/`condition` | ★ `docfield`/`doctable`/`ai_node`/`branch`（**前三个全库不存在**） |
+| Store 方法 | `ArchiveAsync` / `GetActiveTablesAsync` | ★ `InvalidateActiveAsync` / 两者均需新增 |
+| ORM 过滤 | 「`NodeExecutor` 无 `IsValid=1` 过滤 = 最严重」 | ❌ **判断错误**，ORM 已自动过滤（`SqlSugarDbOrm.cs:82,164,183`） |
+| 执行入口 | `BeginRunAsync` 可直接用 | ❌ **是 `private`**（`:196`） |
+| 业务锁 | 有活任务就禁建任务 | ★ **D36（2026-09-30）**：**分类型串行锁** —— 同「企业+阶段+`TaskType`」存在未结束任务则禁建；**「未结束」= `LifecycleStatus='active'` 且 `ExecStatus<>'completed'`** |
+| 结果树层级 | 四级「企业 → 阶段 → 标准 → 任务」 | ★ **D32 修订（2026-09-30）**：**三级**「企业 → 阶段 → 任务」，**「标准」不进树**（落到右表列 + 筛选）；**点阶段节点不出结果** |
+| 阶段编码口径 | 「`cert_org_stage` 与 `cert_enterprise_stage` 语义不同但**不冲突**」 | ❌ **判断错误**。`cert_validation_rule.PhaseCode` 存**业务码**、任务层存 **GUID** ⇒ `ResolveScope` **必 0 行、静默建出空任务**。★ **统一到 GUID**（`22 号 §1.1`） |
+| 补录缺口检测 | 清单 = `IsManual=1` 的字段/表格 − 企业已采集 | ★ **`R \ H` 差集**（`25 号 J1`）：`R` = 流程 DAG 实际引用的字段/表格（★ 按 `itemCodes` 局部收集），`H` = 企业已采集的有效值。⛔ 不依赖 `IsManual` 业务配置 |
+| 补录落库 | 补录 = 编辑提取结果，缺了就 INSERT | ✅ **保留**（`25 号 J2`），但 ★ 查找键从 `FileCode` 改为 **`RuleCode`**，并用 **`ValueSource`（`auto`/`manual`）** 区分来源 |
+| 缺文件时的补录 | 需要「虚拟文件 / 虚拟槽位」承载 `FileCode NOT NULL` | ❌ **不需要**（`25 号 J3`）。`FileCode` 填规则的 `StandardFileCode`；取数与清理都按 `RuleCode`，该列只需非空 |
+| 覆盖文件的清理 | 按 `FileCode` 归档（`InvalidateActiveAsync`） | ★ **按 `RuleCode` 归档**（`25 号 J4`）。DB 已由 `uk_rule_scope` 唯一索引保证 1 文件 = 1 规则 |
 
 ---
 
@@ -14,7 +48,7 @@
 | 能力 | 配置层 | 执行层 | 结论 |
 |---|---|---|---|
 | NC 检查规则 | 完整（`cert_validation_rule` + 实体 + 控制器 + 管理端页面） | **无**（仅 `WorkflowTestController` 测试入口） | 规则能配，跑不起来 |
-| 报告章节定义 | 完整（`cert_report_template` + `rpt_report_section` + 管理端页面） | **无** | 同上 |
+| 报告章节定义 | 完整（`cert_report_template` + `cert_report_section` + 管理端页面） | **无** | 同上 |
 | 专家端任务 | 菜单已通 | `pages/tasks/index.vue` = **52 行假数据空壳** | 0 实现 |
 | 数据源 | 完整（`cert_extraction_result` / `cert_table_extraction_result` 已落地） | — | 具备被消费的条件 |
 
@@ -27,21 +61,52 @@
 | 序 | 文档 | 内容 | 读者 |
 |---|---|---|---|
 | 00 | **本文件** | 索引 · 决策台账 · 术语 | 全部 |
-| 01 | [01-总体设计-V1.md](01-总体设计-V1.md) | 业务全景 · 核心概念 · 状态机 · 端到端链路 · 边界 | 全部（**先读这个**） |
+| **14** | **[14-表命名规范-V1.md](14-表命名规范-V1.md)** | ★★ **表命名权威源**。N1 铁律（体系认证表一律 `cert_` 开头）· 11 张新表 + 3 张存量改名表 · 实测行数 | **写代码前必读** |
+| **16** | **[16-引擎能力补强与验收夹具-V1.md](16-引擎能力补强与验收夹具-V1.md)** | ★★ **引擎能力 N1-N5**（规则版本化/槽位字典/试运行闭环/幂等）+ **验收夹具 C1-C10** + 引擎资产分工表（★ 消除 3 处重复造轮子） | 全部 |
+| **17** | **[17-实测基线-V1.md](17-实测基线-V1.md)** | ★★★ **事实权威源**。行数/列名/FK/节点字面量/ORM 行为全部实测。★ **推翻 5 条原设计基线** | **写代码前必读** |
+| 15 | [15-设计评审报告-V1.md](15-设计评审报告-V1.md) | ⚠️ **第三方评审报告**（33 P0 + 37 P1 + 18 P2）。含**推翻本设计基线判断的实测证据** | 全部 |
+| **18** | **[18-设计评审报告-V2.md](18-设计评审报告-V2.md)** | ★★ **文档自相矛盾评审**（7 P0 / 7 P1 / 3 类 P2）。★ **推翻 17 号 E-1 误诊**（附三条独立证据链） | **写代码前必读** |
+| **19** | **[19-业务符合性评审-V1.md](19-业务符合性评审-V1.md)** | ★★ **业务符合性评审**（以 ISO 17021-1 / ISO 19011 为基准）：**10 处相符 · 9 处业务不符合 · 4 处合理性待修正 · 3 个可操作性障碍**。★ **V1.2 已修正 §2.2 并采纳用户的企业部门方案** | 全部 |
+| **20** | **[20-端到端链路评审-V1.md](20-端到端链路评审-V1.md)** | ★★★ **端到端链路评审**（**六环节「设计 vs 实测」双栏核对**）：后台设计 → 企业资料规范化 → 企业任务设置 → 结果生成 → 审核员确认 → 人工补正。**6 个环节级断点 + 6 个跨环节断点**；给出 **P0 1.6 + P1 2.0 = 3.6 人天**可演示最小闭环 | **动手前必读** |
+| **21** | **[21-架构判断-V1.md](21-架构判断-V1.md)** | ★★★ **只谈整体的架构判断**（决策层）。**3 部分设计架构成立**；**只需裁决 2 条**（树层级方向 / `TaskType` 与"一次审核"心智）；按三分类回答：**设计不合理 0 · 功能缺失 0 · 数据库结构 0**；**部门配置降级为可选**；附**"可直接忽略"清单** | **★ 先读这篇** |
+| **22** | **[22-任务建立实施前置与草图-V1.md](22-任务建立实施前置与草图-V1.md)** | ★★★ **动手前最后一篇**。回答「能否开始任务建立」：**可以**，但有 **1 项真阻塞**（**阶段编码两套口径**：`cert_validation_rule.PhaseCode='03'` vs `cert_enterprise_stage.StageCode=GUID` ⇒ 直接 JOIN 必落空、**静默建出空任务**）+ **02 号 §1.1–§1.3 有 5 处错误**。含**修正版创建事务 / 范围解析 / 6 张表落表清单 / 三批建议**（第 1 批 1.4 人天可开工） | **★ 编码前必读** |
+| **25** | **[25-补录清单与空值守卫-V2.md](25-补录清单与空值守卫-V2.md)** | ★★★ **补录链路的裁决版权威源**。用户 4 项裁决（**J1** 清单=`R\H` 差集/不分文档 · **J2** 写提取结果表 + `ValueSource` · **J3** ⛔不建虚拟文件 · **J4** 1 文件=1 规则、按 `RuleCode` 清理）；`RuleCode` 收窄取数口径；**3 条 DDL**；**9 步实施计划**（每步带夹具验证信号）。★ 同时修正 **05 号 §二/§4.2** 与 **02 号 §二** | **★ 写补录代码前必读** |
+| **23** | **[23-任务系统界面设计-V1.md](23-任务系统界面设计-V1.md)** | ★★★ **界面权威源**（已审）。3 菜单 / 5 界面 / 10 条决策（D-A~D-J）/ 22 个日志事件。★ **21 号 §3.3 的「08 号未回调」由此册替代** —— 做界面看 23 号，不看 08 号 | **前端必读** |
+| **24** | **[24-补录与空值守卫收口-V1.md](24-补录与空值守卫收口-V1.md)** | ★★ 09-30 批次实施收口：提取状态机 3→4 态、工作流空值守卫与取数口径、补录缺口盘点。⚠️ **§三/§四 已被 25 号覆盖** | 后端 |
+| **26** | **[26-三页实现评审-V1.md](26-三页实现评审-V1.md)** | ★★★ **`/tasks` `/nc-results` `/report-results` 三页实现评审**（浏览器 + 源码 + DB 三方取证）。① 符合度：**D31/D32/D36/D-C/4 Tab 全部落地** ② **4 个 P0 新断点**（机器不出结论却显示「符合」/ 失败吞成 completed / 租约只在启动回收致队列永久停摆 / **无取消端点 → `failed` 死锁，是 25 号开工的前置**）③ 14 条 P1 偏差 ④ **业务满足度**：一键 NC ❌ · 一键报告 ❌（0 行，从未跑过）⑤ ★ **修正 21 号 §3.4**：`wf_workflow_definition` 不是阻碍，DAG 在 `cert_validation_rule.RuleJson` | **全部** |
+
+> ★★ **阅读顺序（2026-09-30 修订）**：**先读 21 号（整体是否成立）→ 再读 12 号（业务裁决）→ 要动手时读 22 号（前置与草图）→ 最后读 19/20 号（细节清单）**。
+> ⛔ **不要把 19/20 号的 40+ 条细节当成方向问题** —— 其中**只有 2 条是架构级**，其余是实现期顺手处理的清理项（见 21 号 §5.2）。
+
+> ⚠️ **15 号评审指出 4 条推翻基线的实测事实，必须先处理**：
+>
+> | 编号 | 我的原判断 | 实测真相 |
+> |---|---|---|
+> | **P1-3** | `NodeExecutor` 无 `IsValid=1` 过滤 = ★最严重缺陷 | ❌ **误判**。`SqlSugarDbOrm.cs:82,164,183` 有 `IsValidCondition<T>()` 自动过滤 |
+> | **P0-19** | `cert_validation_rule` 缺 `IsValid` | ⚠️ **更严重**：列存在但 **2 行全是 `NULL`**，被 ORM 过滤**永久屏蔽** |
+> | **P0-10** | 提取结果表用 `PhaseCode` | ❌ **列名错**。实际是 **`StageCode`** → 全部 SQL 会 `ERROR 1054` |
+> | **P1-35** | `BeginRunAsync` 可直接复用 | ❌ **是 `private`**（`WfExecutionTaskService.cs:196`） |
+>
+> → **E0 的工时与验收标准需重算**，见 13 号。
+| **13** | **[13-执行计划与障碍清单-V1.md](13-执行计划与障碍清单-V1.md)** | ★★ **可勾选的执行清单**（28 项障碍 E0-E5 · 执行顺序 · 验收门禁 · 进度表） | 执行者 |
+| **12** | **[12-业务全景图-任务平台-V1.md](12-业务全景图-任务平台-V1.md)** | ★ **产品定位 · 三种任务来源 · 状态三层分离** | 全部 |
+| 01 | [01-总体设计-V1.md](01-总体设计-V1.md) | 业务全景 · 核心概念 · 状态机 · 端到端链路 · 边界 | 全部 |
 | 02 | [02-详细设计-任务与队列-V1.md](02-详细设计-任务与队列-V1.md) | 任务生命周期 · 标准子任务 · 完备性检查 · 队列编排 · 业务锁 | 后端 |
 | 03 | [03-详细设计-NC检查-V1.md](03-详细设计-NC检查-V1.md) | 检查项执行 · 结论判定 · 严重度 · NC 记录生成 | 后端 |
 | 04 | [04-详细设计-报告生成-V1.md](04-详细设计-报告生成-V1.md) | 章节执行 · 章节结果 · 正文编辑 · 多标准分节 | 后端 |
 | 05 | [05-详细设计-补录与日志-V1.md](05-详细设计-补录与日志-V1.md) | 缺口检测算法 · 人工补录写回 · 两类日志 | 后端 |
-| 06 | [06-数据库设计-V1.md](06-数据库设计-V1.md) | 全部 DDL · 改造 SQL · 废弃标记 · 验证 SQL | 后端/DBA |
-| 07 | [07-接口设计-V1.md](07-接口设计-V1.md) | 端点清单 · 请求响应契约 · 错误码 | 前后端 |
+| 06 | [06-数据库设计-V1.md](06-数据库设计-V1.md) | 全部 DDL + 改造 SQL + 废弃标记 | 后端/DBA |
+| 07 | [07-接口设计-V1.md](07-接口设计-V1.md) | 端点清单 + 请求响应契约 + 错误码 | 前后端 |
 | 08 | [08-页面设计-V1.md](08-页面设计-V1.md) | 5 个专家端页面 + 管理端联动 + 守卫合规 | 前端 |
 | 09 | [09-实施计划-V1.md](09-实施计划-V1.md) | S0-S6 分期 · 验收标准 · 风险登记 | 项目管理 |
 | 10 | [10-待裁决问题-V1.md](10-待裁决问题-V1.md) | 开放问题（不阻塞编码） | 全部 |
+| 11 | [11-认证周期业务全景图-V1.md](11-认证周期业务全景图-V1.md) | ⚠️ **部分作废**（见顶部声明）。周期视角的 3 年数据示例仍有效 | 参考 |
 
 **阅读路径建议**：
-- 产品/验收 → 01 → 08 → 09
-- 后端 → 01 → 02 → 05 → 06 → 07
-- 前端 → 01 → 07 → 08
+- 产品/验收 → **12** → 01 → 08 → 09
+- 后端 → **12** → 01 → 02 → 05 → 06 → 07
+- 前端 → **12** → 07 → 08
+- **动手执行 → 13（障碍清单）→ 06（DDL）→ 07（接口）**
 
 ---
 
@@ -51,16 +116,15 @@
 
 | # | 议题 | 裁决 | 影响面 |
 |---|---|---|---|
-| D01 | 任务表结构 | **单一任务表** `tsk_task`，用 `TaskType` 区分 NC/报告，用 `ScopeType` 区分局部/全局 | 不建 `tsk_nc_task`/`tsk_report_task` |
-| D02 | 多标准结构 | **1 个任务 → 自动按标准拆 N 个标准子任务 → N 个队列**。子任务下可挂多个标准的任务 | `tsk_task_standard` |
+| D01 | 任务表结构 | **单一任务表** `cert_expert_task`，用 `TaskType` 区分 NC/报告，用 `ScopeType` 区分局部/全局 | 不建 `tsk_nc_task`/`tsk_report_task` || D02 | 多标准结构 | **1 个任务 → 自动按标准拆 N 个标准子任务 → N 个队列**。子任务下可挂多个标准的任务 | `cert_expert_task_standard` |
 | D03 | 局部任务约束 | 局部勾选**每次只能提交一个标准**下的项；跨标准勾选必须拦截 | 前端校验 + 后端二次校验 |
 | D04 | 完备性不完整的处理 | **软阻塞**：补录完成后再执行；专家**可跳过全部补录** | 不是硬拦截 |
-| D05 | 跳过后的行为 | 缺数据的规则**自动不执行**，标记「该规则缺乏必要数据」，**不显示结果** | `tsk_task_item.AutoStatus=skipped` |
+| D05 | 跳过后的行为 | 缺数据的规则**自动不执行**，标记「该规则缺乏必要数据」，**不显示结果** | `cert_expert_task_item.AutoStatus=skipped` |
 | D06 | 补录数据落点 | **不新建补录表**。直接人工编辑 `cert_extraction_result` / `cert_table_extraction_result` | 补录 = 编辑提取结果 |
 | D07 | 补录留痕 | 提取结果两张表增加**来源类型**（系统自动计算/人工录入）+ **独立日志表**，一个字段/表格可反复人工修改，每次留痕 | `cert_extraction_change_log` |
 | D08 | 追溯粒度 | 文件/字段级追溯**不是本期重点**，归后台工作流设计（规则侧）实现 | 专家端不做字段级下钻 |
 | D09 | 导出格式 | **Excel（xlsx）**，一个标准一个 Sheet，固定格式 | 引入 NPOI |
-| D10 | 队列 | **新建专家任务专用队列**，不混用 `yzh_queue`（该表有跨租户泄露隐患 H12） | `tsk_task_queue` / `tsk_task_queue_item` |
+| D10 | 队列 | **新建专家任务专用队列**，不混用 `yzh_queue`（该表有跨租户泄露隐患 H12） | `cert_expert_task_queue` / `cert_expert_task_queue_item` |
 | D11 | 修改与认可的关系 | **修改即认可**。改完保存即完成认可，日志 Action=MODIFY | 状态直接落 `modified` |
 | D12 | 认可强制性 | **所有结果必须经专家手动认可**，必须有认可记录。无认可 = 任务不可批准 | `ReviewStatus` 必落终态 |
 | D13 | 符合项落库 | **符合项也留记录**（`audit_checklist_item` 已存在但无实体，本期启用） | 能证明"检了什么" |
@@ -79,23 +143,87 @@
 | D21 | 权限 | **不区分制单人/审核人**。注册人即专家系统管理员，默认拥有全部权限 |
 | D22 | 规则库范围 | 本期**只做框架与逻辑**。用手工造的少量规则数据跑通全链路；真实规则由实施人员 + 专家在后台配置 |
 
+### 定位与业务裁决（2026-09-29 第二轮 · D23-D30）
+
+> 详见 [12-业务全景图-任务平台-V1.md](12-业务全景图-任务平台-V1.md)
+
+| # | 议题 | 裁决 |
+|---|---|---|
+| **D23** | **产品定位** | **3 个核心功能**（NC检查 / 报告 / 企业资料规范化），**不做全平台**。目标：迅速占领市场、形成产值 |
+| **D24** | **复核机制** | ★ **流程化替代人工复核**。取消「审核员初稿 + 审核组长复核」两层结构 —— 复核是人工审核时代的产物，流程化保证先天的准确性与追溯性。**专家认可环节保留**（交付承诺 + 审计要求） |
+| **D25** | **任务来源** | 三种，由**任务平台引导**：`NEW`（全新）/ `REDO`（整体重执行）/ `PATCH`（局部更新）。取消 11 号的「继续/复核」模式 |
+| **D26** | **认证周期** | **本期不做**（周期表 + 审核事件表）。预留 `cert_expert_task.AuditEventCode` + `AuditEventName`（可空，0.2 人天） |
+| **D27** | **状态管理** | ★ **三层分离**：执行状态（机器管）/ 结果状态（专家管）/ 存续状态（管理控制）。归档·取消·作废的细节**后定**，本期实现主干 |
+| **D28** | **多有效任务** | **允许**同阶段多个 `active` 任务。靠状态控制而非硬约束。业务锁只保护数据源（文件操作），不拦建任务 |
+| **D29** | **任务命名** | **专家自定义任务名**（`TaskName` 必填，如「XX公司2026年第一次监督审核」）。`TaskNumber` 仍自动生成作唯一标识 |
+| **D30** | **沿用项时间** | **沿用项保留上次检查时间**。监督审核没查的条款不能说「这次也查了」—— 该字段是审计凭据 |
+| **D31** | ★ **认可/修改/批准/导出归属** | **不在任务系统执行**。任务系统只做：创建·提交·看进度·看包含项·**归档**·**作废**·**取消**·重试失败项·看补录清单。⛔ **删除 `approved` 状态与 `POST /approve` 端点** |
+| **D32** | ★ **结果页面形态** | **左树右表**，非单表。左边 = **企业 → 阶段 → 标准 → 任务** 三级树；右边 = 结论（NC）/ 章节内容（报告）。与规则库页交互一致，降低理解成本 |
+| **D33** | ★ **树上的"任务"节点** | 是任务系统的**只读投影** —— 展示该次执行了哪些项、进度如何。点击可跳任务详情（只读） |
+| **D34** | ★ **删除报告主表** | 「**我现在不想做报表系统了，报告的主表我也不需要了**」。`cert_report_template` 废弃（不 DROP）。`cert_report_section` 改名 `cert_report_section` 并直接承载 `(OrgCode=认证机构, StandardCode, PhaseCode)`。**章节定义 = 全局配置**（所有企业共享），企业数据在结果层。→ 配置层与 NC 规则层**完全对称** |
+| **D35** | ★ **表命名铁律** | ⛔ **体系认证业务表一律 `cert_` 开头**（`audit_`/`rpt_`/`ent_` 一律不得用于体系认证业务表）。专家系统专用表用 `cert_expert_` 前缀；后台管理配置层**不加**该前缀（与现有 `cert_validation_rule` 对称）。⚠️ 框架自有域 `wf_`/`sys_`/`yzh_` **本期不动**。详见 [14 号](14-表命名规范-V1.md) |
+
+### D34 的影响（★ 详见 [04 号 §2.1](04-详细设计-报告生成-V1.md)）
+
+**结构对称**（最大收益）：
+
+```
+删前：  cert_validation_rule              cert_report_template + cert_report_section
+        (规则，自带三元组)                 (模板) + (章节，★标准/阶段要 JOIN 取)
+                                            ↑ 多一层容器
+
+删后：  cert_validation_rule              cert_report_section
+        (规则)                            (章节，自带三元组)
+        ─────────────── 完全对称 ───────────────
+```
+
+**顺带消解 3 个现存问题**：
+
+| 问题 | 删后 |
+|---|---|
+| 章节表无 `StandardCode`，每次查都要 JOIN | **直接读** |
+| `ReportCode` 语义错位（DDL 说 FK→`rpt_audit_report`，实际存 `Template.Code`） | **列直接删**，错位消失（阻塞项 B3 消解） |
+| 模板 `IsValid` / 章节 `IsActive` 不一致 | **统一 `IsValid`** |
+
+**失去的能力**（已确认可接受）：多套模板选默认 · docx 模板文件（`TemplateFilePath`）· 章节顺序整体编排（`SectionConfig`）· 模板级启停（替代：按三元组批量改 `IsValid`）。全部源于 D14「不做 docx，只导 Excel」。
+
+### 3 菜单的职责边界（D31 · 编码时不得越界）
+
+| 菜单 | 只做 | 绝不做 |
+|---|---|---|
+| **任务系统** | 创建·提交·看进度·看包含项·**归档**·**作废**·**取消**·重试失败项·看补录清单 | ⛔ 认可 ⛔ 修改 ⛔ 批准 ⛔ 导出 |
+| **NC 检查记录** | 看结论·**认可**·**修改**·看历史轮次·**导出**·归档/作废/取消 | ⛔ 创建任务 ⛔ 触发执行 |
+| **系统认证报告** | 看章节·**认可**·**修改**·沿用上轮·**导出**·归档/作废/取消 | ⛔ 创建任务 ⛔ 触发执行 |
+
+> 理由：任务系统是**执行管理**（产出"一批结果"，专家判断动作不在这）；结果菜单是**日常工作台**（专家 90% 的操作在这里）。专家不该为了改一条结论先找到那个任务。
+
+### 3 菜单结构（D23 定位的直接体现）
+
+| 菜单 | 回答的问题 | 频率 |
+|---|---|---|
+| **任务系统** | "我要做一次检查/出一次报告，现在什么状态？" | 低频（触发） |
+| **NC 检查记录** | "该企业该阶段每条 NC 检查项的当前结论？能改吗？能导出吗？" | **高频（日常）** |
+| **系统认证报告** | "报告各章节的当前内容？能改吗？能导出吗？" | **高频（日常）** |
+
+> 高频操作不必每次进任务详情 —— 这是 D23「降低理解成本」的落地。
+
 ---
 
 ## 四、核心模型一句话
 
 ```
-任务(tsk_task)  1 ── N  标准子任务(tsk_task_standard)  1 ── 1  队列(tsk_task_queue)
+任务(cert_expert_task)  1 ── N  标准子任务(cert_expert_task_standard)  1 ── 1  队列(cert_expert_task_queue)
                                                                      │
-                                                                     1 ── N  队列项(tsk_task_queue_item)
+                                                                     1 ── N  队列项(cert_expert_task_queue_item)
                                                                                     │
-任务(tsk_task)  1 ── N  ★任务项(tsk_task_item)★  ← 统一表：NC检查项 与 报告章节 都在这里
+任务(cert_expert_task)  1 ── N  ★任务项(cert_expert_task_item)★  ← 统一表：NC检查项 与 报告章节 都在这里
                               │            │
                               1:N          1:N
-                     tsk_task_item_log  tsk_task_data_gap
+                     cert_expert_task_log  cert_expert_task_data_gap
                     （认可/修改日志）   （补录清单 → 写回 cert_extraction_result）
 ```
 
-**★ 最重要的设计判断**：NC 检查项和报告章节在数据形态上**完全对称** —— 都是「自动算出一个结果 → 专家认可或改 → 留日志 → 可导出」。因此用**一张 `tsk_task_item` 统一表**承载，两者只在 3 个标量列上有差异（`Conformity` / `Severity` / `ContentText`），其余完全共用。这让认可、修改、日志、导出、列表混排全部只写一遍。
+**★ 最重要的设计判断**：NC 检查项和报告章节在数据形态上**完全对称** —— 都是「自动算出一个结果 → 专家认可或改 → 留日志 → 可导出」。因此用**一张 `cert_expert_task_item` 统一表**承载，两者只在 3 个标量列上有差异（`Conformity` / `Severity` / `ContentText`），其余完全共用。这让认可、修改、日志、导出、列表混排全部只写一遍。
 
 ---
 
@@ -108,9 +236,9 @@
 | 工作流执行引擎 | `CertPlatform.Admin/Services/Workflow/`（`WorkflowInterpreter` / `NodeExecutor` / `AiNodeExecutor` / `WorkflowConfigParser` / `CertSkillRegistry`） | **执行引擎地基**，本期只补正式 `run` 端点（`WorkflowTestController.cs:68` 硬编码 `TaskType="TEST"` 需放开） |
 | `wf_execution_task` / `wf_execution_task_item` | 表已存在、实体已存在 | 执行过程留痕载体，`TaskType` 已预留 `NC_CHECK` / `REPORT_GENERATE` |
 | NC 规则 | `cert_validation_rule` + `ValidationRule.cs` + `ValidationRuleController` | 规则来源 |
-| 报告章节定义 | `rpt_report_section` + `ReportSection.cs` | 章节来源 |
+| 报告章节定义 | `cert_report_section` + `ReportSection.cs` | 章节来源 |
 | 提取结果 | `cert_extraction_result` / `cert_table_extraction_result` | **唯一数据源**，补录直接改这两张表 |
-| 不符合项 | `audit_nonconformity` | **启用**（已有 `SourceType`/`Severity`/`RuleCode`/`Description` 等完整字段） |
+| 不符合项 | `cert_nc` | **启用**（已有 `SourceType`/`Severity`/`RuleCode`/`Description` 等完整字段） |
 | 企业-阶段-标准三元组 | `cert_enterprise_stage` | 任务范围解析的输入 |
 | 阶段主数据 | `cert_cert_stage` | **权威阶段表**（见 R2 修复） |
 
@@ -119,24 +247,30 @@
 | # | 对象 | 改什么 | 为什么 |
 |---|---|---|---|
 | R2 | `cert_validation_rule.PhaseCode` FK | `cert_phase_definition`（**0 行的孤儿表**）→ `cert_cert_stage` | 阶段口径双轨。`cert_enterprise_stage.StageCode` 关联的是 `cert_cert_stage.Code`，规则表指向另一张表会导致规则**配不出来、也查不出来** |
-| R2 | `cert_report_template.PhaseCode` FK | 同上 | 同上 |
+| ~~R2~~ | ~~`cert_report_template.PhaseCode` FK~~ | **随主表废弃而取消**（D34） | 章节改挂 `cert_report_section.PhaseCode` → `cert_cert_stage(Code)` |
 | R2 | `cert_org_stage.StageCode` 口径核对 | 确认关联 `cert_cert_stage.StageCode`（业务码）与 `cert_enterprise_stage` 的 `Code` 混用问题 | 注释与代码已脱节 |
 | R3 | `cert_validation_rule.IsActive` | → `IsValid`（int，0/1） | 铁律九：`Enable` 零容忍，启用/禁用唯一字段 = `IsValid` |
-| R3 | `rpt_report_section.IsActive` | → `IsValid`（当前该表**根本没有** `IsValid` 列，`enable` 已被 DROP） | 同上；且前端 `types/cert.ts:437` 已声明 `IsValid` 但后端实体没实现 → 契约不一致 |
+| R3 | `cert_report_section.IsActive` | → `IsValid`（当前该表**根本没有** `IsValid` 列，`enable` 已被 DROP） | 同上；且前端 `types/cert.ts:437` 已声明 `IsValid` 但后端实体没实现 → 契约不一致 |
 | R3 | `ValidationRule.json:4` | `"EnableField": "IsActive"` → `"IsValid"` | 名字保留、值必须纠正（AGENTS.md 铁律九） |
+| **D34** | ★ **`cert_report_section` 加归属维度** | 加 `StandardCode` / `PhaseCode`（NOT NULL + FK）；`OrgCode` 改 NOT NULL；⛔ **删 `ReportCode` 列**；唯一键改 `(OrgCode, StandardCode, PhaseCode, SortOrder)` | 章节必须自带三元组才能独立查询（取消 JOIN）；并与 NC 规则层对称 |
+| **D34** | ★ **`cert_report_template` 废弃** | 加 COMMENT 标记，⛔ 不 DROP；`ReportDefinitionController` 删 3 个 template 端点；管理端 `report-rule/index.vue` 重构 | 「不想做报表系统了，报告的主表也不需要了」（D34） |
+| **D34** | ★ **管理端报告章节页重构** | 删除"模板"概念与 UI，改为按 `(机构,标准,阶段)` 直接编辑章节列表 | 配合 D34 |
+| **D34** | ★ **新增章节批量启停** | `POST /api/ReportDefinition/section/batch-toggle` | 替代原"模板级启停"能力 |
 | 修复 | `cert_table_extraction_result` | 补 `IsManualEdited` + `ValueSource` | 字段级表有、表格级表缺 → **不对称**，补录留痕会漏 |
-| 修复 | `audit_checklist_item.TaskCode` FK | `audit_task` → `tsk_task` | 任务表统一后指向新表 |
-| 修复 | `audit_nonconformity.TaskCode` FK | `audit_task` → `tsk_task` | 同上 |
-| 修复 | `audit_nonconformity.SourceCheckCode` FK | 指向已删除的 `ent_file_compliance_check`（悬挂 FK） | 改指 `tsk_task_item.Code` |
+| 修复 | `audit_checklist_item` | **整表废弃** | 03 号 §1.3：统一落结果轮次表；且该表无 `StandardCode`，多标准不可用 |
+| 修复 | `cert_nc.TaskCode` FK | `audit_task` → `cert_expert_task` | 任务表统一后指向新表 |
+| 修复 | `cert_nc.SourceCheckCode` FK | 指向已删除的 `ent_file_compliance_check`（悬挂 FK） | 改指结果轮次表 |
 
 ### 5.3 废弃（加注释标记，不删）
 
 | 表 | 理由 |
 |---|---|
-| `audit_task` | 任务表统一到 `tsk_task`（D01） |
-| `rpt_report_task` | 同上 |
+| `audit_task` | 任务表统一到 `cert_expert_task`（D01） |
+| `audit_checklist_item` | 结果统一落轮次表（03 号 §1.3）；且无 `StandardCode`，多标准不可用 |
+| `cert_report_template` | ★ **D34：不做报表系统，报告主表不需要** |
+| `rpt_report_task` | 任务表统一到 `cert_expert_task`（D01） |
 | `rpt_audit_report` | D14：报告产物只导出 Excel，不落报告实例 |
-| `rpt_report_section_source` | D08：字段级追溯归后台工作流设计 |
+| `cert_report_section_source` | D08：字段级追溯归后台工作流设计 |
 | `cert_validation_rule_source` | 同上 |
 | `cert_phase_definition` | R2 修复后无 FK 指向它 → 彻底孤儿 |
 | `yzh_queue` / `yzh_queue_task` | D10：专家任务用专用队列；此表继续服务文档转换/提取 |
@@ -159,7 +293,7 @@
 |---|---|
 | `docs/20-体系认证/05-业务知识库/ISO体系认证NC与报告标准约束-V1.md` | **业务依据**（NC 四要素、报告七要素、NC 生命周期）。本设计是它的系统实现 |
 | `docs/40-实施/企业资料管理/09-内容提取与队列管理-执行方案-V1.md` | **上游**。该方案 D20 明确「本次不动 NC/报告，只提供 `GetActiveAsync` 读取契约」—— 本设计就是那个消费方 |
-| `docs/40-实施/企业资料管理/10-执行计划-V1.md` | **上游**。其中 `EnterpriseExtractionResultStore`（`ArchiveAsync`/`RehydrateVersionAsync`/`GetActiveAsync`）是本期补录写回的**正确落点**，不要绕过 |
+| `docs/40-实施/企业资料管理/10-执行计划-V1.md` | **上游**。其中 `EnterpriseExtractionResultStore`（`InvalidateActiveAsync`/`RehydrateVersionAsync`/`GetActiveAsync`）是本期补录写回的**正确落点**，不要绕过 |
 | `docs/50-任务/开发计划/体系认证专家系统建设计划-V4.md` | **战略**。§4.7 规划的 `POST api/AuditTask/runNc` / `POST api/ReportTask/run` 在本设计中改为统一任务模型，接口清单见 07 |
 | `docs/10-YZH架构/23-前后端信封统一改造计划-V1.md` | **规范**。所有新端点的返回信封必须遵守 |
 | `docs/50-任务/迁移计划/NC规则设计迁移方案-V1.md` | **历史参考**。NC 规则字段的历史设计出处 |
@@ -175,13 +309,13 @@
 | 企业 | Enterprise | 受审核组织。表 `cert_enterprise`，租户键 `OrgCode` = 专家工作区 |
 | 阶段 | Stage | `cert_cert_stage`。`Code`（GUID 业务键）与 `StageCode`（业务码如 `S1`）**双码**，本设计统一用 `Code` |
 | 标准 | Standard | `cert_iso_standard` |
-| 任务 | Task | 专家对某企业某阶段发起的一次 NC 检查或报告生成。表 `tsk_task` |
+| 任务 | Task | 专家对某企业某阶段发起的一次 NC 检查或报告生成。表 `cert_expert_task` |
 | 全局任务 | `ScopeType=FULL` | 该阶段该标准下**全部**检查项/章节 |
 | 局部任务 | `ScopeType=PARTIAL` | 专家**勾选的部分**项。一次只能一个标准（D03） |
 | 标准子任务 | SubTask | 任务按标准拆分后的单元，1 子任务 = 1 队列（D02） |
-| 任务项 | TaskItem | ★ 统一表 `tsk_task_item`。`ItemType=nc_check` 或 `report_section` |
+| 任务项 | TaskItem | ★ 统一表 `cert_expert_task_item`。`ItemType=nc_check` 或 `report_section` |
 | 完备性检查 | DataCheck | 校验规则所需字段/表格是否都已提取（D04） |
-| 数据缺口 | DataGap | 完备性检查的产物 = **补录清单**。表 `tsk_task_data_gap` |
+| 数据缺口 | DataGap | 完备性检查的产物 = **补录清单**。表 `cert_expert_task_data_gap` |
 | 跳过 | Skip | 专家放弃补录，缺数据的规则不执行、不显示结果（D05） |
 | 认可 | Acknowledge | 专家确认自动结果正确。`ReviewStatus=acknowledged`（D12 强制） |
 | 修改 | Modify | 专家改了结果。**修改即认可**（D11），`ReviewStatus=modified` |

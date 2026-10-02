@@ -168,9 +168,15 @@ public static class EntityConfigHelper
                 });
             if (config != null) return config;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // JSON 解析失败，返回默认空配置
+            // ★ 2026-09-30：此前这里是空 catch ⇒ **JSON 里写错一个枚举值就会静默丢掉整份配置**
+            //   （症状：Title 等于实体类型名、Columns=[]、页面有数据行却一列都不显示、零报错）。
+            //   典型触发：`Type` 写了枚举里不存在的值（如 `CustomSlot` 曾长期缺失）。
+            //   这里必须留下痕迹，否则排查成本极高。输出到 stderr → 后端日志文件可见。
+            Console.Error.WriteLine(
+                $"[EntityConfigHelper] ✗ 配置解析失败，已回落到空配置！file={filePath} " +
+                $"（症状：页面有数据行但一列都不显示）。原因：{ex.GetType().Name}: {ex.Message}");
         }
         return NewEmptyConfig(configName);
     }

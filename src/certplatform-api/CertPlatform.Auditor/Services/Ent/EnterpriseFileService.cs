@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
 using YZH.Core.Api.Models.Organization;
+using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Constants;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Entities.Dir;
@@ -39,6 +40,10 @@ public class EnterpriseFileService
     private readonly WorkspaceContextService _workspace;
     private readonly IUserContext _user;
     private readonly ILogger<EnterpriseFileService> _logger;
+    /// <summary>S2③ 结果版本店（归档/回活/读取唯一口）</summary>
+    private readonly CertPlatform.Admin.Services.DocExtraction.EnterpriseExtractionResultStore _resultStore;
+    /// <summary>提取定位链（P2：槽位页四态判定与执行器共用同一结论）</summary>
+    private readonly CertPlatform.Admin.Services.DocExtraction.ExtractionScopeResolver _scopeResolver;
 
     /// <summary>上传任务有效期（分钟）：init 后超时未 confirm 即作废，防悬空 draft 行永久占位</summary>
     private const int TaskExpireMinutes = 30;
@@ -63,7 +68,9 @@ public class EnterpriseFileService
         QueueManager queueManager,
         WorkspaceContextService workspace,
         IUserContext user,
-        ILogger<EnterpriseFileService> logger)
+        ILogger<EnterpriseFileService> logger,
+        CertPlatform.Admin.Services.DocExtraction.EnterpriseExtractionResultStore resultStore,
+        CertPlatform.Admin.Services.DocExtraction.ExtractionScopeResolver scopeResolver)
     {
         _db = db;
         _storage = storage;
@@ -71,6 +78,8 @@ public class EnterpriseFileService
         _workspace = workspace;
         _user = user;
         _logger = logger;
+        _resultStore = resultStore;
+        _scopeResolver = scopeResolver;
     }
 
     #region 一、左树与阶段汇总
@@ -292,6 +301,28 @@ public class EnterpriseFileService
         var allSlots = (await _db.GetListAsync<StandardDirectoryFile>(
             x => x.ConfigCode == config.Code, includeDisabled: true)).Data ?? new List<StandardDirectoryFile>();
 
+        // ★ P2 提取状态四态（2026-09-29 用户裁决）：
+        //   not_configured 未配置（四元组无可用规则，resolver 结论）> queued 提取中（文件资源锁）
+        //   > extracted 已提取 > pending 未提取。resolver 与执行器共用同一口径，不在此重复判定规则。
+        var ruleSlots = await _scopeResolver.ResolveAsync(enterpriseCode, stageCode, standardCode);
+        var ruleMap = ruleSlots
+            .Where(x => !string.IsNullOrEmpty(x.FileCode))
+            .GroupBy(x => x.FileCode!)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var slotCodes = allSlots
+            .Where(f => !string.IsNullOrEmpty(f.Code))
+            .Select(f => f.Code!).Distinct().ToList();
+        var lockedFiles = new HashSet<string>();
+        if (slotCodes.Count > 0)
+        {
+            var lockRows = (await _db.GetListAsync<YZH.Core.Stand.Models.Queue.YzhQueueResourceLock>(
+                r => r.Status == "locked" && r.ResourceTable == QueueManager.RESOURCE_FILE)).Data
+                ?? new List<YZH.Core.Stand.Models.Queue.YzhQueueResourceLock>();
+            foreach (var r in lockRows)
+                if (slotCodes.Contains(r.ResourceCode)) lockedFiles.Add(r.ResourceCode);
+        }
+
         var files = allSlots
             .Where(f => f.IsValid == 1 || !string.IsNullOrEmpty(f.StoragePath))
             .Select(f =>
@@ -322,7 +353,9 @@ public class EnterpriseFileService
                     ConvertMessage = f.ConvertMessage,
                     MarkdownStatus = f.MarkdownStatus,
                     MarkdownMessage = f.MarkdownMessage,
-                    ExtractStatus = f.ExtractStatus,
+                    ExtractStatus = EnterpriseExtractStatus.ForDisplay(f.ExtractStatus),
+                    ExtractState = ExtractStateRule.Of(f.Code, f.ExtractStatus, ruleMap, lockedFiles),
+                    ExtractMessage = f.ExtractMessage,
                     Status = StatusOf(f),
                     UpdateTime = f.UpdateTime,
                     CreateTime = f.CreateTime
@@ -631,7 +664,7 @@ public class EnterpriseFileService
     /// </summary>
     public async Task<(string? Error, object? Data)> UploadInitAsync(
         string enterpriseCode, string stageCode, string standardCode,
-        IList<UploadInitItem> items)
+        IList<UploadInitItem> items, bool? autoExtract = null)
     {
         var err = await OwnershipErrorAsync(enterpriseCode);
         if (err != null) return (err, null);
@@ -799,6 +832,8 @@ public class EnterpriseFileService
             TotalFiles = results.Count,
             TotalSize = totalSize,
             Status = "initialized",
+            // D4：缺省自动提取
+            AutoExtract = autoExtract == false ? 0 : 1,
             ExpireTime = System.DateTime.Now.AddMinutes(TaskExpireMinutes),
             IsValid = 1,
             IsDeleted = false,
@@ -896,7 +931,8 @@ public class EnterpriseFileService
     /// Step3：激活（<c>IsValid 0→1</c>、<c>UploadStatus=uploaded</c>）+ 入 <c>file_convert</c> 队列。
     /// <para>入队失败<b>不阻断激活</b>（R5）：返回 <c>ok=true</c> + <c>QueueError</c> 文案。</para>
     /// </summary>
-    public async Task<(string? Error, object? Data)> UploadConfirmAsync(string taskId, string enterpriseCode)
+    public async Task<(string? Error, object? Data)> UploadConfirmAsync(
+        string taskId, string enterpriseCode, bool? autoExtract = null)
     {
         var err = await OwnershipErrorAsync(enterpriseCode);
         if (err != null) return (err, null);
@@ -953,16 +989,21 @@ public class EnterpriseFileService
                 nameof(StandardDirectoryFolder.UpdateTime));
         }
 
+        // D4：确认阶段允许覆盖 init 的开关；未传则沿用落库值
+        if (autoExtract.HasValue) task.AutoExtract = autoExtract.Value ? 1 : 0;
+
         string? queueCode = null;
         string? queueError = null;
         if (activatable.Count > 0)
-            (queueCode, queueError) = await EnqueueConvertQueueAsync(task.ConfigCode, activatable, "upload_task", taskId);
+            (queueCode, queueError) = await EnqueueConvertQueueAsync(
+                task.ConfigCode, activatable, "upload_task", taskId, task.AutoExtract == 1);
 
         task.Status = "completed";
         task.UpdateBy = _user.UserCode;
         task.UpdateTime = System.DateTime.Now;
         await _db.UpdateAsync(task,
-            nameof(UploadTask.Status), nameof(UploadTask.UpdateBy), nameof(UploadTask.UpdateTime));
+            nameof(UploadTask.Status), nameof(UploadTask.AutoExtract),
+            nameof(UploadTask.UpdateBy), nameof(UploadTask.UpdateTime));
 
         foreach (var row in rows)
             await WriteOpLogAsync(row.EnterpriseCode, row.StageCode, row.Code, "upload", row.VersionNumber,
@@ -1098,39 +1139,42 @@ public class EnterpriseFileService
     /// <para>锁定方案（README §五 偏差 D-替换）：沿用原路径覆盖 + 归档旧件到 <c>_archive/</c>，
     /// 保持外部引用（预览/提取/NC）路径稳定。</para>
     /// </summary>
-    public async Task<Result> ReplaceFileAsync(
+    /// <remarks>★ 2026-09-30：返回 <c>Result&lt;object?&gt;</c> 而非 <c>Result</c> ——
+    /// 携带「人工补录值被归档」的提示载荷（见 <c>ArchiveManualNoticeAsync</c>），
+    /// 控制器把它塞进 <c>ApiResponse.data</c>，前端据此弹窗。</remarks>
+    public async Task<Result<object?>> ReplaceFileAsync(
         string fileCode, string enterpriseCode, Stream fileStream, long fileSize, string fileName,
-        string? reason = null, System.DateTime? expectedModifyTime = null)
+        string? reason = null, System.DateTime? expectedModifyTime = null, bool? autoExtract = null)
     {
         var guard = ValidateWritableEnterprise(enterpriseCode);
-        if (guard != null) return Result.Fail(guard);
+        if (guard != null) return Result<object?>.Fail(guard);
         var tenantErr = await OwnershipErrorAsync(enterpriseCode);
-        if (tenantErr != null) return Result.Fail(tenantErr);
-        if (string.IsNullOrWhiteSpace(fileName)) return Result.Fail("替换失败：文件名为空");
+        if (tenantErr != null) return Result<object?>.Fail(tenantErr);
+        if (string.IsNullOrWhiteSpace(fileName)) return Result<object?>.Fail("替换失败：文件名为空");
 
         var fr = await _db.GetOneIgnoreValidAsync<StandardDirectoryFile>(
             x => x.Code == fileCode && x.EnterpriseCode == enterpriseCode);
         var file = fr.Data;
-        if (file == null) return Result.Fail("文件不存在");
-        if (file.IsValid != 1) return Result.Fail("文件已移除，请先在版本面板恢复后再替换");
-        if (string.IsNullOrEmpty(file.StoragePath)) return Result.Fail("替换失败：文件未上传，请先在「上传文件」入口补齐");
+        if (file == null) return Result<object?>.Fail("文件不存在");
+        if (file.IsValid != 1) return Result<object?>.Fail("文件已移除，请先在版本面板恢复后再替换");
+        if (string.IsNullOrEmpty(file.StoragePath)) return Result<object?>.Fail("替换失败：文件未上传，请先在「上传文件」入口补齐");
 
         var conflict = CheckModifyConflict(file, expectedModifyTime);
-        if (conflict != null) return Result.Fail(conflict);
+        if (conflict != null) return Result<object?>.Fail(conflict);
 
         // 队列锁检查（04 §5.2-2）：该文件正在转换 ⇒ 拒绝
         var lockHit = await _queueManager.FindResourceLockAsync(
             QueueManager.RESOURCE_FILE, new List<string> { fileCode });
         if (lockHit != null)
-            return Result.Fail($"该文件正在转换队列中（{lockHit.QueueCode}），请等待完成后再替换");
+            return Result<object?>.Fail($"该文件正在转换队列中（{lockHit.QueueCode}），请等待完成后再替换");
         var dirErr = await ConfigLockErrorAsync(file.ConfigCode);
-        if (dirErr != null) return Result.Fail(dirErr);
+        if (dirErr != null) return Result<object?>.Fail(dirErr);
 
         // 扩展名族兼容校验（04 §5.2-3）
         var newExt = Path.GetExtension(fileName).TrimStart('.').ToLowerInvariant();
         var oldExt = (file.FileType ?? "").TrimStart('.').ToLowerInvariant();
         if (oldExt.Length > 0 && newExt.Length > 0 && newExt != oldExt && !IsSameFamily(newExt, oldExt))
-            return Result.Fail($"新文件扩展名 .{newExt} 与槽位定义 .{oldExt} 不兼容，请确认后重试");
+            return Result<object?>.Fail($"新文件扩展名 .{newExt} 与槽位定义 .{oldExt} 不兼容，请确认后重试");
 
         var archivedVersion = await GetArchivedVersionNumberAsync(fileCode);
         // 路径策略（04 §5.1 锁定）：沿用原路径覆盖 ⇒ 外部引用（预览/提取/NC）路径稳定
@@ -1145,14 +1189,14 @@ public class EnterpriseFileService
             catch (System.Exception ex)
             {
                 _logger.LogError(ex, "[ReplaceFile] 归档失败（同名路径，源未动）: {FileCode}", fileCode);
-                return Result.Fail($"归档失败，替换中止：{ex.Message}");
+                return Result<object?>.Fail($"归档失败，替换中止：{ex.Message}");
             }
             try { await _storage.UploadAsync(newStoragePath.TrimStart('/'), fileStream, fileSize); }
             catch (System.Exception ex)
             {
                 try { await _storage.RenameAsync(archivePath.TrimStart('/'), oldSource); }
                 catch (System.Exception rex) { _logger.LogError(rex, "[ReplaceFile] 补偿回滚失败: {Archive}", archivePath); }
-                return Result.Fail($"上传失败（已回滚归档）：{ex.Message}");
+                return Result<object?>.Fail($"上传失败（已回滚归档）：{ex.Message}");
             }
         }
         else
@@ -1161,7 +1205,7 @@ public class EnterpriseFileService
             catch (System.Exception ex)
             {
                 _logger.LogError(ex, "[ReplaceFile] 上传失败: {FileCode}", fileCode);
-                return Result.Fail($"上传失败：{ex.Message}");
+                return Result<object?>.Fail($"上传失败：{ex.Message}");
             }
             try { await _storage.RenameAsync(oldSource, archivePath.TrimStart('/')); }
             catch (System.Exception ex)
@@ -1169,7 +1213,7 @@ public class EnterpriseFileService
                 try { await _storage.DeleteAsync(newStoragePath.TrimStart('/')); }
                 catch (System.Exception dex) { _logger.LogError(dex, "[ReplaceFile] 补偿删除新对象失败: {Path}", newStoragePath); }
                 _logger.LogError(ex, "[ReplaceFile] 归档失败（新对象已删除，状态未变）: {FileCode}", fileCode);
-                return Result.Fail($"归档失败，替换中止：{ex.Message}");
+                return Result<object?>.Fail($"归档失败，替换中止：{ex.Message}");
             }
         }
 
@@ -1223,20 +1267,54 @@ public class EnterpriseFileService
             nameof(StandardDirectoryFile.MarkdownPath), nameof(StandardDirectoryFile.UpdateBy),
             nameof(StandardDirectoryFile.UpdateTime));
 
+        // ★ S2③ 图 4：替换 = 版本 n+1 ⇒ 归档 ≤新版本的全部活跃结果（只翻 IsValid，行数不减）
+        //    验收③：替换后读取口径必须为空，直至新版本重新提取完成
+        //
+        // ★ 2026-09-30 改按 RuleCode 归档（用户裁决 J4：1 文件 = 1 规则）。
+        //   原按 FileCode 归档会【漏掉人工补录行】—— 补录行的 FileCode 填的是规则声明的
+        //   StandardFileCode，不是文件槽位 Code。详见 EnterpriseExtractionResultStore.InvalidateByRuleAsync。
+        var replaceRuleCode = await ResolveRuleCodeAsync(file.StandardFileCode);
+        List<ExtractionResult> lostFields = new();
+        List<TableExtractionResult> lostTables = new();
+
+        if (!string.IsNullOrEmpty(replaceRuleCode))
+        {
+            // ★ 归档【前】先捞出人工补录值 —— 裁决 J4 的连带后果：按 RuleCode 清理会把
+            //   同一规则下的人工补录值一起归档。覆盖文件 = 该规则数据整体重算，
+            //   专家之前补的值会消失（05 号 §5.3 要求留痕 + 提示）。
+            (lostFields, lostTables) =
+                await _resultStore.ListArchivedManualAsync(enterpriseCode, replaceRuleCode);
+
+            await _resultStore.InvalidateByRuleAsync(enterpriseCode, replaceRuleCode, file.VersionNumber);
+        }
+        else
+        {
+            // 该文件没配提取规则 ⇒ 回退到按文件归档（保持旧行为，不丢结果）
+            await _resultStore.InvalidateActiveAsync(enterpriseCode, fileCode, file.VersionNumber);
+        }
+
         await WriteOpLogAsync(enterpriseCode, file.StageCode, fileCode, "replace", file.VersionNumber,
             new { fileName, fileSize, reason, archivePath });
 
+        // ★ 人工补录值被归档 ⇒ 记 change_log（archive）+ 返回提示，前端弹窗问专家是否重新补录
+        var lostNotice = await ArchiveManualNoticeAsync(
+            enterpriseCode, replaceRuleCode, lostFields, lostTables, fileName);
+
         if (NeedsConversion(fileName))
         {
+            // R10：替换默认也自动提取（D4），前端可传 AutoExtract=false 关闭
+            // ★ uk_source(SourceType, SourceId) 唯一：同一文件反复替换会撞唯一键 ⇒ 入队静默失败（只 warn），
+            //   表现为「替换成功但不转换/不提取」。带版本号使每次替换 SourceId 唯一。
             var (queueCode, queueError) = await EnqueueConvertQueueAsync(
-                file.ConfigCode, new List<StandardDirectoryFile> { file }, "file_replace", fileCode);
+                file.ConfigCode, new List<StandardDirectoryFile> { file }, "file_replace",
+                $"{fileCode}:v{file.VersionNumber}", autoExtract ?? true);
             if (queueError != null)
                 _logger.LogWarning("[ReplaceFile] 入队失败（不阻断替换）: {FileCode} {Reason}", fileCode, queueError);
             else
                 _logger.LogInformation("[ReplaceFile] 已入队 {QueueCode}: {FileCode}", queueCode, fileCode);
         }
 
-        return Result.Ok();
+        return Result<object?>.Ok(lostNotice);
     }
 
     /// <summary>扩展名族：doc≡docx、xls≡xlsx、ppt≡pptx、jpg≡jpeg 视为兼容（DispatchMatcher 同口径）</summary>
@@ -1273,6 +1351,14 @@ public class EnterpriseFileService
         await _db.UpdateAsync(file,
             nameof(StandardDirectoryFile.IsValid), nameof(StandardDirectoryFile.UpdateBy),
             nameof(StandardDirectoryFile.UpdateTime));
+
+        // ★ S2③ 图 4：移除 ⇒ 归档该文件全部活跃结果（读取口径为空；只翻 IsValid，恢复时可回活）
+        // ★ 2026-09-30 改按 RuleCode 归档（用户裁决 J4），同 ReplaceFileAsync
+        var removeRuleCode = await ResolveRuleCodeAsync(file.StandardFileCode);
+        if (!string.IsNullOrEmpty(removeRuleCode))
+            await _resultStore.InvalidateByRuleAsync(enterpriseCode, removeRuleCode, file.VersionNumber);
+        else
+            await _resultStore.InvalidateActiveAsync(enterpriseCode, fileCode, file.VersionNumber);
 
         await WriteOpLogAsync(enterpriseCode, file.StageCode, fileCode, "delete", file.VersionNumber,
             new { fileName = file.FileName, storagePath = file.StoragePath, reason });
@@ -1383,13 +1469,17 @@ public class EnterpriseFileService
             nameof(StandardDirectoryFile.MarkdownPath), nameof(StandardDirectoryFile.ConvertedStoragePath),
             nameof(StandardDirectoryFile.UpdateBy), nameof(StandardDirectoryFile.UpdateTime));
 
+        // ★ S2③ 图 4：恢复到 vN ⇒ 回活该版本的字段/表格、归档其余版本（验收⑤：vN 字段原样回来）
+        await _resultStore.RehydrateVersionAsync(enterpriseCode, fileCode, versionNumber);
+
         await WriteOpLogAsync(enterpriseCode, file.StageCode, fileCode, "restore", newVersion,
             new { restoredFrom = versionNumber, fileName = restoredFileName, reason });
 
         if (NeedsConversion(restoredFileName))
         {
             var (_, queueError) = await EnqueueConvertQueueAsync(
-                file.ConfigCode, new List<StandardDirectoryFile> { file }, "file_replace", fileCode + ":restore");
+                file.ConfigCode, new List<StandardDirectoryFile> { file }, "file_replace",
+                $"{fileCode}:restore:v{newVersion}");
             if (queueError != null)
                 _logger.LogWarning("[Restore] 入队失败（不阻断恢复）: {FileCode} {Reason}", fileCode, queueError);
         }
@@ -1560,10 +1650,13 @@ public class EnterpriseFileService
         if (file == null) return Result.Fail("文件不存在");
         if (file.ConvertStatus != "completed") return Result.Fail("文件尚未完成转换");
         if (string.IsNullOrEmpty(file.MarkdownPath)) return Result.Fail("Markdown 产物不存在");
-        if (file.ExtractStatus == "processing") return Result.Fail("提取任务进行中，请勿重复触发");
+        // ★ S2⑤ 3 态无 pending/processing：重复触发改用队列资源锁互斥（与 delete 同口径）
+        var held = await _queueManager.FindResourceLockAsync(
+            QueueManager.RESOURCE_FILE, new List<string> { fileCode });
+        if (held != null) return Result.Fail($"该文件已有队列在执行（{held.QueueCode}），请等待完成");
 
-        file.ExtractStatus = "pending";
-        file.ExtractMessage = null;
+        file.ExtractStatus = "none";
+        file.ExtractMessage = "已加入提取队列";
         await _db.UpdateAsync(file,
             nameof(StandardDirectoryFile.ExtractStatus), nameof(StandardDirectoryFile.ExtractMessage));
 
@@ -1581,13 +1674,13 @@ public class EnterpriseFileService
             },
             Tasks = new List<QueueManager.TaskItem>
             {
-                new() { TaskType = "doc_extract", Payload = JsonSerializer.Serialize(new { code = fileCode, enterpriseCode, stageCode = file.StageCode ?? "" }) }
+                new() { TaskType = "doc_extract", Payload = JsonSerializer.Serialize(new { code = fileCode, enterpriseCode, stageCode = file.StageCode ?? "", fileName = file.FileName ?? fileCode }) }
             }
         };
         var (qok, qerr, _, _) = await _queueManager.CreateQueueAsync(req);
         if (!qok)
         {
-            file.ExtractStatus = "failed";
+            file.ExtractStatus = "none";
             file.ExtractMessage = $"提取队列创建失败：{qerr}";
             await _db.UpdateAsync(file,
                 nameof(StandardDirectoryFile.ExtractStatus), nameof(StandardDirectoryFile.ExtractMessage));
@@ -1603,10 +1696,10 @@ public class EnterpriseFileService
         var row = await LoadOwnedFileAsync(fileCode, enterpriseCode);
         if (row == null) return null;
 
-        var fieldRows = (await _db.GetListAsync<ExtractionResult>(
-            x => x.FileCode == fileCode && x.EnterpriseCode == enterpriseCode && x.IsValid == 1)).Data ?? new();
-        var tableRows = (await _db.GetListAsync<TableExtractionResult>(
-            x => x.FileCode == fileCode && x.EnterpriseCode == enterpriseCode && x.IsValid == 1)).Data ?? new();
+        // ★ S2③ §5.3 唯一读取口径：经版本店取「活跃行」（IsValid=1），
+        //   ⛔ 不带 VersionNumber 硬过滤 —— 恢复到 vN 后活跃行即 vN（验收⑤）；
+        //   替换/移除后活跃行为空（验收③④）。
+        var (fieldRows, tableRows) = await _resultStore.GetActiveAsync(enterpriseCode, fileCode);
 
         var fields = fieldRows
             .OrderBy(x => x.FieldCode)
@@ -1618,7 +1711,12 @@ public class EnterpriseFileService
             .Select(x => new { x.TableCode, x.TableIndex, Rows = ParseJsonRows(x.ExtractedJson), x.ExtractedAt })
             .ToList();
 
-        return new { row.Code, row.FileName, row.ExtractStatus, row.ExtractMessage, row.MaxConfidence, Fields = fields, Tables = tables };
+        return new
+        {
+            row.Code, row.FileName,
+            ExtractStatus = EnterpriseExtractStatus.ForDisplay(row.ExtractStatus),
+            row.ExtractMessage, row.MaxConfidence, Fields = fields, Tables = tables
+        };
     }
 
     private static object? ParseJsonRows(string? extractedJson)
@@ -1877,25 +1975,12 @@ public class EnterpriseFileService
 
     /// <summary>
     /// 机构域归一：把「企业挂靠节点 Code」换成「认证机构 Code」= 标准目录模板行的建档域。
-    /// <para>桥：工作区节点 <c>Sys_Organization.OrgCode</c>（业务编码 'CB001'）↔
-    /// <c>CertificationBody.CbCode</c> → 取其 <c>Code</c>。解析不到时原样返回（空态由模板查询统一回）。</para>
+    /// <para>★ 实现已上提到 <see cref="WorkspaceContextService.ResolveCertBodyCodeAsync"/> ——
+    /// 参数定义 / 目录模板 / 标准关联三处都要做同一次归一，各写一份会漂移且都不报错。
+    /// 此处保留方法名作为委托，避免改动 1000+ 行文件里的 12 处调用点。</para>
     /// </summary>
-    private async Task<string> NormalizeOrgCodeAsync(string orgCode)
-    {
-        var self = await _db.GetOneAsync<CertificationBody>(x => x.Code == orgCode);
-        if (self.Data != null) return orgCode;
-
-        var node = await _db.GetOneAsync<Sys_Organization>(x => x.Code == orgCode);
-        var bizCode = node.Data?.OrgCode;
-        if (!string.IsNullOrWhiteSpace(bizCode))
-        {
-            var byBiz = await _db.GetOneAsync<CertificationBody>(x => x.CbCode == bizCode);
-            if (byBiz.Data?.Code != null) return byBiz.Data.Code;
-        }
-
-        var legacy = await _db.GetOneAsync<CertificationBody>(x => x.CbCode == orgCode);
-        return legacy.Data?.Code ?? orgCode;
-    }
+    private Task<string> NormalizeOrgCodeAsync(string orgCode)
+        => _workspace.ResolveCertBodyCodeAsync(orgCode);
 
     /// <summary>
     /// 工作区守卫：目标企业必须属于当前登录人的工作区。失败返回错误文案，成功返回 null。
@@ -2002,7 +2087,8 @@ public class EnterpriseFileService
     /// 载荷字段名必须与 <c>FileConvertPayload</c> 对齐（Code/FileName/SourcePath/ConvertType）。</para>
     /// </summary>
     private async Task<(string? QueueCode, string? Error)> EnqueueConvertQueueAsync(
-        string configCode, List<StandardDirectoryFile> files, string sourceType, string sourceId)
+        string configCode, List<StandardDirectoryFile> files, string sourceType, string sourceId,
+        bool autoExtract = true)
     {
         if (files.Count == 0) return (null, null);
 
@@ -2030,7 +2116,12 @@ public class EnterpriseFileService
                     FileName = f.FileName,
                     SourcePath = f.StoragePath,
                     // 空串 ⇒ 执行器自动双产物（office2pdf + anydoc2md，任一失败不阻塞另一个）
-                    ConvertType = ""
+                    ConvertType = "",
+                    // ★ S2：企业三件套 —— 缺 EnterpriseCode 则转换完成后永不入提取队列（实测该链曾断）
+                    EnterpriseCode = f.EnterpriseCode,
+                    StageCode = f.StageCode,
+                    // ★ S2 图 3 分流依据：false = 只转换不提取
+                    AutoExtract = autoExtract
                 })
             });
             locks.Add(new QueueManager.ResourceLockItem
@@ -2074,6 +2165,135 @@ public class EnterpriseFileService
         return System.Math.Abs((stamp - expectedModifyTime.Value).TotalSeconds) > 2
             ? "文件刚被他人更新，请刷新后重试"
             : null;
+    }
+
+    /// <summary>
+    /// ★ 人工补录值被按 RuleCode 归档时的留痕 + 提示（裁决 J4 的连带后果，05 号 §5.3）。
+    /// </summary>
+    /// <para><b>为什么需要</b>：J4 规定「覆盖文件 ⇒ 按 RuleCode 清理该规则全部数据」，
+    /// 同一 <c>RuleCode</c> 下 <c>ValueSource='manual'</c> 的行也在内 ⇒ <b>专家之前补的值会消失</b>。
+    /// 这是系统行为导致的人工值丢失，<b>必须留痕并告知</b>，否则专家会以为系统出错。</para>
+    /// <para>★ 只 INSERT 到 <c>cert_extraction_change_log</c>（不可变表，<c>ChangeAction='archive'</c>），
+    /// <b>不物理删除、不回滚</b> —— 值仍在归档行里，专家可参考。</para>
+    /// <returns>提示文案；无人工值被归档时返回 <c>null</c></returns>
+    private async Task<object?> ArchiveManualNoticeAsync(
+        string enterpriseCode, string? ruleCode,
+        List<ExtractionResult> lostFields, List<TableExtractionResult> lostTables,
+        string fileName)
+    {
+        if (string.IsNullOrEmpty(ruleCode)) return null;
+        if (lostFields.Count == 0 && lostTables.Count == 0) return null;
+
+        var now = System.DateTime.Now;
+        var orgCode = await ResolveOrgCodeAsync(enterpriseCode);
+
+        foreach (var f in lostFields)
+        {
+            await _db.InsertAsync(new ExtractionChangeLog
+            {
+                Code = Guid.NewGuid().ToString("N"),
+                OrgCode = orgCode,
+                ResultType = "field",
+                ResultCode = f.Code ?? "",
+                EnterpriseCode = enterpriseCode,
+                RuleCode = ruleCode,
+                StandardCode = f.StandardCode,
+                StageCode = f.StageCode,
+                StandardFileCode = f.StandardFileCode,
+                FileCode = f.FileCode,
+                FieldCode = f.FieldCode,
+                FieldLabel = f.FieldName,
+                ChangeAction = ExtractionChangeLog.ActionArchive,
+                OldValue = f.ExtractedValue,
+                NewValue = null,
+                OldValueSource = f.ValueSource,
+                NewValueSource = null,
+                OperatorCode = _user.UserCode,
+                OperatorName = _user.UserTrueName ?? _user.UserName,
+                OperateTime = now,
+                Remark = $"文件「{fileName}」被替换，按 RuleCode 归档时覆盖了人工补录值",
+                CreateBy = _user.UserCode,
+                CreateTime = now,
+                IsValid = 1
+            });
+        }
+
+        foreach (var t in lostTables)
+        {
+            await _db.InsertAsync(new ExtractionChangeLog
+            {
+                Code = Guid.NewGuid().ToString("N"),
+                OrgCode = orgCode,
+                ResultType = "table",
+                ResultCode = t.Code ?? "",
+                EnterpriseCode = enterpriseCode,
+                RuleCode = ruleCode,
+                StandardCode = t.StandardCode,
+                StageCode = t.StageCode,
+                StandardFileCode = t.StandardFileCode,
+                FileCode = t.FileCode,
+                TableCode = t.TableCode,
+                FieldLabel = t.TableCode,
+                ChangeAction = ExtractionChangeLog.ActionArchive,
+                OldValue = t.ExtractedJson,
+                NewValue = null,
+                OldValueSource = t.ValueSource,
+                NewValueSource = null,
+                OperatorCode = _user.UserCode,
+                OperatorName = _user.UserTrueName ?? _user.UserName,
+                OperateTime = now,
+                Remark = $"文件「{fileName}」被替换，按 RuleCode 归档时覆盖了人工补录值",
+                CreateBy = _user.UserCode,
+                CreateTime = now,
+                IsValid = 1
+            });
+        }
+
+        var n = lostFields.Count + lostTables.Count;
+        _logger.LogWarning(
+            "[ReplaceFile] 人工补录值被归档 file={File} rule={Rule} 条数={N}（已写 change_log，需提示专家重新补录）",
+            fileName, ruleCode, n);
+
+        // ★ 前端据此弹窗：「您之前对『{fileName}』的人工补录值已被新的自动提取覆盖，是否需要重新补录？」
+        return new
+        {
+            manualValuesArchived = true,
+            archivedCount = n,
+            fileName,
+            ruleCode,
+            notice = $"您之前对「{fileName}」的 {n} 项人工补录值已被新的提取结果覆盖（按规则整体重算），是否需要重新补录？"
+        };
+    }
+
+    /// <summary>租户/机构 Code：<c>cert_extraction_change_log.OrgCode</c> 是 NOT NULL</summary>
+    private async Task<string> ResolveOrgCodeAsync(string enterpriseCode)
+    {
+        var ent = (await _db.GetOneAsync<Enterprise>(x => x.Code == enterpriseCode)).Data;
+        return ent?.OrgCode ?? enterpriseCode;
+    }
+
+    /// <summary>
+    /// ★ 由标准文件行 Code 反查提取规则 Code（裁决 J4「1 文件 = 1 规则」的落地关键）。
+    /// </summary>
+    /// <para><b>映射链</b>：<c>cert_standard_directory_file.StandardFileCode</c>（模板行 Code）
+    /// → <c>cert_doc_extraction_rule.StandardFileCode</c> → <c>cert_doc_extraction_rule.Code</c>。</para>
+    /// <para><b>为什么必然唯一</b>：<c>uk_rule_scope(OrgCode, StandardCode, StageCode, StandardFileCode)</c>
+    /// 是唯一索引（实测 2026-09-30），故同一 <c>StandardFileCode</c> 最多一条规则。</para>
+    /// <param name="standardFileCode">模板行 Code；为空或查不到规则时返回 <c>""</c>（调用方回退按文件归档）</param>
+    private async Task<string> ResolveRuleCodeAsync(string? standardFileCode)
+    {
+        if (string.IsNullOrWhiteSpace(standardFileCode)) return "";
+
+        var rules = (await _db.GetListAsync<DocExtractionRule>(x =>
+            x.StandardFileCode == standardFileCode && !x.IsDeleted)).Data ?? new List<DocExtractionRule>();
+
+        if (rules.Count == 0) return "";
+        if (rules.Count > 1)
+            _logger.LogWarning(
+                "[EnterpriseFile] standardFileCode={Sfc} 命中 {N} 条提取规则（uk_rule_scope 应保证唯一），取第一条",
+                standardFileCode, rules.Count);
+
+        return rules[0].Code ?? "";
     }
 
     /// <summary>操作留痕（只追加，不修改不删除）。失败不阻断业务。</summary>
@@ -2157,6 +2377,14 @@ public class StandardDirectoryFolderView
 
 public class StandardDirectoryFileView
 {
+    /// <summary>
+    /// ★ 提取状态五态（2026-09-30 用户裁决，页面「提取状态」列唯一口径）：
+    /// <c>not_configured</c> 未配置（四元组无可用规则，不算失败）· <c>queued</c> 提取中（文件资源锁被占用）·
+    /// <c>extracted</c> 已提取 · <c>failed</c> 提取失败（有规则但执行失败：文档与规则不匹配 / 无法解析 / AI 返回空）·
+    /// <c>pending</c> 未提取（尚未跑过）。
+    /// </summary>
+    public string ExtractState { get; set; } = "pending";
+
     public string Code { get; set; } = "";
     /// <summary>标准 Code（冗余列）——前端局部刷新按它定位标准 Tab</summary>
     public string? StandardCode { get; set; }
@@ -2183,10 +2411,38 @@ public class StandardDirectoryFileView
     public string? MarkdownStatus { get; set; }
     public string? MarkdownMessage { get; set; }
     public string? ExtractStatus { get; set; }
+    /// <summary>★ 提取失败/跳过原因（页面 tooltip 用；成功时是「提取字段 N 个、表格 M 张」）</summary>
+    public string? ExtractMessage { get; set; }
     /// <summary>缺失/上传中/已上传/转换中/已就绪/转换失败/已移除（01 §5.1）</summary>
     public string Status { get; set; } = "";
     public System.DateTime? UpdateTime { get; set; }
     public System.DateTime? CreateTime { get; set; }
+}
+
+public static class ExtractStateRule
+{
+    /// <summary>五态判定（与服务端组装同一逻辑，供复用/测试）。</summary>
+    public static string Of(string? code, string? rawExtractStatus,
+        System.Collections.Generic.Dictionary<string, CertPlatform.Admin.Services.DocExtraction.ExtractionSlot> ruleMap,
+        System.Collections.Generic.HashSet<string> lockedFiles)
+    {
+        var c = code ?? "";
+        // ★ 排队/执行中优先：资源锁在手时 DB 里可能还是上一轮的终态（尤其重试期间）
+        if (lockedFiles.Contains(c)) return "queued";
+
+        // ★★ 2026-09-30 用户裁决：直接读后端状态，不再依赖 ruleMap 命中。
+        //   旧实现只在 resolver 覆盖到该行时才判 not_configured，未覆盖的行即使后端已是
+        //   skipped 也会落到 pending（页面显示「未提取」）—— 这是历史文件看起来「未提取」的真因之一。
+        //   同时 failed 独立成态：「有规则但执行失败」必须与「无规则」区分开。
+        var display = EnterpriseExtractStatus.ForDisplay(rawExtractStatus);
+        if (display == EnterpriseExtractStatus.Failed) return "failed";
+        if (display == EnterpriseExtractStatus.Skipped) return "not_configured";
+        if (display == EnterpriseExtractStatus.Completed) return "extracted";
+
+        // 兜底：resolver 有明确结论且无可用规则 ⇒ 未配置（字典缺失 = 该行未参与判定，不误报）
+        if (ruleMap.TryGetValue(c, out var slot) && string.IsNullOrEmpty(slot.RuleCode)) return "not_configured";
+        return "pending";
+    }
 }
 
 public class StandardDirectorySummary

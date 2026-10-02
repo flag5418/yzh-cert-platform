@@ -112,8 +112,11 @@ assert '.code == 200 or .code == 400' "code=200 或 400（文件不存在时预�
 # ============================================================
 sec "7. POST save - 保存规则"
 # ============================================================
+# S0（10 号 §三）：规则带机构维度 —— fileCode 不是真实目录文件行时推不出 OrgCode，
+# 必须显式传 orgCode（否则后端拒绝保存：无法确定规则所属机构）。
 code=$(req POST "$API/save" '{
   "fileCode":"FL-test-save",
+  "orgCode":"TEST-ORG",
   "skill":"word",
   "fields":[{"name":"企业名称","code":"companyName","nameEn":"companyName","dataType":"string","isRequired":true,"isManual":false,"isAiRecommended":true}],
   "tables":[{"name":"股东信息","code":"shareholderInfo","columns":[{"name":"姓名","code":"name","dataType":"string","isRequired":true}],"isAiRecommended":true}],

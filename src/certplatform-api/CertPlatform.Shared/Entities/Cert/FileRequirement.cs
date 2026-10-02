@@ -60,5 +60,13 @@ namespace CertPlatform.Shared.Entities.Cert
         [StringLength(36)]
         [SugarColumn(Length = 36, IsNullable = true)]
         public string? StandardCode { get; set; }
+
+        /// <summary>
+        /// 所属认证机构 Code（DB 列 OrgCode varchar(50) 已存在，实体此前缺失）。
+        /// <para>提取规则四元组作用域回退用：FR 模板 Code（FR-xxx）不是目录文件行时，机构取自本列。</para>
+        /// </summary>
+        [StringLength(50)]
+        [SugarColumn(Length = 50, IsNullable = true)]
+        public string? OrgCode { get; set; }
     }
 }

@@ -1,6 +1,6 @@
 -- ============================================================
 -- 全量表结构 DDL（基准定义）
--- 更新：2026-09-23
+-- 更新：2026-10-02
 --
 -- ★ 字符集/排序规则铁律（`项目全局规则.md` §十六 铁律八）：
 --   全库统一 `utf8mb4` + `utf8mb4_general_ci`。
@@ -12,6 +12,12 @@
 -- ★ 2026-09-23 修正记录：
 --   本文件原有 40 处 `CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci`（`Remark` 列），
 --   是全库 37 个 utf8mb3 列的**源头**。已全部改为 `utf8mb4_general_ci`。
+--
+-- ★ 2026-10-02 删表记录：
+--   删除 `yzh_field_config` / `yzh_page_config`（旧 Vol 框架「页面级 / 字段级 UI 配置表」）。
+--   理由：空表 + 死实体（实体类已同步删除）+ 新架构配置驱动已改为反射驱动
+--   （`YzhControllerBase.GetConfigCore()` 由实体类型反射生成，从不读 DB 配置表）。
+--   详见 scripts/db/fix/drop-dead-config-tables-2026-10-02.sql。
 -- ============================================================
 
 -- 连接排序规则：决定视图内「字面量派生列」的 collation，勿删
@@ -3000,99 +3006,6 @@ CREATE TABLE `wf_workflow_execution_log` (
   KEY `idx_started_at` (`StartedAt`),
   CONSTRAINT `fk_wlog_workflow` FOREIGN KEY (`WorkflowCode`) REFERENCES `wf_workflow_definition` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='工作流执行日志'
-
-
--- ============================================================
--- Table: yzh_field_config
--- ============================================================
-CREATE TABLE `yzh_field_config` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `page_key` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `field_name` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `field_alias` varchar(100) COLLATE utf8mb4_general_ci DEFAULT '',
-  `xs_flag` tinyint DEFAULT '1',
-  `column_sxh` int DEFAULT '0',
-  `column_title` varchar(100) COLLATE utf8mb4_general_ci DEFAULT '',
-  `column_width` int DEFAULT '120',
-  `column_fixed` varchar(10) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `sortable` tinyint DEFAULT '1',
-  `column_formatter` varchar(50) COLLATE utf8mb4_general_ci DEFAULT '',
-  `show_overflow` tinyint DEFAULT '1',
-  `align` varchar(10) COLLATE utf8mb4_general_ci DEFAULT 'left',
-  `bc_flag` tinyint DEFAULT '1',
-  `form_title` varchar(100) COLLATE utf8mb4_general_ci DEFAULT '',
-  `control_type` varchar(20) COLLATE utf8mb4_general_ci DEFAULT 'input',
-  `grid_row` int DEFAULT '0',
-  `grid_col` int DEFAULT '0',
-  `grid_row_span` int DEFAULT '1',
-  `grid_col_span` int DEFAULT '1',
-  `required` tinyint DEFAULT '0',
-  `maxlength` int DEFAULT '0',
-  `placeholder` varchar(200) COLLATE utf8mb4_general_ci DEFAULT '',
-  `default_value` varchar(500) COLLATE utf8mb4_general_ci DEFAULT '',
-  `readonly` tinyint DEFAULT '0',
-  `disabled` tinyint DEFAULT '0',
-  `precision` int DEFAULT NULL,
-  `min_val` decimal(18,6) DEFAULT NULL,
-  `max_val` decimal(18,6) DEFAULT NULL,
-  `textarea_rows` int DEFAULT '3',
-  `data_key` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `remote_url` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `group_index` int DEFAULT '0',
-  `search_flag` tinyint DEFAULT '0',
-  `search_title` varchar(100) COLLATE utf8mb4_general_ci DEFAULT '',
-  `search_placeholder` varchar(100) COLLATE utf8mb4_general_ci DEFAULT '',
-  `search_control_type` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `search_width` int DEFAULT '180',
-  `org_code` varchar(50) COLLATE utf8mb4_general_ci DEFAULT '',
-  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT '',
-  `code` varchar(64) COLLATE utf8mb4_general_ci NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `code` (`code`),
-  UNIQUE KEY `uk_page_field` (`page_key`,`field_name`,`org_code`),
-  KEY `idx_page_key` (`page_key`),
-  KEY `idx_field_name` (`field_name`)
-) ENGINE=InnoDB AUTO_INCREMENT=49 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
-
-
--- ============================================================
--- Table: yzh_page_config
--- ============================================================
-CREATE TABLE `yzh_page_config` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `page_key` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `page_title` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
-  `entity_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
-  `table_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
-  `controller_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
-  `key_field` varchar(50) COLLATE utf8mb4_general_ci DEFAULT 'Id',
-  `key_field_type` varchar(10) COLLATE utf8mb4_general_ci DEFAULT 'number',
-  `sort_field` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `sort_order` varchar(5) COLLATE utf8mb4_general_ci DEFAULT 'desc',
-  `dialog_width` int DEFAULT '960',
-  `dialog_max_height` varchar(20) COLLATE utf8mb4_general_ci DEFAULT '85vh',
-  `dialog_label_width` int DEFAULT '120',
-  `row_height` varchar(10) COLLATE utf8mb4_general_ci DEFAULT 'default',
-  `stripe` tinyint DEFAULT '1',
-  `show_row_number` tinyint DEFAULT '1',
-  `search_mode` varchar(10) COLLATE utf8mb4_general_ci DEFAULT 'fixed',
-  `visible_buttons` text COLLATE utf8mb4_general_ci,
-  `show_action_column` tinyint DEFAULT '1',
-  `checkbox_selection` tinyint DEFAULT '1',
-  `incremental_update` tinyint DEFAULT '1',
-  `org_code` varchar(50) COLLATE utf8mb4_general_ci DEFAULT '',
-  `is_active` tinyint DEFAULT '1',
-  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `remark` varchar(500) COLLATE utf8mb4_general_ci DEFAULT '',
-  `code` varchar(64) COLLATE utf8mb4_general_ci NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `code` (`code`),
-  UNIQUE KEY `uk_page_org` (`page_key`,`org_code`),
-  KEY `idx_page_key` (`page_key`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 
 
 -- ============================================================

@@ -17,6 +17,7 @@ import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { YzhTable } from '@yzh-core'
 import { Calendar, OfficeBuilding, Refresh, Search, Upload, UploadFilled } from '@element-plus/icons-vue'
 import { ResourcesLogic, type ResourceTreeNode } from './logic'
+import type { FileSlot } from '@share/api'
 import StandardFolderTree from './components/StandardFolderTree.vue'
 
 const logic = new ResourcesLogic()
@@ -177,17 +178,14 @@ function onReplacePick(file: any) {
             </div>
           </div>
 
-          <!-- 不可配置标准：Toast 会飘走，这里必须留一条常驻说明，否则用户只能看到「少了几个标准」 -->
+          <!-- 不可配置标准：Toast 会飘走，这里留一条常驻说明。★ 2026-09-30 精简：只留一句处置，去掉给管理员看的诊断 -->
           <div v-if="logic.unconfiguredStandards.value.length" class="unconfigured-bar">
             <el-alert type="warning" :closable="false" show-icon>
               <template #title>
-                以下标准在本阶段暂无资料目录（不会出现在下方 Tab 中）
+                以下标准暂无资料目录（不会出现在下方 Tab 中）
               </template>
               <div v-for="(msg, i) in logic.unconfiguredStandards.value" :key="i" class="unconfigured-bar__item">{{ msg }}</div>
-              <div class="unconfigured-bar__hint">
-                原因：管理端「标准目录管理」还没有为该机构配这些标准的目录模板。
-                <b>关联本身是好的、不必重建</b> —— 模板补齐后刷新本页，资料目录与槽位会自动生成。
-              </div>
+              <div class="unconfigured-bar__hint">目录模板就绪后，刷新本页即自动生成</div>
             </el-alert>
           </div>
 
@@ -238,7 +236,7 @@ function onReplacePick(file: any) {
 
                 <el-empty
                   v-if="logic.folderTreeOf(std.StandardCode).length === 0"
-                  description="管理端还没有为该标准配目录文件定义（关联有效；补齐模板后刷新本页即自动生成槽位）"
+                  description="该标准暂无资料目录，模板就绪后刷新本页自动生成"
                   :image-size="60"
                 />
                 <StandardFolderTree
@@ -248,13 +246,13 @@ function onReplacePick(file: any) {
                   :data-revision="logic.dataRevision.value"
                   :panel-height="(n: number) => logic.panelHeight(n)"
                   :busy="logic.queueBusy.value || logic.uploading.value"
-                  @replace="logic.openReplaceDialog"
-                  @remove="logic.openDeleteDialog"
-                  @versions="logic.openVersions"
-                  @extract="logic.handleTriggerExtract"
-                  @result="logic.handleViewResult"
-                  @preview="logic.previewRow"
-                  @download="logic.downloadRow"
+                  @replace="(r: FileSlot) => logic.openReplaceDialog(r)"
+                  @remove="(r: FileSlot) => logic.openDeleteDialog(r)"
+                  @versions="(r: FileSlot) => logic.openVersions(r)"
+                  @extract="(r: FileSlot) => logic.handleTriggerExtract(r)"
+                  @result="(r: FileSlot) => logic.handleViewResult(r)"
+                  @preview="(r: FileSlot) => logic.previewRow(r)"
+                  @download="(r: FileSlot) => logic.downloadRow(r)"
                   @upload="(folderCode: string) => { logic.openSingleUpload(std.StandardCode, folderCode); }"
                 />
               </el-tab-pane>
@@ -300,9 +298,9 @@ function onReplacePick(file: any) {
       </div>
 
       <el-alert type="info" :closable="false" show-icon class="dialog-tip">
-        同名文件按 M0 文件夹路径 / M1 文件名精确 / M2 主词包含 / M3 目录+扩展名+名称相关度 顺序匹配；
-        M3 属「分不准的兜底」，<b>默认不勾选</b>，需你确认后手动勾上；
-        未命中的文件不进任何标准（不自动丢弃、不塞入各标准 —— 需求 3 硬约束）
+        按「文件夹路径（M0）→ 文件名精确（M1）→ 主词包含（M2）→ 目录+扩展名（M3）」的顺序自动匹配槽位。
+        M3 是分不准时的兜底，<b>默认不勾选</b>，请你确认后再勾。
+        没匹配上的文件不会进入任何标准。
       </el-alert>
 
       <el-button v-if="logic.singleUploadFiles.value.length" size="small" type="primary"
@@ -412,8 +410,8 @@ function onReplacePick(file: any) {
             <el-tag size="small" type="info">已指派 {{ logic.assignedUnmatched.length }}</el-tag>
           </div>
           <el-alert type="info" :closable="false" show-icon class="dialog-tip">
-            这些文件在所有标准里都没有可信的槽位归属（例如营业执照、体系证书等 PDF —— 模板未定义该类文件）。
-            需要入库的话，请指定「标准 + 文件夹」，会以模板外文件落库（<b>StandardFileCode 留空</b>，不占必传槽位）。
+            这些文件不属于任何标准的资料目录（例如营业执照、体系证书这类通用文件）。
+            需要存档的话，请指定「标准 + 文件夹」，会作为补充资料保存（不占用必传项）。
           </el-alert>
           <div v-for="u in logic.batchPlanUnmatched.value" :key="u.Key" class="plan-row assign-row">
             <span class="plan-row__file" :title="u.RelativePath || u.FileName">{{ u.FileName }}</span>

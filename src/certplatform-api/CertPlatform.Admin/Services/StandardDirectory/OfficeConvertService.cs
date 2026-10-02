@@ -560,4 +560,10 @@ public class FileConvertPayload
 
     /// <summary>阶段编码（透传给 doc_extract payload）</summary>
     public string StageCode { get; set; } = "";
+
+    /// <summary>
+    /// 转换成功后是否自动追加 <c>doc_extract</c> 提取任务（10 号 图 3 分流，S2；D4 默认 true）。
+    /// <para><c>false</c> = 只转换不提取，槽位状态留 <c>none</c>（原因写 ExtractMessage）。</para>
+    /// </summary>
+    public bool AutoExtract { get; set; } = true;
 }

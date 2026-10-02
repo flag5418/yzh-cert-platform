@@ -13,10 +13,17 @@ using YZH.Core.Stand.Extensions;
 using YZH.Core.Stand.Interfaces;
 using CertPlatform.Shared.Constants;
 using CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Entities.Dir;
 using CertPlatform.Shared.Entities.Doc;
 
 namespace CertPlatform.Admin.Services.DocExtraction;
+
+/// <summary>
+/// 提取规则四元组作用域（S0，10 号 §三）：规则键 + 机构 + 标准 + 阶段。
+/// <para><c>RuleKey</c> = 规则键（模板文件行 Code / FR 模板 Code）；<c>OrgCode</c> = 模板所属机构。</para>
+/// </summary>
+public sealed record RuleScope(string RuleKey, string OrgCode, string StandardCode, string StageCode);
 
 /// <summary>
 /// 文档提取规则核心服务（业务层 #17 移植，partial：主体 + AI 编排）
@@ -31,6 +38,8 @@ public partial class DocExtractionRuleService
     protected readonly CertPlatform.Shared.DocExtraction.DocumentConvertClient _convertClient;
     protected readonly CertPlatform.Shared.DocExtraction.LlmInvokeService _llm;
     protected readonly IObjectStorage _storage;
+    /// <summary>S2③ 提取结果版本店（归档/回活/读取唯一口）</summary>
+    private readonly EnterpriseExtractionResultStore _resultStore;
 
     /// <summary>YZH 标准企业编码（提取结果落库目标）——已收敛单点，权威定义见 <see cref="YzhVirtualEnterprise"/></summary>
     public const string YzhStandardEnterpriseCode = YzhVirtualEnterprise.Code;
@@ -47,8 +56,10 @@ public partial class DocExtractionRuleService
         CertPlatform.Shared.DocExtraction.DocumentConvertClient convertClient,
         CertPlatform.Shared.DocExtraction.LlmInvokeService llm,
         IConfiguration configuration,
-        ILogger<DocExtractionRuleService> logger)
+        ILogger<DocExtractionRuleService> logger,
+        EnterpriseExtractionResultStore resultStore)
     {
+        _resultStore = resultStore;
         _db = db;
         _storage = storage;
         _convertClient = convertClient;
@@ -114,32 +125,31 @@ public partial class DocExtractionRuleService
         if (request == null || string.IsNullOrWhiteSpace(request.FileCode))
             return (false, "文件编码不能为空");
 
-        // 1. 查找或创建规则（按 StandardFileCode；准则 A：存在性=Code，不靠 Id 分流）
-        var rule = (await _db.GetOneAsync<DocExtractionRule>(x => x.StandardFileCode == request.FileCode)).Data;
-        var isNew = rule == null;
-
-        // 1.1 标准/阶段编码后端权威回填（页面不传，同 Skill 单一约束原则）：
-        //     fileCode → cert_standard_directory_file.ConfigCode → 目录配置 StandardCode/StageCode
-        var standardCode = request.StandardCode;
-        var stageCode = request.StageCode;
-        if (string.IsNullOrWhiteSpace(standardCode) || string.IsNullOrWhiteSpace(stageCode))
+        // 1. 四元组作用域（S0，10 号 §三）：规则键 + 机构 + 标准 + 阶段。
+        //    页面只传 fileCode，机构/标准/阶段一律后端权威推导（同 Skill 单一约束原则）。
+        var scope = await ResolveRuleScopeAsync(request.FileCode);
+        if (string.IsNullOrWhiteSpace(scope.OrgCode))
         {
-            var dirFile = (await _db.GetOneAsync<StandardDirectoryFile>(x => x.Code == request.FileCode)).Data;
-            var dirConfig = dirFile == null
-                ? null
-                : (await _db.GetOneAsync<StandardDirectoryConfig>(x => x.Code == dirFile.ConfigCode)).Data;
-            if (dirConfig != null)
-            {
-                if (string.IsNullOrWhiteSpace(standardCode)) standardCode = dirConfig.StandardCode;
-                if (string.IsNullOrWhiteSpace(stageCode)) stageCode = dirConfig.StageCode;
-            }
+            // 后端推导不到时才用页面显式值兜底；两者都空 ⇒ 无法按机构追溯，拒绝保存
+            var fallbackOrg = (request.OrgCode ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(fallbackOrg))
+                return (false, "无法确定规则所属机构（文件所属目录配置缺少 OrgCode）");
+            scope = scope with { OrgCode = fallbackOrg };
         }
+        var orgCode = scope.OrgCode;
+        var standardCode = string.IsNullOrWhiteSpace(request.StandardCode) ? scope.StandardCode : request.StandardCode;
+        var stageCode = string.IsNullOrWhiteSpace(request.StageCode) ? scope.StageCode : request.StageCode;
+
+        // 1.1 查找规则（准则 A：存在性 = 四元组，不靠 Id 分流）
+        var rule = await GetRuleByScopeAsync(orgCode, standardCode, stageCode, request.FileCode);
+        var isNew = rule == null;
 
         if (isNew)
         {
             rule = new DocExtractionRule
             {
                 Code = Guid.NewGuid().ToString(),
+                OrgCode = orgCode,
                 StandardFileCode = request.FileCode,
                 StandardCode = standardCode,
                 StageCode = stageCode,
@@ -148,10 +158,14 @@ public partial class DocExtractionRuleService
         }
         else
         {
-            // 非空才覆盖：回填失败时保留原值，避免把已有关联清空
+            // 非空才覆盖：推导失败时保留原值，避免把已有关联清空
+            rule.OrgCode = orgCode;
             if (!string.IsNullOrWhiteSpace(standardCode)) rule.StandardCode = standardCode;
             if (!string.IsNullOrWhiteSpace(stageCode)) rule.StageCode = stageCode;
         }
+
+        // P3：保存前快照（规则变更 → 自动标记待重提取的 diff 依据；isNew 无旧快照）
+        var before = isNew ? null : await SnapshotRuleAsync(rule);
 
         // 2. 更新规则信息（技能类型后端权威推导）
         rule.Skill = ResolveSkill(request.FileCode);
@@ -259,9 +273,23 @@ public partial class DocExtractionRuleService
             await SyncExtractionResultToB08B09Async(rule, request);
 
             tx.Commit();
-            _logger.LogInformation("[DocExtractionRule] 保存成功: {FileCode}, fields={F}, tables={T}",
-                request.FileCode, request.Fields?.Count ?? 0, request.Tables?.Count ?? 0);
-            return (true, "保存成功");
+
+            // P3（2026-09-29 用户裁决）：规则内容实质变更 ⇒ 自动标记相关企业文件「待重新提取」。
+            //   实质变更 = 字段/表格定义变 OR Prompt 变 OR 可用性由可用转停用；不自动入队（改完由用户决定何时提取）。
+            //   新增规则（isNew）不标：原本就无规则、无结果可言；回执附影响面供管理员感知。
+            var marked = 0;
+            if (before != null)
+            {
+                var after = await SnapshotRuleAsync(rule);   // 事务已提交：读到的是新定义
+                var contentChanged = before.DefFingerprint != after.DefFingerprint || before.Prompt != after.Prompt;
+                var usabilityLost = IsUsableStatus(before.Status) && !IsUsableStatus(after.Status);
+                if (contentChanged || usabilityLost)
+                    marked = await MarkFilesStaleAsync(rule, "提取规则已更新，待重新提取");
+            }
+
+            _logger.LogInformation("[DocExtractionRule] 保存成功: {FileCode}, fields={F}, tables={T}, marked={M}",
+                request.FileCode, request.Fields?.Count ?? 0, request.Tables?.Count ?? 0, marked);
+            return (true, marked > 0 ? $"保存成功，已标记 {marked} 个文档待重新提取" : "保存成功");
         }
         catch (Exception ex)
         {
@@ -369,9 +397,100 @@ public partial class DocExtractionRuleService
         }
     }
 
-    /// <summary>按标准文件编码取提取规则（企业提取执行器用，G-2c）。</summary>
-    public async Task<DocExtractionRule?> GetRuleByStandardFileCodeAsync(string standardFileCode)
-        => (await _db.GetOneAsync<DocExtractionRule>(x => x.StandardFileCode == standardFileCode)).Data;
+    /// <summary>
+    /// 由文件行推导提取规则四元组（S0 唯一作用域入口，10 号 §三）。
+    /// <para>规则键 <c>RuleKey</c>：企业槽位行取 <c>StandardFileCode</c>（模板文档 Code），模板行取自身 Code。</para>
+    /// <para>标准/阶段以**模板文件行为准**（规则在模板域保存，企业槽位行同源于模板配置）。</para>
+    /// <para>机构 <c>OrgCode</c> = 模板文件行 ConfigCode → <c>cert_standard_directory_config.OrgCode</c>
+    /// （子表经 ConfigCode 间接归属，与 config 表「子表不加机构列」约定一致）。</para>
+    /// </summary>
+    public async Task<RuleScope> ResolveRuleScopeAsync(StandardDirectoryFile file)
+    {
+        if (file == null) return new RuleScope("", "", "", "");
+
+        var ruleKey = string.IsNullOrEmpty(file.StandardFileCode) ? file.Code ?? "" : file.StandardFileCode!;
+
+        // ① 模板行 = 规则键所属行（模板行自身即模板行，不必回查）
+        var templateRow = ruleKey == file.Code ? file
+            : (await _db.GetOneAsync<StandardDirectoryFile>(x => x.Code == ruleKey)).Data;
+
+        // ② 标准/阶段以模板行为准；模板行缺失时退回文件行
+        var standardCode = templateRow?.StandardCode ?? "";
+        var stageCode = templateRow?.StageCode ?? "";
+        if (string.IsNullOrEmpty(standardCode)) standardCode = file.StandardCode ?? "";
+        if (string.IsNullOrEmpty(stageCode)) stageCode = file.StageCode ?? "";
+
+        // ③ 机构 = 模板行所属配置的 OrgCode（缺失时用文件行自身的配置）
+        var orgCode = "";
+        var configCode = string.IsNullOrEmpty(templateRow?.ConfigCode) ? file.ConfigCode : templateRow!.ConfigCode;
+        if (!string.IsNullOrEmpty(configCode))
+        {
+            var config = (await _db.GetOneAsync<StandardDirectoryConfig>(x => x.Code == configCode)).Data;
+            if (config != null)
+            {
+                orgCode = config.OrgCode ?? "";
+                if (string.IsNullOrEmpty(standardCode)) standardCode = config.StandardCode;
+                if (string.IsNullOrEmpty(stageCode)) stageCode = config.StageCode;
+            }
+        }
+
+        // ④ 兜底：文件要求模板（FR-xxx 不是目录文件行）—— 本表自带 OrgCode/StandardCode
+        if (string.IsNullOrEmpty(orgCode))
+        {
+            var fr = (await _db.GetOneAsync<FileRequirement>(x => x.Code == ruleKey)).Data;
+            if (fr != null)
+            {
+                orgCode = fr.OrgCode ?? "";
+                if (string.IsNullOrEmpty(standardCode)) standardCode = fr.StandardCode ?? "";
+                if (string.IsNullOrEmpty(stageCode))
+                {
+                    var folder = (await _db.GetOneAsync<StandardDirectoryFolder>(x => x.Code == (fr.FolderCode ?? ""))).Data;
+                    var frConfig = folder == null ? null
+                        : (await _db.GetOneAsync<StandardDirectoryConfig>(x => x.Code == folder.ConfigCode)).Data;
+                    if (frConfig != null) stageCode = frConfig.StageCode;
+                }
+            }
+        }
+
+        return new RuleScope(ruleKey, orgCode, standardCode, stageCode);
+    }
+
+    /// <summary>按文件编码推导作用域后取规则（<paramref name="fileCode"/> 即规则键来源）。</summary>
+    public async Task<RuleScope> ResolveRuleScopeAsync(string fileCode)
+    {
+        if (string.IsNullOrWhiteSpace(fileCode)) return new RuleScope("", "", "", "");
+        var file = (await _db.GetOneAsync<StandardDirectoryFile>(x => x.Code == fileCode)).Data;
+        if (file == null) return new RuleScope(fileCode, "", "", "");
+        return await ResolveRuleScopeAsync(file);
+    }
+
+    /// <summary>
+    /// ★ 按四元组取规则的**唯一入口**（S0）：机构 + 标准 + 阶段 + 规则键。
+    /// <para>⛔ 禁止只按 <c>StandardFileCode</c> 单列查规则 —— 同一文档 Code 在不同机构下是不同规则。</para>
+    /// </summary>
+    public async Task<DocExtractionRule?> GetRuleByScopeAsync(
+        string orgCode, string standardCode, string stageCode, string standardFileCode)
+    {
+        if (string.IsNullOrWhiteSpace(standardFileCode)) return null;
+        return (await _db.GetOneAsync<DocExtractionRule>(x =>
+            x.OrgCode == orgCode && x.StandardCode == standardCode &&
+            x.StageCode == stageCode && x.StandardFileCode == standardFileCode)).Data;
+    }
+
+    /// <summary>由文件编码推导四元组后取规则（管理端详情/删除/AI 分析/验证用）。</summary>
+    public async Task<DocExtractionRule?> GetRuleByFileAsync(string fileCode)
+    {
+        if (string.IsNullOrWhiteSpace(fileCode)) return null;
+
+        var scope = await ResolveRuleScopeAsync(fileCode);
+        if (!string.IsNullOrWhiteSpace(scope.OrgCode))
+            return await GetRuleByScopeAsync(scope.OrgCode, scope.StandardCode, scope.StageCode, scope.RuleKey);
+
+        // 遗留兜底：文件行不存在（FR 模板缺失 / 历史测试 code）⇒ 推不出四元组，退回单列定位。
+        // 企业提取不走本方法（执行器按四元组严格口径），此处仅供管理端详情/删除/AI 配置期使用。
+        var legacy = (await _db.GetListAsync<DocExtractionRule>(x => x.StandardFileCode == fileCode)).Data;
+        return legacy?.FirstOrDefault();
+    }
 
     // ========================================================
     // 企业域落库（G-2c 写入段，02 号 V-P1 甲路线：旧行 IsValid=0 归档，不物理删）
@@ -381,24 +500,25 @@ public partial class DocExtractionRuleService
     /// 提取结果落 B-08/B-09 **企业域**（真实 EnterpriseCode + 真实 VersionNumber）。
     /// <para>与 <see cref="SyncExtractionResultToB08B09Async"/>（模板域：物理删重写）的关键差异：
     /// 企业域按版本链审计（02 号 §二），历史行必须归档保留 —— 先 UPDATE IsValid=0 归档同键旧行，再插新行。</para>
-    /// <para>⚠️ B-08/B-09 实体未声明 IsValid（ORM 自动过滤不生效），归档/读取过滤一律走原生 SQL 条件。</para>
+    /// <para>⚠️ B-08/B-09 实体未声明 IsValid 接口（ORM 自动过滤不生效），归档/读取一律走版本店的原生条件。</para>
+    /// <para><b>D3</b>：<c>StandardCode</c>/<c>StageCode</c> 取<b>槽位文件行</b>（调用方传入），
+    /// ⛔ 不取规则 —— 规则四元组可跨标准/阶段复用，取规则会写错列（§七② 索引将指不到东西）。</para>
+    /// <para><b>D5</b>：归档走 <c>VersionNumber &lt;= 当前版本</c> 精确谓词（只翻 IsValid，行数不减）。</para>
     /// </summary>
+    /// <param name="standardCode">槽位行的标准编码（D3；空则回退规则值）</param>
+    /// <param name="stageCode">槽位行的阶段编码（D3；空则回退规则值）</param>
     public async Task<(int FieldCount, int TableCount)> SaveEnterpriseExtractionResultsAsync(
         DocExtractionRule rule, ExtractionData extractionData,
-        string enterpriseCode, string fileCode, int versionNumber)
+        string enterpriseCode, string fileCode, int versionNumber,
+        string standardCode = "", string stageCode = "")
     {
         var now = DateTime.Now;
         var standardFileCode = rule.StandardFileCode ?? "";
+        if (string.IsNullOrWhiteSpace(standardCode)) standardCode = rule.StandardCode ?? "";
+        if (string.IsNullOrWhiteSpace(stageCode)) stageCode = rule.StageCode ?? "";
 
-        // 1. 归档同 (企业, 文件) 旧行（IsValid=0），保留版本链
-        await _db.Client.Updateable<ExtractionResult>()
-            .SetColumns(x => new ExtractionResult { IsValid = 0, UpdateTime = now })
-            .Where(x => x.EnterpriseCode == enterpriseCode && x.FileCode == fileCode && x.IsValid == 1)
-            .ExecuteCommandAsync();
-        await _db.Client.Updateable<TableExtractionResult>()
-            .SetColumns(x => new TableExtractionResult { IsValid = 0, UpdateTime = now })
-            .Where(x => x.EnterpriseCode == enterpriseCode && x.FileCode == fileCode && x.IsValid == 1)
-            .ExecuteCommandAsync();
+        // 1. 归档同 (企业, 文件)、版本 <= 当前版本的活跃行（IsValid=0 保留版本链，行数不减）
+        await _resultStore.InvalidateActiveAsync(enterpriseCode, fileCode, versionNumber);
 
         // 2. 字段中文名映射（规则定义为准；ExtractionData 键已由 MapOutputs 归一为 field_code）
         var fieldDefs = (await _db.GetListAsync<DocFieldDef>(x => x.RuleCode == rule.Code)).Data ?? new();
@@ -417,8 +537,8 @@ public partial class DocExtractionRuleService
                 Code = Guid.NewGuid().ToString("N"),
                 EnterpriseCode = enterpriseCode,
                 StandardFileCode = standardFileCode,
-                StandardCode = rule.StandardCode,
-                StageCode = rule.StageCode,
+                StandardCode = standardCode,
+                StageCode = stageCode,
                 FileCode = fileCode,
                 VersionNumber = versionNumber,
                 RuleCode = rule.Code ?? "",
@@ -444,8 +564,8 @@ public partial class DocExtractionRuleService
                 Code = Guid.NewGuid().ToString("N"),
                 EnterpriseCode = enterpriseCode,
                 StandardFileCode = standardFileCode,
-                StandardCode = rule.StandardCode,
-                StageCode = rule.StageCode,
+                StandardCode = standardCode,
+                StageCode = stageCode,
                 FileCode = fileCode,
                 VersionNumber = versionNumber,
                 RuleCode = rule.Code ?? "",
@@ -470,7 +590,8 @@ public partial class DocExtractionRuleService
     /// </summary>
     public async Task<RuleDetailResponse?> GetRuleDetailAsync(string standardFileCode)
     {
-        var rule = (await _db.GetOneAsync<DocExtractionRule>(x => x.StandardFileCode == standardFileCode)).Data;
+        // S0：四元组定位（文件编码 → 机构/标准/阶段 → 规则），不再单列查 StandardFileCode
+        var rule = await GetRuleByFileAsync(standardFileCode);
         if (rule == null) return null;
 
         // 读取 YZH 标准企业提取结果（B-08 字段值 / B-09 表格行），保存后重新进入可完整回显
@@ -545,6 +666,7 @@ public partial class DocExtractionRuleService
             Id = rule.Id,
             Code = rule.Code,
             StandardFileCode = rule.StandardFileCode ?? "",
+            OrgCode = rule.OrgCode ?? "",
             StandardCode = rule.StandardCode ?? "",
             StageCode = rule.StageCode ?? "",
             Skill = rule.Skill,
@@ -564,8 +686,12 @@ public partial class DocExtractionRuleService
 
     public async Task<bool> DeleteRuleAsync(string standardFileCode)
     {
-        var rule = (await _db.GetOneAsync<DocExtractionRule>(x => x.StandardFileCode == standardFileCode)).Data;
+        // S0：四元组定位（避免误删另一机构同文档 Code 的规则）
+        var rule = await GetRuleByFileAsync(standardFileCode);
         if (rule == null) return false;
+
+        // P3：删除规则 = 该四元组不再可用 ⇒ 先标记相关企业文件待重提取（结果归档 + 状态回 none）
+        await MarkFilesStaleAsync(rule, "提取规则已删除，待重新配置后提取");
 
         // 级联删除字段和表格定义
         var fields = (await _db.GetListAsync<DocFieldDef>(x => x.RuleCode == rule.Code)).Data ?? new();
@@ -591,6 +717,99 @@ public partial class DocExtractionRuleService
 
         await _db.DeleteByCodeAsync<DocExtractionRule>(rule.Code);
         return true;
+    }
+
+    // ========================================================
+    // P3：规则变更 → 自动标记待重提取（2026-09-29 用户裁决）
+    // ========================================================
+
+    /// <summary>保存前规则快照（Prompt / Status / 定义指纹），供保存后 diff。</summary>
+    private sealed record RuleSnapshot(string Prompt, string Status, string DefFingerprint);
+
+    /// <summary>规则内容是否可用（与 <see cref="ExtractionScopeResolver.IsUsableRule"/> 同口径）。</summary>
+    private static bool IsUsableStatus(string? status)
+        => status == "configured" || status == "passed";
+
+    private async Task<RuleSnapshot> SnapshotRuleAsync(DocExtractionRule rule)
+        => new(rule.Prompt ?? "", rule.Status ?? "", await DefFingerprintAsync(rule.Code));
+
+    /// <summary>
+    /// 字段 + 表格 + 列定义的稳定指纹（排序后拼接，直接字符串比较）。
+    /// <para>表小（每规则几十行以内），不做 hash ——  diff 失败时可用肉眼核对差异。</para>
+    /// </summary>
+    private async Task<string> DefFingerprintAsync(string? ruleCode)
+    {
+        var fields = (await _db.GetListAsync<DocFieldDef>(x => x.RuleCode == ruleCode)).Data ?? new();
+        var tables = (await _db.GetListAsync<DocTableDef>(x => x.RuleCode == ruleCode)).Data ?? new();
+        var tableCodes = tables.Select(t => t.Code).ToList();
+
+        var sb = new System.Text.StringBuilder();
+        foreach (var f in fields.OrderBy(x => x.FieldCode).ThenBy(x => x.Sort))
+            sb.Append("F|").Append(f.FieldCode).Append('|').Append(f.FieldName).Append('|')
+              .Append(f.DataType).Append('|').Append(f.Description).Append('|').Append(f.IsManual).Append(';');
+        foreach (var t in tables.OrderBy(x => x.TableCode).ThenBy(x => x.Sort))
+        {
+            sb.Append("T|").Append(t.TableCode).Append('|').Append(t.TableName).Append('|').Append(t.Description).Append(';');
+            var cols = tableCodes.Contains(t.Code)
+                ? (await _db.GetListAsync<DocTableFieldDef>(x => x.TableCode == t.Code)).Data ?? new()
+                : new List<DocTableFieldDef>();
+            foreach (var c in cols.OrderBy(x => x.ColumnCode).ThenBy(x => x.Sort))
+                sb.Append("C|").Append(c.ColumnCode).Append('|').Append(c.ColumnName).Append('|')
+                  .Append(c.DataType).Append(';');
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// ★ P3：标记该规则命中的企业文件「待重新提取」——归档活跃结果（版本店唯一口）+
+    /// <c>ExtractStatus='none'</c> + 原因落 <c>ExtractMessage</c>。<b>不自动入队</b>。
+    /// </summary>
+    /// <returns>实际标记的文件数</returns>
+    private async Task<int> MarkFilesStaleAsync(DocExtractionRule rule, string reason)
+    {
+        // 文件行无机构列 ⇒ 经 ConfigCode → StandardDirectoryConfig.OrgCode 间接归属（01 §3）
+        var rows = (await _db.GetListAsync<StandardDirectoryFile>(x =>
+                x.StandardCode == rule.StandardCode && x.StageCode == rule.StageCode &&
+                x.StandardFileCode == rule.StandardFileCode && x.IsValid == 1)).Data
+            ?? new List<StandardDirectoryFile>();
+
+        var cfgCodes = rows.Select(x => x.ConfigCode).Where(c => !string.IsNullOrEmpty(c)).Distinct().ToList();
+        var orgByCfg = cfgCodes.Count == 0
+            ? new Dictionary<string, string>()
+            : ((await _db.GetListAsync<StandardDirectoryConfig>()).Data ?? new List<StandardDirectoryConfig>())
+                .Where(c => cfgCodes.Contains(c.Code))
+                .GroupBy(c => c.Code)
+                .ToDictionary(g => g.Key, g => g.First().OrgCode ?? "");
+
+        var n = 0;
+        var now = DateTime.Now;
+        foreach (var row in rows)
+        {
+            // 只标「有活跃结果可作废」的行：completed 才有结果；pending/skipped 本来就无结果
+            if (row.ExtractStatus != EnterpriseExtractStatus.Completed) continue;
+            if (string.IsNullOrEmpty(row.EnterpriseCode)) continue;
+            if (row.EnterpriseCode == YzhStandardEnterpriseCode) continue;   // 模板行（虚拟企业域）不标
+            if (!orgByCfg.TryGetValue(row.ConfigCode ?? "", out var org) || org != rule.OrgCode) continue;
+
+            var ent = row.EnterpriseCode!;
+            // 归档尽力而为（结果可能已在别处作废 = 0 行）；completed 状态一律回 none ——
+            // 否则「显示已提取 + 结果读出来是空」两头不报错（与 3 态铁律同源的不一致态）
+            await _resultStore.InvalidateActiveAsync(ent, row.Code ?? "");
+
+            row.ExtractStatus = EnterpriseExtractStatus.None;
+            row.ExtractMessage = reason;
+            row.UpdateTime = now;
+            var upd = await _db.UpdateAsync(row,
+                nameof(StandardDirectoryFile.ExtractStatus),
+                nameof(StandardDirectoryFile.ExtractMessage),
+                nameof(StandardDirectoryFile.UpdateTime));
+            if (upd.Success) n++;
+        }
+
+        if (n > 0)
+            _logger.LogInformation("[DocExtractionRule] 规则变更标记: {OrgCode}/{StandardCode}/{StageCode}/{RuleKey} → {N} 个文档（{Reason}）",
+                rule.OrgCode, rule.StandardCode, rule.StageCode, rule.StandardFileCode, n, reason);
+        return n;
     }
 
     // ========================================================

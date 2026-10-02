@@ -107,7 +107,8 @@ namespace CertPlatform.Shared.Entities.Dir
         public string? ConvertStatus { get; set; }
 
         /// <summary>
-        /// 提取状态：none=未触发 / pending=入队等待 / processing=提取中 / completed=完成 / failed=失败
+        /// 提取状态（★ 2026-09-30 与 <see cref="DocExtraction.EnterpriseExtractStatus"/> 对齐为 4 态）：
+        /// <c>none</c>=未提取 / <c>completed</c>=已提取 / <c>failed</c>=有规则但执行失败 / <c>skipped</c>=无可用规则。
         /// <para>仅企业上传行（EnterpriseCode 有真实值）有意义；模板行恒为 NULL。</para>
         /// </summary>
         [SugarColumn(Length = 20)]

@@ -41,6 +41,11 @@ namespace CertPlatform.Shared.Entities.Doc
         [Required]
         public int VersionNumber { get; set; }
 
+        /// <summary>提取规则编码（<c>cert_doc_extraction_rule.Code</c>）
+        /// <para>★ 2026-09-30 起是<b>取数与清理的主键成分</b>（裁决 J4：1 文件 = 1 规则，
+        /// 由 <c>uk_rule_scope(OrgCode,StandardCode,StageCode,StandardFileCode)</c> 唯一索引强制）。
+        /// 补录写入的行走本列，与 <see cref="FileCode"/> 无关。</para>
+        /// </summary>
         [Required, StringLength(200)]
         public string RuleCode { get; set; }
 
@@ -57,7 +62,17 @@ namespace CertPlatform.Shared.Entities.Doc
 
         public string? PositionInfo { get; set; }
 
+        /// <summary>是否被人工修改（布尔标志，取值与 <see cref="ValueSource"/> 保持一致）</summary>
         public bool IsManualEdited { get; set; } = false;
+
+        /// <summary>值来源（★ 2026-09-30 落库，裁决 J2）
+        /// <para><c>auto</c>=系统自动提取（内容提取规则产出）｜<c>manual</c>=人工录入（补录）</para>
+        /// <para>★ 取数时<b>人工值优先</b>：同一 (OrgCode, RuleCode, FieldCode) 下
+        /// <c>auto</c> 行与 <c>manual</c> 行并存，<c>ORDER BY (ValueSource='manual') DESC</c>。
+        /// 两者都保留 ⇒ 提取时间线可完整还原（配合 <c>cert_extraction_change_log</c>）。</para>
+        /// </summary>
+        [Required, StringLength(20)]
+        public string ValueSource { get; set; } = ExtractionValueSource.Auto;
 
         [Required]
         public DateTime ExtractedAt { get; set; }

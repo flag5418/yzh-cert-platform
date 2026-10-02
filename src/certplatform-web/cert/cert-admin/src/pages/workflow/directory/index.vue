@@ -164,16 +164,124 @@ async function loadCurrentContent() {
   }
 }
 
-/** 选中左侧树阶段节点（CertBizTree @select）→ 懒建配置（无感）→ 加载该阶段内容 */
+/** 选中左侧树阶段节点 → 懒建配置（无感）→ 加载该阶段内容 */
 async function selectPhase(phase: TreeNode) {
   if (!phase.DirectoryCode) await ensurePhaseConfig(phase)
   currentPhase.value = phase
+  // ★ 先清空再加载：ensurePhaseConfig 失败时 DirectoryCode 为空，loadCurrentContent 会提前 return，
+  //   不清空就会把**上一个阶段**的文件夹/文件残留显示在新阶段下（假数据）
+  resetRightPanel()
+  if (!phase.DirectoryCode) {
+    ElMessage.error('该阶段的目录配置初始化失败，请点击「刷新」重试')
+    return
+  }
+  await loadCurrentContent()
+  await refreshActiveQueue()
+}
+
+/** 清空右侧内容区（切阶段 / 点非阶段节点时调用，杜绝上一个阶段的内容残留） */
+function resetRightPanel() {
   currentFolderCode.value = ''
   breadcrumbPath.value = []
+  currentFolders.value = []
+  currentFiles.value = []
+  folderAggMap.value.clear()
   selectedItems.clear()
   allSelected.value = false
-  loadCurrentContent()
-  refreshActiveQueue()
+}
+
+/**
+ * 左树节点点击（CertBizTree @node-click，所有节点类型都会触发）。
+ *
+ * ⚠️ 不用 `@select`：CertBizTree 仅在 `data.Type === 'stage'` 时才 emit `select`
+ *（见 components/CertBizTree.vue onNodeClick），点其它类型节点时页面收不到任何回调
+ * → 右侧面板保持旧内容，看起来像「没刷新」。
+ *
+ * 分流：
+ * - `stage`    → 切阶段，右侧加载该阶段根目录
+ * - `folder`   → 右侧下钻到该文件夹（面包屑按 阶段→…→本文件夹 的祖先链重建）
+ * - `file`     → 文件已在右侧列表中，无需跳转（点击仅高亮）
+ * - 其余（机构 / 标准）→ 目录内容只属于「阶段」，清空右侧回空态提示
+ */
+function onTreeNodeClick(node: TreeNode) {
+  if (node.Type === 'folder') {
+    openTreeFolder(node)
+    return
+  }
+  if (node.Type === 'file') return
+
+  if (node.Type !== 'stage') {
+    currentPhase.value = null
+    resetRightPanel()
+    activeQueue.value = null
+    return
+  }
+  selectPhase(node)
+}
+
+/** 阶段节点所在的根级容器（树里 stage 是 folder/file 的祖先） */
+type StagePath = { stage: TreeNode; folders: TreeNode[] }
+
+/**
+ * 在树里定位某节点的「所属阶段 + 祖先文件夹链」。
+ * <para>命中返回 `{ stage, folders }`（folders 由根到该节点，逐级）；未命中（如节点已被
+ * `loadTree` 重建掉）返回 null。</para>
+ */
+function findStagePath(target: TreeNode): StagePath | null {
+  const walk = (
+    nodes: TreeNode[],
+    stage: TreeNode | null,
+    trail: TreeNode[],
+  ): StagePath | null => {
+    for (const n of nodes || []) {
+      const nextStage = n.Type === 'stage' ? n : stage
+      const nextTrail = n.Type === 'folder' ? [...trail, n] : trail
+      if (n === target || (target.FolderCode && n.FolderCode === target.FolderCode)) {
+        if (!nextStage) return null
+        return { stage: nextStage, folders: nextTrail }
+      }
+      const hit = walk(n.Children || [], nextStage, nextTrail)
+      if (hit) return hit
+    }
+    return null
+  }
+  return walk(fileTreeData.value as TreeNode[], null, [])
+}
+
+/** 点击左树文件夹节点 → 右侧下钻到该文件夹 */
+async function openTreeFolder(folder: TreeNode) {
+  const folderCode = folder.FolderCode || String(folder.Code || '')
+
+  // 「根目录」是后端为根级孤儿文件造的虚拟节点（Code = DirectoryCode），不是真文件夹
+  if (!folderCode || folderCode === folder.DirectoryCode) {
+    if (currentPhase.value) {
+      currentFolderCode.value = ''
+      breadcrumbPath.value = []
+      selectedItems.clear()
+      allSelected.value = false
+      await loadCurrentContent()
+    }
+    return
+  }
+
+  const hit = findStagePath(folder)
+  if (!hit) {
+    ElMessage.warning('未找到该文件夹所属的阶段，请点击「刷新」后重试')
+    return
+  }
+
+  // 所属阶段未选中（或不是当前阶段）→ 先切阶段，再下钻
+  if (currentPhase.value?.Code !== hit.stage.Code) {
+    await selectPhase(hit.stage)
+  }
+  // 阶段切换会 resetRightPanel；命中阶段则只重置文件夹层级
+  currentFolderCode.value = folderCode
+  breadcrumbPath.value = hit.folders
+    .filter((f) => f.FolderCode !== folderCode)
+    .map((f) => ({ code: String(f.FolderCode || f.Code || ''), name: f.Name }))
+  selectedItems.clear()
+  allSelected.value = false
+  await loadCurrentContent()
 }
 
 function enterFolder(folder: any) {
@@ -313,10 +421,7 @@ async function handleUpload() {
 async function handleRefresh() {
   await loadTree()
   if (currentPhase.value) {
-    currentFolderCode.value = ''
-    breadcrumbPath.value = []
-    selectedItems.clear()
-    allSelected.value = false
+    resetRightPanel()
     await loadCurrentContent()
     await refreshActiveQueue()
   }
@@ -824,10 +929,7 @@ async function onConfigChanged() {
   if (next?.DirectoryCode) {
     // 补建成功 → 原阶段拿到 configCode，保持选中并加载内容
     currentPhase.value = next
-    currentFolderCode.value = ''
-    breadcrumbPath.value = []
-    selectedItems.clear()
-    allSelected.value = false
+    resetRightPanel()
     await loadCurrentContent()
     await refreshActiveQueue()
   } else {
@@ -879,7 +981,7 @@ onUnmounted(() => {
         title="目录结构"
         search-placeholder="搜索机构 / 标准 / 阶段..."
         :default-expand-level="3"
-        @select="selectPhase"
+        @node-click="onTreeNodeClick"
       />
     </div>
 
@@ -896,7 +998,9 @@ onUnmounted(() => {
             </el-breadcrumb-item>
             <el-breadcrumb-item>
               <span class="clickable-breadcrumb" @click="navigateToRoot">
-                {{ currentPhase.PhaseCode || currentPhase.Name }}
+                <!-- ★ 2026-09-30：阶段节点 PhaseCode 已由业务码改为 GUID（不可读），
+                     面包屑改显 Name（= "jd01 - 初审"） -->
+                {{ currentPhase.Name }}
               </span>
             </el-breadcrumb-item>
             <el-breadcrumb-item v-for="(crumb, index) in breadcrumbPath" :key="index">

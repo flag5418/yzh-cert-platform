@@ -140,7 +140,15 @@ const ROUTE_EXEMPT = new Set(['/login', '/register', '/'])
  * 用途：详情页 / 嵌入页等确实不应出现在侧边栏的路由。
  * 登记格式：'admin:/enterprise/detail' —— 必须同时在注释里写明理由。
  */
-const ORPHAN_ALLOW = new Set([])
+const ORPHAN_ALLOW = new Set([
+  // ── 专家端 · 任务系统（2026-09-30）──
+  // 理由：这两条是「任务中心 `/tasks`」的**子页面**，不是独立功能入口。
+  //   入口在 `/tasks` 列表页的按钮上（工具栏「创建新任务」/ 行按钮「详情」），
+  //   以及结果页「看结果」的跳转。放进侧边栏反而会让菜单变成「同一功能的 3 个入口」。
+  //   菜单侧只需 `MENU_AUD_03`（/tasks）一条。
+  'auditor:/tasks/create',
+  'auditor:/tasks/:code',
+])
 
 /** 从路由源文件抽取「绝对 path」集合（相对子路由按 shell 前缀 '/' 归一） */
 function extractRoutePaths(files) {

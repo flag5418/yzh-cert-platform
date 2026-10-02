@@ -518,7 +518,9 @@ public partial class DocExtractionRuleService
         var analyzePrompt = await BuildAnalysisPromptAsync(skill);
 
         // 3.1 结构化上下文（【正文】/【表格 n】分区）+ 模板占位符渲染
-        var (defFields, defTables) = await LoadRuleDefsAsync(request.FileCode);
+        //     S0：先按四元组取规则再读定义（未配置规则时定义为空集合，行为不变）
+        var ruleCode = (await GetRuleByFileAsync(request.FileCode))?.Code;
+        var (defFields, defTables) = await LoadRuleDefsAsync(ruleCode);
         var structured = BuildStructuredContext(markdown);
         var (renderedPrompt, inlineContent) = RenderPrompt(analyzePrompt, structured, defFields, defTables, null);
 
@@ -567,9 +569,10 @@ public partial class DocExtractionRuleService
                 return new VerifyPromptResponse { Success = false, Message = "AI 提取未启用（系统参数 ai_extract_enabled=false）" };
 
             // 1. 规则（含 doc_content 缓存定位）+ 已配置的字段/表格清单（固定提示词的唯一依据）
-            var rule = (await _db.GetOneAsync<DocExtractionRule>(x => x.StandardFileCode == request.FileCode)).Data;
+            //    S0：四元组定位，不再单列查 StandardFileCode
+            var rule = await GetRuleByFileAsync(request.FileCode);
             var skill = rule?.Skill ?? ResolveSkill(request.FileCode);
-            var (defFields, defTables) = await LoadRuleDefsAsync(request.FileCode);
+            var (defFields, defTables) = await LoadRuleDefsAsync(rule?.Code);
 
             // 2. 文档内容：优先规则缓存，无缓存则提取
             string docContent;
@@ -866,26 +869,27 @@ public partial class DocExtractionRuleService
     /// ② **不落 rule.SampleData**（那是模板域配置期样例，写入企业数据会污染模板规则回显）。</para>
     /// <para>提取结果由调用方（EnterpriseExtractTaskExecutor）经
     /// <see cref="SaveEnterpriseExtractionResultsAsync"/> 落 B-08/B-09 企业域。</para>
+    /// <para>★ S0 起直传 <paramref name="rule"/>：规则由调用方按**四元组**
+    /// （<see cref="GetRuleByScopeAsync"/>）解析后传入，本方法不再按单列 StandardFileCode 自查；
+    /// 「该文件未配置提取规则」由调用方判定（无规则 ⇒ 状态 skipped）。</para>
     /// </summary>
     public async Task<(bool Ok, string? Error, ExtractionData? Data)> TestFieldWithMarkdownAsync(
-        string standardFileCode, string markdown, string enterpriseCode)
+        DocExtractionRule? rule, string markdown, string enterpriseCode)
     {
-        if (string.IsNullOrWhiteSpace(standardFileCode))
-            return (false, "缺少标准文件编码 StandardFileCode", null);
+        if (rule == null)
+            return (false, "该文件未配置提取规则", null);
         if (string.IsNullOrWhiteSpace(markdown))
             return (false, "Markdown 内容为空", null);
         if (string.IsNullOrWhiteSpace(enterpriseCode))
             return (false, "更新失败：缺少业务键 EnterpriseCode", null);
 
+        var standardFileCode = rule.StandardFileCode ?? rule.Code ?? "";
+
         var settings = await GetAiSettingsAsync();
         if (!settings.Enabled)
             return (false, "AI 提取未启用（系统参数 ai_extract_enabled=false）", null);
 
-        var rule = (await _db.GetOneAsync<DocExtractionRule>(x => x.StandardFileCode == standardFileCode)).Data;
-        if (rule == null)
-            return (false, "该文件未配置提取规则", null);
-
-        var (defFields, defTables) = await LoadRuleDefsAsync(standardFileCode);
+        var (defFields, defTables) = await LoadRuleDefsAsync(rule.Code);
         var userPrompt = (rule.Prompt ?? "").Trim();
         var promptTemplate = string.IsNullOrEmpty(userPrompt)
             ? BuildFixedExtractionPrompt(defFields, defTables)
@@ -1316,17 +1320,15 @@ public partial class DocExtractionRuleService
     private const int MaxContextChars = 48000;
 
     /// <summary>
-    /// 读取该文件已配置的字段/表格定义（无规则时返回空集合）。
+    /// 读取该规则已配置的字段/表格定义（ruleCode 为空时返回空集合）。
     /// <para>定义是「固定提示词」与「结果中文回显」的唯一依据。</para>
+    /// <para>★ S0 改为直传 ruleCode（原先按 StandardFileCode 反查一次规则，属于单列查询且多一次往返）。</para>
     /// </summary>
-    private async Task<(List<FieldDefDto> Fields, List<TableDefDto> Tables)> LoadRuleDefsAsync(string? standardFileCode)
+    private async Task<(List<FieldDefDto> Fields, List<TableDefDto> Tables)> LoadRuleDefsAsync(string? ruleCode)
     {
         var fields = new List<FieldDefDto>();
         var tables = new List<TableDefDto>();
-        if (string.IsNullOrWhiteSpace(standardFileCode)) return (fields, tables);
-
-        var ruleCode = (await _db.GetOneAsync<DocExtractionRule>(x => x.StandardFileCode == standardFileCode)).Data?.Code;
-        if (string.IsNullOrEmpty(ruleCode)) return (fields, tables);
+        if (string.IsNullOrWhiteSpace(ruleCode)) return (fields, tables);
 
         var fRows = (await _db.GetListAsync<DocFieldDef>(x => x.RuleCode == ruleCode)).Data ?? new();
         fields = fRows.OrderBy(x => x.Sort).Select(x => new FieldDefDto

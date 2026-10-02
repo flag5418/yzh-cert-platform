@@ -84,7 +84,8 @@ public class DocExtractionRuleController : ControllerBase
         try
         {
             var (ok, message) = await _service.SaveExtractionRuleAsync(request);
-            return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail(message));
+            // P3：透传回执（含「已标记 N 个文档待重新提取」影响数）
+            return Ok(ok ? ApiResponse<object?>.Ok(message) : ApiResponse<object?>.Fail(message));
         }
         catch (Exception ex)
         {

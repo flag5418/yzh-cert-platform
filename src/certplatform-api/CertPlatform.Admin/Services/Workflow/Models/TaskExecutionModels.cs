@@ -28,7 +28,12 @@ namespace CertPlatform.Admin.Services.Workflow.Models
         /// <summary>标准编码</summary>
         public string? StandardCode { get; set; }
 
-        /// <summary>阶段编码</summary>
+        /// <summary>阶段编码（★GUID，关联 <c>cert_cert_stage.Code</c>）
+        /// <para>⚠️ 2026-09-30 起<b>统一传 GUID</b>。<c>wf_execution_task.PhaseCode</c> 已由
+        /// <c>varchar(30)</c> 扩到 <c>varchar(36)</c>，装得下 32 位 GUID；人读短码不再走本字段。
+        /// 传短码会导致 <c>NodeExecutor</c> 的 <c>StageCode</c> 过滤永不匹配
+        /// （<c>cert_extraction_result.StageCode</c> 存 GUID）⇒ docfield 恒抛「缺失必要数据」。</para>
+        /// </summary>
         public string? PhaseCode { get; set; }
 
         /// <summary>工作流配置 JSON（rule_json）</summary>
@@ -80,12 +85,59 @@ namespace CertPlatform.Admin.Services.Workflow.Models
 
         public bool IsSuccess { get; set; }
 
+        /// <summary>★ 失败分类码（成功时为 null）
+        /// <para>2026-09-30 新增。<c>DATA_MISSING</c>=引用的字段/表格无值（专家可补录解决）｜
+        /// <c>SYSTEM_ERROR</c>=系统/配置错误（不是补录能解决的）。</para>
+        /// </summary>
+        public string? ErrorCode { get; set; }
+
+        /// <summary>失败原因（成功时为 null）</summary>
+        public string? Error { get; set; }
+
+        /// <summary>★ 缺失必要数据的结构化详情（<c>ErrorCode == DATA_MISSING</c> 时非空）
+        /// <para>2026-09-30 新增。任务执行器据此落 <c>cert_expert_task_data_gap</c> 一行并把
+        /// 任务项标记为「数据不足，未检查」。<b>刻意不把异常对象本身透出</b>（跨层传异常会耦合）。</para>
+        /// </summary>
+        public MissingDataInfo? MissingData { get; set; }
+
         /// <summary>NC 执行结果（键为运行时动态键，由 Skill 执行器产出，不参与命名规约）</summary>
         public Dictionary<string, object> NcResult { get; set; } = new();
 
         public List<TaskPathResult> PathResults { get; set; } = new();
 
         public int DurationMs { get; set; }
+    }
+
+    /// <summary>
+    /// ★ 缺失必要数据的结构化详情（扁平 DTO，不跨层传异常对象）
+    /// </summary>
+    public class MissingDataInfo
+    {
+        /// <summary><c>field</c> | <c>table</c></summary>
+        public string DataKind { get; set; } = "";
+        /// <summary>FieldCode 或 TableCode</summary>
+        public string DataCode { get; set; } = "";
+        /// <summary><c>not_found</c> | <c>is_empty</c></summary>
+        public string Reason { get; set; } = "";
+        /// <summary>★ 规则 Code（裁决 J4：补录回写的主键成分）</summary>
+        public string? RuleCode { get; set; }
+        public string? StandardFileCode { get; set; }
+        public string? EnterpriseCode { get; set; }
+        public string? StandardCode { get; set; }
+        public string? StageCode { get; set; }
+
+        /// <summary>由 <c>WorkflowDataMissingException</c> 投影（唯一的转换点）</summary>
+        public static MissingDataInfo From(CertPlatform.Shared.Exceptions.WorkflowDataMissingException ex) => new()
+        {
+            DataKind = ex.DataKind,
+            DataCode = ex.DataCode,
+            Reason = ex.Reason,
+            RuleCode = ex.RuleCode,
+            StandardFileCode = ex.StandardFileCode,
+            EnterpriseCode = ex.EnterpriseCode,
+            StandardCode = ex.StandardCode,
+            StageCode = ex.StageCode
+        };
     }
 
     /// <summary>

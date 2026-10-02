@@ -41,6 +41,10 @@ namespace CertPlatform.Shared.Entities.Doc
         [Required]
         public int VersionNumber { get; set; }
 
+        /// <summary>提取规则编码（<c>cert_doc_extraction_rule.Code</c>）
+        /// <para>★ 2026-09-30 起是<b>取数与清理的主键成分</b>（裁决 J4），与
+        /// <see cref="ExtractionResult.RuleCode"/> 同语义。</para>
+        /// </summary>
         [Required, StringLength(200)]
         public string RuleCode { get; set; }
 
@@ -57,6 +61,16 @@ namespace CertPlatform.Shared.Entities.Doc
 
         public string? PositionInfo { get; set; }
 
+        /// <summary>是否被人工修改（★ 2026-09-30 落库；本列原本不存在 ⇒ 表格补录不留痕）</summary>
+        public bool IsManualEdited { get; set; } = false;
+
+        /// <summary>值来源（★ 2026-09-30 落库，裁决 J2）
+        /// <para><c>auto</c>=系统自动提取 ｜ <c>manual</c>=人工录入（补录）。
+        /// 与 <see cref="ExtractionResult.ValueSource"/> 同语义、同取值域。</para>
+        /// </summary>
+        [Required, StringLength(20)]
+        public string ValueSource { get; set; } = ExtractionValueSource.Auto;
+
         [Required]
         public DateTime ExtractedAt { get; set; }
 
@@ -65,5 +79,11 @@ namespace CertPlatform.Shared.Entities.Doc
         /// <para>企业域版本链（02 号 V-P1）：1=当前版本行，0=归档旧版本（**不物理删**）。</para>
         /// </summary>
         public int IsValid { get; set; } = 1;
+
+        /// <summary>软删除标记（★ 2026-09-30 补声明）
+        /// <para>⚠️ DB 列本就存在，但本实体此前未声明 ⇒ <c>NodeExecutor</c> 的注释
+        /// 「实体无 IsDeleted 列」是错的 ⇒ 软删行可被取数读到（缺陷 B6）。</para>
+        /// </summary>
+        public bool IsDeleted { get; set; }
     }
 }

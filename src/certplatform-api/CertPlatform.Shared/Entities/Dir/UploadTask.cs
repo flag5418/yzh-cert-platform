@@ -27,6 +27,9 @@ namespace CertPlatform.Shared.Entities.Dir
         [SugarColumn(Length = 20)]
         public string Status { get; set; } = "initialized";
 
+        /// <summary>上传完成后是否自动触发字段/表格提取（10 号 图 3 主路径分流；D4 默认 true）</summary>
+        public int AutoExtract { get; set; } = 1;
+
         public DateTime? ExpireTime { get; set; }
 
         // ──── ISoftDelete + IIsValid 接口显式实现 ────

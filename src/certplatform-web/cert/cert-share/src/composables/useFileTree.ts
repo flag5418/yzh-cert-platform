@@ -58,6 +58,19 @@ export interface TreeNode {
 // 组合式函数：文件树管理
 // ========================================================
 
+/**
+ * 「产物目录」保留段名 —— 与后端 `PathBuilder.ReservedSegments` 保持一致。
+ * 系统把转换产物写在 `{StoragePath}/pdf/x.pdf`、`{StoragePath}/markdown/x.md`，
+ * 与业务文件夹物理同层；正常路径下创建已被后端 ValidateFolderOrFileName 挡住，
+ * 但历史数据 / 直改 DB 仍可能留下同名文件夹 → 显示层统一过滤（与后端
+ * `StandardDirectoryService.GetStageFileTreeAsync` 的过滤口径一致）。
+ */
+const RESERVED_SEGMENTS = new Set(['pdf', 'markdown', '_archive'])
+
+function isReservedFolder(name?: string): boolean {
+  return !!name && RESERVED_SEGMENTS.has(name.trim().toLowerCase())
+}
+
 export function useFileTree() {
   const fileTreeData = ref<TreeNode[]>([])
   const loading = ref(false)
@@ -182,7 +195,10 @@ export function useFileTree() {
 
   /** 后端 StageFolderNode（含 Files/根目录虚拟节点）→ 前端 TreeNode */
   function buildStageNodes(folderNodes: any[], directoryCode: string): TreeNode[] {
-    return (folderNodes || []).map((folder: any) => {
+    return (folderNodes || [])
+      // ★ 过滤产物目录（pdf / markdown / _archive），其下文件随之不可见
+      .filter((folder: any) => !isReservedFolder(folder?.Name || folder?.FolderName))
+      .map((folder: any) => {
       const node: TreeNode = {
         Code: folder.Code || folder.FolderCode,
         Name: folder.Name || folder.FolderName,
@@ -213,7 +229,7 @@ export function useFileTree() {
         })
       }
       return node
-    })
+      })
   }
 
   /** 加载文件夹文件（懒加载兜底；stage-files 整树模式下一般不再触发） */

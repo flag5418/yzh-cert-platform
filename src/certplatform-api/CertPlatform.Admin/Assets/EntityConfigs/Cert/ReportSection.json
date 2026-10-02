@@ -1,0 +1,203 @@
+{
+  "Title": "报告章节",
+  "FillMode": "AutoFix",
+  "EnableField": "IsValid",
+  "Columns": [
+    {
+      "FieldName": "Id",
+      "DesName": "ID",
+      "Type": "Other",
+      "Sxh": 0,
+      "XsFlag": false,
+      "BcFlag": false,
+      "Yxk": false,
+      "Width": 0,
+      "Row": 0,
+      "Col": 0,
+      "RowSpan": 1,
+      "ColSpan": 1,
+      "Enable": true
+    },
+    {
+      "FieldName": "Code",
+      "DesName": "编码",
+      "Type": "Other",
+      "Sxh": 0,
+      "XsFlag": false,
+      "BcFlag": false,
+      "Yxk": false,
+      "Width": 0,
+      "Enable": true
+    },
+    {
+      "FieldName": "OrgCode",
+      "DesName": "机构编码",
+      "Type": "Other",
+      "Sxh": 0,
+      "XsFlag": false,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 0,
+      "Enable": true
+    },
+    {
+      "FieldName": "StandardCode",
+      "DesName": "标准编码",
+      "Type": "Other",
+      "Sxh": 0,
+      "XsFlag": false,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 0,
+      "Enable": true
+    },
+    {
+      "FieldName": "PhaseCode",
+      "DesName": "阶段编码",
+      "Type": "Other",
+      "Sxh": 0,
+      "XsFlag": false,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 0,
+      "Enable": true
+    },
+    {
+      "FieldName": "SortOrder",
+      "DesName": "章节排序",
+      "Type": "Decimal",
+      "Sxh": 1,
+      "XsFlag": true,
+      "BcFlag": true,
+      "Yxk": true,
+      "Width": 100,
+      "Enable": true
+    },
+    {
+      "FieldName": "SectionName",
+      "DesName": "章节名称",
+      "Type": "TextBox",
+      "Sxh": 2,
+      "XsFlag": true,
+      "BcFlag": true,
+      "Yxk": true,
+      "Width": 220,
+      "Enable": true
+    },
+    {
+      "FieldName": "SectionNameEn",
+      "DesName": "章节名称(英文)",
+      "Type": "TextBox",
+      "Sxh": 3,
+      "XsFlag": true,
+      "BcFlag": true,
+      "Yxk": true,
+      "Width": 200,
+      "Enable": true
+    },
+    {
+      "FieldName": "ClauseCode",
+      "DesName": "对应条款",
+      "Type": "TreeSelect",
+      "Sxh": 4,
+      "XsFlag": true,
+      "BcFlag": true,
+      "Yxk": true,
+      "Width": 200,
+      "Enable": true
+    },
+    {
+      "FieldName": "Content",
+      "DesName": "章节内容",
+      "Type": "Memo",
+      "Sxh": 5,
+      "XsFlag": true,
+      "BcFlag": true,
+      "Yxk": true,
+      "Width": 400,
+      "Enable": true
+    },
+    {
+      "FieldName": "WorkflowCode",
+      "DesName": "工作流编码",
+      "Type": "TextBox",
+      "Sxh": 6,
+      "XsFlag": false,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 180,
+      "Enable": true
+    },
+    {
+      "FieldName": "WorkflowConfig",
+      "DesName": "工作流配置",
+      "Type": "Other",
+      "Sxh": 7,
+      "XsFlag": false,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 0,
+      "Enable": true
+    },
+    {
+      "FieldName": "LayoutJson",
+      "DesName": "画布布局",
+      "Type": "Other",
+      "Sxh": 8,
+      "XsFlag": false,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 0,
+      "Enable": true
+    },
+    {
+      "FieldName": "SectionJson",
+      "DesName": "章节扩展配置",
+      "Type": "Other",
+      "Sxh": 9,
+      "XsFlag": false,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 0,
+      "Enable": true
+    },
+    {
+      "FieldName": "IsValid",
+      "DesName": "状态",
+      "Type": "Switch",
+      "Sxh": 10,
+      "XsFlag": true,
+      "BcFlag": true,
+      "Yxk": true,
+      "Width": 90,
+      "Enable": true
+    },
+    {
+      "FieldName": "Remark",
+      "DesName": "备注",
+      "Type": "TextBox",
+      "Sxh": 11,
+      "XsFlag": true,
+      "BcFlag": true,
+      "Yxk": true,
+      "Width": 200,
+      "Enable": true
+    }
+  ],
+  "SearchFields": [
+    {
+      "Label": "章节名称",
+      "Field": "SectionName",
+      "Operator": "like",
+      "ControlType": "input",
+      "Width": 200
+    }
+  ],
+  "RowButtons": {
+    "Edit": true,
+    "Delete": true,
+    "CustomButtons": {}
+  },
+  "Toolbar": null,
+  "FormCols": 1
+}

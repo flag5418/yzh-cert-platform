@@ -98,4 +98,88 @@ public class WorkspaceContextService
     {
         return Task.FromResult(Resolve(userCode));
     }
+
+    // ════════════════════════════════════════════════════════════════════
+    // 机构域归一 —— ★ 全项目唯一实现
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// ★ <b>机构域归一</b>：把「工作区节点 Code」或「企业挂靠节点 Code」换成
+    /// <b>体系认证机构 Code</b>（<c>cert_certification_body.Code</c>）。
+    ///
+    /// <para><b>为什么必须归一</b>：本项目同时存在三个「机构」概念，且它们的 Code 互不相同：</para>
+    /// <list type="table">
+    ///   <listheader><term>层</term><description>表 / 字段 / 值示例</description></listheader>
+    ///   <item><term>体系认证机构</term>
+    ///         <description><c>cert_certification_body.Code</c> = <c>906e8b2a…</c>（GUID），
+    ///         另有业务编号 <c>CbCode</c> = <c>CB001</c></description></item>
+    ///   <item><term>专家工作区</term>
+    ///         <description><c>Sys_Organization</c>（<c>OrgType='VirtualOrg'</c>）<c>.Code</c> = <c>66bbf572…</c>，
+    ///         其 <c>OrgCode</c> 字段存的是<b>认证机构的 <c>CbCode</c></b>（<c>CB001</c>）</description></item>
+    ///   <item><term>企业</term>
+    ///         <description><c>cert_enterprise.OrgCode</c> = <b>工作区 Code</b>（<c>66bbf572…</c>）</description></item>
+    /// </list>
+    ///
+    /// <para><b>桥</b>：<c>工作区.Code</c> → <c>工作区.OrgCode</c> → <c>CertificationBody.CbCode</c>
+    /// → <c>CertificationBody.Code</c>。</para>
+    ///
+    /// <para><b>★ 为什么放这里而不是各处自己写</b>：本方法原先只存在于
+    /// <c>EnterpriseFileService.NormalizeOrgCodeAsync</c>（私有）。参数定义、目录模板、
+    /// 标准关联都要做同一次归一 —— 复制成三份后，任一处修好另两处仍坏，且<b>都不报错</b>，
+    /// 症状是「某些工作区看不到参数/模板，另一些正常」。故上提为唯一实现，
+    /// <c>EnterpriseFileService</c> 改为委托本方法。</para>
+    ///
+    /// <para><b>解析不到时原样返回</b>（不抛错）：调用方按「查不到数据」处理，
+    /// 空态由各自的查询统一回报。这样「企业还没挂机构」是空列表而非 500。</para>
+    /// </summary>
+    public async Task<string> ResolveCertBodyCodeAsync(string orgCode)
+    {
+        if (string.IsNullOrWhiteSpace(orgCode)) return orgCode;
+
+        // ① 本身就是认证机构 Code
+        var self = await _db.GetOneAsync<CertificationBody>(x => x.Code == orgCode);
+        if (self.Data != null) return orgCode;
+
+        // ② 是机构树节点 → 取其业务编号 → 反查认证机构
+        var node = await _db.GetOneAsync<Sys_Organization>(x => x.Code == orgCode);
+        var bizCode = node.Data?.OrgCode;
+        if (!string.IsNullOrWhiteSpace(bizCode))
+        {
+            var byBiz = await _db.GetOneAsync<CertificationBody>(x => x.CbCode == bizCode);
+            if (byBiz.Data?.Code != null) return byBiz.Data.Code;
+        }
+
+        // ③ 传进来的直接就是业务编号（CbCode）
+        var legacy = await _db.GetOneAsync<CertificationBody>(x => x.CbCode == orgCode);
+        return legacy.Data?.Code ?? orgCode;
+    }
+
+    /// <summary>
+    /// 解析当前用户的<b>工作区 + 所属体系认证机构</b>，一次给全（★ 新模块统一用这个）。
+    /// <para>不要只调 <see cref="Resolve"/> 拿到工作区就当机构用 —— 那是两个不同的 Code
+    /// （见 <see cref="ResolveCertBodyCodeAsync"/> 的对照表）。</para>
+    /// </summary>
+    public async Task<Result<WorkspaceScope>> ResolveScopeAsync(string? userCode)
+    {
+        var ws = Resolve(userCode);
+        if (!ws.Success || ws.Data == null)
+            return Result<WorkspaceScope>.Fail(ws.Error ?? "无法定位当前工作区");
+
+        var certBodyCode = await ResolveCertBodyCodeAsync(ws.Data.Code!);
+
+        return Result<WorkspaceScope>.Ok(new WorkspaceScope(
+            WorkspaceCode: ws.Data.Code!,
+            WorkspaceName: ws.Data.OrgName ?? string.Empty,
+            CertBodyCode: certBodyCode));
+    }
 }
+
+/// <summary>
+/// 当前登录人所属的作用域：<b>工作区</b>（专家平台租户隔离键）+ <b>体系认证机构</b>（配置数据隔离键）。
+/// <para>★ 两个 Code 用途不同，⛔ 不可互换：</para>
+/// <list type="bullet">
+///   <item><c>WorkspaceCode</c> → <c>cert_enterprise.OrgCode</c>、<c>cert_fill_param_value.OrgCode</c>（数据归属）</item>
+///   <item><c>CertBodyCode</c> → <c>cert_fill_param_def.OrgCode</c>、目录模板建档域（配置归属）</item>
+/// </list>
+/// </summary>
+public sealed record WorkspaceScope(string WorkspaceCode, string WorkspaceName, string CertBodyCode);

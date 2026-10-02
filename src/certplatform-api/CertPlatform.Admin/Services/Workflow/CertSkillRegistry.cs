@@ -81,11 +81,19 @@ namespace CertPlatform.Admin.Services.Workflow
             if (_cache.TryGetValue(skillCode, out var cached) && cached is (string cp, string mn))
                 return (cp, mn);
 
+            // ★ 2026-09-29 修正：原为 .Where("enable = 1")
+            //   实测 wf_skill_reflection 表【无 enable 列】，只有 IsValid
+            //   （表结构：Id, Code, SkillCode, ClassPath, MethodName, ParamBinding,
+            //     CreateTime, UpdateTime, DeleteTime, Status, Remark,
+            //     CreateBy, UpdateBy, DeleteBy, IsDeleted, IsValid）
+            //   → 原写法会抛 SQL 错误 Unknown column 'enable'，导致所有 Skill 反射执行失败
+            //   推测为 enable → IsValid（铁律九）改名时表改了、代码未同步
             var row = await _db.Client.Queryable<WfSkillReflection>()
                 .Where(x => x.SkillCode == skillCode)
-                .Where("enable = 1")
+                .Where(x => x.IsValid == 1)        // IIsValid → int
+                .Where(x => x.IsDeleted == false)  // ISoftDelete → bool
                 .Select(x => new ReflectionRow { ClassPath = x.ClassPath, MethodName = x.MethodName })
-                .FirstAsync();
+                .FirstAsync(ct);
 
             if (row == null || string.IsNullOrWhiteSpace(row.ClassPath))
             {

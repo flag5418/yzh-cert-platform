@@ -152,6 +152,13 @@ namespace CertPlatform.Admin.Services.Workflow
                 ItemCode = itemCode,
                 Status = itemResult.Success ? "completed" : "failed",
                 IsSuccess = itemResult.IsSuccess,
+                // ★ 2026-09-30：失败分类码透出（DATA_MISSING / SYSTEM_ERROR），
+                //   专家端据此区分「去补录」（红）与「报 bug」（灰）。
+                ErrorCode = itemResult.ErrorCode,
+                Error = itemResult.Error,
+                MissingData = itemResult.MissingData == null
+                    ? null
+                    : MissingDataInfo.From(itemResult.MissingData),
                 NcResult = itemResult.NcResult,
                 PathResults = itemResult.PathResults.Select(p => new TaskPathResult
                 {

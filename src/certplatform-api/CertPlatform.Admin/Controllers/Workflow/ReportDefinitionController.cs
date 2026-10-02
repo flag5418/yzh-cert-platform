@@ -1,199 +1,93 @@
-
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using YZH.Core.Stand.Interfaces;
+using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Services;
-using CertPlatform.Shared.Entities.Cert;
-using CertPlatform.Shared.Entities.Rpt;
+using YZH.Core.DataBase.Interfaces;
+using YZH.Core.Stand.Helpers;
+using YZH.Core.Stand.Interfaces;
+using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
+using CertPlatform.Shared.Entities.Rpt;
 
 namespace CertPlatform.Admin.Controllers.Workflow
 {
     /// <summary>
-    /// 报告定义控制器 — 模板 + 章节 CRUD + 文件上传
-    /// <para>路由前缀：/api/ReportDefinition</para>
+    /// ★ 体系认证报告章节定义（★2026-09-29 去主表化，D34/D35）
+    ///
+    /// <para><b>★ 改造背景</b>：原为「cert_report_template（主表：报告名称 + 报表模板）→ rpt_report_section（章节）」两层。
+    /// 现已扁平化为一层，<b>与 <c>ValidationRuleController</c>（NC 规则定义）完全对称</b>：
+    /// 都是配置层、都按 <c>OrgCode + StandardCode + PhaseCode</c> 三元组定位、都用 <c>IsValid</c> 启用。</para>
+    ///
+    /// <para><b>★ 已删除的能力</b>（因不做报表系统）：报告名称、报表模板（docx）上传、模板级启停、
+    /// 多套模板选默认（<c>IsDefault</c>）、章节顺序整体编排（<c>SectionConfig</c>）。</para>
+    ///
+    /// <para><b>★ 接口变化</b>：
+    /// <list type="bullet">
+    /// <item>删除：<c>template/context</c>、<c>template/save</c>、<c>template/upload</c>、<c>template/delete</c></item>
+    /// <item>保留：<c>section/list</c>、<c>section/by-context</c>、<c>section/save</c>、<c>section/delete</c></item>
+    /// <item><c>section/save</c> 的入参：<c>ReportCode</c> → 三元组 <c>OrgCode/StandardCode/PhaseCode</c></item>
+    /// </list></para>
     /// </summary>
-    [Route("api/[controller]")]
-    public class ReportDefinitionController : ControllerBase
+    [ApiController]
+    [Route("api/ReportDefinition")]
+    public class ReportDefinitionController : YzhControllerBase<ReportSection>
     {
-        private readonly EntityService<ReportTemplate> _templateEntity;
-        private readonly EntityService<ReportSection> _sectionEntity;
-        private readonly IObjectStorage _storage;
-        private readonly IUserContext _userContext;
+        // ★ 基类已持有 Entity（EntityService<ReportSection>）与 UserContext，此处不重复注入
+        private EntityService<ReportSection> SectionEntity => Entity;
+        private readonly IDbOrm _db;
 
         public ReportDefinitionController(
-            EntityService<ReportTemplate> templateEntity,
-            EntityService<ReportSection> sectionEntity,
-            IObjectStorage storage,
-            IUserContext userContext)
+            EntityService<ReportSection> entityService,
+            IUserContext userContext,
+            IDbOrm db)
+            : base(entityService, userContext)
         {
-            _templateEntity = templateEntity;
-            _sectionEntity = sectionEntity;
-            _storage = storage;
-            _userContext = userContext;
+            _db = db;
         }
 
-        #region 模板 CRUD
+        // =====================================================================
+        // YzhControllerBase<ReportSection> 自动提供（★与 ValidationRuleController 对称）：
+        //   GET  /config                        实体配置（Cert/ReportSection.json）
+        //   POST /filter                        分页查询（FilterRequest）
+        //   POST /add | /update | /delete       标准 CRUD
+        //   POST /toggle-valid                  启用/禁用（铁律九走 IsValid）
+        //   POST /action/{methodName}           行自定义动作
+        // =====================================================================
 
-        /// <summary>
-        /// 按上下文查询模板（主读接口）
-        /// </summary>
-        [HttpGet("template/context")]
-        public async Task<IActionResult> GetTemplateByContext(
-            [FromQuery] string orgCode,
-            [FromQuery] string standardCode,
-            [FromQuery] string phaseCode)
+        // ★ 配置来源：显式指定 JSON（与 ValidationRuleController 同款）。
+        //   基类默认按 typeof(V).Name 找「ReportSection.json」（根目录），
+        //   实际文件在「Cert/ReportSection.json」（参照 ValidationRule 的写法）。
+        protected override EntityConfig LoadConfig()
         {
-            var result = await _templateEntity.GetOne(x =>
-                x.OrgCode == orgCode &&
-                x.StandardCode == standardCode &&
-                x.PhaseCode == phaseCode &&
-                x.IsValid == 1);
-
-            return Ok(ApiResponse<object?>.Ok(data: result.Data));
+            return EntityConfigHelper.GetConfig("Cert/ReportSection");
         }
 
-        /// <summary>
-        /// 创建/更新模板（upsert：同 org+std+phase 只保留一条）
-        /// </summary>
-        [HttpPost("template/save")]
-        public async Task<IActionResult> SaveTemplate([FromBody] ReportTemplate entity)
+        /// <summary>★ 缺 JSON 直接抛错（开发期暴露，不让页面空白上线）</summary>
+        protected override bool StrictConfigLoad => true;
+
+        // 行按钮走基类默认 Edit + Delete；启停走基类 POST /toggle-valid（IsValid）。
+
+        /// <summary>★ 搜索字段：只暴露「章节名称」。三元组字段由前端树联动注入，不进搜索区</summary>
+        protected override List<YZH.Core.Stand.Models.Config.SearchFieldConfig> GetSearchFields()
         {
-            if (string.IsNullOrWhiteSpace(entity.TemplateName))
-                return Ok(ApiResponse<object?>.Fail("模板名称不能为空"));
-
-            // 准则 A：新增 vs 更新只看业务键 Code（禁止 Id > 0 分流）
-            if (!string.IsNullOrWhiteSpace(entity.Code))
+            return new List<YZH.Core.Stand.Models.Config.SearchFieldConfig>
             {
-                var byCode = await _templateEntity.GetByCode(entity.Code);
-                if (byCode.Data == null)
-                    return Ok(ApiResponse<object?>.Fail("模板不存在", 404));
-
-                var target = byCode.Data;
-                target.TemplateName = entity.TemplateName;
-                target.TemplateFilePath = entity.TemplateFilePath;
-                target.Remark = entity.Remark;
-                target.IsDefault = entity.IsDefault;
-                target.UpdateTime = DateTime.Now;
-
-                var updateResult = await _templateEntity.Update(target);
-                return Ok(updateResult.Success ? ApiResponse<object?>.Ok(data: target) : ApiResponse<object?>.Error(updateResult.Error));
-            }
-            else
-            {
-                // 创建 — 先检查是否已存在（业务键：org+std+phase）
-                var existing = await _templateEntity.GetOne(x =>
-                    x.OrgCode == entity.OrgCode &&
-                    x.StandardCode == entity.StandardCode &&
-                    x.PhaseCode == entity.PhaseCode &&
-                    x.IsValid == 1);
-
-                if (existing.Data != null)
+                new()
                 {
-                    // 已存在 → 更新
-                    var target = existing.Data;
-                    target.TemplateName = entity.TemplateName;
-                    target.TemplateFilePath = entity.TemplateFilePath;
-                    target.Remark = entity.Remark;
-                    target.IsDefault = entity.IsDefault;
-                    target.UpdateTime = DateTime.Now;
-
-                    var updateResult = await _templateEntity.Update(target);
-                    return Ok(updateResult.Success ? ApiResponse<object?>.Ok(data: target) : ApiResponse<object?>.Error(updateResult.Error));
+                    Label = "章节名称",
+                    Field = "SectionName",
+                    Operator = "like",
+                    ControlType = "input",
+                    Width = 200
                 }
-
-                // 新建（Id 保持默认，不赋值）
-                entity.Code = Guid.NewGuid().ToString("N");
-                entity.CbCode = entity.OrgCode;  // 同步设置 CbCode（外键约束）
-                entity.CreateBy = _userContext.UserCode;
-                entity.IsValid = 1;
-
-                var addResult = await _templateEntity.Insert(entity);
-                return Ok(addResult.Success ? ApiResponse<object?>.Ok(data: entity) : ApiResponse<object?>.Error(addResult.Error));
-            }
+            };
         }
 
-        /// <summary>
-        /// 上传模板文件到 MinIO
-        /// </summary>
-        [HttpPost("template/upload")]
-        [RequestSizeLimit(100_000_000)]
-        public async Task<IActionResult> UploadTemplateFile(
-            [FromForm] IFormFile file,
-            [FromQuery] string orgCode,
-            [FromQuery] string standardCode,
-            [FromQuery] string phaseCode)
-        {
-            if (file == null || file.Length == 0)
-                return Ok(ApiResponse<object?>.Fail("请选择文件"));
-
-            if (string.IsNullOrEmpty(orgCode) || string.IsNullOrEmpty(standardCode) || string.IsNullOrEmpty(phaseCode))
-                return Ok(ApiResponse<object?>.Fail("缺少上下文参数"));
-
-            // 安全校验：上下文参数仅允许字母数字-_，防止对象键注入（防御性双保险，
-            // MinIO 对象键无文件系统穿越风险，但防串改 bucket 内其他模块对象）
-            if (!IsValidContextSegment(orgCode) || !IsValidContextSegment(standardCode) || !IsValidContextSegment(phaseCode))
-                return Ok(ApiResponse<object?>.Fail("上下文参数含非法字符"));
-
-            var allowedExts = new[] { ".docx", ".xlsx", ".pdf", ".doc", ".xls" };
-            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-            if (!allowedExts.Contains(ext))
-                return Ok(ApiResponse<object?>.Fail("仅支持 .docx / .xlsx / .pdf 格式"));
-
-            var safeFileName = file.FileName.Replace(" ", "_");
-            var objectName = $"report/{orgCode}/{standardCode}/{phaseCode}/{safeFileName}";
-
-            using var stream = file.OpenReadStream();
-            await _storage.UploadAsync(objectName, stream, file.Length, file.ContentType);
-
-            return Ok(ApiResponse<object?>.Ok(data: new { path = objectName, fileName = file.FileName, size = file.Length }));
-        }
+        // =====================================================================
+        // 章节 CRUD（★唯一保留的能力）
+        // =====================================================================
 
         /// <summary>
-        /// 删除模板（级联删除章节）
-        /// </summary>
-        [HttpPost("template/delete")]
-        public async Task<IActionResult> DeleteTemplate([FromQuery] string code)
-        {
-            if (string.IsNullOrWhiteSpace(code))
-                return Ok(ApiResponse<object?>.Fail("缺少业务键 Code"));
-
-            var existing = await _templateEntity.GetByCode(code);
-            if (existing.Data == null)
-                return Ok(ApiResponse<object?>.Fail("模板不存在", 404));
-
-            var template = existing.Data;
-
-            // 级联删除章节
-            var sections = await _sectionEntity.GetListAsync(x => x.ReportCode == template.Code);
-            if (sections.Data != null && sections.Data.Count > 0)
-            {
-                var sectionCodes = sections.Data.Select(s => s.Code).ToList();
-                await _sectionEntity.DeleteBatch(sectionCodes, hardDelete: true);
-            }
-
-            // 硬删除模板
-            var deleteResult = await _templateEntity.DeleteByCode(template.Code);
-            return Ok(deleteResult.Success ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Error(deleteResult.Error));
-        }
-
-        #endregion
-
-        #region 章节 CRUD
-
-        /// <summary>
-        /// 按模板 Code 查询章节列表
-        /// </summary>
-        [HttpGet("section/list")]
-        public async Task<IActionResult> GetSectionList([FromQuery] string reportCode)
-        {
-            var result = await _sectionEntity.GetListAsync(x => x.ReportCode == reportCode);
-            var sorted = (result.Data ?? new List<ReportSection>()).OrderBy(x => x.SortOrder).ToList();
-            return Ok(ApiResponse<object?>.Ok(data: sorted));
-        }
-
-        /// <summary>
-        /// 按上下文（机构+标准+阶段）查询章节列表（先定位模板，再取章节）
+        /// ★ 按三元组查询章节列表（★去 JOIN，扁平结构的核心收益）
         /// </summary>
         [HttpGet("section/by-context")]
         public async Task<IActionResult> GetSectionsByContext(
@@ -201,24 +95,44 @@ namespace CertPlatform.Admin.Controllers.Workflow
             [FromQuery] string standardCode,
             [FromQuery] string phaseCode)
         {
-            // 1. 按上下文定位模板
-            var template = await _templateEntity.GetOne(x =>
+            if (string.IsNullOrWhiteSpace(orgCode)
+                || string.IsNullOrWhiteSpace(standardCode)
+                || string.IsNullOrWhiteSpace(phaseCode))
+            {
+                return Ok(ApiResponse<object?>.Fail("缺少机构 / 标准 / 阶段"));
+            }
+
+            var result = await SectionEntity.GetListAsync(x =>
                 x.OrgCode == orgCode &&
                 x.StandardCode == standardCode &&
-                x.PhaseCode == phaseCode &&
-                x.IsValid == 1);
+                x.PhaseCode == phaseCode);
 
-            if (template.Data == null)
-                return Ok(ApiResponse<object?>.Ok(data: new List<ReportSection>()));
+            var sorted = (result.Data ?? new List<ReportSection>())
+                .OrderBy(x => x.SortOrder)
+                .ToList();
 
-            // 2. 按模板 Code 查章节
-            var result = await _sectionEntity.GetListAsync(x => x.ReportCode == template.Data.Code);
-            var sorted = (result.Data ?? new List<ReportSection>()).OrderBy(x => x.SortOrder).ToList();
             return Ok(ApiResponse<object?>.Ok(data: sorted));
         }
 
         /// <summary>
-        /// 创建/更新章节
+        /// 按章节 Code 查询单条
+        /// </summary>
+        [HttpGet("section/detail")]
+        public async Task<IActionResult> GetSectionDetail([FromQuery] string code)
+        {
+            if (string.IsNullOrWhiteSpace(code))
+                return Ok(ApiResponse<object?>.Fail("缺少业务键 Code"));
+
+            var byCode = await SectionEntity.GetByCode(code);
+            if (byCode.Data == null)
+                return Ok(ApiResponse<object?>.Fail("章节不存在", 404));
+
+            return Ok(ApiResponse<object?>.Ok(data: byCode.Data));
+        }
+
+        /// <summary>
+        /// 创建 / 更新章节
+        /// <para>★ 准则 A：新增 vs 更新只看业务键 <c>Code</c>（禁止 <c>Id &gt; 0</c> 分流）</para>
         /// </summary>
         [HttpPost("section/save")]
         public async Task<IActionResult> SaveSection([FromBody] ReportSection entity)
@@ -226,46 +140,77 @@ namespace CertPlatform.Admin.Controllers.Workflow
             if (string.IsNullOrWhiteSpace(entity.SectionName))
                 return Ok(ApiResponse<object?>.Fail("章节名称不能为空"));
 
-            if (string.IsNullOrWhiteSpace(entity.ReportCode))
-                return Ok(ApiResponse<object?>.Fail("缺少报告编码"));
+            // ★ 改造：原来校验 ReportCode，现在校验三元组
+            if (string.IsNullOrWhiteSpace(entity.OrgCode)
+                || string.IsNullOrWhiteSpace(entity.StandardCode)
+                || string.IsNullOrWhiteSpace(entity.PhaseCode))
+            {
+                return Ok(ApiResponse<object?>.Fail("缺少机构 / 标准 / 阶段"));
+            }
 
-            // 准则 A：新增 vs 更新只看业务键 Code（禁止 Id > 0 分流）
+            // ──── 更新：按 Code 定位 ────
             if (!string.IsNullOrWhiteSpace(entity.Code))
             {
-                var byCode = await _sectionEntity.GetByCode(entity.Code);
+                var byCode = await SectionEntity.GetByCode(entity.Code);
                 if (byCode.Data == null)
                     return Ok(ApiResponse<object?>.Fail("章节不存在", 404));
 
                 var target = byCode.Data;
-                target.SectionName = entity.SectionName;
-                target.SectionNameEn = entity.SectionNameEn;
-                target.Content = entity.Content;
-                target.SortOrder = entity.SortOrder;
-                target.IsActive = entity.IsActive;
-                target.WorkflowCode = entity.WorkflowCode;
+                target.SectionName    = entity.SectionName;
+                target.SectionNameEn  = entity.SectionNameEn;
+                target.Content        = entity.Content;
+                target.SortOrder      = entity.SortOrder;
+                target.IsValid        = entity.IsValid;          // ★ 原 IsActive
+                target.WorkflowCode   = entity.WorkflowCode;
                 target.WorkflowConfig = entity.WorkflowConfig;
-                target.LayoutJson = entity.LayoutJson;
-                target.ClauseCode = entity.ClauseCode;
-                target.SectionJson = entity.SectionJson;
-                target.Remark = entity.Remark;
-                target.UpdateTime = DateTime.Now;
+                target.LayoutJson     = entity.LayoutJson;
+                target.ClauseCode     = entity.ClauseCode;
+                target.SectionJson    = entity.SectionJson;
+                target.Remark         = entity.Remark;
+                target.Status         = entity.Status;
+                target.UpdateTime     = DateTime.Now;
+                target.UpdateBy       = UserContext.UserCode;
 
-                var updateResult = await _sectionEntity.Update(target);
-                return Ok(updateResult.Success ? ApiResponse<object?>.Ok(data: target) : ApiResponse<object?>.Error(updateResult.Error));
+                // 归属三元组：允许改（换阶段/标准），但仍需保持在合法值域
+                target.OrgCode      = entity.OrgCode;
+                target.StandardCode = entity.StandardCode;
+                target.PhaseCode    = entity.PhaseCode;
+
+                var updateResult = await SectionEntity.Update(target);
+                return Ok(updateResult.Success
+                    ? ApiResponse<object?>.Ok(data: target)
+                    : ApiResponse<object?>.Error(updateResult.Error));
             }
-            else
+
+            // ──── 新增 ────
+            // ★ 同 (OrgCode, StandardCode, PhaseCode, SortOrder) 唯一，
+            //   冲突时给出明确提示而不是让 DB 报 1062
+            var dup = await SectionEntity.GetOne(x =>
+                x.OrgCode == entity.OrgCode &&
+                x.StandardCode == entity.StandardCode &&
+                x.PhaseCode == entity.PhaseCode &&
+                x.SortOrder == entity.SortOrder);
+
+            if (dup.Data != null)
             {
-                // 新建
-                entity.Code = Guid.NewGuid().ToString("N");
-                entity.CreateBy = _userContext.UserCode;
-
-                var addResult = await _sectionEntity.Insert(entity);
-                return Ok(addResult.Success ? ApiResponse<object?>.Ok(data: entity) : ApiResponse<object?>.Error(addResult.Error));
+                return Ok(ApiResponse<object?>.Fail(
+                    $"该阶段下第 {entity.SortOrder} 章已被「{dup.Data.SectionName}」占用，请调整排序号"));
             }
+
+            entity.Code      = Guid.NewGuid().ToString("N");
+            entity.CreateBy  = UserContext.UserCode;
+            entity.CreateTime = DateTime.Now;
+            entity.IsValid   = entity.IsValid == 0 ? 0 : 1;
+            entity.IsDeleted = false;
+
+            var addResult = await SectionEntity.Insert(entity);
+            return Ok(addResult.Success
+                ? ApiResponse<object?>.Ok(data: entity)
+                : ApiResponse<object?>.Error(addResult.Error));
         }
 
         /// <summary>
-        /// 删除章节
+        /// 删除章节（软删）
         /// </summary>
         [HttpPost("section/delete")]
         public async Task<IActionResult> DeleteSection([FromQuery] string code)
@@ -273,21 +218,73 @@ namespace CertPlatform.Admin.Controllers.Workflow
             if (string.IsNullOrWhiteSpace(code))
                 return Ok(ApiResponse<object?>.Fail("缺少业务键 Code"));
 
-            var existing = await _sectionEntity.GetByCode(code);
-            if (existing.Data == null)
-                return Ok(ApiResponse<object?>.Fail("章节不存在", 404));
+            // ★ 软删（ISoftDelete），不物理删除
+            // ★★ 不用 EntityService.DeleteByCode：它内部走 GetOneAsync 受 IsValid=1 过滤，
+            //    章节被停用（IsValid=0）后会报「记录不存在或已被删除」→ 停用的章节删不掉。
+            //    故用 GetOneIgnoreValidAsync 绕过 IsValid 过滤（仅过滤软删除）。
+            var found = await _db.GetOneIgnoreValidAsync<ReportSection>(x => x.Code == code);
+            if (!found.Success || found.Data == null)
+                return Ok(ApiResponse<object?>.Fail("章节不存在或已被删除", 404));
 
-            var result = await _sectionEntity.DeleteByCode(existing.Data.Code);
+            // ★ 直接走 SqlSugar Updateable（IDbOrm 无 Update；EntityService.Update 会重查受 IsValid 过滤）
+            var affected = await _db.Client.Updateable<ReportSection>()
+                .SetColumns(x => new ReportSection
+                {
+                    IsDeleted  = true,
+                    DeleteBy   = UserContext.UserCode,
+                    DeleteTime = DateTime.Now,
+                    UpdateBy   = UserContext.UserCode,
+                    UpdateTime = DateTime.Now
+                })
+                .Where(x => x.Code == code)
+                .ExecuteCommandAsync();
+
+            var result = affected > 0
+                ? Result<bool>.Ok(true)
+                : Result<bool>.Fail("软删失败：未命中任何行");
             return Ok(result.Success ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Error(result.Error));
         }
 
-        #endregion
-
-        /// <summary>上下文段合法性：字母/数字/连字符/下划线，长度 1-64</summary>
-        private static bool IsValidContextSegment(string value)
+        /// <summary>
+        /// ★ 批量启停（替代原「模板级启停」能力，D34 删除主表后的等价手段）
+        /// </summary>
+        [HttpPost("section/batch-toggle")]
+        public async Task<IActionResult> BatchToggle(
+            [FromQuery] string orgCode,
+            [FromQuery] string standardCode,
+            [FromQuery] string phaseCode,
+            [FromQuery] int isValid)
         {
-            if (string.IsNullOrEmpty(value) || value.Length > 64) return false;
-            return value.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_');
+            if (isValid != 0 && isValid != 1)
+                return Ok(ApiResponse<object?>.Fail("isValid 只能是 0 或 1"));
+
+            var list = await SectionEntity.GetListAsync(
+                x => x.OrgCode == orgCode &&
+                     x.StandardCode == standardCode &&
+                     x.PhaseCode == phaseCode);
+
+            var rows = list.Data ?? new List<ReportSection>();
+            foreach (var row in rows)
+            {
+                row.IsValid    = isValid;
+                row.UpdateBy   = UserContext.UserCode;
+                row.UpdateTime = DateTime.Now;
+            }
+
+            if (rows.Count == 0)
+                return Ok(ApiResponse<object?>.Ok(data: new { Affected = 0 }));
+
+            // ★ 逐条更新（EntityService 无 UpdateRange）
+            var failed = 0;
+            foreach (var row in rows)
+            {
+                var r = await SectionEntity.Update(row, UserContext.ClientIp);
+                if (!r.Success) failed++;
+            }
+            if (failed > 0)
+                return Ok(ApiResponse<object?>.Fail($"批量启停部分失败：{failed}/{rows.Count}"));
+
+            return Ok(ApiResponse<object?>.Ok(data: new { Affected = rows.Count }));
         }
     }
 }

@@ -7,11 +7,13 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using CertPlatform.Admin.Services.DocExtraction;
 using CertPlatform.Admin.Services.Workflow.Models;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using YZH.Core.DataBase.Interfaces;
 using CertPlatform.Shared.Constants;
 using CertPlatform.Shared.Entities.Doc;
+using CertPlatform.Shared.Exceptions;
 
 namespace CertPlatform.Admin.Services.Workflow
 {
@@ -35,19 +37,23 @@ namespace CertPlatform.Admin.Services.Workflow
         private readonly IDbOrm _db;
         private readonly WorkflowLogger _wfLogger;
         private readonly ILogger<NodeExecutor> _logger;
+        // ★ 2026-09-30 裁决 J1/J2/J4：取数唯一口径。⛔ docfield/doctable 不得再自己拼 WHERE。
+        private readonly ExtractionDataResolver _resolver;
 
         public NodeExecutor(
             ISkillRegistry skillRegistry,
             AiNodeExecutor aiNodeExecutor,
             IDbOrm db,
             WorkflowLogger wfLogger,
-            ILogger<NodeExecutor> logger)
+            ILogger<NodeExecutor> logger,
+            ExtractionDataResolver resolver)
         {
             _skillRegistry = skillRegistry;
             _aiNodeExecutor = aiNodeExecutor;
             _db = db;
             _wfLogger = wfLogger;
             _logger = logger;
+            _resolver = resolver;
         }
 
         /// <summary>
@@ -114,6 +120,21 @@ namespace CertPlatform.Admin.Services.Workflow
                 nodeResult.CompletedAt = DateTime.Now;
                 return nodeResult;
             }
+            catch (WorkflowDataMissingException ex)
+            {
+                // ★★★ 2026-09-30 语义异常【必须穿透】（裁决：执行期空值 ⇒ 自动失败 + 落缺口）
+                //
+                //   为什么不能吞：WorkflowDataMissingException 带 8 个结构化属性
+                //   （DataKind/DataCode/Reason/RuleCode/StandardFileCode/EnterpriseCode/
+                //     StandardCode/StageCode）。一旦被下面的 catch(Exception) 捕获并
+                //   压成 NodeExecutionResult.Error 字符串，上层就再也分不清
+                //   「故意造的缺口」与「取数 bug」—— 补录夹具会失去信号（25 号 §6.3）。
+                //
+                //   失败分类码：DATA_MISSING（红·去补录） vs SYSTEM_ERROR（灰·报 bug）
+                sw.Stop();
+                _wfLogger.NodeFail(taskCode, itemCode, node.NodeId, ex.Message, (int)sw.ElapsedMilliseconds);
+                throw;
+            }
             catch (Exception ex)
             {
                 sw.Stop();
@@ -121,6 +142,7 @@ namespace CertPlatform.Admin.Services.Workflow
                 _wfLogger.NodeFail(taskCode, itemCode, node.NodeId, ex.Message, (int)sw.ElapsedMilliseconds);
 
                 var failResult = NodeExecutionResult.Fail(ex.Message, (int)sw.ElapsedMilliseconds);
+                failResult.ErrorCode = WorkflowErrorCodes.SystemError;
                 failResult.StartedAt = startedAt;
                 failResult.CompletedAt = DateTime.Now;
                 return failResult;
@@ -330,6 +352,10 @@ namespace CertPlatform.Admin.Services.Workflow
             var enterpriseCode = contextParams?.GetValueOrDefault("enterpriseCode")?.ToString() ?? "";
             if (string.IsNullOrEmpty(enterpriseCode))
                 enterpriseCode = YzhVirtualEnterprise.Code;
+            var standardCode = contextParams?.GetValueOrDefault("standardCode")?.ToString() ?? "";
+            // ★ 2026-09-30 修 B1：上下文键是 phaseCode，cert_extraction_result 的列是 StageCode。
+            //   值口径已统一为 GUID（wf_execution_task.PhaseCode 已扩到 varchar(36），执行器改传 GUID）。
+            var stageCode = contextParams?.GetValueOrDefault("phaseCode")?.ToString() ?? "";
 
             var source = enterpriseCode == YzhVirtualEnterprise.Code ? "sample_data" : "enterprise_doc";
 
@@ -338,23 +364,50 @@ namespace CertPlatform.Admin.Services.Workflow
             if (string.IsNullOrEmpty(fieldCode))
                 throw new InvalidOperationException($"docField 节点 {node.NodeId} 缺少 fieldCode 配置");
 
-            // 真实取数：cert_extraction_result 按 field_code + enterprise_code，取最新版本
-            var field = (await _db.GetOneAsync<CertPlatform.Shared.Entities.Doc.ExtractionResult>(x =>
-                x.FieldCode == fieldCode && x.EnterpriseCode == enterpriseCode)).Data;
+            // ★★ 取数唯一口径 = ExtractionDataResolver（2026-09-30 裁决 J1/J2/J4）。
+            //   · 收窄键 (OrgCode, RuleCode, FieldCode)  ← RuleCode 取代 FileCode（B2 修复）
+            //   · 人工值优先（ValueSource='manual'）        ← 裁决 J2
+            //   · IsBlankText 判空（识别 - / 无 / 待填写…）  ← B3 修复
+            //   ⛔ 不得在此另拼 WHERE —— 缺口生成（GapDetector）走同一个 Resolver，
+            //     口径分叉会导致「清单说齐了、执行说缺了」。
+            var field = await _resolver.GetFieldAsync(
+                enterpriseCode, ruleCode, fieldCode, standardCode, stageCode);
 
-            if (field == null)
-                throw new InvalidOperationException(
-                    $"未找到提取字段：field_code={fieldCode}, enterprise_code={enterpriseCode}（请确认提取规则已保存且数据已落库）");
+            // ★★★ 空值守卫：取不到【可用值】⇒ 自动失败 + 提示「缺失必要数据」。
+            //   三态（has_value / is_empty / not_found）由 Resolver 判定。
+            if (field.State == EmptyJudge.StateNotFound)
+                throw new WorkflowDataMissingException("field", fieldCode, "not_found",
+                    $"缺失必要数据：字段「{field.FieldName ?? fieldCode}」没有提取记录，无法执行判定，请先补录（或确认提取规则已配置并跑过提取）",
+                    ruleCode: ruleCode,
+                    enterpriseCode: enterpriseCode, standardCode: standardCode, stageCode: stageCode);
+
+            if (field.State == EmptyJudge.StateIsEmpty)
+                throw new WorkflowDataMissingException("field", fieldCode, "is_empty",
+                    $"缺失必要数据：字段「{field.FieldName ?? fieldCode}」的值为空，无法执行判定，请先补录",
+                    standardFileCode: field.StandardFileCode,
+                    ruleCode: ruleCode,
+                    enterpriseCode: enterpriseCode, standardCode: standardCode, stageCode: stageCode);
 
             var confidence = (double?)(field.Confidence ?? 0m) ?? 0d;
 
-            _wfLogger.DocFieldResult(field.ExtractedValue, confidence, source);
+            _wfLogger.DocFieldResult(field.RawValue, confidence, source);
 
             return new Dictionary<string, object>
             {
-                ["fieldValue"] = field.ExtractedValue ?? string.Empty,
+                ["fieldValue"] = field.RawValue ?? string.Empty,
                 ["confidence"] = confidence,
-                ["source"] = source
+                ["source"]     = source,
+                // ★★ 溯源三元组（2026-09-30 B4 修复）
+                //   WfExecutionTaskService:490-492 读的正是这三个键；
+                //   修复前 NodeExecutor 只返回 source（值是 "enterprise_doc" 这类字符串，不是文件Code），
+                //   导致 wf_node_execution.SourceFileCode/SourceFieldName/SourceVersion 长期为 NULL，
+                //   ★ 连带后果：18 号 §3.5 的 C5 证据交叉校验形同虚设。
+                ["sourceFileCode"]  = field.StandardFileCode ?? field.FileCode,
+                ["sourceFieldName"] = field.FieldName ?? fieldCode,
+                ["sourceVersion"]   = field.VersionNumber,
+                // ★ 2026-09-30 补：值来源与命中行，供上层区分人工值 / 自动值
+                ["valueSource"]     = field.ValueSource ?? ExtractionValueSource.Auto,
+                ["resultCode"]      = field.ResultCode ?? string.Empty
             };
         }
 
@@ -375,6 +428,8 @@ namespace CertPlatform.Admin.Services.Workflow
             var enterpriseCode = contextParams?.GetValueOrDefault("enterpriseCode")?.ToString() ?? "";
             if (string.IsNullOrEmpty(enterpriseCode))
                 enterpriseCode = YzhVirtualEnterprise.Code;
+            var standardCode = contextParams?.GetValueOrDefault("standardCode")?.ToString() ?? "";
+            var stageCode = contextParams?.GetValueOrDefault("phaseCode")?.ToString() ?? "";
 
             var source = enterpriseCode == YzhVirtualEnterprise.Code ? "sample_data" : "enterprise_doc";
 
@@ -383,89 +438,56 @@ namespace CertPlatform.Admin.Services.Workflow
             if (string.IsNullOrEmpty(tableCode))
                 throw new InvalidOperationException($"docTable 节点 {node.NodeId} 缺少 tableCode 配置");
 
-            // 真实取数：cert_table_extraction_result 按 table_code + enterprise_code，取最新版本
-            var table = (await _db.GetOneAsync<CertPlatform.Shared.Entities.Doc.TableExtractionResult>(x =>
-                x.TableCode == tableCode && x.EnterpriseCode == enterpriseCode)).Data;
+            // ★★ 取数唯一口径 = ExtractionDataResolver（同 docField，裁决 J1/J2/J4）。
+            //   · 收窄键 (OrgCode, RuleCode, TableCode)  ← RuleCode 取代 FileCode
+            //   · 人工值优先（ValueSource='manual'）
+            //   · ★ B3 修复：JSON 非空但【所有单元格都空】（实测 `[{"item":"","value":""}]`）也判 is_empty
+            //   · ★ B6 修复：补 !IsDeleted（实体此前未声明该属性，但 DB 列本就存在）
+            var table = await _resolver.GetTableAsync(
+                enterpriseCode, ruleCode, tableCode, standardCode, stageCode);
 
-            if (table == null)
-                throw new InvalidOperationException(
-                    $"未找到提取表格：table_code={tableCode}, enterprise_code={enterpriseCode}（请确认提取规则已保存且数据已落库）");
+            // ★★★ 空值守卫：无记录 / 空表 ⇒ 自动失败 + 提示「缺失必要数据」
+            if (table.State == EmptyJudge.StateNotFound)
+                throw new WorkflowDataMissingException("table", tableCode, "not_found",
+                    $"缺失必要数据：表格「{tableCode}」没有提取记录，无法执行判定，请先补录（或确认提取规则已配置并跑过提取）",
+                    ruleCode: ruleCode,
+                    enterpriseCode: enterpriseCode, standardCode: standardCode, stageCode: stageCode);
 
-            var rows = ParseTableRows(table.ExtractedJson);
+            if (table.State == EmptyJudge.StateIsEmpty)
+                throw new WorkflowDataMissingException("table", tableCode, "is_empty",
+                    $"缺失必要数据：表格「{tableCode}」没有有效数据行，无法执行判定，请先补录",
+                    standardFileCode: table.StandardFileCode,
+                    ruleCode: ruleCode,
+                    enterpriseCode: enterpriseCode, standardCode: standardCode, stageCode: stageCode);
+
+            var rows = ParseTableRows(table);
             var confidence = (double?)(table.Confidence ?? 0m) ?? 0d;
 
             _wfLogger.DocTableResult(rows.Count, confidence, source);
 
             return new Dictionary<string, object>
             {
-                ["rows"] = rows,
-                ["rowCount"] = rows.Count,
+                ["rows"]      = rows,
+                ["rowCount"]  = rows.Count,
                 ["confidence"] = confidence,
-                ["source"] = source
+                ["source"]    = source,
+                // ★★ 溯源三元组（2026-09-30 B4 修复）—— 同 docfield
+                ["sourceFileCode"]  = table.StandardFileCode ?? table.FileCode,
+                ["sourceFieldName"] = tableCode,   // 表格用 tableCode 做标识
+                ["sourceVersion"]   = table.VersionNumber,
+                // ★ 2026-09-30 补：值来源与命中行
+                ["valueSource"]     = table.ValueSource ?? ExtractionValueSource.Auto,
+                ["resultCode"]      = table.ResultCode ?? string.Empty
             };
         }
 
         /// <summary>
-        /// 解析表格数据 JSON 为行数组（TableData 列存 JSON，形如 [[c1,c2],[c1,c2]] 或 {"rows":[...]}）
+        /// Resolver 的已解析行 → 引擎用的 <c>List&lt;object&gt;</c>（保持下游 AI Prompt 模板兼容）。
+        /// <para>★ 2026-09-30：解析逻辑下沉到 <see cref="ExtractionDataResolver.ParseRows"/>（唯一口径），
+        /// 此处只做形状转换。</para>
         /// </summary>
-        private static List<object> ParseTableRows(string? tableDataJson)
-        {
-            var rows = new List<object>();
-            if (string.IsNullOrWhiteSpace(tableDataJson))
-                return rows;
-
-            try
-            {
-                using var doc = JsonDocument.Parse(tableDataJson);
-                var root = doc.RootElement;
-
-                if (root.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var item in root.EnumerateArray())
-                        rows.Add(JsonElementToObject(item));
-                }
-                else if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("rows", out var rowsEl) && rowsEl.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var item in rowsEl.EnumerateArray())
-                        rows.Add(JsonElementToObject(item));
-                }
-            }
-            catch
-            {
-                // JSON 解析失败 → 返回原始文本作为单行
-                rows.Add(new Dictionary<string, object> { ["raw"] = tableDataJson });
-            }
-
-            return rows;
-        }
-
-        /// <summary>JsonElement → 可序列化对象（dict/list/标量）</summary>
-        private static object JsonElementToObject(JsonElement el)
-        {
-            switch (el.ValueKind)
-            {
-                case JsonValueKind.Object:
-                    var dict = new Dictionary<string, object>();
-                    foreach (var p in el.EnumerateObject())
-                        dict[p.Name] = JsonElementToObject(p.Value);
-                    return dict;
-                case JsonValueKind.Array:
-                    var list = new List<object>();
-                    foreach (var item in el.EnumerateArray())
-                        list.Add(JsonElementToObject(item));
-                    return list;
-                case JsonValueKind.String:
-                    return el.GetString() ?? "";
-                case JsonValueKind.Number:
-                    return el.GetDouble();
-                case JsonValueKind.True:
-                    return true;
-                case JsonValueKind.False:
-                    return false;
-                default:
-                    return el.GetRawText();
-            }
-        }
+        private static List<object> ParseTableRows(ExtractionDataResolver.TableValue table)
+            => table.Rows.Select(r => (object)r).ToList();
 
         /// <summary>
         /// ai_node 节点：委托 AiNodeExecutor

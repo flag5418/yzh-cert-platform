@@ -16,6 +16,7 @@ export * from './workflow/ai-usage'
 export * from './workflow/nc-config'
 export * from './workflow/report-rule'
 export * from './workflow/doc-extraction-rule'
+export * from './workflow/prompt-workbench'
 export * from './workflow/execution'
 
 // Enterprise 域 API（专家端企业资料管理）

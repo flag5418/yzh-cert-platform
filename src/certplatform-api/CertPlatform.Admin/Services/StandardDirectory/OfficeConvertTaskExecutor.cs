@@ -1,8 +1,10 @@
 
 using System.Text.Json;
 using CertPlatform.Shared.Constants;
+using CertPlatform.Shared.Entities.Dir;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using YZH.Core.DataBase.Interfaces;
 using YZH.Core.DataBase.Services;
 using YZH.Core.Stand.Interfaces;
 using YzhQueueTask = YZH.Core.Stand.Models.Queue.YzhQueueTask;
@@ -70,6 +72,14 @@ public class OfficeConvertTaskExecutor : IYzhTaskExecutor
         if (string.IsNullOrWhiteSpace(payload.EnterpriseCode) || payload.EnterpriseCode == YzhVirtualEnterprise.Code)
             return;
 
+        // ★ S2 图 3 分流：未要求自动提取 ⇒ 只转换不提取（状态留 none，原因落 ExtractMessage）
+        if (!payload.AutoExtract)
+        {
+            await MarkAutoExtractSkippedAsync(payload.Code);
+            _logger.LogInformation("[FileConvert→Extract] AutoExtract=false，跳过提取入队: {FileCode}", payload.Code);
+            return;
+        }
+
         var queueManager = _serviceProvider.GetRequiredService<QueueManager>();
         var fileCode = payload.Code;
         var req = new QueueManager.CreateQueueRequest
@@ -86,12 +96,41 @@ public class OfficeConvertTaskExecutor : IYzhTaskExecutor
             },
             Tasks = new List<QueueManager.TaskItem>
             {
-                new() { TaskType = "doc_extract", Payload = JsonSerializer.Serialize(new { code = fileCode, enterpriseCode = payload.EnterpriseCode, stageCode = payload.StageCode }) }
+                new() { TaskType = "doc_extract", Payload = JsonSerializer.Serialize(new { code = fileCode, enterpriseCode = payload.EnterpriseCode, stageCode = payload.StageCode, fileName = payload.FileName }) }
             }
         };
         var (qok, qerr, _, _) = await queueManager.CreateQueueAsync(req);
         if (!qok)
             _logger.LogWarning("[FileConvert→Extract] 提取队列创建失败: {FileCode} {Reason}", fileCode, qerr);
+    }
+
+    /// <summary>
+    /// ★ S2：AutoExtract=false 时的落痕 —— 状态保持 3 态里的 <c>none</c>（未提取），
+    /// 只把原因写进 <c>ExtractMessage</c>，让页面能看到「转换完成，未要求自动提取」。
+    /// </summary>
+    private async Task MarkAutoExtractSkippedAsync(string fileCode)
+    {
+        if (string.IsNullOrWhiteSpace(fileCode)) return;
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<IDbOrm>();
+            var file = (await db.GetOneIgnoreValidAsync<StandardDirectoryFile>(
+                x => x.Code == fileCode)).Data;
+            if (file == null) return;
+
+            file.ExtractStatus = "none";
+            file.ExtractMessage = "转换完成，未要求自动提取";
+            file.UpdateTime = DateTime.Now;
+            await db.UpdateAsync(file,
+                nameof(StandardDirectoryFile.ExtractStatus),
+                nameof(StandardDirectoryFile.ExtractMessage),
+                nameof(StandardDirectoryFile.UpdateTime));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[FileConvert→Extract] 写未自动提取标记失败: {FileCode}", fileCode);
+        }
     }
 
     public Task OnTaskStateChangedAsync(YzhQueueTask task, string newStatus, string message)

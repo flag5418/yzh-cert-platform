@@ -168,4 +168,48 @@ public class PromptTemplateService
         var result = await _db.UpdateAsync(target);
         return result.Success;
     }
+
+    /// <summary>
+    /// 【工作台】标准下拉选项：<c>Code</c>（GUID，存库值）+ <c>StandardCode</c> / <c>StandardName</c>（展示）。
+    /// <para>⚠️ 返回值用 <c>Code</c>（GUID），因为 <c>wf_prompt_template.StandardCode</c> 与
+    /// <c>cert_enterprise_stage.StandardCode</c> 同口径都存 GUID —— 存可读编码会造成「页面看 A、匹配 B」且不报错。</para>
+    /// </summary>
+    public async Task<List<StandardOption>> GetStandardOptionsAsync()
+    {
+        var list = await _db.GetListAsync<CertPlatform.Shared.Entities.Cert.ISOStandard>(x => x.IsValid == 1);
+        if (!list.Success || list.Data == null) return new List<StandardOption>();
+
+        return list.Data
+            .OrderBy(x => x.StandardCode)
+            .Select(x => new StandardOption
+            {
+                Code = x.Code ?? "",
+                StandardCode = x.StandardCode,
+                StandardName = x.StandardName,
+                Display = $"{x.StandardName}（{x.StandardCode}）"
+            })
+            .ToList();
+    }
+
+    /// <summary>标准下拉项</summary>
+    /// <remarks>
+    /// ⚠️ 显式 <c>[JsonPropertyName]</c> 不可省：本项目 MVC JSON 选项是
+    /// <c>PropertyNamingPolicy = null</c>（PascalCase），而 DTO 惯例是 camelCase。
+    /// 不标注 ⇒ 前端读 <c>data.code</c> 得 undefined ⇒ 「下拉有选项但选中后存空值」且零报错。
+    /// </remarks>
+    public class StandardOption
+    {
+        /// <summary>★ 存库值（cert_iso_standard.Code，GUID）</summary>
+        [System.Text.Json.Serialization.JsonPropertyName("code")]
+        public string Code { get; set; } = "";
+        /// <summary>可读标准号（如 iso9001-2015）</summary>
+        [System.Text.Json.Serialization.JsonPropertyName("standardCode")]
+        public string StandardCode { get; set; } = "";
+        /// <summary>标准名称</summary>
+        [System.Text.Json.Serialization.JsonPropertyName("standardName")]
+        public string StandardName { get; set; } = "";
+        /// <summary>下拉展示文本</summary>
+        [System.Text.Json.Serialization.JsonPropertyName("display")]
+        public string Display { get; set; } = "";
+    }
 }

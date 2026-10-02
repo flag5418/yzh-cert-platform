@@ -44,6 +44,37 @@ function rowsLoader(node: FolderNode) {
   return () => Promise.resolve({ rows: node.Files, total: node.Files.length })
 }
 
+/**
+ * ★ 提取状态五态文案/色（与后端 ExtractStateRule.Of 同口径）
+ *
+ * <para>2026-09-30 用户裁决新增 `failed`：**有提取规则、但执行时失败**
+ * （文档内容与标准目录结构完全不同 / 该文档不能解析 / AI 未提取到任何字段表格）。
+ * 必须与 `not_configured`（无规则，不算失败）区分开 —— 旧实现把 failed 抹成 none，
+ * 页面显示「未提取」，用户以为根本没跑。</para>
+ */
+const EXTRACT_STATE_TEXT: Record<string, { text: string; type: 'success' | 'info' | 'warning' | 'primary' | 'danger' }> = {
+  extracted: { text: '已提取', type: 'success' },
+  failed: { text: '提取失败', type: 'danger' },
+  pending: { text: '未提取', type: 'warning' },
+  not_configured: { text: '未配置', type: 'info' },
+  queued: { text: '提取中', type: 'primary' }
+}
+
+/** 提取列 tooltip：说清「为什么是这个状态」，用专家看得懂的话（不指向管理员） */
+function extractTip(row: FileSlot): string {
+  const msg = row.ExtractMessage?.trim()
+  switch (row.ExtractState) {
+    case 'failed':
+      return msg || '该文档有提取规则但执行未成功（内容与规则不匹配或无法解析），可点「重试」'
+    case 'not_configured':
+      return '该文档不需要提取：规则库未为它配置可用规则（不算失败）'
+    case 'pending':
+      return msg || '尚未提取'
+    default:
+      return msg || ''
+  }
+}
+
 function statusType(row: FileSlot) {
   const t = SLOT_STATUS_TEXT[row.Status]?.type ?? 'info'
   return t === 'primary' ? 'primary' : t
@@ -93,7 +124,7 @@ function formatSize(size?: number | null) {
           <template #column-Status="{ row }">
             <el-tooltip
               v-if="row.Status === 'markdownFailed'"
-              content="PDF 产物已生成，但 Markdown 产物失败 —— 提取与 NC 检查拿不到正文，请重传为 docx 或由管理员调整转换器"
+              content="预览正常，但正文转换失败（该格式不支持），提取与 NC 检查拿不到内容，建议重传为 docx"
               placement="top"
             >
               <span><el-tag size="small" :type="statusType(row)">
@@ -103,6 +134,19 @@ function formatSize(size?: number | null) {
             <el-tag v-else size="small" :type="statusType(row)">
               {{ SLOT_STATUS_TEXT[row.Status as keyof typeof SLOT_STATUS_TEXT]?.text ?? row.Status }}
             </el-tag>
+          </template>
+          <template #column-ExtractState="{ row }">
+            <el-tooltip v-if="extractTip(row)" :content="extractTip(row)" placement="top">
+              <span><el-tag
+                size="small"
+                :type="EXTRACT_STATE_TEXT[row.ExtractState ?? '']?.type ?? 'info'"
+              >{{ EXTRACT_STATE_TEXT[row.ExtractState ?? '']?.text ?? '未提取' }}</el-tag></span>
+            </el-tooltip>
+            <el-tag
+              v-else
+              size="small"
+              :type="EXTRACT_STATE_TEXT[row.ExtractState ?? '']?.type ?? 'info'"
+            >{{ EXTRACT_STATE_TEXT[row.ExtractState ?? '']?.text ?? '未提取' }}</el-tag>
           </template>
           <template #column-VersionNumber="{ row }">
             <span v-if="row.StoragePath">v{{ row.VersionNumber }}</span>
@@ -121,12 +165,20 @@ function formatSize(size?: number | null) {
               <el-button link type="primary" size="small" :disabled="busy" @click="emit('replace', row)">替换</el-button>
               <el-button link type="primary" size="small" @click="emit('versions', row)">版本</el-button>
               <el-button
-                v-if="row.ConvertStatus === 'completed' && !!row.MarkdownPath" link type="primary" size="small"
+                v-if="row.ConvertStatus === 'completed' && !!row.MarkdownPath && row.ExtractState !== 'not_configured'"
+                link :type="row.ExtractState === 'failed' ? 'danger' : 'primary'" size="small"
                 :disabled="busy" @click="emit('extract', row)"
-              >提取</el-button>
+              >{{ row.ExtractState === 'failed' ? '重试' : '提取' }}</el-button>
+              <el-tooltip
+                v-else-if="row.ExtractState === 'not_configured'"
+                content="该文档不需要提取：规则库未为它配置可用规则"
+                placement="top"
+              >
+                <span><el-button link type="info" size="small" disabled>提取</el-button></span>
+              </el-tooltip>
               <el-tooltip
                 v-else-if="row.ConvertStatus === 'completed' && !row.MarkdownPath"
-                content="该文件没有 Markdown 产物（转换器不支持或已失败），提取/NC 拿不到正文"
+                content="该文件没有可提取的正文（转换器不支持或转换失败），请重传为 docx"
                 placement="top"
               >
                 <span><el-button link type="info" size="small" disabled>提取</el-button></span>

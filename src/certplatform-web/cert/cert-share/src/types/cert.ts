@@ -400,7 +400,12 @@ export interface QueueStatus {
 // 报告定义
 // ========================================================
 
-/** 报告模板 */
+/**
+ * ★【已废弃 2026-09-29】报告模板
+ * <p>报告主表已废弃（D34：不做报表系统，章节定义改为扁平结构）。
+ * 保留此 interface 仅供历史代码编译期提示，新代码不应引用。</p>
+ * @deprecated 表已改名为 z_deprecated_cert_report_template，0 行，不再写入
+ */
 export interface ReportTemplate {
   Id: number
   Code: string
@@ -417,25 +422,41 @@ export interface ReportTemplate {
   ModifyDate: string
 }
 
-/** 报告章节 */
+/**
+ * ★ 报告章节（★2026-09-29 去主表化，扁平结构）
+ * <p>★ 与 NC 检查规则（ValidationRule）完全对称：都是配置层、都按
+ * (OrgCode + StandardCode + PhaseCode) 三元组定位、都用 IsValid 启用。</p>
+ * <p>★ 相比旧版：删 ReportCode（语义错位列），增 StandardCode/PhaseCode，
+ * IsActive 统一为 IsValid（铁律九）。</p>
+ */
 export interface ReportSection {
   Id: number
   Code: string
-  ReportCode: string
-  ClauseCode: string
+  /** ★ 认证机构编码（配置层归属，不是专家工作区） */
+  OrgCode: string
+  /** ★ 标准编码 */
+  StandardCode: string
+  /** ★ 阶段编码（cert_cert_stage.Code，GUID 不是业务码） */
+  PhaseCode: string
   SectionName: string
   SectionNameEn: string
+  /** 章节内容（模板示例正文，纯文本） */
   Content: string
+  /** 章节排序（唯一键组成：OrgCode+StandardCode+PhaseCode+SortOrder） */
   SortOrder: number
-  IsActive: number
+  /** ★ 有效标志（1=启用，0=禁用）—— 铁律九唯一启用字段 */
+  IsValid: number
+  /** 对应条款编码（★可空：概述/结论类章节不映射条款） */
+  ClauseCode: string
   WorkflowCode: string
+  /** ★ 工作流 DAG（★注意：规则的 DAG 在 RuleJson，本表是 WorkflowConfig，字段名不同） */
   WorkflowConfig: string
   LayoutJson: string
   SectionJson: string
-  OrgCode: string
   Remark: string
-  IsValid: number
+  Status: string
   CreateBy: string
-  CreateDate: string
-  ModifyDate: string
+  CreateTime: string
+  UpdateBy: string
+  UpdateTime: string
 }

@@ -1,0 +1,176 @@
+{
+  "Title": "专家任务",
+  "FillMode": "AutoFix",
+  "EnableField": "IsValid",
+  "Columns": [
+    {
+      "FieldName": "Id",
+      "DesName": "ID",
+      "Type": "Other",
+      "Sxh": 0,
+      "XsFlag": false,
+      "BcFlag": false,
+      "Yxk": false,
+      "Width": 0,
+      "Enable": true
+    },
+    {
+      "FieldName": "Code",
+      "DesName": "编码",
+      "Type": "Other",
+      "Sxh": 0,
+      "XsFlag": false,
+      "BcFlag": false,
+      "Yxk": false,
+      "Width": 0,
+      "Enable": true
+    },
+    {
+      "FieldName": "OrgCode",
+      "DesName": "工作区",
+      "Type": "Other",
+      "Sxh": 0,
+      "XsFlag": false,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 0,
+      "Enable": true
+    },
+    {
+      "FieldName": "TaskNumber",
+      "DesName": "任务编号",
+      "Type": "TextBox",
+      "Sxh": 1,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 150,
+      "Enable": true
+    },
+    {
+      "FieldName": "TaskName",
+      "DesName": "任务名称",
+      "Type": "TextBox",
+      "Sxh": 2,
+      "XsFlag": true,
+      "BcFlag": true,
+      "Yxk": true,
+      "Width": 220,
+      "Enable": true
+    },
+    {
+      "FieldName": "EnterpriseName",
+      "DesName": "企业",
+      "Type": "TextBox",
+      "Sxh": 3,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 170,
+      "Enable": true
+    },
+    {
+      "FieldName": "StageName",
+      "DesName": "阶段",
+      "Type": "TextBox",
+      "Sxh": 4,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 100,
+      "Enable": true
+    },
+    {
+      "FieldName": "TaskTypeLabel",
+      "DesName": "分类",
+      "Type": "TextBox",
+      "Sxh": 5,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 100,
+      "Enable": true
+    },
+    {
+      "FieldName": "ExecStatusLabel",
+      "DesName": "执行状态",
+      "Type": "CustomSlot",
+      "Sxh": 6,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 110,
+      "Enable": true
+    },
+    {
+      "FieldName": "Progress",
+      "DesName": "进度",
+      "Type": "CustomSlot",
+      "Sxh": 7,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 150,
+      "Enable": true
+    },
+    {
+      "FieldName": "CreateTime",
+      "DesName": "创建时间",
+      "Type": "DateTimePicker",
+      "Sxh": 8,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 160,
+      "Enable": true
+    },
+    {
+      "FieldName": "Remark",
+      "DesName": "备注",
+      "Type": "Memo",
+      "Sxh": 9,
+      "XsFlag": false,
+      "BcFlag": true,
+      "Yxk": true,
+      "Width": 200,
+      "Enable": true
+    }
+  ],
+  "SearchFields": [
+    {
+      "Label": "任务名称",
+      "Field": "TaskName",
+      "Operator": "like",
+      "ControlType": "input",
+      "Width": 200
+    },
+    {
+      "Label": "任务编号",
+      "Field": "TaskNumber",
+      "Operator": "like",
+      "ControlType": "input",
+      "Width": 180
+    }
+  ],
+  "RowButtons": {
+    "Edit": false,
+    "Delete": false,
+    "CustomButtons": {
+      "detail": "详情",
+      "submit": "提交执行",
+      "retry": "重试失败项",
+      "result": "看结果"
+    }
+  },
+  "Toolbar": {
+    "Add": false,
+    "Delete": false,
+    "Export": false,
+    "Import": false,
+    "CustomButtons": {
+      "创建新任务": "create",
+      "从已有任务出发": "createFrom"
+    }
+  },
+  "FormCols": 1
+}

@@ -71,5 +71,18 @@ public enum ControlType
     Slider = 20,
 
     /// <summary>树形选择</summary>
-    TreeSelect = 21
+    TreeSelect = 21,
+
+    /// <summary>
+    ///     自定义插槽列（★ 2026-09-30 新增）。
+    ///     <para><b>为什么必须存在</b>：前端 <c>entityAdapters.ts</c> 的 <c>toTableColumns</c> 用
+    ///     <c>c.Type === 'CustomSlot'</c> 判定该列走 <c>&lt;slot name="column-{FieldName}"&gt;</c>
+    ///     （进度条 / 状态标签等无法用纯文本渲染的列）。此前该值<b>只存在于前端约定、
+    ///     后端枚举里没有</b> ⇒ <c>JsonStringEnumConverter</c> 反序列化抛异常 ⇒ 被
+    ///     <c>EntityConfigHelper.LoadAndParse</c> 的 <c>catch</c> 静默吞掉 ⇒
+    ///     <b>整个 EntityConfig 变成空配置（Columns=[]）</b>，页面「有数据行、一列都不显示、零报错」。
+    ///     </para>
+    ///     <para>⚠️ 新增任何 <c>Type</c> 值都必须<b>同时</b>加在这里，否则就是整份配置静默失效。</para>
+    /// </summary>
+    CustomSlot = 22
 }

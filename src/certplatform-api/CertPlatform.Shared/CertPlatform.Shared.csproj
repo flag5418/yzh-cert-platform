@@ -16,6 +16,16 @@
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Minio" Version="6.0.4" />
+    <!--
+      ★ NPOI：Word/Excel 单元格级写入（Office/ 目录）与 IExcelService 实现（NpoiExcelService）。
+      ★★ 版本刻意锁 2.7.2，⛔ 不要顺手升到 2.8.x：
+          2.8.0 起引入 OSMF（Open Source Maintenance Fee）EULA —— 构建期会强制要求
+          <AcceptNPOIOSMFLicense>true</AcceptNPOIOSMFLicense>，对**商业产品**意味着额外的
+          付费维护义务。2.7.2 为 Apache-2.0，无此约束。
+          ⇒ 升级前必须先由项目负责人确认许可与费用，属**商业决策**不是技术决策。
+      详见 docs/20-体系认证/03-详细设计/05-企业资料规范化/26-核心菜单功能设计（待审批）-V2.md §3.4.6
+    -->
+    <PackageReference Include="NPOI" Version="2.7.2" />
   </ItemGroup>
 
   <ItemGroup>

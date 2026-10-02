@@ -114,6 +114,7 @@
 | 前端 API | `cert-share/src/api/ent/enterprise-file.ts` 全量重写（新契约 + `yzhApi.getBlob` 取字节，禁裸链接） | `typecheck` + `build:auditor` 通过 |
 | 前端页面 | `resources/logic.ts` 重写（含 `treeNodes` 单树模型）+ `resources/components/StandardFolderTree.vue`（**递归**文件夹树）+ `index.vue` 重写（后台管理风格双卡片 + 4 个弹窗/抽屉） | 浏览器实测：左树「企业 → 阶段」单树（搜索命中保留父节点）→ 汇总 2/167/6/0/161 → 11 文件夹三级嵌套 → 槽位状态/操作列正确 → 控制台零告警 |
 | 出口门 | `dotnet build` 0 错；`guards.mjs` 20 规则 882 文件 0 违规；`build:share`/`build:auditor` 成功 | — |
+| 内容提取 S0–S2（10 号执行计划） | 规则表 `OrgCode` + 四元组；`ExtractionScopeResolver`；`AutoExtract` + `EnterpriseExtractionResultStore` + 3 态 | `test-doc-extraction-scope.sh` 20/20、`test-doc-extraction-api.sh` 51/51、`test-extraction-scope-resolver.sh` 8/8、`test-s2-autoextract-store.sh` **42/42**；`guards.mjs`/`typecheck:all`/`build:auditor`/`dotnet build` 全绿 |
 
 ### 8.2 偏差与理由（须逐条回写）
 
@@ -149,13 +150,38 @@
 | E23 | 关联页对**真故障**用 `ElMessage.error`、对 `org_unbound` 用 `warning` | 原来所有失败一律 `warning`，把「缺模板」和「代码缺陷」混为一谈 | 05 §三 |
 
 
+### 8.2.2 内容提取 S0–S2（2026-09-29，10 号执行计划）
+
+| # | 偏差 | 理由 | 对应原文 |
+|---|---|---|---|
+| E24 | `EnterpriseExtractionResultStore` 落在 `CertPlatform.Admin`（**不放 Shared**） | `CertPlatform.Shared.csproj` 只引用 `YZH.Core.Stand`、无 `YZH.Core.DataBase` ⇒ 依赖 `IDbOrm` 的类进不了 Shared；Admin/Auditor 各自注册 DI | 10 §6 S2③ |
+| E25 | `GetExtractionResultAsync` 读口径**不带 `VersionNumber` 硬过滤** | §5.3 中版本过滤本就标「可选」；恢复到 vN 后槽位当前版本是 n+1，硬过滤会把刚回活的 vN 行滤掉 ⇒ 验收⑤ 恒空 | 10 §5.3 |
+| E26 | replace/restore 入队 `SourceId` 改 `fileCode:v{N}` / `fileCode:restore:v{N}` | `yzh_queue.uk_source(SourceType,SourceId)` 唯一：同一文件第二次替换/恢复**撞键 ⇒ 队列静默失败**（只有 warn），「换文件后自动重新提取」不发生（③b 曾超时） | 10 图3/图4 |
+| E27 | 执行器 `extract_done` 留痕显式写 `CreateTime=DateTime.Now` + `IsValid=1` + `IsDeleted=false` | 原漏写 ⇒ `BaseEntity` 兜成 **UTC**（09:xx），而 replace/delete/restore 是本地时间（17:xx）⇒ 同一列两种时区，`CreateTime>=` 判据恒 0 | 10 §6 DoD |
+| E28 | 3 态落地细节：`processing` **不落库**（内存置 `none`+「提取中」）；重复触发守卫改用队列资源锁 `FindResourceLockAsync(RESOURCE_FILE)`；`pending/processing/failed/convertFailed` 读写一律 `none`、原因写 `ExtractMessage` | 落库的 `processing/pending` 会被页面读到（破 3 态铁律）；拿状态字面量判重复触发会与「转换中」撞车 | 10 §5.2 |
+| E29 | `upload/confirm` 的 `AutoExtract` 覆盖移到 `activatable` 判断**之外**，且 UPDATE 列显式带 `AutoExtract` | 原控制流写在 `activatable` 分支内 ⇒ 非激活路径丢开关；UPDATE 漏列则 DB 仍留默认值（实现期曾出现 if 错位，已改为独立语句） | 10 图3 |
+| E30 | 验收夹具：①④⑤ 用**本轮新上传槽位**（`VersionNumber=1`），③⑥ 用历史槽位 F；⑤ 前先做一次替换制造 `cert_enterprise_file_version` v1 归档件；规则按阶段 `align_rule` 切换、脚本 `EXIT` trap 复原 | 从未替换过的文件没有 v1 归档件（`RestoreFileAsync` 报「归档版本 v1 不存在」）；规则只能指向一个 `StandardFileCode`，双夹具必须来回切 | 10 §6 验收⑤ |
+| E31 | 验收脚本规避 macOS bash 3.2 陷阱：`[ "$(f "{...}")" = x ]` 里的 JSON **必须先落变量**再进命令替换 | bash 3.2 会对双引号内的 `{a,b}` 做花括号展开并拆词（实测 `apost` 被调 2 次、参数变 `["ConfigCode":"…"]`）⇒ `wait_idle` 恒超时、整轮验收假红 | — |
+| E32 | S1 验收的「等终态」判据从 **status 改为占位文案**（`ExtractMessage != "已加入提取队列"` 才算跑完） | S2 之后 status 只有 3 个终态、入队瞬间即为 `none` ⇒ 拿 status 轮询会在队列还没跑时就返回 `none`，把本该 `skipped` 的断言判假红（实测 7/8） | 10 §5.2 |
+
+### 8.2.3 内容提取 S3（重定义，2026-09-29）
+
+> 用户裁决 4 项：① **有规则即可提取**（口径修复）② 槽位页**提取状态四态列** ③ 规则内容变更 → **自动标记待重提取**（不自动入队）④ 队列监控页可看**自动提取日志**。原 §六 S3 的 `extract/plan|batch|retry|progress` 四端点与批量弹窗**延后**。验收：`test-extract-state-rule-update.sh` **22/22**。
+
+| # | 偏差 / 决策 | 现象与根因 | 权威出处 |
+|---|---|---|---|
+| E33 | **规则可用口径断链修复**：`ExtractionScopeResolver` 可用集从 `{passed}` 扩为 `{configured, passed}`（`IsUsableRule` 单点），并加执行器护栏「Prompt 空 ∧ 字段表格定义全空 ⇒ `skipped` 不空跑 LLM」 | resolver 只认 `Status='passed'`，但管理端 `SaveExtractionRuleAsync` 只写 `configured`/`failed`、全项目**零处写入 `passed`** ⇒ 正常配置的规则恒判「未配置」、自动提取恒 `skipped`，**两头都不报错**（规则页显示已配置、执行器显示跳过） | 10 §六 / AGENTS ② |
+| E34 | **非空 Prompt 的验收夹具必须留空**：`TestFieldWithMarkdownAsync` 里用户 Prompt 非空时走 `RenderPrompt(用户Prompt)`，**无渲染占位符则字段/表格定义进不了提示词** ⇒ AI 返回结构不匹配 ⇒ 0 字段 0 表格 ⇒ `failed`；且 `defTables` 为空时 `MapOutputsToExtractionData` 必然映射 0 表 | 首轮 S3 验收 16/22：写非空 Prompt 后 LLM 次次 0/0；Prompt 留空走 `BuildFixedExtractionPrompt(defFields, defTables)`（定义完整入提示词）即恢复 `completed`（E34 的第二层：**表格定义是映射硬前提**——夹具表格定义曾被验证性 save 删除，已从历史结果行反推重建 6 表 20 列） | 04 数据契约 |
+| E35 | **P3 标记逻辑去掉 `archived==0 continue`**：归档尽力而为，`completed` 状态**一律**回 `none` | 首版以「归档行数 > 0」为标状态前提：字段结果 0 行（只提取到表格）时 archived=0 ⇒ 不标 ⇒ 殿后成「显示已提取 + 结果读出来是空」的不一致态（与 3 态铁律同源） | 10 §五 5.2 |
+| E36 | **P3 夹具与回执**：① 真实保存前必须先对齐 `StandardFileCode`，否则 `GetRuleByScopeAsync` 判 `isNew` ⇒ `before=null` 不标记、还**多建一行规则**；② 控制器原 `ApiResponse.Ok()` 丢弃 service message ⇒ 「已标记 N 个文档待重新提取」影响数传不到页面，改 `Ok(message)` 透传；③ 验收脚本 `EXIT` trap 须同时复原**字段+表格定义 dump**（save 会物理删除重插） | 首轮验证：新建分支不标记（符合预期但误判为 bug）+ 回执恒「操作成功」+ 表格定义夹具丢失导致后续提取 0/0 | AGENTS ④（Code 分流）/ 22 接口返回规范 |
+
 ### 8.3 未完成项（下一批）
 
 | # | 项 | 说明 |
 |---|---|---|
 | ~~N1~~ | ~~右侧卡片布局~~ **已按用户 2026-09-29 裁决改口径** | 01 §3.2 原「每标准一张卡片并存」**废弃**：改为**后台管理风格**——整页灰底 + 两张白卡片（左「企业与阶段」单树、右「阶段资料」：阶段头 + 汇总条 + 标准 Tab），左侧**只有一棵树**（企业为父、阶段为子，不再叠加「企业树 + 阶段单选组」两套控件）。见 §8.4 |
 | ~~N2~~ | ~~未归属区「人工指派」~~ **已实现（E17）** | 后端指派模式本就可用，本轮补前端：批量弹窗未归属区逐个选「标准 + 文件夹」+ 单标准弹窗「直接放入所选文件夹」。实测 `营业执照.pdf` 已能落到 `4记录文件/其它/营业执照.pdf`（`StandardFileCode=NULL`、`IsRequired=0`） |
-| N3 | `[RequirePermission]` 未标注（05 §七） | 需先迁移 `sys_api.Enable → IsValid`，再跑 ApiSync + 角色重授权；现在标注会静默 403 |
+| ~~N3~~ | ~~`[RequirePermission]` 未标注~~ **阻塞已不存在** | ★ **2026-09-29 实测**：`sys_api` 列为 `Id, Code, Method, Path, GroupPath, Name, Author, IsValid, CreateTime, UpdateTime` —— **本就没有 `Enable` 列**，「需先迁移 `Enable→IsValid`」是误判，`[RequirePermission]` **现在就能标**。⚠️ 但改端点名会重算 `ApiCode=SHA256(HTTP|controller|action.lower)` ⇒ **必须手动跑 ApiSync + 重做角色关联**。建议并入 10 号 S5 一次配齐，避免二次返工 |标注会静默 403 |
 | N4 | 多标准验收种子未建 | 食品标准 `475da4fe × 复审 29c1bcc3` 无模板 config ⇒ 该行恒「机构未配置标准目录」，多标准分发无法现场验收 |
 | N5 | 菜单改名「资料库 → 企业资料管理」未执行 | 需动 `Sys_Menu` 并重跑 `sync_menu_urls.sh` |
 
@@ -183,7 +209,27 @@
 | 选中态 | 唯一权威 = `logic.selectedKey`（`watch` 同步 `setCurrentKey`），单阶段企业自动深入到阶段节点 | `logic.selectTreeNode` / `selectEnterpriseByCode` |
 | 上传硬约束 | 不变：未选阶段 → 右侧空态、所有上传入口不可用（需求 1） | `index.vue` 右卡片 `v-if="logic.selectedStage.value"` |
 
-### 8.5 第二批范围（2026-09-29 用户提出，**待审批**）
+### 8.5 第二批范围（2026-09-29 用户提出，**待审批** · ★ 已按资产实测重评）
+
+> ★ **2026-09-29 二次重评结论**：本批的问题**不是「漏造了什么」**，而是
+> **三处重复造 + 两处误诊**。
+>
+> | 类别 | 具体 | 修正 |
+> |---|---|---|
+> | **重复造 1** | 自建并发闸门（`SemaphoreSlim(2)`） | ⛔ 删。框架 `QueueManager` 已有 `SemaphoreSlim(4)`（`:45,52`），全进程最多 4 并发，**与队列数无关** |
+> | **重复造 2** | 自建队列 API 面（6 端点/1.5 人天） | ⛔ 缩到 0.8。`api/System/QueueMonitor` 8 端点 + `useQueueMonitor.ts` + `pages/workflow/queue`（544 行）**已存在** |
+> | **重复造 3** | ★ **自建第二套提取读口径** | ★ 修正为 **S2.5（1.0 人天，最高优先级）**：`docField` 未接入 `GetActiveAsync`，**两套读法并存 ⇒ 系统静默失效且无报错** |
+> | **误诊 1** | 「N 队列 = N 并发 LLM」（H14） | ❌ 框架已有限流，恒 ≤4 |
+> | **误诊 2** | 「S6 索引收口未开始」 | ❌ ①②③ 三块 DDL **已执行**，只剩 WP9-1 去重 + 写侧事务 |
+>
+> **★ 新发现两处**（改变了排期）：
+> - **框架真缺陷**：`QueueManager` **先领取后限流**（`:246-277` 领取 + 租约 → `:328` 等信号量），
+>   积压时排队 >600s 会被 `ReapStaleTasksAsync`（`:281-302`）判过期重投 ⇒ ★ **同一 LLM 任务重复执行**（重复扣费 + 重复行）。详见 10 号 §6.2
+> - **成本口径断裂**：`doc_extract` 写 `cert_ai_usage_log`，但工作流 `ai_node` 只记 `wf_node_execution` ⇒ ★ **AI 费用监控页对 NC/报告侧是盲的**。并入 S4a
+>
+> **★ 修正后人天**：原 7.0–8.0 → **6.3**（S2 1.5 + ★S2.5 1.0 + S3 1.0 + S4a 1.0 + ★S4b 0.5 + S5 0.8 + S6 0.5）
+> **★ 修正后关键路径**：`S0 → S1 → S2 → ★S2.5 → S3 → S4a/S4b`，S5 可并行
+> 📌 逐条依据见 [10 号 §6.2 与 §6 执行阶段](10-执行计划-V1.md)
 
 > 用户原文：上传资料时应像后台管理「文档内容提取规则」一样把 Markdown 转成字段/表格并存储，供 NC 检查与报告；**替换文件要清理该文件对应的字段与表格数据**；页面需有「内容提取」按钮（按阶段 / 按标准 / 单文档）；表格要显示哪些文档已提取成功；提取同样要队列管理；专家端也要队列管理（只看当前机构、失败可重试）。
 >

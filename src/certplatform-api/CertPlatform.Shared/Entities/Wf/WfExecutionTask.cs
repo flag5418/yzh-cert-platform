@@ -62,8 +62,16 @@ namespace CertPlatform.Shared.Entities.Wf
         [MaxLength(50)]
         public string EnterpriseCode { get; set; } = string.Empty;
 
-        /// <summary>审核阶段</summary>
-        [MaxLength(30)]
+        /// <summary>审核阶段编码（★GUID，关联 <c>cert_cert_stage.Code</c>）
+        /// <para>⚠️ 2026-09-30 扩列 <c>varchar(30)</c> → <c>varchar(36)</c>（脚本
+        /// <c>fix-wf-phasecode-width-20260930.sql</c>）。原列宽装不下 32 位 GUID，
+        /// 只能存人读短码 <c>'03'</c>，而 <c>cert_extraction_result.StageCode</c> 存 GUID
+        /// ⇒ <c>NodeExecutor</c> 的 StageCode 过滤永不命中（缺陷 B1）⇒ docfield 节点恒
+        /// 抛「缺失必要数据」。</para>
+        /// <para>★ 人读短码见 <c>cert_cert_stage.StageCode</c>，由调用方在
+        /// <c>wf_execution_task_item</c> 的 Payload 里另存（<c>StageNo</c>），不再用本列展示。</para>
+        /// </summary>
+        [MaxLength(36)]
         public string PhaseCode { get; set; } = string.Empty;
 
         /// <summary>yzh_queue.QueueCode（关联队列层）</summary>

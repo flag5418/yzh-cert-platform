@@ -90,7 +90,9 @@ function stageKey(enterpriseCode: string, stageCode: string): string {
  */
 function formatStandardIssue(std: StageStandardSummary): string {
   const no = std.StandardNo ? `（${std.StandardNo}）` : ''
-  return `${std.StandardName}${no}：管理端未配置该标准的目录模板`
+  // ★ 2026-09-30 提示信息优化：原「管理端未配置该标准的目录模板」是写给管理员的诊断，
+  //   专家看不懂也管不了。改为专家视角 —— 只说现状，处置建议收进提示条的一行短话。
+  return `${std.StandardName}${no} 暂无资料目录`
 }
 
 /** 待上传项（plan 预览 → 四段式执行） */
@@ -219,6 +221,7 @@ export class ResourcesLogic {
   readonly slotColumns: YzhTableColumn[] = [
     { prop: 'FileName', label: '标准文件槽位', minWidth: 300, slot: true },
     { prop: 'Status', label: '就位状态', width: 110, slot: true },
+    { prop: 'ExtractState', label: '提取状态', width: 90, slot: true },
     { prop: 'VersionNumber', label: '版本', width: 70, slot: true },
     { prop: 'Actions', label: '操作', width: 320, fixed: 'right', slot: true }
   ]
@@ -1046,13 +1049,23 @@ export class ResourcesLogic {
     if (!this.replaceNewFile.value) { ElMessage.warning('请选择新文件'); return }
     if (!this.replaceReason.value.trim()) { ElMessage.warning('请填写替换原因'); return }
     try {
-      await replaceFile(
+      const notice = await replaceFile(
         this.replaceNewFile.value, target.Code, this.selectedEnterprise.value,
         this.replaceReason.value.trim(), slotModifyTime(target)
       )
       ElMessage.success('文件已替换，旧版本已归档')
       this.closeReplaceDialog()
       await this.reloadStandard(target.StandardCode ?? this.activeTab.value)
+
+      // ★ 2026-09-30 裁决 J4 的连带后果：按 RuleCode 归档会把人工补录值一起清掉。
+      //   后端已写 change_log 留痕，这里弹窗问专家是否要重新补录（05 号 §5.3）。
+      if (notice?.manualValuesArchived) {
+        ElMessageBox.alert(notice.notice, '人工补录值已被覆盖', {
+          type: 'warning',
+          confirmButtonText: '知道了',
+          dangerouslyUseHTMLString: false,
+        }).catch(() => undefined)
+      }
     } catch (e: any) {
       ElMessage.error(e?.message ?? '替换失败')
     }
@@ -1175,8 +1188,9 @@ export class ResourcesLogic {
 
   async handleTriggerExtract(file: FileSlot) {
     try {
+      const isRetry = file.ExtractState === 'failed'
       await triggerExtract(file.Code, this.selectedEnterprise.value)
-      ElMessage.success('提取已入队')
+      ElMessage.success(isRetry ? '已重新提交提取' : '提取已入队')
       await this.reloadStandard(this.activeTab.value)
     } catch (e: any) { ElMessage.error(e?.message ?? '触发提取失败') }
   }

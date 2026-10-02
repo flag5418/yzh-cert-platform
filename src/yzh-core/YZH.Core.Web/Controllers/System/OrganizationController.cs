@@ -63,6 +63,12 @@ namespace YZH.Core.Web.Controllers.System;
 ///     6. 禁用机构时，该机构及所有子机构下的用户全部禁用
 ///     7. 启用人员时，所属机构必须已启用（否则拒绝）
 ///     8. 不能禁用超级管理员（RoleId=1）
+///     9. ★ 仅 OrgType='Dept' 的机构可在本页面修改/删除。
+///        其余类型（Platform/CertBody/VirtualOrg/Enterprise）由业务系统自动创建与维护
+///        （专家注册、专家系统新增企业、认证机构挂载等），管理端只读。
+///        前端隐藏按钮 + 后端 tree/update / tree/delete 双重拦截。
+///     10. ★ 录入表单不含「机构类型」字段（见 Assets/EntityConfigs/System/OrganizationForm.json），
+///        新增机构一律置为 Dept。
 ///     
 ///     API 路由：
 ///     --- 树（机构） ---
@@ -87,6 +93,19 @@ namespace YZH.Core.Web.Controllers.System;
 [Route("api/[controller]")]
 public class OrganizationController : TreeTableControllerBase<Sys_Organization, Sys_User>
 {
+    /// <summary>
+    /// 机构类型：仅「部门/文件夹」由本管理页面手工维护。
+    /// 其它类型（Platform / CertBody / VirtualOrg / Enterprise）均由业务系统自动创建与维护，
+    /// 例如：专家系统「专家注册」创建 VirtualOrg 工作区 + Dept 角色分组、
+    /// 专家系统「新增企业」在「企业信息」分组下创建 Enterprise 企业节点、
+    /// 认证机构挂载时创建 CertBody 机构节点。
+    /// </summary>
+    private const string OrgTypeDept = "Dept";
+
+    /// <summary>非 Dept 机构（业务系统所有）的统一拒绝文案</summary>
+    private const string BusinessOwnedOrgMessage =
+        "该机构由业务系统自动生成，不允许在机构管理中修改或删除；请到对应业务模块操作。";
+
     private readonly PasswordHelper _passwordHelper;
     private readonly IRoleService _roleService;
 
@@ -165,8 +184,9 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         if (string.IsNullOrEmpty(entity.Code))
             entity.Code = Guid.NewGuid().ToString("N");
 
-        if (string.IsNullOrEmpty(entity.OrgType))
-            entity.OrgType = "Dept";
+        // 机构类型已从录入表单移除（见 Assets/EntityConfigs/System/OrganizationForm.json），
+        // 由业务系统按用途自动写入；本页面新增的机构一律为「部门/文件夹」
+        entity.OrgType = OrgTypeDept;
 
         return (true, null);
     }
@@ -174,6 +194,22 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
     /// <summary>修改机构前校验</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdateTree(Sys_Organization entity)
     {
+        if (string.IsNullOrEmpty(entity.Code))
+            return (false, "更新失败：缺少业务键 Code");
+
+        // GetByCodeAny：禁用机构 IsValid=0，GetByCode 会查不到
+        var existing = await TreeEntity.GetByCodeAny(entity.Code);
+        if (!existing.Success || existing.Data == null)
+            return (false, "机构不存在");
+
+        // 非 Dept 机构归业务系统所有 → 拒绝管理端改写
+        if (!IsManagedDept(existing.Data))
+            return (false, BusinessOwnedOrgMessage);
+
+        // OrgType 不在录入表单中（前端不回传），而 SqlSugar 更新是全列覆盖，
+        // 不回填会把 DB 已有值清成 NULL —— 必须从原记录回填
+        entity.OrgType = existing.Data.OrgType;
+
         var nameExists = await TreeEntity.ExistsAsync(o =>
             o.Code != entity.Code &&
             o.ParentCode == entity.ParentCode &&
@@ -185,11 +221,20 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         return (true, null);
     }
 
-    /// <summary>删除机构前校验：禁止删除含子机构或人员的父级</summary>
+    /// <summary>删除机构前校验：禁止删除非 Dept 机构 / 含子机构或人员的父级</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeDeleteTree(string[] codes)
     {
         foreach (var code in codes)
         {
+            // GetByCodeAny：禁用机构 IsValid=0，GetByCode 会查不到
+            var existing = await TreeEntity.GetByCodeAny(code);
+            if (!existing.Success || existing.Data == null)
+                return (false, $"机构 {code} 不存在");
+
+            // 非 Dept 机构归业务系统所有 → 拒绝管理端删除
+            if (!IsManagedDept(existing.Data))
+                return (false, BusinessOwnedOrgMessage);
+
             // 检查是否有子机构
             var childCount = await TreeEntity.CountAsync(o => o.ParentCode == code);
             if (childCount.Data > 0)
@@ -203,6 +248,14 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
 
         return (true, null);
     }
+
+    /// <summary>
+    /// 判断机构是否归本管理页面维护（OrgType = Dept）。
+    /// 空值按 Dept 处理：DB 默认值为 'Dept'，历史脏数据 NULL 亦视作部门层级。
+    /// </summary>
+    private static bool IsManagedDept(Sys_Organization org)
+        => string.IsNullOrWhiteSpace(org.OrgType)
+           || org.OrgType.Equals(OrgTypeDept, StringComparison.OrdinalIgnoreCase);
 
     // ========================================================
     // 三、人员（表格）生命周期钩子
@@ -500,6 +553,9 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         dto.Extra["isValid"] = entity.IsValid;
         // 编辑弹窗回填：OrganizationForm 字段白名单从 Extra 取值（OrgCode 基类 TreeMapper 未提取）
         dto.Extra["OrgCode"] = entity.OrgCode ?? string.Empty;
+        // 机构类型：PascalCase 键，供前端判断是否隐藏「编辑 / 删除」按钮
+        // （基类 TreeMapper 只写了 camelCase 的 orgType，前端按 PascalCase 读会 miss）
+        dto.Extra["OrgType"] = entity.OrgType ?? OrgTypeDept;
         return dto;
     }
 }

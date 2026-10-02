@@ -3,7 +3,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using CertPlatform.Admin.Services.DocExtraction;
 using CertPlatform.Shared.Constants;
+using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Entities.Dir;
+using CertPlatform.Shared.Entities.Doc;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 using YzhQueueTask = YZH.Core.Stand.Models.Queue.YzhQueueTask;
@@ -13,9 +15,14 @@ namespace CertPlatform.Auditor.Services.Ent;
 /// <summary>
 /// 企业资料提取任务执行器（06 册 G-2c，TaskType = "doc_extract"）
 ///
-/// <para>链路：读企业行 <c>MarkdownPath</c> → 按该文件 <c>StandardFileCode</c> 的提取规则跑 LLM
-/// → 写 B-08/B-09 企业域（真实 VersionNumber；V-P1 甲路线：旧行 IsValid=0 归档不物理删）
+/// <para>链路：四元组定位规则（机构+标准+阶段+模板文档 Code，S0）→ 读企业行 <c>MarkdownPath</c>
+/// → 跑 LLM → 写 B-08/B-09 企业域（真实 VersionNumber；V-P1 甲路线：旧行 IsValid=0 归档不物理删）
 /// → 回写 <c>ExtractStatus/MaxConfidence/ExtractMessage</c>。</para>
+///
+/// <para>★ 4 态（2026-09-30 用户裁决，见 <see cref="EnterpriseExtractStatus"/>）：
+/// <c>completed</c> 已提取 / <c>failed</c> 有规则但执行失败（文档与规则不匹配 / 无法解析 / LLM 返回空）/
+/// <c>skipped</c> 无可用规则（不算失败）/ <c>none</c> 尚未提取。
+/// 失败原因落 <c>ExtractMessage</c>（页面 tooltip），队列层据 <c>Retryable</c> 决定重试。</para>
 ///
 /// <para>QueueManager 是单例 ⇒ 本类必须单例；Scoped 依赖经 IServiceProvider.CreateScope() 获取。</para>
 /// </summary>
@@ -60,6 +67,7 @@ public class EnterpriseExtractTaskExecutor : IYzhTaskExecutor
             var db = scope.ServiceProvider.GetRequiredService<IDbOrm>();
             var storage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
             var ruleService = scope.ServiceProvider.GetRequiredService<DocExtractionRuleService>();
+            var resolver = scope.ServiceProvider.GetRequiredService<ExtractionScopeResolver>();
 
             // 1. 企业文件行（含中间态：转换链会临时置 IsValid=0，这里用 IgnoreValid 口径）
             var file = (await db.GetOneIgnoreValidAsync<StandardDirectoryFile>(
@@ -69,7 +77,10 @@ public class EnterpriseExtractTaskExecutor : IYzhTaskExecutor
 
             async Task SetStatusAsync(string status, string? message, decimal? confidence)
             {
-                file.ExtractStatus = status;
+                // ★ 4 态收敛（2026-09-30）：写入值经 Normalize 出口 —— completed/failed/skipped/none 原样落库，
+                //   其他（pending/processing）回落 none。「为什么没提取」同时落 ExtractMessage（页面 tooltip）
+                var st = EnterpriseExtractStatus.Normalize(status);
+                file.ExtractStatus = st;
                 file.ExtractMessage = message;
                 file.MaxConfidence = confidence;
                 file.UpdateTime = DateTime.Now;
@@ -79,8 +90,8 @@ public class EnterpriseExtractTaskExecutor : IYzhTaskExecutor
                     nameof(StandardDirectoryFile.MaxConfidence),
                     nameof(StandardDirectoryFile.UpdateTime));
 
-                // G-3d 留痕：终态一律记 extract_done（含成功/失败，02 号 §六）
-                if (status is "completed" or "failed" or "none")
+                // G-3d 留痕：终态一律记 extract_done（含成功/失败/跳过，02 号 §六 + 4 态）
+                if (st is "completed" or "failed" or "none" or "skipped")
                 {
                     try
                     {
@@ -92,22 +103,77 @@ public class EnterpriseExtractTaskExecutor : IYzhTaskExecutor
                             FileCode = file.Code ?? "",
                             OpType = "extract_done",
                             VersionNumber = Math.Max(file.VersionNumber, 1),
-                            Detail = JsonSerializer.Serialize(new { status, message, confidence })
+                            Detail = JsonSerializer.Serialize(new { status = st, message, confidence }),
+                            // ⚠️ BaseEntity 不兜底：漏写 CreateTime 会落成 UTC，与 replace/delete 等本地时间混用（同一列两种时区）
+                            IsValid = 1,
+                            IsDeleted = false,
+                            CreateTime = System.DateTime.Now
                         });
                     }
                     catch (Exception oex) { _logger.LogWarning(oex, "[EnterpriseExtract] op_log 写入失败: {FileCode}", file.Code); }
                 }
             }
 
-            if (string.IsNullOrEmpty(file.MarkdownPath))
+            // 2. ★ S1 定位链唯一判定（10 号 §六）：四元组 + 可用规则（configured/passed）+ Markdown 就位
+            //    ①②③④ 收口于 ExtractionScopeResolver —— 端点/批量/执行器共用同一结论，
+            //    无规则 = 正常态 ⇒ 状态 skipped，队列任务不算失败
+            var slot = await resolver.ResolveAsync(file);
+            if (string.IsNullOrEmpty(slot.RuleCode))
             {
-                await SetStatusAsync("failed", "Markdown 产物不存在，无法提取", null);
-                return Fail("Markdown 产物不存在", retryable: false);
+                await SetStatusAsync("skipped", "该文件未配置提取规则，已跳过", null);
+                return new TaskExecutionResult { Success = true, Message = "无可用提取规则，跳过" };
             }
 
-            await SetStatusAsync("processing", null, null);
+            var rule = (await db.GetOneAsync<DocExtractionRule>(x => x.Code == slot.RuleCode)).Data;
+            if (rule == null)
+            {
+                await SetStatusAsync("skipped", "提取规则已失效，已跳过", null);
+                return new TaskExecutionResult { Success = true, Message = "提取规则已失效，跳过" };
+            }
 
-            // 2. 读 Markdown 产物
+            // P1 护栏：Prompt 空且字段/表格定义全空 ⇒ 默认提示词也无从构建，不空跑 LLM
+            //（Prompt 空但有定义属正常 —— TestFieldWithMarkdownAsync 会用定义构建默认提示词）
+            var fDefN = (await db.GetListAsync<DocFieldDef>(x => x.RuleCode == rule.Code)).Data?.Count ?? 0;
+            var tDefN = (await db.GetListAsync<DocTableDef>(x => x.RuleCode == rule.Code)).Data?.Count ?? 0;
+            if (string.IsNullOrWhiteSpace(rule.Prompt) && fDefN == 0 && tDefN == 0)
+            {
+                await SetStatusAsync("skipped", "规则未配置 Prompt 且无字段/表格定义，已跳过（请在管理端补全规则）", null);
+                return new TaskExecutionResult { Success = true, Message = "规则内容为空，跳过" };
+            }
+
+            // ★ 2026-09-30 用户裁决：「文档不能转 markdown = 该文档不能被识别」，有规则就必须提取，
+            //   拿不到正文 ⇒ failed，**失败原因 = 解析失败**。与「有正文但 LLM 提不出」区分开：
+            //   这里连正文都没有，专家该做的是【重传文件】而不是重试（故 retryable=false）。
+            if (string.IsNullOrEmpty(file.MarkdownPath))
+            {
+                var mdStatus = (file.MarkdownStatus ?? "").Trim().ToLowerInvariant();
+                if (mdStatus is "failed" or "unsupported")
+                {
+                    var parseMsg = mdStatus == "unsupported"
+                        ? "文档解析失败：该格式不支持转换为文本，请重传为 docx"
+                        : "文档解析失败：转换未成功（文件损坏或内容异常），请重传为 docx";
+                    // 转换器有更具体的报错时优先用它（截断，避免 tooltip 过长）
+                    var detail = file.MarkdownMessage?.Trim();
+                    if (!string.IsNullOrWhiteSpace(detail))
+                    {
+                        if (detail.Length > 120) detail = detail.Substring(0, 120) + "…";
+                        parseMsg = $"文档解析失败：{detail}";
+                    }
+                    await SetStatusAsync("failed", parseMsg, null);
+                    return Fail(parseMsg, retryable: false);
+                }
+
+                // 尚未转换（none/pending）：不是解析失败，稍后可重试
+                await SetStatusAsync("failed", "正文尚未转换完成，请稍后重试", null);
+                return Fail("正文尚未转换完成", retryable: true);
+            }
+
+            // ★ processing 不落库（4 态无该值）：队列任务状态已表达「进行中」，
+            //   DB 侧保持原状态直至终态（completed / failed / skipped）
+            file.ExtractStatus = EnterpriseExtractStatus.None;
+            file.ExtractMessage = "提取中";
+
+            // 3. 读 Markdown 产物
             string markdown;
             try
             {
@@ -127,31 +193,20 @@ public class EnterpriseExtractTaskExecutor : IYzhTaskExecutor
                 return Fail("Markdown 产物内容为空", retryable: false);
             }
 
-            // 3. LLM 提取（规则键 = 模板文件 Code；未配置规则不算失败，按「跳过」落状态）
-            var ruleKey = string.IsNullOrEmpty(file.StandardFileCode) ? file.Code ?? "" : file.StandardFileCode!;
-            var (ok, error, data) = await ruleService.TestFieldWithMarkdownAsync(ruleKey, markdown, payload.EnterpriseCode);
+            // 4. LLM 提取（规则已按四元组解析，直传；无规则分支见上，不再从错误串里猜）
+            var (ok, error, data) = await ruleService.TestFieldWithMarkdownAsync(rule, markdown, payload.EnterpriseCode);
             if (!ok || data == null)
             {
-                if (error == "该文件未配置提取规则")
-                {
-                    await SetStatusAsync("none", "该文件未配置提取规则，已跳过", null);
-                    return new TaskExecutionResult { Success = true, Message = "无提取规则，跳过" };
-                }
                 await SetStatusAsync("failed", error, null);
                 return Fail(error ?? "提取失败", retryable: true);
             }
 
-            // 4. 落 B-08/B-09 企业域（V-P1：归档旧行 + 插新行，VersionNumber = 槽位当前版本）
-            var rule = await ruleService.GetRuleByStandardFileCodeAsync(ruleKey);
-            if (rule == null)
-            {
-                await SetStatusAsync("failed", "提取规则在提取后不可见（并发删除？）", null);
-                return Fail("提取规则不存在", retryable: false);
-            }
+            // 5. 落 B-08/B-09 企业域（V-P1：归档旧行 + 插新行，VersionNumber = 槽位当前版本）
             var (fieldCount, tableCount) = await ruleService.SaveEnterpriseExtractionResultsAsync(
-                rule, data, payload.EnterpriseCode, file.Code ?? "", Math.Max(file.VersionNumber, 1));
+                rule, data, payload.EnterpriseCode, file.Code ?? "", Math.Max(file.VersionNumber, 1),
+                slot.StandardCode, slot.StageCode);
 
-            // 5. 回写状态
+            // 6. 回写状态
             var message = $"提取字段 {fieldCount} 个、表格 {tableCount} 张";
             if (fieldCount == 0 && tableCount == 0)
             {

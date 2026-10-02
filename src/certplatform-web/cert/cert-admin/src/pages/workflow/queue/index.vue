@@ -24,6 +24,8 @@ const stats = ref({
   runningWorkers: 0,
 })
 const activeTab = ref('all')
+/** ★ P4 队列类型筛选：默认只看转换（历史行为）；提取日志要切「提取」或「全部」 */
+const queueType = ref('file_convert')
 const timeRange = ref<[Date, Date] | null>(null)
 const rows = ref<QueueListItem[]>([])
 const total = ref(0)
@@ -49,7 +51,7 @@ const loadData = async () => {
   loading.value = true
   try {
     const body: Record<string, any> = {
-      type: 'file_convert',
+      type: queueType.value,
       status: activeTab.value === 'all' ? '' : activeTab.value,
       page: page.value,
       rows: pageSize.value,
@@ -78,6 +80,12 @@ const onTabChange = () => {
 
 const resetFilter = () => {
   timeRange.value = null
+  queueType.value = 'file_convert'
+  page.value = 1
+  loadData()
+}
+
+const onTypeChange = () => {
   page.value = 1
   loadData()
 }
@@ -258,6 +266,12 @@ onUnmounted(() => {
         <el-tab-pane label="已取消" name="cancelled" />
       </el-tabs>
       <div class="time-filter">
+        <span class="filter-label">队列类型</span>
+        <el-select v-model="queueType" style="width: 140px" @change="onTypeChange">
+          <el-option label="文件转换" value="file_convert" />
+          <el-option label="内容提取" value="doc_extract" />
+          <el-option label="全部类型" value="" />
+        </el-select>
         <span class="filter-label">创建时间</span>
         <el-date-picker
           v-model="timeRange"

@@ -315,6 +315,59 @@ export class YzhApiClient {
   }
 
   /**
+   * POST 二进制内容（带鉴权）—— `getBlob` 的写侧对称方法。
+   *
+   * 背景：导出类接口用 POST（筛选项多，塞不进 query），返回的是文件流而不是 JSON，
+   * 且**业务失败仍按平台契约返回 HTTP 200 + JSON**。`download()` 只判断 `res.ok`，
+   * 遇到这种 200+JSON 会把错误体当文件存下来（用户拿到一个内容是 `{"success":false...}` 的 .csv）。
+   *
+   * 本方法按 `content-type` 分流：JSON ⇒ 取 err/message 抛错；否则返回 Blob。
+   *
+   * @param url  相对路径
+   * @param body 请求体（JSON 序列化）
+   * @returns    Blob + 响应头（调用方据此取文件名）
+   * @throws     401 / 业务错误：带 status 的 Error
+   */
+  async postBlob(
+    url: string,
+    body?: any,
+  ): Promise<{ blob: Blob; headers: Headers }> {
+    const token = this.getToken()
+    const res = await this.safeFetch(this.baseURL + url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body ?? {}),
+    })
+
+    if (res.status === 401) {
+      tokenStore.clear()
+      this.onUnauthorized?.()
+      throw new Error('登录已过期，请重新登录')
+    }
+
+    const contentType = res.headers.get('content-type') || ''
+
+    // 业务失败：HTTP 200 + JSON 信封（平台契约）→ 必须抛错，绝不能当文件存
+    if (contentType.includes('application/json')) {
+      const json = await res.json().catch(() => ({} as any))
+      const err = new Error(json?.err || json?.message || json?.msg || '导出失败')
+      ;(err as any).status = res.status
+      throw err
+    }
+
+    if (!res.ok) {
+      const err = new Error(STATUS_FALLBACK[res.status] || `请求失败 (${res.status})`)
+      ;(err as any).status = res.status
+      throw err
+    }
+
+    return { blob: await res.blob(), headers: res.headers }
+  }
+
+  /**
    * POST 下载文件（导出）
    */
   async download(url: string, body: any, filename: string): Promise<void> {

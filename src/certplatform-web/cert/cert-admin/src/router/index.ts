@@ -20,6 +20,8 @@ const businessRoutes: RouteRecordRaw[] = [
   { path: 'cert/link-org-standard', name: 'CertLinkOrgStandard', component: () => import('@/pages/foundation/cert-org-standard/index.vue') },
   { path: 'cert/link-org-stage', name: 'CertLinkOrgStage', component: () => import('@/pages/foundation/cert-org-stage/index.vue') },
   { path: 'business/directory-manager', name: 'BusinessDirectoryManager', component: () => import('@/pages/workflow/directory/index.vue') },
+  // ★ 体系认证全局参数定义（MENU_00217）—— 按「机构 × 标准 × 阶段」预定义填充参数
+  { path: 'business/fill-param-def', name: 'BusinessFillParamDef', component: () => import('@/pages/cert/fill-param-def/index.vue') },
   { path: 'business/doc-extraction-rule', name: 'BusinessDocExtractionRule', component: () => import('@/pages/workflow/doc-extraction-rule/index.vue') },
   { path: 'business/report-def', name: 'BusinessReportDef', component: () => import('@/pages/workflow/report-rule/index.vue') },
   { path: 'business/prompt-template', name: 'BusinessPromptTemplate', component: () => import('@/pages/workflow/prompt-template/index.vue') },

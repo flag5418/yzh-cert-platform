@@ -11,6 +11,7 @@
  * - openRowDialog：行新增仅限末端机构（树 add-child 不受限）
  * - onPrepareAdd（注入 OrgCode，不生成 Code）
  * - confirmTreeActionMessage（级联禁用文案）
+ * - resolveTreeActions（★ 非 Dept 机构只读：隐藏「编辑 / 删除」）
  * - rowActions 函数（CustomButtons 为 {method:label}，按行状态二选一）
  * - openOrgAddFromFooter（树底：有选中加子级，无选中加根）
  *
@@ -19,6 +20,9 @@
 
 import { ElMessage } from 'element-plus'
 import { TreeTableCore, type TreeNode, type YzhAction } from '@yzh-core'
+
+/** 管理端可维护的机构类型：仅「部门/文件夹」层级由本页面手工维护 */
+const MANAGED_ORG_TYPE = 'Dept'
 
 export class OrgPageLogic extends TreeTableCore<any> {
   controllerName = 'Organization'
@@ -34,6 +38,30 @@ export class OrgPageLogic extends TreeTableCore<any> {
 
   protected override get defaultTreeValues(): Record<string, any> {
     return { IsValid: 1 }
+  }
+
+  /**
+   * 树节点操作按钮（覆写基类 resolveTreeActions）：
+   * 仅 OrgType='Dept' 的节点允许「编辑 / 删除」。
+   *
+   * 其它类型（Platform / CertBody / VirtualOrg / Enterprise）由业务系统自动创建与维护
+   * （专家系统「专家注册」建 VirtualOrg 工作区与角色分组、专家系统「新增企业」建 Enterprise
+   * 企业节点、认证机构挂载建 CertBody 机构节点），管理端只读。
+   * 后端 tree/update / tree/delete 亦做同样拦截，此处只是提前隐藏按钮。
+   *
+   * 「禁用 / 启用」保留：停用业务系统建的机构仍属管理员职责。
+   */
+  protected override resolveTreeActions(node: TreeNode): YzhAction[] {
+    const actions = super.resolveTreeActions(node)
+    if (this.isManagedDeptNode(node)) return actions
+    return actions.filter(a => a.key !== 'edit' && a.key !== 'delete' && a.key !== 'add-child')
+  }
+
+  /** 节点是否归本管理页面维护（OrgType 缺省视为 Dept，与后端 IsManagedDept 判定一致） */
+  private isManagedDeptNode(node: TreeNode): boolean {
+    const orgType = (node.Extra as any)?.OrgType ?? (node.Extra as any)?.orgType
+    if (orgType === undefined || orgType === null || orgType === '') return true
+    return String(orgType).toUpperCase() === MANAGED_ORG_TYPE
   }
 
   /** 未选机构提示（内核默认「请先在左侧选择节点」，本页业务文案） */

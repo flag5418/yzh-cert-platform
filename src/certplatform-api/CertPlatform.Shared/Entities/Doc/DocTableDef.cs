@@ -32,6 +32,12 @@ namespace CertPlatform.Shared.Entities.Doc
         [SugarColumn(Length = 500, IsNullable = true)]
         public string? Description { get; set; }
 
+        /// <summary>
+        /// ★ 是否需手动补充：0-否 1-是（2026-09-30 补齐，与 <see cref="DocFieldDef.IsManual"/> 对齐）。
+        /// <para>任务开启时据此生成补录清单：<c>IsManual=1</c> 且企业已采集信息中取不到值的表格 ⇒ 进入清单。</para>
+        /// </summary>
+        public bool IsManual { get; set; }
+
         /// <summary>排序号</summary>
         public int Sort { get; set; }
 

@@ -26,6 +26,13 @@ public static class CertPlatformAdminServiceExtensions
         services.AddSingleton<DocumentConvertClient>();
         services.AddSingleton<LlmInvokeService>();
         services.AddScoped<DocExtractionRuleService>();
+        // S2③：提取结果版本店（写入侧归档同用）
+        services.AddScoped<CertPlatform.Admin.Services.DocExtraction.EnterpriseExtractionResultStore>();
+        // S1：提取定位链唯一判定器（四元组 + Status=passed + Markdown 就位；执行器/批量端点共用）
+        services.AddScoped<ExtractionScopeResolver>();
+        // ★ 2026-09-30 裁决 J1/J2/J4：提取值取数唯一口径（RuleCode 收窄 + 人工优先 + IsBlankText 判空）。
+        //   ⛔ 守卫（NodeExecutor）与缺口生成（GapDetector）都必须走它，禁止各拼 WHERE。
+        services.AddScoped<CertPlatform.Admin.Services.DocExtraction.ExtractionDataResolver>();
 
         // ──── OCR 能力缝（★ 将来接入 OCR/视觉模型时，**只改这一行**） ────
         // 当前 DefaultOcrProvider 声明"不具备能力"：图片/扫描件不自动提取，
@@ -35,6 +42,8 @@ public static class CertPlatformAdminServiceExtensions
 
         // ──── Prompt 模板管理 ────
         services.AddScoped<PromptTemplateService>();
+        // ★ 2026-10-02 提示词工作台（AI 生成草稿 + 上传文件试跑；文件即弃）
+        services.AddScoped<PromptWorkbenchService>();
 
         // ──── 工作流执行引擎 ────
         services.AddScoped<WorkflowConfigParser>();

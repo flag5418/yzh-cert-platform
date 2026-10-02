@@ -145,6 +145,15 @@ export interface FileSlot {
   MarkdownStatus?: string | null
   MarkdownMessage?: string | null
   ExtractStatus?: string | null
+  /**
+   * ★ 提取状态五态（2026-09-30 用户裁决，页面「提取状态」列唯一口径）：
+   * `not_configured` 未配置（四元组无可用规则，**不算失败**）· `queued` 提取中 ·
+   * `extracted` 已提取 · `failed` 提取失败（**有规则但执行失败**：文档与规则不匹配 / 无法解析 / AI 返回空）·
+   * `pending` 未提取（尚未跑过）
+   */
+  ExtractState?: string | null
+  /** ★ 提取失败/跳过原因（tooltip 用）；成功时是「提取字段 N 个、表格 M 张」 */
+  ExtractMessage?: string | null
   Status: SlotStatus
   UpdateTime?: string | null
   CreateTime?: string | null
@@ -420,17 +429,36 @@ export async function cancelQueue(queueCode: string, enterpriseCode: string): Pr
 // ═══════════════════════ 替换 / 移除 / 恢复 / 版本 / 历史 ═══════════════════════
 
 /** 替换文件（Reason 必填；ExpectedModifyTime = 乐观锁原文回传） */
+/**
+ * ★ 替换文件时「人工补录值被归档」的提示载荷（2026-09-30 裁决 J4 的连带后果）
+ *
+ * <para><b>背景</b>：裁决 J4 规定「覆盖文件 ⇒ 按 <c>RuleCode</c> 清理该规则全部数据」。
+ * 同一 <c>RuleCode</c> 下 <c>ValueSource='manual'</c> 的行也在内 ⇒ <b>专家之前补的值会消失</b>。
+ * 后端会写一条 <c>cert_extraction_change_log</c>（<c>ChangeAction='archive'</code>）留痕，
+ * 并在这里返回提示，由页面弹窗询问专家是否需要重新补录。</para>
+ */
+export interface ManualValuesArchivedNotice {
+  manualValuesArchived: true
+  /** 被归档的人工补录项数（字段 + 表格） */
+  archivedCount: number
+  fileName: string
+  ruleCode: string
+  /** 直接可展示的提示文案 */
+  notice: string
+}
+
 export async function replaceFile(
   file: File, fileCode: string, enterpriseCode: string, reason: string, expectedModifyTime?: string
-): Promise<void> {
+): Promise<ManualValuesArchivedNotice | null> {
   const fd = new FormData()
   fd.append('file', file)
   fd.append('FileCode', fileCode)
   fd.append('EnterpriseCode', enterpriseCode)
   fd.append('Reason', reason)
   if (expectedModifyTime) fd.append('ExpectedModifyTime', expectedModifyTime)
-  const res = await yzhApi.post<ApiResponse<null>>(`${BASE}/replace`, fd)
-  unwrap(res, null)
+  const res = await yzhApi.post<ApiResponse<ManualValuesArchivedNotice | null>>(`${BASE}/replace`, fd)
+  // ⛔ data 为 null 是常态（没配规则 / 没有人工值被归档）
+  return unwrap<ManualValuesArchivedNotice | null>(res, null)
 }
 
 /** 移除文件（软删 + 保留存储对象，Reason 必填） */
