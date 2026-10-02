@@ -13,7 +13,7 @@
 1. [V1 → V2 收敛摘要](#1-v1--v2-收敛摘要)
 2. [架构总则：三条铁律](#2-架构总则三条铁律)
 3. [锚点模型](#3-锚点模型)
-4. [模板设计规范（W1–W8 / E1–E7）](#4-模板设计规范w1w8--e1e7)
+4. [模板设计规范（W1–W9 / E1–E8）](#4-模板设计规范w1w9--e1e8)
 5. [流程粒度与编排](#5-流程粒度与编排)
 6. [执行模型：阶段 A / 屏障 / 阶段 B](#6-执行模型阶段-a--屏障--阶段-b)
 7. [预取缓存与合并视图](#7-预取缓存与合并视图)
@@ -119,7 +119,7 @@ V1 记录了 6 轮讨论的过程，V2 是收敛结果。**骨架发生 6 处实
 | 锚点类型 | 机制 | 用途 | 模板作者操作 | 唯一性 |
 |---|---|---|---|---|
 | **标量锚点** | **Token 文本** `{{TOKEN\|修饰:值}}` | 单个值 | 打字 + 套 `YZH_Mark` 样式 | 铁律三要求唯一 |
-| **区块锚点**（Word） | **书签** Bookmark A→B | 重复区（表格行块）/ 整张表格 | 选中 → 插入 → 书签，命名 `ROW_<表名>` | ✅ Word 原生唯一 |
+| **区块锚点**（Word） | **书签**（⛔ 不是“A→B 两个书签”——Word 是**单个书签** `w:bookmarkStart w:id=N` … `w:bookmarkEnd w:id=N` **同 id 配对**，范围 = 两者之间） | 重复区（表格行块）/ 整张表格 | 选中 → 插入 → 书签，命名 `ROW_<表名>`；**书签落在样板行的首个单元格内** | ✅ Word 原生唯一 |
 | **区块锚点**（Excel） | **区域** `anchor:range` + `total_token` | 数据矩形区 | 圈定区域 | 扫描器校验连续性（E1） |
 | **域锚点** | `{{PAGE}}` / `{{NUMPAGES}}` | 页眉页脚页码 | 打字（渲染为域） | 每类页眉页脚各一处 |
 
@@ -131,7 +131,10 @@ V1 记录了 6 轮讨论的过程，V2 是收敛结果。**骨架发生 6 处实
 | **区块范围** | ❌ **表达不了**（"从 A 到 B 含表格"） | ✅ Word 原生；Excel 需显式声明 |
 | 唯一性 | ⚠️ 可重复出现 | ✅ 天然唯一 |
 
-**Token 表达不了范围是硬伤**：Word 里判断"某 token 属于哪个重复区"要靠表格结构推断，脆。用书签 A→B 包住整块，扫描器直读边界，确定。
+**Token 表达不了范围是硬伤**：Word 里判断"某 token 属于哪个重复区"要靠表格结构推断，脆。用书签包住整块（单书签 `start`/`end` 配对），扫描器直读边界，确定。
+
+> **⚠️ 2026-09-30 勘误（T-02）**：原稿写「书签 **A→B**」并在 §9.2 给出 `AnchorRef` + `BookmarkEnd` **两个**字段 —— 这是**两个书签**的模型，与 Word 原语不符。Word 只需**一个书签名**，范围由该书的 `start`/`end` 起止对决定。处臵：删去 `BookmarkEnd`（或改存 `BookmarkId`），**待 `Q-12` 裁决后落 DDL**（[15-全册评估报告-V1.md](./15-全册评估报告-V1.md) §六-T-02）。
+> **配套硬约束（比字段更关键）**：书签放在**样板行首个单元格内**，扫描器**向上取 `<w:tr>` 边界**作为克隆单位 —— NPOI 克隆的是 `CT_Row`，书签范围未必等于行范围；两者对"重复区"的理解必须一致，否则克隆出一堆无用行。
 
 ### 3.3 换模板的收益（选书签的决定性理由）
 
@@ -156,7 +159,7 @@ V1 记录了 6 轮讨论的过程，V2 是收敛结果。**骨架发生 6 处实
 
 ---
 
-## 4. 模板设计规范（W1–W8 / E1–E7）
+## 4. 模板设计规范（W1–W9 / E1–E8）
 
 > **本节是 V2 的重要产出。** 你的前提（标准模板稳定 + 专门维护团队）成立时，**规范比代码更能控风险**。
 > **规范强制项**须进模板包 + 维护团队培训材料；**可自动检出项**（标 ✅）由扫描器做规范校验，违反红牌阻断。
@@ -166,13 +169,14 @@ V1 记录了 6 轮讨论的过程，V2 是收敛结果。**骨架发生 6 处实
 | # | 规范 | 可检出 | 理由 |
 |---|---|---|---|
 | **W1** | 标量值一律 `{{Token}}` 文本，**不用书签** | — | 打字即可；书签留给区块 |
-| **W2** | 重复区用**书签 A→B** 包住，命名 `ROW_<表名>` | ✅ 检出无书签的重复表格 | token 表达不了范围 |
+| **W2** | 重复区用**书签**包住（单书签 `start`/`end` 同 id 配对），命名 `ROW_<表名>`；**书签落在样板行首个单元格内** | ✅ 检出无书签的重复表格 | token 表达不了范围；行边界由扫描器向上取 `<w:tr>`（NPOI 克隆单位是 `CT_Row`） |
 | **W3** | 书签名全局唯一、PascalCase、≤ 32 字符、仅字母数字下划线 | ✅ | Word 书签名有字符/长度限制 |
 | **W4** | 所有可替换内容套 `YZH_Mark` 字符样式 | ✅ 检出无标记的 token | 自验收唯一依据 |
 | **W5** | 重复区**至少留 1 行样例行** | ✅ | 扫描器识别 + 样式克隆源 |
 | **W6** | 除 `PAGE`/`NUMPAGES` 外**不用 Word 域**做动态值 | — | 域不参与替换 |
 | **W7** | 页眉页脚**三类（首页 `first` / 奇偶 `even` / 默认 `default`）都要检查** | ✅ 检出只配了一类 | 最容易漏配 |
 | **W8** | 跨页长表格：表头行设 `w:tblHeader` 重复 | — | 否则第 2 页无表头 |
+| **W9** | **`{{Token}}` 不得跨 run**：Word 会按编辑历史把一段文字拆成多个 `<w:r>`，`{{ENT_NAME}}` 可能变成 `{{ENT_` + `NAME}}` | — | 扫描器与写入器**必须先做 run 归一化**（poi-tl `RunIterator` 同款）再解析 token；不归一化，P0「拿真实 docx 跑通扫描」必失败（T-01） |
 
 ### 4.2 Excel 模板规范
 
@@ -185,6 +189,7 @@ V1 记录了 6 轮讨论的过程，V2 是收敛结果。**骨架发生 6 处实
 | **E5** | **不用 Excel 原生公式**（除明确要给用户二次编辑的） | ✅ 检出 `=` 开头单元格 | 平台不消费，且 NPOI 不更新引用 |
 | **E6** | 合并单元格**只允许表头和标签区**，数据区禁合并 | ✅ 检出数据区合并 | 合并区破坏偏移 |
 | **E7** | 隐藏 sheet / 隐藏行不参与数据区 | ✅ | 易漏 |
+| **E8** | 数据区**不预留空行**（数据区 = 表头 + 1 样例行），扩行一律 `ShiftRows` 插入；数据区下方内容**随 ShiftRows 下移，禁止删除** | ✅ 检出数据区与区外元素之间的空行/残留 | 与 E2「紧贴」自洽；否则「清理第 N~M 行残留」会误删合计下方的签字栏/说明（T-03）。⚠️ **待 `Q-13` 裁决**（倾向采纳） |
 
 ### 4.3 E2 的具体机制（Excel 唯一真实成本的解法）
 
@@ -211,8 +216,11 @@ Skill 参数：doc_table_write(anchor="A11", range="A11:F11", total_token="SUM_R
   1. 按相对偏移写 N 行数据（从 A11 起，不需知道最终行数）
   2. 按模板样式复制到 A12..A(N+11)
   3. 合计锚点重定位到 A(N+12)（= 数据区末行 + 1）→ 写值
-  4. 清理模板原第 12~60 行残留
+  4. 【❓ T-03 待 Q-13 裁决】原稿为「清理模板原第 12~60 行残留」—— 与 E2 自相矛盾，
+     拟改为「模板不预留空行，区外元素一律随 ShiftRows 下移，禁止删除」（见 E8）
 ```
+
+> **⚠️ 2026-09-30 勘误（T-03）**：原稿步骤 4 为「清理模板原第 12~60 行残留」，与 E2「区外元素紧贴数据区下沿」自相矛盾：若合计行下方还有签字栏/说明，`ShiftRows` 会先把它们下移，而「清理残留」会**误删**。建议采「不预留空行 + ShiftRows 插入」并新增 **E8**，**待 `Q-13` 裁决**（[15-全册评估报告-V1.md](./15-全册评估报告-V1.md) §六-T-03）。
 
 **插多少行都不需要回改任何流程配置。漂移问题彻底消失。**
 
@@ -464,7 +472,7 @@ CREATE TABLE `cert_doc_template_scan` (
   `MarkCount` int NOT NULL DEFAULT '0' COMMENT '识别到的 YZH_Mark 标记数',
   `ScanStatus` varchar(20) NOT NULL DEFAULT 'pending' COMMENT 'pending/processing/completed/failed',
   `ScanMessage` varchar(1024) DEFAULT NULL COMMENT '失败原因',
-  `ViolationJson` json DEFAULT NULL COMMENT '【W1-W8/E1-E7 规范校验结果】[{"code":"E2","level":"error","message":"…","anchor":"…"}]',
+  `ViolationJson` json DEFAULT NULL COMMENT '【W1-W9/E1-E8 规范校验结果】[{"code":"E2","level":"error","message":"…","anchor":"…"}]',
   `SummaryJson` json DEFAULT NULL COMMENT '概览：{"sections":3,"headers":["default","first"],"bookmarks":8}',
   `IsDeleted` tinyint(1) NOT NULL DEFAULT '0' COMMENT '软删除',
   `DeleteBy` varchar(64) DEFAULT NULL COMMENT '删除人Code',
@@ -496,7 +504,9 @@ CREATE TABLE `cert_doc_template_part` (
   `PartType` varchar(20) NOT NULL COMMENT 'scalar=标量 / table=表格 / table_total=合计 / repeat=重复区 / domain=页眉页脚域',
   `AnchorKind` varchar(20) NOT NULL DEFAULT 'token' COMMENT 'token=Token文本 / bookmark=书签 / range=Excel区域',
   `AnchorRef` varchar(200) NOT NULL COMMENT 'token={{ENT_NAME}} / bookmark=ROW_设备 / range=Sheet1!A11:F11',
-  `BookmarkEnd` varchar(100) DEFAULT NULL COMMENT '区块结束书签（Word 重复区 A→B）',
+  -- ⚠️ 2026-09-30 勘误（T-02）：原稿此处有 `BookmarkEnd` 列 —— **错模型**（详见 §3.2 勘误）。
+  --    Word 只需一个书签名（`start`/`end` 同 id 配对）；本列应删除，或改存扫描得到的 `BookmarkId`。
+  --    待 `Q-12` 裁决后落 DDL；在此之前不要按本列写实现。
   `SheetName` varchar(100) DEFAULT NULL COMMENT 'Excel 工作表名',
   `SectionIndex` int DEFAULT NULL COMMENT 'Word 分节序号',
   `HeaderKind` varchar(20) DEFAULT NULL COMMENT 'Word 页眉页脚分类：default/first/even',
@@ -523,7 +533,7 @@ CREATE TABLE `cert_doc_template_part` (
   UNIQUE KEY `uk_scan_anchor` (`ScanCode`,`PartType`,`AnchorKind`,`SheetName`,`SectionIndex`,`HeaderKind`,`AnchorRef`),
   KEY `idx_file_latest` (`StandardFileCode`,`IsLatest`),
   KEY `idx_field` (`FieldCode`),
-  KEY `idx_bookmark` (`BookmarkEnd`)
+  KEY `idx_bookmark` (`AnchorRef`)   -- ⚠️ 勘误 T-02：原为 (`BookmarkEnd`)，该列应删
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='模板部件与锚点（Token/书签/区域）';
 ```
 
@@ -690,7 +700,7 @@ CREATE TABLE `cert_doc_fill_item` (
 
 ## 12. 排期切分
 
-> ⚠️ **前置提醒**：05 册 P0 的 9 张新表一张未建（`10-实施路线:52-60` 全部 `□`）。本模块与之并行会放大 §15-5 范围风险。**建议本册 §13-A 批关闭后，先落 05 册 P0 建表。**
+> ⚠️ **前置提醒**：05 册 P0 的 **4 张新表**一张未建（逐项现状见 [`00-实现现状对照表-V1.md`](./00-实现现状对照表-V1.md)；全册规划共 14 张）。本模块与之并行会放大 §15-5 范围风险。**建议本册 §13-A 批关闭后，先落 05 册 P0 建表。**
 
 | 期 | 范围 | 出口门 |
 |---|---|---|
@@ -698,7 +708,7 @@ CREATE TABLE `cert_doc_fill_item` (
 | **P1** | `DocxRenderer`（`doc_*` 5 Skill）+ `IWorkbookContext` + `fill_plan`/`fill_item` 2 表 + 阶段 A/B 执行器 | 单字段流程端到端跑通 + 标记样式自验收通过 |
 | **P2** | 列表页 + logicflow 画布（例外覆写面）+ 验收三件套接线 | 50 字段文档一次生成成功，`UnfilledFieldCount=0` |
 | **P3** | 队列化（`TemplateGenerateTaskExecutor`）+ 预取缓存 + 换版 diff 继承 | 10 份文档并发生成，成本可测 |
-| **P4** | `XlsxRenderer`（`doc_table_write` Excel 分支）+ E1–E7 校验 | Excel 台账模板端到端跑通 |
+| **P4** | `XlsxRenderer`（`doc_table_write` Excel 分支）+ E1–E8 校验 | Excel 台账模板端到端跑通 |
 | **P5** | `derive` 差距分析策略接入（`14` 号 D25） | — |
 
 **先做 P0/P1（Word 最小闭环）再扩 P4（Excel）**，理由：P0/P1 验证的是**引擎**（扫描/流程/Skill/验收），Excel 只是多一个渲染器；引擎不通用则加渲染器无意义。
@@ -765,7 +775,7 @@ CREATE TABLE `cert_doc_fill_item` (
 | **D35** | **一种模板语言（Word）+ 两种输出渲染器**（docx P0 / xlsx P1）；`.doc`/`.xls` 用 `doc_convert` 归一 | 用户原则 2 + `14` 号 D16/D25 的 Excel 必需性 |
 | **D36** | **锚点分层**：标量 = Token 文本；区块 = 书签（Word）/ 区域+`total_token`（Excel）；域独立 | Token 表达不了范围；书签名使换模板配置零改动 |
 | **D37** | **唯一写入者不变量** → 阶段 B 无序化、无屏障、无循环 | 阶段 A 已算完全部值（`sum` 为 O(1)） |
-| **D38** | **模板设计规范 W1–W8 / E1–E7 为强制项**，可检出项由扫描器校验，违反红牌 | 用户前提「模板稳定 + 维护团队」 |
+| **D38** | **模板设计规范 W1–W9 / E1–E8 为强制项**，可检出项由扫描器校验，违反红牌 | 用户前提「模板稳定 + 维护团队」 |
 
 ### 14.2 待拍板（源自 §13）
 
@@ -856,7 +866,7 @@ CREATE TABLE `cert_doc_fill_item` (
 
 **批次 A 关闭后进批次 B**；B 关闭后 C（规则修订）与 D（取值链）可并行。
 
-> **在此之前不动代码。** 另：05 册 P0 的 9 张新表尚未开工，建议**先落 05 册 P0 建表**，本册 P1 与之串行。
+> **在此之前不动代码。** 另：05 册 P0 的 **4 张**新表（`cert_ent_doc_profile` / `cert_ent_doc_group` / `cert_standard_doc_contract` / `cert_doc_match_*`，以 [02-数据模型与表结构-V1.md](./02-数据模型与表结构-V1.md) §2 为准）尚未开工，建议**先落 05 册 P0 建表**，本册 P1 与之串行。
 
 ---
 
