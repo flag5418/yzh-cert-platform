@@ -92,7 +92,7 @@
             <el-button size="small" type="danger" plain @click="handleClearCanvas"><el-icon><Delete /></el-icon> 清空</el-button>
             <el-button size="small" @click="validateGraph"><el-icon><CircleCheck /></el-icon> 校验</el-button>
             <el-button size="small" :disabled="!currentLeaf" @click="historyVisible = true"><el-icon><Clock /></el-icon> 测试历史</el-button>
-            <el-button v-if="executeConfig.enabled" type="success" size="small" :loading="executing" :disabled="!currentLeaf" @click="handleExecuteTest">
+            <el-button v-if="executeConfig.enabled" type="primary" size="small" :loading="executing" :disabled="!currentLeaf" @click="handleExecuteTest">
               <el-icon><VideoPlay /></el-icon> 运行
             </el-button>
             <el-button type="primary" size="small" :disabled="!currentLeaf || !store.state.dirty" @click="handleSave">

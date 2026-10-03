@@ -342,7 +342,7 @@ onUnmounted(() => {
             <el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button>
             <el-button
               link
-              type="warning"
+              type="default"
               size="small"
               v-if="row.status === 'failed'"
               @click="handleRetryQueue(row)"
@@ -414,7 +414,7 @@ onUnmounted(() => {
                 <el-button
                   v-if="row.status === 'failed'"
                   link
-                  type="warning"
+                  type="default"
                   size="small"
                   @click="handleRetryTask(row)"
                 >重试</el-button>

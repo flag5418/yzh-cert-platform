@@ -51,7 +51,7 @@
         <div class="inspector-section-header"><span class="inspector-section-title">操作</span></div>
         <div v-if="testResult" class="test-result-wrapper"><div :class="['test-result', testResult.success ? 'test-success' : 'test-fail']"><div class="test-header"><el-icon><CircleCheck v-if="testResult.success" /><Warning v-else /></el-icon><span>{{ testResult.success ? '执行成功' : '执行失败' }}</span></div><div v-if="testResult.message" class="test-message">{{ testResult.message }}</div><pre v-if="testResult.data" class="test-output-json">{{ JSON.stringify(testResult.data, null, 2) }}</pre></div></div>
         <div class="action-row">
-          <el-button v-if="form.nodeType === 'docField' || form.nodeType === 'docTable'" type="success" size="small" :loading="testLoading" @click="testDocExtract">测试提取</el-button>
+          <el-button v-if="form.nodeType === 'docField' || form.nodeType === 'docTable'" type="default" size="small" :loading="testLoading" @click="testDocExtract">测试提取</el-button>
           <el-button v-else-if="testable && form.nodeType !== 'start' && form.nodeType !== 'end'" type="primary" size="small" :loading="testLoading" @click="testNode">运行测试</el-button>
           <el-button type="danger" size="small" plain @click="deleteNode">删除节点</el-button>
         </div>

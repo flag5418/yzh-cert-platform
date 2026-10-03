@@ -1042,7 +1042,7 @@ onUnmounted(() => {
             <el-icon><FolderOpened /></el-icon> 目录配置
           </el-button>
           <el-divider direction="vertical" />
-          <el-button size="small" type="warning" plain @click="showHelpDialog = true">
+          <el-button size="small" type="default" plain @click="showHelpDialog = true">
             <el-icon><QuestionFilled /></el-icon> 使用帮助
           </el-button>
         </div>

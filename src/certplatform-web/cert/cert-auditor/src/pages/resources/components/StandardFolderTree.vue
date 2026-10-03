@@ -174,14 +174,14 @@ function formatSize(size?: number | null) {
                 content="该文档不需要提取：规则库未为它配置可用规则"
                 placement="top"
               >
-                <span><el-button link type="info" size="small" disabled>提取</el-button></span>
+                <span><el-button link type="default" size="small" disabled>提取</el-button></span>
               </el-tooltip>
               <el-tooltip
                 v-else-if="row.ConvertStatus === 'completed' && !row.MarkdownPath"
                 content="该文件没有可提取的正文（转换器不支持或转换失败），请重传为 docx"
                 placement="top"
               >
-                <span><el-button link type="info" size="small" disabled>提取</el-button></span>
+                <span><el-button link type="default" size="small" disabled>提取</el-button></span>
               </el-tooltip>
               <el-button link type="primary" size="small" @click="emit('result', row)">结果</el-button>
               <el-button link type="danger" size="small" :disabled="busy" @click="emit('remove', row)">移除</el-button>

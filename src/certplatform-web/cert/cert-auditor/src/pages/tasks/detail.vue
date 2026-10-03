@@ -596,8 +596,8 @@ function goResult() {
         <el-button v-if="task?.CanSubmit" type="primary" :loading="submitting" @click="onSubmit">
           提交执行
         </el-button>
-        <el-button v-if="task?.CanRetry" type="warning" @click="onRetry">重试失败项</el-button>
-        <el-button v-if="task?.CanViewResult" type="success" plain @click="goResult">
+        <el-button v-if="task?.CanRetry" type="default" @click="onRetry">重试失败项</el-button>
+        <el-button v-if="task?.CanViewResult" type="default" plain @click="goResult">
           查看结果
         </el-button>
       </div>
@@ -788,7 +788,7 @@ function goResult() {
               </el-button>
               <el-button
                 size="small"
-                type="warning"
+                type="default"
                 plain
                 :disabled="gapList.PendingCount === 0"
                 @click="doSkipAll"

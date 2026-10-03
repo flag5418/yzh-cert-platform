@@ -242,7 +242,7 @@ async function handleNodeClick(node: TreeNode): Promise<void> {
                         <el-button
                           v-if="item.SourceKind === 'ai'"
                           link
-                          type="warning"
+                          type="default"
                           size="small"
                           @click="logic.showAiPrompt(item)"
                         >

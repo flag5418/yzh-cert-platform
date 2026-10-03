@@ -242,7 +242,7 @@ onBeforeUnmount(() => { stopPolling() })
                   <el-button link type="primary" size="small" @click="openDetail(row); initDetailDraft()">详情</el-button>
                   <el-button link type="primary" size="small" @click="openPreview(row)">预览</el-button>
                   <el-button v-if="row.AnalyzePolicy === 'analyze'" link size="small" @click="quickIgnore(row)">忽略</el-button>
-                  <el-button v-else link type="success" size="small" @click="quickParticipate(row)">恢复提取</el-button>
+                  <el-button v-else link type="default" size="small" @click="quickParticipate(row)">恢复提取</el-button>
                   <el-button v-if="row.VersionNumber > 1" link size="small" @click="onVersions(row)">版本</el-button>
                   <el-button v-else link type="danger" size="small" @click="onDelete(row)">删除</el-button>
                 </template>

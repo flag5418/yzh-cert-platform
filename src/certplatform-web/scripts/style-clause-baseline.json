@@ -147,15 +147,6 @@
     "yzh.vue.core/src/pages/system/role-user/index.vue": 1
   },
   "S03": {
-    "cert/cert-admin/src/pages/workflow/directory/index.vue": 1,
-    "cert/cert-admin/src/pages/workflow/doc-extraction-rule/components/PromptVerifyTab.vue": 1,
-    "cert/cert-admin/src/pages/workflow/queue/index.vue": 2,
-    "cert/cert-auditor/src/pages/enterprise-fill-params/index.vue": 1,
-    "cert/cert-auditor/src/pages/enterprise-original/components/OriginalFolderTree.vue": 1,
-    "cert/cert-auditor/src/pages/enterprise-original/index.vue": 1,
-    "cert/cert-auditor/src/pages/resources/components/StandardFolderTree.vue": 2,
-    "cert/cert-auditor/src/pages/tasks/detail.vue": 3,
-    "cert/cert-share/src/components/workflow/NodePropertyForm.vue": 1,
-    "cert/cert-share/src/components/workflow/WorkflowDesigner.vue": 1
+    "cert/cert-auditor/src/pages/enterprise-original/components/OriginalFolderTree.vue": 1
   }
 }
