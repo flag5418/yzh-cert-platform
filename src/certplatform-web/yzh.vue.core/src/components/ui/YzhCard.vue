@@ -41,6 +41,6 @@ defineProps({
 .yzh-card__footer {
   padding: 12px 20px;
   border-top: 1px solid var(--yzh-color-border-light, #ebeef5);
-  background: #fafafa;
+  background: var(--yzh-color-bg-subtle, #fafafa);
 }
 </style>

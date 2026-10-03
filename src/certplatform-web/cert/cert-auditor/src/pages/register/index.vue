@@ -233,7 +233,7 @@ onMounted(() => {
   display: flex;
   width: 920px;
   margin: 24px 0;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   border-radius: 12px;
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
   overflow: hidden;
@@ -268,7 +268,7 @@ onMounted(() => {
   position: relative;
   z-index: 1;
   text-align: center;
-  color: #fff;
+  color: var(--yzh-color-text-inverse, #fff);
 }
 
 .brand-logo {
@@ -280,7 +280,7 @@ onMounted(() => {
   justify-content: center;
   font-size: 28px;
   font-weight: 700;
-  color: #fff;
+  color: var(--yzh-color-text-inverse, #fff);
   background: rgba(255, 255, 255, 0.15);
   border: 2px solid rgba(255, 255, 255, 0.3);
   border-radius: 14px;
@@ -291,7 +291,7 @@ onMounted(() => {
   font-weight: 700;
   margin: 0 0 8px;
   letter-spacing: 1px;
-  color: #fff;
+  color: var(--yzh-color-text-inverse, #fff);
 }
 
 .brand-subtitle {
@@ -351,7 +351,7 @@ onMounted(() => {
 
 .form-header p {
   font-size: 13px;
-  color: #64748b;
+  color: var(--yzh-color-text-muted, #64748b);
   margin: 0;
 }
 
@@ -387,14 +387,14 @@ onMounted(() => {
 
 .opt-code {
   float: right;
-  color: #94a3b8;
+  color: var(--yzh-color-primary-disabled, #94a3b8);
   font-size: 12px;
 }
 
 .org-empty {
   padding: 10px 0;
   text-align: center;
-  color: #909399;
+  color: var(--yzh-color-text-tertiary, #909399);
   font-size: 13px;
 }
 
@@ -413,7 +413,7 @@ onMounted(() => {
   margin-top: 4px;
   text-align: center;
   font-size: 13px;
-  color: #64748b;
+  color: var(--yzh-color-text-muted, #64748b);
 }
 
 .login-link {

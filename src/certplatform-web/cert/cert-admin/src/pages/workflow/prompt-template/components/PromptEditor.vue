@@ -109,7 +109,7 @@ function onKeydown(e: KeyboardEvent) {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
 }
 
 .prompt-editor__chips {

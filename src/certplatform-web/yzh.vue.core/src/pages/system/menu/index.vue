@@ -136,7 +136,7 @@ const { logic, tableRef, treeTableRef } = useTreeTable(MenuPageLogic)
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   overflow: hidden;
 }
 

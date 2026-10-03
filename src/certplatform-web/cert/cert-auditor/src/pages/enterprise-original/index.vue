@@ -557,9 +557,8 @@ onBeforeUnmount(() => { stopPolling() })
 .eo-preview__text {
   max-height: 70vh; overflow: auto; padding: 14px; line-height: 1.8;
   background: var(--el-fill-color-light); border-radius: 4px;
-  white-space: pre-wrap; word-break: break-word; font-size: 13px;
+  white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px;
 }
-.eo-opt { display: flex; justify-content: space-between; gap: 10px; }
 .eo-orig { margin-top: 14px; font-size: 12px; color: var(--el-text-color-secondary);
   display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
 .eo-orig__label { margin-right: 4px; }

@@ -365,22 +365,22 @@ function formatJson(obj: any) {
 
 <style scoped lang="less">
 .history-drawer { display: flex; flex-direction: column; gap: 10px; height: 100%; }
-.filter-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-bottom: 8px; border-bottom: 1px solid #ebeef5; }
+.filter-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-bottom: 8px; border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5); }
 .history-table { font-size: 12px; }
 .pager { display: flex; justify-content: flex-end; padding-top: 8px; }
-.node-cell { display: flex; flex-direction: column; line-height: 1.3; .node-title { font-family: monospace; } .node-desc { color: #909399; font-size: 11px; } }
-.muted { color: #c0c4cc; }
-.error-text { color: #F56C6C; }
-.detail-wrapper { padding: 8px 12px; background: #fafbfc; }
-.detail-loading { color: #909399; font-size: 12px; padding: 8px 0; }
-.detail-summary { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: #606266; margin-bottom: 8px; code { font-family: monospace; } }
+.node-cell { display: flex; flex-direction: column; line-height: 1.3; .node-title { font-family: monospace; } .node-desc { color: var(--yzh-color-text-tertiary, #909399); font-size: 11px; } }
+.muted { color: var(--yzh-color-text-disabled, #c0c4cc); }
+.error-text { color: var(--yzh-color-danger, #F56C6C); }
+.detail-wrapper { padding: 8px 12px; background: var(--yzh-color-bg-subtle, #fafbfc); }
+.detail-loading { color: var(--yzh-color-text-tertiary, #909399); font-size: 12px; padding: 8px 0; }
+.detail-summary { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--yzh-color-text-regular, #606266); margin-bottom: 8px; code { font-family: monospace; } }
 .detail-section { margin-bottom: 12px; }
-.detail-section-title { font-size: 12px; font-weight: 600; color: #606266; margin-bottom: 4px; }
+.detail-section-title { font-size: 12px; font-weight: 600; color: var(--yzh-color-text-regular, #606266); margin-bottom: 4px; }
 
-.node-approval-bar { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12px; color: #606266; flex-wrap: wrap; }
-.approval-label { color: #909399; font-weight: 600; }
+.node-approval-bar { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12px; color: var(--yzh-color-text-regular, #606266); flex-wrap: wrap; }
+.approval-label { color: var(--yzh-color-text-tertiary, #909399); font-weight: 600; }
 .approval-node { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; }
-.source-badge { font-size: 11px; color: #67c23a; }
+.source-badge { font-size: 11px; color: var(--yzh-color-success, #67c23a); }
 .ai-badge { font-size: 11px; color: #9c27b0; }
-.json-block { background: #f5f7fa; padding: 8px; border-radius: 4px; font-size: 11px; font-family: monospace; max-height: 340px; overflow: auto; margin: 0; white-space: pre-wrap; word-break: break-all; }
+.json-block { background: var(--yzh-color-bg-page, #f5f7fa); padding: 8px; border-radius: 4px; font-size: 11px; font-family: monospace; max-height: 340px; overflow: auto; margin: 0; white-space: pre-wrap; word-break: break-all; }
 </style>

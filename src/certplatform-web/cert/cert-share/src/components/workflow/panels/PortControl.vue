@@ -106,5 +106,5 @@ function onInputTypeChange(newType: string) {
 .input-type-switch { margin-bottom: 8px; display: flex; justify-content: flex-end; }
 :deep(.el-radio-button--small .el-radio-button__inner) { padding: 4px 8px !important; font-size: 10px !important; border-radius: 2px !important; }
 .link-input-area, .constant-input-area { width: 100%; }
-.empty-hint { font-size: 11px; color: #94a3b8; padding: 8px; text-align: center; }
+.empty-hint { font-size: 11px; color: var(--yzh-color-primary-disabled, #94a3b8); padding: 8px; text-align: center; }
 </style>

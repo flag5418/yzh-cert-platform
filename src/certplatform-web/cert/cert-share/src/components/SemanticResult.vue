@@ -255,7 +255,7 @@ function purposeLines(text?: string): string[] {
   margin: 4px 0 0;
   line-height: 1.7;
   color: var(--el-text-color-regular);
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .sr__purpose::before {
   content: '';
@@ -329,7 +329,7 @@ function purposeLines(text?: string): string[] {
   font-size: var(--yzh-font-size-xs);
   line-height: 1.6;
   color: var(--el-text-color-secondary);
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .sr__none {

@@ -580,19 +580,19 @@ onUnmounted(() => {
   max-width: 100%;
 }
 
-.profile-form .el-form-item {
+.profile-form :deep(.el-form-item) {
   margin-bottom: 20px;
 }
 
-.profile-form .el-input__wrapper {
+.profile-form :deep(.el-input__wrapper) {
   background: var(--yzh-color-bg-subtle);
 }
 
-.profile-form .el-input.is-disabled .el-input__wrapper {
+.profile-form :deep(.el-input.is-disabled .el-input__wrapper) {
   background: var(--yzh-color-bg-muted);
 }
 
-.profile-form .el-input.is-disabled .el-input__inner {
+.profile-form :deep(.el-input.is-disabled .el-input__inner) {
   color: var(--yzh-color-text-subtle);
 }
 </style>

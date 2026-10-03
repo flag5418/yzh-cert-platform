@@ -27,9 +27,10 @@
  *    components/ 仍由 R1 单独圈定（零领域依赖）。
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { spawnSync } from 'node:child_process'
 
 const WEB = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const REPORT_ONLY = process.argv.includes('--report')
@@ -530,6 +531,159 @@ function runR17() {
   return { violations, skipped: false }
 }
 
+/* ==========================================================================
+ * ★ R18 —— 硬编码样式守卫（docs/10-YZH架构/25-样式规范与硬编码治理-V1.md §五 P0）
+ *
+ * 三层判据（一个计数器，两类定位）：
+ *   ① 模板内联色：`style="…#hex…"` / `color="#hex"` 属性
+ *   ② <script> 传色：JS 字面量 `'#hex'`（绕过 CSS 层）
+ *   ③ <style> 裸 hex：不在 `var(--x, #hex)` 兜底里的 hex
+ *
+ * 「只准减不准增」= 基线文件 `scripts/style-baseline.json`（file → 违规数）：
+ *   - 文件不在基线 且 违规数 > 0  ⇒ 违规（新文件必须干净）
+ *   - 文件在基线 且 违规数 > 基线 ⇒ 违规（回潮）
+ *   - 违规数 < 基线               ⇒ 放行（进度），--report 提示可收基线
+ *
+ * 收基线：`node scripts/guards.mjs --update-style-baseline`
+ * ⚠️ 收基线只应在**批量消毒完成后**执行一次，不得用来掩盖新增违规。
+ * ========================================================================== */
+
+/** 样式基线文件（相对 WEB） */
+const STYLE_BASELINE = join(WEB, 'scripts/style-baseline.json')
+
+/** 扫描根：所有会写样式的地方（新增端必须登记） */
+const STYLE_ROOTS = [
+  join(WEB, 'cert/cert-admin/src'),
+  join(WEB, 'cert/cert-auditor/src'),
+  join(WEB, 'cert/cert-share/src'),
+  join(WEB, 'yzh.vue.core/src'),
+]
+const STYLE_EXTS = ['.vue', '.ts']
+
+/** 允许保留 hex 的文件（图表/画布类：颜色是数据的一部分，改令牌反而丢语义；25 号 §四 豁免） */
+const STYLE_ALLOW = [
+  'cert-share/src/components/workflow/WorkflowDesigner.vue', // LogicFlow 画布节点/连线/面板
+  'cert-share/src/composables/workflow/compiler.ts', // LogicFlow 连线 stroke（canvas 内消费）
+  'cert-share/src/composables/workflow/specialNodes.ts', // LogicFlow 节点主题色（canvas 内消费）
+  'cert/cert-admin/src/pages/workflow/ai-usage/index.vue', // ECharts itemStyle/areaStyle（canvas 内消费）
+]
+
+/** 去掉 var(--x, #hex) 兜底与注释，剩下的 hex 才是「裸硬编码」 */
+function stripStyleNoise(text) {
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, '') // 块注释
+    .replace(/(^|[^:'"`\\])\/\/.*$/gm, '$1') // 行注释（避开 https://）
+    .replace(/var\(\s*--[\w-]+\s*,\s*[^)]*\)/g, 'var(--tok)') // 令牌兜底
+}
+
+/** 统计一个文件里的裸硬编码（返回 {n, samples}）
+ *  = 裸 hex + 字号/间距裸 px（font-size / padding / margin 必须走 --yzh-font-size-* / --yzh-space-*）
+ *  ⚠️ width/height/border-radius 不计入（结构尺寸，令牌尚未覆盖全部场景） */
+function countStyleHits(text) {
+  const clean = stripStyleNoise(text)
+  const samples = []
+  const push = (s) => {
+    if (s && samples.length < 3 && !samples.includes(s)) samples.push(s)
+  }
+  const hexRe = /#[0-9a-fA-F]{3,8}\b/g
+  let n = (clean.match(hexRe) || []).length
+  for (const m of clean.matchAll(hexRe)) push(m[0])
+
+  const pxRe = /(?:^|[^-\w])(font-size|padding|padding-(?:top|right|bottom|left)|margin|margin-(?:top|right|bottom|left))\s*:\s*[^;{}]*?\b(\d+(?:\.\d+)?)px/g
+  for (const m of clean.matchAll(pxRe)) {
+    n++
+    push(`${m[1]}:${m[2]}px`)
+  }
+  return { n, samples }
+}
+
+function runR18() {
+  const violations = []
+  const baseline = existsSync(STYLE_BASELINE)
+    ? JSON.parse(readFileSync(STYLE_BASELINE, 'utf8'))
+    : {}
+
+  if (process.argv.includes('--update-style-baseline')) {
+    // 全量重算并写回（仅在批量消毒后手动执行）
+    const next = {}
+    for (const file of walkAll(STYLE_ROOTS, STYLE_EXTS)) {
+      const r = rel(file)
+      if (STYLE_ALLOW.some((a) => r.endsWith(a))) continue
+      const { n } = countStyleHits(readFileSync(file, 'utf8'))
+      if (n > 0) next[r] = n
+    }
+    writeFileSync(STYLE_BASELINE, JSON.stringify(next, null, 2) + '\n', 'utf8')
+    console.log(`✓ 样式基线已更新：${Object.keys(next).length} 个文件 / ${Object.values(next).reduce((a, b) => a + b, 0)} 处`)
+    process.exit(0)
+  }
+
+  for (const file of walkAll(STYLE_ROOTS, STYLE_EXTS)) {
+    const r = rel(file)
+    if (STYLE_ALLOW.some((a) => r.endsWith(a))) continue
+    const { n, samples } = countStyleHits(readFileSync(file, 'utf8'))
+    if (n === 0) continue
+    const base = baseline[r] ?? 0
+    if (n > base) {
+      violations.push({
+        file: r,
+        line: 0,
+        text:
+          `裸硬编码样式 ${n} 处（基线 ${base}）：${samples.join(' ')} … —— ` +
+          `颜色改 var(--yzh-*, fallback)、字号/间距改 var(--yzh-font-size-*|space-*)（25 号 §四 映射表）`,
+      })
+    }
+  }
+  return { violations, skipped: false }
+}
+
+/* ==========================================================================
+ * ★ R19 —— 结构性 CSS 门禁（stylelint，基线 0）
+ *
+ * 配置：`src/certplatform-web/.stylelintrc.js`（规则须保持现状 0 违规，新增即红）
+ * 分工：颜色/字号/间距硬编码归 R18；重复选择器/降序特异性/未知单位/未知函数/弃用关键字归本条。
+ *
+ * 依赖：node_modules/.bin/stylelint（devDep，未安装则跳过并告警，不阻断提交）
+ * ========================================================================== */
+
+function runR19() {
+  const bin = join(WEB, 'node_modules/.bin/stylelint')
+  if (!existsSync(bin)) return { violations: [], skipped: true }
+
+  const res = spawnSync(
+    bin,
+    ['--formatter=json', '{cert,yzh.vue.core}/src/**/*.{vue,css}'],
+    { cwd: WEB, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+  )
+  // stylelint 的 JSON 输出走 stderr；stdout 只在彻底崩掉时才有内容
+  const raw = (res.stderr || '').trim() || (res.stdout || '').trim()
+  if (!raw) return { violations: [], skipped: false }
+
+  let out
+  try {
+    out = JSON.parse(raw)
+  } catch {
+    return {
+      violations: [{ file: 'stylelint', line: 0, text: `stylelint 输出无法解析：${raw.slice(0, 200)}` }],
+      skipped: false,
+    }
+  }
+
+  const violations = []
+  for (const f of out) {
+    for (const w of f.warnings || []) {
+      violations.push({
+        file: rel(f.source),
+        line: w.line,
+        text: `${w.text} —— 规则 ${w.rule}`,
+      })
+    }
+    for (const e of f.parseErrors || []) {
+      violations.push({ file: rel(f.source), line: e.line, text: `解析失败：${e.text}` })
+    }
+  }
+  return { violations, skipped: false }
+}
+
 /**
  * 规则定义
  * - id / desc: 标识与说明
@@ -725,6 +879,21 @@ const RULES = [
     //    新增实体时按 24 号 §一 选对目录 —— 放错会被本规则直接拦下。
     debt: [],
   },
+  {
+    id: 'R18',
+    type: 'custom',
+    desc: '硬编码样式只准减不准增（裸 hex / font-size·padding·margin 裸 px；基线 scripts/style-baseline.json）',
+    run: runR18,
+    debt: [],
+  },
+  {
+    id: 'R19',
+    type: 'custom',
+    desc: '结构性 CSS 门禁（stylelint：重复选择器/降序特异性/未知单位/弃用关键字，基线 0）',
+    run: runR19,
+    debt: [],
+    skipMsg: 'node_modules/.bin/stylelint 未安装（npm install 后生效）',
+  },
   // ===== 审计 §8（标准目录链路）：全部为后端 .cs 扫描，debt 随修复逐条删除 =====
   {
     id: 'R-A',
@@ -875,8 +1044,8 @@ if (REPORT_ONLY) {
   }
   printDebtLedger()
   for (const rule of crossSkipped) {
-    console.log(`\n⚠ ${rule.id} 未执行：缺少菜单快照 ${rel(MENU_SNAPSHOT)}`)
-    console.log('   生成：./scripts/db/verify/sync_menu_urls.sh')
+    console.log(`\n⚠ ${rule.id} 未执行：${rule.skipMsg ?? `缺少菜单快照 ${rel(MENU_SNAPSHOT)}`}`)
+    if (!rule.skipMsg) console.log('   生成：./scripts/db/verify/sync_menu_urls.sh')
   }
   console.log(
     `\n报告模式：${RULES.length} 条规则 / ${scannedFiles} 个文件 / ${totalViolations} 处违规（不阻断）`,
@@ -898,8 +1067,10 @@ if (totalViolations > 0) {
 
 for (const rule of crossSkipped) {
   console.warn(
-    `⚠ ${rule.id} 未执行：缺少菜单快照 ${rel(MENU_SNAPSHOT)}` +
-      `（生成：./scripts/db/verify/sync_menu_urls.sh）`,
+    rule.skipMsg
+      ? `⚠ ${rule.id} 未执行：${rule.skipMsg}`
+      : `⚠ ${rule.id} 未执行：缺少菜单快照 ${rel(MENU_SNAPSHOT)}` +
+        `（生成：./scripts/db/verify/sync_menu_urls.sh）`,
   )
 }
 

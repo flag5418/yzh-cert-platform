@@ -281,52 +281,52 @@ defineExpose({ clearFiles, removeFile, triggerFileSelect, triggerFolderSelect })
 }
 
 .upload-drop-zone {
-  border: 2px dashed #dcdfe6;
+  border: 2px dashed var(--yzh-color-border-input, #dcdfe6);
   border-radius: 8px;
   padding: 40px 20px;
   text-align: center;
-  background: #fafafa;
+  background: var(--yzh-color-bg-subtle, #fafafa);
   cursor: pointer;
   transition: all 0.3s ease;
 }
 
 .upload-drop-zone:hover {
   border-color: #a0cfff;
-  background: #ecf5ff;
+  background: var(--el-color-primary-light-9, #ecf5ff);
 }
 
 .upload-drop-zone.is-dragging {
-  border-color: #409eff;
-  background: linear-gradient(135deg, #ecf5ff 0%, #d9ecff 100%);
+  border-color: var(--yzh-color-primary, #409eff);
+  background: linear-gradient(135deg, var(--el-color-primary-light-9, #ecf5ff) 0%, #d9ecff 100%);
   transform: scale(1.02);
 }
 
 .upload-icon {
   font-size: 48px;
-  color: #909399;
+  color: var(--yzh-color-text-tertiary, #909399);
   margin-bottom: 16px;
   transition: all 0.3s;
 }
 
 .upload-drop-zone.is-dragging .upload-icon {
-  color: #409eff;
+  color: var(--yzh-color-primary, #409eff);
   transform: translateY(-8px);
 }
 
 .upload-text {
   font-size: 15px;
-  color: #303133;
+  color: var(--yzh-color-text-primary, #303133);
   margin-bottom: 8px;
 }
 
 .upload-text em {
-  color: #409eff;
+  color: var(--yzh-color-primary, #409eff);
   font-style: normal;
   font-weight: 500;
 }
 
 .drag-hint {
-  color: #409eff;
+  color: var(--yzh-color-primary, #409eff);
   font-weight: 500;
   animation: pulse 1.5s infinite;
 }
@@ -343,7 +343,7 @@ defineExpose({ clearFiles, removeFile, triggerFileSelect, triggerFolderSelect })
 
 .upload-hint {
   font-size: 13px;
-  color: #909399;
+  color: var(--yzh-color-text-tertiary, #909399);
   margin-top: 8px;
 }
 
@@ -358,10 +358,10 @@ defineExpose({ clearFiles, removeFile, triggerFileSelect, triggerFolderSelect })
 
 .file-list-container {
   margin-top: 20px;
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--yzh-color-border, #e4e7ed);
   border-radius: 4px;
   overflow: hidden;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
 }
 
 .file-list-header {
@@ -369,8 +369,8 @@ defineExpose({ clearFiles, removeFile, triggerFileSelect, triggerFolderSelect })
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: #f5f7fa;
-  border-bottom: 1px solid #e4e7ed;
+  background: var(--yzh-color-bg-page, #f5f7fa);
+  border-bottom: 1px solid var(--yzh-color-border, #e4e7ed);
 }
 
 .header-left {
@@ -378,11 +378,11 @@ defineExpose({ clearFiles, removeFile, triggerFileSelect, triggerFolderSelect })
   align-items: center;
   gap: 8px;
   font-size: 14px;
-  color: #606266;
+  color: var(--yzh-color-text-regular, #606266);
 }
 
 .header-left strong {
-  color: #409eff;
+  color: var(--yzh-color-primary, #409eff);
 }
 
 .file-list {
@@ -399,7 +399,7 @@ defineExpose({ clearFiles, removeFile, triggerFileSelect, triggerFolderSelect })
 }
 
 .file-item:hover {
-  background: #f5f7fa;
+  background: var(--yzh-color-bg-page, #f5f7fa);
 }
 
 .file-item:last-child {
@@ -416,7 +416,7 @@ defineExpose({ clearFiles, removeFile, triggerFileSelect, triggerFolderSelect })
 
 .file-icon {
   font-size: 24px;
-  color: #909399;
+  color: var(--yzh-color-text-tertiary, #909399);
   flex-shrink: 0;
 }
 
@@ -427,7 +427,7 @@ defineExpose({ clearFiles, removeFile, triggerFileSelect, triggerFolderSelect })
 
 .file-name {
   font-size: 14px;
-  color: #303133;
+  color: var(--yzh-color-text-primary, #303133);
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -439,7 +439,7 @@ defineExpose({ clearFiles, removeFile, triggerFileSelect, triggerFolderSelect })
   gap: 12px;
   margin-top: 4px;
   font-size: 12px;
-  color: #909399;
+  color: var(--yzh-color-text-tertiary, #909399);
 }
 
 .file-size {
@@ -451,7 +451,7 @@ defineExpose({ clearFiles, removeFile, triggerFileSelect, triggerFolderSelect })
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  background: #f5f7fa;
+  background: var(--yzh-color-bg-page, #f5f7fa);
   border-radius: 10px;
   font-size: 11px;
   max-width: 200px;
@@ -465,9 +465,9 @@ defineExpose({ clearFiles, removeFile, triggerFileSelect, triggerFolderSelect })
   justify-content: space-between;
   align-items: center;
   padding: 10px 16px;
-  background: #f5f7fa;
-  border-top: 1px solid #e4e7ed;
+  background: var(--yzh-color-bg-page, #f5f7fa);
+  border-top: 1px solid var(--yzh-color-border, #e4e7ed);
   font-size: 13px;
-  color: #606266;
+  color: var(--yzh-color-text-regular, #606266);
 }
 </style>

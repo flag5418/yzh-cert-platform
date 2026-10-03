@@ -194,7 +194,7 @@ onMounted(() => {
   display: flex;
   height: 100%;
   overflow: hidden;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
 }
 
 .link-page__tree {
@@ -204,7 +204,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
 }
 
 .link-page__tree-title {
@@ -212,7 +212,7 @@ onMounted(() => {
   font-weight: 600;
   font-size: 14px;
   border-bottom: 1px solid var(--el-border-color-lighter);
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
 }
 
 .link-page__tree :deep(.el-tree) {
@@ -225,7 +225,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
 }
 
 .link-page__header {
@@ -234,7 +234,7 @@ onMounted(() => {
   justify-content: space-between;
   padding: 12px 16px;
   border-bottom: 1px solid var(--el-border-color-lighter);
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
 }
 
 .link-page__header-title {

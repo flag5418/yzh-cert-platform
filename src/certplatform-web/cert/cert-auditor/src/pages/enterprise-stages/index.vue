@@ -110,7 +110,7 @@ function handleCheckChange(payload: { added: string[]; removed: string[] }) {
   height: 100%;
   display: flex;
   overflow: hidden;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   border-radius: 4px;
 }
 
@@ -128,7 +128,7 @@ function handleCheckChange(payload: { added: string[]; removed: string[] }) {
 .es-page__tree-header {
   padding: 12px 16px;
   border-bottom: 1px solid var(--el-border-color-lighter);
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   flex-shrink: 0;
 }
 
@@ -160,7 +160,7 @@ function handleCheckChange(payload: { added: string[]; removed: string[] }) {
   gap: 12px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--el-border-color-lighter);
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   flex-shrink: 0;
 }
 

@@ -236,14 +236,14 @@ defineExpose({
 .yzh-tree-table__tree-toolbar {
   padding: 12px;
   border-bottom: 1px solid var(--el-border-color-lighter);
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   flex-shrink: 0;
 }
 
 .yzh-tree-table__tree-footer {
   padding: 12px;
   border-top: 1px solid var(--el-border-color-lighter);
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   flex-shrink: 0;
 }
 

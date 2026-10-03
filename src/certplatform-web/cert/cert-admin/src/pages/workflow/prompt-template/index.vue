@@ -727,13 +727,13 @@ function startResizeResult(e: MouseEvent) {
   border-radius: 9999px;
   transition: all var(--yzh-transition-base);
 }
-.wb__handle:hover .wb__bar {
-  background: var(--yzh-color-primary-light);
-  height: 50px;
-}
 .wb__handle--h .wb__bar {
   width: 40px;
   height: 2px;
+}
+.wb__handle:hover .wb__bar {
+  background: var(--yzh-color-primary-light);
+  height: 50px;
 }
 .wb__handle--h:hover .wb__bar {
   width: 50px;

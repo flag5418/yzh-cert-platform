@@ -12,36 +12,39 @@
   --yzh-color-primary-dark: #1e40af;
   --yzh-color-primary-disabled: #94a3b8;
 
-  /* Element Plus 主题色 - 对齐参考设计 */
-  --el-color-primary: #1e3a8a;
+  /* ★ Element Plus 桥接层 —— 值一律引用 --yzh-*，本文件是唯一桥接点。
+       禁止在这里写字面量：否则改 --yzh-* 令牌时 EP 组件不同步（R-S11 单旋钮）。
+       ⚠️ --el-color-primary-rgb 无法由 hex 派生（CSS 无 hex→rgb 运算），
+          改 --yzh-color-primary 时必须手工同步下方 rgb 三个分量。 */
+  --el-color-primary: var(--yzh-color-primary, #1e3a8a);
   --el-color-primary-rgb: 30, 58, 138;
-  --el-color-primary-light-3: #3b82f6;
+  --el-color-primary-light-3: var(--yzh-color-primary-lighter, #3b82f6);
   --el-color-primary-light-5: #60a5fa;
   --el-color-primary-light-7: #93c5fd;
   --el-color-primary-light-8: #bfdbfe;
   --el-color-primary-light-9: #dbeafe;
-  --el-color-primary-dark-2: #1e40af;
+  --el-color-primary-dark-2: var(--yzh-color-primary-dark, #1e40af);
 
   /* Element Plus 文本色 */
-  --el-text-color-primary: #303133;
-  --el-text-color-regular: #606266;
-  --el-text-color-secondary: #909399;
-  --el-text-color-placeholder: #a8abb2;
-  --el-text-color-disabled: #c0c4cc;
+  --el-text-color-primary: var(--yzh-color-text-primary, #303133);
+  --el-text-color-regular: var(--yzh-color-text-regular, #606266);
+  --el-text-color-secondary: var(--yzh-color-text-tertiary, #909399);
+  --el-text-color-placeholder: var(--yzh-color-text-placeholder, #a8abb2);
+  --el-text-color-disabled: var(--yzh-color-text-disabled, #c0c4cc);
 
   /* Element Plus 边框色 */
-  --el-border-color: #dcdfe6;
-  --el-border-color-light: #e4e7ed;
-  --el-border-color-lighter: #ebeef5;
+  --el-border-color: var(--yzh-color-border-input, #dcdfe6);
+  --el-border-color-light: var(--yzh-color-border, #e4e7ed);
+  --el-border-color-lighter: var(--yzh-color-border-light, #ebeef5);
   --el-border-color-extra-light: #f2f6fc;
 
   /* Element Plus 填充色 */
-  --el-bg-color: #ffffff;
-  --el-bg-color-page: #f8fafc;
+  --el-bg-color: var(--yzh-color-bg-container, #ffffff);
+  --el-bg-color-page: var(--yzh-color-bg-page, #f8fafc);
   --el-fill-color: #f0f2f5;
-  --el-fill-color-light: #f5f7fa;
+  --el-fill-color-light: var(--yzh-color-bg-page, #f5f7fa);
   --el-fill-color-lighter: #fafafa;
-  --el-fill-color-blank: #ffffff;
+  --el-fill-color-blank: var(--yzh-color-bg-container, #ffffff);
 
   /* Element Plus 阴影 */
   --el-box-shadow: 0px 12px 32px 4px rgba(0,0,0,.04), 0px 8px 20px rgba(0,0,0,.08);

@@ -106,7 +106,7 @@ function handleCheckChange(payload: { added: string[]; removed: string[] }) {
 .role-api-page__tree-header {
   padding: 12px 16px;
   border-bottom: 1px solid var(--el-border-color-lighter);
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   flex-shrink: 0;
 }
 
@@ -135,7 +135,7 @@ function handleCheckChange(payload: { added: string[]; removed: string[] }) {
   justify-content: space-between;
   padding: 12px 16px;
   border-bottom: 1px solid var(--el-border-color-lighter);
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   flex-shrink: 0;
 }
 

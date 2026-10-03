@@ -12,9 +12,9 @@
         :default-active="activeMenu"
         router
         class="auditor-layout__menu"
-        background-color="#1a2332"
+        background-color="var(--yzh-color-sidebar-bg, #1a2332)"
         text-color="#bfcbd9"
-        active-text-color="#409eff"
+        active-text-color="var(--yzh-color-primary, #409eff)"
       >
         <template v-for="menu in visibleMenus" :key="menu.id">
           <!-- 有子菜单：渲染为 el-sub-menu -->
@@ -153,11 +153,11 @@ onUnmounted(() => {
 <style scoped>
 .auditor-layout { height: 100vh; }
 .auditor-layout__aside { background: #1a2332; overflow: hidden; }
-.auditor-layout__logo { height: 60px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; font-weight: bold; border-bottom: 1px solid #243146; }
+.auditor-layout__logo { height: 60px; display: flex; align-items: center; justify-content: center; color: var(--yzh-color-text-inverse, #fff); font-size: 15px; font-weight: bold; border-bottom: 1px solid #243146; }
 .auditor-layout__menu { border-right: none; }
-.auditor-layout__header { display: flex; align-items: center; justify-content: space-between; background: #fff; border-bottom: 1px solid #e4e7ed; padding: 0 20px; }
+.auditor-layout__header { display: flex; align-items: center; justify-content: space-between; background: var(--yzh-color-bg-container, #fff); border-bottom: 1px solid var(--yzh-color-border, #e4e7ed); padding: 0 20px; }
 .auditor-layout__page-title { font-size: 16px; font-weight: 600; }
 .auditor-layout__header-right { display: flex; align-items: center; }
-.auditor-layout__user { display: flex; align-items: center; gap: 4px; cursor: pointer; color: #606266; }
-.auditor-layout__main { background: #f5f7fa; padding: 20px; }
+.auditor-layout__user { display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--yzh-color-text-regular, #606266); }
+.auditor-layout__main { background: var(--yzh-color-bg-page, #f5f7fa); padding: 20px; }
 </style>

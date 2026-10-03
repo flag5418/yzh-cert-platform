@@ -55,7 +55,7 @@ const pageSizeModel = computed({
 :deep(.el-pagination) {
   --el-pagination-bg-color: transparent;
   --el-pagination-button-bg-color: transparent;
-  --el-pagination-button-color: #606266;
+  --el-pagination-button-color: var(--yzh-color-text-regular, #606266);
   --el-pagination-button-disabled-bg-color: transparent;
   --el-pagination-hover-color: var(--yzh-color-primary, #1e3a8a);
 }
@@ -67,6 +67,6 @@ const pageSizeModel = computed({
 
 :deep(.el-pager li.is-active) {
   background: var(--yzh-color-primary, #1e3a8a) !important;
-  color: #fff !important;
+  color: var(--yzh-color-text-inverse, #fff) !important;
 }
 </style>

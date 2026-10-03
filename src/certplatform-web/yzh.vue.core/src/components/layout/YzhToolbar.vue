@@ -62,7 +62,7 @@ function onClick(action: YzhAction) {
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   border-bottom: 1px solid var(--yzh-color-border-light, #f1f5f9);
   min-height: 56px;
 }
@@ -74,14 +74,14 @@ function onClick(action: YzhAction) {
   flex-wrap: wrap;
 }
 
-.yzh-toolbar__left:empty,
-.yzh-toolbar__right:empty {
-  display: none;
-}
-
 .yzh-toolbar__right {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.yzh-toolbar__left:empty,
+.yzh-toolbar__right:empty {
+  display: none;
 }
 </style>

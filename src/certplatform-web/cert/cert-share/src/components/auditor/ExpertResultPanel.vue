@@ -726,7 +726,7 @@ watch(
 .er {
   height: 100%;
   display: flex;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   border-radius: 4px;
   overflow: hidden;
 }

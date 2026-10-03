@@ -188,7 +188,7 @@ onMounted(() => {
   display: flex;
   width: 860px;
   height: 500px;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   border-radius: 12px;
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
   overflow: hidden;
@@ -233,7 +233,7 @@ onMounted(() => {
   position: relative;
   z-index: 1;
   text-align: center;
-  color: #fff;
+  color: var(--yzh-color-text-inverse, #fff);
 }
 
 .brand-logo {
@@ -245,7 +245,7 @@ onMounted(() => {
   justify-content: center;
   font-size: 28px;
   font-weight: 700;
-  color: #fff;
+  color: var(--yzh-color-text-inverse, #fff);
   background: rgba(255, 255, 255, 0.15);
   border: 2px solid rgba(255, 255, 255, 0.3);
   border-radius: 14px;
@@ -256,7 +256,7 @@ onMounted(() => {
   font-weight: 700;
   margin: 0 0 8px;
   letter-spacing: 1px;
-  color: #fff;
+  color: var(--yzh-color-text-inverse, #fff);
 }
 
 .brand-subtitle {
@@ -315,7 +315,7 @@ onMounted(() => {
 
 .form-header p {
   font-size: 13px;
-  color: #64748b;
+  color: var(--yzh-color-text-muted, #64748b);
   margin: 0;
 }
 
@@ -342,9 +342,9 @@ onMounted(() => {
   width: 100px;
   height: 40px;
   border-radius: 6px;
-  border: 1px solid #dcdfe6;
+  border: 1px solid var(--yzh-color-border-input, #dcdfe6);
   cursor: pointer;
-  background: #f5f7fa;
+  background: var(--yzh-color-bg-page, #f5f7fa);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -360,7 +360,7 @@ onMounted(() => {
 
 .verify-placeholder {
   font-size: 12px;
-  color: #909399;
+  color: var(--yzh-color-text-tertiary, #909399);
 }
 
 /* 登录按钮 */
@@ -378,7 +378,7 @@ onMounted(() => {
   margin-top: 4px;
   text-align: center;
   font-size: 13px;
-  color: #64748b;
+  color: var(--yzh-color-text-muted, #64748b);
 }
 
 .register-link {

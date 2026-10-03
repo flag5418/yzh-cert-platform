@@ -120,7 +120,7 @@ const { logic, treeTableRef } = useTreeTable(RolePageLogic)
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   padding: 24px;
 }
 

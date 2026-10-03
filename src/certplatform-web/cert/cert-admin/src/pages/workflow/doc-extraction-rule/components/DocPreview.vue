@@ -303,7 +303,7 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
       </div>
 
       <div v-else-if="error" class="state-panel">
-        <el-icon :size="52" color="#e6a23c"><WarningFilled /></el-icon>
+        <el-icon :size="52" color="var(--yzh-color-warning, #e6a23c)"><WarningFilled /></el-icon>
         <p class="state-title">文档预览失败</p>
         <p class="state-desc">{{ error }}</p>
         <p v-if="errorHint" class="state-tip">{{ errorHint }}</p>
@@ -353,7 +353,7 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
 }
 .preview-header {
   flex-shrink: 0;
@@ -362,7 +362,7 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
   justify-content: space-between;
   gap: 12px;
   padding: 10px 16px;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
 }
 .file-info {
   display: flex;
@@ -371,7 +371,7 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
   min-width: 0;
 }
 .file-icon {
-  color: #409eff;
+  color: var(--yzh-color-primary, #409eff);
   font-size: 18px;
 }
 .file-name {
@@ -392,14 +392,14 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
   align-items: center;
   gap: 8px;
   padding: 6px 16px;
-  background: #fdf6ec;
+  background: var(--yzh-color-warning-light-9, #fdf6ec);
   border-bottom: 1px solid #f5dab1;
   font-size: 12px;
   color: #b88230;
 }
 /* 能力边界提示（图片/扫描件需人工填写）：用中性信息色，与「失败」的橙黄区分开 */
 .manual-bar {
-  background: #ecf5ff;
+  background: var(--el-color-primary-light-9, #ecf5ff);
   border-bottom-color: #b3d8ff;
   color: #337ecc;
 }
@@ -409,7 +409,7 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
   overflow: auto;
   display: flex;
   flex-direction: column;
-  background: #f5f7fa;
+  background: var(--yzh-color-bg-page, #f5f7fa);
 }
 .state-panel {
   flex: 1;
@@ -418,7 +418,7 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: #909399;
+  color: var(--yzh-color-text-tertiary, #909399);
   padding: 24px;
   text-align: center;
 }
@@ -426,7 +426,7 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
   margin: 0;
   font-size: 15px;
   font-weight: 500;
-  color: #606266;
+  color: var(--yzh-color-text-regular, #606266);
 }
 .state-desc {
   margin: 0;
@@ -435,7 +435,7 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
 .state-tip {
   margin: 0;
   font-size: 12px;
-  color: #c0c4cc;
+  color: var(--yzh-color-text-disabled, #c0c4cc);
 }
 .image-preview,
 .image-fallback-img {
@@ -458,8 +458,8 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
   font-family: 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.6;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 </style>

@@ -89,19 +89,19 @@ function methodTagType(method: string): string {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   padding: 16px;
 }
 
 .api-page__group-count {
   margin-left: 8px;
   font-size: 12px;
-  color: #909399;
+  color: var(--yzh-color-text-tertiary, #909399);
 }
 
 .footer-stats {
   padding-top: 12px;
-  color: #909399;
+  color: var(--yzh-color-text-tertiary, #909399);
   font-size: 13px;
   text-align: right;
   flex-shrink: 0;

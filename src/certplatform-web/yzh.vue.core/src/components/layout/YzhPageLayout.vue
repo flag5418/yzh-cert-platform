@@ -77,7 +77,7 @@ defineProps<{
   &__search {
     flex-shrink: 0;
     padding: 16px 20px;
-    background: #fff;
+    background: var(--yzh-color-bg-container, #fff);
     border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
   }
 
@@ -88,7 +88,7 @@ defineProps<{
     align-items: center;
     justify-content: space-between;
     padding: 12px 20px;
-    background: #fff;
+    background: var(--yzh-color-bg-container, #fff);
     border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
     gap: 12px;
   }
@@ -125,7 +125,7 @@ defineProps<{
   &__footer {
     flex-shrink: 0;
     padding: 12px 20px;
-    background: #fff;
+    background: var(--yzh-color-bg-container, #fff);
     border-top: 1px solid var(--yzh-color-border-light, #ebeef5);
     display: flex;
     justify-content: flex-end;

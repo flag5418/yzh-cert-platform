@@ -742,7 +742,7 @@ onMounted(async () => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -908,7 +908,7 @@ onMounted(async () => {
   justify-content: space-between;
   padding: 12px 24px;
   border-top: 1px solid var(--el-border-color-lighter);
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
 }
 
 .wiz__foot-right {

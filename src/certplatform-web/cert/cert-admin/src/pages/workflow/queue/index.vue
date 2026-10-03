@@ -451,7 +451,7 @@ onUnmounted(() => {
 
 <style scoped lang="less">
 :deep(.yzh-page-layout__content) {
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
 }
 
 .status-cards {
@@ -469,16 +469,16 @@ onUnmounted(() => {
   }
   .stat-label {
     font-size: 13px;
-    color: #909399;
+    color: var(--yzh-color-text-tertiary, #909399);
     margin-top: 5px;
   }
 
-  &.running .stat-value { color: #409eff; }
-  &.pending .stat-value { color: #e6a23c; }
-  &.completed .stat-value { color: #67c23a; }
-  &.failed .stat-value { color: #f56c6c; }
-  &.cancelled .stat-value { color: #909399; }
-  &.workers .stat-value { color: #909399; }
+  &.running .stat-value { color: var(--yzh-color-primary, #409eff); }
+  &.pending .stat-value { color: var(--yzh-color-warning, #e6a23c); }
+  &.completed .stat-value { color: var(--yzh-color-success, #67c23a); }
+  &.failed .stat-value { color: var(--yzh-color-danger, #f56c6c); }
+  &.cancelled .stat-value { color: var(--yzh-color-text-tertiary, #909399); }
+  &.workers .stat-value { color: var(--yzh-color-text-tertiary, #909399); }
 }
 
 .filter-bar {
@@ -501,14 +501,14 @@ onUnmounted(() => {
 
     .filter-label {
       font-size: 13px;
-      color: #909399;
+      color: var(--yzh-color-text-tertiary, #909399);
     }
   }
 }
 
 .table-card {
   margin-top: 12px;
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--yzh-color-border-light, #ebeef5);
 
   .scope-text {
     font-family: monospace;
@@ -522,14 +522,14 @@ onUnmounted(() => {
 
     .progress-count {
       font-size: 12px;
-      color: #909399;
+      color: var(--yzh-color-text-tertiary, #909399);
       white-space: nowrap;
     }
   }
 
-  .count-success { color: #67c23a; font-weight: 500; }
-  .count-failed { color: #f56c6c; font-weight: 500; }
-  .count-cancelled { color: #909399; }
+  .count-success { color: var(--yzh-color-success, #67c23a); font-weight: 500; }
+  .count-failed { color: var(--yzh-color-danger, #f56c6c); font-weight: 500; }
+  .count-cancelled { color: var(--yzh-color-text-tertiary, #909399); }
 
   .pagination-row {
     display: flex;
@@ -551,7 +551,7 @@ onUnmounted(() => {
   }
 
   .error-text {
-    color: #f56c6c;
+    color: var(--yzh-color-danger, #f56c6c);
     font-size: 12px;
   }
 }

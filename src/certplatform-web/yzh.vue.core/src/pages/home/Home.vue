@@ -117,7 +117,7 @@ onMounted(() => {
 .welcome-sub {
   margin: 0;
   font-size: 13px;
-  color: #64748b;
+  color: var(--yzh-color-text-muted, #64748b);
 }
 
 .welcome-badge {
@@ -128,7 +128,7 @@ onMounted(() => {
   justify-content: center;
   font-size: 18px;
   font-weight: 700;
-  color: #fff;
+  color: var(--yzh-color-text-inverse, #fff);
   background: linear-gradient(135deg, var(--yzh-color-primary, #2563eb), var(--yzh-color-primary-light, #3b82f6));
   border-radius: 14px;
   letter-spacing: 1px;
@@ -138,7 +138,7 @@ onMounted(() => {
   margin: 0 0 14px;
   font-size: 15px;
   font-weight: 600;
-  color: #334155;
+  color: var(--yzh-color-text-body, #334155);
 }
 
 .entries-grid {
@@ -152,8 +152,8 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   padding: 18px 16px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--yzh-color-bg-container, #fff);
+  border: 1px solid var(--yzh-color-border, #e2e8f0);
   border-radius: 10px;
   text-decoration: none;
   transition: all 0.2s;
@@ -172,7 +172,7 @@ onMounted(() => {
 
 .entry-name {
   font-size: 14px;
-  color: #334155;
+  color: var(--yzh-color-text-body, #334155);
   font-weight: 500;
 }
 </style>

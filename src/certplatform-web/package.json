@@ -16,12 +16,15 @@
     "build:auditor": "npm run build --workspace=@certplatform/auditor",
     "build:all": "npm run build:core && npm run build:share && npm run build:admin && npm run build:auditor",
     "typecheck:all": "npm run typecheck --workspaces --if-present",
+    "lint:style": "stylelint \"{cert,yzh.vue.core}/src/**/*.{vue,css}\"",
     "guard": "node scripts/guards.mjs",
     "guard:report": "node scripts/guards.mjs --report",
     "hooks:install": "bash scripts/install-hooks.sh"
   },
   "devDependencies": {
     "less": "^4.9.1",
+    "stylelint": "^17.16.0",
+    "stylelint-config-recommended-vue": "^2.0.0",
     "typescript": "^5.0.0",
     "vite": "^5.0.0"
   }

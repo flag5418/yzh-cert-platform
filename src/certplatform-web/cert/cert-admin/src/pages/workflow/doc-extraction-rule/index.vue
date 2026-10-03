@@ -411,14 +411,14 @@ function startResizeLeft(e: MouseEvent) {
   flex: 1;
   min-height: 0;
   height: 100%;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
 }
 
 .left-panel {
   min-width: 200px;
   max-width: 600px;
   flex-shrink: 0;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   border-right: 1px solid var(--el-border-color-lighter);
   overflow: hidden;
   display: flex;
@@ -441,12 +441,12 @@ function startResizeLeft(e: MouseEvent) {
 .resize-bar {
   width: 2px;
   height: 40px;
-  background: #e4e7ed;
+  background: var(--yzh-color-border, #e4e7ed);
   border-radius: 9999px;
   transition: all 0.2s;
 }
 .resize-handle:hover .resize-bar {
-  background: #409eff;
+  background: var(--yzh-color-primary, #409eff);
   height: 50px;
 }
 
@@ -455,7 +455,7 @@ function startResizeLeft(e: MouseEvent) {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   overflow: hidden;
 }
@@ -471,7 +471,7 @@ function startResizeLeft(e: MouseEvent) {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   border-left: 1px solid var(--el-border-color-lighter);
   overflow: hidden;
 }
@@ -490,19 +490,19 @@ function startResizeLeft(e: MouseEvent) {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  border-right: 1px solid #ebeef5;
+  border-right: 1px solid var(--yzh-color-border-light, #ebeef5);
 }
 .status-item:last-child {
   border-right: none;
 }
 .status-item .label {
   font-size: 12px;
-  color: #909399;
+  color: var(--yzh-color-text-tertiary, #909399);
 }
 .status-item .value {
   font-size: 18px;
   font-weight: 700;
-  color: #303133;
+  color: var(--yzh-color-text-primary, #303133);
   line-height: 1;
 }
 
@@ -543,6 +543,6 @@ function startResizeLeft(e: MouseEvent) {
   gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid var(--el-border-color-lighter);
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
 }
 </style>

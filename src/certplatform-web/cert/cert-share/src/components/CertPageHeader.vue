@@ -11,6 +11,6 @@ defineProps({ title: { type: String, default: '' }, subtitle: { type: String, de
 
 <style scoped>
 .cert-page-header { margin-bottom: 16px; }
-.cert-page-header__title { font-size: 18px; font-weight: 600; color: #303133; }
-.cert-page-header__subtitle { font-size: 13px; color: #909399; margin-top: 4px; }
+.cert-page-header__title { font-size: 18px; font-weight: 600; color: var(--yzh-color-text-primary, #303133); }
+.cert-page-header__subtitle { font-size: 13px; color: var(--yzh-color-text-tertiary, #909399); margin-top: 4px; }
 </style>

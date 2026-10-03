@@ -353,9 +353,9 @@ async function handleNodeClick(node: TreeNode): Promise<void> {
                     <span class="efp-report__kind-name">{{ k.name }}</span>
                     <el-progress
                       :percentage="Math.round((k.resolved / Math.max(1, k.resolved + k.pending)) * 100)"
-                      :color="logic.capabilityColor(k.kind) === 'primary' ? '#409eff'
-                        : logic.capabilityColor(k.kind) === 'success' ? '#67c23a'
-                          : logic.capabilityColor(k.kind) === 'warning' ? '#e6a23c' : '#909399'"
+                      :color="logic.capabilityColor(k.kind) === 'primary' ? 'var(--yzh-color-primary, #409eff)'
+                        : logic.capabilityColor(k.kind) === 'success' ? 'var(--yzh-color-success, #67c23a)'
+                          : logic.capabilityColor(k.kind) === 'warning' ? 'var(--yzh-color-warning, #e6a23c)' : 'var(--yzh-color-text-tertiary, #909399)'"
                       :stroke-width="10"
                       :show-text="false"
                       class="efp-report__kind-bar"
@@ -566,6 +566,10 @@ async function handleNodeClick(node: TreeNode): Promise<void> {
   border-bottom: none;
 }
 
+.efp-item__control {
+  max-width: 640px;
+}
+
 .efp-item--readonly .efp-item__control {
   opacity: 0.85;
 }
@@ -585,10 +589,6 @@ async function handleNodeClick(node: TreeNode): Promise<void> {
 .efp-item__name {
   font-size: 13px;
   font-weight: 500;
-}
-
-.efp-item__control {
-  max-width: 640px;
 }
 
 .efp-item__foot {
@@ -737,7 +737,7 @@ async function handleNodeClick(node: TreeNode): Promise<void> {
   font-size: 13px;
   line-height: 1.85;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 /* ── 报告 ── */

@@ -346,23 +346,23 @@ onMounted(async () => {
 }
 
 .cert-biz-tree__node-icon.is-organization {
-  color: #e6a23c;
+  color: var(--yzh-color-warning, #e6a23c);
 }
 
 .cert-biz-tree__node-icon.is-standard {
-  color: #409eff;
+  color: var(--yzh-color-primary, #409eff);
 }
 
 .cert-biz-tree__node-icon.is-stage {
-  color: #67c23a;
+  color: var(--yzh-color-success, #67c23a);
 }
 
 .cert-biz-tree__node-icon.is-folder {
-  color: #909399;
+  color: var(--yzh-color-text-tertiary, #909399);
 }
 
 .cert-biz-tree__node-icon.is-file {
-  color: #909399;
+  color: var(--yzh-color-text-tertiary, #909399);
 }
 
 .cert-biz-tree__node-label {
@@ -388,20 +388,20 @@ onMounted(async () => {
 }
 
 .cert-biz-tree__rule-tag.is-none {
-  color: #909399;
-  background: #f4f4f5;
+  color: var(--yzh-color-text-tertiary, #909399);
+  background: var(--yzh-color-bg-muted, #f4f4f5);
   border-color: #e9e9eb;
 }
 
 .cert-biz-tree__rule-tag.is-configured {
   color: #529b2e;
-  background: #f0f9eb;
+  background: var(--yzh-color-success-light-9, #f0f9eb);
   border-color: #e1f3d8;
 }
 
 .cert-biz-tree__rule-tag.is-failed {
   color: #c45656;
-  background: #fef0f0;
+  background: var(--yzh-color-danger-light-9, #fef0f0);
   border-color: #fde2e2;
 }
 </style>

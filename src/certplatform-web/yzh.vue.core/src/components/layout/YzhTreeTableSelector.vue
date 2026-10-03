@@ -372,14 +372,14 @@ defineExpose({
 .yzh-tree-table-selector__tree-search {
   padding: 12px;
   border-bottom: 1px solid var(--el-border-color-lighter);
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   flex-shrink: 0;
 }
 
 .yzh-tree-table-selector__tree-actions {
   padding: 8px 12px;
   border-bottom: 1px solid var(--el-border-color-lighter);
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   flex-shrink: 0;
   display: flex;
   gap: 4px;
@@ -388,7 +388,7 @@ defineExpose({
 .yzh-tree-table-selector__tree-footer {
   padding: 12px;
   border-top: 1px solid var(--el-border-color-lighter);
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   flex-shrink: 0;
 }
 
@@ -406,7 +406,7 @@ defineExpose({
   justify-content: space-between;
   padding: 12px 16px;
   border-bottom: 1px solid var(--el-border-color-lighter);
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   flex-shrink: 0;
 }
 

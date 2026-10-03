@@ -106,7 +106,7 @@ async function handleNodeClick(node: TreeNode) {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   overflow: hidden;
 }
 </style>

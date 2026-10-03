@@ -793,7 +793,7 @@ defineExpose({
   min-height: 0;
   padding: 16px;
   overflow: hidden;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
 }
 
 /* 无内部 padding 模式（用于嵌套场景，但仍保留一定内边距） */
@@ -804,7 +804,7 @@ defineExpose({
 .yzh-table__body {
   height: 100%;
   overflow: hidden;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
 }
 
 .yzh-table__pagination {
@@ -812,7 +812,7 @@ defineExpose({
   border-top: 1px solid var(--yzh-color-border-light, #ebeef5);
   display: flex;
   justify-content: flex-end;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
 }
 
 .yzh-table__empty {
@@ -824,7 +824,7 @@ defineExpose({
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  color: #f56c6c;
+  color: var(--yzh-color-danger, #f56c6c);
 }
 
 .yzh-row-action-danger {
@@ -836,9 +836,9 @@ defineExpose({
   &__header {
     font-size: 14px;
     font-weight: 600;
-    color: #303133;
+    color: var(--yzh-color-text-primary, #303133);
     padding-bottom: 8px;
-    border-bottom: 1px solid #ebeef5;
+    border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
     margin-bottom: 8px;
   }
 
@@ -878,7 +878,7 @@ defineExpose({
     gap: 12px;
     padding-top: 10px;
     margin-top: 8px;
-    border-top: 1px solid #ebeef5;
+    border-top: 1px solid var(--yzh-color-border-light, #ebeef5);
   }
 }
 
@@ -888,7 +888,7 @@ defineExpose({
 }
 
 :deep(.el-table th.el-table__cell) {
-  background: #fafafa !important;
+  background: var(--yzh-color-bg-subtle, #fafafa) !important;
   color: var(--yzh-color-text-primary, #303133);
   font-weight: 600;
   border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5) !important;

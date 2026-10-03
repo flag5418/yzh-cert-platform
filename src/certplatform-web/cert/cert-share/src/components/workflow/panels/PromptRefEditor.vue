@@ -9,7 +9,7 @@
         <div v-if="!refNodes || refNodes.length === 0" class="ref-empty">画布上暂无可用节点</div>
         <div v-else class="ref-rows">
           <div v-for="node in refNodes" :key="node.id" class="ref-row">
-            <span class="ref-dot" :style="{ background: node.color || '#909399' }"></span>
+            <span class="ref-dot" :style="{ background: node.color || 'var(--yzh-color-text-tertiary, #909399)' }"></span>
             <span class="ref-name" :title="node.label">{{ node.label }}</span>
             <span class="ref-type-tag">{{ nodeTypeLabel(node.nodeType) }}</span>
             <el-button type="primary" size="small" plain @click="quickInsert(node.label)">+ 插入</el-button>
@@ -85,22 +85,22 @@ function wrapRef(r: string) { return `{{${r}}}` }
 </script>
 
 <style scoped lang="less">
-.pre { display: flex; flex-direction: column; border: 1px solid #e4e7ed; border-radius: 6px; background: #fff; overflow: hidden; }
-.ref-bar { border-bottom: 1px solid #ebeef5; background: #fafbfc; flex-shrink: 0; }
+.pre { display: flex; flex-direction: column; border: 1px solid var(--yzh-color-border, #e4e7ed); border-radius: 6px; background: var(--yzh-color-bg-container, #fff); overflow: hidden; }
+.ref-bar { border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5); background: var(--yzh-color-bg-subtle, #fafbfc); flex-shrink: 0; }
 .ref-bar-head { display: flex; align-items: center; justify-content: space-between; padding: 5px 10px; background: #fdf2fb; border-bottom: 1px solid #f0f0f0; }
 .ref-bar-title { font-size: 11px; font-weight: 600; color: #9C27B0; }
-.ref-empty { padding: 8px 12px; text-align: center; font-size: 11px; color: #c0c4cc; }
+.ref-empty { padding: 8px 12px; text-align: center; font-size: 11px; color: var(--yzh-color-text-disabled, #c0c4cc); }
 .ref-rows { padding: 4px 8px; display: flex; flex-direction: column; gap: 2px; }
-.ref-row { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; transition: background 0.1s; &:hover { background: #f5f7fa; } }
+.ref-row { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; transition: background 0.1s; &:hover { background: var(--yzh-color-bg-page, #f5f7fa); } }
 .ref-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.ref-name { font-size: 12px; color: #303133; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
-.ref-type-tag { font-size: 10px; color: #909399; background: #f0f0f0; padding: 1px 6px; border-radius: 8px; flex-shrink: 0; white-space: nowrap; }
+.ref-name { font-size: 12px; color: var(--yzh-color-text-primary, #303133); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.ref-type-tag { font-size: 10px; color: var(--yzh-color-text-tertiary, #909399); background: #f0f0f0; padding: 1px 6px; border-radius: 8px; flex-shrink: 0; white-space: nowrap; }
 .pre-editor-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.pre-editor-header { display: flex; align-items: center; justify-content: space-between; padding: 5px 10px; background: #fff; border-bottom: 1px solid #ebeef5; flex-shrink: 0; }
-.pre-editor-label { font-size: 12px; font-weight: 600; color: #303133; }
+.pre-editor-header { display: flex; align-items: center; justify-content: space-between; padding: 5px 10px; background: var(--yzh-color-bg-container, #fff); border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5); flex-shrink: 0; }
+.pre-editor-label { font-size: 12px; font-weight: 600; color: var(--yzh-color-text-primary, #303133); }
 .ref-count { font-size: 10px; color: #9C27B0; margin-left: 2px; }
 :deep(.el-textarea__inner) { border: none; box-shadow: none; padding: 10px; font-family: inherit; line-height: 1.6; flex: 1; min-height: 100px; resize: vertical; &:focus { box-shadow: none; } }
-.pre-ref-inline { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 10px; background: #fafbfc; border-top: 1px solid #ebeef5; flex-shrink: 0; }
+.pre-ref-inline { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 10px; background: var(--yzh-color-bg-subtle, #fafbfc); border-top: 1px solid var(--yzh-color-border-light, #ebeef5); flex-shrink: 0; }
 .ref-chip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px 1px 8px; background: #f0e6ff; color: #722ed1; border-radius: 10px; font-size: 11px; cursor: pointer; transition: background 0.15s; code { font-family: monospace; color: inherit; } &:hover { background: #d3adf7; } }
 .ref-chip-close { font-size: 14px; line-height: 1; color: #b37feb; opacity: 0.5; .ref-chip:hover & { opacity: 1; } }
 .slide-fade-enter-active { transition: all 0.18s ease-out; }

@@ -48,11 +48,11 @@ const label = computed(() => convertStatusLabel(key.value) || '未知状态')
   white-space: nowrap;
 }
 
-.cert-convert-badge.is-none { color: #909399; background: #f4f4f5; }
-.cert-convert-badge.is-pending { color: #909399; background: #f4f4f5; }
-.cert-convert-badge.is-converting { color: #409eff; background: #ecf5ff; }
-.cert-convert-badge.is-completed { color: #67c23a; background: #f0f9eb; }
-.cert-convert-badge.is-failed { color: #f56c6c; background: #fef0f0; }
+.cert-convert-badge.is-none { color: var(--yzh-color-text-tertiary, #909399); background: var(--yzh-color-bg-muted, #f4f4f5); }
+.cert-convert-badge.is-pending { color: var(--yzh-color-text-tertiary, #909399); background: var(--yzh-color-bg-muted, #f4f4f5); }
+.cert-convert-badge.is-converting { color: var(--yzh-color-primary, #409eff); background: var(--el-color-primary-light-9, #ecf5ff); }
+.cert-convert-badge.is-completed { color: var(--yzh-color-success, #67c23a); background: var(--yzh-color-success-light-9, #f0f9eb); }
+.cert-convert-badge.is-failed { color: var(--yzh-color-danger, #f56c6c); background: var(--yzh-color-danger-light-9, #fef0f0); }
 /* ★ unsupported = 能力边界（非故障）：橙色，提示「需人工填写」，与 failed 的红色区分开 */
-.cert-convert-badge.is-unsupported { color: #e6a23c; background: #fdf6ec; }
+.cert-convert-badge.is-unsupported { color: var(--yzh-color-warning, #e6a23c); background: var(--yzh-color-warning-light-9, #fdf6ec); }
 </style>

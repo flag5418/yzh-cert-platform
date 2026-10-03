@@ -137,28 +137,28 @@ onBeforeUnmount(() => { chartInstance?.dispose() })
       <el-col :span="6">
         <el-card shadow="hover" class="summary-card">
           <div class="summary-label">累计总费用</div>
-          <div class="summary-value" style="color: #f56c6c">${{ (summary.TotalCost ?? 0).toFixed(4) }}</div>
+          <div class="summary-value" style="color: var(--yzh-color-danger, #f56c6c)">${{ (summary.TotalCost ?? 0).toFixed(4) }}</div>
           <div class="summary-sub">累计 {{ summary.TotalCalls ?? 0 }} 次调用</div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="hover" class="summary-card">
           <div class="summary-label">本月费用</div>
-          <div class="summary-value" style="color: #e6a23c">${{ (summary.MonthCost ?? 0).toFixed(4) }}</div>
+          <div class="summary-value" style="color: var(--yzh-color-warning, #e6a23c)">${{ (summary.MonthCost ?? 0).toFixed(4) }}</div>
           <div class="summary-sub">{{ summary.MonthCalls ?? 0 }} 次调用</div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="hover" class="summary-card">
           <div class="summary-label">本周费用</div>
-          <div class="summary-value" style="color: #409eff">${{ (summary.WeekCost ?? 0).toFixed(4) }}</div>
+          <div class="summary-value" style="color: var(--yzh-color-primary, #409eff)">${{ (summary.WeekCost ?? 0).toFixed(4) }}</div>
           <div class="summary-sub">{{ summary.WeekCalls ?? 0 }} 次调用</div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="hover" class="summary-card">
           <div class="summary-label">今日费用</div>
-          <div class="summary-value" style="color: #67c23a">${{ (summary.TodayCost ?? 0).toFixed(4) }}</div>
+          <div class="summary-value" style="color: var(--yzh-color-success, #67c23a)">${{ (summary.TodayCost ?? 0).toFixed(4) }}</div>
           <div class="summary-sub">{{ summary.TodayCalls ?? 0 }} 次调用</div>
         </el-card>
       </el-col>
@@ -187,7 +187,7 @@ onBeforeUnmount(() => { chartInstance?.dispose() })
         <el-table-column prop="CompletionTokens" label="输出tokens" width="110" align="right" />
         <el-table-column prop="TotalTokens" label="总tokens" width="100" align="right" />
         <el-table-column prop="CostUsd" label="费用(USD)" width="110" align="right">
-          <template #default="{ row }"><span :style="{ color: row.Success ? '#67c23a' : '#f56c6c' }">${{ (row.CostUsd ?? 0).toFixed(4) }}</span></template>
+          <template #default="{ row }"><span :style="{ color: row.Success ? 'var(--yzh-color-success, #67c23a)' : 'var(--yzh-color-danger, #f56c6c)' }">${{ (row.CostUsd ?? 0).toFixed(4) }}</span></template>
         </el-table-column>
         <el-table-column prop="DurationMs" label="耗时(ms)" width="100" align="right" />
         <el-table-column prop="Success" label="状态" width="80" align="center">
@@ -203,14 +203,14 @@ onBeforeUnmount(() => { chartInstance?.dispose() })
 <style scoped>
 :deep(.yzh-page-layout__content) {
   padding: 0;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
 }
 .quick-range-card { margin-bottom: 16px; }
 .summary-row { margin-bottom: 16px; }
 .summary-card { text-align: center; padding: 8px 0; }
-.summary-label { font-size: 13px; color: #909399; margin-bottom: 8px; }
+.summary-label { font-size: 13px; color: var(--yzh-color-text-tertiary, #909399); margin-bottom: 8px; }
 .summary-value { font-size: 26px; font-weight: 700; line-height: 1.2; }
-.summary-sub { font-size: 12px; color: #c0c4cc; margin-top: 6px; }
+.summary-sub { font-size: 12px; color: var(--yzh-color-text-disabled, #c0c4cc); margin-top: 6px; }
 .chart-card, .table-card { margin-bottom: 16px; }
 .card-title { font-size: 15px; font-weight: 600; }
 </style>

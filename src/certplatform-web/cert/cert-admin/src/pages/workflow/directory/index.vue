@@ -1091,17 +1091,17 @@ onUnmounted(() => {
                     <el-icon
                       v-if="folderAgg(folder).status === 'converting' || folderAgg(folder).status === 'uploading'"
                       class="is-spinning"
-                      color="#409eff"
+                      color="var(--yzh-color-primary, #409eff)"
                     >
                       <Loading />
                     </el-icon>
                     <el-icon
                       v-else-if="folderAgg(folder).status === 'completed' || folderAgg(folder).status === 'uploaded'"
-                      color="#67c23a"
+                      color="var(--yzh-color-success, #67c23a)"
                     >
                       <CircleCheck />
                     </el-icon>
-                    <el-icon v-else-if="folderAgg(folder).status === 'failed'" color="#f56c6c">
+                    <el-icon v-else-if="folderAgg(folder).status === 'failed'" color="var(--yzh-color-danger, #f56c6c)">
                       <CircleClose />
                     </el-icon>
                     <span :class="['status-text', 'is-' + folderAgg(folder).status]">
@@ -1139,13 +1139,13 @@ onUnmounted(() => {
                 <td class="size-cell">{{ formatFileSize(file.FileSize || file.fileSize) }}</td>
                 <td class="status-cell">
                   <div class="cell-flex">
-                    <el-icon v-if="fileStatus(file) === 'converting' || fileStatus(file) === 'uploading'" class="is-spinning" color="#409eff">
+                    <el-icon v-if="fileStatus(file) === 'converting' || fileStatus(file) === 'uploading'" class="is-spinning" color="var(--yzh-color-primary, #409eff)">
                       <Loading />
                     </el-icon>
-                    <el-icon v-else-if="fileStatus(file) === 'completed' || fileStatus(file) === 'uploaded'" color="#67c23a">
+                    <el-icon v-else-if="fileStatus(file) === 'completed' || fileStatus(file) === 'uploaded'" color="var(--yzh-color-success, #67c23a)">
                       <CircleCheck />
                     </el-icon>
-                    <el-icon v-else-if="fileStatus(file) === 'failed'" color="#f56c6c">
+                    <el-icon v-else-if="fileStatus(file) === 'failed'" color="var(--yzh-color-danger, #f56c6c)">
                       <CircleClose />
                     </el-icon>
                     <span :class="['status-text', 'is-' + fileStatus(file)]">{{ STATUS_TEXT[fileStatus(file)] }}</span>
@@ -1303,7 +1303,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
 }
 
 /* 转换队列状态条 */
@@ -1313,10 +1313,10 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   padding: 8px 16px;
-  background: #ecf5ff;
+  background: var(--el-color-primary-light-9, #ecf5ff);
   border-bottom: 1px solid #d9ecff;
   font-size: 13px;
-  color: #409eff;
+  color: var(--yzh-color-primary, #409eff);
 }
 .queue-name {
   font-weight: 500;
@@ -1341,7 +1341,7 @@ onUnmounted(() => {
 .left-panel {
   width: clamp(220px, 22vw, 300px);
   flex-shrink: 0;
-  border-right: 1px solid #e4e7ed;
+  border-right: 1px solid var(--yzh-color-border, #e4e7ed);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1349,18 +1349,18 @@ onUnmounted(() => {
 
 .left-header {
   padding: 16px;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--yzh-color-border, #e4e7ed);
 }
 
 .left-title {
   font-size: 15px;
   font-weight: 600;
-  color: #303133;
+  color: var(--yzh-color-text-primary, #303133);
 }
 
 .search-box {
   padding: 12px 16px;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--yzh-color-border, #e4e7ed);
 }
 
 .tree-container {
@@ -1383,12 +1383,12 @@ onUnmounted(() => {
 }
 
 .tree-node:hover {
-  background: #f5f7fa;
+  background: var(--yzh-color-bg-page, #f5f7fa);
 }
 
 .tree-node.active {
-  background: #ecf5ff;
-  color: #409eff;
+  background: var(--el-color-primary-light-9, #ecf5ff);
+  color: var(--yzh-color-primary, #409eff);
 }
 
 .tree-node.level-0 {
@@ -1406,7 +1406,7 @@ onUnmounted(() => {
 .tree-toggle {
   margin-right: 8px;
   transition: transform 0.2s;
-  color: #909399;
+  color: var(--yzh-color-text-tertiary, #909399);
 }
 
 .tree-toggle.expanded {
@@ -1419,15 +1419,15 @@ onUnmounted(() => {
 }
 
 .tree-icon.org {
-  color: #e6a23c;
+  color: var(--yzh-color-warning, #e6a23c);
 }
 
 .tree-icon.standard {
-  color: #409eff;
+  color: var(--yzh-color-primary, #409eff);
 }
 
 .tree-icon.phase {
-  color: #67c23a;
+  color: var(--yzh-color-success, #67c23a);
 }
 
 .tree-label {
@@ -1449,13 +1449,13 @@ onUnmounted(() => {
 
 .breadcrumb {
   padding: 12px 16px;
-  border-bottom: 1px solid #e4e7ed;
-  background: #fafafa;
+  border-bottom: 1px solid var(--yzh-color-border, #e4e7ed);
+  background: var(--yzh-color-bg-subtle, #fafafa);
 }
 
 .clickable-breadcrumb {
   cursor: pointer;
-  color: #409eff;
+  color: var(--yzh-color-primary, #409eff);
 }
 
 .clickable-breadcrumb:hover {
@@ -1464,7 +1464,7 @@ onUnmounted(() => {
 
 .toolbar {
   padding: 12px 16px;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--yzh-color-border, #e4e7ed);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1489,14 +1489,14 @@ onUnmounted(() => {
 .file-table td {
   padding: 10px 16px;
   text-align: left;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
   vertical-align: middle;
 }
 
 .file-table th {
-  background: #fafafa;
+  background: var(--yzh-color-bg-subtle, #fafafa);
   font-weight: 500;
-  color: #606266;
+  color: var(--yzh-color-text-regular, #606266);
   font-size: 13px;
   position: sticky;
   top: 0;
@@ -1504,11 +1504,11 @@ onUnmounted(() => {
 }
 
 .file-table tbody tr:hover {
-  background: #f5f7fa;
+  background: var(--yzh-color-bg-page, #f5f7fa);
 }
 
 .file-table tbody tr.selected {
-  background: #ecf5ff;
+  background: var(--el-color-primary-light-9, #ecf5ff);
 }
 
 .cell-flex {
@@ -1519,33 +1519,33 @@ onUnmounted(() => {
 }
 
 .folder-icon {
-  color: #e6a23c;
+  color: var(--yzh-color-warning, #e6a23c);
   flex-shrink: 0;
 }
 
 .file-type-icon {
-  color: #909399;
+  color: var(--yzh-color-text-tertiary, #909399);
 }
 
 .file-type-icon.file-pdf {
-  color: #f56c6c;
+  color: var(--yzh-color-danger, #f56c6c);
 }
 .file-type-icon.file-word {
-  color: #409eff;
+  color: var(--yzh-color-primary, #409eff);
 }
 .file-type-icon.file-excel {
-  color: #67c23a;
+  color: var(--yzh-color-success, #67c23a);
 }
 .file-type-icon.file-ppt {
-  color: #e6a23c;
+  color: var(--yzh-color-warning, #e6a23c);
 }
 .file-type-icon.file-image {
-  color: #909399;
+  color: var(--yzh-color-text-tertiary, #909399);
 }
 
 .name-text {
   font-size: 13px;
-  color: #303133;
+  color: var(--yzh-color-text-primary, #303133);
   /* 名称单行省略，不随列宽换行（旧实现为 el-table show-overflow-tooltip） */
   display: inline-block;
   max-width: 340px;
@@ -1556,32 +1556,32 @@ onUnmounted(() => {
 }
 .folder-name {
   cursor: pointer;
-  color: #409eff;
+  color: var(--yzh-color-primary, #409eff);
 }
 
 .size-cell,
 .date-cell,
 .status-cell {
   font-size: 13px;
-  color: #909399;
+  color: var(--yzh-color-text-tertiary, #909399);
 }
 
 .status-cell .cell-flex {
   gap: 4px;
 }
 .status-text.is-failed {
-  color: #f56c6c;
+  color: var(--yzh-color-danger, #f56c6c);
 }
 .status-text.is-completed {
-  color: #67c23a;
+  color: var(--yzh-color-success, #67c23a);
 }
 .status-text.is-converting,
 .status-text.is-uploading {
-  color: #409eff;
+  color: var(--yzh-color-primary, #409eff);
 }
 /* 能力边界（图片/扫描件需人工填写）：信息色，与「失败」的红区分开 */
 .status-text.is-unsupported {
-  color: #e6a23c;
+  color: var(--yzh-color-warning, #e6a23c);
 }
 
 .action-cell {
@@ -1590,25 +1590,25 @@ onUnmounted(() => {
      （对齐历史项目 el-table fixed="right"，修复「看不到 AI 分析按钮」） */
   position: sticky;
   right: 0;
-  background: #fff;
+  background: var(--yzh-color-bg-container, #fff);
   /* 用阴影画分隔线：sticky 列与 border-collapse 共用时 border 会丢失 */
-  box-shadow: -1px 0 0 0 #ebeef5;
+  box-shadow: -1px 0 0 0 var(--yzh-color-border-light, #ebeef5);
 }
 
 .file-table tbody tr:hover .action-cell {
-  background: #f5f7fa;
+  background: var(--yzh-color-bg-page, #f5f7fa);
 }
 
 .file-table tbody tr.selected .action-cell {
-  background: #ecf5ff;
+  background: var(--el-color-primary-light-9, #ecf5ff);
 }
 
 /* 表头的操作列同样吸附，并保持高于表体内容与表头其他单元格 */
 .file-table th:last-child {
   position: sticky;
   right: 0;
-  background: #fafafa;
-  box-shadow: -1px 0 0 0 #ebeef5;
+  background: var(--yzh-color-bg-subtle, #fafafa);
+  box-shadow: -1px 0 0 0 var(--yzh-color-border-light, #ebeef5);
   z-index: 3;
 }
 
@@ -1633,13 +1633,13 @@ onUnmounted(() => {
   gap: 8px;
   padding: 8px 12px;
   margin-bottom: 12px;
-  background: #f5f7fa;
+  background: var(--yzh-color-bg-page, #f5f7fa);
   border-radius: 4px;
   font-size: 13px;
-  color: #606266;
+  color: var(--yzh-color-text-regular, #606266);
 }
 .location-tip {
-  color: #909399;
+  color: var(--yzh-color-text-tertiary, #909399);
   font-size: 12px;
 }
 .upload-progress-area {
@@ -1647,7 +1647,7 @@ onUnmounted(() => {
 }
 .progress-info {
   font-size: 13px;
-  color: #606266;
+  color: var(--yzh-color-text-regular, #606266);
   margin-bottom: 6px;
 }
 
@@ -1659,15 +1659,15 @@ onUnmounted(() => {
 .help-content p,
 .help-content li {
   font-size: 13px;
-  color: #606266;
+  color: var(--yzh-color-text-regular, #606266);
   line-height: 1.8;
 }
 .code-example {
-  background: #f5f7fa;
+  background: var(--yzh-color-bg-page, #f5f7fa);
   padding: 10px 12px;
   border-radius: 4px;
   font-size: 12px;
-  color: #606266;
+  color: var(--yzh-color-text-regular, #606266);
   line-height: 1.9;
 }
 
