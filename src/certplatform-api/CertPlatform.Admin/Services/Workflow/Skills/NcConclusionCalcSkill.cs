@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using CertPlatform.Admin.Services.Workflow.Skills.Nc;
 using YZH.Core.DataBase.Interfaces;
-using CertPlatform.Shared.Entities.Cert;
+using CertPlatform.Admin.Entities.Cert;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills
 {

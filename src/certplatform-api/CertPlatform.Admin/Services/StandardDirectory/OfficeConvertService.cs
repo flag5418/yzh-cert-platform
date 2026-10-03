@@ -7,18 +7,25 @@ using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 using CertPlatform.Shared.DocExtraction;
-using CertPlatform.Shared.Entities.Dir;
+using CertPlatform.Shared.Storage;
+using CertPlatform.Admin.Entities.Dir;
 
 namespace CertPlatform.Admin.Services.StandardDirectory;
 
 /// <summary>
-/// 文件转换服务（V3：双产物链）
+/// 文件转换服务（V4：三链 —— 预览 / 提取 / ★ 归一）
 ///
 /// <para><b>预览链</b>：Office → PDF（LibreOffice 容器）→ 产物列 <c>PreviewPdfPath</c>，
 /// 状态列 <c>ConvertStatus</c>/<c>ConvertMessage</c>。PDF / 图片原样透传（产物路径 = 源路径）。</para>
 ///
 /// <para><b>提取链</b>：任意格式 → Markdown（anydoc 容器）→ 产物列 <c>MarkdownPath</c>，
 /// 状态列 <c>MarkdownStatus</c>/<c>MarkdownMessage</c>。</para>
+///
+/// <para><b>★ 归一链（2026-10-03，S-1）</b>：<c>.doc → .docx</c> / <c>.xls → .xlsx</c> /
+/// <c>.ppt → .pptx</c>（LibreOffice 容器）→ 产物列 <c>EditableStoragePath</c>（<c>editable/</c> 段），
+/// 状态列 <c>EditableStatus</c>/<c>EditableMessage</c>。
+/// <para>存在的唯一理由：<b>NPOI 2.7.2 没有 <c>NPOI.HWPF</c></b> ⇒ <c>.doc</c> 连读都读不了，
+/// 而本库 91.5% 的文件是旧二进制格式 ⇒ 不归一，填写引擎就没有输入。</para></para>
 ///
 /// <para><b>产物路径</b>：统一由 <see cref="CodeGeneratorService.BuildProductPath"/> 从**源路径派生**
 /// （<c>.../pdf/{原文件名}.pdf</c>、<c>.../markdown/{原文件名}.md</c>），不再重新拼装编码段。</para>
@@ -30,44 +37,47 @@ namespace CertPlatform.Admin.Services.StandardDirectory;
 /// <para><b>中间产物</b>（<c>doc2docx</c>/<c>xls2xlsx</c> → <c>ConvertedStoragePath</c>）：
 /// 保留仅为**排空存量队列任务**；新的入队点不再产生该类型（决策 D-5）。</para>
 ///
-/// <para><b>★ 并发写入约束（务必先读再改）</b>：两条链是**两个独立队列任务、并发执行**。
-/// 队列框架的资源锁**不参与调度**（<c>QueueManager.GetNextPendingTaskAsync</c> 只按
-/// <c>Status='pending'</c> 取任务，不看锁），因此同一文件的 PDF 任务与 Markdown 任务
-/// **必然可能同时在跑**。两者各自在开头 <c>GetOneAsync</c> 拿到一份内存快照 ——
+/// <para><b>★ 转换内核已抽出（36 号 T1.1，2026-10-03）</b>：本类自 2026-10-03 起<b>不再自己调
+/// <see cref="DocumentConvertClient"/></b>，两条链（PDF / Markdown）的<b>转换能力</b>全部委托给
+/// <c>CertPlatform.Shared.DocExtraction.IFileConvertCore</c>（实现在
+/// <c>CertPlatform.Shared/DocExtraction/FileConvertCore.cs</c>）。</para>
+/// <para>抽核心理由：企业原始资料（36 号）需要<b>第二条</b>文件转换链（表和列都不同），
+/// 不抽就等于把「PDF/图片透传 + anydoc 转 md + OCR 兜底 + 产物路径派生」抄第二遍 ——
+/// 而状态机抄第二遍的代价本仓已付过一次：下面记录的 2026-09-26 并发写回事故。</para>
+/// <para><b>本类保留的职责（不可下沉）</b>：① 查 DB 行 ② <b>按链写列</b>（列白名单不同）
+/// ③ 上传产物 ④ 与既有队列的衔接。<b>转换能力一律不重复实现。</b></para>
+///
+/// <para><b>★ 并发写入约束（务必先读再改）</b>：三条链（PDF / Markdown / 归一）是**独立队列任务、
+/// 并发执行**。队列框架的资源锁**不参与调度**（<c>QueueManager.GetNextPendingTaskAsync</c> 只按
+/// <c>Status='pending'</c> 取任务，不看锁），因此同一文件的三个任务
+/// **必然可能同时在跑**。各自在开头 <c>GetOneIgnoreValidAsync</c> 拿到一份内存快照 ——
 /// 若用 <c>UpdateAsync(实体)</c> 写**所有列**，后完成的一方会把先完成方刚写的字段
 /// **覆盖回自己快照里的旧值**。
 /// <para>实测事故（2026-09-26）：Markdown 链先完成（<c>MarkdownPath=.../markdown/x.md</c>、
 /// <c>MarkdownStatus=completed</c>），PDF 链后完成 → 全列写回 → <c>MarkdownPath</c> 变 NULL、
 /// <c>MarkdownStatus</c> 退回 <c>pending</c>，**零报错、日志还打印了成功**。</para>
 /// <para>⇒ 本文件**所有**写入必须走 <see cref="SavePdfChainAsync"/> /
-/// <see cref="SaveMarkdownChainAsync"/> / <see cref="SaveLegacyChainAsync"/>，
+/// <see cref="SaveMarkdownChainAsync"/> / <see cref="SaveEditableChainAsync"/> /
+/// <see cref="SaveLegacyChainAsync"/>，
 /// **禁止**直接调用 <c>_db.UpdateAsync(file)</c>。</para>
 /// </summary>
 public class OfficeConvertService
 {
     private readonly IDbOrm _db;
     private readonly IObjectStorage _storage;
-    private readonly DocumentConvertClient _convertClient;
-    private readonly IOcrProvider _ocrProvider;
+    /// <summary>★ 转换内核（36 号 T1.1）：PDF / Markdown 的转换能力<b>不在本类实现</b></summary>
+    private readonly IFileConvertCore _core;
     private readonly ILogger<OfficeConvertService> _logger;
-
-    /// <summary>可预览图片扩展名（透传：预览即原文件）</summary>
-    private static readonly string[] ImageExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp" };
-
-    /// <summary>需要经 LibreOffice 转 PDF 的 Office 扩展名</summary>
-    private static readonly string[] OfficeExtensions = { ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".rtf", ".odt", ".ods", ".odp" };
 
     public OfficeConvertService(
         IDbOrm db,
         IObjectStorage storage,
-        DocumentConvertClient convertClient,
-        IOcrProvider ocrProvider,
+        IFileConvertCore core,
         ILogger<OfficeConvertService> logger)
     {
         _db = db;
         _storage = storage;
-        _convertClient = convertClient;
-        _ocrProvider = ocrProvider;
+        _core = core;
         _logger = logger;
     }
 
@@ -100,6 +110,11 @@ public class OfficeConvertService
                 => await ConvertToPdfAsync(file, payload),
             "anydoc2md" or "doc2md" or "docx2md" or "xls2md" or "xlsx2md" or "pdf2md" or "office2md"
                 => await ConvertToMarkdownAsync(file, payload),
+            // ★ 归一链（S-1，2026-10-03）：旧二进制格式 → OOXML，产物走 editable/ 段。
+            //   ⚠️ 刻意用新名字而不复用下面的 doc2docx/xls2xlsx —— 那两个是【遗留中间产物链】的
+            //      存量队列排空入口（写 ConvertedStoragePath），语义与写入列都不同。
+            "office2editable" or "doc2editable" or "xls2editable" or "ppt2editable"
+                => await ConvertToEditableAsync(file, payload),
             // 仅用于排空存量队列任务（新入队点不再产生）
             "doc2docx" or "xls2xlsx"
                 => await ConvertToOfficeIntermediateAsync(file, payload),
@@ -157,6 +172,22 @@ public class OfficeConvertService
     };
 
     /// <summary>
+    /// ★ 归一链（<c>editable</c>）拥有的列（2026-10-03，S-1）。
+    ///
+    /// <para>⚠️ <b>刻意不含 <see cref="StandardDirectoryFile.IsValid"/></b>：该列属于<b>预览链</b>
+    /// （见 <see cref="MarkPdfCompletedAsync"/> 注释 —— 两条链都写它会出现「提取成功把 IsValid 置 1、
+    /// 而 PDF 其实还在转」的假就绪）。归一不是「文件可用」的标志，PDF 才是。</para>
+    /// </summary>
+    private static readonly string[] EditableChainColumns =
+    {
+        nameof(StandardDirectoryFile.EditableStoragePath),
+        nameof(StandardDirectoryFile.EditableStatus),
+        nameof(StandardDirectoryFile.EditableMessage),
+        nameof(StandardDirectoryFile.EditableDate),
+        nameof(StandardDirectoryFile.UpdateTime)
+    };
+
+    /// <summary>
     /// 预览链写回（**只写 PDF 链的列**，绝不触碰 Markdown 链字段）。
     /// <para>详见类注释「并发写入约束」—— 用 <c>UpdateAsync(file)</c> 全列写回会造成静默数据丢失。</para>
     /// <para>⚠️ 本链新增字段时必须同步加进 <see cref="PdfChainColumns"/>，否则**写不进去且不报错**。</para>
@@ -188,37 +219,27 @@ public class OfficeConvertService
         return _db.UpdateAsync(file, LegacyChainColumns);
     }
 
+    /// <summary>
+    /// ★ 归一链写回（**只写 <c>Editable*</c> 四列**，绝不触碰 PDF / Markdown 链字段）。
+    /// <para>⚠️ 本链新增字段时必须同步加进 <see cref="EditableChainColumns"/>，否则**写不进去且不报错**。</para>
+    /// </summary>
+    private Task SaveEditableChainAsync(StandardDirectoryFile file)
+    {
+        file.UpdateTime = DateTime.Now;
+        return _db.UpdateAsync(file, EditableChainColumns);
+    }
+
     // ========================================================
     // 预览链：→ PDF
     // ========================================================
 
     /// <summary>
     /// 预览链：→ PDF，产物上传 MinIO，回写 <c>PreviewPdfPath</c> + <c>ConvertStatus</c>
+    /// <para>★ 转换能力委托 <see cref="IFileConvertCore"/>（含 PDF / 图片<b>原样透传</b>判定）。
+    /// 本方法只负责「上传产物 + 按链写列」。</para>
     /// </summary>
     private async Task<bool> ConvertToPdfAsync(StandardDirectoryFile file, FileConvertPayload payload)
     {
-        var ext = Path.GetExtension(file.FileName ?? "").ToLowerInvariant();
-
-        // ① PDF 原样透传：预览产物 = 原文件（用户设计：PDF 的两条路径相同）
-        //    ⚠️ 原实现在此分支**不写 ConvertStatus** → 前端永远看不到"已就绪"，
-        //       且产物列填充率统计里 PDF 文件永远为 0（无法验证链路是否跑通）
-        if (ext == ".pdf")
-        {
-            file.PreviewPdfPath = file.StoragePath;
-            await MarkPdfCompletedAsync(file);
-            _logger.LogInformation("PDF 透传（无需转换）: {FileCode}", file.Code);
-            return true;
-        }
-
-        // ② 图片原样透传：预览即原文件，无需转 PDF
-        if (ImageExtensions.Contains(ext))
-        {
-            file.PreviewPdfPath = file.StoragePath;
-            await MarkPdfCompletedAsync(file);
-            _logger.LogInformation("图片透传（无需转换）: {FileCode}", file.Code);
-            return true;
-        }
-
         file.ConvertStatus = "converting";
         file.ConvertMessage = null;
         await SavePdfChainAsync(file);
@@ -227,51 +248,41 @@ public class OfficeConvertService
         {
             var (ok, content, message) = await DownloadSourceAsync(file, payload);
             if (!ok || content == null)
+                return await FailPdfAsync(file, message);
+
+            var core = await _core.ConvertToPdfAsync(file.FileName, file.StoragePath, content);
+            if (!core.Success)
+                return await FailPdfAsync(file, core.Message);
+
+            if (!core.Passthrough && core.Content != null)
             {
-                file.ConvertStatus = "failed";
-                file.ConvertMessage = message;
-                await SavePdfChainAsync(file);
-                _logger.LogWarning("PDF 转换失败（源文件读取）: {FileCode}: {Msg}", file.Code, message);
-                return false;
+                using var targetStream = new MemoryStream(core.Content);
+                await _storage.UploadAsync(
+                    core.TargetPath!.TrimStart('/'), targetStream, core.Content.Length,
+                    core.ContentType ?? "application/pdf");
             }
 
-            var result = await _convertClient.ConvertToPdfAsync(file.FileName, content);
-            if (!result.Success || result.Content == null)
-            {
-                file.ConvertStatus = "failed";
-                file.ConvertMessage = result.Message;
-                await SavePdfChainAsync(file);
-                _logger.LogWarning("PDF 转换失败: {FileCode} ({Kind}): {Msg}", file.Code, result.FailureKind, result.Message);
-                return false;
-            }
-
-            var targetPath = CodeGeneratorService.BuildProductPath(
-                file.StoragePath, CodeGeneratorService.ProductKindPdf, ".pdf");
-            if (string.IsNullOrEmpty(targetPath))
-            {
-                file.ConvertStatus = "failed";
-                file.ConvertMessage = "源文件缺少存储路径，无法派生产物路径";
-                await SavePdfChainAsync(file);
-                return false;
-            }
-
-            using (var targetStream = new MemoryStream(result.Content))
-                await _storage.UploadAsync(targetPath.TrimStart('/'), targetStream, result.Content.Length, "application/pdf");
-
-            file.PreviewPdfPath = targetPath;
+            file.PreviewPdfPath = core.TargetPath;
             await MarkPdfCompletedAsync(file);
-
-            _logger.LogInformation("PDF 转换完成: {FileCode} → {Path}", file.Code, file.PreviewPdfPath);
+            _logger.LogInformation("PDF 转换完成: {FileCode} → {Path}{Passthrough}",
+                file.Code, file.PreviewPdfPath, core.Passthrough ? "（透传）" : "");
             return true;
         }
         catch (Exception ex)
         {
-            file.ConvertStatus = "failed";
-            file.ConvertMessage = $"转换异常：{ex.Message}";
-            await SavePdfChainAsync(file);
-            _logger.LogError(ex, "PDF 转换异常: {FileCode}", file.Code);
-            return false;
+            return await FailPdfAsync(file, $"转换异常：{ex.Message}", log: true, ex: ex, fileCode: file.Code);
         }
+    }
+
+    private async Task<bool> FailPdfAsync(
+        StandardDirectoryFile file, string? message, bool log = false, Exception? ex = null, string? fileCode = null)
+    {
+        file.ConvertStatus = "failed";
+        file.ConvertMessage = message;
+        await SavePdfChainAsync(file);
+        if (log && ex != null) _logger.LogError(ex, "PDF 转换异常: {FileCode}", fileCode);
+        else _logger.LogWarning("PDF 转换失败: {FileCode}: {Msg}", file.Code, message);
+        return false;
     }
 
     // ========================================================
@@ -280,7 +291,8 @@ public class OfficeConvertService
 
     /// <summary>
     /// 提取链：→ Markdown，产物上传 MinIO，回写 <c>MarkdownPath</c> + <c>MarkdownStatus</c>
-    /// <para>失败分类：<c>NeedsOcr</c> → 尝试 <see cref="IOcrProvider"/>；仍不可用则 <c>unsupported</c>。</para>
+    /// <para>★ 转换能力委托 <see cref="IFileConvertCore"/>（含 anydoc 退出码 3 的 OCR 兜底与
+    /// 「能力未接入 ⇒ unsupported 而非伪造内容」判定）。本方法只负责「上传产物 + 按链写列」。</para>
     /// </summary>
     private async Task<bool> ConvertToMarkdownAsync(StandardDirectoryFile file, FileConvertPayload payload)
     {
@@ -292,47 +304,34 @@ public class OfficeConvertService
         {
             var (ok, content, message) = await DownloadSourceAsync(file, payload);
             if (!ok || content == null)
+                return await FailMarkdownAsync(file, message);
+
+            var core = await _core.ConvertToMarkdownAtAsync(file.FileName, file.StoragePath, content);
+            if (!core.Success || core.Content == null || string.IsNullOrEmpty(core.TargetPath))
             {
-                file.MarkdownStatus = "failed";
-                file.MarkdownMessage = message;
+                // ⛔ unsupported 是【能力边界】不是故障：上传流程照常完成，用户手工定义字段后人工填写
+                file.MarkdownStatus = core.Status;
+                file.MarkdownMessage = core.Message;
                 await SaveMarkdownChainAsync(file);
+                _logger.LogInformation("Markdown 未自动提取: {FileCode} ({Status}): {Msg}",
+                    file.Code, core.Status, core.Message);
                 return false;
             }
 
-            var result = await _convertClient.ConvertToMarkdownAsync(file.FileName, content);
+            using (var targetStream = new MemoryStream(core.Content))
+                await _storage.UploadAsync(
+                    core.TargetPath.TrimStart('/'), targetStream, core.Content.Length,
+                    core.ContentType ?? "text/markdown");
 
-            // ── 分支 A：anydoc 判定需要 OCR（图片 / 扫描件，退出码 3）──
-            if (!result.Success && result.NeedsOcr)
-            {
-                return await TryOcrAsync(file, content, result.Message);
-            }
+            file.MarkdownPath = core.TargetPath;
+            file.MarkdownStatus = "completed";
+            file.MarkdownMessage = core.Message;
+            file.MarkdownDate = DateTime.Now;
+            await SaveMarkdownChainAsync(file);
 
-            // ── 分支 B：不支持的类型（anydoc 无法处理，如纯图片）──
-            if (!result.Success && result.FailureKind == ConvertFailureKind.Unsupported)
-            {
-                // 图片本就走不到 anydoc（anydoc 无图片格式支持）；这里覆盖非图片的未知类型
-                if (_ocrProvider.IsAvailable)
-                    return await TryOcrAsync(file, content, result.Message);
-
-                file.MarkdownStatus = "unsupported";
-                file.MarkdownMessage = result.Message;
-                await SaveMarkdownChainAsync(file);
-                _logger.LogInformation("Markdown 不支持自动提取: {FileCode}: {Msg}", file.Code, result.Message);
-                return false;
-            }
-
-            // ── 分支 C：其它失败 ──
-            if (!result.Success || result.Content == null)
-            {
-                file.MarkdownStatus = "failed";
-                file.MarkdownMessage = result.Message;
-                await SaveMarkdownChainAsync(file);
-                _logger.LogWarning("Markdown 转换失败: {FileCode}: {Msg}", file.Code, result.Message);
-                return false;
-            }
-
-            // ── 分支 D：成功 ──
-            return await SaveMarkdownAsync(file, result.Content, null);
+            _logger.LogInformation("Markdown 转换完成: {FileCode} → {Path}{Msg}",
+                file.Code, file.MarkdownPath, string.IsNullOrEmpty(core.Message) ? "" : $"（{core.Message}）");
+            return true;
         }
         catch (Exception ex)
         {
@@ -344,48 +343,13 @@ public class OfficeConvertService
         }
     }
 
-    /// <summary>
-    /// OCR 分支：调用 <see cref="IOcrProvider"/>；不可用时置 <c>unsupported</c>（**不伪造内容**）
-    ///
-    /// <para>★ 为什么不"默认成功"：占位文本若以 <c>completed</c> 流入提取链，会被当成真文档喂给 LLM，
-    /// LLM 会编出一份**格式正确的错误结果**且零报错。宁可如实报 <c>unsupported</c>，
-    /// 让用户走「手工定义字段 + 人工填写」——这正是产品当前的设计意图。</para>
-    /// </summary>
-    private async Task<bool> TryOcrAsync(StandardDirectoryFile file, byte[] content, string fallbackMessage)
+    private async Task<bool> FailMarkdownAsync(StandardDirectoryFile file, string? message)
     {
-        if (!_ocrProvider.IsAvailable)
-        {
-            file.MarkdownStatus = "unsupported";
-            file.MarkdownMessage = string.IsNullOrWhiteSpace(fallbackMessage)
-                ? OcrResult.DefaultNotAvailableMessage
-                : fallbackMessage;
-            await SaveMarkdownChainAsync(file);
-            _logger.LogInformation("Markdown 需 OCR 但能力未接入: {FileCode}", file.Code);
-            return false;
-        }
-
-        try
-        {
-            var ocr = await _ocrProvider.ToMarkdownAsync(file.FileName, content);
-            if (!ocr.Success || ocr.Content == null)
-            {
-                file.MarkdownStatus = "failed";
-                file.MarkdownMessage = string.IsNullOrWhiteSpace(ocr.Message) ? fallbackMessage : ocr.Message;
-                await SaveMarkdownChainAsync(file);
-                _logger.LogWarning("OCR 转换失败: {FileCode}: {Msg}", file.Code, ocr.Message);
-                return false;
-            }
-
-            return await SaveMarkdownAsync(file, ocr.Content, "ocr");
-        }
-        catch (Exception ex)
-        {
-            file.MarkdownStatus = "failed";
-            file.MarkdownMessage = $"OCR 异常：{ex.Message}";
-            await SaveMarkdownChainAsync(file);
-            _logger.LogError(ex, "OCR 转换异常: {FileCode}", file.Code);
-            return false;
-        }
+        file.MarkdownStatus = "failed";
+        file.MarkdownMessage = message;
+        await SaveMarkdownChainAsync(file);
+        _logger.LogWarning("Markdown 转换失败: {FileCode}: {Msg}", file.Code, message);
+        return false;
     }
 
     /// <summary>
@@ -460,11 +424,9 @@ public class OfficeConvertService
             }
 
             var ext = payload.ConvertType == "doc2docx" ? ".docx" : ".xlsx";
-            var contentType = payload.ConvertType == "doc2docx"
-                ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-            var result = await _convertClient.ConvertToFormatAsync(file.FileName, content, ext.TrimStart('.'));
+            // ★ 归一能力同样走内核（36 号 T1.1），legacy 链与 ingest 归一步调同一份实现
+            var result = await _core.ConvertToFormatAsync(file.FileName, content, ext.TrimStart('.'));
             if (!result.Success || result.Content == null)
             {
                 file.ConvertStatus = "failed";
@@ -477,7 +439,7 @@ public class OfficeConvertService
             var targetPath = payload.TargetPath?.TrimStart('/')
                              ?? BuildLegacySiblingPath(file.StoragePath, ext).TrimStart('/');
             using (var targetStream = new MemoryStream(result.Content))
-                await _storage.UploadAsync(targetPath, targetStream, result.Content.Length, contentType);
+                await _storage.UploadAsync(targetPath, targetStream, result.Content.Length, result.ContentType ?? "application/octet-stream");
 
             file.ConvertedStoragePath = "/" + targetPath;
             file.ConvertStatus = "completed";
@@ -496,6 +458,112 @@ public class OfficeConvertService
             _logger.LogError(ex, "中间产物转换异常: {FileCode}", file.Code);
             return false;
         }
+    }
+
+    // ========================================================
+    // ★ 归一链（S-1，2026-10-03）：旧二进制格式 → OOXML
+    // ========================================================
+
+    /// <summary>
+    /// 该文件是否需要归一为 OOXML（<b>全项目唯一判据</b>）。
+    ///
+    /// <para>返回目标扩展名（<b>不含点</b>）：<c>.doc → "docx"</c> / <c>.xls → "xlsx"</c> /
+    /// <c>.ppt → "pptx"</c>；返回 <c>null</c> = 该文件不需要归一。</para>
+    ///
+    /// <para><b>为什么必须有这条链</b>：填写引擎用 NPOI，而 NPOI 2.7.2 <b>没有 <c>NPOI.HWPF</c></b>
+    /// ⇒ <c>.doc</c> <b>连读都读不了</b>。本库实测 668 份中 <c>.doc</c> 567 份、<c>.xls</c> 44 份
+    /// （合计 <b>91.5%</b>）—— 不归一，填写引擎就没有输入，模板侧几乎全部不可用。</para>
+    ///
+    /// <para>⚠️ <b>入队点必须调用本方法</b>（<c>StandardDirectoryService.BuildConvertPayloads</c> /
+    /// <c>BuildBackfillTasks</c>），不得另写一份扩展名判断 —— 两处规则漂移的后果是
+    /// 「页面说需要归一、执行器说不需归一」（或反之），且两处都<b>零报错</b>。</para>
+    /// </summary>
+    public static string? EditableTargetFormat(string? fileName)
+        => Path.GetExtension(fileName ?? "").ToLowerInvariant() switch
+        {
+            ".doc" => "docx",
+            ".xls" => "xlsx",
+            ".ppt" => "pptx",
+            _ => null
+        };
+
+    /// <summary>
+    /// ★ 归一链：<c>.doc → .docx</c> / <c>.xls → .xlsx</c> / <c>.ppt → .pptx</c>，
+    /// 产物上传 MinIO，回写 <c>EditableStoragePath</c> + <c>EditableStatus</c>。
+    ///
+    /// <para>★ 转换能力委托 <see cref="IFileConvertCore.ConvertToFormatAsync"/>
+    /// （走 LibreOffice 容器），本方法只负责「派生产物路径 + 上传 + 按链写列」——
+    /// ⛔ 不重写转换能力（36 号 T1.1 铁律）。</para>
+    ///
+    /// <para><b>与遗留中间产物链（<c>doc2docx</c>）的三点差异</b>：</para>
+    /// <list type="number">
+    ///   <item>写 <c>EditableStoragePath</c>（新列）而非已停用的 <c>ConvertedStoragePath</c>（决策 D-5）。</item>
+    ///   <item>产物走 <c>editable/</c> 段（<see cref="PathBuilder.Product"/> 派生）而非同目录兄弟路径 ——
+    ///         兄弟路径会与既有业务文件撞名（同 stem 不同扩展名的文件本项目实测存在）。</item>
+    ///   <item><b>不写 <c>IsValid</c></b>（那是预览链的列，见 <see cref="EditableChainColumns"/>）。</item>
+    /// </list>
+    ///
+    /// <para><b>幂等</b>：产物路径由源路径派生，重复执行只覆盖同一个 key，不产生垃圾对象。</para>
+    /// </summary>
+    private async Task<bool> ConvertToEditableAsync(StandardDirectoryFile file, FileConvertPayload payload)
+    {
+        var targetFormat = EditableTargetFormat(file.FileName);
+        if (targetFormat == null)
+        {
+            // 入队点已按同一判据过滤，走到这里说明判据漂移或存量队列里有脏任务。
+            // ⚠️ 刻意【不改任何列】：EditableStatus 的 NULL 语义是「不需要归一」，
+            //    在此写值会让该语义依赖「执行器有没有跑到」，不可靠。
+            _logger.LogInformation("归一链跳过（该格式无需归一）: {FileCode} {FileName}", file.Code, file.FileName);
+            return true;
+        }
+
+        file.EditableStatus = "converting";
+        file.EditableMessage = null;
+        await SaveEditableChainAsync(file);
+
+        try
+        {
+            var (ok, content, message) = await DownloadSourceAsync(file, payload);
+            if (!ok || content == null)
+                return await FailEditableAsync(file, message);
+
+            // 产物路径：与 pdf/ markdown/ 对称的 editable/ 段，保留完整原文件名（构造保证唯一）
+            var targetPath = PathBuilder.Product(file.StoragePath, PathBuilder.EditableSegment, "." + targetFormat);
+            if (string.IsNullOrEmpty(targetPath))
+                return await FailEditableAsync(file, "源文件缺少存储路径，无法派生产物路径");
+
+            var result = await _core.ConvertToFormatAsync(file.FileName, content, targetFormat);
+            if (!result.Success || result.Content == null)
+                return await FailEditableAsync(file, result.Message);
+
+            using (var targetStream = new MemoryStream(result.Content))
+                await _storage.UploadAsync(
+                    targetPath.TrimStart('/'), targetStream, result.Content.Length,
+                    result.ContentType ?? "application/octet-stream");
+
+            file.EditableStoragePath = targetPath;
+            file.EditableStatus = "completed";
+            file.EditableMessage = result.Message;
+            file.EditableDate = DateTime.Now;
+            await SaveEditableChainAsync(file);
+
+            _logger.LogInformation("归一完成: {FileCode} {FileName} → {Path}", file.Code, file.FileName, targetPath);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            return await FailEditableAsync(file, $"归一异常：{ex.Message}", ex);
+        }
+    }
+
+    private async Task<bool> FailEditableAsync(StandardDirectoryFile file, string? message, Exception? ex = null)
+    {
+        file.EditableStatus = "failed";
+        file.EditableMessage = message;
+        await SaveEditableChainAsync(file);
+        if (ex != null) _logger.LogError(ex, "归一异常: {FileCode}", file.Code);
+        else _logger.LogWarning("归一失败: {FileCode}: {Msg}", file.Code, message);
+        return false;
     }
 
     // ========================================================
@@ -550,6 +618,8 @@ public class FileConvertPayload
     /// 转换类型：
     /// <para><c>office2pdf</c>（预览链，含 doc2pdf/xls2pdf/docx2pdf/… 别名）</para>
     /// <para><c>anydoc2md</c>（提取链，含 doc2md/pdf2md/… 别名）</para>
+    /// <para><c>office2editable</c>（★ 归一链，含 doc2editable/xls2editable/ppt2editable 别名；
+    /// 产物写 <c>EditableStoragePath</c>，供 NPOI 填写引擎读）</para>
     /// <para><c>doc2docx</c>/<c>xls2xlsx</c>（遗留中间产物，仅排空存量任务）</para>
     /// <para>空 → 自动双产物（PDF + Markdown）</para>
     /// </summary>

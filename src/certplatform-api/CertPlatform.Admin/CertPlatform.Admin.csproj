@@ -14,6 +14,8 @@
 
   <ItemGroup>
     <PackageReference Include="Autofac" Version="8.0.0" />
+    <!-- ★ 2026-10-02 提示词工作台：企业文档 Markdown 复用缓存（仅此用途；不改框架层 INoSql） -->
+    <PackageReference Include="StackExchange.Redis" Version="2.8.31" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,6 +26,11 @@
     <Using Include="CertPlatform.Shared.Entities.Rpt" />
     <Using Include="CertPlatform.Shared.Entities.Sys" />
     <Using Include="CertPlatform.Shared.Entities.Wf" />
+    <!-- ★ 后台端独占实体（2026-10-03 分层修订；清单见 docs/10-YZH架构/24-后端实体归属清单-V1.md） -->
+    <Using Include="CertPlatform.Admin.Entities.Cert" />
+    <Using Include="CertPlatform.Admin.Entities.Dir" />
+        <Using Include="CertPlatform.Admin.Entities.Sys" />
+    <Using Include="CertPlatform.Admin.Entities.Wf" />
     <Using Include="CertPlatform.Shared.DocExtraction" />
   </ItemGroup>
 

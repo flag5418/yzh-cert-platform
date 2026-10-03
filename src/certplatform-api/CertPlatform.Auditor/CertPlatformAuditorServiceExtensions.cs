@@ -24,8 +24,21 @@ public static class CertPlatformAuditorServiceExtensions
 
         // ──── 企业资料服务 ────
         services.AddScoped<EnterpriseFileService>();
+
+        // ──── 企业原始资料（36 号）────
+        //   ⚠️ 与上面 EnterpriseFileService 是**两套东西**（输入库 vs 输出库、标准无关 vs 标准槽位），
+        //      见 36 号 §2.1 判别表。切勿合并。
+        services.AddScoped<EnterpriseOriginalService>();
+        // ★ TaskType = enterprise_original_ingest（格式归一 + 双产物 + 链式入队 analyze）
+        services.AddSingleton<EnterpriseOriginalIngestExecutor>();
+        services.AddSingleton<IYzhTaskExecutor>(sp => sp.GetRequiredService<EnterpriseOriginalIngestExecutor>());
+        // ★ TaskType = enterprise_original_analyze（doc_group 按批次 + doc_content 逐份 + 画像 upsert）
+        services.AddSingleton<EnterpriseOriginalAnalyzeExecutor>();
+        services.AddSingleton<IYzhTaskExecutor>(sp => sp.GetRequiredService<EnterpriseOriginalAnalyzeExecutor>());
+
         // ──── 提取结果版本店（S2③：归档/回活/读取唯一口，行数只翻 IsValid 不删）────
-        services.AddScoped<CertPlatform.Admin.Services.DocExtraction.EnterpriseExtractionResultStore>();
+        // ⚠️ EnterpriseExtractionResultStore 只在 Admin 侧注册一次（36 号 A4 修双注册）。
+        //    Auditor 通过根容器懒解析取到的是同一个实例。
 
         // ──── 企业资料提取任务执行器（G-2c，TaskType=doc_extract）────
         services.AddSingleton<EnterpriseExtractTaskExecutor>();

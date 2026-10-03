@@ -7,7 +7,7 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Auditor.Services;
-using CertPlatform.Shared.Entities.Cert;
+using CertPlatform.Admin.Entities.Cert;
 using CertPlatform.Shared.Fill;
 
 namespace CertPlatform.Auditor.Controllers;

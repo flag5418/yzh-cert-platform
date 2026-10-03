@@ -5,14 +5,16 @@ Date: 2026-09-04
 Purpose: Align database column names with YZH entity [Column("snake_case")] mappings
 """
 
+import os
 import mysql.connector
+import os
 import sys
 
 DB_CONFIG = {
     'host': '127.0.0.1',
     'port': 3307,
     'user': 'root',
-    'password': 'Yzh123456.',
+    'password': os.environ.get('MYSQL_ROOT_PASSWORD', ''),
     'database': 'yzh_cert_platform',
     'autocommit': False
 }

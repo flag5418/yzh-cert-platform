@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+import os
 import mysql.connector
-conn = mysql.connector.connect(host='127.0.0.1', port=3307, user='root', password='Yzh123456.', database='yzh_cert_platform')
+conn = mysql.connector.connect(host='127.0.0.1', port=3307, user='root', password=os.environ.get('MYSQL_ROOT_PASSWORD', ''), database='yzh_cert_platform')
 c = conn.cursor()
 c.execute('SELECT Menu_Id, MenuName, Url, MenuType FROM sys_menu WHERE MenuType IN (0,1) ORDER BY MenuType, Menu_Id')
 print('=== 剩余菜单 ===')

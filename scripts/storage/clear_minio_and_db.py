@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """清空 MinIO cert-platform bucket 和数据库文件/文件夹表"""
+import os
 import pymysql
 from minio import Minio
 from minio.deleteobjects import DeleteObject
 
 # ===== MinIO =====
-client = Minio('127.0.0.1:9000', access_key='admin', secret_key='Yzh123456.', secure=False)
+client = Minio('127.0.0.1:9000', access_key='admin', secret_key=os.environ.get('MINIO_ROOT_PASSWORD', ''), secure=False)
 bucket = 'cert-platform'
 
 objects = list(client.list_objects(bucket, recursive=True))
@@ -28,7 +29,7 @@ print(f'  剩余对象: {len(remaining)}')
 # ===== MySQL =====
 conn = pymysql.connect(
     host='127.0.0.1', port=3307,
-    user='root', password='Yzh123456.',
+    user='root', password=os.environ.get('MYSQL_ROOT_PASSWORD', ''),
     database='yzh_cert_platform', charset='utf8mb4'
 )
 cursor = conn.cursor()

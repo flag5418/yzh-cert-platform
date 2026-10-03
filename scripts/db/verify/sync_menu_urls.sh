@@ -1,4 +1,8 @@
 #!/bin/bash
+# 加载本地口令（⛔ 禁止把口令写进脚本/文档）
+for _e in "$(dirname "$0")/../../docker/.env" "$(dirname "$0")/../docker/.env" "$(dirname "$0")/../../../docker/.env" "$(dirname "$0")/docker/.env"; do
+  [ -f "$_e" ] && set -a && . "$_e" && set +a && break
+done
 # ============================================================
 # 菜单路由契约快照 · 同步（★ 只读 DB，写快照文件）
 #
@@ -23,7 +27,7 @@ OUT_FILE="$HERE/menu-urls.tsv"
 [ -f "$SQL_FILE" ] || { echo "✗ 缺少 SQL 文件：${SQL_FILE}" >&2; exit 1; }
 
 DB="${YZH_DB_NAME:-yzh_cert_platform}"
-MYSQL_PWD_ROOT="${MYSQL_PWD_ROOT:-Yzh123456.}"
+MYSQL_PWD_ROOT="${MYSQL_PWD_ROOT:-$MYSQL_ROOT_PASSWORD}"
 MYSQL_CONTAINER="${YZH_MYSQL_CONTAINER:-yzh-mysql}"
 
 docker exec -i -e MYSQL_PWD="$MYSQL_PWD_ROOT" "$MYSQL_CONTAINER" \

@@ -10,6 +10,9 @@ export { default as CertConvertBadge } from './CertConvertBadge.vue'
 export { default as CertPageHeader } from './CertPageHeader.vue'
 export { default as CertPagePlaceholder } from './CertPagePlaceholder.vue'
 export { default as CertStatusBar } from './CertStatusBar.vue'
+// 33 号语义结果渲染器 —— 2026-10-03 由 cert-admin/pages/workflow/prompt-template/components
+// 上移到 share，供 36 号「企业原始资料管理」分析结果抽屉复用（只读渲染层，⛔ 无 emit）。
+export { default as SemanticResult } from './SemanticResult.vue'
 export { default as YzhFolderUpload } from './YzhFolderUpload.vue'
 
 // ⛔ 重型组件**不要**放进本 barrel（勿加回来）

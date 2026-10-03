@@ -1,4 +1,8 @@
 #!/bin/bash
+# 加载本地口令（⛔ 禁止把口令写进脚本/文档）
+for _e in "$(dirname "$0")/../../docker/.env" "$(dirname "$0")/../docker/.env" "$(dirname "$0")/../../../docker/.env" "$(dirname "$0")/docker/.env"; do
+  [ -f "$_e" ] && set -a && . "$_e" && set +a && break
+done
 # ============================================================
 # 认证阶段定义 — 数据库迁移（一次性脚本，保留备查）
 #
@@ -21,7 +25,7 @@ VERIFY_SQL="$HERE/verify/verify_phase_migration.sql"
 
 DB="${YZH_DB_NAME:-yzh_cert_platform}"
 MYSQL_CONTAINER="${YZH_MYSQL_CONTAINER:-yzh-mysql}"
-MYSQL_PWD_ROOT="${MYSQL_PWD_ROOT:-Yzh123456.}"
+MYSQL_PWD_ROOT="${MYSQL_PWD_ROOT:-$MYSQL_ROOT_PASSWORD}"
 
 [ -f "$SETUP_SQL" ]  || { echo "✗ 缺少 SQL 文件：${SETUP_SQL}"  >&2; exit 1; }
 [ -f "$VERIFY_SQL" ] || { echo "✗ 缺少 SQL 文件：${VERIFY_SQL}" >&2; exit 1; }

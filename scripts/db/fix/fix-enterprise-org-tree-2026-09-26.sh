@@ -1,4 +1,8 @@
 #!/bin/bash
+# 加载本地口令（⛔ 禁止把口令写进脚本/文档）
+for _e in "$(dirname "$0")/../../docker/.env" "$(dirname "$0")/../docker/.env" "$(dirname "$0")/../../../docker/.env" "$(dirname "$0")/docker/.env"; do
+  [ -f "$_e" ] && set -a && . "$_e" && set +a && break
+done
 # ============================================================
 # 企业机构树收敛 · 修复（★ 会写库，必须显式 --apply）
 #
@@ -56,7 +60,7 @@ done
 command -v docker >/dev/null 2>&1 || { echo "✗ 未找到 docker 命令" >&2; exit 1; }
 
 DB="${YZH_DB_NAME:-yzh_cert_platform}"
-MYSQL_PWD_ROOT="${MYSQL_PWD_ROOT:-Yzh123456.}"
+MYSQL_PWD_ROOT="${MYSQL_PWD_ROOT:-$MYSQL_ROOT_PASSWORD}"
 MYSQL_CONTAINER="${YZH_MYSQL_CONTAINER:-yzh-mysql}"
 MYSQL=(docker exec -i -e MYSQL_PWD="$MYSQL_PWD_ROOT" "$MYSQL_CONTAINER" mysql -uroot)
 

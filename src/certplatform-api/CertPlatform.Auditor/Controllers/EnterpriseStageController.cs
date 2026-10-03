@@ -10,7 +10,7 @@ using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Auditor.Services;
 using CertPlatform.Auditor.Services.Ent;
-using CertPlatform.Shared.Entities.Cert;
+using CertPlatform.Admin.Entities.Cert;
 
 using Ent = CertPlatform.Shared.Entities.Cert.Enterprise;
 using Stage = CertPlatform.Shared.Entities.Cert.CertStage;

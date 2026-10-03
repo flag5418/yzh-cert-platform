@@ -42,26 +42,26 @@ export function getNCRulePage(params: {
   SortOrder?: string
   Filters: Array<{ Field: string; Value: string; Operator: string }>
 }) {
-  return yzhApi.post<{ data: { Items: NCRule[]; TotalCount: number } }>('/api/ValidationRule/filter', params)
+  return yzhApi.post<{ data: { Items: NCRule[]; TotalCount: number } }>('/api/Admin/Workflow/ValidationRule/filter', params)
 }
 
 /** 新增规则（POST /add） */
 export function saveNCRule(data: Partial<NCRule>) {
-  return yzhApi.post<NCRule>('/api/ValidationRule/add', data)
+  return yzhApi.post<NCRule>('/api/Admin/Workflow/ValidationRule/add', data)
 }
 
 /** 修改规则（POST /update） */
 export function updateNCRule(data: Partial<NCRule>) {
-  return yzhApi.post<NCRule>('/api/ValidationRule/update', data)
+  return yzhApi.post<NCRule>('/api/Admin/Workflow/ValidationRule/update', data)
 }
 
 /** 删除规则（POST /delete） */
 export function deleteNCRule(codes: string[]) {
-  return yzhApi.post('/api/ValidationRule/delete', codes)
+  return yzhApi.post('/api/Admin/Workflow/ValidationRule/delete', codes)
 }
 
 // ⚠️ 切换启用/复制规则已迁至标准行自定义操作约定：
-//    POST /api/ValidationRule/action/{ToggleActive|Copy}
+//    POST /api/Admin/Workflow/ValidationRule/action/{ToggleActive|Copy}
 //    按钮由 Cert/ValidationRule.json 的 RowButtons.CustomButtons 配置驱动，
 //    前端经 SingleTableCore.dispatch('custom:{method}') 直达，无需手写 api 函数。
 
@@ -70,7 +70,7 @@ export function deleteNCRule(codes: string[]) {
 /** 获取条款树（后端返回扁平列表，由前端按 ParentCode 组树） */
 export async function getISOClauseTree(standardCode: string): Promise<ISOClauseTreeNode[]> {
   const res = await yzhApi.get<ApiResponse<ISOClause[]>>(
-    '/api/Foundation/ISOClause/getTree',
+    '/api/Admin/Foundation/ISOClause/getTree',
     { standardCode },
   )
   return (res?.data ?? []) as ISOClauseTreeNode[]

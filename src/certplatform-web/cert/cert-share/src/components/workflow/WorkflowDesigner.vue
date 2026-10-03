@@ -209,7 +209,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   title: '工作流设计',
   workflowType: () => 'validation',
-  executeConfig: () => ({ enabled: true, runApi: '/api/Workflow/test/run' })
+  executeConfig: () => ({ enabled: true, runApi: '/api/Admin/Workflow/test/run' })
 })
 const emit = defineEmits<{
   'save-success': [result: any]
@@ -308,7 +308,7 @@ onBeforeUnmount(() => {
 //       其内的分页对象属性名为 Items/TotalCount/PageIndex/PageSize（§16.9 铁律）。
 async function loadSkills() {
   try {
-    const res = await yzhApi.post('/api/Workflow/WfSkill/filter', { Page: 1, PageSize: 200, Filters: [] })
+    const res = await yzhApi.post('/api/Admin/Workflow/WfSkill/filter', { Page: 1, PageSize: 200, Filters: [] })
     expectOk(res as any, '技能列表加载失败')
     const items = res?.data?.Items || []
     // skillCode/skillName/category/skillType 是节点模型内部字段（workflow schema），
@@ -343,7 +343,7 @@ async function loadCategories() {
 }
 async function loadTree() {
   try {
-    const res = await yzhApi.get('/api/Workflow/StandardDirectory/organization-tree')
+    const res = await yzhApi.get('/api/Admin/Workflow/StandardDirectory/organization-tree')
     expectOk(res as any, '标准树加载失败')
     const raw = res?.data?.Data || res?.data || res?.Data || []
     treeData.value = (raw as any[]).map((org: any) => ({
@@ -360,7 +360,7 @@ async function loadTree() {
 }
 async function loadDocRules() {
   try {
-    const res = await yzhApi.get('/api/Workflow/DocExtractionRule/configured-rules')
+    const res = await yzhApi.get('/api/Admin/Workflow/DocExtractionRule/configured-rules')
     expectOk(res as any, '文档提取规则加载失败')
     docRules.value = res?.data || res?.Data || []
   } catch (e: any) {
@@ -370,7 +370,7 @@ async function loadDocRules() {
 async function loadFieldsAndTables(ruleCode: string) {
   if (!ruleCode) return
   try {
-    const res = await yzhApi.get(`/api/Workflow/DocExtractionRule/${ruleCode}/fields-tables`)
+    const res = await yzhApi.get(`/api/Admin/Workflow/DocExtractionRule/${ruleCode}/fields-tables`)
     expectOk(res as any, '文档字段加载失败')
     const d = res?.data || res?.Data
     if (d) {
@@ -1089,7 +1089,7 @@ async function handleExecuteTest() {
   executing.value = true
   executionResult.value = null
   try {
-    const runApi = props.executeConfig?.runApi || '/api/Workflow/test/run'
+    const runApi = props.executeConfig?.runApi || '/api/Admin/Workflow/test/run'
     // 请求体字段名与后端 TaskExecutionRequest 的 C# 属性名逐字一致（PascalCase，YZH 命名铁律）
     const res = await yzhApi.post(runApi, {
       TaskType: 'TEST',
@@ -1162,12 +1162,12 @@ async function handleTestNode(nodeData: any) {
           MockOutputs: mockOutputs
         }
       }
-      const res = await yzhApi.post('/api/Workflow/test/ai-node', testBody)
+      const res = await yzhApi.post('/api/Admin/Workflow/test/ai-node', testBody)
       if (res?.success && res.data) nodeData.onSuccess(res.data)
       else nodeData.onError(res?.error || res?.err || res?.message || 'AI 节点测试失败', null)
       return
     }
-    const res = await yzhApi.post('/api/Workflow/test/node', {
+    const res = await yzhApi.post('/api/Admin/Workflow/test/node', {
       ...meta,
       NodeId: nodeData.nodeId, NodeType: nodeData.nodeType, Title: nodeData.title,
       SkillCode: nodeData.skillCode, Config: nodeData.config, Inputs: nodeData.inputs,
@@ -1184,7 +1184,7 @@ async function handleTestWorkflow(nodeData: any) {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const config = serialize(store.state.nodes, store.state.edges, { version: 1 as any, workflowType: props.workflowType } as any) as any
-    const res = await yzhApi.post('/api/Workflow/test/run', {
+    const res = await yzhApi.post('/api/Admin/Workflow/test/run', {
       TaskType: 'TEST',
       RuleCode: currentLeaf.value.Code || currentLeaf.value.RuleCode,
       EnterpriseCode: currentLeaf.value.EnterpriseCode || YZH_VIRTUAL_ENTERPRISE_CODE,
@@ -1210,7 +1210,7 @@ async function handleTestWorkflow(nodeData: any) {
  */
 async function handleTestDocExtract({ nodeType, body, onSuccess, onError }: any) {
   try {
-    const url = nodeType === 'docField' ? '/api/Workflow/DocExtractionRule/test-field' : '/api/Workflow/DocExtractionRule/test-table'
+    const url = nodeType === 'docField' ? '/api/Admin/Workflow/DocExtractionRule/test-field' : '/api/Admin/Workflow/DocExtractionRule/test-table'
     const res: any = await yzhApi.post(url, body)
     const data = res?.data ?? res?.Data
     if (res?.success === false) { onError(res?.err || res?.message || '测试失败', data); return }

@@ -18,7 +18,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- 业务实体全局 using（与 CertPlatform.Admin 保持一致） -->
+    <!--
+      ★ 实体全局 using —— 按【本项目拥有的实体域】列，不是「与 Admin 保持一致」。
+        CertPlatform.Shared/Entities/** 只放【双端共用】的实体；
+        专家端独占实体一律放 CertPlatform.Auditor/Entities/**（36 号 D 分层修订，2026-10-03）。
+        历史坑：曾按 Admin 的域清单抄一份，漏掉 Entities.Expert —— 而那恰好是 Auditor 的主域，
+        导致 8 个文件被迫写显式 using，注释还写「与 Admin 保持一致」（错的）。
+    -->
+    <!-- 双端共用（Shared） -->
     <Using Include="CertPlatform.Shared.Entities.Audit" />
     <Using Include="CertPlatform.Shared.Entities.Cert" />
     <Using Include="CertPlatform.Shared.Entities.Dir" />
@@ -26,6 +33,11 @@
     <Using Include="CertPlatform.Shared.Entities.Rpt" />
     <Using Include="CertPlatform.Shared.Entities.Sys" />
     <Using Include="CertPlatform.Shared.Entities.Wf" />
+    <!-- ★ 专家端独占 -->
+    <Using Include="CertPlatform.Auditor.Entities.Cert" />
+    <Using Include="CertPlatform.Auditor.Entities.Dir" />
+    <Using Include="CertPlatform.Auditor.Entities.Doc" />
+    <Using Include="CertPlatform.Auditor.Entities.Expert" />
   </ItemGroup>
 
   <ItemGroup>

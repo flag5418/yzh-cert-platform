@@ -23,6 +23,8 @@ const businessRoutes: RouteRecordRaw[] = [
   // ★ 体系认证全局参数定义（MENU_00217）—— 按「机构 × 标准 × 阶段」预定义填充参数
   { path: 'business/fill-param-def', name: 'BusinessFillParamDef', component: () => import('@/pages/cert/fill-param-def/index.vue') },
   { path: 'business/doc-extraction-rule', name: 'BusinessDocExtractionRule', component: () => import('@/pages/workflow/doc-extraction-rule/index.vue') },
+  // ★ 标准文档填写规则（MENU_00218）—— 给空白模板标注锚点 + 挂全文填写提示词
+  { path: 'business/doc-fill-rule', name: 'BusinessDocFillRule', component: () => import('@/pages/workflow/doc-fill-rule/index.vue') },
   { path: 'business/report-def', name: 'BusinessReportDef', component: () => import('@/pages/workflow/report-rule/index.vue') },
   { path: 'business/prompt-template', name: 'BusinessPromptTemplate', component: () => import('@/pages/workflow/prompt-template/index.vue') },
   { path: 'business/skill-manage', name: 'BusinessSkillManage', component: () => import('@/pages/workflow/skill-manage/index.vue') },

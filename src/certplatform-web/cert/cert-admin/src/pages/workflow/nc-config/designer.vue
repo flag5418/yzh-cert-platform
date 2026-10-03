@@ -14,7 +14,7 @@
     title="NC 规则配置"
     :workflow-type="'validation'"
     :tree-config="{
-      loadApi: '/api/ValidationRule/filter',
+      loadApi: '/api/Admin/Workflow/ValidationRule/filter',
       loadMethod: 'post',
       loadBodyBuilder: (filter) => ({
         Page: 1, PageSize: 200,
@@ -24,13 +24,13 @@
           filter.PhaseCode ? { Field: 'PhaseCode', Value: filter.PhaseCode, Operator: 'Equal' } : null
         ].filter(Boolean)
       }),
-      detailApi: '/api/ValidationRule',
+      detailApi: '/api/Admin/Workflow/ValidationRule',
       textField: 'RuleName',
       codeField: 'RuleCode'
     }"
     :save-config="{
-      api: '/api/ValidationRule/update',
-      getUrl: (ctx) => (ctx.leaf.Code ? '/api/ValidationRule/update' : '/api/ValidationRule/add'),
+      api: '/api/Admin/Workflow/ValidationRule/update',
+      getUrl: (ctx) => (ctx.leaf.Code ? '/api/Admin/Workflow/ValidationRule/update' : '/api/Admin/Workflow/ValidationRule/add'),
       buildPayload: (ctx) => {
         const r = ctx.leaf
         return {
@@ -53,7 +53,7 @@
         }
       }
     }"
-    :execute-config="{ enabled: true, runApi: '/api/Workflow/test/run' }"
+    :execute-config="{ enabled: true, runApi: '/api/Admin/Workflow/test/run' }"
     @save-success="onSaveSuccess"
     @execute-success="onExecuteSuccess"
   />

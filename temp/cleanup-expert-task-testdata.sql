@@ -8,7 +8,7 @@
 --   ❌ 清空：任务头 / 标准子任务 / 队列 / 队列项 / 结论 / 日志 / 数据缺口
 --
 -- 执行：
---   docker exec -i yzh-mysql mysql -uroot -pYzh123456. --default-character-set=utf8mb4 \
+--   docker exec -i yzh-mysql mysql -uroot -p$MYSQL_ROOT_PASSWORD --default-character-set=utf8mb4 \
 --     yzh_cert_platform < temp/cleanup-expert-task-testdata.sql
 -- ══════════════════════════════════════════════════════════════════
 

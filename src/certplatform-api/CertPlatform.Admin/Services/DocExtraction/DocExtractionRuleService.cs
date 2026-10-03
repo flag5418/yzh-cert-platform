@@ -13,9 +13,9 @@ using YZH.Core.Stand.Extensions;
 using YZH.Core.Stand.Interfaces;
 using CertPlatform.Shared.Constants;
 using CertPlatform.Shared.DocExtraction;
-using CertPlatform.Shared.Entities.Cert;
-using CertPlatform.Shared.Entities.Dir;
-using CertPlatform.Shared.Entities.Doc;
+using CertPlatform.Admin.Entities.Cert;
+using CertPlatform.Admin.Entities.Dir;
+using CertPlatform.Admin.Entities.Doc;
 
 namespace CertPlatform.Admin.Services.DocExtraction;
 

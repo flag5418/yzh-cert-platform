@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """检查 Sys_User 微信字段"""
+import os
 import mysql.connector
 
 conn = mysql.connector.connect(
     host='127.0.0.1', port=3307,
-    user='root', password='Yzh123456.',
+    user='root', password=os.environ.get('MYSQL_ROOT_PASSWORD', ''),
     database='yzh_cert_platform'
 )
 c = conn.cursor()

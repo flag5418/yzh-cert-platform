@@ -12,9 +12,10 @@ namespace CertPlatform.Shared.Entities.Dir
     /// 因此转换链、预览链、提取链应当**共用同一套实现**，仅靠**输入路径前缀**区分归属。
     /// 本类型就是那个「前缀判据」的唯一权威源。
     ///
-    /// <para>⚠️ 当前阶段只启用 <see cref="StandardDirectory"/>；<see cref="EnterpriseDocuments"/>
-    /// 为已预留的第二个库（代码中 <c>DeriveOrgCodeFromPath</c> 早已识别该前缀）。
-    /// 启用时**只需在 <see cref="Prefixes"/> 之外新增数据来源**，转换/预览/提取链零改动。</para>
+    /// <para>⚠️ 当前阶段启用 <see cref="StandardDirectory"/> 与 <see cref="EnterpriseDocuments"/>；
+    /// <see cref="EnterpriseOriginalSource"/> 为 2026-10-03 新增的第三个库（36 号）。
+    /// 新增库时**只需在本文件加前缀 + 在 <c>PrefixOf</c>/<c>Resolve</c> 加分支**，
+    /// 转换/预览/提取链零改动；<c>PathBuilder</c> 加一个构造方法即可。</para>
     ///
     /// <para>★ MinIO 语义提醒：这里的「库」只是 **key 的前缀段**，不是真目录 ——
     /// MinIO/S3 是扁平 key 存储，控制台按 <c>/</c> 分组**显示**成目录。
@@ -28,8 +29,18 @@ namespace CertPlatform.Shared.Entities.Dir
         /// <summary>标准目录库：<c>/standard-directory/...</c></summary>
         StandardDirectory = 1,
 
-        /// <summary>企业文档库：<c>/enterprise-documents/...</c>（已预留，尚未启用）</summary>
-        EnterpriseDocuments = 2
+        /// <summary>企业文档库：<c>/enterprise-documents/{Ent}/{Std}/{Stage}/...</c>（企业【已按标准备好】的规范化材料，输出库）</summary>
+        EnterpriseDocuments = 2,
+
+        /// <summary>
+        /// 企业原始资料库：<c>/enterprise-original-source/{Ent}/{Stage}/...</c>（企业【散乱原始资料】，输入库）。
+        /// <para>★ 与 <see cref="EnterpriseDocuments"/> 的区别是「输入 vs 输出」：
+        /// 本库按**阶段**组织（标准无关，因为企业交上来的时候还没对标准），
+        /// 资料库按**阶段 × 标准 × 槽位**组织。生命周期不同，混库会导致
+        /// 「重新规范化时分不清哪些是原始、哪些是产物」。</para>
+        /// <para>规格见 docs/20-体系认证/03-详细设计/05-企业资料规范化/36-企业原始资料管理设计-V1.md。</para>
+        /// </summary>
+        EnterpriseOriginalSource = 3
     }
 
     /// <summary>文档库路径工具（前缀解析 + 白名单校验的唯一权威源）</summary>
@@ -41,11 +52,15 @@ namespace CertPlatform.Shared.Entities.Dir
         /// <summary>企业文档库前缀</summary>
         public const string EnterpriseDocumentsPrefix = "enterprise-documents";
 
+        /// <summary>企业原始资料库前缀（36 号 D4；⛔ 禁改 —— 改前缀等于换库，历史对象全部孤立）</summary>
+        public const string EnterpriseOriginalSourcePrefix = "enterprise-original-source";
+
         /// <summary>全部合法库前缀（白名单）</summary>
         public static readonly IReadOnlyList<string> Prefixes = new[]
         {
             StandardDirectoryPrefix,
-            EnterpriseDocumentsPrefix
+            EnterpriseDocumentsPrefix,
+            EnterpriseOriginalSourcePrefix
         };
 
         /// <summary>取库对应的前缀段</summary>
@@ -53,6 +68,7 @@ namespace CertPlatform.Shared.Entities.Dir
         {
             DocumentLibrary.StandardDirectory => StandardDirectoryPrefix,
             DocumentLibrary.EnterpriseDocuments => EnterpriseDocumentsPrefix,
+            DocumentLibrary.EnterpriseOriginalSource => EnterpriseOriginalSourcePrefix,
             _ => ""
         };
 
@@ -76,6 +92,8 @@ namespace CertPlatform.Shared.Entities.Dir
                 return DocumentLibrary.StandardDirectory;
             if (firstSeg.Equals(EnterpriseDocumentsPrefix, StringComparison.OrdinalIgnoreCase))
                 return DocumentLibrary.EnterpriseDocuments;
+            if (firstSeg.Equals(EnterpriseOriginalSourcePrefix, StringComparison.OrdinalIgnoreCase))
+                return DocumentLibrary.EnterpriseOriginalSource;
 
             return DocumentLibrary.Unknown;
         }
@@ -87,6 +105,12 @@ namespace CertPlatform.Shared.Entities.Dir
         /// <c>p.StartsWith("standard-directory/")</c> —— 那会让企业文档库的
         /// <c>file-preview</c>/<c>file-markdown</c>/<c>download</c> 请求**静默被拒**
         /// （业务失败恒 HTTP 200，前端只看到「未找到文件」，无线索指向白名单）。</para>
+        ///
+        /// <para>⚠️ <b>本方法只是第一道闸</b>。业务端可能还有<b>自己写的第二道</b>：
+        /// <c>EnterpriseFileService.DownloadAsync</c>（Auditor，<c>CertPlatform.Auditor/Services/Ent/
+        /// EnterpriseFileService.cs</c> 约 1551-1552 行）在白名单之后又硬编码了
+        /// <c>!segs[0].Equals(EnterpriseDocumentsPrefix)</c> 的首段判断。
+        /// 新增库时<b>只改本类会被那道判断静默拦下</b>，务必一并改（36 号 §4.2 表③）。</para>
         /// </summary>
         public static bool IsAllowedStoragePath(string? path)
         {

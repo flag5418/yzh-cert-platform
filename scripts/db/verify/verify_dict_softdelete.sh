@@ -1,4 +1,8 @@
 #!/bin/bash
+# 加载本地口令（⛔ 禁止把口令写进脚本/文档）
+for _e in "$(dirname "$0")/../../docker/.env" "$(dirname "$0")/../docker/.env" "$(dirname "$0")/../../../docker/.env" "$(dirname "$0")/docker/.env"; do
+  [ -f "$_e" ] && set -a && . "$_e" && set +a && break
+done
 # ============================================================
 # 数据字典 · 软删除语义核对（★ 只读，不做任何修改）
 #
@@ -23,7 +27,7 @@ SQL_FILE="$HERE/verify_dict_softdelete.sql"
 [ -f "$SQL_FILE" ] || { echo "✗ 缺少 SQL 文件：${SQL_FILE}" >&2; exit 1; }
 
 DB="${YZH_DB_NAME:-yzh_cert_platform}"
-MYSQL_PWD_ROOT="${MYSQL_PWD_ROOT:-Yzh123456.}"
+MYSQL_PWD_ROOT="${MYSQL_PWD_ROOT:-$MYSQL_ROOT_PASSWORD}"
 
 # SQL 外置（铁律 B3）：脚本只做「参数注入 + 喂给 mysql」，不持有任何 SQL 文本。
 sed -e "s|__DICT_CODE__|${DICT_CODE}|g" -e "s|__ITEM_CODE__|${ITEM_CODE}|g" "$SQL_FILE" \

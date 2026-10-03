@@ -13,11 +13,11 @@ using SqlSugar;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 using CertPlatform.Shared.DocExtraction;
-using CertPlatform.Shared.Entities.Dir;
-using CertPlatform.Shared.Entities.Doc;
+using CertPlatform.Admin.Entities.Dir;
+using CertPlatform.Admin.Entities.Doc;
 using YZH.Core.Api.Models.System;
-using CertPlatform.Shared.Entities.Wf;
-using CertPlatform.Shared.Entities.Cert;
+using CertPlatform.Admin.Entities.Wf;
+using CertPlatform.Admin.Entities.Cert;
 
 namespace CertPlatform.Admin.Services.DocExtraction;
 

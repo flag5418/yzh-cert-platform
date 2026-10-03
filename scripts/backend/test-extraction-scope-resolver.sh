@@ -1,4 +1,8 @@
 #!/bin/bash
+# 加载本地口令（⛔ 禁止把口令写进脚本/文档）
+for _e in "$(dirname "$0")/../../docker/.env" "$(dirname "$0")/../docker/.env" "$(dirname "$0")/../../../docker/.env" "$(dirname "$0")/docker/.env"; do
+  [ -f "$_e" ] && set -a && . "$_e" && set +a && break
+done
 # ============================================================
 # S1 · 提取定位链验收（10 号 §六 S1）
 #
@@ -27,7 +31,7 @@ ok()  { PASS=$((PASS+1)); echo "  ✓ $1"; }
 bad() { FAIL=$((FAIL+1)); FAIL_DETAILS="$FAIL_DETAILS\n  ✗ $1"; echo "  ✗ $1"; }
 sec() { echo ""; echo "── $1"; }
 
-MY() { docker exec -i yzh-mysql mysql -uroot -pYzh123456. --default-character-set=utf8mb4 yzh_cert_platform -N -B -e "$1" 2>/dev/null; }
+MY() { docker exec -i yzh-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" --default-character-set=utf8mb4 yzh_cert_platform -N -B -e "$1" 2>/dev/null; }
 
 restore() {
   MY "UPDATE cert_doc_extraction_rule SET Status='failed', StandardFileCode='$TPL_FILE' WHERE Code='$RULE';"

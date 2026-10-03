@@ -1,4 +1,8 @@
 #!/bin/bash
+# 加载本地口令（⛔ 禁止把口令写进脚本/文档）
+for _e in "$(dirname "$0")/../../docker/.env" "$(dirname "$0")/../docker/.env" "$(dirname "$0")/../../../docker/.env" "$(dirname "$0")/docker/.env"; do
+  [ -f "$_e" ] && set -a && . "$_e" && set +a && break
+done
 # ============================================================
 # S3（重定义）· 提取状态四态 + 规则口径 + 规则变更自动标记 验收
 # 对应：2026-09-29 用户裁决 4 项（有规则即可提取 / 三态列 / 规则变更标记 / 队列日志）
@@ -36,7 +40,7 @@ F_KEY="23ce314f7ea745bdad87b78eb7b033db"
 PASS=0; FAIL=0; FAIL_DETAILS=""
 DUMP="$(mktemp)"
 
-MY()  { docker exec -i yzh-mysql mysql -uroot -pYzh123456. --default-character-set=utf8mb4 yzh_cert_platform -N -B -e "$1" 2>/dev/null; }
+MY()  { docker exec -i yzh-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" --default-character-set=utf8mb4 yzh_cert_platform -N -B -e "$1" 2>/dev/null; }
 ok()  { PASS=$((PASS+1)); echo "  ✓ $1"; }
 bad() { FAIL=$((FAIL+1)); FAIL_DETAILS="$FAIL_DETAILS\n  ✗ $1"; echo "  ✗ $1"; }
 sec() { echo ""; echo "── $1"; }
@@ -50,14 +54,14 @@ ORIG_STATUS="$(echo "$ORIG_SNAP" | cut -d'|' -f1)"
 ORIG_SFC="$(echo "$ORIG_SNAP" | cut -d'|' -f2)"
 ORIG_PROMPT="$(echo "$ORIG_SNAP" | cut -d'|' -f3-)"
 # 备份规则自身的字段/表格定义（保存会删除重插，收尾按 dump 恢复，保住 e4f329… 等夹具行）
-docker exec yzh-mysql mysqldump -uroot -pYzh123456. yzh_cert_platform cert_doc_field_def \
+docker exec yzh-mysql mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" yzh_cert_platform cert_doc_field_def \
   --where="RuleCode='$RULE'" --skip-add-drop-table --no-create-info --complete-insert --compact > "$DUMP" 2>/dev/null
 # 表格定义经 TableCode 关联：先取本规则的 TableCode 集合，再 dump 表与列
 TCS="$(MY "SELECT DISTINCT TableCode FROM cert_doc_table_def WHERE RuleCode='$RULE';" | sed "s/^/'/;s/$/'/" | paste -sd, -)"
 if [ -n "$TCS" ] && [ "$TCS" != "''" ]; then
-  docker exec yzh-mysql mysqldump -uroot -pYzh123456. yzh_cert_platform cert_doc_table_def \
+  docker exec yzh-mysql mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" yzh_cert_platform cert_doc_table_def \
     --where="RuleCode='$RULE'" --skip-add-drop-table --no-create-info --complete-insert --compact >> "$DUMP" 2>/dev/null
-  docker exec yzh-mysql mysqldump -uroot -pYzh123456. yzh_cert_platform cert_doc_table_field_def \
+  docker exec yzh-mysql mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" yzh_cert_platform cert_doc_table_field_def \
     --where="TableCode IN ($TCS)" --skip-add-drop-table --no-create-info --complete-insert --compact >> "$DUMP" 2>/dev/null
 fi
 
@@ -66,7 +70,7 @@ restore_and_exit() {
   MY "DELETE FROM cert_doc_field_def WHERE RuleCode='$RULE';"
   MY "DELETE FROM cert_doc_table_field_def WHERE TableCode IN (SELECT * FROM (SELECT TableCode FROM cert_doc_table_def WHERE RuleCode='$RULE') t);"
   MY "DELETE FROM cert_doc_table_def WHERE RuleCode='$RULE';"
-  [ -s "$DUMP" ] && docker exec -i yzh-mysql mysql -uroot -pYzh123456. --default-character-set=utf8mb4 yzh_cert_platform < "$DUMP" 2>/dev/null
+  [ -s "$DUMP" ] && docker exec -i yzh-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" --default-character-set=utf8mb4 yzh_cert_platform < "$DUMP" 2>/dev/null
   rm -f "$DUMP"
 }
 trap restore_and_exit EXIT

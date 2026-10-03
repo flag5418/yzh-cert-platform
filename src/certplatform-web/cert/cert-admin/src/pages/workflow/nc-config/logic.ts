@@ -158,7 +158,7 @@ function buildClauseTree(flat: ISOClauseTreeNode[]): ISOClauseTreeNode[] {
 
 export class NCConfigLogic extends TreeTableLogic<any> {
   // ──── 控制器名称（对应后端 ValidationRuleController 路由） ────
-  controllerName = 'ValidationRule'
+  controllerName = 'Admin/Workflow/ValidationRule'
 
   /** 目录域组织树的纯转换器（不走 useFileTree.loadTree —— 它会预加载阶段目录，本页用不到） */
   private readonly fileTree = useFileTree()

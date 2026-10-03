@@ -20,6 +20,10 @@ public static class CertPlatformAdminServiceExtensions
         services.AddScoped<StandardDirectoryService>();
         services.AddScoped<DirectoryTemplateService>();
         services.AddScoped<OfficeConvertService>();
+        // ★ 转换内核（36 号 T1.1）：PDF / Markdown / 格式归一 / OCR 兜底的**唯一实现**，
+        //   无状态可注册单例。标准目录、企业资料库、企业原始资料三条链共用它 ——
+        //   ⛔ 禁止在任何 Service 里再直接调 DocumentConvertClient（那是「状态机抄第二遍」的开端）。
+        services.AddSingleton<IFileConvertCore, FileConvertCore>();
 
         // ──── 文档提取规则 ────
         services.AddHttpClient();
@@ -42,8 +46,10 @@ public static class CertPlatformAdminServiceExtensions
 
         // ──── Prompt 模板管理 ────
         services.AddScoped<PromptTemplateService>();
-        // ★ 2026-10-02 提示词工作台（AI 生成草稿 + 上传文件试跑；文件即弃）
+        // ★ 2026-10-02 提示词工作台（AI 生成草稿 + 上传文件试跑）
         services.AddScoped<PromptWorkbenchService>();
+        // ★ 2026-10-02 企业文档 Markdown 复用缓存（Redis，单例持连接；连不上自动降级为「每次重新转换」）
+        services.AddSingleton<PromptMarkdownCache>();
 
         // ──── 工作流执行引擎 ────
         services.AddScoped<WorkflowConfigParser>();

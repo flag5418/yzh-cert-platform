@@ -19,12 +19,12 @@ from minio.error import S3Error
 MYSQL_HOST = "127.0.0.1"
 MYSQL_PORT = 3307
 MYSQL_USER = "root"
-MYSQL_PASS = "Yzh123456."
+MYSQL_PASS = os.environ.get('MYSQL_ROOT_PASSWORD', '')
 MYSQL_DB   = "yzh_cert_platform"
 
 MINIO_ENDPOINT = "127.0.0.1:9000"
 MINIO_ACCESS   = "admin"
-MINIO_SECRET   = "Yzh123456."
+MINIO_SECRET   = os.environ.get('MINIO_ROOT_PASSWORD', '')
 MINIO_BUCKET   = "cert-platform"
 
 # 项目根目录

@@ -8,7 +8,7 @@
 -- 影响：不加此列，「表格的补录清单」永远为空。
 -- 幂等：先查 information_schema，已存在则跳过。
 --
--- 执行：docker exec -i yzh-mysql mysql -uroot -pYzh123456. \
+-- 执行：docker exec -i yzh-mysql mysql -uroot -p$MYSQL_ROOT_PASSWORD \
 --         --default-character-set=utf8mb4 yzh_cert_platform < 本文件
 -- ============================================================
 

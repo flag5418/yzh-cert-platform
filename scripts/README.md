@@ -67,6 +67,7 @@
 | `generate/` | 代码/实体生成 | 无 |
 | `storage/` | MinIO/存储相关 | 无 |
 | `tools/` | 通用工具（目录树、冻结检查、文档迁移） | 无 |
+| `tunnel/` | 公网临时隧道（Cloudflare Quick Tunnel）启停/状态 | ⛔ 无数据库操作 |
 | `docker/`（仓库根） | 依赖容器启停/状态 | ⛔ 无数据库操作 |
 
 ---
@@ -113,7 +114,7 @@
 | `run_phase_migration.sh` | 认证阶段定义一次性迁移（**已执行完毕**，保留备查） | `./run_phase_migration.sh` |
 
 **连接方式**：`docker exec -i yzh-mysql mysql -uroot -p*** --default-character-set=utf8mb4 yzh_cert_platform`
-**密码**：`docker/.env` → `Yzh123456.`
+**密码**：从 `docker/.env` 的 `MYSQL_ROOT_PASSWORD` 读取（⛔ **禁止把口令值写进任何受版本控制的文档**）
 
 ### 2.3 frontend/ — 前端脚本
 
@@ -138,7 +139,17 @@
 | `tools/freeze-check.sh` | 冻结检查（`src/old/` 禁改校验） |
 | `tools/docs-migration/` | 文档迁移脚本：`cleanup_refs_20260928.py` / `rebase_relative_links_20260928.py` / `update_refs.py`（一次性，已执行）+ **`check_docs.mjs`（常驻防回归校验，随时可跑：`node scripts/tools/docs-migration/check_docs.mjs`）** |
 
-### 2.5 仓库根 docker/ — 依赖容器
+### 2.5 tunnel/ — 公网临时访问（Cloudflare Quick Tunnel）
+
+| 脚本 | 作用 | 用法 |
+|------|------|------|
+| `start-tunnel.sh` | 一键把 admin(9990)/auditor(9991) 前端暴露到公网（免域名） | `./start-tunnel.sh [admin\|auditor\|all]` |
+| `stop-tunnel.sh` | 关闭隧道，公网地址即刻失效 | `./stop-tunnel.sh [admin\|auditor\|all]` |
+| `status-tunnel.sh` | 查看隧道进程 / 本机端口 / 当前公网地址 | `./status-tunnel.sh` |
+
+**要点**：只暴露两个前端；后端 9992 与 MySQL/Redis/MinIO **不对外暴露**——前端以相对路径 `/api` 调用，由 Vite proxy 在本机转发。首次运行自动下载 `cloudflared` 至 `tunnel/bin/`。详见 `tunnel/README.md`。
+
+### 2.6 仓库根 docker/ — 依赖容器
 
 | 脚本 | 作用 |
 |------|------|

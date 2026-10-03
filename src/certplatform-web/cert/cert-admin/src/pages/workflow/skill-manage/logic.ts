@@ -18,7 +18,10 @@
 import { TreeTableLogic, type ApiResponse, type PagedData, type TreeNode } from '@yzh-core'
 
 export class SkillTreeTableLogic extends TreeTableLogic<any> {
-  controllerName = 'Workflow/SkillTreeTable'
+  // ⚠️ 必须含 Admin/ 端标记 —— 后端路由为 api/Admin/Workflow/SkillTreeTable（2026-10-03 端标记改造）。
+  //    URL 由 SingleTableCore 拼成 `/api/${controllerName}${path}`（SingleTableCore.ts:878），
+  //    漏 Admin/ ⇒ 全部端点 404，页面报「接口不存在」。
+  controllerName = 'Admin/Workflow/SkillTreeTable'
 
   // ──── 新增技能默认值（分类归入由 onPrepareAdd 按选中树节点注入） ────
   protected override get defaultValues(): Record<string, any> {

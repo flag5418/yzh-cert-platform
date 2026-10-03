@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations.Schema;
-using CertPlatform.Shared.Entities.Cert;
 
 namespace CertPlatform.Shared.Entities.Cert
 {

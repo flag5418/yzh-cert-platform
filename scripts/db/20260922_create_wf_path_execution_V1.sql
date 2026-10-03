@@ -14,7 +14,7 @@
 -- 命名规范（项目全局规则 §16.9 铁律七）：DB 列名 = C# 属性名 = PascalCase，逐字一致。
 --   实体：CertPlatform.Shared/Entities/Wf/WfPathExecution.cs
 --
--- 执行：docker exec -i yzh-mysql mysql -uroot -p'Yzh123456.' < 本文件
+-- 执行：docker exec -i yzh-mysql mysql -uroot -p'$MYSQL_ROOT_PASSWORD' < 本文件
 -- 幂等：CREATE TABLE IF NOT EXISTS，可重复执行。
 
 USE yzh_cert_platform;

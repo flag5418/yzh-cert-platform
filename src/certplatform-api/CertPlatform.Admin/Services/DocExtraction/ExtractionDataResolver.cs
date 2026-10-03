@@ -1,5 +1,5 @@
 using CertPlatform.Admin.Services.Workflow.Skills;
-using CertPlatform.Shared.Entities.Doc;
+using CertPlatform.Admin.Entities.Doc;
 using YZH.Core.DataBase.Interfaces;
 
 namespace CertPlatform.Admin.Services.DocExtraction;

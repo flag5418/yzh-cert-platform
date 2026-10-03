@@ -3,10 +3,9 @@ using Microsoft.Extensions.Logging;
 using CertPlatform.Admin.Services.DocExtraction;
 using CertPlatform.Admin.Services.Workflow.Models;
 using CertPlatform.Shared.Constants;
-using CertPlatform.Shared.Entities.Cert;
-using CertPlatform.Shared.Entities.Dir;
-using CertPlatform.Shared.Entities.Doc;
-using CertPlatform.Shared.Entities.Expert;
+using CertPlatform.Admin.Entities.Cert;
+using CertPlatform.Admin.Entities.Dir;
+using CertPlatform.Admin.Entities.Doc;
 using CertPlatform.Shared.Entities.Rpt;
 using YZH.Core.DataBase.Interfaces;
 

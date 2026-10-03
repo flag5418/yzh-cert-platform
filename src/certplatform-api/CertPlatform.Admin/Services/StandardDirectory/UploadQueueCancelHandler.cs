@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Queue;
-using CertPlatform.Shared.Entities.Dir;
+using CertPlatform.Admin.Entities.Dir;
 
 namespace CertPlatform.Admin.Services.StandardDirectory;
 

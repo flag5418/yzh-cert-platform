@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using CertPlatform.Admin.Services.Workflow;
-using CertPlatform.Shared.Entities.Wf;
+using CertPlatform.Admin.Entities.Wf;
 using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Helpers;
@@ -19,7 +19,14 @@ namespace CertPlatform.Admin.Controllers.Workflow;
 /// <para>额外提供：activate（激活）/ <b>generate（AI 生成草稿）</b> / <b>test（上传文件试跑）</b> / standards（标准下拉）</para>
 /// </summary>
 [ApiController]
-[Route("api/[controller]")]
+/// <para><b>★ 端标记（2026-10-03）</b>：路由加 <c>Admin/</c> 段，与专家端 <c>/api/Auditor/*</c> 对称。
+/// <para>背景：后台端 20 个 Controller 此前零端标记，4 个连业务域前缀都没有（<c>api/AIUsage</c>
+/// <c>api/PromptTemplate</c> <c>api/ValidationRule</c> <c>api/ReportDefinition</c>），
+/// 且 <c>api/System/[controller]</c> 与框架层 <c>YZH.Core.Web</c> 的 <c>api/System/*</c> 撞前缀。</para>
+/// <para><b>不影响授权</b>：<c>ApiCode = Sha256("{METHOD}|{路由末段}|{动作名}")</c>（ApiScanner.cs:326-331）
+/// 只取路由<b>末段</b>作控制器名，本 Controller 的末段未变 ⇒ <c>ApiCode</c> 不变 ⇒
+/// <b>角色-接口关联不断裂</b>，无需重跑 ApiSync。</para>
+[Route("api/Admin/Workflow/PromptTemplate")]
 public class PromptTemplateController : YzhControllerBase<PromptTemplate>
 {
     private readonly PromptTemplateService _service;
@@ -95,8 +102,10 @@ public class PromptTemplateController : YzhControllerBase<PromptTemplate>
     }
 
     /// <summary>
-    /// 【工作台】AI 自动生成提示词草稿（**不落库**，返回正文由用户确认后保存）
+    /// 【工作台】AI 生成 / 优化提示词草稿（**不落库**，返回正文由用户确认后保存）
     /// <para>POST /api/PromptTemplate/workbench/generate</para>
+    /// <para>★ <c>currentTemplate</c> 非空 = 优化用户现有手写提示词（不全量重写）；
+    /// 为空 = 按标准从零生成。</para>
     /// <para>★ 返回强类型 <see cref="PromptWorkbenchService.GenerateResult"/>（显式 camelCase），
     /// 不用匿名对象 —— 匿名对象会走 PascalCase，与 DTO 惯例不一致 ⇒ 前端读 <c>data.prompt</c> 得 undefined。</para>
     /// </summary>
@@ -106,37 +115,49 @@ public class PromptTemplateController : YzhControllerBase<PromptTemplate>
         if (string.IsNullOrWhiteSpace(req.PromptType))
             return Ok(ApiResponse.Fail("promptType 不能为空"));
 
-        var r = await _workbench.GenerateAsync(req.PromptType!, req.StandardCode, req.ExtraRequirement);
+        var r = await _workbench.GenerateAsync(
+            req.PromptType!, req.StandardCode, req.ExtraRequirement, req.CurrentTemplate);
         return r.Success
             ? Ok(ApiResponse<PromptWorkbenchService.GenerateResult>.Ok(r, "生成成功"))
             : Ok(ApiResponse.Fail(r.Message));
     }
 
     /// <summary>
-    /// 【工作台】上传文件试跑提示词：转 Markdown → 跑提示词 → 返回结果。
-    /// <para>POST /api/PromptTemplate/workbench/test（multipart：files + promptType + template + standardCode）</para>
-    /// <para>★ 文件<b>只落转换容器临时目录</b>（内部 finally 已清理），<b>不落 MinIO / 不落 DB</b>。</para>
+    /// 【工作台】上传文件试跑提示词：转 Markdown → 落 Redis → 跑提示词 → 返回结果。
+    /// <para>POST /api/PromptTemplate/workbench/test（multipart）</para>
+    /// <para><b>两种调用</b>（2026-10-02 勘误：Markdown 可复用，不再「文件即弃」）：</para>
+    /// <list type="bullet">
+    ///   <item><b>带 files</b>：转换 → 写缓存（覆写 cacheKey）→ 跑 LLM → 回传 <c>cacheKey</c></item>
+    ///   <item><b>只带 cacheKey</b>：读缓存直接跑 LLM（**零转换、零上传**）；
+    ///         缓存过期 → 返回「测试缓存已过期，请重新上传文件」</item>
+    /// </list>
     /// <para>★ <c>template</c> 可传「页面上未保存的编辑内容」，实现真正的边改边试。</para>
     /// </summary>
     [HttpPost("workbench/test")]
     [RequestSizeLimit(200_000_000)]
     public async Task<IActionResult> Test([FromForm] PromptTestRequest req)
     {
-        if (req?.Files == null || req.Files.Count == 0)
-            return Ok(ApiResponse.Fail("请先选择要测试的文件"));
-        if (string.IsNullOrWhiteSpace(req.PromptType))
+        if (req == null || string.IsNullOrWhiteSpace(req.PromptType))
             return Ok(ApiResponse.Fail("promptType 不能为空"));
 
+        var hasFiles = req.Files != null && req.Files.Any(x => x != null && x.Length > 0);
+        if (!hasFiles && string.IsNullOrWhiteSpace(req.CacheKey))
+            return Ok(ApiResponse.Fail("请先选择要测试的文件"));
+
         var files = new List<(string FileName, byte[] Content)>();
-        foreach (var f in req.Files)
+        if (hasFiles)
         {
-            if (f == null || f.Length == 0) continue;
-            using var ms = new MemoryStream();
-            await f.CopyToAsync(ms);
-            files.Add((f.FileName, ms.ToArray()));
+            foreach (var f in req.Files!)
+            {
+                if (f == null || f.Length == 0) continue;
+                using var ms = new MemoryStream();
+                await f.CopyToAsync(ms);
+                files.Add((f.FileName, ms.ToArray()));
+            }
         }
 
-        var r = await _workbench.TestAsync(req.PromptType!, req.Template, req.StandardCode, files);
+        var r = await _workbench.TestAsync(
+            req.PromptType!, req.Template, req.StandardCode, files, req.CacheKey);
         // ★ 试跑失败也返回完整结果（含转换日志 + 实际提示词），便于排查「到底哪一步不对」
         return Ok(ApiResponse<PromptWorkbenchService.TestResult>.Ok(r, r.Message));
     }
@@ -164,10 +185,12 @@ public class PromptTemplateController : YzhControllerBase<PromptTemplate>
     }
 
     /// <summary>
-    /// 【工作台】保存提示词（按 <c>PromptCode</c> 幂等 upsert：无则新增、有则版本 +1 并置为生效）。
+    /// 【工作台】保存提示词（按 <c>PromptCode</c> 幂等 upsert：无则新增、有则覆盖正文并置为生效）。
     /// <para>POST /api/PromptTemplate/workbench/save</para>
     /// <para>⚠️ 不走通用 <c>add</c>/<c>update</c>：那两个走 <c>EntityService</c> 的
-    /// 「<c>updateFields</c> = 全部 BcFlag 列」全量写回，会把服务端生成的 <c>Version</c>/<c>Code</c>/<c>IsActive</c> 覆盖成前端值。</para>
+    /// 「<c>updateFields</c> = 全部 BcFlag 列」全量写回，会把服务端生成的 <c>Code</c>/<c>IsActive</c> 覆盖成前端值。</para>
+    /// <para>⛔ 版本不再 +1（2026-10-02 裁决：提示词不做版本管理）；
+    /// 模型参数不在本请求内（统一 AI 配置，Q3=a）。</para>
     /// </summary>
     [HttpPost("workbench/save")]
     public async Task<IActionResult> Save([FromBody] PromptSaveRequest req)
@@ -186,9 +209,8 @@ public class PromptTemplateController : YzhControllerBase<PromptTemplate>
             StandardCode = string.IsNullOrWhiteSpace(req.StandardCode) ? null : req.StandardCode!.Trim(),
             Template = req.Template,
             Description = req.Description,
-            ModelName = string.IsNullOrWhiteSpace(req.ModelName) ? null : req.ModelName!.Trim(),
-            MaxTokens = req.MaxTokens,
-            Temperature = req.Temperature,
+            // ModelName / MaxTokens / Temperature 故意不赋值（保持 null）：
+            // SaveAsync 更新分支会把库中已有值原样保留，NC 链路读它们不受影响。
         };
 
         var (ok, msg) = await _service.SaveAsync(entity);
@@ -229,16 +251,16 @@ public class PromptTemplateDto
     [JsonPropertyName("skillTarget")] public string? SkillTarget { get; set; }
     [JsonPropertyName("standardCode")] public string? StandardCode { get; set; }
     [JsonPropertyName("template")] public string? Template { get; set; }
-    [JsonPropertyName("modelName")] public string? ModelName { get; set; }
-    [JsonPropertyName("maxTokens")] public int? MaxTokens { get; set; }
-    [JsonPropertyName("temperature")] public decimal? Temperature { get; set; }
     [JsonPropertyName("description")] public string? Description { get; set; }
-    [JsonPropertyName("version")] public int Version { get; set; }
     [JsonPropertyName("isActive")] public bool IsActive { get; set; }
     [JsonPropertyName("status")] public string? Status { get; set; }
     [JsonPropertyName("creator")] public string? Creator { get; set; }
     [JsonPropertyName("createTime")] public DateTime? CreateTime { get; set; }
     [JsonPropertyName("updateTime")] public DateTime? UpdateTime { get; set; }
+
+    // ⛔ 2026-10-02 起不再下发 ModelName / MaxTokens / Temperature / Version：
+    //    本工作台「统一 AI 配置」（Q3=a）—— 模型参数一律读 cert_sys_config，
+    //    版本管理已裁决不做。NC 链路 BuildNcPromptSkill 仍读库里的行级参数，不受影响。
 
     public static PromptTemplateDto From(PromptTemplate e) => new()
     {
@@ -249,11 +271,7 @@ public class PromptTemplateDto
         SkillTarget = e.SkillTarget,
         StandardCode = e.StandardCode,
         Template = e.Template,
-        ModelName = e.ModelName,
-        MaxTokens = e.MaxTokens,
-        Temperature = e.Temperature,
         Description = e.Description,
-        Version = e.Version,
         IsActive = e.IsActive,
         Status = e.Status,
         Creator = e.CreateBy,
@@ -263,7 +281,7 @@ public class PromptTemplateDto
 }
 
 /// <summary>
-/// 【工作台】AI 生成提示词草稿请求
+/// 【工作台】AI 生成 / 优化提示词草稿请求
 /// <para>⚠️ 命名必须带 <c>Prompt</c> 前缀：同命名空间下 <c>CertPlatform.Shared.DocExtraction</c>
 /// 已有 <c>GeneratePromptRequest</c>，无前缀同名会<b>遮蔽</b>它并导致 <c>DocExtractionRuleController</c> 编译失败（CS1503）。</para>
 /// </summary>
@@ -275,12 +293,20 @@ public class PromptGenerateRequest
     public string? StandardCode { get; set; }
     /// <summary>额外要求（用户自由输入，可选）</summary>
     public string? ExtraRequirement { get; set; }
+    /// <summary>
+    /// ★ 现有提示词正文（2026-10-02 新增）。非空 = AI **优化**这段手写内容（不全量重写）；
+    /// 空 = 按标准从零生成。
+    /// </summary>
+    public string? CurrentTemplate { get; set; }
 }
 
 /// <summary>【工作台】上传文件试跑请求（multipart/form-data）</summary>
 public class PromptTestRequest
 {
-    /// <summary>待测试的文件（可多个；分类提示词可多文件，作用提示词取第一个）</summary>
+    /// <summary>
+    /// 待测试的文件（可多个；分类提示词可多文件，作用提示词取第一个）。
+    /// <para>★ 可为空 —— 此时必须提供 <see cref="CacheKey"/> 走「读缓存复用 Markdown」路径。</para>
+    /// </summary>
     public List<IFormFile>? Files { get; set; }
     /// <summary>提示词类型：doc_group / doc_content</summary>
     public string? PromptType { get; set; }
@@ -288,6 +314,12 @@ public class PromptTestRequest
     public string? Template { get; set; }
     /// <summary>适用标准 Code（GUID）</summary>
     public string? StandardCode { get; set; }
+    /// <summary>
+    /// ★ Markdown 缓存键（2026-10-02 新增）。
+    /// <para>传 files + cacheKey → 转换后覆写该 key；只传 cacheKey → 读缓存（零转换）。</para>
+    /// <para>为空时后端生成并回传，前端存起来供下次复用。</para>
+    /// </summary>
+    public string? CacheKey { get; set; }
 }
 
 /// <summary>【工作台】保存提示词请求（字段名 = 实体属性名，PascalCase 逐字一致）</summary>
@@ -300,7 +332,8 @@ public class PromptSaveRequest
     public string? SkillTarget { get; set; }
     public string? Template { get; set; }
     public string? Description { get; set; }
-    public string? ModelName { get; set; }
-    public int? MaxTokens { get; set; }
-    public decimal? Temperature { get; set; }
+
+    // ⛔ 已移除 ModelName / MaxTokens / Temperature（2026-10-02 统一 AI 配置，Q3=a）。
+    //    更新时由 PromptTemplateService.SaveAsync **保留原值**，避免把 NC 链路
+    //    BuildNcPromptSkill 在读的行级参数抹成 NULL。
 }

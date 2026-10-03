@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+import os
 import mysql.connector
-conn = mysql.connector.connect(host='127.0.0.1', port=3307, user='root', password='Yzh123456.', database='yzh_cert_platform')
+conn = mysql.connector.connect(host='127.0.0.1', port=3307, user='root', password=os.environ.get('MYSQL_ROOT_PASSWORD', ''), database='yzh_cert_platform')
 c = conn.cursor()
 c.execute("SELECT Menu_Id, MenuName FROM sys_menu WHERE MenuName LIKE '%基础%' OR MenuName LIKE '%图表%' OR Menu_Id = 32")
 for r in c.fetchall():

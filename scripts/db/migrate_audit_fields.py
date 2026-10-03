@@ -6,10 +6,12 @@
 迁移策略：通过 Sys_User 表关联获取 User_Id 对应的 Code
 """
 
+import os
 import subprocess
+import os
 import sys
 
-DB_CMD = ["docker", "exec", "yzh-mysql", "mysql", "-uroot", "-pYzh123456.", "yzh_cert_platform"]
+DB_CMD = ["docker", "exec", "yzh-mysql", "mysql", "-uroot", "-p" + os.environ.get('MYSQL_ROOT_PASSWORD', ''), "yzh_cert_platform"]
 
 def run_sql(sql, description=""):
     """执行 SQL 语句"""

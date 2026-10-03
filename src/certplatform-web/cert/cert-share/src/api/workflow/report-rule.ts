@@ -20,7 +20,7 @@
 import { yzhApi } from '@yzh-core/api/client'
 import type { ReportSection } from '@share/types/cert'
 
-const API_PREFIX = '/api/ReportDefinition'
+const API_PREFIX = '/api/Admin/Workflow/ReportDefinition'
 
 // ========================================================
 // 章节 CRUD（★唯一保留的能力）

@@ -350,6 +350,6 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- ═══════════════════════════════════════════════════════
 -- 备份命令（执行前跑）
 -- ═══════════════════════════════════════════════════════
--- mkdir -p scripts/db/backup && docker exec yzh-mysql mysqldump -uroot -pYzh123456. \
+-- mkdir -p scripts/db/backup && docker exec yzh-mysql mysqldump -uroot -p$MYSQL_ROOT_PASSWORD \
 --   --default-character-set=utf8mb4 --single-transaction --routines --triggers --events \
 --   yzh_cert_platform > scripts/db/backup/yzh_cert_platform_before_naming_fix_$(date +%Y%m%d_%H%M).sql

@@ -11,7 +11,7 @@
 --   3. 校验 cert_doc_extraction_rule 系列表（只查不改，输出核对信息）
 --
 -- 幂等性：全部语句可重复执行（information_schema 判重 + INSERT ... SELECT WHERE NOT EXISTS）
--- 执行：docker exec -i yzh-mysql mysql -uroot -pYzh123456. yzh_cert_platform < scripts/db/20260916_doc_extraction_alter.sql
+-- 执行：docker exec -i yzh-mysql mysql -uroot -p$MYSQL_ROOT_PASSWORD yzh_cert_platform < scripts/db/20260916_doc_extraction_alter.sql
 -- ==========================================================
 
 -- ------------------------------------------------------------

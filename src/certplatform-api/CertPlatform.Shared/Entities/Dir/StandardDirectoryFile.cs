@@ -17,6 +17,14 @@ namespace CertPlatform.Shared.Entities.Dir
         [SugarColumn(Length = 36)]
         public string FolderCode { get; set; } = string.Empty;
 
+        /// <summary>父文件 Code → <c>cert_standard_directory_file.Code</c>（根级恒 <c>""</c>）。14 号 D19 要求 P0 即加</summary>
+        [SugarColumn(Length = 36)]
+        public string ParentFileCode { get; set; } = string.Empty;
+
+        /// <summary>章节锚点（大文档切片定位用，可空）</summary>
+        [SugarColumn(Length = 200, IsNullable = true)]
+        public string? SectionAnchor { get; set; }
+
         /// <summary>配置 Code → <c>cert_standard_directory_config.Code</c>（原列名 <c>DirectoryCode</c>）</summary>
         [SugarColumn(Length = 36)]
         public string ConfigCode { get; set; } = string.Empty;
@@ -69,6 +77,30 @@ namespace CertPlatform.Shared.Entities.Dir
         public bool PreCheckRequired { get; set; } = true;
 
         public bool ComplianceRequired { get; set; } = false;
+
+        /// <summary>
+        ///     ★ 文档分类：<c>fixed</c>=固定文档（营业执照/生产许可等，<b>匹配即终点</b>）/
+        ///     <c>hybrid</c>=混合 / <c>editable</c>=可编写（进 ⑧ 提取 → ⑨ 填充）。
+        ///     <para>⛔ 决定 04 号 §5.2 用哪套加权公式，不得留空（05 号 §3，默认 <c>editable</c>）。</para>
+        ///     <para>34 号 §2.3：流程在 ⑦ 裁决后按本列分叉。</para>
+        /// </summary>
+        [SugarColumn(Length = 20)]
+        public string DocCategory { get; set; } = "editable";
+
+        /// <summary>匹配状态：<c>none</c> / <c>recalled</c> / <c>scored</c> / <c>conflicted</c> / <c>matched</c> / <c>unmatched</c></summary>
+        [SugarColumn(Length = 20)]
+        public string MatchState { get; set; } = "none";
+
+        /// <summary>
+        ///     实例状态：<c>none</c> / <c>pending</c> / <c>filling</c> / <c>filled</c> / <c>confirmed</c> / <c>archived</c>。
+        ///     <para>⚠️ <c>DocCategory=fixed</c> 的文档裁决后直接到 <c>matched</c>，<b>不进 <c>filling</c></b>（34 号 §2.3 短路分支）。</para>
+        /// </summary>
+        [SugarColumn(Length = 20)]
+        public string InstanceState { get; set; } = "none";
+
+        /// <summary>关联契约 → <c>cert_standard_doc_contract.Code</c>（空串 = 该标准文档未配契约，不参与匹配）</summary>
+        [SugarColumn(Length = 36)]
+        public string ContractCode { get; set; } = string.Empty;
 
         [SugarColumn(Length = 20, IsNullable = true)]
         public string? Status { get; set; } = "draft";
@@ -139,6 +171,38 @@ namespace CertPlatform.Shared.Entities.Dir
         public string? MarkdownMessage { get; set; }
 
         public DateTime? MarkdownDate { get; set; }
+
+        // ──── ★ 归一链（2026-10-03，S-1）：旧二进制格式 → OOXML ────
+        //   产物段 PathBuilder.EditableSegment（"editable"），与 pdf/ markdown/ 对称。
+        //   ⚠️ 为什么必须有这条链：NPOI 2.7.2 **没有 NPOI.HWPF** ⇒ .doc 连读都读不了，
+        //      而本库 668 份里 .doc 567 + .xls 44 = 91.5% 是旧格式。不归一 ⇒ 填写引擎无输入。
+
+        /// <summary>
+        /// ★ 归一后的可编辑版本路径（<c>.docx</c>/<c>.xlsx</c>/<c>.pptx</c>）；
+        /// <b>空 = 尚未归一</b>（填写引擎此时应回退用 <see cref="StoragePath"/>）。
+        /// <para>产物段见 <see cref="CertPlatform.Shared.Storage.PathBuilder.EditableSegment"/>：
+        /// <c>…/editable/{完整原文件名}.docx</c>。</para>
+        /// </summary>
+        [SugarColumn(Length = 512, IsNullable = true)]
+        public string? EditableStoragePath { get; set; }
+
+        /// <summary>
+        /// ★ 归一状态：<c>pending</c> / <c>completed</c> / <c>failed</c>；
+        /// <b>空（NULL）= 不需要归一</b>（本来就是 <c>.docx</c>/<c>.xlsx</c>/<c>.pdf</c> 等）。
+        ///
+        /// <para>⛔ 「空」与「<c>pending</c>」语义<b>不可互换</b>：空 = 这条链对该文件不适用，
+        /// <c>pending</c> = 已入队待跑。回填端点按「扩展名是否旧格式」决定投不投，
+        /// 不按本列是否为空 —— 否则已归一的文件会被反复重投。</para>
+        /// </summary>
+        [SugarColumn(Length = 20, IsNullable = true)]
+        public string? EditableStatus { get; set; }
+
+        /// <summary>★ 归一失败原因（<c>completed</c> 时为 null 或提示语）</summary>
+        [SugarColumn(Length = 1024, IsNullable = true)]
+        public string? EditableMessage { get; set; }
+
+        /// <summary>★ 最近归一时间</summary>
+        public DateTime? EditableDate { get; set; }
 
         // ──── ISoftDelete + IIsValid 接口显式实现 ────
         public bool IsDeleted { get; set; }

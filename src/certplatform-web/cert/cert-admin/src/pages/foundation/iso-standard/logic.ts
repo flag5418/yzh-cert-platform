@@ -147,7 +147,7 @@ function filterClauseTree(nodes: ClauseRow[], searchValues: Record<string, any>)
 }
 
 export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
-  controllerName = 'Foundation/ISOStandardTreeTable'
+  controllerName = 'Admin/Foundation/ISOStandardTreeTable'
 
   // ──── 标准弹窗状态（树节点表单，与基类行表单弹窗分开） ────
   stdDialogVisible = ref(false)
@@ -208,7 +208,7 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
     }
     try {
       const res = await yzhApi.get<ApiResponse<ClauseRow[]>>(
-        '/api/Foundation/ISOClause/getTree',
+        '/api/Admin/Foundation/ISOClause/getTree',
         { standardCode: this.selectedNode.Code, includeDisabled: 'true' },
       )
       const flat = res?.data ?? []
@@ -244,7 +244,7 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
     const standardCode = this.selectedNode.Code
     try {
       const res = await yzhApi.get<ApiResponse<ClauseRow[]>>(
-        '/api/Foundation/ISOClause/getTree',
+        '/api/Admin/Foundation/ISOClause/getTree',
         {
           standardCode,
           includeDisabled: this.showDisabled.value ? 'true' : 'false',

@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
-using CertPlatform.Shared.Entities.Wf;
+using CertPlatform.Admin.Entities.Wf;
 
 namespace CertPlatform.Admin.Services.Workflow;
 
@@ -81,7 +81,10 @@ public class PromptTemplateService
     }
 
     /// <summary>
-    /// 创建或更新提示词（按 prompt_code 幂等匹配；更新时版本号 +1 并置为生效）
+    /// 创建或更新提示词（按 prompt_code 幂等匹配；更新时覆盖正文并置为生效）
+    /// <para>⛔ 2026-10-02 起<b>不再 +1 版本</b>（裁决：提示词不做版本管理），
+    /// 原 <c>Version</c> 原样保留 —— <c>DocExtractionRuleService.AI</c> 与
+    /// <c>BuildNcPromptSkill</c> 仍按 <c>OrderByDescending(Version)</c> 取行。</para>
     /// </summary>
     public async Task<(bool Success, string Message)> SaveAsync(PromptTemplate entity)
     {
@@ -115,7 +118,13 @@ public class PromptTemplateService
             return (false, "更新失败：缺少业务键 Code");
 
         entity.Code = existing.Code;
-        entity.Version = existing.Version + 1;
+        // ★ 统一 AI 配置（Q3=a）：本工作台不编辑行级模型参数 ⇒ 更新时**原样保留**。
+        //   否则请求里没有这几个字段会把它们写成 NULL，NC 链路 BuildNcPromptSkill 读到空值即炸。
+        entity.ModelName = existing.ModelName;
+        entity.MaxTokens = existing.MaxTokens;
+        entity.Temperature = existing.Temperature;
+        // ★ 不做版本管理：保留原版本号，仅刷新正文
+        entity.Version = existing.Version;
         entity.IsActive = true;
         entity.IsValid = 1;
         entity.CreateTime = existing.CreateTime;
@@ -123,6 +132,7 @@ public class PromptTemplateService
         entity.UpdateTime = DateTime.Now;
         entity.DeleteBy = null;
         entity.DeleteTime = null;
+        if (string.IsNullOrWhiteSpace(entity.Status)) entity.Status = existing.Status;
 
         var updated = await _db.UpdateAsync(entity);
         if (!updated.Success)

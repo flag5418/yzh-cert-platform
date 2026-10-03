@@ -8,7 +8,7 @@
 import { SingleTableCore } from '@yzh-core'
 
 export class CertStageLogic extends SingleTableCore<any> {
-  controllerName = 'Foundation/CertStage'
+  controllerName = 'Admin/Foundation/CertStage'
 
   /** 新增默认值 */
   protected override get defaultValues(): Record<string, any> {

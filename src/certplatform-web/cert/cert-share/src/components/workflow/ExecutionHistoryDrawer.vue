@@ -5,8 +5,8 @@
   让 NC 规则设置与报告规则设置**自动同时获得**该能力；绝不在两个页面各写一遍。
 
   数据来源（后端 WorkflowTestController 只读端点）：
-    POST /api/Workflow/test/history            列表（四层模型第一层）
-    GET  /api/Workflow/test/detail/{taskCode}  展开时按需加载四层聚合详情
+    POST /api/Admin/Workflow/test/history            列表（四层模型第一层）
+    GET  /api/Admin/Workflow/test/detail/{taskCode}  展开时按需加载四层聚合详情
 
   为什么用「展开行懒加载」而不是「点开跳新页」：
   一次测试的四层数据（task/item/path/node）通常几十行，抽屉内直接展开比跳转更省事；

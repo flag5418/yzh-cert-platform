@@ -40,9 +40,14 @@ public abstract class BaseEntity : INotifyPropertyChanged
     [SugarColumn(ColumnName = "Id", IsPrimaryKey = true, IsIdentity = true)]
     public long Id { get; set; }
 
-    /// <summary>业务编码（GUID 业务键，新增时框架自动生成，不可修改）</summary>
+    /// <summary>
+    ///     业务编码（GUID 业务键，新增时框架自动生成，不可修改）
+    ///     <para>DB 列宽约定：<c>varchar(36)</c>（全库 96 张表中 68 张已是 36，为事实标准）。</para>
+    ///     <para>⚠️ 标注必须与 DB 一致 —— 标注宽于 DB 时，严格模式报错、非严格模式<b>静默截断</b>，
+    ///     截断后的 Code 可能与既有记录撞车，导致业务键失效。</para>
+    /// </summary>
     [SugarColumn(ColumnName = "Code")]
-    [StringLength(64)]
+    [StringLength(36)]
     public string? Code { get; set; }
 
     /// <summary>创建时间（创建时赋值，后续不变）</summary>

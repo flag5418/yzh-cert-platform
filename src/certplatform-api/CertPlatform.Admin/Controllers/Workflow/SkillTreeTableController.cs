@@ -38,10 +38,18 @@ namespace CertPlatform.Admin.Controllers.Workflow;
 /// GET    /api/Workflow/SkillTreeTable/treepconfig           页面配置
 /// </summary>
 [ApiController]
-[Route("api/Workflow/[controller]")]
+
+/// <para><b>★ 端标记（2026-10-03）</b>：路由加 <c>Admin/</c> 段，与专家端 <c>/api/Auditor/*</c> 对称。
+/// <para>背景：后台端 20 个 Controller 此前零端标记，4 个连业务域前缀都没有（<c>api/AIUsage</c>
+/// <c>api/PromptTemplate</c> <c>api/ValidationRule</c> <c>api/ReportDefinition</c>），
+/// 且 <c>api/System/[controller]</c> 与框架层 <c>YZH.Core.Web</c> 的 <c>api/System/*</c> 撞前缀。</para>
+/// <para><b>不影响授权</b>：<c>ApiCode = Sha256("{METHOD}|{路由末段}|{动作名}")</c>（ApiScanner.cs:326-331）
+/// 只取路由<b>末段</b>作控制器名，本 Controller 的末段未变 ⇒ <c>ApiCode</c> 不变 ⇒
+/// <b>角色-接口关联不断裂</b>，无需重跑 ApiSync。</para>
+[Route("api/Admin/Workflow/SkillTreeTable")]
 public class SkillTreeTableController
-    : TreeTableControllerBase<CertPlatform.Shared.Entities.Wf.SkillCategoryDict,
-                             CertPlatform.Shared.Entities.Wf.Skill>
+    : TreeTableControllerBase<CertPlatform.Admin.Entities.Wf.SkillCategoryDict,
+                             CertPlatform.Admin.Entities.Wf.Skill>
 {
     /// <summary>技能分类字典的 DicNo（字典管理页面按此编码维护分类）</summary>
     private const string CategoryDictNo = "skill_category";
@@ -53,8 +61,8 @@ public class SkillTreeTableController
     private string? _categoryDictCode;
 
     public SkillTreeTableController(
-        EntityService<CertPlatform.Shared.Entities.Wf.SkillCategoryDict> treeEntityService,
-        EntityService<CertPlatform.Shared.Entities.Wf.Skill> tableEntityService,
+        EntityService<CertPlatform.Admin.Entities.Wf.SkillCategoryDict> treeEntityService,
+        EntityService<CertPlatform.Admin.Entities.Wf.Skill> tableEntityService,
         EntityService<Sys_Dictionary> dictionaryService,
         IUserContext userContext)
         : base(treeEntityService, tableEntityService, userContext)
@@ -132,7 +140,7 @@ public class SkillTreeTableController
                 return Ok(ApiResponse<TreeItemDto[]>.Fail(result.Error!));
 
             // DicValue 为空的字典项无法作为关联值（wf_skill.CategoryCode），跳过防止脏节点
-            var items = (result.Data ?? new List<CertPlatform.Shared.Entities.Wf.SkillCategoryDict>())
+            var items = (result.Data ?? new List<CertPlatform.Admin.Entities.Wf.SkillCategoryDict>())
                 .Where(x => !string.IsNullOrWhiteSpace(x.DicValue))
                 .OrderBy(x => x.OrderNo ?? 0)
                 .ThenBy(x => x.DicName)
@@ -175,7 +183,7 @@ public class SkillTreeTableController
     /// 实体 → TreeItemDto 映射：补 Color（TreeMapper 自动提取 IsValid/Remark/OrderNo，不含 Color）
     /// </summary>
     protected override TreeItemDto MapToTreeItem(
-        CertPlatform.Shared.Entities.Wf.SkillCategoryDict entity, int level)
+        CertPlatform.Admin.Entities.Wf.SkillCategoryDict entity, int level)
     {
         var dto = base.MapToTreeItem(entity, level);
         dto.Extra ??= new Dictionary<string, object>();
@@ -192,7 +200,7 @@ public class SkillTreeTableController
 
     /// <summary>拦截：不在技能页新增分类</summary>
     protected override Task<(bool ok, string? msg)> OnBeforeAddTree(
-        CertPlatform.Shared.Entities.Wf.SkillCategoryDict entity)
+        CertPlatform.Admin.Entities.Wf.SkillCategoryDict entity)
     {
         return Task.FromResult<(bool, string?)>(
             (false, "技能分类在「系统参数配置 → 数据字典」中维护，此处不允许新增"));
@@ -200,7 +208,7 @@ public class SkillTreeTableController
 
     /// <summary>拦截：不在技能页修改分类</summary>
     protected override Task<(bool ok, string? msg)> OnBeforeUpdateTree(
-        CertPlatform.Shared.Entities.Wf.SkillCategoryDict entity)
+        CertPlatform.Admin.Entities.Wf.SkillCategoryDict entity)
     {
         return Task.FromResult<(bool, string?)>(
             (false, "技能分类在「系统参数配置 → 数据字典」中维护，此处不允许修改"));
@@ -231,7 +239,7 @@ public class SkillTreeTableController
     /// （2026-09-26 移除 Guid.NewGuid 兜底 —— 编码必须语义可读，禁止自动生成 GUID）
     /// </summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAdd(
-        CertPlatform.Shared.Entities.Wf.Skill entity)
+        CertPlatform.Admin.Entities.Wf.Skill entity)
     {
         if (string.IsNullOrWhiteSpace(entity.Code))
             return (false, "缺少业务键编码 Code，请填写技能编码");
@@ -248,7 +256,7 @@ public class SkillTreeTableController
     /// （Code 为定位键，Update 忽略 Code 列不可改；原实现条件自相矛盾恒 false，2026-09-26 修复）
     /// </summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(
-        CertPlatform.Shared.Entities.Wf.Skill entity)
+        CertPlatform.Admin.Entities.Wf.Skill entity)
     {
         if (string.IsNullOrWhiteSpace(entity.Code))
             return (false, "缺少业务键编码 Code");
@@ -270,7 +278,7 @@ public class SkillTreeTableController
     /// 请求体 = 行实体 { Code: "技能编码" }
     /// </summary>
     private async Task<Result<ApiResponse<object?>>> DisableSkillAsync(
-        CertPlatform.Shared.Entities.Wf.Skill entity)
+        CertPlatform.Admin.Entities.Wf.Skill entity)
     {
         // GetByCode：内置 IsValid=1 过滤（当前为启用状态才可禁用）
         var result = await Entity.GetByCode(entity.Code);
@@ -292,7 +300,7 @@ public class SkillTreeTableController
     /// 请求体 = 行实体 { Code: "技能编码" }
     /// </summary>
     private async Task<Result<ApiResponse<object?>>> EnableSkillAsync(
-        CertPlatform.Shared.Entities.Wf.Skill entity)
+        CertPlatform.Admin.Entities.Wf.Skill entity)
     {
         // GetByCodeAny：已禁用技能 IsValid=0，GetByCode 查不到
         var result = await Entity.GetByCodeAny(entity.Code);

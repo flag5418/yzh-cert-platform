@@ -48,7 +48,9 @@ services:
       - "6380:6379"
     volumes:
       - ./redis/data:/data
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    # 2026-10-02 256mb → 1gb：提示词工作台把企业文档 Markdown 落 Redis 复用（单份可达 MB 级），
+    # 256mb 下 allkeys-lru 会把字典/实体等业务缓存一起挤掉。
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

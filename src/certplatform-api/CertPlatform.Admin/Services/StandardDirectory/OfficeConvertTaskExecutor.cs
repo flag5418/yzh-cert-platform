@@ -1,7 +1,7 @@
 
 using System.Text.Json;
 using CertPlatform.Shared.Constants;
-using CertPlatform.Shared.Entities.Dir;
+using CertPlatform.Admin.Entities.Dir;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;

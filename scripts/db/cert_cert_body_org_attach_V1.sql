@@ -14,7 +14,7 @@
 -- 幂等：可重复执行
 --
 -- 用法：
---   docker exec -i yzh-mysql mysql -uroot -p'Yzh123456.' yzh_cert_platform \
+--   docker exec -i yzh-mysql mysql -uroot -p'$MYSQL_ROOT_PASSWORD' yzh_cert_platform \
 --     < scripts/db/cert_cert_body_org_attach_V1.sql
 -- ============================================================
 

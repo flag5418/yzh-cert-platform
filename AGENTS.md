@@ -157,23 +157,49 @@ AIGC:
     - ③ **优先走扩展点**：能通过 `virtual` 钩子 / 特性 / 配置 / 新增类解决的，**不改核心逻辑**。
     - ④ **改动记档**：在 `.workbuddy-ai/memory/REFERENCE.md` 的「框架层已改动清单」登记（文件 / 改动 / 理由）。
     - ⑤ **改完回归验证**：后端编译 0 错误 + 服务能起来 + 前端 `node scripts/guards.mjs` 通过。
+12. **前端改动必须跑测试**（2026-10-03 建立）：
+    - 跑法：`cd src/certplatform-web/cert/cert-admin && ./node_modules/.bin/vitest run`
+      ⚠️ vitest **只装在 `cert/cert-admin/node_modules`**（`certplatform-web/node_modules` 里没有）；`vue-tsc` 反过来在 `certplatform-web/node_modules/.bin`
+    - 栈：vitest 1.6 + happy-dom + @vue/test-utils（`cert-admin/vitest.config.ts` 已配 `@` / `@share` / `@yzh-core` alias）
+    - 范式文件：`cert-admin/src/pages/workflow/prompt-template/index.test.ts`（8 用例，覆盖 AI 生成自动落库 / 切换守卫 / 草稿恢复 / 状态提示 / 树高亮回拨）
+    - ★ **stub 铁律**：带**作用域插槽**的组件（`el-tree` 等）stub 必须 `v-for` 渲染 `<slot :data="n" />` —— 只写 `<slot />` 会让 `#default="{ data }"` 拿到 undefined，**全部用例倒在渲染**；组件用到的指令（`v-loading`）须在 `global.directives` 补 stub
+    - ⛔ 本机**无 Chromium**（`agent-browser` 未装 / playwright 缓存为空）⇒ 页面**逻辑**验证走组件测试；「页面**能否编译**」用 `curl --noproxy '*' http://127.0.0.1:9990/src/<路径>.vue`（返回 500 = Vite 编译失败 = 白屏）
 
 ## 业务菜单速览
 
-> 仅供参考，以 `80-功能设计/README.md` 功能总览地图为准。
+> ★ **事实源 = DB 表 `Sys_Menu`**（以 `admin` Tag 为后台专家端，`auditor` Tag 为专家端）。
+> 本节仅为速查，**改菜单后必须同步此处 + `docs/20-体系认证/03-详细设计/05-企业资料规范化/26-核心菜单功能设计（待审批）-V2.md` §五**。
+> 事实源快照：`scripts/db/verify/menu-urls.tsv`（`./scripts/db/verify/sync_menu_urls.sh` 生成）。
+
+**命名法（消除「定义 / 设计」歧义，铁律）**：
+不带「设计」= 左树右表**清单**（可增删改查）｜带「设计」= **工作流设计器**（NC 与报告是两套完全不同的配置，⛔ 不得合并成同一入口）。
+
+**后台（`Tag=admin`，端口 9990）—— 2 级侧栏（2026-10-02 重组）**
 
 ```
-体系认证平台
-├── 基础配置
-│   ├── 标准目录管理
-│   ├── 系统参数配置（含阿里云标签页）
-│   └── AI 费用监控
-├── 审核规则库
-│   ├── NC检查规则
-│   └── 报告章节定义
-├── 文档提取规则
-└── Prompt 模板管理
+平台管理 MENU_00001
+  机构-人员管理 · 角色-人员管理 · 角色-菜单管理 · 角色-接口管理
+  菜单管理 · 接口管理 · 数据字典 · 日志管理 · 系统参数配置
+业务管理 MENU_00002
+├── 基础资料 MENU_00301
+│   认证机构管理 · 标准管理 · 阶段管理 · 机构-标准关联 · 机构-阶段关联
+│   标准资料清单 · NC 检查项 · 报告章节
+├── 规则定义 MENU_00302
+│   NC 规则设计 · 报告内容设计 · 文档提取规则
+│   （预留：空白文档填写规则 —— 页面未开发，暂不建菜单）
+└── 系统管理 MENU_00303
+    标准核心字段 · Prompt 模板 · 技能管理 · AI 费用分析 · 队列监控
 ```
+
+**专家端（`Tag=auditor`，端口 9991）—— 顶级「专家系统」MENU_AUD_00**
+
+```
+专家系统
+  系统一览 · 企业管理 · 阶段标准关联 · 企业全局参数定义
+  任务中心 · NC 检查结果 · 报告结论 · 资料库 · 组织与成员 · 系统设置
+```
+
+> ⚠️ **侧栏只渲染 2 级**：`yzh.vue.core/src/layouts/YzhAppLayout.vue:23-36` 是硬编码「一级 `el-sub-menu` + 二级 `el-menu-item`」，**无递归**。DB 与后端 `MenuController.BuildTree` 支持 N 级，但**第 3 级及以下不会显示**。新增第 3 级分组前必须先改该布局为递归组件（走框架层改造准入）。
 
 ## 与知识库的关系
 

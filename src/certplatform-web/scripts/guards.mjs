@@ -27,8 +27,8 @@
  *    components/ 仍由 R1 单独圈定（零领域依赖）。
  */
 
-import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const WEB = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -432,6 +432,104 @@ function runRE() {
   return { violations, skipped: false }
 }
 
+// ── R17：后端实体归属一致性（2026-10-03 用户指出「专家系统实体一个都没有」后新增）──
+//
+//   背景：曾把 77 个实体全部塞在 CertPlatform.Shared/Entities/，无法回答
+//   「哪些表属于后台、哪些属于专家端」；且铁律九守卫 R7 只扫 Shared 一个目录。
+//   修订后的规则（docs/10-YZH架构/24-后端实体归属清单-V1.md §一）：
+//     · 单端独占 → CertPlatform.{Admin,Auditor}.Entities/
+//     · 双端共用 → CertPlatform.Shared/Entities/
+//
+//   判据是「谁真的读这张表」而非「表名像什么」：统计每个带 [SugarTable] 的实体在
+//   Admin / Auditor 两端的引用次数（跳过定义文件自身、跳过 bin/obj/node_modules）。
+const API_ROOT = resolve(WEB, '../certplatform-api')
+/** 实体**定义**目录（归属判定的依据） */
+const ENTITY_DIRS = {
+  Shared: join(API_ROOT, 'CertPlatform.Shared/Entities'),
+  Admin: join(API_ROOT, 'CertPlatform.Admin/Entities'),
+  Auditor: join(API_ROOT, 'CertPlatform.Auditor/Entities'),
+}
+/** 引用**扫描**目录 —— ⚠️ 是整个项目而非 Entities/ 子目录：
+ *  真正的引用在 Controllers/ 与 Services/ 下，只扫 Entities/ 会得出「零引用」的假结论。 */
+const PROJECT_DIRS = {
+  Shared: join(API_ROOT, 'CertPlatform.Shared'),
+  Admin: join(API_ROOT, 'CertPlatform.Admin'),
+  Auditor: join(API_ROOT, 'CertPlatform.Auditor'),
+  Tests: join(API_ROOT, 'CertPlatform.Admin.Tests'),
+}
+const SKIP_DIRS = new Set(['obj', 'bin', 'node_modules', '.git', 'Migrations'])
+
+function listCsFiles(dir) {
+  if (!existsSync(dir)) return []
+  const out = []
+  const rec = (d) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      if (SKIP_DIRS.has(e.name)) continue
+      const p = join(d, e.name)
+      if (e.isDirectory()) rec(p)
+      else if (e.name.endsWith('.cs')) out.push(p)
+    }
+  }
+  rec(dir)
+  return out
+}
+
+function countRefs(className, roots) {
+  let n = 0
+  const re = new RegExp('\\b' + className + '\\b', 'g')
+  for (const r of roots) {
+    for (const f of listCsFiles(r)) {
+      if (basename(f) === className + '.cs') continue // 不算自身定义
+      // ⚠️ 必须排除注释：文档注释里常写「该实体在 Xxx 项目里」「若日后迁进 Admin 需移到…」，
+      //    那只是**说明归属**，不是代码引用。数进去会把「注释里提到」误判成「双端共用」。
+      //    实测：SrcGlobalParamSkill.cs 的类注释里 3 处提到 FillParamValue，被误报成分层倒退。
+      const code = readFileSync(f, 'utf8')
+        .split('\n')
+        .filter((line) => !isCommentLine(line))
+        .join('\n')
+      const m = code.match(re)
+      if (m) n += m.length
+    }
+  }
+  return n
+}
+
+function runR17() {
+  const violations = []
+
+  for (const [owner, dir] of Object.entries(ENTITY_DIRS)) {
+    for (const file of listCsFiles(dir)) {
+      const cls = basename(file, '.cs')
+      const text = readFileSync(file, 'utf8')
+      const st = text.indexOf('SugarTable')
+      if (st < 0) continue // 纯常量类 / DTO / enum 不参与归属判定
+
+      const nAdmin = countRefs(cls, [PROJECT_DIRS.Admin, PROJECT_DIRS.Tests])
+      const nAuditor = countRefs(cls, [PROJECT_DIRS.Auditor])
+      const both = nAdmin > 0 && nAuditor > 0
+
+      if (owner !== 'Shared' && both) {
+        // ★ 硬错误：已下沉到单端目录却被两端共用 = 分层倒退（0 容忍）
+        violations.push({
+          file: rel(file),
+          line: lineOf(text, st),
+          text: `实体在 ${owner} 端目录，却被两端同时引用（Admin=${nAdmin} / Auditor=${nAuditor}）—— 双端共用必须放 Shared/Entities（分层倒退）`,
+        })
+      } else if (owner === 'Shared' && !both && nAdmin + nAuditor > 0) {
+        // 提示级：Shared 里只有一端用 ⇒ 应下沉（走 debt 逐条清理）
+        const target = nAdmin > 0 ? 'Admin' : 'Auditor'
+        violations.push({
+          file: rel(file),
+          line: lineOf(text, st),
+          text: `实体在 Shared/Entities 但只有 ${target} 端引用（Admin=${nAdmin} / Auditor=${nAuditor}）—— 应下沉到 CertPlatform.${target}.Entities/（24 号 §一）`,
+        })
+      }
+      // 两端都 0 ⇒ 死实体，另立清单（24 号 §四），本规则不管
+    }
+  }
+  return { violations, skipped: false }
+}
+
 /**
  * 规则定义
  * - id / desc: 标识与说明
@@ -541,8 +639,16 @@ const RULES = [
   },
   {
     id: 'R7',
-    desc: '业务实体禁声明 Enable 列（启用/禁用唯一字段 = IsValid；sys_api 同步 Enable 除外）',
-    roots: [resolve(WEB, '../certplatform-api/CertPlatform.Shared/Entities')],
+    // ⚠️ 2026-10-03 覆盖面修正：原 roots 只有 Shared/Entities，导致单端实体新落点
+    //    （Auditor/Entities、Admin/Entities）完全不被扫。铁律九对**所有**实体目录生效。
+    // ⚠️ desc 里的「sys_api 同步 Enable 除外」已作废（2026-09-24 用户裁决：所有表统一 IsValid）。
+    desc: '业务实体禁声明 Enable 列（铁律九：启用/禁用唯一字段 = IsValid）',
+    roots: [
+      resolve(WEB, '../certplatform-api/CertPlatform.Shared/Entities'),
+      resolve(WEB, '../certplatform-api/CertPlatform.Auditor/Entities'),
+      resolve(WEB, '../certplatform-api/CertPlatform.Admin/Entities'),
+      resolve(WEB, '../certplatform-api/CertPlatform.Enterprise/Entities'),
+    ],
     exts: ['.cs'],
     forbid: [
       /public\s+bool\s+Enable\b/,
@@ -607,6 +713,16 @@ const RULES = [
     type: 'custom',
     desc: 'ElMessage.success 不得出现在 expectOk 之前（信封校验后才准报成功）',
     run: runR16,
+    debt: [],
+  },
+  {
+    id: 'R17',
+    type: 'custom',
+    desc: '后端实体归属一致性（单端实体不得留在 Shared/Entities；已下沉的不得两端共用）',
+    run: runR17,
+    // ✅ 2026-10-03 分层落地时 debt 清零：Admin 独占 22 个 + Auditor 独占 15 个已全部下沉，
+    //    Shared/Entities 现在只剩双端共用实体（24 号清单 §三）。
+    //    新增实体时按 24 号 §一 选对目录 —— 放错会被本规则直接拦下。
     debt: [],
   },
   // ===== 审计 §8（标准目录链路）：全部为后端 .cs 扫描，debt 随修复逐条删除 =====

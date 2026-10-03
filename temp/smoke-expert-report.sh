@@ -1,4 +1,8 @@
 #!/bin/bash
+# 加载本地口令（⛔ 禁止把口令写进脚本/文档）
+for _e in "$(dirname "$0")/../../docker/.env" "$(dirname "$0")/../docker/.env" "$(dirname "$0")/../../../docker/.env" "$(dirname "$0")/docker/.env"; do
+  [ -f "$_e" ] && set -a && . "$_e" && set +a && break
+done
 # ══════════════════════════════════════════════════════════════════
 # 报告生成链路 —— S4 冒烟（临时脚本，位于 temp/）
 # 覆盖：锁判定（REPORT_GENERATE 与 NC_CHECK 互不阻塞）→ 候选 → 创建
@@ -144,7 +148,7 @@ for l in rows[:12]:
 
 echo ""
 echo "── 11. 数据库核对 ──"
-docker exec yzh-mysql mysql -uroot -pYzh123456. --default-character-set=utf8mb4 -t -B yzh_cert_platform -e "
+docker exec yzh-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" --default-character-set=utf8mb4 -t -B yzh_cert_platform -e "
 SELECT ExecStatus, IFNULL(ActiveLockKey,'<NULL=已解锁>') AS LockKey, Progress FROM cert_expert_task WHERE Code='$TASK';
 SELECT ExecStatus, ItemCount, DoneCount, SkippedCount, FailedCount, Progress FROM cert_expert_task_standard WHERE TaskCode='$TASK';
 SELECT AutoStatus, SkipCategory, GenerationMode FROM cert_expert_report_result WHERE TaskCode='$TASK';

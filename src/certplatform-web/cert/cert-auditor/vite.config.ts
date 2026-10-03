@@ -16,6 +16,9 @@ export default defineConfig({
   server: {
     host: '127.0.0.1',
     port: 9991,
+    // 临时公网隧道（scripts/tunnel/）：Vite >= 5.4.12 会校验 Host 头，
+    // 白名单外的域名一律 403 (Blocked request)。前导点 = 匹配该域名全部子域。
+    allowedHosts: ['.trycloudflare.com'],
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:9992',

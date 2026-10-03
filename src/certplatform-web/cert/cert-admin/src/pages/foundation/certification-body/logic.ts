@@ -7,7 +7,7 @@
 import { SingleTableCore } from '@yzh-core'
 
 export class CertificationBodyLogic extends SingleTableCore<any> {
-  controllerName = 'Foundation/CertificationBody'
+  controllerName = 'Admin/Foundation/CertificationBody'
 
   /** 新增默认值 */
   protected override get defaultValues(): Record<string, any> {

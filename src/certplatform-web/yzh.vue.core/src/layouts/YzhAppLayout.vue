@@ -13,34 +13,18 @@
       </div>
 
       <!-- 菜单区域（按 menuTag 分流；数据来自 useMenuTree 模块单例） -->
+      <!-- ★ 2026-10-02：菜单项改由递归组件 YzhMenuNode 渲染（原模板硬编码 2 级，
+             第 3 级及以下被静默丢弃，且 Url 为空的目录节点会错跳 /system/{Id}） -->
       <el-menu
         :default-active="activeMenu"
         router
         class="yzh-layout__menu"
       >
-        <template v-for="menu in visibleMenus" :key="menu.id">
-          <!-- 有子菜单：渲染为 el-sub-menu -->
-          <el-sub-menu v-if="menu.children && menu.children.length > 0" :index="menu.url || String(menu.id)">
-            <template #title>
-              <el-icon v-if="menu.icon"><component :is="formatIcon(menu.icon)" /></el-icon>
-              <span>{{ menu.menuName }}</span>
-            </template>
-            <el-menu-item
-              v-for="child in menu.children"
-              :key="child.id"
-              :index="child.url || String(child.id)"
-            >
-              <el-icon v-if="child.icon"><component :is="formatIcon(child.icon)" /></el-icon>
-              <span>{{ child.menuName }}</span>
-            </el-menu-item>
-          </el-sub-menu>
-
-          <!-- 无子菜单：渲染为 el-menu-item -->
-          <el-menu-item v-else :index="menu.url || String(menu.id)">
-            <el-icon v-if="menu.icon"><component :is="formatIcon(menu.icon)" /></el-icon>
-            <span>{{ menu.menuName }}</span>
-          </el-menu-item>
-        </template>
+        <YzhMenuNode
+          v-for="menu in visibleMenus"
+          :key="menu.code || menu.id"
+          :menu="menu"
+        />
       </el-menu>
     </el-aside>
 
@@ -177,7 +161,8 @@ import { getCurrentUser, modifyPwd, updateUserInfo } from '../api/auth'
 import { useAuthState } from '../composables/useAuthState'
 import { useMenuTree } from '../composables/useMenuTree'
 import { onMenuChanged } from '../composables/useMenuChanged'
-import { filterMenuTreeByTag, formatMenuIcon as formatIcon } from '../utils/menu'
+import { filterMenuTreeByTag } from '../utils/menu'
+import YzhMenuNode from './components/YzhMenuNode.vue'
 
 /**
  * 原子应用布局（系统底座默认壳：侧栏 + 顶栏 + 个人中心 + 改密）

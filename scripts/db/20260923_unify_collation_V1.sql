@@ -49,11 +49,11 @@
 -- =============================================================================
 -- ★ 执行方式
 -- =============================================================================
---   docker exec -i yzh-mysql mysql -uroot -p'Yzh123456.' --default-character-set=utf8mb4 \
+--   docker exec -i yzh-mysql mysql -uroot -p'$MYSQL_ROOT_PASSWORD' --default-character-set=utf8mb4 \
 --     yzh_cert_platform < scripts/db/20260923_unify_collation_V1.sql
 --
 -- ★ 转换前备份（务必先做；本脚本已按此流程执行过）
---   docker exec -e MYSQL_PWD='Yzh123456.' yzh-mysql mysqldump -uroot --single-transaction \
+--   docker exec -e MYSQL_PWD='$MYSQL_ROOT_PASSWORD' yzh-mysql mysqldump -uroot --single-transaction \
 --     --routines --triggers --events --default-character-set=utf8mb4 yzh_cert_platform \
 --     > /tmp/yzh-backup-20260923/yzh_cert_platform_pre_collation.sql
 --

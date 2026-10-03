@@ -1,4 +1,8 @@
 #!/bin/bash
+# 加载本地口令（⛔ 禁止把口令写进脚本/文档）
+for _e in "$(dirname "$0")/../../docker/.env" "$(dirname "$0")/../docker/.env" "$(dirname "$0")/../../../docker/.env" "$(dirname "$0")/docker/.env"; do
+  [ -f "$_e" ] && set -a && . "$_e" && set +a && break
+done
 # ============================================================
 # 数据字典 · 测试夹具清理（★ 会写库，必须显式调用）
 #
@@ -31,7 +35,7 @@ SQL_FILE="$HERE/cleanup_dict_test_data.sql"
 [ -f "$SQL_FILE" ] || { echo "✗ 缺少 SQL 文件：${SQL_FILE}" >&2; exit 1; }
 
 DB="${YZH_DB_NAME:-yzh_cert_platform}"
-MYSQL_PWD_ROOT="${MYSQL_PWD_ROOT:-Yzh123456.}"
+MYSQL_PWD_ROOT="${MYSQL_PWD_ROOT:-$MYSQL_ROOT_PASSWORD}"
 MYSQL=(docker exec -i -e MYSQL_PWD="$MYSQL_PWD_ROOT" yzh-mysql mysql -uroot)
 
 # SQL 外置（铁律 B3）：删除 + 残留计数都在 .sql 里，脚本只注入参数并取回计数。

@@ -204,3 +204,7 @@ docs/历史文档/案例/
 docs/90-归档/案例资料/
 docs/90-归档/历史项目/
 docs/90-归档/旧版本/
+
+# 公网临时隧道：cloudflared 二进制与运行态文件不入库
+scripts/tunnel/bin/
+scripts/tunnel/run/

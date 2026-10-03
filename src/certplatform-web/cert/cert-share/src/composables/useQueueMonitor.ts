@@ -76,7 +76,7 @@ export interface QueueDetailResult {
 
 /** 队列主表分页（Tabs + 时间过滤） */
 export async function getQueueList(params: QueueListParams = {}): Promise<QueueListResult> {
-  const res = await yzhApi.post<ApiResponse<QueueListResult>>('/api/System/QueueMonitor/list', {
+  const res = await yzhApi.post<ApiResponse<QueueListResult>>('/api/Admin/System/QueueMonitor/list', {
     Type: params.type || '',
     Status: params.status || '',
     StartTime: params.startTime || null,
@@ -89,20 +89,20 @@ export async function getQueueList(params: QueueListParams = {}): Promise<QueueL
 
 /** 队列统计卡 */
 export async function getQueueStatus(): Promise<QueueStatus> {
-  const res = await yzhApi.post<ApiResponse<QueueStatus>>('/api/System/QueueMonitor/status')
+  const res = await yzhApi.post<ApiResponse<QueueStatus>>('/api/Admin/System/QueueMonitor/status')
   return unwrapOk(res, '获取队列统计失败')
 }
 
 /** 队列详情（主表 + 子任务 + 资源锁） */
 export async function getQueueDetail(queueCode: string): Promise<QueueDetailResult> {
-  const res = await yzhApi.post<ApiResponse<QueueDetailResult>>('/api/System/QueueMonitor/detail', { QueueCode: queueCode })
+  const res = await yzhApi.post<ApiResponse<QueueDetailResult>>('/api/Admin/System/QueueMonitor/detail', { QueueCode: queueCode })
   return unwrapOk(res, '获取队列详情失败')
 }
 
 /** 取消队列 */
 export async function cancelQueue(queueCode: string): Promise<void> {
   expectOk(
-    await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/cancel', { QueueCode: queueCode }),
+    await yzhApi.post<ApiResponse<void>>('/api/Admin/System/QueueMonitor/cancel', { QueueCode: queueCode }),
     '取消队列失败',
   )
 }
@@ -110,7 +110,7 @@ export async function cancelQueue(queueCode: string): Promise<void> {
 /** 整队重跑 */
 export async function retryQueue(queueCode: string): Promise<void> {
   expectOk(
-    await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/retry', { QueueCode: queueCode }),
+    await yzhApi.post<ApiResponse<void>>('/api/Admin/System/QueueMonitor/retry', { QueueCode: queueCode }),
     '重试队列失败',
   )
 }
@@ -118,14 +118,14 @@ export async function retryQueue(queueCode: string): Promise<void> {
 /** 单个子任务重试（准则 A：业务键 TaskCode） */
 export async function retryTask(taskCode: string): Promise<void> {
   expectOk(
-    await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/task/retry', { TaskCode: taskCode }),
+    await yzhApi.post<ApiResponse<void>>('/api/Admin/System/QueueMonitor/task/retry', { TaskCode: taskCode }),
     '重试子任务失败',
   )
 }
 
 /** 查找资源锁 */
 export async function findResourceLock(resourceTable: string, resourceCodes: string[]): Promise<any[]> {
-  const res = await yzhApi.post<ApiResponse<any[]>>('/api/System/QueueMonitor/resource/locked', {
+  const res = await yzhApi.post<ApiResponse<any[]>>('/api/Admin/System/QueueMonitor/resource/locked', {
     ResourceTable: resourceTable,
     ResourceCodes: resourceCodes,
   })

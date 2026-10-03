@@ -91,7 +91,20 @@ public sealed class FillValue
 /// <summary>一次填充请求（= 一份模板 + 一本值字典）</summary>
 public sealed class OfficeFillRequest
 {
-    /// <summary>模板文件字节（.docx / .xlsx）。⛔ 不接受 .doc / .xls —— 上传侧已拒绝（21 号 Q-3）。</summary>
+    /// <summary>
+    /// 模板文件字节 —— <b>只接受 OOXML</b>（<c>.docx</c> / <c>.xlsx</c>）。
+    ///
+    /// <para>⚠️ <b>更正一条过期注释（2026-10-03）</b>：原文写「⛔ 不接受 <c>.doc</c> / <c>.xls</c> ——
+    /// 上传侧已拒绝（21 号 Q-3）」，**与事实相反** —— 上传白名单 <c>allowedExts</c> <b>含</b>
+    /// <c>doc</c>/<c>xls</c>，库内实测 <c>.doc</c> 570 份 / <c>.xls</c> 44 份（占 92%），
+    /// 「上传侧拒绝」是**裁定存在但从未落地**。真正的原因在<b>库能力</b>：
+    /// NPOI 2.7.2 <b>没有 <c>NPOI.HWPF</c></b>，<c>.doc</c> <b>连读都读不了</b>（不是「只读」）。</para>
+    ///
+    /// <para><b>⇒ 调用方必须先用归一产物</b>：取
+    /// <c>PathBuilder.Product(file.StoragePath, PathBuilder.EditableSegment, ".docx")</c>
+    /// 指向的 <c>editable/</c> 文件字节（`S-1` 归一链产出），
+    /// ⛔ <b>不要把源文件字节直接喂进来</b> —— 会抛异常或静默产出错内容。</para>
+    /// </summary>
     public byte[] Template { get; set; } = Array.Empty<byte>();
 
     /// <summary>值字典：锚点键 → 值。<b>Key 用 <see cref="StringComparer.Ordinal"/></b>。</summary>

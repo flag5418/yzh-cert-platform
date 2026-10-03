@@ -21,7 +21,7 @@ print('=== 数据库删除示例菜单 ===')
 result = subprocess.run([
     'python3', '-c', f"""
 import mysql.connector
-conn = mysql.connector.connect(host='127.0.0.1', port=3307, user='root', password='Yzh123456.', database='yzh_cert_platform')
+conn = mysql.connector.connect(host='127.0.0.1', port=3307, user='root', password=os.environ.get('MYSQL_ROOT_PASSWORD', ''), database='yzh_cert_platform')
 c = conn.cursor()
 # 查出现有禁用菜单
 c.execute('SELECT Menu_Id, MenuName FROM sys_menu WHERE Menu_Id IN (8,32,36,91,113,115,125,296,297,298,299,300,301,302)')

@@ -120,7 +120,7 @@ function buildClauseTree(flat: ISOClauseTreeNode[]): ISOClauseTreeNode[] {
 
 export class ReportRuleLogic extends TreeTableLogic<any> {
   // ──── 控制器名称（对应后端 ReportDefinitionController 路由）───
-  controllerName = 'ReportDefinition'
+  controllerName = 'Admin/Workflow/ReportDefinition'
 
   /** 目录域组织树的纯转换器 */
   private readonly fileTree = useFileTree()

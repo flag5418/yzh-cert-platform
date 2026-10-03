@@ -27,7 +27,12 @@ public static class StorageServiceExtensions
                 {
                     var endpoint = config["MinIO:Endpoint"] ?? "127.0.0.1:9000";
                     var accessKey = config["MinIO:AccessKey"] ?? "admin";
-                    var secretKey = config["MinIO:SecretKey"] ?? "Yzh123456.";
+                    // ⛔ 密钥只允许来自 appsettings.json（已 gitignore）；代码内禁止密钥字面量，缺失即启动失败
+                    var secretKey = config["MinIO:SecretKey"];
+                    if (string.IsNullOrWhiteSpace(secretKey))
+                        throw new InvalidOperationException(
+                            "MinIO:SecretKey 未配置。请在 appsettings.json 或环境变量 " +
+                            "MinIO__SecretKey 中提供（⛔ 不要把密钥写进代码）。");
 
                     return new MinioClient()
                         .WithEndpoint(endpoint)

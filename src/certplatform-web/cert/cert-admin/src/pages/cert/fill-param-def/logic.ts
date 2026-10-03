@@ -141,7 +141,7 @@ function toCoreNodes(nodes: FileTreeNode[]): TreeNode[] {
 }
 
 export class FillParamDefLogic extends TreeTableLogic<EffectiveItem> {
-  controllerName = 'Cert/FillParamDef'
+  controllerName = 'Admin/Cert/FillParamDef'
 
   /** 目录域组织树的纯转换器（不参与状态，只借它的 transformOrgTree） */
   private readonly fileTree = useFileTree()

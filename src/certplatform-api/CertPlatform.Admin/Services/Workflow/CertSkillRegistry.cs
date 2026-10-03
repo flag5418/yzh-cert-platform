@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
 using CertPlatform.Admin.Services.Workflow.Skills;
-using CertPlatform.Shared.Entities.Wf;
+using CertPlatform.Admin.Entities.Wf;
 using YZH.Core.DataBase.Interfaces;
 
 namespace CertPlatform.Admin.Services.Workflow

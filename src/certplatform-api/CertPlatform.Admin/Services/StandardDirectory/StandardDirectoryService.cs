@@ -13,11 +13,11 @@ using YZH.Core.DataBase.Models;
 using YZH.Core.DataBase.Services;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Queue;
-using CertPlatform.Shared.Entities.Dir;
-using CertPlatform.Shared.Entities.Cert;
-using CertPlatform.Shared.Entities.Doc;
-using CertPlatform.Shared.Entities.Sys;
-using CertPlatform.Shared.Entities.Wf;
+using CertPlatform.Admin.Entities.Dir;
+using CertPlatform.Admin.Entities.Cert;
+using CertPlatform.Admin.Entities.Doc;
+using CertPlatform.Admin.Entities.Sys;
+using CertPlatform.Admin.Entities.Wf;
 using CertPlatform.Shared.Storage;
 
 namespace CertPlatform.Admin.Services.StandardDirectory;
@@ -882,15 +882,21 @@ public class StandardDirectoryService
     }
 
     /// <summary>
-    /// 构造**双队列**任务载荷：① <c>office2pdf</c>（预览）② <c>anydoc2md</c>（提取）。
+    /// 构造**转换队列**任务载荷：① <c>office2pdf</c>（预览）② <c>anydoc2md</c>（提取）
+    /// ③ <c>office2editable</c>（★ 归一，仅旧二进制格式）。
     ///
-    /// <para>为什么两条独立任务而不是一个双产物任务（用户第 1、2 点）：</para>
+    /// <para>为什么拆成独立任务而不是一个多产物任务（用户第 1、2 点）：</para>
     /// <list type="bullet">
     ///   <item>失败语义隔离：扫描件 PDF 能出 PDF 预览、但转不了 Markdown —— 合成一个任务时
     ///         整体判失败，用户会以为「预览也没好」。</item>
     ///   <item>可独立重试：Markdown 失败可只重试提取链，不必重跑 LibreOffice。</item>
-    ///   <item>状态列各自独立：<c>ConvertStatus</c> 与 <c>MarkdownStatus</c> 互不干扰。</item>
+    ///   <item>状态列各自独立：<c>ConvertStatus</c> / <c>MarkdownStatus</c> / <c>EditableStatus</c>
+    ///         互不干扰（三条链各有列白名单，见 <c>OfficeConvertService</c>）。</item>
     /// </list>
+    ///
+    /// <para>★ 归一链的**条件性**：只有 <c>.doc</c>/<c>.xls</c>/<c>.ppt</c> 才投 ——
+    /// 判据收口在 <see cref="OfficeConvertService.EditableTargetFormat"/>，
+    /// ⛔ 不在此另写一份扩展名判断（两处规则漂移的后果是「零报错地不一致」）。</para>
     ///
     /// <para>⚠️ 不在入队点算 TargetPath —— 产物路径由执行器用
     /// <see cref="CodeGeneratorService.BuildProductPath"/> 从源路径派生。
@@ -898,7 +904,8 @@ public class StandardDirectoryService
     /// 导致产物全部落到 <c>/standard-directory/.converted/{文件名}</c> 而互相覆盖（实测已丢数据）。</para>
     /// </summary>
     private static List<FileConvertPayload> BuildConvertPayloads(StandardDirectoryFile f)
-        => new()
+    {
+        var payloads = new List<FileConvertPayload>
         {
             new FileConvertPayload
             {
@@ -911,6 +918,19 @@ public class StandardDirectoryService
                 SourcePath = f.StoragePath, ConvertType = "anydoc2md"
             }
         };
+
+        // ★ 归一链（S-1，2026-10-03）：旧二进制格式 → OOXML，供 NPOI 填写引擎读
+        if (OfficeConvertService.EditableTargetFormat(f.FileName) != null)
+        {
+            payloads.Add(new FileConvertPayload
+            {
+                Code = f.Code ?? "", FileName = f.FileName,
+                SourcePath = f.StoragePath, ConvertType = "office2editable"
+            });
+        }
+
+        return payloads;
+    }
 
     /// <summary>把若干文件的双队列载荷摊平成任务列表</summary>
     private static List<QueueManager.TaskItem> BuildConvertTasks(
@@ -939,6 +959,10 @@ public class StandardDirectoryService
             await TryDeleteObjectAsync(file.PreviewPdfPath, "旧预览PDF产物");
         await TryDeleteObjectAsync(file.MarkdownPath, "旧Markdown产物");
         await TryDeleteObjectAsync(file.ConvertedStoragePath, "旧中间产物");
+        // ★ 归一产物（S-1）：不作废则填写引擎会读**替换前的内容**且状态仍是 completed ⇒ 静默错误
+        //   （与上面 Markdown 注释同构）。⚠️ 不能与源路径相同：归一产物恒在 editable/ 段下，
+        //   与 StoragePath 必然不同，故无需 sameAsSource 判定。
+        await TryDeleteObjectAsync(file.EditableStoragePath, "旧归一产物");
 
         file.PreviewPdfPath = null;
         file.MarkdownPath = null;
@@ -947,6 +971,11 @@ public class StandardDirectoryService
         file.ConvertedStoragePath = null;
         file.ConvertStatus = "pending";
         file.ConvertMessage = null;
+        file.EditableStoragePath = null;
+        // ⚠️ 置 null（=「不需要归一」）而非 "pending"：替换后的新文件扩展名可能已变，
+        //    是否需要归一只由入队点按扩展名判定，此处不预设。
+        file.EditableStatus = null;
+        file.EditableMessage = null;
     }
 
     /// <summary>
@@ -2692,7 +2721,8 @@ public class StandardDirectoryService
     #region 存量文件产物回填（★ 2026-09-26 双产物链上线后的一次性补齐）
 
     /// <summary>
-    /// 为**存量文件**补齐双产物（<c>PreviewPdfPath</c> / <c>MarkdownPath</c>）。
+    /// 为**存量文件**补齐三产物（<c>PreviewPdfPath</c> / <c>MarkdownPath</c> /
+    /// <c>EditableStoragePath</c>★ S-1）。
     ///
     /// <para><b>为什么需要它</b>：实测 167 行历史数据的 <c>PreviewPdfPath</c> 与
     /// <c>MarkdownPath</c> **全部为空**（产物链从未跑通过），而 <see cref="RetryFailedConversionsAsync"/>
@@ -2700,8 +2730,11 @@ public class StandardDirectoryService
     /// <c>completed</c>（旧 doc→docx 链留下的），因此**永远不会被它捞到**。
     /// 结果是：目录里所有老文件至今仍走「预览时才动态转换」，提取时才现算 Markdown。</para>
     ///
-    /// <para><b>候选判据</b>：未删除 + 有存储路径 + 双产物**任一为空** + 双链**都不在途**
-    /// （<c>pending</c>/<c>converting</c> 视为在途，跳过以避免重复入队）。</para>
+    /// <para><b>候选判据</b>：未删除 + 有存储路径 + 三产物**任一为空** + 三链**都不在途**
+    /// （<c>pending</c>/<c>converting</c> 视为在途，跳过以避免重复入队）。
+    /// <para>★ 归一链（S-1）的「产物缺失」只在**旧二进制格式**上成立
+    /// （<c>.doc</c>/<c>.xls</c>/<c>.ppt</c>）—— 其余格式该列恒为空是<b>语义</b>不是缺口，
+    /// 判据由 <see cref="OfficeConvertService.EditableTargetFormat"/> 收口。</para></para>
     ///
     /// <para><b>与重试的两个刻意差异</b>：</para>
     /// <list type="number">
@@ -2712,7 +2745,10 @@ public class StandardDirectoryService
     ///         不再重复投递 Markdown 任务 —— 那不是故障，重跑必然再失败，纯浪费容器调用。</item>
     /// </list>
     ///
-    /// <para>幂等：产物已齐的文件不在候选集内；重复调用只会命中仍缺产物的那些。</para>
+    /// <para>幂等：产物已齐的文件不在候选集内；重复调用只会命中仍缺产物的那些。
+    /// ⚠️ 归一链的幂等还依赖「**失败也留在候选集**」：归一失败后 <c>EditableStoragePath</c>
+    /// 仍为空 ⇒ 下次调用会重投（这是**期望**行为 —— 用户修好容器环境后重跑即可，
+    /// 无需手工清状态）。</para>
     /// </summary>
     /// <param name="limit">单次最多处理多少个文件（防止一次把整库投进队列）</param>
     /// <param name="directoryCode">可选：只回填指定目录</param>
@@ -2723,23 +2759,36 @@ public class StandardDirectoryService
         {
             if (limit <= 0) limit = 200;
 
-            // 1. 候选：未删除 + 有源文件 + 双产物任一为空
+            // 1. 候选（SQL 粗筛，**刻意宽松**）：未删除 + 有源文件 + 三产物任一为空
             //    注：用 Queryable 直接下推到 SQL —— GetListAsync 默认会加 IsValid=1，
             //       而转换中的文件 IsValid=0，用默认值会漏掉它们（REFERENCE §二十 ⑱）。
+            //    ⚠️ 归一产物列对「不需要归一」的文件（.docx 等）**恒为空** ⇒ 粗筛必然多选。
+            //       多选无害（第 2 步按精确判据裁掉），但**绝不能少选** —— 故此处不写扩展名判断，
+            //       精确判据统一在 BuildBackfillTasks / OfficeConvertService.EditableTargetFormat。
             var query = _db.Client.Queryable<StandardDirectoryFile>()
                 .Where(x => !x.IsDeleted)
                 .Where(x => x.StoragePath != null && x.StoragePath != "")
                 .Where(x => (x.PreviewPdfPath == null || x.PreviewPdfPath == "")
-                         || (x.MarkdownPath == null || x.MarkdownPath == ""));
+                         || (x.MarkdownPath == null || x.MarkdownPath == "")
+                         || (x.EditableStoragePath == null || x.EditableStoragePath == ""));
 
             if (!string.IsNullOrWhiteSpace(directoryCode))
                 query = query.Where(x => x.ConfigCode == directoryCode);
 
             var rows = await query.ToListAsync();
 
-            // 2. 剔除「已在途」的文件（双链任一 pending/converting）
+            // 2. 剔除「已在途」的文件（三链任一 pending/converting）
+            //    + 剔除「无活可干」的（粗筛多选进来的：不需要归一且三产物都齐）——
+            //      不剔则 Take(limit) 会被这些行占满配额，真正待办的文件永远排不上（表现为
+            //      「回填一直返回 0」且不报错）。
             var candidates = rows
-                .Where(f => !IsChainInFlight(f.ConvertStatus) && !IsChainInFlight(f.MarkdownStatus))
+                .Where(f => !IsChainInFlight(f.ConvertStatus)
+                         && !IsChainInFlight(f.MarkdownStatus)
+                         && !IsChainInFlight(f.EditableStatus))
+                .Where(f => string.IsNullOrEmpty(f.PreviewPdfPath)
+                         || string.IsNullOrEmpty(f.MarkdownPath)
+                         || (OfficeConvertService.EditableTargetFormat(f.FileName) != null
+                             && string.IsNullOrEmpty(f.EditableStoragePath)))
                 .OrderBy(f => f.ConfigCode)
                 .ThenBy(f => f.FileName)
                 .Take(limit)
@@ -2818,11 +2867,36 @@ public class StandardDirectoryService
                 {
                     var pdfTasked = string.IsNullOrEmpty(f.PreviewPdfPath);
                     var mdTasked = string.IsNullOrEmpty(f.MarkdownPath) && f.MarkdownStatus != "unsupported";
+                    var edTasked = OfficeConvertService.EditableTargetFormat(f.FileName) != null
+                                && string.IsNullOrEmpty(f.EditableStoragePath);
 
-                    if (pdfTasked) { f.ConvertStatus = "pending"; f.ConvertMessage = null; }
-                    if (mdTasked) { f.MarkdownStatus = "pending"; f.MarkdownMessage = null; }
+                    // ★ 列级写回（2026-10-03 修正）：原实现是 UpdateAsync(f) **全列写回**。
+                    //   入队后队列可能**立即**开始执行，执行器已把 EditableStatus 改成 converting/failed，
+                    //   而 f 是「投递前」的快照 ⇒ 全列写回会把执行器的写入**覆盖回旧值**且零报错
+                    //   （与 OfficeConvertService 类注释记录的 2026-09-26 事故同一机理）。
+                    var cols = new List<string> { nameof(StandardDirectoryFile.UpdateTime) };
+                    f.UpdateTime = DateTime.Now;
+
+                    if (pdfTasked)
+                    {
+                        f.ConvertStatus = "pending"; f.ConvertMessage = null;
+                        cols.Add(nameof(StandardDirectoryFile.ConvertStatus));
+                        cols.Add(nameof(StandardDirectoryFile.ConvertMessage));
+                    }
+                    if (mdTasked)
+                    {
+                        f.MarkdownStatus = "pending"; f.MarkdownMessage = null;
+                        cols.Add(nameof(StandardDirectoryFile.MarkdownStatus));
+                        cols.Add(nameof(StandardDirectoryFile.MarkdownMessage));
+                    }
+                    if (edTasked)
+                    {
+                        f.EditableStatus = "pending"; f.EditableMessage = null;
+                        cols.Add(nameof(StandardDirectoryFile.EditableStatus));
+                        cols.Add(nameof(StandardDirectoryFile.EditableMessage));
+                    }
                     // ⚠️ 刻意不动 IsValid（见方法注释「与重试的两个刻意差异」）
-                    await _db.UpdateAsync(f);
+                    await _db.UpdateAsync(f, cols.ToArray());
                 }
 
                 enqueued += count;
@@ -2848,7 +2922,7 @@ public class StandardDirectoryService
 
     /// <summary>
     /// 为单个文件构造**按需裁剪**的回填任务：只投「产物缺失」的那条链。
-    /// <para>与 <see cref="BuildConvertTasks"/> 的区别：那个是「上传/重试，两条链都要」，这个是「补缺，只补缺的」。</para>
+    /// <para>与 <see cref="BuildConvertTasks"/> 的区别：那个是「上传/重试，三条链都要」，这个是「补缺，只补缺的」。</para>
     /// </summary>
     private static List<QueueManager.TaskItem> BuildBackfillTasks(StandardDirectoryFile f)
     {
@@ -2873,6 +2947,19 @@ public class StandardDirectoryService
             {
                 Code = f.Code ?? "", FileName = f.FileName,
                 SourcePath = f.StoragePath, ConvertType = "anydoc2md"
+            });
+        }
+
+        // ③ ★ 归一链（S-1）：**仅旧二进制格式** 且 产物缺失才投。
+        //    ⚠️ 「需不需要归一」的判据只此一处（EditableTargetFormat）—— 不要为了少扫几行
+        //       在别处再写一份扩展名判断，两处漂移会「零报错地」不一致。
+        if (OfficeConvertService.EditableTargetFormat(f.FileName) != null
+            && string.IsNullOrEmpty(f.EditableStoragePath))
+        {
+            payloads.Add(new FileConvertPayload
+            {
+                Code = f.Code ?? "", FileName = f.FileName,
+                SourcePath = f.StoragePath, ConvertType = "office2editable"
             });
         }
 

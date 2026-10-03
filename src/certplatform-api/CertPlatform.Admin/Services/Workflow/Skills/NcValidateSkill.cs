@@ -157,7 +157,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         /// </summary>
         private static async Task<HashSet<string>> LoadSourceFilesAsync(IDbOrm db, string wfTaskCode)
         {
-            var rows = await db.Client.Queryable<CertPlatform.Shared.Entities.Wf.WfNodeExecution>()
+            var rows = await db.Client.Queryable<CertPlatform.Admin.Entities.Wf.WfNodeExecution>()
                 .Where(x => x.TaskCode == wfTaskCode
                          && x.SourceFileCode != null && x.SourceFileCode != "")
                 .Select(x => x.SourceFileCode)

@@ -10,7 +10,7 @@ DB_CONFIG = {
     'host': '127.0.0.1',
     'port': 3307,
     'user': 'root',
-    'password': 'Yzh123456.',
+    'password': os.environ.get('MYSQL_ROOT_PASSWORD', ''),
     'database': 'yzh_cert_platform'
 }
 

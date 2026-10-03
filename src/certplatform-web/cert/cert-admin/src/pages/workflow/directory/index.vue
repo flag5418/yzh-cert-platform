@@ -496,7 +496,7 @@ async function handleExport() {
   const dirCode = currentPhase.value.DirectoryCode
   try {
     await yzhApi.download(
-      `/api/Workflow/StandardDirectory/configs/${encodeURIComponent(dirCode)}/export`,
+      `/api/Admin/Workflow/StandardDirectory/configs/${encodeURIComponent(dirCode)}/export`,
       { folderCodes, fileCodes },
       `${dirCode}-export.zip`
     )

@@ -2,8 +2,8 @@
  * 工作流执行历史 API（阶段四，2026-09-22）
  *
  * 对应后端 `WorkflowTestController` 的只读查询端点：
- *   POST /api/Workflow/test/history          分页查询执行任务（四层模型第一层）
- *   GET  /api/Workflow/test/detail/{taskCode} 四层聚合详情（task + item + path + node）
+ *   POST /api/Admin/Workflow/test/history          分页查询执行任务（四层模型第一层）
+ *   GET  /api/Admin/Workflow/test/detail/{taskCode} 四层聚合详情（task + item + path + node）
  *
  * 字段命名遵循 YZH 命名铁律：C# 属性名 = JSON 字段名 = TS 字段名（PascalCase）。
  */
@@ -156,7 +156,7 @@ export async function getTaskHistory(
   params: TaskHistoryRequest = {},
 ): Promise<TaskHistoryPage> {
   const res = await yzhApi.post<ApiResponse<TaskHistoryPage>>(
-    '/api/Workflow/test/history',
+    '/api/Admin/Workflow/test/history',
     { Page: 1, PageSize: 20, ...params },
   )
   return res.data
@@ -176,7 +176,7 @@ export interface NodeApprovalRequest {
 /** 提交节点审批 */
 export async function approveNode(request: NodeApprovalRequest): Promise<void> {
   const res = await yzhApi.post<ApiResponse<{ result: boolean }>>(
-    '/api/Workflow/approve',
+    '/api/Admin/Workflow/approve',
     request,
   )
   if (res.success !== true) throw new Error(res.message || res.err || '审批失败')
@@ -184,7 +184,7 @@ export async function approveNode(request: NodeApprovalRequest): Promise<void> {
 
 export async function getTaskDetail(taskCode: string): Promise<TaskExecutionDetail> {
   const res = await yzhApi.get<ApiResponse<TaskExecutionDetail>>(
-    `/api/Workflow/test/detail/${encodeURIComponent(taskCode)}`,
+    `/api/Admin/Workflow/test/detail/${encodeURIComponent(taskCode)}`,
   )
   return res.data
 }

@@ -18,7 +18,7 @@
 --   · EnableField bool 脏列（配置泄漏）一并 DROP。
 --
 -- 执行：
---   docker exec -i yzh-mysql mysql -uroot -p'Yzh123456.' --default-character-set=utf8mb4 yzh_cert_platform \
+--   docker exec -i yzh-mysql mysql -uroot -p'$MYSQL_ROOT_PASSWORD' --default-character-set=utf8mb4 yzh_cert_platform \
 --     < scripts/db/unify_enable_to_isvalid_V2.sql
 -- ===================================================================
 

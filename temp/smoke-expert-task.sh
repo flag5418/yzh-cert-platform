@@ -1,4 +1,8 @@
 #!/bin/bash
+# 加载本地口令（⛔ 禁止把口令写进脚本/文档）
+for _e in "$(dirname "$0")/../../docker/.env" "$(dirname "$0")/../docker/.env" "$(dirname "$0")/../../../docker/.env" "$(dirname "$0")/docker/.env"; do
+  [ -f "$_e" ] && set -a && . "$_e" && set +a && break
+done
 # ══════════════════════════════════════════════════════════════════
 # 专家任务系统 —— S4 接口冒烟（临时脚本，位于 temp/，不入库）
 # 覆盖：列表 → 锁判定 → 候选 → 创建 → 锁拒绝 → 提交 → 队列启动
@@ -270,7 +274,7 @@ echo "$TASK" > /tmp/s4_task_code.txt
 # ── 17. 数据库侧核对 ──
 echo ""
 echo "── 17. 数据库核对 ──"
-docker exec yzh-mysql mysql -uroot -pYzh123456. --default-character-set=utf8mb4 -t -B yzh_cert_platform -e "
+docker exec yzh-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" --default-character-set=utf8mb4 -t -B yzh_cert_platform -e "
 SELECT ExecStatus, LifecycleStatus, TotalItemCount, AckedCount, ModifiedCount,
        IFNULL(ActiveLockKey,'<NULL=已解锁>') AS LockKey, Progress
 FROM cert_expert_task WHERE Code='$TASK';

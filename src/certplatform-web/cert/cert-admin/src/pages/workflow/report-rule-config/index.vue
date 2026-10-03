@@ -17,13 +17,13 @@
     title="报告内容设计"
     :workflow-type="'report'"
     :tree-config="{
-      loadApi: '/api/ReportDefinition/section/by-context',
+      loadApi: '/api/Admin/Workflow/ReportDefinition/section/by-context',
       loadMethod: 'get',
       textField: 'SectionName',
       codeField: 'Code'
     }"
     :save-config="{
-      api: '/api/ReportDefinition/section/save',
+      api: '/api/Admin/Workflow/ReportDefinition/section/save',
       buildPayload: (ctx) => ({
         Id: ctx.leaf.Id,
         Code: ctx.leaf.Code,
@@ -41,7 +41,7 @@
         Remark: ctx.leaf.Remark
       })
     }"
-    :execute-config="{ enabled: true, runApi: '/api/Workflow/test/run' }"
+    :execute-config="{ enabled: true, runApi: '/api/Admin/Workflow/test/run' }"
     @save-success="onSaveSuccess"
     @execute-success="onExecuteSuccess"
   />

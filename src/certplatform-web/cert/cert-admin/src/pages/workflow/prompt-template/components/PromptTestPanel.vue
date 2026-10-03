@@ -1,235 +1,217 @@
 <script setup lang="ts">
 /**
- * PromptTestPanel —— 提示词试跑面板（2026-10-02）
+ * 语义测试面板（33 号 §4.2 / 34 号 §九）
  *
- * 用户口径（逐字）：
- *   「我们还可以在该界面上传文件进行测试（上传的时候，自动转 markdown），
- *     调用提示词得到结果，后直接删除该文件，因为该功能非常重要，我们需要不停的尝试完善提示词」
+ * ★ 2026-10-02 重构：由「永久第三栏」改为「可折叠的下方面板」。
+ *   原因：提示词正文 1500–2500 字是**纵向阅读**的长文，左右分栏会把它压成窄条
+ *   （实测中栏仅 474px ≈ 34 字/行）；而测试是偶发动作却永久占掉 410px。
+ *   上下分栏同时满足「正文够宽」与「边改边看结果」。
  *
- * ★ 文件生命周期：浏览器 → 后端内存 → 转换容器临时目录 → **后端 finally 清理**。
- *   不落 MinIO、不落 DB、不留痕。本组件只负责「选文件 → 提交 → 展示」。
- *
- * ★ 用「当前编辑器里未保存的内容」试跑（template 传参）—— 这是「边改边试」的关键：
- *   不必先保存才能试。
+ * 迭代闭环：真实上传 → 分析 → 改提示词 → 复用缓存重测（零转换）。
+ * Markdown 缓存 8 小时，键由后端回传。
+ * ⛔ 不展示 AI 模型：模型由 `cert_sys_config` 统一固定，UI 不可选也不展示。
  */
-import { computed, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Delete, UploadFilled, VideoPlay } from '@element-plus/icons-vue'
-import type { UploadUserFile } from 'element-plus'
-import { PROMPT_TYPE, testPrompt, type PromptTestResultDto } from '@share/api/workflow/prompt-workbench'
+import { ref, computed } from 'vue'
+import { Upload, RefreshRight, Delete, Close } from '@element-plus/icons-vue'
+import type { PromptTestResultDto, ConvertLogDto } from '@share/api/workflow/prompt-workbench'
+// 2026-10-03：SemanticResult 上移到 @share/components（36 号 §6.6），
+//   供 36 号「企业原始资料管理」的分析结果抽屉共用同一渲染器。
+import { SemanticResult } from '@share/components'
 
 const props = defineProps<{
-  /** 当前提示词类型：doc_group / doc_content */
   promptType: string
-  /** 当前适用标准（GUID，可空） */
-  standardCode?: string | null
-  /** ★ 编辑器里**未保存**的提示词正文（为空则后端回落库里的生效版本） */
-  template?: string | null
+  standardCode: string
+  cacheKey?: string | null
+  testing: boolean
+  result: PromptTestResultDto | null
 }>()
 
-const fileList = ref<UploadUserFile[]>([])
-const running = ref(false)
-const result = ref<PromptTestResultDto | null>(null)
-const activeResultTab = ref('parsed')
+const emit = defineEmits<{
+  (e: 'update:cacheKey', v: string): void
+  (e: 'run', files: File[]): void
+}>()
 
-/** 分类提示词可多文件（逐个取标题+开头片段）；作用提示词只用第一个文件 */
-const isGroup = computed(() => props.promptType === PROMPT_TYPE.Group)
+const fileInput = ref<HTMLInputElement>()
+const files = ref<File[]>([])
+const activeTab = ref('result')
 
-const canRun = computed(() => fileList.value.length > 0 && !running.value)
+function pickFiles() {
+  fileInput.value?.click()
+}
 
-const typeHint = computed(() =>
-  isGroup.value
-    ? '分类提示词：可一次上传多份资料，系统取每份的「标题 + 开头片段」组成文件清单，让 AI 逐个归类。'
-    : '作用提示词：只取**第一份**文件，转换 Markdown 全文后交给 AI 判断其作用。'
-)
+function onFilesChange(e: Event) {
+  const el = e.target as HTMLInputElement
+  if (!el.files?.length) return
+  // 同名去重：重复点选不会堆出重复项
+  const incoming = Array.from(el.files)
+  const names = new Set(files.value.map((f) => f.name))
+  files.value = files.value.concat(incoming.filter((f) => !names.has(f.name)))
+  el.value = ''
+}
 
-/** 解析后的 JSON（美化）；解析失败返回 null */
-const prettyJson = computed(() => {
-  const raw = result.value?.jsonOutput
-  if (!raw) return null
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2)
-  } catch {
-    return null
-  }
-})
-
-const conclusionType = computed(() => {
-  if (!result.value) return 'info'
-  return result.value.success ? 'success' : 'warning'
-})
-
-const conclusionText = computed(() => {
-  if (!result.value) return ''
-  return result.value.success ? '试跑成功' : `试跑未通过：${result.value.message}`
-})
-
-function onExceed() {
-  ElMessage.warning('一次最多 20 个文件，请分批测试')
+function removeFile(i: number) {
+  files.value.splice(i, 1)
 }
 
 function clearFiles() {
-  fileList.value = []
-  result.value = null
+  files.value = []
 }
 
-async function onRun() {
-  const files = fileList.value
-    .map((f) => f.raw)
-    .filter(Boolean) as File[]
-  if (!files.length) {
-    ElMessage.warning('请先选择要测试的文件')
-    return
-  }
-
-  running.value = true
-  result.value = null
-  try {
-    const r = await testPrompt({
-      files,
-      promptType: props.promptType,
-      template: props.template || null,
-      standardCode: props.standardCode || null
-    })
-    result.value = r
-    activeResultTab.value = r.jsonOutput ? 'parsed' : 'raw'
-    if (r.success) {
-      ElMessage.success(`试跑完成（${r.durationMs} ms）`)
-    } else {
-      ElMessage.warning(r.message || '试跑未通过')
-    }
-  } catch (e: any) {
-    ElMessage.error(e?.message || '试跑失败')
-  } finally {
-    running.value = false
-  }
+function runWithFiles() {
+  if (!files.value.length) return
+  emit('run', files.value)
 }
 
-async function copyText(text?: string | null) {
-  if (!text) return
+function runWithCache() {
+  emit('run', [])
+}
+
+// ==================== 结果展示 ====================
+
+const prettyJson = computed(() => {
+  const raw = props.result?.jsonOutput
+  if (!raw) return ''
   try {
-    await navigator.clipboard.writeText(text)
-    ElMessage.success('已复制')
+    return JSON.stringify(JSON.parse(raw), null, 2)
   } catch {
-    ElMessage.error('复制失败')
+    return raw
   }
-}
+})
+
+const validationMessages = computed(() => props.result?.validation?.messages || [])
+
+const okFiles = computed<ConvertLogDto[]>(() => (props.result?.files || []).filter((f) => f.success))
+
+const hasFiles = computed(() => (props.result?.files || []).length > 0)
+
+/** 单行运行指标（⛔ 不含模型名 —— 模型由系统参数统一固定，UI 不展示） */
+const metaLine = computed(() => {
+  const r = props.result
+  if (!r) return ''
+  const parts = [
+    `${r.durationMs} ms`,
+    `${r.promptTokens ?? '-'} / ${r.completionTokens ?? '-'} tokens`,
+    hasFiles.value
+      ? `${r.cacheHit ? '缓存文件' : '转换'} ${okFiles.value.length}/${(r.files || []).length}`
+      : '',
+    props.cacheKey ? `cache ${props.cacheKey.slice(0, 8)}…` : ''
+  ].filter(Boolean)
+  return parts.join(' · ')
+})
 </script>
 
 <template>
   <div class="test-panel">
-    <!-- ── 上传区 ───────────────────────────────────────────── -->
-    <div class="panel-section">
-      <div class="section-head">
-        <h4>上传试跑</h4>
-        <span class="head-hint">文件即用即弃，不落库</span>
-      </div>
-
-      <el-upload
-        v-model:file-list="fileList"
-        drag
-        multiple
-        :auto-upload="false"
-        :limit="20"
-        :on-exceed="onExceed"
-        accept=".doc,.docx,.xls,.xlsx,.pdf,.txt,.md,.csv,.wps,.et,.ppt,.pptx"
-        class="test-upload"
-      >
-        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-        <div class="el-upload__text">拖拽文件到此处，或<em>点击选择</em></div>
-        <template #tip>
-          <div class="el-upload__tip">
-            支持 Word / Excel / PDF / 文本；上传后自动转 Markdown。已选 {{ fileList.length }} 个文件。
-          </div>
-        </template>
-      </el-upload>
-
-      <el-alert :title="typeHint" type="info" :closable="false" show-icon class="type-hint" />
-
-      <div class="run-bar">
+    <!-- 上传区 -->
+    <div class="test-panel__upload">
+      <div class="test-panel__row">
+        <input
+          ref="fileInput"
+          type="file"
+          multiple
+          style="display: none"
+          accept=".doc,.docx,.xls,.xlsx,.pdf,.txt,.md,.csv"
+          @change="onFilesChange"
+        />
+        <el-button :icon="Upload" @click="pickFiles">选择文件</el-button>
+        <el-button :icon="Delete" :disabled="!files.length" @click="clearFiles"> 清空 </el-button>
+        <div class="test-panel__spacer" />
         <el-button
           type="primary"
-          :icon="VideoPlay"
-          :loading="running"
-          :disabled="!canRun"
-          @click="onRun"
+          :loading="testing"
+          :disabled="!files.length"
+          :icon="RefreshRight"
+          @click="runWithFiles"
         >
-          {{ running ? '试跑中…' : '用当前提示词试跑' }}
+          分析
         </el-button>
-        <el-button :icon="Delete" :disabled="running || !fileList.length" @click="clearFiles">
-          清空
+        <el-button
+          :loading="testing"
+          :disabled="!cacheKey"
+          :title="cacheKey ? '复用已转换的 Markdown（零转换）' : '无缓存'"
+          @click="runWithCache"
+        >
+          重测
         </el-button>
-        <span class="run-hint">
-          {{ template ? '使用编辑器中的当前内容' : '编辑器为空 → 使用库里的生效版本' }}
-        </span>
-      </div>
-    </div>
-
-    <!-- ── 结果区 ───────────────────────────────────────────── -->
-    <div v-if="result" class="panel-section result-section">
-      <el-alert :type="conclusionType" :title="conclusionText" :closable="false" show-icon />
-
-      <div class="meta-bar">
-        <el-tag size="small" type="info" effect="plain">模型 {{ result.model || '—' }}</el-tag>
-        <el-tag size="small" type="info" effect="plain">max_tokens {{ result.maxTokens ?? '—' }}</el-tag>
-        <el-tag size="small" type="info" effect="plain">温度 {{ result.temperature ?? '—' }}</el-tag>
-        <el-tag size="small" type="info" effect="plain">{{ result.durationMs }} ms</el-tag>
-        <el-tag v-if="result.promptTokens != null" size="small" type="info" effect="plain">
-          in {{ result.promptTokens }} / out {{ result.completionTokens ?? 0 }} tokens
-        </el-tag>
       </div>
 
-      <!-- 转换日志：确认「文件确实被读到了」 -->
-      <!-- ⚠️ 此处刻意不用 el-table 内联表格：守卫 R6 要求页面统一用 YzhTable，
-           而这段只有 4 个字段、数据来自一次响应、无分页/排序需求 ——
-           硬套 YzhTable 的 dataLoader 契约反而更绕。用纯布局渲染。 -->
-      <div class="block">
-        <h5>① 转换结果（上传 → Markdown）</h5>
-        <div class="convert-list">
-          <div v-for="(f, i) in result.files" :key="i" class="convert-row">
-            <el-tag :type="f.success ? 'success' : 'danger'" size="small" effect="plain">
-              {{ f.success ? '成功' : '失败' }}
-            </el-tag>
-            <span class="convert-name" :title="f.fileName">{{ f.fileName }}</span>
-            <span class="convert-len">{{ f.markdownLength }} 字</span>
-            <span class="convert-msg">
-              <span v-if="f.message" class="err-text">{{ f.message }}</span>
-              <span v-else class="ok-text">已转 Markdown</span>
-            </span>
-          </div>
+      <div v-if="files.length" class="test-panel__filelist">
+        <div v-for="(f, i) in files" :key="f.name + i" class="test-panel__file">
+          <span class="test-panel__fname" :title="f.name">{{ f.name }}</span>
+          <span class="test-panel__fsize">{{ (f.size / 1024).toFixed(1) }} KB</span>
+          <el-icon class="test-panel__fdel" @click="removeFile(i)"><Close /></el-icon>
         </div>
       </div>
-
-      <!-- 结果本体 -->
-      <div class="block">
-        <h5>
-          ② AI 返回结果
-          <el-button link size="small" @click="copyText(result.rawOutput)">复制原文</el-button>
-        </h5>
-        <el-tabs v-model="activeResultTab" class="result-tabs">
-          <el-tab-pane name="parsed" :disabled="!prettyJson">
-            <template #label>
-              <span>解析后 JSON<span v-if="!prettyJson" class="tab-note">（无）</span></span>
-            </template>
-            <pre v-if="prettyJson" class="code-block">{{ prettyJson }}</pre>
-            <el-empty v-else description="模型未返回可解析的 JSON（见「原始输出」）" :image-size="60" />
-          </el-tab-pane>
-          <el-tab-pane label="原始输出" name="raw">
-            <pre v-if="result.rawOutput" class="code-block">{{ result.rawOutput }}</pre>
-            <el-empty v-else description="无输出" :image-size="60" />
-          </el-tab-pane>
-          <el-tab-pane label="实际送出的提示词" name="prompt">
-            <div class="prompt-pre-head">
-              <span class="hint">用于确认占位符（{{ '{{file_list}}' }} / {{ '{{document_content}}' }}）替换是否正确</span>
-              <el-button link size="small" @click="copyText(result.promptText)">复制</el-button>
-            </div>
-            <pre v-if="result.promptText" class="code-block">{{ result.promptText }}</pre>
-          </el-tab-pane>
-        </el-tabs>
-      </div>
     </div>
 
-    <el-empty v-else description="选择文件后点「试跑」，这里显示结果" :image-size="70" />
+    <!-- 结果区 -->
+    <div class="test-panel__result">
+      <el-empty v-if="!result" description="无分析结果" :image-size="80" />
+
+      <template v-else>
+        <!-- 状态头 -->
+        <div class="test-panel__status">
+          <el-tag :type="result.success ? 'success' : 'danger'" size="small" effect="dark">
+            {{ result.success ? '分析通过' : '分析失败' }}
+          </el-tag>
+          <el-tag v-if="result.cacheHit" size="small" effect="plain">缓存命中</el-tag>
+          <span v-if="!result.success" class="test-panel__msg" :title="result.message">
+            {{ result.message }}
+          </span>
+        </div>
+        <div class="test-panel__meta">{{ metaLine }}</div>
+
+        <!-- 后端校正明细（33 号 §3.3） -->
+        <div v-if="validationMessages.length" class="test-panel__valid">
+          <div class="test-panel__valid-title">校正 {{ validationMessages.length }} 处</div>
+          <ul>
+            <li v-for="(m, i) in validationMessages" :key="i">{{ m }}</li>
+          </ul>
+        </div>
+
+        <!-- 明细 -->
+        <el-tabs v-model="activeTab" class="test-panel__tabs">
+          <el-tab-pane label="结果" name="result">
+            <SemanticResult :prompt-type="promptType" :json="result.jsonOutput" />
+          </el-tab-pane>
+
+          <el-tab-pane label="JSON" name="json">
+            <pre class="test-panel__code">{{ prettyJson || '(无 JSON 输出)' }}</pre>
+          </el-tab-pane>
+
+          <el-tab-pane label="转换日志" name="files">
+            <div v-if="!hasFiles" class="test-panel__none">复用缓存，未重新转换</div>
+            <el-collapse v-else>
+              <el-collapse-item
+                v-for="(f, i) in result.files"
+                :key="i"
+                :name="i"
+              >
+                <template #title>
+                  <span class="test-panel__fitem">
+                    <el-tag :type="f.success ? 'success' : 'danger'" size="small" effect="plain">
+                      {{ f.success ? 'OK' : 'FAIL' }}
+                    </el-tag>
+                    <span class="test-panel__fname">{{ f.fileName }}</span>
+                    <span class="test-panel__fsize">{{ f.markdownLength }} 字符</span>
+                  </span>
+                </template>
+                <div v-if="!f.success" class="test-panel__fail">{{ f.message || '转换失败' }}</div>
+                <pre v-else class="test-panel__code test-panel__code--md">{{ f.markdown || f.markdownHead || '' }}</pre>
+              </el-collapse-item>
+            </el-collapse>
+          </el-tab-pane>
+
+          <el-tab-pane label="提示词" name="prompt">
+            <pre class="test-panel__code">{{ result.promptText || '(空)' }}</pre>
+          </el-tab-pane>
+
+          <el-tab-pane v-if="result.rawOutput" label="原始输出" name="raw">
+            <pre class="test-panel__code">{{ result.rawOutput }}</pre>
+          </el-tab-pane>
+        </el-tabs>
+      </template>
+    </div>
   </div>
 </template>
 
@@ -237,153 +219,168 @@ async function copyText(text?: string | null) {
 .test-panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
   height: 100%;
-  overflow: auto;
-  padding: 16px;
-  box-sizing: border-box;
+  min-height: 0;
 }
 
-.panel-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+/* ---------- 上传区 ---------- */
+.test-panel__upload {
+  flex-shrink: 0;
+  padding: var(--yzh-space-3) var(--yzh-space-4);
+  border-bottom: 1px solid var(--yzh-color-border-light);
+  background: var(--yzh-color-bg-subtle);
 }
-
-.section-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-.section-head h4 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #303133;
-}
-.head-hint {
-  font-size: 12px;
-  color: #909399;
-}
-
-.test-upload :deep(.el-upload-dragger) {
-  padding: 20px 12px;
-}
-
-.type-hint :deep(.el-alert__title) {
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.run-bar {
+.test-panel__row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--yzh-space-2);
 }
-.run-hint {
-  font-size: 12px;
-  color: #909399;
-  margin-left: auto;
+.test-panel__spacer {
+  flex: 1;
 }
-
-.result-section {
-  border-top: 1px solid #ebeef5;
-  padding-top: 14px;
-}
-
-.meta-bar {
+.test-panel__filelist {
+  margin-top: var(--yzh-space-2);
+  max-height: 72px;
+  overflow: auto;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--yzh-space-1) var(--yzh-space-2);
 }
-
-.block h5 {
-  margin: 0 0 8px 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: #303133;
+.test-panel__file {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--yzh-space-2);
+  font-size: var(--yzh-font-size-xs);
+  padding: 3px var(--yzh-space-2);
+  background: var(--yzh-color-bg-container);
+  border: 1px solid var(--yzh-color-border-light);
+  border-radius: var(--yzh-radius-sm);
 }
-
-.err-text {
-  color: #f56c6c;
-}
-.ok-text {
-  color: #67c23a;
-}
-
-.convert-list {
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 4px;
-  overflow: hidden;
-}
-.convert-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  font-size: 12px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
-.convert-row:last-child {
-  border-bottom: none;
-}
-.convert-row:nth-child(odd) {
-  background: #fafcff;
-}
-.convert-name {
+.test-panel__fname {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #303133;
+  color: var(--yzh-color-text-regular);
 }
-.convert-len {
+.test-panel__fsize {
   flex-shrink: 0;
-  color: #909399;
-  font-variant-numeric: tabular-nums;
+  color: var(--yzh-color-text-placeholder);
 }
-.convert-msg {
-  flex-shrink: 0;
-  max-width: 160px;
+.test-panel__fdel {
+  cursor: pointer;
+  color: var(--yzh-color-text-placeholder);
+}
+.test-panel__fdel:hover {
+  color: var(--yzh-color-danger);
+}
+/* ---------- 结果区 ---------- */
+.test-panel__result {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--yzh-space-3) var(--yzh-space-4);
+}
+
+.test-panel__status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--yzh-space-1) var(--yzh-space-2);
+}
+.test-panel__msg {
+  flex: 1;
+  min-width: 120px;
+  font-size: var(--yzh-font-size-xs);
+  color: var(--yzh-color-danger);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.result-tabs {
-  margin-top: 4px;
-}
-.tab-note {
-  color: #c0c4cc;
-}
-
-.code-block {
-  margin: 0;
-  padding: 12px;
-  background: #1e1e1e;
-  color: #d4d4d4;
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
-  font-size: 12px;
-  line-height: 1.65;
-  max-height: 420px;
-  overflow: auto;
-  white-space: pre-wrap;
+.test-panel__meta {
+  margin-top: var(--yzh-space-1);
+  font-size: var(--yzh-font-size-xs);
+  line-height: var(--yzh-line-height-base);
+  font-variant-numeric: tabular-nums;
+  color: var(--yzh-color-text-placeholder);
   word-break: break-all;
 }
 
-.prompt-pre-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
+.test-panel__valid {
+  margin-top: var(--yzh-space-3);
+  padding: var(--yzh-space-2) var(--yzh-space-3);
+  background: var(--yzh-color-warning-light-9);
+  border: 1px solid var(--el-color-warning-light-7);
+  border-radius: var(--yzh-radius-md);
 }
-.prompt-pre-head .hint {
-  font-size: 12px;
-  color: #909399;
+.test-panel__valid-title {
+  font-size: var(--yzh-font-size-xs);
+  font-weight: var(--yzh-font-weight-semibold);
+  color: var(--yzh-color-warning);
+  margin-bottom: var(--yzh-space-1);
+}
+.test-panel__valid ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.test-panel__valid li {
+  font-size: var(--yzh-font-size-xs);
+  line-height: var(--yzh-line-height-base);
+  color: var(--yzh-color-text-regular);
+  word-break: break-all;
+}
+
+.test-panel__tabs {
+  margin-top: var(--yzh-space-3);
+}
+.test-panel__tabs :deep(.el-tabs__header) {
+  margin-bottom: var(--yzh-space-2);
+}
+.test-panel__tabs :deep(.el-tabs__item) {
+  height: 32px;
+  line-height: 32px;
+  font-size: var(--yzh-font-size-xs);
+  padding: 0 var(--yzh-space-3);
+}
+.test-panel__tabs :deep(.el-tabs__content) {
+  padding: 0;
+}
+
+.test-panel__code {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: var(--yzh-space-3);
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border-radius: var(--yzh-radius-md);
+  font-family: 'SFMono-Regular', Consolas, Menlo, monospace;
+  font-size: var(--yzh-font-size-xs);
+  line-height: var(--yzh-line-height-base);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.test-panel__code--md {
+  background: #f6f8fa;
+  color: #24292f;
+  max-height: 260px;
+}
+.test-panel__none {
+  font-size: var(--yzh-font-size-xs);
+  color: var(--yzh-color-text-tertiary);
+  padding: var(--yzh-space-2) 0;
+}
+.test-panel__fail {
+  font-size: var(--yzh-font-size-xs);
+  color: var(--yzh-color-danger);
+}
+.test-panel__fitem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yzh-space-2);
+  min-width: 0;
+  padding-right: var(--yzh-space-2);
 }
 </style>

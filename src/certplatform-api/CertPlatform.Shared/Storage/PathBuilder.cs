@@ -42,7 +42,50 @@ public static class PathBuilder
     /// <summary>产物类型段：提取 Markdown</summary>
     public const string MarkdownSegment = "markdown";
 
-    /// <summary>归档段（仅企业资料库使用；标准目录库为单纯覆盖，无归档）</summary>
+    /// <summary>
+    /// ★ 产物类型段：可编辑版本（2026-10-03 新增）——
+    /// <c>.doc → .docx</c> / <c>.xls → .xlsx</c> / <c>.ppt → .pptx</c> 的 LibreOffice 归一产物。
+    ///
+    /// <para><b>为什么必须单独占一个段</b>：填写引擎（NPOI）<b>只能读 OOXML</b> ——
+    /// NPOI 2.7.2 <b>没有 <c>NPOI.HWPF</c></b>，<c>.doc</c> 连读都读不了。
+    /// 而本库实测 668 份文件中 <c>.doc</c> 567 份 / <c>.xls</c> 44 份（<b>91.5%</b>），
+    /// 不归一就等于「92% 的模板填不了」。</para>
+    ///
+    /// <para><b>为什么不与源文件同目录（兄弟路径）</b>：同目录会出现
+    /// <c>风险管理报告.doc</c>（源）与 <c>风险管理报告.docx</c>（产物）并存的情况，
+    /// 而同 stem 不同扩展名的文件在本项目实测<b>真实存在</b>（如
+    /// <c>XASL-QR-014 年度内审计划.doc</c> 与 <c>.xls</c>）⇒ 兄弟路径会与既有业务文件<b>撞名</b>。
+    /// 独立段由构造保证唯一。</para>
+    ///
+    /// <para><b>为什么产物文件名保留完整原文件名</b>：与 <see cref="PdfSegment"/> /
+    /// <see cref="MarkdownSegment"/> 同一理由（见 <see cref="Product"/>），
+    /// 形如 <c>…/editable/风险管理报告.doc.docx</c>。看起来冗余，但一致性优先 ——
+    /// 三段产物用同一套命名规则，排查时不必记三套。</para>
+    /// </summary>
+    public const string EditableSegment = "editable";
+
+    /// <summary>
+    /// ★ 目录段：空白模板（2026-10-03 新增，`37` 号 §4.3）——
+    /// 标准目录库下、与源文件**同层级**的 <c>_template/</c> 子目录，
+    /// 存放「带 <c>{{}}</c> 标签 + 书签 + <c>YZH_Mark</c> 标记」的空白模板。
+    ///
+    /// <para><b>为什么与源文件同层级，而不是独立库</b>：模板是**源文档的派生物**
+    /// （同机构 × 标准 × 阶段 × 文件夹），与 <c>pdf/</c> / <c>markdown/</c> / <c>editable/</c>
+    /// 同属「挂在源文件旁」的目录。独立库会引入第二套身份段与第二套权限，
+    /// 且「删标准文档时忘记删模板」会变成常态。</para>
+    ///
+    /// <para><b>⚠️ 与产物段的本质区别（决定了它不进 <see cref="IsProductPath"/>）</b>：
+    /// 产物段由 <see cref="Product"/> 从源路径**派生**（文件名 = 完整原名 + 新扩展名）；
+    /// 而 <c>_template/</c> 由 <see cref="TemplateFile"/> **构造**（同 <see cref="StandardFile"/>
+    /// 的段结构再插一段，文件名 = 上传时的原始名）。
+    /// 两者生命周期也不同：产物可随时重算，模板是**人工标注的资产**，丢了要重标。</para>
+    ///
+    /// <para><b>下划线前缀</b>：与 <see cref="ArchiveSegment"/> 一致，表示「系统目录、非业务文件夹」，
+    /// 人工排查时一眼可辨。</para>
+    /// </summary>
+    public const string TemplateSegment = "_template";
+
+    /// <summary>归档段（企业资料库 + 企业原始资料库使用；标准目录库为单纯覆盖，无归档）</summary>
     public const string ArchiveSegment = "_archive";
 
     /// <summary>版本后缀前缀：<c>{文件名}.v{版本号}</c>，与历史表 <c>VersionNumber</c> 对齐</summary>
@@ -55,7 +98,7 @@ public static class PathBuilder
     /// </summary>
     public static readonly IReadOnlyList<string> ReservedSegments = new[]
     {
-        PdfSegment, MarkdownSegment, ArchiveSegment
+        PdfSegment, MarkdownSegment, EditableSegment, TemplateSegment, ArchiveSegment
     };
 
     private static readonly HashSet<string> ReservedSegmentSet =
@@ -93,6 +136,36 @@ public static class PathBuilder
             Folder(folderPath),
             FileName(fileName));
 
+    /// <summary>
+    /// 标准目录库 · **空白模板**路径（`37` 号 §4.3）。
+    /// <para>格式：<c>/standard-directory/{OrgCode}/{StandardCode}/{StageCode}/{FolderPath}/_template/{FileName}</c></para>
+    ///
+    /// <para><b>实现 = 复用 <see cref="StandardFile"/> 再插一段</b>（⛔ 不重写一遍拼接逻辑 ——
+    /// 重写就会出现两套格式，而本类存在的唯一理由就是「只有一处权威」）。
+    /// 身份段规则（取 <c>Code</c> 原文、空则抛异常、保留段校验）因此**自动继承**。</para>
+    ///
+    /// <para><b>为什么插在文件名前</b>：源文件 <c>…/4记录文件/风险管理报告.doc</c> 与模板
+    /// <c>…/4记录文件/_template/风险管理报告.docx</c> 同层级并列 ⇒ 整文件夹搬迁/删除时两者一起走；
+    /// 且模板名与源名一致（仅扩展名可能不同），人工对照直观。</para>
+    ///
+    /// <para>⚠️ <b>换版归档</b>走 <see cref="Archive"/> ⇒
+    /// <c>…/_template/_archive/风险管理报告.docx.v1</c>，与源文件归档语义一致（同算法）。</para>
+    /// </summary>
+    /// <param name="orgCode">机构 <c>certification_body.Code</c></param>
+    /// <param name="standardCode">标准 <c>cert_iso_standard.Code</c>（GUID）</param>
+    /// <param name="stageCode">阶段 <c>cert_cert_stage.Code</c>（GUID）</param>
+    /// <param name="folderPath">相对配置根的文件夹路径，<c>/</c> 分隔；可为空（文件直接位于根）</param>
+    /// <param name="fileName">模板文件名（含扩展名，通常 <c>.docx</c> / <c>.xlsx</c>）</param>
+    public static string TemplateFile(
+        string? orgCode, string? standardCode, string? stageCode,
+        string? folderPath, string? fileName)
+    {
+        // StandardFile 已保证：以 / 开头、身份段非空、至少 5 段（库前缀 + 3 身份段 + 文件名）
+        var src = StandardFile(orgCode, standardCode, stageCode, folderPath, fileName);
+        var lastSlash = src.LastIndexOf('/');
+        return src[..lastSlash] + "/" + TemplateSegment + src[lastSlash..];
+    }
+
     #endregion
 
     #region 企业资料库（覆盖 + 归档 + 版本）
@@ -123,6 +196,13 @@ public static class PathBuilder
 
     /// <summary>
     /// 归档路径：在**文件名前**插入 <c>_archive</c> 段，并给文件名追加 <c>.v{版本号}</c>。
+    ///
+    /// <para>使用方：企业资料库（<c>enterprise-documents</c>）+ 企业原始资料库
+    /// （<c>enterprise-original-source</c>，36 号 D8）。
+    /// ⚠️ 标准目录库的**源文件**为单纯覆盖，不调用本方法；
+    /// 但 <see cref="TemplateSegment"/> 下的**空白模板换版时走本方法**
+    /// （`37` 号 §4.3：<c>…/_template/_archive/风险管理报告.docx.v1</c>）——
+    /// 模板是人工标注的资产，误覆盖不可挽回。</para>
     ///
     /// <para>对源文件与两种产物**同一套算法**（都是"父段 + <c>_archive</c> + 原名 + 后缀"）：</para>
     /// <code>
@@ -157,6 +237,41 @@ public static class PathBuilder
 
     #endregion
 
+    #region 企业原始资料库（企业散乱原始资料，输入库 + 版本管理）
+
+    /// <summary>
+    /// 企业原始资料库存储路径。
+    /// <para>格式：<c>/enterprise-original-source/{EnterpriseCode}/{StageCode}/{FolderPath}/{FileName}</c></para>
+    ///
+    /// <para>★ <b>为什么少一段（无 StandardCode）</b>：本库是<b>输入</b>库 —— 企业把散乱资料传上来时
+    /// 还没对标准，标准是后续规范化阶段才确定的。而 <see cref="EnterpriseFile"/> 是<b>输出</b>库，
+    /// 按「阶段 × 标准 × 槽位」组织。两者生命周期不同，混库会导致「重新规范化时分不清哪些是原始、
+    /// 哪些是产物」。</para>
+    ///
+    /// <para>★ <b>版本管理（D8）</b>：本库沿用企业资料库的**同文件夹归档**语义 ——
+    /// 替换文件时先 <c>Rename(旧 → <see cref="Archive"/>)</c> 再向<b>同一路径</b>写新字节，
+    /// 于是 <c>StoragePath</c> 恒定、外部引用（预览 / 下载 / 语义分析输入）永不失效。
+    /// 归档路径形如 <c>…/{Ent}/{Stage}/4记录文件/_archive/风险管理报告.doc.v3</c>。
+    /// ⛔ 归档算法只有 <see cref="Archive"/> 一个，禁止另写。</para>
+    ///
+    /// <para>⚠️ <b>历史版本在 MinIO 侧不可枚举</b>：本项目无「按前缀列举 MinIO 对象」的代码路径，
+    /// 历史版本清单一律走 DB（<c>cert_enterprise_original_file_version</c> 表）。</para>
+    /// </summary>
+    /// <param name="enterpriseCode">企业 <c>cert_enterprise.Code</c>（GUID 业务键原文）</param>
+    /// <param name="stageCode">阶段 <c>cert_cert_stage.Code</c>（GUID 业务键原文）</param>
+    /// <param name="folderPath">相对 <c>{Ent}/{Stage}/</c> 的文件夹路径，<c>/</c> 分隔；可为空（文件直接位于该阶段根）</param>
+    /// <param name="fileName">原始文件名（含扩展名）</param>
+    public static string EnterpriseOriginalSource(
+        string? enterpriseCode, string? stageCode, string? folderPath, string? fileName)
+        => Join(
+            DocumentLibraryPath.EnterpriseOriginalSourcePrefix,
+            Identity(enterpriseCode, "企业编码 EnterpriseCode"),
+            Identity(stageCode,     "阶段编码 StageCode"),
+            Folder(folderPath),
+            FileName(fileName));
+
+    #endregion
+
     #region 产物路径（预览 PDF / 提取 Markdown）
 
     /// <summary>
@@ -167,6 +282,7 @@ public static class PathBuilder
     /// 源：  /standard-directory/{Std}/{Stage}/4记录文件/风险管理报告.doc
     /// PDF：/standard-directory/{Std}/{Stage}/4记录文件/pdf/风险管理报告.doc.pdf
     /// MD： /standard-directory/{Std}/{Stage}/4记录文件/markdown/风险管理报告.doc.md
+    /// ED： /standard-directory/{Std}/{Stage}/4记录文件/editable/风险管理报告.doc.docx
     /// </code>
     ///
     /// <para><b>为什么从源路径派生，而不是重新拼装各编码段</b>：</para>
@@ -183,8 +299,8 @@ public static class PathBuilder
     /// 若产物只取 stem，两者会互相覆盖。保留原扩展名可**由构造保证唯一**。</para>
     /// </summary>
     /// <param name="storagePath">源文件在 MinIO 的存储路径</param>
-    /// <param name="productKind"><see cref="PdfSegment"/> 或 <see cref="MarkdownSegment"/></param>
-    /// <param name="targetExt">目标扩展名（含点，如 <c>.pdf</c> / <c>.md</c>）</param>
+    /// <param name="productKind"><see cref="PdfSegment"/> / <see cref="MarkdownSegment"/> / <see cref="EditableSegment"/></param>
+    /// <param name="targetExt">目标扩展名（含点，如 <c>.pdf</c> / <c>.md</c> / <c>.docx</c>）</param>
     /// <returns>产物路径（以 <c>/</c> 开头）；<paramref name="storagePath"/> 为空或段数不足时返回空串</returns>
     /// <remarks>
     /// <b>返回空串而非抛异常是刻意保留的契约</b>：4 处调用方（<c>OfficeConvertService</c> ×2、
@@ -195,9 +311,10 @@ public static class PathBuilder
     {
         if (string.IsNullOrWhiteSpace(storagePath)) return "";
 
-        if (productKind != PdfSegment && productKind != MarkdownSegment)
+        if (productKind != PdfSegment && productKind != MarkdownSegment && productKind != EditableSegment)
             throw new ArgumentException(
-                $"产物类型段必须是「{PdfSegment}」或「{MarkdownSegment}」，实际为「{productKind}」", nameof(productKind));
+                $"产物类型段必须是「{PdfSegment}」「{MarkdownSegment}」或「{EditableSegment}」，实际为「{productKind}」",
+                nameof(productKind));
 
         var segs = Segments(storagePath);
         if (segs.Length < 2) return "";
@@ -212,16 +329,30 @@ public static class PathBuilder
     }
 
     /// <summary>
-    /// 判断给定路径是否为「产物路径」（位于 <c>pdf/</c> 或 <c>markdown/</c> 段下）。
+    /// 判断给定路径是否为「产物路径」（位于 <c>pdf/</c>、<c>markdown/</c> 或 <c>editable/</c> 段下）。
     /// <para>用途：删除文件时避免把产物目录误当业务目录；以及排查历史脏数据。</para>
     /// </summary>
     public static bool IsProductPath(string? path)
         => Segments(path).Any(s => s.Equals(PdfSegment, StringComparison.OrdinalIgnoreCase)
-                                || s.Equals(MarkdownSegment, StringComparison.OrdinalIgnoreCase));
+                                || s.Equals(MarkdownSegment, StringComparison.OrdinalIgnoreCase)
+                                || s.Equals(EditableSegment, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>判断给定路径是否为「归档路径」（含 <c>_archive</c> 段）。</summary>
     public static bool IsArchivePath(string? path)
         => Segments(path).Any(s => s.Equals(ArchiveSegment, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// 判断给定路径是否为「空白模板路径」（含 <c>_template</c> 段）。
+    ///
+    /// <para>用途：① 删除标准文档时一并清理模板；② 排查「模板被误当业务文件」；
+    /// ③ 上传/替换时拒绝把模板写进业务目录。</para>
+    ///
+    /// <para>⚠️ 与 <see cref="IsProductPath"/> <b>并列而非包含</b> —— 模板不是产物
+    /// （产物可重算，模板是人工标注的资产）。所以 <see cref="IsProductPath"/> 不认
+    /// <c>_template</c>，本方法也不认 <c>pdf</c>/<c>markdown</c>/<c>editable</c>。</para>
+    /// </summary>
+    public static bool IsTemplatePath(string? path)
+        => Segments(path).Any(s => s.Equals(TemplateSegment, StringComparison.OrdinalIgnoreCase));
 
     #endregion
 

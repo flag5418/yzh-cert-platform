@@ -3,7 +3,7 @@
 -- 创建时间：2026-09-13
 -- 涉及表：6 张，共 55 列
 -- 
--- 执行方式：mysql -uroot -pYzh123456. yzh_cert_platform < rename_columns_pascalcase.sql
+-- 执行方式：mysql -uroot -p$MYSQL_ROOT_PASSWORD yzh_cert_platform < rename_columns_pascalcase.sql
 -- 回滚方式：见文件末尾 Rollback 部分
 -- ============================================================
 

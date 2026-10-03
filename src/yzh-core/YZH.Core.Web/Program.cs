@@ -30,6 +30,8 @@ builder.UseYzhCore(options =>
     {
         Path.Combine(bizRoot, "CertPlatform.Admin", "Assets", "EntityConfigs"),
         Path.Combine(bizRoot, "CertPlatform.Auditor", "Assets", "EntityConfigs"),
+        // ⛔ 缺 CertPlatform.Enterprise —— 该端未开工（见下方 AddCertPlatformEnterpriseServices 处的说明）。
+        //    企业端开工时必须在此加一行，否则该端 EntityConfig 静默空配置。
     };
 });
 
@@ -37,6 +39,22 @@ builder.UseYzhCore(options =>
 builder.Services.AddCertPlatformAdminServices();
 // 专家端（专家注册 / 专家登录）业务服务
 builder.Services.AddCertPlatformAuditorServices();
+
+// ⛔⛔ 企业端 **未开工**，此处刻意不调 AddCertPlatformEnterpriseServices() ⛔⛔
+//
+// 背景（2026-10-03 架构盘点发现）：`CertPlatform.Enterprise` 是一个 **100% 空壳项目** ——
+//   Controllers/ Services/ Entities/ 三个目录全空，全项目只有 .csproj + .DS_Store。
+//   但 `YZH.Core.Web.csproj` 引用了它，且 `Program.cs` 里既无 `AddApplicationPart`、
+//   也无 `BusinessEntityConfigPaths` 条目 ⇒ **一旦有人往里加 Controller，运行时静默不加载**
+//   （页面点开白屏，既无编译错误也无启动错误）。
+//
+// ⚠️ 这正是「后台/专家/企业三端已分层」的假象来源。开工前必须三件事一起做：
+//   ① 本处加 AddCertPlatformEnterpriseServices();
+//   ② 下方 AddApplicationPart 加 typeof(CertPlatform.Enterprise.Controllers.XxxController).Assembly;
+//   ③ 上方 BusinessEntityConfigPaths 加 Enterprise/Assets/EntityConfigs;
+//   缺任何一条 = 该端接口 404 / EntityConfig 静默空（标题=类型名、列全不显示）。
+//
+// 判定「未开工」的口径：企业端目录下出现第一个 Controller 文件时，本注释必须同步删除。
 
 // 注册审计日志数据库写入初始化服务（在启动时设置 IYzhAuditLogger.DbWriter）
 builder.Services.AddSingleton<IHostedService, AuditLogDbWriterInitializer>();
@@ -46,8 +64,14 @@ builder.Services.AddSingleton<IHostedService, AuditLogDbWriterInitializer>();
 // 已通过 AddCertPlatformAdminServices() 统一注册
 
 // 读取 JWT 配置
+// ⛔ 密钥只允许来自 appsettings.json（已被 .gitignore 忽略）或环境变量；
+//    代码内禁止任何密钥字面量，配置缺失时直接启动失败（缺失即失败 > 静默用弱默认值）。
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var jwtSecret = jwtSettings["SecretKey"] ?? "AA3627441FFA4B5DB4E64A29B53CE525";
+var jwtSecret = jwtSettings["SecretKey"];
+if (string.IsNullOrWhiteSpace(jwtSecret))
+    throw new InvalidOperationException(
+        "JwtSettings:SecretKey 未配置。请在 src/yzh-core/YZH.Core.Web/appsettings.json " +
+        "或环境变量 JwtSettings__SecretKey 中提供（⛔ 不要把密钥写进代码）。");
 var jwtIssuer = jwtSettings["Issuer"] ?? "YZH.Core";
 var jwtAudience = jwtSettings["Audience"] ?? "YZH.Core.Client";
 
@@ -99,6 +123,8 @@ builder.Services.AddControllers(options =>
 .AddApplicationPart(typeof(CertPlatform.Admin.Controllers.System.QueueMonitorController).Assembly)
 // 专家端控制器（api/AuditorAuth/*）
 .AddApplicationPart(typeof(CertPlatform.Auditor.Controllers.AuditorAuthController).Assembly)
+// ⛔ 缺 CertPlatform.Enterprise —— 该端未开工。开工时必须加 .AddApplicationPart(...)，
+//    否则该端 Controller 运行时不被发现 ⇒ 路由 404 且零启动错误。
 .AddJsonOptions(json =>
 {
     // PascalCase 序列化（与实体属性名一致）

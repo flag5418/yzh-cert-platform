@@ -2,7 +2,7 @@
 /**
  * ConfigTab —— 目录配置管理（管理入口：改根名/状态/级联清理）
  *
- * 后端：GET/POST /api/Workflow/StandardDirectory/configs*
+ * 后端：GET/POST /api/Admin/Workflow/StandardDirectory/configs*
  * 表：cert_standard_directory_config（一行 = 一个「机构 × 标准 × 阶段」）
  *
  * ★ 契约（2026-09-27 决策⑳修订 + ㉑）：
@@ -65,9 +65,9 @@ function pickItems(res: any): any[] {
 async function loadOptions() {
   try {
     const [stdRes, stageRes, bodyRes] = await Promise.all([
-      yzhApi.post('/api/Foundation/ISOStandard/filter', { Page: 1, PageSize: 1000 }),
-      yzhApi.post('/api/Foundation/CertStage/filter', { Page: 1, PageSize: 1000 }),
-      yzhApi.post('/api/Foundation/CertificationBody/filter', { Page: 1, PageSize: 1000 }),
+      yzhApi.post('/api/Admin/Foundation/ISOStandard/filter', { Page: 1, PageSize: 1000 }),
+      yzhApi.post('/api/Admin/Foundation/CertStage/filter', { Page: 1, PageSize: 1000 }),
+      yzhApi.post('/api/Admin/Foundation/CertificationBody/filter', { Page: 1, PageSize: 1000 }),
     ])
     standards.value = pickItems(stdRes)
     stages.value = pickItems(stageRes)

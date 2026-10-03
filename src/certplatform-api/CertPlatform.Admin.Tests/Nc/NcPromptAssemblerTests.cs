@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using CertPlatform.Shared.Entities.Cert;
+using CertPlatform.Admin.Entities.Cert;
 using Xunit;
 
 namespace CertPlatform.Admin.Tests.Nc;

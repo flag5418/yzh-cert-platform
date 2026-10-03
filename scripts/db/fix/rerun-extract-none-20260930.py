@@ -27,6 +27,7 @@
   python3 scripts/db/fix/rerun-extract-none-20260930.py            # 预览
   python3 scripts/db/fix/rerun-extract-none-20260930.py --apply    # 执行
 """
+import os
 import subprocess
 import sys
 import uuid
@@ -36,7 +37,7 @@ DB = "yzh_cert_platform"
 # ⚠️ 必须带 `-i`：批量写入是把整批 SQL 从 stdin 灌给容器内 mysql，
 #    少了 `-i` 时 docker exec 不转发 stdin ⇒ mysql 收到空输入、exit 0、无 stderr
 #    ⇒ 脚本会误报「已入队 N 个」而 DB 里一行都没有（实测踩过）。
-MYSQL = ["docker", "exec", "-i", "yzh-mysql", "mysql", "-uroot", "-pYzh123456.",
+MYSQL = ["docker", "exec", "-i", "yzh-mysql", "mysql", "-uroot", "-p" + os.environ.get('MYSQL_ROOT_PASSWORD', ''),
          "--default-character-set=utf8mb4", "-N", "-B", DB, "-e"]
 LOCK_TABLE = "cert_standard_directory_file"
 

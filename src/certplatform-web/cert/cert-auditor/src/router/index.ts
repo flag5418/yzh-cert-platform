@@ -85,6 +85,14 @@ const routes: RouteRecordRaw[] = [
         name: 'Resources',
         component: () => import('@/pages/resources/index.vue')
       },
+      // ★ 企业原始资料管理（MENU_AUD_11，36 号）—— 企业散乱原始资料 → 双产物 → 语义分析 → L3 画像
+      //   ⛔ 必须与菜单 MENU_AUD_11 成对落地：本端路由是静态的，菜单 Url 无对应子路由 ⇒ 点击白屏
+      //     且守卫 R12 报「菜单 Url 无对应路由」。当前为 P0 占位页，P3 替换页面内容。
+      {
+        path: 'enterprise-original',
+        name: 'EnterpriseOriginal',
+        component: () => import('@/pages/enterprise-original/index.vue')
+      },
       {
         path: 'organization',
         name: 'Organization',

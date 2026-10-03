@@ -32,6 +32,14 @@
     <ProjectReference Include="..\..\certplatform-api\CertPlatform.Shared\CertPlatform.Shared.csproj" Aliases="CertPlatform,SharedEntities" />
     <ProjectReference Include="..\..\certplatform-api\CertPlatform.Admin\CertPlatform.Admin.csproj" />
     <ProjectReference Include="..\..\certplatform-api\CertPlatform.Auditor\CertPlatform.Auditor.csproj" />
+    <!-- ⛔ CertPlatform.Enterprise = **未开工的空壳项目**（Controllers/Services/Entities 三目录全空，
+         全项目仅 .csproj + .DS_Store）。本引用只为让 sln 保持三端形状。
+         ⚠️ 往该端加代码时必须同步三处，否则【运行时静默失效、零启动错误】：
+           ① Program.cs: AddCertPlatformEnterpriseServices()
+           ② Program.cs: AddApplicationPart(typeof(CertPlatform.Enterprise.Controllers.XxxController).Assembly)
+           ③ Program.cs: BusinessEntityConfigPaths 加 Enterprise/Assets/EntityConfigs
+         漏 ①② ⇒ 接口 404；漏 ③ ⇒ EntityConfig 静默空（标题=类型名、页面有数据行但一列都不显示）。
+         详情：docs/10-YZH架构/24-后端实体归属清单-V1.md §五 A3 -->
     <ProjectReference Include="..\..\certplatform-api\CertPlatform.Enterprise\CertPlatform.Enterprise.csproj" />
   </ItemGroup>
 

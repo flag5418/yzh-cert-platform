@@ -6,7 +6,7 @@ using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
-using CertPlatform.Shared.Entities.Cert;
+using CertPlatform.Admin.Entities.Cert;
 using CertPlatform.Shared.Fill;
 using CertPlatform.Shared.Fill.Resolvers;
 
@@ -28,7 +28,14 @@ namespace CertPlatform.Admin.Controllers.Cert;
 /// <c>enterprise-attrs</c>（企业属性目录 —— 后台配置取值表达式时「选企业属性」用）。</para>
 /// </summary>
 [ApiController]
-[Route("api/Cert/[controller]")]
+/// <para><b>★ 端标记（2026-10-03）</b>：路由加 <c>Admin/</c> 段，与专家端 <c>/api/Auditor/*</c> 对称。
+/// <para>背景：后台端 20 个 Controller 此前零端标记，4 个连业务域前缀都没有（<c>api/AIUsage</c>
+/// <c>api/PromptTemplate</c> <c>api/ValidationRule</c> <c>api/ReportDefinition</c>），
+/// 且 <c>api/System/[controller]</c> 与框架层 <c>YZH.Core.Web</c> 的 <c>api/System/*</c> 撞前缀。</para>
+/// <para><b>不影响授权</b>：<c>ApiCode = Sha256("{METHOD}|{路由末段}|{动作名}")</c>（ApiScanner.cs:326-331）
+/// 只取路由<b>末段</b>作控制器名，本 Controller 的末段未变 ⇒ <c>ApiCode</c> 不变 ⇒
+/// <b>角色-接口关联不断裂</b>，无需重跑 ApiSync。</para>
+[Route("api/Admin/Cert/[controller]")]
 public class FillParamDefController : YzhControllerBase<FillParamDef>
 {
     private readonly IDbOrm _db;

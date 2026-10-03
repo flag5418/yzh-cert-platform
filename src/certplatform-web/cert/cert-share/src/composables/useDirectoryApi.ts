@@ -12,30 +12,30 @@ import type {
 } from '@share/types'
 
 // ========================================================
-// StandardDirectoryController (/api/Workflow/StandardDirectory/*)
+// StandardDirectoryController (/api/Admin/Workflow/StandardDirectory/*)
 // ========================================================
 
 /** 组织树 */
 export async function getOrganizationTree(): Promise<OrgTreeNode[]> {
-  const res = await yzhApi.get<ApiResponse<OrgTreeNode[]>>('/api/Workflow/StandardDirectory/organization-tree')
+  const res = await yzhApi.get<ApiResponse<OrgTreeNode[]>>('/api/Admin/Workflow/StandardDirectory/organization-tree')
   return unwrapOk(res, '获取组织树失败')
 }
 
 /** 获取所有目录配置 */
 export async function getDirectoryConfigs(): Promise<StandardDirectoryConfig[]> {
-  const res = await yzhApi.get<ApiResponse<StandardDirectoryConfig[]>>('/api/Workflow/StandardDirectory/configs')
+  const res = await yzhApi.get<ApiResponse<StandardDirectoryConfig[]>>('/api/Admin/Workflow/StandardDirectory/configs')
   return unwrapOk(res, '获取目录配置列表失败')
 }
 
 /** 获取单个目录配置 */
 export async function getDirectoryConfig(directoryCode: string): Promise<StandardDirectoryConfig | null> {
-  const res = await yzhApi.get<ApiResponse<StandardDirectoryConfig>>(`/api/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}`)
+  const res = await yzhApi.get<ApiResponse<StandardDirectoryConfig>>(`/api/Admin/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}`)
   return unwrapOk(res, '获取目录配置失败') ?? null
 }
 
 /** 创建目录配置 */
 export async function createDirectoryConfig(config: Partial<StandardDirectoryConfig>): Promise<BizResult> {
-  return await yzhApi.post<BizResult>('/api/Workflow/StandardDirectory/configs/create', config)
+  return await yzhApi.post<BizResult>('/api/Admin/Workflow/StandardDirectory/configs/create', config)
 }
 
 /**
@@ -48,7 +48,7 @@ export async function ensureDirectoryConfig(keys: {
   StageCode: string
 }): Promise<StandardDirectoryConfig | null> {
   const res = await yzhApi.post<ApiResponse<StandardDirectoryConfig>>(
-    '/api/Workflow/StandardDirectory/configs/ensure',
+    '/api/Admin/Workflow/StandardDirectory/configs/ensure',
     keys
   )
   return unwrapOk(res, '初始化目录配置失败') ?? null
@@ -56,29 +56,29 @@ export async function ensureDirectoryConfig(keys: {
 
 /** 更新目录配置 */
 export async function updateDirectoryConfig(directoryCode: string, config: Partial<StandardDirectoryConfig>): Promise<BizResult> {
-  return await yzhApi.post<BizResult>(`/api/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}`, config)
+  return await yzhApi.post<BizResult>(`/api/Admin/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}`, config)
 }
 
 /** 删除目录配置 */
 export async function deleteDirectoryConfig(directoryCode: string): Promise<BizResult> {
-  return await yzhApi.post<BizResult>(`/api/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}/delete`)
+  return await yzhApi.post<BizResult>(`/api/Admin/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}/delete`)
 }
 
 /** 获取文件夹列表 */
 export async function getFolders(directoryCode: string): Promise<StandardDirectoryFolder[]> {
-  const res = await yzhApi.get<ApiResponse<StandardDirectoryFolder[]>>(`/api/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}/folders`)
+  const res = await yzhApi.get<ApiResponse<StandardDirectoryFolder[]>>(`/api/Admin/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}/folders`)
   return unwrapOk(res, '获取文件夹列表失败')
 }
 
 /** 获取文件夹扁平列表（按 ParentCode 过滤用） */
 export async function getFoldersFlat(directoryCode: string): Promise<StandardDirectoryFolder[]> {
-  const res = await yzhApi.get<ApiResponse<StandardDirectoryFolder[]>>(`/api/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}/folders-flat`)
+  const res = await yzhApi.get<ApiResponse<StandardDirectoryFolder[]>>(`/api/Admin/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}/folders-flat`)
   return unwrapOk(res, '获取文件夹扁平列表失败')
 }
 
 /** 创建文件夹 */
 export async function createFolder(directoryCode: string, folder: Partial<StandardDirectoryFolder>): Promise<BizResult> {
-  return await yzhApi.post<BizResult>(`/api/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}/folders/create`, folder)
+  return await yzhApi.post<BizResult>(`/api/Admin/Workflow/StandardDirectory/configs/${encodeURIComponent(directoryCode)}/folders/create`, folder)
 }
 
 /** 业务响应体：这些端点始终 HTTP 200，业务成败看 code（200/400） */
@@ -93,39 +93,39 @@ export interface BizResult {
 
 /** 更新文件夹 */
 export async function updateFolder(folderCode: string, folder: Partial<StandardDirectoryFolder>): Promise<BizResult> {
-  return await yzhApi.post<BizResult>(`/api/Workflow/StandardDirectory/folders/${encodeURIComponent(folderCode)}`, folder)
+  return await yzhApi.post<BizResult>(`/api/Admin/Workflow/StandardDirectory/folders/${encodeURIComponent(folderCode)}`, folder)
 }
 
 /** 删除文件夹 */
 export async function deleteFolder(folderCode: string): Promise<BizResult> {
-  return await yzhApi.post<BizResult>(`/api/Workflow/StandardDirectory/folders/${encodeURIComponent(folderCode)}/delete`)
+  return await yzhApi.post<BizResult>(`/api/Admin/Workflow/StandardDirectory/folders/${encodeURIComponent(folderCode)}/delete`)
 }
 
 /** 获取文件列表 */
 export async function getFiles(folderCode: string): Promise<StandardDirectoryFile[]> {
-  const res = await yzhApi.get<ApiResponse<StandardDirectoryFile[]>>(`/api/Workflow/StandardDirectory/folders/${encodeURIComponent(folderCode)}/files`)
+  const res = await yzhApi.get<ApiResponse<StandardDirectoryFile[]>>(`/api/Admin/Workflow/StandardDirectory/folders/${encodeURIComponent(folderCode)}/files`)
   return unwrapOk(res, '获取文件列表失败')
 }
 
 /** 获取目录根级文件（无文件夹的文件） */
 export async function getRootFiles(directoryCode: string): Promise<StandardDirectoryFile[]> {
-  const res = await yzhApi.get<ApiResponse<StandardDirectoryFile[]>>(`/api/Workflow/StandardDirectory/directories/${encodeURIComponent(directoryCode)}/root-files`)
+  const res = await yzhApi.get<ApiResponse<StandardDirectoryFile[]>>(`/api/Admin/Workflow/StandardDirectory/directories/${encodeURIComponent(directoryCode)}/root-files`)
   return unwrapOk(res, '获取根级文件列表失败')
 }
 
 /** 更新文件 */
 export async function updateFile(fileCode: string, file: Partial<StandardDirectoryFile>): Promise<BizResult> {
-  return await yzhApi.post<BizResult>(`/api/Workflow/StandardDirectory/files/${encodeURIComponent(fileCode)}`, file)
+  return await yzhApi.post<BizResult>(`/api/Admin/Workflow/StandardDirectory/files/${encodeURIComponent(fileCode)}`, file)
 }
 
 /** 删除文件 */
 export async function deleteFile(fileCode: string): Promise<BizResult> {
-  return await yzhApi.post<BizResult>(`/api/Workflow/StandardDirectory/files/${encodeURIComponent(fileCode)}/delete`)
+  return await yzhApi.post<BizResult>(`/api/Admin/Workflow/StandardDirectory/files/${encodeURIComponent(fileCode)}/delete`)
 }
 
 /** 下载文件（带鉴权取回 Blob；预览与下载共用） */
 export async function downloadFile(storagePath: string): Promise<Blob> {
-  return yzhApi.getBlob('/api/Workflow/StandardDirectory/download', { storagePath })
+  return yzhApi.getBlob('/api/Admin/Workflow/StandardDirectory/download', { storagePath })
 }
 
 /** 重试转换失败的文件（重新入队） */
@@ -136,7 +136,7 @@ export async function retryFailedConversions(): Promise<{
   queueCount: number
 }> {
   // 该端点始终 HTTP 200，业务结果在信封 success；失败详情在 err，载荷在 data
-  const res = await yzhApi.post<any>('/api/Workflow/StandardDirectory/retry-failed-conversions')
+  const res = await yzhApi.post<any>('/api/Admin/Workflow/StandardDirectory/retry-failed-conversions')
   return {
     ok: !!res?.success,
     message: res?.err || res?.message || '',
@@ -190,7 +190,7 @@ export async function uploadInit(
 
   console.log('[uploadInit] Sending:', { DirectoryCode: directoryCode, Folders: folderItems, Files: fileItems })
 
-  const res = await yzhApi.post<ApiResponse<any>>('/api/Workflow/StandardDirectory/upload-init', {
+  const res = await yzhApi.post<ApiResponse<any>>('/api/Admin/Workflow/StandardDirectory/upload-init', {
     DirectoryCode: directoryCode,
     // 决策⑳修订：主键含 OrgCode —— 兜底回退按三键定位，避免跨机构误命中
     OrgCode: orgCode || undefined,
@@ -233,7 +233,7 @@ export async function uploadFile(taskId: string, fileCode: string, file: File): 
   formData.append('TaskId', taskId)
   formData.append('FileCode', fileCode)
   const token = tokenStore.get()
-  const res = await fetch('/api/Workflow/StandardDirectory/upload-file-v2', {
+  const res = await fetch('/api/Admin/Workflow/StandardDirectory/upload-file-v2', {
     method: 'POST',
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -252,7 +252,7 @@ export async function replaceFile(fileCode: string, file: File): Promise<{ queue
   const formData = new FormData()
   formData.append('File', file)
   const token = tokenStore.get()
-  const res = await fetch(`/api/Workflow/StandardDirectory/files/${encodeURIComponent(fileCode)}/replace`, {
+  const res = await fetch(`/api/Admin/Workflow/StandardDirectory/files/${encodeURIComponent(fileCode)}/replace`, {
     method: 'POST',
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -266,7 +266,7 @@ export async function replaceFile(fileCode: string, file: File): Promise<{ queue
 
 /** 上传确认（激活文件 + 创建转换队列）；业务失败（success=false）必须抛错，否则页面误报「上传成功」 */
 export async function uploadConfirm(taskId: string): Promise<{ queueCode: string }> {
-  const res = await yzhApi.post<any>('/api/Workflow/StandardDirectory/upload-confirm', { TaskId: taskId })
+  const res = await yzhApi.post<any>('/api/Admin/Workflow/StandardDirectory/upload-confirm', { TaskId: taskId })
   if (!res?.success) {
     throw new Error(res?.err || res?.message || '上传确认失败')
   }
@@ -277,7 +277,7 @@ export async function uploadConfirm(taskId: string): Promise<{ queueCode: string
 /** 上传取消（回滚） */
 export async function uploadCancel(taskId: string): Promise<void> {
   expectOk(
-    await yzhApi.post<ApiResponse<void>>('/api/Workflow/StandardDirectory/upload-cancel', { TaskId: taskId }),
+    await yzhApi.post<ApiResponse<void>>('/api/Admin/Workflow/StandardDirectory/upload-cancel', { TaskId: taskId }),
     '取消上传失败',
   )
 }
@@ -286,7 +286,7 @@ export async function uploadCancel(taskId: string): Promise<void> {
 export async function getUploadStatus(taskId: string): Promise<FileUploadProgress[]> {
   // 注意：get 的第二个参数就是查询对象，不能再包一层 { params: {...} }
   // （否则会序列化成 ?params=[object Object]，后端 400）
-  const res = await yzhApi.get<ApiResponse<FileUploadProgress[]>>('/api/Workflow/StandardDirectory/upload-status', { taskId })
+  const res = await yzhApi.get<ApiResponse<FileUploadProgress[]>>('/api/Admin/Workflow/StandardDirectory/upload-status', { taskId })
   return unwrapOk(res, '获取上传状态失败')
 }
 
@@ -329,7 +329,7 @@ export interface StageFolderNode {
 
 export async function getStageFileTree(directoryCode: string): Promise<{ folders: StageFolderNode[]; statistics?: { TotalFolders: number; TotalFiles: number; ConfiguredFiles: number } }> {
   const res = await yzhApi.get<ApiResponse<{ Folders: StageFolderNode[]; Statistics?: any }>>(
-    `/api/Workflow/StandardDirectory/stage-files/${encodeURIComponent(directoryCode)}`,
+    `/api/Admin/Workflow/StandardDirectory/stage-files/${encodeURIComponent(directoryCode)}`,
   )
   expectOk(res, '获取阶段文件树失败')
   return { folders: res.data?.Folders ?? [], statistics: res.data?.Statistics }
@@ -337,7 +337,7 @@ export async function getStageFileTree(directoryCode: string): Promise<{ folders
 
 /** 获取活跃队列 */
 export async function getActiveQueue(directoryCode: string): Promise<any[]> {
-  const res = await yzhApi.get<ApiResponse<any[]>>('/api/Workflow/StandardDirectory/active-queue', { directoryCode })
+  const res = await yzhApi.get<ApiResponse<any[]>>('/api/Admin/Workflow/StandardDirectory/active-queue', { directoryCode })
   return unwrapOk(res, '获取活跃队列失败')
 }
 
@@ -348,7 +348,7 @@ export async function getActiveQueue(directoryCode: string): Promise<any[]> {
  */
 export async function getConvertProgress(taskId: string): Promise<any> {
   const res = await yzhApi.post<ApiResponse<any>>(
-    '/api/Workflow/StandardDirectory/convert/progress',
+    '/api/Admin/Workflow/StandardDirectory/convert/progress',
     undefined,
     { params: { taskId } }
   )
@@ -362,32 +362,32 @@ export async function getConvertProgress(taskId: string): Promise<any> {
  */
 export async function cancelConvert(queueCode: string): Promise<BizResult> {
   return await yzhApi.post<BizResult>(
-    '/api/Workflow/StandardDirectory/convert/cancel',
+    '/api/Admin/Workflow/StandardDirectory/convert/cancel',
     undefined,
     { params: { queueCode } }
   )
 }
 
 // ========================================================
-// DirectoryTemplateController (/api/Foundation/DirectoryTemplate/*)
+// DirectoryTemplateController (/api/Admin/Foundation/DirectoryTemplate/*)
 // ========================================================
 
 /** 获取目录模板树 */
 export async function getTemplateTree(configCode: string): Promise<DirectoryTemplate[]> {
-  const res = await yzhApi.get<ApiResponse<DirectoryTemplate[]>>('/api/Foundation/DirectoryTemplate/tree', { configCode })
+  const res = await yzhApi.get<ApiResponse<DirectoryTemplate[]>>('/api/Admin/Foundation/DirectoryTemplate/tree', { configCode })
   return unwrapOk(res, '获取目录模板树失败')
 }
 
 /** 添加模板文件夹 */
 export async function addTemplateFolder(folder: Partial<DirectoryTemplate>): Promise<DirectoryTemplate> {
-  const res = await yzhApi.post<ApiResponse<DirectoryTemplate>>('/api/Foundation/DirectoryTemplate/addFolder', folder)
+  const res = await yzhApi.post<ApiResponse<DirectoryTemplate>>('/api/Admin/Foundation/DirectoryTemplate/addFolder', folder)
   return unwrapOk(res, '新增模板文件夹失败')
 }
 
 /** 更新模板文件夹 */
 export async function updateTemplateFolder(folder: Partial<DirectoryTemplate>): Promise<void> {
   expectOk(
-    await yzhApi.post<ApiResponse<void>>('/api/Foundation/DirectoryTemplate/updateFolder', folder),
+    await yzhApi.post<ApiResponse<void>>('/api/Admin/Foundation/DirectoryTemplate/updateFolder', folder),
     '更新模板文件夹失败',
   )
 }
@@ -395,7 +395,7 @@ export async function updateTemplateFolder(folder: Partial<DirectoryTemplate>): 
 /** 删除模板文件夹 */
 export async function deleteTemplateFolder(code: string): Promise<void> {
   expectOk(
-    await yzhApi.post<ApiResponse<void>>(`/api/Foundation/DirectoryTemplate/deleteFolder?code=${encodeURIComponent(code)}`),
+    await yzhApi.post<ApiResponse<void>>(`/api/Admin/Foundation/DirectoryTemplate/deleteFolder?code=${encodeURIComponent(code)}`),
     '删除模板文件夹失败',
   )
 }
@@ -405,7 +405,7 @@ export async function uploadTemplateFile(file: File, configCode: string): Promis
   const formData = new FormData()
   formData.append('file', file)
   const res = await yzhApi.post<ApiResponse<string>>(
-    `/api/Foundation/DirectoryTemplate/uploadTemplateFile?configCode=${encodeURIComponent(configCode)}`,
+    `/api/Admin/Foundation/DirectoryTemplate/uploadTemplateFile?configCode=${encodeURIComponent(configCode)}`,
     formData,
     { headers: { 'Content-Type': 'multipart/form-data' } } as any,
   )
@@ -414,13 +414,13 @@ export async function uploadTemplateFile(file: File, configCode: string): Promis
 
 /** 下载模板文件（带鉴权取回 Blob） */
 export async function downloadTemplateFile(storagePath: string): Promise<Blob> {
-  return yzhApi.getBlob('/api/Foundation/DirectoryTemplate/downloadTemplateFile', { storagePath })
+  return yzhApi.getBlob('/api/Admin/Foundation/DirectoryTemplate/downloadTemplateFile', { storagePath })
 }
 
 /** 删除模板文件 */
 export async function deleteTemplateFile(storagePath: string): Promise<void> {
   expectOk(
-    await yzhApi.post<ApiResponse<void>>(`/api/Foundation/DirectoryTemplate/deleteTemplateFile?storagePath=${encodeURIComponent(storagePath)}`),
+    await yzhApi.post<ApiResponse<void>>(`/api/Admin/Foundation/DirectoryTemplate/deleteTemplateFile?storagePath=${encodeURIComponent(storagePath)}`),
     '删除模板文件失败',
   )
 }
@@ -428,7 +428,7 @@ export async function deleteTemplateFile(storagePath: string): Promise<void> {
 /** 重命名模板文件 */
 export async function renameTemplateFile(oldPath: string, newPath: string): Promise<void> {
   expectOk(
-    await yzhApi.post<ApiResponse<void>>(`/api/Foundation/DirectoryTemplate/renameTemplateFile?oldPath=${encodeURIComponent(oldPath)}&newPath=${encodeURIComponent(newPath)}`),
+    await yzhApi.post<ApiResponse<void>>(`/api/Admin/Foundation/DirectoryTemplate/renameTemplateFile?oldPath=${encodeURIComponent(oldPath)}&newPath=${encodeURIComponent(newPath)}`),
     '重命名模板文件失败',
   )
 }
@@ -439,20 +439,20 @@ export async function renameTemplateFile(oldPath: string, newPath: string): Prom
 
 /** 获取队列列表 */
 export async function getQueueList(params: { Type?: string; Status?: string; StartTime?: string; EndTime?: string; Page?: number; Rows?: number }): Promise<any> {
-  const res = await yzhApi.post<ApiResponse<any>>('/api/System/QueueMonitor/list', params)
+  const res = await yzhApi.post<ApiResponse<any>>('/api/Admin/System/QueueMonitor/list', params)
   return unwrapOk(res, '获取队列列表失败')
 }
 
 /** 获取队列详情 */
 export async function getQueueDetail(queueCode: string): Promise<any> {
-  const res = await yzhApi.post<ApiResponse<any>>('/api/System/QueueMonitor/detail', { QueueCode: queueCode })
+  const res = await yzhApi.post<ApiResponse<any>>('/api/Admin/System/QueueMonitor/detail', { QueueCode: queueCode })
   return unwrapOk(res, '获取队列详情失败')
 }
 
 /** 取消队列 */
 export async function cancelQueue(queueCode: string): Promise<void> {
   expectOk(
-    await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/cancel', { QueueCode: queueCode }),
+    await yzhApi.post<ApiResponse<void>>('/api/Admin/System/QueueMonitor/cancel', { QueueCode: queueCode }),
     '取消队列失败',
   )
 }
@@ -460,7 +460,7 @@ export async function cancelQueue(queueCode: string): Promise<void> {
 /** 重试队列 */
 export async function retryQueue(queueCode: string): Promise<void> {
   expectOk(
-    await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/retry', { QueueCode: queueCode }),
+    await yzhApi.post<ApiResponse<void>>('/api/Admin/System/QueueMonitor/retry', { QueueCode: queueCode }),
     '重试队列失败',
   )
 }
@@ -468,20 +468,20 @@ export async function retryQueue(queueCode: string): Promise<void> {
 /** 重试任务（准则 A：业务键 TaskCode） */
 export async function retryTask(taskCode: string): Promise<void> {
   expectOk(
-    await yzhApi.post<ApiResponse<void>>('/api/System/QueueMonitor/task/retry', { TaskCode: taskCode }),
+    await yzhApi.post<ApiResponse<void>>('/api/Admin/System/QueueMonitor/task/retry', { TaskCode: taskCode }),
     '重试子任务失败',
   )
 }
 
 /** 获取队列状态统计 */
 export async function getQueueStatus(): Promise<QueueStatus> {
-  const res = await yzhApi.post<ApiResponse<QueueStatus>>('/api/System/QueueMonitor/status')
+  const res = await yzhApi.post<ApiResponse<QueueStatus>>('/api/Admin/System/QueueMonitor/status')
   return unwrapOk(res, '获取队列状态失败')
 }
 
 /** 查找资源锁 */
 export async function findResourceLock(resourceTable: string, resourceCodes: string[]): Promise<any[]> {
-  const res = await yzhApi.post<ApiResponse<any[]>>('/api/System/QueueMonitor/resource/locked', {
+  const res = await yzhApi.post<ApiResponse<any[]>>('/api/Admin/System/QueueMonitor/resource/locked', {
     ResourceTable: resourceTable,
     ResourceCodes: resourceCodes,
   })

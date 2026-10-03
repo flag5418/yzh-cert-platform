@@ -1,7 +1,7 @@
 <!--
   ExecutionResultPanel.vue — 工作流执行结果面板（共享层）
 
-  数据来源：`POST /api/Workflow/test/run`（整流）的 `data`，契约见
+  数据来源：`POST /api/Admin/Workflow/test/run`（整流）的 `data`，契约见
   `CertPlatform.Admin/Services/Workflow/Models/TaskExecutionModels.cs`。
 
   层次（阶段四 2026-09-22 扩展）：

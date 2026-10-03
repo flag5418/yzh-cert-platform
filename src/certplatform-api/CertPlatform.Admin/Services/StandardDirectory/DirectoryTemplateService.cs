@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
-using CertPlatform.Shared.Entities.Cert;
+using CertPlatform.Admin.Entities.Cert;
 
 namespace CertPlatform.Admin.Services.StandardDirectory;
 

@@ -18,7 +18,7 @@ import { yzhApi } from '@yzh-core'
 import type { ApiResponse } from '@yzh-core'
 import { unwrap } from '@yzh-core'
 
-const BASE = '/api/Cert/FillParamDef'
+const BASE = '/api/Admin/Cert/FillParamDef'
 
 /** 下拉选项（value = Code，label = 显示名，no = 业务编号） */
 export interface ScopeOption {

@@ -10,7 +10,7 @@
 -- 取值：FULL（整流完整测试）| NODE（任意单节点）| AI_NODE（AI 节点）
 -- 默认 FULL：存量任务都是整流测试，语义正确。
 --
--- 执行：docker exec -i yzh-mysql mysql -uroot -p'Yzh123456.' < 本文件
+-- 执行：docker exec -i yzh-mysql mysql -uroot -p'$MYSQL_ROOT_PASSWORD' < 本文件
 -- 幂等：MySQL 8.0 不支持 ADD COLUMN IF NOT EXISTS，重复执行会报 1060，
 --       可忽略；或先执行下方查询确认列不存在。
 
