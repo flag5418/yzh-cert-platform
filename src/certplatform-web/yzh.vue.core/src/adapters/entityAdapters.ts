@@ -214,6 +214,11 @@ export function toSearchFields(config: EntityConfigDto | null): SearchField[] {
 
 // ========================================================
 // AD-3 EntityConfig → YzhAction[]（Toolbar / RowButtons）
+//
+// 按钮 type 三档制（25 号 §四 · S03）：primary 主操作 / danger 危险 /
+// default 中性（含导出、导入、自定义动作、启用、禁用 —— 启停是可逆状态
+// 切换，不是危险动作；状态色归 S08 徽章，不属按钮）。
+// ⛔ 禁 info / success / warning：灰=视觉像禁用，绿橙=状态色。
 // ========================================================
 
 /** 工具栏按钮（声明式） */
@@ -223,11 +228,11 @@ export function toToolbarActions(config: EntityConfigDto | null): YzhAction[] {
   const btns: YzhAction[] = []
   if (tb.Add !== false) btns.push({ key: 'add', text: '新增', type: 'primary' })
   if (tb.Delete !== false) btns.push({ key: 'delete', text: '批量删除', type: 'danger' })
-  if (tb.Export !== false) btns.push({ key: 'export', text: '导出', type: 'success' })
-  if (tb.Import !== false) btns.push({ key: 'import', text: '导入', type: 'warning' })
+  if (tb.Export !== false) btns.push({ key: 'export', text: '导出', type: 'default' })
+  if (tb.Import !== false) btns.push({ key: 'import', text: '导入', type: 'default' })
   if (tb.CustomButtons) {
     for (const [label, method] of Object.entries(tb.CustomButtons)) {
-      btns.push({ key: `custom:${method}`, text: label, type: 'info' })
+      btns.push({ key: `custom:${method}`, text: label, type: 'default' })
     }
   }
   return btns
@@ -277,7 +282,7 @@ export function toRowActions(
   const otherActions: YzhAction[] = otherEntries.map(([method, label]) => ({
     key: `custom:${method}`,
     text: label,
-    type: 'info' as const,
+    type: 'default' as const,
   }))
 
   // ── 分支 1：CustomButtons 含 enable/disable（key = custom:方法名，走 /action/{method}）
@@ -289,9 +294,9 @@ export function toRowActions(
       const disableEntry = stateEntries.find(([m]) => m.toLowerCase() === 'disable')
       const enableEntry = stateEntries.find(([m]) => m.toLowerCase() === 'enable')
       if (on && disableEntry) {
-        actions.push({ key: `custom:${disableEntry[0]}`, text: disableEntry[1], type: 'warning' })
+        actions.push({ key: `custom:${disableEntry[0]}`, text: disableEntry[1], type: 'default' })
       } else if (!on && enableEntry) {
-        actions.push({ key: `custom:${enableEntry[0]}`, text: enableEntry[1], type: 'success' })
+        actions.push({ key: `custom:${enableEntry[0]}`, text: enableEntry[1], type: 'default' })
       }
       actions.push(...otherActions)
       return actions
@@ -307,8 +312,8 @@ export function toRowActions(
       return [
         ...base,
         on
-          ? { key: 'toggle-valid', text: '禁用', type: 'warning' }
-          : { key: 'toggle-valid', text: '启用', type: 'success' },
+          ? { key: 'toggle-valid', text: '禁用', type: 'default' }
+          : { key: 'toggle-valid', text: '启用', type: 'default' },
         ...otherActions,
       ]
     }
@@ -316,7 +321,7 @@ export function toRowActions(
 
   // ── 兜底：状态型 CustomButtons 但无 EnableField → 无法判态，按声明全量渲染（旧行为）
   for (const [method, label] of stateEntries) {
-    base.push({ key: `custom:${method}`, text: label, type: 'warning' })
+    base.push({ key: `custom:${method}`, text: label, type: 'default' })
   }
   return [...base, ...otherActions]
 }
@@ -367,8 +372,8 @@ export function toTreeActions(
   if (tc.AllowToggle !== false && field) {
     actions.push(
       on
-        ? { key: 'toggle-disable', text: '禁用', type: 'warning' }
-        : { key: 'toggle-enable', text: '启用', type: 'success' },
+        ? { key: 'toggle-disable', text: '禁用', type: 'default' }
+        : { key: 'toggle-enable', text: '启用', type: 'default' },
     )
   }
 
@@ -377,14 +382,14 @@ export function toTreeActions(
     for (const [method, label] of Object.entries(tc.CustomActions)) {
       const m = method.toLowerCase()
       if (m === 'disable') {
-        if (on) actions.push({ key: `custom:${method}`, text: label, type: 'warning' })
+        if (on) actions.push({ key: `custom:${method}`, text: label, type: 'default' })
         continue
       }
       if (m === 'enable') {
-        if (!on) actions.push({ key: `custom:${method}`, text: label, type: 'success' })
+        if (!on) actions.push({ key: `custom:${method}`, text: label, type: 'default' })
         continue
       }
-      actions.push({ key: `custom:${method}`, text: label, type: 'info' })
+      actions.push({ key: `custom:${method}`, text: label, type: 'default' })
     }
   }
   return actions

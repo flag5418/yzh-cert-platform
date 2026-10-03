@@ -15,10 +15,10 @@
         />
       </div>
       <div class="yzh-tree-table-check-selector__toolbar-actions">
-        <el-button size="small" @click="handleExpandAll">展开全部</el-button>
-        <el-button size="small" @click="handleCollapseAll">折叠全部</el-button>
-        <el-button size="small" @click="handleCheckAll">全选</el-button>
-        <el-button size="small" @click="handleUncheckAll">取消全选</el-button>
+        <el-button type="default" size="small" @click="handleExpandAll">展开全部</el-button>
+        <el-button type="default" size="small" @click="handleCollapseAll">折叠全部</el-button>
+        <el-button type="default" size="small" @click="handleCheckAll">全选</el-button>
+        <el-button type="default" size="small" @click="handleUncheckAll">取消全选</el-button>
       </div>
     </div>
 

@@ -176,9 +176,9 @@ async function queueLoader(params: PageParams): Promise<Page<TaskQueue>> {
 
 /** 行按钮：由 `CanStart` / `CanPause` 决定（后端算，前端不判） */
 function queueRowActions(row: TaskQueue) {
-  const list: Array<{ key: string; text: string; type?: 'primary' | 'warning' }> = []
+  const list: Array<{ key: string; text: string; type?: 'primary' | 'default' }> = []
   if (row.CanStart) list.push({ key: 'start', text: '启动', type: 'primary' })
-  if (row.CanPause) list.push({ key: 'pause', text: '暂停', type: 'warning' })
+  if (row.CanPause) list.push({ key: 'pause', text: '暂停', type: 'default' })
   return list
 }
 

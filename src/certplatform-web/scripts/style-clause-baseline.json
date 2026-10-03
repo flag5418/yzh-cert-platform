@@ -34,8 +34,6 @@
     "yzh.vue.core/src/components/layout/YzhDialog.vue": 1,
     "yzh.vue.core/src/components/layout/YzhSearchBar.vue": 1,
     "yzh.vue.core/src/components/layout/YzhTree.vue": 1,
-    "yzh.vue.core/src/components/layout/YzhTreeTableCheckSelector.vue": 4,
-    "yzh.vue.core/src/components/layout/YzhTreeTableSelector.vue": 4,
     "yzh.vue.core/src/components/table/YzhTable.vue": 4,
     "yzh.vue.core/src/components/ui/YzhEmptyState.vue": 1,
     "yzh.vue.core/src/layouts/YzhAppLayout.vue": 2
@@ -156,21 +154,8 @@
     "cert/cert-auditor/src/pages/enterprise-original/components/OriginalFolderTree.vue": 1,
     "cert/cert-auditor/src/pages/enterprise-original/index.vue": 1,
     "cert/cert-auditor/src/pages/resources/components/StandardFolderTree.vue": 2,
-    "cert/cert-auditor/src/pages/tasks/detail.vue": 4,
-    "cert/cert-auditor/src/pages/tasks/logic.ts": 2,
-    "cert/cert-share/src/components/auditor/ExpertResultPanel.vue": 1,
+    "cert/cert-auditor/src/pages/tasks/detail.vue": 3,
     "cert/cert-share/src/components/workflow/NodePropertyForm.vue": 1,
-    "cert/cert-share/src/components/workflow/WorkflowDesigner.vue": 1,
-    "yzh.vue.core/src/adapters/entityAdapters.ts": 11,
-    "yzh.vue.core/src/logic/TreeTableCore.ts": 6,
-    "yzh.vue.core/src/pages/system/dictionary/logic.ts": 1,
-    "yzh.vue.core/src/pages/system/organization/logic.ts": 3
-  },
-  "S09": {
-    "yzh.vue.core/src/components/layout/YzhSearchBar.vue": 2,
-    "yzh.vue.core/src/components/table/YzhTable.vue": 2
-  },
-  "S11": {
-    "yzh.vue.core/src/components/table/YzhTable.vue": 1
+    "cert/cert-share/src/components/workflow/WorkflowDesigner.vue": 1
   }
 }

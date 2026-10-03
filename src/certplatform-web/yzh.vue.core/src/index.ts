@@ -25,6 +25,7 @@ export type {
   SearchField,
   YzhAction,
   YzhActionType,
+  YzhTagType,
   YzhNodeActions,
   YzhRowActionResolver,
   YzhRowActions,

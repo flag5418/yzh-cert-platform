@@ -13,8 +13,22 @@ import type { PropType } from 'vue'
 // 颜色语义外置：type 由调用方声明，组件不内置 edit/delete→颜色 的业务假设（C-A4）。
 // ========================================================
 
-/** 按钮语义类型（element-plus button type） */
-export type YzhActionType = 'primary' | 'success' | 'warning' | 'danger' | 'info'
+/**
+ * 按钮语义类型（element-plus button type）
+ *
+ * ★ 必须含 `'default'`（25 号 §四 · S03 三档制的中性档）：EP `buttonTypes` 首值即
+ * `'default'`，早前的联合缺中性值，逼得调用方只能挑 `info`（灰=视觉像禁用）——
+ * 这正是全项目灰钮的类型系统级根因。
+ * ⛔ `success` / `warning` 是状态色，归 S08 徽章，不得用作按钮色（S03）。
+ */
+export type YzhActionType = 'default' | 'primary' | 'success' | 'warning' | 'danger' | 'info'
+
+/**
+ * 标签语义类型（element-plus tag type）
+ * ⚠️ 与按钮类型**不是一回事**：`el-tag` 不接受 `'default'`（默认 `'primary'`），
+ * 因此 `tagType` / `tagTypeMap` 必须用本类型，不能复用 `YzhActionType`。
+ */
+export type YzhTagType = 'success' | 'warning' | 'info' | 'primary' | 'danger'
 
 /** 通用动作描述符 */
 export interface YzhAction {
@@ -85,13 +99,13 @@ export interface YzhTableColumn<T = any> {
   /** 字典编码（自动从全局字典池翻译） */
   dictCode?: string
   /** 标签类型（仅当 dictCode 生效时）：success/warning/info/primary/danger */
-  tagType?: 'success' | 'warning' | 'info' | 'primary' | 'danger'
+  tagType?: YzhTagType
   /** 是否掩码显示（敏感字段如 key/secret/password） */
   mask?: boolean
   /** 通用标签渲染（C-A6）：值 → 显示文字 / 标签类型的映射，由调用方传入，组件不内置业务语义 */
   tagMap?: Record<string | number, string>
   /** render:'tag' 时的标签类型映射（可选） */
-  tagTypeMap?: Record<string | number, YzhActionType>
+  tagTypeMap?: Record<string | number, YzhTagType>
 }
 
 // V4 命名空间别名（避免和旧版 YzhDataTable 冲突）

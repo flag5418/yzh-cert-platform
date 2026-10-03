@@ -66,9 +66,9 @@ export class ExpertTaskLogic extends SingleTableCore<ExpertTaskRow> {
         case 'custom:submit':
           return { ...a, type: 'primary', visible: a.visible !== false }
         case 'custom:retry':
-          return { ...a, type: 'warning', visible: a.visible !== false }
+          return { ...a, type: 'default', visible: a.visible !== false }
         case 'custom:result':
-          return { ...a, type: 'success', visible: a.visible !== false }
+          return { ...a, type: 'default', visible: a.visible !== false }
         default:
           return a
       }

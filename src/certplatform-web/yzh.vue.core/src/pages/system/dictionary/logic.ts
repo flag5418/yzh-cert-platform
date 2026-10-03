@@ -112,7 +112,7 @@ export class DictionaryPageLogic extends TreeTableCore<any> {
     return [
       { key: 'add', text: '新增字典项', type: 'primary' },
       { key: 'delete', text: '批量删除', type: 'danger' },
-      { key: 'refresh', text: '刷新', type: 'info' },
+      { key: 'refresh', text: '刷新', type: 'default' },
     ]
   }
 

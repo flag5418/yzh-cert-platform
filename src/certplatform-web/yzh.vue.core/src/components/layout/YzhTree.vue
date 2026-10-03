@@ -312,11 +312,14 @@ function resolveNodeActions(node: YzhTreeNode): YzhAction[] {
   return [...list, ...legacy].filter((a) => a.visible !== false)
 }
 
-/** 根据动作返回下拉菜单项样式类（二选一按钮配色：停用→绿「启用」、启用→橙「禁用」） */
+/**
+ * 下拉菜单项样式类
+ * S03：按钮 type 已归三档，启/停按钮是中性白钮，状态由行内徽章（S08）表达 ——
+ * 因此这里只保留 `danger` 标志驱动的危险项强调（YzhAction.danger 是专用标志，
+ * 不读 action.type），success/warning 分支随 S03 一并移除。
+ */
 function getDropdownItemClass(action: YzhAction): string {
   if (action.danger) return 'yzh-tree__action-danger'
-  if (action.type === 'success') return 'yzh-tree__action-enable'
-  if (action.type === 'warning') return 'yzh-tree__action-toggle'
   return ''
 }
 
@@ -582,13 +585,5 @@ function removeFromTree(nodes: YzhTreeNode[], code: string): boolean {
 
 :deep(.yzh-tree__action-danger) {
   color: var(--el-color-danger) !important;
-}
-
-:deep(.yzh-tree__action-enable) {
-  color: var(--el-color-success) !important;
-}
-
-:deep(.yzh-tree__action-toggle) {
-  color: var(--el-color-warning) !important;
 }
 </style>

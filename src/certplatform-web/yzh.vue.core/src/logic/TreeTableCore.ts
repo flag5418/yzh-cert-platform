@@ -197,9 +197,9 @@ export abstract class TreeTableCore<
       const camel = field.charAt(0).toLowerCase() + field.slice(1)
       const val = extra[field] ?? extra[camel] ?? 1
       if (isRowEnabled(val)) {
-        actions.push({ key: 'toggle-disable', text: '禁用', type: 'warning' })
+        actions.push({ key: 'toggle-disable', text: '禁用', type: 'default' })
       } else {
-        actions.push({ key: 'toggle-enable', text: '启用', type: 'success' })
+        actions.push({ key: 'toggle-enable', text: '启用', type: 'default' })
       }
     } else if (tc.CustomActions) {
       if (!allowToggle) {
@@ -209,16 +209,16 @@ export abstract class TreeTableCore<
         const val = extra[statusField] ?? extra[camel] ?? 1
         for (const [method, label] of Object.entries(tc.CustomActions)) {
           if (method === 'disable') {
-            if (isRowEnabled(val)) actions.push({ key: `custom:${method}`, text: label, type: 'warning' })
+            if (isRowEnabled(val)) actions.push({ key: `custom:${method}`, text: label, type: 'default' })
           } else if (method === 'enable') {
-            if (!isRowEnabled(val)) actions.push({ key: `custom:${method}`, text: label, type: 'success' })
+            if (!isRowEnabled(val)) actions.push({ key: `custom:${method}`, text: label, type: 'default' })
           } else {
-            actions.push({ key: `custom:${method}`, text: label, type: 'info' })
+            actions.push({ key: `custom:${method}`, text: label, type: 'default' })
           }
         }
       } else {
         for (const [method, label] of Object.entries(tc.CustomActions)) {
-          actions.push({ key: `custom:${method}`, text: label, type: 'info' })
+          actions.push({ key: `custom:${method}`, text: label, type: 'default' })
         }
       }
     }

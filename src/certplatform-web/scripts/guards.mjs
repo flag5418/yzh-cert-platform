@@ -727,7 +727,10 @@ const CLAUSE_CHECKS = {
     }
     for (const m of text.matchAll(/\btype:\s*['"](info|success|warning)['"]/g)) {
       const before = text.slice(Math.max(0, m.index - 320), m.index)
-      if (/confirmButtonText|ElMessageBox|Record</.test(before)) continue // MessageBox 选项 / 状态映射
+      if (/confirmButtonText|ElMessageBox/.test(before)) continue // MessageBox 选项
+      // 状态映射表声明 `const X: Record<K, { text; type }> = {` —— 必须带 `= {`，
+      // 否则函数签名 `node: Record<string, any>` 也会误伤（曾漏计 3 处）
+      if (/Record<[^>]*>\s*=\s*\{/.test(before)) continue
       if (/\{\s*text:\s*string\s*;/.test(before)) continue // 类型声明
       if (/key\s*:|\.push\(|YzhAction/.test(before)) n++ // 动作对象
     }
@@ -772,7 +775,8 @@ const CLAUSE_CHECKS = {
   S11(text) {
     let n = 0
     for (const sm of text.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)) {
-      const body = sm[1]
+      // 先去块注释：法条条文本身会引用 !important 字样（注释里提条款不等于违规）
+      const body = sm[1].replace(/\/\*[\s\S]*?\*\//g, (m) => ' '.repeat(m.length))
       let i = body.indexOf('!important')
       while (i !== -1) {
         const brace = body.lastIndexOf('{', i)
@@ -823,7 +827,6 @@ function runR20() {
     for (const [id, fn] of Object.entries(CLAUSE_CHECKS)) {
       if (exemptOf(id).some((a) => r.endsWith(a))) continue
       const n = fn(text)
-      if (n === 0) continue
       const base = baseline[id]?.[r] ?? 0
       if (n > base) {
         violations.push({
@@ -832,6 +835,7 @@ function runR20() {
           text: `[${id}] ${n} 处（基线 ${base}）—— 25 号 §四 法条违规，只准减不准增`,
         })
       } else if (n < base) {
+        // 降到 0 也要报：该文件应从基线里移除
         progress.push({ id, r, n, base })
       }
     }

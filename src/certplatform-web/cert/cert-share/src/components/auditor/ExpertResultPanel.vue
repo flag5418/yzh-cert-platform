@@ -349,7 +349,7 @@ async function onExport() {
 const rowActions = computed(() => (_row: ResultRow) => [
   // 历史轮次恒可点（同一检查项可跑多轮；只跑过 1 轮时也值得看那一轮的自动判定原文）
   { key: 'edit', text: isReport.value ? '修改正文' : '修改结论', type: 'primary' as const },
-  { key: 'history', text: '历史轮次', type: 'info' as const },
+  { key: 'history', text: '历史轮次', type: 'default' as const },
 ])
 
 async function onRowAction(key: string, row: ResultRow) {

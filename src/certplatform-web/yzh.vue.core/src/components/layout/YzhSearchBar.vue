@@ -7,6 +7,7 @@
  * - 查询和重置按钮固定在右侧
  */
 import { reactive, watch } from 'vue'
+import { Refresh, Search } from '@element-plus/icons-vue'
 import type { SearchField } from '../table/types'
 
 const props = withDefaults(
@@ -126,11 +127,11 @@ function onReset() {
       <!-- 右侧按钮 -->
       <div class="yzh-search-bar__actions">
         <el-button type="primary" @click="onSearch">
-          <i class="bi bi-search"></i>
+          <el-icon><Search /></el-icon>
           查询
         </el-button>
         <el-button @click="onReset">
-          <i class="bi bi-arrow-counterclockwise"></i>
+          <el-icon><Refresh /></el-icon>
           重置
         </el-button>
       </div>

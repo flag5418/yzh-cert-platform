@@ -18,6 +18,7 @@
  * 独立可用性（C-A11）：仅传 columns + dataLoader 即可渲染与交互。
  */
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Operation, WarningFilled } from '@element-plus/icons-vue'
 import { computed, getCurrentInstance, onMounted, reactive, ref, watch } from 'vue'
 import YzhPagination from '../layout/YzhPagination.vue'
 import YzhSearchBar from '../layout/YzhSearchBar.vue'
@@ -601,7 +602,7 @@ defineExpose({
           <el-popover v-if="toolbarConfig.columnSetting" trigger="click" placement="bottom-end" :width="200">
             <template #reference>
               <el-button text>
-                <i class="bi bi-columns"></i>
+                <el-icon><Operation /></el-icon>
                 列设置
               </el-button>
             </template>
@@ -754,7 +755,7 @@ defineExpose({
             <div class="yzh-table__empty">
               <el-empty v-if="!loading && !error" :description="emptyText" />
               <div v-else-if="error" class="yzh-table__error">
-                <i class="bi bi-exclamation-triangle"></i>
+                <el-icon><WarningFilled /></el-icon>
                 <span>{{ error }}</span>
                 <el-button text type="primary" @click="refresh">重试</el-button>
               </div>
@@ -827,8 +828,10 @@ defineExpose({
   color: var(--yzh-color-danger, #f56c6c);
 }
 
-.yzh-row-action-danger {
-  color: var(--el-color-danger) !important;
+/* S11：!important 仅限 :deep() 内 —— 这里靠 .el-dropdown-menu__item 提特异性
+   （30 > EP hover 态 21）压过覆盖，因此不再需要 !important */
+.yzh-table :deep(.el-dropdown-menu__item.yzh-row-action-danger) {
+  color: var(--yzh-color-danger, #f56c6c);
 }
 
 /* 列设置 popover 内层 */

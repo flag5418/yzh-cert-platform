@@ -130,10 +130,10 @@ export class OrgPageLogic extends TreeTableCore<any> {
       }
       const cb = rb?.CustomButtons ?? {}
       if (row?.IsValid === 1 && cb['disable']) {
-        actions.push({ key: 'custom:disable', text: cb['disable'], type: 'warning' })
+        actions.push({ key: 'custom:disable', text: cb['disable'], type: 'default' })
       } else if (row?.IsValid === 0 && cb['enable']) {
-        // 配色约定：停用行 → success 绿「启用」（与全项目二选一按钮一致）
-        actions.push({ key: 'custom:enable', text: cb['enable'], type: 'success' })
+        // S03 三档制：启停按钮归中性（状态色归 S08 徽章）
+        actions.push({ key: 'custom:enable', text: cb['enable'], type: 'default' })
       }
       return actions
     }
@@ -144,7 +144,7 @@ export class OrgPageLogic extends TreeTableCore<any> {
     return [
       { key: 'add', text: '新增人员', type: 'primary' },
       { key: 'delete', text: '批量删除', type: 'danger' },
-      { key: 'refresh', text: '刷新', type: 'info' },
+      { key: 'refresh', text: '刷新', type: 'default' },
     ]
   }
 
