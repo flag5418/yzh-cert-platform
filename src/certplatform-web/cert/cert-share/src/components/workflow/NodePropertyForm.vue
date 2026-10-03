@@ -59,14 +59,17 @@
     </div>
 
     <div v-else class="form-empty">
-      <div class="empty-icon"><el-icon :size="48"><InfoFilled /></el-icon></div>
-      <p class="empty-title">点击画布节点配置属性</p>
-      <p class="empty-hint">从左侧节点库拖动节点到画布，或点击节点查看和编辑属性</p>
+      <YzhEmptyState
+        :icon="InfoFilled"
+        title="点击画布节点配置属性"
+        description="从左侧节点库拖动节点到画布，或点击节点查看和编辑属性"
+      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { YzhEmptyState } from '@yzh-core'
 import { getSpecialNode } from '@share/composables/workflow/specialNodes'
 import { CircleCheck, InfoFilled, Warning } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -234,7 +237,4 @@ function applyChanges() {
 .test-output-json { background: var(--yzh-color-bg-page, #f5f7fa); padding: 8px; border-radius: 4px; font-size: 11px; font-family: monospace; max-height: 150px; overflow-y: auto; margin: 0; }
 .action-row { display: flex; gap: 8px; margin-top: 12px; .el-button { flex: 1; height: 32px; border-radius: 2px; font-weight: 700; } }
 .form-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 32px; text-align: center; }
-.empty-icon { color: var(--yzh-color-border, #e2e8f0); margin-bottom: 16px; }
-.empty-title { font-size: 15px; color: var(--yzh-color-text-muted, #64748b); font-weight: 700; margin: 0 0 8px; }
-.empty-hint { font-size: 12px; color: var(--yzh-color-primary-disabled, #94a3b8); margin: 0; line-height: 1.5; }
 </style>

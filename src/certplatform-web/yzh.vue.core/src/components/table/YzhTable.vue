@@ -17,8 +17,9 @@
  *
  * 独立可用性（C-A11）：仅传 columns + dataLoader 即可渲染与交互。
  */
+import YzhEmptyState from '../ui/YzhEmptyState.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Operation, WarningFilled } from '@element-plus/icons-vue'
+import { Operation, WarningFilled, Files } from '@element-plus/icons-vue'
 import { computed, getCurrentInstance, onMounted, reactive, ref, watch } from 'vue'
 import YzhPagination from '../layout/YzhPagination.vue'
 import YzhSearchBar from '../layout/YzhSearchBar.vue'
@@ -753,7 +754,7 @@ defineExpose({
 
           <template #empty>
             <div class="yzh-table__empty">
-              <el-empty v-if="!loading && !error" :description="emptyText" />
+              <YzhEmptyState :icon="Files" v-if="!loading && !error" :title="emptyText" />
               <div v-else-if="error" class="yzh-table__error">
                 <el-icon><WarningFilled /></el-icon>
                 <span>{{ error }}</span>

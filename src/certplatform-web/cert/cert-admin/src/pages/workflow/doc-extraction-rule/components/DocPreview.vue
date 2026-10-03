@@ -11,6 +11,7 @@
  *  3. 魔数校验：JSON 错误体由 getBlob 提前拦截；此处再校验二进制魔数，
  *     避免「返回的不是文件却被当文件渲染」的静默失败。
  */
+import { YzhEmptyState } from '@yzh-core'
 import { ref, watch, computed, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Download, Refresh, WarningFilled, Loading, Document } from '@element-plus/icons-vue'
@@ -341,7 +342,7 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
       <pre v-else-if="textContent" class="text-content">{{ textContent }}</pre>
 
       <div v-else-if="isRenderable" class="state-panel">
-        <el-empty description="暂无预览内容" />
+        <YzhEmptyState :icon="Document" title="暂无预览内容" />
       </div>
     </div>
   </div>

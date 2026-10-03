@@ -11,8 +11,9 @@
  * Markdown 缓存 8 小时，键由后端回传。
  * ⛔ 不展示 AI 模型：模型由 `cert_sys_config` 统一固定，UI 不可选也不展示。
  */
+import { YzhEmptyState } from '@yzh-core'
 import { ref, computed } from 'vue'
-import { Upload, RefreshRight, Delete, Close } from '@element-plus/icons-vue'
+import { Upload, RefreshRight, Delete, Close, Files } from '@element-plus/icons-vue'
 import type { PromptTestResultDto, ConvertLogDto } from '@share/api/workflow/prompt-workbench'
 // 2026-10-03：SemanticResult 上移到 @share/components（36 号 §6.6），
 //   供 36 号「企业原始资料管理」的分析结果抽屉共用同一渲染器。
@@ -146,7 +147,7 @@ const metaLine = computed(() => {
 
     <!-- 结果区 -->
     <div class="test-panel__result">
-      <el-empty v-if="!result" description="无分析结果" :image-size="80" />
+      <YzhEmptyState :icon="Files" v-if="!result" title="无分析结果" />
 
       <template v-else>
         <!-- 状态头 -->

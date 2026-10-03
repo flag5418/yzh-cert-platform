@@ -12,7 +12,7 @@
  *    三态（转换/Markdown/分析）在 UI 上压成**一个**「文件状态」。
  */
 import { onBeforeUnmount, onMounted } from 'vue'
-import { YzhTreeTableLayout, YzhTable } from '@yzh-core'
+import { YzhTreeTableLayout, YzhTable, YzhEmptyState } from '@yzh-core'
 import type { YzhTableColumn } from '@yzh-core'
 import { YzhFolderUpload } from '@share/components'
 import type { AnalyzePolicyKey, PolicyReasonKey } from '@share/api/ent/enterprise-original'
@@ -35,7 +35,7 @@ import {
   onDelete,
   queueVisible, queueDetail, queueLoading, openQueueDetail,
 } from './logic'
-import { FolderOpened, Document, Loading } from '@element-plus/icons-vue'
+import { FolderOpened, Document, Loading, Files } from '@element-plus/icons-vue'
 import OriginalFolderTree from './components/OriginalFolderTree.vue'
 import type { OriginalFolderNode } from './components/OriginalFolderTree.vue'
 
@@ -185,9 +185,15 @@ onBeforeUnmount(() => { stopPolling() })
             <p>请在左侧选择「企业 › 阶段」，然后上传企业交来的原始资料。</p>
           </div>
 
-          <el-empty v-else-if="folderNodes.length === 0 && rootFiles.length === 0" description="这里还没有文件">
-            <el-button type="primary" :disabled="isBusy" @click="openUpload">上传文件</el-button>
-          </el-empty>
+          <YzhEmptyState
+            v-else-if="folderNodes.length === 0 && rootFiles.length === 0"
+            :icon="FolderOpened"
+            title="这里还没有文件"
+          >
+            <template #action>
+              <el-button type="primary" :disabled="isBusy" @click="openUpload">上传文件</el-button>
+            </template>
+          </YzhEmptyState>
 
           <div v-else class="eo-tree-wrap">
             <!-- 根目录 -->
@@ -281,7 +287,7 @@ onBeforeUnmount(() => { stopPolling() })
         <template v-else-if="previewKind === 'text'">
           <pre class="eo-preview__text">{{ previewText || '（文件内容为空）' }}</pre>
         </template>
-        <el-empty v-else-if="!previewLoading" description="这个格式暂时无法预览，请下载原件查看" />
+        <YzhEmptyState :icon="Document" v-else-if="!previewLoading" title="这个格式暂时无法预览，请下载原件查看" />
       </div>
     </el-drawer>
 
@@ -434,7 +440,7 @@ onBeforeUnmount(() => { stopPolling() })
     <!-- ═══════════ 处理进度抽屉 ═══════════ -->
     <el-drawer v-model="queueVisible" title="处理进度" size="720px">
       <div v-loading="queueLoading">
-        <el-empty v-if="!queueLoading && (queueDetail?.Rows ?? []).length === 0" description="当前没有进行中的处理" />
+        <YzhEmptyState :icon="Files" v-if="!queueLoading && (queueDetail?.Rows ?? []).length === 0" title="当前没有进行中的处理" />
         <div v-for="q in queueDetail?.Rows ?? []" :key="q.Code" class="eo-q">
           <div class="eo-q__head">
             <span>{{ q.QueueType === 'enterprise_original_analyze' ? '识别资料内容' : '读取文件内容' }}</span>

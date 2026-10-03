@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { YzhEmptyState } from '@yzh-core'
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -15,6 +16,7 @@ import {
   CircleClose,
   QuestionFilled,
   FolderOpened,
+  Pointer,
 } from '@element-plus/icons-vue'
 import { yzhApi } from '@yzh-core/api/client'
 import { YzhFolderUpload, CertStatusBar, CertBizTree } from '@share/components'
@@ -1163,11 +1165,10 @@ onUnmounted(() => {
           </table>
 
           <!-- 空状态 -->
-          <el-empty
+          <YzhEmptyState :icon="FolderOpened"
             v-if="currentFolders.length === 0 && currentFiles.length === 0"
-            description="暂无内容"
-            :image-size="80"
-          />
+            title="暂无内容"
+           />
         </div>
 
         <!-- 底部状态栏 -->
@@ -1182,9 +1183,7 @@ onUnmounted(() => {
 
       <!-- 未选中阶段：管理「机构 × 标准 × 阶段」目录配置（根名/状态/级联清理；创建已无感懒建） -->
       <div v-else class="empty-state">
-        <div class="empty-hint">
-          <el-empty description="请从左侧目录树选择一个阶段（阶段首次进入会自动初始化目录，无需手工创建）" :image-size="100" />
-        </div>
+        <YzhEmptyState :icon="Pointer" title="请从左侧目录树选择一个阶段（阶段首次进入会自动初始化目录，无需手工创建）" />
       </div>
     </div>
     </div>
@@ -1616,10 +1615,6 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow: auto;
-}
-
-.empty-hint {
-  padding-top: 24px;
 }
 
 /* 上传弹窗 */

@@ -42,7 +42,7 @@
           @check-change="handleCheckChange"
         />
         <div v-else class="role-menu-page__empty">
-          <el-empty description="请先选择左侧角色" />
+          <YzhEmptyState :icon="Pointer" title="请先选择左侧角色" />
         </div>
       </div>
     </div>
@@ -57,7 +57,8 @@
  * - 右侧：菜单勾选树
  * - 勾选/取消立即保存（auto-save）；勾选子菜单后端自动补全祖先菜单（Applied 回传）
  */
-import { YzhTree, YzhTreeTableCheckSelector, useCheckTree } from '@yzh-core'
+import { Pointer } from '@element-plus/icons-vue'
+import { YzhTree, YzhTreeTableCheckSelector, useCheckTree, YzhEmptyState } from '@yzh-core'
 import { RoleMenuLogic } from './logic'
 
 const { logic } = useCheckTree(RoleMenuLogic)

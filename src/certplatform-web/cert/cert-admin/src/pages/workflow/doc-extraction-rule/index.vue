@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { MagicStick, ChatLineSquare } from '@element-plus/icons-vue'
-import { YzhPageLayout } from '@yzh-core'
+import { MagicStick, ChatLineSquare, Pointer } from '@element-plus/icons-vue'
+import { YzhPageLayout, YzhEmptyState } from '@yzh-core'
 import { CertDirectoryTree } from '@share/components'
 import { retryFailedConversions } from '@share/composables/useDirectoryApi'
 import {
@@ -336,7 +336,7 @@ function startResizeLeft(e: MouseEvent) {
       <div class="center-panel">
         <DocPreview v-if="selectedFile" :file="selectedFile" />
         <div v-else class="empty-preview">
-          <el-empty description="请选择左侧文档进行预览" :image-size="90" />
+          <YzhEmptyState :icon="Pointer" title="请选择左侧文档进行预览" />
         </div>
       </div>
 

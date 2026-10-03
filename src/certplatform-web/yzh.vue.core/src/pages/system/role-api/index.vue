@@ -56,7 +56,7 @@
           </template>
         </YzhTreeTableCheckSelector>
         <div v-else class="role-api-page__empty">
-          <el-empty description="请先选择左侧角色" />
+          <YzhEmptyState :icon="Pointer" title="请先选择左侧角色" />
         </div>
       </div>
     </div>
@@ -71,7 +71,8 @@
  * - 右侧：接口分组树 + 接口勾选（cascade / 搜索 / count-type）
  * - 勾选/取消立即保存（auto-save）；分组节点跟随子级（afterAssociationsLoaded）
  */
-import { YzhTree, YzhTreeTableCheckSelector, useCheckTree } from '@yzh-core'
+import { Pointer } from '@element-plus/icons-vue'
+import { YzhTree, YzhTreeTableCheckSelector, useCheckTree, YzhEmptyState } from '@yzh-core'
 import { RoleApiLogic } from './logic'
 
 const { logic } = useCheckTree(RoleApiLogic)

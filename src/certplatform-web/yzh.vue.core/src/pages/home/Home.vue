@@ -27,12 +27,14 @@
           <span class="entry-name">{{ entry.menuName }}</span>
         </router-link>
       </div>
-      <el-empty v-else description="暂无可用入口" :image-size="80" />
+      <YzhEmptyState :icon="Box" v-else title="暂无可用入口" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import YzhEmptyState from '../../components/ui/YzhEmptyState.vue'
+import { Box } from '@element-plus/icons-vue'
 import { computed, onMounted } from 'vue'
 import { useAuthState } from '../../composables/useAuthState'
 import { useMenuTree } from '../../composables/useMenuTree'

@@ -11,9 +11,13 @@
       </el-icon>
 
       <div class="yzh-empty-state__title">{{ title }}</div>
-      <div v-if="description" class="yzh-empty-state__description">{{ description }}</div>
+      <!-- 富内容空态（多段说明 / 列表）走 #description；纯文本仍用 description prop -->
+      <div v-if="$slots.description || description" class="yzh-empty-state__description">
+        <slot name="description">{{ description }}</slot>
+      </div>
 
-      <div v-if="actionLabel && onAction" class="yzh-empty-state__action">
+      <!-- #action 可独立使用（自带按钮 disabled/权限），不必强绑 actionLabel+onAction -->
+      <div v-if="$slots.action || (actionLabel && onAction)" class="yzh-empty-state__action">
         <slot name="action">
           <el-button size="small" @click="onAction">{{ actionLabel }}</el-button>
         </slot>

@@ -11,6 +11,7 @@
  *     `StageCode` = cert_cert_stage.Code
  *   - ★ 创建已无感懒建：阶段首次进入/上传时后端 Ensure 自动建行，本界面只做管理与批量查看。
  */
+import { YzhEmptyState } from '@yzh-core'
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, FolderOpened } from '@element-plus/icons-vue'
@@ -244,7 +245,7 @@ onMounted(async () => {
           </template>
         </el-table-column>
         <template #empty>
-          <el-empty description="暂无目录配置" :image-size="80" />
+          <YzhEmptyState :icon="FolderOpened" title="暂无目录配置" />
         </template>
       </el-table>
     </el-card>

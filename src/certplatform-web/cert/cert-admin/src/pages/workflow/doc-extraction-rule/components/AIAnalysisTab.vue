@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { YzhEmptyState } from '@yzh-core'
 import { ref, watch } from 'vue'
-import { MagicStick, Plus, Delete, View } from '@element-plus/icons-vue'
+import { MagicStick, Plus, Delete, View, Files } from '@element-plus/icons-vue'
 import type { FieldDefDto, TableDefDto } from '@share/api/workflow/doc-extraction-rule'
 
 const props = defineProps<{
@@ -133,7 +134,7 @@ function toggleDataPreview(i: number) {
           <el-icon><Plus /></el-icon> 添加
         </el-button>
       </div>
-      <div v-if="!localFields.length" class="empty-hint">暂无字段，请点击"开始分析"或手动添加</div>
+      <YzhEmptyState v-if="!localFields.length" compact :icon="Files" :icon-size="18" title="暂无字段，请点击「开始分析」或手动添加" />
       <div v-for="(field, i) in localFields" :key="i" class="field-item" :class="{ manual: field.isManual }">
         <div class="field-row">
           <el-input v-model="field.name" placeholder="中文名" size="small" style="flex:1" @change="onFieldChange" />
@@ -164,7 +165,7 @@ function toggleDataPreview(i: number) {
           <el-icon><Plus /></el-icon> 添加
         </el-button>
       </div>
-      <div v-if="!localTables.length" class="empty-hint">暂无表格</div>
+      <YzhEmptyState v-if="!localTables.length" compact :icon="Files" :icon-size="18" title="暂无表格" />
       <el-collapse v-model="expandedTables">
         <el-collapse-item v-for="(table, i) in localTables" :key="i" :name="i">
           <template #title>
@@ -239,7 +240,6 @@ function toggleDataPreview(i: number) {
 .header-actions { display: flex; align-items: center; }
 .section { margin-bottom: 16px; }
 .section-title { display: flex; justify-content: space-between; align-items: center; font-weight: 500; margin-bottom: 8px; }
-.empty-hint { color: var(--yzh-color-text-tertiary, #909399); font-size: 13px; padding: 12px 0; }
 .field-item { padding: 8px; border: 1px solid var(--yzh-color-border-light, #ebeef5); border-radius: 4px; margin-bottom: 8px; }
 .field-item.manual { border-left: 3px solid var(--yzh-color-warning, #e6a23c); }
 .field-row { display: flex; gap: 8px; align-items: center; }

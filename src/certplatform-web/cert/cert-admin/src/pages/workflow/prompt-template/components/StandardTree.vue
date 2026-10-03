@@ -8,6 +8,7 @@
  *
  * 每个节点下方标注该作用域下已有的提示词：`[分类]` `[作用]`。
  */
+import { YzhEmptyState } from '@yzh-core'
 import { ref, computed, watch, nextTick } from 'vue'
 import { Document, Files } from '@element-plus/icons-vue'
 import type { StandardOptionDto, PromptTemplateDto } from '@share/api/workflow/prompt-workbench'
@@ -118,7 +119,7 @@ watch(
         </template>
       </el-tree>
 
-      <el-empty v-if="!standards.length" description="暂无标准" :image-size="70" />
+      <YzhEmptyState :icon="Document" v-if="!standards.length" title="暂无标准" />
     </div>
   </div>
 </template>

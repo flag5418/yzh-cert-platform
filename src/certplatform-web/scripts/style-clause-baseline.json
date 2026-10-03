@@ -121,32 +121,10 @@
     "cert/cert-share/src/components/workflow/ExecutionHistoryDrawer.vue": 1,
     "yzh.vue.core/src/layouts/YzhAppLayout.vue": 2
   },
-  "S05": {
-    "cert/cert-admin/src/pages/workflow/directory/components/ConfigTab.vue": 1,
-    "cert/cert-admin/src/pages/workflow/directory/index.vue": 3,
-    "cert/cert-admin/src/pages/workflow/doc-extraction-rule/components/AIAnalysisTab.vue": 2,
-    "cert/cert-admin/src/pages/workflow/doc-extraction-rule/components/DocPreview.vue": 1,
-    "cert/cert-admin/src/pages/workflow/doc-extraction-rule/components/PromptVerifyTab.vue": 2,
-    "cert/cert-admin/src/pages/workflow/doc-extraction-rule/index.vue": 1,
-    "cert/cert-admin/src/pages/workflow/doc-fill-rule/components/PromptPanel.vue": 1,
-    "cert/cert-admin/src/pages/workflow/prompt-template/components/PromptTestPanel.vue": 1,
-    "cert/cert-admin/src/pages/workflow/prompt-template/components/StandardTree.vue": 1,
-    "cert/cert-auditor/src/pages/enterprise-original/components/OriginalFolderTree.vue": 1,
-    "cert/cert-auditor/src/pages/enterprise-original/index.vue": 3,
-    "cert/cert-auditor/src/pages/enterprise-stages/index.vue": 1,
-    "cert/cert-auditor/src/pages/resources/components/StandardFolderTree.vue": 1,
-    "cert/cert-auditor/src/pages/resources/index.vue": 7,
-    "cert/cert-share/src/components/CertBizTree.vue": 1,
-    "cert/cert-share/src/components/CertPagePlaceholder.vue": 1,
-    "cert/cert-share/src/components/workflow/NodePropertyForm.vue": 1,
-    "cert/cert-share/src/components/workflow/panels/PortControl.vue": 2,
-    "yzh.vue.core/src/components/table/YzhTable.vue": 1,
-    "yzh.vue.core/src/pages/home/Home.vue": 1,
-    "yzh.vue.core/src/pages/system/role-api/index.vue": 1,
-    "yzh.vue.core/src/pages/system/role-menu/index.vue": 1,
-    "yzh.vue.core/src/pages/system/role-user/index.vue": 1
-  },
   "S03": {
+    "cert/cert-auditor/src/pages/enterprise-original/components/OriginalFolderTree.vue": 1
+  },
+  "S05": {
     "cert/cert-auditor/src/pages/enterprise-original/components/OriginalFolderTree.vue": 1
   }
 }

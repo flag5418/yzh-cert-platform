@@ -14,8 +14,8 @@
  * ★ 字段大小写：DB 列名字段 PascalCase（Code/FileName/StoragePath/Status），接口拼装字段 camel
  */
 import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { YzhTable } from '@yzh-core'
-import { Calendar, OfficeBuilding, Refresh, Search, Upload, UploadFilled } from '@element-plus/icons-vue'
+import { YzhTable, YzhEmptyState } from '@yzh-core'
+import { Calendar, OfficeBuilding, Refresh, Search, Upload, UploadFilled, Document, Files, FolderOpened } from '@element-plus/icons-vue'
 import { ResourcesLogic, type ResourceTreeNode } from './logic'
 import type { FileSlot } from '@share/api'
 import StandardFolderTree from './components/StandardFolderTree.vue'
@@ -128,7 +128,7 @@ function onReplacePick(file: any) {
           </el-tree>
 
           <el-skeleton v-else-if="logic.loadingEnterprises.value" :rows="4" animated />
-          <el-empty v-else description="暂无企业数据" :image-size="70" />
+          <YzhEmptyState :icon="OfficeBuilding" v-else title="暂无企业数据" />
         </div>
       </aside>
 
@@ -194,7 +194,7 @@ function onReplacePick(file: any) {
               <el-skeleton :rows="4" animated />
             </div>
             <div v-else-if="logic.tabStandards.length === 0" class="content-panel__placeholder">
-              <el-empty :description="logic.emptyHint" :image-size="110" />
+              <YzhEmptyState :icon="Files" :title="logic.emptyHint" />
             </div>
 
             <el-tabs v-else v-model="logic.activeTab.value" type="card" class="standards-tabs">
@@ -234,11 +234,10 @@ function onReplacePick(file: any) {
                   </div>
                 </div>
 
-                <el-empty
+                <YzhEmptyState :icon="FolderOpened"
                   v-if="logic.folderTreeOf(std.StandardCode).length === 0"
-                  description="该标准暂无资料目录，模板就绪后刷新本页自动生成"
-                  :image-size="60"
-                />
+                  title="该标准暂无资料目录，模板就绪后刷新本页自动生成"
+                 />
                 <StandardFolderTree
                   v-else
                   :nodes="logic.folderTreeOf(std.StandardCode)"
@@ -261,7 +260,7 @@ function onReplacePick(file: any) {
         </template>
 
         <div v-else class="content-panel__placeholder">
-          <el-empty :description="logic.emptyHint" :image-size="110" />
+          <YzhEmptyState :icon="Files" :title="logic.emptyHint" />
         </div>
       </section>
     </div>
@@ -538,13 +537,13 @@ function onReplacePick(file: any) {
           <div v-if="h.Detail" class="timeline-detail">{{ h.Detail }}</div>
         </el-timeline-item>
       </el-timeline>
-      <el-empty v-else description="暂无操作记录" :image-size="60" />
+      <YzhEmptyState :icon="Files" v-else title="暂无操作记录" />
     </el-drawer>
 
     <!-- ═══════════ PDF 预览（Blob → ObjectURL；裸链接无法带 Authorization） ═══════════ -->
     <el-drawer v-model="logic.previewVisible.value" :title="`预览：${logic.previewName.value}`" direction="rtl" size="70%" @closed="logic.closePreview()">
       <iframe v-if="logic.previewUrl.value" :src="logic.previewUrl.value" class="preview-frame" />
-      <el-empty v-else description="暂无预览" />
+      <YzhEmptyState :icon="Document" v-else title="暂无预览" />
     </el-drawer>
 
     <!-- ═══════════ 提取结果 ═══════════ -->
@@ -580,7 +579,7 @@ function onReplacePick(file: any) {
           </div>
         </div>
       </div>
-      <el-empty v-else description="暂无提取结果" />
+      <YzhEmptyState :icon="Document" v-else title="暂无提取结果" />
     </el-drawer>
   </div>
 </template>

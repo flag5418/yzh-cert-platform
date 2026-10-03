@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { YzhEmptyState } from '@yzh-core'
 import { computed } from 'vue'
-import { CopyDocument, Refresh, Warning } from '@element-plus/icons-vue'
+import { CopyDocument, Refresh, Warning, Document } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { FieldDefDto, TableDefDto, ExtractionData } from '@share/api/workflow/doc-extraction-rule'
 import { buildExtractionView } from '@share/utils/extractionView'
@@ -119,7 +120,7 @@ function cellText(v: unknown): string {
             </template>
           </el-table-column>
         </el-table>
-        <el-empty v-else description="该文件尚未配置字段定义" :image-size="60" />
+        <YzhEmptyState :icon="Document" v-else title="该文件尚未配置字段定义" />
       </div>
 
       <!-- 提取表格：中文表名 + 中文列头 -->
@@ -128,7 +129,7 @@ function cellText(v: unknown): string {
           提取表格
           <span class="count">{{ view.extractedTableCount }} / {{ view.tables.length }} 已提取，共 {{ view.extractedRowCount }} 行</span>
         </h5>
-        <el-empty v-if="!view.tables.length" description="该文件尚未配置表格定义" :image-size="60" />
+        <YzhEmptyState :icon="Document" v-if="!view.tables.length" title="该文件尚未配置表格定义" />
         <div v-for="t in view.tables" :key="t.code" class="table-block">
           <div class="table-head">
             <span class="table-label">{{ t.name }}</span>

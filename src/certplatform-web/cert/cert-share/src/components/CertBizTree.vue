@@ -69,16 +69,16 @@
         </template>
       </el-tree>
 
-      <el-empty
+      <YzhEmptyState :icon="FolderOpened"
         v-if="!loading && filteredTreeData.length === 0"
-        :description="filterText ? '未匹配到目录' : '暂无目录数据'"
-        :image-size="80"
-      />
+        :title="filterText ? '未匹配到目录' : '暂无目录数据'"
+       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { YzhEmptyState } from '@yzh-core'
 import { ref, computed, watch, onMounted } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import {

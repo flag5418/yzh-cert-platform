@@ -43,6 +43,12 @@ vi.mock('@yzh-core', () => ({
   YzhPageLayout: {
     name: 'YzhPageLayout',
     template: '<div class="yzh-page"><slot name="toolbar" /><slot /></div>'
+  },
+  // S05：空状态统一走 YzhEmptyState（StandardTree 仅传 props，无作用域插槽）
+  YzhEmptyState: {
+    name: 'YzhEmptyState',
+    props: ['icon', 'title', 'description', 'compact', 'iconSize'],
+    template: '<div class="yzh-empty"><span>{{ title }}</span><slot name="description" /><slot name="action" /></div>'
   }
 }))
 

@@ -10,7 +10,7 @@
  * 计数按子树汇总（父目录的「已就位/缺失」= 自身 + 全部后代）。</para>
  */
 import { ref } from 'vue'
-import { YzhTable } from '@yzh-core'
+import { YzhTable, YzhEmptyState } from '@yzh-core'
 import { FolderOpened } from '@element-plus/icons-vue'
 import { SLOT_STATUS_TEXT } from '@share/api'
 import type { FileSlot } from '@share/api'
@@ -208,10 +208,10 @@ function formatSize(size?: number | null) {
           @upload="(c: string) => emit('upload', c)"
         />
 
-        <el-empty
+        <YzhEmptyState :icon="FolderOpened"
           v-if="!node.Files.length && !node.Children.length"
-          description="该文件夹暂无标准槽位" :image-size="50"
-        />
+          title="该文件夹暂无标准槽位"
+         />
       </el-collapse-item>
     </el-collapse>
   </div>

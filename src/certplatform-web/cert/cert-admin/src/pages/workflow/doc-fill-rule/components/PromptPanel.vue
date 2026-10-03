@@ -16,8 +16,8 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { RefreshRight } from '@element-plus/icons-vue'
-import { YzhTable, unwrapOk, type PageParams, type YzhAction, type YzhTableColumn } from '@yzh-core'
+import { RefreshRight, Document } from '@element-plus/icons-vue'
+import { YzhTable, unwrapOk, type PageParams, type YzhAction, type YzhTableColumn, YzhEmptyState } from '@yzh-core'
 import {
   getDocFillPromptVersions,
   resolveDocFillPrompt,
@@ -121,14 +121,14 @@ onMounted(() => {
 <template>
   <div class="prompt-panel">
     <!-- 未挂提示词：不是错误，锚点填充依然可用 -->
-    <el-empty v-if="!hasPrompt">
+    <YzhEmptyState v-if="!hasPrompt" :icon="Document" title="未挂提示词">
       <template #description>
         <p>该模板未挂「全文填写提示词」—— 只走<strong>锚点规则</strong>填充。</p>
         <p class="prompt-panel__hint">
           需要时可在模板行上填写 <code>FillPromptCode</code>，再在「提示词工作台」维护对应版本。
         </p>
       </template>
-    </el-empty>
+    </YzhEmptyState>
 
     <template v-else>
       <el-alert type="success" :closable="false" show-icon class="prompt-panel__banner">

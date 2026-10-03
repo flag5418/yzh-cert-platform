@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { YzhEmptyState } from '@yzh-core'
+import { Box } from '@element-plus/icons-vue'
 /**
  * 页面占位组件 —— 菜单已建立、业务页尚未实现的过渡态
  *
@@ -21,7 +23,7 @@ defineProps<{
       <span class="cert-page-placeholder__title">{{ title }}</span>
     </template>
 
-    <el-empty :image-size="90">
+    <YzhEmptyState :icon="Box" title="功能规划中">
       <template #description>
         <div class="cert-page-placeholder__desc">
           <p class="cert-page-placeholder__lead">{{ desc || '该功能尚未实现，页面已就位。' }}</p>
@@ -30,7 +32,7 @@ defineProps<{
           </ul>
         </div>
       </template>
-    </el-empty>
+    </YzhEmptyState>
   </el-card>
 </template>
 

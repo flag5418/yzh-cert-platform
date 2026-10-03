@@ -19,7 +19,8 @@
  * ★ 展示字段说明：表格「标准编号」列绑 `StandardNo`（人读编号，如 `iso9001-2015`），
  *   **不是** `StandardCode`（那是 `cert_iso_standard.Code`，一串 GUID 关联键）。
  */
-import { YzhTree, YzhTreeTableCheckSelector, useCheckTree } from '@yzh-core'
+import { Pointer } from '@element-plus/icons-vue'
+import { YzhTree, YzhTreeTableCheckSelector, useCheckTree, YzhEmptyState } from '@yzh-core'
 import { EnterpriseStageLogic } from './logic'
 
 const { logic } = useCheckTree(EnterpriseStageLogic)
@@ -98,7 +99,7 @@ function handleCheckChange(payload: { added: string[]; removed: string[] }) {
           </template>
         </YzhTreeTableCheckSelector>
         <div v-else class="es-page__empty">
-          <el-empty description="请先选择左侧企业" />
+          <YzhEmptyState :icon="Pointer" title="请先选择左侧企业" />
         </div>
       </div>
     </div>
