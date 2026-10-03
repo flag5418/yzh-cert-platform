@@ -684,6 +684,167 @@ function runR19() {
   return { violations, skipped: false }
 }
 
+/* ==========================================================================
+ * ★ R20 —— 样式法条守卫（25 号 §四 S03–S11，基线只准减不准增）
+ *
+ * 分工：R18 = S01/S02（颜色·字号·间距裸硬编码）；R19 = 结构性 CSS；
+ *      R20 = 组件写法条款（按钮/空态/确认框/弹窗/标签/图标/布局/!important）。
+ *
+ * 基线文件 `scripts/style-clause-baseline.json`：
+ *   { "<条款>": { "<rel 路径>": 处数 } }
+ *   - 文件不在基线且处数 > 0  ⇒ 违规（新文件必须干净）
+ *   - 文件在基线且处数 > 基线  ⇒ 违规（回潮）
+ *   - 处数 < 基线              ⇒ 放行（进度），--report 提示可收基线
+ *
+ * 收基线：`node scripts/guards.mjs --update-clause-baseline`
+ * ⚠️ 只应在**一条条款批量收口完成后**执行，不得用来掩盖新增违规。
+ *
+ * 豁免是「实现体」不是「法外之地」：
+ *   - S06 豁免 confirm.ts / useConfirm.ts（confirmOrFalse 的实现体）
+ *   - S07 豁免 YzhDialog.vue / YzhFormDialog.vue（它们自身必须包 el-dialog）
+ * ========================================================================== */
+
+/** 法条基线文件（相对 WEB） */
+const CLAUSE_BASELINE = join(WEB, 'scripts/style-clause-baseline.json')
+
+/** 条款豁免：该文件是这条写法的实现体本身 */
+const CLAUSE_EXEMPT = {
+  S06: ['yzh.vue.core/src/utils/confirm.ts', 'yzh.vue.core/src/composables/useConfirm.ts'],
+  S07: [
+    'yzh.vue.core/src/components/layout/YzhDialog.vue',
+    'yzh.vue.core/src/components/form/YzhFormDialog.vue',
+  ],
+}
+
+/** 各条款的机器计数（返回处数；无命中返回 0） */
+const CLAUSE_CHECKS = {
+  // S03a 模板侧：按钮禁用 info/success/warning（状态色不属按钮）
+  // S03b TS 侧：动作对象 { key, text, type } 同样禁用；状态映射 Record< 与 MessageBox 选项是合法语境，必须排除
+  S03(text) {
+    let n = 0
+    for (const tag of text.match(/<el-button(?![\w-])[^>]*>/g) || []) {
+      if (/[\s"']type="(info|success|warning)"/.test(tag)) n++
+    }
+    for (const m of text.matchAll(/\btype:\s*['"](info|success|warning)['"]/g)) {
+      const before = text.slice(Math.max(0, m.index - 320), m.index)
+      if (/confirmButtonText|ElMessageBox|Record</.test(before)) continue // MessageBox 选项 / 状态映射
+      if (/\{\s*text:\s*string\s*;/.test(before)) continue // 类型声明
+      if (/key\s*:|\.push\(|YzhAction/.test(before)) n++ // 动作对象
+    }
+    return n
+  },
+  // S04 el-button 必须显式 type（:type 绑定算已声明）
+  S04(text) {
+    const tags = text.match(/<el-button(?![\w-])[^>]*>/g) || []
+    return tags.filter((t) => !/(?:^|[\s"'])[:@]?type\s*=/.test(t)).length
+  },
+  // S05 空态：el-empty + 模板里的 .empty-hint
+  S05(text) {
+    return (
+      (text.match(/<el-empty(?![\w-])/g) || []).length +
+      (text.match(/\bclass="[^"]*\bempty-hint\b/g) || []).length
+    )
+  },
+  // S06 二次确认直调
+  S06(text) {
+    return (text.match(/ElMessageBox\.confirm\(/g) || []).length
+  },
+  // S07 裸弹窗（el-dialog + el-drawer）
+  S07(text) {
+    return (
+      (text.match(/<el-dialog(?![\w-])/g) || []).length +
+      (text.match(/<el-drawer(?![\w-])/g) || []).length
+    )
+  },
+  // S08 状态标签
+  S08(text) {
+    return (text.match(/<el-tag(?![\w-])/g) || []).length
+  },
+  // S09 .bi 字体图标
+  S09(text) {
+    return (text.match(/\bbi bi-/g) || []).length
+  },
+  // S10 左树右表自造容器（.link-page；.studio-layout 是纵向壳，不属本条款）
+  S10(text) {
+    return (text.match(/\blink-page\b/g) || []).length
+  },
+  // S11 !important 出 :deep() 外（只看 <style> 块）
+  S11(text) {
+    let n = 0
+    for (const sm of text.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)) {
+      const body = sm[1]
+      let i = body.indexOf('!important')
+      while (i !== -1) {
+        const brace = body.lastIndexOf('{', i)
+        const sel = brace < 0 ? '' : body.slice(body.lastIndexOf('}', brace - 1) + 1, brace)
+        if (!sel.includes(':deep(')) n++
+        i = body.indexOf('!important', i + 1)
+      }
+    }
+    return n
+  },
+}
+
+function runR20() {
+  const files = walkAll(STYLE_ROOTS, STYLE_EXTS)
+  const exemptOf = (id) => CLAUSE_EXEMPT[id] || []
+
+  /** 重算全量：{ S03: { path: n }, … }（只保留 n > 0 的文件） */
+  const recalc = () => {
+    const next = {}
+    for (const file of files) {
+      const r = rel(file)
+      const text = readFileSync(file, 'utf8')
+      for (const [id, fn] of Object.entries(CLAUSE_CHECKS)) {
+        if (exemptOf(id).some((a) => r.endsWith(a))) continue
+        const n = fn(text)
+        if (n > 0) (next[id] ||= {})[r] = n
+      }
+    }
+    return next
+  }
+
+  if (process.argv.includes('--update-clause-baseline')) {
+    const next = recalc()
+    writeFileSync(CLAUSE_BASELINE, JSON.stringify(next, null, 2) + '\n', 'utf8')
+    const clauses = Object.keys(next).length
+    const hits = Object.values(next).reduce((s, m) => s + Object.values(m).reduce((a, b) => a + b, 0), 0)
+    console.log(`✓ 法条基线已更新：${clauses} 条款 / ${hits} 处`)
+    process.exit(0)
+  }
+
+  const baseline = existsSync(CLAUSE_BASELINE) ? JSON.parse(readFileSync(CLAUSE_BASELINE, 'utf8')) : {}
+  const violations = []
+  const progress = []
+
+  for (const file of files) {
+    const r = rel(file)
+    const text = readFileSync(file, 'utf8')
+    for (const [id, fn] of Object.entries(CLAUSE_CHECKS)) {
+      if (exemptOf(id).some((a) => r.endsWith(a))) continue
+      const n = fn(text)
+      if (n === 0) continue
+      const base = baseline[id]?.[r] ?? 0
+      if (n > base) {
+        violations.push({
+          file: r,
+          line: 0,
+          text: `[${id}] ${n} 处（基线 ${base}）—— 25 号 §四 法条违规，只准减不准增`,
+        })
+      } else if (n < base) {
+        progress.push({ id, r, n, base })
+      }
+    }
+  }
+
+  if (progress.length > 0) {
+    console.log(`\nℹ 法条进度：${progress.length} 个文件已下降，可收基线（--update-clause-baseline）`)
+    for (const p of progress.slice(0, 10)) console.log(`   [${p.id}] ${p.r} ${p.base} → ${p.n}`)
+  }
+
+  return { violations, skipped: false }
+}
+
 /**
  * 规则定义
  * - id / desc: 标识与说明
@@ -893,6 +1054,15 @@ const RULES = [
     run: runR19,
     debt: [],
     skipMsg: 'node_modules/.bin/stylelint 未安装（npm install 后生效）',
+  },
+  {
+    id: 'R20',
+    type: 'custom',
+    desc:
+      '样式法条 S03–S11（按钮语义色/显式 type/空态/确认框/弹窗/状态标签/.bi 图标/左树右表/!important，' +
+      '基线 scripts/style-clause-baseline.json 只准减不准增）',
+    run: runR20,
+    debt: [],
   },
   // ===== 审计 §8（标准目录链路）：全部为后端 .cs 扫描，debt 随修复逐条删除 =====
   {

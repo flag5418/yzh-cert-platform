@@ -62,12 +62,13 @@ AIGC:
 **⑤ 样式唯一写法 = 令牌 + 兜底（2026-10-03 · 违反 = 返工）**
 
 - 前端 `<style>` 里**颜色 / 字号 / 间距一律 `var(--yzh-*, 兜底值)`**，⛔ 禁止裸 hex、禁止 `font-size/padding/margin` 写字面量 px。
-- 映射表唯一权威：`docs/10-YZH架构/25-样式规范与硬编码治理-V1.md` §四（如 `#409eff`→`--yzh-color-primary`、`13px`→`--yzh-font-size-sm`、`16px`→`--yzh-space-4`）
+- ★ **样式法条 S01–S12（唯一权威）**：`docs/10-YZH架构/25-样式规范与硬编码治理-V1.md` §四 —— 改样式/组件前查条款号，**改造时在 commit / 注释里直接引用条款号**（如「按 S03 归一为 default」）
+- 映射表：同文 §五（如 `#409eff`→`--yzh-color-primary`、`13px`→`--yzh-font-size-sm`、`16px`→`--yzh-space-4`）
 - **覆盖 Element Plus 只能 `:deep()` + 局部 `--el-*`**，`!important` 仅限 `:deep()` 内（stylelint 已放行）
 - 豁免（允许保留 hex）：LogicFlow 画布 / ECharts / `tokens.css`·`main.css` 令牌定义 / 登录页品牌渐变
-- 守卫：`guards.mjs` **R18**（裸 hex + 裸 px，基线 `scripts/style-baseline.json` **只准减不准增**）+ **R19**（stylelint 结构性错误，基线 0）
+- 守卫：`guards.mjs` **R18**（裸 hex + 裸 px，基线 `scripts/style-baseline.json` **只准减不准增**）+ **R19**（stylelint 结构性错误，基线 0）+ **R20**（法条 S03–S11，基线 `scripts/style-clause-baseline.json` **按文件只准减不准增**）
 
-**改完必跑**：`cd src/certplatform-web && node scripts/guards.mjs`（0 违规，**含 R12 路由↔菜单一致性 + R18/R19 样式**）→ 对应端 `npm run build`（含 `vue-tsc`）。
+**改完必跑**：`cd src/certplatform-web && node scripts/guards.mjs`（0 违规，**含 R12 路由↔菜单一致性 + R18/R19/R20 样式**）→ 对应端 `npm run build`（含 `vue-tsc`）。
 
 > **动了路由或菜单 → 额外跑一次**：`./scripts/db/verify/sync_menu_urls.sh` 刷新菜单快照，否则 R12 基于过期数据（快照缺失时 R12 会跳过并告警）。
 > R12 双向判据：菜单 `Url` 无对应路由 = **报错**（点击必白屏）；路由无对应菜单 = **报错**（孤儿路由，须补菜单 / 删路由 / 登记 `ORPHAN_ALLOW`）。
