@@ -150,12 +150,6 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: var(--yzh-letter-spacing-wide);
 }
 
-/* 表格表头、按钮等强调文字 */
-.yzh-text-emphasized {
-  font-weight: var(--yzh-font-weight-medium);
-  letter-spacing: var(--yzh-letter-spacing-wide);
-}
-
 #app {
   height: 100%;
 }
@@ -190,27 +184,5 @@ a:hover {
   color: var(--yzh-color-primary-lighter);
 }
 
-/* 工具类 */
-.yzh-flex { display: flex; }
-.yzh-flex-col { display: flex; flex-direction: column; }
-.yzh-items-center { align-items: center; }
-.yzh-justify-center { justify-content: center; }
-.yzh-justify-between { justify-content: space-between; }
-.yzh-gap-1 { gap: var(--yzh-space-1); }
-.yzh-gap-2 { gap: var(--yzh-space-2); }
-.yzh-gap-3 { gap: var(--yzh-space-3); }
-.yzh-gap-4 { gap: var(--yzh-space-4); }
-.yzh-gap-6 { gap: var(--yzh-space-6); }
-.yzh-text-primary { color: var(--yzh-color-text-primary); }
-.yzh-text-secondary { color: var(--yzh-color-text-secondary); }
-.yzh-text-tertiary { color: var(--yzh-color-text-tertiary); }
-.yzh-font-semibold { font-weight: var(--yzh-font-weight-semibold); }
-.yzh-font-bold { font-weight: var(--yzh-font-weight-bold); }
-.yzh-p-4 { padding: var(--yzh-space-4); }
-.yzh-p-6 { padding: var(--yzh-space-6); }
-.yzh-m-4 { margin: var(--yzh-space-4); }
-.yzh-m-6 { margin: var(--yzh-space-6); }
-.yzh-bg-white { background-color: var(--yzh-color-bg-container); }
-.yzh-rounded { border-radius: var(--yzh-radius-md); }
-.yzh-shadow { box-shadow: var(--yzh-shadow-sm); }
-.yzh-shadow-md { box-shadow: var(--yzh-shadow-md); }
+/* 工具类：已全部清零（2026-10-03 审计：24 个类全 0 引用，禁新增 —— 需要布局请用组件或 var(--yzh-space-*)） */
+

@@ -19,7 +19,7 @@
   "cert/cert-admin/src/pages/workflow/queue/index.vue": 16,
   "cert/cert-admin/src/pages/workflow/report-rule/index.vue": 3,
   "cert/cert-admin/src/pages/workflow/skill-manage/index.vue": 1,
-  "cert/cert-auditor/src/layouts/AuditorLayout.vue": 8,
+  "cert/cert-auditor/src/layouts/AuditorLayout.vue": 7,
   "cert/cert-auditor/src/layouts/AuditorLogin.vue": 32,
   "cert/cert-auditor/src/pages/enterprise-fill-params/index.vue": 61,
   "cert/cert-auditor/src/pages/enterprise-original/components/OriginalFolderTree.vue": 9,
