@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { MagicStick, ChatLineSquare, Pointer } from '@element-plus/icons-vue'
-import { YzhPageLayout, YzhEmptyState } from '@yzh-core'
+import { confirmOrFalse, YzhPageLayout, YzhEmptyState } from '@yzh-core'
 import { CertDirectoryTree } from '@share/components'
 import { retryFailedConversions } from '@share/composables/useDirectoryApi'
 import {
@@ -246,15 +246,12 @@ function onPromptUpdate(val: string) {
 
 /* 重试失败的文档转换：把转换失败/未转换的 doc、xls 重新入队，完成后树自动刷新 */
 async function onRetryFailed() {
-  try {
-    await ElMessageBox.confirm(
-      '将把转换失败或未转换的 doc、xls 文件重新加入转换队列（文件会在转换期间暂时隐藏，完成后自动恢复）。确定继续吗？',
-      '重试失败转换',
-      { type: 'warning', confirmButtonText: '开始重试', cancelButtonText: '取消' }
-    )
-  } catch {
-    return
-  }
+  const ok = await confirmOrFalse(
+    '将把转换失败或未转换的 doc、xls 文件重新加入转换队列（文件会在转换期间暂时隐藏，完成后自动恢复）。确定继续吗？',
+    '重试失败转换',
+    { type: 'warning', confirmButtonText: '开始重试', cancelButtonText: '取消' }
+  )
+  if (!ok) return
 
   retrying.value = true
   try {

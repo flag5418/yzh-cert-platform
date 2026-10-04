@@ -49,7 +49,12 @@ vi.mock('@yzh-core', () => ({
     name: 'YzhEmptyState',
     props: ['icon', 'title', 'description', 'compact', 'iconSize'],
     template: '<div class="yzh-empty"><span>{{ title }}</span><slot name="description" /><slot name="action" /></div>'
-  }
+  },
+  // S06：二次确认唯一写法。测试对 ElMessageBox.confirm 下毒，真实实现要穿透到它
+  confirmOrFalse: (msg: string, title: string) =>
+    ElMessageBox.confirm(msg, title).then(() => true, () => false),
+  confirmChoice: (msg: string, title: string) =>
+    ElMessageBox.confirm(msg, title).then(() => 'confirm' as const, (a: unknown) => (a === 'cancel' ? 'cancel' : 'close' as const))
 }))
 
 import { ElMessage, ElMessageBox } from 'element-plus'

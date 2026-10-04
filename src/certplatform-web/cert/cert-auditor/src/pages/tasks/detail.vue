@@ -389,16 +389,15 @@ async function doFill(row: TaskGap) {
 
     // ★ 只重跑受影响的项，不重跑全部（一个任务几十条，全跑一次可能几十分钟）
     if (r.ImpactedItemCodes.length > 0) {
-      ElMessageBox.confirm(
+      const ok = await confirmOrFalse(
         `已补录 ${r.ImpactedItemCodes.length} 项数据，影响 ${r.ImpactedItemCodes.length} 条检查项。是否立即重跑这些项？`,
         '补录成功',
         { confirmButtonText: '立即重跑', cancelButtonText: '稍后', type: 'info' },
       )
-        .then(async () => {
-          await retryFailed(taskCode.value)
-          ElMessage.success('已重置为待执行，请在「执行队列」中启动')
-        })
-        .catch(() => undefined)
+      if (ok) {
+        await retryFailed(taskCode.value)
+        ElMessage.success('已重置为待执行，请在「执行队列」中启动')
+      }
     }
   } catch (e) {
     ElMessage.error((e as Error)?.message || '补录失败')
@@ -408,15 +407,12 @@ async function doFill(row: TaskGap) {
 }
 
 async function doSkip(row: TaskGap) {
-  try {
-    await ElMessageBox.confirm(
-      `跳过「${row.GapLabel}」后，依赖它的检查项将标记为「数据不足，未检查」，不会产生审核结果，且不计入「符合」数量。`,
-      '确认跳过',
-      { confirmButtonText: '确认跳过', cancelButtonText: '取消', type: 'warning' },
-    )
-  } catch {
-    return
-  }
+  const ok = await confirmOrFalse(
+    `跳过「${row.GapLabel}」后，依赖它的检查项将标记为「数据不足，未检查」，不会产生审核结果，且不计入「符合」数量。`,
+    '确认跳过',
+    { confirmButtonText: '确认跳过', cancelButtonText: '取消', type: 'warning' },
+  )
+  if (!ok) return
   try {
     await skipGap(row.Code)
     ElMessage.success('已跳过')
@@ -429,17 +425,14 @@ async function doSkip(row: TaskGap) {
 
 async function doSkipAll() {
   if (gapList.value.PendingCount === 0) return
-  try {
-    await ElMessageBox.confirm(
-      `⚠ 确认跳过全部 ${gapList.value.PendingCount} 项待补录数据？\n\n` +
-        `跳过后，依赖这些数据的检查项将标记为「数据不足，未检查」，不会产生审核结果，` +
-        `导出报告时结论列显示「数据不足，未检查」。\n\n这些检查项不会计入「符合」数量。`,
-      '确认跳过全部',
-      { confirmButtonText: '确认跳过', cancelButtonText: '取消', type: 'warning' },
-    )
-  } catch {
-    return
-  }
+  const ok = await confirmOrFalse(
+    `⚠ 确认跳过全部 ${gapList.value.PendingCount} 项待补录数据？\n\n` +
+      `跳过后，依赖这些数据的检查项将标记为「数据不足，未检查」，不会产生审核结果，` +
+      `导出报告时结论列显示「数据不足，未检查」。\n\n这些检查项不会计入「符合」数量。`,
+    '确认跳过全部',
+    { confirmButtonText: '确认跳过', cancelButtonText: '取消', type: 'warning' },
+  )
+  if (!ok) return
   try {
     const n = await skipAllGaps(taskCode.value)
     ElMessage.success(`已跳过 ${n} 项`)

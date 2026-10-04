@@ -11,8 +11,9 @@
  * 按 “/” 拆成层级节点，接口挂在最末级分组下，避免一屏几百行平铺。
  */
 
+import { confirmOrFalse } from '../../../utils/confirm'
 import { ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { SingleTableCore, type Page, type PageParams, type YzhAction } from '@yzh-core'
 import {
   getApiList,
@@ -226,19 +227,16 @@ export class ApiPageLogic extends SingleTableCore<ApiTreeRow> {
 
   /** 同步接口（扫描 + 增量更新到 sys_api） */
   async handleSync(): Promise<void> {
-    try {
-      await ElMessageBox.confirm(
-        '将扫描所有 Controller 接口并同步到数据库。已有接口的权限关联不会被清除。确认继续？',
-        '同步接口',
-        {
-          confirmButtonText: '确认同步',
-          cancelButtonText: '取消',
-          type: 'warning',
-        },
-      )
-    } catch {
-      return
-    }
+    const ok = await confirmOrFalse(
+      '将扫描所有 Controller 接口并同步到数据库。已有接口的权限关联不会被清除。确认继续？',
+      '同步接口',
+      {
+        confirmButtonText: '确认同步',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+    if (!ok) return
 
     this.syncing.value = true
     this.syncResult.value = null

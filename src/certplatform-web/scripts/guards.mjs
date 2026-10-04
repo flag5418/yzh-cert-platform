@@ -727,7 +727,8 @@ const CLAUSE_CHECKS = {
     }
     for (const m of text.matchAll(/\btype:\s*['"](info|success|warning)['"]/g)) {
       const before = text.slice(Math.max(0, m.index - 320), m.index)
-      if (/confirmButtonText|ElMessageBox/.test(before)) continue // MessageBox 选项
+      // MessageBox / 确认工具的选项对象（{ type: 'warning' } 是弹窗样式，不是按钮语义色）
+      if (/confirmButtonText|ElMessageBox|confirmOrFalse|confirmChoice|useConfirm/.test(before)) continue
       // 状态映射表声明 `const X: Record<K, { text; type }> = {` —— 必须带 `= {`，
       // 否则函数签名 `node: Record<string, any>` 也会误伤（曾漏计 3 处）
       if (/Record<[^>]*>\s*=\s*\{/.test(before)) continue
@@ -789,8 +790,26 @@ const CLAUSE_CHECKS = {
   },
 }
 
+/**
+ * ★ 测试文件豁免（2026-10-04 修守卫自身缺陷）。
+ *
+ * <para>S 法条（S03–S11）针对的是**生产 UI 代码**的组件写法。测试文件里的
+ * <c>ElMessageBox.confirm</c> 是给真实实现**打桩的 mock**，它反过来去 spy 被测代码 ——
+ * 扫它等于把测试替身当成生产代码的「二次确认直调」，属误判。</para>
+ *
+ * <para>实测触发：`prompt-template/index.test.ts:55,57` 两个 mock 被判 S06 违规（基线 0）
+ * ⇒ 逼着加基线豁免，而豁免是<b>永久债务</b>（测试文件永远不合格）。
+ * 正解是<b>测试文件不进法条扫描</b>。</para>
+ */
+function isTestFile(file) {
+  const f = String(file)
+  return /\.(test|spec)\.[cm]?[jt]sx?$/.test(f)
+    || /[/\\]__tests__[/\\]/.test(f)
+    || /\.test-d\.[jt]sx?$/.test(f)
+}
+
 function runR20() {
-  const files = walkAll(STYLE_ROOTS, STYLE_EXTS)
+  const files = walkAll(STYLE_ROOTS, STYLE_EXTS).filter((f) => !isTestFile(f))
   const exemptOf = (id) => CLAUSE_EXEMPT[id] || []
 
   /** 重算全量：{ S03: { path: n }, … }（只保留 n > 0 的文件） */

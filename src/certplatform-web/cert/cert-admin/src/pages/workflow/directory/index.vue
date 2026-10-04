@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { YzhEmptyState } from '@yzh-core'
+import { confirmOrFalse, YzhEmptyState } from '@yzh-core'
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import {
   Folder,
   Document,
@@ -348,11 +348,8 @@ function goToQueueMonitor() {
 async function cancelActiveQueue() {
   const queueCode = activeQueue.value?.QueueCode || activeQueue.value?.queueCode
   if (!queueCode) return
-  try {
-    await ElMessageBox.confirm('确定取消当前转换队列吗？未完成的文件将不再转换。', '取消队列', { type: 'warning' })
-  } catch {
-    return
-  }
+  const ok = await confirmOrFalse('确定取消当前转换队列吗？未完成的文件将不再转换。', '取消队列', { type: 'warning' })
+  if (!ok) return
   try {
     // 该端点 HTTP 恒 200，成败在信封 success（「队列不存在」等失败详情在 err）
     const res = await cancelConvert(queueCode)
@@ -455,11 +452,8 @@ async function deleteSelected() {
     return
   }
 
-  try {
-    await ElMessageBox.confirm(`确定要删除选中的 ${selectedItems.size} 个项目吗？`, '确认删除', { type: 'warning' })
-  } catch {
-    return
-  }
+  const ok = await confirmOrFalse(`确定要删除选中的 ${selectedItems.size} 个项目吗？`, '确认删除', { type: 'warning' })
+  if (!ok) return
 
   let failed = 0
   for (const code of [...selectedItems]) {
@@ -570,11 +564,13 @@ async function confirmRename(force = false) {
     const msg = e?.message || ''
     // 后端重名保护：返回 force=true 提示时需要用户二次确认后强制改名
     if (msg.includes('force=true')) {
-      try {
-        await ElMessageBox.confirm(msg.replace(/force=true/gi, '').trim() || '名称已存在，是否强制重命名？', '确认重命名', { type: 'warning' })
-        await confirmRename(true)
-      } catch {
-        /* 用户取消 */
+      const forced = await confirmOrFalse(msg.replace(/force=true/gi, '').trim() || '名称已存在，是否强制重命名？', '确认重命名', { type: 'warning' })
+      if (forced) {
+        try {
+          await confirmRename(true)
+        } catch {
+          /* 与改造前一致：此处不再二次报错（confirmRename 自身已有错误出口） */
+        }
       }
       return
     }
@@ -585,11 +581,8 @@ async function confirmRename(force = false) {
 async function deleteItem(item: any, options: { skipConfirm?: boolean } = {}) {
   const name = item.FolderName || item.folderName || item.FileName || item.fileName
   if (!options.skipConfirm) {
-    try {
-      await ElMessageBox.confirm(`确定删除「${name}」吗？`, '删除确认', { type: 'warning' })
-    } catch {
-      return
-    }
+    const ok = await confirmOrFalse(`确定删除「${name}」吗？`, '删除确认', { type: 'warning' })
+    if (!ok) return
   }
 
   try {
@@ -621,15 +614,12 @@ async function onReplacePicked(e: Event) {
   input.value = '' // 允许重复选择同一文件
   if (!picked || !replaceTarget) return
   const t = replaceTarget
-  try {
-    await ElMessageBox.confirm(
-      `确定用「${picked.name}」替换「${t.name}」吗？${['doc', 'xls'].includes(t.type) ? '替换后将自动重新转换。' : ''}`,
-      '替换确认',
-      { type: 'warning' },
-    )
-  } catch {
-    return
-  }
+  const ok = await confirmOrFalse(
+    `确定用「${picked.name}」替换「${t.name}」吗？${['doc', 'xls'].includes(t.type) ? '替换后将自动重新转换。' : ''}`,
+    '替换确认',
+    { type: 'warning' },
+  )
+  if (!ok) return
   try {
     const { queueCode } = await replaceFileApi(t.code, picked)
     if (queueCode) ElMessage.success('替换成功，已进入转换队列')

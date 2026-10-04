@@ -28,7 +28,7 @@
  */
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { YzhPageLayout } from '@yzh-core'
+import { confirmChoice, confirmOrFalse, YzhPageLayout } from '@yzh-core'
 import {
   PROMPT_TYPE,
   getStandardOptions,
@@ -302,21 +302,18 @@ type SwitchChoice = 'save' | 'draft' | 'stay'
  * 点 X 或 Esc = 「留在本页」—— 破坏性动作默认不执行。
  */
 async function askBeforeSwitch(): Promise<SwitchChoice> {
-  try {
-    await ElMessageBox.confirm(
-      '当前正文有未保存的改动。切换后会自动保留为草稿，随时可以切回来继续编辑。',
-      '有未保存改动',
-      {
-        confirmButtonText: '保存并切换',
-        cancelButtonText: '暂存草稿并切换',
-        distinguishCancelAndClose: true,
-        type: 'warning'
-      }
-    )
-    return 'save'
-  } catch (action) {
-    return action === 'cancel' ? 'draft' : 'stay'
-  }
+  const choice = await confirmChoice(
+    '当前正文有未保存的改动。切换后会自动保留为草稿，随时可以切回来继续编辑。',
+    '有未保存改动',
+    {
+      confirmButtonText: '保存并切换',
+      cancelButtonText: '暂存草稿并切换',
+      distinguishCancelAndClose: true,
+      type: 'warning'
+    }
+  )
+  if (choice === 'confirm') return 'save'
+  return choice === 'cancel' ? 'draft' : 'stay'
 }
 
 /**
@@ -482,15 +479,12 @@ async function doSave(opts: { bypassGate?: boolean; silent?: boolean } = {}): Pr
     return false
   }
   if (!opts.bypassGate && saveBlockedReason.value) {
-    try {
-      await ElMessageBox.confirm(`${saveBlockedReason.value}。仍要保存吗？`, '未通过测试闸门', {
-        confirmButtonText: '仍然保存',
-        cancelButtonText: '取消',
-        type: 'warning'
-      })
-    } catch {
-      return false
-    }
+    const ok = await confirmOrFalse(`${saveBlockedReason.value}。仍要保存吗？`, '未通过测试闸门', {
+      confirmButtonText: '仍然保存',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    if (!ok) return false
   }
 
   saving.value = true

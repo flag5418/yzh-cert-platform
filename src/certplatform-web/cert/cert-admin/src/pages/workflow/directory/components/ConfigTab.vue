@@ -11,9 +11,9 @@
  *     `StageCode` = cert_cert_stage.Code
  *   - ★ 创建已无感懒建：阶段首次进入/上传时后端 Ensure 自动建行，本界面只做管理与批量查看。
  */
-import { YzhEmptyState } from '@yzh-core'
+import { confirmOrFalse, YzhEmptyState } from '@yzh-core'
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Plus, FolderOpened } from '@element-plus/icons-vue'
 import { yzhApi } from '@yzh-core/api/client'
 import {
@@ -172,16 +172,13 @@ async function handleSubmit() {
 
 async function handleDelete(row: StandardDirectoryConfig) {
   const code = row.Code
-  try {
-    await ElMessageBox.confirm(
-      `确定删除该目录配置（${orgLabel(row.OrgCode)} × ${stdLabel(row.StandardCode)} × ${stageLabel(row.StageCode)}）吗？` +
-        '该目录下的文件夹、文件与上传队列将一并清理；再次进入该阶段会自动重建空目录。',
-      '删除确认',
-      { type: 'warning' }
-    )
-  } catch {
-    return
-  }
+  const ok = await confirmOrFalse(
+    `确定删除该目录配置（${orgLabel(row.OrgCode)} × ${stdLabel(row.StandardCode)} × ${stageLabel(row.StageCode)}）吗？` +
+      '该目录下的文件夹、文件与上传队列将一并清理；再次进入该阶段会自动重建空目录。',
+    '删除确认',
+    { type: 'warning' }
+  )
+  if (!ok) return
   try {
     const res: any = await deleteDirectoryConfig(code)
     if (!res?.success) throw new Error(res?.err || res?.message || '删除失败')

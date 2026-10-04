@@ -152,9 +152,10 @@
 </template>
 
 <script setup lang="ts">
+import { confirmOrFalse } from '../utils/confirm'
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { getCurrentUser, modifyPwd, updateUserInfo } from '../api/auth'
@@ -361,20 +362,18 @@ async function changePassword() {
 }
 
 // 下拉菜单命令处理
-function handleCommand(command: string) {
+async function handleCommand(command: string) {
   if (command === 'logout') {
-    ElMessageBox.confirm('确定要退出登录吗？', '提示', {
+    const ok = await confirmOrFalse('确定要退出登录吗？', '提示', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning'
     })
-      .then(() => {
-        clearToken()
-        clearMenus()
-        ElMessage.success('已退出登录')
-        router.push('/login')
-      })
-      .catch(() => {})
+    if (!ok) return
+    clearToken()
+    clearMenus()
+    ElMessage.success('已退出登录')
+    router.push('/login')
   } else if (command === 'profile') {
     openProfileDialog()
   } else if (command === 'password') {

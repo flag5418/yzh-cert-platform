@@ -151,6 +151,7 @@
 <script setup lang="ts">
 import { yzhApi } from '@yzh-core/api/client'
 import { expectOk } from '@yzh-core/utils/apiResponse'
+import { confirmOrFalse } from '@yzh-core'
 import ExecutionResultPanel from './ExecutionResultPanel.vue'
 import ExecutionHistoryDrawer from './ExecutionHistoryDrawer.vue'
 import NodePropertyForm from './NodePropertyForm.vue'
@@ -443,11 +444,10 @@ function toggleRightPanel() { rightPanelVisible.value = !rightPanelVisible.value
 async function togglePhase(phase: any, std: any, org: any) {
   // 切换阶段会重建画布 —— 存在未保存改动时先确认，避免静默丢失
   if (store.state.dirty) {
-    try {
-      await ElMessageBox.confirm('当前工作流有未保存的改动，切换阶段后将丢失。是否继续？', '未保存提示', {
-        type: 'warning', confirmButtonText: '继续切换', cancelButtonText: '留在当前'
-      })
-    } catch { return }
+    const ok = await confirmOrFalse('当前工作流有未保存的改动，切换阶段后将丢失。是否继续？', '未保存提示', {
+      type: 'warning', confirmButtonText: '继续切换', cancelButtonText: '留在当前'
+    })
+    if (!ok) return
   }
   phase.expanded = !phase.expanded
   // 读：组织树是服务层手写 DTO（camelCase，已登记例外）
@@ -504,11 +504,10 @@ const refreshTree = () => { loadTree() }
 async function selectLeaf(leaf: any, phase: any) {
   // 切走会覆盖画布 —— 存在未保存改动时先确认
   if (store.state.dirty && currentLeaf.value?.id !== leaf.id) {
-    try {
-      await ElMessageBox.confirm('当前工作流有未保存的改动，切换后将丢失。是否继续？', '未保存提示', {
-        type: 'warning', confirmButtonText: '继续切换', cancelButtonText: '留在当前'
-      })
-    } catch { return }
+    const ok = await confirmOrFalse('当前工作流有未保存的改动，切换后将丢失。是否继续？', '未保存提示', {
+      type: 'warning', confirmButtonText: '继续切换', cancelButtonText: '留在当前'
+    })
+    if (!ok) return
   }
   // ★ 引用同一性：currentLeaf 必须指向 phase.children 中的那个对象。
   //   若写成 { ...leaf } 浅拷贝，保存后的回写会落到副本上，
@@ -858,11 +857,14 @@ function clearCanvas() {
   try { const gm = diagram.value.graphModel; if (gm) { gm.edges = []; gm.nodes = [] } else { diagram.value.render({ nodes: [], edges: [] }) } } catch {}
   store.clearAll()
 }
-function handleClearCanvas() {
+async function handleClearCanvas() {
   if (!store.state.nodes.length) { ElMessage.info('画布已为空'); return }
-  ElMessageBox.confirm('确认清空画布上的所有节点和连线？', '清空确认', { type: 'warning' })
-    .then(() => { clearCanvas(); selectedNode.value = null; ensureStartNode(); ElMessage.success('画布已清空') })
-    .catch(() => {})
+  const ok = await confirmOrFalse('确认清空画布上的所有节点和连线？', '清空确认', { type: 'warning' })
+  if (!ok) return
+  clearCanvas()
+  selectedNode.value = null
+  ensureStartNode()
+  ElMessage.success('画布已清空')
 }
 function ensureStartNode() {
   if (!diagram.value) return
@@ -1043,8 +1045,9 @@ async function handleSave() {
   const config = serialize(store.state.nodes, store.state.edges, { version: 1 as any, workflowType: props.workflowType } as any) as any
   const layout = extractLayout(store.state.nodes)
   const leafName = currentLeaf.value[props.treeConfig.textField] || currentLeaf.value[props.treeConfig.codeField] || ''
+  const ok = await confirmOrFalse(`保存工作流到「${leafName}」？`, '保存确认', { type: 'info' })
+  if (!ok) return
   try {
-    await ElMessageBox.confirm(`保存工作流到「${leafName}」？`, '保存确认', { type: 'info' })
     const ctx = { leaf: currentLeaf.value, filter: currentFilter, config, layout }
     const url = props.saveConfig.getUrl ? props.saveConfig.getUrl(ctx) : props.saveConfig.api
     const payload = props.saveConfig.buildPayload ? props.saveConfig.buildPayload(ctx) : {
@@ -1071,7 +1074,7 @@ async function handleSave() {
       emit('save-success', res)
       ElMessage.success('工作流保存成功')
     } else ElMessage.error(res?.err || res?.message || '保存失败')
-  } catch (e: any) { if (e?.message !== 'cancel') ElMessage.error('保存失败') }
+  } catch { ElMessage.error('保存失败') }
 }
 
 // ==================== Execution ====================

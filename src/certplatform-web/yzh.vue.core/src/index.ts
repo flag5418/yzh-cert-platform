@@ -101,4 +101,4 @@ export {
   unwrap,
   unwrapOk,
 } from './utils/apiResponse'
-export { confirmOrFalse } from './utils/confirm'
+export { confirmOrFalse, confirmChoice, type ConfirmChoice } from './utils/confirm'

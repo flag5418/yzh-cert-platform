@@ -13,6 +13,7 @@
  * ★ 上传（04 §一 四段式）：`upload/plan` 预览（DispatchMatcher M0–M3）→ `upload/init` → `upload/file` → `upload/confirm`
  * ★ 就位状态以后端 `Status` 字段为唯一权威（01 §5.1），前端不自行推断组合条件
  */
+import { confirmOrFalse } from '@yzh-core'
 import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { YzhTableColumn, YzhTableDataLoader } from '@yzh-core'
@@ -587,7 +588,8 @@ export class ResourcesLogic {
     try {
       const q = await activeQueue(cfg, this.selectedEnterprise.value)
       if (!q?.QueueCode) { ElMessage.info('当前没有运行中的转换队列'); return }
-      await ElMessageBox.confirm(`取消转换队列 ${q.QueueCode}？未完成的文件会标记为转换失败。`, '取消队列', { type: 'warning' })
+      const ok = await confirmOrFalse(`取消转换队列 ${q.QueueCode}？未完成的文件会标记为转换失败。`, '取消队列', { type: 'warning' })
+      if (!ok) return
       await cancelQueue(q.QueueCode, this.selectedEnterprise.value)
       ElMessage.success('队列已取消')
       await this.reloadStandard(standardCode)
@@ -1166,12 +1168,11 @@ export class ResourcesLogic {
   async handleRestore(row: FileVersionRow) {
     const file = this.versionsFile.value
     if (!file || this.restoringVersion.value > 0) return
-    try {
-      await ElMessageBox.confirm(
-        `用归档版本 v${row.VersionNumber}（${row.FileName}）恢复？当前文件会先归档，版本号继续递增。`,
-        '恢复确认', { type: 'warning', confirmButtonText: '恢复' }
-      )
-    } catch { return }
+    const ok = await confirmOrFalse(
+      `用归档版本 v${row.VersionNumber}（${row.FileName}）恢复？当前文件会先归档，版本号继续递增。`,
+      '恢复确认', { type: 'warning', confirmButtonText: '恢复' }
+    )
+    if (!ok) return
 
     this.restoringVersion.value = row.VersionNumber
     try {

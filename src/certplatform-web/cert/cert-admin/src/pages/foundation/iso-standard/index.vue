@@ -13,8 +13,8 @@
  * - toolbar 按钮根据配置动态渲染
  */
 import { Delete, Plus, RefreshRight } from '@element-plus/icons-vue'
-import { YzhForm, YzhTreeTableLayout, YzhTreeTable, type TreeNode } from '@yzh-core'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { confirmOrFalse, YzhForm, YzhTreeTableLayout, YzhTreeTable, type TreeNode } from '@yzh-core'
+import { ElMessage } from 'element-plus'
 import { computed, onMounted, nextTick, ref } from 'vue'
 import { ISOStandardTreeTableLogic } from './logic'
 
@@ -75,7 +75,7 @@ function handleEditStd(node: TreeNode) {
 
 /** 删除标准 */
 async function handleDeleteStd(node: TreeNode) {
-  await ElMessageBox.confirm(
+  const ok = await confirmOrFalse(
     `确定删除标准【${node.Name}】？`,
     '删除确认',
     {
@@ -84,6 +84,7 @@ async function handleDeleteStd(node: TreeNode) {
       cancelButtonText: '取消',
     },
   )
+  if (!ok) return
   await logic.deleteStd(node)
   ElMessage.success('已删除标准')
 }
@@ -107,11 +108,12 @@ async function handleEditClause(row: any) {
 
 /** 删除条款 */
 async function handleDeleteClause(row: any) {
-  await ElMessageBox.confirm(
+  const ok = await confirmOrFalse(
     `确定删除条款【${row.ClauseNumber} ${row.Title}】？`,
     '删除确认',
     { type: 'warning' },
   )
+  if (!ok) return
   await logic.deleteClause(row)
   ElMessage.success('删除成功')
 }
@@ -138,11 +140,12 @@ async function handleBatchDelete() {
     ElMessage.warning('请先选择要删除的条款')
     return
   }
-  await ElMessageBox.confirm(
+  const ok = await confirmOrFalse(
     `确定删除选中的 ${selectedRows.value.length} 个条款？`,
     '批量删除',
     { type: 'warning' },
   )
+  if (!ok) return
   await logic.batchDeleteClauses(selectedRows.value)
   selectedRows.value = []
   tableRef.value?.clearSelection?.()

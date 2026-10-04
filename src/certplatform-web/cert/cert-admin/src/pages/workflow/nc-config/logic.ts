@@ -20,7 +20,7 @@
  *   loadConfig()   → 后端只有 GET /config，无 /treepconfig → 前端构造 TreeConfig
  *   loadTreeRoot() → 树不是本实体树，取 StandardDirectory 的组织树
  */
-import {
+import { confirmOrFalse,
   TreeTableLogic,
   expectOk,
   type YzhTableColumn,
@@ -32,7 +32,7 @@ import {
   type ApiResponse,
 } from '@yzh-core'
 import { ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { getOrganizationTree } from '@share/composables/useDirectoryApi'
 import { useFileTree, type TreeNode as FileTreeNode } from '@share/composables/useFileTree'
 import { getISOClauseTree } from '@share/api/workflow/nc-config'
@@ -179,11 +179,8 @@ export class NCConfigLogic extends TreeTableLogic<any> {
     // 前端仅覆写行为钩子，不改按钮声明）
     this.registerHandler('custom:Copy', async (row) => {
       if (!row) return
-      try {
-        await ElMessageBox.confirm(`确定复制规则「${row.RuleName}」？`, '确认复制', { type: 'info' })
-      } catch {
-        return
-      }
+      const ok = await confirmOrFalse(`确定复制规则「${row.RuleName}」？`, '确认复制', { type: 'info' })
+      if (!ok) return
       await this.executeAction('Copy', row)
     })
     // 新增前校验树选中（业务差异钩子）

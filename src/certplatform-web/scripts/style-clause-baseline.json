@@ -1,4 +1,7 @@
 {
+  "S03": {
+    "cert/cert-auditor/src/pages/enterprise-original/components/OriginalFolderTree.vue": 1
+  },
   "S04": {
     "cert/cert-admin/src/pages/cert/fill-param-def/index.vue": 1,
     "cert/cert-admin/src/pages/foundation/iso-standard/index.vue": 1,
@@ -8,7 +11,6 @@
     "cert/cert-admin/src/pages/workflow/doc-extraction-rule/components/DocPreview.vue": 2,
     "cert/cert-admin/src/pages/workflow/doc-extraction-rule/components/PromptVerifyTab.vue": 2,
     "cert/cert-admin/src/pages/workflow/doc-extraction-rule/index.vue": 1,
-    "cert/cert-admin/src/pages/workflow/doc-fill-rule/components/PromptPanel.vue": 1,
     "cert/cert-admin/src/pages/workflow/doc-fill-rule/components/RegisterTemplateDialog.vue": 1,
     "cert/cert-admin/src/pages/workflow/doc-fill-rule/index.vue": 1,
     "cert/cert-admin/src/pages/workflow/nc-config/index.vue": 1,
@@ -36,6 +38,26 @@
     "yzh.vue.core/src/components/layout/YzhTree.vue": 1,
     "yzh.vue.core/src/components/table/YzhTable.vue": 4,
     "yzh.vue.core/src/components/ui/YzhEmptyState.vue": 1,
+    "yzh.vue.core/src/layouts/YzhAppLayout.vue": 2
+  },
+  "S05": {
+    "cert/cert-auditor/src/pages/enterprise-original/components/OriginalFolderTree.vue": 1
+  },
+  "S06": {
+    "cert/cert-auditor/src/pages/enterprise-original/logic.ts": 3
+  },
+  "S07": {
+    "cert/cert-admin/src/pages/foundation/iso-standard/index.vue": 2,
+    "cert/cert-admin/src/pages/workflow/directory/components/ConfigTab.vue": 1,
+    "cert/cert-admin/src/pages/workflow/directory/index.vue": 5,
+    "cert/cert-admin/src/pages/workflow/doc-fill-rule/components/AnchorSidePanel.vue": 1,
+    "cert/cert-admin/src/pages/workflow/queue/index.vue": 1,
+    "cert/cert-auditor/src/pages/enterprise-fill-params/index.vue": 1,
+    "cert/cert-auditor/src/pages/enterprise-original/index.vue": 6,
+    "cert/cert-auditor/src/pages/resources/index.vue": 7,
+    "cert/cert-auditor/src/pages/tasks/detail.vue": 1,
+    "cert/cert-share/src/components/auditor/ExpertResultPanel.vue": 2,
+    "cert/cert-share/src/components/workflow/ExecutionHistoryDrawer.vue": 1,
     "yzh.vue.core/src/layouts/YzhAppLayout.vue": 2
   },
   "S08": {
@@ -82,49 +104,12 @@
     "yzh.vue.core/src/pages/system/dictionary/index.vue": 1,
     "yzh.vue.core/src/pages/system/menu/index.vue": 1,
     "yzh.vue.core/src/pages/system/organization/index.vue": 1,
-    "yzh.vue.core/src/pages/system/role/index.vue": 2,
     "yzh.vue.core/src/pages/system/role-api/index.vue": 1,
+    "yzh.vue.core/src/pages/system/role/index.vue": 2,
     "yzh.vue.core/src/pages/system/user/index.vue": 1
   },
   "S10": {
     "cert/cert-admin/src/pages/foundation/cert-org-stage/index.vue": 2,
     "cert/cert-admin/src/pages/foundation/cert-org-standard/index.vue": 2
-  },
-  "S06": {
-    "cert/cert-admin/src/pages/foundation/iso-standard/index.vue": 3,
-    "cert/cert-admin/src/pages/workflow/directory/components/ConfigTab.vue": 1,
-    "cert/cert-admin/src/pages/workflow/directory/index.vue": 5,
-    "cert/cert-admin/src/pages/workflow/doc-extraction-rule/index.vue": 1,
-    "cert/cert-admin/src/pages/workflow/doc-fill-rule/components/PromptPanel.vue": 1,
-    "cert/cert-admin/src/pages/workflow/doc-fill-rule/components/RegisterTemplateDialog.vue": 1,
-    "cert/cert-admin/src/pages/workflow/nc-config/logic.ts": 1,
-    "cert/cert-admin/src/pages/workflow/prompt-template/index.vue": 2,
-    "cert/cert-admin/src/pages/workflow/queue/index.vue": 2,
-    "cert/cert-auditor/src/pages/enterprise-original/logic.ts": 3,
-    "cert/cert-auditor/src/pages/resources/logic.ts": 2,
-    "cert/cert-auditor/src/pages/tasks/detail.vue": 3,
-    "cert/cert-share/src/components/workflow/WorkflowDesigner.vue": 4,
-    "yzh.vue.core/src/components/table/YzhTable.vue": 2,
-    "yzh.vue.core/src/layouts/YzhAppLayout.vue": 1,
-    "yzh.vue.core/src/pages/system/api/logic.ts": 1
-  },
-  "S07": {
-    "cert/cert-admin/src/pages/foundation/iso-standard/index.vue": 2,
-    "cert/cert-admin/src/pages/workflow/directory/components/ConfigTab.vue": 1,
-    "cert/cert-admin/src/pages/workflow/directory/index.vue": 5,
-    "cert/cert-admin/src/pages/workflow/queue/index.vue": 1,
-    "cert/cert-auditor/src/pages/enterprise-fill-params/index.vue": 1,
-    "cert/cert-auditor/src/pages/enterprise-original/index.vue": 6,
-    "cert/cert-auditor/src/pages/resources/index.vue": 7,
-    "cert/cert-auditor/src/pages/tasks/detail.vue": 1,
-    "cert/cert-share/src/components/auditor/ExpertResultPanel.vue": 2,
-    "cert/cert-share/src/components/workflow/ExecutionHistoryDrawer.vue": 1,
-    "yzh.vue.core/src/layouts/YzhAppLayout.vue": 2
-  },
-  "S03": {
-    "cert/cert-auditor/src/pages/enterprise-original/components/OriginalFolderTree.vue": 1
-  },
-  "S05": {
-    "cert/cert-auditor/src/pages/enterprise-original/components/OriginalFolderTree.vue": 1
   }
 }

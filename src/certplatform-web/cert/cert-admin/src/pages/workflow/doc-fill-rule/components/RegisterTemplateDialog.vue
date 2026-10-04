@@ -15,9 +15,9 @@
  *   让实施人员一眼看出「这份文件到底能不能填」。
  */
 import { computed, ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { RefreshRight } from '@element-plus/icons-vue'
-import { YzhDialog, YzhTable, unwrapOk, type PageParams, type SearchField, type YzhAction, type YzhTableColumn } from '@yzh-core'
+import { confirmOrFalse, YzhDialog, YzhTable, unwrapOk, type PageParams, type SearchField, type YzhAction, type YzhTableColumn } from '@yzh-core'
 import {
   getDocTemplateCandidates,
   registerDocTemplate,
@@ -81,17 +81,14 @@ function rowActions(row: DocTemplateCandidate): YzhAction[] {
 
 async function handleRowAction(key: string, row: DocTemplateCandidate) {
   if (key !== 'register') return
-  try {
-    await ElMessageBox.confirm(
-      `将把「${row.FileName}」登记为标准文档模板。\n\n` +
-        `登记类型：${row.RegisterKind}（归一产物）\n` +
-        '登记后即可为它配置锚点规则与全文填写规则。',
-      '确认登记',
-      { type: 'info', confirmButtonText: '登记', cancelButtonText: '取消' },
-    )
-  } catch {
-    return
-  }
+  const ok = await confirmOrFalse(
+    `将把「${row.FileName}」登记为标准文档模板。\n\n` +
+      `登记类型：${row.RegisterKind}（归一产物）\n` +
+      '登记后即可为它配置锚点规则与全文填写规则。',
+    '确认登记',
+    { type: 'info', confirmButtonText: '登记', cancelButtonText: '取消' },
+  )
+  if (!ok) return
   submitting.value = true
   try {
     unwrapOk(

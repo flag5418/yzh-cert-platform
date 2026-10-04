@@ -17,8 +17,9 @@
  *
  * 独立可用性（C-A11）：仅传 columns + dataLoader 即可渲染与交互。
  */
+import { confirmOrFalse } from '../../utils/confirm'
 import YzhEmptyState from '../ui/YzhEmptyState.vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Operation, WarningFilled, Files } from '@element-plus/icons-vue'
 import { computed, getCurrentInstance, onMounted, reactive, ref, watch } from 'vue'
 import YzhPagination from '../layout/YzhPagination.vue'
@@ -190,11 +191,8 @@ const toolbarButtons = computed<YzhAction[]>(() =>
 async function onRowActionClick(action: YzhAction, row: T) {
   if (action.disabled) return
   if (action.confirm) {
-    try {
-      await ElMessageBox.confirm(action.confirm, '操作确认', { type: 'warning' })
-    } catch {
-      return
-    }
+    const ok = await confirmOrFalse(action.confirm, '操作确认', { type: 'warning' })
+    if (!ok) return
   }
   emit('row-action', action.key, row, action)
 }
@@ -203,11 +201,8 @@ async function onRowActionClick(action: YzhAction, row: T) {
 async function onToolbarActionClick(action: YzhAction) {
   if (action.disabled) return
   if (action.confirm) {
-    try {
-      await ElMessageBox.confirm(action.confirm, '操作确认', { type: 'warning' })
-    } catch {
-      return
-    }
+    const ok = await confirmOrFalse(action.confirm, '操作确认', { type: 'warning' })
+    if (!ok) return
   }
   emit('toolbar-action', action.key, action)
 }

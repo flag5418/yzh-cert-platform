@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { YzhPageLayout } from '@yzh-core'
+import { ElMessage } from 'element-plus'
+import { confirmOrFalse, YzhPageLayout } from '@yzh-core'
 import {
   getQueueList,
   getQueueStatus,
@@ -102,11 +102,8 @@ const openDetail = async (row: QueueListItem) => {
 }
 
 const handleRetryQueue = async (row: QueueListItem) => {
-  try {
-    await ElMessageBox.confirm(`确定要重新执行队列 ${row.queueCode} 吗？`, '整队重试', { type: 'warning' })
-  } catch {
-    return
-  }
+  const ok = await confirmOrFalse(`确定要重新执行队列 ${row.queueCode} 吗？`, '整队重试', { type: 'warning' })
+  if (!ok) return
   try {
     await retryQueue(row.queueCode)
     ElMessage.success('队列已重新排队')
@@ -117,11 +114,8 @@ const handleRetryQueue = async (row: QueueListItem) => {
 }
 
 const handleCancelQueue = async (row: QueueListItem) => {
-  try {
-    await ElMessageBox.confirm(`确定要取消队列 ${row.queueCode} 吗？正在执行的任务将被终止。`, '取消队列', { type: 'warning' })
-  } catch {
-    return
-  }
+  const ok = await confirmOrFalse(`确定要取消队列 ${row.queueCode} 吗？正在执行的任务将被终止。`, '取消队列', { type: 'warning' })
+  if (!ok) return
   try {
     await cancelQueue(row.queueCode)
     ElMessage.success('队列已取消')
