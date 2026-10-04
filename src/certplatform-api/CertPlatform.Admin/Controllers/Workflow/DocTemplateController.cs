@@ -11,6 +11,7 @@ using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Admin.Entities.Doc;
 using CertPlatform.Admin.Services.DocExtraction;
+using CertPlatform.Admin.Services.StandardDirectory;
 using CertPlatform.Shared.Constants;
 using CertPlatform.Shared.Storage;
 
@@ -47,6 +48,7 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
     private readonly DocExtractionRuleService _extraction;
     private readonly EntityService<DocTemplateAnchor> _anchors;
     private readonly IObjectStorage _storage;
+    private readonly StandardDirectoryService _directory;
     private readonly ILogger<DocTemplateController> _logger;
 
     public DocTemplateController(
@@ -56,6 +58,7 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         IDbOrm db,
         DocExtractionRuleService extraction,
         IObjectStorage storage,
+        StandardDirectoryService directory,
         ILogger<DocTemplateController> logger)
         : base(entityService, userContext)
     {
@@ -63,6 +66,7 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         _db = db;
         _extraction = extraction;
         _storage = storage;
+        _directory = directory;
         _logger = logger;
     }
 
@@ -394,6 +398,17 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
             return Ok(ApiResponse<object>.Fail($"上传失败：{ex.Message}"));
         }
 
+        // ★★ 换版必须失效预览缓存（2026-10-04）——
+        //   预览 PDF 的缓存路径由**源路径**派生（`…/_template/x.docx` → `…/_template/pdf/x.docx.pdf`），
+        //   而「重新上传 = 换版」时同名文件的缓存路径**完全相同** ⇒ 不删的话中栏会继续显示
+        //   **上一版**的 PDF。用户刚上传完期待看到新版，却看到旧版 —— 这是「静默显示错内容」，
+        //   比直接报错危险得多（用户会以为上传没生效，然后反复重传）。
+        //   两个路径都失效：新路径（同名覆盖）+ 旧路径（改名换版时旧缓存会变孤儿）。
+        var prevPath = (await FindAnyByStandardFileAsync(dto.StandardFileCode))?.StoragePath;
+        await InvalidatePreviewCacheAsync(templatePath);
+        if (!string.IsNullOrEmpty(prevPath) && !string.Equals(prevPath, templatePath, StringComparison.Ordinal))
+            await InvalidatePreviewCacheAsync(prevPath);
+
         var result = await UpsertTemplateAsync(fileRow, templatePath, kind, fileName, sha256, dto.Remark);
         if (!result.Success)
             return Ok(ApiResponse<object>.Fail(result.Error ?? "模板登记失败"));
@@ -422,9 +437,118 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
     }
 
     /// <summary>
-    /// <b>左树</b>：已登记模板按「机构 → 标准 · 阶段 → 模板文件」三级展开。
+    /// ★★ <b>左树（首选）</b>：<b>标准资料清单树</b> + 空白模板状态，五级展开
+    /// 「机构 → 标准 → 阶段 → 文件夹 → 文件」。
+    ///
+    /// <para><b>为什么是资料清单而不是模板表</b>（2026-10-04 用户裁定）：
+    /// 「我们所有的文档来源首先得有标准文档资料清单，我们是根据这个资料清单的文件，
+    /// 下载后进行空白文档设置，上传后，再定义规则的，<b>而不是想当然的空白的</b>」。</para>
+    ///
+    /// <para>按模板表构树时，<b>还没上传模板的文件在页面上根本不存在</b> ⇒ 用户无从下手。
+    /// 实测：模板表 1 行 vs 资料清单 168 份 ⇒ 树几乎是空的。</para>
+    ///
+    /// <para><b>与「标准资料清单」页同源</b>：机构/标准/阶段复用
+    /// <c>StandardDirectoryService.GetOrganizationTreeAsync</c>，文件夹保留段过滤复用同一份口径
+    /// ⇒ 两页的树不可能漂移。</para>
+    ///
+    /// <para><b>与 <see cref="Tree"/> 的关系</b>：<c>tree</c> 保留（只列已登记模板，供
+    /// 「候选/登记」类场景）；页面左树已切到本端点。<b>⛔ 不要删 <c>tree</c></b> ——
+    /// 删了会让 ApiCode 关联断裂。</para>
+    /// </summary>
+    [HttpGet("directory-tree")]
+    public async Task<IActionResult> DirectoryTree()
+    {
+        var nodes = await _directory.GetTemplateDirectoryTreeAsync();
+
+        var total = 0;
+        var withTemplate = 0;
+        void Walk(List<TemplateDirectoryNode> ns)
+        {
+            foreach (var n in ns)
+            {
+                if (n.Extra.TryGetValue("kind", out var k) && k as string == "file")
+                {
+                    total++;
+                    if (n.Extra.TryGetValue("hasTemplate", out var h) && h is true) withTemplate++;
+                }
+                Walk(n.Children);
+            }
+        }
+        Walk(nodes);
+
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            Nodes = nodes,
+            Total = total,
+            WithTemplate = withTemplate,
+        }));
+    }
+
+    /// <summary>
+    /// <b>挂接 / 解绑全文填写提示词</b>：写 <c>cert_doc_template.FillPromptCode</c>。
+    ///
+    /// <para>【为什么单开一个端点，而不是复用通用 <c>update</c>】</para>
+    /// <para>通用 <c>update</c> 会把 <c>BcFlag</c> 的全部列提交一遍 —— 前端只要漏传一个业务键，
+    /// 它就被清空（见「静默失败陷阱」⑳/㉑）。而本操作**只改一列**，语义清晰、无法误伤。</para>
+    ///
+    /// <para>【校验】非空 <c>PromptCode</c> 必须**至少存在一个未软删的版本**，
+    /// 否则就是挂了个空壳 —— 运行期 <c>resolve</c> 找不到版本 ⇒ 静默不走全文规则，
+    /// 而界面上却显示「已挂接」，是最难查的一类不一致。</para>
+    /// </summary>
+    [HttpPost("set-prompt")]
+    public async Task<IActionResult> SetPrompt([FromBody] SetPromptRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.TemplateCode))
+            return Ok(ApiResponse<object>.Fail("请指定模板 Code"));
+
+        // ★ 双关键字准则 A：定位只用 Code；含已删也要能查到（软删模板不该在这里被"复活"）
+        var tpl = await _db.Client.Queryable<DocTemplate>()
+            .Where(t => t.Code == req.TemplateCode)
+            .FirstAsync();
+        if (tpl == null)
+            return Ok(ApiResponse<object>.Fail("模板不存在"));
+        if (tpl.IsDeleted)
+            return Ok(ApiResponse<object>.Fail("该模板已删除，无法挂接提示词"));
+
+        var promptCode = (req.PromptCode ?? string.Empty).Trim();
+
+        if (promptCode.Length > 0)
+        {
+            var versions = await _db.Client.Queryable<DocFillPrompt>()
+                .Where(p => p.PromptCode == promptCode)
+                .ToListAsync();
+            if (!versions.Any(p => !p.IsDeleted))
+                return Ok(ApiResponse<object>.Fail($"提示词「{promptCode}」还没有任何版本，无法挂接"));
+        }
+
+        tpl.FillPromptCode = promptCode.Length == 0 ? null : promptCode;
+        tpl.UpdateTime = DateTime.Now;
+
+        // ⚠️ 列级更新：并发写同行时不能整行覆盖（见「静默失败陷阱」㉕/㉖）
+        var upd = await _db.UpdateAsync(tpl, new[]
+        {
+            nameof(DocTemplate.FillPromptCode),
+            nameof(DocTemplate.UpdateTime),
+        });
+        if (!upd.Success)
+            return Ok(ApiResponse<object>.Fail(upd.Error ?? "挂接提示词失败"));
+
+        _logger.LogInformation("[DocTemplate] 挂接提示词：Template={Tpl}, PromptCode={P}",
+            tpl.Code, promptCode.Length == 0 ? "(解绑)" : promptCode);
+
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            TemplateCode = tpl.Code,
+            FillPromptCode = tpl.FillPromptCode,
+            Bound = promptCode.Length > 0,
+        }));
+    }
+
+    /// <summary>
+    /// <b>左树（旧）</b>：已登记模板按「机构 → 标准 · 阶段 → 模板文件」三级展开。
     /// <para>节点字段遵循 <c>YzhTreeTableLayout</c> 契约：<c>Code</c> / <c>Name</c> / <c>Children</c> /
     /// <c>IsLeaf</c> / <c>Extra</c>（<c>Extra</c> 携带 <c>kind</c> 与锚点数，供右侧按 <c>kind</c> 分派）。</para>
+    /// <para>⚠️ 页面左树已改用 <see cref="DirectoryTree"/>（资料清单驱动）。本端点保留兼容。</para>
     /// </summary>
     [HttpGet("tree")]
     public async Task<IActionResult> Tree()
@@ -476,6 +600,22 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
                     .ToListAsync())
                 .ToDictionary(x => x.Code, x => x.Name ?? x.Code, StringComparer.Ordinal);
 
+        // ★ 标准目录文件行：左树要给模板叶子挂「文档分类」徽标（37 号 §3.6 组 E / 组 F 分流），
+        //   而 DocCategory 的**权威列在 `cert_standard_directory_file`**（不是契约表、也不是模板表）。
+        //   ⇒ 一次批量查回，⛔ 不逐模板查（N+1）。
+        var stdFileCodes = templates
+            .Select(t => t.StandardFileCode)
+            .Where(c => !string.IsNullOrEmpty(c))
+            .Distinct()
+            .ToList();
+
+        var stdFiles = stdFileCodes.Count == 0
+            ? new Dictionary<string, StandardDirectoryFile>(StringComparer.Ordinal)
+            : (await _db.Client.Queryable<StandardDirectoryFile>()
+                    .Where(x => stdFileCodes.Contains(x.Code))
+                    .ToListAsync())
+                .ToDictionary(x => x.Code, x => x, StringComparer.Ordinal);
+
         string NameOf(Dictionary<string, string> map, string key)
             => string.IsNullOrEmpty(key) ? "未指定" : map.TryGetValue(key, out var n) ? n : key;
 
@@ -496,6 +636,7 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
                         var leaves = scopeGroup.Select(t =>
                         {
                             var stat = anchorStat.TryGetValue(t.Code, out var s) ? s : new { Total = 0, Orphan = 0 };
+                            var stdFile = stdFiles.TryGetValue(t.StandardFileCode ?? string.Empty, out var sf) ? sf : null;
                             return new TreeDto
                             {
                                 Code = t.Code,
@@ -505,6 +646,9 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
                                 {
                                     ["kind"] = "template",
                                     ["standardFileCode"] = t.StandardFileCode,
+                                    // ★ 文档分类（权威列 = 标准目录文件行）：editable / fixed
+                                    ["docCategory"] = stdFile?.DocCategory,
+                                    ["standardFileName"] = stdFile?.FileName,
                                     ["fileKind"] = t.FileKind,
                                     ["storagePath"] = t.StoragePath,
                                     ["fillPromptCode"] = t.FillPromptCode,
@@ -628,6 +772,31 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
     }
 
     /// <summary>
+    /// 失效某个模板路径派生的**预览 PDF 字节缓存**（best-effort，⛔ 失败不阻断换版）。
+    ///
+    /// <para><b>缓存路径口径必须与读侧一致</b>：同走 <c>PathBuilder.Product</c>
+    /// （<c>DocExtractionRuleService.GetPreviewPdfByPathAsync</c> 第 ③ 步），
+    /// ⛔ 不在这里另写一份拼接 —— 两份必然漂移，而漂移的后果是「缓存删不掉 ⇒ 预览显示上一版」。</para>
+    ///
+    /// <para>MinIO 的 <c>RemoveObject</c> 对不存在的对象不报错（S3 语义），
+    /// 所以首次上传时这里的删除是安全的空操作。</para>
+    /// </summary>
+    private async Task InvalidatePreviewCacheAsync(string templatePath)
+    {
+        try
+        {
+            var cachePath = PathBuilder.Product(templatePath, PathBuilder.PdfSegment, ".pdf");
+            if (string.IsNullOrEmpty(cachePath)) return;
+            await _storage.DeleteAsync(cachePath.TrimStart('/'));
+            _logger.LogInformation("[DocTemplate] 已失效预览缓存: {Cache}", cachePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[DocTemplate] 预览缓存失效失败（不影响换版）: {Path}", templatePath);
+        }
+    }
+
+    /// <summary>
     /// <b>上传空白模板后的落库</b>（覆盖语义）：
     /// <list type="bullet">
     /// <item>命中<b>存活</b>行 ⇒ 就地更新（<b>沿用同 Code</b> ⇒ 锚点/填充日志外键不失效），
@@ -660,6 +829,10 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         existing.DeleteBy = null;
         existing.DeleteTime = null;
 
+        // ★ 换版判定必须在覆盖 `SourceSha256` **之前**做（2026-10-04 用户实测缺陷）。
+        //   判定结果决定「旧锚点是否作废」，见方法尾部。
+        var versionChanged = !string.Equals(existing.SourceSha256, sha256, StringComparison.OrdinalIgnoreCase);
+
         existing.StandardFileCode = fileRow.Code;
         existing.FileKind = fileKind;
         existing.FileName = fileName;
@@ -674,6 +847,7 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         existing.ScanMessage = null;
         existing.ScanTime = null;
         existing.ViolationJson = null;
+        existing.PartCount = 0;   // ★ 旧锚点随换版作废 ⇒ 部件数归零（重扫时按实际重算）
 
         // 身份段重新推导（模板可能被改挂到另一个标准文件）
         var scope = await _extraction.ResolveRuleScopeAsync(fileRow.Code);
@@ -689,7 +863,60 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         _logger.LogInformation("[DocTemplate] 空白模板覆盖：StandardFileCode={Code}, Template={Tpl}",
             fileRow.Code, existing.Code);
 
+        // ★ 换版 ⇒ 旧锚点全部作废（软删）。必须在模板更新**成功之后**做 ——
+        //   更新失败就动锚点，会留下「模板还是旧字节、锚点却已被清空」的不一致状态。
+        if (versionChanged) await InvalidateAnchorsAsync(existing.Code);
+
         return Result<DocTemplate>.Ok(existing);
+    }
+
+    /// <summary>
+    /// <b>换版时作废该模板的全部锚点</b>（软删，留痕）。
+    ///
+    /// <para><b>为什么必须做</b>（2026-10-04 用户实测缺陷）：重新上传 = 换版，模板字节已变，
+    /// 旧锚点描述的是<b>上一版</b>文档 ⇒ 必须作废。修复前的行为是「只把本次没扫到的标孤儿、
+    /// 不删」，结果用户重新上传后页面上<b>旧锚点与新锚点并存</b>，用户的原话就是
+    /// 「重新上传并没有删除之前的锚点，好像又重复了锚点」。</para>
+    ///
+    /// <para><b>★ 为什么是软删而不是硬删</b>：① 留痕、可审计、可回溯；
+    /// ② 随后重扫时 <c>FindByUniqueKeyAsync</c> 会按 <c>uk_tpl_anchor</c> 命中<b>已软删</b>行并
+    /// 逐条复活 ⇒ 「新模板里<b>仍然存在</b>的同名 token」会<b>保留原配置</b>
+    /// （<c>SourceSpec</c> / <c>Required</c> / <c>WriteMode</c> …），只有「新模板里<b>已消失</b>的
+    /// token」才真正退出列表。这正是用户期望的语义 —— 换版不是「从零开始」，
+    /// 而是「锚点集跟着新文档走」。</para>
+    ///
+    /// <para><b>⛔ 同字节重传不作废</b>：调用方只在 <c>SourceSha256</c> 变化时才调用本方法；
+    /// 用户只是又点了一次上传时，文档没变，清空锚点会白丢实施人员已配好的规则。</para>
+    ///
+    /// <para><b>⛔ 绝不抛异常</b>：作废失败不能连累上传（上传已成功、字节已落 MinIO），
+    /// 只留日志 —— 否则用户会看到「上传失败」，而文件其实已经在存储里了。</para>
+    /// </summary>
+    private async Task InvalidateAnchorsAsync(string templateCode)
+    {
+        try
+        {
+            var codes = await _db.Client.Queryable<DocTemplateAnchor>()
+                .Where(a => a.TemplateCode == templateCode && a.IsDeleted == false)
+                .Select(a => a.Code)
+                .ToListAsync();
+            if (codes.Count == 0) return;
+
+            var del = await _anchors.DeleteBatch(codes, clientIp: UserContext.ClientIp);
+            if (del.Success)
+            {
+                _logger.LogInformation("[DocTemplate] 换版作废旧锚点：Template={Tpl}, Count={N}",
+                    templateCode, codes.Count);
+            }
+            else
+            {
+                _logger.LogWarning("[DocTemplate] 换版作废旧锚点失败（不影响上传）：Template={Tpl}, Err={Err}",
+                    templateCode, del.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[DocTemplate] 换版作废旧锚点异常（不影响上传）：Template={Tpl}", templateCode);
+        }
     }
 
     /// <summary>
@@ -753,10 +980,19 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         public string? Remark { get; set; }
     }
 
+    /// <summary>挂接全文填写提示词的请求（<c>POST set-prompt</c>）</summary>
+    public sealed class SetPromptRequest
+    {
+        /// <summary>模板 Code（<c>cert_doc_template.Code</c>，必填）—— ★ 双关键字准则 A：定位只用 Code</summary>
+        public string? TemplateCode { get; set; }
+
+        /// <summary>提示词编码；<b>空串 = 解绑</b>（该模板不走全文规则）</summary>
+        public string? PromptCode { get; set; }
+    }
+
     /// <summary>上传空白模板的请求（<c>multipart/form-data</c>）</summary>
     public sealed class UploadTemplateDto
-    {
-        /// <summary>空白模板文件（<c>.docx</c> / <c>.xlsx</c>）</summary>
+    {        /// <summary>空白模板文件（<c>.docx</c> / <c>.xlsx</c>）</summary>
         public IFormFile? File { get; set; }
 
         /// <summary>宿主标准文件 Code（<c>cert_standard_directory_file.Code</c>，必填）</summary>

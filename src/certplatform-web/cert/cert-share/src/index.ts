@@ -13,6 +13,9 @@ export { usePolling } from './composables/usePolling'
 // 业务类型
 export * from './types'
 
+// ★★ 上传文件类型契约（单一事实源；改规则只改 constants/upload-file-policy.ts）
+export * from './constants/upload-file-policy'
+
 // 业务工具
 export { formatFileSize, formatDate, formatDateTime } from './utils/format'
 export { downloadBlob, parseFileNameFromDisposition } from './utils/download'

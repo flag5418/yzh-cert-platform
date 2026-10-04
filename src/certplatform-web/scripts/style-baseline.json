@@ -13,7 +13,6 @@
   "cert/cert-admin/src/pages/workflow/doc-extraction-rule/index.vue": 8,
   "cert/cert-admin/src/pages/workflow/doc-fill-rule/components/PromptPanel.vue": 4,
   "cert/cert-admin/src/pages/workflow/doc-fill-rule/components/RegisterTemplateDialog.vue": 3,
-  "cert/cert-admin/src/pages/workflow/doc-fill-rule/index.vue": 5,
   "cert/cert-admin/src/pages/workflow/prompt-template/components/PromptTestPanel.vue": 6,
   "cert/cert-admin/src/pages/workflow/prompt-template/components/StandardTree.vue": 1,
   "cert/cert-admin/src/pages/workflow/queue/index.vue": 16,

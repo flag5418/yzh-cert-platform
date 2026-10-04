@@ -1,6 +1,16 @@
 # 文档填写 Skill 详细设计
 
-> **版本**：V1.2 | **日期**：2026-10-03 | **状态**：**✅ 已批准 —— 实施中（S1 完成 / S2 完成）**
+> **版本**：V1.3 | **日期**：2026-10-04 | **状态**：**✅ 已批准 —— 实施中（8 个 Skill 中 7 个已注册运行）**
+> **V1.3 修订（★ 3 个 AI 来源 Skill 落地，2026-10-04）**：用户裁决「**先完善填写的数据来源**
+> —— 填写方法的 Skill 已完整，数据来源不完整就完不成任务」⇒ 实现 `src_semantic` / `src_ai_field` /
+> `src_ai_table` 及其公共件（`AiFillInvoker` / `AiFillPromptBuilder` / `AiFillJsonReader` /
+> `AiFillSettings` / `TablePayloadFactory`）+ `FillValueFactory.FromRaw`。
+> **本次修正 4 处「文档给了错的地址」**（全部因「设计时还没写代码」）：
+> ① **§2.3 的 `ClassPath` 少一段 `.Ai`** ⇒ 按它注册会**运行期**「无法找到类型」；
+> ② **§6.2 / §7.2 / §8.2 的示意代码**与实际签名有 4~6 处差异（`payload` 字典 vs `AiFillAnchorSpec`、
+> `InvokeAsync(prompt)` vs `InvokeAsync(db, prompt)`、`resp.Json` vs `resp.Root` …）⇒ 每节加「实现备注」表；
+> ③ **§12.2 的 `IAiFillPromptBuilder` 接口**实际是 `static class`；
+> ④ **§8.2 注释与 §12.4 Schema 自相矛盾**（`tables.{tag}` 是对象还是数组）⇒ 裁定「**两种形态都收**」。
 > **V1.2 修订（实施反哺设计）**：用户批准后按 §十四 顺序开工，**编码时实读源码 + 核对项目引用**
 > 查出并修正 **3 处硬错误 + 1 处结构性阻塞**（全部在 §4.2 `src_global_param`）：
 > ① `FillParamValue` 实体**不在** `CertPlatform.Shared.Entities.Param`，而在 **`CertPlatform.Auditor`**；
@@ -102,12 +112,15 @@ VALUES
    '按参数编码取全局参数值（标准/阶段特化，取最特异一条）',1,1,'1.0',100,'el-icon-set-up','#409EFF'),
   ('SK_SRC_MANUAL','src_manual','人工待办声明','method','doc_src_scalar',0,'json',
    '声明「该锚点需人工填写」，产出待办标记（不产值）',1,1,'1.0',101,'el-icon-edit-outline','#909399'),
+  -- ★ 2026-10-04 已按 DB/mysql/phase14_doc_fill_ai_skills.sql **实际注册**
+  --   （SortOrder 改为 110/111/150：给 AI 类留段；Color 统一 #409EFF；Icon 逐个区分）
   ('SK_SRC_SEMANTIC','src_semantic','AI 语义改写','method','doc_src_scalar',0,'json',
-   '按企业实际情况改写标准原文（不依赖企业文档）',1,1,'1.0',102,'el-icon-magic-stick','#9B59B6'),
+   '按企业实际情况改写标准原文（不依赖企业文档）',1,1,'1.0',110,'el-icon-magic-stick','#409EFF'),
   ('SK_SRC_AI_FIELD','src_ai_field','AI 单元格填写','method','doc_src_scalar',0,'json',
-   '提示词 + 已过滤企业文档 → 动态分析出单元格值',1,1,'1.0',103,'el-icon-magic-stick','#9B59B6'),
+   '提示词 + 已过滤企业文档 → 动态分析出单元格值',1,1,'1.0',111,'el-icon-cpu','#409EFF'),
   ('SK_SRC_AI_TABLE','src_ai_table','AI 表格填写','method','doc_src_table',0,'json',
-   '提示词 + 已过滤企业文档 → 动态分析出表格数据',1,1,'1.0',104,'el-icon-magic-stick','#9B59B6'),
+   '提示词 + 已过滤企业文档 → 动态分析出表格数据',1,1,'1.0',150,'el-icon-grid','#409EFF'),
+  -- ⏸ src_dict 属二期 ⇒ **未注册**（提前注册会让 ResolveType 返回 null ⇒ 运行期「无法找到类型」）
   ('SK_SRC_DICT','src_dict','字典取值','method','doc_src_scalar',0,'json',
    '按字典编码取字典项（支持级联）',0,1,'1.0',105,'el-icon-collection','#67C23A'),
   ('SK_FILL_CELL','fill_cell','单元格填写','method','doc_fill',1,'json',
@@ -120,9 +133,11 @@ INSERT INTO wf_skill_reflection (Code, SkillCode, ClassPath, MethodName, Status)
 VALUES
   ('SKR_SRC_GLOBAL_PARAM','src_global_param','CertPlatform.Admin.Services.Workflow.Skills.Fill.SrcGlobalParamSkill','ExecuteAsync','active'),
   ('SKR_SRC_MANUAL','src_manual','CertPlatform.Admin.Services.Workflow.Skills.Fill.SrcManualSkill','ExecuteAsync','active'),
-  ('SKR_SRC_SEMANTIC','src_semantic','CertPlatform.Admin.Services.Workflow.Skills.Fill.SrcSemanticSkill','ExecuteAsync','active'),
-  ('SKR_SRC_AI_FIELD','src_ai_field','CertPlatform.Admin.Services.Workflow.Skills.Fill.SrcAiFieldSkill','ExecuteAsync','active'),
-  ('SKR_SRC_AI_TABLE','src_ai_table','CertPlatform.Admin.Services.Workflow.Skills.Fill.SrcAiTableSkill','ExecuteAsync','active'),
+  -- ★ 2026-10-04 修正：本批 3 个 AI Skill 放在 Fill/Ai/ 子目录 ⇒ 命名空间**多一段 .Ai**
+  --   （原 §2.3 写的 `...Skills.Fill.SrcSemanticSkill` 是错的 ⇒ 运行期「无法找到类型」）
+  ('SKR_SRC_SEMANTIC','src_semantic','CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai.SrcSemanticSkill','ExecuteAsync','active'),
+  ('SKR_SRC_AI_FIELD','src_ai_field','CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai.SrcAiFieldSkill','ExecuteAsync','active'),
+  ('SKR_SRC_AI_TABLE','src_ai_table','CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai.SrcAiTableSkill','ExecuteAsync','active'),
   ('SKR_SRC_DICT','src_dict','CertPlatform.Admin.Services.Workflow.Skills.Fill.SrcDictSkill','ExecuteAsync','active'),
   ('SKR_FILL_CELL','fill_cell','CertPlatform.Admin.Services.Workflow.Skills.Fill.FillCellSkill','ExecuteAsync','active'),
   ('SKR_FILL_TABLE','fill_table','CertPlatform.Admin.Services.Workflow.Skills.Fill.FillTableSkill','ExecuteAsync','active');
@@ -132,6 +147,43 @@ VALUES
 > `ClassPath` 前缀 = **`CertPlatform.Admin.Services.Workflow.Skills.Fill.*`**。
 > ⚠️ 与 `38` 号 §14.7 写的 `...Skills.FillCellSkill` **不同** —— 本文加了 `.Fill` 段，**以本文为准**。
 > ⛔ `ClassPath` 与 `MethodName` 是**字符串匹配**，写错 ⇒ `ResolveType` 返回 null ⇒ 报「无法找到类型」。
+
+#### 2.3.1 ★★ 实现状态（2026-10-04 实测）
+
+| 批次 | 脚本 | Skill | 状态 |
+|---|---|---|---|
+| phase13 | `DB/mysql/phase13_doc_fill_skills.sql` | `src_global_param` / `src_manual` / `fill_cell` / `fill_table` | ✅ 已注册 |
+| **phase14** | **`DB/mysql/phase14_doc_fill_ai_skills.sql`** | **`src_semantic` / `src_ai_field` / `src_ai_table`** | ✅ **2026-10-04 已注册** |
+| — | — | `src_dict` | ⏸ **未注册**（二期；提前注册 ⇒ 运行期「无法找到类型」） |
+
+**注册一个 Skill 必动 3 处**（漏任一处都**静默失败**）：
+
+| # | 表 | 漏了会怎样 |
+|---|---|---|
+| ① | `Sys_DictionaryList`（`DicCode` = 技能分类字典的 **GUID** `63a1d466b99d11f1877ec60431dd7713`，`DicNo` = `skill_category`） | 技能管理页**左树挂不上节点** ⇒ 新增 Skill 在界面上「看不见」 |
+| ② | `wf_skill` | 列表里没有这个技能 |
+| ③ | `wf_skill_reflection`（`ClassPath` + `MethodName`，**字符串精确匹配**） | **运行期才炸**：「无法找到类型」 |
+
+**实测证据**（2026-10-04）：
+
+```bash
+# ① 注册行（应 3 / 3 / 3 / 7 / 7）
+docker exec -i yzh-mysql mysql -uroot -pYzh123456. --default-character-set=utf8mb4 -B yzh_cert_platform \
+  < DB/mysql/phase14_doc_fill_ai_skills.sql
+
+# ② 左树（应 8 个分类，含 doc_src_scalar / doc_src_table / doc_fill）
+curl --noproxy '*' -X POST http://127.0.0.1:9992/api/Admin/Workflow/SkillTreeTable/tree/root \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{}'
+
+# ③ 技能列表（应 18 个 = 原 15 + 新 3）
+curl --noproxy '*' -X POST http://127.0.0.1:9992/api/Admin/Workflow/SkillTreeTable/filter \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"pageIndex":1,"pageSize":50}'
+```
+
+> ★ **`ClassPath` 与代码的一致性有自动化守卫**：
+> `CertPlatform.Admin.Tests/Fill/AiFillSkillTests.cs` 的 `ClassPath_应能被反射解析且与注册SQL一致`
+> —— 用**注册 SQL 里写的那个字符串**去 `Type.GetType`，同时断言 SQL 文件里确实写着它。
+> ⇒ 「改了命名空间忘改 SQL」在**构建阶段**就报错，不必等到运行期。
 
 ---
 
@@ -635,6 +687,21 @@ public static class SrcSemanticSkill
 }
 ```
 
+> ★ **实现备注（2026-10-04 · 代码已落地）**：上面这段是**首版设计示意**。实际实现
+> （`CertPlatform.Admin/Services/Workflow/Skills/Fill/Ai/SrcSemanticSkill.cs`）有 4 处差异，
+> **权威以代码为准**：
+>
+> | 示意写法 | 实际写法 | 原因 |
+> |---|---|---|
+> | `BuildSingleAsync(db, promptCode, skillCode, payload: Dictionary, ct)` | `BuildSingleAsync(db, promptCode, skillCode, anchor: AiFillAnchorSpec, enterpriseDocs, orgCode, ct)` | **类型必须由锚点属性给**（§7.3）—— `payload` 字典表达不了 `value_kind` / `number_format` |
+> | `llm.InvokeAsync(prompt, ct)` | `llm.InvokeAsync(db, prompt, ct)` | 端点 / 密钥在 `cert_sys_config`，不在 `AiFillInvokeRequest` 里 |
+> | `resp.Json`（`JsonDocument`） | `resp.Root`（`Dictionary<string, object>`，**已深转换**） | 归一化在 `AiFillInvoker` 内做，Skill 不该再碰 `JsonElement` |
+> | `AiFillJsonReader.ReadString(resp.Json, "semantic", k)` | `AiFillJsonReader.ReadSectionValue(resp.Root, "semantic", k)` | 方法名统一为「读某一段的值」 |
+> | `Confidence = ReadConfidence(resp.Json, "semantic", k)` | **不设**（`semantic` 段没有 `confidence`） | §12.4 的 Schema 里 `semantic` 是 `additionalProperties: {type: string}` —— 原示意是把「对象段」的取值写到了「字符串段」上 |
+>
+> ★ `source_text`（待改写的原文）通过 `AiFillAnchorSpec.SourceText` 传入，
+> 由 `RenderAnchors` 渲染成「待改写原文：…」进提示词（⛔ 不占独立占位符）。
+
 ### 6.3 边界
 
 | 场景 | 行为 |
@@ -726,6 +793,20 @@ public static class SrcAiFieldSkill
     }
 }
 ```
+
+> ★ **实现备注（2026-10-04 · 代码已落地）**：实际实现见
+> `CertPlatform.Admin/Services/Workflow/Skills/Fill/Ai/SrcAiFieldSkill.cs`。与示意代码的差异：
+>
+> | 示意写法 | 实际写法 | 原因 |
+> |---|---|---|
+> | `BuildSingleAsync(…, payload: Dictionary, ct)` | `BuildSingleAsync(…, anchor: AiFillAnchorSpec, …)` | 同上（类型随锚点走） |
+> | `llm.InvokeAsync(prompt, ct)` | `llm.InvokeAsync(db, prompt, ct)` | 同上 |
+> | `resp.Json` | `resp.Root` | 同上 |
+> | `ReadObject(resp.Json, "fields", k)` | `ReadObject(resp.Root, "fields", k)` | 同上 |
+> | `value.Confidence = ReadConfidence(node, "confidence")` | 模型给了才覆盖，并在 `Outputs` 里回传 `confidence_from_ai` | `Confidence` 是 `double`，直接把 `double?` 赋过去**编译不过**；且 ⛔ 不用 0.5 之类的魔法中间值冒充「模型没给」 |
+> | `FromRaw(...)` 直接用 | **必须判空** —— `null` ⇒ `Fail` | `FromRaw` 返回 `FillValue?`，失败（声明 `number` 却返回「叁万元」）⇒ ⛔ 不静默降级成文本 |
+>
+> ★ 额外产出 `Outputs`：`source_doc` / `confidence` / `confidence_from_ai` / `note`（供编排器与界面复核）。
 
 ### 7.3 ★★ 关键设计点：`value_kind` 由**锚点属性**给，⛔ 不由 AI 猜
 
@@ -832,6 +913,23 @@ public static class SrcAiTableSkill
     }
 }
 ```
+
+> ★ **实现备注（2026-10-04 · 代码已落地）**：实际实现见
+> `CertPlatform.Admin/Services/Workflow/Skills/Fill/Ai/SrcAiTableSkill.cs` +
+> `CertPlatform.Shared/Office/TablePayloadFactory.cs`。除与 §6.2/§7.2 相同的 4 处差异外，还有 3 处**本段特有**的修正：
+>
+> | # | 示意 / 原文 | 实际做法 | 原因 |
+> |---|---|---|---|
+> | 1 | 注释写 `tables.{tag} = { columns: [...], rows: [...] }`，而 §12.4 的 Schema 写的是**行数组** | **两种形态都收**（`TablePayloadFactory.FromAiNode`：数组直接用；对象取 `rows`） | **文档自相矛盾**（§8.2 注释 vs §12.4 Schema）。模型偶发不严格遵循 Schema 是常态，收窄输入只会让「什么都没填上」变成静默结果 |
+> | 2 | `TablePayloadFactory.FromAiNode(table.Value, table_tag, columns_json)` | `FromAiNode(tableTag, columns, node, maxRows)` —— **传 `columns` 对象，不是 JSON 串** | JSON 串解析放在 `TablePayloadFactory.ParseColumns`（可单测），且解析不出列要能 `Fail` |
+> | 3 | `instruction` 无默认值（= 必填） | 改为**可选** | 表格「要填什么」已由列定义表达（`columns_json` 的 `title` 就是中文列名），再加必填只会让「配不出这个参数」变成硬失败 |
+>
+> ★ **`TablePayload` 实际契约以代码为准**（`CertPlatform.Shared/Office/TablePayload.cs`）：
+> `Rows` 是 `List<Dictionary<string, string?>>`（**不是** `object?`），`TableColumn.Title` 是 `string?`，
+> 且 `TableColumn` 有 `NumberFormat`（§8.4 的节选少了它）。
+> ⇒ **单元格值统一转文本**，类型由 `TableColumn.ValueKind` 给、由 `fill_table` 解析（⛔ 不在 AI 侧转类型）。
+>
+> ★ 输出 `Outputs`：`table`（`TablePayload` 实例，= `fill_table` 的输入）/ `table_tag` / `row_count` / `column_count`。
 
 ### 8.3 ★ 为什么 `columns_json` 是**输入**而不是让 AI 自己定列
 
@@ -1122,20 +1220,43 @@ public sealed class AiFillInvokeRequest
 ### 12.2 `AiFillPromptBuilder` —— **批量与单项的唯一装配器**
 
 ```csharp
-public interface IAiFillPromptBuilder
+// ★ 实际实现（2026-10-04 落地）：static class，⛔ 不是 interface
+public static class AiFillPromptBuilder
 {
     /// <summary>单项：一个锚点一次请求（试跑 / 缺项回退）</summary>
-    Task<AiFillInvokeRequest> BuildSingleAsync(IDbOrm db, string? promptCode, string skillCode,
-        IDictionary<string, object> payload, CancellationToken ct);
+    public static Task<AiFillInvokeRequest> BuildSingleAsync(
+        IDbOrm db, string? promptCode, string skillCode,
+        AiFillAnchorSpec anchor, string? enterpriseDocs = null,
+        string? orgCode = null, CancellationToken ct = default);
 
     /// <summary>批量：一份文档一次请求（★ 生产路径）</summary>
-    Task<AiFillInvokeRequest> BuildBatchAsync(IDbOrm db, string? promptCode,
-        AiFillBuildContext ctx, CancellationToken ct);
+    public static Task<AiFillInvokeRequest> BuildBatchAsync(
+        IDbOrm db, string? promptCode, AiFillBuildContext ctx,
+        string? orgCode = null, CancellationToken ct = default);
+
+    /// <summary>锚点清单 → 人话 + 类型（进 {{__FILL__.anchors}}）</summary>
+    public static string RenderAnchors(List<AiFillAnchorSpec>? anchors);
+
+    /// <summary>渲染 {{__FILL__.key}}（★ 精确串替换，⛔ 不用正则）</summary>
+    public static string Render(string template, IDictionary<string, string> values);
+
+    // 内置默认：DefaultUserTemplate / DefaultSystemPrompt / DefaultOutputSchema
 }
 ```
 
-**★ 为什么必须共用**：`38` 号 §15.4 已警告 —— **两套 prompt 组装逻辑必然漂移**
-（「页面上试跑是对的，正式跑却不对」）。
+> ★ **为什么改成 `static class` 而不是接口**：它**无状态、无依赖注入**（`db` 由调用方传入），
+> 做成接口只会多一层注册与解析。⚠️ 但「唯一装配器」的约束不变 ——
+> ⛔ 任何 Skill 都不得自己拼提示词。
+>
+> ★ **★ 无提示词时回落到内置默认模板**：实测 `cert_doc_fill_prompt` 两行 `UserTemplate` 都是 `NULL`。
+> 若直接报「提示词为空」，**Skill 永远跑不起来**（用户必须先手工建提示词 —— 典型的先有鸡还是先有蛋）。
+> ⇒ 缺省时用 `DefaultUserTemplate`（= §12.3 原文），让 Skill **开箱可跑**，用户再按需覆盖。
+>
+> ★ **渲染用的占位符**（`Prefix = "{{__FILL__."`）：
+> `anchors` / `semantic_anchors` / `field_anchors` / `table_anchors` / `enterprise_docs` /
+> `enterprise_context`（与前者同物，兼容 §6.2 的写法）/ `output_schema` / `document_name` / `standard_code`；
+> **单锚点调用时额外补** `anchor_code` / `instruction` / `value_kind`（⛔ 批量时不补 ——
+> 否则模型会以为「只有第一个锚点要填」）。
 
 ### 12.3 `cert_doc_fill_prompt.UserTemplate` 全文示例（★ 可直接录入）
 

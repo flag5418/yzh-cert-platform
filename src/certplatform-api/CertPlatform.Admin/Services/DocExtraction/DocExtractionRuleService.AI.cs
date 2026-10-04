@@ -485,6 +485,106 @@ public partial class DocExtractionRuleService
         }
     }
 
+    /// <summary>
+    /// ★★ <b>按存储路径取预览 PDF 字节</b>（2026-10-04 新增）。
+    ///
+    /// <para><b>为什么需要它</b>：<see cref="GetFilePreviewPdfAsync"/> 只吃 <c>fileCode</c>，
+    /// 而空白模板存于 <c>_template/</c> 段、在 <c>cert_standard_directory_file</c> 里
+    /// <b>没有对应行</b>（模板表 <c>cert_doc_template</c> 也没有 <c>FileCode</c>）——
+    /// 用标准目录那条链<b>根本查不到它</b>。</para>
+    ///
+    /// <para><b>缓存口径与标准目录完全一致</b>：产物路径由 <c>PathBuilder.Product</c> 派生
+    /// （<c>…/_template/x.docx</c> → <c>…/_template/pdf/x.docx.pdf</c>），⛔ 不新造段名、⛔ 不手工拼。
+    /// 差别只有一处：模板表<b>没有产物列</b> ⇒ 只把 PDF 写进 MinIO 做<b>字节级缓存</b>、<b>不写 DB</b>。
+    /// 因此「换版」（重新上传同名模板）时缓存路径<b>完全相同</b>，
+    /// 必须由调用方<b>显式失效</b>（见 <c>DocTemplateController.UploadTemplate</c> 的
+    /// <c>InvalidatePreviewCacheAsync</c>），否则用户会看到<b>上一版的 PDF</b> ——
+    /// 这是「静默显示错内容」，比直接报错危险得多。</para>
+    ///
+    /// <para><b>不做路径安全校验</b>：本方法只认「已由业务方查库拿到的路径」，
+    /// 面向 HTTP 的那道闸（<c>DocumentLibraryPath.IsAllowedStoragePath</c>）在控制器侧
+    /// —— 保持「服务层不感知请求」的分层（<c>file-preview</c> 同此约定）。</para>
+    /// </summary>
+    /// <param name="storagePath">源文件在 MinIO 的路径（原始件 / 归一产物 / 空白模板均可）</param>
+    /// <param name="fileName">用于判扩展名与推导产物名的文件名；为空时取路径末段</param>
+    /// <param name="useCache">是否复用 / 回写 PDF 字节缓存；<c>false</c> = 每次都实时转换</param>
+    public async Task<(byte[]? Content, string? FileName, string? Error)> GetPreviewPdfByPathAsync(
+        string storagePath, string? fileName = null, bool useCache = true)
+    {
+        if (string.IsNullOrWhiteSpace(storagePath))
+            return (null, null, "缺少存储路径");
+
+        var name = string.IsNullOrWhiteSpace(fileName)
+            ? Path.GetFileName(storagePath)
+            : fileName!.Trim();
+        if (string.IsNullOrWhiteSpace(name)) name = "未命名文件";
+
+        var ext = Path.GetExtension(name).ToLowerInvariant();
+
+        // ① PDF 原样透传（不缓存、不转换）
+        if (ext == ".pdf")
+        {
+            var pdfBytes = await TryReadBytesAsync(storagePath);
+            if (pdfBytes == null) return (null, null, "源文件读取失败（对象不存在或存储不可用）");
+            return (pdfBytes, Path.GetFileNameWithoutExtension(name), null);
+        }
+
+        // ② 只支持 Office 家族（模板只可能是 docx/xlsx；其余明确报错，⛔ 不静默返回空 PDF）
+        if (ext is not (".doc" or ".docx" or ".xls" or ".xlsx" or ".ppt" or ".pptx"))
+            return (null, null, $"该格式（{ext}）暂不支持在线预览，请下载后用本地软件打开");
+
+        // ③ 已有字节缓存 → 直接返回（省一次 LibreOffice 转换）
+        var cachePath = string.IsNullOrEmpty(storagePath)
+            ? ""
+            : CertPlatform.Admin.Services.StandardDirectory.CodeGeneratorService.BuildProductPath(
+                storagePath,
+                CertPlatform.Admin.Services.StandardDirectory.CodeGeneratorService.ProductKindPdf,
+                ".pdf");
+
+        if (useCache && !string.IsNullOrEmpty(cachePath))
+        {
+            var cached = await TryReadBytesAsync(cachePath);
+            if (cached != null && cached.Length > 0)
+                return (cached, Path.GetFileNameWithoutExtension(name), null);
+        }
+
+        // ④ 实时转换（LibreOffice）
+        try
+        {
+            var sourceBytes = await TryReadBytesAsync(storagePath);
+            if (sourceBytes == null) return (null, null, "源文件读取失败（对象不存在或存储不可用）");
+
+            var result = await _convertClient.ConvertToPdfAsync(name, sourceBytes);
+            if (!result.Success || result.Content == null)
+                return (null, null, result.Message);
+
+            // ⑤ 回写字节缓存（best-effort；模板表无产物列 ⇒ 不写 DB）
+            if (useCache && !string.IsNullOrEmpty(cachePath))
+            {
+                try
+                {
+                    using var s = new MemoryStream(result.Content);
+                    await _storage.UploadAsync(
+                        cachePath.TrimStart('/'), s, result.Content.Length, "application/pdf");
+                    _logger.LogInformation(
+                        "[DocExtractionRule] 按路径预览产物已缓存: {Src} → {Cache}", storagePath, cachePath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,
+                        "[DocExtractionRule] 预览缓存回写失败（不影响本次预览）: {Cache}", cachePath);
+                }
+            }
+
+            return (result.Content, Path.GetFileNameWithoutExtension(name), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[DocExtractionRule] 按路径预览转换失败: {Path}", storagePath);
+            return (null, null, $"预览转换失败：{ex.Message}");
+        }
+    }
+
     // ========================================================
     // AI 分析（analyze 模式，对照旧 AIAnalyzeAsync + CallAIForAnalysisAsync）
     // ========================================================
@@ -1712,7 +1812,10 @@ public partial class DocExtractionRuleService
     private static object? ConvertJsonElement(JsonElement el) => el.ValueKind switch
     {
         JsonValueKind.String => el.GetString(),
-        JsonValueKind.Number => el.TryGetInt64(out var l) ? l : el.GetDouble(),
+        // ★ 必须显式 `(object)` 强转 —— 否则三元表达式类型被**提升为 double**，
+        //   long 分支也被转成 double 装箱 ⇒ 大整数丢精度且**不报错**
+        //   （`LlmExtractSkill.NormalizeJson` 用的就是这个正确写法）。
+        JsonValueKind.Number => el.TryGetInt64(out var l) ? (object)l : el.GetDouble(),
         JsonValueKind.True => true,
         JsonValueKind.False => false,
         JsonValueKind.Null => null,

@@ -14,7 +14,7 @@
  * ⛔ 不出现 Markdown / 转换链 / Sha256 等技术词；⛔ 不用 emoji 图标（改用 Element Plus 图标）。</para>
  */
 import { ref } from 'vue'
-import { YzhTable } from '@yzh-core'
+import { YzhTable, YzhEmptyState } from '@yzh-core'
 import type { YzhTableColumn } from '@yzh-core'
 import { FolderOpened, Document } from '@element-plus/icons-vue'
 import type { OriginalFile } from '@share/api/ent/enterprise-original'
@@ -48,6 +48,8 @@ function tagText(code: string): string {
 
 const emit = defineEmits<{
   (e: 'detail', row: OriginalFile): void
+  (e: 'content', row: OriginalFile): void
+  (e: 'regenerate', row: OriginalFile): void
   (e: 'preview', row: OriginalFile): void
   (e: 'ignore', row: OriginalFile): void
   (e: 'participate', row: OriginalFile): void
@@ -120,7 +122,11 @@ function statusTip(row: OriginalFile): string {
   const s = statusOf(row)
   if (s.text === '需人工填写') return '这个格式系统自动读不了内容，请人工填写下面的「作用」'
   if (s.text === '提取失败') return row.AnalyzeMessage || row.ConvertMessage || row.MarkdownMessage || '处理时出错，可删除后重新上传'
-  if (s.text === '不建议提取') return '这份文件不参与标签和作用提取（可能是营业执照、身份证等特定证件）'
+  if (s.text === '不建议提取') {
+    return row.NotSuggestedByFormat
+      ? '图片类文件（营业执照、身份证、资质证书等证照扫描件），没有正文可提取，不设标签和作用'
+      : '这份文件已设置为不参与提取，不设标签和作用'
+  }
   if (s.text === '待提取') return row.UnusableReason || '还没开始处理，稍等片刻刷新看看'
   if (s.text === '已忽略') return '这份文件已设置为不参与提取'
   return ''
@@ -157,7 +163,7 @@ function extOf(name?: string): string {
   <div class="folder-tree">
     <!-- 根目录（企业直接放在阶段根下的文件） -->
     <div v-if="nodes.length === 0" class="folder-empty">
-      <el-empty description="该阶段下还没有文件" :image-size="70" />
+      <YzhEmptyState :icon="FolderOpened" title="该阶段下还没有文件" />
     </div>
 
     <el-collapse v-else v-model="opened" class="folder-collapse">
@@ -241,12 +247,13 @@ function extOf(name?: string): string {
           <!-- ★ 操作：详情 / 预览 / 忽略 三个高频动作常驻，其余收进「更多」 -->
           <template #column-Actions="{ row }">
             <el-button link type="primary" size="small" @click="emit('detail', row)">详情</el-button>
+            <el-button link type="primary" size="small" @click="emit('content', row)">查看内容</el-button>
             <el-button link type="primary" size="small" @click="emit('preview', row)">预览</el-button>
             <el-button
               v-if="row.AnalyzePolicy === 'analyze'"
               link size="small" @click="emit('ignore', row)"
             >忽略</el-button>
-            <el-button v-else link type="success" size="small" @click="emit('participate', row)">恢复提取</el-button>
+            <el-button v-else link type="default" size="small" @click="emit('participate', row)">恢复提取</el-button>
             <el-dropdown v-if="row.VersionNumber > 1" trigger="click" @command="(c: string) => {
               if (c === 'versions') emit('versions', row)
               else emit('download', row)
@@ -254,6 +261,7 @@ function extOf(name?: string): string {
               <el-button link size="small">更多</el-button>
               <template #dropdown>
                 <el-dropdown-menu>
+                  <el-dropdown-item command="regenerate">重新生成内容</el-dropdown-item>
                   <el-dropdown-item command="versions">历史版本</el-dropdown-item>
                   <el-dropdown-item command="download">下载原件</el-dropdown-item>
                   <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
@@ -275,6 +283,8 @@ function extOf(name?: string): string {
           :busy="props.busy"
           :tag-names="props.tagNames"
           @detail="(r) => emit('detail', r)"
+          @content="(r) => emit('content', r)"
+          @regenerate="(r) => emit('regenerate', r)"
           @preview="(r) => emit('preview', r)"
           @ignore="(r) => emit('ignore', r)"
           @participate="(r) => emit('participate', r)"

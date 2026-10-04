@@ -6,20 +6,34 @@
  *  1. 本平台 JWT 走 Authorization 头，`<iframe src>` / `<img src>` 无法携带凭据
  *     → 直接渲染受保护的文件流必然 401（历史「不能预览」根因之一），
  *       必须先带 Token 取回字节，再用 ObjectURL 交给渲染器。
- *  2. Office（doc/docx/xls/xlsx/ppt/pptx）统一走后端 D-6 预览产物链：
- *     file-preview 端点返回 PDF 字节（已有产物优先，缺失时实时转换）。
+ *  2. Office（doc/docx/xls/xlsx/ppt/pptx）统一走后端预览产物链，端点返回 PDF 字节
+ *     （已有产物优先，缺失时实时转换）。**两条链**：
+ *     - 有 `fileCode` → `file-preview`（按标准目录行查，产物路径回写 DB 列）；
+ *     - 只有 `storagePath` → `preview-by-path`（裸路径，用于 `_template/` 下的空白模板
+ *       —— 它在标准目录表里没有行，第一条链查不到）。
  *  3. 魔数校验：JSON 错误体由 getBlob 提前拦截；此处再校验二进制魔数，
  *     避免「返回的不是文件却被当文件渲染」的静默失败。
  */
-import { YzhEmptyState } from '@yzh-core'
+import { YzhEmptyState, YzhStatusBadge } from '@yzh-core'
 import { ref, watch, computed, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Download, Refresh, WarningFilled, Loading, Document } from '@element-plus/icons-vue'
 import VueOfficePdf from '@vue-office/pdf'
-import { getFilePreviewBlob } from '@share/api/workflow/doc-extraction-rule'
+import { getFilePreviewBlob, getPreviewBlobByPath } from '@share/api/workflow/doc-extraction-rule'
 import { downloadFile } from '@share/composables/useDirectoryApi'
 
-const props = defineProps<{ file: any }>()
+const props = defineProps<{
+  file: any
+  /**
+   * 「下载」按钮的文案。
+   *
+   * ⛔ 默认值刻意是「下载原始件」而不是「下载」：本组件取的是**原始字节**
+   *   （`fetchRawBlob` 优先 `storagePath`），而填写规则页操作条的「下载可编辑版」
+   *   取的是归一产物 —— 两个按钮下的是**不同文件**，同名会让用户以为下重了。
+   *   预览空白模板时由调用方传「下载模板」，语义才准确。
+   */
+  downloadLabel?: string
+}>()
 
 const loading = ref(false)
 const error = ref('')
@@ -108,8 +122,32 @@ const needsManualFill = computed(() => markdownStatus.value === 'unsupported')
  * 双产物链后 ConvertedStoragePath 停止写入新值，且预览链已统一为「PDF 字节」，
  * 因此扩展名必须回到原始文件名 —— 否则 .doc 会被判成 isLegacyOffice，
  * 错误文案长期停留在「旧版格式需先转 PDF」这种过时说法上。
+ *
+ * ★★ 提取规则：**取最后一个「像扩展名」的 token**，⛔ 不是「最后一个点之后的所有字符」。
+ *
+ * 【为什么（2026-10-04 实测缺陷）】
+ *   上游可能把**显示装饰**拼进文件名（本页左树就把模板状态徽标拼进了节点 `Name`），
+ *   于是传来 `附录一 质量管理体系过程识别图.doc  ⬜未上传模板`。
+ *   用 `split('.').pop()` ⇒ `doc  ⬜未上传模板` ⇒ 不在白名单
+ *   ⇒ 报「暂不支持在线预览 .doc ⬜未上传模板 格式」，**而标题栏看起来完全正常**
+ *   （契约接口随后把标题修干净了）—— 典型的「标题对、内容错」，最难查的一类。
+ *
+ *   正则 `\.([A-Za-z0-9]{1,8})(?![A-Za-z0-9])` 取**最后一个**匹配：
+ *   - `x.doc`                → `doc`   ✅
+ *   - `x.doc.docx`           → `docx`  ✅（双重扩展名的归一产物）
+ *   - `x.doc  ⬜未上传模板`   → `doc`   ✅（中文/空白不是 `[A-Za-z0-9]`，不会吞进去）
+ *   - `XASL-QR-014 计划.doc` → `doc`   ✅（连字符不在字符类里，不会被误判）
+ *
+ * ⚠️ 这是**防御性**修正，不是主要修复：主修复是上游别把徽标拼进文件名
+ *   （`logic.fileName` 读 `Extra.rawName`）。两层都要有 —— 少任何一层，
+ *   下一个往文件名里塞装饰的调用方又会把这里打回原形。
  */
-const ext = computed(() => (fileName.value.split('.').pop() || '').toLowerCase())
+const ext = computed(() => {
+  const name = fileName.value
+  const matches = name.match(/\.([A-Za-z0-9]{1,8})(?![A-Za-z0-9])/g)
+  if (!matches || matches.length === 0) return ''
+  return matches[matches.length - 1].slice(1).toLowerCase()
+})
 
 const isImage = computed(() => ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext.value))
 const isPdf = computed(() => ext.value === 'pdf')
@@ -140,6 +178,12 @@ const fileTypeText = computed(() => {
   return map[ext.value] || (ext.value ? ext.value.toUpperCase() + ' 文件' : '未知类型')
 })
 
+/**
+ * 「下载」按钮文案（模板可覆盖）。
+ * ⛔ 不要在模板里直接写死 —— 错误提示里也要引用同一份文案，两处不一致会让用户找不到按钮。
+ */
+const downloadText = computed(() => props.downloadLabel || '下载原始件')
+
 /* ============ ObjectURL 生命周期管理 ============ */
 function revoke() {
   if (previewUrl.value.startsWith('blob:')) {
@@ -168,11 +212,34 @@ async function detectMagic(blob: Blob): Promise<string> {
   return ''
 }
 
-/** 原始文件字节：优先原始路径，其次转换产物，最后退回预览链 */
+/**
+ * 原始文件字节：优先原始路径，其次转换产物，最后退回预览链。
+ *
+ * ⚠️ 这里的「原始」是相对**归一产物**而言的 —— 它取的是 `storagePath` 指向的那份字节。
+ *   标准目录文件 → `.doc`/`.xls` 原始件；空白模板 → `_template/` 下的 `.docx`/`.xlsx`。
+ *   两种情况都**不该**去要归一产物：那是「下载可编辑版」按钮的职责。
+ */
 async function fetchRawBlob(): Promise<Blob> {
   if (storagePath.value) return downloadFile(storagePath.value)
   if (convertedPath.value) return downloadFile(convertedPath.value)
   return getFilePreviewBlob(fileCode.value)
+}
+
+/**
+ * ★ PDF 字节：**两条链，按有没有 `fileCode` 分流**（2026-10-04）。
+ *
+ * | 场景 | 判据 | 端点 | 为什么 |
+ * |---|---|---|---|
+ * | 标准资料清单文件 | 有 `fileCode` | `file-preview` | 产物路径要回写 `PreviewPdfPath` 列 |
+ * | 空白模板 / 企业文档 | 只有 `storagePath` | `preview-by-path` | 它在标准目录表里**没有行**，按 code 查不到 |
+ *
+ * ⛔ 不要合并成一条：`file-preview` 内部是 `GetFileInfoAsync(fileCode)`，
+ *   模板传空 code 会得到「未找到文件」，而用户看到的是「预览失败」——
+ *   症状会指向存储，实际是路由选错了。
+ */
+async function fetchPreviewBlob(): Promise<Blob> {
+  if (fileCode.value) return getFilePreviewBlob(fileCode.value)
+  return getPreviewBlobByPath(storagePath.value, fileName.value)
 }
 
 /* ============ 主流程 ============ */
@@ -212,11 +279,11 @@ async function loadPreview() {
 
     // PDF 原样透传，Office 走后端转换链，二者都是 PDF 字节
     if (isPdf.value || isOffice.value) {
-      const blob = await getFilePreviewBlob(fileCode.value)
+      const blob = await fetchPreviewBlob()
       const magic = await detectMagic(blob)
       if (magic !== 'pdf') {
         error.value = '预览服务返回的不是 PDF 内容'
-        errorHint.value = '可点击「下载」后用本地 Office / WPS 打开查看'
+        errorHint.value = `可点击「${props.downloadLabel || '下载原始件'}」后用本地 Office / WPS 打开查看`
         return
       }
       previewUrl.value = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }))
@@ -224,13 +291,13 @@ async function loadPreview() {
     }
 
     error.value = `暂不支持在线预览 .${ext.value || '?'} 格式`
-    errorHint.value = '可点击「下载」后用本地软件打开查看'
+    errorHint.value = `可点击「${downloadText.value}」后用本地软件打开查看`
   } catch (e: any) {
     error.value = e?.message || '预览加载失败'
     errorHint.value =
       convertStatus.value === 'failed'
         ? `预览转换失败：${convertMessage.value}`
-        : '可点击「下载」后用本地 Office / WPS 打开查看'
+        : `可点击「${downloadText.value}」后用本地 Office / WPS 打开查看`
   } finally {
     clearTimeout(slowTimer)
     loading.value = false
@@ -239,7 +306,7 @@ async function loadPreview() {
 
 function onOfficePdfError(e: any) {
   error.value = e?.message || 'PDF 渲染失败'
-  errorHint.value = '可点击「下载」后用本地软件打开查看'
+  errorHint.value = `可点击「${downloadText.value}」后用本地软件打开查看`
 }
 
 async function download() {
@@ -259,7 +326,29 @@ async function download() {
   }
 }
 
-watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { immediate: true })
+/**
+ * 重载触发键。
+ *
+ * ⛔ **必须带上 `fileName`**：`ext` / `isOffice` / `fileTypeText` 全部由文件名推出，
+ *   而文件名可能**后到**（本页的契约接口是异步的，先渲染的是树节点名）。
+ *   只 watch 路径的话，名字改对了也**不会重载** —— 用户看到的是
+ *   「标题已经变正常、内容还停在旧错误」的错位状态。
+ */
+watch(() => [fileCode.value, storagePath.value, fileName.value].join('|'), () => loadPreview(), {
+  immediate: true,
+})
+
+/**
+ * ★ 显式重载出口（2026-10-04）。
+ *
+ * 【为什么 watch 不够】
+ *   换版（重新上传**同名**空白模板）后，`storagePath` 与 `fileCode` **完全没变**
+ *   ⇒ 上面的 watch 不触发 ⇒ 用户会一直看着**上一版**的 PDF。
+ *   字节变了但路径没变，只能由调用方**显式**通知（上传成功后调 `reload()`）。
+ *
+ * 调用方：`doc-fill-rule/components/PreviewPane.vue`。
+ */
+defineExpose({ reload: loadPreview })
 </script>
 
 <template>
@@ -268,11 +357,15 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
       <div class="file-info">
         <el-icon class="file-icon"><Document /></el-icon>
         <span class="file-name" :title="fileName">{{ fileName }}</span>
-        <el-tag size="small" type="info">{{ fileTypeText }}</el-tag>
+        <YzhStatusBadge type="info" size="small" :text="fileTypeText" />
       </div>
       <div class="preview-actions">
-        <el-button size="small" :icon="Download" @click="download">下载</el-button>
-        <el-button size="small" :icon="Refresh" :loading="loading" @click="loadPreview">刷新</el-button>
+        <el-button type="default" size="small" :icon="Download" @click="download">
+          {{ downloadText }}
+        </el-button>
+        <el-button type="default" size="small" :icon="Refresh" :loading="loading" @click="loadPreview">
+          刷新
+        </el-button>
       </div>
     </div>
 
@@ -362,7 +455,7 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 16px;
+  padding: var(--yzh-space-2, 8px) var(--yzh-space-4, 16px);
   border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
 }
 .file-info {
@@ -373,36 +466,36 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
 }
 .file-icon {
   color: var(--yzh-color-primary, #409eff);
-  font-size: 18px;
+  font-size: var(--yzh-font-size-xl, 18px);
 }
 .file-name {
-  font-weight: 500;
-  font-size: 14px;
+  font-weight: var(--yzh-font-weight-medium, 500);
+  font-size: var(--yzh-font-size-md, 14px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .preview-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--yzh-space-2, 8px);
   flex-shrink: 0;
 }
 .convert-bar {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 16px;
-  background: var(--yzh-color-warning-light-9, #fdf6ec);
-  border-bottom: 1px solid #f5dab1;
-  font-size: 12px;
-  color: #b88230;
+  gap: var(--yzh-space-2, 8px);
+  padding: var(--yzh-space-1, 4px) var(--yzh-space-4, 16px);
+  background: var(--yzh-color-bg-subtle, #f9fafb);
+  border-bottom: 1px solid var(--yzh-color-warning, #d97706);
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--yzh-color-warning, #d97706);
 }
 /* 能力边界提示（图片/扫描件需人工填写）：用中性信息色，与「失败」的橙黄区分开 */
 .manual-bar {
-  background: var(--el-color-primary-light-9, #ecf5ff);
-  border-bottom-color: #b3d8ff;
-  color: #337ecc;
+  background: var(--yzh-color-bg-active, #eff6ff);
+  border-bottom-color: var(--yzh-color-primary-lighter, #3b82f6);
+  color: var(--yzh-color-primary, #1e3a8a);
 }
 .preview-content {
   flex: 1;
@@ -410,7 +503,7 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
   overflow: auto;
   display: flex;
   flex-direction: column;
-  background: var(--yzh-color-bg-page, #f5f7fa);
+  background: var(--yzh-color-bg-page, #f8fafc);
 }
 .state-panel {
   flex: 1;
@@ -418,24 +511,24 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--yzh-space-3, 12px);
   color: var(--yzh-color-text-tertiary, #909399);
-  padding: 24px;
+  padding: var(--yzh-space-6, 24px);
   text-align: center;
 }
 .state-title {
   margin: 0;
-  font-size: 15px;
-  font-weight: 500;
+  font-size: var(--yzh-font-size-lg, 16px);
+  font-weight: var(--yzh-font-weight-medium, 500);
   color: var(--yzh-color-text-regular, #606266);
 }
 .state-desc {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--yzh-font-size-sm, 13px);
 }
 .state-tip {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--yzh-font-size-xs, 12px);
   color: var(--yzh-color-text-disabled, #c0c4cc);
 }
 .image-preview,
@@ -454,11 +547,11 @@ watch(() => fileCode.value + '|' + storagePath.value, () => loadPreview(), { imm
 .text-content {
   flex: 1;
   overflow: auto;
-  padding: 16px;
+  padding: var(--yzh-space-4, 16px);
   margin: 0;
-  font-family: 'Courier New', monospace;
-  font-size: 13px;
-  line-height: 1.6;
+  font-family: var(--yzh-font-family-mono, 'Courier New', monospace);
+  font-size: var(--yzh-font-size-sm, 13px);
+  line-height: var(--yzh-line-height-base, 1.6);
   background: var(--yzh-color-bg-container, #fff);
   white-space: pre-wrap;
   overflow-wrap: anywhere;

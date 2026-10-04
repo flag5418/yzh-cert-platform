@@ -17,11 +17,15 @@
  *   三个操作（预览 / 改标签 / 改作用）直接摊在卡面上，不需要点进详情。
  * ════════════════════════════════════════════════════════════════════════
  */
+import { confirmOrFalse } from '@yzh-core'
 import { computed, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import type { AnalyzePolicyKey, DocProfile, OriginalFile, QueueDetail, StatusBar } from '@share/api/ent/enterprise-original'
+import { partitionUploadable } from '@share/constants/upload-file-policy'
 import {
   batchSetPolicy,
+  fetchMarkdownContent,
+  regenerate,
   correctProfile,
   fetchFilesFiltered,
   fetchProfile,
@@ -448,6 +452,52 @@ export async function quickParticipate(row: OriginalFile): Promise<void> {
   }
 }
 
+// ═══════════════════════ 三·c、★ 内容查看 / 重新生成 ═══════════════════════
+
+/** ★「查看提取内容」抽屉：让专家在页面内直接看到 AI 提取出的 Markdown 原文 */
+export const contentVisible = ref(false)
+export const contentRow = ref<OriginalFile | null>(null)
+export const contentText = ref('')
+export const contentLoading = ref(false)
+
+export async function openContent(row: OriginalFile): Promise<void> {
+  contentRow.value = row
+  contentVisible.value = true
+  contentLoading.value = true
+  contentText.value = ''
+  try {
+    const r = await fetchMarkdownContent(row.Code, row.EnterpriseCode)
+    if (r?.Markdown) contentText.value = r.Markdown
+    else ElMessage.warning(r?.Message ?? '尚未生成内容')
+  } catch (e) {
+    ElMessage.warning(`读取内容失败：(e as Error).message`.replace('(e as Error).message', (e as Error).message))
+  } finally {
+    contentLoading.value = false
+  }
+}
+
+export function closeContent(): void {
+  contentVisible.value = false
+  contentRow.value = null
+  contentText.value = ''
+}
+
+/** ★ 重新生成：重跑转换链（此前只能重新上传整个文件夹） */
+export const regenerating = ref('')
+
+export async function onRegenerate(row: OriginalFile, reanalyze = true): Promise<void> {
+  regenerating.value = row.Code
+  try {
+    const r = await regenerate(row.Code, row.EnterpriseCode, reanalyze)
+    ElMessage.success(r?.Message ?? '已重新入队')
+    await loadFiles()
+  } catch (e) {
+    ElMessage.error((e as Error).message)
+  } finally {
+    regenerating.value = ''
+  }
+}
+
 // ═══════════════════════ 四、★ 预览（专家直接看文件）══════════════
 
 export const previewVisible = ref(false)
@@ -632,36 +682,88 @@ function toItems(files: File[]): PlanItem[] {
   })
 }
 
+/**
+ * 从 plan 清单里移除一行（只影响本次上传的清单，⛔ 不改已选中的原始 File 列表）。
+ * ★ 解决用户报障：「不支持的文件在弹窗里删不掉，只能干等」。
+ */
+export function removePlanRow(index: number): void {
+  if (index < 0 || index >= planRows.value.length) return
+  planRows.value.splice(index, 1)
+  const sum = planSummary.value ?? {}
+  planSummary.value = {
+    ...sum,
+    Total: planRows.value.length,
+    BlockedCount: planRows.value.filter((r) => r.Blocked).length,
+  }
+}
+
 export async function onFilesPicked(list: File[]): Promise<void> {
-  pendingFiles.value = list
+  // ★ 先用共享契约本地过滤（36 号：改规则只改 upload-file-policy.ts，页面不写 if/else）
+  //   好处：① 立刻反馈，不必等后端往返 ② 系统垃圾文件根本不会出现在 UI 里
+  const part = partitionUploadable(list.map((f) => ({ name: f.name })))
+  pendingFiles.value = list.filter((f) => part.accepted.some((a) => a.name === f.name))
+
+  if (part.noise.length > 0) {
+    ElMessage.info(
+      `已自动忽略 ${part.noise.length} 个系统文件（${part.noise.slice(0, 3).map((nf) => nf.name).join('、')}${part.noise.length > 3 ? ' 等' : ''}）`)
+  }
+
+  if (pendingFiles.value.length === 0) {
+    planRows.value = []
+    planSummary.value = {} as any
+    if (part.rejected.length > 0) {
+      ElMessage.warning(part.rejected[0].message + '（压缩包 / 可执行文件 / 网页脚本不支持）')
+    }
+    return
+  }
+
   try {
-    const r = await planUpload(enterpriseCode.value, stageCode.value, toItems(list))
+    const r = await planUpload(enterpriseCode.value, stageCode.value, toItems(pendingFiles.value))
     planRows.value = r.rows
     planSummary.value = r.summary
+    if (part.rejected.length > 0) {
+      ElMessage.warning(`已跳过 ${part.rejected.length} 个不支持的文件：${part.rejected.slice(0, 3).map((r2) => r2.name).join('、')}`)
+    }
   } catch (e) {
     ElMessage.error((e as Error).message)
   }
 }
 
+/**
+ * 开始上传。
+ *
+ * ★ 2026-10-03 修掉的卡死：原逻辑是「**只要有 1 个不合规文件就整体 return**」，
+ *   而 macOS 选文件夹上传时每个目录都带 `.DS_Store` ⇒ 用户点了上传**毫无反应**。
+ *   现改为：**不合规的跳过，合规的照常上传**，只有「一个都不合规」才中止。
+ */
 export async function startUpload(): Promise<void> {
-  const blocked = planRows.value.filter((r) => r.Blocked)
-  if (planRows.value.length === 0) {
-    ElMessage.warning('没有可上传的文件')
+  const all = planRows.value
+  const blocked = all.filter((r) => r.Blocked)
+  const uploadable = all.filter((r) => !r.Blocked)
+
+  if (all.length === 0) {
+    ElMessage.warning(
+      planSummary.value?.FilteredCount
+        ? `选中的 ${planSummary.value.FilteredCount} 个文件都是系统文件（.DS_Store 等），没有可上传的资料`
+        : '没有可上传的文件')
+    return
+  }
+  // ⛔ 只有「全部不合规」才中止；有合规的就继续传
+  if (uploadable.length === 0) {
+    ElMessage.error(`这 ${blocked.length} 个文件都不支持上传：${blocked.slice(0, 3).map((b) => b.FileName).join('、')}`)
     return
   }
   if (blocked.length > 0) {
-    ElMessage.error(`有 ${blocked.length} 个文件不符合要求：${blocked.slice(0, 3).map((b) => b.FileName).join('、')}`)
-    return
+    ElMessage.warning(`已跳过 ${blocked.length} 个不支持的文件：${blocked.slice(0, 3).map((b) => b.FileName).join('、')}${blocked.length > 3 ? ' 等' : ''}`)
   }
   const replaces = planSummary.value?.ReplaceCount ?? 0
   const skips = planSummary.value?.SkipCount ?? 0
   if (replaces > 0) {
-    try {
-      await ElMessageBox.confirm(
-        `本次上传 ${planRows.value.length} 份，其中 ${replaces} 份会替换旧文件（旧版本会保留），` +
-        `${skips} 份内容没变化会跳过。是否继续？`,
-        '确认上传', { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消' })
-    } catch { return }
+    const ok = await confirmOrFalse(
+      `本次上传 ${planRows.value.length} 份，其中 ${replaces} 份会替换旧文件（旧版本会保留），` +
+      `${skips} 份内容没变化会跳过。是否继续？`,
+      '确认上传', { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消' })
+    if (!ok) return
   }
   uploadStage.value = 'uploading'
   const items = toItems(pendingFiles.value)
@@ -744,11 +846,10 @@ export async function onVersions(row: OriginalFile): Promise<void> {
 export async function onRestore(v: FileVersion): Promise<void> {
   const row = versionTarget.value
   if (!row) return
-  try {
-    await ElMessageBox.confirm(
-      `把「${v.FileName}」恢复为当前版本？当前版本会被保留为历史版本。`,
-      '恢复旧版本', { type: 'warning', confirmButtonText: '确认恢复', cancelButtonText: '取消' })
-  } catch { return }
+  const ok = await confirmOrFalse(
+    `把「${v.FileName}」恢复为当前版本？当前版本会被保留为历史版本。`,
+    '恢复旧版本', { type: 'warning', confirmButtonText: '确认恢复', cancelButtonText: '取消' })
+  if (!ok) return
   try {
     await restoreVersion(row.Code, row.EnterpriseCode, v.VersionNumber, '页面手动恢复')
     ElMessage.success('已恢复')
@@ -800,11 +901,10 @@ export async function submitPolicy(): Promise<void> {
 }
 
 export async function onDelete(row: OriginalFile): Promise<void> {
-  try {
-    await ElMessageBox.confirm(
-      `删除「${row.FileName}」？文件与历史版本会一并移除；识别结果（标签/作用）会保留以备审计。`,
-      '删除确认', { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' })
-  } catch { return }
+  const ok = await confirmOrFalse(
+    `删除「${row.FileName}」？文件与历史版本会一并移除；识别结果（标签/作用）会保留以备审计。`,
+    '删除确认', { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' })
+  if (!ok) return
   try {
     await removeFile(row.Code, row.EnterpriseCode, '页面删除')
     ElMessage.success('已删除')

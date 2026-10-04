@@ -54,19 +54,15 @@ namespace CertPlatform.Auditor.Services.Ent
         /// <summary>批次有效期（分钟）：init 后超时未 confirm 即作废，防悬空草稿行永久占位</summary>
         private const int TaskExpireMinutes = 30;
 
+        /// <summary>
+        /// 转换僵死判定阈值：文件非终态且 <c>UpdateTime</c> 超过此时长 ⇒ 认定执行器已死，按失败放行。
+        /// <para>取值 15 分钟：大于队列租约（默认 5 分钟 × 重试），小于人工察觉周期。</para>
+        /// </summary>
+        private static readonly TimeSpan StuckThreshold = TimeSpan.FromMinutes(15);
+
         /// <summary>单文件大小上限（字节）= 200 MB，与既有 upload/file 的 RequestSizeLimit 一致</summary>
         public const long MaxFileSizeBytes = 200L * 1024 * 1024;
 
-        /// <summary>允许的扩展名白名单（转换链能处理的格式 + PDF/图片透传）</summary>
-        private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
-        {
-            // Office（LibreOffice 可转 PDF）
-            ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".rtf", ".odt", ".ods", ".odp",
-            // 文本 / 标书
-            ".txt", ".md", ".csv",
-            // PDF / 图片（预览透传）
-            ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp",
-        };
 
         public EnterpriseOriginalService(
             IDbOrm db,
@@ -148,6 +144,53 @@ namespace CertPlatform.Auditor.Services.Ent
                && row.AnalyzeStatus != AnalyzeStatus.Analyzed;
 
         /// <summary>
+        /// ★ <b>操作系统 / 编辑器垃圾文件</b>识别（2026-10-03 用户报障）：
+        /// macOS 选文件夹上传时，每个目录里都可能带 <c>.DS_Store</c>；Windows 有 <c>Thumbs.db</c>；
+        /// Office 打开文档会生成锁文件 <c>~$xxx.doc</c>；macOS 打包可能带 <c>._xxx</c>（资源分叉）。
+        ///
+        /// <para><b>为什么必须单独识别，而不是丢给「格式白名单」判不合规</b>：
+        /// 这些文件**用户根本没打算上传**，把它们报成「不支持的格式」是错的（用户看到一堆
+        /// 莫名其妙的不合规项）；更糟的是前端「有一个不合规就整体中止」会让
+        /// <b>整个文件夹传不上去</b>（2026-10-03 实测：含 1 个 <c>.DS_Store</c> ⇒ 上传按钮点了没反应）。
+        /// ⇒ 判定为「系统噪声」⇒ <b>plan 阶段直接剔除</b>，只在 <c>Summary.FilteredCount</c> 里报个���数。</para>
+        /// </summary>
+        public static bool IsSystemNoise(string? fileName)
+            => UploadFilePolicy.IsSystemNoise(fileName);
+
+        /// <summary>图片类扩展名 —— <b>天然是证照照片</b>（营业执照/身份证/资质证书扫描件）</summary>
+        private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff"
+        };
+
+        /// <summary>
+        /// ★ <b>格式层预判</b>：这份文件是否<b>天然不该</b>进标签/作用抽取。
+        ///
+        /// <para><b>为什么要有这层规则</b>（2026-10-03 用户指出）：营业执照、身份证、资质证书、许可证
+        /// 这类<b>特定证件</b>本身没有「体系文件的作用」语义，硬打标签只会污染召回词表。
+        /// 而我们<b>目前没有</b> OCR / 版面理解 / 证件分类模型
+        /// （联网调研结论见 36 号 §十 L7），<b>纯靠 LLM 读 Markdown 猜「这是不是证件」本就不准</b> ——
+        /// 尤其图片类根本产不出 Markdown，LLM 连看都看不到。</para>
+        ///
+        /// <para><b>当前口径（保守，只判最有把握的）</b>：</para>
+        /// <list type="bullet">
+        ///   <item><b>图片文件</b>（jpg/png/…）⇒ 直接判「不建议提取」。
+        ///         理由：企业上传的图片几乎全是证照扫描件，正文无从提取。</item>
+        ///   <item><b>PDF 不一刀切</b>：体系文件（手册/程序文件/记录）大量是 PDF，
+        ///         仍交给 LLM 判 + 人工设策略。</item>
+        /// </list>
+        ///
+        /// <para><b>将来接入证件识别后</b>（§十 L7 的三个候选方向）：本方法扩成
+        /// 「格式预判 → 证件识别 → LLM」三级判定，证件类走<b>独立的证件字段</b>
+        /// （证照类型/编号/有效期），<b>不塞进通用标签池</b>。</para>
+        /// </summary>
+        public static bool IsNotSuggestedByFormat(EnterpriseOriginalFile row)
+        {
+            var ext = (row.FileType ?? "").Trim().ToLowerInvariant();
+            return ext.Length > 0 && ImageExtensions.Contains(ext);
+        }
+
+        /// <summary>
         /// ★ <b>不建议提取</b>：人工或 AI 判定这份文件<b>不参与</b>标签/作用抽取。
         ///
         /// <para><b>为什么这类文件不给「标签 / 作用」入口</b>（2026-10-03 用户裁决）：
@@ -155,12 +198,14 @@ namespace CertPlatform.Auditor.Services.Ent
         /// 硬给它打标签只会污染召回词表；而我们<b>还没有</b>按格式+内容识别证件的能力
         /// （无 OCR、无版面理解、无证件分类模型），靠 LLM 猜「这是不是证件」本就不准。</para>
         ///
-        /// <para>⇒ 判定口径：<b>策略为 skip/ignore</b>（人工设的或 AI 建议的）⇒ 一律不提供标签/作用入口。
+        /// <para>⇒ 判定口径 = <b>格式预判</b>（<see cref="IsNotSuggestedByFormat"/>，图片类）
+        /// <b>∪</b> <b>策略</b>（人工或 AI 建议 skip/ignore）。两者任一命中即不提供标签/作用入口。</para>
         /// 将来若引入证件识别（见 36 号 §十 遗留），再按识别结果细分「证件类」，
         /// 那时证件应该走<b>独立的证件字段</b>（证照类型/编号/有效期），而不是塞进通用标签池。</para>
         /// </summary>
         public static bool IsNotSuggested(EnterpriseOriginalFile row)
-            => row.AnalyzePolicy is Policy.Skip or Policy.Ignore;
+            => row.AnalyzePolicy is Policy.Skip or Policy.Ignore
+               || IsNotSuggestedByFormat(row);
 
         /// <summary>不可用的一句话原因（UI 直接展示，避免用户猜）</summary>
         public static string ExplainUsability(EnterpriseOriginalFile row)
@@ -352,6 +397,8 @@ namespace CertPlatform.Auditor.Services.Ent
                         IsHalfProduct = IsHalfProduct(r),
                         // ★ 「不建议提取」⇒ 前端不给标签/作用入口（营业执照/身份证等特定证件）
                         IsNotSuggested = IsNotSuggested(r),
+                        // 供 UI 区分原因：格式预判（图片类）vs 策略设置（人工/AI 建议）
+                        NotSuggestedByFormat = IsNotSuggestedByFormat(r),
                         UnusableReason = usable ? (string?)null : ExplainUsability(r),
                         r.ConvertStatus,
                         r.ConvertMessage,
@@ -429,6 +476,176 @@ namespace CertPlatform.Auditor.Services.Ent
             }
             catch (System.Text.Json.JsonException) { /* 非法 JSON 由画像校验拦，这里只做防御 */ }
             return list;
+        }
+
+        // ========================================================
+        // 七·b、★ 重新生成（转换 / 识别重跑入口，36 号 §八 T4）
+        // ========================================================
+
+        /// <summary>
+        /// ★ **重新生成**一份文件的 Markdown（重跑转换链，随后自动接分析链）。
+        ///
+        /// <para><b>为什么必须有这个接口</b>（2026-10-03 核查发现）：此前 Markdown 只有「上传时生成」这一个入口，
+        /// 于是下面这些场景<b>只能重新上传整个文件夹</b>，体验极差且会打断已有批次：</para>
+        /// <list type="number">
+        ///   <item>anydoc 偶发失败（Docker 忙 / 超时）⇒ 想重试</item>
+        ///   <item>改了 <c>ai_vision_config</c>（换模型 / 开视觉识别）⇒ 想用新配置重跑扫描件</item>
+        ///   <item>专家误判「需人工填写」⇒ 想换成 AI 识别</item>
+        ///   <item>僵死逃生把状态标成 failed ⇒ 需要真正的重试口子</item>
+        /// </list>
+        ///
+        /// <para><b>语义</b>：<b>不动源文件、不改版本号</b>（不是替换文件），
+        /// 只重跑「字节 → PDF/Markdown」这一段；成功后自动并入 analyze 队列（单文件批次）。</para>
+        /// </summary>
+        /// <param name="reanalyze">是否连语义分析一起重跑（false = 只重转 Markdown，画像不动）</param>
+        public async Task<Result<object?>> RegenerateAsync(
+            string fileCode, string enterpriseCode, bool reanalyze = true)
+        {
+            if (string.IsNullOrWhiteSpace(fileCode))
+                return Result<object?>.Fail("文件业务键 Code 不能为空");
+
+            var row = (await _db.Client.Queryable<EnterpriseOriginalFile>()
+                .Where(x => x.Code == fileCode).ToListAsync() ?? new List<EnterpriseOriginalFile>())
+                .FirstOrDefault();
+            if (row == null) return Result<object?>.Fail($"记录不存在：{fileCode}");
+
+            var tenantErr = await OwnershipErrorAsync(enterpriseCode);
+            if (tenantErr != null) return Result<object?>.Fail(tenantErr);
+            if (!string.Equals(row.EnterpriseCode, enterpriseCode, StringComparison.Ordinal))
+                return Result<object?>.Fail("记录不存在或不属于当前工作区");
+            if (row.IsDeleted) return Result<object?>.Fail("记录已删除");
+
+            // 忙碌闸门：该企业该阶段还有队列在跑 ⇒ 拒绝，避免两条链并发写同一行
+            var busy = await FindBusyQueueAsync(enterpriseCode, row.StageCode);
+            if (busy != null)
+                return Result<object?>.Fail($"该阶段还有一批资料正在处理（{DescribeQueueType(busy.QueueType)} "
+                    + $"{busy.CompletedCount}/{busy.TotalCount}），请等处理完成后再重新生成");
+
+            if (string.IsNullOrEmpty(row.StoragePath))
+                return Result<object?>.Fail("文件尚未上传完成，无法生成内容");
+
+            // 置回待处理（⛔ 清 Markdown 路径，防止读到旧产物）
+            row.ConvertStatus = ConvertStatus.Pending;
+            row.ConvertMessage = null;
+            row.MarkdownStatus = ConvertStatus.Pending;
+            row.MarkdownMessage = null;
+            row.PreviewPdfPath = null;
+            row.MarkdownPath = null;
+            row.ConvertDate = null;
+            row.AnalyzeStatus = reanalyze ? AnalyzeStatus.Pending : AnalyzeStatus.Pending;
+            row.AnalyzeMessage = "等待重新识别";
+            row.UpdateTime = DateTime.Now;
+            row.UpdateBy = _user.UserCode;
+            await _db.UpdateAsync(row,
+                nameof(EnterpriseOriginalFile.ConvertStatus),
+                nameof(EnterpriseOriginalFile.ConvertMessage),
+                nameof(EnterpriseOriginalFile.MarkdownStatus),
+                nameof(EnterpriseOriginalFile.MarkdownMessage),
+                nameof(EnterpriseOriginalFile.PreviewPdfPath),
+                nameof(EnterpriseOriginalFile.MarkdownPath),
+                nameof(EnterpriseOriginalFile.ConvertDate),
+                nameof(EnterpriseOriginalFile.AnalyzeStatus),
+                nameof(EnterpriseOriginalFile.AnalyzeMessage),
+                nameof(EnterpriseOriginalFile.UpdateTime),
+                nameof(EnterpriseOriginalFile.UpdateBy));
+
+            // ★ 单文件批次（BatchCode 用 file: 前缀 ⇒ ingest executor 会走「单文件不入队 analyze」，
+            //   由本方法自己控制后续，避免两处重复入队）
+            var (qCode, qErr) = await EnqueueIngestQueueAsync(
+                row.EnterpriseCode, row.StageCode,
+                new List<EnterpriseOriginalFile> { row }, $"file:{fileCode}");
+
+            if (qCode == null)
+            {
+                // 入队失败 ⇒ 状态已置回 pending，卡在这儿会误导用户，立即回滚状态
+                row.ConvertStatus = ConvertStatus.Failed;
+                row.MarkdownStatus = ConvertStatus.Failed;
+                row.ConvertMessage = $"重新生成入队失败：{qErr}";
+                row.MarkdownMessage = row.ConvertMessage;
+                await _db.UpdateAsync(row,
+                    nameof(EnterpriseOriginalFile.ConvertStatus),
+                    nameof(EnterpriseOriginalFile.MarkdownStatus),
+                    nameof(EnterpriseOriginalFile.ConvertMessage),
+                    nameof(EnterpriseOriginalFile.MarkdownMessage));
+                return Result<object?>.Fail($"重新生成入队失败：{qErr}");
+            }
+
+            return Result<object?>.Ok(new
+            {
+                FileCode = fileCode,
+                QueueCode = qCode,
+                Reanalyze = reanalyze,
+                Message = reanalyze ? "已重新入队，完成后会自动重新识别" : "已重新入队（仅重新生成内容，不重新识别）",
+            });
+        }
+
+        /// <summary>
+        /// ★ 取一份文件已生成的 Markdown **文本内容**（供前端「查看提取结果」）。
+        ///
+        /// <para><b>与 <c>file-markdown/{fileCode}</c> 的区别</b>（两者都要，缺一不可）：</para>
+        /// <list type="bullet">
+        ///   <item><c>file-markdown/{fileCode}</c> —— 返回<b>文件流</b>（<c>text/markdown</c>），
+        ///         用途是<b>下载</b>。</item>
+        ///   <item>本方法 —— 返回 <c>{ markdown: string, … }</c> <b>JSON</b>，
+        ///         用途是<b>前端直接展示 / 编辑 / 让用户核对提取质量</b>。</item>
+        /// </list>
+        ///
+        /// <para><b>为什么必须有</b>（2026-10-03 核查发现）：专家反馈「Markdown 提取的数据是乱码」时，
+        /// 唯一的查看方式是下载文件用外部编辑器打开 —— 页面内看不到内容，就无法判断是提取错了还是显示错了，
+        /// 「人工修正标签/作用」也无从核对依据。</para>
+        /// </summary>
+        public async Task<object> GetMarkdownAsync(string fileCode, string enterpriseCode)
+        {
+            var err = await OwnershipErrorAsync(enterpriseCode);
+            if (err != null) return new { Success = false, Message = err };
+
+            var row = (await _db.Client.Queryable<EnterpriseOriginalFile>()
+                .Where(x => x.Code == fileCode && x.EnterpriseCode == enterpriseCode)
+                .ToListAsync() ?? new List<EnterpriseOriginalFile>())
+                .FirstOrDefault();
+            if (row == null) return new { Success = false, Message = "记录不存在或不属于当前工作区" };
+
+            if (string.IsNullOrEmpty(row.MarkdownPath))
+                return new
+                {
+                    Success = false,
+                    Message = string.IsNullOrEmpty(row.MarkdownMessage)
+                        ? "尚未生成内容（可能还在处理中，或该格式无法自动提取）"
+                        : row.MarkdownMessage!,
+                    MarkdownStatus = row.MarkdownStatus,
+                    MarkdownMessage = row.MarkdownMessage,
+                };
+
+            try
+            {
+                var (stream, _) = await _storage.DownloadAsync(row.MarkdownPath.TrimStart('/'));
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+
+                // ★ 必须显式 UTF-8：Markdown 产物是 UTF-8，用平台默认编码读会出乱码
+                //   （这正是 2026-10-03 专家报「Markdown 内容乱码」的一类根因；
+                //     另一半是下载端点缺 charset，已在 DownloadAsync 里补）。
+                var markdown = System.Text.Encoding.UTF8.GetString(ms.ToArray());
+
+                return new
+                {
+                    Success = true,
+                    Message = (string?)null,
+                    FileCode = fileCode,
+                    FileName = row.FileName,
+                    MarkdownStatus = row.MarkdownStatus,
+                    MarkdownMessage = row.MarkdownMessage,
+                    ConvertStatus = row.ConvertStatus,
+                    MarkdownPath = row.MarkdownPath,
+                    Markdown = markdown,
+                    Length = markdown.Length,
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[原始资料] 读取 Markdown 失败: {Code}", fileCode);
+                return new { Success = false, Message = $"读取内容失败：{ex.Message}" };
+            }
         }
 
         /// <summary>
@@ -634,17 +851,24 @@ namespace CertPlatform.Auditor.Services.Ent
                 ?? new List<EnterpriseOriginalFile>();
 
             var rows = new List<object>();
+            var filtered = 0;
             foreach (var f in files ?? new List<PlanItemDto>())
             {
                 var name = SanitizeName(f.FileName);
                 if (name.Length == 0) continue;
 
-                var ext = Path.GetExtension(name).ToLowerInvariant();
+                // ★ 系统噪声（.DS_Store / Thumbs.db / ~$xx.doc / ._xx）⇒ 静默剔除，
+                //   不进 Rows、不算 Blocked，只报计数。理由见 IsSystemNoise 注释。
+                // ★ 系统噪声静默剔除（.DS_Store / Thumbs.db / ~$xx.doc / ._xx）
+                if (UploadFilePolicy.IsSystemNoise(name)) { filtered++; continue; }
+
+                var verdict = UploadFilePolicy.Check(name);
+                var ext = verdict.Extension.Length > 0 ? verdict.Extension : Path.GetExtension(name).ToLowerInvariant();
                 var folder = NormalizeFolder(f.RelFolderPath);
                 var blocked = new List<string>();
 
-                if (!AllowedExtensions.Contains(ext))
-                    blocked.Add($"不支持的格式「{ext}」（允许：{string.Join(" / ", AllowedExtensions.OrderBy(x => x))}）");
+                // 格式判定走 UploadFilePolicy 单一事实源（⛔ 不再在本类维护第二份白名单）
+                if (!verdict.Ok) blocked.Add(verdict.Message);
                 if (f.FileSize > MaxFileSizeBytes)
                     blocked.Add($"超过单文件上限 {MaxFileSizeBytes / 1024 / 1024} MB");
                 if (f.FileSize <= 0)
@@ -691,6 +915,13 @@ namespace CertPlatform.Auditor.Services.Ent
                     ReplaceCount = rows.Count(r => ((dynamic)r).Action as string == "replace"),
                     SkipCount = rows.Count(r => ((dynamic)r).Action as string == "skip"),
                     BlockedCount = rows.Count(r => ((dynamic)r).Blocked as bool? == true),
+                    // ★ 被静默剔除的系统噪声数量（.DS_Store / Thumbs.db / ~$xx.doc …）
+                    FilteredCount = filtered,
+                    FilteredNames = filtered > 0
+                        ? (files ?? new List<PlanItemDto>())
+                            .Where(f => IsSystemNoise(SanitizeName(f.FileName)))
+                            .Select(f => SanitizeName(f.FileName)).Distinct().Take(5).ToList()
+                        : null,
                 },
             };
         }
@@ -728,8 +959,10 @@ namespace CertPlatform.Auditor.Services.Ent
             {
                 var name = SanitizeName(f.FileName);
                 if (name.Length == 0) continue;
-                var ext = Path.GetExtension(name).ToLowerInvariant();
-                if (!AllowedExtensions.Contains(ext)) continue;      // plan 已拦，这里兜底
+                // ★ 绕过 plan 直调 API 的兜底：系统噪声与白名单外一律不写库
+                var initVerdict = UploadFilePolicy.Check(name);
+                if (!initVerdict.Ok) continue;
+                var ext = initVerdict.Extension;
                 var folder = NormalizeFolder(f.RelFolderPath);
 
                 var sha = (f.Sha256 ?? "").Trim().ToLowerInvariant();
@@ -1817,7 +2050,36 @@ namespace CertPlatform.Auditor.Services.Ent
             //     ⇒ doc_group 被调 N 次（实测 2 次），白烧 LLM。
             //     要求全部终态后，只有**最后一个**任务会通过 ⇒ 一个批次恰好入队一次。
             //   · 终态 = Markdown 已 completed / failed / unsupported / none（none = 无需转换，如已透传）
+            //
+            // ★★ 僵死逃生（2026-10-03 补）：进程被 kill / 容器重启时，队列侧会把任务标 failed
+            //   （QueueManager 对 LockedUntil 过期的任务做 HandleTaskFailureAsync），
+            //   但**执行器根本没跑到写回那一步** ⇒ 文件行永久停在 `converting`。
+            //   而本判定要求「全部终态」⇒ **整批永远进不了语义分析**，用户界面一直显示「提取中」。
+            //   ⇒ 加超时逃生：某个文件非终态且 UpdateTime 超过阈值 ⇒ 视为僵死，按 failed 放行整批。
             var terminal = new[] { ConvertStatus.Completed, ConvertStatus.Failed, ConvertStatus.Unsupported, ConvertStatus.None };
+            var stuck = batchFiles
+                .Where(f => !terminal.Contains(f.MarkdownStatus ?? ConvertStatus.None))
+                .Where(f => f.UpdateTime is null || DateTime.Now - f.UpdateTime.Value > StuckThreshold)
+                .ToList();
+
+            if (stuck.Count > 0)
+            {
+                _logger.LogWarning(
+                    "[原始资料] 批次 {Batch} 有 {N} 个文件转换僵死（> {Min} 分钟无进展），按失败放行整批: {Codes}",
+                    batchCode, stuck.Count, StuckThreshold.TotalMinutes,
+                    string.Join(",", stuck.Select(f => f.Code)));
+                foreach (var f in stuck)
+                {
+                    f.MarkdownStatus = ConvertStatus.Failed;
+                    f.MarkdownMessage = "转换进程中断或超时未回写，已按失败处理（可点「重新生成」重试）";
+                    f.UpdateTime = DateTime.Now;
+                    await _db.UpdateAsync(f,
+                        nameof(EnterpriseOriginalFile.MarkdownStatus),
+                        nameof(EnterpriseOriginalFile.MarkdownMessage),
+                        nameof(EnterpriseOriginalFile.UpdateTime));
+                }
+            }
+
             var allSettled = batchFiles.All(f => terminal.Contains(f.MarkdownStatus ?? ConvertStatus.None));
             if (!allSettled) return (null, null);
 

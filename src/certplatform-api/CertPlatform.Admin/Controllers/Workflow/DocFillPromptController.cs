@@ -252,6 +252,61 @@ public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
         }));
     }
 
+    /// <summary>
+    /// <b>可选提示词清单</b>：按 <c>PromptCode</c> 聚合，供「挂接提示词」下拉使用。
+    ///
+    /// <para>【为什么必须有这个端点】</para>
+    /// <para>本页「全文填写规则」页签原先是 <c>:disabled="!promptCode"</c>，而新模板的
+    /// <c>FillPromptCode</c> <b>必然是空的</b> ⇒ 页签点不开；就算点开了，面板里
+    /// <b>只有「版本表 + 设为默认」，没有任何新建/挂接入口</b> —— 先有鸡还是先有蛋。
+    /// 要打破死循环，第一步就是让前端能拿到「现有提示词有哪些」。</para>
+    ///
+    /// <para>【口径】</para>
+    /// <list type="bullet">
+    /// <item>⛔ 不含已软删行（软删 = 停用，不该出现在候选里）</item>
+    /// <item>同一 <c>PromptCode</c> 跨 <c>OrgCode</c> 聚合；<c>Orgs</c> 列出它有哪些机构版本（空串 = 全局）</item>
+    /// <item><c>ActiveVersion</c> = 该 Code 下 <c>IsDefault=1 且 Status='active'</c> 的最大版本号（无则 null）</item>
+    /// </list>
+    /// </summary>
+    [HttpGet("codes")]
+    public async Task<IActionResult> Codes([FromQuery] string? keyword)
+    {
+        var kw = (keyword ?? string.Empty).Trim();
+
+        // ⛔ 走 Client.Queryable（无隐式软删过滤），本方法自己显式排除已删
+        var rows = await _db.Client.Queryable<DocFillPrompt>().ToListAsync();
+        rows = rows.Where(p => !p.IsDeleted).ToList();
+
+        if (kw.Length > 0)
+        {
+            rows = rows
+                .Where(p => (p.PromptCode ?? string.Empty).Contains(kw, StringComparison.OrdinalIgnoreCase)
+                         || (p.PromptName ?? string.Empty).Contains(kw, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        var items = rows
+            .GroupBy(p => p.PromptCode ?? string.Empty, StringComparer.Ordinal)
+            .Where(g => g.Key.Length > 0)
+            .Select(g => new
+            {
+                PromptCode = g.Key,
+                // 名称取最新版本那条（改名后应显示新名）
+                PromptName = g.OrderByDescending(p => p.Version).First().PromptName,
+                VersionCount = g.Count(),
+                MaxVersion = g.Max(p => p.Version),
+                Orgs = g.Select(p => p.OrgCode ?? string.Empty)
+                        .Distinct().OrderBy(x => x, StringComparer.Ordinal).ToList(),
+                ActiveVersion = g.Where(p => p.IsDefault && p.Status == "active")
+                                 .Select(p => (int?)p.Version).Max(),
+                UpdateTime = g.Max(p => p.UpdateTime),
+            })
+            .OrderBy(i => i.PromptCode, StringComparer.Ordinal)
+            .ToList();
+
+        return Ok(ApiResponse<object>.Ok(new { Total = items.Count, Items = items }));
+    }
+
     // ════════════════════════════════════════════════════════════════════
     // 三、私有：规范化 / 校验 / 版本 / 排他
     // ════════════════════════════════════════════════════════════════════

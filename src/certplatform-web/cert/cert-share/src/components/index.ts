@@ -10,6 +10,12 @@ export { default as CertConvertBadge } from './CertConvertBadge.vue'
 export { default as CertPageHeader } from './CertPageHeader.vue'
 export { default as CertPagePlaceholder } from './CertPagePlaceholder.vue'
 export { default as CertStatusBar } from './CertStatusBar.vue'
+// 文档在线预览（docx/xlsx/pdf/图片/文本）—— 2026-10-04 由
+// cert-admin/pages/workflow/doc-extraction-rule/components 上移到 share，
+// 供「文档填写规则」页（中栏预览空白模板 / 标准原始文档）复用。
+// ⚠️ 依赖 `@vue-office/pdf`（中等体积），但已被两个管理端页面同时需要，
+//    放进 barrel 不引入额外包（若将来只有一处用，请改回直接路径导入）。
+export { default as DocPreview } from './DocPreview.vue'
 // 33 号语义结果渲染器 —— 2026-10-03 由 cert-admin/pages/workflow/prompt-template/components
 // 上移到 share，供 36 号「企业原始资料管理」分析结果抽屉复用（只读渲染层，⛔ 无 emit）。
 export { default as SemanticResult } from './SemanticResult.vue'

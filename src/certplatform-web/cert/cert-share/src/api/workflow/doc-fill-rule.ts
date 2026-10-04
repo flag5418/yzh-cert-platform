@@ -67,7 +67,11 @@ export interface DocTemplateTreeNode {
   IsLeaf: boolean
   Children?: DocTemplateTreeNode[]
   Extra?: {
-    /** `org` / `scope` / `template` */
+    /**
+     * 节点类型 —— **两个端点的取值不同**：
+     * - `tree`（旧，模板表驱动）：`org` / `scope` / `template`
+     * - `directory-tree`（新，资料清单驱动）：`org` / `standard` / `stage` / `folder` / `file`
+     */
     kind?: string
     orgCode?: string
     standardCode?: string
@@ -83,6 +87,34 @@ export interface DocTemplateTreeNode {
     scanStatus?: string
     anchorCount?: number
     orphanCount?: number
+
+    // ── 以下仅 `directory-tree` 的文件叶子有 ──
+    /** `standard` 节点的标准编号（如 `iso9001-2015`） */
+    standardNo?: string
+    /** `stage` 节点的阶段 GUID */
+    phaseCode?: string
+    /** `stage` 节点的目录配置 Code（空 = 该「标准×阶段」还没建配置，不会有文件） */
+    configCode?: string
+    /** 文件扩展名（小写，无点）：`doc` / `docx` / `xls` / `xlsx` … */
+    fileType?: string
+    /** 资料清单里的**原始文档**路径（第 ② 步「下载标准文档」用） */
+    standardStoragePath?: string
+    /** 原始文档的 LibreOffice 归一产物（`.docx` / `.xlsx`）路径 */
+    standardEditablePath?: string
+    /**
+     * ★ 是否已上传空白模板 —— 页面据此决定操作条分级。
+     * 为 `false` 时只能「下载标准文档 + 上传空白模板」。
+     */
+    hasTemplate?: boolean
+    /** 空白模板 `cert_doc_template.Code`（无模板时为空串） */
+    templateCode?: string
+    /** 空白模板在 MinIO 的路径（`…/_template/xxx.docx`） */
+    templateStoragePath?: string
+    templateFileName?: string
+    /** ★ 权威分类列 `cert_standard_directory_file.DocCategory`：`editable` / `fixed` */
+    docCategory?: string
+    /** 文件夹深度（1 起） */
+    depth?: number
   }
 }
 
@@ -133,6 +165,28 @@ export function getDocTemplateTree() {
 }
 
 /**
+ * ★★ **资料清单树**（页面左树首选）—— 机构 → 标准 → 阶段 → 文件夹 → 文件。
+ *
+ * <p>与「标准资料清单」页（`directory-manager`）**同源同形**（后端复用同一个
+ * `GetOrganizationTreeAsync` + 同一份保留段过滤口径），差别只有两点：</p>
+ * <ol>
+ *   <li>载荷是 <b>PascalCase</b>（对齐 `YzhTreeTableLayout` 契约），
+ *       而资料清单页内部用的是 `CertBizTree` 的 `{id,label,type}` camelCase 私有格式；</li>
+ *   <li>每个<b>文件叶子</b>额外带空白模板状态（`hasTemplate` / `templateCode` /
+ *       `scanStatus` / `publishStatus` / `anchorCount` / `docCategory`）。</li>
+ * </ol>
+ *
+ * <p>⛔ 不要退回 `tree` 端点 —— 那个按 `cert_doc_template` 构树，
+ * 只显示**已上传过模板的文件**（实测 1 个 vs 资料清单 168 个），
+ * 用户会看到一棵几乎是空的树，且无从下手（没模板的文件根本不在树上）。</p>
+ */
+export function getDirectoryTree() {
+  return yzhApi.get<
+    ApiResponse<{ Nodes: DocTemplateTreeNode[]; Total: number; WithTemplate: number }>
+  >(`${BASE}/DocTemplate/directory-tree`)
+}
+
+/**
  * 某 `promptCode` 的全部版本（**含已软删**，按 `Version` 降序）。
  *
  * ⚠️ `orgCode` 传空串 = 全局作用域；后端按「机构非空优先」选取。
@@ -168,4 +222,236 @@ export function setDocFillPromptDefault(version: DocFillPromptVersion) {
     ...version,
     IsDefault: true,
   })
+}
+
+/**
+ * **可选提示词清单**（按 `PromptCode` 聚合，不含已软删）—— 「挂接提示词」下拉用。
+ *
+ * 【为什么需要它】
+ *   「全文填写规则」页签原来 `:disabled="!promptCode"`，而新模板的 `FillPromptCode` 必然是空的
+ *   ⇒ 页签点不开；即便点开，面板里只有「版本表 + 设为默认」，**没有任何新建/挂接入口**。
+ *   这个端点就是打破死循环的第一步：先让用户看得见「现有提示词有哪些」。
+ */
+export function getDocFillPromptCodes(keyword?: string) {
+  return yzhApi.get<
+    ApiResponse<{
+      Total: number
+      Items: {
+        PromptCode: string
+        PromptName?: string
+        VersionCount: number
+        MaxVersion: number
+        Orgs: string[]
+        ActiveVersion: number | null
+        UpdateTime?: string
+      }[]
+    }>
+  >(`${BASE}/DocFillPrompt/codes`, keyword ? { keyword } : undefined)
+}
+
+/**
+ * 新增一版提示词（`Version <= 0` 时后端自动取 `max + 1`）。
+ *
+ * ⚠️ `OrgCode` 空串 = 全局；本页新建的提示词一律落**全局**（机构级差异化留给提示词工作台）。
+ */
+export function addDocFillPrompt(payload: {
+  PromptCode: string
+  PromptName: string
+  SystemPrompt?: string
+  UserTemplate?: string
+  Model?: string
+  Temperature?: number
+  MaxTokens?: number
+  Status?: string
+  IsDefault?: boolean
+}) {
+  return yzhApi.post<ApiResponse<any>>(`${BASE}/DocFillPrompt/add`, {
+    OrgCode: '',
+    // 0 = 未指定 ⇒ 后端取 max(Version) + 1
+    Version: 0,
+    Status: 'draft',
+    IsDefault: false,
+    MaxTokens: 4000,
+    Temperature: 0.2,
+    ...payload,
+  })
+}
+
+/**
+ * **挂接 / 解绑**本模板的全文填写提示词（只改 `cert_doc_template.FillPromptCode` 一列）。
+ *
+ * ⛔ 不走通用 `update`：那会把全部 `BcFlag` 列提交一遍，漏传的业务键被清空。
+ * `promptCode` 传空串 = 解绑。
+ */
+export function setDocTemplatePrompt(templateCode: string, promptCode: string) {
+  return yzhApi.post<ApiResponse<{ TemplateCode: string; FillPromptCode?: string; Bound: boolean }>>(
+    `${BASE}/DocTemplate/set-prompt`,
+    { TemplateCode: templateCode, PromptCode: promptCode },
+  )
+}
+
+// ====================================================================
+// 七步闭环（37 号 §7.1）—— 2026-10-03 新增的跨实体编排端点
+//
+// 命名与后端逐字对齐：
+//   `POST /DocTemplate/upload-template`        ← ④ 上传空白模板
+//   `GET  /StandardDocContract/detail`         ← Tab3 读契约
+//   `POST /StandardDocContract/save`           ← Tab3 写契约（含 DocCategory 分流）
+//   `POST /StandardDocContract/analyze`        ← 「自动分析」按钮（聚合 C 字段提取 + A 扫描）
+//   `POST /DocTemplateAnchor/scan`             ← ⑤ 重新扫描（零 LLM）
+//   `POST /DocTemplateAnchor/validate`         ← ⑥ 校验（三色）
+//   `POST /DocTemplateAnchor/publish`          ← ⑦ 发布
+//
+// ⚠️ 后端这几个端点的**业务失败恒 HTTP 200**，`success` 是唯一判据 ⇒ 调用方
+//    必须用 `unwrapOk` / `expectOk`（守卫 R13，⛔ 禁裸 `if (!res.success)`）。
+// ====================================================================
+
+/** `GET /StandardDocContract/detail` 的返回（契约不存在时 `Exists=false` 的空壳） */
+export interface DocContractDetail {
+  /** 契约行是否已存在。false 时其余业务字段回落到文件行默认值，仍可直接编辑后保存 */
+  Exists: boolean
+  Code?: string
+  StandardFileCode: string
+  FileName: string
+  /** ★ 分类权威列 = `cert_standard_directory_file.DocCategory`（不是契约行） */
+  DocCategory: string
+  DocName: string
+  /** required / optional / reference / attachment */
+  DocRole: string
+  DocPurpose?: string
+  /** 标签数组 JSON 字符串 */
+  TagsJson?: string
+  InfoItemsJson?: string
+  /** `fixed` 文档专用：指纹规则集 JSON */
+  FingerprintJson?: string
+
+  AnalyzeStatus: string
+  AnalyzeMessage?: string
+  ModelName?: string
+  AnalyzeTime?: string
+  /** `ai` / `manual` —— 人工改过的批量重跑不得覆盖 */
+  TagsSource?: string
+  DocPurposeSource?: string
+  TagsConfidence?: number
+  DocPurposeConfidence?: number
+  IsManualCorrected: boolean
+
+  // ── 标准原始文档的存储信息（供「下载标准文档」与中栏预览）──
+  StandardFileType?: string
+  StandardStoragePath?: string
+  StandardEditablePath?: string
+  StandardConvertedPath?: string
+  StandardEditableStatus?: string
+  EnterpriseCode?: string
+}
+
+/** `POST /StandardDocContract/save` 的请求体（字段名 PascalCase，与后端逐字一致） */
+export interface DocContractSavePayload {
+  StandardFileCode: string
+  DocName?: string
+  /** ★ 「这个文档是否不需要编辑」：`fixed`（固定格式免填）/ `editable`（要配填写规则） */
+  DocCategory?: string
+  DocRole?: string
+  /** ⚠️ 传 `null`（或不传）= 本次不动该字段；传空串 = 清空 */
+  DocPurpose?: string | null
+  TagsJson?: string | null
+  InfoItemsJson?: string | null
+  FingerprintJson?: string | null
+}
+
+/**
+ * 上传**空白模板**（37 号 §7.1 第 ④ 步）。
+ *
+ * ⚠️ 必须用 `FormData`；**⛔ 不要手工设 `Content-Type: multipart/form-data`** ——
+ * 手写不带 boundary，后端解析不出任何字段，请求发得出去、后端只见空 form、前端零报错。
+ * `yzhApi` 检测到 `FormData` 会自动删掉该头，让浏览器补 boundary。
+ *
+ * ★ 覆盖语义：同一 `standardFileCode` 重新上传 = **换版**。模板行沿用同 `Code`，
+ * 但 `PublishStatus` 重置为 `draft`、`ScanStatus` 重置为 `pending` ⇒ 必须重扫重校验。
+ */
+export function uploadDocTemplate(file: File, standardFileCode: string, remark?: string) {
+  const fd = new FormData()
+  fd.append('File', file)
+  fd.append('StandardFileCode', standardFileCode)
+  if (remark) fd.append('Remark', remark)
+  return yzhApi.post<ApiResponse<any>>(`${BASE}/DocTemplate/upload-template`, fd)
+}
+
+/** 读文档契约（不存在返回空壳，不报错） */
+export function getDocContract(fileCode: string) {
+  return yzhApi.get<ApiResponse<DocContractDetail>>(`${BASE}/StandardDocContract/detail`, { fileCode })
+}
+
+/** 保存文档契约（人工编辑 ⇒ 标记 `manual`，后端同批同步标准目录行的 `DocCategory`） */
+export function saveDocContract(payload: DocContractSavePayload) {
+  return yzhApi.post<ApiResponse<any>>(`${BASE}/StandardDocContract/save`, payload)
+}
+
+/**
+ * 「自动分析」（用户要求：每个文件一个分析按钮）。
+ *
+ * 一次调用聚合：
+ *   - **C 字段提取**（LLM，已实现）
+ *   - **A 锚点扫描**（零 LLM，但**需要空白模板** ⇒ 未上传时返回 `Scan.Status='blocked'`）
+ *   - **B 语义分析**（分类/作用/标签）本轮**未接** ⇒ `Semantic.Status='not_wired'`
+ */
+export function analyzeDocForFill(fileCode: string) {
+  return yzhApi.post<ApiResponse<any>>(`${BASE}/StandardDocContract/analyze`, null, {
+    params: { fileCode },
+  })
+}
+
+/**
+ * 重新扫描空白模板 → 锚点清单（**零 LLM**）。
+ *
+ * ⚠️ `force=false`（默认）时，若已扫过且 `PublishStatus !== 'draft'`，后端**直接跳过**
+ * 并返回 `Skipped=true` —— 想强制重扫必须传 `force=true`。
+ */
+export function scanTemplateAnchors(templateCode: string, force = false) {
+  return yzhApi.post<ApiResponse<any>>(`${BASE}/DocTemplateAnchor/scan`, null, {
+    params: { templateCode, force },
+  })
+}
+
+/** 校验（三色）：返回 `ErrorCount` / `WarningCount` / `Violations` / `CanPublish` */
+export function validateTemplate(templateCode: string) {
+  return yzhApi.post<ApiResponse<any>>(`${BASE}/DocTemplateAnchor/validate`, null, {
+    params: { templateCode },
+  })
+}
+
+/** 发布（硬前置：无红牌 + 有锚点；后端会重新校验一遍，⛔ 不信缓存） */
+export function publishTemplate(templateCode: string) {
+  return yzhApi.post<ApiResponse<any>>(`${BASE}/DocTemplateAnchor/publish`, null, {
+    params: { templateCode },
+  })
+}
+
+/**
+ * 批量保存锚点（按 `uk_tpl_anchor` upsert，单事务）。
+ *
+ * ★ 侧边栏「保存」走这个端点而不是通用 `/update`，原因有两条：
+ *   ① 语义 = **整行 upsert**（`SaveAnchorBatchRequest` 的注释已声明）：每条 `Items[i]`
+ *      是该锚点的**完整状态**，未出现的字段会被写成 CLR 默认值 ⇒ 调用方必须提交完整行；
+ *   ② 它**按唯一键定位**（`TemplateCode+AnchorType+AnchorKind+SheetName+SectionIndex+HeaderKind+AnchorRef`），
+ *      所以即便 `Code` 缺失也不会插重复行，比 `/update` 更稳。
+ *
+ * ⚠️ 同一批次内**唯一键不得重复**，否则后端直接拒绝整批。
+ */
+export function saveAnchorBatch(templateCode: string, items: any[]) {
+  return yzhApi.post<ApiResponse<any>>(`${BASE}/DocTemplateAnchor/save-batch`, {
+    TemplateCode: templateCode,
+    Items: items,
+  })
+}
+
+/** 全局参数定义（`global` 类来源的下拉候选）。⛔ 只读，仅用于提示可选值 */
+export function listFillParamDefs(keyword?: string) {
+  const filters = keyword
+    ? [{ Field: 'ParamCode', Operator: 'like' as const, Value: keyword }]
+    : []
+  return yzhApi.post<ApiResponse<{ Items: any[]; TotalCount: number }>>(
+    '/api/Admin/Cert/FillParamDef/filter',
+    { Page: 1, PageSize: 500, Filters: filters },
+  )
 }

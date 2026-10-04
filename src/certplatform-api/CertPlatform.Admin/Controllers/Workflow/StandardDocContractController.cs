@@ -92,6 +92,17 @@ public class StandardDocContractController : WebControllerBase
             // ★ 分类权威 = 标准目录文件行（不是契约行）
             DocCategory = NormalizeCategory(fileRow.DocCategory, null),
 
+            // ── ★ 标准原始文档的存储信息（37 号 §3.3 的「下载标准文档」）──
+            //   页面中栏要「先看原始文档、再上传加工后的空白模板」，所以路径必须随本接口一起给。
+            //   优先级与前端 DocPreview 一致：原始 → 可编辑副本 → 转换产物。
+            //   ⚠️ 这里只**透出路径**，下载仍走既有的 `downloadFile(storagePath)`（⛔ 不新造下载端点）。
+            StandardFileType = fileRow.FileType,
+            StandardStoragePath = fileRow.StoragePath,
+            StandardEditablePath = fileRow.EditableStoragePath,
+            StandardConvertedPath = fileRow.ConvertedStoragePath,
+            StandardEditableStatus = fileRow.EditableStatus,
+            EnterpriseCode = fileRow.EnterpriseCode,
+
             DocName = contract?.DocName ?? fileRow.FileName,
             DocRole = contract?.DocRole ?? "required",
             DocPurpose = contract?.DocPurpose,
@@ -189,13 +200,17 @@ public class StandardDocContractController : WebControllerBase
             contract.DocPurpose = req.DocPurpose;
             contract.DocPurposeSource = string.IsNullOrWhiteSpace(req.DocPurpose) ? null : "manual";
         }
+        // ★ JSON 列必须归一（2026-10-04 实测缺陷）：`TagsJson` 是 MySQL `json` 列，
+        //   前端「标签为空」时提交的是**空串** ⇒ MySQL 直接报
+        //   `Invalid JSON text: "The document is empty." at position 0`，**整条保存失败**。
+        //   ⇒ 空值一律归一成合法 JSON 字面量（数组 `[]` / 对象 `{}`），⛔ 绝不写空串。
         if (req.TagsJson != null)
         {
-            contract.TagsJson = req.TagsJson;
+            contract.TagsJson = ToJsonArray(req.TagsJson);
             contract.TagsSource = string.IsNullOrWhiteSpace(req.TagsJson) ? null : "manual";
         }
-        if (req.InfoItemsJson != null) contract.InfoItemsJson = req.InfoItemsJson;
-        if (req.FingerprintJson != null) contract.FingerprintJson = req.FingerprintJson;
+        if (req.InfoItemsJson != null) contract.InfoItemsJson = ToJsonArray(req.InfoItemsJson);
+        if (req.FingerprintJson != null) contract.FingerprintJson = ToJsonObject(req.FingerprintJson);
 
         // ★ 人工编辑留痕：批量重跑不得覆盖
         contract.IsManualCorrected = true;
@@ -300,9 +315,42 @@ public class StandardDocContractController : WebControllerBase
             .Where(t => t.StandardFileCode == fileCode && t.IsDeleted == false)
             .FirstAsync();
 
-        object scanResult = template == null
-            ? new { Status = "blocked", Message = "尚未上传空白模板，无法扫描锚点（请先「下载标准文档 → 加工 → 上传空白模板」）" }
-            : new { Status = "not_wired", Message = "扫描器本轮尚未接入（需先扩展 WordDocumentScanner / ExcelSheetScanner）" };
+        object scanResult;
+        if (template == null)
+        {
+            scanResult = new
+            {
+                Status = "blocked",
+                Message = "尚未上传空白模板，无法扫描锚点（请先「下载标准文档 → 加工 → 上传空白模板」）",
+            };
+        }
+        else
+        {
+            // ★ 扫描器**已接入**（`DocTemplateAnchor/scan`）。此处如实回报已有扫描结果，
+            //   ⛔ 不再写「扫描器尚未接入」——那会与页面上可用的「重新扫描」按钮自相矛盾。
+            var anchorRows = await _db.Client.Queryable<DocTemplateAnchor>()
+                .Where(a => a.TemplateCode == template.Code && a.IsDeleted == false && a.IsValid == 1)
+                .Select(a => new { a.AnchorType, a.IsOrphan })
+                .ToListAsync();
+
+            var scanned = string.Equals(template.ScanStatus, "completed", StringComparison.Ordinal);
+
+            scanResult = new
+            {
+                Status = scanned ? "ok" : template.ScanStatus,
+                ScanStatus = template.ScanStatus,
+                ScanMessage = template.ScanMessage,
+                ScanTime = template.ScanTime,
+                AnchorCount = anchorRows.Count,
+                OrphanCount = anchorRows.Count(a => a.IsOrphan),
+                ByType = anchorRows
+                    .GroupBy(a => a.AnchorType ?? string.Empty, StringComparer.Ordinal)
+                    .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal),
+                Message = scanned
+                    ? $"已扫描：{anchorRows.Count} 个锚点（孤儿 {anchorRows.Count(a => a.IsOrphan)} 个）"
+                    : "尚未扫描或扫描未完成，请点「重新扫描」",
+            };
+        }
 
         return Ok(ApiResponse<object>.Ok(new
         {
@@ -338,6 +386,26 @@ public class StandardDocContractController : WebControllerBase
             _ => null,
         };
     }
+
+    /// <summary>
+    /// JSON <b>数组</b>列的空值归一：空串 / 纯空白 ⇒ <c>"[]"</c>，否则原样（去首尾空白）。
+    ///
+    /// <para><b>为什么必须做</b>（2026-10-04 实测）：<c>cert_standard_doc_contract.TagsJson</c> 是
+    /// MySQL <c>json</c> 列，写空串会抛 <c>Invalid JSON text: "The document is empty." at position 0</c>
+    /// —— 而且是在 <c>INSERT</c> 阶段抛出，<b>整条契约保存失败</b>，前端只看到「新增失败」。
+    /// 前端已经改为提交 <c>[]</c>，此处是<b>第二道闸</b>：任何调用方（脚本 / 后续 AI 批量写入）
+    /// 漏传空串都不会再炸。</para>
+    /// </summary>
+    private static string ToJsonArray(string? raw)
+        => string.IsNullOrWhiteSpace(raw) ? "[]" : raw.Trim();
+
+    /// <summary>
+    /// JSON <b>对象</b>列的空值归一：空串 / 纯空白 ⇒ <c>null</c>（该列可空，语义 = 「未配置指纹」）。
+    /// <para>⛔ 不能写 <c>"{}"</c> —— 指纹规则的判空口径是 <c>IS NULL</c>，写 <c>{}</c> 会让
+    /// 「没有指纹」与「指纹为空对象」变成两种状态，匹配侧要多处理一个分支。</para>
+    /// </summary>
+    private static string? ToJsonObject(string? raw)
+        => string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
 
     /// <summary>保存契约的请求体</summary>
     public sealed class ContractSaveRequest

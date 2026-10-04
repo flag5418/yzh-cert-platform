@@ -210,5 +210,28 @@ export const getSkills = () =>
 export const getFilePreviewBlob = (fileCode: string) =>
   yzhApi.getBlob('/api/Admin/Workflow/DocExtractionRule/file-preview', { fileCode })
 
+/**
+ * ★ 按**存储路径**取预览 PDF 流（2026-10-04 新增）。
+ *
+ * 【为什么需要第二条预览链】
+ *   `file-preview` 按 `fileCode` 查 `cert_standard_directory_file`。
+ *   而**空白模板**存在 `…/_template/xxx.docx`，在标准目录表里**没有对应行**，
+ *   模板表也没有 `FileCode` ⇒ 那条链**根本查不到它**，只能吃裸路径。
+ *
+ * 【缓存语义】
+ *   服务端把转换结果缓存到源路径派生的 `…/pdf/x.docx.pdf`（与标准目录产物同一套口径）。
+ *   因此**换版（重新上传同名模板）必须让服务端先失效缓存**，否则会看到上一版的 PDF
+ *   —— 上传接口已内建该失效动作，前端无需传 `useCache:false`。
+ *
+ * ⚠️ `fileName` 必须传**真实文件名（含扩展名）**：服务端靠它判扩展名与推导产物名。
+ *   只给路径的话，`…/editable/陪审人员.doc.docx` 这类「双重扩展名」产物仍能正确取到
+ *   `.docx`，但模板路径一旦不带扩展名就会误判为不支持预览。
+ */
+export const getPreviewBlobByPath = (storagePath: string, fileName?: string) =>
+  yzhApi.getBlob('/api/Admin/Workflow/DocExtractionRule/preview-by-path', {
+    storagePath,
+    ...(fileName ? { fileName } : {}),
+  })
+
 export const getFileMarkdown = (fileCode: string) =>
   yzhApi.get<{ code: number; data: string }>(`/api/Admin/Workflow/DocExtractionRule/file-markdown?fileCode=${fileCode}`)

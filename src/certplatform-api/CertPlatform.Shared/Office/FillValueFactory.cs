@@ -174,6 +174,79 @@ public static class FillValueFactory
     private static string Truncate(string s) => s.Length <= 40 ? s : s[..40] + "…";
 
     // ────────────────────────────────────────────────────────────────────────
+    // FromRaw —— AI Skill 的入口（39 号 §7.2）
+    // ────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 把「AI 返回的原始值」按<b>锚点声明的类型</b>转成 <see cref="FillValue"/>。
+    ///
+    /// <para><b>★ 与 <see cref="Coerce"/> 的分工（⛔ 不要合并）</b>：
+    /// <see cref="Coerce"/> 是 <c>fill_cell</c> 的解包口 —— 值字典里可能已经是
+    /// <see cref="FillValue"/>，<b>类型随值走</b>（谁产的值谁负责类型）；
+    /// 本方法是 AI Skill 的入口 —— 值来自模型返回的 JSON，<b>类型随锚点走</b>
+    /// （39 号 §7.3：类型由 <c>cert_doc_template_anchor.ValueType</c> 给，⛔ 不由 AI 猜）。
+    /// 两者输入形态重叠但<b>类型来源相反</b>，合并必然让一方错。</para>
+    ///
+    /// <para><b>★ 返回 <c>null</c> = 转换失败</b>（典型：锚点声明 <c>number</c>，
+    /// 模型却返回「叁万元」）。调用方<b>必须</b> <c>SkillResult.Fail</c> ——
+    /// ⛔ 不得静默降级成文本：Excel 数字变文本<b>不报错但结果错</b>（38 号 §4.2）。</para>
+    ///
+    /// <para>⚠️ <b>空值不是失败</b>：<paramref name="raw"/> 为 <c>null</c> / 空串 ⇒
+    /// 返回「类型正确、值为空」的 <see cref="FillValue"/>。
+    /// 「空是否可接受」是<b>业务判断</b>（39 号 §7.4：AI 返回 <c>null</c> ⇒ Fail 回退重试），
+    /// 刻意不放在本方法 —— 否则「资料里确实没提」这种合法的空也会被当成类型错误。</para>
+    /// </summary>
+    /// <param name="anchorCode">锚点键（与文档 <c>{{ }}</c> 内文本逐字一致）</param>
+    /// <param name="raw">模型返回的原始值（<c>string</c> / 数值 / <c>bool</c> / <see cref="JsonElement"/> / 已是 <see cref="FillValue"/>)</param>
+    /// <param name="valueKind">锚点声明的值类型（<c>text</c> / <c>number</c> / <c>date</c> / <c>bool</c> / <c>enum</c>）</param>
+    /// <param name="numberFormat">格式串（<b>.NET 方言</b>）</param>
+    /// <returns>转换结果；失败返回 <c>null</c></returns>
+    public static FillValue? FromRaw(
+        string anchorCode,
+        object? raw,
+        string? valueKind,
+        string? numberFormat = null)
+    {
+        if (string.IsNullOrWhiteSpace(anchorCode)) return null;
+
+        // ① 已是 FillValue ⇒ 透传，只补锚点与缺失的格式
+        if (raw is FillValue direct)
+        {
+            if (string.IsNullOrWhiteSpace(direct.AnchorCode)) direct.AnchorCode = anchorCode;
+            if (string.IsNullOrWhiteSpace(direct.NumberFormat) && !string.IsNullOrWhiteSpace(numberFormat))
+                direct.NumberFormat = numberFormat;
+            return direct;
+        }
+
+        // ② JsonElement ⇒ 先降 CLR 再递归（避免每种类型写两遍）
+        if (raw is JsonElement je)
+            return FromRaw(anchorCode, FromJsonElement(je), valueKind, numberFormat);
+
+        // ③ 其余 ⇒ 文本化后按**声明类型**解析
+        //    ⚠️ raw 为 null ⇒ ToText 给空串 ⇒ 走 TryCreate 的空值分支（Ok + 空值）
+        var (ok, value, _) = TryCreate(anchorCode, ToText(raw), valueKind, numberFormat);
+        return ok ? value : null;
+    }
+
+    /// <summary>
+    /// 值 → 文本（数值走 <b>InvariantCulture</b>；⛔ 不用当前区域性 ——
+    /// 否则小数点在德语区会变逗号，再解析回来就成了另一个数）。
+    ///
+    /// <para>★ <c>public</c>：<see cref="FromRaw"/> 与 <c>TablePayloadFactory</c> 共用 ——
+    /// 这是全项目「值 → 文本」的<b>唯一</b>实现，⛔ 不要再写第三份
+    /// （两份必然漂移，典型症状是「同一列里有的值带千分位、有的不带」）。</para>
+    /// </summary>
+    public static string ToText(object? raw) => raw switch
+    {
+        null => string.Empty,
+        string s => s,
+        bool b => b ? "true" : "false",
+        System.DateTime dt => dt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+        System.DateOnly d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        _ => System.Convert.ToString(raw, CultureInfo.InvariantCulture) ?? string.Empty,
+    };
+
+    // ────────────────────────────────────────────────────────────────────────
     // Coerce —— fill_cell 的入参解包口（39 号 §10.2）
     // ────────────────────────────────────────────────────────────────────────
 
@@ -273,7 +346,10 @@ public static class FillValueFactory
         JsonValueKind.String => e.GetString(),
         JsonValueKind.True => true,
         JsonValueKind.False => false,
-        JsonValueKind.Number => e.TryGetInt64(out var l) ? l : e.GetDouble(),
+        // ★ 必须显式 `(object)` 强转 —— 否则三元表达式类型被**提升为 double**，
+        //   long 分支也被转成 double 装箱 ⇒ 大整数丢精度且**不报错**
+        //   （`1234567890123456789` 会变成 `1234567890123456800`）。
+        JsonValueKind.Number => e.TryGetInt64(out var l) ? (object)l : e.GetDouble(),
         JsonValueKind.Object => e.EnumerateObject()
             .ToDictionary(p => p.Name, p => FromJsonElement(p.Value)),
         JsonValueKind.Array => e.EnumerateArray().Select(FromJsonElement).ToList(),

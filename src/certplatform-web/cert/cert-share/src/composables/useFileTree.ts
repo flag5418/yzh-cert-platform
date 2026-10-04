@@ -59,13 +59,24 @@ export interface TreeNode {
 // ========================================================
 
 /**
- * 「产物目录」保留段名 —— 与后端 `PathBuilder.ReservedSegments` 保持一致。
- * 系统把转换产物写在 `{StoragePath}/pdf/x.pdf`、`{StoragePath}/markdown/x.md`，
- * 与业务文件夹物理同层；正常路径下创建已被后端 ValidateFolderOrFileName 挡住，
- * 但历史数据 / 直改 DB 仍可能留下同名文件夹 → 显示层统一过滤（与后端
- * `StandardDirectoryService.GetStageFileTreeAsync` 的过滤口径一致）。
+ * 「产物 / 系统目录」保留段名 —— 必须与后端 `PathBuilder.ReservedSegments` **逐字一致**（5 个）。
+ *
+ * 后端权威定义（`PathBuilder.cs:99-102`，`StringComparer.OrdinalIgnoreCase`）：
+ *   `PdfSegment="pdf"` / `MarkdownSegment="markdown"` / `EditableSegment="editable"`
+ *   / `TemplateSegment="_template"` / `ArchiveSegment="_archive"`
+ *
+ * 这些目录与业务文件夹**物理同层**写在 `{StoragePath}/` 下：
+ *   - `pdf/`、`markdown/`、`editable/` = 转换产物（PDF 预览 / Markdown 提取 / 可编辑归一）
+ *   - `_template/` = **空白模板**（本页「上传空白模板」的落点，文件名保留原始上传名）
+ *   - `_archive/` = 换版归档
+ *
+ * 正常创建已被后端 `ValidateFolderOrFileName` 挡住，但历史数据 / 直改 DB / 上传模板
+ * 仍可能留下同名文件夹 ⇒ 显示层统一过滤（口径与 `StandardDirectoryService` 一致）。
+ *
+ * ⚠️ **漏一个就会在资料清单页冒出幽灵文件夹**（如上传模板后出现 `_template`）——
+ * 曾漏 `editable` 与 `_template`，2026-10-04 补齐。
  */
-const RESERVED_SEGMENTS = new Set(['pdf', 'markdown', '_archive'])
+const RESERVED_SEGMENTS = new Set(['pdf', 'markdown', 'editable', '_template', '_archive'])
 
 function isReservedFolder(name?: string): boolean {
   return !!name && RESERVED_SEGMENTS.has(name.trim().toLowerCase())
@@ -196,7 +207,7 @@ export function useFileTree() {
   /** 后端 StageFolderNode（含 Files/根目录虚拟节点）→ 前端 TreeNode */
   function buildStageNodes(folderNodes: any[], directoryCode: string): TreeNode[] {
     return (folderNodes || [])
-      // ★ 过滤产物目录（pdf / markdown / _archive），其下文件随之不可见
+      // ★ 过滤保留段目录（pdf / markdown / editable / _template / _archive），其下文件随之不可见
       .filter((folder: any) => !isReservedFolder(folder?.Name || folder?.FolderName))
       .map((folder: any) => {
       const node: TreeNode = {

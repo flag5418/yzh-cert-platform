@@ -57,6 +57,30 @@ namespace CertPlatform.Auditor.Controllers
             => Ok(ApiResponse<object?>.Ok(await _service.StatusBarAsync(
                 req.EnterpriseCode ?? "", req.StageCode ?? "")));
 
+        /// <summary>
+        /// ★ **重新生成** Markdown（重跑转换链；可选连语义分析一起重跑）。
+        /// <para>此前 Markdown 只有「上传时生成」一个入口 ⇒ anydoc 偶发失败 / 换了视觉模型 / 僵死逃生后
+        /// 只能重新上传整个文件夹。有了它，点一下即可重试，不动源文件、不改版本号。</para>
+        /// </summary>
+        [HttpPost("regenerate")]
+        public async Task<IActionResult> Regenerate([FromBody] RegenerateRequest req)
+        {
+            var r = await _service.RegenerateAsync(
+                req.FileCode ?? "", req.EnterpriseCode ?? "", req.Reanalyze ?? true);
+            return r.Success
+                ? Ok(ApiResponse<object?>.Ok(r.Data))
+                : Ok(ApiResponse<object?>.Fail(r.Error ?? "重新生成失败"));
+        }
+
+        /// <summary>
+        /// ★ 取已生成的 Markdown **文本内容**（JSON）。
+        /// <para>与 <c>file-markdown/{fileCode}</c> 的分工：后者返回<b>文件流</b>（下载用），
+        /// 本端点返回<b>文本</b>（页面内展示/核对用）。⚠️ 显式 UTF-8 解码，避免乱码。</para>
+        /// </summary>
+        [HttpGet("markdown/{fileCode}")]
+        public async Task<IActionResult> Markdown(string fileCode, [FromQuery] string? enterpriseCode)
+            => Ok(ApiResponse<object?>.Ok(await _service.GetMarkdownAsync(fileCode, enterpriseCode ?? "")));
+
         /// <summary>★ 队列明细：排队位置 + 进度 + 每份文件的任务状态与失败原因</summary>
         [HttpPost("queue-detail")]
         public async Task<IActionResult> QueueDetail([FromBody] ScopeRequest req)
@@ -303,6 +327,13 @@ namespace CertPlatform.Auditor.Controllers
         {
             public string? TaskId { get; set; }
             public string? EnterpriseCode { get; set; }
+        }
+
+        /// <summary>重新生成请求</summary>
+        public class RegenerateRequest : FileCodeRequest
+        {
+            /// <summary>true = 连语义分析一起重跑（false = 只重新生成内容，画像不动）</summary>
+            public bool? Reanalyze { get; set; }
         }
 
         public class RestoreRequest : FileCodeRequest

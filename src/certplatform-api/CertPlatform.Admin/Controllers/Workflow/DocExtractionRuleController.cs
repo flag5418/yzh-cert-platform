@@ -205,5 +205,31 @@ public class DocExtractionRuleController : ControllerBase
         return File(content, "application/pdf", $"{fileName}.pdf");
     }
 
+    /// <summary>
+    /// ★★ <b>按存储路径取预览 PDF 流</b>（2026-10-04 新增）。
+    ///
+    /// <para><b>与 <c>file-preview</c> 的分工</b>：<c>file-preview</c> 按 <c>fileCode</c> 查
+    /// <c>cert_standard_directory_file</c>；本端点吃<b>裸路径</b>，用于<b>不在标准目录里</b>的文件
+    /// —— 典型是空白模板（<c>…/_template/xxx.docx</c>，无 <c>FileCode</c>）。</para>
+    ///
+    /// <para><b>安全闸</b>：<c>DocumentLibraryPath.IsAllowedStoragePath</c>（与 <c>StandardDirectory/download</c>
+    /// 同一道闸）—— 只放行已登记的文档库前缀，且拒绝 <c>..</c> / 空段。
+    /// ⛔ 不要改成 <c>StartsWith</c> 硬编码：那会让企业文档库静默被拒（业务失败恒 HTTP 200，前端无线索）。</para>
+    /// </summary>
+    [HttpGet("preview-by-path")]
+    public async Task<IActionResult> GetPreviewByPath(
+        [FromQuery] string storagePath,
+        [FromQuery] string? fileName = null,
+        [FromQuery] bool useCache = true)
+    {
+        if (!CertPlatform.Shared.Entities.Dir.DocumentLibraryPath.IsAllowedStoragePath(storagePath))
+            return Ok(ApiResponse<object?>.Fail("非法的文件路径"));
+
+        var (content, name, error) = await _service.GetPreviewPdfByPathAsync(storagePath, fileName, useCache);
+        if (error != null || content == null)
+            return Ok(ApiResponse<object?>.Fail(error ?? "预览产物生成失败"));
+        return File(content, "application/pdf", $"{name}.pdf");
+    }
+
     #endregion
 }

@@ -21,6 +21,7 @@
       :lazy="lazy"
       :load="loadData"
       :default-expand-all="defaultExpandAll"
+      :default-expanded-keys="defaultExpandedKeys"
       :expand-on-click-node="expandOnClickNode"
       :highlight-current="highlightCurrent"
       :node-key="nodeKey"
@@ -166,6 +167,13 @@ interface Props {
   loadData?: (node: any, resolve: (data: YzhTreeNode[]) => void) => void
   /** 默认展开全部 */
   defaultExpandAll?: boolean
+  /**
+   * 默认展开的节点 key 列表（`nodeKey` 的值）。
+   *
+   * <para>⚠️ 与 `defaultExpandAll` 二选一：层级深的树（如资料清单「机构→标准→阶段→文件夹→文件」）
+   * 全展开会有上百个节点，用本属性只展开前两级。</para>
+   */
+  defaultExpandedKeys?: (string | number)[]
   /** 点击节点展开 */
   expandOnClickNode?: boolean
   /** 高亮当前 */
@@ -196,6 +204,7 @@ const props = withDefaults(defineProps<Props>(), {
   checkStrictly: false,
   lazy: false,
   defaultExpandAll: false,
+  defaultExpandedKeys: () => [],
   expandOnClickNode: true,
   highlightCurrent: true,
   searchable: false,

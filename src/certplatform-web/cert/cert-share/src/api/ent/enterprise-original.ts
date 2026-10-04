@@ -105,6 +105,11 @@ export interface OriginalFile {
    *   **特定证件**没有「体系文件作用」语义，硬打标签会污染召回词表。
    */
   IsNotSuggested?: boolean
+  /**
+   * 命中原因 = **格式预判**（图片类：jpg/png/…，天然是证照扫描件，无正文可提取）。
+   * `false` 且 `IsNotSuggested=true` ⇒ 原因是**策略**（人工设置或 AI 建议 skip/ignore）。
+   */
+  NotSuggestedByFormat?: boolean
   UnusableReason?: string | null
   DocPurpose?: string | null
   InfoItemsJson?: string | null
@@ -141,11 +146,29 @@ export interface PlanRow {
   Action: 'create' | 'replace' | 'skip'
   ExistingCode?: string | null
   ExistingVersion?: number | null
+  /**
+   * true = 不支持/超限，**会被跳过**（⛔ 不阻塞其余文件上传）。
+   * ⚠️ 系统噪声（`.DS_Store` 等）不会出现在 Rows 里 —— 它们被 plan 静默剔除并计入
+   *    `Summary.FilteredCount`，见 `EnterpriseOriginalService.IsSystemNoise`。
+   */
   Blocked: boolean
   BlockReason?: string | null
 }
 
 /** plan 上传项 */
+/** plan 结果汇总 */
+export interface PlanSummary {
+  Total: number
+  CreateCount: number
+  ReplaceCount: number
+  SkipCount: number
+  BlockedCount: number
+  /** ★ 被静默剔除的系统噪声数量（.DS_Store / Thumbs.db / ~$xx.doc …），2026-10-03 新增 */
+  FilteredCount?: number
+  /** 被剔除的文件名样例（最多 5 个），用于提示用户「这些不是你的错」 */
+  FilteredNames?: string[] | null
+}
+
 export interface PlanItem {
   FileName: string
   RelFolderPath?: string
@@ -351,7 +374,7 @@ export async function fetchStatusBar(enterpriseCode: string, stageCode: string):
 /** Step0：预检（纯计算，不落库） */
 export async function originalPlanUpload(
   enterpriseCode: string, stageCode: string, items: PlanItem[],
-): Promise<{ rows: PlanRow[]; summary: any }> {
+): Promise<{ rows: PlanRow[]; summary: PlanSummary }> {
   const res = await yzhApi.post<Payload>(`${BASE}/upload/plan`, {
     EnterpriseCode: enterpriseCode, StageCode: stageCode, Items: items,
   })
@@ -498,6 +521,58 @@ export async function fetchTags(applicableSide = 'enterprise'): Promise<TagItem[
 export async function fetchTagGroups(applicableSide = 'enterprise'): Promise<Array<{ TagGroup: string; Count: number }>> {
   const res = await yzhApi.post<any>('/api/Admin/Workflow/TagDict/list', { ApplicableSide: applicableSide })
   return (res?.data?.Groups as Array<{ TagGroup: string; Count: number }>) ?? []
+}
+
+// ═══════════════════════ 五·b、★ 内容查看 / 重新生成 ═══════════════════════
+
+/** 已生成 Markdown 的文本内容（JSON，非文件流） */
+export interface MarkdownContent {
+  Success?: boolean
+  Message?: string | null
+  FileCode?: string
+  FileName?: string
+  MarkdownStatus?: ConvertStatusKey
+  MarkdownMessage?: string | null
+  ConvertStatus?: ConvertStatusKey
+  MarkdownPath?: string | null
+  Markdown?: string
+  Length?: number
+}
+
+/**
+ * ★ 取已生成的 Markdown **文本内容**（页面内展示/核对用）。
+ *
+ * ⚠️ 与 {@link originalMarkdownBlob}（下载文件流）分工不同，两者都要。
+ * ⛔ 本端点内部显式 UTF-8 解码 —— 下载端点也补了 `charset=utf-8`。
+ */
+export async function fetchMarkdownContent(fileCode: string, enterpriseCode: string): Promise<MarkdownContent | null> {
+  const res = await yzhApi.get<any>(`${BASE}/markdown/${fileCode}`, { enterpriseCode })
+  const d = res?.data
+  return (d?.Success ? d : null) as MarkdownContent | null
+}
+
+
+
+/**
+ * ★ 重新生成 Markdown（重跑转换链）。
+ *
+ * 用途（此前这些场景**只能重新上传整个文件夹**）：
+ *   · anydoc 偶发失败 / Docker 忙
+ *   · 换了 `ai_vision_config`（换模型 / 开视觉识别）想用新配置重跑扫描件
+ *   · 专家误判「需人工填写」想换成 AI 识别
+ *   · 转换僵死逃生后被标 failed，需要真正的重试口子
+ *
+ * ⛔ 不动源文件、不改版本号（不是替换文件）。
+ *
+ * @param reanalyze true = 连语义分析一起重跑；false = 只重新生成内容
+ */
+export async function regenerate(
+  fileCode: string, enterpriseCode: string, reanalyze = true,
+): Promise<{ QueueCode: string; Message: string } | null> {
+  const res = await yzhApi.post<any>(`${BASE}/regenerate`, {
+    FileCode: fileCode, EnterpriseCode: enterpriseCode, Reanalyze: reanalyze,
+  })
+  return unwrap(res, null as any)
 }
 
 // ═══════════════════════ 六、下载 / 预览 ═══════════════════════

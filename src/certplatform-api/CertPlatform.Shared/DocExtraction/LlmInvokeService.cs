@@ -36,6 +36,25 @@ namespace CertPlatform.Shared.DocExtraction
         /// <summary>文档上下文（Markdown 全文）</summary>
         public string DocumentContent { get; set; } = "";
 
+    /// <summary>
+    /// ★ 图片字节（base64 编码后作为 <c>image_url</c> 内容块下发）。
+    /// <para>2026-10-03 新增 —— 此前本类只能发<b>纯文本</b>（<c>messages.content</c> 恒为 string），
+    /// 导致「图片 / 扫描件」在整条链路上完全无能力（<c>DefaultOcrProvider.IsAvailable =&gt; false</c>）。
+    /// </para>
+    /// <para>⚠️ <b>只有视觉模型才吃得下</b>：实测 <c>qwen-flash</c> 收到 <c>image_url</c> 会
+    /// <b>静默忽略</b> —— HTTP 200 + 正常回答，但图片根本没进模型（2026-10-03 实测，
+    /// 它回答「请提供图片」）。调用方必须确认 <c>Model</c> 是 <c>qwen*-vl*</c> 系列。</para>
+    /// <para>📎 图片按 <b>token</b> 计费（实测 1520×1240 的图 = 1874 image_tokens），
+    /// 上传前压缩能直接省一半。</para>
+    /// </summary>
+    public List<byte[]> Images { get; set; } = new();
+
+    /// <summary>
+    /// 图片文件类型（决定 data-url 的 MIME）。
+    /// ⛔ 必须按<b>真实字节</b>判断，⛔ 不能信用户上传的文件名（可伪造）。
+    /// </summary>
+    public string ImageMimeType { get; set; } = "image/png";
+
         /// <summary>是否强制 JSON 输出（analyze/verify 场景 true）</summary>
         public bool ForceJson { get; set; } = true;
     }
@@ -108,7 +127,27 @@ namespace CertPlatform.Shared.DocExtraction
                     && !userContent.Contains("json", StringComparison.OrdinalIgnoreCase)
                     && !(request.SystemPrompt ?? "").Contains("json", StringComparison.OrdinalIgnoreCase))
                     userContent += "\n\n请严格输出一个合法的 JSON object。";
-                messages.Add(new { role = "user", content = userContent });
+                // ★ 有图 ⇒ content 必须是**数组**形态（OpenAI 多模态规范）。
+                //   纯文本时保持 string 形态，避免给现有 8 个调用点引入行为差异。
+                if (request.Images is { Count: > 0 })
+                {
+                    var parts = new List<object>();
+                    foreach (var img in request.Images)
+                    {
+                        var b64 = Convert.ToBase64String(img);
+                        parts.Add(new
+                        {
+                            type = "image_url",
+                            image_url = new { url = $"data:{request.ImageMimeType};base64,{b64}" }
+                        });
+                    }
+                    parts.Add(new { type = "text", text = userContent });
+                    messages.Add(new { role = "user", content = parts });
+                }
+                else
+                {
+                    messages.Add(new { role = "user", content = userContent });
+                }
 
                 var bodyObj = request.ForceJson
                     ? (object)new
@@ -132,7 +171,8 @@ namespace CertPlatform.Shared.DocExtraction
                 var httpRequest = new HttpRequestMessage(HttpMethod.Post, url) { Content = httpContent };
                 httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", request.ApiKey);
 
-                _logger.LogInformation("[LLM] 调用 {Model} @ {Url}，上下文 {Len} 字符", request.Model, request.BaseUrl, request.DocumentContent.Length);
+                _logger.LogInformation("[LLM] 调用 {Model} @ {Url}，上下文 {Len} 字符，图片 {Img} 张",
+                    request.Model, request.BaseUrl, request.DocumentContent.Length, request.Images?.Count ?? 0);
 
                 var response = await client.SendAsync(httpRequest);
                 var responseBody = await response.Content.ReadAsStringAsync();

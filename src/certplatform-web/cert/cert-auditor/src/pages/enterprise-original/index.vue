@@ -15,6 +15,10 @@ import { onBeforeUnmount, onMounted } from 'vue'
 import { YzhTreeTableLayout, YzhTable, YzhEmptyState } from '@yzh-core'
 import type { YzhTableColumn } from '@yzh-core'
 import { YzhFolderUpload } from '@share/components'
+import { buildAcceptAttribute, describeAllowed } from '@share/constants/upload-file-policy'
+
+/** ★ accept 由共享契约生成（⛔ 不再本地硬编码后缀串） */
+const ACCEPT = buildAcceptAttribute()
 import type { AnalyzePolicyKey, PolicyReasonKey } from '@share/api/ent/enterprise-original'
 import {
   loadTree, treeNodes, treeHint, scopeLabel, scopeLoading,
@@ -22,9 +26,11 @@ import {
   isBusy, queueProgress, queueLabel, startPolling, stopPolling,
   onNodeClick, loadTags, clearFilters, refresh, dataRevision,
   previewVisible, previewRow, previewUrl, previewKind, previewText, previewLoading, openPreview, closePreview,
+  contentRow, contentText, contentLoading, openContent,
+  regenerating, onRegenerate,
   tagDraft,
   PURPOSE_SEGMENTS, purposeSaving,
-  uploadVisible, uploadStage, planRows, planSummary, uploadProgress, openUpload, onFilesPicked, startUpload, closeUpload,
+  uploadVisible, uploadStage, planRows, planSummary, uploadProgress, openUpload, onFilesPicked, startUpload, closeUpload, removePlanRow,
   formatSize,
   rootFiles, folderNodes,
   onDownload, onVersions, versionVisible, versions, currentVersion, onRestore,
@@ -38,9 +44,6 @@ import {
 import { FolderOpened, Document, Loading, Files } from '@element-plus/icons-vue'
 import OriginalFolderTree from './components/OriginalFolderTree.vue'
 import type { OriginalFolderNode } from './components/OriginalFolderTree.vue'
-
-/** ★ 上传格式白名单（与后端 AllowedExtensions 逐字一致）；之前没传 accept 导致任意类型都能选 */
-const ACCEPT = '.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.odt,.ods,.odp,.txt,.md,.csv,.pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp'
 
 /** ★ 专家语言：不是「是否参与识别」而是「这份文件要不要参与自动提取」 */
 const POLICY_OPTIONS: Array<{ value: AnalyzePolicyKey; label: string }> = [
@@ -115,8 +118,8 @@ onBeforeUnmount(() => { stopPolling() })
               </div>
             </div>
             <div class="eo-header__right">
-              <el-button size="small" text @click="openQueueDetail">处理进度</el-button>
-              <el-button v-if="stageCode" size="small" text @click="refresh">刷新</el-button>
+              <el-button size="small" text type="primary" @click="openQueueDetail">处理进度</el-button>
+              <el-button v-if="stageCode" size="small" text type="primary" @click="refresh">刷新</el-button>
               <el-tooltip
                 v-if="stageCode"
                 :disabled="!isBusy"
@@ -163,7 +166,7 @@ onBeforeUnmount(() => { stopPolling() })
               </el-option>
             </el-select>
             <el-checkbox v-model="onlyUsable">只看已就绪的</el-checkbox>
-            <el-button v-if="filterTags.length || onlyUsable" size="small" text @click="clearFilters">清空筛选</el-button>
+            <el-button v-if="filterTags.length || onlyUsable" size="small" text type="primary" @click="clearFilters">清空筛选</el-button>
 
             <span class="eo-filterbar__spacer" />
 
@@ -174,7 +177,7 @@ onBeforeUnmount(() => { stopPolling() })
             >
               全选
             </el-checkbox>
-            <el-button v-if="selected.length > 1" size="small" @click="openPolicy('batch')">
+            <el-button v-if="selected.length > 1" size="small" type="primary" @click="openPolicy('batch')">
               批量设置（已选 {{ selected.length }}）
             </el-button>
           </div>
@@ -224,16 +227,16 @@ onBeforeUnmount(() => { stopPolling() })
                   <div v-else-if="(row.Tags ?? []).length" class="f-tags">
                     <el-tag v-for="t in row.Tags" :key="t" size="small" effect="plain" class="f-tags__item"
                             :title="tagNameMap[t] || t"
-                            @click="openDetail(row); initDetailDraft()">{{ tagNameMap[t] || t }}</el-tag>
+                            @click="openDetail(row); initDetailDraft(); openContent(row)">{{ tagNameMap[t] || t }}</el-tag>
                   </div>
-                  <el-button v-else link type="primary" size="small" @click="openDetail(row); initDetailDraft()">加标签</el-button>
+                  <el-button v-else link type="primary" size="small" @click="openDetail(row); initDetailDraft(); openContent(row)">加标签</el-button>
                 </template>
                 <template #column-DocPurpose="{ row }">
                   <span v-if="row.IsNotSuggested" class="f-dim">—</span>
                   <el-tooltip v-else-if="row.DocPurpose" :content="row.DocPurpose" placement="top" :show-after="300">
-                    <span class="f-purpose" @click="openDetail(row); initDetailDraft()">{{ row.DocPurpose }}</span>
+                    <span class="f-purpose" @click="openDetail(row); initDetailDraft(); openContent(row)">{{ row.DocPurpose }}</span>
                   </el-tooltip>
-                  <el-button v-else link type="primary" size="small" @click="openDetail(row); initDetailDraft()">填作用</el-button>
+                  <el-button v-else link type="primary" size="small" @click="openDetail(row); initDetailDraft(); openContent(row)">填作用</el-button>
                 </template>
                 <template #column-ExtractState="{ row }">
                   <el-tag size="small" :type="row.IsUsableForFilling ? 'success' : 'info'">
@@ -245,11 +248,12 @@ onBeforeUnmount(() => { stopPolling() })
                   <span v-else class="f-dim">—</span>
                 </template>
                 <template #column-Actions="{ row }">
-                  <el-button link type="primary" size="small" @click="openDetail(row); initDetailDraft()">详情</el-button>
+                  <el-button link type="primary" size="small" @click="openDetail(row); initDetailDraft(); openContent(row)">详情</el-button>
+                  <el-button link type="primary" size="small" @click="openContent(row)">查看内容</el-button>
                   <el-button link type="primary" size="small" @click="openPreview(row)">预览</el-button>
-                  <el-button v-if="row.AnalyzePolicy === 'analyze'" link size="small" @click="quickIgnore(row)">忽略</el-button>
-                  <el-button v-else link type="default" size="small" @click="quickParticipate(row)">恢复提取</el-button>
-                  <el-button v-if="row.VersionNumber > 1" link size="small" @click="onVersions(row)">版本</el-button>
+                  <el-button v-if="row.AnalyzePolicy === 'analyze'" link type="danger" size="small" @click="quickIgnore(row)">忽略</el-button>
+                  <el-button v-else link type="primary" size="small" @click="quickParticipate(row)">恢复提取</el-button>
+                  <el-button v-if="row.VersionNumber > 1" link type="primary" size="small" @click="onVersions(row)">版本</el-button>
                   <el-button v-else link type="danger" size="small" @click="onDelete(row)">删除</el-button>
                 </template>
               </YzhTable>
@@ -261,7 +265,9 @@ onBeforeUnmount(() => { stopPolling() })
               :nodes="folderNodes as OriginalFolderNode[]"
               :data-revision="dataRevision"
               :tag-names="tagNameMap"
-              @detail="openDetail"
+              @detail="(r) => { openDetail(r); initDetailDraft(); openContent(r) }"
+              @content="openContent"
+              @regenerate="onRegenerate"
               @preview="openPreview"
               @ignore="quickIgnore"
               @participate="quickParticipate"
@@ -313,8 +319,8 @@ onBeforeUnmount(() => { stopPolling() })
           <div class="eo-detail__block">
             <div class="eo-detail__label">文件内容</div>
             <div class="eo-detail__preview">
-              <el-button size="small" @click="openPreview(detailRow)">打开预览</el-button>
-              <el-button size="small" text @click="onDownload(detailRow)">下载原件</el-button>
+              <el-button size="small" type="primary" @click="openPreview(detailRow)">打开预览</el-button>
+              <el-button size="small" text type="primary" @click="onDownload(detailRow)">下载原件</el-button>
             </div>
           </div>
 
@@ -324,6 +330,30 @@ onBeforeUnmount(() => { stopPolling() })
             这份文件已设置为<b>不参与提取</b>，因此不设标签和作用。
             如果这是误判，可在下方改为「参与识别」。
           </el-alert>
+
+          <!-- ★ 提取内容页签：让专家在页面内直接看到 AI 提取出的 Markdown 原文。
+               此前只能下载后用外部编辑器打开 ⇒ 无法在页面内判断「是提取错了还是显示错了」，
+               「人工修正标签/作用」也无从核对依据（2026-10-03 核查补入）。 -->
+          <div class="eo-detail__block">
+            <div class="eo-detail__label">
+              提取内容
+              <span class="eo-dim">（AI 从文件里读出来的原始内容，可据此核对下面的标签与作用）</span>
+            </div>
+            <div v-loading="contentLoading" class="eo-content">
+              <pre v-if="contentText" class="eo-content__md">{{ contentText }}</pre>
+              <el-empty
+                v-else-if="!contentLoading"
+                :description="contentRow?.MarkdownMessage || '尚未生成内容'"
+                :image-size="60"
+              >
+                <el-button
+                  v-if="contentRow" type="primary" size="small"
+                  :loading="regenerating === contentRow.Code"
+                  @click="onRegenerate(contentRow)"
+                >重新生成</el-button>
+              </el-empty>
+            </div>
+          </div>
 
           <!-- 标签 -->
           <div v-else class="eo-detail__block">
@@ -366,7 +396,13 @@ onBeforeUnmount(() => { stopPolling() })
       </div>
 
       <template #footer>
-        <el-button @click="closeDetail">关闭</el-button>
+        <el-button type="primary" @click="closeDetail">关闭</el-button>
+        <el-button
+          v-if="detailRow"
+          type="primary"
+          :loading="regenerating === detailRow.Code"
+          @click="onRegenerate(detailRow)"
+        >重新生成内容</el-button>
         <el-button v-if="!detailRow?.IsNotSuggested" type="primary" :loading="purposeSaving" @click="saveDetail">保存</el-button>
       </template>
     </el-drawer>
@@ -377,26 +413,44 @@ onBeforeUnmount(() => { stopPolling() })
         会保留文件夹结构。已存在且内容相同的文件会自动跳过；内容不同的会作为新版本保留旧版。
       </el-alert>
       <el-alert type="warning" :closable="false" show-icon class="eo-alert">
-        支持：Word / Excel / PPT / PDF / 图片 / 文本。压缩包和可执行文件不支持。
+        支持：{{ describeAllowed() }}。压缩包和可执行文件不支持。
       </el-alert>
 
       <div class="eo-upload">
         <YzhFolderUpload :multiple="true" :accept="ACCEPT" @change="onFilesPicked" />
       </div>
 
-      <div v-if="planRows.length > 0" class="eo-plan">
+      <div v-if="planRows.length > 0 || planSummary.FilteredCount > 0" class="eo-plan">
+        <!-- ★ 被静默剔除的系统文件：明确告诉用户「已自动忽略」，而不是让它们变成一堆
+             莫名其妙的不合规项（2026-10-03 用户报障：.DS_Store 没被过滤、且删不掉） -->
+        <el-alert
+          v-if="planSummary.FilteredCount > 0"
+          type="info" :closable="false" show-icon class="eo-alert"
+        >
+          已自动忽略 <b>{{ planSummary.FilteredCount }}</b> 个系统文件<template v-if="planSummary.FilteredNames?.length">（{{ planSummary.FilteredNames.join('、') }}{{ planSummary.FilteredCount > planSummary.FilteredNames.length ? ' 等' : '' }}）</template>，这些不是企业资料，无需处理。
+        </el-alert>
+
         <div class="eo-plan__summary">
-          共 {{ planSummary.Total }} 个文件
+          共 {{ planRows.length }} 个文件
+          <template v-if="planSummary.CreateCount">，新建 {{ planSummary.CreateCount }}</template>
           <template v-if="planSummary.ReplaceCount">，{{ planSummary.ReplaceCount }} 个是更新旧文件</template>
           <template v-if="planSummary.SkipCount">，{{ planSummary.SkipCount }} 个内容相同会跳过</template>
+          <template v-if="planSummary.BlockedCount">，<b class="eo-plan__bad">{{ planSummary.BlockedCount }} 个不支持</b>（上传时自动跳过）</template>
         </div>
         <ul class="eo-plan__list">
-          <li v-for="r in planRows" :key="r.FileName">
+          <li v-for="(r, i) in planRows" :key="r.FileName + '_' + i">
             <span class="eo-plan__name">{{ r.FileName }}</span>
+            <span v-if="r.Blocked" class="eo-plan__why">{{ r.BlockReason }}</span>
             <el-tag v-if="r.Blocked" size="small" type="danger">不支持</el-tag>
             <el-tag v-else-if="r.Action === 'skip'" size="small" type="info">内容相同，跳过</el-tag>
             <el-tag v-else-if="r.Action === 'replace'" size="small" type="warning">更新为新版本</el-tag>
             <el-tag v-else size="small" type="success">新增</el-tag>
+            <!-- ★ 可移除：解决「不支持的文件在弹窗里删不掉」
+                 ⚠️ type 用 danger（移除动作）⛔ 不用 info/success/warning —— 守卫 S03a：
+                    状态色（info/success/warning）只该给 el-tag，按钮语义色是 primary/danger -->
+            <el-button v-if="r.Blocked" link type="danger" size="small" class="eo-plan__del" @click="removePlanRow(i)">
+              移除
+            </el-button>
           </li>
         </ul>
       </div>
@@ -405,7 +459,7 @@ onBeforeUnmount(() => { stopPolling() })
       <div v-else-if="uploadStage === 'done'" class="eo-progress eo-progress--done">{{ uploadProgress }}</div>
 
       <template #footer>
-        <el-button @click="closeUpload">{{ uploadStage === 'done' ? '关闭' : '取消' }}</el-button>
+        <el-button type="primary" @click="closeUpload">{{ uploadStage === 'done' ? '关闭' : '取消' }}</el-button>
         <el-button
           v-if="uploadStage !== 'done'" type="primary"
           :loading="uploadStage === 'uploading'" :disabled="planRows.length === 0"
@@ -432,7 +486,7 @@ onBeforeUnmount(() => { stopPolling() })
         「只留存，不参与识别」的文件仍会作为证据保留，只是不再自动提取内容。
       </el-alert>
       <template #footer>
-        <el-button @click="policyVisible = false">取消</el-button>
+        <el-button type="primary" @click="policyVisible = false">取消</el-button>
         <el-button type="primary" @click="submitPolicy">保存</el-button>
       </template>
     </el-drawer>
@@ -520,6 +574,18 @@ onBeforeUnmount(() => { stopPolling() })
 
 /* ══════════ 详情抽屉 ══════════ */
 .eo-detail { min-height: 200px; }
+.eo-content { min-height: 200px; }
+.eo-content__md {
+  max-height: 60vh; overflow: auto; margin: 0;
+  padding: var(--yzh-space-3, 12px);
+  background: var(--yzh-color-bg-subtle, var(--el-fill-color-light));
+  border-radius: var(--yzh-radius-sm, 4px);
+  font-family: SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: var(--yzh-font-size-sm, 13px);
+  line-height: var(--yzh-line-height-relaxed, 1.7);
+  white-space: pre-wrap; word-break: break-word;
+  color: var(--yzh-color-text-primary);
+}
 .eo-detail__meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; font-size: 13px; }
 .eo-detail__block { margin-bottom: 16px; }
 .eo-detail__label { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
@@ -573,7 +639,12 @@ onBeforeUnmount(() => { stopPolling() })
 .eo-plan__summary { font-size: 13px; margin-bottom: 6px; }
 .eo-plan__list { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow: auto; }
 .eo-plan__list li { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; }
-.eo-plan__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eo-plan__why { flex: 1; min-width: 0; color: var(--el-text-color-secondary);
+  font-size: var(--yzh-font-size-xs, 12px);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eo-plan__bad { color: var(--el-color-danger); }
+.eo-plan__del { flex: none; }
+.eo-plan__name { flex: none; max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .eo-progress { margin-top: 10px; font-size: 13px; }
 .eo-progress--done { color: var(--el-color-success); }
 

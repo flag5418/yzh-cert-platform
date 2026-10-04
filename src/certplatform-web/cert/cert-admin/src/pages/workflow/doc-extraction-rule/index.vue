@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { MagicStick, ChatLineSquare, Pointer } from '@element-plus/icons-vue'
 import { confirmOrFalse, YzhPageLayout, YzhEmptyState } from '@yzh-core'
-import { CertDirectoryTree } from '@share/components'
+import { CertDirectoryTree, DocPreview } from '@share/components'
 import { retryFailedConversions } from '@share/composables/useDirectoryApi'
 import {
   getRuleDetail,
@@ -17,7 +17,6 @@ import {
 } from '@share/api/workflow/doc-extraction-rule'
 import AIAnalysisTab from './components/AIAnalysisTab.vue'
 import PromptVerifyTab from './components/PromptVerifyTab.vue'
-import DocPreview from './components/DocPreview.vue'
 
 const treeRef = ref<any>(null)
 const selectedFile = ref<any>(null)

@@ -173,6 +173,267 @@ public class StandardDirectoryService
 
     #endregion
 
+    #region 资料清单树（供「标准文档填写规则」页左树）
+
+    /// <summary>
+    /// ★★ 资料清单树 + 空白模板状态（2026-10-04 新增）。
+    ///
+    /// <para><b>为什么必须由资料清单驱动</b>：空白模板是<b>从标准资料清单的文件加工出来的</b>
+    /// （下载 → 本地加 <c>{{标签}}</c> → 上传空白模板 → 再配规则），⛔ <b>不是凭空产生的</b>。
+    /// 所以左树必须以资料清单为骨架 —— 否则「还没上传模板的文件」在页面上根本不存在，
+    /// 用户无从下手。<b>实测</b>：旧实现按 <c>cert_doc_template</c> 构树，
+    /// 只显示 1 个已登记模板，而资料清单有 168 份标准文档 ⇒ 用户看到的是「几乎空白的树」。</para>
+    ///
+    /// <para><b>与「标准资料清单」页同源（保证不漂移）</b>：
+    /// 机构 → 标准 → 阶段 三级<b>直接复用 <see cref="GetOrganizationTreeAsync"/></b>；
+    /// 文件夹保留段过滤复用 <see cref="CollectReservedFolderCodes"/> ⇒
+    /// 两页的树**不可能出现口径差异**（⛔ 不另写一套 org/std/phase 组装逻辑）。</para>
+    ///
+    /// <para><b>合并进来的模板状态</b>（挂在文件叶子 <c>Extra</c>）：
+    /// <c>hasTemplate</c> / <c>templateCode</c> / <c>templateStoragePath</c> /
+    /// <c>scanStatus</c> / <c>publishStatus</c> / <c>anchorCount</c> / <c>docCategory</c>。
+    /// 页面据此决定操作条可用性与徽标，⛔ 前端不自行推断「有没有模板」。</para>
+    ///
+    /// <para><b>层级</b>：机构 → 标准 → 阶段 → 文件夹（可嵌套）→ 文件。
+    /// 文件夹层是**必须的** —— 资料清单实测有 11 个文件夹、最深 2 层嵌套（如「4记录文件/质量类」），
+    /// 拍平后 167 个文件会挤在同一个阶段节点下。</para>
+    ///
+    /// <para><b>性能</b>：文件夹 / 文件 / 模板 / 锚点各**一次查询**后在内存组树。
+    /// 配置数在十量级、文件在百量级（实测 10 / 668），全量取回远优于逐阶段 N+1。</para>
+    /// </summary>
+    public async Task<List<TemplateDirectoryNode>> GetTemplateDirectoryTreeAsync()
+    {
+        // ① 组织树（org → standard → phase），与资料清单页同源
+        var raw = await GetOrganizationTreeAsync();
+
+        var root = new List<TemplateDirectoryNode>();
+        // (阶段节点, 目录配置Code, 机构Code, 标准GUID, 阶段GUID) —— 只有配了目录的阶段才可能有文件
+        var phases = new List<(TemplateDirectoryNode Node, string ConfigCode, string OrgCode, string StdCode, string StageCode)>();
+
+        foreach (var orgObj in raw)
+        {
+            if (orgObj is not Dictionary<string, object> o) continue;
+
+            var orgNode = new TemplateDirectoryNode
+            {
+                Code = Str(o, "id"),
+                Name = Str(o, "label"),
+                Extra = new() { ["kind"] = "org", ["orgCode"] = Str(o, "cbCode") },
+            };
+            root.Add(orgNode);
+
+            if (o.GetValueOrDefault("children") is not List<object> stds) continue;
+            foreach (var stdObj in stds)
+            {
+                if (stdObj is not Dictionary<string, object> s) continue;
+
+                var stdNode = new TemplateDirectoryNode
+                {
+                    Code = Str(s, "id"),
+                    Name = Str(s, "label"),
+                    Extra = new()
+                    {
+                        ["kind"] = "standard",
+                        ["orgCode"] = Str(s, "cbCode"),
+                        ["stdCode"] = Str(s, "stdCode"),
+                        ["standardNo"] = Str(s, "standardCode"),
+                    },
+                };
+                orgNode.Children.Add(stdNode);
+
+                if (s.GetValueOrDefault("children") is not List<object> phs) continue;
+                foreach (var phObj in phs)
+                {
+                    if (phObj is not Dictionary<string, object> p) continue;
+
+                    var configCode = Str(p, "configCode");
+                    var phaseNode = new TemplateDirectoryNode
+                    {
+                        Code = Str(p, "id"),
+                        Name = Str(p, "label"),
+                        Extra = new()
+                        {
+                            ["kind"] = "stage",
+                            ["orgCode"] = Str(p, "cbCode"),
+                            ["stdCode"] = Str(p, "stdCode"),
+                            ["standardNo"] = Str(p, "standardCode"),
+                            ["phaseCode"] = Str(p, "phaseCode"),
+                            ["phaseName"] = Str(p, "phaseName"),
+                            ["configCode"] = configCode,
+                        },
+                    };
+                    stdNode.Children.Add(phaseNode);
+
+                    if (configCode.Length > 0)
+                    {
+                        phases.Add((phaseNode, configCode, Str(p, "cbCode"), Str(p, "stdCode"), Str(p, "phaseCode")));
+                    }
+                }
+            }
+        }
+
+        if (phases.Count == 0) return root;
+
+        var configCodes = phases.Select(x => x.ConfigCode).Distinct().ToList();
+
+        // ② 文件夹 / 文件：各一次查询（⛔ 不逐阶段查 —— 那会是 2×N 次往返）
+        var allFolders = (await _db.GetListAsync<StandardDirectoryFolder>(x => x.IsValid == 1)).Data ?? new();
+        var allFiles = (await _db.GetListAsync<StandardDirectoryFile>(x => x.IsValid == 1)).Data ?? new();
+
+        var scopedFolders = allFolders
+            .Where(f => !string.IsNullOrEmpty(f.ConfigCode) && configCodes.Contains(f.ConfigCode!))
+            .ToList();
+        var scopedFiles = allFiles
+            .Where(f => !string.IsNullOrEmpty(f.ConfigCode) && configCodes.Contains(f.ConfigCode))
+            .ToList();
+
+        // 保留段过滤（pdf / markdown / editable / _template / _archive）—— 与资料清单页同一份口径
+        var reservedCodes = CollectReservedFolderCodes(scopedFolders);
+        if (reservedCodes.Count > 0)
+        {
+            scopedFolders = scopedFolders.Where(f => !reservedCodes.Contains(f.Code ?? "")).ToList();
+            scopedFiles = scopedFiles.Where(f => !reservedCodes.Contains(f.FolderCode ?? "")).ToList();
+        }
+
+        // ③ 空白模板（按宿主标准文件 Code 索引）
+        var fileCodes = scopedFiles.Select(f => f.Code ?? "").Where(c => c.Length > 0).Distinct().ToList();
+        var templates = fileCodes.Count == 0
+            ? new List<DocTemplate>()
+            : (await _db.GetListAsync<DocTemplate>(t => fileCodes.Contains(t.StandardFileCode!))).Data ?? new();
+
+        var tplByFile = templates
+            .Where(t => !string.IsNullOrEmpty(t.StandardFileCode))
+            .GroupBy(t => t.StandardFileCode, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        // ④ 锚点统计（一次分组查询，⛔ 不逐模板 count）
+        var templateCodes = templates.Select(t => t.Code ?? "").Where(c => c.Length > 0).Distinct().ToList();
+        var anchorRows = templateCodes.Count == 0
+            ? new List<DocTemplateAnchor>()
+            : (await _db.GetListAsync<DocTemplateAnchor>(
+                a => templateCodes.Contains(a.TemplateCode) && a.IsDeleted == false && a.IsValid == 1)).Data ?? new();
+
+        var anchorStat = anchorRows
+            .GroupBy(a => a.TemplateCode ?? "", StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => (Total: g.Count(), Orphan: g.Count(x => x.IsOrphan)),
+                StringComparer.Ordinal);
+
+        // ⑤ 逐阶段组装文件夹树 + 文件叶子
+        foreach (var (phaseNode, configCode, orgCode, stdCode, stageCode) in phases)
+        {
+            var folders = scopedFolders.Where(f => f.ConfigCode == configCode).ToList();
+            var files = scopedFiles.Where(f => f.ConfigCode == configCode).ToList();
+
+            // 先建索引再挂父子：脏数据里子文件夹排在父文件夹之前时不会漏挂
+            var folderByCode = new Dictionary<string, TemplateDirectoryNode>(StringComparer.Ordinal);
+            foreach (var f in folders)
+            {
+                var fc = f.Code ?? "";
+                if (fc.Length == 0) continue;
+                folderByCode[fc] = new TemplateDirectoryNode
+                {
+                    Code = fc,
+                    Name = f.FolderName ?? "",
+                    Extra = new() { ["kind"] = "folder", ["depth"] = f.Depth },
+                };
+            }
+
+            foreach (var f in folders)
+            {
+                if (!folderByCode.TryGetValue(f.Code ?? "", out var node)) continue;
+                var parentCode = f.ParentCode ?? "";
+                // ParentCode 为空、或父文件夹本身被过滤/跨配置 ⇒ 挂到阶段根（⛔ 不静默丢弃）
+                if (parentCode.Length > 0 && folderByCode.TryGetValue(parentCode, out var parentNode))
+                    parentNode.Children.Add(node);
+                else
+                    phaseNode.Children.Add(node);
+            }
+
+            foreach (var f in files)
+            {
+                var node = BuildTemplateFileNode(f, tplByFile, anchorStat, orgCode, stdCode, stageCode);
+                var folderCode = f.FolderCode ?? "";
+                if (folderCode.Length > 0 && folderByCode.TryGetValue(folderCode, out var folderNode))
+                    folderNode.Children.Add(node);
+                else
+                    phaseNode.Children.Add(node);
+            }
+        }
+
+        MarkLeaf(root);
+        return root;
+    }
+
+    /// <summary>资料清单文件行 → 树叶子（合并空白模板状态）</summary>
+    private static TemplateDirectoryNode BuildTemplateFileNode(
+        StandardDirectoryFile f,
+        Dictionary<string, DocTemplate> tplByFile,
+        Dictionary<string, (int Total, int Orphan)> anchorStat,
+        string orgCode,
+        string stdCode,
+        string stageCode)
+    {
+        var code = f.Code ?? "";
+        tplByFile.TryGetValue(code, out var tpl);
+        var anchors = tpl != null && anchorStat.TryGetValue(tpl.Code ?? "", out var st)
+            ? st
+            : (Total: 0, Orphan: 0);
+
+        return new TemplateDirectoryNode
+        {
+            Code = code,
+            Name = f.FileName,
+            IsLeaf = true,
+            Extra = new()
+            {
+                ["kind"] = "file",
+                // ★ 宿主标准文件 —— 下载原始文档 / 上传空白模板 / 读写文档契约都用它
+                ["standardFileCode"] = code,
+                ["orgCode"] = orgCode,
+                ["stdCode"] = stdCode,
+                ["stageCode"] = stageCode,
+                ["fileType"] = f.FileType ?? "",
+                // 资料清单里的原始文档（「下载原始件」用）
+                ["standardStoragePath"] = f.StoragePath ?? "",
+                // ★ 归一产物（.docx/.xlsx）——「下载可编辑版」的正确起点：
+                //   用户要的是「下载后能加工成空白模板」的文件，而 .doc/.xls 连读都读不了
+                //   （NPOI 2.7.2 无 HWPF）⇒ 只要归一产物就绪，就该下载它
+                ["standardEditablePath"] = f.EditableStoragePath ?? "",
+                ["standardEditableStatus"] = f.EditableStatus ?? "",
+                // ★ 权威分类列（37 号 §3.6）：决定「这个文档是否不需要编辑」
+                ["docCategory"] = string.IsNullOrWhiteSpace(f.DocCategory) ? "editable" : f.DocCategory,
+                // ★ 空白模板（为空 = 还没上传 ⇒ 页面只放行「下载 + 上传」）
+                ["hasTemplate"] = tpl != null,
+                ["templateCode"] = tpl?.Code ?? "",
+                ["templateStoragePath"] = tpl?.StoragePath ?? "",
+                ["templateFileName"] = tpl?.FileName ?? "",
+                ["scanStatus"] = tpl?.ScanStatus ?? "",
+                ["publishStatus"] = tpl?.PublishStatus ?? "",
+                ["fillPromptCode"] = tpl?.FillPromptCode ?? "",
+                ["anchorCount"] = anchors.Total,
+                ["orphanCount"] = anchors.Orphan,
+            },
+        };
+    }
+
+    /// <summary>自底向上标记叶子（叶子的判据 = 无子节点）</summary>
+    private static void MarkLeaf(List<TemplateDirectoryNode> nodes)
+    {
+        foreach (var n in nodes)
+        {
+            n.IsLeaf = n.Children.Count == 0;
+            MarkLeaf(n.Children);
+        }
+    }
+
+    /// <summary>从 <c>GetOrganizationTreeAsync</c> 的字典里取字符串（缺失/非字符串/null ⇒ 空串）</summary>
+    private static string Str(Dictionary<string, object> d, string key)
+        => d.TryGetValue(key, out var v) && v is string s ? s : "";
+
+    #endregion
+
     #region 目录配置 CRUD
 
     public async Task<List<StandardDirectoryConfig>> GetConfigsAsync()
@@ -417,8 +678,8 @@ public class StandardDirectoryService
     /// 获取所有文件夹（扁平列表，前端按 ParentCode 过滤实现面包屑导航）
     /// </summary>
     /// <remarks>
-    /// ★ 与 <see cref="GetStageFileTreeAsync"/> 保持一致：过滤掉「产物目录」
-    /// （pdf / markdown / _archive，见 <see cref="PathBuilder.ReservedSegments"/>），
+    /// ★ 与 <see cref="GetStageFileTreeAsync"/> 保持一致：过滤掉「产物 / 系统目录」
+    /// （pdf / markdown / editable / _template / _archive，见 <see cref="PathBuilder.ReservedSegments"/>），
     /// 否则左树不显示、右侧却能列出来的两棵树会不一致。
     /// </remarks>
     public async Task<List<StandardDirectoryFolder>> GetFoldersFlatAsync(string directoryCode)
@@ -432,8 +693,8 @@ public class StandardDirectoryService
     }
 
     /// <summary>
-    /// 收集「产物目录」及其全部子孙的 Code（大小写不敏感）。
-    /// <para>用于显示层过滤 <c>pdf</c> / <c>markdown</c> / <c>_archive</c> 三个保留段名文件夹。</para>
+    /// 收集「产物 / 系统目录」及其全部子孙的 Code（大小写不敏感）。
+    /// <para>用于显示层过滤 <c>pdf</c> / <c>markdown</c> / <c>editable</c> / <c>_template</c> / <c>_archive</c> 保留段名文件夹。</para>
     /// <para>★ 带环检测与深度上限 —— 脏数据 ParentCode 成环时不能无限递归。</para>
     /// </summary>
     private static HashSet<string> CollectReservedFolderCodes(List<StandardDirectoryFolder> folders)
@@ -462,7 +723,7 @@ public class StandardDirectoryService
         return result;
     }
 
-    /// <summary>文件夹名是否为产物保留段名（pdf / markdown / _archive）</summary>
+    /// <summary>文件夹名是否为产物 / 系统保留段名（pdf / markdown / editable / _template / _archive）</summary>
     private static bool IsReservedSegmentName(string? name)
         => !string.IsNullOrWhiteSpace(name)
            && PathBuilder.ReservedSegments.Any(s =>
@@ -3044,6 +3305,39 @@ public class StageFileNode
     public string RuleStatus { get; set; } = "none";
     public int ExtractFieldCount { get; set; }
     public int TableDefCount { get; set; }
+}
+
+/// <summary>
+/// ★ 「标准文档填写规则」页左树节点（2026-10-04 新增）。
+///
+/// <para>形状刻意对齐 <c>YzhTreeTableLayout</c> 的树契约（<c>Code</c> / <c>Name</c> /
+/// <c>Children</c> / <c>IsLeaf</c> / <c>Extra</c>），⛔ 与资料清单页内部的
+/// <c>{id,label,type,children}</c> camelCase 形状<b>不是同一个东西</b> ——
+/// 那个是 <c>CertBizTree</c> 的私有格式，只有该组件消费。</para>
+///
+/// <para><b>载荷 PascalCase</b>（项目铁律）：前端逐字读 <c>node.Code</c> / <c>node.Extra.kind</c>，
+/// 写成 <c>node.code</c> 会渲染成空且不报错。</para>
+/// </summary>
+public class TemplateDirectoryNode
+{
+    /// <summary>业务编码：机构/标准/阶段节点 = 组织树 id；文件夹 = folder.Code；文件 = standard_directory_file.Code</summary>
+    public string Code { get; set; } = "";
+
+    /// <summary>显示名：文件夹 = FolderName；文件 = FileName；其余 = 组织树 label</summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>是否叶子（由 Children 是否为空推出）</summary>
+    public bool IsLeaf { get; set; }
+
+    /// <summary>
+    /// 节点附加信息。唯一判据键 = <c>kind</c>：
+    /// <c>org</c> / <c>standard</c> / <c>stage</c> / <c>folder</c> / <c>file</c>。
+    /// 只有 <c>file</c> 叶子带 <c>standardFileCode</c> / <c>hasTemplate</c> / <c>templateCode</c> /
+    /// <c>docCategory</c> / <c>scanStatus</c> / <c>publishStatus</c> / <c>anchorCount</c>。
+    /// </summary>
+    public Dictionary<string, object?> Extra { get; set; } = new();
+
+    public List<TemplateDirectoryNode> Children { get; set; } = new();
 }
 
 #endregion

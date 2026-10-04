@@ -15,6 +15,11 @@ import { YzhEmptyState } from '@yzh-core'
 import { ref, computed } from 'vue'
 import { Upload, RefreshRight, Delete, Close, Files } from '@element-plus/icons-vue'
 import type { PromptTestResultDto, ConvertLogDto } from '@share/api/workflow/prompt-workbench'
+// ★ accept 来自共享上传契约（⛔ 本页不再硬编码后缀串；改规则只改 constants/upload-file-policy.ts）
+import { buildAcceptAttribute } from '@share/constants/upload-file-policy'
+
+/** 提示词试跑：只要文档 + 文本，不需要图片 */
+const ACCEPT = buildAcceptAttribute(['document', 'pdf'])
 // 2026-10-03：SemanticResult 上移到 @share/components（36 号 §6.6），
 //   供 36 号「企业原始资料管理」的分析结果抽屉共用同一渲染器。
 import { SemanticResult } from '@share/components'
@@ -111,7 +116,7 @@ const metaLine = computed(() => {
           type="file"
           multiple
           style="display: none"
-          accept=".doc,.docx,.xls,.xlsx,.pdf,.txt,.md,.csv"
+          :accept="ACCEPT"
           @change="onFilesChange"
         />
         <el-button :icon="Upload" @click="pickFiles">选择文件</el-button>

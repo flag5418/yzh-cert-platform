@@ -1,0 +1,1554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>文档填写规则页 · 第三栏功能菜单原型 V3</title>
+<style>
+:root{
+  --pri:#409eff;--pri-l:#ecf5ff;--pri-b:#d9ecff;--pri-d:#337ecc;
+  --suc:#67c23a;--suc-l:#f0f9eb;--suc-b:#e1f3d8;
+  --warn:#e6a23c;--warn-l:#fdf6ec;--warn-b:#faecd8;
+  --dan:#f56c6c;--dan-l:#fef0f0;--dan-b:#fde2e2;
+  --info:#909399;--info-l:#f4f4f5;--info-b:#e9e9eb;
+  --t1:#303133;--t2:#606266;--t3:#909399;--t4:#c0c4cc;
+  --bd:#dcdfe6;--bd-l:#e4e7ed;--bd-xl:#ebeef5;
+  --bg:#f5f7fa;--bg2:#fafafa;--r:4px;--r2:8px;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--t1);font-size:14px;overflow:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+button,input,textarea,select{font-family:inherit}
+.app{display:flex;flex-direction:column;height:100%}
+
+/* ── 原型说明条 ─────────────────────────────────────────── */
+.note{background:#fffbe6;border-bottom:1px solid #ffe58f;padding:7px 16px;font-size:12px;
+  color:#7c5c00;display:flex;align-items:center;gap:10px;flex:0 0 auto;flex-wrap:wrap}
+.note b{color:#614700}
+.note .sp{flex:1}
+.note .lnk{color:var(--pri);cursor:pointer;text-decoration:underline;white-space:nowrap}
+.note .seg{display:inline-flex;border:1px solid #ffe58f;border-radius:4px;overflow:hidden;background:#fff}
+.note .seg button{border:0;background:transparent;padding:3px 9px;font-size:11px;cursor:pointer;color:#7c5c00}
+.note .seg button.on{background:#ffe58f;font-weight:600}
+.note-body{display:none;background:#fffdf5;border-bottom:1px solid #ffe58f;padding:10px 16px 14px;
+  font-size:12px;color:#7c5c00;line-height:1.85;flex:0 0 auto;max-height:280px;overflow:auto}
+.note-body.on{display:block}
+.note-body h4{margin:9px 0 4px;font-size:12px;color:#614700}
+.note-body ol,.note-body ul{margin:4px 0 0 18px;padding:0}
+.note-body code{font-family:var(--mono);background:#fff4c2;padding:0 4px;border-radius:3px}
+.note-body .ok{color:#2f7a1e;font-weight:600}
+.note-body .no{color:#a33;font-weight:600}
+
+/* ── 顶行（页面级：当前文档 + 全局未保存提醒） ─────────── */
+.topbar{background:#fff;border-bottom:1px solid var(--bd-l);padding:8px 16px;
+  display:flex;align-items:center;gap:12px;flex:0 0 auto;flex-wrap:wrap}
+.topbar .ico{font-size:16px}
+.topbar .fn{font-size:15px;font-weight:500;max-width:360px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.topbar .path{font-size:12px;color:var(--t3)}
+.topbar .sp{flex:1}
+.topbar .warnbar{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--warn);
+  background:var(--warn-l);border:1px solid var(--warn-b);border-radius:var(--r);padding:3px 10px;cursor:pointer}
+.topbar .warnbar:hover{background:#fdf0d9}
+
+/* ── 骨架 ──────────────────────────────────────────────── */
+.app-body{flex:1;display:flex;min-height:0}
+
+/* 第 1 栏 · 左树 */
+.side{width:286px;flex:0 0 286px;background:#fff;border-right:1px solid var(--bd-l);
+  display:flex;flex-direction:column;min-height:0}
+.side-hd{padding:9px 12px;border-bottom:1px solid var(--bd-xl)}
+.side-hd .t{font-size:13px;font-weight:500;display:flex;align-items:center;gap:8px}
+.side-hd .t .sp{flex:1}
+.fbar{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap;align-items:center}
+.fbar .gl{font-size:11px;color:var(--t4);flex:0 0 26px}
+.fbar .f{padding:2px 9px;font-size:12px;border:1px solid var(--bd-l);border-radius:11px;
+  cursor:pointer;color:var(--t2);background:#fff;line-height:17px}
+.fbar .f:hover{border-color:var(--pri-b);color:var(--pri)}
+.fbar .f.on{background:var(--pri);border-color:var(--pri);color:#fff}
+.fbar .f .c{opacity:.72;font-size:11px;margin-left:3px}
+.side-bd{flex:1;overflow:auto;padding:6px 0 12px}
+.side-ft{padding:8px 12px;border-top:1px solid var(--bd-xl);font-size:12px;color:var(--t3);
+  display:flex;align-items:center;gap:8px}
+.side-ft .sp{flex:1}
+
+.tn{padding:6px 12px 6px 14px;font-size:13px;color:var(--t2);cursor:pointer;display:flex;
+  align-items:center;gap:6px;line-height:1.5;border-left:3px solid transparent}
+.tn:hover{background:var(--bg2)}
+.tn.on{background:var(--pri-l);color:var(--pri);border-left-color:var(--pri);font-weight:500}
+.tn .caret{width:12px;color:var(--t4);font-size:10px;flex:0 0 12px;text-align:center}
+.tn .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tn.l1{padding-left:14px;font-weight:500;color:var(--t1)}
+.tn.l2{padding-left:30px}
+.tn.l3{padding-left:46px}
+.tn.l4{padding-left:62px}
+.tn .dirty{width:7px;height:7px;border-radius:50%;background:var(--warn);flex:0 0 7px;
+  box-shadow:0 0 0 2px var(--warn-l)}
+.tree-empty{padding:26px 16px;text-align:center;color:var(--t3);font-size:12px;line-height:1.9}
+
+/* 第 2 栏 · 预览 */
+.pv{flex:1;min-width:0;background:#eef1f6;display:flex;flex-direction:column;min-height:0}
+.pv-hd{background:#fff;border-bottom:1px solid var(--bd-l);padding:8px 14px;font-size:12px;
+  color:var(--t2);display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.pv-hd .sp{flex:1}
+.pv-bd{flex:1;overflow:auto;padding:16px;display:flex;justify-content:center}
+.page-mock{width:470px;min-height:600px;background:#fff;border:1px solid var(--bd-l);
+  box-shadow:0 2px 12px rgba(0,0,0,.06);padding:34px 40px;font-size:12px;color:var(--t2);line-height:2}
+.page-mock .ph{text-align:center;font-size:15px;font-weight:600;color:var(--t1);margin-bottom:16px;
+  letter-spacing:2px}
+.page-mock .kv{display:flex;gap:8px;border-bottom:1px dotted var(--bd);padding:3px 0}
+.page-mock .kv b{flex:0 0 76px;font-weight:400;color:var(--t3)}
+.page-mock .tok{background:var(--pri-l);color:var(--pri-d);border:1px dashed var(--pri);
+  border-radius:3px;padding:0 5px;font-family:var(--mono);font-size:11px}
+.page-mock .tok.miss{background:var(--dan-l);color:var(--dan);border-color:var(--dan)}
+.page-mock table{width:100%;border-collapse:collapse;margin-top:12px;font-size:11px}
+.page-mock th,.page-mock td{border:1px solid var(--bd);padding:4px 6px;text-align:center;color:var(--t2)}
+.page-mock th{background:var(--bg2)}
+.page-mock .scan{border:1px dashed var(--bd);padding:26px 12px;text-align:center;color:var(--t3);
+  margin-top:14px;line-height:1.9}
+
+/* ── 第 3 栏（★ 本轮核心：功能菜单 + 内容 + 固定底部保存条） ── */
+.col3{width:610px;flex:0 0 610px;background:#fff;border-left:1px solid var(--bd-l);
+  display:flex;flex-direction:column;min-height:0;position:relative}
+
+/* ★ V5：说明外移 —— 菜单区标题行只放一个 ! 按钮，说明收进浮层，⛔ 不再塞满页面 */
+.fnavhd{display:flex;align-items:center;gap:8px;padding:9px 12px 0;flex:0 0 auto;background:#fff}
+.fnavhd .t{font-size:12px;color:var(--t3);letter-spacing:.4px}
+.fnavhd .sp{flex:1}
+.helpbtn{width:19px;height:19px;border-radius:50%;border:1px solid var(--bd);background:#fff;
+  color:var(--t3);font-size:12px;font-weight:600;line-height:1;cursor:pointer;padding:0;
+  display:inline-flex;align-items:center;justify-content:center;font-family:var(--mono)}
+.helpbtn:hover{border-color:var(--pri);color:var(--pri);background:var(--pri-l)}
+.helpbtn.on{border-color:var(--pri);color:#fff;background:var(--pri)}
+.help{position:absolute;right:10px;top:36px;width:432px;max-height:calc(100% - 70px);overflow:auto;
+  background:#fff;border:1px solid var(--bd);border-radius:var(--r2);
+  box-shadow:0 6px 24px rgba(0,0,0,.12);padding:12px 14px;z-index:40;display:none}
+.help.on{display:block}
+.help h5{margin:0 0 6px;font-size:12px;color:var(--t3);font-weight:500;letter-spacing:.4px}
+.help .hi{padding:9px 0;border-top:1px solid var(--bd-xl)}
+.help .hi:first-of-type{border-top:0;padding-top:2px}
+.help .hi .hn{font-size:13px;font-weight:600;color:var(--t1);display:flex;align-items:center;gap:7px}
+.help .hi .hn i{font-style:normal;color:var(--pri);font-size:13px}
+.help .hi .hr{font-size:12px;color:var(--t2);line-height:1.8;margin-top:4px}
+.help .hi .hr .k{color:var(--t3);margin-right:6px}
+.help .hi .hr b{color:var(--t1);font-weight:500}
+.help .hi .hr code{font-family:var(--mono);background:var(--bg2);padding:0 3px;border-radius:3px}
+
+/* ★ V5：页内说明统一降为「一行、小字、灰」 —— 用 .hint，⛔ 不再用长段 lead */
+.hint{font-size:11px;color:var(--t3);line-height:1.6;margin:6px 0 0}
+
+/* 3-1 顶部：一级功能菜单 */
+.fnav{display:flex;align-items:stretch;border-bottom:1px solid var(--bd-l);flex:0 0 auto;
+  padding:0 6px;overflow-x:auto;background:#fff}
+.fnav.vert{flex-direction:column;padding:6px 8px;gap:3px;overflow:visible}
+.fnav .nv{border:1px solid transparent;background:transparent;cursor:pointer;color:var(--t2);
+  display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:8px 9px;
+  border-bottom:2px solid transparent;white-space:nowrap;flex:0 0 auto;border-radius:0}
+.fnav .nv .l1{display:flex;align-items:center;gap:5px;font-size:12px}
+.fnav .nv .l1 i{font-style:normal;font-size:13px;opacity:.9}
+.fnav .nv .l2{display:flex;align-items:center;gap:4px}
+.fnav .nv:hover{background:#fafcff;color:var(--pri)}
+.fnav .nv.on{color:var(--pri);border-bottom-color:var(--pri);background:#f7fbff;font-weight:500}
+.fnav.vert .nv{flex-direction:row;align-items:center;gap:8px;width:100%;border-radius:var(--r);
+  border-bottom:1px solid transparent;padding:7px 9px}
+.fnav.vert .nv .l1{flex:0 0 88px}
+.fnav.vert .nv.on{background:var(--pri-l);border-color:var(--pri-b)}
+.fnav .nv.off{opacity:.4;cursor:not-allowed}
+.fnav .nv.off:hover{background:transparent;color:var(--t2)}
+
+/* ★ 九宫格形态（V4 新增，默认）—— 2 列网格：宽高都省，加功能不挤爆，常用项永不被遮挡 */
+.fnav.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px;
+  border-bottom:1px solid var(--bd-l);overflow:visible;background:#fbfcfe}
+.fnav.grid .nv{flex-direction:row;align-items:center;gap:8px;padding:9px 10px;min-width:0;
+  border:1px solid var(--bd-l);border-radius:var(--r);background:#fff;white-space:normal}
+.fnav.grid .nv .l1{flex:1 1 auto;min-width:0;font-size:12px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.fnav.grid .nv .l1 i{font-size:15px;flex:0 0 auto}
+.fnav.grid .nv .l2{flex:0 0 auto}
+.fnav.grid .nv:hover{border-color:var(--pri-b);background:#fafcff}
+.fnav.grid .nv.on{background:var(--pri-l);border-color:var(--pri-b);color:var(--pri);font-weight:500}
+.fnav.grid .nv.on:hover{background:var(--pri-l)}
+.fnav.grid .nv.off{opacity:.45;background:#fafbfc}
+.b{font-size:11px;padding:0 6px;line-height:17px;border-radius:9px;border:1px solid transparent}
+.b.s{background:var(--suc-l);color:var(--suc);border-color:var(--suc-b)}
+.b.w{background:var(--warn-l);color:var(--warn);border-color:var(--warn-b)}
+.b.d{background:var(--dan-l);color:var(--dan);border-color:var(--dan-b)}
+.b.i{background:var(--info-l);color:var(--info);border-color:var(--info-b)}
+.b.p{background:var(--pri-l);color:var(--pri-d);border-color:var(--pri-b)}
+
+/* ★ V4：两步引导条（识别与类型页） */
+.steps{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.stepi{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);
+  padding:5px 11px;border:1px solid var(--bd-l);border-radius:20px;background:#fff}
+.stepi b{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;
+  border-radius:50%;background:var(--bd-xl);color:var(--t3);font-size:11px;font-weight:600}
+.stepi.ok{border-color:var(--suc-b);background:var(--suc-l);color:var(--suc)}
+.stepi.ok b{background:var(--suc);color:#fff}
+.stepar{color:var(--t3);font-size:12px}
+
+/* 3-2 中部：内容（滚动） */
+.cbody{flex:1;overflow:auto;padding:14px 16px 20px;min-height:0}
+
+/* ★ V6：全文规则 —— 素材区（上） + 提示词编辑区（下）
+   ⛔ 不再左右分栏：第 3 栏只有 610px，左右各占一半后两边都不够用 */
+.pmpage{display:flex;flex-direction:column;gap:10px;min-height:100%}
+.pm-mats{border:1px solid var(--bd-l);border-radius:var(--r);background:#fbfcfe;padding:5px 9px}
+.pmrow{display:flex;align-items:center;gap:8px;padding:4px 0;min-width:0}
+.pmrow+.pmrow{border-top:1px dashed var(--bd-xl)}
+.pmrow .pmg{flex:0 0 96px;display:flex;align-items:center;gap:5px;font-size:12px;
+  font-weight:600;color:var(--t1);white-space:nowrap}
+.pmrow .pmg i{font-style:normal;color:var(--pri)}
+.pmrow .pmg .cnt{font-weight:400;color:var(--t3);font-size:11px;margin-left:auto}
+.pmrow .pmb{flex:1;min-width:0;display:flex;gap:5px;overflow-x:auto;padding:3px 0}
+.pmchip{flex:0 0 auto;border:1px solid var(--bd);border-radius:11px;background:#fff;cursor:pointer;
+  padding:3px 10px;font-size:12px;color:var(--t2);white-space:nowrap;font-family:var(--mono)}
+.pmchip.m{font-family:inherit}
+.pmchip:hover{border-color:var(--pri);background:var(--pri-l);color:var(--pri)}
+.pm-ed{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px;min-height:0}
+.pm-ed textarea{width:100%;flex:1;min-height:150px;font-family:var(--mono);font-size:12px;line-height:1.7;
+  resize:vertical}
+.pm-ref{display:flex;flex-wrap:wrap;gap:5px;align-items:center;min-height:20px}
+.pm-ref .refhd{font-size:11px;color:var(--t3)}
+.refchip{font-size:11px;padding:2px 7px;border-radius:10px;font-family:var(--mono);
+  background:var(--pri-l);color:var(--pri-d);border:1px solid var(--pri-b)}
+.refchip.unk{background:var(--dan-l);color:var(--dan);border-color:var(--dan-b)}
+
+/* 3-3 底部：★ 固定保存条（随时可保存） */
+.savebar{flex:0 0 auto;border-top:1px solid var(--bd-l);background:#fff;padding:10px 16px;
+  display:flex;align-items:center;gap:10px;box-shadow:0 -2px 8px rgba(0,0,0,.04)}
+.savebar .prog{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--t2);min-width:0}
+.savebar .prog .bar{width:74px;height:6px;border-radius:3px;background:var(--bd-xl);overflow:hidden;flex:0 0 74px}
+.savebar .prog .bar>i{display:block;height:100%;background:var(--pri);border-radius:3px;transition:.2s}
+.savebar .prog .bar>i.done{background:var(--suc)}
+.savebar .prog .miss{color:var(--dan);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.savebar .sp{flex:1}
+.savebar .dirtyTag{font-size:12px;color:var(--warn);display:flex;align-items:center;gap:5px}
+.savebar .dirtyTag .dot{width:7px;height:7px;border-radius:50%;background:var(--warn)}
+
+/* 通用 */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;font-size:13px;
+  border:1px solid var(--bd);border-radius:var(--r);background:#fff;color:var(--t2);
+  cursor:pointer;line-height:1.4}
+.btn:hover{color:var(--pri);border-color:#c6e2ff;background:var(--pri-l)}
+.btn.pri{background:var(--pri);border-color:var(--pri);color:#fff}
+.btn.pri:hover{background:#66b1ff;border-color:#66b1ff;color:#fff}
+.btn.suc{background:var(--suc);border-color:var(--suc);color:#fff}
+.btn.suc:hover{background:#85ce61;border-color:#85ce61;color:#fff}
+.btn.sm{padding:4px 9px;font-size:12px}
+.btn.gh{background:transparent}
+.btn[disabled]{opacity:.45;cursor:not-allowed;color:var(--t3);background:#fff;border-color:var(--bd)}
+.btn[disabled]:hover{color:var(--t3);background:#fff;border-color:var(--bd)}
+.btn .ld{width:11px;height:11px;border:2px solid currentColor;border-top-color:transparent;
+  border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.tag{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;font-size:12px;
+  border-radius:var(--r);line-height:19px;white-space:nowrap;border:1px solid transparent}
+.tag.b{background:var(--pri-l);color:var(--pri-d);border-color:var(--pri-b)}
+.tag.s{background:var(--suc-l);color:var(--suc);border-color:var(--suc-b)}
+.tag.w{background:var(--warn-l);color:var(--warn);border-color:var(--warn-b)}
+.tag.d{background:var(--dan-l);color:var(--dan);border-color:var(--dan-b)}
+.tag.i{background:var(--info-l);color:var(--info);border-color:var(--info-b)}
+.tag .x{cursor:pointer;opacity:.6;font-size:13px}
+.tag .x:hover{opacity:1}
+.tag.mono{font-family:var(--mono)}
+
+.muted{color:var(--t3)}
+.tiny{font-size:12px}
+.lead{font-size:12px;color:var(--t3);line-height:1.75}
+.hr{height:1px;background:var(--bd-xl);margin:12px 0}
+.row{display:flex;align-items:center;gap:8px}
+.row.wrap{flex-wrap:wrap}
+.sp{flex:1}
+
+.fld{margin-bottom:12px}
+.fld:last-child{margin-bottom:0}
+.fld>label{display:block;font-size:12px;color:var(--t2);margin-bottom:5px}
+.fld textarea,.fld input[type=text]{width:100%;font-size:13px;color:var(--t1);padding:7px 10px;
+  border:1px solid var(--bd);border-radius:var(--r);outline:none;resize:vertical;line-height:1.7}
+.fld textarea:focus,.fld input[type=text]:focus{border-color:var(--pri)}
+.fld .tip{font-size:11px;color:var(--t3);margin-top:4px;line-height:1.6}
+
+.blk{border:1px solid var(--bd-xl);border-radius:var(--r2);margin-bottom:14px;overflow:hidden}
+.blk-hd{background:var(--bg2);padding:9px 14px;font-size:13px;font-weight:500;color:var(--t1);
+  display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--bd-xl)}
+.blk-hd .sp{flex:1}
+.blk-hd .sub{font-size:12px;color:var(--t3);font-weight:400}
+.blk-bd{padding:14px}
+.blk-bd.tight{padding:10px 12px}
+
+.ai-box{border:1px solid var(--pri-b);background:linear-gradient(180deg,#f7fbff,#fff);
+  border-radius:var(--r2);padding:12px}
+.ai-meta{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--t3);margin-bottom:10px;
+  flex-wrap:wrap}
+.ai-sug{border:1px solid var(--pri-b);background:var(--pri-l);border-radius:var(--r2);
+  padding:10px 12px;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--pri-d)}
+
+.typegrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tcard{border:1.5px solid var(--bd-l);border-radius:var(--r2);padding:14px;cursor:pointer;
+  background:#fff;transition:.15s}
+.tcard:hover{border-color:#c6e2ff;background:#fbfdff}
+.tcard.on{border-color:var(--pri);background:var(--pri-l);box-shadow:0 0 0 2px var(--pri-b)}
+.tcard .tt{font-size:14px;font-weight:500;display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.tcard .td{font-size:12px;color:var(--t3);line-height:1.7}
+.tcard.on .tt{color:var(--pri-d)}
+.tcard .chk{margin-left:auto;color:var(--pri);font-size:13px}
+.tcard.fx.on{border-color:var(--info);background:var(--info-l);box-shadow:0 0 0 2px var(--info-b)}
+.tcard.fx.on .tt{color:var(--info)}
+
+.stat{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.stat .s{border:1px solid var(--bd-l);border-radius:var(--r);padding:4px 9px;font-size:12px;
+  color:var(--t2);background:var(--bg2);display:flex;align-items:center;gap:5px}
+.stat .s b{font-weight:600}
+.stat .s.b b{color:var(--pri)} .stat .s.s b{color:var(--suc)}
+.stat .s.w b{color:var(--warn)} .stat .s.d b{color:var(--dan)} .stat .s.i b{color:var(--info)}
+.filters{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.filters .f{padding:3px 10px;font-size:12px;border:1px solid var(--bd-l);border-radius:12px;
+  cursor:pointer;color:var(--t2);background:#fff}
+.filters .f:hover{border-color:var(--pri-b);color:var(--pri)}
+.filters .f.on{background:var(--pri);border-color:var(--pri);color:#fff}
+
+.ac{border:1px solid var(--bd-l);border-radius:var(--r2);margin-bottom:10px;background:#fff;
+  transition:.15s;overflow:hidden}
+.ac:hover{border-color:#c6e2ff;box-shadow:0 1px 6px rgba(64,158,255,.10)}
+.ac.orphan{border-left:3px solid var(--warn)}
+.ac.nosrc{border-left:3px solid var(--dan)}
+.ac-hd{padding:9px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px dashed var(--bd-xl)}
+.ac-hd .ref{font-family:var(--mono);font-size:12px;color:var(--t1);background:var(--bg2);
+  border:1px solid var(--bd-l);border-radius:3px;padding:1px 7px;max-width:240px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ac-meta{padding:7px 12px;font-size:11px;color:var(--t3);display:flex;gap:10px;flex-wrap:wrap;
+  border-bottom:1px dashed var(--bd-xl)}
+.ac-meta .m b{font-weight:400;color:var(--t4)}
+.ac-src{padding:7px 12px;font-size:12px;color:var(--t2);display:flex;align-items:center;gap:6px;
+  border-bottom:1px dashed var(--bd-xl);background:#fcfdff}
+.ac-src .k{color:var(--t3);font-size:11px}
+.ac-op{padding:8px 12px;display:flex;align-items:center;gap:8px;background:var(--bg2)}
+
+.sw{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);cursor:pointer;
+  user-select:none}
+.sw .track{width:32px;height:18px;border-radius:9px;background:var(--bd);position:relative;
+  transition:.15s;flex:0 0 32px}
+.sw .knob{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;
+  transition:.15s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.sw.on .track{background:var(--pri)}
+.sw.on .knob{left:16px}
+
+.guide{display:flex;gap:10px;padding:11px 12px;border-radius:var(--r2);background:var(--warn-l);
+  border:1px solid var(--warn-b);font-size:12px;color:#8a5a00;line-height:1.85}
+.guide .gi{font-size:14px;flex:0 0 auto}
+.guide code{font-family:var(--mono);background:#fff;border:1px solid var(--warn-b);
+  border-radius:3px;padding:0 4px;color:#8a5a00}
+.guide .stp{display:block}
+
+.vr{display:flex;gap:9px;padding:9px 11px;border-radius:var(--r);font-size:12px;
+  margin-bottom:8px;line-height:1.7;align-items:flex-start}
+.vr.r{background:var(--dan-l);border:1px solid var(--dan-b);color:#a33}
+.vr.y{background:var(--warn-l);border:1px solid var(--warn-b);color:#8a5a00}
+.vr.g{background:var(--suc-l);border:1px solid var(--suc-b);color:#4b7a1e}
+.vr .vi{flex:0 0 auto}
+.vr .vsp{flex:1}
+
+.ph-box{border:1px dashed var(--bd);border-radius:var(--r2);padding:22px 16px;text-align:center;
+  color:var(--t3);font-size:12px;line-height:1.9;background:var(--bg2)}
+.ph-box b{color:var(--t2)}
+
+/* 抽屉 */
+.drawer{position:fixed;top:0;right:0;bottom:0;width:420px;background:#fff;
+  border-left:1px solid var(--bd-l);box-shadow:-4px 0 18px rgba(0,0,0,.10);z-index:50;
+  display:none;flex-direction:column}
+.drawer.on{display:flex}
+.drawer-hd{padding:12px 16px;border-bottom:1px solid var(--bd-xl);display:flex;align-items:center;gap:8px}
+.drawer-hd .t{font-size:14px;font-weight:500;flex:1}
+.drawer-bd{flex:1;overflow:auto;padding:14px 16px}
+.drawer-ft{padding:11px 16px;border-top:1px solid var(--bd-xl);display:flex;gap:8px;justify-content:flex-end}
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.18);z-index:49;display:none}
+.mask.on{display:block}
+
+/* 未保存确认弹层 */
+.dlg{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:440px;background:#fff;
+  border-radius:var(--r2);box-shadow:0 8px 32px rgba(0,0,0,.18);z-index:60;display:none;
+  overflow:hidden}
+.dlg.on{display:block}
+.dlg-hd{padding:14px 18px 6px;font-size:15px;font-weight:500;display:flex;align-items:center;gap:8px}
+.dlg-bd{padding:6px 18px 14px;font-size:13px;color:var(--t2);line-height:1.85}
+.dlg-ft{padding:10px 18px 16px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+
+.toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);background:#fff;
+  border:1px solid var(--suc-b);color:var(--suc);border-radius:var(--r2);padding:9px 16px;
+  font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:99;display:none;align-items:center;gap:7px}
+.toast.on{display:flex}
+.toast.err{border-color:var(--dan-b);color:var(--dan)}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="note">
+  <b>原型 V6</b>
+  <span><b>全文规则改上下结构</b>：上 = 素材区（锚点 / 全局参数 / 填写方法），下 = 提示词编辑区。其余沿用 V5（说明外移 + 九宫格菜单）。</span>
+  <span class="sp"></span>
+  <span class="seg">
+    <button id="mg" class="on">菜单·九宫格</button>
+    <button id="mh">菜单·横向</button>
+    <button id="mv">菜单·纵向</button>
+  </span>
+  <span class="lnk" id="noteToggle">展开设计说明 ▾</span>
+</div>
+<div class="note-body" id="noteBody">
+  <h4>★ V6 本轮改动：全文规则改上下结构</h4>
+  <p style="margin:4px 0"><b>问题</b>：上一版把「素材区（左）」与「提示词编辑区（右）」左右分栏。
+    第 3 栏总共只有 <b>610px</b> —— 素材区固定 210px 后，编辑区只剩 <b>约 380px</b>，
+    <b>写提示词的地方反而最窄</b>（提示词是长句，最需要宽度）。</p>
+  <p style="margin:4px 0"><b>做法</b>：改<b>上下结构</b> ——</p>
+  <table style="width:100%;border-collapse:collapse;font-size:12px;margin:4px 0">
+    <tr style="background:#fff4c2"><th style="text-align:left;padding:4px 8px;border:1px solid #ffe58f">区</th>
+      <th style="text-align:left;padding:4px 8px;border:1px solid #ffe58f">内容</th>
+      <th style="text-align:left;padding:4px 8px;border:1px solid #ffe58f">高度</th></tr>
+    <tr><td style="padding:4px 8px;border:1px solid #ffe58f"><b>上 · 素材区</b></td>
+      <td style="padding:4px 8px;border:1px solid #ffe58f">三行，每组一行：<b>⚓ 锚点</b> / <b>▤ 全局参数</b> / <b>✎ 填写方法</b>；
+        每行左侧是组名 + 条数，右侧是 chip 列表（<b>横向滚动</b>）</td>
+      <td style="padding:4px 8px;border:1px solid #ffe58f"><b>固定 ~104px</b></td></tr>
+    <tr><td style="padding:4px 8px;border:1px solid #ffe58f"><b>下 · 编辑区</b></td>
+      <td style="padding:4px 8px;border:1px solid #ffe58f">提示词 textarea（<code>flex:1</code> 占满剩余高度）+ 下方「已引用」清单</td>
+      <td style="padding:4px 8px;border:1px solid #ffe58f"><b>占满剩余</b>（≥150px）</td></tr>
+  </table>
+  <p style="margin:4px 0"><b>三个好处</b>：
+    ① 编辑区宽度从 ~380px 提到 <b>610px</b>（一行能写更多字）；
+    ② 素材区高度<b>固定</b> ⇒ 条目增减不会让编辑区上下跳动；
+    ③ 上下顺序 = <b>使用顺序</b>（先选素材，再写提示词）。</p>
+  <p style="margin:4px 0" class="tiny">★ 素材区用「横向滚动」而不是「换行」：
+    换行会让高度随条目数变化（锚点 5 个 vs 12 个 = 高度差一倍），
+    而上下结构里<b>素材区一变高，编辑区就被挤</b>。</p>
+
+  <h4>上一轮（V5）说明外移</h4>
+  <p style="margin:4px 0"><b>问题</b>：上一版把设计意图（为什么这么做、这个字段干嘛的、注意什么）
+    直接写在了页面上 —— 结果每一屏都被注释塞满，<b>严肃严谨的设置页读起来像新手指南</b>，
+    而且这些文字<b>占据了本就不多的第 3 栏空间</b>，把真正的操作项挤下去。</p>
+  <p style="margin:4px 0"><b>做法</b>：把内容分两类 ——</p>
+  <table style="width:100%;border-collapse:collapse;font-size:12px;margin:4px 0">
+    <tr style="background:#fff4c2"><th style="text-align:left;padding:4px 8px;border:1px solid #ffe58f">类别</th>
+      <th style="text-align:left;padding:4px 8px;border:1px solid #ffe58f">去哪</th></tr>
+    <tr><td style="padding:4px 8px;border:1px solid #ffe58f"><b>事实与操作</b><br>
+      <span class="tiny">当前状态、缺哪几项、按钮、锚点清单、已引用清单</span></td>
+      <td style="padding:4px 8px;border:1px solid #ffe58f"><b>留在页面上</b>（这是用户每次都要看的）</td></tr>
+    <tr><td style="padding:4px 8px;border:1px solid #ffe58f"><b>解释与背景</b><br>
+      <span class="tiny">这个功能是干嘛的、为什么这么设计、注意事项</span></td>
+      <td style="padding:4px 8px;border:1px solid #ffe58f"><b>收进「!」浮层</b>（看一次就够，需要时再点开）</td></tr>
+  </table>
+  <p style="margin:4px 0"><b>具体动作</b>：① 第 3 栏菜单区加一行标题 + 右上角 <b>!</b> 按钮，点开是四个功能的
+    「作用 / 做法」（一屏看完）；② 删掉所有长段 <code>lead</code> 说明与解释性 <code>tip</code>；
+    ③ 保留的提示统一降为<b>一行、小字、灰</b>（<code>.hint</code>）；④ 清理 <code>📝🔒💡🤖🖼📄⤓⚙⟳🏢</code>
+    等装饰性图标（保留 <code>⚠ ✓ ✕</code> 这类有语义的符号）。</p>
+  <p style="margin:4px 0" class="tiny">★ 页面仍然是<b>有引导的</b>（两步引导条、状态徽标、缺失项提示都在），
+    只是<b>不再讲解自己</b>。</p>
+
+  <h4>上一轮（V4）三处改动</h4>
+  <p style="margin:4px 0"><b>⑤ 菜单九宫格</b>：第 3 栏只有 610px 宽 —— 横向 5 项 = 550px 已经贴边，
+    <b>再加功能就挤爆</b>；纵向省宽但吃高度，把内容区压小。九宫格（2 列）<b>宽高都省</b>，
+    且 4~6 项都能一眼看全。<b>常用项永不被遮挡</b>。右上角可切横向 / 纵向对比。</p>
+  <p style="margin:4px 0"><b>⑥ 类型并入「识别与类型」（第一级菜单）</b>：语义分析<b>任何文档都必须做</b>；
+    而类型只是<b>点一下卡片</b>，不值得单独占一页。合并后菜单 5 → 4 项：
+    <code>识别与类型 · 锚点设置 · 全文规则 · 测试验证</code>。
+    页面内是「先分析 → 再确认类型」的两步引导。</p>
+  <p style="margin:4px 0"><b>⑦ 全文规则重构 = 素材书签 + 光标插入</b>：即使<b>没有任何 AI 填入项</b>，
+    它也能阐述「这份文档<b>怎么筛选企业的材料</b>」「哪些单元格怎么写」。
+    编辑器左侧是三组可点击的<b>书签</b>：
+    <b>① 锚点</b>（本模板扫出的全部锚点）<b>② 企业参数</b>（全局参数 + 企业字段）
+    <b>③ 填写方法</b>（日期 / 金额 / 序号等写法约定片段）。
+    点一下 ⇒ 插入到光标处 ⇒ 拼出一份完整的填写方法。</p>
+  <p style="margin:4px 0" class="tiny">⚠️ <b>待你裁决（D8）</b>：插入的是<b>引擎原文 token</b>
+    <code>{{ENT_NAME}}</code>（引擎零改动，推荐）还是<b>可读标记</b> <code>[ENT_NAME]</code>（更好读，但引擎要加一层解析）。
+    原型按<b>原文 token</b> 做，并在下方列出「已引用」清单辅助阅读。</p>
+
+  <h4>① 一级菜单位置修正</h4>
+  <p style="margin:4px 0">上一版把 5 个功能按钮横跨<b>整个页面顶部</b>（压在第 1/2/3 栏之上），错。
+    现在移进 <b>第 3 栏顶部</b>，它成了「这一栏的菜单」，与第 3 栏的内容是<b>同一层级</b>的关系。
+    顶行只留「当前文档是谁 + 全局未保存提醒」。</p>
+  <p style="margin:4px 0">★ 原型里给了<b>两种菜单形态</b>可切换（右上角）：
+    <b>横向</b>（顶部一排，省纵向空间）／<b>纵向</b>（左侧竖排，更像「菜单」，且状态徽标读起来更顺）。
+    我倾向<b>纵向</b>——因为它能让「已设置 / 未设置」一眼扫完，横向两行式反而要来回看。**请你定（D6）。**</p>
+
+  <h4>② 保存 ≠ 完成：文档三态</h4>
+  <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:4px">
+    <tr style="background:#fff4c2"><th style="text-align:left;padding:4px 8px;border:1px solid #ffe58f">状态</th>
+      <th style="text-align:left;padding:4px 8px;border:1px solid #ffe58f">判据</th></tr>
+    <tr><td style="padding:4px 8px;border:1px solid #ffe58f"><b>未设置规则</b></td>
+      <td style="padding:4px 8px;border:1px solid #ffe58f">无 <code>cert_standard_doc_contract</code> 行</td></tr>
+    <tr><td style="padding:4px 8px;border:1px solid #ffe58f"><b>正在设置</b></td>
+      <td style="padding:4px 8px;border:1px solid #ffe58f">有契约行，但<b>必需项</b>没全过（保存过 ≠ 完成）</td></tr>
+    <tr><td style="padding:4px 8px;border:1px solid #ffe58f"><b>已完成设置</b></td>
+      <td style="padding:4px 8px;border:1px solid #ffe58f">有契约行，且<b>必需项</b>全过</td></tr>
+  </table>
+  <p style="margin:6px 0 0"><b>必需项</b>（决定状态）：</p>
+  <ul>
+    <li>通用：① AI 语义分析完成（标签 + 作用）　② 文档类型已确认</li>
+    <li><code>editable</code> 追加：③ 锚点已扫描且<b>无未配来源</b></li>
+    <li><code>fixed</code> 追加：③ 标签非空　④ 作用非空　<span class="tiny">（⛔ 不要求指纹 —— 否则 PDF 会永远完不成）</span></li>
+  </ul>
+  <p style="margin:6px 0 0"><b>建议项</b>（<b>不影响状态</b>，只给黄点提示）：全文规则已挂接、填写规则与说明非空。</p>
+
+  <h4>③ ★ 状态是「算出来的」，不是「存出来的」</h4>
+  <p style="margin:4px 0"><code>cert_standard_doc_contract.Status</code> 这一列<b>已经存在</b>（默认 <code>draft</code>），
+    但我建议<b>不要拿它存完成度</b>。理由：完成度会被<b>别处</b>改掉 ——
+    删锚点、换空白模板、解绑提示词，都会让文档从「已完成」退回「正在设置」，
+    而<b>没有任何人负责回退那一列</b> ⇒ 状态必然漂移，然后「左树筛选」和「实际能不能跑」就对不上了。</p>
+  <p style="margin:4px 0"><span class="ok">✅ 正确做法</span>：完成度<b>实时算</b>。所需原子字段全都有了
+    （<code>docCategory / analyzeStatus / anchorCount / noSrcCount / fillPromptCode / hasContract</code>），
+    后端在 <code>directory-tree</code> 的 <code>Extra</code> 里下发 <code>setupStatus</code> + <code>missingItems</code>，
+    前端只展示。<b>口径唯一在后端、不落库、永不漂移、零额外查询。</b></p>
+
+  <h4>④ 固定底部保存条 + 未保存提醒</h4>
+  <ul>
+    <li>第 3 栏底部<b>常驻</b>保存条：左侧「完成度 3/4 · 缺 XX」+ 未保存标记，右侧 <b>[保存]</b>。<b>任何时候都能点</b>。</li>
+    <li>切换<b>文档</b>或切换<b>功能</b>时若有未保存改动 ⇒ <b>弹确认</b>（保存并切换 / 丢弃 / 取消），⛔ 不静默丢弃。</li>
+    <li>左树节点打<b>橙点</b>表示「有未保存改动」；顶行显示「⚠ N 份文档有未保存改动」，点击可跳转。</li>
+  </ul>
+
+  <h4>怎么点</h4>
+  <ol>
+    <li>左树点 <code>陪审人员.doc</code> → 第 3 栏顶部是功能菜单，底部是保存条</li>
+    <li>点「语义分析」→ 点「开始分析」→ 在「文档作用」里<b>改几个字然后点空白处</b>（触发失焦）→ 看底部保存条出现「● 未保存」</li>
+    <li>此时直接点左树的 <code>风险管理报告.doc</code> → <b>弹未保存确认</b></li>
+    <li>选「保存并切换」→ 回左树看：该文档变成<b>正在设置</b>（因为锚点还没配），不是「已完成」</li>
+    <li>点「锚点设置」→ 模拟上传扫描 → 把唯一的「未配来源」锚点配掉 → 看底部完成度变成 <b>4/4</b>、状态变<b>已完成设置</b></li>
+    <li>切到「测试验证」→ 发布按钮才可点</li>
+  </ol>
+</div>
+
+<!-- 顶行：当前文档 + 全局未保存提醒 -->
+<div class="topbar" id="topbar"></div>
+
+<div class="app-body">
+  <!-- 第 1 栏 -->
+  <aside class="side">
+    <div class="side-hd">
+      <div class="t"><span>标准资料清单</span><span class="sp"></span>
+        <button class="btn sm gh" title="刷新">⟳</button></div>
+      <div class="fbar" id="fbar"></div>
+    </div>
+    <div class="side-bd" id="tree"></div>
+    <div class="side-ft" id="sideft"></div>
+  </aside>
+
+  <!-- 第 2 栏 -->
+  <section class="pv">
+    <div class="pv-hd" id="pvhd"></div>
+    <div class="pv-bd"><div class="page-mock" id="pvmock"></div></div>
+  </section>
+
+  <!-- 第 3 栏：功能菜单 + 内容 + 固定保存条 -->
+  <aside class="col3">
+    <div class="fnavhd">
+      <span class="t">一级功能</span>
+      <span class="sp"></span>
+      <button class="helpbtn" id="btnHelp" title="各项功能说明">!</button>
+    </div>
+    <div class="fnav" id="fnav"></div>
+    <div class="help" id="help"></div>
+    <div class="cbody" id="cbody"></div>
+    <div class="savebar" id="savebar"></div>
+  </aside>
+</div>
+</div>
+
+<div class="mask" id="mask"></div>
+
+<!-- 锚点配置抽屉 -->
+<div class="drawer" id="drawer">
+  <div class="drawer-hd"><span class="t">配置锚点规则</span>
+    <button class="btn sm gh" onclick="closeDrawer()">✕</button></div>
+  <div class="drawer-bd">
+    <div class="fld"><label>锚点原文</label><input type="text" id="dwRef" readonly></div>
+    <div class="fld"><label>来源类型</label>
+      <div class="row wrap"><span class="tag b">全局参数</span><span class="tag i">企业资料</span>
+        <span class="tag i">同文档字段</span><span class="tag i">AI 生成</span></div></div>
+    <div class="fld"><label>来源链（按顺序尝试，取第一个命中）</label>
+      <div class="row" style="margin-bottom:6px"><span class="tag mono b">1 · ENT_NAME</span>
+        <span class="muted tiny">全局参数 · 企业名称</span><span class="sp"></span>
+        <span class="muted tiny">落空 ⇒ 取下一项</span></div>
+      <button class="btn sm gh">+ 追加来源</button></div>
+    <div class="hr"></div>
+    <div class="row"><span class="tiny">写入方式</span><span class="sp"></span><span class="tag i">替换整格</span></div>
+    <div class="row" style="margin-top:10px"><span class="tiny">落空策略</span><span class="sp"></span><span class="tag i">留空</span></div>
+    <div class="hr"></div>
+    <p class="lead">⚠️ 抽屉 <b>420px</b> —— 只覆盖第 3 栏，<b>第 2 栏预览保持可见</b>。</p>
+  </div>
+  <div class="drawer-ft">
+    <button class="btn" onclick="closeDrawer()">取消</button>
+    <button class="btn pri" onclick="closeDrawer();toast('锚点规则已保存')">保存规则</button>
+  </div>
+</div>
+
+<!-- 未保存确认 -->
+<div class="dlg" id="dlg">
+  <div class="dlg-hd"><span>⚠</span><span id="dlgTitle">有未保存的改动</span></div>
+  <div class="dlg-bd" id="dlgBody"></div>
+  <div class="dlg-ft" id="dlgFt"></div>
+</div>
+
+<div class="toast" id="toast"><span>✓</span><span id="toastTxt"></span></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   样本数据 —— ★ 每个文件自带完整状态（模拟 directory-tree 的 Extra）
+   ══════════════════════════════════════════════════════════════ */
+const ANCHORS_TPL = [
+  { ref:'{{ENT_NAME}}',       type:'标量', pos:'正文', field:'ENT_NAME', src:'全局参数 ENT_NAME → 落空留空', state:'ok',     required:false },
+  { ref:'{{文件控制程序}}',   type:'标量', pos:'正文', field:'—',        src:'未配置来源',                   state:'nosrc',  required:true  },
+  { ref:'{{table:审核安排}}', type:'表格', pos:'正文', field:'—',        src:'企业资料 · 审核安排表',         state:'ok',     required:true  },
+  { ref:'{{@PAGE}}',          type:'域自动',pos:'页眉',field:'—',        src:'系统域 · 页码',                 state:'ok',     required:false },
+  { ref:'{{QMS_VER}}',        type:'标量', pos:'正文', field:'QMS_VER',  src:'全局参数 QMS_VER → 落空取默认', state:'ok',     required:true  },
+];
+
+const FILES = [
+  { code:'f1', name:'陪审人员.doc', ft:'doc', hasContract:false, type:null, typeConfirmed:false,
+    analyzeStatus:'none', tags:[], purpose:'', fillHint:'',
+    hasTpl:false, anchors:[], promptBound:false, dirty:false },
+  { code:'f2', name:'风险管理报告.doc', ft:'doc', hasContract:true, type:'editable', typeConfirmed:true,
+    analyzeStatus:'completed', tags:['风险记录','报告类'],
+    purpose:'【是什么】记录企业风险识别、评价与控制措施的落实情况。\n【审核关注点】风险源识别是否覆盖全部过程；控制措施是否与风险等级匹配。\n【来源口径】企业自行编制。\n【包含信息】风险描述、可能性、严重度、风险等级、控制措施、责任人。',
+    fillHint:'按过程逐条填写：风险描述、可能性、严重度、风险等级、控制措施、责任人、完成时间。',
+    hasTpl:true, anchors:ANCHORS_TPL.map(a=>({...a})), promptBound:false, dirty:false },
+  { code:'f3', name:'相关方需求和期望一览表.xls', ft:'xls', hasContract:false, type:null, typeConfirmed:false,
+    analyzeStatus:'none', tags:[], purpose:'', fillHint:'',
+    hasTpl:false, anchors:[], promptBound:false, dirty:false },
+  { code:'f4', name:'营业执照（扫描件）.pdf', ft:'pdf', hasContract:true, type:'fixed', typeConfirmed:true,
+    analyzeStatus:'completed', tags:['资质证照','主体资格','营业执照'],
+    purpose:'【是什么】企业依法登记取得的营业执照，证明其合法经营主体资格。\n【审核关注点】名称、统一社会信用代码、法定代表人、经营范围是否与申请书一致；是否在有效期内。\n【来源口径】市场监督管理部门核发，企业提供扫描件。\n【包含信息】企业名称、统一社会信用代码、法定代表人、经营范围、成立日期。',
+    fillHint:'扫描件 / 照片，不接受填写，只需上传清晰完整的一页（含国徽与登记机关章）。',
+    hasTpl:false, anchors:[], promptBound:false, dirty:false },
+  { code:'f5', name:'法定代表人身份证.jpg', ft:'jpg', hasContract:false, type:null, typeConfirmed:false,
+    analyzeStatus:'none', tags:[], purpose:'', fillHint:'',
+    hasTpl:false, anchors:[], promptBound:false, dirty:false },
+  { code:'f6', name:'内审计划表.doc', ft:'doc', hasContract:true, type:'editable', typeConfirmed:true,
+    analyzeStatus:'completed', tags:['内审记录','计划类'],
+    purpose:'【是什么】年度内部审核的日程与分工安排。\n【审核关注点】是否覆盖全部条款与部门；审核员是否具备资格且未审核本部门工作。\n【来源口径】企业自行编制。\n【包含信息】审核日期、受审部门、条款、审核员、审核组长。',
+    fillHint:'按年度内审方案逐条填写：审核日期、受审部门、对应条款、审核员姓名。',
+    hasTpl:true, anchors:ANCHORS_TPL.filter(a=>a.state==='ok').map(a=>({...a})), promptBound:true, dirty:false },
+];
+
+// ★ V4：全文规则编辑区内容（老样本没有这一项 ⇒ 补默认空串，再给两份示例看效果）
+FILES.forEach(x => { if (typeof x.promptText !== 'string') x.promptText = ''; });
+FILES[1].promptText =
+  '按过程逐条填写风险：\n企业名称：{{ENT_NAME}}\n\n填写方法：\n' +
+  '- 日期一律用 YYYY-MM-DD（如 2026-03-11）。\n' +
+  '- 所有单元格不得留空，不适用填「/」。';
+FILES[5].promptText =
+  '按年度内审方案逐条填写，每行一个受审部门。\n企业名称：{{ENT_NAME}}\n审核日期：{{AUDIT_DATE}}\n\n' +
+  '填写方法：\n- 序号从 1 起连续编号，⛔ 不留空行。\n- 审核员不得审核本部门工作。';
+
+/* ══════════════════════════════════════════════════════════════
+   全局状态
+   ══════════════════════════════════════════════════════════════ */
+const state = {
+  file: FILES[0],
+  nav: 'ai',            // ai | type | anchor | prompt | verify
+  menuForm: 'g',        // g 九宫格（默认，V4） | h 横向 | v 纵向
+  filterType: 'all',    // all | fixed | editable | undecided
+  filterState: 'all',   // all | none | draft | done
+  anchorFilter: 'all',
+  analyzing: false,
+  verified: {},
+  pending: null,        // 待执行的切换动作（未保存确认用）
+};
+
+const FIXED_EXT = ['pdf','jpg','jpeg','png','bmp','tif','tiff','gif','webp'];
+const EDIT_EXT  = ['doc','docx','xls','xlsx','ppt','pptx','txt'];
+function suggestTypeByExt(ft){
+  const e = (ft||'').toLowerCase();
+  if (FIXED_EXT.includes(e)) return 'fixed';
+  if (EDIT_EXT.includes(e))  return 'editable';
+  return null;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ★★ 完成度计算 —— 全项目唯一入口（模拟后端 setupStatus）
+   ⛔ 状态是「算出来的」不是「存出来的」：删锚点/换模板/解绑提示词都会让它自动回退
+   ══════════════════════════════════════════════════════════════ */
+function missingItems(f) {
+  const miss = [];
+  if (f.analyzeStatus !== 'completed') miss.push('AI 语义分析');
+  if (!f.typeConfirmed) { miss.push('文档类型确认'); return miss; }
+  if (f.type === 'fixed') {
+    if (!f.tags.length) miss.push('分类标签');
+    if (!f.purpose.trim()) miss.push('文档作用');
+  } else {
+    if (!f.hasTpl || f.anchors.length === 0) miss.push('锚点扫描');
+    else if (f.anchors.some(a => a.state === 'nosrc')) miss.push('锚点来源');
+  }
+  return miss;
+}
+/** 建议项（不影响状态，只提示） */
+function advisoryItems(f) {
+  const adv = [];
+  // ★ V4：两种类型都建议写全文规则 —— editable 是「生成口径」，fixed 是「要什么材料 / 怎么筛」
+  if (!f.promptBound) adv.push(f.type === 'fixed' ? '未写上传要求（全文规则）' : '全文规则未挂接');
+  if (!f.fillHint.trim()) adv.push('填写规则与说明为空');
+  if (f.type === 'fixed') adv.push('指纹规则未实现（不阻断）');
+  return adv;
+}
+function requiredCount(f) {
+  if (!f.typeConfirmed) return 2;
+  return f.type === 'fixed' ? 4 : 3;
+}
+function isComplete(f) { return f.hasContract && missingItems(f).length === 0; }
+/** ★ 文档三态 */
+function docState(f) {
+  if (!f.hasContract) return 'none';
+  return isComplete(f) ? 'done' : 'draft';
+}
+const STATE_META = {
+  none:  { text:'未设置规则', tone:'i' },
+  draft: { text:'正在设置',   tone:'w' },
+  done:  { text:'已完成设置', tone:'s' },
+};
+
+/* ══════════════════════════════════════════════════════════════
+   ★★ 功能菜单状态（唯一入口）
+   ══════════════════════════════════════════════════════════════ */
+function computeNav() {
+  const f = state.file, t = f.type, isFixed = t === 'fixed';
+  const noSrc = f.anchors.filter(a => a.state === 'nosrc').length;
+
+  const items = [];
+  // ★ V4：语义分析 + 类型合并为第一项
+  //   理由：语义分析「任何文档都必须做」；而类型只是点一下卡片，不值得单独占一页。
+  let aiBadge;
+  if (state.analyzing) aiBadge = { text:'分析中', tone:'w' };
+  else if (f.analyzeStatus !== 'completed') aiBadge = { text:'未分析', tone:'w' };
+  else if (!f.typeConfirmed) aiBadge = { text:'待确认类型', tone:'w' };
+  else aiBadge = { text: isFixed ? '已分析 · 固定' : '已分析 · 可编辑', tone:'s' };
+  items.push({ key:'ai', icon:'✦', label:'识别与类型', disabled:false, reason:'', badge: aiBadge });
+
+  items.push({ key:'anchor', icon:'⚓', label:'锚点设置', disabled:isFixed,
+    reason: isFixed ? '固定格式文档不生成内容，没有锚点' : '',
+    badge: isFixed ? {text:'不适用', tone:'i'}
+         : f.anchors.length === 0 ? {text:'未扫描', tone:'w'}
+         : noSrc > 0 ? {text:`${f.anchors.length} 个 · ${noSrc} 未配`, tone:'d'}
+         : {text:`${f.anchors.length} 个`, tone:'s'} });
+
+  // ★ V4：固定格式文档也开放全文规则 —— 它在这里表达「这一格要什么样的企业材料 / 怎么筛」
+  items.push({ key:'prompt', icon:'ƒ', label:'全文规则', disabled:false, reason:'',
+    badge: f.promptBound ? {text:'已挂接', tone:'s'} : {text:'未挂接', tone:'w'} });
+
+  let vb, vd = false, vr = '';
+  if (f.analyzeStatus !== 'completed') { vb = {text:'待分析', tone:'i'}; vd = true; vr = '请先完成 AI 语义分析'; }
+  else if (isFixed) vb = state.verified[f.code] ? {text:'已通过', tone:'s'} : {text:'未验证', tone:'w'};
+  else if (noSrc > 0) vb = {text:`${noSrc} 张红牌`, tone:'d'};
+  else if (f.anchors.length === 0) vb = {text:'未扫描', tone:'w'};
+  else vb = state.verified[f.code] ? {text:'已通过', tone:'s'} : {text:'未验证', tone:'w'};
+
+  items.push({ key:'verify', icon:'✓', label:'测试验证', badge:vb, disabled:vd, reason:vr });
+  return items;
+}
+
+function canPublish() {
+  const f = state.file;
+  if (f.analyzeStatus !== 'completed') return false;
+  if (!f.typeConfirmed) return false;
+  if (f.type === 'fixed') return f.tags.length > 0 && !!f.purpose.trim();
+  if (f.type !== 'editable') return false;
+  return f.anchors.length > 0 && !f.anchors.some(a => a.state === 'nosrc');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   工具
+   ══════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let toastTimer = null;
+function toast(msg, err) {
+  $('toastTxt').textContent = msg;
+  $('toast').className = 'toast on' + (err ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $('toast').className = 'toast'; }, 2400);
+}
+function openDrawer(ref) { $('dwRef').value = ref || ''; $('drawer').className = 'drawer on'; $('mask').className = 'mask on'; }
+function closeDrawer() { $('drawer').className = 'drawer'; if (!$('dlg').className.includes('on')) $('mask').className = 'mask'; }
+function closeDlg() { $('dlg').className = 'dlg'; $('mask').className = 'mask'; }
+
+/** ★ 未保存提醒：有 dirty 就先确认，再执行动作 */
+function guardUnsaved(title, body, onProceed) {
+  if (!state.file.dirty) { onProceed(); return; }
+  state.pending = onProceed;
+  $('dlgTitle').textContent = title;
+  $('dlgBody').innerHTML = body;
+  $('dlgFt').innerHTML =
+    `<button class="btn" data-act="cancel">取消</button>` +
+    `<button class="btn" data-act="discard" style="color:var(--dan)">丢弃改动</button>` +
+    `<button class="btn pri" data-act="save">保存并继续</button>`;
+  $('dlg').className = 'dlg on';
+  $('mask').className = 'mask on';
+  $('dlgFt').querySelectorAll('[data-act]').forEach(b => {
+    b.onclick = () => {
+      const act = b.dataset.act;
+      closeDlg();
+      if (act === 'cancel') { state.pending = null; return; }
+      if (act === 'save') doSave(true);
+      else { state.file.dirty = false; toast('已丢弃未保存的改动'); }
+      const fn = state.pending; state.pending = null;
+      if (fn) fn();
+    };
+  });
+}
+
+/** 收集当前 DOM 里的编辑值 → state（保存前必须做） */
+function collectEdits() {
+  const p = $('aiPurpose'), h = $('aiHint');
+  if (p) state.file.purpose = p.value;
+  if (h) state.file.fillHint = h.value;
+}
+
+function doSave(silent) {
+  collectEdits();
+  const f = state.file;
+  f.hasContract = true;
+  f.dirty = false;
+  f.analyzeStatus = f.analyzeStatus === 'none' ? 'completed' : f.analyzeStatus;
+  const miss = missingItems(f);
+  render();
+  if (!silent) {
+    toast(miss.length
+      ? `已保存 · 当前状态「正在设置」（还缺：${miss.join('、')}）`
+      : '已保存 · 该文档状态已更新为「已完成设置」');
+  } else {
+    toast(miss.length ? `已保存（仍缺 ${miss.join('、')}）` : '已保存 · 已完成设置');
+  }
+}
+
+/** 只刷新「未保存相关」的 UI（不整页重渲染，避免打断输入焦点） */
+function refreshDirtyUI() {
+  renderSaveBar(); renderTree(); renderTopbar();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   顶行
+   ══════════════════════════════════════════════════════════════ */
+function renderTopbar() {
+  const f = state.file;
+  const pre = suggestTypeByExt(f.ft);
+  const showPre = !f.typeConfirmed && pre;
+  const dirtyCount = FILES.filter(x => x.dirty).length;
+
+  $('topbar').innerHTML =
+    `<span class="fn" title="${esc(f.name)}">${esc(f.name)}</span>` +
+    `<span class="path">9001标准 / 初次认证 / ${esc(f.ft)}</span>` +
+    `<span class="sp"></span>` +
+    (dirtyCount
+      ? `<span class="warnbar" id="warnbar">⚠ ${dirtyCount} 份文档有未保存改动</span>`
+      : ``) +
+    `<div class="gate">
+       ${showPre ? `<span class="hint" style="margin:0">已按 .${esc(f.ft)} 预选，待确认</span>` : ``}
+       <span class="gl">文档类型</span>
+       <button class="${f.type==='editable'?'on':''}${f.typeConfirmed?'':' pre'}" data-type="editable"><span class="dot"></span>可编辑文档</button>
+       <button class="${f.type==='fixed'?'on fx':''}${f.typeConfirmed?'':' pre'}" data-type="fixed"><span class="dot"></span>固定格式</button>
+     </div>`;
+
+  $('topbar').querySelectorAll('[data-type]').forEach(b => { b.onclick = () => setDocType(b.dataset.type); });
+  const wb = $('warnbar');
+  if (wb) wb.onclick = () => {
+    const first = FILES.find(x => x.dirty);
+    if (first) guardUnsaved('切换到未保存的文档',
+      `「<b>${esc(first.name)}</b>」有未保存的改动。`, () => selectFile(first));
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════
+   第 1 栏 · 左树 + 三态过滤
+   ══════════════════════════════════════════════════════════════ */
+function matchFilter(f) {
+  const t = state.filterType;
+  if (t === 'fixed' && f.type !== 'fixed') return false;
+  if (t === 'editable' && f.type !== 'editable') return false;
+  if (t === 'undecided' && f.typeConfirmed) return false;
+  const s = state.filterState;
+  if (s !== 'all' && docState(f) !== s) return false;
+  return true;
+}
+
+function renderFbar() {
+  const cnt = fn => FILES.filter(fn).length;
+  const row = (label, arr, cur, fk) =>
+    `<span class="gl">${label}</span>` + arr.map(([k, txt, n]) =>
+      `<span class="f ${cur===k?'on':''}" data-fk="${fk}" data-fv="${k}">${txt}<span class="c">${n}</span></span>`).join('');
+
+  $('fbar').innerHTML =
+    `<div class="fbar" style="margin:0">` + row('类型', [
+      ['all','全部',FILES.length],
+      ['fixed','固定',cnt(f=>f.type==='fixed')],
+      ['editable','可编辑',cnt(f=>f.type==='editable')],
+      ['undecided','未定',cnt(f=>!f.typeConfirmed)],
+    ], state.filterType, 'type') + `</div>
+    <div class="fbar" style="margin:6px 0 0">` + row('状态', [
+      ['all','全部',FILES.length],
+      ['none','未设置',cnt(f=>docState(f)==='none')],
+      ['draft','正在设置',cnt(f=>docState(f)==='draft')],
+      ['done','已完成',cnt(f=>docState(f)==='done')],
+    ], state.filterState, 'state') + `</div>`;
+
+  $('fbar').querySelectorAll('[data-fk]').forEach(el => {
+    el.onclick = () => {
+      if (el.dataset.fk === 'type') state.filterType = el.dataset.fv;
+      else state.filterState = el.dataset.fv;
+      render();
+    };
+  });
+}
+
+function renderTree() {
+  const rows = [
+    `<div class="tn l1"><span class="caret">▾</span><span class="nm">广州某某制造有限公司</span></div>`,
+    `<div class="tn l2"><span class="caret">▾</span><span class="nm">9001标准</span></div>`,
+    `<div class="tn l3"><span class="caret">▾</span><span class="nm">初次认证</span></div>`,
+  ];
+  const list = FILES.filter(matchFilter);
+  if (list.length === 0) {
+    rows.push(`<div class="tree-empty">当前筛选下没有文件<br><span class="tiny">换个筛选条件试试</span></div>`);
+  } else {
+    list.forEach(f => {
+      const on = state.file && state.file.code === f.code ? ' on' : '';
+      const st = STATE_META[docState(f)];
+      rows.push(
+        `<div class="tn l4${on}" data-file="${f.code}" title="${esc(f.name)}">` +
+        (f.dirty ? `<span class="dirty" title="有未保存改动"></span>` : `<span class="dirty" style="visibility:hidden"></span>`) +
+        `<span class="nm">${esc(f.name)}</span>` +
+        `<span class="tag ${st.tone}" style="transform:scale(.9)">${st.text}</span></div>`
+      );
+    });
+  }
+  $('tree').innerHTML = rows.join('');
+  $('tree').querySelectorAll('[data-file]').forEach(el => {
+    el.onclick = () => {
+      const f = FILES.find(x => x.code === el.dataset.file);
+      if (!f || f === state.file) return;
+      guardUnsaved('切换文档前，先处理未保存的改动',
+        `「<b>${esc(state.file.name)}</b>」有未保存的改动。`, () => selectFile(f));
+    };
+  });
+
+  const shown = FILES.filter(matchFilter).length;
+  const dirty = FILES.filter(f => f.dirty).length;
+  $('sideft').innerHTML =
+    `<span>显示 ${shown} / ${FILES.length} 份</span><span class="sp"></span>` +
+    (dirty ? `<span style="color:var(--warn)">● ${dirty} 未保存</span>` : `<span class="muted tiny">全部已保存</span>`);
+}
+
+function selectFile(f) {
+  state.file = f;
+  state.nav = 'ai';
+  state.anchorFilter = 'all';
+  state.analyzing = false;
+  render();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   类型
+   ══════════════════════════════════════════════════════════════ */
+function setDocType(t) {
+  const f = state.file;
+  if (f.type === t && f.typeConfirmed) return;
+  f.type = t;
+  f.typeConfirmed = true;
+  f.dirty = true;
+  if (t === 'fixed') {
+    // 固定格式：锚点不适用（清掉）；★ V4：全文规则仍保留 —— 它表达「这一格要什么样的企业材料」
+    f.hasTpl = false; f.anchors = [];
+    if (state.nav === 'anchor') state.nav = 'ai';
+    toast('已切为「固定格式」—— 锚点设置不适用；全文规则仍可写「上传要求」（记得保存）');
+  } else {
+    toast('已切为「可编辑文档」（记得保存）');
+  }
+  render();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   第 2 栏 · 预览
+   ══════════════════════════════════════════════════════════════ */
+function renderPreview() {
+  const f = state.file;
+  const isFixed = f.type === 'fixed';
+  const showTpl = f.hasTpl && !isFixed;
+
+  $('pvhd').innerHTML =
+    `<span>${isFixed ? '原始扫描件' : showTpl ? '空白模板' : '原始文档'}</span>` +
+    `<span class="muted">·</span><span class="muted">${esc(f.name)}</span>` +
+    `<span class="sp"></span>` +
+    `<span class="tag ${showTpl?'b':'i'}">${isFixed ? '不可编辑' : showTpl?'已归一':'只读'}</span>` +
+    `<button class="btn sm gh">下载原始件</button>`;
+
+  if (isFixed) {
+    $('pvmock').innerHTML =
+      `<div class="ph">营 业 执 照</div>` +
+      `<div class="scan">（扫描件 / 图片，无可编辑内容）<br>
+        <span class="tiny">不上传空白模板、不配锚点</span></div>`;
+    return;
+  }
+  if (state.nav === 'ai' || !f.hasTpl) {
+    $('pvmock').innerHTML =
+      `<div class="ph">陪 审 人 员 安 排 表</div>` +
+      `<div class="kv"><b>编制单位</b><span>广州某某制造有限公司</span></div>` +
+      `<div class="kv"><b>审核类型</b><span>初次认证审核</span></div>` +
+      `<div class="kv"><b>审核日期</b><span>2026-03-11 ~ 2026-03-12</span></div>` +
+      `<table><thead><tr><th>日期</th><th>受审部门</th><th>条款</th><th>陪审人员</th></tr></thead>
+        <tbody><tr><td>03-11 上午</td><td>管理层</td><td>4.1~4.4</td><td>张伟</td></tr>
+          <tr><td>03-11 下午</td><td>生产部</td><td>8.5</td><td>李强</td></tr></tbody></table>` +
+      `<p class="tiny muted" style="margin-top:14px">※ 原始文档（含示例数据）</p>`;
+  } else {
+    $('pvmock').innerHTML =
+      `<div class="ph">陪 审 人 员 安 排 表</div>` +
+      `<div class="kv"><b>编制单位</b><span class="tok">{{ENT_NAME}}</span></div>` +
+      `<div class="kv"><b>审核类型</b><span class="tok">{{审核类型}}</span></div>` +
+      `<div class="kv"><b>审核日期</b><span class="tok">{{审核日期}}</span></div>` +
+      `<table><thead><tr><th>日期</th><th>受审部门</th><th>条款</th><th>陪审人员</th></tr></thead>
+        <tbody><tr><td colspan="4" class="tok" style="display:table-cell">{{table:审核安排}}</td></tr></tbody></table>` +
+      `<div class="kv" style="margin-top:16px"><b>编制人</b><span class="tok miss">{{文件控制程序}}</span>
+        <span class="tiny" style="color:var(--dan)">← 未配来源</span></div>` +
+      `<p class="tiny muted" style="margin-top:14px">※ 空白模板（锚点由此扫描）</p>`;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   第 3 栏 · 顶部功能菜单
+   ══════════════════════════════════════════════════════════════ */
+function renderFnav() {
+  const items = computeNav();
+  const el = $('fnav');
+  el.className = 'fnav' + (state.menuForm === 'v' ? ' vert' : state.menuForm === 'g' ? ' grid' : '');
+  el.innerHTML = items.map(it => `
+    <button class="nv ${state.nav===it.key?'on':''}${it.disabled?' off':''}"
+            data-nav="${it.key}" title="${it.disabled ? esc(it.reason) : ''}">
+      <span class="l1"><i>${it.icon}</i>${esc(it.label)}</span>
+      <span class="l2"><span class="b ${it.badge.tone}">${esc(it.badge.text)}</span></span>
+    </button>`).join('');
+
+  el.querySelectorAll('[data-nav]').forEach(b => {
+    b.onclick = () => {
+      const key = b.dataset.nav;
+      const it = computeNav().find(x => x.key === key);
+      if (it && it.disabled) { toast(it.reason || '该功能对当前文档不适用', true); return; }
+      if (key === state.nav) return;
+      guardUnsaved('切换功能前，先处理未保存的改动',
+        `「<b>${esc(state.file.name)}</b>」有未保存的改动。`,
+        () => { state.nav = key; render(); });
+    };
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ★ V5：一级功能说明 —— 从页面里搬出来，收进「!」浮层
+   ──────────────────────────────────────────────────────────────
+   原则：页面只呈现**事实与操作**（状态、缺失项、按钮），
+        **解释**（这东西是干嘛的、为什么这么设计）一律进浮层。
+   ══════════════════════════════════════════════════════════════ */
+const HELP = [
+  { icon:'✦', name:'识别与类型',
+    role:'让系统知道这份文档<b>本来是什么</b> —— 产出分类标签、文档作用、填写说明，并确认它是可编辑还是固定格式。',
+    how:'① 点「开始分析原始文件」（读原始件，约 15~25 秒）→ ② 点一张类型卡片。类型<b>只是一个值</b>，点一下即生效，随底部保存条一起落库。' },
+  { icon:'⚓', name:'锚点设置',
+    role:'把空白模板里的 <code>{{标签}}</code> 与「值从哪来」绑定起来。<b>仅可编辑文档</b>适用。',
+    how:'① 备好空白模板（下载可编辑版 → 加 <code>{{标签}}</code> → 上传，系统自动扫描）→ ② 逐个锚点配来源 → ③ 必填项就地开关即存。' },
+  { icon:'ƒ', name:'全文规则',
+    role:'整份文档的<b>填写方法</b> —— 给人看（这一格要什么材料、怎么筛），也给引擎做生成口径。',
+    how:'上方是素材区（锚点 / 企业参数 / 填写方法），点一下插入到<b>光标处</b>；下方是提示词编辑区。⛔ 不挂接也能跑，不影响「已完成设置」。' },
+  { icon:'✓', name:'测试验证',
+    role:'按<b>必需项</b>逐条检查 —— 与「已完成设置」同一套判据，通过后才能发布。',
+    how:'点「开始验证」。红牌（非法组合）必须清掉；黄牌（孤儿锚点）可带过。' },
+];
+
+function renderHelp() {
+  const el = $('help');
+  if (!el) return;
+  el.innerHTML =
+    `<h5>一级功能说明</h5>` +
+    HELP.map(h => `
+      <div class="hi">
+        <div class="hn"><i>${h.icon}</i>${esc(h.name)}</div>
+        <div class="hr"><span class="k">作用</span>${h.role}</div>
+        <div class="hr"><span class="k">做法</span>${h.how}</div>
+      </div>`).join('');
+}
+
+function closeHelp() {
+  const e = $('help'), b = $('btnHelp');
+  if (e) e.className = 'help';
+  if (b) b.className = 'helpbtn';
+}
+
+/* ══════════════════════════════════════════════════════════════
+   第 3 栏 · 中部内容
+   ══════════════════════════════════════════════════════════════ */
+function renderCbody() {
+  // ★ V4：type 页已并入 ai 页 ⇒ 菜单 4 项
+  const map = { ai: pageAI, anchor: pageAnchor, prompt: pagePrompt, verify: pageVerify };
+  (map[state.nav] || (() => { $('cbody').innerHTML = ''; }))();
+}
+
+/* ── 语义分析 ───────────────────────────────────────── */
+function pageAI() {
+  const f = state.file, ai = f;
+  const done = f.analyzeStatus === 'completed';
+  const body = !done
+    ? `<div class="ph-box">
+         ${state.analyzing
+           ? `<span class="ld" style="display:inline-block;vertical-align:-2px;margin-right:6px"></span>
+              正在分析 <b>${esc(f.name)}</b>…<span class="tiny">（约 15~25 秒）</span>`
+           : `尚未分析。`}
+       </div>
+       <div class="row" style="justify-content:center;margin-top:12px">
+         <button class="btn pri" id="btnAI" ${state.analyzing?'disabled':''}>
+           ${state.analyzing?'<span class="ld"></span>分析中…':'✦ 开始分析原始文件'}</button>
+       </div>`
+    : `<div class="ai-box">
+         <div class="ai-meta">
+           <span class="tag s">已完成</span><span>qwen-plus · 8.4s</span>
+           <span>来源：<b>${esc(f.name)}</b></span>
+         </div>
+         <div class="fld">
+           <label>分类标签 <span class="tiny muted">（字典）</span></label>
+           <div class="row wrap">
+             ${ai.tags.map((t,i)=>`<span class="tag b">${esc(t)}<span class="x" data-deltag="${i}">×</span></span>`).join('')}
+             <button class="btn sm gh" id="btnAddTag">+ 从字典选</button>
+           </div>
+         </div>
+         <div class="fld">
+           <label>文档作用 <span class="tiny muted">（四段式）</span></label>
+           <textarea rows="6" id="aiPurpose">${esc(ai.purpose)}</textarea>
+         </div>
+         <div class="fld">
+           <label>填写规则与说明 <span class="tiny muted">（给企业）</span></label>
+           <textarea rows="4" id="aiHint">${esc(ai.fillHint)}</textarea>
+         </div>
+         <div class="ai-sug">
+           <span>建议类型：<b>${suggestTypeByExt(f.ft)==='fixed'?'固定格式（免填）':'可编辑文档'}</b></span>
+           <span class="sp"></span>
+           <button class="btn sm pri" id="btnAdopt" ${f.typeConfirmed?'disabled':''}>
+             ${f.typeConfirmed?'已确认':'采纳'}</button>
+         </div>
+       </div>`;
+
+  // ★ V4：合并页 —— 上面是语义分析，下面是类型卡片（两步引导）
+  const step1 = done, step2 = f.typeConfirmed;
+  $('cbody').innerHTML =
+    `<div class="steps">
+       <span class="stepi ${step1?'ok':''}"><b>1</b> 分析原始文件</span>
+       <span class="stepar">→</span>
+       <span class="stepi ${step2?'ok':''}"><b>2</b> 确认文档类型</span>
+     </div>
+     <div class="blk">
+       <div class="blk-hd">① 语义分析 <span class="sub">全部文档</span></div>
+       <div class="blk-bd">${body}</div>
+     </div>
+     <div class="blk" style="margin-top:12px">
+       <div class="blk-hd">② 文档类型</div>
+       <div class="blk-bd">${typeBlock(f)}</div>
+     </div>`;
+
+  const bind = (id, fn) => { const el = $(id); if (el) el.onclick = fn; };
+  bind('btnAI', runAI);
+  bind('btnAddTag', () => { f.tags.push('未命名标签'); f.dirty = true; render(); });
+  bind('btnAdopt', () => { f.type = suggestTypeByExt(f.ft) || 'editable'; f.typeConfirmed = true; f.dirty = true; toast('已采纳（记得保存）'); render(); });
+
+  // ★ V4：类型卡片事件（原 pageType 的绑定搬到这里）
+  $('cbody').querySelectorAll('[data-t]').forEach(el => { el.onclick = () => setDocType(el.dataset.t); });
+
+  // ★ 失焦即写回 state + 标记 dirty，但不整页重渲染（否则会打断点击）
+  const p = $('aiPurpose'), h = $('aiHint');
+  if (p) p.onblur = () => { if (f.purpose !== p.value) { f.purpose = p.value; f.dirty = true; refreshDirtyUI(); } };
+  if (h) h.onblur = () => { if (f.fillHint !== h.value) { f.fillHint = h.value; f.dirty = true; refreshDirtyUI(); } };
+
+  $('cbody').querySelectorAll('[data-deltag]').forEach(el => {
+    el.onclick = () => { f.tags.splice(+el.dataset.deltag,1); f.dirty = true; render(); };
+  });
+}
+
+function runAI() {
+  const f = state.file;
+  state.analyzing = true; render();
+  setTimeout(() => {
+    state.analyzing = false;
+    const isPdf = FIXED_EXT.includes((f.ft||'').toLowerCase());
+    f.analyzeStatus = 'completed';
+    if (isPdf) {
+      f.tags = ['资质证照','主体资格','营业执照'];
+      f.purpose = '【是什么】企业依法登记取得的营业执照，证明其合法经营主体资格。\n【审核关注点】名称、统一社会信用代码、法定代表人、经营范围是否与申请书一致；是否在有效期内。\n【来源口径】市场监督管理部门核发，企业提供扫描件。\n【包含信息】企业名称、统一社会信用代码、法定代表人、经营范围、成立日期。';
+      f.fillHint = '扫描件 / 照片，不接受填写，只需上传清晰完整的一页（含国徽与登记机关章）。';
+    } else {
+      f.tags = ['内审记录','记录类','陪审安排'];
+      f.purpose = '【是什么】用于记录外部审核期间陪审人员的分工与安排。\n【审核关注点】是否覆盖全部审核日程；陪审人员是否具备对应条款的专业能力。\n【来源口径】企业自行编制，随审核计划一并提交。\n【包含信息】审核日期、审核部门、审核条款、陪审人员。';
+      f.fillHint = '按「审核计划」逐条填写：每行一个审核日程，需填审核日期、受审部门、对应条款号、陪审人员姓名与职务。\n表头「编制人 / 批准人 / 日期」需签字并加盖部门章。';
+    }
+    f.dirty = true;                    // ★ 分析结果也要保存才落库
+    toast('分析完成 —— 结果<b>尚未保存</b>，请点底部「保存」');
+    render();
+  }, 1200);
+}
+
+/* ── 类型卡片（★ V4：并入「识别与类型」页，⛔ 不再单独成页；★ V5：去掉长说明） ── */
+function typeBlock(f) {
+  const pre = suggestTypeByExt(f.ft);
+  const preLabel = pre === 'fixed' ? '固定格式' : pre === 'editable' ? '可编辑' : '无法推断';
+  return `<div class="typegrid">
+       <div class="tcard ${f.type==='editable'?'on':''}" data-t="editable">
+         <div class="tt">可编辑文档 ${f.type==='editable'?'<span class="chk">✓</span>':''}</div>
+         <div class="td">记录表、报告、一览表</div>
+       </div>
+       <div class="tcard fx ${f.type==='fixed'?'on':''}" data-t="fixed">
+         <div class="tt">固定格式 ${f.type==='fixed'?'<span class="chk">✓</span>':''}</div>
+         <div class="td">营业执照、身份证、证书、扫描件</div>
+       </div>
+     </div>
+     <p class="hint">已按扩展名 <code>.${esc(f.ft)}</code> 预选 <b>${preLabel}</b>。判断有误时点另一张卡片即可覆盖。</p>`;
+}
+
+/* ── 锚点设置 ───────────────────────────────────────── */
+function pageAnchor() {
+  const f = state.file;
+  if (!f.hasTpl) {
+    $('cbody').innerHTML =
+      `<div class="guide">
+         <span class="gi">⚠</span>
+         <div>
+           <b>还没有空白模板，锚点无法配置。</b>
+           <span class="stp">① 点「下载可编辑版」拿到 <code>.docx</code>（系统已自动归一）</span>
+           <span class="stp">② 删掉示例数据，在要填的位置加 <code>{{标签}}</code></span>
+           <span class="stp">③ 点「上传空白模板」，存到源文件同级 <code>_template/</code> 并自动扫描</span>
+         </div>
+       </div>
+       <div class="row" style="margin-top:14px;gap:8px">
+         <button class="btn" id="btnDl">下载可编辑版</button>
+         <button class="btn pri" id="btnUp">模拟上传并扫描</button>
+       </div>`;
+    const bind = (id, fn) => { const el = $(id); if (el) el.onclick = fn; };
+    bind('btnDl', () => toast('已开始下载 陪审人员.doc.docx（归一产物）'));
+    bind('btnUp', () => {
+      f.hasTpl = true; f.anchors = ANCHORS_TPL.map(a => ({...a})); f.dirty = true;
+      toast('模板已上传，已自动扫描：命中 5 个锚点（记得保存）'); render();
+    });
+    return;
+  }
+
+  const A = f.anchors;
+  const st = {
+    auto: A.filter(a=>a.state==='ok' && a.src.includes('全局参数')).length,
+    man:  A.filter(a=>a.src.includes('企业资料')).length,
+    calc: A.filter(a=>a.src.includes('系统域')).length,
+    nosrc:A.filter(a=>a.state==='nosrc').length,
+    orph: A.filter(a=>a.state==='orphan').length,
+  };
+  const fl = state.anchorFilter;
+  const list = A.filter(a => fl==='all' ? true : fl==='nosrc' ? a.state==='nosrc' : fl==='req' ? a.required : a.state==='orphan');
+  const badge = a => a.state==='orphan' ? `<span class="tag w">孤儿</span>`
+    : a.state==='nosrc' ? `<span class="tag d">未配来源</span>`
+    : a.required ? `<span class="tag b">必填</span>` : `<span class="tag s">已配</span>`;
+
+  $('cbody').innerHTML =
+    `<div class="stat">
+       <span class="s b">自动 <b>${st.auto}</b></span><span class="s s">人工 <b>${st.man}</b></span>
+       <span class="s i">计算 <b>${st.calc}</b></span><span class="s d">未配 <b>${st.nosrc}</b></span>
+       <span class="s w">孤儿 <b>${st.orph}</b></span>
+     </div>
+     <div class="filters">
+       <span class="f ${fl==='all'?'on':''}" data-f="all">全部 ${A.length}</span>
+       <span class="f ${fl==='nosrc'?'on':''}" data-f="nosrc">未配来源 ${st.nosrc}</span>
+       <span class="f ${fl==='req'?'on':''}" data-f="req">必填 ${A.filter(a=>a.required).length}</span>
+       <span class="f ${fl==='orph'?'on':''}" data-f="orph">孤儿 ${st.orph}</span>
+     </div>
+     ${list.length ? list.map(a => `
+       <div class="ac ${a.state==='orphan'?'orphan':''}${a.state==='nosrc'?' nosrc':''}">
+         <div class="ac-hd"><span class="ref" title="${esc(a.ref)}">${esc(a.ref)}</span>
+           <span class="sp"></span>${badge(a)}</div>
+         <div class="ac-meta"><span class="m"><b>类型</b> ${esc(a.type)}</span>
+           <span class="m"><b>位置</b> ${esc(a.pos)}</span><span class="m"><b>字段</b> ${esc(a.field)}</span></div>
+         <div class="ac-src"><span class="k">来源</span>${esc(a.src)}</div>
+         <div class="ac-op">
+           <button class="btn sm" data-cfg="${esc(a.ref)}">配置规则</button>
+           <span class="sp"></span>
+           <span class="sw ${a.required?'on':''}" data-req="${esc(a.ref)}" title="拨动即改（记得保存）">
+             <span class="track"><span class="knob"></span></span>必填</span>
+         </div>
+       </div>`).join('') : `<div class="ph-box">该筛选下没有锚点</div>`}
+     <div class="row" style="justify-content:flex-end;margin-top:12px">
+       <button class="btn sm" id="btnRescan">重新扫描</button>
+     </div>`;
+
+  $('cbody').querySelectorAll('[data-f]').forEach(el => { el.onclick = () => { state.anchorFilter = el.dataset.f; render(); }; });
+  $('cbody').querySelectorAll('[data-cfg]').forEach(el => {
+    el.onclick = () => {
+      const a = f.anchors.find(x => x.ref === el.dataset.cfg);
+      openDrawer(a ? a.ref : '');
+      // 配置完成 ⇒ 视为已配来源
+      if (a && a.state === 'nosrc') { a.state = 'ok'; a.src = '全局参数 ENT_NAME → 落空留空'; f.dirty = true; }
+    };
+  });
+  $('cbody').querySelectorAll('[data-req]').forEach(el => {
+    el.onclick = () => {
+      const a = f.anchors.find(x => x.ref === el.dataset.req);
+      if (!a) return;
+      a.required = !a.required; f.dirty = true;
+      toast(`「${a.ref}」已设为${a.required?'必填':'非必填'}（记得保存）`);
+      render();
+    };
+  });
+  const rs = $('btnRescan'); if (rs) rs.onclick = () => { f.dirty = true; toast('已重新扫描：命中 5 个锚点（记得保存）'); };
+}
+
+/* ══════════════════════════════════════════════════════════════
+   全文规则（★ V4 重构 → ★ V6 改上下结构）
+   ──────────────────────────────────────────────────────────────
+   定位扩展：即使**没有任何 AI 填入项**，也能在这里阐述
+     ① 这份文档怎么筛选企业的材料
+     ② 哪些单元格 / 哪一段怎么写
+   ★ V6 布局：**上 = 素材区**（锚点 / 企业参数 / 填写方法，各占一行）
+              **下 = 提示词编辑区**（占满剩余高度）
+     ⛔ 不再左右分栏 —— 第 3 栏只有 610px，左右各半后两边都不够用。
+   编辑方式：点上方素材 ⇒ 插入到光标处 ⇒ 拼出完整填写方法。
+   ⛔ 插入的是**引擎原文 token**（{{ENT_NAME}}），填充引擎零改动即可识别。
+   ══════════════════════════════════════════════════════════════ */
+
+/** 三组可插入素材（书签） —— ① 锚点 ② 企业参数 ③ 填写方法 */
+function promptBookmarks() {
+  const f = state.file;
+  return [
+    { key:'anchor', icon:'⚓', title:'锚点', hint:'本模板扫出的全部锚点',
+      items: f.anchors.map(a => ({ label:a.ref, ins:a.ref, note:`${a.type} · ${a.pos}` })) },
+    { key:'param', icon:'▤', title:'企业参数', hint:'全局参数 + 企业资料字段',
+      items: [
+        { label:'企业名称',         ins:'{{ENT_NAME}}',   note:'全局参数 · 必填' },
+        { label:'统一社会信用代码', ins:'{{ENT_USCC}}',   note:'全局参数 · 必填' },
+        { label:'法定代表人',       ins:'{{ENT_LEGAL}}',  note:'全局参数' },
+        { label:'认证标准号',       ins:'{{STD_NO}}',     note:'标准域参数' },
+        { label:'审核日期',         ins:'{{AUDIT_DATE}}', note:'任务级参数' },
+        { label:'企业·名称',        ins:'{{enterprise.Name}}',    note:'企业资料字段' },
+        { label:'企业·地址',        ins:'{{enterprise.Address}}', note:'企业资料字段' },
+      ] },
+    { key:'method', icon:'✎', title:'填写方法', hint:'写法约定片段（点一下插入）',
+      items: [
+        { label:'日期格式', ins:'日期一律用 YYYY-MM-DD（如 2026-03-11）。', note:'片段' },
+        { label:'金额单位', ins:'金额统一为人民币元，保留 2 位小数。',      note:'片段' },
+        { label:'序号规则', ins:'序号从 1 起连续编号，⛔ 不留空行。',       note:'片段' },
+        { label:'签字要求', ins:'需签字处须手写签名并加盖部门章。',         note:'片段' },
+        { label:'不留空',   ins:'所有单元格不得留空，不适用填「/」。',      note:'片段' },
+        { label:'筛选口径', ins:'本格只收企业自有的、覆盖全部过程的记录；\n不具备的可提交说明函。', note:'片段' },
+      ] },
+  ];
+}
+
+/** 光标处插入（⛔ 不整页重渲染 —— 否则会丢焦点 / 丢点击） */
+function insertAtCursor(ta, text) {
+  const s = ta.selectionStart ?? ta.value.length;
+  const e = ta.selectionEnd ?? s;
+  ta.value = ta.value.slice(0, s) + text + ta.value.slice(e);
+  const pos = s + text.length;
+  ta.setSelectionRange(pos, pos);
+  ta.focus();
+}
+
+function pagePrompt() {
+  const f = state.file;
+  const isFixed = f.type === 'fixed';
+  const groups = promptBookmarks();
+
+  $('cbody').innerHTML =
+    `<div class="pmpage">
+       <div class="blk">
+         <div class="blk-hd">全文填写规则
+           <span class="sub">${isFixed ? '上传要求' : '整篇生成口径'}</span></div>
+         <div class="blk-bd">
+           <div class="row" style="margin-bottom:9px">
+             <span class="tag ${f.promptBound?'s':'w'}">${f.promptBound?'已挂接':'尚未挂接'}</span>
+             <span class="sp"></span>
+             <button class="btn sm">新建</button>
+             <button class="btn sm gh">挂接已有</button>
+             <button class="btn sm ${f.promptBound?'':'pri'}" id="btnBind">${f.promptBound?'解绑':'模拟挂接'}</button>
+           </div>
+           <div class="pm-mats">
+             ${groups.map(g => `
+               <div class="pmrow">
+                 <span class="pmg"><i>${g.icon}</i>${esc(g.title)}<span class="cnt">${g.items.length}</span></span>
+                 <span class="pmb">
+                   ${g.items.length
+                     ? g.items.map(it => `<button class="pmchip${g.key==='method'?' m':''}" data-ins="${esc(it.ins)}"
+                           title="${esc(it.label)}：${esc(it.ins)}">${esc(it.label)}</button>`).join('')
+                     : `<span class="tiny muted">${g.key === 'anchor' ? '该模板还没有扫到锚点' : '（空）'}</span>`}
+                 </span>
+               </div>`).join('')}
+           </div>
+         </div>
+       </div>
+       <div class="pm-ed">
+         <textarea id="pmText" placeholder="点上方素材插入引用，再组织成一份完整的填写方法…">${esc(f.promptText || '')}</textarea>
+         <div class="pm-ref" id="pmRef"></div>
+       </div>
+     </div>`;
+
+  const b = $('btnBind');
+  if (b) b.onclick = () => {
+    f.promptBound = !f.promptBound; f.dirty = true;
+    toast(f.promptBound ? '已挂接（记得保存）' : '已解绑（记得保存）');
+    render();
+  };
+
+  // ★ 书签 ⇒ 光标处插入（只局部刷新，⛔ 不整页重渲染）
+  const ta = $('pmText');
+  $('cbody').querySelectorAll('[data-ins]').forEach(el => {
+    el.onclick = () => {
+      if (!ta) return;
+      insertAtCursor(ta, el.dataset.ins);
+      f.promptText = ta.value; f.dirty = true;
+      refreshPromptRefs(); refreshDirtyUI();
+    };
+  });
+  if (ta) ta.oninput = () => {
+    f.promptText = ta.value; f.dirty = true;
+    refreshPromptRefs(); refreshDirtyUI();
+  };
+  refreshPromptRefs();
+}
+
+/** 「已引用」清单：扫出编辑区里的 {{token}}，标注引擎能否识别 */
+function refreshPromptRefs() {
+  const ta = $('pmText'), box = $('pmRef');
+  if (!ta || !box) return;
+  const found = [...new Set(ta.value.match(/\{\{[^{}]{1,60}\}\}/g) || [])];
+  const known = new Set();
+  promptBookmarks().forEach(g => g.items.forEach(it => {
+    if (it.ins.startsWith('{{')) known.add(it.ins);
+  }));
+  box.innerHTML = found.length
+    ? `<span class="refhd">已引用 ${found.length} 个：</span>` + found.map(t =>
+        `<span class="refchip ${known.has(t) ? '' : 'unk'}"
+           title="${known.has(t) ? '可识别' : '⚠️ 未知 token —— 引擎取不到值会留空'}">${esc(t)}</span>`).join('')
+    : `<span class="tiny muted">还没有引用任何锚点 / 参数 —— 点左侧书签插入</span>`;
+}
+
+/* ── 测试验证 ───────────────────────────────────────── */
+function pageVerify() {
+  const f = state.file;
+  const isFixed = f.type === 'fixed';
+
+  if (isFixed) {
+    const tagsOk = f.tags.length > 0, purpOk = !!f.purpose.trim(), hintOk = !!f.fillHint.trim();
+    const okF = tagsOk && purpOk && f.typeConfirmed;
+    $('cbody').innerHTML =
+      `<div class="vr ${tagsOk?'g':'r'}"><span class="vi">${tagsOk?'✓':'✕'}</span><div class="vsp">分类标签${tagsOk?`已填（${f.tags.length} 个）`:'为空 —— 无法匹配企业上传的同类文件'}</div></div>
+       <div class="vr ${purpOk?'g':'r'}"><span class="vi">${purpOk?'✓':'✕'}</span><div class="vsp">文档作用${purpOk?'已填':'为空'}</div></div>
+       <div class="vr ${hintOk?'g':'y'}"><span class="vi">${hintOk?'✓':'!'}</span><div class="vsp">填写规则与说明${hintOk?'已填':'为空（不阻断）'}</div></div>
+       <div class="vr y"><span class="vi">!</span><div class="vsp">指纹规则未配置<span class="muted">　未实现，不阻断</span></div></div>
+       <div class="row" style="justify-content:flex-end;margin-top:14px">
+         <button class="btn ${okF?'suc':''}" id="btnPub" ${okF?'':'disabled'}
+           title="${okF?'校验通过':'标签 / 作用为空，或类型尚未确认'}">发布</button>
+       </div>`;
+    const b = $('btnPub'); if (b) b.onclick = () => toast('已发布');
+    return;
+  }
+
+  const nosrc = f.anchors.filter(a=>a.state==='nosrc').length;
+  const orph  = f.anchors.filter(a=>a.state==='orphan').length;
+  const ok = canPublish();
+
+  $('cbody').innerHTML =
+    (f.anchors.length === 0
+      ? `<div class="vr y"><span class="vi">!</span><div class="vsp">还没有锚点</div></div>`
+      : nosrc
+        ? `<div class="vr r"><span class="vi">✕</span><div class="vsp"><b>${nosrc} 个锚点未配来源</b>　阻断发布
+             <div class="tiny" style="margin-top:3px">处理：去「锚点设置」筛选「未配来源」逐个配置。</div></div></div>`
+        : `<div class="vr g"><span class="vi">✓</span><div class="vsp">全部锚点已配来源</div></div>`)
+    + (orph ? `<div class="vr y"><span class="vi">!</span><div class="vsp">${orph} 个孤儿锚点（换版后消失）　不阻断</div></div>` : ``)
+    + `<div class="vr g"><span class="vi">✓</span><div class="vsp">模板已扫描：${f.anchors.length} 个锚点</div></div>`
+    + `<div class="blk" style="margin-top:14px">
+         <div class="blk-hd">发布前检查</div>
+         <div class="blk-bd tight">
+           <div class="row"><span class="tag ${f.analyzeStatus==='completed'?'s':'w'}">${f.analyzeStatus==='completed'?'通过':'待办'}</span><span class="tiny">AI 语义分析</span></div>
+           <div class="row" style="margin-top:8px"><span class="tag ${f.typeConfirmed?'s':'w'}">${f.typeConfirmed?'通过':'待办'}</span><span class="tiny">文档类型已确认</span></div>
+           <div class="row" style="margin-top:8px"><span class="tag ${nosrc?'d':f.anchors.length?'s':'w'}">${nosrc?'红牌':f.anchors.length?'通过':'待办'}</span><span class="tiny">锚点来源完整性</span></div>
+           <div class="row" style="margin-top:8px"><span class="tag ${f.promptBound?'s':'w'}">${f.promptBound?'通过':'未挂接'}</span><span class="tiny">全文填写提示词</span></div>
+         </div>
+       </div>
+       <div class="row" style="justify-content:flex-end;margin-top:14px">
+         <button class="btn ${ok?'suc':''}" id="btnPub2" ${ok?'':'disabled'}
+           title="${ok?'校验通过':'存在红牌或未扫描，无法发布'}">发布模板</button>
+       </div>`;
+  const b = $('btnPub2'); if (b) b.onclick = () => toast('模板已发布');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   第 3 栏 · 底部固定保存条
+   ══════════════════════════════════════════════════════════════ */
+function renderSaveBar() {
+  const f = state.file;
+  const miss = missingItems(f);
+  const need = requiredCount(f);
+  const doneN = Math.max(0, need - miss.length);
+  const pct = Math.round(100 * doneN / need);
+  const adv = advisoryItems(f);
+  const st = STATE_META[docState(f)];
+
+  $('savebar').innerHTML =
+    `<span class="tag ${st.tone}">${st.text}</span>` +
+    `<span class="prog">
+       <span class="bar"><i class="${miss.length===0?'done':''}" style="width:${pct}%"></i></span>
+       <span>${doneN}/${need}</span>
+       ${miss.length ? `<span class="miss" title="${esc(miss.join('、'))}">缺：${esc(miss.join('、'))}</span>`
+                     : `<span style="color:var(--suc)">必需项已全部完成</span>`}
+     </span>` +
+    (adv.length ? `<span class="tag w" title="${esc(adv.join('、'))}">建议 ${adv.length} 项</span>` : ``) +
+    `<span class="sp"></span>` +
+    (f.dirty ? `<span class="dirtyTag"><span class="dot"></span>未保存</span>` : ``) +
+    `<button class="btn ${f.dirty?'pri':''}" id="btnSave" title="随时可保存 —— 保存不等于「已完成设置」">保存</button>`;
+
+  const b = $('btnSave');
+  if (b) b.onclick = () => doSave(false);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   渲染
+   ══════════════════════════════════════════════════════════════ */
+function render() {
+  renderTopbar();
+  renderFbar();
+  renderTree();
+  renderPreview();
+  renderFnav();
+  closeHelp();          // ★ V5：任何整页重渲染都收起说明浮层（⛔ 不打断用户操作）
+  renderCbody();
+  renderSaveBar();
+}
+
+/* 初始化 */
+state.file = FILES[0];
+renderHelp();           // ★ V5：浮层内容只渲染一次（⛔ 不被 render 重置打开状态）
+render();
+
+/* ★ V5：说明浮层开关（点 ! 展开 / 再点收起；切换功能或文档时自动收起） */
+$('btnHelp').onclick = () => {
+  const e = $('help'), b = $('btnHelp');
+  const on = e.className.includes('on');
+  e.className = 'help' + (on ? '' : ' on');
+  b.className = 'helpbtn' + (on ? '' : ' on');
+};
+
+/* ★ V4：菜单形态三选一（九宫格 / 横向 / 纵向）—— 供裁决 D6 */
+function setMenuForm(m) {
+  state.menuForm = m;
+  ['mg','mh','mv'].forEach(id => {
+    const el = $(id);
+    if (el) el.className = (id === 'm' + m) ? 'on' : '';
+  });
+  renderFnav();
+}
+$('mg').onclick = () => setMenuForm('g');
+$('mh').onclick = () => setMenuForm('h');
+$('mv').onclick = () => setMenuForm('v');
+$('noteToggle').onclick = function () {
+  const b = $('noteBody');
+  const on = b.className.includes('on');
+  b.className = 'note-body' + (on ? '' : ' on');
+  this.textContent = on ? '展开设计说明 ▾' : '收起 ▴';
+};
+$('mask').onclick = () => { closeDrawer(); closeDlg(); };
+</script>
+</body>
+</html>

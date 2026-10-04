@@ -4,6 +4,7 @@ using CertPlatform.Admin.Services.StandardDirectory;
 using CertPlatform.Admin.Services.Audit;
 using CertPlatform.Admin.Services.Workflow;
 using CertPlatform.Admin.Services.Workflow.Skills;
+using CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai;
 using CertPlatform.Shared.DocExtraction;
 using YZH.Core.Api.Services;
 using YZH.Core.DataBase.Interfaces;
@@ -38,11 +39,13 @@ public static class CertPlatformAdminServiceExtensions
         //   ⛔ 守卫（NodeExecutor）与缺口生成（GapDetector）都必须走它，禁止各拼 WHERE。
         services.AddScoped<CertPlatform.Admin.Services.DocExtraction.ExtractionDataResolver>();
 
-        // ──── OCR 能力缝（★ 将来接入 OCR/视觉模型时，**只改这一行**） ────
-        // 当前 DefaultOcrProvider 声明"不具备能力"：图片/扫描件不自动提取，
-        // 由用户手工定义字段与表格、人工填写。接入时替换为具体实现即可，
-        // 转换链 / 提取链 / 前端零改动。详见 IOcrProvider 的 XML 注释。
-        services.AddSingleton<IOcrProvider, DefaultOcrProvider>();
+        // ──── 视觉识别（2026-10-03 从空壳换成真实现）────
+        // 图片/扫描件交给视觉模型出 Markdown。★ 判定顺序在 FileConvertCore：
+        //   anydoc 能解的直接解（**零 AI 成本**），只有 NeedsOcr（退出码 3 = 无文本层）才落到这里。
+        //   ⛔ Provider 必须在 Admin 层 —— 读系统参数 ai_vision_config 需要 IDbOrm，
+        //      而 CertPlatform.Shared 不引用 YZH.Core.DataBase（分层约束）。
+        //   配置缺失 / 模型不是视觉模型时，VisionOcrProvider 自行返回 NotAvailable（如实报不支持），不抛异常。
+        services.AddSingleton<IOcrProvider, VisionOcrProvider>();
 
         // ──── Prompt 模板管理 ────
         services.AddScoped<PromptTemplateService>();
@@ -59,6 +62,13 @@ public static class CertPlatformAdminServiceExtensions
         services.AddScoped<ISkillRegistry>(sp => sp.GetRequiredService<CertSkillRegistry>());
         services.AddScoped<LlmExtractSkill>();
         services.AddScoped<ISkillNode>(sp => sp.GetRequiredService<LlmExtractSkill>());
+
+        // ★ 2026-10-04 AI 填充数据来源（src_semantic / src_ai_field / src_ai_table）的公共件。
+        //   AiFillInvoker 是 LlmInvokeService（上面已注册为单例）的薄封装 —— 它自己**不持** IDbOrm
+        //   （db 由调用方每次传入），故与 LlmInvokeService 同为单例。
+        //   SkillExecutor 通过 [FromService] 从 scope 的 provider 解析它。
+        services.AddSingleton<IAiFillInvoker, AiFillInvoker>();
+
         services.AddScoped<AiNodeExecutor>();
         services.AddScoped<NodeExecutor>();
         services.AddScoped<WorkflowInterpreter>();

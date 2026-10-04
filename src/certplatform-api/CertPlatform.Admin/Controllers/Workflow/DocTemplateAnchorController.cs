@@ -353,9 +353,27 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
         var errors = violations.Count(v => v.Level == "error");
         var warnings = violations.Count(v => v.Level == "warning");
 
+        var canPublish = errors == 0 && tpl.PartCount > 0;
+
+        // ★ 阻断原因的唯一口径：前端按钮的禁用提示直接读它，⛔ 不复算
+        //   （「0 红牌却仍不能发布」的真实原因是「还没有锚点」，必须说清楚，
+        //    否则界面会显示「全部通过」而发布按钮又不可用 —— 自相矛盾）
+        string? blockReason = errors > 0
+            ? $"存在 {errors} 个红牌问题，不能发布"
+            : tpl.PartCount == 0
+                ? "该模板还没有锚点，请先「重新扫描」"
+                : null;
+
         tpl.ViolationJson = violations.Count == 0 ? null : JsonSerializer.Serialize(violations);
         // 无红牌 + 有锚点 ⇒ ready（可发布）；否则退回 scanned
-        tpl.PublishStatus = errors == 0 && tpl.PartCount > 0 ? "ready" : "scanned";
+        // ★ 但**不降级 `published`** —— 校验是只读动作，不该把已发布的模板打回 ready
+        //   （实测踩过：发布后点一次「校验」，状态徽标从「已发布」掉回「可发布」）。
+        //   仅当出现红牌时才退回 scanned（此时模板确实不可再用）。
+        tpl.PublishStatus = errors > 0
+            ? "scanned"
+            : tpl.PublishStatus == "published"
+                ? "published"
+                : canPublish ? "ready" : "scanned";
         await _db.UpdateAsync(tpl,
             nameof(DocTemplate.ViolationJson), nameof(DocTemplate.PublishStatus));
 
@@ -365,8 +383,10 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
             ErrorCount = errors,
             WarningCount = warnings,
             Violations = violations,
+            AnchorCount = tpl.PartCount,
             PublishStatus = tpl.PublishStatus,
-            CanPublish = errors == 0 && tpl.PartCount > 0,
+            CanPublish = canPublish,
+            BlockReason = blockReason,
         }, errors == 0 ? "校验通过" : $"发现 {errors} 个红牌问题，不能发布"));
     }
 
@@ -501,8 +521,23 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
 
             tx.Commit();
 
-            _logger.LogInformation("[DocTemplateAnchor] save-batch：模板 {Tpl} → 新增 {Ins} / 更新 {Upd}",
-                req.TemplateCode, inserted, updated);
+            // ★ 重算 PartCount（锚点部件数）。
+            //   为什么必须做：`PartCount` 既是「发布前置」（`CanPublish = 无红牌 && PartCount > 0`）
+            //   又是左树徽标的依据，但**只有扫描器写它**。一旦锚点经本端点落库（扫描尚未跑过），
+            //   就会出现「锚点表有 N 行、PartCount=0 ⇒ 校验说『还没有锚点』⇒ 永远发不出去」的死角。
+            //   放在 Commit 之后：避免依赖「事务内能否读到未提交行」这一未定行为。
+            var liveAnchors = await _db.Client.Queryable<DocTemplateAnchor>()
+                .Where(a => a.TemplateCode == req.TemplateCode && a.IsDeleted == false && a.IsValid == 1)
+                .CountAsync();
+            var tplRow = (await _db.GetOneAsync<DocTemplate>(t => t.Code == req.TemplateCode)).Data;
+            if (tplRow != null && tplRow.PartCount != liveAnchors)
+            {
+                tplRow.PartCount = liveAnchors;
+                await _db.UpdateAsync(tplRow, nameof(DocTemplate.PartCount));
+            }
+
+            _logger.LogInformation("[DocTemplateAnchor] save-batch：模板 {Tpl} → 新增 {Ins} / 更新 {Upd} / 锚点总数 {N}",
+                req.TemplateCode, inserted, updated, liveAnchors);
 
             return Ok(ApiResponse<object>.Ok(new
             {
@@ -510,6 +545,7 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
                 Inserted = inserted,
                 Updated = updated,
                 Total = req.Items.Count,
+                AnchorCount = liveAnchors,
             }));
         }
         catch (Exception ex)

@@ -32,6 +32,7 @@
           :lazy="treeLazy"
           :load-data="treeLoadData"
           :default-expand-all="treeDefaultExpandAll"
+          :default-expanded-keys="treeDefaultExpandedKeys"
           :node-actions="nodeActions"
           :legacy-node-actions="legacyNodeActions"
           :get-action-label="getActionLabel"
@@ -102,6 +103,12 @@ interface Props {
   treeLoadData?: (node: any, resolve: (data: YzhTreeNode[]) => void) => void
   /** 树默认展开 */
   treeDefaultExpandAll?: boolean
+  /**
+   * 树默认展开的节点 key（`nodeKey` 的值）。
+   * <para>层级深的树（机构→标准→阶段→文件夹→文件）用它只展开前两级，
+   * 避免 `treeDefaultExpandAll` 一次铺开上百个节点。</para>
+   */
+  treeDefaultExpandedKeys?: (string | number)[]
   /** 节点操作按钮：YzhAction[] 或 (node) => YzhAction[] */
   nodeActions?: YzhAction[] | ((node: YzhTreeNode) => YzhAction[])
   /** 兼容旧属性：{ 方法名: 显示文字 } */
@@ -124,6 +131,7 @@ const props = withDefaults(defineProps<Props>(), {
   treeCheckStrictly: false,
   treeLazy: false,
   treeDefaultExpandAll: false,
+  treeDefaultExpandedKeys: () => [],
   nodeActions: () => [],
   legacyNodeActions: () => ({}),
   getActionLabel: undefined
