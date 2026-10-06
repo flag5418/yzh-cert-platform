@@ -701,7 +701,7 @@ function runR19() {
  *
  * 豁免是「实现体」不是「法外之地」：
  *   - S06 豁免 confirm.ts / useConfirm.ts（confirmOrFalse 的实现体）
- *   - S07 豁免 YzhDialog.vue / YzhFormDialog.vue（它们自身必须包 el-dialog）
+ *   - S07 豁免 YzhDialog.vue / YzhDrawer.vue / YzhFormDialog.vue（它们自身必须包 el-dialog / el-drawer）
  * ========================================================================== */
 
 /** 法条基线文件（相对 WEB） */
@@ -712,6 +712,7 @@ const CLAUSE_EXEMPT = {
   S06: ['yzh.vue.core/src/utils/confirm.ts', 'yzh.vue.core/src/composables/useConfirm.ts'],
   S07: [
     'yzh.vue.core/src/components/layout/YzhDialog.vue',
+    'yzh.vue.core/src/components/layout/YzhDrawer.vue',
     'yzh.vue.core/src/components/form/YzhFormDialog.vue',
   ],
 }
@@ -762,7 +763,14 @@ const CLAUSE_CHECKS = {
   },
   // S08 状态标签
   S08(text) {
-    return (text.match(/<el-tag(?![\w-])/g) || []).length
+    // 法条范围是「状态 / 启用 / 结果」徽标；⛔ 不含**用户可维护的标签集合**
+    // （`closable` 的可删 chip —— 那是标签编辑器控件，不是状态展示）。
+    // 判据：带 `closable` 且**没有**任何 type 绑定（写死 type="info" 也算状态色）的排除。
+    const tags = text.match(/<el-tag(?![\w-])[\s\S]*?>/g) || []
+    return tags.filter((t) => {
+      if (!/\bclosable\b/.test(t)) return true
+      return /(?:^|[\s"'])(?::|v-bind:)?type\s*=/.test(t)
+    }).length
   },
   // S09 .bi 字体图标
   S09(text) {

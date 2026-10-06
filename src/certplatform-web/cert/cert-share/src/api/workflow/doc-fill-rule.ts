@@ -129,6 +129,8 @@ export interface DocFillPromptVersion {
   Version: number
   IsDefault: boolean
   Status: string
+  SystemPrompt?: string
+  UserTemplate?: string
   Sort?: number
   IsValid: number
   IsDeleted?: boolean
@@ -159,9 +161,9 @@ export function registerDocTemplate(payload: RegisterTemplatePayload) {
 
 /** 模板三级树：机构 → 「标准 · 阶段」→ 模板 */
 export function getDocTemplateTree() {
-  return yzhApi.get<ApiResponse<{ Nodes: DocTemplateTreeNode[]; Total: number }>>(
-    `${BASE}/DocTemplate/tree`,
-  )
+  return yzhApi.get<
+    ApiResponse<{ Nodes: DocTemplateTreeNode[]; Total: number }>
+  >(`${BASE}/DocTemplate/tree`)
 }
 
 /**
@@ -182,7 +184,11 @@ export function getDocTemplateTree() {
  */
 export function getDirectoryTree() {
   return yzhApi.get<
-    ApiResponse<{ Nodes: DocTemplateTreeNode[]; Total: number; WithTemplate: number }>
+    ApiResponse<{
+      Nodes: DocTemplateTreeNode[]
+      Total: number
+      WithTemplate: number
+    }>
   >(`${BASE}/DocTemplate/directory-tree`)
 }
 
@@ -192,10 +198,14 @@ export function getDirectoryTree() {
  * ⚠️ `orgCode` 传空串 = 全局作用域；后端按「机构非空优先」选取。
  */
 export function getDocFillPromptVersions(promptCode: string, orgCode = '') {
-  return yzhApi.get<ApiResponse<{ PromptCode: string; OrgCode: string; Total: number; Items: DocFillPromptVersion[] }>>(
-    `${BASE}/DocFillPrompt/versions`,
-    { promptCode, orgCode },
-  )
+  return yzhApi.get<
+    ApiResponse<{
+      PromptCode: string
+      OrgCode: string
+      Total: number
+      Items: DocFillPromptVersion[]
+    }>
+  >(`${BASE}/DocFillPrompt/versions`, { promptCode, orgCode })
 }
 
 /**
@@ -206,7 +216,14 @@ export function getDocFillPromptVersions(promptCode: string, orgCode = '') {
  * 避免实施人员看到 3 个版本却不知道运行期会用哪一个。
  */
 export function resolveDocFillPrompt(promptCode: string, orgCode = '') {
-  return yzhApi.get<ApiResponse<any>>(`${BASE}/DocFillPrompt/resolve`, { promptCode, orgCode })
+  return yzhApi.get<ApiResponse<any>>(`${BASE}/DocFillPrompt/resolve`, {
+    promptCode,
+    orgCode,
+  })
+}
+
+export function updateDocFillPrompt(version: DocFillPromptVersion) {
+  return yzhApi.post<ApiResponse<any>>(`${BASE}/DocFillPrompt/update`, version)
 }
 
 /**
@@ -284,10 +301,16 @@ export function addDocFillPrompt(payload: {
  * `promptCode` 传空串 = 解绑。
  */
 export function setDocTemplatePrompt(templateCode: string, promptCode: string) {
-  return yzhApi.post<ApiResponse<{ TemplateCode: string; FillPromptCode?: string; Bound: boolean }>>(
-    `${BASE}/DocTemplate/set-prompt`,
-    { TemplateCode: templateCode, PromptCode: promptCode },
-  )
+  return yzhApi.post<
+    ApiResponse<{
+      TemplateCode: string
+      FillPromptCode?: string
+      Bound: boolean
+    }>
+  >(`${BASE}/DocTemplate/set-prompt`, {
+    TemplateCode: templateCode,
+    PromptCode: promptCode,
+  })
 }
 
 // ====================================================================
@@ -322,6 +345,16 @@ export interface DocContractDetail {
   /** 标签数组 JSON 字符串 */
   TagsJson?: string
   InfoItemsJson?: string
+  /**
+   * ★ `fixed` 文档专用：**可替换性**（人工判断，49-V3 §2.2 已裁 D-AA1，⛔ 程序不推导）。
+   *
+   * - `standard_provided` = 标准自带（不向企业索取）
+   * - `enterprise_provided` = 企业提供（必须给匹配依据）
+   *
+   * ⚠️ 非 `fixed` 行忽略此列（后端不写）。默认值 `enterprise_provided`。
+   * ⛔ DDL 注释里曾写 `platform_generated` —— **那是错的**，别照着抄。
+   */
+  FixedDocSubtype?: string
   /** `fixed` 文档专用：指纹规则集 JSON */
   FingerprintJson?: string
 
@@ -356,6 +389,8 @@ export interface DocContractSavePayload {
   DocPurpose?: string | null
   TagsJson?: string | null
   InfoItemsJson?: string | null
+  /** ★ 仅 `fixed` 文档用：`standard_provided` / `enterprise_provided` */
+  FixedDocSubtype?: string | null
   FingerprintJson?: string | null
 }
 
@@ -369,36 +404,58 @@ export interface DocContractSavePayload {
  * ★ 覆盖语义：同一 `standardFileCode` 重新上传 = **换版**。模板行沿用同 `Code`，
  * 但 `PublishStatus` 重置为 `draft`、`ScanStatus` 重置为 `pending` ⇒ 必须重扫重校验。
  */
-export function uploadDocTemplate(file: File, standardFileCode: string, remark?: string) {
+export function uploadDocTemplate(
+  file: File,
+  standardFileCode: string,
+  remark?: string,
+) {
   const fd = new FormData()
   fd.append('File', file)
   fd.append('StandardFileCode', standardFileCode)
   if (remark) fd.append('Remark', remark)
-  return yzhApi.post<ApiResponse<any>>(`${BASE}/DocTemplate/upload-template`, fd)
+  return yzhApi.post<ApiResponse<any>>(
+    `${BASE}/DocTemplate/upload-template`,
+    fd,
+  )
 }
 
 /** 读文档契约（不存在返回空壳，不报错） */
 export function getDocContract(fileCode: string) {
-  return yzhApi.get<ApiResponse<DocContractDetail>>(`${BASE}/StandardDocContract/detail`, { fileCode })
+  return yzhApi.get<ApiResponse<DocContractDetail>>(
+    `${BASE}/StandardDocContract/detail`,
+    { fileCode },
+  )
 }
 
 /** 保存文档契约（人工编辑 ⇒ 标记 `manual`，后端同批同步标准目录行的 `DocCategory`） */
 export function saveDocContract(payload: DocContractSavePayload) {
-  return yzhApi.post<ApiResponse<any>>(`${BASE}/StandardDocContract/save`, payload)
+  return yzhApi.post<ApiResponse<any>>(
+    `${BASE}/StandardDocContract/save`,
+    payload,
+  )
 }
 
 /**
  * 「自动分析」（用户要求：每个文件一个分析按钮）。
  *
- * 一次调用聚合：
- *   - **C 字段提取**（LLM，已实现）
- *   - **A 锚点扫描**（零 LLM，但**需要空白模板** ⇒ 未上传时返回 `Scan.Status='blocked'`）
- *   - **B 语义分析**（分类/作用/标签）本轮**未接** ⇒ `Semantic.Status='not_wired'`
+ * 一次调用聚合三项，**互相独立、互不阻断**（任一项失败只影响它自己的 `Status` 段）：
+ *   - **C 字段提取**（LLM）⇒ `Field.Status` ∈ `ok` / `empty` / `failed`
+ *   - **B 语义分析**（LLM 两跳 `doc_group` + `doc_content`，结论落契约表）
+ *     ⇒ `Semantic.Status` ∈ `completed` / `partial` / `blocked` / `skipped` / `failed`
+ *   - **A 锚点扫描**（零 LLM，但**需要空白模板** ⇒ 未上传时 `Scan.Status='blocked'`）
+ *
+ * ⚠️ **B 会真调 LLM 两次，约 15~25 秒** ⇒ 本请求超时必须 ≥120s，否则前端先超时而后端仍在跑。
+ * ⚠️ `Semantic.SuggestedCategory` 只是 **AI 建议**，⛔ 未落库 —— 需人工在 Tab3 确认后走
+ * `saveDocContract`（后端才同批写契约行 + 标准目录行的 `DocCategory`）。
  */
 export function analyzeDocForFill(fileCode: string) {
-  return yzhApi.post<ApiResponse<any>>(`${BASE}/StandardDocContract/analyze`, null, {
-    params: { fileCode },
-  })
+  return yzhApi.post<ApiResponse<any>>(
+    `${BASE}/StandardDocContract/analyze`,
+    null,
+    {
+      params: { fileCode },
+    },
+  )
 }
 
 /**
@@ -415,16 +472,24 @@ export function scanTemplateAnchors(templateCode: string, force = false) {
 
 /** 校验（三色）：返回 `ErrorCount` / `WarningCount` / `Violations` / `CanPublish` */
 export function validateTemplate(templateCode: string) {
-  return yzhApi.post<ApiResponse<any>>(`${BASE}/DocTemplateAnchor/validate`, null, {
-    params: { templateCode },
-  })
+  return yzhApi.post<ApiResponse<any>>(
+    `${BASE}/DocTemplateAnchor/validate`,
+    null,
+    {
+      params: { templateCode },
+    },
+  )
 }
 
 /** 发布（硬前置：无红牌 + 有锚点；后端会重新校验一遍，⛔ 不信缓存） */
 export function publishTemplate(templateCode: string) {
-  return yzhApi.post<ApiResponse<any>>(`${BASE}/DocTemplateAnchor/publish`, null, {
-    params: { templateCode },
-  })
+  return yzhApi.post<ApiResponse<any>>(
+    `${BASE}/DocTemplateAnchor/publish`,
+    null,
+    {
+      params: { templateCode },
+    },
+  )
 }
 
 /**
@@ -443,6 +508,50 @@ export function saveAnchorBatch(templateCode: string, items: any[]) {
     TemplateCode: templateCode,
     Items: items,
   })
+}
+
+/** `POST /DocTemplateAnchor/lock` 的返回 */
+export interface LockAnchorResult {
+  TemplateCode: string
+  /** 本次请求的目标状态 */
+  Locked: boolean
+  /** 真正写入成功的条数 */
+  Affected: number
+  /** 本来就已是目标状态、未变更的条数 */
+  Unchanged: number
+  Failed: number
+  /** ★ 操作范围内「操作后」仍处于锁定态的条数（前端据此刷新，⛔ 不自己算） */
+  LockedTotal: number
+  /** ★ 如实推导、⛔ 不阻断：如「锁定后仍不能用于自动填充」 */
+  Warnings: string[]
+}
+
+/**
+ * ★ 锁定 / 解锁锚点（用户第 20 轮第 2 条 + 2026-10-05 口径修订）。
+ *
+ * 【★ 语义】`IsLocked = 1` = 实施人员已认可该锚点的设置规则，**配置就此冻结**：
+ *   后端 `save-batch` / `UpdateCore` 命中锁定行且**配置列有实质变化**时**整批拒绝**，
+ *   `clear` **跳过**锁定行。⇒ 前端在锁定后应把「配置规则」置为只读，⛔ 别让用户白改一遍。
+ *
+ * 【★ 与保存配置正交】本端点**只改 `IsLocked`**；`save-batch` 的列清单里**刻意不含**
+ *   `IsLocked` ⇒ 保存配置**不会**顺手解除锁定。两者是**两个独立动作**，⛔ 不要合并成一次提交。
+ *
+ * 【★ 锁定动作本身不设前置】锁定一个「还没配取值来源」的锚点是**允许**的 ——
+ *   后端只在 `Warnings` 里如实提示。是否配齐由前端（C8 闸）与人工决定。
+ *
+ * @param codes 目标锚点 Code 清单（单行切换传 1 个）；传空数组且 `all=true` 时作用于整个模板
+ * @param locked `true` = 锁定，`false` = 解锁
+ */
+export function lockAnchor(
+  templateCode: string,
+  codes: string[],
+  locked: boolean,
+  all = false,
+) {
+  return yzhApi.post<ApiResponse<LockAnchorResult>>(
+    `${BASE}/DocTemplateAnchor/lock`,
+    { TemplateCode: templateCode, Codes: codes, All: all, Locked: locked },
+  )
 }
 
 /** 全局参数定义（`global` 类来源的下拉候选）。⛔ 只读，仅用于提示可选值 */

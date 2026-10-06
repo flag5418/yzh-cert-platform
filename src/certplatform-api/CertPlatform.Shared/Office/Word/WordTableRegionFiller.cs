@@ -23,7 +23,9 @@ namespace CertPlatform.Shared.Office.Word;
 /// <list type="bullet">
 ///   <item>行不足 ⇒ <b>克隆起始行补齐</b>（深拷贝 <c>CT_Row</c>，保留合并/边框/行高）；</item>
 ///   <item>行多余 ⇒ <b>多余行不删</b>（删行会破坏模板结构）；</item>
-///   <item>列多于模板列 ⇒ <b>丢弃多出的列</b>（⛔ 不建新列 —— 表格结构由模板控制）；</item>
+///   <item>列多于模板列 ⇒ <b>丢弃多出的列</b>（⛔ 不建新列 —— 表格结构由模板控制），
+///         <b>并记入 <see cref="OfficeFillRegionHit.Warnings"/></b>
+///         （2026-10-05 修正：过去是<b>静默</b> <c>break</c>，起始列配错时整批值消失而报告毫无痕迹）；</item>
 ///   <item>单元格样式 ⇒ <b>一律沿用模板</b>（见 <see cref="WordCellWriter"/>）。</item>
 /// </list>
 /// </summary>
@@ -74,10 +76,20 @@ internal static class WordTableRegionFiller
             for (var j = 0; j < data.Count; j++)
             {
                 var col = region.StartCol + j;
-                if (col >= cells.Count) break;   // ⛔ 不建新列：表格结构由模板控制
+                if (col >= cells.Count)
+                {
+                    // ⛔ 不建新列：表格结构由模板控制。
+                    // ★ 但「丢弃」必须被看见（2026-10-05 修正）—— 过去这里是一句静默的 break，
+                    //   起始列/列数配错时整批值凭空消失，而报告里看不出任何异常。
+                    //   这正是「试填验证 ⇒ 让用户发现参数指定错误」要消灭的缺陷。
+                    hit.Warnings.Add(
+                        $"表格[{region.TableTag}] 第 {targetIndex + 1} 行第 {col + 1} 列超出模板列数" +
+                        $"（该行共 {cells.Count} 列）⇒ 该行剩余 {data.Count - j} 个值未写入");
+                    break;
+                }
 
                 // ★ 值为 null ⇒ 写空串（用户规格：「如果没有值则自动将填写内容赋值为空」）
-                WordCellWriter.SetText(cells[col], data[j]?.ToDisplayText());
+                WordCellWriter.Write(cells[col], data[j]);
             }
 
             hit.RowCount++;

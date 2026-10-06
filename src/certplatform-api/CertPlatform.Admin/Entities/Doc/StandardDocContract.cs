@@ -70,6 +70,16 @@ namespace CertPlatform.Admin.Entities.Doc
         [StringLength(20)]
         public string DocCategory { get; set; } = "editable";
 
+        /// <summary>
+        ///     【固定文档 · 可替换性】<c>standard_provided</c> = 标准自带（不向企业索取）/
+        ///     <c>enterprise_provided</c> = 企业提供（要匹配依据）。
+        ///     <para>★ 仅当 <see cref="DocCategory"/> = <c>fixed</c> 时有意义；<b>人工判断，可覆盖</b>（不阻断）。</para>
+        ///     <para>⛔ <b>该列 DDL 早已存在</b>（<c>varchar(20) NOT NULL DEFAULT 'enterprise_provided'</c>），
+        ///     但实体此前未声明 ⇒ ORM 看不见 ⇒ 读写都被静默丢弃。本次补上（缺口 G1）。</para>
+        /// </summary>
+        [StringLength(20)]
+        public string FixedDocSubtype { get; set; } = "enterprise_provided";
+
         /// <summary>required=必需 / optional=可选 / reference=参考 / attachment=附件</summary>
         [StringLength(20)]
         public string DocRole { get; set; } = "required";
@@ -143,7 +153,14 @@ namespace CertPlatform.Admin.Entities.Doc
 
         // ──── 分析元数据（可观测 + 可追溯 + 可重跑，33 号 §五）────
 
-        /// <summary>语义分析状态：pending / running / completed / failed / manual（人工直接写入）</summary>
+        /// <summary>
+        ///     语义分析状态：<c>pending</c> / <c>running</c> / <c>completed</c> / <c>partial</c> /
+        ///     <c>failed</c> / <c>manual</c>（人工直接写入）。
+        ///     <para>★ <c>partial</c>（2026-10-05 新增）= 两跳提示词（<c>doc_group</c> / <c>doc_content</c>）
+        ///     只成功了其中一跳，结论<b>部分可用</b>；失败的那一跳的原因记在 <see cref="AnalyzeMessage"/>。
+        ///     ⛔ 不要把它归并进 <c>failed</c> —— 那会让「标签拿到了、作用没拿到」和「什么都没拿到」
+        ///     变成同一种状态，人工无从判断该不该重跑。</para>
+        /// </summary>
         [StringLength(20)]
         public string AnalyzeStatus { get; set; } = "pending";
 

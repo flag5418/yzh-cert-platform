@@ -37,8 +37,22 @@ public static class WordDocumentScanner
     /// <param name="AnchorKind">token（文本锚点）</param>
     /// <param name="FieldCode">去前缀的键，与 <c>cert_doc_field_def.FieldCode</c> 对齐</param>
     /// <param name="DomainKind">仅 domain 类型：text（写值）/ auto（交给 Word 算）</param>
-    /// <param name="Location">body / table / header / footer —— ⚠️ <b>仅供前端展示</b>，
-    /// <c>cert_doc_template_anchor</c> 无此列，<b>不落库、不参与去重</b>。</param>
+    /// <param name="Location">
+    /// 锚点位置的可读描述 —— <b>2026-10-05 起带行列号与段落序号</b>：
+    /// <c>正文·第 12 段</c> / <c>表格[0] 行 2 列 3</c> / <c>页眉[0]·第 1 段</c>。
+    ///
+    /// <para><b>★ 为什么要补</b>：人工填坐标（<c>OfficeRegionKind.WordCell</c>）时，
+    /// 用户需要知道「这个锚点在第几个表第几行第几列」—— 光有一个 <c>table</c> 字眼没法下手，
+    /// 只能自己数。扫描器顺手算出来，用户就从「数」变成「确认」。</para>
+    ///
+    /// <para><b>★ 格式与写入侧逐字同口径</b>（<c>WordFillWriter</c> 的「正文·第 N 段」、
+    /// <c>WordTableRowInserter.FillTableRecursive</c> 的「行 R 列 C」）——
+    /// 这样填充报告里的 <c>Hit.Location</c> 与模板锚点清单的位置<b>可以直接对照</b>，
+    /// 不需要人工换算两套编号。</para>
+    ///
+    /// <para>⚠️ <b>仅供展示</b>：<c>cert_doc_template_anchor</c> 无此列，
+    /// <b>不落库、不参与去重</b>（<c>DocTemplateAnchorController.ScannedAnchor</c> 也不含它）。</para>
+    /// </param>
     /// <param name="Context">所在段落文本片段（人工辨认用，⛔ 不落库）</param>
     public sealed record WordAnchor(
         string AnchorRef,
@@ -114,28 +128,50 @@ public static class WordDocumentScanner
                 AddToken(m.Value, location, ctx);
         }
 
-        void ScanTable(XWPFTable t, string location)
+        // ★ 行列号口径与写入侧 WordTableRowInserter.FillTableRecursive 逐字一致：
+        //   locationPrefix = "表格[0]"（或页眉下的 "页眉[0]·表格[1]"），格 = "{前缀} 行 R 列 C"（1-based）
+        void ScanTable(XWPFTable t, string locationPrefix)
         {
-            foreach (var row in t.Rows)
-                foreach (var cell in row.GetTableCells())
+            var rows = t.Rows;
+            for (var ri = 0; ri < rows.Count; ri++)
+            {
+                var cells = rows[ri].GetTableCells();
+                for (var ci = 0; ci < cells.Count; ci++)
                 {
-                    foreach (var p in cell.Paragraphs) ScanParagraph(p, location);
-                    foreach (var nested in cell.Tables) ScanTable(nested, location);
+                    var cellLocation = $"{locationPrefix} 行 {ri + 1} 列 {ci + 1}";
+
+                    foreach (var p in cells[ci].Paragraphs) ScanParagraph(p, cellLocation);
+                    foreach (var nested in cells[ci].Tables) ScanTable(nested, cellLocation);
                 }
+            }
         }
 
-        void ScanHeaderFooter(XWPFHeaderFooter hf)
+        void ScanHeaderFooter(XWPFHeaderFooter hf, string label)
         {
-            var loc = hf is XWPFHeader ? "header" : "footer";
-            foreach (var p in hf.Paragraphs) ScanParagraph(p, loc);
-            foreach (var t in hf.Tables) ScanTable(t, loc);
+            var paragraphs = hf.Paragraphs;
+            for (var i = 0; i < paragraphs.Count; i++)
+                ScanParagraph(paragraphs[i], $"{label}·第 {i + 1} 段");
+
+            var tables = hf.Tables;
+            for (var i = 0; i < tables.Count; i++)
+                ScanTable(tables[i], $"{label}·表格[{i}]");
         }
 
-        foreach (var p in doc.Paragraphs) ScanParagraph(p, "body");
-        foreach (var t in doc.Tables) ScanTable(t, "body");
+        // ★ 正文段落序号：与 WordFillWriter 的 $"正文·第 {i + 1} 段" 逐字一致
+        var bodyParagraphs = doc.Paragraphs;
+        for (var i = 0; i < bodyParagraphs.Count; i++)
+            ScanParagraph(bodyParagraphs[i], $"正文·第 {i + 1} 段");
 
-        foreach (var h in doc.HeaderList) ScanHeaderFooter(h);
-        foreach (var f in doc.FooterList) ScanHeaderFooter(f);
+        // ★ 表格序号：与 WordFillWriter 的 $"表格[{i}]" 逐字一致
+        var bodyTables = doc.Tables;
+        for (var i = 0; i < bodyTables.Count; i++)
+            ScanTable(bodyTables[i], $"表格[{i}]");
+
+        var headers = doc.HeaderList;
+        for (var i = 0; i < headers.Count; i++) ScanHeaderFooter(headers[i], $"页眉[{i}]");
+
+        var footers = doc.FooterList;
+        for (var i = 0; i < footers.Count; i++) ScanHeaderFooter(footers[i], $"页脚[{i}]");
 
         // ★ 本次新建的页眉/页脚不在 HeaderList/FooterList 里（见 WordFillWriter 的说明），
         //   必须显式补扫，否则「新建页眉里的锚点」会被漏掉。
@@ -147,7 +183,10 @@ public static class WordDocumentScanner
             foreach (var h in doc.HeaderList) known.Add(h);
             foreach (var f in doc.FooterList) known.Add(f);
             foreach (var hf in extraHeaderFooters)
-                if (known.Add(hf)) ScanHeaderFooter(hf);
+                if (known.Add(hf))
+                    // ⚠️ 标「附加」而不是编号：它的序号不在 HeaderList 里，
+                    //    强行编号会与主列表的 [0]/[1] 撞号，报告里反而更难看懂。
+                    ScanHeaderFooter(hf, hf is XWPFHeader ? "页眉[附加]" : "页脚[附加]");
         }
 
         return result;

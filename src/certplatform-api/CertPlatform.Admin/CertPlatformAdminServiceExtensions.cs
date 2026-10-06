@@ -1,5 +1,6 @@
 
 using CertPlatform.Admin.Services.DocExtraction;
+using CertPlatform.Admin.Services.Ent.Executors;
 using CertPlatform.Admin.Services.StandardDirectory;
 using CertPlatform.Admin.Services.Audit;
 using CertPlatform.Admin.Services.Workflow;
@@ -80,6 +81,17 @@ public static class CertPlatformAdminServiceExtensions
         services.AddSingleton<CertQueueNotifier>();
         services.AddSingleton<UploadQueueCancelHandler>();
         services.AddSingleton<IYzhTaskExecutor>(sp => sp.GetRequiredService<OfficeConvertTaskExecutor>());
+
+        // ★ 2026-10-05 企业文档规范化执行器（ent_doc_normalize）—— 此前**只有类定义、没有注册**，
+        //   导致该类型任务永远分发不到且不报错。
+        //   ⛔ 不能写成 AddSingleton<IYzhTaskExecutor, EnterpriseDocNormalizationExecutor>()：
+        //   QueueManager 是单例且构造注入 IEnumerable<IYzhTaskExecutor>，而执行器本体依赖
+        //   IDbOrm / IObjectStorage（**均为 Scoped**）⇒ 会抛「Cannot consume scoped service from singleton」。
+        //   解法 = 单例桥接壳（内部每次 CreateScope），执行器本体保持 Scoped。
+        services.AddScoped<EnterpriseDocNormalizationExecutor>();
+        services.AddSingleton<EnterpriseDocNormalizationExecutorAdapter>();
+        services.AddSingleton<IYzhTaskExecutor>(sp => sp.GetRequiredService<EnterpriseDocNormalizationExecutorAdapter>());
+
         services.AddSingleton<IYzhQueueNotifier>(sp => sp.GetRequiredService<CertQueueNotifier>());
         services.AddSingleton<IYzhQueueCancelHandler>(sp => sp.GetRequiredService<UploadQueueCancelHandler>());
 

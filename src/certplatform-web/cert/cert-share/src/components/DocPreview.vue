@@ -20,7 +20,7 @@ import { ElMessage } from 'element-plus'
 import { Download, Refresh, WarningFilled, Loading, Document } from '@element-plus/icons-vue'
 import VueOfficePdf from '@vue-office/pdf'
 import { getFilePreviewBlob, getPreviewBlobByPath } from '@share/api/workflow/doc-extraction-rule'
-import { downloadFile } from '@share/composables/useDirectoryApi'
+import { downloadRawBlob } from '@share/composables/useDirectoryApi'
 
 const props = defineProps<{
   file: any
@@ -220,8 +220,11 @@ async function detectMagic(blob: Blob): Promise<string> {
  *   两种情况都**不该**去要归一产物：那是「下载可编辑版」按钮的职责。
  */
 async function fetchRawBlob(): Promise<Blob> {
-  if (storagePath.value) return downloadFile(storagePath.value)
-  if (convertedPath.value) return downloadFile(convertedPath.value)
+  // ⚠️ 这里要的是**字节**（拿去渲染 / 另存），不是「触发浏览器下载」——
+  //   `downloadFile` 已改为 Promise<void>（内部直接 downloadGet），
+  //   预览渲染必须走返回 Blob 的二进制端点。
+  if (storagePath.value) return downloadRawBlob(storagePath.value)
+  if (convertedPath.value) return downloadRawBlob(convertedPath.value)
   return getFilePreviewBlob(fileCode.value)
 }
 
@@ -282,8 +285,19 @@ async function loadPreview() {
       const blob = await fetchPreviewBlob()
       const magic = await detectMagic(blob)
       if (magic !== 'pdf') {
-        error.value = '预览服务返回的不是 PDF 内容'
-        errorHint.value = `可点击「${props.downloadLabel || '下载原始件'}」后用本地 Office / WPS 打开查看`
+        // ⚠️ 必须区分「0 字节」与「内容不对」——两者根因完全不同：
+        //   0 字节 = **对象存储读不到内容**（源文件或 PDF 缓存是空的），
+        //           重新扫描 / 重转 PDF 都无济于事，得先查存储层；
+        //   有内容但不是 PDF = 转换链返回了别的东西（多半是 JSON 错误体被当文件）。
+        if (!blob || blob.size === 0) {
+          error.value = '预览产物为空（0 字节）'
+          errorHint.value =
+            '服务端未取到文件内容。通常是对象存储读取异常或该文件的 PDF 产物是空文件，' +
+            '请重试上传 / 重新生成 PDF；仍失败请联系管理员核查存储层。'
+        } else {
+          error.value = '预览服务返回的不是 PDF 内容'
+          errorHint.value = `可点击「${props.downloadLabel || '下载原始件'}」后用本地 Office / WPS 打开查看`
+        }
         return
       }
       previewUrl.value = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }))
@@ -360,6 +374,17 @@ defineExpose({ reload: loadPreview })
         <YzhStatusBadge type="info" size="small" :text="fileTypeText" />
       </div>
       <div class="preview-actions">
+        <!--
+          ★ `#actions` 插槽（2026-10-05 新增，C9）—— 让调用方把**本页专有**的动作
+            放在「下载」左边，与它**同一行**。
+
+          【为什么用插槽而不是加 prop】
+            「上传空白模板」是 `doc-fill-rule` 页独有的动作（依赖标准资料清单行 +
+            模板登记链），塞进本组件会把领域概念带进共享渲染器。
+            插槽让本组件保持「哑渲染器」，同时满足「上传 / 下载同一行」的排布要求。
+          【向后兼容】插槽可选，未提供时渲染结果与改动前**逐字一致**。
+        -->
+        <slot name="actions" />
         <el-button type="default" size="small" :icon="Download" @click="download">
           {{ downloadText }}
         </el-button>
@@ -543,6 +568,18 @@ defineExpose({ reload: loadPreview })
   height: 100%;
   flex: 1;
   min-height: 0;
+}
+/*
+ * ★ `@vue-office/pdf` 在**运行时给画布容器写内联 `background: gray`**，
+ *   在浅色页面里表现为「预览区中间一条深灰带」，与整页底色割裂。
+ *   改为跟随页面底色 —— 只动**画布背板**，渲染出来的 PDF 页面白底不动。
+ *
+ *   ⚠️ 必须 `:deep()` + `!important`（S11 允许 `!important` 仅出现在 `:deep()` 内）：
+ *      内联样式的优先级高于任何选择器，不加 `!important` 一定压不住。
+ *      这是 S11 设立该例外的**原意场景** —— 覆盖第三方组件的运行时内联样式。
+ */
+.pdf-viewer :deep(.vue-office-pdf-wrapper) {
+  background: var(--yzh-color-bg-page, #f8fafc) !important;
 }
 .text-content {
   flex: 1;

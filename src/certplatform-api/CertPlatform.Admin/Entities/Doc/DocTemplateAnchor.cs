@@ -144,6 +144,18 @@ namespace CertPlatform.Admin.Entities.Doc
         /// <summary>是否必填</summary>
         public bool Required { get; set; }
 
+        /// <summary>
+        ///     ★ <b>锚点锁定</b> = 实施人员<b>已认可</b>该锚点的设置规则，<b>配置就此冻结</b>。
+        ///     <para><b>① 不可再修改配置</b>（用户 2026-10-05 裁定「锁定的问题，就是不能再修改配置」）：
+        ///     <c>save-batch</c> / <c>UpdateCore</c> 命中锁定行且<b>配置列有实质变化</b>时一律拒绝；
+        ///     <c>Clear</c>（清空模板锚点）也<b>跳过</b>锁定行。解锁走 <c>lock</c> 端点（<c>locked=false</c>）。</para>
+        ///     <para><b>② 换版重扫保留配置</b>：新模板里仍有同唯一键锚点 ⇒ 软删 + 复活 ⇒ 配置自动保留
+        ///     （无需额外搬运代码）；已消失的由 <c>Scan</c> 如实回报 <c>Locked.LostRefs</c>。</para>
+        ///     <para>⛔ 不另设 <c>LockedBy</c> / <c>LockedTime</c>：<c>BaseEntity</c> 的
+        ///     <c>UpdateBy</c> / <c>UpdateTime</c> 已记录「谁在何时认可的」。</para>
+        /// </summary>
+        public bool IsLocked { get; set; }
+
         /// <summary>★ 重传后消失的锚点（不删，标记保留，因其可能已有填过的值）</summary>
         public bool IsOrphan { get; set; }
 

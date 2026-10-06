@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>标准文档标准化 · 后台端原型 V1</title>
+<style>
+:root{
+  --pri:#409eff;--pri-l:#ecf5ff;--pri-b:#d9ecff;--pri-d:#337ecc;
+  --suc:#67c23a;--suc-l:#f0f9eb;--suc-b:#e1f3d8;
+  --warn:#e6a23c;--warn-l:#fdf6ec;--warn-b:#faecd8;
+  --dan:#f56c6c;--dan-l:#fef0f0;--dan-b:#fde2e2;
+  --info:#909399;--info-l:#f4f4f5;--info-b:#e9e9eb;
+  --ai:#8b5cf6;--ai-l:#f5f3ff;--ai-b:#ddd6fe;
+  --t1:#303133;--t2:#606266;--t3:#909399;--t4:#c0c4cc;
+  --bd:#dcdfe6;--bd-l:#e4e7ed;--bd-xl:#ebeef5;
+  --bg:#f5f7fa;--bg2:#fafafa;--r:4px;--r2:8px;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--t1);font-size:14px;overflow:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+button,input,textarea,select{font-family:inherit}
+.app{display:flex;flex-direction:column;height:100%}
+
+/* ── 顶栏 ─────────────────────────────────── */
+.topbar{background:#fff;border-bottom:1px solid var(--bd-l);padding:9px 16px;
+  display:flex;align-items:center;gap:12px;flex:0 0 auto;flex-wrap:wrap}
+.topbar .fn{font-size:15px;font-weight:500;max-width:340px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.topbar .path{font-size:12px;color:var(--t3)}
+.topbar .sp{flex:1}
+.gate{display:flex;align-items:center;gap:0;border:1px solid var(--bd);border-radius:var(--r);overflow:hidden}
+.gate .gl{font-size:12px;color:var(--t3);padding:0 9px;background:var(--bg2);line-height:28px;
+  border-right:1px solid var(--bd)}
+.gate button{border:0;background:#fff;padding:0 12px;font-size:13px;color:var(--t2);cursor:pointer;
+  line-height:28px;display:flex;align-items:center;gap:5px;border-right:1px solid var(--bd-l)}
+.gate button:last-child{border-right:0}
+.gate button .dot{width:6px;height:6px;border-radius:50%;background:var(--t4)}
+.gate button.on{background:var(--pri-l);color:var(--pri-d);font-weight:500}
+.gate button.on .dot{background:var(--pri)}
+.gate button.on.fx{background:var(--info-l);color:var(--info)}
+.gate button.on.fx .dot{background:var(--info)}
+.gate button[disabled]{opacity:.55;cursor:not-allowed}
+
+/* ── 骨架 ─────────────────────────────────── */
+.app-body{flex:1;display:flex;min-height:0}
+
+/* 第 1 栏 · 左树 */
+.side{width:262px;flex:0 0 262px;background:#fff;border-right:1px solid var(--bd-l);
+  display:flex;flex-direction:column;min-height:0}
+.side-hd{padding:9px 12px;border-bottom:1px solid var(--bd-xl)}
+.side-hd .t{font-size:13px;font-weight:500;display:flex;align-items:center;gap:8px}
+.side-hd .t .sp{flex:1}
+.fbar{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap;align-items:center}
+.fbar .f{padding:2px 9px;font-size:12px;border:1px solid var(--bd-l);border-radius:11px;
+  cursor:pointer;color:var(--t2);background:#fff;line-height:17px}
+.fbar .f:hover{border-color:var(--pri-b);color:var(--pri)}
+.fbar .f.on{background:var(--pri);border-color:var(--pri);color:#fff}
+.fbar .f .c{opacity:.72;font-size:11px;margin-left:3px}
+.side-bd{flex:1;overflow:auto;padding:6px 0 12px}
+.side-ft{padding:8px 12px;border-top:1px solid var(--bd-xl);font-size:12px;color:var(--t3);
+  display:flex;align-items:center;gap:8px}
+.side-ft .sp{flex:1}
+.tn{padding:6px 12px 6px 14px;font-size:13px;color:var(--t2);cursor:pointer;display:flex;
+  align-items:center;gap:6px;line-height:1.5;border-left:3px solid transparent}
+.tn:hover{background:var(--bg2)}
+.tn.on{background:var(--pri-l);color:var(--pri);border-left-color:var(--pri);font-weight:500}
+.tn .caret{width:12px;color:var(--t4);font-size:10px;flex:0 0 12px;text-align:center}
+.tn .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tn.l1{padding-left:14px;font-weight:500;color:var(--t1)}
+.tn.l2{padding-left:30px}
+.tn.l3{padding-left:46px}
+.tn.l4{padding-left:58px}
+
+/* 第 2 栏 · 预览 */
+.pv{flex:1;min-width:0;background:#eef1f6;display:flex;flex-direction:column;min-height:0}
+.pv-hd{background:#fff;border-bottom:1px solid var(--bd-l);padding:7px 14px;font-size:12px;
+  color:var(--t2);display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.pv-hd .sp{flex:1}
+.pv-hd .tag{font-size:11px}
+.pv-bd{flex:1;overflow:auto;padding:18px;display:flex;justify-content:center;align-items:flex-start}
+.page-mock{width:470px;min-height:600px;background:#fff;border:1px solid var(--bd-l);
+  box-shadow:0 2px 12px rgba(0,0,0,.06);padding:34px 40px;font-size:12px;color:var(--t2);line-height:2}
+.page-mock .ph{text-align:center;font-size:15px;font-weight:600;color:var(--t1);margin-bottom:16px;
+  letter-spacing:2px}
+.page-mock .kv{display:flex;gap:8px;border-bottom:1px dotted var(--bd);padding:3px 0}
+.page-mock .kv b{flex:0 0 76px;font-weight:400;color:var(--t3)}
+.page-mock .tok{background:var(--pri-l);color:var(--pri-d);border:1px dashed var(--pri);
+  border-radius:3px;padding:0 5px;font-family:var(--mono);font-size:11px}
+.page-mock .tok.miss{background:var(--dan-l);color:var(--dan);border-color:var(--dan)}
+.page-mock .val{background:var(--suc-l);color:#3d7a1c;border:1px dashed var(--suc);
+  border-radius:3px;padding:0 5px}
+.page-mock table{width:100%;border-collapse:collapse;margin-top:12px;font-size:11px}
+.page-mock th,.page-mock td{border:1px solid var(--bd);padding:4px 6px;text-align:center;color:var(--t2)}
+.page-mock th{background:var(--bg2)}
+.page-mock .scan{border:1px dashed var(--bd);padding:26px 12px;text-align:center;color:var(--t3);
+  margin-top:14px;line-height:1.9}
+.page-mock .fake{background:#fbfbfb;border:1px dashed var(--bd-l);padding:8px 10px;margin-top:8px;
+  color:var(--t3);font-size:11px;line-height:1.8}
+
+/* 第 3 栏 · 右侧（固定信息 + 2 Tab） */
+.right{width:400px;flex:0 0 400px;background:#fff;border-left:1px solid var(--bd-l);
+  display:flex;flex-direction:column;min-height:0;position:relative}
+.rtabs{display:flex;border-bottom:1px solid var(--bd-l);flex:0 0 auto;padding:0 10px;background:#fff}
+.rtabs button{flex:1;border:0;background:transparent;padding:10px 6px;font-size:13px;color:var(--t2);
+  cursor:pointer;border-bottom:2px solid transparent;display:flex;align-items:center;
+  justify-content:center;gap:6px}
+.rtabs button:hover{color:var(--pri)}
+.rtabs button.on{color:var(--pri);border-bottom-color:var(--pri);font-weight:500}
+.rtabs button .b{font-size:11px;padding:0 6px;line-height:16px;border-radius:8px;
+  background:var(--bg2);color:var(--t3);border:1px solid var(--bd-l)}
+.rtabs button.on .b{background:var(--pri-l);color:var(--pri-d);border-color:var(--pri-b)}
+.rtabs button .b.d{background:var(--dan-l);color:var(--dan);border-color:var(--dan-b)}
+.rtabs button .b.s{background:var(--suc-l);color:var(--suc);border-color:var(--suc-b)}
+.rbody{flex:1;overflow:auto;padding:14px 16px 20px;min-height:0}
+
+/* 锚点列表 */
+.agroup{margin-bottom:14px}
+.agroup .ahd{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--t1);
+  padding:0 2px 7px}
+.agroup .ahd .cnt{font-weight:400;color:var(--t3);font-size:11px}
+.agroup .ahd .sp{flex:1}
+.arow{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--bd-l);
+  border-radius:var(--r);margin-bottom:6px;cursor:pointer;background:#fff;transition:.15s}
+.arow:hover{border-color:var(--pri-b);background:#fbfdff}
+.arow .ref{font-family:var(--mono);font-size:12px;color:var(--t1);flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arow .src{font-size:11px;color:var(--t3);flex:0 0 auto}
+.arow.bad{border-left:3px solid var(--dan)}
+.arow .dot{width:6px;height:6px;border-radius:50%;flex:0 0 6px;background:var(--suc)}
+.arow.bad .dot{background:var(--dan)}
+
+/* 锚点设置面板 */
+.pnlhd{display:flex;align-items:center;gap:8px;padding:0 0 12px;border-bottom:1px solid var(--bd-xl);
+  margin-bottom:14px}
+.pnlhd .back{border:1px solid var(--bd);background:#fff;border-radius:var(--r);cursor:pointer;
+  padding:3px 9px;font-size:12px;color:var(--t2)}
+.pnlhd .back:hover{border-color:var(--pri);color:var(--pri)}
+.pnlhd .t{font-family:var(--mono);font-size:13px;color:var(--t1);flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zone{border:1px solid var(--bd-l);border-radius:var(--r2);margin-bottom:14px;overflow:hidden}
+.zone>.zhd{background:var(--bg2);padding:8px 12px;font-size:12px;font-weight:600;color:var(--t1);
+  display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--bd-l)}
+.zone>.zhd .sp{flex:1}
+.zone>.zhd .sub{font-weight:400;font-size:11px;color:var(--t3)}
+.zone>.zbd{padding:12px}
+
+/* 通用控件 */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;font-size:13px;
+  border:1px solid var(--bd);border-radius:var(--r);background:#fff;color:var(--t2);
+  cursor:pointer;line-height:1.4}
+.btn:hover{color:var(--pri);border-color:#c6e2ff;background:var(--pri-l)}
+.btn.pri{background:var(--pri);border-color:var(--pri);color:#fff}
+.btn.pri:hover{background:#66b1ff;border-color:#66b1ff;color:#fff}
+.btn.sm{padding:3px 9px;font-size:12px}
+.btn.gh{background:transparent}
+.btn[disabled]{opacity:.45;cursor:not-allowed;color:var(--t3);background:#fff;border-color:var(--bd)}
+.btn[disabled]:hover{color:var(--t3);background:#fff;border-color:var(--bd)}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;font-size:12px;
+  border-radius:var(--r);line-height:19px;white-space:nowrap;border:1px solid transparent}
+.tag.b{background:var(--pri-l);color:var(--pri-d);border-color:var(--pri-b)}
+.tag.s{background:var(--suc-l);color:var(--suc);border-color:var(--suc-b)}
+.tag.w{background:var(--warn-l);color:var(--warn);border-color:var(--warn-b)}
+.tag.d{background:var(--dan-l);color:var(--dan);border-color:var(--dan-b)}
+.tag.i{background:var(--info-l);color:var(--info);border-color:var(--info-b)}
+.tag.ai{background:var(--ai-l);color:var(--ai);border-color:var(--ai-b)}
+.tag .x{cursor:pointer;opacity:.6;font-size:13px}
+.tag .x:hover{opacity:1}
+.tag.mono{font-family:var(--mono)}
+.muted{color:var(--t3)}
+.tiny{font-size:12px}
+.row{display:flex;align-items:center;gap:8px}
+.row.wrap{flex-wrap:wrap}
+.sp{flex:1}
+.hint{font-size:11px;color:var(--t3);line-height:1.6;margin:6px 0 0}
+.hr{height:1px;background:var(--bd-xl);margin:12px 0}
+
+.fld{margin-bottom:12px}
+.fld:last-child{margin-bottom:0}
+.fld>label{display:block;font-size:12px;color:var(--t2);margin-bottom:5px}
+.fld textarea,.fld input[type=text],.fld select{width:100%;font-size:13px;color:var(--t1);
+  padding:7px 10px;border:1px solid var(--bd);border-radius:var(--r);outline:none;
+  resize:vertical;line-height:1.7;background:#fff}
+.fld textarea:focus,.fld input[type=text]:focus,.fld select:focus{border-color:var(--pri)}
+.fld .tip{font-size:11px;color:var(--t3);margin-top:4px;line-height:1.6}
+
+/* 单选卡片（类型 / 数据源 / 操作） */
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cards.one{grid-template-columns:1fr}
+.card{border:1.5px solid var(--bd-l);border-radius:var(--r2);padding:10px 12px;cursor:pointer;
+  background:#fff;transition:.15s}
+.card:hover{border-color:#c6e2ff;background:#fbfdff}
+.card.on{border-color:var(--pri);background:var(--pri-l);box-shadow:0 0 0 2px var(--pri-b)}
+.card .ct{font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px}
+.card .cd{font-size:11px;color:var(--t3);line-height:1.65;margin-top:3px}
+.card.on .ct{color:var(--pri-d)}
+.card .chk{margin-left:auto;color:var(--pri);font-size:13px}
+.card.ai.on{border-color:var(--ai);background:var(--ai-l);box-shadow:0 0 0 2px var(--ai-b)}
+.card.ai.on .ct{color:var(--ai)}
+
+/* 状态徽标 */
+.st{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:12px;
+  font-size:12px;border:1px solid transparent}
+.st .d{width:6px;height:6px;border-radius:50%}
+.st.none{background:var(--info-l);color:var(--info);border-color:var(--info-b)}
+.st.none .d{background:var(--info)}
+.st.draft{background:var(--warn-l);color:var(--warn);border-color:var(--warn-b)}
+.st.draft .d{background:var(--warn)}
+.st.done{background:var(--suc-l);color:var(--suc);border-color:var(--suc-b)}
+.st.done .d{background:var(--suc)}
+
+.toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);background:#fff;
+  border:1px solid var(--suc-b);color:var(--suc);border-radius:var(--r2);padding:9px 16px;
+  font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:99;display:none;align-items:center;gap:7px}
+.toast.on{display:flex}
+.toast.err{border-color:var(--dan-b);color:var(--dan)}
+.empty{padding:30px 16px;text-align:center;color:var(--t3);font-size:12px;line-height:1.9}
+
+/* ★ 锚点「锁定」—— 表示这份配置已确定，换模板重扫时会保留 */
+.lk{flex:0 0 auto;border:1px solid var(--bd-l);background:#fff;color:var(--t3);cursor:pointer;
+  border-radius:11px;padding:1px 9px;font-size:11px;line-height:17px}
+.lk:hover{border-color:var(--pri);color:var(--pri)}
+.lk.on{background:var(--pri-l);border-color:var(--pri-b);color:var(--pri-d);font-weight:500}
+/* ★ 操作方式自动推导（只读） */
+.auto-op{display:flex;align-items:center;gap:8px;border:1px dashed var(--bd-l);border-radius:var(--r);
+  padding:8px 11px;background:var(--bg2)}
+/* 未配齐提示条 */
+.warnbar{display:flex;gap:8px;background:var(--warn-l);border:1px solid var(--warn-b);color:#8a5a00;
+  border-radius:var(--r2);padding:8px 12px;font-size:12px;line-height:1.7;margin-bottom:12px}
+
+/* ★ 帮助：收进 Tab 行右侧的「!」，⛔ 页面里不再印说明 */
+.rtabs .helpbtn{flex:0 0 auto;width:20px;height:20px;border-radius:50%;border:1px solid var(--bd);
+  background:#fff;color:var(--t3);font-size:12px;font-weight:600;cursor:pointer;padding:0;
+  font-family:var(--mono);align-self:center;display:inline-flex;align-items:center;justify-content:center}
+.rtabs .helpbtn:hover{border-color:var(--pri);color:var(--pri);background:var(--pri-l)}
+.rtabs .helpbtn.on{border-color:var(--pri);background:var(--pri);color:#fff}
+.help{position:absolute;right:12px;top:44px;width:326px;max-height:calc(100% - 62px);overflow:auto;
+  background:#fff;border:1px solid var(--bd);border-radius:var(--r2);
+  box-shadow:0 6px 24px rgba(0,0,0,.12);padding:12px 14px;z-index:40;display:none}
+.help.on{display:block}
+.help h5{margin:0 0 8px;font-size:12px;color:var(--t3);font-weight:500;letter-spacing:.3px}
+.help .hi{padding:8px 0;border-top:1px solid var(--bd-xl);font-size:12px;line-height:1.8;color:var(--t2)}
+.help .hi:first-of-type{border-top:0;padding-top:2px}
+.help .hi .k{color:var(--t3);margin-right:6px}
+.help .hi b{color:var(--t1);font-weight:500}
+.help .hi code{font-family:var(--mono);background:var(--bg2);padding:0 3px;border-radius:3px}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="topbar" id="topbar"></div>
+
+<div class="app-body">
+  <aside class="side">
+    <div class="side-hd">
+      <div class="t"><span>标准资料清单</span><span class="sp"></span>
+        <span class="tiny muted" id="sideCount"></span></div>
+      <div class="fbar" id="fbar"></div>
+    </div>
+    <div class="side-bd" id="tree"></div>
+    <div class="side-ft" id="sideft"></div>
+  </aside>
+
+  <section class="pv">
+    <div class="pv-hd" id="pvhd"></div>
+    <div class="pv-bd" id="pvbd"></div>
+  </section>
+
+  <aside class="right">
+    <div class="rtabs" id="rtabs"></div>
+    <div class="help" id="help"></div>
+    <div class="rbody" id="rbody"></div>
+  </aside>
+</div>
+</div>
+
+<div class="toast" id="toast"><span id="toastTxt"></span></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   1. 常量：数据源 5 类 / 操作 2 类
+   ══════════════════════════════════════════════════════════════ */
+const SOURCES = {
+  global:    { label:'全局参数',     ai:false, desc:'直接取一个全局参数的值（零 LLM）' },
+  ai_gen:    { label:'AI 自动生成',  ai:true,  desc:'按本段语义自动生成；可选带一个全局参数' },
+  ai_field:  { label:'AI 字段',      ai:true,  desc:'按提示词生成一个字段值；可选带参数' },
+  ai_table:  { label:'AI 表格',      ai:true,  desc:'生成整张表；可选带参数' },
+  ai_prompt: { label:'AI 提示词',    ai:true,  desc:'纯提示词驱动，不取参数' },
+};
+const OPS = {
+  cell:  { label:'单元格更新', desc:'把值替换进单元格 / 文本 token' },
+  table: { label:'表格更新',   desc:'按行列填充表格区域' },
+};
+const ONMISS = {
+  empty: { label:'留空' }, next: { label:'取下一条' }, block: { label:'阻断' },
+};
+/* ★ 操作方式**自动推导**（⛔ 不需要人工选）：
+   表格锚点 ⇒ 表格更新；字段锚点 ⇒ 单元格更新（正文 / 页眉 / 单元格里的 token 替换） */
+const autoOp = a => a.kind === 'table' ? 'table' : 'cell';
+/* ★ 能不能自动填充 / 预览：锚点得先配齐（规则没定 ⇒ 程序不知道值该填到哪） */
+const readyOf = d => d.anchors.length > 0 && d.anchors.every(a => a.source);
+
+/* ══════════════════════════════════════════════════════════════
+   2. 样本数据 —— 8 份文档，覆盖各种状态
+   ══════════════════════════════════════════════════════════════ */
+const DOCS = [
+  { code:'D1', name:'陪审人员.doc', ft:'doc', path:'9001标准 / 初次认证',
+    parseable:true, type:'editable', touched:true,
+    tags:['陪审安排'], purpose:'【是什么】记录外部审核期间陪审人员的分工与安排。\n【审核关注点】是否覆盖全部审核日程；陪审人员是否具备对应条款的专业能力。\n【来源口径】企业自行编制。\n【包含信息】审核日期、受审部门、条款、陪审人员。',
+    subtype:null, matchPrompt:'', filled:false,
+    anchors:[
+      { ref:'{{ENT_NAME}}',   kind:'field', pos:'正文 · 第 1 段', source:'global',   param:'ENT_NAME', prompt:'', op:'cell', onMissing:'empty', locked:true,  value:'广州某某制造有限公司' },
+      { ref:'{{QMS_VER}}',    kind:'field', pos:'页眉',           source:'global',   param:'QMS_VER',  prompt:'', op:'cell', onMissing:'empty', locked:true,  value:'A/1' },
+      { ref:'{{审核类型}}',    kind:'field', pos:'正文 · 第 2 段', source:'global',   param:'AUDIT_TYPE', prompt:'', op:'cell', onMissing:'empty', locked:false, value:'初次认证审核' },
+      { ref:'{{ai:陪审说明}}', kind:'field', pos:'正文 · 第 5 段', source:'ai_gen',   param:'',         prompt:'结合企业概况，写 2 句话说明陪审安排的原则。', op:'cell', onMissing:'empty', locked:false, value:'本次陪审由管理者代表牵头，按部门职责分工。' },
+      { ref:'{{文件控制程序}}', kind:'field', pos:'正文 · 第 8 段', source:null,       param:'',         prompt:'', op:'cell', onMissing:'empty', locked:false, value:'' },
+      { ref:'{{table:审核安排}}', kind:'table', pos:'正文 · 表 1', source:'ai_table', param:'', prompt:'按审核日程生成表格：日期、受审部门、条款、陪审人员。', op:'table', onMissing:'empty', locked:false,
+        rows:[['03-11 上午','管理层','4.1~4.4','张伟'],['03-11 下午','生产部','8.5','李强']] },
+    ],
+    aiRules:[ { key:'ai_gen:陪审说明', title:'AI 自动生成 · 陪审说明', prompt:'', saved:false } ] },
+
+  { code:'D2', name:'内审计划表.doc', ft:'doc', path:'9001标准 / 初次认证',
+    parseable:true, type:'editable', touched:true,
+    tags:['内审记录','计划类'], purpose:'【是什么】年度内部审核的日程与分工安排。\n【审核关注点】是否覆盖全部条款与部门；审核员是否具备资格且未审核本部门工作。\n【来源口径】企业自行编制。\n【包含信息】审核日期、受审部门、条款、审核员。',
+    subtype:null, matchPrompt:'', filled:false,
+    anchors:[
+      { ref:'{{ENT_NAME}}', kind:'field', pos:'正文 · 第 1 段', source:'global', param:'ENT_NAME', prompt:'', op:'cell', onMissing:'empty', locked:true, value:'广州某某制造有限公司' },
+      { ref:'{{table:内审日程}}', kind:'table', pos:'正文 · 表 1', source:'ai_table', param:'', prompt:'按年度内审方案生成表格。', op:'table', onMissing:'empty', locked:true,
+        rows:[['2026-03-02','管理层','4.1~4.4','张伟'],['2026-03-03','生产部','8.1~8.7','李强']] },
+    ],
+    aiRules:[ { key:'ai_table:内审日程', title:'AI 表格 · 内审日程', prompt:'按年度内审方案生成表格：日期、受审部门、条款、审核员。\n日期一律用 YYYY-MM-DD。', saved:true } ] },
+
+  { code:'D3', name:'营业执照（扫描件）.pdf', ft:'pdf', path:'9001标准 / 初次认证',
+    parseable:false, type:'fixed', touched:true,
+    tags:['资质证照','主体资格','营业执照'], purpose:'【是什么】企业依法登记取得的营业执照，证明其合法经营主体资格。\n【审核关注点】名称、统一社会信用代码、法定代表人、经营范围是否与申请书一致；是否在有效期内。\n【来源口径】市场监督管理部门核发，企业提供扫描件。\n【包含信息】企业名称、统一社会信用代码、法定代表人、经营范围。',
+    subtype:'enterprise_provided', matchPrompt:'', filled:false, anchors:[], aiRules:[] },
+
+  { code:'D4', name:'法定代表人身份证.jpg', ft:'jpg', path:'9001标准 / 初次认证',
+    parseable:false, type:'fixed', touched:true,
+    tags:['资质证照','身份证明'], purpose:'【是什么】企业法定代表人的身份证明。\n【审核关注点】姓名与营业执照是否一致；证件是否在有效期内。\n【来源口径】企业提供扫描件。\n【包含信息】姓名、性别、出生日期、住址、身份证号。',
+    subtype:'enterprise_provided', matchPrompt:'', filled:false, anchors:[], aiRules:[] },
+
+  { code:'D5', name:'附录三 程序文件清单.docx', ft:'docx', path:'9001标准 / 初次认证',
+    parseable:true, type:'fixed', touched:true,
+    tags:['程序文件','清单类'], purpose:'【是什么】标准配套的程序文件目录清单，随标准一并发布。\n【审核关注点】清单所列程序文件是否齐全、版本是否现行有效。\n【来源口径】标准自带，不向企业索取。\n【包含信息】文件编号、文件名称、版本号、受控状态。',
+    subtype:'standard_provided', matchPrompt:'', filled:false, anchors:[], aiRules:[] },
+
+  { code:'D6', name:'风险管理报告.doc', ft:'doc', path:'9001标准 / 初次认证',
+    parseable:true, type:'editable', touched:true,
+    tags:['风险记录','报告类'], purpose:'【是什么】记录企业风险识别、评价与控制措施的落实情况。\n【审核关注点】风险源识别是否覆盖全部过程；控制措施是否与风险等级匹配。\n【来源口径】企业自行编制。\n【包含信息】风险描述、可能性、严重度、风险等级、控制措施、责任人。',
+    subtype:null, matchPrompt:'', filled:false,
+    anchors:[
+      { ref:'{{ENT_NAME}}', kind:'field', pos:'正文 · 第 1 段', source:'global', param:'ENT_NAME', prompt:'', op:'cell', onMissing:'empty', locked:true, value:'广州某某制造有限公司' },
+      { ref:'{{ai:风险概述}}', kind:'field', pos:'正文 · 第 3 段', source:'ai_gen', param:'', prompt:'结合企业概况，概括本年度风险识别与控制的总体情况。', op:'cell', onMissing:'empty', locked:false, value:'本年度共识别风险 12 项，均已落实控制措施。' },
+    ],
+    aiRules:[ { key:'ai_gen:风险概述', title:'AI 自动生成 · 风险概述', prompt:'', saved:false } ] },
+
+  { code:'D7', name:'相关方需求和期望一览表.xls', ft:'xls', path:'9001标准 / 初次认证',
+    parseable:true, type:'editable', touched:false,
+    tags:[], purpose:'', subtype:null, matchPrompt:'', filled:false, anchors:[], aiRules:[] },
+
+  { code:'D8', name:'质量手册.docx', ft:'docx', path:'9001标准 / 初次认证',
+    parseable:true, type:'editable', touched:false,
+    tags:[], purpose:'', subtype:null, matchPrompt:'', filled:false, anchors:[], aiRules:[] },
+];
+
+/* ══════════════════════════════════════════════════════════════
+   3. 派生：状态 / 缺什么 / 有 ai 节点吗（★ 全是算出来的）
+   ══════════════════════════════════════════════════════════════ */
+const hasAi = d => d.anchors.some(a => a.source && SOURCES[a.source] && SOURCES[a.source].ai);
+const aiAnchors = d => d.anchors.filter(a => a.source && SOURCES[a.source] && SOURCES[a.source].ai);
+
+/** 必需项缺失（决定状态）—— 唯一入口 */
+function missingOf(d) {
+  const L = [];
+  if (!d.touched) return ['未做任何设置'];
+  if (d.type === 'fixed') {
+    if (!d.tags.length)    L.push('分组');
+    if (!d.purpose.trim()) L.push('文档作用');
+    if (!d.subtype)        L.push('可替换性');
+  } else {
+    if (!d.anchors.length) L.push('锚点（还没有空白模板 / 没扫到）');
+    else {
+      const n = d.anchors.filter(a => !a.source).length;
+      if (n) L.push(`${n} 个锚点未配数据源`);
+    }
+    if (hasAi(d) && !d.aiRules.some(r => r.prompt.trim())) L.push('全局填写规则（有 ai 节点）');
+  }
+  return L;
+}
+/** ★ 三态：算出来的，⛔ 不落库 */
+function statusOf(d) {
+  if (!d.touched) return 'none';
+  return missingOf(d).length ? 'draft' : 'done';
+}
+const ST = {
+  none:  { text:'未设置',   cls:'none'  },
+  draft: { text:'正在设置', cls:'draft' },
+  done:  { text:'已设置',   cls:'done'  },
+};
+
+/* ══════════════════════════════════════════════════════════════
+   4. 全局状态
+   ══════════════════════════════════════════════════════════════ */
+const S = {
+  doc: DOCS[0],
+  /* ★ 打开一份标准文档 ⇒ 默认落在「全局规则」：
+     因为全局规则（分组 / 文档作用）由**原始文件**语义分析带出，第一次打开就有；
+     而锚点规则要等**空白模板**上传后才能扫 ⇒ 没有理由先落在锚点 Tab */
+  tab: 'global',      // anchor | global
+  anchorSel: null,    // 选中的锚点 ref
+  view: 'origin',     // origin | template | filled
+  filter: 'all',      // all | fixed | editable | none | draft | done
+};
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let toastTimer = null;
+function toast(msg, err) {
+  $('toastTxt').textContent = msg;
+  $('toast').className = 'toast on' + (err ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $('toast').className = 'toast'; }, 2200);
+}
+const srcLabel = k => (k && SOURCES[k]) ? SOURCES[k].label : '未配置';
+const srcTag   = k => (k && SOURCES[k] && SOURCES[k].ai) ? 'ai' : 'b';
+
+/* ══════════════════════════════════════════════════════════════
+   5. 顶栏 —— 文档名 + 类型 + 状态
+   ══════════════════════════════════════════════════════════════ */
+function renderTopbar() {
+  const d = S.doc, st = ST[statusOf(d)];
+  const locked = !d.parseable;   // 图片 / PDF ⇒ 类型锁定
+  $('topbar').innerHTML =
+    `<span class="fn" title="${esc(d.name)}">${esc(d.name)}</span>` +
+    `<span class="path">${esc(d.path)}</span>` +
+    `<span class="sp"></span>` +
+    `<div class="gate">
+       <span class="gl">文档类型</span>
+       <button class="${d.type==='editable'?'on':''}" data-type="editable" ${locked?'disabled':''}
+         title="${locked?'图片 / PDF 无法解析 ⇒ 固定文档，不可更改':'可编辑文档'}">
+         <span class="dot"></span>可编辑文档</button>
+       <button class="${d.type==='fixed'?'on fx':''}" data-type="fixed" ${locked?'disabled':''}
+         title="${locked?'图片 / PDF 无法解析 ⇒ 固定文档（锁定）':'固定文档'}">
+         <span class="dot"></span>固定文档</button>
+     </div>` +
+    `<span class="st ${st.cls}"><span class="d"></span>${st.text}</span>`;
+
+  $('topbar').querySelectorAll('[data-type]').forEach(b => {
+    b.onclick = () => setType(b.dataset.type);
+  });
+}
+
+function setType(t) {
+  const d = S.doc;
+  if (!d.parseable) { toast('图片 / PDF 无法解析 ⇒ 只能是固定文档', true); return; }
+  if (d.type === t) return;
+  d.type = t; d.touched = true;
+  if (t === 'fixed') { d.anchors = []; d.aiRules = []; S.anchorSel = null; S.tab = 'global'; }
+  else { d.subtype = null; }
+  toast(`已改为「${t==='fixed'?'固定文档':'可编辑文档'}」`);
+  render();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   6. 左树
+   ══════════════════════════════════════════════════════════════ */
+function matchFilter(d) {
+  const f = S.filter;
+  if (f === 'all') return true;
+  if (f === 'fixed' || f === 'editable') return d.type === f;
+  return statusOf(d) === f;
+}
+function renderTree() {
+  const rows = [
+    `<div class="tn l1"><span class="caret">▾</span><span class="nm">广州某某制造有限公司</span></div>`,
+    `<div class="tn l2"><span class="caret">▾</span><span class="nm">9001 标准</span></div>`,
+    `<div class="tn l3"><span class="caret">▾</span><span class="nm">初次认证</span></div>`,
+  ];
+  const list = DOCS.filter(matchFilter);
+  if (!list.length) rows.push(`<div class="empty">当前筛选下没有文件</div>`);
+  list.forEach(d => {
+    const on = S.doc && S.doc.code === d.code ? ' on' : '';
+    const st = ST[statusOf(d)];
+    rows.push(
+      `<div class="tn l4${on}" data-doc="${d.code}" title="${esc(d.name)}">` +
+      `<span class="nm">${esc(d.name)}</span>` +
+      `<span class="tag ${st.cls==='done'?'s':st.cls==='draft'?'w':'i'}" style="transform:scale(.9)">${st.text}</span></div>`);
+  });
+  $('tree').innerHTML = rows.join('');
+  $('tree').querySelectorAll('[data-doc]').forEach(el => {
+    el.onclick = () => selectDoc(DOCS.find(x => x.code === el.dataset.doc));
+  });
+
+  const cnt = fn => DOCS.filter(fn).length;
+  $('fbar').innerHTML = [
+    ['all','全部',DOCS.length], ['fixed','固定',cnt(d=>d.type==='fixed')],
+    ['editable','可编辑',cnt(d=>d.type==='editable')],
+    ['none','未设置',cnt(d=>statusOf(d)==='none')],
+    ['draft','正在设置',cnt(d=>statusOf(d)==='draft')],
+    ['done','已设置',cnt(d=>statusOf(d)==='done')],
+  ].map(([k,txt,n]) => `<span class="f ${S.filter===k?'on':''}" data-f="${k}">${txt}<span class="c">${n}</span></span>`).join('');
+  $('fbar').querySelectorAll('[data-f]').forEach(el => {
+    el.onclick = () => { S.filter = el.dataset.f; render(); };
+  });
+
+  $('sideft').innerHTML =
+    `<span>显示 ${DOCS.filter(matchFilter).length} / ${DOCS.length} 份</span><span class="sp"></span>` +
+    `<span class="muted tiny">${S.doc.type==='fixed'?'固定文档':'可编辑文档'}</span>`;
+}
+
+function selectDoc(d) {
+  if (!d) return;
+  S.doc = d; S.anchorSel = null; S.view = d.parseable ? 'origin' : 'origin';
+  /* ★ 默认落「全局规则」—— 分组 / 文档作用由原始文件语义分析带出，第一次打开就有 */
+  S.tab = 'global';
+  render();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   7. 中栏预览 —— 原始文档 / 空白模板 / 填充后预览
+   ══════════════════════════════════════════════════════════════ */
+function renderPreview() {
+  const d = S.doc;
+  const canTpl = d.type === 'editable';
+  if (!canTpl) S.view = 'origin';
+
+  $('pvhd').innerHTML =
+    `<span>${d.type === 'fixed' ? '原始扫描件' : '预览'}</span>` +
+    `<span class="sp"></span>` +
+    (canTpl
+      ? `<div class="gate">
+           <button class="${S.view==='origin'?'on':''}" data-view="origin"><span class="dot"></span>原始文档</button>
+           <button class="${S.view==='template'?'on':''}" data-view="template"><span class="dot"></span>空白模板</button>
+           <button class="${S.view==='filled'?'on':''}" data-view="filled" ${d.filled?'':'disabled'}
+             title="${d.filled?'':'先点右上「自动填充」'}"><span class="dot"></span>填充后预览</button>
+         </div>`
+      : `<span class="tag i">不可编辑</span>`) +
+    /* ★ 上传空白模板 / 下载原始文档 —— 同一行 */
+    (canTpl ? `<button class="btn sm" id="btnUpTpl">上传空白模板</button>` : ``) +
+    `<button class="btn sm gh" id="btnDlRaw">下载原始文档</button>`;
+
+  $('pvhd').querySelectorAll('[data-view]').forEach(b => {
+    b.onclick = () => { S.view = b.dataset.view; renderPreview(); };
+  });
+  const bu = $('btnUpTpl');
+  if (bu) bu.onclick = () => uploadTpl(d);
+  const bd = $('btnDlRaw');
+  if (bd) bd.onclick = () => toast('已开始下载：' + d.name);
+
+  const filled = S.view === 'filled';
+  const tok = a => {
+    if (filled) return a.value ? `<span class="val">${esc(a.value)}</span>` : `<span class="tok miss">（空）</span>`;
+    return `<span class="tok${a.source?'':' miss'}">${esc(a.ref)}</span>`;
+  };
+
+  if (d.type === 'fixed') {
+    $('pvbd').innerHTML =
+      `<div class="page-mock"><div class="ph">${esc(d.name.replace(/\.[^.]+$/,''))}</div>
+        <div class="scan">（扫描件 / 图片，无可编辑内容）</div>
+        <div class="fake">最终产物 = ${d.subtype === 'standard_provided' ? '标准域那一份' : d.subtype === 'enterprise_provided' ? '企业上传的原件' : '待定（先定「可替换性」）'}</div>
+      </div>`;
+    return;
+  }
+
+  if (!d.anchors.length) {
+    $('pvbd').innerHTML =
+      `<div class="page-mock"><div class="ph">${esc(d.name.replace(/\.[^.]+$/,''))}</div>
+        <div class="scan">还没有空白模板</div>
+        <div class="fake">先「上传空白模板」，系统据此扫描锚点</div>
+      </div>`;
+    return;
+  }
+
+  const fld = d.anchors.filter(a => a.kind === 'field');
+  const tbl = d.anchors.filter(a => a.kind === 'table');
+
+  /* 只有「陪审人员.doc」配了版式示意；其余文档走通用列表预览（⛔ 不显示不存在的锚点） */
+  if (d.code !== 'D1') {
+    $('pvbd').innerHTML =
+      `<div class="page-mock">
+        <div class="ph">${esc(d.name.replace(/\.[^.]+$/, ''))}</div>
+        ${fld.map(a => `<div class="kv"><b>${esc(a.ref.replace(/[{}]/g, ''))}</b><span>${tok(a)}</span></div>`).join('')}
+        ${tbl.map(a => `<table><thead><tr><th>表格区域</th></tr></thead><tbody>
+           ${filled && a.rows && a.rows.length
+             ? a.rows.map(r => `<tr>${r.map(c => `<td><span class="val">${esc(c)}</span></td>`).join('')}</tr>`).join('')
+             : `<tr><td style="padding:10px">${tok(a)}</td></tr>`}
+         </tbody></table>`).join('')}
+        <p class="tiny muted" style="margin-top:14px">${filled ? '填充后预览' : S.view === 'template' ? '空白模板' : '原始文档'}</p>
+      </div>`;
+    return;
+  }
+
+  const byRef = ref => d.anchors.find(a => a.ref === ref);
+  const g = ref => { const a = byRef(ref); return a ? tok(a) : `<span class="muted">—</span>`; };
+
+  $('pvbd').innerHTML =
+    `<div class="page-mock">
+      <div class="ph">陪 审 人 员 安 排 表</div>
+      <div class="kv"><b>编制单位</b><span>${g('{{ENT_NAME}}')}</span></div>
+      <div class="kv"><b>审核类型</b><span>${g('{{审核类型}}')}</span></div>
+      <div class="kv"><b>版本</b><span>${g('{{QMS_VER}}')}</span></div>
+      <p style="margin:14px 0 4px">${g('{{ai:陪审说明}}')}</p>
+      <table><thead><tr><th>日期</th><th>受审部门</th><th>条款</th><th>陪审人员</th></tr></thead><tbody>
+        ${tbl.length
+          ? (filled && tbl[0].rows && tbl[0].rows.length
+              ? tbl[0].rows.map(r => `<tr>${r.map(c => `<td><span class="val">${esc(c)}</span></td>`).join('')}</tr>`).join('')
+              : `<tr><td colspan="4" style="padding:10px">${tok(tbl[0])}</td></tr>`)
+          : `<tr><td colspan="4" style="color:var(--t3)">（无表格锚点）</td></tr>`}
+      </tbody></table>
+      <div class="kv" style="margin-top:16px"><b>编制人</b><span>${g('{{文件控制程序}}')}</span>
+        ${byRef('{{文件控制程序}}') && !byRef('{{文件控制程序}}').source ? `<span class="tiny" style="color:var(--dan)">← 未配数据源</span>` : ``}</div>
+      <p class="tiny muted" style="margin-top:14px">${filled ? '填充后预览' : S.view === 'template' ? '空白模板' : '原始文档'}</p>
+    </div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   7b. 上传空白模板（★ 锁定过的锚点，配置会保留）
+   ══════════════════════════════════════════════════════════════ */
+function uploadTpl(d) {
+  const had = d.anchors.length;
+  const lockedOld = d.anchors.filter(a => a.locked);
+  const fresh = [
+    { ref:'{{ENT_NAME}}', kind:'field', pos:'正文 · 第 1 段', source:'global', param:'ENT_NAME', prompt:'', op:'cell', onMissing:'empty', locked:false, value:'广州某某制造有限公司' },
+    { ref:'{{table:相关方}}', kind:'table', pos:'正文 · 表 1', source:null, param:'', prompt:'', op:'table', onMissing:'empty', locked:false, rows:[] },
+  ];
+  /* ★ 锁定 = 这份配置已确定 ⇒ 换模板重新扫描时把配置带回来 */
+  let kept = 0;
+  fresh.forEach(f => {
+    const old = lockedOld.find(x => x.ref === f.ref);
+    if (old) { Object.assign(f, old); kept++; }
+  });
+  d.anchors = fresh;
+  d.touched = true;
+  toast(had
+    ? `已重新上传并扫描：${fresh.length} 个锚点${kept ? `，其中 ${kept} 个锁定配置已保留` : ''}`
+    : `模板已上传，扫到 ${fresh.length} 个锚点`);
+  render();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   8b. 帮助 —— ★ 收进 Tab 行右侧的「!」，页面里 ⛔ 不印说明
+   ══════════════════════════════════════════════════════════════ */
+const HELP = {
+  anchor: [
+    { k:'作用', v:'把空白模板里的 <code>{{标签}}</code> 与「值从哪来」绑定。<b>仅可编辑文档</b>适用。' },
+    { k:'分组', v:'按 <b>字段 / 表格</b> 两组；点一个锚点即进入它的设置页。' },
+    { k:'设置页', v:'<b>数据区域</b> = 数据源（5 类）；<b>操作区域</b> = 操作方式（自动推导）+ 落空策略。' },
+    { k:'锁定', v:'锁定表示这份配置<b>已确定</b> —— 换模板重新扫描时会保留。' },
+    { k:'自动填充 / 预览', v:'锚点<b>全部配好数据源后</b>才可用。' },
+  ],
+  global: [
+    { k:'文档属性', v:'分组 / 文档作用 / 是否可替换 —— 打开文档时<b>自动带出</b>，可修改。' },
+    { k:'全局填写规则', v:'只有存在 <b>ai 节点</b>时才出现；点「自动分析」按 ai 节点生成可执行提示词，<b>每段可单独保存</b>。' },
+  ],
+};
+function renderHelp() {
+  const el = $('help');
+  if (!el) return;
+  el.innerHTML = `<h5>${S.tab === 'anchor' ? '锚点规则' : '全局规则'} · 功能说明</h5>` +
+    (HELP[S.tab] || []).map(x => `<div class="hi"><span class="k">${x.k}</span>${x.v}</div>`).join('');
+}
+function toggleHelp() {
+  const e = $('help'), b = $('btnHelp');
+  if (!e) return;
+  const on = e.className.includes('on');
+  if (!on) renderHelp();
+  e.className = 'help' + (on ? '' : ' on');
+  if (b) b.className = 'helpbtn' + (on ? '' : ' on');
+}
+function closeHelp() {
+  const e = $('help'), b = $('btnHelp');
+  if (e) e.className = 'help';
+  if (b) b.className = 'helpbtn';
+}
+
+/* ══════════════════════════════════════════════════════════════
+   8. 右侧 —— Tab 头
+   ══════════════════════════════════════════════════════════════ */
+function renderRtabs() {
+  const d = S.doc;
+  const isFixed = d.type === 'fixed';
+  const bad = d.anchors.filter(a => !a.source).length;
+  const aiN = aiAnchors(d).length;
+  const aiOk = !hasAi(d) || d.aiRules.some(r => r.prompt.trim());
+
+  $('rtabs').innerHTML =
+    `<button class="${S.tab==='anchor'?'on':''}" data-tab="anchor">
+       锚点规则
+       <span class="b ${bad?'d':(isFixed||d.anchors.length)?'s':''}">${
+         isFixed ? '不适用' : d.anchors.length ? (bad ? bad + ' 未配' : d.anchors.length + ' 个') : '未扫描'}</span>
+     </button>` +
+    `<button class="${S.tab==='global'?'on':''}" data-tab="global">
+       全局规则
+       <span class="b ${aiOk?'s':'d'}">${hasAi(d) ? (aiOk ? 'ai 已配' : aiN + ' 个 ai') : '无 ai'}</span>
+     </button>` +
+    `<button class="helpbtn" id="btnHelp" title="本页功能说明">!</button>`;
+
+  $('rtabs').querySelectorAll('[data-tab]').forEach(b => {
+    b.onclick = () => {
+      S.tab = b.dataset.tab; S.anchorSel = null;
+      closeHelp();
+      renderRight(); renderRtabs();
+    };
+  });
+  const hb = $('btnHelp');
+  if (hb) hb.onclick = ev => { ev.stopPropagation(); toggleHelp(); };
+}
+
+/* ══════════════════════════════════════════════════════════════
+   9. 右侧 · 锚点规则（列表 → 点开设置页）
+   ══════════════════════════════════════════════════════════════ */
+function renderAnchorTab() {
+  const d = S.doc;
+  if (d.type === 'fixed') {
+    $('rbody').innerHTML =
+      `<div class="empty">固定文档不生成内容，没有锚点。<br>
+        <span class="tiny">类型对图片 / PDF 是锁定的；如需锚点，请先改成可编辑文档。</span></div>`;
+    return;
+  }
+  if (S.anchorSel) return renderAnchorEdit();
+
+  const fld = d.anchors.filter(a => a.kind === 'field');
+  const tbl = d.anchors.filter(a => a.kind === 'table');
+  const bad = d.anchors.filter(a => !a.source).length;
+  const lockedN = d.anchors.filter(a => a.locked).length;
+  /* ★ 锚点没配完 ⇒ 不知道值该填到哪 ⇒ 不能自动填充 / 预览 */
+  const ready = readyOf(d);
+
+  const group = (title, arr) =>
+    `<div class="agroup">
+       <div class="ahd"><span>${title}</span><span class="cnt">${arr.length} 个</span></div>
+       ${arr.length ? arr.map(a => `
+         <div class="arow ${a.source?'':'bad'}" data-anchor="${esc(a.ref)}">
+           <span class="dot"></span>
+           <span class="ref" title="${esc(a.ref)}">${esc(a.ref)}</span>
+           <span class="src"><span class="tag ${srcTag(a.source)}">${srcLabel(a.source)}</span></span>
+           <button class="lk ${a.locked?'on':''}" data-lock="${esc(a.ref)}"
+             title="${a.locked?'已锁定 —— 这份配置已确定，换模板重扫时会保留':'点一下锁定（表示这个字段的配置已确定）'}">${a.locked?'已锁定':'锁定'}</button>
+         </div>`).join('') : `<div class="empty" style="padding:14px">没有${title}锚点</div>`}
+     </div>`;
+
+  $('rbody').innerHTML =
+    (ready ? `` : `<div class="warnbar"><span>锚点未配齐 ⇒ 不能自动填充 / 预览</span></div>`) +
+    `<div class="row" style="margin-bottom:12px">
+       <button class="btn pri" id="btnAuto" ${ready?'':'disabled'} title="${ready?'一键填入测试值':'锚点未配齐，先配完数据源'}">自动填充</button>
+       <button class="btn" id="btnPrev" ${(ready && d.filled)?'':'disabled'} title="${ready ? (d.filled?'':'先点自动填充') : '锚点未配齐'}">预览</button>
+       <span class="sp"></span>
+       ${ready ? `<span class="tag s">已配齐</span>` : `<span class="tag d">${bad} 个未配</span>`}
+       ${lockedN ? `<span class="tag i">${lockedN} 个已锁定</span>` : ``}
+     </div>
+     ${group('字段', fld)}
+     ${group('表格', tbl)}
+     <div class="hr"></div>
+     <div class="row"><span class="tiny muted">共 ${d.anchors.length} 个锚点</span><span class="sp"></span>
+       <button class="btn sm gh" id="btnRescan">重新扫描</button></div>`;
+
+  $('rbody').querySelectorAll('[data-anchor]').forEach(el => {
+    el.onclick = () => { S.anchorSel = el.dataset.anchor; renderRight(); };
+  });
+  /* ★ 锁定开关（⛔ 不要冒泡到「进入设置页」） */
+  $('rbody').querySelectorAll('[data-lock]').forEach(el => {
+    el.onclick = ev => {
+      ev.stopPropagation();
+      const a = d.anchors.find(x => x.ref === el.dataset.lock);
+      if (!a) return;
+      a.locked = !a.locked;
+      toast(a.locked ? '已锁定 —— 换模板重扫时会保留这份配置' : '已解锁');
+      renderRight();
+    };
+  });
+  const ba = $('btnAuto');
+  if (ba) ba.onclick = () => {
+    d.anchors.forEach(a => { if (a.source && !a.value) a.value = autoValue(a); });
+    d.filled = true; S.view = 'filled';
+    toast('已自动填充 —— 可修改或清空');
+    render();
+  };
+  const bp = $('btnPrev');
+  if (bp) bp.onclick = () => { S.view = 'filled'; renderPreview(); toast('已切到填充后预览'); };
+  const br = $('btnRescan');
+  if (br) br.onclick = () => toast('已重新扫描（模拟）');
+}
+
+function autoValue(a) {
+  if (a.kind === 'table') return a.rows;
+  return a.source === 'global' ? '（取自全局参数）' : '（AI 生成内容）';
+}
+
+/* 锚点设置页 —— 数据区域 + 操作区域 */
+function renderAnchorEdit() {
+  const d = S.doc;
+  const a = d.anchors.find(x => x.ref === S.anchorSel);
+  if (!a) { S.anchorSel = null; return renderAnchorTab(); }
+  const isAi = a.source && SOURCES[a.source] && SOURCES[a.source].ai;
+
+  $('rbody').innerHTML =
+    `<div class="pnlhd">
+       <button class="back" id="btnBack">← 返回</button>
+       <span class="t" title="${esc(a.ref)}">${esc(a.ref)}</span>
+       <span class="tag ${a.kind==='table'?'w':'b'}">${a.kind==='table'?'表格':'字段'}</span>
+       <button class="lk ${a.locked?'on':''}" id="btnLock"
+         title="${a.locked?'已锁定 —— 这份配置已确定，换模板重扫时会保留':'锁定（表示这份配置已确定）'}">${a.locked?'已锁定':'锁定'}</button>
+     </div>
+
+     <div class="zone">
+       <div class="zhd">数据区域<span class="sp"></span>
+         <span class="tag ${srcTag(a.source)}">${srcLabel(a.source)}</span></div>
+       <div class="zbd">
+         <div class="fld"><label>数据源</label>
+           <div class="cards">
+             ${Object.entries(SOURCES).map(([k,v]) => `
+               <div class="card ${v.ai?'ai':''} ${a.source===k?'on':''}" data-src="${k}">
+                 <div class="ct">${v.label}${a.source===k?'<span class="chk">✓</span>':''}</div>
+                 <div class="cd">${v.desc}</div>
+               </div>`).join('')}
+           </div>
+         </div>
+
+         ${a.source === 'global' ? `
+           <div class="fld"><label>取哪个全局参数</label>
+             <select id="fParam">
+               ${['ENT_NAME · 企业名称','ENT_USCC · 统一社会信用代码','ENT_LEGAL · 法定代表人','STD_NO · 认证标准号','AUDIT_TYPE · 审核类型','QMS_VER · 体系版本']
+                 .map(o => `<option ${('{{'+o.split(' · ')[0]+'}}'==='{{'+a.param+'}}' || o.startsWith(a.param+' '))?'selected':''}>${o}</option>`).join('')}
+             </select>
+           </div>` : ``}
+
+         ${isAi && a.source !== 'ai_prompt' ? `
+           <div class="fld"><label>来源参数 <span class="tiny muted">（可选 · 为空则只看提示词）</span></label>
+             <select id="fAiParam">
+               <option value="">（不取参数）</option>
+               ${['ENT_NAME · 企业名称','ENT_SCOPE · 企业经营范围','ENT_CULTURE · 企业文化','ENT_PROFILE · 企业概况']
+                 .map(o => `<option ${a.param && o.startsWith(a.param+' ')?'selected':''}>${o}</option>`).join('')}
+             </select>
+           </div>
+           <div class="fld"><label>是否关联企业文档</label>
+             <div class="cards">
+               <div class="card ${a.relDoc?'on':''}" data-rel="0"><div class="ct">不关联${a.relDoc?'':'<span class="chk">✓</span>'}</div>
+                 <div class="cd">仅凭参数 + 提示词生成</div></div>
+               <div class="card ${a.relDoc?'on':''}" data-rel="1"><div class="ct">关联${a.relDoc?'<span class="chk">✓</span>':''}</div>
+                 <div class="cd">需要读企业的 markdown 做语义分析</div></div>
+             </div>
+           </div>` : ``}
+
+         ${isAi ? `
+           <div class="fld"><label>AI 提示词 <span class="tiny muted">（本锚点专用）</span></label>
+             <textarea rows="4" id="fPrompt" placeholder="告诉模型这一段该怎么写…">${esc(a.prompt)}</textarea>
+           </div>` : ``}
+       </div>
+     </div>
+
+     <div class="zone">
+       <div class="zhd">操作区域<span class="sp"></span>
+         <span class="tag i">${OPS[autoOp(a)].label}</span></div>
+       <div class="zbd">
+         <div class="fld"><label>操作方式 <span class="tiny muted">（自动）</span></label>
+           <div class="auto-op"><span class="tag i">${OPS[autoOp(a)].label}</span></div>
+         </div>
+         <div class="fld"><label>落空策略</label>
+           <select id="fOnMiss">
+             ${Object.entries(ONMISS).map(([k,v]) => `<option value="${k}" ${a.onMissing===k?'selected':''}>${v.label}</option>`).join('')}
+           </select>
+         </div>
+         <div class="fld"><label>位置 <span class="tiny muted">（扫描器带出）</span></label>
+           <input type="text" value="${esc(a.pos)}" readonly>
+         </div>
+       </div>
+     </div>
+
+     <div class="row" style="justify-content:flex-end;gap:8px">
+       <button class="btn" id="btnDel">删除锚点规则</button>
+       <button class="btn pri" id="btnSaveAnchor">保存</button>
+     </div>`;
+
+  $('btnBack').onclick = () => { S.anchorSel = null; renderRight(); };
+  $('btnLock').onclick = () => {
+    a.locked = !a.locked;
+    toast(a.locked ? '已锁定 —— 换模板重扫时会保留这份配置' : '已解锁');
+    renderRight();
+  };
+  $('rbody').querySelectorAll('[data-src]').forEach(el => {
+    el.onclick = () => { a.source = el.dataset.src; if (!SOURCES[a.source].ai) a.prompt = ''; renderRight(); };
+  });
+  $('rbody').querySelectorAll('[data-rel]').forEach(el => {
+    el.onclick = () => { a.relDoc = el.dataset.rel === '1'; renderRight(); };
+  });
+  $('btnSaveAnchor').onclick = () => {
+    const p = $('fPrompt'); if (p) a.prompt = p.value;
+    const m = $('fOnMiss'); if (m) a.onMissing = m.value;
+    const pm = $('fParam');
+    if (pm) a.param = pm.value.split(' · ')[0];
+    const ap = $('fAiParam');
+    if (ap) a.param = ap.value ? ap.value.split(' · ')[0] : '';
+    a.op = autoOp(a);          // ★ 操作方式自动推导，⛔ 不人工选
+    d.touched = true;
+    toast('已保存（自动保存）');
+    render();
+  };
+  $('btnDel').onclick = () => {
+    d.anchors = d.anchors.filter(x => x.ref !== a.ref);
+    S.anchorSel = null; d.touched = true;
+    toast('已删除该锚点规则');
+    render();
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════
+   10. 右侧 · 全局规则
+   ══════════════════════════════════════════════════════════════ */
+function renderGlobalTab() {
+  const d = S.doc;
+  const isFixed = d.type === 'fixed';
+  const ai = aiAnchors(d);
+
+  $('rbody').innerHTML =
+    `<div class="zone">
+       <div class="zhd">文档属性</div>
+       <div class="zbd">
+         <div class="fld"><label>分组</label>
+           <div class="row wrap" id="tagBox">
+             ${d.tags.map((t,i) => `<span class="tag b">${esc(t)}<span class="x" data-deltag="${i}">×</span></span>`).join('')}
+             <button class="btn sm gh" id="btnAddTag">+ 加一个</button>
+           </div>
+         </div>
+         <div class="fld"><label>文档作用</label>
+           <textarea rows="6" id="fPurpose">${esc(d.purpose)}</textarea>
+         </div>
+         ${isFixed ? `
+           <div class="fld"><label>是否可替换</label>
+             <div class="cards">
+               <div class="card ${d.subtype==='standard_provided'?'on':''}" data-sub="standard_provided">
+                 <div class="ct">标准自带${d.subtype==='standard_provided'?'<span class="chk">✓</span>':''}</div>
+                 <div class="cd">标准里本来就有，不向企业索取</div></div>
+               <div class="card ${d.subtype==='enterprise_provided'?'on':''}" data-sub="enterprise_provided">
+                 <div class="ct">企业提供${d.subtype==='enterprise_provided'?'<span class="chk">✓</span>':''}</div>
+                 <div class="cd">要企业交上来，需要匹配依据</div></div>
+             </div>
+           </div>
+           ${d.subtype === 'enterprise_provided' ? `
+             <div class="fld"><label>匹配依据</label>
+               <input type="text" id="fMatch" value="${esc(d.matchPrompt)}" placeholder="如：含「营业执照」且含企业名称">
+             </div>` : ``}` : ``}
+       </div>
+     </div>
+
+     ${hasAi(d) ? `
+       <div class="zone">
+         <div class="zhd">全局填写规则 <span class="sub">${ai.length} 个 ai 节点</span><span class="sp"></span>
+           <button class="btn sm pri" id="btnAiAnalyze">自动分析</button></div>
+         <div class="zbd">
+           ${d.aiRules.map((r, i) => `
+             <div class="fld" style="border:1px solid var(--bd-l);border-radius:var(--r2);padding:10px">
+               <label style="display:flex;align-items:center;gap:6px">
+                 <span class="tag ai">${esc(r.title)}</span>
+                 <span class="sp"></span>
+                 <span class="tag ${r.saved?'s':'w'}" style="font-size:11px">${r.saved?'已保存':'未保存'}</span>
+               </label>
+               <textarea rows="4" data-airule="${i}" placeholder="点右上「自动分析」生成，或自己写…">${esc(r.prompt)}</textarea>
+               <div class="row" style="margin-top:6px"><span class="sp"></span>
+                 <button class="btn sm" data-aisave="${i}">保存本段</button></div>
+             </div>`).join('') || `<div class="empty">没有 ai 节点</div>`}
+         </div>
+       </div>` : `
+       <div class="zone">
+         <div class="zhd">全局填写规则</div>
+         <div class="zbd"><div class="empty">没有 ai 节点</div></div>
+       </div>`}`;
+
+  const bp = $('fPurpose');
+  if (bp) bp.onblur = () => { if (d.purpose !== bp.value) { d.purpose = bp.value; d.touched = true; renderTopbar(); renderTree(); renderRtabs(); } };
+  const bm = $('fMatch');
+  if (bm) bm.onblur = () => { d.matchPrompt = bm.value; };
+  $('rbody').querySelectorAll('[data-deltag]').forEach(el => {
+    el.onclick = () => { d.tags.splice(+el.dataset.deltag, 1); d.touched = true; render(); };
+  });
+  const bt = $('btnAddTag');
+  if (bt) bt.onclick = () => { d.tags.push('未命名分组'); d.touched = true; render(); };
+  $('rbody').querySelectorAll('[data-sub]').forEach(el => {
+    el.onclick = () => { d.subtype = el.dataset.sub; d.touched = true; render(); };
+  });
+  const ba = $('btnAiAnalyze');
+  if (ba) ba.onclick = () => {
+    d.aiRules.forEach(r => {
+      const a = ai.find(x => r.key.endsWith(x.ref.replace(/[{}]/g,'').replace(/^ai:/,'')));
+      r.prompt = `你是体系认证文档助手。请为「${d.name}」生成这一段内容。\n` +
+        `· 目标锚点：${a ? a.ref : r.title}\n` +
+        `· 企业：{{ENT_NAME}}（可扩充：经营范围 / 企业文化 / 企业概况）\n` +
+        `· 要求：语言正式、与体系文件口径一致；只输出该段正文，不要解释。`;
+      r.saved = false;
+    });
+    toast('已按 ai 节点生成提示词 —— 每段可单独保存');
+    render();
+  };
+  $('rbody').querySelectorAll('[data-airule]').forEach(el => {
+    el.oninput = () => { d.aiRules[+el.dataset.airule].prompt = el.value; };
+  });
+  $('rbody').querySelectorAll('[data-aisave]').forEach(el => {
+    el.onclick = () => {
+      const i = +el.dataset.aisave;
+      d.aiRules[i].saved = true; d.touched = true;
+      toast('本段已保存');
+      render();
+    };
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════
+   11. 渲染入口
+   ══════════════════════════════════════════════════════════════ */
+function renderRight() {
+  if (S.tab === 'global') renderGlobalTab();
+  else renderAnchorTab();
+}
+function render() {
+  renderTopbar(); renderTree(); renderPreview(); renderRtabs(); renderRight();
+}
+
+/* 初始化 */
+S.doc = DOCS[0];
+render();
+
+/* 帮助浮层：点面板外任意处收起（⛔ 不占页面空间） */
+document.addEventListener('click', ev => {
+  const e = $('help');
+  if (!e || !e.className.includes('on')) return;
+  const tg = ev.target;
+  if (tg && tg.closest && (tg.closest('#help') || tg.closest('#btnHelp'))) return;
+  closeHelp();
+});
+
+/* ══════════════════════════════════════════════════════════════
+   12. 自检（?selftest=1 触发；也可被 check 脚本调用）
+   ══════════════════════════════════════════════════════════════ */
+function selfTest() {
+  const R = [];
+  const t = (n, c) => R.push((c ? '✓ ' : '✗ ') + n);
+  const pick = c => DOCS.find(d => d.code === c);
+
+  t('文档共 8 份', DOCS.length === 8);
+  t('数据源 5 类（全局参数 / AI 自动生成 / AI 字段 / AI 表格 / AI 提示词）', Object.keys(SOURCES).length === 5);
+  t('操作 2 类（单元格更新 / 表格更新）', Object.keys(OPS).length === 2);
+
+  /* 类型自动判定：图片 / PDF ⇒ 固定且锁定 */
+  t('图片 / PDF ⇒ 解析不了', !pick('D3').parseable && !pick('D4').parseable);
+  t('图片 / PDF ⇒ 固定文档', pick('D3').type === 'fixed' && pick('D4').type === 'fixed');
+  t('可解析文档 ⇒ 默认可编辑', pick('D1').type === 'editable' && pick('D2').type === 'editable');
+
+  /* 三态 */
+  t('未动过 ⇒ 未设置', statusOf(pick('D7')) === 'none');
+  t('固定文档信息齐 ⇒ 已设置', statusOf(pick('D3')) === 'done');
+  t('有锚点未配数据源 ⇒ 正在设置', statusOf(pick('D1')) === 'draft');
+  t('有 ai 节点但没全局规则 ⇒ 正在设置', statusOf(pick('D6')) === 'draft');
+  t('ai 规则写好 ⇒ 已设置', (() => {
+    const d = JSON.parse(JSON.stringify(pick('D6')));
+    d.anchors.forEach(a => { if (!a.source) a.source = 'global'; });
+    d.aiRules.forEach(r => r.prompt = 'x');
+    return statusOf(d) === 'done';
+  })());
+
+  /* ai 节点识别 */
+  t('识别出 ai 节点（D1 有 2 个：ai_gen 字段 + ai_table 表格）', aiAnchors(pick('D1')).length === 2);
+  t('固定文档没有 ai 节点 ⇒ 不显示全局填写规则', !hasAi(pick('D5')) && !hasAi(pick('D3')));
+  t('纯全局参数文档 ⇒ 无 ai 节点', (() => {
+    const d = JSON.parse(JSON.stringify(pick('D2')));
+    d.anchors = d.anchors.filter(a => a.source === 'global');
+    d.aiRules = [];
+    return !hasAi(d) && statusOf(d) === 'done';
+  })());
+
+  /* 锚点分组 */
+  t('锚点按字段 / 表格分组', pick('D1').anchors.filter(a => a.kind === 'field').length === 5 &&
+                            pick('D1').anchors.filter(a => a.kind === 'table').length === 1);
+
+  /* ★ 本轮新增：操作方式自动推导（⛔ 不人工选） */
+  t('操作方式自动：字段 ⇒ 单元格更新', autoOp({ kind: 'field' }) === 'cell');
+  t('操作方式自动：表格 ⇒ 表格更新', autoOp({ kind: 'table' }) === 'table');
+
+  /* ★ 本轮新增：锚点锁定 */
+  t('锚点锁定可统计（D1 有 2 个已锁定）', pick('D1').anchors.filter(a => a.locked).length === 2);
+  t('锁定 = 配置已确定（D2 两个锚点都锁了）', pick('D2').anchors.every(a => a.locked));
+
+  /* ★ 本轮新增：锚点配齐才能自动填充 / 预览 */
+  t('锚点未配齐 ⇒ 不能自动填充 / 预览', readyOf(pick('D1')) === false);
+  t('锚点配齐 ⇒ 可以自动填充 / 预览', (() => {
+    const d = JSON.parse(JSON.stringify(pick('D1')));
+    d.anchors.forEach(a => { if (!a.source) a.source = 'global'; });
+    return readyOf(d) === true;
+  })());
+  t('没有锚点 ⇒ 也不能自动填充', readyOf({ anchors: [] }) === false);
+
+  /* 缺项清单 */
+  t('D1 缺项含「未配数据源」', missingOf(pick('D1')).some(x => x.includes('未配数据源')));
+  t('D3 缺项为空', missingOf(pick('D3')).length === 0);
+
+  return R;
+}
+
+if (typeof location !== 'undefined' && location.search && location.search.indexOf('selftest=1') >= 0) {
+  const R = selfTest();
+  const pass = R.filter(x => x.startsWith('✓')).length;
+  console.log(R.join('\n') + '\n\n结果: ' + pass + '/' + R.length + ' 通过');
+}
+</script>
+</body>
+</html>

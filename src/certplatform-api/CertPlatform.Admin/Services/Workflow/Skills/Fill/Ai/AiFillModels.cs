@@ -41,6 +41,12 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
         /// </summary>
         public string Section { get; set; } = "field";
 
+        /// <summary>
+        /// ★ 提示词组（41 号原型 V6）：支持按自定义组进行批量 AI 提取。
+        /// <para>如果为空，则默认按 <see cref="Section"/> 分组。</para>
+        /// </summary>
+        public string? PromptGroup { get; set; }
+
         /// <summary>表格列定义（仅 <c>Section=table</c> 时有值；列顺序 = 写入列序）</summary>
         public List<AiFillColumnSpec>? Columns { get; set; }
 

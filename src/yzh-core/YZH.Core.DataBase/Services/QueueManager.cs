@@ -42,14 +42,41 @@ public class QueueManager
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
-        _maxConcurrent = 4;
-        _timeoutSeconds = 300;
-        _leaseMinutes = 10;
+
+        // 从系统参数读取并发控制（启动时读取一次，生效需重启服务）
+        _maxConcurrent = ReadConfigInt("queue_max_concurrent", 4);
+        _timeoutSeconds = ReadConfigInt("queue_timeout_seconds", 300);
+        _leaseMinutes = ReadConfigInt("queue_lease_minutes", 10);
+
         _executors = (executors ?? Enumerable.Empty<IYzhTaskExecutor>())
             .Where(e => !string.IsNullOrEmpty(e.TaskType))
             .GroupBy(e => e.TaskType)
             .ToDictionary(g => g.Key, g => g.First());
+
         _semaphore = new SemaphoreSlim(_maxConcurrent, _maxConcurrent);
+        _logger.LogInformation("[QueueManager] 队列引擎已启动，并发 Worker 数: {MaxConcurrent}", _maxConcurrent);
+    }
+
+    private int ReadConfigInt(string key, int defaultValue)
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var orm = scope.ServiceProvider.GetRequiredService<IDbOrm>();
+            // 注意：QueueManager 是 Singleton，此处在构造函数中使用同步等待是允许的
+            var sql = "SELECT ConfigValue FROM cert_sys_config WHERE ConfigKey = @key AND IsValid = 1 AND IsDeleted = 0";
+            var result = orm.SqlScalarAsync<string>(sql, new { key }).GetAwaiter().GetResult().Data;
+
+            if (!string.IsNullOrEmpty(result) && int.TryParse(result, out var val))
+            {
+                return val > 0 ? val : defaultValue;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[QueueManager] 读取系统参数 {Key} 失败，使用默认值 {Default}", key, defaultValue);
+        }
+        return defaultValue;
     }
 
     #region 入参 DTO

@@ -33,18 +33,28 @@
  *   两者**不是同一张表的两种视图**，⛔ 不要合并。
  */
 import {
+  getDirectoryTree,
+  saveAnchorBatch,
+} from '@share/api/workflow/doc-fill-rule'
+import {
   TreeTableLogic,
   expectOk,
-  type YzhTableColumn,
-  type YzhFormField,
-  type FilterItem,
-  type TreeNode,
-  type EntityConfigDto,
-  type TreeBehaviorConfig,
   type ApiResponse,
+  type EntityConfigDto,
+  type FilterItem,
+  type TreeBehaviorConfig,
+  type TreeNode,
+  type YzhFormField,
+  type YzhTableColumn,
 } from '@yzh-core'
 import { ElMessage } from 'element-plus'
-import { getDirectoryTree } from '@share/api/workflow/doc-fill-rule'
+import { computed, ref } from 'vue'
+import {
+  buildAnchorViews,
+  computeAnchorStats,
+  type AnchorStats,
+  type AnchorView,
+} from './components/anchorStats'
 
 // ──── 左树：树行为配置 ────
 const TREE_BEHAVIOR: TreeBehaviorConfig = {
@@ -80,6 +90,72 @@ const NODE_ICON: Record<string, string> = {
 /** 只有「文件」叶子可操作 —— 机构/标准/阶段/文件夹只是导航 */
 const FILE_KIND = 'file'
 
+/**
+ * ★ 扫描器 / 填写引擎都**解析不了**的扩展名（C3 类型自动判定）。
+ *
+ * ⛔ 用「**否定清单**」而不是「肯定清单」：资料清单里存在 `txt`（实测 1 份）
+ *   以及未来可能出现的未知扩展名。肯定清单会把它们一并判成「不可解析」⇒
+ *   把一份本来能配规则的文档**锁死成固定文档**（用户无从解锁）。
+ *   否定清单只会锁住「确知解析不了」的那几种，未知扩展名按「可解析」放行。
+ */
+const UNPARSEABLE_TYPES = [
+  'pdf',
+  'jpg',
+  'jpeg',
+  'png',
+  'tif',
+  'tiff',
+  'bmp',
+  'gif',
+  'webp',
+  'heic',
+]
+
+/** 某扩展名是否不可解析（纯函数，`missingItems` 与 getter 共用同一口径） */
+function isUnparseableType(fileType: unknown): boolean {
+  const t = String(fileType ?? '').toLowerCase().replace(/^\./, '')
+  return t !== '' && UNPARSEABLE_TYPES.includes(t)
+}
+
+/**
+ * ★ 按「文件是否保留」裁剪树（左栏「类型 / 状态」筛选用）。
+ *
+ * 规则：
+ * - **文件叶子**：`keepFile` 为假 ⇒ 丢弃；
+ * - **非文件节点**（机构/标准/阶段/文件夹）：自身没有可筛属性，**只裁剪子树**；
+ *   子树被裁空 ⇒ **该节点一并丢弃**，否则筛选后树上会留下一串点不开的空壳分支。
+ *
+ * ⛔ 必须**重建对象**（`{ ...n, Children: kids }`），⛔ 不能就地改 `Children`：
+ *   树数据是 `logic.treeData` 的引用，就地改会污染源数据 —— 清空筛选后回不来。
+ * ⛔ 也**不能**只写 `{ ...n }`：展开运算符会把**未裁剪的原始 Children** 一起带回来，
+ *   表现为「筛选状态=已完成 → 161 份；再叠加筛选类型 → 还是 161 份」（筛选失效）。
+ */
+export function pruneTree(
+  nodes: TreeNode[],
+  keepFile: (node: TreeNode) => boolean,
+): TreeNode[] {
+  const out: TreeNode[] = []
+  for (const n of nodes) {
+    const kids = n.Children ?? []
+    const kept = pruneTree(kids, keepFile)
+    if (n.NodeType === FILE_KIND) {
+      if (keepFile(n)) out.push({ ...n, Children: [] })
+      continue
+    }
+    // 原本就没有子节点的导航节点**保留** —— 否则「无筛选」时视图也会变（空节点被抹掉）
+    if (kept.length || kids.length === 0) out.push({ ...n, Children: kept })
+  }
+  return out
+}
+
+/**
+ * 文档的**设置状态**三态（原型 V6 §②）。
+ *
+ * ⛔ 不落库：`cert_standard_doc_contract.Status` 会被别处改掉而无人回退 ⇒ 必然漂移。
+ * ✅ 实时算（见 `calcSetupStatus` / `missingItems`）。
+ */
+export type DocSetupStatus = 'draft' | 'setting' | 'done'
+
 // ──── L3 受控值（与后端 `DocTemplateAnchorController` 的静态集合逐字一致）────
 //
 // ⛔ 改这里必须同步改后端：后端才是权威校验（前端下拉只是防手滑）。
@@ -90,21 +166,26 @@ const VALUE_TYPES = ['text', 'number', 'date', 'bool', 'enum']
 const HEADER_KINDS = ['default', 'first', 'even']
 
 /** 受控值 → `{ label, value }`（空选项由调用方决定是否加） */
-const toOptions = (values: string[]) => values.map((v) => ({ label: v, value: v }))
+const toOptions = (values: string[]) =>
+  values.map((v) => ({ label: v, value: v }))
 
 export class DocFillRuleLogic extends TreeTableLogic<any> {
   /** 后端锚点控制器路由（★ 与目录同名同路径） */
   controllerName = 'Admin/Workflow/DocTemplateAnchor'
 
   /**
-   * 当前选中的**文件叶子**（`Extra.kind === 'file'`）。
+   * 当前选中的**文件叶子**（支持 `Extra.kind` 或业务树的 `Type`）。
    *
    * ⚠️ 它是**资料清单里的文件行**（`cert_standard_directory_file`），不是模板行。
    * 该文件可能还没上传空白模板 —— 那时 `hasTemplate === false`。
    */
-  get fileNode(): TreeNode | null {
-    const node = this.selectedNode
-    return node && node.Extra?.kind === FILE_KIND ? node : null
+  get fileNode(): any {
+    const node = this.selectedNode as any
+    const isFile =
+      node?.Type === FILE_KIND ||
+      node?.NodeType === FILE_KIND ||
+      node?.Extra?.kind === FILE_KIND
+    return isFile ? node : null
   }
 
   /** 右栏可操作的前置条件：选中了「文件」叶子 */
@@ -113,28 +194,161 @@ export class DocFillRuleLogic extends TreeTableLogic<any> {
   }
 
   /**
-   * ★★ 该文件是否**已上传空白模板** —— 页面操作条的分级依据。
+   * 左树加载态（`v-loading` 用）。
    *
-   * `false` 时只放行「下载标准文档 + 上传空白模板」；
-   * 扫描 / 自动分析 / 校验 / 发布 全部禁用（没有模板就没有可扫可校验的对象）。
+   * ⚠️ 基类的 `treeLoading` getter 返回的是 **Ref 对象**（恒真）——
+   *    模板里直接 `v-loading="logic.treeLoading"` 会让遮罩**常驻**，必须取 `.value`。
+   */
+  get isTreeLoading(): boolean {
+    return this.treeSide.treeLoading.value
+  }
+
+  /** 刷新左树（带 loading 态，供刷新按钮绑定） */
+  async refreshTree(): Promise<void> {
+    this.treeSide.treeLoading.value = true
+    try {
+      await this.reloadTree()
+    } finally {
+      this.treeSide.treeLoading.value = false
+    }
+  }
+
+  // ========================================================
+  // ★★ 锚点清单的**唯一共享仓库**（2026-10-05 第 28 轮新增）
+  // ========================================================
+  //
+  // 【为什么从 `AnchorRuleTab` 上移到 logic】
+  //   C 组把右栏改成 2 Tab 后，「锚点是否配齐」（C8 闸）与「有没有 ai 节点」（C11）
+  //   都成了**页面级**判据：底部保存条、Tab 徽标、中栏都要读它。
+  //   若仍留在 `AnchorRuleTab` 内部，则：
+  //     ① 默认落「全局规则」Tab 时 `AnchorRuleTab` **未挂载** ⇒ 读不到任何锚点；
+  //     ② 父页只能通过函数 ref 去掏子组件内部状态 —— 这正是 `PromptPanel` 注释里
+  //        记过的坑（`v-if` 互斥导致 ref 恒为 `null`）。
+  //   ⇒ 上移到 logic：一处加载，多处读取，口径唯一。
+
+  /** 锚点原始行（PascalCase 整行；`save-batch` 必须整行提交） */
+  private readonly anchorRowsRef = ref<any[]>([])
+  /** 锚点清单加载态 */
+  private readonly anchorLoadingRef = ref(false)
+  /** 解析后视图（`SourceSpec` 一行只解析一次 —— 口径在 `anchorStats`） */
+  private readonly anchorViewsComputed = computed<AnchorView[]>(() =>
+    buildAnchorViews(this.anchorRowsRef.value),
+  )
+  private readonly anchorStatsComputed = computed<AnchorStats>(() =>
+    computeAnchorStats(this.anchorViewsComputed.value),
+  )
+
+  get anchorRows(): any[] {
+    return this.anchorRowsRef.value
+  }
+  set anchorRows(rows: any[]) {
+    this.anchorRowsRef.value = rows
+  }
+  get anchorViews(): AnchorView[] {
+    return this.anchorViewsComputed.value
+  }
+  get anchorStats(): AnchorStats {
+    return this.anchorStatsComputed.value
+  }
+  get isAnchorLoading(): boolean {
+    return this.anchorLoadingRef.value
+  }
+
+  /**
+   * ★ C8 闸：锚点是否**配齐**（配齐才谈得上自动填充 / 预览）。
+   *
+   * 判据四条**全部**成立：① 已上传模板 ② 扫描完成 ③ 至少 1 个锚点 ④ 无未配来源、无孤儿。
+   * ⛔ 「未配」的判据不在本类复写 —— 唯一口径在 `anchorStats.toAnchorView`
+   *    （域自动值 `domain + auto` 不算未配）。
+   */
+  get anchorReadiness(): {
+    total: number
+    unconfigured: number
+    orphan: number
+    ready: boolean
+  } {
+    const s = this.anchorStats
+    return {
+      total: s.total,
+      unconfigured: s.unconfigured,
+      orphan: s.orphan,
+      ready:
+        this.hasTemplate &&
+        this.scanStatus === 'completed' &&
+        s.total > 0 &&
+        s.unconfigured === 0 &&
+        s.orphan === 0,
+    }
+  }
+
+  /**
+   * ★ C11：本模板是否存在 **ai 节点**（来源链里有 `kind === 'ai'` 的条目）。
+   *
+   * 存在才显示「全局填写规则」块 —— 没有 ai 节点时，整块与用户无关。
+   */
+  get hasAiNode(): boolean {
+    return this.anchorViews.some((v) =>
+      v.model.sources.some((s) => s.kind === 'ai'),
+    )
+  }
+
+  /**
+   * 重新加载锚点清单（写进共享仓库）。
+   *
+   * ⛔ 未上传模板时**不发请求**（与 `shouldApplyTreeFilter` 同一口径）：
+   *   那时 `TemplateCode` 为空，`eq ''` 会命中一批脏数据。
+   */
+  async reloadAnchors(): Promise<void> {
+    if (!this.templateCode) {
+      this.anchorRowsRef.value = []
+      return
+    }
+    this.anchorLoadingRef.value = true
+    try {
+      this.anchorRowsRef.value = await this.loadAnchors()
+    } catch {
+      // 锚点取不到只影响右栏清单与闸门判据，⛔ 不该把整页打挂
+      this.anchorRowsRef.value = []
+    } finally {
+      this.anchorLoadingRef.value = false
+    }
+  }
+
+  /**
+   * 获取节点上的业务属性（兼容业务树的 Raw 和 框架树的 Extra）。
+   */
+  get nodeExtra(): any {
+    return this.fileNode?.Extra || this.fileNode?.Raw || {}
+  }
+
+  /**
+   * ★★ 该文件是否**已上传空白模板** —— 页面操作条的分级依据。
    */
   get hasTemplate(): boolean {
-    return this.fileNode?.Extra?.hasTemplate === true
+    const ex = this.nodeExtra
+    return ex.hasTemplate === true || ex.HasTemplate === true
   }
 
   /** 空白模板 Code（= `cert_doc_template.Code`）；**未上传模板时为空串** */
   get templateCode(): string {
-    return (this.fileNode?.Extra?.templateCode as string) ?? ''
+    const ex = this.nodeExtra
+    return (ex.templateCode || ex.TemplateCode || '') as string
   }
 
-  /** 宿主标准文件 Code（= `cert_standard_directory_file.Code`）—— 下载原始文档 / 上传模板 / 读写契约都用它 */
+  /** 宿主标准文件 Code（= `cert_standard_directory_file.Code`） */
   get standardFileCode(): string {
-    return (this.fileNode?.Extra?.standardFileCode as string) ?? ''
+    const node = this.fileNode
+    const ex = this.nodeExtra
+    return (node?.FileCode ||
+      ex.standardFileCode ||
+      ex.FileCode ||
+      '') as string
   }
 
   /** 资料清单里**原始文档**的存储路径（「下载原始件」用） */
   get standardStoragePath(): string {
-    return (this.fileNode?.Extra?.standardStoragePath as string) ?? ''
+    const ex = this.nodeExtra
+    return (ex.standardStoragePath || ex.StoragePath || '') as string
   }
 
   /**
@@ -146,12 +360,14 @@ export class DocFillRuleLogic extends TreeTableLogic<any> {
    *   归一产物已经生成好了（`ConvertStatus=completed`），下载原始件等于让用户先自己转一次。
    */
   get standardEditablePath(): string {
-    return (this.fileNode?.Extra?.standardEditablePath as string) ?? ''
+    const ex = this.nodeExtra
+    return (ex.standardEditablePath || ex.StandardEditablePath || '') as string
   }
 
   /** 归一产物状态（`pending` / `processing` / `completed` / `failed` / `unsupported`） */
   get standardEditableStatus(): string {
-    return (this.fileNode?.Extra?.standardEditableStatus as string) ?? ''
+    const ex = this.nodeExtra
+    return (ex.standardEditableStatus || ex.ConvertStatus || '') as string
   }
 
   /**
@@ -167,92 +383,167 @@ export class DocFillRuleLogic extends TreeTableLogic<any> {
 
   /** 空白模板在 MinIO 的路径（`…/_template/xxx.docx`）；未上传时为空串 */
   get templateStoragePath(): string {
-    return (this.fileNode?.Extra?.templateStoragePath as string) ?? ''
+    const ex = this.nodeExtra
+    return (ex.templateStoragePath || ex.TemplateStoragePath || '') as string
   }
 
   /**
    * 空白模板的**文件名**（含扩展名，如 `陪审人员.docx`）。
-   *
-   * ⚠️ 预览时必须与 `templateStoragePath` **成对**下发：
-   *   `preview-by-path` 端点靠文件名判扩展名 —— 只给路径的话，
-   *   `…/_template/xxx` 这种没有扩展名的路径会被判成「不支持在线预览」。
-   *   （`…/editable/x.doc.docx` 这类双重扩展名恰好能蒙对，所以这个坑只在模板上暴露。）
    */
   get templateFileName(): string {
-    return (this.fileNode?.Extra?.templateFileName as string) ?? ''
+    const ex = this.nodeExtra
+    return (ex.templateFileName || ex.TemplateFileName || '') as string
   }
 
   /**
    * ★★ 文件**真实文件名**（含扩展名，**不带**左树徽标）—— 下载 / 预览只许用它。
-   *
-   * 【为什么必须单独给一个 getter（2026-10-04 实测缺陷）】
-   *   左树组件不支持自定义节点内容 ⇒ 徽标只能拼进 `Name`（见 `toCoreNode`）：
-   *     `附录一 质量管理体系过程识别图.doc  ⬜未上传模板`
-   *   而**文件名是下游的判据**：`DocPreview` 用 `name.split('.').pop()` 推扩展名、
-   *   `preview-by-path` 也靠它判扩展名。
-   *   用带徽标的 `Name` 当文件名 ⇒ 扩展名变成 `doc  ⬜未上传模板`
-   *   ⇒ 不在 Office 白名单 ⇒ 中栏报「暂不支持在线预览 .doc ⬜未上传模板 格式」。
-   *
-   * ⚠️ 更阴的是**它看起来像间歇性故障**：契约接口回来后 `contract.FileName` 会覆盖成
-   *   干净名字（标题栏正常了），但错误状态已经落定、没有任何东西触发重载 ⇒
-   *   **标题对、内容错**。所以修完这个还得让 `PreviewPane` 把 `fileName` 纳入 key。
    */
   get fileName(): string {
-    return (this.fileNode?.Extra?.rawName as string) || ''
+    const ex = this.nodeExtra
+    return (ex.rawName || ex.FileName || '') as string
   }
 
   /** 文件扩展名（小写无点）：`doc` / `docx` / `xls` / `xlsx` … */
   get fileType(): string {
-    return (this.fileNode?.Extra?.fileType as string) ?? ''
+    const ex = this.nodeExtra
+    return (ex.fileType || ex.FileType || '') as string
   }
 
   /** 模板上挂的全文提示词编码（可能为空 —— 表示该模板只走锚点填充） */
   get promptCode(): string {
-    return (this.fileNode?.Extra?.fillPromptCode as string) ?? ''
+    const ex = this.nodeExtra
+    return (ex.fillPromptCode || ex.FillPromptCode || '') as string
   }
 
   /** 文件所属机构（用于提示词「更具体优先」的选取） */
   get templateOrgCode(): string {
-    return (this.fileNode?.Extra?.orgCode as string) ?? ''
+    const ex = this.nodeExtra
+    return (ex.orgCode || ex.OrgCode || '') as string
   }
 
   /**
    * 该文件的**文档分类**（`editable` / `fixed`）——「这个文档是否不需要编辑」。
    *
-   * ⚠️ 权威列在 `cert_standard_directory_file.DocCategory`，由后端 `directory-tree` 端点
-   * 随 `Extra.docCategory` 一起下发（契约表同名列只是副本）。
+   * ⚠️ 这是**库里存的值**（`cert_standard_directory_file.DocCategory`）。
+   *   界面判定请用 `effectiveDocCategory` —— 不可解析的文件会被强制成 `fixed`。
    */
   get docCategory(): string {
-    return (this.fileNode?.Extra?.docCategory as string) || 'editable'
+    const ex = this.nodeExtra
+    return (ex.docCategory || ex.DocCategory || 'editable') as string
+  }
+
+  /**
+   * ★ C3：这份文件**能不能被解析**（决定「文档类型」是否允许人工切换）。
+   *
+   * 图片 / PDF 扫描件没有可编辑内容 ⇒ 只能是固定文档，类型开关**置灰锁定**。
+   * 判据 = 扩展名在 `UNPARSEABLE_TYPES` 里（见顶部注释：否定清单，未知扩展名放行）。
+   */
+  get isParseable(): boolean {
+    return !isUnparseableType(this.fileType)
+  }
+
+  /** 文档类型是否被**锁死**（不可解析 ⇒ 只能是固定文档，⛔ 不允许人工改成可编辑） */
+  get docTypeLocked(): boolean {
+    return !this.isParseable
+  }
+
+  /**
+   * ★ 界面/规则判定用的**生效**文档分类。
+   *
+   * 不可解析 ⇒ 恒 `fixed`（覆盖库里可能残留的 `editable`）—— 否则一份 PDF
+   * 会带着「可编辑」类型进入锚点配置流程，而它根本没有锚点可扫。
+   */
+  get effectiveDocCategory(): string {
+    return this.docTypeLocked ? 'fixed' : this.docCategory
   }
 
   /** 是否固定格式（免填）文档 —— 操作条与右栏据此换形态（37 号 §3.6） */
   get isFixedDoc(): boolean {
-    return this.docCategory === 'fixed'
+    return this.effectiveDocCategory === 'fixed'
   }
 
-  /** 模板扫描状态（`pending` / `processing` / `completed` / `failed`）；未上传时为空串 */
+  /**
+   * ★ 完成度（2026-10-04 原型 V6 口径）
+   *
+   * ⛔ 状态是「算出来的」不是「存出来的」：
+   * 删锚点 / 换空白模板 / 解绑提示词 都会让它自动回退，永不漂移。
+   *
+   * ★★ 分母由 `requiredItems()` 给出（**与 `missingItems()` 同一组条件**）。
+   *   ⛔ 不要写死 `isFixedDoc ? 4 : 3`：必配项本身是**条件化**的 ——
+   *     不可解析（图片 / PDF）不需要「类型确认」；未上传模板的文档没有「锚点扫描」。
+   *     写死分母会让这些文档**永远差 1 项**（`done` 少算、进度条永远不满）。
+   */
+  get completion() {
+    if (!this.anySelected) return { done: 0, total: 0, miss: [] as string[] }
+    const ex = this.nodeExtra
+    const total = this.requiredItems(ex).length
+    const miss = this.missingItems(ex)
+    return { done: Math.max(0, total - miss.length), total, miss }
+  }
+
+  /**
+   * ★ 提示词引用锚点校验（2026-10-04）
+   *
+   * 扫描 `prompt` 里的 `{{__FILL__.AnchorRef}}`，检查这些锚点是否在本模板中存在。
+   * 返回非法引用列表（不存在的 AnchorRef）。
+   */
+  validatePromptAnchors(prompt: string, allAnchors: any[]): string[] {
+    if (!prompt) return []
+    const regex = /\{\{__FILL__\.([^}]+)\}\}/g
+    const matches = prompt.matchAll(regex)
+    const invalid: string[] = []
+    const existingRefs = new Set(allAnchors.map((a) => a.AnchorRef))
+
+    for (const match of matches) {
+      const ref = match[1]
+      if (!existingRefs.has(ref)) {
+        invalid.push(ref)
+      }
+    }
+    return [...new Set(invalid)]
+  }
+
+  /** 建议项（不影响状态，只提示） */
+  get advisoryItems(): string[] {
+    if (!this.anySelected) return []
+    const f = this.nodeExtra
+    const adv: string[] = []
+
+    if (!(f.fillPromptCode || f.FillPromptCode)) {
+      adv.push(this.isFixedDoc ? '未写上传要求' : '全文规则未挂接')
+    }
+    if (!(f.docFillHint || f.DocFillHint)?.trim()) adv.push('填写规则为空')
+
+    return adv
+  }
+
+  /** 模板扫描状态（`pending` / `processing` / `completed` / `failed` / `unsupported`）；未上传时为空串 */
   get scanStatus(): string {
-    return (this.fileNode?.Extra?.scanStatus as string) ?? ''
+    const ex = this.nodeExtra
+    return (ex.scanStatus || ex.ScanStatus || '') as string
   }
 
   /** 模板发布状态（`draft` / `scanned` / `ready` / `published`）；未上传时为空串 */
   get publishStatus(): string {
-    return (this.fileNode?.Extra?.publishStatus as string) ?? ''
+    const ex = this.nodeExtra
+    return (ex.publishStatus || ex.PublishStatus || '') as string
   }
 
   /**
-   * 左树**默认展开**的节点 key：机构 + 标准两级。
+   * 左树**默认展开**的节点 key：机构 + 标准 + 阶段三级。
    *
-   * 为什么不 `treeDefaultExpandAll`：资料清单实测 168 份文件 / 11 个文件夹，
-   * 全展开会一次铺开近 200 个节点 —— 与「标准资料清单」页保持一致（只展开前两级），
-   * 阶段及其以下由用户点击展开。
+   * 为什么不 `treeDefaultExpandAll`：资料清单实测 **168 份文件 / 11 个文件夹**，
+   * 全展开会一次铺开近 200 行，把左栏变成清单而不是导航。
+   * 展开到阶段层 = 8 行，用户点阶段才看到「文件夹 → 文件」两级。
    */
   get defaultExpandedKeys(): string[] {
     const keys: string[] = []
     for (const org of this.treeData) {
       keys.push(String(org.Code))
-      for (const std of org.Children ?? []) keys.push(String(std.Code))
+      for (const std of org.Children ?? []) {
+        keys.push(String(std.Code))
+        for (const stage of std.Children ?? []) keys.push(String(stage.Code))
+      }
     }
     return keys
   }
@@ -266,7 +557,9 @@ export class DocFillRuleLogic extends TreeTableLogic<any> {
         return
       }
       if (!this.hasTemplate) {
-        ElMessage.warning('该文件还没有空白模板，请先「下载可编辑版」→ 加工 → 「上传空白模板」')
+        ElMessage.warning(
+          '该文件还没有空白模板，请先「下载可编辑版」→ 加工 → 「上传空白模板」',
+        )
         return
       }
       this.openAddDialog()
@@ -314,46 +607,139 @@ export class DocFillRuleLogic extends TreeTableLogic<any> {
     const kind = n.Extra?.kind ?? ''
     return {
       Code: String(n.Code),
-      // ★ 文件叶子把「模板状态」拼进 Name —— 左树组件不支持自定义节点内容，
-      //   这是唯一能在树上显示徽标的位置（37 号 §3.6「左树加分类徽标」）。
-      //   ⚠️ 正因如此，**Name 不再是纯文件名** ⇒ 任何「当文件名用」的地方
-      //     一律走 `logic.fileName`（读 `Extra.rawName`），⛔ 不要用 `Name`。
-      Name: kind === FILE_KIND ? `${n.Name}${this.badgeOf(n.Extra)}` : n.Name,
+      // ★ Name 保持**纯文件名/纯层级名**（原型 V5 起不再把状态拼进名称）——
+      //   文件状态由左栏筛选 + 右栏 `YzhStatusBadge` 表达，⛔ 不再 emoji 拼串。
+      Name: n.Name,
       NodeType: kind,
       IsLeaf: children.length === 0,
-      // `rawName` = 后端下发的**未加徽标**原名（`StandardDirectoryService.BuildTemplateFileNode`
-      // 里 `Name = f.FileName`）—— 供下载文件名 / 预览判扩展名使用。
+      // `rawName` = 后端下发的原名（供下载文件名 / 预览判扩展名使用）
       Extra: { ...(n.Extra ?? {}), rawName: n.Name, Icon: NODE_ICON[kind] },
       Children: children,
     }
   }
 
   /**
-   * 文件叶子的徽标后缀。
+   * 当前选中文件的**祖先路径**（机构 → 标准 → 阶段 → 文件夹）。
    *
-   * - **未上传模板**：`⬜未上传模板`（页面会引导「下载 → 加工 → 上传」）
-   * - **已上传**：`📝可编辑 / 📎免填 · 发布状态 · N 锚点`
-   *   - `📝` 可编辑（要配填写规则）｜`📎` 固定格式（免填，只配指纹）
-   *   - 发布状态：`draft` 草稿 / `scanned` 已扫描 / `ready` 可发布 / `published` 已发布
+   * ⚠️ 后端 `Extra` **不下发** orgName / standardName / stageName ⇒ 前端从树上回溯，
+   *    ⛔ 不要臆造字段名（读了永远是 undefined，面包屑就整条空掉）。
    */
-  private badgeOf(extra: any): string {
-    if (extra?.hasTemplate !== true) return '  ⬜未上传模板'
+  get breadcrumb(): string[] {
+    const code = this.fileNode?.Code
+    if (code == null) return []
+    const path = this.findPath(this.treeData, String(code))
+    return path.slice(0, -1).map((n) => n.Name)
+  }
 
-    const parts: string[] = []
-    parts.push(extra?.docCategory === 'fixed' ? '📎免填' : '📝可编辑')
+  /** 深度优先找出从根到目标节点的路径（含自身） */
+  private findPath(nodes: TreeNode[], code: string, trail: TreeNode[] = []): TreeNode[] {
+    for (const n of nodes) {
+      const next = [...trail, n]
+      if (String(n.Code) === code) return next
+      const hit = this.findPath(n.Children ?? [], code, next)
+      if (hit.length) return hit
+    }
+    return []
+  }
 
-    const scan = String(extra?.scanStatus ?? '')
-    const pub = String(extra?.publishStatus ?? '')
-    if (pub === 'published') parts.push('🟢已发布')
-    else if (pub === 'ready') parts.push('🔵可发布')
-    else if (scan === 'failed') parts.push('🔴扫描失败')
-    else if (scan === 'completed') parts.push('⚪已扫描')
-    else parts.push('⚪未扫描')
+  /** 文件叶子的**设置状态**（三态，实时算不落库 —— 口径唯一在这里） */
+  statusOf(node: any): DocSetupStatus {
+    const ex = node?.Extra ?? node?.Raw ?? {}
+    return this.calcSetupStatus(ex)
+  }
 
-    const anchors = Number(extra?.anchorCount ?? 0)
-    if (anchors > 0) parts.push(`${anchors} 锚点`)
+  /** 当前选中文件的设置状态 */
+  get setupStatus(): DocSetupStatus {
+    if (!this.anySelected) return 'draft'
+    return this.calcSetupStatus(this.nodeExtra)
+  }
 
-    return `  ${parts.join(' · ')}`
+  /**
+   * ★ 完成度唯一口径（原型 V6 §③「状态是算出来的，不是存出来的」）。
+   *
+   * 为什么不读 `cert_standard_doc_contract.Status`：完成度会被**别处**改掉 ——
+   * 删锚点 / 换空白模板 / 解绑提示词 都会让文档从「已完成」退回「正在设置」，
+   * 而没有任何人负责回退那一列 ⇒ 状态必然漂移，左树筛选与实际能不能跑就对不上。
+   */
+  private calcSetupStatus(ex: any): DocSetupStatus {
+    const missing = this.missingItems(ex)
+    if (missing.length === 0) return 'done'
+    // 未上传空白模板 = 规则还没开始配 ⇒ 归「未设置」而非「正在设置」
+    if (ex?.hasTemplate !== true && ex?.HasTemplate !== true) return 'draft'
+    return 'setting'
+  }
+
+  /**
+   * ★ 该文档的**全部必配项**（完成度的分母）。
+   *
+   * ⛔ 与 `missingItems()` **共用同一组条件** —— 两处分开写必然漂移
+   *   （这正是原实现写死 `isFixedDoc ? 4 : 3` 踩的坑：分母写死之后，
+   *    一旦必配项随文档形态增减，`done` 就会**静默算错**）。
+   *
+   * 通用：① AI 语义分析 ② 类型确认（**不可解析时不需要** —— 类型由程序定）
+   * `fixed`    追加：③ 分类标签 ④ 文档作用（⛔ 不要求指纹，否则 PDF 永远完不成）
+   * `editable` 且**已上传模板**追加：③ 锚点槽位
+   *   ⚠️ 「锚点扫描」与「锚点来源」是**同一个槽位的两种缺法**（`missingItems` 里
+   *      `if/else if` ⇒ 最多报一个）⇒ 分母只加 **1**，⛔ 不能加成 2 项，
+   *      否则「扫描通过但没配来源」的文档会被算成缺 2 项（分母虚高、进度条永远差一格）。
+   *   ⚠️ 未上传模板时没有锚点可谈 ⇒ 不进分母。
+   */
+  requiredItems(ex: any): string[] {
+    const items = ['AI 语义分析']
+    const typeLocked = isUnparseableType(ex?.fileType || ex?.FileType)
+    if (!typeLocked) items.push('类型确认')
+
+    const isFixed =
+      typeLocked || (ex?.docCategory || ex?.DocCategory) === 'fixed'
+    if (isFixed) items.push('分类标签', '文档作用')
+    else if (ex?.hasTemplate === true || ex?.HasTemplate === true)
+      items.push('锚点')
+
+    return items
+  }
+
+  /**
+   * ★ 必配项缺失清单（空数组 = 已完成）。
+   *
+   * 口径见 `requiredItems()` 的注释 —— 本方法只做「逐项判定」。
+   */
+  missingItems(ex: any): string[] {
+    const miss: string[] = []
+
+    const analyzeStatus = ex?.analyzeStatus || ex?.AnalyzeStatus
+    if (analyzeStatus !== 'completed') miss.push('AI 语义分析')
+
+    // ★ C3：不可解析（图片 / PDF）⇒ 类型是**程序定的**，⛔ 不要求人工「确认」
+    //   （开关本身就置灰了，把它列成缺失项会让这份文档**永远完不成**）
+    const typeLocked = isUnparseableType(ex?.fileType || ex?.FileType)
+    const typeConfirmed = ex?.typeConfirmed || ex?.TypeConfirmed
+    if (!typeLocked && !typeConfirmed) miss.push('类型确认')
+
+    const isFixed =
+      typeLocked || (ex?.docCategory || ex?.DocCategory) === 'fixed'
+    if (isFixed) {
+      const tags = ex?.tagsJson || ex?.TagsJson
+      if (!tags || tags === '[]' || tags === '') miss.push('分类标签')
+      const purpose = ex?.docPurpose || ex?.DocPurpose
+      if (!purpose?.trim()) miss.push('文档作用')
+    } else if (ex?.hasTemplate === true || ex?.HasTemplate === true) {
+      const scan = ex?.scanStatus || ex?.ScanStatus
+      if (scan !== 'completed') miss.push('锚点扫描')
+      else if (Number(ex?.orphanCount ?? ex?.OrphanCount ?? 0) > 0)
+        miss.push('锚点来源')
+    }
+
+    return miss
+  }
+
+  /** 树里文件叶子总数（用于「显示 N / M 份」） */
+  countFiles(nodes: TreeNode[]): number {
+    let n = 0
+    for (const node of nodes) {
+      if (node.NodeType === FILE_KIND) n++
+      if (node.Children?.length) n += this.countFiles(node.Children)
+    }
+    return n
   }
 
   // ========================================================
@@ -420,7 +806,11 @@ export class DocFillRuleLogic extends TreeTableLogic<any> {
       )
       .map((c: any) =>
         c.prop === 'IsValid'
-          ? { ...c, tagMap: { 1: '启用', 0: '禁用' }, tagTypeMap: { 1: 'success', 0: 'info' } }
+          ? {
+              ...c,
+              tagMap: { 1: '启用', 0: '禁用' },
+              tagTypeMap: { 1: 'success', 0: 'info' },
+            }
           : c,
       )
   }
@@ -442,13 +832,37 @@ export class DocFillRuleLogic extends TreeTableLogic<any> {
    */
   async loadAnchors(): Promise<any[]> {
     if (!this.templateCode) return []
-    const res = await this.apiPost<ApiResponse<{ Items: any[]; TotalCount: number }>>('/filter', {
+    const res = await this.apiPost<
+      ApiResponse<{ Items: any[]; TotalCount: number }>
+    >('/filter', {
       Page: 1,
       PageSize: 1000,
-      Filters: [{ Field: 'TemplateCode', Operator: 'eq', Value: this.templateCode }],
+      Filters: [
+        { Field: 'TemplateCode', Operator: 'eq', Value: this.templateCode },
+      ],
     })
     expectOk(res, '加载锚点清单失败')
     return res.data?.Items ?? []
+  }
+
+  /**
+   * ★ 保存**单个**锚点行（「必填项」就地开关等）。
+   *
+   * 【为什么必须有这个方法】
+   *   `AnchorRuleTab` 的「必填项」开关点一下就写库，走的是这个入口。
+   *   此前该方法**只被调用、从未被定义** ⇒ 点开关必抛
+   *   `TypeError: …updateAnchor is not a function`，被 catch 吞成「保存失败」，
+   *   开关弹回原位 —— 表现为「必填项怎么点都不生效」。
+   *
+   * 【为什么走 `save-batch` 而不是通用 `/update`】
+   *   `save-batch` 按 `uk_tpl_anchor` **整行 upsert**，语义 =「这一行 = 完整状态」。
+   *   因此**必须提交完整行** —— 本方法的入参正是 `loadAnchors()` 返回的原始行，
+   *   天然满足；⛔ 不要在这里只传 `{ Code, Required }`（其余字段会被写成 CLR 默认值）。
+   */
+  async updateAnchor(row: any): Promise<void> {
+    if (!this.templateCode) throw new Error('未选中模板，无法保存锚点')
+    const res = await saveAnchorBatch(this.templateCode, [row])
+    expectOk(res, '保存锚点失败')
   }
 
   // ========================================================
@@ -456,37 +870,62 @@ export class DocFillRuleLogic extends TreeTableLogic<any> {
   // ========================================================
 
   override get formFields(): YzhFormField[] {
-    return super.formFields
-      // 模板由左树注入
-      .filter((f) => f.prop !== 'TemplateCode')
-      .map((f) => {
-        switch (f.prop) {
-          // ★ 受控值改下拉：后端有 L3 校验，让用户「选」而不是「猜着敲」
-          //   （EntityConfig 里是 TextBox + Placeholder，因为库里没有对应字典）
-          case 'AnchorType':
-            return { ...f, type: 'select' as any, options: toOptions(ANCHOR_TYPES) }
-          case 'AnchorKind':
-            return { ...f, type: 'select' as any, options: toOptions(ANCHOR_KINDS) }
-          case 'WriteMode':
-            return { ...f, type: 'select' as any, options: toOptions(WRITE_MODES) }
-          case 'ValueType':
-            return { ...f, type: 'select' as any, options: toOptions(VALUE_TYPES) }
-          // 页眉页脚：空串 = 不适用，必须是**可清空**的下拉
-          case 'HeaderKind':
-            return {
-              ...f,
-              type: 'select' as any,
-              options: [{ label: '（不适用）', value: '' }, ...toOptions(HEADER_KINDS)],
-              clearable: true,
-            }
-          // ★ IsValid 是 int（0/1）—— switch 必须显式声明 active/inactive value，
-          //   否则写入布尔 true/false（DB 容得下，但语义上不该依赖隐式转换）
-          case 'IsValid':
-            return { ...f, type: 'switch' as any, fieldProps: { 'active-value': 1, 'inactive-value': 0 } }
-          default:
-            return f
-        }
-      })
+    return (
+      super.formFields
+        // 模板由左树注入
+        .filter((f) => f.prop !== 'TemplateCode')
+        .map((f) => {
+          switch (f.prop) {
+            // ★ 受控值改下拉：后端有 L3 校验，让用户「选」而不是「猜着敲」
+            //   （EntityConfig 里是 TextBox + Placeholder，因为库里没有对应字典）
+            case 'AnchorType':
+              return {
+                ...f,
+                type: 'select' as any,
+                options: toOptions(ANCHOR_TYPES),
+              }
+            case 'AnchorKind':
+              return {
+                ...f,
+                type: 'select' as any,
+                options: toOptions(ANCHOR_KINDS),
+              }
+            case 'WriteMode':
+              return {
+                ...f,
+                type: 'select' as any,
+                options: toOptions(WRITE_MODES),
+              }
+            case 'ValueType':
+              return {
+                ...f,
+                type: 'select' as any,
+                options: toOptions(VALUE_TYPES),
+              }
+            // 页眉页脚：空串 = 不适用，必须是**可清空**的下拉
+            case 'HeaderKind':
+              return {
+                ...f,
+                type: 'select' as any,
+                options: [
+                  { label: '（不适用）', value: '' },
+                  ...toOptions(HEADER_KINDS),
+                ],
+                clearable: true,
+              }
+            // ★ IsValid 是 int（0/1）—— switch 必须显式声明 active/inactive value，
+            //   否则写入布尔 true/false（DB 容得下，但语义上不该依赖隐式转换）
+            case 'IsValid':
+              return {
+                ...f,
+                type: 'switch' as any,
+                fieldProps: { 'active-value': 1, 'inactive-value': 0 },
+              }
+            default:
+              return f
+          }
+        })
+    )
   }
 
   // ========================================================

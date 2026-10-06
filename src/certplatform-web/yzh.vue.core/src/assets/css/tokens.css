@@ -44,6 +44,24 @@
   --yzh-color-info: #64748b;
   --yzh-color-info-light-9: #f4f4f5;
 
+  /* ---------- 语义色 -light-8 / -light-7（描边 / hover 档） ----------
+   * ★ 补齐原因（框架层准入①「补齐真实缺口」）：全项目已有 19 处
+   *   `var(--yzh-color-{primary,success,warning,danger,info}-light-7|8, 兜底)` 调用，
+   *   但这三档**从未定义** ⇒ 永远走兜底值，换品牌色时这 19 处纹丝不动
+   *   （正是 25 号 §三 P2-1「单旋钮换肤失效」的一个具体实例）。
+   *   档位语义与 Element Plus 对齐：-8 = 描边/分隔，-7 = hover 底。
+   */
+  --yzh-color-primary-light-7: #c6e2ff;
+  --yzh-color-primary-light-8: #d9ecff;
+  --yzh-color-success-light-7: #e1f3d8;
+  --yzh-color-success-light-8: #b3e19d;
+  --yzh-color-warning-light-7: #faecd8;
+  --yzh-color-warning-light-8: #f5dab1;
+  --yzh-color-danger-light-7: #fde2e2;
+  --yzh-color-danger-light-8: #fbc4c4;
+  --yzh-color-info-light-7: #e9e9eb;
+  --yzh-color-info-light-8: #dcdfe6;
+
   /* ---------- 背景 ---------- */
   --yzh-color-bg-page: #f8fafc;
   --yzh-color-bg-container: #ffffff;

@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow;
 using CertPlatform.Shared.Entities.Cert;
+using CertPlatform.Shared.Fill;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
@@ -194,7 +195,7 @@ namespace CertPlatform.Auditor.Services.Ent
 
                 var groupByFile = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
                 if (groupResult.Success && !string.IsNullOrWhiteSpace(groupResult.Json))
-                    groupByFile = ParseGroupItems(groupResult.Json!);
+                    groupByFile = SemanticHints.ParseGroupItems(groupResult.Json!);
                 else
                     _logger.LogWarning("[原始资料分析] doc_group 失败（继续跑 doc_content）: {Msg}", groupResult.Message);
 
@@ -245,9 +246,36 @@ namespace CertPlatform.Auditor.Services.Ent
                         var scopes2 = await ResolveScopesAsync(db2, payload.EnterpriseCode, payload.StageCode);
                         var contentScope = await PickScopeAsync(db2, prompts2, scopes2, PromptWorkbenchService.Types.Content);
 
+                        // ★ 语义精要预处理（字数 > 2000 且尚未生成）
+                        var analysisInput = markdown;
+                        if (markdown.Length > 2000 && string.IsNullOrWhiteSpace(row.EssentialSummary))
+                        {
+                            var essentialScope = await PickScopeAsync(db2, prompts2, scopes2, PromptWorkbenchService.Types.Essential);
+                            var summaryRes = await prompts2.AnalyzeForQueueAsync(
+                                PromptWorkbenchService.Types.Essential, essentialScope,
+                                new List<(string, string?)> { (fileName, markdown) },
+                                $"enterprise_original:{row.Code}:essential");
+
+                            if (summaryRes.Success && !string.IsNullOrWhiteSpace(summaryRes.Json))
+                            {
+                                // 尝试从 JSON 中读取 summary 字段，或者直接存原始返回
+                                row.EssentialSummary = ExtractSummaryFromJson(summaryRes.Json);
+                                row.UpdateTime = DateTime.Now;
+                                await db2.UpdateAsync(row, nameof(EnterpriseOriginalFile.EssentialSummary), nameof(EnterpriseOriginalFile.UpdateTime));
+                                
+                                // 后续分析使用精要内容替代原文，节约 Token 并防止溢出
+                                analysisInput = row.EssentialSummary;
+                            }
+                        }
+                        else if (!string.IsNullOrWhiteSpace(row.EssentialSummary))
+                        {
+                            // 已有缓存，直接使用
+                            analysisInput = row.EssentialSummary;
+                        }
+
                         var one = await prompts2.AnalyzeForQueueAsync(
                             PromptWorkbenchService.Types.Content, contentScope,
-                            new List<(string, string?)> { (fileName, markdown) },
+                            new List<(string, string?)> { (fileName, analysisInput) },
                             $"enterprise_original:{row.Code}:content");
 
                         if (!one.Success)
@@ -361,35 +389,16 @@ namespace CertPlatform.Auditor.Services.Ent
         // L1 结果解析与回写
         // ========================================================
 
-        /// <summary>
-        /// 解析 <c>doc_group</c> 输出：<c>{ items: [ { fileName, tags[], suggestedPolicy, … } ] }</c>
-        /// ⇒ 文件名 → 该文件的判定对象。
-        /// <para>⚠️ 按 <b>文件名</b> 匹配（33 号 <c>doc_group</c> 的契约就是文件名清单）；
-        /// 匹配不上的文件不进 map，后续按「无 L1 结论」正常走 L2。</para>
-        /// </summary>
-        private static Dictionary<string, JsonElement> ParseGroupItems(string json)
-        {
-            var map = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
-            try
-            {
-                using var doc = JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var it in items.EnumerateArray())
-                    {
-                        if (it.ValueKind != JsonValueKind.Object) continue;
-                        var name = ReadString(it, "fileName") ?? ReadString(it, "name");
-                        if (string.IsNullOrWhiteSpace(name)) continue;
-                        map[name!] = it.Clone();
-                    }
-                }
-            }
-            catch (JsonException) { /* 非法 JSON 已由 ValidateSemanticOutput 拦过，这里只做防御 */ }
-            return map;
-        }
+        // ★ 2026-10-05：`ParseGroupItems` / `ExtractGroupHints` / `ExtractContentHints`
+        //   已**下沉到 `CertPlatform.Shared.Fill.SemanticHints`**。
+        //
+        //   原因：Admin 侧（`StandardDocContractController` 的标准文档语义分析）需要**同一套**
+        //   提取口径，而 `Admin` ⛔ 不引用 `Auditor`（引用方向是 Auditor → Admin）⇒ 只能下沉到
+        //   双方都引用的 `Shared`。⛔ **不要在本类里再抄一份** —— 复制即漂移，33 号的输出校验
+        //   口径一旦分叉，两张表的画像字段就会长出不同形状。
 
-        private static string? ReadString(JsonElement el, string prop)
-            => el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        /// <summary>转发到 <see cref="SemanticHints.ReadString"/>（本类 <c>ReadSuggestedPolicy</c> 仍在用）</summary>
+        private static string? ReadString(JsonElement el, string prop) => SemanticHints.ReadString(el, prop);
 
         private static string? ReadSuggestedPolicy(string json)
         {
@@ -476,9 +485,10 @@ namespace CertPlatform.Auditor.Services.Ent
             var nextVersion = (latest?.ProfileVersion ?? 0) + 1;
 
             var (tagsJson, tagsReason, tagsConf, typeGuess, keywords, summary, docCategory) =
-                ExtractGroupHints(groupByFile, row.FileName, groupResult);
+                SemanticHints.ExtractGroupHints(groupByFile, row.FileName, groupResult.ValidationMessages);
 
-            var (purpose, purposeConf, infoItems, fields, tables, conf) = ExtractContentHints(one.Json!);
+            var (purpose, purposeConf, infoItems, fields, tables, conf) =
+                SemanticHints.ExtractContentHints(one.Json!);
 
             var profile = new EnterpriseDocProfile
             {
@@ -514,6 +524,7 @@ namespace CertPlatform.Auditor.Services.Ent
                 Keywords = keywords,
                 Summary = summary,
                 DocCategory = docCategory,
+                EssentialSummary = row.EssentialSummary, // ★ 带入精要内容
 
                 // L2 结论
                 DocPurpose = purpose,
@@ -532,6 +543,13 @@ namespace CertPlatform.Auditor.Services.Ent
             }
             await db.InsertAsync(profile);
 
+            // ⚠️ 同步更新主行的 EssentialSummary（如果画像里带了的话，做个备份）
+            if (!string.IsNullOrWhiteSpace(profile.EssentialSummary) && string.IsNullOrWhiteSpace(row.EssentialSummary))
+            {
+                row.EssentialSummary = profile.EssentialSummary;
+                await db.UpdateAsync(row, nameof(EnterpriseOriginalFile.EssentialSummary));
+            }
+
             row.AnalyzeStatus = EnterpriseOriginalService.AnalyzeStatus.Analyzed;
             row.AnalyzeMessage = null;
             row.AnalyzeTime = DateTime.Now;
@@ -543,58 +561,21 @@ namespace CertPlatform.Auditor.Services.Ent
                 nameof(EnterpriseOriginalFile.UpdateTime));
         }
 
-        private static (string? TagsJson, string? Reason, decimal? Conf, string? TypeGuess,
-                         string? Keywords, string? Summary, string? Category)
-            ExtractGroupHints(Dictionary<string, JsonElement> map, string fileName,
-                              PromptWorkbenchService.AnalyzeForQueueResult groupResult)
-        {
-            if (!map.TryGetValue(fileName, out var g)) return (null, null, null, null, null, null, null);
-            if (g.ValueKind != JsonValueKind.Object) return (null, null, null, null, null, null, null);
-
-            var tagsJson = g.TryGetProperty("tags", out var t) && t.ValueKind == JsonValueKind.Array
-                ? t.GetRawText() : null;
-
-            var reasonParts = new List<string>();
-            var typeGuess = ReadString(g, "typeGuess");
-            if (!string.IsNullOrWhiteSpace(typeGuess)) reasonParts.Add($"类型猜测：{typeGuess}");
-            reasonParts.AddRange(groupResult.ValidationMessages);
-
-            decimal? conf = null;
-            if (g.TryGetProperty("confidence", out var c) && c.ValueKind == JsonValueKind.Number
-                && c.TryGetDouble(out var cd)) conf = (decimal)Math.Round(cd, 2);
-
-            return (tagsJson,
-                    reasonParts.Count == 0 ? null : string.Join("；", reasonParts),
-                    conf,
-                    typeGuess,
-                    ReadString(g, "keywords"),
-                    ReadString(g, "summary"),
-                    ReadString(g, "docCategory"));
-        }
-
-        private static (string? Purpose, decimal? PurposeConf, string? InfoItems,
-                         string? Fields, string? Tables, decimal? Conf)
-            ExtractContentHints(string json)
+        private static string? ExtractSummaryFromJson(string json)
         {
             try
             {
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
-                if (root.ValueKind != JsonValueKind.Object) return (null, null, null, null, null, null);
-
-                decimal? Num(string prop)
-                    => root.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number
-                       && v.TryGetDouble(out var d) ? (decimal)Math.Round(d, 2) : null;
-
-                string? Arr(string prop)
-                    => root.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Array
-                       ? v.GetRawText() : null;
-
-                return (ReadString(root, "purpose"), Num("purposeConfidence") ?? Num("docPurposeConfidence"),
-                        Arr("infoItems"), Arr("fields"), Arr("tables"), Num("confidence"));
+                if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("summary", out var s))
+                    return s.GetString();
+                return json; // 兜底返回全文
             }
-            catch (JsonException) { return (null, null, null, null, null, null); }
+            catch { return json; }
         }
+
+        // ★ `ExtractGroupHints` / `ExtractContentHints` 已下沉到
+        //   `CertPlatform.Shared.Fill.SemanticHints`（见上方注释），此处不再保留实现。
 
         // ========================================================
         // 状态写回（列级，禁止全列）

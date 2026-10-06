@@ -77,15 +77,54 @@ public sealed class FillValue
     /// <summary>值来源说明（如「企业基础信息 · 企业全称」），仅用于审计与「一键看证据摘要」。</summary>
     public string? Source { get; set; }
 
-    /// <summary>写入报告里展示的值（按类型格式化，截断到 120 字符）。</summary>
+    /// <summary>
+    /// 写入报告里展示的值（按类型格式化，截断到 120 字符）。
+    ///
+    /// <para><b>★ Number 吃 <see cref="NumberFormat"/>（2026-10-05 修正）</b>：
+    /// 原实现是 <c>Number?.ToString(InvariantCulture)</c> —— 完全忽略格式串，后果是
+    /// <b>Word 表格里的金额永远拿不到千分位</b>（<c>1,234.50</c> 落成 <c>1234.5</c>）。
+    /// Excel 侧的正规路径不受影响（它走 <c>SetCellValue(double)</c> + <c>DataFormat</c>），
+    /// 但 <b>Excel 的「格内片段替换」路径同样吃本方法</b> ⇒ 那里是<b>修正</b>而非回退。</para>
+    ///
+    /// <para>⚠️ <b>方言说明</b>：<see cref="NumberFormat"/> 在 Excel 侧当 <b>Excel 格式串</b>
+    /// 喂给 <c>DataFormat</c>，在 Word 侧当 <b>.NET 格式串</b> 喂给 <c>ToString</c>。
+    /// 两者在常用形态（<c>#,##0.00</c> / <c>yyyy-MM-dd</c>）上高度重合，故一期不拆字段；
+    /// 若真出现 <c>[$-409]</c> 这类 Excel 专有写法，需在层 2 就拆成两个字段。</para>
+    /// </summary>
     public string ToDisplayText() => Kind switch
     {
-        FillValueKind.Number => Number?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
-        FillValueKind.Date => Date?.ToString("yyyy-MM-dd") ?? string.Empty,
+        FillValueKind.Number => FormatNumber(),
+        FillValueKind.Date => Date?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
         FillValueKind.Bool => Bool == true ? "是" : "否",
         FillValueKind.Field => Text ?? string.Empty,
         _ => Text ?? string.Empty,
     };
+
+    /// <summary>
+    /// 按 <see cref="NumberFormat"/> 格式化数值；未给格式 ⇒ 用 Invariant 原样输出。
+    ///
+    /// <para><b>★ 为什么必须 try/catch</b>：<c>ToString(format)</c> 遇到非法格式串会抛
+    /// <see cref="FormatException"/>（如 Excel 专有的 <c>[$-409]</c>）。
+    /// <b>不能让一个格式串把整份文档的填充炸掉</b> —— 回退到不带格式的输出，
+    /// 值仍然是值的本身，只是少了个千分位。</para>
+    /// </summary>
+    private string FormatNumber()
+    {
+        if (Number is null) return string.Empty;
+
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        if (string.IsNullOrWhiteSpace(NumberFormat))
+            return Number.Value.ToString(culture);
+
+        try
+        {
+            return Number.Value.ToString(NumberFormat, culture);
+        }
+        catch (FormatException)
+        {
+            return Number.Value.ToString(culture);
+        }
+    }
 }
 
 /// <summary>一次填充请求（= 一份模板 + 一本值字典）</summary>
@@ -151,7 +190,24 @@ public sealed class OfficeFillRequest
     public string MarkStyleId { get; set; } = "YZH_Mark";
 }
 
-/// <summary>区域填充的目标类型</summary>
+/// <summary>
+/// 区域填充的目标类型。
+///
+/// <para><b>★ 两种定位方式的语义差别（2026-10-05 补充，必读）</b>：</para>
+/// <list type="table">
+/// <item>
+///   <term><see cref="WordTable"/> / <see cref="ExcelRange"/></term>
+///   <description><b>标记 / 起点定位 + 数据驱动</b>：行数由<b>业务数据</b>决定 ⇒
+///   行不足就<b>克隆补行</b>，行多余就<b>留空</b>。这里是「模板给几行只是排版示意」。</description>
+/// </item>
+/// <item>
+///   <term><see cref="WordCell"/></term>
+///   <description><b>坐标定位 + 精确写入</b>：行列是<b>人工指定</b>的 ⇒
+///   目标不存在就是<b>参数填错</b>，必须<b>报告</b>（⛔ 不克隆补行、⛔ 不静默丢弃）。
+///   理由：克隆补行会把「坐标写错」伪装成「正常填充」，用户永远发现不了。</description>
+/// </item>
+/// </list>
+/// </summary>
 public enum OfficeRegionKind
 {
     /// <summary>Excel：从 <c>(StartRow, StartCol)</c> 起，逐行逐列写（0-based）</summary>
@@ -159,6 +215,21 @@ public enum OfficeRegionKind
 
     /// <summary>Word：按 <c>{{table:Tag}}</c> 定位表格，<b>从该标记所在行起</b>逐行写</summary>
     WordTable = 1,
+
+    /// <summary>
+    /// Word：按 <c>TableIndex</c> + <c>(StartRow, StartCol)</c> <b>坐标</b>写单元格。
+    ///
+    /// <para><b>★ 为什么需要它</b>：<see cref="WordTable"/> 要求模板里预写 <c>{{table:Tag}}</c> 标记。
+    /// 但很多真实模板（如房产测绘的 <c>table.SetText(0, 2, id)</c> 场景）<b>格子里什么标记都没有</b> ——
+    /// 位置固定在第 0 个表第 0 行第 2 列，靠人工指定坐标即可。
+    /// 这类位置<b>扫描器扫不出来</b>（没有 <c>{{}}</c>），必须由人配。</para>
+    ///
+    /// <para>⚠️ <b>列号口径</b>：一期用 <c>GetTableCells()</c> 的<b>索引</b>（0-based），
+    /// <b>⛔ 不折算 <c>gridSpan</c>（跨列合并）</b> —— 含合并单元格的行里，
+    /// 「视觉列号」与「cell 索引」会不一致。与 2026-10-02 用户规格一致：
+    /// 「我用的 npoi 的替换来解决，当然这是针对<b>非常普通的单元格</b>来实现的」。</para>
+    /// </summary>
+    WordCell = 2,
 }
 
 /// <summary>
@@ -198,15 +269,33 @@ public sealed class OfficeFillRegion
     /// <summary>表格标签（<see cref="OfficeRegionKind.WordTable"/>）—— 对应模板里的 <c>{{table:Tag}}</c>。</summary>
     public string? TableTag { get; set; }
 
+    /// <summary>
+    /// 表格序号（<see cref="OfficeRegionKind.WordCell"/>，0-based，按文档中表格的出现顺序）。
+    /// <para>⚠️ 按序号定位在<b>模板增删内容后会静默错位</b>（往文档前面加一段，所有序号平移）。
+    /// 这正是 <see cref="WordTable"/> 当初选「标签定位」的原因；坐标定位是本类唯一的例外 ——
+    /// 因为「模板里根本没有标记可标」。故它<b>必须</b>配合 <c>Warnings</c> 的越界报告使用，
+    /// 让错位至少能被看见。</para>
+    /// </summary>
+    public int TableIndex { get; set; }
+
     /// <summary>数据：行 × 列。每格一个 <see cref="FillValue"/>；<c>null</c> = 写空。</summary>
     public List<List<FillValue?>> Rows { get; set; } = new();
 
-    /// <summary>区域可读描述（写入报告，如 <c>Sheet1!A3</c> / <c>表格[table:items]</c>）</summary>
+    /// <summary>
+    /// 区域可读描述（写入报告，如 <c>Sheet1!A3</c> / <c>表格[table:items]</c> / <c>表格[0]!C1</c>）。
+    ///
+    /// <para>★ <see cref="OfficeRegionKind.WordCell"/> 用 <c>表格[序号]!列行</c> 的写法，
+    /// 刻意与 <c>WordTableRowInserter</c> 的「<c>行 R 列 C</c>」口径区分开 ——
+    /// 前者是「人工指定的坐标」，后者是「扫描/遍历出来的位置」，
+    /// 报告里一眼能看出这条记录是哪种。</para>
+    /// </summary>
     public string Describe() => Kind switch
     {
         OfficeRegionKind.ExcelRange =>
             $"{SheetName ?? "(第 1 个工作表)"}!{CellRef(StartRow, StartCol)}",
         OfficeRegionKind.WordTable => $"表格[{{{{table:{TableTag}}}}}]",
+        OfficeRegionKind.WordCell =>
+            $"表格[{TableIndex}]!{CellRef(StartRow, StartCol)}",
         _ => Kind.ToString(),
     };
 
@@ -306,6 +395,24 @@ public sealed class OfficeFillRegionHit
 
     /// <summary>未匹配时的说明（如「模板里没有 <c>{{table:items}}</c> 标签」）</summary>
     public string? Message { get; set; }
+
+    /// <summary>
+    /// ★ <b>非致命问题清单</b>（越界 / 丢弃 / 未写入）—— 2026-10-05 新增。
+    ///
+    /// <para><b>与 <see cref="Message"/> 的分工</b>：<c>Message</c> 是「<b>整块没匹配上</b>」
+    /// （<see cref="Matched"/> = <c>false</c>，一块都没写）；<c>Warnings</c> 是
+    /// 「<b>匹配上了，但其中若干格没写成</b>」—— <b>不阻断</b>整体填充，但<b>必须被看见</b>。</para>
+    ///
+    /// <para><b>★ 为什么必须有它</b>：这些情况过去全是<b>静默</b>的 ——
+    /// <c>WordTableRegionFiller</c> 里 <c>col &gt;= cells.Count</c> 直接 <c>break</c>（列号写大 ⇒ 值被丢弃），
+    /// 坐标定位里行列不存在 ⇒ 无从谈起。而「<b>试填验证</b>」（2026-10-05 用户规格）的
+    /// 第二条判据正是「<b>我们自己填写的信息，位置是否正确</b>」——
+    /// <b>底座不会报错，界面就无从显示</b>。故本字段是试填验证的前置条件。</para>
+    ///
+    /// <para>⚠️ 措辞约定：每条一句话说清「<b>哪一格</b> + <b>为什么没写成</b> + <b>后果</b>」，
+    /// 供界面逐条直接展示，⛔ 不要写成需要二次解读的日志。</para>
+    /// </summary>
+    public List<string> Warnings { get; set; } = new();
 }
 
 /// <summary>

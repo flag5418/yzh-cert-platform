@@ -52,6 +52,26 @@ internal static class WordCellWriter
     }
 
     /// <summary>
+    /// 按值类型把 <see cref="FillValue"/> 写进单元格（<b>2026-10-05 新增</b>）。
+    ///
+    /// <para><b>★ 为什么需要这个重载</b>：原来的 <see cref="SetText"/> 只接 <c>string</c>，
+    /// 与 Excel 侧的 <c>ExcelCellWriter.Write(ICell, FillValue, StyleCache)</c> <b>不对称</b> ——
+    /// 后果是 Word 表格里的金额/日期<b>拿不到格式</b>（走 <c>ToDisplayText()</c> 时
+    /// <c>NumberFormat</c> 被整个丢掉，<c>1,234.50</c> 落成 <c>1234.5</c>）。</para>
+    ///
+    /// <para>⚠️ <b>Word 与 Excel 的落笔方式本质不同</b>：Word 的单元格<b>没有类型概念</b>
+    /// （Excel 的 <c>ICell</c> 有 cell type + <c>DataFormat</c> 两层），
+    /// 所以这里<b>不是</b>「按 <c>Kind</c> 分派 <c>SetCellValue</c> 重载」，
+    /// 而是「按 <c>NumberFormat</c> 把值格式化成文本再写」。
+    /// ⇒ 在 Word 里，类型的语义<b>只体现为文本形态</b>。</para>
+    ///
+    /// <para>★ <c>value</c> 为 <c>null</c> ⇒ 写空串（与 <c>ExcelCellWriter.Write</c> 同口径，
+    /// 即用户规格「如果没有值则自动将填写内容赋值为空」）。</para>
+    /// </summary>
+    public static void Write(XWPFTableCell cell, FillValue? value)
+        => SetText(cell, value?.ToDisplayText());
+
+    /// <summary>
     /// 读取单元格当前文本（拼接全部段落）。
     /// <para>★ 用于自验收与测试；⛔ 不要用 <c>cell.GetText()</c>（见类注释的缓存坑）。</para>
     /// </summary>

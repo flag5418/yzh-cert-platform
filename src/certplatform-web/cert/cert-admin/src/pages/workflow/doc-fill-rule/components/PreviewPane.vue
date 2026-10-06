@@ -31,7 +31,7 @@
  *   `storagePath` 一模一样，`DocPreview` 内部的 watch **不会触发**（它按路径做 key）。
  */
 import { computed, ref, watch } from 'vue'
-import { Document, Files } from '@element-plus/icons-vue'
+import { Document, Files, Upload } from '@element-plus/icons-vue'
 import { DocPreview } from '@share/components'
 import { YzhEmptyState } from '@yzh-core'
 
@@ -48,7 +48,18 @@ const props = defineProps<{
   templateFileName: string
   /** 该文件是否已上传空白模板 */
   hasTemplate: boolean
+  /**
+   * ★ C9：是否允许「上传空白模板」。
+   *
+   * 判据由父页给（= 选中文件且**非固定格式**）——
+   * 固定文档不生成内容，没有空白模板可传，显示这个按钮只会误导。
+   */
+  canUploadTemplate?: boolean
+  /** 上传进行中（按钮转圈） */
+  uploading?: boolean
 }>()
+
+const emit = defineEmits<{ (e: 'upload-template'): void }>()
 
 /** 预览源。`original` = 资料清单原始文档；`template` = 已上传的空白模板 */
 type PreviewSource = 'original' | 'template'
@@ -199,7 +210,25 @@ defineExpose({ refresh, showTemplate })
       :key="previewKey"
       :file="activeFile"
       :download-label="downloadLabel"
-    />
+    >
+      <!--
+        ★ C9：把「上传空白模板」放到**与「下载原始文档」同一行**（`DocPreview` 的
+          `.preview-actions` 内）。此前它挂在右栏锚点页签的操作条上 ——
+          用户要在「看文档」与「换模板」之间来回横跳两个栏位。
+      -->
+      <template #actions>
+        <el-button
+          v-if="canUploadTemplate"
+          type="primary"
+          size="small"
+          :icon="Upload"
+          :loading="uploading"
+          @click="emit('upload-template')"
+        >
+          {{ hasTemplate ? '重新上传模板' : '上传空白模板' }}
+        </el-button>
+      </template>
+    </DocPreview>
     <div v-else class="empty-preview">
       <YzhEmptyState :icon="Document" title="请选择左侧文档" />
     </div>
@@ -222,7 +251,8 @@ defineExpose({ refresh, showTemplate })
   align-items: center;
   gap: var(--yzh-space-2, 8px);
   padding: var(--yzh-space-1, 4px) var(--yzh-space-4, 16px);
-  background: var(--yzh-color-bg-subtle, #f9fafb);
+  /* 与页面同底（白）—— 分区靠 `border-bottom` 表达（整页统一底色口径） */
+  background: var(--yzh-color-bg-container, #fff);
   border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
 }
 .source-bar__label {

@@ -3,181 +3,89 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>原型 42 · 专家端 · 企业资料规范化</title>
+<title>原型 42 · v2 · 专家端 · 企业资料规范化</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="app">
 
-  <!-- ===================== 顶栏 ===================== -->
+  <!-- ============ 顶栏 ============ -->
   <div class="topbar">
-    <span class="topbar__title">企业资料规范化</span>
-    <span class="topbar__sub" id="crumb"></span>
+    <span class="topbar__title">映智汇 · 专家端</span>
+    <div class="menu" id="menu"></div>
     <span class="topbar__spacer"></span>
-    <span class="tag tag--gray">原型 v1 · 数据为模拟</span>
-    <button class="btn btn--sm" onclick="showHelp()">使用说明</button>
-    <button class="btn btn--sm" onclick="resetAll()">重置数据</button>
+    <span class="tag tag--gray">原型 v5</span>
+    <button class="btn btn--sm" onclick="demoUpload()" title="模拟企业重新上传一份资料，看依赖失效如何传播">⚡ 模拟资料更新</button>
+    <button class="btn btn--sm" onclick="location.reload()">重置</button>
   </div>
 
   <div class="body">
 
-    <!-- ===================== 左树：企业 + 资源 ===================== -->
+    <!-- ============ 左树：企业 → 阶段 → 标准 → 文件夹 → 文件 ============ -->
     <div class="sidebar">
       <div class="card__head" style="border-bottom:1px solid var(--yzh-color-border-light)">
-        <span>资源树</span><span class="spacer"></span>
+        <span>企业资源</span><span class="spacer"></span>
         <button class="btn btn--link btn--sm" onclick="expandAll(true)">展开</button>
         <button class="btn btn--link btn--sm" onclick="expandAll(false)">折叠</button>
       </div>
       <div class="tree" id="tree"></div>
-      <div style="padding:var(--yzh-space-3);border-top:1px solid var(--yzh-color-border-light)">
-        <div class="hint">
-          <b>左树只有两层语义</b><br>
-          <b>企业</b> → <b>资源</b>（标准 → 阶段 → 目录 → 文档）<br>
-          企业原始资料<b>不在树里</b>，只在右侧「候选」和抽屉里作为数据来源出现。
-        </div>
-      </div>
     </div>
 
-    <!-- ===================== 右区 ===================== -->
-    <div class="main">
+    <!-- ============ 右区：顶部只有面包屑，底部集中「操作 + 问题」 ============ -->
+    <div class="main" id="mainBox">
+      <div id="queueInline"></div>
 
-      <!-- 面包屑 + 页签 -->
-      <div class="row" style="margin-bottom:var(--yzh-space-3)">
-        <div class="grow" id="scopeTitle"></div>
-        <select class="inp" style="width:150px" id="filterSel" onchange="render()">
-          <option value="all">全部文档</option>
-          <option value="need">待人工匹配</option>
-          <option value="pending">有待填项</option>
-          <option value="lowconf">可信度 &lt; 70%</option>
-          <option value="notgen">未生成</option>
-          <option value="locked">已锁定</option>
-        </select>
-      </div>
+      <!-- ① 面包屑 -->
+      <div class="crumb" id="crumb"></div>
 
-      <div class="tabs" id="tabs"></div>
+      <!-- ② ★ 功能菜单（面包屑正下方） -->
+      <div class="funcbar" id="funcBar"></div>
 
-      <!-- 队列条 -->
-      <div id="queueBox"></div>
-
-      <!-- 提示区 -->
-      <div id="alertBox"></div>
-
-      <!-- 工具栏 -->
-      <div class="card">
-        <div class="card__body row" style="padding:var(--yzh-space-3)">
-          <button class="btn btn--primary" onclick="runNormalize()">▶ 一键规范化</button>
-          <button class="btn" onclick="rewriteSelected()">↻ 重新生成（已勾选）</button>
-          <button class="btn" onclick="lockSelected(true)">🔒 锁定</button>
-          <button class="btn" onclick="lockSelected(false)">🔓 解锁</button>
-          <span style="width:1px;height:20px;background:var(--yzh-color-border)"></span>
-          <button class="btn" onclick="packageZip()">📦 打包下载</button>
-          <button class="btn" onclick="exportValues()">📊 下载填写明细</button>
-          <span class="grow"></span>
-          <span class="small muted" id="selInfo">未勾选</span>
-        </div>
-      </div>
-
-      <!-- 文档表 -->
-      <div class="card">
-        <div class="card__head">
-          <span>文档清单</span><span class="spacer"></span>
-          <span class="small muted" id="listSum"></span>
-        </div>
+      <!-- ② 内容区（文件夹页面 / 文件页面） -->
+      <div class="card" id="folderCard">
         <table class="tbl">
-          <thead>
-            <tr>
-              <th style="width:28px"><input type="checkbox" id="chkAll" onchange="toggleAll(this.checked)"></th>
-              <th>文档名称</th>
-              <th style="width:80px">类型</th>
-              <th style="width:130px">完成度</th>
-              <th style="width:90px">可信度</th>
-              <th style="width:120px">匹配 / 状态</th>
-              <th style="width:230px">操作</th>
-            </tr>
-          </thead>
+          <thead><tr>
+            <th style="width:30px"><input type="checkbox" id="chkAll" onchange="toggleAll(this.checked)"></th>
+            <th style="width:22px"></th>
+            <th style="width:30px">类型</th>
+            <th>名称</th>
+            <th style="width:78px">状态</th>
+            <th style="width:112px">完成度</th>
+            <th style="width:60px">可信度</th>
+            <th style="width:auto;min-width:180px">备注（可能存在的问题）</th>
+            <th style="width:132px">操作</th>
+          </tr></thead>
           <tbody id="tbody"></tbody>
         </table>
       </div>
 
-      <!-- 原始资料候选池（输入侧，只读） -->
-      <div class="card">
-        <div class="card__head">
-          <span>企业原始资料池</span>
-          <span class="tag tag--gray">输入 · 只读</span>
-          <span class="spacer"></span>
-          <span class="small muted">共 <b id="rawCnt">0</b> 份 · 由「企业原始资料管理」上传，本页不编辑</span>
-        </div>
-        <table class="tbl">
-          <thead><tr><th>文件名</th><th style="width:100px">分类</th><th style="width:80px">阶段</th><th style="width:110px">上传日期</th><th style="width:150px">已被引用为</th></tr></thead>
-          <tbody id="rawTbody"></tbody>
-        </table>
-      </div>
+      <!-- ③ 文件页面（整页替换） -->
+      <div id="filePage" style="display:none"></div>
 
-      <!-- 修改日志 -->
-      <div class="card">
-        <div class="card__head">
-          <span>修改记录</span><span class="tag tag--gray">审计 · 只追加</span>
-          <span class="spacer"></span>
-          <span class="small muted">「谁 · 何时 · 改了什么 · 为什么」</span>
-        </div>
-        <table class="tbl">
-          <thead><tr><th style="width:160px">时间</th><th style="width:80px">操作人</th><th style="width:100px">动作</th><th>对象</th><th>理由</th></tr></thead>
-          <tbody id="logTbody"></tbody>
-        </table>
-      </div>
+      <!-- ④ ★ 底部：本页存在的问题（操作已在顶部功能菜单） -->
+      <div id="bottomBar"></div>
 
+      <!-- ⑤ 页脚说明 -->
+      <div class="footnote" id="footnote"></div>
     </div><!-- /main -->
   </div><!-- /body -->
 </div><!-- /app -->
 
-<!-- ===================== 抽屉：固定文档 · 匹配确认 ===================== -->
-<div id="maskFixed" class="mask" style="display:none" onclick="closeDrawer('fixed')"></div>
-<div id="drawerFixed" class="drawer" style="display:none">
+<!-- ★ v4：文件页面已改为整页（#filePage），此处仅保留「依赖明细」抽屉 -->
+<div id="maskDep" class="mask" style="display:none" onclick="closeDrawer('dep')"></div>
+<div id="drawerDep" class="drawer" style="display:none;width:70%;max-width:900px">
   <div class="drawer__head">
-    <span class="drawer__title" id="fxTitle"></span>
-    <span class="tag tag--info">固定文档</span>
-    <span class="tag tag--gray">不可生成 · 只能「接收企业原件」</span>
+    <span class="drawer__title">依赖明细</span>
     <span class="grow"></span>
-    <button class="btn btn--sm" onclick="closeDrawer('fixed')">✕ 关闭</button>
+    <button class="btn btn--sm" onclick="closeDrawer('dep')">✕ 关闭</button>
   </div>
-  <div class="drawer__body" id="fxBody"></div>
-  <div class="drawer__foot">
-    <span class="small muted" id="fxFoot"></span>
-    <span class="spacer"></span>
-    <button class="btn" onclick="closeDrawer('fixed')">取消</button>
-    <button class="btn btn--primary" id="fxSave" onclick="saveFixed()">确认并更新文档</button>
-  </div>
+  <div class="drawer__body" id="depBody"></div>
+  <div class="drawer__foot"><span class="grow"></span><button class="btn btn--primary" onclick="closeDrawer('dep')">知道了</button></div>
 </div>
 
-<!-- ===================== 抽屉：可编辑文档 · 单元格干预 ===================== -->
-<div id="maskEdit" class="mask" style="display:none" onclick="closeDrawer('edit')"></div>
-<div id="drawerEdit" class="drawer" style="display:none">
-  <div class="drawer__head">
-    <span class="drawer__title" id="edTitle"></span>
-    <span class="tag tag--info">可编辑文档</span>
-    <span class="tag tag--gray">按锚点逐格干预</span>
-    <span class="grow"></span>
-    <button class="btn btn--sm" onclick="closeDrawer('edit')">✕ 关闭</button>
-  </div>
-  <div class="drawer__tabs">
-    <div class="tab is-active" onclick="switchEdTab(0,this)">预览</div>
-    <div class="tab" onclick="switchEdTab(1,this)">单元格明细 <span class="tab__cnt" id="edTodoCnt">0</span></div>
-    <div class="tab" onclick="switchEdTab(2,this)">改动清单</div>
-  </div>
-  <div class="drawer__body" id="edBody"></div>
-  <div class="drawer__foot">
-    <label class="small"><input type="checkbox" id="edKeepManual" checked> 重写时保留人工填写值（推荐）</label>
-    <label class="small"><input type="checkbox" id="edKeepPinned" checked> 保留钉住值</label>
-    <span class="spacer"></span>
-    <span class="small muted" id="edFoot"></span>
-    <button class="btn" onclick="closeDrawer('edit')">取消</button>
-    <button class="btn btn--primary" onclick="saveEdit()">更新文档</button>
-  </div>
-</div>
-
-<!-- ===================== 抽屉：队列明细 ===================== -->
+<!-- ============ 抽屉：队列明细 ============ -->
 <div id="maskQ" class="mask" style="display:none" onclick="closeDrawer('q')"></div>
-<div id="drawerQ" class="drawer" style="display:none;width:56%;max-width:760px">
+<div id="drawerQ" class="drawer" style="display:none;width:62%;max-width:820px">
   <div class="drawer__head">
     <span class="drawer__title">队列明细</span>
     <span class="mono" id="qCode"></span>
@@ -186,22 +94,33 @@
   </div>
   <div class="drawer__body" id="qBody"></div>
   <div class="drawer__foot">
-    <span class="spacer"></span>
+    <span class="small muted">一个文件 = 一个任务（原子）· 失败只重试自己</span>
+    <span class="grow"></span>
     <button class="btn btn--warn" onclick="retryFailed()">↻ 重试失败项</button>
     <button class="btn" onclick="closeDrawer('q')">关闭</button>
   </div>
 </div>
 
-<!-- ===================== 抽屉：帮助 ===================== -->
+<!-- ============ 抽屉：说明 ============ -->
 <div id="maskH" class="mask" style="display:none" onclick="closeDrawer('h')"></div>
-<div id="drawerH" class="drawer" style="display:none;width:52%;max-width:700px">
+<div id="drawerH" class="drawer" style="display:none;width:56%;max-width:760px">
   <div class="drawer__head">
-    <span class="drawer__title">使用说明 · 本原型演示什么</span>
-    <span class="grow"></span>
+    <span class="drawer__title">使用说明</span><span class="grow"></span>
     <button class="btn btn--sm" onclick="closeDrawer('h')">✕ 关闭</button>
   </div>
   <div class="drawer__body" id="hBody"></div>
-  <div class="drawer__foot"><span class="spacer"></span><button class="btn btn--primary" onclick="closeDrawer('h')">知道了</button></div>
+  <div class="drawer__foot"><span class="grow"></span><button class="btn btn--primary" onclick="closeDrawer('h')">知道了</button></div>
+</div>
+
+<!-- ============ 抽屉：独立菜单（日志 / 资料管理）预览 ============ -->
+<div id="maskM" class="mask" style="display:none" onclick="closeDrawer('m')"></div>
+<div id="drawerM" class="drawer" style="display:none;width:56%;max-width:760px">
+  <div class="drawer__head">
+    <span class="drawer__title" id="mTitle"></span><span class="grow"></span>
+    <button class="btn btn--sm" onclick="closeDrawer('m')">✕ 关闭</button>
+  </div>
+  <div class="drawer__body" id="mBody"></div>
+  <div class="drawer__foot"><span class="grow"></span><button class="btn btn--primary" onclick="closeDrawer('m')">知道了</button></div>
 </div>
 
 <script src="data.js"></script>

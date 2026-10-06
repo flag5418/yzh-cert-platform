@@ -198,6 +198,16 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
                 ["standard_code"] = ctx.StandardCode ?? string.Empty,
             };
 
+            // ★ 动态补充自定义提示词组（group_XXX）
+            var groups = ctx.Anchors
+                .Where(a => !string.IsNullOrWhiteSpace(a.PromptGroup))
+                .GroupBy(a => a.PromptGroup!)
+                .ToList();
+            foreach (var g in groups)
+            {
+                values[$"group_{g.Key}"] = RenderAnchors(g.ToList());
+            }
+
             // ★ 单项调用时补「单锚点便捷占位符」—— 让提示词可以直接写
             //   {{__FILL__.instruction}}，不必绕道 {{__FILL__.anchors}}（39 号 §6.2 / §7.2 的写法）。
             //   ⛔ 只在恰好一个锚点时才补：批量时若也补，模型会以为「只有第一个锚点要填」。

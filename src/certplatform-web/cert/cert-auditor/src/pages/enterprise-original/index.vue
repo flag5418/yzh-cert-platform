@@ -356,7 +356,7 @@ onBeforeUnmount(() => { stopPolling() })
           </div>
 
           <!-- 标签 -->
-          <div v-else class="eo-detail__block">
+          <div v-if="!detailRow.IsNotSuggested" class="eo-detail__block">
             <div class="eo-detail__label">
               标签
               <span class="eo-dim">（决定这份资料被归到哪一类，只能从清单里选）</span>

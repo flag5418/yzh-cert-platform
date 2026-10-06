@@ -7,6 +7,7 @@ export { YzhForm, YzhFormDialog } from './components/form'
 export type { YzhFieldType, YzhFormField } from './components/form/YzhForm.vue'
 export {
   YzhDialog,
+  YzhDrawer,
   YzhPageLayout,
   YzhPagination,
   YzhSearchBar,

@@ -67,6 +67,8 @@ public class PromptWorkbenchService
         public const string Group = "doc_group";
         /// <summary>★ 作用提示词（输入单文件 Markdown → 输出作用）</summary>
         public const string Content = "doc_content";
+        /// <summary>★ 语义精要提示词（长文档摘要，输入长 Markdown → 输出精简画像）</summary>
+        public const string Essential = "doc_essential";
     }
 
     /// <summary>单次试跑最多接受的文件数（防超时 / 防 token 爆）</summary>

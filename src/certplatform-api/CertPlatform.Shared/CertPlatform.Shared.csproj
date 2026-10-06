@@ -15,7 +15,7 @@
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="Minio" Version="6.0.4" />
+    <PackageReference Include="Minio" Version="7.0.0" />
     <!--
       ★ NPOI：Word/Excel 单元格级写入（Office/ 目录）与 IExcelService 实现（NpoiExcelService）。
       ★★ 版本刻意锁 2.7.2，⛔ 不要顺手升到 2.8.x：

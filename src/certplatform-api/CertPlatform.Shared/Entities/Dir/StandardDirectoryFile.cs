@@ -131,6 +131,14 @@ namespace CertPlatform.Shared.Entities.Dir
         [SugarColumn(Length = 500, IsNullable = true)]
         public string? FullPath { get; set; }
 
+        /// <summary>
+        /// 文件夹路径段（FullPath 剔除文件名后的部分）
+        /// </summary>
+        [SugarColumn(IsIgnore = true)]
+        public string FolderPath => string.IsNullOrEmpty(FullPath) || string.IsNullOrEmpty(FileName)
+            ? string.Empty
+            : (FullPath.EndsWith(FileName) ? FullPath.Substring(0, FullPath.Length - FileName.Length).TrimEnd('/') : FullPath);
+
         /// <summary>⛔ 遗留字段（旧 .doc→.docx 单产物链），已停止写入新值；产物改用 <see cref="PreviewPdfPath"/> / <see cref="MarkdownPath"/></summary>
         [SugarColumn(Length = 512, IsNullable = true)]
         public string? ConvertedStoragePath { get; set; }

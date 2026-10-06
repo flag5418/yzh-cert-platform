@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>企业资料规范化 · 原型 V8</title>
+<style>
+:root{
+  --pri:#409eff;--pri-l:#ecf5ff;--pri-b:#d9ecff;--pri-d:#337ecc;
+  --suc:#67c23a;--suc-l:#f0f9eb;--suc-b:#e1f3d8;
+  --warn:#e6a23c;--warn-l:#fdf6ec;--warn-b:#faecd8;
+  --dan:#f56c6c;--dan-l:#fef0f0;--dan-b:#fde2e2;
+  --info:#909399;--info-l:#f4f4f5;--info-b:#e9e9eb;
+  --t1:#303133;--t2:#606266;--t3:#909399;--t4:#c0c4cc;
+  --bd:#dcdfe6;--bd-l:#e4e7ed;--bd-xl:#ebeef5;
+  --bg:#f5f7fa;--bg2:#fafafa;--r:4px;--r2:8px;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--t1);font-size:14px;overflow:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+button,input,textarea,select{font-family:inherit}
+.app{display:flex;flex-direction:column;height:100%}
+
+/* ── 顶栏 ── */
+.topbar{background:#fff;border-bottom:1px solid var(--bd-l);padding:0 16px;height:50px;
+  display:flex;align-items:center;gap:14px;flex:0 0 auto}
+.topbar .brand{font-size:15px;font-weight:600}
+.menu{display:flex;gap:2px;margin-left:8px}
+.menu b{padding:5px 12px;font-size:13px;font-weight:400;color:var(--t2);border-radius:var(--r);cursor:pointer}
+.menu b:hover{background:var(--bg2)}
+.menu b.on{background:var(--pri-l);color:var(--pri);font-weight:500}
+.topbar .sp{flex:1}
+.ver{font-size:11px;color:var(--t3);border:1px solid var(--bd-l);border-radius:10px;padding:1px 8px}
+
+/* ── 骨架 ── */
+.app-body{flex:1;display:flex;min-height:0}
+.side{width:272px;flex:0 0 272px;background:#fff;border-right:1px solid var(--bd-l);
+  display:flex;flex-direction:column;min-height:0}
+.side-hd{padding:9px 12px;border-bottom:1px solid var(--bd-xl);font-size:13px;font-weight:500;
+  display:flex;align-items:center;gap:8px}
+.side-hd .sp{flex:1}
+.side-bd{flex:1;overflow:auto;padding:6px 0 12px}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;padding:12px 14px 0;overflow:hidden}
+
+.tn{padding:6px 12px 6px 14px;font-size:13px;color:var(--t2);cursor:pointer;display:flex;
+  align-items:center;gap:6px;line-height:1.5;border-left:3px solid transparent}
+.tn:hover{background:var(--bg2)}
+.tn.on{background:var(--pri-l);color:var(--pri);border-left-color:var(--pri);font-weight:500}
+.tn .caret{width:12px;color:var(--t4);font-size:10px;flex:0 0 12px;text-align:center}
+.tn .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tn.l1{padding-left:14px;font-weight:500;color:var(--t1)}
+.tn.l2{padding-left:30px}.tn.l3{padding-left:46px}.tn.l4{padding-left:62px}
+.tn .dots{flex:0 0 auto;font-size:10px;letter-spacing:-1px}
+
+/* ── 面包屑 / 功能条 ── */
+.crumb{font-size:12px;color:var(--t3);display:flex;align-items:center;gap:6px;flex:0 0 auto;
+  padding-bottom:8px;flex-wrap:wrap}
+.crumb i{font-style:normal;color:var(--t4)}
+.crumb b{color:var(--t1);font-weight:500}
+.crumb .lnk{color:var(--pri);cursor:pointer}
+.crumb .lnk:hover{text-decoration:underline}
+.funcbar{display:flex;align-items:center;gap:8px;flex:0 0 auto;padding:0 0 10px;flex-wrap:wrap}
+.funcbar .sp{flex:1}
+
+/* ── 内容 ── */
+.content{flex:1;min-height:0;overflow:auto}
+
+/* ── 表格 ── */
+.tbl{width:100%;border-collapse:collapse;background:#fff;table-layout:fixed}
+.tbl th{background:var(--bg2);font-size:12px;font-weight:500;color:var(--t2);text-align:left;
+  padding:8px 10px;border-bottom:1px solid var(--bd-l);white-space:nowrap}
+.tbl td{padding:7px 10px;border-bottom:1px solid var(--bd-xl);font-size:13px;vertical-align:middle}
+.tbl tr:hover td{background:#fbfdff}
+.tbl tr.sel td{background:var(--pri-l)}
+.tbl .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;color:var(--t1)}
+.tbl .nm:hover{color:var(--pri);text-decoration:underline}
+.nowrap{white-space:nowrap}
+.mono{font-family:var(--mono);font-size:12px}
+.muted{color:var(--t3)}
+.small{font-size:12px}
+.tiny{font-size:11px}
+
+/* ── 按钮 ── */
+.btn{height:28px;padding:0 12px;border-radius:var(--r);border:1px solid var(--bd);background:#fff;
+  color:var(--t2);font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+.btn:hover{border-color:var(--pri);color:var(--pri)}
+.btn--primary{background:var(--pri);border-color:var(--pri);color:#fff}
+.btn--primary:hover{opacity:.9;color:#fff}
+.btn--sm{height:24px;padding:0 8px;font-size:12px}
+.btn--link{border:none;background:none;color:var(--pri);padding:0 4px;height:auto}
+.btn--link:hover{text-decoration:underline}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* ── 标签 ── */
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:2px;
+  font-size:12px;white-space:nowrap}
+.tag--success{background:var(--suc-l);color:var(--suc)}
+.tag--warning{background:var(--warn-l);color:var(--warn)}
+.tag--danger{background:var(--dan-l);color:var(--dan)}
+.tag--info{background:var(--pri-l);color:var(--pri)}
+.tag--gray{background:var(--bg);color:var(--t3)}
+.tag--ai{background:#f4f0ff;color:#7c5cff}
+
+/* ── 卡片 ── */
+.card{background:#fff;border:1px solid var(--bd-l);border-radius:var(--r);margin-bottom:12px}
+.card__hd{padding:9px 14px;border-bottom:1px solid var(--bd-xl);font-size:13px;font-weight:600;
+  display:flex;align-items:center;gap:8px}
+.card__hd .sp{flex:1}
+.card__bd{padding:14px}
+
+/* ── Tab ── */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--bd-l);margin-bottom:12px}
+.tabs .tab{padding:7px 16px;font-size:13px;color:var(--t2);cursor:pointer;border-bottom:2px solid transparent}
+.tabs .tab:hover{color:var(--pri)}
+.tabs .tab.on{color:var(--pri);border-bottom-color:var(--pri);font-weight:500}
+
+/* ── 底部问题 ── */
+.bottom{flex:0 0 auto;padding:10px 0 0}
+.bottom__t{font-size:12px;color:var(--t3);margin-bottom:6px}
+.issue{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:var(--r);
+  font-size:13px;margin-bottom:4px;cursor:pointer;border:1px solid transparent}
+.issue:hover{border-color:var(--bd-l)}
+.issue--d{background:var(--dan-l);color:#b13b3b}
+.issue--w{background:var(--warn-l);color:#96601a}
+.issue--i{background:var(--pri-l);color:var(--pri-d)}
+.issue__n{font-family:var(--mono);font-weight:600;flex:0 0 auto}
+.issue__go{margin-left:auto;font-size:12px;opacity:.8;white-space:nowrap}
+
+/* ── 页脚 ── */
+.foot{flex:0 0 auto;padding:8px 0 12px;font-size:11px;color:var(--t3);display:flex;gap:14px;
+  flex-wrap:wrap;align-items:center;border-top:1px solid var(--bd-xl);margin-top:10px}
+
+/* ── 预览 ── */
+.page-mock{width:430px;background:#fff;border:1px solid var(--bd-l);box-shadow:0 2px 12px rgba(0,0,0,.06);
+  padding:30px 36px;font-size:12px;color:var(--t2);line-height:2;margin:0 auto}
+.page-mock .ph{text-align:center;font-size:15px;font-weight:600;color:var(--t1);margin-bottom:14px;letter-spacing:2px}
+.page-mock .kv{display:flex;gap:8px;border-bottom:1px dotted var(--bd);padding:3px 0}
+.page-mock .kv b{flex:0 0 74px;font-weight:400;color:var(--t3)}
+.page-mock .tok{background:var(--pri-l);color:var(--pri-d);border:1px dashed var(--pri);border-radius:3px;
+  padding:0 5px;font-family:var(--mono);font-size:11px}
+.page-mock .tok.miss{background:var(--dan-l);color:var(--dan);border-color:var(--dan)}
+.page-mock table{width:100%;border-collapse:collapse;margin-top:10px;font-size:11px}
+.page-mock th,.page-mock td{border:1px solid var(--bd);padding:4px 6px;text-align:center}
+.page-mock th{background:var(--bg2)}
+
+/* ── 抽屉 ── */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:60;display:none}
+.mask.on{display:block}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:560px;max-width:92vw;background:#fff;z-index:61;
+  display:none;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,.12)}
+.drawer.on{display:flex}
+.drawer__hd{padding:12px 16px;border-bottom:1px solid var(--bd-l);display:flex;align-items:center;gap:8px}
+.drawer__hd .t{font-size:14px;font-weight:600}
+.drawer__hd .sp{flex:1}
+.drawer__bd{flex:1;overflow:auto;padding:14px 16px}
+.drawer__ft{padding:10px 16px;border-top:1px solid var(--bd-l);display:flex;gap:8px;align-items:center}
+.drawer__ft .sp{flex:1}
+
+/* ── 描述表 ── */
+.dl{width:100%;border-collapse:collapse;font-size:13px}
+.dl td{padding:6px 0;vertical-align:top;border-bottom:1px solid var(--bd-xl)}
+.dl td:first-child{width:88px;color:var(--t3);font-size:12px}
+
+/* ── 回链块 ── */
+.link-block{background:var(--bg2);border:1px solid var(--bd-l);border-left:3px solid var(--pri);
+  border-radius:var(--r);padding:10px 12px;margin-top:12px}
+.link-block h6{margin:0 0 8px;font-size:12px;color:var(--t3);font-weight:500;letter-spacing:.4px}
+.link-block .row{display:flex;gap:8px;font-size:12px;padding:3px 0}
+.link-block .row .k{flex:0 0 66px;color:var(--t3)}
+.link-block .row .v{flex:1;font-family:var(--mono);font-size:11px;color:var(--t2);word-break:break-all}
+
+/* ── 提示条 ── */
+.alert{padding:9px 12px;border-radius:var(--r);font-size:13px;line-height:1.7;margin-bottom:12px}
+.alert--i{background:var(--pri-l);color:var(--pri-d)}
+.alert--w{background:var(--warn-l);color:#96601a}
+.alert--d{background:var(--dan-l);color:#b13b3b}
+
+/* ── 浮层说明 ── */
+.help{position:fixed;right:16px;bottom:52px;width:430px;max-height:60vh;overflow:auto;background:#fff;
+  border:1px solid var(--bd);border-radius:var(--r2);box-shadow:0 6px 24px rgba(0,0,0,.12);
+  padding:12px 14px;z-index:50;display:none}
+.help.on{display:block}
+.help h6{margin:0 0 8px;font-size:12px;color:var(--t3);font-weight:500}
+.help .hi{padding:8px 0;border-top:1px solid var(--bd-xl);font-size:12px;line-height:1.8;color:var(--t2)}
+.help .hi:first-of-type{border-top:0}
+.help .hi b{color:var(--t1)}
+.help code{font-family:var(--mono);background:var(--bg2);padding:0 3px;border-radius:3px;font-size:11px}
+
+/* ── 候选卡 ── */
+.cand{border:1px solid var(--bd-l);border-radius:var(--r);padding:10px 12px;margin-bottom:8px;cursor:pointer}
+.cand:hover{border-color:var(--pri-b);background:#fbfdff}
+.cand.on{border-color:var(--pri);background:var(--pri-l)}
+.cand__h{display:flex;align-items:center;gap:8px}
+.cand__n{font-size:13px;font-weight:500}
+.cand__e{font-size:12px;color:var(--t3);margin-top:5px;line-height:1.7}
+.toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);background:rgba(48,49,51,.92);
+  color:#fff;font-size:13px;padding:8px 16px;border-radius:var(--r);z-index:99;display:none}
+.toast.on{display:block}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <span class="brand">映智汇 · 专家端</span>
+    <div class="menu" id="menu"></div>
+    <span class="sp"></span>
+    <span class="ver">原型 V8 · 2026-10-05</span>
+    <button class="btn btn--sm" onclick="resetAll()">重置</button>
+  </div>
+  <div class="app-body">
+    <div class="side">
+      <div class="side-hd"><span>企业资源</span><span class="sp"></span>
+        <button class="btn btn--link btn--sm" onclick="expandAll(true)">展开</button>
+        <button class="btn btn--link btn--sm" onclick="expandAll(false)">折叠</button>
+      </div>
+      <div class="side-bd" id="tree"></div>
+    </div>
+    <div class="main">
+      <div class="crumb" id="crumb"></div>
+      <div class="funcbar" id="funcbar"></div>
+      <div class="content" id="content"></div>
+      <div class="bottom" id="bottom"></div>
+      <div class="foot" id="foot"></div>
+    </div>
+  </div>
+</div>
+
+<div class="mask" id="mask" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer__hd"><span class="t" id="dwT"></span><span class="sp"></span>
+    <button class="btn btn--sm" onclick="closeDrawer()">✕ 关闭</button></div>
+  <div class="drawer__bd" id="dwB"></div>
+  <div class="drawer__ft" id="dwF"></div>
+</div>
+
+<div class="help" id="help"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================================
+   企业资料规范化 · 原型 V8
+   ---------------------------------------------------------------------------
+   设计依据：49-V4（设计原则 P1~P4 + 校验清单 C1~C6）
+   相对 v7 的三处核心变化：
+     ① 更少元素   —— 表格 9 列 → 6 列；完成度并入状态；说明外移
+     ② 规则可回链 —— 每个值都能点开看「这条规则来自后台哪个配置」
+     ③ 建议可覆盖 —— 类型/来源是程序给的，人工能改；改了程序只如实重算，不阻断
+   ========================================================================== */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ★ 后台配置回链表 —— 这是 v8 的新增核心。
+   原型 v7 把这些值全部硬编码了，读者看不出「这个值从哪来、谁配的」。
+   ══════════════════════════════════════════════════════════════════════════ */
+const RULE = {
+  type:   { label:'文档类型',     col:'cert_standard_directory_file.DocCategory',              page:'标准文档标准化 › 全局规则 › 文档类型' },
+  source: { label:'可替换性',     col:'cert_standard_doc_contract.FixedDocSubtype',            page:'标准文档标准化 › 全局规则 › 可替换性（★ 人工判断）' },
+  tags:   { label:'分组',         col:'cert_standard_doc_contract.TagsJson',                   page:'标准文档标准化 › 全局规则 › 分组' },
+  purpose:{ label:'文档作用',     col:'cert_standard_doc_contract.DocPurpose',                 page:'标准文档标准化 › 全局规则 › 文档作用' },
+  match:  { label:'匹配依据',     col:'cert_standard_doc_contract.MatchPrompt / FingerprintJson', page:'标准文档标准化 › 全局规则 › 匹配依据' },
+  tpl:    { label:'空白模板',     col:'cert_doc_template',                                     page:'标准文档标准化 › 上传空白模板' },
+  anchor: { label:'锚点',         col:'cert_doc_template_anchor',                              page:'标准文档标准化 › 锚点规则' },
+  src:    { label:'数据源',       col:'cert_doc_template_anchor.SourceSpec',                   page:'标准文档标准化 › 锚点规则 › 数据源' },
+  op:     { label:'操作方式',     col:'cert_doc_template_anchor.WriteMode / ValueType / NumberFormat', page:'标准文档标准化 › 锚点规则 › 操作' },
+  prompt: { label:'全局填写规则', col:'cert_doc_fill_prompt',                                  page:'标准文档标准化 › 全局规则 › 全局填写规则' },
+};
+
+/* ── 数据源字典（= 22 号 D1 七类，一期 5 类） ── */
+const SRC = {
+  global:  { label:'全局参数',   tag:'info'    },
+  profile: { label:'企业资料',   tag:'warning' },
+  ai:      { label:'AI 推断',    tag:'ai'      },
+  manual:  { label:'人工填写',   tag:'success' },
+  compute: { label:'计算/统计',  tag:'info'    },
+  table:   { label:'表格数据',   tag:'warning' },
+};
+/* ★ 依赖策略：企业资料变更后 —— 与 v7 一致（KILL / KEEP / REVIEW 三分） */
+const DEP_KILL = ['profile','ai'];            /* ⛔ 依赖企业文件 ⇒ 清空 */
+const DEP_KEEP = ['global','compute','table'];/* ✅ 不依赖 ⇒ 保留 */
+const DEP_REVIEW = ['manual'];                /* ⚠️ 人填 ⇒ 保留 + 标待复核 */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   文档数据
+     suggest      = 程序建议的类型（①事实推出 ⇒ ②判断，★ 可被人工覆盖）
+     suggestWhy   = 建议依据（给人工看的，可复核）
+     source       = 可替换性（★ 纯人工判断，程序不推导）
+     candidates   = 企业候选（仅 source=enterprise 且有匹配依据时才有）
+   ══════════════════════════════════════════════════════════════════════════ */
+const DOCS = {
+  D_LICENSE:{ Name:'营业执照', Ext:'pdf', suggest:'fixed', suggestWhy:'PDF · anydoc 无法解析', source:'enterprise',
+    tags:['Qualification'], purpose:'企业的法定主体资格证明，含统一社会信用代码、法定代表人、经营范围。',
+    match:{ prompt:'营业执照 / 统一社会信用代码', fp:'统一社会信用代码 + 公司名称' },
+    candidates:[
+      { code:'R001', name:'营业执照_2025.pdf', score:0.94, by:'文件名 + 统一社会信用代码', ev:'统一社会信用代码 91610xxxxMA7K3… 与档案一致' },
+      { code:'R002', name:'营业执照_副本.pdf', score:0.71, by:'文件名', ev:'公司名称一致，但代码识别失败' } ],
+    picked:'R001' },
+
+  D_IDCARD:{ Name:'法人身份证', Ext:'jpg', suggest:'fixed', suggestWhy:'图片 · anydoc 无法解析', source:'enterprise',
+    tags:['Qualification'], purpose:'法定代表人的身份证明（人像面）。',
+    match:{ prompt:'法人身份证（人像面）', fp:'姓名 + 身份证号' },
+    candidates:[
+      { code:'R010', name:'张明远_身份证正面.jpg', score:0.94, by:'姓名 + 人像面', ev:'张明远 / 4101**********1234' },
+      { code:'R011', name:'张明远_身份证反面.jpg', score:0.62, by:'同名前缀推断', ev:'国徽面，无人像' },
+      { code:'R012', name:'李建国_身份证.jpg',     score:0.38, by:'姓名不符',     ev:'李建国 ≠ 张明远' },
+      { code:'R013', name:'王秀英_身份证.jpg',     score:0.34, by:'姓名不符',     ev:'王秀英 ≠ 张明远' } ],
+    picked:null },
+
+  /* ★ 标准自带：不替换、不配锚点、不设模板 ⇒ 初始即「已设置」（49-V4 §九） */
+  D_SYSFILE:{ Name:'体系文件清单', Ext:'doc', suggest:'fixed', suggestWhy:'业务上不需企业替换（标准附录）', source:'standard',
+    tags:['RecordDocumentControl'], purpose:'标准附录三，随标准存在，用于列出企业程序文件清单。',
+    match:{ prompt:'', fp:'' } },
+
+  /* ★ C3：可替换，但没有匹配依据 ⇒ 队列找不到企业文档 */
+  D_PRODLIC:{ Name:'生产许可证', Ext:'pdf', suggest:'fixed', suggestWhy:'PDF · anydoc 无法解析', source:'enterprise',
+    tags:['Qualification'], purpose:'产品生产许可证明。',
+    match:{ prompt:'', fp:'' } },
+
+  D_CTRLLIST:{ Name:'受控文件清单', Ext:'xls', suggest:'editable', suggestWhy:'xls · 可解析，已配空白模板', source:'enterprise',
+    analyzed:true, hasTemplate:true, tags:['RecordDocumentControl'], purpose:'列出全部受控文件的编号、版本与发放范围。',
+    fillPrompt:'已挂接',
+    anchors:[
+      { ref:'ENT_NAME', field:'ENT_NAME', loc:'Sheet1!B2', kind:'global', val:'G4测试石油天然气有限公司', conf:1.0, pinned:true },
+      { ref:'DOC_ROWS', field:'DOC_ROWS', loc:'Sheet1!A5:F20', kind:'table', val:'', conf:0, pinned:false } ] },
+
+  D_REVLIST:{ Name:'文件修订记录', Ext:'xls', suggest:'editable', suggestWhy:'xls · 可解析，已配空白模板', source:'enterprise',
+    analyzed:true, hasTemplate:true, tags:['RecordDocumentControl'], purpose:'记录受控文件的历次修订。',
+    fillPrompt:'已挂接',
+    anchors:[
+      { ref:'ENT_NAME', field:'ENT_NAME', loc:'Sheet1!B2', kind:'global', val:'G4测试石油天然气有限公司', conf:1.0, pinned:true },
+      { ref:'REV_ROWS', field:'REV_ROWS', loc:'Sheet1!A5:E20', kind:'table', val:'', conf:0, pinned:false } ] },
+
+  /* ★ 完整可编辑：有模板 + 锚点全配 + 有 ai 锚点且挂了全局规则 */
+  D_RISK:{ Name:'风险管理报告', Ext:'docx', suggest:'editable', suggestWhy:'docx · 可解析，已配空白模板', source:'enterprise',
+    analyzed:true, hasTemplate:true, tags:['RecordRisk'], purpose:'用于证明企业已建立风险管理机制，含风险识别、评价与应对措施。',
+    fillPrompt:'已挂接',
+    anchors:[
+      { ref:'ENT_NAME',     field:'ENT_NAME',     loc:'正文·第 3 段',     kind:'global',  val:'G4测试石油天然气有限公司', conf:1.0,  pinned:true  },
+      { ref:'CREDIT_CODE',  field:'CREDIT_CODE',  loc:'正文·第 3 段',     kind:'global',  val:'91610xxxxMA7K3',          conf:1.0,  pinned:false },
+      { ref:'LEGAL_PERSON', field:'LEGAL_PERSON', loc:'正文·第 4 段',     kind:'global',  val:'张明远',                  conf:1.0,  pinned:false },
+      { ref:'AUDIT_DATE',   field:'AUDIT_DATE',   loc:'页眉[0]·第 1 段',  kind:'global',  val:'2026-10-15',              conf:1.0,  pinned:false },
+      { ref:'RISK_LEVEL',   field:'RISK_LEVEL',   loc:'表格[1] 行 3 列 2', kind:'profile', val:'高',                      conf:0.78, pinned:false },
+      { ref:'RISK_POLICY',  field:'RISK_POLICY',  loc:'正文·第 9 段',     kind:'ai',      val:'公司建立了以总经理为第一责任人的风险管理体系，每年开展一次风险识别与评价…', conf:0.86, pinned:false },
+      { ref:'RISK_ROWS',    field:'RISK_ROWS',    loc:'表格[1] 行 1-8',   kind:null,      val:'',                        conf:0,    pinned:false } ] },
+
+  /* ★ C4：有 ai 锚点，但没挂全局填写规则 ⇒ 未设置完成 */
+  D_TRAIN:{ Name:'培训记录表', Ext:'xls', suggest:'editable', suggestWhy:'xls · 可解析，已配空白模板', source:'enterprise',
+    analyzed:true, hasTemplate:true, tags:['RecordTraining'], purpose:'记录年度培训计划执行情况，含培训主题、学时与参训人员。',
+    fillPrompt:null,
+    anchors:[
+      { ref:'ENT_NAME',    field:'ENT_NAME',    loc:'Sheet1!B2', kind:'global',  val:'G4测试石油天然气有限公司', conf:1.0, pinned:true },
+      { ref:'TRAIN_TOPIC', field:'TRAIN_TOPIC', loc:'Sheet1!B3', kind:'profile', val:'ISO 9001 标准宣贯', conf:0.91, pinned:false },
+      { ref:'TRAIN_HOURS', field:'TRAIN_HOURS', loc:'Sheet1!C3', kind:'profile', val:'4', conf:0.88, pinned:false },
+      { ref:'TRAIN_LEADER',field:'TRAIN_LEADER',loc:'Sheet1!D3', kind:'ai',      val:'张明远', conf:0.80, pinned:false },
+      { ref:'TRAIN_ROWS',  field:'TRAIN_ROWS',  loc:'Sheet1!A5:F12', kind:'table', val:'', conf:0, pinned:false } ] },
+
+  /* ★ C5：有锚点未配数据源 */
+  D_QUALOBJ:{ Name:'质量目标', Ext:'docx', suggest:'editable', suggestWhy:'docx · 可解析，已配空白模板', source:'enterprise',
+    analyzed:true, hasTemplate:true, tags:['RecordQuality'], purpose:'年度质量目标及其分解与考核方式。',
+    fillPrompt:'已挂接',
+    anchors:[
+      { ref:'ENT_NAME', field:'ENT_NAME', loc:'正文·第 2 段', kind:'global', val:'G4测试石油天然气有限公司', conf:1.0, pinned:true },
+      { ref:'OBJ_YEAR', field:'OBJ_YEAR', loc:'正文·第 5 段', kind:'global', val:'2026', conf:1.0, pinned:false },
+      { ref:'OBJ_ROWS', field:'OBJ_ROWS', loc:'表格[0] 行 1-6', kind:null,    val:'', conf:0, pinned:false } ] },
+
+  /* ★ C1：标成可编辑，但没有空白模板 ⇒ 锚点无处可挂 */
+  D_ENV:{ Name:'环境因素识别表', Ext:'docx', suggest:'editable', suggestWhy:'docx · 可解析，但未上传空白模板', source:'enterprise',
+    analyzed:true, hasTemplate:false, tags:['RecordEnv'], purpose:'识别企业活动、产品和服务中的环境因素。',
+    fillPrompt:null, anchors:[] },
+
+  /* ★ 未设置：什么都没做 */
+  D_REVIEW:{ Name:'管理评审报告', Ext:'docx', suggest:null, suggestWhy:'尚未做语义分析', source:null,
+    analyzed:false, hasTemplate:false, tags:[], purpose:'', fillPrompt:null, anchors:[] },
+};
+
+/* ── 树：企业 → 阶段 → 标准 → 文件夹 → 文件 ── */
+const TREE = {
+  E001:{ Name:'G4测试企业甲', Stages:[
+    { Code:'S_RE', Name:'复审', Standards:[
+      { Code:'ISO9001', Name:'ISO 9001:2015', Folders:[
+        { Code:'F0', Name:'0 基础资料', Files:['D_LICENSE','D_IDCARD','D_SYSFILE','D_PRODLIC'] },
+        { Code:'F1', Name:'1 文件控制', Files:['D_CTRLLIST','D_REVLIST'] },
+        { Code:'F4', Name:'4 记录文件', Files:['D_RISK','D_TRAIN','D_QUALOBJ'] },
+        { Code:'F5', Name:'5 管理职责', Files:['D_ENV','D_REVIEW'] },
+      ]}
+    ]}
+  ]}
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
+   全局状态
+   ══════════════════════════════════════════════════════════════════════════ */
+const S = {
+  ent:'E001', stage:'S_RE', std:'ISO9001', folder:null, file:null,
+  page:'list',              /* list | folder | file */
+  tab:0,                    /* 0 预览 / 1 审核 */
+  open:{ 'en':true, 'st:S_RE':true, 'sd:S_RE:ISO9001':true },
+  sel:[],
+  override:{},              /* docCode -> 人工覆盖的类型 */
+  pick:{},                  /* docCode -> 人工选定的原件 code */
+  edits:{},                 /* docCode -> { ref: {from,val} } */
+  pinned:{},                /* 'docCode|ref' -> true（人工顶住） */
+  inval:null,               /* 依赖失效演示 */
+  help:false,
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ★★ 派生逻辑
+   ══════════════════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pct = v => Math.round(v*100)+'%';
+
+function doc(code){ return DOCS[code]; }
+/** ★ 生效类型 = 人工覆盖优先于程序建议（P1：判断权归维护人员） */
+function effType(code){ return S.override[code] || doc(code).suggest || null; }
+function effSource(code){ return doc(code).source; }
+function isFixed(code){ return effType(code) === 'fixed'; }
+function pickedOf(code){ return S.pick[code] || doc(code).picked || null; }
+
+function anchorPinned(code, a){
+  const k = code+'|'+a.ref;
+  if (k in S.pinned) return S.pinned[k];
+  /* 全局参数/计算 来源 ⇒ 自动顶住（与 v7 一致） */
+  return a.kind === 'global' || a.kind === 'compute';
+}
+
+/** ★★ 必需项缺失清单 —— 唯一入口（49-V4 §九 + C1~C6） */
+function missing(code){
+  const d = doc(code), t = effType(code), miss = [];
+  if (!t) return ['文档类型'];
+  if (t === 'fixed'){
+    if (d.source === 'standard') return miss;                 /* 标准自带：无必需项 ⇒ 初始即「已设置」 */
+    if (!(d.tags||[]).length) miss.push('分组');
+    if (!(d.purpose||'').trim()) miss.push('文档作用');
+    if (!d.match || !d.match.prompt) miss.push('匹配依据');   /* ★ C3 */
+    return miss;
+  }
+  /* 可编辑 */
+  if (!d.hasTemplate) return ['空白模板'];                    /* ★ C1：没模板就到此为止 */
+  if (!(d.anchors||[]).length) return ['锚点扫描'];
+  if (d.anchors.some(a => !a.kind)) miss.push('锚点数据源');  /* ★ C5 */
+  if (d.anchors.some(a => a.kind === 'ai') && !d.fillPrompt) miss.push('全局填写规则'); /* ★ C4 */
+  return miss;
+}
+
+/** ★★ 三态（算出来的，不是存出来的） */
+function stateOf(code){
+  const d = doc(code);
+  const untouched = !d.analyzed && !d.hasTemplate && !(d.anchors||[]).length && !effType(code);
+  if (untouched) return 'none';
+  return missing(code).length ? 'draft' : 'done';
+}
+const STATE_META = {
+  none:  { text:'未设置',   cls:'tag--gray'    },
+  draft: { text:'正在设置', cls:'tag--warning' },
+  done:  { text:'已设置',   cls:'tag--success' },
+};
+
+/** ★★ 问题清单 —— 只报「需要人动手的」，不做统计、不阻断（49-V4 §四） */
+function issues(code){
+  const d = doc(code), t = effType(code), out = [];
+  const miss = missing(code);
+  /* C1 */
+  if (miss.includes('空白模板')) out.push({ lv:'d', n:1, t:'可编辑文档需要空白模板（锚点只能从模板扫出）', go:`openFile('${code}')` });
+  /* C3 */
+  if (miss.includes('匹配依据')) out.push({ lv:'w', n:1, t:'可替换但没有匹配依据 ⇒ 队列找不到企业文档', go:`showRule('match')` });
+  /* C4 */
+  if (miss.includes('全局填写规则')) out.push({ lv:'w', n:1, t:'有 AI 锚点但没挂全局填写规则 ⇒ AI 节点拿不到数据', go:`showRule('prompt')` });
+  /* C5 */
+  if (miss.includes('锚点数据源')) out.push({ lv:'w', n: d.anchors.filter(a=>!a.kind).length, t:`${d.anchors.filter(a=>!a.kind).length} 个锚点还没配数据源`, go:`openFile('${code}')` });
+  /* 固定文档：多候选需人工指定 */
+  if (t === 'fixed' && d.source === 'enterprise' && (d.candidates||[]).length > 1 && !pickedOf(code))
+    out.push({ lv:'d', n: d.candidates.length, t:`企业上传了 ${d.candidates.length} 份同类文件，需你选定`, go:`openFile('${code}')` });
+  if (t === 'fixed' && d.source === 'enterprise' && (d.candidates||[]).length === 0)
+    out.push({ lv:'d', n:1, t:'企业资料中找不到可匹配的文件', go:`openFile('${code}')` });
+  /* 未提交改动 */
+  const ne = Object.keys(S.edits[code]||{}).length;
+  if (ne) out.push({ lv:'w', n:ne, t:`${ne} 处改动未提交`, go:`openFile('${code}')` });
+  /* 依赖失效 */
+  if (S.inval && S.inval.cleared.some(x => x.doc === code))
+    out.push({ lv:'d', n: S.inval.cleared.filter(x=>x.doc===code).length, t:`有字段因企业资料更新被清空`, go:`openFile('${code}')` });
+  return out;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   渲染
+   ══════════════════════════════════════════════════════════════════════════ */
+function render(){ renderMenu(); renderTree(); renderCrumb(); renderFuncbar(); renderContent(); renderBottom(); renderFoot(); }
+
+function renderMenu(){
+  $('menu').innerHTML = [['norm','企业资料规范化'],['log','规范化日志'],['res','企业资料管理']]
+    .map(([k,t]) => `<b class="${k==='norm'?'on':''}" onclick="toast('原型：切到「${t}」')">${t}</b>`).join('');
+}
+
+function renderTree(){
+  const t = TREE[S.ent];
+  let h = '';
+  h += node('l1', 0, t.Name, 'en', true);
+  if (S.open['en']) t.Stages.forEach(st => {
+    h += node('l2', 1, st.Name, 'st:'+st.Code, !!S.open['st:'+st.Code]);
+    if (S.open['st:'+st.Code]) st.Standards.forEach(sd => {
+      h += node('l3', 2, sd.Name, 'sd:'+st.Code+':'+sd.Code, !!S.open['sd:'+st.Code+':'+sd.Code]);
+      if (S.open['sd:'+st.Code+':'+sd.Code]) sd.Folders.forEach(fo => {
+        h += node('l4', 3, fo.Name, 'fo:'+fo.Code, !!S.open['fo:'+fo.Code], fo);
+        if (S.open['fo:'+fo.Code]) fo.Files.forEach(c => {
+          const on = S.file === c;
+          h += `<div class="tn l4 ${on?'on':''}" style="padding-left:62px" onclick="openFile('${c}')">
+            <span class="caret"></span><span class="nm">${esc(doc(c).Name)}</span>
+            <span class="dots" style="color:${dotColor(c)}">●</span></div>`;
+        });
+      });
+    });
+  });
+  $('tree').innerHTML = h;
+}
+function node(cls, lv, name, key, open, folder){
+  let act = 'goEnt()';
+  if (key.startsWith('st:')) act = `goStage('${key.slice(3)}')`;
+  else if (key.startsWith('sd:')) act = `goStd('${key.split(':')[2]}')`;
+  else if (key.startsWith('fo:')) act = `goFolder('${key.slice(3)}')`;
+  const on = (key === 'en' && !S.stage) || (!!folder && S.folder === folder.Code);
+  return `<div class="tn ${cls} ${on?'on':''}" onclick="${act}">
+    <span class="caret" onclick="event.stopPropagation();toggle('${key}')">${open?'▾':'▸'}</span>
+    <span class="nm">${esc(name)}</span></div>`;
+}
+function dotColor(code){
+  const s = stateOf(code);
+  return s==='done' ? '#67c23a' : s==='draft' ? '#e6a23c' : '#c0c4cc';
+}
+function toggle(k){ S.open[k] = !S.open[k]; render(); }
+function expandAll(v){
+  S.open = {};
+  if (v){ S.open['en']=true; TREE[S.ent].Stages.forEach(st=>{ S.open['st:'+st.Code]=true;
+    st.Standards.forEach(sd=>{ S.open['sd:'+st.Code+':'+sd.Code]=true; sd.Folders.forEach(fo=>S.open['fo:'+fo.Code]=true); }); }); }
+  render();
+}
+
+/** ★ 当前选中范围的文件夹清单（支持企业/阶段/标准/文件夹 任意层） */
+function scopeFolders(){
+  const out = [];
+  TREE[S.ent].Stages.forEach(st => {
+    if (S.stage && st.Code !== S.stage) return;
+    st.Standards.forEach(sd => {
+      if (S.std && sd.Code !== S.std) return;
+      sd.Folders.forEach(fo => out.push({ st, sd, fo }));
+    });
+  });
+  return S.folder ? out.filter(x => x.fo.Code === S.folder) : out;
+}
+function scopeFiles(){ return scopeFolders().flatMap(x => x.fo.Files); }
+
+function renderCrumb(){
+  const t = TREE[S.ent];
+  let h = `<span class="${S.stage?'lnk':''}" onclick="goEnt()">${esc(t.Name)}</span>`;
+  const st = t.Stages.find(x=>x.Code===S.stage);
+  if (st){
+    h += `<i>›</i><span class="${S.std?'lnk':''}" onclick="goStage('${st.Code}')">${esc(st.Name)}</span>`;
+    const sd = st.Standards.find(x=>x.Code===S.std);
+    if (sd){
+      h += `<i>›</i><span class="${S.folder?'lnk':''}" onclick="goStd('${sd.Code}')">${esc(sd.Name)}</span>`;
+      if (S.folder){ const fo = sd.Folders.find(x=>x.Code===S.folder);
+        if (fo) h += `<i>›</i><span class="${S.file?'lnk':''}" onclick="goFolder('${fo.Code}')">${esc(fo.Name)}</span>`; }
+    }
+  }
+  if (S.file) h += `<i>›</i><b>${esc(doc(S.file).Name)}</b>`;
+  $('crumb').innerHTML = h;
+}
+
+function renderFuncbar(){
+  if (S.page === 'file' && S.file){
+    const c = S.file, st = stateOf(c), m = STATE_META[st];
+    const miss = missing(c);
+    $('funcbar').innerHTML =
+      `<button class="btn btn--sm" onclick="backFolder()">‹ 返回</button>
+       <span class="tag ${m.cls}">${m.text}</span>
+       <span class="small muted">${miss.length ? '缺：'+miss.join(' / ') : '必需项已齐'}</span>
+       <span class="sp"></span>
+       <button class="btn btn--sm" onclick="showRule('type')">类型规则</button>
+       <button class="btn btn--sm" onclick="toast('原型：提交改动并重新生成')">↻ 重新生成</button>`;
+    return;
+  }
+  const n = S.sel.length;
+  $('funcbar').innerHTML =
+    `<span class="small muted">已勾选</span><b>${n}</b><span class="small muted">个</span>
+     <button class="btn btn--link btn--sm" onclick="S.sel=[];render()">清空</button>
+     <span class="sp"></span>
+     <button class="btn btn--sm btn--primary" ${n?'':'disabled'} onclick="toast('原型：重新生成 ${n} 个文件')">↻ 重新生成</button>
+     <button class="btn btn--sm" ${n?'':'disabled'} onclick="toast('原型：锁定 ${n} 个文件')">🔒 锁定</button>
+     <button class="btn btn--sm" onclick="showQueue()">队列</button>`;
+}
+
+function renderContent(){
+  if (S.page === 'file' && S.file) return renderFile(S.file);
+  return renderList();
+}
+
+/* ── 列表：★ 6 列（v7 是 9 列） ── */
+function renderList(){
+  const folders = scopeFolders();
+  let h = `<table class="tbl"><thead><tr>
+      <th style="width:34px"><input type="checkbox" onclick="toggleAll(this.checked)"></th>
+      <th style="width:76px">类型</th>
+      <th>名称</th>
+      <th style="width:126px">状态</th>
+      <th style="width:auto;min-width:190px">问题</th>
+      <th style="width:132px">操作</th>
+    </tr></thead><tbody>`;
+
+  folders.forEach(({ sd, fo }) => {
+    if (!S.folder){
+      /* 文件夹行 */
+      const stats = { none:0, draft:0, done:0 };
+      fo.Files.forEach(c => stats[stateOf(c)]++);
+      const iss = fo.Files.flatMap(c => issues(c));
+      h += `<tr>
+        <td><input type="checkbox" onclick="event.stopPropagation();toggleSel('${fo.Code}')" ${S.sel.includes(fo.Code)?'checked':''}></td>
+        <td><span class="tag tag--gray">文件夹</span></td>
+        <td><span class="nm" onclick="goFolder('${fo.Code}')">${esc((S.std?'':sd.Name+' / ')+fo.Name)}</span></td>
+        <td class="nowrap small">
+          ${stats.done?`<span class="tag tag--success">${stats.done}</span> `:''}
+          ${stats.draft?`<span class="tag tag--warning">${stats.draft}</span> `:''}
+          ${stats.none?`<span class="tag tag--gray">${stats.none}</span>`:''}
+        </td>
+        <td class="small">${iss.length ? `<span class="muted" title="${esc(iss.map(i=>i.t).join('；'))}">${iss.length} 个待处理</span>` : '<span class="muted">—</span>'}</td>
+        <td><button class="btn btn--sm" onclick="goFolder('${fo.Code}')">打开</button></td></tr>`;
+      return;
+    }
+    /* 文件行 */
+    fo.Files.forEach(c => {
+      const d = doc(c), st = stateOf(c), m = STATE_META[st], t = effType(c);
+      const ov = !!S.override[c];
+      const iss = issues(c);
+      const typeTag = !t ? '<span class="tag tag--gray">待定</span>'
+        : t === 'fixed' ? '<span class="tag tag--info">固定</span>'
+        : '<span class="tag tag--warning">可编辑</span>';
+      const editBtn = `<button class="btn btn--link btn--sm" title="程序建议：${esc(d.suggestWhy||'—')}　点击可人工覆盖（P1：判断权归维护人员）"
+        onclick="event.stopPropagation();cycleType('${c}')">改</button>`;
+      const miss = missing(c);
+      const prog = t === 'editable' && d.anchors.length ? ` <span class="muted tiny">${d.anchors.filter(a=>a.kind).length}/${d.anchors.length}</span>` : '';
+      const action = (t === 'fixed' && d.source === 'enterprise')
+        ? `<button class="btn btn--sm" onclick="event.stopPropagation();openFile('${c}')">${(d.candidates||[]).length>1&&!pickedOf(c)?'选定原件':'查看原件'}</button>`
+        : `<button class="btn btn--sm" onclick="event.stopPropagation();openFile('${c}')">打开</button>`;
+      h += `<tr class="${S.sel.includes(c)?'sel':''}">
+        <td><input type="checkbox" onclick="event.stopPropagation();toggleSel('${c}')" ${S.sel.includes(c)?'checked':''}></td>
+        <td class="nowrap">${typeTag}${ov?'<span class="tag tag--danger tiny" title="已被人工覆盖">改</span>':''} ${editBtn}</td>
+        <td><span class="nm" onclick="openFile('${c}')" title="${esc(d.Name)}">${esc(d.Name)}</span>
+            <div class="tiny muted">${esc(d.Ext)} · ${d.source==='standard'?'标准自带':'企业提供'}</div></td>
+        <td class="nowrap"><span class="tag ${m.cls}">${m.text}</span>${prog}
+            ${miss.length?`<div class="tiny muted">缺：${esc(miss.join(' / '))}</div>`:''}</td>
+        <td class="small">${iss.length ? `<span title="${esc(iss.map(i=>i.t).join('；'))}">${esc(iss[0].t)}</span>${iss.length>1?` <span class="tag tag--gray tiny">+${iss.length-1}</span>`:''}` : '<span class="muted">—</span>'}</td>
+        <td class="nowrap">${action}</td></tr>`;
+    });
+  });
+  h += '</tbody></table>';
+  $('content').innerHTML = h;
+}
+
+/* ── 文件页 ── */
+function renderFile(c){
+  const d = doc(c), st = stateOf(c), m = STATE_META[st], t = effType(c);
+  const fixed = t === 'fixed';
+  let h = `<div class="card"><div class="card__bd" style="display:flex;align-items:center;gap:10px;padding:10px 14px">
+      <span class="tag ${m.cls}">${m.text}</span>
+      <b style="font-size:15px">${esc(d.Name)}</b>
+      <span class="tag ${fixed?'tag--info':'tag--warning'}">${fixed?'固定文档':'可编辑文档'}</span>
+      <span class="tag tag--gray">${d.source==='standard'?'标准自带（不可替换）':'企业提供（可替换）'}</span>
+      <span class="sp" style="flex:1"></span>
+      <button class="btn btn--link btn--sm" onclick="showRule('type')">这条类型从哪来？</button>
+    </div></div>
+    <div class="tabs">
+      <div class="tab ${S.tab===0?'on':''}" onclick="S.tab=0;render()">${fixed?'原件':'预览'}</div>
+      <div class="tab ${S.tab===1?'on':''}" onclick="S.tab=1;render()">${fixed?'选定原件':'审核'}</div>
+    </div>`;
+  h += fixed ? (S.tab===0 ? fixedPreview(c) : fixedPick(c)) : (S.tab===0 ? preview(c) : audit(c));
+  $('content').innerHTML = h;
+}
+
+/* ── 可编辑 · Tab0 预览 ── */
+function preview(c){
+  const d = doc(c);
+  if (!d.hasTemplate) return `<div class="alert alert--d">还没上传空白模板，没有可预览的产物。<br>
+    <span class="small">★ 程序不拦你把它标成「可编辑」—— 但锚点只能从空白模板扫出，所以现在配不了、也生成不了。</span></div>`;
+  const body = (d.anchors||[]).map(a => {
+    const v = (S.edits[c]||{})[a.ref];
+    const val = v ? v.val : a.val;
+    const cls = a.kind ? 'tok' : 'tok miss';
+    return `<div class="kv"><b>${esc(a.field)}</b><span class="${cls}">${esc(val || a.ref)}</span></div>`;
+  }).join('');
+  return `<div class="page-mock">
+      <div class="ph">${esc(d.Name)}</div>
+      ${body}
+      <div class="tiny muted" style="margin-top:14px">蓝框 = 由平台按规则填入　红框 = 还没配数据源</div>
+    </div>`;
+}
+
+/* ── 可编辑 · Tab1 审核（★ 每行可回链到后台配置） ── */
+function audit(c){
+  const d = doc(c);
+  if (!d.hasTemplate) return `<div class="alert alert--w">没有空白模板，没有锚点可审核。</div>`;
+  if (!d.anchors.length) return `<div class="alert alert--i">该模板没有可填锚点（纯复制文档）。</div>`;
+  let h = `<div class="alert alert--i" style="font-size:12px">
+      勾选 = 认可这个值（企业资料更新时不清空它）· 点「查」看**这个值从哪来、规则配在后台哪里**</div>
+    <table class="tbl"><thead><tr>
+      <th style="width:32px"></th><th style="width:126px">位置</th><th style="width:104px">字段</th>
+      <th style="width:auto;min-width:190px">值（可直接改）</th>
+      <th style="width:80px">来源</th><th style="width:52px">可信</th><th style="width:46px"></th>
+    </tr></thead><tbody>`;
+  d.anchors.forEach(a => {
+    const ov = (S.edits[c]||{})[a.ref];
+    const val = ov ? ov.val : a.val;
+    const sk = a.kind ? SRC[a.kind] : null;
+    const pin = anchorPinned(c, a);
+    h += `<tr>
+      <td><input type="checkbox" ${pin?'checked':''} ${a.kind?'':'disabled'} onchange="togglePin('${c}','${esc(a.ref)}',this.checked)"></td>
+      <td class="mono tiny">${esc(a.loc)}</td>
+      <td class="mono tiny">${esc(a.field)}</td>
+      <td><input class="inp" style="width:100%;height:26px;border:1px solid var(--bd-l);border-radius:3px;padding:0 6px;font-size:12px"
+            value="${esc(val)}" placeholder="${a.kind?'':'待填写…'}"
+            oninput="editCell('${c}','${esc(a.ref)}',this.value)"></td>
+      <td>${sk?`<span class="tag ${sk.tag}">${sk.label}</span>`:'<span class="tag tag--gray">待配</span>'}</td>
+      <td class="small">${a.kind?pct(a.conf):'—'}</td>
+      <td><button class="btn btn--link btn--sm" onclick="showField('${c}','${esc(a.ref)}')">查</button></td></tr>`;
+  });
+  h += '</tbody></table>';
+  const todo = d.anchors.filter(a => !a.kind);
+  if (todo.length) h += `<div class="alert alert--w" style="margin-top:12px">
+      <b>${todo.length} 个锚点还没配数据源</b> —— 这不是「填不上」，是**后台没配规则**。
+      <div class="small" style="margin-top:4px">${todo.map(a=>`<span class="tag tag--gray">${esc(a.field)}</span>`).join(' ')}</div></div>`;
+  return h;
+}
+
+/* ── 固定 · Tab0 原件预览 ── */
+function fixedPreview(c){
+  const d = doc(c), p = pickedOf(c);
+  if (d.source === 'standard')
+    return `<div class="alert alert--i"><b>标准自带文档</b> —— 它跟着标准存在，<b>不需要企业提供、也不需要替换</b>。
+      <div class="small" style="margin-top:4px">所以它没有候选、没有锚点、也没有全局填写规则 —— 这是<b>正常</b>的，不是缺配置。</div></div>
+      <div class="page-mock"><div class="ph">${esc(d.Name)}</div>
+        <div class="kv"><b>来源</b><span>标准附录（随标准下发）</span></div></div>`;
+  const cand = (d.candidates||[]).find(x => x.code === p);
+  if (!cand) return `<div class="alert alert--d">还没选定原件。</div>`;
+  return `<div class="card"><div class="card__bd">
+    <div class="alert alert--i" style="margin:0">已接收：<b>${esc(cand.name)}</b>（匹配度 ${pct(cand.score)}）</div>
+    <div class="page-mock" style="margin-top:12px"><div class="ph">${esc(d.Name)}</div>
+      <div class="kv"><b>文件名</b><span>${esc(cand.name)}</span></div>
+      <div class="kv"><b>命中</b><span>${esc(cand.by)}</span></div>
+      <div class="kv"><b>证据</b><span>${esc(cand.ev)}</span></div></div></div></div>`;
+}
+
+/* ── 固定 · Tab1 选定原件 ── */
+function fixedPick(c){
+  const d = doc(c);
+  if (d.source === 'standard')
+    return `<div class="alert alert--i">标准自带文档，<b>无需选定原件</b>。<br>
+      <span class="small">★ 这一条正是「不可替换 ⇒ 文档必须存在」的实现：直接用标准域那一份。</span>
+      <div style="margin-top:8px"><button class="btn btn--sm" onclick="showRule('source')">看这条「不可替换」是谁定的</button></div></div>`;
+  const cands = d.candidates || [];
+  if (!cands.length)
+    return `<div class="alert alert--d">企业原始资料里没有可匹配的文件。
+      <div class="small" style="margin-top:6px">★ 注意：这不是「企业没传」，也可能是<b>后台没配匹配依据</b>（${esc(RULE.match.col)}）。</div>
+      <div style="margin-top:8px"><button class="btn btn--sm" onclick="showRule('match')">检查匹配依据</button></div></div>`;
+  let h = `<div class="alert ${cands.length>1?'alert--w':'alert--i'}">
+      ${cands.length>1 ? `企业上传了 <b>${cands.length} 份</b>同类文件，系统<b>无法判断哪份是对的</b> —— 点候选卡片即选中。`
+                       : `只有 <b>1 份</b>候选，已自动选定，可点其它候选替换。`}</div>`;
+  const p = pickedOf(c);
+  cands.forEach(cd => {
+    const on = p === cd.code;
+    const lv = cd.score>=0.9 ? 'tag--success' : cd.score>=0.6 ? 'tag--warning' : 'tag--danger';
+    h += `<div class="cand ${on?'on':''}" onclick="pickDoc('${c}','${cd.code}')">
+      <div class="cand__h"><span class="cand__n">${esc(cd.name)}</span>
+        <span class="sp" style="flex:1"></span>
+        <span class="tag ${lv}">${pct(cd.score)}</span>
+        <span class="tag ${on?'tag--success':'tag--gray'}">${on?'✓ 当前':'选它'}</span></div>
+      <div class="cand__e">命中：${esc(cd.by)}<br>证据：${esc(cd.ev)}</div></div>`;
+  });
+  return h;
+}
+
+/* ── 底部问题 ── */
+function renderBottom(){
+  let list = [];
+  if (S.page === 'file' && S.file) list = issues(S.file);
+  else list = scopeFiles().flatMap(c => issues(c));
+  const box = $('bottom');
+  if (!list.length){ box.innerHTML = `<div class="bottom__t">本页存在的问题</div>
+    <div class="small muted" style="padding-left:2px">没有需要处理的问题</div>`; return; }
+  box.innerHTML = `<div class="bottom__t">本页存在的问题（${list.length}）</div>` +
+    list.slice(0,4).map(i => `<div class="issue issue--${i.lv}" onclick="${i.go}">
+        <span class="issue__n">${i.n}</span><span>${esc(i.t)}</span><span class="issue__go">去处理 ›</span></div>`).join('') +
+    (list.length>4 ? `<div class="small muted" style="padding-left:4px">… 还有 ${list.length-4} 项</div>` : '');
+}
+
+/* ── 页脚 ── */
+function renderFoot(){
+  $('foot').innerHTML = `
+    <span>左树：企业 › 阶段 › 标准 › 文件夹（来自后台标准文档目录）</span>
+    <span>状态：<b>已设置</b>=必需项全过 · <b>正在设置</b>=有缺项 · <b>未设置</b>=没动过</span>
+    <span class="sp" style="flex:1"></span>
+    <button class="btn btn--link btn--sm" onclick="toggleHelp()">口径与规则说明</button>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   抽屉：① 字段来源（含后台回链） ② 规则回链 ③ 队列
+   ══════════════════════════════════════════════════════════════════════════ */
+function openDrawer(title, body, foot){
+  $('dwT').textContent = title; $('dwB').innerHTML = body; $('dwF').innerHTML = foot || '<span class="sp"></span><button class="btn" onclick="closeDrawer()">关闭</button>';
+  $('drawer').classList.add('on'); $('mask').classList.add('on');
+}
+function closeDrawer(){ $('drawer').classList.remove('on'); $('mask').classList.remove('on'); }
+
+/** ★★ 回链块 —— v8 的核心新增 */
+function linkBlock(key, extra){
+  const r = RULE[key]; if (!r) return '';
+  return `<div class="link-block">
+    <h6>这条规则来自后台哪个配置</h6>
+    <div class="row"><span class="k">配置项</span><span class="v" style="font-family:inherit;color:var(--t1)">${esc(r.label)}</span></div>
+    <div class="row"><span class="k">落库列</span><span class="v">${esc(r.col)}</span></div>
+    <div class="row"><span class="k">后台页面</span><span class="v" style="font-family:inherit">${esc(r.page)}</span></div>
+    ${extra ? `<div class="row"><span class="k">当前值</span><span class="v" style="font-family:inherit">${esc(extra)}</span></div>` : ''}
+    <div class="row" style="margin-top:6px"><button class="btn btn--sm" onclick="toast('原型：跳转到后台「${esc(r.page)}」')">去后台看</button></div>
+  </div>`;
+}
+
+function showRule(key){
+  const r = RULE[key]; if (!r) return;
+  openDrawer('规则来源 · ' + r.label,
+    `<table class="dl"><tbody>
+       <tr><td>配置项</td><td><b>${esc(r.label)}</b></td></tr>
+       <tr><td>落库列</td><td class="mono tiny">${esc(r.col)}</td></tr>
+       <tr><td>后台页面</td><td>${esc(r.page)}</td></tr>
+     </tbody></table>
+     <div class="alert alert--i" style="margin-top:12px;font-size:12px">
+       这是「<b>程序给建议、人工可覆盖</b>」的那一类：程序只负责如实推导，改不改由你定。</div>`,
+    '<span class="sp"></span><button class="btn btn--primary" onclick="toast(\'原型：打开后台页面\')">去后台看</button>');
+}
+
+function showField(code, ref){
+  const d = doc(code), a = d.anchors.find(x => x.ref === ref); if (!a) return;
+  const ov = (S.edits[code]||{})[ref];
+  const val = ov ? ov.val : a.val;
+  const sk = a.kind ? SRC[a.kind] : null;
+  const pin = anchorPinned(code, a);
+  const dep = a.kind === 'profile' || a.kind === 'ai';
+  openDrawer('字段来源 · ' + a.field,
+    `<table class="dl"><tbody>
+      <tr><td>位置</td><td class="mono tiny">${esc(a.loc)}</td></tr>
+      <tr><td>当前值</td><td>${esc(val||'（空）')}</td></tr>
+      <tr><td>来源</td><td>${sk?`<span class="tag ${sk.tag}">${sk.label}</span>`:'<span class="tag tag--gray">还没配</span>'}</td></tr>
+      <tr><td>可信度</td><td>${a.kind?pct(a.conf):'—'} <span class="muted tiny">（仅供参考，合格与否由你决定）</span></td></tr>
+      <tr><td>顶住</td><td>${pin?'<span class="tag tag--warning">🔒 已顶住</span> <span class="muted tiny">企业资料更新不影响</span>'
+                                :'<span class="muted">○ 未顶住 —— 企业资料更新会清空它</span>'}</td></tr>
+      <tr><td>依赖企业文件</td><td>${dep?'<span class="tag tag--danger">是</span> <span class="muted tiny">更新时清空</span>'
+                                    :'<span class="tag tag--success">否</span> <span class="muted tiny">更新时保留</span>'}</td></tr>
+    </tbody></table>
+    ${linkBlock('src', sk ? sk.label : '（空）')}
+    ${a.kind==='ai' ? linkBlock('prompt', d.fillPrompt||'未挂接') : ''}`,
+    `<button class="btn ${pin?'':'btn--primary'}" onclick="togglePin('${code}','${esc(ref)}',${!pin});closeDrawer()">${pin?'🔓 解除顶住':'🔒 顶住（认可）'}</button>
+     <span class="sp"></span><button class="btn" onclick="closeDrawer()">关闭</button>`);
+}
+
+function showQueue(){
+  openDrawer('队列明细',
+    `<div class="alert alert--i">一个文件 = 一个任务（原子）· 失败只重试自己</div>
+     <table class="tbl"><thead><tr><th>文件</th><th style="width:90px">状态</th><th>说明</th></tr></thead><tbody>
+     <tr><td>风险管理报告</td><td><span class="tag tag--success">完成</span></td><td class="small">7 锚点 · 6 已填</td></tr>
+     <tr><td>培训记录表</td><td><span class="tag tag--danger">失败</span></td><td class="small">AI 节点拿不到数据 —— 后台未挂全局填写规则</td></tr>
+     <tr><td>环境因素识别表</td><td><span class="tag tag--gray">跳过</span></td><td class="small">未上传空白模板</td></tr>
+     </tbody></table>`);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   交互
+   ══════════════════════════════════════════════════════════════════════════ */
+function findFolder(code){
+  for (const st of TREE[S.ent].Stages) for (const sd of st.Standards)
+    for (const fo of sd.Folders) if (fo.Code === code) return fo;
+  return null;
+}
+function goEnt(){ S.stage=null; S.std=null; S.folder=null; S.file=null; S.page='list'; S.sel=[]; S.open['en']=true; render(); }
+function goStage(c){ S.stage=c; S.std=null; S.folder=null; S.file=null; S.page='list'; S.sel=[]; S.open['en']=true; S.open['st:'+c]=true; render(); }
+function goStd(c){ S.std=c; S.folder=null; S.file=null; S.page='list'; S.sel=[]; S.open['st:'+S.stage]=true; S.open['sd:'+S.stage+':'+c]=true; render(); }
+function goFolder(c){ S.folder = (S.folder===c?null:c); S.file=null; S.sel=[]; S.page = S.folder?'folder':'list'; S.open['fo:'+c]=true; render(); }
+function backFolder(){ S.file=null; S.page = S.folder?'folder':'list'; render(); }
+function openFile(c){ S.file=c; S.page='file'; S.tab = isFixed(c)?1:0; render(); }
+function toggleSel(c){ const i=S.sel.indexOf(c); i>=0?S.sel.splice(i,1):S.sel.push(c); render(); }
+function toggleAll(v){ S.sel = v ? scopeFiles() : []; render(); }
+
+/** ★ 人工覆盖类型（P1：判断权归维护人员） */
+function cycleType(c){
+  const d = doc(c);
+  if (!d.suggest){ toast('还没做语义分析，没有可覆盖的建议'); return; }
+  const cur = effType(c);
+  const next = cur === 'fixed' ? 'editable' : 'fixed';
+  S.override[c] = next;
+  toast(`已人工覆盖为「${next==='fixed'?'固定文档':'可编辑文档'}」 —— 程序按你的选择如实重算状态`);
+  render();
+}
+function pickDoc(c, code){ S.pick[c]=code; toast('已选定原件'); render(); }
+function editCell(c, ref, val){
+  const a = doc(c).anchors.find(x=>x.ref===ref);
+  S.edits[c] = S.edits[c] || {};
+  S.edits[c][ref] = { from: a.val, val };
+}
+function togglePin(c, ref, v){ S.pinned[c+'|'+ref] = v; render(); }
+function toggleHelp(){ S.help = !S.help;
+  $('help').className = 'help' + (S.help?' on':'');
+  $('help').innerHTML = S.help ? `
+    <h6>口径与规则说明</h6>
+    <div class="hi"><b>状态怎么来的</b><br>必需项全过 ⇒ 已设置；有缺项 ⇒ 正在设置；没动过 ⇒ 未设置。<br>
+      <code>fixed + 标准自带</code> 无必需项 ⇒ <b>初始即已设置</b>。</div>
+    <div class="hi"><b>谁定</b><br>类型 = 程序建议 + <b>人工可覆盖</b>；可替换性 = <b>纯人工判断</b>；状态 = 程序算。</div>
+    <div class="hi"><b>顶住</b><br>全局参数/计算来源<b>自动顶住</b>；企业资料/AI 来源需你勾选认可。</div>
+    <div class="hi"><b>依赖企业文件</b><br>企业资料 / AI ⇒ 更新时清空；全局参数 / 计算 / 表格 ⇒ 保留；人工填写 ⇒ 保留 + 待复核。</div>
+    <div class="hi"><b>程序不做什么</b><br>不限制内容（只限格式）· 不做内容一致性校验 · 不替人确认 · 不阻断任何选择。</div>` : '';
+}
+function resetAll(){ location.reload(); }
+function toast(m){
+  const t = $('toast'); t.textContent = m; t.classList.add('on');
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove('on'), 2200);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ★ 自检（浏览器控制台执行 selfTest()，或 ?selftest=1）
+   ══════════════════════════════════════════════════════════════════════════ */
+function selfTest(){
+  const R = []; const ok = (n,c) => R.push((c?'✓ ':'✗ ')+n);
+  /* 1. 标准自带 ⇒ 无必需项 ⇒ 已设置 */
+  ok('标准自带文档初始即「已设置」', missing('D_SYSFILE').length===0 && stateOf('D_SYSFILE')==='done');
+  /* 2. 可编辑无模板 ⇒ 缺「空白模板」（C1） */
+  ok('可编辑无模板 ⇒ 缺空白模板', missing('D_ENV').includes('空白模板'));
+  /* 3. 有 ai 锚点无全局规则 ⇒ 缺「全局填写规则」（C4） */
+  ok('ai 锚点无全局规则 ⇒ 缺全局填写规则', missing('D_TRAIN').includes('全局填写规则'));
+  ok('ai 锚点有全局规则 ⇒ 不缺', !missing('D_RISK').includes('全局填写规则'));
+  /* 4. 未配数据源 ⇒ 缺「锚点数据源」（C5） */
+  ok('锚点未配数据源 ⇒ 缺锚点数据源', missing('D_QUALOBJ').includes('锚点数据源'));
+  /* 5. 无匹配依据 ⇒ 缺「匹配依据」（C3） */
+  ok('企业提供但无匹配依据 ⇒ 缺匹配依据', missing('D_PRODLIC').includes('匹配依据'));
+  /* 6. 人工覆盖生效，且程序不阻断 */
+  S.override['D_SYSFILE'] = 'editable';
+  ok('人工覆盖后类型跟着变', effType('D_SYSFILE')==='editable');
+  ok('覆盖后如实重算（缺空白模板）', missing('D_SYSFILE').includes('空白模板'));
+  delete S.override['D_SYSFILE'];
+  /* 7. 三态 */
+  ok('未设置态可被识别', stateOf('D_REVIEW')==='none');
+  ok('正在设置态可被识别', stateOf('D_ENV')==='draft');
+  /* 8. 依赖策略分级 */
+  ok('profile 依赖企业文件', DEP_KILL.includes('profile'));
+  ok('global 不依赖企业文件', DEP_KEEP.includes('global'));
+  ok('manual 保留但待复核', DEP_REVIEW.includes('manual'));
+  /* 9. 回链表覆盖所有落库列 */
+  ok('回链表 10 项齐全', Object.keys(RULE).length===10);
+  /* 10. 问题清单只报要动手的 */
+  ok('标准自带文档没有问题项', issues('D_SYSFILE').length===0);
+  const pass = R.filter(x=>x.startsWith('✓')).length;
+  console.log('%c自检 '+pass+'/'+R.length, 'font-weight:bold', '\n'+R.join('\n'));
+  if (pass !== R.length) console.error('有失败项');
+  return R;
+}
+if (location.search.includes('selftest')) setTimeout(selfTest, 60);
+
+/* 启动 */
+render();
+</script>
+</body>
+</html>

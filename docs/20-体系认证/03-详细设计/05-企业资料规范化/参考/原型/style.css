@@ -245,3 +245,243 @@ select.inp{cursor:pointer}
 .col{display:flex;flex-direction:column;gap:var(--yzh-space-2)}
 .grow{flex:1}
 .nowrap{white-space:nowrap}
+/* ==========================================================================
+   v2 追加 · PDF 预览器 / 面包屑 / 汇总指标 / 锚点操作组
+   ========================================================================== */
+
+/* ---------- 顶栏菜单（一级菜单文字） ---------- */
+.menu{display:flex;gap:var(--yzh-space-5);height:100%;align-items:center;margin-left:var(--yzh-space-5)}
+.menu__i{font-size:var(--yzh-font-size-md);color:var(--yzh-color-text-regular);cursor:pointer;padding:var(--yzh-space-2) 0;border-bottom:2px solid transparent}
+.menu__i:hover{color:var(--yzh-color-primary)}
+.menu__i.is-active{color:var(--yzh-color-primary);border-bottom-color:var(--yzh-color-primary);font-weight:600}
+
+/* ---------- 面包屑 ---------- */
+.crumb{display:flex;align-items:center;gap:var(--yzh-space-2);font-size:var(--yzh-font-size-md);margin-bottom:var(--yzh-space-3);flex-wrap:wrap}
+.crumb__i{cursor:pointer;color:var(--yzh-color-text-regular);padding:2px 6px;border-radius:var(--yzh-radius)}
+.crumb__i:hover{background:var(--yzh-color-primary-light);color:var(--yzh-color-primary)}
+.crumb__i.is-cur{color:var(--yzh-color-text-primary);font-weight:600;cursor:default}
+.crumb__i.is-cur:hover{background:none}
+.crumb__sep{color:var(--yzh-color-text-tertiary)}
+
+/* ---------- 汇总指标卡 ---------- */
+.metrics{display:flex;gap:var(--yzh-space-3);margin-bottom:var(--yzh-space-3)}
+.metric{
+  flex:1;background:var(--yzh-color-bg);border:1px solid var(--yzh-color-border-light);
+  border-radius:var(--yzh-radius);padding:var(--yzh-space-3) var(--yzh-space-4);
+}
+.metric__lbl{font-size:var(--yzh-font-size-xs);color:var(--yzh-color-text-secondary);margin-bottom:var(--yzh-space-1)}
+.metric__val{font-size:20px;font-weight:600;line-height:1.2}
+.metric__val small{font-size:var(--yzh-font-size-xs);font-weight:400;color:var(--yzh-color-text-secondary);margin-left:4px}
+.metric__bar{margin-top:6px}
+
+/* ---------- PDF 预览器 ---------- */
+.pdf{background:var(--yzh-color-bg-page);border:1px solid var(--yzh-color-border);border-radius:var(--yzh-radius);padding:var(--yzh-space-3)}
+.pdf__bar{display:flex;align-items:center;gap:var(--yzh-space-2);margin-bottom:var(--yzh-space-3);font-size:var(--yzh-font-size-sm)}
+.pdf__page{
+  background:#fff;margin:0 auto;box-shadow:0 1px 6px rgba(0,0,0,.12);
+  width:100%;max-width:660px;min-height:420px;padding:38px 46px;
+  font-size:13px;line-height:2;color:#1f2329;
+}
+.pdf__title{text-align:center;font-size:19px;font-weight:700;letter-spacing:2px;margin-bottom:6px}
+.pdf__sub{text-align:center;font-size:12px;color:var(--yzh-color-text-secondary);margin-bottom:22px}
+.pdf__p{text-indent:2em;margin-bottom:10px}
+.pdf__kv{display:flex;gap:8px;margin-bottom:4px}
+.pdf__k{color:var(--yzh-color-text-secondary);flex:none;width:88px}
+.pdf__v{flex:1}
+.pdf__stamp{
+  display:inline-block;margin-top:18px;padding:2px 8px;border:2px solid var(--yzh-color-danger);
+  color:var(--yzh-color-danger);font-size:11px;transform:rotate(-8deg);border-radius:2px;font-weight:600;
+}
+.pdf__hl{background:var(--yzh-color-warning-light);border-bottom:1px solid var(--yzh-color-warning);padding:0 1px}
+.pdf__note{font-size:11px;color:var(--yzh-color-text-tertiary);margin-top:20px;border-top:1px dashed var(--yzh-color-border);padding-top:8px}
+
+/* ---------- 锚点操作组（三操作：查看 / 编辑 / 锁定） ---------- */
+.ops{display:flex;gap:2px}
+.ops__b{
+  width:22px;height:22px;border:1px solid var(--yzh-color-border);background:var(--yzh-color-bg);
+  border-radius:2px;cursor:pointer;font-size:11px;color:var(--yzh-color-text-secondary);
+  display:inline-flex;align-items:center;justify-content:center;
+}
+.ops__b:hover{border-color:var(--yzh-color-primary);color:var(--yzh-color-primary)}
+.ops__b.is-on{background:var(--yzh-color-warning-light);border-color:var(--yzh-color-warning);color:var(--yzh-color-warning)}
+
+/* ---------- 分组标题 ---------- */
+.gtitle{font-size:var(--yzh-font-size-sm);font-weight:600;color:var(--yzh-color-text-regular);margin:var(--yzh-space-4) 0 var(--yzh-space-2)}
+.gtitle:first-child{margin-top:0}
+
+/* ---------- 目录文件夹视图 ---------- */
+.folderGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:var(--yzh-space-3)}
+.fcard{
+  border:1px solid var(--yzh-color-border-light);border-radius:var(--yzh-radius);
+  padding:var(--yzh-space-3);cursor:pointer;background:var(--yzh-color-bg);
+}
+.fcard:hover{border-color:var(--yzh-color-primary);box-shadow:0 1px 4px rgba(64,158,255,.12)}
+.fcard__top{display:flex;align-items:center;gap:var(--yzh-space-2);margin-bottom:var(--yzh-space-2)}
+.fcard__nm{flex:1;font-weight:600;font-size:var(--yzh-font-size-sm)}
+.fcard__meta{display:flex;gap:var(--yzh-space-3);font-size:var(--yzh-font-size-xs);color:var(--yzh-color-text-secondary);margin-top:6px}
+
+/* ==========================================================================
+   v3 追加 · 统计区移到表格下方后的样式调整
+   ========================================================================== */
+
+/* 主区统计区：加一条顶边 + 上间距，与表格拉开距离（不再是「入口」，而是「结论」） */
+#metrics{margin-top:var(--yzh-space-4);padding-top:var(--yzh-space-4);border-top:1px dashed var(--yzh-color-border)}
+#metrics:empty{display:none}
+
+/* 指标卡：等宽、紧凑、数字更大 */
+.metric{
+  flex:1;background:var(--yzh-color-bg);border:1px solid var(--yzh-color-border-light);
+  border-radius:var(--yzh-radius);padding:var(--yzh-space-3);
+}
+.metric__val{font-size:22px;font-weight:600;line-height:1.15;letter-spacing:-.5px}
+
+/* 抽屉内的锚点状态概览：卡片略小一号，避免与主区混淆 */
+.drawer__body .metrics .metric{padding:var(--yzh-space-2) var(--yzh-space-3)}
+.drawer__body .metrics .metric__val{font-size:18px}
+
+/* 段标题：审计页签里的三段分隔 */
+.gtitle{
+  font-size:var(--yzh-font-size-sm);font-weight:600;color:var(--yzh-color-text-regular);
+  margin:var(--yzh-space-5) 0 var(--yzh-space-2);
+  padding-bottom:var(--yzh-space-1);border-bottom:1px solid var(--yzh-color-border-light);
+}
+.gtitle:first-child{margin-top:0}
+
+/* ==========================================================================
+   v4 · 文件页面 / 文件夹页面
+   ========================================================================== */
+
+/* 文件页面顶部的状态条 */
+#filePage .card:first-child .card__body{background:var(--yzh-color-bg-page)}
+
+/* 审核 tab 的字段表：值列要够宽，行高舒服一点 */
+#filePage .tbl td{height:34px}
+#filePage .tbl .inp{height:28px}
+
+/* 顶住按钮的两种态：自动（灰）/ 人工认可（黄） */
+.ops__b.is-on{background:var(--yzh-color-warning-light);border-color:var(--yzh-color-warning);color:var(--yzh-color-warning)}
+.ops__b.is-auto{background:var(--yzh-color-bg-page);border-color:var(--yzh-color-border);color:var(--yzh-color-text-secondary)}
+
+/* 文件夹行的图标列 */
+.tbl td:first-child + td{color:var(--yzh-color-text-secondary);font-size:12px}
+
+/* 依赖失效标记 */
+.tag.tiny{font-size:10px;height:16px;padding:0 4px}
+
+/* 统计区：只有三个数字时更紧凑 */
+#metrics .metric{padding:var(--yzh-space-2) var(--yzh-space-3)}
+
+/* ==========================================================================
+   v5 · 底部统一区（操作 + 本页存在的问题）
+   ========================================================================== */
+
+/* 主体底部留白，让内容不贴底 */
+.main{padding-bottom:var(--yzh-space-5)}
+
+/* 底部条：吸底、两侧分栏 */
+.bottom{
+  position:sticky;bottom:0;margin-top:var(--yzh-space-4);
+  background:var(--yzh-color-bg);border:1px solid var(--yzh-color-border);
+  border-radius:var(--yzh-radius);box-shadow:0 -2px 10px rgba(0,0,0,.06);
+  display:flex;align-items:stretch;
+}
+.bottom__left{flex:1;min-width:0;padding:var(--yzh-space-3) var(--yzh-space-4)}
+.bottom__right{
+  display:flex;align-items:center;gap:var(--yzh-space-2);
+  padding:var(--yzh-space-3) var(--yzh-space-4);
+  border-left:1px solid var(--yzh-color-border-light);background:var(--yzh-color-bg-page);
+  border-radius:0 var(--yzh-radius) var(--yzh-radius) 0;flex:none;
+}
+.bottom__title{font-size:var(--yzh-font-size-xs);color:var(--yzh-color-text-secondary);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+
+/* 问题条目 */
+.issue{
+  display:flex;align-items:center;gap:var(--yzh-space-2);
+  padding:5px var(--yzh-space-3);border-radius:var(--yzh-radius);
+  font-size:var(--yzh-font-size-sm);cursor:pointer;margin-bottom:4px;
+  background:var(--yzh-color-bg-page);
+}
+.issue:last-child{margin-bottom:0}
+.issue:hover{background:var(--yzh-color-primary-light)}
+.issue--warn{background:var(--yzh-color-warning-light)}
+.issue--warn:hover{background:#f9e6c8}
+.issue--danger{background:var(--yzh-color-danger-light)}
+.issue--danger:hover{background:#fcdcdc}
+.issue__ico{width:16px;flex:none;text-align:center;font-size:12px}
+.issue__n{
+  flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;
+  background:var(--yzh-color-danger);color:#fff;font-size:11px;
+  display:inline-flex;align-items:center;justify-content:center;
+}
+.issue--info .issue__n{background:var(--yzh-color-primary)}
+.issue__txt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.issue__go{flex:none;color:var(--yzh-color-primary);font-size:var(--yzh-font-size-xs)}
+
+/* 备注列 */
+.remark{display:flex;flex-wrap:wrap;gap:3px;align-items:center}
+.remark__t{
+  font-size:11px;line-height:1.5;padding:1px 6px;border-radius:2px;white-space:nowrap;
+}
+.remark__t--warn{background:var(--yzh-color-warning-light);color:var(--yzh-color-warning)}
+.remark__t--danger{background:var(--yzh-color-danger-light);color:var(--yzh-color-danger)}
+.remark__t--gray{background:var(--yzh-color-bg-page);color:var(--yzh-color-text-secondary)}
+.remark__t--info{background:var(--yzh-color-primary-light);color:var(--yzh-color-primary)}
+.remark__none{color:var(--yzh-color-text-tertiary);font-size:var(--yzh-font-size-xs)}
+
+/* ==========================================================================
+   v6 · 功能菜单条（面包屑下方）/ 页脚 / 表格不换行
+   ========================================================================== */
+
+/* 功能菜单条：紧贴面包屑下方，不做成卡片，避免与内容抢视觉 */
+.funcbar{
+  display:flex;align-items:center;gap:var(--yzh-space-2);
+  padding:var(--yzh-space-2) 0 var(--yzh-space-3);
+  margin-bottom:var(--yzh-space-1);
+  border-bottom:1px solid var(--yzh-color-border-light);
+  min-height:36px;flex-wrap:wrap;
+}
+.funcbar:empty{display:none}
+.funcbar__grp{display:flex;align-items:center;gap:var(--yzh-space-2)}
+.funcbar__sep{width:1px;height:18px;background:var(--yzh-color-border)}
+
+/* 页脚说明 + 使用说明入口 */
+.footnote{
+  margin-top:var(--yzh-space-4);padding:var(--yzh-space-3) var(--yzh-space-4);
+  border-top:1px dashed var(--yzh-color-border);
+  display:flex;align-items:flex-start;gap:var(--yzh-space-4);
+  font-size:var(--yzh-font-size-xs);color:var(--yzh-color-text-secondary);line-height:1.8;
+}
+.footnote__k{color:var(--yzh-color-text-regular);font-weight:600;margin-right:4px}
+.footnote__item{flex:1;min-width:0}
+.footnote__item b{color:var(--yzh-color-text-regular)}
+
+/* ★ 表格：基本不换行 */
+.tbl{table-layout:fixed;width:100%}
+.tbl th{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbl td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+.tbl td .tbl__sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 需要换行的（备注列的多个标签）单独放开 */
+.tbl td .remark{flex-wrap:nowrap;overflow:hidden}
+.tbl td .remark__t{overflow:hidden;text-overflow:ellipsis;max-width:150px}
+.tbl td .tbl__name{overflow:hidden;text-overflow:ellipsis;display:block}
+
+/* 图标列窄一点，居中 */
+.tbl th:nth-child(2),.tbl td:nth-child(2){text-align:center;padding-left:2px;padding-right:2px}
+
+/* 审核 tab 的字段表：值列宽且不换行 */
+#filePage .tbl{table-layout:fixed}
+#filePage .tbl td{white-space:nowrap;overflow:hidden}
+#filePage .tbl .inp{min-width:0}
+#filePage .tbl select.inp{text-overflow:ellipsis}
+
+/* 底部条：v6 起只有左侧（操作已移到功能菜单条） */
+.bottom{background:transparent;border:none;box-shadow:none;border-top:1px dashed var(--yzh-color-border);border-radius:0;margin-top:var(--yzh-space-3);padding-top:var(--yzh-space-3)}
+.bottom__left{padding:0}
+
+/* v7 · 顶住勾选框列：居中、醒目 */
+#filePage .tbl th:first-child, #filePage .tbl td:first-child{text-align:center;width:34px;padding-left:4px;padding-right:4px}
+#filePage .tbl input[type=checkbox]{width:15px;height:15px;cursor:pointer;vertical-align:middle}
+#filePage .tbl input[type=checkbox]:disabled{cursor:not-allowed;opacity:.4}
+#filePage .tbl input[type=checkbox]:checked{accent-color:var(--yzh-color-warning)}
+/* 操作列只剩「查」，宽度收窄 */
+#filePage .tbl .ops__b{width:26px;height:24px}

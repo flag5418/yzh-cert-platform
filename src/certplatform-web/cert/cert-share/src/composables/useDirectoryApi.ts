@@ -123,9 +123,19 @@ export async function deleteFile(fileCode: string): Promise<BizResult> {
   return await yzhApi.post<BizResult>(`/api/Admin/Workflow/StandardDirectory/files/${encodeURIComponent(fileCode)}/delete`)
 }
 
-/** 下载文件（带鉴权取回 Blob；预览与下载共用） */
-export async function downloadFile(storagePath: string): Promise<Blob> {
+/**
+ * 取文件**字节**（带鉴权）—— 与 `downloadFile` 的孪生函数，分工必须清楚：
+ *   - `downloadFile(path, name)` → 触发浏览器下载，返回 `void`
+ *   - `downloadRawBlob(path)`     → 返回 `Blob`，给预览渲染 / 另存用
+ * ⛔ 预览渲染**不能**用 `downloadFile`：它不返回字节，且会顺带弹一次下载。
+ */
+export async function downloadRawBlob(storagePath: string): Promise<Blob> {
   return yzhApi.getBlob('/api/Admin/Workflow/StandardDirectory/download', { storagePath })
+}
+
+/** 下载文件（带鉴权并触发浏览器下载） */
+export async function downloadFile(storagePath: string, fileName?: string): Promise<void> {
+  await yzhApi.downloadGet(`/api/Admin/Workflow/StandardDirectory/download?storagePath=${encodeURIComponent(storagePath)}`, fileName || 'download')
 }
 
 /** 重试转换失败的文件（重新入队） */

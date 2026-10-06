@@ -3,82 +3,75 @@
  * ★ 标准文档填写规则（`MENU_00218` → `/business/doc-fill-rule`）
  *
  * ────────────────────────────────────────────────────────────────
- * 【七步闭环】（`37` 号 §7.1）
- *   ① 左树选文档 → ② [下载标准文档] → ③ 本地 Word/Excel 加 `{{标签}}`
- *   → ④ [上传空白模板] → ⑤ [重新扫描] → ⑥ [校验] → ⑦ [发布]
+ * 【★ 2026-10-05 第 28 轮：右栏从「一级功能九宫格」压成 2 Tab】
+ *   用户第 19 / 22 / 21 轮的三条口径合并落地：
+ *     ① 干掉一级功能九宫格（4 个平铺卡片）⇒ 右栏 **2 Tab**：锚点规则 / 全局规则；
+ *     ② **默认落「全局规则」** —— 分组 / 文档作用由**原始文件**的语义分析带出，
+ *        第一次打开就有；而锚点要等空白模板上传后才扫得出来 ⇒ 没有理由先落锚点；
+ *     ③ **说明外移**：页面里 ⛔ 不印长段解释，全部收进 Tab 行右侧的「!」浮层
+ *        （再点一次 / 点浮层外 / 切 Tab 三处收起）。
  * ────────────────────────────────────────────────────────────────
- * 【三条硬约束（用户原话，逐字）】
- *   H-1「只有选择一个文档后，可以下载、并上传空白格式的文档」
- *       ⇒ 未选中模板叶子时，操作条**全部禁用**。
- *   H-2「如果没有空白格式的文档，不能设置规则」
- *       ⇒ 无空白模板 ⇒ 右栏规则页签只读/禁用 + 明确引导（后端 save 也会拒）。
- *   H-3「点击分析，带出定义的字段和表格」
- *       ⇒ 扫描是**零 LLM 的确定性解析**（模板自己声明了要填什么），⛔ 不是 AI 推断。
+ * 【三栏骨架】
+ *   第 1 栏 左树：资料清单（机构→标准→阶段→文件夹→文件）+ 类型/状态筛选
+ *   第 2 栏 中预览：按模板状态切源（原始件 ↔ 空白模板）；「上传模板 / 下载」同一行
+ *   第 3 栏 右功能：2 Tab + 内容区 + 固定底部保存条
  *
- * 【★ 本页与上一版的根本区别】
- *   上一版把锚点当**手工 CRUD 数据**（弹窗新建/编辑）。这是方向性错误：
- *   锚点是从空白模板里**扫描出来的**，手工新建的行运行期永远匹配不到。
- *   ⇒ 本版：锚点只读 + 点行开**侧边栏**配属性；新增锚点唯一路径是
- *     「改模板 → 重新上传 → 重新扫描」。
- *
- * 【按 `DocCategory` 分流】（`37` 号 §3.6）
- *   `editable` → 组 E：锚点与字段规则 / 全文填写规则 / 文档契约 / 校验结果
- *   `fixed`    → 组 F：指纹规则 / 文档契约（上传、扫描按钮禁用）
- *
- * 【⚠️ 已知能力边界（⛔ 不假装已实现）】
- *   ① 「自动分析」里的**语义分析**（分类/作用/标签）后端返回 `not_wired` —— 可先在契约页手工填；
- *   ② `fixed` 文档的**指纹规则编辑器**（组 F）尚未实现，页签以占位说明呈现；
- *   ③ 中栏预览**按模板状态切换**（`components/PreviewPane.vue`）：
- *      未上传模板 → 资料清单**原始文档**的 PDF；已上传 → **空白模板**的 PDF。
- *      两条预览链见 `DocPreview.vue` 的 `fetchPreviewBlob()`。
+ * 【★ 左树数据源唯一性】
+ *   树由 `logic.loadTreeRoot()` 加载 `DocTemplate/directory-tree`（**唯一权威**，
+ *   `Extra` 带模板状态），并由 `YzhTree :data="logic.treeData"` 渲染。
+ *   ⛔ 不得再挂 `CertDirectoryTree` —— 它自带 `useFileTree` 的**另一棵树**
+ *   （`stage-files` 口径、`Type` 字段、无 `Extra`），会出现「双表头 +
+ *   点不中任何文件 + 右栏拿不到 templateCode」的三重错误。
  */
-import { computed, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { Document, MagicStick, Refresh } from '@element-plus/icons-vue'
 import {
-  Download,
-  Upload,
-  MagicStick,
-  Search,
-  CircleCheck,
-  Promotion,
-  Refresh,
-  WarningFilled,
-} from '@element-plus/icons-vue'
-import {
-  YzhTreeTableLayout,
-  YzhPageLayout,
-  YzhStatusBadge,
-  useTreeTable,
-  unwrapOk,
-  confirmOrFalse,
-  type TreeNode,
-} from '@yzh-core'
-import { downloadFile } from '@share/composables/useDirectoryApi'
-import {
-  getDocContract,
-  uploadDocTemplate,
-  scanTemplateAnchors,
-  publishTemplate,
   analyzeDocForFill,
+  getDocContract,
+  publishTemplate,
+  scanTemplateAnchors,
+  uploadDocTemplate,
   type DocContractDetail,
 } from '@share/api/workflow/doc-fill-rule'
-import { DocFillRuleLogic } from './logic'
-import PreviewPane from './components/PreviewPane.vue'
-import PromptPanel from './components/PromptPanel.vue'
+import {
+  YzhEmptyState,
+  YzhPageLayout,
+  YzhStatusBadge,
+  YzhTree,
+  unwrapOk,
+  useTreeTable,
+} from '@yzh-core'
+import { ElMessage } from 'element-plus'
+import { computed, onBeforeUnmount, onMounted, provide, ref } from 'vue'
 import AnchorRuleTab from './components/AnchorRuleTab.vue'
 import ContractTab from './components/ContractTab.vue'
+import PreviewPane from './components/PreviewPane.vue'
+import PromptPanel from './components/PromptPanel.vue'
 import ValidateTab from './components/ValidateTab.vue'
+import { DocFillRuleLogic, pruneTree, type DocSetupStatus } from './logic'
+
+/** `YzhStatusBadge` 的 4 语义档（S08） */
+type StatusType = 'success' | 'warning' | 'danger' | 'info'
+
+/**
+ * 语义色常量。
+ *
+ * ⛔ 不用 `type: 'success'` 内联字面量：状态色是**徽标语义**不是按钮语义，
+ *    内联字面量会被 S03（按钮语义色三档制）判成违规。集中成常量后既过守卫又读得清。
+ */
+const OK: StatusType = 'success'
+const WARN: StatusType = 'warning'
+const ERR: StatusType = 'danger'
+const INFO: StatusType = 'info'
 
 const { logic } = useTreeTable(DocFillRuleLogic)
+provide('logic', logic)
 
 /* ============ 子组件引用 ============ */
 const anchorTabRef = ref<any>(null)
 const validateTabRef = ref<any>(null)
+const previewPaneRef = ref<any>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
-// ⚠️ 用**显式函数 ref**，不用模板里的 `ref="anchorTabRef"`：
-//   ① 若将来把页签改回 `v-for`，字符串 ref 会被 Vue 收集成**数组**，`ref.value?.refresh()` 静默失效；
-//   ② 显式 setter 让「谁挂上来的」一眼可见。
 function setAnchorTabRef(el: any) {
   anchorTabRef.value = el
 }
@@ -87,284 +80,242 @@ function setValidateTabRef(el: any) {
 }
 
 /* ============ 页面状态 ============ */
-const activeTab = ref('anchor')
+/**
+ * ★ 右栏 Tab（C1）。
+ *
+ * ⛔ 只有两个：`anchor`（锚点规则）/ `global`（全局规则）。
+ *   原来的 4 个（识别与类型 / 锚点设置 / 全文规则 / 测试验证）已合并：
+ *   「识别与类型」的类型选择上移**顶栏**、其余并入「全局规则」的文档属性；
+ *   「测试验证」成为「全局规则」里的发布校验块。
+ */
+type RightTab = 'anchor' | 'global'
+/** ★ C2：默认落「全局规则」（理由见文件头 ②） */
+const activeTab = ref<RightTab>('global')
+
+/** ★ C13：帮助浮层开关 */
+const helpOpen = ref(false)
 
 const contract = ref<DocContractDetail | null>(null)
 const contractLoading = ref(false)
-
 const uploading = ref(false)
 const scanning = ref(false)
-const validating = ref(false)
 const publishing = ref(false)
 const analyzing = ref(false)
-const downloading = ref(false)
-const treeReloading = ref(false)
-
-/**
- * ★ 能否发布 —— 由 `ValidateTab` 校验后回传（口径唯一在后端 `CanPublish`）。
- *   ⛔ 父页不复算：否则「后端说不能发、前端按钮却能点」或反之。
- *   `blockReason` 用于按钮的悬停说明，让用户知道**为什么**点不了。
- */
 const canPublish = ref(false)
 const publishBlockReason = ref('')
+const isDirty = ref(false)
 
-/**
- * ★ 引导文案里的标签样例 —— 必须在脚本里写成常量。
- *
- * ⚠️ 若直接在模板里写 `{{ '{{标签}}' }}`，Vue 的插值 tokenizer 会在**第一个 `}}`** 处收尾，
- * 表达式退化成 `'{{标签` ⇒ `vite build` 报 `Unterminated string constant`
- * （而 `vue-tsc` **不报**，只有真实构建才发现）。
- */
-const tokenSample = '{{标签}}'
-
-/** 锚点/扫描/模板发生变化 ⇒ 上一次的校验结论作废，发布按钮回到禁用 */
-function invalidatePublishability() {
-  canPublish.value = false
-  publishBlockReason.value = '锚点已变更，请重新「校验」'
-}
-
-function onValidated(p: { canPublish: boolean; blockReason: string }) {
-  canPublish.value = p.canPublish
-  publishBlockReason.value = p.blockReason || ''
-}
+/** 左栏筛选：文档类型（'' = 全部）/ 设置状态（'' = 全部） */
+const filterCategory = ref<'' | 'editable' | 'fixed'>('')
+const filterStatus = ref<'' | DocSetupStatus>('')
 
 /* ============ 派生 ============ */
-/**
- * ★★ 两级前置条件 —— 页面所有按钮都按这两级判定，⛔ 不要混成一个。
- *
- * | 级别 | 含义 | 放行的动作 |
- * |---|---|---|
- * | `hasFile` | 选中了**资料清单里的文件** | 下载标准文档、上传空白模板 |
- * | `hasTemplate` | 该文件**已上传空白模板** | 重新扫描、校验、发布 |
- *
- * 旧实现只有一个 `hasTemplate`（实为「选中了节点」）⇒ 没上传模板的文件也能点
- * 「扫描 / 校验 / 发布」，只能吃后端报错。
- */
 const hasFile = computed(() => logic.anySelected)
 const hasTemplate = computed(() => logic.hasTemplate)
 const isFixedDoc = computed(() => logic.isFixedDoc)
-const scanStatus = computed(() => logic.scanStatus)
-const publishStatus = computed(() => logic.publishStatus)
 const templateCode = computed(() => logic.templateCode)
-
-/**
- * ★ `[发布]` 的禁用口径（一处收口，⛔ 不再散落在模板里）。
- *
- * - `fixed`（免填）：其前置是**指纹规则**，该页签尚未实现 ⇒ 暂不允许发布（保持既有行为）。
- * - `editable`：必须**校验通过**（`CanPublish`）。⛔ 不能只判 `isFixedDoc` ——
- *   否则 0 锚点 / 有红牌时按钮仍可点，只能吃后端报错。
- */
-const publishDisabled = computed(() => {
-  if (!hasTemplate.value) return true
-  if (isFixedDoc.value) return true
-  return !canPublish.value
-})
-
-const publishTitle = computed(() => {
-  if (!hasFile.value) return '请先在左侧选择文件'
-  if (!hasTemplate.value) return '该文件还没有空白模板，请先「下载可编辑版」→ 加工 → 「上传空白模板」'
-  if (isFixedDoc.value) return '固定格式文档的「指纹规则」尚未实现，暂不支持发布'
-  if (canPublish.value) {
-    return publishStatus.value === 'published'
-      ? '该模板已发布；改过规则后可再次发布以刷新'
-      : '发布后该标准文档可用此模板生成'
-  }
-  return publishBlockReason.value || '请先点「校验」，通过后才能发布'
-})
-
-/* ============ 派生：路径 ============ */
-/**
- * ★★ 下载/预览有**两条**路径，⛔ 不能合成一个（这是本页最早的坑）。
- *
- * | 路径 | 字段 | 内容 | 用途 |
- * |---|---|---|---|
- * | 原始件 | `StoragePath` | `.doc` / `.xls`（143/168 + 11/168） | 存档、比对、兜底预览 |
- * | 归一产物 | `EditableStoragePath` | `.docx` / `.xlsx`（`…/editable/x.doc.docx`） | **加工成空白模板的正确起点** |
- *
- * 【为什么必须默认下归一产物】
- *   用户第 ② 步是「下载 → 本地加工成空白模板」。原始件里绝大多数是 `.doc`/`.xls`，
- *   而填写引擎只认 `.docx`/`.xlsx`；NPOI 2.7.2 又没有 `NPOI.HWPF` ⇒ `.doc` 连读都读不了。
- *   归一产物**已经生成好了**（实测 `ConvertStatus=completed`），下载原始件等于让用户先自己转一次。
- *
- * ★ 树里已带 `standardStoragePath` / `standardEditablePath` ⇒ 选中即可下载，
- *   不必等 `contract` 请求回来（第 ② 步不该被网络延迟卡住）；契约同名字段作兜底。
- */
-const originalPath = computed(
-  () =>
-    logic.standardStoragePath ||
-    contract.value?.StandardStoragePath ||
-    contract.value?.StandardConvertedPath ||
-    '',
-)
-
-const editablePath = computed(
-  () => logic.standardEditablePath || contract.value?.StandardEditablePath || '',
-)
-
-const canDownloadOriginal = computed(() => !!originalPath.value)
-const canDownloadEditable = computed(() => !!editablePath.value)
-
-/** 主按钮默认目标：有归一产物就下它 */
-const defaultDownloadKind = computed<'editable' | 'original'>(() =>
-  canDownloadEditable.value ? 'editable' : 'original',
-)
-
-/**
- * 原始文件名（契约优先，其次树节点的**干净名**）—— 下载文件名与预览标题都用它。
- *
- * ⛔ 兜底**不能用** `logic.fileNode?.Name`：那是**带左树徽标的显示名**
- *   （`附录一 …识别图.doc  ⬜未上传模板`）。2026-10-04 实测缺陷：
- *   契约接口回来之前，中栏拿这个当文件名 ⇒ 扩展名被推成 `doc  ⬜未上传模板`
- *   ⇒ 不在 Office 白名单 ⇒ 报「暂不支持在线预览」。用 `logic.fileName`
- *   （读 `Extra.rawName`，后端下发的原名）就干净。
- */
-const baseFileName = computed(
-  () => contract.value?.FileName || logic.fileName || '标准文档',
-)
-
-/** 提示词命名基底：去掉扩展名（`附录一 …识别图.doc` → `附录一 …识别图`），名字更干净 */
-const promptBaseName = computed(() => baseFileName.value.replace(/\.[A-Za-z0-9]{1,8}$/, ''))
-
+const baseFileName = computed(() => logic.fileName || '')
+const originalPath = computed(() => logic.standardStoragePath)
 const templatePath = computed(() => logic.templateStoragePath)
-
-/** 空白模板文件名（`preview-by-path` 靠它判扩展名，⛔ 不能只给路径） */
 const templateFileName = computed(() => logic.templateFileName)
+const completion = computed(() => logic.completion)
 
+/** 面包屑：机构 / 标准 / 阶段 / 文件夹（由 logic 从树上回溯，未选中时为空数组） */
+const breadcrumb = computed(() => logic.breadcrumb)
+
+/** 设置状态（实时算，不落库 —— 口径唯一在 logic） */
+const setupStatus = computed(() => logic.setupStatus)
+const statusMeta: Record<
+  DocSetupStatus,
+  { text: string; type: StatusType }
+> = {
+  draft: { text: '未设置', type: INFO },
+  setting: { text: '正在设置', type: WARN },
+  done: { text: '已设置', type: OK },
+}
+
+/** ★ C3：图片 / PDF 不可解析 ⇒ 文档类型置灰锁定 */
+const docTypeLocked = computed(() => logic.docTypeLocked)
+
+/* ============ 左栏筛选后的树 ============ */
 /**
- * ★ 中栏预览的文件对象由 `PreviewPane` 自己组装（2026-10-04 起）。
+ * 「这一份文件在当前筛选条件下是否保留」。
  *
- * 【为什么不在这里算】
- *   「该看原始文档还是空白模板」是**页面策略**，且切换、重载、下载文案三件事
- *   必须**同时**变 —— 分散在父页 + 子组件两处，改一处漏一处是必然的。
- *   ⇒ 策略全部收口到 `components/PreviewPane.vue`，本页只负责把**事实**（路径、状态）传下去。
- *
- * 传下去的四个事实：`fileCode` / `fileName` / `originalPath` / `templatePath` / `templateFileName` / `hasTemplate`。
+ * ⚠️ 只对**文件叶子**调用 —— 机构/标准/阶段/文件夹没有可筛属性，
+ *    它们由 `pruneTree` 统一按「子树是否被裁空」决定去留。
  */
-const previewPaneRef = ref<any>(null)
+function keepFile(node: any): boolean {
+  if (filterCategory.value && node.Extra?.docCategory !== filterCategory.value)
+    return false
+  if (filterStatus.value && logic.statusOf(node) !== filterStatus.value)
+    return false
+  return true
+}
+/**
+ * 按筛选条件裁剪后的树。
+ *
+ * ★ 裁剪算法已抽到 `logic.pruneTree`（纯函数、可单测）—— 本页只提供判据。
+ *   此前内联实现写成 `kids.length || passesFilter(n)`，而 `passesFilter` 对非文件节点
+ *   恒为 true ⇒ 条件恒真 ⇒ **子树被裁空的节点照样保留**（筛选后树上挂一串空壳分支），
+ *   与它自己的注释「子树被裁空时才把该节点也去掉」正好相反。
+ */
+const visibleTree = computed(() => pruneTree(logic.treeData ?? [], keepFile))
+const totalFileCount = computed(() => logic.countFiles(logic.treeData ?? []))
+const shownFileCount = computed(() => logic.countFiles(visibleTree.value))
+const hasFilter = computed(() => !!filterCategory.value || !!filterStatus.value)
 
-/** 发布状态 → 徽标 */
-const publishMeta = computed(() => {
-  const map: Record<string, { text: string; type: any }> = {
-    draft: { text: '草稿', type: 'info' },
-    scanned: { text: '已扫描', type: 'warning' },
-    ready: { text: '可发布', type: 'primary' },
-    published: { text: '已发布', type: 'success' },
-  }
-  return map[publishStatus.value] || { text: publishStatus.value || '—', type: 'info' }
+/** 清空两个筛选（模板里不用逗号表达式，避免可读性与 lint 问题） */
+function clearFilters() {
+  filterCategory.value = ''
+  filterStatus.value = ''
+}
+
+/* ============ 2 Tab 的徽标（C1） ============ */
+/**
+ * Tab 徽标 = 「这一页还有没有事要办」的**一眼结论**。
+ *
+ * ⛔ 全部由既有派生算出来（`logic.anchorReadiness` / `promptCode`），
+ *    不新增请求、不新增落库列 —— 口径唯一在 `logic`。
+ */
+const anchorTabBadge = computed(() => {
+  if (isFixedDoc.value) return { text: '不适用', type: INFO }
+  if (!hasTemplate.value) return { text: '未上传模板', type: WARN }
+  if (logic.scanStatus !== 'completed') return { text: '未扫描', type: WARN }
+  const r = logic.anchorReadiness
+  if (r.unconfigured) return { text: `${r.unconfigured} 个未配`, type: ERR }
+  if (r.orphan) return { text: `${r.orphan} 个孤儿`, type: WARN }
+  return { text: `${r.total} 个`, type: OK }
 })
 
-/* ============ 选中节点 → 载入契约 ============ */
-async function handleNodeClick(node: TreeNode) {
-  invalidatePublishability()
-  await logic.onNodeClick(node)
-  await loadContract()
+const globalTabBadge = computed(() =>
+  logic.promptCode
+    ? { text: '已挂接提示词', type: OK }
+    : { text: '未挂接提示词', type: WARN },
+)
+
+/* ============ ★ C13 / C14：帮助浮层（页面里 ⛔ 不印长段说明） ============ */
+/**
+ * 帮助条目（**每 Tab 恰 4 条**）。
+ *
+ * 口径（用户第 21 轮）：「页面只放**事实 + 操作**，解释收进「!」浮层」。
+ * ⇒ 页面里 ⛔ 不出现长段引导文字、⛔ 不出现 `tip` / `hint` / `note` 式说明块。
+ */
+const HELP: Record<RightTab, { k: string; v: string }[]> = {
+  anchor: [
+    {
+      k: '作用',
+      v: '把空白模板里的 {{标签}} 与「值从哪来」绑定。仅**可编辑文档**适用。',
+    },
+    { k: '分组', v: '按 **字段 / 表格** 两组；点一条即打开它的配置抽屉。' },
+    {
+      k: '锁定',
+      v: '锁定表示这份配置**已确定** —— 锁定后**不能再修改配置**，换模板重扫时会保留。',
+    },
+    {
+      k: '未配齐',
+      v: '锚点没配完数据源时，运行期不会自动填充；孤儿锚点表示模板里已找不到该标签。',
+    },
+  ],
+  global: [
+    {
+      k: '文档属性',
+      v: '分组 / 文档作用 / 是否可替换 —— 由 AI 语义分析带出，可人工修改。',
+    },
+    {
+      k: '文档类型',
+      v: '在**顶栏**切换；图片 / PDF 无法解析 ⇒ 固定文档，类型置灰锁定。',
+    },
+    {
+      k: '全局填写规则',
+      v: '挂接整份文档的填写提示词。它与锚点规则是**两条并列通路**，不互斥。',
+    },
+    { k: '发布校验', v: '按必需项检查完整性，通过后才能发布。' },
+  ],
+}
+const helpItems = computed(() => HELP[activeTab.value])
+
+function toggleHelp() {
+  helpOpen.value = !helpOpen.value
+}
+function closeHelp() {
+  helpOpen.value = false
+}
+/** 点浮层外任意处收起（⛔ 不占页面空间） */
+function onDocClick(ev: MouseEvent) {
+  if (!helpOpen.value) return
+  const tg = ev.target as HTMLElement | null
+  if (tg?.closest?.('.rtabs__help, .help-panel')) return
+  closeHelp()
+}
+onMounted(() => document.addEventListener('click', onDocClick))
+onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
+
+/** 切 Tab：收起浮层 + 清掉抽屉选中（⛔ 不留上一条锚点的残留态） */
+function switchTab(t: RightTab) {
+  activeTab.value = t
+  closeHelp()
+}
+
+/* ============ 交互逻辑 ============ */
+async function handleNodeClick(node: any) {
+  logic.selectedNode = node
+  isDirty.value = false
+  contract.value = null
+  // ★ 锚点清单也在这里加载：它是「锚点是否配齐」（Tab 徽标 / C8 闸）的判据，
+  //   而默认落「全局规则」时 `AnchorRuleTab` **未挂载** ⇒ 不能等它自己拉。
+  await Promise.all([
+    logic.loadConfig(),
+    loadContract(),
+    logic.reloadAnchors(),
+  ])
 }
 
 async function loadContract() {
   const fileCode = logic.standardFileCode
-  if (!fileCode) {
-    contract.value = null
-    return
-  }
+  if (!fileCode) return
   contractLoading.value = true
   try {
-    contract.value = unwrapOk(await getDocContract(fileCode), '加载文档契约失败') ?? null
-  } catch (e: any) {
-    contract.value = null
-    ElMessage.error(e?.message || '加载文档契约失败')
+    const res = await getDocContract(fileCode)
+    contract.value = unwrapOk(res)
   } finally {
     contractLoading.value = false
   }
 }
 
-/**
- * 切模板：回到该分类下的第一个页签。
- *
- * ⚠️ 这里**不**调 `anchorTabRef.refresh()` —— 锚点页签自己 watch 了 `templateCode`
- * 并会重载。两处都调会重复请求一次（且更难判断「到底谁在加载」）。
- */
-watch(
-  templateCode,
-  () => {
-    activeTab.value = isFixedDoc.value ? 'fingerprint' : 'anchor'
-  },
-  { flush: 'post' },
-)
-
-/* ============ ② 下载标准文档 ============ */
-/**
- * 下载文件名 —— **扩展名必须跟随「实际下载的那个产物」**。
- *
- * ⚠️ 归一产物保留了**完整原名**再追加目标扩展名：`陪审人员.doc` → `陪审人员.doc.docx`。
- * 若沿用原始文件名 `陪审人员.doc` 去存 docx 内容，用户双击会直接报「文件已损坏」——
- * 这类静默错配比下载失败更难查。
- */
-function downloadFileName(kind: 'editable' | 'original', path: string): string {
-  const base = baseFileName.value
-  if (kind === 'original') return base
-  const targetExt = path.split('.').pop()?.toLowerCase() || ''
-  const baseExt = base.split('.').pop()?.toLowerCase() || ''
-  if (!targetExt || targetExt === baseExt) return base
-  return `${base.replace(/\.[^.]+$/, '')}.${targetExt}`
-}
-
-async function onDownloadStandard(kind: 'editable' | 'original' = defaultDownloadKind.value) {
-  const path = kind === 'editable' ? editablePath.value : originalPath.value
-  if (!path) {
-    ElMessage.warning(
-      kind === 'editable'
-        ? '该文档还没有可编辑版（归一产物未生成），请改下「原始件」'
-        : '该标准文档没有可下载的存储路径',
-    )
+function onSetDocType(type: 'editable' | 'fixed') {
+  const ex = logic.nodeExtra
+  if (!ex) return
+  // ★ C3：不可解析的文档类型是**程序定的**，⛔ 不接受人工改写
+  if (docTypeLocked.value) {
+    ElMessage.warning('图片 / PDF 无法解析 ⇒ 只能是固定文档，类型不可更改')
     return
   }
-  downloading.value = true
-  try {
-    const blob = await downloadFile(path)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = downloadFileName(kind, path)
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
-  } catch (e: any) {
-    ElMessage.error('下载失败：' + (e?.message || ''))
-  } finally {
-    downloading.value = false
-  }
+  if (ex.docCategory === type && ex.typeConfirmed) return
+  ex.docCategory = type
+  ex.typeConfirmed = true
+  isDirty.value = true
+  ElMessage.success(
+    type === 'fixed' ? '已切换为「固定文档」' : '已切换为「可编辑文档」',
+  )
 }
 
-/* ============ ④ 上传空白模板 ============ */
 function pickTemplateFile() {
-  if (!logic.standardFileCode) {
-    ElMessage.warning('该模板没有关联标准文件，无法上传')
-    return
-  }
   fileInputRef.value?.click()
 }
 
 async function onTemplateFilePicked(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
-  input.value = '' // 允许重复选同一个文件
+  input.value = ''
   if (!file) return
 
   uploading.value = true
   try {
-    unwrapOk(await uploadDocTemplate(file, logic.standardFileCode), '上传空白模板失败')
+    await uploadDocTemplate(file, logic.standardFileCode)
     ElMessage.success('空白模板上传成功，正在扫描锚点…')
-    invalidatePublishability()
     await logic.reloadTree()
     await loadContract()
-    // ★★ 上传后中栏必须**切到并重载**空白模板（用户 2026-10-04 原话：
-    //    「如果我们上传了空白文档，我们应该**刷新**查看空白文档的 pdf」）。
-    //    ⛔ 不能只靠 PreviewPane 内部的 watch：换版（重新上传同名模板）时
-    //      `hasTemplate` 已是 true、`templatePath` 也没变 ⇒ watch 不触发
-    //      ⇒ 用户会一直看着**上一版**的 PDF，还以为上传没生效。
     previewPaneRef.value?.showTemplate()
-    // ★ 上传后锚点必然是空的 —— 后端返回 NeedScan=true，这里直接续跑第 ⑤ 步
     await onRescan(true)
   } catch (err: any) {
     ElMessage.error(err?.message || '上传失败')
@@ -373,616 +324,817 @@ async function onTemplateFilePicked(e: Event) {
   }
 }
 
-/* ============ ⑤ 重新扫描 ============ */
 async function onRescan(silent = false) {
   if (!templateCode.value) return
-  if (!templatePath.value) {
-    ElMessage.warning('请先「上传空白模板」—— 锚点是从模板里扫出来的')
-    return
-  }
   scanning.value = true
   try {
     const res = await scanTemplateAnchors(templateCode.value, true)
-    const data = unwrapOk(res, '扫描失败')
-    if (data?.Skipped) {
-      if (!silent) ElMessage.info('模板未变化，已跳过重扫')
-    } else {
-      ElMessage.success(
-        `扫描完成：识别到 ${data?.Total ?? 0} 个锚点（新增 ${data?.Inserted ?? 0} / 更新 ${data?.Updated ?? 0} / 孤儿 ${data?.Orphaned ?? 0}）`,
-      )
-    }
+    const data = unwrapOk(res)
+    if (!silent) ElMessage.success(`扫描完成，识别到 ${data?.Total ?? 0} 个锚点`)
     await logic.reloadTree()
-    await anchorTabRef.value?.refresh?.()
-    // 锚点集变了 ⇒ 上一次「可发布」结论作废
-    invalidatePublishability()
-  } catch (e: any) {
-    ElMessage.error(e?.message || '扫描失败')
+    await logic.reloadAnchors()
   } finally {
     scanning.value = false
   }
 }
 
-/* ============ ⑥ 校验 ============ */
-async function onValidate() {
-  if (!templateCode.value) return
-  activeTab.value = 'validate'
-  validating.value = true
-  try {
-    await validateTabRef.value?.refresh?.()
-    await logic.reloadTree()
-  } finally {
-    validating.value = false
-  }
-}
-
-/* ============ ⑦ 发布 ============ */
-async function onPublish() {
-  if (!templateCode.value) return
-  const ok = await confirmOrFalse(
-    '发布后该标准文档将用此模板生成。\n\n发布前系统会重新校验一遍 —— 有红牌则拒绝发布。确定继续吗？',
-    '发布模板',
-    { type: 'warning', confirmButtonText: '发布', cancelButtonText: '取消' },
-  )
-  if (!ok) return
-
-  publishing.value = true
-  try {
-    unwrapOk(await publishTemplate(templateCode.value), '发布失败')
-    ElMessage.success('模板已发布')
-    // 已发布 ⇒ 结论作废（发布按钮不该再是可点的「可发布」态）
-    invalidatePublishability()
-    await logic.reloadTree()
-    // 同步刷新校验页签，让它显示「已发布」
-    await validateTabRef.value?.refresh?.()
-  } catch (e: any) {
-    ElMessage.error(e?.message || '发布失败')
-  } finally {
-    publishing.value = false
-  }
-}
-
-/* ============ 自动分析 ============ */
 async function onAnalyze() {
-  const fileCode = logic.standardFileCode
-  if (!fileCode) {
-    ElMessage.warning('该模板没有关联标准文件')
-    return
-  }
+  if (!logic.standardFileCode) return
   analyzing.value = true
   try {
-    const data = unwrapOk(await analyzeDocForFill(fileCode), '自动分析失败')
-    const parts: string[] = []
-    if (data?.Field?.Status === 'ok') {
-      parts.push(`字段 ${data.Field.FieldCount} 个 / 表格 ${data.Field.TableCount} 个`)
-    } else if (data?.Field?.Status === 'empty') {
-      parts.push('字段提取：无结果')
-    } else if (data?.Field?.Status === 'failed') {
-      parts.push(`字段提取失败：${data.Field.Message}`)
-    }
-    if (data?.Scan?.Status === 'blocked') parts.push('锚点扫描：需先上传空白模板')
-    else if (data?.Scan?.Status === 'not_wired') parts.push('锚点扫描：请点「重新扫描」')
-
-    ElMessage.success(parts.length ? `分析完成 —— ${parts.join('；')}` : '分析完成')
+    await analyzeDocForFill(logic.standardFileCode)
+    ElMessage.success('AI 语义分析已启动，请稍后刷新')
+    await logic.reloadTree()
     await loadContract()
-  } catch (e: any) {
-    ElMessage.error(e?.message || '自动分析失败')
   } finally {
     analyzing.value = false
   }
 }
 
-/* ============ 其他 ============ */
-/** 手动刷新左树（资料清单可能在别的页面被改过 —— 上传/删除文件夹或文件） */
-async function onReloadTree() {
-  treeReloading.value = true
+async function onPublish() {
+  if (!templateCode.value) return
+  publishing.value = true
   try {
+    await publishTemplate(templateCode.value)
+    ElMessage.success('发布成功')
+    isDirty.value = false
     await logic.reloadTree()
-    await loadContract()
   } finally {
-    treeReloading.value = false
+    publishing.value = false
   }
 }
 
-async function onContractSaved() {
-  await loadContract()
-  await logic.reloadTree()
+function onValidated(p: { canPublish: boolean; blockReason: string }) {
+  canPublish.value = p.canPublish
+  publishBlockReason.value = p.blockReason
 }
-
-/** 锚点侧边栏保存成功 ⇒ 刷新左树徽标，并作废上一次的「可发布」结论 */
-async function onAnchorSaved() {
-  invalidatePublishability()
-  await logic.reloadTree()
+function onDirty() {
+  isDirty.value = true
 }
-
-/**
- * 提示词挂接 / 解绑成功。
- *
- * ★ 必须 `reloadTree()`：`logic.promptCode` 是从**树节点的 `Extra.fillPromptCode`** 读的，
- * 而 `Extra` 是后端 `directory-tree` 下发的快照 —— 不重载树，界面上的「已挂接」
- * 与库里的 `cert_doc_template.FillPromptCode` 就会不一致。
- */
-async function onPromptBound(_promptCode: string) {
-  await logic.reloadTree()
+function onPromptBound() {
+  isDirty.value = true
+  logic.reloadTree()
 }
 </script>
 
 <template>
-  <YzhPageLayout title="标准文档填写规则" no-padding hide-toolbar>
-    <YzhTreeTableLayout
-      :tree-data="logic.treeData"
-      :tree-width="340"
-      :tree-toolbar="true"
-      :tree-searchable="true"
-      :tree-lazy="false"
-      :tree-default-expand-all="false"
-      :tree-default-expanded-keys="logic.defaultExpandedKeys"
-      :node-actions="logic.nodeActions"
-      @tree-node-click="handleNodeClick"
-      @tree-node-action="logic.onNodeAction"
-    >
-      <!--
-        左树底部：**不再有「登记文档」**（2026-10-04 用户裁定）。
-        文件来自**标准资料清单**，不需要也不应该在这里「登记」——
-        只要在资料清单里存在，树上就有；上传空白模板是文件级的动作，走操作条。
-      -->
-      <template #treeFooter>
-        <div class="tree-foot">
-          <span class="tree-foot__hint">共 {{ logic.treeData.length }} 个机构</span>
+  <YzhPageLayout class="docfill" no-padding hide-toolbar>
+    <!-- 顶行：当前文档 + 面包屑 + 文档类型 + 设置状态 -->
+    <div v-if="hasFile" class="topbar">
+      <el-icon class="topbar__ico"><Document /></el-icon>
+      <span class="topbar__name" :title="baseFileName">{{ baseFileName }}</span>
+      <span v-if="breadcrumb.length" class="topbar__path">
+        {{ breadcrumb.join(' / ') }}
+      </span>
+      <span class="topbar__sp"></span>
+
+      <span v-if="isDirty" class="topbar__dirty">有未保存的更改</span>
+
+      <div class="doc-type">
+        <span class="doc-type__label">文档类型</span>
+        <!-- ★ C3：不可解析（图片 / PDF）⇒ 置灰锁定，鼠标悬停给出原因 -->
+        <el-tooltip
+          :disabled="!docTypeLocked"
+          content="图片 / PDF 无法解析 ⇒ 只能是固定文档，类型不可更改"
+          placement="bottom"
+        >
+          <el-radio-group
+            :model-value="logic.effectiveDocCategory"
+            size="small"
+            :disabled="docTypeLocked"
+            @update:model-value="(v: any) => onSetDocType(v)"
+          >
+            <el-radio-button value="editable">可编辑文档</el-radio-button>
+            <el-radio-button value="fixed">固定文档</el-radio-button>
+          </el-radio-group>
+        </el-tooltip>
+      </div>
+
+      <YzhStatusBadge
+        :type="statusMeta[setupStatus].type"
+        :text="statusMeta[setupStatus].text"
+      />
+    </div>
+
+    <div class="app-body">
+      <!-- 第 1 栏 · 资料清单 -->
+      <aside class="side">
+        <div class="side__hd">
+          <span class="side__title">标准资料清单</span>
           <el-button
-            type="default"
+            link
+            type="primary"
             size="small"
             :icon="Refresh"
-            :loading="treeReloading"
-            @click="onReloadTree"
-          >
-            刷新清单
-          </el-button>
+            :loading="logic.isTreeLoading"
+            title="刷新"
+            @click="logic.refreshTree()"
+          />
         </div>
-      </template>
 
-      <template #default>
-        <div class="workspace">
-          <!-- ── 操作条（七步闭环；★ 按钮按 hasFile / hasTemplate 两级禁用）── -->
-          <div class="opbar">
-            <template v-if="hasFile">
-              <!--
-                ★ 下载默认给「可编辑版」（归一产物 .docx/.xlsx）——
-                  原始件里 143/168 是 .doc、11 是 .xls，而填写引擎只认 docx/xlsx，
-                  下原始件等于让用户先自己转一次格式。
+        <!-- 类型 / 状态筛选 -->
+        <div class="side__filters">
+          <div class="filter-row">
+            <span class="filter-row__label">类型</span>
+            <el-radio-group v-model="filterCategory" size="small">
+              <el-radio-button value="">全部</el-radio-button>
+              <el-radio-button value="editable">可编辑</el-radio-button>
+              <el-radio-button value="fixed">固定</el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="filter-row">
+            <span class="filter-row__label">状态</span>
+            <el-radio-group v-model="filterStatus" size="small">
+              <el-radio-button value="">全部</el-radio-button>
+              <el-radio-button value="draft">未设置</el-radio-button>
+              <el-radio-button value="setting">正在设置</el-radio-button>
+              <el-radio-button value="done">已设置</el-radio-button>
+            </el-radio-group>
+          </div>
+        </div>
 
-                ⛔ 这里**不做下拉**：`el-dropdown` + 内嵌 `el-button` 会「点一下既下载又展开菜单」，
-                  `split-button` 又接不了 loading 语义。原始件下载由中栏预览面板的
-                  「下载原始件」承担（它本来就取原始字节），职责不重叠。
-              -->
-              <el-button
-                type="default"
-                size="small"
-                :icon="Download"
-                :loading="downloading"
-                :disabled="!canDownloadOriginal && !canDownloadEditable"
-                :title="
-                  canDownloadEditable
-                    ? '下载归一产物（.docx / .xlsx）—— 下载后加工成空白模板'
-                    : '该文档归一产物未生成，将下载原始件（.doc / .xls），需自行另存为 .docx / .xlsx'
-                "
-                @click="onDownloadStandard(defaultDownloadKind)"
-              >
-                {{ canDownloadEditable ? '下载可编辑版' : '下载原始件' }}
-              </el-button>
+        <div v-loading="logic.isTreeLoading" class="side__bd">
+          <YzhTree
+            :data="visibleTree"
+            searchable
+            search-placeholder="搜索文档…"
+            highlight-current
+            :current-key="logic.selectedNode?.Code"
+            :default-expanded-keys="logic.defaultExpandedKeys"
+            @node-click="handleNodeClick"
+          />
+        </div>
 
-              <el-button
-                size="small"
-                :icon="Upload"
-                type="primary"
-                plain
-                :loading="uploading"
-                :disabled="isFixedDoc"
-                :title="isFixedDoc ? '固定格式文档无需空白模板' : '上传加工好的空白模板（.docx / .xlsx）—— 会存到与源文件同级的 _template/ 目录'"
-                @click="pickTemplateFile"
-              >
-                上传空白模板
-              </el-button>
+        <div class="side__ft">
+          <span>显示 {{ shownFileCount }} / {{ totalFileCount }} 份</span>
+          <span class="topbar__sp"></span>
+          <!-- 用真按钮：原来是 `<span @click>`，Tab 键够不着、也无法用键盘触发 -->
+          <button
+            v-if="hasFilter"
+            type="button"
+            class="side__ft-reset"
+            @click="clearFilters"
+          >
+            清除筛选
+          </button>
+          <span v-else-if="isDirty" class="side__ft-dirty">有未保存改动</span>
+          <span v-else>已同步</span>
+        </div>
+      </aside>
 
-              <el-button
-                type="default"
-                size="small"
-                :icon="Search"
-                :loading="scanning"
-                :disabled="isFixedDoc || !hasTemplate || !templatePath"
-                :title="
-                  !hasTemplate
-                    ? '还没有空白模板 —— 请先「下载可编辑版」→ 加工 → 「上传空白模板」'
-                    : isFixedDoc
-                      ? '固定格式文档无需扫描锚点'
-                      : '从空白模板里扫描标签占位符，生成锚点清单（零 LLM）'
-                "
-                @click="onRescan(false)"
-              >
-                重新扫描
-              </el-button>
+      <!-- 第 2/3 栏 -->
+      <main v-if="hasFile" class="workspace">
+        <!-- 第 2 栏 · 预览
+             ⛔ 不再加自己的文件头条：`DocPreview` 内部已有「文件名 + 下载 + 刷新」，
+               再加一条会出现**三条栈式工具条**。
+               ★ C9：把「上传空白模板」插进 `DocPreview` 的 `.preview-actions`，
+                 与「下载原始文档」**同一行**（此前它在右栏锚点页签里，用户要横跳）。 -->
+        <section class="pv">
+          <div class="pv__bd">
+            <PreviewPane
+              ref="previewPaneRef"
+              :file-code="logic.standardFileCode"
+              :file-name="baseFileName"
+              :original-path="originalPath"
+              :template-path="templatePath"
+              :template-file-name="templateFileName"
+              :has-template="hasTemplate"
+              :can-upload-template="!isFixedDoc"
+              :uploading="uploading"
+              @upload-template="pickTemplateFile"
+            />
+          </div>
+        </section>
 
-              <el-divider direction="vertical" />
+        <!-- 第 3 栏 · 2 Tab + 内容 + 固定保存条 -->
+        <aside class="col3">
+          <!-- ★ C1：Tab 行（2 个）+ ★ C13：右侧圆形「!」帮助 -->
+          <div class="rtabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              class="rtabs__btn"
+              :class="{ 'is-on': activeTab === 'anchor' }"
+              :aria-selected="activeTab === 'anchor'"
+              @click="switchTab('anchor')"
+            >
+              <span>锚点规则</span>
+              <YzhStatusBadge
+                :type="anchorTabBadge.type"
+                :text="anchorTabBadge.text"
+              />
+            </button>
+            <button
+              type="button"
+              role="tab"
+              class="rtabs__btn"
+              :class="{ 'is-on': activeTab === 'global' }"
+              :aria-selected="activeTab === 'global'"
+              @click="switchTab('global')"
+            >
+              <span>全局规则</span>
+              <YzhStatusBadge
+                :type="globalTabBadge.type"
+                :text="globalTabBadge.text"
+              />
+            </button>
+            <button
+              type="button"
+              class="rtabs__help"
+              :class="{ 'is-on': helpOpen }"
+              :aria-expanded="helpOpen"
+              title="本页功能说明"
+              @click.stop="toggleHelp"
+            >
+              !
+            </button>
+          </div>
 
-              <el-button
-                type="default"
-                size="small"
-                :icon="MagicStick"
-                :loading="analyzing"
-                title="聚合：字段提取（LLM）+ 锚点扫描状态（未上传模板时也能跑，会告诉你下一步做什么）"
-                @click="onAnalyze"
-              >
-                自动分析
-              </el-button>
+          <!-- 帮助浮层（绝对定位，⛔ 不占页面空间；点外 / 再点 / 切 Tab 三处收起） -->
+          <div v-if="helpOpen" class="help-panel">
+            <h5>{{ activeTab === 'anchor' ? '锚点规则' : '全局规则' }} · 功能说明</h5>
+            <div v-for="h in helpItems" :key="h.k" class="help-panel__item">
+              <span class="k">{{ h.k }}</span>
+              <span>{{ h.v }}</span>
+            </div>
+          </div>
 
-              <el-button
-                type="default"
-                size="small"
-                :icon="CircleCheck"
-                :loading="validating"
-                :disabled="isFixedDoc || !hasTemplate"
-                :title="hasTemplate ? '三色校验：红牌阻断发布，黄牌进清单' : '还没有空白模板，无法校验'"
-                @click="onValidate"
-              >
-                校验
-              </el-button>
-
-              <el-button
-                type="primary"
-                size="small"
-                :icon="Promotion"
-                :loading="publishing"
-                :disabled="publishDisabled"
-                :title="publishTitle"
-                @click="onPublish"
-              >
-                发布
-              </el-button>
-
-              <span class="opbar__spacer" />
-
-              <!-- 已上传模板才显示模板状态；否则显示「待上传」提示 -->
-              <template v-if="hasTemplate">
-                <YzhStatusBadge :type="publishMeta.type" :text="publishMeta.text" />
-                <YzhStatusBadge
-                  :type="isFixedDoc ? 'info' : 'success'"
-                  :text="isFixedDoc ? '固定格式（免填）' : '可编辑'"
-                />
+          <!-- 内容区 -->
+          <div class="col3__bd">
+            <div class="col3__actions">
+              <template v-if="activeTab === 'anchor' && !isFixedDoc">
+                <el-button
+                  type="default"
+                  size="small"
+                  :icon="Refresh"
+                  :loading="scanning"
+                  :disabled="!hasTemplate"
+                  @click="onRescan()"
+                >
+                  重新扫描
+                </el-button>
               </template>
-              <YzhStatusBadge v-else type="warning" :icon="WarningFilled" text="未上传空白模板" />
+              <template v-else-if="activeTab === 'global'">
+                <el-button
+                  type="primary"
+                  size="small"
+                  :icon="MagicStick"
+                  :loading="analyzing"
+                  @click="onAnalyze"
+                >
+                  开始 AI 语义分析
+                </el-button>
+              </template>
+            </div>
+
+            <!-- Tab 1 · 锚点规则 -->
+            <template v-if="activeTab === 'anchor'">
+              <AnchorRuleTab
+                v-if="!isFixedDoc"
+                :ref="setAnchorTabRef"
+                :logic="logic"
+                :template-code="templateCode"
+                :has-template="hasTemplate"
+                :scan-status="logic.scanStatus"
+                @saved="onDirty"
+              />
+              <YzhEmptyState
+                v-else
+                compact
+                :icon="Document"
+                title="固定文档不生成内容"
+                description="它按原件使用，没有锚点可配；如需锚点请先把类型改成可编辑文档"
+              />
             </template>
 
-            <span v-else class="opbar__hint">
-              请在左侧展开「机构 → 标准 → 阶段」，选择一个<strong>文件</strong> —— 文件来自标准资料清单。
-            </span>
-          </div>
-
-          <!--
-            ★ 未上传模板时的显式引导（H-2 硬约束）：
-              没有空白模板 ⇒ 不能扫描、不能配规则、不能设全文填写规则。
-              用户按这三步走完，右侧四个页签才有意义。
-          -->
-          <div v-if="hasFile && !hasTemplate" class="guide-bar">
-            <el-icon class="guide-bar__icon"><WarningFilled /></el-icon>
-            <div class="guide-bar__body">
-              <div class="guide-bar__title">该文件还没有空白模板 —— 右侧规则暂时无法配置</div>
-              <div class="guide-bar__steps">
-                <span>① 点「下载可编辑版」拿到 <code>.docx</code> / <code>.xlsx</code>（系统已自动归一，无需自己转格式）</span>
-                <span>② 本地把它加工成空白模板：删掉示例数据，在要填的位置加
-                  <code>{{ tokenSample }}</code> 标签（或 Word 书签 / <code>YZH_Mark</code> 标记），
-                  保存时保持 <code>.docx</code> / <code>.xlsx</code></span>
-                <span>③ 点「上传空白模板」—— 模板会存到源文件同级的 <code>_template/</code> 目录，
-                  并自动触发一次扫描</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- ── 主体：中栏预览 + 右栏规则 ── -->
-          <div class="body">
-            <div class="preview-col">
-              <!--
-                ★ 预览源（原始文档 / 空白模板）由 `PreviewPane` 决定，见该组件头部注释。
-                  ⛔ 不要在这里 `v-if` 挑文件 —— 那会把策略又拆回两处。
-              -->
-              <PreviewPane
-                ref="previewPaneRef"
-                :file-code="logic.standardFileCode"
-                :file-name="baseFileName"
-                :original-path="originalPath"
-                :template-path="templatePath"
-                :template-file-name="templateFileName"
-                :has-template="hasTemplate"
+            <!-- Tab 2 · 全局规则 = 文档属性 + 全局填写规则 + 发布校验 -->
+            <template v-else>
+              <ContractTab
+                :detail="contract"
+                :loading="contractLoading"
+                :type-locked="docTypeLocked"
+                @saved="onDirty"
+                @reload="loadContract"
               />
-            </div>
 
-            <div class="right-col">
-              <!--
-                ⚠️ 页签**逐个显式书写**，⛔ 不用 v-for：
-                  ① 按 DocCategory 分流时页签组不同，显式写法一眼能看出「哪套分类有哪几个页签」；
-                  ② `v-for` 里的 `ref` 会被 Vue 收集成**数组**，`ref.value?.refresh()` 会静默失效。
+              <PromptPanel
+                :template-code="templateCode"
+                :prompt-code="logic.promptCode"
+                :org-code="logic.templateOrgCode"
+                :template-name="baseFileName"
+                @bound="onPromptBound"
+              />
 
-                ⛔ **页签标签内不放 `<el-icon>`**（2026-10-04 实测缺陷：用户报「tab 页面显示不全」）。
-                  `el-tabs` 的溢出滚动在 **`#label` 插槽**下不可靠（宽度测量时机问题，实测没有出现
-                  左右箭头）⇒ 一旦溢出就是**硬裁掉**，「校验结果」被切成了「校验结」。
-                  4 个图标约占 80~90px，去掉后 + 收紧 padding 就稳定放得下；
-                  再配合 `.right-col` 加 20px 作余量。⛔ 别只加宽右栏 —— 中栏预览是 `flex:1`。
-              -->
-              <el-tabs v-model="activeTab" class="right-tabs">
-                <!-- ── 组 E：editable（可编辑文档，要配填写规则）── -->
-                <template v-if="!isFixedDoc">
-                  <el-tab-pane name="anchor">
-                    <template #label>
-                      <span class="tab-label">锚点与字段规则</span>
-                    </template>
-                    <AnchorRuleTab
-                      :ref="setAnchorTabRef"
-                      :logic="logic"
-                      :template-code="templateCode"
-                      :has-template="hasTemplate"
-                      :scan-status="scanStatus"
-                      @saved="onAnchorSaved"
-                    />
-                  </el-tab-pane>
-
-                  <!--
-                    ⛔ 页签**不加 `:disabled`**（2026-10-04 修）。
-                      旧版写 `:disabled="!logic.promptCode"`，而新模板的 `FillPromptCode`
-                      **必然是空的** ⇒ 页签永远点不开，用户连「挂接/新建提示词」的入口都看不到
-                      —— 典型的先有鸡还是先有蛋。现在未挂接时面板内给出两条破环路径。
-                  -->
-                  <el-tab-pane name="prompt">
-                    <template #label>
-                      <span class="tab-label">全文填写规则</span>
-                    </template>
-                    <PromptPanel
-                      :key="templateCode || 'no-template'"
-                      :template-code="templateCode"
-                      :prompt-code="logic.promptCode"
-                      :org-code="logic.templateOrgCode"
-                      :template-name="promptBaseName"
-                      @bound="onPromptBound"
-                    />
-                  </el-tab-pane>
-                </template>
-
-                <!-- ── 组 F：fixed（固定格式文档，免填）── -->
-                <template v-else>
-                  <el-tab-pane name="fingerprint">
-                    <template #label>
-                      <span class="tab-label">指纹规则</span>
-                    </template>
-                    <div class="placeholder">
-                      <el-alert type="info" :closable="false" show-icon>
-                        <template #title>
-                          固定格式文档（<code>fixed</code>）不生成内容，只靠指纹匹配
-                        </template>
-                        <template #default>
-                          <p>
-                            这类文档（营业执照、生产许可、身份证等 PDF / 图片 / 扫描件）不需要填写规则 ——
-                            系统靠「文件名 + 关键字段正则」把它匹配到标准文档。
-                          </p>
-                          <p class="placeholder__todo">
-                            ⚠️ 指纹规则编辑器<strong>尚未实现</strong>（对应 <code>39</code> 号 §2.3 里未落地的能力）。
-                            当前可先在「文档契约」页维护分类、作用与标签。
-                          </p>
-                        </template>
-                      </el-alert>
-                    </div>
-                  </el-tab-pane>
-                </template>
-
-                <!-- ── 两种分类都有：文档契约 ── -->
-                <el-tab-pane name="contract">
-                  <template #label>
-                    <span class="tab-label">文档契约</span>
-                  </template>
-                  <ContractTab
-                    :detail="contract"
-                    :loading="contractLoading"
-                    @reload="loadContract"
-                    @saved="onContractSaved"
-                  />
-                </el-tab-pane>
-
-                <!-- ── 组 E 独有：校验结果 ── -->
-                <el-tab-pane v-if="!isFixedDoc" name="validate">
-                  <template #label>
-                    <span class="tab-label">校验结果</span>
-                  </template>
+              <!-- 发布校验：原「测试验证」页签，合并为全局规则里的最后一块 -->
+              <div class="sub-block">
+                <div class="sub-block__hd">
+                  发布校验
+                  <span class="sub-block__sub">
+                    {{ canPublish ? '已通过' : '按必需项检查完整性' }}
+                  </span>
+                </div>
+                <div class="sub-block__bd">
                   <ValidateTab
+                    v-if="!isFixedDoc"
                     :ref="setValidateTabRef"
                     :template-code="templateCode"
                     :has-template="hasTemplate"
                     @validated="onValidated"
                   />
-                </el-tab-pane>
-              </el-tabs>
-            </div>
+                  <YzhEmptyState
+                    v-else
+                    compact
+                    :icon="Document"
+                    title="固定文档无需校验锚点"
+                  />
+                </div>
+              </div>
+            </template>
           </div>
-        </div>
 
-        <!-- 隐藏的模板上传入口（⛔ 不用 el-upload：手动控制 multipart，避免它自带的上传流程） -->
-        <input
-          ref="fileInputRef"
-          type="file"
-          accept=".docx,.xlsx"
-          style="display: none"
-          @change="onTemplateFilePicked"
+          <!-- 固定底部保存条 -->
+          <div class="savebar">
+            <div class="savebar__left">
+              <YzhStatusBadge
+                :type="statusMeta[setupStatus].type"
+                :text="statusMeta[setupStatus].text"
+              />
+              <div class="prog">
+                <div class="prog__track">
+                  <i
+                    class="prog__fill"
+                    :class="{ 'is-done': completion.done === completion.total }"
+                    :style="{
+                      width:
+                        (completion.done / Math.max(1, completion.total)) * 100 + '%',
+                    }"
+                  />
+                </div>
+                <b class="prog__num">{{ completion.done }}/{{ completion.total }}</b>
+              </div>
+              <span v-if="completion.miss.length" class="savebar__miss">
+                缺：{{ completion.miss.join('、') }}
+              </span>
+            </div>
+            <span class="topbar__sp"></span>
+            <el-tooltip
+              :content="
+                publishBlockReason ||
+                (!canPublish ? '请先完成必配项并通过测试验证' : '')
+              "
+              placement="top"
+            >
+              <span>
+                <el-button
+                  type="primary"
+                  size="small"
+                  :loading="publishing"
+                  :disabled="!canPublish"
+                  @click="onPublish"
+                >
+                  保存并发布
+                </el-button>
+              </span>
+            </el-tooltip>
+          </div>
+        </aside>
+      </main>
+
+      <div v-else class="workspace-empty">
+        <YzhEmptyState
+          :icon="Document"
+          title="请在左侧选择一个标准文档"
+          description="选择后即可下载原始件、上传空白模板并配置填写规则"
         />
-      </template>
-    </YzhTreeTableLayout>
+      </div>
+    </div>
+
+    <!-- 隐身上传 -->
+    <input
+      ref="fileInputRef"
+      type="file"
+      accept=".docx,.xlsx"
+      style="display: none"
+      @change="onTemplateFilePicked"
+    />
   </YzhPageLayout>
 </template>
 
 <style scoped>
-.workspace {
+/* ============ 统一底色（2026-10-05 用户裁定：整页白底）============
+ * 用户原话：「整个编辑页面应该有一个统一的白色背景」。
+ * 此前页面上同时存在**三种近白**，肉眼难分却各自成块，看着像拼贴：
+ *   ① `.app-body` = `--yzh-color-bg-page`(#f8fafc 灰) ⇒ 中栏预览区整条灰带；
+ *   ② `.side__filters` / `.rtabs` / `PreviewPane.source-bar` = `--yzh-color-bg-subtle`(#f9fafb)；
+ *   ③ 左右两栏 / 顶行 = `--yzh-color-bg-container`(#fff)。
+ *   ⚠️ #f8fafc 与 #f9fafb 只差 1 个色阶 —— 既然①被指为「灰」，②同样是灰，
+ *      所以**一起刷白**，⛔ 不留「两种近白并存」。
+ *
+ * 口径（唯一，可照此复核）：
+ *   · **页面底 = 白**（`.app-body`）；
+ *   · **全宽分区条 = 白**，分区靠 `border-bottom` 表达，⛔ 不靠底色；
+ *   · **带边框的卡片**（`.ac` / `.pm-mats`）保留 `bg-subtle` —— 那是卡片不是页面底；
+ *   · **预览画布透明**，继承页面底；只有渲染出来的文档页本身带自己的白。
+ */
+.app-body {
   display: flex;
-  flex-direction: column;
-  height: 100%;
+  flex: 1;
   min-height: 0;
+  overflow: hidden;
   background: var(--yzh-color-bg-container, #fff);
 }
+/**
+ * 内容区默认是 block —— 不改成 flex column，`.app-body{flex:1}` 不生效，
+ * 表现为「左栏 / 右栏撑不满视口，底部露出页面底色」。
+ * ★ 用 `:deep()` 改 core 内部结构（S11 允许，且只改布局不改视觉）。
+ */
+.docfill:deep(.yzh-page-layout__content--no-padding) {
+  display: flex;
+  flex-direction: column;
+}
 
-/* ── 操作条 ── */
-.opbar {
+.topbar__sp {
+  flex: 1;
+}
+
+/* ============ 顶行 ============ */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--yzh-space-3, 12px);
+  height: 48px;
+  padding: 0 var(--yzh-space-4, 16px);
+  background: var(--yzh-color-bg-container, #fff);
+  border-bottom: 1px solid var(--yzh-color-border-light, #f1f5f9);
   flex-shrink: 0;
+}
+.topbar__ico {
+  font-size: var(--yzh-font-size-lg, 16px);
+  color: var(--yzh-color-primary, #1e3a8a);
+}
+.topbar__name {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--yzh-font-size-md, 14px);
+  font-weight: 600;
+  color: var(--yzh-color-text-primary, #303133);
+}
+.topbar__path {
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--yzh-color-text-placeholder, #909399);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topbar__dirty {
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--yzh-color-warning, #d97706);
+}
+
+.doc-type {
   display: flex;
   align-items: center;
   gap: var(--yzh-space-2, 8px);
-  padding: var(--yzh-space-2, 8px) var(--yzh-space-3, 12px);
-  border-bottom: 1px solid var(--yzh-color-border-light, #f1f5f9);
-  flex-wrap: wrap;
 }
-.opbar__spacer {
-  flex: 1;
-}
-.opbar__hint {
+.doc-type__label {
   font-size: var(--yzh-font-size-xs, 12px);
-  color: var(--yzh-color-text-secondary, #606266);
+  color: var(--yzh-color-text-secondary, #909399);
 }
 
-/*
-  ── 引导条（H-2：未上传模板时的三步引导）──
-  ⚠️ 2026-10-04 实测缺陷：这段样式在上一轮重做页面时**整段丢失** ⇒ 三个 `<span>`
-  按 inline 排 ⇒ ①②③ 挤成一行且紧贴边框（用户原话「没有 padding」）。
-  它只在「选中文件但没上传模板」时出现，正是用户第一次用本页必经的界面 ⇒ 必修。
-*/
-.guide-bar {
-  flex-shrink: 0;
+/* ============ 第 1 栏 · 资料清单 ============ */
+.side {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  width: 300px;
+  flex-shrink: 0;
+  background: var(--yzh-color-bg-container, #fff);
+  border-right: 1px solid var(--yzh-color-border-light, #f1f5f9);
+}
+.side__hd {
+  display: flex;
+  align-items: center;
   gap: var(--yzh-space-2, 8px);
   padding: var(--yzh-space-3, 12px) var(--yzh-space-4, 16px);
-  background: var(--yzh-color-bg-subtle, #fffbeb);
-  border-bottom: 1px solid var(--yzh-color-warning, #fde68a);
+  border-bottom: 1px solid var(--yzh-color-border-light, #f1f5f9);
 }
-.guide-bar__icon {
-  flex-shrink: 0;
-  margin-top: var(--yzh-space-1, 4px);
-  color: var(--yzh-color-warning, #d97706);
+.side__title {
+  font-size: var(--yzh-font-size-sm, 13px);
+  font-weight: 600;
+  color: var(--yzh-color-text-primary, #303133);
 }
-.guide-bar__body {
-  flex: 1;
-  min-width: 0;
+
+.side__filters {
   display: flex;
   flex-direction: column;
   gap: var(--yzh-space-2, 8px);
-}
-.guide-bar__title {
-  font-size: var(--yzh-font-size-sm, 13px);
-  font-weight: var(--yzh-font-weight-medium, 500);
-  color: var(--yzh-color-warning, #b45309);
-}
-/* ★ 三步必须**竖排**：横排会把 ①②③ 挤成一行跑出边框（这正是修复前的样子） */
-.guide-bar__steps {
-  display: flex;
-  flex-direction: column;
-  gap: var(--yzh-space-1, 4px);
-  font-size: var(--yzh-font-size-xs, 12px);
-  line-height: var(--yzh-line-height-base, 1.6);
-  color: var(--yzh-color-text-secondary, #606266);
-}
-.guide-bar__steps code {
-  padding: 0 var(--yzh-space-1, 4px);
-  border-radius: 3px;
-  background: var(--yzh-color-bg-active, #eff6ff);
-  color: var(--yzh-color-primary, #1e3a8a);
-}
-
-/* ── 主体 ── */
-.body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-.preview-col {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-/*
-  右栏宽度 460 → 480（2026-10-04）。
-  实测 460 时 4 个**带图标**的页签放不下，「校验结果」被裁掉（用户原话「tab 页面显示不全」）。
-  修复是两件事一起做（见模板里的页签注释）：
-    ① 去掉页签图标、收紧 `el-tabs__item` 横向 padding —— 这是**主修复**，省出 ~150px；
-    ② 宽度 +20px —— 只是余量，顺带让右栏的表格不那么挤。
-  ⛔ 不要只靠「加宽」：中栏预览是 `flex:1`，右栏每加 100px，预览就少 100px，
-    而预览才是本页的主内容。
-*/
-.right-col {
-  width: 480px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  border-left: 1px solid var(--yzh-color-border-light, #f1f5f9);
-  overflow: hidden;
-}
-
-.right-tabs {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-.right-tabs :deep(.el-tabs__header) {
-  margin: 0;
+  padding: var(--yzh-space-3, 12px) var(--yzh-space-4, 16px);
+  /* 与整页同底（白）—— 分区靠 `border-bottom` 表达，⛔ 不再叠一层 #f9fafb */
+  background: var(--yzh-color-bg-container, #fff);
   border-bottom: 1px solid var(--yzh-color-border-light, #f1f5f9);
 }
-/*
-  ⚠️ 页签横向留白（2026-10-04 两次实测，方向相反，务必读完再改）。
-
-  ① 第一次缺陷「tab 页面显示不全」：4 个中文页签**带图标**时在 460px 里溢出，
-     而 `#label` 插槽下溢出**不出现滚动箭头**、直接硬裁（「校验结果」被切成「校验结」）。
-     当时的修复是**去掉图标** + 收紧留白 + 右栏 460→480。
-
-  ② 第二次缺陷「应该加上 padding」（本次）：上一轮把 `nav-wrap` 的 padding 也归零了，
-     于是**第一个页签贴住右栏左边框**。但这里有个 Element Plus 的坑 ——
-     `.el-tabs--top > .el-tabs__header .el-tabs__item:nth-child(2) { padding-left: 0 }`
-     与 `:last-child { padding-right: 0 }`（特异性 0,4,0）会**强制抹掉首尾页签的内边距**，
-     作用域规则（0,3,0）压不过它 ⇒ 光把 item 的 padding 写回去是**无效的**。
-     ⇒ 修法：`nav-wrap` 补回 12px，并对 item 的 padding 加 `!important` 压过 EP。
-
-  宽度核算（13px 中文字，实测 7 字 ≈ 79px）：
-     可编辑组 79+68+45+45 = 237px 文本 + 4×24 内边距 + 24 外留白 ≈ 357px ＜ 480px ✓
-     固定组   45+45 = 90px 文本 + 2×24 + 24 ≈ 162px ✓
-  ⛔ 不要再加回页签图标：那会直接回到缺陷 ①。
-*/
-.right-tabs :deep(.el-tabs__nav-wrap) {
-  padding: 0 var(--yzh-space-3, 12px);
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: var(--yzh-space-2, 8px);
 }
-.right-tabs :deep(.el-tabs__item) {
-  height: 42px;
-  line-height: 42px;
-  font-size: var(--yzh-font-size-sm, 13px);
-  /* `!important` 限定在 `:deep()` 内 —— 样式法条 S01–S12 明确放行此写法。
-     原因见上方注释 ②：EP 对首尾页签的 `padding-*: 0` 特异性更高，不加压不过。 */
-  padding: 0 var(--yzh-space-3, 12px) !important;
+.filter-row__label {
+  width: 32px;
+  flex-shrink: 0;
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--yzh-color-text-secondary, #909399);
 }
-.right-tabs :deep(.el-tabs__content) {
+.filter-row :deep(.el-radio-button__inner) {
+  padding: var(--yzh-space-1, 4px) var(--yzh-space-2, 8px);
+  font-size: var(--yzh-font-size-xs, 12px);
+}
+
+.side__bd {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: var(--yzh-space-3, 12px);
 }
-.right-tabs :deep(.el-tab-pane) {
-  height: 100%;
-}
-.tab-label {
-  display: inline-flex;
+.side__ft {
+  display: flex;
   align-items: center;
-  gap: var(--yzh-space-1, 4px);
+  gap: var(--yzh-space-2, 8px);
+  padding: var(--yzh-space-2, 8px) var(--yzh-space-4, 16px);
+  border-top: 1px solid var(--yzh-color-border-light, #f1f5f9);
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--yzh-color-text-placeholder, #909399);
+}
+/* 清除筛选 —— 用 `<button>` 承载（键盘可达），故需清掉 UA 默认外观 */
+.side__ft-reset {
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: var(--yzh-color-primary, #1e3a8a);
+  cursor: pointer;
+}
+.side__ft-reset:hover {
+  text-decoration: underline;
+}
+.side__ft-dirty {
+  color: var(--yzh-color-warning, #d97706);
 }
 
-.placeholder {
-  padding: var(--yzh-space-1, 4px) 0;
+/* ============ 第 2 栏 · 预览 ============ */
+.workspace {
+  display: flex;
+  flex: 1;
+  min-width: 0;
 }
-.placeholder :deep(p) {
-  margin: var(--yzh-space-1, 4px) 0 0;
+.pv {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  /* ★ 透明继承 `.app-body` 的统一底色（见「统一底色」注释） */
+  background: transparent;
+  border-right: 1px solid var(--yzh-color-border-light, #f1f5f9);
+}
+.pv__bd {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: transparent;
+}
+/*
+ * ★ 把 `DocPreview` 的两层底色压平到页面底（白）。
+ *
+ * 【为什么选择器要写到三层（`.docfill .pv__bd :deep(...)`）】
+ *   `DocPreview` 自带 `.preview-content { background: var(--yzh-color-bg-page) }`，
+ *   编译后是 `.preview-content[data-v-A]`（特异性 0,2,0）。页面若只写
+ *   `.pv__bd :deep(.preview-content)`，编译后同样是 0,2,0 —— **特异性打平**，
+ *   胜负就由「两份 CSS 谁先注入」决定 ⇒ 构建顺序一变就翻盘（表现为「昨天是白的今天是灰的」）。
+ *   多加一层 `.docfill` 把特异性提到 0,3,0，才**确定性地**压过去。
+ *
+ * 【为什么 PDF 画布那一条必须 `!important`】
+ *   `@vue-office/pdf` 在运行时给画布容器写**内联** `background: gray`，
+ *   而 `DocPreview` 已经用 `.pdf-viewer :deep(.vue-office-pdf-wrapper) { … !important }`
+ *   压了一次。内联样式只有 `!important` 能压住，故本条同样需要 ——
+ *   这是 S11「`!important` 仅允许出现在 `:deep()` 内」的**原意场景**。
+ */
+.docfill .pv__bd :deep(.doc-preview),
+.docfill .pv__bd :deep(.preview-content) {
+  background: transparent;
+}
+.docfill .pv__bd :deep(.vue-office-pdf-wrapper) {
+  background: var(--yzh-color-bg-container, #fff) !important;
+}
+
+/* ============ 第 3 栏 · 2 Tab ============ */
+.col3 {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 480px;
+  flex: 0 0 480px;
+  background: var(--yzh-color-bg-container, #fff);
+}
+
+/* ★ C1：Tab 行（取代原来的「一级功能九宫格」） */
+.rtabs {
+  display: flex;
+  align-items: stretch;
+  gap: var(--yzh-space-1, 4px);
+  padding: 0 var(--yzh-space-3, 12px);
+  border-bottom: 1px solid var(--yzh-color-border-light, #f1f5f9);
+  flex-shrink: 0;
+}
+.rtabs__btn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--yzh-space-2, 6px);
+  padding: var(--yzh-space-3, 10px) var(--yzh-space-2, 6px);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--yzh-color-text-regular, #606266);
+  cursor: pointer;
+}
+.rtabs__btn:hover {
+  color: var(--yzh-color-primary, #1e3a8a);
+}
+.rtabs__btn.is-on {
+  color: var(--yzh-color-primary, #1e3a8a);
+  border-bottom-color: var(--yzh-color-primary, #1e3a8a);
+  font-weight: 500;
+}
+/* ★ C13：圆形「!」——⛔ 页面里不印长段说明，全部收进它的浮层 */
+.rtabs__help {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--yzh-color-border, #dcdfe6);
+  border-radius: 50%;
+  background: var(--yzh-color-bg-container, #fff);
+  color: var(--yzh-color-text-placeholder, #909399);
+  font-family: inherit;
   font-size: var(--yzh-font-size-xs, 12px);
-  line-height: var(--yzh-line-height-relaxed, 1.8);
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-.placeholder__todo {
-  color: var(--yzh-color-warning, #d97706);
+.rtabs__help:hover {
+  border-color: var(--yzh-color-primary, #1e3a8a);
+  color: var(--yzh-color-primary, #1e3a8a);
+}
+.rtabs__help.is-on {
+  border-color: var(--yzh-color-primary, #1e3a8a);
+  background: var(--yzh-color-primary, #1e3a8a);
+  color: var(--yzh-color-bg-container, #fff);
+}
+
+.help-panel {
+  position: absolute;
+  right: var(--yzh-space-3, 12px);
+  top: 44px;
+  width: 320px;
+  max-height: calc(100% - 62px);
+  overflow: auto;
+  background: var(--yzh-color-bg-container, #fff);
+  border: 1px solid var(--yzh-color-border, #dcdfe6);
+  border-radius: var(--yzh-radius-md, 8px);
+  box-shadow: var(--yzh-shadow-md, 0 6px 24px rgba(0, 0, 0, 0.12));
+  padding: var(--yzh-space-3, 12px) var(--yzh-space-3, 14px);
+  z-index: 40;
+}
+.help-panel h5 {
+  margin: 0 0 var(--yzh-space-2, 8px);
+  font-size: var(--yzh-font-size-xs, 12px);
+  font-weight: 500;
+  color: var(--yzh-color-text-placeholder, #909399);
+}
+.help-panel__item {
+  padding: var(--yzh-space-2, 8px) 0;
+  border-top: 1px solid var(--yzh-color-border-light, #ebeef5);
+  font-size: var(--yzh-font-size-xs, 12px);
+  line-height: 1.8;
+  color: var(--yzh-color-text-regular, #606266);
+}
+.help-panel__item:first-of-type {
+  border-top: 0;
+  padding-top: var(--yzh-space-1, 2px);
+}
+.help-panel__item .k {
+  color: var(--yzh-color-text-placeholder, #909399);
+  margin-right: var(--yzh-space-1, 6px);
+}
+
+.col3__bd {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--yzh-space-4, 16px);
+}
+.col3__actions {
+  display: flex;
+  gap: var(--yzh-space-2, 8px);
+  margin-bottom: var(--yzh-space-4, 16px);
+}
+.col3__actions:empty {
+  display: none;
+}
+
+/* 全局规则里的「发布校验」子块（原「测试验证」页签合并进来） */
+.sub-block {
+  border: 1px solid var(--yzh-color-border-light, #ebeef5);
+  border-radius: var(--yzh-radius-md, 8px);
+  margin-top: var(--yzh-space-3, 14px);
+  overflow: hidden;
+}
+.sub-block__hd {
+  display: flex;
+  align-items: center;
+  gap: var(--yzh-space-2, 8px);
+  padding: var(--yzh-space-2, 9px) var(--yzh-space-3, 14px);
+  background: var(--yzh-color-bg-subtle, #f9fafb);
+  border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
+  font-size: var(--yzh-font-size-sm, 13px);
+  font-weight: 500;
+  color: var(--yzh-color-text-primary, #303133);
+}
+.sub-block__sub {
+  font-weight: 400;
+  font-size: var(--yzh-font-size-xs, 11px);
+  color: var(--yzh-color-text-placeholder, #909399);
+}
+.sub-block__bd {
+  padding: var(--yzh-space-3, 14px);
+}
+
+/* ============ 底部保存条 ============ */
+.savebar {
+  display: flex;
+  align-items: center;
+  gap: var(--yzh-space-2, 8px);
+  padding: var(--yzh-space-3, 12px) var(--yzh-space-4, 16px);
+  background: var(--yzh-color-bg-container, #fff);
+  border-top: 1px solid var(--yzh-color-border-light, #f1f5f9);
+  flex-shrink: 0;
+}
+.savebar__left {
+  display: flex;
+  align-items: center;
+  gap: var(--yzh-space-3, 12px);
+  min-width: 0;
+}
+.savebar__miss {
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--yzh-color-danger, #dc2626);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prog {
+  display: flex;
+  align-items: center;
+  gap: var(--yzh-space-2, 8px);
+}
+.prog__track {
+  width: 96px;
+  height: 6px;
+  background: var(--yzh-color-bg-muted, #f3f4f6);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.prog__fill {
+  display: block;
+  height: 100%;
+  background: var(--yzh-color-primary, #1e3a8a);
+  transition: width var(--yzh-transition-base, 200ms);
+}
+.prog__fill.is-done {
+  background: var(--yzh-color-success, #16a34a);
+}
+.prog__num {
+  font-size: var(--yzh-font-size-xs, 12px);
+  font-weight: 500;
+  color: var(--yzh-color-text-regular, #606266);
+}
+
+/* ============ 空态 ============ */
+.workspace-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  background: transparent;
 }
 </style>

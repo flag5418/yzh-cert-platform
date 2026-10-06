@@ -26,12 +26,14 @@
 export interface SourceSpecEntry {
   /** `global` / `compute` / `manual` / `profile` / `self` / `sibling` / `ai` */
   kind: string
-  /** `global` → 参数编码；`profile` → 文档名；`self`/`sibling` → 锚点/文档引用 */
+  /** `global` → 参数编码；`profile` → 文档名；`self`/`sibling` → 锚点/文档引用；`ai` → 提示词编码 */
   ref?: string
   /** `profile` 专用：画像里的字段名 */
   field?: string
   /** `profile` 专用：最低置信度（低于此值视为未命中） */
   minConfidence?: number
+  /** `ai` 专用（41 号原型 V6）：提示词组（用于批量提取分组） */
+  promptGroup?: string
   /** 缺失时行为：`block` / `next`（默认）/ `todo` / `empty` */
   onMissing?: string
 }
@@ -50,8 +52,16 @@ export interface SourceSpecModel {
 export type CombineMode = 'firstHit' | 'concat' | 'template'
 
 /** 组合方式（22 号 §三） */
-export const COMBINE_MODES: { value: CombineMode; label: string; hint: string }[] = [
-  { value: 'firstHit', label: '顺序回退', hint: '按顺序取第一个非空，取到即停（覆盖 90% 场景）' },
+export const COMBINE_MODES: {
+  value: CombineMode
+  label: string
+  hint: string
+}[] = [
+  {
+    value: 'firstHit',
+    label: '顺序回退',
+    hint: '按顺序取第一个非空，取到即停（覆盖 90% 场景）',
+  },
   { value: 'concat', label: '拼接', hint: '多个来源拼成一句，全部都要' },
   { value: 'template', label: '模板套用', hint: '用小模板组合多个来源' },
 ]
@@ -59,22 +69,69 @@ export const COMBINE_MODES: { value: CombineMode; label: string; hint: string }[
 /**
  * 来源类别。
  *
- * ⚠️ `implemented=false` 的项**不是设计遗漏**，而是 `39` 号 §2.3 里尚未落地的 Skill：
- * 一期只上线 `global`（`src_global_param`）/ `manual`（`src_manual`）/ `compute`。
- * 页面把它们**灰显 + 标注「未实现」**，⛔ 不静默让用户配一个运行期不生效的来源。
+ * ⚠️ `implemented=false` 的项**不是设计遗漏**，而是尚未落地的 Skill：
+ * 已注册可用的只有 `global`（`src_global_param`）/ `manual`（`src_manual`）
+ * 与 `ai`（`src_ai_field` / `src_ai_table` / `src_semantic` 三个）。
+ * ⛔ `compute` **没有对应 Skill**（后端执行器命中即 `Fail`）⇒ 必须标未实现。
+ * 页面把 `implemented=false` 的项**灰显 + 标注「未实现」**，
+ * ⛔ 不静默让用户配一个运行期必然不生效的来源。
  */
-export const SOURCE_KINDS: { value: string; label: string; implemented: boolean; hint: string }[] = [
-  { value: 'global', label: '全局参数', implemented: true, hint: '取自「全局填写参数」（企业基础信息 / 认证项目信息）' },
-  { value: 'manual', label: '人工录入', implemented: true, hint: '运行期挂人工待办，由专家填写' },
-  { value: 'compute', label: '计算', implemented: true, hint: '由表达式算出来（如合计、计数）' },
-  { value: 'profile', label: '企业资料画像', implemented: false, hint: '从已上传的企业资料里提取的值（画像链尚未接通本页）' },
-  { value: 'self', label: '本模板其他锚点', implemented: false, hint: '引用同一模板内另一个锚点的值' },
-  { value: 'sibling', label: '兄弟文档', implemented: false, hint: '引用同一批次内另一份文档的值' },
-  { value: 'ai', label: 'AI 生成', implemented: false, hint: '由模型按上下文生成' },
+export const SOURCE_KINDS: {
+  value: string
+  label: string
+  implemented: boolean
+  hint: string
+}[] = [
+  {
+    value: 'global',
+    label: '全局参数',
+    implemented: true,
+    hint: '取自「全局填写参数」（企业基础信息 / 认证项目信息）',
+  },
+  {
+    value: 'manual',
+    label: '人工录入',
+    implemented: true,
+    hint: '运行期挂人工待办，由专家填写',
+  },
+  {
+    value: 'compute',
+    label: '计算',
+    implemented: false,
+    hint: '由表达式算出来（如合计、计数）—— 一期无对应 Skill，运行期会直接失败',
+  },
+  {
+    value: 'profile',
+    label: '企业资料画像',
+    implemented: false,
+    hint: '从已上传的企业资料里提取的值（画像链尚未接通本页）',
+  },
+  {
+    value: 'self',
+    label: '本模板其他锚点',
+    implemented: false,
+    hint: '引用同一模板内另一个锚点的值',
+  },
+  {
+    value: 'sibling',
+    label: '兄弟文档',
+    implemented: false,
+    hint: '引用同一批次内另一份文档的值',
+  },
+  {
+    value: 'ai',
+    label: 'AI 生成',
+    implemented: true,
+    hint: '由模型按上下文生成（支持批量提示词组）',
+  },
 ]
 
 /** 缺失时行为（22 号 §八） */
-export const ON_MISSING_OPTIONS: { value: string; label: string; hint: string }[] = [
+export const ON_MISSING_OPTIONS: {
+  value: string
+  label: string
+  hint: string
+}[] = [
   { value: 'next', label: '取下一个', hint: '跳过本来源，继续下一个（默认）' },
   { value: 'todo', label: '挂待办', hint: '挂人工待办，继续填其他锚点' },
   { value: 'block', label: '阻断', hint: '直接报错，整份文档不生成' },
@@ -103,15 +160,21 @@ export function emptySourceSpec(): SourceSpecModel {
  * 抛异常会让整个侧边栏打不开，用户连「改回来」的机会都没有。
  * 解析失败 ⇒ 返回空模型 + `parseError=true`，由界面提示「原值无法解析，保存将覆盖」。
  */
-export function parseSourceSpec(raw?: string | null): { model: SourceSpecModel; parseError: boolean } {
+export function parseSourceSpec(raw?: string | null): {
+  model: SourceSpecModel
+  parseError: boolean
+} {
   const text = (raw ?? '').trim()
   if (!text) return { model: emptySourceSpec(), parseError: false }
 
   try {
     const obj = JSON.parse(text)
-    if (obj == null || typeof obj !== 'object') return { model: emptySourceSpec(), parseError: true }
+    if (obj == null || typeof obj !== 'object')
+      return { model: emptySourceSpec(), parseError: true }
 
-    const combine = (['firstHit', 'concat', 'template'] as const).includes(obj.combine)
+    const combine = (['firstHit', 'concat', 'template'] as const).includes(
+      obj.combine,
+    )
       ? (obj.combine as CombineMode)
       : 'firstHit'
 
@@ -122,7 +185,10 @@ export function parseSourceSpec(raw?: string | null): { model: SourceSpecModel; 
             kind: String(s.kind ?? 'global'),
             ref: s.ref == null ? undefined : String(s.ref),
             field: s.field == null ? undefined : String(s.field),
-            minConfidence: typeof s.minConfidence === 'number' ? s.minConfidence : undefined,
+            minConfidence:
+              typeof s.minConfidence === 'number' ? s.minConfidence : undefined,
+            promptGroup:
+              s.promptGroup == null ? undefined : String(s.promptGroup),
             onMissing: s.onMissing == null ? undefined : String(s.onMissing),
           }))
       : []
@@ -161,7 +227,9 @@ export function stringifySourceSpec(model: SourceSpecModel): string | null {
     const e: Record<string, any> = { kind: s.kind }
     if (s.ref) e.ref = s.ref
     if (s.kind === 'profile' && s.field) e.field = s.field
-    if (s.kind === 'profile' && typeof s.minConfidence === 'number') e.minConfidence = s.minConfidence
+    if (s.kind === 'profile' && typeof s.minConfidence === 'number')
+      e.minConfidence = s.minConfidence
+    if (s.kind === 'ai' && s.promptGroup) e.promptGroup = s.promptGroup
     e.onMissing = s.onMissing || DEFAULT_ON_MISSING
     return e
   })
@@ -186,7 +254,7 @@ export function entrySummary(e: SourceSpecEntry): string {
       case 'sibling':
         return `兄弟文档:${e.ref || '?'}`
       case 'ai':
-        return 'AI 生成'
+        return `AI:${e.ref || '?'}${e.promptGroup ? `[组:${e.promptGroup}]` : ''}`
       default:
         return `${e.kind}:${e.ref || ''}`
     }
@@ -200,8 +268,10 @@ export function entrySummary(e: SourceSpecEntry): string {
 export function summarizeSourceSpec(model: SourceSpecModel): string {
   if (!model.sources.length) return ''
   const parts = model.sources.map(entrySummary)
-  if (model.combine === 'concat') return `拼接(${model.separator ?? '、'}): ${parts.join(' + ')}`
-  if (model.combine === 'template') return `模板套用: ${model.expr || '(未填模板)'} ← ${parts.join(' + ')}`
+  if (model.combine === 'concat')
+    return `拼接(${model.separator ?? '、'}): ${parts.join(' + ')}`
+  if (model.combine === 'template')
+    return `模板套用: ${model.expr || '(未填模板)'} ← ${parts.join(' + ')}`
   return parts.join(' → ')
 }
 
@@ -214,7 +284,9 @@ export function summarizeSourceSpec(model: SourceSpecModel): string {
 export function humanPreview(model: SourceSpecModel): string {
   if (!model.sources.length) return '尚未配置取值来源 —— 运行期该锚点将留空。'
 
-  const labels = model.sources.map((s, i) => `${i + 1}. ${kindLabel(s.kind)}${s.ref ? `（${s.ref}）` : ''}`)
+  const labels = model.sources.map(
+    (s, i) => `${i + 1}. ${kindLabel(s.kind)}${s.ref ? `（${s.ref}）` : ''}`,
+  )
 
   if (model.combine === 'concat') {
     return `把 ${labels.join(' 与 ')} 用「${model.separator || '、'}」拼成一段文字。`
@@ -235,7 +307,9 @@ export function humanPreview(model: SourceSpecModel): string {
         case 'empty':
           return '取不到就留空'
         default:
-          return i === model.sources.length - 1 ? '取不到就留空' : '取不到就继续往下找'
+          return i === model.sources.length - 1
+            ? '取不到就留空'
+            : '取不到就继续往下找'
       }
     })()
     sentences.push(`先取 ${labels[i]}，${tail}`)

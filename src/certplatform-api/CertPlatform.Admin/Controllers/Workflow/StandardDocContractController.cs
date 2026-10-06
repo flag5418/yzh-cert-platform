@@ -1,9 +1,13 @@
+using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using CertPlatform.Admin.Entities.Doc;
 using CertPlatform.Admin.Services.DocExtraction;
+using CertPlatform.Admin.Services.Workflow;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Entities.Dir;
+using CertPlatform.Shared.Fill;
 using YZH.Core.Api.Controllers;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
@@ -43,17 +47,23 @@ public class StandardDocContractController : WebControllerBase
 {
     private readonly IDbOrm _db;
     private readonly DocExtractionRuleService _extraction;
+    private readonly PromptWorkbenchService _prompts;
+    private readonly IObjectStorage _storage;
     private readonly IUserContext _userContext;
     private readonly ILogger<StandardDocContractController> _logger;
 
     public StandardDocContractController(
         IDbOrm db,
         DocExtractionRuleService extraction,
+        PromptWorkbenchService prompts,
+        IObjectStorage storage,
         IUserContext userContext,
         ILogger<StandardDocContractController> logger)
     {
         _db = db;
         _extraction = extraction;
+        _prompts = prompts;
+        _storage = storage;
         _userContext = userContext;
         _logger = logger;
     }
@@ -91,6 +101,9 @@ public class StandardDocContractController : WebControllerBase
 
             // ★ 分类权威 = 标准目录文件行（不是契约行）
             DocCategory = NormalizeCategory(fileRow.DocCategory, null),
+
+            // ★ 固定文档 · 可替换性（仅 DocCategory=fixed 时有意义；见 ContractSaveRequest）
+            FixedDocSubtype = contract?.FixedDocSubtype ?? "enterprise_provided",
 
             // ── ★ 标准原始文档的存储信息（37 号 §3.3 的「下载标准文档」）──
             //   页面中栏要「先看原始文档、再上传加工后的空白模板」，所以路径必须随本接口一起给。
@@ -154,6 +167,18 @@ public class StandardDocContractController : WebControllerBase
         if (category == null)
             return Ok(ApiResponse<object>.Fail("文档分类只能是 fixed / editable（hybrid 一期不启用）"));
 
+        // ★ 固定文档 · 可替换性（缺口 G1 的下半场 —— 见 ContractSaveRequest 注释）
+        //   ⚠️ 空 = **本次不动**（与 DocPurpose / TagsJson 的「null 不动」口径一致）：
+        //      前端只改了分类、没碰可替换性时，不该把既有值冲回默认。
+        string? fixedSubtype = null;
+        if (!string.IsNullOrWhiteSpace(req.FixedDocSubtype))
+        {
+            var st = req.FixedDocSubtype.Trim().ToLowerInvariant();
+            if (st is not ("standard_provided" or "enterprise_provided"))
+                return Ok(ApiResponse<object>.Fail("固定文档可替换性只能是 standard_provided / enterprise_provided"));
+            fixedSubtype = st;
+        }
+
         var scope = await _extraction.ResolveRuleScopeAsync(req.StandardFileCode);
         var now = DateTime.Now;
         var user = _userContext.UserCode;
@@ -192,6 +217,7 @@ public class StandardDocContractController : WebControllerBase
         // ── 业务字段 ──
         contract.DocName = string.IsNullOrWhiteSpace(req.DocName) ? fileRow.FileName : req.DocName!;
         contract.DocCategory = category;
+        if (fixedSubtype != null) contract.FixedDocSubtype = fixedSubtype;
         if (!string.IsNullOrWhiteSpace(req.DocRole)) contract.DocRole = req.DocRole!;
 
         // 只在「显式提交」时改写 —— null = 本次不动该字段（避免前端漏传导致清空）
@@ -250,6 +276,7 @@ public class StandardDocContractController : WebControllerBase
             contract.StandardFileCode,
             contract.DocName,
             contract.DocCategory,
+            contract.FixedDocSubtype,
             contract.DocPurpose,
             contract.TagsJson,
             contract.InfoItemsJson,
@@ -266,18 +293,21 @@ public class StandardDocContractController : WebControllerBase
     /// <summary>
     /// <b>自动分析</b>（用户 2026-10-03 要求「每个文件应该有个自动分析按钮」）。
     ///
-    /// <para><b>★ 一次调用聚合两个分析</b>（37 号 §0.2 的 A / B / C 三个分析中的 C 与 A）：</para>
+    /// <para><b>★ 一次调用聚合三个分析</b>（37 号 §0.2 的 A / B / C）：</para>
     /// <list type="bullet">
     /// <item><b>C 字段提取</b>：调 <see cref="DocExtractionRuleService.AIAnalyzeAsync"/> ——
     /// 已实现，⛔ 不重复造。</item>
+    /// <item><b>B 文档语义分析</b>：调 <see cref="PromptWorkbenchService.AnalyzeForQueueAsync"/> 的
+    /// <c>doc_group</c>（标签）+ <c>doc_content</c>（作用）两跳，结论落 <c>cert_standard_doc_contract</c>。
+    /// 见 <see cref="RunSemanticAsync"/>。</item>
     /// <item><b>A 锚点扫描</b>：需要<b>空白模板</b>（37 号 H-2 硬约束）。未上传时本项<b>跳过并提示</b>，
     /// ⛔ 不报错 —— 用户的实际顺序是先分析原始文档、再上传空白模板。</item>
     /// </list>
     ///
-    /// <para><b>⚠️ B 文档语义分析（分类/作用/标签）本轮未接</b>：它需要 LLM 提示词（<c>doc_group</c> /
-    /// <c>doc_content</c>）+ 标签字典裁剪，属「企业原始资料分析」执行器
-    /// （<c>EnterpriseOriginalAnalyzeExecutor</c>）的既有能力，接口尚未对本页开放。
-    /// 本轮先返回 <c>Semantic.Status = "not_wired"</c>，前端据此提示「可手工在 Tab3 填写」。</para>
+    /// <para><b>★ 三项互相独立，互不阻断</b>（P2' 程序不阻断、只如实推导）：任一项失败只影响它自己的
+    /// <c>Status</c> 段，另两项照跑 —— 例如提示词还没配（B 必然失败）不该让 C 字段提取也做不成。</para>
+    ///
+    /// <para><b>⚠️ 本端点会真调 LLM（两次，约 15~25 秒）</b>，前端超时须 ≥120s。</para>
     /// </summary>
     [HttpPost("analyze")]
     public async Task<IActionResult> Analyze([FromQuery] string fileCode)
@@ -309,6 +339,9 @@ public class StandardDocContractController : WebControllerBase
             _logger.LogWarning(ex, "[Contract] 字段提取失败：File={File}", fileCode);
             fieldResult = new { Status = "failed", Message = ex.Message };
         }
+
+        // ── B：文档语义分析（标签 + 作用，两跳 LLM，结论落契约表）──
+        var semantic = await RunSemanticAsync(fileRow);
 
         // ── A：锚点扫描（需要空白模板 —— H-2 硬约束）──
         var template = await _db.Client.Queryable<DocTemplate>()
@@ -355,12 +388,317 @@ public class StandardDocContractController : WebControllerBase
         return Ok(ApiResponse<object>.Ok(new
         {
             StandardFileCode = fileCode,
-            Semantic = new { Status = "not_wired", Message = "语义分析（分类/作用/标签）本轮未接，可先在「文档契约」页手工填写" },
+            Semantic = semantic,
             Field = fieldResult,
             Scan = scanResult,
             // ★ 前端据此决定下一步引导
             NextStep = template == null ? "upload-template" : "rescan",
         }));
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // 三·B、文档语义分析（两跳 LLM → 契约表）
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// <b>B 文档语义分析</b>：跑 <c>doc_group</c>（标签）+ <c>doc_content</c>（作用）两跳 LLM，
+    /// 结论落 <c>cert_standard_doc_contract</c>。
+    ///
+    /// <para><b>★ 为什么复用 <c>AnalyzeForQueueAsync</c> 而不是自己写 LLM 调用</b>：
+    /// 它是「提示词工作台」的唯一队列语义入口，内部已含
+    /// ① 生效提示词解析（<c>ResolveActiveAsync</c>）
+    /// ② 语义上下文占位符渲染（<c>BuildSemanticContextAsync</c>，含标签字典裁剪）
+    /// ③ 33 号 §3.3 的<b>六条输出校验</b>（越界回退 OTHER / clamp / 截断）
+    /// ④ 用量日志（<c>cert_ai_usage_log</c>）。
+    /// 自己写一遍就是<b>「复制即漂移」</b> —— 校验口径一分叉，契约表与画像表就会长出不同形状。</para>
+    ///
+    /// <para><b>★ 提取口径也复用 <see cref="SemanticHints"/></b>（与 <c>EnterpriseOriginalAnalyzeExecutor</c>
+    /// 同一套），⛔ 不在本类里另抄一份 JSON 解析。</para>
+    ///
+    /// <para><b>⛔ 本方法不写 <c>DocCategory</c></b>：该列的<b>权威位置是
+    /// <c>cert_standard_directory_file.DocCategory</c></b>（<see cref="Detail"/> 也一律读文件行）。
+    /// 只写契约行 ⇒ <c>detail</c> 读不到 ⇒ 变成<b>「写了但不生效」的静默分叉</b>。
+    /// 故 AI 的分类结论只作为 <c>SuggestedCategory</c> <b>建议</b>返回，由人工在 Tab3 确认后经
+    /// <see cref="Save"/> 同批写两处（P3 建议 ≠ 事实）。</para>
+    ///
+    /// <para><b>★ 输入是 Markdown，⛔ 不是原始二进制</b>：语义分析吃转换产物
+    /// （<c>cert_standard_directory_file.MarkdownPath</c>）；未转换 ⇒ <c>blocked</c>，⛔ 不报错。</para>
+    /// </summary>
+    private async Task<SemanticOutcome> RunSemanticAsync(StandardDirectoryFile fileRow)
+    {
+        // ① 输入闸：Markdown 未就绪 ⇒ blocked（⛔ 不是 failed —— 还没轮到而已）
+        if (string.IsNullOrWhiteSpace(fileRow.MarkdownPath))
+            return SemanticOutcome.Blocked("原始文档尚未转换为 Markdown，无法做语义分析（请先让文件完成转换）");
+
+        // ② 读 Markdown（MinIO）
+        string markdown;
+        try
+        {
+            // ⚠️ 路径必须 TrimStart('/')：库里存的是带前导斜杠的展示路径，MinIO 的 key 不带
+            //   （与 EnterpriseOriginalAnalyzeExecutor 同一口径）
+            var (stream, _) = await _storage.DownloadAsync(fileRow.MarkdownPath!.TrimStart('/'));
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            markdown = Encoding.UTF8.GetString(ms.ToArray());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[Contract] Markdown 读取失败：File={File}, Path={Path}",
+                fileRow.Code, fileRow.MarkdownPath);
+            return SemanticOutcome.Failed($"Markdown 读取失败：{ex.Message}");
+        }
+
+        if (string.IsNullOrWhiteSpace(markdown))
+            return SemanticOutcome.Failed("Markdown 内容为空，无法分析");
+
+        // ③ 作用域（★ 必须是标准 GUID，⛔ 不接受 slug；空 = 平台级提示词）
+        var scope = await _extraction.ResolveRuleScopeAsync(fileRow);
+        var standardCode = string.IsNullOrWhiteSpace(scope.StandardCode) ? null : scope.StandardCode;
+
+        var fileName = fileRow.FileName;
+        var one = new List<(string, string?)> { (fileName, markdown) };
+
+        // ④ L1 doc_group（标签）—— 批次提示词，本场景只有 1 份
+        var groupRes = await _prompts.AnalyzeForQueueAsync(
+            PromptWorkbenchService.Types.Group, standardCode, one, $"standard_doc:{fileRow.Code}:group");
+
+        // ⑤ L2 doc_content（作用）—— 单份
+        var contentRes = await _prompts.AnalyzeForQueueAsync(
+            PromptWorkbenchService.Types.Content, standardCode, one, $"standard_doc:{fileRow.Code}:content");
+
+        // ⑥ 提取（统一口径）
+        var groupByFile = groupRes.Success && !string.IsNullOrWhiteSpace(groupRes.Json)
+            ? SemanticHints.ParseGroupItems(groupRes.Json!)
+            : new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+
+        var (tagsJson, tagsReason, tagsConf, typeGuess, keywords, summary, aiCategory)
+            = SemanticHints.ExtractGroupHints(groupByFile, fileName, groupRes.ValidationMessages);
+
+        // ⚠️ contentRes.Json 可能为 null ⇒ 传空串让 ExtractContentHints 内部的 JsonException 分支兜住
+        var (purpose, purposeConf, infoItems, _, _, _)
+            = SemanticHints.ExtractContentHints(contentRes.Json ?? string.Empty);
+
+        // ⑦ 两跳独立判定（P2' 只如实推导：一跳挂了不该把另一跳的成果也丢掉）
+        var groupOk = groupRes.Success;
+        var contentOk = contentRes.Success;
+
+        var warnings = new List<string>();
+        if (!groupRes.Success) warnings.Add($"标签分析失败：{groupRes.Message}");
+        if (!contentRes.Success) warnings.Add($"作用分析失败：{contentRes.Message}");
+        if (groupRes.Success && string.IsNullOrWhiteSpace(tagsJson))
+            warnings.Add("标签分析成功但未返回可用标签（可能提示词未声明 tags 字段）");
+
+        var nothingProduced = string.IsNullOrWhiteSpace(tagsJson) && string.IsNullOrWhiteSpace(purpose);
+
+        // ⑧ 落库（含已删查重 + 复活 —— 陷阱 ㊶）
+        var user = _userContext.UserCode;
+        var now = DateTime.Now;
+
+        var contract = await _db.Client.Queryable<StandardDocContract>()
+            .Where(c => c.StandardFileCode == fileRow.Code)
+            .FirstAsync();
+
+        // ★ B4：人工修正过的行 ⛔ 不覆盖（33 号 §五）。仍把 AI 结论原样回给前端供人工参考。
+        if (contract != null && contract.IsManualCorrected)
+        {
+            _logger.LogInformation("[Contract] 语义分析跳过（人工已修正）：File={File}", fileRow.Code);
+            return SemanticOutcome.Skipped(
+                "该文档契约已被人工修正，自动分析不覆盖（如需重跑请先清除人工标记）",
+                purpose, tagsJson, aiCategory, typeGuess, keywords, summary,
+                tagsConf, purposeConf, groupRes, contentRes, warnings);
+        }
+
+        if (nothingProduced)
+        {
+            // 两跳都没产出 ⇒ 如实标 failed，并留痕（排障时能看到「当时用的哪版提示词、报了什么」）
+            if (contract != null)
+            {
+                contract.AnalyzeStatus = "failed";
+                contract.AnalyzeMessage = Truncate(string.Join("；", warnings), 1024);
+                contract.AnalyzeTime = now;
+                contract.UpdateBy = user;
+                contract.UpdateTime = now;
+                await _db.UpdateAsync(contract,
+                    nameof(StandardDocContract.AnalyzeStatus),
+                    nameof(StandardDocContract.AnalyzeMessage),
+                    nameof(StandardDocContract.AnalyzeTime),
+                    nameof(StandardDocContract.UpdateBy),
+                    nameof(StandardDocContract.UpdateTime));
+            }
+            return SemanticOutcome.Failed(
+                warnings.Count > 0 ? string.Join("；", warnings) : "语义分析未产出任何结论",
+                warnings);
+        }
+
+        var isNew = contract == null;
+        if (contract == null)
+        {
+            // ★ 底层 ORM 不生成业务键 Code（必须自己给，否则「新增失败：必填字段为空」）
+            contract = new StandardDocContract
+            {
+                Code = Guid.NewGuid().ToString("N"),
+                StandardFileCode = fileRow.Code,
+                CreateBy = user,
+                CreateTime = now,
+                IsValid = 1,
+                Status = "draft",
+            };
+        }
+
+        // 复活（若命中已软删行）
+        contract.IsDeleted = false;
+        contract.DeleteBy = null;
+        contract.DeleteTime = null;
+
+        // 身份段（服务端权威推导，⛔ 不信前端）
+        contract.ConfigCode = fileRow.ConfigCode ?? string.Empty;
+        contract.StandardCode = scope.StandardCode ?? string.Empty;
+        contract.StageCode = scope.StageCode ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(contract.DocName)) contract.DocName = fileRow.FileName;
+        if (string.IsNullOrWhiteSpace(contract.DocCategory))
+            contract.DocCategory = NormalizeCategory(fileRow.DocCategory, null) ?? "editable";
+
+        // ── 语义字段：只在有值时写，⛔ 绝不用 null 清空既有内容 ──
+        if (!string.IsNullOrWhiteSpace(tagsJson))
+        {
+            contract.TagsJson = ToJsonArray(tagsJson);
+            contract.TagsSource = "ai";
+            contract.TagsConfidence = tagsConf;
+        }
+        var reason = Truncate(tagsReason, 500);
+        if (!string.IsNullOrWhiteSpace(reason)) contract.TagsReason = reason;
+
+        if (!string.IsNullOrWhiteSpace(purpose))
+        {
+            contract.DocPurpose = purpose;
+            contract.DocPurposeSource = "ai";
+            contract.DocPurposeConfidence = purposeConf;
+        }
+        if (!string.IsNullOrWhiteSpace(infoItems)) contract.InfoItemsJson = ToJsonArray(infoItems);
+
+        // 召回关键词：人工可维护 ⇒ 只在空时填（⛔ 不覆盖人工填的）
+        var kw = Truncate(keywords, 500);
+        if (!string.IsNullOrWhiteSpace(kw) && string.IsNullOrWhiteSpace(contract.Keywords)) contract.Keywords = kw;
+
+        // ── 分析元数据（可观测 + 可追溯 + 可重跑）──
+        //   两跳合并口径：模型取「作用分析」那次（更贴近最终结论），Token / 耗时为两跳之和。
+        contract.ModelName = Truncate(contentOk ? contentRes.Model : groupRes.Model, 50);
+        contract.PromptCode = Truncate(contentOk ? contentRes.PromptCode : groupRes.PromptCode, 64);
+        contract.PromptVersion = contentOk ? contentRes.PromptVersion : groupRes.PromptVersion;
+        contract.PromptTokens = groupRes.PromptTokens + contentRes.PromptTokens;
+        contract.CompletionTokens = groupRes.CompletionTokens + contentRes.CompletionTokens;
+        contract.DurationMs = (int)Math.Min(groupRes.DurationMs + contentRes.DurationMs, int.MaxValue);
+        contract.AnalyzeStatus = groupOk && contentOk ? "completed" : "partial";
+        contract.AnalyzeMessage = Truncate(string.Join("；", warnings), 1024);
+        contract.AnalyzeTime = now;
+        contract.UpdateBy = user;
+        contract.UpdateTime = now;
+
+        var save = isNew ? await _db.InsertAsync(contract) : await _db.UpdateAsync(contract);
+        if (!save.Success)
+        {
+            _logger.LogWarning("[Contract] 语义结论落库失败：File={File}, Err={Err}", fileRow.Code, save.Error);
+            return SemanticOutcome.Failed($"语义结论落库失败：{save.Error}", warnings);
+        }
+
+        _logger.LogInformation(
+            "[Contract] 语义分析完成：File={File}, Group={G}, Content={C}, Tags={Tags}, {PT}+{CT}tok {Ms}ms",
+            fileRow.Code, groupRes.Success, contentRes.Success, tagsJson != null,
+            contract.PromptTokens, contract.CompletionTokens, contract.DurationMs);
+
+        return new SemanticOutcome
+        {
+            Status = contract.AnalyzeStatus,
+            Message = warnings.Count > 0 ? string.Join("；", warnings) : null,
+            Saved = true,
+            DocPurpose = purpose,
+            TagsJson = tagsJson,
+            SuggestedCategory = aiCategory,
+            TypeGuess = typeGuess,
+            Keywords = keywords,
+            Summary = summary,
+            TagsConfidence = tagsConf,
+            DocPurposeConfidence = purposeConf,
+            Model = contract.ModelName,
+            PromptCode = contract.PromptCode,
+            PromptVersion = contract.PromptVersion,
+            PromptTokens = contract.PromptTokens ?? 0,
+            CompletionTokens = contract.CompletionTokens ?? 0,
+            DurationMs = contract.DurationMs ?? 0,
+            Warnings = warnings,
+        };
+    }
+
+    /// <summary>截断到 <paramref name="max"/> 字符（MySQL 严格模式下超长直接抛错 ⇒ 整条链路挂）</summary>
+    private static string? Truncate(string? s, int max)
+        => string.IsNullOrEmpty(s) ? s : (s.Length <= max ? s : s[..max]);
+
+    /// <summary>
+    /// B 语义分析的产出（只读回执，供 <see cref="Analyze"/> 原样透出）。
+    /// <para><c>Status</c> 取值：<c>completed</c> / <c>partial</c> / <c>blocked</c> / <c>skipped</c> / <c>failed</c>。</para>
+    /// </summary>
+    private sealed class SemanticOutcome
+    {
+        /// <summary>completed=两跳都成 / partial=只成一跳 / blocked=输入未就绪 / skipped=人工已修正 / failed=无产出</summary>
+        public string Status { get; init; } = "failed";
+
+        /// <summary>人读说明（失败原因 / 告警汇总）</summary>
+        public string? Message { get; init; }
+
+        /// <summary>结论是否已落 <c>cert_standard_doc_contract</c>（<c>blocked</c>/<c>skipped</c>/<c>failed</c> ⇒ false）</summary>
+        public bool Saved { get; init; }
+
+        public string? DocPurpose { get; init; }
+        public string? TagsJson { get; init; }
+
+        /// <summary>★ AI 建议的文档分类 —— <b>仅供人工确认</b>，⛔ 未落库（见 <see cref="RunSemanticAsync"/> 注释）</summary>
+        public string? SuggestedCategory { get; init; }
+
+        public string? TypeGuess { get; init; }
+        public string? Keywords { get; init; }
+        public string? Summary { get; init; }
+        public decimal? TagsConfidence { get; init; }
+        public decimal? DocPurposeConfidence { get; init; }
+
+        public string? Model { get; init; }
+        public string? PromptCode { get; init; }
+        public int? PromptVersion { get; init; }
+        public int PromptTokens { get; init; }
+        public int CompletionTokens { get; init; }
+        public long DurationMs { get; init; }
+
+        /// <summary>逐条告警（含 33 号 §3.3 输出校验的后端自动校正明细）</summary>
+        public List<string> Warnings { get; init; } = new();
+
+        public static SemanticOutcome Blocked(string message)
+            => new() { Status = "blocked", Message = message };
+
+        public static SemanticOutcome Failed(string message, List<string>? warnings = null)
+            => new() { Status = "failed", Message = message, Warnings = warnings ?? new() };
+
+        public static SemanticOutcome Skipped(
+            string message, string? purpose, string? tagsJson, string? category, string? typeGuess,
+            string? keywords, string? summary, decimal? tagsConf, decimal? purposeConf,
+            PromptWorkbenchService.AnalyzeForQueueResult groupRes,
+            PromptWorkbenchService.AnalyzeForQueueResult contentRes, List<string> warnings)
+            => new()
+            {
+                Status = "skipped",
+                Message = message,
+                DocPurpose = purpose,
+                TagsJson = tagsJson,
+                SuggestedCategory = category,
+                TypeGuess = typeGuess,
+                Keywords = keywords,
+                Summary = summary,
+                TagsConfidence = tagsConf,
+                DocPurposeConfidence = purposeConf,
+                Model = contentRes.Success ? contentRes.Model : groupRes.Model,
+                PromptTokens = groupRes.PromptTokens + contentRes.PromptTokens,
+                CompletionTokens = groupRes.CompletionTokens + contentRes.CompletionTokens,
+                DurationMs = groupRes.DurationMs + contentRes.DurationMs,
+                Warnings = warnings,
+            };
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -418,6 +756,19 @@ public class StandardDocContractController : WebControllerBase
 
         /// <summary>★ 是否不需要编辑：<c>fixed</c>（固定格式，免填）/ <c>editable</c>（要配填写规则）</summary>
         public string? DocCategory { get; set; }
+
+        /// <summary>
+        /// ★【固定文档 · 可替换性】<c>standard_provided</c>（标准自带，不向企业索取）/
+        /// <c>enterprise_provided</c>（企业提供，要匹配依据）。
+        ///
+        /// <para><b>★ 为什么必须出现在这里（缺口 G1 的下半场）</b>：该列 DDL 早已存在，
+        /// 但 ① 实体没声明（读写被静默丢弃）② 本 DTO 也没这个字段 ⇒ <b>没有任何入口能写它</b>
+        /// ⇒ 它永远停在 DB 默认值 <c>enterprise_provided</c>，成为又一条「列在库、值恒默认」的死配置。
+        /// 补上实体属性只是让 ORM 能看见，<b>还必须有人写它</b>。</para>
+        ///
+        /// <para>⚠️ 空 = 本次不动（⛔ 不冲回默认）。仅在 <see cref="DocCategory"/> = <c>fixed</c> 时有意义。</para>
+        /// </summary>
+        public string? FixedDocSubtype { get; set; }
 
         /// <summary>required / optional / reference / attachment</summary>
         public string? DocRole { get; set; }

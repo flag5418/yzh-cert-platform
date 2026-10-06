@@ -11,6 +11,7 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Admin.Entities.Doc;
+using CertPlatform.Shared.Office;
 using CertPlatform.Shared.Office.Excel;
 using CertPlatform.Shared.Office.Word;
 
@@ -95,6 +96,14 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
     /// <summary>
     /// ★ 批量保存时允许整行覆盖的列（<b>列级写入</b>）。
     /// <para>⛔ 不含 <c>Code</c>（定位键，改了就变成另一行）、<c>Id</c>、<c>CreateTime</c>、<c>CreateBy</c>。</para>
+    /// <para>⛔ <b>刻意不含 <c>IsLocked</c></b>（2026-10-05）：锁定与配置是<b>两个正交动作</b> ——
+    /// 保存配置<b>不该</b>顺手改锁定状态。若列在这里，前端「保存锚点」时漏传 <c>isLocked</c>
+    /// 会被写成 <c>false</c>，实施人员辛苦确认过的锁定被<b>静默解除</b>（且日志显示成功）。
+    /// 锁定只走 <see cref="Lock"/> 端点。</para>
+    /// <para>⚠️ 本清单含 <c>IsValid</c> / <c>IsDeleted</c> / <c>DeleteBy</c> / <c>DeleteTime</c> 四个
+    /// <b>接口列</b>（复活分支需要写它们）。代价是：前端提交的行若漏传 <c>isValid</c>，
+    /// 反序列化后是 <c>0</c> ⇒ 会把锚点<b>静默置为无效</b>（此后 <c>Validate</c> / <c>liveAnchors</c>
+    /// 都查不到它）。⇒ 落库前必须显式归一（见 <see cref="NormalizeInterfaceColumns"/>）。</para>
     /// </summary>
     private static readonly string[] BatchUpdatableColumns =
     {
@@ -128,6 +137,29 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
         nameof(DocTemplateAnchor.DeleteBy),
         nameof(DocTemplateAnchor.DeleteTime),
         nameof(DocTemplateAnchor.UpdateTime),
+    };
+
+    /// <summary>
+    /// ★ <b>非配置列</b> —— 判定「锁定行是否真的被改了配置」时<b>排除</b>这些列
+    /// （它们不是实施人员配的规则，而是接口列 / 扫描产物 / 派生值）。
+    /// <para>⛔ 为什么必须排除而不是「锁定行一律拒绝」：本页「保存」是<b>整批提交</b>（含锁定行），
+    /// 若锁定行内容一个字没改也拒绝，实施人员会被无意义地挡住 —— 那是假闸门。
+    /// ⇒ 只拦「真的改了配置」的（见 <see cref="ConfigDiff"/>）。</para>
+    /// <list type="bullet">
+    /// <item><c>IsValid</c> / <c>IsDeleted</c> / <c>DeleteBy</c> / <c>DeleteTime</c> / <c>UpdateTime</c> —— 接口/审计列</item>
+    /// <item><c>IsOrphan</c> —— 扫描产物（由 <c>Scan</c> 管理，人工不直接配）</item>
+    /// <item><c>SourceSummary</c> —— 由 <c>SourceSpec</c> 派生（列表展示用）</item>
+    /// </list>
+    /// </summary>
+    private static readonly HashSet<string> NonConfigColumns = new(StringComparer.Ordinal)
+    {
+        nameof(DocTemplateAnchor.IsValid),
+        nameof(DocTemplateAnchor.IsDeleted),
+        nameof(DocTemplateAnchor.DeleteBy),
+        nameof(DocTemplateAnchor.DeleteTime),
+        nameof(DocTemplateAnchor.UpdateTime),
+        nameof(DocTemplateAnchor.IsOrphan),
+        nameof(DocTemplateAnchor.SourceSummary),
     };
 
     // ════════════════════════════════════════════════════════════════════
@@ -171,13 +203,19 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
         return await base.AddCore(entity);
     }
 
-    /// <summary>修改：规范化 + 校验 + 唯一键查重（排除自身）</summary>
+    /// <summary>
+    /// 修改：规范化 + 接口列归一 + 校验 + 唯一键查重（排除自身）+ <b>锁定拦截</b>。
+    /// <para>⚠️ 本端点（基类 CRUD 路径）与 <see cref="SaveBatch"/>（页面主路径）用<b>同一套</b>
+    /// 锁定判定（<see cref="ConfigDiff"/>）—— ⛔ 不各写一份，否则会出现「这条路拦得住、那条拦不住」。</para>
+    /// </summary>
     public override async Task<Result<DocTemplateAnchor>> UpdateCore(DocTemplateAnchor entity)
     {
         if (string.IsNullOrWhiteSpace(entity.Code))
             return Result<DocTemplateAnchor>.Fail("更新失败：缺少业务键 Code");
 
         Normalize(entity);
+        // ★ 接口列归一：⛔ 不允许一次「更新」把锚点静默置为无效（前端漏传 isValid ⇒ 0）
+        NormalizeInterfaceColumns(entity);
         var err = Validate(entity);
         if (err != null) return Result<DocTemplateAnchor>.Fail(err);
 
@@ -193,6 +231,16 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
                     : "同一模板下已存在相同锚点（类型/定位方式/引用 三者相同）。");
         }
 
+        // ★ 锁定拦截（用户 2026-10-05 裁定「锁定的问题，就是不能再修改配置」）：
+        //   命中自身且已锁定 ⇒ 配置列有实质变化就拒绝；无变化放行（避免「只改了个没变的字段」也被拒）。
+        if (dup != null && string.Equals(dup.Code, entity.Code, StringComparison.Ordinal) && dup.IsLocked)
+        {
+            var diff = ConfigDiff(entity, dup);
+            if (diff.Count > 0)
+                return Result<DocTemplateAnchor>.Fail(
+                    $"该锚点已锁定，不能修改其配置（{string.Join(" / ", diff)}）。如需修改请先解锁。");
+        }
+
         return await base.UpdateCore(entity);
     }
 
@@ -200,11 +248,6 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
     // 三、自定义端点
     // ════════════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// <b>批量保存</b>：按唯一键 upsert（命中 ⇒ 列级更新并复活；未命中 ⇒ 插入）。
-    /// <para>整个批次在<b>单事务</b>内完成 —— 任一条失败即整体回滚，避免「半批锚点生效」。</para>
-    /// <para>⛔ 不删除本批次未出现的锚点：删除走 <c>delete</c> 或 <c>clear</c>，显式且可审计。</para>
-    ///
     /// <summary>
     /// <b>扫描空白模板 → 生成锚点清单</b>（37 号 §7.1 第 ⑤ 步 / §7.2）。
     ///
@@ -281,7 +324,26 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
 
         try
         {
-            var (inserted, updated, orphaned) = await PersistScanAsync(templateCode, scanned);
+            // ★ B6：落库**之前**先拍一张「锁定锚点」快照。
+            //   ⚠️ 必须**含已软删**：换版时 `DocTemplateController.InvalidateAnchorsAsync` 已把旧锚点
+            //      全部软删，只查存活行会一行都查不到 ⇒ 恒返回「全部保留」的假结论。
+            var lockedBefore = await _db.Client.Queryable<DocTemplateAnchor>()
+                .Where(a => a.TemplateCode == templateCode && a.IsLocked)
+                .Select(a => new { a.AnchorRef, a.AnchorType, a.AnchorKind, a.SheetName, a.SectionIndex, a.HeaderKind })
+                .ToListAsync();
+
+            var (inserted, updated, orphaned, persisted) = await PersistScanAsync(templateCode, scanned);
+
+            // ★ B6：如实回报锁定锚点的去向 —— 「配置还在」与「配置丢了」必须能看出来。
+            //   保留：新模板里仍有同唯一键锚点 ⇒ 软删 + 复活 ⇒ 配置自动保留（无需额外代码）。
+            //   丢失：新模板里已没有该锚点 ⇒ 真的退出，⛔ 不做模糊匹配（见 AnchorScanMerge 类注释）。
+            var lockedSummary = AnchorScanMerge.Summarize(
+                lockedBefore.Select(a => (
+                    AnchorScanMerge.AnchorKey.Of(a.AnchorType, a.AnchorKind, a.SheetName,
+                        a.SectionIndex, a.HeaderKind, a.AnchorRef),
+                    a.AnchorRef,
+                    true)),
+                persisted);
 
             tpl.ScanStatus = "completed";
             tpl.ScanMessage = null;
@@ -298,8 +360,16 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
                 nameof(DocTemplate.PublishStatus));
 
             _logger.LogInformation(
-                "[DocTemplateAnchor] 扫描完成 Template={Tpl}：新增 {Ins} / 更新 {Upd} / 孤儿 {Orp} / 共 {Total}",
-                templateCode, inserted, updated, orphaned, scanned.Count);
+                "[DocTemplateAnchor] 扫描完成 Template={Tpl}：新增 {Ins} / 更新 {Upd} / 孤儿 {Orp} / 共 {Total}"
+                + " / 锁定 {Locked}（保留 {Carried} / 丢失 {Lost}）",
+                templateCode, inserted, updated, orphaned, scanned.Count,
+                lockedSummary.Total, lockedSummary.Carried, lockedSummary.Lost);
+
+            // ★ 消息里显式点名「锁定的锚点丢了」—— 这是唯一无法自动挽回的情况，
+            //   必须让人在扫描后的第一眼就看到，而不是等发布前才发现规则不见了。
+            var msg = $"扫描完成：识别到 {scanned.Count} 个锚点（新增 {inserted} / 更新 {updated} / 标记孤儿 {orphaned}）";
+            if (lockedSummary.Lost > 0)
+                msg += $"；⚠️ 有 {lockedSummary.Lost} 个已锁定的锚点在新模板中已不存在（{string.Join("、", lockedSummary.LostRefs)}），其配置无法保留";
 
             return Ok(ApiResponse<object>.Ok(new
             {
@@ -309,7 +379,15 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
                 Updated = updated,
                 Orphaned = orphaned,
                 ScannedAt = tpl.ScanTime,
-            }, $"扫描完成：识别到 {scanned.Count} 个锚点（新增 {inserted} / 更新 {updated} / 标记孤儿 {orphaned}）"));
+                // ★ B6：锁定锚点去向（保留 / 丢失）
+                Locked = new
+                {
+                    Total = lockedSummary.Total,
+                    Carried = lockedSummary.Carried,
+                    Lost = lockedSummary.Lost,
+                    LostRefs = lockedSummary.LostRefs,
+                },
+            }, msg));
         }
         catch (Exception ex)
         {
@@ -431,11 +509,25 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
     }
 
     /// <summary>
+    /// <b>批量保存</b>：按唯一键 upsert（命中 ⇒ 列级更新并复活；未命中 ⇒ 插入）。
+    ///
     /// <para><b>★ 语义 = 整行 upsert（不是部分更新）</b>：每条 <c>items[i]</c> 视为该锚点的<b>完整状态</b>，
     /// 未在 JSON 里出现的字段会被写成其 CLR 默认值（<c>""</c> / <c>0</c> / <c>false</c>）。
     /// 实测踩过：先存 <c>required=true</c>，再发一条只带 <c>defaultText</c> 的「同键」条目，
     /// <c>required</c> 被静默改回 <c>false</c>。⇒ <b>前端编辑器必须提交完整行</b>。</para>
+    ///
+    /// <para>整个批次在<b>单事务</b>内完成 —— 任一条失败即整体回滚，避免「半批锚点生效」。</para>
+    /// <para>⛔ 不删除本批次未出现的锚点：删除走 <c>delete</c> 或 <c>clear</c>，显式且可审计。</para>
+    ///
+    /// <para><b>★ 锁定拦截</b>（2026-10-05 用户裁定「锁定的问题，就是不能再修改配置」）：
+    /// 提交项命中<b>已锁定</b>的锚点且配置列有<b>实质变化</b>时<b>整批拒绝</b>，
+    /// 并点名「哪条锚点 / 哪些列」。锁定行内容没变的照常放行 —— 否则整批保存会被假闸门挡住
+    /// （本页保存是整批提交，锁定行一个字没改也被拒 ⇒ 实施人员连其他行都存不了）。判定见 <see cref="ConfigDiff"/>。</para>
+    ///
+    /// <para><b>★ 接口列归一</b>：落库前强制「存活 + 有效」（见 <see cref="NormalizeInterfaceColumns"/>），
+    /// ⛔ 不允许一次「保存配置」把锚点静默置为无效。</para>
     /// </summary>
+    /// <param name="req">模板 Code + 锚点清单（每条按唯一键 upsert）</param>
     [HttpPost("save-batch")]
     public async Task<IActionResult> SaveBatch([FromBody] SaveAnchorBatchRequest req)
     {
@@ -455,6 +547,8 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
             var item = req.Items[i];
             item.TemplateCode = req.TemplateCode;
             Normalize(item);
+            // ★ 接口列归一：⛔ 不允许「保存配置」把锚点静默置为无效（前端漏传 isValid ⇒ 0）
+            NormalizeInterfaceColumns(item);
 
             var err = Validate(item);
             if (err != null)
@@ -463,6 +557,28 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
             if (!seen.Add(UniqueKeyOf(item)))
                 return Ok(ApiResponse<object>.Fail(
                     $"第 {i + 1} 条锚点与前面的条目重复（类型/定位方式/引用 完全相同）：{item.AnchorRef}"));
+        }
+
+        // ★ 锁定拦截（用户 2026-10-05 裁定「锁定的问题，就是不能再修改配置」）。
+        //   放在**开事务之前** —— 只读预检，失败时不留任何痕迹，也不会「半批生效」。
+        //   ⚠️ 只拦「配置列有实质变化」的：整批提交里锁定行内容没变是常态，
+        //      一律拒绝会变成假闸门（实施人员连其他行都存不了）。
+        var lockedConflicts = new List<string>();
+        foreach (var item in req.Items)
+        {
+            var locked = await FindByUniqueKeyAsync(item);
+            if (locked == null || !locked.IsLocked) continue;
+
+            var diff = ConfigDiff(item, locked);
+            if (diff.Count > 0)
+                lockedConflicts.Add($"{item.AnchorRef}（{string.Join(" / ", diff)}）");
+        }
+        if (lockedConflicts.Count > 0)
+        {
+            _logger.LogInformation("[DocTemplateAnchor] save-batch 被锁定拦截：Template={Tpl}, 冲突 {N} 条",
+                req.TemplateCode, lockedConflicts.Count);
+            return Ok(ApiResponse<object>.Fail(
+                $"以下锚点已锁定，不能修改其配置：{string.Join("；", lockedConflicts)}。如需修改请先解锁。"));
         }
 
         using var tx = _db.BeginTransaction();
@@ -484,9 +600,8 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
                     if (a.Sort == 0) a.Sort = i;
 
                     if (string.IsNullOrWhiteSpace(a.Code)) a.Code = Guid.NewGuid().ToString("N");
-                    a.IsDeleted = false;
-                    a.DeleteBy = null;
-                    a.DeleteTime = null;
+                    // ★ 接口列归一（含 IsValid=1）—— 见 NormalizeInterfaceColumns 注释
+                    NormalizeInterfaceColumns(a);
                     a.CreateTime = now;
                     a.UpdateTime = now;
 
@@ -504,9 +619,9 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
                     a.Id = existing.Id;
                     a.CreateTime = existing.CreateTime;
                     a.CreateBy = existing.CreateBy;
-                    a.IsDeleted = false;
-                    a.DeleteBy = null;
-                    a.DeleteTime = null;
+                    // ★ 接口列归一（含 IsValid=1）—— 前端漏传 isValid 会被反序列化成 0，
+                    //   不归一就会把锚点静默置为无效（此后校验与计数都看不见它，日志却显示成功）
+                    NormalizeInterfaceColumns(a);
                     a.UpdateTime = now;
 
                     var upd = await _db.UpdateAsync(a, BatchUpdatableColumns);
@@ -556,28 +671,191 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
         }
     }
 
-    /// <summary><b>清空某模板的全部锚点</b>（软删，留痕）。显式调用 —— ⛔ 不在 save-batch 里隐式触发。</summary>
+    /// <summary>
+    /// <b>清空某模板的全部锚点</b>（软删，留痕）。显式调用 —— ⛔ 不在 save-batch 里隐式触发。
+    ///
+    /// <para><b>★ 跳过已锁定的锚点</b>（2026-10-05 用户裁定「锁定的问题，就是不能再修改配置」）：
+    /// 清空 = 把配置整批删掉，与「锁定后不可改配置」直接冲突 ⇒ 锁定行一律不动，
+    /// 并在返回体与消息里<b>如实报告跳过了几条</b>（⛔ 不静默少删 —— 那会让人以为已经清干净了）。
+    /// 要连锁定行一起清，须先解锁。</para>
+    /// </summary>
     [HttpPost("clear")]
     public async Task<IActionResult> Clear([FromQuery] string templateCode)
     {
         if (string.IsNullOrWhiteSpace(templateCode))
             return Ok(ApiResponse<object>.Fail("请指定所属模板（templateCode）"));
 
-        var codes = await _db.Client.Queryable<DocTemplateAnchor>()
+        var rows = await _db.Client.Queryable<DocTemplateAnchor>()
             .Where(a => a.TemplateCode == templateCode && a.IsDeleted == false)
-            .Select(a => a.Code)
+            .Select(a => new { a.Code, a.IsLocked })
             .ToListAsync();
 
+        var codes = rows.Where(r => !r.IsLocked).Select(r => r.Code).ToList();
+        var skippedLocked = rows.Count - codes.Count;
+
         if (codes.Count == 0)
-            return Ok(ApiResponse<object>.Ok(new { TemplateCode = templateCode, Deleted = 0 }));
+        {
+            return Ok(ApiResponse<object>.Ok(new
+            {
+                TemplateCode = templateCode,
+                Deleted = 0,
+                SkippedLocked = skippedLocked,
+            }, skippedLocked > 0
+                ? $"该模板下 {skippedLocked} 条锚点均已锁定，未清空任何锚点（如需清空请先解锁）"
+                : "该模板下没有锚点"));
+        }
 
         var del = await Entity.DeleteBatch(codes, clientIp: UserContext.ClientIp);
         if (!del.Success)
             return Ok(ApiResponse<object>.Fail(del.Error ?? "清空锚点失败"));
 
-        _logger.LogInformation("[DocTemplateAnchor] 清空模板 {Tpl} 的 {N} 条锚点", templateCode, del.Data);
+        _logger.LogInformation("[DocTemplateAnchor] 清空模板 {Tpl} 的 {N} 条锚点（跳过已锁定 {Skip} 条）",
+            templateCode, del.Data, skippedLocked);
 
-        return Ok(ApiResponse<object>.Ok(new { TemplateCode = templateCode, Deleted = del.Data }));
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            TemplateCode = templateCode,
+            Deleted = del.Data,
+            SkippedLocked = skippedLocked,
+        }, skippedLocked > 0
+            ? $"已清空 {del.Data} 条锚点；{skippedLocked} 条已锁定，未清空"
+            : $"已清空 {del.Data} 条锚点"));
+    }
+
+    /// <summary>
+    /// <b>锁定 / 解锁锚点</b>（用户第 20 轮第 2 条 + 第 24 轮 Q1 裁决 + <b>2026-10-05 口径修订</b>）。
+    ///
+    /// <para><b>★ 语义（2026-10-05 修订）</b>：<c>IsLocked = 1</c> = 实施人员已认可该锚点的设置规则，
+    /// <b>配置就此冻结 —— 不能再修改配置</b>（用户逐字：「锁定的问题，就是不能再修改配置」）。
+    /// 落地表现：<see cref="SaveBatch"/> / <see cref="UpdateCore"/> 命中锁定行且配置列有<b>实质变化</b>时
+    /// <b>拒绝</b>；<see cref="Clear"/> <b>跳过</b>锁定行。解锁即本端点传 <c>locked=false</c>。</para>
+    ///
+    /// <para><b>⛔ 此前口径已作废</b>：旧注释写「它<b>不是权限位、不阻断任何操作</b>」（依据 P2'
+    /// 「程序不阻断，只如实推导」）。那条原则约束的是「<b>能不能这么配</b>」这类业务组合
+    /// （见 49-V4 §四 C1~C6：没有模板也允许标可编辑，程序只如实推导状态），
+    /// ⛔ <b>不适用于「锁定之后还能不能再改」</b> —— 锁定是实施人员的<b>显式冻结动作</b>，
+    /// 冻结了就不能改，两者并不冲突。别再用 P2' 给「锁定可绕过」背书。</para>
+    ///
+    /// <para><b>★ 换版重扫仍自动保留配置</b>：新模板里仍有同唯一键锚点 ⇒ 软删 + 复活 ⇒ 配置保留；
+    /// 已消失的由 <see cref="Scan"/> 列进 <c>Locked.LostRefs</c> 如实回报（见 <see cref="AnchorScanMerge"/>）。</para>
+    ///
+    /// <para><b>⛔ 为什么不记「谁锁的、什么时候锁的」</b>（Q1 用户逐字：「锚点是实施人员操作的，
+    /// 他认可了这个设置规则 ok 了，就加上锚点了」）：<c>BaseEntity</c> 的 <c>UpdateBy</c> / <c>UpdateTime</c>
+    /// 已记录人与时间，再开两列就是同一事实存两处。</para>
+    ///
+    /// <para><b>★ 与 <see cref="SaveBatch"/> 正交</b>：本端点<b>只改</b> <c>IsLocked</c>；
+    /// <c>save-batch</c> 的列清单里<b>刻意不含</b> <c>IsLocked</c>（见
+    /// <see cref="BatchUpdatableColumns"/>）⇒ 保存配置不会顺手解除锁定。</para>
+    ///
+    /// <para><b>★ 锁定动作本身不设前置</b>：锁定一个「还没配取值来源」的锚点是<b>允许</b>的 ——
+    /// 程序只在 <c>Warnings</c> 里如实提示，⛔ 不拒绝。是否配齐由前端（C8 闸）与人工决定。
+    /// （注意：这是「锁定动作」不设闸，与「锁定后不可改配置」是两件事。）</para>
+    /// </summary>
+    /// <param name="req">模板 Code + 目标锚点 Code 清单（或 <c>all=true</c> 整模板）+ 目标状态</param>
+    [HttpPost("lock")]
+    public async Task<IActionResult> Lock([FromBody] LockAnchorRequest req)
+    {
+        if (req == null || string.IsNullOrWhiteSpace(req.TemplateCode))
+            return Ok(ApiResponse<object>.Fail("请指定所属模板（templateCode）"));
+
+        var tplErr = await EnsureTemplateAsync(req.TemplateCode);
+        if (tplErr != null) return Ok(ApiResponse<object>.Fail(tplErr));
+
+        // ★ 取「该模板下全部存活锚点」后在内存里过滤，⛔ 不在 SQL 里拼 IN ——
+        //   ① 单模板锚点数很小（当前 5 行，现实规模 < 500）；
+        //   ② 顺带拿到 `AnchorType` / `SourceSpec`，供下面的告警判定，不必再查一次。
+        var all = await _db.Client.Queryable<DocTemplateAnchor>()
+            .Where(a => a.TemplateCode == req.TemplateCode && a.IsDeleted == false)
+            .ToListAsync();
+
+        List<DocTemplateAnchor> targets;
+        if (req.Codes.Count > 0)
+        {
+            var wanted = new HashSet<string>(
+                req.Codes.Where(c => !string.IsNullOrWhiteSpace(c)), StringComparer.Ordinal);
+            targets = all.Where(a => wanted.Contains(a.Code)).ToList();
+
+            // 显式点名却一个都没命中 ⇒ 报错（可能传错模板，或锚点已被删除）
+            if (targets.Count == 0)
+                return Ok(ApiResponse<object>.Fail("未找到要操作的锚点（可能已删除，或不属于该模板）"));
+        }
+        else if (req.All)
+        {
+            targets = all;
+        }
+        else
+        {
+            return Ok(ApiResponse<object>.Fail("请指定要操作的锚点（codes），或传 all=true 作用于整个模板"));
+        }
+
+        if (targets.Count == 0)
+            return Ok(ApiResponse<object>.Ok(new
+            {
+                TemplateCode = req.TemplateCode,
+                Locked = req.Locked,
+                Affected = 0,
+                Unchanged = 0,
+                Failed = 0,
+                LockedTotal = 0,
+                Warnings = Array.Empty<string>(),
+            }, "该模板下还没有锚点"));
+
+        var now = DateTime.Now;
+        var affected = 0;
+        var unchanged = 0;
+        var failed = 0;
+
+        foreach (var a in targets)
+        {
+            if (a.IsLocked == req.Locked) { unchanged++; continue; }
+
+            a.IsLocked = req.Locked;
+            a.UpdateTime = now;
+
+            var upd = await _db.UpdateAsync(a,
+                nameof(DocTemplateAnchor.IsLocked), nameof(DocTemplateAnchor.UpdateTime));
+            if (upd.Success) affected++;
+            else
+            {
+                failed++;
+                _logger.LogWarning("[DocTemplateAnchor] 锁定状态写入失败：{Code} —— {Err}", a.Code, upd.Error);
+            }
+        }
+
+        // ★ 如实推导、⛔ 不阻断：锁定「还没配取值来源」的锚点是允许的，但要让人知道
+        var warnings = new List<string>();
+        if (req.Locked)
+        {
+            var noSource = targets.Count(a =>
+                a.AnchorType != "domain" && string.IsNullOrWhiteSpace(a.SourceSpec));
+            if (noSource > 0)
+                warnings.Add($"本次操作的锚点中有 {noSource} 个尚未配置取值来源，锁定后仍不能用于自动填充");
+
+            var orphans = targets.Count(a => a.IsOrphan);
+            if (orphans > 0)
+                warnings.Add($"本次操作的锚点中有 {orphans} 个是孤儿（最近一次扫描已消失），锁定它们不会让它们回到列表");
+        }
+
+        _logger.LogInformation("[DocTemplateAnchor] {Act}锚点：Template={Tpl}, 生效 {Aff} / 未变 {Un} / 失败 {Fail}",
+            req.Locked ? "锁定" : "解锁", req.TemplateCode, affected, unchanged, failed);
+
+        var lockedTotal = targets.Count(a => a.IsLocked);
+
+        var msg = (req.Locked ? "已锁定 " : "已解锁 ") + $"{affected} 个锚点"
+                  + (unchanged > 0 ? $"（{unchanged} 个状态未变）" : string.Empty)
+                  + (failed > 0 ? $"；{failed} 个写入失败" : string.Empty);
+
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            TemplateCode = req.TemplateCode,
+            Locked = req.Locked,
+            Affected = affected,
+            Unchanged = unchanged,
+            Failed = failed,
+            // ★ 本次操作范围内「操作后」仍处于锁定态的条数 —— 前端据此刷新行状态，⛔ 不用自己算
+            LockedTotal = lockedTotal,
+            Warnings = warnings,
+        }, msg));
     }
 
     /// <summary>
@@ -604,6 +882,7 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
                 a.FieldCode,
                 a.ValueType,
                 a.Required,
+                a.IsLocked,
                 a.Sort,
                 a.IsDeleted,
                 a.IsValid,
@@ -616,6 +895,7 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
             Total = rows.Count,
             LiveCount = rows.Count(r => !r.IsDeleted),
             DeletedCount = rows.Count(r => r.IsDeleted),
+            LockedCount = rows.Count(r => !r.IsDeleted && r.IsLocked),
             Items = rows,
         }));
     }
@@ -646,6 +926,53 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
 
         if (string.IsNullOrWhiteSpace(a.ValueType)) a.ValueType = "text";
         else a.ValueType = a.ValueType.Trim();
+    }
+
+    /// <summary>
+    /// ★ <b>接口列归一</b>（落库前必调）：本端点用<b>整行</b>覆盖，而
+    /// <see cref="BatchUpdatableColumns"/> 含 <c>IsValid</c> / <c>IsDeleted</c> / <c>DeleteBy</c> / <c>DeleteTime</c>。
+    /// <para>⚠️ 前端提交的行若<b>漏传</b> <c>isValid</c>，反序列化后是 <c>0</c>
+    /// ⇒ 该锚点被<b>静默置为无效</b>（此后 <see cref="BuildViolationsAsync"/> 与 <c>liveAnchors</c>
+    /// 都看不见它，而日志显示「保存成功」）。</para>
+    /// <para>⇒ 保存配置<b>不该</b>改变有效性 / 删除态：一律强制「存活 + 有效」。
+    /// 删除只走 <c>delete</c> / <c>clear</c>（显式且可审计）。</para>
+    /// </summary>
+    private static void NormalizeInterfaceColumns(DocTemplateAnchor a)
+    {
+        a.IsDeleted = false;
+        a.DeleteBy = null;
+        a.DeleteTime = null;
+        a.IsValid = 1;
+    }
+
+    /// <summary>
+    /// ★ <b>锁定拦截判定</b>：返回「提交行与库中行在<b>配置列</b>上不一致」的列名清单（空 = 无实质变化）。
+    ///
+    /// <para><b>为什么用差异比对而不是「锁定行一律拒绝」</b>：本页「保存」是<b>整批提交</b>（含锁定行），
+    /// 锁定行一个字没改也被拒 ⇒ 假闸门，实施人员无法保存其他行。</para>
+    ///
+    /// <para><b>★ 与落库共用同一份列清单</b>：反射遍历 <see cref="BatchUpdatableColumns"/> 并跳过
+    /// <see cref="NonConfigColumns"/> —— ⛔ 不另抄一份「配置列」清单，两处清单各自漂移是
+    /// 「有的列拦得住、有的列拦不住」这类静默漏拦的经典成因。</para>
+    ///
+    /// <para>⚠️ 调用前两边都必须已 <see cref="Normalize"/>：否则提交行里空白的
+    /// <c>AnchorKind</c> / <c>WriteMode</c> / <c>ValueType</c> 会被误判成「改过了」。</para>
+    /// </summary>
+    private static List<string> ConfigDiff(DocTemplateAnchor submitted, DocTemplateAnchor existing)
+    {
+        var diff = new List<string>();
+
+        foreach (var col in BatchUpdatableColumns)
+        {
+            if (NonConfigColumns.Contains(col)) continue;
+
+            var prop = typeof(DocTemplateAnchor).GetProperty(col);
+            if (prop == null) continue;
+
+            if (!Equals(prop.GetValue(submitted), prop.GetValue(existing))) diff.Add(col);
+        }
+
+        return diff;
     }
 
     /// <summary>L3 提交期校验：必填 + 受控值（没等级的规则 = 愿望）</summary>
@@ -742,13 +1069,18 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
     /// <para><b>⛔ 为什么更新时不整行写回</b>：锚点表上有一半列是<b>人工配置</b>的
     /// （<c>SourceSpec</c> / <c>WriteMode</c> / <c>Required</c> / <c>DefaultText</c> …）。
     /// 整行写回会把「扫描前刚配好的取值来源」清成默认值，且日志显示成功 —— 陷阱 ㉕ 的同源问题。</para>
+    /// <para><b>★ 返回值多一项 <c>persisted</c></b>（2026-10-05）：本次<b>实际落库</b>的锚点键集合。
+    /// 供 <see cref="Scan"/> 判定「锁定锚点的配置保住了没有」（见 <see cref="AnchorScanMerge"/>）。
+    /// ⛔ 不能用原始 <paramref name="scanned"/> 代替：扫描识别出但被合规校验拒掉的项<b>没进库</b>，
+    /// 拿它们当「已保留」会给出假结论。</para>
     /// </summary>
-    private async Task<(int inserted, int updated, int orphaned)> PersistScanAsync(
-        string templateCode, List<ScannedAnchor> scanned)
+    private async Task<(int inserted, int updated, int orphaned, List<AnchorScanMerge.AnchorKey> persisted)>
+        PersistScanAsync(string templateCode, List<ScannedAnchor> scanned)
     {
         var now = DateTime.Now;
         var inserted = 0;
         var updated = 0;
+        var persisted = new List<AnchorScanMerge.AnchorKey>();
 
         using var tx = _db.BeginTransaction();
         try
@@ -782,6 +1114,8 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
                 }
 
                 seenKeys.Add(UniqueKeyOf(a));
+                persisted.Add(AnchorScanMerge.AnchorKey.Of(
+                    a.AnchorType, a.AnchorKind, a.SheetName, a.SectionIndex, a.HeaderKind, a.AnchorRef));
 
                 var existing = await FindByUniqueKeyAsync(a);
                 if (existing == null)
@@ -838,7 +1172,7 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
             }
 
             tx.Commit();
-            return (inserted, updated, orphaned);
+            return (inserted, updated, orphaned, persisted);
         }
         catch
         {
@@ -911,5 +1245,25 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
 
         /// <summary>锚点清单（每条按唯一键 upsert）</summary>
         public List<DocTemplateAnchor> Items { get; set; } = new();
+    }
+
+    /// <summary>锁定 / 解锁请求（<c>POST lock</c>）</summary>
+    public sealed class LockAnchorRequest
+    {
+        /// <summary>所属模板 Code（<c>cert_doc_template.Code</c>，必填）</summary>
+        public string TemplateCode { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 目标锚点 Code 清单（单行切换就传 1 个）。
+        /// <para>⛔ 不能跨模板：不在 <see cref="TemplateCode"/> 下的 Code 会被静默忽略 ——
+        /// 这是刻意的（避免误传 Code 改到别的模板的锚点），未命中时会整体报错而不是部分生效。</para>
+        /// </summary>
+        public List<string> Codes { get; set; } = new();
+
+        /// <summary>true = 作用于该模板下<b>全部</b>存活锚点（<see cref="Codes"/> 为空时才生效）</summary>
+        public bool All { get; set; }
+
+        /// <summary>目标状态：true = 锁定，false = 解锁</summary>
+        public bool Locked { get; set; } = true;
     }
 }

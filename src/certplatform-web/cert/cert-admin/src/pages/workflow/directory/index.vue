@@ -639,13 +639,8 @@ async function downloadItem(item: any) {
   }
 
   try {
-    const blob = await downloadFile(storagePath)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = item.FileName || item.fileName
-    a.click()
-    URL.revokeObjectURL(url)
+    // ⛔ 同 useFileTree：下载触发已在 `downloadFile` 内部完成
+    await downloadFile(storagePath, item.FileName || item.fileName)
   } catch (e: any) {
     ElMessage.error('下载失败：' + (e?.message || ''))
   }

@@ -1,40 +1,42 @@
 <script setup lang="ts">
 /**
- * Tab3 · 文档契约（可编辑）
+ * 全局规则 · 「文档属性」(ContractTab)
  *
- * 【⛔ 这里与 `37` 号 §3.4 Tab3 的原始设计不同 —— 是**实测推翻**的结果】
- *   原设计写的是「契约**只读** + 跳转到『文档语义规则』页编辑」，理由是
- *   「分类/作用属契约，不是模板属性；两处改同一份数据 = 必然不一致」。
- *   该理由**仍然成立**，但前提不成立：实查 `cert_standard_doc_contract` **0 行，
- *   且全项目没有任何读写它的端点** —— 跳转过去也没有页面能改。
- *   ⇒ 本页承担契约的读写；后端 `save` 会**同批同步** `cert_standard_directory_file.DocCategory`
- *     （流程分叉的权威列），保证两处永不不一致。
+ * 【★ 2026-10-05 第 28 轮（C1/C3）重构：从「识别与类型」收敛为「文档属性」】
+ *   原型 V1 把右栏压成 **2 Tab**（锚点规则 / 全局规则），并把**文档类型**提到顶栏
+ *   （按钮组，图片 / PDF 不可解析 ⇒ 置灰锁定）。因此本组件：
+ *   - ⛔ **删掉**「两步引导条」与「文档类型卡片网格」—— 类型已上移顶栏，
+ *     留着就是**同一件事两处入口**（改一处另一处不同步，用户不知道哪个算数）；
+ *   - ✅ 保留「文档属性」（名称 / 角色 / 作用 / 业务标签 / 关键信息项）
+ *     与「AI 识别溯源」两块，作为「全局规则」Tab 的第一块内容；
+ *   - ✅ 新增 `fixed` 文档的「是否可替换」（`FixedDocSubtype`，D-AA1 已裁）。
  *
- * 【「这个文档是否不需要编辑」就是这里的 `DocCategory`】
- *   `editable` = 可编辑文档 → 要配填写规则（组 E）
- *   `fixed`    = 固定格式文档（PDF/图片/扫描件）→ **免填**，只配指纹（组 F）
- *   `hybrid`   = 混合（一期**不启用**，`37` 号 Q-10）
+ * 【为什么「可替换性」放在这里而不是锚点页】
+ *   它是**文档级**属性（`cert_standard_doc_contract.FixedDocSubtype`），
+ *   与锚点无关 ⇒ 归「全局规则」。
  */
-import { computed, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Plus, RefreshRight, MagicStick, Close, Document } from '@element-plus/icons-vue'
-import { unwrapOk, YzhEmptyState, YzhStatusBadge } from '@yzh-core'
+import {
+  Document,
+  MagicStick,
+  RefreshRight,
+} from '@element-plus/icons-vue'
 import {
   saveDocContract,
   type DocContractDetail,
 } from '@share/api/workflow/doc-fill-rule'
+import { unwrapOk, YzhEmptyState, YzhStatusBadge } from '@yzh-core'
+import { ElMessage } from 'element-plus'
+import { computed, ref, watch } from 'vue'
 
-/**
- * ⚠️ 契约的**读取状态由父页持有**（`detail` 是 prop，不是本组件自己拉）。
- *
- * 理由：父页也要用 `DocCategory`（决定操作条启用/禁用、右栏页签组）和
- * 标准文档的存储路径（决定 `[下载标准文档]` 能不能点）。
- * 两处各拉一份 = 两处各存一份状态 ⇒ 保存后必有一处是旧值。
- */
 const props = defineProps<{
-  /** 契约详情（父页加载）。`null` = 未选中文档 */
   detail: DocContractDetail | null
   loading?: boolean
+  /**
+   * 文档类型是否被**锁死**（图片 / PDF 不可解析）。
+   * 锁死时「是否可替换」仍需人工判断（它答的是「企业要不要交」，
+   * 与「能不能解析」无关），故本组件只把该事实透传给 `fixed` 分支的提示文案。
+   */
+  typeLocked?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -44,12 +46,14 @@ const emit = defineEmits<{
 
 const saving = ref(false)
 
-/* ============ 编辑态（由 detail 初始化） ============ */
+/* ============ 编辑态 ============ */
 const form = ref({
   DocCategory: 'editable',
   DocRole: 'required',
   DocName: '',
   DocPurpose: '',
+  /** `fixed` 专用：`standard_provided` / `enterprise_provided` */
+  FixedDocSubtype: 'enterprise_provided',
 })
 const tags = ref<string[]>([])
 const infoItems = ref<string[]>([])
@@ -63,25 +67,36 @@ const DOC_ROLES = [
   { value: 'attachment', label: '附件' },
 ]
 
-const CATEGORY_OPTIONS = [
+/**
+ * `fixed` 文档的「可替换性」（49-V3 §2.2 已裁 D-AA1：**人工判断，⛔ 程序不推导**）。
+ *
+ * ⚠️ 取值口径是 `standard_provided` / `enterprise_provided`。
+ *   DDL 注释里曾写 `platform_generated` —— **那是错的**（两个不同的业务维度：
+ *   「谁生产」vs「能不能被替换」），别照着抄。
+ */
+const SUBTYPE_OPTIONS = [
   {
-    value: 'editable',
-    label: '可编辑文档',
-    desc: '要配填写规则（锚点 + 全文规则）',
+    value: 'standard_provided',
+    label: '标准自带',
+    desc: '标准里本来就有，不向企业索取',
   },
   {
-    value: 'fixed',
-    label: '固定格式（免填）',
-    desc: 'PDF / 图片 / 扫描件 —— 不生成内容，只配指纹',
+    value: 'enterprise_provided',
+    label: '企业提供',
+    desc: '要企业交上来，需要匹配依据',
   },
 ]
 
-/** 分析状态 → 人话 + 颜色 */
+/** 生效类型：不可解析 ⇒ 恒 `fixed`（与 `logic.effectiveDocCategory` 同一口径） */
+const isFixed = computed(
+  () => !!props.typeLocked || form.value.DocCategory === 'fixed',
+)
+
 const analyzeMeta = computed(() => {
   const s = props.detail?.AnalyzeStatus || 'pending'
   const map: Record<string, { text: string; type: any }> = {
     pending: { text: '尚未分析', type: 'info' },
-    manual: { text: '人工录入（未跑过 AI）', type: 'info' },
+    manual: { text: '人工录入', type: 'info' },
     analyzing: { text: '分析中', type: 'warning' },
     completed: { text: '已完成', type: 'success' },
     failed: { text: '分析失败', type: 'danger' },
@@ -89,7 +104,6 @@ const analyzeMeta = computed(() => {
   return map[s] || { text: s, type: 'info' }
 })
 
-/** 安全解析 JSON 数组（历史数据可能是空串 / 半截 JSON） */
 function parseArray(raw?: string | null): string[] {
   const t = (raw ?? '').trim()
   if (!t) return []
@@ -101,7 +115,6 @@ function parseArray(raw?: string | null): string[] {
   }
 }
 
-/** 父页加载完契约 / 切换文档 ⇒ 重置编辑态 */
 watch(
   () => props.detail,
   (d) => {
@@ -111,6 +124,7 @@ watch(
       DocRole: d.DocRole || 'required',
       DocName: d.DocName || d.FileName || '',
       DocPurpose: d.DocPurpose || '',
+      FixedDocSubtype: d.FixedDocSubtype || 'enterprise_provided',
     }
     tags.value = parseArray(d.TagsJson)
     infoItems.value = parseArray(d.InfoItemsJson)
@@ -118,7 +132,6 @@ watch(
   { immediate: true },
 )
 
-/* ============ 编辑 ============ */
 function addTag() {
   const t = newTag.value.trim()
   if (!t) return
@@ -138,7 +151,10 @@ function removeItem(i: number) {
   infoItems.value.splice(i, 1)
 }
 
-/* ============ 保存 ============ */
+function pickSubtype(v: string) {
+  form.value.FixedDocSubtype = v
+}
+
 async function onSave() {
   const fileCode = props.detail?.StandardFileCode
   if (!fileCode) return
@@ -151,17 +167,14 @@ async function onSave() {
         DocCategory: form.value.DocCategory,
         DocRole: form.value.DocRole,
         DocPurpose: form.value.DocPurpose,
-        // ★ 空数组必须提交 `'[]'`，⛔ **不能提交空串**（2026-10-04 实测缺陷）：
-        //   `TagsJson` / `InfoItemsJson` 是 MySQL `json` 列，写空串会在 INSERT 阶段抛
-        //   `Invalid JSON text: "The document is empty." at position 0` ⇒ **整条契约保存失败**，
-        //   而前端只会显示「新增失败：…」，完全看不出根因是「标签为空」。
-        //   `JSON.stringify([])` === `'[]'`，是合法 JSON 空数组。
         TagsJson: JSON.stringify(tags.value),
         InfoItemsJson: JSON.stringify(infoItems.value),
+        // ⛔ 非 fixed 文档不提交该列 —— 后端只认 fixed 分支，发了也是噪音
+        FixedDocSubtype: isFixed.value ? form.value.FixedDocSubtype : null,
       }),
       '保存文档契约失败',
     )
-    ElMessage.success('文档契约已保存（标准目录行的分类已同步）')
+    ElMessage.success('文档属性已保存')
     emit('saved')
   } catch (e: any) {
     ElMessage.error(e?.message || '保存失败')
@@ -169,144 +182,172 @@ async function onSave() {
     saving.value = false
   }
 }
+
+defineExpose({ onSave })
 </script>
 
 <template>
   <div class="contract-tab" v-loading="loading">
     <template v-if="detail">
-      <!-- ★ 「这个文档是否不需要编辑」 -->
-      <section class="block">
-        <h4 class="block__title">
-          是否不需要编辑
-          <span class="block__sub">决定右栏用哪套规则；保存后同步到标准目录行</span>
-        </h4>
-        <el-radio-group v-model="form.DocCategory" class="cat-group">
-          <el-radio
-            v-for="c in CATEGORY_OPTIONS"
-            :key="c.value"
-            :value="c.value"
-            class="cat-item"
-            border
-          >
-            <div class="cat-item__label">{{ c.label }}</div>
-            <div class="cat-item__desc">{{ c.desc }}</div>
-          </el-radio>
-        </el-radio-group>
-        <div class="hint-line">
-          <code>hybrid</code>（混合）一期不启用 —— 传了也不会落库。
-        </div>
-      </section>
+      <!-- ★ 文档属性（文档类型已上移顶栏，此处 ⛔ 不再重复类型入口） -->
+      <div class="blk">
+        <div class="blk-hd">文档属性</div>
+        <div class="blk-bd">
+          <div class="fld">
+            <label>文档名称</label>
+            <el-input
+              v-model="form.DocName"
+              placeholder="例如：质量管理体系过程识别图"
+            />
+          </div>
 
-      <!-- 语义 -->
-      <section class="block">
-        <h4 class="block__title">文档语义</h4>
-        <el-form label-width="80px" label-position="left" size="small">
-          <el-form-item label="文档名称">
-            <el-input v-model="form.DocName" />
-          </el-form-item>
-          <el-form-item label="文档角色">
-            <el-select v-model="form.DocRole" style="width: 100%">
-              <el-option v-for="r in DOC_ROLES" :key="r.value" :value="r.value" :label="r.label" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="文档作用">
+          <div class="row wrap" style="margin-bottom: var(--yzh-space-3, 12px)">
+            <div class="fld" style="flex: 1; margin-bottom: 0">
+              <label>文档角色</label>
+              <el-select v-model="form.DocRole" style="width: 100%">
+                <el-option
+                  v-for="r in DOC_ROLES"
+                  :key="r.value"
+                  :value="r.value"
+                  :label="r.label"
+                />
+              </el-select>
+            </div>
+          </div>
+
+          <div class="fld">
+            <label>文档作用</label>
             <el-input
               v-model="form.DocPurpose"
               type="textarea"
-              :rows="3"
-              placeholder="这份文档在认证流程里干什么用（人读的四段式描述）"
+              :rows="4"
+              placeholder="这份文档在认证流程中起什么作用、审核关注什么…"
             />
-          </el-form-item>
-        </el-form>
-
-        <div class="sub-block">
-          <div class="sub-block__title">标签</div>
-          <div class="chip-list">
-            <span v-for="(t, i) in tags" :key="t" class="chip">
-              {{ t }}
-              <el-icon class="chip__close" @click="removeTag(i)"><Close /></el-icon>
-            </span>
-            <span v-if="!tags.length" class="muted">暂无标签</span>
           </div>
-          <div class="add-row">
-            <el-input
-              v-model="newTag"
-              size="small"
-              placeholder="输入标签后回车（值应来自标签字典）"
-              style="width: 260px"
-              @keyup.enter="addTag"
-            />
-            <el-button type="default" size="small" :icon="Plus" @click="addTag">添加</el-button>
+
+          <!-- ★ fixed 专用：是否可替换（人工判断，D-AA1） -->
+          <div v-if="isFixed" class="fld">
+            <label>是否可替换</label>
+            <div class="typegrid">
+              <div
+                v-for="s in SUBTYPE_OPTIONS"
+                :key="s.value"
+                class="tcard"
+                :class="{ on: form.FixedDocSubtype === s.value }"
+                role="button"
+                tabindex="0"
+                :aria-pressed="form.FixedDocSubtype === s.value"
+                @click="pickSubtype(s.value)"
+                @keydown.enter.prevent="pickSubtype(s.value)"
+                @keydown.space.prevent="pickSubtype(s.value)"
+              >
+                <div class="tt">
+                  <span>{{ s.label }}</span>
+                </div>
+                <div class="td">{{ s.desc }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="fld">
+            <label>业务标签</label>
+            <div class="tags-list">
+              <el-tag
+                v-for="(t, i) in tags"
+                :key="t"
+                closable
+                size="small"
+                effect="plain"
+                class="m-tag"
+                @close="removeTag(i)"
+              >
+                {{ t }}
+              </el-tag>
+              <el-input
+                v-model="newTag"
+                class="add-tag-input"
+                size="small"
+                placeholder="+ 新增"
+                @keyup.enter="addTag"
+                @blur="addTag"
+              />
+            </div>
+          </div>
+
+          <div class="fld">
+            <label>包含的关键信息项</label>
+            <div class="tags-list">
+              <el-tag
+                v-for="(t, i) in infoItems"
+                :key="t"
+                closable
+                size="small"
+                effect="plain"
+                class="m-tag"
+                @close="removeItem(i)"
+              >
+                {{ t }}
+              </el-tag>
+              <el-input
+                v-model="newItem"
+                class="add-tag-input"
+                size="small"
+                placeholder="+ 新增项"
+                @keyup.enter="addItem"
+                @blur="addItem"
+              />
+            </div>
           </div>
         </div>
+      </div>
 
-        <div class="sub-block">
-          <div class="sub-block__title">包含信息</div>
-          <div class="chip-list">
-            <span v-for="(t, i) in infoItems" :key="t" class="chip chip--info">
-              {{ t }}
-              <el-icon class="chip__close" @click="removeItem(i)"><Close /></el-icon>
-            </span>
-            <span v-if="!infoItems.length" class="muted">暂无条目</span>
-          </div>
-          <div class="add-row">
-            <el-input
-              v-model="newItem"
-              size="small"
-              placeholder="这份文档里包含哪些信息项（如：审核日期 / 审核组长）"
-              style="width: 320px"
-              @keyup.enter="addItem"
-            />
-            <el-button type="default" size="small" :icon="Plus" @click="addItem">添加</el-button>
+      <!-- AI 识别溯源 -->
+      <div class="blk">
+        <div class="blk-hd">AI 识别溯源</div>
+        <div class="blk-bd">
+          <div class="ai-box">
+            <div class="ai-meta">
+              <YzhStatusBadge
+                :type="analyzeMeta.type"
+                :text="analyzeMeta.text"
+              />
+              <span class="sp"></span>
+              <span>模型：{{ detail.ModelName || 'AnyDoc-LLM' }}</span>
+              <span v-if="detail.AnalyzeTime">{{ detail.AnalyzeTime }}</span>
+            </div>
+            <div class="ai-sug">
+              <el-icon style="font-size: var(--yzh-font-size-lg, 16px)"
+                ><MagicStick
+              /></el-icon>
+              <div>
+                {{
+                  detail.TagsSource ||
+                  '尚未分析 —— 可在顶部「开始 AI 语义分析」后回看结论。'
+                }}
+                <span v-if="detail.TagsConfidence" class="muted tiny"
+                  >（置信度 {{ detail.TagsConfidence }}%）</span
+                >
+              </div>
+            </div>
           </div>
         </div>
-      </section>
+      </div>
 
-      <!-- 分析元数据（只读） -->
-      <section class="block">
-        <h4 class="block__title">分析来源<span class="block__sub">只读</span></h4>
-        <el-descriptions :column="2" size="small" border>
-          <el-descriptions-item label="分析状态">
-            <YzhStatusBadge :type="analyzeMeta.type" :text="analyzeMeta.text" />
-          </el-descriptions-item>
-          <el-descriptions-item label="人工修正">
-            <YzhStatusBadge v-if="detail.IsManualCorrected" type="warning" text="已人工修正" />
-            <span v-else class="muted">否</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="标签来源">
-            {{ detail.TagsSource || '—' }}
-            <span v-if="detail.TagsConfidence != null" class="muted">
-              （置信 {{ detail.TagsConfidence }}）
-            </span>
-          </el-descriptions-item>
-          <el-descriptions-item label="作用来源">
-            {{ detail.DocPurposeSource || '—' }}
-            <span v-if="detail.DocPurposeConfidence != null" class="muted">
-              （置信 {{ detail.DocPurposeConfidence }}）
-            </span>
-          </el-descriptions-item>
-          <el-descriptions-item label="模型" :span="2">
-            {{ detail.ModelName || '—' }}
-            <span v-if="detail.AnalyzeTime" class="muted"> · {{ detail.AnalyzeTime }}</span>
-          </el-descriptions-item>
-        </el-descriptions>
-        <div class="hint-line">
-          <el-icon><MagicStick /></el-icon>
-          语义分析（分类 / 作用 / 标签）本轮<strong>尚未接通</strong> —— 可先在此手工填写；
-          一旦人工保存，后续批量重跑<strong>不会覆盖</strong>你的值。
-        </div>
-      </section>
-
-      <div class="actions">
+      <div class="row" style="justify-content: flex-end">
         <el-button
           type="default"
           :icon="RefreshRight"
-          :loading="loading"
+          size="small"
           @click="emit('reload')"
+          >重新读取</el-button
         >
-          重新读取
-        </el-button>
-        <el-button type="primary" :loading="saving" @click="onSave">保存契约</el-button>
+        <el-button
+          type="primary"
+          size="small"
+          :loading="saving"
+          @click="onSave"
+          >保存文档属性</el-button
+        >
       </div>
     </template>
 
@@ -318,105 +359,151 @@ async function onSave() {
 .contract-tab {
   display: flex;
   flex-direction: column;
-  gap: var(--yzh-space-4, 16px);
+  min-height: 0;
 }
 
-.block__title {
-  margin: 0 0 var(--yzh-space-2, 8px);
+/* V6 骨架回归 */
+.blk {
+  border: 1px solid var(--yzh-color-border-light, #ebeef5);
+  border-radius: var(--yzh-radius-md, 8px);
+  margin-bottom: var(--yzh-space-3, 14px);
+  overflow: hidden;
+  background: var(--yzh-color-bg-container, #fff);
+}
+.blk-hd {
+  background: var(--yzh-color-bg-subtle, #f9fafb);
+  padding: var(--yzh-space-2, 9px) var(--yzh-space-3, 14px);
   font-size: var(--yzh-font-size-sm, 13px);
-  font-weight: var(--yzh-font-weight-semibold, 600);
+  font-weight: 500;
   color: var(--yzh-color-text-primary, #303133);
   display: flex;
-  align-items: baseline;
-  gap: var(--yzh-space-2, 8px);
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
 }
-.block__sub {
-  font-size: var(--yzh-font-size-xs, 12px);
-  font-weight: var(--yzh-font-weight-normal, 400);
-  color: var(--yzh-color-text-secondary, #606266);
-}
-
-.cat-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--yzh-space-2, 8px);
-  align-items: stretch;
-}
-.cat-item {
-  height: auto;
-  margin: 0;
-  padding: var(--yzh-space-2, 8px) var(--yzh-space-3, 12px);
-}
-.cat-item__label {
-  font-size: var(--yzh-font-size-sm, 13px);
-  font-weight: var(--yzh-font-weight-medium, 500);
-}
-.cat-item__desc {
-  font-size: var(--yzh-font-size-xs, 12px);
-  color: var(--yzh-color-text-secondary, #606266);
-  white-space: normal;
-  line-height: var(--yzh-line-height-tight, 1.3);
+.blk-bd {
+  padding: var(--yzh-space-3, 14px);
 }
 
-.hint-line {
-  margin-top: var(--yzh-space-2, 8px);
-  font-size: var(--yzh-font-size-xs, 12px);
-  color: var(--yzh-color-text-secondary, #606266);
+/* 类型 / 可替换性选择网格 */
+.typegrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.tcard {
+  border: 1.5px solid var(--yzh-color-border-light, #e4e7ed);
+  border-radius: var(--yzh-radius-md, 8px);
+  padding: var(--yzh-space-3, 14px);
+  cursor: pointer;
+  background: var(--yzh-color-bg-container, #fff);
+  transition: all var(--yzh-transition-base, 200ms);
+}
+.tcard:hover {
+  border-color: var(--yzh-color-primary-light-7, #c6e2ff);
+  background: var(--yzh-color-primary-light-9, #fbfdff);
+}
+.tcard.on {
+  border-color: var(--yzh-color-primary, #409eff);
+  background: var(--yzh-color-primary-light-9, #ecf5ff);
+  box-shadow: 0 0 0 2px var(--yzh-color-primary-light-8, #d9ecff);
+}
+.tcard .tt {
+  font-size: var(--yzh-font-size-md, 14px);
+  font-weight: 500;
   display: flex;
   align-items: center;
-  gap: var(--yzh-space-1, 4px);
-  line-height: var(--yzh-line-height-base, 1.6);
+  gap: 6px;
+  margin-bottom: var(--yzh-space-2, 6px);
+}
+.tcard .td {
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--yzh-color-text-placeholder, #909399);
+  line-height: 1.7;
+}
+.tcard.on .tt {
+  color: var(--yzh-color-primary-dark-2, #337ecc);
+}
+/* 卡片是 role=button ⇒ 键盘焦点必须可见 */
+.tcard:focus-visible {
+  outline: 2px solid var(--yzh-color-primary, #1e3a8a);
+  outline-offset: 1px;
 }
 
-.sub-block {
-  margin-top: var(--yzh-space-3, 12px);
+/* 表单与标签 */
+.fld {
+  margin-bottom: var(--yzh-space-3, 12px);
 }
-.sub-block__title {
+.fld label {
+  display: block;
   font-size: var(--yzh-font-size-xs, 12px);
   color: var(--yzh-color-text-regular, #606266);
-  margin-bottom: var(--yzh-space-1, 4px);
+  margin-bottom: var(--yzh-space-1, 5px);
 }
-.chip-list {
+.tags-list {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--yzh-space-1, 4px);
-  min-height: 26px;
-  align-items: center;
-}
-/* 可关闭标签片（S08 只允许 YzhStatusBadge 表达「状态」；标签片是数据不是状态） */
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--yzh-space-1, 4px);
-  padding: var(--yzh-space-1, 4px) var(--yzh-space-2, 8px);
+  gap: 6px;
+  padding: var(--yzh-space-2, 8px);
+  background: var(--yzh-color-bg-subtle, #f9fafb);
   border-radius: var(--yzh-radius-sm, 4px);
-  background: var(--yzh-color-bg-muted, #f3f4f6);
-  color: var(--yzh-color-text-regular, #606266);
-  font-size: var(--yzh-font-size-xs, 12px);
-  line-height: 1;
+  border: 1px solid var(--yzh-color-border-light, #ebeef5);
 }
-.chip--info {
-  background: var(--yzh-color-bg-hover, #f1f5f9);
-  color: var(--yzh-color-text-muted, #64748b);
+.m-tag {
+  border-radius: var(--yzh-radius-sm, 4px);
 }
-.chip__close {
-  cursor: pointer;
-  font-size: var(--yzh-font-size-xs, 12px);
+.add-tag-input {
+  width: 80px;
 }
-.add-row {
-  display: flex;
-  gap: var(--yzh-space-2, 8px);
-  margin-top: var(--yzh-space-2, 8px);
-}
-.muted {
-  font-size: var(--yzh-font-size-xs, 12px);
-  color: var(--yzh-color-text-placeholder, #a8abb2);
+.add-tag-input :deep(.el-input__inner) {
+  height: 24px;
+  padding: 0 var(--yzh-space-2, 8px);
+  font-size: var(--yzh-font-size-xs, 11px);
 }
 
-.actions {
+/* AI Box */
+.ai-box {
+  border: 1px solid var(--yzh-color-primary-light-8, #d9ecff);
+  background: linear-gradient(180deg, var(--yzh-color-bg-subtle, #f7fbff), var(--yzh-color-bg-container, #fff));
+  border-radius: var(--yzh-radius-md, 8px);
+  padding: var(--yzh-space-3, 12px);
+}
+.ai-meta {
   display: flex;
-  justify-content: flex-end;
-  gap: var(--yzh-space-2, 8px);
-  padding-top: var(--yzh-space-1, 4px);
+  align-items: center;
+  gap: 8px;
+  font-size: var(--yzh-font-size-xs, 11px);
+  color: var(--yzh-color-text-placeholder, #909399);
+  margin-bottom: var(--yzh-space-2, 10px);
+  flex-wrap: wrap;
+}
+.ai-sug {
+  border: 1px solid var(--yzh-color-primary-light-8, #d9ecff);
+  background: var(--yzh-color-primary-light-9, #ecf5ff);
+  border-radius: var(--yzh-radius-md, 8px);
+  padding: var(--yzh-space-2, 10px) var(--yzh-space-3, 12px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--yzh-color-primary-dark-2, #337ecc);
+}
+
+.sp {
+  flex: 1;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wrap {
+  flex-wrap: wrap;
+}
+.muted {
+  color: var(--yzh-color-text-placeholder, #909399);
+}
+.tiny {
+  font-size: var(--yzh-font-size-xs, 11px);
 }
 </style>

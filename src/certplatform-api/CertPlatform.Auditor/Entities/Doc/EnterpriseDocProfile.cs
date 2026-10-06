@@ -93,6 +93,10 @@ namespace CertPlatform.Auditor.Entities.Doc
         [SugarColumn(Length = 1000, IsNullable = true)]
         public string? Summary { get; set; }
 
+        /// <summary>★ 语义精要（长文档 AI 提取结果快照）</summary>
+        [SugarColumn(ColumnDataType = "text", IsNullable = true)]
+        public string? EssentialSummary { get; set; }
+
         /// <summary>关键词（逗号分隔，召回倒排）</summary>
         [SugarColumn(Length = 1000, IsNullable = true)]
         public string? Keywords { get; set; }

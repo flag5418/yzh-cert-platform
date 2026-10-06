@@ -21,9 +21,11 @@ namespace CertPlatform.Shared.Office.Word;
 ///   <item><b>重点</b>：<b>单元格 + 表格填充</b>。</item>
 /// </list>
 ///
-/// <para><b>执行顺序</b>：① 区域填充（表格标签定位 + 写数据）→ ② 正文段落锚点 →
+/// <para><b>执行顺序</b>：① 表格标签区域填充 → <b>①b 坐标定位单元格填充</b> → ② 正文段落锚点 →
 /// ③ 表格单元格锚点 → ④ 页眉锚点 → ⑤ 自验收 → ⑥ 落盘。
-/// ⚠️ 区域填充必须**先于**锚点替换 —— 否则 <c>{{table:xxx}}</c> 会被当成普通锚点处理掉。</para>
+/// ⚠️ <b>两类区域填充都必须先于锚点替换</b>：① 否则 <c>{{table:xxx}}</c> 会被当成普通锚点处理掉；
+/// ①b 因为坐标是<b>显式</b>指定的，优先级高于「模板里恰好写着的 <c>{{}}</c>」——
+/// 目标格里若有标记，会被坐标写入覆盖，这正是用户的意图。</para>
 ///
 /// <para><b>线程安全</b>：无状态，可注册为单例。每次调用独立打开/写入一份文档。</para>
 /// </summary>
@@ -44,6 +46,9 @@ public sealed class WordFillWriter
 
         // ── ① 区域填充（表格标签 + 二维数据）★ 必须在锚点替换之前 ──
         WordTableRegionFiller.Fill(doc, request, report);
+
+        // ── ①b 坐标填充（表格序号 + 行列）★ 同样先于锚点替换：坐标是显式指定，优先级更高 ──
+        WordCellRegionFiller.Fill(doc, request, report);
 
         // ── ② 正文段落 ──
         var paragraphs = doc.Paragraphs;

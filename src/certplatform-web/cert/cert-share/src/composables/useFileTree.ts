@@ -282,13 +282,9 @@ export function useFileTree() {
       return
     }
     try {
-      const blob = await downloadFile(file.StoragePath)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = file.FileName
-      a.click()
-      URL.revokeObjectURL(url)
+      // ⛔ 不要在这里再手工 blob→objectURL→a.click()：
+      //   `downloadFile` 已内部完成下载触发（且返回 void），手工做一遍会弹两次。
+      await downloadFile(file.StoragePath, file.FileName)
     } catch (e: any) {
       ElMessage.error('下载失败：' + (e?.message || ''))
     }
