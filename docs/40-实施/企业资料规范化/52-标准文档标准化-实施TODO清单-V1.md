@@ -729,3 +729,129 @@ B6 真正缺的只有一件事：**「配置丢了」这件事目前是静默的
 > 桩必须真渲染插槽，否则插槽内容永远测不到，C9 等于没测）；
 > `AnchorRuleTab.test.ts` 由「手搓 mock」改为**真实 `DocFillRuleLogic` + `vi.spyOn` 两个出口** ——
 > 手搓 mock 等于**在测试里重写一遍生产逻辑**，它永远不会发现生产逻辑写错。
+
+---
+
+## 十四、第 5 批（代码评审处置）—— ✅ 已完成
+
+> **来源**：用户「代码评审结论 — 标准文档填写规则页」（走查 10 项全 ✅ + 6 条问题清单）。
+> **用户指令**：「合并前建议修 **#1**（帮助文案去掉 `**`）、**#2**（PromptPanel 复用 `logic.anchorRows` 或去重请求）；
+> **#3、#5 需要你确认方向**（补存储对象 / 更新菜单快照文档）。」
+
+### 14.1 逐条处置
+
+| # | 级别 | 结论 | 落点 |
+|---|---|---|---|
+| **#1** | 中 | ✅ **治本**：抽可测纯函数（坑已踩两次，「注释提醒」无效） | 新建 `components/richText.ts` + `richText.test.ts`（9 例）；`index.vue` 模板改 `parseBold(h.v)` |
+| **#2** | 中 | ✅ **根因不是「多发一次请求」，是「两份数据」** ⇒ 只去重不够 | `logic.ensureAnchors()`（幂等）+ `anchorLoadedFor` 标记；`PromptPanel` 改读 `logic.anchorRows`；`AnchorRuleTab` 兜底判据改「本模板没加载过」 |
+| **#3** | 中 | ✅ **根因与评审推断完全相反**（见 14.2） | `scripts/backend/run-backend.sh` 加 `NO_PROXY` |
+| **#4** | 低 | ✅ 已补 `ContractTab.vue`（5 处）+ `PromptPanel.vue`（3 处） | `el-select` ⛔ 不能用 `for/id`（`id` 落内部隐藏 input）⇒ 统一 `aria-label` |
+| **#5** | 低 | ✅ **过期点比评审说的更多（3 处）** | `AGENTS.md` 菜单速览 + `26 号 §五` 校正块 |
+| **#6** | 备忘 | ✅ **原本就有注释**，仅补强「不违规 + 防误判」 | `StandardDocContractController.cs:24-25` |
+
+### 14.2 ★★★ #3 的真正根因：**代理毒死 MinIO**（不是对象缺失）
+
+**评审推断**：MinIO 对象缺失（DB 有行、存储无对象）⇒ 建议「补存储对象」。
+
+**实测（新增对账脚本，列 1012 个 MinIO 对象 × 对 5 个 DB 路径列）**：
+`StoragePath` 185/185 · `PreviewPdfPath` 184/184 · `MarkdownPath` 179/179 ·
+`EditableStoragePath` 167/167 · 空白模板 2/2 ⇒ **对象 100% 存在，零缺失。**
+
+> ⚠️ **脚本第一版会得出「100% 缺失」的假结论**：DB 存 `/standard-directory/…`（**带前导斜杠**），
+> MinIO key **不带**。不归一化就会复现评审的误判形态。
+
+**日志实证的根因**：
+```
+System.Net.Http.HttpRequestException: Connection refused (127.0.0.1:62083)
+   at Minio.MinioClient.BucketExistsAsync → StatObjectAsync
+   at YZH.Core.DataBase.Infra.MinioObjectStorage.DownloadAsync
+```
+.NET 在 Unix 上 `HttpClient.DefaultProxy` **读 `HTTP_PROXY`/`HTTPS_PROXY`** ⇒ MinIO SDK
+把**本机 9000** 的请求送去代理；后端继承的是**更早会话的代理端口**（每会话都变，那个端口早没了）。
+
+**⇒ 症状与病因完全错位**：对外报「文件不存在 / 源文件读取失败（对象不存在或存储不可用）」，
+**看起来是数据问题，实际是网络层**。影响面远大于预览/下载 —— **所有走 MinIO 的功能同时全坏**
+（Office 转换产物读写、Markdown 提取、语义分析读 `MarkdownPath`）。
+
+**修复（★ 三层，与启动路径无关；均只「追加/绕过」，⛔ 绝不 unset —— LLM 调用要代理出网）**：
+
+| 层 | 位置 | 作用 |
+|---|---|---|
+| **① 根治** | `YZH.Core.Web/Extensions/StorageServiceExtensions.cs` | MinioClient `.WithHttpClient(new HttpClient(new SocketsHttpHandler { UseProxy = false }) { Timeout = 10min })` ⇒ **不依赖任何环境变量**（IDE / 裸 `dotnet run` / 服务 / 容器一律生效）。Minio 7.0.0 的 `MinioClientExtensions.WithHttpClient` 可链在 `.WithSSL(false)` 后、`.Build()` 前。⛔ 超时不用 `InfiniteTimeSpan`（异常时会永久挂住） |
+| **② 兜底** | `Program.cs` **第一条语句** | 把 `127.0.0.1,localhost,::1,0.0.0.0` **合并进**（⛔ 不覆盖）`NO_PROXY`/`no_proxy`。★ 必须在**任何 `HttpClient` 创建之前** —— `HttpClient.DefaultProxy` 惰性初始化、**首次访问即定稿** |
+| **③ 进程级** | `scripts/backend/run-backend.sh` | `export NO_PROXY="127.0.0.1,localhost,::1,0.0.0.0${NO_PROXY:+,$NO_PROXY}"` |
+
+> ★ **MinIO 是内网对象存储，走代理没有任何意义** ⇒ `UseProxy = false` 是**正确语义**，不是绕过。
+> ✅ 原「只覆盖 `run-backend.sh`、裸 `dotnet run` 会复发」的缺口**已消除**。
+
+**验收（★ 必须按「原始故障场景」验，脚本启动只能证明第 ③ 层）**：
+手工启动 + `HTTP_PROXY` 指向**当初那个已死的 62083** + `NO_PROXY` 为空 ⇒ 跑接口矩阵：
+
+| # | 端点 | 覆盖的链路 | 结果 |
+|---|---|---|---|
+| ① | `DocExtractionRule/preview-by-path` | 空白模板读 + 实时转 PDF + 上传 | 200 · 107,088 B · **真 PDF v1.7 / 2 页** |
+| ② | `StandardDirectory/download` | 源文件读 | 200 · 53 B |
+| ③ | `DocExtractionRule/file-preview` | 读已缓存产物 | 200 · 15,103 B · PDF |
+| ④ | `DocExtractionRule/file-markdown` | ★ **语义分析的上游**（读 Markdown） | `success:true` · 679 B **真 Markdown** |
+| ⑤ | `preview-by-path` + **`useCache=false`** | ★ 强制重新转换并**上传**（**写链路**） | 200 · 107,088 B · **真 PDF** |
+
+日志 `Connection refused` = **0**、`源文件读取失败` = **0**；`dotnet build CertPlatform.sln` **0 Error**。
+
+### 14.3 ★ 本轮基线
+
+| 闸 | 结果 |
+|---|---|
+| 前端架构守卫 | ✓ 24 条规则 / 1133 文件 |
+| `vitest`（`doc-fill-rule` 目录） | **7 files / 172 tests** ✅（163 → +9 `richText`） |
+| `vue-tsc` + `vite build` | **0 error** ✅（`✓ built in 10.40s`） |
+| 后端编译 | **0 Error**（340 warnings 均既有） |
+| MinIO 对账 | 5 个路径列**零缺失**；1012 对象中 295 个孤儿（正常） |
+
+### 14.4 ★ 沉淀
+
+- **新增技能** `yzh-diagnose-file-failure`（含对账脚本）—— 「文件打不开」类故障的判据表 + 三层定位顺序。
+- **纠正一条旧结论**：`el-input-number` / `el-switch` **支持** `aria-label`
+  （此前记的「无 `useAriaProps`」是错的）。
+- **口径**：**报错文本 ≠ 根因层**。「文件不存在」先看**日志** → 再看**存储** → 最后才怀疑**数据**。
+
+---
+
+## 十五、第 6 批（第二轮 4 项改造）—— ✅ 已完成（2026-10-07）
+
+用户逐字口径（4 项）：
+
+| # | 口径 | 落点 |
+|---|---|---|
+| ① | 全局规则只留「**文本框 + 自动生成（后端 LLM）+ 保存**」；未挂接时点自动生成**自动新建+挂接**；版本表 / 挂接对话框 / 解绑 / 编辑抽屉**全删**；仅锚点含 `kind='ai'` 节点才显示 | `PromptPanel.vue` 整体重写 + `index.vue` 卡3 `v-if="logic.hasAiNode"` |
+| ② | 「全局规则」Tab 改**三块分组卡片**：分组 / 文档作用 / 全局填写规则 | `ContractTab.vue` 拆卡1（分组）+ 卡2（文档作用）；卡3 = `PromptPanel`；发布校验为卡4 |
+| ③ | 新增第三个「**预览**」Tab：闸门 → 自动填值可改 → 带 `Overrides` 出 PDF（前后端一起改） | 新建 `PreviewTab.vue` + `index.vue` `RightTab += 'preview'`；后端 `PreviewAnchorValue.Value` + `runDocFillPreview(overrides?)` |
+| ④ | 错误改 **Tab 角标 + 点击弹层明细**，⛔ 不让提示占太多 Tab 空间 | 三颗徽标外包 `el-popover`（`anchorIssues` / 挂接态+`promptInvalidRefs` / 闸门）；删 `AnchorRuleTab` C8 顶部警示条 |
+
+### 15.1 后端配套（本轮仅 3 处小改）
+
+| 位置 | 改动 | 为什么 |
+|---|---|---|
+| `NormalizeModels.cs` `PreviewAnchorValue` | 加 `Value`（全两处构造点：override 分支 `ov.Value`、工厂分支 `pv.Value.ToDisplayText()`） | `Display` 被截到 120 字符，编辑框初值 / 回传覆盖必须用**未截断**的 `Value`，否则长值被静默截断写进产物 |
+| `DocFillPromptController.cs` `versions` select | 补 `UserTemplate / SystemPrompt / OutputSchema / Remark` | 「保存 = 整行 update」的行数据源 —— 缺列会把 `PromptName/Sort` 等写成 CLR 默认值（`updateFields` 是全部 `BcFlag` 列） |
+| 同上 `versions` 可见范围 | `p.OrgCode == org` → `p.OrgCode == '' \|\| p.OrgCode == org` | 与 `resolve` 的候选范围**逐字对齐**，否则「resolve 选中的行在 versions 查不到 ⇒ 无从保存」 |
+
+（`POST DocFillPrompt/generate` + `runDocFillPreview` 带 `Overrides` 属本轮前置，已在前一次提交完成；`dotnet build CertPlatform.Auditor` 0 Error。）
+
+### 15.2 关键设计判断
+
+- **生成 ≠ 保存**：`generate` 只把正文填进文本框；已挂接时必须点「保存」才落库（改坏了还能重来）。未挂接时按用户裁决①就地 `addDocFillPrompt` + `setDocTemplatePrompt`（新建+挂接两步跨控制器非事务，第二步失败如实抛出）。
+- **`localCode` 防双击**：新建挂接 → 父页 `reloadTree` 刷回 `promptCode` 之间有窗口，`hasPrompt` 用 `promptCode || localCode` 拼接，避免连点建出两个提示词。
+- **非法引用只上报不展示**：`PromptPanel` emit `invalidRefs` → `index.vue` 存 `promptInvalidRefs` 进角标弹层；换文件清零。组件内 ⛔ 不留错误大块。
+- **预览闸门三处同源**：锚点页按钮 / 预览 Tab 徽标 / `PreviewTab` 内部门槛全部读 `logic.anchorReadiness.ready`（含 `previewBlockReason` 由父页传入，⛔ 不复述判据）。
+- **弹层必须 teleport**：`el-popover` 默认进 body ⇒ 组件 `scoped` 样式够不着，走 `popper-class` + 全局样式块（仍全用令牌，R18 可扫）；顺带避免弹层撑变形 Tab 行。
+- ⚠️ **S04 注释踩坑**：注释里写字面量 `el-button` 标签会被 `guards.mjs` 的正则当成真标签计违规 —— 注释措辞要避开标签原文。
+
+### 15.3 ★ 本轮基线
+
+| 闸 | 结果 |
+|---|---|
+| 前端架构守卫 | ✓ 24 条规则 / 1189 文件 |
+| `vitest`（`cert-admin` 全量） | **13 files / 273 tests** ✅ |
+| `vue-tsc --noEmit` | **0 error** ✅ |
+| `npm run build` | ✓ built（含 `vue-tsc`） |
+| 后端 `dotnet build CertPlatform.Auditor` | **0 Error**（326 warnings 均既有） |
