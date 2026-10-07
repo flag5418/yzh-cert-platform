@@ -12,4 +12,5 @@ export {
 export * from './treeUtils'
 export * from './apiResponse'
 export * from './confirm'
+export { resolveStatusBadge, type StatusBadge } from './status'
 export { toCamelCase, toPascalCase, pascalCaseFormData, rowToFormData } from './case'

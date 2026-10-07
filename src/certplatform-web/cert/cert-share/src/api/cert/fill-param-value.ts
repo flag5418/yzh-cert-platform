@@ -6,11 +6,15 @@
  *   这是设计不是缺陷（理由见后端 `FillParamValueController` 类注释）。
  *
  * ★ 三个端点：
- *   - `merge-list`  ★ 把「后台定义的全局参数」与「企业已有基本信息」合并成待完善清单
- *   - `save`        批量保存企业完善结果（只落 manual / both 两类）
- *   - `ai-prompt`   ★ 为 `SourceKind='ai'` 的参数产出可投喂模型的提示词
+ *   - `merge-list`  ★ 把「后台定义的全局参数」与「企业已有值」合并成待完善清单
+ *   - `save`        批量保存企业完善结果（值来源恒 `manual`，由服务端写死）
+ *   - `enterprise-tree` ★ 左树数据源（企业 → 标准，**两级**）
  *
- * ★ 另一个控制器 `DocumentFillController` 提供 4 项能力的演示与填充预览。
+ * ⛔ **没有 `ai-prompt`**（2026-10-07 用户裁决）：本页是简单填写页，信息由人手填，
+ *    不由 AI 分析产出 —— 端点与「生成提示词」按钮已删除。
+ *
+ * ⛔ 本文件**不含**填充预览（`DocumentFill`）客户端 —— 2026-10-06 用户裁决：
+ *    预览 UI 归企业资料规范化册承载，后端 `DocumentFillController` 端点与引擎保留。
  *
  * ⚠️ 契约：载荷 **PascalCase**（与 C# 属性、DB 列名一致），⛔ 不要按 camelCase 读；
  *    空值属性会被序列化器**省略**（不是 null），前端一律用 `?? ''` 兜底。
@@ -20,7 +24,6 @@ import type { ApiResponse } from '@yzh-core'
 import { unwrap } from '@yzh-core'
 
 const BASE = '/api/Auditor/FillParamValue'
-const FILL_BASE = '/api/Auditor/DocumentFill'
 
 export interface ScopeOption {
   value: string
@@ -48,7 +51,10 @@ export interface MergedParamItem {
   EnumOptions?: string | null
   /** auto | manual | both —— 决定 `Editable` 与「能否被自动覆盖」 */
   MaintainMode: string
-  /** global | replace | headerFooter | ai */
+  /**
+   * 取值来源类别 —— 迁移后恒 `manual`（`20261007_fill_param_drop_ai_V1.sql`）。
+   * ⛔ 原 `ai` 取值已作废：专家端不再有「生成提示词」按钮。
+   */
   SourceKind: string
   SourceExpr?: string | null
   IsRequired: boolean
@@ -59,7 +65,7 @@ export interface MergedParamItem {
 
   /** 当前值（可能被序列化器省略 ⇒ 用 `?? ''` 兜底） */
   ParamValue?: string | null
-  /** auto | manual | ai | default | empty */
+  /** auto | manual | default | empty */
   ValueSource: string
   /** 值来源说明（如「企业基础信息 · 企业全称」） */
   SourceRef: string
@@ -106,6 +112,10 @@ export interface MergeListResult {
 export interface MergeListRequest {
   EnterpriseCode: string
   StandardCode?: string
+  /**
+   * ⛔ 专家端**不再传**（2026-10-07 起）：树只到标准一级，后台定义 `StageCode` 恒空串。
+   * 字段保留只为向后兼容 —— 省略时后端按空串匹配（= 不限阶段，即全部定义）。
+   */
   StageCode?: string
 }
 
@@ -134,8 +144,7 @@ export async function getMergeList(req: MergeListRequest): Promise<MergeListResu
 export interface SaveParamItem {
   ParamCode: string
   ParamValue: string
-  /** manual（默认）| ai */
-  ValueSource?: string
+  // ⛔ 刻意没有 `ValueSource`：值来源恒 `manual`，由服务端写死
 }
 
 export interface SaveResult {
@@ -152,54 +161,30 @@ export async function saveValues(
   return unwrap(res, { savedCount: 0, ignoredAuto: [], message: '' })
 }
 
-export interface AiPromptResult {
-  paramCode: string
-  paramName: string
-  valueType: string
-  prompt: string
-  contextCount: number
-  note: string
-}
-
-/** ★ 为 AI 参数产出提示词（本期不直连模型） */
-export async function getAiPrompt(
-  enterpriseCode: string,
-  paramCode: string,
-): Promise<AiPromptResult> {
-  const res = await yzhApi.post<ApiResponse<AiPromptResult>>(`${BASE}/ai-prompt`, {
-    EnterpriseCode: enterpriseCode,
-    ParamCode: paramCode,
-  })
-  return unwrap(res, {
-    paramCode, paramName: paramCode, valueType: 'text', prompt: '', contextCount: 0, note: '',
-  })
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// ★ 企业树（企业 → 标准 → 阶段）—— 左树数据源
-// ════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// ★ 企业树（企业 → 标准，两级）—— 左树数据源
+// ════════════════════════════════════════════════════════════════
 
 /**
  * 企业树节点。
  *
  * <p>⛔ 不是内核 `TreeNode`：后端只出业务字段，前端补 `IsLeaf` / `Extra.Icon`
  * 等渲染所需信息（见 `logic.ts` 的 `toTreeNodes`）。</p>
+ *
+ * <p>★ **没有阶段字段**（2026-10-07 用户裁决）：树只到标准一级，
+ * 后台「企业资料参数」的定义也只按标准组织（`StageCode` 恒空串）。</p>
  */
 export interface EnterpriseTreeNode {
-  /** 节点唯一键：`ent:{企业}` / `std:{企业}|{标准}` / `stage:{企业}|{标准}|{阶段}` */
+  /** 节点唯一键：`ent:{企业}` / `std:{企业}|{标准}` */
   Code: string
   Name: string
-  /** enterprise | standard | stage */
+  /** enterprise | standard */
   NodeType: string
   EnterpriseCode: string
   /** 标准 Code（GUID = cert_iso_standard.Code） */
   StandardCode: string
-  /** 阶段 Code（GUID = cert_cert_stage.Code） */
-  StageCode: string
-  /** 副标题（企业编号 / 标准名 / 阶段业务码） */
+  /** 副标题（企业编号 / 标准名） */
   Subtitle: string
-  /** 后代阶段数 */
-  StageCount: number
   Children: EnterpriseTreeNode[]
 }
 
@@ -207,119 +192,22 @@ export interface EnterpriseTreeResult {
   Nodes: EnterpriseTreeNode[]
   EnterpriseCount: number
   LinkCount: number
-  /** 空树时的兜底提示（如「企业还没有关联标准 / 阶段，请先到『阶段标准关联』配置」） */
+  /** 空树时的兜底提示（如「企业还没有关联标准，请先到『阶段标准关联』配置」） */
   Hint: string
 }
 
 /**
- * ★ 企业树 —— 左树数据源（企业 → 标准 → 阶段）。
+ * ★ 企业树 —— 左树数据源（企业 → 标准，**两级**）。
  *
  * <p>选中的层级决定 `merge-list` 的作用域语义：</p>
  * <ul>
- *   <li>点<b>企业</b>节点 → 标准 / 阶段都留空 → 只看「通用参数」</li>
- *   <li>点<b>标准</b>节点 → 阶段留空 → 「通用 + 该标准专属」</li>
- *   <li>点<b>阶段</b>节点 → 「通用 + 该标准专属 + 该阶段专属 + 该标准×该阶段专属」</li>
+ *   <li>点<b>企业</b>节点 → 标准留空 → 只看「通用参数」</li>
+ *   <li>点<b>标准</b>节点 → 「通用 + 该标准专属」</li>
  * </ul>
- * <p>三种点击都有明确语义，不会出现「点了没反应」的死节点。</p>
+ * <p>两种点击都有明确语义，不会出现「点了没反应」的死节点。</p>
+ * <p>⛔ **没有阶段层**：挂一层阶段只会让同一份清单重复出现 N 次。</p>
  */
 export async function getEnterpriseTree(): Promise<EnterpriseTreeResult> {
   const res = await yzhApi.post<ApiResponse<EnterpriseTreeResult>>(`${BASE}/enterprise-tree`, {})
   return unwrap(res, { Nodes: [], EnterpriseCount: 0, LinkCount: 0, Hint: '' })
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// 文档填充（4 项能力的演示 + 预览）
-// ════════════════════════════════════════════════════════════════════════
-
-export interface FillCapability {
-  kind: string
-  name: string
-  order: number
-  syntax: string
-  meaning: string
-  example: string
-}
-
-export interface CapabilitiesResult {
-  capabilities: FillCapability[]
-  demoTemplate: string
-  demoHeader: string
-  demoFooter: string
-  anchorPattern: string
-}
-
-export interface FillHit {
-  token: string
-  key: string
-  kind: string
-  kindName: string
-  value: string
-  source: string
-}
-
-export interface FillPending {
-  token: string
-  key: string
-  kind: string
-  kindName: string
-  reason: string
-}
-
-export interface FillReport {
-  total: number
-  resolved: number
-  pending: number
-  completion: number
-  byKind: { kind: string; name: string; resolved: number; pending: number }[]
-  hits: FillHit[]
-  pendings: FillPending[]
-}
-
-export interface PreviewResult {
-  enterpriseCode: string
-  enterpriseName: string
-  standardCode: string
-  stageCode: string
-  output: string
-  header?: string | null
-  footer?: string | null
-  report: FillReport
-  stats: {
-    paramCount: number
-    autoMappedCount: number
-    filledFromTableCount: number
-    definedCount: number
-    undefinedTokenCount: number
-  }
-  summary: string
-}
-
-export interface PreviewRequest {
-  EnterpriseCode: string
-  StandardCode?: string
-  StageCode?: string
-  /** 留空 = 用内置演示模板 */
-  Template?: string
-  Header?: string
-  Footer?: string
-  AiEnabled?: boolean
-}
-
-/** 填充能力清单 + 锚点语法 + 内置演示模板 */
-export async function getCapabilities(): Promise<CapabilitiesResult> {
-  const res = await yzhApi.get<ApiResponse<CapabilitiesResult>>(`${FILL_BASE}/capabilities`)
-  return unwrap(res, {
-    capabilities: [], demoTemplate: '', demoHeader: '', demoFooter: '', anchorPattern: '',
-  })
-}
-
-/** ★ 填充预览：企业 + 模板 → 成文 + 证据报告 */
-export async function getPreview(req: PreviewRequest): Promise<PreviewResult> {
-  const res = await yzhApi.post<ApiResponse<PreviewResult>>(`${FILL_BASE}/preview`, req)
-  return unwrap(res, {
-    enterpriseCode: '', enterpriseName: '', standardCode: '', stageCode: '',
-    output: '', report: { total: 0, resolved: 0, pending: 0, completion: 0, byKind: [], hits: [], pendings: [] },
-    stats: { paramCount: 0, autoMappedCount: 0, filledFromTableCount: 0, definedCount: 0, undefinedTokenCount: 0 },
-    summary: '',
-  })
 }

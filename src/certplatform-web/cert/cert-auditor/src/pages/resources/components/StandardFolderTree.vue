@@ -10,7 +10,7 @@
  * 计数按子树汇总（父目录的「已就位/缺失」= 自身 + 全部后代）。</para>
  */
 import { ref } from 'vue'
-import { YzhTable, YzhEmptyState } from '@yzh-core'
+import { YzhTable, YzhEmptyState, type YzhAction } from '@yzh-core'
 import { FolderOpened } from '@element-plus/icons-vue'
 import { SLOT_STATUS_TEXT } from '@share/api'
 import type { FileSlot } from '@share/api'
@@ -42,6 +42,60 @@ const opened = ref<string[]>(props.nodes.filter(n => n.Depth <= 2).map(n => n.Co
 /** 本地分组数据一次性回传（分页关闭）——YzhTable 只在挂载时跑 dataLoader */
 function rowsLoader(node: FolderNode) {
   return () => Promise.resolve({ rows: node.Files, total: node.Files.length })
+}
+
+/**
+ * 行操作按钮（2026-10-07 起改由 YzhTable 内置列渲染，原 #column-Actions 插槽已删）
+ *
+ * <para>列宽由 `actionColWidth` 按实际文案估宽 + `action-dropdown-only`
+ * 收敛到下限 88px —— 原先 `width: 320` 固定像素不随按钮数收缩。</para>
+ *
+ * <para>⚠️ 原实现在两处禁用「提取」上挂了 `el-tooltip`（not_configured /
+ * 转换后无正文）。`YzhAction` 不支持 tooltip，2026-10-07 用户裁决**丢弃**——
+ * 解释改由「提取状态」列自身的 tooltip（`extractTip`）承担。</para>
+ */
+function rowActions(row: FileSlot): YzhAction[] {
+  if (row.Status === 'removed') return [{ key: 'versions', text: '恢复' }]
+  if (row.Status === 'missing') return [{ key: 'upload', text: '上传', disabled: props.busy }]
+
+  const list: YzhAction[] = [
+    { key: 'preview', text: '预览' },
+    { key: 'download', text: '下载' },
+    { key: 'replace', text: '替换', disabled: props.busy },
+    { key: 'versions', text: '版本' }
+  ]
+
+  const canExtract = row.ConvertStatus === 'completed' && !!row.MarkdownPath && row.ExtractState !== 'not_configured'
+  const noBody = row.ConvertStatus === 'completed' && !row.MarkdownPath
+  if (canExtract) {
+    list.push({
+      key: 'extract',
+      text: row.ExtractState === 'failed' ? '重试' : '提取',
+      type: row.ExtractState === 'failed' ? 'danger' : 'primary',
+      disabled: props.busy
+    })
+  } else if (row.ExtractState === 'not_configured' || noBody) {
+    list.push({ key: 'extract', text: '提取', type: 'default', disabled: true })
+  }
+  // else：转换中/未完成且非 not_configured ⇒ 不出「提取」（与原实现 v-if 链一致）
+
+  list.push({ key: 'result', text: '结果' })
+  list.push({ key: 'remove', text: '移除', type: 'danger', disabled: props.busy })
+  return list
+}
+
+/** YzhTable @row-action(key,row) → 本组件既有 emit（转发链不变，index.vue 零改动） */
+function onRowAction(key: string, row: FileSlot) {
+  switch (key) {
+    case 'preview': return emit('preview', row)
+    case 'download': return emit('download', row)
+    case 'replace': return emit('replace', row)
+    case 'versions': return emit('versions', row)
+    case 'extract': return emit('extract', row)
+    case 'result': return emit('result', row)
+    case 'remove': return emit('remove', row)
+    case 'upload': return emit('upload', row.FolderCode)
+  }
 }
 
 /**
@@ -111,8 +165,11 @@ function formatSize(size?: number | null) {
           :toolbar="false"
           :show-pagination="false"
           :height="panelHeight(node.Files.length)"
+          :row-action-buttons="rowActions"
+          :action-dropdown-only="true"
           row-key="Code"
           empty-text="该文件夹暂无标准槽位"
+          @row-action="onRowAction"
         >
           <template #column-FileName="{ row }">
             <div class="slot-name">
@@ -152,41 +209,8 @@ function formatSize(size?: number | null) {
             <span v-if="row.StoragePath">v{{ row.VersionNumber }}</span>
             <span v-else>-</span>
           </template>
-          <template #column-Actions="{ row }">
-            <template v-if="row.Status === 'removed'">
-              <el-button link type="primary" size="small" @click="emit('versions', row)">恢复</el-button>
-            </template>
-            <template v-else-if="row.Status === 'missing'">
-              <el-button link type="primary" size="small" :disabled="busy" @click="emit('upload', row.FolderCode)">上传</el-button>
-            </template>
-            <template v-else>
-              <el-button link type="primary" size="small" @click="emit('preview', row)">预览</el-button>
-              <el-button link type="primary" size="small" @click="emit('download', row)">下载</el-button>
-              <el-button link type="primary" size="small" :disabled="busy" @click="emit('replace', row)">替换</el-button>
-              <el-button link type="primary" size="small" @click="emit('versions', row)">版本</el-button>
-              <el-button
-                v-if="row.ConvertStatus === 'completed' && !!row.MarkdownPath && row.ExtractState !== 'not_configured'"
-                link :type="row.ExtractState === 'failed' ? 'danger' : 'primary'" size="small"
-                :disabled="busy" @click="emit('extract', row)"
-              >{{ row.ExtractState === 'failed' ? '重试' : '提取' }}</el-button>
-              <el-tooltip
-                v-else-if="row.ExtractState === 'not_configured'"
-                content="该文档不需要提取：规则库未为它配置可用规则"
-                placement="top"
-              >
-                <span><el-button link type="default" size="small" disabled>提取</el-button></span>
-              </el-tooltip>
-              <el-tooltip
-                v-else-if="row.ConvertStatus === 'completed' && !row.MarkdownPath"
-                content="该文件没有可提取的正文（转换器不支持或转换失败），请重传为 docx"
-                placement="top"
-              >
-                <span><el-button link type="default" size="small" disabled>提取</el-button></span>
-              </el-tooltip>
-              <el-button link type="primary" size="small" @click="emit('result', row)">结果</el-button>
-              <el-button link type="danger" size="small" :disabled="busy" @click="emit('remove', row)">移除</el-button>
-            </template>
-          </template>
+          <!-- 操作列改由 YzhTable 内置列渲染（:row-action-buttons + :action-dropdown-only），
+               原 #column-Actions 手写插槽已于 2026-10-07 删除，按钮集见 script 的 rowActions() -->
         </YzhTable>
 
         <!-- 子文件夹（递归；层级缩进由 .folder-tree--child 的内边距表达） -->
@@ -208,7 +232,7 @@ function formatSize(size?: number | null) {
           @upload="(c: string) => emit('upload', c)"
         />
 
-        <YzhEmptyState :icon="FolderOpened"
+        <YzhEmptyState
           v-if="!node.Files.length && !node.Children.length"
           title="该文件夹暂无标准槽位"
          />

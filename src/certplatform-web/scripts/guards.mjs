@@ -495,6 +495,49 @@ function countRefs(className, roots) {
   return n
 }
 
+/* ── R17 登记例外：Shared/Entities 中「当前只有一端接线、但已裁定双端共用」的实体 ──
+ *
+ * 默认判据把「Shared 里只有一端引用」判为应下沉（24 号 §一）。但有一类实体属于
+ * 「设计上双端共用，只是另一端尚未接线」—— 此时按默认判据下沉，会逼出两份同义实现。
+ *
+ * 登记三条门槛（须同时满足，缺一不可）：
+ *   ① 双端使用场景明确（不是「以后可能会用」）
+ *   ② 下沉会造成重复实现（两套同义代码 / 两个同义列）
+ *   ③ 用户已明确裁定 —— reason 必须写明裁定日期与原话要点
+ *
+ * ⛔ 本表不是「压告警」的白名单：未登记的实体一律照规则报错；
+ *    已登记的实体若日后另一端长期不接线，须回访并撤登记。
+ *
+ * ★ 2026-10-06 用户裁定原话：「我的建议还是放置到 share 中，毕竟后台的填充和
+ *   专家端的填充，都需要进行复用」—— 下列三个实体据此留在 CertPlatform.Shared/Entities/。
+ */
+const R17_SHARED_ALLOW = new Map([
+  [
+    'DocFillPrompt',
+    {
+      since: '2026-10-06',
+      reason:
+        '填写提示词（SystemPrompt/UserTemplate）：后台填写规则页配置、专家端规范化填充读取，双端共用同一份提示词',
+    },
+  ],
+  [
+    'DocTableFieldDef',
+    {
+      since: '2026-10-06',
+      reason:
+        '表格字段定义：后台填写规则页定义列口径，专家端取值/落笔共用同一字段口径，下沉会造出两套字段定义',
+    },
+  ],
+  [
+    'StandardDocContract',
+    {
+      since: '2026-10-06',
+      reason:
+        '标准文档契约：Admin 侧语义分析写入（StandardDocContractController），Auditor 侧规范化读取（P1 编排器），双端共用同一契约行',
+    },
+  ],
+])
+
 function runR17() {
   const violations = []
 
@@ -518,6 +561,8 @@ function runR17() {
         })
       } else if (owner === 'Shared' && !both && nAdmin + nAuditor > 0) {
         // 提示级：Shared 里只有一端用 ⇒ 应下沉（走 debt 逐条清理）
+        // ★ 登记例外：已裁定双端共用、只是另一端尚未接线 ⇒ 跳过（见 R17_SHARED_ALLOW 门槛）
+        if (R17_SHARED_ALLOW.has(cls)) continue
         const target = nAdmin > 0 ? 'Admin' : 'Auditor'
         violations.push({
           file: rel(file),
@@ -700,6 +745,7 @@ function runR19() {
  * ⚠️ 只应在**一条条款批量收口完成后**执行，不得用来掩盖新增违规。
  *
  * 豁免是「实现体」不是「法外之地」：
+ *   - S05 豁免 YzhEmptyState.vue（el-empty 的封装实现体本身——S05 管的是页面层）
  *   - S06 豁免 confirm.ts / useConfirm.ts（confirmOrFalse 的实现体）
  *   - S07 豁免 YzhDialog.vue / YzhDrawer.vue / YzhFormDialog.vue（它们自身必须包 el-dialog / el-drawer）
  * ========================================================================== */
@@ -709,6 +755,7 @@ const CLAUSE_BASELINE = join(WEB, 'scripts/style-clause-baseline.json')
 
 /** 条款豁免：该文件是这条写法的实现体本身 */
 const CLAUSE_EXEMPT = {
+  S05: ['yzh.vue.core/src/components/ui/YzhEmptyState.vue'],
   S06: ['yzh.vue.core/src/utils/confirm.ts', 'yzh.vue.core/src/composables/useConfirm.ts'],
   S07: [
     'yzh.vue.core/src/components/layout/YzhDialog.vue',
@@ -1064,11 +1111,13 @@ const RULES = [
   {
     id: 'R17',
     type: 'custom',
-    desc: '后端实体归属一致性（单端实体不得留在 Shared/Entities；已下沉的不得两端共用）',
+    desc: '后端实体归属一致性（单端实体不得留在 Shared/Entities；已下沉的不得两端共用；例外见 R17_SHARED_ALLOW）',
     run: runR17,
     // ✅ 2026-10-03 分层落地时 debt 清零：Admin 独占 22 个 + Auditor 独占 15 个已全部下沉，
     //    Shared/Entities 现在只剩双端共用实体（24 号清单 §三）。
     //    新增实体时按 24 号 §一 选对目录 —— 放错会被本规则直接拦下。
+    // ★ 2026-10-06：「当前只有一端接线、但已裁定双端共用」的实体走 R17_SHARED_ALLOW
+    //    显式登记例外（三门槛 + 裁定原话），⛔ 不是改判据、⛔ 不是压告警。
     debt: [],
   },
   {

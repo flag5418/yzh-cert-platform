@@ -4,6 +4,7 @@ export { TreeTableCore } from './TreeTableCore'
 export { TreeSide } from './TreeSide'
 export { AssociationTreeCore, type AssociationApi, type AssociationSelection } from './AssociationTreeCore'
 export { CheckTreeCore } from './CheckTreeCore'
+export { CheckTreeCrudCore, type CheckTreeCrudApi } from './CheckTreeCrudCore'
 export { LinkTableCore, type LinkTableApi } from './LinkTableCore'
 
 // ──── 过渡别名（@deprecated，待剩余消费者迁移后删除） ────

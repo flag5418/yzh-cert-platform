@@ -5,7 +5,6 @@ using CertPlatform.Admin.Services.Workflow.Models;
 using CertPlatform.Shared.Constants;
 using CertPlatform.Admin.Entities.Cert;
 using CertPlatform.Admin.Entities.Dir;
-using CertPlatform.Admin.Entities.Doc;
 using CertPlatform.Shared.Entities.Rpt;
 using YZH.Core.DataBase.Interfaces;
 
@@ -41,6 +40,7 @@ public class GapDetector
 {
     private readonly IDbOrm _db;
     private readonly ExtractionDataResolver _resolver;
+    private readonly GapLabelResolver _labels;
     private readonly ILogger<GapDetector> _logger;
 
     /// <summary>DAG 反序列化选项（与 <c>WorkflowConfigParser</c> 逐字一致，避免两处口径不同）</summary>
@@ -51,10 +51,15 @@ public class GapDetector
         AllowTrailingCommas = true
     };
 
-    public GapDetector(IDbOrm db, ExtractionDataResolver resolver, ILogger<GapDetector> logger)
+    public GapDetector(
+        IDbOrm db,
+        ExtractionDataResolver resolver,
+        GapLabelResolver labels,
+        ILogger<GapDetector> logger)
     {
         _db = db;
         _resolver = resolver;
+        _labels = labels;
         _logger = logger;
     }
 
@@ -301,15 +306,24 @@ public class GapDetector
         var pending = new List<CertExpertTaskDataGap>();
         var satisfied = 0;
 
+        // ★★ 中文名批量解析（2026-10-07 用户裁决 · 「关键信息补录」）
+        //   唯一权威来源 = 文档提取规则页（/business/doc-extraction-rule）定义的字段/表格
+        //   （DocFieldDef / DocTableDef）。⛔ 不要用 cert_extraction_result.FieldName 当主来源：
+        //   那一列只在「已存在提取结果行」时才有值，而缺口场景恰恰是结果行不存在
+        //   ⇒ 必然拿到 null ⇒ 旧实现回退成英文码（F3 第一层根因）。
+        var labelMap = await _labels.ResolveLabelsAsync(
+            demand.Select(d => (d.GapType, (string?)d.RuleCode, d.FieldCode ?? d.TableCode)));
+
         foreach (var d in demand)
         {
             bool hasValue;
-            string? label = null;
+            // 结果行上残留的中文名（有结果行、但值为空时的次级来源）
+            string? fromResult = null;
 
-            if (d.GapType == "field")
+            if (d.GapType == GapLabelResolver.TypeField)
             {
                 var key = ExtractionDataResolver.FieldKey(d.RuleCode, d.FieldCode);
-                if (fieldValues.TryGetValue(key, out var fv)) { hasValue = fv.HasValue; label = fv.FieldName; }
+                if (fieldValues.TryGetValue(key, out var fv)) { hasValue = fv.HasValue; fromResult = fv.FieldName; }
                 else hasValue = false;
             }
             else
@@ -320,6 +334,17 @@ public class GapDetector
             }
 
             if (hasValue) { satisfied++; continue; }
+
+            // ★ 中文名三级：规则定义 → 结果行残留名 → 人话兜底
+            //   ⛔ 绝不回退英文码 —— 宁可说「未命名字段」，也不要甩 appendix_three_... 给审核员
+            var dataCode = d.FieldCode ?? d.TableCode;
+            var fallback = d.GapType == GapLabelResolver.TypeField
+                ? GapLabelResolver.UnnamedField
+                : GapLabelResolver.UnnamedTable;
+            var label = labelMap.TryGetValue(GapLabelResolver.Key(d.GapType, d.RuleCode, dataCode), out var ln)
+                        && !string.IsNullOrWhiteSpace(ln)
+                ? ln
+                : (string.IsNullOrWhiteSpace(fromResult) ? fallback : fromResult!);
 
             // ★ 补齐归属文件提示（规则 → StandardFileCode → 模板文件名）
             var (sfc, fileName) = await ResolveSourceFileAsync(d.RuleCode);
@@ -410,8 +435,10 @@ public class GapDetector
             StandardCode = standardCode,
             StageCode = stageCode,
             GapType = d.GapType,
+            // ★ 中文名兜底（2026-10-07 用户裁决）：⛔ 不回退英文码
+            //   宁可显示「未命名字段」，也不要甩 appendix_three_program_file_list 给审核员
             GapLabel = !string.IsNullOrWhiteSpace(label) ? label!
-                      : isField ? (d.FieldCode ?? "") : (d.TableCode ?? ""),
+                      : isField ? GapLabelResolver.UnnamedField : GapLabelResolver.UnnamedTable,
             FieldCode = isField ? d.FieldCode : null,
             TableCode = isField ? null : d.TableCode,
             // ★ 只读提示列（J1「不分文档」）：不作分组键、不作存储键

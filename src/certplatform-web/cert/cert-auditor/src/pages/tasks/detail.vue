@@ -2,29 +2,40 @@
 /**
  * 任务详情（专家端 · 任务系统第 3 页 · 路由 `/tasks/:code`）
  *
- * 4 个 Tab（用户裁决的「任务导航 + 队列启动 + 多埋点日志」三条全在这里）：
+ * 5 个 Tab（用户裁决的「任务导航 + 队列启动 + 多埋点日志」三条全在这里）：
  *   ① 标准子任务 —— 1 任务跨 N 标准，看每个标准各自跑到哪
- *   ② 执行队列 —— **队列的启动/暂停在这里**（提交与启动拆开，允许分批跑）
+ *   ② 执行队列 —— **队列的启动/暂停在这里**（★ 高级用法：允许分批跑）
  *   ③ 运行日志 —— 埋点全量可见（含跳过原因、失败原因），支持按队列过滤 + 自动刷新
- *   ④ 数据缺口 —— 依赖的企业资料缺失项（专家据此补录或跳过）
+ *   ④ 补录清单 —— 依赖的企业资料缺失项（专家据此补录或跳过）
+ *   ⑤ 未执行清单 —— ★ 2026-10-07 裁 2：队列跑完后**逐条**列出哪些规则 / 条款没执行、为什么
  *
  * ★ 数据来源：`POST /detail` 一次性返回任务头 + 标准子任务 + 队列（Tab 1/2 不再各发一次请求）；
- *   日志与缺口是**可能很大**的两张表，按 Tab 懒加载。
+ *   日志 / 补录清单 / 未执行清单是**可能很大**的表，按 Tab 懒加载。
  *
  * ★ 所有「能不能点」都读后端视图字段（`CanSubmit` / `CanRetry` / `CanStart` / `CanPause`），
  *   ⛔ 前端不得自己按状态枚举判断。
+ *
+ * ★ 2026-10-07 用户裁决在本页的落点：
+ *   · **主路径已搬到任务列表的「启动任务」** —— 本页保留的是**高级路径**：
+ *     「只提交不启动」（分批跑）与队列级启停。所以 Tab 2 的按钮明确叫「启动队列」，
+ *     ⛔ 不再和列表上的「启动任务」混为一谈。
+ *   · **补录界面去掉「字段编码 / 表格编码」两列** —— 用户原话「全是字段的英文和看不懂的编号」。
+ *     中文名权威来源 = 后台「文档提取规则」页，由后端 `GapLabelResolver` 解析后下发。
+ *   · **表格型补录不再让用户手写 JSON** —— 改用「关键信息补录」抽屉里的可编辑表格。
  */
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Page, PageParams, YzhTableColumn } from '@yzh-core'
-import { YzhTable, confirmOrFalse } from '@yzh-core'
+import { YzhStatusBadge, YzhTable, confirmOrFalse } from '@yzh-core'
 import {
+  batchFillGaps,
   fillGap,
   getGapChangeLogs,
   getGapList,
   getTaskDetail,
   getTaskLogs,
+  getUnexecuted,
   pauseQueue,
   retryFailed,
   skipAllGaps,
@@ -38,6 +49,7 @@ import {
   type TaskLog,
   type TaskQueue,
   type TaskStandard,
+  type TaskUnexecuted,
 } from '@share/api/auditor/expert-task'
 import {
   CHANGE_ACTION_MAP,
@@ -57,6 +69,7 @@ import {
   VALUE_SOURCE_TAG,
 } from '@share/constants/expert-task'
 import { formatDateTime } from '@share/utils/format'
+import KeyInfoFillDrawer from './components/KeyInfoFillDrawer.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -66,7 +79,7 @@ const taskCode = computed(() => String(route.params.code ?? ''))
 const loading = ref(false)
 const detail = ref<TaskDetail | null>(null)
 // ★ 2026-09-30：支持深链 `?tab=gaps`（结果页「去补录」按钮直接跳过来）
-const TAB_NAMES = ['standards', 'queues', 'logs', 'gaps'] as const
+const TAB_NAMES = ['standards', 'queues', 'logs', 'gaps', 'unexecuted'] as const
 const initialTab = String(route.query.tab ?? '')
 const activeTab = ref(TAB_NAMES.includes(initialTab as never) ? initialTab : 'standards')
 
@@ -98,8 +111,9 @@ const queueTableRef = ref<any>(null)
 const logTableRef = ref<any>(null)
 const gapFieldTableRef = ref<any>(null)
 const gapTableTableRef = ref<any>(null)
+const unexecutedTableRef = ref<any>(null)
 
-/** 数据到位后统一刷新 5 张表（等待一帧，确保 v-if/v-for 已把数据渲染进 DOM） */
+/** 数据到位后统一刷新 6 张表（等待一帧，确保 v-if/v-for 已把数据渲染进 DOM） */
 async function refreshTables() {
   await nextTick()
   standardTableRef.value?.refresh?.()
@@ -107,6 +121,7 @@ async function refreshTables() {
   logTableRef.value?.refresh?.()
   gapFieldTableRef.value?.refresh?.()
   gapTableTableRef.value?.refresh?.()
+  unexecutedTableRef.value?.refresh?.()
 }
 
 async function loadDetail() {
@@ -125,6 +140,26 @@ async function loadDetail() {
 onMounted(async () => {
   await loadDetail()
   await loadLogs()
+})
+
+/**
+ * 回到本页时重新拉数据。
+ *
+ * ⚠️ `AuditorLayout` 用 `<keep-alive>` 缓存路由组件 ⇒ 从别处返回时 `onMounted`
+ *    ⛔ 不再触发（同一 `taskCode` 的 URL 复用同一个缓存实例）。
+ *    ⚠️ 换任务（`/tasks/A` → `/tasks/B`）由布局的 `:key="route.fullPath"` 保证新建实例，
+ *       但**同一个任务**跑完再回来必须靠这里刷新，否则看到的是旧进度。
+ */
+let activatedOnce = false
+onActivated(async () => {
+  if (!activatedOnce) {
+    activatedOnce = true
+    return
+  }
+  await loadDetail()
+  if (logs.value.length > 0) await loadLogs()
+  if (gapsLoaded.value) await loadGaps()
+  if (unexecutedLoaded.value) await loadUnexecuted()
 })
 
 // ══════════════════════════════════════════════════════════════════════
@@ -174,11 +209,17 @@ async function queueLoader(params: PageParams): Promise<Page<TaskQueue>> {
   return { rows: all.slice((page - 1) * rows, page * rows), total: all.length }
 }
 
-/** 行按钮：由 `CanStart` / `CanPause` 决定（后端算，前端不判） */
+/**
+ * 行按钮：由 `CanStart` / `CanPause` 决定（后端算，前端不判）。
+ *
+ * ★ 文案刻意用「启动队列 / 暂停队列」而不是「启动」——
+ *   列表页那个按钮叫「启动任务」（一次做完整条流程），
+ *   这里是**队列级**的高级操作（分批跑），名字必须能区分开。
+ */
 function queueRowActions(row: TaskQueue) {
   const list: Array<{ key: string; text: string; type?: 'primary' | 'default' }> = []
-  if (row.CanStart) list.push({ key: 'start', text: '启动', type: 'primary' })
-  if (row.CanPause) list.push({ key: 'pause', text: '暂停', type: 'default' })
+  if (row.CanStart) list.push({ key: 'start', text: '启动队列', type: 'primary' })
+  if (row.CanPause) list.push({ key: 'pause', text: '暂停队列', type: 'default' })
   return list
 }
 
@@ -318,20 +359,20 @@ const gapsLoaded = ref(false)
 const editing = ref<Record<string, string>>({})
 const savingCode = ref<string>('')
 
+// ★ 2026-10-07：删掉「字段编码 / 表格编码」两列 —— 用户原话「全是字段的英文和看不懂的编号」。
+//   中文名由后端 `GapLabelResolver` 三级解析后放进 `GapLabel`，界面⛔ 不再暴露 Code。
 const gapFieldColumns: YzhTableColumn<TaskGap>[] = [
-  { prop: 'GapLabel', label: '字段', minWidth: 200, showOverflowTooltip: true },
-  { prop: 'FieldCode', label: '字段编码', minWidth: 180, showOverflowTooltip: true },
+  { prop: 'GapLabel', label: '字段', minWidth: 220, slot: true },
   { prop: 'ExpectedFileName', label: '应来自', minWidth: 170, showOverflowTooltip: true },
-  { prop: 'ImpactedItemCount', label: '影响检查项', width: 100, slot: true },
+  { prop: 'ImpactedItemCount', label: '影响检查项', width: 110, slot: true },
   { prop: 'GapStatus', label: '状态', width: 90, slot: true },
-  { prop: '操作', label: '操作', width: 190, slot: true },
+  { prop: '操作', label: '操作', width: 230, slot: true },
 ]
 
 const gapTableColumns: YzhTableColumn<TaskGap>[] = [
-  { prop: 'GapLabel', label: '表格', minWidth: 180, showOverflowTooltip: true },
-  { prop: 'TableCode', label: '表格编码', minWidth: 160, showOverflowTooltip: true },
+  { prop: 'GapLabel', label: '表格', minWidth: 200, slot: true },
   { prop: 'ExpectedFileName', label: '应来自', minWidth: 170, showOverflowTooltip: true },
-  { prop: 'ImpactedItemCount', label: '影响检查项', width: 100, slot: true },
+  { prop: 'ImpactedItemCount', label: '影响检查项', width: 110, slot: true },
   { prop: 'GapStatus', label: '状态', width: 90, slot: true },
   { prop: '操作', label: '操作', width: 190, slot: true },
 ]
@@ -361,22 +402,17 @@ function impactText(row: TaskGap): string {
   return `影响 ${n} 条检查项`
 }
 
+/**
+ * 字段型补录：单行输入 → 直接保存。
+ *
+ * ⚠️ 表格型**不走这里** —— 它改用「关键信息补录」抽屉的可编辑表格
+ *    （旧实现要求用户手写 `[{"列名":"值"}]`，用户明确反馈看不懂）。
+ */
 async function doFill(row: TaskGap) {
-  const isTable = row.GapType === 'table'
-  const value = editing.value[row.Code] ?? ''
-
-  if (!value.trim()) {
-    ElMessage.warning(isTable ? '请输入表格内容（JSON 数组）' : '请输入补录值')
+  const value = (editing.value[row.Code] ?? '').trim()
+  if (!value) {
+    ElMessage.warning('请输入补录值')
     return
-  }
-  if (isTable) {
-    try {
-      const parsed = JSON.parse(value)
-      if (!Array.isArray(parsed)) throw new Error('不是数组')
-    } catch {
-      ElMessage.error('表格内容必须是 JSON 数组，例如 [{"列名":"值"}]')
-      return
-    }
   }
 
   savingCode.value = row.Code
@@ -406,9 +442,53 @@ async function doFill(row: TaskGap) {
   }
 }
 
+// ── 表格型补录：复用「关键信息补录」抽屉（★ 2026-10-07）─────────────
+//
+// ★ 为什么复用而不是再写一套：抽屉已经把「列定义 → 中文列头 → 可编辑小表格」
+//   做完了；这里只是把范围收窄成**单张表**（`Fields: []` + `Tables: [row]`）。
+//   ⛔ 不复制 UI、不复制校验逻辑。
+
+const tableGapVisible = ref(false)
+const tableGapList = ref<TaskGapList | null>(null)
+const tableGapSaving = ref(false)
+
+function openTableFill(row: TaskGap) {
+  tableGapList.value = {
+    Fields: [],
+    Tables: [row],
+    PendingCount: 1,
+    FilledCount: 0,
+    SkippedCount: 0,
+  }
+  tableGapVisible.value = true
+}
+
+async function onTableGapFill(items: { GapCode: string; Value: string }[]) {
+  tableGapSaving.value = true
+  try {
+    await batchFillGaps(items)
+    ElMessage.success('已补录')
+    tableGapVisible.value = false
+    await loadGaps()
+    await loadDetail()
+  } catch (e) {
+    ElMessage.error((e as Error)?.message || '补录失败')
+  } finally {
+    tableGapSaving.value = false
+  }
+}
+
+async function onTableGapSkip() {
+  const row = tableGapList.value?.Tables[0]
+  tableGapVisible.value = false
+  if (!row) return
+  await doSkip(row)
+}
+
 async function doSkip(row: TaskGap) {
   const ok = await confirmOrFalse(
-    `跳过「${row.GapLabel}」后，依赖它的检查项将标记为「数据不足，未检查」，不会产生审核结果，且不计入「符合」数量。`,
+    `跳过「${row.GapLabel}」后，依赖它的检查项将标记为「数据不足，未检查」，不会产生审核结果，且不计入「符合」数量。\n\n` +
+      `任务跑完后可在「未执行清单」里看到这条原因。`,
     '确认跳过',
     { confirmButtonText: '确认跳过', cancelButtonText: '取消', type: 'warning' },
   )
@@ -499,36 +579,112 @@ async function gapTableLoader(params: PageParams): Promise<Page<TaskGap>> {
 watch(activeTab, async (tab) => {
   if (tab === 'gaps' && !gapsLoaded.value) await loadGaps()
   if (tab === 'logs' && logs.value.length === 0) await loadLogs()
+  if (tab === 'unexecuted' && !unexecutedLoaded.value) await loadUnexecuted()
 })
+
+// ══════════════════════════════════════════════════════════════════════
+// 五之二、Tab 5 · 未执行清单（★ 2026-10-07 裁 2「运行跳过」）
+// ══════════════════════════════════════════════════════════════════════
+//
+// 用户逐字要求：「运行跳过，针对工作流缺失关键信息的，该工作流不执行，
+//   再队列完成后，详细记录，哪些规则或条款未执行成功，什么原因」
+//
+// ★ 为什么必须有这个出口（这是本轮最重要的「防静默」改动）：
+//   `ExpertTaskQueueRunner.RefreshQueueAsync` 在「全部项 skipped、failed = 0」时
+//   会把队列置为 `completed` —— **报告看起来跑完了，实际有检查项根本没做**，
+//   而且完全静默。本 Tab 就是把这个静默缺口显式摊开。
+//
+// ★ 粒度是「规则 / 条款」而不是「缺口」：用户要的是「哪条没跑成」，
+//   一条规则可能同时缺 3 个字段，按缺口罗列会读不出结论。
+
+const unexecuted = ref<TaskUnexecuted[]>([])
+const unexecutedMeta = ref<{ TotalCount: number; DataGapCount: number; IsQueueFinished: boolean }>({
+  TotalCount: 0,
+  DataGapCount: 0,
+  IsQueueFinished: false,
+})
+const unexecutedLoading = ref(false)
+const unexecutedLoaded = ref(false)
+
+const unexecutedColumns: YzhTableColumn<TaskUnexecuted>[] = [
+  { prop: 'ItemName', label: '规则 / 章节', minWidth: 240, showOverflowTooltip: true },
+  { prop: 'StandardCode', label: '标准', width: 170, slot: true },
+  { prop: 'ClauseCode', label: '条款', width: 110, slot: true },
+  { prop: 'SkipCategoryLabel', label: '未执行原因', width: 130, slot: true },
+  { prop: 'Reason', label: '说明', minWidth: 240, showOverflowTooltip: true },
+  { prop: 'MissingItems', label: '具体缺什么', minWidth: 260, slot: true },
+]
+
+async function loadUnexecuted() {
+  if (!taskCode.value) return
+  unexecutedLoading.value = true
+  try {
+    const r = await getUnexecuted(taskCode.value)
+    unexecuted.value = r.Items
+    unexecutedMeta.value = {
+      TotalCount: r.TotalCount,
+      DataGapCount: r.DataGapCount,
+      IsQueueFinished: r.IsQueueFinished,
+    }
+    unexecutedLoaded.value = true
+    await refreshTables()
+  } catch (e) {
+    ElMessage.error((e as Error)?.message || '加载未执行清单失败')
+  } finally {
+    unexecutedLoading.value = false
+  }
+}
+
+async function unexecutedLoader(params: PageParams): Promise<Page<TaskUnexecuted>> {
+  const page = params.page ?? 1
+  const rows = params.rows ?? 20
+  const all = unexecuted.value
+  return { rows: all.slice((page - 1) * rows, page * rows), total: all.length }
+}
+
+/** 未执行分类 → 徽标语义（后端给中文名，前端只挑配色） */
+function skipBadgeType(category: string): 'success' | 'warning' | 'danger' | 'info' {
+  if (category === 'exec_failed') return 'danger'
+  if (category === 'data_gap' || category === 'data_gap_skipped') return 'warning'
+  return 'info'
+}
 
 // ══════════════════════════════════════════════════════════════════════
 // 六、任务级动作（提交执行 / 重试失败 / 看结果）
 // ══════════════════════════════════════════════════════════════════════
 
+/**
+ * 任务级动作（★ 本页保留的是**高级路径**）。
+ *
+ * ★ 为什么还留着「仅生成队列」：把「提交」与「启动」合并进列表的「启动任务」后，
+ *   会跳过 `pending_run` 这一跳（`27-任务启动流程重构方案` §五 坑 2）。
+ *   分批跑 / 先检查范围再跑这类能力**必须有独立入口**，否则能力丢失。
+ *   所以列表 = 一步到底（日常），本页 = 拆开跑（高级），两者文案必须能区分。
+ */
 const submitting = ref(false)
 
 async function onSubmit() {
   const t = task.value
   if (!t) return
   const ok = await confirmOrFalse(
-    `将为「${t.StandardCount} 个标准」生成执行队列，共 ${t.TotalItemCount} 个检查项。\n` +
-      '生成后需在「执行队列」里逐个启动（可分批跑）。\n\n确定提交？',
-    '提交执行',
-    { confirmButtonText: '确定提交' },
+    `将为「${t.StandardCount} 个标准」生成执行队列，共 ${t.TotalItemCount} 个检查项。\n\n` +
+      '⚠ 这一步**只生成队列、不启动**。生成后到「执行队列」逐个启动（可分批跑）。\n' +
+      '若想一步跑完，回任务列表点「启动任务」即可。\n\n确定生成？',
+    '仅生成执行队列',
+    { confirmButtonText: '确定生成' },
   )
   if (!ok) return
   submitting.value = true
   try {
-    // ★ 提交【不阻断】（裁决 J1）：未补录的缺口只提示，不阻止入队。
-    //   真正的门禁在执行期 —— 引用数据为空时任务项自动失败 + 提示「缺失必要数据」。
     const r = await submitTask(t.Code)
     if (r.PendingGapCount > 0) {
       ElMessageBox.alert(
         `${r.Warning ?? `有 ${r.PendingGapCount} 项数据未补录`}\n\n` +
-          `这些检查项执行时会自动失败并标记为「数据不足，未检查」。\n` +
-          `可现在去「补录清单」处理，或先执行、稍后再补。`,
-        '已提交，但有数据待补录',
-        { type: 'warning', confirmButtonText: '知道了' },
+          `这些检查项执行时会标记为「数据不足，未检查」，不会产生审核结果。\n` +
+          `可现在去「补录清单」处理，或先执行、稍后再补。\n` +
+          `跑完后可在「未执行清单」里逐条看到是哪些规则 / 条款没执行、为什么。`,
+        '已生成队列，但有数据待补录',
+        { confirmButtonText: '知道了' },
       ).catch(() => undefined)
     } else {
       ElMessage.success(r.Message || '已生成执行队列')
@@ -587,7 +743,7 @@ function goResult() {
       </div>
       <div class="td__head-right">
         <el-button v-if="task?.CanSubmit" type="primary" :loading="submitting" @click="onSubmit">
-          提交执行
+          仅生成队列
         </el-button>
         <el-button v-if="task?.CanRetry" type="default" @click="onRetry">重试失败项</el-button>
         <el-button v-if="task?.CanViewResult" type="default" plain @click="goResult">
@@ -657,8 +813,8 @@ function goResult() {
         </div>
       </el-tab-pane>
 
-      <!-- ── Tab 2 ── -->
-      <el-tab-pane label="执行队列" name="queues">
+      <!-- ── Tab 2 · ★ 队列级操作（高级用法：分批跑）── -->
+      <el-tab-pane label="执行队列（分批）" name="queues">
         <div class="td__pane">
           <YzhTable
             ref="queueTableRef"
@@ -666,14 +822,14 @@ function goResult() {
             :data-loader="queueLoader"
             :row-action-buttons="queueRowActions"
             :show-pagination="false"
-            empty-text="还没有队列 —— 点右上角「提交执行」生成"
+            empty-text="还没有队列 —— 回任务列表点「启动任务」即可生成并启动"
             @row-action="onQueueAction"
           >
             <template #toolbar-left>
               <el-button size="small" type="primary" @click="startAllPending">
                 启动全部待启动队列
               </el-button>
-              <el-button size="small" @click="loadDetail()">刷新</el-button>
+              <el-button size="small" type="default" @click="loadDetail()">刷新</el-button>
             </template>
 
             <template #column-QueueStatus="{ row }">
@@ -772,11 +928,12 @@ function goResult() {
               <el-tag type="success" size="small">已补录 {{ gapList.FilledCount }}</el-tag>
               <el-tag type="info" size="small">已跳过 {{ gapList.SkippedCount }}</el-tag>
               <span class="gap__hint">
-                ⓘ 补录<strong>不阻断</strong>执行；未补录的数据在执行时会自动失败并提示「缺失必要数据」
+                ⓘ 缺这些数据的检查项<strong>不会执行</strong>（标「数据不足，未检查」，
+                <strong>不计入「符合」</strong>）。跑完可在「未执行清单」看逐条原因。
               </span>
             </div>
             <div class="gap__actions">
-              <el-button size="small" :disabled="!gapsLoaded" @click="openChangeLogs">
+              <el-button size="small" type="default" :disabled="!gapsLoaded" @click="openChangeLogs">
                 补录留痕
               </el-button>
               <el-button
@@ -805,6 +962,16 @@ function goResult() {
               :toolbar="false"
               empty-text="没有待补录的字段"
             >
+              <!-- ★ 2026-10-07：中文名 + 未登记提示（⛔ 不再显示 `FieldCode`） -->
+              <template #column-GapLabel="{ row }">
+                <span>{{ row.GapLabel }}</span>
+                <YzhStatusBadge
+                  v-if="row.IsUnnamed"
+                  type="warning"
+                  text="未登记中文名"
+                  class="gap__unnamed"
+                />
+              </template>
               <template #column-ImpactedItemCount="{ row }">
                 <el-tooltip
                   v-if="row.ImpactedItemCount > 0"
@@ -841,7 +1008,7 @@ function goResult() {
                   >
                     保存
                   </el-button>
-                  <el-button size="small" @click="doSkip(row)">跳过</el-button>
+                  <el-button size="small" type="default" @click="doSkip(row)">跳过</el-button>
                 </div>
                 <span v-else-if="row.GapStatus === 'filled'" class="gap__done">
                   <el-tag :type="VALUE_SOURCE_TAG.manual" size="small">
@@ -858,7 +1025,7 @@ function goResult() {
             </YzhTable>
           </div>
 
-          <!-- 表 2：表格清单（★ 本期 textarea 输 JSON，10 号 Q11；后续可演进为可编辑表格） -->
+          <!-- 表 2：表格清单（★ 2026-10-07：改用「关键信息补录」抽屉的可编辑表格，⛔ 不再手写 JSON） -->
           <div class="gap__block">
             <div class="gap__block-title">
               表格清单
@@ -872,6 +1039,15 @@ function goResult() {
               :toolbar="false"
               empty-text="没有待补录的表格"
             >
+              <template #column-GapLabel="{ row }">
+                <span>{{ row.GapLabel }}</span>
+                <YzhStatusBadge
+                  v-if="row.IsUnnamed"
+                  type="warning"
+                  text="未登记中文名"
+                  class="gap__unnamed"
+                />
+              </template>
               <template #column-ImpactedItemCount="{ row }">
                 <span class="gap__impact">{{ impactText(row) }}</span>
               </template>
@@ -882,23 +1058,10 @@ function goResult() {
               </template>
               <template #column-操作="{ row }">
                 <div v-if="row.GapStatus === 'pending'" class="gap__row-actions">
-                  <el-input
-                    v-model="editing[row.Code]"
-                    type="textarea"
-                    :rows="2"
-                    size="small"
-                    placeholder='JSON 数组，例如 [{"项目":"值"}]'
-                    :disabled="savingCode === row.Code"
-                  />
-                  <el-button
-                    size="small"
-                    type="primary"
-                    :loading="savingCode === row.Code"
-                    @click="doFill(row)"
-                  >
-                    保存
+                  <el-button size="small" type="primary" plain @click="openTableFill(row)">
+                    填写
                   </el-button>
-                  <el-button size="small" @click="doSkip(row)">跳过</el-button>
+                  <el-button size="small" type="default" @click="doSkip(row)">跳过</el-button>
                 </div>
                 <span v-else-if="row.GapStatus === 'filled'" class="gap__done">
                   <el-tag :type="VALUE_SOURCE_TAG.manual" size="small">
@@ -913,6 +1076,91 @@ function goResult() {
           </div>
         </div>
       </el-tab-pane>
+
+      <!-- ── Tab 5 · 未执行清单（★ 2026-10-07 裁 2「运行跳过」）── -->
+      <el-tab-pane name="unexecuted">
+        <template #label>
+          <span>
+            未执行清单
+            <el-badge
+              v-if="unexecutedMeta.TotalCount > 0"
+              :value="unexecutedMeta.TotalCount"
+              type="warning"
+            />
+          </span>
+        </template>
+
+        <div class="td__pane">
+          <div class="gap__bar">
+            <div class="gap__stats">
+              <YzhStatusBadge type="info" :text="`未执行 ${unexecutedMeta.TotalCount} 条`" />
+              <YzhStatusBadge
+                v-if="unexecutedMeta.DataGapCount > 0"
+                type="warning"
+                :text="`其中缺企业数据 ${unexecutedMeta.DataGapCount} 条`"
+              />
+              <YzhStatusBadge
+                :type="unexecutedMeta.IsQueueFinished ? 'success' : 'warning'"
+                :text="unexecutedMeta.IsQueueFinished ? '队列已结束' : '执行中，清单还会变化'"
+              />
+            </div>
+            <div class="gap__actions">
+              <el-button
+                size="small"
+                type="default"
+                :loading="unexecutedLoading"
+                @click="loadUnexecuted()"
+              >
+                刷新
+              </el-button>
+            </div>
+          </div>
+
+          <div class="gap__hint gap__hint--block">
+            ⓘ 队列显示「已完成」<strong>不等于每条规则都跑过</strong> ——
+            缺企业数据的工作流按裁决「运行跳过」，不执行但必须留痕。
+            下面逐条列出<strong>哪些规则 / 条款没执行、什么原因</strong>。
+          </div>
+
+          <YzhTable
+            ref="unexecutedTableRef"
+            :columns="unexecutedColumns"
+            :data-loader="unexecutedLoader"
+            :show-pagination="unexecuted.length > 20"
+            :toolbar="false"
+            empty-text="所有规则 / 条款都已执行成功。"
+          >
+            <template #column-StandardCode="{ row }">
+              {{ standardNameOf(row.StandardCode) }}
+            </template>
+            <template #column-ClauseCode="{ row }">
+              <span v-if="row.ClauseCode">{{ row.ClauseCode }}</span>
+              <span v-else class="gap__muted">—</span>
+            </template>
+            <template #column-SkipCategoryLabel="{ row }">
+              <YzhStatusBadge :type="skipBadgeType(row.SkipCategory)" :text="row.SkipCategoryLabel" />
+            </template>
+            <template #column-MissingItems="{ row }">
+              <div v-if="row.MissingItems?.length" class="gap__missing">
+                <div v-for="(m, i) in row.MissingItems" :key="i" class="gap__missing-item">
+                  · {{ m }}
+                </div>
+              </div>
+              <span v-else class="gap__muted">—</span>
+            </template>
+          </YzhTable>
+        </div>
+      </el-tab-pane>
+
+      <!-- 「关键信息补录」抽屉（★ 表格型补录复用，⛔ 不让用户手写 JSON） -->
+      <KeyInfoFillDrawer
+        v-model="tableGapVisible"
+        mode="fill"
+        :gap-list="tableGapList"
+        :submitting="tableGapSaving"
+        @fill="onTableGapFill"
+        @skip="onTableGapSkip"
+      />
 
       <!-- 补录留痕抽屉（cert_extraction_change_log · 不可变表，只追加） -->
       <el-drawer v-model="logDrawerVisible" title="补录留痕" size="720px">
@@ -941,7 +1189,7 @@ function goResult() {
           </template>
           <template #column-Target="{ row }">
             <el-tag size="small" type="info">{{ GAP_TYPE_MAP[row.ResultType] ?? row.ResultType }}</el-tag>
-            <span style="margin-left: 6px">{{ row.FieldLabel || row.FieldCode || row.TableCode }}</span>
+            <span class="gap__target">{{ row.FieldLabel || row.FieldCode || row.TableCode }}</span>
           </template>
           <template #column-NewValueSource="{ row }">
             <el-tag v-if="row.NewValueSource" :type="VALUE_SOURCE_TAG[row.NewValueSource] ?? 'info'" size="small">
@@ -1124,11 +1372,37 @@ function goResult() {
 
 .gap__muted {
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--yzh-font-size-xs, 12px);
 }
 
 .gap__arrow {
-  margin: 0 6px;
+  margin: 0 var(--yzh-space-1, 4px);
   color: var(--el-text-color-secondary);
+}
+
+/* ★ 2026-10-07 新增：中文名缺失提示 / 未执行清单 / 留痕对象 */
+.gap__unnamed {
+  margin-left: var(--yzh-space-1, 4px);
+}
+
+.gap__target {
+  margin-left: var(--yzh-space-1, 4px);
+}
+
+.gap__hint--block {
+  display: block;
+  margin-bottom: var(--yzh-space-3, 12px);
+  line-height: 1.7;
+}
+
+.gap__missing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--yzh-space-1, 4px);
+}
+
+.gap__missing-item {
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--el-text-color-regular);
 }
 </style>

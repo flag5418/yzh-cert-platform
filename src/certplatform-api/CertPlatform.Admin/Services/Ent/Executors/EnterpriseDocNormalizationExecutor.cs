@@ -8,7 +8,6 @@ using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Queue;
-using CertPlatform.Admin.Entities.Doc;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Entities.Dir;
 using CertPlatform.Shared.Office;
@@ -48,13 +47,18 @@ namespace CertPlatform.Admin.Services.Ent.Executors
             IDbOrm db,
             ILogger<EnterpriseDocNormalizationExecutor> logger,
             IAiFillInvoker aiInvoker,
+            SourceResolver sourceResolver,
             IObjectStorage storage)
         {
             _db = db;
             _logger = logger;
             _aiInvoker = aiInvoker;
+            // ★ 2026-10-06（S1-5）：改为 DI 注入。原先这里是 `new SourceResolver(db)` ——
+            //   手工 new 会让 SourceResolver 内部的依赖（FillParamValueProvider）无法注入，
+            //   只能自己再 new 一个，于是「同一个取值内核」被实例化出多份，
+            //   改一处忘一处就是静默分叉（这正是 D1/D6 的成因模式）。
+            _sourceResolver = sourceResolver;
             _storage = storage;
-            _sourceResolver = new SourceResolver(db);
         }
 
         public async Task<TaskExecutionResult> ExecuteAsync(YzhQueueTask task, CancellationToken ct)
@@ -71,8 +75,10 @@ namespace CertPlatform.Admin.Services.Ent.Executors
             try
             {
                 // 1. 获取企业信息快照（用于全局参数取值）
+                //    ★ 2026-10-06（S1-5）：原 private MapToInfo 已删 —— 与 SrcGlobalParamSkill.MapToInfo
+                //      是同一段 16 字段搬运的两份手写副本（D6）。现统一走 Shared 的 EnterpriseInfoMapper。
                 var ent = (await _db.GetOneAsync<Enterprise>(x => x.Code == payload.EnterpriseCode)).Data;
-                var entInfo = MapToInfo(ent);
+                var entInfo = CertPlatform.Shared.Services.Fill.EnterpriseInfoMapper.ToInfo(ent);
 
                 // 2. 获取当前标准下所有需要处理的文件清单
                 // ⚠️ 模板行标记为 YzhVirtualEnterprise.Code
@@ -143,7 +149,12 @@ namespace CertPlatform.Admin.Services.Ent.Executors
                 {
                     if (entry.Kind == "global")
                     {
-                        var (ok, val) = await _sourceResolver.TryResolveGlobalAsync(entry, anchor, entInfo, payload.StandardCode, payload.StageCode, orgCode);
+                        // ⚠️ 后三个参数 = 企业已填值（cert_fill_param_value）。本执行器在 Admin 端，
+                        //    ⛔ 看不见该实体（属专家端独占，见 SourceResolver 类注释）⇒ 显式传 null。
+                        //    本执行器**待停用**（第 2 批 P1），新编排器落在 Auditor，届时传入真实值。
+                        var (ok, val) = await _sourceResolver.TryResolveGlobalAsync(
+                            entry, anchor, entInfo, payload.StandardCode, payload.StageCode, orgCode,
+                            payload.EnterpriseCode, savedValue: null, savedValueSource: null, savedIsManualEdited: false);
                         if (ok && val != null)
                         {
                             fillValues[anchor.AnchorRef] = val;
@@ -357,9 +368,16 @@ namespace CertPlatform.Admin.Services.Ent.Executors
                 await _db.InsertAsync(log);
 
                 // B. 记录 AI 建议
+                // ⚠️ 本类是**待停用**的旧执行器（DI 注册已注释，见 CertPlatformAdminServiceExtensions.cs:96-98）。
+                //   此处仅为对齐守卫 B-R5「禁丢弃 DbOrm 批量写入返回值」而收口：
+                //   `InsertBatchAsync` 失败时**返回 `Result.Fail` 而不抛异常** ⇒ 丢弃返回值 = 静默失败。
                 if (aiSuggestions.Count > 0)
                 {
-                    await _db.InsertBatchAsync(aiSuggestions);
+                    var suggInsert = await _db.InsertBatchAsync(aiSuggestions);
+                    if (!suggInsert.Success)
+                    {
+                        throw new InvalidOperationException($"AI 建议批量写入失败：{suggInsert.Error}");
+                    }
                 }
 
                 // C. 更新文件实例状态
@@ -440,25 +458,11 @@ namespace CertPlatform.Admin.Services.Ent.Executors
             return (sb.ToString(), codes);
         }
 
-        private CertPlatform.Shared.Fill.EnterpriseInfo MapToInfo(Enterprise? e) => e == null ? new CertPlatform.Shared.Fill.EnterpriseInfo() : new CertPlatform.Shared.Fill.EnterpriseInfo
-        {
-            Code = e.Code ?? "",
-            Name = e.Name ?? "",
-            ShortName = e.ShortName,
-            CreditCode = e.CreditCode,
-            LegalPerson = e.LegalPerson,
-            Province = e.Province,
-            City = e.City,
-            Address = e.Address,
-            IndustryType = e.IndustryType,
-            EmployeeCount = e.EmployeeCount,
-            CertScope = e.CertScope,
-            ContactName = e.ContactName,
-            ContactPhone = e.ContactPhone,
-            ContactEmail = e.ContactEmail,
-            EnterpriseNo = e.EnterpriseNo,
-            ArchiveDate = e.ArchiveDate,
-        };
+        // ★ 2026-10-06（S1-5）：原 private MapToInfo(Enterprise) 已删除。
+        //   它与 SrcGlobalParamSkill.MapToInfo 是同一段 16 字段搬运的两份手写副本（D6），
+        //   成因是「Shared 不引 YZH.Core.DataBase」这条自设约束（现已解除）。
+        //   唯一实现 = CertPlatform.Shared.Services.Fill.EnterpriseInfoMapper.ToInfo。
+        //   出口门：grep "MapToInfo" CertPlatform.Admin ⇒ 必须为 0。
 
         public Task OnTaskStateChangedAsync(YzhQueueTask task, string newStatus, string message)
         {

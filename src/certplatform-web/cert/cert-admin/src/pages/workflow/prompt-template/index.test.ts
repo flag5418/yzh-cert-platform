@@ -39,23 +39,34 @@ vi.mock('@share/api/workflow/prompt-workbench', () => ({
   activatePrompt: vi.fn()
 }))
 
-vi.mock('@yzh-core', () => ({
-  YzhPageLayout: {
-    name: 'YzhPageLayout',
-    template: '<div class="yzh-page"><slot name="toolbar" /><slot /></div>'
-  },
-  // S05：空状态统一走 YzhEmptyState（StandardTree 仅传 props，无作用域插槽）
-  YzhEmptyState: {
-    name: 'YzhEmptyState',
-    props: ['icon', 'title', 'description', 'compact', 'iconSize'],
-    template: '<div class="yzh-empty"><span>{{ title }}</span><slot name="description" /><slot name="action" /></div>'
-  },
-  // S06：二次确认唯一写法。测试对 ElMessageBox.confirm 下毒，真实实现要穿透到它
-  confirmOrFalse: (msg: string, title: string) =>
-    ElMessageBox.confirm(msg, title).then(() => true, () => false),
-  confirmChoice: (msg: string, title: string) =>
-    ElMessageBox.confirm(msg, title).then(() => 'confirm' as const, (a: unknown) => (a === 'cancel' ? 'cancel' : 'close' as const))
-}))
+vi.mock('@yzh-core', async () => {
+  // 启用/禁用徽章判据用**真实实现**（mock 内不复制口径，唯一源 = utils/status.ts）
+  const { resolveStatusBadge } = await import('@yzh-core/utils/status')
+  return {
+    YzhPageLayout: {
+      name: 'YzhPageLayout',
+      template: '<div class="yzh-page"><slot name="toolbar" /><slot /></div>'
+    },
+    // S05：空状态统一走 YzhEmptyState（StandardTree 仅传 props，无作用域插槽）
+    YzhEmptyState: {
+      name: 'YzhEmptyState',
+      props: ['icon', 'title', 'description', 'compact', 'iconSize'],
+      template: '<div class="yzh-empty"><span>{{ title }}</span><slot name="description" /><slot name="action" /></div>'
+    },
+    // S08：状态徽章组件桩（只回显 text，断言不依赖样式）
+    YzhStatusBadge: {
+      name: 'YzhStatusBadge',
+      props: ['type', 'text', 'size', 'icon'],
+      template: '<span class="yzh-status-badge">{{ text }}</span>'
+    },
+    resolveStatusBadge,
+    // S06：二次确认唯一写法。测试对 ElMessageBox.confirm 下毒，真实实现要穿透到它
+    confirmOrFalse: (msg: string, title: string) =>
+      ElMessageBox.confirm(msg, title).then(() => true, () => false),
+    confirmChoice: (msg: string, title: string) =>
+      ElMessageBox.confirm(msg, title).then(() => 'confirm' as const, (a: unknown) => (a === 'cancel' ? 'cancel' : 'close' as const))
+  }
+})
 
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as api from '@share/api/workflow/prompt-workbench'

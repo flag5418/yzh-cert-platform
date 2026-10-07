@@ -27,9 +27,15 @@
     <ProjectReference Include="..\YZH.Core.Api\YZH.Core.Api.csproj" />
     <ProjectReference Include="..\YZH.Core.DataBase\YZH.Core.DataBase.csproj" />
     <ProjectReference Include="..\YZH.Core.Stand\YZH.Core.Stand.csproj" />
-    <!-- 业务模块。CertPlatform.Shared 挂 extern alias：其类型不暴露到全局命名空间（本层只用 AddApplicationPart 按程序集名加载，不直接 typeof），
-         与 Program.cs:149 的说明保持一致。 -->
-    <ProjectReference Include="..\..\certplatform-api\CertPlatform.Shared\CertPlatform.Shared.csproj" Aliases="CertPlatform,SharedEntities" />
+    <!-- 业务模块。
+         ★ 2026-10-06 变更：`CertPlatform.Shared` 的 `Aliases="CertPlatform,SharedEntities"` 已移除。
+           原因：`AddCertPlatformSharedServices()`（Shared 层的 DI 自注册入口，见 58 §4.2）必须由宿主调用，
+                 而 extern alias 会让 `using CertPlatform.Shared;` 编译不过（CS0234），
+                 只能退化成 `Alias::Ns.Type.Method(...)` 的静态调用写法 —— 可读性差且容易漏改。
+           影响面：宿主仍只对 Admin/Auditor 用 `typeof(...).Assembly` 做 AddApplicationPart；
+                 放开别名只是让宿主**可以**直接引用 Shared 的类型，⛔ 不代表鼓励这么做。
+           ⚠️ 若将来出现 CS0104（类型二义性），说明宿主同时可见 Admin 与 Shared 的同名类型 ⇒ 显式写全名。 -->
+    <ProjectReference Include="..\..\certplatform-api\CertPlatform.Shared\CertPlatform.Shared.csproj" />
     <ProjectReference Include="..\..\certplatform-api\CertPlatform.Admin\CertPlatform.Admin.csproj" />
     <ProjectReference Include="..\..\certplatform-api\CertPlatform.Auditor\CertPlatform.Auditor.csproj" />
     <!-- ⛔ CertPlatform.Enterprise = **未开工的空壳项目**（Controllers/Services/Entities 三目录全空，

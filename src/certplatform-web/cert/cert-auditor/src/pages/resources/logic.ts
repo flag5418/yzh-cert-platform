@@ -223,8 +223,10 @@ export class ResourcesLogic {
     { prop: 'FileName', label: '标准文件槽位', minWidth: 300, slot: true },
     { prop: 'Status', label: '就位状态', width: 110, slot: true },
     { prop: 'ExtractState', label: '提取状态', width: 90, slot: true },
-    { prop: 'VersionNumber', label: '版本', width: 70, slot: true },
-    { prop: 'Actions', label: '操作', width: 320, fixed: 'right', slot: true }
+    { prop: 'VersionNumber', label: '版本', width: 70, slot: true }
+    // ⛔ 操作列不再手写（2026-10-07）：改用 YzhTable 内置行动作列
+    //    rowActionButtons + action-dropdown-only ⇒ 列宽按 actionColWidth 自适应
+    //    （原 width:320 固定像素不随按钮数收缩，全缺失的文件夹白占 270px）
   ]
 
   readonly versionColumns: YzhTableColumn[] = [
@@ -625,6 +627,19 @@ export class ResourcesLogic {
     const added = this.appendFiles(this.singleUploadFiles.value, files)
     if (added < files.length) ElMessage.info(`已忽略 ${files.length - added} 个重复文件`)
     this.resetSinglePlan()
+    this.autoPreviewSingle()
+  }
+
+  /**
+   * 选完文件**自动**干跑预览（04 §4.4 原文「直接展示该标准的匹配预览」）。
+   *
+   * <para>★ 为什么要自动：目标标准与目标文件夹在打开弹窗时就已给定，剩下的「文件 → 槽位」
+   * 是纯计算，后端 upload/plan 一次调用就能出结果 —— 让用户多点一次「匹配预览」只是白费一次点击。
+   * 真正需要人看的只有 M3 标黄、冲突、未归属这三类，它们在预览结果里逐行可见，勾选态即确认。</para>
+   */
+  private autoPreviewSingle() {
+    if (this.singleUploadFiles.value.length === 0) return
+    void this.previewSingleUpload()
   }
 
   clearSingleUploadFiles() {
@@ -641,11 +656,13 @@ export class ResourcesLogic {
   setSingleUploadFolderFiles(files: File[]) {
     this.singleUploadFiles.value = files
     this.resetSinglePlan()
+    this.autoPreviewSingle()
   }
 
   removeSingleUploadFile(index: number) {
     this.singleUploadFiles.value.splice(index, 1)
     this.resetSinglePlan()
+    this.autoPreviewSingle()
   }
 
   // ═══════════════════ 分发预览：本地文件 ↔ 计划行的关联键 ═══════════════════

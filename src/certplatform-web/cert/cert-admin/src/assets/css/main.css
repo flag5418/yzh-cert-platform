@@ -18,12 +18,13 @@
           改 --yzh-color-primary 时必须手工同步下方 rgb 三个分量。 */
   --el-color-primary: var(--yzh-color-primary, #1e3a8a);
   --el-color-primary-rgb: 30, 58, 138;
-  --el-color-primary-light-3: var(--yzh-color-primary-lighter, #3b82f6);
-  --el-color-primary-light-5: #60a5fa;
-  --el-color-primary-light-7: #93c5fd;
-  --el-color-primary-light-8: #bfdbfe;
-  --el-color-primary-light-9: #dbeafe;
   --el-color-primary-dark-2: var(--yzh-color-primary-dark, #1e40af);
+  /* ⛔ `--el-color-primary-light-3/5/7/8/9`（EP 的 hover / 禁用 / 浅底五档）
+        **不在此处声明**：它们由 `@yzh-core/assets/css/tokens.css` 用
+        `color-mix()` 从 `--yzh-color-primary` 派生（2026-10-07）。
+        此前这一层写的是 Tailwind 蓝字面量 ⇒ 主色是深藏青，按钮一禁用却跳到
+        亮天空蓝 #60a5fa，且换主色时这些档位不跟（R-S11 单旋钮失效）。
+        本层只覆盖“想改的”，五档必须继续继承同一主色旋钮。 */
 
   /* Element Plus 文本色 */
   --el-text-color-primary: var(--yzh-color-text-primary, #303133);

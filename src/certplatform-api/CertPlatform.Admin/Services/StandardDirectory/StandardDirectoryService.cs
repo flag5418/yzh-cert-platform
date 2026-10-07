@@ -15,7 +15,6 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Queue;
 using CertPlatform.Admin.Entities.Dir;
 using CertPlatform.Admin.Entities.Cert;
-using CertPlatform.Admin.Entities.Doc;
 using CertPlatform.Admin.Entities.Sys;
 using CertPlatform.Admin.Entities.Wf;
 using CertPlatform.Shared.Storage;

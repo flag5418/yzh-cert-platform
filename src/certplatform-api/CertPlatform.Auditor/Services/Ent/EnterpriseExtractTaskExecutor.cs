@@ -5,7 +5,6 @@ using CertPlatform.Admin.Services.DocExtraction;
 using CertPlatform.Shared.Constants;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Admin.Entities.Dir;
-using CertPlatform.Admin.Entities.Doc;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 using YzhQueueTask = YZH.Core.Stand.Models.Queue.YzhQueueTask;

@@ -327,6 +327,39 @@ public class ExpertTaskController : YzhControllerBase<CertExpertTask>
         }
     }
 
+    /// <summary>
+    /// ★★ 未执行清单 —— 队列完成后，详细记录「哪些规则或条款未执行成功、什么原因」
+    /// （2026-10-07 用户裁决 · 裁 2「运行跳过」）。
+    /// <para>POST <c>api/Auditor/ExpertTask/unexecuted</c></para>
+    /// </summary>
+    ///
+    /// <para><b>为什么必须有这个出口</b>：<c>ExpertTaskQueueRunner.RefreshQueueAsync</c>
+    /// 在「全部项 skipped」时会把队列置 <c>completed</c> ——
+    /// <b>报告看起来跑完了，实际有检查项根本没做</b>，而且完全静默。
+    /// 用户原话要的就是把这个静默缺口<b>显式记录</b>下来。</para>
+    ///
+    /// <para>清单按<b>规则/条款</b>聚合（⛔ 不按缺口逐条罗列），并带
+    /// <c>IsQueueFinished</c> 让界面区分「执行中（还会变）」与「已结束（终稿）」。</para>
+    [HttpPost("unexecuted")]
+    public async Task<ActionResult<ApiResponse<TaskUnexecutedResult>>> Unexecuted(
+        [FromBody] TaskCodeRequest req)
+    {
+        try
+        {
+            var ws = ResolveWorkspace();
+            if (ws.Error != null) return Ok(ApiResponse<TaskUnexecutedResult>.Fail(ws.Error));
+
+            var r = await _svc.GetUnexecutedAsync(ws.Code!, req.TaskCode);
+            return r.Success
+                ? Ok(ApiResponse<TaskUnexecutedResult>.Ok(r.Data!))
+                : Ok(ApiResponse<TaskUnexecutedResult>.Fail(r.Error!));
+        }
+        catch (Exception ex)
+        {
+            return Ok(ApiResponse<TaskUnexecutedResult>.Fail(ex.Message));
+        }
+    }
+
     // ========================================================
     // 六、辅助
     // ========================================================

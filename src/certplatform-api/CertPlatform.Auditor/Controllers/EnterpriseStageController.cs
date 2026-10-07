@@ -281,7 +281,9 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
                             StandardNo = sd.StandardCode,
                             StandardName = sd.StandardName,
                             VersionYear = sd.VersionYear,
-                            Category = sd.Category
+                            Category = sd.Category,
+                            // 启用/禁用徽章（前端 CheckSelector 统一读 Extra.IsValid；查询已过滤 IsValid=1）
+                            IsValid = sd.IsValid
                         }
                     };
                 }).ToList();
@@ -300,7 +302,9 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
                         StageCode = st.Code,
                         StageName = st.StageName,
                         SortOrder = st.SortOrder,
-                        ChildCount = children.Count
+                        ChildCount = children.Count,
+                        // 启用/禁用徽章（与标准子节点同口径）
+                        IsValid = st.IsValid
                     }
                 });
 

@@ -46,8 +46,10 @@ public static class ParamValueResolver
     /// <summary>值来源：企业人工填写</summary>
     public const string SourceManual = "manual";
 
-    /// <summary>值来源：AI 生成</summary>
-    public const string SourceAi = "ai";
+    // ⛔ 这里刻意**没有** `SourceAi`：2026-10-07 用户裁决「企业资料参数」页由人手填，
+    //    `cert_fill_param_def.SourceKind` / `cert_fill_param_value.ValueSource` 的
+    //    `ai` 取值已由迁移 20261007_fill_param_drop_ai_V1.sql 归一为 manual，
+    //    专家端「生成提示词」按钮与 `ai-prompt` 端点一并删除。
 
     /// <summary>值来源：取自定义的默认值</summary>
     public const string SourceDefault = "default";
@@ -57,7 +59,7 @@ public static class ParamValueResolver
 
     /// <summary>一次取值决策的结果</summary>
     /// <param name="Value">当前值（null 或空串 = 待完善）</param>
-    /// <param name="ValueSource">auto | manual | ai | default | empty</param>
+    /// <param name="ValueSource">auto | manual | default | empty</param>
     /// <param name="SourceRef">给用户看的值来源说明</param>
     /// <param name="Editable">企业端能否编辑（false 时前端应渲染为只读 + 「去企业管理修改」链接）</param>
     /// <param name="IsManualEdited">企业是否人工改过（决定后续自动带出是否还覆盖）</param>

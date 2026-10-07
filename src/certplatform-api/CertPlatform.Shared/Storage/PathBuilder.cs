@@ -85,6 +85,28 @@ public static class PathBuilder
     /// </summary>
     public const string TemplateSegment = "_template";
 
+    /// <summary>
+    /// ★ 目录段：**试填预览**（2026-10-06 新增，`52` §12.4 裁定 A）——
+    /// 标准目录库下、与 <see cref="TemplateSegment"/> **同级**的 <c>_preview/</c> 子目录，
+    /// 存放「把空白模板试填一遍后转出来的 PDF」。
+    ///
+    /// <para><b>格式</b>：<c>…/{Folder}/_preview/{模板名}.docx.pdf</c>（<b>固定 key，重复试填覆盖</b>）。</para>
+    ///
+    /// <para><b>★ 为什么必须独立于 <see cref="PdfSegment"/></b>：<c>pdf/</c> 段已被
+    /// 「<b>源文件</b>的预览 PDF」占用（实测 185 行在用）。试填产物来自<b>空白模板</b>
+    /// （不是源文件），复用同一段会让两者算出<b>同一个 key ⇒ 互相覆盖</b>。</para>
+    ///
+    /// <para><b>★ 为什么固定 key、不带时间戳</b>：试填是「看看填出来长什么样」，不是正式产物
+    /// ⇒ 不需要历史版本。固定 key 让空间占用<b>恒定</b>（每模板最多 1 个 PDF），
+    /// 贴合用户「节约后台空间」的口径。⚠️ 副作用：并发试填同一模板会互相覆盖 ——
+    /// 试填是单人操作，可接受。</para>
+    ///
+    /// <para><b>⚠️ 与 <see cref="IsProductPath"/> 并列而非包含</b>：<c>IsProductPath</c> 的 3 个段
+    /// <b>恰好等于 <see cref="Product"/> 接受的 3 个 <c>productKind</c></b>（收到第 4 种会抛异常）
+    /// —— 这是一条不变量。把 <c>_preview</c> 塞进去会让「判定通过」与「能否派生」不再等价。</para>
+    /// </summary>
+    public const string PreviewSegment = "_preview";
+
     /// <summary>归档段（企业资料库 + 企业原始资料库使用；标准目录库为单纯覆盖，无归档）</summary>
     public const string ArchiveSegment = "_archive";
 
@@ -93,12 +115,17 @@ public static class PathBuilder
 
     /// <summary>
     /// 保留段名 —— <b>业务文件夹名与文件名不得使用</b>。
-    /// 否则会与产物目录 / 归档目录撞车（例如业务文件夹叫 <c>pdf</c>，会被
+    /// 否则会与产物目录 / 系统目录撞车（例如业务文件夹叫 <c>pdf</c>，会被
     /// <see cref="IsProductPath"/> 误判为产物路径）。
+    ///
+    /// <para>★ 2026-10-06 起共 <b>6 个</b>（新增 <see cref="PreviewSegment"/>）。
+    /// ⚠️ <b>前端 <c>cert-share/src/composables/useFileTree.ts</c> 的 <c>RESERVED_SEGMENTS</c>
+    /// 必须与本列表逐字一致</b> —— 漏一个，MinIO 里那个目录就会在文件树里
+    /// 显示成「幽灵业务文件夹」。</para>
     /// </summary>
     public static readonly IReadOnlyList<string> ReservedSegments = new[]
     {
-        PdfSegment, MarkdownSegment, EditableSegment, TemplateSegment, ArchiveSegment
+        PdfSegment, MarkdownSegment, EditableSegment, TemplateSegment, PreviewSegment, ArchiveSegment
     };
 
     private static readonly HashSet<string> ReservedSegmentSet =
@@ -329,6 +356,57 @@ public static class PathBuilder
     }
 
     /// <summary>
+    /// ★ 从**空白模板路径**派生「试填预览 PDF」路径（`52` §12.4 裁定 A，2026-10-06 新增）。
+    ///
+    /// <para><b>规则</b>：把模板路径里的 <see cref="TemplateSegment"/> 段替换为
+    /// <see cref="PreviewSegment"/>，并给文件名追加产物扩展名。</para>
+    /// <code>
+    /// 模板：…/4记录文件/_template/风险管理报告.docx
+    /// 预览：…/4记录文件/_preview/风险管理报告.docx.pdf
+    /// </code>
+    ///
+    /// <para><b>★ 为什么不能复用 <see cref="Product"/></b>：① <c>Product</c> 从
+    /// <b>源文件</b>路径派生，而试填产物来自<b>空白模板</b>；② <c>Product</c> 只接受
+    /// <c>pdf</c>/<c>markdown</c>/<c>editable</c> 三个段，传 <c>_preview</c> 会抛
+    /// <see cref="ArgumentException"/>；③ 复用 <c>pdf/</c> 段会与「源文件预览 PDF」
+    /// （实测 185 行在用）<b>同 key 互相覆盖</b>。</para>
+    ///
+    /// <para><b>★ 固定 key（不带时间戳）</b>：试填不需要历史版本 ⇒ 每模板最多 1 个 PDF，
+    /// 空间占用恒定（用户口径「节约后台空间」）。</para>
+    ///
+    /// <para>⚠️ 路径里找不到 <see cref="TemplateSegment"/> 段时（非常规调用）退化为
+    /// <b>在文件名前插入</b> <see cref="PreviewSegment"/> —— 宁可落在同层级，
+    /// 也不静默返回一个错误位置。</para>
+    /// </summary>
+    /// <param name="templatePath">空白模板的存储路径（<see cref="TemplateFile"/> 的产出）</param>
+    /// <param name="targetExt">目标扩展名（含点，如 <c>.pdf</c>）</param>
+    /// <returns>预览产物路径（以 <c>/</c> 开头）；入参为空或段数不足时返回<b>空串</b></returns>
+    /// <remarks>
+    /// 返回空串而非抛异常，与 <see cref="Product"/> 保持同一契约 ——
+    /// 调用方以 <c>string.IsNullOrEmpty</c> 判定「缺少存储路径」并据此失败。
+    /// </remarks>
+    public static string PreviewFromTemplate(string? templatePath, string targetExt)
+    {
+        if (string.IsNullOrWhiteSpace(templatePath)) return "";
+
+        var segs = Segments(templatePath);
+        if (segs.Length < 2) return "";
+
+        var ext = string.IsNullOrEmpty(targetExt)
+            ? ""
+            : (targetExt.StartsWith('.') ? targetExt : "." + targetExt);
+
+        var name = Sanitize(segs[^1]) + ext;
+        var parent = segs[..^1].ToList();
+
+        var idx = parent.FindIndex(s => s.Equals(TemplateSegment, StringComparison.OrdinalIgnoreCase));
+        if (idx >= 0) parent[idx] = PreviewSegment;
+        else parent.Add(PreviewSegment);
+
+        return $"/{string.Join("/", parent)}/{name}";
+    }
+
+    /// <summary>
     /// 判断给定路径是否为「产物路径」（位于 <c>pdf/</c>、<c>markdown/</c> 或 <c>editable/</c> 段下）。
     /// <para>用途：删除文件时避免把产物目录误当业务目录；以及排查历史脏数据。</para>
     /// </summary>
@@ -353,6 +431,22 @@ public static class PathBuilder
     /// </summary>
     public static bool IsTemplatePath(string? path)
         => Segments(path).Any(s => s.Equals(TemplateSegment, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// 判断给定路径是否为「试填预览路径」（含 <c>_preview</c> 段）。
+    ///
+    /// <para><b>★ 为什么与 <see cref="IsProductPath"/> 并列，而不是并进去</b>：
+    /// <see cref="IsProductPath"/> 的 3 个段<b>恰好等于 <see cref="Product"/> 接受的
+    /// 3 个 <c>productKind</c></b> —— 这是一条不变量（传第 4 种会抛
+    /// <see cref="ArgumentException"/>）。把 <c>_preview</c> 塞进 <c>IsProductPath</c>
+    /// 会让「判定通过」与「能否派生」不再等价，是下一个静默分叉的入口。
+    /// ⇒ <b>三个判定并列：产物 / 模板 / 试填预览</b>，各自 <c>false</c> 于另两者。</para>
+    ///
+    /// <para>用途与 <see cref="IsTemplatePath"/> 相同：① 删除标准文档时一并清理；
+    /// ② 排查「试填产物被误当业务文件」；③ 上传/替换时拒绝把产物写进业务目录。</para>
+    /// </summary>
+    public static bool IsPreviewPath(string? path)
+        => Segments(path).Any(s => s.Equals(PreviewSegment, StringComparison.OrdinalIgnoreCase));
 
     #endregion
 

@@ -1,13 +1,21 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Services;
+using YZH.Core.Api.Models.System;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Admin.Entities.Doc;
+using CertPlatform.Shared.DocExtraction;
 
 namespace CertPlatform.Admin.Controllers.Workflow;
 
@@ -38,16 +46,19 @@ namespace CertPlatform.Admin.Controllers.Workflow;
 public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
 {
     private readonly IDbOrm _db;
+    private readonly LlmInvokeService _llm;
     private readonly ILogger<DocFillPromptController> _logger;
 
     public DocFillPromptController(
         EntityService<DocFillPrompt> entityService,
         IUserContext userContext,
         IDbOrm db,
+        LlmInvokeService llm,
         ILogger<DocFillPromptController> logger)
         : base(entityService, userContext)
     {
         _db = db;
+        _llm = llm;
         _logger = logger;
     }
 
@@ -213,6 +224,11 @@ public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
     }
 
     /// <summary><b>版本历史</b>：同一 <c>PromptCode</c> 的全部版本（含已软删），按版本降序。</summary>
+    /// <remarks>
+    /// <b>★ 可见范围与 <c>resolve</c> 逐字一致</b>（<c>OrgCode = ''</c> 或命中查询机构）——
+    /// 前端「编辑生效版本」先 resolve 拿 <c>Picked.Code</c>，再回本端点取**整行**提交 update；
+    /// 两处范围不一致时会出现「resolve 选中的行在 versions 里查不到」⇒ 编辑无从保存。
+    /// </remarks>
     [HttpGet("versions")]
     public async Task<IActionResult> Versions([FromQuery] string promptCode, [FromQuery] string? orgCode)
     {
@@ -222,7 +238,8 @@ public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
         var org = (orgCode ?? string.Empty).Trim();
 
         var rows = await _db.Client.Queryable<DocFillPrompt>()
-            .Where(p => p.PromptCode == promptCode && p.OrgCode == org)
+            .Where(p => p.PromptCode == promptCode
+                        && (p.OrgCode == string.Empty || p.OrgCode == org))
             .OrderByDescending(p => p.Version)
             .Select(p => new
             {
@@ -230,6 +247,9 @@ public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
                 p.OrgCode,
                 p.PromptCode,
                 p.PromptName,
+                p.SystemPrompt,
+                p.UserTemplate,
+                p.OutputSchema,
                 p.Model,
                 p.Temperature,
                 p.MaxTokens,
@@ -239,6 +259,7 @@ public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
                 p.Sort,
                 p.IsValid,
                 p.IsDeleted,
+                p.Remark,
                 p.UpdateTime,
             })
             .ToListAsync();
@@ -305,6 +326,234 @@ public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
             .ToList();
 
         return Ok(ApiResponse<object>.Ok(new { Total = items.Count, Items = items }));
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // 二·补、★ 自动生成全文填写提示词（2026-10-07 用户裁决：「自动生成 = 后端调 LLM」）
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// <b>按「锚点清单 + 文档作用」LLM 生成全文填写提示词正文</b>。
+    ///
+    /// <para><b>定位</b>：「标准文档填写规则」页「全局填写规则」卡片的「自动生成」按钮。
+    /// 生成结果<b>不落库</b>（与 <c>PromptWorkbenchService.GenerateAsync</c> 同口径）——
+    /// 由用户在文本框里改，点保存才写（保存走既有 add/update 端点）。</para>
+    ///
+    /// <para><b>两种模式</b>：<c>CurrentPrompt</c> 为空 = 从零生成；非空 = 在其基础上优化
+    /// （保留结构与已有业务口径，不全量重写）。</para>
+    ///
+    /// <para><b>契约</b>（`22` 号）：业务失败恒 HTTP 200、<c>success</c> 唯一判据、载荷 PascalCase。</para>
+    /// </summary>
+    [HttpPost("generate")]
+    public async Task<IActionResult> Generate([FromBody] GenerateRequest req, CancellationToken ct)
+    {
+        var purpose = (req?.DocPurpose ?? string.Empty).Trim();
+        var anchors = (req?.Anchors ?? new List<GenerateAnchor>())
+            .Where(a => !string.IsNullOrWhiteSpace(a?.AnchorRef))
+            .ToList();
+
+        if (purpose.Length == 0 && anchors.Count == 0)
+            return Ok(ApiResponse<object>.Fail("缺少生成依据：文档作用与锚点清单至少给一项"));
+
+        var settings = await GetAiSettingsAsync();
+        var prompt = BuildGeneratePrompt(req!, purpose, anchors);
+
+        var resp = await _llm.CompleteAsync(new LlmInvokeRequest
+        {
+            BaseUrl = settings.BaseUrl,
+            ApiKey = settings.ApiKey,
+            Model = settings.Model,
+            Temperature = settings.Temperature,
+            MaxTokens = settings.MaxTokens,
+            Prompt = prompt,
+            // ★ 产出是「提示词正文」而非 JSON —— ForceJson 会把正文强包成 JSON 字符串
+            ForceJson = false,
+        });
+        await LogGenerateUsageAsync(settings, resp);
+
+        if (!resp.Success)
+            return Ok(ApiResponse<object>.Fail("AI 生成失败：" + (string.IsNullOrWhiteSpace(resp.Message) ? "未知错误" : resp.Message)));
+
+        var text = StripFence(resp.Content);
+        if (string.IsNullOrWhiteSpace(text))
+            return Ok(ApiResponse<object>.Fail("AI 未返回内容（请重试）"));
+
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            Prompt = text,
+            Model = settings.Model,
+            DurationMs = resp.DurationMs,
+            Optimize = !string.IsNullOrWhiteSpace(req!.CurrentPrompt),
+        }));
+    }
+
+    /// <summary>组装生成提示词（★ 上下文 = 文档作用 + 锚点清单 + 现有正文，⛔ 不查库 —— 由前端传入）</summary>
+    private static string BuildGeneratePrompt(GenerateRequest req, string purpose, List<GenerateAnchor> anchors)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("你是 ISO 体系认证审核领域的资深文档工程专家。请为下列标准文档生成一份「全文填写提示词」。");
+        sb.AppendLine();
+        sb.AppendLine("【这份提示词的用途】");
+        sb.AppendLine("它会被文档填写引擎在**整篇文档层面**引用，负责组织文档整体结构、统一行文口吻与颗粒度；");
+        sb.AppendLine("而每个具体格子填什么，由各锚点自己的规则负责 —— ⛔ 提示词不要越界去规定单个锚点的取值。");
+        sb.AppendLine();
+
+        if (!string.IsNullOrWhiteSpace(req.DocRole))
+        {
+            sb.AppendLine($"【文档角色】{req.DocRole.Trim()}");
+            sb.AppendLine();
+        }
+
+        if (purpose.Length > 0)
+        {
+            sb.AppendLine("【文档作用（用户填写，必须贴合）】");
+            sb.AppendLine(purpose);
+            sb.AppendLine();
+        }
+
+        if (anchors.Count > 0)
+        {
+            sb.AppendLine($"【锚点清单（共 {anchors.Count} 个位置会被自动填写；提示词须与之呼应，⛔ 不得与这些位置的规则冲突）】");
+            foreach (var a in anchors)
+            {
+                var vt = string.IsNullOrWhiteSpace(a.ValueType) ? "text" : a.ValueType!.Trim();
+                var src = string.IsNullOrWhiteSpace(a.Source) ? "" : $"，来源：{a.Source!.Trim()}";
+                sb.AppendLine($"- {a.AnchorRef!.Trim()}（值类型 {vt}{src}）");
+            }
+            sb.AppendLine();
+        }
+
+        var isOptimize = !string.IsNullOrWhiteSpace(req.CurrentPrompt);
+        if (isOptimize)
+        {
+            sb.AppendLine("【模式】优化 —— 下方是用户现有提示词正文，请保留其结构与业务口径，只改不足处（⛔ 不要全量重写）。");
+            sb.AppendLine();
+            sb.AppendLine("--- 现有正文开始 ---");
+            sb.AppendLine(req.CurrentPrompt!.Trim());
+            sb.AppendLine("--- 现有正文结束 ---");
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("【输出要求】");
+        sb.AppendLine("1. 直接输出提示词正文：Markdown 指令文本，按小节组织（如：整体定位 / 行文口吻 / 结构要求 / 与锚点的协同 / 禁止事项）。");
+        sb.AppendLine("2. ⛔ 只输出正文本身：不要 JSON、不要解释你为什么这么写、不要代码围栏（```）、不要“以下是提示词”之类开场白。");
+        sb.AppendLine("3. 全文用中文，面向填写引擎执行，口吻具体可操作（禁止“视情况而定”这类空话）。");
+        sb.AppendLine($"4. 篇幅约 {Math.Max(400, anchors.Count * 80)}–1200 字。");
+        return sb.ToString();
+    }
+
+    /// <summary>去围栏（模型偶尔仍会给 ```markdown … ``` 包一层）</summary>
+    private static string StripFence(string? s)
+    {
+        var t = (s ?? string.Empty).Trim();
+        if (!t.StartsWith("```", StringComparison.Ordinal)) return t;
+        var nl = t.IndexOf('\n');
+        if (nl < 0) return t;
+        t = t[(nl + 1)..];
+        var end = t.LastIndexOf("```", StringComparison.Ordinal);
+        return (end >= 0 ? t[..end] : t).Trim();
+    }
+
+    // ── AI 配置（口径与 PromptWorkbenchService.GetAiSettingsAsync 逐字一致；⛔ 不另立口径）──
+
+    private sealed class AiSettings
+    {
+        public string ApiKey { get; set; } = "";
+        public string BaseUrl { get; set; } = "https://dashscope.aliyuncs.com/compatible-mode/v1";
+        public string Model { get; set; } = "qwen-flash";
+        public string Provider { get; set; } = "qianwen";
+        public int MaxTokens { get; set; } = 32768;
+        public float Temperature { get; set; } = 0.2f;
+    }
+
+    private async Task<AiSettings> GetAiSettingsAsync()
+    {
+        var s = new AiSettings();
+        var rows = await _db.Client.Queryable<SysConfig>()
+            .Where(x => x.Category == "ai_model" && !x.IsDeleted)
+            .Select(x => new { x.ConfigKey, x.ConfigValue })
+            .ToListAsync();
+
+        foreach (var row in rows)
+        {
+            switch (row.ConfigKey)
+            {
+                case "ai_api_key": s.ApiKey = row.ConfigValue ?? ""; break;
+                case "ai_base_url": s.BaseUrl = row.ConfigValue ?? s.BaseUrl; break;
+                case "ai_model_name": s.Model = row.ConfigValue ?? s.Model; break;
+                case "ai_provider": s.Provider = row.ConfigValue ?? s.Provider; break;
+                case "ai_max_tokens":
+                    if (int.TryParse(row.ConfigValue, out var mt)) s.MaxTokens = mt;
+                    break;
+                case "ai_temperature":
+                    if (float.TryParse(row.ConfigValue, out var tp)) s.Temperature = tp;
+                    break;
+            }
+        }
+        return s;
+    }
+
+    /// <summary>计费留痕（口径同 PromptWorkbenchService.LogUsageAsync；日志失败不影响主流程）</summary>
+    private async Task LogGenerateUsageAsync(AiSettings settings, LlmInvokeResponse result)
+    {
+        try
+        {
+            var log = new AiUsageLog
+            {
+                CallId = Guid.NewGuid().ToString("N"),
+                Code = Guid.NewGuid().ToString("N"),
+                BusinessType = "doc_fill_prompt",
+                BusinessRef = "doc_fill_prompt_generate",
+                Skill = "doc_fill_prompt",
+                Provider = string.IsNullOrWhiteSpace(settings.Provider) ? "qianwen" : settings.Provider,
+                Model = settings.Model,
+                PromptTokens = result.PromptTokens ?? 0,
+                CompletionTokens = result.CompletionTokens ?? 0,
+                TotalTokens = (result.PromptTokens ?? 0) + (result.CompletionTokens ?? 0),
+                DurationMs = result.DurationMs,
+                Success = result.Success,
+                ErrorMessage = result.Success ? null : (result.Message.Length > 500 ? result.Message[..500] : result.Message),
+                CreateTime = DateTime.Now,
+            };
+            await _db.Client.Insertable(log).ExecuteCommandAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[DocFillPrompt] AI 用量日志写入失败");
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // 二·补·DTO
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>自动生成请求（DTO 字段 PascalCase，`22` 号契约）</summary>
+    public sealed class GenerateRequest
+    {
+        /// <summary>文档作用（全局规则 Tab「文档作用」文本框内容）</summary>
+        public string? DocPurpose { get; set; }
+
+        /// <summary>文档角色（可空）</summary>
+        public string? DocRole { get; set; }
+
+        /// <summary>现有提示词正文；非空 = 优化模式</summary>
+        public string? CurrentPrompt { get; set; }
+
+        /// <summary>锚点清单（前端从当前模板锚点行组装）</summary>
+        public List<GenerateAnchor>? Anchors { get; set; }
+    }
+
+    /// <summary>生成上下文中的一个锚点（只传生成所需字段，⛔ 不传整行实体）</summary>
+    public sealed class GenerateAnchor
+    {
+        /// <summary>锚点引用 → <c>cert_doc_template_anchor.AnchorRef</c></summary>
+        public string? AnchorRef { get; set; }
+
+        /// <summary>值类型（text / number / date / bool）</summary>
+        public string? ValueType { get; set; }
+
+        /// <summary>取值来源摘要（SourceSummary / SourceSpec 摘要，可空）</summary>
+        public string? Source { get; set; }
     }
 
     // ════════════════════════════════════════════════════════════════════

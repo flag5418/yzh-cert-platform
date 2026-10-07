@@ -7,6 +7,7 @@
  */
 import { ref, onMounted, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
+import { YzhStatusBadge, resolveStatusBadge } from '@yzh-core'
 import { certOrgStageApi } from '@share/api/cert/cert-org-stage'
 import type { CertOrgStageItem } from '@share/types/cert'
 
@@ -14,6 +15,8 @@ import type { CertOrgStageItem } from '@share/types/cert'
 interface TreeNode {
   Code: string
   Name: string
+  /** 后端 Extra（含 IsValid 启用状态，左树徽章用） */
+  Extra?: Record<string, any>
   Children?: TreeNode[]
 }
 const treeData = ref<TreeNode[]>([])
@@ -56,6 +59,7 @@ async function loadTree() {
     treeData.value = (res.data || []).map((item: any) => ({
       Code: item.Code,
       Name: item.Name,
+      Extra: item.Extra,
     }))
   } finally {
     treeLoading.value = false
@@ -152,7 +156,20 @@ onMounted(() => {
         :expand-on-click-node="false"
         :loading="treeLoading"
         @node-click="handleNodeClick"
-      />
+      >
+        <template #default="{ data }">
+          <span class="link-page__tree-node">
+            <span>{{ data.Name }}</span>
+            <!-- 启用/禁用徽章（判据 = @yzh-core resolveStatusBadge，全站同源） -->
+            <YzhStatusBadge
+              v-if="resolveStatusBadge(data, 'IsValid')"
+              :type="resolveStatusBadge(data, 'IsValid')?.type"
+              :text="resolveStatusBadge(data, 'IsValid')?.text"
+              size="small"
+            />
+          </span>
+        </template>
+      </el-tree>
     </div>
 
     <!-- 右表 -->
@@ -217,6 +234,14 @@ onMounted(() => {
 .link-page__tree :deep(.el-tree) {
   flex: 1;
   overflow-y: auto;
+}
+
+/* 左树节点：名称 + 启用/禁用徽章（S05：间距一律走令牌） */
+.link-page__tree-node {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yzh-space-2, 8px);
+  min-width: 0;
 }
 
 .link-page__content {

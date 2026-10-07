@@ -2,8 +2,9 @@
 /**
  * OrgPage - 组织机构-人员管理（左树右表，配置驱动）
  *
- * - 左树：机构树（懒加载 + 增删改 + 级联启停），底部「新增机构」
+ * - 左树：机构树（懒加载 + 增删改 + 级联启停 + **节点启用/停用徽章**），底部「新增机构」
  * - 右表：选中机构下人员（新增仅限末端机构）
+ * - 非 Dept（业务系统所有）机构及其人员只读：仅保留启用/禁用
  * - 节点动作由内核 onNodeAction 派发；行按钮由 logic.rowActions 函数驱动
  */
 import { Plus } from '@element-plus/icons-vue'
@@ -24,6 +25,7 @@ const { logic, tableRef, treeTableRef } = useTreeTable(OrgPageLogic)
       :tree-searchable="true"
       :tree-lazy="true"
       :tree-load-data="logic.loadChildren.bind(logic)"
+      :status-field="logic.treeStatusField"
       :node-actions="logic.nodeActions"
       :get-action-label="(action: string, node: any) => logic.getNodeActionLabel(action, node)"
       @tree-node-click="logic.onNodeClick"
@@ -33,7 +35,8 @@ const { logic, tableRef, treeTableRef } = useTreeTable(OrgPageLogic)
         <el-button
           type="primary"
           :icon="Plus"
-          style="width: 100%"
+          class="org-page__add-org"
+          :disabled="logic.treeFooterAddDisabled"
           @click="logic.openOrgAddFromFooter()"
         >
           新增机构
@@ -128,6 +131,10 @@ const { logic, tableRef, treeTableRef } = useTreeTable(OrgPageLogic)
   flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
+}
+
+.org-page__add-org {
+  width: 100%;
 }
 
 .org-page__table {

@@ -9,7 +9,6 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Auditor.Services;
 using CertPlatform.Auditor.Services.Expert;
-using CertPlatform.Admin.Entities.Doc;
 using YZH.Core.DataBase.Interfaces;
 
 namespace CertPlatform.Auditor.Controllers;
@@ -42,6 +41,8 @@ public class ExpertTaskDataGapController : WebControllerBase
     private readonly IDbOrm _db;
     private readonly GapFillService _fill;
     private readonly GapDetector _detector;
+    private readonly GapLabelResolver _labels;
+    private readonly ExpertTaskService _tasks;
     private readonly WorkspaceContextService _workspace;
     private readonly IUserContext _user;
 
@@ -49,12 +50,16 @@ public class ExpertTaskDataGapController : WebControllerBase
         IDbOrm db,
         GapFillService fill,
         GapDetector detector,
+        GapLabelResolver labels,
+        ExpertTaskService tasks,
         WorkspaceContextService workspace,
         IUserContext userContext)
     {
         _db = db;
         _fill = fill;
         _detector = detector;
+        _labels = labels;
+        _tasks = tasks;
         _workspace = workspace;
         _user = userContext;
     }
@@ -84,32 +89,69 @@ public class ExpertTaskDataGapController : WebControllerBase
             if (string.IsNullOrWhiteSpace(req.TaskCode))
                 return Ok(ApiResponse<object>.Fail("TaskCode 不能为空"));
 
-            var rows = (await _db.GetListAsync<CertExpertTaskDataGap>(x =>
-                x.OrgCode == ws.Code && x.TaskCode == req.TaskCode && !x.IsDeleted)).Data
-                ?? new List<CertExpertTaskDataGap>();
-
-            // ★ 「影响 N 条规则」实时反查（⛔ 不落库）
-            var impacts = await BuildImpactsAsync(ws.Code!, rows);
-
-            var dtos = rows
-                .OrderBy(x => x.GapStatus == ExpertTaskConst.GapStatus.Pending ? 0 : 1)
-                .ThenBy(x => x.GapType).ThenBy(x => x.GapLabel)
-                .Select(x => ToDto(x, impacts))
-                .ToList();
-
-            return Ok(ApiResponse<object>.Ok(new
-            {
-                // ★ 两张扁平表（裁决 J1「不分文档」）
-                Fields = dtos.Where(d => d.GapType == GapGroupType.Field).ToList(),
-                Tables = dtos.Where(d => d.GapType == GapGroupType.Table).ToList(),
-                PendingCount = dtos.Count(d => d.GapStatus == ExpertTaskConst.GapStatus.Pending),
-                FilledCount  = dtos.Count(d => d.GapStatus == ExpertTaskConst.GapStatus.Filled),
-                SkippedCount = dtos.Count(d => d.GapStatus == ExpertTaskConst.GapStatus.Skipped)
-            }));
+            var dtos = await BuildGapListAsync(ws.Code!, req.TaskCode);
+            return Ok(ApiResponse<object>.Ok(ToPayload(dtos)));
         }
         catch (Exception ex)
         {
             return Ok(ApiResponse<object>.Fail($"加载补录清单失败：{ex.Message}"));
+        }
+    }
+
+    /// <summary>
+    /// ★★ 启动前预检 —— 「关键信息补录」对话框的触发点（2026-10-07 用户裁决）
+    /// <para><c>POST api/Auditor/ExpertTaskDataGap/precheck</c></para>
+    /// </summary>
+    ///
+    /// <para><b>为什么需要它（用户逐字）</b>：</para>
+    /// <code>
+    /// 「我们的启动，如果发现缺失关键信息，应该是主动弹窗，将需要录入的信息，形成表单，
+    ///   让客户进行填写……而且应该是补全相关信息才开始真正的任务，
+    ///   而不是开启任务后，再让人去页面找，发现还有资料没有填写」
+    /// </code>
+    ///
+    /// <para><b>与 <c>list</c> 的唯一差别</b>：本端点先<b>重算</b>缺口
+    /// （<see cref="ExpertTaskService.GenerateGapsAsync"/>），再返回清单。
+    /// 重算是必须的 —— 数据可能在向导创建之后被补录 / 换版 / 重新提取，缺口集合已变。</para>
+    ///
+    /// <para><b>★ 信封语义</b>：本端点是<b>查询</b>（回答「能不能启动、缺什么」），
+    /// 查询成功即 <c>Ok</c>，⛔ 不是 <c>Fail</c>；真正的「拒绝启动」由前端依据
+    /// <c>PendingCount &gt; 0</c> 决定是否弹窗，⛔ 不做硬阻断（用户裁决「运行跳过」）。</para>
+    ///
+    /// <para><b>返回体</b>：与 <c>list</c> 同构（<c>Fields</c> / <c>Tables</c> / 三个计数），
+    /// 表格项额外带 <c>Columns</c>（中文列头）供补录表单渲染，
+    /// 并带 <c>HasUnnamedItem</c> 提示「规则页没配中文名」。</para>
+    [HttpPost("precheck")]
+    public async Task<ActionResult<ApiResponse<object>>> Precheck([FromBody] GapListRequest req)
+    {
+        try
+        {
+            var ws = ResolveWorkspace();
+            if (ws.Error != null) return Ok(ApiResponse<object>.Fail(ws.Error));
+            if (string.IsNullOrWhiteSpace(req.TaskCode))
+                return Ok(ApiResponse<object>.Fail("TaskCode 不能为空"));
+
+            var task = (await _db.GetOneAsync<CertExpertTask>(x =>
+                x.OrgCode == ws.Code && x.Code == req.TaskCode && !x.IsDeleted)).Data;
+            if (task == null) return Ok(ApiResponse<object>.Fail("任务不存在或不属于当前工作区"));
+
+            // ★ 重算缺口（与提交执行同一份逻辑，⛔ 不在控制器另写 R\H 差集）
+            //   ⛔ 失败不静默吞：口径分叉会演变成「预检说齐了、执行说缺了」，必须让用户看见
+            try
+            {
+                await _tasks.GenerateGapsAsync(task, ws.Code!);
+            }
+            catch (Exception ex)
+            {
+                return Ok(ApiResponse<object>.Fail($"关键信息检查失败：{ex.Message}"));
+            }
+
+            var dtos = await BuildGapListAsync(ws.Code!, req.TaskCode);
+            return Ok(ApiResponse<object>.Ok(ToPayload(dtos)));
+        }
+        catch (Exception ex)
+        {
+            return Ok(ApiResponse<object>.Fail($"关键信息检查失败：{ex.Message}"));
         }
     }
 
@@ -315,6 +357,44 @@ public class ExpertTaskDataGapController : WebControllerBase
     // 五、内部工具
     // ========================================================
 
+    /// <summary>组装缺口清单 DTO（<c>list</c> / <c>precheck</c> 共用，⛔ 不写两份）</summary>
+    private async Task<List<GapDto>> BuildGapListAsync(string orgCode, string taskCode)
+    {
+        var rows = (await _db.GetListAsync<CertExpertTaskDataGap>(x =>
+            x.OrgCode == orgCode && x.TaskCode == taskCode && !x.IsDeleted)).Data
+            ?? new List<CertExpertTaskDataGap>();
+
+        // ★ 「影响 N 条规则」实时反查（⛔ 不落库）
+        var impacts = await BuildImpactsAsync(orgCode, rows);
+
+        // ★ 表格列定义（中文列头）—— 供「关键表格信息补录」Tab 渲染可编辑表格
+        var columns = await _labels.ResolveTableColumnsAsync(rows
+            .Where(x => x.GapType == GapGroupType.Table)
+            .Select(x => x.TableCode));
+
+        return rows
+            .OrderBy(x => x.GapStatus == ExpertTaskConst.GapStatus.Pending ? 0 : 1)
+            .ThenBy(x => x.GapType).ThenBy(x => x.GapLabel)
+            .Select(x => ToDto(x, impacts, columns))
+            .ToList();
+    }
+
+    /// <summary>清单信封载荷（两张扁平表 + 计数 + 中文名缺失提示）</summary>
+    private static object ToPayload(List<GapDto> dtos) => new
+    {
+        // ★ 两张扁平表（裁决 J1「不分文档」）
+        Fields = dtos.Where(d => d.GapType == GapGroupType.Field).ToList(),
+        Tables = dtos.Where(d => d.GapType == GapGroupType.Table).ToList(),
+        PendingCount = dtos.Count(d => d.GapStatus == ExpertTaskConst.GapStatus.Pending),
+        FilledCount = dtos.Count(d => d.GapStatus == ExpertTaskConst.GapStatus.Filled),
+        SkippedCount = dtos.Count(d => d.GapStatus == ExpertTaskConst.GapStatus.Skipped),
+        // ★ 待补录项里存在「未命名」项 ⇒ 规则页没配中文名。
+        //   界面须提示管理员去 /business/doc-extraction-rule 补，
+        //   ⛔ 不要让审核员以为系统坏了（实测 cert_doc_field_def 可能整表只有 1 行）。
+        HasUnnamedItem = dtos.Any(d =>
+            d.GapStatus == ExpertTaskConst.GapStatus.Pending && d.IsUnnamed)
+    };
+
     private async Task<Dictionary<string, List<GapDetector.GapImpact>>> BuildImpactsAsync(
         string orgCode, List<CertExpertTaskDataGap> rows)
     {
@@ -343,10 +423,27 @@ public class ExpertTaskDataGapController : WebControllerBase
 
     private GapDto ToDto(
         CertExpertTaskDataGap x,
-        Dictionary<string, List<GapDetector.GapImpact>> impacts)
+        Dictionary<string, List<GapDetector.GapImpact>> impacts,
+        Dictionary<string, List<GapLabelResolver.TableColumn>> columns)
     {
         var key = GapDetector.ImpactKey(x.GapType, x.RuleCode ?? "", x.FieldCode, x.TableCode);
         var hit = impacts.TryGetValue(key, out var list) ? list : new List<GapDetector.GapImpact>();
+
+        // ★ 「未命名」= 规则页没登记中文名 ⇒ 界面提示管理员去补，⛔ 不是系统故障
+        var isUnnamed = x.GapLabel == GapLabelResolver.UnnamedField
+                        || x.GapLabel == GapLabelResolver.UnnamedTable;
+
+        // ★ 表格列定义（中文列头）—— 让「关键表格信息补录」渲染可编辑表格，⛔ 不再手写 JSON
+        var cols = x.GapType == GapGroupType.Table
+                   && !string.IsNullOrWhiteSpace(x.TableCode)
+                   && columns.TryGetValue(x.TableCode!, out var found)
+            ? found.Select(c => new GapColumnDto
+            {
+                Code = c.Code,
+                Name = c.Name,
+                DataType = c.DataType
+            }).ToList()
+            : new List<GapColumnDto>();
 
         return new GapDto
         {
@@ -369,6 +466,10 @@ public class ExpertTaskDataGapController : WebControllerBase
             SkipName = x.SkipName,
             SkipTime = x.SkipTime,
             SkipReason = x.SkipReason,
+            // ★ 中文名缺失（规则页未登记）⇒ 界面提示管理员
+            IsUnnamed = isUnnamed,
+            // ★ 表格列定义（中文列头；字段型恒空）
+            Columns = cols,
             ImpactedItemCount = hit.Count,
             ImpactedItems = hit.Select(i => new GapImpactDto
             {
@@ -466,8 +567,23 @@ public class ExpertTaskDataGapController : WebControllerBase
         public string? SkipName { get; set; }
         public DateTime? SkipTime { get; set; }
         public string? SkipReason { get; set; }
+        /// <summary>★ 中文名缺失（规则页未登记中文名）⇒ 界面提示管理员，⛔ 不是系统故障</summary>
+        public bool IsUnnamed { get; set; }
+        /// <summary>★ 表格列定义（中文列头；字段型恒空）—— 供「关键表格信息补录」渲染表单</summary>
+        public List<GapColumnDto> Columns { get; set; } = new();
         /// <summary>★ 实时反查：影响几条检查项（⛔ 不落库）</summary>
         public int ImpactedItemCount { get; set; }
         public List<GapImpactDto> ImpactedItems { get; set; } = new();
+    }
+
+    /// <summary>表格列定义（中文列头 + 类型）—— 来自 <c>cert_doc_table_field_def</c></summary>
+    public class GapColumnDto
+    {
+        /// <summary>列编码（英文驼峰，补录回写用）</summary>
+        public string Code { get; set; } = "";
+        /// <summary>列中文名（界面列头）</summary>
+        public string Name { get; set; } = "";
+        /// <summary><c>string</c> | <c>number</c> | <c>date</c></summary>
+        public string DataType { get; set; } = "string";
     }
 }

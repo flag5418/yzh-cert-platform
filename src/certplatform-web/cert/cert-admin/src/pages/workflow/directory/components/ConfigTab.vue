@@ -242,7 +242,7 @@ onMounted(async () => {
           </template>
         </el-table-column>
         <template #empty>
-          <YzhEmptyState :icon="FolderOpened" title="暂无目录配置" />
+          <YzhEmptyState title="暂无目录配置" />
         </template>
       </el-table>
     </el-card>

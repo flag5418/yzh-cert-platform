@@ -18,7 +18,11 @@ public class CertQueueNotifier : IYzhQueueNotifier
     {
         ["file_convert"] = "文档转换",
         ["auto_verify"] = "自动核验",
-        ["report_generate"] = "报告生成"
+        ["report_generate"] = "报告生成",
+        // ★ 2026-10-06 企业资料规范化（专家端 P1 编排器，TaskType 见
+        //   CertPlatform.Auditor/Services/Ent/Normalize/EnterpriseNormalizeExecutor.TaskTypeName）
+        //   ⚠️ 漏登记 = 队列页面显示成原始 task_type 字符串（功能不受影响，但可读性差）
+        ["enterprise_normalize"] = "企业资料规范化"
     };
 
     public CertQueueNotifier(ILogger<CertQueueNotifier> logger)

@@ -150,6 +150,22 @@ namespace CertPlatform.Auditor.Services.Expert
             public const string ExecFailed = "exec_failed";
         }
 
+        /// <summary>
+        /// ★ 跳过分类的<b>中文名</b>（2026-10-07 用户裁决 · 裁 2「运行跳过」）。
+        /// <para>「跳过」不是失败，但<b>原因必须完整展示</b>，否则专家会以为系统漏检。
+        /// ⛔ 界面不得裸露 <c>data_gap_skipped</c> 这类英文枚举。</para>
+        /// </summary>
+        public static string SkipCategoryLabel(string? category) => category switch
+        {
+            SkipCategory.DataGap => "缺企业数据",
+            SkipCategory.DataGapSkipped => "缺口已跳过",
+            SkipCategory.NoRule => "规则未配工作流",
+            SkipCategory.RuleDisabled => "规则已停用",
+            SkipCategory.ManualMode => "人工判定项",
+            SkipCategory.ExecFailed => "执行失败",
+            _ => "未执行"
+        };
+
         /// <summary>任务来源（D25）</summary>
         public static class TaskSource
         {

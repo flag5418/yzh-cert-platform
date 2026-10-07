@@ -1,4 +1,3 @@
-using CertPlatform.Admin.Entities.Doc;
 using YZH.Core.DataBase.Interfaces;
 
 namespace CertPlatform.Admin.Services.DocExtraction;

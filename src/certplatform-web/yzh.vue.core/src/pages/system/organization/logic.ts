@@ -11,9 +11,9 @@
  * - openRowDialog：行新增仅限末端机构（树 add-child 不受限）
  * - onPrepareAdd（注入 OrgCode，不生成 Code）
  * - confirmTreeActionMessage（级联禁用文案）
- * - resolveTreeActions（★ 非 Dept 机构只读：隐藏「编辑 / 删除」）
+ * - resolveTreeActions / canAddUnderNode / rowActions / toolbarActions / openOrgAddFromFooter
+ *   （★ 非 Dept 机构与其人员只读：仅保留启用/禁用）
  * - rowActions 函数（CustomButtons 为 {method:label}，按行状态二选一）
- * - openOrgAddFromFooter（树底：有选中加子级，无选中加根）
  *
  * TreeNode 一律 PascalCase（node.Code / node.Name / node.IsLeaf / node.Extra）。
  */
@@ -23,6 +23,13 @@ import { TreeTableCore, type TreeNode, type YzhAction } from '@yzh-core'
 
 /** 管理端可维护的机构类型：仅「部门/文件夹」层级由本页面手工维护 */
 const MANAGED_ORG_TYPE = 'Dept'
+
+/**
+ * 业务系统所有的机构（OrgType ≠ Dept）拒绝文案。
+ * 与后端 `OrganizationController.BusinessOwnedOrgMessage` 逐字一致（双端同文案）。
+ */
+const BUSINESS_OWNED_MESSAGE =
+  '该机构由业务系统自动生成，不允许在机构管理中修改或删除；请到对应业务模块操作。'
 
 export class OrgPageLogic extends TreeTableCore<any> {
   controllerName = 'Organization'
@@ -57,11 +64,41 @@ export class OrgPageLogic extends TreeTableCore<any> {
     return actions.filter(a => a.key !== 'edit' && a.key !== 'delete' && a.key !== 'add-child')
   }
 
+  /**
+   * 非 Dept 机构下不允许新增下级机构（业务系统的树形由业务模块自己扩展）。
+   * 与后端 `OnBeforeAddTree` 的拦截同规则。
+   */
+  protected override canAddUnderNode(node: TreeNode): boolean {
+    return this.isManagedDeptNode(node)
+  }
+
+  protected override canAddUnderNodeMessage(node: TreeNode): string {
+    return this.isManagedDeptNode(node)
+      ? '请选择末端机构（不含子机构的节点）'
+      : BUSINESS_OWNED_MESSAGE
+  }
+
+  /** 选中的机构是否归业务系统所有（非 Dept）—— 此时机构与其人员在本页只读，仅可启停 */
+  private get isBusinessOwnedSelected(): boolean {
+    const node = this.selectedNode
+    return !!node && !this.isManagedDeptNode(node)
+  }
+
+  /**
+   * 树底部「新增机构」是否置灰（选中业务系统机构时不允许新增下级）。
+   * 与 canAddUnderNode 同规则，仅用于把只读状态摆在按钮上（点击仍会弹出文案）。
+   */
+  get treeFooterAddDisabled(): boolean {
+    return this.isBusinessOwnedSelected
+  }
+
   /** 节点是否归本管理页面维护（OrgType 缺省视为 Dept，与后端 IsManagedDept 判定一致） */
   private isManagedDeptNode(node: TreeNode): boolean {
     const orgType = (node.Extra as any)?.OrgType ?? (node.Extra as any)?.orgType
     if (orgType === undefined || orgType === null || orgType === '') return true
-    return String(orgType).toUpperCase() === MANAGED_ORG_TYPE
+    // 大小写不敏感（对齐后端 IsManagedDept 的 StringComparison.OrdinalIgnoreCase）：
+    // ⚠️ 两侧必须同时归一，只归一左值会变成 'DEPT' === 'Dept' 恒 false → 所有节点被当非 Dept
+    return String(orgType).toUpperCase() === String(MANAGED_ORG_TYPE).toUpperCase()
   }
 
   /** 未选机构提示（内核默认「请先在左侧选择节点」，本页业务文案） */
@@ -75,8 +112,8 @@ export class OrgPageLogic extends TreeTableCore<any> {
   }
 
   /**
-   * 行「新增人员」：必须已选机构且为末端机构。
-   * 树「新增下级机构」仍走内核 openTreeNodeDialog（canAddUnderNode 默认 true 不动）。
+   * 行「新增人员」：必须已选机构、该机构归管理端维护（Dept）、且为末端机构。
+   * 树「新增下级机构」仍走内核 openTreeNodeDialog（非 Dept 由 canAddUnderNode 拦截）。
    */
   override openRowDialog(row?: any | null): boolean {
     if (!row) {
@@ -85,16 +122,16 @@ export class OrgPageLogic extends TreeTableCore<any> {
         ElMessage.warning(this.requireTreeSelectionMessage)
         return false
       }
+      if (this.isBusinessOwnedSelected) {
+        ElMessage.warning(BUSINESS_OWNED_MESSAGE)
+        return false
+      }
       if (node.IsLeaf !== true) {
         ElMessage.warning(this.canAddUnderNodeMessage(node))
         return false
       }
     }
     return super.openRowDialog(row)
-  }
-
-  protected override canAddUnderNodeMessage(_node: TreeNode): string {
-    return '请选择末端机构（不含子机构的节点）'
   }
 
   /** 新增人员注入所属机构 Code（Code 由后端生成） */
@@ -115,17 +152,22 @@ export class OrgPageLogic extends TreeTableCore<any> {
 
   /**
    * 行按钮：edit + delete + 按 row.IsValid 二选一 disable/enable。
+   *
+   * ★ 选中机构归业务系统所有（非 Dept）时，人员维护只能在业务系统完成
+   *   —— 隐藏「编辑 / 删除」，只留启用/禁用（后端 OnBeforeUpdate/OnBeforeDelete
+   *   亦做了同样拦截，此处只是提前隐藏按钮）。
    * CustomButtons 形状为 { method: label }（与 toRowActions 一致）；
    * 本页保留显式覆写以维持确认文案与按钮文案的独立控制。
    */
   override get rowActions(): YzhAction[] | ((row: any) => YzhAction[]) {
     return (row: any) => {
       const rb = this.config.value?.RowButtons
+      const readOnly = this.isBusinessOwnedSelected
       const actions: YzhAction[] = []
-      if (rb?.Edit !== false) {
+      if (!readOnly && rb?.Edit !== false) {
         actions.push({ key: 'edit', text: '编辑', type: 'primary' })
       }
-      if (rb?.Delete !== false) {
+      if (!readOnly && rb?.Delete !== false) {
         actions.push({ key: 'delete', text: '删除', type: 'danger' })
       }
       const cb = rb?.CustomButtons ?? {}
@@ -139,8 +181,14 @@ export class OrgPageLogic extends TreeTableCore<any> {
     }
   }
 
-  /** 工具栏：新增人员 + 批量删除 + 刷新 */
+  /**
+   * 工具栏：新增人员 + 批量删除 + 刷新。
+   * ★ 非 Dept 机构下的人员只读 → 只留「刷新」。
+   */
   override get toolbarActions(): YzhAction[] {
+    if (this.isBusinessOwnedSelected) {
+      return [{ key: 'refresh', text: '刷新', type: 'default' }]
+    }
     return [
       { key: 'add', text: '新增人员', type: 'primary' },
       { key: 'delete', text: '批量删除', type: 'danger' },
@@ -150,10 +198,15 @@ export class OrgPageLogic extends TreeTableCore<any> {
 
   /**
    * 树底部「新增机构」：有选中加子级；无选中加根（旧语义）。
-   * 绕开 requireTreeSelectionForAdd（本页树允许根新增）。
+   * 绕开 requireTreeSelectionForAdd（本页树允许根新增）；
+   * 非 Dept 机构下不允许新增（与 canAddUnderNode 同规则）。
    */
   openOrgAddFromFooter(): boolean {
     if (this.selectedNode) {
+      if (!this.canAddUnderNode(this.selectedNode)) {
+        ElMessage.warning(this.canAddUnderNodeMessage(this.selectedNode))
+        return false
+      }
       return this.openTreeNodeDialog(null, this.selectedNode)
     }
     this.treeDialogMode.value = 'add'

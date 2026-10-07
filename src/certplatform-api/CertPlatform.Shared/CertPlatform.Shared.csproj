@@ -30,6 +30,30 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\yzh-core\YZH.Core.Stand\YZH.Core.Stand.csproj" />
+    <!--
+      ★ 2026-10-06 用户裁定：「share 可以引入 database 也可以引入 stand」。
+      ★ 为什么现在才加：`Shared/Services/` 下的查库服务（FillParamValueProvider 等）需要 `IDbOrm`。
+        在此之前 Shared 只引 Stand ⇒ 查库逻辑只能各自端内各写一份 = D1/D6 两处重复设计的根因。
+      ★ 实测无环：`YZH.Core.DataBase` → `YZH.Core.Stand`；`YZH.Core.Stand` 零 <ProjectReference>。
+      ⚠️ 硬纪律：加了这个引用**不等于**允许 `Shared/Fill/` 与 `Shared/Office/` 查库 ——
+         那两层必须保持纯函数（可单测、可离线跑，见 FillModels.cs:115）。查库一律放 `Shared/Services/`。
+      守卫：G-4 `grep -rn "IDbOrm" CertPlatform.Shared/Fill CertPlatform.Shared/Office` 恒为 0。
+    -->
+    <ProjectReference Include="..\..\yzh-core\YZH.Core.DataBase\YZH.Core.DataBase.csproj" />
+  </ItemGroup>
+
+  <!--
+    ★ 2026-10-06 用户裁定：「assest 可以放 entityconfig 的 json 文件」。
+    ★ 为什么必须加这段：`Assets/EntityConfigs/*.json` 是**运行期按路径读取**的，
+      ⛔ 不参与编译 ⇒ 不复制到输出目录的话，`dotnet run` 时找不到文件，
+      `EntityConfigHelper` 会**静默**落到 NewEmptyConfig（症状：标题=类型名、Columns=[]、
+      页面「有数据行却一列都不显示」）—— 不报任何错。
+    ⚠️ 配合 `Program.cs` 的 `BusinessEntityConfigPaths` **必须把 Shared 放首位**（搜索顺序=列表顺序）。
+  -->
+  <ItemGroup>
+    <Content Include="Assets\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

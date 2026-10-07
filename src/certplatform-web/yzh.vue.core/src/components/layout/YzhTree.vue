@@ -56,10 +56,19 @@
             {{ getLabel(data) }}
           </span>
 
-          <!-- 徽标 -->
+          <!-- 计数徽标（放在状态**之前**：状态列位置只取决于它右侧的元素 ⇒ 名称/计数长短都对齐） -->
           <span v-if="nodeExtra(data).badge" class="yzh-tree__badge">
             {{ nodeExtra(data).badge }}
           </span>
+
+          <!-- 启用/停用状态（statusField 命中 Extra 时渲染；启停文案可覆盖） -->
+          <YzhStatusBadge
+            v-if="nodeStatus(data)"
+            class="yzh-tree__status"
+            :type="nodeStatus(data)?.type"
+            :text="nodeStatus(data)?.text"
+            size="small"
+          />
 
           <!-- 操作下拉菜单 -->
           <el-dropdown
@@ -104,6 +113,8 @@
 import { computed, ref, watch } from 'vue'
 import { ElTree, ElInput } from 'element-plus'
 import { Document, Folder } from '@element-plus/icons-vue'
+import YzhStatusBadge from '../ui/YzhStatusBadge.vue'
+import { resolveStatusBadge } from '../../utils/status'
 import type { YzhAction } from '../table/types'
 
 /** 组件内结构化树节点（字段参数化的默认形状） */
@@ -186,6 +197,21 @@ interface Props {
   searchPlaceholder?: string
   /** 高亮关键字（搜索时） */
   highlightKeyword?: boolean
+  /**
+   * 节点状态字段名（`Extra` 内，PascalCase / camelCase 双 Key）。
+   *
+   * <para>**默认 `'IsValid'`（全站统一，页面无需绑定）**：后端
+   * `TreeMapper.MapToTreeItem` 已给所有含 `IsValid` 的实体注入 `Extra.IsValid`，
+   * 故任何一棵树（左树右表 / 裸 YzhTree）自动显示启用·禁用徽章 —— 铁律九：启停唯一字段。</para>
+   * <para>节点 `Extra` 无该字段 → 不渲染（如无启停语义的字典树/标准树不受影响）。</para>
+   * <para>传 `''` = 关闭徽章；传其他字段名 = 覆盖（如 `Status`）。仍可绑内核
+   * `treeStatusField`（取后端 `TreeConfig.EnableField`）做后端驱动的覆盖。</para>
+   */
+  statusField?: string
+  /** 启用态文案（传空串 = 启用态不渲染徽章，长树只标注停用更清爽） */
+  statusEnabledText?: string
+  /** 停用态文案 */
+  statusDisabledText?: string
   /** 节点操作按钮：YzhAction[] 或 (node) => YzhAction[] */
   nodeActions?: YzhAction[] | ((node: YzhTreeNode) => YzhAction[])
   /** 兼容旧属性：{ 方法名: 显示文字 } */
@@ -210,6 +236,10 @@ const props = withDefaults(defineProps<Props>(), {
   searchable: false,
   searchPlaceholder: '搜索节点',
   highlightKeyword: true,
+  // 默认读 Extra.IsValid ⇒ 全站树自动显示启停徽章（页面零绑定）；传 '' 关闭
+  statusField: 'IsValid',
+  statusEnabledText: '启用',
+  statusDisabledText: '禁用',
   nodeActions: () => [],
   legacyNodeActions: () => ({}),
   getActionLabel: undefined
@@ -266,6 +296,26 @@ function nodeIcon(node: YzhTreeNode | null | undefined): string | undefined {
   return icon ? String(icon) : undefined
 }
 
+/**
+ * 节点启用状态徽章（S08：状态色只出现在徽章，不出现在按钮）。
+ *
+ * 判据统一走 `utils/status.ts` 的 `resolveStatusBadge`（与 CheckSelector、
+ * 直用 el-tree 的页面同一份口径）—— 组件只负责传 statusField 与文案。
+ * 字段缺失（Extra 未注入）→ 返回 null，不渲染徽章。
+ */
+function nodeStatus(
+  node: YzhTreeNode | null | undefined,
+): { text: string; type: 'success' | 'info' } | null {
+  if (!props.statusField) return null
+  return resolveStatusBadge(
+    node as Record<string, any> | null | undefined,
+    props.statusField,
+    props.statusEnabledText,
+    props.statusDisabledText,
+    props.extraField,
+  )
+}
+
 // ========================================================
 // 树配置（el-tree props 由字段参数化派生）
 // ========================================================
@@ -301,6 +351,16 @@ watch(searchKeyword, (val) => {
     treeRef.value?.filter(val)
   }, 200)
 })
+
+/**
+ * 外部搜索框驱动本树的原地过滤（布局层 `.yzh-tree-table__tree-toolbar` 用）。
+ * <para>⚠️ 外部只能走这条路，⛔ 不要在外层克隆 data 再传进来：el-tree lazy store
+ * 重建时子节点不会从 data 还原（`Node.initialize` 对 lazy 跳过 `setData`），
+ * 克隆一次 = 懒加载结果与展开态全丢（已踩坑 2026-10-07 菜单树搜索）。</para>
+ */
+function setSearchKeyword(value: string) {
+  searchKeyword.value = value ?? ''
+}
 
 // ========================================================
 // 节点动作（YzhAction[] / resolver）
@@ -415,6 +475,11 @@ function setCurrentNode(code: string) {
   treeRef.value?.setCurrentKey(code)
 }
 
+/** 当前高亮节点数据（el-tree store.currentNode.data；无选中返回 null） */
+function getCurrentNode(): YzhTreeNode | null {
+  return (treeRef.value?.getCurrentNode?.() as YzhTreeNode | null) ?? null
+}
+
 /**
  * 向指定父节点追加子节点（不触发 API，仅更新本地树 UI）
  * @param parentCode 父节点 key（null = 追加到根级）
@@ -423,29 +488,43 @@ function setCurrentNode(code: string) {
 function appendNode(parentCode: string | null, newNode: YzhTreeNode) {
   if (!treeRef.value) return
 
-  if (parentCode) {
-    // 优先使用 el-tree 公开 API：append(data, nodeKey)
-    try {
-      ;(treeRef.value as any).append(newNode, parentCode)
-      return
-    } catch {
-      // append 不可用时走 fallback
+  // ① 优先走 el-tree 公开 API append(data, parentNode)
+  //    · 父级 → store.getNode(parentCode).insertChild(...)
+  //    · 根级（parentCode 为空）→ store.append 的 isPropAbsent(undefined)=true →
+  //      落到 store.root.insertChild(...)，正常建节点并渲染
+  //    ⛔ 根级不能只做 props.data.push：el-tree 对 :data 是**浅监听**
+  //       （tree.vue `watch(() => props.data, setData)` 无 deep），原地 push 不触发
+  //       setData，store.root.childNodes 不变 ⇒ 新节点不渲染。
+  try {
+    ;(treeRef.value as any).append(newNode, parentCode ?? undefined)
+    if (!parentCode) {
+      // store 根节点只把数据写进 array.Children（属性），数组本体不动 → 补写，
+      // 保持 treeData 与 store 同源（findNodeByCode / badge 以它为准）。
+      // 根节点没有 tree-node 监听器，此处 push 不会触发 updateChildren 重复建节点。
+      const key = getNodeKey(newNode)
+      if (!props.data.some((n) => getNodeKey(n) === key)) props.data.push(newNode)
     }
-
-    // fallback：通过 store.nodesMap 获取 Node 对象
-    const store = (treeRef.value as any).store
-    const parentNode = store?.nodesMap?.[parentCode]
-    if (parentNode && typeof parentNode.append === 'function') {
-      parentNode.append(newNode)
-      return
-    }
-
-    // 最终 fallback：直接在数据中查找父节点并插入
-    const added = addToTree(props.data, parentCode, newNode)
-    if (added) return
+    return
+  } catch {
+    // append 不可用 → 走下方 fallback
   }
 
-  // 根级：直接追加到 data
+  if (parentCode) {
+    // ② store.nodesMap 拿 Node 对象直接插（Node 无 append，用 insertChild）
+    const store = (treeRef.value as any).store
+    const parentNode = store?.nodesMap?.[parentCode]
+    if (parentNode && typeof parentNode.insertChild === 'function') {
+      parentNode.insertChild({ data: newNode })
+      return
+    }
+
+    // ③ 最终 fallback：直接在数据中查找父节点并插入
+    if (addToTree(props.data, parentCode, newNode)) return
+    // 父节点既不在 store 也不在数据里 → 不动（⛔ 绝不降级成根级追加）
+    return
+  }
+
+  // ④ 兜底：只更新数据
   props.data.push(newNode)
 }
 
@@ -477,25 +556,24 @@ defineExpose({
   expandAll,
   collapseAll,
   setCurrentNode,
+  getCurrentNode,
+  setSearchKeyword,
   appendNode,
   /** 从树中移除指定节点（不触发 API，仅更新本地树 UI） */
   removeNode: (_parentCode: string | null, code: string) => {
     if (!treeRef.value) return
-    // 优先使用 el-tree 公开 API：remove(nodeKey)
+    // ① el-tree 公开 API remove(nodeKey) → 只从 store.childNodes 摘除
     try {
       ;(treeRef.value as any).remove(code)
-      return
     } catch {
-      // fallback
+      // ② store.nodesMap 拿 Node 对象删除
+      const store = (treeRef.value as any).store
+      const node = store?.nodesMap?.[code]
+      if (node?.parentNode) node.parentNode.remove(node)
     }
-    // fallback：通过 store.nodesMap 获取 Node 对象并删除
-    const store = (treeRef.value as any).store
-    const node = store?.nodesMap?.[code]
-    if (node && node.parentNode) {
-      node.parentNode.remove(node)
-      return
-    }
-    // 最终 fallback：在数据中递归查找并移除
+    // ⚠️ store.remove **不会**改 props.data（根级尤其会残留：渲染读 childNodes、
+    //    数据读 treeData → 下次 setData 又把已删节点带回来）。
+    //    与 appendNode 的「store + data 双写」对称，这里补一刀；找不到则静默返回。
     removeFromTree(props.data, code)
   },
 })
@@ -567,6 +645,10 @@ function removeFromTree(nodes: YzhTreeNode[], code: string): boolean {
 .yzh-tree__label.is-highlight {
   color: var(--el-color-primary);
   font-weight: 500;
+}
+
+.yzh-tree__status {
+  flex-shrink: 0;
 }
 
 .yzh-tree__badge {

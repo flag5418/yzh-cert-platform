@@ -280,9 +280,29 @@ export interface TaskGap {
   SkipName?: string | null
   SkipTime?: string | null
   SkipReason?: string | null
+  /**
+   * ★ 中文名缺失（文档提取规则页未登记中文名）⇒ 界面提示管理员去补，
+   * ⛔ 不是系统故障。实测 `cert_doc_field_def` 可能整表只有 1 行。
+   */
+  IsUnnamed?: boolean
+  /**
+   * ★ 表格列定义（中文列头）—— 供「关键表格信息补录」渲染可编辑表格。
+   * 字段型恒为空数组。来源 = `cert_doc_table_field_def`。
+   */
+  Columns?: GapColumn[]
   /** 实时反查：影响几条检查项 */
   ImpactedItemCount: number
   ImpactedItems: GapImpact[]
+}
+
+/** ★ 表格列定义（中文列头 + 类型） */
+export interface GapColumn {
+  /** 列编码（英文驼峰，补录回写用） */
+  Code: string
+  /** 列中文名（界面列头） */
+  Name: string
+  /** `string` | `number` | `date` */
+  DataType: string
 }
 
 /** 清单整体（★ 两张扁平表） */
@@ -294,6 +314,13 @@ export interface TaskGapList {
   PendingCount: number
   FilledCount: number
   SkippedCount: number
+  /**
+   * ★ 待补录项里存在「未命名」项 ⇒ 规则页没配中文名（2026-10-07 裁 3）。
+   *
+   * 界面须提示管理员去后台「文档提取规则」页补，⛔ 不要让审核员以为系统坏了
+   * —— 实测 `cert_doc_field_def` 可能整表只有 1 行。
+   */
+  HasUnnamedItem?: boolean
 }
 
 /** 单条补录结果 */
@@ -450,13 +477,42 @@ export async function getGapList(taskCode: string): Promise<TaskGapList> {
 }
 
 /**
+ * ★★ 启动前预检 —— 「关键信息补录」抽屉的触发点（2026-10-07 用户裁决）
+ *
+ * 【为什么必须实时重算，而不是读 `list` 的存量行】
+ *   缺口清单是**派生数据**（依赖当前企业资料 + 当前规则 DAG），
+ *   存量行会随资料/配置变动漂移。本端点在后端复用 `GapDetector.GenerateGapsAsync`
+ *   现算后再落库，保证「点启动那一刻」的清单与实际执行口径一致
+ *   —— 避免「列表说有缺口、其实早补好了」这类假告警。
+ *
+ * 【信封语义】
+ *   本端点是**查询**（回答「能不能启动、缺什么」）⇒ 查询成功即 `Ok`，
+ *   ⛔ 不是 `Fail`。真正的「不启动」由前端按 `PendingCount > 0` 决定是否弹抽屉，
+ *   ⛔ 不做硬阻断（用户裁决「运行跳过」）。
+ */
+export async function precheckGaps(taskCode: string): Promise<TaskGapList> {
+  const res = await yzhApi.post<ApiResponse<TaskGapList>>(`${GAP_BASE}/precheck`, {
+    TaskCode: taskCode,
+  })
+  return unwrap<TaskGapList>(res, {
+    Fields: [],
+    Tables: [],
+    PendingCount: 0,
+    FilledCount: 0,
+    SkippedCount: 0,
+    HasUnnamedItem: false,
+  })
+}
+
+/**
  * 补录单条
  *
  * 落库去向：`cert_extraction_result` / `cert_table_extraction_result`，
  * `ValueSource='manual'`（裁决 J2）。⛔ 不建独立补录表。
  *
  * @param value 字段型 = 字符串；**表格型必须是 JSON 数组字符串**
- *   （本期表格用 textarea 输 JSON，10 号 Q11；后续可演进为可编辑表格组件）
+ *   （★ 2026-10-07 起界面不再让用户手写 JSON —— 「关键信息补录」抽屉用
+ *    `gap.Columns`（中文列头）渲染可编辑小表格，提交时由前端 `JSON.stringify`）
  */
 export async function fillGap(
   gapCode: string,
@@ -510,4 +566,69 @@ export async function getGapChangeLogs(taskCode: string): Promise<GapChangeLog[]
     TaskCode: taskCode,
   })
   return unwrap<GapChangeLog[]>(res, [])
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 六、未执行清单（2026-10-07 用户裁决 · 裁 2「运行跳过」）
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * 未执行清单一行 —— **按规则/条款聚合**（⛔ 不按缺口逐条罗列）
+ *
+ * 用户逐字要求：「队列完成后，详细记录，哪些规则或条款未执行成功，什么原因」。
+ */
+export interface TaskUnexecuted {
+  /** 规则 / 章节业务键 */
+  ItemCode: string
+  /** ★ 规则名 / 章节名（中文） */
+  ItemName: string
+  /** `nc_check` | `report_section` */
+  ItemType: string
+  /** 关联条款编码 */
+  ClauseCode?: string | null
+  /** 条款标题（中文，可空） */
+  ClauseTitle?: string | null
+  /** 未执行分类（英文枚举，界面用 `SkipCategoryLabel` 显示） */
+  SkipCategory: string
+  /** ★ 未执行分类的中文名 */
+  SkipCategoryLabel: string
+  /** ★ 原因（人话，恒非空） */
+  Reason: string
+  /** ★ 具体缺什么（字段/表格中文名 + 应来自哪个文件） */
+  MissingItems: string[]
+  StandardCode?: string | null
+}
+
+export interface TaskUnexecutedResult {
+  Items: TaskUnexecuted[]
+  /** 未执行成功的规则/条款条数 */
+  TotalCount: number
+  /** 其中因「缺企业数据」导致的条数 */
+  DataGapCount: number
+  /** ★ 队列是否已全部结束（未结束 ⇒ 清单还会变，界面须标注「执行中」） */
+  IsQueueFinished: boolean
+  /** 任务执行状态 */
+  ExecStatus: string
+}
+
+/**
+ * ★★ 未执行清单 —— 队列完成后，详细记录「哪些规则或条款未执行成功、什么原因」
+ *
+ * 【为什么必须有这个出口】
+ *   `ExpertTaskQueueRunner.RefreshQueueAsync` 在「全部项 skipped」时会把队列置
+ *   `completed` —— **报告看起来跑完了，实际有检查项根本没做**，而且完全静默。
+ *   本接口就是把这个静默缺口显式记录下来。
+ */
+export async function getUnexecuted(taskCode: string): Promise<TaskUnexecutedResult> {
+  const res = await yzhApi.post<ApiResponse<TaskUnexecutedResult>>(
+    '/api/Auditor/ExpertTask/unexecuted',
+    { TaskCode: taskCode },
+  )
+  return unwrap<TaskUnexecutedResult>(res, {
+    Items: [],
+    TotalCount: 0,
+    DataGapCount: 0,
+    IsQueueFinished: false,
+    ExecStatus: '',
+  })
 }

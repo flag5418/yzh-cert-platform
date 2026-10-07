@@ -54,12 +54,6 @@ namespace CertPlatform.Auditor.Services.Ent
         /// <summary>批次有效期（分钟）：init 后超时未 confirm 即作废，防悬空草稿行永久占位</summary>
         private const int TaskExpireMinutes = 30;
 
-        /// <summary>
-        /// 转换僵死判定阈值：文件非终态且 <c>UpdateTime</c> 超过此时长 ⇒ 认定执行器已死，按失败放行。
-        /// <para>取值 15 分钟：大于队列租约（默认 5 分钟 × 重试），小于人工察觉周期。</para>
-        /// </summary>
-        private static readonly TimeSpan StuckThreshold = TimeSpan.FromMinutes(15);
-
         /// <summary>单文件大小上限（字节）= 200 MB，与既有 upload/file 的 RequestSizeLimit 一致</summary>
         public const long MaxFileSizeBytes = 200L * 1024 * 1024;
 
@@ -263,6 +257,36 @@ namespace CertPlatform.Auditor.Services.Ent
                     .Where(x => x.EnterpriseCode == ent.Code && x.IsValid == 1 && !x.IsDeleted)
                     .ToListAsync() ?? new List<CertEnterpriseStage>();
 
+                // ★ <b>M7（2026-10-07）</b>：本企业绑定的**标准清单**，随阶段节点下发 ⇒ 前端渲染标准 tab。
+                //
+                // <para><b>为什么必须从这里取标准</b>：原始资料表 <c>cert_enterprise_original_file</c>
+                // <b>没有标准列</b>（只有 <c>StageCode</c>）—— 标准维度只存在于
+                // <c>cert_enterprise_stage</c>（一行 = 一个「企业 × 阶段 × 标准」）与画像表
+                // <c>cert_enterprise_doc_profile</c>（一行 = 一个「文件 × 标准」画像）。</para>
+                //
+                // <para>⇒ 前端不把标准传下去时，后端只能 <c>FirstOrDefault</c> 取「某一行」画像
+                // ⇒ 同一份文件在 A 标准下显示 B 标准的标签/作用（用户点名痛点：
+                // 「点击分组的时候，显示的信息不正确」）。</para>
+                var stdCodes = links.Select(l => (l.StandardCode ?? "").Trim())
+                    .Where(c => c != "")
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList();
+                var stdRows = stdCodes.Count == 0
+                    ? new List<ISOStandard>()
+                    : await _db.Client.Queryable<ISOStandard>()
+                        .Where(x => stdCodes.Contains(x.Code) && x.IsValid == 1 && !x.IsDeleted)
+                        .ToListAsync() ?? new List<ISOStandard>();
+                // ⚠️ 排序在内存里做（⛔ 不在 SqlSugar 表达式里 OrderBy）。
+                //    Sort 是标准表自己的排序号，实测**两个标准都是 0**（并列）⇒ 只靠它排序结果不稳定，
+                //    会让「食品标准」排在「9001标准」前面（对 9001 为主的企业很别扭）。
+                //    故补两级确定性兜底：VersionYear（标准版本年，旧的在前）→ StandardCode。
+                //    ⚠️ 这只是**确定性**排序，不代表业务上的主次（业务主次未定义）。
+                stdRows = stdRows
+                    .OrderBy(x => x.Sort)
+                    .ThenBy(x => x.VersionYear)
+                    .ThenBy(x => x.StandardCode, StringComparer.Ordinal)
+                    .ToList();
+
                 var stageCodes = links.Select(l => l.StageCode).Distinct().ToList();
                 var stages = stageCodes.Count == 0
                     ? new List<CertStage>()
@@ -276,7 +300,18 @@ namespace CertPlatform.Auditor.Services.Ent
 
                 var children = stages.OrderBy(s => s.SortOrder).Select(s =>
                 {
-                    var sc = counts.Where(c => c.StageCode == s.StageCode).ToList();
+                    // ★ 必须用 s.Code（GUID）而不是 s.StageCode（slug 如 jd01/03）：
+                    //   EnterpriseOriginalFile.StageCode 存的是**阶段 Code（GUID）**
+                    //   —— 与 cert_enterprise_stage.StageCode 同一口径（见下方 Code = s.Code 的注释）。
+                    //   ⛔ 曾经写成 c.StageCode == s.StageCode ⇒ GUID 比 slug 永远不等
+                    //      ⇒ 每个阶段的 FileCount 恒为 0（企业节点却是真实总数）
+                    //      ⇒ 界面表现为「企业明明有 101 份，每个阶段都显示 0」。
+                    var sc = counts.Where(c => c.StageCode == s.Code).ToList();
+                    // ★ M7：该阶段绑定的标准（同一阶段可以同时做多个标准，如 9001 + 食品）
+                    var stageStdCodes = links.Where(l => l.StageCode == s.Code)
+                        .Select(l => (l.StandardCode ?? "").Trim())
+                        .Where(c => c != "")
+                        .ToHashSet(StringComparer.Ordinal);
                     return (object)new
                     {
                         // ★ 必须是 Code（GUID）而不是 StageCode（slug 如 jd01/03）：
@@ -298,6 +333,13 @@ namespace CertPlatform.Auditor.Services.Ent
                         AnalyzingCount = sc.Count(c => c.AnalyzeStatus == AnalyzeStatus.Analyzing),
                         FailedCount = sc.Count(c => c.ConvertStatus == ConvertStatus.Failed
                                                  || c.AnalyzeStatus == AnalyzeStatus.Failed),
+                        // ★ M7：本阶段绑定的标准清单（已按 Sort 排好）
+                        //   ⇒ 前端据此渲染标准 tab；把选中标准的 Code 传回 list/profile 端点，
+                        //     标签与作用才按「该标准那一行画像」显示（根治串标准）。
+                        Standards = stdRows
+                            .Where(x => stageStdCodes.Contains(x.Code))
+                            .Select(x => new { x.Code, x.StandardCode, x.StandardName, x.VersionYear })
+                            .ToList(),
                     };
                 }).ToList();
 
@@ -335,9 +377,17 @@ namespace CertPlatform.Auditor.Services.Ent
         /// <param name="groupByTag">
         /// true = 额外返回「语义分组聚合」（每个标签多少份），供页面渲染分组视图。
         /// </param>
+        /// <param name="standardCode">
+        /// ★ <b>M6（2026-10-06）</b>：按<b>标准</b>取画像。
+        ///
+        /// <para>一个文件在 N 个标准下各有<b>一行</b>画像（选项 A 多行画像）⇒ 不指定标准时
+        /// 只能拿到「该文件的某一行」（<c>FirstOrDefault</c>），<b>标签/作用可能属于另一个标准</b>。</para>
+        /// <para>空 = 兼容旧前端：不过滤标准（取该文件版本号最大的一行）。</para>
+        /// </param>
         public async Task<object> ListAsync(
             string enterpriseCode, string stageCode,
-            IList<string>? tagCodes = null, bool onlyUsable = false, bool groupByTag = false)
+            IList<string>? tagCodes = null, bool onlyUsable = false, bool groupByTag = false,
+            string? standardCode = null)
         {
             var err = await OwnershipErrorAsync(enterpriseCode);
             if (err != null) return new { Success = false, Message = err, Rows = new object[0] };
@@ -348,9 +398,26 @@ namespace CertPlatform.Auditor.Services.Ent
                             && !x.IsDeleted && x.IsValid == 1)
                 .ToListAsync() ?? new List<EnterpriseOriginalFile>();
 
-            var profiles = await _db.Client.Queryable<EnterpriseDocProfile>()
-                .Where(x => x.EnterpriseCode == enterpriseCode && x.IsLatest && x.IsValid == 1)
-                .ToListAsync() ?? new List<EnterpriseDocProfile>();
+            // ★ M6：画像按**标准**过滤（不传则不限标准，取版本号最大的一行）
+            var std = (standardCode ?? "").Trim();
+            var profiles = (await _db.Client.Queryable<EnterpriseDocProfile>()
+                .Where(x => x.EnterpriseCode == enterpriseCode && x.IsLatest && x.IsValid == 1
+                            && (std == "" || x.StandardCode == std))
+                .ToListAsync() ?? new List<EnterpriseDocProfile>())
+                // ★ 同一文件在同一标准下只应有一行 IsLatest；万一历史数据有多行，取版本号最大者（确定性）
+                .GroupBy(x => x.OriginalFileCode, StringComparer.Ordinal)
+                .Select(g => g.OrderByDescending(x => x.ProfileVersion).First())
+                .ToList();
+
+            // ★ 本企业×阶段「画像里出现过的标准」——供前端渲染标准切换器（M7-③，P2 落地 UI）
+            var availableStandards = (await _db.Client.Queryable<EnterpriseDocProfile>()
+                    .Where(x => x.EnterpriseCode == enterpriseCode && x.StageCode == stageCode
+                                && x.IsLatest && x.IsValid == 1)
+                    .ToListAsync() ?? new List<EnterpriseDocProfile>())
+                .Select(x => x.StandardCode)
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
 
             // ★ 标签过滤（语义分组）：先挂画像再过滤
             var tagByFile = new Dictionary<string, List<string>>(StringComparer.Ordinal);
@@ -425,6 +492,8 @@ namespace CertPlatform.Auditor.Services.Ent
                         DocPurpose = p?.DocPurpose,
                         InfoItemsJson = p?.InfoItemsJson,
                         ProfileVersion = p?.ProfileVersion,
+                        // ★ M6：这行画像属于哪个标准（前端标准切换器据此对齐）
+                        StandardCode = p?.StandardCode,
                     };
                 }).ToList();
 
@@ -450,6 +519,9 @@ namespace CertPlatform.Auditor.Services.Ent
                 UsableCount = usableTotal,
                 HalfProductCount = halfTotal,
                 Groups = groupByTag ? grouped : null,
+                // ★ M6：当前生效的标准过滤 + 该企业×阶段画像里出现过的全部标准（供前端标准切换器）
+                StandardCode = std == "" ? null : std,
+                Standards = availableStandards,
             };
         }
 
@@ -515,12 +587,9 @@ namespace CertPlatform.Auditor.Services.Ent
                 return Result<object?>.Fail("记录不存在或不属于当前工作区");
             if (row.IsDeleted) return Result<object?>.Fail("记录已删除");
 
-            // 忙碌闸门：该企业该阶段还有队列在跑 ⇒ 拒绝，避免两条链并发写同一行
-            var busy = await FindBusyQueueAsync(enterpriseCode, row.StageCode);
-            if (busy != null)
-                return Result<object?>.Fail($"该阶段还有一批资料正在处理（{DescribeQueueType(busy.QueueType)} "
-                    + $"{busy.CompletedCount}/{busy.TotalCount}），请等处理完成后再重新生成");
-
+            // ★ 文件级闸门（2026-10-06 重构）：⛔ 不再按「阶段忙」拒绝 —— 阶段里其他文件在跑
+            //   与本文件无关（实测误伤）。同文件自己的旧队列由 EnqueueFileQueuesAsync
+            //   入队前取消重建（用户裁决 ③），并发写同一行的风险由资源锁 + 取消解决。
             if (string.IsNullOrEmpty(row.StoragePath))
                 return Result<object?>.Fail("文件尚未上传完成，无法生成内容");
 
@@ -532,11 +601,10 @@ namespace CertPlatform.Auditor.Services.Ent
             row.PreviewPdfPath = null;
             row.MarkdownPath = null;
             row.ConvertDate = null;
-            row.AnalyzeStatus = reanalyze ? AnalyzeStatus.Pending : AnalyzeStatus.Pending;
-            row.AnalyzeMessage = "等待重新识别";
             row.UpdateTime = DateTime.Now;
             row.UpdateBy = _user.UserCode;
-            await _db.UpdateAsync(row,
+            var updateCols = new List<string>
+            {
                 nameof(EnterpriseOriginalFile.ConvertStatus),
                 nameof(EnterpriseOriginalFile.ConvertMessage),
                 nameof(EnterpriseOriginalFile.MarkdownStatus),
@@ -544,16 +612,24 @@ namespace CertPlatform.Auditor.Services.Ent
                 nameof(EnterpriseOriginalFile.PreviewPdfPath),
                 nameof(EnterpriseOriginalFile.MarkdownPath),
                 nameof(EnterpriseOriginalFile.ConvertDate),
-                nameof(EnterpriseOriginalFile.AnalyzeStatus),
-                nameof(EnterpriseOriginalFile.AnalyzeMessage),
-                nameof(EnterpriseOriginalFile.UpdateTime),
-                nameof(EnterpriseOriginalFile.UpdateBy));
+            };
+            // ★ reanalyze=false = 只重转不重识别 ⇒ 识别状态**原样保留**（画像不动就不是「待识别」）。
+            //   旧实现无条件置 pending + SkipAnalyze 短路 ⇒ 状态永远停在「待识别」（历史缺陷，随重构修）
+            if (reanalyze)
+            {
+                row.AnalyzeStatus = AnalyzeStatus.Pending;
+                row.AnalyzeMessage = "等待重新识别";
+                updateCols.Add(nameof(EnterpriseOriginalFile.AnalyzeStatus));
+                updateCols.Add(nameof(EnterpriseOriginalFile.AnalyzeMessage));
+            }
+            updateCols.Add(nameof(EnterpriseOriginalFile.UpdateTime));
+            updateCols.Add(nameof(EnterpriseOriginalFile.UpdateBy));
+            await _db.UpdateAsync(row, updateCols.ToArray());
 
-            // ★ 单文件批次（BatchCode 用 file: 前缀 ⇒ ingest executor 会走「单文件不入队 analyze」，
-            //   由本方法自己控制后续，避免两处重复入队）
-            var (qCode, qErr) = await EnqueueIngestQueueAsync(
+            // ★ 单文件队列：编排器内串行跑「转换段 → 分析段」；skipAnalyze 承接 reanalyze=false
+            var (qCode, qErr) = await EnqueueFileQueuesAsync(
                 row.EnterpriseCode, row.StageCode,
-                new List<EnterpriseOriginalFile> { row }, $"file:{fileCode}");
+                new List<EnterpriseOriginalFile> { row }, $"file:{fileCode}", skipAnalyze: !reanalyze);
 
             if (qCode == null)
             {
@@ -662,7 +738,8 @@ namespace CertPlatform.Auditor.Services.Ent
             var scopeKey = ScopeKeyOf(enterpriseCode, stageCode);
             var rows = await _db.Client.Queryable<YzhQueue>()
                 .Where(q => q.ScopeKey == scopeKey
-                            && (q.QueueType == EnterpriseOriginalQueue.QueueTypeIngest
+                            && (q.QueueType == EnterpriseOriginalQueue.QueueTypeFile
+                                || q.QueueType == EnterpriseOriginalQueue.QueueTypeIngest
                                 || q.QueueType == EnterpriseOriginalQueue.QueueTypeAnalyze))
                 .OrderByDescending(q => q.CreateTime)
                 .Take(20)
@@ -688,9 +765,10 @@ namespace CertPlatform.Auditor.Services.Ent
 
             var tasks = taskScope.Where(t => t.QueueCode != null && queueCodes.Contains(t.QueueCode)).ToList();
 
-            // 任务 → 文件：⚠️ 两种 payload 形态
-            //   · ingest（逐文件）：{ "Code": "<文件Code>", ... }
-            //   · analyze（批次）  ：{ "BatchCode": "...", "FileCodes": ["<Code1>","<Code2>"] }
+            // 任务 → 文件：⚠️ 三种 payload 形态
+            //   · file（当前唯一写入口，2026-10-06 起）：{ "Code": "<文件Code>", ... }
+            //   · ingest（历史）：{ "Code": "<文件Code>", ... }
+            //   · analyze（历史批次）：{ "BatchCode": "...", "FileCodes": ["<Code1>","<Code2>"] }
             // ⇒ 统一展开成「一个文件一行」，否则批次任务在 UI 上挂不到文件名。
             var fileCodes = new HashSet<string>(StringComparer.Ordinal);
             foreach (var t in tasks)
@@ -801,7 +879,57 @@ namespace CertPlatform.Auditor.Services.Ent
                             && !x.IsDeleted && x.IsValid == 1)
                 .ToListAsync() ?? new List<EnterpriseOriginalFile>();
 
-            var running = await _queueManager.FindRunningQueueByScopeKeyAsync(ScopeKeyOf(enterpriseCode, stageCode));
+            var scopeKey = ScopeKeyOf(enterpriseCode, stageCode);
+
+            // ★ 忙碌判据 = 该 scope 下**非终态**队列（2026-10-06 文件级重构后可能同时有 N 个）
+            var active = await _db.Client.Queryable<YzhQueue>()
+                .Where(q => q.ScopeKey == scopeKey
+                            && q.Status != "completed" && q.Status != "failed" && q.Status != "cancelled")
+                .OrderByDescending(q => q.CreateTime)
+                .ToListAsync() ?? new List<YzhQueue>();
+            var running = active.FirstOrDefault();
+
+            // ★ 进度按**文件**聚合：一个文件 = 一个队列 = 一个任务 ⇒ 旧「单队列 TotalCount」
+            //   口径会显示成「0 / 1」，毫无意义。文件级口径 = 本次在跑的文件里已到终态的占比。
+            int queueTotal = 0, queueCompleted = 0;
+            if (active.Count > 0)
+            {
+                var activeCodes = active.Select(q => q.QueueCode)
+                    .Where(c => !string.IsNullOrWhiteSpace(c))
+                    .ToHashSet(StringComparer.Ordinal);
+
+                // ⚠️ 全取 + 内存过滤（SqlSugar 对闭包集合 Contains 翻译不可靠，会静默返回空集）
+                var taskScope = activeCodes.Count == 0
+                    ? new List<YzhQueueTask>()
+                    : await _db.Client.Queryable<YzhQueueTask>()
+                        .OrderByDescending(t => t.CreateTime)
+                        .Take(500)
+                        .ToListAsync() ?? new List<YzhQueueTask>();
+                var activeTasks = taskScope
+                    .Where(t => t.QueueCode != null && activeCodes.Contains(t.QueueCode))
+                    .ToList();
+
+                var fileCodes = activeTasks
+                    .Select(t => ExtractPayloadCode(t.Payload))
+                    .Where(c => !string.IsNullOrWhiteSpace(c))
+                    .Select(c => c!)
+                    .ToHashSet(StringComparer.Ordinal);
+
+                var inFlight = fileCodes.Count == 0
+                    ? new List<EnterpriseOriginalFile>()
+                    : rows.Where(r => fileCodes.Contains(r.Code ?? "")).ToList();
+                if (inFlight.Count > 0)
+                {
+                    queueTotal = inFlight.Count;
+                    queueCompleted = inFlight.Count(IsFileFinished);
+                }
+                else
+                {
+                    // 兜底（历史批次队列 / 载荷解析不出文件）：退回任务口径
+                    queueTotal = active.Sum(a => a.TotalCount);
+                    queueCompleted = active.Sum(a => a.CompletedCount);
+                }
+            }
 
             return new
             {
@@ -820,14 +948,27 @@ namespace CertPlatform.Auditor.Services.Ent
                 HalfProductCount = rows.Count(IsHalfProduct),
                 QueueCode = running?.QueueCode,
                 QueueStatus = running?.Status,
-                // ★ 队列进度（前端进度条直接吃这两个字段）
-                QueueTotal = running?.TotalCount ?? 0,
-                QueueCompleted = running?.CompletedCount ?? 0,
-                QueueProgress = running?.Progress ?? 0,
-                // ★「有队列在跑」= 忙碌态，前端据此**禁用上传按钮**（36 号 §六，2026-10-03 用户要求：
-                //   「卡住该阶段不允许继续上传，只有队列完成后才能继续上传」）
-                IsBusy = running != null,
+                // ★ 前端「正在做什么」按类型说人话（旧实现漏了这个字段 ⇒ 标签恒为 else 分支，2026-10-06 修）
+                QueueType = running?.QueueType,
+                QueueTotal = queueTotal,
+                QueueCompleted = queueCompleted,
+                QueueProgress = queueTotal > 0 ? (int)Math.Round(queueCompleted * 100d / queueTotal) : 0,
+                // ★「有队列在跑」= 忙碌态 ⇒ 前端显示进度横幅 + 3s 轮询（⛔ 不再禁用上传：
+                //   文件级队列互不冲突，阶段级拒绝是 2026-10-03 的旧口径，随重构废除）
+                IsBusy = active.Count > 0,
             };
+        }
+
+        /// <summary>文件是否已到终态（转换段 ∧ 分析段都收尾）——进度聚合的「完成」判据</summary>
+        private static bool IsFileFinished(EnterpriseOriginalFile f)
+        {
+            var convDone = f.ConvertStatus == ConvertStatus.Completed
+                        || f.ConvertStatus == ConvertStatus.Failed
+                        || f.ConvertStatus == ConvertStatus.Unsupported;
+            var anaDone = f.AnalyzeStatus == AnalyzeStatus.Analyzed
+                       || f.AnalyzeStatus == AnalyzeStatus.Skipped
+                       || f.AnalyzeStatus == AnalyzeStatus.Failed;
+            return convDone && anaDone;
         }
 
         // ========================================================
@@ -1272,10 +1413,9 @@ namespace CertPlatform.Auditor.Services.Ent
             foreach (var row in rows)
             {
                 row.IsValid = 1;
-                // ⚠️ 这里**不能**清空 UploadTaskCode：ingest 队列是本方法刚建的，
-                //   其任务跑完时会调 `EnsureAnalyzeQueuedAsync(batchCode)` —— 它靠 DB 里这一列反查整批文件。
-                //   清了 ⇒ 批次查不到 ⇒ analyze 永远排不上（2026-10-03 实测：3 份全部停在「待分析」）。
-                //   「改策略重跑别扫全批」改由 SetPolicyAsync / RestoreVersionAsync 主动置空来保证。
+                // ⚠️ 不清空 UploadTaskCode：它是**上传批次的追溯列**（init/file/cancel/replace
+                //   都按它反查本批次行）。队列侧已不再依赖它 —— 批次语义随 2026-10-06
+                //   文件级重构废除（入队快照写进 payload，执行时按 payload 走）。
                 row.UpdateTime = now;
                 row.UpdateBy = _user.UserCode;
                 await _db.UpdateAsync(row,
@@ -1284,26 +1424,18 @@ namespace CertPlatform.Auditor.Services.Ent
                     nameof(EnterpriseOriginalFile.UpdateBy));
             }
 
-            // ★ 忙碌闸门：该企业该阶段已有队列在跑 ⇒ **拒绝上传**（2026-10-03 用户要求）。
-            //   早先只返回一句 QueueError 提示，前端照样显示「上传完成」⇒ 用户以为成功了。
-            var busy = await FindBusyQueueAsync(enterpriseCode, task.StageCode);
-            if (busy != null)
-            {
-                return ($"该阶段还有一批资料正在处理（{DescribeQueueType(busy.QueueType)} " +
-                        $"{busy.CompletedCount}/{busy.TotalCount}），请等处理完成后再上传", null);
-            }
-
+            // ★ 文件级闸门（2026-10-06 重构）：⛔ 不再按「阶段忙」拒绝整批上传 —— 同阶段其他
+            //   文件在跑与本批次无关（2026-10-03 阶段级拒绝「实测误伤」，随重构废除）。
+            //   同文件重传的旧队列由 EnqueueFileQueuesAsync 入队前**取消重建**（用户裁决 ③）。
             string? queueCode = null;
             string? queueError = null;
             if (activatable.Count > 0)
             {
-                (queueCode, queueError) = await EnqueueIngestQueueAsync(enterpriseCode, task.StageCode, activatable, task.Code);
-
-                // ⚠️ analyze 队列**不在这里入队** —— 此刻 ingest 刚开始跑，Markdown 还没产出。
-                //   改由 `EnsureAnalyzeQueuedAsync` 在**整批转换完成后**自动补（见 executor 调用点）。
-                //   框架的 `GetNextPendingTaskAsync` 只按 Status='pending' 取任务、**不看 ScopeKey**
-                //   ⇒ analyze 与 ingest 会并行；此处入队必然抢跑。实测（2026-10-03）：
-                //   analyze 先跑 → 3 份全部「转换完成但 Markdown 未就绪」。
+                // 一个文件 = 一个队列 = 一个任务：转换段 + 分析段由 EnterpriseOriginalFileExecutor
+                // **串行**跑在同一个任务里 ⇒ 无须再等「整批转换完」补建 analyze（旧抢跑根因已消）。
+                // TaskId = task.Code ⇒ UploadCancelAsync 的 CancelBatchAsync(taskId) 仍可整批取消。
+                (queueCode, queueError) = await EnqueueFileQueuesAsync(
+                    enterpriseCode, task.StageCode, activatable, task.Code);
             }
 
             task.Status = TaskStatus.Confirmed;
@@ -1435,6 +1567,45 @@ namespace CertPlatform.Auditor.Services.Ent
                 nameof(EnterpriseOriginalFile.UpdateBy));
 
             return Result<object?>.Ok(null);
+        }
+
+        /// <summary>
+        /// ★ <b>批量删除</b>（2026-10-07 新增）—— 页面上「删除整个文件夹」的落点。
+        ///
+        /// <para><b>为什么必须有一个端点，而不是前端循环调 <see cref="DeleteAsync"/></b>：
+        /// 一个文件夹的子树里可能有几十份文件，逐个调用会产生几十次往返；中途某次失败
+        /// 还会留下「删了一半」的中间态，而用户界面上看不出到底删掉了哪些。</para>
+        ///
+        /// <para><b>语义与单个删除完全一致</b>（软删行 + 删对象 + 归档历史版本；
+        /// <c>cert_enterprise_doc_profile</c> <b>画像保留</b>以备审计）。
+        /// 逐个执行并汇总成败 —— ⛔ 某一份失败<b>不中断</b>其余（与 <see cref="BatchSetPolicyAsync"/> 同款口径），
+        /// 否则一个已被别处删掉的行会让整次操作白跑。</para>
+        /// </summary>
+        public async Task<Result<object?>> BatchDeleteAsync(
+            IList<string> fileCodes, string enterpriseCode, string? reason)
+        {
+            if (fileCodes == null || fileCodes.Count == 0)
+                return Result<object?>.Fail("请先选择要删除的文件");
+
+            var tenantErr = await OwnershipErrorAsync(enterpriseCode);
+            if (tenantErr != null) return Result<object?>.Fail(tenantErr);
+
+            var ok = 0;
+            var failed = new List<string>();
+            foreach (var code in fileCodes.Distinct(StringComparer.Ordinal))
+            {
+                var r = await DeleteAsync(code, enterpriseCode, reason);
+                if (r.Success) ok++;
+                else failed.Add($"{code}：{r.Error}");
+            }
+
+            return Result<object?>.Ok(new
+            {
+                Total = fileCodes.Count,
+                SuccessCount = ok,
+                FailedCount = failed.Count,
+                Failed = failed.Take(10).ToList(),
+            });
         }
 
         /// <summary>历史版本列表（只追加，倒序）</summary>
@@ -1578,7 +1749,8 @@ namespace CertPlatform.Auditor.Services.Ent
 
             await InvalidateProfileAsync(fileCode);
 
-            var (_, qErr) = await EnqueueIngestQueueAsync(
+            // ★ 单文件队列（先取消该文件旧队列再重建）
+            var (_, qErr) = await EnqueueFileQueuesAsync(
                 row.EnterpriseCode, row.StageCode, new List<EnterpriseOriginalFile> { row }, $"restore:v{versionNumber}");
             if (qErr != null) _logger.LogWarning("[Restore] 入队失败（不阻断恢复）: {FileCode} {Reason}", fileCode, qErr);
 
@@ -1621,7 +1793,7 @@ namespace CertPlatform.Auditor.Services.Ent
                 row.MarkdownMessage = null;
                 row.AnalyzeStatus = AnalyzeStatus.Pending;
                 row.AnalyzeMessage = null;
-                // ★ 置空批次号：本次是「单文件重跑」，不能被 EnsureAnalyzeQueuedAsync 当成整批
+                // ★ 置空批次号：单文件重跑的追溯（队列不再按批次反查，此列仅供上传链路用）
                 row.UploadTaskCode = "";
                 row.UpdateTime = DateTime.Now;
                 await _db.UpdateAsync(row,
@@ -1634,7 +1806,7 @@ namespace CertPlatform.Auditor.Services.Ent
                     nameof(EnterpriseOriginalFile.UploadTaskCode),
                     nameof(EnterpriseOriginalFile.UpdateTime));
 
-                var (_, qErr) = await EnqueueIngestQueueAsync(
+                var (_, qErr) = await EnqueueFileQueuesAsync(
                     row.EnterpriseCode, row.StageCode, new List<EnterpriseOriginalFile> { row }, "policy:analyze");
                 if (qErr != null) return Result<object?>.Fail($"策略已保存，但入队失败：{qErr}");
             }
@@ -1683,26 +1855,43 @@ namespace CertPlatform.Auditor.Services.Ent
         // 五、画像读取与人工修正（D6）
         // ========================================================
 
-        /// <summary>取该文件最新画像（语义结果 + 策略）</summary>
-        public async Task<object> GetProfileAsync(string fileCode, string enterpriseCode)
+        /// <summary>
+        /// 取该文件最新画像（语义结果 + 策略）。
+        /// <para>★ <b>M6</b>：<paramref name="standardCode"/> 指定「哪个标准下的画像」；
+        /// 空 = 兼容旧前端（取版本号最大的一行，可能属于任意标准）。</para>
+        /// </summary>
+        public async Task<object> GetProfileAsync(string fileCode, string enterpriseCode, string? standardCode = null)
         {
             var err = await OwnershipErrorAsync(enterpriseCode);
             if (err != null) return new { Success = false, Message = err };
 
+            var std = (standardCode ?? "").Trim();
             var p = (await _db.Client.Queryable<EnterpriseDocProfile>()
-                .Where(x => x.OriginalFileCode == fileCode && x.IsLatest && x.IsValid == 1)
+                .Where(x => x.OriginalFileCode == fileCode && x.IsLatest && x.IsValid == 1
+                            && (std == "" || x.StandardCode == std))
                 .ToListAsync() ?? new List<EnterpriseDocProfile>())
                 .OrderByDescending(x => x.ProfileVersion).FirstOrDefault();
 
             if (p == null) return new { Success = false, Message = "该文件尚无画像（可能策略为跳过/忽略，或分析未完成）" };
 
-            return new { Success = true, Message = (string?)null, Profile = p };
+            // ★ M6：一并回该文件**有画像的全部标准**，前端标准切换器据此渲染
+            var standards = (await _db.Client.Queryable<EnterpriseDocProfile>()
+                    .Where(x => x.OriginalFileCode == fileCode && x.IsLatest && x.IsValid == 1)
+                    .ToListAsync() ?? new List<EnterpriseDocProfile>())
+                .Select(x => x.StandardCode)
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            return new { Success = true, Message = (string?)null, Profile = p, Standards = standards };
         }
 
         /// <summary>
         /// 人工修正画像（D6 全量编辑：标签 / 作用四段 / InfoItems / 策略）。
         /// <para>修正写<b>新版本</b>（<c>ProfileVersion+1</c>、旧版 <c>IsLatest=0</c>）而不是原地改 ——
         /// 「谁在什么时候把标签从 A 改成 B」必须可审计（AI 建议值本身也要留痕对比）。</para>
+        /// <para>★ <b>M6</b>：<c>dto.StandardCode</c> 指定改的是<b>哪个标准</b>那一行
+        /// （多行画像下不指定就只能改到版本号最大的一行 = 可能不是用户在看的那一行）。</para>
         /// </summary>
         public async Task<Result<object?>> CorrectProfileAsync(CorrectProfileDto dto)
         {
@@ -1711,11 +1900,16 @@ namespace CertPlatform.Auditor.Services.Ent
             var tenantErr = await OwnershipErrorAsync(dto.EnterpriseCode ?? "");
             if (tenantErr != null) return Result<object?>.Fail(tenantErr);
 
+            var std = (dto.StandardCode ?? "").Trim();
             var latest = (await _db.Client.Queryable<EnterpriseDocProfile>()
-                .Where(x => x.OriginalFileCode == dto.FileCode && x.IsLatest && x.IsValid == 1)
+                .Where(x => x.OriginalFileCode == dto.FileCode && x.IsLatest && x.IsValid == 1
+                            && (std == "" || x.StandardCode == std))
                 .ToListAsync() ?? new List<EnterpriseDocProfile>())
                 .OrderByDescending(x => x.ProfileVersion).FirstOrDefault();
-            if (latest == null) return Result<object?>.Fail("该文件尚无画像，无法修正");
+            if (latest == null)
+                return Result<object?>.Fail(std == ""
+                    ? "该文件尚无画像，无法修正"
+                    : $"该文件在标准 {std} 下尚无画像，无法修正");
 
             // 标签值必须 ∈ cert_tag_dict.TagCode，否则标签漂移 → 召回退化（36 号 R6）
             if (!string.IsNullOrWhiteSpace(dto.TagsJson))
@@ -1917,245 +2111,139 @@ namespace CertPlatform.Auditor.Services.Ent
             return r ?? 0;
         }
 
-        /// <summary>建 <c>enterprise_original_ingest</c> 队列（每文件 1 个 TaskItem）</summary>
-        private async Task<(string? QueueCode, string? Error)> EnqueueIngestQueueAsync(
-            string enterpriseCode, string stageCode, List<EnterpriseOriginalFile> files, string sourceId)
+        /// <summary>
+        /// ★ <b>按文件建队列</b>（2026-10-06 队列重构的<b>唯一入队口</b>）：
+        /// 一个文件 = 一个队列 = 一个任务（<c>enterprise_original_file</c>），
+        /// 任务内由 <see cref="EnterpriseOriginalFileExecutor"/> <b>串行</b>跑「转换段 → 分析段」。
+        ///
+        /// <para><b>同文件重入 = 取消旧队列再重建</b>（用户裁决 ③）：入队前先
+        /// <see cref="CancelActiveQueuesOfFileAsync"/> 收掉该文件的活跃队列（含旧批次 ingest
+        /// 持有的资源锁），否则 <c>yzh_queue_resource_lock.uk_active</c>（Table|Code 唯一）直接冲突。
+        /// ⛔ <b>不再做阶段级 ScopeKey 互斥</b>：一个文件在跑不该拦住同阶段的其他文件
+        /// （旧批次闸门「实测误伤」，已随重构废除）。</para>
+        ///
+        /// <para><b>★ <c>TaskId</c> = 触发标识 <paramref name="sourceTag"/></b>：confirm 传上传批次 Code
+        /// ⇒ <see cref="UploadCancelAsync"/> 的 <c>CancelBatchAsync(taskId)</c>（框架按 TaskId 精确匹配）
+        /// 仍能整批取消；其余入口传 <c>file:{Code}</c> / <c>restore:v{n}</c> / <c>policy:analyze</c>。</para>
+        /// </summary>
+        /// <param name="skipAnalyze">true = 只重转不重识别（「重新生成」勾掉「重新识别」）</param>
+        private async Task<(string? QueueCode, string? Error)> EnqueueFileQueuesAsync(
+            string enterpriseCode, string stageCode, List<EnterpriseOriginalFile> files, string sourceTag,
+            bool skipAnalyze = false)
         {
             if (files.Count == 0) return (null, null);
 
             var scopeKey = ScopeKeyOf(enterpriseCode, stageCode);
-            var running = await _queueManager.FindRunningQueueByScopeKeyAsync(scopeKey);
-            if (running != null)
-                return (null, $"该企业该阶段已有运行中原始资料队列（{running.QueueCode}），请等待完成");
-
-            var tasks = new List<QueueManager.TaskItem>();
-            var locks = new List<QueueManager.ResourceLockItem>();
+            var standardCodes = await ResolveStageStandardCodesAsync(enterpriseCode, stageCode);
+            var created = new List<string>();
+            string? firstErr = null;
 
             foreach (var f in files)
             {
-                tasks.Add(new QueueManager.TaskItem
+                await CancelActiveQueuesOfFileAsync(f.Code, f.FileName);
+
+                var (ok, err, code, _) = await _queueManager.CreateQueueAsync(new QueueManager.CreateQueueRequest
                 {
-                    TaskType = EnterpriseOriginalQueue.TaskTypeIngest,
-                    TaskId = sourceId,
-                    Payload = JsonSerializer.Serialize(new
+                    QueueType = EnterpriseOriginalQueue.QueueTypeFile,
+                    QueueName = $"企业原始资料处理 - {Truncate(f.FileName, 80)}",
+                    ScopeKey = scopeKey,
+                    SourceType = "enterprise_original",
+                    // uk_source(SourceType, SourceId) 唯一：文件 Code + 毫秒时间戳 ⇒ 同文件多轮不撞
+                    SourceId = $"file:{f.Code}@{DateTime.Now:yyyyMMddHHmmssfff}",
+                    // 持文件锁：转换段独占该行；取消/完成时由框架统一释放
+                    ResourceLocks = new List<QueueManager.ResourceLockItem>
                     {
-                        Code = f.Code,
-                        EnterpriseCode = f.EnterpriseCode,
-                        StageCode = f.StageCode,
-                        FileName = f.FileName,
-                        SourcePath = f.StoragePath,
-                        FileType = f.FileType,
-                        AnalyzePolicy = f.AnalyzePolicy,
-                        // 批次号：ingest 成功后用它入队 analyze 链
-                        BatchCode = f.UploadTaskCode,
-                    }),
-                });
-                locks.Add(new QueueManager.ResourceLockItem
-                {
-                    ResourceTable = ResourceTable,
-                    ResourceCode = f.Code,
-                    ResourceName = f.FileName,
-                });
-            }
-
-            var (ok, err, code, _) = await _queueManager.CreateQueueAsync(new QueueManager.CreateQueueRequest
-            {
-                QueueType = EnterpriseOriginalQueue.QueueTypeIngest,
-                QueueName = $"企业原始资料入库 - {enterpriseCode}/{stageCode}（{files.Count} 份）",
-                ScopeKey = scopeKey,
-                SourceType = "enterprise_original",
-                // yzh_queue.uk_source 唯一：同一批次多轮必须逐次唯一
-                SourceId = $"{sourceId}@{DateTime.Now:yyyyMMddHHmmss}",
-                ResourceLocks = locks,
-                Tasks = tasks,
-            });
-
-            if (!ok) _logger.LogWarning("[EnqueueIngest] 队列创建失败: {Scope} {Reason}", scopeKey, err);
-            return (ok ? code : null, ok ? null : err);
-        }
-
-        /// <summary>
-        /// ★ <b>确保该批次的分析队列存在</b>（整批转换完成后由 <c>EnterpriseOriginalIngestExecutor</c>
-        /// 的每个任务收尾时调用，<b>幂等</b>）。
-        ///
-        /// <para><b>为什么必须这样设计</b>（三次踩坑的结论）：</para>
-        /// <list type="number">
-        ///   <item>❌ 由 ingest executor <b>逐文件</b>链式入队 ⇒ 同批次 N 个文件同一秒用同一个
-        ///         <c>SourceId</c> ⇒ 撞 <c>yzh_queue.uk_source</c>（实测报「唯一约束冲突」）。</item>
-        ///   <item>❌ 在 <c>upload/confirm</c> 里一次性入队 ⇒ 此刻转换还没开始，analyze 会抢跑，
-        ///         读到空的 <c>MarkdownPath</c>（实测 3 份全部失败）。
-        ///         而用 ScopeKey 互斥去挡 ⇒ analyze 永远排不上（框架 ScopeKey 不参与调度）。</item>
-        ///   <item>✅ <b>整批转换完成后</b>由最后一个任务补一个 analyze 队列，带上整批 FileCodes
-        ///         ⇒ <c>doc_group</c> 一次扫整批（33 号 :386 的批次语义）+ <c>doc_content</c> 逐份，
-        ///         且天然只建一次。</item>
-        /// </list>
-        /// </summary>
-        /// <param name="batchCode">
-        /// 上传批次 Code；<b>空</b>表示单文件触发（改策略 / 回滚）⇒ 直接按单元素批次入队，不等。
-        /// </param>
-        public async Task<(string? QueueCode, string? Error)> EnsureAnalyzeQueuedAsync(
-            string enterpriseCode, string stageCode, string fileCode, string batchCode)
-        {
-            // 单文件触发（策略变更 / 回滚）：不等整批，直接入队
-            if (string.IsNullOrWhiteSpace(batchCode))
-            {
-                var row0 = (await _db.Client.Queryable<EnterpriseOriginalFile>()
-                    .Where(x => x.Code == fileCode).ToListAsync() ?? new List<EnterpriseOriginalFile>())
-                    .FirstOrDefault();
-                if (row0 == null) return (null, "文件行不存在");
-                var (c1, e1) = await EnqueueAnalyzeQueueAsync(
-                    enterpriseCode, stageCode, new List<EnterpriseOriginalFile> { row0 }, $"file:{fileCode}");
-                return (c1, e1);
-            }
-
-            // ★ 按批次加锁，避免并发穿透
-            var gate = BatchLockOf(batchCode);
-            await gate.WaitAsync();
-            try
-            {
-                return await EnsureAnalyzeQueuedCoreAsync(enterpriseCode, stageCode, fileCode, batchCode);
-            }
-            finally { gate.Release(); }
-        }
-
-        private async Task<(string? QueueCode, string? Error)> EnsureAnalyzeQueuedCoreAsync(
-            string enterpriseCode, string stageCode, string fileCode, string batchCode)
-        {
-            var batchFiles = await _db.Client.Queryable<EnterpriseOriginalFile>()
-                .Where(x => x.UploadTaskCode == batchCode && x.EnterpriseCode == enterpriseCode)
-                .ToListAsync() ?? new List<EnterpriseOriginalFile>();
-            if (batchFiles.Count == 0) return (null, null);
-
-            // ① 幂等：本批次已有 analyze 队列 ⇒ 不重复建
-            //    ⚠️ 这个「先查后插」在**并发**下有穿透窗口：ingest 的多个任务会挨个调本方法，
-            //    第一个还没落库时后面的已经查完 ⇒ 建出多个队列 ⇒
-            //    `yzh_queue_resource_lock.uk_active`（ResourceTable+ResourceCode 唯一）直接冲突
-            //    （2026-10-03 实测 8 路并发时炸了 2 次）。
-            //    ⇒ 兜底：捕获唯一约束异常视为「别人已经建好」。
-            var scopeKey = ScopeKeyOf(enterpriseCode, stageCode);
-            var existed = await _db.Client.Queryable<YzhQueue>()
-                .Where(q => q.QueueType == EnterpriseOriginalQueue.QueueTypeAnalyze
-                            && q.ScopeKey == scopeKey
-                            && q.SourceId != null && q.SourceId.StartsWith($"batch:{batchCode}@"))
-                .ToListAsync() ?? new List<YzhQueue>();
-            if (existed.Count > 0) return (null, null);
-
-            // ② ★ 判定条件（两次踩坑后的正确形态）：
-            //   「**全部到达终态**」∧「**至少一份有 Markdown**」
-            //
-            //   · 为什么不是「整批都有 Markdown」：一份转换失败（.pdf 无 Markdown / anydoc 失败）
-            //     不该阻塞其余文件的分析 —— 那样整批永远分析不了（实测 3 份里 1 份失败 ⇒ analyze 队列为 0）。
-            //   · 为什么必须要求「全部终态」：ingest 的 N 个任务会挨个调本方法，
-            //     若「有一份就绪就入队」，前面的任务会抢先建队列 ⇒ 一个批次建出 2~N 个 analyze 队列
-            //     ⇒ doc_group 被调 N 次（实测 2 次），白烧 LLM。
-            //     要求全部终态后，只有**最后一个**任务会通过 ⇒ 一个批次恰好入队一次。
-            //   · 终态 = Markdown 已 completed / failed / unsupported / none（none = 无需转换，如已透传）
-            //
-            // ★★ 僵死逃生（2026-10-03 补）：进程被 kill / 容器重启时，队列侧会把任务标 failed
-            //   （QueueManager 对 LockedUntil 过期的任务做 HandleTaskFailureAsync），
-            //   但**执行器根本没跑到写回那一步** ⇒ 文件行永久停在 `converting`。
-            //   而本判定要求「全部终态」⇒ **整批永远进不了语义分析**，用户界面一直显示「提取中」。
-            //   ⇒ 加超时逃生：某个文件非终态且 UpdateTime 超过阈值 ⇒ 视为僵死，按 failed 放行整批。
-            var terminal = new[] { ConvertStatus.Completed, ConvertStatus.Failed, ConvertStatus.Unsupported, ConvertStatus.None };
-            var stuck = batchFiles
-                .Where(f => !terminal.Contains(f.MarkdownStatus ?? ConvertStatus.None))
-                .Where(f => f.UpdateTime is null || DateTime.Now - f.UpdateTime.Value > StuckThreshold)
-                .ToList();
-
-            if (stuck.Count > 0)
-            {
-                _logger.LogWarning(
-                    "[原始资料] 批次 {Batch} 有 {N} 个文件转换僵死（> {Min} 分钟无进展），按失败放行整批: {Codes}",
-                    batchCode, stuck.Count, StuckThreshold.TotalMinutes,
-                    string.Join(",", stuck.Select(f => f.Code)));
-                foreach (var f in stuck)
-                {
-                    f.MarkdownStatus = ConvertStatus.Failed;
-                    f.MarkdownMessage = "转换进程中断或超时未回写，已按失败处理（可点「重新生成」重试）";
-                    f.UpdateTime = DateTime.Now;
-                    await _db.UpdateAsync(f,
-                        nameof(EnterpriseOriginalFile.MarkdownStatus),
-                        nameof(EnterpriseOriginalFile.MarkdownMessage),
-                        nameof(EnterpriseOriginalFile.UpdateTime));
-                }
-            }
-
-            var allSettled = batchFiles.All(f => terminal.Contains(f.MarkdownStatus ?? ConvertStatus.None));
-            if (!allSettled) return (null, null);
-
-            var ready = batchFiles.Where(f => !string.IsNullOrEmpty(f.MarkdownPath)).ToList();
-            if (ready.Count == 0) return (null, null);
-
-            // ③ 有就绪文件 ⇒ 一次性入队 analyze（带上整批 FileCodes；未就绪的由 executor 跳过）
-            var (code, err) = await EnqueueAnalyzeQueueAsync(enterpriseCode, stageCode, ready, batchCode);
-            if (code != null)
-                _logger.LogInformation("[原始资料] 批次 {Batch} 已有 {Ready}/{Total} 份可分析，入队 {Queue}",
-                    batchCode, ready.Count, batchFiles.Count, code);
-            return (code, err);
-        }
-
-        /// <summary>
-        /// 建 <c>enterprise_original_analyze</c> 队列（<b>一个批次一个队列</b>，任务载荷带全部 FileCodes）。
-        ///
-        /// <para>★ 为什么 analyze 的队列粒度比 ingest 粗：ingest 是「逐文件转换」（可并行、互不影响），
-        /// analyze 是「一次 <c>doc_group</c> 扫整批 + 逐份 <c>doc_content</c>」（天然需要看到全批）。
-        /// 而且 <c>yzh_queue.uk_source(SourceType, SourceId)</c> 唯一 ⇒ 逐文件建队列必然自撞。</para>
-        /// </summary>
-        private async Task<(string? QueueCode, string? Error)> EnqueueAnalyzeQueueAsync(
-            string enterpriseCode, string stageCode, List<EnterpriseOriginalFile> files, string batchCode)
-        {
-            if (files.Count == 0) return (null, null);
-
-            // ⛔ 这里**不做** ScopeKey 互斥检查。
-            //   原因：`FindRunningQueueByScopeKeyAsync(scopeKey)` 会把**同 scope 的 ingest 队列本身**
-            //   判成「运行中」⇒ analyze 永远入不了队（2026-10-03 实测：3 份转换全成功但 analyze 队列为 0）。
-            //   而框架的 `GetNextPendingTaskAsync` **只按 Status='pending' 取任务、根本不看 ScopeKey**，
-            //   两者并发并不会互相破坏（analyze 侧自带「Markdown 未就绪就跳过」的容错）。
-            var scopeKey = ScopeKeyOf(enterpriseCode, stageCode);
-
-            // ★ SourceId 带毫秒：同一批次若被重复触发也不会撞 `uk_source` 唯一约束
-            var sourceId = $"batch:{batchCode}@{DateTime.Now:yyyyMMddHHmmssfff}";
-
-            var (ok, err, code, _) = await _queueManager.CreateQueueAsync(new QueueManager.CreateQueueRequest
-            {
-                QueueType = EnterpriseOriginalQueue.QueueTypeAnalyze,
-                QueueName = $"企业原始资料语义分析 - {enterpriseCode}/{stageCode}（{files.Count} 份）",
-                ScopeKey = scopeKey,
-                SourceType = "enterprise_original",
-                SourceId = sourceId,
-                // ⛔ **不加资源锁**：analyze 只**读**已在 MinIO 里的 Markdown，不写文件。
-                //   加锁会与 ingest 队列抢同一批文件 ⇒ ingest 还在 running 时
-                //   `yzh_queue_resource_lock.uk_active`（ResourceTable+ResourceCode 唯一）直接冲突
-                //   （2026-10-03 实测 4 份文件冲突 3 次，框架吞异常 ⇒ 日志一片红）。
-                //   ingest 队列自己持锁到转换结束，天然保证 analyze 读到的是**转换完成的**产物。
-                ResourceLocks = new List<QueueManager.ResourceLockItem>(),
-                Tasks = new List<QueueManager.TaskItem>
-                {
-                    new()
+                        new() { ResourceTable = ResourceTable, ResourceCode = f.Code, ResourceName = f.FileName },
+                    },
+                    Tasks = new List<QueueManager.TaskItem>
                     {
-                        TaskType = EnterpriseOriginalQueue.TaskTypeAnalyze,
-                        Payload = JsonSerializer.Serialize(new EnterpriseOriginalAnalyzePayload
+                        new()
                         {
-                            EnterpriseCode = enterpriseCode,
-                            StageCode = stageCode,
-                            BatchCode = $"batch:{batchCode}",
-                            FileCodes = files.Select(f => f.Code).ToList(),
-                        }),
-                    }
-                },
-            });
+                            TaskType = EnterpriseOriginalQueue.TaskTypeFile,
+                            TaskId = sourceTag,
+                            Payload = JsonSerializer.Serialize(new EnterpriseOriginalFilePayload
+                            {
+                                Code = f.Code,
+                                EnterpriseCode = f.EnterpriseCode,
+                                StageCode = f.StageCode,
+                                BatchCode = sourceTag,
+                                SkipAnalyze = skipAnalyze,
+                                StandardCodes = standardCodes,
+                            }),
+                        },
+                    },
+                });
 
-            if (!ok)
-            {
-                // 并发下「别人已经建好」会表现为唯一约束冲突 ⇒ 视为成功，不当失败
-                if (IsDuplicateKeyError(err))
+                if (ok && !string.IsNullOrEmpty(code))
                 {
-                    _logger.LogInformation("[EnqueueAnalyze] 并发下已有队列建好（唯一约束拦截），视为成功: {Scope}", scopeKey);
-                    return (null, null);
+                    created.Add(code);
                 }
-                _logger.LogWarning("[EnqueueAnalyze] 队列创建失败: {Scope} {Reason}", scopeKey, err);
+                else
+                {
+                    firstErr ??= err ?? "队列创建失败";
+                    // 并发下「别人刚给这个文件建好」表现为唯一约束冲突 ⇒ 已有队列在跑，不当失败
+                    if (IsDuplicateKeyError(err))
+                        _logger.LogInformation("[EnqueueFile] 并发下已有队列（唯一约束拦截）: {File}", f.Code);
+                    else
+                        _logger.LogWarning("[EnqueueFile] 队列创建失败: {File} {Reason}", f.Code, err);
+                }
             }
-            return (ok ? code : null, ok ? null : err);
+
+            if (created.Count == 0) return (null, firstErr ?? "队列创建失败");
+            _logger.LogInformation("[EnqueueFile] {Scope} 入队 {Ok}/{Total} 个文件队列（{Tag}）",
+                scopeKey, created.Count, files.Count, sourceTag);
+            return (created[0], files.Count == created.Count ? null : firstErr);
+        }
+
+        /// <summary>
+        /// 取消该文件的<b>所有活跃队列</b>（同文件重传 / 重新生成 / 回滚 / 改策略 = 先取消旧的再重建）。
+        /// <para>① 按<b>资源锁</b>找：覆盖旧 <c>enterprise_original_ingest</c> 批次队列（它们持文件锁）；
+        /// ② 按 <c>SourceId</c> 前缀 <c>file:{Code}@</c> 兜底：文件级队列锁已释放但队列仍活跃的窗口。</para>
+        /// </summary>
+        private async Task CancelActiveQueuesOfFileAsync(string fileCode, string fileName)
+        {
+            var hit = await _queueManager.FindResourceLockAsync(ResourceTable, new List<string> { fileCode });
+            if (hit != null && !string.IsNullOrEmpty(hit.QueueCode))
+            {
+                var (ok, err) = await _queueManager.CancelQueueAsync(hit.QueueCode);
+                _logger.LogInformation("[CancelOld] 文件 {File} 持锁队列 {Queue} 取消={Ok} {Reason}",
+                    fileName, hit.QueueCode, ok, err);
+            }
+
+            var qs = await _db.Client.Queryable<YzhQueue>()
+                .Where(q => q.QueueType == EnterpriseOriginalQueue.QueueTypeFile
+                            && q.SourceId != null
+                            && q.SourceId.StartsWith($"file:{fileCode}@")
+                            && q.Status != "completed" && q.Status != "failed" && q.Status != "cancelled")
+                .ToListAsync() ?? new List<YzhQueue>();
+            foreach (var q in qs)
+            {
+                var (ok, err) = await _queueManager.CancelQueueAsync(q.QueueCode);
+                _logger.LogInformation("[CancelOld] 文件 {File} 前缀队列 {Queue} 取消={Ok} {Reason}",
+                    fileName, q.QueueCode, ok, err);
+            }
+        }
+
+        /// <summary>
+        /// 解析「企业 × 阶段」关联的<b>标准快照</b>（GUID 列表），入队时固化进载荷。
+        /// <para>★ M6 语义：doc_group / doc_content 提示词按标准绑定 ⇒ 必须按标准各分析一次。
+        /// 入队时快照，执行时不再回查 —— 排队期间改了阶段-标准关联，按入队时的口径跑。</para>
+        /// </summary>
+        private async Task<List<string>> ResolveStageStandardCodesAsync(string enterpriseCode, string stageCode)
+        {
+            var list = (await _db.Client.Queryable<CertEnterpriseStage>()
+                    .Where(x => x.EnterpriseCode == enterpriseCode && x.StageCode == stageCode
+                                && x.IsValid == 1 && !x.IsDeleted)
+                    .ToListAsync() ?? new List<CertEnterpriseStage>())
+                .Select(x => x.StandardCode)
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Select(c => c!)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (list.Count == 0)
+                _logger.LogWarning("[EnqueueFile] {Scope} 未关联任何标准，分析段将按执行侧自动解析",
+                    ScopeKeyOf(enterpriseCode, stageCode));
+            return list;
         }
 
         /// <summary>错误信息里是否含「唯一约束 / Duplicate entry」——并发建队列时的正常竞态</summary>
@@ -2166,37 +2254,6 @@ namespace CertPlatform.Auditor.Services.Ent
                 || err.Contains("唯一约束", StringComparison.OrdinalIgnoreCase)
                 || err.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase);
         }
-
-        /// <summary>
-        /// 按「批次号」的进程内互斥锁。
-        /// <para>★ 为什么需要：「先查后插」在并发下必然穿透 —— ingest 的 N 个任务会挨个调
-        /// <c>EnsureAnalyzeQueuedAsync</c>，第一个队列还没落库时后面的已经查完 ⇒ 一起建队列 ⇒
-        /// 抢同一批文件的资源锁 ⇒ <c>yzh_queue_resource_lock.uk_active</c> 冲突
-        /// （2026-10-03 实测 8 路并发炸了 8 次，框架吞掉异常 ⇒ 日志一片红）。</para>
-        /// <para>单进程部署下进程内锁足够；多实例部署需要再叠一层分布式锁。</para>
-        /// </summary>
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> BatchLocks = new();
-
-        private static SemaphoreSlim BatchLockOf(string key)
-            => BatchLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-
-        /// <summary>该企业该阶段是否有**排队中或执行中**的队列（忙碌判据）</summary>
-        public async Task<YzhQueue?> FindBusyQueueAsync(string enterpriseCode, string stageCode)
-        {
-            var scopeKey = ScopeKeyOf(enterpriseCode, stageCode);
-            var list = await _db.Client.Queryable<YzhQueue>()
-                .Where(q => q.ScopeKey == scopeKey
-                            && (q.QueueType == EnterpriseOriginalQueue.QueueTypeIngest
-                                || q.QueueType == EnterpriseOriginalQueue.QueueTypeAnalyze)
-                            && (q.Status == "pending" || q.Status == "running" || q.Status == "processing"))
-                .OrderByDescending(q => q.CreateTime)
-                .ToListAsync() ?? new List<YzhQueue>();
-            return list.FirstOrDefault();
-        }
-
-        /// <summary>队列类型 → 专家语言（⛔ 不暴露 task_type 字面量）</summary>
-        public static string DescribeQueueType(string? queueType)
-            => queueType == EnterpriseOriginalQueue.QueueTypeAnalyze ? "识别资料内容" : "读取文件内容";
 
         /// <summary>队列资源锁表名（框架的 <c>RESOURCE_FILE</c> 指向标准目录表，本模块用自己的一张）</summary>
         public const string ResourceTable = "cert_enterprise_original_file";

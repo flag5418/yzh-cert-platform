@@ -147,6 +147,19 @@ export abstract class TreeTableCore<
     return this.treeConfig?.RelateField || 'ParentCode'
   }
 
+  /**
+   * 树节点状态字段名（供 `YzhTree` / `YzhTreeTableLayout` 的 `status-field` 绑定）。
+   *
+   * <para>取后端 `TreeConfig.EnableField`（与节点「禁用/启用」按钮同一字段，保证
+   * 徽章与按钮判定永远一致；缺省回落 `TableConfig.EnableField`）。后端未声明该字段
+   * （无启停语义的树）返回 `undefined` → 不渲染状态徽章，不影响既有页面。</para>
+   * <para>后端 `TreeMapper` 已把 `IsValid` 写入每个节点的 `Extra`，故页面只需
+   * `:status-field="logic.treeStatusField"` 即生效。</para>
+   */
+  get treeStatusField(): string | undefined {
+    return this.enableField ?? undefined
+  }
+
   // ──── 自动注入的操作按钮（来自后端 /treepconfig） ────
 
   /** 树节点自定义操作按钮：{ 方法名: 显示文字 }（后端自动注入） */
@@ -440,7 +453,10 @@ export abstract class TreeTableCore<
     for (const child of children) this.treeSide.register(child, data)
     if (resolve) resolve(children)
     if (data && typeof data === 'object') {
-      data.children = children
+      // PascalCase 主键（铁律三处一致）：读者全在上面 —— getChildren / 更新保子级 /
+      // 删除前端预检（node.Children.length）。曾写小写 `children`，导致懒加载父节点的
+      // Children 恒为 []：有子级的节点删不掉（预检放行）、更新时子级保不住。
+      data.Children = children
     }
     return children
   }
@@ -749,6 +765,9 @@ export abstract class TreeTableCore<
     if (localCode && !res.data) {
       newNode.Code = localCode
     }
+    // 新节点必无子级 → 一律末端。后端未回填 IsLeaf 时 dto 会给 false，
+    // 会让该节点在 openRowDialog 里被误判为「非末端机构」而无法新增人员。
+    newNode.IsLeaf = true
 
     // 通过 el-tree API 直接追加节点（不 reload，不重复）
     if (this._treeTableRef) {
@@ -786,6 +805,10 @@ export abstract class TreeTableCore<
     )
     const live = this.treeSide.findNode(node.Code)
     if (live) {
+      // IsLeaf 仅在后端明确回填 true 时改写：false 无法区分「真有子级」与「未回填」
+      // （实体 IsLeaf 非库列），保留本地值可避免末端机构被打成非末端 → 无法新增人员。
+      // 真实有子级的场景不受影响：appendChild/loadChildren 已把本地置为 false。
+      if (res.data?.IsLeaf !== true) newNode.IsLeaf = live.IsLeaf
       const children = live.Children
       Object.assign(live, newNode)
       live.Children = children

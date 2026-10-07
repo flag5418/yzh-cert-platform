@@ -102,6 +102,75 @@ namespace CertPlatform.Shared.Entities.Dir
         [SugarColumn(Length = 36)]
         public string ContractCode { get; set; } = string.Empty;
 
+        // ════════════════════════════════════════════════════════════════════════
+        //  ★ 2026-10-06（P0 地基 · 11 列）—— 企业资料规范化
+        //  DDL：scripts/db/20261006_doc_normalize_V1.sql ｜ 依据：54 §4.3 + 55 §4.5
+        //  ⚠️ 全部按「列级 UpdateAsync(entity, cols)」回写 —— ⛔ 禁止全列写回，
+        //     否则并发上传链会把这些列清成 NULL（陷阱 ㉕）
+        // ════════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        ///     ★ <b>锁定</b>：锁定后<b>任何生成路径不得覆盖</b>（26 号 S-6「锁定优先」）。
+        ///     <para>队列执行时<b>第一件事</b>就是查它：<c>IsLocked=1</c> ⇒ 直接跳过并计入 <c>SkippedLockedCount</c>。</para>
+        /// </summary>
+        public bool IsLocked { get; set; }
+
+        /// <summary>锁定人 Code</summary>
+        [SugarColumn(Length = 64, IsNullable = true)]
+        public string? LockedBy { get; set; }
+
+        /// <summary>锁定时间</summary>
+        public DateTime? LockedTime { get; set; }
+
+        // ⚠️ 解锁的 By/Time/Reason ⛔ 不设列 —— 解锁是**多次**动作，列只能记最后一次
+        //    ⇒ 统一落 cert_doc_normalize_action（26 号 A-2「解锁也留痕」）
+
+        /// <summary>
+        ///     ★ <b>生成依据</b>：产出本次文件所用的画像 → <c>cert_enterprise_doc_profile.Code</c>
+        ///     （可多值时逗号分隔，最多 3 个）。
+        /// </summary>
+        [SugarColumn(Length = 36)]
+        public string SourceProfileCode { get; set; } = string.Empty;
+
+        /// <summary>
+        ///     ★ <b>溯源展示</b>：对应原始文件路径（冗余存储）。
+        ///     <para>⚠️ ⛔ <b>生成过程绝不读它</b> —— 它只是给界面「看来源」用的字符串快照；
+        ///     若被当成输入去读原始文件，即违反 26 号 A-1「只读画像」。</para>
+        /// </summary>
+        [SugarColumn(Length = 512, IsNullable = true)]
+        public string? SourceOriginalPath { get; set; }
+
+        /// <summary>
+        ///     ★ <b>产物 PDF</b>（预览用；转换未完成时为空）。
+        ///     <para>⚠️ 与 <see cref="PreviewPdfPath"/>（<b>源文件</b>预览）<b>不是同一列</b>：
+        ///     本列是<b>规范化产物</b>的预览 ⇒ <b>两者都保留</b>，⛔ 不要当成重复列删掉一个。</para>
+        /// </summary>
+        [SugarColumn(Length = 512, IsNullable = true)]
+        public string? NormalizedPdfPath { get; set; }
+
+        /// <summary>★ 最近一次规范化完成时间</summary>
+        public DateTime? NormalizedTime { get; set; }
+
+        /// <summary>
+        ///     ★ <b>完成率</b> 0.0000~1.0000。
+        ///     <para>口径（54 §4.5，三处必须一致）：<c>(FillAnchorCount − FillPendingCount) / FillAnchorCount</c>。</para>
+        ///     <para>⚠️ <c>FillAnchorCount = 0</c> ⇒ 记 <b>0.0000</b>（⛔ <b>不是 1.0000</b>）。</para>
+        ///     <para>⚠️ <b>物化列</b>：列表页直接读它，⛔ 不实时聚合（一份文档上千锚点 × 668 份 = 列表页卡死）。</para>
+        /// </summary>
+        public decimal FillCompletion { get; set; }
+
+        /// <summary>★ <b>加权可信度</b> 0.00~1.00（只对 <c>filled</c> 行求均值，<c>pending</c> 不进分母）</summary>
+        public decimal FillConfidence { get; set; } = 1.00m;
+
+        /// <summary>锚点总数（<b>分母快照</b>）</summary>
+        public int FillAnchorCount { get; set; }
+
+        /// <summary>待办数（<b>分子缺口</b>）</summary>
+        public int FillPendingCount { get; set; }
+
+        // ⛔ 不新增 NormalizedPath —— 沿用既有 StoragePath 作为「产物路径」唯一列
+        //    （55 §4.5 同义列 #1：StoragePath 已回填 186/669，且现有执行器就写它）
+
         [SugarColumn(Length = 20, IsNullable = true)]
         public string? Status { get; set; } = "draft";
 

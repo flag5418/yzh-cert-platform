@@ -1,7 +1,6 @@
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Constants;
 using CertPlatform.Admin.Entities.Dir;
-using CertPlatform.Admin.Entities.Doc;
 using YZH.Core.DataBase.Interfaces;
 
 namespace CertPlatform.Admin.Services.DocExtraction;

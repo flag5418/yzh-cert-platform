@@ -18,8 +18,9 @@ namespace CertPlatform.Auditor.Services.Ent
     /// <summary>
     /// 企业原始资料入库执行器（TaskType = <c>enterprise_original_ingest</c>，36 号 §八 T1.5）。
     ///
-    /// <para><b>职责</b>：① 格式归一（.doc/.xls → .docx/.xlsx）② 双产物（PDF 预览 + Markdown 分析输入）
-    /// ③ 成功后<b>链式入队</b> <c>enterprise_original_analyze</c>。</para>
+    /// <para><b>职责</b>：① 格式归一（.doc/.xls → .docx/.xlsx）② 双产物（PDF 预览 + Markdown 分析输入）。
+    /// ⚠️ <b>分析段不在本类</b>：2026-10-06 起由文件级编排器 <see cref="EnterpriseOriginalFileExecutor"/>
+    /// 在转换段之后<b>同一任务内串行</b>调用本类 + 分析执行器（本类亦可被历史 ingest 队列直接执行）。</para>
     ///
     /// <para><b>★ 单例 + 根容器懒解析</b>：<c>QueueManager</c> 构造注入 <c>IEnumerable&lt;IYzhTaskExecutor&gt;</c>
     /// （含本类）⇒ 构造器注入会形成 DI 循环，必须运行时从根容器解析。
@@ -27,7 +28,7 @@ namespace CertPlatform.Auditor.Services.Ent
     ///
     /// <para><b>★ 转换能力不重复实现</b>：全部委托 <see cref="IFileConvertCore"/>
     /// （36 号 T1.1 抽出到 <c>CertPlatform.Shared</c>，与标准目录 / 企业资料库共用同一份）。
-    /// 本类只负责「上传产物 + 按链写列 + 链式入队」。</para>
+    /// 本类只负责「上传产物 + 按链写列」。</para>
     ///
     /// <para><b>⚠️ 状态枚举铁律</b>：<c>ConvertStatus</c> / <c>MarkdownStatus</c> 只能写
     /// <c>none/pending/converting/completed/failed/unsupported</c>，与前端 <c>convertStatus.ts</c> 逐字对齐；
@@ -133,20 +134,9 @@ namespace CertPlatform.Auditor.Services.Ent
 
                 _logger.LogInformation("[原始资料入库] {Code} PDF={Pdf} MD={Md}", row.Code, pdfOk, mdOk);
 
-                // ⑤ ★ 整批转换完成 ⇒ 自动补一个【批次级】analyze 队列
-                //   调用 `EnsureAnalyzeQueuedAsync`：它内部幂等 + 检查「整批 Markdown 是否都就绪」，
-                //   因此前 N-1 个文件调用时只会返回「还没转完」，最后一个文件才真正入队。
-                //   ⛔ 不能在这里直接建队列：逐文件建会撞 `yzh_queue.uk_source` 唯一约束（实测）。
-                //   ⛔ 也不能在 confirm 时建：此刻转换刚开始，analyze 会抢跑读到空 MarkdownPath（实测）。
-                if (mdOk)
-                {
-                    using var scope2 = _serviceProvider.CreateScope();
-                    var svc = scope2.ServiceProvider.GetRequiredService<EnterpriseOriginalService>();
-                    var (aqCode, aqErr) = await svc.EnsureAnalyzeQueuedAsync(
-                        row.EnterpriseCode, row.StageCode, row.Code, payload.BatchCode);
-                    if (aqErr != null)
-                        _logger.LogWarning("[原始资料入库] 分析队列补建失败: {Code} {Reason}", row.Code, aqErr);
-                }
+                // ⛔ 2026-10-06 起**不再链式入队 analyze**：批次双队列方案已由「文件级编排器」
+                //   （EnterpriseOriginalFileExecutor）取代 —— 转换段跑完由编排器在同一任务内
+                //   串行接分析段，不存在跨队列补建/抢跑问题（旧逻辑见 git 历史）。
 
                 // 任一链失败都把任务标记为可重试，便于前端「重试失败项」
                 return new TaskExecutionResult

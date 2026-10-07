@@ -9,7 +9,6 @@ using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
-using CertPlatform.Admin.Entities.Doc;
 using CertPlatform.Admin.Services.DocExtraction;
 using CertPlatform.Admin.Services.StandardDirectory;
 using CertPlatform.Shared.Constants;
@@ -849,6 +848,21 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         existing.ViolationJson = null;
         existing.PartCount = 0;   // ★ 旧锚点随换版作废 ⇒ 部件数归零（重扫时按实际重算）
 
+        // ★★ 换版必须清空「试填预览」（2026-10-06，B7 配套）——
+        //   试填预览 PDF 的路径由**模板路径**派生且是**固定 key**（`PathBuilder.PreviewFromTemplate`，
+        //   不带时间戳，理由见该方法的注释：试填不需要历史版本、省空间）。
+        //   ⇒ 换版后同名模板的预览路径**完全相同** ⇒ 不清空的话，中栏「填充后预览」会继续显示
+        //   **上一版模板**填出来的 PDF。这不是「内容旧了」，而是「这份预览属于另一份文档」
+        //   —— 用户会以为规则改了没生效，然后反复改规则、反复试填（方向完全错）。
+        //   ⛔ 与「改锚点规则」区分：改规则**不清**预览（那只是快照变旧，页面用 `PreviewTime`
+        //   如实显示「试填于何时」即可，属 §P3「建议 ≠ 事实」的同类口径：不阻断、不替人决定）。
+        var stalePreviewPath = existing.PreviewPdfPath;
+        if (versionChanged)
+        {
+            existing.PreviewPdfPath = null;
+            existing.PreviewTime = null;
+        }
+
         // 身份段重新推导（模板可能被改挂到另一个标准文件）
         var scope = await _extraction.ResolveRuleScopeAsync(fileRow.Code);
         existing.OrgCode = scope.OrgCode;
@@ -866,6 +880,23 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         // ★ 换版 ⇒ 旧锚点全部作废（软删）。必须在模板更新**成功之后**做 ——
         //   更新失败就动锚点，会留下「模板还是旧字节、锚点却已被清空」的不一致状态。
         if (versionChanged) await InvalidateAnchorsAsync(existing.Code);
+
+        // ★ 换版 ⇒ 旧试填预览对象也删掉（best-effort，⛔ 失败不阻断换版）。
+        //   「同名换版」时新预览路径与旧路径**相同**（固定 key），下次试填会覆盖；
+        //   但「改名换版」会让旧对象变成**孤儿**（DB 已无引用、MinIO 里却还占着空间）。
+        //   两种都删一遍最省心 —— RemoveObject 对不存在的对象不报错（S3 语义）。
+        if (versionChanged && !string.IsNullOrWhiteSpace(stalePreviewPath))
+        {
+            try
+            {
+                await _storage.DeleteAsync(stalePreviewPath.TrimStart('/'));
+                _logger.LogInformation("[DocTemplate] 已删除随换版失效的试填预览对象: {Path}", stalePreviewPath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[DocTemplate] 试填预览对象删除失败（不影响换版）: {Path}", stalePreviewPath);
+            }
+        }
 
         return Result<DocTemplate>.Ok(existing);
     }

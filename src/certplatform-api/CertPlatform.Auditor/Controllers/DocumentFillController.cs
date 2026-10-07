@@ -124,14 +124,15 @@ public class DocumentFillController : YzhControllerBase<FillParamValue>
         if (!string.Equals(ent.OrgCode, scope.Data.WorkspaceCode, StringComparison.Ordinal))
             return Ok(ApiResponse<object>.Fail("无权访问其他工作区的企业"));
 
-        // ★ 参数定义归属 = 体系认证机构 Code（⛔ 不是工作区 Code）
+        // orgCode = 体系认证机构 Code（仅供页脚 {{@org}} 机构名查询）；
+        // ★ 参数定义全平台共享（2026-10-06 起 OrgCode 恒空串 —— 见 26 号 §3.1 裁决）
         var orgCode = scope.Data.CertBodyCode;
         var stdCode = req.StandardCode ?? string.Empty;
         var stageCode = req.StageCode ?? string.Empty;
 
         // ── 1. 定义（含通配，按具体度去重）──
         var defs = await _db.Client.Queryable<FillParamDef>()
-            .Where(d => d.OrgCode == orgCode && d.IsDeleted == false && d.IsValid == 1
+            .Where(d => d.OrgCode == "" && d.IsDeleted == false && d.IsValid == 1
                         && (d.StandardCode == "" || d.StandardCode == stdCode)
                         && (d.StageCode == "" || d.StageCode == stageCode))
             .ToListAsync();
@@ -347,7 +348,7 @@ public class DocumentFillController : YzhControllerBase<FillParamValue>
 
     private static string ExampleOf(string kind) => kind switch
     {
-        "global" => "{{company_name}} → 企业全称",
+        "global" => "{{main_products}} → 主要产品",
         "replace" => "{{enterprise.LegalPerson}} → 法定代表人",
         "headerFooter" => "{{@doc_no}} → YZH-QM-2026-001",
         "ai" => "{{ai:quality_policy}} → 一段质量方针正文",
@@ -366,10 +367,12 @@ public class DocumentFillController : YzhControllerBase<FillParamValue>
 
     /// <summary>
     /// 演示正文 —— 一份质量手册的封面 + 颁布令 + 方针目标章节。
-    /// <para>锚点分布：全局参数 6 处、替换 4 处、AI 生成 3 处、页眉页脚由 header/footer 承担。</para>
+    /// <para>锚点分布：全局参数 2 处（doc_prefix / main_products）、替换若干
+    /// （企业档案类锚点走 {{enterprise.*}} —— 2026-10-06 起企业全称等档案字段
+    /// 不再是字典参数，见 26 号 §3.1 裁决）、AI 生成 3 处、页眉页脚由 header/footer 承担。</para>
     /// </summary>
     private const string DemoBody = """
-# {{company_name}}
+# {{enterprise.Name}}
 ## 质 量 手 册
 
 | 项目 | 内容 |
@@ -377,11 +380,12 @@ public class DocumentFillController : YzhControllerBase<FillParamValue>
 | 文件编号 | {{@doc_no}} |
 | 版本 / 修改状态 | {{@version}} |
 | 受控状态 | 受控 |
-| 编制单位 | {{company_name}} |
-| 统一社会信用代码 | {{credit_code}} |
-| 法定代表人 | {{legal_person}} |
-| 注册地址 | {{company_address}} |
-| 认证范围 | {{cert_scope}} |
+| 编制单位 | {{enterprise.Name}} |
+| 统一社会信用代码 | {{enterprise.CreditCode}} |
+| 法定代表人 | {{enterprise.LegalPerson}} |
+| 注册地址 | {{enterprise.Address}} |
+| 认证范围 | {{enterprise.CertScope}} |
+| 主要产品 | {{main_products}} |
 | 发布日期 | {{@date_cn}} |
 
 ---
@@ -391,8 +395,8 @@ public class DocumentFillController : YzhControllerBase<FillParamValue>
 本公司依据 {{@standard_no}} 标准要求，结合本企业实际编制了本《质量手册》。
 本手册自 {{@date_cn}} 起发布实施，全体员工必须遵照执行。
 
-本手册由 {{company_name}}（统一社会信用代码 {{credit_code}}）法定代表人
-{{legal_person}} 批准发布。
+本手册由 {{enterprise.Name}}（统一社会信用代码 {{enterprise.CreditCode}}）法定代表人
+{{enterprise.LegalPerson}} 批准发布。
 
 批准人：{{enterprise.LegalPerson}}　　　日期：{{system.date}}
 

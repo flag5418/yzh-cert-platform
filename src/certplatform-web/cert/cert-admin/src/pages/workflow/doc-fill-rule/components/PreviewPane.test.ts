@@ -242,3 +242,144 @@ describe('PreviewPane — ★ C9 上传模板按钮进 `#actions` 插槽', () =>
     expect(w.find('.eb').exists()).toBe(false)
   })
 })
+
+/**
+ * ★ C10：中栏第三个视图「填充后预览」（2026-10-06，B7 落地后新增）。
+ *
+ * 【为什么必须测】
+ *   这个视图的失败模式全是**静默**的：
+ *   · 文件名不带 `.pdf` ⇒ `DocPreview` 的 `ext` 推不出来 ⇒ 报「暂不支持在线预览」，
+ *     而**标题栏看起来完全正常**（典型「标题对、内容错」）；
+ *   · 重跑试填后不重挂 ⇒ 路径是**固定 key**（同一模板重复试填路径不变）
+ *     ⇒ `DocPreview` 的 watch 不触发 ⇒ **看到上一次的试填结果**；
+ *   · 无产物时「静默空切」⇒ 用户点「预览」后中栏变空白，以为功能坏了。
+ */
+describe('PreviewPane — ★ C10 第三视图「填充后预览」', () => {
+  const FILLED = {
+    hasTemplate: true,
+    templatePath: '_template/x.docx',
+    templateFileName: '质量手册.docx',
+    filledPath: '_preview/x.docx.pdf',
+  }
+
+  /** 取「查看」切换条里的三个选项（stub 成 `<label class="rb">`） */
+  function radios(w: ReturnType<typeof mountPane>) {
+    return w.findAll('.rb')
+  }
+
+  /**
+   * 取第三个选项的 `disabled` 绑定值。
+   *
+   * ⚠️ 断言的是**字符串**（`'true'` / `'false'`）而不是「有没有这个属性」：
+   *   stub 是普通 `<label>`，而 `disabled` 不是 `<label>` 的**布尔**属性
+   *   ⇒ Vue 按普通属性渲染，`false` 也会输出成 `disabled="false"`。
+   *   用 `toBeUndefined()` 判「可用」会永远失败（本文件已踩过一次）。
+   */
+  function filledDisabled(w: ReturnType<typeof mountPane>): string {
+    return String(radios(w)[2].attributes('disabled'))
+  }
+
+  it('没有试填产物 ⇒ 选项存在但 disabled，且 `title` 说明原因（⛔ 不隐藏）', () => {
+    const w = mountPane({
+      hasTemplate: true,
+      templatePath: '_template/x.docx',
+      templateFileName: '质量手册.docx',
+    })
+    // 隐藏会让用户以为「这功能不存在」⇒ 必须存在且可解释
+    expect(radios(w)).toHaveLength(3)
+    expect(filledDisabled(w)).toBe('true')
+    expect(radios(w)[2].attributes('title')).toContain('自动填充')
+  })
+
+  it('有产物 ⇒ 选项可用，`title` 变成中性描述', () => {
+    const w = mountPane(FILLED)
+    expect(filledDisabled(w)).toBe('false')
+    expect(radios(w)[2].attributes('title')).toBe('查看试填结果')
+  })
+
+  it('★ showFilled() ⇒ 渲染试填 PDF，文件名**必须以 .pdf 结尾**（否则 DocPreview 判不出类型）', async () => {
+    const w = mountPane(FILLED)
+    expect((w.vm as any).showFilled()).toBe(true)
+    await w.vm.$nextTick()
+
+    const file = dp(w).props('file')
+    expect(file.storagePath).toBe('_preview/x.docx.pdf')
+    // ⛔ `x.docx.pdf` 会让 DocPreview 的 ext 取到 `pdf`（侥幸对），
+    //   但语义上产物名应是「模板名换扩展名」⇒ 钉住 `x.pdf`
+    expect(file.fileName).toBe('质量手册.pdf')
+    // 试填产物没有 fileCode ⇒ 必须走 `preview-by-path`（`.pdf` 原样透传）
+    expect(file.fileCode).toBeUndefined()
+    expect(dp(w).props('downloadLabel')).toBe('下载填充后预览')
+  })
+
+  it('★ 没有产物时 showFilled() **不切**（返回 false）—— ⛔ 不做静默空切', async () => {
+    const w = mountPane({
+      hasTemplate: true,
+      templatePath: '_template/x.docx',
+      templateFileName: '质量手册.docx',
+    })
+    expect((w.vm as any).showFilled()).toBe(false)
+    await w.vm.$nextTick()
+    // 仍停在默认源（空白模板），⛔ 没有切到空白视图
+    expect(dp(w).props('file').storagePath).toBe('_template/x.docx')
+  })
+
+  it('★ 重跑试填（路径不变、字节变了）⇒ showFilled() 必须重挂，否则看到上一次结果', async () => {
+    const w = mountPane(FILLED)
+    ;(w.vm as any).showFilled()
+    await w.vm.$nextTick()
+    const beforeUid = dp(w).vm.$.uid
+
+    // 固定 key ⇒ 路径一模一样，只有「显式重载」能顶掉旧实例
+    ;(w.vm as any).showFilled()
+    await w.vm.$nextTick()
+    expect(dp(w).vm.$.uid).not.toBe(beforeUid)
+  })
+
+  it('★ `hasTemplate` 变化**不得**把 filled 视图抢走（否则「点了预览却跳回空白模板」）', async () => {
+    const w = mountPane(FILLED)
+    ;(w.vm as any).showFilled()
+    await w.vm.$nextTick()
+    expect(dp(w).props('file').storagePath).toBe('_preview/x.docx.pdf')
+
+    // 父页因任何原因让 hasTemplate 重新求值
+    await w.setProps({ hasTemplate: false })
+    await w.setProps({ hasTemplate: true })
+    expect(dp(w).props('file').storagePath).toBe('_preview/x.docx.pdf')
+  })
+
+  it('★ 换文件 ⇒ 从 filled 回到该文件的默认源（不串台）', async () => {
+    const w = mountPane(FILLED)
+    ;(w.vm as any).showFilled()
+    await w.vm.$nextTick()
+
+    await w.setProps({
+      fileCode: 'FILE-2',
+      fileName: '程序文件.doc',
+      templatePath: '_template/y.docx',
+      templateFileName: '程序文件.docx',
+      filledPath: '',
+    })
+    expect(dp(w).props('file').storagePath).toBe('_template/y.docx')
+  })
+
+  it('★ 看 filled 时**不显示**「上传空白模板」（那个视图里没有模板可换）', async () => {
+    const w = mountPane({ ...FILLED, canUploadTemplate: true })
+    // 空白模板视图下按钮在
+    expect(w.find('.eb').exists()).toBe(true)
+
+    ;(w.vm as any).showFilled()
+    await w.vm.$nextTick()
+    expect(w.find('.eb').exists()).toBe(false)
+  })
+
+  it('脚注给出**试填时间**（事实，⛔ 不是「请重跑」的引导）', () => {
+    const w = mountPane({ ...FILLED, filledTime: '2026-10-07T10:39:53.327879+08:00' })
+    ;(w.vm as any).showFilled()
+    return w.vm.$nextTick().then(() => {
+      const hint = w.find('.source-bar__hint').text()
+      expect(hint).toContain('2026-10-07 10:39')
+      expect(hint).toContain('试填结果')
+    })
+  })
+})

@@ -18,6 +18,18 @@
  *         （401 `Unauthorized(` 属基础设施信号，保留，不在此规则内）
  *   B-R4  信封不变量运行时守卫存在性 —— ApiResponseContractFilter 已注册进全局过滤器
  *         （实际校验在运行时：success:false ⇒ err 非空 / success:true ⇒ err 空 / 失败 ⇒ message 空）
+ *   B-R5  禁**丢弃** `DbOrm` 批量写入的返回值 —— `await _db.InsertBatchAsync(x);` 这种写法
+ *         ⚠️ 病因：`SqlSugarDbOrm.InsertAsync / InsertBatchAsync / UpdateAsync` 三个方法的实现体
+ *            都是 `try { … } catch (Exception ex) { return Result.Fail(…) }`
+ *            ⇒ **失败时不抛异常、只返回失败结果**。丢弃返回值 = **静默失败**：
+ *            事务照样提交，DB 里什么都没写，而调用方以为成功。
+ *         ★ 真实事故（2026-10-07）：`DocumentFillOrchestrator` 的取值账本整批写入被丢弃返回值，
+ *            叠加「构造行时漏赋 `Code`（DB `NOT NULL`）」⇒ `cert_doc_fill_value` **恒 0 行**，
+ *            而结果对象报「取值账本 N 行」（N 取自内存 `List.Count`）—— 页面看到的是**假成功**。
+ *         ★ 正确写法：`var r = await _db.InsertBatchAsync(x); if (!r.Success) throw new …(r.Error);`
+ *         📏 基线：全仓 `_db/_dbOrm.InsertBatchAsync` 调用点共 3 处，规则启用时已全部收口 = 0。
+ *         ⚠️ 已知局限：按行匹配。若写成「赋值换行 + 下一行 `await …`」会误报
+ *            —— 本仓风格为单行赋值，误报时改成单行即可。
  *
  * ⛔ 严禁挂到 dotnet watch / dev 启动脚本 —— 只允许挂到 build / pre-commit / 手动门禁。
  *
@@ -80,6 +92,12 @@ const RULES = [
     id: 'B-R3',
     desc: '禁业务语境 return BadRequest( / return NotFound(（业务失败一律 HTTP 200）',
     forbid: [/return (BadRequest|NotFound)\(/],
+  },
+  {
+    id: 'B-R5',
+    desc: '禁丢弃 DbOrm 批量写入返回值（`await _db.InsertBatchAsync(x);` ⇒ 失败被静默吞掉）',
+    // 行首锚定 ⇒ `var r = await _db.InsertBatchAsync(…)` 不匹配（合规写法）
+    forbid: [/^\s*await\s+(?:_db|_dbOrm)\.InsertBatchAsync\(/],
   },
 ]
 

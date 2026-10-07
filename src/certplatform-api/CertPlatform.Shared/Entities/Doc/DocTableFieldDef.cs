@@ -2,7 +2,7 @@ using SqlSugar;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Entity;
 
-namespace CertPlatform.Admin.Entities.Doc
+namespace CertPlatform.Shared.Entities.Doc
 {
     /// <summary>
     /// DocTableFieldDef 文档表格字段定义（表格的列）

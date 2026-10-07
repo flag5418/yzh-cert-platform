@@ -12,8 +12,13 @@ namespace CertPlatform.Auditor.Entities.Doc
     /// <c>scripts/db/20261003_enterprise_original_V1.sql</c> —— <b>两处必须同步维护，⛔ 不得各改各的</b>。
     /// 本实体 2026-10-03 随该表首次落库而建（此前 DDL 只存在于 md）。</para>
     ///
-    /// <para><b>只追加哲学</b>：<c>uk_file_ver(OriginalFileCode, ProfileVersion)</c> + <c>IsLatest</c> ——
+    /// <para><b>只追加哲学</b>：<c>uk_file_std_ver(OriginalFileCode, StandardCode, ProfileVersion)</c> + <c>IsLatest</c> ——
     /// 换文件 ⇒ <c>ProfileVersion+1</c>、旧版 <c>IsLatest=0</c> 保留可审计（26 号 A-4）。</para>
+    ///
+    /// <para><b>★★★ M6（2026-10-06）唯一键扩标准</b>：一个文件 <b>× 每个标准 = 一行</b>
+    /// ⇒ 版本号 <c>ProfileVersion</c> <b>按 (文件, 标准) 各自递增</b>，<c>IsLatest</c> 也只置同一标准内的旧行。
+    /// 迁移脚本：<c>scripts/db/20261006_m6_profile_uk_standard_V1.sql</c>（旧 <c>uk_file_ver</c> 已删）。
+    /// ⚠️ 依据：原 <c>uk_file_ver(OriginalFileCode, ProfileVersion)</c> 会让标准 B 顶掉标准 A 的画像行。</para>
     ///
     /// <para><b>与标准侧对称</b>：<see cref="TagsJson"/> / <see cref="TagsSource"/> / <see cref="TagsReason"/> /
     /// <see cref="TagsConfidence"/> / <see cref="DocPurpose"/> / <see cref="InfoItemsJson"/> /

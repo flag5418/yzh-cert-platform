@@ -5,7 +5,7 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Entity;
 using YZH.Entity.Admin.Platform;
 
-namespace CertPlatform.Admin.Entities.Doc
+namespace CertPlatform.Shared.Entities.Doc
 {
     /// <summary>标准文档契约（五要素 1 / 2 / 5）</summary>
     /// <para>表名：cert_standard_doc_contract</para>

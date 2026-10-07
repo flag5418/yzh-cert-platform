@@ -10,7 +10,6 @@ using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
-using CertPlatform.Admin.Entities.Doc;
 using CertPlatform.Shared.Office;
 using CertPlatform.Shared.Office.Excel;
 using CertPlatform.Shared.Office.Word;

@@ -57,7 +57,15 @@ public class RoleController : TreeTableControllerBase<Sys_Role, Sys_Role>
         {
             RelateField = "ParentCode",
             NameField = "RoleName",
+            // 角色树只开放「新增下级 / 编辑 / 删除」；启用禁用不重复暴露在树上
+            // （AllowToggle=false → 前端 toTreeActions 不出 toggle-* 节点动作）
+            AllowToggle = false,
         };
+
+        // 树节点表单配置：不设则 /treepconfig 的 TreeFormConfig=null，
+        // 前端树弹窗零字段 → 角色无处可维护（本控制器改造前的根因之一）。
+        // 字段/布局全在 Assets/EntityConfigs/System/Sys_Role.json（RoleName/IsValid/OrderNo）。
+        TreeFormConfigName = "System/Sys_Role";
 
         // 注册行操作
         RegisterRowAction("SetPermission", SetPermissionAsync);
@@ -101,6 +109,57 @@ public class RoleController : TreeTableControllerBase<Sys_Role, Sys_Role>
         }
 
         // 如果未指定 ParentCode，设置为根节点（null）
+        if (string.IsNullOrEmpty(entity.ParentCode))
+        {
+            entity.ParentCode = null;
+        }
+
+        return (true, null);
+    }
+
+    /// <summary>
+    ///     树节点新增前（/tree/add）—— 与单表 OnBeforeAdd 平行，但**不复用它**
+    ///     <para>① Code 为空时基类在其后兜底 Guid → 只在显式带了 Code 才查唯一性；</para>
+    ///     <para>② 归一空 ParentCode → null（根节点），避免插入 '' 导致父子链断裂。</para>
+    /// </summary>
+    protected override async Task<(bool ok, string? msg)> OnBeforeAddTree(Sys_Role entity)
+    {
+        if (!string.IsNullOrEmpty(entity.Code))
+        {
+            var result = await TreeEntity.ExistsByCodeAsync(entity.Code);
+            if (result.Data == true)
+                return (false, $"角色编码 {entity.Code} 已存在");
+        }
+
+        if (string.IsNullOrEmpty(entity.ParentCode))
+        {
+            entity.ParentCode = null;
+        }
+
+        return (true, null);
+    }
+
+    /// <summary>
+    ///     树节点修改前（/tree/update）—— 回填树弹窗未覆盖的列
+    ///     <para>⚠️ <c>SqlSugarDbOrm.UpdateAsync</c> 按「实体全列 − IgnoreColumns(Code/Id/CreateTime/CreateBy)」
+    ///     写库，请求体没有的列会被**实体默认值**覆盖。树弹窗只提交
+    ///     RoleName / IsValid / OrderNo / ParentCode / Code，故须把表单外的列按库值回填，
+    ///     否则 <c>DeptName</c>（存量有值：「无」「1」等）会被静默清空。</para>
+    ///     <para>⛔ 不可复用单表 OnBeforeUpdate：它比对 <c>existing.Id != entity.Id</c>，
+    ///     而本路径按准则 A 不传 Id（恒为 0）→ 必然误判「编码已存在」。</para>
+    /// </summary>
+    protected override async Task<(bool ok, string? msg)> OnBeforeUpdateTree(Sys_Role entity)
+    {
+        var current = await TreeEntity.GetByCodeAny(entity.Code);
+        if (!current.Success || current.Data == null)
+            return (false, "角色不存在");
+
+        var existing = current.Data;
+        entity.DeptName ??= existing.DeptName;
+        entity.DeleteBy ??= existing.DeleteBy;
+        entity.DeleteTime ??= existing.DeleteTime;
+        entity.IsDeleted = existing.IsDeleted;
+
         if (string.IsNullOrEmpty(entity.ParentCode))
         {
             entity.ParentCode = null;
@@ -229,6 +288,11 @@ public class RoleController : TreeTableControllerBase<Sys_Role, Sys_Role>
                     ParentCode = org.ParentCode,
                     NodeType = "org",
                     CheckFlag = false,
+                    // 启用/禁用徽章（Extra.IsValid，前端 CheckSelector 统一渲染）
+                    Extra = new Dictionary<string, object>
+                    {
+                        ["IsValid"] = org.IsValid,
+                    },
                 });
             }
 
@@ -246,6 +310,7 @@ public class RoleController : TreeTableControllerBase<Sys_Role, Sys_Role>
                     {
                         ["UserName"] = user.UserName,
                         ["OrgCode"] = user.OrgCode ?? "",
+                        ["IsValid"] = user.IsValid,
                     },
                 });
             }

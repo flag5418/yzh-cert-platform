@@ -157,9 +157,8 @@
     "Delete": false,
     "CustomButtons": {
       "detail": "详情",
-      "submit": "提交执行",
-      "retry": "重试失败项",
-      "result": "看结果"
+      "submit": "启动任务",
+      "retry": "重试失败项"
     }
   },
   "Toolbar": {

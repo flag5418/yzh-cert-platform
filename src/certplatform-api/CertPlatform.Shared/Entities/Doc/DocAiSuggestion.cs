@@ -5,7 +5,7 @@ using YZH.Core.Stand.Attributes;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Entity;
 
-namespace CertPlatform.Admin.Entities.Doc
+namespace CertPlatform.Shared.Entities.Doc
 {
     /// <summary>
     /// AI 填写建议（多候选 + 人工裁决）

@@ -8,6 +8,8 @@
  * - 工具栏（声明式 toolbarActions + 列设置）
  * - 搜索栏联动
  * - 行操作按钮下沉：icon / type / disabled / visible / confirm / 溢出折叠（actionMaxInline）
+ *   / 纯下拉（actionDropdownOnly）/ 固定列开关（actionFixed）；
+ *   操作列宽由 actionColWidth 按按钮文案自适应（⛔ 不要在 columns 里手写 Actions + width）
  * - render:'tag' 列级标签渲染（valueMap/tagTypeMap 由调用方传入）
  * - 插槽扩展（#column-prop）
  *
@@ -20,7 +22,7 @@
 import { confirmOrFalse } from '../../utils/confirm'
 import YzhEmptyState from '../ui/YzhEmptyState.vue'
 import { ElMessage } from 'element-plus'
-import { Operation, WarningFilled, Files } from '@element-plus/icons-vue'
+import { Operation, WarningFilled } from '@element-plus/icons-vue'
 import { computed, getCurrentInstance, onMounted, reactive, ref, watch } from 'vue'
 import YzhPagination from '../layout/YzhPagination.vue'
 import YzhSearchBar from '../layout/YzhSearchBar.vue'
@@ -69,6 +71,18 @@ const props = withDefaults(
     rowActionLink?: boolean
     /** 行按钮超过 N 个时折叠为「更多」下拉（0 = 不折叠） */
     actionMaxInline?: number
+    /**
+     * 纯下拉模式：操作列只渲染一个「操作 ▾」触发钮，全部行按钮收进下拉菜单。
+     * 列宽由 `actionColWidth` 恒定收敛到下限 88px（不再随按钮数膨胀）。
+     * 默认 false（保持 actionMaxInline 的既有语义）。
+     */
+    actionDropdownOnly?: boolean
+    /**
+     * 操作列是否 `fixed="right"`（默认 true，维持既有行为）。
+     * 36 号 §8.1a 实测：部分页面 el-table 的 fixed 层里按钮宽度算成 0（点不动），
+     * 这类页面显式传 false 退回普通列。
+     */
+    actionFixed?: boolean
     /** 树形数据默认全部展开（children 字段驱动，透传 el-table default-expand-all） */
     defaultExpandAll?: boolean
     /** 树形字段映射（透传 el-table tree-props；children 默认 'children'） */
@@ -88,6 +102,8 @@ const props = withDefaults(
     rowActionButtons: () => [],
     rowActionLink: true,
     actionMaxInline: 0,
+    actionDropdownOnly: false,
+    actionFixed: true,
     defaultExpandAll: false,
     treeProps: undefined
   }
@@ -164,7 +180,9 @@ function resolveRowActions(row: T): YzhAction[] {
 
 /** 是否显示动态行操作列 */
 const showDynamicActionColumn = computed(() => {
-  const hasActionsCol = props.columns.some((c) => c.prop === 'actions')
+  // 字段名铁律：业务列一律 PascalCase（'Actions'）⇒ 必须大小写不敏感比较，
+  // 否则该判据永不命中，配了 rowActionButtons 又手写了操作列时会**双列并存**。
+  const hasActionsCol = props.columns.some((c) => String(c.prop).toLowerCase() === 'actions')
   if (typeof props.rowActionButtons === 'function') return !hasActionsCol
   const count = Array.isArray(props.rowActionButtons)
     ? props.rowActionButtons.length
@@ -172,14 +190,22 @@ const showDynamicActionColumn = computed(() => {
   return count > 0 && !hasActionsCol
 })
 
-/** 溢出折叠：前 N 个平铺，其余收进「更多」下拉 */
+/** 溢出折叠：前 N 个平铺，其余收进「更多」下拉；actionDropdownOnly = 一个都不平铺 */
 const inlineOverflow = computed(() => props.actionMaxInline > 0)
 
 function splitRowActions(list: YzhAction[]): { inline: YzhAction[]; overflow: YzhAction[] } {
+  if (props.actionDropdownOnly) {
+    return list.length > 0 ? { inline: [], overflow: list } : { inline: [], overflow: [] }
+  }
   if (!inlineOverflow.value || list.length <= props.actionMaxInline) {
     return { inline: list, overflow: [] }
   }
   return { inline: list.slice(0, props.actionMaxInline), overflow: list.slice(props.actionMaxInline) }
+}
+
+/** 下拉触发钮文案：纯下拉时列头已是「操作」，按钮不再叫「更多」 */
+function overflowTriggerText(inlineCount: number): string {
+  return inlineCount > 0 ? '更多' : '操作'
 }
 
 /** 工具栏按钮（声明式） */
@@ -387,11 +413,13 @@ function estimateActionWidth(action: YzhAction): number {
   return textWidth + 16
 }
 
-/** 一组行按钮的渲染宽度（含溢出折叠时的「更多」下拉） */
+/** 一组行按钮的渲染宽度（含溢出折叠时的「更多/操作」下拉） */
 function estimateActionsWidth(list: YzhAction[]): number {
   const { inline, overflow } = splitRowActions(list)
   let width = inline.reduce((sum, a) => sum + estimateActionWidth(a), 0)
-  if (overflow.length > 0) width += estimateActionWidth({ key: '__overflow__', text: '更多' })
+  if (overflow.length > 0) {
+    width += estimateActionWidth({ key: '__overflow__', text: overflowTriggerText(inline.length) })
+  }
   return width
 }
 
@@ -709,7 +737,7 @@ defineExpose({
             v-if="showDynamicActionColumn"
             label="操作"
             :width="actionColWidth"
-            fixed="right"
+            :fixed="actionFixed ? 'right' : undefined"
             align="center"
           >
             <template #default="{ row }">
@@ -729,7 +757,9 @@ defineExpose({
                 trigger="click"
                 @command="(key: string) => { const a = splitRowActions(resolveRowActions(row)).overflow.find(x => x.key === key); if (a) onRowActionClick(a, row) }"
               >
-                <el-button link size="small">更多</el-button>
+                <el-button link type="primary" size="small">
+                  {{ overflowTriggerText(splitRowActions(resolveRowActions(row)).inline.length) }}
+                </el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item
@@ -749,7 +779,7 @@ defineExpose({
 
           <template #empty>
             <div class="yzh-table__empty">
-              <YzhEmptyState :icon="Files" v-if="!loading && !error" :title="emptyText" />
+              <YzhEmptyState v-if="!loading && !error" :title="emptyText" />
               <div v-else-if="error" class="yzh-table__error">
                 <el-icon><WarningFilled /></el-icon>
                 <span>{{ error }}</span>
@@ -824,9 +854,15 @@ defineExpose({
   color: var(--yzh-color-danger, #f56c6c);
 }
 
-/* S11：!important 仅限 :deep() 内 —— 这里靠 .el-dropdown-menu__item 提特异性
+/* 行动作下拉里的 danger 项（如「删除」）
+   ⚠️ 锚点必须是 `.el-dropdown-menu` 而不是 `.yzh-table`：`el-dropdown` 默认
+   `teleported`，菜单被 teleport 到 `<body>`，已不在 `.yzh-table` 祖先内 ⇒
+   `.yzh-table :deep(...)` 永远匹配不到（颜色静默丢失）。`.el-dropdown-menu`
+   是本组件模板里的子组件根节点，Vue 会把本组件的 scope id 贴上去，故
+   `.el-dropdown-menu[data-v-x]` 在 teleport 后依然命中。
+   S11：!important 仅限 :deep() 内 —— 这里靠 .el-dropdown-menu__item 提特异性
    （30 > EP hover 态 21）压过覆盖，因此不再需要 !important */
-.yzh-table :deep(.el-dropdown-menu__item.yzh-row-action-danger) {
+.el-dropdown-menu :deep(.el-dropdown-menu__item.yzh-row-action-danger) {
   color: var(--yzh-color-danger, #f56c6c);
 }
 

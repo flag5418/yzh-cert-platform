@@ -69,7 +69,7 @@
         </template>
       </el-tree>
 
-      <YzhEmptyState :icon="FolderOpened"
+      <YzhEmptyState
         v-if="!loading && filteredTreeData.length === 0"
         :title="filterText ? '未匹配到目录' : '暂无目录数据'"
        />

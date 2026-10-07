@@ -2,7 +2,6 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using CertPlatform.Admin.Entities.Doc;
 using CertPlatform.Admin.Services.DocExtraction;
 using CertPlatform.Admin.Services.Workflow;
 using CertPlatform.Shared.DocExtraction;
@@ -21,8 +20,11 @@ namespace CertPlatform.Admin.Controllers.Workflow;
 /// <para><b>路由前缀</b>：<c>/api/Admin/Workflow/StandardDocContract</c>（含 <c>Admin/</c> 端标记，
 /// 与后台端其余 Controller 一致；<c>ApiCode</c> 取路由<b>末段</b>，加端标记不影响授权关联）。</para>
 ///
-/// <para><b>基类说明</b>：继承 <see cref="WebControllerBase"/> 而非 <c>YzhControllerBase&lt;V&gt;</c> ——
-/// 契约表<b>没有</b> EntityConfig 与页面配置驱动的 CRUD 需求，继承后者只会白带六个通用端点。</para>
+/// <para><b>基类说明（★ 有意为之，⛔ 不是漏改）</b>：继承 <see cref="WebControllerBase"/> 而非
+/// <c>YzhControllerBase&lt;V&gt;</c> —— 契约表<b>没有</b> EntityConfig、也不走页面配置驱动的 CRUD，
+/// 继承后者只会白带六个通用端点（且那六个端点全都用不上）。
+/// 架构规范允许「<b>职能特殊控制器</b>」直接继承 <c>ControllerBase</c>，本控制器正属该类；
+/// 此处显式记录理由，避免后人 review 时误判为「基类写错了」而改成 <c>YzhControllerBase&lt;V&gt;</c>。</para>
 ///
 /// <para><b>业务定位（37 号 §3.4 Tab3 / §0.2）</b>：契约是「<b>文档语义分析</b>」的标准侧落点 ——
 /// 分类（<c>DocCategory</c>）、作用（<c>DocPurpose</c>）、标签（<c>TagsJson</c>）、

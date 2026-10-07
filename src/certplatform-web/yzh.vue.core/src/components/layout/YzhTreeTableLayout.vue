@@ -21,7 +21,7 @@
         <!-- 树内容 -->
         <YzhTree
           ref="treeRef"
-          :data="filteredTreeData"
+          :data="treeData"
           :node-key="nodeKey"
           :label-field="labelField"
           :children-field="childrenField"
@@ -33,10 +33,14 @@
           :load-data="treeLoadData"
           :default-expand-all="treeDefaultExpandAll"
           :default-expanded-keys="treeDefaultExpandedKeys"
+          :status-field="statusField"
+          :status-enabled-text="statusEnabledText"
+          :status-disabled-text="statusDisabledText"
           :node-actions="nodeActions"
           :legacy-node-actions="legacyNodeActions"
           :get-action-label="getActionLabel"
           @node-click="handleTreeNodeClick"
+          @node-expand="handleTreeNodeExpand"
           @check-change="handleTreeCheckChange"
           @node-action="handleTreeNodeAction"
         />
@@ -65,7 +69,7 @@
  * - nodeActions 透传为 YzhAction[] / resolver
  * - 不对 node.Code / data.Code 等做任何硬编码
  */
-import { computed, ref } from 'vue'
+import { ref, watch } from 'vue'
 import { ElInput } from 'element-plus'
 import YzhTree, { type YzhTreeNode } from './YzhTree.vue'
 import type { YzhAction } from '../table/types'
@@ -109,6 +113,17 @@ interface Props {
    * 避免 `treeDefaultExpandAll` 一次铺开上百个节点。</para>
    */
   treeDefaultExpandedKeys?: (string | number)[]
+  /**
+   * 节点状态字段名（`Extra` 内，透传 YzhTree）。
+   * <para>**不传 = 页面零绑定**：YzhTree 默认读 `Extra.IsValid`，全站树自动显示启停徽章。</para>
+   * <para>需后端驱动覆盖时才绑 `logic.treeStatusField`（取 `TreeConfig.EnableField`）；
+   * 传 `''` = 关闭徽章。</para>
+   */
+  statusField?: string
+  /** 启用态文案（传空串 = 仅标注停用） */
+  statusEnabledText?: string
+  /** 停用态文案 */
+  statusDisabledText?: string
   /** 节点操作按钮：YzhAction[] 或 (node) => YzhAction[] */
   nodeActions?: YzhAction[] | ((node: YzhTreeNode) => YzhAction[])
   /** 兼容旧属性：{ 方法名: 显示文字 } */
@@ -132,6 +147,9 @@ const props = withDefaults(defineProps<Props>(), {
   treeLazy: false,
   treeDefaultExpandAll: false,
   treeDefaultExpandedKeys: () => [],
+  statusField: undefined,
+  statusEnabledText: '启用',
+  statusDisabledText: '禁用',
   nodeActions: () => [],
   legacyNodeActions: () => ({}),
   getActionLabel: undefined
@@ -151,12 +169,21 @@ const treeRef = ref<InstanceType<typeof YzhTree>>()
 const treeSearchKeyword = ref('')
 
 // ========================================================
-// 计算属性（字段参数化感知的搜索过滤）
+// 树搜索（委托 YzhTree 原地过滤，不克隆 data）
 // ========================================================
 
-const filteredTreeData = computed(() => {
-  if (!treeSearchKeyword.value) return props.treeData
-  return filterTreeData(props.treeData, treeSearchKeyword.value)
+/**
+ * 工具栏搜索只做转发：真正的过滤由 el-tree `filter-node-method` 原地完成
+ * （隐藏不匹配节点 + 保留匹配祖先），**不重建 store**。
+ *
+ * ⛔ 曾经这里用 `filterTreeData` 克隆 `props.treeData` 再传给 YzhTree：
+ *   ① 读 `node[childrenField]`（Children），而懒加载子节点写在 `data.children` → 搜深层节点恒为空；
+ *   ② 换数组 = el-tree lazy store 重建，`Node.initialize` 对 lazy 跳过 `setData` →
+ *      已展开的懒加载子节点全丢（搜完清空只剩 3 个根）。
+ * 两条合起来即「树搜索清空后子节点消失」的根因 → 改走 `setSearchKeyword`（2026-10-07）。
+ */
+watch(treeSearchKeyword, (val) => {
+  treeRef.value?.setSearchKeyword(val ?? '')
 })
 
 // ========================================================
@@ -164,6 +191,23 @@ const filteredTreeData = computed(() => {
 // ========================================================
 
 function handleTreeNodeClick(node: YzhTreeNode) {
+  emit('tree-node-click', node)
+}
+
+/**
+ * 点展开箭头 → 同步选中，右表跟随（与点节点名一致）。
+ *
+ * el-tree 只有 `.el-tree-node` 根上的 `@click.stop` 才 emit `node-click`，
+ * 箭头是 `@click.stop="handleExpandIconClick"`，**只 expand 不选中** ⇒ 右表不刷新。
+ * 「点名」路径 handleClick 先 setCurrent 再 expand，故此处以 store.currentNode 去重，
+ * 不会出现一次点击两次刷新；箭头点在**已选中**节点上则不重复查询（右表本就是它的数据）。
+ */
+function handleTreeNodeExpand(node: YzhTreeNode) {
+  const key = String(node[props.nodeKey] ?? '')
+  if (!key) return
+  const current = treeRef.value?.getCurrentNode?.() as YzhTreeNode | null | undefined
+  if (current && String(current[props.nodeKey] ?? '') === key) return
+  treeRef.value?.setCurrentNode(key)
   emit('tree-node-click', node)
 }
 
@@ -181,28 +225,6 @@ function handleExpandAll() {
 
 function handleCollapseAll() {
   treeRef.value?.collapseAll()
-}
-
-// ========================================================
-// 辅助函数
-// ========================================================
-
-function filterTreeData(nodes: YzhTreeNode[], keyword: string): YzhTreeNode[] {
-  const lower = keyword.toLowerCase()
-  const result: YzhTreeNode[] = []
-
-  for (const node of nodes) {
-    const label = String(node[props.labelField] ?? '')
-    const matched = label.toLowerCase().includes(lower)
-    const children = (node[props.childrenField] as YzhTreeNode[]) ?? []
-    const filteredChildren = filterTreeData(children, keyword)
-
-    if (matched || filteredChildren.length > 0) {
-      result.push({ ...node, [props.childrenField]: filteredChildren })
-    }
-  }
-
-  return result
 }
 
 // ========================================================

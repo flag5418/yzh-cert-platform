@@ -52,6 +52,10 @@ const props = withDefaults(
     rowActionButtons?: Record<string, string> | YzhAction[] | ((row: T) => Record<string, string> | YzhAction[])
     rowActionLink?: boolean
     actionMaxInline?: number
+    /** 纯下拉模式：操作列只渲染一个「操作 ▾」，全部行按钮收进菜单（透传 YzhTable） */
+    actionDropdownOnly?: boolean
+    /** 操作列是否固定右侧（透传 YzhTable；fixed 层有按钮宽度算成 0 的已知坑时传 false） */
+    actionFixed?: boolean
     /** 树表默认全展开 */
     defaultExpandAll?: boolean
     /** 行子级字段（el-table tree-props.children；字段参数化） */
@@ -78,6 +82,8 @@ const props = withDefaults(
     rowActionButtons: () => [],
     rowActionLink: true,
     actionMaxInline: 0,
+    actionDropdownOnly: false,
+    actionFixed: true,
     defaultExpandAll: true,
     childrenField: 'children',
     allowAddChild: false,
@@ -182,6 +188,8 @@ defineExpose({
     :row-action-buttons="effectiveRowActions as any"
     :row-action-link="rowActionLink"
     :action-max-inline="actionMaxInline"
+    :action-dropdown-only="actionDropdownOnly"
+    :action-fixed="actionFixed"
     :default-expand-all="defaultExpandAll"
     :tree-props="treeProps"
     v-bind="$attrs"

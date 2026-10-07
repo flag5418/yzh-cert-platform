@@ -40,5 +40,6 @@ auditor	MENU_AUD_08	/nc-results
 auditor	MENU_AUD_09	/report-results
 auditor	MENU_AUD_04	/resources
 auditor	MENU_AUD_11	/enterprise-original
+auditor	MENU_AUD_12	/enterprise-normalize
 auditor	MENU_AUD_05	/organization
 auditor	MENU_AUD_06	/settings

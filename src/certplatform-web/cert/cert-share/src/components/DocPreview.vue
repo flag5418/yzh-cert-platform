@@ -460,7 +460,7 @@ defineExpose({ reload: loadPreview })
       <pre v-else-if="textContent" class="text-content">{{ textContent }}</pre>
 
       <div v-else-if="isRenderable" class="state-panel">
-        <YzhEmptyState :icon="Document" title="暂无预览内容" />
+        <YzhEmptyState title="暂无预览内容" />
       </div>
     </div>
   </div>

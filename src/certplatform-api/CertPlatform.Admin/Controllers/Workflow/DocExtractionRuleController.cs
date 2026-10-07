@@ -1,7 +1,6 @@
 
 using Microsoft.AspNetCore.Mvc;
 using CertPlatform.Admin.Services.DocExtraction;
-using CertPlatform.Admin.Entities.Doc;
 using YZH.Core.Stand.Models.Result;
 
 namespace CertPlatform.Admin.Controllers.Workflow;

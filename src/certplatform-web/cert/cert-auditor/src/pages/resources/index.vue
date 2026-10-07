@@ -15,7 +15,7 @@
  */
 import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { YzhTable, YzhEmptyState } from '@yzh-core'
-import { Calendar, OfficeBuilding, Refresh, Search, Upload, UploadFilled, Document, Files, FolderOpened } from '@element-plus/icons-vue'
+import { Calendar, OfficeBuilding, Refresh, Search, Upload, UploadFilled, Files } from '@element-plus/icons-vue'
 import { ResourcesLogic, type ResourceTreeNode } from './logic'
 import type { FileSlot } from '@share/api'
 import StandardFolderTree from './components/StandardFolderTree.vue'
@@ -128,7 +128,7 @@ function onReplacePick(file: any) {
           </el-tree>
 
           <el-skeleton v-else-if="logic.loadingEnterprises.value" :rows="4" animated />
-          <YzhEmptyState :icon="OfficeBuilding" v-else title="暂无企业数据" />
+          <YzhEmptyState v-else title="暂无企业数据" />
         </div>
       </aside>
 
@@ -234,7 +234,7 @@ function onReplacePick(file: any) {
                   </div>
                 </div>
 
-                <YzhEmptyState :icon="FolderOpened"
+                <YzhEmptyState
                   v-if="logic.folderTreeOf(std.StandardCode).length === 0"
                   title="该标准暂无资料目录，模板就绪后刷新本页自动生成"
                  />
@@ -302,9 +302,9 @@ function onReplacePick(file: any) {
         没匹配上的文件不会进入任何标准。
       </el-alert>
 
-      <el-button v-if="logic.singleUploadFiles.value.length" size="small" type="primary"
+      <el-button v-if="logic.singleUploadFiles.value.length" size="small" type="default"
                  :loading="logic.singlePlanLoading.value" @click="logic.previewSingleUpload()">
-        匹配预览
+        重新匹配
       </el-button>
 
       <div v-if="logic.singlePlanRows.value.length" class="plan-block">
@@ -336,8 +336,9 @@ function onReplacePick(file: any) {
       <template #footer>
         <el-button @click="logic.closeSingleUploadDialog()">取消</el-button>
         <el-button type="primary" :loading="logic.uploading.value"
-                   :disabled="!logic.singlePlanRows.value.some(r => r.Selected && !r.BlockReason)
-                     && !(logic.singleAssignUnmatched.value && logic.singleUploadFiles.value.length > 0)"
+                   :disabled="logic.singlePlanLoading.value
+                     || (!logic.singlePlanRows.value.some(r => r.Selected && !r.BlockReason)
+                       && !(logic.singleAssignUnmatched.value && logic.singleUploadFiles.value.length > 0))"
                    @click="logic.confirmSingleUpload()">
           确认上传
         </el-button>
@@ -537,13 +538,13 @@ function onReplacePick(file: any) {
           <div v-if="h.Detail" class="timeline-detail">{{ h.Detail }}</div>
         </el-timeline-item>
       </el-timeline>
-      <YzhEmptyState :icon="Files" v-else title="暂无操作记录" />
+      <YzhEmptyState v-else title="暂无操作记录" />
     </el-drawer>
 
     <!-- ═══════════ PDF 预览（Blob → ObjectURL；裸链接无法带 Authorization） ═══════════ -->
     <el-drawer v-model="logic.previewVisible.value" :title="`预览：${logic.previewName.value}`" direction="rtl" size="70%" @closed="logic.closePreview()">
       <iframe v-if="logic.previewUrl.value" :src="logic.previewUrl.value" class="preview-frame" />
-      <YzhEmptyState :icon="Document" v-else title="暂无预览" />
+      <YzhEmptyState v-else title="暂无预览" />
     </el-drawer>
 
     <!-- ═══════════ 提取结果 ═══════════ -->
@@ -579,7 +580,7 @@ function onReplacePick(file: any) {
           </div>
         </div>
       </div>
-      <YzhEmptyState :icon="Document" v-else title="暂无提取结果" />
+      <YzhEmptyState v-else title="暂无提取结果" />
     </el-drawer>
   </div>
 </template>

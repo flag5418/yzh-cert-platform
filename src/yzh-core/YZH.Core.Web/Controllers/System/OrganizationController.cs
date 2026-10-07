@@ -69,6 +69,11 @@ namespace YZH.Core.Web.Controllers.System;
 ///        前端隐藏按钮 + 后端 tree/update / tree/delete 双重拦截。
 ///     10. ★ 录入表单不含「机构类型」字段（见 Assets/EntityConfigs/System/OrganizationForm.json），
 ///        新增机构一律置为 Dept。
+///     11. ★ 对称规则（第 9 条的延展）：
+///        ① 非 Dept 机构下**不允许新增下级机构**（OnBeforeAddTree 拦截）；
+///        ② 非 Dept 机构下的**人员增 / 删 / 改一律拒绝**（OnBeforeAdd/OnBeforeUpdate/OnBeforeDelete），
+///           这些人员在业务模块创建，管理端只能**启用/禁用**。
+///        判定与文案与前端 `pages/system/organization/logic.ts` 逐字一致（双端拦截）。
 ///     
 ///     API 路由：
 ///     --- 树（机构） ---
@@ -165,6 +170,15 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
     /// <summary>新增机构前校验</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAddTree(Sys_Organization entity)
     {
+        // 非 Dept（业务系统所有）机构下不允许新增下级：
+        // 平台/认证机构/虚拟体系机构/企业 的树形由对应业务模块自行扩展
+        if (!string.IsNullOrEmpty(entity.ParentCode))
+        {
+            var parent = await TreeEntity.GetByCodeAny(entity.ParentCode);
+            if (parent.Success && parent.Data != null && !IsManagedDept(parent.Data))
+                return (false, BusinessOwnedOrgMessage);
+        }
+
         // 同级机构名称唯一性（EntityService.ExistsAsync 自动过滤 IsDeleted=true）
         var nameExists = await TreeEntity.ExistsAsync(o =>
             o.ParentCode == entity.ParentCode &&
@@ -189,6 +203,29 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         entity.OrgType = OrgTypeDept;
 
         return (true, null);
+    }
+
+    /// <summary>
+    /// 人员归属机构准入：仅 OrgType='Dept' 机构下的人员可由本页面维护。
+    /// 非 Dept（Platform / CertBody / VirtualOrg / Enterprise）的人员由业务模块创建，
+    /// 本页面只能启用/禁用。
+    /// </summary>
+    private async Task<string?> CheckUserOrgManagedAsync(string? orgCode)
+    {
+        if (string.IsNullOrEmpty(orgCode)) return null;
+        var org = await TreeEntity.GetByCodeAny(orgCode);
+        if (org.Success && org.Data != null && !IsManagedDept(org.Data))
+            return BusinessOwnedOrgMessage;
+        return null;
+    }
+
+    /// <summary>按人员 Code 反查其归属机构是否归业务系统所有</summary>
+    private async Task<string?> CheckUserManagedByCodeAsync(string? userCode)
+    {
+        if (string.IsNullOrEmpty(userCode)) return null;
+        var existing = await Entity.GetByCodeAny(userCode);
+        if (!existing.Success || existing.Data == null) return null;
+        return await CheckUserOrgManagedAsync(existing.Data.OrgCode);
     }
 
     /// <summary>修改机构前校验</summary>
@@ -271,6 +308,8 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         var orgResult = await TreeEntity.GetByCodeAny(entity.OrgCode);
         if (!orgResult.Success || orgResult.Data == null)
             return (false, "所属机构不存在");
+        if (!IsManagedDept(orgResult.Data))
+            return (false, BusinessOwnedOrgMessage);
         if (orgResult.Data.IsValid == 0)
             return (false, "所属机构已禁用，无法添加人员");
 
@@ -285,15 +324,33 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
         return (true, null);
     }
 
-    /// <summary>修改人员前：如果传了新密码则重新加密</summary>
-    protected override Task<(bool ok, string? msg)> OnBeforeUpdate(Sys_User entity)
+    /// <summary>修改人员前：非 Dept 机构下的人员只读；传了新密码则重新加密</summary>
+    protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(Sys_User entity)
     {
+        // 业务系统所有机构下的人员 → 拒绝管理端改写
+        var orgMsg = await CheckUserManagedByCodeAsync(entity.Code);
+        if (orgMsg != null)
+            return (false, orgMsg);
+
         if (!string.IsNullOrEmpty(entity.UserPwd) && entity.UserPwd.Length < 50)
         {
             entity.UserPwd = _passwordHelper.AesEncrypt(entity.UserPwd);
         }
 
-        return Task.FromResult<(bool, string?)>((true, null));
+        return (true, null);
+    }
+
+    /// <summary>删除人员前：非 Dept 机构下的人员只读（业务系统负责删除）</summary>
+    protected override async Task<(bool ok, string? msg)> OnBeforeDelete(string[] codes)
+    {
+        foreach (var code in codes)
+        {
+            var orgMsg = await CheckUserManagedByCodeAsync(code);
+            if (orgMsg != null)
+                return (false, orgMsg);
+        }
+
+        return (true, null);
     }
 
     /// <summary>查询后处理：字典翻译 + 手机号脱敏</summary>

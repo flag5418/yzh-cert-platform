@@ -6,7 +6,7 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Entity;
 using YZH.Entity.Admin.Platform;
 
-namespace CertPlatform.Admin.Entities.Doc
+namespace CertPlatform.Shared.Entities.Doc
 {
     /// <summary>标准文档模板（空白模板登记）</summary>
     /// <para>表名：cert_doc_template</para>
@@ -67,6 +67,29 @@ namespace CertPlatform.Admin.Entities.Doc
         [Required]
         [StringLength(512)]
         public string StoragePath { get; set; } = string.Empty;
+
+        // ──── 试填预览（`52` §12.4 裁定 A，2026-10-06 新增）────
+
+        /// <summary>
+        /// 试填预览 PDF 路径 → <c>PathBuilder.PreviewFromTemplate()</c>（<c>_preview/</c> 段下）。
+        ///
+        /// <para><b>空 = 从未试填过</b>（前端据此禁用中栏「填充后预览」视图）。</para>
+        ///
+        /// <para><b>★ 为什么固定 key（不带时间戳）</b>：试填是「看看填出来长什么样」，
+        /// 不是正式产物 ⇒ 不需要历史版本，重复试填覆盖同一对象，空间占用恒定。</para>
+        ///
+        /// <para>⛔ 与 <c>cert_standard_directory_file.PreviewPdfPath</c> <b>不是一回事</b> ——
+        /// 那个是「<b>源文件</b>的预览 PDF」（185 行在用），本列是「<b>空白模板试填后</b>的 PDF」。</para>
+        /// </summary>
+        [StringLength(512)]
+        public string? PreviewPdfPath { get; set; }
+
+        /// <summary>
+        /// 最近一次试填时间。
+        /// <para>⚠️ 刻意<b>不复用</b> <c>BaseEntity.UpdateTime</c> —— 那个列被「扫描 / 发布 /
+        /// 改配置」共用，显示出来会是「上次改配置的时间」，属于误导。</para>
+        /// </summary>
+        public DateTime? PreviewTime { get; set; }
 
         /// <summary>模板指纹：相同则跳过重扫</summary>
         [StringLength(64)]

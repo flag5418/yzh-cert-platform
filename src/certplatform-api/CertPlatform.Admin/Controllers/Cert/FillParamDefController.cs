@@ -7,34 +7,37 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Admin.Entities.Cert;
-using CertPlatform.Shared.Fill;
-using CertPlatform.Shared.Fill.Resolvers;
 
 namespace CertPlatform.Admin.Controllers.Cert;
 
 /// <summary>
-/// 体系认证全局参数定义控制器（后台管理）
+/// 企业资料参数字典控制器（后台管理）
 ///
-/// <para><b>业务定位</b>：认证机构按「机构 × 标准 × 阶段」预定义体系认证全局参数。
-/// 这些参数是标准文档填充时的主要取值来源。</para>
+/// <para><b>业务定位（2026-10-06 重定义，见 26-核心菜单功能设计 §3.1 裁决）</b>：
+/// 「企业资料参数」是一个<b>按标准管理的简单字典</b> —— 定义专家端可完善、
+/// 审核员可补充的企业资料字段，供未来标准文档填充使用。</para>
 ///
-/// <para><b>路由前缀</b>：<c>/api/Cert/FillParamDef</c></para>
-/// <para><b>数据库</b>：<c>cert_fill_param_def</c></para>
+/// <para><b>数据模型绑定制</b>：左树 = [通用] + 各ISO标准（只读，树数据源非本实体，
+/// 前端从 <c>/api/Admin/Foundation/ISOStandardTreeTable/tree/root</c> 取并拼通用根）；
+/// 每条参数唯一归属一节点（<c>StandardCode=''</c>=通用 或 ISOStandard.Code）；
+/// <c>OrgCode</c> / <c>StageCode</c> 服务端强制恒空串（不分机构、不分阶段）；
+/// 行级 <c>IsValid</c> 即启用/禁用开关。</para>
 ///
-/// <para><b>设计依据</b>：05 册 <c>22</c> §七（全局参数 2 表）、<c>23</c> §四（标准 × 阶段裁剪）；
-/// 实测必要性见 <c>25-纸面实验实测报告-V1.md</c> §8.5。</para>
+/// <para><b>为什么不是 TreeTableControllerBase</b>：树数据源是 ISO 标准表（另一实体），
+/// 本控制器的树增删改无业务意义 —— 左树只读，右表走基类 <c>/filter</c>（前端注入
+/// <c>StandardCode eq node.Code</c> 单条件），故保持 <c>YzhControllerBase</c>。</para>
 ///
-/// <para><b>★ 自定义端点</b>：<c>scopes</c>（机构/标准/阶段下拉）、
-/// <c>enterprise-attrs</c>（企业属性目录 —— 后台配置取值表达式时「选企业属性」用）。</para>
+/// <para><b>路由前缀</b>：<c>/api/Admin/Cert/FillParamDef</c>
+/// <b>数据库</b>：<c>cert_fill_param_def</c></para>
+///
+/// <para><b>★ 端点变化（2026-10-06）</b>：原自定义端点 <c>scopes</c> / <c>enterprise-attrs</c> /
+/// <c>effective</c> 仅被旧页面调用，随作用域模型一并删除 —— ApiCode 集合变化，
+/// 部署后须重跑 ApiSync 并重关联角色-接口。</para>
 /// </summary>
 [ApiController]
 /// <para><b>★ 端标记（2026-10-03）</b>：路由加 <c>Admin/</c> 段，与专家端 <c>/api/Auditor/*</c> 对称。
-/// <para>背景：后台端 20 个 Controller 此前零端标记，4 个连业务域前缀都没有（<c>api/AIUsage</c>
-/// <c>api/PromptTemplate</c> <c>api/ValidationRule</c> <c>api/ReportDefinition</c>），
-/// 且 <c>api/System/[controller]</c> 与框架层 <c>YZH.Core.Web</c> 的 <c>api/System/*</c> 撞前缀。</para>
 /// <para><b>不影响授权</b>：<c>ApiCode = Sha256("{METHOD}|{路由末段}|{动作名}")</c>（ApiScanner.cs:326-331）
-/// 只取路由<b>末段</b>作控制器名，本 Controller 的末段未变 ⇒ <c>ApiCode</c> 不变 ⇒
-/// <b>角色-接口关联不断裂</b>，无需重跑 ApiSync。</para>
+/// 只取路由<b>末段</b>作控制器名，本 Controller 的末段未变 ⇒ 既有 ApiCode 不变。</para>
 [Route("api/Admin/Cert/[controller]")]
 public class FillParamDefController : YzhControllerBase<FillParamDef>
 {
@@ -62,59 +65,113 @@ public class FillParamDefController : YzhControllerBase<FillParamDef>
     // 一、CRUD 校验钩子
     // ════════════════════════════════════════════════════════════════════
 
-    /// <summary>新增前校验：同一「机构+标准+阶段」下 ParamCode 唯一</summary>
+    /// <summary>
+    /// 新增原子方法覆写：<b>「已删行复活」必须改走更新通路</b>（2026-10-06 冒烟实测修复）。
+    ///
+    /// <para>框架 <c>YzhControllerBase.AddCore</c>（YzhControllerBase.cs:252）在 <c>OnBeforeAdd</c>
+    /// 之后<b>无条件 Insert</b> —— 在钩子里把 <c>entity.Code</c> 指到已删行也拦不住 1062
+    /// （<c>uk_org_std_stage_param</c> 不含 <c>IsDeleted</c>，唯一约束冲突 = 「新增失败：数据已存在」）。
+    /// 故复活判定提前到本覆写：命中已删行 → 沿用 Code/Id 走 <c>Entity.Update</c>
+    /// （IgnoreColumns = Code/Id/CreateTime/CreateBy，<c>IsDeleted</c> 可写 ⇒ 复活落库），
+    /// 否则交回基类正常校验 + Insert。</para>
+    /// </summary>
+    public override async Task<Result<FillParamDef>> AddCore(FillParamDef entity)
+    {
+        // 归一前置（与 OnBeforeAdd 同款、幂等）—— 复活查行依赖归一后的三键 + trim 后的 ParamCode
+        entity.OrgCode = string.Empty;
+        entity.StageCode = string.Empty;
+        entity.SourceExpr = null;
+        entity.MaintainMode = "manual";
+        entity.StandardCode ??= string.Empty;
+        if (string.IsNullOrWhiteSpace(entity.ParamCode))
+            return Result<FillParamDef>.Fail("参数编码不能为空");
+        entity.ParamCode = entity.ParamCode.Trim();
+
+        // 含已删查行（uk 不含 IsDeleted ⇒ 必须在 Insert 前接管）
+        var dead = await _db.Client.Queryable<FillParamDef>()
+            .Where(p => p.IsDeleted
+                        && p.OrgCode == entity.OrgCode
+                        && p.StandardCode == entity.StandardCode
+                        && p.StageCode == entity.StageCode
+                        && p.ParamCode == entity.ParamCode)
+            .FirstAsync();
+
+        if (dead == null)
+            return await base.AddCore(entity);
+
+        var (valid, vmsg) = ValidateEntity(entity);
+        if (!valid) return Result<FillParamDef>.Fail(vmsg);
+
+        // 复活 = 把已删行当活行更新：沿用 Code/Id/CreateTime，清删除标记
+        entity.Code = dead.Code;
+        entity.Id = dead.Id;
+        entity.IsDeleted = false;
+        entity.DeleteBy = null;
+        entity.DeleteTime = null;
+        entity.CreateTime = dead.CreateTime;
+        entity.CreateBy = dead.CreateBy;
+
+        var upd = await Entity.Update(entity, UserContext.ClientIp);
+        if (!upd.Success || upd.Data == null)
+            return Result<FillParamDef>.Fail(upd.Error ?? "复活失败");
+
+        await OnAfterUpdate(upd.Data);
+        await OnAfterCommitted();
+        return Result<FillParamDef>.Ok(upd.Data);
+    }
+
+    /// <summary>新增前：三键服务端强制归一 + ParamCode 必填 + 同一标准下唯一（含已删，复活在 AddCore）</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAdd(FillParamDef entity)
     {
-        if (string.IsNullOrWhiteSpace(entity.OrgCode))
-            return (false, "所属机构不能为空");
+        // ★ 关键字段不分机构、不分阶段（2026-10-06 裁决）—— 服务端强制，不信任客户端传值
+        entity.OrgCode = string.Empty;
+        entity.StageCode = string.Empty;
+        entity.SourceExpr = null;
+        entity.MaintainMode = "manual";
+        // StandardCode 是唯一允许客户端决定的归属键（前端从左树选中节点注入），仅防空
+        entity.StandardCode ??= string.Empty;
+
         if (string.IsNullOrWhiteSpace(entity.ParamCode))
             return (false, "参数编码不能为空");
+        entity.ParamCode = entity.ParamCode.Trim();
 
-        // ★ 唯一键不含 IsDeleted ⇒ 查重必须「含已删」；命中已删行则复活它
-        //   （GetOneIgnoreValidAsync 只过滤软删除、不过滤 IsValid —— 见 REFERENCE §二十 ㉖）
-        var existing = await _db.GetOneIgnoreValidAsync<FillParamDef>(p =>
-            p.OrgCode == entity.OrgCode
-            && p.StandardCode == entity.StandardCode
-            && p.StageCode == entity.StageCode
-            && p.ParamCode == entity.ParamCode);
-
-        if (existing.Success && existing.Data != null)
-        {
-            if (existing.Data.IsDeleted)
-            {
-                // 复活：把已删行交还给框架更新（Code 沿用，避免产生第二行）
-                entity.Code = existing.Data.Code;
-                entity.Id = existing.Data.Id;
-                entity.IsDeleted = false;
-                entity.DeleteBy = null;
-                entity.DeleteTime = null;
-                entity.CreateTime = existing.Data.CreateTime;
-                entity.CreateBy = existing.Data.CreateBy;
-                return (true, null);
-            }
-            return (false, $"同一「机构 + 标准 + 阶段」下参数编码【{entity.ParamCode}】已存在");
-        }
+        // ★ 查重「含已删」（DB 唯一索引不含 IsDeleted）。
+        // 已删行正常情况下已在 AddCore 覆写里被接管复活 —— 走到这里说明是两查之间的
+        // 并发竞态，响亮拒绝让调用方重试（重试即走复活通路），绝不放进 Insert 撞 1062。
+        var existing = await _GetOneIgnoreValid(entity);
+        if (existing != null)
+            return (false, $"同一标准下参数编码【{entity.ParamCode}】已存在");
 
         return (true, null);
     }
 
-    /// <summary>修改前校验：ParamCode 唯一（排除自身）</summary>
+    /// <summary>修改前：Code 业务键 + 三键归一 + 同一标准下唯一（排除自身）</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(FillParamDef entity)
     {
         if (string.IsNullOrWhiteSpace(entity.Code))
             return (false, "更新失败：缺少业务键 Code");
 
-        var dup = await Entity.ExistsAsync(p =>
-            p.Code != entity.Code
-            && p.OrgCode == entity.OrgCode
-            && p.StandardCode == entity.StandardCode
-            && p.StageCode == entity.StageCode
-            && p.ParamCode == entity.ParamCode);
+        // ★ 与 OnBeforeAdd 同款强制归一：客户端不传 / 传脏都以服务端为准
+        entity.OrgCode = string.Empty;
+        entity.StageCode = string.Empty;
+        entity.SourceExpr = null;
+        entity.MaintainMode = "manual";
+        entity.StandardCode ??= string.Empty;
 
-        if (dup.Data)
-            return (false, $"同一「机构 + 标准 + 阶段」下参数编码【{entity.ParamCode}】已存在");
+        // 查重范围 = 含禁用、不含已删（DB 唯一索引不含 IsValid；已删行由新增复活路径接管）
+        var dup = await _db.Client.Queryable<FillParamDef>()
+            .Where(p => p.Code != entity.Code
+                        && p.IsDeleted == false
+                        && p.OrgCode == entity.OrgCode
+                        && p.StandardCode == entity.StandardCode
+                        && p.StageCode == entity.StageCode
+                        && p.ParamCode == entity.ParamCode)
+            .FirstAsync();
 
-        // ★ 内置参数的 ParamCode 不允许改（改了会断裂已配置的锚点引用）
+        if (dup != null)
+            return (false, $"同一标准下参数编码【{entity.ParamCode}】已存在");
+
+        // ★ 内置参数的 ParamCode 不允许改（改了会断裂已配置的文档锚点引用）
         var current = await Entity.GetOne(p => p.Code == entity.Code);
         if (current.Success && current.Data != null && current.Data.IsBuiltin)
         {
@@ -125,7 +182,7 @@ public class FillParamDefController : YzhControllerBase<FillParamDef>
         return (true, null);
     }
 
-    /// <summary>删除前校验：内置参数不可删除</summary>
+    /// <summary>删除前：内置参数不可删除（含已禁用行）</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeDelete(string[] codes)
     {
         if (codes == null || codes.Length == 0)
@@ -144,394 +201,20 @@ public class FillParamDefController : YzhControllerBase<FillParamDef>
         return (true, null);
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // 二、自定义端点
-    // ════════════════════════════════════════════════════════════════════
-
     /// <summary>
-    /// 作用域下拉数据：机构 / 标准 / 阶段。
-    /// <para>供前端在「所属机构 / 所属标准 / 所属阶段」三个 ComboBox 上注入选项。</para>
+    /// 按三键查行（<b>含已删</b>、不过滤 IsValid）—— 新增复活判定用。
+    /// ⛔ 不能用 <c>GetOneIgnoreValidAsync</c>：它仍过滤软删除（SqlSugarDbOrm.cs:64），
+    /// 命中不了已删行，复活逻辑会静默失效；而 DB 唯一索引 uk_org_std_stage_param
+    /// <b>不含 IsDeleted</b> → 复活失效时重复插入直接撞 1062。故此处裸查 Client。
     /// </summary>
-    [HttpGet("scopes")]
-    public async Task<IActionResult> Scopes()
+    private async Task<FillParamDef?> _GetOneIgnoreValid(FillParamDef entity)
     {
-        var orgs = await _db.Client.Queryable<CertificationBody>()
-            .Where(x => x.IsDeleted == false && x.IsValid == 1)
-            .OrderBy(x => x.Name)
-            .Select(x => new { x.Code, x.Name })
-            .ToListAsync();
-
-        // 标准是树形表（iso-standard 左树右表样板）→ 下拉只取叶子，否则目录节点会混进选项
-        var standards = await _db.Client.Queryable<ISOStandard>()
-            .Where(x => x.IsDeleted == false && x.IsValid == 1 && x.IsLeaf == true)
-            .OrderBy(x => x.Sort)
-            .Select(x => new { x.Code, Name = x.StandardName, x.StandardCode })
-            .ToListAsync();
-
-        var stages = await _db.Client.Queryable<CertStage>()
-            .Where(x => x.IsDeleted == false && x.IsValid == 1)
-            .OrderBy(x => x.SortOrder)
-            .Select(x => new { x.Code, Name = x.StageName, x.StageCode })
-            .ToListAsync();
-
-        return Ok(ApiResponse<object>.Ok(new
-        {
-            orgs = orgs.Select(x => new { value = x.Code, label = x.Name }).ToList(),
-            standards = standards.Select(x => new { value = x.Code, label = x.Name, no = x.StandardCode }).ToList(),
-            stages = stages.Select(x => new { value = x.Code, label = x.Name, no = x.StageCode }).ToList(),
-        }));
-    }
-
-    /// <summary>
-    /// ★ 企业属性目录 —— 「自动形成带企业所有属性的列表，让用户选择」。
-    ///
-    /// <para>返回 <c>cert_enterprise</c> 的全部业务属性（字段名 + 中文名 + 示例值），
-    /// 供后台在配置「取值表达式 SourceExpr」时点选，而不是让用户手敲字段名。</para>
-    ///
-    /// <para><b>返回的 <c>Expr</c> 即写入 <c>cert_fill_param_def.SourceExpr</c> 的值</b>，
-    /// 形如 <c>enterprise.Name</c>，由填充引擎的 <c>GlobalParamResolver</c> 解析。</para>
-    /// </summary>
-    [HttpGet("enterprise-attrs")]
-    public async Task<IActionResult> EnterpriseAttrs([FromQuery] string? enterpriseCode)
-    {
-        // ★ 属性中文名取 ReplaceResolver.EnterpriseAttrLabels（全项目唯一口径）——
-        //   若在此另写一份，新增企业字段时两处会漂移：后台能选、填充引擎认不出，
-        //   或者反之。这是本仓反复出现的「两套口径」缺陷，不要重犯。
-        //   此处只补「值类型」与「分组」两项展示信息。
-        var valueTypes = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["EmployeeCount"] = "number",
-            ["ArchiveDate"] = "date",
-        };
-
-        // 取一台真实企业做「示例值」——让机构看得见每个属性长什么样
-        Enterprise? sample = null;
-        if (!string.IsNullOrWhiteSpace(enterpriseCode))
-        {
-            var r = await _db.Client.Queryable<Enterprise>()
-                .Where(x => x.Code == enterpriseCode).FirstAsync();
-            sample = r;
-        }
-        sample ??= await _db.Client.Queryable<Enterprise>()
-            .Where(x => x.IsDeleted == false && x.IsValid == 1)
-            .OrderBy(x => x.Id)
+        var r = await _db.Client.Queryable<FillParamDef>()
+            .Where(p => p.OrgCode == entity.OrgCode
+                        && p.StandardCode == entity.StandardCode
+                        && p.StageCode == entity.StageCode
+                        && p.ParamCode == entity.ParamCode)
             .FirstAsync();
-
-        var sampleInfo = sample == null
-            ? new EnterpriseInfo()
-            : new EnterpriseInfo
-            {
-                Code = sample.Code,
-                Name = sample.Name,
-                ShortName = sample.ShortName,
-                CreditCode = sample.CreditCode,
-                LegalPerson = sample.LegalPerson,
-                Province = sample.Province,
-                City = sample.City,
-                Address = sample.Address,
-                IndustryType = sample.IndustryType,
-                EmployeeCount = sample.EmployeeCount,
-                CertScope = sample.CertScope,
-                ContactName = sample.ContactName,
-                ContactPhone = sample.ContactPhone,
-                ContactEmail = sample.ContactEmail,
-                EnterpriseNo = sample.EnterpriseNo,
-                ArchiveDate = sample.ArchiveDate,
-            };
-
-        var items = ReplaceResolver.EnterpriseAttrLabels.Select(kv => new
-        {
-            attr = kv.Key,
-            label = kv.Value,
-            group = "基础信息",
-            valueType = valueTypes.TryGetValue(kv.Key, out var vt) ? vt : "text",
-            expr = $"enterprise.{kv.Key}",
-            sample = sampleInfo.Get(kv.Key),
-        }).ToList();
-
-        return Ok(ApiResponse<object>.Ok(new
-        {
-            enterpriseCode = sample?.Code,
-            enterpriseName = sample?.Name,
-            items,
-        }));
-    }
-
-    // ════════════════════════════════════════════════════════════════════
-    // 三、★ 生效参数集（左树右表 —— 选中「机构 × 标准 × 阶段」后的右表数据）
-    // ════════════════════════════════════════════════════════════════════
-
-    /// <summary>
-    /// ★ <b>生效参数集</b>：选中一个「机构 × 标准 × 阶段」后，返回填充引擎<b>实际会用到</b>的那批参数。
-    ///
-    /// <para><b>为什么不能直接用基类的 <c>/filter</c></b>：参数的作用域可以「不限标准 / 不限阶段」，
-    /// 生效条件是
-    /// <c>OrgCode = X AND (StandardCode = '' OR StandardCode = S) AND (StageCode = '' OR StageCode = P)</c>
-    /// —— 这是 <b>OR 组合</b>，<c>FilterItem</c> 的 AND 语义表达不了；且同一 <c>ParamCode</c>
-    /// 可能有多条（通用 + 标准专属），必须按「更具体优先」去重取一条。</para>
-    ///
-    /// <para><b>去重口径 = <see cref="ParamValueResolver.PickMostSpecific"/></b>，与企业端
-    /// 「合并清单」（<c>FillParamValueController.MergeList</c>）<b>共用同一实现</b>，
-    /// ⛔ 不在此另写一份 —— 两套口径的后果是「后台看到 A 条生效、文档里填的却是 B 条的值」，
-    /// 且两边都不报错。</para>
-    ///
-    /// <para><b>返回两类行</b>：① <b>生效行</b>（每个 ParamCode 一条，带 <c>ScopeKind</c>/<c>ScopeText</c>）；
-    /// ② <b>未生效行</b>（<c>IncludeShadowed=true</c> 时返回，带 <c>ShadowReason</c>）——
-    /// 让管理员看得见「我配的这条为什么没生效」（被更具体的覆写 / 已禁用）。</para>
-    ///
-    /// <para>⚠️ <b>不分页</b>：生效集是「一个作用域下的全部参数」，实测规模 &lt; 100 条；
-    /// 前端在本地做关键字过滤，交互更快。若将来单作用域参数破千，再改为服务端分页。</para>
-    /// </summary>
-    [HttpPost("effective")]
-    public async Task<IActionResult> Effective([FromBody] EffectiveRequest req)
-    {
-        if (req == null || string.IsNullOrWhiteSpace(req.OrgCode))
-            return Ok(ApiResponse<object>.Fail("请先选择机构"));
-
-        var stdCode = req.StandardCode ?? string.Empty;
-        var stageCode = req.StageCode ?? string.Empty;
-
-        // ── 1. 取候选：标准 / 阶段留空 = 通配（与企业端 merge-list 完全同口径）──
-        var candidates = await _db.Client.Queryable<FillParamDef>()
-            .Where(d => d.OrgCode == req.OrgCode && d.IsDeleted == false
-                        && (d.StandardCode == "" || d.StandardCode == stdCode)
-                        && (d.StageCode == "" || d.StageCode == stageCode))
-            .OrderBy(d => d.SortOrder)
-            .ToListAsync();
-
-        // ── 2. 生效集：只从「启用」行里选，同一 ParamCode 取更具体的那条 ──
-        var picked = ParamValueResolver.PickMostSpecific(candidates.Where(d => d.IsValid == 1));
-        var pickedCodes = new HashSet<string>(picked.Select(d => d.Code), StringComparer.Ordinal);
-
-        // ── 3. 未生效行（被覆写 / 已禁用）—— 默认不下发 ──
-        var shadowed = candidates.Where(d => !pickedCodes.Contains(d.Code)).ToList();
-
-        // ── 4. 作用域名称：只查候选里真正出现的标准 / 阶段（避免全表扫）──
-        var stdCodes = candidates
-            .Where(d => !string.IsNullOrWhiteSpace(d.StandardCode))
-            .Select(d => d.StandardCode).Distinct().ToList();
-        var stageCodes = candidates
-            .Where(d => !string.IsNullOrWhiteSpace(d.StageCode))
-            .Select(d => d.StageCode).Distinct().ToList();
-
-        var stdNames = stdCodes.Count == 0
-            ? new Dictionary<string, string>(StringComparer.Ordinal)
-            : (await _db.Client.Queryable<ISOStandard>()
-                .Where(x => stdCodes.Contains(x.Code))
-                .Select(x => new { x.Code, Name = x.StandardName })
-                .ToListAsync())
-              .ToDictionary(x => x.Code, x => x.Name, StringComparer.Ordinal);
-
-        var stageNames = stageCodes.Count == 0
-            ? new Dictionary<string, string>(StringComparer.Ordinal)
-            : (await _db.Client.Queryable<CertStage>()
-                .Where(x => stageCodes.Contains(x.Code))
-                .Select(x => new { x.Code, Name = x.StageName })
-                .ToListAsync())
-              .ToDictionary(x => x.Code, x => x.Name, StringComparer.Ordinal);
-
-        // 作用域 → (kind, 可读文字)。★ 局部函数，闭包捕获上面两个字典
-        (string Kind, string Text) ScopeOf(FillParamDef d)
-        {
-            var hasStd = !string.IsNullOrWhiteSpace(d.StandardCode);
-            var hasStage = !string.IsNullOrWhiteSpace(d.StageCode);
-
-            var stdText = hasStd
-                ? (stdNames.TryGetValue(d.StandardCode, out var sn) ? sn : d.StandardCode)
-                : string.Empty;
-            var stageText = hasStage
-                ? (stageNames.TryGetValue(d.StageCode, out var jn) ? jn : d.StageCode)
-                : string.Empty;
-
-            return (hasStd, hasStage) switch
-            {
-                (true, true) => ("standardStage", $"{stdText} · {stageText}"),
-                (true, false) => ("standard", stdText),
-                (false, true) => ("stage", stageText),
-                // ★ 文字里不再重复「通用」二字 —— 前端会并排渲染 ScopeKind 标签 + 本文字
-                _ => ("common", "不限标准 / 阶段"),
-            };
-        }
-
-        // ── 5. 关键字过滤（ParamCode / ParamName 模糊匹配）──
-        var keyword = req.Keyword?.Trim() ?? string.Empty;
-        bool Hit(FillParamDef d) =>
-            keyword.Length == 0
-            || (d.ParamCode?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)
-            || (d.ParamName?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false);
-
-        var effectiveRows = picked.Where(Hit).ToList();
-        var visibleCodes = new HashSet<string>(effectiveRows.Select(d => d.ParamCode), StringComparer.Ordinal);
-
-        var items = effectiveRows.Select(d =>
-        {
-            var (kind, text) = ScopeOf(d);
-            return new EffectiveItem
-            {
-                Code = d.Code,
-                OrgCode = d.OrgCode,
-                StandardCode = d.StandardCode,
-                StageCode = d.StageCode,
-                ParamCode = d.ParamCode,
-                ParamName = d.ParamName,
-                GroupName = d.GroupName ?? string.Empty,
-                ValueType = d.ValueType,
-                EnumOptions = d.EnumOptions,
-                SourceKind = d.SourceKind,
-                SourceExpr = d.SourceExpr,
-                MaintainMode = d.MaintainMode,
-                DefaultValue = d.DefaultValue,
-                Placeholder = d.Placeholder,
-                IsRequired = d.IsRequired,
-                IsBuiltin = d.IsBuiltin,
-                SortOrder = d.SortOrder,
-                Description = d.Description,
-                IsValid = d.IsValid,
-                ScopeKind = kind,
-                ScopeText = text,
-                ScopeLevel = ParamValueResolver.Specificity(d),
-                IsEffective = true,
-                ShadowReason = string.Empty,
-                ShadowedBy = string.Empty,
-                // ★ 「本行覆写掉了哪些更宽的定义」—— 让管理员知道改动的影响面
-                ShadowedScopes = shadowed
-                    .Where(s => string.Equals(s.ParamCode, d.ParamCode, StringComparison.Ordinal))
-                    .Select(s => ScopeOf(s).Text)
-                    .ToList(),
-            };
-        }).ToList();
-
-        // ── 6. 未生效行（仅 IncludeShadowed）──
-        var shadowItems = new List<EffectiveItem>();
-        if (req.IncludeShadowed)
-        {
-            foreach (var s in shadowed.Where(s => visibleCodes.Contains(s.ParamCode)))
-            {
-                var winner = picked.FirstOrDefault(p =>
-                    string.Equals(p.ParamCode, s.ParamCode, StringComparison.Ordinal));
-                var (kind, text) = ScopeOf(s);
-                shadowItems.Add(new EffectiveItem
-                {
-                    Code = s.Code,
-                    OrgCode = s.OrgCode,
-                    StandardCode = s.StandardCode,
-                    StageCode = s.StageCode,
-                    ParamCode = s.ParamCode,
-                    ParamName = s.ParamName,
-                    GroupName = s.GroupName ?? string.Empty,
-                    ValueType = s.ValueType,
-                    EnumOptions = s.EnumOptions,
-                    SourceKind = s.SourceKind,
-                    SourceExpr = s.SourceExpr,
-                    MaintainMode = s.MaintainMode,
-                    DefaultValue = s.DefaultValue,
-                    Placeholder = s.Placeholder,
-                    IsRequired = s.IsRequired,
-                    IsBuiltin = s.IsBuiltin,
-                    SortOrder = s.SortOrder,
-                    Description = s.Description,
-                    IsValid = s.IsValid,
-                    ScopeKind = kind,
-                    ScopeText = text,
-                    ScopeLevel = ParamValueResolver.Specificity(s),
-                    IsEffective = false,
-                    // overridden = 被更具体的同名参数覆写；disabled = 本行已禁用
-                    ShadowReason = s.IsValid == 1 ? "overridden" : "disabled",
-                    ShadowedBy = winner?.Code ?? string.Empty,
-                });
-            }
-        }
-
-        var all = items.Concat(shadowItems).ToList();
-
-        return Ok(ApiResponse<object>.Ok(new
-        {
-            // ★ 整个响应一律 PascalCase（含外层匿名对象）—— 与项目契约一致，
-            //   ⛔ 不要因为「别的端点用了小写」就跟风；契约一致性优先于局部模仿
-            OrgCode = req.OrgCode,
-            StandardCode = stdCode,
-            StageCode = stageCode,
-            Items = all,
-            Stats = new
-            {
-                EffectiveCount = items.Count,
-                ShadowedCount = shadowItems.Count,
-                ByScope = new
-                {
-                    Common = items.Count(x => x.ScopeKind == "common"),
-                    Standard = items.Count(x => x.ScopeKind == "standard"),
-                    Stage = items.Count(x => x.ScopeKind == "stage"),
-                    StandardStage = items.Count(x => x.ScopeKind == "standardStage"),
-                },
-            },
-        }));
-    }
-
-    // ════════════════════════════════════════════════════════════════════
-    // 四、请求 / 响应 DTO
-    // ════════════════════════════════════════════════════════════════════
-
-    /// <summary>生效参数集请求</summary>
-    public sealed class EffectiveRequest
-    {
-        /// <summary>机构编码（必填）</summary>
-        public string OrgCode { get; set; } = string.Empty;
-
-        /// <summary>标准 Code（空 = 只看通用 + 阶段专属）</summary>
-        public string? StandardCode { get; set; }
-
-        /// <summary>阶段 Code（空 = 只看通用 + 标准专属）</summary>
-        public string? StageCode { get; set; }
-
-        /// <summary>关键字（按 ParamCode / ParamName 模糊匹配，大小写不敏感）</summary>
-        public string? Keyword { get; set; }
-
-        /// <summary>是否附带「未生效的定义」（被覆写 / 已禁用），默认 false</summary>
-        public bool IncludeShadowed { get; set; }
-    }
-
-    /// <summary>
-    /// 生效参数行。
-    /// <para>前 18 个属性与 <c>cert_fill_param_def</c> 逐字段对应；后 6 个是<b>计算列</b>
-    /// （DB 里没有，由 <see cref="Effective"/> 算出）。</para>
-    /// </summary>
-    public sealed class EffectiveItem
-    {
-        // ──── 定义本体 ────
-        public string Code { get; set; } = string.Empty;
-        public string OrgCode { get; set; } = string.Empty;
-        public string StandardCode { get; set; } = string.Empty;
-        public string StageCode { get; set; } = string.Empty;
-        public string ParamCode { get; set; } = string.Empty;
-        public string ParamName { get; set; } = string.Empty;
-        public string GroupName { get; set; } = string.Empty;
-        public string ValueType { get; set; } = "text";
-        public string? EnumOptions { get; set; }
-        public string SourceKind { get; set; } = "global";
-        public string? SourceExpr { get; set; }
-        public string MaintainMode { get; set; } = "auto";
-        public string? DefaultValue { get; set; }
-        public string? Placeholder { get; set; }
-        public bool IsRequired { get; set; }
-        public bool IsBuiltin { get; set; }
-        public int SortOrder { get; set; }
-        public string? Description { get; set; }
-        public int IsValid { get; set; }
-
-        // ──── ★ 计算列 ────
-        /// <summary>作用域类别：common | standard | stage | standardStage</summary>
-        public string ScopeKind { get; set; } = "common";
-        /// <summary>作用域可读文字（如「ISO 9001:2015 · 复审」；通用时为「不限标准 / 阶段」）</summary>
-        public string ScopeText { get; set; } = "不限标准 / 阶段";
-        /// <summary>具体度 0..3（= <c>ParamValueResolver.Specificity</c>）：越大越具体</summary>
-        public int ScopeLevel { get; set; }
-        /// <summary>本行是否生效（false = 被覆写或已禁用）</summary>
-        public bool IsEffective { get; set; } = true;
-        /// <summary>未生效原因：overridden（被更具体覆写）| disabled（已禁用）</summary>
-        public string ShadowReason { get; set; } = string.Empty;
-        /// <summary>覆写本行的生效行 Code（仅未生效行有值）</summary>
-        public string ShadowedBy { get; set; } = string.Empty;
-        /// <summary>本行覆写掉的更宽定义的作用域文字（仅生效行有值）</summary>
-        public List<string> ShadowedScopes { get; set; } = new();
+        return r;
     }
 }

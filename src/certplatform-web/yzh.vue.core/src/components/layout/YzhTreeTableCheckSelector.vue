@@ -70,6 +70,17 @@
               {{ row[col.prop] }}
             </template>
           </slot>
+          <!--
+            启用/禁用徽章：放在 slot **之外**（页面覆写 column-Name 也带徽章），
+            且只挂在 statusNameField 列上。判据 = utils/status.ts（与 YzhTree 同源）。
+          -->
+          <YzhStatusBadge
+            v-if="col.prop === statusNameField && rowStatus(row)"
+            class="yzh-tree-table-check-selector__status"
+            :type="rowStatus(row)?.type"
+            :text="rowStatus(row)?.text"
+            size="small"
+          />
         </template>
       </el-table-column>
     </el-table>
@@ -97,6 +108,8 @@
  */
 import { ref, computed, watch, nextTick } from 'vue'
 import { ElInput } from 'element-plus'
+import YzhStatusBadge from '../ui/YzhStatusBadge.vue'
+import { resolveStatusBadge } from '../../utils/status'
 
 // ========================================================
 // 类型定义
@@ -163,6 +176,14 @@ interface Props {
   countType?: string
   /** 搜索框占位文字 */
   searchPlaceholder?: string
+  /** 启用/禁用徽章字段（默认 IsValid，与 YzhTree 同契约；'' = 关闭徽章） */
+  statusField?: string
+  /** 徽章追加在该字段所在列的文本后（默认 Name） */
+  statusNameField?: string
+  /** 启用文案（默认「启用」，空串 = 启用不标） */
+  statusEnabledText?: string
+  /** 停用文案（默认「禁用」，空串 = 停用不标） */
+  statusDisabledText?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -181,7 +202,25 @@ const props = withDefaults(defineProps<Props>(), {
   searchFields: () => ['Name'],
   countType: undefined,
   searchPlaceholder: '搜索',
+  statusField: 'IsValid',
+  statusNameField: 'Name',
+  statusEnabledText: '启用',
+  statusDisabledText: '禁用',
 })
+
+/**
+ * 行启用/禁用徽章：判据统一走 `utils/status.ts`（与 YzhTree 同一份口径）。
+ * Extra 未注入该字段（如分组节点、机构骨架节点）→ null，不渲染徽章。
+ */
+function rowStatus(row: Record<string, any>): { text: string; type: 'success' | 'info' } | null {
+  if (!props.statusField) return null
+  return resolveStatusBadge(
+    row,
+    props.statusField,
+    props.statusEnabledText,
+    props.statusDisabledText,
+  )
+}
 
 /** 节点类型显示文案（映射由调用方传入，未命中回退类型名本身） */
 function typeLabel(type: string): string {
@@ -732,5 +771,10 @@ defineExpose({
 .yzh-tree-table-check-selector__table {
   flex: 1;
   overflow: auto;
+}
+
+/* Name 列内的启用/禁用徽章与文本留白（S05：间距一律走令牌） */
+.yzh-tree-table-check-selector__status {
+  margin-left: var(--yzh-space-2, 8px);
 }
 </style>

@@ -1,10 +1,9 @@
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Office;
-using YZH.Core.DataBase.Interfaces;
+using CertPlatform.Shared.Services.Fill;
 using SharedFill = CertPlatform.Shared.Fill;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
@@ -13,24 +12,26 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
     /// 全局参数取值 —— 按 <c>param_code</c>（+ 标准 / 阶段）取**最特异**的一条定义，
     /// 经「全项目唯一」的取值决策得到值，产出 <see cref="FillValue"/>。
     ///
-    /// <para><b>★★ 与 39 号 §4.2 的一处刻意偏离（★ 必读）</b>：
-    /// §4.2 原设计让本 Skill 直接查 <c>cert_fill_param_value</c>（企业填的值）。
-    /// 但该实体 <c>FillParamValue</c> 定义在 <b><c>CertPlatform.Auditor</c></b> 项目里，
-    /// 而引用方向是 <b><c>Auditor → Admin</c> 单向</b> ⇒
-    /// <b>本 Skill（在 Admin 项目内）看不到该实体，按原文写会编译不过</b>。</para>
+    /// <para><b>★★ 2026-10-06（S1-5）改造后的定位</b>：
+    /// 「查定义 + 取企业已填值」已下沉到
+    /// <see cref="FillParamValueProvider"/>（<c>Shared/Services/Fill/</c>），
+    /// 本 Skill 改为调它；本类只保留
+    /// ① <b>Skill 壳</b>（参数声明 / <c>SkillResult</c> 包装）
+    /// ② <b>纯函数 <see cref="BuildValue"/></b>（可单测，取值语义仍只由
+    /// <c>ParamValueResolver.Resolve</c> 决定，⛔ 本类不重写 auto/manual/both 判定）。</para>
     ///
-    /// <para><b>本实现的做法</b>：企业已填值由 <b>编排器预取</b>后经
-    /// <paramref name="saved_value"/> 传入（编排层在 Auditor，两边都能看）。这样反而更正确：</para>
-    /// <list type="number">
-    ///   <item>本 Skill 变成<b>近乎纯函数</b>（定义 + 企业档案 + 已填值 → 值），可单测、可重放；</item>
-    ///   <item>取值语义仍<b>只由 <c>ParamValueResolver.Resolve</c> 一处决定</b>
-    ///         （⛔ 本 Skill 不自写一套 auto/manual/both 判定 —— 那正是「两套口径」缺陷的来源）；</item>
-    ///   <item>不为了一个字段把实体搬家（跨项目重构），符合「最小改动」。</item>
-    /// </list>
+    /// <para><b>★ 为什么这样拆</b>：同一个「取全局参数值」在项目里曾有三条互不相通的实现
+    /// （缺陷 D1）—— <c>Shared/Fill/ParamValueResolver</c>（决策，唯一正确）、
+    /// 本 Skill（查询 + 决策 + 组值）、
+    /// <c>Ent/SourceResolver.TryResolveGlobalAsync</c>（手抄本 Skill 的查询，且恒不传企业已填值 ⇒ 静默漂移）。
+    /// 下沉到 provider 后两条链共用同一个类 ⇒ <b>口径必然一致</b>。</para>
     ///
-    /// <para>⚠️ 若日后编排层迁进 Admin，则需把 <c>FillParamValue</c> 实体移到
-    /// <c>CertPlatform.Shared/Entities/Cert/</c>（与 <c>FillParamDef</c> 成对），
-    /// 届时可把预取改回 Skill 内查询 —— 但<b>取值决策点仍只能是 <c>ParamValueResolver</c></b>。</para>
+    /// <para><b>★ 关于企业已填值（<c>saved_value</c>）</b>：
+    /// 它<b>只能由调用方预取后传入</b> —— 该表的实体 <c>FillParamValue</c> 属<b>专家端独占</b>
+    /// （<c>24-后端实体归属清单</c> §一；守卫 R17 会把「上移到 Shared」拦下），
+    /// 而 <c>Shared</c> ⛔ 不能引用 <c>Auditor</c>（<c>Auditor → Shared</c> 单向）。
+    /// ⇒ 能读该表的调用方在 Auditor（<c>FillParamValueController</c> / <c>DocumentFillController</c>），
+    /// 由它们把值传进来。这样 <see cref="BuildValue"/> 保持<b>纯函数</b>、可单测、可重放。</para>
     /// </summary>
     [Skill(
         Code = "src_global_param",
@@ -60,7 +61,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
         /// <param name="saved_value">★ 企业已填写的参数值（由编排器预取，见类注释）</param>
         /// <param name="saved_value_source">已填值的来源：<c>auto</c>/<c>manual</c>/<c>ai</c>/<c>import</c></param>
         /// <param name="saved_is_manual_edited">企业是否人工改过（=true 时不再被自动映射覆盖）</param>
-        /// <param name="db">数据访问（DI 注入）</param>
+        /// <param name="provider">★ 取值内核（DI 注入；查定义 + 取企业已填值）</param>
         /// <param name="ct">取消令牌</param>
         public static async Task<SkillResult> ExecuteAsync(
             [SkillParam(Description = "参数编码，如 company_name")]
@@ -96,7 +97,13 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
             [SkillParam(Description = "企业是否人工改过（true=不再被自动映射覆盖）")]
             bool saved_is_manual_edited = false,
 
-            [FromService] IDbOrm db = null!,
+            // ★ 2026-10-06（S1-5）：取值内核。由 SkillExecutor 从 DI 容器解析
+            //   （[FromService] 参数不参与业务参数绑定、不进 LLM 可见 schema）。
+            //   注册点 = CertPlatform.Shared/CertPlatformSharedServiceExtensions.cs
+            //   ⚠️ 本方法原先还有一个 [FromService] IDbOrm db —— 查询下沉后已无用，已删
+            //      （保留会让读代码的人以为「这里还在自己查库」）。
+            [FromService] FillParamValueProvider provider = null!,
+
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(param_code))
@@ -107,42 +114,18 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
             var pc = stage_code ?? string.Empty;
             var org = org_code ?? string.Empty;
 
-            // ① 取候选定义。
-            //    ★ 条件 = OrgCode + (StandardCode='' OR S) + (StageCode='' OR P) —— 这是 OR 组合，
-            //      FilterItem 表达不了 ⇒ 必须手写表达式（同 38 号 §「生效参数集」）。
-            //    ⚠️ 用两个分支而非「!hasOrg || ...」：把常量折叠交给 ORM 容易踩翻译坑，显式分支最稳。
-            var defs = string.IsNullOrWhiteSpace(org)
-                ? (await db.GetListAsync<FillParamDef>(x =>
-                        x.ParamCode == param_code &&
-                        (x.StandardCode == "" || x.StandardCode == sc) &&
-                        (x.StageCode == "" || x.StageCode == pc))).Data
-                : (await db.GetListAsync<FillParamDef>(x =>
-                        x.ParamCode == param_code &&
-                        x.OrgCode == org &&
-                        (x.StandardCode == "" || x.StandardCode == sc) &&
-                        (x.StageCode == "" || x.StageCode == pc))).Data;
-
-            defs ??= new List<FillParamDef>();
-
-            // ② 去重口径：全项目唯一 = PickMostSpecific（⛔ 不得另写一套）
-            var def = SharedFill.ParamValueResolver.PickMostSpecific(defs).FirstOrDefault();
+            // ① 取候选定义（★ 2026-10-06：改为调 Shared 的唯一实现，⛔ 本 Skill 不再手写查询）。
+            //    OR 组合条件（OrgCode + (StandardCode='' OR S) + (StageCode='' OR P)）
+            //    与 PickMostSpecific 去重口径都在 provider 内，此处不再重复。
+            var def = await provider.FindDefAsync(param_code, standard_code, stage_code, org_code);
             if (def == null)
                 return SkillResult.Fail(
                     $"未找到 param_code={param_code}, standard={sc}, stage={pc}, org={org}");
 
-            // ③ 企业档案快照（仅当给了企业编码；auto/both 的自动带出需要它）
-            var enterprise = new SharedFill.EnterpriseInfo();
-            if (!string.IsNullOrWhiteSpace(enterprise_code))
-            {
-                // ⚠️ GetOneAsync 返回 Result<T>（不是 T）⇒ 必须取 .Data。
-                //    ★ 这里用 GetOneAsync（带 IsValid=1）是**对的**：企业档案只应取有效行。
-                //      （记忆 §二十㉖ 说「后台取数用 GetOneIgnoreValidAsync」是针对
-                //       「取自己正在转换的那份文件」的场景，与本处语义不同。）
-                var ent = (await db.GetOneAsync<Enterprise>(x => x.Code == enterprise_code)).Data;
-                if (ent != null) enterprise = MapToInfo(ent);
-            }
+            // ② 企业档案快照（仅当给了企业编码；auto/both 的自动带出需要它）
+            var enterprise = await provider.LoadEnterpriseInfoAsync(enterprise_code);
 
-            // ④ 取值决策 + 组值（★ 抽成 BuildValue 以便单测，见下）
+            // ③ 取值决策 + 组值（★ 抽成 BuildValue 以便单测，见下）
             var (ok, value, error) = BuildValue(
                 def, enterprise, saved_value, saved_value_source, saved_is_manual_edited,
                 anchor, value_kind, number_format);
@@ -164,8 +147,11 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
         /// <summary>
         /// ★ <b>纯函数</b>部分：定义 + 企业档案 + 已填值 → <see cref="FillValue"/>。
         ///
-        /// <para>抽出来的目的：<b>可单测</b>（不依赖 DB / DI）。取值语义
-        /// <b>只走 <c>ParamValueResolver.Resolve</c></b>，⛔ 本方法不重写 auto/manual/both 判定。</para>
+        /// <para>抽出来的目的：<b>可单测</b>（不依赖 DB / DI）。
+        /// ★ 2026-10-06（S1-5）：方法体已<b>委托</b>给全项目唯一实现
+        /// <see cref="FillParamValueProvider.BuildValue"/>（签名保持不变，
+        /// 既有单测继续钉住语义：取值语义只走 <c>ParamValueResolver.Resolve</c>，
+        /// ⛔ 本类不重写 auto/manual/both 判定）。</para>
         /// </summary>
         /// <returns><c>(Ok, Value, Error)</c></returns>
         public static (bool Ok, FillValue? Value, string? Error) BuildValue(
@@ -177,53 +163,13 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
             string anchorCode,
             string? valueKind,
             string? numberFormat)
-        {
-            if (def == null)
-                return (false, null, "参数定义不能为空");
+            => FillParamValueProvider.BuildValue(
+                def, enterprise, savedValue, savedValueSource, savedIsManualEdited,
+                anchorCode, valueKind, numberFormat);
 
-            // ★ 全项目唯一决策点（auto=恒实时取企业档案 / both=可覆盖 / manual=手工）
-            var decision = SharedFill.ParamValueResolver.Resolve(
-                def, enterprise, savedValue, savedValueSource, savedIsManualEdited);
-
-            if (string.IsNullOrWhiteSpace(decision.Value))
-            {
-                // ⛔ 不返回空值 —— 空值会被当成「填了空」，无法区分「没找到」
-                return (false, null, $"未取到 param_code={def.ParamCode} 的值（{decision.SourceRef}）");
-            }
-
-            // 值类型：显式入参 > 参数定义 > text（⚠️ 由配置给，⛔ 不由值猜）
-            var kind = string.IsNullOrWhiteSpace(valueKind) ? def.ValueType : valueKind;
-
-            var (ok, value, error) = FillValueFactory.TryCreate(
-                anchorCode, decision.Value, kind, numberFormat);
-
-            if (!ok)
-                return (false, null, error);
-
-            value!.Source = decision.SourceRef;
-            value.Confidence = 1.0;
-            return (true, value, null);
-        }
-
-        /// <summary>实体 → 引擎快照（引擎在 Shared，不引用 <c>YZH.Core.DataBase</c>，故必须映射）</summary>
-        private static SharedFill.EnterpriseInfo MapToInfo(Enterprise e) => new()
-        {
-            Code = e.Code,
-            Name = e.Name,
-            ShortName = e.ShortName,
-            CreditCode = e.CreditCode,
-            LegalPerson = e.LegalPerson,
-            Province = e.Province,
-            City = e.City,
-            Address = e.Address,
-            IndustryType = e.IndustryType,
-            EmployeeCount = e.EmployeeCount,
-            CertScope = e.CertScope,
-            ContactName = e.ContactName,
-            ContactPhone = e.ContactPhone,
-            ContactEmail = e.ContactEmail,
-            EnterpriseNo = e.EnterpriseNo,
-            ArchiveDate = e.ArchiveDate,
-        };
+        // ★ 2026-10-06（S1-5）：原 private static MapToInfo(Enterprise) 已删除 ——
+        //   它与 EnterpriseDocNormalizationExecutor.MapToInfo 是同一段 16 字段搬运的**两份手写副本**
+        //   （缺陷 D6）。现统一为 Shared 层的 EnterpriseInfoMapper.ToInfo（唯一实现）。
+        //   出口门：grep "MapToInfo" CertPlatform.Admin ⇒ 必须为 0。
     }
 }

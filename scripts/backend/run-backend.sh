@@ -41,6 +41,25 @@ print_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 print_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# ★★ 必须把「本机地址」排除出代理，否则 MinIO 全线失败（2026-10-06 实测）
+#
+# 机理：.NET 在 Unix 上 `HttpClient.DefaultProxy` 会读 `HTTP_PROXY`/`HTTPS_PROXY`
+#       环境变量；MinIO SDK 走 HttpClient ⇒ 本机 9000 的请求会被送去代理。
+# 症状：预览 / 下载 / 转换产物读写**全部**失败，而错误信息是
+#       「文件不存在」「源文件读取失败（对象不存在或存储不可用）」——
+#       **看起来像数据缺失，实际是 `Connection refused (127.0.0.1:<代理端口>)`**。
+#       （代理端口每次会话都不同，所以后端一旦继承了旧会话的代理端口，
+#         那个端口早就没了 ⇒ 必然 connection refused。）
+# 判据：日志里出现 `Minio.MinioClient.BucketExistsAsync` + `Connection refused (127.0.0.1:xxxxx)`
+#       ⇒ 就是本条，⛔ 不要去查 MinIO 对象或数据库。
+#
+# ⚠️ 只**追加** NO_PROXY、⛔ 不要 unset 代理 —— 本机 LLM 调用（通义千问等）
+#    需要代理出网，清掉会让语义分析直接不可用。
+# ─────────────────────────────────────────────────────────────────────────────
+export NO_PROXY="127.0.0.1,localhost,::1,0.0.0.0${NO_PROXY:+,$NO_PROXY}"
+export no_proxy="$NO_PROXY"
+
 # 编译项目
 build_project() {
     print_info "开始编译后端项目... (dotnet: $DOTNET_BIN)"

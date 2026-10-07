@@ -99,6 +99,27 @@ public class WorkspaceContextService
         return Task.FromResult(Resolve(userCode));
     }
 
+    /// <summary>
+    ///     ★ <b>平台级账号判定</b> —— <c>Sys_User.OrgCode</c> 为空（未挂靠任何机构）。
+    ///
+    ///     <para><b>为什么需要单独一个判据</b>：<see cref="Resolve"/> 的失败有<b>四种</b>原因 ——
+    ///     ① 未挂靠任何机构（平台级账号，<b>正常数据</b>）
+    ///     ② 账号不存在 ③ 挂靠节点不存在 ④ 挂靠的不是 VirtualOrg / 层级异常（后三种都是<b>数据异常</b>）。
+    ///     调用方若要「只对 ① 放行」，⛔ <b>不能拿 <c>Error</c> 字符串去比对</b>（改文案就静默失效），
+    ///     必须用本方法判定。</para>
+    ///
+    ///     <para><b>典型用法</b>：平台维护人员（后台「标准资料填写规则」页的实施人员）
+    ///     本就不属于任何认证机构，而他们做的动作（如<b>模板试填</b>）是<b>模板级只读操作</b>、
+    ///     与企业数据无关 ⇒ 不该被机构隔离挡住；但 ②③④ 必须照旧拦。</para>
+    /// </summary>
+    public async Task<bool> IsPlatformAccountAsync(string? userCode)
+    {
+        if (string.IsNullOrWhiteSpace(userCode)) return false;
+
+        var user = await _db.GetOneAsync<Sys_User>(x => x.Code == userCode);
+        return user.Data != null && string.IsNullOrWhiteSpace(user.Data.OrgCode);
+    }
+
     // ════════════════════════════════════════════════════════════════════
     // 机构域归一 —— ★ 全项目唯一实现
     // ════════════════════════════════════════════════════════════════════

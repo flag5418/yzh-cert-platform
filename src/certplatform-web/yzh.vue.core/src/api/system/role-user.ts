@@ -1,6 +1,8 @@
 import { yzhApi } from '../client'
 import type { ApiResponse } from '../client'
 import type { AssociationSelection, CheckTreeNode, AssociationDto, RoleTreeItem } from '../../types/association'
+import type { TreeTableConfigDto, TreeItemDto } from '../../types/contracts'
+import { expectOk } from '../../utils/apiResponse'
 import { unwrap } from '../../utils'
 
 // ========================================================
@@ -40,6 +42,45 @@ export async function getRoleTreeChildren(parentCode: string, _level?: number): 
     ParentCode: parentCode,
   })
   return (res.data ?? []).map(toRoleTreeItem)
+}
+
+// ========================================================
+// 角色树节点增删改（role-user 页面左侧角色树；与 role-menu / role-api 共用 Role 控制器）
+// ========================================================
+
+/**
+ * 树行为配置 + 树节点表单配置（`GET /api/Role/treepconfig`，与 `TreeTableCore.loadConfig` 同方法）
+ * 节点动作（新增下级/编辑/删除）与弹窗字段全部由它驱动，页面零硬编码。
+ */
+export async function getRoleTreePageConfig(): Promise<TreeTableConfigDto> {
+  const res = await yzhApi.get<ApiResponse<TreeTableConfigDto>>('/api/Role/treepconfig')
+  expectOk(res, '加载角色树配置失败')
+  return res.data as TreeTableConfigDto
+}
+
+/**
+ * 新增角色树节点（`/api/Role/tree/add`）
+ * 请求体 PascalCase（RoleName / ParentCode / IsValid / OrderNo / Code…），
+ * Code 由后端在钩子未生成时兜底 Guid。
+ * F-1/F-2：失败抛 BizError，不返回给流程层。
+ */
+export async function addRoleTreeNode(body: Record<string, any>): Promise<TreeItemDto | null> {
+  const res = await yzhApi.post<ApiResponse<TreeItemDto>>('/api/Role/tree/add', body)
+  expectOk(res, '新增角色失败')
+  return res.data ?? null
+}
+
+/** 修改角色树节点（`/api/Role/tree/update`，按 Code 定位，请求体不带 Id） */
+export async function updateRoleTreeNode(body: Record<string, any>): Promise<TreeItemDto | null> {
+  const res = await yzhApi.post<ApiResponse<TreeItemDto>>('/api/Role/tree/update', body)
+  expectOk(res, '修改角色失败')
+  return res.data ?? null
+}
+
+/** 删除角色树节点（`/api/Role/tree/delete`，body = Code[]；含子节点时后端拒绝） */
+export async function deleteRoleTreeNodes(codes: string[]): Promise<void> {
+  const res = await yzhApi.post<ApiResponse<string>>('/api/Role/tree/delete', codes)
+  expectOk(res, '删除角色失败')
 }
 
 // ========================================================

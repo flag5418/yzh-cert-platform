@@ -12,7 +12,6 @@ using CertPlatform.Admin.Services.Workflow.Models;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using YZH.Core.DataBase.Interfaces;
 using CertPlatform.Shared.Constants;
-using CertPlatform.Admin.Entities.Doc;
 using CertPlatform.Shared.Exceptions;
 
 namespace CertPlatform.Admin.Services.Workflow

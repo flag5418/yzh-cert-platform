@@ -7,26 +7,37 @@
  *   （按钮组，图片 / PDF 不可解析 ⇒ 置灰锁定）。因此本组件：
  *   - ⛔ **删掉**「两步引导条」与「文档类型卡片网格」—— 类型已上移顶栏，
  *     留着就是**同一件事两处入口**（改一处另一处不同步，用户不知道哪个算数）；
- *   - ✅ 保留「文档属性」（名称 / 角色 / 作用 / 业务标签 / 关键信息项）
- *     与「AI 识别溯源」两块，作为「全局规则」Tab 的第一块内容；
+ *   - ✅ 保留「文档属性」（角色 / 作用 / 业务标签 / 关键信息项）
+ *     一块，作为「全局规则」Tab 的第一块内容；
  *   - ✅ 新增 `fixed` 文档的「是否可替换」（`FixedDocSubtype`，D-AA1 已裁）。
+ *
+ * 【★ 2026-10-06 用户裁决：再删两块】
+ *   ① 「文档名称」—— 与文件名同源（`DocName` 回落 `FileName`），人工改它没有意义
+ *     ⇒ ⛔ 不再渲染输入框，但 `form.DocName` **保留**（保存仍回传加载值，契约不缺列）；
+ *   ② 「AI 识别溯源」整块 —— 内容（模型 / 置信度 / 来源）与进度条、
+ *     「开始 AI 语义分析」按钮重复，且置信度曾渲染成 `0.93%` 的口径错误
+ *     ⇒ ⛔ 整块删除，状态看顶部进度条与已带出的字段本身。
+ *
+ * 【★ 2026-10-07 用户裁决：单块拆成两块分组卡片（第二轮改造之②）】
+ *   「全局规则」Tab 排三块纵向卡片：**分组 / 文档作用 / 全局填写规则**。
+ *   本组件承载前两块（同一行契约，共用底部「保存文档属性」）：
+ *   - 卡1 **分组**：文档角色 + 业务标签 + 关键信息项（这个文档属于哪一类、要哪些信息）；
+ *   - 卡2 **文档作用**：作用 textarea + `fixed` 的是否可替换（这个文档干什么用）。
+ *   卡3「全局填写规则」由父页 `index.vue` 渲染（`PromptPanel`，仅锚点含 ai 节点时出现）。
  *
  * 【为什么「可替换性」放在这里而不是锚点页】
  *   它是**文档级**属性（`cert_standard_doc_contract.FixedDocSubtype`），
  *   与锚点无关 ⇒ 归「全局规则」。
  */
-import {
-  Document,
-  MagicStick,
-  RefreshRight,
-} from '@element-plus/icons-vue'
+import { Document, RefreshRight } from '@element-plus/icons-vue'
 import {
   saveDocContract,
   type DocContractDetail,
 } from '@share/api/workflow/doc-fill-rule'
-import { unwrapOk, YzhEmptyState, YzhStatusBadge } from '@yzh-core'
+import { unwrapOk, YzhEmptyState } from '@yzh-core'
 import { ElMessage } from 'element-plus'
 import { computed, ref, watch } from 'vue'
+import { labelOf } from './contractLabels'
 
 const props = defineProps<{
   detail: DocContractDetail | null
@@ -50,13 +61,15 @@ const saving = ref(false)
 const form = ref({
   DocCategory: 'editable',
   DocRole: 'required',
+  /** ⚠️ **不再渲染输入框**（2026-10-06 裁决：与文件名同源、冗余），但保存仍回传加载值 */
   DocName: '',
   DocPurpose: '',
   /** `fixed` 专用：`standard_provided` / `enterprise_provided` */
   FixedDocSubtype: 'enterprise_provided',
 })
-const tags = ref<string[]>([])
-const infoItems = ref<string[]>([])
+/** 元素可能是 AI 落库的**对象**（标签 `{tagCode,tagName,…}`、信息项 `{Name,Required,…}`），也可能是人工新增的纯字符串 */
+const tags = ref<unknown[]>([])
+const infoItems = ref<unknown[]>([])
 const newTag = ref('')
 const newItem = ref('')
 
@@ -92,24 +105,12 @@ const isFixed = computed(
   () => !!props.typeLocked || form.value.DocCategory === 'fixed',
 )
 
-const analyzeMeta = computed(() => {
-  const s = props.detail?.AnalyzeStatus || 'pending'
-  const map: Record<string, { text: string; type: any }> = {
-    pending: { text: '尚未分析', type: 'info' },
-    manual: { text: '人工录入', type: 'info' },
-    analyzing: { text: '分析中', type: 'warning' },
-    completed: { text: '已完成', type: 'success' },
-    failed: { text: '分析失败', type: 'danger' },
-  }
-  return map[s] || { text: s, type: 'info' }
-})
-
-function parseArray(raw?: string | null): string[] {
+function parseArray(raw?: string | null): unknown[] {
   const t = (raw ?? '').trim()
   if (!t) return []
   try {
     const v = JSON.parse(t)
-    return Array.isArray(v) ? v.map((x) => String(x)) : []
+    return Array.isArray(v) ? v : []
   } catch {
     return []
   }
@@ -189,35 +190,99 @@ defineExpose({ onSave })
 <template>
   <div class="contract-tab" v-loading="loading">
     <template v-if="detail">
-      <!-- ★ 文档属性（文档类型已上移顶栏，此处 ⛔ 不再重复类型入口） -->
+      <!-- ── 卡1 · 分组（文档角色 + 业务标签 + 关键信息项）── -->
       <div class="blk">
-        <div class="blk-hd">文档属性</div>
+        <div class="blk-hd">分组</div>
         <div class="blk-bd">
           <div class="fld">
-            <label>文档名称</label>
-            <el-input
-              v-model="form.DocName"
-              placeholder="例如：质量管理体系过程识别图"
-            />
+            <!-- ⚠️ `el-select` 的 `id` 落到**内部隐藏 input**（`select2.mjs:201`），
+                 ⛔ 不是 `role="combobox"` 那个元素 ⇒ `for/id` 会关联到错的节点，
+                 只能用 `aria-label`（`select2.mjs:217` 绑到 combobox）。 -->
+            <label>文档角色</label>
+            <el-select
+              v-model="form.DocRole"
+              aria-label="文档角色"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="r in DOC_ROLES"
+                :key="r.value"
+                :value="r.value"
+                :label="r.label"
+              />
+            </el-select>
           </div>
 
-          <div class="row wrap" style="margin-bottom: var(--yzh-space-3, 12px)">
-            <div class="fld" style="flex: 1; margin-bottom: 0">
-              <label>文档角色</label>
-              <el-select v-model="form.DocRole" style="width: 100%">
-                <el-option
-                  v-for="r in DOC_ROLES"
-                  :key="r.value"
-                  :value="r.value"
-                  :label="r.label"
-                />
-              </el-select>
+          <div class="fld">
+            <label id="cf-doc-tags-label">业务标签</label>
+            <div
+              class="tags-list"
+              role="group"
+              aria-labelledby="cf-doc-tags-label"
+            >
+              <el-tag
+                v-for="(t, i) in tags"
+                :key="i"
+                closable
+                size="small"
+                effect="plain"
+                class="m-tag"
+                @close="removeTag(i)"
+              >
+                {{ labelOf(t) }}
+              </el-tag>
+              <el-input
+                v-model="newTag"
+                aria-label="新增业务标签"
+                class="add-tag-input"
+                size="small"
+                placeholder="+ 新增"
+                @keyup.enter="addTag"
+                @blur="addTag"
+              />
             </div>
           </div>
 
+          <div class="fld" style="margin-bottom: 0">
+            <label id="cf-doc-items-label">包含的关键信息项</label>
+            <div
+              class="tags-list"
+              role="group"
+              aria-labelledby="cf-doc-items-label"
+            >
+              <el-tag
+                v-for="(t, i) in infoItems"
+                :key="i"
+                closable
+                size="small"
+                effect="plain"
+                class="m-tag"
+                @close="removeItem(i)"
+              >
+                {{ labelOf(t) }}
+              </el-tag>
+              <el-input
+                v-model="newItem"
+                aria-label="新增关键信息项"
+                class="add-tag-input"
+                size="small"
+                placeholder="+ 新增项"
+                @keyup.enter="addItem"
+                @blur="addItem"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 卡2 · 文档作用（作用 textarea + fixed 的是否可替换）── -->
+      <div class="blk">
+        <div class="blk-hd">文档作用</div>
+        <div class="blk-bd">
           <div class="fld">
-            <label>文档作用</label>
+            <label for="cf-doc-purpose">文档作用</label>
             <el-input
+              id="cf-doc-purpose"
               v-model="form.DocPurpose"
               type="textarea"
               :rows="4"
@@ -226,7 +291,7 @@ defineExpose({ onSave })
           </div>
 
           <!-- ★ fixed 专用：是否可替换（人工判断，D-AA1） -->
-          <div v-if="isFixed" class="fld">
+          <div v-if="isFixed" class="fld" style="margin-bottom: 0">
             <label>是否可替换</label>
             <div class="typegrid">
               <div
@@ -245,88 +310,6 @@ defineExpose({ onSave })
                   <span>{{ s.label }}</span>
                 </div>
                 <div class="td">{{ s.desc }}</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="fld">
-            <label>业务标签</label>
-            <div class="tags-list">
-              <el-tag
-                v-for="(t, i) in tags"
-                :key="t"
-                closable
-                size="small"
-                effect="plain"
-                class="m-tag"
-                @close="removeTag(i)"
-              >
-                {{ t }}
-              </el-tag>
-              <el-input
-                v-model="newTag"
-                class="add-tag-input"
-                size="small"
-                placeholder="+ 新增"
-                @keyup.enter="addTag"
-                @blur="addTag"
-              />
-            </div>
-          </div>
-
-          <div class="fld">
-            <label>包含的关键信息项</label>
-            <div class="tags-list">
-              <el-tag
-                v-for="(t, i) in infoItems"
-                :key="t"
-                closable
-                size="small"
-                effect="plain"
-                class="m-tag"
-                @close="removeItem(i)"
-              >
-                {{ t }}
-              </el-tag>
-              <el-input
-                v-model="newItem"
-                class="add-tag-input"
-                size="small"
-                placeholder="+ 新增项"
-                @keyup.enter="addItem"
-                @blur="addItem"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- AI 识别溯源 -->
-      <div class="blk">
-        <div class="blk-hd">AI 识别溯源</div>
-        <div class="blk-bd">
-          <div class="ai-box">
-            <div class="ai-meta">
-              <YzhStatusBadge
-                :type="analyzeMeta.type"
-                :text="analyzeMeta.text"
-              />
-              <span class="sp"></span>
-              <span>模型：{{ detail.ModelName || 'AnyDoc-LLM' }}</span>
-              <span v-if="detail.AnalyzeTime">{{ detail.AnalyzeTime }}</span>
-            </div>
-            <div class="ai-sug">
-              <el-icon style="font-size: var(--yzh-font-size-lg, 16px)"
-                ><MagicStick
-              /></el-icon>
-              <div>
-                {{
-                  detail.TagsSource ||
-                  '尚未分析 —— 可在顶部「开始 AI 语义分析」后回看结论。'
-                }}
-                <span v-if="detail.TagsConfidence" class="muted tiny"
-                  >（置信度 {{ detail.TagsConfidence }}%）</span
-                >
               </div>
             </div>
           </div>
@@ -461,37 +444,6 @@ defineExpose({ onSave })
   font-size: var(--yzh-font-size-xs, 11px);
 }
 
-/* AI Box */
-.ai-box {
-  border: 1px solid var(--yzh-color-primary-light-8, #d9ecff);
-  background: linear-gradient(180deg, var(--yzh-color-bg-subtle, #f7fbff), var(--yzh-color-bg-container, #fff));
-  border-radius: var(--yzh-radius-md, 8px);
-  padding: var(--yzh-space-3, 12px);
-}
-.ai-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--yzh-font-size-xs, 11px);
-  color: var(--yzh-color-text-placeholder, #909399);
-  margin-bottom: var(--yzh-space-2, 10px);
-  flex-wrap: wrap;
-}
-.ai-sug {
-  border: 1px solid var(--yzh-color-primary-light-8, #d9ecff);
-  background: var(--yzh-color-primary-light-9, #ecf5ff);
-  border-radius: var(--yzh-radius-md, 8px);
-  padding: var(--yzh-space-2, 10px) var(--yzh-space-3, 12px);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: var(--yzh-font-size-xs, 12px);
-  color: var(--yzh-color-primary-dark-2, #337ecc);
-}
-
-.sp {
-  flex: 1;
-}
 .row {
   display: flex;
   align-items: center;
@@ -499,11 +451,5 @@ defineExpose({ onSave })
 }
 .wrap {
   flex-wrap: wrap;
-}
-.muted {
-  color: var(--yzh-color-text-placeholder, #909399);
-}
-.tiny {
-  font-size: var(--yzh-font-size-xs, 11px);
 }
 </style>

@@ -43,6 +43,27 @@ export type AnalyzePolicyKey = 'analyze' | 'skip' | 'ignore'
 /** 策略原因（字典 POLICY_REASON） */
 export type PolicyReasonKey = 'covered_by_params' | 'irrelevant' | 'duplicate' | 'manual'
 
+/**
+ * ★ 标准引用（`cert_iso_standard` 的一行，由 `stage-tree` 随阶段节点下发）。
+ *
+ * <para><b>为什么阶段节点要带标准</b>：原始资料表 `cert_enterprise_original_file` <b>没有标准列</b>
+ * （只有 `StageCode`），标准维度只存在于 `cert_enterprise_stage`（一行 = 一个「企业×阶段×标准」）
+ * 与画像表 `cert_enterprise_doc_profile`（一行 = 一个「文件×标准」画像）。</para>
+ *
+ * <para>⇒ 前端必须把某个标准显式传下去，后端才知道该显示/写入<b>哪一行</b>画像；
+ * 不传就只能 `FirstOrDefault` 取「某一行」⇒ 标签/作用串到别的标准（用户点名痛点）。</para>
+ */
+export interface StandardRef {
+  /** 标准业务键（GUID）—— 传回后端的就是这个 */
+  Code: string
+  /** 标准编号（如 iso9001-2015），只用于展示 */
+  StandardCode: string
+  /** 标准中文名（如 9001标准） */
+  StandardName: string
+  /** 版本年份 */
+  VersionYear?: number
+}
+
 /** 左树节点 */
 export interface TreeNode {
   /** ★ 业务键（GUID）—— 阶段节点是 `cert_cert_stage.Code`，⛔ 不是 slug（jd01/03） */
@@ -60,6 +81,8 @@ export interface TreeNode {
   ConvertingCount?: number
   AnalyzingCount?: number
   FailedCount?: number
+  /** ★ 仅阶段节点有：该阶段绑定的标准清单（前端据此渲染标准 tab） */
+  Standards?: StandardRef[]
 }
 
 /** 文件行（表 cert_enterprise_original_file） */
@@ -338,14 +361,22 @@ export async function fetchFiles(enterpriseCode: string, stageCode: string): Pro
  * @param tagCodes 受控标签码并集；空 = 不按标签过滤
  * @param onlyUsable true = 只返回「转换 ∧ 分析」双条件都成功的行（**填写期取资料必须用这个**）
  * @param groupByTag true = 额外返回按标签的分组聚合（语义分组视图）
+ * @param standardCode ★ **按标准取画像**（2026-10-07 接线）。
+ *   空 = 兼容旧行为：不过滤标准，后端取「该文件版本号最大的一行」画像
+ *   ⇒ 标签/作用**可能属于另一个标准**（这正是用户报的「点击显示的信息不正确」）。
+ *   ⛔ 页面必须传当前标准 tab 的 Code。
  */
 export async function fetchFilesFiltered(
   enterpriseCode: string, stageCode: string,
   tagCodes?: string[], onlyUsable = false, groupByTag = false,
+  standardCode?: string,
 ): Promise<{ rows: OriginalFile[]; total: number; usableCount: number; halfProductCount: number; groups: TagGroupItem[] }> {
   const res = await yzhApi.post<Payload>(`${BASE}/list`, {
     EnterpriseCode: enterpriseCode, StageCode: stageCode,
     TagCodes: tagCodes ?? [], OnlyUsable: onlyUsable, GroupByTag: groupByTag,
+    // ⚠️ 必须逐字 PascalCase（AGENTS.md ③）；写成 standardCode ⇒ 模型绑定丢掉
+    //    ⇒ 静默退化成「不过滤标准」，症状与「没修」完全一样。
+    StandardCode: standardCode ?? '',
   })
   const d = res?.data ?? {}
   return {
@@ -433,6 +464,25 @@ export async function removeFile(fileCode: string, enterpriseCode: string, reaso
   unwrap(res, undefined as any)
 }
 
+/**
+ * ★ **批量删除**（2026-10-07 新增）—— 页面上「删除整个文件夹」的落点。
+ *
+ * <para>语义与 {@link removeFile} 完全一致（软删 + 删对象 + 归档历史版本；<b>画像保留</b>以备审计），
+ * 后端逐个执行并汇总成败，⛔ 一份失败不中断其余。</para>
+ *
+ * <para>⛔ <b>只传文件 Code，不传文件夹路径</b>：后端不持有「文件夹」这个概念，
+ * 「哪些文件属于这个文件夹」由前端按 `RelFolderPath` 展开子树后提交 ——
+ * 避免前后端各判一套子树归属。</para>
+ */
+export async function batchRemoveFile(
+  fileCodes: string[], enterpriseCode: string, reason?: string,
+): Promise<{ Total: number; SuccessCount: number; FailedCount: number; Failed: string[] }> {
+  const res = await yzhApi.post<any>(`${BASE}/delete/batch`, {
+    FileCodes: fileCodes, EnterpriseCode: enterpriseCode, Reason: reason,
+  })
+  return unwrap(res, { Total: 0, SuccessCount: 0, FailedCount: 0, Failed: [] })
+}
+
 /** 历史版本列表 */
 export async function fetchVersions(fileCode: string, enterpriseCode: string): Promise<{
   CurrentVersion: number; Rows: FileVersion[]
@@ -483,9 +533,20 @@ export async function batchSetPolicy(
 
 // ═══════════════════════ 五、画像与人工修正（D6）═══════════════════════
 
-/** 取最新画像 */
-export async function fetchProfile(fileCode: string, enterpriseCode: string): Promise<DocProfile | null> {
-  const res = await yzhApi.get<any>(`${BASE}/profile/${fileCode}`, { enterpriseCode })
+/**
+ * 取最新画像。
+ *
+ * @param standardCode ★ **按标准取画像**（2026-10-07 接线）。
+ *   同一文件在 N 个标准下各有**一行**画像 ⇒ 不传标准就只能拿到「某一行」，
+ *   用户看到/改到的标签与作用**可能属于另一个标准**。
+ *   ⛔ 页面必须传当前标准 tab 的 Code。
+ */
+export async function fetchProfile(
+  fileCode: string, enterpriseCode: string, standardCode?: string,
+): Promise<DocProfile | null> {
+  const q: Record<string, string> = { enterpriseCode }
+  if (standardCode) q.standardCode = standardCode
+  const res = await yzhApi.get<any>(`${BASE}/profile/${fileCode}`, q)
   const d = unwrap(res, null as any)
   return (d?.Profile as DocProfile) ?? null
 }
@@ -498,6 +559,11 @@ export async function fetchProfile(fileCode: string, enterpriseCode: string): Pr
 export async function correctProfile(payload: {
   FileCode: string
   EnterpriseCode: string
+  /**
+   * ★ 要修正的是**哪个标准下**的画像行（2026-10-07 接线）。
+   * 不传 ⇒ 后端退化为「该文件版本号最大的一行」，改的**不是**用户当前在看的那个标准。
+   */
+  StandardCode?: string | null
   TagsJson?: string | null
   TagsReason?: string | null
   TagsConfidence?: number | null

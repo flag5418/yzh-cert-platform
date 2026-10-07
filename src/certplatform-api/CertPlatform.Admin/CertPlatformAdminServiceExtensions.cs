@@ -1,5 +1,6 @@
 
 using CertPlatform.Admin.Services.DocExtraction;
+using CertPlatform.Admin.Services.Ent;
 using CertPlatform.Admin.Services.Ent.Executors;
 using CertPlatform.Admin.Services.StandardDirectory;
 using CertPlatform.Admin.Services.Audit;
@@ -82,15 +83,26 @@ public static class CertPlatformAdminServiceExtensions
         services.AddSingleton<UploadQueueCancelHandler>();
         services.AddSingleton<IYzhTaskExecutor>(sp => sp.GetRequiredService<OfficeConvertTaskExecutor>());
 
-        // ★ 2026-10-05 企业文档规范化执行器（ent_doc_normalize）—— 此前**只有类定义、没有注册**，
-        //   导致该类型任务永远分发不到且不报错。
-        //   ⛔ 不能写成 AddSingleton<IYzhTaskExecutor, EnterpriseDocNormalizationExecutor>()：
-        //   QueueManager 是单例且构造注入 IEnumerable<IYzhTaskExecutor>，而执行器本体依赖
-        //   IDbOrm / IObjectStorage（**均为 Scoped**）⇒ 会抛「Cannot consume scoped service from singleton」。
-        //   解法 = 单例桥接壳（内部每次 CreateScope），执行器本体保持 Scoped。
-        services.AddScoped<EnterpriseDocNormalizationExecutor>();
-        services.AddSingleton<EnterpriseDocNormalizationExecutorAdapter>();
-        services.AddSingleton<IYzhTaskExecutor>(sp => sp.GetRequiredService<EnterpriseDocNormalizationExecutorAdapter>());
+        // ⛔⛔ 2026-10-06 停用：企业文档规范化执行器（ent_doc_normalize，Admin 侧旧实现）
+        //   依据 `60` §六 裁决③（用户原话「填充代码可以彻底全部重新实现」）+ `60` §六之补二：
+        //   旧执行器实测缺 6 处，最致命的是【读错表】—— LoadEnterpriseOriginalDocsMarkdownAsync
+        //   方法名「企业原始文档」，实际查 StandardDirectoryFile（企业**成品**文档），
+        //   把成品当原始资料喂给填充引擎。
+        //   ⇒ 新编排器落在专家端 `CertPlatform.Auditor/Services/Ent/Normalize/DocumentFillOrchestrator.cs`，
+        //      队列任务类型 `enterprise_normalize` 由 `CertPlatformAuditorServiceExtensions` 注册。
+        //   ⚠️ 两套填充代码并存 = 静默漂移（取值/锁定/产物路径规则各写一套，两边都不报错）
+        //      ⇒ 必须显式停用本处注册。类文件保留（供对照），但**不再注册进 DI**。
+        //   ⛔ 不要因为「类还在」就把注册加回来。
+        // services.AddScoped<EnterpriseDocNormalizationExecutor>();
+        // services.AddSingleton<EnterpriseDocNormalizationExecutorAdapter>();
+        // services.AddSingleton<IYzhTaskExecutor>(sp => sp.GetRequiredService<EnterpriseDocNormalizationExecutorAdapter>());
+
+        // ★ 2026-10-06（S1-5）来源解析器 —— 改为 DI 注册。
+        //   原先执行器里写的是 `new SourceResolver(db)`：手工 new 会让它无法接收
+        //   FillParamValueProvider（Shared 层的取值内核），只能自己再 new 一份 ⇒
+        //   「同一个取值内核」被实例化出多份，改一处忘一处 = 静默分叉（D1/D6 的成因模式）。
+        //   ⚠️ 它依赖 IDbOrm（Scoped）⇒ 必须 Scoped；执行器本体也是 Scoped，生命周期匹配。
+        services.AddScoped<SourceResolver>();
 
         services.AddSingleton<IYzhQueueNotifier>(sp => sp.GetRequiredService<CertQueueNotifier>());
         services.AddSingleton<IYzhQueueCancelHandler>(sp => sp.GetRequiredService<UploadQueueCancelHandler>());

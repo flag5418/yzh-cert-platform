@@ -1,0 +1,21 @@
+{
+  "Title": "规范化动作留痕",
+  "FillMode": "AutoFix",
+  "EnableField": "",
+  "Columns": [
+    { "FieldName": "Id", "DesName": "ID", "Type": "Other", "Sxh": 0, "XsFlag": false, "BcFlag": false, "Yxk": false, "Width": 0, "Row": 0, "Col": 0, "RowSpan": 1, "ColSpan": 1, "GroupIndex": "99", "Mrz": "", "Enable": false },
+    { "FieldName": "Code", "DesName": "编码", "Type": "Other", "Sxh": 0, "XsFlag": false, "BcFlag": false, "Yxk": false, "Width": 0, "Row": 0, "Col": 0, "RowSpan": 1, "ColSpan": 1, "GroupIndex": "99", "Mrz": "", "Enable": false },
+    { "FieldName": "CreateTime", "DesName": "动作时间", "Type": "DateTimePicker", "Sxh": 1, "XsFlag": true, "BcFlag": false, "Yxk": true, "Width": 170, "Row": 0, "Col": 0, "RowSpan": 1, "ColSpan": 1, "GroupIndex": "1", "Mrz": "", "Enable": true, "Sortable": true, "Align": "center" },
+    { "FieldName": "ActionType", "DesName": "动作", "Type": "TextBox", "Sxh": 2, "XsFlag": true, "BcFlag": false, "Yxk": true, "Width": 120, "Row": 0, "Col": 0, "RowSpan": 1, "ColSpan": 1, "GroupIndex": "1", "Mrz": "", "Enable": true, "Sortable": true, "Align": "center" },
+    { "FieldName": "EnterpriseCode", "DesName": "企业编码", "Type": "TextBox", "Sxh": 3, "XsFlag": true, "BcFlag": false, "Yxk": true, "Width": 220, "Row": 0, "Col": 0, "RowSpan": 1, "ColSpan": 1, "GroupIndex": "1", "Mrz": "", "Enable": true, "Sortable": true, "Align": "left" },
+    { "FieldName": "ScopeType", "DesName": "范围", "Type": "TextBox", "Sxh": 4, "XsFlag": true, "BcFlag": false, "Yxk": true, "Width": 110, "Row": 0, "Col": 0, "RowSpan": 1, "ColSpan": 1, "GroupIndex": "1", "Mrz": "", "Enable": true, "Align": "center" },
+    { "FieldName": "ScopeName", "DesName": "范围名称", "Type": "TextBox", "Sxh": 5, "XsFlag": true, "BcFlag": false, "Yxk": true, "Width": 200, "Row": 0, "Col": 0, "RowSpan": 1, "ColSpan": 1, "GroupIndex": "1", "Mrz": "", "Enable": true, "Align": "left" },
+    { "FieldName": "TargetCode", "DesName": "目标", "Type": "TextBox", "Sxh": 6, "XsFlag": true, "BcFlag": false, "Yxk": true, "Width": 220, "Row": 0, "Col": 0, "RowSpan": 1, "ColSpan": 1, "GroupIndex": "1", "Mrz": "", "Enable": true, "Align": "left" },
+    { "FieldName": "AnchorCode", "DesName": "锚点", "Type": "TextBox", "Sxh": 7, "XsFlag": true, "BcFlag": false, "Yxk": true, "Width": 220, "Row": 0, "Col": 0, "RowSpan": 1, "ColSpan": 1, "GroupIndex": "1", "Mrz": "", "Enable": true, "Align": "left" },
+    { "FieldName": "Reason", "DesName": "理由", "Type": "Memo", "Sxh": 8, "XsFlag": true, "BcFlag": false, "Yxk": true, "Width": 240, "Row": 0, "Col": 0, "RowSpan": 1, "ColSpan": 1, "GroupIndex": "1", "Mrz": "", "Enable": true, "Align": "left" },
+    { "FieldName": "QueueCode", "DesName": "批次", "Type": "TextBox", "Sxh": 9, "XsFlag": true, "BcFlag": false, "Yxk": true, "Width": 220, "Row": 0, "Col": 0, "RowSpan": 1, "ColSpan": 1, "GroupIndex": "1", "Mrz": "", "Enable": true, "Align": "left" },
+    { "FieldName": "CreateBy", "DesName": "操作人", "Type": "Other", "Sxh": 99, "XsFlag": true, "BcFlag": false, "Yxk": true, "Width": 120, "Row": 0, "Col": 0, "RowSpan": 1, "ColSpan": 1, "GroupIndex": "99", "Mrz": "", "Enable": false }
+  ],
+  "RowButtons": { "Enable": true },
+  "FormCols": 1
+}

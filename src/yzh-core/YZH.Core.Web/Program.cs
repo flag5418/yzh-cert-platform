@@ -10,6 +10,37 @@ using YZH.Core.Web;
 using YZH.Core.DataBase.Services;
 using CertPlatform.Admin;
 using CertPlatform.Auditor;
+using CertPlatform.Shared;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ★★★ 必须最先执行：把「本机地址」排除出代理（2026-10-06 实测根治）
+//
+// 机理：.NET 在 Unix 上 `HttpClient.DefaultProxy` 会读 `HTTP_PROXY`/`HTTPS_PROXY` 环境变量。
+//       MinIO 的 SDK 走 HttpClient ⇒ **本机 9000 的请求会被送去代理**。
+// 后果：开发机常年开代理，且**代理端口每次会话都变**；后端一旦继承了**旧会话**的代理端口，
+//       那个端口早已不存在 ⇒ **所有 MinIO 读写失败**（预览 / 下载 / 转换产物 / Markdown 提取 /
+//       语义分析全线），而对外报的却是「文件不存在」「源文件读取失败（对象不存在或存储不可用）」
+//       —— **症状与病因完全错位**，看起来像数据缺失，实际是网络层，极难定位。
+//
+// ⚠️ 只**追加**，⛔ 绝不覆盖或清空 —— 本机 LLM 调用（通义千问等）**需要代理出网**，
+//    清掉会让语义分析直接不可用。
+// ⚠️ 必须放在**任何 HttpClient 被创建之前**（`HttpClient.DefaultProxy` 是惰性初始化，
+//    首次访问即定稿）⇒ 故置于文件最前。
+// ⚠️ 这里是「按进程生效」；`scripts/backend/run-backend.sh` 里也有一份，属双保险。
+// ─────────────────────────────────────────────────────────────────────────────
+{
+    var existing = Environment.GetEnvironmentVariable("NO_PROXY")
+                   ?? Environment.GetEnvironmentVariable("no_proxy") ?? "";
+    var parts = existing
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .ToList();
+    foreach (var host in new[] { "127.0.0.1", "localhost", "::1", "0.0.0.0" })
+        if (!parts.Contains(host, StringComparer.OrdinalIgnoreCase))
+            parts.Add(host);
+    var merged = string.Join(",", parts);
+    Environment.SetEnvironmentVariable("NO_PROXY", merged);
+    Environment.SetEnvironmentVariable("no_proxy", merged);
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,6 +59,10 @@ builder.UseYzhCore(options =>
     var bizRoot = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "..", "certplatform-api"));
     options.BusinessEntityConfigPaths = new List<string>
     {
+        // ★ 2026-10-06 新增，**必须放首位**：共用实体的 EntityConfig 以 Shared 为唯一权威。
+        //   放首位后，若 Admin/Auditor 里还留着同名副本，会**先命中 Shared 的那份** ⇒ 副本失效（但不报错）。
+        //   ⇒ 下沉实体时必须**同步删掉端内的同名 JSON**，否则两份 = 静默分叉。
+        Path.Combine(bizRoot, "CertPlatform.Shared", "Assets", "EntityConfigs"),
         Path.Combine(bizRoot, "CertPlatform.Admin", "Assets", "EntityConfigs"),
         Path.Combine(bizRoot, "CertPlatform.Auditor", "Assets", "EntityConfigs"),
         // ⛔ 缺 CertPlatform.Enterprise —— 该端未开工（见下方 AddCertPlatformEnterpriseServices 处的说明）。
@@ -36,6 +71,10 @@ builder.UseYzhCore(options =>
 });
 
 // 业务服务自注册（启动工程不感知具体业务实现）
+// ⚠️ 顺序敏感：Shared **必须最前**。AddScoped 是「后注册覆盖先注册」的语义 ——
+//    若 Admin 也注册了同名服务，**Admin 的会赢**，Shared 那份就等于没注册（静默分叉）。
+//    ⇒ 下沉服务后必须**同步删掉 Admin 侧的重复注册**。
+builder.Services.AddCertPlatformSharedServices();
 builder.Services.AddCertPlatformAdminServices();
 // 专家端（专家注册 / 专家登录）业务服务
 builder.Services.AddCertPlatformAuditorServices();

@@ -9,17 +9,20 @@ using YZH.Core.Stand.Models.Result;
 using CertPlatform.Auditor.Services;
 using CertPlatform.Admin.Entities.Cert;
 using CertPlatform.Shared.Fill;
-using CertPlatform.Shared.Fill.Resolvers;
 
 namespace CertPlatform.Auditor.Controllers;
 
 /// <summary>
 /// 企业全局参数值控制器（专家端 —— 「企业全局参数定义」页的数据口）
 ///
-/// <para><b>业务定位</b>：把「后台按机构×标准×阶段预定义的全局参数」与「企业已有基本信息」
+/// <para><b>业务定位</b>：把「后台按标准预定义的全局参数」与「企业已有基本信息」
 /// <b>自动合并成一张待完善清单</b>，让企业只需填真正缺的那几项。
 /// 这正是 05 册 <c>22</c> §七 去重裁定的落地形态：
 /// <b>企业基本信息与全局参数不是两套数据，而是「同一份数据的两个视角」</b>。</para>
+///
+/// <para><b>★ 本页是「简单填写页」</b>（2026-10-07 用户裁决）：左树 = 企业 → 标准（两级），
+/// 右区 = 按后台定义逐项手填；<b>不接 AI</b> —— 原 <c>ai-prompt</c> 端点与
+/// 「生成提示词」按钮已删除，<c>ValueSource</c> 恒 <c>manual</c>。</para>
 ///
 /// <para><b>★ 三条语义（决定本类全部行为，改动前必读）</b>：</para>
 /// <list type="number">
@@ -113,19 +116,26 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // 一b、★ 企业树（企业 → 标准 → 阶段）—— 左树的数据源
+    // 一b、★ 企业树（企业 → 标准）—— 左树的数据源
     // ════════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// ★ <b>企业树</b>：企业 → 标准 → 阶段。供专家端「企业全局参数定义」左树使用 ——
-    /// 选中阶段后，右区按 <c>(EnterpriseCode, StandardCode, StageCode)</c> 拉 <c>merge-list</c>。
+    /// ★ <b>企业树</b>：企业 → 标准（<b>两级</b>）。供专家端「企业全局参数定义」左树使用 ——
+    /// 选中标准后，右区按 <c>(EnterpriseCode, StandardCode)</c> 拉 <c>merge-list</c>。
+    ///
+    /// <para><b>★ 为什么没有阶段层（2026-10-07 用户裁决）</b>：本页是「按后台定义的信息
+    /// 逐项填写」的<b>简单填写页</b>，而后台「企业资料参数」的定义<b>只按标准组织</b>
+    /// （<c>FillParamDefController</c> 强制 <c>StageCode=string.Empty</c>，不分阶段）。
+    /// 树里再挂一层阶段，只会让同一份清单重复出现 N 次、还多一层「点了看什么」的困惑。
+    /// 阶段维度仍由「阶段标准关联」与企业资料规范化册承载，本页不重复暴露。</para>
     ///
     /// <para><b>为什么不复用机构的 <c>organization-tree</c></b>：那棵树的根是
     /// 「体系认证机构」，本页要按<b>企业</b>组织 —— 两者维度不同。强行把机构树改造成企业树，
     /// 会让「标准目录 / 文档提取规则」等页面失去原有语义；后端各自出树、前端各自转换，
     /// 比在一棵树里塞两套语义更可控。</para>
     ///
-    /// <para><b>数据源</b>：<c>cert_enterprise</c>（本工作区）+ <c>cert_enterprise_stage</c>（三元组）。
+    /// <para><b>数据源</b>：<c>cert_enterprise</c>（本工作区）+ <c>cert_enterprise_stage</c>
+    /// （三元组<b>按标准去重</b>降为两级 —— 同一企业同一标准关联了多个阶段也只出一个标准节点）。
     /// ⚠️ 三元组无数据时，树里只有企业节点、没有子节点 —— 前端须给「去『阶段标准关联』配置」
     /// 的兜底提示（本端点用 <c>Hint</c> 字段下发），而不是显示一棵点不开的空白树。</para>
     ///
@@ -166,10 +176,8 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
             .Where(x => entCodes.Contains(x.EnterpriseCode) && x.IsDeleted == false && x.IsValid == 1)
             .ToListAsync();
 
-        // ── 3. 标准 / 阶段名称：只查真正出现的 Code（避免全表扫）──
+        // ── 3. 标准名称：只查真正出现的 Code（避免全表扫）──
         var stdCodes = links.Select(x => x.StandardCode)
-            .Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().ToList();
-        var stageCodes = links.Select(x => x.StageCode)
             .Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().ToList();
 
         var stdMap = stdCodes.Count == 0
@@ -178,13 +186,7 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
                 .Where(x => stdCodes.Contains(x.Code)).ToListAsync())
               .ToDictionary(x => x.Code, x => x, StringComparer.Ordinal);
 
-        var stageMap = stageCodes.Count == 0
-            ? new Dictionary<string, CertStage>(StringComparer.Ordinal)
-            : (await _db.Client.Queryable<CertStage>()
-                .Where(x => stageCodes.Contains(x.Code)).ToListAsync())
-              .ToDictionary(x => x.Code, x => x, StringComparer.Ordinal);
-
-        // ── 4. 组装树：企业 → 标准 → 阶段（三元组按标准分组降为两级）──
+        // ── 4. 组装树：企业 → 标准（三元组按标准去重降为两级，⛔ 不再产 stage 节点）──
         var nodes = new List<EnterpriseTreeNode>();
         foreach (var ent in enterprises)
         {
@@ -201,7 +203,7 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
             foreach (var g in entLinks.GroupBy(l => l.StandardCode))
             {
                 stdMap.TryGetValue(g.Key, out var std);
-                var stdNode = new EnterpriseTreeNode
+                entNode.Children.Add(new EnterpriseTreeNode
                 {
                     Code = $"std:{ent.Code}|{g.Key}",
                     // 与机构树同款命名（`{编号} - {名称}`），两棵树的阅读习惯保持一致
@@ -210,28 +212,9 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
                     EnterpriseCode = ent.Code,
                     StandardCode = g.Key,
                     Subtitle = std?.StandardName ?? string.Empty,
-                };
-
-                foreach (var l in g.OrderBy(x => x.StageCode, StringComparer.Ordinal))
-                {
-                    stageMap.TryGetValue(l.StageCode, out var stage);
-                    stdNode.Children.Add(new EnterpriseTreeNode
-                    {
-                        Code = $"stage:{ent.Code}|{l.StandardCode}|{l.StageCode}",
-                        Name = stage?.StageName ?? l.StageCode,
-                        NodeType = "stage",
-                        EnterpriseCode = ent.Code,
-                        StandardCode = l.StandardCode,
-                        StageCode = l.StageCode,
-                        Subtitle = stage?.StageCode ?? string.Empty,
-                    });
-                }
-
-                stdNode.StageCount = stdNode.Children.Count;
-                entNode.Children.Add(stdNode);
+                });
             }
 
-            entNode.StageCount = entNode.Children.Sum(x => x.StageCount);
             nodes.Add(entNode);
         }
 
@@ -241,7 +224,7 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
             EnterpriseCount = enterprises.Count,
             LinkCount = links.Count,
             Hint = links.Count == 0
-                ? "企业还没有关联标准 / 阶段，请先到「阶段标准关联」配置"
+                ? "企业还没有关联标准，请先到「阶段标准关联」配置"
                 : string.Empty,
         }));
     }
@@ -278,8 +261,8 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
         if (!string.Equals(ent.OrgCode, scope.Data.WorkspaceCode, StringComparison.Ordinal))
             return Ok(ApiResponse<object>.Fail("无权查看其他工作区的企业参数"));
 
-        // ★ 参数定义归属 = 体系认证机构 Code（⛔ 不是工作区 Code —— 见 WorkspaceContextService 的对照表）
-        var orgCode = scope.Data.CertBodyCode;
+        // ★ 参数定义全平台共享（2026-10-06 起不分机构：OrgCode 恒空串 —— 见 26 号 §3.1 裁决）
+        var orgCode = string.Empty;
         var stdCode = req.StandardCode ?? string.Empty;
         var stageCode = req.StageCode ?? string.Empty;
 
@@ -436,17 +419,15 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
         if (!string.Equals(ent.OrgCode, scope.Data.WorkspaceCode, StringComparison.Ordinal))
             return Ok(ApiResponse<object>.Fail("无权修改其他工作区的企业参数"));
 
-        // ★ 两个作用域 Code 分开命名，避免再次混淆（见 WorkspaceContextService 对照表）：
-        //   certBodyCode  → 查参数定义（配置归属 = 体系认证机构）
-        //   workspaceCode → 写参数值行 OrgCode（数据归属 = 工作区）
-        var certBodyCode = scope.Data.CertBodyCode;
+        // ★ 参数值行 OrgCode = 工作区 Code（数据归属，见 WorkspaceContextService 对照表）；
+        //   参数定义 OrgCode 恒空串（2026-10-06 起全局共享，见 26 号 §3.1 裁决）
         var workspaceCode = scope.Data.WorkspaceCode;
         var stdCode = req.StandardCode ?? string.Empty;
         var stageCode = req.StageCode ?? string.Empty;
 
         // 定义全集（校验 paramCode 合法性 —— 不认识的一律报错，不静默丢弃）
         var defs = await _db.Client.Queryable<FillParamDef>()
-            .Where(d => d.OrgCode == certBodyCode && d.IsDeleted == false && d.IsValid == 1
+            .Where(d => d.OrgCode == "" && d.IsDeleted == false && d.IsValid == 1
                         && (d.StandardCode == "" || d.StandardCode == stdCode)
                         && (d.StageCode == "" || d.StageCode == stageCode))
             .ToListAsync();
@@ -463,7 +444,7 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
             .ToList();
         if (unknown.Count > 0)
             return Ok(ApiResponse<object>.Fail(
-                $"以下参数编码未在当前「机构 × 标准 × 阶段」下定义：{string.Join("、", unknown)}"));
+                $"以下参数编码未在当前标准作用域下定义（含通配）：{string.Join("、", unknown)}"));
 
         var now = DateTime.Now;
         var userCode = UserContext.UserCode;
@@ -496,13 +477,14 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
                     && v.ParamCode == def.ParamCode);
 
                 var value = item.ParamValue ?? string.Empty;
-                var isAi = string.Equals(item.ValueSource, "ai", StringComparison.Ordinal);
 
                 if (row.Success && row.Data != null)
                 {
                     var existing = row.Data;
                     existing.ParamValue = value;
-                    existing.ValueSource = isAi ? "ai" : "manual";
+                    // ★ 本页是「按后台定义逐项手填」的简单填写页 ⇒ 值来源恒 manual
+                    //   （2026-10-07 用户裁决：信息由人填写，不由 AI 分析产出）
+                    existing.ValueSource = "manual";
                     existing.IsManualEdited = true;
                     existing.IsFilled = !string.IsNullOrWhiteSpace(value);
                     existing.IsDeleted = false;
@@ -529,7 +511,7 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
                         ValueType = def.ValueType,
                         EnumOptions = def.EnumOptions,
                         ParamValue = value,
-                        ValueSource = isAi ? "ai" : "manual",
+                        ValueSource = "manual",
                         SourceRef = $"全局参数 · {def.ParamName}",
                         IsManualEdited = true,
                         MaintainMode = def.MaintainMode,
@@ -562,85 +544,6 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
             message = ignoredAuto.Count == 0
                 ? $"已保存 {savedCount} 项"
                 : $"已保存 {savedCount} 项；{ignoredAuto.Count} 项由企业档案自动带出，未保存（如需修改请到「企业管理」）",
-        }));
-    }
-
-    // ════════════════════════════════════════════════════════════════════
-    // 四、AI 生成（产出提示词，不直连模型）
-    // ════════════════════════════════════════════════════════════════════
-
-    /// <summary>
-    /// ★ <b>AI 生成提示词</b>：为 <c>SourceKind='ai'</c> 的参数产出一段可直接投喂模型的提示词。
-    ///
-    /// <para><b>为什么本期只产提示词、不直连模型</b>：</para>
-    /// <list type="number">
-    ///   <item><b>可离线</b>：文档填充引擎必须能在无网、无计费的环境下重跑 167 份文档；
-    ///         模型调用放进去会让批量填充变成「跑一次花一次钱、结果不可复现」；</item>
-    ///   <item><b>可覆盖</b>：生成结果落 <c>cert_fill_param_value</c> 后企业可人工改，
-    ///         这是「AI 辅助、人负责」的前提；</item>
-    ///   <item><b>可替换</b>：接真模型 = 在本端点后追加一次调用，引擎与前端都不动。</item>
-    /// </list>
-    /// <para>产出物即「能力已就位」的证据：提示词里已经拼好了企业全部相关属性，
-    /// 机构/专家看到的是<b>真实可用的生成请求</b>，而不是一句「支持 AI」。</para>
-    /// </summary>
-    [HttpPost("ai-prompt")]
-    public async Task<IActionResult> AiPrompt([FromBody] AiPromptRequest req)
-    {
-        var scope = await _workspace.ResolveScopeAsync(UserContext.UserCode);
-        if (!scope.Success || scope.Data == null)
-            return Ok(ApiResponse<object>.Fail(scope.Error ?? "无法定位当前工作区"));
-
-        if (req == null || string.IsNullOrWhiteSpace(req.EnterpriseCode))
-            return Ok(ApiResponse<object>.Fail("请先选择企业"));
-
-        var ent = await _db.Client.Queryable<Enterprise>()
-            .Where(x => x.Code == req.EnterpriseCode && x.IsDeleted == false)
-            .FirstAsync();
-
-        if (ent == null)
-            return Ok(ApiResponse<object>.Fail("企业不存在或已删除"));
-        if (!string.Equals(ent.OrgCode, scope.Data.WorkspaceCode, StringComparison.Ordinal))
-            return Ok(ApiResponse<object>.Fail("无权访问其他工作区的企业参数"));
-
-        // 参数定义归属 = 体系认证机构 Code
-        var def = await _db.Client.Queryable<FillParamDef>()
-            .Where(d => d.OrgCode == scope.Data.CertBodyCode && d.IsDeleted == false && d.IsValid == 1
-                        && d.ParamCode == req.ParamCode)
-            .OrderBy(d => d.SortOrder)
-            .FirstAsync();
-
-        if (def == null)
-            return Ok(ApiResponse<object>.Fail($"未找到参数「{req.ParamCode}」的定义"));
-
-        if (!string.Equals(def.SourceKind, "ai", StringComparison.Ordinal))
-            return Ok(ApiResponse<object>.Fail(
-                $"参数「{def.ParamName}」的来源类别是「{def.SourceKind}」，不需要 AI 生成"));
-
-        // 拼装上下文：把企业全部已知属性给模型，避免它编造
-        var info = ToEnterpriseInfo(ent);
-        var ctxLines = ReplaceResolver.EnterpriseAttrLabels
-            .Select(kv => (Attr: kv.Key, Label: kv.Value, Value: info.Get(kv.Key)))
-            .Where(x => !string.IsNullOrWhiteSpace(x.Value))
-            .Select(x => $"- {x.Label}：{x.Value}")
-            .ToList();
-
-        var prompt =
-            $"你是 ISO 体系认证文件编写助手。请为下列企业撰写【{def.ParamName}】。\n\n" +
-            $"【企业已知信息】\n{string.Join("\n", ctxLines)}\n\n" +
-            $"【写作要求】\n" +
-            $"- {(string.IsNullOrWhiteSpace(def.Description) ? "符合 ISO 9001 体系文件的行文习惯" : def.Description)}\n" +
-            $"- 只依据上方已知信息撰写，不得编造未提供的资质、数据或客户名称\n" +
-            $"- 输出 150~300 字，直接给出正文，不要标题、不要解释\n" +
-            $"- 若已知信息不足以支撑，请只输出「信息不足：<缺什么>」，不要凑字数";
-
-        return Ok(ApiResponse<object>.Ok(new
-        {
-            paramCode = def.ParamCode,
-            paramName = def.ParamName,
-            valueType = def.ValueType,
-            prompt,
-            contextCount = ctxLines.Count,
-            note = "本端点只产出提示词。生成结果请通过 save 端点以 valueSource='ai' 回填，之后文档填充即可取用。",
         }));
     }
 
@@ -696,14 +599,9 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
         public string ParamCode { get; set; } = string.Empty;
         public string? ParamValue { get; set; }
 
-        /// <summary>值来源：manual（默认）| ai</summary>
-        public string? ValueSource { get; set; }
-    }
-
-    public sealed class AiPromptRequest
-    {
-        public string EnterpriseCode { get; set; } = string.Empty;
-        public string ParamCode { get; set; } = string.Empty;
+        // ⛔ 这里刻意**没有** `ValueSource`：本页值来源恒 `manual`
+        //    （2026-10-07 用户裁决：信息由人填写，不由 AI 分析产出），
+        //    由服务端写死，不接受客户端指定。
     }
 
     /// <summary>
@@ -729,7 +627,7 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
 
         public string? ParamValue { get; set; }
 
-        /// <summary>auto | manual | ai | default | empty</summary>
+        /// <summary>auto | manual | default | empty</summary>
         public string ValueSource { get; set; } = "empty";
 
         public string SourceRef { get; set; } = string.Empty;
@@ -739,19 +637,21 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
     }
 
     /// <summary>
-    /// 企业树节点（企业 → 标准 → 阶段）—— <c>enterprise-tree</c> 的载荷。
+    /// 企业树节点（<b>企业 → 标准</b> 两级）—— <c>enterprise-tree</c> 的载荷。
     /// <para>⛔ 不是内核 <c>TreeNode</c>：这里只出业务字段，前端负责补
     /// <c>IsLeaf</c> / <c>Extra.Icon</c> 等渲染所需信息 —— 后端不耦合前端组件契约。</para>
+    /// <para>★ <b>没有阶段字段</b>（2026-10-07 用户裁决）：本页树只到标准一级，
+    /// 后台「企业资料参数」的定义也只按标准组织（<c>StageCode</c> 恒空串）。</para>
     /// </summary>
     public sealed class EnterpriseTreeNode
     {
-        /// <summary>节点唯一键（el-tree node-key）：<c>ent:{企业}</c> / <c>std:{企业}|{标准}</c> / <c>stage:{企业}|{标准}|{阶段}</c></summary>
+        /// <summary>节点唯一键（el-tree node-key）：<c>ent:{企业}</c> / <c>std:{企业}|{标准}</c></summary>
         public string Code { get; set; } = string.Empty;
 
-        /// <summary>显示名（企业名 / <c>{标准编号} - {标准名}</c> / 阶段名）</summary>
+        /// <summary>显示名（企业名 / <c>{标准编号} - {标准名}</c>）</summary>
         public string Name { get; set; } = string.Empty;
 
-        /// <summary>enterprise | standard | stage</summary>
+        /// <summary>enterprise | standard</summary>
         public string NodeType { get; set; } = "enterprise";
 
         public string EnterpriseCode { get; set; } = string.Empty;
@@ -759,14 +659,8 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
         /// <summary>标准 Code（GUID = <c>cert_iso_standard.Code</c>）；企业节点为空</summary>
         public string StandardCode { get; set; } = string.Empty;
 
-        /// <summary>阶段 Code（GUID = <c>cert_cert_stage.Code</c>）；企业 / 标准节点为空</summary>
-        public string StageCode { get; set; } = string.Empty;
-
-        /// <summary>副标题（企业编号 / 标准名 / 阶段业务码），仅作展示</summary>
+        /// <summary>副标题（企业编号 / 标准名），仅作展示</summary>
         public string Subtitle { get; set; } = string.Empty;
-
-        /// <summary>后代阶段数（企业 / 标准节点上有值）</summary>
-        public int StageCount { get; set; }
 
         public List<EnterpriseTreeNode> Children { get; set; } = new();
     }

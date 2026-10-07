@@ -4,15 +4,32 @@
  *
  * 菜单 `MENU_AUD_11`｜路由 `/enterprise-original`
  *
- * ★★ 面向专家设计（2026-10-03 重做）。专家只关心三件事：
- *   ① 文件处理好了吗  ② 内容对不对（预览）  ③ 系统认出的标签/作用准不准（可改）
+ * ════════════════════════════════════════════════════════════════════════
+ * ★★★ 2026-10-07 四轮：**定位纠偏**（用户逐字反馈）
  *
- * ⇒ 主体是**卡片列表**而非数据表格；三个动作（预览 / 改标签 / 改作用）摊在卡面上。
- * ⇒ ⛔ 不出现 Markdown / 转换链 / 队列 / Sha256 等技术词。
- *    三态（转换/Markdown/分析）在 UI 上压成**一个**「文件状态」。
+ * 用户原话：「其实针对审核员，是<b>不需要他去确认任何信息</b>的，他甚至可以不关心我们提取出来的
+ * 详细内容、分组及文档作用，他需要的只是通过这个进行<b>管理</b>：可以预览，可以针对单个文件进行
+ * 替换，可以删除，可以删除整个文件夹，或针对整个文件夹进行更新等操作……针对我们提取的 markdown、
+ * 标签、文档作用<b>不用做强制的审批</b>，也<b>不要将审核员最核心的文件管理作用给弱化了</b>……
+ * 我们设计系统，不但要考虑程序的逻辑底层，更要考虑<b>审核员他们的操作意愿</b>。」
+ *
+ * ⇒ **页面主角是「文件管理」，不是「AI 结果审批台」**：
+ *   ① 主区 ⛔ 不再按标准分 tab（用户裁决去掉）；标准切换搬进「提取信息」抽屉。
+ *   ② 顶部一条「!」说明（`el-alert` 的 `show-icon` 就是那个感叹号）：这页干什么、
+ *      改这些有什么用 —— 让审核员自己判断，⛔ 不替他决定。
+ *   ③ 行操作 = 提取信息 / 预览 / 下载原件 / 历史版本 / 替换 / 排除提取 / 删除。
+ *   ④ **文件夹是一等公民**：更新本文件夹内容 / 不参与提取 / 恢复参与 / 删除整个文件夹。
+ *   ⑤ 「提取信息」= 一个**可选**入口（分组与文档作用可改 + 提取内容只读），
+ *      ⛔ 不弹「待确认」、⛔ 不阻断流程 —— 不看也能一路走下去。
+ *
+ * ⚠️ 本轮**不动**的既有约束：
+ *   · 状态口径唯一来源 = `logic.statusOf`（根目录表与文件夹树共用一份）
+ *   · 页面外壳必须自带滚动容器（见文件末尾 `<style>` 顶部注释）
+ *   · ⛔ 不出现 Markdown / 转换链 / 队列 / Sha256 等技术词
+ * ════════════════════════════════════════════════════════════════════════
  */
 import { onBeforeUnmount, onMounted } from 'vue'
-import { YzhTreeTableLayout, YzhTable, YzhEmptyState } from '@yzh-core'
+import { YzhTreeTableLayout, YzhTable, YzhEmptyState, YzhDrawer, type YzhAction } from '@yzh-core'
 import type { YzhTableColumn } from '@yzh-core'
 import { YzhFolderUpload } from '@share/components'
 import { buildAcceptAttribute, describeAllowed } from '@share/constants/upload-file-policy'
@@ -22,45 +39,119 @@ const ACCEPT = buildAcceptAttribute()
 import type { AnalyzePolicyKey, PolicyReasonKey } from '@share/api/ent/enterprise-original'
 import {
   loadTree, treeNodes, treeHint, scopeLabel, scopeLoading,
-  stageCode, files, statusBar, selected, filterTags, onlyUsable, tagOptions, tagNameMap,
-  isBusy, queueProgress, queueLabel, startPolling, stopPolling,
+  stageCode, files, statusBar, selected, filterTags, onlyUsable, tagOptions,
+  filterActive, filterSummary, scopeTotal, filteredCount,
+  isBusy, queueProgress, queueLabel, describeQueueType, startPolling, stopPolling,
   onNodeClick, loadTags, clearFilters, refresh, dataRevision,
+  standards, activeStandard, activeStandardName,
   previewVisible, previewRow, previewUrl, previewKind, previewText, previewLoading, openPreview, closePreview,
-  contentRow, contentText, contentLoading, openContent,
+  contentText, contentMessage, contentLoading,
   regenerating, onRegenerate,
-  tagDraft,
-  PURPOSE_SEGMENTS, purposeSaving,
-  uploadVisible, uploadStage, planRows, planSummary, uploadProgress, openUpload, onFilesPicked, startUpload, closeUpload, removePlanRow,
+  tagDraft, purposeSaving, statusOf, statusTip,
+  uploadVisible, uploadStage, planRows, planSummary, uploadProgress,
+  uploadTitle, uploadTargetLabel, uploadTargetAlertType,
+  openUpload, openFolderUpload, openReplace, onFilesPicked, startUpload, closeUpload, removePlanRow,
   formatSize,
   rootFiles, folderNodes,
   onDownload, onVersions, versionVisible, versions, currentVersion, onRestore,
-  detailVisible, detailRow, detailLoading, detailPurpose,
-  openDetail, closeDetail, saveDetail, initDetailDraft,
-  quickIgnore, quickParticipate,
+  detailVisible, detailRow, detailLoading, detailPurposeText, infoTab,
+  openDetail, closeDetail, saveDetail, onDetailStandardChange,
+  excludeExtract, allowExtract,
+  excludeFolder, allowFolder, deleteFolder,
   policyVisible, policyValue, policyReason, openPolicy, submitPolicy,
   onDelete,
   queueVisible, queueDetail, queueLoading, openQueueDetail,
 } from './logic'
-import { FolderOpened, Document, Loading, Files } from '@element-plus/icons-vue'
+import { FolderOpened, Document, Loading } from '@element-plus/icons-vue'
 import OriginalFolderTree from './components/OriginalFolderTree.vue'
 import type { OriginalFolderNode } from './components/OriginalFolderTree.vue'
+import type { OriginalFile } from '@share/api/ent/enterprise-original'
 
 /** ★ 专家语言：不是「是否参与识别」而是「这份文件要不要参与自动提取」 */
 const POLICY_OPTIONS: Array<{ value: AnalyzePolicyKey; label: string }> = [
-  { value: 'analyze', label: '参与识别（默认）' },
-  { value: 'skip', label: '只留存，不参与识别' },
-  { value: 'ignore', label: '不参与，留作证据' },
+  { value: 'analyze', label: '允许提取（默认）' },
+  { value: 'skip', label: '只留存，不提取' },
+  { value: 'ignore', label: '排除提取（仅作证据）' },
 ]
-/** 根目录区（企业直接放在阶段根下的文件）用的同一套列 */
-/** 与文件夹树内同一套列（总宽 ~950px，一屏放得下，⛔ 不用 fixed 列 —— 见组件内注释） */
+
+/**
+ * 列表列（用户 2026-10-07 裁决）：**文件名（含大小）· 提取状态 · 版本 · 操作**。
+ *
+ * ⛔ 刻意删掉「标签」「作用」两列：它们**按标准各有一份**
+ * （一个文件在 N 个标准下有 N 行画像），摊在列表里既占宽、又必须在行上写清「这是哪个标准的」；
+ * 专家日常只做「预览 / 更新文件」，标签与作用改到行操作「详情」里按当前标准编辑。
+ */
 const rootColumns: YzhTableColumn<any>[] = [
-  { prop: 'FileName', label: '文件名', width: 200, slot: true },
-  { prop: 'Tags', label: '标签', width: 140, slot: true },
-  { prop: 'DocPurpose', label: '作用', minWidth: 180, slot: true },
-  { prop: 'ExtractState', label: '提取', width: 92, slot: true },
-  { prop: 'VersionNumber', label: '版本', width: 56, align: 'center', slot: true },
-  { prop: 'Actions', label: '操作', width: 230, slot: true },
+  { prop: 'FileName', label: '文件名', minWidth: 260, slot: true },
+  { prop: 'ExtractState', label: '提取状态', width: 110, slot: true },
+  { prop: 'VersionNumber', label: '版本', width: 60, align: 'center', slot: true }
+  // ⛔ 操作列不手写（2026-10-07）：YzhTable 内置行动作列 + action-dropdown-only
+  //    列宽按 actionColWidth 自适应；action-fixed=false 保持 36 号 §8.1a 的裁决
+  //    —— 本项目 el-table 的 fixed 层里按钮宽度算成 0（点不动）
 ]
+
+/**
+ * 根目录表行操作（纯下拉：一个「操作 ▾」装下全部按钮）。
+ *
+ * ★ 2026-10-07 四轮：按「文件管理为主角」重排 ——
+ *   ① 「详情」+「提取内容」两条合并成一条「**提取信息**」：用户要的是「**一个**提取信息的展示」，
+ *      ⛔ 不是页面上一堆并列入口（合并后抽屉内是两个 Tab）。
+ *   ② 新增「**替换**」：单个文件换一份新的（走 `upload/*`，旧版本自动保留）。
+ *   ③ 「忽略 / 恢复提取」→「**排除提取 / 允许提取**」（用户裁决：「忽略」让人猜不到会发生什么）。
+ *   ④ 破坏性动作排最后，且「排除提取」也标 danger —— 它会让这份文件不再产出内容，不是无副作用操作。
+ */
+function rootRowActions(row: OriginalFile): YzhAction[] {
+  return [
+    { key: 'info', text: '提取信息' },
+    { key: 'preview', text: '预览' },
+    { key: 'download', text: '下载原件' },
+    { key: 'versions', text: '历史版本' },
+    { key: 'replace', text: '替换' },
+    row.AnalyzePolicy === 'analyze'
+      ? { key: 'exclude', text: '排除提取', type: 'danger' }
+      : { key: 'allow', text: '允许提取' },
+    { key: 'delete', text: '删除', type: 'danger' }
+  ]
+}
+
+/** YzhTable @row-action(key,row) → 逻辑层函数 */
+function onRootRowAction(key: string, row: OriginalFile) {
+  switch (key) {
+    case 'info':
+      return openDetail(row)
+    case 'preview':
+      return openPreview(row)
+    case 'download':
+      return onDownload(row)
+    case 'versions':
+      return onVersions(row)
+    case 'replace':
+      return openReplace(row)
+    case 'exclude':
+      return excludeExtract(row)
+    case 'allow':
+      return allowExtract(row)
+    case 'delete':
+      return onDelete(row)
+  }
+}
+
+/** 「不建议提取」的文件在详情抽屉里一键恢复提取（并关抽屉：表单要按新状态重新加载） */
+async function allowFromDetail(): Promise<void> {
+  const row = detailRow.value
+  if (!row) return
+  await allowExtract(row)
+  closeDetail()
+}
+
+/**
+ * ⛔ 原 `extractTip` 已删除（2026-10-07 四轮）。
+ *
+ * <para>它原来会在状态 tooltip 后追加「系统建议这份文件不参与提取，<b>尚未生效</b>，
+ * 可在行操作「详情」里<b>确认</b>」—— 这是一句<b>要审核员去办事</b>的话。
+ * 用户逐字：「审核员不需要确认任何信息……不用做强制的审批」⇒ 状态 tooltip 统一回
+ * {@link statusTip}（只陈述事实），AI 建议改到「提取信息」抽屉里以中性一行展示。</para>
+ */
 
 const REASON_OPTIONS: Array<{ value: PolicyReasonKey; label: string }> = [
   { value: 'covered_by_params', label: '内容已在全局参数里定义过' },
@@ -111,7 +202,10 @@ onBeforeUnmount(() => { stopPolling() })
             <div class="eo-header__left">
               <div class="eo-header__title">{{ scopeLabel || '请先在左侧选择「企业 › 阶段」' }}</div>
               <div v-if="statusBar && stageCode" class="eo-header__sub">
-                共 {{ statusBar.Total }} 个文件
+                共 {{ scopeTotal }} 个文件
+                <!-- ★ 筛选态必须显式写出「命中几份」：接口的 Total 是过滤前口径，
+                     只写「共 N 个文件」会在筛选 0 命中时与空列表自相矛盾（2026-10-06 实测投诉） -->
+                <template v-if="filterActive">，其中符合当前筛选的 {{ filteredCount }} 个</template>
                 <template v-if="statusBar.UsableCount">，{{ statusBar.UsableCount }} 个已就绪</template>
                 <template v-if="statusBar.ConvertingCount || statusBar.AnalyzingCount">，正在处理 {{ statusBar.ConvertingCount + statusBar.AnalyzingCount }} 个</template>
                 <template v-if="statusBar.FailedCount">，{{ statusBar.FailedCount }} 个需处理</template>
@@ -120,26 +214,30 @@ onBeforeUnmount(() => { stopPolling() })
             <div class="eo-header__right">
               <el-button size="small" text type="primary" @click="openQueueDetail">处理进度</el-button>
               <el-button v-if="stageCode" size="small" text type="primary" @click="refresh">刷新</el-button>
-              <el-tooltip
-                v-if="stageCode"
-                :disabled="!isBusy"
-                :content="isBusy ? '上一批资料还在处理中，完成后才能继续上传' : ''"
-                placement="bottom"
-              >
-                <span>
-                  <el-button type="primary" :disabled="isBusy" @click="openUpload">
-                    {{ isBusy ? '处理中，暂不能上传' : '上传文件' }}
-                  </el-button>
-                </span>
-              </el-tooltip>
+              <!-- ★ 2026-10-06 文件级队列：⛔ 不再按「阶段忙」禁用上传 —— 同阶段其他文件在跑
+                   与本批次无关；同文件重传由后端「取消旧队列重建」兜底（旧阶段级拒绝实测误伤） -->
+              <el-button v-if="stageCode" type="primary" @click="openUpload">上传文件</el-button>
             </div>
           </div>
 
+          <!-- ══════════ ★ 顶部「!」说明（用户 2026-10-07 四轮裁决）══════════
+               用户逐字：「我们顶部有个 **!** 提示这个页面是干什么的，修改这些有什么作用，
+               让审核员自己去判断」。⇒ 用 `el-alert` 的 `show-icon`（那个图标就是感叹号），
+               ⛔ 不弹窗、⛔ 不阻断、⛔ 不写成「请你去确认 xx」的指令口气。
+               ★ 主区原来的「按标准分 tab」已按用户裁决**去掉** ——
+                 标准切换搬进「提取信息」抽屉（标签/作用本来就是按标准各有一份）。 -->
+          <el-alert v-if="stageCode" type="info" :closable="false" show-icon class="eo-alert">
+            <template #title>这一页用来管理企业交来的原始资料</template>
+            预览 / 替换 / 删除文件，或对<b>整个文件夹</b>做更新、排除提取、删除。
+            系统会自行读取文件内容并整理成标准文档所需的材料，<b>不需要你逐个核对</b>；
+            想看看系统读到了什么、或想调整它的分组与文档作用，点行操作里的「提取信息」即可 ——
+            <b>不看也能正常往下走</b>。
+          </el-alert>
+
           <!-- ══════════ ★ 处理进度横幅（照抄标准文档管理的 queue-banner）══════════
-               有队列在跑时：显示进度条 + 详情，并**禁用上传按钮**。
-               2026-10-03 用户要求：「应该类似后台管理的标准文档管理，有队列的进度条，
-               并卡住该阶段不允许继续上传，只有队列完成后才能继续上传，可以显示进度的详情，
-               否则会造成误判」 -->
+               有队列在跑时：显示进度条 + 详情 + 自动轮询（2026-10-03 用户要求「显示进度的
+               详情，否则会造成误判」——进度详情保留；「卡住该阶段不允许继续上传」随
+               2026-10-06 文件级队列重构废除，上传按钮不再禁用） -->
           <div v-if="isBusy && statusBar" class="eo-queue-banner">
             <el-icon class="is-spinning"><Loading /></el-icon>
             <span class="eo-queue-banner__label">{{ queueLabel }}</span>
@@ -158,7 +256,7 @@ onBeforeUnmount(() => { stopPolling() })
           <div v-if="stageCode" class="eo-filterbar">
             <el-select
               v-model="filterTags" multiple collapse-tags collapse-tags-tooltip clearable
-              placeholder="按标签筛选文件" style="width: 260px"
+              placeholder="按标签筛选（当前标准）" style="width: 260px"
             >
               <el-option v-for="t in tagOptions" :key="t.TagCode" :label="t.TagName" :value="t.TagCode">
                 <span>{{ t.TagName }}</span>
@@ -190,11 +288,16 @@ onBeforeUnmount(() => { stopPolling() })
 
           <YzhEmptyState
             v-else-if="folderNodes.length === 0 && rootFiles.length === 0"
-            :icon="FolderOpened"
-            title="这里还没有文件"
+            :title="filterActive ? '没有符合筛选条件的文件' : '这里还没有文件'"
+            :description="filterActive
+              ? '本阶段共 ' + scopeTotal + ' 个文件，当前筛选（' + filterSummary + '）没有匹配到任何一份。'
+              : ''"
           >
             <template #action>
-              <el-button type="primary" :disabled="isBusy" @click="openUpload">上传文件</el-button>
+              <!-- ★ 筛选未命中的出路是「清空筛选」，⛔ 不是「上传文件」——
+                   给错动作会让用户以为文件丢了，重新上传一遍（2026-10-06 实测投诉） -->
+              <el-button v-if="filterActive" type="primary" @click="clearFilters">清空筛选</el-button>
+              <el-button v-else type="primary" @click="openUpload">上传文件</el-button>
             </template>
           </YzhEmptyState>
 
@@ -212,50 +315,39 @@ onBeforeUnmount(() => { stopPolling() })
                 :data-loader="async () => ({ rows: rootFiles, total: rootFiles.length })"
                 :toolbar="false"
                 :show-pagination="false"
+                :row-action-buttons="rootRowActions"
+                :action-dropdown-only="true"
+                :action-fixed="false"
                 select-mode="multiple"
                 row-key="Code"
                 empty-text="暂无文件"
+                @row-action="onRootRowAction"
               >
                 <template #column-FileName="{ row }">
                   <div class="f-name">
                     <el-icon class="f-name__icon"><Document /></el-icon>
                     <span class="f-name__text" :title="row.FileName">{{ row.FileName }}</span>
                   </div>
+                  <!-- ★ 大小放文件名副行（用户裁决：文件名 + 大小合成一列，不必单开一列） -->
+                  <div class="f-sub">{{ formatSize(row.FileSize) }}</div>
                 </template>
-                <template #column-Tags="{ row }">
-                  <span v-if="row.IsNotSuggested" class="f-dim">—</span>
-                  <div v-else-if="(row.Tags ?? []).length" class="f-tags">
-                    <el-tag v-for="t in row.Tags" :key="t" size="small" effect="plain" class="f-tags__item"
-                            :title="tagNameMap[t] || t"
-                            @click="openDetail(row); initDetailDraft(); openContent(row)">{{ tagNameMap[t] || t }}</el-tag>
-                  </div>
-                  <el-button v-else link type="primary" size="small" @click="openDetail(row); initDetailDraft(); openContent(row)">加标签</el-button>
-                </template>
-                <template #column-DocPurpose="{ row }">
-                  <span v-if="row.IsNotSuggested" class="f-dim">—</span>
-                  <el-tooltip v-else-if="row.DocPurpose" :content="row.DocPurpose" placement="top" :show-after="300">
-                    <span class="f-purpose" @click="openDetail(row); initDetailDraft(); openContent(row)">{{ row.DocPurpose }}</span>
-                  </el-tooltip>
-                  <el-button v-else link type="primary" size="small" @click="openDetail(row); initDetailDraft(); openContent(row)">填作用</el-button>
-                </template>
+                <!-- ★ 提取状态与文件夹树**共用同一份口径**（logic.statusOf）——
+                     ⛔ 不再各判一套：原来上表只判两态、文件夹树判七态，
+                     同一份文件在页面上下两处显示不同状态 = 用户报的「显示的信息不正确」之一 -->
                 <template #column-ExtractState="{ row }">
-                  <el-tag size="small" :type="row.IsUsableForFilling ? 'success' : 'info'">
-                    {{ row.IsUsableForFilling ? '已提取' : (row.UnusableReason || '待提取') }}
-                  </el-tag>
+                  <el-tooltip v-if="statusTip(row)" :content="statusTip(row)" placement="top">
+                    <span>
+                      <el-tag size="small" :type="statusOf(row).type">{{ statusOf(row).text }}</el-tag>
+                    </span>
+                  </el-tooltip>
+                  <el-tag v-else size="small" :type="statusOf(row).type">{{ statusOf(row).text }}</el-tag>
                 </template>
                 <template #column-VersionNumber="{ row }">
                   <span v-if="row.VersionNumber > 1">v{{ row.VersionNumber }}</span>
                   <span v-else class="f-dim">—</span>
                 </template>
-                <template #column-Actions="{ row }">
-                  <el-button link type="primary" size="small" @click="openDetail(row); initDetailDraft(); openContent(row)">详情</el-button>
-                  <el-button link type="primary" size="small" @click="openContent(row)">查看内容</el-button>
-                  <el-button link type="primary" size="small" @click="openPreview(row)">预览</el-button>
-                  <el-button v-if="row.AnalyzePolicy === 'analyze'" link type="danger" size="small" @click="quickIgnore(row)">忽略</el-button>
-                  <el-button v-else link type="primary" size="small" @click="quickParticipate(row)">恢复提取</el-button>
-                  <el-button v-if="row.VersionNumber > 1" link type="primary" size="small" @click="onVersions(row)">版本</el-button>
-                  <el-button v-else link type="danger" size="small" @click="onDelete(row)">删除</el-button>
-                </template>
+                <!-- 操作列改由 YzhTable 内置列渲染（rootRowActions + action-dropdown-only），
+                     原 #column-Actions 手写插槽已于 2026-10-07 删除 -->
               </YzhTable>
             </div>
 
@@ -264,17 +356,20 @@ onBeforeUnmount(() => { stopPolling() })
               v-if="folderNodes.length"
               :nodes="folderNodes as OriginalFolderNode[]"
               :data-revision="dataRevision"
-              :tag-names="tagNameMap"
-              @detail="(r) => { openDetail(r); initDetailDraft(); openContent(r) }"
-              @content="openContent"
+              :busy="isBusy"
+              @detail="openDetail"
               @regenerate="onRegenerate"
               @preview="openPreview"
-              @ignore="quickIgnore"
-              @participate="quickParticipate"
+              @replace="openReplace"
+              @exclude="excludeExtract"
+              @allow="allowExtract"
               @versions="onVersions"
               @download="onDownload"
               @delete="onDelete"
-              @tag="openDetail"
+              @folder-update="openFolderUpload"
+              @folder-exclude="excludeFolder"
+              @folder-allow="allowFolder"
+              @folder-delete="deleteFolder"
             />
           </div>
         </div>
@@ -293,122 +388,165 @@ onBeforeUnmount(() => { stopPolling() })
         <template v-else-if="previewKind === 'text'">
           <pre class="eo-preview__text">{{ previewText || '（文件内容为空）' }}</pre>
         </template>
-        <YzhEmptyState :icon="Document" v-else-if="!previewLoading" title="这个格式暂时无法预览，请下载原件查看" />
+        <YzhEmptyState v-else-if="!previewLoading" title="这个格式暂时无法预览，请下载原件查看" />
       </div>
     </el-drawer>
 
-    <!-- ═══════════ ★ 详情抽屉（点「详情」进来改标签/作用/预览）═══════════ -->
-    <el-drawer
+    <!-- ═══════════ ★ 「提取信息」抽屉（2026-10-07 四轮：详情 + 提取内容 合并）═══════════
+         用户逐字：「可以增加一个**提取信息的展示**，审核员**可以关心，可以点击查看**，
+         或去更改按标准显示的分组、文档作用、提取信息这些，**但不是强求**」。
+         ⇒ 它不再是「请审核员确认 AI 结果」的审批台，而是一个**可选**入口：
+           Tab1「分组与文档作用」可改；Tab2「提取内容」只读。
+           ⛔ 不弹「待确认」、⛔ 不阻断流程 —— 不看也能一路走下去。
+         ★ **标准切换器搬进了这里**：主区已按用户裁决去掉标准 tab，但
+           「一个文件 × 一个标准 = 一行画像」这个事实没变 ⇒ 阶段绑了多个标准时必须能选
+           「按哪个标准看」，否则后端只能取「某一行」，标签会串到另一个标准。
+         ★ 用 `YzhDrawer`（法条 S07）—— 原来是「裸 el-drawer + 另一个 YzhDrawer」，
+           合并后只剩一个，裸抽屉数量是净减少。 -->
+    <YzhDrawer
       :model-value="detailVisible" size="720px"
-      :title="detailRow ? detailRow.FileName : '详情'"
+      :title="detailRow ? ('提取信息 · ' + detailRow.FileName) : '提取信息'"
       @update:model-value="(v: boolean) => { if (!v) closeDetail() }"
     >
       <div v-loading="detailLoading" class="eo-detail">
         <template v-if="detailRow">
-          <!-- 基本信息 -->
+          <!-- 一行元信息：提取状态 + 大小 + 类型 +（有才显示）系统建议 -->
           <div class="eo-detail__meta">
-            <el-tag size="small" :type="detailRow.IsUsableForFilling ? 'success' : 'info'">
-              {{ detailRow.IsUsableForFilling ? '已提取' : (detailRow.UnusableReason || '待提取') }}
-            </el-tag>
+            <el-tag size="small" :type="statusOf(detailRow).type">{{ statusOf(detailRow).text }}</el-tag>
             <span class="eo-dim">{{ formatSize(detailRow.FileSize) }}</span>
             <span class="eo-dim">{{ fileKindText(detailRow.FileType) }}</span>
-            <span v-if="detailRow.RelFolderPath" class="eo-dim">{{ detailRow.RelFolderPath }}</span>
+            <!-- ★ AI 建议改**中性陈述**：⛔ 不再写「尚未生效，请人工确认」
+                 （用户裁决：不做强制的审批 —— 系统给个参考，采不采由人自己判断） -->
+            <span v-if="detailRow.PolicySource === 'ai' && detailRow.PolicyReason" class="eo-dim">
+              系统建议：不参与提取（仅供参考）
+            </span>
           </div>
 
-          <!-- 预览内容 -->
-          <div class="eo-detail__block">
-            <div class="eo-detail__label">文件内容</div>
-            <div class="eo-detail__preview">
-              <el-button size="small" type="primary" @click="openPreview(detailRow)">打开预览</el-button>
-              <el-button size="small" text type="primary" @click="onDownload(detailRow)">下载原件</el-button>
-            </div>
+          <!-- 预览 / 下载 / 历史版本 / 替换：一行文字按钮（就近入口，⛔ 不重复做区块） -->
+          <div class="eo-detail__quick">
+            <el-button link type="primary" size="small" @click="openPreview(detailRow)">预览</el-button>
+            <el-divider direction="vertical" />
+            <el-button link type="primary" size="small" @click="onDownload(detailRow)">下载原件</el-button>
+            <el-divider direction="vertical" />
+            <el-button link type="primary" size="small" @click="onVersions(detailRow)">历史版本</el-button>
+            <el-divider direction="vertical" />
+            <el-button link type="primary" size="small" @click="openReplace(detailRow)">替换</el-button>
           </div>
 
-          <!-- ⛔ 「不建议提取」的文件不提供标签/作用编辑（营业执照、身份证等特定证件
-               没有「体系文件作用」语义，硬打标签会污染召回词表） -->
-          <el-alert v-if="detailRow.IsNotSuggested" type="info" :closable="false" show-icon class="eo-alert">
-            这份文件已设置为<b>不参与提取</b>，因此不设标签和作用。
-            如果这是误判，可在下方改为「参与识别」。
-          </el-alert>
-
-          <!-- ★ 提取内容页签：让专家在页面内直接看到 AI 提取出的 Markdown 原文。
-               此前只能下载后用外部编辑器打开 ⇒ 无法在页面内判断「是提取错了还是显示错了」，
-               「人工修正标签/作用」也无从核对依据（2026-10-03 核查补入）。 -->
-          <div class="eo-detail__block">
-            <div class="eo-detail__label">
-              提取内容
-              <span class="eo-dim">（AI 从文件里读出来的原始内容，可据此核对下面的标签与作用）</span>
-            </div>
-            <div v-loading="contentLoading" class="eo-content">
-              <pre v-if="contentText" class="eo-content__md">{{ contentText }}</pre>
-              <el-empty
-                v-else-if="!contentLoading"
-                :description="contentRow?.MarkdownMessage || '尚未生成内容'"
-                :image-size="60"
-              >
-                <el-button
-                  v-if="contentRow" type="primary" size="small"
-                  :loading="regenerating === contentRow.Code"
-                  @click="onRegenerate(contentRow)"
-                >重新生成</el-button>
-              </el-empty>
-            </div>
-          </div>
-
-          <!-- 标签 -->
-          <div v-if="!detailRow.IsNotSuggested" class="eo-detail__block">
-            <div class="eo-detail__label">
-              标签
-              <span class="eo-dim">（决定这份资料被归到哪一类，只能从清单里选）</span>
-            </div>
-            <el-select
-              v-model="tagDraft" multiple filterable clearable size="large" style="width: 100%"
-              placeholder="选择这份资料属于哪几类"
+          <!-- ★ 标准选择器（该阶段绑了多个标准才出）—— 见抽屉头部注释 -->
+          <div v-if="standards.length > 1" class="eo-detail__block">
+            <div class="eo-detail__label">按哪个标准查看</div>
+            <el-radio-group
+              :model-value="activeStandard"
+              @change="(v: any) => onDetailStandardChange(String(v))"
             >
-              <el-option v-for="t in tagOptions" :key="t.TagCode" :label="t.TagName" :value="t.TagCode">
-                <div class="eo-opt"><span>{{ t.TagName }}</span><span class="eo-dim">{{ t.TagGroup }}</span></div>
-              </el-option>
-            </el-select>
+              <el-radio-button v-for="s in standards" :key="s.Code" :value="s.Code">
+                {{ s.StandardName || s.StandardCode }}
+              </el-radio-button>
+            </el-radio-group>
           </div>
 
-          <!-- 作用（四段式） -->
-          <div v-if="!detailRow.IsNotSuggested" class="eo-detail__block">
-            <div class="eo-detail__label">
-              作用
-              <span class="eo-dim">（说明这份资料能证明什么，系统自动生成的可能不准）</span>
-            </div>
-            <el-form label-position="top">
-              <el-form-item v-for="seg in PURPOSE_SEGMENTS" :key="seg" :label="seg.replace(/[【】]/g, '')">
-                <el-input v-model="detailPurpose[seg]" type="textarea" :rows="2"
-                          :placeholder="seg.replace(/[【】]/g, '') + '…'" />
-              </el-form-item>
-            </el-form>
-          </div>
+          <el-tabs v-model="infoTab" class="eo-detail__tabs">
+            <!-- ── Tab 1：分组与文档作用（可改，但不是强求） ── -->
+            <el-tab-pane label="分组与文档作用" name="group">
+              <!-- 该阶段没关联标准 ⇒ 标签/作用无处可存，说清楚，⛔ 不给一个存不进去的空表单 -->
+              <el-alert v-if="!activeStandard" type="warning" :closable="false" show-icon class="eo-alert">
+                该认证阶段还没有关联标准，标签与文档作用无法按标准保存。
+                请先到「认证阶段」里为该阶段关联标准。
+              </el-alert>
 
-          <!-- AI 建议 -->
-          <el-alert
-            v-if="detailRow.PolicySource === 'ai' && detailRow.PolicyReason"
-            type="warning" :closable="false" show-icon class="eo-alert"
-          >
-            系统建议这份文件「{{ detailRow.PolicyReason }}」，<b>尚未生效</b>，请人工确认
-          </el-alert>
+              <!-- ⛔ 不参与提取的文件不提供标签/作用编辑（营业执照、身份证等特定证件
+                   没有「体系文件作用」语义，硬打标签会污染召回词表） -->
+              <el-alert v-else-if="detailRow.IsNotSuggested" type="info" :closable="false" show-icon class="eo-alert">
+                这份文件当前<b>不参与提取</b>，因此没有标签和文档作用。若判断有误，点下方「允许提取」。
+              </el-alert>
+
+              <template v-else>
+                <div class="eo-detail__block">
+                  <div class="eo-detail__label">
+                    标签
+                    <span class="eo-dim">（决定这份资料在「{{ activeStandardName }}」下归到哪几类，只能从清单里选）</span>
+                  </div>
+                  <el-select
+                    v-model="tagDraft" multiple filterable clearable size="large" style="width: 100%"
+                    placeholder="选择这份资料属于哪几类"
+                  >
+                    <el-option v-for="t in tagOptions" :key="t.TagCode" :label="t.TagName" :value="t.TagCode">
+                      <div class="eo-opt"><span>{{ t.TagName }}</span><span class="eo-dim">{{ t.TagGroup }}</span></div>
+                    </el-option>
+                  </el-select>
+                </div>
+
+                <!-- 文档作用：**一个文本框**。
+                     ⛔ 不再拆四段 —— 「审核关注点 / 审核内容」系统根本不使用、审核员也不需要填（用户裁决）。
+                     ⚠️ 后端 DocPurpose 只作自由文本存储（无代码解析【】分段；结构化要素另存 InfoItemsJson）
+                        ⇒ 整段编辑不会破坏任何下游。 -->
+                <div class="eo-detail__block">
+                  <div class="eo-detail__label">
+                    文档作用
+                    <span class="eo-dim">（系统自动生成，可直接改；只影响「{{ activeStandardName }}」这一份）</span>
+                  </div>
+                  <el-input
+                    v-model="detailPurposeText" type="textarea" :rows="10"
+                    placeholder="尚未生成，可手工填写这份资料能证明什么"
+                  />
+                </div>
+              </template>
+            </el-tab-pane>
+
+            <!-- ── Tab 2：提取内容（只读，出问题时查证用，⛔ 不是给人逐字核对） ── -->
+            <el-tab-pane label="提取内容" name="content">
+              <div v-loading="contentLoading" class="eo-content">
+                <pre v-if="contentText" class="eo-content__md">{{ contentText }}</pre>
+                <YzhEmptyState
+                  v-else-if="!contentLoading"
+                  title="这份文件还没有提取内容"
+                  :description="contentMessage"
+                >
+                  <template #action>
+                    <el-button
+                      v-if="detailRow" type="primary"
+                      :loading="regenerating === detailRow.Code"
+                      @click="onRegenerate(detailRow)"
+                    >重新生成</el-button>
+                  </template>
+                </YzhEmptyState>
+              </div>
+            </el-tab-pane>
+          </el-tabs>
         </template>
       </div>
 
       <template #footer>
-        <el-button type="primary" @click="closeDetail">关闭</el-button>
+        <el-button type="default" @click="closeDetail">关闭</el-button>
         <el-button
-          v-if="detailRow"
-          type="primary"
+          v-if="detailRow && !detailRow.IsNotSuggested"
+          type="default"
           :loading="regenerating === detailRow.Code"
           @click="onRegenerate(detailRow)"
         >重新生成内容</el-button>
-        <el-button v-if="!detailRow?.IsNotSuggested" type="primary" :loading="purposeSaving" @click="saveDetail">保存</el-button>
+        <!-- 不参与提取的文件：给出一条恢复的出路（原来只能去行操作下拉里找） -->
+        <el-button v-if="detailRow?.IsNotSuggested" type="primary" @click="allowFromDetail">允许提取</el-button>
+        <el-button
+          v-if="detailRow && !detailRow.IsNotSuggested && activeStandard"
+          type="primary" :loading="purposeSaving" @click="saveDetail"
+        >保存</el-button>
       </template>
-    </el-drawer>
+    </YzhDrawer>
 
-    <!-- ═══════════ 上传抽屉 ═══════════ -->
-    <el-drawer v-model="uploadVisible" title="上传文件" size="620px" @close="closeUpload">
+    <!-- ═══════════ 上传抽屉 ═══════════
+         ★ 2026-10-07 四轮：同一个抽屉现在有三个入口（上传文件 / 更新文件夹内容 / 替换单个文件），
+           标题与目标提示条都跟着「本次目标」走 —— 否则从「替换」点进来的人看到的仍是
+           「上传文件」，只能靠猜「我这次传的东西会落到哪、会不会改名」。 -->
+    <el-drawer v-model="uploadVisible" :title="uploadTitle" size="620px" @close="closeUpload">
+      <!-- ★ 目标提示条（常规上传时不出现）—— 说明「这次会落到哪里」 -->
+      <el-alert
+        v-if="uploadTargetLabel"
+        :type="uploadTargetAlertType"
+        :closable="false" show-icon class="eo-alert"
+      >
+        {{ uploadTargetLabel }}
+      </el-alert>
       <el-alert type="info" :closable="false" show-icon class="eo-alert">
         会保留文件夹结构。已存在且内容相同的文件会自动跳过；内容不同的会作为新版本保留旧版。
       </el-alert>
@@ -494,10 +632,10 @@ onBeforeUnmount(() => { stopPolling() })
     <!-- ═══════════ 处理进度抽屉 ═══════════ -->
     <el-drawer v-model="queueVisible" title="处理进度" size="720px">
       <div v-loading="queueLoading">
-        <YzhEmptyState :icon="Files" v-if="!queueLoading && (queueDetail?.Rows ?? []).length === 0" title="当前没有进行中的处理" />
+        <YzhEmptyState v-if="!queueLoading && (queueDetail?.Rows ?? []).length === 0" title="当前没有进行中的处理" />
         <div v-for="q in queueDetail?.Rows ?? []" :key="q.Code" class="eo-q">
           <div class="eo-q__head">
-            <span>{{ q.QueueType === 'enterprise_original_analyze' ? '识别资料内容' : '读取文件内容' }}</span>
+            <span>{{ describeQueueType(q.QueueType) }}</span>
             <el-tag size="small" :type="q.Status === 'completed' ? 'success' : q.Status === 'failed' ? 'danger' : 'info'">
               {{ { pending: '排队中', running: '处理中', processing: '处理中', completed: '完成', failed: '失败', cancelled: '已取消' }[q.Status as string] || q.Status }}
             </el-tag>
@@ -531,8 +669,41 @@ onBeforeUnmount(() => { stopPolling() })
 </template>
 
 <style scoped>
-.eo-page { height: 100%; }
-.eo-main { padding: 14px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+/* ══════════ ★ 页面外壳：本页必须自己提供滚动容器（2026-10-07 修复）══════════
+   病因：`YzhTreeTableLayout` 的右面板是 `overflow: hidden`（布局壳的既定约束，
+        多页共用、⛔ 不在这里改），所以**页面必须自己给出滚动容器**。
+        原来 `.eo-main` 只有 `min-height: 0`、没有 `flex: 1` / `overflow: auto`
+        ⇒ 它按内容高度撑开、被父面板裁掉，**既看不到下方内容、也滚不动**。
+   症状（用户报障「为什么技术类的不能展开了」）：
+        文件夹树默认展开前两层 ⇒ 「技术类」**本来就是展开的**（箭头朝下），
+        但它的表格落在视口之外且**永远不可达** ⇒ 用户点一下其实是「收起」，
+        可视区毫无变化 ⇒ 看起来像「展不开」。
+   修法：与同仓 `enterprise-normalize` 的 `.en-page/.en-main` 逐字同款。 */
+.eo-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.eo-main {
+  flex: 1; min-height: 0; overflow: auto;
+  padding: 14px; display: flex; flex-direction: column; gap: 10px;
+  /* ★ 2026-10-07：显式给白底。原来不设背景 ⇒ `.eo-main` 是透明，露出外层
+     `el-main`（`.auditor-layout__main`）的 `--el-fill-color-light` 灰底（实测 rgb(248,250,252)），
+     看起来像「主区没铺满/发灰」。⛔ 不要指望父级变白 —— 那个灰底是全站布局的一部分。 */
+  background: var(--el-bg-color);
+}
+
+/* ══════════ ★★ 子项一律不收缩（2026-10-07 修复「告警只显示一行」）══════════
+   病因：`.eo-main` 是**列方向 flex 容器**且高度由外部给定（`flex:1` + `overflow:auto`）。
+        flex 子项默认 `flex-shrink:1`，容器内容超高时会把它们**压缩**；
+        正常情况下子项的 `min-height:auto` 会兜住（= 不许压到内容高度以下），
+        **但 `min-height:auto` 只在 `overflow:visible` 时生效** ——
+        而 Element Plus 的 `.el-alert` 自带 `overflow:hidden` ⇒ 它的自动最小尺寸直接塌成 `0`
+        ⇒ 被压成一条线、文字被自己的 `overflow:hidden` 裁掉。
+   实测（真实数据 101 份文件，主区可视高 354px）：
+        `.el-alert` clientHeight **16** / scrollHeight **290**（被压掉 274px）；
+        同层兄弟 `.eo-header` 261/261、`.eo-filterbar` 132/132、`.eo-tree-wrap` 7991/7992 —— 全部完好，
+        因为它们的 `overflow` 是 `visible`。⇒ **症状只落在「自带 overflow:hidden 的子项」上**，
+        这也是它看起来像「某个组件坏了」而不是「布局问题」的原因。
+   修法：`flex: none`（= 0 0 auto）让高度回归内容，超高交给 `.eo-main` 的 `overflow:auto` 滚动。
+        ⛔ 不用逐个给 `.el-alert` 打补丁 —— 任何将来加进来的 `overflow:hidden` 子项都会踩同一个坑。 */
+.eo-main > * { flex: none; }
 
 .eo-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .eo-header__title { font-size: 15px; font-weight: 600; }
@@ -557,6 +728,9 @@ onBeforeUnmount(() => { stopPolling() })
 }
 .eo-filterbar__spacer { flex: 1; }
 
+/* ⛔ `.eo-stdtabs*` 已于 2026-10-07 四轮删除 —— 主区不再按标准分 tab
+   （用户裁决去掉），标准切换搬进「提取信息」抽屉，这几条选择器已无任何元素命中。 */
+
 .eo-placeholder { padding: 60px 0; text-align: center; color: var(--el-text-color-secondary); }
 
 /* ══════════ 文件夹树 ══════════ */
@@ -568,9 +742,8 @@ onBeforeUnmount(() => { stopPolling() })
 .f-name__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .f-sub { font-size: 11px; color: var(--el-text-color-placeholder); margin-top: 1px; }
 .f-dim { color: var(--el-text-color-placeholder); }
-.f-tags { display: flex; gap: 3px; flex-wrap: wrap; }
-.f-tags__item { cursor: pointer; }
-.f-purpose { cursor: pointer; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ⛔ `.f-tags` / `.f-tags__item` / `.f-purpose` 已于 2026-10-07 删除 ——
+   标签与作用不再上表（用户裁决），它们只活在详情抽屉里 */
 
 /* ══════════ 详情抽屉 ══════════ */
 .eo-detail { min-height: 200px; }
@@ -587,6 +760,8 @@ onBeforeUnmount(() => { stopPolling() })
   color: var(--yzh-color-text-primary);
 }
 .eo-detail__meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; font-size: 13px; }
+/* 详情抽屉里的「预览 / 下载原件 / 提取内容 / 历史版本」一行文字入口 */
+.eo-detail__quick { display: flex; align-items: center; gap: var(--yzh-space-1, 4px); margin-bottom: var(--yzh-space-3, 12px); }
 .eo-detail__block { margin-bottom: 16px; }
 .eo-detail__label { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .eo-detail__preview { display: flex; gap: 6px; }

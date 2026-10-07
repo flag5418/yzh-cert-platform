@@ -6,7 +6,7 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Entity;
 using YZH.Entity.Admin.Platform;
 
-namespace CertPlatform.Admin.Entities.Doc
+namespace CertPlatform.Shared.Entities.Doc
 {
     /// <summary>全文填写提示词（「AI 按模板通篇写」的规则）</summary>
     /// <para>表名：cert_doc_fill_prompt</para>

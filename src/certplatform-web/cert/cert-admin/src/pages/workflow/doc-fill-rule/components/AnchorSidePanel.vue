@@ -15,6 +15,14 @@
  * 【2026-10-04 UI 升级（保留）】
  *   - 严谨简洁大气：去掉冗余描述，说明文字收纳进 `!` 浮层。
  *   - 提示词分组：支持 AI 来源的批量提示词组（PromptGroup）配置。
+ *
+ * 【★ C6（2026-10-07）：操作方式改为「自动推导」】
+ *   原先这里是一个「写入方式」下拉（`overwrite`/`replace`/`append`/`remove`）—— 那是 `52` 号
+ *   清单里的**最后一处「设计走样」**：
+ *     ① `WriteMode` 是**死字段**（写入侧从不读，`48` 号 G10 实测）；
+ *     ② `51-V1` 原型 / `55` 号「操作区域」都规定：**操作方式由锚点类型推导，⛔ 不让人选**。
+ *   ⇒ 换成只读展示「单元格更新 / 表格更新」，分类口径**复用 C4 的 `TABLE_TYPES`**。
+ *   ⚠️ 该列仍**原样回写**（`saveAnchorBatch` 整行 upsert，少传一列 = 静默清空）。
  */
 import { Delete, Plus } from '@element-plus/icons-vue'
 import {
@@ -53,13 +61,32 @@ const emit = defineEmits<{
   (e: 'closed'): void
 }>()
 
-const WRITE_MODES = [
-  { value: 'overwrite', label: '重写 overwrite', hint: '锚点处为空，直接写入' },
-  { value: 'replace', label: '替换 replace', hint: '锚点处已有内容，替换掉它' },
-  { value: 'append', label: '追加 append', hint: '保留原内容，在锚点后追加' },
-  { value: 'remove', label: '删除 remove', hint: '该内容不适用，整块移除' },
-]
 const VALUE_TYPES = ['text', 'number', 'date', 'bool', 'enum']
+
+/**
+ * ★ C6（2026-10-07）：**操作方式自动推导**，⛔ 不让人选。
+ *
+ * 【为什么删掉「写入方式」下拉】
+ *   `WriteMode`（`replace`/`overwrite`/`append`/`remove`）是**死字段** —— 全仓只有
+ *   `DocTemplateAnchorController` 在读它（受控值集合 / 保存白名单 / 默认值+校验），
+ *   **写入侧（`WordFillWriter` / `ExcelFillWriter`）从不读**（`48` 号 G10 实测）。
+ *   而 `51-V1` 原型、`52` 号 C6、`55` 号「操作区域」都明确：设置页**只展示推导出来的操作方式**。
+ *   ⇒ 页面不再暴露这个选择；表单仍**原样回写**该列（⛔ 不重置既有值 ——
+ *      `saveAnchorBatch` 是整行 upsert，少传一列就是静默清空）。
+ *
+ * 【分类口径必须与 C4 分组逐字一致】
+ *   `AnchorRuleTab.vue` 的 `TABLE_TYPES = ['table','table_total']` 已在做「字段 / 表格」分组；
+ *   这里**复用同一口径**，否则会出现「左边分到『表格』组、右边却写『单元格更新』」的自相矛盾。
+ */
+const TABLE_TYPES = ['table', 'table_total']
+const OP_LABELS: Record<'cell' | 'table', string> = {
+  cell: '单元格更新',
+  table: '表格更新',
+}
+const OP_HINTS: Record<'cell' | 'table', string> = {
+  cell: '把值替换进单元格 / 正文 / 页眉里的 {{token}}',
+  table: '按行列填充表格区域（行不足克隆末行；多余行写空串，⛔ 不删）',
+}
 
 /* ============ 本地状态 ============ */
 const model = ref<SourceSpecModel>(emptySourceSpec())
@@ -69,6 +96,7 @@ const saving = ref(false)
 const dragIndex = ref(-1)
 
 const form = ref({
+  /** ⚠️ 页面上**已无此控件**（C6：操作方式改为自动推导）—— 仅作**原样回写**，⛔ 不从 UI 改 */
   WriteMode: 'overwrite',
   ValueType: 'text',
   Required: false,
@@ -89,6 +117,10 @@ const isDomainAuto = computed(
     String(props.anchor?.DomainKind || '') === 'auto',
 )
 const isTableTotal = computed(() => anchorType.value === 'table_total')
+/** ★ C6：操作方式（自动推导，⛔ 不可选）—— 与 C4 的字段/表格分组同一口径 */
+const autoOp = computed<'cell' | 'table'>(() =>
+  TABLE_TYPES.includes(anchorType.value) ? 'table' : 'cell',
+)
 const preview = computed(() => humanPreview(model.value))
 
 const combos = computed(() => {
@@ -514,22 +546,20 @@ async function onSave() {
               </template>
               <div class="help-content">
                 <p><strong>写入属性</strong>：定义如何将值写回文档。</p>
-                <p>· <b>写入方式</b>：重写、替换、追加或删除。</p>
+                <p>
+                  · <b>操作方式</b>：由锚点类型<b>自动推导</b>（表格锚点 ⇒ 表格更新；
+                  其余 ⇒ 单元格更新），⛔ 不需要选。
+                </p>
                 <p>· <b>空值兜底</b>：当所有来源都拿不到值时使用的默认文字。</p>
               </div>
             </el-popover>
           </div>
           <div class="form-grid">
             <div class="form-item">
-              <label>写入方式</label>
-              <el-select v-model="form.WriteMode" size="small">
-                <el-option
-                  v-for="w in WRITE_MODES"
-                  :key="w.value"
-                  :value="w.value"
-                  :label="w.label"
-                />
-              </el-select>
+              <label>操作方式</label>
+              <div class="auto-op" :title="OP_HINTS[autoOp]">
+                {{ OP_LABELS[autoOp] }}
+              </div>
             </div>
             <div class="form-item">
               <label>值类型</label>
@@ -812,6 +842,24 @@ async function onSave() {
 }
 .form-item.full label {
   margin-top: var(--yzh-space-2, 6px);
+}
+
+/*
+ * ★ C6：操作方式（自动推导，只读）。
+ * 视觉上刻意与可编辑控件区分 —— 虚线框 + 浅底 + `cursor:help`（悬停看口径说明），
+ * 让人一眼看出「这不是让你选的」。
+ */
+.auto-op {
+  flex: 1;
+  min-width: 0;
+  padding: var(--yzh-space-1, 4px) var(--yzh-space-2, 8px);
+  border: 1px dashed var(--bd);
+  border-radius: var(--r);
+  background: var(--bg2);
+  color: var(--t1);
+  font-size: var(--yzh-font-size-xs, 12px);
+  line-height: 1.6;
+  cursor: help;
 }
 
 .ml4 {

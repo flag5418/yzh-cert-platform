@@ -24,7 +24,7 @@
  * ★ 本页的候选表**不是配置驱动**（走 `getCandidates` 而不是 EntityConfig），
  *   所以列在这里内联声明 —— 这是向导的固有形态，不违反「配置驱动」原则。
  */
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onActivated, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { Page, PageParams, YzhTableColumn } from '@yzh-core'
@@ -78,9 +78,41 @@ interface Option {
   No?: string
 }
 
+/** 带所属阶段的「阶段 × 标准」叶子（同一标准可挂在多个阶段下） */
+interface StdLeaf extends Option {
+  /** 所属阶段 = `cert_cert_stage.Code`（与 `form.StageCode` 同口径） */
+  StageCode: string
+}
+
 const enterprises = ref<Option[]>([])
 const stages = ref<Option[]>([])
-const standards = ref<Option[]>([])
+
+/**
+ * ★ 该企业**全部**已关联的「阶段 × 标准」叶子（原始数据，**允许同一标准重复**）。
+ *
+ * ⛔ 不要直接把 `standards` 绑到这个 ref —— `checkTree` 返回的是「每个阶段各一份
+ *   自己的标准子节点」，同一标准挂在 N 个阶段下就会出现 N 条（实测 G4测试企业甲
+ *   挂 2 阶段 × 2 标准 = 4 条），直接渲染 = 用户看到重复勾选框。
+ */
+const linkedStdLeaves = ref<StdLeaf[]>([])
+
+/**
+ * 当前阶段下已关联的标准（按 `Code` 去重）—— 页面真正渲染的列表。
+ *
+ * 口径：`form.StageCode`（`cert_cert_stage.Code`）过滤 + `Code` 去重。
+ * 阶段未选 ⇒ 空列表（标准只能在选定阶段下谈）。
+ */
+const standards = computed<Option[]>(() => {
+  const seen = new Set<string>()
+  const out: Option[] = []
+  for (const leaf of linkedStdLeaves.value) {
+    if (!leaf.Code || leaf.StageCode !== form.StageCode || seen.has(leaf.Code)) continue
+    seen.add(leaf.Code)
+    out.push({ Code: leaf.Code, Name: leaf.Name, No: leaf.No })
+  }
+  return out
+})
+
 const selectedStandards = ref<string[]>([])
 
 const enterprisesLoading = ref(false)
@@ -164,10 +196,14 @@ async function loadEnterprises() {
  *
  * ★ 只有 `CheckFlag = true` 的标准才是「已关联」的 ——
  * 任务只能建在已关联的组合上（后端会校验，前端先挡）。
+ *
+ * ★ `checkTree` 返回的是**扁平列表**，每个阶段下挂自己的一份标准子节点
+ * （`ParentCode` = 阶段节点 Code，`Extra.StageCode` = `cert_cert_stage.Code`）。
+ * 所以这里只落「原始叶子」，按阶段过滤 + 去重交给 `standards` 计算属性。
  */
 async function loadStagesAndStandards() {
   stages.value = []
-  standards.value = []
+  linkedStdLeaves.value = []
   selectedStandards.value = []
   if (!form.EnterpriseCode) return
 
@@ -183,17 +219,18 @@ async function loadStagesAndStandards() {
       .filter((n) => linkedStageCodes.has(String(n.Extra?.StageCode ?? '')))
       .map((n) => ({ Code: String(n.Extra?.StageCode ?? ''), Name: n.Name }))
 
-    standards.value = stdRows.map((n) => ({
+    linkedStdLeaves.value = stdRows.map((n) => ({
       Code: String(n.Extra?.StandardCode ?? ''),
       Name: String(n.Extra?.StandardName ?? n.Name),
       No: String(n.Extra?.StandardNo ?? ''),
+      StageCode: String(n.Extra?.StageCode ?? ''),
     }))
   } finally {
     treeLoading.value = false
   }
 }
 
-/** 选中阶段后 → 该阶段下的已关联标准，默认全选 */
+/** 选中阶段后 → 该阶段下的已关联标准（已去重），默认全选 */
 function syncStandardsByStage() {
   selectedStandards.value = standards.value.map((s) => s.Code)
 }
@@ -453,6 +490,48 @@ onMounted(async () => {
     }
   }
 })
+
+// ══════════════════════════════════════════════════════════════════════
+// 十、缓存复用时的复位（★ 2026-10-07）
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * 回到本页时把向导复位。
+ *
+ * ⚠️ 为什么需要它：`AuditorLayout` 用 `<keep-alive>` 缓存路由组件 ⇒ 第二次进入
+ *    `/tasks/create` 时 `onMounted` ⛔ 不再触发，页面上会**残留上次填的内容**
+ *    和「创建成功」面板（用户报的「操作反直觉」之一）。
+ *
+ * ⚠️ 第一次 `onActivated` 与 `onMounted` 同时发生（首载已经初始化过），
+ *    用标记跳过 —— 否则会把 `onMounted` 里的「从已有任务出发」预填冲掉。
+ */
+function resetWizard() {
+  step.value = 0
+  form.TaskName = ''
+  form.TaskType = 'NC_CHECK'
+  form.EnterpriseCode = ''
+  form.StageCode = ''
+  form.TaskSource = 'NEW'
+  form.ScopeType = 'FULL'
+  form.Remark = ''
+
+  stages.value = []
+  linkedStdLeaves.value = []
+  selectedStandards.value = []
+  lock.value = null
+  candidates.value = []
+  pickedItemCodes.value = new Set()
+  created.value = null
+}
+
+let activatedOnce = false
+onActivated(() => {
+  if (!activatedOnce) {
+    activatedOnce = true
+    return
+  }
+  resetWizard()
+})
 </script>
 
 <template>
@@ -700,10 +779,12 @@ onMounted(async () => {
           </el-descriptions>
 
           <el-alert type="info" :closable="false" show-icon class="wiz__tip">
-            <template #title>创建后还需要「提交执行」</template>
+            <template #title>创建后回列表点「启动任务」即可开始</template>
             <div>
-              创建只会落任务与检查项（不跑队列）。创建后到任务详情点「提交执行」生成队列，
-              再逐个启动 —— 允许分批跑，也允许先检查范围再跑。
+              创建只落任务与检查项（不跑队列）。回到任务列表点「启动任务」，
+              系统会先核对关键资料是否齐全：缺什么会当场弹窗让你补，补齐后自动开始执行；
+              也可以选「运行跳过」直接跑 —— 未执行的规则 / 条款会在任务详情
+              「未执行清单」里逐条列明原因。
             </div>
           </el-alert>
         </template>
@@ -717,8 +798,8 @@ onMounted(async () => {
               </div>
             </template>
             <template #extra>
-              <el-button type="primary" @click="goDetail">去详情页提交执行</el-button>
-              <el-button @click="goList">返回任务列表</el-button>
+              <el-button type="primary" @click="goList">去任务列表启动</el-button>
+              <el-button type="default" @click="goDetail">查看详情</el-button>
             </template>
           </el-result>
         </template>

@@ -103,3 +103,5 @@ export {
   unwrapOk,
 } from './utils/apiResponse'
 export { confirmOrFalse, confirmChoice, type ConfirmChoice } from './utils/confirm'
+// 启用/禁用徽章唯一判据（YzhTree / CheckSelector / 直用 el-tree 页面三处共用）
+export { resolveStatusBadge, type StatusBadge } from './utils/status'

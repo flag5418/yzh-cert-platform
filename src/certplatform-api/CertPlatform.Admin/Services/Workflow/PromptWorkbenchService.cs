@@ -71,7 +71,12 @@ public class PromptWorkbenchService
         public const string Essential = "doc_essential";
     }
 
-    /// <summary>单次试跑最多接受的文件数（防超时 / 防 token 爆）</summary>
+    /// <summary>
+    /// <b>仅</b>「提示词工作台·单次试跑」(<see cref="TestAsync"/>) 接受的文件数上限（防超时 / 防 token 爆）。
+    /// <para>⛔ <b>不是队列上限</b>：队列入口 <see cref="AnalyzeForQueueAsync"/> 自 2026-10-06（M8-1）起
+    /// 用<b>自己的</b> <c>maxFiles</c> 参数（默认不限），由调用方按批切片。误用本常数会让
+    /// <c>doc_group</c> 整批被拒 ⇒ 分组静默全丢。</para>
+    /// </summary>
     private const int MaxTestFiles = 20;
 
     /// <summary>文件清单里每个文件注入的开头片段长度</summary>
@@ -564,17 +569,29 @@ public class PromptWorkbenchService
     /// <param name="standardCode">标准 Code（<b>GUID</b>）；空 = 平台级。<b>⚠️ 不接受 slug</b>。</param>
     /// <param name="markdownByFile">文件名 → Markdown 全文（<c>doc_group</c> 传整批 / <c>doc_content</c> 传一份）</param>
     /// <param name="businessRef">计费与画像的关联键（落 <c>cert_ai_usage_log.BusinessRef</c>）</param>
+    /// <param name="maxFiles">
+    /// 本方法<b>自身</b>的单次文件数上限；<c>0</c>（默认）= <b>不限</b>。
+    ///
+    /// <para>★ <b>2026-10-06（M8-1）</b>：此前这里误用了测试页常数 <see cref="MaxTestFiles"/>（<c>=20</c>），
+    /// 导致 <c>doc_group</c> 一旦收到 101 份就被<b>整体拒绝</b> ⇒ 执行器只 <c>LogWarning</c> 继续跑
+    /// <c>doc_content</c> ⇒ <c>groupByFile</c> 空 ⇒ <b>分组全丢且页面看不出异常</b>（静默降级）。
+    /// 队列侧的正确做法是<b>调用方按批切片</b>（见 <c>EnterpriseOriginalAnalyzeExecutor</c> 的
+    /// <c>GroupBatchSize</c>），⛔ 而不是在这里用测试页的常数拦。</para>
+    /// <para>⛔ <b>不要</b>把默认值改成 <see cref="MaxTestFiles"/> —— 那等于把刚修好的 bug 又写回来。</para>
+    /// </param>
     public async Task<AnalyzeForQueueResult> AnalyzeForQueueAsync(
         string promptType, string? standardCode,
         IReadOnlyList<(string FileName, string? Markdown)> markdownByFile,
-        string businessRef)
+        string businessRef,
+        int maxFiles = 0)
     {
         var usable = markdownByFile.Where(x => !string.IsNullOrWhiteSpace(x.Markdown)).ToList();
         if (usable.Count == 0)
             return AnalyzeForQueueResult.Fail("没有可用的 Markdown 输入（转换未完成或内容为空）");
 
-        if (usable.Count > MaxTestFiles)
-            return AnalyzeForQueueResult.Fail($"一次最多分析 {MaxTestFiles} 个文件（当前 {usable.Count} 个），请分批");
+        // ⚠️ 只在调用方**显式**传了正数时才拦（测试页走 TestAsync，不经这里）
+        if (maxFiles > 0 && usable.Count > maxFiles)
+            return AnalyzeForQueueResult.Fail($"一次最多分析 {maxFiles} 个文件（当前 {usable.Count} 个），请分批");
 
         // 1. 提示词正文（本方法<strong>不接未保存的编辑内容</strong> —— 队列只认库里生效版本）
         var promptRow = await ResolveActiveAsync(promptType, standardCode);

@@ -8,7 +8,7 @@
  *
  * 每个节点下方标注该作用域下已有的提示词：`[分类]` `[作用]`。
  */
-import { YzhEmptyState } from '@yzh-core'
+import { YzhEmptyState, YzhStatusBadge, resolveStatusBadge } from '@yzh-core'
 import { ref, computed, watch, nextTick } from 'vue'
 import { Document, Files } from '@element-plus/icons-vue'
 import type { StandardOptionDto, PromptTemplateDto } from '@share/api/workflow/prompt-workbench'
@@ -31,6 +31,8 @@ interface TreeNode {
   label: string
   isPlatform: boolean
   badges: string[]
+  /** 启用状态（0/1）—— 标准节点有，根节点无（徽章判据走 resolveStatusBadge） */
+  isValid?: number
   children?: TreeNode[]
 }
 
@@ -52,7 +54,8 @@ const treeData = computed<TreeNode[]>(() => [
         id: code,
         label: s.standardName || s.display || code,
         isPlatform: false,
-        badges: badgesFor(code)
+        badges: badgesFor(code),
+        isValid: s.isValid
       }
     })
   }
@@ -115,11 +118,19 @@ watch(
                 :class="b === '作用' ? 'std-tree__badge--purpose' : 'std-tree__badge--group'"
               >[{{ b }}]</em>
             </span>
+            <!-- 启用/禁用徽章（判据 = @yzh-core resolveStatusBadge，全站同源） -->
+            <YzhStatusBadge
+              v-if="resolveStatusBadge(data, 'IsValid')"
+              class="std-tree__status"
+              :type="resolveStatusBadge(data, 'IsValid')?.type"
+              :text="resolveStatusBadge(data, 'IsValid')?.text"
+              size="small"
+            />
           </span>
         </template>
       </el-tree>
 
-      <YzhEmptyState :icon="Document" v-if="!standards.length" title="暂无标准" />
+      <YzhEmptyState v-if="!standards.length" title="暂无标准" />
     </div>
   </div>
 </template>

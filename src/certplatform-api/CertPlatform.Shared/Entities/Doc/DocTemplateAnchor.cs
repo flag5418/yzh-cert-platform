@@ -6,7 +6,7 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Entity;
 using YZH.Entity.Admin.Platform;
 
-namespace CertPlatform.Admin.Entities.Doc
+namespace CertPlatform.Shared.Entities.Doc
 {
     /// <summary>模板锚点规则（文档填写规则的最小单元）</summary>
     /// <para>表名：cert_doc_template_anchor</para>
@@ -164,6 +164,26 @@ namespace CertPlatform.Admin.Entities.Doc
 
         [StringLength(500)]
         public string? Remark { get; set; }
+
+        // ──── ★ 2026-10-06（P0 地基）：示例数据 / 父锚点 ────
+
+        /// <summary>
+        ///     ★ <b>模板里的示例数据</b>（25 号 Q-5）。
+        ///     <para>模板常含<b>上一家企业</b>的真实姓名与日期（实测 <c>XASL-QR-008</c> 160 处 /
+        ///     <c>XASL-OR-001</c> 45 处 / <c>XASL-QR-010</c> 190 处）⇒ <b>不清空 = 记录造假嫌疑</b>。</para>
+        ///     <para><b>填充前无条件清空</b>（合规铁律，⛔ 不可跳过）。<c>SampleData=1</c> 时
+        ///     <c>WriteMode</c> <b>强制为 <c>replace</c></b>（示例数据一定是「已有内容被替换」）。</para>
+        ///     <para>⚠️ <b>默认 0 是刻意的</b>：哪些锚点是示例数据<b>需人工判定</b>（不能靠正则猜 ——
+        ///     真实内容也可能是人名）⇒ 标记动作在后台菜单 <c>MENU_00218</c> 的人工操作里，⛔ 不自动追溯标记。</para>
+        /// </summary>
+        public bool SampleData { get; set; }
+
+        /// <summary>
+        ///     ★ <b>父锚点</b> → 本表 <c>Code</c>（表格列锚点指向表格锚点）。
+        ///     <para>用于把「表格整体」与「其列」串成树，供 UI 分组与区域填充定位。</para>
+        /// </summary>
+        [StringLength(36)]
+        public string? ParentAnchorCode { get; set; }
 
         // ──── 接口字段（BaseEntity 不含，必须声明在实体自身，否则全库过滤静默失效）────
 

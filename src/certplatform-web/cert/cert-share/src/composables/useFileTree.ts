@@ -59,24 +59,33 @@ export interface TreeNode {
 // ========================================================
 
 /**
- * 「产物 / 系统目录」保留段名 —— 必须与后端 `PathBuilder.ReservedSegments` **逐字一致**（5 个）。
+ * 「产物 / 系统目录」保留段名 —— 必须与后端 `PathBuilder.ReservedSegments` **逐字一致**（6 个）。
  *
- * 后端权威定义（`PathBuilder.cs:99-102`，`StringComparer.OrdinalIgnoreCase`）：
+ * 后端权威定义（`PathBuilder.cs` 的 `ReservedSegments`，`StringComparer.OrdinalIgnoreCase`）：
  *   `PdfSegment="pdf"` / `MarkdownSegment="markdown"` / `EditableSegment="editable"`
- *   / `TemplateSegment="_template"` / `ArchiveSegment="_archive"`
+ *   / `TemplateSegment="_template"` / `PreviewSegment="_preview"` / `ArchiveSegment="_archive"`
  *
  * 这些目录与业务文件夹**物理同层**写在 `{StoragePath}/` 下：
  *   - `pdf/`、`markdown/`、`editable/` = 转换产物（PDF 预览 / Markdown 提取 / 可编辑归一）
  *   - `_template/` = **空白模板**（本页「上传空白模板」的落点，文件名保留原始上传名）
+ *   - `_preview/` = **试填预览 PDF**（2026-10-06 新增；固定 key，重复试填覆盖）
  *   - `_archive/` = 换版归档
  *
  * 正常创建已被后端 `ValidateFolderOrFileName` 挡住，但历史数据 / 直改 DB / 上传模板
  * 仍可能留下同名文件夹 ⇒ 显示层统一过滤（口径与 `StandardDirectoryService` 一致）。
  *
  * ⚠️ **漏一个就会在资料清单页冒出幽灵文件夹**（如上传模板后出现 `_template`）——
- * 曾漏 `editable` 与 `_template`，2026-10-04 补齐。
+ * 曾漏 `editable` 与 `_template`，2026-10-04 补齐；`_preview` 于 2026-10-06 随
+ * 「试填/预览」功能一并加入（漏它 ⇒ 试填一次就多一个幽灵文件夹）。
  */
-const RESERVED_SEGMENTS = new Set(['pdf', 'markdown', 'editable', '_template', '_archive'])
+const RESERVED_SEGMENTS = new Set([
+  'pdf',
+  'markdown',
+  'editable',
+  '_template',
+  '_preview',
+  '_archive',
+])
 
 function isReservedFolder(name?: string): boolean {
   return !!name && RESERVED_SEGMENTS.has(name.trim().toLowerCase())

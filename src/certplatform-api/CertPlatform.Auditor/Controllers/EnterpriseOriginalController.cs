@@ -49,7 +49,8 @@ namespace CertPlatform.Auditor.Controllers
         public async Task<IActionResult> List([FromBody] ListRequest req)
             => Ok(ApiResponse<object?>.Ok(await _service.ListAsync(
                 req.EnterpriseCode ?? "", req.StageCode ?? "",
-                req.TagCodes, req.OnlyUsable ?? false, req.GroupByTag ?? false)));
+                req.TagCodes, req.OnlyUsable ?? false, req.GroupByTag ?? false,
+                req.StandardCode)));
 
         /// <summary>状态条：转换中 / 分析中 / 失败 / 可用性 计数 + 运行中队列</summary>
         [HttpPost("status-bar")]
@@ -158,6 +159,24 @@ namespace CertPlatform.Auditor.Controllers
             return r.Success ? Ok(ApiResponse<object?>.Ok()) : Ok(ApiResponse<object?>.Fail(r.Error));
         }
 
+        /// <summary>
+        /// ★ <b>批量删除</b>（2026-10-07 新增）—— 页面上「删除整个文件夹」的落点。
+        ///
+        /// <para>语义与 <c>delete</c> 完全一致（软删行 + 删对象 + 归档历史版本；画像保留），
+        /// 逐个执行并汇总成败，⛔ 一份失败不中断其余。</para>
+        ///
+        /// <para><b>⛔ 只收 <c>FileCodes</c>（业务键），不收文件夹路径</b>：
+        /// 「哪些文件属于这个文件夹」是前端按 <c>RelFolderPath</c> 算出来的展示口径，
+        /// 后端不持有该概念；由前端展开成文件列表再提交，避免两处各判一套子树归属。</para>
+        /// </summary>
+        [HttpPost("delete/batch")]
+        public async Task<IActionResult> BatchDelete([FromBody] BatchDeleteRequest req)
+        {
+            var r = await _service.BatchDeleteAsync(
+                req.FileCodes ?? new List<string>(), req.EnterpriseCode ?? "", req.Reason);
+            return r.Success ? Ok(ApiResponse<object?>.Ok(r.Data)) : Ok(ApiResponse<object?>.Fail(r.Error));
+        }
+
         [HttpGet("versions/{fileCode}")]
         public async Task<IActionResult> Versions(string fileCode, [FromQuery] string? enterpriseCode)
             => Ok(ApiResponse<object?>.Ok(await _service.GetVersionsAsync(fileCode, enterpriseCode ?? "")));
@@ -196,9 +215,11 @@ namespace CertPlatform.Auditor.Controllers
         // 五、画像读取与人工修正（D6）
         // ========================================================
 
+        /// <param name="standardCode">★ M6：按标准取画像（空 = 不限标准，取版本号最大的一行）</param>
         [HttpGet("profile/{fileCode}")]
-        public async Task<IActionResult> Profile(string fileCode, [FromQuery] string? enterpriseCode)
-            => Ok(ApiResponse<object?>.Ok(await _service.GetProfileAsync(fileCode, enterpriseCode ?? "")));
+        public async Task<IActionResult> Profile(
+            string fileCode, [FromQuery] string? enterpriseCode, [FromQuery] string? standardCode)
+            => Ok(ApiResponse<object?>.Ok(await _service.GetProfileAsync(fileCode, enterpriseCode ?? "", standardCode)));
 
         [HttpPost("profile/correct")]
         public async Task<IActionResult> CorrectProfile([FromBody] CorrectProfileDto dto)
@@ -289,6 +310,13 @@ namespace CertPlatform.Auditor.Controllers
 
             /// <summary>true = 额外返回按标签的分组聚合（语义分组视图）</summary>
             public bool? GroupByTag { get; set; }
+
+            /// <summary>
+            /// ★ <b>M6（2026-10-06）</b>：按<b>标准</b>取画像。
+            /// <para>一个文件在 N 个标准下各有<b>一行</b>画像 ⇒ 不指定就只能拿到「某一行」，
+            /// 标签/作用可能属于<b>另一个标准</b>（用户点名痛点）。空 = 兼容旧前端。</para>
+            /// </summary>
+            public string? StandardCode { get; set; }
         }
 
         public class FileCodeRequest
@@ -357,6 +385,15 @@ namespace CertPlatform.Auditor.Controllers
             public string? AnalyzePolicy { get; set; }
             public string? PolicyReason { get; set; }
             public bool? Reanalyze { get; set; }
+        }
+
+        /// <summary>★ 批量删除请求（2026-10-07）—— 页面上「删除整个文件夹」用</summary>
+        public class BatchDeleteRequest
+        {
+            /// <summary>★ 要删除的文件业务键集合（前端按文件夹子树展开后提交）</summary>
+            public List<string>? FileCodes { get; set; }
+            public string? EnterpriseCode { get; set; }
+            public string? Reason { get; set; }
         }
     }
 }

@@ -167,7 +167,6 @@ defineExpose({ refresh })
 
       <YzhEmptyState
         v-if="!validated"
-        :icon="Pointer"
         title="尚未校验"
         description="系统将按必需项检查规则完整性，通过后即可发布。"
       />

@@ -236,6 +236,64 @@ namespace CertPlatform.Auditor.Services.Expert
         public string? SkipReason { get; set; }
     }
 
+    /// <summary>
+    /// ★★ 未执行清单一行（2026-10-07 用户裁决 · 裁 2「运行跳过」）
+    /// <para>用户逐字：「队列如果因为某些问题不能启动，不是任务暂停，而是任务失败，而且应该是
+    /// 补全相关信息才开始真正的任务」+「再队列完成后，详细记录，哪些规则或条款未执行成功，什么原因」。</para>
+    /// <para>本 DTO 就是那句「详细记录」的载体：<b>按规则/条款聚合</b>，
+    /// 而不是按缺口逐条罗列 —— 审核员要看的是「哪条没跑、为什么」。</para>
+    /// </summary>
+    public class TaskUnexecutedDto
+    {
+        /// <summary>规则/章节业务键（<c>cert_expert_nc_item.Code</c> / <c>…report_section_item.Code</c>）</summary>
+        public string ItemCode { get; set; } = string.Empty;
+
+        /// <summary>★ 规则名 / 章节名（中文）</summary>
+        public string ItemName { get; set; } = string.Empty;
+
+        /// <summary><c>nc_check</c> | <c>report_section</c></summary>
+        public string ItemType { get; set; } = string.Empty;
+
+        /// <summary>关联条款编码</summary>
+        public string? ClauseCode { get; set; }
+
+        /// <summary>条款标题（中文，可为空）</summary>
+        public string? ClauseTitle { get; set; }
+
+        /// <summary>★ 未执行分类（英文枚举，前端用 <c>SkipCategoryLabel</c> 映射）</summary>
+        public string SkipCategory { get; set; } = string.Empty;
+
+        /// <summary>★ 未执行分类的中文名</summary>
+        public string SkipCategoryLabel { get; set; } = string.Empty;
+
+        /// <summary>★ 原因（人话，恒非空）</summary>
+        public string Reason { get; set; } = string.Empty;
+
+        /// <summary>★ 具体缺什么（字段/表格中文名 + 应来自哪个文件）</summary>
+        public List<string> MissingItems { get; set; } = new();
+
+        public string? StandardCode { get; set; }
+    }
+
+    /// <summary>未执行清单信封</summary>
+    public class TaskUnexecutedResult
+    {
+        /// <summary>★ 按规则/条款聚合后的清单</summary>
+        public List<TaskUnexecutedDto> Items { get; set; } = new();
+
+        /// <summary>未执行成功的规则/条款条数</summary>
+        public int TotalCount { get; set; }
+
+        /// <summary>其中因「缺企业数据」导致的条数</summary>
+        public int DataGapCount { get; set; }
+
+        /// <summary>★ 队列是否已全部结束（未结束 ⇒ 清单还会变，界面须标注「执行中」）</summary>
+        public bool IsQueueFinished { get; set; }
+
+        /// <summary>任务执行状态（供界面判断是否已可查看最终清单）</summary>
+        public string ExecStatus { get; set; } = string.Empty;
+    }
+
     // ══════════════════════════════════════════════════════════════════════
     // 核心服务
     // ══════════════════════════════════════════════════════════════════════
@@ -734,7 +792,13 @@ namespace CertPlatform.Auditor.Services.Expert
         /// <param name="snapshot">范围快照（取各标准的 itemCode）</param>
         /// <param name="orgCode">专家工作区（租户）Code ⇒ 写 <c>cert_expert_task_data_gap.OrgCode</c></param>
         /// <returns>本次新增的缺口条数</returns>
-        private async Task<int> GenerateGapsAsync(CertExpertTask task, string orgCode)
+        /// <remarks>
+        /// ★ 2026-10-07 改为 <c>public</c>：供「启动前预检」端点
+        /// （<c>ExpertTaskDataGapController.Precheck</c>）复用同一份重算逻辑。
+        /// ⛔ 不要在控制器里另写一份 R\H 差集 —— 两处口径必然分叉，
+        /// 出现「预检说齐了、执行说缺了」。
+        /// </remarks>
+        public async Task<int> GenerateGapsAsync(CertExpertTask task, string orgCode)
         {
             var itemType = task.TaskType == ExpertTaskConst.TaskTypeNcCheck
                 ? ExpertTaskConst.ItemType.NcCheck
@@ -1697,6 +1761,212 @@ namespace CertPlatform.Auditor.Services.Expert
                 }).ToList();
 
             return Result<List<TaskGapDto>>.Ok(dto);
+        }
+
+        /// <summary>
+        /// ★★ 未执行清单（2026-10-07 用户裁决 · 裁 2「运行跳过」）
+        /// </summary>
+        ///
+        /// <para><b>用户逐字</b>：「队列如果因为某些问题不能启动，不是任务暂停，而是任务失败，
+        /// 而且应该是补全相关信息才开始真正的任务」+「再队列完成后，<b>详细记录，哪些规则或条款
+        /// 未执行成功，什么原因</b>」。</para>
+        ///
+        /// <para><b>两个来源合并</b>：</para>
+        /// <list type="number">
+        ///   <item><b>缺口来源</b>（<c>cert_expert_task_data_gap</c>）—— 「缺企业数据」这一类，
+        ///         含具体缺哪个字段/表格（<b>中文名</b>）+ 应来自哪个文件；</item>
+        ///   <item><b>结果来源</b>（<c>cert_expert_nc_result</c> / <c>cert_expert_report_result</c>
+        ///         中 <c>AutoStatus=skipped</c>）—— 补上非缺口类原因（规则未配工作流 / 规则停用 /
+        ///         人工判定项 / 执行失败）。</item>
+        /// </list>
+        ///
+        /// <para><b>★ 为什么这条记录是必需的</b>：<c>ExpertTaskQueueRunner.RefreshQueueAsync</c>
+        /// 在「全部项 skipped」时会把队列置 <c>completed</c> ——
+        /// <b>报告看起来跑完了，实际有检查项根本没做</b>，而且完全静默。
+        /// 本清单就是把这个静默缺口<b>显式记录下来</b>。</para>
+        ///
+        /// <para><b>★ 按规则/条款聚合</b>，⛔ 不按缺口逐条罗列 —— 审核员要看的是
+        /// 「哪条规则没跑、为什么」，不是「缺了 8 个字段」。</para>
+        /// </summary>
+        public async Task<Result<TaskUnexecutedResult>> GetUnexecutedAsync(string orgCode, string taskCode)
+        {
+            var task = (await _db.GetOneAsync<CertExpertTask>(x =>
+                x.Code == taskCode && x.OrgCode == orgCode && !x.IsDeleted)).Data;
+            if (task == null) return Result<TaskUnexecutedResult>.Fail("任务不存在或不属于当前工作区");
+
+            var isNc = task.TaskType == ExpertTaskConst.TaskTypeNcCheck;
+            var itemType = isNc ? ExpertTaskConst.ItemType.NcCheck : ExpertTaskConst.ItemType.ReportSection;
+
+            var items = new Dictionary<string, TaskUnexecutedDto>(StringComparer.Ordinal);
+
+            // 本地函数：按 (规则, 条款) 取槽位（★ 可先使用后声明）
+            TaskUnexecutedDto Slot(string itemCode, string? clauseCode)
+            {
+                var key = $"{itemCode}|{clauseCode ?? "-"}";
+                if (!items.TryGetValue(key, out var dto))
+                {
+                    dto = new TaskUnexecutedDto
+                    {
+                        ItemCode = itemCode,
+                        ItemType = itemType,
+                        ClauseCode = clauseCode
+                    };
+                    items[key] = dto;
+                }
+                return dto;
+            }
+
+            // ── ① 缺口来源（缺企业数据 —— 原因最具体）────────────────
+            var gaps = (await _db.GetListAsync<CertExpertTaskDataGap>(x =>
+                x.TaskCode == taskCode && !x.IsDeleted)).Data ?? new List<CertExpertTaskDataGap>();
+
+            foreach (var g in gaps)
+            {
+                var dto = Slot(g.SourceItemCode, g.ClauseCode);
+                if (string.IsNullOrWhiteSpace(dto.ItemName) && !string.IsNullOrWhiteSpace(g.SourceItemName))
+                    dto.ItemName = g.SourceItemName!;
+                if (string.IsNullOrWhiteSpace(dto.StandardCode)) dto.StandardCode = g.StandardCode;
+
+                var label = string.IsNullOrWhiteSpace(g.GapLabel) ? "未命名数据" : g.GapLabel;
+                var what = g.GapType == "table" ? $"表格「{label}」" : $"字段「{label}」";
+                var state = g.GapStatus switch
+                {
+                    ExpertTaskConst.GapStatus.Filled => "已补录",
+                    ExpertTaskConst.GapStatus.Skipped => "已跳过",
+                    _ => "待补录"
+                };
+                var src = string.IsNullOrWhiteSpace(g.ExpectedFileName)
+                    ? ""
+                    : $"（应来自 {g.ExpectedFileName}）";
+                dto.MissingItems.Add($"{state}{what}{src}");
+
+                // 缺口类原因由 ① 统一承担（比结果行的原因更具体）
+                if (string.IsNullOrWhiteSpace(dto.SkipCategory))
+                {
+                    dto.SkipCategory = g.GapStatus == ExpertTaskConst.GapStatus.Skipped
+                        ? ExpertTaskConst.SkipCategory.DataGapSkipped
+                        : ExpertTaskConst.SkipCategory.DataGap;
+                    dto.SkipCategoryLabel = ExpertTaskConst.SkipCategoryLabel(dto.SkipCategory);
+                }
+            }
+
+            // ── ② 结果来源（实际被跳过的结果行，补非缺口类原因）──────
+            var skipped = new List<(string ItemCode, string? Category, string? Reason)>();
+            if (isNc)
+            {
+                var rows = (await _db.GetListAsync<CertExpertNcResult>(x =>
+                    x.TaskCode == taskCode && !x.IsDeleted
+                    && x.AutoStatus == ExpertTaskConst.Auto.Skipped)).Data ?? new List<CertExpertNcResult>();
+                skipped.AddRange(rows.Select(x => (x.ItemCode, x.SkipCategory, x.SkipReason)));
+            }
+            else
+            {
+                var rows = (await _db.GetListAsync<CertExpertReportResult>(x =>
+                    x.TaskCode == taskCode && !x.IsDeleted
+                    && x.AutoStatus == ExpertTaskConst.Auto.Skipped)).Data ?? new List<CertExpertReportResult>();
+                skipped.AddRange(rows.Select(x => (x.ItemCode, x.SkipCategory, x.SkipReason)));
+            }
+
+            foreach (var s in skipped)
+            {
+                if (string.IsNullOrWhiteSpace(s.ItemCode)) continue;
+                var dto = Slot(s.ItemCode, null);
+
+                // ⛔ 缺口类原因已被 ① 更精确地描述（含「缺什么 + 应来自哪」），不覆盖
+                var already = dto.SkipCategory == ExpertTaskConst.SkipCategory.DataGap
+                              || dto.SkipCategory == ExpertTaskConst.SkipCategory.DataGapSkipped;
+
+                var cat = string.IsNullOrWhiteSpace(s.Category)
+                    ? ExpertTaskConst.SkipCategory.ExecFailed
+                    : s.Category!;
+
+                if (!already)
+                {
+                    dto.SkipCategory = cat;
+                    dto.SkipCategoryLabel = ExpertTaskConst.SkipCategoryLabel(cat);
+                    if (!string.IsNullOrWhiteSpace(s.Reason)) dto.Reason = s.Reason!;
+                }
+            }
+
+            // ── ③ 回填规则/章节名 + 条款（结果来源本身不带名字）──────
+            var needNames = items.Values
+                .Where(x => string.IsNullOrWhiteSpace(x.ItemName))
+                .Select(x => x.ItemCode)
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Distinct()
+                .ToList();
+
+            if (needNames.Count > 0)
+            {
+                if (isNc)
+                {
+                    var ncItems = (await _db.GetListAsync<CertExpertNcItem>(x =>
+                        needNames.Contains(x.Code!) && !x.IsDeleted)).Data ?? new List<CertExpertNcItem>();
+                    foreach (var it in ncItems)
+                        FillNames(it.Code ?? "", it.RuleName, it.ClauseCode, it.ClauseTitle);
+                }
+                else
+                {
+                    var secItems = (await _db.GetListAsync<CertExpertReportSectionItem>(x =>
+                        needNames.Contains(x.Code!) && !x.IsDeleted)).Data
+                        ?? new List<CertExpertReportSectionItem>();
+                    foreach (var it in secItems)
+                        FillNames(it.Code ?? "", it.SectionName, it.ClauseCode, it.ClauseTitle);
+                }
+            }
+
+            void FillNames(string code, string? name, string? clauseCode, string? clauseTitle)
+            {
+                foreach (var dto in items.Values.Where(x => x.ItemCode == code))
+                {
+                    if (string.IsNullOrWhiteSpace(dto.ItemName) && !string.IsNullOrWhiteSpace(name))
+                        dto.ItemName = name!;
+                    dto.ClauseCode ??= clauseCode;
+                    dto.ClauseTitle ??= clauseTitle;
+                }
+            }
+
+            // ── ④ 兜底文案（⛔ 界面不得出现空白的规则名 / 空原因）────
+            foreach (var dto in items.Values)
+            {
+                if (string.IsNullOrWhiteSpace(dto.ItemName)) dto.ItemName = "（未知规则或章节）";
+                if (string.IsNullOrWhiteSpace(dto.SkipCategory))
+                {
+                    dto.SkipCategory = ExpertTaskConst.SkipCategory.DataGap;
+                    dto.SkipCategoryLabel = ExpertTaskConst.SkipCategoryLabel(dto.SkipCategory);
+                }
+                if (string.IsNullOrWhiteSpace(dto.Reason))
+                {
+                    dto.Reason = dto.MissingItems.Count > 0
+                        ? $"{dto.SkipCategoryLabel}：{string.Join("；", dto.MissingItems)}"
+                        : dto.SkipCategoryLabel;
+                }
+            }
+
+            // ── ⑤ 队列是否已全部结束（未结束 ⇒ 清单还会变）──────────
+            var queues = (await _db.GetListAsync<CertExpertTaskQueue>(x =>
+                x.TaskCode == taskCode && !x.IsDeleted)).Data ?? new List<CertExpertTaskQueue>();
+            var finished = queues.Count == 0 || queues.All(q =>
+                q.QueueStatus == ExpertTaskConst.Queue.Completed
+                || q.QueueStatus == ExpertTaskConst.Queue.Failed
+                || q.QueueStatus == ExpertTaskConst.Queue.Cancelled);
+
+            var list = items.Values
+                .OrderByDescending(x => x.SkipCategory == ExpertTaskConst.SkipCategory.DataGap
+                                        || x.SkipCategory == ExpertTaskConst.SkipCategory.DataGapSkipped)
+                .ThenBy(x => x.ItemName, StringComparer.Ordinal)
+                .ToList();
+
+            return Result<TaskUnexecutedResult>.Ok(new TaskUnexecutedResult
+            {
+                Items = list,
+                TotalCount = list.Count,
+                DataGapCount = list.Count(x =>
+                    x.SkipCategory == ExpertTaskConst.SkipCategory.DataGap
+                    || x.SkipCategory == ExpertTaskConst.SkipCategory.DataGapSkipped),
+                IsQueueFinished = finished,
+                ExecStatus = task.ExecStatus
+            });
         }
 
         // ================================================================

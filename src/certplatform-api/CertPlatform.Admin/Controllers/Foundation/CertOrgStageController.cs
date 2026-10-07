@@ -71,7 +71,8 @@ public class CertOrgStageController : ControllerBase
                 ParentCode = (string?)null,
                 Level = 1,
                 IsLeaf = true,
-                Extra = new { }
+                // 启用/禁用徽章（前端左树统一读 Extra.IsValid；该查询已过滤 IsValid=1）
+                Extra = new { IsValid = p.IsValid }
             }).ToList();
 
             return Ok(ApiResponse<object?>.Ok(nodes));

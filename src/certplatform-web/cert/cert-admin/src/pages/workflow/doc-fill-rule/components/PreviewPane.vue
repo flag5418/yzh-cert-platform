@@ -15,23 +15,28 @@
  *   被迫理解「空白模板 / 归一产物 / 锚点」这些只有本页才有的概念。
  *   ⇒ 策略留在本组件，`DocPreview` 保持哑。
  *
- * 【两条预览源】
+ * 【★ 三条预览源（2026-10-06 加第三条 = C10）】
  * | 源 | 取哪份字节 | 端点 |
  * |---|---|---|
  * | `original` | 资料清单里的**原始文档** | `file-preview?fileCode=`（产物链，回写 DB） |
  * | `template` | 已上传的**空白模板** | `preview-by-path?storagePath=`（裸路径，无 fileCode） |
+ * | `filled` | **试填后转出的 PDF**（`…/_preview/x.docx.pdf`） | 同上（`.pdf` 原样透传，⛔ 不二次转换） |
  *
- * ⛔ 两者**不是**同一份文件的两种渲染，是**两份不同的文件**：
- *   原始文档是 `.doc`（143/168）且含示例数据；模板是用户加工后的 `.docx`。
+ * ⛔ 三者**不是**同一份文件的三种渲染，是**三份不同的文件**：
+ *   原始文档是 `.doc`（143/168）且含示例数据；模板是用户加工后的 `.docx`；
+ *   填充后是**空白模板被填过一遍**的结果。
  *   页面上必须让用户一眼看出「现在看的是哪一份」，否则会误判「我的模板没生效」。
  *
  * 【★ 自动切换规则（用户口述的那条）】
  *   未上传模板 → `original`；已上传 → `template`。
  *   上传成功 ⇒ 父页调 `showTemplate()` **显式**切过去并重载 —— 因为换版时
  *   `storagePath` 一模一样，`DocPreview` 内部的 watch **不会触发**（它按路径做 key）。
+ *   ⛔ **`filled` 不参与自动切换**：它是「看过一眼结果」的动作，
+ *      自动切过去会让用户以为「模板就是这个样子」（而那是**填过的**，不是模板）。
+ *      必须由「自动填充 / 预览」按钮显式切（`showFilled()`）。
  */
 import { computed, ref, watch } from 'vue'
-import { Document, Files, Upload } from '@element-plus/icons-vue'
+import { Document, Files, MagicStick, Upload } from '@element-plus/icons-vue'
 import { DocPreview } from '@share/components'
 import { YzhEmptyState } from '@yzh-core'
 
@@ -49,6 +54,13 @@ const props = defineProps<{
   /** 该文件是否已上传空白模板 */
   hasTemplate: boolean
   /**
+   * ★ C10：试填预览 PDF 在 MinIO 的路径（`…/_preview/x.docx.pdf`）；
+   * **空串 = 从未试填过** ⇒ 「填充后预览」选项禁用。
+   */
+  filledPath?: string
+  /** 最近一次试填时间（展示用事实，⛔ 不弹提醒、⛔ 不阻断） */
+  filledTime?: string
+  /**
    * ★ C9：是否允许「上传空白模板」。
    *
    * 判据由父页给（= 选中文件且**非固定格式**）——
@@ -61,11 +73,11 @@ const props = defineProps<{
 
 const emit = defineEmits<{ (e: 'upload-template'): void }>()
 
-/** 预览源。`original` = 资料清单原始文档；`template` = 已上传的空白模板 */
-type PreviewSource = 'original' | 'template'
+/** 预览源。`original` = 资料清单原始文档；`template` = 已上传的空白模板；`filled` = 试填结果 */
+type PreviewSource = 'original' | 'template' | 'filled'
 const source = ref<PreviewSource>('original')
 
-/** 重载序号 —— 路径不变但字节变了时（换版），靠它强制 `DocPreview` 重新拉取 */
+/** 重载序号 —— 路径不变但字节变了时（换版 / 重跑试填），靠它强制 `DocPreview` 重新拉取 */
 const reloadSeq = ref(0)
 
 /**
@@ -77,16 +89,24 @@ const reloadSeq = ref(0)
  */
 const templateAvailable = computed(() => props.templatePath.length > 0)
 
+/** ★ C10：试填源可用的判据 = 有 PDF 路径（同 `templateAvailable` 的理由） */
+const filledAvailable = computed(() => (props.filledPath ?? '').length > 0)
+
 /**
  * 自动跟随模板状态（用户口述的那条规则）。
  *
  * ⛔ `immediate: true` 是必须的：先选了文件 A（无模板）→ 再选文件 B（有模板）时，
  *   `hasTemplate` 从 false 变 true 会触发；但**首次挂载**时 watch 不会跑，
  *   `source` 会停在初始值 `original` —— 于是「已上传模板的文件一进来看到的是原始文档」。
+ *
+ * ⛔ **`filled` 时不要覆盖**：用户点「预览」切到填充后视图后，
+ *   若此时任何 prop 变化让 `hasTemplate` 重新求值，watch 会把视图抢回 `template`
+ *   ⇒ 「点了预览却跳回空白模板」。试填视图只能由 `showFilled()` 进出。
  */
 watch(
   () => props.hasTemplate,
   (has) => {
+    if (source.value === 'filled') return
     if (has && templateAvailable.value) source.value = 'template'
     else if (!has) source.value = 'original'
   },
@@ -107,8 +127,27 @@ watch(
   },
 )
 
-/** 交给 `DocPreview` 的文件对象（`fileCode` 只在原始源下给 —— 模板没有 fileCode） */
+/**
+ * ★ 试填产物**后到**（点「自动填充」→ 后端跑完 → 父页把路径传下来）时，
+ * 若当前正停在「填充后预览」视图，必须重载 ——
+ * 路径是**固定 key**（同一模板重复试填路径不变）⇒ `DocPreview` 的 watch 不触发，
+ * 用户会看到**上一次**的试填结果。与「换版重传模板」是同一类「静默显示旧内容」。
+ */
+watch(
+  () => props.filledPath,
+  (p, old) => {
+    if (source.value === 'filled' && p && p === old) reloadSeq.value++
+  },
+)
+
+/** 交给 `DocPreview` 的文件对象（`fileCode` 只在原始源下给 —— 模板/试填都没有 fileCode） */
 const activeFile = computed(() => {
+  if (source.value === 'filled') {
+    return {
+      fileName: filledFileName.value,
+      storagePath: props.filledPath ?? '',
+    }
+  }
   if (source.value === 'template') {
     return {
       fileName: props.templateFileName || '空白模板',
@@ -121,6 +160,20 @@ const activeFile = computed(() => {
     storagePath: props.originalPath,
   }
 })
+
+/**
+ * 试填产物的显示名。
+ *
+ * ⚠️ 必须带 `.pdf` 扩展名：`DocPreview` **只从文件名推扩展名**
+ *   （`ext` computed 读 `fileName`），推不出 `.pdf` 就会落到「暂不支持在线预览」分支
+ *   —— 而字节其实是 PDF。这是「标题对、内容错」的经典形态。
+ */
+const filledFileName = computed(() => {
+  const base = props.templateFileName || props.fileName || '文档'
+  // 去掉模板自身的扩展名再拼 `.pdf`：`x.docx` → `x.pdf`（不是 `x.docx.pdf`）
+  return base.replace(/\.[A-Za-z0-9]{1,8}$/, '') + '.pdf'
+})
+
 
 /**
  * `DocPreview` 的 key。
@@ -144,8 +197,12 @@ const previewKey = computed(
     ].join('|'),
 )
 
-/** 当前源对应的下载按钮文案（两份文件不同名，⛔ 不能都叫「下载」） */
-const downloadLabel = computed(() => (source.value === 'template' ? '下载模板' : '下载原始件'))
+/** 当前源对应的下载按钮文案（三份文件不同名，⛔ 不能都叫「下载」） */
+const downloadLabel = computed(() => {
+  if (source.value === 'filled') return '下载填充后预览'
+  if (source.value === 'template') return '下载模板'
+  return '下载原始件'
+})
 
 /**
  * 面板脚注：一句话说明「现在看的是哪一份」。
@@ -155,6 +212,12 @@ const downloadLabel = computed(() => (source.value === 'template' ? '下载模�
  *   需要强调就用静态文案 + 动态文案分开渲染，别在插值里写标记。
  */
 const sourceHint = computed(() => {
+  if (source.value === 'filled') {
+    // ★ 带上试填时间 —— 这是**事实**（用户能据此判断「这份结果是不是我刚改完规则跑的」），
+    //   ⛔ 不是「提醒你重跑」（那是教操作，按收敛标准已删）。
+    const t = props.filledTime ? `（试填于 ${formatTime(props.filledTime)}）` : ''
+    return `试填结果：把空白模板按当前规则填过一遍${t}`
+  }
   if (source.value === 'template') {
     return '已上传的空白模板 —— 扫描出的锚点位置就在这份文件里'
   }
@@ -163,6 +226,18 @@ const sourceHint = computed(() => {
   }
   return '资料清单原始文档。加工成空白模板并上传后，这里会自动切换成模板'
 })
+
+/**
+ * 试填时间的展示格式（`YYYY-MM-DD HH:mm`）。
+ *
+ * ⛔ 不用 `new Date(s).toLocaleString()`：不同浏览器/语言环境输出不同
+ *   （中文系统给「2026/10/6 下午2:39」），同一页面在不同机器上显示不一致。
+ *   ⛔ 也不引入 dayjs —— 本组件只需要一个固定格式，不值得一个依赖。
+ */
+function formatTime(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(iso)
+  return m ? `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}` : iso
+}
 
 /** 重载当前源（路径不变、字节变了时用；也可由用户点面板内的「刷新」触发） */
 function refresh() {
@@ -180,7 +255,22 @@ function showTemplate() {
   reloadSeq.value++
 }
 
-defineExpose({ refresh, showTemplate })
+/**
+ * ★ C10：切到「填充后预览」并重载 —— **「自动填充 / 预览」按钮由父页显式调用**。
+ *
+ * ⚠️ `reloadSeq++` 是必须的：试填产物是**固定 key**（同一模板重复试填路径不变）
+ *   ⇒ `DocPreview` 的 watch 不触发 ⇒ 会继续显示**上一次**的结果。
+ *
+ * ⛔ 没有产物时**不做静默空切**（那会切到一个空白视图）：调用方先判 `filledAvailable`。
+ */
+function showFilled() {
+  if (!filledAvailable.value) return false
+  source.value = 'filled'
+  reloadSeq.value++
+  return true
+}
+
+defineExpose({ refresh, showTemplate, showFilled })
 </script>
 
 <template>
@@ -189,6 +279,16 @@ defineExpose({ refresh, showTemplate })
       预览源切换条。
       ⚠️ 未上传模板时**整条不显示**：只有一个选项的切换器是噪音，
         还会让人以为「还有别的东西没解锁」。
+
+      ★ C10：加了第三个「填充后预览」。它与前两个**并列**（不是子项）——
+        三者是三份不同的文件，用户必须能一眼看出在看哪一份。
+        ⚠️ 未试填过时该选项 **disabled**（`el-radio-button` 的 `disabled` 是**逐个**生效的），
+          并挂 `title` 说明原因 —— 直接隐藏会让用户以为「这功能不存在」。
+          ⛔ 这里刻意**不用 `el-tooltip`**：它要求单元素子节点，必须再包一层 `<span>`，
+             而 Element Plus 的「首尾圆角 / 相邻负边距」是按
+             `.el-radio-button:first-child|:last-child|:not(:first-child)` 匹配的 ——
+             包一层后第三个 label 变成 span 的首个子元素 ⇒ **1px 双线 + 圆角错位**。
+             原型（`51-V1`）用的也是 `title`，口径一致。
     -->
     <div v-if="templateAvailable" class="source-bar">
       <span class="source-bar__label">查看</span>
@@ -200,6 +300,14 @@ defineExpose({ refresh, showTemplate })
         <el-radio-button value="template">
           <el-icon><Files /></el-icon>
           空白模板
+        </el-radio-button>
+        <el-radio-button
+          value="filled"
+          :disabled="!filledAvailable"
+          :title="filledAvailable ? '查看试填结果' : '还没有试填结果 —— 先在右栏点「自动填充」'"
+        >
+          <el-icon><MagicStick /></el-icon>
+          填充后预览
         </el-radio-button>
       </el-radio-group>
       <span class="source-bar__hint">{{ sourceHint }}</span>
@@ -215,10 +323,13 @@ defineExpose({ refresh, showTemplate })
         ★ C9：把「上传空白模板」放到**与「下载原始文档」同一行**（`DocPreview` 的
           `.preview-actions` 内）。此前它挂在右栏锚点页签的操作条上 ——
           用户要在「看文档」与「换模板」之间来回横跳两个栏位。
+
+        ⛔ 看「填充后预览」时**不显示**这个按钮：那个视图里没有「模板」可换，
+          把「上传空白模板」摆在一份已经填好的文档旁边，语义是错的。
       -->
       <template #actions>
         <el-button
-          v-if="canUploadTemplate"
+          v-if="canUploadTemplate && source !== 'filled'"
           type="primary"
           size="small"
           :icon="Upload"

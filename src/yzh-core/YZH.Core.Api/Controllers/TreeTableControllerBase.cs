@@ -171,8 +171,10 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
             await OnAfterAddTree(result.Data!);
             await OnAfterCommitted();
 
-            // 6. 返回 DTO
-            return Ok(ApiResponse<TreeItemDto>.Ok(MapToTreeItem(result.Data!, 0), "创建成功"));
+            // 6. 返回 DTO（回填 IsLeaf：实体 IsLeaf 非库列，未回填会让前端把新节点当非末端）
+            var addDto = MapToTreeItem(result.Data!, 0);
+            await FillIsLeafBatch(new List<TreeItemDto> { addDto });
+            return Ok(ApiResponse<TreeItemDto>.Ok(addDto, "创建成功"));
         }
         catch (Exception ex)
         {
@@ -209,7 +211,10 @@ public abstract class TreeTableControllerBase<T, V> : YzhControllerBase<V>
             await OnAfterUpdateTree(result.Data!);
             await OnAfterCommitted();
 
-            return Ok(ApiResponse<TreeItemDto>.Ok(MapToTreeItem(result.Data!, 0), "修改成功"));
+            // 5. 回填 IsLeaf（与 tree/add 同因：不回填会把末端机构打成非末端）
+            var updateDto = MapToTreeItem(result.Data!, 0);
+            await FillIsLeafBatch(new List<TreeItemDto> { updateDto });
+            return Ok(ApiResponse<TreeItemDto>.Ok(updateDto, "修改成功"));
         }
         catch (Exception ex)
         {

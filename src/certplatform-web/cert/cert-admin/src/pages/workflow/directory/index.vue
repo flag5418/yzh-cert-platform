@@ -1150,7 +1150,7 @@ onUnmounted(() => {
           </table>
 
           <!-- 空状态 -->
-          <YzhEmptyState :icon="FolderOpened"
+          <YzhEmptyState
             v-if="currentFolders.length === 0 && currentFiles.length === 0"
             title="暂无内容"
            />

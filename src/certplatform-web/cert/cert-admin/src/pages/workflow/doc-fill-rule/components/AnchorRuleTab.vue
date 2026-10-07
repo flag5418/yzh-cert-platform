@@ -8,8 +8,11 @@
  *   - **C7 锁定**：行内一个锁定开关（走 `DocTemplateAnchor/lock`）。
  *     锁定 = 实施人员认可了这份配置 ⇒ **后端会拒绝再改配置列**，
  *     所以锁定后「配置规则」改为只读提示，⛔ 不让用户白改一遍再被打回。
- *   - **C8 未配齐警示**：锚点没配完 ⇒ 顶部一条警示 + 徽标，
- *     ⛔ **不造「自动填充 / 预览」按钮** —— 那两个按钮就是 B7/B8 本身（已裁决降级 TODO）。
+ *   - ~~**C8 未配齐警示**：锚点没配完 ⇒ 顶部一条警示 + 徽标~~
+ *     **2026-10-07 第二轮之④已删警示条**（用户裁决：错误改「Tab 角标 + 点击弹层」，
+ *     ⛔ 不让提示占太多空间）。明细在右栏角标弹层（`index.vue` 的 `anchorIssues`，
+ *     同源于 `anchorViews`）；本页统计条的「已配齐 / 未配齐」一行徽标保留。
+ *     「自动填充 / 预览」按钮仍在右栏操作条，按 `logic.anchorReadiness.ready` 置灰。
  *
  * 【★ 锚点清单的存储位置（本轮上移）】
  *   清单由 `logic.anchorRows` 持有（`logic.reloadAnchors()` 加载）—— 不再由本组件
@@ -17,7 +20,7 @@
  *   而底部保存条 / Tab 徽标 / 中栏都要读「锚点是否配齐」。
  *   放在组件里会导致「没点过锚点页 ⇒ 一律显示未配齐」。
  */
-import { Filter, InfoFilled, Lock, Unlock } from '@element-plus/icons-vue'
+import { Filter, Lock, Unlock } from '@element-plus/icons-vue'
 import { lockAnchor } from '@share/api/workflow/doc-fill-rule'
 import { unwrapOk, YzhEmptyState, YzhStatusBadge } from '@yzh-core'
 import { ElMessage } from 'element-plus'
@@ -71,6 +74,10 @@ const lockedCount = computed(
 )
 
 /* ============ 加载 ============ */
+/**
+ * 强制重拉（数据确实变了：抽屉保存成功 / 父页扫描后调用）。
+ * ⛔ 挂载兜底不要用它 —— 那是 `ensureAnchors()`（幂等）。
+ */
 function loadAll() {
   return props.logic.reloadAnchors()
 }
@@ -83,17 +90,21 @@ async function refresh() {
 defineExpose({ refresh })
 
 /**
- * ★ 首次挂载：**仅在共享仓库为空时**补一次加载。
+ * ★ 首次挂载：**幂等**兜底加载。
  *
- * 【为什么要这个「空才拉」的兜底】
+ * 【为什么要这个兜底】
  *   清单的**主**加载在父页（`handleNodeClick`）—— 因为默认落「全局规则」时
  *   本组件**未挂载**，而 Tab 徽标 / C8 闸都要读它。
  *   但本组件仍不该假设「一定有人先拉过」：若父页那次请求失败、或将来有人单独挂载它，
  *   页面会**静默空白**（不报错、也没有加载态）。
- *   ⇒ 加一层「空才拉」兜底：有数据时 ⛔ 不重复请求（避免每次切 Tab 都打一次接口）。
+ *
+ * 【★ 2026-10-06 评审 #2：判据从「仓库为空」改成「本模板没加载过」】
+ *   原判据 `!anchorRows.length` 有个反例：**该模板本来就没有锚点**时，仓库合法地是空的，
+ *   于是每次切回锚点页签都会**再打一次接口**。
+ *   `ensureAnchors()` 用 `anchorLoadedFor` 标记去重 ⇒ 「没拉过才拉」，与条数无关。
  */
 onMounted(() => {
-  if (!props.logic.anchorRows?.length) loadAll()
+  void props.logic.ensureAnchors()
 })
 
 watch(
@@ -193,31 +204,24 @@ async function toggleLock(v: AnchorView) {
   <div class="anchor-tab">
     <YzhEmptyState
       v-if="!hasTemplate"
-      :icon="InfoFilled"
       title="还没有空白模板"
       description="先在右侧「上传空白模板」，系统据此扫描锚点"
     />
 
     <YzhEmptyState
       v-else-if="scanStatus !== 'completed'"
-      :icon="InfoFilled"
       title="该模板还没有扫描出锚点"
       description="锚点来自空白模板本身的声明（{{标签}} / 书签）"
     />
 
     <template v-else>
-      <!-- ★ C8：锚点没配齐 ⇒ 一条警示（⛔ 不造点了没反应的按钮，见文件头注释） -->
-      <div v-if="!readiness.ready" class="warnbar">
-        <span>
-          锚点未配齐 ⇒ 运行期不会自动填充
-          <template v-if="readiness.unconfigured">
-            （{{ readiness.unconfigured }} 个未配数据源）
-          </template>
-          <template v-if="readiness.orphan">
-            （{{ readiness.orphan }} 个孤儿）
-          </template>
-        </span>
-      </div>
+      <!--
+        ★ 2026-10-07 第二轮之④：**删掉原 C8 顶部警示条**（用户裁决：
+           「错误用角标显示，点击再展开详情，不要让提示信息占太多空间」）。
+        未配 / 孤儿 / 解析失败明细已收进右栏「锚点规则」Tab 的**角标弹层**
+        （`index.vue` 的 `anchorIssues`，数据同源于 `anchorViews` ⇒ 与本页徽标不矛盾）。
+        ⚠️ 下面统计条里的「已配齐 / 未配齐」徽标保留 —— 它是一行紧凑状态，不是大块提示。
+      -->
 
       <!-- 统计条 -->
       <div class="stat">
@@ -385,19 +389,8 @@ async function toggleLock(v: AnchorView) {
   min-height: 0;
 }
 
-/* ★ C8 未配齐警示条 */
-.warnbar {
-  display: flex;
-  gap: var(--yzh-space-2, 8px);
-  background: var(--yzh-color-warning-light-9, #fdf6ec);
-  border: 1px solid var(--yzh-color-warning-light-8, #faecd8);
-  color: var(--yzh-color-warning-dark-2, #8a5a00);
-  border-radius: var(--yzh-radius-md, 8px);
-  padding: var(--yzh-space-2, 8px) var(--yzh-space-3, 12px);
-  font-size: var(--yzh-font-size-xs, 12px);
-  line-height: 1.7;
-  margin-bottom: var(--yzh-space-3, 12px);
-}
+/* ★ 2026-10-07：原 `.warnbar`（C8 未配齐警示条）已删 —— 明细改由右栏
+   Tab 角标弹层承载（用户裁决之④：⛔ 不让提示信息占太多空间）。 */
 
 /* 统计条 */
 .stat {

@@ -74,7 +74,8 @@ const routes: RouteRecordRaw[] = [
         name: 'ReportResults',
         component: () => import('@/pages/report-results/index.vue')
       },
-      // ★ 企业全局参数定义（MENU_AUD_10）—— 企业档案 × 后台参数定义的关联列表 + 填充预览
+      // ★ 企业全局参数定义（MENU_AUD_10）—— 企业档案 × 后台参数定义（标准核心字段）的关联补值清单
+      //   ⛔ 无「填充预览」（2026-10-06 裁决）：预览 UI 归企业资料规范化册承载
       {
         path: 'enterprise-fill-params',
         name: 'EnterpriseFillParams',
@@ -92,6 +93,14 @@ const routes: RouteRecordRaw[] = [
         path: 'enterprise-original',
         name: 'EnterpriseOriginal',
         component: () => import('@/pages/enterprise-original/index.vue')
+      },
+      // ★ 企业资料规范化（MENU_AUD_12，54 §6.1）—— 企业原始资料 → 规范化标准文档
+      //   ⛔ 必须与菜单 MENU_AUD_12 成对落地（菜单 Url 无子路由 ⇒ 点击白屏 + 守卫 R12 报错）。
+      //   当前为 P0 占位页，P2 替换页面内容（左树五级 + 右区 + 单元格三交互）。
+      {
+        path: 'enterprise-normalize',
+        name: 'EnterpriseNormalize',
+        component: () => import('@/pages/enterprise-normalize/index.vue')
       },
       {
         path: 'organization',

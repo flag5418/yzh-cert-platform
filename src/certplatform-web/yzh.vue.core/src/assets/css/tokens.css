@@ -154,11 +154,22 @@
 
   /* ---------- Element Plus 令牌映射（core 内部 el-* 组件用） ---------- */
   --el-color-primary: var(--yzh-color-primary);
-  --el-color-primary-light-3: var(--yzh-color-primary-lighter);
-  --el-color-primary-light-5: #60a5fa;
-  --el-color-primary-light-7: #93c5fd;
-  --el-color-primary-light-8: #bfdbfe;
-  --el-color-primary-light-9: #dbeafe;
+
+  /* ★ 五档浅色档 = **主色混合白色**真派生（EP 语义：light-N = 主色 (100-N×10)% + 白 N×10%）。
+     为什么必须派生（2026-10-07）：EP 的 `.el-button--primary` 把
+       hover  绑 `light-3`、**禁用绑 `light-5`**、浅底/描边绑 `light-7/8/9`
+     （见 element-plus/theme-chalk/el-button.css）。此前这四档写的是
+     Tailwind 蓝-300/200/100 字面量 ⇒ 主色是深藏青 `#1e3a8a`，一禁用却跳到
+     亮天空蓝 `#60a5fa`（两种蓝不是一个色族）；改 `--yzh-color-primary`
+     时按钮的 hover / 禁用 / 浅底**纹丝不动**（25 号 §三 P2-1「单旋钮换肤失效」）。
+     派生后：只改 `--yzh-color-primary` 一处，按钮**全部状态（含禁用）**同步换色。
+     ⚠️ 用 `white` 而非 `#fff`：避免在令牌层引入新字面量（R18）。 */
+  --el-color-primary-light-3: color-mix(in srgb, var(--yzh-color-primary) 70%, white);
+  --el-color-primary-light-5: color-mix(in srgb, var(--yzh-color-primary) 50%, white);
+  --el-color-primary-light-7: color-mix(in srgb, var(--yzh-color-primary) 30%, white);
+  --el-color-primary-light-8: color-mix(in srgb, var(--yzh-color-primary) 20%, white);
+  --el-color-primary-light-9: color-mix(in srgb, var(--yzh-color-primary) 10%, white);
+
   --el-color-primary-dark-2: var(--yzh-color-primary-dark);
   --el-text-color-primary: var(--yzh-color-text-primary);
   --el-text-color-regular: var(--yzh-color-text-regular);

@@ -34,11 +34,13 @@
  */
 import {
   getDirectoryTree,
+  getDocFillPreviewInfo,
   saveAnchorBatch,
 } from '@share/api/workflow/doc-fill-rule'
 import {
   TreeTableLogic,
   expectOk,
+  unwrapOk,
   type ApiResponse,
   type EntityConfigDto,
   type FilterItem,
@@ -293,25 +295,64 @@ export class DocFillRuleLogic extends TreeTableLogic<any> {
   }
 
   /**
-   * 重新加载锚点清单（写进共享仓库）。
+   * 已加载锚点清单对应的模板 Code（空串 = 尚无有效加载）。
+   *
+   * ★ 存在的意义 = 让「父页加载 + 子组件兜底」**不会变成两次请求**（见 `ensureAnchors()`）。
+   * ⛔ 只有**成功**才记 —— 失败不记，下次兜底才会重试。
+   */
+  private anchorLoadedFor = ''
+
+  /**
+   * 重新加载锚点清单（写进共享仓库）—— **强制重拉**。
+   *
+   * 调用时机 = 「数据确实变了」：点树节点 / 扫描完成 / 保存锚点之后。
+   * ⛔ 只想「确保有数据」的场景（组件挂载兜底）请用 `ensureAnchors()`。
    *
    * ⛔ 未上传模板时**不发请求**（与 `shouldApplyTreeFilter` 同一口径）：
    *   那时 `TemplateCode` 为空，`eq ''` 会命中一批脏数据。
    */
   async reloadAnchors(): Promise<void> {
-    if (!this.templateCode) {
+    const tpl = this.templateCode
+    if (!tpl) {
       this.anchorRowsRef.value = []
+      this.anchorLoadedFor = ''
       return
     }
     this.anchorLoadingRef.value = true
     try {
       this.anchorRowsRef.value = await this.loadAnchors()
+      this.anchorLoadedFor = tpl
     } catch {
       // 锚点取不到只影响右栏清单与闸门判据，⛔ 不该把整页打挂
       this.anchorRowsRef.value = []
+      this.anchorLoadedFor = ''
     } finally {
       this.anchorLoadingRef.value = false
     }
+  }
+
+  /**
+   * ★ 确保锚点清单已加载（**幂等**）—— 给「只读它、不该负责拉它」的组件用。
+   *
+   * 【为什么需要它（2026-10-06 代码评审 #2）】
+   *   `PromptPanel` 原先自持 `anchors` ref，并在 `onMounted` 与
+   *   `watch(templateCode…)` 里各拉一次；而父页 `handleNodeClick` **已经**调过
+   *   `reloadAnchors()` ⇒ 同一次点树对 `DocTemplateAnchor/filter` 发**两次**，
+   *   且两份数据在请求返回前**可能短暂不一致**（素材区还显示旧锚点，底部闸门已按新锚点算）。
+   *
+   *   ⇒ 改成「读共享仓库 + 挂载兜底」后，若兜底也用 `reloadAnchors()`，
+   *     只是把重复请求**换了个地方**（且「该模板本来就没锚点」时每次挂载都会重拉）。
+   *   ⇒ 用 `anchorLoadedFor` 标记去重：**同一模板已加载过就不再请求**。
+   *
+   * 与 `reloadAnchors()` 的分工：
+   *   · `reloadAnchors()` = 强制重拉（数据确实变了）
+   *   · `ensureAnchors()` = 没拉过才拉（兜底）
+   */
+  async ensureAnchors(): Promise<void> {
+    const tpl = this.templateCode
+    if (!tpl) return
+    if (this.anchorLoadedFor === tpl) return
+    await this.reloadAnchors()
   }
 
   /**
@@ -393,6 +434,79 @@ export class DocFillRuleLogic extends TreeTableLogic<any> {
   get templateFileName(): string {
     const ex = this.nodeExtra
     return (ex.templateFileName || ex.TemplateFileName || '') as string
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  //  ★ 试填预览（`52` B7 + D1，2026-10-06）
+  //    中栏「填充后预览」视图的路径来源。⛔ 不在树节点上带（见 `reloadPreviewInfo` 注释）。
+  // ════════════════════════════════════════════════════════════════════
+
+  private readonly previewPdfPathRef = ref('')
+  private readonly previewTimeRef = ref('')
+
+  /** 试填预览 PDF 路径（`…/_preview/x.docx.pdf`）；**空串 = 从未试填过** */
+  get previewPdfPath(): string {
+    return this.previewPdfPathRef.value
+  }
+  set previewPdfPath(v: string) {
+    this.previewPdfPathRef.value = v ?? ''
+  }
+
+  /** 最近一次试填时间（ISO 字符串；空串 = 从未试填过） */
+  get previewTime(): string {
+    return this.previewTimeRef.value
+  }
+  set previewTime(v: string) {
+    this.previewTimeRef.value = v ?? ''
+  }
+
+  /** 已查询过试填状态的模板 Code（去重，口径与 `anchorLoadedFor` 一致） */
+  private previewLoadedFor = ''
+
+  /**
+   * ★ 读「这个模板试填过没有」（幂等）。
+   *
+   * 【为什么单独一次请求，而不是塞进左树节点】
+   *   `directory-tree` 的文件叶子已带模板元信息。若把 `PreviewPdfPath` 也塞进去，
+   *   每次**试填**都要让整棵树失效重取（`reloadTree` 是重请求），而试填是高频动作
+   *   ⇒ 单文件粒度查询把刷新限制在**被试填的那一个文件**上。
+   *
+   * 【为什么按模板 Code 去重】
+   *   `handleNodeClick` 会在每次点树时调它。同一次点树可能因筛选/重渲染被调多次，
+   *   而 `templateCode` 相同 ⇒ 结果必然相同 ⇒ 第二次起直接跳过。
+   *   ⚠️ 点**同一个文件**后重跑试填的情况由调用方**显式赋值**（`previewPdfPath = …`），
+   *      ⛔ 不走这里 —— 否则会被「已加载过」挡掉。
+   */
+  async reloadPreviewInfo(force = false): Promise<void> {
+    const tpl = this.templateCode
+    if (!tpl) {
+      this.previewPdfPathRef.value = ''
+      this.previewTimeRef.value = ''
+      this.previewLoadedFor = ''
+      return
+    }
+    if (!force && this.previewLoadedFor === tpl) return
+
+    try {
+      const res = await getDocFillPreviewInfo(tpl)
+      const d = unwrapOk(res)
+      this.previewPdfPathRef.value = d?.PreviewPdfPath || ''
+      this.previewTimeRef.value = d?.PreviewTime || ''
+      this.previewLoadedFor = tpl
+    } catch {
+      // 试填状态取不到**只影响中栏第三个视图**（禁用即可），⛔ 不该把整页打挂。
+      // ⛔ 不记 `previewLoadedFor` —— 失败要允许下次重试（与 `reloadAnchors` 同口径）。
+      this.previewPdfPathRef.value = ''
+      this.previewTimeRef.value = ''
+      this.previewLoadedFor = ''
+    }
+  }
+
+  /** 试填产物就绪时，把新状态写进仓库（避免再打一次接口） */
+  applyPreviewResult(pdfPath: string, previewTime: string): void {
+    this.previewPdfPathRef.value = pdfPath || ''
+    this.previewTimeRef.value = previewTime || ''
+    this.previewLoadedFor = this.templateCode
   }
 
   /**

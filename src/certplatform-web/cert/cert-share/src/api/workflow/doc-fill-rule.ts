@@ -131,6 +131,7 @@ export interface DocFillPromptVersion {
   Status: string
   SystemPrompt?: string
   UserTemplate?: string
+  OutputSchema?: string
   Sort?: number
   IsValid: number
   IsDeleted?: boolean
@@ -195,7 +196,11 @@ export function getDirectoryTree() {
 /**
  * 某 `promptCode` 的全部版本（**含已软删**，按 `Version` 降序）。
  *
- * ⚠️ `orgCode` 传空串 = 全局作用域；后端按「机构非空优先」选取。
+ * ⚠️ 可见范围与 `resolve` 一致（`OrgCode = ''` 或命中 `orgCode`）——
+ * 「编辑生效版本」= resolve 拿 `Picked.Code` → 本端点取**整行** → `update` 整行提交，
+ * ⛔ 不能只发 `{Code, UserTemplate}`（`updateFields` 是全部 `BcFlag` 列，缺的会被清空）。
+ *
+ * ⚠️ `orgCode` 传空串 = 只看全局作用域；后端按「机构非空优先」选取。
  */
 export function getDocFillPromptVersions(promptCode: string, orgCode = '') {
   return yzhApi.get<
@@ -311,6 +316,45 @@ export function setDocTemplatePrompt(templateCode: string, promptCode: string) {
     TemplateCode: templateCode,
     PromptCode: promptCode,
   })
+}
+
+// ====================================================================
+// ★ 自动生成全文填写提示词（2026-10-07 用户裁决：「自动生成 = 后端调 LLM」）
+// ====================================================================
+
+/** `POST /DocFillPrompt/generate` 的请求体（PascalCase，与后端 `GenerateRequest` 逐字一致） */
+export interface GenerateFillPromptPayload {
+  /** 文档作用（全局规则 Tab「文档作用」文本框内容）；与 Anchors 至少给一项 */
+  DocPurpose?: string
+  /** 文档角色（可空） */
+  DocRole?: string
+  /** 现有提示词正文；**非空 = 优化模式**（保留结构，不全量重写） */
+  CurrentPrompt?: string
+  /** 锚点清单（前端从当前模板锚点行组装） */
+  Anchors?: { AnchorRef: string; ValueType?: string; Source?: string }[]
+}
+
+/** 生成结果 —— ⛔ **不落库**，由调用方写进文本框、点保存才持久化 */
+export interface GenerateFillPromptResult {
+  /** 提示词正文（后端已 `StripFence` 去围栏） */
+  Prompt: string
+  Model?: string
+  DurationMs?: number
+  /** `true` = 本次是优化模式（带了 `CurrentPrompt`） */
+  Optimize: boolean
+}
+
+/**
+ * ★ **按「锚点清单 + 文档作用」LLM 生成提示词正文**（全局填写规则卡片「自动生成」）。
+ *
+ * ⚠️ 生成约 5~15s ⇒ 调用方需给按钮加载态；失败时业务文案已在 `err` 里。
+ * ⚠️ 生成≠保存：未挂接提示词时调用方在生成成功后自行走「新建+挂接」落库。
+ */
+export function generateFillPrompt(payload: GenerateFillPromptPayload) {
+  return yzhApi.post<ApiResponse<GenerateFillPromptResult>>(
+    `${BASE}/DocFillPrompt/generate`,
+    payload,
+  )
 }
 
 // ====================================================================
@@ -562,5 +606,131 @@ export function listFillParamDefs(keyword?: string) {
   return yzhApi.post<ApiResponse<{ Items: any[]; TotalCount: number }>>(
     '/api/Admin/Cert/FillParamDef/filter',
     { Page: 1, PageSize: 500, Filters: filters },
+  )
+}
+
+// ====================================================================
+// ★ 试填 / 预览（`52` B7 + D1，2026-10-06）
+//
+// ⚠️ **本段的 BASE 与文件其余部分不同** —— 上面全是 `/api/Admin/Workflow/*`，
+//    本段是 `/api/Auditor/DocFillPreview/*`。这不是笔误：
+//    试填的唯一实现是 `DocumentFillOrchestrator`（**Auditor 工程**），
+//    而依赖方向是 `Auditor → Admin`（单向），`Admin` ⛔ 不能引 `Auditor`
+//    ⇒ 控制器只能落在专家端。`52` 写的 `api/Admin/Workflow/DocFillPreview` **落不了地**。
+//    （用户 2026-10-05 原话只要求「新建一个 controller」，`api/Admin/…` 是文档作者补的路径。）
+//
+// 【链路（`52` §12.2，用户口径「先按 office 填写，再调后台方法形成 pdf」）】
+//   ① NPOI 填空白模板（**只读**：不写账本、不更新宿主行、不产企业产物）
+//   ② IFileConvertCore 转 PDF（纯内核，不上传产物）
+//   ③ 落 MinIO `…/_preview/{模板名}.docx.pdf`（**固定 key，重复试填覆盖**）
+//   ④ 回写 `cert_doc_template.PreviewPdfPath` + `PreviewTime`（列级）
+//
+// 【★ 门槛低于「发布」】试填**不要求** `PublishStatus='published'` ——
+//   试填正是「发布前验证规则」的工具，要求已发布 = 发布后才能验证 = 死锁。
+// ====================================================================
+
+const AUDITOR_BASE = '/api/Auditor/DocFillPreview'
+
+/** `POST /DocFillPreview/preview` 的返回（字段 PascalCase，与后端逐字一致） */
+export interface DocFillPreviewResult {
+  TemplateCode: string
+  /** 空白模板在 MinIO 的路径（`…/_template/x.docx`） */
+  TemplateStoragePath: string
+  /**
+   * ★ 试填预览 PDF 的路径（`…/_preview/x.docx.pdf`）。
+   *
+   * 中栏「填充后预览」视图直接把它交给 `DocPreview` ——
+   * 后者只有 `storagePath`（无 `fileCode`）时走 `preview-by-path`，
+   * 而该端点对 `.pdf` 是**原样透传**（读字节即返回，不二次转换）。
+   */
+  PreviewPdfPath: string
+  PreviewTime?: string
+  /** 路径是否已成功回写 DB（`false` = 字节已落 MinIO、前端照样能看，只是「试填过」没记住） */
+  PathSaved: boolean
+  /** `docx` / `xlsx` */
+  FileKind: string
+  FileName: string
+  /** `filled` / `partial` / `skipped_no_anchor` / `failed` */
+  Status: string
+  Message?: string
+  AnchorCount: number
+  PendingCount: number
+  Completion: number
+  Verified: boolean
+  /** ⛔ 非致命问题如实回报（越界 / 丢弃 / 自验收残留），⛔ 不静默 */
+  Warnings: string[]
+  Pendings: { AnchorRef: string; Key: string; Reason: string }[]
+  /**
+   * 取值明细。
+   *
+   * ⚠️ `Value` 是**未截断**的完整值（预览 Tab 编辑框的初值、回传覆盖的原文）；
+   *    `Display` 是给表格看的 120 字符截断版 —— ⛔ 别拿 `Display` 回传，
+   *    那会把长值静默截断后写进产物。
+   */
+  Values: {
+    AnchorRef: string
+    Key: string
+    Source: string
+    Value: string
+    Display: string
+  }[]
+}
+
+/** 试填人工覆盖一行（`POST /DocFillPreview/preview` 的 `Overrides[]`，PascalCase 与后端逐字一致） */
+export interface FillPreviewOverride {
+  /** 定位锚点的业务键（后端按它建索引，⛔ 不用 `Key` 定位） */
+  AnchorRef: string
+  /** 冗余传入便于日志对账 */
+  Key?: string
+  /** 覆盖后的文本；空串 = 显式清空（仍算已填，⛔ 不进 Pendings） */
+  Value: string
+}
+
+/** `GET /DocFillPreview/preview-info` 的返回 */
+export interface DocFillPreviewInfo {
+  TemplateCode: string
+  /** 空 = 从未试填过 ⇒ 中栏「填充后预览」视图禁用 */
+  HasPreview: boolean
+  PreviewPdfPath: string
+  PreviewTime?: string
+}
+
+/**
+ * ★ **试填一份空白模板并生成预览 PDF**（`52` B7）。
+ *
+ * 前置（前端闸 = C8）：锚点**配齐**才让点 —— `logic.anchorReadiness.ready`
+ * （已上传模板 ∧ 扫描完成 ∧ 至少 1 个锚点 ∧ 无未配来源 ∧ 无孤儿）。
+ * ⛔ 后端**不设**这道闸（`52` §六 P2'：程序不阻断业务组合，只如实推导）——
+ * 闸门在前端，是为了「不让用户白等一次必然全空的试填」。
+ *
+ * ⚠️ 首次调用要等 LibreOffice 转 PDF（秒级，冷启动更久）⇒ 调用方需给加载态。
+ *
+ * @param overrides 人工覆盖（预览 Tab「自动填写 → 用户改 → 再预览」）。
+ *   命中 `AnchorRef` 的锚点不走占位工厂、直接落笔；空串也算已填。
+ *   ⛔ 只传**被用户改过**的项 —— 未传的锚点每次都会重新推导（结果稳定），
+ *   全量回传只是把「用户没动的值」也冻结成人工值，白白丢掉规则更新的效果。
+ */
+export function runDocFillPreview(
+  templateCode: string,
+  overrides?: FillPreviewOverride[],
+) {
+  return yzhApi.post<ApiResponse<DocFillPreviewResult>>(`${AUDITOR_BASE}/preview`, {
+    TemplateCode: templateCode,
+    Overrides: overrides ?? [],
+  })
+}
+
+/**
+ * 读「这个模板试填过没有」—— 切文件时驱动中栏「填充后预览」视图的可用性。
+ *
+ * 【为什么不在左树节点上带】
+ *   `directory-tree` 的文件叶子已带模板元信息（锚点数 / 发布状态）。
+ *   再把 `PreviewPdfPath` 塞进去，每次**试填**都要让整棵树失效重取，
+ *   而试填是高频动作 ⇒ 单文件粒度查询把刷新限制在**被试填的那一个文件**上。
+ */
+export function getDocFillPreviewInfo(templateCode: string) {
+  return yzhApi.get<ApiResponse<DocFillPreviewInfo>>(
+    `${AUDITOR_BASE}/preview-info`,
+    { templateCode },
   )
 }

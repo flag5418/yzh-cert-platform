@@ -13,7 +13,7 @@
  */
 import { YzhEmptyState } from '@yzh-core'
 import { ref, computed } from 'vue'
-import { Upload, RefreshRight, Delete, Close, Files } from '@element-plus/icons-vue'
+import { Upload, RefreshRight, Delete, Close } from '@element-plus/icons-vue'
 import type { PromptTestResultDto, ConvertLogDto } from '@share/api/workflow/prompt-workbench'
 // ★ accept 来自共享上传契约（⛔ 本页不再硬编码后缀串；改规则只改 constants/upload-file-policy.ts）
 import { buildAcceptAttribute } from '@share/constants/upload-file-policy'
@@ -152,7 +152,7 @@ const metaLine = computed(() => {
 
     <!-- 结果区 -->
     <div class="test-panel__result">
-      <YzhEmptyState :icon="Files" v-if="!result" title="无分析结果" />
+      <YzhEmptyState v-if="!result" title="无分析结果" />
 
       <template v-else>
         <!-- 状态头 -->

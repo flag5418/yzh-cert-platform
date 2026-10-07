@@ -66,6 +66,8 @@ export interface StandardOptionDto {
   standardCode: string
   standardName: string
   display: string
+  /** 启用状态（0/1，左树启用/禁用徽章用；后端已过滤 isValid=1） */
+  isValid?: number
 }
 
 export interface PromptGenerateResultDto {

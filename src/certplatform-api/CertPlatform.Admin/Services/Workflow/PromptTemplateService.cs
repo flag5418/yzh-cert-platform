@@ -196,7 +196,8 @@ public class PromptTemplateService
                 Code = x.Code ?? "",
                 StandardCode = x.StandardCode,
                 StandardName = x.StandardName,
-                Display = $"{x.StandardName}（{x.StandardCode}）"
+                Display = $"{x.StandardName}（{x.StandardCode}）",
+                IsValid = x.IsValid
             })
             .ToList();
     }
@@ -221,5 +222,8 @@ public class PromptTemplateService
         /// <summary>下拉展示文本</summary>
         [System.Text.Json.Serialization.JsonPropertyName("display")]
         public string Display { get; set; } = "";
+        /// <summary>启用状态（0/1，左树启用/禁用徽章用；查询已过滤 IsValid=1）</summary>
+        [System.Text.Json.Serialization.JsonPropertyName("isValid")]
+        public int IsValid { get; set; } = 1;
     }
 }
