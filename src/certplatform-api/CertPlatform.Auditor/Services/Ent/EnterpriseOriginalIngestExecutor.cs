@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
@@ -241,6 +243,51 @@ namespace CertPlatform.Auditor.Services.Ent
             var r = await core.ConvertToMarkdownAtAsync(fileName, sourcePath, content);
             if (!r.Success || r.Content == null || string.IsNullOrEmpty(r.TargetPath))
             {
+                // ★ T1（2026-10-07）：图片 / PDF 走 anydoc 出不了 Markdown（unsupported）时，
+                //   回退到<b>视觉模型 OCR</b>（<c>IOcrProvider.ToMarkdownAsync</c>，读同一行 <c>ai_vision_config</c>）
+                //   产出 Markdown。得到 Markdown 后，分析段（AnalyzeExecutor）的 L1/L2 文本管道
+                //   会像普通文本文件一样自然产出 分类/作用/标签 ⇒ 图片/PDF 也能进画像。
+                //   ⛔ 不伪造内容：OCR 也失败（未接入/模型不可用/超大图）则落到下方 failed 分支，
+                //   如实报能力边界，⛔ 绝不写占位文本（占位流进 LLM 会零报错地出错误结果）。
+                if (UploadFilePolicy.IsImageOrPdf(row.FileType)
+                    && _serviceProvider.GetService<IOcrProvider>() is { IsAvailable: true } ocr)
+                {
+                    var md = await ocr.ToMarkdownAsync(fileName, content);
+                    if (md.Success && md.Content != null && md.Content.Length > 0)
+                    {
+                        var targetPath = PathBuilder.Product(sourcePath, PathBuilder.MarkdownSegment, ".md");
+                        if (string.IsNullOrEmpty(targetPath))
+                        {
+                            await SetMdStatusAsync(db, row, EnterpriseOriginalService.ConvertStatus.Failed,
+                                "源文件缺少存储路径，无法派生 Markdown 产物路径");
+                            return false;
+                        }
+                        try
+                        {
+                            await storage.UploadAsync(targetPath.TrimStart('/'),
+                                new MemoryStream(md.Content), md.Content.Length, "text/markdown");
+                            row.MarkdownPath = targetPath;
+                            row.ConvertDate = DateTime.Now;
+                            await SetMdStatusAsync(db, row,
+                                EnterpriseOriginalService.ConvertStatus.Completed,
+                                "Markdown 由视觉模型 OCR 提取（ai_vision_config）");
+                            _logger.LogInformation("[原始资料入库] 视觉 OCR 回退成功: {Code} → {Path}",
+                                row.Code, targetPath);
+                            return true;
+                        }
+                        catch (Exception ex)
+                        {
+                            await SetMdStatusAsync(db, row,
+                                EnterpriseOriginalService.ConvertStatus.Failed,
+                                $"视觉 OCR 产物上传失败：{ex.Message}");
+                            return false;
+                        }
+                    }
+                    // OCR 不可用 / 失败 ⇒ 落到下方失败分支，如实报能力边界（不静默）
+                    _logger.LogInformation("[原始资料入库] 视觉 OCR 未产出 Markdown（{Msg}），按能力边界处理: {Code}",
+                        md.Message, row.Code);
+                }
+
                 // ⛔ unsupported 是**能力边界**不是故障：如实报出来让用户走「人工填写」，
                 //   ⛔ 绝不伪造占位内容 —— 占位文本流到 LLM 会生成一份「格式正确的错误结果」且零报错
                 await SetMdStatusAsync(db, row, r.Status, r.Message);

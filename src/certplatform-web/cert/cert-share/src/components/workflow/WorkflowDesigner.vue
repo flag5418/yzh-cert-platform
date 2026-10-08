@@ -268,18 +268,30 @@ const canvasNodesForPanel = computed(() =>
 )
 
 /**
+ * 「未配 DAG」归一化 —— ★ 与后端 `ValidationRuleRules.NormalizeDag` / `HasWorkflow` 同口径。
+ *
+ * NULL / '' / '{}' / 'null' / '[]' 一律视为未配置。
+ * ⚠️ 必须识别 '{}'：历史上空画布被 `JSON.stringify({})` 落库过，只判 `!json` 会误判为"已配置"。
+ */
+function normalizeDag(json: string | null | undefined): string | null {
+  if (!json) return null
+  const t = String(json).trim()
+  return t === '' || t === '{}' || t === 'null' || t === '[]' ? null : json
+}
+
+/**
  * 该叶子是否已配置工作流
  * 兼容两套实体字段：ValidationRule.RuleJson / ReportSection.WorkflowConfig（均为 PascalCase）
  */
 function hasWorkflow(leaf: any): boolean {
   if (!leaf) return false
-  return !!(leaf.WorkflowConfig || leaf.RuleJson)
+  return !!normalizeDag(leaf.WorkflowConfig || leaf.RuleJson)
 }
 
-/** 取叶子的工作流配置串 */
+/** 取叶子的工作流配置串（未配置 → null） */
 function getWorkflowConfig(leaf: any): string | null {
   if (!leaf) return null
-  return leaf.WorkflowConfig || leaf.RuleJson || null
+  return normalizeDag(leaf.WorkflowConfig || leaf.RuleJson)
 }
 
 /** 取叶子的布局串 */

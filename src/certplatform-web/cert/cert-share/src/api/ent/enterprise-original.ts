@@ -56,7 +56,7 @@ export type PolicyReasonKey = 'covered_by_params' | 'irrelevant' | 'duplicate' |
 export interface StandardRef {
   /** 标准业务键（GUID）—— 传回后端的就是这个 */
   Code: string
-  /** 标准编号（如 iso9001-2015），只用于展示 */
+  /** 标准编号（如 iso9001），只用于展示 */
   StandardCode: string
   /** 标准中文名（如 9001标准） */
   StandardName: string

@@ -298,6 +298,8 @@ function onReplacePick(file: any) {
 
       <el-alert type="info" :closable="false" show-icon class="dialog-tip">
         按「文件夹路径（M0）→ 文件名精确（M1）→ 主词包含（M2）→ 目录+扩展名（M3）」的顺序自动匹配槽位。
+        <b>扩展名必须与模板同族</b>（doc↔docx、xls↔xlsx、ppt↔pptx、jpg↔jpeg）：模板要「.doc」却传「.pdf」
+        即使命中文件名也判为未归属，槽位保持「缺失」。
         M3 是分不准时的兜底，<b>默认不勾选</b>，请你确认后再勾。
         没匹配上的文件不会进入任何标准。
       </el-alert>
@@ -415,7 +417,7 @@ function onReplacePick(file: any) {
           </el-alert>
           <div v-for="u in logic.batchPlanUnmatched.value" :key="u.Key" class="plan-row assign-row">
             <span class="plan-row__file" :title="u.RelativePath || u.FileName">{{ u.FileName }}</span>
-            <el-tag size="small" :type="u.Reason === 'ambiguous' ? 'warning' : 'info'">
+            <el-tag size="small" :type="u.Reason === 'ambiguous' || u.Reason === 'ext_mismatch' ? 'warning' : 'info'">
               {{ logic.unmatchedReasonText(u.Reason) }}
             </el-tag>
             <el-select :model-value="logic.unmatchedAssignOf(u.Key).StandardCode" placeholder="指派到标准" size="small" style="width:150px"

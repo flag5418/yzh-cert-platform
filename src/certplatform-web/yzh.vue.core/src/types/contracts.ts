@@ -8,8 +8,9 @@
  * ② 业务实体（DTO / EntityConfig / ColumnConfig / TreeItemDto / PagedResult...）：
  *    PascalCase（与 C# 属性、数据库列名一致，原样输出）
  * ③ 字典 key（EntityConfigDto.NewEntity / Schema）：
- *    camelCase（YZH.Core.Stand/EntitySchemaHelper 反射生成时显式 ToCamelCase）
- *    → 前端 formData / 业务数据 用 camelCase key，但访问业务实体字段用 PascalCase
+ *    PascalCase（EntitySchemaHelper 保持 prop.Name —— 2026-10-08 实测 /config 确认；
+ *    此前注释写的 camelCase/ToCamelCase 与后端不符，已勘误）
+ *    → 前端 formData / 字典 key 与业务实体字段一样用 PascalCase
  * ④ FilterRequest / FilterItem：PascalCase（与 YZH.Core.Stand/Request 一致）
  *
  * 不维护：
@@ -133,7 +134,7 @@ export interface FilterItem {
 
 // ========================================================
 // ④ 实体配置（PascalCase，YZH.Core.Stand/EntityConfigDto）
-// 字典 key（NewEntity/Schema）说明：key 是 camelCase（反射生成 ToCamelCase）
+// 字典 key（NewEntity/Schema）说明：key 是 PascalCase（EntitySchemaHelper 保持 prop.Name，2026-10-08 实测确认）
 // ========================================================
 
 export interface ColumnConfig {
@@ -221,13 +222,13 @@ export interface EntityConfigDto {
   FormCols?: number
   Columns: ColumnConfig[]
   /**
-   * 空实体模板：camelCase key（YZH.Core.Stand/EntitySchemaHelper 反射 ToCamelCase）
-   * 例：{ code: "", userName: "", enable: 1, orgCode: "root" }
+   * 空实体模板：PascalCase key（YZH.Core.Stand/EntitySchemaHelper 保持 prop.Name）
+   * 例：{ Code: "", UserName: "", OrgCode: "root" }
    */
   NewEntity?: Record<string, any>
   /**
-   * 字段结构描述：camelCase key → 字段描述
-   * 例：{ code: { type: "string", default: "", optional: false } }
+   * 字段结构描述：PascalCase key → 字段描述
+   * 例：{ Code: { Type: "string", Default: "", Optional: false } }
    */
   Schema?: Record<string, EntityFieldSchema>
   /** 兼容旧字段（来自 JSON 文件） */

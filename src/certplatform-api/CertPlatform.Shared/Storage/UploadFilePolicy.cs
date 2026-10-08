@@ -209,6 +209,20 @@ namespace CertPlatform.Shared.Storage
                    || PdfExtensions.Contains(v.Extension, StringComparer.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// ★ 该<b>扩展名</b>是否为「图片 或 PDF」（§2 路径② 需走视觉模型 分类+作用+Markdown 的判定，2026-10-07）。
+        /// <para>复用已有 <see cref="ImageExtensions"/> / <see cref="PdfExtensions"/>，⛔ 不另写清单；
+        /// 接受带点（<c>.jpg</c>）或不带点（<c>jpg</c>），归一化后比对。</para>
+        /// </summary>
+        public static bool IsImageOrPdf(string? extension)
+        {
+            var ext = (extension ?? "").Trim().ToLowerInvariant();
+            if (ext.Length == 0) return false;
+            if (!ext.StartsWith(".", StringComparison.Ordinal)) ext = "." + ext;
+            return ImageExtensions.Any(e => string.Equals(e, ext, StringComparison.OrdinalIgnoreCase))
+                   || PdfExtensions.Any(e => string.Equals(e, ext, StringComparison.OrdinalIgnoreCase));
+        }
+
         #endregion
     }
 }

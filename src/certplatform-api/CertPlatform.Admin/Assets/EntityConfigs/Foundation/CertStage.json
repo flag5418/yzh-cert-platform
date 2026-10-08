@@ -42,26 +42,6 @@
       "Align": "left"
     },
     {
-      "FieldName": "Category",
-      "DesName": "分类",
-      "Type": "ComboBox",
-      "Sxh": 3,
-      "XsFlag": true,
-      "BcFlag": true,
-      "Yxk": true,
-      "Width": 120,
-      "Row": 2,
-      "Col": 0,
-      "RowSpan": 1,
-      "ColSpan": 1,
-      "GroupIndex": "0",
-      "Mrz": "process",
-      "Enable": true,
-      "Sortable": true,
-      "Align": "left",
-      "DictCode": "stage_category"
-    },
-    {
       "FieldName": "SortOrder",
       "DesName": "排序",
       "Type": "Decimal",
@@ -133,6 +113,24 @@
       "GroupIndex": "99",
       "Mrz": "active",
       "Enable": false
+    },
+    {
+      "FieldName": "StatusName",
+      "DesName": "运营状态",
+      "Type": "Other",
+      "Sxh": 7,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": false,
+      "Width": 90,
+      "Row": 0,
+      "Col": 0,
+      "RowSpan": 1,
+      "ColSpan": 1,
+      "GroupIndex": "0",
+      "Mrz": "",
+      "Enable": false,
+      "Align": "center"
     },
     {
       "FieldName": "CreateTime",
@@ -226,5 +224,21 @@
   "RowButtons": {
     "Enable": true
   },
-  "FormCols": 1
+  "FormCols": 1,
+  "SearchFields": [
+    {
+      "Label": "阶段编码",
+      "Field": "StageCode",
+      "Operator": "like",
+      "ControlType": "input",
+      "Width": 160
+    },
+    {
+      "Label": "阶段名称",
+      "Field": "StageName",
+      "Operator": "like",
+      "ControlType": "input",
+      "Width": 180
+    }
+  ]
 }

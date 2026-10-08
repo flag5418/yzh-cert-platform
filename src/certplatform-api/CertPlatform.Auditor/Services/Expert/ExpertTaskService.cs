@@ -435,9 +435,9 @@ namespace CertPlatform.Auditor.Services.Expert
 
             if (taskType == ExpertTaskConst.TaskTypeNcCheck)
             {
-                // ⚠️ ValidationRule 只继承 BaseEntity（无 ISoftDelete / IIsValid）→ 启用判据是 IsActive
+                // ★ 2026-10-08：ValidationRule 已实现 IIsValid（铁律九），启用判据 = IsValid（不再是 IsActive）
                 var rules = (await _db.GetListAsync<ValidationRule>(x =>
-                    x.PhaseCode == stageCode && x.IsActive)).Data
+                    x.PhaseCode == stageCode && x.IsValid == 1)).Data
                     ?? new List<ValidationRule>();
 
                 if (standardCodes is { Count: > 0 })
@@ -470,7 +470,8 @@ namespace CertPlatform.Auditor.Services.Expert
                         SeverityDefault = r.SeverityIfViolated,
                         LastAuditedTime = existing?.LastAuditedTime,
                         LastConclusion = null, // 由前端按需下钻历史轮次
-                        HasWorkflow = !string.IsNullOrWhiteSpace(r.RuleJson),
+                        // ★ 唯一判据（NULL = 未配 DAG）见 ValidationRuleRules.HasWorkflow
+                        HasWorkflow = r.HasWorkflow(),
                         // 系统建议：从未检查过 / 上次不符 / 人工判定 → 建议勾选
                         Suggested = existing == null || existing.RoundCount == 0
                     });
@@ -875,7 +876,11 @@ namespace CertPlatform.Auditor.Services.Expert
             string orgCode, TaskCreateRequest req, TaskCandidateDto c,
             string userCode, string? userName, DateTime now)
         {
-            var rule = (await _db.GetOneAsync<ValidationRule>(x => x.Code == c.ItemCode)).Data;
+            // ★ 用 includeDisabled: true 取规则（2026-10-08）：实体实现 IIsValid 后 GetOneAsync 会套
+            //   IsValid=1 过滤；本处为规则快照 upsert（含「复活」已禁用实体行的分支），
+            //   过滤会导致停用规则的任务落不到快照、条款号/严重度全空。
+            var rule = (await _db.GetListAsync<ValidationRule>(
+                x => x.Code == c.ItemCode, includeDisabled: true)).Data?.FirstOrDefault();
 
             // ★ 条款号 / 条款标题必须**显式 JOIN** `cert_iso_clause` 取。
             //   `ValidationRule.ClauseNumber` / `ClauseTitle` 是 `[SugarColumn(IsIgnore = true)]`
@@ -905,7 +910,8 @@ namespace CertPlatform.Auditor.Services.Expert
                 existing.ClauseTitle = clause?.Title;
                 existing.JudgeMode = rule?.JudgeMode;
                 existing.SeverityDefault = rule?.SeverityIfViolated;
-                existing.WorkflowCode = rule?.WorkflowCode;
+                // ★ 不再快照 WorkflowCode（2026-10-08）：DAG 已由 cert_validation_rule.RuleJson 承载，
+                //   该列在规则表已删；CertExpertNcItem.WorkflowCode 列保留但不再写入（历史 NULL）
                 existing.UpdateBy = userCode;
                 existing.UpdateTime = now;
 
@@ -915,7 +921,6 @@ namespace CertPlatform.Auditor.Services.Expert
                     nameof(CertExpertNcItem.RuleNumber), nameof(CertExpertNcItem.ClauseCode),
                     nameof(CertExpertNcItem.ClauseNumber), nameof(CertExpertNcItem.ClauseTitle),
                     nameof(CertExpertNcItem.JudgeMode), nameof(CertExpertNcItem.SeverityDefault),
-                    nameof(CertExpertNcItem.WorkflowCode),
                     nameof(CertExpertNcItem.UpdateBy), nameof(CertExpertNcItem.UpdateTime));
                 return up.Success ? Result<bool>.Ok(true) : Result<bool>.Fail(up.Error);
             }
@@ -936,7 +941,6 @@ namespace CertPlatform.Auditor.Services.Expert
                 ClauseTitle = clause?.Title,
                 JudgeMode = rule?.JudgeMode,
                 SeverityDefault = rule?.SeverityIfViolated,
-                WorkflowCode = rule?.WorkflowCode,
                 RuleVersion = 1,
                 RoundCount = 0,
                 CreateBy = userCode,

@@ -22,8 +22,9 @@ namespace CertPlatform.Auditor.Entities.Cert
     ///
     /// <para><b>为什么阶段表统一用 cert_cert_stage</b>：用户 2026-09-25 裁定。
     /// 菜单 <c>MENU_00203</c>「认证阶段定义」已指向它，机构-阶段关联
-    /// （<c>cert_org_stage</c>）也读它；<c>cert_phase_definition</c> 是重复实现的孤儿
-    /// （前端零引用、0 行），本次不动。</para>
+    /// （<c>cert_org_stage</c>）也读它；孤儿 <c>cert_phase_definition</c> 已于
+    /// 2026-10-08 删除（Q4 裁决，见 scripts/db/20261008_drop_cert_phase_definition_V1.sql）。
+    /// 2026-10-08 Q2：本表 <c>StageCode</c> 列值 = <c>cert_cert_stage.Code</c>（GUID）。</para>
     ///
     /// 命名规范（YZH 铁律七）：DB 列名 = C# 属性名 = TS 字段名 = PascalCase
     /// </summary>

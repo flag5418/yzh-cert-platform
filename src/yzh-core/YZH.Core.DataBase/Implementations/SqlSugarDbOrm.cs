@@ -4,6 +4,7 @@ using System.Security;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
+using YZH.Core.Stand.Annotations;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Result;
@@ -34,11 +35,23 @@ public class SqlSugarDbOrm : IDbOrm
 
     // ==================== 查询 ====================
 
+    /// <summary>
+    ///     只读查询（视图路由）：实体标了 [ViewName] 时改查视图，否则查物理表。
+    ///     ⚠️ 修复（2026-10-08）：原先所有只读查询都直连物理表，[ViewName] 视图路由静默失效。
+    ///     增删改仍走物理表（IsOnlyIgnoreInsert/Update 字段从写入 SQL 中剔除）。
+    /// </summary>
+    private ISugarQueryable<T> QueryableRead<T>() where T : class, new()
+    {
+        var viewName = typeof(T).GetCustomAttributes(typeof(ViewNameAttribute), true)
+            .Cast<ViewNameAttribute>().FirstOrDefault()?.ViewName;
+        return string.IsNullOrEmpty(viewName) ? _client.Queryable<T>() : _client.Queryable<T>().AS(viewName);
+    }
+
     public async Task<Result<T?>> GetOneAsync<T>(Expression<Func<T, bool>> predicate) where T : class, new()
     {
         try
         {
-            var entity = await _client.Queryable<T>()
+            var entity = await QueryableRead<T>()
                 .Where(predicate)
                 .Where(IsDeletedCondition<T>())
                 .Where(IsValidCondition<T>())
@@ -59,7 +72,7 @@ public class SqlSugarDbOrm : IDbOrm
         try
         {
             // 仅过滤软删除，不过滤 IsValid —— 上传/转换状态机需读取 pending/replacing 中间态
-            var entity = await _client.Queryable<T>()
+            var entity = await QueryableRead<T>()
                 .Where(predicate)
                 .Where(IsDeletedCondition<T>())
                 .FirstAsync();
@@ -77,7 +90,7 @@ public class SqlSugarDbOrm : IDbOrm
     {
         try
         {
-            var query = _client.Queryable<T>().Where(IsDeletedCondition<T>());
+            var query = QueryableRead<T>().Where(IsDeletedCondition<T>());
             if (!includeDisabled)
                 query = query.Where(IsValidCondition<T>());
             if (predicate != null)
@@ -108,7 +121,11 @@ public class SqlSugarDbOrm : IDbOrm
             var tableName = !string.IsNullOrEmpty(options.TableName)
                 ? options.TableName
                 : GetTableName<T>();
-            var query = _client.Queryable<T>(tableName);
+            // ⚠️ 修复（2026-10-08）：原先写成 Queryable<T>(tableName)，SqlSugar 5.1.4 把该字符串
+            // 当"表别名"（生成 FROM `cert_cert_stage` `v_cert_stage`），视图路由静默失效 ——
+            // 实体上的视图列（CategoryName/StatusName）一旦参与 SELECT 就报 Unknown column。
+            // 换表名的正确 API 是 .AS(tableName)。
+            var query = _client.Queryable<T>().AS(tableName);
 
             // 软删除过滤（反引号包裹列名，避免 SQL 解析问题）
             var isDeletedCol = GetColumnName<T>("IsDeleted");
@@ -375,7 +392,7 @@ public class SqlSugarDbOrm : IDbOrm
         try
         {
             // 获取符合条件的记录
-            var entities = await _client.Queryable<T>()
+            var entities = await QueryableRead<T>()
                 .Where(filter)
                 .ToListAsync();
             

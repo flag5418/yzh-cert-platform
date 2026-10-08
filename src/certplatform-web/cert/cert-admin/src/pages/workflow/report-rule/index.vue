@@ -85,6 +85,7 @@ async function handleNodeClick(node: TreeNode) {
       :fields="logic.formFields"
       :loading="logic.submitting.value"
       :cols="logic.formLayoutCols as any"
+      label-width="130px"
       width="640px"
       @submit="logic.submitForm()"
     >

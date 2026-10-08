@@ -2,18 +2,15 @@
 /**
  * ISO 标准 → 条款管理（左树右表，配置驱动 TreeTable 架构）
  *
- * 布局结构：
- * - 左侧：标准树（扁平，所有标准为根节点，含搜索、增删改）
- * - 右侧：条款树形表格（菜单模式：整树、默认全展开、行内新增下级、无分页）
+ * ★ 三层体系裁决（2026-10-08）：
+ * - 左树：**全只读**（体系/族/版本均不可增删改）
+ * - 右表：仅当选中「版本」节点时加载条款树；否则显示空提示
+ * - 条款操作（增/删/改）仍可用 —— 但只作用于已选中的版本
  *
- * 配置驱动：
- * - 表格列从 logic.columns 自动获取（Foundation/ISOClause.json）
- * - 表单字段从 logic.formFields 自动获取
- * - 树节点表单从 logic.treeFormFields 自动获取
- * - toolbar 按钮根据配置动态渲染
+ * 注：标准（版本）本身的增删改在「标准管理」/cert/iso-standard 独立页面完成。
  */
 import { Delete, Plus, RefreshRight } from '@element-plus/icons-vue'
-import { confirmOrFalse, YzhForm, YzhTreeTableLayout, YzhTreeTable, type TreeNode } from '@yzh-core'
+import { confirmOrFalse, YzhForm, YzhEmptyState, YzhStatusBadge, resolveStatusBadge, YzhTreeTableLayout, YzhTreeTable, type TreeNode } from '@yzh-core'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, nextTick, ref } from 'vue'
 import { ISOStandardTreeTableLogic } from './logic'
@@ -26,15 +23,12 @@ window.addEventListener('error', (event) => {
   }
 })
 
-// 实例化 Logic
 const logic = new ISOStandardTreeTableLogic()
 
-// 本地状态
 const treeTableRef = ref()
 const tableRef = ref()
 const selectedRows = ref<any[]>([])
 
-// 行操作按钮（含 add-child；基类注入 edit/delete/toggle-valid）
 const rowActionButtons = computed(() => logic.rowActions)
 
 const dialogTitle = computed(() =>
@@ -42,71 +36,29 @@ const dialogTitle = computed(() =>
 )
 
 // ========================================================
-// 树节点操作
+// 树节点点击：仅版本节点（_level=2）触发条款加载
 // ========================================================
 
-/** 树节点点击 → 加载该标准下条款 */
 async function handleNodeClick(node: TreeNode) {
+  const extra: Record<string, any> = node.Extra ?? {}
+  // ★ 三层体系裁决：本页面左树全只读，仅 level=2 的版本节点触发右侧条款加载
+  if (node.NodeType === 'virtual' || extra._level !== 2) return
   await logic.onNodeClick(node)
-  // 表格通过 dataLoader 自动刷新，无需手动调用 refresh
-}
-
-/** 树节点自定义操作（编辑/删除） */
-async function handleTreeNodeAction(action: string, node: TreeNode) {
-  if (action === 'edit') {
-    handleEditStd(node)
-  } else if (action === 'delete') {
-    await handleDeleteStd(node)
-  } else if (action === 'toggle-disable' || action === 'toggle-enable' || action === 'toggle-valid') {
-    // 节点启停走内核（确认弹窗 + /tree/toggle-valid + 本地 Extra 更新）
-    await logic.toggleTreeNodeWithConfirm(node)
-  }
-}
-
-/** 新增标准 */
-function handleAddStd() {
-  logic.openAddStdDialog()
-}
-
-/** 编辑标准 */
-function handleEditStd(node: TreeNode) {
-  logic.openEditStdDialog(node)
-}
-
-/** 删除标准 */
-async function handleDeleteStd(node: TreeNode) {
-  const ok = await confirmOrFalse(
-    `确定删除标准【${node.Name}】？`,
-    '删除确认',
-    {
-      type: 'warning',
-      confirmButtonText: '确定删除',
-      cancelButtonText: '取消',
-    },
-  )
-  if (!ok) return
-  await logic.deleteStd(node)
-  ElMessage.success('已删除标准')
 }
 
 // ========================================================
 // 条款操作
 // ========================================================
 
-/** 新增顶级条款（ParentCode = null，弹窗内可改上级） */
 async function handleAddClause() {
   const ok = await logic.openAddClauseDialog()
-  if (!ok) {
-    ElMessage.warning('请先选择标准')
-  }
+  if (!ok) ElMessage.warning('请先选择版本')
 }
 
-/** 编辑条款（可修改上级调整层级） */
 async function handleEditClause(row: any) {
   await logic.openEditClauseDialog(row)
 }
 
-/** 删除条款 */
 async function handleDeleteClause(row: any) {
   const ok = await confirmOrFalse(
     `确定删除条款【${row.ClauseNumber} ${row.Title}】？`,
@@ -118,13 +70,10 @@ async function handleDeleteClause(row: any) {
   ElMessage.success('删除成功')
 }
 
-/** 表格行自定义操作（add-child / edit / delete / toggle-valid） */
 async function handleRowAction(action: string, row: any) {
   if (action === 'add-child') {
     const ok = await logic.openAddClauseChild(row)
-    if (!ok) {
-      ElMessage.warning('请先选择标准')
-    }
+    if (!ok) ElMessage.warning('请先选择版本')
   } else if (action === 'edit') {
     await handleEditClause(row)
   } else if (action === 'delete') {
@@ -134,7 +83,6 @@ async function handleRowAction(action: string, row: any) {
   }
 }
 
-/** 批量删除条款（整批提交，父子同批由后端判定） */
 async function handleBatchDelete() {
   if (selectedRows.value.length === 0) {
     ElMessage.warning('请先选择要删除的条款')
@@ -152,7 +100,6 @@ async function handleBatchDelete() {
   ElMessage.success('批量删除成功')
 }
 
-/** 切换条款有效标志（树模式：API 成功后整树刷新） */
 async function handleToggleClauseIsValid(row: any) {
   await (logic as any).toggleRowIsValidWithConfirm(row, {
     entityName: `${row.ClauseNumber} ${row.Title}`,
@@ -160,60 +107,20 @@ async function handleToggleClauseIsValid(row: any) {
   await logic.refresh()
 }
 
-// ========================================================
-// 提交弹窗
-// ========================================================
-
 async function handleClauseSubmit() {
   try {
     await logic.submitClauseForm()
-    ElMessage.success(
-      logic.dialogMode.value === 'add' ? '新增成功' : '修改成功',
-    )
+    ElMessage.success(logic.dialogMode.value === 'add' ? '新增成功' : '修改成功')
   } catch (e: any) {
     ElMessage.error(e.message || '保存失败')
   }
 }
 
-async function handleStdSubmit() {
-  try {
-    await logic.submitStdForm()
-    ElMessage.success(
-      logic.stdDialogMode.value === 'add' ? '新增成功' : '修改成功',
-    )
-  } catch (e: any) {
-    ElMessage.error(e.message || '保存失败')
-  }
-}
-
-// ========================================================
-// 弹窗生命周期（避免 destroy-on-close 竞态）
-// ========================================================
-
-function onClauseDialogOpened() {
-  // 弹窗完全打开后初始化
-}
-
-function onClauseDialogClosed() {
-  // 弹窗完全关闭后清理（销毁关闭竞态已通过 destroy-on-close="false" 修复）
-}
-
-function onStdDialogOpened() {
-  // 弹窗完全打开后初始化
-}
-
-function onStdDialogClosed() {
-  // 弹窗完全关闭后清理
-}
-
-// ========================================================
-// 初始化
-// ========================================================
+function onClauseDialogOpened() { /* 弹窗完全打开后初始化 */ }
+function onClauseDialogClosed() { /* 弹窗完全关闭后清理 */ }
 
 onMounted(async () => {
   await logic.init()
-  // 注入组件引用，使基类 addTreeNode/updateTreeNode/deleteTreeNode 等可局部刷新
-  // （官方示例写法：nextTick 传回调，确保 DOM 更新完成后再取 ref）
   nextTick(() => {
     logic.setTreeTableRef(treeTableRef.value)
     logic.setTableRef(tableRef.value)
@@ -230,22 +137,23 @@ onMounted(async () => {
       :tree-toolbar="true"
       :tree-searchable="true"
       :tree-lazy="false"
+      :tree-default-expand-all="true"
       :node-actions="logic.nodeActions"
       :get-action-label="(action: string, node: TreeNode) => logic.getNodeActionLabel(action, node)"
       @tree-node-click="handleNodeClick"
-      @tree-node-action="handleTreeNodeAction"
     >
-      <!-- 树底部：新增标准按钮 -->
-      <template #treeFooter>
-        <el-button type="primary" :icon="Plus" @click="handleAddStd" style="width: 100%;">
-          新增标准
-        </el-button>
-      </template>
+      <!-- 树底部：无操作按钮（左树全只读） -->
 
       <template #default>
         <div class="iso-page__content">
-          <!-- 条款树形表格（YzhTreeTable：整树 + 默认全展开 + 无分页 + allowAddChild） -->
+          <!-- 未选中版本时：空提示 -->
+          <div v-if="!logic.selectedNode || (logic.selectedNode.Extra as any)?._level !== 2" class="iso-page__empty">
+            <YzhEmptyState title="未选择版本" description="请从左侧选择版本节点以查看和编辑条款" />
+          </div>
+
+          <!-- 已选中版本：条款树形表格 -->
           <YzhTreeTable
+            v-else
             ref="tableRef"
             :columns="logic.columns as any"
             :data-loader="logic.dataLoader.bind(logic)"
@@ -258,24 +166,25 @@ onMounted(async () => {
             @selection-change="selectedRows = $event"
             @row-action="handleRowAction"
           >
-            <!-- 状态列：IsValid 自动渲染为 el-tag -->
+            <!-- 状态列 -->
             <template #column-IsValid="{ row }">
-              <el-tag :type="row.IsValid === 1 ? 'success' : 'info'" size="small">
-                {{ row.IsValid === 1 ? '启用' : '禁用' }}
-              </el-tag>
+              <YzhStatusBadge
+                v-if="resolveStatusBadge(row, 'IsValid')"
+                :type="resolveStatusBadge(row, 'IsValid')?.type"
+                :text="resolveStatusBadge(row, 'IsValid')?.text"
+                size="small"
+              />
             </template>
 
-            <!-- 工具栏左侧：操作按钮 -->
+            <!-- 工具栏左侧 -->
             <template #toolbar-left>
-              <el-button type="primary" :icon="Plus" @click="handleAddClause"
-                >新增顶级条款</el-button
-              >
-              <el-button type="danger" :icon="Delete" @click="handleBatchDelete"
-                >批量删除</el-button
-              >
-              <el-button :icon="RefreshRight" @click="logic.refresh()"
-                >刷新</el-button
-              >
+              <el-button type="primary" :icon="Plus" @click="handleAddClause">
+                新增顶级条款
+              </el-button>
+              <el-button type="danger" :icon="Delete" @click="handleBatchDelete">
+                批量删除
+              </el-button>
+              <el-button :icon="RefreshRight" @click="logic.refresh()">刷新</el-button>
             </template>
 
             <!-- 工具栏右侧：显示已禁用开关 -->
@@ -312,27 +221,6 @@ onMounted(async () => {
         @reset="logic.dialogVisible.value = false"
       />
     </el-dialog>
-
-    <!-- 标准新增/编辑弹窗 -->
-    <el-dialog
-      v-model="logic.stdDialogVisible.value"
-      :title="logic.stdDialogMode.value === 'add' ? '新增标准' : '编辑标准'"
-      width="700px"
-      :close-on-click-modal="false"
-      :destroy-on-close="false"
-      @opened="onStdDialogOpened"
-      @closed="onStdDialogClosed"
-    >
-      <YzhForm
-        v-model="logic.stdFormData"
-        :fields="logic.treeFormFields as any"
-        :loading="logic.stdSubmitting.value"
-        :cols="2"
-        label-width="100px"
-        @submit="handleStdSubmit"
-        @reset="logic.stdDialogVisible.value = false"
-      />
-    </el-dialog>
   </div>
 </template>
 
@@ -352,6 +240,14 @@ onMounted(async () => {
   min-height: 0;
   background: var(--yzh-color-bg-container, #fff);
   overflow: hidden;
+}
+
+.iso-page__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 200px;
 }
 
 .toolbar-switch {

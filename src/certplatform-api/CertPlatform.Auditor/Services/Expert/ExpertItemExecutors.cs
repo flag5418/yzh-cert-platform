@@ -130,7 +130,11 @@ namespace CertPlatform.Auditor.Services.Expert
                     Message = $"检查项实体不存在（TaskItemCode={p.TaskItemCode}）"
                 };
 
-            var rule = (await db.GetOneAsync<ValidationRule>(x => x.Code == p.ItemCode)).Data;
+            // ★ 用 includeDisabled: true 取规则 —— 实体实现 IIsValid 后 GetOneAsync 会套 IsValid=1 过滤，
+            //   而本处语义是「任务创建时已冻结规则快照，之后规则被停用仍应可按快照执行」；
+            //   若用 GetOneAsync，规则一旦停用，已排队任务会报“规则不存在”而非正常跳过。
+            var rule = (await db.GetListAsync<ValidationRule>(
+                x => x.Code == p.ItemCode, includeDisabled: true)).Data?.FirstOrDefault();
             if (rule == null)
                 return new ItemExecOutcome
                 {
@@ -158,8 +162,8 @@ namespace CertPlatform.Auditor.Services.Expert
                 };
             }
 
-            // ── 分支 2：未配置 DAG ──
-            if (string.IsNullOrWhiteSpace(rule.RuleJson))
+            // ── 分支 2：未配置 DAG（★ 判据唯一口径：NULL/空 = 未配，见 ValidationRuleRules.HasWorkflow）──
+            if (!rule.HasWorkflow())
             {
                 await WriteResultAsync(db, ncItem, item, new CertExpertNcResult
                 {

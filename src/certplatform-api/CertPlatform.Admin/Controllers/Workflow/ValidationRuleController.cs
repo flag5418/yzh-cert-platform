@@ -102,11 +102,7 @@ public class ValidationRuleController
         if (string.IsNullOrWhiteSpace(code))
             return Ok(ApiResponse.Fail("规则编码不能为空"));
 
-        var result = await Entity.GetOne(r => r.Code == code);
-        if (!result.Success)
-            return Ok(ApiResponse.Fail(result.Error!));
-
-        var rule = result.Data;
+        var rule = await FindByCodeIgnoreValidAsync(code);
         if (rule == null)
             return Ok(ApiResponse.Fail($"规则不存在：{code}"));
 
@@ -164,13 +160,19 @@ public class ValidationRuleController
     public override async Task<ActionResult<ApiResponse<ValidationRule>>> Update(
         [FromBody] ValidationRule entity)
     {
+        // ★ NULL = 未配 DAG（唯一口径，见 ValidationRuleRules.HasWorkflow）：
+        //   空画布 / "{}" / "null" / "[]" 在落库前一律归一为 NULL
+        entity.RuleJson = ValidationRuleRules.NormalizeDag(entity.RuleJson);
+
         var fields = typeof(ValidationRule)
             .GetProperties()
             .Where(p => p.Name != "Code" && p.Name != "Id"
                      && p.Name != "CreateTime" && p.Name != "CreateBy"
                      && p.Name != "ClauseNumber" && p.Name != "ClauseTitle"
                      && p.Name != "CheckFlag" && p.Name != "DeleteFlag"
-                     && p.Name != "RowVersion")
+                     && p.Name != "RowVersion"
+                     // ★ 软删除三字段不进更新白名单 —— 编辑行不得改写删除态
+                     && p.Name != "IsDeleted" && p.Name != "DeleteBy" && p.Name != "DeleteTime")
             .Select(p => p.Name)
             .ToArray();
 
@@ -191,12 +193,17 @@ public class ValidationRuleController
         if (string.IsNullOrEmpty(entity.Code))
             entity.Code = Guid.NewGuid().ToString("N");
 
+        // ★ NULL = 未配 DAG（唯一口径）：空画布 / "{}" / "null" / "[]" 落库前归一为 NULL
+        entity.RuleJson = ValidationRuleRules.NormalizeDag(entity.RuleJson);
+
         if (string.IsNullOrEmpty(entity.RuleCode))
         {
+            // ★ includeDisabled: true —— 编号算法已改为 MAX(seq)+1，必须把已禁用行一并纳入；
+            //   否则删/禁行后新号与既有行重复，直接撞 uk_rule_code 唯一键
             var existing = await Entity.GetListAsync(r =>
-                r.StandardCode == entity.StandardCode);
-            var seq = (existing.Data?.Count ?? 0) + 1;
-            entity.RuleCode = $"NC-{entity.StandardCode}-{seq:D3}";
+                r.StandardCode == entity.StandardCode, includeDisabled: true);
+            entity.RuleCode = ValidationRuleRules.NextRuleCode(
+                entity.StandardCode, existing.Data);
         }
 
         return (true, null);
@@ -214,15 +221,41 @@ public class ValidationRuleController
     private Task<Result<ApiResponse<object?>>> EnableAction(ValidationRule entity)
         => SetActiveAsync(entity, true);
 
-    /// <summary>按 Code 置 IsActive（ValidationRule 用 bool IsActive 做启用开关，实体无 IsValid 字段）</summary>
+    /// <summary>
+    /// 按 <c>Code</c> 取规则 —— <b>★ 不过滤 <c>IsValid</c></b>。
+    ///
+    /// <para><b>为什么必须单独开一个方法（2026-10-08 实测踩坑）</b>：本实体实现
+    /// <see cref="IIsValid"/> 后，<c>SqlSugarDbOrm.GetOneAsync</c> 会自动附加
+    /// <c>IsValid = 1</c> 与 <c>IsDeleted = 0</c> 两个条件（`Where(IsValidCondition<T>())`）。
+    /// 于是 <c>Entity.GetOne(r =&gt; r.Code == code)</c> <b>取不到已禁用行</b>，直接造成三个可用性缺陷：
+    /// ① 点「禁用」后无法再「启用」（报“规则不存在”）⇒ <b>禁用不可逆</b>；
+    /// ② 已禁用规则无法「复制」；③ 已禁用规则详情（设计器 GET /{code}）打不开。</para>
+    ///
+    /// <para>凡「按 Code 精确定位」的启停 / 复制 / 详情一律走本方法；
+    /// 列表类查询仍走默认口径（只看启用行），两者职责不同。</para>
+    /// </summary>
+    private async Task<ValidationRule?> FindByCodeIgnoreValidAsync(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return null;
+        var result = await Entity.GetListAsync(
+            r => r.Code == code, includeDisabled: true);
+        return result.Success ? result.Data?.FirstOrDefault() : null;
+    }
+
+    /// <summary>
+    /// 按 Code 置 <c>IsValid</c>（1=启用 / 0=禁用）。
+    /// <para>★ 2026-10-08：启停字段由 <c>IsActive</c> 统一为 <c>IsValid</c>（铁律九），
+    /// 与其余 8 张配置表判据一致，且与列按钮显隐所读的 <c>EnableField</c> 同源。</para>
+    /// </summary>
     private async Task<Result<ApiResponse<object?>>> SetActiveAsync(ValidationRule entity, bool active)
     {
-        var rule = await Entity.GetOne(r => r.Code == entity.Code);
-        if (!rule.Success || rule.Data == null)
+        // ★ 必须用 includeDisabled 取数：否则停用后再点「启用」会报“规则不存在”
+        var rule = await FindByCodeIgnoreValidAsync(entity.Code);
+        if (rule == null)
             return Result<ApiResponse<object?>>.Fail("规则不存在");
 
-        rule.Data.IsActive = active;
-        var result = await Entity.Update(rule.Data);
+        rule.IsValid = active ? 1 : 0;
+        var result = await Entity.Update(rule);
         if (!result.Success)
             return Result<ApiResponse<object?>>.Fail(result.Error!);
 
@@ -232,30 +265,31 @@ public class ValidationRuleController
     /// <summary>深拷贝规则（前端按钮：RowButtons.CustomButtons["复制"]）</summary>
     private async Task<Result<ApiResponse<object?>>> CopyAction(ValidationRule entity)
     {
-        var source = await Entity.GetOne(r => r.Code == entity.Code);
-        if (!source.Success || source.Data == null)
+        // ★ 必须用 includeDisabled 取数：否则「复制」一条已禁用规则会报“源规则不存在”
+        var sourceData = await FindByCodeIgnoreValidAsync(entity.Code);
+        if (sourceData == null)
             return Result<ApiResponse<object?>>.Fail("源规则不存在");
 
         var copy = new ValidationRule
         {
             Code = Guid.NewGuid().ToString("N"),
-            OrgCode = source.Data.OrgCode,
-            StandardCode = source.Data.StandardCode,
-            PhaseCode = source.Data.PhaseCode,
-            ClauseCode = source.Data.ClauseCode,
-            WorkflowCode = source.Data.WorkflowCode,
-            RuleName = $"{source.Data.RuleName}（副本）",
-            RuleNameEn = source.Data.RuleNameEn,
-            SeverityIfViolated = source.Data.SeverityIfViolated,
-            NcDescriptionTemplate = source.Data.NcDescriptionTemplate,
-            Remark = source.Data.Remark,
-            IsActive = false,
+            OrgCode = sourceData.OrgCode,
+            StandardCode = sourceData.StandardCode,
+            PhaseCode = sourceData.PhaseCode,
+            ClauseCode = sourceData.ClauseCode,
+            RuleName = $"{sourceData.RuleName}（副本）",
+            RuleNameEn = sourceData.RuleNameEn,
+            SeverityIfViolated = sourceData.SeverityIfViolated,
+            NcDescriptionTemplate = sourceData.NcDescriptionTemplate,
+            Remark = sourceData.Remark,
+            // 副本以「禁用」状态落库，待确认后再启用（IsValid: 1=启用 / 0=禁用）
+            IsValid = 0,
         };
 
         var existing = await Entity.GetListAsync(r =>
-            r.StandardCode == copy.StandardCode);
-        var seq = (existing.Data?.Count ?? 0) + 1;
-        copy.RuleCode = $"NC-{copy.StandardCode}-{seq:D3}";
+            r.StandardCode == copy.StandardCode, includeDisabled: true);
+        copy.RuleCode = ValidationRuleRules.NextRuleCode(
+            copy.StandardCode, existing.Data);
 
         var result = await Entity.Insert(copy);
         if (!result.Success)

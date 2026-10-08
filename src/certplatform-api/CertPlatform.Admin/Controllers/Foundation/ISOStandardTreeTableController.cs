@@ -21,13 +21,18 @@ namespace CertPlatform.Admin.Controllers.Foundation;
 ///     - 配置：/treepconfig（返回 TreeTableConfig = TreeConfig + TableConfig）
 ///     - 树→表格联动：选中标准后自动注入 StandardCode 过滤
 ///
-///     业务规则：
-///     1. 标准无层级（MaxLevel=1），不显示"新增下级"按钮
-///     2. 标准名称全局唯一（ExistsAsync 自动排除 IsDeleted）
-///     3. 标准编号 + 版本年份 唯一
-///     4. 条款编号在同一标准下唯一
-///     5. 删除标准前校验：无条款关联才可删除
-///
+    ///     业务规则：
+    ///     1. 标准无层级（MaxLevel=1），不显示"新增下级"按钮
+    ///     2. 标准名称 + 版本年份 唯一（ExistsAsync 自动排除 IsDeleted；同名可多版本并存）
+    ///     3. 标准编号 + 版本年份 唯一
+    ///     4. 条款编号在同一标准下唯一
+    ///     5. 删除标准前校验：无条款关联才可删除
+    ///
+    /// <para>★ 左树分组（2026-10-08）：本端点仍返回<b>扁平</b>标准列表（`ParentCode=null`、`MaxLevel=1`），
+    ///     「类别 → 标准」的两层结构由<b>前端</b>按 `iso_category` 字典在视图层重组
+    ///     （`cert-admin/src/pages/foundation/iso-standard/group.ts`）。
+    ///     ⛔ 不要在后端分组 —— 会破坏 `fill-param-def` 独立覆写 `loadTreeRoot` 的调用方。</para>
+    ///
 ///     API 路由：
 ///     --- 树（标准） ---
 ///     POST   /api/Foundation/ISOStandardTreeTable/tree/root             获取根节点（所有标准）
@@ -101,6 +106,8 @@ public class ISOStandardTreeTableController
         dto.Extra["StandardCode"] = entity.StandardCode ?? "";
         dto.Extra["VersionYear"] = entity.VersionYear;
         dto.Extra["Category"] = entity.Category ?? "";
+        // ★ 族外键（GUID）—— 编辑标准弹窗回填「所属族」下拉用（2026-10-08 三层体系）
+        dto.Extra["FamilyCode"] = entity.FamilyCode ?? "";
         dto.Extra["Description"] = entity.Description ?? "";
         dto.Extra["Remark"] = entity.Remark ?? "";
         return dto;
@@ -110,7 +117,7 @@ public class ISOStandardTreeTableController
     // 树节点（标准）生命周期钩子
     // ========================================================
 
-    /// <summary>新增标准前校验：标准名称唯一 + 同版本下编号唯一</summary>
+    /// <summary>新增标准前校验：标准名称+版本年份唯一 + 同版本下编号唯一</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAddTree(
         ISOStandard entity)
     {
@@ -122,9 +129,10 @@ public class ISOStandardTreeTableController
             return (false, "标准名称不能为空");
 
         var nameExists = await TreeEntity.ExistsAsync(s =>
-            s.StandardName == entity.StandardName);
+            s.StandardName == entity.StandardName &&
+            s.VersionYear == entity.VersionYear);
         if (nameExists.Data)
-            return (false, $"标准名称【{entity.StandardName}】已存在");
+            return (false, $"版本 {entity.VersionYear} 下标准名称【{entity.StandardName}】已存在");
 
         var exists = await TreeEntity.ExistsAsync(s =>
             s.StandardCode == entity.StandardCode &&
@@ -136,7 +144,7 @@ public class ISOStandardTreeTableController
         return (true, null);
     }
 
-    /// <summary>修改标准前校验：标准名称唯一（排除自身）+ 同版本下编号唯一（排除自身）</summary>
+    /// <summary>修改标准前校验：标准名称+版本年份唯一（排除自身）+ 同版本下编号唯一（排除自身）</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdateTree(
         ISOStandard entity)
     {
@@ -145,9 +153,10 @@ public class ISOStandardTreeTableController
 
         var nameExists = await TreeEntity.ExistsAsync(s =>
             s.Code != entity.Code &&
-            s.StandardName == entity.StandardName);
+            s.StandardName == entity.StandardName &&
+            s.VersionYear == entity.VersionYear);
         if (nameExists.Data)
-            return (false, $"标准名称【{entity.StandardName}】已存在");
+            return (false, $"版本 {entity.VersionYear} 下标准名称【{entity.StandardName}】已存在");
 
         var exists = await TreeEntity.ExistsAsync(s =>
             s.Code != entity.Code &&

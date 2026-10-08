@@ -87,6 +87,15 @@ namespace CertPlatform.Shared.Entities.Dir
         [SugarColumn(Length = 20)]
         public string DocCategory { get; set; } = "editable";
 
+        /// <summary>
+        ///     ★ <b>固定文档是否可用企业文件替代</b>（§2 路径分流，2026-10-07）。
+        ///     <para><c>false</c> = 直接按标准目录结构归档到企业标准资料 MinIO（路径①，无 AI / 无参数）；
+        ///     <c>true</c> = 走文件匹配（路径②：两层过滤 + 图片/PDF 视觉模型 + 语义）。</para>
+        ///     <para>仅 <c>DocCategory='fixed'</c> 时有意义；<c>editable/hybrid</c> 恒忽略本列。</para>
+        /// </summary>
+        [SugarColumn(IsNullable = false)]
+        public bool Replaceable { get; set; } = true;
+
         /// <summary>匹配状态：<c>none</c> / <c>recalled</c> / <c>scored</c> / <c>conflicted</c> / <c>matched</c> / <c>unmatched</c></summary>
         [SugarColumn(Length = 20)]
         public string MatchState { get; set; } = "none";

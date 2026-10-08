@@ -12,10 +12,17 @@ namespace CertPlatform.Admin.Controllers.Foundation;
 /// <summary>
 /// 认证阶段管理控制器（全局基础资料）
 ///
-/// 功能：ISO/IEC 17021-1:2015 九阶段认证流程的增删改查
-/// 路由前缀：/api/Foundation/CertStage
+/// 功能：认证阶段（阶段主数据）的增删改查 —— 左树右表右表侧
+/// 路由前缀：/api/Admin/Foundation/CertStage（末段 CertStage 未变 ⇒ ApiCode 不变）
 ///
-/// 数据库：cert_cert_stage
+/// ★ T+V（2026-10-08 启用）：V = CertStageView
+///   - 读：/filter /list 走 [ViewName("v_cert_stage")]（含 CategoryName / StatusName 中文）
+///   - 写：增删改走 [SugarTable("cert_cert_stage")] 物理表
+///   - 本控制器仍是 YzhControllerBase（左树 = 字典 stage_category，树数据源非本实体，
+///     树能力由前端 TreeTableCore 自取字典 + RelateField 注入，详见
+///     cert-admin/src/pages/foundation/cert-stage/logic.ts）
+///
+/// 数据库：cert_cert_stage（视图 v_cert_stage）
 /// </summary>
 [ApiController]
 
@@ -27,10 +34,10 @@ namespace CertPlatform.Admin.Controllers.Foundation;
 /// 只取路由<b>末段</b>作控制器名，本 Controller 的末段未变 ⇒ <c>ApiCode</c> 不变 ⇒
 /// <b>角色-接口关联不断裂</b>，无需重跑 ApiSync。</para>
 [Route("api/Admin/Foundation/[controller]")]
-public class CertStageController : YzhControllerBase<CertStage>
+public class CertStageController : YzhControllerBase<CertStageView>
 {
     public CertStageController(
-        EntityService<CertStage> entityService,
+        EntityService<CertStageView> entityService,
         IUserContext userContext)
         : base(entityService, userContext)
     {
@@ -46,7 +53,7 @@ public class CertStageController : YzhControllerBase<CertStage>
 
     /// <summary>新增前校验：StageCode 唯一性</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAdd(
-        CertStage entity)
+        CertStageView entity)
     {
         var exists = await Entity.ExistsAsync(p => p.StageCode == entity.StageCode);
         if (exists.Data)
@@ -56,7 +63,7 @@ public class CertStageController : YzhControllerBase<CertStage>
 
     /// <summary>修改前校验：StageCode 唯一性（排除自身）</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(
-        CertStage entity)
+        CertStageView entity)
     {
         var exists = await Entity.ExistsAsync(p =>
             p.Code != entity.Code && p.StageCode == entity.StageCode);

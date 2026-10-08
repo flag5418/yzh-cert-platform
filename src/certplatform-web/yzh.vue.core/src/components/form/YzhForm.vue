@@ -13,6 +13,7 @@ import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { computed, reactive, ref, watch } from 'vue'
 import { yzhApi } from '../../api/client'
+import type { EntityFieldSchema } from '../../types/contracts'
 
 export type YzhFieldType =
   | 'text'
@@ -76,6 +77,12 @@ export interface YzhFormField {
   trigger?: string | string[]
   /** 默认值 */
   defaultValue?: any
+  /**
+   * 后端 Schema 字段描述（`entityAdapters.toFormFields` 透传）。
+   * ★ 消费点：Switch 判定实体属性是否 bool（见 `isBooleanSwitch`）——
+   *   `Type='boolean'` 的列必须用 true/false 当开关值，写 1/0 会把数字发进 bool 属性。
+   */
+  fieldSchema?: EntityFieldSchema
 }
 
 const props = withDefaults(
@@ -255,6 +262,32 @@ async function ensureOptions(field: YzhFormField) {
 // 双向绑定
 const formData = reactive<any>({})
 
+/**
+ * ★ Switch 开关值类型判定（2026-10-08 修 `/business/fill-param-def` 保存报错）
+ *
+ * el-switch 的选中态 = 「当前值 === active-value」，开关值类型必须与实体列一致：
+ * - 实体属性是 **bool**（Schema.Type='boolean'，如 FillParamDef.IsRequired）→ 开关值必须 true/false。
+ *   若写死 1/0：一切换就把数字写进 formData，JSON 数字进 bool 属性 → System.Text.Json 抛
+ *   `The JSON value could not be converted to System.Boolean. Path: $.IsRequired` → 模型绑定失败 →
+ *   保存报「entity 不能为空」（HTTP 200 + success:false，两段文案被 Program.cs Friendly() 用「；」拼接）。
+ * - 实体属性是 **int**（如 IsValid）→ 开关值保持 1/0。
+ *
+ * 判据优先级：① fieldSchema.Type（后端反射，最权威）② 当前值已是 boolean。
+ * ⚠️ 任一命中即走 bool —— 否则 EP 会在挂载时把 `true` 纠偏成 `0`（静默丢数据）。
+ */
+function isBooleanSwitch(field: YzhFormField): boolean {
+  if (field.fieldSchema?.Type === 'boolean') return true
+  return typeof formData[field.prop] === 'boolean'
+}
+
+function switchActiveValue(field: YzhFormField): boolean | number {
+  return isBooleanSwitch(field) ? true : 1
+}
+
+function switchInactiveValue(field: YzhFormField): boolean | number {
+  return isBooleanSwitch(field) ? false : 0
+}
+
 function syncFromProps() {
   Object.keys(formData).forEach((k) => delete formData[k])
   Object.assign(formData, props.modelValue || {})
@@ -407,13 +440,13 @@ defineExpose({ validate, resetFields, formRef })
               </el-checkbox>
             </el-checkbox-group>
 
-            <!-- switch -->
+            <!-- switch：开关值按实体列类型选 true/false 或 1/0（见 isBooleanSwitch） -->
             <el-switch
               v-else-if="field.type === 'switch'"
               v-model="formData[field.prop]"
               :disabled="field.disabled"
-              :active-value="1"
-              :inactive-value="0"
+              :active-value="switchActiveValue(field)"
+              :inactive-value="switchInactiveValue(field)"
               v-bind="field.fieldProps"
             />
 

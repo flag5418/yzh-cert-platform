@@ -200,14 +200,16 @@ namespace CertPlatform.Admin.Services.Workflow
             var ruleWithClause = await _db.Client.Queryable<CertPlatform.Shared.Entities.Cert.ValidationRule>()
                 .LeftJoin<CertPlatform.Shared.Entities.Cert.ISOClause>(
                     (r, c) => r.ClauseCode == c.Code)
-                .Where((r, c) => r.RuleCode == task.RuleCode)
+                // ★ 关联口径（2026-10-08 修正）：task.RuleCode 存的是规则 Code(GUID)，
+                //   此前误按 r.RuleCode（业务号）比对 ⇒ RuleContext 恒查不到 ⇒ FirstAsync() 抛异常 ⇒ 详情接口整段失败
+                .Where((r, c) => r.Code == task.RuleCode)
                 .Select((r, c) => new RuleContext
                 {
                     RuleCode = r.RuleCode,
                     RuleName = r.RuleName,
                     RuleNameEn = r.RuleNameEn,
                     ClauseCode = r.ClauseCode,
-                    ClauseNumber = c.Code,
+                    ClauseNumber = c.ClauseNumber,   // ★ 2026-10-08 修正：原写 c.Code，把 GUID 当条款号显示
                     ClauseTitle = c.Title,
                     SeverityIfViolated = r.SeverityIfViolated,
                     JudgeMode = r.JudgeMode,

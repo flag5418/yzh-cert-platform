@@ -126,6 +126,24 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                     return result;
                 }
 
+                // ════════════════════════════════════════════════════════════
+                //  ★ §2 四路分流（2026-10-07，路由按 DocCategory + Replaceable）
+                //    一个空白文档进队列 = 本方法一次调用，按文档类别走不同路径：
+                //      · editable / hybrid → 走下方七步编排（取锚点值 → Office 落笔）
+                //      · fixed + Replaceable=false → ① 快归档（直接存企业标准资料，无 AI/参数）
+                //      · fixed + Replaceable=true  → ② 文件匹配（读画像匹配结论 + ④ 无匹配兜底）
+                //    ⚠️ 标准域行（stdFile）56/57 号「永不写」⇒ 各路径状态记到企业实例行 instance。
+                //    ② 的「匹配算法」与 ① 的「归档搬运」为可替换接缝（见方法内 TODO）。
+                // ════════════════════════════════════════════════════════════
+                var category = (stdFile.DocCategory ?? "editable").Trim().ToLowerInvariant();
+                if (category == "fixed")
+                {
+                    if (!stdFile.Replaceable)
+                        return await RunFixedArchiveAsync(req, instance, stdFile, result, ct);
+                    return await RunFixedMatchAsync(req, instance, stdFile, result, ct);
+                }
+                // editable / hybrid → 现有七步编排（下面不动）
+
                 var template = (await _db.GetOneAsync<DocTemplate>(x =>
                     x.StandardFileCode == req.StandardFileCode && x.IsValid == 1)).Data;
                 if (template == null)
@@ -543,6 +561,170 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                 result.Message = ex.Message;
                 return result;
             }
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        //  ★ §2 路径① —— 固定 + 不可替：快归档（无 AI / 无参数 / 不取锚点值）
+        //    「直接按标准目录结构存入企业标准资料 MinIO + 记录企业标准信息」就完成。
+        //    标准域行（stdFile）永不写（56/57 号）⇒ 状态记到企业实例行。
+        // ════════════════════════════════════════════════════════════════════
+        private async Task<FillOneResult> RunFixedArchiveAsync(
+            FillOneRequest req,
+            StandardDirectoryFile? instance,
+            StandardDirectoryFile stdFile,
+            FillOneResult result,
+            CancellationToken ct)
+        {
+            // ① 快归档：把「标准源文件」（模板 StoragePath 代表的空白文档原件）按标准目录结构
+            //    存入企业标准资料区。★ 归档搬运为可替换接缝（见下方 TODO），今天先落「如实记录版」。
+            //
+            // TODO(归档接缝)：确认「企业标准资料 MinIO 目标路径」的拼接口径（PathBuilder 现有段
+            //   Pdf/Markdown/Editable/Template/Preview/Archive，无「企业标准资料」专用段）。
+            //   落地时：var outPath = PathBuilder.<企业标准资料段>(req.EnterpriseCode, req.StageCode,
+            //   stdFile.FolderPath, stdFile.FileName)；下载源字节 → _storage.UploadAsync(outPath, …)；
+            //   把 outPath 写进企业实例行 StoragePath。
+            //
+            // 今天（如实记录版）：置实例行状态为「已归档」，⛔ 不搬文件、不伪造路径。
+            var now = DateTime.Now;
+            var instanceRow = instance ?? new StandardDirectoryFile
+            {
+                ConfigCode = stdFile.ConfigCode,
+                EnterpriseCode = req.EnterpriseCode,
+                StandardCode = req.StandardCode,
+                StageCode = req.StageCode,
+                StandardFileCode = req.StandardFileCode,
+                FileName = stdFile.FileName,
+                FileType = stdFile.FileType,
+                FullPath = stdFile.FolderPath,
+                VersionNumber = 1,
+                IsValid = 1,
+                CreateBy = req.OperatorCode,
+            };
+            instanceRow.InstanceState = "archived";      // 固定不可替 = 归档完成即终点
+            instanceRow.MatchState = "matched";          // 无需匹配（按结构直接存）
+            instanceRow.NormalizedTime = now;
+            instanceRow.UpdateTime = now;
+            instanceRow.UpdateBy = req.OperatorCode;
+
+            var writeRes = instance != null
+                ? await _db.UpdateAsync(instanceRow,
+                    nameof(StandardDirectoryFile.InstanceState),
+                    nameof(StandardDirectoryFile.MatchState),
+                    nameof(StandardDirectoryFile.NormalizedTime),
+                    nameof(StandardDirectoryFile.UpdateTime),
+                    nameof(StandardDirectoryFile.UpdateBy))
+                : await _db.InsertAsync(instanceRow);
+            if (!writeRes.Success)
+            {
+                result.Success = false;
+                result.Status = "failed";
+                result.Message = $"固定文档归档记录失败：{writeRes.Error}";
+                return result;
+            }
+
+            result.Success = true;
+            result.Status = "archived";
+            result.Message = "固定文档（不可替代）已按标准目录结构归档完成";
+            return result;
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        //  ★ §2 路径② —— 固定 + 可替：文件匹配（两层过滤 + 视觉/语义结论）
+        //    读「企业文档画像」里已算好的匹配结论（patch1 的 4 列：
+        //    MatchTargetStandardFileCode / MatchConfidence / MatchSource / MatchCandidatesJson）。
+        //    · 有匹配 → 记下命中的企业文件 + 候选集，状态 matched（「该文件已找到」）
+        //    · 无匹配 → ④ 兜底：状态 unmatched（「无适合的匹配项」），⛔ 不报错、不阻塞
+        //    ★ 「匹配算法」为可替换接缝（见方法内 TODO），今天先读已算好的结论。
+        // ════════════════════════════════════════════════════════════════════
+        private async Task<FillOneResult> RunFixedMatchAsync(
+            FillOneRequest req,
+            StandardDirectoryFile? instance,
+            StandardDirectoryFile stdFile,
+            FillOneResult result,
+            CancellationToken ct)
+        {
+            // TODO(匹配接缝)：当画像 4 列尚无值时，跑「分组标签 → 文件作用」两层过滤：
+            //   第一层按 TagsJson/分类对齐、第二层按 DocPurpose/关键词，
+            //   图片/PDF 走视觉模型（patch2 的 ToMarkdown 回退）出 Markdown 再匹配。
+            //   今天：直接读画像里已有结论（若没有 ⇒ 走 ④ 无匹配兜底）。
+
+            // 读该企业×标准最新画像（M6 多行取 IsLatest）
+            var profile = (await _db.GetListAsync<EnterpriseDocProfile>(x =>
+                x.EnterpriseCode == req.EnterpriseCode &&
+                x.StandardCode == req.StandardCode &&
+                x.StageCode == req.StageCode &&
+                x.IsLatest == true &&
+                x.IsValid == 1)).Data?
+                .OrderByDescending(x => x.ProfileVersion)
+                .FirstOrDefault();
+
+            // 匹配结论：画像指向了「本标准文件行」= 找到；否则 = 无匹配
+            var matched = profile != null
+                          && string.Equals(profile.MatchTargetStandardFileCode,
+                              req.StandardFileCode, StringComparison.Ordinal);
+
+            var instanceRow = instance ?? new StandardDirectoryFile
+            {
+                ConfigCode = stdFile.ConfigCode,
+                EnterpriseCode = req.EnterpriseCode,
+                StandardCode = req.StandardCode,
+                StageCode = req.StageCode,
+                StandardFileCode = req.StandardFileCode,
+                FileName = stdFile.FileName,
+                FileType = stdFile.FileType,
+                FullPath = stdFile.FolderPath,
+                VersionNumber = 1,
+                IsValid = 1,
+                CreateBy = req.OperatorCode,
+            };
+
+            var now = DateTime.Now;
+            instanceRow.MatchState = matched ? "matched" : "unmatched";
+            if (matched && profile != null)
+            {
+                // 记录命中来源（证据链：哪个企业文件、可信度、候选集）
+                instanceRow.SourceOriginalPath = profile.SourceMarkdownPath;
+                instanceRow.SourceProfileCode = profile.Code;
+                // ⚠️ FillConfidence 是 decimal（非空），MatchConfidence 是 decimal?（老画像可能 null）⇒ ?? 兜底
+                instanceRow.FillConfidence = profile.MatchConfidence ?? 0m;
+                instanceRow.InstanceState = "archived";   // 可替固定文档匹配到即终点
+            }
+            instanceRow.NormalizedTime = now;
+            instanceRow.UpdateTime = now;
+            instanceRow.UpdateBy = req.OperatorCode;
+
+            var writeRes = instance != null
+                ? await _db.UpdateAsync(instanceRow,
+                    nameof(StandardDirectoryFile.MatchState),
+                    nameof(StandardDirectoryFile.SourceOriginalPath),
+                    nameof(StandardDirectoryFile.SourceProfileCode),
+                    nameof(StandardDirectoryFile.FillConfidence),
+                    nameof(StandardDirectoryFile.InstanceState),
+                    nameof(StandardDirectoryFile.NormalizedTime),
+                    nameof(StandardDirectoryFile.UpdateTime),
+                    nameof(StandardDirectoryFile.UpdateBy))
+                : await _db.InsertAsync(instanceRow);
+            if (!writeRes.Success)
+            {
+                result.Success = false;
+                result.Status = "failed";
+                result.Message = $"固定文档匹配记录失败：{writeRes.Error}";
+                return result;
+            }
+
+            result.Success = true;
+            if (matched)
+            {
+                result.Status = "matched";
+                result.Message = $"固定文档（可替代）已匹配到企业文件（可信度 {profile!.MatchConfidence}，来源 {profile.MatchSource}）";
+            }
+            else
+            {
+                // ④ 兜底：无适合的匹配项 —— 如实记录，⛔ 不报错、不阻塞批次
+                result.Status = "no_match";
+                result.Message = "固定文档（可替代）暂无匹配的企业文件，已记录待人工补充";
+            }
+            return result;
         }
 
         // ════════════════════════════════════════════════════════════════════

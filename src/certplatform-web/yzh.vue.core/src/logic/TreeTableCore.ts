@@ -266,8 +266,9 @@ export abstract class TreeTableCore<
       .filter((c) => c.BcFlag && c.Type !== 'Other')
       .map((c) => {
         const prop = c.FieldName
+        // Schema key = PascalCase（同 entityAdapters.toFormFields，camel 仅兜底；2026-10-08 实测确认）
         const camelKey = toCamelCase(prop)
-        const fieldSchema = schema?.[camelKey]
+        const fieldSchema = schema?.[prop] ?? schema?.[camelKey]
         return {
           prop,
           label: c.DesName,
@@ -282,7 +283,9 @@ export abstract class TreeTableCore<
             : `请输入${c.DesName}`,
           defaultValue: c.Mrz
             ? c.Type === 'Switch'
-              ? Number(c.Mrz)
+              ? fieldSchema?.Type === 'boolean'
+                ? Boolean(Number(c.Mrz))
+                : Number(c.Mrz)
               : c.Mrz
             : (fieldSchema as any)?.Default,
           fieldSchema,

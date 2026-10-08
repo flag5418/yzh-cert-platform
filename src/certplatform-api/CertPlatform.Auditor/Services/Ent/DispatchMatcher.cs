@@ -12,13 +12,18 @@ namespace CertPlatform.Auditor.Services.Ent;
 /// <para><b>匹配层级</b>（顺序命中即停）：</para>
 /// <list type="table">
 ///   <item><term>M0</term><description>文件夹路径强匹配：上传相对路径的目录段 == 模板文件夹 FullPath（归一后），且文件名命中 M1/M2</description></item>
-///   <item><term>M1</term><description>文件名精确（归一后相等）</description></item>
-///   <item><term>M2</term><description>文件名主词包含：模板名主词（归一后）出现在上传名中</description></item>
+///   <item><term>M1</term><description>文件名精确（归一后相等）<b>且扩展名族兼容</b>（见 <see cref="ExtCompatible"/>）</description></item>
+///   <item><term>M2</term><description>文件名主词包含：模板名主词（归一后）出现在上传名中，<b>且扩展名族兼容</b></description></item>
 ///   <item><term>M3</term><description>目录 + 扩展名族 + 名称相关度，且<b>必须唯一胜出</b>（<see cref="DispatchMatchLevel.M3FolderExt"/>）；猜不准就不产出，文件落未归属交人工指派</description></item>
 /// </list>
 ///
 /// <para>归一化规则见 <see cref="NormalizeCore"/> / <see cref="NormalizeFolder"/>：
 /// 去编码前缀 / 去括号注释 / 去序号前缀 / 去空白连字符 / 扩展名族折叠 / 大小写不敏感。</para>
+///
+/// <para><b>扩展名族门（2026-10-08，A 方案）</b>：M0/M1/M2 命中后必须再过 <see cref="ExtCompatible"/>——
+/// 模板 <c>制度.doc</c> 收到 <c>制度.docx</c> 同族放行，收到 <c>制度.pdf</c> 则<b>不给命中</b>，
+/// 文件落未归属并标 <c>ext_mismatch</c>（槽位保持「缺失」，由人工决定是否指派）。
+/// 在此之前 M0/M1/M2 完全剥掉扩展名比对，导致「格式不符」被静默判为已就位。</para>
 /// </summary>
 public static partial class DispatchMatcher
 {
@@ -91,7 +96,9 @@ public static partial class DispatchMatcher
         public required string FileName { get; init; }
         public string RelativePath { get; init; } = "";
         public long FileSize { get; init; }
-        /// <summary>未命中原因：<c>no_standard</c>（该阶段无标准）/ <c>no_match</c>（全标准都无命中）/ <c>ambiguous</c>（有候选但分不清，见 <see cref="MinM3Affinity"/>）</summary>
+        /// <summary>未命中原因：<c>no_standard</c>（该阶段无标准）/ <c>no_match</c>（全标准都无命中）/
+        /// <c>ambiguous</c>（有候选但分不清，见 <see cref="MinM3Affinity"/>）/
+        /// <c>ext_mismatch</c>（文件名命中了槽位但扩展名族不符，见 <see cref="ExtCompatible"/>）</summary>
         public string Reason { get; init; } = "no_match";
     }
 
@@ -164,6 +171,20 @@ public static partial class DispatchMatcher
     }
 
     /// <summary>
+    /// 扩展名族兼容（M0/M1/M2 的命中门，A 方案）：任一侧无扩展名即放行，否则要求 <see cref="NormalizeExt"/> 相等。
+    /// <para>例：模板 <c>x.doc</c> vs 上传 <c>x.docx</c> → 放行（同族）；<c>x.doc</c> vs <c>x.pdf</c> → 拦下。</para>
+    /// <para>任一侧无扩展名放行的原因：模板里存在不带扩展名的定义行，此时无从判族，
+    /// 宁可沿用旧口径（只比主词）也不制造假缺失。</para>
+    /// </summary>
+    public static bool ExtCompatible(string? fileName, string? slotFileName)
+    {
+        var a = NormalizeExt(fileName);
+        var b = NormalizeExt(slotFileName);
+        if (a.Length == 0 || b.Length == 0) return true;
+        return a == b;
+    }
+
+    /// <summary>
     /// 文件名主词归一：去扩展名 → 全角折叠 → 去编码前缀 → 去括号注释 → 去空白/连字符/下划线/点 → 小写。
     /// <para>例：<c>XASL-TR-001 年度验证计划（2026版）.doc</c> → <c>年度验证计划2026版</c></para>
     /// </summary>
@@ -231,7 +252,17 @@ public static partial class DispatchMatcher
     /// <summary>对单个标准匹配一个文件：M0 → M1 → M2 → M3，命中即停；未命中返回 null</summary>
     public static (TemplateSlot Slot, DispatchMatchLevel Level)? MatchSingle(
         IncomingFile file, StandardScope standard)
+        => MatchSingle(file, standard, out _);
+
+    /// <summary>
+    /// 同上，但回传 <paramref name="extMismatch"/> = 该标准下存在「文件名命中槽位、扩展名族却不兼容」的候选。
+    /// <para>供 <see cref="BuildPlan"/> 把未归属原因区分为 <c>ext_mismatch</c>（有明确目标槽位、只是格式不符）
+    /// 而不是笼统的 <c>no_match</c>。</para>
+    /// </summary>
+    public static (TemplateSlot Slot, DispatchMatchLevel Level)? MatchSingle(
+        IncomingFile file, StandardScope standard, out bool extMismatch)
     {
+        extMismatch = false;
         if (standard.Slots.Count == 0) return null;
 
         var relPath = (file.RelativePath ?? file.FileName).Replace('\\', '/').TrimStart('/');
@@ -256,14 +287,16 @@ public static partial class DispatchMatcher
         {
             if (dir.Length > 0 && byFolder.TryGetValue(dir, out var folderSlots))
             {
-                var hit = MatchByName(folderSlots, normName);
+                var hit = MatchByName(folderSlots, normName, fileName, out var folderExtBlocked);
                 if (hit != null) return (hit.Value.Slot, DispatchMatchLevel.M0Path);
+                if (folderExtBlocked) extMismatch = true;
             }
         }
 
         // M1 / M2：全标准范围文件名匹配（跨文件夹同名单槽位取第一个未占用）
-        var globalHit = MatchByName(standard.Slots, normName);
+        var globalHit = MatchByName(standard.Slots, normName, fileName, out var globalExtBlocked);
         if (globalHit != null) return (globalHit.Value.Slot, globalHit.Value.Level);
+        if (globalExtBlocked) extMismatch = true;
 
         // M3：目录定位 + 扩展名族 + 名称相关度唯一胜出。猜不准就返回 null（落未归属交人工指派）。
         var m3 = MatchByFolderAffinity(byFolder, normDir, normName, ext);
@@ -313,20 +346,30 @@ public static partial class DispatchMatcher
         if (slash > 0) yield return normDir[(slash + 1)..];
     }
 
-    /// <summary>按文件名匹配槽位集：M1 精确优先，M2 主词包含次之；同层多命中取第一个未占用</summary>
+    /// <summary>
+    /// 按文件名匹配槽位集：M1 精确优先，M2 主词包含次之；同层多命中取第一个未占用。
+    /// <para><b>扩展名族门</b>（A 方案）：每层先按主词筛，再用 <see cref="ExtCompatible"/> 滤掉异族——
+    /// 主词命中但异族的候选<b>不给命中</b>，只置 <paramref name="extBlocked"/>（交 BuildPlan 标 ext_mismatch）。</para>
+    /// </summary>
     private static (TemplateSlot Slot, DispatchMatchLevel Level)? MatchByName(
-        List<TemplateSlot> slots, string normName)
+        List<TemplateSlot> slots, string normName, string fileName, out bool extBlocked)
     {
+        extBlocked = false;
         if (normName.Length == 0) return null;
+
         var exact = slots.Where(s => NormalizeCore(s.FileName) == normName).ToList();
-        if (exact.Count > 0) return (Pick(exact), DispatchMatchLevel.M1Exact);
+        var exactOk = exact.Where(s => ExtCompatible(fileName, s.FileName)).ToList();
+        if (exactOk.Count > 0) return (Pick(exactOk), DispatchMatchLevel.M1Exact);
+        if (exact.Count > 0) extBlocked = true;
 
         var contains = slots.Where(s =>
         {
             var stem = NormalizeCore(s.FileName);
             return stem.Length >= 2 && normName.Contains(stem, StringComparison.Ordinal);
         }).ToList();
-        if (contains.Count > 0) return (Pick(contains), DispatchMatchLevel.M2Contains);
+        var containsOk = contains.Where(s => ExtCompatible(fileName, s.FileName)).ToList();
+        if (containsOk.Count > 0) return (Pick(containsOk), DispatchMatchLevel.M2Contains);
+        if (contains.Count > 0) extBlocked = true;
 
         return null;
     }
@@ -364,13 +407,16 @@ public static partial class DispatchMatcher
             var anyHit = false;
             // 至少有一个标准给出了「有把握但分不清」的候选 ⇒ 归因为歧义（前端文案不同，指导人工指派）
             var anyAmbiguous = false;
+            // 至少有一个标准「文件名命中槽位、扩展名族却不兼容」⇒ 归因 ext_mismatch（比 ambiguous/no_match 更可诊断）
+            var anyExtMismatch = false;
 
             foreach (var std in standards)
             {
-                var hit = MatchSingle(file, std);
+                var hit = MatchSingle(file, std, out var stdExtMismatch);
                 if (hit == null)
                 {
-                    if (HasFolderCandidate(std, file)) anyAmbiguous = true;
+                    if (stdExtMismatch) anyExtMismatch = true;
+                    else if (HasFolderCandidate(std, file)) anyAmbiguous = true;
                     continue;
                 }
                 anyHit = true;
@@ -403,7 +449,10 @@ public static partial class DispatchMatcher
                     FileName = file.FileName,
                     RelativePath = file.RelativePath,
                     FileSize = file.FileSize,
-                    Reason = standards.Count == 0 ? "no_standard" : anyAmbiguous ? "ambiguous" : "no_match"
+                    Reason = standards.Count == 0 ? "no_standard"
+                        : anyExtMismatch ? "ext_mismatch"
+                        : anyAmbiguous ? "ambiguous"
+                        : "no_match"
                 });
         }
 

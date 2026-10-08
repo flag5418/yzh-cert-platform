@@ -137,9 +137,12 @@ export function toFormFields(
     .filter((c) => c.BcFlag && c.Type !== 'Other')
     .map((c) => {
       const prop = c.FieldName
-      // Schema 字典 key 是 camelCase（反射 ToCamelCase）→ 转 PascalCase 查表
+      // ★ Schema 字典 key = **PascalCase**（V4 强制：EntitySchemaHelper 保持 prop.Name，
+      //   2026-10-08 实测 /api/Admin/Cert/FillParamDef/config 确认）——
+      //   原「camelCase 查表」恒 miss ⇒ fieldSchema 恒 undefined（Switch 判 bool 因此失效，
+      //   IsRequired 报「entity 不能为空」的连带根因之一）。camel 兜底仅为兼容历史 camelCase 配置。
       const camelKey = toCamelKey(prop)
-      const fieldSchema = schema?.[camelKey]
+      const fieldSchema = schema?.[prop] ?? schema?.[camelKey]
       const fieldGroupIndex = c.GroupIndex || '0'
       const isDisabledByGroupIndex = editMode !== '0' && fieldGroupIndex !== editMode
 
@@ -172,7 +175,9 @@ export function toFormFields(
         defaultValue: withDefaults
           ? c.Mrz
             ? c.Type === 'Switch'
-              ? Number(c.Mrz)
+              ? fieldSchema?.Type === 'boolean'
+                ? Boolean(Number(c.Mrz))
+                : Number(c.Mrz)
               : c.Mrz
             : (fieldSchema as any)?.Default
           : undefined,

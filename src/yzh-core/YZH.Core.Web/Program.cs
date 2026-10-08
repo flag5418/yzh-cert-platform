@@ -212,7 +212,11 @@ builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(o =>
 
 // 注册 Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    // 使用完整类型路径作为 schema ID，避免同名内部类冲突
+    options.CustomSchemaIds(type => type.FullName!);
+});
 
 // 注册 CORS
 var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()

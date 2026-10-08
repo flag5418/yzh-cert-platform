@@ -131,7 +131,7 @@ namespace CertPlatform.Auditor.Controllers
 
         /// <summary>Step3：激活 + 入 enterprise_original_ingest 队列</summary>
         [HttpPost("upload/confirm")]
-        public async Task<IActionResult> UploadConfirm([FromBody] UploadTaskRequest req)
+        public async Task<IActionResult> UploadConfirm([FromBody] OriginalUploadTaskRequest req)
         {
             var (err, data) = await _service.UploadConfirmAsync(
                 req.TaskId ?? "", req.EnterpriseCode ?? "");
@@ -140,7 +140,7 @@ namespace CertPlatform.Auditor.Controllers
 
         /// <summary>Step4：回滚（取消队列 + 删对象 + 撤本批次行）</summary>
         [HttpPost("upload/cancel")]
-        public async Task<IActionResult> UploadCancel([FromBody] UploadTaskRequest req)
+        public async Task<IActionResult> UploadCancel([FromBody] OriginalUploadTaskRequest req)
         {
             var (err, data) = await _service.UploadCancelAsync(
                 req.TaskId ?? "", req.EnterpriseCode ?? "");
@@ -351,7 +351,7 @@ namespace CertPlatform.Auditor.Controllers
             public string? Sha256 { get; set; }
         }
 
-        public class UploadTaskRequest
+        public class OriginalUploadTaskRequest
         {
             public string? TaskId { get; set; }
             public string? EnterpriseCode { get; set; }

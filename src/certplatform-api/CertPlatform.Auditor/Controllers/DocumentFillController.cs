@@ -106,7 +106,7 @@ public class DocumentFillController : YzhControllerBase<FillParamValue>
     /// 把 <c>report</c> 渲染成右侧「证据摘要」。</para>
     /// </summary>
     [HttpPost("preview")]
-    public async Task<IActionResult> Preview([FromBody] PreviewRequest req)
+    public async Task<IActionResult> Preview([FromBody] DemoPreviewRequest req)
     {
         var scope = await _workspace.ResolveScopeAsync(UserContext.UserCode);
         if (!scope.Success || scope.Data == null)
@@ -434,7 +434,7 @@ public class DocumentFillController : YzhControllerBase<FillParamValue>
     // 请求体
     // ════════════════════════════════════════════════════════════════════
 
-    public sealed class PreviewRequest
+    public sealed class DemoPreviewRequest
     {
         public string EnterpriseCode { get; set; } = string.Empty;
         public string? StandardCode { get; set; }

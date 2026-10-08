@@ -18,7 +18,9 @@ using CertPlatform.Shared.Constants;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Entities.Dir;
 using CertPlatform.Shared.Entities.Doc;
+using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Office;
+using CertPlatform.Shared.Storage;
 using CertPlatform.Auditor.Entities.Cert;
 using CertPlatform.Auditor.Entities.Doc;
 using CertPlatform.Auditor.Services;
@@ -58,6 +60,7 @@ namespace CertPlatform.Auditor.Controllers
         private readonly WorkspaceContextService _workspace;
         private readonly QueueManager _queueManager;
         private readonly IDbOrm _db;
+        private readonly IOcrProvider _ocrProvider;
         private readonly ILogger<EnterpriseNormalizeController> _logger;
 
         public EnterpriseNormalizeController(
@@ -67,6 +70,7 @@ namespace CertPlatform.Auditor.Controllers
             WorkspaceContextService workspace,
             QueueManager queueManager,
             IDbOrm db,
+            IOcrProvider ocrProvider,
             ILogger<EnterpriseNormalizeController> logger)
             : base(entityService, userContext)
         {
@@ -74,6 +78,7 @@ namespace CertPlatform.Auditor.Controllers
             _workspace = workspace;
             _queueManager = queueManager;
             _db = db;
+            _ocrProvider = ocrProvider;
             _logger = logger;
         }
 
@@ -350,6 +355,120 @@ namespace CertPlatform.Auditor.Controllers
 
             result.Total = result.Items.Count;
             result.Queued = result.WillFill + result.WillRegenerate;
+
+            // ★ §6 缺参预检（2026-10-07）：按「将要入队的标准」算缺失的必填全局参数。
+            //   纯读、零副作用；结果挂到 result.ParamGaps / MissingRequired，
+            //   供 plan 展示、供 run 拦截。
+            var queuedCodes = result.Items
+                .Where(i => i.Action == "fill" || i.Action == "regenerate")
+                .Select(i => i.StandardFileCode)
+                .ToList();
+            var involvedStandards = queuedCodes
+                .Select(c => scope.StdMap.TryGetValue(c, out var sf) ? sf.StandardCode : "")
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            var orgCodeForGaps = scope.Published.FirstOrDefault()?.OrgCode ?? "";
+            if (involvedStandards.Count > 0)
+            {
+                result.ParamGaps = await BuildParamGapsAsync(
+                    orgCodeForGaps, enterpriseCode, stageCode ?? "", involvedStandards);
+                result.MissingRequired = result.ParamGaps.Sum(g => g.Items.Count);
+            }
+
+            // ★ §9.5 视觉可达预检（2026-10-07）：入队文件若含「图片 / PDF」⇒ 需视觉模型 OCR 才能出 Markdown。
+            //   算出 NeedsVision（纯读，供前端预览可见 + run 拦截依据）。
+            result.NeedsVision = queuedCodes
+                .Where(c => scope.StdMap.TryGetValue(c, out var vstd)
+                    && UploadFilePolicy.IsImageOrPdf(vstd.FileType))
+                .Any();
+
+            return result;
+        }
+
+        /// <summary>
+        /// ★ §6 缺参预检：按「入队标准」算「缺失的必填全局参数」（分标准分组，2026-10-07）。
+        /// <para><b>口径</b>：对每个涉及标准 S，取「该机构 × 阶段（通配）× (S 或不限标准)」下
+        /// <c>IsRequired=true</c> 的参数定义全集，减去该企业「已填且非空」的参数值 ⇒ 缺失集合。
+        /// 通配（<c>StandardCode=''</c>/<c>StageCode=''</c>）定义与值都参与，与
+        /// <c>FillParamValueProvider.FindDefAsync</c> 的特异性口径一致。</para>
+        /// <para>⛔ 纯读零副作用（2 次 DB 查询：定义一次 + 值一次），不写库、不调 LLM。</para>
+        /// </summary>
+        private async Task<List<NormalizeParamGapGroup>> BuildParamGapsAsync(
+            string orgCode, string enterpriseCode, string stageCode,
+            List<string> standards)
+        {
+            var result = new List<NormalizeParamGapGroup>();
+            if (string.IsNullOrEmpty(orgCode) || standards.Count == 0) return result;
+
+            // ★ 标准名称（让缺参拦截文案可读）：ISOStandard.StandardCode 为业务键
+            var stdNames = (await _db.GetListAsync<ISOStandard>(s =>
+                standards.Contains(s.StandardCode) && s.IsValid == 1)).Data
+                ?? new List<ISOStandard>();
+            var stdNameMap = stdNames
+                .ToDictionary(s => s.StandardCode, s => s.StandardName, StringComparer.Ordinal);
+
+            // ① 必填参数定义：该机构 × (阶段==stage 或不限) × (标准∈涉及 或 不限)
+            var defs = (await _db.GetListAsync<FillParamDef>(d =>
+                d.OrgCode == orgCode
+                && d.IsRequired
+                && d.IsValid == 1
+                && (d.StageCode == "" || d.StageCode == stageCode)
+                && (d.StandardCode == "" || standards.Contains(d.StandardCode)))).Data
+                ?? new List<FillParamDef>();
+            if (defs.Count == 0) return result;
+
+            // ② 企业已填的有效值：该企业 × (阶段==stage 或 不限) × (标准∈涉及 或 不限)
+            var filled = (await _db.GetListAsync<FillParamValue>(v =>
+                v.EnterpriseCode == enterpriseCode
+                && v.IsValid == 1
+                && (v.StageCode == "" || v.StageCode == stageCode)
+                && (v.StandardCode == "" || standards.Contains(v.StandardCode)))).Data
+                ?? new List<FillParamValue>();
+            var filledCodes = filled
+                .Where(v => !string.IsNullOrWhiteSpace(v.ParamValue))
+                .GroupBy(v => v.StandardCode, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.Select(v => v.ParamCode)
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .ToHashSet(StringComparer.Ordinal));
+
+            foreach (var std in standards.Distinct(StringComparer.Ordinal))
+            {
+                // 该标准适用的必填参数 = def 的 StandardCode ∈ {std, ''}
+                var required = defs
+                    .Where(d => d.StandardCode == "" || d.StandardCode == std)
+                    .Select(d => d.ParamCode)
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList();
+                if (required.Count == 0) continue;
+
+                // 已填 = 该标准的通配值 + 该标准专属值（非空）
+                var filledForStd = new HashSet<string>(StringComparer.Ordinal);
+                if (filledCodes.TryGetValue("", out var wc)) filledForStd.UnionWith(wc);
+                if (filledCodes.TryGetValue(std, out var sc)) filledForStd.UnionWith(sc);
+
+                var missing = required.Except(filledForStd, StringComparer.Ordinal).ToList();
+                if (missing.Count == 0) continue;
+
+                result.Add(new NormalizeParamGapGroup
+                {
+                    StandardCode = std,
+                    // ★ 查不到名称时回退标准 Code（⛔ 不静默吞）
+                    StandardName = stdNameMap.TryGetValue(std, out var nm) ? nm : std,
+                    Items = missing
+                        .Select(pc => defs.First(d => d.ParamCode == pc && (d.StandardCode == "" || d.StandardCode == std)))
+                        .Select(d => new NormalizeParamGapItem
+                        {
+                            ParamCode = d.ParamCode,
+                            ParamName = d.ParamName,
+                            GroupName = d.GroupName ?? string.Empty,
+                            ValueType = d.ValueType,
+                            IsRequired = true,
+                        })
+                        .ToList(),
+                });
+            }
             return result;
         }
 
@@ -563,7 +682,7 @@ namespace CertPlatform.Auditor.Controllers
         {
             public string StandardCode { get; set; } = string.Empty;
 
-            /// <summary>标准编号（如 <c>iso9001-2015</c>）</summary>
+            /// <summary>标准编号（如 <c>iso9001</c>，年份另见 <c>VersionYear</c>）</summary>
             public string StandardNo { get; set; } = string.Empty;
 
             /// <summary>标准名称（如 <c>9001标准</c>）</summary>
@@ -928,6 +1047,40 @@ namespace CertPlatform.Auditor.Controllers
                 if (plan.SkipNoAnchor > 0) why.Add($"{plan.SkipNoAnchor} 个模板无锚点");
                 return Ok(ApiResponse<object>.Fail(
                     "没有可规范化的文件：" + (why.Count > 0 ? string.Join("、", why) : "未选中任何文件")));
+            }
+
+            // ★ §6 缺参拦截（2026-10-07）：入队的标准若存在「未填的必填全局参数」⇒ 业务拒绝。
+            //   缺参会导致依赖 {{param}} 的锚点取不到值 ⇒ 文档只能 partial；不如执行前拦住、
+            //   让专家先去「企业资料参数」页补齐再跑。只拦必填（IsRequired），选填缺失放行
+            //   （照旧 partial + 待办归因），⛔ 不把整批卡死。
+            if (plan.MissingRequired > 0)
+            {
+                var gapLines = plan.ParamGaps
+                    .Select(g =>
+                        $"「{g.StandardName}」缺 {g.Items.Count} 项：" +
+                        string.Join("、", g.Items.Select(i => i.ParamName)))
+                    .ToList();
+                _logger.LogInformation(
+                    "[EntNorm] 缺必填参数，拒绝入队：Ent={Ent}, Stage={Stage}, 缺失={N}",
+                    req.EnterpriseCode, req.StageCode, plan.MissingRequired);
+                return Ok(ApiResponse<object>.Fail(
+                    "存在尚未填写的必填全局参数，请先到「企业资料参数」补齐后再执行：" +
+                    string.Join("；", gapLines)));
+            }
+
+            // ★ §9.5 视觉可达拦截（2026-10-07）：入队文件含「图片 / PDF」⇒ 必须视觉模型可达。
+            //   视觉能力是文档必要条件（⛔ 不版本管理、不可降级 partial）：
+            //   视觉模型未配 / 非视觉模型（IsAvailable=false）时，图片/PDF 出不了 Markdown，
+            //   执行必然 partial ⇒ 不如入队前拦住，让管理员去 /system/config 配好 ai_vision_config。
+            if (plan.NeedsVision && !_ocrProvider.IsAvailable)
+            {
+                _logger.LogWarning(
+                    "[EntNorm] 视觉模型不可达，拒绝入队（含图片/PDF）：Ent={Ent}, Stage={Stage}",
+                    req.EnterpriseCode, req.StageCode);
+                return Ok(ApiResponse<object>.Fail(
+                    "本批文件包含图片 / PDF，需视觉模型（ai_vision_config）识别后才能规范化，"
+                    + "但当前视觉模型未配置或不是视觉模型。请先到「系统参数 → 视觉模型配置」"
+                    + "配好可用的视觉模型（如 qwen3-vl-flash）再执行。"));
             }
 
             // ② 防重复入队（同企业同阶段同时只允许一条运行中的规范化队列）

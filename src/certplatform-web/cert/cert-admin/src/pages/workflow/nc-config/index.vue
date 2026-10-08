@@ -14,6 +14,7 @@
  * - 行动作（编辑/删除/启停/复制）由内核 dispatch 派发，页面无手写 handler
  */
 import { computed } from 'vue'
+import { ElSwitch, ElTag } from 'element-plus'
 import { Plus, RefreshRight } from '@element-plus/icons-vue'
 import { YzhTable, YzhFormDialog, YzhTreeTableLayout, useTreeTable, type TreeNode } from '@yzh-core'
 import { NCConfigLogic } from './logic'
@@ -59,10 +60,10 @@ async function handleNodeClick(node: TreeNode) {
             row-key="Code"
             @row-action="logic.onRowAction"
           >
-            <!-- 启用状态列：IsActive（bool）被内核标记为 slot，不给插槽会渲原值 true/false -->
-            <template #column-IsActive="{ row }">
-              <el-tag :type="row.IsActive ? 'success' : 'info'" size="small">
-                {{ row.IsActive ? '启用' : '禁用' }}
+            <!-- 启用状态列：IsValid（int 1/0）被内核标记为 slot，不给插槽会渲原值 1/0 -->
+            <template #column-IsValid="{ row }">
+              <el-tag :type="row.IsValid === 1 ? 'success' : 'info'" size="small">
+                {{ row.IsValid === 1 ? '启用' : '禁用' }}
               </el-tag>
             </template>
 
@@ -70,6 +71,21 @@ async function handleNodeClick(node: TreeNode) {
             <template #toolbar-left>
               <el-button type="primary" :icon="Plus" @click="logic.onToolbarAction('add')">新建检查项</el-button>
               <el-button :icon="RefreshRight" @click="tableRef?.refresh()">刷新</el-button>
+            </template>
+
+            <!--
+              ★ 显示已禁用（必需，不是可选）：
+              后端 OnBuildingFilter 会自动追加 IsValid=1，只有前端传 ShowDisabled=true 才放行。
+              缺了这个开关 ⇒ 禁用后行从列表消失、再也点不到「启用」⇒ 禁用不可逆。
+            -->
+            <template #toolbar-right>
+              <div class="nc-config-page__switch">
+                <span class="nc-config-page__switch-label">显示已禁用</span>
+                <el-switch
+                  :model-value="logic.showDisabled.value"
+                  @change="logic.toggleShowDisabled()"
+                />
+              </div>
             </template>
           </YzhTable>
         </div>
@@ -108,5 +124,16 @@ async function handleNodeClick(node: TreeNode) {
   min-height: 0;
   background: var(--yzh-color-bg-container, #fff);
   overflow: hidden;
+}
+
+.nc-config-page__switch {
+  display: flex;
+  align-items: center;
+  gap: var(--yzh-space-2, 8px);
+}
+
+.nc-config-page__switch-label {
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--el-text-color-regular);
 }
 </style>

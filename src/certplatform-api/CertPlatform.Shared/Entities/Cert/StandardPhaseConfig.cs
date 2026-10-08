@@ -9,6 +9,8 @@ namespace CertPlatform.Shared.Entities.Cert
     /// <summary>
     /// StandardPhaseConfig 标准-阶段配置
     /// <para>表名：cert_standard_phase_config</para>
+    /// <para>⚠️ 0 行、无引用（Q4 说明：cert_phase_definition 已 2026-10-08 删除；
+    /// PhaseCode 语义 = cert_cert_stage.Code GUID）</para>
     /// </summary>
     [SugarTable("cert_standard_phase_config")]
     public class StandardPhaseConfig : BaseEntity
@@ -20,6 +22,7 @@ namespace CertPlatform.Shared.Entities.Cert
         [UniqueField("标准编码", WithFields = new[] { "PhaseCode" })]
         public string StandardCode { get; set; }
 
+        /// <summary>阶段 Code → cert_cert_stage.Code（GUID）</summary>
         [Required, StringLength(36)]
         public string PhaseCode { get; set; }
 

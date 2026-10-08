@@ -9,6 +9,7 @@ using CertPlatform.Admin.Entities.Sys;
 using CB = CertPlatform.Shared.Entities.Cert.CertificationBody;
 using ISO = CertPlatform.Shared.Entities.Cert.ISOStandard;
 using Link = CertPlatform.Admin.Entities.Sys.CertOrgStandard;
+using Family = CertPlatform.Admin.Entities.Cert.CertStandardFamily;
 
 namespace CertPlatform.Admin.Controllers.Foundation;
 
@@ -35,17 +36,20 @@ public class CertOrgStandardController : ControllerBase
     private readonly EntityService<CB> _cbService;
     private readonly EntityService<ISO> _isoService;
     private readonly EntityService<Link> _linkService;
+    private readonly EntityService<Family> _familyService;
     private readonly IUserContext _userContext;
 
     public CertOrgStandardController(
         EntityService<CB> cbService,
         EntityService<ISO> isoService,
         EntityService<Link> linkService,
+        EntityService<Family> familyService,
         IUserContext userContext)
     {
         _cbService = cbService;
         _isoService = isoService;
         _linkService = linkService;
+        _familyService = familyService;
         _userContext = userContext;
     }
 
@@ -92,7 +96,7 @@ public class CertOrgStandardController : ControllerBase
     /// 获取所有有效标准，并标记哪些已关联当前机构
     /// </summary>
     [HttpPost("list")]
-    public async Task<ActionResult<ApiResponse<object?>>> List([FromBody] ListRequest request)
+    public async Task<ActionResult<ApiResponse<object?>>> List([FromBody] CertOrgStandardListRequest request)
     {
         try
         {
@@ -110,7 +114,12 @@ public class CertOrgStandardController : ControllerBase
             var linkedCodes = new HashSet<string>(
                 linked.Data?.Select(p => p.StandardCode) ?? Array.Empty<string>());
 
-            // 3. 合并返回
+            // 3. 查询族信息，构建 FamilyCode → FamilyName 映射
+            var families = (await _familyService.GetListAsync()).Data ?? new();
+            var familyMap = new Dictionary<string, string>(
+                families.Where(f => f.Code != null).ToDictionary(f => f.Code!, f => $"{f.FamilyNo} {f.FamilyName}".Trim()));
+
+            // 4. 合并返回（含族信息，供前端构建树）
             var items = standards.Data!.OrderByDescending(p => p.VersionYear).Select(p => new
             {
                 Code = p.Code,
@@ -118,6 +127,8 @@ public class CertOrgStandardController : ControllerBase
                 StandardName = p.StandardName,
                 VersionYear = p.VersionYear,
                 Category = p.Category,
+                FamilyCode = p.FamilyCode,
+                FamilyName = p.FamilyCode != null && familyMap.TryGetValue(p.FamilyCode, out var fn) ? fn : string.Empty,
                 Linked = linkedCodes.Contains(p.Code)
             }).ToList();
 
@@ -137,7 +148,7 @@ public class CertOrgStandardController : ControllerBase
     /// 单条保存：勾选创建关联，取消删除关联
     /// </summary>
     [HttpPost("save")]
-    public async Task<ActionResult<ApiResponse<object?>>> Save([FromBody] SaveRequest request)
+    public async Task<ActionResult<ApiResponse<object?>>> Save([FromBody] CertOrgStandardSaveRequest request)
     {
         try
         {
@@ -195,12 +206,12 @@ public class CertOrgStandardController : ControllerBase
     // 请求模型
     // ========================================================
 
-    public class ListRequest
+    public class CertOrgStandardListRequest
     {
         public string OrgCode { get; set; } = string.Empty;
     }
 
-    public class SaveRequest
+    public class CertOrgStandardSaveRequest
     {
         public string OrgCode { get; set; } = string.Empty;
         public string StandardCode { get; set; } = string.Empty;

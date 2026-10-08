@@ -73,7 +73,7 @@ public class StandardDirectoryService
         var orgStandards = (await _db.GetListAsync<CertOrgStandard>()).Data ?? new();
         var orgStages = (await _db.GetListAsync<CertOrgStage>()).Data ?? new();
 
-        // CertStage 是机构-阶段关联（cert_org_stage.StageCode）的权威来源
+        // CertStage 是机构-阶段关联的权威来源（cert_org_stage.StageCode ★Q2 起存 Code/GUID）
         // 与「认证阶段定义」页（/cert/cert-stage）同源
         var phaseDefs = (await _db.GetListAsync<CertStage>(x => x.IsValid == 1 && !x.IsDeleted))
                         .Data?.OrderBy(x => x.SortOrder).ThenBy(x => x.StageCode).ToList() ?? new();
@@ -120,7 +120,7 @@ public class StandardDirectoryService
                 };
                 var stdChildren = (List<object>)stdNode["children"];
 
-                // 该机构+标准关联的阶段：cert_org_stage.StageCode == CertStage.StageCode
+                // 该机构+标准关联的阶段：cert_org_stage.StageCode == CertStage.Code（★Q2 统一 GUID，2026-10-08）
                 // StandardCode==null 表示适用于所有标准
                 var orgStageCodes = orgStages
                     .Where(x => x.OrgCode == org.Code
@@ -128,8 +128,9 @@ public class StandardDirectoryService
                     .Select(x => x.StageCode).ToHashSet();
 
                 // CertStage 是权威数据源，按 SortOrder 排序展示
+                // ★ Q2：org_stage.StageCode 已统一为 Code(GUID) ⇒ 与 p.Code 比对，⛔ 不再用业务码 p.StageCode
                 var linkedPhases = phaseDefs
-                    .Where(p => orgStageCodes.Contains(p.StageCode))
+                    .Where(p => orgStageCodes.Contains(p.Code))
                     .ToList();
 
                 foreach (var phase in linkedPhases)

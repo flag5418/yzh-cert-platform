@@ -5,6 +5,7 @@ admin	MENU_00202	/foundation/certification-body
 admin	MENU_00212	/business/nc-config
 admin	MENU_00217	/business/fill-param-def
 admin	MENU_00301	
+admin	MENU_00219	/cert/standard-manage
 admin	MENU_00002	/
 admin	MENU_00102	/system/role-user
 admin	MENU_00201	/cert/iso-standard

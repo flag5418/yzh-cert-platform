@@ -14,6 +14,8 @@ import { useMenuStore } from '@/store/menu'
  *    功能已由现有后台管理模块覆盖，不再单独提供页面。
  */
 const businessRoutes: RouteRecordRaw[] = [
+  // ★ 标准管理（MENU_00219）—— 体系 → 族 → 版本 三层只读树 + 族 CRUD
+  { path: 'cert/standard-manage', name: 'CertStandardManage', component: () => import('@/pages/foundation/standard-manage/index.vue') },
   { path: 'cert/iso-standard', name: 'CertIsoStandard', component: () => import('@/pages/foundation/iso-standard/index.vue') },
   { path: 'foundation/certification-body', name: 'FoundationCertificationBody', component: () => import('@/pages/foundation/certification-body/index.vue') },
   { path: 'cert/cert-stage', name: 'CertCertStage', component: () => import('@/pages/foundation/cert-stage/index.vue') },

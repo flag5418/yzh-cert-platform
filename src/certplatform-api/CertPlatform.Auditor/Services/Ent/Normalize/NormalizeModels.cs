@@ -333,6 +333,57 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
 
         /// <summary>逐条明细（含跳过项及其原因 —— ⛔ 不静默丢弃）</summary>
         public List<NormalizePlanItem> Items { get; set; } = new();
+
+        /// <summary>
+        /// ★ 按标准分组的「缺失必填全局参数」（§6 缺参预检，2026-10-07）。
+        /// <para>每个入队标准列一组：该 企业×阶段×标准 下 <c>IsRequired=true</c> 且企业尚未填有效值的
+        /// 全局参数。空 = 该标准必填参数已齐。⛔ 纯读零副作用（plan 不写库）。</para>
+        /// </summary>
+        public List<NormalizeParamGapGroup> ParamGaps { get; set; } = new();
+
+        /// <summary>★ 必填缺失参数总数（= 所有 <see cref="ParamGaps"/> 里 <c>IsRequired=true</c> 项之和）。</summary>
+        public int MissingRequired { get; set; }
+
+        /// <summary>
+        /// ★ §9.5 视觉可达校验（2026-10-07）：入队文件是否含「图片 / PDF」（需视觉模型 OCR 才能出 Markdown）。
+        /// <para>true 且 <c>IOcrProvider.IsAvailable == false</c>（视觉模型未配 / 非视觉模型）时，
+        /// <c>run</c> 端点<b>整批拒绝</b>（能力是文档必要条件，⛔ 不降级 partial —— §9.5 铁律）。</para>
+        /// </summary>
+        public bool NeedsVision { get; set; }
+    }
+
+    /// <summary>
+    /// ★ 按标准分组的缺参组（§6：执行前"分标准看每个标准缺哪些全局参数"，2026-10-07）。
+    /// </summary>
+    public sealed class NormalizeParamGapGroup
+    {
+        /// <summary>标准 Code（<c>cert_iso_standard.Code</c>；入队标准）。</summary>
+        public string StandardCode { get; set; } = string.Empty;
+
+        /// <summary>标准名称（人话显示）。</summary>
+        public string StandardName { get; set; } = string.Empty;
+
+        /// <summary>该标准下缺失的必填参数逐条。</summary>
+        public List<NormalizeParamGapItem> Items { get; set; } = new();
+    }
+
+    /// <summary>★ 单个缺失的全局参数（§6 缺参预检）。</summary>
+    public sealed class NormalizeParamGapItem
+    {
+        /// <summary>参数 Code（<c>cert_fill_param_def.ParamCode</c>）。</summary>
+        public string ParamCode { get; set; } = string.Empty;
+
+        /// <summary>参数名（人话）。</summary>
+        public string ParamName { get; set; } = string.Empty;
+
+        /// <summary>参数分组（如「基础信息」，前端按组渲染补填表单）。</summary>
+        public string GroupName { get; set; } = string.Empty;
+
+        /// <summary>取值类型（text/number/…，前端出对应控件）。</summary>
+        public string ValueType { get; set; } = string.Empty;
+
+        /// <summary>是否必填（拦截判据只看 IsRequired；选填缺失放行照旧 partial）。</summary>
+        public bool IsRequired { get; set; }
     }
 
     /// <summary>干跑明细一行</summary>

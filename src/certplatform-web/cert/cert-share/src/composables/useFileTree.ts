@@ -34,7 +34,7 @@ export interface TreeNode {
   StandardCode?: string
   /** 阶段编码 */
   PhaseCode?: string
-  /** 阶段定义编码（cert_phase_definition.Code，报告模板外键） */
+  /** 阶段定义编码（★历史命名，值 = cert_cert_stage.Code；cert_phase_definition 已 2026-10-08 删除） */
   PhaseDefinitionCode?: string
   /** 文件编码 */
   FileCode?: string

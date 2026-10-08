@@ -124,11 +124,13 @@ export interface UnmatchedAssign {
   FolderCode: string
 }
 
-/** 未归属原因 → 中文（`ambiguous` = 有候选但分不清，提示人工指派而不是硬匹配） */
+/** 未归属原因 → 中文（`ambiguous` = 有候选但分不清，提示人工指派而不是硬匹配；
+ *  `ext_mismatch` = 文件名命中了槽位但扩展名与模板不同族，格式不符按未归属处理，槽位保持「缺失」） */
 const UNMATCHED_REASON_TEXT: Record<string, string> = {
   no_standard: '该阶段无可用标准',
   no_match: '未命中任何标准槽位',
-  ambiguous: '有相近槽位但分不清'
+  ambiguous: '有相近槽位但分不清',
+  ext_mismatch: '扩展名与匹配槽位不兼容（格式不符）'
 }
 
 export class ResourcesLogic {

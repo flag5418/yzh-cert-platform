@@ -240,7 +240,7 @@ public class GapDetector
             //    这违反铁律九（启用字段唯一 = IsValid），属独立已知问题（README P0-19），
             //    此处与 ExpertTaskService.ResolveScope 保持同口径，不在本次修。
             var rules = (await _db.GetListAsync<ValidationRule>(x =>
-                itemCodes.Contains(x.Code!) && x.IsActive)).Data ?? new List<ValidationRule>();
+                itemCodes.Contains(x.Code!) && x.IsValid == 1)).Data ?? new List<ValidationRule>();
 
             return rules.Select(r => new ItemShape
             {

@@ -14,9 +14,9 @@
  *   `OnBuildingFilter` 收敛到「本工作区的企业集合」。前端不传任何隔离参数。
  *
  * ★ 阶段数据源统一为 `cert_cert_stage`（菜单 MENU_00203「认证阶段定义」同源）；
- *   `cert_phase_definition` 是重复实现的孤儿表，本页不引用。
+ *   孤儿表 `cert_phase_definition` 已于 2026-10-08 删除（Q4 裁决）。
  *
- * ★ 展示字段说明：表格「标准编号」列绑 `StandardNo`（人读编号，如 `iso9001-2015`），
+ * ★ 展示字段说明：表格「标准编号」列绑 `StandardNo`（人读编号，如 `iso9001`），
  *   **不是** `StandardCode`（那是 `cert_iso_standard.Code`，一串 GUID 关联键）。
  */
 import { Pointer } from '@element-plus/icons-vue'

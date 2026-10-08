@@ -74,7 +74,7 @@ const form = reactive({
 interface Option {
   Code: string
   Name: string
-  /** 标准人读编号（如 iso9001-2015） */
+  /** 标准人读编号（如 iso9001，年份在 `VersionYear` 列） */
   No?: string
 }
 

@@ -39,6 +39,35 @@ import type { ReportSection } from '@share/types/cert'
 
 export type { ReportSection }
 
+// ──── 判定方式（JudgeMode）字典 ────
+//
+// 值域：auto=AI 自动判定 / manual=人工判定 / semi=半自动
+// 背景：部分报告章节必须由人工判断（如现场作业一致性、员工访谈），
+//       AI 无法从企业上传资料自动分析 → 执行引擎据此跳过不可自动化的章节。
+//
+// 与 `nc-config/logic.ts` 的 JUDGE_MODE_* 完全一致，本页复用同一套选项。
+
+/** 判定方式：值 → 显示文字 */
+const JUDGE_MODE_LABEL: Record<string, string> = {
+  auto: 'AI 自动',
+  manual: '人工',
+  semi: '半自动',
+}
+
+/** 判定方式：值 → 标签颜色 */
+const JUDGE_MODE_TAG: Record<string, 'success' | 'warning' | 'primary'> = {
+  auto: 'success',
+  manual: 'warning',
+  semi: 'primary',
+}
+
+/** 判定方式下拉选项 */
+const JUDGE_MODE_OPTIONS = [
+  { label: 'AI 自动判定', value: 'auto' },
+  { label: '人工判定', value: 'manual' },
+  { label: '半自动（AI 初判 + 人工确认）', value: 'semi' },
+]
+
 // ──── 左树：树行为配置 ────
 //
 // 与 nc-config 完全一致：树只读，阶段节点 Code 是目录树 id，右表关联键是 PhaseCode。
@@ -147,6 +176,14 @@ export class ReportRuleLogic extends TreeTableLogic<any> {
     })
   }
 
+  /** 提交前剥离 SectionNameEn 换行（章节英文名称为单行字段，禁止保留 \n） */
+  override normalizeBeforeSubmit(payload: Record<string, any>): Record<string, any> {
+    if (payload.SectionNameEn != null) {
+      payload.SectionNameEn = String(payload.SectionNameEn).replace(/[\r\n]+/g, ' ')
+    }
+    return super.normalizeBeforeSubmit(payload)
+  }
+
   // ========================================================
   // 覆盖点①：配置加载（后端无 /treepconfig）
   // ========================================================
@@ -220,11 +257,16 @@ export class ReportRuleLogic extends TreeTableLogic<any> {
     return super.columns
       // 归属三列由左树决定，右表不展示（与 nc-config 隐藏 ClauseCode 同理）
       .filter((c: any) => !['OrgCode', 'StandardCode', 'PhaseCode', 'ClauseCode', 'Id'].includes(c.prop))
-      .map((c: any) =>
-        c.prop === 'IsValid'
-          ? { ...c, tagMap: { 1: '启用', 0: '禁用' }, tagTypeMap: { 1: 'success', 0: 'info' } }
-          : c,
-      )
+      .map((c: any) => {
+        // ★ JudgeMode → 带颜色的标签（与 nc-config 同款）
+        if (c.prop === 'JudgeMode') {
+          return { ...c, tagMap: JUDGE_MODE_LABEL, tagTypeMap: JUDGE_MODE_TAG }
+        }
+        if (c.prop === 'IsValid') {
+          return { ...c, tagMap: { 1: '启用', 0: '禁用' }, tagTypeMap: { 1: 'success', 0: 'info' } }
+        }
+        return c
+      })
   }
 
   // ========================================================
@@ -248,6 +290,15 @@ export class ReportRuleLogic extends TreeTableLogic<any> {
               checkStrictly: true,
               filterable: true,
             },
+          }
+        }
+        // ★ JudgeMode → select 下拉（选项由本页注入，与 nc-config 同款）
+        if (f.prop === 'JudgeMode') {
+          return {
+            ...f,
+            type: 'select' as any,
+            options: JUDGE_MODE_OPTIONS,
+            placeholder: '选择判定方式',
           }
         }
         // ★ IsValid（int 0/1）→ switch

@@ -11,9 +11,12 @@
  * - 选中阶段节点后，内核自动注入 OrgCode / StandardCode / PhaseCode 三字段联动过滤
  * - 数据加载走内核 dataLoader（未选中阶段 → NoSelectionBehavior=empty → 空表）
  * - 行按钮全部由后端 Cert/ValidationRule.json 的 RowButtons 配置驱动
- *   （Edit/Delete + CustomButtons: disable/enable/Copy，EnableField=IsActive →
+ *   （Edit/Delete + CustomButtons: disable/enable/Copy，**EnableField=IsValid**（1/0）→
  *   内核按行状态二选一：启用行只显橙「禁用」、停用行只显绿「启用」），
  *   走标准 POST /action/{method} 约定，前端零硬编码按钮
+ * - ★ 2026-10-08 启停字段由 IsActive(bool) 统一为 IsValid(int 0/1)（铁律九）：
+ *   后端默认过滤 IsValid=1 ⇒ 页面**必须**提供「显示已禁用」开关（见 index.vue），
+ *   否则禁用即不可逆（已禁用行不进列表，无法再启用）
  * - JudgeMode（判定方式）: 列/表单的**选项**在本页注入（见 JUDGE_MODE_* 常量）
  *
  * ⚠️ 两个覆盖点（本页后端是 YzhControllerBase 单表控制器，不是 TreeTableControllerBase）：
@@ -159,6 +162,20 @@ function buildClauseTree(flat: ISOClauseTreeNode[]): ISOClauseTreeNode[] {
 export class NCConfigLogic extends TreeTableLogic<any> {
   // ──── 控制器名称（对应后端 ValidationRuleController 路由） ────
   controllerName = 'Admin/Workflow/ValidationRule'
+
+  /**
+   * 新增默认值 —— 新规则默认启用。
+   * <para>★ IsValid 是 int（1=启用 / 0=禁用），不是 bool：写成 true 会被 YzhForm
+   * 的 el-switch 在挂载时纠偏成 0（静默丢数据）。</para>
+   */
+  protected override get defaultValues(): Record<string, any> {
+    return { IsValid: 1 }
+  }
+
+  /** 删除/复制确认里显示的实体名称字段（默认 'Name'，本实体是 RuleName） */
+  protected override get entityNameField(): string {
+    return 'RuleName'
+  }
 
   /** 目录域组织树的纯转换器（不走 useFileTree.loadTree —— 它会预加载阶段目录，本页用不到） */
   private readonly fileTree = useFileTree()
@@ -308,17 +325,8 @@ export class NCConfigLogic extends TreeTableLogic<any> {
           placeholder: '选择判定方式',
         }
       }
-      // IsActive: boolean switch（后端 NewEntity 是 boolean，覆盖默认 1/0 值避免类型不匹配）
-      if (f.prop === 'IsActive') {
-        return {
-          ...f,
-          type: 'switch' as any,
-          fieldProps: {
-            'active-value': true,
-            'inactive-value': false,
-          },
-        }
-      }
+      // IsValid：不需要覆写 —— YzhForm 已按实体列类型自动判定开关值域
+      //   （int → active-value=1 / inactive-value=0，见 YzhForm.switchActiveValue）
       return f
     })
   }

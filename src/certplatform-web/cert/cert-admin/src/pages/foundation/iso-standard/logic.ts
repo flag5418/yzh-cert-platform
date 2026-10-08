@@ -8,7 +8,8 @@
  * - formData：PascalCase key（YzhForm 双向绑定）
  *
  * 架构：
- * - 左侧：标准树（扁平，所有标准为根节点，不允许增加下级）
+ * - 左侧：**类别 → 标准** 两层树（分类来自 `iso_category` 字典，**视图层重组**，见 `./group.ts`）
+ *        分类节点 `Code` = 字典项 Code(GUID) + `NodeType='virtual'` —— 关联走 Code 的铁律
  * - 右侧：条款树形表格（菜单模式：整树加载、默认全展开、行内新增下级）
  * - 继承 TreeTableLogic 获得全套左树右表能力
  *
@@ -16,6 +17,7 @@
  */
 
 import { yzhApi } from '@yzh-core/api/client'
+import { getCertStandardFamilyList } from '@share/api/cert/cert-standard-family'
 import {
   TreeTableLogic,
   type ApiResponse,
@@ -24,6 +26,7 @@ import {
   type YzhFormField,
 } from '@yzh-core'
 import { reactive, ref } from 'vue'
+import { buildCategoryTree, type CategoryItem } from './group'
 
 // ========================================================
 // 模块级工具：扁平条款 → 树 / 前端过滤
@@ -166,6 +169,45 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
     return `${num} ${title}`.trim()
   }
 
+  // ========================================================
+  // 左树：类别 → 族 → 版本 分组（视图层，后端仍返回扁平）
+  // ========================================================
+
+  /** 节点是否为「类别」分组节点（字典派生，虚拟节点） */
+  private isCategoryNode(node: TreeNode | null | undefined): boolean {
+    return !!node && node.NodeType === 'virtual'
+  }
+
+  /**
+   * 覆盖树根加载：先走内核取**扁平**标准，再按 `iso_category` 字典重组成两层。
+   *
+   * ⚠️ 必须用 `treeSide.setNodes()`（内部会 `rebuildIndex()`）——
+   * 直接赋 `treeData` 不重建索引，`updateTreeNode`/`deleteTreeNode` 会找不到节点。
+   */
+  override async loadTreeRoot(): Promise<void> {
+    await super.loadTreeRoot()
+    let categories: CategoryItem[] = []
+    try {
+      const res = await yzhApi.get<ApiResponse<CategoryItem[]>>(
+        '/api/System/Dictionary/items/by-no/iso_category',
+      )
+      categories = res?.data ?? []
+    } catch {
+      categories = []
+    }
+    if (!categories.length) return
+    this.treeSide.setNodes(buildCategoryTree(this.treeData, categories))
+  }
+
+  /**
+   * 覆盖树节点操作：分类节点（`NodeType='virtual'`）不出任何按钮 ——
+   * 它没有对应实体，编辑/删除/新增下级都无意义。
+   * ★ 三层体系裁决（2026-10-08）：整个左树全只读，所有节点均无操作按钮。
+   */
+  override get nodeActions(): (node: TreeNode) => YzhAction[] {
+    return () => []
+  }
+
   // ──── 表单字段：ParentCode → treeSelect（可改上级 / 层级调整） ────
   override get formFields(): YzhFormField[] {
     return super.formFields.map((f) => {
@@ -188,6 +230,38 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
     })
   }
 
+  // ──── 标准弹窗字段：FamilyCode → 下拉（族列表，可留空 = 未归族） ────
+  // 后端 ISOStandardForm.json 只能声明 Type=ComboBox（EntityConfig 无表数据源类型），
+  // 选项由本覆写注入 loadOptions —— YzhForm 初始化时自动调用（YzhForm.vue:249-252）。
+  override get treeFormFields(): YzhFormField[] {
+    return super.treeFormFields.map((f) => {
+      if (f.prop === 'FamilyCode') {
+        return {
+          ...f,
+          type: 'select',
+          filterable: true,
+          clearable: true,
+          placeholder: '选择所属标准族，留空 = 未归族',
+          loadOptions: async () => {
+            try {
+              const res = await getCertStandardFamilyList()
+              const items = res?.data?.Items ?? []
+              return items
+                .filter((x) => x?.Code)
+                .map((x) => ({
+                  value: x.Code!,
+                  label: `${x.FamilyNo} ${x.FamilyName}`.trim(),
+                }))
+            } catch {
+              return []
+            }
+          },
+        }
+      }
+      return f
+    })
+  }
+
   // ──── 行操作：菜单模式（新增下级 + 基类 edit/delete/toggle-valid） ────
   override get rowActions(): YzhAction[] | ((row: any) => YzhAction[]) {
     const base = super.rowActions
@@ -202,7 +276,8 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
 
   /** 拉取当前标准全量条款并构建上级候选（编辑时排除自身及子孙） */
   private async loadParentOptions(excludeCode?: string): Promise<void> {
-    if (!this.selectedNode) {
+    // 分类节点无条款语义：不发请求（standardCode 传字典项 Code 会查出空/脏数据）
+    if (!this.selectedNode || this.isCategoryNode(this.selectedNode)) {
       this.parentOptions.value = []
       return
     }
@@ -224,7 +299,8 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
 
   /**
    * YzhTable 数据加载器：返回条款树根节点数组。
-   * - 未选中标准 → 空
+   * - 未选中标准 / 选中**分类节点** → 空（★ `onNodeClick` 直接调 `_tableRef.refresh()`
+   *   走的是本方法，**不经过** `loadPageWithoutTree`，所以必须自己挡）
    * - GET ISOClause/getTree 取扁平 → 本地组树
    * - 条款编号/标题 → 前端关键字过滤（保留命中节点的祖先链）
    * - 关分页：total = 树中可见节点数（仅展示用）
@@ -238,7 +314,7 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
     Title?: string
     [key: string]: any
   }): Promise<{ rows: any[]; total: number }> {
-    if (!this.selectedNode) {
+    if (!this.selectedNode || this.isCategoryNode(this.selectedNode)) {
       return { rows: [], total: 0 }
     }
     const standardCode = this.selectedNode.Code
@@ -269,7 +345,7 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
 
   /** 打开新增顶级条款弹窗（ParentCode = null，可再选上级） */
   async openAddClauseDialog(): Promise<boolean> {
-    if (!this.selectedNode) {
+    if (!this.selectedNode || this.isCategoryNode(this.selectedNode)) {
       return false
     }
     this.dialogMode.value = 'add'
@@ -292,7 +368,7 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
    * 打开「新增下级」弹窗（预填 ParentCode = row.Code，仍可改上级）
    */
   async openAddClauseChild(row: ClauseRow): Promise<boolean> {
-    if (!this.selectedNode) {
+    if (!this.selectedNode || this.isCategoryNode(this.selectedNode)) {
       return false
     }
     this.dialogMode.value = 'add'
@@ -365,21 +441,32 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
   // 标准（树节点）CRUD
   // ========================================================
 
-  /** 打开新增标准弹窗 */
+  /** 打开新增标准弹窗（选中某类别时预填该类别，见「按不同分类建标准」） */
   openAddStdDialog(): void {
     this.stdDialogMode.value = 'add'
     this.stdEditingNode.value = null
     this.resetObject(this.stdFormData)
     const tmpl = (this.treeFormConfig as any)?.NewEntity || {}
+    // 类别节点与标准节点的 Extra.Category 都是 DicValue（如 quality）——直接可用
+    const category = this.selectedNode?.Extra?.Category
     Object.assign(this.stdFormData, {
       ...tmpl,
       Code: crypto.randomUUID?.() || `${Date.now()}`,
+      ...(category ? { Category: category } : {}),
     })
     this.stdDialogVisible.value = true
   }
 
-  /** 打开编辑标准弹窗 */
+  /**
+   * 打开编辑标准弹窗
+   *
+   * ⚠️ `node.Name` 在分组树里是**标签**（`iso9001:2015 9001标准`），
+   * 真名存在 `Extra.StandardName`（由 `group.ts` 落档）——
+   * `...extra` 放在 `StandardName: node.Name` **之后**，靠它覆盖回来，
+   * 否则提交会把标签存成标准名。
+   */
   openEditStdDialog(node: TreeNode): void {
+    if (this.isCategoryNode(node)) return
     this.stdDialogMode.value = 'edit'
     this.stdEditingNode.value = node
     this.resetObject(this.stdFormData)
@@ -406,6 +493,9 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
         )
       }
       this.stdDialogVisible.value = false
+      // ★ 分组是视图层：新增走「本地 append 到根」、更新走「原位改」，
+      //   内核都不会重新归类 ⇒ 必须整树重载才能落回正确的类别下。
+      await this.loadTreeRoot()
     } finally {
       this.stdSubmitting.value = false
     }
@@ -416,6 +506,8 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
     await this.deleteTreeNode(node, true)
     // 右表走 YzhTable dataLoader 刷新（selectedNode 可能已被清空）
     await this.refresh()
+    // 重建分组 + `treeSide` 索引（内核局部 removeNode 后索引已残）
+    await this.loadTreeRoot()
   }
 }
 

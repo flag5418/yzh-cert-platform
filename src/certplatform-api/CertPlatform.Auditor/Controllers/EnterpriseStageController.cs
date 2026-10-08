@@ -11,10 +11,16 @@ using YZH.Core.Stand.Models.Result;
 using CertPlatform.Auditor.Services;
 using CertPlatform.Auditor.Services.Ent;
 using CertPlatform.Admin.Entities.Cert;
+using CertPlatform.Admin.Entities.Sys;
+using YZH.Core.Api.Models.System;
 
 using Ent = CertPlatform.Shared.Entities.Cert.Enterprise;
 using Stage = CertPlatform.Shared.Entities.Cert.CertStage;
 using Std = CertPlatform.Shared.Entities.Cert.ISOStandard;
+using OrgStage = CertPlatform.Admin.Entities.Sys.CertOrgStage;
+using OrgStd = CertPlatform.Admin.Entities.Sys.CertOrgStandard;
+using Dict = YZH.Core.Api.Models.System.Sys_Dictionary;
+using DictItem = YZH.Core.Api.Models.System.Sys_DictionaryList;
 
 namespace CertPlatform.Auditor.Controllers;
 
@@ -80,15 +86,26 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
     private readonly EntityService<Ent> _entService;
     private readonly EntityService<Stage> _stageService;
     private readonly EntityService<Std> _stdService;
+    private readonly EntityService<OrgStage> _orgStageService;
+    private readonly EntityService<OrgStd> _orgStdService;
+    private readonly EntityService<Dict> _dictService;
+    private readonly EntityService<DictItem> _dictItemService;
     private readonly IDbOrm _db;
     private readonly WorkspaceContextService _workspace;
     private readonly EnterpriseFileService _fileService;
+
+    /// <summary>iso_category 字典 Code 缓存（进程内，Code 插入后不可修改）</summary>
+    private string? _isoCategoryDictCode;
 
     public EnterpriseStageController(
         EntityService<CertEnterpriseStage> entityService,
         EntityService<Ent> entService,
         EntityService<Stage> stageService,
         EntityService<Std> stdService,
+        EntityService<OrgStage> orgStageService,
+        EntityService<OrgStd> orgStdService,
+        EntityService<Dict> dictService,
+        EntityService<DictItem> dictItemService,
         IDbOrm db,
         IUserContext userContext,
         WorkspaceContextService workspace,
@@ -98,6 +115,10 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
         _entService = entService;
         _stageService = stageService;
         _stdService = stdService;
+        _orgStageService = orgStageService;
+        _orgStdService = orgStdService;
+        _dictService = dictService;
+        _dictItemService = dictItemService;
         _db = db;
         _workspace = workspace;
         _fileService = fileService;
@@ -217,6 +238,10 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
     /// <para>展示字段（标准编号 / 版本年 / 类别）放在 <c>Extra</c> 内 ——
     /// 前端 <c>handleNodeSelect</c> 会把 <c>Extra</c> 平铺到节点上，列可直接绑 <c>StandardNo</c> 等。</para>
     ///
+    /// <para><b>机构范围过滤</b>：只展示当前工作区所属认证机构（经 <c>ResolveCertBodyCodeAsync</c> 归一）
+    /// 在 <c>cert_org_stage</c> / <c>cert_org_standard</c> 中已关联的阶段 × 标准 ——
+    /// 机构未配置的不展示、不可选（企业挂在该机构下，只有机构有的才能选）。</para>
+    ///
     /// <para>POST <c>api/Auditor/EnterpriseStage/checkTree</c>，body <c>{ ContextCode }</c>（= 企业 Code）</para>
     /// </summary>
     [HttpPost("checkTree")]
@@ -232,15 +257,41 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
             if (err != null)
                 return Ok(ApiResponse.Fail(err));
 
-            // 阶段（统一源：cert_cert_stage，与「认证阶段定义」页同源）
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // ★ 机构范围过滤：只展示当前工作区所属认证机构已关联的阶段 × 标准
+            //   （企业挂在该机构下，机构未配置的阶段/标准不展示、不可选）
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            // ① 机构域归一：工作区 Code → 认证机构 Code
+            var certBodyCode = await _workspace.ResolveCertBodyCodeAsync(ws.Data.Code);
+
+            // ② 机构已关联的阶段 Code 集合（cert_org_stage）
+            var orgStages = await _orgStageService.GetListAsync(p =>
+                p.OrgCode == certBodyCode && p.IsValid == 1 && !p.IsDeleted);
+            var orgStageCodes = new HashSet<string>(
+                orgStages.Data?.Select(p => p.StageCode) ?? Array.Empty<string>());
+
+            // ③ 机构已关联的标准 Code 集合（cert_org_standard）
+            var orgStds = await _orgStdService.GetListAsync(p =>
+                p.OrgCode == certBodyCode && p.IsValid == 1 && !p.IsDeleted);
+            var orgStdCodes = new HashSet<string>(
+                orgStds.Data?.Select(p => p.StandardCode) ?? Array.Empty<string>());
+
+            // ④ 全量有效阶段 / 标准，再按机构范围过滤
             var stages = await _stageService.GetListAsync(p => p.IsValid == 1 && !p.IsDeleted);
             if (!stages.Success)
                 return Ok(ApiResponse.Fail(stages.Error));
+            var filteredStages = stages.Data!.Where(s => orgStageCodes.Contains(s.Code)).ToList();
 
-            // 标准（cert_iso_standard）
             var stds = await _stdService.GetListAsync(p => p.IsValid == 1 && !p.IsDeleted);
             if (!stds.Success)
                 return Ok(ApiResponse.Fail(stds.Error));
+            var filteredStds = stds.Data!.Where(s => orgStdCodes.Contains(s.Code)).ToList();
+
+            // ── 字典翻译：iso_category DicValue → DicName ──
+            var categoryMap = await BuildIsoCategoryMapAsync();
+            string CategoryNameOf(string? dicValue) =>
+                !string.IsNullOrWhiteSpace(dicValue) && categoryMap.TryGetValue(dicValue, out var name) ? name : dicValue ?? "";
 
             // 该企业已关联的「阶段 × 标准」组合
             var linked = await Entity.GetListAsync(p =>
@@ -249,14 +300,14 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
                 (linked.Data ?? new List<CertEnterpriseStage>())
                     .Select(p => BuildStandardNodeCode(p.StageCode, p.StandardCode)));
 
-            var stdList = stds.Data!
+            var stdList = filteredStds
                 .OrderBy(p => p.Sort)
                 .ThenBy(p => p.StandardCode)
                 .ToList();
 
             var nodes = new List<object>();
 
-            foreach (var st in stages.Data!.OrderBy(p => p.SortOrder).ThenBy(p => p.StageCode))
+            foreach (var st in filteredStages.OrderBy(p => p.SortOrder).ThenBy(p => p.StageCode))
             {
                 // ★ 阶段键 = cert_cert_stage.Code（不是 StageCode 业务码 'jd01'）：
                 //   标准目录模板/提取规则/提取结果/文件行/op_log 全部按 Code 存 StageCode，
@@ -282,6 +333,8 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
                             StandardName = sd.StandardName,
                             VersionYear = sd.VersionYear,
                             Category = sd.Category,
+                            // ★ 类别中文名（iso_category 字典翻译：quality → 质量管理）
+                            CategoryName = CategoryNameOf(sd.Category),
                             // 启用/禁用徽章（前端 CheckSelector 统一读 Extra.IsValid；查询已过滤 IsValid=1）
                             IsValid = sd.IsValid
                         }
@@ -317,6 +370,43 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
         {
             return Ok(ApiResponse.Fail(ex.Message));
         }
+    }
+
+    /// <summary>
+    /// 构建 iso_category 字典的 DicValue → DicName 映射（quality → 质量管理）。
+    /// 进程内缓存字典 Code（Code 插入后不可修改，缓存安全）。
+    /// </summary>
+    private async Task<Dictionary<string, string>> BuildIsoCategoryMapAsync()
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        string? dictCode = _isoCategoryDictCode;
+        if (dictCode == null)
+        {
+            var dictResult = await _dictService.GetListAsync(d => d.DicNo == "iso_category", includeDisabled: true);
+            var dict = dictResult?.Data?.OrderBy(d => d.Id).FirstOrDefault();
+            if (dict != null)
+            {
+                _isoCategoryDictCode = dict.Code;
+                dictCode = dict.Code;
+            }
+        }
+
+        if (dictCode == null) return map;
+
+        var items = await _dictItemService.GetListAsync(x => x.DicCode == dictCode && x.IsValid == 1 && !x.IsDeleted);
+        if (items?.Data != null)
+        {
+            foreach (var item in items.Data)
+            {
+                if (!string.IsNullOrWhiteSpace(item.DicValue))
+                {
+                    map[item.DicValue] = item.DicName;
+                }
+            }
+        }
+
+        return map;
     }
 
     // ========================================================
@@ -361,6 +451,20 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
                 return Ok(ApiResponse.Fail(stds.Error));
             var validStds = new HashSet<string>(stds.Data!.Select(p => p.Code));
 
+            // ★ 机构范围校验：提交的阶段/标准必须属于当前工作区所属认证机构已关联的范围。
+            //   前端已做 UI 过滤（checkTree 只展示机构关联项），此处为防 API 滥用的第二道门。
+            var certBodyCode = await _workspace.ResolveCertBodyCodeAsync(ws.Data.Code);
+
+            var orgStages = await _orgStageService.GetListAsync(p =>
+                p.OrgCode == certBodyCode && p.IsValid == 1 && !p.IsDeleted);
+            var orgStageCodes = new HashSet<string>(
+                orgStages.Data?.Select(p => p.StageCode) ?? Array.Empty<string>());
+
+            var orgStds = await _orgStdService.GetListAsync(p =>
+                p.OrgCode == certBodyCode && p.IsValid == 1 && !p.IsDeleted);
+            var orgStdCodes = new HashSet<string>(
+                orgStds.Data?.Select(p => p.StandardCode) ?? Array.Empty<string>());
+
             var applied = new List<string>();
             var inserted = 0;
             var directoryInit = new List<object>();
@@ -387,6 +491,9 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
             {
                 if (!validStages.Contains(item.StageCode)) continue;
                 if (!validStds.Contains(item.StandardCode)) continue;
+                // ★ 机构范围守卫：不在机构关联范围内的提交项直接跳过（防 API 滥用）
+                if (!orgStageCodes.Contains(item.StageCode)) continue;
+                if (!orgStdCodes.Contains(item.StandardCode)) continue;
 
                 var nodeCode = BuildStandardNodeCode(item.StageCode, item.StandardCode);
 

@@ -719,6 +719,13 @@ public class EnterpriseFileService
                 // 同一批次里重复指向同一槽位 ⇒ 后者必失败，直接拒
                 if (plan.Any(p => p.Mode == "slot" && p.Slot?.Code == slot.Code))
                     return ($"槽位「{slot.FileName}」在本次上传中被重复指定", null);
+                // ★ 扩展名族兼容兜底（04 §4.1 A 方案）：plan 已把异族文件挡在未归属（ext_mismatch），
+                //   这里是绕过 plan 直调 init 的最后一道（同 MaxFileSizeMB）。任一侧无扩展名放行。
+                if (!DispatchMatcher.ExtCompatible(item.FileName, slot.FileName))
+                {
+                    var want = Path.GetExtension(slot.FileName);
+                    return ($"「{item.FileName}」扩展名与槽位「{slot.FileName}」不兼容（模板要求 {want}），请上传 {want} 或同族格式", null);
+                }
 
                 plan.Add(new InitPlanItem
                 {

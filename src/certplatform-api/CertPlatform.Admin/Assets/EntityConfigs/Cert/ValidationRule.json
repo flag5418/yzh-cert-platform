@@ -1,7 +1,7 @@
 {
   "Title": "NC 检查规则",
   "FillMode": "AutoFix",
-  "EnableField": "IsActive",
+  "EnableField": "IsValid",
   "Columns": [
     {
       "FieldName": "Id",
@@ -194,7 +194,7 @@
       "Placeholder": "选择判定方式"
     },
     {
-      "FieldName": "IsActive",
+      "FieldName": "IsValid",
       "DesName": "启用",
       "Type": "Switch",
       "Sxh": 7,
@@ -207,7 +207,7 @@
       "RowSpan": 1,
       "ColSpan": 1,
       "GroupIndex": "1",
-      "Mrz": "true",
+      "Mrz": "1",
       "Enable": true
     },
     {

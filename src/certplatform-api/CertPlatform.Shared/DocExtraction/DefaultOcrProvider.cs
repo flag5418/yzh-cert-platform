@@ -24,6 +24,15 @@ namespace CertPlatform.Shared.DocExtraction
             // 调用方会把 Message 写入 MarkdownMessage，前端据此引导用户走「手工定义 + 人工填写」。
             return Task.FromResult(OcrResult.NotAvailable());
         }
+
+        /// <summary>
+        /// 空壳实现：与 <see cref="ToMarkdownAsync"/> 同为能力边界显式声明（⛔ 不抛异常）。
+        /// 真实能力在 Admin <c>VisionOcrProvider.JudgeDocPurposeAsync</c>（读 <c>ai_vision_config</c>）。
+        /// </summary>
+        public Task<DocPurposeJudge> JudgeDocPurposeAsync(string fileName, byte[] content)
+        {
+            return Task.FromResult(DocPurposeJudge.NotAvailable("视觉模型未接入，无法识别文档分类/作用"));
+        }
     }
 
     /// <summary>

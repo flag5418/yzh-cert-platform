@@ -36,6 +36,8 @@
         SortOrder: ctx.leaf.SortOrder,
         // ★ IsActive → IsValid（铁律九）
         IsValid: ctx.leaf.IsValid ?? 1,
+        // ★ 判定方式：auto=AI 自动 / manual=人工 / semi=半自动（与 NC 规则对齐）
+        JudgeMode: ctx.leaf.JudgeMode ?? 'auto',
         WorkflowConfig: JSON.stringify(ctx.config),
         LayoutJson: JSON.stringify(ctx.layout),
         Remark: ctx.leaf.Remark

@@ -64,6 +64,15 @@ namespace CertPlatform.Shared.Entities.Rpt
         [SugarColumn(ColumnDataType = "text", IsNullable = true)]
         public string? LayoutJson { get; set; }
 
+        /// <summary>
+        /// 判定方式（auto=AI 自动判定 / manual=人工判定 / semi=半自动）
+        /// <para>业务背景：部分章节必须由人工判断（如现场作业一致性、员工访谈），
+        /// AI 无法从企业上传资料自动分析 → 执行引擎据此跳过不可自动化的章节。</para>
+        /// <para>★ 与 <see cref="Cert.Entities.Cert.ValidationRule.JudgeMode"/> 完全对齐。</para>
+        /// </summary>
+        [SugarColumn(Length = 20)]
+        public string JudgeMode { get; set; } = "auto";
+
         /// <summary>对应条款编码（★可空：概述/结论类章节不映射条款）</summary>
         [SugarColumn(Length = 36, IsNullable = true)]
         public string? ClauseCode { get; set; }

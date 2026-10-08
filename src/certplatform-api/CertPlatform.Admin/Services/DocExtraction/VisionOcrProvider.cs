@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using CertPlatform.Shared.DocExtraction;
 using Microsoft.Extensions.DependencyInjection;
@@ -146,6 +148,100 @@ namespace CertPlatform.Admin.Services.DocExtraction
             {
                 _logger.LogError(ex, "[视觉] 识别异常: {File}", fileName);
                 return OcrResult.NotAvailable($"视觉识别异常：{ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// ★ 图片 / PDF「分类 + 作用 + 关键词」识别（§2 路径② 两层过滤的输入，2026-10-07）。
+        ///
+        /// <para><b>★ 与 <see cref="ToMarkdownAsync"/> 共用同一视觉模型 + 同一行 <c>ai_vision_config</c></b>：
+        /// 底层核心能力不版本管理、一份配置服务所有文档；OCR 与「分类/作用」用同一模型，
+        /// ⛔ 不拆第二行（否则会出现「这份用 A 模型、那份用 B 模型」的不一致）。</para>
+        ///
+        /// <para>读 <see cref="VisionSettings.DocPurposePrompt"/>（新增字段），<c>ForceJson=true</c> 让模型返回
+        /// 结构化 <c>{kind,purpose,keywords,confidence}</c>。⛔ 铁律沿用（2026-10-03 实测）：
+        /// 只让模型选 <c>kind</c> 固定枚举 + 自由文本 purpose/keywords，⛔ 不输出派生布尔。</para>
+        ///
+        /// <para>配置关闭 / 模型非视觉 / 超大图时返回 <see cref="DocPurposeJudge.NotAvailable"/>（不抛异常）。
+        /// ⚠️ 按 §9.5 铁律：该能力是文档必要条件，返回 NotAvailable 时调用方应拒执（不降级 partial）。</para>
+        /// </summary>
+        public async Task<DocPurposeJudge> JudgeDocPurposeAsync(string fileName, byte[] content)
+        {
+            if (content == null || content.Length == 0)
+                return DocPurposeJudge.NotAvailable("文件内容为空");
+
+            // ★ 复用现有 LoadSettings()：同一行 ai_vision_config、同一视觉模型
+            var v = LoadSettings();
+            if (!v.Enabled)
+                return DocPurposeJudge.NotAvailable("视觉识别已关闭（ai_vision_config.Enabled=false）");
+            if (!v.LooksLikeVisionModel)
+                return DocPurposeJudge.NotAvailable(
+                    $"配置的模型「{v.Model}」不是视觉模型，无法读取图片内容（纯文本模型会静默忽略图片）");
+            if (content.Length > v.MaxImageBytes)
+                return DocPurposeJudge.NotAvailable(
+                    $"图片 {content.Length / 1024 / 1024} MB 超过上限 {v.MaxImageBytes / 1024 / 1024} MB，未识别");
+
+            try
+            {
+                // ★ 复用 OCR 的图片预处理（缩放 + 判 MIME），⛔ 不另写一份
+                var bytes = ImagePreprocess.ScaleDown(content, v.ImageMaxEdge, out var mime);
+
+                var resp = await _llm.CompleteAsync(new LlmInvokeRequest
+                {
+                    BaseUrl = v.BaseUrl,
+                    ApiKey = v.ApiKey,
+                    Model = v.Model,
+                    MaxTokens = v.MaxTokens,
+                    Temperature = v.Temperature,
+                    Prompt = v.DocPurposePrompt,      // ★ 新增字段（与 OCR 同一行配置）
+                    // ★ ForceJson=true：本能力要的是结构化 {kind,purpose,keywords,confidence}
+                    ForceJson = true,
+                    Images = new List<byte[]> { bytes },
+                    ImageMimeType = mime,
+                });
+
+                _logger.LogInformation(
+                    "[视觉·作用] {File} → {Model}，{Ok}，{Ms}ms，来源 {Src}",
+                    fileName, v.Model, resp.Success, resp.DurationMs, v.Source);
+
+                if (!resp.Success)
+                    return DocPurposeJudge.NotAvailable($"识别失败：{resp.Message}");
+
+                // ★ 只读 JSON，⛔ 不让模型派生布尔（沿用 2026-10-03 铁律：kind 全对、派生布尔全错）
+                if (resp.Json?.RootElement.ValueKind != JsonValueKind.Object)
+                    return DocPurposeJudge.NotAvailable("模型未返回可解析的 JSON");
+
+                var root = resp.Json.RootElement;
+                var kind = root.TryGetProperty("kind", out var k) ? (k.GetString() ?? "").Trim() : "";
+                var purpose = root.TryGetProperty("purpose", out var p) ? (p.GetString() ?? "").Trim() : "";
+                var keywords = new List<string>();
+                if (root.TryGetProperty("keywords", out var kw) && kw.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var el in kw.EnumerateArray())
+                    {
+                        var w = (el.GetString() ?? "").Trim();
+                        if (w.Length > 0) keywords.Add(w);
+                    }
+                }
+                double conf = 0;
+                if (root.TryGetProperty("confidence", out var c) &&
+                    double.TryParse(c.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var cf))
+                    conf = Math.Clamp(cf, 0.0, 1.0);
+
+                return new DocPurposeJudge
+                {
+                    Success = true,
+                    Kind = kind,
+                    Purpose = purpose,
+                    Keywords = keywords,
+                    Confidence = conf,
+                    Message = "",
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[视觉·作用] 识别异常: {File}", fileName);
+                return DocPurposeJudge.NotAvailable($"识别异常：{ex.Message}");
             }
         }
 

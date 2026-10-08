@@ -30,7 +30,7 @@
       "Sxh": 1,
       "Mrz": "",
       "Enable": true,
-      "Placeholder": "如：ISO 13485:2016"
+      "Placeholder": "如：iso13485（年份填「版本年份」，勿写 iso13485-2016）"
     },
     {
       "Row": 1,
@@ -90,6 +90,24 @@
       "RowSpan": 1,
       "Col": 0,
       "ColSpan": 1,
+      "FieldName": "FamilyCode",
+      "DesName": "所属族",
+      "Width": 220,
+      "Type": "ComboBox",
+      "Yxk": true,
+      "BcFlag": true,
+      "XsFlag": false,
+      "GroupIndex": "1",
+      "Sxh": 5,
+      "Mrz": "",
+      "Enable": true,
+      "Placeholder": "留空 = 未归族（值 = cert_standard_family.Code）"
+    },
+    {
+      "Row": 5,
+      "RowSpan": 1,
+      "Col": 0,
+      "ColSpan": 1,
       "FieldName": "Description",
       "DesName": "描述",
       "Width": 500,
@@ -98,13 +116,13 @@
       "BcFlag": true,
       "XsFlag": true,
       "GroupIndex": "1",
-      "Sxh": 5,
+      "Sxh": 6,
       "Mrz": "",
       "Enable": true,
       "Placeholder": "标准描述（可选）"
     },
     {
-      "Row": 5,
+      "Row": 6,
       "RowSpan": 1,
       "Col": 0,
       "ColSpan": 2,
@@ -116,7 +134,7 @@
       "BcFlag": true,
       "XsFlag": false,
       "GroupIndex": "99",
-      "Sxh": 6,
+      "Sxh": 7,
       "Mrz": "",
       "Enable": true
     },

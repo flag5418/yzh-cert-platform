@@ -157,88 +157,48 @@ async function handleNodeClick(node: TreeNode): Promise<void> {
                   >
                     {{ VALUE_SOURCE_LABEL[item.ValueSource] || item.ValueSource }}
                   </el-tag>
-                  <el-tag v-if="item.IsBuiltin" type="warning" size="small" effect="plain">内置</el-tag>
                 </div>
 
                 <div class="efp-item__control">
                   <!-- 枚举 -->
-                  <el-select
-                    v-if="item.ValueType === 'enum'"
-                    :model-value="logic.valueOf(item)"
-                    :disabled="!item.Editable"
-                    :placeholder="item.Placeholder || `请选择${item.ParamName}`"
-                    clearable
-                    style="width: 100%"
-                    @update:model-value="logic.onValueChange(item, $event ?? '')"
-                  >
-                    <el-option
-                      v-for="o in parseEnumOptions(item.EnumOptions)"
-                      :key="o.value"
-                      :label="o.label"
-                      :value="o.value"
-                    />
-                  </el-select>
+                  <template v-if="item.ValueType === 'enum'">
+                    <el-select :model-value="logic.valueOf(item)" :disabled="!item.Editable"
+                      :placeholder="item.Description || item.Placeholder || `请选择${item.ParamName}`" clearable style="width:100%"
+                      @update:model-value="logic.onValueChange(item, $event ?? '')">
+                      <el-option v-for="o in parseEnumOptions(item.EnumOptions)" :key="o.value" :label="o.label" :value="o.value" />
+                    </el-select>
+                  </template>
 
                   <!-- 数字 -->
-                  <el-input
-                    v-else-if="item.ValueType === 'number'"
-                    :model-value="logic.valueOf(item)"
-                    :disabled="!item.Editable"
-                    :placeholder="item.Placeholder || `请输入${item.ParamName}`"
-                    @update:model-value="logic.onValueChange(item, String($event ?? ''))"
-                  />
+                  <template v-else-if="item.ValueType === 'number'">
+                    <el-input :model-value="logic.valueOf(item)" :disabled="!item.Editable"
+                      :placeholder="item.Description || item.Placeholder || `请输入${item.ParamName}`"
+                      @update:model-value="logic.onValueChange(item, String($event ?? ''))" />
+                  </template>
 
                   <!-- 日期 -->
-                  <el-date-picker
-                    v-else-if="item.ValueType === 'date'"
-                    :model-value="logic.valueOf(item)"
-                    :disabled="!item.Editable"
-                    type="date"
-                    value-format="YYYY-MM-DD"
-                    :placeholder="item.Placeholder || `请选择${item.ParamName}`"
-                    style="width: 100%"
-                    @update:model-value="logic.onValueChange(item, String($event ?? ''))"
-                  />
+                  <template v-else-if="item.ValueType === 'date'">
+                    <el-date-picker :model-value="logic.valueOf(item)" :disabled="!item.Editable" type="date"
+                      value-format="YYYY-MM-DD"
+                      :placeholder="item.Description || item.Placeholder || `请选择${item.ParamName}`"
+                      style="width:100%" @update:model-value="logic.onValueChange(item, String($event ?? ''))" />
+                  </template>
 
                   <!-- 长文本（质量方针等） -->
-                  <el-input
-                    v-else-if="item.ParamCode === 'quality_policy'
-                      || item.ParamCode === 'quality_objective'
-                      || item.ParamCode === 'company_profile'"
-                    :model-value="logic.valueOf(item)"
-                    :disabled="!item.Editable"
-                    type="textarea"
-                    :rows="4"
-                    :placeholder="item.Placeholder || `请输入${item.ParamName}`"
-                    @update:model-value="logic.onValueChange(item, String($event ?? ''))"
-                  />
+                  <template v-else-if="item.ParamCode === 'quality_policy'
+                    || item.ParamCode === 'quality_objective'
+                    || item.ParamCode === 'company_profile'">
+                    <el-input :model-value="logic.valueOf(item)" :disabled="!item.Editable" type="textarea" :rows="4"
+                      :placeholder="item.Description || item.Placeholder || `请输入${item.ParamName}`"
+                      @update:model-value="logic.onValueChange(item, String($event ?? ''))" />
+                  </template>
 
                   <!-- 文本 -->
-                  <el-input
-                    v-else
-                    :model-value="logic.valueOf(item)"
-                    :disabled="!item.Editable"
-                    :placeholder="item.Placeholder || `请输入${item.ParamName}`"
-                    @update:model-value="logic.onValueChange(item, String($event ?? ''))"
-                  />
-                </div>
-
-                <div class="efp-item__foot">
-                  <span class="efp-item__ref">
-                    <code>{{ item.ParamCode }}</code>
-                    {{ item.SourceRef }}
-                  </span>
-                  <span class="efp-item__actions">
-                    <el-button
-                      v-if="!item.Editable"
-                      link
-                      type="primary"
-                      size="small"
-                      @click="logic.goToEnterprise()"
-                    >
-                      去企业管理修改
-                    </el-button>
-                  </span>
+                  <template v-else>
+                    <el-input :model-value="logic.valueOf(item)" :disabled="!item.Editable"
+                      :placeholder="item.Description || item.Placeholder || `请输入${item.ParamName}`"
+                      @update:model-value="logic.onValueChange(item, String($event ?? ''))" />
+                  </template>
                 </div>
               </div>
             </el-card>
@@ -438,31 +398,6 @@ async function handleNodeClick(node: TreeNode): Promise<void> {
 .efp-item__name {
   font-size: 13px;
   font-weight: 500;
-}
-
-.efp-item__foot {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-top: 5px;
-}
-
-.efp-item__ref {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-.efp-item__ref code {
-  margin-right: 6px;
-  padding: 0 4px;
-  border-radius: 3px;
-  background: var(--el-fill-color);
-  color: var(--el-text-color-regular);
-}
-
-.efp-item__actions {
-  white-space: nowrap;
 }
 
 /* ── 保存条 ── */

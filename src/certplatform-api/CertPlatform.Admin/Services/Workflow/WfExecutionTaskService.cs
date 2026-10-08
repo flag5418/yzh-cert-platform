@@ -211,8 +211,11 @@ namespace CertPlatform.Admin.Services.Workflow
         {
             var now = DateTime.Now;
 
+            // ★ 关联口径（2026-10-08 修正）：传入的 ruleCode = cert_validation_rule.Code（GUID 业务键，准则 A）。
+            //   此前误按 RuleCode 列比对（该列存的是人读业务号 NC-xxx-001）⇒ rule 恒为 null，
+            //   导致 RuleName / SeverityIfViolated 快照全部落空（实测 wf_execution_task Id=67 为 NULL）。
             var rule = await _db.Client.Queryable<CertPlatform.Shared.Entities.Cert.ValidationRule>()
-                .Where(x => x.RuleCode == ruleCode )
+                .Where(x => x.Code == ruleCode)
                 .FirstAsync(ct);
 
             var task = new WfExecutionTask

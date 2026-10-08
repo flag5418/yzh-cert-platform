@@ -89,23 +89,9 @@ export interface ISOClause {
   IsDeleted?: boolean
 }
 
-export interface PhaseDefinition {
-  Id?: number
-  Code?: string
-  PhaseCode: string
-  PhaseName: string
-  SequenceOrder: number
-  Description?: string
-  IsValid: number
-  StatusName?: string
-  CreateBy?: string
-  CreateTime?: string
-  UpdateBy?: string
-  UpdateTime?: string
-  DeleteBy?: string
-  DeleteTime?: string
-  IsDeleted?: boolean
-}
+// 2026-10-08 Q4：接口 PhaseDefinition 已随孤儿表 cert_phase_definition 删除；
+// 阶段定义唯一实体 = CertStage（cert_cert_stage）。遗留字段名 PhaseDefinitionCode
+//（useFileTree / nc-config / directory）语义 = cert_cert_stage.Code，属历史命名，值口径不变。
 
 export interface Enterprise {
   Id?: number
@@ -150,6 +136,38 @@ export interface CertStage {
   Status?: string
   StatusName?: string
   Remark?: string
+  CreateBy?: string
+  CreateTime?: string
+  UpdateBy?: string
+  UpdateTime?: string
+  DeleteBy?: string
+  DeleteTime?: string
+  IsDeleted?: boolean
+}
+
+/**
+ * ISO 标准族（体系 → 族 → 版本 三层中的「族」层）
+ *
+ * 三层语义（2026-10-08 裁决）：
+ * - 体系 = `iso_category` 字典（`GET /api/System/Dictionary/items/by-no/iso_category`）
+ * - 族   = 本实体 `cert_standard_family`（新表）
+ * - 版本 = 现有 `cert_iso_standard`（一行 = 一个版本，经 `FamilyCode` 关联本表 `Code`）
+ *
+ * ⚠️ `FamilyNo` 是**人读编号**（iso9000）；`Code` 是 GUID 关联键 —— 两者同名不同义勿混用。
+ * 全局表无 `OrgCode`。
+ */
+export interface CertStandardFamily {
+  Id?: number
+  Code?: string
+  /** 族人读编号（iso9000），全局唯一 */
+  FamilyNo: string
+  /** 族中文名，与 Category 组合唯一 */
+  FamilyName: string
+  /** 所属体系（iso_category 字典 DicValue，如 quality） */
+  Category: string
+  Description?: string
+  Sort: number
+  IsValid: number
   CreateBy?: string
   CreateTime?: string
   UpdateBy?: string
@@ -213,6 +231,10 @@ export interface CertOrgStandardItem {
   StandardName: string
   VersionYear: number
   Category: string
+  /** 所属族 GUID（null = 未归族） */
+  FamilyCode: string | null
+  /** 族人读名（FamilyNo + FamilyName，后端拼接，供前端树标签展示） */
+  FamilyName: string
   /** 是否已关联当前选中机构 */
   Linked: boolean
 }
@@ -223,6 +245,10 @@ export interface CertOrgStageItem {
   PhaseCode: string
   PhaseName: string
   SortOrder: number
+  /** 阶段分类（process/audit/post） */
+  Category: string
+  /** 分类中文名（如「流程阶段」） */
+  CategoryName: string
   /** 是否已关联当前选中机构 */
   Linked: boolean
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -69,6 +70,20 @@ namespace CertPlatform.Shared.DocExtraction
         public string ImageJudgePrompt { get; set; } =
             "判断这份资料的类型。只输出一个 JSON：{\"kind\":\"体系文件|营业执照|身份证|资质证书|许可证|检测报告|其他\",\"confidence\":0.0-1.0,\"reason\":\"一句话\"}";
 
+        /// <summary>
+        /// ★ <b>文档作用识别提示词</b>（图片 / PDF → 分类 + 作用 + 关键词，§2 路径② 两层过滤用）。
+        /// <para>与 <see cref="ImageJudgePrompt"/>（只判 kind 枚举）不同：本 prompt 额外要求
+        /// 输出 <c>purpose</c>（一句话作用）与 <c>keywords</c>（3~5 个匹配关键词），
+        /// 供「分组标签 → 文件作用」两层过滤的对齐判定使用。</para>
+        /// <para>★ <b>与 OCR（<see cref="DocumentParsePrompt"/>）共用同一行 <c>ai_vision_config</c>、同一视觉模型</b>
+        /// （用户 2026-10-07 裁决：底层核心能力不版本管理、一份配置服务所有文档；拆两行会出现
+        /// 「这份用 A 模型、那份用 B 模型」的不一致）。换模型时这一项最可能要调。</para>
+        /// </summary>
+        public string DocPurposePrompt { get; set; } =
+            "你是体系认证文件分析专家。请分析这份企业文件：只输出一个 JSON：" +
+            "{\"kind\":\"体系文件|营业执照|身份证|资质证书|许可证|检测报告|手册|记录表|其他\"," +
+            "\"purpose\":\"一句话描述该文件在体系文件中的用途\",\"keywords\":[],\"confidence\":0.0-1.0}";
+
         /// <summary>图片压缩：长边上限（px）。<b>图片按 token 计费</b>，压到 1600 可省约一半。</summary>
         public int ImageMaxEdge { get; set; } = 1600;
 
@@ -93,6 +108,11 @@ namespace CertPlatform.Shared.DocExtraction
                 s.Source = "ai_vision_config";
                 if (string.IsNullOrWhiteSpace(s.Model)) s.Model = "qwen3-vl-flash";
                 if (string.IsNullOrWhiteSpace(s.DocumentParsePrompt)) s.DocumentParsePrompt = "qwenvl markdown";
+                if (string.IsNullOrWhiteSpace(s.DocPurposePrompt))
+                    s.DocPurposePrompt =
+                        "你是体系认证文件分析专家。请分析这份企业文件：只输出一个 JSON：" +
+                        "{\"kind\":\"体系文件|营业执照|身份证|资质证书|许可证|检测报告|手册|记录表|其他\"," +
+                        "\"purpose\":\"一句话描述该文件在体系文件中的用途\",\"keywords\":[],\"confidence\":0.0-1.0}";
                 if (s.TimeoutSeconds <= 0) s.TimeoutSeconds = 180;
                 if (s.MaxTokens <= 0) s.MaxTokens = 8192;
                 if (s.MaxImageBytes <= 0) s.MaxImageBytes = 12 * 1024 * 1024;
@@ -123,5 +143,37 @@ namespace CertPlatform.Shared.DocExtraction
             => Model.Contains("vl", StringComparison.OrdinalIgnoreCase)
                || Model.Contains("vision", StringComparison.OrdinalIgnoreCase)
                || Model.Contains("omni", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// ★ 图片 / PDF「分类 + 作用 + 关键词」识别结果（§2 路径② 两层过滤的输入，2026-10-07）。
+    ///
+    /// <para><b>放 Shared 而非 Admin</b>：标准侧（Admin <c>StandardDocContractController</c>）与
+    /// 企业侧（Auditor <c>EnterpriseOriginalAnalyzeExecutor</c>）都要消费它；⛔ Auditor 不能引 Admin
+    /// （C2 分层），故结果 DTO 必须落在 Shared。识别调用本身（读 <c>ai_vision_config</c>）由两端各自薄封装。</para>
+    /// <para>⛔ <b>不做可信度门槛拦截</b>（§9.5 全量留痕）：<see cref="Confidence"/> 无论高低都记录，
+    /// 审核环节可审批 / 改源 / 改值。</para>
+    /// </summary>
+    public sealed record DocPurposeJudge
+    {
+        /// <summary>是否成功产出结构化结论。</summary>
+        public bool Success { get; init; }
+
+        /// <summary>分类（kind 枚举：体系文件|营业执照|身份证|…|其他）。</summary>
+        public string Kind { get; init; } = "";
+
+        /// <summary>作用（一句话用途 → <c>cert_enterprise_doc_profile.DocPurpose</c>）。</summary>
+        public string Purpose { get; init; } = "";
+
+        /// <summary>关键词（3~5 个 → 供 §2 路径② 第一层分组标签过滤对齐）。</summary>
+        public List<string> Keywords { get; init; } = new();
+
+        /// <summary>模型自评可信度 0.00~1.00（→ <c>MatchConfidence</c>；⛔ 仅记录不拦截）。</summary>
+        public double Confidence { get; init; }
+
+        /// <summary>失败 / 未接入说明（<see cref="Success"/>=false 时非空）。</summary>
+        public string Message { get; init; } = "";
+
+        public static DocPurposeJudge NotAvailable(string message) => new() { Success = false, Message = message };
     }
 }

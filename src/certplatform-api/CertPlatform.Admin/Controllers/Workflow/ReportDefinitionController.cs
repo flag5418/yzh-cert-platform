@@ -171,6 +171,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
                 target.WorkflowCode   = entity.WorkflowCode;
                 target.WorkflowConfig = entity.WorkflowConfig;
                 target.LayoutJson     = entity.LayoutJson;
+                target.JudgeMode      = entity.JudgeMode;
                 target.ClauseCode     = entity.ClauseCode;
                 target.SectionJson    = entity.SectionJson;
                 target.Remark         = entity.Remark;

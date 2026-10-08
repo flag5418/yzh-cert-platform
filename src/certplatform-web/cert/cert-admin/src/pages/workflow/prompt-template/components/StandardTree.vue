@@ -48,7 +48,7 @@ const treeData = computed<TreeNode[]>(() => [
     badges: badgesFor(ROOT_SCOPE.code),
     children: props.standards.map((s) => {
       // ★ 节点 id 必须用 `code`（GUID）—— `wf_prompt_template.StandardCode` 存的就是它。
-      //   `standardCode` 是人类可读 slug（如 iso9001-2015），拿它去 resolve 永远匹配不到。
+      //   `standardCode` 是人类可读 slug（如 iso9001，不含年份），拿它去 resolve 永远匹配不到。
       const code = normScope(s.code) || normScope(s.standardCode)
       return {
         id: code,

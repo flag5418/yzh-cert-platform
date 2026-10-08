@@ -134,4 +134,12 @@ SELECT
   `s`.`DeleteTime` AS `DeleteTime`,
   `s`.`IsDeleted` AS `IsDeleted`
 FROM `cert_cert_stage` `s`
-LEFT JOIN `sys_dictionarylist` `cat` ON `cat`.`DicCode` = 'stage_category' AND `cat`.`DicValue` = `s`.`Category` COLLATE utf8mb4_general_ci;
+-- ★ 2026-10-08 修：DicCode 存 sys_dictionary.Code（GUID），不是 DicNo 字符串。
+--   原 join `cat.DicCode = 'stage_category'` 恒不命中 ⇒ CategoryName 全 NULL。
+--   详见 scripts/db/fix/fix-v-cert-stage-category-diccode-2026-10-08.sql
+LEFT JOIN `sys_dictionary` `d`
+       ON `d`.`DicNo` = 'stage_category' AND `d`.`IsDeleted` = 0
+LEFT JOIN `sys_dictionarylist` `cat`
+       ON `cat`.`DicCode` = `d`.`Code`
+      AND `cat`.`DicValue` = `s`.`Category` COLLATE utf8mb4_general_ci
+      AND `cat`.`IsDeleted` = 0;

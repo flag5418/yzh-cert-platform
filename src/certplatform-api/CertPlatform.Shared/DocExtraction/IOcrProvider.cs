@@ -36,6 +36,18 @@ namespace CertPlatform.Shared.DocExtraction
         /// <param name="content">原始文件字节</param>
         /// <returns>转换结果；未接入时返回 <see cref="OcrResult.NotAvailable"/></returns>
         Task<OcrResult> ToMarkdownAsync(string fileName, byte[] content);
+
+        /// <summary>
+        /// ★ 图片 / PDF「分类 + 作用 + 关键词」识别（§2 路径② 两层过滤的输入，2026-10-07）。
+        /// <para>与 <see cref="ToMarkdownAsync"/> 共用同一视觉模型 + 同一行 <c>ai_vision_config</c>
+        /// （底层核心能力不版本管理、一份配置服务所有文档）。⛔ 必须与 <see cref="ToMarkdownAsync"/>
+        /// 成对实现：真实能力在 Admin <c>VisionOcrProvider</c>；空壳 <c>NullOcrProvider</c> 返回
+        /// <see cref="DocPurposeJudge.NotAvailable"/>（能力边界显式声明，不抛异常）。</para>
+        /// </summary>
+        /// <param name="fileName">原始文件名（含扩展名，供 Provider 判断类型）</param>
+        /// <param name="content">原始文件字节（图片 / PDF）</param>
+        /// <returns>识别结果；未接入时返回 <see cref="DocPurposeJudge.NotAvailable"/></returns>
+        Task<DocPurposeJudge> JudgeDocPurposeAsync(string fileName, byte[] content);
     }
 
     /// <summary>OCR 转换结果</summary>

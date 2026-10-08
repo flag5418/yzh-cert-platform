@@ -37,11 +37,13 @@ export interface StageStandardRow extends CheckTreeNode {
   StageName?: string
   /** 关联键 = `cert_iso_standard.Code`（GUID）；⛔ 不要用于展示 */
   StandardCode?: string
-  /** 展示用标准编号（如 `iso9001-2015`）= `cert_iso_standard.StandardCode` */
+  /** 展示用标准编号（如 `iso9001`，年份另见 `VersionYear`）= `cert_iso_standard.StandardCode` */
   StandardNo?: string
   StandardName?: string
   VersionYear?: number
   Category?: string
+  /** 类别中文名（iso_category 字典翻译：quality → 质量管理） */
+  CategoryName?: string
   /** 仅阶段行有意义：该阶段下的标准数 */
   ChildCount?: number
 }
@@ -52,7 +54,7 @@ export class EnterpriseStageLogic extends CheckTreeCore {
     { prop: 'Name', label: '阶段 / 标准', minWidth: 280 },
     { prop: 'StandardNo', label: '标准编号', minWidth: 180 },
     { prop: 'VersionYear', label: '版本年', width: 90 },
-    { prop: 'Category', label: '类别', width: 110 },
+    { prop: 'CategoryName', label: '类别', width: 110 },
   ]
 
   /**

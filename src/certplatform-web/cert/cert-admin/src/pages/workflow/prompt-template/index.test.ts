@@ -158,8 +158,8 @@ beforeEach(() => {
   localStorage.clear()
 
   mockApi.getStandardOptions.mockResolvedValue([
-    { code: 'STD-FOOD', standardCode: 'iso4001-2016', standardName: '食品标准', display: '食品标准' },
-    { code: 'STD-9001', standardCode: 'iso9001-2015', standardName: '9001标准', display: '9001标准' }
+    { code: 'STD-FOOD', standardCode: 'iso4001', standardName: '食品标准', display: '食品标准' },
+    { code: 'STD-9001', standardCode: 'iso9001', standardName: '9001标准', display: '9001标准' }
   ])
   mockApi.listPrompts.mockResolvedValue([])
   mockApi.resolveActivePrompt.mockResolvedValue(null)

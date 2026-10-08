@@ -243,7 +243,7 @@ export interface NormalizeFolderNode {
 /** 范围树 · 标准节点（= 页面上的一个 Tab） */
 export interface NormalizeStandardNode {
   StandardCode: string
-  /** 标准编号（如 `iso9001-2015`） */
+  /** 标准编号（如 `iso9001`，年份另见 `VersionYear`） */
   StandardNo: string
   /** 标准名称（如 `9001标准`） */
   StandardName: string

@@ -213,7 +213,7 @@ public class PromptTemplateService
         /// <summary>★ 存库值（cert_iso_standard.Code，GUID）</summary>
         [System.Text.Json.Serialization.JsonPropertyName("code")]
         public string Code { get; set; } = "";
-        /// <summary>可读标准号（如 iso9001-2015）</summary>
+        /// <summary>可读标准号（如 iso9001，不含年份）</summary>
         [System.Text.Json.Serialization.JsonPropertyName("standardCode")]
         public string StandardCode { get; set; } = "";
         /// <summary>标准名称</summary>

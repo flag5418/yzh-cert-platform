@@ -6,7 +6,7 @@ using CertPlatform.Admin.Entities.Cert;
 using CertPlatform.Admin.Entities.Sys;
 
 using CB = CertPlatform.Shared.Entities.Cert.CertificationBody;
-using Stage = CertPlatform.Shared.Entities.Cert.CertStage;
+using Stage = CertPlatform.Admin.Entities.Cert.CertStageView;
 using Link = CertPlatform.Admin.Entities.Sys.CertOrgStage;
 
 namespace CertPlatform.Admin.Controllers.Foundation;
@@ -91,7 +91,7 @@ public class CertOrgStageController : ControllerBase
     /// 获取所有有效阶段，并标记哪些已关联当前机构
     /// </summary>
     [HttpPost("list")]
-    public async Task<ActionResult<ApiResponse<object?>>> List([FromBody] ListRequest request)
+    public async Task<ActionResult<ApiResponse<object?>>> List([FromBody] CertOrgStageListRequest request)
     {
         try
         {
@@ -104,20 +104,23 @@ public class CertOrgStageController : ControllerBase
             if (!stages.Success)
                 return Ok(ApiResponse.Fail(stages.Error));
 
-            // 2. 查询该机构已关联的阶段编码
+            // 2. 查询该机构已关联的阶段键（cert_org_stage.StageCode ★Q2 起存 Code/GUID）
             var linked = await _linkService.GetListAsync(p =>
                 p.OrgCode == request.OrgCode && !p.IsDeleted);
             var linkedCodes = new HashSet<string>(
                 linked.Data?.Select(p => p.StageCode) ?? Array.Empty<string>());
 
-            // 3. 合并返回（字段名对齐前端 CertOrgStageItem：PhaseCode/PhaseName）
+            // 3. 合并返回（字段名对齐前端 CertOrgStageItem：PhaseCode=业务码仅供显示）
             var items = stages.Data!.OrderBy(p => p.SortOrder).ThenBy(p => p.StageCode).Select(p => new
             {
                 Code = p.Code,
                 PhaseCode = p.StageCode,
                 PhaseName = p.StageName,
                 SortOrder = p.SortOrder,
-                Linked = linkedCodes.Contains(p.StageCode)
+                Category = p.Category,
+                CategoryName = p.CategoryName,
+                // ★ Q2：关联判定用 Code（GUID），⛔ 不再用业务码 p.StageCode
+                Linked = linkedCodes.Contains(p.Code)
             }).ToList();
 
             return Ok(ApiResponse<object?>.Ok(items));
@@ -136,13 +139,14 @@ public class CertOrgStageController : ControllerBase
     /// 单条保存：勾选创建关联，取消删除关联
     /// </summary>
     [HttpPost("save")]
-    public async Task<ActionResult<ApiResponse<object?>>> Save([FromBody] SaveRequest request)
+    public async Task<ActionResult<ApiResponse<object?>>> Save([FromBody] CertOrgStageSaveRequest request)
     {
         try
         {
             if (string.IsNullOrEmpty(request.OrgCode) || string.IsNullOrEmpty(request.StageCode))
                 return Ok(ApiResponse.Fail("OrgCode 和 StageCode 不能为空"));
 
+            // ★ Q2：request.StageCode = 前端传入的 cert_cert_stage.Code（GUID），与 cert_org_stage.StageCode 同口径
             if (request.Linked)
             {
                 // 勾选 → 创建关联
@@ -194,12 +198,12 @@ public class CertOrgStageController : ControllerBase
     // 请求模型
     // ========================================================
 
-    public class ListRequest
+    public class CertOrgStageListRequest
     {
         public string OrgCode { get; set; } = string.Empty;
     }
 
-    public class SaveRequest
+    public class CertOrgStageSaveRequest
     {
         public string OrgCode { get; set; } = string.Empty;
         public string StageCode { get; set; } = string.Empty;

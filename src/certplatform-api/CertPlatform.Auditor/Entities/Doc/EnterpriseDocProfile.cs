@@ -152,6 +152,24 @@ namespace CertPlatform.Auditor.Entities.Doc
         public string? PromptCode { get; set; }
 
         public int PromptVersion { get; set; } = 1;
+
+        /// <summary>
+        /// ★ <b>最佳匹配的标准目录文件 Code</b>（§2 路径②：两层过滤 + 视觉/语义匹配的结论，2026-10-07）。
+        /// </summary>
+        [SugarColumn(Length = 36, IsNullable = false)]
+        public string MatchTargetStandardFileCode { get; set; } = string.Empty;
+
+        /// <summary>匹配可信度 0.00~1.00（§2 路径② 两层过滤最佳可信度；⛔ 不做门槛拦截，仅记录）。</summary>
+        [SugarColumn(Length = 4, DecimalDigits = 2, IsNullable = true)]
+        public decimal? MatchConfidence { get; set; }
+
+        /// <summary>匹配来源：<c>ai_image | semantic | fingerprint | manual</c>（§2 路径②）。</summary>
+        [SugarColumn(Length = 20, IsNullable = false)]
+        public string MatchSource { get; set; } = string.Empty;
+
+        /// <summary>候选集 JSON（<c>[{Code,Score,Reason}]</c>，⛔ 不只最佳一个，全量候选；§2 路径② 审核可改源）。</summary>
+        [SugarColumn(ColumnDataType = "text", IsNullable = true)]
+        public string? MatchCandidatesJson { get; set; }
         public int PromptTokens { get; set; }
         public int CompletionTokens { get; set; }
         public int DurationMs { get; set; }

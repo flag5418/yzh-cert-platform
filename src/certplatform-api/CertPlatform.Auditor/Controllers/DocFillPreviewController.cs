@@ -116,7 +116,7 @@ namespace CertPlatform.Auditor.Controllers
         ///     否则会去查规则配置（错误方向）。</para>
         /// </summary>
         [HttpPost("preview")]
-        public async Task<IActionResult> Preview([FromBody] PreviewRequest req, CancellationToken ct)
+        public async Task<IActionResult> Preview([FromBody] DocFillPreviewRequest req, CancellationToken ct)
         {
             if (req == null || string.IsNullOrWhiteSpace(req.TemplateCode))
                 return Ok(ApiResponse<object?>.Fail("缺少模板 Code"));
@@ -309,7 +309,7 @@ namespace CertPlatform.Auditor.Controllers
         //  三、请求模型（DTO 字段 PascalCase，与 DB 列名逐字一致）
         // ════════════════════════════════════════════════════════════════════
 
-        public sealed class PreviewRequest
+        public sealed class DocFillPreviewRequest
         {
             /// <summary>空白模板 <c>cert_doc_template.Code</c>（⛔ 不是 <c>StandardFileCode</c>）</summary>
             public string? TemplateCode { get; set; }

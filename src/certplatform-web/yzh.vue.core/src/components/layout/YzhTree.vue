@@ -35,7 +35,7 @@
       @node-collapse="handleNodeCollapse"
     >
       <template #default="{ data }">
-        <div class="yzh-tree__node" @mouseenter="hoveredNode = getNodeKey(data)" @mouseleave="hoveredNode = null">
+        <div class="yzh-tree__node" @mouseenter="handleNodeEnter($event, data)" @mouseleave="hoveredNode = null">
           <!-- 图标（Extra 双 Key：后端注入 PascalCase Icon，历史数据为 camel icon） -->
           <el-icon v-if="nodeIcon(data) && !isEmoji(nodeIcon(data)!)" class="yzh-tree__icon">
             <component :is="nodeIcon(data)" />
@@ -48,13 +48,21 @@
             <Folder />
           </el-icon>
 
-          <!-- 名称 -->
-          <span
-            class="yzh-tree__label"
-            :class="{ 'is-highlight': highlightKeyword && isMatchNode(data) }"
+          <!-- 名称（超长截断时 hover 显示完整名称 tooltip） -->
+          <el-tooltip
+            :content="tipContent"
+            :disabled="tipDisabled"
+            :show-after="200"
+            placement="top"
+            popper-class="yzh-tree-label-tip"
           >
-            {{ getLabel(data) }}
-          </span>
+            <span
+              class="yzh-tree__label"
+              :class="{ 'is-highlight': highlightKeyword && isMatchNode(data) }"
+            >
+              {{ getLabel(data) }}
+            </span>
+          </el-tooltip>
 
           <!-- 计数徽标（放在状态**之前**：状态列位置只取决于它右侧的元素 ⇒ 名称/计数长短都对齐） -->
           <span v-if="nodeExtra(data).badge" class="yzh-tree__badge">
@@ -111,7 +119,7 @@
  * - 搜索防抖 + 不深拷贝：过滤完全交给 el-tree filter-node-method（原地过滤，不克隆数据）
  */
 import { computed, ref, watch } from 'vue'
-import { ElTree, ElInput } from 'element-plus'
+import { ElTree, ElInput, ElTooltip } from 'element-plus'
 import { Document, Folder } from '@element-plus/icons-vue'
 import YzhStatusBadge from '../ui/YzhStatusBadge.vue'
 import { resolveStatusBadge } from '../../utils/status'
@@ -264,6 +272,22 @@ const emit = defineEmits<{
 const treeRef = ref<InstanceType<typeof ElTree>>()
 const searchKeyword = ref('')
 const hoveredNode = ref<string | null>(null)
+
+// 名称 tooltip：仅在标签被截断（scrollWidth > clientWidth）时启用
+const tipContent = ref('')
+const tipDisabled = ref(true)
+
+/**
+ * 节点 hover：记录 hover key + 按标签实际截断情况开关 tooltip。
+ * 必须挂在**节点容器**上（而非 label 自身）—— mouseenter 按外→内顺序派发，
+ * 容器先于 label 触发，保证 el-tooltip 的 label mouseenter 读到最新 disabled。
+ */
+function handleNodeEnter(e: MouseEvent, node: YzhTreeNode) {
+  hoveredNode.value = getNodeKey(node)
+  const label = (e.currentTarget as HTMLElement).querySelector('.yzh-tree__label')
+  tipContent.value = getLabel(node)
+  tipDisabled.value = !label || label.scrollWidth <= label.clientWidth || !tipContent.value
+}
 
 // ========================================================
 // 字段参数化读取
@@ -676,5 +700,13 @@ function removeFromTree(nodes: YzhTreeNode[], code: string): boolean {
 
 :deep(.yzh-tree__action-danger) {
   color: var(--el-color-danger) !important;
+}
+</style>
+
+<style>
+/* 非 scoped：tooltip popper 挂到 body 下，scoped 选择器够不到 */
+.yzh-tree-label-tip {
+  max-width: 480px;
+  word-break: break-all;
 }
 </style>

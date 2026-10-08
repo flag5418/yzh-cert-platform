@@ -120,6 +120,15 @@ namespace CertPlatform.Auditor.Entities.Doc
         public string SourceLabel { get; set; } = string.Empty;
 
         /// <summary>
+        /// ★ <b>AI 匹配来源的企业文件 Code</b>（§3 全量留痕，2026-10-07）。
+        /// <para>当 <c>SourceKind='ai'</c> 且值由「两层过滤 + 读 Markdown 抽取」自动填时，
+        /// 记录匹配到的是<b>哪个企业文件</b>（<c>cert_enterprise_original_file.Code</c>）；
+        /// 非 AI 来源（global / manual / profile）本列留空串。⛔ 100% 可信度也记（审核可追溯 / 可改源）。</para>
+        /// </summary>
+        [SugarColumn(Length = 36, IsNullable = false)]
+        public string SourceFileCode { get; set; } = string.Empty;
+
+        /// <summary>
         ///     ★ 完整来源链 <c>{paramCode, profileCode, originalFileCode, fieldPath, pageHint, tableHint}</c>
         ///     —— 供「查看来源」下钻（证据链 5 级）。
         /// </summary>

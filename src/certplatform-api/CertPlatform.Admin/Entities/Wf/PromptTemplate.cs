@@ -30,7 +30,7 @@ namespace CertPlatform.Admin.Entities.Wf
 
         /// <summary>
         /// ★ 适用标准（<c>cert_iso_standard.Code</c>，GUID）。NULL = 不限（平台默认 / 跨标准通用）。
-        /// <para>⚠️ 存 <b>GUID</b>，不是可读编码（如 <c>iso9001-2015</c>）—— 与
+        /// <para>⚠️ 存 <b>GUID</b>，不是可读编码（如 <c>iso9001</c>）—— 与
         /// <c>cert_enterprise_stage.StandardCode</c> 同口径。</para>
         /// <para>定位口径：标准级 → 平台级，逐层回退（与全局参数同构）。</para>
         /// </summary>

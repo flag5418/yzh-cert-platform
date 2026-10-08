@@ -89,7 +89,7 @@ export interface DocTemplateTreeNode {
     orphanCount?: number
 
     // ── 以下仅 `directory-tree` 的文件叶子有 ──
-    /** `standard` 节点的标准编号（如 `iso9001-2015`） */
+    /** `standard` 节点的标准编号（如 `iso9001`） */
     standardNo?: string
     /** `stage` 节点的阶段 GUID */
     phaseCode?: string
