@@ -35,9 +35,12 @@
 import { ref, watch } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { YzhEmptyState, YzhStatusBadge } from '@yzh-core'
+import { formatDateTime } from '@share/utils/format'
 import {
   INSTANCE_STATE_TEXT,
   INSTANCE_STATE_TYPE,
+  LOG_STATUS_TEXT,
+  LOG_STATUS_TYPE,
   toPercent,
 } from '@share/api/ent/enterprise-normalize'
 import type { ScopeTreeNode } from '../logic'
@@ -136,6 +139,33 @@ function onCheck(): void {
             <span class="nst-node__meta">
               完成率 {{ toPercent(data.File.FillCompletion) }}% · 锚点
               {{ data.File.FillAnchorCount }} · 待办 {{ data.File.FillPendingCount }}
+            </span>
+
+            <!--
+              ★ 上次填充的**结论 + 时间**（2026-10-09 补）。
+
+              ⛔ 只说「待办 1 个」不说「什么时候跑的、跑成什么样」等于没说 ——
+              用户没法判断「这是新结果还是三天前的旧结果」。
+              ⚠️ 时间口径：后端已把 `LastFillTime`（留痕 UTC）显式标 UTC，JSON 带 Z，
+                 `formatDateTime` 能正确换算成本地时间（此前少 8 小时）。
+            -->
+            <template v-if="data.File.LastFillStatus">
+              <YzhStatusBadge
+                :type="LOG_STATUS_TYPE[data.File.LastFillStatus] || 'info'"
+                :text="LOG_STATUS_TEXT[data.File.LastFillStatus] || data.File.LastFillStatus"
+              />
+              <span v-if="data.File.LastFillTime" class="nst-node__time">
+                {{ formatDateTime(data.File.LastFillTime) }}
+              </span>
+            </template>
+
+            <!-- ★ 产物落点 —— 让用户知道「生成出来的文件在哪儿」 -->
+            <span
+              v-if="data.File.OutputPath"
+              class="nst-node__path"
+              :title="data.File.OutputPath"
+            >
+              产物 {{ data.File.OutputPath }}
             </span>
 
             <!--
@@ -245,6 +275,22 @@ function onCheck(): void {
 }
 
 .nst-node__meta--dim {
+  color: var(--yzh-color-text-placeholder, #a8abb2);
+}
+
+/* 上次填充时间（留痕时间，已按 UTC→本地换算） */
+.nst-node__time {
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--yzh-color-text-tertiary, #909399);
+}
+
+/* 产物落点 —— 可能很长，⛔ 不给它撑破整行：单行截断 + title 看全 */
+.nst-node__path {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--yzh-font-size-xs, 12px);
   color: var(--yzh-color-text-placeholder, #a8abb2);
 }
 

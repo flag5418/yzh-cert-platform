@@ -2,46 +2,52 @@
 /**
  * ★ 锚点规则抽屉 —— 「点一个锚点 → 在右侧抽屉里配它的属性」
  *
- * 【2026-10-05 用户裁定：从「页内下方展开」改为「右侧抽屉」】
- *   用户原话：「点击配置规则，为什么是在下方进行操作，我们不是用侧边栏更好吗」。
- *   ⇒ 本组件**只负责内容**，抽屉外壳（标题 / 遮罩 / 底部按钮）统一由 `YzhDrawer` 提供，
- *     ⛔ 不再有 `embedded` / `visible` 双模式（那是「页内下半区」时代的产物）。
+ * 【★ 2026-10-09 结构定稿：严格三段，⛔ ①② 不得合并】
+ *   用户原话：「其实针对一个锚点，分为 3 部分我觉得合理，1、先选择来源，
+ *   2、根据不同的来源设置不同的属性（ai 节点需要设置有无参数，ai 的提示词等），
+ *   3、最后是设置填写规则…… 而不是将 1 和 2 合并在一起来设计」。
  *
- * 【为什么底部按钮改用 `YzhDrawer` 的默认页脚】
- *   原实现自带 `.panel-footer`（取消 + 保存规则），与抽屉外壳的页脚是两份实现；
- *   交给 `YzhDrawer` 后，「保存规则」的 loading / disabled 只通过 props 表达，
- *   ⛔ 不需要在内容区再画一遍。
+ *   ⇒ ① **选来源**（6 选 1，卡片）
+ *      ② **来源属性**（随来源不同而不同；AI 节点 = 固定 3 属性）
+ *      ③ **填写规则**（覆盖 / 填充 + 值类型 + 必填 + 空值兜底 + 备注）
  *
- * 【2026-10-04 UI 升级（保留）】
- *   - 严谨简洁大气：去掉冗余描述，说明文字收纳进 `!` 浮层。
- *   - 提示词分组：支持 AI 来源的批量提示词组（PromptGroup）配置。
+ * 【★ 本轮删掉的东西（⛔ 不要加回来）】
+ *   - **「组合方式」整层**（顺序回退 / 拼接 / 模板套用）—— 用户：
+ *     「没有顺序回退 / 拼接 / 模板套用这种选项，我们的规则是必须正确的，
+ *      没有想当然的，有问题我们改程序」。
+ *   - **「企业资料画像」来源** —— 用户从未要求过该概念。
+ *   - **来源链列表 / 拖拽排序 / 「缺失时行为」下拉** —— 「一个锚点 = 一个来源」后
+ *     这些控件全部失去意义。
  *
- * 【★ C6（2026-10-07）：操作方式改为「自动推导」】
- *   原先这里是一个「写入方式」下拉（`overwrite`/`replace`/`append`/`remove`）—— 那是 `52` 号
- *   清单里的**最后一处「设计走样」**：
- *     ① `WriteMode` 是**死字段**（写入侧从不读，`48` 号 G10 实测）；
- *     ② `51-V1` 原型 / `55` 号「操作区域」都规定：**操作方式由锚点类型推导，⛔ 不让人选**。
- *   ⇒ 换成只读展示「单元格更新 / 表格更新」，分类口径**复用 C4 的 `TABLE_TYPES`**。
- *   ⚠️ 该列仍**原样回写**（`saveAnchorBatch` 整行 upsert，少传一列 = 静默清空）。
+ * 【★ AI 节点 = 固定 3 属性（顺序不可换）】
+ *   ① 参数（无 / 有 —— 有 ⇒ 就是全局参数）
+ *   ② 是否依赖企业资料（不依赖 ⇒ 只用「参数 + 提示词」生成，如 xxx 规则 / xxx 内容）
+ *   ③ 提示词
+ *
+ * 【★ 锚点定位（原「①」）降级为只读条】
+ *   它不承载配置，只是「你在配哪个位置」，所以**不占段号**。
  */
-import { Delete, Plus } from '@element-plus/icons-vue'
-import {
-  listFillParamDefs,
-  saveAnchorBatch,
-} from '@share/api/workflow/doc-fill-rule'
+import { listFillParamDefs, saveAnchorBatch } from '@share/api/workflow/doc-fill-rule'
 import { unwrapOk, YzhDrawer, YzhStatusBadge } from '@yzh-core'
 import { ElMessage } from 'element-plus'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import {
-  COMBINE_MODES,
-  DEFAULT_ON_MISSING,
+  aiParamRefs,
+  cardOf,
+  DEFAULT_WRITE_MODE,
+  DOC_INFO_ITEMS,
   emptySourceSpec,
+  ENTERPRISE_ATTRS,
+  findParam,
   humanPreview,
-  ON_MISSING_OPTIONS,
+  isAiKind,
+  newEntry,
+  ORG_SYS_ATTRS,
   parseSourceSpec,
   SOURCE_KINDS,
   stringifySourceSpec,
-  type SourceSpecEntry,
+  validateSource,
+  WRITE_MODES,
   type SourceSpecModel,
 } from './sourceSpec'
 
@@ -64,19 +70,13 @@ const emit = defineEmits<{
 const VALUE_TYPES = ['text', 'number', 'date', 'bool', 'enum']
 
 /**
- * ★ C6（2026-10-07）：**操作方式自动推导**，⛔ 不让人选。
+ * 操作方式 —— **只读展示**（⛔ 不让人选）。
  *
- * 【为什么删掉「写入方式」下拉】
- *   `WriteMode`（`replace`/`overwrite`/`append`/`remove`）是**死字段** —— 全仓只有
- *   `DocTemplateAnchorController` 在读它（受控值集合 / 保存白名单 / 默认值+校验），
- *   **写入侧（`WordFillWriter` / `ExcelFillWriter`）从不读**（`48` 号 G10 实测）。
- *   而 `51-V1` 原型、`52` 号 C6、`55` 号「操作区域」都明确：设置页**只展示推导出来的操作方式**。
- *   ⇒ 页面不再暴露这个选择；表单仍**原样回写**该列（⛔ 不重置既有值 ——
- *      `saveAnchorBatch` 是整行 upsert，少传一列就是静默清空）。
- *
- * 【分类口径必须与 C4 分组逐字一致】
- *   `AnchorRuleTab.vue` 的 `TABLE_TYPES = ['table','table_total']` 已在做「字段 / 表格」分组；
- *   这里**复用同一口径**，否则会出现「左边分到『表格』组、右边却写『单元格更新』」的自相矛盾。
+ * ⚠️ 与 ③「填写规则」是**两件不同的事**，⛔ 不要混淆：
+ *   - **操作方式**（本项）= 落笔到**哪个容器**（单元格 / 表格区域）—— 由锚点类型**推导**；
+ *   - **填写规则**（③ 的「覆盖 / 填充」）= 落笔时**怎么处理原有文字** —— 由**用户选**。
+ *   原实现把两者混为一谈（`autoOp` 注释里写「操作方式由锚点类型推导」），
+ *   本轮把「怎么处理原有文字」独立出来成为 ③ 的第一个控件。
  */
 const TABLE_TYPES = ['table', 'table_total']
 const OP_LABELS: Record<'cell' | 'table', string> = {
@@ -91,13 +91,15 @@ const OP_HINTS: Record<'cell' | 'table', string> = {
 /* ============ 本地状态 ============ */
 const model = ref<SourceSpecModel>(emptySourceSpec())
 const parseError = ref(false)
+/** 旧数据：原配置有多个来源，新模型只保留第 1 个 */
+const legacyMultiSource = ref(false)
+const droppedCount = ref(0)
 const rawSpec = ref('')
 const saving = ref(false)
-const dragIndex = ref(-1)
 
 const form = ref({
-  /** ⚠️ 页面上**已无此控件**（C6：操作方式改为自动推导）—— 仅作**原样回写**，⛔ 不从 UI 改 */
-  WriteMode: 'overwrite',
+  /** ★ ③ 填写规则：`overwrite`（覆盖）/ `replace`（填充） */
+  WriteMode: DEFAULT_WRITE_MODE,
   ValueType: 'text',
   Required: false,
   DefaultText: '',
@@ -106,7 +108,9 @@ const form = ref({
   Remark: '',
 })
 
-const paramOptions = ref<{ value: string; label: string }[]>([])
+const paramOptions = ref<
+  { value: string; label: string; standardCode: string }[]
+>([])
 
 /* ============ 派生 ============ */
 const title = computed(() => props.anchor?.AnchorRef || '锚点规则')
@@ -116,24 +120,79 @@ const isDomainAuto = computed(
     anchorType.value === 'domain' &&
     String(props.anchor?.DomainKind || '') === 'auto',
 )
-const isTableTotal = computed(() => anchorType.value === 'table_total')
-/** ★ C6：操作方式（自动推导，⛔ 不可选）—— 与 C4 的字段/表格分组同一口径 */
+/** 操作方式（推导，⛔ 不可选）—— 与 `AnchorRuleTab` 的字段/表格分组同一口径 */
 const autoOp = computed<'cell' | 'table'>(() =>
   TABLE_TYPES.includes(anchorType.value) ? 'table' : 'cell',
 )
+
+/** 当前来源（单来源模型：`kind === ''` 表示还没选） */
+const src = computed(() => model.value.source)
+const isAi = computed(() => isAiKind(src.value.kind))
+
+/**
+ * ★ 当前选中的**卡片**。
+ *
+ * ⚠️ 不能用 `src.kind` 直接判 —— 存储 kind 里的 `replace` 在界面上**归在「全局参数」卡片下**
+ *   （用户裁决「需要合并」）。卡片高亮 / ② 段渲染条件都必须走 `card`。
+ */
+const card = computed(() => cardOf(src.value.kind))
+
+/** ★ 阻塞保存的问题（空数组 = 可保存） */
+const issues = computed(() => validateSource(model.value))
 const preview = computed(() => humanPreview(model.value))
 
-const combos = computed(() => {
-  const list: string[] = []
-  if (isDomainAuto.value && model.value.sources.length > 0)
-    list.push('域自动值无需配置取值来源')
-  if (
-    isTableTotal.value &&
-    model.value.sources.some((s) => s.kind === 'manual')
-  )
-    list.push('合计锚点不能配「人工录入」')
-  return list
-})
+/**
+ * ★ AI「加入提示词」按钮列表 —— 把已勾选的全局参数逐个做成可点击 chip。
+ * 点一下 ⇒ 在提示词光标处插入 `{{参数编码}}`（48 §2.2 ① / 61 S-1）。
+ */
+const aiParamList = computed(() =>
+  aiParamRefs(src.value).map((r) => ({
+    ref: r,
+    label: findParam(r, paramOptions.value)?.label ?? r,
+  })),
+)
+const writeModeHint = computed(
+  () => WRITE_MODES.find((m) => m.value === form.value.WriteMode)?.hint ?? '',
+)
+
+/**
+ * ★ 「全局参数」卡片的 ② 段下拉 —— **4 组**。
+ *
+ * 【为什么 ①② 是硬编码、③④ 是动态】
+ *   ①② 对应引擎 `ReplaceResolver` 的**硬编码属性清单**（不是数据库行）⇒ 前端同源硬编码；
+ *   ③④ 来自 `cert_fill_param_def`（后台可维护）⇒ 由 `listFillParamDefs()` 拉取。
+ *
+ * 【★ 只读 / 可覆盖 —— 本项目最易搞错的一处】
+ *   ①② `replace` **只读**：企业改档案即改文档，在「企业资料参数」页改了**不生效**；
+ *   ③④ `global` **可覆盖**：读企业填的 `cert_fill_param_value`。
+ *   组标题上标出来，⛔ 不让用户去猜。
+ *
+ * ⚠️ 空的动态组**保留显示**（带「库里还没有」占位）——
+ *   直接 `.filter(非空)` 会让用户以为「这类参数不存在」，而事实是「表里还没配」。
+ */
+const paramGroups = computed(() => [
+  {
+    label: '企业基本信息 · 只读',
+    items: ENTERPRISE_ATTRS.map(([value, label]) => ({ value, label })),
+  },
+  {
+    label: '机构 / 系统信息 · 只读',
+    items: ORG_SYS_ATTRS.map(([value, label]) => ({ value, label })),
+  },
+  {
+    label: '后台定义的全局参数 · 可覆盖',
+    items: paramOptions.value.filter((p) => !p.standardCode),
+  },
+  {
+    label: '标准对应的参数 · 可覆盖',
+    items: paramOptions.value.filter((p) => !!p.standardCode),
+  },
+])
+
+/** 「文档信息」卡片的 ② 段下拉（6 项，走引擎 `headerFooter` 能力） */
+const docInfoOptions = computed(() =>
+  DOC_INFO_ITEMS.map(([value, label]) => ({ value, label })),
+)
 
 /* ============ 初始化 ============ */
 watch(
@@ -143,9 +202,22 @@ watch(
     const parsed = parseSourceSpec(row.SourceSpec)
     model.value = parsed.model
     parseError.value = parsed.parseError
+    legacyMultiSource.value = parsed.legacyMultiSource
+    droppedCount.value = parsed.droppedCount
     rawSpec.value = row.SourceSpec || ''
+    // ★ AI 多参数：老行没有 `params` ⇒ 补空数组，否则 `el-select multiple` 会拿到 undefined
+    if (
+      isAiKind(model.value.source.kind) &&
+      !Array.isArray(model.value.source.params)
+    )
+      model.value.source.params = []
+    // ★ ③ 填写规则：旧值可能是 `append`/`remove`（22 号时代的死字段，从未生效）
+    //   ⇒ 不在受控值里的归一到默认「覆盖」，避免单选框空选。
+    const wm = row.WriteMode || DEFAULT_WRITE_MODE
     form.value = {
-      WriteMode: row.WriteMode || 'overwrite',
+      WriteMode: WRITE_MODES.some((m) => m.value === wm)
+        ? wm
+        : DEFAULT_WRITE_MODE,
       ValueType: row.ValueType || 'text',
       Required: !!row.Required,
       DefaultText: row.DefaultText || '',
@@ -157,54 +229,21 @@ watch(
   { immediate: true },
 )
 
-/* ============ 来源链操作 ============ */
-function addSource() {
-  model.value.sources.push({
-    kind: 'global',
-    ref: '',
-    onMissing: DEFAULT_ON_MISSING,
-  })
-}
-function removeSource(i: number) {
-  model.value.sources.splice(i, 1)
-}
-function moveSource(from: number, to: number) {
-  if (from < 0 || to < 0 || from === to) return
-  const [item] = model.value.sources.splice(from, 1)
-  model.value.sources.splice(to, 0, item)
-}
-function onDragStart(i: number) {
-  dragIndex.value = i
-}
-function onDragOver(e: DragEvent) {
-  e.preventDefault()
-}
-function onDrop(i: number) {
-  moveSource(dragIndex.value, i)
-  dragIndex.value = -1
-}
-
-function onKindChange(entry: SourceSpecEntry) {
-  entry.ref = ''
-  entry.field = undefined
-  entry.minConfidence = undefined
-  entry.promptGroup = undefined
-}
-
+/* ============ 交互 ============ */
 /**
- * 来源类别下拉项。
+ * ① 选来源。
  *
- * ⚠️ 必须是 `computed` —— 原来写成 `kindOptions()` 函数并在 `v-for` 里逐行调用，
- *    每个来源卡片**每次渲染都会重新 map 一遍 `SOURCE_KINDS`**（N 行 × M 次渲染
- *    的无谓分配），而且拿到的是**新数组**，`el-option` 每次都要重挂。
+ * ⚠️ 换来源 ⇒ **整个条目重建**（`newEntry`），⛔ 不做字段合并 ——
+ *   上一类来源的属性（如 AI 的提示词）对新来源毫无意义，
+ *   留着只会让人以为「已经配过了」。
  */
-const kindOptions = computed(() =>
-  SOURCE_KINDS.map((k) => ({
-    value: k.value,
-    label: k.implemented ? k.label : `${k.label}（未实现）`,
-    disabled: !k.implemented,
-  })),
-)
+function pickKind(kind: string) {
+  // ★ 判据用 `card`（不是 `src.kind`）——
+  //   已配 `enterprise.Name`（存储 kind = `replace`）的锚点，点「全局参数」卡片时
+  //   `src.kind !== 'global'`，用 `src.kind` 判会**误判成「换了来源」而把配置清空**。
+  if (card.value === kind) return
+  model.value.source = newEntry(kind)
+}
 
 async function loadParams() {
   try {
@@ -212,6 +251,7 @@ async function loadParams() {
     paramOptions.value = (res?.data?.Items ?? []).map((p: any) => ({
       value: String(p.ParamCode ?? p.Code ?? ''),
       label: `${p.ParamCode ?? p.Code ?? ''}${p.ParamName ? ` · ${p.ParamName}` : ''}`,
+      standardCode: String(p.StandardCode ?? ''),
     }))
   } catch {
     paramOptions.value = []
@@ -226,9 +266,40 @@ watch(
   { immediate: true },
 )
 
+/* ============ 「加入提示词」 ============ */
+/** 提示词 textarea 引用（插入参数 token 时读光标位置） */
+const promptRef = ref<any>(null)
+
+/**
+ * 把 `{{参数编码}}` 插到提示词**光标处**（无光标 ⇒ 追加末尾）。
+ *
+ * ⚠️ 与 `PromptPanel.insertAtCursor` 同一思路：**先改状态**，再在 `nextTick` 摆回光标 ——
+ * 直接改 DOM value + 伪造事件是绕过 Vue 响应式的写法，绑定方式一变就静默失效。
+ */
+function insertParamRef(code: string) {
+  const token = `{{${code}}}`
+  const el: HTMLTextAreaElement | undefined = promptRef.value?.textarea
+  const cur = src.value.prompt ?? ''
+  if (!el) {
+    src.value.prompt = cur + token
+    return
+  }
+  const start = el.selectionStart ?? cur.length
+  const end = el.selectionEnd ?? cur.length
+  src.value.prompt = cur.slice(0, start) + token + cur.slice(end)
+  nextTick(() => {
+    el.focus()
+    el.setSelectionRange(start + token.length, start + token.length)
+  })
+}
+
 /* ============ 保存 ============ */
 async function onSave() {
   if (!props.anchor || !props.templateCode) return
+  if (issues.value.length > 0) {
+    ElMessage.error(issues.value[0])
+    return
+  }
   saving.value = true
   try {
     const sourceSpec = stringifySourceSpec(model.value)
@@ -262,7 +333,7 @@ async function onSave() {
     :title="`锚点规则 · ${title}`"
     size="620px"
     confirm-text="保存规则"
-    :confirm-disabled="combos.length > 0"
+    :confirm-disabled="issues.length > 0"
     :confirm-loading="saving"
     @update:model-value="(v: boolean) => emit('update:visible', v)"
     @confirm="onSave"
@@ -271,289 +342,279 @@ async function onSave() {
   >
     <div v-if="anchor" class="anchor-panel">
       <div class="panel-scroll">
-        <!-- ── ① 定位信息（严谨简洁）── -->
-        <div class="section">
-          <div class="section-hd">
-            <span>锚点定位</span>
-            <el-popover placement="top" :width="300" trigger="hover">
-              <template #reference>
-                <el-icon class="info-icon"><InfoFilled /></el-icon>
-              </template>
-              <div class="help-content">
-                <p><strong>锚点定位</strong>：该锚点在空白模板中的物理位置。</p>
-                <p>
-                  · <b>域自动值</b>：如页码、日期等，系统自动识别，无需配来源。
-                </p>
-                <p>· <b>语义字段</b>：对应数据库中的业务字段编码。</p>
-              </div>
-            </el-popover>
+        <!-- ── 锚点定位（只读条，⛔ 不占段号）── -->
+        <div class="loc-info">
+          <div class="loc-item">
+            <label>锚点</label>
+            <span class="loc-ref">{{ anchor.AnchorRef }}</span>
           </div>
-          <div class="loc-info">
-            <div class="loc-item">
-              <label>类型</label>
-              <YzhStatusBadge
-                :type="anchorType === 'domain' ? 'info' : 'success'"
-                :text="anchorType"
-              />
-              <YzhStatusBadge
-                v-if="anchor.DomainKind"
-                type="warning"
-                :text="anchor.DomainKind"
-                class="ml4"
-              />
-            </div>
-            <div class="loc-item">
-              <label>位置</label>
-              <span>{{
-                anchor.SheetName ||
-                (anchor.HeaderKind ? `页眉页脚(${anchor.HeaderKind})` : '正文')
-              }}</span>
-            </div>
-            <div class="loc-item full">
-              <label>语义字段</label>
-              <el-input
-                v-model="form.FieldCode"
-                size="small"
-                placeholder="字段编码"
-                :disabled="isDomainAuto"
-              />
-            </div>
+          <div class="loc-item">
+            <label>类型</label>
+            <YzhStatusBadge
+              :type="anchorType === 'domain' ? 'info' : 'success'"
+              :text="anchorType"
+            />
+            <YzhStatusBadge
+              v-if="anchor.DomainKind"
+              type="warning"
+              :text="anchor.DomainKind"
+              class="ml4"
+            />
+          </div>
+          <div class="loc-item">
+            <label>位置</label>
+            <span>{{
+              anchor.SheetName ||
+              (anchor.HeaderKind ? `页眉页脚(${anchor.HeaderKind})` : '正文')
+            }}</span>
+          </div>
+          <div class="loc-item">
+            <label>语义字段</label>
+            <el-input
+              v-model="form.FieldCode"
+              size="small"
+              placeholder="字段编码"
+              :disabled="isDomainAuto"
+            />
           </div>
         </div>
 
-        <!-- ── ② 取值来源链 ── -->
+        <!--
+          ★ 原值无法解析 / 旧多来源数据 的提示。
+          `parseSourceSpec` 对半截 JSON 会**静默回落空模型**（绝不抛异常，否则面板打不开），
+          于是「来源配置其实坏了」这件事在界面上完全看不出来 ——
+          用户只会看到「未配置来源」，随手配一个一保存，**原值就被覆盖没了**。
+        -->
+        <el-alert
+          v-if="parseError"
+          type="warning"
+          show-icon
+          :closable="false"
+          title="原有来源配置无法解析"
+          class="parse-alert"
+        >
+          <template #default>
+            <div class="parse-alert__body">
+              <span>保存后将以当前界面内容覆盖原值。原值为：</span>
+              <code>{{ rawSpec }}</code>
+            </div>
+          </template>
+        </el-alert>
+
+        <!--
+          ★ 旧数据（`22` 号时代的多来源链）：新模型只支持 1 个来源。
+          ⛔ 绝不静默丢弃 —— 不提示的话，用户以为「只是打开看了一眼」，
+             其实多余来源已经在保存时被砍掉了。
+        -->
+        <el-alert
+          v-if="legacyMultiSource"
+          type="warning"
+          show-icon
+          :closable="false"
+          :title="`原配置有多个来源，新的规则是「一个锚点 = 一个来源」`"
+          class="parse-alert"
+        >
+          <template #default>
+            <div class="parse-alert__body">
+              <span
+                >已保留**第 1 个**来源，保存将丢弃其余 {{ droppedCount }} 个。请确认第
+                1 个是你要的那个。</span
+              >
+            </div>
+          </template>
+        </el-alert>
+
+        <!-- ── ① 选来源 ── -->
         <div class="section">
-          <div class="section-hd">
-            <span>取值来源链</span>
-            <el-popover placement="top" :width="320" trigger="hover">
-              <template #reference>
-                <el-icon class="info-icon"><InfoFilled /></el-icon>
-              </template>
-              <div class="help-content">
-                <p><strong>取值来源链</strong>：定义该锚点的数据从哪里来。</p>
-                <p>
-                  ·
-                  <b>组合方式</b>：多个来源时如何合并（首个非空、拼接、模板）。
-                </p>
-                <p>
-                  · <b>来源类型</b>：全局参数、AI 提取、计算公式、其他文档等。
-                </p>
-              </div>
-            </el-popover>
+          <div class="section-hd"><span>① 选来源</span></div>
+          <div class="kind-grid" role="radiogroup" aria-label="取值来源">
+            <button
+              v-for="k in SOURCE_KINDS"
+              :key="k.value"
+              type="button"
+              class="kind"
+              :class="{ on: card === k.value }"
+              role="radio"
+              :aria-checked="card === k.value"
+              @click="pickKind(k.value)"
+            >
+              <span class="kl">{{ k.label }}</span>
+              <span class="kh">{{ k.hint }}</span>
+            </button>
           </div>
+          <div v-if="!src.kind" class="hint">
+            还没有选来源 —— 运行期该锚点会留空并挂人工待办。
+          </div>
+        </div>
 
-          <!--
-            ★ 原值无法解析的提示。
-            `parseSourceSpec` 对半截 JSON 会**静默回落空模型**（绝不抛异常，否则面板打不开），
-            于是「来源配置其实坏了」这件事在界面上完全看不出来 ——
-            用户只会看到「未配置来源」，随手加一个来源一保存，**原值就被覆盖没了**。
-            这里把 `rawSpec` 原样亮出来，让用户至少有机会自己抄回去。
-          -->
-          <el-alert
-            v-if="parseError"
-            type="warning"
-            show-icon
-            :closable="false"
-            title="原有来源配置无法解析"
-            class="parse-alert"
-          >
-            <template #default>
-              <div class="parse-alert__body">
-                <span>保存后将以当前界面内容覆盖原值。原值为：</span>
-                <code>{{ rawSpec }}</code>
+        <!-- ── ② 来源属性（随来源不同而不同）── -->
+        <div v-if="src.kind" class="section">
+          <div class="section-hd"><span>② 来源属性</span></div>
+
+          <!-- 全局参数：4 组下拉（企业基本信息 / 机构·系统 为只读，后台参数为可覆盖） -->
+          <template v-if="card === 'global'">
+            <div class="form-item">
+              <label>参数</label>
+              <el-select
+                v-model="src.ref"
+                size="small"
+                filterable
+                clearable
+                placeholder="选一个参数"
+                style="width: 100%"
+              >
+                <el-option-group
+                  v-for="g in paramGroups"
+                  :key="g.label"
+                  :label="g.label"
+                >
+                  <el-option
+                    v-for="p in g.items"
+                    :key="p.value"
+                    :value="p.value"
+                    :label="p.label"
+                  />
+                  <!-- ★ 空的动态组也要可见：直接隐藏会让用户以为「这类参数不存在」 -->
+                  <el-option
+                    v-if="!g.items.length"
+                    :key="`${g.label}__empty`"
+                    :value="`__empty__${g.label}`"
+                    label="（库里还没有这类参数）"
+                    disabled
+                  />
+                </el-option-group>
+              </el-select>
+            </div>
+            <div class="hint">
+              <b>企业基本信息</b> / <b>机构·系统信息</b>是<b>只读</b>的（直读企业档案，改档案即改文档）；
+              <b>后台定义的全局参数</b> / <b>标准对应的参数</b>企业可在专家端「<b>企业资料参数</b>」页覆盖。
+            </div>
+          </template>
+
+          <!-- 文档信息：6 项（运行期从文档本身取） -->
+          <template v-else-if="card === 'headerFooter'">
+            <div class="form-item">
+              <label>项</label>
+              <el-select
+                v-model="src.ref"
+                size="small"
+                clearable
+                placeholder="选一项文档信息"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="d in docInfoOptions"
+                  :key="d.value"
+                  :value="d.value"
+                  :label="d.label"
+                />
+              </el-select>
+            </div>
+            <div class="hint">
+              文档信息是<b>运行期</b>从这份文档本身取的值（编号 / 版本 / 认证阶段 …），⛔ 不需要企业填。
+            </div>
+          </template>
+
+          <!-- AI 三类：固定 3 属性，顺序不可换 -->
+          <template v-else-if="isAi">
+            <div class="form-item">
+              <label>① 参数</label>
+              <el-radio-group v-model="src.hasParam" size="small">
+                <el-radio-button :value="false">无</el-radio-button>
+                <el-radio-button :value="true">有</el-radio-button>
+              </el-radio-group>
+            </div>
+            <div v-if="src.hasParam" class="form-item full">
+              <label>选参数（可多选）</label>
+              <el-select
+                v-model="src.params"
+                size="small"
+                multiple
+                filterable
+                clearable
+                placeholder="选全局参数（可多个）"
+                style="width: 100%"
+              >
+                <el-option-group
+                  v-for="g in paramGroups"
+                  :key="g.label"
+                  :label="g.label"
+                >
+                  <el-option
+                    v-for="p in g.items"
+                    :key="p.value"
+                    :value="p.value"
+                    :label="p.label"
+                  />
+                </el-option-group>
+              </el-select>
+              <!-- ★ 「加入」按钮：把勾选的全局参数插入提示词（48 §2.2 ① / 61 S-1） -->
+              <div v-if="aiParamList.length" class="param-join">
+                <span class="pj-hd">加入提示词：</span>
+                <el-button
+                  v-for="p in aiParamList"
+                  :key="p.ref"
+                  link
+                  type="primary"
+                  size="small"
+                  :title="`在提示词光标处插入 {{${p.ref}}}`"
+                  @click="insertParamRef(p.ref)"
+                >
+                  {{ p.label }}
+                </el-button>
               </div>
-            </template>
-          </el-alert>
+            </div>
 
-          <div class="combine-row">
-            <el-radio-group v-model="model.combine" size="small">
+            <div class="form-item">
+              <label>② 依赖企业资料</label>
+              <el-switch v-model="src.dependsOnEnterprise" size="small" />
+              <span class="sw-note">
+                {{
+                  src.dependsOnEnterprise
+                    ? '会读取企业资料作为输入'
+                    : '不读企业资料 —— 只靠「参数 + 提示词」生成'
+                }}
+              </span>
+            </div>
+
+            <div class="form-item full">
+              <label>③ 提示词</label>
+              <el-input
+                ref="promptRef"
+                v-model="src.prompt"
+                size="small"
+                type="textarea"
+                :rows="4"
+                placeholder="例如：根据企业持有的资质证书，写一段 100 字以内的企业概况；可选参数处插入 {{参数}} 引用全局参数"
+              />
+            </div>
+          </template>
+
+          <!-- 人工填写：无属性 -->
+          <template v-else>
+            <div class="hint">
+              人工填写**没有来源属性** —— 运行期挂人工待办，由审核专家在专家端填写。
+            </div>
+          </template>
+        </div>
+
+        <!-- ── ③ 填写规则 ── -->
+        <div class="section">
+          <div class="section-hd"><span>③ 填写规则</span></div>
+
+          <div class="form-item">
+            <label>写入方式</label>
+            <el-radio-group v-model="form.WriteMode" size="small">
               <el-radio-button
-                v-for="m in COMBINE_MODES"
+                v-for="m in WRITE_MODES"
                 :key="m.value"
                 :value="m.value"
                 >{{ m.label }}</el-radio-button
               >
             </el-radio-group>
-            <div v-if="model.combine === 'concat'" class="combine-param">
-              <span class="label">分隔符</span>
-              <el-input
-                v-model="model.separator"
-                size="small"
-                placeholder="、"
-                style="width: 60px"
-              />
-            </div>
-            <div v-if="model.combine === 'template'" class="combine-param">
-              <span class="label">模板</span>
-              <el-input
-                v-model="model.expr"
-                size="small"
-                placeholder="{{Name}}({{Code}})"
-              />
-            </div>
           </div>
+          <div class="hint">{{ writeModeHint }}</div>
 
-          <div class="sources-list">
-            <div
-              v-for="(s, i) in model.sources"
-              :key="i"
-              class="source-card"
-              draggable="true"
-              @dragstart="onDragStart(i)"
-              @dragover="onDragOver"
-              @drop="onDrop(i)"
-            >
-              <div class="card-left">
-                <span class="drag-handle">⠿</span>
-                <span class="idx">{{ i + 1 }}</span>
-                <el-select
-                  v-model="s.kind"
-                  size="small"
-                  style="width: 100px"
-                  @change="onKindChange(s)"
-                >
-                  <el-option
-                    v-for="o in kindOptions"
-                    :key="o.value"
-                    :value="o.value"
-                    :label="o.label"
-                    :disabled="o.disabled"
-                  />
-                </el-select>
-              </div>
-
-              <div class="card-center">
-                <template v-if="s.kind === 'global'">
-                  <el-select
-                    v-model="s.ref"
-                    size="small"
-                    filterable
-                    allow-create
-                    placeholder="参数编码"
-                    style="width: 100%"
-                  >
-                    <el-option
-                      v-for="p in paramOptions"
-                      :key="p.value"
-                      :value="p.value"
-                      :label="p.label"
-                    />
-                  </el-select>
-                </template>
-                <template v-else-if="s.kind === 'profile'">
-                  <el-input
-                    v-model="s.ref"
-                    size="small"
-                    placeholder="文档"
-                    style="width: 40%"
-                  />
-                  <el-input
-                    v-model="s.field"
-                    size="small"
-                    placeholder="字段"
-                    style="width: 40%"
-                  />
-                  <el-input-number
-                    v-model="s.minConfidence"
-                    size="small"
-                    :min="0"
-                    :max="1"
-                    :step="0.1"
-                    :controls="false"
-                    placeholder="置信度"
-                    style="width: 20%"
-                  />
-                </template>
-                <template v-else-if="s.kind === 'ai'">
-                  <el-input
-                    v-model="s.ref"
-                    size="small"
-                    placeholder="提示词"
-                    style="width: 50%"
-                  />
-                  <el-input
-                    v-model="s.promptGroup"
-                    size="small"
-                    placeholder="提示词组"
-                    style="width: 50%"
-                  />
-                </template>
-                <template
-                  v-else-if="
-                    s.kind === 'compute' ||
-                    s.kind === 'self' ||
-                    s.kind === 'sibling'
-                  "
-                >
-                  <el-input
-                    v-model="s.ref"
-                    size="small"
-                    placeholder="引用/表达式"
-                    style="width: 100%"
-                  />
-                </template>
-                <span v-else class="muted">无需参数</span>
-              </div>
-
-              <div class="card-right">
-                <el-select
-                  v-model="s.onMissing"
-                  size="small"
-                  style="width: 90px"
-                >
-                  <el-option
-                    v-for="o in ON_MISSING_OPTIONS"
-                    :key="o.value"
-                    :value="o.value"
-                    :label="o.label"
-                  />
-                </el-select>
-                <el-button
-                  :icon="Delete"
-                  circle
-                  size="small"
-                  text
-                  type="danger"
-                  @click="removeSource(i)"
-                />
-              </div>
-            </div>
-
-            <el-button
-              type="primary"
-              :icon="Plus"
-              size="small"
-              text
-              class="add-btn"
-              @click="addSource"
-              >添加来源</el-button
-            >
-          </div>
-
-          <div class="preview-banner">
-            <span class="label">运行期逻辑：</span>
-            <span class="text">{{ preview }}</span>
-          </div>
-        </div>
-
-        <!-- ── ③ 写入属性 ── -->
-        <div class="section">
-          <div class="section-hd">
-            <span>写入属性</span>
-            <el-popover placement="top" :width="280" trigger="hover">
-              <template #reference>
-                <el-icon class="info-icon"><InfoFilled /></el-icon>
-              </template>
-              <div class="help-content">
-                <p><strong>写入属性</strong>：定义如何将值写回文档。</p>
-                <p>
-                  · <b>操作方式</b>：由锚点类型<b>自动推导</b>（表格锚点 ⇒ 表格更新；
-                  其余 ⇒ 单元格更新），⛔ 不需要选。
-                </p>
-                <p>· <b>空值兜底</b>：当所有来源都拿不到值时使用的默认文字。</p>
-              </div>
-            </el-popover>
-          </div>
           <div class="form-grid">
             <div class="form-item">
               <label>操作方式</label>
@@ -564,12 +625,7 @@ async function onSave() {
             <div class="form-item">
               <label>值类型</label>
               <el-select v-model="form.ValueType" size="small">
-                <el-option
-                  v-for="t in VALUE_TYPES"
-                  :key="t"
-                  :value="t"
-                  :label="t"
-                />
+                <el-option v-for="t in VALUE_TYPES" :key="t" :value="t" :label="t" />
               </el-select>
             </div>
             <div class="form-item">
@@ -596,8 +652,14 @@ async function onSave() {
           </div>
         </div>
 
+        <!-- 运行期人话预览（防错的关键） -->
+        <div class="preview-banner">
+          <span class="label">运行期逻辑：</span>
+          <span class="text">{{ preview }}</span>
+        </div>
+
         <el-alert
-          v-for="(c, i) in combos"
+          v-for="(c, i) in issues"
           :key="i"
           type="error"
           show-icon
@@ -628,18 +690,6 @@ async function onSave() {
   --pri-l: var(--yzh-color-primary-light-9, #ecf5ff);
   --pri-b: var(--yzh-color-primary-light-8, #d9ecff);
   --pri-d: var(--yzh-color-primary-dark, #337ecc);
-  --suc: var(--yzh-color-success, #67c23a);
-  --suc-l: var(--yzh-color-success-light-9, #f0f9eb);
-  --suc-b: var(--yzh-color-success-light-7, #e1f3d8);
-  --warn: var(--yzh-color-warning, #e6a23c);
-  --warn-l: var(--yzh-color-warning-light-9, #fdf6ec);
-  --warn-b: var(--yzh-color-warning-light-7, #faecd8);
-  --dan: var(--yzh-color-danger, #f56c6c);
-  --dan-l: var(--yzh-color-danger-light-9, #fef0f0);
-  --dan-b: var(--yzh-color-danger-light-7, #fde2e2);
-  --info: var(--yzh-color-text-tertiary, #909399);
-  --info-l: var(--yzh-color-info-light-9, #f4f4f5);
-  --info-b: var(--yzh-color-info-light-7, #e9e9eb);
   --t1: var(--yzh-color-text-primary, #303133);
   --t2: var(--yzh-color-text-regular, #606266);
   --t3: var(--yzh-color-text-tertiary, #909399);
@@ -678,23 +728,7 @@ async function onSave() {
   background: var(--bd-xl);
 }
 
-.info-icon {
-  color: var(--t4);
-  cursor: help;
-  font-size: var(--yzh-font-size-md, 14px);
-  transition: color 0.2s;
-}
-.info-icon:hover {
-  color: var(--pri);
-}
-
-.help-content {
-  font-size: var(--yzh-font-size-xs, 12px);
-  line-height: 1.7;
-  color: var(--t2);
-}
-
-/* ── 定位信息 ── */
+/* ── 锚点定位（只读条） ── */
 .loc-info {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -709,143 +743,137 @@ async function onSave() {
   align-items: center;
   gap: 6px;
   font-size: var(--yzh-font-size-xs, 11px);
+  min-width: 0;
 }
 .loc-item label {
   color: var(--t3);
-  width: 50px;
+  width: 56px;
+  flex-shrink: 0;
   font-weight: 500;
 }
-.loc-item.full {
-  grid-column: span 2;
+.loc-item .loc-ref {
+  font-family: var(--mono);
+  color: var(--t1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* ── 来源链 ── */
-.combine-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: var(--yzh-space-2, 8px);
-  padding: 0 var(--yzh-space-1, 4px);
-}
-.combine-param {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--yzh-font-size-xs, 11px);
-}
-.combine-param .label {
-  color: var(--t3);
-}
-
-.sources-list {
+/* ── ① 来源卡片 ── */
+.kind-grid {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.source-card {
+.kind {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: var(--yzh-space-2, 6px) var(--yzh-space-2, 10px);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  font-family: inherit;
+  padding: var(--yzh-space-2, 7px) var(--yzh-space-3, 11px);
   background: var(--yzh-color-bg-container, #fff);
   border: 1px solid var(--bd-l);
   border-radius: var(--r);
+  cursor: pointer;
   transition: all 0.2s;
 }
-.source-card:hover {
+.kind:hover {
   border-color: var(--pri-b);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 }
-.card-left {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-.drag-handle {
-  cursor: grab;
-  color: var(--t4);
-  font-size: var(--yzh-font-size-md, 14px);
-  padding: 0 var(--yzh-space-1, 2px);
-}
-.idx {
-  width: 16px;
-  height: 16px;
-  line-height: 16px;
-  font-size: var(--yzh-font-size-xs, 10px);
-  color: var(--t3);
-  text-align: center;
-  background: var(--bg);
-  border-radius: 50%;
-  font-family: var(--mono);
-}
-.card-center {
-  flex: 1;
-  display: flex;
-  gap: 5px;
-  min-width: 0;
-}
-.card-right {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.add-btn {
-  margin-top: var(--yzh-space-1, 4px);
-  align-self: flex-start;
-  font-size: var(--yzh-font-size-xs, 12px);
-  color: var(--pri);
-}
-
-.preview-banner {
-  margin-top: var(--yzh-space-2, 8px);
-  padding: var(--yzh-space-2, 8px) var(--yzh-space-2, 10px);
+.kind.on {
+  border-color: var(--pri);
   background: var(--pri-l);
-  border-radius: var(--r);
-  border: 1px solid var(--pri-b);
-  font-size: var(--yzh-font-size-xs, 11px);
-  line-height: 1.6;
+  box-shadow: 0 0 0 1px var(--pri-b);
 }
-.preview-banner .label {
-  color: var(--pri-d);
+.kind .kl {
+  font-size: var(--yzh-font-size-xs, 12px);
   font-weight: 600;
-  margin-right: var(--yzh-space-1, 4px);
-}
-.preview-banner .text {
   color: var(--t1);
-  font-family: var(--mono);
+}
+.kind.on .kl {
+  color: var(--pri-d);
+}
+.kind .kh {
+  font-size: var(--yzh-font-size-xs, 11px);
+  color: var(--t3);
+  line-height: 1.5;
 }
 
-/* ── 写入属性 ── */
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
+/* ── 表单 ── */
 .form-item {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: var(--yzh-font-size-xs, 11px);
+  margin-bottom: var(--yzh-space-2, 8px);
 }
-.form-item label {
+.form-item > label {
   color: var(--t2);
-  width: 50px;
+  width: 88px;
   flex-shrink: 0;
   font-weight: 500;
 }
 .form-item.full {
-  grid-column: span 2;
   align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
 }
-.form-item.full label {
-  margin-top: var(--yzh-space-2, 6px);
+.form-item.full > label {
+  width: auto;
+}
+.form-item.full .el-input,
+.form-item.full :deep(.el-textarea) {
+  width: 100%;
+}
+.sw-note {
+  color: var(--t3);
+  font-size: var(--yzh-font-size-xs, 10px);
+}
+
+/* AI「加入提示词」按钮行 —— 紧跟多参数下拉 */
+.param-join {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--yzh-space-1, 4px);
+  margin-top: var(--yzh-space-1, 4px);
+}
+.param-join .pj-hd {
+  font-size: var(--yzh-font-size-xs, 11px);
+  color: var(--t3);
+}
+
+.hint {
+  font-size: var(--yzh-font-size-xs, 11px);
+  line-height: 1.6;
+  color: var(--t3);
+  margin-top: var(--yzh-space-1, 4px);
+}
+.hint b {
+  color: var(--t2);
+}
+
+/* ③ 填写规则的次级表单（两列） */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: var(--yzh-space-2, 8px);
+}
+.form-grid .form-item {
+  margin-bottom: 0;
+}
+.form-grid .form-item > label {
+  width: 50px;
+}
+.form-grid .form-item.full {
+  grid-column: span 2;
 }
 
 /*
- * ★ C6：操作方式（自动推导，只读）。
+ * ★ 操作方式（推导，只读）。
  * 视觉上刻意与可编辑控件区分 —— 虚线框 + 浅底 + `cursor:help`（悬停看口径说明），
  * 让人一眼看出「这不是让你选的」。
  */
@@ -862,6 +890,23 @@ async function onSave() {
   cursor: help;
 }
 
+.preview-banner {
+  padding: var(--yzh-space-2, 8px) var(--yzh-space-2, 10px);
+  background: var(--pri-l);
+  border-radius: var(--r);
+  border: 1px solid var(--pri-b);
+  font-size: var(--yzh-font-size-xs, 11px);
+  line-height: 1.6;
+}
+.preview-banner .label {
+  color: var(--pri-d);
+  font-weight: 600;
+  margin-right: var(--yzh-space-1, 4px);
+}
+.preview-banner .text {
+  color: var(--t1);
+}
+
 .ml4 {
   margin-left: var(--yzh-space-1, 4px);
 }
@@ -869,9 +914,9 @@ async function onSave() {
   margin-top: var(--yzh-space-2, 8px);
 }
 
-/* 「原值无法解析」告警 —— 原值以等宽字体整段亮出，长 JSON 换行不溢出 */
+/* 「原值无法解析 / 旧多来源」告警 —— 原值以等宽字体整段亮出，长 JSON 换行不溢出 */
 .parse-alert {
-  margin-bottom: var(--yzh-space-2, 8px);
+  margin-bottom: var(--yzh-space-1, 4px);
 }
 .parse-alert__body {
   display: flex;
@@ -892,15 +937,6 @@ async function onSave() {
   word-break: break-all;
   max-height: 96px;
   overflow: auto;
-}
-.muted {
-  color: var(--t4);
-  font-size: var(--yzh-font-size-xs, 10px);
-}
-
-:deep(.el-input-number.is-without-controls .el-input__inner) {
-  text-align: left;
-  padding-left: var(--yzh-space-2, 8px);
 }
 
 :deep(.el-input--small .el-input__inner) {

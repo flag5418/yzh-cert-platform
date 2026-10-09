@@ -63,10 +63,10 @@ function handleAddFamily() {
   logic.openAddFamily()
 }
 
-async function handleBatchDeleteFamilies() {
+async function handleBatchDeleteVersions() {
   const rows = (versionTableRef.value as any)?.getSelectionRows?.() ?? []
-  if (rows.length === 0) { ElMessage.warning('请先勾选要删除的族'); return }
-  await logic.batchDeleteFamilies(rows as FamilyRow[])
+  if (rows.length === 0) { ElMessage.warning('请先勾选要删除的版本'); return }
+  await logic.batchDeleteVersions(rows as VersionRow[])
   selectedRows.value = []
   versionTableRef.value?.clearSelection?.()
 }
@@ -76,9 +76,10 @@ function handleAddVersion() {
   logic.openAddVersionDialog()
 }
 
-function handleViewClauses(row: VersionRow) {
-  // 直接按行数据切换条款面板（旧实现在只到族层的左树里找版本节点，恒不命中）
-  void logic.showVersionClauses(row)
+function handleVersionRowAction(key: string, row: VersionRow) {
+  if (key === 'edit') logic.openEditVersionDialog(row)
+  else if (key === 'delete') void logic.deleteVersion(row)
+  else if (key === 'toggle-valid') void logic.toggleVersionValid(row)
 }
 
 // ── 树节点操作（族节点 ⋯ 下拉菜单） ──
@@ -180,7 +181,7 @@ onMounted(async () => {
             ★ 列定义两铁律（2026-10-08 修复）：
             1. 要自定渲染的列必须 slot:true，否则 YzhTable 渲裸值（quality / 1）—— 插槽名 column-{prop}
             2. ⛔ 不要手写 { prop: 'actions' } 列：YzhTable 的 showDynamicActionColumn 见到
-               actions 列会抑制动态操作列 ⇒ row-action-buttons 的「查看条款」永不渲染
+               actions 列会抑制动态操作列 ⇒ row-action-buttons 永不渲染
             （注：Vue 内联表达式里禁止 // 注释，故本注释置于元素外）
           -->
           <div v-else-if="panelMode === 'family'" class="sm-page__table-area">
@@ -196,16 +197,20 @@ onMounted(async () => {
               :data-loader="logic.dataLoader.bind(logic)"
               :show-pagination="false"
               :selectable="true"
-              :row-action-buttons="[{ key: 'view-clauses', text: '查看条款', type: 'primary' }]"
+              :row-action-buttons="(row: VersionRow) => [
+                { key: 'edit', text: '编辑', type: 'primary' },
+                { key: 'toggle-valid', text: (row.IsValid ?? 1) === 1 ? '禁用' : '启用', type: 'default' },
+                { key: 'delete', text: '删除', type: 'danger' },
+              ]"
               row-key="Code"
               select-mode="multiple"
               @selection-change="(v: any[]) => selectedRows = v"
-              @row-action="(key: string, row: VersionRow) => { if (key === 'view-clauses') handleViewClauses(row); }"
+              @row-action="handleVersionRowAction"
             >
               <template #toolbar-left>
                 <el-button type="primary" :icon="Plus" @click="handleAddVersion">新增</el-button>
                 <el-button type="danger" :icon="Delete" :disabled="!hasSelection"
-                  @click="handleBatchDeleteFamilies">批量删除</el-button>
+                  @click="handleBatchDeleteVersions">批量删除</el-button>
                 <el-button type="default" :icon="RefreshRight" @click="versionTableRef?.refresh?.()">刷新</el-button>
               </template>
               <template #column-Category="{ row }">
@@ -302,7 +307,7 @@ onMounted(async () => {
     <!-- 版本表单弹窗 -->
     <YzhDialog
       v-model="logic.versionDialogVisible.value"
-      title="新增版本"
+      :title="logic.versionMode.value === 'add' ? '新增版本' : '编辑版本'"
       width="600px"
       :close-on-click-modal="false"
       :destroy-on-close="false"

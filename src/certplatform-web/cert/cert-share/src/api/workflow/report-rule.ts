@@ -54,7 +54,7 @@ export function saveSection(data: Partial<ReportSection> & Record<string, any>) 
   )
 }
 
-/** 删除章节（软删，准则 A：业务键 Code） */
+/** 删除章节（★2026-10-09 改硬删：uk_scope_sort 不含 IsDeleted，软删后同 SortOrder 重建撞唯一键；准则 A：业务键 Code） */
 export function deleteSection(code: string) {
   return yzhApi.post<boolean>(
     `${API_PREFIX}/section/delete`,

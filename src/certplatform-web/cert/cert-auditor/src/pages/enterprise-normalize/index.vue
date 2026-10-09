@@ -16,28 +16,41 @@
  *   → 干跑预览 → 底部操作条）。
  *
  * ════════════════════════════════════════════════════════════════════════
- * ★★ 两条显示口径（用户裁决）
+ * ★★ 三条显示口径（用户裁决 + 2026-10-09 补第三条）
  *
  * ① **未配填写规则的标准文件 → 不显示**（不是灰显、不是折叠）
  * ② **标准 → 右区 Tab**：企业该阶段挂载的标准**全部显示**（含没有可规范化文件的），
  *    让「食品标准还没配规则」这件事**看得见**，⛔ 不是静默消失。
  *    ⚠️ 文件夹**全显示**并带「可规范化 N / 共 M 个文件」两个计数 ——
  *       否则用户会以为系统丢了数据（实测：167 份标准域文件里只有 1 份可规范化）。
+ * ③ **标准名一律走 `standardLabel()`，⛔ 绝不显示裸 GUID**（2026-10-09 用户报障）。
+ *    `cert_iso_standard` 的主数据被删、而 `cert_enterprise_stage` 的关联还在时，
+ *    后端此前 `StandardName = iso?.StandardName ?? code` ⇒ Tab 上直接显示
+ *    `475da4fe-8f50-4bf7-bf2b-b39869d5ddf7`。现在：显示「未登记标准（475da4fe）」
+ *    + `未登记` 徽标 + 一条 danger 说明条（说清「为什么永远不会有文件、去哪儿修」）。
  *
  * ════════════════════════════════════════════════════════════════════════
- * ★★ 「干跑 → 确认 → 入队」三段式
+ * ★★ 「干跑 → 确认 → 入队」三段式 + 入队后自动刷新
  *
  * 规范化是**覆盖性**操作，且「已锁定 / 未配规则 / 无锚点」三类会被静默跳过 ⇒
  * **必须先预览再执行**。`logic.canRun` 强制这一点：改了勾选就要重新预览。
+ *
+ * 入队后 `logic` 会启动 15s 轮询（见 `logic.startAutoRefresh`）——
+ * 后台是串行跑，用户不该靠反复点「刷新」来猜进度；跑完/超时会自动停，也能手动停。
  *
  * ════════════════════════════════════════════════════════════════════════
  * ⛔ 本页**不使用** `useSingleTable` / `useTreeTable`：右区是「范围树 + 干跑预览」，不是单表。
  * ⛔ 本页**不再有**「本期还没做（P2）」卡：其中的 `plan` / `run` / 五级范围展开本轮已实现。
  */
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { MagicStick } from '@element-plus/icons-vue'
 import { YzhEmptyState, YzhStatusBadge, YzhTreeTableLayout, type YzhTreeNode } from '@yzh-core'
-import { FILL_STATUS_TEXT, FILL_STATUS_TYPE, toPercent } from '@share/api/ent/enterprise-normalize'
+import {
+  FILL_STATUS_TEXT,
+  FILL_STATUS_TYPE,
+  standardLabel,
+  toPercent,
+} from '@share/api/ent/enterprise-normalize'
 import { EnterpriseNormalizeLogic } from './logic'
 import NormalizeScopeTree from './components/NormalizeScopeTree.vue'
 import NormalizePlanCard from './components/NormalizePlanCard.vue'
@@ -45,6 +58,9 @@ import NormalizePlanCard from './components/NormalizePlanCard.vue'
 const logic = new EnterpriseNormalizeLogic()
 
 onMounted(() => logic.init())
+
+// ★ 自动刷新用的是 `setInterval` ⇒ 组件卸载**必须**停，否则路由切走后定时器还在打接口
+onUnmounted(() => logic.stopAutoRefresh())
 
 function handleNodeClick(node: YzhTreeNode): void {
   void logic.onNodeClick(node)
@@ -133,6 +149,29 @@ function runButtonText(): string {
               </span>
             </div>
 
+            <!--
+              ══════════ 自动刷新提示条（入队成功后出现） ══════════
+
+              ★ 为什么要有：`run` 只把任务投进队列就返回，真正执行在后台串行跑（单个文件可能到分钟级）。
+              此前用户必须**自己反复点「刷新」**才知道跑完没有 —— 而「不知道跑没跑完」
+              正是最容易被误判成「点了没反应 / 系统卡死」的状态。
+              ⛔ 不显示「预计还要多久」：后端不给进度，编时间就是骗人。
+            -->
+            <div v-if="logic.polling.value" class="en-poll">
+              <span class="en-poll__text">
+                后台正在执行规范化，本页每 15 秒自动刷新一次<template
+                  v-if="logic.pollCount.value > 0"
+                >
+                  （已刷新 {{ logic.pollCount.value }} 次<template v-if="logic.lastRefreshAt.value"
+                    >，最近 {{ logic.lastRefreshAt.value }}</template
+                  >）</template
+                >；全部跑完会自动停。
+              </span>
+              <el-button type="default" size="small" @click="logic.stopAutoRefresh()">
+                停止自动刷新
+              </el-button>
+            </div>
+
             <!-- 标准 Tab（★ 全部显示，含没有可规范化文件的 —— 让「还没配规则」看得见） -->
             <el-tabs v-model="logic.activeStandardCode.value" class="en-tabs">
               <el-tab-pane
@@ -142,7 +181,19 @@ function runButtonText(): string {
               >
                 <template #label>
                   <span class="en-tab">
-                    <span class="en-tab__name">{{ s.StandardName || s.StandardNo }}</span>
+                    <!--
+                      ★★ 标准名一律走 `standardLabel()` —— ⛔ 绝不显示裸 GUID（2026-10-09 用户报障）。
+
+                      主数据被删时后端回传的是**空串** + `StandardRegistered=false`
+                      （⛔ 不再 `?? code` 回退），这里显示「未登记标准（475da4fe）」并挂 danger 徽标。
+                    -->
+                    <span class="en-tab__name">{{ standardLabel(s) }}</span>
+                    <YzhStatusBadge
+                      v-if="s.StandardRegistered === false"
+                      type="danger"
+                      text="未登记"
+                    />
+                    <YzhStatusBadge v-else-if="!s.Mounted" type="info" text="未挂载" />
                     <span
                       class="en-tab__count"
                       :class="{ 'en-tab__count--zero': s.FillableCount === 0 }"
@@ -153,6 +204,43 @@ function runButtonText(): string {
                 </template>
               </el-tab-pane>
             </el-tabs>
+
+            <!--
+              ══════════ 「为什么这里是空的」说明条 ══════════
+
+              ★ 为什么必须有：Tab 上的徽标只能提示「有问题」，说不清「是什么问题、去哪儿修」。
+              三种原因指向**三种不同处置**：
+                · 未登记 → 标准主数据被删但关联还在 ⇒ 清关联 / 补主数据（找管理员）
+                · 未挂载 → 只是配了模板但企业阶段没勾该标准 ⇒ 去企业阶段关联处补勾
+                · 未配规则 → 该标准下还没有已发布的空白文档 ⇒ 去后台「标准文档标准化」发布
+              ⛔ 合成一句「暂无数据」= 让人四处乱找。
+            -->
+            <div
+              v-if="logic.unregisteredStandards.value.length > 0"
+              class="en-notice en-notice--danger"
+            >
+              <span class="en-notice__title">
+                本阶段有 {{ logic.unregisteredStandards.value.length }} 个标准「未登记」
+              </span>
+              <span class="en-notice__body">
+                {{
+                  logic.unregisteredStandards.value.map((s) => standardLabel(s)).join('、')
+                }}：企业阶段的关联还在，但基础数据「ISO 标准」里已经没有这个标准了（可能已被删除）
+                ⇒ 这些标准<b>永远不会有</b>可规范化的文件。请到「机构-标准关联」清理关联，
+                或先在基础数据里补回该标准。
+              </span>
+            </div>
+
+            <div
+              v-else-if="logic.activeStandardMounted.value === false"
+              class="en-notice en-notice--info"
+            >
+              <span class="en-notice__title">该标准未挂到本企业阶段</span>
+              <span class="en-notice__body">
+                它只是因为存在「已发布的填写规则模板」才显示 —— 文件能规范化，但企业侧还没认领这个标准。
+                若它本应属于本阶段，请到企业阶段关联处补勾。
+              </span>
+            </div>
 
             <!-- 文件夹 / 文件勾选树（文件夹可整选） -->
             <!--
@@ -440,6 +528,64 @@ function runButtonText(): string {
 
 .en-plan {
   margin-top: var(--yzh-space-3, 12px);
+}
+
+/* ── 「为什么这里是空的」说明条 ──
+   两种语义：danger = 数据有问题（未登记，需人工介入）；info = 只是没挂载，不算错 */
+.en-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--yzh-space-2, 8px);
+  margin-top: var(--yzh-space-2, 8px);
+  padding: var(--yzh-space-2, 8px) var(--yzh-space-3, 12px);
+  border-radius: var(--yzh-radius-sm, 4px);
+  font-size: var(--yzh-font-size-xs, 12px);
+  line-height: var(--yzh-line-height-base, 1.6);
+}
+
+.en-notice--danger {
+  background: var(--yzh-color-danger-light-9, #fef0f0);
+  border: 1px solid var(--yzh-color-danger-light-7, #fde2e2);
+}
+
+.en-notice--info {
+  background: var(--yzh-color-info-light-9, #f4f4f5);
+  border: 1px solid var(--yzh-color-info-light-7, #e9e9eb);
+}
+
+.en-notice__title {
+  flex: none;
+  font-weight: var(--yzh-font-weight-semibold, 600);
+  color: var(--yzh-color-text-primary, #303133);
+}
+
+.en-notice--danger .en-notice__title {
+  color: var(--yzh-color-danger, #dc2626);
+}
+
+.en-notice__body {
+  color: var(--yzh-color-text-regular, #606266);
+  word-break: break-all;
+}
+
+/* ── 自动刷新提示条 ── */
+.en-poll {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--yzh-space-2, 8px);
+  margin-top: var(--yzh-space-2, 8px);
+  padding: var(--yzh-space-2, 8px) var(--yzh-space-3, 12px);
+  border-radius: var(--yzh-radius-sm, 4px);
+  background: var(--yzh-color-primary-light-9, #ecf5ff);
+  border: 1px solid var(--yzh-color-primary-light-8, #d9ecff);
+  font-size: var(--yzh-font-size-xs, 12px);
+}
+
+.en-poll__text {
+  color: var(--yzh-color-text-regular, #606266);
 }
 
 /* ── 单文件同步结果 ── */

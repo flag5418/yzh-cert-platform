@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Text.RegularExpressions;
 using CertPlatform.Shared.Fill;
 using NPOI.SS.UserModel;
@@ -123,6 +124,50 @@ public sealed class ExcelFillWriter
                     });
                     return;
                 }
+            }
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        //  ★ 覆盖（`overwrite`）—— 整格换成取值，格里的其它文字一并被替换
+        //
+        //  用户 2026-10-09 规格原话：
+        //    「我们很多时候，一个单元格并不是一个字段，一般是**一句话，中间有 {{}}**，
+        //      我们如果用**覆盖**，就将 cell 全部填充成新的内容了，只能替换当前单元格的 {{}}」
+        //
+        //  ⚠️ 仅在「本格恰好 1 个锚点」时成立 —— 多个锚点时「整格该换成哪一个的值」
+        //     语义模糊 ⇒ **退回填充**并记一条待办（⛔ 不猜、⛔ 不静默）。
+        // ════════════════════════════════════════════════════════════════
+        if (matches.Count == 1)
+        {
+            var (owKey, _) = FillSyntax.SplitFormat(matches[0].Groups[1].Value);
+            if (request.Values.TryGetValue(owKey, out var owValue) && owValue.IsOverwrite())
+            {
+                ExcelCellWriter.Write(cell, owValue, styleCache);
+                report.Hits.Add(new OfficeFillHit
+                {
+                    Token = matches[0].Value, AnchorCode = owKey,
+                    LocationKind = FillLocationKind.ExcelCell, Location = location,
+                    Value = owValue.ToDisplayText(), CrossRun = false, Source = owValue.Source,
+                });
+                return;
+            }
+        }
+        else
+        {
+            // 多锚点 + 有人要求覆盖 ⇒ 语义模糊，如实记一条待办（本格仍按「填充」处理）
+            var owKey = matches
+                .Select(m => FillSyntax.SplitFormat(m.Groups[1].Value).Key)
+                .FirstOrDefault(k => request.Values.TryGetValue(k, out var v) && v.IsOverwrite());
+
+            if (owKey != null)
+            {
+                report.Pendings.Add(new OfficeFillPending
+                {
+                    Token = matches[0].Value, AnchorCode = owKey,
+                    LocationKind = FillLocationKind.ExcelCell, Location = location,
+                    Reason = $"写入方式配了「覆盖」（整格替换），但本格有 {matches.Count} 个锚点 —— "
+                           + "整格该换成哪一个的值无法确定，已按「填充」处理（只替换 {{}}）",
+                });
             }
         }
 

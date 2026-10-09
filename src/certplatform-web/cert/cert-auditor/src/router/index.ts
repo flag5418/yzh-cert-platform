@@ -108,6 +108,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/organization/index.vue')
       },
       {
+        path: 'queue',
+        name: 'QueueMonitor',
+        component: () => import('@/pages/queue/index.vue')
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('@/pages/settings/index.vue')

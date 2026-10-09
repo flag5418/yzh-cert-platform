@@ -83,7 +83,7 @@ describe('toAnchorView', () => {
     expect(v.unconfigured).toBe(true)
     expect(v.summary).toBe('')
     expect(v.parseError).toBe(false)
-    expect(v.model.sources).toEqual([])
+    expect(v.model.source).toEqual({ kind: '' })
   })
 
   it('有来源 ⇒ 未配为 false，且摘要非空', () => {
@@ -113,7 +113,7 @@ describe('toAnchorView', () => {
       }),
     )
     expect(v.unconfigured).toBe(false)
-    expect(v.model.sources).toHaveLength(1)
+    expect(v.model.source.kind).toBe('global')
   })
 
   it('IsOrphan ⇒ orphan', () => {
@@ -125,7 +125,7 @@ describe('toAnchorView', () => {
     const v = toAnchorView(row({ SourceSpec: '{"combine":"first' }))
     expect(v.parseError).toBe(true)
     expect(v.unconfigured).toBe(true)
-    expect(v.model.sources).toEqual([])
+    expect(v.model.source).toEqual({ kind: '' })
   })
 
   it('JSON 合法但不是对象（如 "abc"）⇒ parseError', () => {
@@ -173,7 +173,6 @@ describe('computeAnchorStats', () => {
       total: 0,
       auto: 0,
       manual: 0,
-      compute: 0,
       unconfigured: 0,
       orphan: 0,
       required: 0,
@@ -192,32 +191,27 @@ describe('computeAnchorStats', () => {
     expect(s.required).toBe(2)
   })
 
-  it('来源按 kind 三分类：auto（其余）/ manual / compute', () => {
+  it('★ 来源按 kind 二分类：auto（全局参数 + AI 三类）/ manual', () => {
     const s = computeAnchorStats(
       buildAnchorViews([
-        row({
-          SourceSpec: spec([
-            { kind: 'global', ref: 'A' },
-            { kind: 'manual' },
-            { kind: 'compute', ref: 'B' },
-            { kind: 'ai', ref: 'C' },
-          ]),
-        }),
+        row({ SourceSpec: spec([{ kind: 'global', ref: 'A' }]) }),
+        row({ SourceSpec: spec([{ kind: 'manual' }]) }),
+        row({ SourceSpec: spec([{ kind: 'ai_field', prompt: 'x' }]) }),
       ]),
     )
-    expect(s.auto).toBe(2) // global + ai
+    expect(s.auto).toBe(2) // global + ai_field
     expect(s.manual).toBe(1)
-    expect(s.compute).toBe(1)
   })
 
-  it('★ 一行多来源**逐个计数**（不是「有来源就算 1」）', () => {
+  it('★ 一个锚点 = 一个来源 ⇒ 按**锚点**计数（⛔ 不按来源条目累加）', () => {
     const s = computeAnchorStats(
       buildAnchorViews([
+        // 旧数据写了 2 个来源 —— 新模型只认第 1 个 ⇒ 这一行只计 1
         row({ SourceSpec: spec([{ kind: 'global' }, { kind: 'global' }]) }),
         row({ SourceSpec: spec([{ kind: 'global' }]) }),
       ]),
     )
-    expect(s.auto).toBe(3)
+    expect(s.auto).toBe(2)
   })
 
   it('unconfigured / orphan 分别计数', () => {

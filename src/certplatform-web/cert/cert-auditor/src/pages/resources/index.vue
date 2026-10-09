@@ -146,7 +146,7 @@ function onReplacePick(file: any) {
             <div class="content-panel__actions">
               <el-button type="primary" size="small" :icon="Upload" :disabled="logic.uploading.value"
                          @click="logic.openBatchUpload()">
-                所有标准上传
+                上传
               </el-button>
               <el-button size="small" :icon="Refresh" :loading="logic.loading.value" @click="logic.loadOverview()">
                 刷新
@@ -177,18 +177,6 @@ function onReplacePick(file: any) {
               <div class="overview-item__label">缺失</div>
             </div>
           </div>
-
-          <!-- 不可配置标准：Toast 会飘走，这里留一条常驻说明。★ 2026-09-30 精简：只留一句处置，去掉给管理员看的诊断 -->
-          <div v-if="logic.unconfiguredStandards.value.length" class="unconfigured-bar">
-            <el-alert type="warning" :closable="false" show-icon>
-              <template #title>
-                以下标准暂无资料目录（不会出现在下方 Tab 中）
-              </template>
-              <div v-for="(msg, i) in logic.unconfiguredStandards.value" :key="i" class="unconfigured-bar__item">{{ msg }}</div>
-              <div class="unconfigured-bar__hint">目录模板就绪后，刷新本页即自动生成</div>
-            </el-alert>
-          </div>
-
           <div class="content-panel__body" v-loading="logic.loading.value">
             <div v-if="logic.loading.value && !logic.overview.value" class="content-panel__placeholder">
               <el-skeleton :rows="4" animated />
@@ -347,8 +335,8 @@ function onReplacePick(file: any) {
       </template>
     </el-dialog>
 
-    <!-- ═══════════ 所有标准上传（多标准分发，需求 3 核心） ═══════════ -->
-    <el-dialog v-model="logic.batchUploadVisible.value" title="所有标准上传（多标准自动分发）" width="980px">
+    <!-- ═══════════ 上传（多标准分发，需求 3 核心） ═══════════ -->
+    <el-dialog v-model="logic.batchUploadVisible.value" title="上传" width="980px">
       <el-alert type="info" :closable="false" show-icon class="dialog-tip">
         目标阶段：<b>{{ logic.selectedStageName.value }}</b>；涉及标准：
         {{ logic.tabStandards.map(s => s.StandardName).join(' / ') || '—' }}
@@ -796,23 +784,6 @@ function onReplacePick(file: any) {
 
 .overview-item--danger .overview-item__value {
   color: var(--el-color-danger);
-}
-
-/* 不可配置标准的常驻说明 */
-.unconfigured-bar {
-  flex-shrink: 0;
-  padding: 10px 16px 0;
-}
-
-.unconfigured-bar__item {
-  font-size: 13px;
-  line-height: 1.8;
-}
-
-.unconfigured-bar__hint {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
 }
 
 /* 标准 Tab */

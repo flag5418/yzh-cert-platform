@@ -94,7 +94,15 @@ namespace CertPlatform.Shared.Entities.Doc
         /// <summary>修饰符 <c>{"fmt":"0.00","def":"—","src":"global"}</c></summary>
         public string? TokenModifiersJson { get; set; }
 
-        /// <summary>取值来源规格：<c>{combine,separator,expr,sources[]}</c>；sources 有序</summary>
+        /// <summary>
+        ///     取值来源规格：<c>{"sources":[{...}]}</c>。
+        ///     <para><b>★ 2026-10-09：一个锚点 = 一个来源</b> ⇒ <c>sources</c> 数组<b>长度恒为 1</b>
+        ///     （编排器仍按数组遍历，保持兼容）。用户裁定删除「组合方式」
+        ///     （<c>combine</c>/<c>separator</c>/<c>expr</c>）与「企业资料画像」（<c>profile</c>）。</para>
+        ///     <para>单个条目形如：<c>{"kind":"global","ref":"ENT_NAME"}</c>、
+        ///     <c>{"kind":"ai_field","hasParam":true,"ref":"P1","dependsOnEnterprise":true,"prompt":"…"}</c>、
+        ///     <c>{"kind":"manual"}</c>。kind 取值见 <c>SourceResolver.SourceSpecEntry</c>。</para>
+        /// </summary>
         public string? SourceSpec { get; set; }
 
         /// <summary>来源摘要（列表展示用，由 <see cref="SourceSpec"/> 生成）</summary>

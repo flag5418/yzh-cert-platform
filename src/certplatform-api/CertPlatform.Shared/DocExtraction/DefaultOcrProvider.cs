@@ -18,6 +18,10 @@ namespace CertPlatform.Shared.DocExtraction
         /// <summary>恒为 false —— 本实现不具备 OCR 能力</summary>
         public bool IsAvailable => false;
 
+        /// <summary>空壳实现仍须给出<b>合法</b>参数：调用方会先判 <see cref="IsAvailable"/>，
+        /// 但页数上限/DPI 在渲染前就要用到 ⇒ ⛔ 不能抛异常，回落到缺省值。</summary>
+        public PdfOcrOptions PdfOptions => PdfOcrOptions.Default;
+
         public Task<OcrResult> ToMarkdownAsync(string fileName, byte[] content)
         {
             // 明确返回「未接入」，不伪造内容、不抛异常。
@@ -79,9 +83,24 @@ namespace CertPlatform.Shared.DocExtraction
                 && d[8] == 0x57 && d[9] == 0x45 && d[10] == 0x42 && d[11] == 0x50) return "image/webp";
             // BMP：42 4D
             if (d[0] == 0x42 && d[1] == 0x4D) return "image/bmp";
+            // ★ PDF：25 50 44 46（%PDF）—— 2026-10-09 补
+            //   原先没有这一分支 ⇒ PDF 静默落到末尾 `return "image/png"`，把 PDF 字节
+            //   以 `data:image/png` 发给视觉模型 ⇒ 恒 400 `The image format is illegal`，
+            //   且报错文案是「视觉识别失败」，让人去查模型/密钥（真因是类型没识别）。
+            //   ⛔ 这里给出正确 MIME 是为了**可诊断**：视觉模型仍不接受 PDF，调用方必须先逐页渲染。
+            if (IsPdf(d)) return "application/pdf";
 
             return "image/png";
         }
+
+        /// <summary>
+        /// 按魔数判 PDF（<c>%PDF</c> = <c>25 50 44 46</c>）。
+        /// <para>★ 2026-10-09：视觉模型<b>不接受 PDF 字节</b>走 <c>image_url</c>（实测恒 400）
+        /// ⇒ 调用方必须据此先走 <c>DocumentConvertClient.RenderPdfPagesAsync</c> 逐页渲染。</para>
+        /// </summary>
+        public static bool IsPdf(byte[]? d)
+            => d != null && d.Length >= 4
+               && d[0] == 0x25 && d[1] == 0x50 && d[2] == 0x44 && d[3] == 0x46;
 
         /// <summary>剥掉模型常加的 ``` 围栏（否则整段 Markdown 会被下游当成代码块）</summary>
         public static string StripCodeFence(string? content)

@@ -403,6 +403,55 @@ export function statusTip(row: OriginalFile): string {
   return ''
 }
 
+/**
+ * ★ 该文件是否「**不支持提取规则**」（2026-10-09）。
+ *
+ * <para>判据 = **Markdown 提取链**被判 <c>unsupported</c>，与后台端「文档提取规则」页
+ * （`doc-extraction-rule`）**同一口径** —— 那边点击这类文件会直接提示「该文件不支持提取规则」。
+ * 两处若各判一套，同一份文件在后台说「不支持」、在专家端说「支持」，用户无从判断哪个是真的
+ * （同族教训见本文件顶部的「状态口径唯一来源」）。</para>
+ *
+ * <para>⛔ 刻意**不复用** {@link statusKeyOf} 的 <c>manual</c> 键：<c>manual</c> 还包含
+ * <c>ConvertStatus === 'unsupported'</c>（预览 PDF 链不支持，但正文提取可能是好的）
+ * 以及「提取产物不可用于填充」等情况，对它们说「不支持提取规则」是不准确的。</para>
+ */
+export function isExtractionUnsupported(row: OriginalFile): boolean {
+  return String(row.MarkdownStatus || '').toLowerCase() === 'unsupported'
+}
+
+/**
+ * 「不支持提取规则」的原因文案。
+ *
+ * <para>优先用后端 <c>MarkdownMessage</c> —— 它本身就是写给用户看的一整句，含
+ * 「可手工定义字段与表格，由人工填写」这样的**行动指引**；老数据可能为空
+ * ⇒ 兜底句**必须同样含行动指引**，⛔ 不能只说「不支持」把用户留在原地。</para>
+ */
+export function unsupportedExtractionTip(row: OriginalFile): string {
+  return (
+    row.MarkdownMessage ||
+    row.ConvertMessage ||
+    '该文件的类型无法被自动识别，不能自动提取内容。可手工定义字段与表格，由人工填写。'
+  )
+}
+
+/**
+ * ★ **点击文件行**（2026-10-09）。
+ *
+ * <para>用户对这类文件的要求是「**点击该文件，直接提示**该文件不支持提取规则」——
+ * 本页原先只有 hover 才出的 tooltip（见 {@link statusTip}），满足不了「点一下就知道」。</para>
+ *
+ * <para>⛔ 只对 {@link isExtractionUnsupported} 为真的行给反馈：其他行点一下没反应是本页**既有**
+ * 行为（本页的行级动作都在「操作 ▾」下拉里），本轮不借机改变它 —— 那属于「行点击打开什么」
+ * 的另一个议题。</para>
+ *
+ * <para>用 warning ⛔ 不是 error：这是**能力边界**（这类文件的正确出路是手工填写），
+ * 不是系统出错。与后台端 `doc-extraction-rule` 页的提示口径逐字对齐。</para>
+ */
+export function onFileRowClick(row: OriginalFile): void {
+  if (!isExtractionUnsupported(row)) return
+  ElMessage.warning(`该文件不支持提取规则：${unsupportedExtractionTip(row)}`)
+}
+
 /** 是否处于「已就绪」（可预览全文 + 有标签/作用） */
 export function canPreview(row: OriginalFile): boolean {
   return row.ConvertStatus === 'completed' || !!row.PreviewPdfPath || !!row.StoragePath

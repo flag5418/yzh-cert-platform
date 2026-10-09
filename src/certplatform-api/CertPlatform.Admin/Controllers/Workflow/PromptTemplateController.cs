@@ -95,8 +95,10 @@ public class PromptTemplateController : YzhControllerBase<PromptTemplate>
             return Ok(ApiResponse.Fail("promptType 不能为空"));
 
         var entity = await _workbench.ResolveActiveAsync(promptType, standardCode);
+        // 未命中 ≠ 错误：「还没有提示词」是正常业务态（用户尚未配置），返 200 + data:null。
+        // 前端 `resolveActivePrompt` 用了 `res.data || null`，故此变更不影响既有显示逻辑。
         if (entity == null)
-            return Ok(ApiResponse.Fail($"未找到生效的「{promptType}」提示词（标准级与平台级都为空）"));
+            return Ok(ApiResponse<PromptTemplateDto>.Ok(null));
 
         return Ok(ApiResponse<PromptTemplateDto>.Ok(PromptTemplateDto.From(entity)));
     }
@@ -115,11 +117,21 @@ public class PromptTemplateController : YzhControllerBase<PromptTemplate>
         if (string.IsNullOrWhiteSpace(req.PromptType))
             return Ok(ApiResponse.Fail("promptType 不能为空"));
 
-        var r = await _workbench.GenerateAsync(
-            req.PromptType!, req.StandardCode, req.ExtraRequirement, req.CurrentTemplate);
-        return r.Success
-            ? Ok(ApiResponse<PromptWorkbenchService.GenerateResult>.Ok(r, "生成成功"))
-            : Ok(ApiResponse.Fail(r.Message));
+        // ★ 2026-10-09：包 try/catch —— 生成链路里的意外异常（如 DB/配置读取失败）转成业务错误，
+        //   把真实原因回给前端，避免裸 500 被 GlobalExceptionFilter 脱敏成「操作失败，请联系管理员」
+        //   （开发环境）或被前端 STATUS_FALLBACK[500] 显示成「服务器内部错误，请稍后重试」，掩盖真实原因。
+        try
+        {
+            var r = await _workbench.GenerateAsync(
+                req.PromptType!, req.StandardCode, req.ExtraRequirement, req.CurrentTemplate);
+            return r.Success
+                ? Ok(ApiResponse<PromptWorkbenchService.GenerateResult>.Ok(r, "生成成功"))
+                : Ok(ApiResponse.Fail(r.Message));
+        }
+        catch (Exception ex)
+        {
+            return Ok(ApiResponse.Fail("AI 生成失败：" + ex.Message));
+        }
     }
 
     /// <summary>

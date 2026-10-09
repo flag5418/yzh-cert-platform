@@ -49,6 +49,7 @@ const { logic, tableRef, treeTableRef } = useTreeTable(MenuPageLogic)
             :data-loader="logic.dataLoader.bind(logic)"
             :search-fields="logic.searchFields"
             :row-action-buttons="logic.rowActions"
+            :toolbar="false"
             row-key="Code"
             @selection-change="logic.onSelectionChange($event)"
             @row-action="logic.onRowAction"

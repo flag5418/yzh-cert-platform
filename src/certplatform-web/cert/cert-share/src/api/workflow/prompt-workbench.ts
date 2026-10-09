@@ -68,11 +68,17 @@ export interface StandardOptionDto {
   display: string
   /** 启用状态（0/1，左树启用/禁用徽章用；后端已过滤 isValid=1） */
   isValid?: number
+  /** ★ 所属族 GUID（cert_standard_family.Code）；null = 未归族（三层树「族」定位用） */
+  familyCode?: string | null
+  /** ★ 所属体系（iso_category 字典 DicValue，如 quality）；「体系」定位用 */
+  category?: string | null
 }
 
 export interface PromptGenerateResultDto {
   success: boolean
   message: string
+  /** ★ 警告：草稿已生成但需人工完善（如缺占位符、过短）。非空时正文仍可用，提示用户补齐后再保存 */
+  warning?: string | null
   /** 生成的提示词正文（★ 不落库） */
   prompt?: string | null
   durationMs: number

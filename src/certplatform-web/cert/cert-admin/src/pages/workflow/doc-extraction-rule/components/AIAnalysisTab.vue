@@ -8,6 +8,14 @@ const props = defineProps<{
   fields: FieldDefDto[]
   tables: TableDefDto[]
   analyzing: boolean
+  /**
+   * ★ 该文件**不支持自动提取**（后端 MarkdownStatus=unsupported，2026-10-09）。
+   *
+   * <para>只置灰「开始分析」这一个入口 —— ⛔ **不能禁用整个页签**：这类文件的正确出路是
+   * 「手工定义字段与表格，由人工填写」（后端 MarkdownMessage 原话），
+   * 手工增删字段 / 表格 / 保存规则必须照常可用。</para>
+   */
+  unsupported?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -117,7 +125,14 @@ function toggleDataPreview(i: number) {
       <h4>AI 自动分析</h4>
       <div class="header-actions">
         <el-switch v-model="showRawJson" active-text="JSON" size="small" style="margin-right: 12px" />
-        <el-button type="primary" size="small" :loading="analyzing" @click="emit('analyze')">
+        <el-button
+          type="primary"
+          size="small"
+          :loading="analyzing"
+          :disabled="unsupported"
+          :title="unsupported ? '该文件不支持自动提取，请手工添加字段与表格' : ''"
+          @click="emit('analyze')"
+        >
           <el-icon><MagicStick /></el-icon> 开始分析
         </el-button>
       </div>
@@ -134,7 +149,13 @@ function toggleDataPreview(i: number) {
           <el-icon><Plus /></el-icon> 添加
         </el-button>
       </div>
-      <YzhEmptyState v-if="!localFields.length" compact :icon="Files" :icon-size="18" title="暂无字段，请点击「开始分析」或手动添加" />
+      <YzhEmptyState
+        v-if="!localFields.length"
+        compact
+        :icon="Files"
+        :icon-size="18"
+        :title="unsupported ? '该文件不支持自动提取，请手动添加字段' : '暂无字段，请点击「开始分析」或手动添加'"
+      />
       <div v-for="(field, i) in localFields" :key="i" class="field-item" :class="{ manual: field.isManual }">
         <div class="field-row">
           <el-input v-model="field.name" placeholder="中文名" size="small" style="flex:1" @change="onFieldChange" />

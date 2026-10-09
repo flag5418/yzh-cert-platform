@@ -267,6 +267,39 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
                 .FirstOrDefault();
         }
 
+        /// <summary>
+        ///     ★ <b>把「带参数」的引用 <c>{{参数}}</c> 替换成参数值</b>（<c>48</c> §2.2 ① / <c>61</c> S-1）。
+        ///
+        ///     <para><b>为什么单独一个方法、且是 public static</b>：替换是<b>纯函数</b>（无 DB / 无 LLM），
+        ///     抽出来才能被契约测试直接钉住 —— 否则「参数没被替换进提示词」这类<b>静默失效</b>
+        ///     （模型收到一个字面量 <c>{{参数}}</c>，照样返回 JSON，看不出来）永远测不到。</para>
+        ///
+        ///     <para><b>★ 与 <see cref="Render"/> 的区别</b>：<see cref="Render"/> 只认封闭的
+        ///     <c>{{__FILL__.key}}</c> 命名空间；本方法认<b>参数编码原文</b> <c>{{code}}</c> ——
+        ///     即用户提示词里写的那个（<c>enterprise.Name</c> / <c>质量方针</c> …）。
+        ///     ⛔ 两者不可合并：合并会让用户提示词里别的 <c>{{}}</c> 被误吃。</para>
+        ///
+        ///     <para>取值缺失（<c>null</c> / 空）⇒ 替换成 <c>（未提供）</c>，⛔ <b>绝不把 token 原样留给模型</b> ——
+        ///     否则模型会把 <c>{{参数}}</c> 当成字面量抄进答案。</para>
+        /// </summary>
+        /// <param name="prompt">用户提示词原文</param>
+        /// <param name="values">参数编码 → 取值（<c>null</c> = 未提供）</param>
+        public static string RenderParamRefs(
+            string prompt, IReadOnlyDictionary<string, string?> values)
+        {
+            if (string.IsNullOrEmpty(prompt)) return string.Empty;
+
+            var result = prompt;
+            foreach (var kv in values)
+            {
+                if (string.IsNullOrWhiteSpace(kv.Key)) continue;
+                var text = string.IsNullOrWhiteSpace(kv.Value) ? "（未提供）" : kv.Value!;
+                result = result.Replace($"{{{{{kv.Key}}}}}", text, StringComparison.Ordinal);
+            }
+
+            return result;
+        }
+
         /// <summary>按 section 过滤（保持原顺序）</summary>
         private static List<AiFillAnchorSpec> Filter(List<AiFillAnchorSpec> all, string section)
             => all.Where(a => string.Equals(a.Section, section, StringComparison.OrdinalIgnoreCase)).ToList();

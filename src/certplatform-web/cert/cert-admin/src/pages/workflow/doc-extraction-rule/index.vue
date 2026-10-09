@@ -55,6 +55,31 @@ const selectedFileCode = computed(
   () => selectedFile.value?.fileCode || selectedFile.value?.FileCode || selectedFile.value?.Raw?.FileCode || ''
 )
 
+/**
+ * ★ 该文件是否**不支持提取规则**（2026-10-09）。
+ *
+ * <para>判据只有一条：后端 Markdown 提取链把它判成了 <c>unsupported</c> —— 这是**能力边界**，
+ * 不是故障。典型来源是 anydoc 与视觉模型都不认的文件类型（如 <c>.txt</c>），
+ * 见 <c>FileConvertCore.ConvertMarkdownInnerAsync</c> 的分支 B。</para>
+ *
+ * <para>⛔ 为什么不用扩展名在前端自己猜：那会与后端两套判据，一旦 anydoc 新增支持格式，
+ * 前端就会**拦下一个其实能处理的文件**（用户永远发现不了）。以后端落库的状态为唯一权威。</para>
+ */
+const extractionUnsupported = computed(() => String(selectedFile.value?.markdownStatus || '').toLowerCase() === 'unsupported')
+
+/**
+ * 不支持时的原因文案。
+ *
+ * 主用后端 `MarkdownMessage`（它本身就是写给用户看的一整句，含「可手工定义字段与表格，由人工填写」
+ * 这样的行动指引）；历史数据 / 老接口可能为空 ⇒ 兜底句必须**同样含行动指引**，
+ * ⛔ 不能只说「不支持」把用户留在原地。
+ */
+const unsupportedReason = computed(
+  () =>
+    selectedFile.value?.markdownMessage ||
+    '该文件的类型无法被自动识别，不能自动提取内容。可手工定义字段与表格，由人工填写。'
+)
+
 async function onFileSelect(file: any) {
   // 树节点是 PascalCase 形态（FileCode/Name/Raw/ConvertStatus…），归一化为 camelCase，
   // 供本页守卫与 DocPreview 统一读取
@@ -67,6 +92,9 @@ async function onFileSelect(file: any) {
       file.convertedStoragePath || file.ConvertedStoragePath || file.Raw?.ConvertedStoragePath || '',
     convertStatus: file.convertStatus || file.ConvertStatus || file.Raw?.ConvertStatus || '',
     convertMessage: file.convertMessage || file.ConvertMessage || file.Raw?.ConvertMessage || '',
+    // ★ 提取链状态 + 原因（2026-10-09）：unsupported 的文件点开就要给出明确提示
+    markdownStatus: file.markdownStatus || file.MarkdownStatus || file.Raw?.MarkdownStatus || '',
+    markdownMessage: file.markdownMessage || file.MarkdownMessage || file.Raw?.MarkdownMessage || '',
     ruleStatus: file.ruleStatus || file.RuleStatus || 'none'
   }
   fields.value = []
@@ -76,6 +104,13 @@ async function onFileSelect(file: any) {
   extractionData.value = null
   ruleStatus.value = selectedFile.value.ruleStatus || 'none'
   activeTab.value = 'analysis'
+
+  // ★ 点击即提示（2026-10-09）：不能让用户先点「开始分析」、等一轮往返、再被告知不行。
+  //   用 warning 而非 error —— 这是能力边界，不是故障（⛔ 别把「不支持」渲染成系统出错）。
+  if (extractionUnsupported.value) {
+    ElMessage.warning(`该文件不支持提取规则：${unsupportedReason.value}`)
+  }
+
   await loadExistingRule(selectedFileCode.value)
 }
 
@@ -110,6 +145,13 @@ async function loadExistingRule(fileCode: string) {
 async function onAIAnalyze() {
   if (!selectedFileCode.value) {
     ElMessage.warning('请先选择一个文件')
+    return
+  }
+  // ★ 前置守卫（2026-10-09）：不支持提取的文件不必再跑一次后端 ——
+  //   后端 GetDocumentMarkdownAsync 见到 unsupported 会短路返回同一句话，白跑一轮往返。
+  //   按钮已置灰，这里是键盘/程序触发的兜底。
+  if (extractionUnsupported.value) {
+    ElMessage.warning(`该文件不支持提取规则：${unsupportedReason.value}`)
     return
   }
   analyzing.value = true
@@ -358,6 +400,20 @@ function startResizeLeft(e: MouseEvent) {
           </div>
         </div>
 
+        <!-- ★ 不支持提取规则：常驻说明（2026-10-09）
+             为什么要常驻而不只弹一次 toast：toast 会消失，用户回头再看就只剩一个「需人工填写」徽标，
+             无从判断是「还没转」还是「转不了」。⛔ 也不禁用整个面板 —— 该文件仍可**手工**定义
+             字段与表格并保存规则（后端 MarkdownMessage 明写「可手工定义字段与表格，由人工填写」）。 -->
+        <el-alert
+          v-if="extractionUnsupported"
+          class="unsupported-alert"
+          type="warning"
+          show-icon
+          :closable="false"
+          title="该文件不支持提取规则"
+          :description="unsupportedReason"
+        />
+
         <el-tabs v-model="activeTab" class="right-tabs">
           <el-tab-pane name="analysis">
             <template #label>
@@ -367,6 +423,7 @@ function startResizeLeft(e: MouseEvent) {
               :fields="fields"
               :tables="tables"
               :analyzing="analyzing"
+              :unsupported="extractionUnsupported"
               @analyze="onAIAnalyze"
               @update:fields="onFieldsUpdate"
               @update:tables="onTablesUpdate"
@@ -478,6 +535,14 @@ function startResizeLeft(e: MouseEvent) {
   align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+/* ★ 「不支持提取规则」常驻提示（2026-10-09）
+   ⚠️ 必须 flex-shrink:0：.right-panel 是 column flex + overflow:hidden，
+      el-alert 自身也带 overflow:hidden ⇒ 不给 flex-shrink:0 会被压成一条线（同族坑见 enterprise-normalize）。 */
+.unsupported-alert {
+  flex-shrink: 0;
+  margin: var(--yzh-space-3, 12px) var(--yzh-space-4, 16px) 0;
 }
 .status-item {
   flex: 1;

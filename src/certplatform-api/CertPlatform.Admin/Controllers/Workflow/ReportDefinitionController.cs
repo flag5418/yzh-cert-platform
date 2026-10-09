@@ -218,7 +218,8 @@ namespace CertPlatform.Admin.Controllers.Workflow
         }
 
         /// <summary>
-        /// 删除章节（软删）
+        /// 删除章节（★2026-10-09 改硬删：uk_scope_sort 不含 IsDeleted，软删后同 SortOrder
+        /// 重建必撞唯一键 1062 —— 与实体 <c>YZHDeleteStrategy(Hard)</c> 策略一致）
         /// </summary>
         [HttpPost("section/delete")]
         public async Task<IActionResult> DeleteSection([FromQuery] string code)
@@ -226,30 +227,23 @@ namespace CertPlatform.Admin.Controllers.Workflow
             if (string.IsNullOrWhiteSpace(code))
                 return Ok(ApiResponse<object?>.Fail("缺少业务键 Code"));
 
-            // ★ 软删（ISoftDelete），不物理删除
-            // ★★ 不用 EntityService.DeleteByCode：它内部走 GetOneAsync 受 IsValid=1 过滤，
+            // ★ 不用 EntityService.DeleteByCode：它内部走 GetOneAsync 受 IsValid=1 过滤，
             //    章节被停用（IsValid=0）后会报「记录不存在或已被删除」→ 停用的章节删不掉。
-            //    故用 GetOneIgnoreValidAsync 绕过 IsValid 过滤（仅过滤软删除）。
+            //    故用 GetOneIgnoreValidAsync 绕过 IsValid 过滤，先定位到行。
             var found = await _db.GetOneIgnoreValidAsync<ReportSection>(x => x.Code == code);
             if (!found.Success || found.Data == null)
                 return Ok(ApiResponse<object?>.Fail("章节不存在或已被删除", 404));
 
-            // ★ 直接走 SqlSugar Updateable（IDbOrm 无 Update；EntityService.Update 会重查受 IsValid 过滤）
-            var affected = await _db.Client.Updateable<ReportSection>()
-                .SetColumns(x => new ReportSection
-                {
-                    IsDeleted  = true,
-                    DeleteBy   = UserContext.UserCode,
-                    DeleteTime = DateTime.Now,
-                    UpdateBy   = UserContext.UserCode,
-                    UpdateTime = DateTime.Now
-                })
+            // ★ 物理删除：释放 SortOrder 占位（uk_scope_sort 对全表唯一），
+            //    与实体 [YZHDeleteStrategy(Hard)] 口径一致；章节定义无审计留痕需求，
+            //    生成侧参照已拷贝至 cert_expert_report_section_item.SectionTemplateContent。
+            var affected = await _db.Client.Deleteable<ReportSection>()
                 .Where(x => x.Code == code)
                 .ExecuteCommandAsync();
 
             var result = affected > 0
                 ? Result<bool>.Ok(true)
-                : Result<bool>.Fail("软删失败：未命中任何行");
+                : Result<bool>.Fail("删除失败：未命中任何行");
             return Ok(result.Success ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Error(result.Error));
         }
 

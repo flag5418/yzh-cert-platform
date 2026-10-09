@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using CertPlatform.Shared.Fill;
@@ -75,6 +76,59 @@ internal static class WordParagraphFiller
                     Source = soloValue.Source,
                 });
                 return;
+            }
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        //  ★ 覆盖（`overwrite`）—— **整段换成取值**，段里的其它文字一并被替换
+        //
+        //  与 Excel 侧同一规格（用户 2026-10-09：「一句话，中间有 {{}}」）。
+        //  Word 侧的「格」口径 = **一个段落**（正文段落与表格单元格内的段落同此处理）——
+        //  NPOI 的 <c>XWPFTableCell</c> 内部就是若干段落，逐段进来即可，无需额外区分。
+        //
+        //  ⚠️ 与 Excel 侧同一条约束：仅在「本段恰好 1 个锚点」时成立；多锚点 ⇒ 退回填充 + 记待办。
+        // ════════════════════════════════════════════════════════════════
+        if (matches.Count == 1)
+        {
+            var (owKey, _) = FillSyntax.SplitFormat(matches[0].Groups[1].Value);
+            if (request.Values.TryGetValue(owKey, out var owValue) && owValue.IsOverwrite())
+            {
+                // ★ 整段替换 = 把值写进首 run、其余 run 清空 —— 保持「只改文本、不动结构」
+                //   （与下方索引映射法同一手法，故 <w:pPr> / <w:rPr> 等结构元素全部保留）
+                WordRunText.Set(runs[0], owValue.ToDisplayText());
+                for (var i = 1; i < runs.Count; i++) WordRunText.Set(runs[i], string.Empty);
+
+                report.Hits.Add(new OfficeFillHit
+                {
+                    Token = matches[0].Value,
+                    AnchorCode = owKey,
+                    LocationKind = kind,
+                    Location = location,
+                    Value = Truncate(owValue.ToDisplayText(), 120),
+                    CrossRun = runs.Count > 1,
+                    Source = owValue.Source,
+                });
+                return;
+            }
+        }
+        else
+        {
+            // 多锚点 + 有人要求覆盖 ⇒ 语义模糊，如实记一条待办（本段仍按「填充」处理）
+            var owKey = matches
+                .Select(m => FillSyntax.SplitFormat(m.Groups[1].Value).Key)
+                .FirstOrDefault(k => request.Values.TryGetValue(k, out var v) && v.IsOverwrite());
+
+            if (owKey != null)
+            {
+                report.Pendings.Add(new OfficeFillPending
+                {
+                    Token = matches[0].Value,
+                    AnchorCode = owKey,
+                    LocationKind = kind,
+                    Location = location,
+                    Reason = $"写入方式配了「覆盖」（整段替换），但本段有 {matches.Count} 个锚点 —— "
+                           + "整段该换成哪一个的值无法确定，已按「填充」处理（只替换 {{}}）",
+                });
             }
         }
 

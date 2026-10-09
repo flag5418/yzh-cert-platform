@@ -29,8 +29,23 @@ namespace CertPlatform.Auditor.Entities.Doc
     public class DocNormalizeAction : BaseEntity
     {
         // ──── Id / Code / CreateTime（= 动作发生时间）/ CreateBy（= 操作人）由 BaseEntity 提供 ────
-        // ⚠️ 本表 ⛔ 不使用 UpdateTime / UpdateBy（只追加，永不更新）—— BaseEntity 的这两列
-        //    在 DB 里不存在，SqlSugar 不会写它们（仅在显式 Update 时才写）。
+
+        /// <summary>
+        ///     ⛔ <b>屏蔽基类的 <c>UpdateTime</c></b> —— 本表 DB 里<b>没有这一列</b>（只追加，永不更新）。
+        ///
+        ///     <para><b>⚠️ 不屏蔽的后果（2026-10-09 实测踩中）</b>：<c>_db.InsertAsync</c> 会把
+        ///     <c>UpdateTime</c> 拼进 INSERT 的字段列表 ⇒ 报
+        ///     <c>Unknown column 'UpdateTime' in 'field list'</c> ⇒ <b>留痕永远写不进去</b>，
+        ///     症状是「动作明明生效了，审计链却是空的」。</para>
+        ///
+        ///     <para>★ 同款先例：<c>Sys_RoleMenu</c> / <c>Sys_RoleUser</c> 用同样手法屏蔽基类列。</para>
+        /// </summary>
+        [SugarColumn(IsIgnore = true)]
+        public new DateTime? UpdateTime { get; set; }
+
+        /// <summary>⛔ 屏蔽基类的 <c>UpdateBy</c> —— 同上，本表无此列</summary>
+        [SugarColumn(IsIgnore = true)]
+        public new string? UpdateBy { get; set; }
 
         /// <summary>认证机构 Code</summary>
         [SugarColumn(Length = 36)]

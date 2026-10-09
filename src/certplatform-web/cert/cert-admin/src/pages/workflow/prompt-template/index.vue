@@ -6,11 +6,11 @@
  * 后端：/api/PromptTemplate（⚠️ 路由名永不改名 —— 改名 = ApiCode 断链）
  *
  * ┌───────────────────────────────────────────────────────────────┐
- * │ WorkbenchBar：作用域 › 类型切换 │ AI生成 恢复 保存 专注        │  ← 共享操作条
+ * │ WorkbenchBar：作用域 › 类型切换 │ AI生成 恢复 保存              │  ← 共享操作条
  * ├──────────┬────────────────────────────────────────────────────┤
  * │          │ PromptEditor（宽度 = 全部剩余，纵向长文阅读）        │
  * │ 标准树   ├══════ 可拖动分隔（上下分栏，比例持久化）═══════     │
- * │（可折叠）│ PromptTestPanel（上传 + 结构化结果，5 个页签）      │
+ * │          │ PromptTestPanel（上传 + 结构化结果，5 个页签）      │
  * └──────────┴────────────────────────────────────────────────────┘
  *
  * 布局决策（35 号评估）：
@@ -27,7 +27,7 @@
  * ⛔ 界面不展示 AI 模型：模型由 cert_sys_config 统一固定，UI 不可选也不展示。
  */
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { confirmChoice, confirmOrFalse, YzhPageLayout } from '@yzh-core'
 import {
   PROMPT_TYPE,
@@ -154,7 +154,6 @@ const loading = ref(false)
 const generating = ref(false)
 const testing = ref(false)
 const saving = ref(false)
-const focused = ref(false)
 
 const treeWidth = ref(240)
 const editorArea = ref<HTMLElement>()
@@ -367,29 +366,17 @@ onMounted(async () => {
 
 async function onGenerate() {
   const has = hasContent.value
-  let extra: string | null = null
-  try {
-    const { value } = await ElMessageBox.prompt(
-      has
-        ? dirty.value
-          ? // ★ 2026-10-03：AI 优化是**破坏性替换** —— 生成结果会自动落库，
-            //   用户手改的那份既不在库里、也会被 dropDraft 清掉。原实现一字不提，
-            //   等于「点一下优化，手改的内容静默消失」。这里在唯一的输入弹窗里说清楚。
-            '当前正文有未保存的改动 —— AI 会以它为输入重新生成，并整体替换正文（原改动不会单独留存）。优化方向：'
-          : '优化方向（留空 = 按原意优化）'
-        : '补充要求（留空 = 自动生成）',
-      has ? '优化' : '生成',
-      {
-        confirmButtonText: '开始',
-        cancelButtonText: '取消',
-        inputPlaceholder: '可留空',
-        inputPattern: /^[\s\S]{0,500}$/,
-        inputErrorMessage: '最多 500 字'
-      }
+
+  // ★ 2026-10-09 用户裁决：「AI 生成不需要任何参数，点击即按全局提示词自动动态生成，结果由用户按实际情况修改」。
+  //   故移除原「补充要求 / 优化方向」输入弹窗（ElMessageBox.prompt），点按钮直接生成。
+  //   仅「优化 + 有未保存改动」保留一次确认（防手改内容被静默整体替换）—— 这是防数据丢失的
+  //   是/否闸门，不是需要填的参数，不违背「不需要任何参数」。
+  if (has && dirty.value) {
+    const ok = await confirmOrFalse(
+      '当前正文有未保存的改动 —— AI 会以它为输入重新生成并整体替换正文（原改动不会单独留存）。继续？',
+      'AI 优化'
     )
-    extra = (value || '').trim() || null
-  } catch {
-    return
+    if (!ok) return
   }
 
   generating.value = true
@@ -397,7 +384,7 @@ async function onGenerate() {
     const r = await generatePromptDraft({
       promptType: activeType.value,
       standardCode: scope.value || undefined,
-      extraRequirement: extra,
+      extraRequirement: null,
       currentTemplate: has ? templateText.value : null
     })
     if (!r.prompt || !r.prompt.trim()) {
@@ -409,6 +396,9 @@ async function onGenerate() {
     testedTemplate.value = null
     result.value = null
     view.value.resultOpen = true
+
+    // ★ 草稿需人工完善（如缺占位符）时给出警告 —— 正文仍可用，提示用户补齐后再用
+    if (r.warning) ElMessage.warning(r.warning)
 
     // ★ 2026-10-03 用户明确要求：「ai 自动生成的时候，进行自动保存」。
     //   动机：生成结果原先只存内存，切作用域/类型即静默丢失（已实测复现）。
@@ -595,32 +585,27 @@ function startResizeResult(e: MouseEvent) {
         :generating="generating"
         :saving="saving"
         :save-blocked-reason="saveBlockedReason"
-        :focused="focused"
         @update:active-type="onSelectType"
         @generate="onGenerate"
         @save="onSave"
         @reset="onReset"
-        @toggle-focus="focused = !focused"
       />
     </template>
 
     <div class="wb">
       <div class="wb__body" v-loading="loading" element-loading-text="载入提示词…">
-        <!-- 左：标准树（专注模式下隐藏） -->
-        <template v-if="!focused">
-          <div class="wb__left" :style="{ width: treeWidth + 'px' }">
-            <StandardTree
-              ref="treeComp"
-              :model-value="scope"
-              :standards="standards"
-              :rows="allRows"
-              @select="(v) => onSelectScope(v.code)"
-            />
-          </div>
-          <div class="wb__handle" @mousedown.prevent="startResizeTree">
-            <div class="wb__bar" />
-          </div>
-        </template>
+        <!-- 左：标准树 -->
+        <div class="wb__left" :style="{ width: treeWidth + 'px' }">
+          <StandardTree
+            ref="treeComp"
+            :model-value="scope"
+            :standards="standards"
+            @select="(v) => onSelectScope(v.code)"
+          />
+        </div>
+        <div class="wb__handle" @mousedown.prevent="startResizeTree">
+          <div class="wb__bar" />
+        </div>
 
         <!-- 中：编辑器（上） + 结果区（下） -->
         <div ref="editorArea" class="wb__main">

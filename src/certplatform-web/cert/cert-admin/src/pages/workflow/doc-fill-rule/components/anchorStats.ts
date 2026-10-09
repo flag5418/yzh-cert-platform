@@ -69,7 +69,7 @@ export function toAnchorView(row: any): AnchorView {
     model,
     parseError,
     isDomainAuto,
-    unconfigured: !isDomainAuto && model.sources.length === 0,
+    unconfigured: !isDomainAuto && !model.source.kind,
     orphan: !!row?.IsOrphan,
     summary: summarizeSourceSpec(model),
   }
@@ -83,10 +83,10 @@ export function buildAnchorViews(rows: any[] | null | undefined): AnchorView[] {
 /** 统计条的数据（`AnchorRuleTab` 顶部那排 chip） */
 export interface AnchorStats {
   total: number
-  /** 来源链里 `kind` 非 manual / compute 的条目数 */
+  /** 来源是「自动」的锚点数（全局参数 / AI 三类） */
   auto: number
+  /** 来源是「人工填写」的锚点数 */
   manual: number
-  compute: number
   unconfigured: number
   orphan: number
   required: number
@@ -97,7 +97,6 @@ export function computeAnchorStats(views: AnchorView[]): AnchorStats {
     total: views.length,
     auto: 0,
     manual: 0,
-    compute: 0,
     unconfigured: 0,
     orphan: 0,
     required: 0,
@@ -106,11 +105,12 @@ export function computeAnchorStats(views: AnchorView[]): AnchorStats {
     if (v.orphan) stats.orphan++
     if (v.unconfigured) stats.unconfigured++
     if (v.row?.Required) stats.required++
-    for (const s of v.model.sources) {
-      if (s.kind === 'manual') stats.manual++
-      else if (s.kind === 'compute') stats.compute++
-      else stats.auto++
-    }
+    // ★ 2026-10-09：来源模型收敛为「一个锚点 = 一个来源」⇒ 按锚点计数，⛔ 不再按来源条目累加。
+    //   ⛔ 旧口径的 `compute`（计算来源）已随「来源链」整层删除，不再统计。
+    const s = v.model.source
+    if (!s) continue
+    if (s.kind === 'manual') stats.manual++
+    else stats.auto++
   }
   return stats
 }

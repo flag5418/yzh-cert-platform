@@ -48,6 +48,8 @@ import {
   contentText, contentMessage, contentLoading,
   regenerating, onRegenerate,
   tagDraft, purposeSaving, statusOf, statusTip,
+  // ★ 点击文件行的提示（2026-10-09）：只有「不支持提取规则」的文件会给反馈
+  onFileRowClick,
   uploadVisible, uploadStage, planRows, planSummary, uploadProgress,
   uploadTitle, uploadTargetLabel, uploadTargetAlertType,
   openUpload, openFolderUpload, openReplace, onFilesPicked, startUpload, closeUpload, removePlanRow,
@@ -308,6 +310,7 @@ onBeforeUnmount(() => { stopPolling() })
                 row-key="Code"
                 empty-text="暂无文件"
                 @row-action="onRootRowAction"
+                @row-click="onFileRowClick"
               >
                 <template #column-FileName="{ row }">
                   <div class="f-name">
@@ -344,6 +347,7 @@ onBeforeUnmount(() => { stopPolling() })
               :data-revision="dataRevision"
               :busy="isBusy"
               @detail="openDetail"
+              @row-click="onFileRowClick"
               @regenerate="onRegenerate"
               @preview="openPreview"
               @replace="openReplace"

@@ -33,7 +33,8 @@
       }),
       detailApi: '/api/Admin/Workflow/ValidationRule',
       textField: 'RuleName',
-      codeField: 'RuleCode'
+      codeField: 'RuleCode',
+      filterLeaf: (item) => item.JudgeMode !== 'manual'
     }"
     :save-config="{
       api: '/api/Admin/Workflow/ValidationRule/update',

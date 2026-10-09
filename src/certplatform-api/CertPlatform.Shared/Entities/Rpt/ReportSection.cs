@@ -1,4 +1,5 @@
 using SqlSugar;
+using YZH.Core.Stand.Attributes;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Entity;
 
@@ -15,8 +16,13 @@ namespace CertPlatform.Shared.Entities.Rpt
     ///   ② 旧 <c>ReportCode</c> 语义错位（DDL 声明 FK→rpt_audit_report，实际存 Template.Code）→ 列已删除
     ///   ③ 旧表用 <c>IsActive</c> 违反铁律九 → 现统一 <see cref="IIsValid.IsValid"/></para>
     /// <para>命名规范（YZH 铁律七）：DB 列名 = C# 属性名 = TS 字段名，PascalCase 逐字一致</para>
+    /// <para><b>★ 2026-10-09 删除策略改硬删除</b>：uk_scope_sort(OrgCode,StandardCode,PhaseCode,SortOrder)
+    /// 对全表行唯一（含已删行），软删除后「删第 N 章再建第 N 章」必撞唯一键 1062
+    /// （预检 GetOne 过滤软删行，还给不出友好提示）⇒ 章节定义物理删除
+    /// （先例：<c>CertOrgStandard</c> uk_org_std 同类改造）。</para>
     /// </summary>
     [SugarTable("cert_report_section")]
+    [YZHDeleteStrategy(Mode = DeleteMode.Hard)]
     public class ReportSection : BaseEntity, ISoftDelete, IIsValid
     {
         // ──── Id / Code / 审计字段由 BaseEntity 统一提供 ────

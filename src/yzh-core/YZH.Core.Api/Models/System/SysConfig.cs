@@ -39,8 +39,16 @@ public class SysConfig : BaseEntity, ISoftDelete, IIsValid
     [StringLength(100)]
     public string ConfigKey { get; set; } = string.Empty;
 
-    /// <summary>配置值</summary>
-    [StringLength(4000)]
+    /// <summary>
+    ///     配置值
+    ///     <para>⚠️ <b>2026-10-09 修</b>：原为 <c>[StringLength(4000)]</c>，而 DB 列早已被
+    ///     <c>scripts/db/20261007_enterprise_normalize_enhance_V1.sql</c> 改成 <c>text</c>
+    ///     （<c>59</c> §4：<b>视觉 JSON 天然长</b>）。但本框架<b>开启了自动模型校验</b>
+    ///     （<c>Program.cs</c> 明确 <c>SuppressModelStateInvalidFilter</c> 仍为 false）⇒
+    ///     超过 4000 字符的 <c>ConfigValue</c> 在进 DB 之前就被拒 ⇒ <b>列加宽了却到不了</b>。
+    ///     取值 <c>16000</c>：<c>text</c> 上限 65535 <b>字节</b>，按最坏 4 字节/字符留余量。</para>
+    /// </summary>
+    [StringLength(16000)]
     public string? ConfigValue { get; set; }
 
     /// <summary>配置类型（string/int/bool/json）</summary>

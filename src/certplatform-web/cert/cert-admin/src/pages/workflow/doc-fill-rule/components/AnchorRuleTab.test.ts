@@ -207,6 +207,14 @@ const stubs = {
     template: '<button class="erb"><slot /></button>',
     props: ['value', 'label'],
   },
+  /**
+   * ★ 2026-10-09 新增：参数下拉按「后台定义的全局参数 / 标准对应的参数」分组
+   *   （`AnchorSidePanel` 的 ② 段）。不补这个桩会刷 `Failed to resolve component`。
+   */
+  'el-option-group': {
+    template: '<div class="eoptgroup"><slot /></div>',
+    props: ['label'],
+  },
 }
 
 async function mountTab(logic: ReturnType<typeof makeLogic>) {
@@ -333,9 +341,11 @@ describe('AnchorRuleTab — 保存必须「整行 upsert」', () => {
     expect(payload.WriteMode).toBe('overwrite')
     expect(payload.ValueType).toBe('text')
     expect(payload.Required).toBe(false)
-    // 来源链：JSON 往返后仍是原来那条
+    // ★ 2026-10-09：来源改为「一个锚点 = 一个来源」⇒ **不再有 `combine`**。
+    //   `sources` 仍是数组（长度恒 1）—— 后端编排器按数组遍历，保持 JSON 兼容。
     const spec = JSON.parse(payload.SourceSpec)
-    expect(spec.combine).toBe('firstHit')
+    expect(spec).not.toHaveProperty('combine')
+    expect(spec).not.toHaveProperty('onMissing')
     expect(spec.sources).toHaveLength(1)
     expect(spec.sources[0]).toMatchObject({ kind: 'global', ref: 'ENT_NAME' })
 

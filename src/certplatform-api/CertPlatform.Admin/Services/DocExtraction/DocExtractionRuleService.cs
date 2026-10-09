@@ -36,6 +36,16 @@ public partial class DocExtractionRuleService
     private readonly ILogger<DocExtractionRuleService> _logger;
     protected readonly IConfiguration _configuration;
     protected readonly CertPlatform.Shared.DocExtraction.DocumentConvertClient _convertClient;
+    /// <summary>
+    /// ★ 转换内核（2026-10-09 接入）：本页的**实时兜底转换**必须走它 ——
+    /// 内部含 anydoc 退出码 3 的**视觉 OCR 兜底**（图片直接识别 / 扫描件 PDF 逐页渲染后识别）。
+    /// <para>⛔ 为什么不能继续直接用 <c>DocumentConvertClient</c>：后者只有一条 anydoc 命令，
+    /// 图片与扫描件一律被 <c>ClassifyError</c> 判成 <c>NeedsOcr</c> ⇒ 本页把它们落 <c>unsupported</c>
+    /// ⇒ **它们在「文档提取规则」页永远无法参与规则定义**。而标准目录上传链
+    /// （<c>OfficeConvertService</c>）走的是 <see cref="CertPlatform.Shared.DocExtraction.IFileConvertCore"/>，
+    /// 同一种文件上传时能 OCR、进本页却不能 —— 两条路径行为不一致（用户 2026-10-09 裁决：统一）。</para>
+    /// </summary>
+    protected readonly CertPlatform.Shared.DocExtraction.IFileConvertCore _convertCore;
     protected readonly CertPlatform.Shared.DocExtraction.LlmInvokeService _llm;
     protected readonly IObjectStorage _storage;
     /// <summary>S2③ 提取结果版本店（归档/回活/读取唯一口）</summary>
@@ -54,6 +64,7 @@ public partial class DocExtractionRuleService
         IDbOrm db,
         IObjectStorage storage,
         CertPlatform.Shared.DocExtraction.DocumentConvertClient convertClient,
+        CertPlatform.Shared.DocExtraction.IFileConvertCore convertCore,
         CertPlatform.Shared.DocExtraction.LlmInvokeService llm,
         IConfiguration configuration,
         ILogger<DocExtractionRuleService> logger,
@@ -63,6 +74,7 @@ public partial class DocExtractionRuleService
         _db = db;
         _storage = storage;
         _convertClient = convertClient;
+        _convertCore = convertCore;
         _llm = llm;
         _configuration = configuration;
         _logger = logger;

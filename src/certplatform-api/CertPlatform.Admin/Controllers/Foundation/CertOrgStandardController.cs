@@ -157,6 +157,15 @@ public class CertOrgStandardController : ControllerBase
 
             if (request.Linked)
             {
+                // ★ 契约守卫（2026-10-09）：StandardCode 必须是 cert_iso_standard.Code（GUID）。
+                //   传业务编号 slug（如 iso13485）会静默入库，但本接口 List 与专家端
+                //   EnterpriseStageController 均按 Code 比对 ⇒ 库里有行却永不回显（勾选"没保存成功"）。
+                var stdCheck = await _isoService.GetListAsync(p =>
+                    p.Code == request.StandardCode && !p.IsDeleted);
+                if (stdCheck.Data == null || stdCheck.Data.Count == 0)
+                    return Ok(ApiResponse.Fail(
+                        $"标准不存在：{request.StandardCode}（须传 cert_iso_standard.Code）"));
+
                 // 勾选 → 创建关联
                 var exists = await _linkService.ExistsAsync(p =>
                     p.OrgCode == request.OrgCode &&

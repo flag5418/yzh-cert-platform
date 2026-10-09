@@ -3,16 +3,20 @@
  * ISO 标准 → 条款管理（左树右表，配置驱动 TreeTable 架构）
  *
  * ★ 三层体系裁决（2026-10-08）：
- * - 左树：**全只读**（体系/族/版本均不可增删改）
- * - 右表：仅当选中「版本」节点时加载条款树；否则显示空提示
- * - 条款操作（增/删/改）仍可用 —— 但只作用于已选中的版本
+ * - 左树：**全只读**（类别/标准均不可增删改）
+ * - 右表：仅当选中「标准」节点时加载条款树；否则显示空提示
+ * - 条款操作（增/删/改）仍可用 —— 但只作用于已选中的标准
  *
- * 注：标准（版本）本身的增删改在「标准管理」/cert/iso-standard 独立页面完成。
+ * 注：标准本身的增删改在「标准管理」/cert/standard-manage 独立页面完成。
+ *
+ * ★ 选择判定唯一入口 = `logic.isSelectableNode()`（点击守卫 + 空态 v-if 共用）。
+ *   2026-10-09 事故：两处曾各写一遍 `Extra._level !== 2`，而数据源根本没有 `_level`
+ *   键（只有 `level`，值 0/1）⇒ 守卫恒拦、右表永不挂载、条款接口一次不发。
  */
 import { Delete, Plus, RefreshRight } from '@element-plus/icons-vue'
 import { confirmOrFalse, YzhForm, YzhEmptyState, YzhStatusBadge, resolveStatusBadge, YzhTreeTableLayout, YzhTreeTable, type TreeNode } from '@yzh-core'
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, nextTick, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ISOStandardTreeTableLogic } from './logic'
 
 // 静默第三方库 ResizeObserver polyfill 的 startTime 错误（VM809:2）
@@ -29,6 +33,24 @@ const treeTableRef = ref()
 const tableRef = ref()
 const selectedRows = ref<any[]>([])
 
+/**
+ * 函数式 ref：挂载/卸载时同步给内核。
+ *
+ * ★ 必要性：右表在 `v-if` 分支里 —— 首次选中标准前**根本不渲染**，
+ *   `onMounted + nextTick` 一次性注册拿到的恒是 `undefined`，
+ *   此后 `refresh()` / 启停 / 显示已禁用 / 提交后刷新全走 `_tableRef?.refresh()`
+ *   静默 no-op（2026-10-09 与守卫 bug 一并修复）。范式同 `useTreeTable` / standard-manage。
+ */
+function setTreeTableRef(el: any): void {
+  treeTableRef.value = el
+  logic.setTreeTableRef(el)
+}
+
+function setTableRef(el: any): void {
+  tableRef.value = el
+  logic.setTableRef(el)
+}
+
 const rowActionButtons = computed(() => logic.rowActions)
 
 const dialogTitle = computed(() =>
@@ -36,13 +58,15 @@ const dialogTitle = computed(() =>
 )
 
 // ========================================================
-// 树节点点击：仅版本节点（_level=2）触发条款加载
+// 树节点点击：仅标准节点触发条款加载（判定唯一入口 = isSelectableNode）
 // ========================================================
 
 async function handleNodeClick(node: TreeNode) {
-  const extra: Record<string, any> = node.Extra ?? {}
-  // ★ 三层体系裁决：本页面左树全只读，仅 level=2 的版本节点触发右侧条款加载
-  if (node.NodeType === 'virtual' || extra._level !== 2) return
+  if (!logic.isSelectableNode(node)) {
+    // 点击类别（虚拟）节点：清空选择，右侧回到空提示
+    logic.selectedNode = null
+    return
+  }
   await logic.onNodeClick(node)
 }
 
@@ -52,7 +76,7 @@ async function handleNodeClick(node: TreeNode) {
 
 async function handleAddClause() {
   const ok = await logic.openAddClauseDialog()
-  if (!ok) ElMessage.warning('请先选择版本')
+  if (!ok) ElMessage.warning('请先选择标准')
 }
 
 async function handleEditClause(row: any) {
@@ -73,7 +97,7 @@ async function handleDeleteClause(row: any) {
 async function handleRowAction(action: string, row: any) {
   if (action === 'add-child') {
     const ok = await logic.openAddClauseChild(row)
-    if (!ok) ElMessage.warning('请先选择版本')
+    if (!ok) ElMessage.warning('请先选择标准')
   } else if (action === 'edit') {
     await handleEditClause(row)
   } else if (action === 'delete') {
@@ -120,18 +144,16 @@ function onClauseDialogOpened() { /* 弹窗完全打开后初始化 */ }
 function onClauseDialogClosed() { /* 弹窗完全关闭后清理 */ }
 
 onMounted(async () => {
+  // refs 由模板函数式 ref 在子组件挂载时注入（早于本 onMounted），
+  // 这里只做 init —— init 末尾若自动选中节点，right table refresh 才拿得到引用。
   await logic.init()
-  nextTick(() => {
-    logic.setTreeTableRef(treeTableRef.value)
-    logic.setTableRef(tableRef.value)
-  })
 })
 </script>
 
 <template>
   <div class="iso-page">
     <YzhTreeTableLayout
-      ref="treeTableRef"
+      :ref="setTreeTableRef"
       :tree-data="logic.treeData"
       :tree-width="320"
       :tree-toolbar="true"
@@ -146,15 +168,15 @@ onMounted(async () => {
 
       <template #default>
         <div class="iso-page__content">
-          <!-- 未选中版本时：空提示 -->
-          <div v-if="!logic.selectedNode || (logic.selectedNode.Extra as any)?._level !== 2" class="iso-page__empty">
-            <YzhEmptyState title="未选择版本" description="请从左侧选择版本节点以查看和编辑条款" />
+          <!-- 未选中标准时：空提示（判定与点击守卫共用 isSelectableNode） -->
+          <div v-if="!logic.isSelectableNode(logic.selectedNode)" class="iso-page__empty">
+            <YzhEmptyState title="未选择标准" description="请从左侧选择标准节点以查看和编辑条款" />
           </div>
 
-          <!-- 已选中版本：条款树形表格 -->
+          <!-- 已选中标准：条款树形表格 -->
           <YzhTreeTable
             v-else
-            ref="tableRef"
+            :ref="setTableRef"
             :columns="logic.columns as any"
             :data-loader="logic.dataLoader.bind(logic)"
             :search-fields="logic.searchFields as any"

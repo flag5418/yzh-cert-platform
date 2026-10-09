@@ -250,29 +250,29 @@ namespace CertPlatform.Auditor.Services.Ent
                 //   ⛔ 不伪造内容：OCR 也失败（未接入/模型不可用/超大图）则落到下方 failed 分支，
                 //   如实报能力边界，⛔ 绝不写占位文本（占位流进 LLM 会零报错地出错误结果）。
                 if (UploadFilePolicy.IsImageOrPdf(row.FileType)
-                    && _serviceProvider.GetService<IOcrProvider>() is { IsAvailable: true } ocr)
+                    && _serviceProvider.GetService<IOcrProvider>() is { IsAvailable: true })
                 {
-                    var md = await ocr.ToMarkdownAsync(fileName, content);
-                    if (md.Success && md.Content != null && md.Content.Length > 0)
+                    // ★ 2026-10-09：改调 <c>core.OcrToMarkdownAsync</c>，⛔ 不再直接调
+                    //   <c>ocr.ToMarkdownAsync</c> —— 后者会把 <b>PDF 字节原样</b>送视觉模型，
+                    //   实测恒 400（The image format is illegal）。前者内部对 PDF 会
+                    //   <b>先逐页渲染成图片</b>再识别，与主链（FileConvertCore）共用同一套。
+                    var md = await core.OcrToMarkdownAsync(fileName, sourcePath, content);
+                    if (md.Success && md.Content != null && md.Content.Length > 0
+                        && !string.IsNullOrEmpty(md.TargetPath))
                     {
-                        var targetPath = PathBuilder.Product(sourcePath, PathBuilder.MarkdownSegment, ".md");
-                        if (string.IsNullOrEmpty(targetPath))
-                        {
-                            await SetMdStatusAsync(db, row, EnterpriseOriginalService.ConvertStatus.Failed,
-                                "源文件缺少存储路径，无法派生 Markdown 产物路径");
-                            return false;
-                        }
                         try
                         {
-                            await storage.UploadAsync(targetPath.TrimStart('/'),
+                            await storage.UploadAsync(md.TargetPath!.TrimStart('/'),
                                 new MemoryStream(md.Content), md.Content.Length, "text/markdown");
-                            row.MarkdownPath = targetPath;
+                            row.MarkdownPath = md.TargetPath;
                             row.ConvertDate = DateTime.Now;
                             await SetMdStatusAsync(db, row,
                                 EnterpriseOriginalService.ConvertStatus.Completed,
-                                "Markdown 由视觉模型 OCR 提取（ai_vision_config）");
+                                string.IsNullOrWhiteSpace(md.Message)
+                                    ? "Markdown 由视觉模型 OCR 提取（ai_vision_config）"
+                                    : md.Message);
                             _logger.LogInformation("[原始资料入库] 视觉 OCR 回退成功: {Code} → {Path}",
-                                row.Code, targetPath);
+                                row.Code, md.TargetPath);
                             return true;
                         }
                         catch (Exception ex)

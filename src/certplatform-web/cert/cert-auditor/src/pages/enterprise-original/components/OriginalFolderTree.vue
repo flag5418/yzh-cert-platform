@@ -65,6 +65,16 @@ const emit = defineEmits<{
   (e: 'detail', row: OriginalFile): void
   (e: 'regenerate', row: OriginalFile): void
   (e: 'preview', row: OriginalFile): void
+  /**
+   * ★ 点击文件行（2026-10-09）。
+   *
+   * <para>本页原先**没有**行点击动作（只有行操作「操作 ▾」下拉），但用户对
+   * 「不支持提取规则」的文件要求「**点击该文件，直接提示**该文件不支持提取规则」——
+   * hover 才出的 tooltip 满足不了「点一下就知道」。</para>
+   *
+   * <para>本组件只**转发**：判据与文案在 `logic.ts`，提示在父页（与根目录表共用一份）。</para>
+   */
+  (e: 'row-click', row: OriginalFile): void
   /** ★ 单个文件换一份新的（走 `upload/*`，旧版本自动保留）—— 用户逐字：「可以针对单个文件进行替换」 */
   (e: 'replace', row: OriginalFile): void
   /** ★ 原 'ignore' —— 文案与语义都改成「排除提取」（用户裁决：「忽略」让人猜不到后果） */
@@ -145,6 +155,11 @@ function rowActions(row: OriginalFile): YzhAction[] {
       : { key: 'allow', text: '允许提取' },
     { key: 'delete', text: '删除', type: 'danger' }
   ]
+}
+
+/** ★ 点击文件行 → 转发（2026-10-09）。`YzhTable` 的 row-click 还带 index，父页用不到，只转 row。 */
+function onRowClick(row: OriginalFile) {
+  emit('row-click', row)
 }
 
 /** YzhTable @row-action(key,row) → 本组件既有 emit（转发链不变） */
@@ -262,6 +277,7 @@ function ownCount(node: OriginalFolderNode): number {
           row-key="Code"
           empty-text="该文件夹暂无文件"
           @row-action="onRowAction"
+          @row-click="onRowClick"
         >
           <!-- 文件名 + 大小 -->
           <!-- ⛔ 原「待确认」`el-tag` 已于 2026-10-07 四轮删除：
@@ -321,6 +337,7 @@ function ownCount(node: OriginalFolderNode): number {
           @detail="(r) => emit('detail', r)"
           @regenerate="(r) => emit('regenerate', r)"
           @preview="(r) => emit('preview', r)"
+          @row-click="(r) => emit('row-click', r)"
           @replace="(r) => emit('replace', r)"
           @exclude="(r) => emit('exclude', r)"
           @allow="(r) => emit('allow', r)"

@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>标准文档填写规则 · 简化原型 V4</title>
+<style>
+  :root{
+    --pri:#2b4b7d; --pri-l:#eef3fa; --pri-b:#c9d9ee;
+    --t1:#303133; --t2:#606266; --t3:#909399; --t4:#c0c4cc;
+    --bd:#dcdfe6; --bd-l:#e4e7ed; --bg:#f5f7fa; --bg2:#fafafa;
+    --suc:#3f8f4f; --suc-l:#eef7f0;
+    --warn:#b88230; --warn-l:#fdf6ec;
+    --dan:#c0392b; --dan-l:#fdf0ee;
+    --r:6px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--t1);
+    font:14px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+  .topbar{background:#fff;border-bottom:1px solid var(--bd-l);padding:14px 24px;
+    display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:10;flex-wrap:wrap}
+  .topbar h1{font-size:15px;font-weight:500;margin:0}
+  .doc-pick{display:flex;align-items:center;gap:8px;margin-left:8px}
+  .doc-pick .fname{font-size:13px;color:var(--t1)}
+  .meta{display:flex;gap:6px;margin-left:auto}
+  .tag{font-size:12px;padding:2px 9px;border-radius:11px;background:var(--bg);
+    color:var(--t2);border:1px solid var(--bd-l)}
+  .tag.ok{background:var(--suc-l);color:var(--suc);border-color:#cfe6d5}
+  .tag.warn{background:var(--warn-l);color:var(--warn);border-color:#f0e0c8}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 24px 60px}
+  .card{background:#fff;border:1px solid var(--bd-l);border-radius:8px;margin-bottom:16px}
+  .card-hd{padding:12px 18px;border-bottom:1px solid var(--bd-l);
+    font-size:13px;font-weight:500;display:flex;align-items:center;gap:8px}
+  .card-hd .hint{font-weight:400;color:var(--t3);font-size:12px}
+  .card-bd{padding:16px 18px}
+
+  .ask{background:var(--warn-l);border-color:#f0e0c8}
+  .ask .card-hd{border-bottom-color:#f0e0c8;color:#8a6320}
+  .ask ol{margin:0;padding-left:22px}
+  .ask li{margin-bottom:9px;font-size:13px;color:var(--t2)}
+  .ask li:last-child{margin-bottom:0}
+  .ask b{color:var(--t1);font-weight:500}
+  .ask code{font-family:var(--mono);font-size:12px;background:#fff;
+    padding:1px 5px;border-radius:3px;border:1px solid #eadfc9}
+
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:12px;font-weight:500;color:var(--t3);
+    padding:9px 12px;background:var(--bg2);border-bottom:1px solid var(--bd-l);white-space:nowrap}
+  td{padding:11px 12px;border-bottom:1px solid #f0f2f5;font-size:13px;vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  .pos{font-family:var(--mono);font-size:12.5px;color:var(--t1)}
+  .sub{color:var(--t3);font-size:12px;margin-top:2px}
+  .kind{font-size:12px;padding:1px 8px;border-radius:4px;background:var(--bg);
+    color:var(--t2);border:1px solid var(--bd-l);white-space:nowrap}
+  .src{font-size:12.5px}
+  .src.none{color:var(--t4)}
+  .param{font-family:var(--mono);font-size:11.5px;color:var(--t3);
+    max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+  .btn{font:inherit;font-size:12.5px;padding:4px 13px;border-radius:var(--r);
+    border:1px solid var(--bd);background:#fff;color:var(--t2);cursor:pointer}
+  .btn:hover{border-color:var(--pri-b);color:var(--pri)}
+  .btn.pri{background:var(--pri);border-color:var(--pri);color:#fff}
+  .btn.pri:hover{opacity:.9;color:#fff}
+  .btn.sm{padding:3px 10px;font-size:12px}
+  .btn.ghost{border-style:dashed;color:var(--pri);border-color:var(--pri-b)}
+  .flag{font-size:11px;padding:1px 7px;border-radius:3px;background:var(--warn-l);
+    color:var(--warn);border:1px solid #f0e0c8;white-space:nowrap}
+  .flag.dan{background:var(--dan-l);color:var(--dan);border-color:#f2d6d1}
+  tr.depr td{background:#fcfcfd}
+  tr.depr .pos{color:var(--t3);text-decoration:line-through}
+
+  .mask{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;
+    align-items:center;justify-content:center;z-index:50;padding:24px}
+  .mask.on{display:flex}
+  .modal{background:#fff;border-radius:10px;width:100%;max-width:780px;
+    max-height:calc(100vh - 48px);display:flex;flex-direction:column;overflow:hidden}
+  .modal-hd{padding:16px 22px;border-bottom:1px solid var(--bd-l);
+    display:flex;align-items:center;gap:10px}
+  .modal-hd h2{font-size:15px;font-weight:500;margin:0}
+  .modal-hd .x{margin-left:auto;cursor:pointer;color:var(--t3);font-size:19px;line-height:1}
+  .modal-bd{padding:18px 22px;overflow:auto;flex:1}
+  .modal-ft{padding:13px 22px;border-top:1px solid var(--bd-l);
+    display:flex;justify-content:flex-end;gap:10px;background:var(--bg2)}
+
+  .anchorbar{background:var(--bg);border:1px solid var(--bd-l);border-radius:var(--r);
+    padding:10px 14px;font-size:12.5px;color:var(--t2);margin-bottom:18px;
+    display:flex;flex-wrap:wrap;gap:6px 22px}
+  .anchorbar b{color:var(--t1);font-weight:500}
+  .anchorbar .v{font-family:var(--mono);color:var(--t1)}
+
+  .step{border:1px solid var(--bd-l);border-radius:8px;margin-bottom:14px;overflow:hidden}
+  .step:last-child{margin-bottom:0}
+  .step-hd{background:var(--bg2);padding:9px 14px;font-size:13px;font-weight:500;
+    display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--bd-l)}
+  .step-hd .no{width:19px;height:19px;border-radius:50%;background:var(--pri);color:#fff;
+    font-size:11.5px;display:flex;align-items:center;justify-content:center;flex:none}
+  .step-hd .hint{font-weight:400;color:var(--t3);font-size:12px;margin-left:2px}
+  .step-bd{padding:14px}
+
+  .kinds{display:grid;grid-template-columns:repeat(5,1fr);gap:9px}
+  .kc{border:1px solid var(--bd-l);border-radius:var(--r);padding:11px 8px;
+    cursor:pointer;text-align:center;transition:.15s;background:#fff}
+  .kc:hover{border-color:var(--pri-b)}
+  .kc.on{border-color:var(--pri);background:var(--pri-l);box-shadow:inset 0 0 0 1px var(--pri)}
+  .kc .n{font-size:13px;font-weight:500;color:var(--t1)}
+  .kc .d{font-size:11px;color:var(--t3);margin-top:4px;line-height:1.45}
+
+  .field{display:grid;grid-template-columns:104px 1fr;gap:14px 14px;align-items:start}
+  .field > label{font-size:12.5px;color:var(--t2);text-align:right;padding-top:6px;line-height:1.4}
+  .field > label.top{padding-top:2px}
+  .req::after{content:" *";color:var(--dan)}
+  input[type=text],textarea,select{font:inherit;font-size:13px;padding:6px 10px;
+    border:1px solid var(--bd);border-radius:var(--r);width:100%;background:#fff;color:var(--t1)}
+  input[type=text]:focus,textarea:focus,select:focus{outline:none;border-color:var(--pri)}
+  textarea{resize:vertical;min-height:62px;line-height:1.55}
+  .note{font-size:11.5px;color:var(--t3);line-height:1.55;margin-top:5px}
+  .note b{color:var(--t2);font-weight:500}
+  .chk{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--t2)}
+  .radios{display:flex;gap:22px;flex-wrap:wrap}
+  .radios label{display:flex;align-items:flex-start;gap:7px;font-size:12.5px;
+    color:var(--t2);cursor:pointer;text-align:left}
+  .radios input{margin-top:3px;flex:none}
+  .radios .t{color:var(--t1);font-weight:500;display:block}
+  .radios .s{color:var(--t3);font-size:11.5px;display:block}
+
+  /* 全局参数四组（多选） */
+  .ppick{margin-top:9px;border:1px solid var(--bd-l);border-radius:var(--r);overflow:hidden}
+  .pgrp{border-bottom:1px solid var(--bd-l)}
+  .pgrp:last-child{border-bottom:none}
+  .pgrp-hd{background:var(--bg2);padding:6px 11px;font-size:12px;color:var(--t2);
+    display:flex;align-items:center;gap:8px}
+  .pgrp-hd .src-name{font-family:var(--mono);font-size:11px;color:var(--t3)}
+  .pgrp-bd{padding:8px 11px;display:flex;flex-wrap:wrap;gap:6px 18px}
+  .pchk{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--t2);cursor:pointer}
+  .pchk input{flex:none;margin:0}
+  .pchk code{font-family:var(--mono);font-size:11px;color:var(--t3)}
+  .empty-inline{font-size:12px;color:var(--t3)}
+  /* ★ 只读 / 可覆盖 徽标 —— replace 与 global 的唯一行为差别，必须一眼看见 */
+  .cap{font-size:10.5px;padding:0 6px;border-radius:3px;border:1px solid;flex:none;line-height:16px}
+  .cap.ro{background:var(--bg);color:var(--t3);border-color:var(--bd)}
+  .cap.rw{background:var(--suc-l);color:var(--suc);border-color:#cfe6d5}
+
+  /* 覆盖 / 填充 示例 */
+  .eg{margin-top:10px;border:1px solid var(--bd-l);border-radius:var(--r);
+    background:var(--bg2);padding:11px 13px;font-size:12.5px;line-height:1.75}
+  .eg .eg-lb{color:var(--t3);font-size:11.5px;margin-right:8px;display:inline-block;min-width:74px}
+  .eg .eg-txt{font-family:var(--mono);color:var(--t1)}
+  .eg .eg-txt b{background:#fff3cd;padding:0 3px;border-radius:2px;font-weight:500}
+  .eg .eg-out{font-family:var(--mono);color:var(--suc)}
+  .eg .eg-line{margin-bottom:3px}
+  .eg .eg-line:last-child{margin-bottom:0}
+  .eg .eg-dan{font-family:var(--mono);color:var(--dan)}
+
+  .ptable{width:100%;border-collapse:collapse;margin-top:8px}
+  .ptable th{padding:6px 8px;font-size:11.5px;background:var(--bg)}
+  .ptable td{padding:5px 8px;border-bottom:1px solid #f0f2f5}
+  .ptable input{padding:4px 8px;font-size:12.5px}
+  .ptable .del{color:var(--dan);cursor:pointer;font-size:15px;line-height:1;
+    background:none;border:none;padding:2px 6px}
+  .empty{color:var(--t3);font-size:12.5px;padding:10px 0;text-align:center}
+  .foot{color:var(--t3);font-size:12px;text-align:center;padding:6px 0 0}
+  .spec td:first-child{width:34px;color:var(--t3)}
+  .spec td:nth-child(2){width:150px;color:var(--t1);font-weight:500}
+  .spec td:nth-child(3){width:190px;font-family:var(--mono);font-size:12px}
+  .spec code{font-family:var(--mono);font-size:11.5px;background:var(--bg);
+    padding:1px 5px;border-radius:3px;border:1px solid var(--bd-l)}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1>标准文档填写规则</h1>
+  <div class="doc-pick">
+    <span style="font-size:12.5px;color:var(--t3)">标准文档</span>
+    <span class="fname">附录三 程序文件清单 (2).docx</span>
+  </div>
+  <div class="meta">
+    <span class="tag">9001标准 · 2015</span>
+    <span class="tag">RC 再认证审核</span>
+    <span class="tag ok">已发布 #3bfc3563</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="card ask">
+    <div class="card-hd">待你确认 <span class="hint">（V4：按你指的那页 `enterprise-fill-params` 对齐了「全局参数」，还没动代码）</span></div>
+    <div class="card-bd">
+      <ol>
+        <li><b>「全局参数」已按 <code>/enterprise-fill-params</code> 那页对齐。</b>
+          那页的清单 = <b>后台定义 × 企业已有值</b> 的合并视图，实测 8 条
+          （文件编号前缀 / 持有资质证书 / 主要产品 / 企业荣誉 / 质量方针 / 质量目标 / 企业概况 / 上次审核遗留问题）。
+          这一页选「全局参数」时，下拉里就是这批 —— <b>企业填了，文档里就有值</b>。</li>
+        <li><b>但引擎里「全局参数」其实是两类，行为不一样，必须标出来。</b>
+          <code>ReplaceResolver</code> 的类注释写得很死：判据 = <b>这个位置是否允许企业填一个和企业档案不同的值</b>。
+          <b>不允许 → replace（只读）</b>；<b>允许 → global（可覆盖）</b>。
+          ⚠️ 选错的后果：用 replace 写「文件编号前缀」，企业在参数页改了<b>也不生效</b> —— <b>两边都不报错</b>。
+          所以下拉里每组都标了「只读 / 可覆盖」。</li>
+        <li><b>AI 节点 = 固定 3 项属性</b>（① 参数 → ② 是否依赖企业资料 → ③ 提示词），顺序按你说的，不可换。
+          「参数」只有<b>无 / 有</b>两个选项，选「有」= 就是<b>全局参数</b>（勾哪些，提示词里 <code>{{参数}}</code> 引用）。</li>
+        <li><b>覆盖 / 填充</b>：一个格子常常是<b>一句话带 <code>{{}}</code></b> ⇒
+          <b>覆盖</b> = 整格换成取值；<b>填充</b> = 只换 <code>{{}}</code>，其余文字保留。你说<b>要测试</b>，两个都留着。</li>
+        <li><b>垃圾数据已清</b>：<code>3333/333</code>（活行）与 <code>TEST_BIND_CHECK2/绑定探针2</code>（软删残留）
+          已硬删，表 19 → 17 行、活行 9 → 8。那 9 条档案镜像参数<b>原样没动</b>（仍软删）。</li>
+      </ol>
+      <div class="note" style="margin-top:10px;color:#8a6320">
+        ⚠️ <b>要你拍板的 2 条</b>（都是「引擎里有、但你这三条口径没覆盖到」的）：
+        <ol style="margin:6px 0 0;padding-left:20px">
+          <li><b>机构（<code>org.*</code> 6 项）与系统变量（<code>system.*</code> 6 项）</b> ——
+            和「企业基本信息」一样是 <b>replace / 只读</b>。现在我把它们单列成一组，
+            <b>要不要一起放进「全局参数」？</b>（不放的话，模板里只能手写 <code>{{system.date}}</code>，页面上配不出来。）</li>
+          <li><b>「阶段名称」「标准号」「文档编号」「文档版本」这类值，既不在 <code>enterprise.*</code>、也不在参数字典里</b> ——
+            它们在引擎的 <b><code>headerFooter</code> 能力</b>（<code>DocInfo</code>）里，
+            是<b>文档级</b>的：<code>No</code> / <code>Title</code> / <code>Version</code> / <code>StandardNo</code> / <code>StageName</code> / <code>Page</code>。
+            <b>本页现在没有这个来源</b> ⇒ 模板里出现 <code>{{阶段名称}}</code> 就配不出来。
+            <b>要不要加第 6 个来源「文档信息」？</b></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">「来源」的权威口径 <span class="hint">（引擎 IFillResolver 的 4 项能力 —— 与用户 10-02 点名的 4 项核心能力 1:1 对应）</span></div>
+    <div class="card-bd">
+      <table>
+        <thead><tr><th style="width:130px">引擎能力</th><th style="width:210px">实现</th><th style="width:190px">认领的写法</th><th>取数口 / 本页对应来源</th></tr></thead>
+        <tbody>
+          <tr><td><span class="pos">ai</span><div class="sub">Order 10</div></td>
+              <td>AiGenerateResolver</td>
+              <td><span class="pos">{{ai:param_code}}</span></td>
+              <td>读参数表；⛔ <b>本类不直连大模型</b>，只做「取值 + 标注来源」 ⇒ 本页拆成
+                <b>AI 语义生成 / AI 字段 / AI 表格</b> 三个节点</td></tr>
+          <tr><td><span class="pos">headerFooter</span><div class="sub">Order 20</div></td>
+              <td>HeaderFooterResolver</td>
+              <td>页眉 / 页脚模板</td>
+              <td>文档级自动变量（文档编号 / 名称 / 版本 / 标准号 / 阶段名 / 页码）
+                ⇒ ⚠️ <b>本页目前没有这个来源</b>，见下方待确认</td></tr>
+          <tr><td><span class="pos">replace</span><div class="sub">Order 30</div></td>
+              <td>ReplaceResolver</td>
+              <td><span class="pos">{{enterprise.*}}</span> · <span class="pos">{{org.*}}</span> · <span class="pos">{{system.*}}</span></td>
+              <td>直读档案 / 机构 / 运行期 ⇒ <b>本页「全局参数」的第 1、2 组（只读）</b></td></tr>
+          <tr><td><span class="pos">global</span><div class="sub">Order 100</div></td>
+              <td>GlobalParamResolver</td>
+              <td><span class="pos">{{param_code}}</span>（裸参数名）</td>
+              <td>读 <span class="pos">cert_fill_param_value</span> ⇒ <b>本页「全局参数」的第 3、4 组（可覆盖）</b></td></tr>
+        </tbody>
+      </table>
+      <div class="note" style="margin-top:12px">
+        <b>链式契约</b>：引擎按 Order 升序依次调用，每个 Resolver 只认自己那类 token，其余原样透传。
+        ⛔ 新增能力 = 新增一个 Resolver，<b>不要</b>改既有 Resolver 去兼容新语法。
+        <br>★ <b>「人工填写」不是引擎能力</b> —— 它是「前四类都没解析出来」的兜底：保留原文 + 记一条待办。
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">AI 节点的三个属性 <span class="hint">（语义生成 / AI 字段 / AI 表格 —— 三个 AI 节点共用同一套属性）</span></div>
+    <div class="card-bd">
+      <table class="spec">
+        <thead><tr><th>#</th><th>属性</th><th>取值</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>1</td><td>参数</td><td>无 &nbsp;|&nbsp; 有</td>
+            <td>只有两个选项。<b>选「有」就是全局参数</b> —— 从下面四组里勾，勾了的可以在提示词里用
+              <code>{{参数}}</code> 引用。<br>
+              <span class="note" style="margin:0">因为我们可以<b>根据全局参数进行提示词，自动生成内容</b>。</span></td>
+          </tr>
+          <tr>
+            <td>2</td><td>是否依赖企业资料</td><td>不依赖 &nbsp;|&nbsp; 依赖</td>
+            <td><b>不依赖</b> ⇒ 不读企业资料，直接靠「全局参数 + 提示词」生成，例如 <b>xxx 规则</b>、<b>xxx 内容</b> 这类。<br>
+              <b>依赖</b> ⇒ 提示词从<b>企业资料</b>里引用（有些 AI 字段没办法语义分析，只能写提示词去企业资料里取）。</td>
+          </tr>
+          <tr>
+            <td>3</td><td>提示词</td><td>文本</td>
+            <td>模型按这句话干活。引用的写法：全局参数用 <code>{{参数}}</code>。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="eg" style="margin-top:14px">
+        <div class="eg-line"><span class="eg-lb">不依赖 · 例</span><span class="eg-txt">参数=有（<b>企业简称</b>）· 提示词=「按企业简称生成程序文件名称」</span></div>
+        <div class="eg-line"><span class="eg-lb">依赖 · 例</span><span class="eg-txt">参数=无 · 依赖企业资料=是 · 提示词=「从企业资料里找出质量目标，一句话」</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">「全局参数」下拉里到底是哪些 <span class="hint">（实测：引擎 4 项能力 + cert_fill_param_def 17 行 + 企业档案）</span></div>
+    <div class="card-bd">
+      <table>
+        <thead><tr><th style="width:180px">组</th><th style="width:110px">引擎</th><th style="width:90px">企业能改吗</th><th>实测现状</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>① 企业基本信息</b></td>
+            <td><span class="pos">replace</span></td>
+            <td><span class="flag">只读</span></td>
+            <td><b>16 项</b>，直接读 <span class="pos">cert_enterprise</span>。
+              ⛔ 那 9 条档案镜像参数（company_name 等）是 <b>2026-10-06 有意软删</b>的，
+              迁移脚本原话：「<b>企业基本资料应由「企业基本资料」关联带出，字典不需要</b>」——
+              所以<b>不从参数字典走，走 <code>enterprise.*</code> 关联</b>，两条路不冲突。</td>
+          </tr>
+          <tr>
+            <td><b>② 机构 / 系统信息</b></td>
+            <td><span class="pos">replace</span></td>
+            <td><span class="flag">只读</span></td>
+            <td><b>12 项</b>：<span class="pos">org.*</span> 6 项 + <span class="pos">system.*</span> 6 项。
+              ★ <code>system.*</code> 必须<b>在填充时刻</b>求值 —— 制表日期不能预存，
+              否则 2026 年复用 2025 年生成的手册会印着 2025 年。</td>
+          </tr>
+          <tr>
+            <td><b>③ 后台定义的全局参数</b></td>
+            <td><span class="pos">global</span></td>
+            <td><span class="flag">可覆盖</span></td>
+            <td><span class="flag">实测 8 条</span>
+              文件编号前缀 · 持有资质证书 · 主要产品 · 企业荣誉 / 入库情况 ·
+              质量方针 · 质量目标 · 企业概况 · 上次审核遗留问题
+              <div class="sub">这就是 <code>/enterprise-fill-params</code> 那页让企业填的清单（企业没填时按默认值/待完善显示）</div></td>
+          </tr>
+          <tr>
+            <td><b>④ 标准对应的参数</b></td>
+            <td><span class="pos">global</span></td>
+            <td><span class="flag">可覆盖</span></td>
+            <td><span class="flag dan">实测 0 条</span>
+              全表 <span class="pos">StandardCode</span> 非空的行<b>一条都没有</b> ——
+              唯一一条是刚清掉的垃圾行 <code>3333</code>。
+              <div class="sub">「上次审核遗留问题」虽然 <span class="pos">GroupName=阶段专属</span>，
+                但它的 <span class="pos">StandardCode / StageCode 都是空</span> ⇒ 实际<b>对所有阶段都出现</b>，
+                与它自己的说明不符（待裁）。</div></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note" style="margin-top:12px">
+        ⚠️ 另实测：<span class="pos">cert_fill_param_value</span>（参数值表）<b>0 行</b> ——
+        企业<b>一个值都没填过</b>。所以 <code>/enterprise-fill-params</code> 那页显示
+        「已完善 2 / 8 项」，那 2 项是<b>定义里的默认值</b>（质量方针 / 质量目标），不是企业填的。
+        <br>⚠️ 该页 <code>merge-list</code> 返回的 <span class="pos">Enterprise</span> 对象只带
+        <b>Code / Name / EnterpriseNo</b> —— 不是陈旧进程，是 <b>null 字段被 JSON 序列化省略</b>
+        （测试企业的信用代码等本来就是 NULL）。
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">
+      锚点规则 <span class="hint">（实测：cert_doc_template_anchor 共 5 行，跨两个模板版本）</span>
+      <span style="margin-left:auto;font-size:12px;color:var(--t3)" id="cnt"></span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:250px">位置</th>
+          <th style="width:90px">类型</th>
+          <th style="width:110px">来源</th>
+          <th>来源属性</th>
+          <th style="width:160px">填写规则</th>
+          <th style="width:70px">操作</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <p class="foot">本页只配「规则」，不涉及具体企业 —— 企业由专家端选任务时注入。</p>
+</div>
+
+<div class="mask" id="mask">
+  <div class="modal">
+    <div class="modal-hd">
+      <h2 id="mTitle">锚点规则</h2>
+      <span class="x" onclick="closeM()">&times;</span>
+    </div>
+    <div class="modal-bd">
+      <div class="anchorbar" id="mBar"></div>
+
+      <div class="step">
+        <div class="step-hd"><span class="no">1</span>选择来源<span class="hint">这个位置的值，来自哪里（有且只有一个）</span></div>
+        <div class="step-bd"><div class="kinds" id="mKinds"></div></div>
+      </div>
+
+      <div class="step">
+        <div class="step-hd"><span class="no">2</span>来源属性<span class="hint">所选来源自己的设置，随①变</span></div>
+        <div class="step-bd"><div class="field" id="mParams"></div></div>
+      </div>
+
+      <div class="step">
+        <div class="step-hd"><span class="no">3</span>填写规则<span class="hint">怎么落到 Word / Excel 的行列里</span></div>
+        <div class="step-bd"><div class="field" id="mWrite"></div></div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeM()">取消</button>
+      <button class="btn pri" onclick="saveM()">保存规则</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   5 种来源 —— 用户原话点名的 3 个 AI 节点 + 全局参数 + 人工填写
+   ══════════════════════════════════════════════════════════════════ */
+const KINDS = [
+  { k:'global',   n:'全局参数',    d:'系统里已有的数据' },
+  { k:'semantic', n:'AI 语义生成', d:'改写模板原文' },
+  { k:'ai_field', n:'AI 字段',     d:'分析出一个格子的值' },
+  { k:'ai_table', n:'AI 表格',     d:'分析出一张表' },
+  { k:'manual',   n:'人工填写',    d:'挂待办给人填' }
+];
+const KIND_LABEL = Object.fromEntries(KINDS.map(x=>[x.k,x.n]));
+const AI_KINDS = ['semantic','ai_field','ai_table'];
+
+/* ══════════════════════════════════════════════════════════════════
+   全局参数 = 引擎 4 项能力里的 replace + global（用户裁决 #4 + 引擎对齐）
+     · items 项 = [code, 显示名, 是否库里已存在]
+   第 1 组直接从企业档案取字段，⛔ 不恢复那 9 条被软删的镜像参数行
+   ══════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════
+   全局参数 —— ★ 严格对齐引擎（IFillResolver 的 4 项能力）
+     · replace（ReplaceResolver）: 直读 enterprise.* / org.* / system.*
+       ⇒ ⛔ 企业**不可**改写（永远等于档案）
+     · global （GlobalParamResolver）: 读 cert_fill_param_value
+       ⇒ ✅ 企业**可**在「企业资料参数」页覆盖
+   判据（ReplaceResolver 类注释原文）：这个位置**是否允许企业填一个和企业档案不同的值**？
+     不允许 → replace；允许 → global
+   ⚠️ 选错的后果：用 replace 写「文件编号前缀」，企业在参数页改了也不生效 —— 两边都不报错
+   ══════════════════════════════════════════════════════════════════ */
+const PARAM_GROUPS = [
+  {
+    g:'企业基本信息', cap:'replace', from:'enterprise.* · 直读 cert_enterprise', ro:true,
+    tag:'16 项 · 只读',
+    items:[
+      ['enterprise.Code','企业编码'], ['enterprise.Name','企业全称'],
+      ['enterprise.ShortName','企业简称'], ['enterprise.CreditCode','统一社会信用代码'],
+      ['enterprise.LegalPerson','法定代表人'], ['enterprise.Province','省份'],
+      ['enterprise.City','城市'], ['enterprise.Address','企业地址'],
+      ['enterprise.IndustryType','行业类型'], ['enterprise.EmployeeCount','员工人数'],
+      ['enterprise.CertScope','认证范围'], ['enterprise.ContactName','体系对接人'],
+      ['enterprise.ContactPhone','联系电话'], ['enterprise.ContactEmail','联系邮箱'],
+      ['enterprise.EnterpriseNo','企业编号'], ['enterprise.ArchiveDate','归档日期']
+    ]
+  },
+  {
+    g:'机构 / 系统信息', cap:'replace', from:'org.* / system.* · 直读运行期上下文', ro:true,
+    tag:'12 项 · 只读',
+    items:[
+      ['org.Code','机构编码'], ['org.Name','机构名称'], ['org.ShortName','机构简称'],
+      ['org.Address','机构地址'], ['org.ContactName','机构联系人'], ['org.ContactPhone','机构电话'],
+      ['system.date','制表日期 yyyy-MM-dd'], ['system.datetime','日期时间'],
+      ['system.date_cn','中文日期'], ['system.year','年'], ['system.month','月'], ['system.day','日']
+    ]
+  },
+  {
+    g:'后台定义的全局参数', cap:'global', from:'cert_fill_param_def · 全平台通用', ro:false,
+    tag:'实测 8 条 · 可覆盖',
+    items:[
+      ['doc_prefix','文件编号前缀'], ['qualifications','持有资质证书'],
+      ['main_products','主要产品'], ['honors','企业荣誉 / 入库情况'],
+      ['quality_policy','质量方针'], ['quality_objective','质量目标'],
+      ['company_profile','企业概况'], ['last_audit_findings','上次审核遗留问题']
+    ]
+  },
+  {
+    g:'标准对应的参数', cap:'global', from:'cert_fill_param_def · StandardCode 非空', ro:false,
+    tag:'实测 0 条',
+    items:[]
+  }
+];
+const ALL_PARAMS = PARAM_GROUPS.flatMap(g=>g.items);
+/* 查参数项（含它属于哪一组、是只读还是可覆盖） */
+function findParam(code){
+  for(const g of PARAM_GROUPS){
+    const it = g.items.find(p=>p[0]===code);
+    if(it) return { code:it[0], name:it[1], g, ro:g.ro };
+  }
+  return null;
+}
+/*
+ * ★ 查不到时 ⛔ 不能回退成空串 —— 实测锚点 1 配的就是 `company_name`，
+ *   而它正是被软删的那条 ⇒ 必须把「库里没有」显式带出来，否则又是一次静默失效。
+ */
+function paramLabel(code){
+  if(!code) return '未选';
+  const p = findParam(code);
+  return p ? p.name : code + '（库里没有）';
+}
+/* 来源类型 = 引擎的哪项能力（界面上要说清，⛔ 不让用户猜） */
+function paramCapLabel(code){
+  const p = findParam(code);
+  if(!p) return '';
+  return p.ro ? '只读 · replace' : '可覆盖 · global';
+}
+
+/* ── 锚点：实测 cert_doc_template_anchor 5 行（两个模板版本）── */
+function mk(o){
+  return Object.assign({
+    src:'', p:null, orphan:false, deprecated:false, warn:'',
+    w:{ mode:'overwrite', valueType:'text', format:'', required:false, fallback:'',
+        startRow:'', startCol:'', endCol:'', rows:'fixed' }
+  }, o);
+}
+/* 归一来源属性 —— ⛔ 不要假设后端一定给全字段 */
+function np(o){
+  return Object.assign({
+    param:'', hint:'', instruction:'',
+    useParams:false, params:[], needDocs:false
+  }, o||{});
+}
+let ANCHORS = [
+  mk({ id:1, ref:'{{文件控制程序}}', doc:'已发布 #3bfc3563', type:'scalar', kind:'token',
+       field:'文件控制程序',
+       src:'global', p:np({ param:'company_name' }),
+       warn:'实测配的是 company_name（企业全称），但该参数行已被软删（IsBuiltin=1 · IsValid=0 · IsDeleted=1）⇒ 运行期取不到值' }),
+  mk({ id:2, ref:'{{ENT_NAME}}', doc:'扫描版 #2078f2d4', type:'scalar', kind:'token',
+       field:'ENT_NAME', orphan:true, deprecated:true }),
+  mk({ id:3, ref:'{{文件控制程序}}', doc:'扫描版 #2078f2d4', type:'scalar', kind:'token',
+       field:'文件控制程序' }),
+  mk({ id:4, ref:'{{AUDIT_DATE}}', doc:'扫描版 #2078f2d4', type:'scalar', kind:'token',
+       field:'AUDIT_DATE', deprecated:true }),
+  mk({ id:5, ref:'Sheet1!A11:F11', doc:'扫描版 #2078f2d4', type:'table', kind:'range',
+       sheet:'Sheet1', field:'TRAIN_RECORDS', deprecated:true,
+       src:'ai_table',
+       p:np({ useParams:true, params:['enterprise.Name'], needDocs:true,
+              instruction:'提取企业近一年的培训记录，含培训日期、主题、学时、参训人员、考核结果、备注' }),
+       w:{ mode:'fill', valueType:'text', format:'', required:false, fallback:'',
+           startRow:'11', startCol:'A', endCol:'F', rows:'auto' } })
+];
+
+let editing = null;
+
+function esc(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+/* ── 摘要 ── */
+function srcSummary(a){
+  if(!a.src) return '—';
+  const p = a.p || {};
+  if(a.src==='global'){
+    const cap = paramCapLabel(p.param);
+    return '参数：' + paramLabel(p.param) + (cap ? ' · ' + cap : '');
+  }
+  if(a.src==='manual') return p.hint ? '提示：'+p.hint : '挂待办';
+  /* 三个 AI 节点：按「参数 · 是否依赖企业资料 · 提示词」三属性摘要 */
+  const bits = [];
+  bits.push(p.useParams ? '参数：有' + ((p.params||[]).length ? '（'+(p.params||[]).length+'）' : '') : '参数：无');
+  bits.push(p.needDocs ? '依赖企业资料' : '不依赖企业资料');
+  if(p.instruction) bits.push('提示词：' + p.instruction);
+  return bits.join(' · ');
+}
+function writeSummary(a){
+  if(!a.src) return '—';
+  const w = a.w || {};
+  const mode = w.mode === 'fill' ? '填充' : '覆盖';
+  if(a.type === 'table'){
+    const r = w.rows === 'auto' ? '自动扩展' : '固定 1 行';
+    return mode + ' · ' + (w.startRow||'?') + '行 ' + (w.startCol||'?') + '-' + (w.endCol||'?') + '列 · ' + r;
+  }
+  const bits = [mode, w.valueType || 'text'];
+  if(w.format) bits.push(w.format);
+  if(w.required) bits.push('必填');
+  return bits.join(' · ');
+}
+
+/* ── 列表 ── */
+function render(){
+  document.getElementById('rows').innerHTML = ANCHORS.map(a=>{
+    const pos = a.type==='table' ? 'Excel 区域 · '+a.ref : a.ref;
+    const tags = [];
+    if(a.deprecated) tags.push('<span class="flag">模板里已废弃</span>');
+    if(a.orphan)     tags.push('<span class="flag">模板里已不存在</span>');
+    const sub = (a.type==='table' ? '表格区域' : (a.kind==='token'?'正文文本锚点':'书签'))
+              + ' · ' + a.doc + (tags.length ? ' ' + tags.join(' ') : '');
+    const warn = a.warn ? `<div class="sub" style="color:var(--warn)">⚠ ${esc(a.warn)}</div>` : '';
+    return `<tr data-id="${a.id}" class="${a.deprecated?'depr':''}">
+      <td><span class="pos">${esc(pos)}</span><div class="sub">${sub}</div>${warn}</td>
+      <td><span class="kind">${a.type==='table'?'表格':'标量'}</span></td>
+      <td class="src ${a.src?'':'none'}">${a.src?KIND_LABEL[a.src]:'未配置'}</td>
+      <td><span class="param" title="${esc(srcSummary(a))}">${esc(srcSummary(a))}</span></td>
+      <td><span class="param" title="${esc(writeSummary(a))}">${esc(writeSummary(a))}</span></td>
+      <td><button class="btn sm" onclick="openM(${a.id})">配置</button></td>
+    </tr>`;
+  }).join('');
+  const done = ANCHORS.filter(a=>a.src).length;
+  document.getElementById('cnt').textContent = '已配 ' + done + ' / 共 ' + ANCHORS.length;
+}
+
+/* ── 打开 ── */
+function openM(id){
+  editing = JSON.parse(JSON.stringify(ANCHORS.find(a=>a.id===id)));
+  editing.w = editing.w || {};
+  editing.p = np(editing.p);
+  document.getElementById('mTitle').textContent = '锚点规则 · ' + editing.ref;
+  document.getElementById('mBar').innerHTML =
+    `<span>位置 <span class="v">${esc(editing.ref)}</span></span>` +
+    `<span>类型 <b>${editing.type==='table'?'表格区域':'标量'}</b></span>` +
+    `<span>所在 <b>${esc(editing.sheet || '正文')}</b></span>` +
+    `<span>字段 <span class="v">${esc(editing.field || '—')}</span></span>`;
+  renderKinds(); renderParams(); renderWrite();
+  document.getElementById('mask').classList.add('on');
+}
+function closeM(){ document.getElementById('mask').classList.remove('on'); editing = null; }
+
+/* ── ① 选择来源（单选，有且只有一个）── */
+function renderKinds(){
+  document.getElementById('mKinds').innerHTML = KINDS.map(k=>
+    `<div class="kc ${editing.src===k.k?'on':''}" onclick="pickKind('${k.k}')">
+       <div class="n">${k.n}</div><div class="d">${k.d}</div></div>`).join('');
+}
+function pickKind(k){
+  if(editing.src !== k){ editing.p = np(null); }   /* 换来源 ⇒ 属性全部清空重填 */
+  editing.src = k;
+  renderKinds(); renderParams();
+}
+
+/* ── ② 来源属性（随①变）── */
+function renderParams(){
+  const box = document.getElementById('mParams');
+  const s = editing.src;
+  if(!s){
+    box.innerHTML = '<div class="empty" style="grid-column:1/-1">先在上面选一个来源</div>';
+    return;
+  }
+
+  if(s === 'global'){
+    const cur = findParam(editing.p.param);
+    box.innerHTML = `
+      <label class="req top">参数</label>
+      <div>
+        <select id="pParam">
+          <option value="">— 请选择 —</option>
+          ${PARAM_GROUPS.map(g=>`<optgroup label="${esc(g.g)}　·　${g.ro?'只读':'可覆盖'}　·　${esc(g.tag)}">
+            ${g.items.length
+              ? g.items.map(p=>`<option value="${p[0]}" ${editing.p.param===p[0]?'selected':''}>${esc(p[1])}　（${p[0]}）</option>`).join('')
+              : '<option value="" disabled>（这一组实测 0 条）</option>'}
+          </optgroup>`).join('')}
+        </select>
+        <div class="note">${
+          cur
+            ? (cur.ro
+                ? `<b>只读</b> —— 引擎走 <code>replace</code>，直读 ${esc(cur.g.from)}。<b>企业在参数页改了也不生效</b>（企业要改得去「企业管理」改档案）。`
+                : `<b>可覆盖</b> —— 引擎走 <code>global</code>，读企业填好的值。企业可在专家端「<b>企业资料参数</b>」页填/改。`)
+            : `四组来源：<b>企业基本信息</b> · <b>机构 / 系统信息</b>（只读）· <b>后台定义的全局参数</b> · <b>标准对应的参数</b>（可覆盖）。`
+        }</div>
+      </div>`;
+    document.getElementById('pParam').onchange = e => { editing.p.param = e.target.value; renderParams(); };
+    return;
+  }
+
+  if(s === 'manual'){
+    box.innerHTML = `
+      <label class="top">给填写人的提示</label>
+      <div>
+        <input type="text" id="pHint" value="${esc(editing.p.hint||'')}" placeholder="例如：请填写贵公司对应的程序文件名称">
+        <div class="note">运行期不自动填，挂一条待办，由审核专家手工填。</div>
+      </div>`;
+    document.getElementById('pHint').oninput = e => editing.p.hint = e.target.value;
+    return;
+  }
+
+  /* ═══ 三个 AI 节点：固定 3 项属性 ═══
+     ① 参数（无 / 有 —— 有就是全局参数）
+     ② 是否依赖企业资料（不依赖 / 依赖）
+     ③ 提示词
+     ⛔ 顺序即用户口述顺序，⛔ 不要合并
+  */
+  const phMap = {
+    semantic:'可不填，例如：按企业实际的组织架构调整部门名称',
+    ai_field:'例如：企业的质量管理体系覆盖的产品范围，须与营业执照一致',
+    ai_table:'例如：提取企业近一年的培训记录，含培训日期、主题、学时、参训人员'
+  };
+  const reqCls = s === 'semantic' ? '' : ' req';
+
+  box.innerHTML = `
+    <label class="top">参数</label>
+    <div>
+      <div class="radios">
+        <label><input type="radio" name="aiP" value="0" ${!editing.p.useParams?'checked':''}
+          onchange="setP('useParams',false)">
+          <span><span class="t">无</span><span class="s">提示词不引用任何全局参数</span></span></label>
+        <label><input type="radio" name="aiP" value="1" ${editing.p.useParams?'checked':''}
+          onchange="setP('useParams',true)">
+          <span><span class="t">有</span><span class="s">参数 = 全局参数，勾选后可在提示词里引用</span></span></label>
+      </div>
+      ${editing.p.useParams ? renderParamPick() : ''}
+    </div>
+
+    <label class="top">是否依赖企业资料</label>
+    <div>
+      <div class="radios">
+        <label><input type="radio" name="aiD" value="0" ${!editing.p.needDocs?'checked':''}
+          onchange="setP('needDocs',false)">
+          <span><span class="t">不依赖</span><span class="s">只用「参数 + 提示词」生成，如 xxx 规则 / xxx 内容</span></span></label>
+        <label><input type="radio" name="aiD" value="1" ${editing.p.needDocs?'checked':''}
+          onchange="setP('needDocs',true)">
+          <span><span class="t">依赖</span><span class="s">提示词从企业资料里引用</span></span></label>
+      </div>
+    </div>
+
+    <label class="${reqCls} top">提示词</label>
+    <div>
+      <textarea id="pIns" placeholder="${esc(phMap[s])}">${esc(editing.p.instruction||'')}</textarea>
+      <div class="note" id="pNote">${aiNote()}</div>
+    </div>`;
+
+  const ins = document.getElementById('pIns');
+  ins.oninput = e => { editing.p.instruction = e.target.value; };
+}
+
+/* 依赖与否 ⇒ 提示词框下面那句解释跟着变 */
+function aiNote(){
+  const p = editing.p;
+  if(p.needDocs){
+    return '模型拿这句话 + <b>企业资料</b>去分析。' +
+      (p.useParams ? '提示词里还可以用勾选的全局参数（<code>{{参数}}</code>）做限定条件。' : '');
+  }
+  return '模型<b>不读企业资料</b>，只用「全局参数 + 这句话」生成。' +
+    (p.useParams ? '' : '<b class="note" style="color:var(--dan)">参数=无 且 不依赖企业资料 ⇒ 提示词必须填，否则没有任何输入。</b>');
+}
+
+/* 全局参数多选（四组）—— 给 AI 节点的「参数=有」用
+   ★ 每组带「只读 / 可覆盖」徽标 —— 这是 replace 与 global 的**唯一行为差别**，
+     ⛔ 不标出来就是给「配了不生效」留口子 */
+function renderParamPick(){
+  return `<div class="ppick">${PARAM_GROUPS.map(g=>`
+    <div class="pgrp">
+      <div class="pgrp-hd">
+        <span class="cap ${g.ro?'ro':'rw'}">${g.ro?'只读':'可覆盖'}</span>
+        ${esc(g.g)}<span class="src-name">${esc(g.from)}</span>
+      </div>
+      <div class="pgrp-bd">${
+        g.items.length
+          ? g.items.map(p=>`
+            <label class="pchk">
+              <input type="checkbox" ${(editing.p.params||[]).includes(p[0])?'checked':''}
+                onchange="toggleAiParam('${p[0]}',this.checked)">
+              <span>${esc(p[1])}</span><code>{{${p[0]}}}</code>
+            </label>`).join('')
+          : '<span class="empty-inline">这一组实测 0 条 —— 库里还没有挂到标准上的参数</span>'
+      }</div>
+    </div>`).join('')}</div>
+    <div class="note"><b>只读</b> = 永远等于档案/运行期，企业在参数页改了也不生效（引擎走 <code>replace</code>）；
+      <b>可覆盖</b> = 企业能在「企业资料参数」页填或改（引擎走 <code>global</code>）。</div>`;
+}
+
+/* ★ 勾选只改数据，⛔ 不重渲 —— 复选框状态是原生 DOM，重渲会丢焦点 */
+function toggleAiParam(code, on){
+  const arr = editing.p.params;
+  const i = arr.indexOf(code);
+  if(on && i < 0) arr.push(code);
+  if(!on && i >= 0) arr.splice(i,1);
+}
+/* ★ 改 radio 才重渲（要联动提示词框下的说明） */
+function setP(k, v){ editing.p[k] = v; renderParams(); }
+
+/* ── ③ 填写规则 ── */
+function renderWrite(){
+  const box = document.getElementById('mWrite');
+  const w = editing.w;
+  const isTable = editing.type === 'table';
+
+  /* ★ 覆盖 / 填充 的口径（用户裁决 #2）：
+       一个格子常常是「一句话带 {{}}」，不是单个字段。
+       覆盖 = 整个格子换成取值；填充 = 只换掉 {{}}，其余文字保留。 */
+  const modeBlock = `
+    <label class="top">写入方式</label>
+    <div>
+      <div class="radios">
+        <label><input type="radio" name="wmode" value="overwrite" ${w.mode!=='fill'?'checked':''}
+          onchange="setW('mode','overwrite')">
+          <span><span class="t">覆盖</span><span class="s">整个格子换成取值（格里的其他文字会被冲掉）</span></span></label>
+        <label><input type="radio" name="wmode" value="fill" ${w.mode==='fill'?'checked':''}
+          onchange="setW('mode','fill')">
+          <span><span class="t">填充</span><span class="s">只把格子里的 {{}} 换成取值，其余文字保留</span></span></label>
+      </div>
+      <div class="eg">
+        <div class="eg-line"><span class="eg-lb">格子原文</span><span class="eg-txt">本公司的质量方针为：<b>{{QUALITY_POLICY}}</b>，全体员工须遵照执行。</span></div>
+        <div class="eg-line"><span class="eg-lb">覆盖 →</span><span class="eg-dan">以质量求生存</span><span style="color:var(--t3);font-size:11.5px">　← 整句话被冲掉</span></div>
+        <div class="eg-line"><span class="eg-lb">填充 →</span><span class="eg-out">本公司的质量方针为：以质量求生存，全体员工须遵照执行。</span></div>
+      </div>
+      <div class="note">你说这个问题<b>需要测试</b>，所以两个选项都先留着。</div>
+    </div>`;
+
+  if(isTable){
+    box.innerHTML = modeBlock + `
+      <label class="top">起始行</label>
+      <input type="text" value="${esc(w.startRow)}" placeholder="11" oninput="setW('startRow',this.value)">
+      <label class="top">起始列</label>
+      <input type="text" value="${esc(w.startCol)}" placeholder="A" oninput="setW('startCol',this.value)">
+      <label class="top">结束列</label>
+      <input type="text" value="${esc(w.endCol)}" placeholder="F" oninput="setW('endCol',this.value)">
+      <label class="top">行数</label>
+      <div>
+        <div class="radios">
+          <label><input type="radio" name="wrows" value="fixed" ${w.rows!=='auto'?'checked':''}
+            onchange="setW('rows','fixed')"><span><span class="t">固定 1 行</span></span></label>
+          <label><input type="radio" name="wrows" value="auto" ${w.rows==='auto'?'checked':''}
+            onchange="setW('rows','auto')">
+            <span><span class="t">按数据自动扩展</span><span class="s">不足则克隆末行；多余行写空，不删</span></span></label>
+        </div>
+        <div class="note">位置来自模板扫描结果，可手工改。</div>
+      </div>`;
+  } else {
+    box.innerHTML = modeBlock + `
+      <label class="top">值类型</label>
+      <select id="wType" onchange="setW('valueType',this.value)">
+        ${['text','number','date','bool'].map(t=>`<option value="${t}" ${w.valueType===t?'selected':''}>${t}</option>`).join('')}
+      </select>
+      <label class="top">格式</label>
+      <input type="text" value="${esc(w.format)}" placeholder="日期：yyyy年MM月dd日　数字：#,##0.00"
+             oninput="setW('format',this.value)">
+      <label class="top">必填</label>
+      <div class="chk"><input type="checkbox" ${w.required?'checked':''}
+        onchange="setW('required',this.checked)"><span>取不到值时整份文档不生成</span></div>
+      <label class="top">兜底文字</label>
+      <input type="text" value="${esc(w.fallback)}" placeholder="留空则写空" oninput="setW('fallback',this.value)">`;
+  }
+}
+function setW(k, v){ editing.w[k] = v; }
+
+/* ── 保存校验 ── */
+function validate(a){
+  if(!a.src) return '请先选择来源';
+  const p = a.p || {};
+  if(a.src === 'global' && !p.param) return '请选择全局参数';
+  if(AI_KINDS.includes(a.src)){
+    /* ★ 先报「最直接」的那条：AI 字段/表格本来就是来产内容的，没提示词直接拦。
+       ⛔ 不要先报那条语义规则 —— 否则用户看到的是「参数=无…」，而真正该做的是填提示词。 */
+    if((a.src === 'ai_field' || a.src === 'ai_table') && !(p.instruction||'').trim()){
+      return '请填写提示词';
+    }
+    const hasIn = p.useParams && (p.params||[]).length > 0;
+    if(!hasIn && !p.needDocs && !(p.instruction||'').trim()){
+      return '参数=无 且 不依赖企业资料 ⇒ 提示词不能为空，否则没有任何输入';
+    }
+  }
+  return '';
+}
+function saveM(){
+  const msg = validate(editing);
+  if(msg){ alert(msg); return; }
+  const i = ANCHORS.findIndex(a=>a.id === editing.id);
+  ANCHORS[i] = editing;
+  render(); closeM();
+}
+
+document.getElementById('mask').onclick = e => { if(e.target.id === 'mask') closeM(); };
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeM(); });
+render();
+</script>
+</body>
+</html>

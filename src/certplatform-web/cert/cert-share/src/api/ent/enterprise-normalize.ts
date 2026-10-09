@@ -208,7 +208,16 @@ export interface NormalizeFileNode {
   NormalizedTime: string | null
   /** 最近一次留痕状态：`success` / `partial` / `failed`；无留痕为 null */
   LastFillStatus: string | null
-  /** 最近一次留痕时间（⚠️ 后端该列是 UTC，与 `NormalizedTime`（本地）有 8h 时差，⛔ 不要并排显示） */
+  /**
+   * 最近一次留痕时间。
+   *
+   * ★ 2026-10-09 已修口径：`cert_doc_fill_log.CreateTime` 是 **UTC**（`BaseEntity` 赋
+   * `DateTime.UtcNow`），后端现已显式标 `DateTimeKind.Utc` ⇒ JSON 带 `Z` ⇒
+   * `new Date()` 能正确换算成本地时间（此前无 `Z`，被当本地解析 ⇒ **少 8 小时**）。
+   *
+   * ⚠️ 对照：`NormalizedTime`（实例行）由 `DateTime.Now` 写入 = **本地时间**，JSON 无 `Z`，
+   * 前端按本地解析**本来就是对的**。两者现在都能直接 `formatDateTime`。
+   */
   LastFillTime: string | null
   /**
    * ★ 最近一次填充的**待办明细（含可操作归因）** —— ⛔ 别只显示 `FillPendingCount` 那个数字。
@@ -243,10 +252,22 @@ export interface NormalizeFolderNode {
 /** 范围树 · 标准节点（= 页面上的一个 Tab） */
 export interface NormalizeStandardNode {
   StandardCode: string
-  /** 标准编号（如 `iso9001`，年份另见 `VersionYear`） */
+  /** 标准编号（如 `iso9001`，年份另见 `VersionYear`）—— ⚠️ 主数据缺失时为**空串** */
   StandardNo: string
-  /** 标准名称（如 `9001标准`） */
+  /** 标准名称（如 `9001标准`）—— ⚠️ 主数据缺失时为**空串**，⛔ 不是 Code */
   StandardName: string
+  /**
+   * ★ 本标准在 `cert_iso_standard` 里**是否登记在册**（2026-10-09 新增）。
+   *
+   * 为什么必须有：`StandardCode` 来自 `cert_enterprise_stage`（企业阶段关联）与
+   * `cert_doc_template`（模板），两者只是**引用**，不保证主数据还在。
+   * 主数据被删而关联没清时，后端此前 `StandardName = iso?.StandardName ?? code`
+   * ⇒ **把裸 GUID 当标准名回传** ⇒ Tab 上直接显示 `475da4fe-8f50-4bf7-bf2b-b39869d5ddf7`
+   * （2026-10-09 用户报障）。
+   *
+   * ⇒ `false` 时页面必须显示「未登记标准（短码）」+ 处置提示，⛔ 不能显示 GUID。
+   */
+  StandardRegistered: boolean
   VersionYear: number
   Sort: number
   /** 该企业该阶段是否挂了本标准（`cert_enterprise_stage`）—— false = 只是配了模板但企业没勾选 */
@@ -325,6 +346,61 @@ export interface NormalizePlanResult {
   /** ★ 真正会入队的数量 = WillFill + WillRegenerate */
   Queued: number
   Items: NormalizePlanItem[]
+  /** ★ 必填缺失全局参数总数（`run` 会据此整批拒绝） */
+  MissingRequired?: number
+  /** ★ 本批是否含图片 / PDF（视觉模型不可达时 `run` 整批拒绝） */
+  NeedsVision?: boolean
+  // ──── 以下为「重写预检」追加段（仅 `rewrite` 端点填充）────
+  /**
+   * ★ **本次结果是否含重写预检**。
+   * `false`（`plan` / `run`）⇒ 下面的 `*Total` **无意义**，⛔ 页面不得显示「将保留 0 个」。
+   */
+  RewritePrecheck?: boolean
+  KeepManual?: boolean
+  KeepPinned?: boolean
+  /** 基准账本里「钉住」的锚点数（事实） */
+  PinnedAnchorTotal?: number
+  /** 基准账本里「人工改过值」的锚点数（事实） */
+  ManualValueTotal?: number
+  /** 模板示例数据锚点数（事实；规则④ 必清，⛔ 不受开关影响） */
+  SampleAnchorTotal?: number
+  /** ★ 按开关算出的**将保留**锚点数 */
+  WillKeepAnchorTotal?: number
+  /** ★ 按开关算出的**将重新取值**锚点数 */
+  WillRecomputeAnchorTotal?: number
+  RewriteFiles?: NormalizeRewriteFilePrecheck[]
+}
+
+/** 重写预检：单份文件（全是**事实计数**，⛔ 不是「已经保留」的承诺） */
+export interface NormalizeRewriteFilePrecheck {
+  StandardFileCode: string
+  FileName: string
+  Action: string
+  IsLocked: boolean
+  /** 基准 = 该文件**最近一次**填充；空 = 从未规范化过 */
+  FillLogCode?: string | null
+  FillLogTime?: string | null
+  LedgerRowCount: number
+  PinnedCount: number
+  ManualCount: number
+  SampleCount: number
+  WillKeepCount: number
+  WillRecomputeCount: number
+}
+
+/** `rewrite`（全部重写预告）入参 */
+export interface NormalizeRewriteRequest {
+  EnterpriseCode: string
+  StageCode?: string
+  /** `enterprise` / `stage` / `standard` / `folder` / `file`（默认 `file`） */
+  ScopeType?: string
+  ScopeCode?: string
+  /** ★ 显式文件清单（优先级最高；与 `plan` / `run` / `lock` 同口径，前端已展开） */
+  StandardFileCodes?: string[]
+  /** 保留「人工改过的值」（规则③，默认 `true`） */
+  KeepManual?: boolean
+  /** 保留「钉住的锚点」（规则②，默认 `true`） */
+  KeepPinned?: boolean
 }
 
 /** 入队结果 —— 只回批次号，⛔ 不阻塞等待执行 */
@@ -363,6 +439,372 @@ export async function planNormalize(payload: NormalizeScopeRequest): Promise<Nor
 export async function runNormalize(payload: NormalizeScopeRequest): Promise<NormalizeRunResult> {
   const res = await yzhApi.post<ApiResponse<NormalizeRunResult>>(`${BASE}/run`, payload)
   return unwrapOk<NormalizeRunResult>(res, '入队失败')
+}
+
+// ═══════════════════════ 四之二、锁定 / 账本 / 重写 / 候选 ═══════════════════════
+//
+// ⚠️ 这些端点全部是 2026-10-09 补齐的（`54` §5.2 端点 7~13 / 17）。
+//    ⛔ 未在此封装的端点：固定文档（`fixed/*`，契约表当前 0 行）、
+//    导出与预览（`package` / `download` / `export-values` / `preview`）。
+
+/** 锁定 / 解锁入参 —— ⚠️ `EnterpriseCode` **必需**（⛔ `41-03` 的表里漏了） */
+export interface NormalizeLockRequest {
+  EnterpriseCode: string
+  StageCode?: string
+  /** ★ **标准域行** Code 清单（文件夹级由前端展开后传入） */
+  StandardFileCodes: string[]
+}
+
+/** 解锁入参 —— ⛔ `Reason` **必填**（解锁 = 放开一道保护，必须留痕为什么） */
+export interface NormalizeUnlockRequest extends NormalizeLockRequest {
+  Reason: string
+}
+
+export interface NormalizeLockResult {
+  LockedCount: number
+  /** ★ 其中「实例行原本不存在、本次新建」的数量（有意行为，但必须可见） */
+  CreatedCount: number
+  SkippedCount: number
+  /** ⚠️ 非空 = 动作已生效，但审计留痕写失败（页面必须显式提示，⛔ 不吞） */
+  AuditWarning?: string | null
+}
+
+export interface NormalizeUnlockResult {
+  UnlockedCount: number
+  SkippedCount: number
+  AuditWarning?: string | null
+}
+
+/**
+ * ★ **锁定**（L2 文件锁）—— 锁定后任何生成路径不得覆盖该文件产物。
+ *
+ * ⚠️ 锁落在**企业侧实例行**（同一标准文件，企业 A 锁了不影响企业 B）
+ *   ⇒ `EnterpriseCode` 不是可选项，缺了无从定位要锁哪一行。
+ * ⚠️ 幂等：已锁定 ⇒ 计入 `LockedCount` 但**不重复写库、不重复留痕**。
+ *
+ * @throws BizError 企业不存在 / 未选中文件 / 写入失败
+ */
+export async function lockNormalize(payload: NormalizeLockRequest): Promise<NormalizeLockResult> {
+  const res = await yzhApi.post<ApiResponse<NormalizeLockResult>>(`${BASE}/lock`, payload)
+  return unwrapOk<NormalizeLockResult>(res, '锁定失败')
+}
+
+/**
+ * ★ **解锁** —— 只改 3 列（`IsLocked` / `LockedBy` / `LockedTime`），放开覆盖保护。
+ *
+ * ⛔ `Reason` 必填：解锁后产物会被下次生成覆盖，事后必须答得出「为什么放开」。
+ *
+ * @throws BizError 未填理由 / 企业不存在 / 没有一个处于锁定态
+ */
+export async function unlockNormalize(payload: NormalizeUnlockRequest): Promise<NormalizeUnlockResult> {
+  const res = await yzhApi.post<ApiResponse<NormalizeUnlockResult>>(`${BASE}/unlock`, payload)
+  return unwrapOk<NormalizeUnlockResult>(res, '解锁失败')
+}
+
+/** 取值账本一行（账本 + 锚点 JOIN） */
+export interface FillValueDto {
+  Code: string
+  AnchorCode: string
+  /** 锚点原文（含花括号，如 `{{文件控制程序}}`）—— 规则已删时仍会带出（`AnchorExists=false`） */
+  AnchorRef: string
+  AnchorType: string
+  AnchorKind: string
+  FieldCode: string
+  /** `body` / `table_cell` / `header` / `excel_cell` / …（⚠️ 后端**序列化成字符串**，⛔ 不按数字比） */
+  LocationKind: string
+  LocationDesc: string
+  ValueType: string
+  ValueDisplay: string
+  ValueText: string
+  /** `global` / `self` / `profile` / `compute` / `ai` / `manual` */
+  SourceKind: string
+  SourceLabel: string
+  Confidence: number
+  ConfidenceReason: string
+  /** `filled` / `pending` / `kept_as_is` / `removed`（★ 只有 `filled` 计入完成率分子） */
+  FillStatus: string
+  WriteMode: string
+  OriginalText?: string | null
+  IsOverridden: boolean
+  OverrideKind: string
+  OverrideReason?: string | null
+  OverriddenBy?: string | null
+  OverriddenTime?: string | null
+  /** ★ L3 锚点钉住 —— 重写时跳过本行 */
+  IsPinned: boolean
+  SampleData: boolean
+  Required: boolean
+  IsOrphan: boolean
+  /** ★ 规则是否还在（锚点被软删 / 停用 ⇒ false） */
+  AnchorExists: boolean
+  Sort: number
+}
+
+/** 账本读结果 —— 多包一层**日志上下文**（不传 FillLogCode 时后端替用户挑了哪一条） */
+export interface NormalizeLedgerResult {
+  /** ★ 空 = 该企业**从未规范化过**这份文件（⛔ 不是错误，显示「尚未规范化」即可） */
+  FillLogCode: string
+  FillLogStatus: string
+  FillLogMessage: string
+  /** ★ UTC，JSON 带 `Z` */
+  FillLogTime?: string | null
+  FillLogTotalAnchors: number
+  FillLogPendingCount: number
+  OutputPath?: string | null
+  Total: number
+  Items: FillValueDto[]
+}
+
+export interface SourceCandidateDto {
+  Code: string
+  SourceKind: string
+  SourceLabel: string
+  Value: string
+  ValueKind: string
+  Confidence?: number | null
+  Evidence?: string | null
+  Location?: string | null
+  /** ★ 这条候选来自哪一份企业原始资料 → 写回 `SourceDetailJson.originalFileCode` 用 */
+  SourceDocCode?: string | null
+  Reason?: string | null
+  IsPicked: boolean
+  Index: number
+}
+
+/** 动作留痕一行（只追加表，⛔ 永不修改） */
+export interface NormalizeActionDto {
+  Code: string
+  /** `lock` / `unlock` / `rewrite` / `pin` / `unpin` / `batch_run` / `batch_cancel` */
+  ActionType: string
+  ScopeType: string
+  ScopeCode: string
+  ScopeName: string
+  TargetCode: string
+  AnchorCode: string
+  BeforeJson?: string | null
+  AfterJson?: string | null
+  Reason?: string | null
+  CreateBy: string
+  /** ★ 操作人姓名（人话；查不到时后端回退为 Code，⛔ 不会留空） */
+  OperatorName: string
+  /** UTC，JSON 带 `Z` */
+  CreateTime?: string | null
+  QueueCode: string
+}
+
+export interface NormalizeActionListResult {
+  Limit: number
+  /** ★ 还有更早的留痕未返回（页面必须显式提示，⛔ 不静默） */
+  Truncated: boolean
+  Total: number
+  Items: NormalizeActionDto[]
+}
+
+/** 单锚点详情 = 账本行 + 证据链 + 候选 + 该锚点的动作时间线 */
+export interface FillValueDetailDto extends FillValueDto {
+  EvidenceText?: string | null
+  EvidencePageHint?: string | null
+  /** ★ 证据链 5 级 JSON（原样回传，⛔ 后端不解析） */
+  SourceDetailJson?: string | null
+  Candidates: SourceCandidateDto[]
+  Actions: NormalizeActionDto[]
+}
+
+/**
+ * ★ **读取某份文件的取值账本**（审计抽屉 Tab1）。
+ *
+ * ⚠️ 不传 `FillLogCode` 时后端取**最近一次**填充，并把「取的是哪一条」回传
+ *   ⇒ 页面必须用回传的 `FillLogCode`，⛔ 不要假设是「刚刚那次」。
+ * ⚠️ `FillLogCode` 为空 ⇒ 该文件**从未规范化过**（⛔ 不是错误）。
+ *
+ * @throws BizError 未选企业/文件；指定了 `fillLogCode` 但查不到
+ */
+export async function fetchNormalizeValues(params: {
+  EnterpriseCode: string
+  StandardFileCode: string
+  FillLogCode?: string
+}): Promise<NormalizeLedgerResult> {
+  const res = await yzhApi.get<ApiResponse<NormalizeLedgerResult>>(`${BASE}/values`, params)
+  return unwrapOk<NormalizeLedgerResult>(res, '读取取值账本失败')
+}
+
+/**
+ * ★ **单个锚点的取值详情**（审计抽屉 Tab2「数据来源」）。
+ *
+ * ⚠️ `anchorCode` 走**路由**（`value/{anchorCode}`），⛔ 不要塞进查询串 ——
+ *   与查询参数同名，但后端以路由为准。
+ *
+ * @throws BizError 缺锚点 / 该文件尚未规范化 / 该锚点在这份产物里没有取值记录
+ */
+export async function fetchNormalizeValueDetail(params: {
+  AnchorCode: string
+  EnterpriseCode: string
+  StandardFileCode: string
+  FillLogCode?: string
+}): Promise<FillValueDetailDto> {
+  const { AnchorCode, ...query } = params
+  const res = await yzhApi.get<ApiResponse<FillValueDetailDto>>(
+    `${BASE}/value/${encodeURIComponent(AnchorCode)}`,
+    query,
+  )
+  return unwrapOk<FillValueDetailDto>(res, '读取取值详情失败')
+}
+
+/**
+ * ★ **动作留痕时间线**（审计抽屉 Tab3）—— 两种查法，取**并集**去重。
+ *
+ * @param targetCode 文件级（= 文件 Code）
+ * @param scopeCode  文件夹 / 阶段级
+ * ⚠️ 有上限：返回的 `Truncated=true` 表示还有更早的留痕未返回（页面必须提示）。
+ *
+ * @throws BizError 两者都没给
+ */
+export async function fetchNormalizeActions(params: {
+  TargetCode?: string
+  ScopeCode?: string
+  Limit?: number
+}): Promise<NormalizeActionListResult> {
+  const res = await yzhApi.get<ApiResponse<NormalizeActionListResult>>(`${BASE}/actions`, params)
+  return unwrapOk<NormalizeActionListResult>(res, '读取动作时间线失败')
+}
+
+/** 账本写入参 —— 改值 / 改来源 / 钉住（`Kind` 分流） */
+export interface NormalizeOverrideRequest {
+  FillLogCode: string
+  AnchorCode: string
+  /** `value` 只改值 · `source` 只改来源（值不变）· `both` 两者都改；空串 = 只做钉住 */
+  Kind?: string
+  /** ⚠️ **改前的旧值**（可选）：传了即做乐观并发校验 */
+  SourceKind?: string
+  /** ★ 目标来源类别（`Kind` 含 `source` 时必填） */
+  NewSourceKind?: string
+  SourceLabel?: string
+  /** ★ 换原始件时带新的证据链（`originalFileCode` 就在这里面） */
+  SourceDetailJson?: string
+  /**
+   * ★ 人工值（`Kind` 含 `value` 时必填）。
+   * ⚠️ **空串 = 显式清空**（落 `FillStatus='removed'`，⛔ 不计完成率分子）；`undefined` = 没给 ⇒ 拒绝。
+   */
+  ValueText?: string
+  /** ★ 必填：改值 / 换来源都要留「为什么」 */
+  Reason: string
+  /**
+   * ★ 钉住开关（L3）。
+   * ⚠️ **`undefined` = 本次不改钉住状态**；⛔ 不要用 `false` 表达「不改」—— 那会静默解开。
+   */
+  IsPin?: boolean
+}
+
+export interface NormalizeOverrideResult {
+  Code: string
+  Kind: string
+  ValueDisplay: string
+  SourceKind: string
+  SourceLabel: string
+  /** 落库后的钉住状态（事实） */
+  IsPinned: boolean
+  AuditWarning?: string | null
+}
+
+/**
+ * ★ **账本写** —— 改值 / 改来源 / 钉住（`54` §5.2 端点 11）。
+ *
+ * ⛔ **只改账本，⛔ 不重跑、⛔ 不动产物文件**：这是「编辑三缓冲」的**落笔**那一半
+ *   —— 账本改了、产物还是旧的，必须再走一次生成才会体现在文档里。
+ *
+ * ★ 留痕粒度 = **一动作一行**：改值/改来源写 `rewrite`，钉住写 `pin`/`unpin`
+ *   ⇒ 一次调用两者都做会写**两行**。
+ *
+ * @throws BizError 缺 FillLogCode/AnchorCode · 没填理由 · Kind 非法 ·
+ *   来源类别非法 · 乐观并发校验失败 · 该锚点没有取值记录
+ */
+export async function overrideNormalizeValue(
+  payload: NormalizeOverrideRequest,
+): Promise<NormalizeOverrideResult> {
+  const res = await yzhApi.post<ApiResponse<NormalizeOverrideResult>>(`${BASE}/value/override`, payload)
+  return unwrapOk<NormalizeOverrideResult>(res, '改写取值失败')
+}
+
+/**
+ * ★ **「全部重写」预告**（`54` §5.2 端点 12）—— 按**五条不覆盖规则**回答
+ * 「会保留什么、会覆盖什么」。
+ *
+ * ⛔ **本端点只预告、不入队**（出参是 `NormalizePlan`，没有 `QueueCode`）。
+ *   真正执行仍走 {@link runNormalize}。
+ *
+ * ⚠️ 返回的 `*Total` 里：`PinnedAnchorTotal` / `ManualValueTotal` / `SampleAnchorTotal`
+ *   是**事实**（库里现在有多少行）；`WillKeepAnchorTotal` 是**按开关算出来会保留多少**。
+ *   ⛔ 别把 `WillKeepAnchorTotal` 当成「已经保留了」的承诺。
+ * ⚠️ `RewritePrecheck=false` ⇒ 下面的计数无意义（⛔ 不要显示「将保留 0 个」）。
+ *
+ * @throws BizError 未选企业 / 范围内没有可重写文件 / `ScopeType` 非法
+ */
+export async function rewriteNormalize(
+  payload: NormalizeRewriteRequest,
+): Promise<NormalizePlanResult> {
+  const res = await yzhApi.post<ApiResponse<NormalizePlanResult>>(`${BASE}/rewrite`, payload)
+  return unwrapOk<NormalizePlanResult>(res, '重写预览失败')
+}
+
+/**
+ * ★ **候选来源**（`54` §5.2 端点 13）—— 改来源时「有哪些可选」。
+ *
+ * ★ `ProfileCode` 有两层作用：① 只返回**来自这份原始资料**的建议（换原始件场景）；
+ *   ② 顺便解析出企业与目标文件 ⇒ 只给 `ProfileCode` 也能定位。
+ * ⚠️ 但候选池按「企业 × 文件 × 锚点」三键存放 ⇒ 至少要能确定企业与文件：
+ *   给了 `ProfileCode`，或同时给 `EnterpriseCode` + `StandardFileCode`。
+ * ⛔ 查不到返回空数组（不是错误）—— 确定性来源的锚点本来就没有 AI 候选。
+ *
+ * @throws BizError 缺 AnchorCode · 画像不存在 · 无法确定候选池范围
+ */
+export async function fetchNormalizeCandidates(params: {
+  AnchorCode: string
+  ProfileCode?: string
+  EnterpriseCode?: string
+  StandardFileCode?: string
+}): Promise<SourceCandidateDto[]> {
+  const res = await yzhApi.get<ApiResponse<SourceCandidateDto[]>>(`${BASE}/candidates`, params)
+  return unwrapOk<SourceCandidateDto[]>(res, '读取候选来源失败')
+}
+
+/** 动作类型 → 人话（`normalize_action` 字典七值） */
+export const ACTION_TYPE_TEXT: Record<string, string> = {
+  lock: '锁定',
+  unlock: '解锁',
+  rewrite: '改写',
+  pin: '钉住锚点',
+  unpin: '取消钉住',
+  batch_run: '整批执行',
+  batch_cancel: '取消批次',
+}
+
+/** 动作类型 → 徽标语义色（`YzhStatusBadge` 的 type） */
+export const ACTION_TYPE_TYPE: Record<string, string> = {
+  lock: 'warning',
+  unlock: 'info',
+  rewrite: 'success',
+  pin: 'success',
+  unpin: 'info',
+  batch_run: 'success',
+  batch_cancel: 'danger',
+}
+
+/** 取值来源 → 人话 */
+export const SOURCE_KIND_TEXT: Record<string, string> = {
+  global: '全局参数',
+  self: '文档自身',
+  profile: '企业资料画像',
+  compute: '计算得出',
+  ai: 'AI 建议',
+  manual: '人工填写',
+}
+
+/** 锚点取值状态 → 人话 */
+export const VALUE_STATUS_TEXT: Record<string, string> = {
+  filled: '已写入',
+  pending: '待办（无值）',
+  kept_as_is: '未命中，保留原文',
+  removed: '已清空',
 }
 
 /** 干跑动作 → 人话 */
@@ -442,6 +884,55 @@ export const INSTANCE_STATE_TYPE: Record<string, string> = {
   filled: 'success',
   confirmed: 'success',
   archived: 'info',
+}
+
+/** 最近一次填充留痕状态（`cert_doc_fill_log.Status`）→ 人话 */
+export const LOG_STATUS_TEXT: Record<string, string> = {
+  success: '上次成功',
+  partial: '上次部分完成',
+  failed: '上次失败',
+}
+
+/** 最近一次填充留痕状态 → 徽标语义色 */
+export const LOG_STATUS_TYPE: Record<string, string> = {
+  success: 'success',
+  partial: 'warning',
+  failed: 'danger',
+}
+
+/**
+ * ★ Code 短码（前 8 位）—— 与后端 `EnterpriseNormalizeController.ShortCode` **同口径**。
+ *
+ * 用途：主数据缺失时的人话占位。⛔ 不要改成完整 GUID（版面撑爆 + 把人劝退）。
+ */
+export function shortCode(code?: string | null): string {
+  const c = (code ?? '').trim()
+  if (!c) return '?'
+  return c.length > 8 ? c.slice(0, 8) : c
+}
+
+/**
+ * ★★ **标准显示名** —— ⛔ 绝不把裸 GUID 当名字显示（2026-10-09 用户报障）。
+ *
+ * 取值顺序：`StandardName` → `StandardNo`（业务编号，如 `iso9001`）→「未登记标准（短码）」。
+ *
+ * 背景：`cert_iso_standard` 里 `475da4fe-8f50-4bf7-bf2b-b39869d5ddf7`（食品标准）被删，
+ * 但 `cert_enterprise_stage` 的关联行还在 ⇒ 后端此前 `StandardName = iso?.StandardName ?? code`
+ * 回退 ⇒ 页面 Tab 直接渲染出一串 GUID。用户看到的是「系统坏了」，而不是「数据缺了」。
+ *
+ * ⚠️ 配套：后端已改为**不回退**（`StandardName`/`StandardNo` 缺就是空串），
+ * 并用 `NormalizeStandardNode.StandardRegistered` 说明「为什么缺」。
+ */
+export function standardLabel(s: {
+  StandardName?: string | null
+  StandardNo?: string | null
+  StandardCode?: string | null
+}): string {
+  const name = (s.StandardName ?? '').trim()
+  if (name) return name
+  const no = (s.StandardNo ?? '').trim()
+  if (no) return no
+  return `未登记标准（${shortCode(s.StandardCode)}）`
 }
 
 /** 0~1 小数 → 百分比整数（⛔ 后端可能给 decimal 字符串，必须先 Number()） */

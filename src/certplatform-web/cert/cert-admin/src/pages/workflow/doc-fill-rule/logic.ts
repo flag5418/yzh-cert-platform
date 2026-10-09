@@ -57,6 +57,7 @@ import {
   type AnchorStats,
   type AnchorView,
 } from './components/anchorStats'
+import { isAiKind } from './components/sourceSpec'
 
 // ──── 左树：树行为配置 ────
 const TREE_BEHAVIOR: TreeBehaviorConfig = {
@@ -284,14 +285,19 @@ export class DocFillRuleLogic extends TreeTableLogic<any> {
   }
 
   /**
-   * ★ C11：本模板是否存在 **ai 节点**（来源链里有 `kind === 'ai'` 的条目）。
+   * ★ C11：本模板是否存在 **AI 节点**（来源是 `ai_semantic` / `ai_field` / `ai_table` 之一）。
    *
-   * 存在才显示「全局填写规则」块 —— 没有 ai 节点时，整块与用户无关。
+   * 存在才显示「全局填写规则」块 —— 没有 AI 节点时，整块与用户无关。
+   *
+   * ⚠️ 2026-10-09：来源模型改为「一个锚点 = 一个来源」后，判据从
+   *   `sources.some(kind === 'ai')` 改为**单个来源**判 `isAiKind()`；
+   *   同时把旧值 `ai` 也算进来 —— 库里可能还留着 `22` 号时代的老数据。
    */
   get hasAiNode(): boolean {
-    return this.anchorViews.some((v) =>
-      v.model.sources.some((s) => s.kind === 'ai'),
-    )
+    return this.anchorViews.some((v) => {
+      const k = v.model.source?.kind
+      return k === 'ai' || isAiKind(String(k ?? ''))
+    })
   }
 
   /**

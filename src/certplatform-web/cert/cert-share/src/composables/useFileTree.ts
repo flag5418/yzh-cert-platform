@@ -44,6 +44,13 @@ export interface TreeNode {
   ConvertStatus?: string
   /** Markdown 提取链状态：none/pending/converting/completed/failed/unsupported */
   MarkdownStatus?: string
+  /**
+   * ★ Markdown 提取链的**原因文案**（2026-10-09 补）。
+   * <para>后端 `StageFileNode.MarkdownMessage` 一直在下发，前端此前漏映射 ⇒ 页面只能显示
+   * 「需人工填写」徽标，**说不出为什么**。`unsupported` 时它就是给用户看的那句话
+   * （如「不支持的文件类型，无法自动提取内容。可手工定义字段与表格，由人工填写」）。</para>
+   */
+  MarkdownMessage?: string
   /** 规则状态 */
   RuleStatus?: 'none' | 'configured' | 'failed'
   /** 是否已展开 */
@@ -244,6 +251,7 @@ export function useFileTree() {
           FolderCode: f.FolderCode,
           ConvertStatus: f.ConvertStatus || '',
           MarkdownStatus: f.MarkdownStatus || '',
+          MarkdownMessage: f.MarkdownMessage || '',
           RuleStatus: f.RuleStatus || 'none',
           Raw: f,
         })
@@ -272,6 +280,7 @@ export function useFileTree() {
         Raw: file,
         ConvertStatus: file.ConvertStatus || file.convertStatus,
         MarkdownStatus: file.MarkdownStatus || file.markdownStatus,
+        MarkdownMessage: file.MarkdownMessage || file.markdownMessage || '',
         RuleStatus: 'none' as const,
       }))
       folderNode._loaded = true

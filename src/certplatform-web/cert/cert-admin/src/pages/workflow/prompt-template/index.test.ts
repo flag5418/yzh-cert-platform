@@ -183,12 +183,18 @@ describe('提示词工作台 · 页面操作逻辑', () => {
       prompt: 'AI 生成的分类提示词正文',
       durationMs: 10
     })
-    vi.spyOn(ElMessageBox, 'prompt').mockResolvedValue({ value: '' } as never)
 
     const wrapper = await mountPage()
     await wrapper.findComponent(WorkbenchBar).vm.$emit('generate')
     await flushPromises()
 
+    // ★ 2026-10-09：AI 生成不再弹「补充要求」输入框 —— 点击直接生成，无需任何参数
+    expect(mockApi.generatePromptDraft).toHaveBeenCalledTimes(1)
+    expect(mockApi.generatePromptDraft.mock.calls[0][0]).toMatchObject({
+      promptType: 'doc_group',
+      extraRequirement: null,
+      currentTemplate: null
+    })
     // ★ 核心断言：生成后**立即**调用了 savePrompt，且正文就是 AI 返回的内容
     expect(mockApi.savePrompt).toHaveBeenCalledTimes(1)
     expect(mockApi.savePrompt.mock.calls[0][0]).toMatchObject({
@@ -328,21 +334,22 @@ describe('提示词工作台 · 页面操作逻辑', () => {
     wrapper.unmount()
   })
 
-  it('T8 AI 优化前必须说清「未保存改动会被整体替换」', async () => {
+  it('T8 AI 优化有未保存改动时先确认「会被整体替换」；取消则不生成', async () => {
     mockApi.resolveActivePrompt.mockResolvedValue(rowOf('原始正文'))
 
     const wrapper = await mountPage()
     await editor(wrapper).setValue('我手改的正文')
     await flushPromises()
 
-    // 用户在输入框里点「取消」→ onGenerate 直接返回，不改动正文
-    const promptSpy = vi.spyOn(ElMessageBox, 'prompt').mockRejectedValue('cancel')
+    // 用户点「取消」→ confirmOrFalse 返回 false → onGenerate 直接返回，不调用生成
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
     await wrapper.findComponent(WorkbenchBar).vm.$emit('generate')
     await flushPromises()
 
-    expect(promptSpy).toHaveBeenCalledTimes(1)
-    expect(String(promptSpy.mock.calls[0][0])).toContain('未保存的改动')
-    // 取消后正文原样保留
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(String(confirmSpy.mock.calls[0][0])).toContain('未保存的改动')
+    // 取消后：未调用生成、正文原样保留
+    expect(mockApi.generatePromptDraft).not.toHaveBeenCalled()
     expect((editor(wrapper).element as HTMLTextAreaElement).value).toBe('我手改的正文')
     wrapper.unmount()
   })

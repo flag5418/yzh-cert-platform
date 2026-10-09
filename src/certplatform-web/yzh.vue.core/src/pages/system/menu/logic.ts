@@ -77,7 +77,7 @@ export class MenuPageLogic extends TreeTableCore<any> {
     return true
   }
 
-  // ──── 菜单变更广播（侧栏刷新） ────
+  // ──── 菜单变更广播（侧栏刷新 + 管理树同步） ────
 
   protected override onAfterAddTree(): void {
     notifyMenuChanged()
@@ -106,11 +106,22 @@ export class MenuPageLogic extends TreeTableCore<any> {
     notifyMenuChanged()
   }
 
+  /**
+   * ★ bug fix：行自定义动作（Disable/Enable）路径走 executeAction（不调 onAfterUpdate），
+   * 表格刷新后禁用项因 IsValid=1 过滤消失，但左侧管理树未刷新 → 树节点仍显示「启用」徽章
+   * → 用户找不到该项恢复。此处强制刷新管理树，使 Extra.IsValid 从后端重新拉取、徽章同步。
+   */
+  override async executeAction(methodName: string, row: any): Promise<void> {
+    await super.executeAction(methodName, row)
+    await this.loadTreeRoot()
+  }
+
   override async toggleTreeNodeIsValid(
     node: Parameters<TreeTableCore<any>['toggleTreeNodeIsValid']>[0],
   ): Promise<{ Code: string; IsValid: number }> {
     const result = await super.toggleTreeNodeIsValid(node)
     notifyMenuChanged()
+    await this.refreshTable()
     return result
   }
 }

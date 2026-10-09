@@ -259,16 +259,18 @@ public partial class DocExtractionRuleService
         if (string.IsNullOrEmpty(fileInfo.FileName) || string.IsNullOrEmpty(fileInfo.StoragePath))
             return (null, "未找到可分析的文件：请确认该标准已上传模板文件（文件要求），或该文件已上传到标准目录");
 
-        // 3. 实时转换（anydoc 直转），成功后**回写产物**
+        // 3. 实时转换（★ 2026-10-09 改走 IFileConvertCore 主链），成功后**回写产物**
+        //    ⚠️ 必须用 ConvertToMarkdownAtAsync（带源路径）—— 无源路径的重载派生不出 markdown/ 产物路径，恒返回 failed。
+        //    主链内部按用户裁决分流：anydoc 能提取就直接用（⛔ 不走视觉）；退出码 3（图片 / 扫描件）才交 IOcrProvider 走视觉。
         try
         {
             var bytes = await TryReadBytesAsync(fileInfo.StoragePath);
             if (bytes == null) return (null, "源文件读取失败（对象不存在或存储不可用）");
 
-            var result = await _convertClient.ConvertToMarkdownAsync(fileInfo.FileName, bytes);
+            var result = await _convertCore.ConvertToMarkdownAtAsync(fileInfo.FileName, fileInfo.StoragePath, bytes);
 
-            // 3a. 图片/扫描件：置 unsupported（能力边界，不是故障），并持久化提示
-            if (!result.Success && result.NeedsOcr)
+            // 3a. 能力边界（如视觉能力未接入）：置 unsupported 并持久化提示 —— 这不是故障
+            if (!result.Success && result.Status == "unsupported")
             {
                 await PersistMarkdownStatusAsync(fileCode, "unsupported", result.Message);
                 return (null, result.Message);

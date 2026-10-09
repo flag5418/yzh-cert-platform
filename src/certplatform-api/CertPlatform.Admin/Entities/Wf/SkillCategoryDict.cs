@@ -8,18 +8,17 @@ using YZH.Core.Stand.Models.Entity;
 namespace CertPlatform.Admin.Entities.Wf
 {
     /// <summary>
-    /// 技能分类树节点（只读）—— 数据源 = 字典「技能分类」（DicNo='skill_category'）的字典项
+    /// 技能分类树节点 —— 数据源 = 字典「技能分类」（DicNo='skill_category'）的字典项
     ///
-    /// 背景（2026-09-26 分类字典化，用户裁决方案 A）：
-    ///   · 原 wf_skill_category 表废弃（分类增删改一律在「字典管理」页面维护）
-    ///   · 本实体仅供 SkillTreeTableController 左树读取，<b>禁止任何写入</b>
-    ///     （树 CRUD 端点已在控制器中拦截为「去字典管理维护」）
+    /// 背景（2026-09-26 分类字典化；2026-10-09 改为就地维护）：
+    ///   · 原 wf_skill_category 表废弃（分类统一用字典项）
+    ///   · 分类增删改在「技能管理」页面就地维护（不再跳去字典管理页）
     ///
     /// 关联设计：
     ///   · 树节点 Code（TreeConfig.CodeField="DicValue"）= 分类业务编码 data_access 等
     ///   · wf_skill.CategoryCode 存的即此 DicValue（iso_category 的 Category=quality 同款先例）
     ///   · ⚠️ 字典项的 Code 列（GUID 行标识）不参与关联 —— DicValue 才是业务值，
-    ///     因此字典页面维护分类时「值(DicValue)」必填且改后会使既有技能关联悬空，需谨慎
+    ///     因此修改 DicValue 后会使既有技能关联悬空，需谨慎
     ///
     /// 命名规范（YZH 铁律）：DB 列名 = C# 属性名（PascalCase 例外见各 SugarColumn.Column_name，
     /// Sys_DictionaryList 为历史字典表，列名为 DicName/DicValue 等驼峰，此处按真实列名映射）

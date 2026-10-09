@@ -100,6 +100,170 @@ namespace CertPlatform.Shared.DocExtraction
         }
 
         // ========================================================
+        // 视觉链前置：PDF → 逐页 PNG（2026-10-09）
+        // ========================================================
+
+        /// <summary>
+        /// ★ <b>PDF → 逐页 PNG</b>，供「视觉模型 OCR」使用。
+        ///
+        /// <para><b>为什么必须有这一步（两条实测结论，缺一不可）</b>：</para>
+        /// <list type="number">
+        ///   <item>anydoc 对「<b>有页面</b>无文本层」的 PDF 直接 <c>exit 3</c> 且
+        ///         <b>不产出任何文件</b> —— 实测 21 页 PDF 仅第 7 页无文本层（一张界面截图），
+        ///         退出码 3，会话目录里连 <c>.md</c> 都没有 ⇒ anydoc 的文本<b>一点也拿不到</b>。</item>
+        ///   <item><b>视觉模型不接受 PDF 字节走 <c>image_url</c></b>：实测
+        ///         <c>data:image/png</c> 与 <c>data:application/pdf</c> <b>两种 MIME 都返回 400</b>
+        ///         <c>The image format is illegal and cannot be opened</c>
+        ///         ⇒ 把 PDF 字节原样丢给视觉模型<b>必然失败</b>（2026-10-09 真机复现）。</item>
+        /// </list>
+        ///
+        /// <para><b>渲染器</b>：<c>pdftoppm</c>（<c>poppler-utils</c>，装在 <c>yzh-anydoc</c> 镜像里）。
+        /// 之所以复用 anydoc 容器而不新建容器：它已有「宿主 <c>./anydoc/tmp</c> ↔ 容器 <c>/tmp/anydoc</c>」
+        /// 的挂载与清理链路，且 PDF 解析本就是它的职责域。</para>
+        ///
+        /// <para>⚠️ <paramref name="maxPages"/> 是<b>硬上限</b>：超出的页<b>丢弃并置
+        /// <see cref="PdfRenderResult.Truncated"/></b>，由调用方如实告知用户，
+        /// ⛔ 不允许「静默只转前 N 页」—— 那会让下游把残缺内容当成完整文档。</para>
+        /// </summary>
+        public async Task<PdfRenderResult> RenderPdfPagesAsync(
+            string fileName, byte[] content, int maxPages, int dpi)
+        {
+            if (content == null || content.Length == 0)
+                return PdfRenderResult.Fail("PDF 内容为空");
+            if (maxPages <= 0) maxPages = 50;
+            if (dpi <= 0) dpi = 150;
+
+            var sessionId = Guid.NewGuid().ToString("N");
+            var hostDir = Path.Combine(_workRoot, "anydoc", "tmp", sessionId);
+            try
+            {
+                Directory.CreateDirectory(hostDir);
+
+                var safeName = SanitizeFileName(fileName);
+                var hostInput = Path.Combine(hostDir, safeName);
+                await File.WriteAllBytesAsync(hostInput, content);
+
+                var containerDir = $"/tmp/anydoc/{sessionId}";
+                var containerFile = $"{containerDir}/{safeName}";
+                var containerPrefix = $"{containerDir}/page";
+
+                // ① 先取总页数（用于如实报告「是否被截断」）
+                var totalPages = 0;
+                var info = await ExecRawAsync("yzh-anydoc",
+                    $"pdfinfo \"{containerFile}\" 2>/dev/null | sed -n 's/^Pages:[[:space:]]*//p'");
+                if (info.ExitCode == 0)
+                    int.TryParse(info.StdOut.Trim(), out totalPages);
+
+                // ② 渲染（-f/-l 限定页范围，避免超大 PDF 把磁盘/内存打满）
+                //    ⚠️ 路径必须加引号：ExecRawAsync 走容器内 `sh -c`，含空格/中文的名会被拆成多个参数
+                var renderArgs =
+                    $"pdftoppm -png -r {dpi} -f 1 -l {maxPages} \"{containerFile}\" \"{containerPrefix}\"";
+                var render = await ExecRawAsync("yzh-anydoc", renderArgs);
+                if (render.ExitCode != 0)
+                {
+                    _logger.LogWarning("[PdfRender] pdftoppm 退出码 {Code}: {Err}",
+                        render.ExitCode, Brief(render.StdErr));
+                    return PdfRenderResult.Fail($"PDF 逐页渲染失败（退出码 {render.ExitCode}）：{Brief(render.StdErr)}");
+                }
+
+                // ③ 读回页面。pdftoppm 命名 = {prefix}-{n}.png；n 的位数随总页数变化
+                //    （≤9 页是 -1，≥10 页是 -01）⇒ ⛔ 不能按字符串排序（"page-10" 会排在 "page-2" 前）
+                var produced = Directory.GetFiles(hostDir, "page-*.png");
+                if (produced.Length == 0)
+                    return PdfRenderResult.Fail("PDF 逐页渲染未产出任何页面图片");
+
+                var ordered = produced
+                    .Select(p => (Path: p, No: TrailingNumber(Path.GetFileNameWithoutExtension(p))))
+                    .OrderBy(x => x.No)
+                    .Select(x => x.Path)
+                    .ToList();
+
+                var pages = new List<byte[]>(ordered.Count);
+                foreach (var p in ordered)
+                    pages.Add(await File.ReadAllBytesAsync(p));
+
+                var truncated = totalPages > pages.Count;
+                _logger.LogInformation(
+                    "[PdfRender] {File} → {Got}/{Total} 页（dpi={Dpi}，截断={Trunc}）",
+                    fileName, pages.Count, totalPages, dpi, truncated);
+
+                return new PdfRenderResult
+                {
+                    Success = true,
+                    Pages = pages,
+                    TotalPages = totalPages,
+                    Truncated = truncated,
+                    Message = truncated
+                        ? $"PDF 共 {totalPages} 页，本次仅识别前 {pages.Count} 页（超出单份上限）"
+                        : $"PDF 共 {pages.Count} 页，已逐页渲染"
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[PdfRender] PDF 逐页渲染异常: {File}", fileName);
+                return PdfRenderResult.Fail($"PDF 逐页渲染异常：{ex.Message}");
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(hostDir)) Directory.Delete(hostDir, recursive: true);
+                }
+                catch { /* 清理失败不影响主流程 */ }
+            }
+        }
+
+        /// <summary>取文件名末尾的连续数字（<c>page-07</c> → 7）；取不到返回 <see cref="int.MaxValue"/></summary>
+        private static int TrailingNumber(string stem)
+        {
+            var i = stem.Length;
+            while (i > 0 && char.IsDigit(stem[i - 1])) i--;
+            return i < stem.Length && int.TryParse(stem[i..], out var n) ? n : int.MaxValue;
+        }
+
+        /// <summary>
+        /// 执行 docker exec 并取回退出码/标准输出/标准错误（<b>不要求产物文件</b>）。
+        /// <para>与 <see cref="ExecDockerAsync"/> 的分工：那个负责「跑完要读产物文件」的转换器；
+        /// 本方法负责 <c>pdfinfo</c> / <c>pdftoppm</c> 这类「自己往目录里写多个文件」的场景。</para>
+        /// </summary>
+        private async Task<(int ExitCode, string StdOut, string StdErr)> ExecRawAsync(string container, string args)
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "docker",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            psi.ArgumentList.Add("exec");
+            psi.ArgumentList.Add(container);
+            psi.ArgumentList.Add("sh");
+            psi.ArgumentList.Add("-c");
+            psi.ArgumentList.Add(args);
+
+            _logger.LogInformation("[Convert] docker exec {Container}: {Args}", container, args);
+
+            using var process = new Process { StartInfo = psi };
+            process.Start();
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(TimeoutSeconds));
+            try
+            {
+                await process.WaitForExitAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                try { process.Kill(true); } catch { }
+                return (-1, "", $"执行超时（{TimeoutSeconds}s）：{container}");
+            }
+
+            return (process.ExitCode, await stdoutTask, await stderrTask);
+        }
+
+        // ========================================================
         // 内部：临时目录中转 + docker exec + 产物读取
         // ========================================================
 
@@ -325,5 +489,30 @@ namespace CertPlatform.Shared.DocExtraction
 
         public static ConvertResult Fail(string message, ConvertFailureKind kind = ConvertFailureKind.Other)
             => new() { Success = false, Message = message, FailureKind = kind };
+    }
+
+    /// <summary>
+    /// PDF → 逐页图片的渲染结果（2026-10-09，供视觉模型 OCR 前置使用）。
+    /// <para>⛔ 与 <see cref="ConvertResult"/> 分开：那个描述「一份文档 → 一个产物」，
+    /// 这个描述「一份 PDF → N 张页面图」，语义不同，混用会让调用方分不清
+    /// <c>Content</c> 到底是 Markdown 还是图片。</para>
+    /// </summary>
+    public class PdfRenderResult
+    {
+        public bool Success { get; set; }
+
+        /// <summary>按页序排列的 PNG 字节（<b>已排序</b>，调用方直接按下标当页码用）</summary>
+        public List<byte[]> Pages { get; set; } = new();
+
+        /// <summary>PDF 真实总页数（取不到时为 0）；用于如实报告「是否被截断」</summary>
+        public int TotalPages { get; set; }
+
+        /// <summary>是否因超出单份页数上限而被截断（⛔ 必须透出给用户，不可静默）</summary>
+        public bool Truncated { get; set; }
+
+        public string Message { get; set; } = "";
+
+        public static PdfRenderResult Fail(string message)
+            => new() { Success = false, Message = message };
     }
 }

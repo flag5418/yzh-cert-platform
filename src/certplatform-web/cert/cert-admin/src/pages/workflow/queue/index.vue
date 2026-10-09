@@ -192,11 +192,6 @@ onUnmounted(() => {
 
 <template>
   <YzhPageLayout title="队列监控">
-    <template #toolbar>
-      <el-button type="primary" @click="loadData" :loading="loading">
-        <el-icon style="margin-right: 4px"><Refresh /></el-icon>刷新
-      </el-button>
-    </template>
 
     <!-- 统计卡 -->
     <el-row :gutter="15" class="status-cards">
@@ -331,7 +326,7 @@ onUnmounted(() => {
         <el-table-column prop="endTime" label="结束时间" width="160">
           <template #default="{ row }">{{ row.endTime || '—' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="200" align="center" fixed="right">
+        <el-table-column label="操作" min-width="130" align="center" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button>
             <el-button

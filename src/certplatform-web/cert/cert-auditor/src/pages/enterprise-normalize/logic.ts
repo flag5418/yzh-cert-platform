@@ -66,6 +66,22 @@ export interface RowResult {
 }
 
 /**
+ * 入队后自动刷新的轮询间隔（ms）。
+ *
+ * ★ 为什么是 15s：后台串行跑「AI 取值 + 文档写入」，单个文件可能到分钟级
+ *   ⇒ 太密没意义（还没跑完），太疏用户会以为页面卡死。
+ */
+const POLL_INTERVAL_MS = 15_000
+
+/**
+ * 单次入队后最多轮询多少次（15s × 40 = 10 分钟）。
+ *
+ * ★ 为什么要封顶：轮询是「锦上添花」，⛔ 不能变成永远不关的定时器
+ *   （用户切走页面、队列卡住、后端挂了…都会让轮询白跑）。
+ */
+const POLL_MAX_TICKS = 40
+
+/**
  * 范围树节点（`el-tree` 的数据形状）。
  *
  * ⚠️ 字段名是 `Name` / `Children` / `Disabled`（⛔ 不是后端原样字段）——
@@ -183,9 +199,41 @@ export class EnterpriseNormalizeLogic {
   activeEmptyText = computed(() => {
     const s = this.activeStandard.value
     if (!s) return '请先选择标准'
+    // ★ 主数据缺失优先说 —— 这种标准**永远不可能**有文件，说「暂无可规范化文件」会让人去白找
+    if (s.StandardRegistered === false) {
+      return '该标准在企业阶段里的关联还在，但标准主数据已被删除（未登记），因此没有可规范化的文件'
+    }
     if (!s.Mounted) return '该标准未挂到当前企业阶段，仅因存在已发布的填写规则模板而显示'
     return '该标准下暂无可规范化的文件（尚未配置填写规则，或模板未发布）'
   })
+
+  // ══════════════ 三·补、标准主数据健康度（2026-10-09） ══════════════
+  //
+  // ★★ 为什么要有这一段（用户报障根因）
+  //
+  // `cert_enterprise_stage` / `cert_doc_template` 里的 `StandardCode` 只是**引用**，
+  // 不保证 `cert_iso_standard` 里的主数据还在。主数据被删而关联没清时，
+  // 后端此前 `StandardName = iso?.StandardName ?? code` ⇒ **把裸 GUID 当标准名回传**
+  // ⇒ Tab 上直接显示 `475da4fe-8f50-4bf7-bf2b-b39869d5ddf7`。
+  //
+  // 用户看到的是「系统坏了」，而真相是「数据缺了」—— 两者处置完全不同：
+  //   · 系统坏了 → 找人修系统
+  //   · 数据缺了 → 去清关联 / 补主数据
+  // ⇒ 页面必须**说破**，且⛔ 不能把 GUID 当名字显示。
+
+  /** ★ 当前标准是否登记在册（`false` ⇒ 关联指向了一个已被删除的标准） */
+  activeStandardRegistered = computed(() => {
+    const s = this.activeStandard.value
+    return s ? s.StandardRegistered !== false : true
+  })
+
+  /** ★ 当前标准是否挂到本企业阶段（`false` = 仅因存在已发布模板而显示） */
+  activeStandardMounted = computed(() => this.activeStandard.value?.Mounted === true)
+
+  /** ★ 本阶段里所有「引用了一个已不存在标准」的标准 —— 顶部一次性说清，⛔ 不逐个弹 */
+  unregisteredStandards = computed(() =>
+    this.standards.value.filter((s) => s.StandardRegistered === false),
+  )
 
   // ══════════════ 四、选择（★ 跨 Tab 保持） ══════════════
   /** 已勾选的标准域行 Code（只含文件） */
@@ -235,6 +283,123 @@ export class EnterpriseNormalizeLogic {
     Object.values(this.results.value).slice(-5).reverse(),
   )
 
+  // ══════════════ 七、入队后自动刷新（2026-10-09） ══════════════
+  //
+  // ★ 为什么要有（用户 2026-10-09 选「功能补全」）
+  //
+  // `run` 只把任务**投进队列**就返回了，真正执行在后台串行跑（单个文件可能到分钟级）。
+  // 此前用户必须**自己反复点「刷新」**才知道跑完没有 —— 而「不知道跑没跑完」
+  // 正是最容易被误判成「点了没反应 / 系统卡死」的状态。
+  //
+  // ★ 三条约束（⛔ 别丢）：
+  //   ① **只在入队成功后启动** —— 平时⛔ 不轮询（白耗接口 + 无意义重渲染）
+  //   ② **封顶 10 分钟** + **无在跑文件即提前收工** ⇒ 定时器一定有个头
+  //   ③ **换作用域 / 组件卸载 / 用户手动停** 都要停 —— 否则会拿 A 阶段的选择去刷 B 阶段
+
+  /** 是否正在自动刷新（页面据此显示提示条 + 「停止」按钮） */
+  polling = ref(false)
+  /** 本轮自动刷新已执行的次数（⛔ 不显示「预计还要多久」—— 后端不给进度，编时间就是骗人） */
+  pollCount = ref(0)
+  /** 最近一次刷新完成的时刻（本地时间字符串，用于让用户确认「它真的在动」） */
+  lastRefreshAt = ref('')
+
+  private pollTimer: number | null = null
+
+  /**
+   * ★ 本轮入队时刻（浏览器 epoch ms）—— 「跑完了没」的判据基准。
+   *
+   * ⛔ **为什么不用 `InstanceState ∈ {filling, pending}` 判**（第一版写法，已废弃）：
+   * 后端**从来不写**这两个值 —— 全仓只有 `instance.InstanceState = "filled"` /
+   * `"archived"`（`DocumentFillOrchestrator.cs:449/603/690`）⇒ 该判据**恒为 false**
+   * ⇒ 第一次轮询（15s）就「提前收工」，功能等于没做。
+   * （这类错误 `vue-tsc` / `guards` / `vite build` **全都发现不了**，只能靠读后端源码 + 真机。）
+   */
+  private runStartedAtMs = 0
+
+  /** 本轮真正入队的标准域行 Code（`fill` / `regenerate` 两类）—— 完成判据只看它们 */
+  private queuedCodes: string[] = []
+
+  /**
+   * ★ **完成判据**：本轮入队的文件，**每一个**都已产生「晚于本次入队时刻」的填充留痕。
+   *
+   * 为什么用留痕时间：它是**可观测的既成事实**（`cert_doc_fill_log` 新行），
+   * ⛔ 不是对内部状态的猜测。跳过（锁定/未配规则）的文件不会产生留痕 ⇒ 本方法返回 false
+   * ⇒ 靠 10 分钟上限兜底，⛔ 不会误判成「跑完了」而提前收工。
+   *
+   * ⚠️ 留痕时间是**服务端 UTC**，基准是**浏览器本地 epoch**；两者都是 epoch，
+   *    但可能有秒级时钟偏差 ⇒ 留 10 秒容差。
+   */
+  private allQueuedDone(): boolean {
+    if (this.queuedCodes.length === 0) return false
+
+    const byCode = new Map<string, NormalizeFileNode>()
+    for (const s of this.standards.value) {
+      for (const f of collectFiles(s)) byCode.set(f.StandardFileCode, f)
+    }
+
+    const toleranceMs = 10_000
+    return this.queuedCodes.every((c) => {
+      const f = byCode.get(c)
+      if (!f || !f.LastFillTime) return false
+      const t = new Date(f.LastFillTime).getTime()
+      return Number.isFinite(t) && t >= this.runStartedAtMs - toleranceMs
+    })
+  }
+
+  /**
+   * 启动自动刷新（入队成功后调用；重复调用 = 重新计时）。
+   *
+   * @param queuedCodes 本轮真正入队的标准域行 Code（来自 `run` 回执的 `Items`）
+   */
+  startAutoRefresh(queuedCodes: string[] = []): void {
+    this.stopAutoRefresh()
+    if (!this.scopeReady.value) return
+    this.queuedCodes = [...queuedCodes]
+    this.runStartedAtMs = Date.now()
+    this.pollCount.value = 0
+    this.polling.value = true
+    this.pollTimer = window.setInterval(() => {
+      void this.pollOnce()
+    }, POLL_INTERVAL_MS)
+  }
+
+  /** 停止自动刷新（用户点「停止」/ 换作用域 / 组件卸载时调用；幂等） */
+  stopAutoRefresh(): void {
+    if (this.pollTimer !== null) {
+      window.clearInterval(this.pollTimer)
+      this.pollTimer = null
+    }
+    this.polling.value = false
+    this.queuedCodes = []
+  }
+
+  /** 一次轮询：刷新范围树 → 判断是否该收工 */
+  private async pollOnce(): Promise<void> {
+    if (!this.scopeReady.value) {
+      this.stopAutoRefresh()
+      return
+    }
+
+    this.pollCount.value += 1
+    try {
+      await this.loadRange()
+      this.lastRefreshAt.value = new Date().toLocaleTimeString('zh-CN')
+    } catch {
+      // loadRange 自己会把业务拒绝写进 listMessage/listBlocked（并弹红）
+      // ⇒ 这里只负责停掉轮询，⛔ 不重复报错、不刷屏
+      this.stopAutoRefresh()
+      return
+    }
+
+    // ① 本轮入队的文件都出了新留痕 ⇒ 跑完了，收工
+    if (this.allQueuedDone()) {
+      this.stopAutoRefresh()
+      return
+    }
+    // ② 兜底上限（10 分钟）—— 保证定时器一定有个头
+    if (this.pollCount.value >= POLL_MAX_TICKS) this.stopAutoRefresh()
+  }
+
   async init(): Promise<void> {
     await this.loadTree()
   }
@@ -261,6 +426,9 @@ export class EnterpriseNormalizeLogic {
    * · 阶段节点（叶子）→ 定位 (企业, 阶段) 并加载范围树
    */
   async onNodeClick(node: YzhTreeNode): Promise<void> {
+    // ★ 换作用域 ⇒ 立刻停掉自动刷新（否则会拿 A 阶段的选择去刷 B 阶段）
+    this.stopAutoRefresh()
+
     const children = (node?.Children as YzhTreeNode[] | undefined) ?? []
     if (children.length > 0) {
       this.scopeLabel.value = `${node.Label ?? node.Name ?? ''}（请选择具体阶段）`
@@ -459,6 +627,14 @@ export class EnterpriseNormalizeLogic {
       this.planStale.value = true
       // 刷新范围（实例态 / 产物路径可能已变）
       await this.loadRange()
+      // ★★ 入队后**启动自动刷新** —— 后台在串行跑，用户不该靠反复点「刷新」来猜进度。
+      //    ⚠️ 只把**真正会执行**的（fill / regenerate）作为「完成判据」的观察对象 ——
+      //      被跳过的文件永远不会产生新留痕，算进去就永远等不到「完成」。
+      this.startAutoRefresh(
+        (r.Items ?? [])
+          .filter((i) => i.Action === 'fill' || i.Action === 'regenerate')
+          .map((i) => i.StandardFileCode),
+      )
     } catch (e) {
       ElMessage.error((e as Error).message)
     } finally {

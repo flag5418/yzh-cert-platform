@@ -2,13 +2,13 @@
  * SkillTreeTableLogic — 技能分类 → 技能 左树右表 Logic（TreeTable 架构）
  *
  * 布局：
- * - 左侧：分类树（**只读**，数据源 = 字典 skill_category；分类的增删改在字典管理页维护）
+ * - 左侧：分类树（数据源 = 字典 skill_category；分类在当前页就地维护）
  * - 右侧：技能表格（选中分类后加载，分页、搜索、增删改 + 启用/禁用）
  *
  * 分类字典化（2026-09-26，方案A：字典为分类唯一数据源）：
  * - 树节点 Code = 字典项 DicValue（data_access 等语义值），Name = DicName
  * - wf_skill.CategoryCode 存 DicValue；表单下拉由 Skill.json 的 DictCode 驱动
- * - 树只读：增删改分类入口已移除，后端树写钩子兜底拦截
+ * - 分类就地维护（2026-10-09）：树的增删改在当前页完成，后端校验钩子保障数据卫生
  *
  * 启用/禁用（对齐机构-用户样板）：
  * - 行按钮由内核 rowActions 按 IsValid 二选一（disable/enable，后端 RegisterRowAction 注入）
@@ -22,6 +22,14 @@ export class SkillTreeTableLogic extends TreeTableLogic<any> {
   //    URL 由 SingleTableCore 拼成 `/api/${controllerName}${path}`（SingleTableCore.ts:878），
   //    漏 Admin/ ⇒ 全部端点 404，页面报「接口不存在」。
   controllerName = 'Admin/Workflow/SkillTreeTable'
+
+  /**
+   * 覆写树节点表单的"名称字段"：后端实体用 DicName（非默认 Name）
+   * 使 submitTreeNodeForm 提交时能正确映射到 SkillCategoryDict.DicName
+   */
+  protected override get treeEntityNameField(): string {
+    return 'DicName'
+  }
 
   // ──── 新增技能默认值（分类归入由 onPrepareAdd 按选中树节点注入） ────
   protected override get defaultValues(): Record<string, any> {

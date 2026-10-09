@@ -170,12 +170,25 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
   }
 
   // ========================================================
-  // 左树：类别 → 族 → 版本 分组（视图层，后端仍返回扁平）
+  // 左树：类别 → 标准 分组（视图层，后端仍返回扁平）
   // ========================================================
 
   /** 节点是否为「类别」分组节点（字典派生，虚拟节点） */
   private isCategoryNode(node: TreeNode | null | undefined): boolean {
     return !!node && node.NodeType === 'virtual'
+  }
+
+  /**
+   * 节点是否可选中并加载条款：左树只有「类别(virtual) / 标准」两类，仅标准可选。
+   *
+   * ★ index.vue 的**点击守卫**与**空态 v-if 必须共用本谓词** —— 两处各写一遍
+   *   曾因读了不存在的 `Extra._level`（数据源写的是 `level`，且只有 0/1）导致
+   *   守卫恒 early return、右表永不挂载、条款接口一次都不发（2026-10-09 事故）。
+   * ★ 判据用 `NodeType !== 'virtual'` 而非 `level === 1`：字典为空的降级模式
+   *   （`buildCategoryTree` 直接返回扁平标准）标准节点 `level=0`，按 level 判会被全拦。
+   */
+  isSelectableNode(node: TreeNode | null | undefined): boolean {
+    return !!node && node.NodeType !== 'virtual'
   }
 
   /**

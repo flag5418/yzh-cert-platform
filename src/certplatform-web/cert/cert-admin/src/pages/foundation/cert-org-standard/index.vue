@@ -56,7 +56,8 @@ interface StdTreeNode {
   categoryName?: string   // 体系中文名
   familyCode?: string     // 族 GUID（仅族节点和版本节点）
   familyName?: string     // 族人读名（如 "iso9000 · ISO 9000 质量管理体系族"）
-  standardCode?: string   // 标准编号（仅叶子）
+  code?: string           // 标准 GUID = cert_iso_standard.Code（仅叶子，保存传参用）
+  standardCode?: string   // 标准业务编号 slug 如 iso13485（仅叶子，仅展示/搜索）
   standardName?: string   // 标准名称（仅叶子）
   versionYear?: number    // 年份（仅叶子）
   linked?: boolean        // 是否已关联（仅叶子有意义）
@@ -230,6 +231,7 @@ function buildLeafNode(item: CertOrgStandardItem): StdTreeNode {
     categoryName: categoryLabel.value.get(item.Category) || item.Category,
     familyCode: item.FamilyCode ?? undefined,
     familyName: item.FamilyName || undefined,
+    code: item.Code,
     standardCode: item.StandardCode,
     standardName: item.StandardName,
     versionYear: item.VersionYear,
@@ -329,17 +331,20 @@ function handleStdCheckChange(data: StdTreeNode, isChecked: boolean) {
   if (suppressCheckChange) return
   if (!data.IsLeaf) return
   if (!selectedOrgCode.value) return
-  // ★ 守卫：仅处理有有效 standardCode 的标准节点
-  //   （空体系/族节点即使 IsLeaf=true 也没有 standardCode，不应触发保存）
-  if (!data.standardCode) return
+  // ★ 守卫：仅处理有有效 code/standardCode 的标准节点
+  //   （空体系/族节点即使 IsLeaf=true 也没有 code，不应触发保存）
+  if (!data.code || !data.standardCode) return
 
   const prevLinked = data.linked
   data.linked = isChecked
 
+  // ★ 传参契约（铁律④）：StandardCode = cert_iso_standard.Code（GUID），
+  //   ⛔ 不是业务编号 slug（如 iso13485）—— 后端 List/专家端均按 Code 比对，
+  //   传 slug ⇒ 库里有行但回显永远未勾选（2026-10-09 踩坑）
   if (isChecked && !prevLinked) {
     certOrgStandardApi.save({
       OrgCode: selectedOrgCode.value,
-      StandardCode: data.standardCode,
+      StandardCode: data.code,
       Linked: true,
     }).catch(() => {
       ElMessage.error(`关联标准【${data.standardName}】失败`)
@@ -348,7 +353,7 @@ function handleStdCheckChange(data: StdTreeNode, isChecked: boolean) {
   } else if (!isChecked && prevLinked) {
     certOrgStandardApi.save({
       OrgCode: selectedOrgCode.value,
-      StandardCode: data.standardCode,
+      StandardCode: data.code,
       Linked: false,
     }).catch(() => {
       ElMessage.error(`取消关联【${data.standardName}】失败`)

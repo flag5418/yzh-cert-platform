@@ -1,0 +1,30 @@
+-- =====================================================================
+-- 清理 wf_prompt_template 孤儿数据（2026-10-09）
+--
+-- 背景：用户调整了底层标准信息（cert_iso_standard.Code 变更），
+--       导致 wf_prompt_template 中部分行引用的 StandardCode 在
+--       cert_iso_standard 中已不存在。这些行在 prompt-template 工作台
+--       左侧树里永远不会出现（getStandardOptions 只返回有效标准），
+--       属于死数据。
+--
+-- 已执行的删除（2 行）：
+--   Id 32  doc_group_iso4001    StandardCode=475da4fe-8f50-4bf7-bf2b-b39869d5ddf7
+--   Id 33  doc_content_iso4001  StandardCode=475da4fe-8f50-4bf7-bf2b-b39869d5ddf7
+--
+-- 保留（清理后剩余 3 行）：
+--   Id 20  prompt_generator        平台级元提示词（StandardCode=NULL）
+--   Id 21  doc_group_iso9001      关联标准 846dec4b-... 有效
+--   Id 22  doc_content_iso9001    关联标准 846dec4b-... 有效
+-- =====================================================================
+
+-- 本脚本已执行完毕（2026-10-09），以下为归档条件供后续同类问题复用：
+--
+-- DELETE FROM wf_prompt_template
+-- WHERE StandardCode IS NOT NULL
+--   AND StandardCode NOT IN (SELECT Code FROM cert_iso_standard WHERE IsValid = 1 AND IsDeleted = 0);
+ --
+ -- ⚠️ 若当前 MySQL 开启 SQL_SAFE_UPDATES，需用主键（Id）绕开：
+ --    DELETE FROM wf_prompt_template WHERE Id IN (SELECT Id FROM (SELECT Id FROM wf_prompt_template WHERE StandardCode IS NOT NULL AND StandardCode NOT IN (SELECT Code FROM cert_iso_standard WHERE IsValid = 1 AND IsDeleted = 0)) t);
+
+-- 验证：清理后应只剩 3 行
+-- SELECT Id, PromptCode, PromptType, StandardCode FROM wf_prompt_template ORDER BY Id;

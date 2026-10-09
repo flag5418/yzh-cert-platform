@@ -90,6 +90,22 @@ namespace CertPlatform.Shared.DocExtraction
         /// <summary>压缩后仍超过此字节数则放弃视觉识别（防止超大扫描件拖垮链路）</summary>
         public int MaxImageBytes { get; set; } = 12 * 1024 * 1024;
 
+        /// <summary>
+        /// ★ <b>单份 PDF 走视觉 OCR 的页数上限</b>（2026-10-09）。
+        /// <para>超过则<b>只识别前 N 页</b>，并把「共 X 页，仅识别前 N 页」写进
+        /// <c>MarkdownMessage</c> 如实告知（⛔ 不静默截断）。</para>
+        /// <para>取值 50 的依据：A4 @150dpi 单页 ≈ 2147 image tokens，50 页 ≈ 10.7 万 tokens，
+        /// 是「不把单份文档做废」与「不把上下文打满」的折中。</para>
+        /// </summary>
+        public int OcrMaxPages { get; set; } = 50;
+
+        /// <summary>
+        /// ★ <b>PDF 逐页渲染的 DPI</b>（2026-10-09）。
+        /// <para>150 dpi 下 A4 ≈ 1240×1754，印刷体 OCR 足够；调高更清晰但 image token 按面积增长
+        /// （200 dpi ≈ 1.8 倍 token）。⛔ 低于 100 印刷小字会糊。</para>
+        /// </summary>
+        public int OcrRenderDpi { get; set; } = 150;
+
         /// <summary>配置来源说明（诊断用：回退了几次）</summary>
         [JsonIgnore]
         public string Source { get; set; } = "default";
@@ -117,6 +133,10 @@ namespace CertPlatform.Shared.DocExtraction
                 if (s.MaxTokens <= 0) s.MaxTokens = 8192;
                 if (s.MaxImageBytes <= 0) s.MaxImageBytes = 12 * 1024 * 1024;
                 if (s.ImageMaxEdge <= 0) s.ImageMaxEdge = 1600;
+                // ★ 2026-10-09：PDF 逐页 OCR 的两个新键。存量 JSON 里没有 ⇒ 反序列化后是 0
+                //   ⇒ 必须在此回落，否则「50 页上限」会变成「0 页上限」把 PDF 全链路打死。
+                if (s.OcrMaxPages <= 0) s.OcrMaxPages = 50;
+                if (s.OcrRenderDpi <= 0) s.OcrRenderDpi = 150;
                 return s;
             }
             catch (JsonException)

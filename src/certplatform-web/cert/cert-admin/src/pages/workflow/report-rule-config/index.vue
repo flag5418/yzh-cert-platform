@@ -20,7 +20,8 @@
       loadApi: '/api/Admin/Workflow/ReportDefinition/section/by-context',
       loadMethod: 'get',
       textField: 'SectionName',
-      codeField: 'Code'
+      codeField: 'Code',
+      filterLeaf: (item) => item.JudgeMode !== 'manual'
     }"
     :save-config="{
       api: '/api/Admin/Workflow/ReportDefinition/section/save',

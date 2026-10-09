@@ -3,14 +3,14 @@
  * 技能管理 — 左树右表（YZH 标准 TreeTable 架构）
  *
  * 布局：
- * - 左侧：分类树（**只读**，数据源 = 字典 skill_category；分类维护入口在字典管理页）
+ * - 左侧：分类树（数据源 = 字典 skill_category；分类在当前页就地维护）
  * - 右侧：技能表格（选中分类后加载，分页、搜索、增删改、启用/禁用）
  *
  * 配置驱动：
  * - 表格列从 logic.columns 自动获取（Workflow/Skill.json）
  * - 表单字段从 logic.formFields 自动获取（分类下拉由 DictCode=skill_category 驱动）
  * - 行按钮由 logic.rowActions 按 IsValid 二选一（内核 onRowAction 分发）
- * - 节点动作为空（树只读，后端树写钩子兜底拦截）
+ * - 节点操作从 logic.nodeActions 获取（编辑/删除分类）
  */
 import { Delete, Plus, RefreshRight } from '@element-plus/icons-vue'
 import { YzhFormDialog, YzhTable, YzhTreeTableLayout, useTreeTable, type TreeNode } from '@yzh-core'
@@ -25,12 +25,22 @@ const { logic, tableRef, treeTableRef } = useTreeTable(SkillTreeTableLogic)
 const rowActions = computed(() => logic.rowActions)
 
 // ========================================================
-// 树节点操作（树只读：仅点击过滤，无增删改）
+// 树节点操作（就地维护：新增/编辑/删除分类）
 // ========================================================
 
 /** 树节点点击 → 加载该分类下技能 */
 async function handleNodeClick(node: TreeNode) {
   await logic.onNodeClick(node)
+}
+
+/** 树节点操作（编辑/删除 → 内核 onNodeAction 分发） */
+async function handleNodeAction(action: string, node: TreeNode) {
+  await logic.onNodeAction(action, node)
+}
+
+/** 新增分类（树工具栏按钮 → 打开根节点弹窗） */
+function handleAddRootCategory() {
+  logic.openTreeNodeDialog(null, null)
 }
 
 // ========================================================
@@ -64,7 +74,20 @@ async function handleBatchDelete() {
       :node-actions="logic.nodeActions"
       :get-action-label="(action: string, node: TreeNode) => logic.getNodeActionLabel(action, node)"
       @tree-node-click="handleNodeClick"
+      @tree-node-action="handleNodeAction"
     >
+      <!-- 树底部工具栏：新增分类 -->
+      <template #treeFooter>
+        <el-button
+          type="primary"
+          :icon="Plus"
+          style="width: 100%"
+          @click="handleAddRootCategory"
+        >
+          新增分类
+        </el-button>
+      </template>
+
       <template #default>
         <div class="skill-page__content">
           <!-- 技能表格 -->
@@ -119,6 +142,19 @@ async function handleBatchDelete() {
       :cols="logic.formLayoutCols as any"
       width="640px"
       @submit="logic.submitForm()"
+    />
+
+    <!-- 分类新增/编辑弹窗（树节点表单） -->
+    <YzhFormDialog
+      v-model:visible="logic.treeDialogVisible.value"
+      v-model="logic.treeFormData"
+      :mode="logic.treeDialogMode.value"
+      entity-name="分类"
+      :fields="logic.treeFormFields as any"
+      :loading="logic.treeSubmitting.value"
+      :cols="logic.treeFormLayoutCols as any"
+      width="480px"
+      @submit="logic.submitTreeNodeForm()"
     />
   </div>
 </template>

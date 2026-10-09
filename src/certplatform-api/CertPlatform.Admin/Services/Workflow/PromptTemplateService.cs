@@ -197,7 +197,9 @@ public class PromptTemplateService
                 StandardCode = x.StandardCode,
                 StandardName = x.StandardName,
                 Display = $"{x.StandardName}（{x.StandardCode}）",
-                IsValid = x.IsValid
+                IsValid = x.IsValid,
+                FamilyCode = x.FamilyCode,
+                Category = x.Category
             })
             .ToList();
     }
@@ -225,5 +227,11 @@ public class PromptTemplateService
         /// <summary>启用状态（0/1，左树启用/禁用徽章用；查询已过滤 IsValid=1）</summary>
         [System.Text.Json.Serialization.JsonPropertyName("isValid")]
         public int IsValid { get; set; } = 1;
+        /// <summary>★ 所属族 GUID（cert_standard_family.Code）；null = 未归族（前端三层树「族」定位用）</summary>
+        [System.Text.Json.Serialization.JsonPropertyName("familyCode")]
+        public string? FamilyCode { get; set; }
+        /// <summary>★ 所属体系（iso_category 字典 DicValue，如 quality）；前端「体系」定位用</summary>
+        [System.Text.Json.Serialization.JsonPropertyName("category")]
+        public string? Category { get; set; }
     }
 }

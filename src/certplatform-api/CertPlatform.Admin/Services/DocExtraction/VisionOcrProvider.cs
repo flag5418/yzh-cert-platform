@@ -94,10 +94,34 @@ namespace CertPlatform.Admin.Services.DocExtraction
             }
         }
 
+        /// <summary>
+        /// ★ PDF 逐页 OCR 的渲染参数（页数上限 / DPI），取自同一行 <c>ai_vision_config</c>
+        /// （2026-10-09）。<c>FileConvertCore</c> 渲染前会读它 —— 故即便 <see cref="IsAvailable"/>
+        /// 为 false，本属性也必须能安全返回（<see cref="PdfOcrOptions.Normalized"/> 兜住 0/负数）。
+        /// </summary>
+        public PdfOcrOptions PdfOptions
+        {
+            get
+            {
+                var v = LoadSettings();
+                return new PdfOcrOptions(v.OcrMaxPages, v.OcrRenderDpi).Normalized();
+            }
+        }
+
         public async Task<OcrResult> ToMarkdownAsync(string fileName, byte[] content)
         {
             if (content == null || content.Length == 0)
                 return OcrResult.NotAvailable("文件内容为空");
+
+            // ★ 2026-10-09 硬闸：PDF 字节不能直接送视觉模型（实测两种 MIME 均 400
+            //   `The image format is illegal and cannot be opened`）。
+            //   正确做法是先经 DocumentConvertClient.RenderPdfPagesAsync 逐页渲染成图片。
+            //   ⛔ 这里必须明确报错而不是放行 —— 放行的症状是「视觉识别失败：AI 调用失败（400）」，
+            //   看的人会去查模型名/密钥，真因却是「送错了东西」。
+            if (ImagePreprocess.IsPdf(content))
+                return OcrResult.NotAvailable(
+                    "收到 PDF 字节：视觉模型不接受 PDF 直接识别，必须先逐页渲染成图片"
+                    + "（见 FileConvertCore 的 PDF OCR 分支 / DocumentConvertClient.RenderPdfPagesAsync）");
 
             var v = LoadSettings();
 

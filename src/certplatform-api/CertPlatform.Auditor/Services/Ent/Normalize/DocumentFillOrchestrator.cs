@@ -13,6 +13,7 @@ using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Entities.Dir;
 using CertPlatform.Shared.Entities.Doc;
 using CertPlatform.Shared.Fill;
+using CertPlatform.Shared.Fill.Resolvers;
 using CertPlatform.Shared.Office;
 using CertPlatform.Shared.Office.Excel;
 using CertPlatform.Shared.Office.Word;
@@ -199,6 +200,13 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                 //   Admin 端看不见它 ⇒ 由能读该表的调用方（Auditor 侧编排器）预取后传入」。
                 var savedValues = await LoadSavedParamValuesAsync(req, ct);
 
+                // ── ★ 填充上下文（引擎的输入）—— `replace` / `headerFooter` 两种来源的取数口 ──
+                //   ⚠️ 此前本编排器**只**装配了 Enterprise，没有 Org / Doc ⇒ 一旦锚点配了
+                //      `org.*` / `system.*`（机构·系统只读项）或 `@doc_*`（文档信息），
+                //      取值就会落到 `ResolveByEntryAsync` 的 `default` 分支报「未实现的来源」。
+                //      ⇒ 「配了不生效」，且**全程不报错**（本项目最坏的失败形态）。
+                var fillCtx = await BuildFillContextAsync(req, template, entInfo, savedValues, ct);
+
                 // ════════════════════════════════════════════════════════════
                 //  ③ 取值（层 2 先供给）
                 // ════════════════════════════════════════════════════════════
@@ -225,6 +233,9 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                         var (okEmpty, emptyVal, _) = FillValueFactory.TryCreate(key, "", anchor.ValueType, anchor.NumberFormat);
                         if (okEmpty && emptyVal != null)
                         {
+                            // 清示例数据 = 只把 {{占位符}} 里的内容抹掉（⛔ 不整格替换）——
+                            // 与下方账本记的 `writeMode: "replace"` 保持一致
+                            emptyVal.WriteMode = "replace";
                             values[key] = emptyVal;
                             ledger.Add(BuildLedgerRow(req, template, anchor, key, emptyVal,
                                 sourceKind: "manual", sourceLabel: "示例数据（合规清空）",
@@ -249,18 +260,32 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                     var resolved = false;
                     foreach (var entry in spec.Sources)
                     {
-                        var (ok, val, label) = await ResolveByEntryAsync(entry, anchor, key, entInfo, savedValues, profiles, req, ct);
-                        if (!ok || val == null) continue;
-
-                        if (string.Equals(entry.Kind, "ai", StringComparison.OrdinalIgnoreCase))
+                        // ★ AI 三类（`ai_semantic` / `ai_field` / `ai_table`）：只做「认领」，
+                        //   真实 LLM 调用在下方 `ResolveAiAnchorsAsync` 统一批量执行。
+                        //   ★ 行为变更（55 §4.6）：AI 只产「建议」，⛔ 不进值字典。
+                        //
+                        // ⚠️⚠️ 2026-10-09 修（AI 来源**从来就没生效过**）：
+                        //   此前这段判定写在 `if (!ok || val == null) continue;` **之后**，
+                        //   而 `case "ai"` 故意返回 `(true, null, "AI 生成")` ——
+                        //   于是 AI 锚点在到达这段判定**之前**就被 `continue` 掉了。
+                        //   后果：`aiAnchors` 恒空 ⇒ `ResolveAiAnchorsAsync` 不执行 ⇒
+                        //   `resolved` 恒 false ⇒ 最终记一条「来源链未命中」。
+                        //   表现 = 「配了 AI 来源，跑完说取不到值」，且**全程不报错**（静默失败）。
+                        //   ⇒ 认领判定必须在 `val == null` 之前。
+                        if (IsAiKind(entry.Kind))
                         {
-                            // ★ 行为变更（55 §4.6）：AI 只产「建议」，⛔ 不进值字典。
-                            //   真实 LLM 调用在下方 ResolveAiAnchorsAsync 统一批量执行。
                             aiAnchors.Add(anchor);
                             resolved = true;
                             break;
                         }
 
+                        var (ok, val, label) = await ResolveByEntryAsync(entry, anchor, key, fillCtx, savedValues, profiles, req, ct);
+                        if (!ok || val == null) continue;
+
+                        // ★ 把锚点配的「写入方式」（覆盖 / 填充）传给写入器 ——
+                        //   不传的话 `ExcelFillWriter` / `WordParagraphFiller` 只会走「填充」
+                        //   ⇒ 用户在本页选的「覆盖」**看起来配了、实际不生效**（静默失效）。
+                        val.WriteMode = anchor.WriteMode;
                         values[key] = val;
                         ledger.Add(BuildLedgerRow(req, template, anchor, key, val,
                             sourceKind: entry.Kind, sourceLabel: label,
@@ -286,7 +311,7 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                 // ── 腿 B · AI 汇聚（生成式）—— 落建议池，⛔ 不进产物 ──
                 if (aiAnchors.Count > 0)
                 {
-                    await ResolveAiAnchorsAsync(aiAnchors, template, profiles, req, skillTrace, retrievedCodes, ct);
+                    await ResolveAiAnchorsAsync(aiAnchors, template, profiles, req, skillTrace, retrievedCodes, fillCtx, savedValues, ct);
 
                     foreach (var anchor in aiAnchors)
                     {
@@ -931,11 +956,108 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
         //  取值分派（腿 A · 确定性）
         // ════════════════════════════════════════════════════════════════════
 
+        /// <summary>
+        ///     ★ 装配填充上下文（<see cref="FillContext"/>）—— 引擎的**唯一**输入。
+        ///
+        ///     <para><b>为什么必须在这里装配</b>：<c>replace</c>（<c>enterprise.*</c> /
+        ///     <c>org.*</c> / <c>system.*</c>）与 <c>headerFooter</c>（<c>@doc_*</c>）两种来源
+        ///     都从本上下文取值。<b>⛔ 少装配一块，对应来源就整片取不到值</b> ——
+        ///     而且是静默的（表现是「跑完说取不到值」，不报错）。</para>
+        ///
+        ///     <para><b>与试填预览（<c>DocumentFillController</c>）的口径对齐</b>：</para>
+        ///     <list type="bullet">
+        ///         <item><c>Enterprise</c> —— 同一个 <c>EnterpriseInfoMapper.ToInfo</c>。</item>
+        ///         <item><c>Org.Name</c> —— 用 <b>认证机构</b>（<c>CertificationBody</c>）的名称，
+        ///               ⛔ 不是工作区名（工作区名形如「尚龙认证 · 王卿权」，印在正式文件页脚不合适）。</item>
+        ///         <item><c>Doc.StandardNo</c> / <c>Doc.StageName</c> —— 按 Code 查
+        ///               <c>ISOStandard.StandardCode</c> / <c>CertStage.StageName</c>。</item>
+        ///     </list>
+        ///
+        ///     <para><b>⚠️ 文档编号 / 版本号：库里没有来源</b> —— <c>cert_doc_template</c>
+        ///     只有 <c>FileName</c>，没有编号列与版本列；活参数里也只有「文件编号前缀」
+        ///     （<c>doc_prefix</c>），且「前缀」≠「编号」。
+        ///     ⇒ <b>刻意不装配</b>（⛔ 不用前缀顶替编号 —— 那会把「前缀」当成编号印进正式文件，
+        ///     属于「想当然」）。后果是选这两项会挂待办，<b>这是真实状态，不是 bug</b>。
+        ///     要真正可用需先定来源（见 <c>REFERENCE</c> 的待裁项）。</para>
+        /// </summary>
+        private async Task<FillContext> BuildFillContextAsync(
+            FillOneRequest req,
+            DocTemplate template,
+            EnterpriseInfo entInfo,
+            Dictionary<string, FillParamValue> savedValues,
+            CancellationToken ct)
+        {
+            // ── 机构（认证机构，⛔ 不是工作区）──
+            var body = string.IsNullOrWhiteSpace(req.OrgCode)
+                ? null
+                : (await _db.GetOneAsync<CertificationBody>(x => x.Code == req.OrgCode)).Data;
+
+            // ── 文档元信息 ──
+            var stdNo = string.IsNullOrWhiteSpace(req.StandardCode)
+                ? null
+                : (await _db.GetOneAsync<ISOStandard>(x => x.Code == req.StandardCode)).Data?.StandardCode;
+
+            var stageName = string.IsNullOrWhiteSpace(req.StageCode)
+                ? null
+                : (await _db.GetOneAsync<CertStage>(x => x.Code == req.StageCode)).Data?.StageName;
+
+            return new FillContext
+            {
+                // ⚠️ 本路径是**锚点驱动**（值由 `ResolveByEntryAsync` 逐锚点算好后放进
+                //    `OfficeFillRequest.Values`），⇒ `Template` / `Params` 这里**不需要**填。
+                //    引擎在本路径只用 `Enterprise` / `Org` / `Doc` / `Now` 四块。
+                Enterprise = entInfo,
+                Org = new OrgInfo
+                {
+                    Code = req.OrgCode,
+                    Name = body?.Name,
+                    ShortName = body?.ShortName,
+                    Address = body?.Address,
+                    ContactName = body?.ContactName,
+                    ContactPhone = body?.ContactPhone,
+                },
+                Doc = new DocInfo
+                {
+                    // ⚠️ No / Version 刻意留空 —— 库里没有来源，见方法注释
+                    No = null,
+                    Version = null,
+                    Title = string.IsNullOrWhiteSpace(template.FileName)
+                        ? null
+                        : Path.GetFileNameWithoutExtension(template.FileName),
+                    StandardNo = stdNo,
+                    StageName = stageName,
+                    Page = "1",
+                },
+                AiEnabled = true,
+                Now = DateTime.Now,
+            };
+        }
+
+        /// <summary>
+        ///     ★ 是否 AI 类来源。
+        ///
+        ///     <para>三类 AI（<c>ai_semantic</c> / <c>ai_field</c> / <c>ai_table</c>）在前端是
+        ///     <b>语义标签</b>（用户要区分「生成一段文字 / 拼一句话 / 生成一张表」），
+        ///     在后端<b>走同一条路</b>：都只「认领」，真实 LLM 调用统一在
+        ///     <c>ResolveAiAnchorsAsync</c> 批量执行。</para>
+        ///
+        ///     <para>⚠️ 同时认旧值 <c>ai</c>（<c>22</c> 号时代的单值）—— 库里可能还有老数据，
+        ///     ⛔ 不能只认新三值，否则老配置会静默变成「未实现的来源」。</para>
+        /// </summary>
+        private static bool IsAiKind(string? kind)
+        {
+            if (string.IsNullOrEmpty(kind)) return false;
+            return kind.Equals("ai", StringComparison.OrdinalIgnoreCase)
+                || kind.Equals("ai_semantic", StringComparison.OrdinalIgnoreCase)
+                || kind.Equals("ai_field", StringComparison.OrdinalIgnoreCase)
+                || kind.Equals("ai_table", StringComparison.OrdinalIgnoreCase);
+        }
+
         private async Task<(bool ok, FillValue? value, string label)> ResolveByEntryAsync(
             SourceSpecEntry entry,
             DocTemplateAnchor anchor,
             string key,
-            EnterpriseInfo entInfo,
+            FillContext ctx,
             Dictionary<string, FillParamValue> savedValues,
             List<EnterpriseDocProfile> profiles,
             FillOneRequest req,
@@ -947,12 +1069,45 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                 {
                     savedValues.TryGetValue(entry.Ref ?? string.Empty, out var saved);
                     var (ok, val) = await _sourceResolver.TryResolveGlobalAsync(
-                        entry, anchor, entInfo, req.StandardCode, req.StageCode, req.OrgCode,
+                        entry, anchor, ctx.Enterprise, req.StandardCode, req.StageCode, req.OrgCode,
                         req.EnterpriseCode,
                         savedValue: saved?.ParamValue,
                         savedValueSource: saved?.ValueSource,
                         savedIsManualEdited: saved?.IsManualEdited ?? false);
                     return (ok, val, saved?.SourceRef ?? $"全局参数 · {entry.Ref}");
+                }
+
+                // ════════════════════════════════════════════════════════════════
+                //  ★ 2026-10-09 新增两个来源 —— 前端「全局参数」卡片的只读项 + 「文档信息」卡片
+                //
+                //  · `replace`       ← ①②组：`enterprise.*` / `org.*` / `system.*`（只读，直读档案）
+                //  · `headerFooter`  ← 「文档信息」卡片：`@doc_no` / `@stage_name` …（读文档元信息）
+                //
+                //  ⚠️⚠️ 为什么必须走 `TryEvaluate` 而**不能**在这里自己写取值逻辑：
+                //     本编排器是**锚点驱动**（一个锚点 = 一个来源，没有 `{{}}` 文本可扫），
+                //     而试填预览是**文档驱动**（`DocumentFillEngine` 扫 token）。
+                //     两条路径若各写一套取值，就会出现「预览里填对了、真填出来是空的」，
+                //     且**两边都不报错**。`TryEvaluate` 让两条路径共用同一个 `Evaluate`
+                //     ⇒ 中文名、错误话术、只读语义全部一致。
+                // ════════════════════════════════════════════════════════════════
+                case "replace":
+                case "headerfooter":
+                {
+                    IFillResolver resolver = entry.Kind!.ToLowerInvariant() == "headerfooter"
+                        ? new HeaderFooterResolver()
+                        : new ReplaceResolver();
+
+                    if (!resolver.TryEvaluate(entry.Ref, ctx, out var raw, out var srcLabel, out var why))
+                    {
+                        // ⛔ 不静默：如实回报「该去哪补」（`why` 由 Resolver 产出，含中文名与动作指引）
+                        _logger.LogWarning(
+                            "[EntNorm] 锚点 {Key} 的 {Kind} 来源「{Ref}」取值失败：{Why}",
+                            key, entry.Kind, entry.Ref, why);
+                        return (false, null, why);
+                    }
+
+                    var (okVal, val, _) = FillValueFactory.TryCreate(key, raw, anchor.ValueType, anchor.NumberFormat);
+                    return (okVal && val != null, val, srcLabel);
                 }
 
                 case "manual":
@@ -971,8 +1126,14 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                 }
 
                 case "ai":
+                case "ai_semantic":
+                case "ai_field":
+                case "ai_table":
                 {
-                    // 只做「认领」，真实 LLM 调用在 ResolveAiAnchorsAsync 统一批量执行
+                    // ★ 兜底分支：正常路径下主循环已用 `IsAiKind()` **提前认领**并 break，
+                    //   ⛔ 不会走到这里（见主循环注释：AI 必须判在 `val == null` 之前）。
+                    //   保留这些 case 是为了「单一事实来源」—— 万一将来有人从别处调用本方法，
+                    //   未知 kind 会落到 default 报「未实现的来源」，那是**指错方向**。
                     return (true, null, "AI 生成");
                 }
 
@@ -1051,6 +1212,8 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
             FillOneRequest req,
             List<string> skillTrace,
             List<string> retrievedCodes,
+            FillContext fillCtx,
+            Dictionary<string, FillParamValue> savedValues,
             CancellationToken ct)
         {
             // 召回企业文档 Markdown（画像的 SourceMarkdownPath = 分析输入快照）
@@ -1073,33 +1236,41 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                 }
             }
 
-            // 按 PromptGroup 分组
-            var groups = aiAnchors.GroupBy(a =>
-                _sourceResolver.Parse(a.SourceSpec)?.Sources
-                    .FirstOrDefault(s => string.Equals(s.Kind, "ai", StringComparison.OrdinalIgnoreCase))?.PromptGroup
-                ?? "default");
+            // 按 AI 来源条目分组。
+            //
+            // ⚠️⚠️ 2026-10-09 修（与「AI 认领」同一类静默失效）：
+            //   此前判的是 `s.Kind == "ai"`，而新 UI 写的是 `ai_semantic` / `ai_field` / `ai_table`
+            //   ⇒ `FirstOrDefault` 恒为 null ⇒ 所有 AI 锚点塌进 `default` 组，
+            //   而且下面构造 `Instruction` 时根本拿不到 per-anchor 的提示词。
+            //   现在统一走 `AiEntryOf`（= `IsAiKind`），并把「AI 节点提示词 + 引用参数」接进来。
+            var groups = aiAnchors.GroupBy(a => AiEntryOf(a)?.PromptGroup ?? "default");
 
             var batchCode = Guid.NewGuid().ToString();
 
             foreach (var group in groups)
             {
+                // ★ Instruction 需要逐锚点异步取「引用参数」的值 ⇒ ⛔ 不能用 LINQ Select（无法 await）
+                var specs = new List<AiFillAnchorSpec>();
+                foreach (var a in group)
+                {
+                    var (key, _) = AnchorKeyOf(a);
+                    specs.Add(new AiFillAnchorSpec
+                    {
+                        AnchorCode = key,
+                        // ★ 「③ 提示词」是这一格的指令（此前错用了 `Remark`，见方法注释）
+                        Instruction = await BuildAiInstructionAsync(a, key, fillCtx, savedValues, req),
+                        ValueKind = a.ValueType,
+                        Section = "field",
+                        PromptGroup = group.Key,
+                    });
+                }
+
                 var buildCtx = new AiFillBuildContext
                 {
                     DocumentName = template.FileName,
                     StandardCode = template.StandardCode,
                     EnterpriseDocs = docsMarkdown.ToString(),
-                    Anchors = group.Select(a =>
-                    {
-                        var (key, _) = AnchorKeyOf(a);
-                        return new AiFillAnchorSpec
-                        {
-                            AnchorCode = key,
-                            Instruction = a.Remark ?? key,
-                            ValueKind = a.ValueType,
-                            Section = "field",
-                            PromptGroup = group.Key,
-                        };
-                    }).ToList(),
+                    Anchors = specs,
                 };
 
                 AiFillInvokeResult aiResult;
@@ -1179,6 +1350,69 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                     }
                 }
             }
+        }
+
+        /// <summary>
+        ///     取锚点上的 <b>AI 来源条目</b>（<c>ai_semantic</c> / <c>ai_field</c> / <c>ai_table</c>，含旧值 <c>ai</c>）。
+        ///     <para>⛔ 唯一口径：判据走 <see cref="IsAiKind"/>，⛔ 不要在别处再写 <c>== "ai"</c>。</para>
+        /// </summary>
+        private SourceSpecEntry? AiEntryOf(DocTemplateAnchor anchor)
+            => _sourceResolver.Parse(anchor.SourceSpec)?.Sources?.FirstOrDefault(s => IsAiKind(s.Kind));
+
+        /// <summary>
+        ///     ★ 构造某个 AI 锚点的指令文本 —— = <b>该锚点配的「提示词」</b>（替换掉引用的 <c>{{参数}}</c>）。
+        ///
+        ///     <para><b>为什么必须重写这一处（原实现是空功能）</b>：此前写的是 <c>a.Remark ?? key</c> ——
+        ///     用户在抽屉「③ 提示词」里写的内容<b>从不被读取</b>（模型收到的是「备注」字段），
+        ///     而「② 选参数」也不参与 ⇒ 整个 AI ② 段是<b>配了不生效</b>的假功能。</para>
+        ///
+        ///     <para><b>引用参数怎么落地</b>（<c>48</c> §2.2 ① / <c>61</c> S-1）：按 <see cref="SourceSpecEntry.AiParamRefs"/>
+        ///     逐个用 <c>global</c> 取值内核解析出真实值，再交给
+        ///     <c>AiFillPromptBuilder.RenderParamRefs</c> 把 <c>{{参数}}</c> 替换掉。</para>
+        ///
+        ///     <para><b>取不到值不阻断</b>：替换为「（未提供）」并继续（模型据此作答 / 留空），
+        ///     ⛔ 不让一个参数缺失炸掉整批 AI 调用。</para>
+        /// </summary>
+        private async Task<string> BuildAiInstructionAsync(
+            DocTemplateAnchor anchor,
+            string key,
+            FillContext fillCtx,
+            Dictionary<string, FillParamValue> savedValues,
+            FillOneRequest req)
+        {
+            var entry = AiEntryOf(anchor);
+            var prompt = entry?.Prompt?.Trim();
+
+            // 提示词为空 ⇒ 回退链（保持与旧行为一致：Remark → 锚点键）
+            if (string.IsNullOrWhiteSpace(prompt)) return anchor.Remark ?? key;
+
+            var values = new Dictionary<string, string?>(StringComparer.Ordinal);
+            foreach (var pref in entry!.AiParamRefs())
+            {
+                try
+                {
+                    savedValues.TryGetValue(pref, out var saved);
+                    var pseudo = new SourceSpecEntry { Kind = "global", Ref = pref };
+                    var (ok, val) = await _sourceResolver.TryResolveGlobalAsync(
+                        pseudo, anchor, fillCtx.Enterprise, req.StandardCode, req.StageCode, req.OrgCode,
+                        req.EnterpriseCode, saved?.ParamValue, saved?.ValueSource, saved?.IsManualEdited ?? false);
+                    values[pref] = ok && val != null ? val.ToDisplayText() : null;
+                }
+                catch (Exception ex)
+                {
+                    // ⛔ 不静默降级到「异常炸整批」：单个参数取不到 ⇒ 记 warning + 标「未提供」
+                    _logger.LogWarning(ex, "[EntNorm] AI 锚点 {Key} 的引用参数 {Param} 取值失败", key, pref);
+                    values[pref] = null;
+                }
+            }
+
+            var text = AiFillPromptBuilder.RenderParamRefs(prompt!, values);
+
+            // ★ 「② 是否依赖企业资料」= false ⇒ 明确告知模型「别去企业资料里找」（S-1 ②）
+            if (entry.DependsOnEnterprise == false)
+                text += "\n（本项不依赖企业资料，仅依据上述参考参数与提示词作答。）";
+
+            return text;
         }
 
         // ════════════════════════════════════════════════════════════════════

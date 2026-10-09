@@ -78,6 +78,44 @@ public sealed class FillValue
     public string? Source { get; set; }
 
     /// <summary>
+    ///     ★ <b>写入方式</b> —— 命中这一格 / 这一段时，怎么处理**原有文字**。
+    ///
+    ///     <para><b>取值</b>（受控值同 <c>DocTemplateAnchor.WriteMode</c>）：</para>
+    ///     <list type="table">
+    ///         <listheader><term>值</term><description>行为</description></listheader>
+    ///         <item><term><c>overwrite</c>（覆盖）</term>
+    ///               <description><b>整格 / 整段换成取值</b> —— 格里的其它文字<b>一并被替换掉</b>。</description></item>
+    ///         <item><term><c>replace</c>（填充）</term>
+    ///               <description><b>只替换格里的 <c>{{token}}</c></b>，其余文字<b>原样保留</b>。</description></item>
+    ///         <item><term><c>null</c> / 其它</term>
+    ///               <description><b>按「填充」处理</b> —— ⛔ 这是刻意的保守默认：
+    ///                     不认识的值一律走「不破坏原文」的那条路。</description></item>
+    ///     </list>
+    ///
+    ///     <para><b>★ 为什么这条要由层 2 显式给出、而不是层 1 按格子内容猜</b>：
+    ///     用户 2026-10-09 规格原话 ——「我们很多时候，一个单元格并不是一个字段，一般是<b>一句话，
+    ///     中间有 <c>{{}}</c></b>，我们如果用<b>覆盖</b>，就将 cell 全部填充成新的内容了，
+    ///     <b>只能替换当前单元格的 <c>{{}}</c></b>」。
+    ///     ⇒ 「整格换掉」还是「只换占位符」是<b>用户配的规则</b>，不是格子长什么样的推论
+    ///     （同一句「一句话带 <c>{{}}</c>」，两种意图都可能）。层 1 只按此字段落笔，⛔ 不推断。</para>
+    ///
+    ///     <para><b>⚠️ 覆盖只在「本格 / 本段恰好 1 个锚点」时成立</b> —— 多个锚点时
+    ///     「整格该换成哪一个的值」语义模糊，层 1 <b>退回填充并记一条待办</b>（⛔ 不猜）。</para>
+    /// </summary>
+    public string? WriteMode { get; set; }
+
+    /// <summary>
+    ///     ★ 是否「覆盖」写入 —— <b>整格 / 整段换成取值</b>。
+    ///
+    ///     <para><b>⛔ 唯一判据</b>：两个写入器（<c>ExcelFillWriter</c> / <c>WordParagraphFiller</c>）
+    ///     都必须读这里，⛔ 不要各自写一遍 <c>== "overwrite"</c> —— 两处口径漂移 =
+    ///     「Excel 整格换了、Word 只换了占位符」这类只在一边出现的怪现象。</para>
+    ///
+    ///     <para>大小写与空白容错；<c>null</c> / 空 / 未知值一律 <c>false</c>（= 填充，保守默认）。</para>
+    /// </summary>
+    public bool IsOverwrite() => WriteMode?.Trim().ToLowerInvariant() == "overwrite";
+
+    /// <summary>
     /// 写入报告里展示的值（按类型格式化，截断到 120 字符）。
     ///
     /// <para><b>★ Number 吃 <see cref="NumberFormat"/>（2026-10-05 修正）</b>：

@@ -361,7 +361,95 @@ public class ExpertTaskController : YzhControllerBase<CertExpertTask>
     }
 
     // ========================================================
-    // 六、辅助
+    // 六、队列监控（列表 / 统计 / 详情 / 取消）
+    // ========================================================
+
+    /// <summary>队列监控列表。POST <c>api/Auditor/ExpertTask/queue/list</c></summary>
+    [HttpPost("queue/list")]
+    public async Task<ActionResult<ApiResponse<object>>> QueueList([FromBody] QueueListRequest req)
+    {
+        try
+        {
+            var ws = ResolveWorkspace();
+            if (ws.Error != null) return Ok(ApiResponse.Fail(ws.Error));
+
+            var r = await _svc.GetQueueListAsync(
+                ws.Code!, req.Status, req.StartTime, req.EndTime, req.Page, req.Rows);
+            return r.Success
+                ? Ok(ApiResponse<object>.Ok(r.Data!))
+                : Ok(ApiResponse.Fail(r.Error!));
+        }
+        catch (Exception ex)
+        {
+            return Ok(ApiResponse.Fail($"获取队列列表失败：{ex.Message}"));
+        }
+    }
+
+    /// <summary>队列监控统计卡。POST <c>api/Auditor/ExpertTask/queue/stats</c></summary>
+    [HttpPost("queue/stats")]
+    public async Task<ActionResult<ApiResponse<object>>> QueueStats()
+    {
+        try
+        {
+            var ws = ResolveWorkspace();
+            if (ws.Error != null) return Ok(ApiResponse.Fail(ws.Error));
+
+            var r = await _svc.GetQueueStatsAsync(ws.Code!);
+            return r.Success
+                ? Ok(ApiResponse<object>.Ok(r.Data!))
+                : Ok(ApiResponse.Fail(r.Error!));
+        }
+        catch (Exception ex)
+        {
+            return Ok(ApiResponse.Fail($"获取队列统计失败：{ex.Message}"));
+        }
+    }
+
+    /// <summary>队列详情 + 子任务列表。POST <c>api/Auditor/ExpertTask/queue/detail</c></summary>
+    [HttpPost("queue/detail")]
+    public async Task<ActionResult<ApiResponse<object>>> QueueDetail(
+        [FromBody] QueueDetailRequest req)
+    {
+        try
+        {
+            var ws = ResolveWorkspace();
+            if (ws.Error != null) return Ok(ApiResponse.Fail(ws.Error));
+
+            var r = await _svc.GetQueueDetailAsync(ws.Code!, req.QueueCode);
+            return r.Success
+                ? Ok(ApiResponse<object>.Ok(r.Data!))
+                : Ok(ApiResponse.Fail(r.Error!));
+        }
+        catch (Exception ex)
+        {
+            return Ok(ApiResponse.Fail($"获取队列详情失败：{ex.Message}"));
+        }
+    }
+
+    /// <summary>取消队列。POST <c>api/Auditor/ExpertTask/queue/cancel</c></summary>
+    [HttpPost("queue/cancel")]
+    public async Task<ActionResult<ApiResponse<object>>> QueueCancel(
+        [FromBody] QueueCodeRequest req)
+    {
+        try
+        {
+            var ws = ResolveWorkspace();
+            if (ws.Error != null) return Ok(ApiResponse.Fail(ws.Error));
+
+            var r = await _svc.CancelQueueAsync(
+                ws.Code!, req.QueueCode, UserContext.UserCode, DisplayName());
+            return r.Success
+                ? Ok(ApiResponse<object>.Ok(r.Data!))
+                : Ok(ApiResponse.Fail(r.Error!));
+        }
+        catch (Exception ex)
+        {
+            return Ok(ApiResponse.Fail($"取消队列失败：{ex.Message}"));
+        }
+    }
+
+    // ========================================================
+    // 八、辅助
     // ========================================================
 
     /// <summary>解析工作区；失败时返回 (null, 错误文案)</summary>
@@ -380,7 +468,7 @@ public class ExpertTaskController : YzhControllerBase<CertExpertTask>
             : UserContext.UserTrueName!;
 
     // ========================================================
-    // 七、请求模型
+    // 九、请求模型
     // ========================================================
 
     public class TaskCodeRequest
@@ -398,5 +486,19 @@ public class ExpertTaskController : YzhControllerBase<CertExpertTask>
         public string TaskCode { get; set; } = string.Empty;
         public string? QueueCode { get; set; }
         public int Take { get; set; } = 200;
+    }
+
+    public class QueueListRequest
+    {
+        public string? Status { get; set; }
+        public DateTime? StartTime { get; set; }
+        public DateTime? EndTime { get; set; }
+        public int Page { get; set; } = 1;
+        public int Rows { get; set; } = 20;
+    }
+
+    public class QueueDetailRequest
+    {
+        public string QueueCode { get; set; } = string.Empty;
     }
 }

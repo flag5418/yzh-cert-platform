@@ -213,7 +213,7 @@
       "GroupIndex": "1",
       "Mrz": "",
       "Enable": true,
-      "Placeholder": "{\"combine\":\"\",\"separator\":\"\",\"expr\":\"\",\"sources\":[]}"
+      "Placeholder": "{\"sources\":[{\"kind\":\"global\",\"ref\":\"参数编码\"}]}"
     },
     {
       "FieldName": "SourceSummary",

@@ -12,6 +12,12 @@
  *   1. handleStdCheckChange 增加守卫：仅处理有有效 standardCode 的节点
  *   2. buildStdTree 中体系节点不设 IsLeaf:true（即使无子节点也应显示为可折叠父节点）
  *
+ * 覆盖 2026-10-09 用户报出的缺陷：
+ *   「勾选新的医疗器械标准，但没有保存成功」
+ * 根因：save 传的是业务编号 slug（iso13485），而后端 List/专家端均按
+ *       cert_iso_standard.Code（GUID）比对 ⇒ 库里有行但回显永远未勾选。
+ * 修复：叶子节点携带 code（= item.Code），save 传 GUID（T1/T4/T5 断言）。
+ *
  * 6 个用例：
  *   T1 正常渲染 —— API 返回 1 条标准，树中恰好 1 个有效叶子
  *   T2 空节点不可勾选 —— 无子节点的体系节点不渲染为可勾选的叶子
@@ -220,6 +226,8 @@ describe('机构-标准关联管理 · 树渲染与勾选', () => {
     expect(leaves[0].standardCode).toBe('iso9001')
     expect(leaves[0].standardName).toBe('9001标准')
     expect(leaves[0].id).toBe(STD_ISO9001.Code)
+    // ★ 保存传参用 GUID（cert_iso_standard.Code），slug 仅展示
+    expect(leaves[0].code).toBe(STD_ISO9001.Code)
 
     wrapper.unmount()
   })
@@ -302,11 +310,11 @@ describe('机构-标准关联管理 · 树渲染与勾选', () => {
     await vm.handleStdCheckChange(leafNode, true)
     await flushPromises()
 
-    // ★ 验证 save 被调用，且参数正确
+    // ★ 验证 save 被调用，且参数正确（StandardCode 必须是 GUID，2026-10-09 回显缺陷回归）
     expect(mockOrgStandardApi.save).toHaveBeenCalledTimes(1)
     expect(mockOrgStandardApi.save.mock.calls[0][0]).toMatchObject({
       OrgCode: ORG_CODE_1,
-      StandardCode: 'iso9001',
+      StandardCode: STD_ISO9001.Code,
       Linked: true
     })
     wrapper.unmount()
@@ -333,11 +341,11 @@ describe('机构-标准关联管理 · 树渲染与勾选', () => {
     await vm.handleStdCheckChange(leafNode, false)
     await flushPromises()
 
-    // ★ 验证 save 被调用，且 Linked = false
+    // ★ 验证 save 被调用，Linked = false，StandardCode 为 GUID
     expect(mockOrgStandardApi.save).toHaveBeenCalledTimes(1)
     expect(mockOrgStandardApi.save.mock.calls[0][0]).toMatchObject({
       OrgCode: ORG_CODE_1,
-      StandardCode: 'iso9001',
+      StandardCode: STD_ISO9001.Code,
       Linked: false
     })
     wrapper.unmount()

@@ -195,13 +195,73 @@ namespace CertPlatform.Admin.Services.Ent
         public List<SourceSpecEntry> Sources { get; set; } = new();
     }
 
+    /// <summary>
+    ///     来源条目（<c>SourceSpec.sources[i]</c>）。
+    ///
+    ///     <para><b>★ 2026-10-09：模型收敛为「一个锚点 = 一个来源」</b> ——
+    ///     <c>Sources</c> 数组**长度恒为 1**（编排器仍按数组遍历，保持向后兼容）。
+    ///     用户裁定删除「组合方式」（<c>combine</c>）与「企业资料画像」（<c>profile</c>）。</para>
+    ///
+    ///     <para><b>★ 前端已不再写</b> <c>Combine</c> / <c>Separator</c> / <c>Expr</c> /
+    ///     <c>OnMissing</c> —— 这几项都有默认值，⛔ 删字段会破坏老数据反序列化，故保留。</para>
+    /// </summary>
     public class SourceSpecEntry
     {
+        /// <summary><c>global</c> / <c>ai_semantic</c> / <c>ai_field</c> / <c>ai_table</c> / <c>manual</c>（旧值 <c>ai</c> / <c>profile</c> 仍可解析）</summary>
         public string Kind { get; set; } = string.Empty;
+        /// <summary><c>global</c> 专用 = 参数编码；<c>ai_*</c> 且 <see cref="HasParam"/>=true 时同义</summary>
         public string? Ref { get; set; }
         public string? Field { get; set; }
         public double? MinConfidence { get; set; }
         public string? PromptGroup { get; set; }
         public string OnMissing { get; set; } = "next";
+
+        // ── ★ 2026-10-09 新增：AI 节点的固定 3 属性（前端 ② 段）──
+        //    ⛔ 不加这三个字段的话，前端写进 JSON 的值会被**静默丢弃**（反序列化忽略未知属性）。
+
+        /// <summary>★ <c>ai_*</c> 专用：① 有无参数（有 ⇒ <see cref="Ref"/> 就是全局参数编码）</summary>
+        public bool HasParam { get; set; }
+
+        /// <summary>★ <c>ai_*</c> 专用：② 是否依赖企业资料（不依赖 ⇒ 只靠「参数 + 提示词」生成）</summary>
+        public bool DependsOnEnterprise { get; set; }
+
+        /// <summary>★ <c>ai_*</c> 专用：③ 提示词（其中可用 <c>{{参数}}</c> 引用 <see cref="Params"/> 里的全局参数）</summary>
+        public string? Prompt { get; set; }
+
+        /// <summary>
+        ///     ★ <c>ai_*</c> 专用：④ <b>引用的全局参数（多选）</b> —— 「带参数」的落地。
+        ///
+        ///     <para>依据：<c>48</c> §2.2 ①（三类 AI 共用的「是否带参数」+ 多选全局参数）·
+        ///     <c>61</c> S-1（「勾选后提示词 <c>{{参数}}</c> 引用」）· 原型 V4。
+        ///     用户在 AI 节点的提示词里写 <c>{{参数编码}}</c>，运行期由
+        ///     <c>AiFillPromptBuilder.RenderParamRefs</c> 替换成真实取值。</para>
+        ///
+        ///     <para>⚠️ <b>兼容单参数老写法</b>：<c>Params</c> 为空但 <see cref="HasParam"/>=true 时，
+        ///     回退到 <see cref="Ref"/>（2026-10-09 之前 UI 只支持单选一个参数）。⛔ 不要删 <see cref="Ref"/>：
+        ///     库里可能已有该形态的行，删字段会让它们反序列化后静默丢参数。</para>
+        /// </summary>
+        public List<string> Params { get; set; } = new();
+
+        /// <summary>
+        ///     生效的<b>参数引用列表</b>（去空、去重保序）—— <b>唯一判据</b>。
+        ///     <para>新写法 <see cref="Params"/> 优先；为空时回退单值 <see cref="Ref"/>（见 <see cref="Params"/> 注释）。</para>
+        /// </summary>
+        public IReadOnlyList<string> AiParamRefs()
+        {
+            var list = new List<string>();
+            if (Params != null)
+            {
+                foreach (var p in Params)
+                {
+                    var t = (p ?? string.Empty).Trim();
+                    if (t.Length > 0 && !list.Contains(t)) list.Add(t);
+                }
+            }
+
+            if (list.Count == 0 && HasParam && !string.IsNullOrWhiteSpace(Ref))
+                list.Add(Ref!.Trim());
+
+            return list;
+        }
     }
 }

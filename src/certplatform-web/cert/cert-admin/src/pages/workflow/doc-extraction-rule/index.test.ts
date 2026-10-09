@@ -82,6 +82,43 @@ describe('AIAnalysisTab', () => {
     expect(wrapper.text()).toContain('表格定义（1）')
     expect(wrapper.text()).toContain('股东信息')
   })
+
+  // ★ 2026-10-09：文件被后端判为 unsupported（MarkdownStatus）时，只置灰「开始分析」
+  it('disables analyze button and rewrites empty-state hint when unsupported', () => {
+    const wrapper = mount(AIAnalysisTab, {
+      props: { ...defaultProps, unsupported: true },
+      global: { stubs }
+    })
+    const btn = wrapper.find('button')
+    expect(btn.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('该文件不支持自动提取，请手动添加字段')
+    // ⛔ 不能连「暂无字段」的默认文案一起丢掉：不支持的判据只改措辞，不改结构
+    expect(wrapper.text()).not.toContain('请点击「开始分析」')
+  })
+
+  // ★ 2026-10-09：不支持的文件的**正确出路是手工定义**（后端 MarkdownMessage 原话），
+  //   所以手工增删字段 / 表格必须照常可用 —— 这条断言防的是「顺手把整个页签禁掉」。
+  it('keeps manual field editing available when unsupported', async () => {
+    const wrapper = mount(AIAnalysisTab, {
+      props: { ...defaultProps, unsupported: true },
+      global: { stubs }
+    })
+    const buttons = wrapper.findAll('button')
+    const analyzeBtn = buttons.find((b) => b.text().includes('开始分析'))
+    const addBtns = buttons.filter((b) => b.text().includes('添加'))
+
+    // ① 自动分析入口被禁
+    expect(analyzeBtn?.attributes('disabled')).toBeDefined()
+    // ② 手工「添加」入口（字段区 / 表格区）一个都不能被禁
+    expect(addBtns.length).toBe(2)
+    addBtns.forEach((b) => expect(b.attributes('disabled')).toBeUndefined())
+    // ③ 点一次真的加出一个字段 —— 证明不是「看着能点、点了没用」。
+    //    ⚠️ 只断言「不再是 0」而不断言等于 1：el-button 的测试替身在 VTU 的 trigger 下会派发两次
+    //    click（`<button @click="$emit('click')">` 的原生冒泡 + emit 转发），精确计数会得到假失败。
+    expect(wrapper.text()).toContain('字段定义（0）')
+    await addBtns[0].trigger('click')
+    expect(wrapper.text()).not.toContain('字段定义（0）')
+  })
 })
 
 describe('PromptVerifyTab', () => {

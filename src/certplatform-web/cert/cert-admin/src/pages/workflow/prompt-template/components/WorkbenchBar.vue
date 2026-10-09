@@ -8,7 +8,7 @@
  *
  * ⛔ 不显示 AI 模型：模型由 `cert_sys_config` 统一固定（D.2-1 / Q3=a），UI 不可选也不展示。
  */
-import { MagicStick, RefreshLeft, DocumentChecked, Fold, Expand, ArrowRight } from '@element-plus/icons-vue'
+import { MagicStick, RefreshLeft, DocumentChecked, ArrowRight } from '@element-plus/icons-vue'
 import type { PromptTypeDef } from '../logic'
 
 defineProps<{
@@ -39,9 +39,7 @@ defineProps<{
   saveState: 'saved' | 'unsaved' | 'draft'
   generating: boolean
   saving: boolean
-  saveBlockedReason?: string
-  /** 专注模式：隐藏左树与结果区 */
-  focused: boolean
+saveBlockedReason?: string
 }>()
 
 const emit = defineEmits<{
@@ -49,7 +47,6 @@ const emit = defineEmits<{
   (e: 'generate'): void
   (e: 'save'): void
   (e: 'reset'): void
-  (e: 'toggleFocus'): void
 }>()
 </script>
 
@@ -134,9 +131,6 @@ const emit = defineEmits<{
             保存
           </el-button>
         </span>
-      </el-tooltip>
-      <el-tooltip :content="focused ? '退出专注' : '专注模式（隐藏左树与结果区）'" placement="bottom">
-        <el-button :icon="focused ? Expand : Fold" @click="emit('toggleFocus')" />
       </el-tooltip>
     </div>
   </div>

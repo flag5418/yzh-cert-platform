@@ -15,8 +15,8 @@ namespace CertPlatform.Admin.Controllers.Workflow;
 /// <summary>
 /// 技能管理 — 左树右表控制器（TreeTable 架构）
 ///
-/// 左树：技能分类（扁平一级，<b>只读</b>）—— 数据源 = 字典「技能分类」(DicNo='skill_category') 的字典项
-///       分类的增删改/启停一律在「字典管理」页面维护（2026-09-26 分类字典化，用户裁决方案 A）
+/// 左树：技能分类（扁平一级）—— 数据源 = 字典「技能分类」(DicNo='skill_category') 的字典项
+///       分类的增删改/启停<b>在当前页面维护</b>（2026-10-09 改为就地维护，方便随时调整分类）
 /// 右表：技能（选中分类后分页加载，含启用/禁用行操作）
 ///
 /// 关联：树节点 Code = 字典项 DicValue（data_access 等语义值）→ wf_skill.CategoryCode 同值关联
@@ -24,13 +24,22 @@ namespace CertPlatform.Admin.Controllers.Workflow;
 ///
 /// 继承 TreeTableControllerBase 获得能力：
 /// - 树读取：/tree/root（override 过滤 skill_category 字典项） /tree/children（扁平恒空）
-/// - 树写入：/tree/add|update|delete|toggle-valid <b>全部拦截</b> → 提示去字典管理维护
+/// - 树写入：/tree/add|update|delete（就地维护，OnBefore* 钩子校验）
 /// - 单表 CRUD：/filter /add /update /delete /toggle-valid
 /// - 行操作：/action/disable /action/enable（RegisterRowAction，按行状态二选一按钮）
 /// - 配置：/treepconfig /config
 ///
+/// ⚠️ GUID/DicValue 映射：
+///   前端树节点 Code = DicValue（业务编码），后端实体 Code = GUID（行标识）。
+///   Update 时前端发 {Code: DicValue, DicName, DicValue, ...} → 本控制器
+///   先按 DicValue 查回 GUID 实体，再合并表单字段后 Update。
+///   Delete 时前端发 [DicValue, ...] → 先批量查回 GUID 再调基类删除。
+///
 /// API 路由：
 /// POST   /api/Workflow/SkillTreeTable/tree/root             获取根节点（skill_category 字典项）
+/// POST   /api/Workflow/SkillTreeTable/tree/add              新增分类（字典项）
+/// POST   /api/Workflow/SkillTreeTable/tree/update           修改分类
+/// POST   /api/Workflow/SkillTreeTable/tree/delete           删除分类（含外键校验）
 /// POST   /api/Workflow/SkillTreeTable/filter                技能分页（自动注入分类过滤）
 /// POST   /api/Workflow/SkillTreeTable/add|update|delete     技能增删改
 /// POST   /api/Workflow/SkillTreeTable/toggle-valid          技能启用/禁用
@@ -69,20 +78,23 @@ public class SkillTreeTableController
     {
         _dictionaryService = dictionaryService;
 
-        // ──── 左树配置（技能分类，只读） ────
+        // ──── 左树配置（技能分类，就地维护） ────
         TreeConfig.NameField = "DicName";             // 树显示名 = 字典项 DicName
         TreeConfig.CodeField = "DicValue";            // 树 Code = 业务编码 DicValue（关联 wf_skill.CategoryCode，非字典项 GUID）
         TreeConfig.ParentCodeField = "ParentCode";    // 扁平结构恒 null
         TreeConfig.RelateField = "CategoryCode";      // 右表通过 CategoryCode 关联左树
         TreeConfig.MaxLevel = 1;                      // 仅一级（扁平结构）
-        // 分类维护在「字典管理」页面 —— 树只读，全部写操作按钮关闭
-        TreeConfig.AllowAddChild = false;
-        TreeConfig.AllowEdit = false;
-        TreeConfig.AllowDelete = false;
+        // 分类在当前页面就地维护（2026-10-09 用户裁决：随时可能要调整分类）
+        TreeConfig.AllowAddChild = false;             // 扁平结构：不显示「新增下级」
+        TreeConfig.AllowEdit = true;                  // 允许编辑分类
+        TreeConfig.AllowDelete = true;                // 允许删除分类（含外键校验）
         TreeConfig.AllowRename = false;
-        TreeConfig.AllowToggle = false;               // 分类启停在字典页面做
+        TreeConfig.AllowToggle = false;               // 分类启停由 IsValid 字段隐式控制（禁用后自动从树消失）
         TreeConfig.NoSelectionBehavior = "all";       // 未选中分类（默认"全部"节点）时返回全量
         TreeConfig.EnableField = "IsValid";
+
+        // 树节点表单配置（弹窗新增/编辑分类时的表单字段）
+        TreeFormConfigName = "Workflow/SkillCategoryForm";
 
         // 注册行操作（表格：启用/禁用技能）→ 自动注入 RowButtons.CustomButtons，前端按行状态二选一渲染
         RegisterRowAction("disable", DisableSkillAsync);
@@ -193,41 +205,189 @@ public class SkillTreeTableController
     }
 
     // ========================================================
-    // 三、树写操作拦截（分类维护在「字典管理」页面）
-    //     前端 TreeConfig 全关（AllowEdit/AllowDelete/AllowToggle=false）已不发请求；
-    //     此处钩子兜底，防直连接口误写字典项表
+    // 三、树写操作校验（分类在当前页面就地维护）
     // ========================================================
 
-    /// <summary>拦截：不在技能页新增分类</summary>
-    protected override Task<(bool ok, string? msg)> OnBeforeAddTree(
+    /// <summary>
+    /// 新增分类前校验：DicName/DicValue 必填 + DicValue 唯一 + 自动填充 DicCode
+    /// </summary>
+    protected override async Task<(bool ok, string? msg)> OnBeforeAddTree(
         CertPlatform.Admin.Entities.Wf.SkillCategoryDict entity)
     {
-        return Task.FromResult<(bool, string?)>(
-            (false, "技能分类在「系统参数配置 → 数据字典」中维护，此处不允许新增"));
+        if (string.IsNullOrWhiteSpace(entity.DicName))
+            return (false, "分类名称不能为空");
+
+        if (string.IsNullOrWhiteSpace(entity.DicValue))
+            return (false, "分类编码（DicValue）不能为空");
+
+        // 自动填充 DicCode（skill_category 字典 Code）
+        var dictCode = await ResolveCategoryDictCodeAsync();
+        if (dictCode == null)
+            return (false, $"字典「技能分类」(DicNo={CategoryDictNo}) 未配置，请先在「字典管理」中创建");
+        entity.DicCode = dictCode;
+
+        // DicValue 唯一性校验（同一字典下不允许重复）
+        var exists = await TreeEntity.ExistsAsync(x => x.DicCode == dictCode && x.DicValue == entity.DicValue);
+        if (exists.Data)
+            return (false, $"分类编码【{entity.DicValue}】已存在");
+
+        // IsValid 默认 1
+        entity.IsValid = 1;
+        return (true, null);
     }
 
-    /// <summary>拦截：不在技能页修改分类</summary>
-    protected override Task<(bool ok, string? msg)> OnBeforeUpdateTree(
+    /// <summary>
+    /// 修改分类前校验：DicName 不可空 + DicValue 唯一（排除自身）
+    /// </summary>
+    protected override async Task<(bool ok, string? msg)> OnBeforeUpdateTree(
         CertPlatform.Admin.Entities.Wf.SkillCategoryDict entity)
     {
-        return Task.FromResult<(bool, string?)>(
-            (false, "技能分类在「系统参数配置 → 数据字典」中维护，此处不允许修改"));
+        if (string.IsNullOrWhiteSpace(entity.DicName))
+            return (false, "分类名称不能为空");
+
+        if (string.IsNullOrWhiteSpace(entity.DicValue))
+            return (false, "分类编码（DicValue）不能为空");
+
+        // DicValue 唯一性校验（排除自身：按 DicValue 查出的记录不能是别的 GUID）
+        var dictCode = await ResolveCategoryDictCodeAsync();
+        if (dictCode == null)
+            return (false, $"字典「技能分类」(DicNo={CategoryDictNo}) 未配置");
+
+        var dup = await TreeEntity.GetListAsync(x => x.DicCode == dictCode && x.DicValue == entity.DicValue);
+        var conflict = (dup.Data ?? new List<CertPlatform.Admin.Entities.Wf.SkillCategoryDict>())
+            .FirstOrDefault(x => x.Code != entity.Code);
+        if (conflict != null)
+            return (false, $"分类编码【{entity.DicValue}】已存在");
+
+        return (true, null);
     }
 
-    /// <summary>拦截：不在技能页删除分类</summary>
-    protected override Task<(bool ok, string? msg)> OnBeforeDeleteTree(string[] codes)
+    /// <summary>
+    /// 删除分类前校验：检查是否有技能正在引用该分类
+    /// </summary>
+    protected override async Task<(bool ok, string? msg)> OnBeforeDeleteTree(string[] codes)
     {
-        return Task.FromResult<(bool, string?)>(
-            (false, "技能分类在「系统参数配置 → 数据字典」中维护，此处不允许删除"));
+        if (codes == null || codes.Length == 0)
+            return (false, "未指定要删除的分类");
+
+        // 前端传的是 DicValue（树 Code = DicValue），需查回 GUID 再检查外键
+        var dictCode = await ResolveCategoryDictCodeAsync();
+        if (dictCode == null)
+            return (false, $"字典「技能分类」(DicNo={CategoryDictNo}) 未配置");
+
+        var items = await TreeEntity.GetListAsync(x => x.DicCode == dictCode && codes.Contains(x.DicValue));
+        var guids = (items.Data ?? new List<CertPlatform.Admin.Entities.Wf.SkillCategoryDict>())
+            .Select(x => x.Code)
+            .ToList();
+
+        // 检查每个 GUID 下是否有技能引用
+        foreach (var guid in guids)
+        {
+            var categoryItem = (items.Data ?? new List<CertPlatform.Admin.Entities.Wf.SkillCategoryDict>())
+                .FirstOrDefault(x => x.Code == guid);
+            if (categoryItem == null) continue;
+
+            var skillCount = await Entity.CountAsync(s => s.CategoryCode == categoryItem.DicValue);
+            if (skillCount.Data > 0)
+                return (false, $"分类【{categoryItem.DicName}】下有 {skillCount.Data} 个技能引用，无法删除");
+        }
+
+        return (true, null);
     }
 
-    /// <summary>拦截：分类启停在字典页面做（字典项 IsValid=0 后自动从本树消失）</summary>
-    [HttpPost("tree/toggle-valid")]
-    public override Task<ActionResult<ApiResponse<object?>>> ToggleTreeNodeIsValid(
-        [FromBody] JsonElement entityData)
+    // ========================================================
+    // 3.5 GUID/DicValue 映射处理（前端 Code = DicValue，后端 Code = GUID）
+    // ========================================================
+
+    /// <summary>
+    /// 覆盖 UpdateTreeNode：前端发 {Code: DicValue, DicName, DicValue, ...}
+    /// → 先按 DicValue 查回 GUID 实体 → 合并表单字段 → 调基类 Update
+    /// </summary>
+    [HttpPost("tree/update")]
+    public override async Task<ActionResult<ApiResponse<TreeItemDto>>> UpdateTreeNode(
+        [FromBody] CertPlatform.Admin.Entities.Wf.SkillCategoryDict entity)
     {
-        return Task.FromResult<ActionResult<ApiResponse<object?>>>(
-            Ok(ApiResponse<object?>.Fail("技能分类在「系统参数配置 → 数据字典」中维护，此处不允许启停")));
+        try
+        {
+            // 1. 修改前钩子（校验 DicName/DicValue 必填 + 唯一性）
+            var (ok, cancelMsg) = await OnBeforeUpdateTree(entity);
+            if (!ok) return Ok(ApiResponse.Fail(cancelMsg ?? "操作已取消"));
+
+            // 2. 按 DicValue 查回 GUID 实体
+            var dictCode = await ResolveCategoryDictCodeAsync();
+            if (dictCode == null)
+                return Ok(ApiResponse.Fail($"字典「技能分类」(DicNo={CategoryDictNo}) 未配置"));
+
+            var existing = await TreeEntity.GetListAsync(x =>
+                x.DicCode == dictCode && x.DicValue == entity.DicValue);
+            var existingItem = (existing.Data ?? new List<CertPlatform.Admin.Entities.Wf.SkillCategoryDict>())
+                .FirstOrDefault();
+            if (existingItem == null)
+                return Ok(ApiResponse.Fail($"分类编码【{entity.DicValue}】不存在"));
+
+            // 3. 合并表单字段到 GUID 实体（保留 Code/DicCode/IsValid 等）
+            existingItem.DicName = entity.DicName;
+            existingItem.DicValue = entity.DicValue;
+            existingItem.Color = entity.Color;
+            existingItem.OrderNo = entity.OrderNo;
+            existingItem.Remark = entity.Remark;
+
+            // 4. 执行修改
+            var result = await TreeEntity.Update(existingItem, UserContext.ClientIp);
+            if (!result.Success) return Ok(ApiResponse.Fail(result.Error));
+
+            // 5. 修改后钩子
+            await OnAfterUpdateTree(result.Data!);
+            await OnAfterCommitted();
+
+            // 6. 回填 IsLeaf
+            var updateDto = MapToTreeItem(result.Data!, 0);
+            await FillIsLeafBatch(new List<TreeItemDto> { updateDto });
+            return Ok(ApiResponse<TreeItemDto>.Ok(updateDto, "修改成功"));
+        }
+        catch (Exception ex)
+        {
+            return Ok(ApiResponse.Fail($"修改分类失败：{ex.Message}"));
+        }
+    }
+
+    /// <summary>
+    /// 覆盖 DeleteTreeNode：前端发 [DicValue, ...]
+    /// → 先批量查回 GUID → 再调基类删除（基类按 GUID 执行）
+    /// </summary>
+    [HttpPost("tree/delete")]
+    public override async Task<ActionResult<ApiResponse<string>>> DeleteTreeNode(
+        [FromBody] string[] codes)
+    {
+        try
+        {
+            if (codes == null || codes.Length == 0)
+                return Ok(ApiResponse.Fail("未指定要删除的分类"));
+
+            // 1. 删除前钩子（外键校验）
+            var (ok, cancelMsg) = await OnBeforeDeleteTree(codes);
+            if (!ok) return Ok(ApiResponse.Fail(cancelMsg ?? "操作已取消"));
+
+            // 2. 按 DicValue 查回 GUID
+            var dictCode = await ResolveCategoryDictCodeAsync();
+            if (dictCode == null)
+                return Ok(ApiResponse.Fail($"字典「技能分类」(DicNo={CategoryDictNo}) 未配置"));
+
+            var items = await TreeEntity.GetListAsync(x => x.DicCode == dictCode && codes.Contains(x.DicValue));
+            var guids = (items.Data ?? new List<CertPlatform.Admin.Entities.Wf.SkillCategoryDict>())
+                .Select(x => x.Code)
+                .ToArray();
+
+            if (guids.Length == 0)
+                return Ok(ApiResponse.Fail("未找到指定的分类"));
+
+            // 3. 调基类删除（按 GUID 执行）
+            return await base.DeleteTreeNode(guids);
+        }
+        catch (Exception ex)
+        {
+            return Ok(ApiResponse.Fail($"删除分类失败：{ex.Message}"));
+        }
     }
 
     // ========================================================

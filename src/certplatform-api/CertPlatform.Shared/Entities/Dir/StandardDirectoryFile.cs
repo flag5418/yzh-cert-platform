@@ -136,9 +136,17 @@ namespace CertPlatform.Shared.Entities.Dir
 
         /// <summary>
         ///     ★ <b>生成依据</b>：产出本次文件所用的画像 → <c>cert_enterprise_doc_profile.Code</c>
-        ///     （可多值时逗号分隔，最多 3 个）。
+        ///     （可多值时逗号分隔，最多 3 个 ⇒ 上限 3×36+2 = <b>110</b> 字符）。
+        ///
+        ///     <para><b>⚠️ 列宽必须是 200 而不是 36（2026-10-09 实测踩中）</b>：本列原为
+        ///     <c>varchar(36)</c>（只够 1 个 Code），而多标准场景下一个文件会命中 ≥2 个画像
+        ///     ⇒ 回写报 <c>Data too long for column 'SourceProfileCode'</c> ⇒
+        ///     <b>整次填充失败</b>（事务回滚，产物也出不来），而单画像场景侥幸通过
+        ///     ⇒ 缺陷潜伏到多标准场景才暴露。</para>
+        ///
+        ///     <para>DDL 修复：<c>scripts/db/20261009_fix_source_profile_code_width_V1.sql</c>。</para>
         /// </summary>
-        [SugarColumn(Length = 36)]
+        [SugarColumn(Length = 200)]
         public string SourceProfileCode { get; set; } = string.Empty;
 
         /// <summary>

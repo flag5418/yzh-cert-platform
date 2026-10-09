@@ -310,8 +310,20 @@ public class PromptWorkbenchService
             }
         }
 
+        // ★ 2026-10-09 用户裁决：「AI 生成不需要任何参数，根据全局提示词动态生成，我们可以根据实际情况进行修改」。
+        //   故缺占位符 / 过短**不再硬拦**（返回 success:false 让用户重试），而是返回草稿 + 警告，
+        //   由用户在编辑器里按实际情况补齐 {{standard_name}} 等占位符后再保存。
+        //   仅「输出为空」「整段是 JSON 本体」这两种无可救药的情况才硬失败。
         if (problems.Count > 0)
-            return GenerateResult.Fail("AI 生成结果不合格：" + string.Join("；", problems) + "，请点「AI 生成」重试", totalMs);
+        {
+            var hopeless = problems.Any(p => p.Contains("输出为空") || p.Contains("JSON 本体"));
+            if (hopeless)
+                return GenerateResult.Fail("AI 生成失败：" + string.Join("；", problems), totalMs);
+
+            var warned = GenerateResult.Ok(text, totalMs, totalPt, totalCt);
+            warned.Warning = "草稿已生成，但需人工完善：" + string.Join("；", problems);
+            return warned;
+        }
 
         return GenerateResult.Ok(text, totalMs, totalPt, totalCt);
     }
@@ -1308,6 +1320,11 @@ public class PromptWorkbenchService
     {
         [JsonPropertyName("success")] public bool Success { get; set; }
         [JsonPropertyName("message")] public string Message { get; set; } = "";
+        /// <summary>
+        /// ★ 警告（2026-10-09 新增）：草稿已生成但需人工完善（如缺占位符、过短）。
+        /// <para>非空时 <see cref="Success"/> 仍为 true —— 正文可用，仅提示用户补齐后再保存。</para>
+        /// </summary>
+        [JsonPropertyName("warning")] public string? Warning { get; set; }
         /// <summary>生成的提示词正文（★ 不落库，由用户确认后保存）</summary>
         [JsonPropertyName("prompt")] public string? Prompt { get; set; }
         [JsonPropertyName("durationMs")] public long DurationMs { get; set; }

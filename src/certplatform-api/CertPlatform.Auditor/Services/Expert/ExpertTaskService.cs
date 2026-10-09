@@ -1974,7 +1974,104 @@ namespace CertPlatform.Auditor.Services.Expert
         }
 
         // ================================================================
-        // 七、辅助
+        // 七、队列监控（列表 / 统计 / 详情 / 取消）
+        // ================================================================
+
+        /// <summary>队列监控列表（工作区隔离 + 分页 + 过滤）</summary>
+        public async Task<Result<object>> GetQueueListAsync(
+            string orgCode, string? status, DateTime? startTime, DateTime? endTime, int page, int rows)
+        {
+            var query = _db.Client.Queryable<CertExpertTaskQueue>()
+                .Where(x => x.OrgCode == orgCode && !x.IsDeleted);
+
+            if (!string.IsNullOrWhiteSpace(status))
+                query = query.Where(x => x.QueueStatus == status);
+            if (startTime.HasValue)
+                query = query.Where(x => x.CreateTime >= startTime.Value);
+            if (endTime.HasValue)
+                query = query.Where(x => x.CreateTime <= endTime.Value);
+
+            var total = await query.CountAsync();
+            var items = await query
+                .OrderByDescending(x => x.CreateTime)
+                .Skip((page - 1) * rows)
+                .Take(rows)
+                .ToListAsync();
+
+            return Result<object>.Ok(new { Total = total, Rows = items });
+        }
+
+        /// <summary>队列监控统计卡（按状态聚合 + 今日计数）</summary>
+        public async Task<Result<object>> GetQueueStatsAsync(string orgCode)
+        {
+            var all = (await _db.GetListAsync<CertExpertTaskQueue>(
+                x => x.OrgCode == orgCode && !x.IsDeleted)).Data ?? new List<CertExpertTaskQueue>();
+
+            var today = DateTime.Today;
+            var stats = new
+            {
+                Running = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Running),
+                Pending = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Pending),
+                Completed = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Completed),
+                Failed = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Failed),
+                Cancelled = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Cancelled),
+                TodayTotal = all.Count(x => x.CreateTime >= today),
+                TodayCompleted = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Completed && x.FinishTime >= today),
+                TodayFailed = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Failed && x.FinishTime >= today)
+            };
+
+            return Result<object>.Ok(stats);
+        }
+
+        /// <summary>队列详情 + 子任务列表</summary>
+        public async Task<Result<object>> GetQueueDetailAsync(string orgCode, string queueCode)
+        {
+            var q = (await _db.GetOneAsync<CertExpertTaskQueue>(
+                x => x.Code == queueCode && x.OrgCode == orgCode && !x.IsDeleted)).Data;
+            if (q == null) return Result<object>.Fail("队列不存在或不属于当前工作区");
+
+            var items = (await _db.GetListAsync<CertExpertTaskQueueItem>(
+                x => x.QueueCode == queueCode && !x.IsDeleted)).Data
+                ?? new List<CertExpertTaskQueueItem>();
+
+            return Result<object>.Ok(new { Queue = q, Items = items });
+        }
+
+        /// <summary>取消队列（pending / running → cancelled）</summary>
+        public async Task<Result<object>> CancelQueueAsync(
+            string orgCode, string queueCode, string userCode, string? userName)
+        {
+            var q = (await _db.GetOneAsync<CertExpertTaskQueue>(
+                x => x.Code == queueCode && x.OrgCode == orgCode && !x.IsDeleted)).Data;
+            if (q == null) return Result<object>.Fail("队列不存在或不属于当前工作区");
+            if (q.QueueStatus != ExpertTaskConst.Queue.Pending && q.QueueStatus != ExpertTaskConst.Queue.Running)
+                return Result<object>.Fail("只有等待中或运行中的队列可取消");
+
+            var now = DateTime.Now;
+            q.QueueStatus = ExpertTaskConst.Queue.Cancelled;
+            q.FinishTime = now;
+            q.UpdateBy = userCode;
+            q.UpdateTime = now;
+            var up = await _db.UpdateAsync(q,
+                nameof(CertExpertTaskQueue.QueueStatus), nameof(CertExpertTaskQueue.FinishTime),
+                nameof(CertExpertTaskQueue.UpdateBy), nameof(CertExpertTaskQueue.UpdateTime));
+            if (!up.Success) return Result<object>.Fail(up.Error);
+
+            // 同步把所有 pending 项改为 cancelled（ExecuteCommand 是同步的）
+            _db.Client.Updateable<CertExpertTaskQueueItem>()
+                .SetColumns(x => new CertExpertTaskQueueItem
+                {
+                    ItemStatus = ExpertTaskConst.Item.Cancelled,
+                    UpdateTime = now
+                })
+                .Where(x => x.QueueCode == queueCode && x.ItemStatus == ExpertTaskConst.Item.Pending && !x.IsDeleted)
+                .ExecuteCommand();
+
+            return Result<object>.Ok(new { Message = "队列已取消" });
+        }
+
+        // ================================================================
+        // 八、辅助
         // ================================================================
 
         private async Task<List<ISOStandard>> LoadStandardsAsync(List<string>? codes)

@@ -7,7 +7,7 @@
  * - 点击版本节点 → 右侧切换条款树（复用 ISOClause getTree）
  *
  * 设计约束（2026-10-08 三层体系裁决）：
- * - 版本增删改在 /cert/iso-standard 独立完成；本页面只做浏览 + 族维护
+ * - 版本增删改在本页右表完成（2026-10-09 用户裁决：添加编辑/删除/启用禁用，移除「查看条款」）
  * - 左树无增删改按钮（nodeActions = []）
  * - 族 CRUD 通过弹窗完成，不走内核 add/edit/delete（独立实现）
  */
@@ -26,6 +26,11 @@ import {
   deleteCertStandardFamily,
   toggleCertStandardFamilyValid,
 } from '@share/api/cert/cert-standard-family'
+import {
+  updateISOStandard,
+  deleteISOStandard,
+  toggleISOStandardValid,
+} from '@share/api/cert/iso-standard'
 import { ElMessage } from 'element-plus'
 import { confirmOrFalse } from '@yzh-core'
 
@@ -48,6 +53,7 @@ export interface VersionRow {
   VersionYear: number
   Category: string
   FamilyCode: string | null
+  Sort?: number
   IsValid: number
 }
 
@@ -83,8 +89,10 @@ export class StandardManageLogic extends TreeTableCore<any> {
 
   // ── 版本表单 ──
   versionDialogVisible = ref(false)
+  versionMode = ref<'add' | 'edit'>('add')
   versionSubmitting = ref(false)
   versionFormData = ref<Record<string, any>>({})
+  editingVersion = ref<VersionRow | null>(null)
 
   // ── 条款表单 ──
   clauseDialogVisible = ref(false)
@@ -232,6 +240,7 @@ export class StandardManageLogic extends TreeTableCore<any> {
         VersionYear: Number(r.VersionYear) || 0,
         Category: r.Category ?? '',
         FamilyCode: r.FamilyCode ?? null,
+        Sort: r.Sort ?? 0,
         IsValid: r.IsValid ?? 1,
       }))
       return { rows: this.versions.value, total: this.versions.value.length }
@@ -326,53 +335,11 @@ export class StandardManageLogic extends TreeTableCore<any> {
     }
   }
 
-  async batchDeleteFamilies(rows: FamilyRow[]): Promise<void> {
-    if (rows.length === 0) return
-    const ok = await confirmOrFalse(
-      `确定删除选中的 ${rows.length} 个族？`,
-      '批量删除',
-      { type: 'warning' },
-    )
-    if (!ok) return
-    try {
-      await deleteCertStandardFamily(rows.map(r => r.Code))
-      ElMessage.success('已删除')
-      await this.loadTreeRoot()
-      this.currentFamily.value = null
-      this.panelMode.value = null
-      this.versions.value = []
-      this.clauses.value = []
-    } catch (e: any) {
-      ElMessage.error(e?.message ?? '删除失败')
-    }
-  }
-
-  /**
-   * 从**版本行**直接进入条款面板（「查看条款」按钮）。
-   *
-   * ⚠️ 历史缺陷（2026-10-08 修复）：原实现由 index.vue 遍历 `logic.treeData` 的
-   *    `cat.Children[].Children[]` 找版本节点 —— 但左树**只造到族层**
-   *    （buildCategoryFamilyTree 给族节点写 `IsLeaf:true, Children:[]`），版本层从未存在
-   *    ⇒ 循环恒不命中 ⇒ 按钮静默无响应。此处直接按行数据切换面板，不依赖树层级。
-   */
-  async showVersionClauses(row: VersionRow): Promise<void> {
-    this.panelMode.value = 'version'
-    this.currentVersion.value = {
-      Code: row.Code,
-      StandardCode: row.StandardCode ?? '',
-      StandardName: row.StandardName ?? '',
-      VersionYear: Number(row.VersionYear) || 0,
-      Category: row.Category ?? '',
-      FamilyCode: row.FamilyCode ?? null,
-      IsValid: row.IsValid ?? 1,
-    }
-    this.currentFamily.value = null
-    await this.loadClauses(this.currentVersion.value.Code)
-  }
-
   // ── 版本表单 CRUD ──
   openAddVersionDialog(): void {
     if (!this.currentFamily.value) return
+    this.versionMode.value = 'add'
+    this.editingVersion.value = null
     this.versionFormData.value = {
       StandardCode: '',
       StandardName: '',
@@ -385,19 +352,99 @@ export class StandardManageLogic extends TreeTableCore<any> {
     this.versionDialogVisible.value = true
   }
 
+  openEditVersionDialog(row: VersionRow): void {
+    this.versionMode.value = 'edit'
+    this.editingVersion.value = row
+    this.versionFormData.value = {
+      Code: row.Code,
+      StandardCode: row.StandardCode,
+      StandardName: row.StandardName,
+      VersionYear: row.VersionYear,
+      Category: row.Category,
+      FamilyCode: row.FamilyCode,
+      IsValid: row.IsValid ?? 1,
+      Sort: row.Sort ?? 0,
+    }
+    this.versionDialogVisible.value = true
+  }
+
   async submitVersionForm(): Promise<void> {
     this.versionSubmitting.value = true
     try {
-      await yzhApi.post('/api/Admin/Foundation/ISOStandard/add', this.versionFormData.value)
+      if (this.versionMode.value === 'add') {
+        await yzhApi.post('/api/Admin/Foundation/ISOStandard/add', this.versionFormData.value)
+      } else {
+        await updateISOStandard(this.versionFormData.value)
+      }
       this.versionDialogVisible.value = false
-      ElMessage.success('新增版本成功')
+      ElMessage.success(this.versionMode.value === 'add' ? '新增版本成功' : '修改版本成功')
       if (this.currentFamily.value) {
         await this.loadVersions(this.currentFamily.value.Code)
+        await this.refreshTable()
       }
     } catch (e: any) {
       ElMessage.error(e?.message ?? '保存失败')
     } finally {
       this.versionSubmitting.value = false
+    }
+  }
+
+  async deleteVersion(row: VersionRow): Promise<void> {
+    const ok = await confirmOrFalse(
+      `确定删除版本【${row.StandardCode} ${row.StandardName} ${row.VersionYear}】？\n关联条款将不可见。`,
+      '删除确认',
+      { type: 'warning' },
+    )
+    if (!ok) return
+    try {
+      await deleteISOStandard([row.Code])
+      ElMessage.success('删除成功')
+      if (this.currentFamily.value) {
+        await this.loadVersions(this.currentFamily.value.Code)
+        await this.refreshTable()
+      }
+    } catch (e: any) {
+      ElMessage.error(e?.message ?? '删除失败')
+    }
+  }
+
+  async toggleVersionValid(row: VersionRow): Promise<void> {
+    const action = row.IsValid === 1 ? '禁用' : '启用'
+    const ok = await confirmOrFalse(
+      `确定${action}版本【${row.StandardCode} ${row.StandardName} ${row.VersionYear}】？`,
+      `${action}确认`,
+      { type: 'warning' },
+    )
+    if (!ok) return
+    try {
+      const res = await toggleISOStandardValid(row.Code)
+      ElMessage.success(res?.data?.IsValid === 1 ? '已启用' : '已禁用')
+      if (this.currentFamily.value) {
+        await this.loadVersions(this.currentFamily.value.Code)
+        await this.refreshTable()
+      }
+    } catch (e: any) {
+      ElMessage.error(e?.message ?? '操作失败')
+    }
+  }
+
+  async batchDeleteVersions(rows: VersionRow[]): Promise<void> {
+    if (rows.length === 0) return
+    const ok = await confirmOrFalse(
+      `确定删除选中的 ${rows.length} 个版本？\n关联条款将不可见。`,
+      '批量删除',
+      { type: 'warning' },
+    )
+    if (!ok) return
+    try {
+      await deleteISOStandard(rows.map(r => r.Code))
+      ElMessage.success('批量删除成功')
+      if (this.currentFamily.value) {
+        await this.loadVersions(this.currentFamily.value.Code)
+        await this.refreshTable()
+      }
+    } catch (e: any) {
+      ElMessage.error(e?.message ?? '删除失败')
     }
   }
 
@@ -420,6 +467,7 @@ export class StandardManageLogic extends TreeTableCore<any> {
         VersionYear: Number(r.VersionYear) || 0,
         Category: r.Category ?? '',
         FamilyCode: r.FamilyCode ?? null,
+        Sort: r.Sort ?? 0,
         IsValid: r.IsValid ?? 1,
       }))
     } catch {

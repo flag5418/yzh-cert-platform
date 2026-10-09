@@ -190,6 +190,12 @@ interface TreeConfig {
   detailApi?: string
   textField: string
   codeField: string
+  /**
+   * ★ 叶子过滤（2026-10-09）：返回 false 的叶子不进左树。
+   * 调用方按业务字段裁，例如隐藏「人工判定」（JudgeMode='manual'）的规则 / 章节 ——
+   * 这类条目由人工完成，不需要在本设计器里编排 AI 工作流。
+   */
+  filterLeaf?: (item: any) => boolean
 }
 interface SaveConfig {
   api: string
@@ -488,19 +494,22 @@ async function loadLeavesForPhase(phase: any) {
       const params = new URLSearchParams({ orgCode: filter.OrgCode, standardCode: filter.StandardCode, phaseCode: filter.PhaseCode }).toString()
       res = await yzhApi.get(`${props.treeConfig.loadApi}?${params}`)
     }
-    const items: any[] = res?.data?.Items || res?.data || []
+    const raw: any[] = res?.data?.Items || res?.data || []
     const { textField, codeField } = props.treeConfig
     // ── 契约校验 ──
     // 字段名写错（典型：实体是 PascalCase 却填了 camelCase）会让叶子渲染成空行，
     // 历史上该故障排查成本极高，此处主动暴露。
-    if (items.length > 0 && items[0][textField] === undefined) {
+    // ⚠️ 用**过滤前**的 raw 做校验：过滤后可能为空数组，会让「字段名写错」这一契约校验被静默跳过。
+    if (raw.length > 0 && raw[0][textField] === undefined) {
       console.error(
         `[WorkflowDesigner] treeConfig.textField="${textField}" 在接口 ${props.treeConfig.loadApi} 返回数据中不存在。` +
         `依据 YZH 命名铁律（DB列名 = C#属性名 = TS字段名，PascalCase），请修正 treeConfig。`,
-        '实际返回字段：', Object.keys(items[0])
+        '实际返回字段：', Object.keys(raw[0])
       )
       ElMessage.error(`树配置字段「${textField}」与后端返回不一致，请按 PascalCase 修正 treeConfig`)
     }
+    // ★ 叶子过滤（2026-10-09）：调用方按业务字段裁掉不进左树的叶子（如人工判定的规则 / 章节）
+    const items: any[] = props.treeConfig.filterLeaf ? raw.filter(props.treeConfig.filterLeaf) : raw
     phase.children = items.map((item: any) => ({
       ...item,
       id: item.Code || item[codeField],

@@ -22,6 +22,11 @@ export async function deleteISOStandard(codes: string[]): Promise<any> {
   return yzhApi.post('/api/Admin/Foundation/ISOStandard/delete', codes)
 }
 
+/** 切换 ISO 标准启用/禁用 */
+export async function toggleISOStandardValid(code: string): Promise<any> {
+  return yzhApi.post('/api/Admin/Foundation/ISOStandard/toggle-valid', { Code: code })
+}
+
 /** 获取 ISO 标准下拉列表（供条款页面选择） */
 export async function getISOStandardList(): Promise<{ rows: ISOStandard[] }> {
   return yzhApi.post<{ rows: ISOStandard[] }>('/api/Admin/Foundation/ISOStandard/filter', {
