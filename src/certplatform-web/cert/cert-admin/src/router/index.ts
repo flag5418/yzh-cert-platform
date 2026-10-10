@@ -1,8 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
-import { createYzhRoutes } from '@yzh-core/router'
+import { yzhLoginRoute, yzhSystemRoutes } from '@yzh-core/router'
 import { useAuthStore } from '@/store/auth'
 import { useMenuStore } from '@/store/menu'
+import CertAdminLayout from '@/layouts/CertAdminLayout.vue'
 
 /**
  * 业务路由（foundation / workflow 等宿主页面）
@@ -38,24 +39,31 @@ const businessRoutes: RouteRecordRaw[] = [
 ]
 
 /**
- * 路由表 —— ★ 统一装配入口 `createYzhRoutes()`（S6，2026-09-24）
+ * 路由表 —— ★ 手动装配（S6，2026-10-10）
  *
- * 不再手写整张 routes 表：core 提供 login / shell / 系统页 / 首页四个覆盖开关，
- * 宿主只声明「业务路由 + 品牌 + 首屏去向」。
- * `...yzhSystemRoutes` 由 `createYzhRoutes()` 内部装配，**勿在此重复注册同 path**
+ * 使用 CertAdminLayout 作为应用壳（内置 MessageBell 铃铛通知），
+ * 替代 createYzhRoutes() 硬编码的 YzhAppLayout。
+ * `...yzhSystemRoutes` 由本文件内部装配，**勿在此重复注册同 path**
  * （同 path 双注册 → 后注册静默失效）。
  *
  * ⚠️ 与旧手写版本的差异（改前已确认**全仓零处**按 name 导航，均为 path 形式）：
  *   - shell 的 `name`：`Home` → `YzhShell`
  *   - 登录页的 `name`：`Login` → `YzhLogin`
  */
-const routes = createYzhRoutes({
-  menuTag: 'admin',
-  branding: { logoText: 'YZH', appTitle: '映智汇认证平台' },
-  home: false, // 不注册 core 占位首页
-  redirect: '/system/organization', // 首屏直达机构管理
-  businessRoutes,
-})
+const routes: RouteRecordRaw[] = [
+  yzhLoginRoute,
+  {
+    path: '/',
+    name: 'YzhShell',
+    component: CertAdminLayout,
+    props: { menuTag: 'admin', logoText: 'YZH', appTitle: '映智汇认证平台' },
+    redirect: '/system/organization',
+    children: [
+      ...yzhSystemRoutes,
+      ...businessRoutes,
+    ],
+  },
+]
 
 const router = createRouter({
   history: createWebHistory(),

@@ -327,20 +327,64 @@ onBeforeUnmount(() => {
 //       其内的分页对象属性名为 Items/TotalCount/PageIndex/PageSize（§16.9 铁律）。
 async function loadSkills() {
   try {
+    await loadSkillMetadata()
     const res = await yzhApi.post('/api/Admin/Workflow/WfSkill/filter', { Page: 1, PageSize: 200, Filters: [] })
     expectOk(res as any, '技能列表加载失败')
     const items = res?.data?.Items || []
     // skillCode/skillName/category/skillType 是节点模型内部字段（workflow schema），
     // 由实体字段 Code/Name/CategoryCode/SkillType 派生，属组件内部模型而非实体字段。
+    // ★ skillCode 取 SkillCode（执行期 wf_skill_reflection 的键）：Code 与 SkillCode 对
+    //   SK_* 类技能不一致，用 Code 会让 NodeExecutor 反射查不到 Skill（2026-10-10）。
+    // ★ inputPorts 反射元数据（方案 A）：数据行 wf_skill_input 仅 6 行、不可依赖。
     skills.value = items.map((s: any) => ({
       ...s,
-      skillCode: s.Code,
+      skillCode: s.SkillCode || s.Code,
       skillName: s.Name,
       category: s.CategoryCode || '_default',
-      skillType: s.SkillType || 'manual'
+      skillType: s.SkillType || 'manual',
+      inputPorts: skillPortIndex.value[s.SkillCode || s.Code] || []
     }))
   } catch (e: any) {
     ElMessage.error(e?.err || e?.message || '技能列表加载失败')
+  }
+}
+
+/**
+ * Skill 输入端口元数据索引（★ 方案 A · 2026-10-10）。
+ * 唯一数据源 = GET /api/Admin/Workflow/WfSkill/metadata（后端反射 [SkillParam] 得出）。
+ * 双键索引：Code 与 SkillCode 都可命中 —— 历史画布节点里存的 skillCode 两值都可能出现。
+ * 元数据拿不到时只降级为「节点不显示参数」，不阻断画布。
+ */
+const skillPortIndex = ref<Record<string, any[]>>({})
+async function loadSkillMetadata() {
+  try {
+    const res = await yzhApi.get('/api/Admin/Workflow/WfSkill/metadata')
+    expectOk(res as any, '技能参数元数据加载失败')
+    const arr: any[] = Array.isArray(res?.data) ? res.data : (res?.data?.Data || [])
+    const idx: Record<string, any[]> = {}
+    for (const m of arr) {
+      const ports = m.InputPorts || []
+      if (m.Code) idx[m.Code] = ports
+      if (m.SkillCode) idx[m.SkillCode] = ports
+    }
+    skillPortIndex.value = idx
+  } catch (e: any) {
+    console.warn('[WorkflowDesigner] 技能参数元数据加载失败', e?.err || e?.message)
+  }
+}
+
+/**
+ * 把参数元数据回灌到画布节点 —— 已保存的历史节点 inputPorts 可能为空数组，
+ * 只在新增节点时取 item.inputPorts 的话，老节点永远看不到参数。
+ * 端口以代码反射为单源：命中即覆盖，取不到则保持原样。
+ */
+function applySkillPorts(nodes: any[]) {
+  const idx = skillPortIndex.value
+  if (!Object.keys(idx).length) return
+  for (const n of nodes) {
+    if (n?.nodeType !== 'skill' || !n.skillCode) continue
+    const ports = idx[n.skillCode] || []
+    if (ports.length) n.inputPorts = [...ports]
   }
 }
 async function loadCategories() {
@@ -595,8 +639,11 @@ function createLogicFlowInstance() {
       nodeId: data.id, nodeType: props_.nodeType || 'skill', classCode: props_.classCode || props_.nodeType || 'skill',
       title: storeNode?.title || props_.title || data.text || '', skillCode: props_.skillCode || '',
       config: storeNode?.config || props_.config || {}, inputs: syncedInputs, inputTypes: syncedInputTypes,
-      outputs: storeNode?.outputs || props_.outputs || {}, inputPorts: storeNode?.inputPorts || props_.inputPorts || [],
-      outputPorts: storeNode?.outputPorts || props_.outputPorts || []
+       outputs: storeNode?.outputs || props_.outputs || {},
+       // ★ 关键修复（2026-10-10）：logicflow 内部可能对 properties 做追加式更新，
+       //   必须深拷贝 inputPorts / outputPorts，防止后续 mutation 污染原始 skill 元数据。
+       inputPorts: storeNode?.inputPorts ? [...storeNode.inputPorts] : (props_.inputPorts || []),
+       outputPorts: storeNode?.outputPorts ? [...storeNode.outputPorts] : (props_.outputPorts || [])
     }
     if (nodeData.nodeType === 'branch') {
       const gd = diagram.value?.getGraphData()
@@ -752,7 +799,9 @@ function onCanvasDrop(event: DragEvent) {
     const node = store.addNode(item, pos?.x ?? 200, pos?.y ?? 150)
     if (!node) return
     const category = item.category || skills.value.find((s: any) => s.skillCode === item.skillCode)?.category || ''
-    const props_ = { classCode: node.classCode, nodeType: node.nodeType, title: node.title, skillCode: node.skillCode, config: node.config, inputs: node.inputs, inputTypes: node.inputTypes, outputs: node.outputs, inputPorts: node.inputPorts, outputPorts: node.outputPorts }
+    const props_ = { classCode: node.classCode, nodeType: node.nodeType, title: node.title, skillCode: node.skillCode, config: node.config, inputs: node.inputs, inputTypes: node.inputTypes, outputs: node.outputs,
+      // ★ 深拷贝：防止 LogicFlow formatData 后内部 mutation 回污染 skillPortIndex 原始数组
+      inputPorts: [...(node.inputPorts || [])], outputPorts: [...(node.outputPorts || [])] }
     if (node.nodeType === 'branch') (props_ as any).points = [[0, -30], [50, 0], [0, 30]]
     diagram.value.addNode({ id: node.id, type: lfShapeType(node.nodeType), x: pos?.x ?? 200, y: pos?.y ?? 150, text: node.title, style: nodeStyle(node.nodeType, node.skillCode, category), properties: props_ })
   } catch {}
@@ -770,7 +819,9 @@ function handleAddNode(item: any) {
   const node = store.addNode(item, 120 + (maxX % 600), 80 + (maxY % 400))
   if (!node) return
   const category = item.category || skills.value.find((s: any) => s.skillCode === item.skillCode)?.category || ''
-  const addProps = { classCode: node.classCode, nodeType: node.nodeType, title: node.title, description: node.description || "", skillCode: node.skillCode, config: node.config, inputs: node.inputs, inputTypes: node.inputTypes, outputs: node.outputs, inputPorts: node.inputPorts, outputPorts: node.outputPorts }
+  const addProps = { classCode: node.classCode, nodeType: node.nodeType, title: node.title, description: node.description || "", skillCode: node.skillCode, config: node.config, inputs: node.inputs, inputTypes: node.inputTypes, outputs: node.outputs,
+    // ★ 深拷贝：防止 LogicFlow formatData 后内部 mutation 回污染 skillPortIndex 原始数组
+    inputPorts: [...(node.inputPorts || [])], outputPorts: [...(node.outputPorts || [])] }
   if (node.nodeType === 'branch') (addProps as any).points = [[0, -30], [50, 0], [0, 30]]
   diagram.value.addNode({ id: node.id, type: lfShapeType(node.nodeType), x: node.x, y: node.y, text: node.title, style: nodeStyle(node.nodeType, node.skillCode, category), properties: addProps })
 }
@@ -792,7 +843,7 @@ function handleUpdateNode(data: any) {
         const outEdges = (gd?.edges || []).filter((e: any) => e.sourceNodeId === data.nodeId)
         branchEdges = outEdges.map((e: any) => ({ handle: e.properties?.sourceHandle || '', targetId: e.targetNodeId, edgeId: e.id }))
       }
-      selectedNode.value = { nodeId: sn.id, nodeType: sn.nodeType, classCode: sn.classCode, title: sn.title, skillCode: sn.skillCode, config: { ...sn.config }, inputs: { ...sn.inputs }, inputTypes: { ...(sn.inputTypes || {}) }, outputs: { ...sn.outputs }, inputPorts: sn.inputPorts || [], outputPorts: sn.outputPorts || [], branchEdges }
+      selectedNode.value = { nodeId: sn.id, nodeType: sn.nodeType, classCode: sn.classCode, title: sn.title, skillCode: sn.skillCode, config: { ...sn.config }, inputs: { ...sn.inputs }, inputTypes: { ...(sn.inputTypes || {}) }, outputs: { ...sn.outputs }, inputPorts: [...(sn.inputPorts || [])], outputPorts: [...(sn.outputPorts || [])], branchEdges }
       forceRefreshTick.value++
     }
   })
@@ -817,7 +868,7 @@ function promptEditNodeName(nodeId: string, currentName: string) {
             const outEdges = (gd?.edges || []).filter((e: any) => e.sourceNodeId === nodeId)
             branchEdges = outEdges.map((e: any) => ({ handle: e.properties?.sourceHandle || '', targetId: e.targetNodeId, edgeId: e.id }))
           }
-          selectedNode.value = { nodeId: storeNode.id, nodeType: storeNode.nodeType, classCode: storeNode.classCode, title: storeNode.title, description: storeNode.description || "", skillCode: storeNode.skillCode, config: { ...storeNode.config }, inputs: { ...storeNode.inputs }, inputTypes: { ...(storeNode.inputTypes || {}) }, outputs: { ...storeNode.outputs }, inputPorts: storeNode.inputPorts || [], outputPorts: storeNode.outputPorts || [], branchEdges }
+          selectedNode.value = { nodeId: storeNode.id, nodeType: storeNode.nodeType, classCode: storeNode.classCode, title: storeNode.title, description: storeNode.description || "", skillCode: storeNode.skillCode, config: { ...storeNode.config }, inputs: { ...storeNode.inputs }, inputTypes: { ...(storeNode.inputTypes || {}) }, outputs: { ...storeNode.outputs }, inputPorts: [...(storeNode.inputPorts || [])], outputPorts: [...(storeNode.outputPorts || [])], branchEdges }
           forceRefreshTick.value++
         }
         _renamingNodeId.value = null; _renamingTimestamp.value = 0
@@ -904,6 +955,8 @@ function renderWorkflow(workflowConfig: any, layoutJson: any) {
     const config = typeof workflowConfig === 'string' ? JSON.parse(workflowConfig) : workflowConfig
     const layout = layoutJson ? (typeof layoutJson === 'string' ? JSON.parse(layoutJson) : layoutJson) : null
     const { nodes, edges, idGenerator, migrated } = deserialize(config, layout)
+    // ★ 已保存节点回灌参数端口（方案 A）：老工作流落库时 inputPorts=[]，不补则永远无参数
+    applySkillPorts(nodes)
     store.loadFromData(nodes, edges)
     // @ts-ignore - idGenerator needs to be set on state
     store.state.idGenerator = idGenerator

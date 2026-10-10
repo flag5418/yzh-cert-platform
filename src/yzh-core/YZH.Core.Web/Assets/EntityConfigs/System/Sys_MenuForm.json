@@ -151,10 +151,10 @@
     {
       "FieldName": "ParentCode",
       "DesName": "上级菜单",
-      "Type": "Other",
+      "Type": "Custom",
       "Sxh": 9,
-      "XsFlag": false,
-      "BcFlag": false,
+      "XsFlag": true,
+      "BcFlag": true,
       "Yxk": true,
       "Width": 200,
       "Row": 6,

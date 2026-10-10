@@ -41,6 +41,7 @@ import {
   INSTANCE_STATE_TYPE,
   LOG_STATUS_TEXT,
   LOG_STATUS_TYPE,
+  pathFileName,
   toPercent,
 } from '@share/api/ent/enterprise-normalize'
 import type { ScopeTreeNode } from '../logic'
@@ -159,13 +160,19 @@ function onCheck(): void {
               </span>
             </template>
 
-            <!-- ★ 产物落点 —— 让用户知道「生成出来的文件在哪儿」 -->
+            <!--
+              ★ 产物落点 —— 让用户知道「生成出来的文件在哪儿」。
+              ⚠️ 2026-10-10 用户裁决：版面**只显示文件名**，⛔ 不渲染完整路径
+                 （`/enterprise-documents/{Ent}/{Std}/{Stage}/{Folder}/{FileName}`
+                  整条摆上会把行撑爆，中段 GUID 对用户毫无意义）。
+                 完整路径保留在 `title` —— 悬停可查、可复制。
+            -->
             <span
               v-if="data.File.OutputPath"
               class="nst-node__path"
               :title="data.File.OutputPath"
             >
-              产物 {{ data.File.OutputPath }}
+              产物 {{ pathFileName(data.File.OutputPath) }}
             </span>
 
             <!--

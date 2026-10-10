@@ -19,7 +19,7 @@ import {
   Pointer,
 } from '@element-plus/icons-vue'
 import { yzhApi } from '@yzh-core/api/client'
-import { YzhFolderUpload, CertStatusBar, CertBizTree } from '@share/components'
+import { YzhFolderUpload, CertStatusBar, OrgStandardStageTree } from '@share/components'
 import ConfigTab from './components/ConfigTab.vue'
 import { useFileTree, type TreeNode } from '@share/composables/useFileTree'
 import {
@@ -205,7 +205,7 @@ function resetRightPanel() {
  * - `file`     → 文件已在右侧列表中，无需跳转（点击仅高亮）
  * - 其余（机构 / 标准）→ 目录内容只属于「阶段」，清空右侧回空态提示
  */
-function onTreeNodeClick(node: TreeNode) {
+function onTreeNodeClick(node: any) {
   if (node.Type === 'folder') {
     openTreeFolder(node)
     return
@@ -964,10 +964,13 @@ onUnmounted(() => {
     <div class="main-row">
     <!-- 左侧面板 -->
     <div class="left-panel">
-      <CertBizTree
+      <OrgStandardStageTree
         title="目录结构"
         search-placeholder="搜索机构 / 标准 / 阶段..."
         :default-expand-level="3"
+        :max-level="5"
+        :leaf-types="['stage']"
+        :data="fileTreeData as any"
         @node-click="onTreeNodeClick"
       />
     </div>

@@ -100,7 +100,7 @@ const { logic, tableRef, treeTableRef } = useTreeTable(OrgPageLogic)
       </template>
     </YzhFormDialog>
 
-    <!-- 机构新增/编辑弹窗 -->
+    <!-- 机构新增/编辑弹窗（上级机构由表单 ParentCode 字段 TreeSelect 驱动） -->
     <YzhFormDialog
       v-model:visible="logic.treeDialogVisible.value"
       v-model="logic.treeFormData"
@@ -111,16 +111,7 @@ const { logic, tableRef, treeTableRef } = useTreeTable(OrgPageLogic)
       :cols="logic.treeFormLayoutCols as any"
       width="700px"
       @submit="logic.submitTreeNodeForm()"
-    >
-      <template #prepend>
-        <div class="org-form-header">
-          <span class="org-form-header__label">上级机构：</span>
-          <span class="org-form-header__value">
-            {{ logic.treeParentNode.value?.Name ?? '根级' }}
-          </span>
-        </div>
-      </template>
-    </YzhFormDialog>
+    />
   </div>
 </template>
 

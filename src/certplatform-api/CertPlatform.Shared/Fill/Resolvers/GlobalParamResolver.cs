@@ -22,7 +22,7 @@ namespace CertPlatform.Shared.Fill.Resolvers;
 /// 见 <c>DocumentFillController</c> 的 <c>unknownTokens</c> 字段。</para>
 ///
 /// <para><b>兜底语义</b>：本类是链上最后一个，用 <see cref="FillSyntax.IsClaimedByOthers"/>
-/// 主动拒收前三类 token（拒收理由见该方法的注释）。</para>
+/// 主动拒收其它能力的 token（ai / @ / 表达式 / 表格锚点，拒收理由见该方法的注释）。</para>
 /// </summary>
 public sealed class GlobalParamResolver : FillResolverBase
 {

@@ -59,6 +59,10 @@ export {
   listFiles,
 } from './api/file-storage'
 
+// 实时推送（框架核心能力：SignalR 客户端，连接 /api/yzh-msg）
+export { yzhPush } from './api/push'
+export type { YzhPushMessage, YzhPushHandler } from './api/push'
+
 // Composables
 export * from './composables/index'
 

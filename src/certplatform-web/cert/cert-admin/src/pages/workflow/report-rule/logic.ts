@@ -25,16 +25,15 @@ import {
   type YzhTableColumn,
   type YzhFormField,
   type FilterItem,
-  type TreeNode,
   type EntityConfigDto,
   type TreeBehaviorConfig,
   type ApiResponse,
 } from '@yzh-core'
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getOrganizationTree } from '@share/composables/useDirectoryApi'
-import { useFileTree, type TreeNode as FileTreeNode } from '@share/composables/useFileTree'
+import { loadOrgStageTree } from '@share/composables/useOrgStageTree'
 import { getISOClauseTree, type ISOClauseTreeNode } from '@share/api/workflow/nc-config'
+import { getReportSectionPage } from '@share/api/workflow/report-rule'
 import type { ReportSection } from '@share/types/cert'
 
 export type { ReportSection }
@@ -92,42 +91,6 @@ const TREE_BEHAVIOR: TreeBehaviorConfig = {
 
 // ──── 左树：目录域树节点 → 内核 TreeNode ────
 
-/** 节点类型 → 图标（Element Plus 图标已在宿主 main.ts 全局注册） */
-const NODE_ICON: Record<string, string> = {
-  organization: 'OfficeBuilding',
-  standard: 'Document',
-  stage: 'Calendar',
-}
-
-/**
- * 目录域树（组织 → 标准 → 阶段 → 目录 → 文件）→ 内核 TreeNode。
- *
- * 只保留 组织/标准/阶段 三层：阶段以下的目录/文件属于标准文件管理域，
- * 与报告章节定义无关。
- *
- * TreeNode 字段一律 PascalCase（守卫 R2），阶段三编码进 Extra 供 buildFilters 读取。
- */
-function toCoreNodes(nodes: FileTreeNode[]): TreeNode[] {
-  const result: TreeNode[] = []
-  for (const n of nodes) {
-    if (!(n.Type in NODE_ICON)) continue
-    const children = toCoreNodes(n.Children ?? [])
-    result.push({
-      Code: String(n.Code),
-      Name: n.Name,
-      NodeType: n.Type,
-      IsLeaf: children.length === 0,
-      Extra: {
-        Icon: NODE_ICON[n.Type],
-        OrgCode: n.OrgCode ?? '',
-        StdCode: n.StdCode ?? '',
-        PhaseCode: n.PhaseCode ?? '',
-      },
-      Children: children,
-    })
-  }
-  return result
-}
 
 // ──── 工具函数：扁平条款列表 → 树形（与 nc-config 同款）───
 function buildClauseTree(flat: ISOClauseTreeNode[]): ISOClauseTreeNode[] {
@@ -151,8 +114,6 @@ export class ReportRuleLogic extends TreeTableLogic<any> {
   // ──── 控制器名称（对应后端 ReportDefinitionController 路由）───
   controllerName = 'Admin/Workflow/ReportDefinition'
 
-  /** 目录域组织树的纯转换器 */
-  private readonly fileTree = useFileTree()
 
   // ──── 条款树数据（编辑弹窗 tree-select 使用）───
   clauseTreeData = ref<ISOClauseTreeNode[]>([])
@@ -205,11 +166,64 @@ export class ReportRuleLogic extends TreeTableLogic<any> {
   override async loadTreeRoot(): Promise<void> {
     this.treeSide.treeLoading.value = true
     try {
-      const orgTree = await getOrganizationTree()
-      this.treeSide.setNodes(toCoreNodes(this.fileTree.transformOrgTree(orgTree)))
+      this.treeSide.setNodes(await loadOrgStageTree())
+      // 加载各阶段章节数量徽标
+      this.loadSectionCounts()
     } finally {
       this.treeSide.treeLoading.value = false
     }
+  }
+
+  /**
+   * 加载各阶段报告章节数量，附加到树节点徽标（countField = 'SectionCount'）。
+   * 后端暂缺批量聚合接口，暂走 N+1（PageSize=1 仅取 TotalCount）。
+   */
+  async loadSectionCounts(): Promise<void> {
+    const nodes = this.treeSide.treeData.value
+    if (!nodes?.length) return
+
+    const stages: { code: string; phaseCode: string }[] = []
+    const walk = (list: any[]) => {
+      for (const n of list) {
+        if (n.NodeType === 'stage' && n.Extra?.PhaseCode) {
+          stages.push({ code: String(n.Code), phaseCode: n.Extra.PhaseCode })
+        }
+        if (n.Children?.length) walk(n.Children)
+      }
+    }
+    walk(nodes)
+
+    if (!stages.length) return
+
+    await Promise.all(
+      stages.map(async (s) => {
+        try {
+          const res = await getReportSectionPage({
+            Page: 1,
+            PageSize: 1,
+            Filters: [{ Field: 'PhaseCode', Value: s.phaseCode, Operator: 'eq' }],
+          })
+          const count = res?.data?.TotalCount ?? 0
+          const node = this.findNodeByCode(s.code)
+          if (node) (node as any).SectionCount = count
+        } catch {
+          // 静默失败：数量显示异常不影响主功能
+        }
+      }),
+    )
+  }
+
+  /** 按 Code 在树里定位节点（供 loadSectionCounts 使用） */
+  private findNodeByCode(code: string): any | null {
+    const walk = (nodes: any[]): any | null => {
+      for (const n of nodes) {
+        if (String(n.Code) === code) return n
+        const hit = n.Children?.length ? walk(n.Children) : null
+        if (hit) return hit
+      }
+      return null
+    }
+    return walk(this.treeSide.treeData.value)
   }
 
   // ========================================================

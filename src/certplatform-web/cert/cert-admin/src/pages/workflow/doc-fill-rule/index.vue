@@ -51,10 +51,10 @@ import {
   YzhEmptyState,
   YzhPageLayout,
   YzhStatusBadge,
-  YzhTree,
   unwrapOk,
   useTreeTable,
 } from '@yzh-core'
+import { OrgStandardStageTree } from '@share/components'
 import { ElMessage } from 'element-plus'
 import { computed, onBeforeUnmount, onMounted, provide, ref } from 'vue'
 import AnchorRuleTab from './components/AnchorRuleTab.vue'
@@ -243,6 +243,7 @@ const anchorTabBadge = computed(() => {
   if (logic.scanStatus !== 'completed') return { text: '未扫描', type: WARN }
   const r = logic.anchorReadiness
   if (r.unconfigured) return { text: `${r.unconfigured} 个未配`, type: ERR }
+  if (r.staleRef) return { text: `${r.staleRef} 个来源失效`, type: ERR }
   if (r.orphan) return { text: `${r.orphan} 个孤儿`, type: WARN }
   return { text: `${r.total} 个`, type: OK }
 })
@@ -266,9 +267,9 @@ const previewTabBadge = computed(() => {
 
 /* ============ ★ 第 4 项裁决：错误改「角标弹层明细」，⛔ 不占 Tab 空间 ============ */
 /**
- * 锚点角标弹层的明细：未配来源 / 孤儿 / `SourceSpec` 解析失败 三类名单。
+ * 锚点角标弹层的明细：未配来源 / **来源已失效** / 孤儿 / `SourceSpec` 解析失败 四类名单。
  *
- * ⛔ 不在这里重新判据 —— 三类标记全部取自 `anchorViews`
+ * ⛔ 不在这里重新判据 —— 四类标记全部取自 `anchorViews`
  *    （唯一口径在 `anchorStats.toAnchorView`），弹层只是**换个地方显示**。
  */
 const anchorIssues = computed(() => {
@@ -278,6 +279,7 @@ const anchorIssues = computed(() => {
     if (v.parseError) out.push({ kind: '来源解析失败', ref })
     if (v.orphan) out.push({ kind: '孤儿锚点', ref })
     else if (v.unconfigured) out.push({ kind: '未配来源', ref })
+    else if (v.staleRef) out.push({ kind: '来源已失效', ref })
   })
   return out
 })
@@ -741,13 +743,13 @@ function onPromptBound() {
         </div>
 
         <div v-loading="logic.isTreeLoading" class="side__bd">
-          <YzhTree
-            :data="visibleTree"
-            searchable
+          <OrgStandardStageTree
+            title=""
             search-placeholder="搜索文档…"
-            highlight-current
+            :default-expand-level="3"
+            :max-level="5"
+            :data="visibleTree as any"
             :current-key="logic.selectedNode?.Code"
-            :default-expanded-keys="logic.defaultExpandedKeys"
             @node-click="handleNodeClick"
           />
         </div>

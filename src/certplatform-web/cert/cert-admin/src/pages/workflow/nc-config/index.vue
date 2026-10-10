@@ -1,52 +1,44 @@
 <script setup lang="ts">
 /**
- * NC 规则管理 — 左树右表（YZH 标准架构：YzhTreeTableLayout + useTreeTable）
+ * NC 规则管理 — 左树右表（OrgStageTableLayout 统一树）
  *
  * 布局：
- * - 左侧：组织 → 标准 → 阶段 树（只读，数据源 = StandardDirectory 组织树）
- * - 右侧：NC 检查规则表格（YzhTable + YzhFormDialog + TreeTableCore）
- *
- * 架构（样板页面指南-V1 §四）：
- * - Logic 继承 TreeTableLogic，由 useTreeTable 注入 tableRef/treeTableRef 与初始化流程
- * - 表格列/表单字段/搜索字段/行按钮全部由后端 EntityConfig（Cert/ValidationRule.json）驱动
- * - 选中阶段节点后，内核自动注入 OrgCode + StandardCode + PhaseCode 三字段联动过滤
- * - 数据加载走内核 dataLoader：未选中阶段 → 右表空态（不发请求）
- * - 行动作（编辑/删除/启停/复制）由内核 dispatch 派发，页面无手写 handler
+ * - 左侧：组织 → 标准 → 阶段 树（OrgStandardStageTree + OrgStageTableLayout）
+ * - 右侧：NC 检查规则表格（YzhTable + YzhFormDialog）
  */
 import { computed } from 'vue'
 import { ElSwitch, ElTag } from 'element-plus'
 import { Plus, RefreshRight } from '@element-plus/icons-vue'
-import { YzhTable, YzhFormDialog, YzhTreeTableLayout, useTreeTable, type TreeNode } from '@yzh-core'
+import { YzhTable, YzhFormDialog, useTreeTable } from '@yzh-core'
+import { OrgStageTableLayout } from '@share/components'
 import { NCConfigLogic } from './logic'
 
-// 实例化 Logic（useTreeTable 统一注入 tableRef/treeTableRef 与初始化流程）
-const { logic, tableRef, treeTableRef } = useTreeTable(NCConfigLogic)
+const { logic, tableRef } = useTreeTable(NCConfigLogic)
 
-// 行操作按钮（内核 rowActions：Edit/Delete + 按行状态二选一的 启用|禁用|复制）
+// 行操作按钮
 const rowActions = computed(() => logic.rowActions)
 
-// 右表空态文案：未选中阶段时给出操作提示，避免只显示「暂无数据」
+// 右表空态文案
 const emptyText = computed(() => (logic.anySelected ? '暂无数据' : '请在左侧选择阶段'))
 
 // 树节点点击 → 内核选中节点并触发右表联动刷新
-async function handleNodeClick(node: TreeNode) {
+async function handleNodeClick(node: any) {
   await logic.onNodeClick(node)
 }
 </script>
 
 <template>
   <div class="nc-config-page">
-    <YzhTreeTableLayout
-      ref="treeTableRef"
-      :tree-data="logic.treeData"
+    <OrgStageTableLayout
+      :data="logic.treeData"
+      title="组织 → 标准 → 阶段"
       :tree-width="280"
-      :tree-toolbar="true"
-      :tree-searchable="true"
-      :tree-lazy="false"
-      :tree-default-expand-all="true"
-      :node-actions="logic.nodeActions"
-      @tree-node-click="handleNodeClick"
-      @tree-node-action="logic.onNodeAction"
+      :filterable="true"
+      :default-expand-level="2"
+      :max-level="3"
+:leaf-types="['stage']"
+:count-field="'RuleCount'"
+@select="handleNodeClick"
     >
       <template #default>
         <div class="nc-config-page__content">
@@ -60,24 +52,17 @@ async function handleNodeClick(node: TreeNode) {
             row-key="Code"
             @row-action="logic.onRowAction"
           >
-            <!-- 启用状态列：IsValid（int 1/0）被内核标记为 slot，不给插槽会渲原值 1/0 -->
             <template #column-IsValid="{ row }">
               <el-tag :type="row.IsValid === 1 ? 'success' : 'info'" size="small">
                 {{ row.IsValid === 1 ? '启用' : '禁用' }}
               </el-tag>
             </template>
 
-            <!-- 工具栏左侧：新建检查项 + 刷新 -->
             <template #toolbar-left>
               <el-button type="primary" :icon="Plus" @click="logic.onToolbarAction('add')">新建检查项</el-button>
               <el-button :icon="RefreshRight" @click="tableRef?.refresh()">刷新</el-button>
             </template>
 
-            <!--
-              ★ 显示已禁用（必需，不是可选）：
-              后端 OnBuildingFilter 会自动追加 IsValid=1，只有前端传 ShowDisabled=true 才放行。
-              缺了这个开关 ⇒ 禁用后行从列表消失、再也点不到「启用」⇒ 禁用不可逆。
-            -->
             <template #toolbar-right>
               <div class="nc-config-page__switch">
                 <span class="nc-config-page__switch-label">显示已禁用</span>
@@ -90,7 +75,7 @@ async function handleNodeClick(node: TreeNode) {
           </YzhTable>
         </div>
       </template>
-    </YzhTreeTableLayout>
+    </OrgStageTableLayout>
 
     <!-- 编辑弹窗 -->
     <YzhFormDialog

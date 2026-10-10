@@ -138,7 +138,11 @@ public sealed class DocumentFillEngine
                 Token = raw,
                 Key = key,
                 Kind = "orphan",
-                Reason = "锚点无归属解析器（引擎配置错误：Resolver 未注册或执行顺序被改坏）",
+                // ★ 表格锚点是**刻意拒收**的（文本引擎没有表格能力，表格由 Office 区域填充处理）
+                //   —— ⛔ 不能套「引擎配置错误」的话术，那是对正常配置的误报。
+                Reason = FillSyntax.IsTableToken(key)
+                    ? "表格锚点（{{table:xxx}}）由文件填充的区域填充处理，文本引擎不填表格"
+                    : "锚点无归属解析器（引擎配置错误：Resolver 未注册或执行顺序被改坏）",
             });
         }
     }

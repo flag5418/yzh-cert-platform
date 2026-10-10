@@ -27,6 +27,7 @@ import { YzhStatusBadge } from '@yzh-core'
 import {
   PLAN_ACTION_TEXT,
   PLAN_ACTION_TYPE,
+  type NormalizeBatchResult,
   type NormalizePlanResult,
   type NormalizeRunResult,
 } from '@share/api/ent/enterprise-normalize'
@@ -36,13 +37,38 @@ defineProps<{
   plan: NormalizePlanResult | null
   /** 入队回执（null = 还没执行过） */
   run: NormalizeRunResult | null
+  /** ★ 批次进度快照（`batch/{queueCode}` 轮询结果；null = 还没查过） */
+  batch: NormalizeBatchResult | null
   /** 干跑进行中 */
   planning: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'dismiss'): void
+  /** 用户点「取消批次」—— 由 logic 做二次确认与请求 */
+  (e: 'cancel'): void
 }>()
+
+/** 批次状态 → 徽标色（⛔ 不让前端按 Status 字符串自由发挥，五态收敛到四色） */
+function batchStatusType(b: NormalizeBatchResult): 'success' | 'danger' | 'warning' | 'info' {
+  if (b.Status === 'cancelled') return 'warning'
+  if (b.Status === 'completed') return b.Failed > 0 ? 'warning' : 'success'
+  if (b.Status === 'failed') return 'danger'
+  return 'info'
+}
+
+function batchStatusText(b: NormalizeBatchResult): string {
+  if (b.Status === 'cancelled') return '已取消'
+  if (b.Status === 'completed') return b.Failed > 0 ? '完成（含失败）' : '已完成'
+  if (b.Status === 'failed') return '执行失败'
+  if (b.Status === 'running') return '执行中'
+  return '排队中'
+}
+
+/** el-progress 只收 0~100 —— 后端声明是整数百分比，这里仍夹紧防越界 */
+function batchPct(b: NormalizeBatchResult): number {
+  return Math.min(100, Math.max(0, b.Progress))
+}
 </script>
 
 <template>
@@ -58,10 +84,65 @@ const emit = defineEmits<{
         <li>批次号：<code>{{ run.QueueCode || '—' }}</code></li>
         <li>入队 {{ run.Queued }} 个文件 · 跳过 {{ run.Skipped }} 个</li>
         <li>
-          规范化在后台串行执行（含 AI 取值 + 文档写入，单个文件可能到分钟级）。
-          完成后回到本页点「刷新」即可看到新的完成率与产物。
+          规范化在后台队列执行（含 AI 取值 + 文档写入，单个文件可能到分钟级）。
+          本页每 15 秒跟踪批次进度，完成后自动刷新产物与留痕。
         </li>
       </ul>
+
+      <!--
+        ★ 批次进度（`batch/{queueCode}` 轮询快照）
+        运行中：进度条 + 处理中/排队数 + 取消入口；结束后：成功/失败汇总 + 失败明细。
+        ⛔ 失败明细必须带「哪一份、为什么」—— 只回一个失败数等于把排查成本转嫁给用户。
+      -->
+      <div v-if="batch" class="npc__batch">
+        <div class="npc__batch-head">
+          <YzhStatusBadge :type="batchStatusType(batch)" :text="batchStatusText(batch)" />
+          <span class="npc__batch-counts">
+            已完成 {{ batch.Completed }}/{{ batch.Total }} · 失败 {{ batch.Failed }} · 取消
+            {{ batch.Cancelled }}
+          </span>
+          <el-button
+            v-if="!batch.IsFinished"
+            type="danger"
+            size="small"
+            plain
+            @click="emit('cancel')"
+          >
+            取消批次
+          </el-button>
+        </div>
+
+        <el-progress
+          v-if="!batch.IsFinished"
+          :percentage="batchPct(batch)"
+          :stroke-width="8"
+          class="npc__batch-bar"
+        />
+        <div v-if="!batch.IsFinished" class="npc__sub">
+          正在处理 {{ batch.Processing }} 个 · 排队等待 {{ batch.Pending }} 个
+        </div>
+
+        <ul v-if="batch.Failures.length > 0" class="npc__items">
+          <li v-for="f in batch.Failures" :key="f.StandardFileCode" class="npc__item">
+            <YzhStatusBadge type="danger" text="失败" />
+            <span class="npc__item-name">{{ f.FileName || f.StandardFileCode }}</span>
+            <span class="npc__item-reason">
+              {{
+                [
+                  f.ErrorType || '执行失败',
+                  f.ErrorMessage || '',
+                  f.RetryCount > 0 ? `已重试 ${f.RetryCount} 次` : '',
+                ]
+                  .filter(Boolean)
+                  .join('，')
+              }}
+            </span>
+          </li>
+        </ul>
+        <div v-else-if="batch.IsFinished" class="npc__tip npc__tip--ok">
+          批次已结束，全部文件执行成功；产物与留痕已反映在上方范围树。
+        </div>
+      </div>
     </div>
 
     <!-- ══════════ ② 干跑预览（执行前） ══════════ -->
@@ -255,5 +336,28 @@ const emit = defineEmits<{
   background: var(--yzh-color-bg-muted, #f3f4f6);
   border-radius: var(--yzh-radius-sm, 4px);
   padding: 0 var(--yzh-space-1, 4px);
+}
+
+/* ★ 批次进度段（按 S01/S03/S07 归一：颜色/字号/间距一律令牌 + 兜底） */
+.npc__batch {
+  margin-top: var(--yzh-space-2, 8px);
+  padding-top: var(--yzh-space-2, 8px);
+  border-top: 1px dashed var(--yzh-color-border-light, #f1f5f9);
+}
+
+.npc__batch-head {
+  display: flex;
+  align-items: center;
+  gap: var(--yzh-space-2, 8px);
+  flex-wrap: wrap;
+}
+
+.npc__batch-counts {
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--yzh-color-text-regular, #606266);
+}
+
+.npc__batch-bar {
+  margin-top: var(--yzh-space-2, 8px);
 }
 </style>

@@ -7,7 +7,7 @@
  */
 import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { confirmOrFalse, YzhPageLayout } from '@yzh-core'
+import { confirmOrFalse, YzhPageLayout, YzhDrawer, YzhStatusBadge } from '@yzh-core'
 import {
   getExpertQueueList,
   getExpertQueueStats,
@@ -252,7 +252,7 @@ onUnmounted(stopPolling)
           style="width: 360px"
         />
         <el-button type="primary" @click="loadData">查询</el-button>
-        <el-button @click="resetFilter">重置</el-button>
+        <el-button type="default" @click="resetFilter">重置</el-button>
       </div>
     </div>
 
@@ -262,14 +262,14 @@ onUnmounted(stopPolling)
         <el-table-column prop="code" label="队列编码" width="200" show-overflow-tooltip />
         <el-table-column prop="queueType" label="类型" width="100">
           <template #default="{ row }">
-            <el-tag size="small">{{ row.queueType === 'nc_check' ? 'NC 检查' : '报告生成' }}</el-tag>
+            <YzhStatusBadge :type="row.queueType === 'nc_check' ? 'info' : 'success'" :text="row.queueType === 'nc_check' ? 'NC 检查' : '报告生成'" size="small" />
           </template>
         </el-table-column>
         <el-table-column prop="standardCode" label="标准编码" width="180" show-overflow-tooltip />
         <el-table-column prop="createBy" label="创建人" width="100" show-overflow-tooltip />
         <el-table-column label="状态" width="90" align="center">
           <template #default="{ row }">
-            <el-tag :type="statusTagType(row.queueStatus)" size="small">{{ statusText(row.queueStatus) }}</el-tag>
+            <YzhStatusBadge :type="statusTagType(row.queueStatus)" :text="statusText(row.queueStatus)" size="small" />
           </template>
         </el-table-column>
         <el-table-column label="进度" min-width="150">
@@ -334,17 +334,21 @@ onUnmounted(stopPolling)
     </el-card>
 
     <!-- 详情抽屉 -->
-    <el-drawer v-model="detailVisible" title="队列详情" size="60%">
+    <YzhDrawer
+      :model-value="detailVisible"
+      title="队列详情"
+      size="60%"
+      :show-footer="false"
+      @update:model-value="detailVisible = $event"
+    >
       <template v-if="detailQueue">
         <el-descriptions :column="2" border size="small" class="detail-desc">
           <el-descriptions-item label="队列编码">{{ detailQueue.code }}</el-descriptions-item>
           <el-descriptions-item label="类型">
-            <el-tag size="small">{{ detailQueue.queueType === 'nc_check' ? 'NC 检查' : '报告生成' }}</el-tag>
+            <YzhStatusBadge :type="detailQueue.queueType === 'nc_check' ? 'info' : 'success'" :text="detailQueue.queueType === 'nc_check' ? 'NC 检查' : '报告生成'" size="small" />
           </el-descriptions-item>
           <el-descriptions-item label="状态">
-            <el-tag :type="statusTagType(detailQueue.queueStatus)" size="small">
-              {{ statusText(detailQueue.queueStatus) }}
-            </el-tag>
+            <YzhStatusBadge :type="statusTagType(detailQueue.queueStatus)" :text="statusText(detailQueue.queueStatus)" size="small" />
           </el-descriptions-item>
           <el-descriptions-item label="进度">{{ detailQueue.doneCount }}/{{ detailQueue.totalCount }}</el-descriptions-item>
           <el-descriptions-item label="创建人">{{ detailQueue.createBy || '—' }}</el-descriptions-item>
@@ -362,13 +366,13 @@ onUnmounted(stopPolling)
             <el-table-column prop="seq" label="序号" width="50" align="center" />
             <el-table-column prop="itemType" label="类型" width="100">
               <template #default="{ row }">
-                <el-tag size="small">{{ row.itemType === 'nc_check' ? 'NC 检查' : '报告章节' }}</el-tag>
+                <YzhStatusBadge :type="row.itemType === 'nc_check' ? 'info' : 'success'" :text="row.itemType === 'nc_check' ? 'NC 检查' : '报告章节'" size="small" />
               </template>
             </el-table-column>
             <el-table-column prop="itemCode" label="项编码" min-width="180" show-overflow-tooltip />
             <el-table-column label="状态" width="90" align="center">
               <template #default="{ row }">
-                <el-tag :type="statusTagType(row.itemStatus)" size="small">{{ statusText(row.itemStatus) }}</el-tag>
+                <YzhStatusBadge :type="statusTagType(row.itemStatus)" :text="statusText(row.itemStatus)" size="small" />
               </template>
             </el-table-column>
             <el-table-column prop="retryCount" label="重试" width="50" align="center" />
@@ -382,7 +386,7 @@ onUnmounted(stopPolling)
           </el-table>
         </div>
       </template>
-    </el-drawer>
+    </YzhDrawer>
   </YzhPageLayout>
 </template>
 
@@ -392,22 +396,22 @@ onUnmounted(stopPolling)
 }
 
 .status-cards {
-  margin-bottom: 16px;
-  margin-top: 16px;
+  margin-bottom: var(--yzh-space-4, 16px);
+  margin-top: var(--yzh-space-4, 16px);
 }
 
 .stat-card {
   text-align: center;
-  padding: 10px 0;
+  padding: var(--yzh-space-2, 8px) 0;
 
   .stat-value {
-    font-size: 26px;
+    font-size: var(--yzh-font-size-3xl, 26px);
     font-weight: bold;
   }
   .stat-label {
-    font-size: 13px;
+    font-size: var(--yzh-font-size-sm, 13px);
     color: var(--yzh-color-text-tertiary, #909399);
-    margin-top: 5px;
+    margin-top: var(--yzh-space-1, 5px);
   }
 
   &.running .stat-value { color: var(--yzh-color-primary, #409eff); }
@@ -439,7 +443,7 @@ onUnmounted(stopPolling)
 }
 
 .table-card {
-  margin-top: 12px;
+  margin-top: var(--yzh-space-3, 12px);
   border: 1px solid var(--yzh-color-border-light, #ebeef5);
 
   .progress-cell {
@@ -448,7 +452,7 @@ onUnmounted(stopPolling)
     gap: 8px;
 
     .progress-count {
-      font-size: 12px;
+      font-size: var(--yzh-font-size-xs, 12px);
       color: var(--yzh-color-text-tertiary, #909399);
       white-space: nowrap;
     }
@@ -461,25 +465,25 @@ onUnmounted(stopPolling)
   .pagination-row {
     display: flex;
     justify-content: flex-end;
-    margin-top: 12px;
+    margin-top: var(--yzh-space-3, 12px);
   }
 }
 
 .detail-desc {
-  margin-bottom: 16px;
+  margin-bottom: var(--yzh-space-4, 16px);
 }
 
 .detail-section {
-  margin-top: 16px;
+  margin-top: var(--yzh-space-4, 16px);
 
   h4 {
-    margin-bottom: 8px;
+    margin-bottom: var(--yzh-space-2, 8px);
     font-weight: 500;
   }
 
   .error-text {
     color: var(--yzh-color-danger, #f56c6c);
-    font-size: 12px;
+    font-size: var(--yzh-font-size-xs, 12px);
   }
 }
 </style>

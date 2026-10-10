@@ -20,6 +20,7 @@ using CertPlatform.Shared.Office.Word;
 using CertPlatform.Shared.Services.Fill;
 using CertPlatform.Shared.Storage;
 using CertPlatform.Admin.Services.Ent;
+using CertPlatform.Admin.Services.Workflow.Skills.Fill;
 using CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai;
 using CertPlatform.Auditor.Entities.Cert;
 using CertPlatform.Auditor.Entities.Doc;
@@ -213,6 +214,8 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                 var values = new Dictionary<string, FillValue>(StringComparer.Ordinal);
                 var ledger = new List<DocFillValue>();
                 var pendings = new List<OfficeFillPending>();
+                // ★ G1（评审 63 号）：AI 表格锚点的区域指令 —— 此前恒空 ⇒ 表格永远不落笔
+                var regions = new List<OfficeFillRegion>();
                 var aiAnchors = new List<DocTemplateAnchor>();
                 var skillTrace = new List<string>();
                 var retrievedCodes = new List<string>();
@@ -262,7 +265,8 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                     {
                         // ★ AI 三类（`ai_semantic` / `ai_field` / `ai_table`）：只做「认领」，
                         //   真实 LLM 调用在下方 `ResolveAiAnchorsAsync` 统一批量执行。
-                        //   ★ 行为变更（55 §4.6）：AI 只产「建议」，⛔ 不进值字典。
+                        //   ★ D2 裁决（评审 63 号 G4）：AI 产出随步骤④统一落笔（标量进 values、
+                        //     表格进 regions），产建议仅作审计留痕 —— 不再「只产建议、值不进产物」。
                         //
                         // ⚠️⚠️ 2026-10-09 修（AI 来源**从来就没生效过**）：
                         //   此前这段判定写在 `if (!ok || val == null) continue;` **之后**，
@@ -308,19 +312,17 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                     }
                 }
 
-                // ── 腿 B · AI 汇聚（生成式）—— 落建议池，⛔ 不进产物 ──
+                // ── 腿 B · AI 汇聚（生成式）—— ★ G3/G4（评审 63 号，D2 裁决）──
+                //   旧行为 = 「AI 只产建议、值恒不进产物」，且下面这圈循环给**每个** AI 锚点
+                //   无差别记一条「AI 已产建议，待人工确认后生效」—— 即使模型根本没返回该锚点。
+                //   现在由 ResolveAiAnchorsAsync 内部按成败逐锚点处理：
+                //   · 模型产出了标量 ⇒ 进 values + 账本 filled（随步骤④统一落笔）；
+                //   · 模型产出了表格 ⇒ 装配区域指令进 regions（G1：Regions 不再恒空）；
+                //   · 未产出 / 调用失败 / 类型不符 ⇒ 记可操作待办（原因写实，方法内统一收尾）。
                 if (aiAnchors.Count > 0)
                 {
-                    await ResolveAiAnchorsAsync(aiAnchors, template, profiles, req, skillTrace, retrievedCodes, fillCtx, savedValues, ct);
-
-                    foreach (var anchor in aiAnchors)
-                    {
-                        var (key, _) = AnchorKeyOf(anchor);
-                        pendings.Add(BuildPending(anchor, "AI 已产建议，待人工确认后生效"));
-                        ledger.Add(BuildLedgerRow(req, template, anchor, key, null,
-                            sourceKind: "ai", sourceLabel: "AI 建议（待确认）",
-                            fillStatus: "pending", writeMode: anchor.WriteMode, confidence: 0.00m));
-                    }
+                    await ResolveAiAnchorsAsync(aiAnchors, template, profiles, req, skillTrace,
+                        retrievedCodes, fillCtx, savedValues, values, ledger, pendings, regions, ct);
                 }
 
                 // ════════════════════════════════════════════════════════════
@@ -332,6 +334,8 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                     Values = values,
                     // 未命中 ⇒ 置空（⛔ 不保留 {{xxx}}），但必须记入 Pendings（无静默丢弃）
                     KeepUnresolvedAsIs = false,
+                    // ★ G1（评审 63 号）：AI 表格锚点的区域指令 —— 此前恒空 ⇒ 表格永远不落笔
+                    Regions = regions,
                 };
 
                 OfficeFillResult fillResult;
@@ -381,7 +385,14 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
 
                 // 收集写入器回报的非致命问题（越界 / 丢弃）—— ⛔ 不静默
                 foreach (var region in report.Regions)
+                {
                     result.Warnings.AddRange(region.Warnings);
+
+                    // ★ G1b：整块未匹配（模板没有 {{table:xxx}} 标签 / 工作表名不对）
+                    //   必须进 Warnings —— 否则「数据装配成功但一块没写」在界面上完全不可见。
+                    if (!region.Matched && !string.IsNullOrEmpty(region.Message))
+                        result.Warnings.Add(region.Message);
+                }
 
                 // ════════════════════════════════════════════════════════════
                 //  ⑤ 自验收 —— Verified == false ⇒ 产物判 partial
@@ -776,10 +787,10 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
         ///     ② 把 <c>cert_standard_directory_file</c> 实例行的完成率 / 可信度写成
         ///     <b>试填的假数据</b> ⇒ 「一键规范化」的进度显示成「已经填过了」。</para>
         ///
-        ///     <para><b>⚠️ 表格锚点不产区域指令</b>：<see cref="OfficeFillRequest.Regions"/> 留空
-        ///     —— <b>与正式链逐字一致</b>（正式链同样只产 <c>Values</c>）。⛔ 不要在试填里
-        ///     「顺手把表格也填了」：那会让预览<b>比真实效果好看</b>，从而<b>掩盖真实缺口</b> ——
-        ///     比不填更糟。</para>
+        ///     <para><b>⚠️ 表格锚点不产区域指令</b>：<see cref="OfficeFillRequest.Regions"/> 留空。
+        ///     自 G3/G4 起正式链会为 AI 表格产 Regions，但预览链<b>刻意不产</b> ——
+        ///     ① 预览不调 LLM（无表格数据可装配）；② 方向是<b>预览更保守</b>
+        ///     （预览比真实少填一块，⛔ 反向的「预览比真实好看」才会掩盖真实缺口）。</para>
         ///
         ///     <para><b>★ 门槛低于正式填充</b>：⛔ 不要求 <c>PublishStatus='published'</c>
         ///     （试填正是「发布前验证规则」的工具，要求已发布 = 发布后才能验证 = 死锁）。
@@ -1198,12 +1209,31 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
         }
 
         // ════════════════════════════════════════════════════════════════════
-        //  腿 B · AI 汇聚（生成式）—— 落建议池，⛔ 不进产物
+        //  腿 B · AI 汇聚（生成式）—— ★ D2 裁决（评审 63 号 G4）：AI 值随步骤④统一落笔，
+        //    产建议仅作审计留痕（Status=accepted / IsSelected=false）；仅未产出者记待办。
         // ════════════════════════════════════════════════════════════════════
 
         /// <summary>
-        ///     ★ <b>行为变更点</b>（<c>55</c> §4.6）：AI 结果<b>只落 <c>cert_doc_ai_suggestion</c></b>
-        ///     （<c>Status=pending</c>），<b>⛔ 不写进值字典</b> —— 人工确认后才进账本/产物。
+        ///     ★ <b>AI 锚点批量取值 + 落笔装配</b>（腿 B · 生成式）。
+        ///
+        ///     <para><b>G3/G4（评审 63 号，D2 裁决「AI 值随步骤④统一落笔」）</b>：</para>
+        ///     <list type="bullet">
+        ///       <item><b>G3</b>：按 AI 来源类型分派输出三段 ——
+        ///             <c>ai_semantic</c>→<c>semantic</c> / <c>ai_field</c>→<c>fields</c> /
+        ///             <c>ai_table</c>（AnchorType=table）→<c>tables</c>；旧 <c>ai</c> 按锚点形态判。
+        ///             此前 <c>Section</c> 写死 <c>"field"</c> 且只读 <c>fields</c> 段 ⇒
+        ///             语义改写与表格产出<b>永远取不到</b>（配了不生效且不报错）。</item>
+        ///       <item><b>G4</b>：模型产出的<b>标量</b>进 <paramref name="values"/> + 账本
+        ///             <c>filled</c>（<c>sourceKind</c> = AI 来源类型、<c>sourceKind=ai_*</c>）；
+        ///             <b>仅未产出</b>的 AI 锚点记待办（⛔ 不再无差别记「待人工确认」）。
+        ///             建议行 <c>Status=accepted</c> / <c>IsSelected=false</c>（审计留痕，不是确认步骤）。</item>
+        ///       <item>模型产出的<b>表格</b>经 <c>fill_table</c> 装配成区域指令进
+        ///             <paramref name="regions"/>（G1：Regions 不再恒空）。</item>
+        ///     </list>
+        ///
+        ///     <para>失败语义（⛔ 不静默）：调用失败 / 模型未返回键 / 类型不符 / 表格无列定义
+        ///         ⇒ 记入 <paramref name="failReasons"/>，方法末尾统一转待办，
+        ///         原因写实（由写入器 pending 校准机制盖到界面上）。</para>
         /// </summary>
         private async Task ResolveAiAnchorsAsync(
             List<DocTemplateAnchor> aiAnchors,
@@ -1214,8 +1244,18 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
             List<string> retrievedCodes,
             FillContext fillCtx,
             Dictionary<string, FillParamValue> savedValues,
+            Dictionary<string, FillValue> values,
+            List<DocFillValue> ledger,
+            List<OfficeFillPending> pendings,
+            List<OfficeFillRegion> regions,
             CancellationToken ct)
         {
+            // ★ 成败账：consumed = 已落笔（值/区域/账本已记）；其余在方法末尾按 failReasons 记待办
+            var consumed = new HashSet<DocTemplateAnchor>();
+            var failReasons = new Dictionary<DocTemplateAnchor, string>();
+
+            var isExcel = string.Equals(template.FileKind, "xlsx", StringComparison.OrdinalIgnoreCase);
+
             // 召回企业文档 Markdown（画像的 SourceMarkdownPath = 分析输入快照）
             var docsMarkdown = new StringBuilder();
             foreach (var profile in profiles)
@@ -1254,15 +1294,37 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                 foreach (var a in group)
                 {
                     var (key, _) = AnchorKeyOf(a);
-                    specs.Add(new AiFillAnchorSpec
+                    var section = SectionOf(a);
+
+                    // ★ G3：表格锚点在 prompt 里用「表格标签」当键（{{table:items}} → items）
+                    //   —— 与 DefaultOutputSchema「tables 段键 = 表格标签」、SrcAiTableSkill 同口径；
+                    //   semantic / field 用归一化 key。
+                    var spec = new AiFillAnchorSpec
                     {
-                        AnchorCode = key,
+                        AnchorCode = section == "table" ? TableTagOf(a, key) : key,
                         // ★ 「③ 提示词」是这一格的指令（此前错用了 `Remark`，见方法注释）
                         Instruction = await BuildAiInstructionAsync(a, key, fillCtx, savedValues, req),
-                        ValueKind = a.ValueType,
-                        Section = "field",
+                        ValueKind = section == "table" ? "table" : a.ValueType,
+                        NumberFormat = section == "table" ? null : a.NumberFormat,
+                        Section = section,          // ★ G3：此前写死 "field" ⇒ 语义/表格段永远配不进提示词
                         PromptGroup = group.Key,
-                    });
+                    };
+
+                    if (section == "table")
+                    {
+                        // ★ G3：表格列定义透传给 prompt（否则模型不知道要吐哪些列）
+                        spec.Columns = TablePayloadFactory.ParseColumns(a.ColumnsJson)
+                            .Select(c => new AiFillColumnSpec
+                            {
+                                FieldCode = c.FieldCode,
+                                Title = c.Title ?? string.Empty,
+                                ValueKind = string.IsNullOrWhiteSpace(c.ValueKind) ? "text" : c.ValueKind!,
+                                NumberFormat = c.NumberFormat,
+                            })
+                            .ToList();
+                    }
+
+                    specs.Add(spec);
                 }
 
                 var buildCtx = new AiFillBuildContext
@@ -1276,64 +1338,179 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                 AiFillInvokeResult aiResult;
                 try
                 {
-                    var request = await AiFillPromptBuilder.BuildBatchAsync(_db, null, buildCtx, req.OrgCode, ct);
+                    // ★ G2（评审 63 号）：此前传死 `null` ⇒ `LoadPromptAsync` 恒 null ⇒ 永远走内置默认模板，
+                    //   `cert_doc_template.FillPromptCode` 挂在页面上是**装饰**（「配了不生效且不报错」）。
+                    //   空/未挂接时 `LoadPromptAsync` 自返回 null ⇒ 仍回落默认模板，行为向后兼容。
+                    var request = await AiFillPromptBuilder.BuildBatchAsync(_db, template.FillPromptCode, buildCtx, req.OrgCode, ct);
                     aiResult = await _aiInvoker.InvokeAsync(_db, request, ct);
                 }
                 catch (Exception ex)
                 {
-                    // ⛔ 不静默降级：如实记 warning，AI 锚点保持 pending
+                    // ⛔ 不静默降级：如实记 warning + 把整组锚点标成「调用失败」（方法末尾统一转待办）
                     _logger.LogWarning(ex, "[EntNorm] AI 批量取值失败（组 {Group}）", group.Key);
                     skillTrace.Add($"ai_batch_failed:{group.Key}");
+                    foreach (var a in group)
+                        failReasons[a] = $"AI 批量调用失败：{ex.Message}";
                     continue;
                 }
 
                 skillTrace.Add($"ai_batch:{group.Key}:{group.Count()}");
 
-                if (!aiResult.Success || aiResult.Root == null) continue;
-                if (!aiResult.Root.TryGetValue("fields", out var fieldsObj) || fieldsObj is not Dictionary<string, object> fields)
+                if (!aiResult.Success || aiResult.Root == null)
+                {
+                    var why = $"AI 调用失败：{aiResult.Error ?? "返回不可解析（非对象根 / 空响应）"}";
+                    foreach (var a in group)
+                        failReasons[a] = why;
                     continue;
+                }
 
+                var root = aiResult.Root;
                 var suggestions = new List<DocAiSuggestion>();
+
                 foreach (var anchor in group)
                 {
                     var (key, _) = AnchorKeyOf(anchor);
-                    if (!fields.TryGetValue(key, out var fieldVal) || fieldVal is not Dictionary<string, object> fieldObj)
-                        continue;
+                    var entry = AiEntryOf(anchor);
+                    var kind = entry?.Kind ?? "ai";
+                    var section = SectionOf(anchor);
 
-                    if (!fieldObj.TryGetValue("value", out var raw) || raw == null) continue;
-                    var valStr = raw.ToString();
-                    if (string.IsNullOrWhiteSpace(valStr)) continue;
-
-                    var confidence = fieldObj.TryGetValue("confidence", out var c) && c is double d ? (decimal)d : 1.00m;
-
-                    suggestions.Add(new DocAiSuggestion
+                    // ────────────────────────────────────────────────
+                    // ① 表格（AnchorType=table / ai_table）→ 区域指令（G1：Regions 不再恒空）
+                    // ────────────────────────────────────────────────
+                    if (section == "table")
                     {
-                        // ★★★ 同 `BuildLedgerRow`：`cert_doc_ai_suggestion.Code` 是
-                        //   `varchar(36) NOT NULL` + `UNIQUE KEY uk_ai_suggestion_code`，
-                        //   而 `DocAiSuggestion : BaseEntity` 的 `Code` 是**可空** `string?`
-                        //   ⇒ 不显式赋值即 `Column 'Code' cannot be null`，且因走 DbOrm 直插（非 `AddCore`）
-                        //   **不会**被自动补值。⛔ 与账本缺陷同源，属「静默失败」同一类。
-                        Code = Guid.NewGuid().ToString("N"),
-                        OrgCode = req.OrgCode,
-                        EnterpriseCode = req.EnterpriseCode,
-                        StageCode = req.StageCode,
-                        StandardCode = req.StandardCode,
-                        TemplateFileCode = req.StandardFileCode,
-                        AnchorCode = key,
-                        BatchCode = batchCode,
-                        SuggestedValue = valStr,
-                        ValueKind = anchor.ValueType,
-                        NumberFormat = anchor.NumberFormat,
-                        Confidence = confidence,
-                        SourceSnippet = fieldObj.TryGetValue("note", out var note) ? note.ToString() : null,
-                        Reason = fieldObj.TryGetValue("note", out var reason) ? reason.ToString() : null,
-                        SkillCode = "src_ai_field",
-                        ModelName = aiResult.Model,
-                        PromptTokens = aiResult.PromptTokens ?? 0,
-                        CompletionTokens = aiResult.CompletionTokens ?? 0,
-                        DurationMs = (int)aiResult.DurationMs,
-                        Status = "pending",   // ★ 待人工确认
-                    });
+                        var tag = TableTagOf(anchor, key);
+                        var columns = TablePayloadFactory.ParseColumns(anchor.ColumnsJson);
+                        if (columns.Count == 0)
+                        {
+                            failReasons[anchor] =
+                                $"表格锚点 {tag} 未配置列定义 ColumnsJson —— 请在锚点抽屉「③ 表格参数」按 " +
+                                "[{\"field_code\":..,\"title\":..,\"kind\":..}] 配置";
+                            continue;
+                        }
+
+                        var tableNode = AiFillJsonReader.ReadSectionRaw(root, AiFillJsonReader.SectionTables, tag)
+                            ?? AiFillJsonReader.ReadSectionRaw(root, AiFillJsonReader.SectionTables, FillSyntax.TablePrefix + tag)
+                            ?? AiFillJsonReader.ReadSectionRaw(root, AiFillJsonReader.SectionTables, key);
+                        if (tableNode == null)
+                        {
+                            failReasons[anchor] = $"AI 未返回 tables.{tag}（检查提示词是否让模型输出该表）";
+                            continue;
+                        }
+
+                        var payload = TablePayloadFactory.FromAiNode(tag, columns, tableNode, maxRows: 500);
+                        if (payload.Rows.Count == 0)
+                        {
+                            failReasons[anchor] = $"AI 返回的 tables.{tag} 没有解析出任何数据行";
+                            continue;
+                        }
+
+                        var (startRow, startCol, sheetName) = TableStartOf(anchor, isExcel);
+                        var session = new FillSession
+                        {
+                            FileKind = isExcel ? "excel" : "word",
+                            TemplateFileCode = req.StandardFileCode,
+                        };
+                        var tableSkill = await FillTableSkill.ExecuteAsync(
+                            session, payload, startRow, startCol, sheetName, ct);
+                        if (!tableSkill.Success)
+                        {
+                            failReasons[anchor] = $"表格区域装配失败：{tableSkill.Error}";
+                            continue;
+                        }
+
+                        regions.AddRange(session.Request.Regions);
+                        consumed.Add(anchor);
+                        skillTrace.Add($"{kind}:{key}:rows{payload.Rows.Count}");
+
+                        // 账本留痕（值显示「N 行 × M 列」；⛔ 不进 values —— 区域填充不经值字典）
+                        ledger.Add(BuildLedgerRow(req, template, anchor, key, new FillValue
+                        {
+                            AnchorCode = key,
+                            Kind = FillValueKind.Text,
+                            Text = $"{payload.Rows.Count} 行 × {payload.Columns.Count} 列",
+                            Source = $"AI 生成 · {aiResult.Model}",
+                        },
+                            sourceKind: kind, sourceLabel: $"AI 表格生成 · {aiResult.Model}",
+                            fillStatus: "filled", writeMode: anchor.WriteMode,
+                            confidence: CalcConfidence(kind, 0.80)));
+
+                        suggestions.Add(BuildSuggestion(req, anchor, key, batchCode, aiResult,
+                            TableSuggestionJson(payload), kind, section, confidence: 0.80m,
+                            formKind: "table", note: null));
+                        continue;
+                    }
+
+                    // ────────────────────────────────────────────────
+                    // ② 标量（semantic / fields 两段互通兜底 —— 39 §12.5；G3）
+                    // ────────────────────────────────────────────────
+                    string? text = null;
+                    double? confidence = null;
+                    string? note = null;
+
+                    var semanticVal = AiFillJsonReader.ReadSectionValue(root, AiFillJsonReader.SectionSemantic, key);
+                    var fieldNode = AiFillJsonReader.ReadObject(root, AiFillJsonReader.SectionFields, key);
+                    var fieldValue = AiFillJsonReader.ReadRaw(fieldNode, "value");
+
+                    if (section == "semantic")
+                    {
+                        if (semanticVal != null)
+                            text = semanticVal;                                  // 主段命中
+                        else if (fieldValue != null)
+                        {
+                            // 模型把该锚点放进了 fields 段 ⇒ 按字段取（⛔ 不因段错位丢值）
+                            text = AiFillJsonReader.AsString(fieldValue);
+                            confidence = AiFillJsonReader.ReadConfidence(fieldNode);
+                            note = AiFillJsonReader.ReadString(fieldNode, "note");
+                        }
+                        else if (fieldNode != null)
+                            note = AiFillJsonReader.ReadString(fieldNode, "note"); // 节点在、值空 ⇒ 模型明说没有
+                    }
+                    else // field
+                    {
+                        if (fieldValue != null)
+                        {
+                            text = AiFillJsonReader.AsString(fieldValue);
+                            confidence = AiFillJsonReader.ReadConfidence(fieldNode);
+                            note = AiFillJsonReader.ReadString(fieldNode, "note");
+                        }
+                        else if (semanticVal != null)
+                            text = semanticVal;                                  // 回退 semantic 段
+                        else if (fieldNode != null)
+                            note = AiFillJsonReader.ReadString(fieldNode, "note");
+                    }
+
+                    if (text == null)
+                    {
+                        // ★ 未产出（⛔ 不静默）：语义段为 string（null=键缺失），字段段「节点在但 value 空」
+                        //   ⇒ 把模型的 note 带进待办原因（如「资料中未提及」）
+                        failReasons[anchor] = note
+                            ?? $"AI 未返回 {SectionJsonName(section)}.{key} —— 检查提示词是否让模型输出该键";
+                        continue;
+                    }
+
+                    var (ok, val, err) = FillValueFactory.TryCreate(key, text, anchor.ValueType, anchor.NumberFormat);
+                    if (!ok || val == null)
+                    {
+                        // ★ 类型由锚点 ValueType 决定（⛔ 不由 AI 猜）：AI 给了文本但声明是 number ⇒ 如实记待办
+                        failReasons[anchor] = $"AI 返回的值类型不符：{err}（类型由锚点 ValueType「{anchor.ValueType}」决定）";
+                        continue;
+                    }
+
+                    // ★★ G4（D2 裁决）：AI 标量直接落值字典，随步骤④统一落笔
+                    val.WriteMode = anchor.WriteMode;
+                    val.Source = $"AI 生成 · {aiResult.Model}";
+                    values[key] = val;
+                    consumed.Add(anchor);
+                    skillTrace.Add($"{kind}:{key}");
+                    ledger.Add(BuildLedgerRow(req, template, anchor, key, val,
+                        sourceKind: kind, sourceLabel: $"AI 生成 · {aiResult.Model}",
+                        fillStatus: "filled", writeMode: anchor.WriteMode,
+                        confidence: CalcConfidence(kind, confidence ?? 0.80)));
+
+                    suggestions.Add(BuildSuggestion(req, anchor, key, batchCode, aiResult,
+                        text, kind, section, confidence: (decimal?)(confidence ?? 0.80),
+                        formKind: "scalar", note: note));
                 }
 
                 if (suggestions.Count > 0)
@@ -1343,13 +1520,244 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                     var suggResult = await _db.InsertBatchAsync(suggestions);
                     if (!suggResult.Success)
                     {
-                        // ⛔ 不静默降级：AI 建议落库失败必须留痕（锚点仍保持 pending）
+                        // ⛔ 不静默降级：AI 建议落库失败必须留痕（值已落笔不受影响，但审计缺行）
                         _logger.LogError("[EntNorm] AI 建议落库失败（{Count} 条）：{Err}",
                             suggestions.Count, suggResult.Error);
                         skillTrace.Add($"ai_suggestion_insert_failed:{suggestions.Count}");
                     }
                 }
             }
+
+            // ────────────────────────────────────────────────────────
+            // ★ 统一收尾：未被消费的 AI 锚点 → 按实记待办 + 账本 pending（⛔ 不静默）
+            //   （调用方原先那圈**无差别**「AI 已产建议，待人工确认后生效」循环已删除：
+            //    现在只有真失败才记，且原因写实 —— 写入器 pending 校准机制会盖到界面上）
+            // ────────────────────────────────────────────────────────
+            foreach (var anchor in aiAnchors)
+            {
+                if (consumed.Contains(anchor)) continue;
+
+                var (key, _) = AnchorKeyOf(anchor);
+                var reason = failReasons.TryGetValue(anchor, out var why)
+                    ? why
+                    : "AI 未返回该锚点的值";
+                pendings.Add(BuildPending(anchor, reason));
+                ledger.Add(BuildLedgerRow(req, template, anchor, key, null,
+                    sourceKind: AiEntryOf(anchor)?.Kind ?? "ai",
+                    sourceLabel: reason,
+                    fillStatus: "pending", writeMode: anchor.WriteMode, confidence: 0.00m));
+            }
+        }
+
+        /// <summary>
+        ///     ★ <b>按 AI 来源类型 + 锚点形态分派输出段</b>（G3，39 §12.5）。
+        ///
+        ///     <para>返回值是<b>提示词侧词汇</b>（<c>semantic</c> / <c>field</c> / <c>table</c>，
+        ///     见 <c>AiFillPromptBuilder.RenderAnchors</c>）；读输出 JSON 时再映射到
+        ///     <c>fields</c> / <c>tables</c> 复数段名（<see cref="SectionJsonName"/>）。</para>
+        ///
+        ///     <para>⛔ <c>table_total</c>（合计）刻意<b>不</b>猜成表格 —— 走 field 段取标量。</para>
+        /// </summary>
+        private string SectionOf(DocTemplateAnchor anchor)
+        {
+            var kind = (AiEntryOf(anchor)?.Kind ?? "ai").ToLowerInvariant();
+            var isTable = string.Equals(anchor.AnchorType, "table", StringComparison.OrdinalIgnoreCase);
+
+            switch (kind)
+            {
+                case "ai_semantic": return "semantic";
+                case "ai_field": return "field";
+                case "ai_table": return isTable ? "table" : "field";
+                default:
+                    // 旧 "ai"（单值时代）：按锚点形态判 —— table→表格，block→语义改写，其余→字段
+                    if (isTable) return "table";
+                    return string.Equals(anchor.AnchorType, "block", StringComparison.OrdinalIgnoreCase)
+                        ? "semantic"
+                        : "field";
+            }
+        }
+
+        /// <summary>提示词侧段名 → 输出 JSON 段键（待办原因文案用）：<c>field</c>→<c>fields</c></summary>
+        private static string SectionJsonName(string section) => section switch
+        {
+            "semantic" => AiFillJsonReader.SectionSemantic,
+            "table" => AiFillJsonReader.SectionTables,
+            _ => AiFillJsonReader.SectionFields,
+        };
+
+        /// <summary>
+        ///     表格锚点的<b>标签</b>（<c>{{table:items}}</c> → <c>items</c>）。
+        ///     <para>优先 <c>FieldCode</c>（扫描器给的 inner 原文）；空则从归一化键剥 <c>table:</c> 前缀。</para>
+        /// </summary>
+        private static string TableTagOf(DocTemplateAnchor anchor, string key)
+        {
+            var fc = (anchor.FieldCode ?? string.Empty).Trim();
+            if (fc.Length > 0) return fc;
+            return FillSyntax.IsTableToken(key) ? key[FillSyntax.TablePrefix.Length..] : key;
+        }
+
+        /// <summary>
+        ///     表格区域起始坐标（Excel）：① <c>TokenModifiersJson</c> 显式配置
+        ///     （<c>{startRow, startCol, sheet}</c>，大小写容忍，G5 抽屉③段写入）
+        ///     ② 解析 <c>AnchorRef</c>（<c>Sheet1!B3</c> / <c>Sheet1!A11:F11</c> 取冒号前段）
+        ///     ③ 兜底 (0,0)。Word 走 <c>TableTag</c> 定位，坐标被 <c>FillTableSkill</c> 忽略。
+        /// </summary>
+        private static (int Row, int Col, string? Sheet) TableStartOf(DocTemplateAnchor anchor, bool isExcel)
+        {
+            var row = -1;
+            var col = -1;
+            string? sheet = null;
+
+            // ① TokenModifiersJson 显式覆盖
+            if (!string.IsNullOrWhiteSpace(anchor.TokenModifiersJson))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(anchor.TokenModifiersJson!);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                    {
+                        row = ReadModifierInt(doc.RootElement, "startRow") ?? row;
+                        col = ReadModifierInt(doc.RootElement, "startCol") ?? col;
+                        sheet = ReadModifierString(doc.RootElement, "sheet") ?? sheet;
+                    }
+                }
+                catch (JsonException)
+                {
+                    // 配置坏 ⇒ 回落 ②，⛔ 不炸整批
+                }
+            }
+
+            // ② 解析 AnchorRef
+            if (row < 0 || col < 0)
+            {
+                var (r, c, sh) = ParseA1AnchorRef(anchor.AnchorRef);
+                if (r >= 0)
+                {
+                    if (row < 0) row = r;
+                    if (col < 0) col = c;
+                }
+                sheet ??= sh;
+            }
+
+            sheet ??= string.IsNullOrWhiteSpace(anchor.SheetName) ? null : anchor.SheetName;
+
+            // Word 不用坐标（FillTableSkill 按 TableTag 定位）—— 仍原样返回，调用方不区分
+            return (row < 0 ? 0 : row, col < 0 ? 0 : col, sheet);
+        }
+
+        /// <summary><c>Sheet1!B3</c> / <c>Sheet1!A11:F11</c> → (row0, col0, sheet)；解析不了 ⇒ (-1,-1,sheet?)</summary>
+        private static (int Row, int Col, string? Sheet) ParseA1AnchorRef(string? anchorRef)
+        {
+            var raw = (anchorRef ?? string.Empty).Trim();
+            if (raw.Length == 0) return (-1, -1, null);
+
+            string? sheet = null;
+            var cellPart = raw;
+            var bang = raw.IndexOf('!');
+            if (bang >= 0)
+            {
+                sheet = raw[..bang];
+                cellPart = raw[(bang + 1)..];
+            }
+
+            var colon = cellPart.IndexOf(':');
+            if (colon > 0) cellPart = cellPart[..colon];   // "A11:F11" → "A11"（区域取左上角）
+
+            var i = 0;
+            while (i < cellPart.Length && char.IsLetter(cellPart[i])) i++;
+            if (i == 0 || i >= cellPart.Length) return (-1, -1, sheet);
+            if (!int.TryParse(cellPart[i..], out var rowNum) || rowNum < 1) return (-1, -1, sheet);
+
+            var col0 = 0;
+            foreach (var ch in cellPart[..i].ToUpperInvariant())
+                col0 = col0 * 26 + (ch - 'A' + 1);
+
+            return (rowNum - 1, col0 - 1, sheet);
+        }
+
+        private static int? ReadModifierInt(JsonElement obj, string name)
+        {
+            foreach (var key in new[] { name, char.ToUpperInvariant(name[0]) + name[1..] })
+            {
+                if (obj.TryGetProperty(key, out var p) && p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out var v))
+                    return v;
+            }
+            return null;
+        }
+
+        private static string? ReadModifierString(JsonElement obj, string name)
+        {
+            foreach (var key in new[] { name, char.ToUpperInvariant(name[0]) + name[1..] })
+            {
+                if (obj.TryGetProperty(key, out var p) && p.ValueKind == JsonValueKind.String)
+                    return p.GetString();
+            }
+            return null;
+        }
+
+        /// <summary>表格建议值 → JSON（TEXT 列 64KB 上限：超限降级为行数摘要，⛔ 不炸插入）</summary>
+        private static string TableSuggestionJson(TablePayload payload)
+        {
+            var json = JsonSerializer.Serialize(payload.Rows);
+            return json.Length <= 60000
+                ? json
+                : JsonSerializer.Serialize(new { row_count = payload.Rows.Count, truncated = true });
+        }
+
+        /// <summary>
+        ///     构造一条 AI 建议行（<c>cert_doc_ai_suggestion</c>）。
+        ///     <para>★ D2 裁决：<c>Status=accepted</c> / <c>IsSelected=false</c> ——
+        ///     建议已随步骤④落笔，此行仅作审计留痕（<c>SourceResolver</c> 只认
+        ///     <c>IsSelected==true</c> 的行，⛔ 不会二次回填）。</para>
+        /// </summary>
+        private static DocAiSuggestion BuildSuggestion(
+            FillOneRequest req,
+            DocTemplateAnchor anchor,
+            string key,
+            string batchCode,
+            AiFillInvokeResult aiResult,
+            string suggestedValue,
+            string kind,
+            string section,
+            decimal? confidence,
+            string formKind,
+            string? note)
+        {
+            var k = kind.ToLowerInvariant();
+            var skill = k switch
+            {
+                "ai_semantic" => "src_semantic",
+                "ai_table" => "src_ai_table",
+                "ai_field" => "src_ai_field",
+                _ => section == "semantic" ? "src_semantic" : section == "table" ? "src_ai_table" : "src_ai_field",
+            };
+
+            return new DocAiSuggestion
+            {
+                // ★★★ 同 `BuildLedgerRow`：`Code` NOT NULL 且直插不会自动补值 ⇒ 必须显式赋值
+                Code = Guid.NewGuid().ToString("N"),
+                OrgCode = req.OrgCode,
+                EnterpriseCode = req.EnterpriseCode,
+                StageCode = req.StageCode,
+                StandardCode = req.StandardCode,
+                TemplateFileCode = req.StandardFileCode,
+                AnchorCode = key,
+                FormKind = formKind,
+                BatchCode = batchCode,
+                SuggestedValue = suggestedValue,
+                ValueKind = anchor.ValueType,
+                NumberFormat = anchor.NumberFormat,
+                Confidence = confidence,
+                SourceSnippet = note,
+                Reason = note,
+                SkillCode = skill,
+                ModelName = aiResult.Model,
+                PromptTokens = aiResult.PromptTokens ?? 0,
+                CompletionTokens = aiResult.CompletionTokens ?? 0,
+                DurationMs = (int)aiResult.DurationMs,
+                Status = "accepted",   // ★ D2：已随步骤④落笔 —— 审计留痕，⛔ 不是待确认步骤
+                IsSelected = false,
+            };
         }
 
         /// <summary>
@@ -1441,6 +1849,27 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
             {
                 raw = raw.Substring(2, raw.Length - 4);
             }
+            else if (string.Equals(anchor.AnchorKind, "range", StringComparison.OrdinalIgnoreCase)
+                     && !string.IsNullOrWhiteSpace(anchor.FieldCode))
+            {
+                // ★★ G1b'（评审 63 号未发现的第 5 个断点 —— Excel 全量标量/域/语义锚点不落笔）：
+                //   Excel range 锚点的 AnchorRef 是**坐标**（"Sheet1!B3"），而
+                //   `ExcelFillWriter.FillCell` 是按**单元格 token 内容**
+                //   （`FillSyntax.SplitFormat(cellText)`）查值字典 ——
+                //   坐标键永远撞不上 ⇒ Excel 所有非表格锚点「填不进去且不报错」
+                //   （预览 override、reasonByKey 归因、自动域 pendings 同样失配）。
+                //   ⇒ 用扫描器存的 FieldCode（= `AnchorClassifier.FieldCodeOf(inner)`，
+                //   已剥 ai:/table:/@ 前缀）按 AnchorType 还原 token inner，再走 SplitFormat
+                //   —— 与写入器的查找键**逐字一致**。FieldCode 空 ⇒ 回退坐标（维持现状）。
+                var fc = anchor.FieldCode!.Trim();
+                raw = anchor.AnchorType.ToLowerInvariant() switch
+                {
+                    "block" => FillSyntax.AiPrefix + fc,
+                    "table" => FillSyntax.TablePrefix + fc,
+                    "domain" => FillSyntax.SysPrefix + fc,
+                    _ => fc,   // scalar / table_total —— FieldCodeOf 恒等 ⇒ 含格式串，交 SplitFormat 剥
+                };
+            }
 
             return FillSyntax.SplitFormat(raw);
         }
@@ -1462,6 +1891,10 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                     return 1.00m;
                 case "profile":
                 case "ai":
+                // ★ G4 配套：AI 三类新来源类型 —— 此前落 default 恒 0.50（低估且与 "ai" 不一致）
+                case "ai_semantic":
+                case "ai_field":
+                case "ai_table":
                     return Clamp(raw);
                 default:
                     return 0.50m;

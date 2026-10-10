@@ -83,9 +83,9 @@ public class SkillTreeTableController
         TreeConfig.CodeField = "DicValue";            // 树 Code = 业务编码 DicValue（关联 wf_skill.CategoryCode，非字典项 GUID）
         TreeConfig.ParentCodeField = "ParentCode";    // 扁平结构恒 null
         TreeConfig.RelateField = "CategoryCode";      // 右表通过 CategoryCode 关联左树
-        TreeConfig.MaxLevel = 1;                      // 仅一级（扁平结构）
+        TreeConfig.MaxLevel = 2;                      // 两级：大类 → 子类
         // 分类在当前页面就地维护（2026-10-09 用户裁决：随时可能要调整分类）
-        TreeConfig.AllowAddChild = false;             // 扁平结构：不显示「新增下级」
+        TreeConfig.AllowAddChild = true;              // 根级分类允许新增子类
         TreeConfig.AllowEdit = true;                  // 允许编辑分类
         TreeConfig.AllowDelete = true;                // 允许删除分类（含外键校验）
         TreeConfig.AllowRename = false;
@@ -134,7 +134,7 @@ public class SkillTreeTableController
     // ========================================================
 
     /// <summary>
-    /// 获取根节点 = skill_category 字典下的全部有效字典项（扁平一级）
+    /// 获取根节点 = skill_category 字典下 ParentCode=null 的有效字典项（一级大类）
     /// POST /api/Workflow/SkillTreeTable/tree/root
     /// </summary>
     [HttpPost("tree/root")]
@@ -147,7 +147,9 @@ public class SkillTreeTableController
                 return Ok(ApiResponse<TreeItemDto[]>.Fail(
                     $"字典「技能分类」(DicNo={CategoryDictNo}) 未配置，请先在「字典管理」中创建"));
 
-            var result = await TreeEntity.GetListAsync(x => x.DicCode == dictCode && x.IsValid == 1);
+            // 仅查根级分类（ParentCode = null），子级通过 /tree/children 懒加载
+            var result = await TreeEntity.GetListAsync(x =>
+                x.DicCode == dictCode && x.ParentCode == null && x.IsValid == 1);
             if (!result.Success)
                 return Ok(ApiResponse<TreeItemDto[]>.Fail(result.Error!));
 
@@ -170,29 +172,50 @@ public class SkillTreeTableController
     }
 
     /// <summary>
-    /// 懒加载子节点 —— 分类扁平无层级，恒返回空
+    /// 懒加载子节点 —— 按 ParentCode 查询指定一级大类下的子类
     /// POST /api/Workflow/SkillTreeTable/tree/children
     /// </summary>
     [HttpPost("tree/children")]
     public override async Task<ActionResult<ApiResponse<TreeItemDto[]>>> GetChildren(
         [FromBody] TreeChildrenRequest request)
     {
-        await Task.CompletedTask;
-        return Ok(ApiResponse<TreeItemDto[]>.Ok(Array.Empty<TreeItemDto>()));
-    }
-
-    /// <summary>批量 isLeaf —— 扁平分类恒为叶子（避免基类按 ParentCode 查字典项表）</summary>
-    protected override Task FillIsLeafBatch(List<TreeItemDto> dtos)
-    {
-        foreach (var dto in dtos)
+        try
         {
-            dto.IsLeaf = true;
+            var dictCode = await ResolveCategoryDictCodeAsync();
+            if (dictCode == null)
+                return Ok(ApiResponse<TreeItemDto[]>.Fail(
+                    $"字典「技能分类」(DicNo={CategoryDictNo}) 未配置"));
+
+            // 按 ParentCode 查子级分类（同一 DicCode 下）
+            var result = await TreeEntity.GetListAsync(x =>
+                x.DicCode == dictCode && x.ParentCode == request.ParentCode && x.IsValid == 1);
+            if (!result.Success)
+                return Ok(ApiResponse<TreeItemDto[]>.Fail(result.Error!));
+
+            var items = (result.Data ?? new List<CertPlatform.Admin.Entities.Wf.SkillCategoryDict>())
+                .Where(x => !string.IsNullOrWhiteSpace(x.DicValue))
+                .OrderBy(x => x.OrderNo ?? 0)
+                .ThenBy(x => x.DicName)
+                .ToList();
+
+            var dtos = items.Select(item => MapToTreeItem(item, request.Level + 1)).ToList();
+            await FillIsLeafBatch(dtos);
+            return Ok(ApiResponse<TreeItemDto[]>.Ok(dtos.ToArray()));
         }
-        return Task.CompletedTask;
+        catch (Exception ex)
+        {
+            return Ok(ApiResponse<TreeItemDto[]>.Fail($"加载子节点失败：{ex.Message}"));
+        }
     }
 
     /// <summary>
-    /// 实体 → TreeItemDto 映射：补 Color（TreeMapper 自动提取 IsValid/Remark/OrderNo，不含 Color）
+    /// 实体 → TreeItemDto 映射：补 Color + DicValue + OrderNo + ParentCode（PascalCase）
+    ///
+    /// 前端 openTreeNodeDialog 编辑回填逻辑（TreeTableCore.ts:632-635）：
+    ///   从 node.Extra 按 treeFormFields 的 prop 白名单取值（prop = FieldName，PascalCase）。
+    ///   · TreeMapper 自动以「小写 orderNo」放入 Extra → 与前端 prop `OrderNo` 不匹配 → 回填空
+    ///   · DicValue 完全不在 Extra 中 → 回填空
+    ///   故需显式以 PascalCase 注入，确保前端能匹配。
     /// </summary>
     protected override TreeItemDto MapToTreeItem(
         CertPlatform.Admin.Entities.Wf.SkillCategoryDict entity, int level)
@@ -201,6 +224,9 @@ public class SkillTreeTableController
         dto.Extra ??= new Dictionary<string, object>();
         dto.Extra["Color"] = entity.Color ?? "";
         dto.Extra["IsValid"] = entity.IsValid;
+        dto.Extra["DicValue"] = entity.DicValue ?? "";
+        dto.Extra["OrderNo"] = entity.OrderNo ?? 0;
+        dto.Extra["ParentCode"] = entity.ParentCode ?? "";
         return dto;
     }
 
@@ -237,7 +263,7 @@ public class SkillTreeTableController
     }
 
     /// <summary>
-    /// 修改分类前校验：DicName 不可空 + DicValue 唯一（排除自身）
+    /// 修改分类前校验：DicName 不可空 + DicValue 唯一（排除自身） + 子级分类不允许改父级（保两层结构）
     /// </summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdateTree(
         CertPlatform.Admin.Entities.Wf.SkillCategoryDict entity)
@@ -248,11 +274,17 @@ public class SkillTreeTableController
         if (string.IsNullOrWhiteSpace(entity.DicValue))
             return (false, "分类编码（DicValue）不能为空");
 
-        // DicValue 唯一性校验（排除自身：按 DicValue 查出的记录不能是别的 GUID）
         var dictCode = await ResolveCategoryDictCodeAsync();
         if (dictCode == null)
             return (false, $"字典「技能分类」(DicNo={CategoryDictNo}) 未配置");
 
+        // 子级分类不允许改父级（保两层结构）
+        var existingList = await TreeEntity.GetListAsync(x => x.DicCode == dictCode && x.Code == entity.Code);
+        var existingItem = (existingList.Data ?? new List<CertPlatform.Admin.Entities.Wf.SkillCategoryDict>()).FirstOrDefault();
+        if (existingItem != null && existingItem.ParentCode != null && existingItem.ParentCode != entity.ParentCode)
+            return (false, "子分类不允许修改上级分类");
+
+        // DicValue 唯一性校验（排除自身：按 DicValue 查出的记录不能是别的 GUID）
         var dup = await TreeEntity.GetListAsync(x => x.DicCode == dictCode && x.DicValue == entity.DicValue);
         var conflict = (dup.Data ?? new List<CertPlatform.Admin.Entities.Wf.SkillCategoryDict>())
             .FirstOrDefault(x => x.Code != entity.Code);

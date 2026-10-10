@@ -48,6 +48,7 @@ import { YzhEmptyState, YzhStatusBadge, YzhTreeTableLayout, type YzhTreeNode } f
 import {
   FILL_STATUS_TEXT,
   FILL_STATUS_TYPE,
+  pathFileName,
   standardLabel,
   toPercent,
 } from '@share/api/ent/enterprise-normalize'
@@ -150,23 +151,39 @@ function runButtonText(): string {
             </div>
 
             <!--
-              ══════════ 自动刷新提示条（入队成功后出现） ══════════
+              ══════════ 批次进度提示条（入队成功后出现） ══════════
 
-              ★ 为什么要有：`run` 只把任务投进队列就返回，真正执行在后台串行跑（单个文件可能到分钟级）。
+              ★ 为什么要有：`run` 只把任务投进队列就返回，真正执行在后台队列跑（单个文件可能到分钟级）。
               此前用户必须**自己反复点「刷新」**才知道跑完没有 —— 而「不知道跑没跑完」
               正是最容易被误判成「点了没反应 / 系统卡死」的状态。
-              ⛔ 不显示「预计还要多久」：后端不给进度，编时间就是骗人。
+              ★ 2026-10-10 P1：进度数据来自 `batch/{QueueCode}`（服务端判完成 + 带失败明细），
+                ⛔ 不再整树重拉 tree —— 旧做法载荷大、拿不到失败明细，且靠浏览器时钟判完成。
+              ⛔ 不显示「预计还要多久」：剩余时间只能靠编，编了就是骗人。
             -->
             <div v-if="logic.polling.value" class="en-poll">
               <span class="en-poll__text">
-                后台正在执行规范化，本页每 15 秒自动刷新一次<template
-                  v-if="logic.pollCount.value > 0"
+                后台正在执行规范化，本页每 15 秒查询批次进度<template
+                  v-if="logic.batchResult.value"
                 >
-                  （已刷新 {{ logic.pollCount.value }} 次<template v-if="logic.lastRefreshAt.value"
-                    >，最近 {{ logic.lastRefreshAt.value }}</template
+                  （{{ logic.batchResult.value.Completed }}/{{ logic.batchResult.value.Total }}
+                  已完成<template v-if="logic.batchResult.value.Failed > 0">
+                    ，失败 {{ logic.batchResult.value.Failed }}</template
                   >）</template
+                ><template v-if="logic.pollCount.value > 0">
+                  ，已查询 {{ logic.pollCount.value }} 次<template v-if="logic.lastRefreshAt.value"
+                    >（最近 {{ logic.lastRefreshAt.value }}）</template
+                  ></template
                 >；全部跑完会自动停。
               </span>
+              <el-button
+                v-if="logic.batchResult.value && !logic.batchResult.value.IsFinished"
+                type="danger"
+                size="small"
+                plain
+                @click="logic.cancelBatch()"
+              >
+                取消批次
+              </el-button>
               <el-button type="default" size="small" @click="logic.stopAutoRefresh()">
                 停止自动刷新
               </el-button>
@@ -259,13 +276,15 @@ function runButtonText(): string {
               @run-one="(file) => logic.runOne(file)"
             />
 
-            <!-- 干跑预览 / 入队回执 -->
+            <!-- 干跑预览 / 入队回执（含批次进度） -->
             <NormalizePlanCard
               class="en-plan"
               :plan="logic.planResult.value"
               :run="logic.runResult.value"
+              :batch="logic.batchResult.value"
               :planning="logic.planning.value"
               @dismiss="logic.dismissCard()"
+              @cancel="logic.cancelBatch()"
             />
 
             <!-- 单文件同步执行结果（「立即跑」的证据，⛔ 不美化） -->
@@ -313,7 +332,15 @@ function runButtonText(): string {
                         : '未通过 —— 文档里可能还有没填上的锚点，需人工看一眼'
                     }}
                   </li>
-                  <li>产物：{{ r.Result.OutputPath || '（本次未生成产物）' }}</li>
+                  <!-- ★ 产物只显示文件名（2026-10-10 用户裁决）：完整路径含 GUID 段长达百字符，
+                       撑爆整行且中段对用户无意义 —— 完整路径留在 title 悬停可查 -->
+                  <li>
+                    产物：<span
+                      v-if="r.Result.OutputPath"
+                      :title="r.Result.OutputPath"
+                      >{{ pathFileName(r.Result.OutputPath) }}</span
+                    ><template v-else>（本次未生成产物）</template>
+                  </li>
                   <li>留痕 Code：{{ r.Result.FillLogCode || '—' }}</li>
                 </ul>
 

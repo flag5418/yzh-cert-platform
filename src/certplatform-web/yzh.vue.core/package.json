@@ -9,6 +9,7 @@
     "./components/*": "./src/components/*/index.ts",
     "./api/client": "./src/api/client.ts",
     "./api/auth": "./src/api/auth.ts",
+    "./api/push": "./src/api/push.ts",
     "./api/system": "./src/api/system/index.ts",
     "./api/system/*": "./src/api/system/*.ts",
     "./assets/*": "./src/assets/*",
@@ -28,6 +29,9 @@
     "vue-router": "^4.3.0",
     "element-plus": "^2.6.0",
     "@element-plus/icons-vue": "^2.3.0"
+  },
+  "dependencies": {
+    "@microsoft/signalr": "^8.0.7"
   },
   "devDependencies": {
     "@element-plus/icons-vue": "^2.3.0",

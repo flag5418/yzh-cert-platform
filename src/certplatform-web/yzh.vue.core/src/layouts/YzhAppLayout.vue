@@ -159,6 +159,8 @@ import { ElMessage } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { getCurrentUser, modifyPwd, updateUserInfo } from '../api/auth'
+import { yzhPush } from '../api/push'
+import { handleForceLogout } from '../api/push'
 import { useAuthState } from '../composables/useAuthState'
 import { useMenuTree } from '../composables/useMenuTree'
 import { onMenuChanged } from '../composables/useMenuChanged'
@@ -370,6 +372,7 @@ async function handleCommand(command: string) {
       type: 'warning'
     })
     if (!ok) return
+    yzhPush.disconnect()
     clearToken()
     clearMenus()
     ElMessage.success('已退出登录')
@@ -383,16 +386,24 @@ async function handleCommand(command: string) {
 
 // 加载菜单 + 回填当前用户信息；订阅菜单变更（菜单管理页 notifyMenuChanged 后侧栏强刷）
 let stopMenuWatch: (() => void) | null = null
+let offLogout: (() => void) | null = null
 onMounted(() => {
   loadMenus()
   loadCurrentUser()
+  yzhPush.connect()
+  offLogout = yzhPush.on('logout', (msg) => {
+    handleForceLogout(msg.message)
+  })
   stopMenuWatch = onMenuChanged(() => {
     loadMenus(true)
   })
 })
 onUnmounted(() => {
+  yzhPush.disconnect()
   stopMenuWatch?.()
+  offLogout?.()
   stopMenuWatch = null
+  offLogout = null
 })
 </script>
 

@@ -22,7 +22,9 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:9992',
-        changeOrigin: true
+        changeOrigin: true,
+        // 实时推送 Hub /api/yzh-msg 需要 WebSocket 升级（SignalR；WS 失败时它也会自动降级 SSE）
+        ws: true
       },
       // Swagger UI/JSON（接口管理页「测试」深链；相对路径与 yzhApi.baseURL='' 同源）
       '/swagger': {

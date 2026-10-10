@@ -106,6 +106,19 @@ const form = ref({
   NumberFormat: '',
   FieldCode: '',
   Remark: '',
+  /**
+   * ★ G5「表格更新」参数（评审 63 号：规则页没有配置起始行/列/工作表的 UI）
+   *
+   * ⚠️ **UI 是 1 起的 Excel 行/列号，存储（TokenModifiersJson.startRow/StartCol）是 0-based**
+   * —— 与 `FillTableSkill.start_row`（0-based）一致；watch 读入时 -1，保存时 +1。
+   * 留空 = 不写该键 ⇒ 后端 `TableStartOf` 回落解析 `AnchorRef`（从锚点单元格开始）。
+   */
+  StartRow: null as number | null,
+  StartCol: null as number | null,
+  /** Excel 工作表名覆盖（空 = 锚点所在工作表；Word 忽略） */
+  Sheet: '',
+  /** 列定义（JSON 数组，决定 AI 输出列与写入顺序） */
+  ColumnsJson: '',
 })
 
 const paramOptions = ref<
@@ -123,6 +136,25 @@ const isDomainAuto = computed(
 /** 操作方式（推导，⛔ 不可选）—— 与 `AnchorRuleTab` 的字段/表格分组同一口径 */
 const autoOp = computed<'cell' | 'table'>(() =>
   TABLE_TYPES.includes(anchorType.value) ? 'table' : 'cell',
+)
+
+/**
+ * ★ G5：表格标签（只读展示）—— Word 走 `{{table:标签}}` 定位，Excel 走列定义对齐。
+ * 优先 `FieldCode`（扫描器给的 inner）；空则从 `AnchorRef` 剥 `{{table:…}}`。
+ */
+const tableTag = computed(() => {
+  const fc = String(props.anchor?.FieldCode || '').trim()
+  if (fc) return fc
+  const ref = String(props.anchor?.AnchorRef || '')
+  const m = ref.match(/^\{\{\s*table:([^}|]+?)\s*\}\}$/)
+  return m ? m[1] : ref
+})
+
+/** 当前锚点是否 Excel 区域（坐标参数只对它有意义；Word 表格走标签定位） */
+const isExcelRange = computed(
+  () =>
+    autoOp.value === 'table' &&
+    String(props.anchor?.AnchorKind || '') === 'range',
 )
 
 /** 当前来源（单来源模型：`kind === ''` 表示还没选） */
@@ -194,6 +226,85 @@ const docInfoOptions = computed(() =>
   DOC_INFO_ITEMS.map(([value, label]) => ({ value, label })),
 )
 
+/* ============ ★ G5「表格更新」参数（评审 63 号 G5 / 2.4） ============ */
+/** 读 `TokenModifiersJson` 为受控表单字段（存储 0-based ⇒ UI 1-based） */
+function readTableParams(row: any): {
+  StartRow: number | null
+  StartCol: number | null
+  Sheet: string
+  ColumnsJson: string
+} {
+  let mods: Record<string, unknown> = {}
+  try {
+    const p = JSON.parse(String(row?.TokenModifiersJson || ''))
+    if (p && typeof p === 'object' && !Array.isArray(p)) mods = p
+  } catch {
+    /* 没配 / 坏 JSON ⇒ 空对象（保存时会以当前表单重建） */
+  }
+  const asPos = (v: unknown): number | null => {
+    const n = Number(v)
+    return Number.isInteger(n) && n >= 0 && n <= 1048575 ? n + 1 : null
+  }
+  return {
+    StartRow: asPos(mods.startRow ?? mods.StartRow),
+    StartCol: asPos(mods.startCol ?? mods.StartCol),
+    Sheet: String(mods.sheet ?? mods.Sheet ?? ''),
+    ColumnsJson: String(row?.ColumnsJson || ''),
+  }
+}
+
+/**
+ * 组装保存用的 `TokenModifiersJson` / `ColumnsJson`（仅表格锚点调用）。
+ *
+ * ⚠️ **合并写**：以行上现有 `TokenModifiersJson` 为底，只增删 startRow/startCol/sheet 三键 ——
+ * ⛔ 不整串覆盖（其他键如 `fmt`/`def` 不能被静默抹掉）。
+ * 返回 null = 三键全空 ⇒ 存 null（后端回落 `AnchorRef` 解析）。
+ */
+function buildTableParams(row: any): {
+  TokenModifiersJson: string | null
+  ColumnsJson: string | null
+} {
+  let mods: Record<string, unknown> = {}
+  try {
+    const p = JSON.parse(String(row?.TokenModifiersJson || ''))
+    if (p && typeof p === 'object' && !Array.isArray(p)) mods = { ...p }
+  } catch {
+    /* 空/坏 ⇒ 重建 */
+  }
+  const put = (key: string, v: unknown) => {
+    if (v === undefined || v === null || v === '') delete mods[key]
+    else mods[key] = v
+  }
+  put('startRow', form.value.StartRow == null ? null : form.value.StartRow - 1)
+  put('startCol', form.value.StartCol == null ? null : form.value.StartCol - 1)
+  put('sheet', form.value.Sheet.trim())
+
+  const keys = Object.keys(mods)
+  const columns = form.value.ColumnsJson.trim()
+  return {
+    TokenModifiersJson: keys.length ? JSON.stringify(mods) : null,
+    ColumnsJson: columns || null,
+  }
+}
+
+/** 列定义是合法的非空对象数组、且每项有 field_code —— 否则 AI 输出列无从对齐 */
+function validateColumnsJson(): string | null {
+  const text = form.value.ColumnsJson.trim()
+  if (!text) return null // 空 = 还没配（后端会记可操作待办，⛔ 不在保存时硬拦）
+  let arr: any
+  try {
+    arr = JSON.parse(text)
+  } catch {
+    return '列定义不是合法 JSON'
+  }
+  if (!Array.isArray(arr) || arr.length === 0) return '列定义必须是 JSON 数组'
+  const bad = arr.some(
+    (c: any) => !c || typeof c !== 'object' || !String(c.field_code || '').trim(),
+  )
+  if (bad) return '列定义每项都必须有 field_code'
+  return null
+}
+
 /* ============ 初始化 ============ */
 watch(
   () => props.anchor,
@@ -224,6 +335,9 @@ watch(
       NumberFormat: row.NumberFormat || '',
       FieldCode: row.FieldCode || '',
       Remark: row.Remark || '',
+      // ★ G5：表格参数 —— ⚠️ TokenModifiersJson **合并读**（其他键如 fmt/def 原样保留，
+      //   ⛔ 不能整串替换 —— 那会静默抹掉别的功能写进去的修饰符）
+      ...readTableParams(row),
     }
   },
   { immediate: true },
@@ -300,6 +414,16 @@ async function onSave() {
     ElMessage.error(issues.value[0])
     return
   }
+  // ★ G5：表格列定义先校验再进 saving（校验失败 ⛔ 不能把按钮转成 loading）
+  const tableParams =
+    autoOp.value === 'table' ? buildTableParams(props.anchor) : null
+  if (tableParams) {
+    const err = validateColumnsJson()
+    if (err) {
+      ElMessage.error(err)
+      return
+    }
+  }
   saving.value = true
   try {
     const sourceSpec = stringifySourceSpec(model.value)
@@ -313,6 +437,8 @@ async function onSave() {
       NumberFormat: form.value.NumberFormat || null,
       FieldCode: form.value.FieldCode || null,
       Remark: form.value.Remark || null,
+      // ★ G5：仅表格锚点提交（cell 锚点保持行上原值，⛔ 不动这两列）
+      ...(tableParams || {}),
     }
     unwrapOk(await saveAnchorBatch(props.templateCode, [payload]), '保存失败')
     ElMessage.success('锚点规则已保存')
@@ -650,6 +776,73 @@ async function onSave() {
               />
             </div>
           </div>
+
+          <!--
+            ★ G5「表格更新」参数（评审 63 号 2.3/2.4：规则页没有配置起始行/列/工作表的 UI）
+              · Word 表格 = 标签定位 + 列定义（坐标忽略）；
+              · Excel 区域 = 起始行/列 + 工作表 + 列定义（留空 ⇒ 从锚点单元格开始）。
+              · 列定义 = `ColumnsJson` —— 决定 AI 输出列与写入顺序（kind：text/number/date/bool/enum）。
+          -->
+          <template v-if="autoOp === 'table'">
+            <div class="section-hd"><span>表格参数</span></div>
+            <div class="form-grid">
+              <template v-if="isExcelRange">
+                <div class="form-item">
+                  <label>起始行</label>
+                  <el-input-number
+                    v-model="form.StartRow"
+                    :min="1"
+                    :max="1048576"
+                    :controls="false"
+                    size="small"
+                    placeholder="Excel 行号（从 1 起）"
+                  />
+                </div>
+                <div class="form-item">
+                  <label>起始列</label>
+                  <el-input-number
+                    v-model="form.StartCol"
+                    :min="1"
+                    :max="16384"
+                    :controls="false"
+                    size="small"
+                    placeholder="列号（B 列 = 2）"
+                  />
+                </div>
+                <div class="form-item">
+                  <label>工作表</label>
+                  <el-input
+                    v-model="form.Sheet"
+                    size="small"
+                    :placeholder="`留空 = ${anchor.SheetName || '首个工作表'}`"
+                  />
+                </div>
+              </template>
+              <div class="form-item">
+                <label>表格标签</label>
+                <div class="auto-op" title="Word 按 {{table:标签}} 定位；AI 输出写入 tables.标签">
+                  {{ tableTag }}
+                </div>
+              </div>
+              <div class="form-item full">
+                <label>列定义 ColumnsJson</label>
+                <el-input
+                  v-model="form.ColumnsJson"
+                  size="small"
+                  type="textarea"
+                  :rows="3"
+                  :placeholder='[{"field_code":"train_date","title":"培训日期","kind":"date"}]'
+                />
+              </div>
+            </div>
+            <div class="hint">
+              起始行/列留空 = 从锚点单元格开始；列定义决定 AI 输出列与写入顺序（kind：
+              text/number/date/bool/enum），每项必须有 field_code。
+              <template v-if="!isExcelRange"
+                >Word 表格按标签定位，坐标参数不适用。</template
+              >
+            </div>
+          </template>
         </div>
 
         <!-- 运行期人话预览（防错的关键） -->

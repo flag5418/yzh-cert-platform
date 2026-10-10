@@ -62,7 +62,7 @@ namespace YZH.Core.Web.Controllers.System;
 ///     5. 启用/禁用操作仅设置 IsValid 字段（1=启用，0=禁用），不删除数据
 ///     6. 禁用机构时，该机构及所有子机构下的用户全部禁用
 ///     7. 启用人员时，所属机构必须已启用（否则拒绝）
-///     8. 不能禁用超级管理员（RoleId=1）
+///     8. 不能禁用超级管理员（通过 Sys_RoleUser 关联表判定，⛔ 不使用 RoleId）
 ///     9. ★ 仅 OrgType='Dept' 的机构可在本页面修改/删除。
 ///        其余类型（Platform/CertBody/VirtualOrg/Enterprise）由业务系统自动创建与维护
 ///        （专家注册、专家系统新增企业、认证机构挂载等），管理端只读。
@@ -542,7 +542,7 @@ public class OrganizationController : TreeTableControllerBase<Sys_Organization, 
     /// 请求体 = 行实体 { Code: "用户编码" }
     /// 
     /// 业务规则：
-    /// - 不能禁用超级管理员（RoleId=1）
+    /// - 不能禁用超级管理员（通过 Sys_RoleUser 关联表判定）
     /// - 禁用后该用户无法登录系统
     /// </summary>
     private async Task<Result<ApiResponse<object?>>> DisableUserAsync(Sys_User entity)

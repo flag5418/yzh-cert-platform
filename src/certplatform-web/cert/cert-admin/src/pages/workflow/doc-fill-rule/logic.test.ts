@@ -511,6 +511,7 @@ describe('DocFillRuleLogic · C8 锚点配齐 / C11 ai 节点', () => {
       total: 1,
       unconfigured: 0,
       orphan: 0,
+      staleRef: 0,   // ★ 目录未拉/拉失败 ⇒ 恒 0（见 logic.ts anchorReadiness 注释）
       ready: true,
     })
   })

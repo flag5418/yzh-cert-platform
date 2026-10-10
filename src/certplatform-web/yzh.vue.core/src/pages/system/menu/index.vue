@@ -10,6 +10,7 @@ import { Plus } from '@element-plus/icons-vue'
 import { YzhFormDialog, YzhTable, YzhTreeTableLayout, useTreeTable } from '@yzh-core'
 import { formatMenuIcon } from '../../../utils/menu'
 import IconPicker from './IconPicker.vue'
+import MenuParentPicker from './MenuParentPicker.vue'
 import MenuPageLogic from './logic'
 
 const { logic, tableRef, treeTableRef } = useTreeTable(MenuPageLogic)
@@ -73,7 +74,7 @@ const { logic, tableRef, treeTableRef } = useTreeTable(MenuPageLogic)
       </template>
     </YzhTreeTableLayout>
 
-    <!-- 树节点新增/编辑弹窗（Icon 走 custom slot） -->
+    <!-- 树节点新增/编辑弹窗（Icon / ParentCode 走 custom slot） -->
     <YzhFormDialog
       v-model:visible="logic.treeDialogVisible.value"
       v-model="logic.treeFormData"
@@ -85,23 +86,22 @@ const { logic, tableRef, treeTableRef } = useTreeTable(MenuPageLogic)
       width="520px"
       @submit="logic.submitTreeNodeForm()"
     >
-      <template #prepend>
-        <div class="menu-form-header">
-          <span class="menu-form-header__label">上级菜单：</span>
-          <span class="menu-form-header__value">
-            {{ logic.treeParentNode.value?.Name ?? '根级' }}
-          </span>
-        </div>
-      </template>
       <template #Icon="{ value }">
         <IconPicker
           :model-value="value ?? ''"
           @update:model-value="logic.treeFormData.Icon = $event"
         />
       </template>
+      <template #ParentCode="{ value }">
+        <MenuParentPicker
+          :model-value="value ?? '0'"
+          :exclude-code="logic.treeEditingNode.value?.Code || logic.treeFormData.Code"
+          @update:model-value="logic.treeFormData.ParentCode = $event"
+        />
+      </template>
     </YzhFormDialog>
 
-    <!-- 右表行编辑弹窗 -->
+    <!-- 右表行编辑弹窗（Icon / ParentCode 走 custom slot） -->
     <YzhFormDialog
       v-model:visible="logic.dialogVisible.value"
       v-model="logic.formData"
@@ -117,6 +117,13 @@ const { logic, tableRef, treeTableRef } = useTreeTable(MenuPageLogic)
         <IconPicker
           :model-value="value ?? ''"
           @update:model-value="logic.formData.Icon = $event"
+        />
+      </template>
+      <template #ParentCode="{ value }">
+        <MenuParentPicker
+          :model-value="value ?? '0'"
+          :exclude-code="logic.formData.Code"
+          @update:model-value="logic.formData.ParentCode = $event"
         />
       </template>
     </YzhFormDialog>

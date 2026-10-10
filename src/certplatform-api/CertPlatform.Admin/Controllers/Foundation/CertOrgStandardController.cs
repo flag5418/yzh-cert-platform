@@ -4,11 +4,11 @@ using YZH.Core.Api.Services;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Admin.Entities.Cert;
-using CertPlatform.Admin.Entities.Sys;
+using CertPlatform.Shared.Entities.Sys;
 
 using CB = CertPlatform.Shared.Entities.Cert.CertificationBody;
 using ISO = CertPlatform.Shared.Entities.Cert.ISOStandard;
-using Link = CertPlatform.Admin.Entities.Sys.CertOrgStandard;
+using Link = CertPlatform.Shared.Entities.Sys.CertOrgStandard;
 using Family = CertPlatform.Admin.Entities.Cert.CertStandardFamily;
 
 namespace CertPlatform.Admin.Controllers.Foundation;

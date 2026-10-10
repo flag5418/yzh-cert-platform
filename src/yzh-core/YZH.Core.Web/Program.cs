@@ -288,6 +288,13 @@ using (var scope = app.Services.CreateScope())
 
 app.MapControllers();
 
+// yzh 实时推送 Hub（框架核心能力：队列终态等服务端事件 → 浏览器；身份 = JWT access_token，
+// 见 YzhMessageHub —— 挂在 /api 前缀下以复用既有 dev/prod 的 /api 代理转发）
+app.MapHub<YZH.Core.Web.Hubs.YzhMessageHub>("/api/yzh-msg");
+
+// yzh 上传进度 Hub（框架核心能力：文件上传实时进度推送；前端 subscribe/unsubscribe 生命周期管理）
+app.MapHub<YZH.Core.Web.Hubs.UploadProgressHub>("/api/yzh-upload");
+
 // 临时测试端点：验证 routing pipeline 是否工作
 app.MapGet("/api/test/ping", () => "pong");
 

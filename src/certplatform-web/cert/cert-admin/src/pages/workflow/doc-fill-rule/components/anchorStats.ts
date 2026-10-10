@@ -20,6 +20,9 @@
  */
 
 import {
+  DOC_INFO_ITEMS,
+  ENTERPRISE_ATTRS,
+  ORG_SYS_ATTRS,
   parseSourceSpec,
   summarizeSourceSpec,
   type SourceSpecModel,
@@ -40,6 +43,13 @@ export interface AnchorView {
   isDomainAuto: boolean
   /** 既非域自动值、又没有任何来源 ⇒ 未配 */
   unconfigured: boolean
+  /**
+   * ★ **配了、但配的那个东西已经不在了**（参数被软删 / 属性名写错）。
+   *
+   * <para>与 `unconfigured` 是**两件事**：`unconfigured` = 没配完（② 段空着）；
+   * `staleRef` = 配完了，但 `ref` 在当前清单里找不到 ⇒ **真填时必然取不到值**。</para>
+   */
+  staleRef: boolean
   /** 模板里已找不到该锚点（模板被换过 / 标签被删） */
   orphan: boolean
   /** 「取值来源」一行摘要（未配时为空串） */
@@ -60,24 +70,96 @@ export function isDomainAutoRow(row: any): boolean {
   )
 }
 
+/**
+ * ★ 需要「具体取值标识」(`ref`) 的来源种类 —— **没有 `ref` 就永远取不到值**。
+ *
+ * 【为什么必须有这份清单（2026-10-10 修的真 BUG）】
+ *   这三种来源的值**完全由 `ref` 决定**：
+ *     · `global`       → `cert_fill_param_def.ParamCode`
+ *     · `replace`      → 企业 / 机构 / 系统属性名（`enterprise.Name` …）
+ *     · `headerFooter` → `@doc_*`（文档编号 / 版本号 …）
+ *   ⇒ 「`kind` 有、`ref` 空」= **② 段没配完**，属于「未配」而**不是**「已配」。
+ *   AI 三类靠提示词产值、`manual` 靠人工产值 —— 都不需要 `ref`。
+ *
+ * ⚠️ 旧判据只看了 `!model.source.kind` ⇒ 一个 `{"kind":"global"}`（无 ref）的锚点
+ *    在页面上显示「已配」、试填还报 100%，**真填却一个值都拿不到**。
+ *    这正是本项目头号病「配了不生效且两边不报错」。
+ */
+export function needsRef(kind?: string | null): boolean {
+  const k = String(kind ?? '').trim().toLowerCase()
+  return k === 'global' || k === 'replace' || k === 'headerfooter'
+}
+
+/** 判「`ref` 还在不在」所需的清单 */
+export interface AnchorRefCatalog {
+  /** `cert_fill_param_def` 里**未软删**的 `ParamCode`（「全局参数」③④ 组） */
+  paramCodes?: readonly string[] | null
+  /**
+   * ★ 参数目录**是否已加载完成**。
+   *
+   * ⚠️ 未加载时**不判** `global` 的失效 —— 清单还没回来就断言「失效」，
+   *    会把**每一个真实存在的参数**都标成失效（与 `findParam` 的「库里没有」同一个坑）。
+   *    `replace` / `headerFooter` 的清单是**前端硬编码**的（与后端同源），任何时刻都能判。
+   */
+  ready?: boolean
+}
+
+/**
+ * `ref` 现在还能不能取到值。
+ *
+ * ⛔ 判不了就返回 `true`（视为存活）—— **宁可漏报，不可误报**：
+ *    误报会让用户去修一个本来好好的配置。
+ */
+export function isRefAlive(
+  kind: string,
+  ref: string,
+  catalog?: AnchorRefCatalog,
+): boolean {
+  const k = String(kind ?? '').trim().toLowerCase()
+  const r = String(ref ?? '').trim()
+  if (!r) return false
+  if (k === 'replace')
+    return (
+      ENTERPRISE_ATTRS.some((p) => p[0] === r) ||
+      ORG_SYS_ATTRS.some((p) => p[0] === r)
+    )
+  if (k === 'headerfooter') return DOC_INFO_ITEMS.some((p) => p[0] === r)
+  if (k === 'global') {
+    if (!catalog?.ready) return true
+    return (catalog.paramCodes ?? []).some((c) => c === r)
+  }
+  return true
+}
+
 /** 把一行锚点解析成视图（**唯一**的解析入口） */
-export function toAnchorView(row: any): AnchorView {
+export function toAnchorView(row: any, catalog?: AnchorRefCatalog): AnchorView {
   const { model, parseError } = parseSourceSpec(row?.SourceSpec)
   const isDomainAuto = isDomainAutoRow(row)
+  const kind = String(model.source?.kind ?? '').trim()
+  const ref = String(model.source?.ref ?? '').trim()
+  // ★ 未配 = ① 连来源种类都没选 **或** ② 选了「必须有 ref」的种类却没填 ref
+  const unconfigured = !isDomainAuto && (!kind || (needsRef(kind) && !ref))
+  // ★ 失效 = 配完了、但 ref 在当前清单里找不到（⛔ 与「未配」互斥）
+  const staleRef =
+    !isDomainAuto && !unconfigured && !isRefAlive(kind, ref, catalog)
   return {
     row,
     model,
     parseError,
     isDomainAuto,
-    unconfigured: !isDomainAuto && !model.source.kind,
+    unconfigured,
+    staleRef,
     orphan: !!row?.IsOrphan,
     summary: summarizeSourceSpec(model),
   }
 }
 
 /** 批量解析（一行一次） */
-export function buildAnchorViews(rows: any[] | null | undefined): AnchorView[] {
-  return (rows ?? []).map(toAnchorView)
+export function buildAnchorViews(
+  rows: any[] | null | undefined,
+  catalog?: AnchorRefCatalog,
+): AnchorView[] {
+  return (rows ?? []).map((r) => toAnchorView(r, catalog))
 }
 
 /** 统计条的数据（`AnchorRuleTab` 顶部那排 chip） */
@@ -88,6 +170,8 @@ export interface AnchorStats {
   /** 来源是「人工填写」的锚点数 */
   manual: number
   unconfigured: number
+  /** ★ 配了但 `ref` 已失效的锚点数（参数被软删 / 属性名写错） */
+  staleRef: number
   orphan: number
   required: number
 }
@@ -98,12 +182,14 @@ export function computeAnchorStats(views: AnchorView[]): AnchorStats {
     auto: 0,
     manual: 0,
     unconfigured: 0,
+    staleRef: 0,
     orphan: 0,
     required: 0,
   }
   for (const v of views) {
     if (v.orphan) stats.orphan++
     if (v.unconfigured) stats.unconfigured++
+    if (v.staleRef) stats.staleRef++
     if (v.row?.Required) stats.required++
     // ★ 2026-10-09：来源模型收敛为「一个锚点 = 一个来源」⇒ 按锚点计数，⛔ 不再按来源条目累加。
     //   ⛔ 旧口径的 `compute`（计算来源）已随「来源链」整层删除，不再统计。
@@ -116,7 +202,12 @@ export function computeAnchorStats(views: AnchorView[]): AnchorStats {
 }
 
 /** 快捷筛选（筛选器 chip 的取值域） */
-export type AnchorQuickFilter = 'all' | 'unconfigured' | 'required' | 'orphan'
+export type AnchorQuickFilter =
+  | 'all'
+  | 'unconfigured'
+  | 'stale'
+  | 'required'
+  | 'orphan'
 
 /** 筛选器定义（`count` 由 `stats` 取，⛔ 不在模板里现算） */
 export const ANCHOR_QUICK_FILTERS: {
@@ -125,6 +216,7 @@ export const ANCHOR_QUICK_FILTERS: {
 }[] = [
   { value: 'all', label: '全部' },
   { value: 'unconfigured', label: '未配来源' },
+  { value: 'stale', label: '来源已失效' },
   { value: 'required', label: '必填' },
   { value: 'orphan', label: '孤儿锚点' },
 ]
@@ -136,6 +228,8 @@ export function filterAnchorViews(
   switch (filter) {
     case 'unconfigured':
       return views.filter((v) => v.unconfigured)
+    case 'stale':
+      return views.filter((v) => v.staleRef)
     case 'required':
       return views.filter((v) => !!v.row?.Required)
     case 'orphan':
@@ -153,6 +247,8 @@ export function filterCount(
   switch (filter) {
     case 'unconfigured':
       return stats.unconfigured
+    case 'stale':
+      return stats.staleRef
     case 'required':
       return stats.required
     case 'orphan':
@@ -168,11 +264,16 @@ export function filterCount(
  * 【为什么有优先级】
  *   一个锚点可能同时「孤儿」且「未配」。此时**孤儿更紧急** ——
  *   它意味着模板里已经没有这个标签了，继续配来源是白费功夫。
- *   顺序：孤儿 > 未配 > 已配(必填) > 已配。
+ *   顺序：孤儿 > 未配 > **失效** > 已配(必填) > 已配。
+ *
+ * ★ 2026-10-10：`来源已失效` 与 `未配来源` **同为 danger** ——
+ *   两者在运行期的后果完全一样（真填取不到值），只是原因不同
+ *   （没填 ref vs ref 指向的东西没了）。
  */
 export function anchorBadge(v: AnchorView): { text: string; tone: AnchorTone } {
   if (v.orphan) return { text: '孤儿', tone: 'warning' }
   if (v.unconfigured) return { text: '未配来源', tone: 'danger' }
+  if (v.staleRef) return { text: '来源已失效', tone: 'danger' }
   if (v.row?.Required) return { text: '已配 · 必填', tone: 'success' }
   return { text: '已配', tone: 'info' }
 }

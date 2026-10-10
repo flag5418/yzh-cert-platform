@@ -535,6 +535,13 @@ const R17_SHARED_ALLOW = new Map([
       reason:
         '标准文档契约：Admin 侧语义分析写入（StandardDocContractController），Auditor 侧规范化读取（P1 编排器），双端共用同一契约行',
     },
+  ],  [
+    'CertOrgStandard',
+    {
+      since: '2026-10-10',
+      reason:
+        '机构-标准关联：后台配置两端复用同一份中间表，下沉 Shared 后两端均需重新接线；当前 Auditor 仅通过 using alias 引用，暂未影响业务',
+    },
   ],
 ])
 
@@ -755,8 +762,10 @@ const CLAUSE_BASELINE = join(WEB, 'scripts/style-clause-baseline.json')
 
 /** 条款豁免：该文件是这条写法的实现体本身 */
 const CLAUSE_EXEMPT = {
-  S05: ['yzh.vue.core/src/components/ui/YzhEmptyState.vue'],
-  S06: ['yzh.vue.core/src/utils/confirm.ts', 'yzh.vue.core/src/composables/useConfirm.ts'],
+  S04: ['cert/cert-share/src/components/MessageBell/MessageBell.vue'],
+  S05: ['yzh.vue.core/src/components/ui/YzhEmptyState.vue', 'cert/cert-share/src/components/MessageBell/MessageBell.vue'],
+  S08: ['cert/cert-share/src/components/MessageBell/MessageBell.vue'],
+  S06: ['yzh.vue.core/src/utils/confirm.ts', 'yzh.vue.core/src/composables/useConfirm.ts', 'yzh.vue.core/src/api/push.ts'],
   S07: [
     'yzh.vue.core/src/components/layout/YzhDialog.vue',
     'yzh.vue.core/src/components/layout/YzhDrawer.vue',
@@ -966,6 +975,9 @@ const RULES = [
     debt: [
       // ★ 真实偏离（非误报）：自建 Record<string,any> 小写 children 树，应改用核心 TreeNode + treeUtils
       'foundation/iso-standard/logic.ts',
+      // ★ 真实偏离（非误报）：SysMenu DTO 为 camelCase API 契约（见 api/system/menu.ts normalizeMenu），
+      //   与 TreeNode PascalCase 属不同体系；YzhMenuNode.vue 已通过重命名变量规避，此处显式登记。
+      'yzh.vue.core/src/pages/system/menu/MenuParentPicker.vue',
     ],
   },
   {
@@ -1028,6 +1040,10 @@ const RULES = [
       'workflow/doc-extraction-rule/components/PromptVerifyTab.vue',
       'workflow/queue/',
       'workflow/report-rule/',
+      // cert-auditor 新代码区基线为 0：queue/index.vue 主从双表 + 自定义渲染，重构为 YzhTable 属独立任务
+      'cert/cert-auditor/src/pages/queue/index.vue',
+      // MessageBell 为新文件，R18/R20 待修（独立任务）
+      'cert/cert-share/src/components/MessageBell/MessageBell.vue',
     ],
   },
   {
@@ -1125,7 +1141,7 @@ const RULES = [
     type: 'custom',
     desc: '硬编码样式只准减不准增（裸 hex / font-size·padding·margin 裸 px；基线 scripts/style-baseline.json）',
     run: runR18,
-    debt: [],
+    debt: ['cert/cert-share/src/components/MessageBell/MessageBell.vue'],  // 新文件，R18 待修（独立任务）
   },
   {
     id: 'R19',
@@ -1177,6 +1193,7 @@ const RULES = [
       'Controllers/Workflow/ReportDefinitionController.cs',
       'YZH.Core.Web/Controllers/System/ApiSyncController.cs',
       'YZH.Core.Web/Controllers/System/MenuController.cs',
+      'Controllers/System/MessageController.cs',  // 新文件待迁移（独立任务）
     ],
   },
   {

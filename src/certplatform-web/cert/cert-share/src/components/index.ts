@@ -6,6 +6,11 @@
  */
 export { default as CertBizTree } from './CertBizTree.vue'
 export { default as CertDirectoryTree } from './CertDirectoryTree.vue'
+// 通用机构+标准+阶段树（数据驱动，maxLevel / leafTypes 控制渲染深度与选中行为）
+export { default as OrgStandardStageTree } from './OrgStandardStageTree.vue'
+export type { StdStageTreeNode } from './OrgStandardStageTree.vue'
+// 左树右表布局壳：OrgStandardStageTree + 表格插槽（替代 YzhTableTableLayout 的轻量方案）
+export { default as OrgStageTableLayout } from './OrgStageTableLayout.vue'
 export { default as CertConvertBadge } from './CertConvertBadge.vue'
 export { default as CertPageHeader } from './CertPageHeader.vue'
 export { default as CertPagePlaceholder } from './CertPagePlaceholder.vue'
@@ -20,6 +25,8 @@ export { default as DocPreview } from './DocPreview.vue'
 // 上移到 share，供 36 号「企业原始资料管理」分析结果抽屉复用（只读渲染层，⛔ 无 emit）。
 export { default as SemanticResult } from './SemanticResult.vue'
 export { default as YzhFolderUpload } from './YzhFolderUpload.vue'
+// 2026-10-10 P2b 消息铃铛：顶栏未读消息入口，admin/auditor 共用
+export { default as MessageBell } from './MessageBell/index'
 
 // ⛔ 重型组件**不要**放进本 barrel（勿加回来）
 //    `WorkflowDesigner` / `ExecutionResultPanel` 依赖 logicflow，体积约 366 KB JS + 25 KB CSS。

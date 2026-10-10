@@ -3,11 +3,11 @@ using YZH.Core.Api.Services;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Admin.Entities.Cert;
-using CertPlatform.Admin.Entities.Sys;
+using CertPlatform.Shared.Entities.Sys;
 
 using CB = CertPlatform.Shared.Entities.Cert.CertificationBody;
 using Stage = CertPlatform.Admin.Entities.Cert.CertStageView;
-using Link = CertPlatform.Admin.Entities.Sys.CertOrgStage;
+using Link = CertPlatform.Shared.Entities.Sys.CertOrgStage;
 
 namespace CertPlatform.Admin.Controllers.Foundation;
 

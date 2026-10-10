@@ -441,7 +441,94 @@ export async function runNormalize(payload: NormalizeScopeRequest): Promise<Norm
   return unwrapOk<NormalizeRunResult>(res, '入队失败')
 }
 
-// ═══════════════════════ 四之二、锁定 / 账本 / 重写 / 候选 ═══════════════════════
+// ═══════════════════════ 四之二、批次进度 / 取消（`54` §5.2 端点 5 / 6） ═══════════════════════
+
+/** 批次进度里的单条失败明细 —— ★ 必须带出「哪一份、为什么」，⛔ 不是只回一个失败数 */
+export interface NormalizeBatchFailure {
+  /** 标准域行 Code（= 队列任务的 `TaskId`） */
+  StandardFileCode: string
+  /** 文件名（后端批量查标准域行带出；行已删除时为空串） */
+  FileName: string
+  /** 错误分类（队列执行器写入） */
+  ErrorType: string
+  /** 错误详情（人话，直接显示） */
+  ErrorMessage: string
+  /** 已重试次数 */
+  RetryCount: number
+  CompleteTime: string | null
+}
+
+/**
+ * 批次进度 —— `GET batch/{queueCode}`。
+ *
+ * ★ **本页轮询的唯一入口**（`41-03` §1.6.1，后端 Controller 注释同口径）。
+ * ⛔ 不要用「整树重拉 tree」代替它：拿不到失败明细、载荷大，且旧实现拿
+ *    `LastFillTime` 与浏览器本地时钟比对判完成 —— 时钟偏差 >10s 时判据永假 ⇒ 白轮 10 分钟。
+ */
+export interface NormalizeBatchResult {
+  QueueCode: string
+  QueueName: string
+  /** `pending` / `running` / `completed` / `failed` / `cancelled` */
+  Status: string
+  /**
+   * ★ 是否已到终态 —— 前端据此**停止轮询**。
+   * ⛔ 刻意不让前端按 `Status` 字符串猜：终态集合一旦扩展（如将来加 `timeout`），
+   *    前端那份副本会漏判 ⇒ 轮询永不停止。
+   */
+  IsFinished: boolean
+  Total: number
+  Completed: number
+  Failed: number
+  Cancelled: number
+  Processing: number
+  Pending: number
+  /** 进度 0~100（整数） */
+  Progress: number
+  StartTime: string | null
+  EndTime: string | null
+  Failures: NormalizeBatchFailure[]
+}
+
+/** 取消批次结果 */
+export interface NormalizeCancelResult {
+  /** 本次被终止的任务数（= 取消时的 `Pending + Processing`） */
+  CancelledCount: number
+  /**
+   * ⚠️ 非空 = **取消已生效，但审计链断了** —— 页面必须显式提示，
+   * ⛔ 不能吞掉（审计链断裂是必须让人知道的事）。
+   */
+  AuditWarning: string | null
+}
+
+/**
+ * ★ **批次进度** —— 全页唯一轮询点。
+ *
+ * @throws BizError 批次不存在 / 不属于「企业资料规范化」（`yzh_queue` 是全项目共用表，
+ *         后端带 `QueueType` 校验，防越权读别的模块的队列）
+ */
+export async function fetchNormalizeBatch(queueCode: string): Promise<NormalizeBatchResult> {
+  const res = await yzhApi.get<ApiResponse<NormalizeBatchResult>>(
+    `${BASE}/batch/${encodeURIComponent(queueCode)}`,
+  )
+  return unwrapOk<NormalizeBatchResult>(res, '查询批次进度失败')
+}
+
+/**
+ * ★ **取消批次** —— 终止该批次**未跑完**的任务。
+ *
+ * ★ 为什么必须能取消：一个阶段几十份文件可能跑十几分钟；同企业同阶段被 `ScopeKey`
+ *   幂等门锁住 ⇒ 不可取消 = 一次误操作锁死十几分钟（连重跑都不行）。
+ *
+ * @throws BizError 批次不存在 / 不属于本模块 / 批次已结束（⛔ 已结束不是「取消 0 个」的假成功）
+ */
+export async function cancelNormalize(queueCode: string): Promise<NormalizeCancelResult> {
+  const res = await yzhApi.post<ApiResponse<NormalizeCancelResult>>(`${BASE}/cancel`, {
+    QueueCode: queueCode,
+  })
+  return unwrapOk<NormalizeCancelResult>(res, '取消批次失败')
+}
+
+// ═══════════════════════ 四之三、锁定 / 账本 / 重写 / 候选 ═══════════════════════
 //
 // ⚠️ 这些端点全部是 2026-10-09 补齐的（`54` §5.2 端点 7~13 / 17）。
 //    ⛔ 未在此封装的端点：固定文档（`fixed/*`，契约表当前 0 行）、
@@ -933,6 +1020,22 @@ export function standardLabel(s: {
   const no = (s.StandardNo ?? '').trim()
   if (no) return no
   return `未登记标准（${shortCode(s.StandardCode)}）`
+}
+
+/**
+ * ★ 存储路径 → **文件名**（只取最后一段，⛔ 不把完整路径摆进版面）。
+ *
+ * 背景（2026-10-10 用户裁决）：范围树里「产物 …」此前直接渲染完整 `OutputPath`
+ * （`/enterprise-documents/{Ent}/{Std}/{Stage}/{Folder}/{FileName}`）——
+ * 一条超长路径把整行撑爆，且路径中段的 GUID / 层级对用户毫无意义。
+ * ⇒ 版面只显示**需要规范化的文件名**，**完整路径留在 `title`**（悬停可查）。
+ *
+ * ⚠️ 兼容 `/` 与 `\`；尾段为空（异常数据）时回退原串，⛔ 不渲染成空白。
+ */
+export function pathFileName(path?: string | null): string {
+  const p = (path ?? '').trim()
+  if (!p) return ''
+  return p.split(/[\\/]/).pop() || p
 }
 
 /** 0~1 小数 → 百分比整数（⛔ 后端可能给 decimal 字符串，必须先 Number()） */

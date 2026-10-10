@@ -8,6 +8,23 @@
       "RowSpan": 1,
       "Col": 0,
       "ColSpan": 1,
+      "FieldName": "ParentCode",
+      "DesName": "上级机构",
+      "Width": 200,
+      "Type": "TreeSelect",
+      "Yxk": true,
+      "BcFlag": true,
+      "XsFlag": false,
+      "GroupIndex": "0",
+      "Sxh": 0,
+      "Mrz": "",
+      "Enable": true
+    },
+    {
+      "Row": 1,
+      "RowSpan": 1,
+      "Col": 0,
+      "ColSpan": 1,
       "FieldName": "OrgName",
       "DesName": "机构名称",
       "Width": 200,
@@ -21,7 +38,7 @@
       "Enable": true
     },
     {
-      "Row": 1,
+      "Row": 2,
       "RowSpan": 1,
       "Col": 0,
       "ColSpan": 1,

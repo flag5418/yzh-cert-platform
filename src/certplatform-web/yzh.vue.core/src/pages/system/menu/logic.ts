@@ -43,20 +43,22 @@ export class MenuPageLogic extends TreeTableCore<any> {
       this.selectedNode?.Code ?? (this.treeConfig?.RootParentCode as string) ?? '0'
   }
 
-  /** 树表单：Icon 字段改为 custom slot（IconPicker 穿透 YzhFormDialog） */
+  /** 树表单：Icon 和 ParentCode 改为 custom slot（IconPicker / MenuParentPicker 穿透 YzhFormDialog） */
   override get treeFormFields(): YzhFormField[] {
-    return super.treeFormFields.map((f) =>
-      f.prop === 'Icon' ? { ...f, type: 'custom' as const, slot: 'Icon' } : f
-    )
+    return super.treeFormFields.map((f) => {
+      if (f.prop === 'Icon') return { ...f, type: 'custom' as const, slot: 'Icon' }
+      if (f.prop === 'ParentCode') return { ...f, type: 'custom' as const, slot: 'ParentCode' }
+      return f
+    })
   }
 
-  /** 右表单：排除 ParentCode（由逻辑注入），Icon 走 slot */
+  /** 右表单：ParentCode 改为 custom slot（上级菜单可编辑），Icon 走 slot */
   override get formFields(): YzhFormField[] {
-    return super.formFields
-      .filter((f) => f.prop !== 'ParentCode')
-      .map((f) =>
-        f.prop === 'Icon' ? { ...f, type: 'custom' as const, slot: 'Icon' } : f
-      )
+    return super.formFields.map((f) => {
+      if (f.prop === 'Icon') return { ...f, type: 'custom' as const, slot: 'Icon' }
+      if (f.prop === 'ParentCode') return { ...f, type: 'custom' as const, slot: 'ParentCode' }
+      return f
+    })
   }
 
   /**
@@ -87,6 +89,8 @@ export class MenuPageLogic extends TreeTableCore<any> {
   protected override onAfterUpdateTree(): void {
     notifyMenuChanged()
     void this.refreshTable()
+    // ParentCode 变更会导致节点归属变化 → 整树 reload 以保证树结构合理
+    void this.loadTreeRoot()
   }
 
   protected override onAfterDeleteTree(): void {

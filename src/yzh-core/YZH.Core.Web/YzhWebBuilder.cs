@@ -155,6 +155,10 @@ public static class YzhWebBuilderExtensions
         // 注册队列引擎（QueueManager + QueueHostedService）
         builder.Services.AddYzhQueue();
 
+        // 注册实时推送（SignalR Hub + IYzhMessagePusher —— 框架核心能力，2026-10-10 P2a）
+        // Hub 端点由 Program.cs 显式挂载：app.MapHub<YzhMessageHub>("/api/yzh-msg")
+        builder.Services.AddYzhMessagePush();
+
         // 注册验证码服务
         builder.Services.AddScoped<ICaptchaService, CaptchaService>();
 

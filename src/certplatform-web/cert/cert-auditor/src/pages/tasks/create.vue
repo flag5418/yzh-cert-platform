@@ -24,7 +24,7 @@
  * ★ 本页的候选表**不是配置驱动**（走 `getCandidates` 而不是 EntityConfig），
  *   所以列在这里内联声明 —— 这是向导的固有形态，不违反「配置驱动」原则。
  */
-import { computed, nextTick, onActivated, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onActivated, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { Page, PageParams, YzhTableColumn } from '@yzh-core'
@@ -155,6 +155,26 @@ const taskSourceLabel = computed(
 const scopeLabel = computed(
   () => SCOPE_TYPE_OPTIONS.find((o) => o.value === form.ScopeType)?.label ?? form.ScopeType,
 )
+
+/**
+ * 步骤 2「任务来源」的可选项 —— 按业务锁的 ExistingTaskCount 条件过滤：
+ *   · 无历史任务（=0）→ 只允许「全新任务」
+ *   · 有历史任务（>0）→ 只允许「整体重执行」/「局部更新」
+ *   · prefillFromTask（从历史任务出发）不受影响：该场景按定义已有历史 → 自然走到 >0 分支
+ */
+const visibleTaskSourceOptions = computed(() => {
+  const hasHistory = (lock.value?.ExistingTaskCount ?? 0) > 0
+  return hasHistory
+    ? TASK_SOURCE_OPTIONS.filter((o) => o.value !== 'NEW')
+    : TASK_SOURCE_OPTIONS.filter((o) => o.value === 'NEW')
+})
+
+// 可选集变化时自动选中第一个可用项（避免 form.TaskSource 落在隐藏选项上）
+watch(visibleTaskSourceOptions, (opts) => {
+  if (opts.length > 0 && !opts.some((o) => o.value === form.TaskSource)) {
+    form.TaskSource = opts[0].value
+  }
+})
 
 /** 第 1 步是否可继续 */
 const step0Ok = computed(
@@ -326,7 +346,6 @@ function clearPick() {
 const candidateColumns: YzhTableColumn<TaskCandidate>[] = [
   { prop: 'Picked', label: '选择', width: 64, align: 'center', slot: true },
   { prop: 'StandardName', label: '标准', width: 160 },
-  { prop: 'ItemNumber', label: '编号', width: 150, showOverflowTooltip: true },
   { prop: 'ItemName', label: '检查项 / 章节', minWidth: 240, showOverflowTooltip: true },
   { prop: 'ClauseNumber', label: '条款', width: 100 },
   {
@@ -667,7 +686,7 @@ onActivated(() => {
       <div v-else-if="step === 1" class="wiz__pane">
         <div class="wiz__section-title">这次执行属于哪种情况？</div>
         <el-radio-group v-model="form.TaskSource" class="wiz__cards">
-          <el-radio v-for="o in TASK_SOURCE_OPTIONS" :key="o.value" :value="o.value" border>
+          <el-radio v-for="o in visibleTaskSourceOptions" :key="o.value" :value="o.value" border>
             <div class="wiz__card-title">{{ o.label }}</div>
             <div class="wiz__card-desc">{{ o.desc }}</div>
           </el-radio>

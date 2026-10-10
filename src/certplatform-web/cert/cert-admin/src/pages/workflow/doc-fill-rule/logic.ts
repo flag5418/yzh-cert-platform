@@ -35,6 +35,7 @@
 import {
   getDirectoryTree,
   getDocFillPreviewInfo,
+  listFillParamDefs,
   saveAnchorBatch,
 } from '@share/api/workflow/doc-fill-rule'
 import {
@@ -233,9 +234,48 @@ export class DocFillRuleLogic extends TreeTableLogic<any> {
   private readonly anchorRowsRef = ref<any[]>([])
   /** 锚点清单加载态 */
   private readonly anchorLoadingRef = ref(false)
+
+  // ──── ★ 2026-10-10：「来源已失效」判据所需的两块状态 ────
+  //
+  //  【为什么必须在 logic 里持有一份】
+  //    `AnchorSidePanel` / `MaterialArea` 各自 `listFillParamDefs()` 拉过一遍，
+  //    但那是**组件内部**状态，页面级的「已配齐」判定读不到。
+  //    而「来源已失效」是**跨行聚合**结论（统计条 / 筛选 chip / C8 闸都要用）
+  //    ⇒ 上移到 logic：一处加载，多处读取，口径唯一。
+  //
+  //  ⚠️ `ready` 与「清单为空」是**两件事**：拉失败时清单也是空的，
+  //     但那时**不能**判失效（会把所有真实参数标红）⇒ 必须靠 `ready` 区分。
+
+  /** `cert_fill_param_def` 未软删的 `ParamCode` */
+  private readonly fillParamCodesRef = ref<string[]>([])
+  /** 参数目录是否**已成功**加载（false ⇒ 不判「失效」，⛔ 不报假警） */
+  private readonly fillParamReadyRef = ref(false)
+
+  /**
+   * 幂等拉取参数目录 —— 判「来源已失效」的**唯一数据源**。
+   *
+   * ⛔ 失败时**保持 `ready=false`**：宁可少报，不可把每一个真实参数都标成失效。
+   */
+  async ensureFillParamCatalog(): Promise<void> {
+    if (this.fillParamReadyRef.value) return
+    try {
+      const res = await listFillParamDefs()
+      const items: any[] = (res as any)?.data?.Items ?? []
+      this.fillParamCodesRef.value = items
+        .map((p: any) => String(p?.ParamCode ?? p?.Code ?? ''))
+        .filter((c: string) => !!c)
+      this.fillParamReadyRef.value = true
+    } catch {
+      // 静默保持未就绪 —— 界面照常可用，只是不显示「来源已失效」
+    }
+  }
+
   /** 解析后视图（`SourceSpec` 一行只解析一次 —— 口径在 `anchorStats`） */
   private readonly anchorViewsComputed = computed<AnchorView[]>(() =>
-    buildAnchorViews(this.anchorRowsRef.value),
+    buildAnchorViews(this.anchorRowsRef.value, {
+      paramCodes: this.fillParamCodesRef.value,
+      ready: this.fillParamReadyRef.value,
+    }),
   )
   private readonly anchorStatsComputed = computed<AnchorStats>(() =>
     computeAnchorStats(this.anchorViewsComputed.value),
@@ -260,13 +300,20 @@ export class DocFillRuleLogic extends TreeTableLogic<any> {
   /**
    * ★ C8 闸：锚点是否**配齐**（配齐才谈得上自动填充 / 预览）。
    *
-   * 判据四条**全部**成立：① 已上传模板 ② 扫描完成 ③ 至少 1 个锚点 ④ 无未配来源、无孤儿。
-   * ⛔ 「未配」的判据不在本类复写 —— 唯一口径在 `anchorStats.toAnchorView`
+   * 判据五条**全部**成立：① 已上传模板 ② 扫描完成 ③ 至少 1 个锚点
+   * ④ 无未配来源、无孤儿 ⑤ **无「来源已失效」**。
+   * ⛔ 「未配」/「失效」的判据不在本类复写 —— 唯一口径在 `anchorStats.toAnchorView`
    *    （域自动值 `domain + auto` 不算未配）。
+   *
+   * ★ 2026-10-10 新增第 ⑤ 条：`ref` 指向的参数被软删（或属性名写错）时，
+   *   **真填必然取不到值**，与「未配来源」在运行期后果完全一样 ⇒ 同样必须挡住。
+   *   ⚠️ 该条只在参数目录**已加载成功**时才可能为真（`anchorStats` 的 `catalog.ready`），
+   *   目录拉失败时 `staleRef` 恒 0 ⇒ 闸门行为与本条引入前一致（⛔ 不会把用户锁死）。
    */
   get anchorReadiness(): {
     total: number
     unconfigured: number
+    staleRef: number
     orphan: number
     ready: boolean
   } {
@@ -274,12 +321,14 @@ export class DocFillRuleLogic extends TreeTableLogic<any> {
     return {
       total: s.total,
       unconfigured: s.unconfigured,
+      staleRef: s.staleRef,
       orphan: s.orphan,
       ready:
         this.hasTemplate &&
         this.scanStatus === 'completed' &&
         s.total > 0 &&
         s.unconfigured === 0 &&
+        s.staleRef === 0 &&
         s.orphan === 0,
     }
   }
@@ -326,7 +375,14 @@ export class DocFillRuleLogic extends TreeTableLogic<any> {
     }
     this.anchorLoadingRef.value = true
     try {
-      this.anchorRowsRef.value = await this.loadAnchors()
+      // ★ 参数目录与锚点清单**并行**拉（幂等）：判「来源已失效」要用它。
+      //   ⛔ 不 fire-and-forget —— 那会让首屏先渲染成「全部正常」再跳成「失效 N」，
+      //   用户看到一次闪烁，且那一瞬间的统计条是**错的**（错的统计比没有统计更糟）。
+      const [rows] = await Promise.all([
+        this.loadAnchors(),
+        this.ensureFillParamCatalog(),
+      ])
+      this.anchorRowsRef.value = rows
       this.anchorLoadedFor = tpl
     } catch {
       // 锚点取不到只影响右栏清单与闸门判据，⛔ 不该把整页打挂

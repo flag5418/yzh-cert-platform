@@ -38,6 +38,15 @@ public static class FillSyntax
     public const string SysPrefix = "@";
 
     /// <summary>
+    /// 表格锚点前缀（<c>{{table:items}}</c>）。
+    /// <para>★ 必须与 <c>ai:</c> / <c>@</c> 一样在 <see cref="SplitFormat"/> 里<b>先剥前缀再拆格式</b> ——
+    /// 否则 <c>table:items</c> 会被当成「键=table、格式=items」，导致
+    /// <b>所有表格锚点撞同一个键 <c>table</c></b>（评审 63 号 G1 的一半病因：
+    /// 「配了不生效且不报错」+ 值互相覆盖）。<see cref="AnchorClassifier"/> 的判型也用本常量。</para>
+    /// </summary>
+    public const string TablePrefix = "table:";
+
+    /// <summary>
     /// 表达式命名空间前缀（含 <c>.</c> 即视为表达式）。
     /// <para>⛔ 刻意<b>不</b>设 <c>doc.</c> 命名空间：文档元信息已有 <c>{{@doc_no}}</c> 一种写法
     /// （见 <see cref="Resolvers.HeaderFooterResolver"/>）。同一件事给两套写法，
@@ -57,6 +66,10 @@ public static class FillSyntax
     public static bool IsExprToken(string key) =>
         ExprNamespaces.Any(ns => key.StartsWith(ns, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>是否表格锚点（<c>{{table:items}}</c>）—— 表格区域由 Office 区域填充处理</summary>
+    public static bool IsTableToken(string key) =>
+        key.StartsWith(TablePrefix, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// 从锚点**内容**中拆出「键」与「格式串」—— 支持 <c>{{key:format}}</c>（如 <c>{{amount:#,##0.00}}</c>）。
     ///
@@ -73,6 +86,7 @@ public static class FillSyntax
     ///   <item><term><c>amount:#,##0.00</c></term><description>key=<c>amount</c>，format=<c>#,##0.00</c></description></item>
     ///   <item><term><c>ai:quality_policy</c></term><description>key=<c>ai:quality_policy</c>，format=<c>null</c>（剥前缀后已无冒号）</description></item>
     ///   <item><term><c>ai:amount:0.00</c></term><description>key=<c>ai:amount</c>，format=<c>0.00</c></description></item>
+    ///   <item><term><c>table:items</c></term><description>key=<c>table:items</c>，format=<c>null</c>（剥前缀后已无冒号；⛔ 曾被误拆成 key=<c>table</c>，所有表格锚点撞键）</description></item>
     ///   <item><term><c>enterprise.Name</c></term><description>key=<c>enterprise.Name</c>，format=<c>null</c></description></item>
     ///   <item><term><c>@doc_date:yyyy年MM月dd日</c></term><description>key=<c>@doc_date</c>，format=<c>yyyy年MM月dd日</c></description></item>
     /// </list>
@@ -87,6 +101,7 @@ public static class FillSyntax
         var prefixLen = 0;
         if (text.StartsWith(AiPrefix, StringComparison.OrdinalIgnoreCase)) prefixLen = AiPrefix.Length;
         else if (text.StartsWith(SysPrefix, StringComparison.Ordinal)) prefixLen = SysPrefix.Length;
+        else if (text.StartsWith(TablePrefix, StringComparison.OrdinalIgnoreCase)) prefixLen = TablePrefix.Length;
 
         var search = text[prefixLen..];
         var idx = search.LastIndexOf(':');
@@ -99,14 +114,16 @@ public static class FillSyntax
     }
 
     /// <summary>
-    /// 是否已被前三个 Resolver 认领。
+    /// 是否已被其它 Resolver / 填充链认领。
     /// <para><b>用途</b>：<see cref="Resolvers.GlobalParamResolver"/> 是兜底 Resolver，
-    /// 它用本方法<b>主动拒收</b>前三类 token。这样一旦引擎的 Resolver 顺序被改错，
+    /// 它用本方法<b>主动拒收</b>前四类 token。这样一旦引擎的 Resolver 顺序被改错，
     /// 症状是「报告里出现『锚点无归属解析器』的待办」——<b>看得见</b>；
-    /// 若改成无条件接收，症状是「表达式被当成参数名，报『无此参数』」——<b>指错方向</b>。</para>
+    /// 若改成无条件接收，症状是「表达式被当成参数名，报『无此参数』」——<b>指错方向</b>。
+    /// 表格锚点（<c>table:</c>）同理：文本引擎没有表格能力，收进「无此参数 table:items」
+    /// 会把人引去参数定义页找一个永远不存在的参数。</para>
     /// </summary>
     public static bool IsClaimedByOthers(string key) =>
-        IsAiToken(key) || IsSysToken(key) || IsExprToken(key);
+        IsAiToken(key) || IsSysToken(key) || IsExprToken(key) || IsTableToken(key);
 }
 
 /// <summary>

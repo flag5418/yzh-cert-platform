@@ -183,7 +183,7 @@ watch(() => props.selectedNode, (node: any) => {
     const currentNodeId = node.nodeId || node.id
     if (_lastNodeId === currentNodeId && form.value.title === node.title) return
     _lastNodeId = currentNodeId; _updateTick++
-    form.value = { nodeId: currentNodeId, nodeType: node.nodeType || 'skill', title: node.title || '', description: node.description || '', skillCode: node.skillCode || '', inputs: { ...(node.inputs || {}) }, outputs: { ...(node.outputs || {}) }, config: { ...(node.config || {}) }, inputPorts: node.inputPorts || [], outputPorts: node.outputPorts || [], inputTypes: { ...(node.inputTypes || {}) }, _branchEdges: node.branchEdges || [], _updateTick }
+    form.value = { nodeId: currentNodeId, nodeType: node.nodeType || 'skill', title: node.title || '', description: node.description || '', skillCode: node.skillCode || '', inputs: { ...(node.inputs || {}) }, outputs: { ...(node.outputs || {}) }, config: { ...(node.config || {}) }, inputPorts: [...(node.inputPorts || [])], outputPorts: [...(node.outputPorts || [])], inputTypes: { ...(node.inputTypes || {}) }, _branchEdges: node.branchEdges || [], _updateTick }
     const vals: Record<string, any> = {}; const types: Record<string, string> = {}
     for (const port of form.value.inputPorts) {
       vals[port.name] = form.value.inputs[port.name] ?? ''

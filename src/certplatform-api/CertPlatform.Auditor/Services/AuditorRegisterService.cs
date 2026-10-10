@@ -189,7 +189,7 @@ public class AuditorRegisterService
             {
                 Code = workspaceCode,
                 OrgName = workspaceName,
-                OrgCode = certBody.CbCode,
+                OrgCode = certBody.Code,
                 ParentCode = rootCode,
                 OrgType = "VirtualOrg",
                 OrgLevel = WorkspaceLevel,
@@ -285,33 +285,19 @@ public class AuditorRegisterService
                 return Result<AuditorRegisterResultDto>.Fail($"绑定默认角色失败：{ruResult.Error}");
             }
 
-            // 5.5 回写匿名注册场景下缺失的字段（三处，均为框架层既有行为导致）
-            //   (a) Sys_User.RoleId —— 实体 Sys_User 未声明该列（框架层遗留），
-            //       但视图 v_sys_user 用 `u.RoleId = r.Id` JOIN Sys_Role 取 RoleName；
-            //       不写会让后台「用户管理」页的角色列空白（登录与权限不受影响，那条链路走 Sys_RoleUser）。
-            //   (b) CreateBy —— EntityService.Insert 的 FillCreateAudit 取 _userContext.UserCode，
-            //       匿名请求下为空串，回写来源标识以便审计追溯。
+            // 5.5 回写注册来源标识（CreateBy）
+            //   EntityService.Insert 的 FillCreateAudit 取 _userContext.UserCode，
+            //   匿名请求下为空串，回写来源标识以便审计追溯。
             //
-            //   ⚠️ 坑：SqlScalarAsync<T> 的内部实现是 Convert.ChangeType(result, typeof(T))，
-            //      而 Convert.ChangeType **不支持 Nullable<T>** —— 传 int? 会抛 InvalidCastException，
-            //      被 catch 后静默返回 Fail（Success=false），表现为「查到了却拿到 0」。
-            //      故此处泛型实参必须是 int，且必须检查 Success。
-            var roleIdResult = await _dbOrm.SqlScalarAsync<int>(
-                "SELECT Id FROM Sys_Role WHERE Code = @code LIMIT 1",
-                new { code = DefaultRoleCode });
-            if (!roleIdResult.Success)
-            {
-                tx.Rollback();
-                return Result<AuditorRegisterResultDto>.Fail($"查询默认角色失败：{roleIdResult.Error}");
-            }
-
+            //   ⚠️ RoleId 不再覆写：v_sys_user 视图已改为通过 Sys_RoleUser 关联表取角色名，
+            //       Sys_User.RoleId 列属于冗余设计（YZH 架构禁止用 Id 关联）。
             var stampUser = await _dbOrm.SqlExecuteAsync(
-                "UPDATE Sys_User SET RoleId = @roleId, CreateBy = @createBy WHERE Code = @code",
-                new { roleId = roleIdResult.Data, createBy = RegisterOrigin, code = userCode });
+                "UPDATE Sys_User SET CreateBy = @createBy WHERE Code = @code",
+                new { createBy = RegisterOrigin, code = userCode });
             if (!stampUser.Success)
             {
                 tx.Rollback();
-                return Result<AuditorRegisterResultDto>.Fail($"回写用户角色字段失败：{stampUser.Error}");
+                return Result<AuditorRegisterResultDto>.Fail($"回写用户来源标识失败：{stampUser.Error}");
             }
 
             var stampOrg = await _dbOrm.SqlExecuteAsync(

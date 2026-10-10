@@ -24,3 +24,4 @@ export { CONVERT_STATUS_MAP, convertStatusBadgeType, convertStatusLabel } from '
 // 业务 API（admin + auditor 共用：认证业务、工作流）
 // 注意：System 域 API（user/role/menu/...）admin 独有，不在本层
 export * from './api'
+export { useUploadProgress } from "./composables/useUploadProgress"

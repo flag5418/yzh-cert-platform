@@ -5,6 +5,7 @@
 > **性质**：**机制评估**（非功能设计）—— 回答"基建 + Skill 可发现模式这套机制是否合理"
 > **前置**：`规则Skill与证据链-功能设计-V1.md`（能力层要补什么）、`工作流引擎-总体架构设计-V3.md`（基建层已有什么）
 > **方法**：给出可判断的评估判据 → 逐条用代码取证 → 分层给结论 → 缺口分级
+> **★ 交付状态（2026-10-10）**：§6 的 **P0-1 / P0-2 已落地**（端点 `GET /api/Admin/Workflow/WfSkill/metadata` + 前端 `loadSkills` 端口回填），D1→D2 通路已通，详见 **§10 实施记录**。§2 表 ②③、§3 D2 的"死链"结论为 2026-09-27 取证快照，已被 §10 覆盖。
 
 ---
 
@@ -162,8 +163,8 @@ Skill 契约当前只回答"**怎么调**"（类名、方法名、参数名）�
 
 | 优先级 | 缺口 | 动作 | 解锁 |
 |---|---|---|---|
-| **P0-1** | 反射契约无出口 | 新增 `GET /WfSkill/{code}/contract`（内部调 `ISkillRegistry.LoadAsync`）；前端 `loadSkills` 后按需拉取 | D1→D2 通路 |
-| **P0-2** | 拖入节点端口为空 | `addNode` 时若 `item.inputPorts` 空则请求 contract 回填；属性面板据此渲染 | 专家能配参数 |
+| **P0-1** | 反射契约无出口 | 新增 `GET /api/Admin/Workflow/WfSkill/metadata`（内部调 `ISkillRegistry.LoadAsync` + `[Skill]` 反射索引）；前端 `loadSkills` 同步拉取并建双键索引（Code + SkillCode） | D1→D2 通路 ✅ 2026-10-10 已交付 |
+| **P0-2** | 拖入节点端口为空 | `addNode` 时若 `item.inputPorts` 空则从索引回填；`renderWorkflow` 后对已保存节点调用 `applySkillPorts` 回灌，避免老规则永久缺参数 | 专家能配参数 ✅ 2026-10-10 已交付 |
 | **P0-3** | 违规裁决出口缺失 | `verdict` Skill + `AggregateNcResult` 三态分离（见证据链文档 §5） | NC 检测成立 |
 | **P1-1** | 设计期无契约校验 | 保存时校验必填端口、端口类型与连线类型匹配 | D3 |
 | **P1-2** | 新增 Skill 5 个编辑点 | 启动时反射扫描自动 upsert ②③ | 单一编辑点 |
@@ -221,6 +222,40 @@ Skill 契约当前只回答"**怎么调**"（类名、方法名、参数名）�
 | 契约中的**中文标签、描述、枚举值** | 专家/维护 | 可在 DB 层覆写（若 P1-3 选择"接入"） |
 | Skill 的**业务语义与阈值** | 专家/维护 | 见 `规则Skill与证据链` §9 |
 | 基建的队列/重试/状态机 | 研发 | 不因 Skill 语义而改动 |
+
+---
+
+## 10. 实施记录（P0-1 / P0-2 已于 2026-10-10 落地）
+
+### 问题复盘
+2026-09-27 评估时抓到的两处死链：
+- **P0-1** `ISkillRegistry.LoadAsync` 零调用方 → 反射元数据出不去；
+- **P0-2** `loadSkills` 只取 `wf_skill` 行，前端 `inputPorts=[]` → 拖入的 Skill 节点属性面板无端口。
+
+### 实现方案（方案 A · 反射元数据）
+**后端**（`CertPlatform.Admin/Controllers/Workflow/WfSkillController.cs`）
+- 新增 `GET /api/Admin/Workflow/WfSkill/metadata`。
+- 解析顺序：
+  1. `[Skill]` 特性静态索引（`BuildSkillIndex`，进程内 `Lazy<IReadOnlyDictionary>`）→ `_skillExecutor.Analyze`。
+  2. 回退：`ISkillRegistry.LoadAsync`（DB `wf_skill_reflection`）。
+- 返回 DTO：`{ Code, SkillCode, Name, Description, InputPorts: [{Name, Label, Type, Required, DefaultValue, Description, BindMode, EnumSource}] }`。
+- 双键索引（`Code` + `SkillCode`）兼容历史画布可能存的 Code 值。
+
+**前端**（`cert-share/.../WorkflowDesigner.vue`）
+- `loadSkillMetadata()`：调 metadata 端点，建双键索引 `skillPortIndex`。
+- `loadSkills()`：`skillCode = s.SkillCode || s.Code`（修复 `SK_*` 类技能反射查不到的隐性 bug）；把 `inputPorts` 挂到 item 上。
+- `applySkillPorts(nodes)`：`renderWorkflow` 后对已保存节点回灌 `inputPorts`，避免存量规则永久缺参数。
+
+### 验证结果
+- 后端：编译 0 错误；`GET /metadata` 返回 18 个 Skill、17 个含端口（`is_std_file_missing`=4 端口，`assemble`/`compare` 等全部命中）。
+- 前端：`vue-tsc --noEmit` 通过；`curl /@fs/.../WorkflowDesigner.vue` 返回 200（Vite 能编译）。
+- 守卫：`node scripts/guards.mjs` 仍报 32 处违规，但均为 **未在本任务中修改的文件**（queue/index.vue、MenuParentPicker.vue、CertOrgStage.cs 等）；我的改动 WfSkillController.cs / WorkflowDesigner.vue / 迁移 SQL 均未出现在违规列表里。
+- 测试：`vitest run` 全仓 347 用例通过。
+
+### 后续可考虑
+- P1-3（`wf_skill_input/output` 二选一）待裁决：若专家需要修改中文标签/必填，可「接入」作为契约覆写层；否则「删除」避免误导。
+- P1-1（保存期端口类型校验）按 §7 目标形态需补。
+- P1-2（反射 upsert 启动自动同步）减少编辑点，但需额外处理废弃 Skill 清理。
 
 ---
 

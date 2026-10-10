@@ -29,7 +29,7 @@
     <!-- ★ 后台端独占实体（2026-10-03 分层修订；清单见 docs/10-YZH架构/24-后端实体归属清单-V1.md） -->
     <Using Include="CertPlatform.Admin.Entities.Cert" />
     <Using Include="CertPlatform.Admin.Entities.Dir" />
-        <Using Include="CertPlatform.Admin.Entities.Sys" />
+        
     <Using Include="CertPlatform.Admin.Entities.Wf" />
     <Using Include="CertPlatform.Shared.DocExtraction" />
   </ItemGroup>

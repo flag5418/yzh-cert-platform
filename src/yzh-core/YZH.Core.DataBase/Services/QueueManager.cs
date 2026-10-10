@@ -515,6 +515,9 @@ public class QueueManager
             _logger.LogError(ex, "[QueueManager] 队列取消清理回调失败: {QueueCode}", queueCode);
         }
 
+        // 6. 终态通知（入口已保证「非终态 → cancelled」是一次边沿转换）
+        await NotifyTerminalAsync(queue);
+
         return (true, null);
     }
 
@@ -613,6 +616,28 @@ public class QueueManager
             await orm.SqlExecuteAsync("UPDATE yzh_queue_resource_lock SET Status = 'released', ActiveKey = NULL, ReleaseTime = NOW() WHERE QueueCode = @qc AND Status = 'locked'", new { qc = queueCode });
         }
         await orm.UpdateAsync(queue);
+
+        // 终态**边沿**通知（仅「刚进入终态」发一次；重跑回 running 后再次进入终态会再发）
+        if (IsTerminal(newStatus) && !wasTerminal)
+            await NotifyTerminalAsync(queue);
+    }
+
+    /// <summary>
+    /// 队列终态通知（IYzhQueueNotifier —— 业务侧实现：消息落库 cert_message + SignalR 实时推送）。
+    /// 通知是旁路：任何失败只记日志，绝不影响队列状态机。
+    /// </summary>
+    private async Task NotifyTerminalAsync(YzhQueue queue)
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            foreach (var notifier in scope.ServiceProvider.GetServices<IYzhQueueNotifier>())
+                await notifier.NotifyAsync(queue);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[QueueManager] 队列终态通知失败: {QueueCode}", queue.QueueCode);
+        }
     }
 
     private static bool IsTerminal(string status) => status is "completed" or "failed" or "cancelled";

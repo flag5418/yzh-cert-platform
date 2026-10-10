@@ -3,7 +3,7 @@ using YZH.Core.Stand.Attributes;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Entity;
 
-namespace CertPlatform.Admin.Entities.Sys
+namespace CertPlatform.Shared.Entities.Sys
 {
     /// <summary>
     /// 机构-标准关联表（多对多）

@@ -231,6 +231,9 @@ async function toggleLock(v: AnchorView) {
         <div v-if="stats.unconfigured" class="s d">
           <b>{{ stats.unconfigured }}</b> 未配
         </div>
+        <div v-if="stats.staleRef" class="s d">
+          <b>{{ stats.staleRef }}</b> 来源失效
+        </div>
         <div v-if="stats.orphan" class="s w"><b>{{ stats.orphan }}</b> 孤儿</div>
         <span class="sp"></span>
         <YzhStatusBadge

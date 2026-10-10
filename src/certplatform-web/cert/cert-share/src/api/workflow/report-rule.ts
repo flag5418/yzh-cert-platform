@@ -63,6 +63,20 @@ export function deleteSection(code: string) {
   )
 }
 
+/** 分页查询（POST /filter，用于获取阶段章节数量徽标） */
+export function getReportSectionPage(params: {
+  Page: number
+  PageSize: number
+  SortField?: string
+  SortOrder?: string
+  Filters: Array<{ Field: string; Value: string; Operator: string }>
+}) {
+  return yzhApi.post<{ data: { Items: ReportSection[]; TotalCount: number } }>(
+    `${API_PREFIX}/filter`,
+    params
+  )
+}
+
 /** ★ 批量启停（替代原「模板级启停」能力，D34 删除主表后的等价手段） */
 export function batchToggleSections(params: {
   orgCode: string

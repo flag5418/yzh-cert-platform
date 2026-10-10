@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace CertPlatform.Admin.Entities.Sys
+namespace CertPlatform.Shared.Entities.Sys
 {
     /// <summary>
     /// 机构-标准关联视图模型（V）— 用于列表显示，含标准信息

@@ -174,6 +174,7 @@ describe('computeAnchorStats', () => {
       auto: 0,
       manual: 0,
       unconfigured: 0,
+      staleRef: 0,
       orphan: 0,
       required: 0,
     })
@@ -219,7 +220,7 @@ describe('computeAnchorStats', () => {
       buildAnchorViews([
         row({ Code: 'A' }), // 未配
         row({ Code: 'B', IsOrphan: true }), // 孤儿 + 未配
-        row({ Code: 'C', SourceSpec: spec([{ kind: 'global' }]) }),
+        row({ Code: 'C', SourceSpec: spec([{ kind: 'global', ref: 'X' }]) }), // 已配
       ]),
     )
     expect(s.unconfigured).toBe(2)
@@ -250,7 +251,11 @@ describe('computeAnchorStats', () => {
    ============================================================ */
 describe('filterAnchorViews', () => {
   const views = buildAnchorViews([
-    row({ Code: 'OK', SourceSpec: spec([{ kind: 'global' }]), Required: true }),
+    row({
+      Code: 'OK',
+      SourceSpec: spec([{ kind: 'global', ref: 'X' }]),
+      Required: true,
+    }),
     row({ Code: 'NOSRC' }), // 未配
     row({ Code: 'ORPHAN', IsOrphan: true }), // 孤儿 + 未配
     row({
@@ -294,6 +299,7 @@ describe('filterCount', () => {
   it('每个筛选档取对应计数', () => {
     expect(filterCount(stats, 'all')).toBe(3)
     expect(filterCount(stats, 'unconfigured')).toBe(3)
+    expect(filterCount(stats, 'stale')).toBe(0)
     expect(filterCount(stats, 'required')).toBe(1)
     expect(filterCount(stats, 'orphan')).toBe(1)
   })
@@ -320,7 +326,7 @@ describe('★ 未配判据只有一份实现（回归）', () => {
   it('视图 / 统计 / 筛选三处对「未配」的结论必须完全一致', () => {
     const views = buildAnchorViews([
       row({ Code: 'A' }), // 未配
-      row({ Code: 'B', SourceSpec: spec([{ kind: 'global' }]) }),
+      row({ Code: 'B', SourceSpec: spec([{ kind: 'global', ref: 'X' }]) }),
       row({ Code: 'C', AnchorType: 'domain', DomainKind: 'auto' }),
       row({ Code: 'D', SourceSpec: '{"broken"' }), // 坏 JSON ⇒ 未配
     ])
@@ -354,14 +360,46 @@ describe('anchorBadge', () => {
 
   it('已配 + 必填 ⇒ success', () => {
     const v = toAnchorView(
-      row({ SourceSpec: spec([{ kind: 'global' }]), Required: true }),
+      row({
+        SourceSpec: spec([{ kind: 'global', ref: 'X' }]),
+        Required: true,
+      }),
     )
     expect(anchorBadge(v)).toEqual({ text: '已配 · 必填', tone: 'success' })
   })
 
   it('已配 + 非必填 ⇒ info', () => {
-    const v = toAnchorView(row({ SourceSpec: spec([{ kind: 'global' }]) }))
+    const v = toAnchorView(row({ SourceSpec: spec([{ kind: 'global', ref: 'X' }]) }))
     expect(anchorBadge(v)).toEqual({ text: '已配', tone: 'info' })
+  })
+
+  it('★ 来源已失效 ⇒ danger（与「未配」同色：运行期后果一样，都取不到值）', () => {
+    const v = toAnchorView(
+      row({ SourceSpec: spec([{ kind: 'global', ref: 'X' }]) }),
+      { paramCodes: ['Y'], ready: true },
+    )
+    expect(v.unconfigured).toBe(false)
+    expect(v.staleRef).toBe(true)
+    expect(anchorBadge(v)).toEqual({ text: '来源已失效', tone: 'danger' })
+  })
+
+  it('★ 失效优先于「已配 · 必填」', () => {
+    const v = toAnchorView(
+      row({
+        SourceSpec: spec([{ kind: 'global', ref: 'X' }]),
+        Required: true,
+      }),
+      { paramCodes: ['Y'], ready: true },
+    )
+    expect(anchorBadge(v).text).toBe('来源已失效')
+  })
+
+  it('★ 孤儿 > 未配 > 失效（孤儿最紧急：模板里已经没有这个标签了）', () => {
+    const v = toAnchorView(
+      row({ IsOrphan: true, SourceSpec: spec([{ kind: 'global', ref: 'X' }]) }),
+      { paramCodes: ['Y'], ready: true },
+    )
+    expect(anchorBadge(v).text).toBe('孤儿')
   })
 
   it('tone 只会落在 YzhStatusBadge 的 4 档里（S08 契约）', () => {
@@ -369,10 +407,19 @@ describe('anchorBadge', () => {
       anchorBadge(toAnchorView(row({ IsOrphan: true }))).tone,
       anchorBadge(toAnchorView(row())).tone,
       anchorBadge(
-        toAnchorView(row({ SourceSpec: spec([{ kind: 'global' }]), Required: 1 })),
+        toAnchorView(
+          row({ SourceSpec: spec([{ kind: 'global', ref: 'X' }]), Required: 1 }),
+        ),
       ).tone,
-      anchorBadge(toAnchorView(row({ SourceSpec: spec([{ kind: 'global' }]) })))
-        .tone,
+      anchorBadge(
+        toAnchorView(row({ SourceSpec: spec([{ kind: 'global', ref: 'X' }]) })),
+      ).tone,
+      anchorBadge(
+        toAnchorView(row({ SourceSpec: spec([{ kind: 'global', ref: 'X' }]) }), {
+          paramCodes: ['Y'],
+          ready: true,
+        }),
+      ).tone,
     ]
     expect(tones.every((t) => ['success', 'warning', 'danger', 'info'].includes(t))).toBe(
       true,
@@ -384,10 +431,11 @@ describe('anchorBadge', () => {
    ANCHOR_QUICK_FILTERS
    ============================================================ */
 describe('ANCHOR_QUICK_FILTERS', () => {
-  it('4 档且顺序固定（UI 上不允许悄悄改顺序/漏档）', () => {
+  it('5 档且顺序固定（UI 上不允许悄悄改顺序/漏档）', () => {
     expect(ANCHOR_QUICK_FILTERS.map((f) => f.value)).toEqual([
       'all',
       'unconfigured',
+      'stale',
       'required',
       'orphan',
     ])

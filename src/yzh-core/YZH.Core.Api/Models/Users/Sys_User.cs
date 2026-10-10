@@ -17,10 +17,11 @@ namespace YZH.Core.Api.Models.Users;
 ///
 ///     关键映射：
 ///     - Id → DB: Id (int AUTO_INCREMENT) 需特殊处理（BaseEntity.Id 是 string）
-///     - RoleId → DB: RoleId (int)
-///     - OrgCode → DB: OrgCode (varchar, 直接匹配)
+///     - OrgCode → DB: OrgCode (varchar, 直接匹配，指向叶子机构节点)
 ///     - CreateTime/CreateBy/UpdateTime/UpdateBy → DB 同名
 ///     - DeleteTime/DeleteBy/IsDeleted → DB 同名
+///     - ⚠️ 不使用 RoleId / OrgId / DeptId 等 ID 关联（YZH 架构铁律：禁止用 Id 关联，
+///       角色走 Sys_RoleUser 关联表，机构通过 OrgCode + OrgPath 解析）
 ///
 ///     视图路由：
 ///     - 查询走 v_sys_user（含 OrgName、RoleName 关联字段）

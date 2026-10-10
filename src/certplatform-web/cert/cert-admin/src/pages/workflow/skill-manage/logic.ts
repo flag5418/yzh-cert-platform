@@ -2,7 +2,7 @@
  * SkillTreeTableLogic — 技能分类 → 技能 左树右表 Logic（TreeTable 架构）
  *
  * 布局：
- * - 左侧：分类树（数据源 = 字典 skill_category；分类在当前页就地维护）
+ * - 左侧：分类树（两级：大类 → 子类；数据源 = 字典 skill_category；分类在当前页就地维护）
  * - 右侧：技能表格（选中分类后加载，分页、搜索、增删改 + 启用/禁用）
  *
  * 分类字典化（2026-09-26，方案A：字典为分类唯一数据源）：
@@ -15,7 +15,7 @@
  * - 分发走 @row-action → logic.onRowAction → POST action/{method}
  */
 
-import { TreeTableLogic, type ApiResponse, type PagedData, type TreeNode } from '@yzh-core'
+import { TreeTableLogic, type ApiResponse, type PagedData, type TreeNode, type YzhFormField } from '@yzh-core'
 
 export class SkillTreeTableLogic extends TreeTableLogic<any> {
   // ⚠️ 必须含 Admin/ 端标记 —— 后端路由为 api/Admin/Workflow/SkillTreeTable（2026-10-03 端标记改造）。
@@ -29,6 +29,57 @@ export class SkillTreeTableLogic extends TreeTableLogic<any> {
    */
   protected override get treeEntityNameField(): string {
     return 'DicName'
+  }
+
+  /**
+   * 覆写 treeFormFields：为 ParentCode（上级分类）treeSelect 注入树形选项。
+   *
+   * 数据源 = 当前已加载的树根节点（排除虚拟"全部"节点 + 当前编辑节点自身），
+   * 格式化为 el-tree-select 所需的 { label, value, children }。
+   * 子级节点不允许修改父级（OnBeforeUpdateTree 已校验），编辑时 ParentCode 通过 disabled 实现只读。
+   */
+  override get treeFormFields(): YzhFormField[] {
+    const fields = super.treeFormFields
+    return fields.map((f) => {
+      if (f.prop === 'ParentCode') {
+        return {
+          ...f,
+          options: this.buildParentCodeOptions(),
+          // 编辑子级分类时 ParentCode 只读（保两层结构）
+          disabled: this.treeDialogMode.value === 'edit' && this.treeFormData.ParentCode,
+        }
+      }
+      return f
+    })
+  }
+
+  /** 为 ParentCode treeSelect 构建选项：根级分类列表（排除虚拟节点和编辑目标自身） */
+  private buildParentCodeOptions(): Array<{ label: string; value: string; children?: any[] }> {
+    const excludeCode = this.treeEditingNode?.value?.Code
+    const nodes = this.treeData.filter((n) => n.Code !== '__all__' && n.Code !== excludeCode)
+    return nodes.map((n) => this.nodeToOption(n))
+  }
+
+  /** TreeNode → el-tree-select 选项格式 */
+  private nodeToOption(node: TreeNode): { label: string; value: string; children?: any[] } {
+    return {
+      label: node.Name,
+      value: node.Code,
+      children: node.Children?.map((c) => this.nodeToOption(c)),
+    }
+  }
+
+  /**
+   * 覆写 canAddUnderNode：两级分类树，只有根级节点（Extra.level=0）允许新增子级。
+   * 子级节点（level=1）再点"新增下级"会产生第三级 → 超出 MaxLevel=2。
+   */
+  protected override canAddUnderNode(node: TreeNode): boolean {
+    const level = (node.Extra?.level as number) ?? 0
+    return level === 0
+  }
+
+  protected override canAddUnderNodeMessage(_node: TreeNode): string {
+    return '子分类下不允许再新增下级（最多两级）'
   }
 
   // ──── 新增技能默认值（分类归入由 onPrepareAdd 按选中树节点注入） ────

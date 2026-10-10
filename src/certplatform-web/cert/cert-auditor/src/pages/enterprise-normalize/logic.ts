@@ -46,10 +46,13 @@ import { ElMessage } from 'element-plus'
 import { confirmOrFalse, type YzhTreeNode } from '@yzh-core'
 import { fetchStageTree } from '@share/api/ent/enterprise-original'
 import {
+  cancelNormalize,
+  fetchNormalizeBatch,
   fetchNormalizeTree,
   fillOneNormalize,
   planNormalize,
   runNormalize,
+  type NormalizeBatchResult,
   type NormalizeFileNode,
   type NormalizeFolderNode,
   type NormalizeFillOneResult,
@@ -80,6 +83,15 @@ const POLL_INTERVAL_MS = 15_000
  *   （用户切走页面、队列卡住、后端挂了…都会让轮询白跑）。
  */
 const POLL_MAX_TICKS = 40
+
+/**
+ * 进度查询**连续**失败多少次后收工。
+ *
+ * ★ 为什么要容忍：进度查询失败 ≠ 批次失败 —— 瞬时网络抖动 / 后端重启一下，
+ *   若一次失败就杀掉轮询，用户又回到「不知道跑没跑完」的老问题。
+ *   但**连续**失败 3 次（45 秒）基本可断定通道坏了 ⇒ 收工并提示。
+ */
+const POLL_MAX_ERROR_TICKS = 3
 
 /**
  * 范围树节点（`el-tree` 的数据形状）。
@@ -283,121 +295,125 @@ export class EnterpriseNormalizeLogic {
     Object.values(this.results.value).slice(-5).reverse(),
   )
 
-  // ══════════════ 七、入队后自动刷新（2026-10-09） ══════════════
+  // ══════════════ 七、入队后批次进度轮询（2026-10-10 P1 改 batch 入口） ══════════════
   //
   // ★ 为什么要有（用户 2026-10-09 选「功能补全」）
   //
-  // `run` 只把任务**投进队列**就返回了，真正执行在后台串行跑（单个文件可能到分钟级）。
+  // `run` 只把任务**投进队列**就返回了，真正执行在后台 Worker 跑（单个文件可能到分钟级）。
   // 此前用户必须**自己反复点「刷新」**才知道跑完没有 —— 而「不知道跑没跑完」
   // 正是最容易被误判成「点了没反应 / 系统卡死」的状态。
   //
+  // ★★ 2026-10-10 P1 修复：轮询入口从「整树重拉 tree」改为「批次进度 batch/{queueCode}」
+  //   （后端 `54` §5.2 端点 5 的注释即写明它是「页面轮询的**唯一**入口」）。三个收益：
+  //   ① 完成判据 = 服务端 `IsFinished` —— 彻底去掉「浏览器本地时钟 vs 留痕时间」的 10s
+  //      容差假设（时钟偏差 >10s 时旧判据**永假** ⇒ 白轮满 10 分钟）
+  //   ② 失败明细（文件名 + ErrorType + 重试次数）随进度一次拿齐 —— 旧做法整树重拉也拿不到
+  //   ③ 载荷从「整棵树」缩成「一个批次」；范围树只在批次**终态**时刷新一次
+  //
   // ★ 三条约束（⛔ 别丢）：
   //   ① **只在入队成功后启动** —— 平时⛔ 不轮询（白耗接口 + 无意义重渲染）
-  //   ② **封顶 10 分钟** + **无在跑文件即提前收工** ⇒ 定时器一定有个头
-  //   ③ **换作用域 / 组件卸载 / 用户手动停** 都要停 —— 否则会拿 A 阶段的选择去刷 B 阶段
+  //   ② **封顶 10 分钟** + **连续查询失败 3 次收工** ⇒ 定时器一定有个头
+  //   ③ **换作用域 / 组件卸载 / 用户手动停 / 手动取消** 都要停 —— 否则会拿 A 阶段的批次去刷 B 阶段
 
   /** 是否正在自动刷新（页面据此显示提示条 + 「停止」按钮） */
   polling = ref(false)
-  /** 本轮自动刷新已执行的次数（⛔ 不显示「预计还要多久」—— 后端不给进度，编时间就是骗人） */
+  /** 本轮自动刷新已执行的次数（⛔ 不显示「预计还要多久」—— 剩余时间只能靠编，编了就是骗人） */
   pollCount = ref(0)
-  /** 最近一次刷新完成的时刻（本地时间字符串，用于让用户确认「它真的在动」） */
+  /** 最近一次进度查询完成的时刻（本地时间字符串，用于让用户确认「它真的在动」） */
   lastRefreshAt = ref('')
+  /** ★ 批次进度快照（`batch/{queueCode}` 返回）—— 提示条与回执卡据此显示进度 / 失败明细 / 取消入口 */
+  batchResult = ref<NormalizeBatchResult | null>(null)
 
   private pollTimer: number | null = null
+  /** ★ 本轮跟踪的批次号（`run` 回执的 `QueueCode`） */
+  private activeQueueCode = ''
+  /** 连续进度查询失败次数（瞬时抖动不该杀掉轮询；连错 3 次才收工） */
+  private pollErrorTicks = 0
 
   /**
-   * ★ 本轮入队时刻（浏览器 epoch ms）—— 「跑完了没」的判据基准。
+   * 启动批次进度轮询（入队成功后调用；重复调用 = 换批次重新计时）。
    *
-   * ⛔ **为什么不用 `InstanceState ∈ {filling, pending}` 判**（第一版写法，已废弃）：
-   * 后端**从来不写**这两个值 —— 全仓只有 `instance.InstanceState = "filled"` /
-   * `"archived"`（`DocumentFillOrchestrator.cs:449/603/690`）⇒ 该判据**恒为 false**
-   * ⇒ 第一次轮询（15s）就「提前收工」，功能等于没做。
-   * （这类错误 `vue-tsc` / `guards` / `vite build` **全都发现不了**，只能靠读后端源码 + 真机。）
+   * @param queueCode 本轮批次号（来自 `run` 回执的 `QueueCode`）
    */
-  private runStartedAtMs = 0
-
-  /** 本轮真正入队的标准域行 Code（`fill` / `regenerate` 两类）—— 完成判据只看它们 */
-  private queuedCodes: string[] = []
-
-  /**
-   * ★ **完成判据**：本轮入队的文件，**每一个**都已产生「晚于本次入队时刻」的填充留痕。
-   *
-   * 为什么用留痕时间：它是**可观测的既成事实**（`cert_doc_fill_log` 新行），
-   * ⛔ 不是对内部状态的猜测。跳过（锁定/未配规则）的文件不会产生留痕 ⇒ 本方法返回 false
-   * ⇒ 靠 10 分钟上限兜底，⛔ 不会误判成「跑完了」而提前收工。
-   *
-   * ⚠️ 留痕时间是**服务端 UTC**，基准是**浏览器本地 epoch**；两者都是 epoch，
-   *    但可能有秒级时钟偏差 ⇒ 留 10 秒容差。
-   */
-  private allQueuedDone(): boolean {
-    if (this.queuedCodes.length === 0) return false
-
-    const byCode = new Map<string, NormalizeFileNode>()
-    for (const s of this.standards.value) {
-      for (const f of collectFiles(s)) byCode.set(f.StandardFileCode, f)
-    }
-
-    const toleranceMs = 10_000
-    return this.queuedCodes.every((c) => {
-      const f = byCode.get(c)
-      if (!f || !f.LastFillTime) return false
-      const t = new Date(f.LastFillTime).getTime()
-      return Number.isFinite(t) && t >= this.runStartedAtMs - toleranceMs
-    })
-  }
-
-  /**
-   * 启动自动刷新（入队成功后调用；重复调用 = 重新计时）。
-   *
-   * @param queuedCodes 本轮真正入队的标准域行 Code（来自 `run` 回执的 `Items`）
-   */
-  startAutoRefresh(queuedCodes: string[] = []): void {
+  startAutoRefresh(queueCode: string): void {
     this.stopAutoRefresh()
-    if (!this.scopeReady.value) return
-    this.queuedCodes = [...queuedCodes]
-    this.runStartedAtMs = Date.now()
+    if (!this.scopeReady.value || !queueCode) return
+    this.activeQueueCode = queueCode
     this.pollCount.value = 0
+    this.pollErrorTicks = 0
     this.polling.value = true
+    // ★ 立刻先查一次（不等 15s）—— 回执卡的进度第一帧不该是空白
+    void this.pollOnce()
     this.pollTimer = window.setInterval(() => {
       void this.pollOnce()
     }, POLL_INTERVAL_MS)
   }
 
-  /** 停止自动刷新（用户点「停止」/ 换作用域 / 组件卸载时调用；幂等） */
+  /** 停止轮询（用户点「停止」/ 换作用域 / 已到终态 / 取消成功时调用；幂等） */
   stopAutoRefresh(): void {
     if (this.pollTimer !== null) {
       window.clearInterval(this.pollTimer)
       this.pollTimer = null
     }
     this.polling.value = false
-    this.queuedCodes = []
+    this.activeQueueCode = ''
+    this.pollErrorTicks = 0
   }
 
-  /** 一次轮询：刷新范围树 → 判断是否该收工 */
+  /** 一次轮询：查批次进度 → 终态则停轮 + 刷范围树 + 播结果提示 */
   private async pollOnce(): Promise<void> {
-    if (!this.scopeReady.value) {
+    if (!this.scopeReady.value || !this.activeQueueCode) {
       this.stopAutoRefresh()
       return
     }
 
+    const queueCode = this.activeQueueCode
     this.pollCount.value += 1
     try {
-      await this.loadRange()
+      const b = await fetchNormalizeBatch(queueCode)
+      // ★ 过期响应丢弃：查询期间用户可能已换作用域 / 新开一批 —— ⛔ 不能拿旧批次
+      //   的结果覆盖新批次的快照，更不能用旧批次的 IsFinished 杀掉新批次的轮询
+      if (this.activeQueueCode !== queueCode) return
+      this.batchResult.value = b
       this.lastRefreshAt.value = new Date().toLocaleTimeString('zh-CN')
+      this.pollErrorTicks = 0
+
+      // ① 服务端判终态（⛔ 不再拿浏览器时钟与留痕时间做比对）
+      if (b.IsFinished) {
+        this.stopAutoRefresh()
+        // 范围树只在终态刷一次（实例态 / 产物路径 / 完成率此时才真正变化）
+        await this.loadRange()
+        this.announceBatchDone(b)
+        return
+      }
     } catch {
-      // loadRange 自己会把业务拒绝写进 listMessage/listBlocked（并弹红）
-      // ⇒ 这里只负责停掉轮询，⛔ 不重复报错、不刷屏
-      this.stopAutoRefresh()
-      return
+      // 进度查询失败 ≠ 批次失败：容忍连续 3 次瞬时故障，超限才收工
+      this.pollErrorTicks += 1
+      if (this.pollErrorTicks >= POLL_MAX_ERROR_TICKS) {
+        this.stopAutoRefresh()
+        ElMessage.warning('连续多次查询批次进度失败，已停止自动刷新；稍后可重新进入本页或到「队列监控」查看')
+        return
+      }
     }
 
-    // ① 本轮入队的文件都出了新留痕 ⇒ 跑完了，收工
-    if (this.allQueuedDone()) {
-      this.stopAutoRefresh()
-      return
-    }
     // ② 兜底上限（10 分钟）—— 保证定时器一定有个头
-    if (this.pollCount.value >= POLL_MAX_TICKS) this.stopAutoRefresh()
+    if (this.pollCount.value >= POLL_MAX_TICKS) {
+      this.stopAutoRefresh()
+      ElMessage.warning('进度查询已达 10 分钟上限，批次可能仍在后台执行；稍后可到「队列监控」查看结果')
+    }
+  }
+
+  /** 批次结束时给一句结果型提示（成功 / 含失败 / 已取消），⛔ 不编造预计时间 */
+  private announceBatchDone(b: NormalizeBatchResult): void {
+    if (b.Status === 'cancelled') {
+      ElMessage.info(`批次 ${b.QueueCode} 已取消（终止 ${b.Cancelled} 个任务）`)
+    } else if (b.Failed > 0) {
+      ElMessage.warning(
+        `批次 ${b.QueueCode} 已结束：成功 ${b.Completed}、失败 ${b.Failed}，失败明细见回执卡`,
+      )
+    } else {
+      ElMessage.success(`批次 ${b.QueueCode} 已完成，成功 ${b.Completed} 个文件`)
+    }
   }
 
   async init(): Promise<void> {
@@ -627,14 +643,11 @@ export class EnterpriseNormalizeLogic {
       this.planStale.value = true
       // 刷新范围（实例态 / 产物路径可能已变）
       await this.loadRange()
-      // ★★ 入队后**启动自动刷新** —— 后台在串行跑，用户不该靠反复点「刷新」来猜进度。
-      //    ⚠️ 只把**真正会执行**的（fill / regenerate）作为「完成判据」的观察对象 ——
-      //      被跳过的文件永远不会产生新留痕，算进去就永远等不到「完成」。
-      this.startAutoRefresh(
-        (r.Items ?? [])
-          .filter((i) => i.Action === 'fill' || i.Action === 'regenerate')
-          .map((i) => i.StandardFileCode),
-      )
+      // ★★ 入队后**启动批次进度轮询** —— 入口 = `batch/{QueueCode}`（服务端判完成 + 带失败明细）。
+      //    ⛔ 旧实现整树重拉 tree 并拿浏览器时钟比对留痕时间判完成：载荷大、拿不到失败明细，
+      //    时钟偏差 >10s 时判据永假（白轮满 10 分钟）。2026-10-10 P1 已修。
+      this.batchResult.value = null
+      this.startAutoRefresh(r.QueueCode)
     } catch (e) {
       ElMessage.error((e as Error).message)
     } finally {
@@ -669,7 +682,48 @@ export class EnterpriseNormalizeLogic {
     this.planResult.value = null
     this.planStale.value = true
     this.runResult.value = null
+    this.batchResult.value = null
     this.results.value = {}
+  }
+
+  // ════════════════════════ 批次取消 ════════════════════════
+
+  /**
+   * ★ **取消批次** —— 终止本批次未跑完的任务（`54` §5.2 端点 6）。
+   *
+   * ★ 为什么必须给入口：一个阶段几十份文件可能跑十几分钟；取消前同企业同阶段被
+   *   `ScopeKey` 幂等门锁住（连重跑都不行）⇒ 不可取消 = 一次误操作锁死十几分钟。
+   * ⛔ 已结束批次的取消会被后端**业务拒绝**（success=false）—— 由 API 层信封校验
+   *    统一抛错、在下方 catch 里展示，⛔ 不会出现「取消 0 个」的假成功。
+   */
+  async cancelBatch(): Promise<void> {
+    const queueCode = this.batchResult.value?.QueueCode || this.activeQueueCode
+    if (!queueCode) return
+
+    const ok = await confirmOrFalse(
+      `取消批次 ${queueCode}？未跑完的任务将被终止（已完成的保留产物与账本），取消后同企业同阶段才能重新入队。`,
+      '取消批次',
+      { type: 'warning', confirmButtonText: '确认取消', cancelButtonText: '继续执行' },
+    )
+    if (!ok) return
+
+    try {
+      const r = await cancelNormalize(queueCode)
+      this.stopAutoRefresh()
+      let msg = `已取消批次 ${queueCode}（终止 ${r.CancelledCount} 个任务）`
+      // ★ AuditWarning 非空 = 取消已生效但**审计链断了** —— 必须显式提示，⛔ 不能吞
+      if (r.AuditWarning) msg += `；⚠️ ${r.AuditWarning}`
+      ElMessage.success(msg)
+      // 终态回读一次拿最新计数（回读失败不致命，保留旧快照即可）
+      try {
+        this.batchResult.value = await fetchNormalizeBatch(queueCode)
+      } catch {
+        /* 保持旧快照 */
+      }
+      await this.loadRange()
+    } catch (e) {
+      ElMessage.error((e as Error).message)
+    }
   }
 
   // ════════════════════════ 单文件同步执行 ════════════════════════
@@ -688,7 +742,7 @@ export class EnterpriseNormalizeLogic {
 
     if (file.OutputPath) {
       const ok = await confirmOrFalse(
-        `「${file.FileName}」已经生成过一版产物，继续会**重新生成并覆盖**当前产物（旧值仍保留在取值账本里，可追溯）。是否继续？`,
+        `「${file.FileName}」已经生成过一版产物，继续会「重新生成并覆盖」当前产物（旧值仍保留在取值账本里，可追溯）。是否继续？`,
         '重新生成',
         { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消' },
       )

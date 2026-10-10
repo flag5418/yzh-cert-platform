@@ -34,7 +34,7 @@ public static class AnchorClassifier
         if (text.StartsWith(FillSyntax.AiPrefix, StringComparison.OrdinalIgnoreCase))
             return ("block", null);
 
-        if (text.StartsWith("table:", StringComparison.OrdinalIgnoreCase))
+        if (text.StartsWith(FillSyntax.TablePrefix, StringComparison.OrdinalIgnoreCase))
             return ("table", null);
 
         if (text.StartsWith(FillSyntax.SysPrefix, StringComparison.Ordinal))
@@ -58,8 +58,8 @@ public static class AnchorClassifier
 
         if (text.StartsWith(FillSyntax.AiPrefix, StringComparison.OrdinalIgnoreCase))
             return text[FillSyntax.AiPrefix.Length..];
-        if (text.StartsWith("table:", StringComparison.OrdinalIgnoreCase))
-            return text["table:".Length..];
+        if (text.StartsWith(FillSyntax.TablePrefix, StringComparison.OrdinalIgnoreCase))
+            return text[FillSyntax.TablePrefix.Length..];
         if (text.StartsWith(FillSyntax.SysPrefix, StringComparison.Ordinal))
             return text[1..];
         return text;

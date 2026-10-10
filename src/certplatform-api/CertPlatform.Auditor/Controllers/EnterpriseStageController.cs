@@ -11,14 +11,14 @@ using YZH.Core.Stand.Models.Result;
 using CertPlatform.Auditor.Services;
 using CertPlatform.Auditor.Services.Ent;
 using CertPlatform.Admin.Entities.Cert;
-using CertPlatform.Admin.Entities.Sys;
+using CertPlatform.Shared.Entities.Sys;
 using YZH.Core.Api.Models.System;
 
 using Ent = CertPlatform.Shared.Entities.Cert.Enterprise;
 using Stage = CertPlatform.Shared.Entities.Cert.CertStage;
 using Std = CertPlatform.Shared.Entities.Cert.ISOStandard;
-using OrgStage = CertPlatform.Admin.Entities.Sys.CertOrgStage;
-using OrgStd = CertPlatform.Admin.Entities.Sys.CertOrgStandard;
+using OrgStage = CertPlatform.Shared.Entities.Sys.CertOrgStage;
+using OrgStd = CertPlatform.Shared.Entities.Sys.CertOrgStandard;
 using Dict = YZH.Core.Api.Models.System.Sys_Dictionary;
 using DictItem = YZH.Core.Api.Models.System.Sys_DictionaryList;
 

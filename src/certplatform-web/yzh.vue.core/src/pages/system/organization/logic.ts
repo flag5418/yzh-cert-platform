@@ -20,6 +20,7 @@
 
 import { ElMessage } from 'element-plus'
 import { TreeTableCore, type TreeNode, type YzhAction } from '@yzh-core'
+import type { YzhFormField } from '@yzh-core'
 
 /** 管理端可维护的机构类型：仅「部门/文件夹」层级由本页面手工维护 */
 const MANAGED_ORG_TYPE = 'Dept'
@@ -220,6 +221,102 @@ export class OrgPageLogic extends TreeTableCore<any> {
     })
     this.treeDialogVisible.value = true
     return true
+  }
+
+  /**
+   * 覆写树节点弹窗：编辑模式下定位父节点并写入 treeParentNode，
+   * 让弹窗 prepend 区域正确显示「上级机构：XXX」（基类编辑时写 null 会显示「根级」）。
+   */
+  override openTreeNodeDialog(node: TreeNode | null = null, parent: TreeNode | null = null): boolean {
+    const result = super.openTreeNodeDialog(node, parent)
+    if (!result || !node) return result
+
+    // 编辑模式：按 node.ParentCode 在已加载的树中定位父节点
+    const parentCode = node.ParentCode
+    if (parentCode) {
+      const found = this.findNodeInTree(this.treeData, parentCode)
+      this.treeParentNode.value = found
+    } else {
+      this.treeParentNode.value = null
+    }
+    return result
+  }
+
+  /**
+   * 覆写树节点表单字段：为 ParentCode 提供 TreeSelect 所需的机构树 options。
+   * 编辑模式下排除自身及其子孙（防止把节点移到自己的子树下形成环）。
+   */
+  override get treeFormFields(): YzhFormField[] {
+    const fields = super.treeFormFields
+    return fields.map((f) => {
+      if (f.prop !== 'ParentCode') return f
+      const editingCode = this.treeDialogMode.value === 'edit'
+        ? this.treeEditingNode.value?.Code
+        : null
+      // 收集编辑节点及其所有子孙的 Code（防环）
+      const excludeCodes = new Set<string>()
+      if (editingCode) {
+        excludeCodes.add(editingCode)
+        this.collectDescendantCodes(this.treeData, editingCode, excludeCodes)
+      }
+      return {
+        ...f,
+        type: 'treeSelect',
+        options: this.buildOrgTreeOptions(excludeCodes),
+      }
+    })
+  }
+
+  /**
+   * 构建机构树 TreeSelect 选项（value=Code / label=Name）。
+   * @param excludeCodes 排除的节点 Code 集合（编辑时排除自身 + 子孙，防环）
+   */
+  private buildOrgTreeOptions(excludeCodes: Set<string>): any[] {
+    const convert = (nodes: TreeNode[]): any[] =>
+      nodes
+        .filter((n) => !excludeCodes.has(n.Code))
+        .map((n) => ({
+          value: n.Code,
+          label: n.Name,
+          children: n.Children?.length ? convert(n.Children) : undefined,
+        }))
+    return convert(this.treeData)
+  }
+
+  /** 收集指定节点及其所有子孙的 Code（递归） */
+  private collectDescendantCodes(nodes: TreeNode[], targetCode: string, acc: Set<string>): boolean {
+    for (const n of nodes) {
+      if (n.Code === targetCode) {
+        this.collectAllCodes(n, acc)
+        return true
+      }
+      if (n.Children?.length && this.collectDescendantCodes(n.Children, targetCode, acc)) {
+        return true
+      }
+    }
+    return false
+  }
+
+  /** 收集节点及其所有子孙的 Code */
+  private collectAllCodes(node: TreeNode, acc: Set<string>): void {
+    acc.add(node.Code)
+    if (node.Children?.length) {
+      for (const child of node.Children) {
+        this.collectAllCodes(child, acc)
+      }
+    }
+  }
+
+  /** 在树数据中按 Code 查找节点（递归） */
+  private findNodeInTree(nodes: TreeNode[], code: string): TreeNode | null {
+    for (const n of nodes) {
+      if (n.Code === code) return n
+      if (n.Children?.length) {
+        const found = this.findNodeInTree(n.Children, code)
+        if (found) return found
+      }
+    }
+    return null
   }
 
   constructor() {

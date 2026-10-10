@@ -1,4 +1,5 @@
 using CertPlatform.Shared.Services.Fill;
+using CertPlatform.Shared.Services.Sys;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CertPlatform.Shared;
@@ -70,6 +71,13 @@ public static class CertPlatformSharedServiceExtensions
         //     · AnalyzeForQueueAsync（队列口径）→ 下沉
         //     · GenerateAsync / TestAsync（工作台交互）→ ⛔ 留 Admin
         //   ⛔ 不要整体搬（会把后台专用变共用），也不要整体留（双端各抄一份口径 = D1 模式重演）。
+
+        // ────────────────────────────────────────────────────────────────
+        // Shared/Services/Sys/ —— 站内消息
+        // ────────────────────────────────────────────────────────────────
+        // ★ 2026-10-10 消息推送链路（P2a）：cert_message 落库（三端共用，队列终态通知走这里）。
+        //   实时通道是框架能力（IYzhMessagePusher），不在本类。Scoped（持 IDbOrm）。
+        services.AddScoped<CertMessageService>();
 
         return services;
     }

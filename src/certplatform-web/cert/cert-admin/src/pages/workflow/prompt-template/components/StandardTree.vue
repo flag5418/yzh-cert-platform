@@ -95,7 +95,10 @@ const treeData = computed<TreeNode[]>(() => {
 
   // 按 Category → FamilyCode 分组标准
   const byCatFam = new Map<string, Map<string, StandardOptionDto[]>>()
-  const unrecognizedCat = new Map<string, StandardOptionDto[]>()   // 字典外的 Category
+  // ⚠️ 值类型必须与 byCatFam 一致（运行期两个分支存的都是 Map<string, StandardOptionDto[]>）——
+  //   原注解写成 StandardOptionDto[] 是**说谎的类型**：vue-tsc 按它推断 target 为联合类型
+  //   ⇒ .has/.set/.get 全部 TS2339，且 buildFamilyNodes(famGroup) 收到错误静态类型。
+  const unrecognizedCat = new Map<string, Map<string, StandardOptionDto[]>>()   // 字典外的 Category
   const uncategorized: StandardOptionDto[] = []                     // Category 为空
 
   for (const s of props.standards) {

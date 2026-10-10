@@ -136,13 +136,12 @@ public class WorkspaceContextService
     ///         另有业务编号 <c>CbCode</c> = <c>CB001</c></description></item>
     ///   <item><term>专家工作区</term>
     ///         <description><c>Sys_Organization</c>（<c>OrgType='VirtualOrg'</c>）<c>.Code</c> = <c>66bbf572…</c>，
-    ///         其 <c>OrgCode</c> 字段存的是<b>认证机构的 <c>CbCode</c></b>（<c>CB001</c>）</description></item>
+    ///         其 <c>OrgCode</c> 字段存的是<b>认证机构的 <c>Code</c>（GUID）</b>（<c>906e8b2a…</c>）</description></item>
     ///   <item><term>企业</term>
     ///         <description><c>cert_enterprise.OrgCode</c> = <b>工作区 Code</b>（<c>66bbf572…</c>）</description></item>
     /// </list>
     ///
-    /// <para><b>桥</b>：<c>工作区.Code</c> → <c>工作区.OrgCode</c> → <c>CertificationBody.CbCode</c>
-    /// → <c>CertificationBody.Code</c>。</para>
+    /// <para><b>桥</b>：<c>工作区.Code</c> → <c>工作区.OrgCode</c>（= 认证机构 Code）→ 直接使用。</para>
     ///
     /// <para><b>★ 为什么放这里而不是各处自己写</b>：本方法原先只存在于
     /// <c>EnterpriseFileService.NormalizeOrgCodeAsync</c>（私有）。参数定义、目录模板、
@@ -161,16 +160,22 @@ public class WorkspaceContextService
         var self = await _db.GetOneAsync<CertificationBody>(x => x.Code == orgCode);
         if (self.Data != null) return orgCode;
 
-        // ② 是机构树节点 → 取其业务编号 → 反查认证机构
+        // ② 是机构树节点 → 取 OrgCode → 尝试直接当认证机构 Code 匹配
+        //    ★ 修复后 OrgCode 直接存认证机构 Code（GUID），优先按此匹配
         var node = await _db.GetOneAsync<Sys_Organization>(x => x.Code == orgCode);
-        var bizCode = node.Data?.OrgCode;
-        if (!string.IsNullOrWhiteSpace(bizCode))
+        var orgCodeValue = node.Data?.OrgCode;
+        if (!string.IsNullOrWhiteSpace(orgCodeValue))
         {
-            var byBiz = await _db.GetOneAsync<CertificationBody>(x => x.CbCode == bizCode);
+            // 标准格式：OrgCode = 认证机构 Code（GUID）
+            var byCode = await _db.GetOneAsync<CertificationBody>(x => x.Code == orgCodeValue);
+            if (byCode.Data?.Code != null) return byCode.Data.Code;
+
+            // 兼容历史遗留：OrgCode = CbCode（业务编号）
+            var byBiz = await _db.GetOneAsync<CertificationBody>(x => x.CbCode == orgCodeValue);
             if (byBiz.Data?.Code != null) return byBiz.Data.Code;
         }
 
-        // ③ 传进来的直接就是业务编号（CbCode）
+        // ③ 传进来的直接就是业务编号（CbCode，极端兜底）
         var legacy = await _db.GetOneAsync<CertificationBody>(x => x.CbCode == orgCode);
         return legacy.Data?.Code ?? orgCode;
     }

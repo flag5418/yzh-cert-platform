@@ -77,13 +77,13 @@ namespace CertPlatform.Admin.Entities.Wf
         /// <summary>删除时间（DB: DeleteTime）</summary>
         public DateTime? DeleteTime { get; set; }
 
-        // === ITreeEntity 实现（字典项为扁平结构，不落库） ===
+        // === ITreeEntity 实现 ===
 
-        /// <summary>父节点编码（树扁平恒为 null；字典项表无此列）</summary>
-        [SugarColumn(IsIgnore = true)]
+        /// <summary>父节点编码（DB: ParentCode）。根级分类 = null，子级分类 = 父级分类的 DicValue。</summary>
+        [SugarColumn(ColumnName = "ParentCode", IsNullable = true)]
         public string? ParentCode { get; set; } = null;
 
-        /// <summary>是否叶子节点（框架批量计算，非持久化；扁平分类恒为 true）</summary>
+        /// <summary>是否叶子节点（框架 FillIsLeafBatch 按 ParentCode 查子级数量计算）</summary>
         [SugarColumn(IsIgnore = true)]
         public bool? IsLeaf { get; set; }
     }

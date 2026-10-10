@@ -36,6 +36,7 @@
           <span class="auditor-layout__page-title">{{ pageTitle }}</span>
         </div>
         <div class="auditor-layout__header-right">
+          <MessageBell />
           <el-dropdown>
             <span class="auditor-layout__user">
               {{ displayName }}
@@ -84,6 +85,9 @@ import { onMenuChanged } from '@yzh-core/composables/useMenuChanged'
 import { filterMenuTreeByTag } from '@yzh-core/utils/menu'
 import YzhMenuNode from '@yzh-core/layouts/components/YzhMenuNode.vue'
 import type { SysMenu } from '@yzh-core/api/system/menu'
+import MessageBell from '@share/components/MessageBell/MessageBell.vue'
+import { yzhPush } from '@yzh-core/api/push'
+import { handleForceLogout } from '@yzh-core/api/push'
 
 const route = useRoute()
 const router = useRouter()
@@ -137,15 +141,23 @@ function handleLogout() {
 
 // 订阅菜单变更：菜单管理页 notifyMenuChanged 后侧栏强刷（force 绕过 loaded 缓存）
 let stopMenuWatch: (() => void) | null = null
+let offLogout: (() => void) | null = null
 onMounted(() => {
   loadMenus()
+  yzhPush.connect()
+  offLogout = yzhPush.on('logout', (msg) => {
+    handleForceLogout(msg.message)
+  })
   stopMenuWatch = onMenuChanged(() => {
     loadMenus(true)
   })
 })
 onUnmounted(() => {
+  yzhPush.disconnect()
   stopMenuWatch?.()
+  offLogout?.()
   stopMenuWatch = null
+  offLogout = null
 })
 </script>
 
