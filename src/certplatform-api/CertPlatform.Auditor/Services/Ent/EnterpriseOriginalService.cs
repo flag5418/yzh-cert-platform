@@ -2150,6 +2150,10 @@ namespace CertPlatform.Auditor.Services.Ent
                     SourceType = "enterprise_original",
                     // uk_source(SourceType, SourceId) 唯一：文件 Code + 毫秒时间戳 ⇒ 同文件多轮不撞
                     SourceId = $"file:{f.Code}@{DateTime.Now:yyyyMMddHHmmssfff}",
+                    // ★ CreateBy 存用户 Code（契约）—— 此前这个入口根本没传创建人，
+                    //   导致终态通知（站内信 + SignalR）无收件人而静默跳过
+                    UserCode = _user.UserCode,
+                    UserName = _user.UserName,
                     // 持文件锁：转换段独占该行；取消/完成时由框架统一释放
                     ResourceLocks = new List<QueueManager.ResourceLockItem>
                     {

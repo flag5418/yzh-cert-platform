@@ -42,7 +42,8 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
         /// <param name="llm">AI 调用器（DI 注入）</param>
         /// <param name="ct">取消令牌</param>
         public static async Task<SkillResult> ExecuteAsync(
-            [SkillParam(Description = "锚点编码")]
+            [SkillParam(Description = "锚点编码",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string anchor_code,
 
             [SkillParam(Description = "这个格子要填什么（模板里这一项的填写说明）",
@@ -53,16 +54,20 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
                         BindMode = SkillParamBindMode.LinkOrConstant)]
             string? enterprise_docs = null,
 
-            [SkillParam(Description = "提示词编码 cert_doc_fill_prompt.PromptCode；空=用内置默认模板")]
+            [SkillParam(Description = "提示词编码 cert_doc_fill_prompt.PromptCode；空=用内置默认模板",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? prompt_code = null,
 
-            [SkillParam(Description = "值类型：text/number/date/bool（★ 来自锚点属性，不由 AI 猜）")]
+            [SkillParam(Description = "值类型：text/number/date/bool（★ 来自锚点属性，不由 AI 猜）",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string value_kind = "text",
 
-            [SkillParam(Description = "Excel 数字/日期格式串（.NET 方言），如 #,##0.00")]
+            [SkillParam(Description = "Excel 数字/日期格式串（.NET 方言），如 #,##0.00",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? number_format = null,
 
-            [SkillParam(Description = "机构编码（空=只命中全局提示词）")]
+            [SkillParam(Description = "机构编码（空=只命中全局提示词）",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? org_code = null,
 
             [FromService] IDbOrm db = null!,

@@ -31,7 +31,6 @@ admin	MENU_00213	/business/workflow-rules
 admin	MENU_00108	/system/log
 admin	MENU_00209	/business/report-def
 admin	MENU_00109	/system/config
-auditor	MENU_AUD_01	/overview
 auditor	MENU_AUD_02	/enterprises
 auditor	MENU_AUD_07	/enterprise-stages
 auditor	MENU_AUD_10	/enterprise-fill-params
@@ -43,5 +42,4 @@ auditor	MENU_AUD_09	/report-results
 auditor	MENU_AUD_04	/resources
 auditor	MENU_AUD_11	/enterprise-original
 auditor	MENU_AUD_12	/enterprise-normalize
-auditor	MENU_AUD_05	/organization
-auditor	MENU_AUD_06	/settings
+auditor	MENU_AUD_14	/enterprise-review

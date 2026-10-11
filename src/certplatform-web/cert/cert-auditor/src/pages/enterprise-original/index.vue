@@ -324,7 +324,7 @@ onBeforeUnmount(() => { stopPolling() })
                      ⛔ 不再各判一套：原来上表只判两态、文件夹树判七态，
                      同一份文件在页面上下两处显示不同状态 = 用户报的「显示的信息不正确」之一 -->
                 <template #column-ExtractState="{ row }">
-                  <el-tooltip v-if="statusTip(row)" :content="statusTip(row)" placement="top">
+                  <el-tooltip v-if="statusTip(row)" :content="statusTip(row)" placement="top" :show-after="1000">
                     <span>
                       <el-tag size="small" :type="statusOf(row).type">{{ statusOf(row).text }}</el-tag>
                     </span>

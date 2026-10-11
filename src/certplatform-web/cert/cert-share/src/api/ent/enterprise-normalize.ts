@@ -28,6 +28,7 @@
  *    前端 `unwrapOk` 抛 `BizError`，页面按「业务拒绝」处理（弹红 + 页面持久展示原因）。
  */
 import { yzhApi, unwrapOk, type ApiResponse } from '@yzh-core'
+import { downloadBlob } from '@share/utils/download'
 
 const BASE = '/api/Auditor/EnterpriseNormalize'
 
@@ -894,6 +895,20 @@ export const VALUE_STATUS_TEXT: Record<string, string> = {
   removed: '已清空',
 }
 
+/**
+ * 锚点取值状态 → 徽标语义色（`YzhStatusBadge` 的 type）。
+ *
+ * ⚠️ `pending` / `kept_as_is` 都用 `warning` 而不是 `danger`：
+ *   它们是**设计内的正常结果**（模板里有可选锚点、企业没填值），
+ *   报红会让审核员以为「跑挂了」。真正异常的是 `Status=failed`（在文件级）。
+ */
+export const VALUE_STATUS_TYPE: Record<string, string> = {
+  filled: 'success',
+  pending: 'warning',
+  kept_as_is: 'warning',
+  removed: 'info',
+}
+
 /** 干跑动作 → 人话 */
 export const PLAN_ACTION_TEXT: Record<string, string> = {
   fill: '将规范化',
@@ -1044,4 +1059,238 @@ export function toPercent(v: unknown): number {
   if (!Number.isFinite(n) || n <= 0) return 0
   if (n >= 1) return 100
   return Math.round(n * 100)
+}
+
+// ═══════════════════════ 六、任务列表 / 任务文件清单 / 打包导出 ═══════════════════════
+//
+// ★★ 2026-10-11 用户裁决：`/enterprise-normalize` **拆成两个页面** ——
+//   ① 「企业资料规范化」= 任务列表 + 向导（开任务）→ 本组 `tasks` / `task-files`
+//   ② 「企业资料审核」= 左树右表（企业 › 阶段 › 任务）+ 统一导出 → 本组 `package`
+//
+// ★ 术语对齐：**「任务」= `yzh_queue` 里一条 `enterprise_normalize` 批次**
+//   （`QueueCode` 即任务号）。⛔ 不是专家任务系统的 `cert_expert_task`
+//   —— 那是 NC 检查 / 报告生成，另一套表、另一个页面。
+//
+// ★★ 显示口径（用户原话）：「我们当前就不用理会所有的标准文档，
+//   我们只考虑标准文档中已经设置规则的」⇒ **界面只呈现结果**，
+//   ⛔ 不显示「标准域共 N 份 / 其中 M 份配了规则」这类内部计数。
+
+/**
+ * 规范化任务一行（= `yzh_queue` 一条 `enterprise_normalize` 批次）。
+ *
+ * ★ `EnterpriseName` / `StageName` / `OperatorName` **后端已解析成人话** ——
+ *   查不到主数据时回落「未登记企业（短码）」，⛔ 不会是一串裸 GUID
+ *   （2026-10-09 报障的教训：用户看到 GUID 会判定「系统坏了」而非「数据缺了」）。
+ */
+export interface NormalizeTaskRow {
+  /** 任务号 = 批次号（`yzh_queue.QueueCode`） */
+  QueueCode: string
+  QueueName: string
+  EnterpriseCode: string
+  EnterpriseName: string
+  StageCode: string
+  StageName: string
+  /** `pending` / `running` / `completed` / `failed` / `cancelled` */
+  Status: string
+  /** ★ 是否已到终态 —— 前端据此停止轮询（⛔ 不按 `Status` 字符串猜） */
+  IsFinished: boolean
+  Total: number
+  Completed: number
+  Failed: number
+  Cancelled: number
+  Processing: number
+  Pending: number
+  /** 进度 0~100 */
+  Progress: number
+  /** ⚠️ **本地时间**（后端 `DateTime.Now`）—— JSON 无 `Z`，按本地解析才对 */
+  StartTime: string | null
+  /** ⚠️ 同 `StartTime`：本地时间 */
+  EndTime: string | null
+  /** ★ **UTC**（`BaseEntity.CreateTime`）—— JSON 带 `Z`，与上面两个**基准不同** */
+  CreateTime: string | null
+  CreateBy: string
+  OperatorName: string
+}
+
+/** 任务列表返回（分页） */
+export interface NormalizeTaskListResult {
+  Rows: NormalizeTaskRow[]
+  /** 满足筛选条件的**总条数**（⛔ 不是本页条数） */
+  Total: number
+}
+
+/** 任务下的单份文件结果（= `cert_doc_fill_log` 一行 + 队列任务状态） */
+export interface NormalizeTaskFileRow {
+  /** 标准域行 Code（= 队列任务的 `TaskId`） */
+  StandardFileCode: string
+  /** ★ 标准文档名（来自标准域行；行已删除时回落产物路径尾段） */
+  FileName: string
+  /**
+   * ★ 所属文件夹 Code（→ `cert_standard_directory_folder.Code`）；空 = 未挂文件夹。
+   *
+   * ⚠️ 别拿它当树的 key —— 一份文件夹下会有多份文档，且**多个任务聚合**时
+   *   同一文件夹会出现多次。树节点 key 由前端自己拼（见 `ReviewFileTreeNode.Code`）。
+   */
+  FolderCode: string
+  /**
+   * ★★ **人话目录路径**，`/` 分隔、**含最顶层文件夹名**
+   * （如 `CS…13485体系材料/4记录文件/质量类`）。空 = 未挂文件夹 ⇒ 当顶层叶子。
+   *
+   * ★ 树形右表就是按它拆段拼出来的（⛔ 前端不查目录接口，一次请求搞定）。
+   *
+   * ⚠️ **含根文件夹名是有意的**：根算不算噪声是**展示**决策，由页面开关
+   *   （`HIDE_ROOT_FOLDER`）决定，后端只给「原样事实」，⛔ 不替调用方裁剪 ——
+   *   否则哪天要显示根，就得改后端 + 重建 + 重启。
+   */
+  FolderPath: string
+  /** 目录层数（= `FolderPath` 的段数）；0 = 未挂文件夹 */
+  FolderDepth: number
+  /** ★ 留痕 Code —— 审核抽屉拿它读取值账本（`values?fillLogCode=`） */
+  FillLogCode: string
+  /** `success` / `partial` / `failed` / `running` / `cancelled` */
+  Status: string
+  /** 执行器写入的人话说明（失败时是**唯一**的解释来源） */
+  Message: string
+  /** 完成率 0~1 */
+  Completion: number
+  /** 加权可信度 0~1 */
+  Confidence: number
+  AnchorCount: number
+  /** 待办数（>0 ⇒ 必须给「为什么」入口，⛔ 不能只给数字） */
+  PendingCount: number
+  Verified: boolean
+  /** 产物路径（MinIO）；空 = 本次未产文件 */
+  OutputPath: string
+  /** 留痕时间（★ UTC，带 `Z`） */
+  FillTime: string | null
+  DurationMs: number
+  /** 待办明细（含可操作归因） */
+  Pendings: NormalizePending[]
+}
+
+/** 任务文件清单返回（审核页右表） */
+export interface NormalizeTaskFilesResult {
+  QueueCode: string
+  EnterpriseCode: string
+  StageCode: string
+  /** 本批次的文件行数 */
+  Total: number
+  /** 其中「已产出产物」的行数（= 可导出 / 可审核的对象） */
+  Filled: number
+  Rows: NormalizeTaskFileRow[]
+}
+
+/**
+ * 任务列表 —— `GET tasks`。
+ *
+ * ★ 供**任务列表页**与**向导第 2 步（历史任务重跑）**共用。
+ * ⚠️ 企业与阶段是**查询期解析**（后端从 `ScopeKey` 拆），⛔ 不是列过滤。
+ */
+export async function fetchNormalizeTasks(params?: {
+  enterpriseCode?: string | null
+  stageCode?: string | null
+  status?: string | null
+  page?: number
+  rows?: number
+}): Promise<NormalizeTaskListResult> {
+  const res = await yzhApi.get<ApiResponse<NormalizeTaskListResult>>(`${BASE}/tasks`, {
+    enterpriseCode: params?.enterpriseCode ?? undefined,
+    stageCode: params?.stageCode ?? undefined,
+    status: params?.status ?? undefined,
+    page: params?.page ?? 1,
+    rows: params?.rows ?? 20,
+  })
+  return unwrapOk<NormalizeTaskListResult>(res, '查询规范化任务失败')
+}
+
+/**
+ * 任务下的文件清单 —— `GET task-files`（审核页右表）。
+ *
+ * @throws BizError 缺少任务号 / 任务不存在 / 不属于「企业资料规范化」
+ */
+export async function fetchNormalizeTaskFiles(queueCode: string): Promise<NormalizeTaskFilesResult> {
+  const res = await yzhApi.get<ApiResponse<NormalizeTaskFilesResult>>(`${BASE}/task-files`, {
+    queueCode,
+  })
+  return unwrapOk<NormalizeTaskFilesResult>(res, '查询任务文件清单失败')
+}
+
+/** 统一打包导出入参 */
+export interface NormalizePackageRequest {
+  EnterpriseCode: string
+  /** 空 = 该企业**全部阶段** */
+  StageCode?: string | null
+  /** 空 = 该范围内全部已规范化的产物；非空 = 只导这些标准域行 */
+  StandardFileCodes?: string[] | null
+}
+
+/**
+ * ★ **统一打包导出** —— `POST package`，把「已规范化」的产物打成 ZIP 直接下载。
+ *
+ * ★★ 为什么用 `postBlob` 而不是 `yzhApi.download`：导出接口在**业务失败时**
+ *   仍按平台契约返回 **HTTP 200 + JSON 信封**，`download()` 只判 `res.ok`，
+ *   会把错误体当文件存下来（用户拿到一个内容是 `{"success":false…}` 的 .zip）。
+ *   `postBlob` 内建按 `Content-Type` 分流 ⇒ JSON 时抛错。
+ *
+ * ⚠️ 端点名是 `package` 而非 `export`：基类 `YzhControllerBase<T>` 已占用
+ *   `[HttpPost("export")]`，同名会让两个 action 命中同一路由 ⇒
+ *   `AmbiguousMatchException` ⇒ HTTP 500（**编译期完全看不出来**）。
+ *
+ * ★ 文件名由调用方给（后端 `Content-Disposition` 里的中文名会退化成 ASCII 兜底，
+ *   解析不可靠；调用方本来就知道企业/阶段，直接拼更稳）。
+ *
+ * @throws Error 业务拒绝（该范围内还没有已规范化的文档）/ 导出失败
+ */
+export async function packageNormalize(
+  req: NormalizePackageRequest,
+  fileName: string,
+): Promise<void> {
+  const { blob } = await yzhApi.postBlob(`${BASE}/package`, {
+    EnterpriseCode: req.EnterpriseCode,
+    StageCode: req.StageCode ?? null,
+    StandardFileCodes: req.StandardFileCodes ?? null,
+  })
+  downloadBlob(blob, fileName.endsWith('.zip') ? fileName : `${fileName}.zip`)
+}
+
+/** 任务状态（`yzh_queue.Status`）→ 人话 */
+export const TASK_STATUS_TEXT: Record<string, string> = {
+  pending: '排队中',
+  running: '执行中',
+  completed: '已完成',
+  failed: '执行失败',
+  cancelled: '已取消',
+}
+
+/** 任务状态 → 徽标语义色（`YzhStatusBadge` 的 type） */
+export const TASK_STATUS_TYPE: Record<string, string> = {
+  pending: 'info',
+  running: 'warning',
+  completed: 'success',
+  failed: 'danger',
+  cancelled: 'info',
+}
+
+/**
+ * 文件级状态 → 人话。
+ *
+ * ⚠️ 与 `LOG_STATUS_TEXT`（「上次成功 / 上次部分完成」）**刻意不同**：
+ *   那一份讲的是**最近一次填充留痕**，本份讲的是**本任务里这一份的成败**。
+ *   复用同一份文案会让审核页出现「上次成功」这种指代不明的标签。
+ */
+export const TASK_FILE_STATUS_TEXT: Record<string, string> = {
+  success: '已生成',
+  partial: '部分完成',
+  failed: '失败',
+  running: '执行中',
+  cancelled: '已取消',
+}
+
+/** 文件级状态 → 徽标语义色 */
+export const TASK_FILE_STATUS_TYPE: Record<string, string> = {
+  success: 'success',
+  partial: 'warning',
+  failed: 'danger',
+  running: 'info',
+  cancelled: 'info',
 }

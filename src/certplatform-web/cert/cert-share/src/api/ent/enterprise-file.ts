@@ -500,7 +500,13 @@ export interface HistoryItem {
   OpType: string
   VersionNumber?: number | null
   Detail?: string | null
+  /**
+   * 操作人用户 Code（= `cert_enterprise_file_op_log.CreateBy`，契约：存 Code）
+   * ⚠️ ⛔ 不要直接当人名渲染（会显示成 `df6e03e9…`）—— 用 `CreateByName`
+   */
   CreateBy?: string | null
+  /** ★ 后端已解析的操作人姓名（解析不到 = 后端回落 `CreateBy` 原值） */
+  CreateByName?: string | null
   Time?: string | null
 }
 

@@ -149,6 +149,31 @@ const ORPHAN_ALLOW = new Set([
   //   菜单侧只需 `MENU_AUD_03`（/tasks）一条。
   'auditor:/tasks/create',
   'auditor:/tasks/:code',
+  // ── 专家端 · 企业资料规范化向导（2026-10-11）──
+  // 理由：`/enterprise-normalize/create` 是「企业资料规范化 `/enterprise-normalize`」的
+  //   **子页面**（开任务的向导，版式对齐 `/tasks/create`），不是独立功能入口。
+  //   入口在列表页工具栏「创建规范化任务」，以及行按钮「重新执行」（带 `?from=`）。
+  //   菜单侧只需 `MENU_AUD_12`（/enterprise-normalize）一条；
+  //   审核页 `/enterprise-review` 是**独立功能**，有自己的菜单 `MENU_AUD_14`，⛔ 不在此登记。
+  'auditor:/enterprise-normalize/create',
+  // ── 专家端 · **刻意停用**的三个菜单（2026-10-11 用户已裁决，✅ 不再是「待裁决」）──
+  // ★ 用户原话：「菜单是故意的，因为有些菜单现在没有实现，我故意禁用了」。
+  // 事实：`Sys_Menu` 里 MENU_AUD_01(/overview) / MENU_AUD_05(/organization) /
+  //   MENU_AUD_06(/settings) 的 `IsValid = 0`（**人工停用**，对应页面尚未实现）；
+  //   `sync_menu_urls.sh` 只导 `IsValid = 1` ⇒ 这三条不在 `menu-urls.tsv` 里 ⇒
+  //   在守卫看来是「没有菜单入口的孤儿路由」。**这是期望状态，不是缺陷。**
+  // ⚠️ 与 `20260923_auditor_menu_seed_V1.sql` 的关系：该脚本里这三行原本是
+  //   `IsValid = 1`，且 `ON DUPLICATE KEY UPDATE` 带 `IsValid = VALUES(IsValid)`
+  //   ⇒ **每次重跑都会把人工停用冲回启用**（用户报障：「改了菜单、跑一次 SQL 又被还原」）。
+  //   已修：脚本 VALUES 改为 `IsValid = 0` 且覆盖子句**不再动** `IsValid`，
+  //   回潮由后端守卫 `B-R6` 拦截。⇒ 本段登记**长期有效**，⛔ 不需要「改回 1」。
+  // ⛔ 页面文件与路由**保留**（不是死代码）：功能实现后只要在库里把 `IsValid` 置 1
+  //   （或改脚本 VALUES 后重跑）即可启用，无需重新接线。
+  // ⚠️ 遗留待办（属产品决定，⛔ 不在本守卫范围）：`cert-auditor/src/router/index.ts`
+  //   的 `redirect: '/overview'` 指向的正是被停用页 ⇒ 登录后落地页没有菜单高亮。
+  'auditor:/overview',
+  'auditor:/organization',
+  'auditor:/settings',
 ])
 
 /** 从路由源文件抽取「绝对 path」集合（相对子路由按 shell 前缀 '/' 归一） */

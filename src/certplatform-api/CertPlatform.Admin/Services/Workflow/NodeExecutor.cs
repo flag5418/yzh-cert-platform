@@ -102,6 +102,9 @@ namespace CertPlatform.Admin.Services.Workflow
                         "branch" => ExecuteBranch(node, resolvedInputs, sharedOutputs),
                         "docfield" => await ExecuteDocFieldAsync(node, taskCode, contextParams, ct),
                         "doctable" => await ExecuteDocTableAsync(node, taskCode, contextParams, ct),
+                        // ★ 特殊节点（2026-10-11 用户裁定）：配置期选「标准 + 阶段 + 标准文件」，
+                        //   执行期的企业/标准/阶段由 start 注入的上下文提供 —— 普通 skill 表达不了。
+                        "is_std_file_missing" => await ExecuteStdFileMissingAsync(node, taskCode, itemCode, contextParams, ct),
                         "skill" => await ExecuteSkillAsync(node, taskCode, itemCode, resolvedInputs, ct),
                         _ => throw new NotSupportedException($"不支持的节点类型: {node.NodeType}")
                     };
@@ -122,6 +125,10 @@ namespace CertPlatform.Admin.Services.Workflow
             catch (WorkflowDataMissingException ex)
             {
                 // ★★★ 2026-09-30 语义异常【必须穿透】（裁决：执行期空值 ⇒ 自动失败 + 落缺口）
+                //
+                // ⚠️ 2026-10-11 后续裁定：docField / docTable **不再抛**本异常（改为返回空值，
+                //    分流交给 is_empty + branch）。此 catch 分支**保留**，供后续特殊节点
+                //    （如 is_std_file_missing）在「确实应自动失败」时复用。
                 //
                 //   为什么不能吞：WorkflowDataMissingException 带 8 个结构化属性
                 //   （DataKind/DataCode/Reason/RuleCode/StandardFileCode/EnterpriseCode/
@@ -171,7 +178,9 @@ namespace CertPlatform.Admin.Services.Workflow
             foreach (var (portName, rawValue) in inputs)
             {
                 var inputType = inputTypes?.GetValueOrDefault(portName);
-                resolved[portName] = ResolveInputValue(rawValue, inputType, sharedOutputs, contextParams);
+                // ★ targetPort 必须传下去 —— 上游输出是「多键字典」时靠它决定取哪个键
+                //   （2026-10-11 用户裁定 A：确立 result 主输出约定）
+                resolved[portName] = ResolveInputValue(rawValue, inputType, sharedOutputs, contextParams, portName);
             }
 
             return resolved;
@@ -184,11 +193,13 @@ namespace CertPlatform.Admin.Services.Workflow
         /// <param name="inputType">输入类型："link" / "constant" / null（未知）</param>
         /// <param name="sharedOutputs">已执行节点输出池</param>
         /// <param name="contextParams">上下文参数</param>
+        /// <param name="targetPort">本端口的名字 —— 上游输出为多键字典时，优先取同名键（见 <see cref="PickFromOutput"/>）</param>
         private object? ResolveInputValue(
             string? rawValue,
             string? inputType,
             Dictionary<string, object> sharedOutputs,
-            Dictionary<string, object> contextParams)
+            Dictionary<string, object> contextParams,
+            string? targetPort = null)
         {
             if (string.IsNullOrEmpty(rawValue))
                 return null;
@@ -213,11 +224,7 @@ namespace CertPlatform.Admin.Services.Workflow
                 if (sharedOutputs != null && sharedOutputs.TryGetValue(rawValue, out var output))
                 {
                     if (output is Dictionary<string, object> outputDict)
-                    {
-                        if (outputDict.Count == 1)
-                            return outputDict.Values.First();
-                        return outputDict;
-                    }
+                        return PickFromOutput(outputDict, targetPort);
                     return output;
                 }
 
@@ -242,17 +249,47 @@ namespace CertPlatform.Admin.Services.Workflow
             if (sharedOutputs != null && sharedOutputs.TryGetValue(rawValue, out var output2))
             {
                 if (output2 is Dictionary<string, object> outputDict2)
-                {
-                    if (outputDict2.Count == 1)
-                        return outputDict2.Values.First();
-                    return outputDict2;
-                }
+                    return PickFromOutput(outputDict2, targetPort);
                 return output2;
             }
 
             // 4. 既不是 constant: 也不是已执行节点 → 作为原始字符串返回
             _logger.LogWarning("输入值 '{RawValue}' 无法解析为常量或已执行节点输出，作为原始字符串使用", rawValue);
             return rawValue;
+        }
+
+        /// <summary>
+        /// 从上游节点的**输出字典**里取出「本端口真正要的那个值」。
+        ///
+        /// <para><b>为什么需要它</b>（★ 2026-10-11 用户裁定 A）：连线在
+        /// <c>useWorkflowStore.connect()</c> 里只把**源节点 ID** 写进 <c>inputs[targetHandle]</c>
+        /// （源端口名被丢弃），而所有 skill / docField / docTable 的输出都 ≥3 个键
+        /// ⇒ 旧逻辑（<c>Count == 1</c> 才拆包）等于「**永远整包传**」，
+        /// 下游 skill 拿到的是一个字典 ⇒ 例如 <c>docField → is_empty</c> 会被判成「有值」（错）。</para>
+        ///
+        /// <para><b>取值优先级</b>：</para>
+        /// <list type="number">
+        /// <item>目标端口名在字典里 → 取该键（最精确，如 <c>assembled_text</c> / <c>result</c>）</item>
+        /// <item>字典有 <c>result</c> → 取 <c>result</c>（★ <b>项目事实上的「主输出」约定</b>：
+        ///       <c>ExecuteBranch</c>、<c>WorkflowTestController</c>、<c>WorkflowInterpreter</c> 都认它）</item>
+        /// <item>字典只有一个键 → 取唯一值（保留旧行为）</item>
+        /// <item>都不满足 → 返回整个字典（兜底，⛔ 不再抛错）</item>
+        /// </list>
+        /// </summary>
+        private static object? PickFromOutput(Dictionary<string, object> dict, string? targetPort)
+        {
+            if (dict == null || dict.Count == 0) return dict;
+
+            if (!string.IsNullOrEmpty(targetPort) && dict.TryGetValue(targetPort, out var byPort))
+                return byPort;
+
+            if (dict.TryGetValue("result", out var byResult))
+                return byResult;
+
+            if (dict.Count == 1)
+                return dict.Values.First();
+
+            return dict;
         }
 
         // ── 各节点类型执行逻辑 ──
@@ -372,28 +409,35 @@ namespace CertPlatform.Admin.Services.Workflow
             var field = await _resolver.GetFieldAsync(
                 enterpriseCode, ruleCode, fieldCode, standardCode, stageCode);
 
-            // ★★★ 空值守卫：取不到【可用值】⇒ 自动失败 + 提示「缺失必要数据」。
-            //   三态（has_value / is_empty / not_found）由 Resolver 判定。
-            if (field.State == EmptyJudge.StateNotFound)
-                throw new WorkflowDataMissingException("field", fieldCode, "not_found",
-                    $"缺失必要数据：字段「{field.FieldName ?? fieldCode}」没有提取记录，无法执行判定，请先补录（或确认提取规则已配置并跑过提取）",
-                    ruleCode: ruleCode,
-                    enterpriseCode: enterpriseCode, standardCode: standardCode, stageCode: stageCode);
-
-            if (field.State == EmptyJudge.StateIsEmpty)
-                throw new WorkflowDataMissingException("field", fieldCode, "is_empty",
-                    $"缺失必要数据：字段「{field.FieldName ?? fieldCode}」的值为空，无法执行判定，请先补录",
-                    standardFileCode: field.StandardFileCode,
-                    ruleCode: ruleCode,
-                    enterpriseCode: enterpriseCode, standardCode: standardCode, stageCode: stageCode);
-
+            // ★★★ 2026-10-11 用户裁定：取不到【可用值】不再抛异常，改为**返回空值**。
+            //
+            //   为什么改（原为 2026-09-30「自动失败 + 落缺口」）：
+            //   docField/docTable 是「**取数**」动作，判空是「**判断**」动作 —— 两者正交。
+            //   抛异常 ⇒ 一次字段缺失就让**整个任务项 failed**，规则作者**无法**用 branch 分流
+            //   （例如「字段空 ⇒ 判 NC 不合规」）。改为返回空值后：
+            //     取数节点（docField/docTable）→ is_empty（判空 skill）→ branch（分流）
+            //   ⚠️ 代价：WorkflowDataMissingException 不再抛出 ⇒ 页面「缺失必要数据 · 去补录」
+            //      红徽标（DATA_MISSING）在 docField/docTable 路径上**不再出现**。
+            //      异常类与其 catch 分支保留（is_std_file_missing 等特殊节点后续可能复用）。
+            //
+            //   ⛔⛔ 必须返回 **null**，不能透出 <c>field.RawValue</c>：
+            //      StateIsEmpty 时 RawValue 是**占位符原文**（"-" / "待填写" / "N/A" …），
+            //      而 IsEmptySkill 的判空口径**不认占位符** ⇒ 原样透出会让 is_empty 误判为「有值」。
+            var hasValue = field.State == EmptyJudge.StateHasValue;
             var confidence = (double?)(field.Confidence ?? 0m) ?? 0d;
+            // 有值 ⇒ 原值；无值（is_empty / not_found）⇒ null（供 is_empty 判定）
+            object? fieldValue = hasValue ? (field.RawValue ?? string.Empty) : null;
 
             _wfLogger.DocFieldResult(field.RawValue, confidence, source);
 
             return new Dictionary<string, object>
             {
-                ["fieldValue"] = field.RawValue ?? string.Empty,
+                ["fieldValue"] = fieldValue!,
+                // ★ result = 主输出（2026-10-11 裁定 A）：连线只传节点 ID ⇒ 下游靠 result 取到「这一个值」
+                ["result"]     = fieldValue!,
+                // ★ 显式暴露三态，便于规则作者 / 排障区分「没提取记录」与「提取到了但为空」
+                ["hasValue"]   = hasValue,
+                ["dataState"]  = field.State,
                 ["confidence"] = confidence,
                 ["source"]     = source,
                 // ★★ 溯源三元组（2026-09-30 B4 修复）
@@ -445,22 +489,13 @@ namespace CertPlatform.Admin.Services.Workflow
             var table = await _resolver.GetTableAsync(
                 enterpriseCode, ruleCode, tableCode, standardCode, stageCode);
 
-            // ★★★ 空值守卫：无记录 / 空表 ⇒ 自动失败 + 提示「缺失必要数据」
-            if (table.State == EmptyJudge.StateNotFound)
-                throw new WorkflowDataMissingException("table", tableCode, "not_found",
-                    $"缺失必要数据：表格「{tableCode}」没有提取记录，无法执行判定，请先补录（或确认提取规则已配置并跑过提取）",
-                    ruleCode: ruleCode,
-                    enterpriseCode: enterpriseCode, standardCode: standardCode, stageCode: stageCode);
-
-            if (table.State == EmptyJudge.StateIsEmpty)
-                throw new WorkflowDataMissingException("table", tableCode, "is_empty",
-                    $"缺失必要数据：表格「{tableCode}」没有有效数据行，无法执行判定，请先补录",
-                    standardFileCode: table.StandardFileCode,
-                    ruleCode: ruleCode,
-                    enterpriseCode: enterpriseCode, standardCode: standardCode, stageCode: stageCode);
-
-            var rows = ParseTableRows(table);
-            var confidence = (double?)(table.Confidence ?? 0m) ?? 0d;
+            // ★★★ 2026-10-11 用户裁定：无记录 / 空表 ⇒ **返回空表**，⛔ 不再抛异常。
+            //   口径与 docField 完全一致（取数与判空正交，分流交给 is_empty + branch）。
+            //   ⛔⛔ 必须返回 **空列表 + rowCount=0**，不能透出 StateIsEmpty 时解析出的
+            //      「全空单元格行」（实测 [{"item":"","value":""}]）—— 那样 is_empty 会判成「有值」。
+            var hasValue = table.State == EmptyJudge.StateHasValue;
+            var rows = hasValue ? ParseTableRows(table) : new List<object>();
+            var confidence = hasValue ? ((double?)(table.Confidence ?? 0m) ?? 0d) : 0d;
 
             _wfLogger.DocTableResult(rows.Count, confidence, source);
 
@@ -468,6 +503,11 @@ namespace CertPlatform.Admin.Services.Workflow
             {
                 ["rows"]      = rows,
                 ["rowCount"]  = rows.Count,
+                // ★ result = 主输出（2026-10-11 裁定 A）：连线只传节点 ID ⇒ 下游靠 result 取到「这个表格」
+                ["result"]    = rows,
+                // ★ 显式暴露三态，便于规则作者 / 排障区分「没提取记录」与「提取到了但为空」
+                ["hasValue"]  = hasValue,
+                ["dataState"] = table.State,
                 ["confidence"] = confidence,
                 ["source"]    = source,
                 // ★★ 溯源三元组（2026-09-30 B4 修复）—— 同 docfield
@@ -558,6 +598,94 @@ namespace CertPlatform.Admin.Services.Workflow
             // 补充元数据
             if (skillResult.Confidence.HasValue)
                 output["confidence"] = skillResult.Confidence.Value;
+
+            return output;
+        }
+
+        /// <summary>
+        /// is_std_file_missing 节点：判断「企业是否缺少某个标准目录要求的文件」。
+        ///
+        /// <para><b>为什么是特殊节点而不是普通 skill</b>（2026-10-11 用户裁定）：
+        /// 配置期必须能<b>按标准 + 阶段挑一个标准文件</b>（下拉选，⛔ 不是手输 GUID），
+        /// 而执行期所需的 <c>enterprise_code</c> / <c>standard_code</c> / <c>stage_code</c>
+        /// <b>配置期根本不知道</b>（由 start 节点在运行时注入）。
+        /// 普通 skill 的参数只能来自画布连线或常量输入 ⇒ 表达不了这个语义。</para>
+        ///
+        /// <para><b>参数来源</b>：
+        ///   · <c>standard_file_code</c> ← 节点 config（面板里选中的标准文件 = 模板行的 Code）
+        ///   · <c>enterprise_code</c> ← start 注入的上下文</para>
+        ///
+        /// <para>⛔ <b>刻意不传 <c>standard_code</c> / <c>stage_code</c></b>：
+        /// <see cref="IsStdFileMissingSkill"/> 里这两个参数是「<b>附加过滤</b>」语义
+        /// （<c>IsNullOrWhiteSpace(x) || 相等</c>），而 <c>standard_file_code</c> 本身
+        /// 已是模板行的 GUID（全局唯一）⇒ 二次过滤没有任何收益，反而一旦上下文的
+        /// <c>standardCode</c> 口径（业务码 <c>iso9001</c> vs GUID）与表列不一致，
+        /// 就会把<b>本来命中的行整批滤掉</b>，静默退化成 <c>not_configured</c>。
+        /// 配置期的「标准 + 阶段」只用于<b>筛选下拉选项</b>，不参与执行期判定。</para>
+        ///
+        /// <para><b>输出</b>：沿用 <see cref="IsStdFileMissingSkill"/> 的四态
+        /// （<c>uploaded</c> / <c>not_required</c> / <c>placeholder_only</c> / <c>not_configured</c>）。
+        /// 其中 <c>result</c>(bool) 是<b>主输出</b> —— 可直接连 <c>branch</c> 的 <c>condition</c> 端口
+        /// （<c>ExecuteBranch</c> 只认这个键）。</para>
+        ///
+        /// <para>⚠️ <c>not_configured</c> 时 <c>result=true</c>（视为「不可用」，保守）——
+        /// 它表达的是「<b>标准目录没配这个文件要求</b>」，与「企业没交」是两回事，
+        /// 界面上靠 <c>state</c> 区分，规则作者需要分流时按 <c>state</c> 判而不是 <c>result</c>。</para>
+        /// </summary>
+        private async Task<Dictionary<string, object>> ExecuteStdFileMissingAsync(
+            WorkflowNodeConfig node,
+            string taskCode,
+            string itemCode,
+            Dictionary<string, object> contextParams,
+            CancellationToken ct)
+        {
+            const string skillCode = "is_std_file_missing";
+
+            var standardFileCode = node.Config?.GetValueOrDefault("standardFileCode")?.ToString() ?? "";
+            if (string.IsNullOrWhiteSpace(standardFileCode))
+                throw new InvalidOperationException(
+                    $"is_std_file_missing 节点 {node.NodeId} 缺少 standardFileCode 配置（请在右侧面板选择标准文件）");
+
+            // ★ 与 docField / docTable 同口径：企业从上下文取，取不到回落虚拟企业（样例数据路径）
+            var enterpriseCode = contextParams?.GetValueOrDefault("enterpriseCode")?.ToString() ?? "";
+            if (string.IsNullOrWhiteSpace(enterpriseCode))
+                enterpriseCode = YzhVirtualEnterprise.Code;
+
+            // ⛔ 不传 standard_code / stage_code（见方法注释：二次过滤会静默滤掉正确行）
+            var inputs = new Dictionary<string, object>
+            {
+                ["standard_file_code"] = standardFileCode,
+                ["enterprise_code"]    = enterpriseCode
+            };
+
+            _wfLogger.SkillExec(skillCode, "ExecuteAsync");
+
+            var context = new SkillContext
+            {
+                Inputs = inputs,
+                WorkflowInstanceId = $"{taskCode}:{itemCode}",
+                NodeId = node.NodeId
+            };
+
+            var skillResult = await _skillRegistry.ExecuteAsync(skillCode, context, ct);
+
+            _wfLogger.SkillResult(skillResult.Success, skillResult.Outputs);
+
+            if (!skillResult.Success)
+                throw new InvalidOperationException($"Skill '{skillCode}' 执行失败: {skillResult.Error}");
+
+            var output = new Dictionary<string, object>();
+            foreach (var kv in skillResult.Outputs)
+            {
+                output[kv.Key] = kv.Value;
+            }
+
+            if (skillResult.Confidence.HasValue)
+                output["confidence"] = skillResult.Confidence.Value;
+
+            // ★ 主输出约定：result 必须是 bool，供 branch 直连（ExecuteBranch 只认这个键）
+            if (!output.ContainsKey("result"))
+                output["result"] = false;
 
             return output;
         }

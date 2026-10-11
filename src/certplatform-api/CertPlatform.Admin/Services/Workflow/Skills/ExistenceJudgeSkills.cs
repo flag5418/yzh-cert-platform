@@ -134,13 +134,13 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     public static class IsFieldEmptySkill
     {
         public static async Task<SkillResult> ExecuteAsync(
-            [SkillParam(Description = "字段编码 field_code", BindMode = SkillParamBindMode.LinkOrConstant)]
+            [SkillParam(Description = "字段编码 field_code", BindMode = SkillParamBindMode.ConstantOnly)]
             string? field_code,
 
-            [SkillParam(Description = "企业编码（空=虚拟企业样例数据）", BindMode = SkillParamBindMode.LinkOrConstant)]
+            [SkillParam(Description = "企业编码（空=虚拟企业样例数据）", BindMode = SkillParamBindMode.ConstantOnly)]
             string? enterprise_code,
 
-            [SkillParam(Description = "文件编码（可选，文件级过滤）", BindMode = SkillParamBindMode.LinkOrConstant)]
+            [SkillParam(Description = "文件编码（可选，文件级过滤）", BindMode = SkillParamBindMode.ConstantOnly)]
             string? file_code,
 
             [FromService] IDbOrm db = null!,
@@ -235,13 +235,13 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     public static class IsTableEmptySkill
     {
         public static async Task<SkillResult> ExecuteAsync(
-            [SkillParam(Description = "表格编码 table_code", BindMode = SkillParamBindMode.LinkOrConstant)]
+            [SkillParam(Description = "表格编码 table_code", BindMode = SkillParamBindMode.ConstantOnly)]
             string? table_code,
 
-            [SkillParam(Description = "企业编码（空=虚拟企业样例数据）", BindMode = SkillParamBindMode.LinkOrConstant)]
+            [SkillParam(Description = "企业编码（空=虚拟企业样例数据）", BindMode = SkillParamBindMode.ConstantOnly)]
             string? enterprise_code,
 
-            [SkillParam(Description = "文件编码（可选，文件级过滤）", BindMode = SkillParamBindMode.LinkOrConstant)]
+            [SkillParam(Description = "文件编码（可选，文件级过滤）", BindMode = SkillParamBindMode.ConstantOnly)]
             string? file_code,
 
             [FromService] IDbOrm db = null!,

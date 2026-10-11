@@ -292,16 +292,16 @@ VALUES
   ('MENU_AUD_11', 'MENU_AUD_00', '企业原始资料管理', NULL, 'Folder',
    '企业散乱原始资料上传 → 转 PDF/Markdown → 语义分析 → L3 画像',
    450, '/enterprise-original', NOW(), 'seed_enterprise_original', 'auditor', 0, 1)
+-- ⛔ 刻意**不**覆盖 `MenuName` / `IsValid` —— 人工可改列，重跑会静默冲掉人工改名与停用
+--    （实测症状：「改了菜单、跑一次 SQL 又被还原」2026-10-11）。守卫 `B-R6` 拦回潮。
 ON DUPLICATE KEY UPDATE
-  `ParentCode` = VALUES(`ParentCode`),
-  `MenuName`   = VALUES(`MenuName`),
-  `Icon`       = VALUES(`Icon`),
-  `Description`= VALUES(`Description`),
-  `OrderNo`    = VALUES(`OrderNo`),
-  `Url`        = VALUES(`Url`),
-  `Tag`        = VALUES(`Tag`),
-  `IsDeleted`  = 0,
-  `IsValid`    = 1;
+    `ParentCode` = VALUES(`ParentCode`),
+    `Icon`       = VALUES(`Icon`),
+    `Description`= VALUES(`Description`),
+    `OrderNo`    = VALUES(`OrderNo`),
+    `Url`        = VALUES(`Url`),
+    `Tag`        = VALUES(`Tag`),
+    `IsDeleted`  = 0;
 
 INSERT IGNORE INTO `Sys_RoleMenu` (`Id`, `RoleCode`, `MenuCode`, `OrderNo`, `CreateTime`, `CreateBy`)
 VALUES

@@ -10,6 +10,7 @@
 import { reactive } from 'vue'
 import { NodeIdGenerator } from '@share/composables/workflow/nodeIdGenerator'
 import { getSpecialNode, type SpecialNodeMeta, type PortDef } from '@share/composables/workflow/specialNodes'
+import { normalizePorts } from '@share/composables/workflow/portNormalize'
 
 export interface WorkflowNode {
   id: string
@@ -97,8 +98,11 @@ export function useWorkflowStore(): WorkflowStore {
 
     const nodeId = state.idGenerator.next(classCode)
     const title = generateUniqueName(meta?.className || item.skillName || item.skillCode || classCode)
-    const inputPorts = item.inputPorts?.length ? item.inputPorts : (meta?.inputPorts || [])
-    const outputPorts = item.outputPorts?.length ? item.outputPorts : (meta?.outputPorts || [])
+    // ★ 端口字段名归一化（2026-10-11）：item 来自 WorkflowDesigner.loadSkills，
+    //   其 inputPorts 源自后端 metadata（PascalCase）⇒ 不归一化会让 port.name 为 undefined，
+    //   buildDefaultInputs 读不到 defaultValue、落库端口带大写键。详见 portNormalize.ts
+    const inputPorts = normalizePorts(item.inputPorts?.length ? item.inputPorts : (meta?.inputPorts || []))
+    const outputPorts = normalizePorts(item.outputPorts?.length ? item.outputPorts : (meta?.outputPorts || []))
 
     const node: WorkflowNode = {
       id: nodeId, classCode, nodeType: meta ? classCode : 'skill', title,
@@ -260,6 +264,9 @@ export function useWorkflowStore(): WorkflowStore {
     if (classCode === 'docField') { config.docCode = ''; config.fieldCode = '' }
     if (classCode === 'docTable') { config.docCode = ''; config.tableCode = '' }
     if (classCode === 'ai_node') { config.prompt = ''; config.jsonMode = true }
+    // ★ 标准文件缺失节点：标准/阶段只用于筛选下拉（⛔ 不参与执行期判定），
+    //   standardFileCode 才是执行期真正用的（= 标准目录模板行的 Code）
+    if (classCode === 'is_std_file_missing') { config.standardCode = ''; config.stageCode = ''; config.standardFileCode = '' }
     return config
   }
 

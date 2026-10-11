@@ -4,7 +4,7 @@
       <div class="inspector-section">
         <div class="inspector-section-header">
           <span class="inspector-section-title">基础信息</span>
-          <el-tooltip v-if="nodeDescription" :content="nodeDescription" placement="left"><el-icon class="help-icon"><Warning /></el-icon></el-tooltip>
+          <el-tooltip v-if="nodeDescription" :content="nodeDescription" placement="left" :show-after="1000"><el-icon class="help-icon"><Warning /></el-icon></el-tooltip>
         </div>
         <div class="inspector-field"><div class="inspector-label">节点名称</div><el-input v-model="form.title" size="small" @change="applyChanges" /></div>
         <div class="inspector-field"><div class="inspector-label">节点描述</div><el-input v-model="form.description" type="textarea" :rows="2" size="small" placeholder="说明该节点在此工作流中的作用，供专家追溯时理解" @change="applyChanges" /></div>
@@ -15,7 +15,7 @@
         <div class="inspector-section-header"><span class="inspector-section-title">输入端口 (INPUTS)</span></div>
         <div v-for="port in visibleInputPorts" :key="port.name" class="inspector-field">
           <div class="inspector-label"><span>{{ port.label || port.name }}</span><el-tag v-if="port.required" size="small" type="danger" effect="plain">REQ</el-tag></div>
-          <div v-if="port.description" class="port-desc">{{ port.description }}</div>
+          <div v-if="port.description && port.description !== (port.label || port.name)" class="port-desc">{{ port.description }}</div>
           <PortControl :key="`port_${port.name}_${form._updateTick || 0}`" :model-value="getInputValue(port.name)" :bind-mode="port.bindMode || 'LinkOrConstant'" :enum-source="port.enumSource" :linkable-nodes="linkableNodes.map((n: any) => ({ id: n.id, label: n.title || n.id }))" :input-type="getInputType(port.name)" :placeholder="getPortPlaceholder(port)" @update:model-value="(v: any) => setInputValue(port.name, v)" @update:input-type="(v: string) => setInputType(port.name, v)" @link-node="({ sourceNodeId }: any) => onLinkNode(port.name, sourceNodeId)" />
         </div>
       </div>
@@ -35,6 +35,12 @@
             <el-input v-if="field.type === 'textarea'" v-model="panelFieldValues[field.field]" type="textarea" :rows="field.rows || 3" size="small" @change="applyPanelField(field)" />
             <el-select v-else-if="field.type === 'doc-select'" v-model="panelFieldValues[field.field]" size="small" style="width: 100%" @change="(v: string) => onDocSelect(field.field, v)"><el-option v-for="d in docList" :key="d.ruleCode || d.RuleCode" :label="d.fileName || d.FileName || d.standardFileCode || d.StandardFileCode" :value="d.ruleCode || d.RuleCode" /></el-select>
             <el-select v-else-if="field.type === 'field-select'" v-model="panelFieldValues[field.field]" size="small" style="width: 100%" :disabled="!panelFieldValues['config.ruleCode']" @change="applyPanelFields"><el-option v-for="f in fieldList" :key="f.fieldCode" :label="f.fieldName" :value="f.fieldCode" /></el-select>
+            <!-- ★ 2026-10-11 补：table-select 此前**没有任何渲染分支** ⇒ docTable 的「表格」下拉只显示 label、选不了 -->
+            <el-select v-else-if="field.type === 'table-select'" v-model="panelFieldValues[field.field]" size="small" style="width: 100%" :disabled="!panelFieldValues['config.ruleCode']" @change="applyPanelFields"><el-option v-for="t in tableList" :key="t.tableCode" :label="t.tableName" :value="t.tableCode" /></el-select>
+            <!-- ★ 2026-10-11：is_std_file_missing 特殊节点的三级联动（标准 → 阶段 → 标准文件） -->
+            <el-select v-else-if="field.type === 'std-select'" v-model="panelFieldValues[field.field]" size="small" style="width: 100%" placeholder="选择标准" @change="(v: string) => onStdSelect(v)"><el-option v-for="s in stdStandardOptions" :key="s.code" :label="s.name" :value="s.code" /></el-select>
+            <el-select v-else-if="field.type === 'stage-select'" v-model="panelFieldValues[field.field]" size="small" style="width: 100%" placeholder="选择阶段（可留空）" clearable :disabled="!panelFieldValues['config.standardCode']" @change="(v: string) => onStageSelect(v)"><el-option v-for="p in stdStageOptions" :key="p.code" :label="p.name" :value="p.code" /></el-select>
+            <el-select v-else-if="field.type === 'std-file-select'" v-model="panelFieldValues[field.field]" size="small" style="width: 100%" placeholder="选择标准文件" filterable :disabled="!panelFieldValues['config.standardCode']" @change="applyPanelFields"><el-option v-for="f in stdFileOptions" :key="f.code" :label="f.name" :value="f.code" /></el-select>
             <el-switch v-else-if="field.type === 'switch'" v-model="panelFieldValues[field.field]" @change="applyPanelFields" />
             <el-slider v-else-if="field.type === 'slider'" v-model="panelFieldValues[field.field]" :min="field.min || 0" :max="field.max || 1" :step="field.step || 0.1" @change="applyPanelFields" />
           </div>
@@ -71,6 +77,7 @@
 <script setup lang="ts">
 import { YzhEmptyState } from '@yzh-core'
 import { getSpecialNode } from '@share/composables/workflow/specialNodes'
+import { normalizePorts } from '@share/composables/workflow/portNormalize'
 import { CircleCheck, InfoFilled, Warning } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, ref, watch } from 'vue'
@@ -79,10 +86,16 @@ import PromptRefEditor from './panels/PromptRefEditor.vue'
 
 const props = defineProps<{
   selectedNode?: any; skills?: any[]; docRules?: any[]; docFields?: any[]; docTables?: any[]; canvasNodes?: any[]
+  /** ★ is_std_file_missing 节点用：标准列表，每项 { code, name, stages: [{ code, name }] } */
+  stdStandards?: any[]
+  /** ★ is_std_file_missing 节点用：当前「标准 + 阶段」下的标准文件，每项 { code, name } */
+  stdFiles?: any[]
 }>()
 const emit = defineEmits<{
   'update-node': [data: any]; 'delete-node': [nodeId: string]; 'load-doc-fields': [ruleCode: string]
   'link-node': [data: any]; 'test-node': [data: any]; 'test-workflow': [data: any]; 'test-doc-extract': [data: any]
+  /** ★ 请求父组件按「标准 + 阶段」加载标准文件列表 */
+  'load-std-files': [data: { standardCode: string; stageCode: string }]
 }>()
 
 const form = ref<any>({ nodeId: '', nodeType: 'skill', title: '', description: '', skillCode: '', inputs: {}, outputs: {}, config: {}, inputPorts: [], outputPorts: [], inputTypes: {} })
@@ -100,6 +113,35 @@ const testable = computed(() => { if (specialMeta.value) return specialMeta.valu
 const visibleInputPorts = computed(() => (form.value.inputPorts || []).filter((p: any) => p.display !== 'hidden'))
 const visibleOutputPorts = computed(() => (form.value.outputPorts || []).filter((p: any) => p.display !== 'hidden' && p.role !== 'anchor'))
 const visiblePanelSchema = computed(() => specialMeta.value?.panelSchema || [])
+
+// ── ★ is_std_file_missing 三级联动（标准 → 阶段 → 标准文件，2026-10-11）──
+//   为什么要在前端选「标准 + 阶段」：后端 /StandardDirectory/std-files 支持按两者过滤，
+//   一个标准域下可能有上百个文件，不筛用户没法选。
+//   ⚠️ 这两个值**只用于筛选下拉**，⛔ 不参与执行期判定（执行期只认 standardFileCode + 上下文企业）。
+const stdStandardOptions = computed(() => props.stdStandards || [])
+const stdStageOptions = computed(() => {
+  const std = stdStandardOptions.value.find((s: any) => s.code === panelFieldValues.value['config.standardCode'])
+  return std?.stages || []
+})
+const stdFileOptions = computed(() => props.stdFiles || [])
+
+/** 换标准 ⇒ 清空阶段与已选文件，并请父组件按新标准重载文件列表 */
+function onStdSelect(standardCode: string) {
+  panelFieldValues.value['config.stageCode'] = ''
+  panelFieldValues.value['config.standardFileCode'] = ''
+  form.value.config = { ...form.value.config, standardCode: standardCode || '', stageCode: '', standardFileCode: '' }
+  emit('load-std-files', { standardCode: standardCode || '', stageCode: '' })
+  applyChanges()
+}
+
+/** 换阶段 ⇒ 清空已选文件（文件列表按「标准 + 阶段」重载） */
+function onStageSelect(stageCode: string) {
+  panelFieldValues.value['config.standardFileCode'] = ''
+  const standardCode = form.value.config?.standardCode || ''
+  form.value.config = { ...form.value.config, stageCode: stageCode || '', standardFileCode: '' }
+  emit('load-std-files', { standardCode, stageCode: stageCode || '' })
+  applyChanges()
+}
 
 const linkableNodes = computed(() => {
   const excludeTypes = new Set(['start', 'end', 'branch'])
@@ -141,7 +183,7 @@ function onLinkNode(portName: string, sourceNodeId: string | null) {
   else { emit('link-node', { portName, sourceNodeId, targetNodeId: form.value.nodeId }); inputValues.value[portName] = sourceNodeId; form.value.inputs = { ...form.value.inputs, [portName]: sourceNodeId } }
   applyChanges()
 }
-function getPortPlaceholder(port: any) { if (port.bindMode === 'Link') return '请在画布上连线'; if (port.bindMode === 'Enum') return '请选择'; return '输入常量或 {{n1.portName}}' }
+function getPortPlaceholder(port: any) { if (port.bindMode === 'Link') return '请在画布上连线'; if (port.bindMode === 'Enum') return '请选择'; if (port.bindMode === 'ConstantOnly') return '输入常量值'; return '输入常量或 {{n1.portName}}' }
 function applyPanelField(field: any) {
   const config = { ...form.value.config }; const parts = field.field.split('.')
   if (parts.length === 2 && parts[0] === 'config') config[parts[1]] = panelFieldValues.value[field.field]; else config[field.field] = panelFieldValues.value[field.field]
@@ -183,7 +225,11 @@ watch(() => props.selectedNode, (node: any) => {
     const currentNodeId = node.nodeId || node.id
     if (_lastNodeId === currentNodeId && form.value.title === node.title) return
     _lastNodeId = currentNodeId; _updateTick++
-    form.value = { nodeId: currentNodeId, nodeType: node.nodeType || 'skill', title: node.title || '', description: node.description || '', skillCode: node.skillCode || '', inputs: { ...(node.inputs || {}) }, outputs: { ...(node.outputs || {}) }, config: { ...(node.config || {}) }, inputPorts: [...(node.inputPorts || [])], outputPorts: [...(node.outputPorts || [])], inputTypes: { ...(node.inputTypes || {}) }, _branchEdges: node.branchEdges || [], _updateTick }
+    // ★ 端口字段名归一化（2026-10-11）：后端 metadata 返回 PascalCase（Name/Label/BindMode…），
+    //   而本组件与 PortControl 读小写（port.name / port.label / port.bindMode）。
+    //   不归一化 ⇒ 端口标题整片空白 + bindMode 失效（本该「仅常量」的参数被渲染成「选择上游节点」下拉）。
+    //   详见 composables/workflow/portNormalize.ts 的长注释。
+    form.value = { nodeId: currentNodeId, nodeType: node.nodeType || 'skill', title: node.title || '', description: node.description || '', skillCode: node.skillCode || '', inputs: { ...(node.inputs || {}) }, outputs: { ...(node.outputs || {}) }, config: { ...(node.config || {}) }, inputPorts: normalizePorts(node.inputPorts), outputPorts: normalizePorts(node.outputPorts), inputTypes: { ...(node.inputTypes || {}) }, _branchEdges: node.branchEdges || [], _updateTick }
     const vals: Record<string, any> = {}; const types: Record<string, string> = {}
     for (const port of form.value.inputPorts) {
       vals[port.name] = form.value.inputs[port.name] ?? ''
@@ -195,6 +241,8 @@ watch(() => props.selectedNode, (node: any) => {
     for (const field of schema) { const parts = field.field.split('.'); if (parts.length === 2 && parts[0] === 'config') pfv[field.field] = form.value.config[parts[1]] ?? field.defaultValue ?? ''; else pfv[field.field] = form.value.config[field.field] ?? field.defaultValue ?? '' }
     panelFieldValues.value = pfv; docList.value = props.docRules || []; fieldList.value = props.docFields || []; tableList.value = props.docTables || []
     if ((node.nodeType === 'docField' || node.nodeType === 'docTable') && (node.config?.ruleCode || node.config?.docCode)) emit('load-doc-fields', node.config.ruleCode || node.config.docCode)
+    // ★ 选中「标准文件缺失」节点时回填文件下拉（否则已配好的文件显示为空）
+    if (node.nodeType === 'is_std_file_missing' && node.config?.standardCode) emit('load-std-files', { standardCode: node.config.standardCode, stageCode: node.config.stageCode || '' })
   } else { _lastNodeId = null; form.value = { nodeId: '', nodeType: 'skill', title: '', skillCode: '', inputs: {}, outputs: {}, config: {}, inputPorts: [], outputPorts: [], inputTypes: {} }; inputValues.value = {}; inputTypes.value = {}; panelFieldValues.value = {} }
 }, { immediate: true })
 

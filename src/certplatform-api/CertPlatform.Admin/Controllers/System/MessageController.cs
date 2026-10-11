@@ -75,8 +75,12 @@ public class MessageController : ControllerBase
     }
 
     /// <summary>
-    /// 强制下线指定用户（按登录名推送 logout 事件，前端收到后弹窗确认并跳转登录页）。
+    /// 强制下线指定用户（前端收到 logout 事件后弹窗确认并跳转登录页）。
     /// 同时落一条 system 类型消息记录（IsRead=0），进入消息中心可见。
+    ///
+    /// <para>⚠️ <b>入参是登录名、内部一律换成用户 Code</b>（2026-10-11 统一）：
+    /// 人在界面上输入的只能是登录名，而落库与<b>推送分组都按 Code</b> ——
+    /// ⛔ 不能把登录名直接交给 <c>SendToUserAsync</c>（那会进一个没人在的分组且不报错）。</para>
     /// </summary>
     [HttpPost("force-logout")]
     public async Task<IActionResult> ForceLogout([FromBody] ForceLogoutRequest req)
@@ -85,10 +89,15 @@ public class MessageController : ControllerBase
         if (string.IsNullOrWhiteSpace(loginName))
             return Ok(ApiResponse<object?>.Fail("登录名不能为空"));
 
+        // 登录名 → 用户 Code（查不到就没什么可下线/可通知的）
+        var targetUserCode = await _messageService.ResolveUserCodeByLoginNameAsync(loginName);
+        if (string.IsNullOrWhiteSpace(targetUserCode))
+            return Ok(ApiResponse<object?>.Fail($"找不到用户：{loginName}"));
+
         // 落库（收件人 = 被强制下线者，Admin 操作留痕）
         var actedBy = GetUserCode() ?? "system";
-        await _messageService.CreateForLoginAsync(
-            loginName,
+        await _messageService.CreateForUserAsync(
+            targetUserCode,
             "系统强制下线",
             req?.Reason ?? "管理员强制下线",
             "system",
@@ -97,7 +106,7 @@ public class MessageController : ControllerBase
         // SignalR 推送（旁路：失败只记日志，不影响主流程）
         try
         {
-            await _pusher.SendToUserAsync(loginName, new YzhPushMessage
+            await _pusher.SendToUserAsync(targetUserCode, new YzhPushMessage
             {
                 Value = YzhPushValues.Logout,
                 Title = "系统通知",

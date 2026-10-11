@@ -1185,4 +1185,222 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
         /// <summary>留痕逐条（<b>倒序</b>：最近的在最前）</summary>
         public List<NormalizeActionDto> Items { get; set; } = new();
     }
+
+    // ════════════════════════════════════════════════════════════════════
+    //  任务列表 / 任务文件清单 / 统一导出（★ 2026-10-11 页面拆分新增）
+    //
+    //  ★ 口径（用户 2026-10-11 裁决）：界面**只认「已配填写规则」的标准文档**。
+    //    ⛔ 本组 DTO **刻意不带** <c>TotalFiles</c> / <c>FillableCount</c> 这类内部口径字段 ——
+    //    审核员不需要知道「标准域一共有 167 份、其中 2 份配了规则」，
+    //    看见了只会问「我明明传了 12 份，为什么只显示 1 份」。
+    //    ⇒ 范围收敛在 <see cref="DocumentFillOrchestrator"/> 与 <c>BuildScopeAsync</c> 里做，
+    //      **结果直接呈现**，过程不上界面。
+    //
+    //  ★ 术语对齐：**「任务」= <c>yzh_queue</c> 里一条 <c>enterprise_normalize</c> 批次**
+    //    （⛔ 不是专家任务系统的 <c>cert_expert_task</c> —— 那是 NC 检查 / 报告生成另一套）。
+    //    ⇒ 本组 DTO 的 <c>QueueCode</c> 即「任务号」。
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>规范化任务一行（= <c>yzh_queue</c> 一条 <c>enterprise_normalize</c> 批次）</summary>
+    public sealed class NormalizeTaskRow
+    {
+        /// <summary>任务号 = 批次号（<c>yzh_queue.QueueCode</c>）</summary>
+        public string QueueCode { get; set; } = string.Empty;
+
+        /// <summary>批次名（如「企业资料规范化 - 5 个文件」）</summary>
+        public string QueueName { get; set; } = string.Empty;
+
+        /// <summary>企业 Code（从 <c>ScopeKey</c> 解析；解析不出时为空串，⛔ 不猜）</summary>
+        public string EnterpriseCode { get; set; } = string.Empty;
+
+        /// <summary>
+        ///     企业名 —— <b>后端已解析成人话</b>：查得到主数据 = 企业名；
+        ///     查不到 = 「未登记企业（短码）」。
+        ///     <para>⚠️ ⛔ <b>绝不回退成裸 GUID</b>（2026-10-09 用户报障的教训：
+        ///     页面出现 GUID 时用户判断是「系统坏了」而不是「数据缺了」）。</para>
+        /// </summary>
+        public string EnterpriseName { get; set; } = string.Empty;
+
+        /// <summary>阶段 Code（从 <c>ScopeKey</c> 解析）</summary>
+        public string StageCode { get; set; } = string.Empty;
+
+        /// <summary>阶段名 —— 同 <see cref="EnterpriseName"/>：查不到 = 「未登记阶段（短码）」</summary>
+        public string StageName { get; set; } = string.Empty;
+
+        /// <summary><c>pending</c> / <c>running</c> / <c>completed</c> / <c>failed</c> / <c>cancelled</c></summary>
+        public string Status { get; set; } = string.Empty;
+
+        /// <summary>是否已到终态（前端据此停止轮询，⛔ 不让前端自己按字符串猜）</summary>
+        public bool IsFinished { get; set; }
+
+        public int Total { get; set; }
+        public int Completed { get; set; }
+        public int Failed { get; set; }
+        public int Cancelled { get; set; }
+        public int Processing { get; set; }
+        public int Pending { get; set; }
+
+        /// <summary>进度 0~100（整数）</summary>
+        public int Progress { get; set; }
+
+        /// <summary>
+        ///     开始时间 —— ⚠️ <b>本地时间</b>（<c>QueueManager</c> 写的是 <c>DateTime.Now</c>）
+        ///     ⇒ JSON 里<b>不带 <c>Z</c></b>，前端按本地解析才对。
+        /// </summary>
+        public DateTime? StartTime { get; set; }
+
+        /// <summary>结束时间 —— 同 <see cref="StartTime"/>：本地时间，⛔ 不带 <c>Z</c></summary>
+        public DateTime? EndTime { get; set; }
+
+        /// <summary>
+        ///     入队时间 —— ★ <b>UTC</b>（<c>BaseEntity.CreateTime</c> = <c>DateTime.UtcNow</c>）
+        ///     ⇒ JSON 里带 <c>Z</c>。
+        ///     <para>⚠️⚠️ <b>同一条记录里两个时间列基准不同</b>（实测差 8 小时）——
+        ///     混用会让页面显示 +8h，别照抄。</para>
+        /// </summary>
+        public DateTime? CreateTime { get; set; }
+
+        /// <summary>发起人 Code（= <c>yzh_queue.CreateBy</c>，契约：存 <c>Sys_User.Code</c>）</summary>
+        public string CreateBy { get; set; } = string.Empty;
+
+        /// <summary>
+        ///     发起人姓名（后端已解析）。
+        ///     <para>★ 2026-10-11：查不到时回落为「未登记用户（短码）」而<b>不再回落原值</b> ——
+        ///     原值自本次改造起就是 <b>Code</b>，直接显示等于把 <c>df6e03e9…</c> 当人名
+        ///     （与「未登记企业/阶段」同一口径）。</para>
+        /// </summary>
+        public string OperatorName { get; set; } = string.Empty;
+    }
+
+    /// <summary>任务列表返回（分页）</summary>
+    public sealed class NormalizeTaskListResult
+    {
+        public List<NormalizeTaskRow> Rows { get; set; } = new();
+
+        /// <summary>满足筛选条件的总条数（⛔ 不是本页条数）</summary>
+        public int Total { get; set; }
+    }
+
+    /// <summary>
+    ///     任务下的单份文件结果（= <c>cert_doc_fill_log</c> 一行）。
+    ///
+    ///     <para><b>★ 为什么用留痕表当数据源</b>：<c>batch/{queueCode}</c> 只回<b>计数 + 失败明细</b>，
+    ///     拿不到「这个批次到底跑了哪几份、各自什么结果」；而留痕表<b>一行 = 一次填充</b>，
+    ///     且带 <c>QueueCode</c> ⇒ 按批次号一查就是完整清单，⛔ 不必新增表。</para>
+    /// </summary>
+    public sealed class NormalizeTaskFileRow
+    {
+        /// <summary>标准域行 Code（= 队列任务的 <c>TaskId</c>）</summary>
+        public string StandardFileCode { get; set; } = string.Empty;
+
+        /// <summary>文件名（查标准域行带出；行已删除时回落产物路径尾段）</summary>
+        public string FileName { get; set; } = string.Empty;
+
+        // ════════════════════════════════════════════════════════════════════════
+        //  ★ 2026-10-11：目录层次三列 —— 审核页右表要显示「每个文档的层次结构」
+        //
+        //  ⛔ 判据 = 走 `cert_standard_directory_folder` 表（Code/ParentCode 逐级上溯），
+        //     **不是**切 `StandardDirectoryFile.FullPath` 字符串：
+        //     `FullPath` 是企业上传时写下的原始路径快照，实测有 NULL、有
+        //     `enterprise-documents` 前缀，**不代表标准目录层次**；
+        //     而模板行的 FullPath 恰好干净只是巧合，不能当契约用。
+        // ════════════════════════════════════════════════════════════════════════
+
+        /// <summary>所属文件夹 Code（→ <c>cert_standard_directory_folder.Code</c>）；空 = 该行未挂任何文件夹</summary>
+        public string FolderCode { get; set; } = string.Empty;
+
+        /// <summary>
+        ///     <b>人话目录路径</b>，`/` 分隔、<b>含最顶层文件夹名</b>（如
+        ///     <c>CS…13485体系材料/4记录文件/质量类</c>）。
+        ///     <para>空 = 未挂文件夹 ⇒ 前端把它当**顶层叶子**。</para>
+        ///     <para>⚠️ 含根文件夹名是**有意**的：根到底算不算噪声由前端决定
+        ///     （前端 `HIDE_ROOT_FOLDER` 一个开关即可去掉首段），
+        ///     后端保持「原样事实」，⛔ 不替调用方裁剪。</para>
+        /// </summary>
+        public string FolderPath { get; set; } = string.Empty;
+
+        /// <summary>目录层数（= <see cref="FolderPath"/> 的段数）；0 = 未挂文件夹</summary>
+        public int FolderDepth { get; set; }
+
+        /// <summary>★ 留痕 Code —— 审核页拿它去读取值账本（<c>values</c> / <c>value/{anchor}</c>）</summary>
+        public string FillLogCode { get; set; } = string.Empty;
+
+        /// <summary>
+        ///     文件级状态：<c>success</c> / <c>partial</c> / <c>failed</c> / <c>running</c> / <c>cancelled</c>。
+        ///     <para>⚠️ <b>不是</b> <c>yzh_queue_task.Status</c> 的原样透传 ——
+        ///     队列的 <c>completed</c> 里混着 <c>partial</c>（有待办）⇒ 后端已合判，
+        ///     见 <c>DescribeTaskFileStatus</c>。</para>
+        /// </summary>
+        public string Status { get; set; } = string.Empty;
+
+        /// <summary>执行器写入的人话说明</summary>
+        public string Message { get; set; } = string.Empty;
+
+        /// <summary>完成率 0~1（<c>cert_doc_fill_log.Completion</c>，decimal 原样）</summary>
+        public decimal Completion { get; set; }
+
+        /// <summary>加权可信度 0~1</summary>
+        public decimal Confidence { get; set; }
+
+        /// <summary>锚点总数</summary>
+        public int AnchorCount { get; set; }
+
+        /// <summary>待办数（&gt;0 ⇒ 必须给「为什么」入口，⛔ 不能只给数字）</summary>
+        public int PendingCount { get; set; }
+
+        /// <summary>自验收：无残留锚点且无残留标记</summary>
+        public bool Verified { get; set; }
+
+        /// <summary>产物路径（MinIO，<c>enterprise-documents/…</c>）；空 = 本次未产文件</summary>
+        public string OutputPath { get; set; } = string.Empty;
+
+        /// <summary>留痕时间（★ UTC，JSON 带 <c>Z</c>）</summary>
+        public DateTime? FillTime { get; set; }
+
+        /// <summary>耗时（毫秒）</summary>
+        public int DurationMs { get; set; }
+
+        /// <summary>待办明细（含可操作归因，来源 = <c>PendingsJson</c>；解析失败退化为空数组）</summary>
+        public List<OfficeFillPending> Pendings { get; set; } = new();
+    }
+
+    /// <summary>任务文件清单返回（审核页右表）</summary>
+    public sealed class NormalizeTaskFilesResult
+    {
+        public string QueueCode { get; set; } = string.Empty;
+        public string EnterpriseCode { get; set; } = string.Empty;
+        public string StageCode { get; set; } = string.Empty;
+
+        /// <summary>本批次的文件行数</summary>
+        public int Total { get; set; }
+
+        /// <summary>其中「已产出产物」的行数（= 可导出 / 可审核的对象）</summary>
+        public int Filled { get; set; }
+
+        public List<NormalizeTaskFileRow> Rows { get; set; } = new();
+    }
+
+    /// <summary>
+    ///     统一打包导出入参 —— <c>POST package</c>（按企业 + 阶段打包已规范化的产物）。
+    ///
+    ///     <para>⚠️ 端点名是 <c>package</c> 而非 <c>export</c>：基类 <c>YzhControllerBase&lt;T&gt;</c>
+    ///     已占用 <c>[HttpPost("export")]</c>（Excel 导出），同名会
+    ///     <c>AmbiguousMatchException</c> ⇒ HTTP 500（编译期无感）。
+    ///     命名沿用 `54` §5.2 端点 14。</para>
+    /// </summary>
+    public sealed class NormalizePackageRequest
+    {
+        /// <summary>企业 Code（必填）</summary>
+        public string EnterpriseCode { get; set; } = string.Empty;
+
+        /// <summary>阶段 Code（可选；空 = 该企业全部阶段）</summary>
+        public string? StageCode { get; set; }
+
+        /// <summary>
+        ///     只导这些标准域行（可选；空 = 该范围内**全部已规范化**的产物）。
+        ///     <para>★ 与 <c>plan</c> / <c>run</c> / <c>lock</c> 同口径：显式清单优先级最高，
+        ///     由前端展开后传入，⛔ 后端不重复实现一遍范围递归。</para>
+        /// </summary>
+        public List<string>? StandardFileCodes { get; set; }
+    }
 }

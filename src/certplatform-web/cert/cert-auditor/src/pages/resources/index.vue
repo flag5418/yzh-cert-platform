@@ -523,7 +523,9 @@ function onReplacePick(file: any) {
               {{ logic.opTypeText(h) }}
             </el-tag>
             <span v-if="h.VersionNumber" class="timeline-ver">v{{ h.VersionNumber }}</span>
-            <span v-if="h.CreateBy" class="timeline-by">{{ h.CreateBy }}</span>
+            <!-- ★ 操作人：显示后端解析后的姓名（`CreateByName`）。`CreateBy` 按契约存的是用户
+                 Code ⇒ ⛔ 直接渲染会把 `df6e03e9…` 当人名显示。 -->
+            <span v-if="h.CreateByName || h.CreateBy" class="timeline-by">{{ h.CreateByName || h.CreateBy }}</span>
           </div>
           <div v-if="h.Detail" class="timeline-detail">{{ h.Detail }}</div>
         </el-timeline-item>

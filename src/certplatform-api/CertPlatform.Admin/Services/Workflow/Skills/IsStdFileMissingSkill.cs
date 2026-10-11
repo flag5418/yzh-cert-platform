@@ -36,17 +36,21 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     {
         public static async Task<SkillResult> ExecuteAsync(
             [SkillParam(Description = "★标准文件要求编码（cert_standard_directory_file.StandardFileCode，如 SF-9001-7-5）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? standard_file_code,
 
-            [SkillParam(Description = "企业编码", BindMode = SkillParamBindMode.LinkOrConstant)]
+            [SkillParam(Description = "企业编码", BindMode = SkillParamBindMode.ConstantOnly)]
             string? enterprise_code,
 
-            [SkillParam(Description = "标准编码（可选，用于校验配置归属）", BindMode = SkillParamBindMode.LinkOrConstant)]
-            string? standard_code,
+            // ★ 2026-10-11 修：这两个参数描述写着「可选」，却**没有默认值** ⇒
+            //   SkillRegistry 按 ParameterInfo.HasDefaultValue 判必填 ⇒ 调用方不传就报
+            //   「缺少必填入参: standard_code, stage_code」，把「可选」变成了「必填」。
+            //   加 `= null` 让语义与描述一致（空 ⇒ 该维度不过滤，见下方 Where）。
+            [SkillParam(Description = "标准编码（可选，用于校验配置归属；空 = 不校验）", BindMode = SkillParamBindMode.ConstantOnly)]
+            string? standard_code = null,
 
-            [SkillParam(Description = "阶段编码（可选）", BindMode = SkillParamBindMode.LinkOrConstant)]
-            string? stage_code,
+            [SkillParam(Description = "阶段编码（可选；空 = 不校验）", BindMode = SkillParamBindMode.ConstantOnly)]
+            string? stage_code = null,
 
             [FromService] IDbOrm db = null!,
             CancellationToken ct = default)

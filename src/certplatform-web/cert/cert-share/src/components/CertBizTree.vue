@@ -53,7 +53,9 @@
             <el-icon class="cert-biz-tree__node-icon" :class="`is-${data.Type}`">
               <component :is="getNodeIcon(data.Type)" />
             </el-icon>
-            <span class="cert-biz-tree__node-label">{{ data.Name }}</span>
+            <el-tooltip :content="data.Name" placement="top" popper-class="cert-biz-tree-label-tip" :show-after="1000">
+              <span class="cert-biz-tree__node-label">{{ data.Name }}</span>
+            </el-tooltip>
             <slot name="node-extra" :node="data">
               <CertConvertBadge
                 v-if="showConvertBadge && data.Type === 'file' && badgeStatus(data)"
@@ -365,8 +367,10 @@ onMounted(async () => {
   color: var(--yzh-color-text-tertiary, #909399);
 }
 
+/* ★ el-tooltip 包裹 label 时继承 flex 特性 */
+.cert-biz-tree__node > :deep(.el-tooltip__trigger) { flex: 1; min-width: 0; }
 .cert-biz-tree__node-label {
-  flex: 1;
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -403,5 +407,13 @@ onMounted(async () => {
   color: #c45656;
   background: var(--yzh-color-danger-light-9, #fef0f0);
   border-color: #fde2e2;
+}
+</style>
+
+<style>
+/* 非 scoped：tooltip popper 挂到 body 下，scoped 选择器够不到 */
+.cert-biz-tree-label-tip {
+  max-width: 480px;
+  word-break: break-all;
 }
 </style>

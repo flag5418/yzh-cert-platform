@@ -64,37 +64,48 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
         /// <param name="provider">★ 取值内核（DI 注入；查定义 + 取企业已填值）</param>
         /// <param name="ct">取消令牌</param>
         public static async Task<SkillResult> ExecuteAsync(
-            [SkillParam(Description = "参数编码，如 company_name")]
+            [SkillParam(Description = "参数编码，如 company_name",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string param_code,
 
-            [SkillParam(Description = "锚点编码（写进 FillValue.AnchorCode；空=用 param_code）")]
+            [SkillParam(Description = "锚点编码（写进 FillValue.AnchorCode；空=用 param_code）",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? anchor_code = null,
 
-            [SkillParam(Description = "标准编码（空=只命中「不限标准」的定义）")]
+            [SkillParam(Description = "标准编码（空=只命中「不限标准」的定义）",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? standard_code = null,
 
-            [SkillParam(Description = "阶段编码（空=只命中「不限阶段」的定义）")]
+            [SkillParam(Description = "阶段编码（空=只命中「不限阶段」的定义）",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? stage_code = null,
 
-            [SkillParam(Description = "机构编码（空=不加机构过滤）")]
+            [SkillParam(Description = "机构编码（空=不加机构过滤）",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? org_code = null,
 
-            [SkillParam(Description = "企业编码（给了才按企业档案自动带出）")]
+            [SkillParam(Description = "企业编码（给了才按企业档案自动带出）",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? enterprise_code = null,
 
-            [SkillParam(Description = "值类型：text/number/date/bool/enum（空=用参数定义的值类型）")]
+            [SkillParam(Description = "值类型：text/number/date/bool/enum（空=用参数定义的值类型）",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? value_kind = null,
 
-            [SkillParam(Description = "格式串（.NET 方言），如 #,##0.00 / yyyy年MM月dd日")]
+            [SkillParam(Description = "格式串（.NET 方言），如 #,##0.00 / yyyy年MM月dd日",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? number_format = null,
 
-            [SkillParam(Description = "★ 企业已填写的参数值（由编排器预取；本 Skill 不查 cert_fill_param_value）")]
+            [SkillParam(Description = "★ 企业已填写的参数值（由编排器预取；本 Skill 不查 cert_fill_param_value）",
+                        BindMode = SkillParamBindMode.LinkOrConstant)]
             string? saved_value = null,
 
-            [SkillParam(Description = "已填值的来源：auto/manual/ai/import")]
+            [SkillParam(Description = "已填值的来源：auto/manual/ai/import",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? saved_value_source = null,
 
-            [SkillParam(Description = "企业是否人工改过（true=不再被自动映射覆盖）")]
+            [SkillParam(Description = "企业是否人工改过（true=不再被自动映射覆盖）",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             bool saved_is_manual_edited = false,
 
             // ★ 2026-10-06（S1-5）：取值内核。由 SkillExecutor 从 DI 容器解析

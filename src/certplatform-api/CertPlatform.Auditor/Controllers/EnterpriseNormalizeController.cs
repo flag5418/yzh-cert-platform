@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -71,6 +74,7 @@ namespace CertPlatform.Auditor.Controllers
         private readonly QueueManager _queueManager;
         private readonly IDbOrm _db;
         private readonly IOcrProvider _ocrProvider;
+        private readonly IObjectStorage _storage;
         private readonly ILogger<EnterpriseNormalizeController> _logger;
 
         public EnterpriseNormalizeController(
@@ -81,6 +85,7 @@ namespace CertPlatform.Auditor.Controllers
             QueueManager queueManager,
             IDbOrm db,
             IOcrProvider ocrProvider,
+            IObjectStorage storage,
             ILogger<EnterpriseNormalizeController> logger)
             : base(entityService, userContext)
         {
@@ -89,6 +94,7 @@ namespace CertPlatform.Auditor.Controllers
             _queueManager = queueManager;
             _db = db;
             _ocrProvider = ocrProvider;
+            _storage = storage;
             _logger = logger;
         }
 
@@ -1220,6 +1226,8 @@ namespace CertPlatform.Auditor.Controllers
                 //   ★ 本仓惯例（EnterpriseOriginalService / EnterpriseFileService / StandardDirectoryService）
                 //     = 「业务键 @ 毫秒时间戳」。
                 SourceId = $"{req.EnterpriseCode}@{DateTime.Now:yyyyMMddHHmmssfff}",
+                // ★ CreateBy 存用户 Code（契约）；登录名只落 yzh_queue_task.UserName 供排查
+                UserCode = UserContext.UserCode,
                 UserName = UserContext.UserName,
                 OrgCode = ws.Data.CertBodyCode,
                 ResourceLocks = locks,
@@ -1403,6 +1411,661 @@ namespace CertPlatform.Auditor.Controllers
                 CancelledCount = willCancel,
                 AuditWarning = auditWarning,
             }));
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        //  九、任务列表 / 任务文件清单 / 统一导出（★ 2026-10-11 页面拆分新增）
+        //
+        //  ★ 背景：用户裁决把「企业资料规范化」一页拆成两页 ——
+        //    ① 「企业资料规范化」= 任务列表 + 向导（开任务）
+        //    ② 「企业资料审核」= 左树右表（企业 › 阶段 › 任务）+ 统一导出
+        //    本组三个端点是这两页**唯一的新增后端**，其余全部复用已有 14 个端点。
+        //
+        //  ★ 术语对齐：**「任务」= <c>yzh_queue</c> 里一条 <c>enterprise_normalize</c> 批次**
+        //    （<c>QueueCode</c> 即任务号）。⛔ 不是专家任务系统的 <c>cert_expert_task</c>
+        //    —— 那是 NC 检查 / 报告生成，另一套表、另一个页面。
+        //
+        //  ★ 口径（用户 2026-10-11 原话）：「我们当前就不用理会所有的标准文档，
+        //    我们只考虑标准文档中已经设置规则的」⇒ 本组端点**只呈现结果**，
+        //    ⛔ 不回传「标准域共 N 份 / 其中 M 份配了规则」这类内部计数。
+        // ════════════════════════════════════════════════════════════════════
+
+        /// <summary>任务列表默认页大小</summary>
+        private const int TaskListDefaultRows = 20;
+
+        /// <summary>任务列表单页上限 —— ⛔ 再大就是「把整张队列表一次拉走」</summary>
+        private const int TaskListMaxRows = 200;
+
+        /// <summary>
+        ///     ★ <b>规范化任务列表</b>（分页）—— 任务列表页与向导第 2 步（历史任务重跑）共用。
+        ///
+        ///     <para><b>★ 数据源 = <c>yzh_queue</c></b>（<c>QueueType='enterprise_normalize'</c>）：
+        ///     规范化走的是<b>全项目通用的队列表</b>，⛔ 不是 <c>cert_expert_task</c>
+        ///     （那套只有 <c>NC_CHECK</c> / <c>REPORT_GENERATE</c> 两种类型）。</para>
+        ///
+        ///     <para><b>⚠️ 企业与阶段不在列上</b>：<c>yzh_queue</c> 只有 <c>ScopeKey</c>
+        ///     （<c>entnorm:{企业}:{阶段}</c>）⇒ 必须<b>先解析再过滤 / 排序 / 分页</b>，
+        ///     没法交给 SQL（解析逻辑不在列上）。本域队列实测个位数，全量内存处理安全；
+        ///     ⚠️ 若将来本域队列上千，须改为「把企业与阶段<b>落列 + 建索引</b>」，
+        ///     而不是让内存硬扛。</para>
+        ///
+        ///     <para><b>★ 名称一律后端解析</b>（企业 / 阶段 / 发起人），查不到主数据时回落
+        ///     「未登记企业（短码）」这类人话占位 —— ⛔ <b>绝不把裸 GUID 当名字</b>。
+        ///     2026-10-09 用户报障的教训：页面显示一串 GUID 时，用户判断是
+        ///     「<b>系统坏了</b>」而不是「<b>数据缺了</b>」。</para>
+        ///
+        ///     <para><b>⛔ 纯读</b>：不写库 / 不产文件 / 不调 LLM / 不入队。</para>
+        /// </summary>
+        [HttpGet("tasks")]
+        public async Task<IActionResult> Tasks(
+            [FromQuery] string? enterpriseCode,
+            [FromQuery] string? stageCode,
+            [FromQuery] string? status,
+            [FromQuery] int page = 1,
+            [FromQuery] int rows = TaskListDefaultRows)
+        {
+            var taskType = EnterpriseNormalizeExecutor.TaskTypeName;
+            var all = (await _db.GetListAsync<YzhQueue>(q => q.QueueType == taskType)).Data
+                      ?? new List<YzhQueue>();
+
+            // ① 解析 ScopeKey → 企业 / 阶段，再按筛选条件收窄
+            IEnumerable<(YzhQueue Queue, (string EnterpriseCode, string StageCode) Scope)> parsed = all
+                .Select(q => (Queue: q, Scope: ParseScopeKey(q.ScopeKey)));
+
+            if (!string.IsNullOrWhiteSpace(enterpriseCode))
+                parsed = parsed.Where(p => string.Equals(
+                    p.Scope.EnterpriseCode, enterpriseCode.Trim(), StringComparison.Ordinal));
+
+            if (!string.IsNullOrWhiteSpace(stageCode))
+                parsed = parsed.Where(p => string.Equals(
+                    p.Scope.StageCode, stageCode.Trim(), StringComparison.Ordinal));
+
+            if (!string.IsNullOrWhiteSpace(status))
+                parsed = parsed.Where(p => string.Equals(
+                    p.Queue.Status, status.Trim(), StringComparison.OrdinalIgnoreCase));
+
+            // ② 新的在前 —— ⚠️ 排序键必须带 Id 兜底：CreateTime 精度到秒，同秒入队的两条会并列
+            var ordered = parsed
+                .OrderByDescending(p => p.Queue.CreateTime)
+                .ThenByDescending(p => p.Queue.Id)
+                .ToList();
+
+            var total = ordered.Count;
+
+            page = page < 1 ? 1 : page;
+            rows = rows is < 1 or > TaskListMaxRows ? TaskListDefaultRows : rows;
+
+            var pageRows = ordered.Skip((page - 1) * rows).Take(rows).ToList();
+
+            // ③ 名称解析（每个维度一次批量查，⛔ 不在循环里逐条查）
+            var entMap = await LoadEnterpriseNamesAsync(pageRows.Select(p => p.Scope.EnterpriseCode));
+            var stageMap = await LoadStageNamesAsync(pageRows.Select(p => p.Scope.StageCode));
+            var userMap = await LoadUserNamesAsync(pageRows.Select(p => p.Queue.CreateBy));
+
+            var list = pageRows.Select(p =>
+            {
+                var q = p.Queue;
+                var entCode = p.Scope.EnterpriseCode;
+                var stgCode = p.Scope.StageCode;
+                var by = q.CreateBy ?? string.Empty;
+
+                return new NormalizeTaskRow
+                {
+                    QueueCode = q.QueueCode,
+                    QueueName = q.QueueName ?? string.Empty,
+                    EnterpriseCode = entCode,
+                    EnterpriseName = entMap.TryGetValue(entCode, out var en) && !string.IsNullOrWhiteSpace(en)
+                        ? en
+                        : $"未登记企业（{ShortCode(entCode)}）",
+                    StageCode = stgCode,
+                    StageName = stageMap.TryGetValue(stgCode, out var sn) && !string.IsNullOrWhiteSpace(sn)
+                        ? sn
+                        : $"未登记阶段（{ShortCode(stgCode)}）",
+                    Status = q.Status,
+                    // ★ 终态由后端判（同 IsTerminalStatus 口径）—— ⛔ 不让前端按字符串猜，
+                    //   两处各猜一次 ⇒ 页面永远转圈（见 IsTerminalStatus 注释）
+                    IsFinished = IsTerminalStatus(q.Status),
+                    Total = q.TotalCount,
+                    Completed = q.CompletedCount,
+                    Failed = q.FailedCount,
+                    Cancelled = q.CancelledCount,
+                    Processing = q.ProcessingCount,
+                    Pending = q.PendingCount,
+                    Progress = q.Progress,
+                    // ★★★ 时区：**同一条队列记录里，两个时间列的基准不一样**（2026-10-11 实测）
+                    //   · CreateTime = `BaseEntity` 默认 `DateTime.UtcNow` ⇒ **UTC**，必须 ToUtc 补 Z
+                    //   · StartTime / EndTime = `QueueManager` 显式 `DateTime.Now` ⇒ **本地时间**
+                    //     ⇒ ⛔ **绝不能标 Z**：标了前端按 UTC 解析 ⇒ 显示成 +8h（09:25 变 17:25）。
+                    //     实测铁证：Q-20261011-9d94066d2 的 CreateTime=01:25:33（UTC=09:25 CST），
+                    //     而 StartTime=09:25:33（已是本地）—— 同一条记录差 8 小时。
+                    //   （同族先例：`StandardDirectoryFile.NormalizedTime` 也是本地时间，⛔ 不标 Z。
+                    //     已核 `QueueManager.cs:172/491/609/615` 与 `yzh_queue_task.ProcessTime/CompleteTime`
+                    //     同样是 `DateTime.Now`。）
+                    StartTime = q.StartTime,
+                    EndTime = q.EndTime,
+                    CreateTime = ToUtc(q.CreateTime),                    CreateBy = by,
+                        OperatorName = userMap.TryGetValue(by, out var un) && !string.IsNullOrWhiteSpace(un)
+                            ? un
+                            : $"未登记用户（{ShortCode(by)}）",
+                };
+            }).ToList();
+
+            return Ok(ApiResponse<object>.Ok(new NormalizeTaskListResult
+            {
+                Total = total,
+                Rows = list,
+            }));
+        }
+
+        /// <summary>
+        ///     ★ <b>任务下的文件清单</b>（审核页右表）—— 左树选中一条任务后拉它跑过哪些文件。
+        ///
+        ///     <para><b>★ 数据源 = <c>yzh_queue_task</c>（基准）+ <c>cert_doc_fill_log</c>（增强）</b>，
+        ///     ⛔ 不能只用留痕：</para>
+        ///     <list type="number">
+        ///       <item><description>留痕<b>只有成功才写</b> ⇒ 入队后失败、或被跳过的文件在留痕里
+        ///       <b>根本不存在</b>，用它当清单会「少几行」且看不出少了。</description></item>
+        ///       <item><description>留痕是「<b>一次填充一行</b>」⇒ 重试过的文件会有多行，当清单会出现重复行。</description></item>
+        ///     </list>
+        ///     <para>⇒ 基准取 <c>yzh_queue_task</c>（<b>一行 = 本批次的一个文件</b>，天然唯一且完整），
+        ///     再用留痕补上完成率 / 待办 / 产物路径 / <c>FillLogCode</c>（审核抽屉要拿它读账本）。</para>
+        ///
+        ///     <para><b>⚠️ 只认本域队列</b>：<c>yzh_queue</c> 全项目共用，不加 <c>QueueType</c> 校验
+        ///     就是「拿到任意批次号即可读任意模块任务明细」的越权读口。</para>
+        ///
+        ///     <para><b>★ 目录层次三列</b>（<c>FolderCode</c> / <c>FolderPath</c> / <c>FolderDepth</c>，
+        ///     2026-10-11 加）：审核页右表要显示「每个文档的层次结构」⇒ 后端把该行的
+        ///     <b>文件夹路径</b>一并解析好（<c>cert_standard_directory_folder</c> 逐级上溯
+        ///     <c>ParentCode</c>）。⛔ <b>不是</b>切 <c>StandardDirectoryFile.FullPath</c> ——
+        ///     那是企业上传时写下的原始路径快照，不代表标准目录层次。
+        ///     前端只按 <c>/</c> 拆段建树，⛔ 不需要二次请求目录接口。</para>
+        ///
+        ///     <para><b>⛔ 纯读</b>：不写库 / 不产文件 / 不调 LLM。</para>
+        /// </summary>
+        [HttpGet("task-files")]
+        public async Task<IActionResult> TaskFiles([FromQuery] string queueCode)
+        {
+            if (string.IsNullOrWhiteSpace(queueCode))
+                return Ok(ApiResponse<object>.Fail("缺少任务号"));
+
+            var queue = (await _db.GetOneAsync<YzhQueue>(q => q.QueueCode == queueCode)).Data;
+            if (queue == null)
+                return Ok(ApiResponse<object>.Fail("任务不存在或已被清理"));
+            if (!IsOwnQueue(queue))
+                return Ok(ApiResponse<object>.Fail("该任务不属于「企业资料规范化」，请到对应页面查看"));
+
+            var scope = ParseScopeKey(queue.ScopeKey);
+
+            // ⚠️ 必须显式排序：不加 ORDER BY 时行序由存储引擎决定，
+            //    而页面要按「入队顺序」呈现（= 用户在向导里勾选的顺序）⇒ 按 Id 升序即入队顺序
+            var tasks = ((await _db.GetListAsync<YzhQueueTask>(j => j.QueueCode == queueCode)).Data
+                         ?? new List<YzhQueueTask>())
+                .OrderBy(t => t.Id)
+                .ToList();
+
+            // ① 文件名（一次批量查；标准域行被删时回落产物路径尾段）
+            var stdCodes = tasks
+                .Select(t => t.TaskId ?? string.Empty)
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            var nameMap = new Dictionary<string, string>(StringComparer.Ordinal);
+            // 标准域行 Code → 所属文件夹 Code（与 nameMap 同一批数据，⛔ 不再查一次库）
+            var folderOfRow = new Dictionary<string, string>(StringComparer.Ordinal);
+            var stdRows = new List<StandardDirectoryFile>();
+            if (stdCodes.Count > 0)
+            {
+                stdRows = (await _db.GetListAsync<StandardDirectoryFile>(x =>
+                    stdCodes.Contains(x.Code!))).Data ?? new List<StandardDirectoryFile>();
+
+                nameMap = stdRows
+                    .Where(r => !string.IsNullOrEmpty(r.Code))
+                    .GroupBy(r => r.Code!, StringComparer.Ordinal)
+                    .ToDictionary(g => g.Key, g => g.First().FileName ?? string.Empty, StringComparer.Ordinal);
+
+                folderOfRow = stdRows
+                    .Where(r => !string.IsNullOrEmpty(r.Code))
+                    .GroupBy(r => r.Code!, StringComparer.Ordinal)
+                    .ToDictionary(g => g.Key, g => g.First().FolderCode ?? string.Empty, StringComparer.Ordinal);
+            }
+
+            // ①b 目录层次（★ 审核页右表要按「文件夹层次」摆树，2026-10-11）
+            //
+            //  ⛔ 判据 = 文件夹表逐级上溯 ParentCode，**不是**切 FullPath 字符串
+            //     （理由见 NormalizeTaskFileRow.FolderPath 的注释）。
+            //  ⚠️ 必须**逐轮**取父级：SqlSugar 的 IN 只能一次拿一层，而层次深度
+            //     由用户配置决定（实测 1~3 层）。上限 8 轮是**脏数据兜底** ——
+            //     若有人手工把 ParentCode 指成环，没有上限就是死循环。
+            var folderMap = new Dictionary<string, StandardDirectoryFolder>(StringComparer.Ordinal);
+            {
+                var need = new HashSet<string>(
+                    stdRows.Select(r => r.FolderCode).Where(c => !string.IsNullOrWhiteSpace(c))!,
+                    StringComparer.Ordinal);
+
+                for (var round = 0; round < 8 && need.Count > 0; round++)
+                {
+                    var batch = (await _db.GetListAsync<StandardDirectoryFolder>(x =>
+                        need.Contains(x.Code!))).Data ?? new List<StandardDirectoryFolder>();
+
+                    var next = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (var f in batch)
+                    {
+                        if (string.IsNullOrEmpty(f.Code) || folderMap.ContainsKey(f.Code)) continue;
+                        folderMap[f.Code] = f;
+                        if (!string.IsNullOrWhiteSpace(f.ParentCode) && !folderMap.ContainsKey(f.ParentCode!))
+                            next.Add(f.ParentCode!);
+                    }
+
+                    // ⛔ 取不到就停：否则 need 永远非空 ⇒ 白跑满 8 轮
+                    if (next.Count == 0) break;
+                    need = next;
+                }
+            }
+
+            // ② 本批次的填充留痕 —— ⚠️ 同一 (QueueCode, TemplateFileCode) 可能多行（重试过）
+            //    ⇒ 按 CreateTime + Id 取**最新**一条（⛔ 不随机取：两次刷新会看到不同的值）
+            var logs = (await _db.GetListAsync<DocFillLog>(x => x.QueueCode == queueCode)).Data
+                       ?? new List<DocFillLog>();
+
+            var logMap = logs
+                .Where(l => !string.IsNullOrEmpty(l.TemplateFileCode))
+                .GroupBy(l => l.TemplateFileCode, StringComparer.Ordinal)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderByDescending(x => x.CreateTime).ThenByDescending(x => x.Id).First(),
+                    StringComparer.Ordinal);
+
+            // 文件夹 Code → 人话路径（含最顶层文件夹名；空 = 未挂文件夹）。
+            // ⚠️ 上溯途中任何一环查不到（文件夹被删 / 脏数据）就**就地停**，
+            //    返回已拼出的那一段 —— ⛔ 不要返回空串，那会把「有层次但断链」
+            //    伪装成「没有层次」，用户看到的树会莫名少一层。
+            string FolderPathOf(string? folderCode)
+            {
+                if (string.IsNullOrWhiteSpace(folderCode)) return string.Empty;
+
+                var parts = new List<string>();
+                var cursor = folderCode;
+                for (var i = 0; i < 8 && !string.IsNullOrWhiteSpace(cursor); i++)
+                {
+                    if (!folderMap.TryGetValue(cursor!, out var f)) break;
+                    if (!string.IsNullOrWhiteSpace(f.FolderName)) parts.Insert(0, f.FolderName!);
+                    cursor = f.ParentCode;
+                }
+
+                return string.Join("/", parts);
+            }
+
+            var rows = tasks.Select(t =>
+            {
+                var code = t.TaskId ?? string.Empty;
+                logMap.TryGetValue(code, out var log);
+
+                var fileName = nameMap.TryGetValue(code, out var n) && !string.IsNullOrWhiteSpace(n)
+                    ? n
+                    : TailSegment(log?.OutputStoragePath);
+
+                folderOfRow.TryGetValue(code, out var folderCode);
+                folderCode ??= string.Empty;
+                var folderPath = FolderPathOf(folderCode);
+
+                var message = !string.IsNullOrWhiteSpace(log?.Message)
+                    ? log!.Message!
+                    : (!string.IsNullOrWhiteSpace(t.ErrorMessage)
+                        ? t.ErrorMessage!
+                        // ★ 队列说完成、留痕却没有 ⇒ 必须解释，⛔ 不能只给一个空「说明」列
+                        : (log == null && string.Equals(t.Status, "completed", StringComparison.OrdinalIgnoreCase)
+                            ? "队列已完成，但没有找到填充留痕（可能已被清理）"
+                            : string.Empty));
+
+                return new NormalizeTaskFileRow
+                {
+                    StandardFileCode = code,
+                    FileName = fileName,
+                    FolderCode = folderCode,
+                    FolderPath = folderPath,
+                    FolderDepth = string.IsNullOrEmpty(folderPath)
+                        ? 0
+                        : folderPath.Split('/').Length,
+                    FillLogCode = log?.Code ?? string.Empty,
+                    Status = DescribeTaskFileStatus(t.Status, log?.Status),
+                    Message = message,
+                    Completion = log?.Completion ?? 0m,
+                    Confidence = log?.AvgConfidence ?? 0m,
+                    AnchorCount = log?.TotalAnchors ?? 0,
+                    PendingCount = log?.PendingCount ?? 0,
+                    Verified = log?.Verified ?? false,
+                    OutputPath = log?.OutputStoragePath ?? string.Empty,
+                    FillTime = log != null ? ToUtc(log.CreateTime) : null,
+                    DurationMs = log?.DurationMs ?? 0,
+                    Pendings = ParsePendings(log?.PendingsJson),
+                };
+            }).ToList();
+
+            return Ok(ApiResponse<object>.Ok(new NormalizeTaskFilesResult
+            {
+                QueueCode = queue.QueueCode,
+                EnterpriseCode = scope.EnterpriseCode,
+                StageCode = scope.StageCode,
+                Total = rows.Count,
+                Filled = rows.Count(r => !string.IsNullOrEmpty(r.OutputPath)),
+                Rows = rows,
+            }));
+        }
+
+        /// <summary>
+        ///     ★ <b>统一打包导出</b>（审核页右上「导出本阶段全部已规范化文档」）—— 打包成 ZIP 返回。
+        ///
+        ///     <para><b>⚠️⚠️ 路由必须是 <c>package</c>，⛔ 不能叫 <c>export</c></b>（2026-10-11 实测踩中）：
+        ///     本控制器继承 <c>YzhControllerBase&lt;T&gt;</c>，而基类<b>已经有一个
+        ///     <c>[HttpPost("export")]</c></b>（Excel 导出实体列表）。
+        ///     ⛔ 同名 ⇒ 两个 action 命中同一路由 ⇒ 运行期抛
+        ///     <c>AmbiguousMatchException: The request matched multiple endpoints</c> ⇒ <b>HTTP 500</b>，
+        ///     且<b>编译期完全看不出来</b>（0 Error、0 Warning）。
+        ///     ⇒ 命名沿用设计文档 `54` §5.2 端点 14 的 <c>package</c>（`55` §727 同口径）。</para>
+        ///
+        ///     <para><b>★★ 唯一判据 = <c>NormalizedTime IS NOT NULL</c></b>：
+        ///     ⛔ <b>不能只看 <c>StoragePath</c></b> —— 实测 524 条企业实例行里 43 条有
+        ///     <c>StoragePath</c>，而其中 42 条是<b>企业上传的原件</b>（不是规范化产物）
+        ///     ⇒ 用 <c>StoragePath</c> 判会把「用户传上来的原始文件」一起打包进去，
+        ///     而用户要的是「<b>已规范化</b>的文档」。<c>NormalizedTime</c> 只在编排器
+        ///     <b>成功提交</b>（留痕 + 账本 + 实例行同一事务）后才写 ⇒ 它才是产物的凭据。</para>
+        ///
+        ///     <para><b>⚠️ 返回体不是信封</b>：成功 ⇒ <c>application/zip</c> 文件流；
+        ///     业务拒绝 / 失败 ⇒ JSON 信封（<c>success=false</c> + <c>err</c>）。
+        ///     前端必须<b>按 Content-Type 分流</b>（用 <c>yzhApi.postBlob</c>，它已内建分流），
+        ///     ⛔ 不能无脑当 blob 存盘 —— 否则用户会下载到一个内容是错误信息的「zip」。
+        ///     （同族先例：<c>StandardDirectoryController</c> 的导出打包。）</para>
+        ///
+        ///     <para><b>★ 单个文件下载失败不整包报废</b>：把失败清单打进包内
+        ///     <c>_导出失败清单.txt</c> —— ⛔ 不能只记日志，用户拿到的是 zip，
+        ///     少了哪几份在界面上根本看不出来。</para>
+        /// </summary>
+        [HttpPost("package")]
+        public async Task<IActionResult> Package([FromBody] NormalizePackageRequest req, CancellationToken ct)
+        {
+            if (req == null || string.IsNullOrWhiteSpace(req.EnterpriseCode))
+                return Ok(ApiResponse<object>.Fail("请先选择企业"));
+
+            var entCode = req.EnterpriseCode.Trim();
+            var stgCode = req.StageCode?.Trim() ?? string.Empty;
+
+            var rows = (await _db.GetListAsync<StandardDirectoryFile>(x =>
+                x.EnterpriseCode == entCode && x.NormalizedTime != null)).Data
+                ?? new List<StandardDirectoryFile>();
+
+            if (!string.IsNullOrEmpty(stgCode))
+                rows = rows
+                    .Where(x => string.Equals(x.StageCode, stgCode, StringComparison.Ordinal))
+                    .ToList();
+
+            // 可选：只导指定的标准域行（与 plan / run / lock 同口径 —— 显式清单优先级最高，
+            // 由前端展开后传入，⛔ 后端不重复实现一遍范围递归）
+            var picked = (req.StandardFileCodes ?? new List<string>())
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Select(c => c!.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (picked.Count > 0)
+                rows = rows
+                    .Where(x => picked.Contains(x.StandardFileCode ?? string.Empty, StringComparer.Ordinal))
+                    .ToList();
+
+            rows = rows.Where(x => !string.IsNullOrWhiteSpace(x.StoragePath)).ToList();
+
+            if (rows.Count == 0)
+                return Ok(ApiResponse<object>.Fail(
+                    "该范围内还没有已规范化的文档可导出。请先在「企业资料规范化」里跑一次任务。"));
+
+            var ms = new MemoryStream();
+            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var missing = new List<string>();
+
+            try
+            {
+                using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, true))
+                {
+                    foreach (var row in rows)
+                    {
+                        ct.ThrowIfCancellationRequested();
+
+                        var entryName = UniqueZipEntryName(used, ZipEntryNameFor(row));
+
+                        try
+                        {
+                            var (stream, _) = await _storage.DownloadAsync(row.StoragePath!, ct);
+                            await using (stream)
+                            {
+                                var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
+                                await using var entryStream = entry.Open();
+                                await stream.CopyToAsync(entryStream, ct);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "[EntNorm] 导出下载失败：Path={Path}", row.StoragePath);
+                            missing.Add(row.FileName);
+                        }
+                    }
+
+                    if (missing.Count > 0)
+                    {
+                        var entry = archive.CreateEntry("_导出失败清单.txt", CompressionLevel.Optimal);
+                        await using var es = entry.Open();
+                        await using var sw = new StreamWriter(es, Encoding.UTF8);
+                        await sw.WriteAsync(
+                            "以下文件未能打包（对象存储读取失败），请在页面上单独下载：" +
+                            Environment.NewLine + string.Join(Environment.NewLine, missing));
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                ms.Dispose();
+                throw;
+            }
+            catch (Exception ex)
+            {
+                ms.Dispose();
+                _logger.LogError(ex, "[EntNorm] 统一导出失败：Ent={Ent}, Stage={Stage}", entCode, stgCode);
+                return Ok(ApiResponse<object>.Fail($"导出失败：{ex.Message}"));
+            }
+
+            ms.Position = 0;
+
+            _logger.LogInformation("[EntNorm] 统一导出：Ent={Ent}, Stage={Stage}, 打包={N}, 失败={Miss}",
+                entCode, stgCode, rows.Count, missing.Count);
+
+            var fileName = $"企业资料_{entCode}_{DateTime.Now:yyyyMMddHHmmss}.zip";
+            return File(ms, "application/zip", fileName);
+        }
+
+        // ────────────────────────────────────────────────────────────────────
+        //  九之附：任务列表 / 文件清单的共用构造
+        // ────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        ///     ★ <b>文件级状态</b>：<c>success</c> / <c>partial</c> / <c>failed</c> / <c>running</c> / <c>cancelled</c>。
+        ///
+        ///     <para><b>⚠️ 为什么必须两个入参</b>：<c>yzh_queue_task.Status='completed'</c>
+        ///     <b>不代表成功</b> —— 执行器把 <c>partial</c> / <c>skipped_no_anchor</c> 也按
+        ///     <c>Success=true</c> 上报（见 <c>EnterpriseNormalizeExecutor.ExecuteAsync</c>），
+        ///     ⇒ 只看队列状态会把「<b>还有待办</b>」的文件显示成「<b>完成</b>」。
+        ///     真正的成败在留痕表（<c>cert_doc_fill_log.Status</c>），而它<b>只有成功才写</b>
+        ///     ⇒ 两者必须合起来判。</para>
+        ///
+        ///     <para><b>★ 队列说完成、留痕却缺失 ⇒ 记 <c>partial</c></b>（保守）：
+        ///     ⛔ 不能记 <c>success</c> —— 没有证据就宣称成功，正是本项目最忌讳的「假成功」。</para>
+        /// </summary>
+        private static string DescribeTaskFileStatus(string? queueStatus, string? logStatus)
+        {
+            var qs = (queueStatus ?? string.Empty).ToLowerInvariant();
+
+            if (qs == "failed") return "failed";
+            if (qs == "cancelled") return "cancelled";
+            if (qs is "pending" or "processing") return "running";
+
+            // 队列侧已跑完 ⇒ 成败看留痕
+            return string.Equals(logStatus, "success", StringComparison.OrdinalIgnoreCase) ? "success" : "partial";
+        }
+
+        /// <summary>
+        ///     ★ <b>ZIP 内条目名去重</b>（同名追加 <c>(2)</c> / <c>(3)</c>…）。
+        ///
+        ///     <para>⚠️ <b>必须有</b>：<c>ZipArchive</c> <b>允许</b>重名条目，
+        ///     而 <c>FullPath</c> 在历史数据里可能重名（同一逻辑路径的不同版本行）
+        ///     ⇒ 打包时不拦，解压时后一个<b>静默覆盖</b>前一个 = 丢文件且无人发现。</para>
+        /// </summary>
+        private static string UniqueZipEntryName(HashSet<string> used, string? rawName)
+        {
+            var name = (rawName ?? string.Empty).Replace('\\', '/').TrimStart('/');
+            if (string.IsNullOrWhiteSpace(name)) name = "未命名文件";
+            if (used.Add(name)) return name;
+
+            var dot = name.LastIndexOf('.');
+            var stem = dot > 0 ? name[..dot] : name;
+            var ext = dot > 0 ? name[dot..] : string.Empty;
+
+            for (var i = 2; ; i++)
+            {
+                var candidate = $"{stem}({i}){ext}";
+                if (used.Add(candidate)) return candidate;
+            }
+        }
+
+        /// <summary>
+        ///     ★ <b>ZIP 内条目名</b> —— <b>目录</b>取 <c>FullPath</c> 的文件夹段，
+        ///     <b>文件名</b>取<b>产物路径</b>的尾段。
+        ///
+        ///     <para><b>⚠️ 为什么不能直接用 <c>FullPath</c> 当条目名</b>（2026-10-11 实测踩中）：
+        ///     <c>FullPath</c> 是<b>上传时</b>写的（实测 <c>1质量手册/附录三 程序文件清单<b>.doc</b></c>），
+        ///     而产物是编排器写出的 <c>.docx</c>；编排器回写实例行时<b>只写 <c>StoragePath</c></b>，
+        ///     ⛔ 不更新 <c>FullPath</c> / <c>FileName</c> ⇒ 拿 <c>FullPath</c> 当条目名会打出
+        ///     一个「<b>扩展名 <c>.doc</c>、内容却是 OOXML</b>」的包 ⇒ Word 提示
+        ///     「文件格式与扩展名不一致」= 用户判定「导出的文件坏了」。
+        ///     ⇒ 文件名必须取 <c>StoragePath</c> 尾段（它<b>就是</b>产物名，
+        ///     实测 = <c>附录三 程序文件清单.docx</c>）。</para>
+        ///
+        ///     <para>目录仍取 <c>FullPath</c> 的文件夹段 —— 它保留标准目录的层级，
+        ///     解压后看到的就是标准目录结构（即「按标准文档与目录归位」的诉求）。</para>
+        /// </summary>
+        private static string ZipEntryNameFor(StandardDirectoryFile row)
+        {
+            var produced = TailSegment(row.StoragePath);
+            var name = string.IsNullOrWhiteSpace(produced) ? (row.FileName ?? string.Empty) : produced;
+
+            var full = (row.FullPath ?? string.Empty).Replace('\\', '/').Trim('/');
+            var idx = full.LastIndexOf('/');
+            var dir = idx > 0 ? full[..idx] : string.Empty;
+
+            return string.IsNullOrEmpty(dir) ? name : $"{dir}/{name}";
+        }
+
+        /// <summary>
+        ///     取路径最后一段当文件名兜底。
+        ///     <para>用场景：标准域行已被删除 / 软删 ⇒ 查不到 <c>FileName</c>，
+        ///     而产物路径尾段就是编排器写的输出文件名（<c>…/xxx.docx</c>）⇒
+        ///     至少还能让用户认得出是哪一份，⛔ 不是一片空白。</para>
+        /// </summary>
+        private static string TailSegment(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return string.Empty;
+
+            var normalized = path!.Replace('\\', '/');
+            var idx = normalized.LastIndexOf('/');
+            return idx >= 0 && idx < normalized.Length - 1 ? normalized[(idx + 1)..] : normalized;
+        }
+
+        /// <summary>批量取企业名（<c>Code</c> → <c>Name</c>）。⛔ 查不到就不进字典，由调用方出人话占位。</summary>
+        private async Task<Dictionary<string, string>> LoadEnterpriseNamesAsync(IEnumerable<string> codes)
+        {
+            var list = codes
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Select(c => c!)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (list.Count == 0) return new Dictionary<string, string>(StringComparer.Ordinal);
+
+            var rows = (await _db.GetListAsync<Enterprise>(x => list.Contains(x.Code!))).Data
+                       ?? new List<Enterprise>();
+
+            return rows
+                .Where(r => !string.IsNullOrEmpty(r.Code))
+                .GroupBy(r => r.Code!, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First().Name ?? string.Empty, StringComparer.Ordinal);
+        }
+
+        /// <summary>
+        ///     批量取阶段名。
+        ///     <para>⚠️ <b>同时按 <c>Code</c> 与 <c>StageCode</c> 查</b>：<c>ScopeKey</c> 里存的是
+        ///     <c>cert_cert_stage.Code</c>（GUID，实测 <c>654c6c40…</c> = <c>RC</c>），
+        ///     但历史上也可能落短码（<c>RC</c> / <c>S2</c>…）⇒ 两条路都认，
+        ///     免得把本可解析的「阶段名」退化成「未登记阶段」。</para>
+        /// </summary>
+        private async Task<Dictionary<string, string>> LoadStageNamesAsync(IEnumerable<string> codes)
+        {
+            var list = codes
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Select(c => c!)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (list.Count == 0) return new Dictionary<string, string>(StringComparer.Ordinal);
+
+            var rows = (await _db.GetListAsync<CertStage>(x =>
+                list.Contains(x.Code!) || list.Contains(x.StageCode))).Data ?? new List<CertStage>();
+
+            var map = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var r in rows)
+            {
+                // 阶段名缺失时回落短码（短码本身是人话，如 RC），⛔ 不回落 GUID
+                var name = string.IsNullOrWhiteSpace(r.StageName) ? r.StageCode : r.StageName;
+
+                if (!string.IsNullOrEmpty(r.Code) && !map.ContainsKey(r.Code!)) map[r.Code!] = name;
+                if (!string.IsNullOrEmpty(r.StageCode) && !map.ContainsKey(r.StageCode)) map[r.StageCode] = name;
+            }
+
+            return map;
+        }
+
+        /// <summary>
+        ///     批量取发起人姓名（<c>Code</c> → 真实姓名，缺失时回落登录名）。
+        ///
+        ///     <para><b>★ 为什么只按 <c>Code</c> 查（架构铁律，2026-10-11 用户裁定）</b>：
+        ///     <b>本项目所有表的关联一律用 <c>Code</c></b> ⇒ <c>yzh_queue.CreateBy</c> 存的必须是
+        ///     <c>Sys_User.Code</c>（= JWT <c>code</c> claim = 推送分组键，全仓同键）。
+        ///     ⛔ <b>不要为了「兼容登录名」在这里加 <c>UserName</c> 兜底</b> —— 两个理由：
+        ///     ① 会把「<c>CreateBy</c> 存 Code」这条契约重新搞脏；
+        ///     ② 更糟的是**读取侧兜底会掩盖写入侧的错误** —— 写错了也照样显示得出来，
+        ///     于是这个错误**再也发现不了**。写入侧错了就改写入侧。</para>
+        ///
+        ///     <para>⚠️ 历史遗留：<c>QueueManager</c> 早期写的是登录名，那批队列的姓名会
+        ///     回落成登录名（如 <c>wzm</c>）—— 这是**架构口径下刻意接受**的结果，
+        ///     靠数据订正解决，⛔ 不在读取侧兜底。</para>
+        ///
+        ///     <para>⚠️ <c>Sys_User</c> 查询用 <c>includeDisabled: true</c> ——
+        ///     已停用的人留下的历史任务仍要显示姓名，⛔ 否则列表上是一串 Code。</para>
+        /// </summary>
+        private async Task<Dictionary<string, string>> LoadUserNamesAsync(IEnumerable<string?> codes)
+        {
+            var list = codes
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Select(c => c!)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (list.Count == 0) return new Dictionary<string, string>(StringComparer.Ordinal);
+
+            var rows = (await _db.GetListAsync<Sys_User>(x => list.Contains(x.Code),
+                includeDisabled: true)).Data ?? new List<Sys_User>();
+
+            return rows
+                .Where(r => !string.IsNullOrEmpty(r.Code))
+                .GroupBy(r => r.Code, StringComparer.Ordinal)
+                .ToDictionary(
+                    g => g.Key,
+                    g => string.IsNullOrWhiteSpace(g.First().UserTrueName)
+                        ? g.First().UserName
+                        : g.First().UserTrueName,
+                    StringComparer.Ordinal);
         }
 
         // ════════════════════════════════════════════════════════════════════

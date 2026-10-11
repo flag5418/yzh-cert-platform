@@ -23,16 +23,16 @@ VALUES
   ('MENU_AUD_12', 'MENU_AUD_00', '企业资料规范化', NULL, 'MagicStick',
    '企业原始资料 → 按空白模板规则生成规范化标准文档（干跑预览 / 一键规范化 / 锚点账本 / 锁定审计）',
    470, '/enterprise-normalize', NOW(), 'seed_doc_normalize', 'auditor', 0, 1)
+-- ⛔ 刻意**不**覆盖 `MenuName` / `IsValid` —— 人工可改列，重跑会静默冲掉人工改名与停用
+--    （实测症状：「改了菜单、跑一次 SQL 又被还原」2026-10-11）。守卫 `B-R6` 拦回潮。
 ON DUPLICATE KEY UPDATE
-  `ParentCode` = VALUES(`ParentCode`),
-  `MenuName`   = VALUES(`MenuName`),
-  `Icon`       = VALUES(`Icon`),
-  `Description`= VALUES(`Description`),
-  `OrderNo`    = VALUES(`OrderNo`),
-  `Url`        = VALUES(`Url`),
-  `Tag`        = VALUES(`Tag`),
-  `IsDeleted`  = 0,
-  `IsValid`    = 1;
+    `ParentCode` = VALUES(`ParentCode`),
+    `Icon`       = VALUES(`Icon`),
+    `Description`= VALUES(`Description`),
+    `OrderNo`    = VALUES(`OrderNo`),
+    `Url`        = VALUES(`Url`),
+    `Tag`        = VALUES(`Tag`),
+    `IsDeleted`  = 0;
 
 INSERT IGNORE INTO `Sys_RoleMenu` (`Id`, `RoleCode`, `MenuCode`, `OrderNo`, `CreateTime`, `CreateBy`)
 VALUES

@@ -55,7 +55,10 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         LinkOrConstant = 1,
 
         /// <summary>字典选择：从字典服务按 EnumSource 加载选项</summary>
-        Enum = 2
+        Enum = 2,
+
+        /// <summary>仅常量：静态配置值，直接输入文字；不下发连线选择器（2026-10-10 新增）</summary>
+        ConstantOnly = 3
     }
 
     /// <summary>

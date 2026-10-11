@@ -203,7 +203,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                         BindMode = SkillParamBindMode.Enum, EnumSource = "nc_prompt_kind")]
             string? prompt_code,
 
-            [SkillParam(Description = "认证机构编码", BindMode = SkillParamBindMode.LinkOrConstant)]
+            [SkillParam(Description = "认证机构编码", BindMode = SkillParamBindMode.ConstantOnly)]
             string? org_code,
 
             [SkillParam(Description = "★规则 JSON（cert_validation_rule.RuleJson，含 dimensions）",
@@ -214,26 +214,26 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                         BindMode = SkillParamBindMode.LinkOrConstant)]
             string? data_material,
 
-            [SkillParam(Description = "条款号（展示用）", BindMode = SkillParamBindMode.LinkOrConstant)]
+            [SkillParam(Description = "条款号（展示用）", BindMode = SkillParamBindMode.ConstantOnly)]
             string? clause_number,
 
-            [SkillParam(Description = "条款标题", BindMode = SkillParamBindMode.LinkOrConstant)]
+            [SkillParam(Description = "条款标题", BindMode = SkillParamBindMode.ConstantOnly)]
             string? clause_title,
 
-            [SkillParam(Description = "条款原文", BindMode = SkillParamBindMode.LinkOrConstant)]
+            [SkillParam(Description = "条款原文", BindMode = SkillParamBindMode.ConstantOnly)]
             string? clause_content,
 
             // ── 以下仅 nc_conclude 用 ──
             [SkillParam(Description = "★[nc_conclude] 规则算出的权威结论",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? rule_conclusion,
 
             [SkillParam(Description = "★[nc_conclude] 依据维度号（JSON 数组）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? basis_json,
 
             [SkillParam(Description = "★[nc_conclude] 未检查维度号（JSON 数组）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? unverified_json,
 
             [FromService] IDbOrm db = null!,

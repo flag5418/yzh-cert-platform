@@ -68,7 +68,18 @@ AIGC:
 - 豁免（允许保留 hex）：LogicFlow 画布 / ECharts / `tokens.css`·`main.css` 令牌定义 / 登录页品牌渐变
 - 守卫：`guards.mjs` **R18**（裸 hex + 裸 px，基线 `scripts/style-baseline.json` **只准减不准增**）+ **R19**（stylelint 结构性错误，基线 0）+ **R20**（法条 S03–S11，基线 `scripts/style-clause-baseline.json` **按文件只准减不准增**）
 
+**⑥ 审计人字段唯一写法 = 用户 Code（2026-10-11 · 违反 = 返工）**
+
+- `CreateBy` / `UpdateBy` / `DeleteBy` 非空时 **必须等于某个 `Sys_User.Code`** —— ⛔ 不许写登录名 `UserName`、⛔ 不许写显示名 `UserTrueName`、⛔ 不许写角色名 / 昵称。
+- 服务端**唯一正确来源 = `IUserContext.UserCode`**（`BaseEntity` 在 `AddCore` / `UpdateCore` / 软删时已自动填充）；业务侧自己写这三列时必须同源，写登录名 = **静默坏数据**。
+- **同键方（五处必须一致）**：`CreateBy` / `UpdateBy` / `DeleteBy`、`IUserContext.UserCode`、SignalR 推送分组键 `user:{UserCode}`、`cert_message.UserCode`、`yzh_queue.CreateBy`；共同源头是 JWT `code` claim（= `Sys_User.Code`，由 `JwtHelper.GenerateToken` 写入）。
+- **为什么**：读侧一律按 Code 解释，命不中**不报错** —— 只表现为「创建人 / 操作人姓名为空」或推送进了**空分组**（实测 `yzh_queue` 曾 79/79 行存登录名 `wzm` ⇒ 队列监控「创建人」永远显示 `wzm`、企业资料规范化「操作人」永远解析不出姓名；Hub 按登录名建组、落库按 Code 寻址 ⇒ 通知静默丢失）。
+- 例外（**有意保留**，须在守卫脚本白名单登记，⛔ 不要「修」）：`seed_*` / `SYSTEM*` / `migration` / `sys_migration` / `restore` / `auditor_reg` / `menu-restructure` / `fix_20261010` / `standard-family-20261008` 等**脚本标记**（记录「这行由哪个脚本创建」）；把它们改成某个用户 = **伪造审计留痕**。
+- 列宽：三列一律 ≥ `varchar(50)`（用户 Code 可为 36 位 GUID，窄列在严格模式报 1406、非严格模式**静默截断**成既非 Code 也非姓名的垃圾）；`BaseEntity` 标注 `[StringLength(64)]` 为准。
+- 守卫：`scripts/db/verify/verify_createby.sql`（**只读**，自动枚举**所有**基表的三列 + 列宽体检，期望 `C_违规 = 0`）；迁移脚本 `scripts/db/fix/20261011_createby_unify_to_usercode_V1.sql`（幂等，备份在 `_bak_usercode_20261011`）。
+
 **改完必跑**：`cd src/certplatform-web && node scripts/guards.mjs`（0 违规，**含 R12 路由↔菜单一致性 + R18/R19/R20 样式**）→ 对应端 `npm run build`（含 `vue-tsc`）。
+**动了审计人字段（`CreateBy`/`UpdateBy`/`DeleteBy`）的写入或迁移**：额外跑 `docker exec -i yzh-mysql mysql -uroot -p*** --default-character-set=utf8mb4 yzh_cert_platform < scripts/db/verify/verify_createby.sql`（期望 `C_违规 = 0`）。
 
 > **动了路由或菜单 → 额外跑一次**：`./scripts/db/verify/sync_menu_urls.sh` 刷新菜单快照，否则 R12 基于过期数据（快照缺失时 R12 会跳过并告警）。
 > R12 双向判据：菜单 `Url` 无对应路由 = **报错**（点击必白屏）；路由无对应菜单 = **报错**（孤儿路由，须补菜单 / 删路由 / 登记 `ORPHAN_ALLOW`）。

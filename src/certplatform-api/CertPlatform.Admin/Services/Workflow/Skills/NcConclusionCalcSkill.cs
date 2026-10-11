@@ -50,15 +50,15 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
             string? dimensions_json,
 
             [SkillParam(Description = "认证机构编码（★取不到时回落到默认规则）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? org_code,
 
             [SkillParam(Description = "标准编码（★空 = 全部标准通用规则）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? standard_code,
 
             [SkillParam(Description = "阶段编码（★空 = 全阶段通用规则）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? phase_code,
 
             [FromService] IDbOrm db = null!,

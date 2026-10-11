@@ -193,6 +193,24 @@ public class StandardDirectoryController : YzhControllerBase<StandardDirectoryCo
         return Ok(ApiResponse<object?>.Ok(data: files));
     }
 
+    /// <summary>
+    /// ★ 按「标准 + 阶段」列出标准目录的<b>模板文件行</b>，供 NC 规则设计器
+    /// 「标准目录文件是否缺失」特殊节点做配置期下拉。
+    ///
+    /// <para>与 <c>directories/{directoryCode}/root-files</c>（列<b>某目录实例</b>的根文件）不同：
+    /// 本端点列的是<b>标准要求</b>（模板行 <c>EnterpriseCode = YZH-STD-ENT</c>），
+    /// 不依赖任何企业或目录实例，配置期可直接调用。</para>
+    ///
+    /// <para><c>standardCode</c> / <c>stageCode</c> 均可省略（省略 = 不过滤）。</para>
+    /// </summary>
+    [RequirePermission("f207b908741c1cdb2317f1e6f5f57383306febdba0e793bf301f26100f576c53")] // GET|StandardDirectory|getstdfiles
+    [HttpGet("std-files")]
+    public async Task<IActionResult> GetStdFiles([FromQuery] string? standardCode, [FromQuery] string? stageCode)
+    {
+        var files = await _service.GetTemplateFilesAsync(standardCode, stageCode);
+        return Ok(ApiResponse<object?>.Ok(data: files));
+    }
+
     [RequirePermission("7fd61ef977214adea5271b6a54bc61dd96de41525caab10c9a4d1510896444ea")] // POST|StandardDirectory|updatefile
     [HttpPost("files/{fileCode}")]
     public async Task<IActionResult> UpdateFile(string fileCode, [FromBody] StandardDirectoryFile file)

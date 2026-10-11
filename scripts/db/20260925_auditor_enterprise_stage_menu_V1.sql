@@ -23,15 +23,16 @@ INSERT INTO `Sys_Menu`
 VALUES
   ('MENU_AUD_07', 'MENU_AUD_00', '阶段标准关联', 'Connection', 250, '/enterprise-stages', 'auditor',
    '企业 × 阶段 × 标准 三元关联：左树选企业，右侧「阶段→标准」勾选即生效', 1, 0, NOW(), 'seed_auditor')
+-- ⛔ 刻意**不**覆盖 `MenuName` / `IsValid` —— 它们是人工可改列（菜单名可在界面改、
+--    菜单可手动停用），写进本子句后每次重跑都会把人工改动**静默冲掉**。
+--    实测症状：「改了菜单、跑一次 SQL 又被还原」（2026-10-11）。守卫 `B-R6` 拦回潮。
 ON DUPLICATE KEY UPDATE
   `ParentCode`  = VALUES(`ParentCode`),
-  `MenuName`    = VALUES(`MenuName`),
   `Icon`        = VALUES(`Icon`),
   `OrderNo`     = VALUES(`OrderNo`),
   `Url`         = VALUES(`Url`),
   `Tag`         = VALUES(`Tag`),
   `Description` = VALUES(`Description`),
-  `IsValid`     = 1,
   `IsDeleted`   = 0;
 
 -- -----------------------------------------------------------------------------

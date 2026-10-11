@@ -976,6 +976,7 @@ function goResult() {
                 <el-tooltip
                   v-if="row.ImpactedItemCount > 0"
                   placement="top"
+                  :show-after="1000"
                 >
                   <template #content>
                     <div v-for="it in row.ImpactedItems" :key="it.ItemCode">

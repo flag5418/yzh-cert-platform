@@ -104,6 +104,9 @@ namespace CertPlatform.Admin.Controllers.Workflow
                         SkillCode = skill.SkillCode,
                         Name = skill.Name,
                         Description = skill.Description ?? string.Empty,
+                        // ★ 用途开关（2026-10-11）：节点库按当前设计器场景过滤，默认 0 = 不出现
+                        IsUseForNcConfig = skill.IsUseForNcConfig,
+                        IsUseForReport = skill.IsUseForReport,
                         InputPorts = await ResolveInputPortsAsync(skill.SkillCode, ct)
                     });
                 }
@@ -180,6 +183,13 @@ namespace CertPlatform.Admin.Controllers.Workflow
         public string SkillCode { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
+        /// <summary>
+        /// ★ 是否可用于 NC 规则配置（wf_skill.IsUseForNcConfig，2026-10-11）
+        /// <para>设计器按 <c>workflowType</c> 取对应开关过滤节点库；默认 <c>false</c>。</para>
+        /// </summary>
+        public bool IsUseForNcConfig { get; set; }
+        /// <summary>★ 是否可用于报告规则配置（wf_skill.IsUseForReport，2026-10-11）</summary>
+        public bool IsUseForReport { get; set; }
         public List<SkillPortDto> InputPorts { get; set; } = new();
     }
 

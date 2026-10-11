@@ -31,7 +31,7 @@
       "Row": 0,
       "Col": 0,
       "RowSpan": 1,
-      "ColSpan": 1,
+      "ColSpan": 2,
       "GroupIndex": "1",
       "Mrz": "",
       "Enable": true,
@@ -49,7 +49,7 @@
       "Row": 1,
       "Col": 0,
       "RowSpan": 1,
-      "ColSpan": 1,
+      "ColSpan": 2,
       "GroupIndex": "1",
       "Mrz": "",
       "Enable": true,
@@ -85,7 +85,7 @@
       "Row": 0,
       "Col": 0,
       "RowSpan": 1,
-      "ColSpan": 1,
+      "ColSpan": 2,
       "GroupIndex": "1",
       "Mrz": "",
       "Enable": true,
@@ -103,7 +103,7 @@
       "Row": 2,
       "Col": 0,
       "RowSpan": 1,
-      "ColSpan": 1,
+      "ColSpan": 2,
       "GroupIndex": "1",
       "Mrz": "manual",
       "Enable": true
@@ -156,7 +156,7 @@
       "Row": 3,
       "Col": 0,
       "RowSpan": 1,
-      "ColSpan": 1,
+      "ColSpan": 2,
       "GroupIndex": "1",
       "Mrz": "0",
       "Enable": true
@@ -173,9 +173,43 @@
       "Row": 4,
       "Col": 0,
       "RowSpan": 1,
-      "ColSpan": 1,
+      "ColSpan": 2,
       "GroupIndex": "1",
       "Mrz": "1",
+      "Enable": true
+    },
+    {
+      "FieldName": "IsUseForNcConfig",
+      "DesName": "用于NC规则",
+      "Type": "Switch",
+      "Sxh": 9,
+      "XsFlag": true,
+      "BcFlag": true,
+      "Yxk": false,
+      "Width": 90,
+      "Row": 5,
+      "Col": 0,
+      "RowSpan": 1,
+      "ColSpan": 1,
+      "GroupIndex": "1",
+      "Mrz": "0",
+      "Enable": true
+    },
+    {
+      "FieldName": "IsUseForReport",
+      "DesName": "用于报告规则",
+      "Type": "Switch",
+      "Sxh": 10,
+      "XsFlag": true,
+      "BcFlag": true,
+      "Yxk": false,
+      "Width": 90,
+      "Row": 6,
+      "Col": 0,
+      "RowSpan": 1,
+      "ColSpan": 1,
+      "GroupIndex": "1",
+      "Mrz": "0",
       "Enable": true
     },
     {
@@ -196,5 +230,5 @@
       "Enable": true
     }
   ],
-  "FormCols": 1
+  "FormCols": 2
 }

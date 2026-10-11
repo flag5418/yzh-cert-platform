@@ -1,6 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
+using YZH.Core.Api.Models.Users;
+using YZH.Core.DataBase.Interfaces;
 using YZH.Core.DataBase.Services;
 using YZH.Core.Stand.Models.Result;
+using CertPlatform.Shared.Entities.Cert;
+using CertPlatform.Shared.Entities.Dir;
 
 namespace CertPlatform.Admin.Controllers.System;
 
@@ -21,24 +25,28 @@ namespace CertPlatform.Admin.Controllers.System;
 public class QueueMonitorController : ControllerBase
 {
     private readonly QueueManager _queueManager;
+    private readonly IDbOrm _db;
 
-    public QueueMonitorController(QueueManager queueManager)
+    public QueueMonitorController(QueueManager queueManager, IDbOrm db)
     {
         _queueManager = queueManager;
+        _db = db;
     }
 
     [HttpPost("list")]
     public async Task<IActionResult> GetList([FromBody] QueueListRequest req)
     {
         var result = await _queueManager.GetQueueListAsync(
-            req.Type, req.Status, req.StartTime, req.EndTime, req.Page, req.Rows);
+            req.Type, req.Status, req.StartTime, req.EndTime, req.Page, req.Rows,
+            scopeResolver: ResolveScopeDisplayAsync,
+            creatorResolver: ResolveCreatorNameAsync);
         return Ok(ApiResponse<object?>.Ok(data: result));
     }
 
     [HttpPost("detail")]
     public async Task<IActionResult> GetDetail([FromBody] QueueDetailRequest req)
     {
-        var result = await _queueManager.GetQueueDetailAsync(req.QueueCode);
+        var result = await _queueManager.GetQueueDetailAsync(req.QueueCode, ResolveCreatorNameAsync);
         return Ok(ApiResponse<object?>.Ok(data: result));
     }
 
@@ -75,6 +83,123 @@ public class QueueMonitorController : ControllerBase
     {
         var result = await _queueManager.FindResourceLockAsync(req.ResourceTable, req.ResourceCodes);
         return Ok(ApiResponse<object?>.Ok(data: result));
+    }
+
+    /// <summary>
+    ///     ★ 把 <c>CreateBy</c>（<b>用户 Code</b>）解析为人话姓名。
+    ///
+    ///     <para><b>为什么必须解析</b>：<c>CreateBy</c> 按契约存 Code（<c>BaseEntity</c> 注释口径，
+    /// 2026-10-11 队列入队处也已统一）⇒ 直接渲染就是「创建人 = <c>df6e03e9…</c>」
+    /// （裸 Code 当人名）。解析顺序：真实姓名 → 登录名 → 空串（前端回落「—」或原 Code）。</para>
+    ///
+    ///     <para>⚠️ 已停用用户（<c>IncludeDisabled</c>）也要能显示姓名 —— 历史队列的创建人可能已停用。
+    /// 异常一律吃掉并返回空串：创建人解析是<b>旁路</b>，⛔ 不能因为它让整个队列页打不开。</para>
+    /// </summary>
+    private async Task<string> ResolveCreatorNameAsync(string? userCode)
+    {
+        if (string.IsNullOrWhiteSpace(userCode)) return string.Empty;
+
+        try
+        {
+            var users = (await _db.GetListAsync<Sys_User>(x => x.Code == userCode, includeDisabled: true)).Data;
+            var u = users?.FirstOrDefault();
+            if (u == null) return string.Empty;
+            return string.IsNullOrWhiteSpace(u.UserTrueName) ? (u.UserName ?? string.Empty) : u.UserTrueName!;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// 按队列类型解析 ScopeKey 为人话（企业名 / 标准名 / 阶段名）。
+    /// 解析失败时回落空字符串 → 前端回落显示原 ScopeKey。
+    /// </summary>
+    private async Task<string> ResolveScopeDisplayAsync(string queueType, string? scopeKey)
+    {
+        if (string.IsNullOrWhiteSpace(scopeKey)) return string.Empty;
+
+        try
+        {
+            switch (queueType)
+            {
+                // ── file_convert：ScopeKey = cert_standard_directory_config.Code ──
+                case "file_convert":
+                    return await ResolveFileConvertScopeAsync(scopeKey);
+
+                // ── doc_extract：ScopeKey = cert_enterprise.Code ──
+                case "doc_extract":
+                    return await ResolveDocExtractScopeAsync(scopeKey);
+
+                // ── enterprise_normalize：ScopeKey = "entnorm:{EnterpriseCode}:{StageCode}" ──
+                case "enterprise_normalize":
+                    return await ResolveEnterpriseNormalizeScopeAsync(scopeKey);
+
+                // ── enterprise_original_*：ScopeKey = "{enterpriseCode}@{stageCode}" ──
+                case "enterprise_original_file":
+                case "enterprise_original_ingest":
+                case "enterprise_original_analyze":
+                    return await ResolveEnterpriseOriginalScopeAsync(scopeKey);
+
+                default:
+                    return string.Empty;
+            }
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private async Task<string> ResolveFileConvertScopeAsync(string configCode)
+    {
+        var config = (await _db.GetOneAsync<StandardDirectoryConfig>(x => x.Code == configCode)).Data;
+        if (config == null) return string.Empty;
+
+        var stdName = (await _db.GetOneAsync<ISOStandard>(x => x.Code == config.StandardCode)).Data?.StandardName;
+        var stageName = (await _db.GetOneAsync<CertStage>(x => x.Code == config.StageCode)).Data?.StageName;
+
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(stdName)) parts.Add(stdName);
+        if (!string.IsNullOrWhiteSpace(stageName)) parts.Add(stageName);
+        return parts.Count > 0 ? string.Join(" / ", parts) : configCode;
+    }
+
+    private async Task<string> ResolveDocExtractScopeAsync(string enterpriseCode)
+    {
+        var ent = (await _db.GetOneAsync<Enterprise>(x => x.Code == enterpriseCode && !x.IsDeleted)).Data;
+        return ent?.Name ?? string.Empty;
+    }
+
+    private async Task<string> ResolveEnterpriseNormalizeScopeAsync(string scopeKey)
+    {
+        // 格式：entnorm:{EnterpriseCode}:{StageCode}
+        var parts = scopeKey.Split(':');
+        if (parts.Length < 3) return string.Empty;
+        var enterpriseCode = parts[1];
+        var stageCode = parts[2];
+        return await BuildEnterpriseStageDisplayAsync(enterpriseCode, stageCode);
+    }
+
+    private async Task<string> ResolveEnterpriseOriginalScopeAsync(string scopeKey)
+    {
+        // 格式：{enterpriseCode}@{stageCode}
+        var parts = scopeKey.Split('@');
+        if (parts.Length < 2) return string.Empty;
+        return await BuildEnterpriseStageDisplayAsync(parts[0], parts[1]);
+    }
+
+    /// <summary>组装「企业名 / 阶段名」</summary>
+    private async Task<string> BuildEnterpriseStageDisplayAsync(string enterpriseCode, string stageCode)
+    {
+        var entName = (await _db.GetOneAsync<Enterprise>(x => x.Code == enterpriseCode && !x.IsDeleted)).Data?.Name;
+        var stageName = (await _db.GetOneAsync<CertStage>(x => x.Code == stageCode)).Data?.StageName;
+
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(entName)) parts.Add(entName);
+        if (!string.IsNullOrWhiteSpace(stageName)) parts.Add(stageName);
+        return parts.Count > 0 ? string.Join(" / ", parts) : string.Empty;
     }
 }
 

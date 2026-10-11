@@ -35,10 +35,12 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
         /// <param name="hint">给填写人的提示（空 ⇒ 用默认提示）</param>
         /// <param name="ct">取消令牌</param>
         public static Task<SkillResult> ExecuteAsync(
-            [SkillParam(Description = "锚点编码")]
+            [SkillParam(Description = "锚点编码",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string anchor_code,
 
-            [SkillParam(Description = "给填写人的提示，如「请填写企业名称」")]
+            [SkillParam(Description = "给填写人的提示，如「请填写企业名称」",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string hint = "",
 
             CancellationToken ct = default)

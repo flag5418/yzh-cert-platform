@@ -358,10 +358,12 @@ namespace CertPlatform.Admin.Services.Ent.Executors
                     RegionCount = result.Report.Regions.Count,
                     ClonedRows = result.Report.Regions.Sum(r => r.ClonedRows),
                     Verified = result.Report.Verified,
-                    LeftoverTokens = result.Report.LeftoverTokens,
+                    // ★ 2026-10-11 修：三个 json 列必须显式序列化（同 Auditor 编排器口径，
+                    //   见 `DocFillLog` 属性注释）。⛔ 别再改回 `List<string>`。
+                    LeftoverTokens = JsonSerializer.Serialize(result.Report.LeftoverTokens),
                     PendingsJson = JsonSerializer.Serialize(result.Report.Pendings),
-                    RetrievedDocCodes = retrievedDocCodes,
-                    SkillTrace = skillTrace,
+                    RetrievedDocCodes = JsonSerializer.Serialize(retrievedDocCodes),
+                    SkillTrace = JsonSerializer.Serialize(skillTrace),
                     DurationMs = duration,
                     Status = result.Report.Completion >= 1.0 ? "success" : "partial"
                 };

@@ -25,6 +25,11 @@
       </div>
     </div>
 
+    <div v-else-if="bindMode === 'ConstantOnly'" class="constant-only">
+      <el-input :model-value="modelValue" :placeholder="placeholder || '输入常量值'" style="width: 100%"
+        @input="(v: any) => onConstantInput(v)" />
+    </div>
+
     <div v-else class="link-or-constant">
       <div class="input-type-switch">
         <el-radio-group :model-value="inputType" size="small" @change="(v: any) => onInputTypeChange(v)">
@@ -106,5 +111,7 @@ function onInputTypeChange(newType: string) {
 }
 .input-type-switch { margin-bottom: 8px; display: flex; justify-content: flex-end; }
 :deep(.el-radio-button--small .el-radio-button__inner) { padding: 4px 8px !important; font-size: 10px !important; border-radius: 2px !important; }
-.link-input-area, .constant-input-area { width: 100%; }
+.link-input-area, .constant-input-area, .constant-only { width: 100%; }
 </style>
+
+// HMR-force-update-2026-10-11

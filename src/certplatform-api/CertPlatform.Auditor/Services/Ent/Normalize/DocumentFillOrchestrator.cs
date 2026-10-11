@@ -445,10 +445,16 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                     RegionCount = report.Regions.Count,
                     ClonedRows = report.Regions.Sum(r => r.ClonedRows),
                     Verified = verified,
-                    LeftoverTokens = report.LeftoverTokens,
+                    // ★ 2026-10-11 修：三个 json 列必须**显式序列化**。
+                    //   `DocFillLog.LeftoverTokens/RetrievedDocCodes/SkillTrace` 此前声明为
+                    //   `List<string>?`，SqlSugar 不序列化 ⇒ 直接落一坨非 JSON 字符串
+                    //   ⇒ MySQL `Invalid JSON text: "Invalid value." at position 0`
+                    //   ⇒ 留痕写入整行回滚 ⇒ **整份文档被记为失败**（队列重试 3 次后放弃）。
+                    //   ⛔ 别再改回 `List<string>`（实体已加注释说明）。
+                    LeftoverTokens = JsonSerializer.Serialize(report.LeftoverTokens),
                     PendingsJson = JsonSerializer.Serialize(report.Pendings),
-                    RetrievedDocCodes = retrievedCodes,
-                    SkillTrace = skillTrace,
+                    RetrievedDocCodes = JsonSerializer.Serialize(retrievedCodes),
+                    SkillTrace = JsonSerializer.Serialize(skillTrace),
                     DurationMs = (int)(DateTime.Now - started).TotalMilliseconds,
                     Status = verified && report.Pending == 0 ? "success" : "partial",
                     CreateBy = req.OperatorCode,

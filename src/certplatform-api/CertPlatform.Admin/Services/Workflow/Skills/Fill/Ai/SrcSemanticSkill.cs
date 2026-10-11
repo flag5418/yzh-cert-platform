@@ -44,7 +44,8 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
         /// <param name="llm">AI 调用器（DI 注入）</param>
         /// <param name="ct">取消令牌</param>
         public static async Task<SkillResult> ExecuteAsync(
-            [SkillParam(Description = "锚点编码")]
+            [SkillParam(Description = "锚点编码",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string anchor_code,
 
             [SkillParam(Description = "待改写的标准原文", BindMode = SkillParamBindMode.LinkOrConstant)]
@@ -53,14 +54,16 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
             [SkillParam(Description = "改写要求（模板里这一项的填写说明）", BindMode = SkillParamBindMode.LinkOrConstant)]
             string? instruction = null,
 
-            [SkillParam(Description = "提示词编码 cert_doc_fill_prompt.PromptCode；空=用内置默认模板")]
+            [SkillParam(Description = "提示词编码 cert_doc_fill_prompt.PromptCode；空=用内置默认模板",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? prompt_code = null,
 
             [SkillParam(Description = "企业画像/参数摘要（可选，用于风格与事实校正）",
                         BindMode = SkillParamBindMode.LinkOrConstant)]
             string? enterprise_context = null,
 
-            [SkillParam(Description = "机构编码（空=只命中全局提示词）")]
+            [SkillParam(Description = "机构编码（空=只命中全局提示词）",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? org_code = null,
 
             [FromService] IDbOrm db = null!,

@@ -302,7 +302,7 @@ function ownCount(node: OriginalFolderNode): number {
 
           <!-- 提取状态（口径来自 logic.statusOf，与根目录表**共用一份**） -->
           <template #column-ExtractState="{ row }">
-            <el-tooltip v-if="statusTip(row)" :content="statusTip(row)" placement="top">
+            <el-tooltip v-if="statusTip(row)" :content="statusTip(row)" placement="top" :show-after="1000">
               <span>
                 <el-tag size="small" :type="statusOf(row).type">{{ statusOf(row).text }}</el-tag>
               </span>

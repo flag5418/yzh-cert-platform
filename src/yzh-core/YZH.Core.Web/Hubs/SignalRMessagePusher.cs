@@ -19,10 +19,11 @@ public class SignalRMessagePusher : IYzhMessagePusher
 
     public bool IsAvailable => true;
 
-    public Task SendToUserAsync(string? userName, YzhPushMessage message, CancellationToken cancellationToken = default)
+    public Task SendToUserAsync(string? userCode, YzhPushMessage message, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrEmpty(userName)) return Task.CompletedTask;
-        return SendAsync(_hubContext.Clients.Group(YzhPushProtocol.UserGroup(userName)), message, cancellationToken);
+        // ⚠️ 传空 = 静默跳过（调用方常直接拿业务表里的创建人字段，历史/系统发起的队列可能为空）
+        if (string.IsNullOrEmpty(userCode)) return Task.CompletedTask;
+        return SendAsync(_hubContext.Clients.Group(YzhPushProtocol.UserGroup(userCode)), message, cancellationToken);
     }
 
     public Task SendToGroupAsync(string group, YzhPushMessage message, CancellationToken cancellationToken = default)

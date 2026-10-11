@@ -8,6 +8,7 @@ using YZH.Core.DataBase.Interfaces;
 using YZH.Core.DataBase.Services;
 using YZH.Core.Stand.Interfaces;
 using YzhQueueTask = YZH.Core.Stand.Models.Queue.YzhQueueTask;
+using YzhQueue = YZH.Core.Stand.Models.Queue.YzhQueue;
 
 namespace CertPlatform.Admin.Services.StandardDirectory;
 
@@ -49,7 +50,7 @@ public class OfficeConvertTaskExecutor : IYzhTaskExecutor
             var convertService = scope.ServiceProvider.GetRequiredService<OfficeConvertService>();
             var ok = await convertService.ConvertAsync(payload);
             if (ok)
-                await EnqueueEnterpriseExtractAsync(payload);
+                await EnqueueEnterpriseExtractAsync(payload, task.QueueCode);
             return new TaskExecutionResult
             {
                 Success = ok,
@@ -67,7 +68,34 @@ public class OfficeConvertTaskExecutor : IYzhTaskExecutor
     // G-2d 提取链接线：企业域文件转换成功后自动追加 doc_extract 任务（模板域/裸转换不入队）
     // ⚠️ QueueManager 构造注入 IEnumerable<IYzhTaskExecutor>（含本类）⇒ 构造器注入会形成 DI 循环，
     //    必须运行时从根容器懒解析。
-    private async Task EnqueueEnterpriseExtractAsync(FileConvertPayload payload)
+    /// <summary>
+    ///     ★ <b>派生队列继承父队列的创建人</b>（2026-10-11）。
+    ///
+    ///     <para>「转换完成 → 自动提取」是**后台派生的第二条队列**：执行器没有 HttpContext，
+    ///     不显式继承就只能落 NULL = 系统发起 ⇒ 这条队列的终态通知（站内信 + SignalR）
+    ///     <b>没有收件人、静默跳过</b>（实测存量 110+45 条即为此）。</para>
+    ///
+    ///     <para>⛔ 取不到就是取不到（返回空）—— ⛔ 不要编造用户；但必须落日志，不静默。</para>
+    /// </summary>
+    private async Task<string> ResolveParentCreatorAsync(string? parentQueueCode)
+    {
+        if (string.IsNullOrWhiteSpace(parentQueueCode)) return string.Empty;
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<IDbOrm>();
+            var parent = (await db.GetOneAsync<YzhQueue>(x => x.QueueCode == parentQueueCode)).Data;
+            // ★ 契约：CreateBy = 用户 Code（可直接作为推送分组键）
+            return parent?.CreateBy ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[FileConvert→Extract] 取父队列创建人失败，派生队列将无收件人: {QueueCode}", parentQueueCode);
+            return string.Empty;
+        }
+    }
+
+    private async Task EnqueueEnterpriseExtractAsync(FileConvertPayload payload, string? parentQueueCode)
     {
         if (string.IsNullOrWhiteSpace(payload.EnterpriseCode) || payload.EnterpriseCode == YzhVirtualEnterprise.Code)
             return;
@@ -82,6 +110,7 @@ public class OfficeConvertTaskExecutor : IYzhTaskExecutor
 
         var queueManager = _serviceProvider.GetRequiredService<QueueManager>();
         var fileCode = payload.Code;
+        var creatorCode = await ResolveParentCreatorAsync(parentQueueCode);
         var req = new QueueManager.CreateQueueRequest
         {
             QueueType = "doc_extract",
@@ -90,6 +119,8 @@ public class OfficeConvertTaskExecutor : IYzhTaskExecutor
             SourceType = "enterprise_extract",
             // yzh_queue.uk_source 唯一：同一文件多轮转换→提取必须逐次唯一
             SourceId = $"{fileCode}@{DateTime.Now:yyyyMMddHHmmss}",
+            // ★ CreateBy 存用户 Code（契约）：继承触发转换的那个人，让派生队列也能通知到人
+            UserCode = creatorCode,
             ResourceLocks = new List<QueueManager.ResourceLockItem>
             {
                 new() { ResourceTable = QueueManager.RESOURCE_FILE, ResourceCode = fileCode, ResourceName = payload.FileName }

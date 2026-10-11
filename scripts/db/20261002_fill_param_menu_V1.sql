@@ -18,16 +18,16 @@ VALUES
   ('MENU_00217', 'MENU_00002', '体系认证全局参数定义', NULL, 'Setting',
    '按「机构 × 标准 × 阶段」定义体系认证全局参数，供标准文档填充时取值',
    1700, '/business/fill-param-def', NOW(), 'seed_fill_param', 'admin', 0, 1)
+-- ⛔ 刻意**不**覆盖 `MenuName` / `IsValid` —— 人工可改列，重跑会静默冲掉人工改名与停用
+--    （实测症状：「改了菜单、跑一次 SQL 又被还原」2026-10-11）。守卫 `B-R6` 拦回潮。
 ON DUPLICATE KEY UPDATE
-  `ParentCode` = VALUES(`ParentCode`),
-  `MenuName`   = VALUES(`MenuName`),
-  `Icon`       = VALUES(`Icon`),
-  `Description`= VALUES(`Description`),
-  `OrderNo`    = VALUES(`OrderNo`),
-  `Url`        = VALUES(`Url`),
-  `Tag`        = VALUES(`Tag`),
-  `IsDeleted`  = 0,
-  `IsValid`    = 1;
+    `ParentCode` = VALUES(`ParentCode`),
+    `Icon`       = VALUES(`Icon`),
+    `Description`= VALUES(`Description`),
+    `OrderNo`    = VALUES(`OrderNo`),
+    `Url`        = VALUES(`Url`),
+    `Tag`        = VALUES(`Tag`),
+    `IsDeleted`  = 0;
 
 -- ── ② 专家端（企业维度）菜单 ──
 INSERT INTO `Sys_Menu`
@@ -36,16 +36,16 @@ VALUES
   ('MENU_AUD_10', 'MENU_AUD_00', '企业全局参数定义', NULL, 'Document',
    '企业基本信息 + 后台定义的全局参数，合并成待完善清单',
    260, '/enterprise-fill-params', NOW(), 'seed_fill_param', 'auditor', 0, 1)
+-- ⛔ 刻意**不**覆盖 `MenuName` / `IsValid` —— 人工可改列，重跑会静默冲掉人工改名与停用
+--    （实测症状：「改了菜单、跑一次 SQL 又被还原」2026-10-11）。守卫 `B-R6` 拦回潮。
 ON DUPLICATE KEY UPDATE
-  `ParentCode` = VALUES(`ParentCode`),
-  `MenuName`   = VALUES(`MenuName`),
-  `Icon`       = VALUES(`Icon`),
-  `Description`= VALUES(`Description`),
-  `OrderNo`    = VALUES(`OrderNo`),
-  `Url`        = VALUES(`Url`),
-  `Tag`        = VALUES(`Tag`),
-  `IsDeleted`  = 0,
-  `IsValid`    = 1;
+    `ParentCode` = VALUES(`ParentCode`),
+    `Icon`       = VALUES(`Icon`),
+    `Description`= VALUES(`Description`),
+    `OrderNo`    = VALUES(`OrderNo`),
+    `Url`        = VALUES(`Url`),
+    `Tag`        = VALUES(`Tag`),
+    `IsDeleted`  = 0;
 
 -- ── ③ 角色授权（后台侧：超管 + 体系管理员）──
 INSERT IGNORE INTO `Sys_RoleMenu` (`Id`, `RoleCode`, `MenuCode`, `OrderNo`, `CreateTime`, `CreateBy`)

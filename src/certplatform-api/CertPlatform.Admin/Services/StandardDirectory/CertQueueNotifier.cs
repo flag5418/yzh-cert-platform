@@ -14,6 +14,10 @@ namespace CertPlatform.Admin.Services.StandardDirectory;
 /// <para>① 落库 cert_message（CertMessageService，Scoped，经 IServiceProvider 建 scope）；
 /// ② SignalR 实时推送（IYzhMessagePusher，框架能力）。</para>
 ///
+/// <para>★ <b>收件人 = <c>queue.CreateBy</c> = 用户 Code</b>（2026-10-11 统一）：落库（<c>CreateForUserAsync</c>）
+/// 与推送（<c>SendToUserAsync</c>）两条链同键。⚠️ 该列为空代表「系统发起的队列」⇒ 两条链都会静默跳过
+/// （这是有意为之：没有创建人就没有收件人）；若发现某类队列长期收不到通知，应回到入队处补 <c>UserCode</c>。</para>
+///
 /// <para>★ 注意：QueueManager 是单例，本类也必须是单例（注册见
 /// CertPlatformAdminServiceExtensions）—— Scoped 依赖一律经 scope 自取。</para>
 ///
@@ -71,12 +75,12 @@ public class CertQueueNotifier : IYzhQueueNotifier
             scopeKey = queue.ScopeKey,
         };
 
-        // ① 落库 cert_message（收件人 = 队列创建者登录名，CertMessageService 内换 UserCode）
+        // ① 落库 cert_message（★ 收件人 = 队列创建者 Code —— 与 CreateBy 契约、推送分组键同键，零映射）
         try
         {
             using var scope = _serviceProvider.CreateScope();
             var messageService = scope.ServiceProvider.GetRequiredService<CertMessageService>();
-            await messageService.CreateForLoginAsync(
+            await messageService.CreateForUserAsync(
                 queue.CreateBy, title, content, "queue", JsonSerializer.Serialize(data));
         }
         catch (Exception ex)
@@ -84,7 +88,8 @@ public class CertQueueNotifier : IYzhQueueNotifier
             _logger.LogError(ex, "队列终态消息落库失败: {QueueCode}", queue.QueueCode);
         }
 
-        // ② SignalR 实时推送（分组身份由 Hub 从已验证 JWT 派生，与 queue.CreateBy 同源=登录名）
+        // ② SignalR 实时推送（分组身份由 Hub 从已验证 JWT 的 code claim 派生，与 queue.CreateBy 同源=用户 Code）
+        //    ⚠️ queue.CreateBy 为空（系统发起的队列）⇒ SendToUserAsync 静默跳过，属预期
         try
         {
             await _pusher.SendToUserAsync(queue.CreateBy, new YzhPushMessage

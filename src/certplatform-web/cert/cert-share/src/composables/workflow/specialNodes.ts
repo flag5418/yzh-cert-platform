@@ -311,6 +311,31 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
       { field: 'config.ruleCode', label: '文档', type: 'doc-select', description: '选择已配置提取规则的文档' },
       { field: 'config.tableCode', label: '表格', type: 'table-select', description: '选择要提取的表格' }
     ]
+  },
+
+  // ==================== 标准目录文件是否缺失节点 ====================
+  {
+    classCode: 'is_std_file_missing',
+    className: '标准文件缺失',
+    category: 'data',
+    color: '#D81B60',
+    icon: 'FolderChecked',
+    singleton: false,
+    testable: true,
+    renameable: true,
+    description: '判断企业是否缺少某个标准目录要求的文件。配置期按「标准 + 阶段」选定一个标准文件；执行期自动带入当前企业，输出 result(bool) 可直连条件分支',
+    inputPorts: [],
+    outputPorts: [
+      { name: 'result', label: '是否缺失', type: 'boolean', description: 'true = 缺失，可直接连条件分支的「条件值」', display: 'visible' },
+      { name: 'state', label: '判定状态', type: 'string', description: 'uploaded / not_required / placeholder_only / not_configured', display: 'visible' },
+      { name: 'is_required', label: '是否必需', type: 'boolean', description: '该文件对本企业是否必需', display: 'hidden' },
+      { name: 'message', label: '说明', type: 'string', description: '判定结论的文字说明', display: 'hidden' }
+    ],
+    panelSchema: [
+      { field: 'config.standardCode', label: '标准', type: 'std-select', description: '先选标准，用于筛选下面的标准文件' },
+      { field: 'config.stageCode', label: '阶段', type: 'stage-select', description: '再选阶段（可留空 = 不限阶段）' },
+      { field: 'config.standardFileCode', label: '标准文件', type: 'std-file-select', required: true, description: '要判断的标准文件；执行期按「当前企业 + 该文件」判断是否已上传' }
+    ]
   }
 ]
 

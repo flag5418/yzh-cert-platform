@@ -25,13 +25,17 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     public static class GetTableSkill
     {
         public static async Task<SkillResult> ExecuteAsync(
-            [SkillParam(Description = "表格编码")]
+            [SkillParam(Description = "表格编码",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string table_code,
-            [SkillParam(Description = "企业编码（空=标准样例企业=虚拟企业常量）")]
+            [SkillParam(Description = "企业编码（空=标准样例企业=虚拟企业常量）",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string enterprise_code,
-            [SkillParam(Description = "文件编码，可选")]
+            [SkillParam(Description = "文件编码，可选",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? file_code = null,
-            [SkillParam(Description = "表格序号，可选")]
+            [SkillParam(Description = "表格序号，可选",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             int? table_index = null,
             [FromService] IDbOrm db = null!,
             CancellationToken ct = default)

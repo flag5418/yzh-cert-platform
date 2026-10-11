@@ -39,7 +39,14 @@
             <el-icon class="org-std-stage-tree__node-icon" :class="`is-${nodeType(data)}`">
               <component :is="getNodeIcon(nodeType(data))" />
             </el-icon>
-            <span class="org-std-stage-tree__node-label">{{ data.Name }}</span>
+            <el-tooltip
+              :content="data.Name"
+              placement="top"
+              :show-after="1000"
+              popper-class="org-std-stage-tree-label-tip"
+            >
+              <span class="org-std-stage-tree__node-label" :title="data.Name">{{ data.Name }}</span>
+            </el-tooltip>
             <span v-if="countField && data[countField]" class="org-std-stage-tree__count-badge">{{ data[countField] }}</span>
             <slot name="node-extra" :node="data" />
           </div>
@@ -57,6 +64,7 @@
 <script setup lang="ts">
 import { YzhEmptyState } from '@yzh-core'
 import { ref, computed, watch, onMounted } from 'vue'
+import { ElTooltip } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import {
   FolderOpened,
@@ -411,5 +419,13 @@ onMounted(() => {
   font-weight: var(--yzh-font-weight-medium, 500);
   min-width: 18px;
   text-align: center;
+}
+</style>
+
+<style>
+/* 非 scoped：tooltip popper 挂到 body 下，scoped 选择器够不到 */
+.org-std-stage-tree-label-tip {
+  max-width: 480px;
+  word-break: break-all;
 }
 </style>

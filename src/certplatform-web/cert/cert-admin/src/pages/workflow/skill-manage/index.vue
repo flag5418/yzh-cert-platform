@@ -141,6 +141,7 @@ async function handleBatchDelete() {
       :loading="logic.submitting.value"
       :cols="logic.formLayoutCols as any"
       width="640px"
+      label-width="110px"
       @submit="logic.submitForm()"
     />
 

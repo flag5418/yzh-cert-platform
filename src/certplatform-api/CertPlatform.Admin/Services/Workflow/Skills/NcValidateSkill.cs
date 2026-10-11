@@ -58,7 +58,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
             string? allowed_basis_json,
 
             [SkillParam(Description = "★本次执行任务编码（用于查 wf_node_execution 的真实来源文件，做 C5 交叉验证）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? wf_task_code,
 
             [FromService] IDbOrm db = null!,

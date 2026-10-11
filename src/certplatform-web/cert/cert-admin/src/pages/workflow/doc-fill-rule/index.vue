@@ -685,7 +685,7 @@ function onPromptBound() {
         <el-tooltip
           :disabled="!docTypeLocked"
           content="图片 / PDF 无法解析 ⇒ 只能是固定文档，类型不可更改"
-          placement="bottom"
+          placement="bottom" :show-after="1000"
         >
           <el-radio-group
             :model-value="logic.effectiveDocCategory"
@@ -980,7 +980,7 @@ function onPromptBound() {
                 <el-tooltip
                   :disabled="previewReady"
                   :content="previewBlockReason"
-                  placement="top"
+                  placement="top" :show-after="1000"
                 >
                   <span>
                     <el-button
@@ -1145,7 +1145,7 @@ function onPromptBound() {
                 publishBlockReason ||
                 (!canPublish ? '请先完成必配项并通过测试验证' : '')
               "
-              placement="top"
+              placement="top" :show-after="1000"
             >
               <span>
                 <el-button

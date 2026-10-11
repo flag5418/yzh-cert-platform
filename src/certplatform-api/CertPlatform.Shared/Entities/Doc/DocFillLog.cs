@@ -86,21 +86,32 @@ namespace CertPlatform.Shared.Entities.Doc
         /// <summary>自验收：无残留锚点且无残留标记</summary>
         public bool Verified { get; set; }
 
-        /// <summary>残留锚点原文</summary>
+        /// <summary>
+        /// 残留锚点原文（**JSON 数组文本**）。
+        ///
+        /// ⚠️⚠️ **必须是 `string`，⛔ 不能声明成 `List&lt;string&gt;`**（2026-10-11 修复）。
+        ///    MySQL `json` 列要求写入**合法 JSON 文本**，而 SqlSugar 对 `List&lt;string&gt;` 属性
+        ///    **不做序列化**，把对象原样交给驱动 ⇒ 落库值是一坨非 JSON 字符串
+        ///    ⇒ 报 `Invalid JSON text: "Invalid value." at position 0`。
+        ///    ⚠️ 该失败会让**整份文档的留痕写入回滚**（编排器刻意「响亮失败」）⇒ 文件级失败。
+        ///
+        ///    本仓**所有其它 json 列一律是 `string` + 调用方显式 `JsonSerializer.Serialize`**
+        ///    —— 紧邻的 <see cref="PendingsJson"/> 就是正确样板。本列曾是全仓唯一例外。
+        /// </summary>
         [SugarColumn(ColumnDataType = "json", IsNullable = true)]
-        public List<string>? LeftoverTokens { get; set; }
+        public string? LeftoverTokens { get; set; }
 
-        /// <summary>待办明细</summary>
+        /// <summary>待办明细（JSON 数组文本，调用方 `JsonSerializer.Serialize`）</summary>
         [SugarColumn(ColumnDataType = "json", IsNullable = true)]
         public string? PendingsJson { get; set; }
 
-        /// <summary>召回的企业文档 Code 清单</summary>
+        /// <summary>召回的企业文档 Code 清单（JSON 数组文本，⚠️ 同 <see cref="LeftoverTokens"/>：必须是 `string`）</summary>
         [SugarColumn(ColumnDataType = "json", IsNullable = true)]
-        public List<string>? RetrievedDocCodes { get; set; }
+        public string? RetrievedDocCodes { get; set; }
 
-        /// <summary>Skill 调用轨迹</summary>
+        /// <summary>Skill 调用轨迹（JSON 数组文本，⚠️ 同 <see cref="LeftoverTokens"/>：必须是 `string`）</summary>
         [SugarColumn(ColumnDataType = "json", IsNullable = true)]
-        public List<string>? SkillTrace { get; set; }
+        public string? SkillTrace { get; set; }
 
         public int PromptTokens { get; set; }
         public int CompletionTokens { get; set; }

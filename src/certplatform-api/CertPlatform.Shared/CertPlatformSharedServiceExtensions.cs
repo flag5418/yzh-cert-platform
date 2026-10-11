@@ -79,6 +79,11 @@ public static class CertPlatformSharedServiceExtensions
         //   实时通道是框架能力（IYzhMessagePusher），不在本类。Scoped（持 IDbOrm）。
         services.AddScoped<CertMessageService>();
 
+        // ★ 2026-10-11 审计人字段（CreateBy/UpdateBy/DeleteBy）→ 显示姓名。
+        //   审计人字段按契约存**用户 Code**，页面要显示姓名 ⇒ 统一走这里解析
+        //   （否则页面把 `df6e03e9…` 当人名渲染）。Scoped（持 IDbOrm）。
+        services.AddScoped<UserDisplayNameResolver>();
+
         return services;
     }
 }

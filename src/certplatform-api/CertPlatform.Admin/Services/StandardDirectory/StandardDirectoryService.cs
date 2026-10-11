@@ -17,6 +17,7 @@ using CertPlatform.Admin.Entities.Dir;
 using CertPlatform.Admin.Entities.Cert;
 using CertPlatform.Shared.Entities.Sys;
 using CertPlatform.Admin.Entities.Wf;
+using CertPlatform.Shared.Constants;
 using CertPlatform.Shared.Storage;
 
 namespace CertPlatform.Admin.Services.StandardDirectory;
@@ -35,6 +36,13 @@ public class StandardDirectoryService
     private readonly ILogger<StandardDirectoryService> _logger;
     private readonly QueueManager _queueManager;
 
+    /// <summary>
+    ///     当前请求的用户上下文 —— 只用来给入队填 <c>UserCode</c>（→ <c>yzh_queue.CreateBy</c>）。
+    ///     <para>⚠️ 本类是 Scoped；后台 / 定时路径没有 HttpContext ⇒ <c>UserCode</c> 为空，
+    ///     此时 <c>CreateBy</c> 落 NULL = 「系统发起」（代价：该队列的终态通知没有收件人）。</para>
+    /// </summary>
+    private readonly IUserContext _user;
+
     private static readonly JsonSerializerOptions PayloadJsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -52,13 +60,15 @@ public class StandardDirectoryService
         IObjectStorage storage,
         IConfiguration configuration,
         ILogger<StandardDirectoryService> logger,
-        QueueManager queueManager)
+        QueueManager queueManager,
+        IUserContext user)
     {
         _db = db;
         _storage = storage;
         _configuration = configuration;
         _logger = logger;
         _queueManager = queueManager;
+        _user = user;
     }
 
     #region 组织树（org → standard → phase）
@@ -1024,6 +1034,40 @@ public class StandardDirectoryService
     }
 
     /// <summary>
+    /// ★ 按「标准 + 阶段」列出标准目录的<b>模板文件行</b>（<c>EnterpriseCode = YZH-STD-ENT</c>）。
+    ///
+    /// <para><b>用途</b>：NC 规则设计器里「标准目录文件是否缺失」特殊节点的配置期下拉 ——
+    /// 选项就是本方法的结果。执行期 <c>IsStdFileMissingSkill</c> 拿所选行的 <c>Code</c>
+    /// 作 <c>StandardFileCode</c>，按「<c>StandardFileCode = 该 Code</c> + <c>EnterpriseCode = 当前企业</c>」
+    /// 反查企业行，判断该文件是否真的上传了。</para>
+    ///
+    /// <para><b>为什么必须是模板行</b>：<c>StandardFileCode</c> 的语义是
+    /// 「关联标准文件 Code → 模板行 Code」（见 <see cref="StandardDirectoryFile.StandardFileCode"/> 注释）。
+    /// 2026-10-11 实测：企业行 501 条 <c>StandardFileCode</c> <b>100% 命中</b>模板行。
+    /// ⛔ 不要改成查企业行 —— 配置期没有企业上下文，且那样会让「标准要求」变成「某企业的现状」。</para>
+    ///
+    /// <para><b>模板行的标识是 <c>YZH-STD-ENT</c> 而不是空串</b>：库里有 23 行历史遗留的
+    /// <c>EnterpriseCode = ''</c>（全部 <c>StandardFileCode</c> 为 NULL），属于脏数据，
+    /// 不纳入选项。真正的模板行 168 行全部是 <c>YZH-STD-ENT</c>。</para>
+    /// </summary>
+    /// <param name="standardCode">标准 Code（空/空白 = 不过滤）</param>
+    /// <param name="stageCode">阶段 Code（空/空白 = 不过滤）</param>
+    public async Task<List<StandardDirectoryFile>> GetTemplateFilesAsync(string? standardCode, string? stageCode)
+    {
+        var all = await _db.GetListAsync<StandardDirectoryFile>(
+            x => x.EnterpriseCode == YzhVirtualEnterprise.Code && x.IsValid == 1);
+
+        return (all.Data ?? new List<StandardDirectoryFile>())
+            .Where(x => string.IsNullOrWhiteSpace(standardCode)
+                        || string.Equals(x.StandardCode, standardCode, StringComparison.OrdinalIgnoreCase))
+            .Where(x => string.IsNullOrWhiteSpace(stageCode)
+                        || string.Equals(x.StageCode, stageCode, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.FileName, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <summary>
     /// 更新文件信息。
     /// <para>★ P0-5 修复：按路由 <c>fileCode</c> 定位 existing 并白名单拷贝，
     /// 不再把客户端实体直接交给单参 <c>UpdateAsync</c>。</para>
@@ -1704,6 +1748,9 @@ public class StandardDirectoryService
                     ScopeKey = file.ConfigCode,
                     SourceType = "file_replace",
                     SourceId = file.Code,
+                    // ★ CreateBy 存用户 Code（契约），后台路径取不到则为空
+                    UserCode = _user.UserCode,
+                    UserName = _user.UserName,
                     ResourceLocks = new List<QueueManager.ResourceLockItem>
                     {
                         new() { ResourceTable = QueueManager.RESOURCE_DIR, ResourceCode = file.ConfigCode, ResourceName = file.ConfigCode },
@@ -1817,6 +1864,9 @@ public class StandardDirectoryService
                 ScopeKey = task.ConfigCode,
                 SourceType = "upload_task",
                 SourceId = taskId,
+                // ★ CreateBy 存用户 Code（契约）
+                UserCode = _user.UserCode,
+                UserName = _user.UserName,
                 ResourceLocks = new List<QueueManager.ResourceLockItem>
                 {
                     new() { ResourceTable = QueueManager.RESOURCE_DIR, ResourceCode = task.ConfigCode, ResourceName = task.ConfigCode }
@@ -2802,6 +2852,9 @@ public class StandardDirectoryService
                         ScopeKey = task.ConfigCode,
                         SourceType = "repair_stuck_upload",
                         SourceId = task.TaskId,
+                        // ★ CreateBy 存用户 Code（契约）
+                        UserCode = _user.UserCode,
+                        UserName = _user.UserName,
                         ResourceLocks = locks,
                         Tasks = BuildConvertTasks(convertible, task.TaskId)
                     };
@@ -2924,6 +2977,9 @@ public class StandardDirectoryService
                     ScopeKey = scopeKey,
                     SourceType = "retry_failed",
                     SourceId = $"retry_{DateTime.Now:yyyyMMddHHmmss}_{group.Key}",
+                    // ★ CreateBy 存用户 Code（契约）
+                    UserCode = _user.UserCode,
+                    UserName = _user.UserName,
                     ResourceLocks = locks,
                     Tasks = BuildConvertTasks(group, group.Key)
                 };
@@ -3111,6 +3167,9 @@ public class StandardDirectoryService
                     ScopeKey = scopeKey,
                     SourceType = "backfill",
                     SourceId = $"backfill_{DateTime.Now:yyyyMMddHHmmss}_{group.Key}",
+                    // ★ CreateBy 存用户 Code（契约）
+                    UserCode = _user.UserCode,
+                    UserName = _user.UserName,
                     ResourceLocks = locks,
                     Tasks = group.SelectMany(x => x.Tasks).ToList()
                 };

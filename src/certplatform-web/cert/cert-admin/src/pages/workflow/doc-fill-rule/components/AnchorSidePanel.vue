@@ -543,7 +543,7 @@ async function onSave() {
           <template #default>
             <div class="parse-alert__body">
               <span
-                >已保留**第 1 个**来源，保存将丢弃其余 {{ droppedCount }} 个。请确认第
+                >已保留<b>第 1 个</b>来源，保存将丢弃其余 {{ droppedCount }} 个。请确认第
                 1 个是你要的那个。</span
               >
             </div>
@@ -719,7 +719,7 @@ async function onSave() {
           <!-- 人工填写：无属性 -->
           <template v-else>
             <div class="hint">
-              人工填写**没有来源属性** —— 运行期挂人工待办，由审核专家在专家端填写。
+              人工填写<b>没有来源属性</b> —— 运行期挂人工待办，由审核专家在专家端填写。
             </div>
           </template>
         </div>

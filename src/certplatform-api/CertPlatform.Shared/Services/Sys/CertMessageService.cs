@@ -9,9 +9,14 @@ namespace CertPlatform.Shared.Services.Sys;
 /// <para>★ 职责：落库（CreateForLoginAsync）+ 读取（GetUnreadCount/GetList/MarkRead/MarkAllRead）。
 /// 实时通道由框架能力（YZH.Core.Stand 的 IYzhMessagePusher）承担，本类不碰推送。</para>
 ///
-/// <para>★ 收件人定位：按**登录名**查 Sys_User 换业务编码 Code 落 UserCode 列 ——
-/// yzh_queue.CreateBy 存的就是创建者登录名（QueueManager: CreateBy = req.UserName），
-/// 队列通知链路只能拿到它。找不到用户 = 跳过。</para>
+/// <para>★ 收件人定位（2026-10-11 统一）：<b>主路径按用户 Code</b>（<see cref="CreateForUserAsync"/>）——
+/// 与 <c>yzh_queue.CreateBy</c> / 推送分组键 / JWT <c>code</c> claim <b>同键</b>，不需要任何映射。
+/// 另保留按<b>登录名</b>的入口（<see cref="CreateForLoginAsync"/>）专供「管理端按登录名强制下线」这一种场景
+/// （人输入的只能是登录名）。找不到用户 = 跳过。</para>
+///
+/// <para>⚠️ 历史坑：本类曾经<strong>只能</strong>按登录名查，而队列那条链路后来按契约改存 Code ⇒
+/// 两种键混用会「查不到用户 → 消息静默不落库」。新增调用一律优先用
+/// <see cref="CreateForUserAsync"/>，⛔ 不要传 Code 进 <see cref="CreateForLoginAsync"/>。</para>
 ///
 /// <para>⚠️ Shared 不引用 YZH.Core.Api（只引 Stand + DataBase），查 Sys_User 用列投影 SQL。</para>
 /// </summary>
@@ -25,9 +30,37 @@ public class CertMessageService
     }
 
     /// <summary>
-    /// 按收件人登录名落一条站内消息。
+    ///     ★ <b>按收件人用户 Code 落一条站内消息</b>（推荐入口）。
+    ///
+    ///     <para>与 <c>yzh_queue.CreateBy</c>、推送分组键、JWT <c>code</c> claim 同键 ——
+    ///     调用方无需做任何 Code/登录名 映射。</para>
     /// </summary>
-    /// <param name="loginName">收件人登录名（Sys_User.UserName，唯一）</param>
+    /// <param name="userCode">收件人业务编码（<c>Sys_User.Code</c>）</param>
+    /// <param name="title">标题</param>
+    /// <param name="content">正文</param>
+    /// <param name="messageType">消息类型（≤20 字符；队列类用 "queue"）</param>
+    /// <param name="extraData">附加 JSON</param>
+    /// <returns>true=已落库；false=用户不存在/Code 为空（静默跳过）</returns>
+    public async Task<bool> CreateForUserAsync(
+        string? userCode, string title, string content, string messageType, string extraData)
+    {
+        if (string.IsNullOrWhiteSpace(userCode)) return false;
+
+        var users = await _db.Client.Ado.SqlQueryAsync<UserBrief>(
+            "SELECT Code, UserName FROM Sys_User WHERE Code = @code AND IsDeleted = 0 LIMIT 1",
+            new { code = userCode.Trim() });
+
+        return await InsertAsync(users.FirstOrDefault(), title, content, messageType, extraData);
+    }
+
+    /// <summary>
+    ///     按收件人<b>登录名</b>落一条站内消息。
+    ///
+    ///     <para>⚠️ 仅供「管理端按登录名强制下线」这一种场景 —— 人在界面上输入的只能是登录名。
+    ///     ⛔ 其它调用一律用 <see cref="CreateForUserAsync"/>（传 Code）：把 Code 传进来会查不到用户，
+    ///     消息<b>静默不落库</b>。</para>
+    /// </summary>
+    /// <param name="loginName">收件人登录名（<c>Sys_User.UserName</c>，唯一）</param>
     /// <param name="title">标题</param>
     /// <param name="content">正文</param>
     /// <param name="messageType">消息类型（≤20 字符；队列类用 "queue"）</param>
@@ -40,8 +73,33 @@ public class CertMessageService
 
         var users = await _db.Client.Ado.SqlQueryAsync<UserBrief>(
             "SELECT Code, UserName FROM Sys_User WHERE UserName = @name AND IsDeleted = 0 LIMIT 1",
-            new { name = loginName });
-        var user = users.FirstOrDefault();
+            new { name = loginName.Trim() });
+
+        return await InsertAsync(users.FirstOrDefault(), title, content, messageType, extraData);
+    }
+
+    /// <summary>
+    ///     登录名 → 用户 Code（查不到返回 null）。
+    ///
+    ///     <para>用途：管理端「强制下线」按登录名定位人，而落库与<b>推送分组都按 Code</b>
+    ///     ⇒ 调一次转换，⛔ 不要把登录名直接传给推送（那会进一个没人在的组且不报错）。</para>
+    /// </summary>
+    public async Task<string?> ResolveUserCodeByLoginNameAsync(string? loginName)
+    {
+        if (string.IsNullOrWhiteSpace(loginName)) return null;
+
+        var users = await _db.Client.Ado.SqlQueryAsync<UserBrief>(
+            "SELECT Code, UserName FROM Sys_User WHERE UserName = @name AND IsDeleted = 0 LIMIT 1",
+            new { name = loginName.Trim() });
+
+        var code = users.FirstOrDefault()?.Code;
+        return string.IsNullOrWhiteSpace(code) ? null : code;
+    }
+
+    /// <summary>落库公共段（两个入口共用：收件人已解析为 Code + UserName）</summary>
+    private async Task<bool> InsertAsync(
+        UserBrief? user, string title, string content, string messageType, string extraData)
+    {
         if (user == null || string.IsNullOrEmpty(user.Code)) return false;
 
         await _db.InsertAsync(new CertMessage

@@ -50,6 +50,12 @@ public static class YzhPushProtocol
     /// <summary>服务端 → 客户端的唯一 Hub 事件名</summary>
     public const string ReceiveEvent = "ReceiveYzhMessage";
 
-    /// <summary>用户分组名（⛔ 只由服务端从已验证 JWT 派生，不接受客户端自报）</summary>
-    public static string UserGroup(string userName) => $"user:{userName}";
+    /// <summary>
+    ///     用户分组名（⛔ 只由服务端从已验证 JWT 派生，不接受客户端自报）。
+    ///
+    ///     <para>★ 键 = <b>用户 Code</b>（<c>Sys_User.Code</c>）—— 与 JWT <c>code</c> claim、
+    ///     <c>yzh_queue.CreateBy</c>、<c>cert_message.UserCode</c> 同键（2026-10-11 统一，
+    ///     原先按登录名分组 ⇒ 与 CreateBy 的 Code 口径分叉，推送会静默进空组）。</para>
+    /// </summary>
+    public static string UserGroup(string userCode) => $"user:{userCode}";
 }

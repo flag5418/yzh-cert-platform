@@ -35,7 +35,7 @@
       @node-collapse="handleNodeCollapse"
     >
       <template #default="{ data }">
-        <div class="yzh-tree__node" @mouseenter="handleNodeEnter($event, data)" @mouseleave="hoveredNode = null">
+        <div class="yzh-tree__node">
           <!-- 图标（Extra 双 Key：后端注入 PascalCase Icon，历史数据为 camel icon） -->
           <el-icon v-if="nodeIcon(data) && !isEmoji(nodeIcon(data)!)" class="yzh-tree__icon">
             <component :is="nodeIcon(data)" />
@@ -48,12 +48,17 @@
             <Folder />
           </el-icon>
 
-          <!-- 名称（超长截断时 hover 显示完整名称 tooltip） -->
+          <!-- 名称（hover 显示完整名称 tooltip） -->
+          <!--
+            双保险：
+            ① el-tooltip = Element Plus 弹窗样式（hover 触发）
+            ② title    = 浏览器原生兜底（el-tooltip 在 el-tree slot 内可能因事件不冒泡
+               失效 —— 已登记于 doc-fill-rule/index.vue §B7/C3「disabled 元素不派发 mouseenter」）。
+          -->
           <el-tooltip
-            :content="tipContent"
-            :disabled="tipDisabled"
-            :show-after="200"
+            :content="getLabel(data)"
             placement="top"
+            :show-after="1000"
             popper-class="yzh-tree-label-tip"
           >
             <span
@@ -271,23 +276,6 @@ const emit = defineEmits<{
 
 const treeRef = ref<InstanceType<typeof ElTree>>()
 const searchKeyword = ref('')
-const hoveredNode = ref<string | null>(null)
-
-// 名称 tooltip：仅在标签被截断（scrollWidth > clientWidth）时启用
-const tipContent = ref('')
-const tipDisabled = ref(true)
-
-/**
- * 节点 hover：记录 hover key + 按标签实际截断情况开关 tooltip。
- * 必须挂在**节点容器**上（而非 label 自身）—— mouseenter 按外→内顺序派发，
- * 容器先于 label 触发，保证 el-tooltip 的 label mouseenter 读到最新 disabled。
- */
-function handleNodeEnter(e: MouseEvent, node: YzhTreeNode) {
-  hoveredNode.value = getNodeKey(node)
-  const label = (e.currentTarget as HTMLElement).querySelector('.yzh-tree__label')
-  tipContent.value = getLabel(node)
-  tipDisabled.value = !label || label.scrollWidth <= label.clientWidth || !tipContent.value
-}
 
 // ========================================================
 // 字段参数化读取

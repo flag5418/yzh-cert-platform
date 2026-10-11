@@ -66,6 +66,7 @@ interface TreeNode {
   /** 标准节点的真实 Code（GUID），level=3 时才有 */
   standardCode?: string
   children?: TreeNode[]
+  Children?: TreeNode[]
   /** 是否叶子（影响图标与样式） */
   isLeaf?: boolean
 }
@@ -283,6 +284,21 @@ function countLeaves(nodes: TreeNode[]): number {
   return nodes.reduce((s, c) => s + (c.children ? countLeaves(c.children) : (c.isLeaf ? 1 : 0)), 0)
 }
 
+// ──── 默认展开全部节点 ────
+const expandedKeys = computed<string[]>(() => {
+  const keys: string[] = []
+  const walk = (nodes: TreeNode[]) => {
+    for (const n of nodes) {
+      if (n.Children?.length) {
+        keys.push(n.id)
+        walk(n.Children)
+      }
+    }
+  }
+  walk(treeData.value)
+  return keys
+})
+
 // ──── 节点点击 ────
 function onNodeClick(data: TreeNode) {
   if (data.level !== 3 || !data.standardCode) return
@@ -319,7 +335,7 @@ watch(
         node-key="id"
         highlight-current
         :expand-on-click-node="false"
-        :default-expanded-keys="[ROOT_SCOPE.code]"
+        :default-expanded-keys="expandedKeys"
         @node-click="onNodeClick"
       >
         <template #default="{ data }">
@@ -337,7 +353,9 @@ watch(
             <el-icon v-else class="std-tree__icon"><Document /></el-icon>
 
             <!-- 标签 -->
-            <span class="std-tree__label" :title="data.label">{{ data.label }}</span>
+            <el-tooltip :content="data.label" placement="top" popper-class="std-tree-label-tip" :show-after="1000">
+              <span class="std-tree__label">{{ data.label }}</span>
+            </el-tooltip>
 
             <!-- 启用/禁用徽章 -->
             <YzhStatusBadge
@@ -413,8 +431,10 @@ watch(
  * ★ 弹性宽度：撑开填满 node 中段，把所有右侧元素（badges / status）推到同一列。
  *   label 长短不重要了——右边界永远齐平（同 YzhTree yzh-tree__label）。
  */
+/* ★ el-tooltip 包裹 std-tree__label 时继承 flex 特性（对齐 OrgStandardStageTree 机制） */
+.std-tree__node > :deep(.el-tooltip__trigger) { flex: 1; min-width: 0; }
 .std-tree__label {
-  flex: 1;
+  display: block;
   font-size: var(--yzh-font-size-sm);
   color: var(--yzh-color-text-regular);
   white-space: nowrap;
@@ -426,5 +446,13 @@ watch(
 .std-tree__status {
   flex-shrink: 0;
   margin-left: auto;
+}
+</style>
+
+<style>
+/* 非 scoped：tooltip popper 挂到 body 下，scoped 选择器够不到 */
+.std-tree-label-tip {
+  max-width: 480px;
+  word-break: break-all;
 }
 </style>

@@ -21,6 +21,8 @@ export interface QueueListItem {
   queueType: string
   queueName: string
   scopeKey: string
+  /** ★ 后端已解析的范围人话（企业名 / 标准名 / 阶段名）；为空则前端回落显示 scopeKey */
+  scopeDisplay: string
   status: string
   totalCount: number
   completedCount: number
@@ -29,7 +31,13 @@ export interface QueueListItem {
   pendingCount: number
   cancelledCount: number
   progress: number
+  /**
+   * 创建人用户 Code（= `yzh_queue.CreateBy`，契约：存 Code）
+   * ⚠️ ⛔ 不要直接当人名渲染（会显示成 `df6e03e9…`）—— 用 `createByName`
+   */
   createBy: string
+  /** ★ 后端已解析的创建人姓名（查不到 / 无创建人 = 空串 ⇒ 回落显示 createBy 或「—」） */
+  createByName: string
   sourceType: string
   sourceId: string
   startTime: string

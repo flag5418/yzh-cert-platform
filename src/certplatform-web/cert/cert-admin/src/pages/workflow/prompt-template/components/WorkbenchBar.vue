@@ -116,7 +116,7 @@ const emit = defineEmits<{
       <el-tooltip
         :content="saveBlockedReason ? `${saveBlockedReason} —— 仍可保存，会先弹确认` : '保存到服务端'"
         placement="bottom"
-        :disabled="!saveBlockedReason"
+        :disabled="!saveBlockedReason" :show-after="1000"
       >
         <span>
           <!-- ★ 2026-10-03：⛔ 不再 `:disabled`。

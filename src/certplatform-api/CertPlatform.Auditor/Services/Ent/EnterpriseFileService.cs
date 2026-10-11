@@ -44,6 +44,9 @@ public class EnterpriseFileService
     /// <summary>提取定位链（P2：槽位页四态判定与执行器共用同一结论）</summary>
     private readonly CertPlatform.Admin.Services.DocExtraction.ExtractionScopeResolver _scopeResolver;
 
+    /// <summary>审计人字段（<c>CreateBy</c>）→ 显示姓名（★ 该字段存的是用户 Code，⛔ 不能当人名渲染）</summary>
+    private readonly CertPlatform.Shared.Services.Sys.UserDisplayNameResolver _userNames;
+
     /// <summary>上传任务有效期（分钟）：init 后超时未 confirm 即作废，防悬空 draft 行永久占位</summary>
     private const int TaskExpireMinutes = 30;
 
@@ -69,7 +72,8 @@ public class EnterpriseFileService
         IUserContext user,
         ILogger<EnterpriseFileService> logger,
         CertPlatform.Admin.Services.DocExtraction.EnterpriseExtractionResultStore resultStore,
-        CertPlatform.Admin.Services.DocExtraction.ExtractionScopeResolver scopeResolver)
+        CertPlatform.Admin.Services.DocExtraction.ExtractionScopeResolver scopeResolver,
+        CertPlatform.Shared.Services.Sys.UserDisplayNameResolver userNames)
     {
         _db = db;
         _storage = storage;
@@ -79,6 +83,7 @@ public class EnterpriseFileService
         _logger = logger;
         _resultStore = resultStore;
         _scopeResolver = scopeResolver;
+        _userNames = userNames;
     }
 
     #region 一、左树与阶段汇总
@@ -1520,10 +1525,20 @@ public class EnterpriseFileService
         var versions = (await _db.GetListAsync<EnterpriseFileVersion>(
             x => x.FileCode == fileCode && x.EnterpriseCode == enterpriseCode, includeDisabled: true)).Data ?? new();
 
+        // ★ 审计人字段（CreateBy）按契约存的是**用户 Code**（如 `df6e03e9…`）。
+        //   直接回给前端 = 时间线上顶着 32 位 GUID 当人名（用户报障原题）。
+        //   ⇒ 读侧批量解析成姓名；解析不到（历史登录名 / 脚本标记）**回落原值**，⛔ 不留空。
+        var nameMap = await _userNames.ResolveManyAsync(
+            logs.Select(l => l.CreateBy).Concat(versions.Select(v => v.CreateBy)));
+        string NameOf(string? by) =>
+            !string.IsNullOrWhiteSpace(by) && nameMap.TryGetValue(by.Trim(), out var n)
+                ? n
+                : (by ?? string.Empty);
+
         var timeline = logs.Select(l => (Time: l.CreateTime, Item: (object)new
         {
             Source = "op_log", l.OpType, l.VersionNumber, l.Detail,
-            l.CreateBy, Time = l.CreateTime
+            l.CreateBy, CreateByName = NameOf(l.CreateBy), Time = l.CreateTime
         }))
             .Concat(versions.Select(v => (Time: (System.DateTime)v.CreateTime, Item: (object)new
             {
@@ -1532,6 +1547,7 @@ public class EnterpriseFileService
                 VersionNumber = (int?)v.VersionNumber,
                 Detail = JsonSerializer.Serialize(new { v.FileName, v.StoragePath, v.FileSize, v.Reason }),
                 CreateBy = v.CreateBy,
+                CreateByName = NameOf(v.CreateBy),
                 Time = v.CreateTime
             })))
             .OrderByDescending(t => t.Time)
@@ -1673,6 +1689,8 @@ public class EnterpriseFileService
             ScopeKey = file.ConfigCode,
             SourceType = "enterprise_manual",
             SourceId = $"{fileCode}@{System.DateTime.Now:yyyyMMddHHmmss}",
+            // ★ CreateBy 存用户 Code（契约）；登录名只落 yzh_queue_task.UserName 供排查
+            UserCode = _user.UserCode,
             UserName = _user.UserName,
             ResourceLocks = new List<QueueManager.ResourceLockItem>
             {
@@ -2145,6 +2163,8 @@ public class EnterpriseFileService
             ScopeKey = configCode,
             SourceType = sourceType,
             SourceId = sourceId,
+            // ★ CreateBy 存用户 Code（契约）；登录名只落 yzh_queue_task.UserName 供排查
+            UserCode = _user.UserCode,
             UserName = _user.UserName,
             ResourceLocks = locks,
             Tasks = tasks

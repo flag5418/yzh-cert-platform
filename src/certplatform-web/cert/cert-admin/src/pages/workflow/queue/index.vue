@@ -279,14 +279,20 @@ onUnmounted(() => {
     <!-- 队列主表 -->
     <el-card shadow="never" class="table-card">
       <el-table :data="rows" v-loading="loading" size="default" stripe>
-        <el-table-column prop="queueCode" label="队列编码" width="170" />
         <el-table-column prop="queueName" label="队列名称" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="scopeKey" label="范围" min-width="200">
+        <el-table-column label="范围" min-width="200">
           <template #default="{ row }">
-            <span class="scope-text">{{ formatScopeKey(row.scopeKey) }}</span>
+            <span class="scope-text">{{ row.scopeDisplay || formatScopeKey(row.scopeKey) || '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="createBy" label="创建人" width="110" />
+        <!--
+          ★ 创建人：显示后端解析后的姓名（`createByName`）；
+             `createBy` 按契约存的是用户 Code ⇒ ⛔ 直接 prop="createBy" 会把 `df6e03e9…` 当人名显示。
+             解析不到（已删用户 / 系统发起的队列）回落「—」。
+        -->
+        <el-table-column label="创建人" width="110" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.createByName || '—' }}</template>
+        </el-table-column>
         <el-table-column label="状态" width="90" align="center">
           <template #default="{ row }">
             <el-tag :type="statusTagType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
@@ -367,9 +373,9 @@ onUnmounted(() => {
           <el-descriptions-item label="队列编码">{{ detail.queue.queueCode }}</el-descriptions-item>
           <el-descriptions-item label="队列名称">{{ detail.queue.queueName }}</el-descriptions-item>
           <el-descriptions-item label="范围">
-            {{ formatScopeKey(detail.queue.scopeKey) || '—' }}
+            {{ detail.queue.scopeDisplay || formatScopeKey(detail.queue.scopeKey) || '—' }}
           </el-descriptions-item>
-          <el-descriptions-item label="创建人">{{ detail.queue.createBy || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="创建人">{{ detail.queue.createByName || '—' }}</el-descriptions-item>
           <el-descriptions-item label="状态">
             <el-tag :type="statusTagType(detail.queue.status)" size="small">{{ statusText(detail.queue.status) }}</el-tag>
           </el-descriptions-item>
@@ -444,22 +450,27 @@ onUnmounted(() => {
 }
 
 .status-cards {
-  margin-bottom: 16px;
-  margin-top: 16px;
+  margin-bottom: var(--yzh-space-sm, 8px);
+  margin-top: var(--yzh-space-sm, 8px);
 }
 
 .stat-card {
   text-align: center;
-  padding: 10px 0;
+
+  :deep(.el-card__body) {
+    padding: var(--yzh-space-sm, 10px) var(--yzh-space-xs, 8px);
+  }
 
   .stat-value {
-    font-size: 26px;
+    font-size: var(--yzh-font-size-stat, 22px);
     font-weight: bold;
+    line-height: 1.2;
   }
+
   .stat-label {
-    font-size: 13px;
+    font-size: var(--yzh-font-size-xs, 12px);
     color: var(--yzh-color-text-tertiary, #909399);
-    margin-top: 5px;
+    margin-top: 2px;
   }
 
   &.running .stat-value { color: var(--yzh-color-primary, #409eff); }

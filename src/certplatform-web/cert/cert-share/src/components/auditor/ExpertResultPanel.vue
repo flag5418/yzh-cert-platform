@@ -486,7 +486,7 @@ watch(
           <template #column-AutoStatus="{ row }">
             <el-tooltip
               v-if="isDataGap(row)"
-              placement="top"
+              placement="top" :open-delay="2000"
             >
               <template #content>
                 <div><strong>缺失必要数据</strong>（不是不符合，是无法判定）</div>

@@ -43,6 +43,20 @@ namespace CertPlatform.Admin.Entities.Wf
         [StringLength(64)]
         public string? CategoryCode { get; set; }
 
+        /// <summary>
+        /// ★ 是否可用于 NC 规则配置（DB: IsUseForNcConfig，2026-10-11）
+        /// <para>nc-config 设计器（workflowType='validation'）的节点库只列 <c>true</c> 的 skill。</para>
+        /// <para>默认 <c>false</c> —— 新 skill <b>不会自动出现</b>在规则节点库里，必须显式开启。</para>
+        /// </summary>
+        public bool IsUseForNcConfig { get; set; } = false;
+
+        /// <summary>
+        /// ★ 是否可用于报告规则配置（DB: IsUseForReport，2026-10-11）
+        /// <para>report-rule-config 设计器（workflowType='report'）的节点库只列 <c>true</c> 的 skill。</para>
+        /// <para>默认 <c>false</c>。同一个 skill 可以两个字段都为 <c>true</c>。</para>
+        /// </summary>
+        public bool IsUseForReport { get; set; } = false;
+
         /// <summary>是否有副作用（DB: SideEffect）</summary>
         public bool SideEffect { get; set; } = false;
 

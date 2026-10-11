@@ -88,15 +88,15 @@ function renderChart() {
 
   chartInstance.setOption({
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-    legend: { data: ['费用(USD)', '调用次数'] },
+    legend: { data: ['费用(CNY)', '调用次数'] },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
     xAxis: { type: 'category', data: dates, axisLabel: { rotate: 30 } },
     yAxis: [
-      { type: 'value', name: '费用(USD)', position: 'left' },
+      { type: 'value', name: '费用(CNY)', position: 'left' },
       { type: 'value', name: '调用次数', position: 'right' }
     ],
     series: [
-      { name: '费用(USD)', type: 'line', smooth: true, data: costs, itemStyle: { color: '#409eff' }, areaStyle: { color: 'rgba(64,158,255,0.1)' } },
+      { name: '费用(CNY)', type: 'line', smooth: true, data: costs, itemStyle: { color: '#409eff' }, areaStyle: { color: 'rgba(64,158,255,0.1)' } },
       { name: '调用次数', type: 'bar', yAxisIndex: 1, data: calls, itemStyle: { color: 'rgba(103,194,58,0.6)' } }
     ]
   })
@@ -119,50 +119,53 @@ onBeforeUnmount(() => { chartInstance?.dispose() })
 
 <template>
   <YzhPageLayout title="AI 费用监控">
-    <!-- 快捷时间范围 -->
-    <el-card shadow="never" class="quick-range-card">
-      <el-radio-group v-model="rangeType" @change="onRangeChange">
-        <el-radio-button value="7d">近 7 天</el-radio-button>
-        <el-radio-button value="30d">近 30 天</el-radio-button>
-        <el-radio-button value="90d">近 90 天</el-radio-button>
-        <el-radio-button value="custom">自定义</el-radio-button>
-      </el-radio-group>
-      <el-date-picker v-if="rangeType === 'custom'" v-model="customRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" style="margin-left: 12px" @change="loadData" />
-      <el-button type="primary" size="small" @click="loadData" style="margin-left: 12px">刷新</el-button>
-      <el-link v-if="aliyunConfigured" :href="aliyunDashboardUrl" target="_blank" type="primary" style="margin-left: 12px">查看阿里云实时余额</el-link>
-    </el-card>
+    <!-- 固定顶部：操作栏 + 摘要 -->
+    <div class="sticky-header">
+      <!-- 快捷时间范围 -->
+      <el-card shadow="never" class="quick-range-card">
+        <el-radio-group v-model="rangeType" @change="onRangeChange">
+          <el-radio-button value="7d">近 7 天</el-radio-button>
+          <el-radio-button value="30d">近 30 天</el-radio-button>
+          <el-radio-button value="90d">近 90 天</el-radio-button>
+          <el-radio-button value="custom">自定义</el-radio-button>
+        </el-radio-group>
+        <el-date-picker v-if="rangeType === 'custom'" v-model="customRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" style="margin-left: 12px" @change="loadData" />
+        <el-button type="primary" @click="loadData" style="margin-left: 12px">刷新</el-button>
+        <el-link v-if="aliyunConfigured" :href="aliyunDashboardUrl" target="_blank" type="primary" style="margin-left: 12px">查看阿里云实时余额</el-link>
+      </el-card>
 
-    <!-- 费用摘要 -->
-    <el-row :gutter="16" class="summary-row">
-      <el-col :span="6">
-        <el-card shadow="hover" class="summary-card">
-          <div class="summary-label">累计总费用</div>
-          <div class="summary-value" style="color: var(--yzh-color-danger, #f56c6c)">${{ (summary.TotalCost ?? 0).toFixed(4) }}</div>
-          <div class="summary-sub">累计 {{ summary.TotalCalls ?? 0 }} 次调用</div>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="hover" class="summary-card">
-          <div class="summary-label">本月费用</div>
-          <div class="summary-value" style="color: var(--yzh-color-warning, #e6a23c)">${{ (summary.MonthCost ?? 0).toFixed(4) }}</div>
-          <div class="summary-sub">{{ summary.MonthCalls ?? 0 }} 次调用</div>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="hover" class="summary-card">
-          <div class="summary-label">本周费用</div>
-          <div class="summary-value" style="color: var(--yzh-color-primary, #409eff)">${{ (summary.WeekCost ?? 0).toFixed(4) }}</div>
-          <div class="summary-sub">{{ summary.WeekCalls ?? 0 }} 次调用</div>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="hover" class="summary-card">
-          <div class="summary-label">今日费用</div>
-          <div class="summary-value" style="color: var(--yzh-color-success, #67c23a)">${{ (summary.TodayCost ?? 0).toFixed(4) }}</div>
-          <div class="summary-sub">{{ summary.TodayCalls ?? 0 }} 次调用</div>
-        </el-card>
-      </el-col>
-    </el-row>
+      <!-- 费用摘要 -->
+      <el-row :gutter="16" class="summary-row">
+        <el-col :span="6">
+          <el-card shadow="hover" class="summary-card">
+            <div class="summary-label">累计总费用</div>
+            <div class="summary-value" style="color: var(--yzh-color-danger, #f56c6c)">¥{{ (summary.TotalCost ?? 0).toFixed(4) }}</div>
+            <div class="summary-sub">累计 {{ summary.TotalCalls ?? 0 }} 次调用</div>
+          </el-card>
+        </el-col>
+        <el-col :span="6">
+          <el-card shadow="hover" class="summary-card">
+            <div class="summary-label">本月费用</div>
+            <div class="summary-value" style="color: var(--yzh-color-warning, #e6a23c)">¥{{ (summary.MonthCost ?? 0).toFixed(4) }}</div>
+            <div class="summary-sub">{{ summary.MonthCalls ?? 0 }} 次调用</div>
+          </el-card>
+        </el-col>
+        <el-col :span="6">
+          <el-card shadow="hover" class="summary-card">
+            <div class="summary-label">本周费用</div>
+            <div class="summary-value" style="color: var(--yzh-color-primary, #409eff)">¥{{ (summary.WeekCost ?? 0).toFixed(4) }}</div>
+            <div class="summary-sub">{{ summary.WeekCalls ?? 0 }} 次调用</div>
+          </el-card>
+        </el-col>
+        <el-col :span="6">
+          <el-card shadow="hover" class="summary-card">
+            <div class="summary-label">今日费用</div>
+            <div class="summary-value" style="color: var(--yzh-color-success, #67c23a)">¥{{ (summary.TodayCost ?? 0).toFixed(4) }}</div>
+            <div class="summary-sub">{{ summary.TodayCalls ?? 0 }} 次调用</div>
+          </el-card>
+        </el-col>
+      </el-row>
+    </div>
 
     <!-- 趋势图 -->
     <el-card shadow="never" class="chart-card">
@@ -170,7 +173,7 @@ onBeforeUnmount(() => { chartInstance?.dispose() })
       <div ref="chartRef" style="height: 300px"></div>
     </el-card>
 
-    <!-- 调用明细 -->
+    <!-- 滚动区域：调用明细 -->
     <el-card shadow="never" class="table-card">
       <template #header><span class="card-title">最近调用记录</span></template>
       <el-table :data="callsList" border stripe v-loading="tableLoading">
@@ -186,8 +189,8 @@ onBeforeUnmount(() => { chartInstance?.dispose() })
         <el-table-column prop="PromptTokens" label="输入tokens" width="110" align="right" />
         <el-table-column prop="CompletionTokens" label="输出tokens" width="110" align="right" />
         <el-table-column prop="TotalTokens" label="总tokens" width="100" align="right" />
-        <el-table-column prop="CostUsd" label="费用(USD)" width="110" align="right">
-          <template #default="{ row }"><span :style="{ color: row.Success ? 'var(--yzh-color-success, #67c23a)' : 'var(--yzh-color-danger, #f56c6c)' }">${{ (row.CostUsd ?? 0).toFixed(4) }}</span></template>
+        <el-table-column prop="CostUsd" label="费用(CNY)" width="110" align="right">
+          <template #default="{ row }"><span :style="{ color: row.Success ? 'var(--yzh-color-success, #67c23a)' : 'var(--yzh-color-danger, #f56c6c)' }">¥{{ (row.CostUsd ?? 0).toFixed(4) }}</span></template>
         </el-table-column>
         <el-table-column prop="DurationMs" label="耗时(ms)" width="100" align="right" />
         <el-table-column prop="Success" label="状态" width="80" align="center">
@@ -203,14 +206,25 @@ onBeforeUnmount(() => { chartInstance?.dispose() })
 <style scoped>
 :deep(.yzh-page-layout__content) {
   padding: 0;
-  background: var(--yzh-color-bg-container, #fff);
+  background: var(--yzh-color-bg-page, #f5f7fa);
+  overflow: auto;
 }
+/* 顶部固定区域：操作栏 + 摘要 + 趋势图 */
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--yzh-color-bg-page, #f5f7fa);
+  padding: 16px;
+}
+.quick-range-card :deep(.el-card__body) { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .quick-range-card { margin-bottom: 16px; }
 .summary-row { margin-bottom: 16px; }
 .summary-card { text-align: center; padding: 8px 0; }
 .summary-label { font-size: 13px; color: var(--yzh-color-text-tertiary, #909399); margin-bottom: 8px; }
 .summary-value { font-size: 26px; font-weight: 700; line-height: 1.2; }
 .summary-sub { font-size: 12px; color: var(--yzh-color-text-disabled, #c0c4cc); margin-top: 6px; }
-.chart-card, .table-card { margin-bottom: 16px; }
+.chart-card { margin-bottom: 16px; }
+.table-card { margin: 0 16px 16px; }
 .card-title { font-size: 15px; font-weight: 600; }
 </style>

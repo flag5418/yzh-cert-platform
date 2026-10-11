@@ -96,11 +96,30 @@ const routes: RouteRecordRaw[] = [
       },
       // ★ 企业资料规范化（MENU_AUD_12，54 §6.1）—— 企业原始资料 → 规范化标准文档
       //   ⛔ 必须与菜单 MENU_AUD_12 成对落地（菜单 Url 无子路由 ⇒ 点击白屏 + 守卫 R12 报错）。
-      //   当前为 P0 占位页，P2 替换页面内容（左树五级 + 右区 + 单元格三交互）。
+      //   ★★ 2026-10-11 用户裁决：本页**收窄为「任务列表」**（开任务 / 看进度 / 取消 / 重新执行）；
+      //      范围勾选与干跑预览搬到向导 `/enterprise-normalize/create`，
+      //      结果审核搬到 `/enterprise-review`（MENU_AUD_14）。
       {
         path: 'enterprise-normalize',
         name: 'EnterpriseNormalize',
         component: () => import('@/pages/enterprise-normalize/index.vue')
+      },
+      // ★ 规范化任务建立向导（`/enterprise-normalize/create` 必须排在 `/enterprise-normalize` 之前）
+      //   ⛔ 不进侧边栏：它是任务列表页的子页面，入口在列表工具栏「创建规范化任务」
+      //      与行按钮「重新执行」（带 `?from={queueCode}`）。
+      //      ⇒ 已在 `scripts/guards.mjs` 的 ORPHAN_ALLOW 登记（R12 要求显式登记 + 理由）。
+      {
+        path: 'enterprise-normalize/create',
+        name: 'EnterpriseNormalizeCreate',
+        component: () => import('@/pages/enterprise-normalize/create.vue')
+      },
+      // ★ 企业资料审核（MENU_AUD_14）—— 左树（企业 › 阶段 › 任务）+ 右表（已规范化文档）
+      //   + 按阶段统一导出 + 逐锚点改值 / 钉住（审核抽屉）。
+      //   ⛔ 必须与菜单 MENU_AUD_14 成对落地：本端路由是静态的，菜单 Url 无子路由 ⇒ 点击白屏。
+      {
+        path: 'enterprise-review',
+        name: 'EnterpriseReview',
+        component: () => import('@/pages/enterprise-review/index.vue')
       },
       {
         path: 'organization',

@@ -89,7 +89,28 @@ public class QueueManager
         public string ScopeInfoJson { get; set; } = string.Empty;
         public string SourceType { get; set; } = string.Empty;
         public string SourceId { get; set; } = string.Empty;
+
+        /// <summary>[已废弃] 旧版数字用户 Id（无消费方，仅为兼容调用方而保留）</summary>
         public int UserId { get; set; }
+
+        /// <summary>
+        ///     ★ <b>创建人用户 Code（<c>Sys_User.Code</c>）</b> → 写入 <c>yzh_queue.CreateBy</c>。
+        ///
+        ///     <para>契约（与 <c>BaseEntity</c> 一致：<c>CreateBy</c> 存 <b>Code</b>）：
+        ///     全仓 <c>CreateBy</c> / <c>IUserContext.UserCode</c> / 推送分组键 / JWT <c>code</c> claim
+        ///     必须同键。⛔ 别再把它写成登录名 —— 那样姓名解析、按 Code 关联、推送寻址都会静默失效。</para>
+        ///
+        ///     <para>⚠️ 后台 / 系统发起的队列（无用户上下文）留空即可：
+        ///     空 = 「系统发起」，比编一个用户更诚实；但**代价是终态通知没有收件人**（站内信 + SignalR 都会跳过），
+        ///     需在调用方补：能从父队列继承的（如转换→提取）就继承，见
+        ///     <c>OfficeConvertTaskExecutor.ResolveParentCreatorAsync</c>。</para>
+        /// </summary>
+        public string UserCode { get; set; } = string.Empty;
+
+        /// <summary>
+        ///     创建人登录名（→ <c>yzh_queue_task.UserName</c>，仅供人工排查）。
+        ///     ⛔ <b>不要把它写进 <c>yzh_queue.CreateBy</c></b>（那列要求 Code）。
+        /// </summary>
         public string UserName { get; set; } = string.Empty;
         public string OrgCode { get; set; } = string.Empty;
         public List<ResourceLockItem> ResourceLocks { get; set; } = new();
@@ -171,7 +192,9 @@ public class QueueManager
                 Progress = 0,
                 StartTime = DateTime.Now,
                 OrgCode = req.OrgCode,
-                CreateBy = req.UserName,
+                // ★ 契约：CreateBy = 用户 Code（BaseEntity 注释口径）。空 = 系统发起，归一为 NULL
+                //   —— 不让 "" 与 NULL 两种空值并存（否则任何 `CreateBy <> ''` 类判据都会漏掉一半）。
+                CreateBy = string.IsNullOrWhiteSpace(req.UserCode) ? null : req.UserCode.Trim(),
                 CreateTime = DateTime.UtcNow
             };
             // 主表必须先落库：InsertAsync 失败只返回 Fail 不抛异常，这里必须检查，
@@ -682,6 +705,16 @@ public class QueueManager
         };
     }
 
+    /// <summary>
+    ///     调用 <paramref name="resolver"/> 解析创建人姓名，<b>异常不外抛</b>（解析是旁路，⛔ 不能因为查不到人就让队列页打不开）。
+    /// </summary>
+    private static async Task<string> SafeResolveCreatorAsync(
+        Func<string?, Task<string>> resolver, string? userCode)
+    {
+        try { return await resolver(userCode); }
+        catch { return string.Empty; }
+    }
+
     public async Task<object> GetQueueStatsAsync()
     {
         using var scope = _serviceProvider.CreateScope();
@@ -700,7 +733,21 @@ public class QueueManager
         };
     }
 
-    public async Task<object> GetQueueListAsync(string? type, string? status, DateTime? startTime, DateTime? endTime, int page, int rows)
+    /// <summary>
+    /// 队列列表查询（全项目共用）
+    /// <para>★ <paramref name="scopeResolver"/> 可选：<code>Func&lt;queueType, scopeKey, Task&lt;string&gt;&gt;</code>
+    /// —— 调用方注入按队列类型解析 ScopeKey 为人话的回调（框架层不感知业务实体）。
+    /// 不传则 <c>scopeDisplay</c> 回落为空字符串。</para>
+    ///
+    /// <para>★ <paramref name="creatorResolver"/> 可选：<code>Func&lt;userCode, Task&lt;string&gt;&gt;</code>
+    /// —— 把 <c>CreateBy</c>（★ 用户 Code）解析成人话姓名。
+    /// ⚠️ <b>必须有</b>：<c>CreateBy</c> 按契约存的是 Code，界面上直接渲染会变成
+    /// 「创建人 = df6e03e9…」（裸 Code 当姓名）—— 这正是 2026-10-09 用户报障的那类问题。
+    /// 框架层（DataBase）不引用 <c>Sys_User</c>（在 Api 层）⇒ 只能由调用方注入；不传则回落为空。</para>
+    /// </summary>
+    public async Task<object> GetQueueListAsync(string? type, string? status, DateTime? startTime, DateTime? endTime, int page, int rows,
+        Func<string, string?, Task<string>>? scopeResolver = null,
+        Func<string?, Task<string>>? creatorResolver = null)
     {
         if (page <= 0) page = 1;
         if (rows <= 0) rows = 20;
@@ -728,15 +775,31 @@ public class QueueManager
         var list = query.OrderByDescending(q => q.CreateTime)
             .Skip((page - 1) * rows).Take(rows).ToList();
 
-        return new
+        // ★ 解析 scopeDisplay：逐个调用 resolver（若有）
+        var rowsResult = new List<object>();
+        foreach (var q in list)
         {
-            total,
-            rows = list.Select(q => new
+            // ★ 创建人姓名（CreateBy 是 Code，直接上界面 = 裸 Code 当人名）
+            string createByName = "";
+            if (creatorResolver != null)
+            {
+                try { createByName = await creatorResolver(q.CreateBy); }
+                catch { createByName = string.Empty; }
+            }
+
+            string scopeDisplay = "";
+            if (scopeResolver != null)
+            {
+                try { scopeDisplay = await scopeResolver(q.QueueType, q.ScopeKey); }
+                catch { /* 解析失败不影响列表显示 */ }
+            }
+            rowsResult.Add(new
             {
                 queueCode = q.QueueCode,
                 queueType = q.QueueType,
                 queueName = q.QueueName,
                 scopeKey = q.ScopeKey,
+                scopeDisplay,
                 status = q.Status,
                 totalCount = q.TotalCount,
                 completedCount = q.CompletedCount,
@@ -746,16 +809,21 @@ public class QueueManager
                 cancelledCount = q.CancelledCount,
                 progress = q.Progress,
                 createBy = q.CreateBy,
+                // ★ 已解析的人话姓名（查不到/无创建人 = 空串，前端回落显示 createBy 或「—」）
+                createByName,
                 sourceType = q.SourceType,
                 sourceId = q.SourceId,
                 startTime = q.StartTime?.ToString("yyyy-MM-dd HH:mm:ss"),
                 endTime = q.EndTime?.ToString("yyyy-MM-dd HH:mm:ss"),
                 createTime = q.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")
-            }).ToList()
-        };
+            });
+        }
+
+        return new { total, rows = rowsResult };
     }
 
-    public async Task<object?> GetQueueDetailAsync(string queueCode)
+    public async Task<object?> GetQueueDetailAsync(string queueCode,
+        Func<string?, Task<string>>? creatorResolver = null)
     {
         using var scope = _serviceProvider.CreateScope();
         var orm = scope.ServiceProvider.GetRequiredService<IDbOrm>();
@@ -783,6 +851,8 @@ public class QueueManager
                 cancelledCount = queue.CancelledCount,
                 progress = queue.Progress,
                 createBy = queue.CreateBy,
+                // ★ 已解析的人话姓名（同列表：CreateBy 是 Code，不能直接当人名渲染）
+                createByName = creatorResolver == null ? string.Empty : await SafeResolveCreatorAsync(creatorResolver, queue.CreateBy),
                 sourceType = queue.SourceType,
                 sourceId = queue.SourceId,
                 startTime = queue.StartTime?.ToString("yyyy-MM-dd HH:mm:ss"),

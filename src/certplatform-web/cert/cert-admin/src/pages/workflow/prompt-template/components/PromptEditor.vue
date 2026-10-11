@@ -69,9 +69,9 @@ function onKeydown(e: KeyboardEvent) {
         v-for="p in typeDef.placeholders"
         :key="p"
         placement="bottom"
-        :show-after="120"
         effect="dark"
         :content="describePlaceholder(p)"
+        :show-after="1000"
       >
         <el-tag
           size="small"

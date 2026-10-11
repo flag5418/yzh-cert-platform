@@ -10,6 +10,7 @@
  */
 
 import { NodeIdGenerator, isValidNodeId } from './nodeIdGenerator'
+import { normalizePorts } from './portNormalize'
 import { getSpecialNode } from './specialNodes'
 
 export interface WorkflowNode {
@@ -133,8 +134,10 @@ export function deserialize(config: WorkflowConfig, layoutJson: LayoutJson | nul
     const classCode = nodeType
 
     const specialMeta = getSpecialNode(classCode)
-    const inputPorts = n.inputPorts?.length ? n.inputPorts : (specialMeta?.inputPorts || [])
-    const outputPorts = n.outputPorts?.length ? n.outputPorts : (specialMeta?.outputPorts || [])
+    // ★ 端口字段名归一化（2026-10-11）：历史落库的 inputPorts 可能是后端 PascalCase
+    //   （Name/Label/BindMode…），不归一化则端口标题空白 + bindMode 失效。详见 portNormalize.ts
+    const inputPorts = normalizePorts(n.inputPorts?.length ? n.inputPorts : (specialMeta?.inputPorts || []))
+    const outputPorts = normalizePorts(n.outputPorts?.length ? n.outputPorts : (specialMeta?.outputPorts || []))
 
     return {
       id: newId,

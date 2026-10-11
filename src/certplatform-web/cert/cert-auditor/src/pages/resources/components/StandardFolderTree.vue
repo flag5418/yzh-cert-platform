@@ -182,7 +182,7 @@ function formatSize(size?: number | null) {
             <el-tooltip
               v-if="row.Status === 'markdownFailed'"
               content="预览正常，但正文转换失败（该格式不支持），提取与 NC 检查拿不到内容，建议重传为 docx"
-              placement="top"
+              placement="top" :show-after="1000"
             >
               <span><el-tag size="small" :type="statusType(row)">
                 {{ SLOT_STATUS_TEXT[row.Status as keyof typeof SLOT_STATUS_TEXT]?.text ?? row.Status }}
@@ -193,7 +193,7 @@ function formatSize(size?: number | null) {
             </el-tag>
           </template>
           <template #column-ExtractState="{ row }">
-            <el-tooltip v-if="extractTip(row)" :content="extractTip(row)" placement="top">
+            <el-tooltip v-if="extractTip(row)" :content="extractTip(row)" placement="top" :show-after="1000">
               <span><el-tag
                 size="small"
                 :type="EXTRACT_STATE_TEXT[row.ExtractState ?? '']?.type ?? 'info'"

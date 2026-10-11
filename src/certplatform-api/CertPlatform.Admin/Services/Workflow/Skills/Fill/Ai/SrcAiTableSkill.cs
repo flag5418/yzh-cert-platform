@@ -50,7 +50,8 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
         /// <param name="llm">AI 调用器（DI 注入）</param>
         /// <param name="ct">取消令牌</param>
         public static async Task<SkillResult> ExecuteAsync(
-            [SkillParam(Description = "表格标签（对应模板 {{table:Tag}}）")]
+            [SkillParam(Description = "表格标签（对应模板 {{table:Tag}}）",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string table_tag,
 
             [SkillParam(Description = "列定义 JSON：[{\"field_code\":\"name\",\"title\":\"姓名\",\"kind\":\"text\"}]",
@@ -64,13 +65,16 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
                         BindMode = SkillParamBindMode.LinkOrConstant)]
             string? enterprise_docs = null,
 
-            [SkillParam(Description = "提示词编码 cert_doc_fill_prompt.PromptCode；空=用内置默认模板")]
+            [SkillParam(Description = "提示词编码 cert_doc_fill_prompt.PromptCode；空=用内置默认模板",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? prompt_code = null,
 
-            [SkillParam(Description = "最多返回行数（保护，0=不限制）")]
+            [SkillParam(Description = "最多返回行数（保护，0=不限制）",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             int max_rows = 200,
 
-            [SkillParam(Description = "机构编码（空=只命中全局提示词）")]
+            [SkillParam(Description = "机构编码（空=只命中全局提示词）",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? org_code = null,
 
             [FromService] IDbOrm db = null!,

@@ -37,7 +37,9 @@
               <div class="tree-node level-0" :class="{ expanded: org.expanded }" @click="toggleExpand(org)">
                 <el-icon class="toggle-icon"><ArrowRight /></el-icon>
                 <el-icon class="type-icon org"><OfficeBuilding /></el-icon>
-                <span class="tree-label">{{ org.label }}</span>
+                <el-tooltip :content="org.label" placement="top" popper-class="ws-tree-label-tip" :show-after="1000">
+                  <span class="tree-label">{{ org.label }}</span>
+                </el-tooltip>
                 <el-badge v-if="org.children?.length" :value="org.children.length" type="info" />
               </div>
               <template v-if="org.expanded && org.children">
@@ -45,7 +47,9 @@
                   <div class="tree-node level-1" :class="{ expanded: std.expanded }" @click="toggleExpand(std)">
                     <el-icon class="toggle-icon"><ArrowRight /></el-icon>
                     <el-icon class="type-icon standard"><Document /></el-icon>
-                    <span class="tree-label">{{ std.label }}</span>
+                    <el-tooltip :content="std.label" placement="top" popper-class="ws-tree-label-tip" :show-after="1000">
+                      <span class="tree-label">{{ std.label }}</span>
+                    </el-tooltip>
                     <el-badge v-if="std.children?.length" :value="std.children.length" type="info" />
                   </div>
                   <template v-if="std.expanded && std.children && std.visible">
@@ -53,7 +57,9 @@
                       <div class="tree-node level-2" :class="{ expanded: phase.expanded }" @click="togglePhase(phase, std, org)">
                         <el-icon class="toggle-icon"><ArrowRight /></el-icon>
                         <el-icon class="type-icon phase"><Calendar /></el-icon>
-                        <span class="tree-label">{{ phase.label }}</span>
+                        <el-tooltip :content="phase.label" placement="top" popper-class="ws-tree-label-tip" :show-after="1000">
+                          <span class="tree-label">{{ phase.label }}</span>
+                        </el-tooltip>
                         <el-badge v-if="phase.children?.length" :value="phase.children.length" type="info" />
                       </div>
                       <div v-if="phase.visible && phase.expanded && phase.leafLoaded">
@@ -67,7 +73,9 @@
                             <el-icon class="type-icon rule" :class="{ configured: hasWorkflow(leaf) }">
                               <CircleCheck v-if="hasWorkflow(leaf)" /><Document v-else />
                             </el-icon>
-                            <span class="tree-label">{{ leaf._Label || leaf[treeConfig.textField] || leaf[treeConfig.codeField] || leaf.id }}</span>
+                            <el-tooltip :content="leaf._Label || leaf[treeConfig.textField] || leaf[treeConfig.codeField] || leaf.id" placement="top" popper-class="ws-tree-label-tip" :show-after="1000">
+                              <span class="tree-label">{{ leaf._Label || leaf[treeConfig.textField] || leaf[treeConfig.codeField] || leaf.id }}</span>
+                            </el-tooltip>
                           </div>
                         </template>
                       </div>
@@ -132,9 +140,12 @@
                 :doc-fields="currentDocFields"
                 :doc-tables="currentDocTables"
                 :canvas-nodes="canvasNodesForPanel"
+                :std-standards="stdStandards"
+                :std-files="stdFiles"
                 @update-node="handleUpdateNode"
                 @delete-node="handleDeleteNode"
                 @load-doc-fields="onNodeDocChange"
+                @load-std-files="onStdFilesRequest"
                 @link-node="handleLinkNode"
                 @test-node="handleTestNode"
                 @test-workflow="handleTestWorkflow"
@@ -158,6 +169,7 @@ import NodePropertyForm from './NodePropertyForm.vue'
 import SkillPanel from './SkillPanel.vue'
 import { analyzeWorkflowTopology, nodeStyle, setLogEnabled, setLogLevel } from '@share/composables/workflow/compiler'
 import { deserialize, extractLayout, serialize } from '@share/composables/workflow/serializer'
+import { SPECIAL_NODE_CODES } from '@share/composables/workflow/specialNodes'
 import { useWorkflowStore } from '@share/composables/workflow/useWorkflowStore'
 import { installLogicFlowPatch } from '@share/utils/logicflow-patch'
 import { YZH_VIRTUAL_ENTERPRISE_CODE } from '@share/constants/virtualEnterprise'
@@ -245,6 +257,8 @@ const forceRefreshTick = ref(0)
 const docRules = ref<any[]>([])
 const currentDocFields = ref<any[]>([])
 const currentDocTables = ref<any[]>([])
+/** ★ is_std_file_missing 节点用：当前「标准 + 阶段」下的标准文件，元素形如 { code, name } */
+const stdFiles = ref<any[]>([])
 const savedTip = ref('')
 const executing = ref(false)
 const executionResult = ref<any>(null)
@@ -263,6 +277,31 @@ const currentRuleCode = computed<string>(() => {
   const leaf = currentLeaf.value
   if (!leaf) return ''
   return leaf.Code || leaf[props.treeConfig.codeField] || ''
+})
+
+/**
+ * ★ is_std_file_missing 节点用：标准 → 阶段两级选项（从已加载的标准树派生，⛔ 不再发请求）。
+ *
+ * <p>⚠️ 字段口径（易错）：树里 <c>standardCode</c> 是**业务码**（<c>iso9001</c>），
+ * 而 <c>cert_standard_directory_file.StandardCode</c> 存的是 <b>GUID</b> ——
+ * 能用于过滤的是 <c>stdCode</c>；阶段同理，用 <c>phaseCode</c>。</p>
+ */
+const stdStandards = computed(() => {
+  const out: any[] = []
+  for (const org of (treeData.value || [])) {
+    for (const std of (org.children || [])) {
+      if (std.type && std.type !== 'standard') continue
+      out.push({
+        code: std.stdCode || std.standardCode || std.id,
+        name: std.standardName || std.label || std.standardCode || std.id,
+        stages: (std.children || []).map((p: any) => ({
+          code: p.phaseCode || p.id,
+          name: p.phaseName || p.label || p.phaseCode || p.id,
+        })),
+      })
+    }
+  }
+  return out
 })
 
 const treeLabel = computed(() => {
@@ -331,12 +370,25 @@ async function loadSkills() {
     const res = await yzhApi.post('/api/Admin/Workflow/WfSkill/filter', { Page: 1, PageSize: 200, Filters: [] })
     expectOk(res as any, '技能列表加载失败')
     const items = res?.data?.Items || []
+    // ★ 用途过滤（2026-10-11 用户裁定）：节点库只列「当前场景可用」的 skill。
+    //   两个开关字段在 wf_skill 上默认 0 ⇒ 新 skill 不会自动出现在规则节点库里，必须显式开启。
+    //   场景由 workflowType 决定：'report' → IsUseForReport；其余（含 'validation'）→ IsUseForNcConfig。
+    //   ⚠️ 后端响应恒 PascalCase，字段名必须按 IsUseForNcConfig / IsUseForReport 读（⛔ 非小写）。
+    const scopeFlag = props.workflowType === 'report' ? 'IsUseForReport' : 'IsUseForNcConfig'
+    // ★ 去重（2026-10-11）：升级为「特殊节点」的 skill（如 is_std_file_missing）由
+    //   specialNodes.ts 提供**带专属面板**的节点，若仍留在 skill 列表里会重复出现两次，
+    //   而且 skill 形态没有标准文件下拉（参数只能手输 GUID）⇒ 必然配错。
+    //   ⛔ 判据用 SPECIAL_NODE_CODES 而不是「开关值」：是否特殊节点是**代码事实**，
+    //      与「可用于 NC/报告规则」两个开关（配置事实）正交。
+    const scopedItems = items.filter((s: any) =>
+      (s?.[scopeFlag] === true || s?.[scopeFlag] === 1)
+      && !SPECIAL_NODE_CODES.includes(s?.SkillCode || s?.Code))
     // skillCode/skillName/category/skillType 是节点模型内部字段（workflow schema），
     // 由实体字段 Code/Name/CategoryCode/SkillType 派生，属组件内部模型而非实体字段。
     // ★ skillCode 取 SkillCode（执行期 wf_skill_reflection 的键）：Code 与 SkillCode 对
     //   SK_* 类技能不一致，用 Code 会让 NodeExecutor 反射查不到 Skill（2026-10-10）。
     // ★ inputPorts 反射元数据（方案 A）：数据行 wf_skill_input 仅 6 行、不可依赖。
-    skills.value = items.map((s: any) => ({
+    skills.value = scopedItems.map((s: any) => ({
       ...s,
       skillCode: s.SkillCode || s.Code,
       skillName: s.Name,
@@ -430,6 +482,39 @@ async function loadDocRules() {
     ElMessage.error(e?.err || e?.message || '文档提取规则加载失败')
   }
 }
+/**
+ * ★ 加载「标准文件」下拉选项（is_std_file_missing 特殊节点，2026-10-11）。
+ *
+ * <p>数据源 = <c>/StandardDirectory/std-files</c>，返回的是标准目录的**模板行**
+ * （<c>EnterpriseCode = YZH-STD-ENT</c>）—— 即「标准要求有哪些文件」，
+ * 与任何企业无关。执行期由后端拿所选行的 Code 反查企业行判断是否上传。</p>
+ *
+ * <p>⚠️ 后端响应恒 <b>PascalCase</b>（<c>Code</c>/<c>FileName</c>）⇒ 在这里归一化成
+ * <c>{ code, name }</c>，让面板只读小写（同 portNormalize 的思路，避免两套命名混用）。</p>
+ */
+async function loadStdFiles(standardCode: string, stageCode: string) {
+  if (!standardCode) { stdFiles.value = []; return }
+  try {
+    const qs = new URLSearchParams({ standardCode, stageCode: stageCode || '' }).toString()
+    const res = await yzhApi.get(`/api/Admin/Workflow/StandardDirectory/std-files?${qs}`)
+    expectOk(res as any, '标准文件列表加载失败')
+    const arr: any[] = res?.data || res?.Data || []
+    stdFiles.value = (Array.isArray(arr) ? arr : []).map((f: any) => ({
+      code: f.Code || f.code || '',
+      name: f.FileName || f.fileName || '',
+      isRequired: f.IsRequired ?? f.isRequired ?? true,
+    }))
+  } catch (e: any) {
+    stdFiles.value = []
+    ElMessage.error(e?.err || e?.message || '标准文件列表加载失败')
+  }
+}
+
+/** 面板请求按「标准 + 阶段」重载标准文件 */
+function onStdFilesRequest({ standardCode, stageCode }: { standardCode: string; stageCode: string }) {
+  loadStdFiles(standardCode, stageCode)
+}
+
 async function loadFieldsAndTables(ruleCode: string) {
   if (!ruleCode) return
   try {
@@ -1345,9 +1430,13 @@ function onNodeDocChange(ruleCode: string) { if (ruleCode) loadFieldsAndTables(r
 .tree-node .type-icon.phase { color: #f59e0b; }
 .tree-node .type-icon.rule { color: #94a3b8; }
 .tree-node .type-icon.rule.configured { color: #10b981; }
-.tree-node .tree-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-node .tree-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ★ el-tooltip 包裹 tree-label 时继承 flex 特性（对齐 OrgStandardStageTree 机制） */
+.tree-node > :deep(.el-tooltip__trigger) { flex: 1; min-width: 0; }
 .level-1 { padding-left: 20px; }
 .level-2 { padding-left: 40px; }
 .level-3 { padding-left: 60px; }
 .rule-code-text { font-family: 'JetBrains Mono', monospace; background: #f1f5f9; padding: 2px 6px; border-radius: 2px; color: #64748b; }
+/* ★ 树节点文字 tooltip（对齐 OrgStandardStageTree 的 org-std-stage-tree-label-tip） */
+.ws-tree-label-tip { max-width: 400px; }
 </style>

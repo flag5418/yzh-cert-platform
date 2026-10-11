@@ -32,16 +32,26 @@ import {
   type NormalizeRunResult,
 } from '@share/api/ent/enterprise-normalize'
 
-defineProps<{
-  /** 干跑结果（null = 还没预览过） */
-  plan: NormalizePlanResult | null
-  /** 入队回执（null = 还没执行过） */
-  run: NormalizeRunResult | null
-  /** ★ 批次进度快照（`batch/{queueCode}` 轮询结果；null = 还没查过） */
-  batch: NormalizeBatchResult | null
-  /** 干跑进行中 */
-  planning: boolean
-}>()
+withDefaults(
+  defineProps<{
+    /** 干跑结果（null = 还没预览过） */
+    plan: NormalizePlanResult | null
+    /** 入队回执（null = 还没执行过） */
+    run: NormalizeRunResult | null
+    /** ★ 批次进度快照（`batch/{queueCode}` 轮询结果；null = 还没查过） */
+    batch: NormalizeBatchResult | null
+    /** 干跑进行中 */
+    planning: boolean
+    /**
+     * 是否显示「收起」按钮（默认 true）。
+     *
+     * ★ 向导页传 `false`：卡片是**步骤 3 的主体**，收起后那一步会变成空白
+     *   （用户看到的是「点了没反应」）。列表 / 详情类页面才需要收起。
+     */
+    closable?: boolean
+  }>(),
+  { closable: true },
+)
 
 const emit = defineEmits<{
   (e: 'dismiss'): void
@@ -78,7 +88,9 @@ function batchPct(b: NormalizeBatchResult): number {
       <div class="npc__head">
         <span class="npc__title">已入队</span>
         <YzhStatusBadge type="success" text="任务已交给后台队列" />
-        <el-button type="default" size="small" @click="emit('dismiss')">收起</el-button>
+        <el-button v-if="closable" type="default" size="small" @click="emit('dismiss')">
+          收起
+        </el-button>
       </div>
       <ul class="npc__facts">
         <li>批次号：<code>{{ run.QueueCode || '—' }}</code></li>
@@ -150,7 +162,9 @@ function batchPct(b: NormalizeBatchResult): number {
       <div class="npc__head">
         <span class="npc__title">干跑预览</span>
         <YzhStatusBadge type="info" text="还没执行，以下是预计结果" />
-        <el-button type="default" size="small" @click="emit('dismiss')">收起</el-button>
+        <el-button v-if="closable" type="default" size="small" @click="emit('dismiss')">
+          收起
+        </el-button>
       </div>
 
       <div class="npc__counts">

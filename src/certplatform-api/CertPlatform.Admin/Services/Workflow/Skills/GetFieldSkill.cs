@@ -23,11 +23,14 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     public static class GetFieldSkill
     {
         public static async Task<SkillResult> ExecuteAsync(
-            [SkillParam(Description = "字段编码，如 iso9001.ent_base.biz_lic.Name")]
+            [SkillParam(Description = "字段编码，如 iso9001.ent_base.biz_lic.Name",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string field_code,
-            [SkillParam(Description = "企业编码（空=标准样例企业=虚拟企业常量）")]
+            [SkillParam(Description = "企业编码（空=标准样例企业=虚拟企业常量）",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string enterprise_code,
-            [SkillParam(Description = "文件编码，可选，文件级过滤")]
+            [SkillParam(Description = "文件编码，可选，文件级过滤",
+                        BindMode = SkillParamBindMode.ConstantOnly)]
             string? file_code = null,
             [FromService] IDbOrm db = null!,
             CancellationToken ct = default)

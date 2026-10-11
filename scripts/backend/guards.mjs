@@ -30,6 +30,17 @@
  *         📏 基线：全仓 `_db/_dbOrm.InsertBatchAsync` 调用点共 3 处，规则启用时已全部收口 = 0。
  *         ⚠️ 已知局限：按行匹配。若写成「赋值换行 + 下一行 `await …`」会误报
  *            —— 本仓风格为单行赋值，误报时改成单行即可。
+ *   B-R6  菜单种子 SQL 的 `ON DUPLICATE KEY UPDATE` 禁覆盖「人工可改列」`MenuName` / `IsValid`
+ *         （扫描 `scripts/db/*.sql`，⛔ 不在 ROOTS 里 —— 那批只收 .cs）
+ *         ★ 真实事故（2026-10-11 用户报障）：「我改了菜单名 / 禁用了菜单，跑一次 SQL 又被还原」
+ *            —— 7 个 `*_menu_*.sql` 的覆盖子句里全都写着
+ *            `MenuName = VALUES(MenuName)` 与 `IsValid = 1`，**每次重跑都冲掉人工改动**。
+ *         ★ 判据：`MenuName`（纯展示）/ `IsValid`（纯启禁）与**路由正确性无关** ⇒ 归人工；
+ *            而 `Url` / `ParentCode` 必须由脚本保证（守卫 R12 要查「路由 ↔ 菜单」一致）
+ *            ⇒ ⛔ 不纳入本规则，否则种子脚本无法修正菜单接线。
+ *         ⚠️ `Description` 属**边界列**（也是人工可改，但常需随职责变更修订）：
+ *            本轮不拦，但修订式 `UPDATE` 应自带「旧值匹配」条件保证幂等
+ *            （样板见 `20261011_menu_aud_14_V1.sql` §②）。
  *
  * ⛔ 严禁挂到 dotnet watch / dev 启动脚本 —— 只允许挂到 build / pre-commit / 手动门禁。
  *
@@ -101,6 +112,80 @@ const RULES = [
   },
 ]
 
+/** B-R6 扫描根：菜单种子 SQL（⛔ 不在 ROOTS 里 —— 那批只收 `.cs`） */
+const MENU_SQL_DIR = join(ROOT, 'scripts/db')
+
+/**
+ * SQL 去注释（**保持行号**，否则违规行号会漂）：
+ * 整行 `--` 注释 + `/* … *\/` 块注释。
+ * ⚠️ 只处理**整行** `--`（行首可选空白）：行内 `--` 在 SQL 里也可能是字符串内容，
+ *    误删会让规则漏报而不是误报 —— 这是刻意选的保守方向。
+ */
+function stripSqlComments(text) {
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/^[ \t]*--.*$/gm, (m) => ' '.repeat(m.length))
+}
+
+function lineOf(text, index) {
+  return text.slice(0, index).split('\n').length
+}
+
+/**
+ * B-R6：菜单种子 SQL 禁覆盖「人工可改列」。
+ *
+ * ★ 病因（2026-10-11 用户报障，实测 7 个文件全中）：
+ *    `scripts/db/*_menu_*.sql` 的 `ON DUPLICATE KEY UPDATE` 里写着
+ *    `` `MenuName` = VALUES(`MenuName`) `` 与 `` `IsValid` = 1 ``。
+ *    这两列是**人工可改列**（库里直接改名 / 手动停用），而覆盖子句**每次重跑都执行**
+ *    ⇒ 症状：「我改了菜单、被执行 sql 后又被还原了」，用户反复踩了很多次。
+ *
+ * ★ 判据（为什么只拦这两列）：
+ *    - `MenuName`（纯展示）、`IsValid`（纯启禁）与**路由正确性无关** ⇒ 归人工；
+ *    - `Url` / `ParentCode` 必须由脚本保证 —— 守卫 `R12` 要查「路由 ↔ 菜单」一致，
+ *      拦掉它们会让种子脚本无法修正菜单接线（⛔ 不纳入）。
+ *
+ * ⚠️ 只认 `INSERT INTO Sys_Menu` 的覆盖子句；其它表（`Sys_Dictionary` / `wf_skill` …）
+ *    不在本规则范围内。
+ */
+function checkMenuSql() {
+  const violations = []
+  let names = []
+  try {
+    names = readdirSync(MENU_SQL_DIR).filter((f) => f.endsWith('.sql'))
+  } catch {
+    return violations // 目录不存在 ⇒ 不阻断（本规则不是信封铁律的一部分）
+  }
+
+  /** 人工可改列 → 违规文案 */
+  const PROTECTED = {
+    MenuName: '重跑会把人工改的**菜单名**冲回脚本值',
+    IsValid: '重跑会把人工**停用**的菜单强制启用',
+  }
+
+  for (const name of names) {
+    const text = stripSqlComments(readFileSync(join(MENU_SQL_DIR, name), 'utf8'))
+    // 非贪婪到第一个 `;` ⇒ 一条 INSERT 一段（本仓 SQL 的字符串字面量里没有 `;`）
+    for (const m of text.matchAll(/INSERT\s+INTO\s+`?(\w+)`?([\s\S]*?);/gi)) {
+      if (m[1].toLowerCase() !== 'sys_menu') continue
+      const body = m[2]
+      const dup = /ON\s+DUPLICATE\s+KEY\s+UPDATE/i.exec(body)
+      if (!dup) continue
+      const clause = body.slice(dup.index)
+      for (const [col, why] of Object.entries(PROTECTED)) {
+        if (new RegExp('`?' + col + '`?\\s*=', 'i').test(clause)) {
+          violations.push({
+            file: relative(ROOT, join(MENU_SQL_DIR, name)),
+            line: lineOf(text, m.index + dup.index),
+            text: `Sys_Menu 的 ON DUPLICATE KEY UPDATE 覆盖了 \`${col}\` —— ${why}`,
+          })
+        }
+      }
+    }
+  }
+  return violations
+}
+
 /** B-R4：静态存在性检查（运行时校验由该过滤器执行） */
 function checkB4() {
   const filterPath = join(ROOT, 'src/yzh-core/YZH.Core.Api/Filters/ApiResponseContractFilter.cs')
@@ -168,8 +253,21 @@ for (const rule of RULES) {
   else if (REPORT_ONLY) console.log(`✓ ${rule.id} ${rule.desc}`)
 }
 
+{
+  const rule = {
+    id: 'B-R6',
+    desc: '菜单种子 SQL 不覆盖人工可改列（Sys_Menu 的 MenuName / IsValid）',
+  }
+  const violations = checkMenuSql()
+  if (violations.length) failures.push({ rule, violations })
+  else if (REPORT_ONLY) console.log(`✓ ${rule.id} ${rule.desc}`)
+}
+
+/** 自定义检查条数（B-R4 / B-R6）—— 与 RULES 一起计入摘要 */
+const CUSTOM_CHECKS = 2
+
 if (REPORT_ONLY) {
-  console.log(`\n报告模式：${RULES.length + 1} 条规则 / ${scannedFiles} 个文件 / ${failures.length} 条违规规则（不阻断）`)
+  console.log(`\n报告模式：${RULES.length + CUSTOM_CHECKS} 条规则 / ${scannedFiles} 个文件 / ${failures.length} 条违规规则（不阻断）`)
   process.exit(0)
 }
 
@@ -186,4 +284,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log(`✓ 后端信封守卫通过（${RULES.length + 1} 条规则 / ${scannedFiles} 个文件）`)
+console.log(`✓ 后端信封守卫通过（${RULES.length + CUSTOM_CHECKS} 条规则 / ${scannedFiles} 个文件）`)
