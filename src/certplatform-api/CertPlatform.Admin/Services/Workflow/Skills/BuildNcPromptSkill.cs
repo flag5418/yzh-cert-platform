@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
+using CertPlatform.Admin.Services.Workflow.Models;
 using YZH.Core.DataBase.Interfaces;
 using CertPlatform.Admin.Entities.Cert;
 
@@ -193,54 +194,64 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     [Skill(
         Code = "build_nc_prompt",
         Name = "NC判定Prompt装配",
-        ReturnType = "json",
+        ReturnType = "string",
+        ResultPort = "user_prompt",
         Description = "★ 从全局 Prompt 模板 + 规则维度清单 + 企业材料，装配出完整的 nc_judge / nc_conclude 提示词（免在画布上重复写判定框架）"
     )]
     public static class BuildNcPromptSkill
     {
         public static async Task<SkillResult> ExecuteAsync(
             [SkillParam(Description = "★Prompt 编码：nc_judge=维度判定 | nc_conclude=结论理由",
-                        BindMode = SkillParamBindMode.Enum, EnumSource = "nc_prompt_kind")]
+                        BindMode = SkillParamBindMode.Enum, EnumSource = "nc_prompt_kind",
+                        AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string? prompt_code,
 
-            [SkillParam(Description = "认证机构编码", BindMode = SkillParamBindMode.ConstantOnly)]
+            [SkillParam(Description = "认证机构编码", BindMode = SkillParamBindMode.ConstantOnly,
+                        AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string? org_code,
 
             [SkillParam(Description = "★规则 JSON（cert_validation_rule.RuleJson，含 dimensions）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string? rule_json,
 
+            // ★ AllowEmpty = SkillParamEmptyPolicy.Deny：企业材料是判定的<b>证据</b>。没有它，AI 只能凭空判 ⇒
+            //   正是用户说的「路径没跑通很大可能影响整个结果」。
+            //   正确做法：上游用 is_empty + branch 分流；这里是不连 is_empty 时的<b>安全网</b>
+            //   （中断当前检查项 + 落补录缺口，让用户能回到「启动前补录」通道）。
             [SkillParam(Description = "★企业材料文本（上游 get_field/get_table/is_* 节点的输出拼装）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string? data_material,
 
-            [SkillParam(Description = "条款号（展示用）", BindMode = SkillParamBindMode.ConstantOnly)]
+            [SkillParam(Description = "条款号（展示用）", BindMode = SkillParamBindMode.ConstantOnly,
+                        AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? clause_number,
 
-            [SkillParam(Description = "条款标题", BindMode = SkillParamBindMode.ConstantOnly)]
+            [SkillParam(Description = "条款标题", BindMode = SkillParamBindMode.ConstantOnly,
+                        AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? clause_title,
 
-            [SkillParam(Description = "条款原文", BindMode = SkillParamBindMode.ConstantOnly)]
+            [SkillParam(Description = "条款原文", BindMode = SkillParamBindMode.ConstantOnly,
+                        AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? clause_content,
 
-            // ── 以下仅 nc_conclude 用 ──
+            // ── 以下仅 nc_conclude 用（dimensions 阶段本就该为空 ⇒ 必须 AllowEmpty = SkillParamEmptyPolicy.Allow）──
             [SkillParam(Description = "★[nc_conclude] 规则算出的权威结论",
-                        BindMode = SkillParamBindMode.ConstantOnly)]
+                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? rule_conclusion,
 
             [SkillParam(Description = "★[nc_conclude] 依据维度号（JSON 数组）",
-                        BindMode = SkillParamBindMode.ConstantOnly)]
+                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? basis_json,
 
             [SkillParam(Description = "★[nc_conclude] 未检查维度号（JSON 数组）",
-                        BindMode = SkillParamBindMode.ConstantOnly)]
+                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? unverified_json,
 
             [FromService] IDbOrm db = null!,
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(org_code))
-                return SkillResult.Fail("org_code 不能为空");
+                return SkillResult.Fail("org_code 不能为空", WorkflowErrorCodes.PreconditionEmpty);
 
             var code = (prompt_code ?? "nc_judge").Trim();
             var org = org_code!;
@@ -250,7 +261,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
             {
                 var tpl = await LoadJudgeTemplateAsync(db, org);
                 if (tpl == null)
-                    return SkillResult.Fail($"未找到 Prompt 模板 {code}（机构={org}）");
+                    return SkillResult.Fail($"未找到 Prompt 模板 {code}（机构={org}）", WorkflowErrorCodes.ConfigError);
 
                 var (sys, user) = NcPromptAssembler.BuildJudgePrompt(
                     tpl, rule_json ?? "", clause_number, clause_title, clause_content,
@@ -283,7 +294,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
             {
                 var tpl = await LoadConcludeTemplateAsync(db, org);
                 if (tpl == null)
-                    return SkillResult.Fail($"未找到 Prompt 模板 {code}（机构={org}）");
+                    return SkillResult.Fail($"未找到 Prompt 模板 {code}（机构={org}）", WorkflowErrorCodes.ConfigError);
 
                 var (sys, user) = NcPromptAssembler.BuildConcludePrompt(
                     tpl,
@@ -313,7 +324,8 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                 return SkillResult.Ok(outputs2, 1.0);
             }
 
-            return SkillResult.Fail($"未知的 prompt_code：{code}（支持 nc_judge / nc_conclude）");
+            return SkillResult.Fail(
+                $"未知的 prompt_code：{code}（支持 nc_judge / nc_conclude）", WorkflowErrorCodes.ConfigError);
         }
 
         private static async Task<NcJudgePrompt?> LoadJudgeTemplateAsync(IDbOrm db, string org)

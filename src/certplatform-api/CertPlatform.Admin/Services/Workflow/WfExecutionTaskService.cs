@@ -164,6 +164,10 @@ namespace CertPlatform.Admin.Services.Workflow
                 {
                     PathIndex = p.PathIndex,
                     Status = p.Status,
+                    // ★ 2026-10-12：分支裁剪的两个新字段必须显式投影，
+                    //   否则内部 PathResult 上有值、到前端全丢（PathResult ≠ TaskPathResult，投影不是浅拷贝）。
+                    SkipReason = p.SkipReason,
+                    ErrorCode = p.ErrorCode,
                     FailedAtNodeId = p.FailedAtNodeId,
                     Error = p.Error,
                     Output = p.Output,

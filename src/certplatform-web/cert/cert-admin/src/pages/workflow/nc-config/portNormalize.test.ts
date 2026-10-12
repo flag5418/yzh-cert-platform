@@ -20,6 +20,7 @@ const GET_FIELD_PORTS = [
     Label: '字段编码，如 iso9001.ent_base.biz_lic.Name',
     Type: 'string',
     Required: true,
+    AllowEmpty: false,
     Description: '字段编码，如 iso9001.ent_base.biz_lic.Name',
     BindMode: 'ConstantOnly'
   },
@@ -27,7 +28,9 @@ const GET_FIELD_PORTS = [
     Name: 'enterprise_code',
     Label: '企业编码（空=标准样例企业=虚拟企业常量）',
     Type: 'string',
-    Required: true,
+    // ★ 2026-10-12：真实后端为 false —— enterprise_code 刻意 AllowEmpty ⇒ 空是合法语义
+    Required: false,
+    AllowEmpty: true,
     Description: '企业编码（空=标准样例企业=虚拟企业常量）',
     BindMode: 'ConstantOnly'
   },
@@ -36,6 +39,7 @@ const GET_FIELD_PORTS = [
     Label: '文件编码，可选，文件级过滤',
     Type: 'string',
     Required: false,
+    AllowEmpty: true,
     Description: '文件编码，可选，文件级过滤',
     BindMode: 'ConstantOnly'
   }
@@ -54,7 +58,7 @@ describe('portNormalize', () => {
 
   it('大写键被清除 —— 不再残留 PascalCase 字段', () => {
     for (const p of normalizePorts(GET_FIELD_PORTS)) {
-      for (const key of ['Name', 'Label', 'Type', 'Required', 'BindMode', 'Description', 'EnumSource', 'DefaultValue']) {
+      for (const key of ['Name', 'Label', 'Type', 'Required', 'AllowEmpty', 'BindMode', 'Description', 'EnumSource', 'DefaultValue']) {
         expect(key in p).toBe(false)
       }
     }
@@ -78,7 +82,16 @@ describe('portNormalize', () => {
   })
 
   it('required 保留（供 REQ 标签）—— 大小写与布尔值都不丢', () => {
-    expect(normalizePorts(GET_FIELD_PORTS).map((p) => p.required)).toEqual([true, true, false])
+    // ★ 2026-10-12：真实后端为 [true, false, false] —— 仅 field_code 不允许为空
+    expect(normalizePorts(GET_FIELD_PORTS).map((p) => p.required)).toEqual([true, false, false])
+  })
+
+  it('★ AllowEmpty 映射 —— 与 required 同源（Required == !AllowEmpty），供面板做空值提示', () => {
+    expect(normalizePorts(GET_FIELD_PORTS).map((p) => p.allowEmpty)).toEqual([false, true, true])
+    // 同源不变量：两者必须互为取反，否则说明后端两个投影分叉了
+    for (const p of normalizePorts(GET_FIELD_PORTS)) {
+      expect(p.required).toBe(!p.allowEmpty)
+    }
   })
 
   it('EnumSource 映射 —— compare 节点的「运算符」枚举下拉依赖它', () => {

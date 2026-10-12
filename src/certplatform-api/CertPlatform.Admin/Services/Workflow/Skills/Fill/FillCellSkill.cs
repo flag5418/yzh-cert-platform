@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Shared.Office;
+using CertPlatform.Admin.Services.Workflow.Models;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
 {
@@ -26,7 +27,8 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
     [Skill(
         Code = "fill_cell",
         Name = "单元格填写",
-        ReturnType = "json",
+        ReturnType = "number",
+        ResultPort = "written",
         Description = "把值装配成单元格填充指令（含页眉）。★ 不落盘。"
     )]
     public static class FillCellSkill
@@ -46,7 +48,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
             FillSession? session = null,
 
             [SkillParam(Description = "值字典：{AnchorCode: FillValue 或 值描述}",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Deny)]
             IDictionary<string, object>? values = null,
 
             [SkillParam(Description = "是否处理 Word 页眉")]
@@ -58,7 +60,8 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
             CancellationToken ct = default)
         {
             if (values == null || values.Count == 0)
-                return Task.FromResult(SkillResult.Fail("values 不能为空"));
+                return Task.FromResult(SkillResult.Fail(
+                    "values 不能为空", WorkflowErrorCodes.PreconditionEmpty));
 
             session ??= new FillSession();                 // ★ 单项试跑可自行新建
             session.Request.FillHeader = fill_header;
@@ -71,12 +74,14 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
                 var fv = FillValueFactory.Coerce(kv.Key, kv.Value);
                 if (fv == null)
                     return Task.FromResult(SkillResult.Fail(
-                        $"锚点 {kv.Key} 的值无法识别：{kv.Value?.GetType().Name ?? "null"}"));
+                        $"锚点 {kv.Key} 的值无法识别：{kv.Value?.GetType().Name ?? "null"}",
+                        WorkflowErrorCodes.ConfigError));
 
                 // ② ★ 认领锚点 —— 已被别的来源写过 ⇒ 必须报错（⛔ 不静默覆盖）
                 if (!session.TryClaim(kv.Key, SkillCode, out var conflict))
                     return Task.FromResult(SkillResult.Fail(
-                        $"锚点 {kv.Key} 已被「{conflict}」赋值（⛔ 不覆盖；请检查来源链是否配重）"));
+                        $"锚点 {kv.Key} 已被「{conflict}」赋值（⛔ 不覆盖；请检查来源链是否配重）",
+                        WorkflowErrorCodes.ConfigError));
 
                 session.Request.Values[kv.Key] = fv;
                 written++;

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Shared.Office;
+using CertPlatform.Admin.Services.Workflow.Models;
 using YZH.Core.DataBase.Interfaces;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
@@ -25,6 +26,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
         Code = "src_ai_table",
         Name = "AI 表格填写",
         ReturnType = "json",
+        ResultPort = "table",
         Description = "提示词 + 已过滤企业文档 → 动态分析出表格数据。"
     )]
     public static class SrcAiTableSkill
@@ -51,18 +53,21 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
         /// <param name="ct">取消令牌</param>
         public static async Task<SkillResult> ExecuteAsync(
             [SkillParam(Description = "表格标签（对应模板 {{table:Tag}}）",
-                        BindMode = SkillParamBindMode.ConstantOnly)]
+                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string table_tag,
 
             [SkillParam(Description = "列定义 JSON：[{\"field_code\":\"name\",\"title\":\"姓名\",\"kind\":\"text\"}]",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string columns_json,
 
-            [SkillParam(Description = "表格要填什么（填写说明）", BindMode = SkillParamBindMode.LinkOrConstant)]
+            [SkillParam(Description = "表格要填什么（填写说明）", BindMode = SkillParamBindMode.LinkOrConstant,
+                        AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? instruction = null,
 
+            // ★ AllowEmpty = SkillParamEmptyPolicy.Deny：企业文档是 AI 取值的**唯一证据**（理由同 src_ai_field）。
+            //   ⚠️ 本 Skill 由编排器**直接静态调用**，⛔ 不经 SkillExecutor ⇒ 不影响现有填值链。
             [SkillParam(Description = "★ 已过滤的企业文档 markdown",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string? enterprise_docs = null,
 
             [SkillParam(Description = "提示词编码 cert_doc_fill_prompt.PromptCode；空=用内置默认模板",
@@ -82,15 +87,16 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(table_tag))
-                return SkillResult.Fail("table_tag 不能为空");
+                return SkillResult.Fail("table_tag 不能为空", WorkflowErrorCodes.PreconditionEmpty);
 
             if (string.IsNullOrWhiteSpace(columns_json))
-                return SkillResult.Fail("columns_json 不能为空");
+                return SkillResult.Fail("columns_json 不能为空", WorkflowErrorCodes.PreconditionEmpty);
 
             // ★ 列定义必须**能解析出列** —— 解析不出就直接 Fail（⛔ 不让 AI 自己定列，见类注释）
             var columns = TablePayloadFactory.ParseColumns(columns_json);
             if (columns.Count == 0)
-                return SkillResult.Fail($"columns_json 解析不出任何列：{Truncate(columns_json)}");
+                return SkillResult.Fail(
+                    $"columns_json 解析不出任何列：{Truncate(columns_json)}", WorkflowErrorCodes.ConfigError);
 
             var anchor = new AiFillAnchorSpec
             {
@@ -112,7 +118,8 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
                 enterpriseDocs: enterprise_docs, orgCode: org_code, ct: ct);
 
             var resp = await llm.InvokeAsync(db, prompt, ct);
-            if (!resp.Success) return SkillResult.Fail(resp.Error ?? "AI 调用失败");
+            if (!resp.Success) return SkillResult.Fail(
+                resp.Error ?? "AI 调用失败", WorkflowErrorCodes.SystemError);
 
             // ★ tables.{table_tag} 是**数组**（39 号 §12.4），必须用 ReadSectionRaw ——
             //   ReadObject 只处理对象、ReadSectionValue 只处理标量，用错会得到「取不到」而不报错。
@@ -120,13 +127,15 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
                 resp.Root, AiFillJsonReader.SectionTables, table_tag);
 
             if (node == null)
-                return SkillResult.Fail($"AI 未返回 tables.{table_tag}");
+                return SkillResult.Fail(
+                    $"AI 未返回 tables.{table_tag}", WorkflowErrorCodes.SystemError);
 
             // ★ 列用**输入的**（模板扫描结果），⛔ 不用 AI 返回里的（见类注释）
             var payload = TablePayloadFactory.FromAiNode(table_tag, columns, node, max_rows);
 
             if (payload.Rows.Count == 0)
-                return SkillResult.Fail($"tables.{table_tag} 没有解析出任何数据行");
+                return SkillResult.Fail(
+                    $"tables.{table_tag} 没有解析出任何数据行", WorkflowErrorCodes.PreconditionEmpty);
 
             return SkillResult.Ok(new Dictionary<string, object>
             {

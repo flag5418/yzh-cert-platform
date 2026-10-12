@@ -20,6 +20,13 @@ export interface PortDef {
   defaultValue?: any
   bindMode?: 'Link' | 'LinkOrConstant' | 'Enum'
   required?: boolean
+  /**
+   * ★ 该参数是否允许为空（2026-10-12 后端新增，`Required == !allowEmpty`，两者同源）。
+   * <para>后端 `[SkillParam(AllowEmpty = …)]` 三态的投影：`false` = 节点开发者显式声明
+   * 「本参数不允许为空」⇒ 上游给空值时该节点以 `PRECONDITION_EMPTY` 失败。</para>
+   * <para>与 `required` 冗余但语义更直白，供面板做「空值拦截」提示；当前无消费方。</para>
+   */
+  allowEmpty?: boolean
   maxIn?: number
   role?: 'anchor'
   display?: 'visible' | 'hidden'

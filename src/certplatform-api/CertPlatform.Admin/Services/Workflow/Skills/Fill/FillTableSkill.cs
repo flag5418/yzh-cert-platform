@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Shared.Office;
+using CertPlatform.Admin.Services.Workflow.Models;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
 {
@@ -25,7 +26,8 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
     [Skill(
         Code = "fill_table",
         Name = "表格填写",
-        ReturnType = "json",
+        ReturnType = "number",
+        ResultPort = "row_count",
         Description = "把表格数据装配成区域填充指令（Word 表格 / Excel 区域）。★ 不落盘。"
     )]
     public static class FillTableSkill
@@ -51,7 +53,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
             FillSession? session = null,
 
             [SkillParam(Description = "表格数据：{table_tag, columns, rows, totals}",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Deny)]
             TablePayload? table = null,
 
             [SkillParam(Description = "Excel 起始行（0-based；<0 落 0）")]
@@ -66,9 +68,11 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
             CancellationToken ct = default)
         {
             if (table == null || table.Columns.Count == 0)
-                return Task.FromResult(SkillResult.Fail("table.columns 不能为空"));
+                return Task.FromResult(SkillResult.Fail(
+                    "table.columns 不能为空", WorkflowErrorCodes.PreconditionEmpty));
             if (table.Rows.Count == 0)
-                return Task.FromResult(SkillResult.Fail("table.rows 不能为空"));
+                return Task.FromResult(SkillResult.Fail(
+                    "table.rows 不能为空", WorkflowErrorCodes.PreconditionEmpty));
 
             session ??= new FillSession();
 
@@ -93,7 +97,8 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
                     //   Excel 里会变成左对齐的文本，可求和性丢失且打开文件看不出异常）
                     if (!ok)
                         return Task.FromResult(SkillResult.Fail(
-                            $"表格列 {col.FieldCode} 的值「{raw}」类型不符：{error}"));
+                            $"表格列 {col.FieldCode} 的值「{raw}」类型不符：{error}",
+                            WorkflowErrorCodes.ConfigError));
 
                     line.Add(fv);
                 }

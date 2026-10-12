@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Shared.Office;
+using CertPlatform.Admin.Services.Workflow.Models;
 using YZH.Core.DataBase.Interfaces;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
@@ -26,6 +27,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
         Code = "src_semantic",
         Name = "AI 语义改写",
         ReturnType = "json",
+        ResultPort = "value",
         Description = "按企业实际情况改写标准原文（不依赖企业文档）。"
     )]
     public static class SrcSemanticSkill
@@ -45,10 +47,11 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
         /// <param name="ct">取消令牌</param>
         public static async Task<SkillResult> ExecuteAsync(
             [SkillParam(Description = "锚点编码",
-                        BindMode = SkillParamBindMode.ConstantOnly)]
+                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string anchor_code,
 
-            [SkillParam(Description = "待改写的标准原文", BindMode = SkillParamBindMode.LinkOrConstant)]
+            [SkillParam(Description = "待改写的标准原文", BindMode = SkillParamBindMode.LinkOrConstant,
+                        AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string source_text,
 
             [SkillParam(Description = "改写要求（模板里这一项的填写说明）", BindMode = SkillParamBindMode.LinkOrConstant)]
@@ -71,12 +74,12 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(anchor_code))
-                return SkillResult.Fail("anchor_code 不能为空");
+                return SkillResult.Fail("anchor_code 不能为空", WorkflowErrorCodes.PreconditionEmpty);
 
             // ★ 空原文 ⇒ Fail（39 号 §6.3）—— ⛔ 不产空值：本 Skill 的语义就是「改写这段原文」，
             //   没有原文就没有可改的东西，返回空值会让上游误以为「改写结果是空」。
             if (string.IsNullOrWhiteSpace(source_text))
-                return SkillResult.Fail("source_text 不能为空");
+                return SkillResult.Fail("source_text 不能为空", WorkflowErrorCodes.PreconditionEmpty);
 
             var anchor = new AiFillAnchorSpec
             {
@@ -92,14 +95,16 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
                 enterpriseDocs: enterprise_context, orgCode: org_code, ct: ct);
 
             var resp = await llm.InvokeAsync(db, prompt, ct);
-            if (!resp.Success) return SkillResult.Fail(resp.Error ?? "AI 调用失败");
+            if (!resp.Success) return SkillResult.Fail(
+                resp.Error ?? "AI 调用失败", WorkflowErrorCodes.SystemError);
 
             // 约定：semantic.{anchor_code} = "改写后的文本"（字符串，不是对象）
             var text = AiFillJsonReader.ReadSectionValue(
                 resp.Root, AiFillJsonReader.SectionSemantic, anchor_code);
 
             if (text == null)
-                return SkillResult.Fail($"AI 未返回 semantic.{anchor_code}");
+                return SkillResult.Fail(
+                    $"AI 未返回 semantic.{anchor_code}", WorkflowErrorCodes.SystemError);
 
             var value = new FillValue
             {

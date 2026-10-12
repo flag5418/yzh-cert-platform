@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using CertPlatform.Admin.Services.Workflow.Skills.Nc;
+using CertPlatform.Admin.Services.Workflow.Models;
 using YZH.Core.DataBase.Interfaces;
 using CertPlatform.Admin.Entities.Cert;
 
@@ -39,26 +40,32 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     [Skill(
         Code = "nc_conclusion_calc",
         Name = "NC认证结论判定",
-        ReturnType = "json",
+        ReturnType = "string",
+        ResultPort = "conclusion",
         Description = "★ 纯规则引擎：按 cert_conclusion_rule 计算认证结论（完全符合/基本符合/不符合）。AI 不参与判定，结果可复现"
     )]
     public static class NcConclusionCalcSkill
     {
         public static async Task<SkillResult> ExecuteAsync(
+            // ★ AllowEmpty = SkillParamEmptyPolicy.Deny：没有维度结果就<b>算不出结论</b> —— 必须中断而不是产出一个空结论。
+            //   注意 dimensions_json 通常连 nc_judge（AI 节点）的输出；若 AI 没产出，
+            //   正确做法是先用 is_empty + branch 分流，这里只是<b>安全网</b>。
             [SkillParam(Description = "维度判定结果 JSON（来自 nc_judge 节点，形如 {\"dimensions\":[...]}）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string? dimensions_json,
 
+            // ★ AllowEmpty = SkillParamEmptyPolicy.Deny：取不到机构就<b>找不到判定规则</b>（LoadRuleAsync 直接返回 null
+            //   ⇒ 下方 Fail）。提前在引擎层拦下，错误信息更准（指出是哪个参数没给）。
             [SkillParam(Description = "认证机构编码（★取不到时回落到默认规则）",
-                        BindMode = SkillParamBindMode.ConstantOnly)]
+                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string? org_code,
 
             [SkillParam(Description = "标准编码（★空 = 全部标准通用规则）",
-                        BindMode = SkillParamBindMode.ConstantOnly)]
+                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? standard_code,
 
             [SkillParam(Description = "阶段编码（★空 = 全阶段通用规则）",
-                        BindMode = SkillParamBindMode.ConstantOnly)]
+                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? phase_code,
 
             [FromService] IDbOrm db = null!,
@@ -72,14 +79,16 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
             }
             catch (FormatException ex)
             {
-                return SkillResult.Fail($"维度判定结果解析失败：{ex.Message}");
+                return SkillResult.Fail(
+                    $"维度判定结果解析失败：{ex.Message}", WorkflowErrorCodes.ConfigError);
             }
 
             // ── ② 取判定规则（★ 精确 → 通用 逐级回落）──
             var rule = await LoadRuleAsync(db, org_code, standard_code, phase_code);
             if (rule == null)
                 return SkillResult.Fail(
-                    $"未找到结论判定规则（OrgCode={org_code}, StandardCode={standard_code}, PhaseCode={phase_code}）");
+                    $"未找到结论判定规则（OrgCode={org_code}, StandardCode={standard_code}, PhaseCode={phase_code}）",
+                    WorkflowErrorCodes.ConfigError);
 
             // ── ③ ★ 计算（纯函数，同输入必同输出）──
             var result = new NcConclusionCalculator().Calculate(dimensions, rule);

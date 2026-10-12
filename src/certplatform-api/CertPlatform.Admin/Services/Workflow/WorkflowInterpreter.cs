@@ -88,7 +88,8 @@ namespace CertPlatform.Admin.Services.Workflow
                     var path = parsed.Paths[pathIndex];
                     var pathResult = await ExecutePathAsync(
                         path, pathIndex, taskCode, itemCode,
-                        sharedOutputs, executedNodes, contextParams, ct);
+                        sharedOutputs, executedNodes, contextParams,
+                        parsed.Adjacency, ct);
 
                     pathResults.Add(pathResult);
 
@@ -141,6 +142,9 @@ namespace CertPlatform.Admin.Services.Workflow
             {
                 Success = ncResult.GetValueOrDefault("success") as bool? ?? false,
                 Error = ncResult.GetValueOrDefault("error") as string,
+                // ★ 2026-10-12：失败分类码从聚合结果冒泡上来（见 AggregateNcResult）。
+                //   修复前这里恒为 null（除 DATA_MISSING 分支），UI 分不清「配置错」与「报 bug」。
+                ErrorCode = ncResult.GetValueOrDefault("errorCode") as string,
                 IsSuccess = isSuccess,
                 PathResults = pathResults,
                 DurationMs = (int)sw.ElapsedMilliseconds,
@@ -161,6 +165,7 @@ namespace CertPlatform.Admin.Services.Workflow
             Dictionary<string, object> sharedOutputs,
             Dictionary<string, NodeExecutionResult> executedNodes,
             Dictionary<string, object> contextParams,
+            Dictionary<string, List<WorkflowEdgeConfig>> adjacency,
             CancellationToken ct)
         {
             var nodeIds = path.Select(n => n.NodeId).ToList();
@@ -179,9 +184,13 @@ namespace CertPlatform.Admin.Services.Workflow
             };
 
             // 逐节点串行执行
-            foreach (var node in path)
+            for (var i = 0; i < path.Count; i++)
             {
+                var node = path[i];
                 ct.ThrowIfCancellationRequested();
+
+                // 本节点执行后的结果（复用或真执行）—— branch 裁剪判定要用
+                NodeExecutionResult branchCandidate;
 
                 // 跨路径复用检查
                 if (executedNodes.TryGetValue(node.NodeId, out var existingResult))
@@ -196,39 +205,79 @@ namespace CertPlatform.Admin.Services.Workflow
                     // 失败的节点也需要记录，让路径终止
                     if (!existingResult.Success)
                     {
-                        return FinishPath(pathResult, "failed", node.NodeId, existingResult.Error, pathSw);
+                        return FinishPath(pathResult, "failed", node.NodeId,
+                            existingResult.Error, existingResult.ErrorCode, pathSw);
                     }
 
-                    // branch 节点复用时不影响路径（路径已在枚举时确定）
-                    continue;
+                    branchCandidate = existingResult;
                 }
-
-                // 执行节点
-                var result = await _nodeExecutor.ExecuteAsync(
-                    node, taskCode, itemCode, sharedOutputs, contextParams, ct);
-
-                // 记录到已执行池
-                executedNodes[node.NodeId] = result;
-
-                // 记录 per-node 明细（真执行，IsReused=false）——中间节点的输出在此保留，不再丢失
-                pathResult.NodeResults.Add(
-                    NodeExecutionRecord.From(node.NodeId, result, isReused: false));
-
-                // 节点失败 → 当前路径终止
-                if (!result.Success)
+                else
                 {
-                    return FinishPath(pathResult, "failed", node.NodeId, result.Error, pathSw);
+                    // 执行节点
+                    var result = await _nodeExecutor.ExecuteAsync(
+                        node, taskCode, itemCode, sharedOutputs, contextParams, ct);
+
+                    // 记录到已执行池
+                    executedNodes[node.NodeId] = result;
+
+                    // 记录 per-node 明细（真执行，IsReused=false）——中间节点的输出在此保留，不再丢失
+                    pathResult.NodeResults.Add(
+                        NodeExecutionRecord.From(node.NodeId, result, isReused: false));
+
+                    // 节点失败 → 当前路径终止
+                    if (!result.Success)
+                    {
+                        return FinishPath(pathResult, "failed", node.NodeId,
+                            result.Error, result.ErrorCode, pathSw);
+                    }
+
+                    // 节点成功 → 输出写入共享池（同时写入 nodeId 和 title 作为 key）
+                    // AI 节点通过 {{节点标题.端口}} 引用上游输出时，需要 title 作为 key
+                    sharedOutputs[node.NodeId] = result.Output;
+                    if (!string.IsNullOrEmpty(node.Title))
+                        sharedOutputs[node.Title] = result.Output;
+
+                    branchCandidate = result;
                 }
 
-                // 节点成功 → 输出写入共享池（同时写入 nodeId 和 title 作为 key）
-                // AI 节点通过 {{节点标题.端口}} 引用上游输出时，需要 title 作为 key
-                sharedOutputs[node.NodeId] = result.Output;
-                if (!string.IsNullOrEmpty(node.Title))
-                    sharedOutputs[node.Title] = result.Output;
+                // ★★ 2026-10-12：branch 判定裁剪 —— 本路径走的是「未被选中」的那条臂 ⇒ 到此为止。
+                //
+                //   背景：路径是**解析期**静态枚举的（WorkflowConfigParser.EnumeratePaths 把 branch
+                //   两条臂都枚举成独立路径），而 branch 的判定只有**运行期**才知道 ⇒ 修复前两条臂
+                //   **都会执行**，分支节点输出的 decision 成了死数据。
+                //   实测（用户 2026-10-12）：is_empty 判出 true ⇒ branch decision=success，
+                //   但 failure 臂上的节点照样跑完 ⇒ 与「值判断 + 分流」的定稿设计相矛盾。
+                //
+                //   判定方式：取 branch 输出里的 decision（success/failure）→ 查邻接表得到该臂的
+                //   **真实目标节点** → 与本路径的下一个节点比对，不一致即跳过。
+                //
+                //   ⚠️ 保守策略：拿不到 decision、或该臂没接线（查不到目标）时**不跳过** ——
+                //      宁可多跑一条路径，也不因判据缺失而漏跑（漏跑会静默少算一个维度）。
+                if (IsBranchNode(node) && i + 1 < path.Count)
+                {
+                    var decision = branchCandidate.Output?.GetValueOrDefault("decision")?.ToString();
+                    var takenTarget = ResolveBranchTarget(adjacency, node.NodeId, decision);
+                    var nextNodeId = path[i + 1].NodeId;
+
+                    if (takenTarget != null &&
+                        !string.Equals(takenTarget, nextNodeId, StringComparison.Ordinal))
+                    {
+                        var skipped = FinishPath(pathResult, "skipped", null, null, null, pathSw);
+                        skipped.SkipReason =
+                            $"条件分支「{node.Title}」判定为 {decision}，本路径走的是另一条分支" +
+                            $"（应走 {takenTarget}，本路径为 {nextNodeId}）⇒ 整条路径跳过";
+
+                        _logger.LogInformation(
+                            "[Workflow] 路径跳过 task={TaskCode} item={ItemCode} path={PathIndex} reason={Reason}",
+                            taskCode, itemCode, pathIndex, skipped.SkipReason);
+
+                        return skipped;
+                    }
+                }
             }
 
             // 路径中所有节点执行成功
-            var finished = FinishPath(pathResult, "completed", null, null, pathSw);
+            var finished = FinishPath(pathResult, "completed", null, null, null, pathSw);
 
             // 路径最终输出 = 最后一个节点（通常是 end）的输出
             var lastNode = path.Last();
@@ -241,18 +290,56 @@ namespace CertPlatform.Admin.Services.Workflow
         }
 
         /// <summary>
-        /// 收口路径结果：写入终态、失败点、耗时与时序（成功/失败两条出口共用，避免时序漏写）
+        /// 收口路径结果：写入终态、失败点、失败分类码、耗时与时序（成功/失败两条出口共用，避免时序漏写）
+        /// <para>★ 2026-10-12 增 <paramref name="errorCode"/> —— 路径级失败此前只带一句 Error 文本，
+        /// 分类码在 <c>NodeExecutionResult</c> 上就丢了，UI 只能显示「工作流执行失败」。</para>
         /// </summary>
         private static PathResult FinishPath(
-            PathResult pathResult, string status, string? failedAtNodeId, string? error, Stopwatch pathSw)
+            PathResult pathResult, string status, string? failedAtNodeId,
+            string? error, string? errorCode, Stopwatch pathSw)
         {
             pathSw.Stop();
             pathResult.Status = status;
             pathResult.FailedAtNodeId = failedAtNodeId;
             pathResult.Error = error;
+            pathResult.ErrorCode = errorCode;
             pathResult.DurationMs = (int)pathSw.ElapsedMilliseconds;
             pathResult.CompletedAt = DateTime.Now;
             return pathResult;
+        }
+
+        // ── 分支裁剪判据（2026-10-12） ──
+
+        /// <summary>
+        /// 节点是否为条件分支 —— 全项目<b>唯一</b>会改变「本路径该不该继续跑」的节点类型。
+        /// </summary>
+        private static bool IsBranchNode(WorkflowNodeConfig node)
+            => string.Equals(node.NodeType, "branch", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// 由 branch 的判定结果解析出该臂的<b>真实目标节点 ID</b>。
+        ///
+        /// <para>边上的 <c>SourceHandle</c> 就是臂名（前端 branch 节点的
+        /// <c>outputPorts:[{name:'success'},{name:'failure'}]</c> 即此契约，
+        /// <c>NodeExecutor.ExecuteBranch</c> 写出的 <c>decision</c> 取值同源）。</para>
+        ///
+        /// <para><b>返回 <c>null</c> 的三种情况</b>（调用方据此走保守策略「不跳过」）：
+        /// ① <paramref name="decision"/> 为空（branch 输出异常）；
+        /// ② 邻接表里查不到该 branch 的出边；
+        /// ③ 该臂没接线（找不到 <c>SourceHandle</c> 匹配的边）。</para>
+        /// </summary>
+        private static string? ResolveBranchTarget(
+            Dictionary<string, List<WorkflowEdgeConfig>> adjacency,
+            string branchNodeId,
+            string? decision)
+        {
+            if (string.IsNullOrWhiteSpace(decision)) return null;
+            if (adjacency == null || !adjacency.TryGetValue(branchNodeId, out var outEdges)) return null;
+
+            var edge = outEdges.FirstOrDefault(e =>
+                string.Equals(e.SourceHandle, decision, StringComparison.OrdinalIgnoreCase));
+
+            return string.IsNullOrEmpty(edge?.Target) ? null : edge.Target;
         }
 
         // ── NC 结果聚合 ──
@@ -280,6 +367,20 @@ namespace CertPlatform.Admin.Services.Workflow
                 .Where(r => r.Status == "failed")
                 .ToList();
 
+            // ★ 2026-10-12：被 branch 判定裁剪掉的路径（走的是未被选中的那条臂）。
+            //   ⛔ 既不算成功也不算失败 —— 「条件不满足」是正常业务行为。
+            var skippedPaths = pathResults
+                .Where(r => r.Status == "skipped")
+                .ToList();
+
+            // ★ 2026-10-12：executedPaths 只含「真正跑过」的路径（completed + failed）。
+            //   修复前它等于「全部枚举出的路径」⇒ 分支裁剪后会把跳过的路径也算进「已执行」，
+            //   界面显示「执行了 2 条」而实际只跑了 1 条。
+            var executedPaths = pathResults
+                .Where(r => r.Status is "completed" or "failed")
+                .Select(r => r.PathIndex)
+                .ToArray();
+
             // ★ 全量路径结果（供 nc_conclusion_calc 之类做多维度聚合判定）
             var allPathResults = pathResults
                 .OrderBy(p => p.PathIndex)
@@ -290,7 +391,10 @@ namespace CertPlatform.Admin.Services.Workflow
                     ["output"]       = p.Output,
                     ["result"]       = ExtractSingleResult(p.Output?.GetValueOrDefault("result") ?? p.Output),
                     ["failedAtNode"] = p.FailedAtNodeId,
-                    ["error"]        = p.Error
+                    ["error"]        = p.Error,
+                    // ★ 2026-10-12：跳过路径的说明（与 error 分开，跳过不是失败）
+                    ["skipped"]      = p.Status == "skipped",
+                    ["skipReason"]   = p.SkipReason
                 })
                 .ToList();
 
@@ -308,9 +412,10 @@ namespace CertPlatform.Admin.Services.Workflow
                     ["result"] = result ?? new { },
                     // ★ 新增：全部路径的结构化结果，避免上层丢失多维度信息
                     ["pathResults"] = allPathResults,
-                    ["executedPaths"] = pathResults.Select(p => p.PathIndex).ToArray(),
+                    ["executedPaths"] = executedPaths,
                     ["successPaths"] = successPaths.Select(p => p.PathIndex).ToArray(),
-                    ["failedPaths"] = failedPaths.Select(p => p.PathIndex).ToArray()
+                    ["failedPaths"] = failedPaths.Select(p => p.PathIndex).ToArray(),
+                    ["skippedPaths"] = skippedPaths.Select(p => p.PathIndex).ToArray()
                 };
             }
 
@@ -325,15 +430,43 @@ namespace CertPlatform.Admin.Services.Workflow
                     ? string.Join("; ", errors)
                     : "所有路径均失败";
 
+                // ★ 2026-10-12：把失败分类码冒泡到 item 级 —— 取第一条「有分类码」的失败路径。
+                //   修复前 item.ErrorCode 只在 DATA_MISSING 那条 catch 分支里被赋值，
+                //   其余失败（CONFIG_ERROR / SYSTEM_ERROR / PRECONDITION_EMPTY）到不了 UI。
+                var errorCode = failedPaths
+                    .Select(f => f.ErrorCode)
+                    .FirstOrDefault(c => !string.IsNullOrWhiteSpace(c));
+
                 return new Dictionary<string, object>
                 {
                     ["success"] = false,
                     ["error"] = errorMsg,
+                    ["errorCode"] = errorCode!,
                     ["result"] = null!,
                     ["pathResults"] = allPathResults,
-                    ["executedPaths"] = pathResults.Select(p => p.PathIndex).ToArray(),
+                    ["executedPaths"] = executedPaths,
                     ["successPaths"] = Array.Empty<int>(),
-                    ["failedPaths"] = failedPaths.Select(p => p.PathIndex).ToArray()
+                    ["failedPaths"] = failedPaths.Select(p => p.PathIndex).ToArray(),
+                    ["skippedPaths"] = skippedPaths.Select(p => p.PathIndex).ToArray()
+                };
+            }
+
+            // ★ 2026-10-12：全部路径都被条件分支跳过（既没成功也没失败）。
+            //   单列一条，⛔ 不与下面「配置可能不合理」混为一谈 —— 拓扑本身可能是对的，
+            //   只是本次数据下 branch 选中的那条臂没接到结束节点。
+            if (skippedPaths.Count > 0)
+            {
+                return new Dictionary<string, object>
+                {
+                    ["success"] = false,
+                    ["error"] = $"全部 {skippedPaths.Count} 条路径都被条件分支跳过（判定命中的分支未接线到结束节点）",
+                    ["errorCode"] = WorkflowErrorCodes.ConfigError,
+                    ["result"] = null!,
+                    ["pathResults"] = allPathResults,
+                    ["executedPaths"] = executedPaths,
+                    ["successPaths"] = Array.Empty<int>(),
+                    ["failedPaths"] = Array.Empty<int>(),
+                    ["skippedPaths"] = skippedPaths.Select(p => p.PathIndex).ToArray()
                 };
             }
 
@@ -342,11 +475,14 @@ namespace CertPlatform.Admin.Services.Workflow
             {
                 ["success"] = false,
                 ["error"] = "所有路径均无有效结果，工作流配置可能不合理",
+                // ★ 2026-10-12：这确实是一类「配置错」（图上没有任何一条路径能到达 end）
+                ["errorCode"] = WorkflowErrorCodes.ConfigError,
                 ["result"] = null!,
                 ["pathResults"] = allPathResults,
-                ["executedPaths"] = pathResults.Select(p => p.PathIndex).ToArray(),
+                ["executedPaths"] = executedPaths,
                 ["successPaths"] = Array.Empty<int>(),
-                ["failedPaths"] = Array.Empty<int>()
+                ["failedPaths"] = Array.Empty<int>(),
+                ["skippedPaths"] = Array.Empty<int>()
             };
         }
 

@@ -46,7 +46,7 @@
           <el-collapse-item v-for="path in result.PathResults" :key="path.PathIndex" :name="path.PathIndex">
             <template #title>
               <div class="path-header">
-                <el-tag :type="path.Status === 'completed' ? 'success' : 'danger'" size="small">{{ path.Status }}</el-tag>
+                <el-tag :type="pathStatusType(path.Status)" size="small">{{ pathStatusText(path.Status) }}</el-tag>
                 <span class="path-index">路径 {{ path.PathIndex + 1 }}</span>
                 <span class="path-nodes">{{ path.NodeIds?.join(' → ') }}</span>
                 <span class="path-meta">{{ path.DurationMs }}ms</span>
@@ -55,6 +55,9 @@
             </template>
             <div class="path-detail">
               <div v-if="path.Error" class="path-error"><span>失败节点: {{ path.FailedAtNodeId }}</span><span>错误: {{ path.Error }}</span></div>
+
+              <!-- ★ 2026-10-12：跳过说明单独一行 —— ⛔ 不塞进上面的红色「失败」块（跳过是正常业务行为） -->
+              <div v-if="path.SkipReason" class="path-skip"><span>{{ path.SkipReason }}</span></div>
 
               <!-- 节点级明细：数据早已在响应里（NodeResults），此前未渲染 -->
               <div v-if="path.NodeResults?.length" class="node-detail">
@@ -149,6 +152,29 @@ function reusedCount(path: any): number {
 }
 
 /**
+ * 路径状态 → 展示文案 / 标签色（★ 2026-10-12 增 skipped）
+ *
+ * skipped = 该路径走的是 branch 节点**未被选中**的那条臂 ⇒ 整条路径不执行。
+ * ⛔ 必须与 failed 分开着色：修复前这里是 `completed ? 'success' : 'danger'` 二元判断，
+ *    skipped 会被渲染成**红色「失败」**，让规则作者以为工作流坏了（实际是条件不满足，正常）。
+ */
+const PATH_STATUS_TEXT: Record<string, string> = {
+  completed: '成功',
+  failed: '失败',
+  skipped: '已跳过',
+  executing: '执行中',
+  pending: '待执行',
+}
+function pathStatusText(status: string): string {
+  return PATH_STATUS_TEXT[status] || status
+}
+function pathStatusType(status: string): 'success' | 'danger' | 'info' {
+  if (status === 'completed') return 'success'
+  if (status === 'skipped') return 'info'
+  return 'danger'
+}
+
+/**
  * NodeId 前缀 → 中文类型名
  * NodeId 格式为 `{classCode}_n{序号}`（如 docField_n1），与 specialNodes.ts 的 classCode 一致。
  * 映射不到时返回空串（模板里不渲染），不阻塞展示。
@@ -186,6 +212,7 @@ function formatJson(obj: any) {
 .path-header { display: flex; align-items: center; gap: 8px; .path-index { font-weight: 600; } .path-nodes { color: var(--yzh-color-text-tertiary, #909399); font-size: 12px; } .path-meta { color: var(--yzh-color-text-disabled, #c0c4cc); font-size: 12px; } }
 .path-detail { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; }
 .path-error { display: flex; flex-direction: column; gap: 4px; color: var(--yzh-color-danger, #F56C6C); font-size: 12px; }
+.path-skip { display: flex; flex-direction: column; gap: 4px; color: var(--yzh-color-text-tertiary, #909399); font-size: var(--yzh-font-size-xs, 12px); }
 .path-output { display: flex; gap: 8px; font-size: 12px; color: var(--yzh-color-text-tertiary, #909399); }
 .node-detail-title { font-size: 12px; color: var(--yzh-color-text-tertiary, #909399); margin-bottom: 4px; }
 .node-table { font-size: 12px; }

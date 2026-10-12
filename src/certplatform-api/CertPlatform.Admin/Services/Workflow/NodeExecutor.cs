@@ -98,6 +98,8 @@ namespace CertPlatform.Admin.Services.Workflow
                     var output = node.NodeType.ToLowerInvariant() switch
                     {
                         "start" => await ExecuteStartAsync(node, contextParams),
+                        // ★ 2026-10-12 补实现（原为「前端有入口、后端无分支」⇒ 必然整条失败）
+                        "constant" => ExecuteConstant(node),
                         "end" => ExecuteEnd(node, resolvedInputs, sharedOutputs),
                         "branch" => ExecuteBranch(node, resolvedInputs, sharedOutputs),
                         "docfield" => await ExecuteDocFieldAsync(node, taskCode, contextParams, ct),
@@ -105,8 +107,15 @@ namespace CertPlatform.Admin.Services.Workflow
                         // ★ 特殊节点（2026-10-11 用户裁定）：配置期选「标准 + 阶段 + 标准文件」，
                         //   执行期的企业/标准/阶段由 start 注入的上下文提供 —— 普通 skill 表达不了。
                         "is_std_file_missing" => await ExecuteStdFileMissingAsync(node, taskCode, itemCode, contextParams, ct),
-                        "skill" => await ExecuteSkillAsync(node, taskCode, itemCode, resolvedInputs, ct),
-                        _ => throw new NotSupportedException($"不支持的节点类型: {node.NodeType}")
+                        "skill" => await ExecuteSkillAsync(node, taskCode, itemCode, resolvedInputs, contextParams, ct),
+                        // ★ 2026-10-12：未实现/未知节点类型 ⇒ CONFIG_ERROR（可处置：换节点或找开发），
+                        //   ⛔ 不再是 NotSupportedException（被 catch 压成 SYSTEM_ERROR ⇒ 界面显示
+                        //   「系统故障·报 bug」，而实际是「画布上放了一个后端还没做的节点」）。
+                        _ => throw new WorkflowNodeFailureException(
+                            $"节点类型「{node.NodeType}」后端尚未实现：该节点能在画布上配置，但执行期没有对应分支" +
+                            "（如 loop 循环节点）。请改用其他节点组合，或联系开发补实现。",
+                            WorkflowErrorCodes.ConfigError,
+                            node.NodeId)
                     };
                     nodeResult = NodeExecutionResult.Ok(output, (int)sw.ElapsedMilliseconds);
                 }
@@ -148,7 +157,11 @@ namespace CertPlatform.Admin.Services.Workflow
                 _wfLogger.NodeFail(taskCode, itemCode, node.NodeId, ex.Message, (int)sw.ElapsedMilliseconds);
 
                 var failResult = NodeExecutionResult.Fail(ex.Message, (int)sw.ElapsedMilliseconds);
-                failResult.ErrorCode = WorkflowErrorCodes.SystemError;
+                // ★ 2026-10-12：保留异常自带的分类码（CONFIG_ERROR / SYSTEM_ERROR …）。
+                //   修复前一律写死 SYSTEM_ERROR ⇒ 「配置错」与「系统故障」在界面上无法区分
+                //   （两者处置人不同：前者找规则作者改配置，后者报开发）。
+                failResult.ErrorCode = (ex as WorkflowNodeFailureException)?.ErrorCode
+                                       ?? WorkflowErrorCodes.SystemError;
                 failResult.StartedAt = startedAt;
                 failResult.CompletedAt = DateTime.Now;
                 return failResult;
@@ -310,6 +323,37 @@ namespace CertPlatform.Admin.Services.Workflow
         }
 
         /// <summary>
+        /// constant 节点：输出画布上配置的常量值，输出端口名 = <c>result</c>。
+        ///
+        /// <para><b>★★ 2026-10-12 补实现</b>：本节点此前<b>前端有入口、后端无执行分支</b> ——
+        /// 落到 <c>_ => throw NotSupportedException("不支持的节点类型: constant")</c>，
+        /// 于是<b>任何在画布上放了常量节点的工作流都必然整条路径失败</b>
+        /// （用户 2026-10-12 用「值判断 + 分流」测试流实测上报）。</para>
+        ///
+        /// <para><b>为什么输出键必须叫 <c>result</c></b>（前端 <c>specialNodes.ts</c> 的
+        /// <c>outputPorts:[{name:'result'}]</c> 即此契约）—— 两种取用方式都依赖它：</para>
+        /// <list type="number">
+        /// <item><b>连线</b>：下游 <c>PickFromOutput</c> 第 2 档「认 <c>result</c> 键」</item>
+        /// <item><b>AI 节点提示词</b>：<c>{{常量节点标题.result}}</c> —— <c>ResolveTemplateRefs</c>
+        ///       先按节点标题从 <c>sharedOutputs</c> 取到输出字典，再取 <c>result</c> 端口</item>
+        /// </list>
+        ///
+        /// <para><b>值恒为字符串</b>：前端 <c>config.value</c> 是 <c>textarea</c>（端口声明
+        /// <c>type:'string'</c>）⇒ ⛔ <b>刻意不做</b>「猜数字/猜布尔」的自动转换：猜错会让
+        /// <c>compare</c> 走错比较分支（数值比较 vs 字符串比较），正是本项目反复踩的
+        /// 「静默算错」。要数值比较时由 <c>compare</c> 自己按内容判断（它本来就会先试数值）。</para>
+        /// </summary>
+        private static Dictionary<string, object> ExecuteConstant(WorkflowNodeConfig node)
+        {
+            var value = node.Config?.GetValueOrDefault("value")?.ToString() ?? string.Empty;
+
+            return new Dictionary<string, object>
+            {
+                ["result"] = value
+            };
+        }
+
+        /// <summary>
         /// end 节点：汇聚上游结果，输出统一格式 { success, error, result }
         /// </summary>
         private Dictionary<string, object> ExecuteEnd(
@@ -345,13 +389,17 @@ namespace CertPlatform.Admin.Services.Workflow
             // 如果 condition 是字典（如 compare 节点的输出），尝试从中提取布尔值
             if (conditionValue is Dictionary<string, object> dict)
             {
-                // 优先取 result / compare_result / success 字段
+                // ★ 2026-10-12：只认「业务结论」键 —— 优先 result，其次 compare_result。
+                //
+                //   ⛔ 删除原第 3 档 `success` 兜底：`success` 是**信封键**（「程序跑完了没有」），
+                //   恒为 true ⇒ 一旦走到那一档，分支**永远走 success**，是个静默的错误分流。
+                //   之所以以前没炸，纯属巧合：所有布尔产出者（compare / is_empty /
+                //   is_std_file_missing）都把结论放在 `result` 里，第 1 档就命中了。
+                //   删除后非布尔值统一落 `_ => false`（保守方向：不声称成功），与既有约定一致。
                 if (dict.TryGetValue("result", out var r) && r is bool br)
                     conditionValue = br;
                 else if (dict.TryGetValue("compare_result", out var cr) && cr is bool bcr)
                     conditionValue = bcr;
-                else if (dict.TryGetValue("success", out var s) && s is bool bs)
-                    conditionValue = bs;
             }
 
             bool condition = conditionValue switch
@@ -557,12 +605,30 @@ namespace CertPlatform.Admin.Services.Workflow
 
         /// <summary>
         /// skill 节点：通过 ISkillRegistry 反射执行 Skill
+        ///
+        /// <para><b>★★★ 2026-10-12 用户裁定：失败必须真的中断</b></para>
+        /// <para>修复前：<c>SkillExecutor</c> <b>恒返回</b> <c>SkillResult.Ok</c>（把
+        /// <c>success:false</c> 塞进输出字典）⇒ 下面那句 <c>if (!skillResult.Success) throw</c>
+        /// <b>永不触发</b> ⇒ skill 业务失败<b>不中断路径</b>，下游拿着
+        /// <c>{success:false, result:{}}</c> 继续算，最后产出一个看起来正常的结论。</para>
+        ///
+        /// <para><b>现在按 <c>ErrorCode</c> 分派两种中断粒度</b>（用户裁定：粒度 = 该检查项 / 该章节）：</para>
+        /// <list type="bullet">
+        /// <item><c>PRECONDITION_EMPTY</c>（入参为空且该参数声明了 <c>AllowEmpty=false</c>）
+        ///   ⇒ 抛 <see cref="WorkflowDataMissingException"/> ⇒
+        ///   <b>全局中断当前检查项</b> + 落补录缺口 + 标「不可判定」。
+        ///   语义与 2026-09-30 的裁定完全一致：「这不是系统故障，也不是不符合，而是<b>无法判定</b>」。</item>
+        /// <item>其余（<c>CONFIG_ERROR</c> / <c>SYSTEM_ERROR</c>）
+        ///   ⇒ 抛 <see cref="WorkflowNodeFailureException"/> ⇒
+        ///   <b>终止当前路径</b>（⛔ 不落补录缺口 —— 补录解决不了配置错）。</item>
+        /// </list>
         /// </summary>
         private async Task<Dictionary<string, object>> ExecuteSkillAsync(
             WorkflowNodeConfig node,
             string taskCode,
             string itemCode,
             Dictionary<string, object> resolvedInputs,
+            Dictionary<string, object> contextParams,
             CancellationToken ct)
         {
             var skillCode = node.SkillCode ?? "";
@@ -584,8 +650,32 @@ namespace CertPlatform.Admin.Services.Workflow
 
             if (!skillResult.Success)
             {
-                throw new InvalidOperationException(
-                    $"Skill '{skillCode}' 执行失败: {skillResult.Error}");
+                var code = string.IsNullOrWhiteSpace(skillResult.ErrorCode)
+                    ? WorkflowErrorCodes.ConfigError
+                    : skillResult.ErrorCode;
+
+                var message = $"Skill '{skillCode}' 执行失败[{code}]: {skillResult.Error}";
+
+                if (code == WorkflowErrorCodes.PreconditionEmpty)
+                {
+                    // ★ 全局中断当前检查项 —— 复用 2026-09-30 的链路（NodeExecutor 穿透不吞
+                    //   → WorkflowInterpreter 全局中断 + MissingData → 上层落补录缺口）。
+                    //   DataKind = "skill_param"：与 "field"/"table" 区分开 —— 它表达的是
+                    //   「**节点入参**为空」而不是「某个字段/表格没取到」，界面上靠它分流处置方式。
+                    throw new WorkflowDataMissingException(
+                        dataKind: "skill_param",
+                        dataCode: skillCode,
+                        reason: "empty",
+                        message: message,
+                        standardFileCode: null,
+                        ruleCode: null,
+                        enterpriseCode: contextParams?.GetValueOrDefault("enterpriseCode")?.ToString(),
+                        standardCode: contextParams?.GetValueOrDefault("standardCode")?.ToString(),
+                        stageCode: contextParams?.GetValueOrDefault("phaseCode")?.ToString());
+                }
+
+                // 终止当前路径（分类码由 catch(Exception) 保留到 NodeExecutionResult.ErrorCode）
+                throw new WorkflowNodeFailureException(message, code, node.NodeId);
             }
 
             // SkillResult.Outputs → Dictionary<string, object>
@@ -643,8 +733,11 @@ namespace CertPlatform.Admin.Services.Workflow
 
             var standardFileCode = node.Config?.GetValueOrDefault("standardFileCode")?.ToString() ?? "";
             if (string.IsNullOrWhiteSpace(standardFileCode))
-                throw new InvalidOperationException(
-                    $"is_std_file_missing 节点 {node.NodeId} 缺少 standardFileCode 配置（请在右侧面板选择标准文件）");
+                // ★ 2026-10-12：分类码 = CONFIG_ERROR（规则作者在面板上选文件即可修），
+                //   ⛔ 不再是笼统的 SYSTEM_ERROR。
+                throw new WorkflowNodeFailureException(
+                    $"is_std_file_missing 节点 {node.NodeId} 缺少 standardFileCode 配置（请在右侧面板选择标准文件）",
+                    WorkflowErrorCodes.ConfigError, node.NodeId);
 
             // ★ 与 docField / docTable 同口径：企业从上下文取，取不到回落虚拟企业（样例数据路径）
             var enterpriseCode = contextParams?.GetValueOrDefault("enterpriseCode")?.ToString() ?? "";
@@ -672,7 +765,9 @@ namespace CertPlatform.Admin.Services.Workflow
             _wfLogger.SkillResult(skillResult.Success, skillResult.Outputs);
 
             if (!skillResult.Success)
-                throw new InvalidOperationException($"Skill '{skillCode}' 执行失败: {skillResult.Error}");
+                throw new WorkflowNodeFailureException(
+                    $"Skill '{skillCode}' 执行失败[{skillResult.ErrorCode ?? WorkflowErrorCodes.ConfigError}]: {skillResult.Error}",
+                    skillResult.ErrorCode ?? WorkflowErrorCodes.ConfigError, node.NodeId);
 
             var output = new Dictionary<string, object>();
             foreach (var kv in skillResult.Outputs)

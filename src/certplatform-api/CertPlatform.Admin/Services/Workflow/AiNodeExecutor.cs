@@ -14,6 +14,7 @@ using CertPlatform.Admin.Services.Workflow.Skills;
 using YZH.Core.Api.Models.System;
 using YZH.Core.DataBase.Interfaces;
 using CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.Exceptions;
 
 namespace CertPlatform.Admin.Services.Workflow
 {
@@ -145,7 +146,39 @@ namespace CertPlatform.Admin.Services.Workflow
                 }
 
                 // ①.bis 从模板 {{节点名.端口}} 自动提取引用（新方案：不再需要 customParams）
-                ResolveTemplateRefs(template, sharedOutputs, paramPool);
+                //
+                // ★★★ 2026-10-12 用户裁定（第 1 条 + 第 4 条）：<b>上游为空必须中断，⛔ 不能静默送 LLM</b>。
+                //
+                //   修复前：resolved == null 时只留一条 Debug 日志（生产环境看不到），
+                //   提示词里的 {{文档字段.result}} <b>没有被替换</b>，带着占位符原文直接送去问大模型，
+                //   节点<b>照常返回成功</b> ⇒ 最典型的「静默产出错误结论」。
+                //   用户原话：「ai节点，需要一个上游的结果，结果上游什么都没有输出给ai节点，
+                //             ai没办法获取任何参数，提示词没办法跑通」。
+                //
+                //   现在：有任何一个引用解析不出来（节点输出不存在 / 值为 null）⇒ 抛
+                //   WorkflowDataMissingException ⇒ <b>全局中断当前检查项</b> + 落补录缺口 + 标「不可判定」。
+                //   ⚠️ 与 compare 等 skill 的区别：这里必须用 DataMissing（而非 PRECONDITION_EMPTY），
+                //      因为 AI 节点的入参**就是上游节点输出**，缺的必然是「数据」⇒ 走补录通道才修得好。
+                //
+                //   ⚠️ <b>只在真实执行路径生效</b>：配置期测试（ExecuteWithMockAsync）不校验 ——
+                //      搭图阶段上游本来就可能是空的，那时要求补齐会让 AI 节点根本没法测。
+                var unresolvedRefs = ResolveTemplateRefs(template, sharedOutputs, paramPool);
+                if (unresolvedRefs.Count > 0)
+                {
+                    throw new WorkflowDataMissingException(
+                        dataKind: "ai_param",
+                        dataCode: string.Join(", ", unresolvedRefs),
+                        reason: "empty",
+                        message:
+                            $"AI 节点「{node.Title}」的上游参数未解析：{string.Join("、", unresolvedRefs)}" +
+                            " —— 提示词无法跑通，已中断当前检查项" +
+                            "（请补录数据，或检查上游连线/节点输出端口是否正确）",
+                        standardFileCode: null,
+                        ruleCode: null,
+                        enterpriseCode: contextParams?.GetValueOrDefault("enterpriseCode")?.ToString(),
+                        standardCode: contextParams?.GetValueOrDefault("standardCode")?.ToString(),
+                        stageCode: contextParams?.GetValueOrDefault("phaseCode")?.ToString());
+                }
 
                 _logger.LogInformation(
                     "[AI_PARAMS] nodeId={NodeId}, params={Params}",
@@ -205,6 +238,15 @@ namespace CertPlatform.Admin.Services.Workflow
                 okResult.AiPrompt = renderedPrompt;
                 return okResult;
             }
+            catch (WorkflowDataMissingException)
+            {
+                // ★★★ 2026-10-12：语义异常【必须穿透】—— 与 NodeExecutor 同一纪律。
+                //   它带 8 个结构化属性（DataKind/DataCode/Reason/RuleCode/作用域四元组），
+                //   一旦被下面的 catch(Exception) 压成一句 error 字符串，
+                //   上层就再也分不清「故意造的缺口」与「取数 bug」—— 补录夹具会失去信号。
+                sw.Stop();
+                throw;
+            }
             catch (Exception ex)
             {
                 sw.Stop();
@@ -261,7 +303,19 @@ namespace CertPlatform.Admin.Services.Workflow
                 }
 
                 // 从模板 {{节点名.端口}} 自动提取引用（新方案）
-                ResolveTemplateRefs(template, mockOutputs, paramPool);
+                //
+                // ⚠️ 测试模式**刻意不校验**未解析引用（与真实执行路径不同）：
+                //    搭图阶段上游节点本来就可能是空的（例如还没上传企业文件 ⇒ docField 返回空），
+                //    若这里也中断，AI 节点在配置期就<b>根本没法测</b>。
+                //    这里只把未解析项写进日志，真实执行期才由 ExecuteAsync 抛
+                //    WorkflowDataMissingException 中断。
+                var unresolvedInTest = ResolveTemplateRefs(template, mockOutputs, paramPool);
+                if (unresolvedInTest.Count > 0)
+                {
+                    _logger.LogWarning(
+                        "[AI_TEST_UNRESOLVED] nodeId={NodeId} 未解析的模板引用: {Refs}（测试模式不中断）",
+                        node.NodeId, string.Join(", ", unresolvedInTest));
+                }
 
                 // 渲染提示词
                 var renderedPrompt = PromptRenderer.Render(template, paramPool);
@@ -587,15 +641,38 @@ namespace CertPlatform.Admin.Services.Workflow
         /// <para>  {{xxx.yyy}} → 在 sharedOutputs 中查找 key=xxx，再取 yyy 端口的值</para>
         /// <para>  {{xxx}} → 在 sharedOutputs 中查找 key=xxx，直接取值（常量节点或单端口节点）</para>
         /// </summary>
-        private void ResolveTemplateRefs(
+        /// <summary>
+        /// 把模板里的 <c>{{节点名.端口}}</c> 引用解析进 <paramref name="paramPool"/>。
+        ///
+        /// <para><b>★ 2026-10-12 改为返回「未解析清单」</b>（原返回 void，解析不出来只留一条
+        /// Debug 日志 ⇒ 生产环境完全看不见）：</para>
+        /// <list type="bullet">
+        /// <item>引用的节点输出<b>不存在</b>（节点名/标题写错，或上游没跑）</item>
+        /// <item>引用存在但<b>值为 null</b>（上游返回空 —— 最常见的一类）</item>
+        /// </list>
+        /// <para>调用方 <c>ExecuteAsync</c> 据此抛 <see cref="WorkflowDataMissingException"/>
+        /// ⇒ 全局中断当前检查项 + 落补录缺口，⛔ 不再「带着未替换的占位符去问大模型」。</para>
+        /// </summary>
+        /// <returns>未解析的完整引用名（如 <c>文档字段.result</c>），空列表 = 全部解析成功</returns>
+        private List<string> ResolveTemplateRefs(
             string? template,
             Dictionary<string, object> sharedOutputs,
             Dictionary<string, object> paramPool)
         {
-            if (string.IsNullOrEmpty(template) || sharedOutputs == null || sharedOutputs.Count == 0)
-                return;
+            var unresolved = new List<string>();
+
+            if (string.IsNullOrEmpty(template)) return unresolved;
 
             var matches = PromptRenderer.Placeholder.Matches(template);
+
+            if (sharedOutputs == null || sharedOutputs.Count == 0)
+            {
+                // 完全没有上游输出 ⇒ 模板里的每个引用都解析不出来
+                foreach (System.Text.RegularExpressions.Match m in matches)
+                    unresolved.Add(m.Groups[1].Value);
+                return unresolved;
+            }
+
             foreach (System.Text.RegularExpressions.Match m in matches)
             {
                 var fullKey = m.Groups[1].Value;  // 完整 key（如 "文档字段.result" 或 "常量值"）
@@ -623,6 +700,7 @@ namespace CertPlatform.Admin.Services.Workflow
                 {
                     _logger.LogWarning("[AI_TEMPLATE_REF] 未找到引用 '{RefKey}'，可用 keys: {Keys}",
                         refKey, string.Join(", ", sharedOutputs.Keys));
+                    unresolved.Add(fullKey);
                     continue;
                 }
 
@@ -640,13 +718,32 @@ namespace CertPlatform.Admin.Services.Workflow
                         : nodeOutput;
                 }
 
-                if (resolved != null)
+                // ★ 空值也算「未解析」—— 原实现只判 null，且 null 时静默跳过。
+                //   注意这里必须用「空白/空集合」口径，与 SkillExecutor.IsEmptyValue 保持一致：
+                //   上游把「取不到」表达为 ""（如 assemble 拼出空串）时，同样不该送 LLM。
+                if (!IsBlank(resolved))
                 {
-                    paramPool[fullKey] = resolved;
+                    paramPool[fullKey] = resolved!;
                     _logger.LogDebug("[AI_TEMPLATE_REF] resolved {{{{{FullKey}}}}} = {Value}",
                         fullKey, resolved);
                 }
+                else
+                {
+                    _logger.LogWarning("[AI_TEMPLATE_REF] 引用 '{FullKey}' 的值为空，无法送 LLM", fullKey);
+                    unresolved.Add(fullKey);
+                }
             }
+
+            return unresolved;
+        }
+
+        /// <summary>值是否算「空」（与 <c>SkillExecutor.IsEmptyValue</c> 同口径：null / 空白串 / 空集合）</summary>
+        private static bool IsBlank(object? v)
+        {
+            if (v == null) return true;
+            if (v is string s) return string.IsNullOrWhiteSpace(s);
+            if (v is System.Collections.ICollection c) return c.Count == 0;
+            return false;
         }
 
         /// <summary>

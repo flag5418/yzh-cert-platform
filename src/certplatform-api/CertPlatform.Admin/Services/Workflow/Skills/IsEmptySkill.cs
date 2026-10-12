@@ -37,14 +37,26 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     [Skill(
         Code = "is_empty",
         Name = "是否为空",
-        ReturnType = "json",
+        ReturnType = "boolean",
+        ResultPort = "result",
         Description = "判断上游返回值是否为空：null / 空白 / 空集合 / 空对象 都算空，输出 result(bool) 可直连分支节点"
     )]
     public static class IsEmptySkill
     {
         public static Task<SkillResult> ExecuteAsync(
-            [SkillParam(Description = "待判断的值（通常连线上游节点输出）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+            // ★★ 2026-10-12：<b>刻意</b>声明 AllowEmpty = SkillParamEmptyPolicy.Allow。
+            //
+            //   理由（用户 2026-10-12 裁定：「用值判断节点来进行控制」）：
+            //   `is_empty` 的**输入天然就该是空的** —— 它存在的意义就是「判断上游有没有值」。
+            //   若这里收紧成 false，「输入为空」会先被引擎判成 PRECONDITION_EMPTY 而中断，
+            //   这个节点就**退化成必填校验**，彻底失去分流能力（规则作者再也无法用 branch
+            //   走兜底分支 —— 而那正是 2026-10-11 裁定的本意）。
+            //
+            //   ⇒ 口径：**永远返回成功**，结论放在 result(bool) 里（true = 空）。
+            //      「为空 ⇒ 中断」这个行为由**不能接受空的节点**（compare / ai_node /
+            //      nc_conclusion_calc …）自己做，⛔ 不是 is_empty 做。
+            [SkillParam(Description = "待判断的值（通常连线上游节点输出；★本节点刻意允许为空）",
+                        BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             object? value = null,
             CancellationToken ct = default)
         {

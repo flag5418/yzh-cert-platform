@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using CertPlatform.Admin.Services.Workflow.Skills.Nc;
+using CertPlatform.Admin.Services.Workflow.Models;
 using YZH.Core.DataBase.Interfaces;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills
@@ -27,38 +28,48 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     [Skill(
         Code = "nc_validate",
         Name = "NC输出校验",
-        ReturnType = "json",
+        ReturnType = "boolean",
+        ResultPort = "passed",
         Description = "★ 校验 AI 产出的 NC 维度结果/结论理由：四态枚举、维度覆盖、证据真实性（反幻觉）、结论权威性。共 7 条校验"
     )]
     public static class NcValidateSkill
     {
         public static async Task<SkillResult> ExecuteAsync(
+            // ★ AllowEmpty = SkillParamEmptyPolicy.Deny：没有 stage 就不知道该按哪套规则校验（默认走 dimensions 是隐患）。
             [SkillParam(Description = "★校验阶段：dimensions=校验维度列表 | conclusion=校验结论理由",
-                        BindMode = SkillParamBindMode.Enum, EnumSource = "nc_validate_stage")]
+                        BindMode = SkillParamBindMode.Enum, EnumSource = "nc_validate_stage",
+                        AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string? stage,
 
+            // ⚠️ 以下 6 个参数<b>全部 AllowEmpty = SkillParamEmptyPolicy.Allow</b>，且这是**刻意**的 ——
+            //    它们按 stage 互斥：
+            //      · stage=dimensions ⇒ 只有 dimensions_json 有值，其余 4 个本就为空
+            //      · stage=conclusion ⇒ 只有 reason / rule_conclusion / allowed_basis_json 有值
+            //    ⇒ 若在这里收紧成 false，**两个阶段都必然误报 PRECONDITION_EMPTY**，
+            //      节点直接不可用。这属于设计文档 §8.3 说的「B 逃生舱」：
+            //      确实需要复杂判断的节点在**函数内部**自己判（见下方 rule_conclusion 检查）。
             [SkillParam(Description = "★阶段=dimensions：维度判定结果 JSON（来自 nc_judge 节点）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? dimensions_json,
 
             [SkillParam(Description = "★阶段=conclusion：AI 写的理由（来自 nc_conclude 节点）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? reason,
 
             [SkillParam(Description = "★阶段=conclusion：AI 若自行产出了结论（★多数应为空，规则为准）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? ai_conclusion,
 
             [SkillParam(Description = "★规则算出的权威结论（来自 nc_conclusion_calc 节点）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? rule_conclusion,
 
             [SkillParam(Description = "★规则算出的依据维度号（JSON 数组，如 [2,3]）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? allowed_basis_json,
 
             [SkillParam(Description = "★本次执行任务编码（用于查 wf_node_execution 的真实来源文件，做 C5 交叉验证）",
-                        BindMode = SkillParamBindMode.ConstantOnly)]
+                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? wf_task_code,
 
             [FromService] IDbOrm db = null!,
@@ -72,7 +83,9 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                 case "conclusion":
                 {
                     if (string.IsNullOrWhiteSpace(rule_conclusion))
-                        return SkillResult.Fail("rule_conclusion 不能为空（★权威结论缺失，无法校验 C7）");
+                        return SkillResult.Fail(
+                            "rule_conclusion 不能为空（★权威结论缺失，无法校验 C7）",
+                            WorkflowErrorCodes.PreconditionEmpty);
 
                     var basis = ParseIntArray(allowed_basis_json);
 

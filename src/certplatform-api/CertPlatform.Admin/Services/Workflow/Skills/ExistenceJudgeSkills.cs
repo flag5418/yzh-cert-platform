@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
+using CertPlatform.Admin.Services.Workflow.Models;
 using YZH.Core.DataBase.Interfaces;
 using CertPlatform.Shared.Constants;
 
@@ -128,26 +129,30 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     [Skill(
         Code = "is_field_empty",
         Name = "字段是否为空",
-        ReturnType = "json",
+        ReturnType = "boolean",
+        ResultPort = "result",
         Description = "★ 判断某字段是否有值：返回三态 has_value/is_empty/not_found，永不失败，可直接接 branch/compare"
     )]
     public static class IsFieldEmptySkill
     {
         public static async Task<SkillResult> ExecuteAsync(
-            [SkillParam(Description = "字段编码 field_code", BindMode = SkillParamBindMode.ConstantOnly)]
+            [SkillParam(Description = "字段编码 field_code", BindMode = SkillParamBindMode.ConstantOnly,
+                        AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string? field_code,
 
-            [SkillParam(Description = "企业编码（空=虚拟企业样例数据）", BindMode = SkillParamBindMode.ConstantOnly)]
+            [SkillParam(Description = "企业编码（空=虚拟企业样例数据）", BindMode = SkillParamBindMode.ConstantOnly,
+                        AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? enterprise_code,
 
-            [SkillParam(Description = "文件编码（可选，文件级过滤）", BindMode = SkillParamBindMode.ConstantOnly)]
+            [SkillParam(Description = "文件编码（可选，文件级过滤）", BindMode = SkillParamBindMode.ConstantOnly,
+                        AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? file_code,
 
             [FromService] IDbOrm db = null!,
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(field_code))
-                return SkillResult.Fail("field_code 不能为空");
+                return SkillResult.Fail("field_code 不能为空", WorkflowErrorCodes.PreconditionEmpty);
 
             var entCode = string.IsNullOrWhiteSpace(enterprise_code)
                 ? YzhVirtualEnterprise.Code
@@ -229,26 +234,30 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     [Skill(
         Code = "is_table_empty",
         Name = "表格是否为空",
-        ReturnType = "json",
+        ReturnType = "boolean",
+        ResultPort = "result",
         Description = "★ 判断某表格是否有数据：解析 JSON 后判行数，返回三态 has_value/is_empty/not_found，并回传 row_count/column_count"
     )]
     public static class IsTableEmptySkill
     {
         public static async Task<SkillResult> ExecuteAsync(
-            [SkillParam(Description = "表格编码 table_code", BindMode = SkillParamBindMode.ConstantOnly)]
+            [SkillParam(Description = "表格编码 table_code", BindMode = SkillParamBindMode.ConstantOnly,
+                        AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string? table_code,
 
-            [SkillParam(Description = "企业编码（空=虚拟企业样例数据）", BindMode = SkillParamBindMode.ConstantOnly)]
+            [SkillParam(Description = "企业编码（空=虚拟企业样例数据）", BindMode = SkillParamBindMode.ConstantOnly,
+                        AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? enterprise_code,
 
-            [SkillParam(Description = "文件编码（可选，文件级过滤）", BindMode = SkillParamBindMode.ConstantOnly)]
+            [SkillParam(Description = "文件编码（可选，文件级过滤）", BindMode = SkillParamBindMode.ConstantOnly,
+                        AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? file_code,
 
             [FromService] IDbOrm db = null!,
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(table_code))
-                return SkillResult.Fail("table_code 不能为空");
+                return SkillResult.Fail("table_code 不能为空", WorkflowErrorCodes.PreconditionEmpty);
 
             var entCode = string.IsNullOrWhiteSpace(enterprise_code)
                 ? YzhVirtualEnterprise.Code

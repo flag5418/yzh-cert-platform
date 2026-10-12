@@ -346,6 +346,8 @@ namespace CertPlatform.Admin.Services.Workflow
 
             // 与 WorkflowInterpreter.AggregateNcResult 保持同构（含 executedPaths/successPaths/failedPaths），
             // 使前端对两种测试的结果解析逻辑完全一致
+            // ★ 2026-10-12：补 skippedPaths —— 单节点测试只有一条路径、且没有 branch 参与，
+            //   恒为空数组；存在的意义是**响应形状与整图执行完全一致**（前端一套解析逻辑）。
             var ncResult = new Dictionary<string, object>
             {
                 ["success"] = allSuccess,
@@ -355,7 +357,8 @@ namespace CertPlatform.Admin.Services.Workflow
                     : null!,
                 ["executedPaths"] = new[] { 0 },
                 ["successPaths"] = allSuccess ? new[] { 0 } : Array.Empty<int>(),
-                ["failedPaths"] = allSuccess ? Array.Empty<int>() : new[] { 0 }
+                ["failedPaths"] = allSuccess ? Array.Empty<int>() : new[] { 0 },
+                ["skippedPaths"] = Array.Empty<int>()
             };
 
             var itemResult = new ItemExecutionResult

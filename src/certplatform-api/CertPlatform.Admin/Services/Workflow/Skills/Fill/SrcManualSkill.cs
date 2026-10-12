@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Shared.Office;
+using CertPlatform.Admin.Services.Workflow.Models;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
 {
@@ -21,6 +22,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
         Code = "src_manual",
         Name = "人工待办声明",
         ReturnType = "json",
+        ResultPort = "todo",
         Description = "声明「该锚点需人工填写」，产出待办标记（不产值）。"
     )]
     public static class SrcManualSkill
@@ -36,17 +38,18 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
         /// <param name="ct">取消令牌</param>
         public static Task<SkillResult> ExecuteAsync(
             [SkillParam(Description = "锚点编码",
-                        BindMode = SkillParamBindMode.ConstantOnly)]
+                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string anchor_code,
 
             [SkillParam(Description = "给填写人的提示，如「请填写企业名称」",
-                        BindMode = SkillParamBindMode.ConstantOnly)]
+                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string hint = "",
 
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(anchor_code))
-                return Task.FromResult(SkillResult.Fail("anchor_code 不能为空"));
+                return Task.FromResult(SkillResult.Fail(
+                    "anchor_code 不能为空", WorkflowErrorCodes.PreconditionEmpty));
 
             var todo = new FillTodo
             {

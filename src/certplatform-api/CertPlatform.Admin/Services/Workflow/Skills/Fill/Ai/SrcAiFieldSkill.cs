@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Shared.Office;
+using CertPlatform.Admin.Services.Workflow.Models;
 using YZH.Core.DataBase.Interfaces;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
@@ -23,6 +24,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
         Code = "src_ai_field",
         Name = "AI 单元格填写",
         ReturnType = "json",
+        ResultPort = "value",
         Description = "提示词 + 已过滤企业文档 → 动态分析出单元格值。"
     )]
     public static class SrcAiFieldSkill
@@ -43,15 +45,19 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
         /// <param name="ct">取消令牌</param>
         public static async Task<SkillResult> ExecuteAsync(
             [SkillParam(Description = "锚点编码",
-                        BindMode = SkillParamBindMode.ConstantOnly)]
+                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string anchor_code,
 
             [SkillParam(Description = "这个格子要填什么（模板里这一项的填写说明）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string instruction,
 
+            // ★ AllowEmpty = SkillParamEmptyPolicy.Deny：企业文档是 AI 取值的**唯一证据**。
+            //   没有它 ⇒ 模型只能凭空编 ⇒ 正是用户说的「路径没跑通很大影响整个结果」。
+            //   ⚠️ 本 Skill 由 DocumentFillOrchestrator **直接静态调用**（⛔ 不经 SkillExecutor），
+            //      所以这条声明<b>不会</b>影响现有填值链 —— 它只对「把本 Skill 当画布节点用」生效。
             [SkillParam(Description = "★ 已过滤的企业文档 markdown（由编排器按相关性筛选后传入）",
-                        BindMode = SkillParamBindMode.LinkOrConstant)]
+                        BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string? enterprise_docs = null,
 
             [SkillParam(Description = "提示词编码 cert_doc_fill_prompt.PromptCode；空=用内置默认模板",
@@ -75,10 +81,10 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(anchor_code))
-                return SkillResult.Fail("anchor_code 不能为空");
+                return SkillResult.Fail("anchor_code 不能为空", WorkflowErrorCodes.PreconditionEmpty);
 
             if (string.IsNullOrWhiteSpace(instruction))
-                return SkillResult.Fail("instruction 不能为空");
+                return SkillResult.Fail("instruction 不能为空", WorkflowErrorCodes.PreconditionEmpty);
 
             var anchor = new AiFillAnchorSpec
             {
@@ -94,21 +100,25 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
                 enterpriseDocs: enterprise_docs, orgCode: org_code, ct: ct);
 
             var resp = await llm.InvokeAsync(db, prompt, ct);
-            if (!resp.Success) return SkillResult.Fail(resp.Error ?? "AI 调用失败");
+            if (!resp.Success) return SkillResult.Fail(
+                resp.Error ?? "AI 调用失败", WorkflowErrorCodes.SystemError);
 
             // 约定：fields.{anchor_code} = { "value": …, "confidence": 0.9, "source_doc": "…", "note": "…" }
             var node = AiFillJsonReader.ReadObject(
                 resp.Root, AiFillJsonReader.SectionFields, anchor_code);
 
             if (node == null)
-                return SkillResult.Fail($"AI 未返回 fields.{anchor_code}");
+                return SkillResult.Fail(
+                    $"AI 未返回 fields.{anchor_code}", WorkflowErrorCodes.SystemError);
 
             var rawValue = AiFillJsonReader.ReadRaw(node, "value");
 
             // ★ 值为 null ⇒ Fail（39 号 §7.4）—— ⛔ 不产空值：
             //   「AI 说资料里没有」应由编排器记 Pending，而不是写一个空值冒充「已填」。
             if (rawValue == null)
-                return SkillResult.Fail($"fields.{anchor_code} 缺 value（AI 可能认为资料中未提及）");
+                return SkillResult.Fail(
+                    $"fields.{anchor_code} 缺 value（AI 可能认为资料中未提及）",
+                    WorkflowErrorCodes.PreconditionEmpty);
 
             // ★ 按**锚点声明的类型**转换（39 号 §7.3）
             var value = FillValueFactory.FromRaw(anchor_code, rawValue, value_kind, number_format);
@@ -116,7 +126,8 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
             if (value == null)
                 return SkillResult.Fail(
                     $"fields.{anchor_code} 的值「{AiFillJsonReader.AsString(rawValue)}」" +
-                    $"不是合法的 {value_kind}（类型由锚点 ValueType 决定，⛔ 不由 AI 猜）");
+                    $"不是合法的 {value_kind}（类型由锚点 ValueType 决定，⛔ 不由 AI 猜）",
+                    WorkflowErrorCodes.ConfigError);
 
             value.Source = AiFillJsonReader.ReadString(node, "source_doc") ?? "AI 单元格填写";
 

@@ -90,6 +90,40 @@ namespace CertPlatform.Admin.Services.Workflow.Models
         /// <para>UI：灰色 · 「报 bug」（<b>不是</b>专家能补录解决的）</para>
         /// </summary>
         public const string SystemError = "SYSTEM_ERROR";
+
+        /// <summary>
+        /// ★ <b>前置为空</b>（2026-10-12 新增）—— 节点的入参为空，而该参数声明了
+        /// <c>[SkillParam(AllowEmpty = SkillParamEmptyPolicy.Deny)]</c>（即「本节点不接受空值」）。
+        ///
+        /// <para><b>语义</b>：这不是「系统故障」，也不是「不符合」，而是<b>无法判定</b> ——
+        /// 上游没给值，本节点没法算。⛔ 不得拿着空值静默算出一个看起来正常的结论。</para>
+        ///
+        /// <para><b>引擎动作</b>：<b>全局中断当前检查项 / 章节</b>（走
+        /// <c>WorkflowDataMissingException</c>）+ 落补录缺口 + 标「不可判定」，
+        /// 让用户能回到「启动前补录」通道 —— 闭环。</para>
+        ///
+        /// <para><b>UI</b>：红/黄 · 「去补录」（与 <see cref="DataMissing"/> 同处置人 = 企业）。</para>
+        ///
+        /// <para><b>⚠️ 与 <see cref="DataMissing"/> 的分工</b>：<c>DATA_MISSING</c> 是
+        /// <b>取数节点</b>（docfield / doctable / is_std_file_missing）自己发现数据没有；
+        /// <c>PRECONDITION_EMPTY</c> 是 <b>消费节点</b>（compare / ai_node / assemble …）
+        /// 发现上游没给值。前者由取数方判定，后者由消费方判定（用户 2026-10-12 裁定：
+        /// 「控制空值还是节点自身的行为来判断」）。</para>
+        /// </summary>
+        public const string PreconditionEmpty = "PRECONDITION_EMPTY";
+
+        /// <summary>
+        /// ★ <b>配置错误</b>（2026-10-12 新增）—— 规则 / 字段 / 表格 Code 不存在，
+        /// 或 skill 的反射定位失败（找不到类型 / 缺 <c>[Skill]</c> / 找不到静态方法）。
+        ///
+        /// <para><b>与 <see cref="SystemError"/> 的区别（唯一判据 = 谁能修）</b>：
+        /// 配置错由<b>规则作者</b>改配置即可解决（改 ruleCode / 重连端口）；
+        /// 系统异常要<b>报开发</b>。两者界面上都是灰色，但提示语不同
+        /// （「改配置」 vs 「报 bug」）。</para>
+        ///
+        /// <para><b>引擎动作</b>：终止当前<b>路径</b>（⛔ 不落补录缺口 —— 补录解决不了配置错）。</para>
+        /// </summary>
+        public const string ConfigError = "CONFIG_ERROR";
     }
 
     /// <summary>
@@ -171,14 +205,49 @@ namespace CertPlatform.Admin.Services.Workflow.Models
         /// <summary>路径索引（从 0 开始）</summary>
         public int PathIndex { get; set; }
 
-        /// <summary>路径状态：completed / failed</summary>
+        /// <summary>
+        /// 路径状态：<c>pending</c> / <c>executing</c> / <c>completed</c> / <c>failed</c> / <c>skipped</c>
+        ///
+        /// <para>★ <b><c>skipped</c>（2026-10-12 新增）</b>：本路径走的是某个 <c>branch</c> 节点
+        /// <b>未被选中</b>的那条分支 ⇒ <b>整条路径不执行</b>。</para>
+        ///
+        /// <para><b>为什么必须有这个状态</b>：路径在<b>解析期</b>静态枚举
+        /// （<c>WorkflowConfigParser.EnumeratePaths</c> 把 branch 的两条臂都枚举成独立路径），
+        /// 而 branch 的判定只有<b>运行期</b>才知道。修复前解释器无条件执行全部路径 ⇒
+        /// <c>if/else</c> 的<b>两个分支都会跑</b>，分支节点输出的 <c>decision</c> 成了死数据。</para>
+        ///
+        /// <para>计入 <c>skippedPaths</c>，⛔ <b>不计入</b> <c>successPaths</c> / <c>failedPaths</c>
+        /// （跳过不是失败，也不是成功）。</para>
+        /// </summary>
         public string Status { get; set; } = "pending";
+
+        /// <summary>
+        /// ★ <b>跳过原因</b>（仅 <c>Status == "skipped"</c> 时非空）——
+        /// 由哪个 branch 节点、判定为什么、本路径实际走的是哪条臂。
+        ///
+        /// <para>⛔ <b>刻意与 <see cref="Error"/> 分开</b>：前端把 <c>Error</c> 渲染成红色
+        /// 「失败节点 / 错误」块，而「跳过」是**正常业务行为**（条件不满足），
+        /// 复用 <c>Error</c> 会让规则作者以为工作流坏了。</para>
+        /// </summary>
+        public string? SkipReason { get; set; }
 
         /// <summary>失败时，失败的节点 ID</summary>
         public string? FailedAtNodeId { get; set; }
 
         /// <summary>失败原因</summary>
         public string? Error { get; set; }
+
+        /// <summary>
+        /// ★ <b>失败分类码</b>（2026-10-12 新增）—— 取自失败节点的
+        /// <see cref="NodeExecutionResult.ErrorCode"/>。
+        ///
+        /// <para><b>为什么路径也要带</b>：修复前路径级失败只带一句 <c>Error</c> 文本，
+        /// <see cref="ItemExecutionResult.ErrorCode"/> 也只在 <c>DATA_MISSING</c>
+        /// 那条 catch 分支里被赋值 ⇒ 其余失败（<c>CONFIG_ERROR</c> / <c>SYSTEM_ERROR</c> /
+        /// <c>PRECONDITION_EMPTY</c>）到不了 UI，界面只能显示「工作流执行失败」。
+        /// 带上它之后 <c>WorkflowInterpreter</c> 才能把它冒泡到 item 级。</para>
+        /// </summary>
+        public string? ErrorCode { get; set; }
 
         /// <summary>路径最终输出（end 节点的输出）</summary>
         public Dictionary<string, object> Output { get; set; } = new();

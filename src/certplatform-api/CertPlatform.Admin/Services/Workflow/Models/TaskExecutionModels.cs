@@ -48,9 +48,41 @@ namespace CertPlatform.Admin.Services.Workflow.Models
     public class TaskPathResult
     {
         public int PathIndex { get; set; }
+
+        /// <summary>
+        /// 路径状态：<c>pending</c> / <c>executing</c> / <c>completed</c> / <c>failed</c> / <c>skipped</c>
+        /// <para>★ <c>skipped</c>（2026-10-12 新增）：本路径走的是某个 <c>branch</c> 节点
+        /// <b>未被选中</b>的那条分支 ⇒ 整条路径不执行。计入 <c>skippedPaths</c>，
+        /// ⛔ 不计入 <c>successPaths</c> / <c>failedPaths</c>。</para>
+        /// </summary>
         public string Status { get; set; } = "pending";
+
+        /// <summary>
+        /// ★ 跳过原因（仅 <c>Status == "skipped"</c> 时非空，2026-10-12 新增）——
+        /// 由哪个 branch 节点、判定为什么、本路径实际走的是哪条臂。
+        ///
+        /// <para><b>为什么必须透出</b>：修复前本 DTO 只有 <c>Error</c>，而「跳过」是
+        /// <b>正常业务行为</b>（条件不满足），⛔ 不能塞进 <c>Error</c>（前端会渲染成红色
+        /// 失败块）。缺本字段时前端 <c>ExecutionResultPanel</c> 的
+        /// <c>v-if="path.SkipReason"</c> 永远读不到值 ⇒ 用户看到路径「莫名消失」。</para>
+        /// </summary>
+        public string? SkipReason { get; set; }
+
         public string? FailedAtNodeId { get; set; }
+
+        /// <summary>失败原因（成功/跳过时为 null）</summary>
         public string? Error { get; set; }
+
+        /// <summary>
+        /// ★ 失败分类码（2026-10-12 新增）—— 取自 <see cref="PathResult.ErrorCode"/>，
+        /// 见 <see cref="WorkflowErrorCodes"/>；成功/跳过时为 null。
+        ///
+        /// <para><b>为什么必须透出</b>：修复前路径级失败只带一句 <c>Error</c> 文本，
+        /// 前端无法区分「<c>DATA_MISSING</c>（可补录）/ <c>CONFIG_ERROR</c>（改规则）/
+        /// <c>SYSTEM_ERROR</c>（报 bug）」，只能统一显示「工作流执行失败」。</para>
+        /// </summary>
+        public string? ErrorCode { get; set; }
+
         public Dictionary<string, object> Output { get; set; } = new();
         public List<string> NodeIds { get; set; } = new();
 

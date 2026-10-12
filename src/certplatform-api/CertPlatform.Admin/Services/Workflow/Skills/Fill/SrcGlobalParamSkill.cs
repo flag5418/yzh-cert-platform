@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Office;
 using CertPlatform.Shared.Services.Fill;
+using CertPlatform.Admin.Services.Workflow.Models;
 using SharedFill = CertPlatform.Shared.Fill;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
@@ -37,6 +38,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
         Code = "src_global_param",
         Name = "全局参数取值",
         ReturnType = "json",
+        ResultPort = "value",
         Description = "按参数编码取全局参数值（标准/阶段特化，取最特异一条）。产出 FillValue。"
     )]
     public static class SrcGlobalParamSkill
@@ -65,7 +67,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
         /// <param name="ct">取消令牌</param>
         public static async Task<SkillResult> ExecuteAsync(
             [SkillParam(Description = "参数编码，如 company_name",
-                        BindMode = SkillParamBindMode.ConstantOnly)]
+                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string param_code,
 
             [SkillParam(Description = "锚点编码（写进 FillValue.AnchorCode；空=用 param_code）",
@@ -118,7 +120,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(param_code))
-                return SkillResult.Fail("param_code 不能为空");
+                return SkillResult.Fail("param_code 不能为空", WorkflowErrorCodes.PreconditionEmpty);
 
             var anchor = string.IsNullOrWhiteSpace(anchor_code) ? param_code : anchor_code!;
             var sc = standard_code ?? string.Empty;
@@ -131,7 +133,8 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
             var def = await provider.FindDefAsync(param_code, standard_code, stage_code, org_code);
             if (def == null)
                 return SkillResult.Fail(
-                    $"未找到 param_code={param_code}, standard={sc}, stage={pc}, org={org}");
+                    $"未找到 param_code={param_code}, standard={sc}, stage={pc}, org={org}",
+                    WorkflowErrorCodes.ConfigError);
 
             // ② 企业档案快照（仅当给了企业编码；auto/both 的自动带出需要它）
             var enterprise = await provider.LoadEnterpriseInfoAsync(enterprise_code);
@@ -142,7 +145,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill
                 anchor, value_kind, number_format);
 
             if (!ok)
-                return SkillResult.Fail(error ?? "取值失败");
+                return SkillResult.Fail(error ?? "取值失败", WorkflowErrorCodes.ConfigError);
 
             return SkillResult.Ok(new Dictionary<string, object>
             {

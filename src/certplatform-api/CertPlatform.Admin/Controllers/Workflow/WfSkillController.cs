@@ -141,6 +141,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
                     Label = string.IsNullOrWhiteSpace(p.Description) ? p.Name : p.Description,
                     Type = p.Type,
                     Required = p.Required,
+                    AllowEmpty = p.AllowEmpty,
                     Description = p.Description,
                     DefaultValue = p.DefaultValue,
                     BindMode = p.BindMode,
@@ -201,6 +202,17 @@ namespace CertPlatform.Admin.Controllers.Workflow
         /// <summary>string / number / boolean / date / json</summary>
         public string Type { get; set; } = "json";
         public bool Required { get; set; }
+        /// <summary>
+        /// ★ <b>该参数是否允许为空</b>（2026-10-12）—— <c>Required == !AllowEmpty</c>，两者<b>同源</b>
+        /// （唯一判据 = <c>SkillExecutor.AllowsEmpty</c>）。
+        ///
+        /// <para><b>为什么与 <c>Required</c> 冗余下发</b>：前端可直接用「允许空 / 不允许空」写提示文案，
+        /// 不必反推 <c>!Required</c>；且二者将来若需分叉（如「界面必填」≠「执行期必须非空」）各有字段。</para>
+        ///
+        /// <para>语义：<c>false</c> = skill 开发者显式声明「本参数不允许为空」⇒
+        /// 上游给空值时该节点以 <c>PRECONDITION_EMPTY</c> 失败（全局中断当前检查项 + 落补录）。</para>
+        /// </summary>
+        public bool AllowEmpty { get; set; } = true;
         public string? DefaultValue { get; set; }
         public string Description { get; set; } = string.Empty;
         /// <summary>Link / LinkOrConstant / Enum</summary>

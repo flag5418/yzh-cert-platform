@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
+using CertPlatform.Admin.Services.Workflow.Models;
 using CertPlatform.Admin.Entities.Dir;
 using YZH.Core.DataBase.Interfaces;
 
@@ -29,36 +30,45 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     [Skill(
         Code = "is_std_file_missing",
         Name = "标准目录文件是否缺失",
-        ReturnType = "json",
+        ReturnType = "boolean",
+        ResultPort = "result",
         Description = "★ 判断某标准目录要求的企业文件是否已上传：返回四态 uploaded/not_required/placeholder_only/not_configured，★ 区分「企业没交」与「目录没配」"
     )]
     public static class IsStdFileMissingSkill
     {
         public static async Task<SkillResult> ExecuteAsync(
+            // ★ AllowEmpty = SkillParamEmptyPolicy.Deny：这是本节点的**判定对象**，没有它算不出任何结论。
+            //   ⚠️ 它由 NodeExecutor.ExecuteStdFileMissingAsync 从**节点 config** 注入
+            //   （⛔ 不是上游连线）—— 配置缺失时那边会先抛 CONFIG_ERROR，这里只是第二道闸。
             [SkillParam(Description = "★标准文件要求编码（cert_standard_directory_file.StandardFileCode，如 SF-9001-7-5）",
-                        BindMode = SkillParamBindMode.ConstantOnly)]
+                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string? standard_file_code,
 
-            [SkillParam(Description = "企业编码", BindMode = SkillParamBindMode.ConstantOnly)]
+            [SkillParam(Description = "企业编码",
+                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Deny)]
             string? enterprise_code,
 
             // ★ 2026-10-11 修：这两个参数描述写着「可选」，却**没有默认值** ⇒
             //   SkillRegistry 按 ParameterInfo.HasDefaultValue 判必填 ⇒ 调用方不传就报
             //   「缺少必填入参: standard_code, stage_code」，把「可选」变成了「必填」。
             //   加 `= null` 让语义与描述一致（空 ⇒ 该维度不过滤，见下方 Where）。
-            [SkillParam(Description = "标准编码（可选，用于校验配置归属；空 = 不校验）", BindMode = SkillParamBindMode.ConstantOnly)]
+            // ★ 2026-10-12：再显式声明 AllowEmpty = SkillParamEmptyPolicy.Allow —— 即使将来有人去掉 `= null`，
+            //   语义也不会被「无默认值 = 必填」这条旧判据悄悄改掉。
+            [SkillParam(Description = "标准编码（可选，用于校验配置归属；空 = 不校验）",
+                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? standard_code = null,
 
-            [SkillParam(Description = "阶段编码（可选；空 = 不校验）", BindMode = SkillParamBindMode.ConstantOnly)]
+            [SkillParam(Description = "阶段编码（可选；空 = 不校验）",
+                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? stage_code = null,
 
             [FromService] IDbOrm db = null!,
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(standard_file_code))
-                return SkillResult.Fail("standard_file_code 不能为空");
+                return SkillResult.Fail("standard_file_code 不能为空", WorkflowErrorCodes.PreconditionEmpty);
             if (string.IsNullOrWhiteSpace(enterprise_code))
-                return SkillResult.Fail("enterprise_code 不能为空");
+                return SkillResult.Fail("enterprise_code 不能为空", WorkflowErrorCodes.PreconditionEmpty);
 
             var ent = enterprise_code!;
             var sfc = standard_file_code!;

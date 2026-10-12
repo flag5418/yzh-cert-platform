@@ -42,6 +42,7 @@ const PORT_KEY_MAP: Record<string, string> = {
   Label: 'label',
   Type: 'type',
   Required: 'required',
+  AllowEmpty: 'allowEmpty',
   DefaultValue: 'defaultValue',
   Description: 'description',
   BindMode: 'bindMode',
