@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using CertPlatform.Auditor.Services.Ent;
-using CertPlatform.Admin.Entities.Dir;
 using YZH.Core.Stand.Models.Result;
 using YZH.Core.Api.Controllers;
 

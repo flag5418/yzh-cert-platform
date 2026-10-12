@@ -16,6 +16,7 @@ using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Admin.Entities.Doc;
 using CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.Domain.Scope;
 
 namespace CertPlatform.Admin.Controllers.Workflow;
 
@@ -181,7 +182,7 @@ public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
 
         var candidates = await _db.Client.Queryable<DocFillPrompt>()
             .Where(p => p.PromptCode == promptCode
-                        && (p.OrgCode == string.Empty || p.OrgCode == org)
+                        && (p.OrgCode == CoreOrgCodes.StdEnv || p.OrgCode == org)
                         && p.IsDeleted == false
                         && p.IsValid == 1)
             .ToListAsync();
@@ -225,7 +226,7 @@ public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
 
     /// <summary><b>版本历史</b>：同一 <c>PromptCode</c> 的全部版本（含已软删），按版本降序。</summary>
     /// <remarks>
-    /// <b>★ 可见范围与 <c>resolve</c> 逐字一致</b>（<c>OrgCode = ''</c> 或命中查询机构）——
+    /// <b>★ 可见范围与 <c>resolve</c> 逐字一致</b>（<c>OrgCode = 'yzh-std-env'</c> 或命中查询机构）——
     /// 前端「编辑生效版本」先 resolve 拿 <c>Picked.Code</c>，再回本端点取**整行**提交 update；
     /// 两处范围不一致时会出现「resolve 选中的行在 versions 里查不到」⇒ 编辑无从保存。
     /// </remarks>
@@ -239,7 +240,7 @@ public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
 
         var rows = await _db.Client.Queryable<DocFillPrompt>()
             .Where(p => p.PromptCode == promptCode
-                        && (p.OrgCode == string.Empty || p.OrgCode == org))
+                        && (p.OrgCode == CoreOrgCodes.StdEnv || p.OrgCode == org))
             .OrderByDescending(p => p.Version)
             .Select(p => new
             {

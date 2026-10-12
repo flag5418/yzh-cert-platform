@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
-using CertPlatform.Admin.Entities.Cert;
 using CertPlatform.Shared.Entities.Rpt;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;

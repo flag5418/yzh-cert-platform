@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using CertPlatform.Admin.Services.Workflow.Models;
+using CertPlatform.Shared.Workflow.Models;
 using CertPlatform.Shared.Exceptions;
 
 namespace CertPlatform.Admin.Services.Workflow

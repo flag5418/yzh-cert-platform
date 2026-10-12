@@ -39,6 +39,18 @@ namespace CertPlatform.Shared.Entities.Cert
         [MaxLength(500)]
         public string? Remark { get; set; }
 
+        /// <summary>
+        ///     ★ <b>机构归属</b>（`OrgCode` 判据铁律 —— 见
+        ///     <c>docs/30-项目规则/跨端共享与核心资源检索规则-V1.md</c> §二）。
+        ///     <para>后台建立的标准级数据 ⇒ <c>CoreOrgCodes.StdEnv</c>（<c>'yzh-std-env'</c>）；
+        ///     企业专属 ⇒ 该企业 <c>Code</c>。</para>
+        ///     <para>⛔ <b>不要</b>用 <c>NULL</c> / <c>''</c> 表示「后台」；
+        ///     判断归属一律调 <c>OrgScope.IsBackendBuilt(...)</c>（守卫 <b>A-R8</b>）。</para>
+        ///     <para>⚠️ 本列此前<b>未在实体声明</b>（DB 有列、实体无字段）⇒ 2026-10-12 补声明。</para>
+        /// </summary>
+        [StringLength(50)]
+        public string? OrgCode { get; set; }
+
         // ──── 条款特有字段 ────
 
         /// <summary>所属标准编码（关联 ISOStandard.Code）</summary>

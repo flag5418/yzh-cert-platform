@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
+namespace CertPlatform.Shared.Fill.Ai
 {
     /// <summary>
     /// <b>待填锚点</b> —— 批量装配（<c>AiFillPromptBuilder.BuildBatchAsync</c>）时的一条。
@@ -127,5 +127,16 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
         public int? CompletionTokens { get; set; }
 
         public long DurationMs { get; set; }
+    }
+
+    /// <summary>
+    /// ★ AI 填充的默认参数（<b>唯一出处</b>，2026-10-12 从 <c>AiFillInvoker.DefaultMaxTokens</c> 下沉）。
+    /// <para><b>为什么必须唯一</b>：装配器（<c>AiFillPromptBuilder</c>，Shared）与调用器
+    /// （<c>AiFillInvoker</c>，Admin）分处两个程序集，各自写 8192 会在某次调整后静默分叉。</para>
+    /// </summary>
+    public static class AiFillDefaults
+    {
+        /// <summary>★ 填充输出比提取更长，4096 会在字符串中间截断 ⇒ JSON 解析失败</summary>
+        public const int MaxTokens = 8192;
     }
 }

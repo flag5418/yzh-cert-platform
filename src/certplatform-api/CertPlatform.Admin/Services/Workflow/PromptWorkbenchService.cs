@@ -10,8 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
 using CertPlatform.Shared.DocExtraction;
-using CertPlatform.Admin.Entities.Cert;
-using CertPlatform.Admin.Entities.Dir;
+using CertPlatform.Shared.Services.Workflow;
 using CertPlatform.Admin.Entities.Doc;
 using CertPlatform.Admin.Entities.Wf;
 using YZH.Core.Api.Models.System;
@@ -50,7 +49,7 @@ namespace CertPlatform.Admin.Services.Workflow;
 /// <para><b>提示词定位（三层回退）</b>：<see cref="ResolveActiveAsync"/> 按「标准级 → 平台级」逐层回退，
 /// 口径与全局参数（<c>ParamValueResolver.PickMostSpecific</c>）同构。</para>
 /// </summary>
-public class PromptWorkbenchService
+public class PromptWorkbenchService : IPromptWorkbench
 {
     private readonly IDbOrm _db;
     private readonly LlmInvokeService _llm;
@@ -58,18 +57,6 @@ public class PromptWorkbenchService
     private readonly PromptMarkdownCache _mdCache;
     private readonly ILogger<PromptWorkbenchService> _logger;
 
-    /// <summary>提示词类型常量</summary>
-    public static class Types
-    {
-        /// <summary>元提示词（生成器）</summary>
-        public const string Generator = "prompt_generator";
-        /// <summary>★ 标题 / 分类提示词（输入文件清单 → 输出类别）</summary>
-        public const string Group = "doc_group";
-        /// <summary>★ 作用提示词（输入单文件 Markdown → 输出作用）</summary>
-        public const string Content = "doc_content";
-        /// <summary>★ 语义精要提示词（长文档摘要，输入长 Markdown → 输出精简画像）</summary>
-        public const string Essential = "doc_essential";
-    }
 
     /// <summary>
     /// <b>仅</b>「提示词工作台·单次试跑」(<see cref="TestAsync"/>) 接受的文件数上限（防超时 / 防 token 爆）。
@@ -223,22 +210,22 @@ public class PromptWorkbenchService
     ///   <item><c>currentTemplate</c> 非空 → <b>优化</b>这段现有手写内容（保留结构与业务口径，不全量重写）</item>
     /// </list>
     /// </summary>
-    /// <param name="promptType">要生成的类型：<see cref="Types.Group"/> / <see cref="Types.Content"/></param>
+    /// <param name="promptType">要生成的类型：<see cref="PromptTypes.Group"/> / <see cref="PromptTypes.Content"/></param>
     /// <param name="standardCode">适用标准（GUID）；仅用于给元提示词提供上下文</param>
     /// <param name="extraRequirement">额外要求（可选，用户自由输入）</param>
     /// <param name="currentTemplate">现有提示词正文；非空 = 走优化模式</param>
     public async Task<GenerateResult> GenerateAsync(
         string promptType, string? standardCode, string? extraRequirement, string? currentTemplate = null)
     {
-        if (promptType != Types.Group && promptType != Types.Content)
+        if (promptType != PromptTypes.Group && promptType != PromptTypes.Content)
             return GenerateResult.Fail($"不支持生成的提示词类型：{promptType}（只支持 doc_group / doc_content）");
 
-        var generator = await ResolveActiveAsync(Types.Generator, null);
+        var generator = await ResolveActiveAsync(PromptTypes.Generator, null);
         if (generator == null || string.IsNullOrWhiteSpace(generator.Template))
             return GenerateResult.Fail("未找到生效的元提示词（PromptCode = prompt_generator），请先执行提示词种子脚本");
 
         var standardName = await ResolveStandardNameAsync(standardCode);
-        var typeName = promptType == Types.Group ? "分类提示词（doc_group）" : "作用提示词（doc_content）";
+        var typeName = promptType == PromptTypes.Group ? "分类提示词（doc_group）" : "作用提示词（doc_content）";
         var isOptimize = !string.IsNullOrWhiteSpace(currentTemplate);
 
         var context = await BuildSemanticContextAsync(standardCode, promptType);
@@ -346,7 +333,7 @@ public class PromptWorkbenchService
         if (LooksLikeJsonOnly(t))
             problems.Add("输出的是 JSON 本体而不是提示词正文");
 
-        var required = promptType == Types.Group
+        var required = promptType == PromptTypes.Group
             ? new[] { "standard_name", "std_doc_catalog", "tag_list", "output_schema", "tag_constraint", "file_list" }
             : new[] { "standard_name", "std_doc_catalog", "tag_list", "output_schema", "tag_constraint", "document_content" };
         var missing = required.Where(n => !t.Contains("{{" + n + "}}")).ToList();
@@ -453,7 +440,7 @@ public class PromptWorkbenchService
                 Markdown = c.Markdown
             });
 
-        if (promptType == Types.Group)
+        if (promptType == PromptTypes.Group)
         {
             var usable = converted.Where(x => x.Markdown != null).ToList();
             if (usable.Count == 0)
@@ -577,7 +564,7 @@ public class PromptWorkbenchService
     /// <c>LoadTagsAsync</c> / <c>BuildFileListJson</c> / <c>LogUsageAsync</c>）<b>一个都不复制</b>，
     /// 只在此处复用 —— 复制即漂移，33 号的六条输出校验一旦分叉，两侧画像字段就会长出不同形状。</para>
     /// </summary>
-    /// <param name="promptType"><see cref="Types.Group"/> 或 <see cref="Types.Content"/></param>
+    /// <param name="promptType"><see cref="PromptTypes.Group"/> 或 <see cref="PromptTypes.Content"/></param>
     /// <param name="standardCode">标准 Code（<b>GUID</b>）；空 = 平台级。<b>⚠️ 不接受 slug</b>。</param>
     /// <param name="markdownByFile">文件名 → Markdown 全文（<c>doc_group</c> 传整批 / <c>doc_content</c> 传一份）</param>
     /// <param name="businessRef">计费与画像的关联键（落 <c>cert_ai_usage_log.BusinessRef</c>）</param>
@@ -616,7 +603,7 @@ public class PromptWorkbenchService
 
         // 3. 组装注入上下文
         string prompt;
-        if (promptType == Types.Group)
+        if (promptType == PromptTypes.Group)
         {
             var fileList = BuildFileListJson(
                 usable.Select(x => (x.FileName, x.Markdown!)).ToList());
@@ -628,7 +615,7 @@ public class PromptWorkbenchService
         else
         {
             if (usable.Count != 1)
-                return AnalyzeForQueueResult.Fail($"作用提示词（{Types.Content}）一次只接受 1 份文件，当前 {usable.Count} 份");
+                return AnalyzeForQueueResult.Fail($"作用提示词（{PromptTypes.Content}）一次只接受 1 份文件，当前 {usable.Count} 份");
             var docToken = "{{" + PhDocContent + "}}";
             prompt = template.Contains(docToken, StringComparison.Ordinal)
                 ? template.Replace(docToken, usable[0].Markdown!)
@@ -1358,40 +1345,6 @@ public class PromptWorkbenchService
         [JsonPropertyName("markdown")] public string? Markdown { get; set; }
     }
 
-    /// <summary>
-    /// 队列语义分析结果（<see cref="AnalyzeForQueueAsync"/>）。
-    /// <para>⚠️ 字段名<b>不加前缀</b>，与 <see cref="TestResult"/> 区分靠类名而非字段名 ——
-    /// 下游（executor）读的都是 PascalCase，加前缀反而要写两套映射。</para>
-    /// </summary>
-    public class AnalyzeForQueueResult
-    {
-        public bool Success { get; set; }
-        public string Message { get; set; } = "";
-        /// <summary>模型名（快照落画像的 <c>ModelName</c>）</summary>
-        public string Model { get; set; } = "";
-        public string PromptCode { get; set; } = "";
-        public int PromptVersion { get; set; } = 1;
-        /// <summary>经六条校验修复后的 JSON（<b>落库用这个</b>，不是 RawOutput）</summary>
-        public string? Json { get; set; }
-        /// <summary>LLM 原始返回（仅留档，不落画像）</summary>
-        public string? RawOutput { get; set; }
-        public long DurationMs { get; set; }
-        public int PromptTokens { get; set; }
-        public int CompletionTokens { get; set; }
-        /// <summary>后端自动校正明细（写 <c>TagsReason</c> / 返回前端展示）</summary>
-        public List<string> ValidationMessages { get; set; } = new();
-
-        public static AnalyzeForQueueResult Fail(string message, LlmInvokeResponse? resp = null, string? raw = null)
-            => new()
-            {
-                Success = false,
-                Message = message,
-                RawOutput = raw ?? resp?.Content,
-                DurationMs = resp?.DurationMs ?? 0,
-                PromptTokens = (int)(resp?.PromptTokens ?? 0),
-                CompletionTokens = (int)(resp?.CompletionTokens ?? 0),
-            };
-    }
 
     public class TestResult
     {
@@ -1436,5 +1389,23 @@ public class PromptWorkbenchService
         [JsonPropertyName("messages")] public List<string> Messages { get; set; } = new();
         /// <summary>校验修复后的 JSON（已回写 OTHER / clamp / 截断）</summary>
         [JsonPropertyName("normalizedJson")] public string? NormalizedJson { get; set; }
+    }
+
+    /// <summary>
+    /// ★ 显式实现 <see cref="IPromptWorkbench"/>：把后台端实体 <c>PromptTemplate</c>
+    /// 投影成 Shared 契约 <see cref="PromptTemplateView"/>。
+    /// <para>⚠️ 刻意用<b>显式实现</b>（而非改公开方法签名）：<c>PromptTemplateController</c>
+    /// 等后台端调用方仍按实体用，零改动；专家端经接口拿 DTO，不依赖后台实体。</para>
+    /// </summary>
+    async Task<PromptTemplateView?> IPromptWorkbench.ResolveActiveAsync(string promptType, string? standardCode)
+    {
+        var t = await ResolveActiveAsync(promptType, standardCode);
+        return t == null ? null : new PromptTemplateView
+        {
+            Code = t.Code ?? "",
+            Version = t.Version,
+            Template = t.Template,
+            ModelName = t.ModelName
+        };
     }
 }

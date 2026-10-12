@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using CertPlatform.Shared.Fill.Ai;
 
-namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
+namespace CertPlatform.Shared.Fill.Ai
 {
     /// <summary>
     /// <b>AI 返回 JSON 的读取器</b> —— 三个 AI Skill（<c>src_semantic</c> / <c>src_ai_field</c> /

@@ -6,9 +6,10 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
-using CertPlatform.Admin.Services.Workflow.Models;
+using CertPlatform.Shared.Workflow.Models;
 using YZH.Core.DataBase.Interfaces;
-using CertPlatform.Shared.Constants;
+using CertPlatform.Shared.Domain.Scope;
+using CertPlatform.Shared.Workflow.Skills;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills
 {
@@ -53,7 +54,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                 return SkillResult.Fail("table_code 不能为空", WorkflowErrorCodes.PreconditionEmpty);
 
             // 企业编码兜底（与 NodeExecutor docTable 节点一致）
-            var entCode = string.IsNullOrWhiteSpace(enterprise_code) ? YzhVirtualEnterprise.Code : enterprise_code;
+            var entCode = string.IsNullOrWhiteSpace(enterprise_code) ? CoreOrgCodes.StdEnv : enterprise_code;
 
             var tables = (await db.GetListAsync<CertPlatform.Shared.Entities.Doc.TableExtractionResult>(x =>
                 x.TableCode == table_code && x.EnterpriseCode == entCode)).Data ?? new();

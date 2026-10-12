@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 
-namespace CertPlatform.Admin.Services.Workflow.Models
+namespace CertPlatform.Shared.Workflow.Models
 {
     /// <summary>
     /// 测试历史查询请求（阶段四）

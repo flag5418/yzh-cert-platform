@@ -7,9 +7,7 @@ using Microsoft.Extensions.Logging;
 using SqlSugar;
 using YZH.Core.Api.Models.Organization;
 using CertPlatform.Shared.DocExtraction;
-using CertPlatform.Shared.Constants;
-using CertPlatform.Admin.Entities.Cert;
-using CertPlatform.Admin.Entities.Dir;
+using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Storage;
 using YZH.Core.DataBase.Services;
 using YZH.Core.DataBase.Interfaces;
@@ -40,9 +38,9 @@ public class EnterpriseFileService
     private readonly IUserContext _user;
     private readonly ILogger<EnterpriseFileService> _logger;
     /// <summary>S2③ 结果版本店（归档/回活/读取唯一口）</summary>
-    private readonly CertPlatform.Admin.Services.DocExtraction.EnterpriseExtractionResultStore _resultStore;
+    private readonly CertPlatform.Shared.Services.DocExtraction.EnterpriseExtractionResultStore _resultStore;
     /// <summary>提取定位链（P2：槽位页四态判定与执行器共用同一结论）</summary>
-    private readonly CertPlatform.Admin.Services.DocExtraction.ExtractionScopeResolver _scopeResolver;
+    private readonly CertPlatform.Shared.Services.DocExtraction.ExtractionScopeResolver _scopeResolver;
 
     /// <summary>审计人字段（<c>CreateBy</c>）→ 显示姓名（★ 该字段存的是用户 Code，⛔ 不能当人名渲染）</summary>
     private readonly CertPlatform.Shared.Services.Sys.UserDisplayNameResolver _userNames;
@@ -71,8 +69,8 @@ public class EnterpriseFileService
         WorkspaceContextService workspace,
         IUserContext user,
         ILogger<EnterpriseFileService> logger,
-        CertPlatform.Admin.Services.DocExtraction.EnterpriseExtractionResultStore resultStore,
-        CertPlatform.Admin.Services.DocExtraction.ExtractionScopeResolver scopeResolver,
+        CertPlatform.Shared.Services.DocExtraction.EnterpriseExtractionResultStore resultStore,
+        CertPlatform.Shared.Services.DocExtraction.ExtractionScopeResolver scopeResolver,
         CertPlatform.Shared.Services.Sys.UserDisplayNameResolver userNames)
     {
         _db = db;
@@ -1141,7 +1139,7 @@ public class EnterpriseFileService
     private static string? ValidateWritableEnterprise(string enterpriseCode)
         => string.IsNullOrWhiteSpace(enterpriseCode)
             ? "更新失败：缺少业务键 EnterpriseCode"
-            : enterpriseCode == YzhVirtualEnterprise.Code
+            : enterpriseCode == CoreOrgCodes.StdEnv
                 ? "更新失败：禁止写入标准模板域（虚拟企业 Code）"
                 : null;
 
@@ -1862,7 +1860,7 @@ public class EnterpriseFileService
 
         // 2. 模板行（EnterpriseCode = 虚拟企业常量）。多行时取第一（Sort → CreateTime，稳定口径）
         var tplCfg = await _db.GetListAsync<StandardDirectoryConfig>(
-            x => x.OrgCode == orgCode && x.EnterpriseCode == YzhVirtualEnterprise.Code
+            x => x.OrgCode == orgCode && x.EnterpriseCode == CoreOrgCodes.StdEnv
                  && x.StandardCode == standardCode && x.StageCode == stageCode);
         var template = tplCfg.Data?
             .OrderBy(c => c.Sort)
@@ -2449,7 +2447,7 @@ public static class ExtractStateRule
 {
     /// <summary>五态判定（与服务端组装同一逻辑，供复用/测试）。</summary>
     public static string Of(string? code, string? rawExtractStatus,
-        System.Collections.Generic.Dictionary<string, CertPlatform.Admin.Services.DocExtraction.ExtractionSlot> ruleMap,
+        System.Collections.Generic.Dictionary<string, CertPlatform.Shared.Services.DocExtraction.ExtractionSlot> ruleMap,
         System.Collections.Generic.HashSet<string> lockedFiles)
     {
         var c = code ?? "";

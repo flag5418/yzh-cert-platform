@@ -7,8 +7,8 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Auditor.Services;
-using CertPlatform.Admin.Entities.Cert;
 using CertPlatform.Shared.Fill;
+using CertPlatform.Shared.Domain.Scope;
 
 namespace CertPlatform.Auditor.Controllers;
 
@@ -420,14 +420,15 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
             return Ok(ApiResponse<object>.Fail("无权修改其他工作区的企业参数"));
 
         // ★ 参数值行 OrgCode = 工作区 Code（数据归属，见 WorkspaceContextService 对照表）；
-        //   参数定义 OrgCode 恒空串（2026-10-06 起全局共享，见 26 号 §3.1 裁决）
+        //   参数定义 OrgCode 恒为后台标准级 CoreOrgCodes.StdEnv
+        //   （2026-10-12 铁律取代 10-06「恒空串」裁决 —— 见跨端规则 §二）
         var workspaceCode = scope.Data.WorkspaceCode;
         var stdCode = req.StandardCode ?? string.Empty;
         var stageCode = req.StageCode ?? string.Empty;
 
         // 定义全集（校验 paramCode 合法性 —— 不认识的一律报错，不静默丢弃）
         var defs = await _db.Client.Queryable<FillParamDef>()
-            .Where(d => d.OrgCode == "" && d.IsDeleted == false && d.IsValid == 1
+            .Where(d => d.OrgCode == CoreOrgCodes.StdEnv && d.IsDeleted == false && d.IsValid == 1
                         && (d.StandardCode == "" || d.StandardCode == stdCode)
                         && (d.StageCode == "" || d.StageCode == stageCode))
             .ToListAsync();

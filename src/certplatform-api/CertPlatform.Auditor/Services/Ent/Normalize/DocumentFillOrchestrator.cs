@@ -19,9 +19,8 @@ using CertPlatform.Shared.Office.Excel;
 using CertPlatform.Shared.Office.Word;
 using CertPlatform.Shared.Services.Fill;
 using CertPlatform.Shared.Storage;
-using CertPlatform.Admin.Services.Ent;
-using CertPlatform.Admin.Services.Workflow.Skills.Fill;
-using CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai;
+using CertPlatform.Shared.Services.Ent;
+using CertPlatform.Shared.Fill.Ai;
 using CertPlatform.Auditor.Entities.Cert;
 using CertPlatform.Auditor.Entities.Doc;
 
@@ -1417,11 +1416,14 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                             FileKind = isExcel ? "excel" : "word",
                             TemplateFileCode = req.StandardFileCode,
                         };
-                        var tableSkill = await FillTableSkill.ExecuteAsync(
-                            session, payload, startRow, startCol, sheetName, ct);
-                        if (!tableSkill.Success)
+                        // ★ 2026-10-12：改调 Shared 的纯构建器（原来是 Admin 的 FillTableSkill
+                        //   ⇒ 专家端引后台端，违反三方结构铁律）。逻辑唯一出处 =
+                        //   CertPlatform.Shared.Fill.TableRegionBuilder。
+                        var (tblOk, tblErr, _, _) =
+                            TableRegionBuilder.Append(session, payload, startRow, startCol, sheetName);
+                        if (!tblOk)
                         {
-                            failReasons[anchor] = $"表格区域装配失败：{tableSkill.Error}";
+                            failReasons[anchor] = $"表格区域装配失败：{tblErr}";
                             continue;
                         }
 

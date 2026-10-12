@@ -8,7 +8,6 @@ using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Storage;
-using CertPlatform.Admin.Entities.Dir;
 
 namespace CertPlatform.Admin.Services.StandardDirectory;
 

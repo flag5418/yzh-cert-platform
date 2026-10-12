@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace CertPlatform.Admin.Services.Workflow.Models
+namespace CertPlatform.Shared.Workflow.Models
 {
     /// <summary>
     /// 端口声明模型 — 节点的输入/输出端口定义

@@ -4,9 +4,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
-using CertPlatform.Admin.Services.Workflow.Models;
+using CertPlatform.Shared.Workflow.Models;
 using YZH.Core.DataBase.Interfaces;
-using CertPlatform.Shared.Constants;
+using CertPlatform.Shared.Domain.Scope;
+using CertPlatform.Shared.Workflow.Skills;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills
 {
@@ -42,7 +43,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
             string field_code,
             // ★ AllowEmpty = SkillParamEmptyPolicy.Allow：描述写着「空 = 标准样例企业」⇒ 空是**合法语义**，
             //   ⛔ 不能判成缺参（修复前它无 C# 默认值 ⇒ 被当必填，与描述矛盾）。
-            [SkillParam(Description = "企业编码（空=标准样例企业=虚拟企业常量）",
+            [SkillParam(Description = "企业编码（空=标准样例域=CoreOrgCodes.StdEnv）",
                         BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string enterprise_code,
             [SkillParam(Description = "文件编码，可选，文件级过滤",
@@ -55,7 +56,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                 return SkillResult.Fail("field_code 不能为空", WorkflowErrorCodes.PreconditionEmpty);
 
             // 企业编码兜底（与 NodeExecutor docField 节点一致）
-            var entCode = string.IsNullOrWhiteSpace(enterprise_code) ? YzhVirtualEnterprise.Code : enterprise_code;
+            var entCode = string.IsNullOrWhiteSpace(enterprise_code) ? CoreOrgCodes.StdEnv : enterprise_code;
 
             var fields = (await db.GetListAsync<CertPlatform.Shared.Entities.Doc.ExtractionResult>(x =>
                 x.FieldCode == field_code && x.EnterpriseCode == entCode)).Data ?? new();

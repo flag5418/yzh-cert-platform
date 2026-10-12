@@ -1,7 +1,8 @@
-using CertPlatform.Admin.Services.Workflow.Skills;
+using CertPlatform.Shared.Workflow.Skills;
 using YZH.Core.DataBase.Interfaces;
+using CertPlatform.Shared.Entities.Doc;
 
-namespace CertPlatform.Admin.Services.DocExtraction;
+namespace CertPlatform.Shared.Services.DocExtraction;
 
 /// <summary>
 /// ★ 提取值取数唯一口径（2026-09-30 用户裁决 J1/J2/J4 · 25 号 §2.3 / §三）

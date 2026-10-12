@@ -14,10 +14,11 @@ using CertPlatform.Shared.Office;
 using CertPlatform.Shared.Office.Word;
 using CertPlatform.Shared.Office.Excel;
 using CertPlatform.Shared.Storage;
-using CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai;
 using CertPlatform.Shared.Fill;
-using CertPlatform.Shared.Constants;
+using CertPlatform.Shared.Domain.Scope;
 using YZH.Core.Stand.Models.Entity;
+using CertPlatform.Shared.Fill.Ai;
+using CertPlatform.Shared.Services.Ent;
 
 namespace CertPlatform.Admin.Services.Ent.Executors
 {
@@ -81,9 +82,9 @@ namespace CertPlatform.Admin.Services.Ent.Executors
                 var entInfo = CertPlatform.Shared.Services.Fill.EnterpriseInfoMapper.ToInfo(ent);
 
                 // 2. 获取当前标准下所有需要处理的文件清单
-                // ⚠️ 模板行标记为 YzhVirtualEnterprise.Code
+                // ⚠️ 模板行标记为 CoreOrgCodes.StdEnv
                 var stdFiles = (await _db.GetListAsync<StandardDirectoryFile>(x => 
-                    x.EnterpriseCode == YzhVirtualEnterprise.Code && 
+                    x.EnterpriseCode == CoreOrgCodes.StdEnv && 
                     x.StandardCode == payload.StandardCode &&
                     x.InstanceState != "archived" &&
                     x.IsValid == 1)).Data ?? new List<StandardDirectoryFile>();
@@ -95,7 +96,7 @@ namespace CertPlatform.Admin.Services.Ent.Executors
                 var config = (await _db.GetOneAsync<StandardDirectoryConfig>(x => 
                     x.StandardCode == payload.StandardCode && 
                     x.StageCode == payload.StageCode && 
-                    x.EnterpriseCode == YzhVirtualEnterprise.Code &&
+                    x.EnterpriseCode == CoreOrgCodes.StdEnv &&
                     x.IsValid == 1)).Data;
                 
                 var orgCode = config?.OrgCode ?? "";

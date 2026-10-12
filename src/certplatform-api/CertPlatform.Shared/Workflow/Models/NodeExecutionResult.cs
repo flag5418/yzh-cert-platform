@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace CertPlatform.Admin.Services.Workflow.Models
+namespace CertPlatform.Shared.Workflow.Models
 {
     /// <summary>
     /// 节点执行结果模型 — 单个节点执行后的标准输出

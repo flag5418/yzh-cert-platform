@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Office;
 using CertPlatform.Shared.Services.Fill;
-using CertPlatform.Admin.Services.Workflow.Models;
+using CertPlatform.Shared.Workflow.Models;
 using SharedFill = CertPlatform.Shared.Fill;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills.Fill

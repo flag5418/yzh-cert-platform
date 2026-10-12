@@ -54,6 +54,19 @@ public static class CertPlatformSharedServiceExtensions
         services.AddScoped<FillParamValueProvider>();
 
         // ────────────────────────────────────────────────────────────────
+        // Shared/Domain/Scope/ —— ★★ 核心资源检索唯一入口（2026-10-12 用户裁定）
+        // ────────────────────────────────────────────────────────────────
+        // ★ 铁律 L5「一个业务概念一个检索入口」：核心资源（机构 + 标准 + 阶段 及其派生的
+        //   NC 规则 / 章节规则 / 填写规则 / 提取规则）的**取数**只允许在本接口内实现；
+        //   端内只允许「投影」。守卫 A-R6 拦端内直查。
+        // ★ 判据唯一：OrgCode 归属判断一律走 OrgScope（守卫 A-R8）；
+        //   常量 'yzh-std-env' 唯一出处 = CoreOrgCodes.StdEnv（守卫 A-R9）。
+        // ★ 生命周期：持 IDbOrm（Scoped）⇒ 必须 AddScoped。
+        // 规则全文：docs/30-项目规则/跨端共享与核心资源检索规则-V1.md
+        services.AddScoped<CertPlatform.Shared.Domain.Scope.ICoreResourceQuery,
+                           CertPlatform.Shared.Domain.Scope.CoreResourceQuery>();
+
+        // ────────────────────────────────────────────────────────────────
         // Shared/Services/Ai/ —— AI 执行内核
         // ────────────────────────────────────────────────────────────────
         // ★ 待 S1-6 落位：AiFillInvoker（Scoped，构造注入 IDbOrm）/ AiFillPromptBuilder（Singleton，无状态）

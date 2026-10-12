@@ -1,6 +1,7 @@
 using CertPlatform.Admin.Services.Workflow.Skills;
 using CertPlatform.Admin.Services.Workflow.Skills.Nc;
 using Xunit;
+using CertPlatform.Shared.Workflow.Skills;
 
 namespace CertPlatform.Admin.Tests.Nc;
 

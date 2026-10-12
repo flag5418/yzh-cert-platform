@@ -28,7 +28,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         /// <summary>
         /// ★ <b>失败分类码</b>（2026-10-12 新增；成功时为 null）。
         ///
-        /// <para>取值见 <see cref="CertPlatform.Admin.Services.Workflow.Models.WorkflowErrorCodes"/>。
+        /// <para>取值见 <see cref="CertPlatform.Shared.Workflow.Models.WorkflowErrorCodes"/>。
         /// 这是「统一判断标准」的第二个字段 —— 引擎判断后续动作<b>只看
         /// <c>Success</c> + <c>ErrorCode</c></b>，⛔ 不为任何单个 skill 写特殊逻辑：</para>
         /// <list type="table">

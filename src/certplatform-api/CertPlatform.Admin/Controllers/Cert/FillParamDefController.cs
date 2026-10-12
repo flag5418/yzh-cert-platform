@@ -6,7 +6,7 @@ using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
-using CertPlatform.Admin.Entities.Cert;
+using CertPlatform.Shared.Domain.Scope;
 
 namespace CertPlatform.Admin.Controllers.Cert;
 
@@ -20,7 +20,8 @@ namespace CertPlatform.Admin.Controllers.Cert;
 /// <para><b>数据模型绑定制</b>：左树 = [通用] + 各ISO标准（只读，树数据源非本实体，
 /// 前端从 <c>/api/Admin/Foundation/ISOStandardTreeTable/tree/root</c> 取并拼通用根）；
 /// 每条参数唯一归属一节点（<c>StandardCode=''</c>=通用 或 ISOStandard.Code）；
-/// <c>OrgCode</c> / <c>StageCode</c> 服务端强制恒空串（不分机构、不分阶段）；
+/// <c>OrgCode</c> 服务端强制为 <c>CoreOrgCodes.StdEnv</c>（后台标准级 —— 见跨端规则 §二）；
+/// <c>StageCode</c> 服务端强制恒空串（阶段维度已砍除）；
 /// 行级 <c>IsValid</c> 即启用/禁用开关。</para>
 ///
 /// <para><b>为什么不是 TreeTableControllerBase</b>：树数据源是 ISO 标准表（另一实体），
@@ -78,7 +79,7 @@ public class FillParamDefController : YzhControllerBase<FillParamDef>
     public override async Task<Result<FillParamDef>> AddCore(FillParamDef entity)
     {
         // 归一前置（与 OnBeforeAdd 同款、幂等）—— 复活查行依赖归一后的三键 + trim 后的 ParamCode
-        entity.OrgCode = string.Empty;
+        entity.OrgCode = CoreOrgCodes.StdEnv;
         entity.StageCode = string.Empty;
         entity.SourceExpr = null;
         entity.MaintainMode = "manual";
@@ -123,8 +124,9 @@ public class FillParamDefController : YzhControllerBase<FillParamDef>
     /// <summary>新增前：三键服务端强制归一 + ParamCode 必填 + 同一标准下唯一（含已删，复活在 AddCore）</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeAdd(FillParamDef entity)
     {
-        // ★ 关键字段不分机构、不分阶段（2026-10-06 裁决）—— 服务端强制，不信任客户端传值
-        entity.OrgCode = string.Empty;
+        // ★ OrgCode 恒为后台标准级 CoreOrgCodes.StdEnv（2026-10-12 铁律，取代 10-06「恒空串」裁决）；
+        //   StageCode 恒空串（阶段维度已砍除）—— 服务端强制，不信任客户端传值
+        entity.OrgCode = CoreOrgCodes.StdEnv;
         entity.StageCode = string.Empty;
         entity.SourceExpr = null;
         entity.MaintainMode = "manual";
@@ -152,7 +154,7 @@ public class FillParamDefController : YzhControllerBase<FillParamDef>
             return (false, "更新失败：缺少业务键 Code");
 
         // ★ 与 OnBeforeAdd 同款强制归一：客户端不传 / 传脏都以服务端为准
-        entity.OrgCode = string.Empty;
+        entity.OrgCode = CoreOrgCodes.StdEnv;
         entity.StageCode = string.Empty;
         entity.SourceExpr = null;
         entity.MaintainMode = "manual";

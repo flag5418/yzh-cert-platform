@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using CertPlatform.Admin.Services.Workflow.Models;
+using CertPlatform.Shared.Workflow.Models;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills
 {

@@ -29,7 +29,9 @@ namespace CertPlatform.Shared.Entities.Dir
         public string OrgCode { get; set; } = string.Empty;
 
         /// <summary>
-        /// 企业 Code：<c>YZH-STD-ENT</c>（<c>YzhVirtualEnterprise.Code</c>）= 机构模板行；真实值 = 该企业该标准该阶段的企业目录。
+        /// 企业 Code：<c>CoreOrgCodes.StdEnv</c>（值 <c>yzh-std-env</c>）= 机构模板行；真实值 = 该企业该标准该阶段的企业目录。
+        /// <para>★ 2026-10-12 统一：原标记值 <c>YZH-STD-ENT</c>（旧 <c>YzhVirtualEnterprise</c> 常量）已废弃 ——
+        /// 全仓「标准域」标记唯一常量 = <c>CoreOrgCodes.StdEnv</c>（守卫 <b>A-R10</b> 禁旧字面量回归）。</para>
         /// <para>★ 与标准目录复用同一张表：EnterpriseCode 列区分「模板行」与「企业上传行」。</para>
         /// <para>⛔ 禁 NULL（P13，2026-09-28）：uk 对 NULL 不生效，NULL/常量双口径必出脏数据；
         /// 唯一键 <c>uk_enterprise_std_stage(OrgCode, EnterpriseCode, StandardCode, StageCode)</c>（P16 四列）。</para>

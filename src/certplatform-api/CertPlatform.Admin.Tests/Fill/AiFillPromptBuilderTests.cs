@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai;
+using CertPlatform.Shared.Fill.Ai;
 using Xunit;
 
 namespace CertPlatform.Admin.Tests.Fill;

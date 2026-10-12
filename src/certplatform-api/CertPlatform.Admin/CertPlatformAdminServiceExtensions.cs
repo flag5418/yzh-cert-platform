@@ -1,7 +1,5 @@
 
 using CertPlatform.Admin.Services.DocExtraction;
-using CertPlatform.Admin.Services.Ent;
-using CertPlatform.Admin.Services.Ent.Executors;
 using CertPlatform.Admin.Services.StandardDirectory;
 using CertPlatform.Admin.Services.Audit;
 using CertPlatform.Admin.Services.Workflow;
@@ -12,6 +10,10 @@ using YZH.Core.Api.Services;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
+using CertPlatform.Shared.Services.DocExtraction;
+using CertPlatform.Shared.Services.Ent;
+using CertPlatform.Shared.Fill.Ai;
+using CertPlatform.Shared.Services.Workflow;
 
 namespace CertPlatform.Admin;
 
@@ -33,13 +35,15 @@ public static class CertPlatformAdminServiceExtensions
         services.AddSingleton<DocumentConvertClient>();
         services.AddSingleton<LlmInvokeService>();
         services.AddScoped<DocExtractionRuleService>();
+        // ★ 2026-10-12 接口反转：Shared 的 ExtractionScopeResolver 依赖本契约（⛔ 不引 Admin 实现）
+        services.AddScoped<IExtractionRuleQuery>(sp => sp.GetRequiredService<DocExtractionRuleService>());
         // S2③：提取结果版本店（写入侧归档同用）
-        services.AddScoped<CertPlatform.Admin.Services.DocExtraction.EnterpriseExtractionResultStore>();
+        services.AddScoped<CertPlatform.Shared.Services.DocExtraction.EnterpriseExtractionResultStore>();
         // S1：提取定位链唯一判定器（四元组 + Status=passed + Markdown 就位；执行器/批量端点共用）
-        services.AddScoped<ExtractionScopeResolver>();
+        services.AddScoped<CertPlatform.Shared.Services.DocExtraction.ExtractionScopeResolver>();
         // ★ 2026-09-30 裁决 J1/J2/J4：提取值取数唯一口径（RuleCode 收窄 + 人工优先 + IsBlankText 判空）。
         //   ⛔ 守卫（NodeExecutor）与缺口生成（GapDetector）都必须走它，禁止各拼 WHERE。
-        services.AddScoped<CertPlatform.Admin.Services.DocExtraction.ExtractionDataResolver>();
+        services.AddScoped<CertPlatform.Shared.Services.DocExtraction.ExtractionDataResolver>();
 
         // ──── 视觉识别（2026-10-03 从空壳换成真实现）────
         // 图片/扫描件交给视觉模型出 Markdown。★ 判定顺序在 FileConvertCore：
@@ -53,6 +57,8 @@ public static class CertPlatformAdminServiceExtensions
         services.AddScoped<PromptTemplateService>();
         // ★ 2026-10-02 提示词工作台（AI 生成草稿 + 上传文件试跑）
         services.AddScoped<PromptWorkbenchService>();
+        // ★ 2026-10-12 接口反转：专家端（Auditor）经此契约跑语义分析（A-R1 铁律）
+        services.AddScoped<IPromptWorkbench>(sp => sp.GetRequiredService<PromptWorkbenchService>());
         // ★ 2026-10-02 企业文档 Markdown 复用缓存（Redis，单例持连接；连不上自动降级为「每次重新转换」）
         services.AddSingleton<PromptMarkdownCache>();
 
@@ -76,6 +82,8 @@ public static class CertPlatformAdminServiceExtensions
         services.AddScoped<WorkflowInterpreter>();
         services.AddScoped<TaskCacheService>();
         services.AddScoped<WfExecutionTaskService>();
+        // ★ 2026-10-12 接口反转：专家端（Auditor）经此契约跑 NC/报告工作流（A-R1 铁律）
+        services.AddScoped<IWorkflowRunner>(sp => sp.GetRequiredService<WfExecutionTaskService>());
 
         // ──── 队列相关（单例，executor/notifier/handler 必须为单例） ────
         services.AddSingleton<OfficeConvertTaskExecutor>();

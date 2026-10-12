@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace CertPlatform.Admin.Services.Workflow.Models
+namespace CertPlatform.Shared.Workflow.Models
 {
     /// <summary>
     /// 单条边的数据模型 — 对应 rule_json 中 edges[] 的一个元素

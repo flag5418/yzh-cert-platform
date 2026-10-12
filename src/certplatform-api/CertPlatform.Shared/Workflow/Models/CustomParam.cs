@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace CertPlatform.Admin.Services.Workflow.Models
+namespace CertPlatform.Shared.Workflow.Models
 {
     /// <summary>
     /// AI 节点异常 — 携带错误码用于前端分类提示
@@ -105,7 +105,7 @@ namespace CertPlatform.Admin.Services.Workflow.Models
         /// <summary>规则编码（cert_validation_rule.Code），用于落库归属</summary>
         public string? RuleCode { get; set; }
 
-        /// <summary>企业编码（运行时绑定，默认 YZH-STD-ENT 测试企业）</summary>
+        /// <summary>企业编码（运行时绑定，缺省 = CoreOrgCodes.StdEnv 标准域）</summary>
         public string? EnterpriseCode { get; set; }
 
         /// <summary>标准编码</summary>

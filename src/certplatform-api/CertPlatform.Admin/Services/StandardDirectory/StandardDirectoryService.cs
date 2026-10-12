@@ -14,10 +14,8 @@ using YZH.Core.DataBase.Services;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Queue;
 using CertPlatform.Admin.Entities.Dir;
-using CertPlatform.Admin.Entities.Cert;
 using CertPlatform.Shared.Entities.Sys;
-using CertPlatform.Admin.Entities.Wf;
-using CertPlatform.Shared.Constants;
+using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Storage;
 
 namespace CertPlatform.Admin.Services.StandardDirectory;
@@ -1034,7 +1032,7 @@ public class StandardDirectoryService
     }
 
     /// <summary>
-    /// ★ 按「标准 + 阶段」列出标准目录的<b>模板文件行</b>（<c>EnterpriseCode = YZH-STD-ENT</c>）。
+    /// ★ 按「标准 + 阶段」列出标准目录的<b>模板文件行</b>（<c>EnterpriseCode = CoreOrgCodes.StdEnv</c>）。
     ///
     /// <para><b>用途</b>：NC 规则设计器里「标准目录文件是否缺失」特殊节点的配置期下拉 ——
     /// 选项就是本方法的结果。执行期 <c>IsStdFileMissingSkill</c> 拿所选行的 <c>Code</c>
@@ -1043,19 +1041,23 @@ public class StandardDirectoryService
     ///
     /// <para><b>为什么必须是模板行</b>：<c>StandardFileCode</c> 的语义是
     /// 「关联标准文件 Code → 模板行 Code」（见 <see cref="StandardDirectoryFile.StandardFileCode"/> 注释）。
-    /// 2026-10-11 实测：企业行 501 条 <c>StandardFileCode</c> <b>100% 命中</b>模板行。
     /// ⛔ 不要改成查企业行 —— 配置期没有企业上下文，且那样会让「标准要求」变成「某企业的现状」。</para>
     ///
-    /// <para><b>模板行的标识是 <c>YZH-STD-ENT</c> 而不是空串</b>：库里有 23 行历史遗留的
-    /// <c>EnterpriseCode = ''</c>（全部 <c>StandardFileCode</c> 为 NULL），属于脏数据，
-    /// 不纳入选项。真正的模板行 168 行全部是 <c>YZH-STD-ENT</c>。</para>
+    /// <para><b>★ 2026-10-12 口径统一（重要）</b>：模板行标记值 = <c>CoreOrgCodes.StdEnv</c>（<c>yzh-std-env</c>），
+    /// ⛔ <b>不再是</b>旧常量 <c>YZH-STD-ENT</c>（该常量已删除，守卫 <b>A-R10</b> 禁其回归）。</para>
+    ///
+    /// <para><b>⚠️ 实测状态（2026-10-12）</b>：本表当前共 23 行，<b>全部是「机构标准目录行」</b>
+    /// （<c>OrgCode = &lt;机构 Code&gt;</c>、<c>EnterpriseCode = ''</c>、有 <c>StoragePath</c>，
+    /// 例：尚龙 <c>XASL-QD-001 工作环境管理制度.doc</c>）—— <b>它们不是模板行</b>。
+    /// ⇒ 本方法当前<b>返回空列表</b>，根因是<b>模板行数据尚未建立</b>，⛔ <b>不是判据写错</b>。
+    /// ⛔ 也不要为了「让下拉有选项」把机构行改判为模板行 —— 那会让「标准要求」与「机构现状」混为一谈。</para>
     /// </summary>
     /// <param name="standardCode">标准 Code（空/空白 = 不过滤）</param>
     /// <param name="stageCode">阶段 Code（空/空白 = 不过滤）</param>
     public async Task<List<StandardDirectoryFile>> GetTemplateFilesAsync(string? standardCode, string? stageCode)
     {
         var all = await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.EnterpriseCode == YzhVirtualEnterprise.Code && x.IsValid == 1);
+            x => x.EnterpriseCode == CoreOrgCodes.StdEnv && x.IsValid == 1);
 
         return (all.Data ?? new List<StandardDirectoryFile>())
             .Where(x => string.IsNullOrWhiteSpace(standardCode)

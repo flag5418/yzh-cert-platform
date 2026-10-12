@@ -6,8 +6,8 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using CertPlatform.Admin.Services.Workflow.Models;
-using CertPlatform.Shared.Constants;
+using CertPlatform.Shared.Workflow.Models;
+using CertPlatform.Shared.Domain.Scope;
 
 namespace CertPlatform.Admin.Services.Workflow
 {
@@ -511,7 +511,7 @@ namespace CertPlatform.Admin.Services.Workflow
 
         /// <summary>企业编码缺省值：单节点测试默认打标准企业（与 NodeExecutor 内部兜底一致）</summary>
         private static string ResolveEnterpriseCode(string? enterpriseCode)
-            => string.IsNullOrWhiteSpace(enterpriseCode) ? YzhVirtualEnterprise.Code : enterpriseCode!;
+            => string.IsNullOrWhiteSpace(enterpriseCode) ? CoreOrgCodes.StdEnv : enterpriseCode!;
 
         /// <summary>从 AI 节点的 WorkflowContext.ContextParams 读一个键（兼容 PascalCase / camelCase）</summary>
         private static string? ReadContextParam(AiNodeTestRequest request, params string[] keys)

@@ -4,9 +4,8 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using CertPlatform.Admin.Services.Workflow;
-using CertPlatform.Admin.Services.Workflow.Models;
-using CertPlatform.Admin.Entities.Cert;
+using CertPlatform.Shared.Services.Workflow;
+using CertPlatform.Shared.Workflow.Models;
 using CertPlatform.Shared.Entities.Rpt;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -99,7 +98,7 @@ namespace CertPlatform.Auditor.Services.Expert
     ///   <item><b><c>JudgeMode = manual</c> → 跳过（<c>manual_mode</c>）</b>：
     ///         现场观察 / 访谈类检查项，机器<b>不猜</b>，直接交人工。这是「人工/自动按审核方法划分」的落点。</item>
     ///   <item><b>无 DAG → 跳过（<c>no_rule</c>）</b>：规则没配工作流，跑不了，也<b>不算失败</b>。</item>
-    ///   <item><b>有 DAG → 调工作流引擎</b>：<c>WfExecutionTaskService.CreateAndRunAsync</c>，
+    ///   <item><b>有 DAG → 调工作流引擎</b>：<c>IWorkflowRunner.CreateAndRunAsync</c>，
     ///         引擎产物（<c>wf_execution_task</c> / <c>wf_node_execution</c>）可下钻溯源。</item>
     /// </list>
     ///
@@ -182,7 +181,7 @@ namespace CertPlatform.Auditor.Services.Expert
             }
 
             // ── 分支 3：跑工作流引擎 ──
-            var wf = sp.GetRequiredService<WfExecutionTaskService>();
+            var wf = sp.GetRequiredService<IWorkflowRunner>();
             TaskExecutionResponse resp;
             try
             {
@@ -513,7 +512,7 @@ namespace CertPlatform.Auditor.Services.Expert
             }
             else
             {
-                var wf = sp.GetRequiredService<WfExecutionTaskService>();
+                var wf = sp.GetRequiredService<IWorkflowRunner>();
                 TaskExecutionResponse resp;
                 try
                 {

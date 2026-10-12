@@ -4,9 +4,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
-using CertPlatform.Admin.Services.Workflow.Models;
-using CertPlatform.Admin.Entities.Dir;
+using CertPlatform.Shared.Workflow.Models;
 using YZH.Core.DataBase.Interfaces;
+using CertPlatform.Shared.Workflow.Skills;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills
 {

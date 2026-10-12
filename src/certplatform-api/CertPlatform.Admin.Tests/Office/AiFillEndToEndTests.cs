@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using CertPlatform.Admin.Services.Workflow.Skills.Fill;
-using CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai;
+using CertPlatform.Shared.Fill.Ai;
 using CertPlatform.Shared.Office;
 using CertPlatform.Shared.Office.Excel;
 using CertPlatform.Shared.Office.Word;

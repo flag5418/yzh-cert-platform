@@ -458,6 +458,371 @@ function runRE() {
   return { violations, skipped: false }
 }
 
+/* ==========================================================================
+ * ★ A-R1 ~ A-R9 —— 跨端共享与核心资源检索铁律（2026-10-12 用户裁定）
+ *
+ *   规则全文：docs/30-项目规则/跨端共享与核心资源检索规则-V1.md
+ *   实施计划：docs/50-任务/迁移计划/跨端共享层收敛-实施计划-V2.md
+ *
+ *   违规面四类：
+ *     ① 依赖方向 —— A-R1（Admin→Auditor）/ A-R2（Auditor→Admin）/ A-R3（Shared→端）
+ *     ② 死 using —— A-R5
+ *     ③ 宿主语义 —— A-R7
+ *     ④ OrgCode 判据分裂 —— A-R8（判据唯一）/ A-R9（字面量唯一）
+ *
+ *   ⚠️ 为什么这些规则重要：项目此前**依赖方向零守卫** —— 全仓 24 条守卫里
+ *      只有本组才覆盖「Admin / Shared / Auditor 三方结构」。
+ * ========================================================================== */
+
+/** 读文本（不存在 ⇒ 空串）—— 供 csproj 判定用 */
+function readText(p) {
+  return existsSync(p) ? readFileSync(p, 'utf8') : ''
+}
+
+/** 收集目录下所有类型名（class / record / interface / enum / struct）—— 供死 using 判定 */
+function collectTypeNames(dir) {
+  const names = new Set()
+  if (!existsSync(dir)) return names
+  for (const file of listCsFiles(dir)) {
+    const text = readFileSync(file, 'utf8')
+    for (const m of text.matchAll(
+      /\b(?:public|internal)\s+(?:sealed\s+|abstract\s+|partial\s+|static\s+)*(?:class|record|interface|enum|struct)\s+(\w+)/g,
+    )) {
+      names.add(m[1])
+    }
+  }
+  return names
+}
+
+/** 命名空间 → 类型集（按 `CertPlatform.{端}.{路径}` 目录约定反推） */
+function typesOfNamespace(ns) {
+  const m = ns.match(/^CertPlatform\.(Admin|Auditor)\.(.+)$/)
+  if (!m) return null
+  const dir = join(API_ROOT, `CertPlatform.${m[1]}`, m[2].replaceAll('.', '/'))
+  return existsSync(dir) ? collectTypeNames(dir) : null
+}
+
+/** A-R1：`Admin` ⛔ 引 `Auditor` */
+function runAR1() {
+  const violations = []
+  const adminDir = join(API_ROOT, 'CertPlatform.Admin')
+  const proj = join(adminDir, 'CertPlatform.Admin.csproj')
+  if (/CertPlatform\.Auditor\.csproj/.test(readText(proj))) {
+    violations.push({
+      file: rel(proj),
+      line: 0,
+      text: 'csproj 引用了 CertPlatform.Auditor —— ⛔ 反向依赖（两端互不引用，只能通过 Shared）',
+    })
+  }
+  for (const file of listCsFiles(adminDir)) {
+    readFileSync(file, 'utf8')
+      .split('\n')
+      .forEach((line, i) => {
+        if (isCommentLine(line)) return
+        if (/^\s*using\s+CertPlatform\.Auditor\b/.test(line)) {
+          violations.push({ file: rel(file), line: i + 1, text: line.trim().slice(0, 120) })
+        }
+      })
+  }
+  return { violations, skipped: false }
+}
+
+/** A-R2：`Auditor` ⛔ 引 `Admin`（debt = 阶段 4 待解耦清单，逐条摘除后转正） */
+function runAR2() {
+  const violations = []
+  const audDir = join(API_ROOT, 'CertPlatform.Auditor')
+  const proj = join(audDir, 'CertPlatform.Auditor.csproj')
+  if (/CertPlatform\.Admin\.csproj/.test(readText(proj))) {
+    violations.push({
+      file: rel(proj),
+      line: 0,
+      text: 'csproj 引用了 CertPlatform.Admin —— ⛔ 反向依赖（阶段 4 摘除后本规则转正）',
+    })
+  }
+  for (const file of listCsFiles(audDir)) {
+    readFileSync(file, 'utf8')
+      .split('\n')
+      .forEach((line, i) => {
+        if (isCommentLine(line)) return
+        if (/^\s*using\s+CertPlatform\.Admin\b/.test(line) || /\bCertPlatform\.Admin\./.test(line)) {
+          violations.push({ file: rel(file), line: i + 1, text: line.trim().slice(0, 120) })
+        }
+      })
+  }
+  return { violations, skipped: false }
+}
+
+/** A-R3：`Shared` ⛔ 引任何一端（会成环 ⇒ 两端重新变成「一个系统」） */
+function runAR3() {
+  const violations = []
+  const sharedDir = join(API_ROOT, 'CertPlatform.Shared')
+  const proj = join(sharedDir, 'CertPlatform.Shared.csproj')
+  const projText = readText(proj)
+  for (const bad of [
+    'CertPlatform.Admin.csproj',
+    'CertPlatform.Auditor.csproj',
+    'CertPlatform.Enterprise.csproj',
+  ]) {
+    if (projText.includes(bad)) {
+      violations.push({ file: rel(proj), line: 0, text: `Shared 引用了 ${bad} —— ⛔ 会成环` })
+    }
+  }
+  for (const file of listCsFiles(sharedDir)) {
+    readFileSync(file, 'utf8')
+      .split('\n')
+      .forEach((line, i) => {
+        if (isCommentLine(line)) return
+        if (/^\s*using\s+CertPlatform\.(Admin|Auditor|Enterprise)\b/.test(line)) {
+          violations.push({ file: rel(file), line: i + 1, text: line.trim().slice(0, 120) })
+        }
+      })
+  }
+  return { violations, skipped: false }
+}
+
+/**
+ * A-R5：禁死 using。
+ *
+ * 判据：`using CertPlatform.{Admin,Auditor}.<X>;` 而 `<X>` 命名空间下的**类型零引用**。
+ * 成因：端 csproj 有 `<Using Include="CertPlatform.Shared.Entities.*" />` 全局 using
+ * ⇒ 文件里写 `CertStage` 命中的是 **Shared**，文件顶那句 Admin using 是历史残留。
+ * （2026-10-12 已清 14 条；本规则防回归。）
+ */
+function runAR5() {
+  const violations = []
+  for (const root of ['CertPlatform.Admin', 'CertPlatform.Auditor', 'CertPlatform.Shared']) {
+    for (const file of listCsFiles(join(API_ROOT, root))) {
+      const lines = readFileSync(file, 'utf8').split('\n')
+      const codeOnly = lines.filter((l) => !isCommentLine(l)).join('\n')
+      lines.forEach((line, i) => {
+        const m = line.match(/^\s*using\s+(CertPlatform\.(?:Admin|Auditor)\.[\w.]+)\s*;/)
+        if (!m) return
+        const types = typesOfNamespace(m[1])
+        if (!types || types.size === 0) return // 目录不存在 ⇒ 不判（避免误报）
+        let hit = false
+        for (const t of types) {
+          if (new RegExp(`\\b${t}\\b`).test(codeOnly)) {
+            hit = true
+            break
+          }
+        }
+        if (!hit) {
+          violations.push({
+            file: rel(file),
+            line: i + 1,
+            text: `死 using：${m[1]} 下 ${types.size} 个类型零引用`,
+          })
+        }
+      })
+    }
+  }
+  return { violations, skipped: false }
+}
+
+/**
+ * A-R6：★ 端内禁「核心资源实体」裸直查。
+ *
+ * 判据：`CertPlatform.{Admin,Auditor}` 下出现
+ *   `GetListAsync<T>` / `GetOneAsync<T>` / `CountAsync<T>` / `Queryable<T>` / `SqlQueryAsync<T>`
+ * 且 `T` ∈ 核心资源实体集 ⇒ 违规。取数只允许走 `Shared/Domain/Scope/CoreResourceQuery.cs`。
+ *
+ * ★ 铁律 L5（一个业务概念一个检索入口）：**同一个 WHERE 出现在第二处 ⇒ 就是违规。**
+ *   端内只允许「投影」：选字段 / 加派生列 / 排序分页 / 组装 DTO。
+ *
+ * ⚠️ 存量走 debt 白名单豁免，随接线逐条删除；删完即代表全站达标。
+ * ⛔ 不加实体到本清单 = 该实体处于守卫盲区。
+ */
+const CORE_RESOURCE_ENTITIES = [
+  'ISOStandard',
+  'ISOClause',
+  'CertStage',
+  'CertOrgStandard',
+  'CertOrgStage',
+  'FillParamDef',
+  'DocFillPrompt',
+  'DocExtractionRule',
+  'StandardDirectoryFile',
+]
+
+function runAR6() {
+  const violations = []
+  const pattern = new RegExp(
+    `\\b(?:GetListAsync|GetOneAsync|CountAsync|Queryable|SqlQueryAsync|GetPageListAsync)\\s*<\\s*(?:${CORE_RESOURCE_ENTITIES.join('|')})\\s*>`,
+  )
+  for (const root of ['CertPlatform.Admin', 'CertPlatform.Auditor']) {
+    const dir = join(API_ROOT, root)
+    if (!existsSync(dir)) continue
+    for (const file of listCsFiles(dir)) {
+      readFileSync(file, 'utf8')
+        .split('\n')
+        .forEach((line, i) => {
+          if (isCommentLine(line)) return
+          if (pattern.test(line)) {
+            violations.push({ file: rel(file), line: i + 1, text: line.trim().slice(0, 120) })
+          }
+        })
+    }
+  }
+  return { violations, skipped: false }
+}
+
+/** A-R7：`Shared/Domain/**` 禁宿主语义（`IUserContext` / `HttpContext`）—— 随 L4 纪律落地 */
+function runAR7() {
+  const violations = []
+  const dir = join(API_ROOT, 'CertPlatform.Shared/Domain')
+  if (!existsSync(dir)) return { violations, skipped: false }
+  for (const file of listCsFiles(dir)) {
+    readFileSync(file, 'utf8')
+      .split('\n')
+      .forEach((line, i) => {
+        if (isCommentLine(line)) return
+        if (/\bIUserContext\b|\bHttpContext\b/.test(line)) {
+          violations.push({ file: rel(file), line: i + 1, text: line.trim().slice(0, 120) })
+        }
+      })
+  }
+  return { violations, skipped: false }
+}
+
+/**
+ * A-R8：★ `OrgCode` 判据唯一。
+ *
+ * 判据：禁把 `OrgCode` 的空值/常量比较当作「这是后台标准级数据」的判断。
+ * 白名单**仅** `CertPlatform.Shared/Domain/Scope/**`（`OrgScope.cs` 判据 + `CoreResourceQuery.cs` 查询）。
+ *
+ * 实测违规（2026-10-12）：4 种写法 / ≥13 处 ——
+ * `== ""` / `IsNullOrEmpty` / `IsNullOrWhiteSpace` / `== string.Empty || == org`。
+ */
+function runAR8() {
+  const violations = []
+  const ALLOW = '/Shared/Domain/Scope/'
+  const pats = [
+    /OrgCode\s*==\s*""/,
+    /OrgCode\s*!=\s*""/,
+    /OrgCode\s*==\s*string\.Empty/,
+    /OrgCode\s*!=\s*string\.Empty/,
+    /IsNullOrEmpty\s*\(\s*[\w.]*OrgCode\s*\)/,
+    /IsNullOrWhiteSpace\s*\(\s*[\w.]*OrgCode\s*\)/,
+  ]
+  // ★ 排除「合法用法」—— 本规则只针对「把 OrgCode 空值当作**后台标准级判据**」，
+  //   不含下列四类（它们不是判据，是入参校验 / 用户机构 / 机构实体字段 / 业务键必填校验）：
+  //     ① 入参：request.OrgCode / req.OrgCode / dto.OrgCode
+  //     ② 用户机构：user.OrgCode / user.Data.OrgCode
+  //     ③ 机构实体：entity.OrgCode / existing.Data.OrgCode
+  //     ④ 业务键校验：config.OrgCode（目录配置所属机构必填）/ manifest.OrgCode（上传清单机构必填）
+  const EXCLUDE = /\b(request|req|user|entity|existing|dto|model|config|manifest)\s*[\w.\[\]]*\.OrgCode\b/
+  for (const file of listCsFiles(API_ROOT)) {
+    const r = rel(file)
+    if (r.includes(ALLOW)) continue
+    readFileSync(file, 'utf8')
+      .split('\n')
+      .forEach((line, i) => {
+        if (isCommentLine(line)) return
+        if (EXCLUDE.test(line)) return
+        for (const re of pats) {
+          if (re.test(line)) {
+            violations.push({ file: r, line: i + 1, text: line.trim().slice(0, 120) })
+            break
+          }
+        }
+      })
+  }
+  return { violations, skipped: false }
+}
+
+/**
+ * A-R9：★ `"yzh-std-env"` 字面量唯一。
+ *
+ * 白名单**仅** `Shared/Domain/Scope/CoreOrgCodes.cs` —— 其余一律用 `CoreOrgCodes.StdEnv`。
+ */
+function runAR9() {
+  const violations = []
+  const ALLOW = 'Shared/Domain/Scope/CoreOrgCodes.cs'
+  for (const file of listCsFiles(API_ROOT)) {
+    const r = rel(file)
+    if (r.includes(ALLOW)) continue
+    readFileSync(file, 'utf8')
+      .split('\n')
+      .forEach((line, i) => {
+        if (isCommentLine(line)) return
+        if (/["']yzh-std-env["']/.test(line)) {
+          violations.push({ file: r, line: i + 1, text: line.trim().slice(0, 120) })
+        }
+      })
+  }
+  return { violations, skipped: false }
+}
+
+/**
+ * A-R10：★ 「标准域标记」字面量唯一（2026-10-12 用户裁定）。
+ *
+ * 背景：`YZH-STD-ENT`（旧 `YzhVirtualEnterprise.Code`）与 `yzh-std-env`
+ *   （`CoreOrgCodes.StdEnv`）**是同一件事的两种写法** —— 「这行数据属于标准域（平台方建立的
+ *   标准/规则），不属于任何企业」。用户裁定**只能留一个** ⇒
+ *   后端 `YzhVirtualEnterprise` + 前端 `YZH_VIRTUAL_ENTERPRISE_CODE` 已全部删除。
+ *
+ * 判据（两条，与后端 A-R9 对称）：
+ *   ① 全仓源码 ⛔ 禁止再出现 `YZH-STD-ENT`（旧值，已废弃）；
+ *   ② 前端源码里 `'yzh-std-env'` 字面量**只允许**出现在
+ *      `cert/cert-share/src/constants/coreOrgCodes.ts` —— 其余一律引用 `CORE_ORG_STD_ENV`。
+ *
+ * ⚠️ 扫描范围 = 前后端源码（`.cs` / `.ts` / `.vue` / `.js`）；⛔ **不扫**：
+ *   · `docs/`（历史记录需保留原值，改了反而读不懂）
+ *   · `scripts/db/`（迁移 SQL 必须引用旧值才能清理）
+ *   · `dist/`（构建产物，随源码重新生成）
+ *   · **注释行**（与 A-R9 对称：注释里写明「旧值已废弃」是有价值的留痕，
+ *     规则要拦的是**代码里还在用旧值**）
+ */
+function runAR10() {
+  const violations = []
+  const SKIP = new Set(['obj', 'bin', 'node_modules', '.git', 'Migrations', 'dist', '__pycache__'])
+  const EXTS = ['.cs', '.ts', '.vue', '.js']
+  const FE_CONST_ALLOW = 'cert/cert-share/src/constants/coreOrgCodes.ts'
+  const roots = [
+    join(API_ROOT, 'CertPlatform.Shared'),
+    join(API_ROOT, 'CertPlatform.Admin'),
+    join(API_ROOT, 'CertPlatform.Auditor'),
+    join(API_ROOT, 'CertPlatform.Enterprise'),
+    join(API_ROOT, 'CertPlatform.Admin.Tests'),
+    join(WEB, 'cert'),
+    join(WEB, 'yzh.vue.core/src'),
+  ]
+  const rec = (d) => {
+    if (!existsSync(d)) return
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      if (SKIP.has(e.name)) continue
+      const p = join(d, e.name)
+      if (e.isDirectory()) {
+        rec(p)
+        continue
+      }
+      if (!EXTS.some((x) => e.name.endsWith(x))) continue
+      const r = rel(p)
+      readFileSync(p, 'utf8')
+        .split('\n')
+        .forEach((line, i) => {
+          if (isCommentLine(line)) return
+          if (line.includes('YZH-STD-ENT')) {
+            violations.push({
+              file: r,
+              line: i + 1,
+              text: `旧标记值 YZH-STD-ENT（已废弃，改用 CoreOrgCodes.StdEnv / CORE_ORG_STD_ENV）：${line.trim().slice(0, 80)}`,
+            })
+          } else if (/^(cert|yzh\.vue\.core)\//.test(r) && !r.includes(FE_CONST_ALLOW)
+                     && /["']yzh-std-env["']/.test(line)) {
+            violations.push({
+              file: r,
+              line: i + 1,
+              text: `前端 yzh-std-env 字面量（应引用 coreOrgCodes.ts 的 CORE_ORG_STD_ENV）：${line.trim().slice(0, 80)}`,
+            })
+          }
+        })
+    }
+  }
+  roots.forEach(rec)
+  return { violations, skipped: false }
+}
+
 // ── R17：后端实体归属一致性（2026-10-03 用户指出「专家系统实体一个都没有」后新增）──
 //
 //   背景：曾把 77 个实体全部塞在 CertPlatform.Shared/Entities/，无法回答
@@ -1240,6 +1605,108 @@ const RULES = [
     type: 'custom',
     desc: '禁止 catch 块内写导出占位文件（P1-18：下载失败写占位 → ZIP「成功」却内容是假的）',
     run: runRE,
+    debt: [],
+  },
+  // ===== ★ 跨端共享与核心资源检索铁律（docs/30-项目规则/跨端共享与核心资源检索规则-V1.md）=====
+  {
+    id: 'A-R1',
+    type: 'custom',
+    desc: 'Admin ⛔ 引 Auditor（三方结构：两端互不引用，只能通过 Shared 共享）',
+    run: runAR1,
+    debt: [],
+  },
+  {
+    id: 'A-R2',
+    type: 'custom',
+    desc: 'Auditor ⛔ 引 Admin（反向依赖，已全部摘除 ⇒ 规则转正，零容忍）',
+    run: runAR2,
+    // ★ 2026-10-12 已解耦：Auditor 侧 8 个文件 + csproj 全部改为消费 CertPlatform.Shared 契约
+    //   （IExtractionRuleQuery / IPromptWorkbench / IWorkflowRunner / TableRegionBuilder /
+    //     Shared.Fill.Ai / Shared.Workflow.Models / Shared.Services.Ent …），
+    //   实现侧在 Admin 经 DI 注册为 Shared 接口。实测 `using CertPlatform.Admin` = 0 处
+    //   ⇒ debt 清空，本规则自本次起为硬性零容忍（任何回潮即失败）。
+    debt: [],
+  },
+  {
+    id: 'A-R3',
+    type: 'custom',
+    desc: 'Shared ⛔ 引任何一端（Admin/Auditor/Enterprise —— 会成环，两端重新变成「一个系统」）',
+    run: runAR3,
+    debt: [],
+  },
+  {
+    id: 'A-R5',
+    type: 'custom',
+    desc: '禁死 using（using 的命名空间下零类型被引用；成因 = csproj 全局 using 已覆盖）',
+    run: runAR5,
+    debt: [],
+  },
+  {
+    id: 'A-R6',
+    type: 'custom',
+    desc: '端内禁核心资源实体裸直查（只允许 Shared/Domain/Scope/CoreResourceQuery —— 铁律 L5）',
+    run: runAR6,
+    // ★ 2026-10-12 首次启用：实测存量 23 文件 / 131 处（按文件路径子串匹配，见下 debt）。
+    //   接线一处 ⇒ 从本清单删一行；删完 ⇒ 规则转正（零容忍）。
+    //   ⚠️ 判据：`Shared/Domain/Scope/CoreResourceQuery.cs` 是**唯一**核心资源检索入口；
+    //      端内只允许「投影」（选字段 / 派生列 / 排序分页 / 组装 DTO），⛔ 不许自己写 WHERE。
+    debt: [
+      // ---- CertPlatform.Admin（12 文件）----
+      'CertPlatform.Admin/Controllers/Cert/FillParamDefController.cs',
+      'CertPlatform.Admin/Controllers/System/QueueMonitorController.cs',
+      'CertPlatform.Admin/Controllers/Workflow/DocFillPromptController.cs',
+      'CertPlatform.Admin/Controllers/Workflow/DocTemplateController.cs',
+      'CertPlatform.Admin/Controllers/Workflow/StandardDocContractController.cs',
+      'CertPlatform.Admin/Services/DocExtraction/DocExtractionRuleService.AI.cs',
+      'CertPlatform.Admin/Services/DocExtraction/DocExtractionRuleService.cs',
+      'CertPlatform.Admin/Services/Ent/Executors/EnterpriseDocNormalizationExecutor.cs',
+      'CertPlatform.Admin/Services/StandardDirectory/StandardDirectoryService.cs',
+      'CertPlatform.Admin/Services/StandardDirectory/UploadQueueCancelHandler.cs',
+      'CertPlatform.Admin/Services/Workflow/PromptWorkbenchService.cs',
+      'CertPlatform.Admin/Services/Workflow/Skills/IsStdFileMissingSkill.cs',
+      // ---- CertPlatform.Auditor（11 文件）----
+      'CertPlatform.Auditor/Controllers/DocumentFillController.cs',
+      'CertPlatform.Auditor/Controllers/EnterpriseNormalizeController.cs',
+      'CertPlatform.Auditor/Controllers/ExpertResultController.cs',
+      'CertPlatform.Auditor/Controllers/FillParamValueController.cs',
+      'CertPlatform.Auditor/Services/Ent/EnterpriseExtractTaskExecutor.cs',
+      'CertPlatform.Auditor/Services/Ent/EnterpriseFileService.cs',
+      'CertPlatform.Auditor/Services/Ent/EnterpriseOriginalService.cs',
+      'CertPlatform.Auditor/Services/Ent/Normalize/DocumentFillOrchestrator.cs',
+      'CertPlatform.Auditor/Services/Expert/ExpertTaskService.cs',
+      'CertPlatform.Auditor/Services/Expert/GapDetector.cs',
+      'CertPlatform.Auditor/Services/Expert/GapFillService.cs',
+    ],
+  },
+  {
+    id: 'A-R7',
+    type: 'custom',
+    desc: 'Shared/Domain/** 禁宿主语义（IUserContext / HttpContext —— 共享层不得读登录态）',
+    run: runAR7,
+    debt: [],
+  },
+  {
+    id: 'A-R8',
+    type: 'custom',
+    desc: 'OrgCode 判据唯一（禁 == "" / IsNullOrEmpty / IsNullOrWhiteSpace；白名单仅 Shared/Domain/Scope/）',
+    run: runAR8,
+    // ✅ 2026-10-12 阶段 1.A 已清零：13 处判据全部收敛到
+    //    `OrgScope.IsBackendBuilt` / `OrgScope.IsLegacyUnassigned` / `CoreOrgCodes.StdEnv`。
+    debt: [],
+  },
+  {
+    id: 'A-R9',
+    type: 'custom',
+    desc: "'yzh-std-env' 字面量唯一（白名单仅 CoreOrgCodes.cs —— 其余用 CoreOrgCodes.StdEnv）",
+    run: runAR9,
+    debt: [],
+  },
+  {
+    id: 'A-R10',
+    type: 'custom',
+    desc: "标准域标记字面量唯一：全仓禁 YZH-STD-ENT（旧值已删）；前端 yzh-std-env 白名单仅 coreOrgCodes.ts",
+    run: runAR10,
+    // ★ 2026-10-12 用户裁定「两个常量只能留一个」后新增：存量已清零（后端 31 处 + 前端 1 常量全部收敛）。
     debt: [],
   },
 ]

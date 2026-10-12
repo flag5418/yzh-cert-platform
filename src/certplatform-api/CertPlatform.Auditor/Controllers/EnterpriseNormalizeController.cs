@@ -20,7 +20,7 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Queue;
 using YZH.Core.Stand.Models.Result;
-using CertPlatform.Shared.Constants;
+using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Entities.Dir;
 using CertPlatform.Shared.Entities.Doc;
@@ -122,7 +122,7 @@ namespace CertPlatform.Auditor.Controllers
             /// </summary>
             public List<DocTemplate> ScopedAll { get; init; } = new();
 
-            /// <summary>标准域行（<c>EnterpriseCode = YZH-STD-ENT</c>），按 <c>Code</c> 索引</summary>
+            /// <summary>标准域行（<c>EnterpriseCode = CoreOrgCodes.StdEnv</c>），按 <c>Code</c> 索引</summary>
             public Dictionary<string, StandardDirectoryFile> StdMap { get; init; } =
                 new(StringComparer.Ordinal);
 
@@ -268,7 +268,7 @@ namespace CertPlatform.Auditor.Controllers
                     .GroupBy(r => r.Code!, StringComparer.Ordinal)
                     .ToDictionary(g => g.Key,
                         g => (g.FirstOrDefault(r => string.Equals(r.EnterpriseCode,
-                                  YzhVirtualEnterprise.Code, StringComparison.Ordinal)) ?? g.First()).FileName,
+                                  CoreOrgCodes.StdEnv, StringComparison.Ordinal)) ?? g.First()).FileName,
                         StringComparer.Ordinal);
             }
 
@@ -907,7 +907,7 @@ namespace CertPlatform.Auditor.Controllers
                 ? new List<StandardDirectoryFile>()
                 : (await _db.GetListAsync<StandardDirectoryFile>(x =>
                       configCodes.Contains(x.ConfigCode) &&
-                      x.EnterpriseCode == YzhVirtualEnterprise.Code &&
+                      x.EnterpriseCode == CoreOrgCodes.StdEnv &&
                       x.IsValid == 1)).Data ?? new List<StandardDirectoryFile>();
 
             // ③ 文件夹（结构要如实 —— 全显，不做「空文件夹剪枝」）
@@ -2143,7 +2143,7 @@ namespace CertPlatform.Auditor.Controllers
             {
                 var extra = (await _db.GetListAsync<StandardDirectoryFile>(x =>
                     missing.Contains(x.Code!) &&
-                    x.EnterpriseCode == YzhVirtualEnterprise.Code &&
+                    x.EnterpriseCode == CoreOrgCodes.StdEnv &&
                     x.IsValid == 1)).Data ?? new List<StandardDirectoryFile>();
                 foreach (var g in extra.GroupBy(r => r.Code!, StringComparer.Ordinal))
                     stdMap[g.Key] = g.First();

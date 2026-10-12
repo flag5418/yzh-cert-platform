@@ -9,7 +9,6 @@ using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
-using CertPlatform.Admin.Entities.Cert;
 
 using CB = CertPlatform.Shared.Entities.Cert.CertificationBody;
 

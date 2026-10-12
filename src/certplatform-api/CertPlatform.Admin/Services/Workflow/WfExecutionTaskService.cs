@@ -8,7 +8,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
-using CertPlatform.Admin.Services.Workflow.Models;
+using CertPlatform.Shared.Workflow.Models;
+using CertPlatform.Shared.Services.Workflow;
 using CertPlatform.Admin.Entities.Wf;
 using YZH.Core.DataBase.Interfaces;
 
@@ -37,7 +38,7 @@ namespace CertPlatform.Admin.Services.Workflow
     ///
     /// <para>本类为 partial：单节点/AI 节点测试的实现见 <c>WfExecutionTaskService.NodeScope.cs</c>。</para>
     /// </summary>
-    public partial class WfExecutionTaskService
+    public partial class WfExecutionTaskService : IWorkflowRunner
     {
         private readonly WorkflowConfigParser _parser;
         private readonly WorkflowInterpreter _interpreter;

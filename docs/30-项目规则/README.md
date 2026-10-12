@@ -16,6 +16,7 @@
 
 | 文档 | 约束对象 | 强度 |
 |------|----------|:----:|
+| [`跨端共享与核心资源检索规则-V1.md`](./跨端共享与核心资源检索规则-V1.md) | ★ **Admin/Shared/Auditor 三方结构与依赖方向 + `yzh-std-env` 虚拟机构铁律 + 核心资源（机构+标准+阶段及派生规则）检索唯一入口 `CoreResourceQuery`** | **强制** |
 | [`前后端代码结构统一规则-V1.md`](./前后端代码结构统一规则-V1.md) | 三层同构（Controller / API / Pages 同路径同名） | 强制 |
 | [`Skill清单-V1.md`](./Skill清单-V1.md) | Skill 编码/输入输出/绑定模式 | 参考 |
 | [`EntityValidationHandler设计文档.md`](../10-YZH架构/EntityValidationHandler设计文档.md) | 实体校验处理器（2026-09-12 归位至 `10-YZH架构/`） | 参考 |

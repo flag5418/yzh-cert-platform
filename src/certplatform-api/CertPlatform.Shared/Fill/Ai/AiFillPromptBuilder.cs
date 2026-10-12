@@ -5,8 +5,11 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using YZH.Core.DataBase.Interfaces;
+using CertPlatform.Shared.Domain.Scope;
+using CertPlatform.Shared.Fill.Ai;
+using CertPlatform.Shared.Entities.Doc;
 
-namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
+namespace CertPlatform.Shared.Fill.Ai
 {
     /// <summary>
     /// <b>批量装配的上下文</b> —— 「这份文档要填哪些锚点 + 有哪些企业资料」。
@@ -228,7 +231,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
                 OutputSchema = Render(outputSchema!, values),
                 // ★ 低温可复现（39 号 §12.1）；prompt 行有配置则用配置
                 Temperature = prompt?.Temperature ?? 0m,
-                MaxTokens = prompt?.MaxTokens is > 0 ? prompt!.MaxTokens : AiFillInvoker.DefaultMaxTokens,
+                MaxTokens = prompt?.MaxTokens is > 0 ? prompt!.MaxTokens : AiFillDefaults.MaxTokens,
             };
         }
 
@@ -253,11 +256,11 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
             var rows = (await db.GetListAsync<DocFillPrompt>(x => x.PromptCode == code)).Data;
             if (rows == null || rows.Count == 0) return null;
 
-            // 机构专属优先；没有机构专属再退回全局（OrgCode=''）
+            // 机构专属优先；没有机构专属再退回后台标准级（OrgCode = CoreOrgCodes.StdEnv）
             var scoped = rows.Where(r => !string.IsNullOrEmpty(org)
                                          && string.Equals(r.OrgCode, org, StringComparison.Ordinal)).ToList();
             if (scoped.Count == 0)
-                scoped = rows.Where(r => string.IsNullOrEmpty(r.OrgCode)).ToList();
+                scoped = rows.Where(r => OrgScope.IsBackendBuilt(r.OrgCode)).ToList();
             if (scoped.Count == 0) return null;
 
             return scoped

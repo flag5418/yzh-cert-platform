@@ -11,6 +11,8 @@ using YZH.Core.Api.Controllers;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Result;
+using CertPlatform.Shared.Services.Workflow;
+using CertPlatform.Shared.Services.DocExtraction;
 
 namespace CertPlatform.Admin.Controllers.Workflow;
 
@@ -462,11 +464,11 @@ public class StandardDocContractController : WebControllerBase
 
         // ④ L1 doc_group（标签）—— 批次提示词，本场景只有 1 份
         var groupRes = await _prompts.AnalyzeForQueueAsync(
-            PromptWorkbenchService.Types.Group, standardCode, one, $"standard_doc:{fileRow.Code}:group");
+            PromptTypes.Group, standardCode, one, $"standard_doc:{fileRow.Code}:group");
 
         // ⑤ L2 doc_content（作用）—— 单份
         var contentRes = await _prompts.AnalyzeForQueueAsync(
-            PromptWorkbenchService.Types.Content, standardCode, one, $"standard_doc:{fileRow.Code}:content");
+            PromptTypes.Content, standardCode, one, $"standard_doc:{fileRow.Code}:content");
 
         // ⑥ 提取（统一口径）
         var groupByFile = groupRes.Success && !string.IsNullOrWhiteSpace(groupRes.Json)
@@ -681,8 +683,8 @@ public class StandardDocContractController : WebControllerBase
         public static SemanticOutcome Skipped(
             string message, string? purpose, string? tagsJson, string? category, string? typeGuess,
             string? keywords, string? summary, decimal? tagsConf, decimal? purposeConf,
-            PromptWorkbenchService.AnalyzeForQueueResult groupRes,
-            PromptWorkbenchService.AnalyzeForQueueResult contentRes, List<string> warnings)
+            AnalyzeForQueueResult groupRes,
+            AnalyzeForQueueResult contentRes, List<string> warnings)
             => new()
             {
                 Status = "skipped",

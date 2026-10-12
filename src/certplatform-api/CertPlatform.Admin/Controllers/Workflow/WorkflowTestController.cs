@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using CertPlatform.Admin.Services.Workflow;
-using CertPlatform.Admin.Services.Workflow.Models;
+using CertPlatform.Shared.Workflow.Models;
 using YZH.Core.Stand.Models.Result;
 
 namespace CertPlatform.Admin.Controllers.Workflow

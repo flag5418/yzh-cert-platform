@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using SqlSugar;
 using YZH.Core.Api.Models.System;
 using YZH.Core.DataBase.Interfaces;
+using CertPlatform.Shared.Fill.Ai;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
 {

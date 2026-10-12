@@ -6,9 +6,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using CertPlatform.Admin.Services.Workflow.Skills.Nc;
-using CertPlatform.Admin.Services.Workflow.Models;
+using CertPlatform.Shared.Workflow.Models;
 using YZH.Core.DataBase.Interfaces;
 using CertPlatform.Admin.Entities.Cert;
+using CertPlatform.Shared.Domain.Scope;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills
 {
@@ -144,7 +145,11 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         }
 
         /// <summary>
-        /// 取判定规则：精确匹配 → 通用规则，逐级回落
+        /// 取判定规则：机构专属优先 → 后台标准级回落，再逐级匹配
+        /// <para><b>★ 取数口径（`OrgCode` 判据铁律 §2.2）</b>：同时取「机构专属」与
+        /// 「后台标准级（<see cref="CoreOrgCodes.StdEnv"/> = `yzh-std-env`）」两类行，
+        /// 机构专属优先。⛔ 不写字符串字面量（守卫 <b>A-R9</b>），⛔ 不写
+        /// `OrgCode == ""` / `IsNullOrEmpty`（守卫 <b>A-R8</b>）。</para>
         /// <para>优先级：</para>
         /// <list type="number">
         /// <item>(OrgCode, StandardCode, PhaseCode) 精确</item>
@@ -159,10 +164,12 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
 
             // ★ GetListAsync 无 ct 参数；includeDisabled=true 以便显式判 IsValid
             var rules = await db.GetListAsync<ConclusionRule>(
-                x => x.OrgCode == orgCode && x.IsDeleted == false,
+                x => (x.OrgCode == orgCode || x.OrgCode == CoreOrgCodes.StdEnv) && x.IsDeleted == false,
                 includeDisabled: true);
 
-            var candidates = rules.Data ?? new List<ConclusionRule>();
+            var candidates = (rules.Data ?? new List<ConclusionRule>())
+                .OrderByDescending(r => r.OrgCode == orgCode)   // ★ 机构专属优先
+                .ToList();
             if (candidates.Count == 0) return null;
 
             var std = standardCode ?? string.Empty;

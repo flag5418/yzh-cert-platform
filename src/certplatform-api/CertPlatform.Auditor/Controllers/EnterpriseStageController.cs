@@ -10,7 +10,6 @@ using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Auditor.Services;
 using CertPlatform.Auditor.Services.Ent;
-using CertPlatform.Admin.Entities.Cert;
 using CertPlatform.Shared.Entities.Sys;
 using YZH.Core.Api.Models.System;
 

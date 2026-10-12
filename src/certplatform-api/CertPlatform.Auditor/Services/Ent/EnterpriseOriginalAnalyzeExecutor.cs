@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using CertPlatform.Admin.Services.Workflow;
+using CertPlatform.Shared.Services.Workflow;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Fill;
 using Microsoft.Extensions.DependencyInjection;
@@ -73,7 +73,7 @@ namespace CertPlatform.Auditor.Services.Ent
     /// ★ <b>M8-2（2026-10-06）</b>：<c>doc_group</c> 单批上限。
     ///
     /// <para>33 号定义 <c>doc_group</c> 是「<b>批次</b>提示词，吃文件名清单」⇒ 理论上一次能塞整批；
-    /// 但实测 101 份时被 <c>PromptWorkbenchService</c> 的测试页常数（20）整批拒绝，
+    /// 但实测 101 份时被 <c>IPromptWorkbench</c> 的测试页常数（20）整批拒绝，
     /// 而执行器只 <c>LogWarning</c> 继续跑 ⇒ <b>分组全丢且页面显示成功</b>（静默降级）。
     /// ⇒ 改为在这里<b>主动切片</b>，逐批调、合并结果。</para>
     /// <para>⛔ 与测试页的 <c>MaxTestFiles</c> <b>不是同一个东西</b>：那个是「页面单次试跑」的防护，
@@ -155,8 +155,8 @@ namespace CertPlatform.Auditor.Services.Ent
                 using var scope = _serviceProvider.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<IDbOrm>();
                 var storage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
-                // ⚠️ PromptWorkbenchService 在 Admin 项目（单宿主同进程同队列）⇒ 从根容器懒解析
-                var prompts = scope.ServiceProvider.GetRequiredService<PromptWorkbenchService>();
+                // ⚠️ IPromptWorkbench 在 Admin 项目（单宿主同进程同队列）⇒ 从根容器懒解析
+                var prompts = scope.ServiceProvider.GetRequiredService<IPromptWorkbench>();
 
                 // ① 取待分析文件（按 Code，⛔ 不用 Id，D9）
                 var rows = new List<EnterpriseOriginalFile>();
@@ -287,7 +287,7 @@ namespace CertPlatform.Auditor.Services.Ent
                             // 每个并发分支独立 scope（IDbOrm 非线程安全）
                             using var inner = _serviceProvider.CreateScope();
                             var db2 = inner.ServiceProvider.GetRequiredService<IDbOrm>();
-                            var prompts2 = inner.ServiceProvider.GetRequiredService<PromptWorkbenchService>();
+                            var prompts2 = inner.ServiceProvider.GetRequiredService<IPromptWorkbench>();
 
                             // ★ 语义精要预处理（字数 > 2000 且尚未生成）
                             //   ⚠️ 精要是**源文档**的压缩，与标准无关 ⇒ 文件级缓存正确，多标准共用。
@@ -295,11 +295,11 @@ namespace CertPlatform.Auditor.Services.Ent
                             if (markdown.Length > 2000 && string.IsNullOrWhiteSpace(row.EssentialSummary))
                             {
                                 var essentialScope = await PickAnyScopeAsync(
-                                    prompts2, standards, PromptWorkbenchService.Types.Essential);
+                                    prompts2, standards, PromptTypes.Essential);
                                 if (essentialScope != null)
                                 {
                                     var summaryRes = await prompts2.AnalyzeForQueueAsync(
-                                        PromptWorkbenchService.Types.Essential, essentialScope,
+                                        PromptTypes.Essential, essentialScope,
                                         new List<(string, string?)> { (fileName, markdown) },
                                         $"enterprise_original:{row.Code}:essential");
 
@@ -324,7 +324,7 @@ namespace CertPlatform.Auditor.Services.Ent
 
                             // ★ M6：作用域 = 本轮标准（std），⛔ 不再「按文件挑一个标准」
                             var one = await prompts2.AnalyzeForQueueAsync(
-                                PromptWorkbenchService.Types.Content, std,
+                                PromptTypes.Content, std,
                                 new List<(string, string?)> { (fileName, analysisInput) },
                                 $"enterprise_original:{row.Code}:content:{ShortCode(std)}");
 
@@ -486,7 +486,7 @@ namespace CertPlatform.Auditor.Services.Ent
         /// <see cref="RunGroupBatchedAsync"/> 的失败清单<b>如实回报</b>。</para>
         /// </summary>
         private async Task<List<string>> ResolveStandardsAsync(
-            IDbOrm db, PromptWorkbenchService prompts, EnterpriseOriginalAnalyzePayload payload)
+            IDbOrm db, IPromptWorkbench prompts, EnterpriseOriginalAnalyzePayload payload)
         {
             // ① 载荷显式指定 ⇒ 只分析其中真能解析到提示词的（解析不到的**如实告警**，⛔ 不静默）
             var wanted = (payload.StandardCodes ?? new List<string>())
@@ -522,9 +522,9 @@ namespace CertPlatform.Auditor.Services.Ent
         }
 
         /// <summary>该标准是否配置了<b>生效的</b> <c>doc_content</c> 提示词（产出画像的必要条件）</summary>
-        private static async Task<bool> HasContentPromptAsync(PromptWorkbenchService prompts, string? standardCode)
+        private static async Task<bool> HasContentPromptAsync(IPromptWorkbench prompts, string? standardCode)
         {
-            var t = await prompts.ResolveActiveAsync(PromptWorkbenchService.Types.Content, standardCode);
+            var t = await prompts.ResolveActiveAsync(PromptTypes.Content, standardCode);
             return t != null && !string.IsNullOrWhiteSpace(t.Template);
         }
 
@@ -537,7 +537,7 @@ namespace CertPlatform.Auditor.Services.Ent
         /// </summary>
         /// <returns><c>ByFile</c> = fileName → 该文件的 doc_group 结论；<c>Failures</c> = 失败批的描述（空 = 全成功）</returns>
         private async Task<(Dictionary<string, JsonElement> ByFile, List<string> Failures)> RunGroupBatchedAsync(
-            PromptWorkbenchService prompts, string? standardCode,
+            IPromptWorkbench prompts, string? standardCode,
             List<(string FileName, string? Markdown)> usable, string batchCode)
         {
             var byFile = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
@@ -549,7 +549,7 @@ namespace CertPlatform.Auditor.Services.Ent
                 var batchNo = i / GroupBatchSize + 1;
 
                 var res = await prompts.AnalyzeForQueueAsync(
-                    PromptWorkbenchService.Types.Group, standardCode, slice,
+                    PromptTypes.Group, standardCode, slice,
                     $"enterprise_original:{batchCode}:group:{ShortCode(standardCode)}:{batchNo}");
 
                 if (res.Success && !string.IsNullOrWhiteSpace(res.Json))
@@ -571,7 +571,7 @@ namespace CertPlatform.Auditor.Services.Ent
         /// 「与标准无关、随便用哪个标准都行」的提示词）。全都不行则返回 <c>null</c>。
         /// </summary>
         private static async Task<string?> PickAnyScopeAsync(
-            PromptWorkbenchService prompts, List<string> standards, string promptType)
+            IPromptWorkbench prompts, List<string> standards, string promptType)
         {
             foreach (var code in standards)
             {
@@ -696,7 +696,7 @@ namespace CertPlatform.Auditor.Services.Ent
         /// </summary>
         private async Task UpsertProfileAsync(
             IDbOrm db, EnterpriseOriginalFile row, string? scopeStandardCode,
-            PromptWorkbenchService.AnalyzeForQueueResult one,
+            AnalyzeForQueueResult one,
             Dictionary<string, JsonElement> groupByFile)
         {
             var std = scopeStandardCode ?? "";

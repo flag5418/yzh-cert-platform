@@ -5,7 +5,7 @@
  * 【为什么要有这一步】
  *   `cert_doc_template` 是**登记表不是生成表**：填写引擎的输入必须是
  *   「已经存在、且格式已被归一为 `.docx`/`.xlsx`」的空白模板。
- *   所以本弹窗的数据源是标准目录的模板行（`EnterpriseCode='YZH-STD-ENT'`），
+ *   所以本弹窗的数据源是标准目录的模板行（`EnterpriseCode = CoreOrgCodes.StdEnv`），
  *   ⛔ 不是「上传一个新文件」。
  *
  * 【★ 实测得出的关键事实（真实数据推翻理想设计）】

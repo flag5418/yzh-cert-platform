@@ -11,7 +11,6 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Auditor.Services;
 using CertPlatform.Auditor.Services.Expert;
-using CertPlatform.Admin.Entities.Cert;
 
 namespace CertPlatform.Auditor.Controllers;
 

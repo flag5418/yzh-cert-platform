@@ -1,7 +1,6 @@
 
 using System.Text.Json;
-using CertPlatform.Shared.Constants;
-using CertPlatform.Admin.Entities.Dir;
+using CertPlatform.Shared.Domain.Scope;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
@@ -97,7 +96,7 @@ public class OfficeConvertTaskExecutor : IYzhTaskExecutor
 
     private async Task EnqueueEnterpriseExtractAsync(FileConvertPayload payload, string? parentQueueCode)
     {
-        if (string.IsNullOrWhiteSpace(payload.EnterpriseCode) || payload.EnterpriseCode == YzhVirtualEnterprise.Code)
+        if (string.IsNullOrWhiteSpace(payload.EnterpriseCode) || payload.EnterpriseCode == CoreOrgCodes.StdEnv)
             return;
 
         // ★ S2 图 3 分流：未要求自动提取 ⇒ 只转换不提取（状态留 none，原因落 ExtractMessage）

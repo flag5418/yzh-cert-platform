@@ -54,7 +54,10 @@
     <ProjectReference Include="..\..\yzh-core\YZH.Core.Api\YZH.Core.Api.csproj" />
     <ProjectReference Include="..\..\yzh-core\YZH.Core.DataBase\YZH.Core.DataBase.csproj" />
     <ProjectReference Include="..\CertPlatform.Shared\CertPlatform.Shared.csproj" />
-    <ProjectReference Include="..\CertPlatform.Admin\CertPlatform.Admin.csproj" />
+    <!-- ★ A-R1 铁律（2026-10-12 落地）：Auditor ⛔ 不得引用 CertPlatform.Admin。
+         Auditor 消费的 Admin 类型已全部下沉 CertPlatform.Shared（契约 + DTO），
+         实现侧（PromptWorkbenchService / WfExecutionTaskService / DocExtractionRuleService）
+         在单宿主同进程内经 DI 注册为 Shared 接口。守卫：scripts/guards.mjs A-R1。 -->
   </ItemGroup>
 
 </Project>

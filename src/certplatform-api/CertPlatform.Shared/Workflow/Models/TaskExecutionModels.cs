@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace CertPlatform.Admin.Services.Workflow.Models
+namespace CertPlatform.Shared.Workflow.Models
 {
     /// <summary>
     /// 任务执行请求 — 工作流执行 API 契约（前端 designer.vue test/run 现有零改动）
@@ -212,7 +212,7 @@ namespace CertPlatform.Admin.Services.Workflow.Models
         /// <summary>规则编码（cert_validation_rule.Code），用于落库归属</summary>
         public string? RuleCode { get; set; }
 
-        /// <summary>企业编码（运行时绑定，默认 YZH-STD-ENT 测试企业）</summary>
+        /// <summary>企业编码（运行时绑定，缺省 = CoreOrgCodes.StdEnv 标准域）</summary>
         public string? EnterpriseCode { get; set; }
 
         /// <summary>标准编码</summary>

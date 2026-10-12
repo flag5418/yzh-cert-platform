@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai;
+using CertPlatform.Shared.Fill.Ai;
 using CertPlatform.Shared.Office;
 using Xunit;
 

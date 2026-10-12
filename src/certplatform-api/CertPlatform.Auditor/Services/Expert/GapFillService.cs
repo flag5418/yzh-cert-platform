@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Logging;
-using CertPlatform.Admin.Services.DocExtraction;
+using CertPlatform.Shared.Services.DocExtraction;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Models.Result;
 

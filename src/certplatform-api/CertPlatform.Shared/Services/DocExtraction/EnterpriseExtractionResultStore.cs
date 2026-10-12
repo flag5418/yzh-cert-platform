@@ -1,6 +1,7 @@
 using YZH.Core.DataBase.Interfaces;
+using CertPlatform.Shared.Entities.Doc;
 
-namespace CertPlatform.Admin.Services.DocExtraction;
+namespace CertPlatform.Shared.Services.DocExtraction;
 
 /// <summary>
 /// 企业提取结果版本店（10 号 §六 S2③；图 4 替换/移除/恢复的唯一读写口）。

@@ -9,7 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
-using CertPlatform.Admin.Services.Workflow.Models;
+using CertPlatform.Shared.Workflow.Models;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using YZH.Core.Api.Models.System;
 using YZH.Core.DataBase.Interfaces;

@@ -105,6 +105,7 @@ AIGC:
 ## 快速指针（编码前必读链路）
 
 - **项目宪法**：`项目全局规则.md` — 项目概述/技术栈锁定/文档目录结构/AI 检索协议/端口规划/快速开始/禁止事项
+- **★ 跨端共享与核心资源检索铁律**（编码前必读）：`docs/30-项目规则/跨端共享与核心资源检索规则-V1.md` — `Admin`/`Shared`/`Auditor` 三方结构与依赖方向 + **`yzh-std-env` 虚拟机构铁律** + **核心资源检索唯一入口 `CoreResourceQuery`** + 守卫 `A-R1`…`A-R9` + 动手前检查清单
 - **项目结构与启动指南**：`docs/00-工程体系/项目结构与启动指南-V1.md` — 新旧架构路径/启动方式/端口规划/AI 检索协议
 - **文档导航**：`docs/00-工程体系/README.md` — 全项目文档索引（00/10/20/50/60/80/90 + 历史文档）
 - **★ YZH 架构唯一入口**：`docs/10-YZH架构/README.md`（← **V1 强制规范**：编码前必读，包含架构总纲/后端基类/前端基类/数据契约/权限体系/代码结构/开发流程/常见错误）
@@ -184,6 +185,16 @@ AIGC:
     - 范式文件：`cert-admin/src/pages/workflow/prompt-template/index.test.ts`（8 用例，覆盖 AI 生成自动落库 / 切换守卫 / 草稿恢复 / 状态提示 / 树高亮回拨）
     - ★ **stub 铁律**：带**作用域插槽**的组件（`el-tree` 等）stub 必须 `v-for` 渲染 `<slot :data="n" />` —— 只写 `<slot />` 会让 `#default="{ data }"` 拿到 undefined，**全部用例倒在渲染**；组件用到的指令（`v-loading`）须在 `global.directives` 补 stub
     - ⛔ 本机**无 Chromium**（`agent-browser` 未装 / playwright 缓存为空）⇒ 页面**逻辑**验证走组件测试；「页面**能否编译**」用 `curl --noproxy '*' http://127.0.0.1:9990/src/<路径>.vue`（返回 500 = Vite 编译失败 = 白屏）
+13. **★ 跨端共享与核心资源检索铁律**（2026-10-12，最高优先级，违反 = 返工）：
+    - **全文（必读）**：`docs/30-项目规则/跨端共享与核心资源检索规则-V1.md`；宪法摘要见 `项目全局规则.md` §十七。
+    - **① 三方结构**：`Admin`（后台端）与 `Auditor`（专家端）是**两个独立系统**，**互不引用**，只能通过 `CertPlatform.Shared` 共享；`Shared` **不引任何一端**。
+    - **② `yzh-std-env` 铁律**：后台标准级数据 ⇒ `OrgCode = 'yzh-std-env'`（虚拟机构），⛔ **不是** `NULL`/`''`/空格。判据**只允许**调 `OrgScope.IsBackendBuilt(orgCode)`（`Shared/Domain/Scope/OrgScope.cs`）；常量**只允许**用 `CoreOrgCodes.StdEnv`。
+      - ⛔ **明令作废**：`OrgCode == ""` / `IsNullOrEmpty(OrgCode)` / `IsNullOrWhiteSpace(OrgCode)` / `== string.Empty || == org`（2026-10-06「恒空串」裁决已被取代）。
+      - ⚠️ 旧写法「能用」**纯属侥幸**：实测 `cert_iso_clause` 用 `== ''` 查 **0 行**、用 `IS NULL OR = ''` 查 **163 行**。
+    - **③ 检索唯一入口**：核心资源（**机构 + 标准 + 阶段**及其派生的 **NC 规则 / 章节规则 / 填写规则 / 提取规则**）的取数，**只能**调 `CoreResourceQuery`；端内**只准投影**（选字段 / 加派生列 / 排序分页），⛔ **不准自建 `Queryable<T>` / `GetListAsync<T>` / `WHERE`**。
+      - **判定口诀**：**同一个 `WHERE` 出现在第二处 ⇒ 就是违规。**
+    - **④ 动手前必过检查清单**（规则文档 §五）：要的数是核心资源吗 → 在写 `Queryable<T>` 吗 → 在写 `OrgCode == ""` 吗 → 要写 `"yzh-std-env"` 字面量吗 → 两端都要用吗 → 有 `using CertPlatform.Admin.*` 吗 → 守卫跑了吗。
+    - **⑤ 守卫**：`A-R1`（`Admin` ⛔ 引 `Auditor`）· `A-R2`（`Auditor` ⛔ 引 `Admin`）· `A-R3`（`Shared` ⛔ 引端）· `A-R5`（禁死 using）· `A-R6`（核心资源禁端内直查）· `A-R8`（`OrgCode` 判据唯一）· `A-R9`（`yzh-std-env` 字面量唯一）。
 
 ## 业务菜单速览
 

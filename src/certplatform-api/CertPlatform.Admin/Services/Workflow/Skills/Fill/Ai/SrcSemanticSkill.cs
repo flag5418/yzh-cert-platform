@@ -2,8 +2,9 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Shared.Office;
-using CertPlatform.Admin.Services.Workflow.Models;
+using CertPlatform.Shared.Workflow.Models;
 using YZH.Core.DataBase.Interfaces;
+using CertPlatform.Shared.Fill.Ai;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai
 {

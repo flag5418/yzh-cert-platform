@@ -11,11 +11,11 @@ using SqlSugar;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Extensions;
 using YZH.Core.Stand.Interfaces;
-using CertPlatform.Shared.Constants;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Admin.Entities.Cert;
-using CertPlatform.Admin.Entities.Dir;
 using CertPlatform.Admin.Entities.Doc;
+using CertPlatform.Shared.Domain.Scope;
+using CertPlatform.Shared.Services.DocExtraction;
 
 namespace CertPlatform.Admin.Services.DocExtraction;
 
@@ -23,14 +23,13 @@ namespace CertPlatform.Admin.Services.DocExtraction;
 /// 提取规则四元组作用域（S0，10 号 §三）：规则键 + 机构 + 标准 + 阶段。
 /// <para><c>RuleKey</c> = 规则键（模板文件行 Code / FR 模板 Code）；<c>OrgCode</c> = 模板所属机构。</para>
 /// </summary>
-public sealed record RuleScope(string RuleKey, string OrgCode, string StandardCode, string StageCode);
 
 /// <summary>
 /// 文档提取规则核心服务（业务层 #17 移植，partial：主体 + AI 编排）
 /// <para>对照旧 DocExtractionRuleService.cs（1,094 行）业务编排完整保留，ORM 改写为 IDbOrm</para>
 /// <para>规则键：StandardFileCode = 实际文件 FileCode（FL-xxx）或模板 Code（FR-xxx）</para>
 /// </summary>
-public partial class DocExtractionRuleService
+public partial class DocExtractionRuleService : IExtractionRuleQuery
 {
     private readonly IDbOrm _db;
     private readonly ILogger<DocExtractionRuleService> _logger;
@@ -51,8 +50,10 @@ public partial class DocExtractionRuleService
     /// <summary>S2③ 提取结果版本店（归档/回活/读取唯一口）</summary>
     private readonly EnterpriseExtractionResultStore _resultStore;
 
-    /// <summary>YZH 标准企业编码（提取结果落库目标）——已收敛单点，权威定义见 <see cref="YzhVirtualEnterprise"/></summary>
-    public const string YzhStandardEnterpriseCode = YzhVirtualEnterprise.Code;
+    // ★ 2026-10-12 常量统一：本类原 `YzhStandardEnterpriseCode` 别名、以及旧 `YzhVirtualEnterprise`
+    //   常量**均已删除** —— 全仓「标准域」标记唯一常量 = `CoreOrgCodes.StdEnv`（值 yzh-std-env；
+    //   定义处 CertPlatform.Shared/Domain/Scope/CoreOrgCodes.cs；字面量唯一由守卫 A-R9 保证）。
+    //   ⛔ 不要再在本类内重建别名：别名 = 第二个字面量出口 = 下次改值必漏一处。
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -140,7 +141,7 @@ public partial class DocExtractionRuleService
         // 1. 四元组作用域（S0，10 号 §三）：规则键 + 机构 + 标准 + 阶段。
         //    页面只传 fileCode，机构/标准/阶段一律后端权威推导（同 Skill 单一约束原则）。
         var scope = await ResolveRuleScopeAsync(request.FileCode);
-        if (string.IsNullOrWhiteSpace(scope.OrgCode))
+        if (OrgScope.IsLegacyUnassigned(scope.OrgCode))
         {
             // 后端推导不到时才用页面显式值兜底；两者都空 ⇒ 无法按机构追溯，拒绝保存
             var fallbackOrg = (request.OrgCode ?? "").Trim();
@@ -281,7 +282,7 @@ public partial class DocExtractionRuleService
                 }
             }
 
-            // 5. 同步提取结果到 B-08/B-09（YZH-STD-ENT），供工作流验证
+            // 5. 同步提取结果到 B-08/B-09（标准域 = CoreOrgCodes.StdEnv），供工作流验证
             await SyncExtractionResultToB08B09Async(rule, request);
 
             tx.Commit();
@@ -312,13 +313,13 @@ public partial class DocExtractionRuleService
     }
 
     /// <summary>
-    /// 将规则保存请求中的提取数据同步到 B-08/B-09（G-2a：企业域参数化，默认 = 虚拟企业常量，管理端行为不变）。
+    /// 将规则保存请求中的提取数据同步到 B-08/B-09（G-2a：企业域参数化，默认 = 标准域常量 CoreOrgCodes.StdEnv，管理端行为不变）。
     /// <para>规则对照旧 SyncExtractionResultToB08B09Async（L528-612）：</para>
     /// <para>1. extractionData 为空 → 跳过；2. 物理删除旧结果（绕过软删拦截 + 唯一约束兜底）；</para>
     /// <para>3. 一致性过滤（只写定义中存在的 code）；4. 空值/空表格不写入</para>
     /// </summary>
     private async Task SyncExtractionResultToB08B09Async(DocExtractionRule rule, SaveExtractionRuleRequest request,
-        string enterpriseCode = YzhStandardEnterpriseCode)
+        string enterpriseCode = CoreOrgCodes.StdEnv)
     {
         var extractionData = request.ExtractionData;
         if (extractionData == null) return;
@@ -495,7 +496,7 @@ public partial class DocExtractionRuleService
         if (string.IsNullOrWhiteSpace(fileCode)) return null;
 
         var scope = await ResolveRuleScopeAsync(fileCode);
-        if (!string.IsNullOrWhiteSpace(scope.OrgCode))
+        if (!OrgScope.IsLegacyUnassigned(scope.OrgCode))
             return await GetRuleByScopeAsync(scope.OrgCode, scope.StandardCode, scope.StageCode, scope.RuleKey);
 
         // 遗留兜底：文件行不存在（FR 模板缺失 / 历史测试 code）⇒ 推不出四元组，退回单列定位。
@@ -608,14 +609,14 @@ public partial class DocExtractionRuleService
 
         // 读取 YZH 标准企业提取结果（B-08 字段值 / B-09 表格行），保存后重新进入可完整回显
         var b08Rows = await _db.Client.Queryable<ExtractionResult>()
-            .Where(x => x.EnterpriseCode == YzhStandardEnterpriseCode && x.StandardFileCode == standardFileCode && !x.IsDeleted)
+            .Where(x => x.EnterpriseCode == CoreOrgCodes.StdEnv && x.StandardFileCode == standardFileCode && !x.IsDeleted)
             .Select(x => new B08Row { FieldCode = x.FieldCode, ExtractedValue = x.ExtractedValue })
             .ToListAsync();
         var b08Map = b08Rows.GroupBy(x => x.FieldCode, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().ExtractedValue ?? "", StringComparer.OrdinalIgnoreCase);
 
         var b09Rows = await _db.Client.Queryable<TableExtractionResult>()
-            .Where(x => x.EnterpriseCode == YzhStandardEnterpriseCode && x.StandardFileCode == standardFileCode)
+            .Where(x => x.EnterpriseCode == CoreOrgCodes.StdEnv && x.StandardFileCode == standardFileCode)
             .OrderBy(x => x.TableIndex)
             .Select(x => new B09Row { TableIndex = x.TableIndex, ExtractedJson = x.ExtractedJson })
             .ToListAsync();
@@ -721,10 +722,10 @@ public partial class DocExtractionRuleService
 
         // 提取结果同步删除（物理删除，与 save 逻辑对齐）
         await _db.Client.Deleteable<ExtractionResult>()
-            .Where(x => x.EnterpriseCode == YzhStandardEnterpriseCode && x.StandardFileCode == standardFileCode)
+            .Where(x => x.EnterpriseCode == CoreOrgCodes.StdEnv && x.StandardFileCode == standardFileCode)
             .ExecuteCommandAsync();
         await _db.Client.Deleteable<TableExtractionResult>()
-            .Where(x => x.EnterpriseCode == YzhStandardEnterpriseCode && x.StandardFileCode == standardFileCode)
+            .Where(x => x.EnterpriseCode == CoreOrgCodes.StdEnv && x.StandardFileCode == standardFileCode)
             .ExecuteCommandAsync();
 
         await _db.DeleteByCodeAsync<DocExtractionRule>(rule.Code);
@@ -800,7 +801,7 @@ public partial class DocExtractionRuleService
             // 只标「有活跃结果可作废」的行：completed 才有结果；pending/skipped 本来就无结果
             if (row.ExtractStatus != EnterpriseExtractStatus.Completed) continue;
             if (string.IsNullOrEmpty(row.EnterpriseCode)) continue;
-            if (row.EnterpriseCode == YzhStandardEnterpriseCode) continue;   // 模板行（虚拟企业域）不标
+            if (row.EnterpriseCode == CoreOrgCodes.StdEnv) continue;   // 模板行（虚拟企业域）不标
             if (!orgByCfg.TryGetValue(row.ConfigCode ?? "", out var org) || org != rule.OrgCode) continue;
 
             var ent = row.EnterpriseCode!;

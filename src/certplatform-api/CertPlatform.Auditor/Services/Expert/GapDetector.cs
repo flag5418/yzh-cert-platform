@@ -1,10 +1,8 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using CertPlatform.Admin.Services.DocExtraction;
-using CertPlatform.Admin.Services.Workflow.Models;
-using CertPlatform.Shared.Constants;
-using CertPlatform.Admin.Entities.Cert;
-using CertPlatform.Admin.Entities.Dir;
+using CertPlatform.Shared.Services.DocExtraction;
+using CertPlatform.Shared.Workflow.Models;
+using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Entities.Rpt;
 using YZH.Core.DataBase.Interfaces;
 
@@ -472,7 +470,7 @@ public class GapDetector
         if (string.IsNullOrWhiteSpace(sfc)) return (null, null);
 
         var tpl = (await _db.GetOneAsync<StandardDirectoryFile>(x =>
-            x.Code == sfc && x.EnterpriseCode == YzhVirtualEnterprise.Code)).Data;
+            x.Code == sfc && x.EnterpriseCode == CoreOrgCodes.StdEnv)).Data;
         return (sfc, tpl?.FileName);
     }
 

@@ -6,8 +6,10 @@ using CertPlatform.Shared.Fill;
 using CertPlatform.Shared.Office;
 using CertPlatform.Shared.Services.Fill;
 using YZH.Core.DataBase.Interfaces;
+using CertPlatform.Shared.Entities.Doc;
+using CertPlatform.Shared.Entities.Cert;
 
-namespace CertPlatform.Admin.Services.Ent
+namespace CertPlatform.Shared.Services.Ent
 {
     /// <summary>
     /// 来源解析器 —— 负责解析 DocTemplateAnchor.SourceSpec 并执行取值逻辑。

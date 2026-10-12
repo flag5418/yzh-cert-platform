@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
-using CertPlatform.Admin.Services.Workflow.Models;
+using CertPlatform.Shared.Workflow.Models;
 using CertPlatform.Admin.Entities.Wf;
 
 namespace CertPlatform.Admin.Services.Workflow

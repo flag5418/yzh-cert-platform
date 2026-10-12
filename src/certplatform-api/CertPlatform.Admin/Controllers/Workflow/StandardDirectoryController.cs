@@ -11,7 +11,6 @@ using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Request;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Admin.Services.StandardDirectory;
-using CertPlatform.Admin.Entities.Dir;
 
 namespace CertPlatform.Admin.Controllers.Workflow;
 
@@ -198,7 +197,7 @@ public class StandardDirectoryController : YzhControllerBase<StandardDirectoryCo
     /// 「标准目录文件是否缺失」特殊节点做配置期下拉。
     ///
     /// <para>与 <c>directories/{directoryCode}/root-files</c>（列<b>某目录实例</b>的根文件）不同：
-    /// 本端点列的是<b>标准要求</b>（模板行 <c>EnterpriseCode = YZH-STD-ENT</c>），
+    /// 本端点列的是<b>标准要求</b>（模板行 <c>EnterpriseCode = CoreOrgCodes.StdEnv</c>），
     /// 不依赖任何企业或目录实例，配置期可直接调用。</para>
     ///
     /// <para><c>standardCode</c> / <c>stageCode</c> 均可省略（省略 = 不过滤）。</para>

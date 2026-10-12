@@ -11,8 +11,9 @@ using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Admin.Services.DocExtraction;
 using CertPlatform.Admin.Services.StandardDirectory;
-using CertPlatform.Shared.Constants;
 using CertPlatform.Shared.Storage;
+using CertPlatform.Shared.Domain.Scope;
+using CertPlatform.Shared.Services.DocExtraction;
 
 namespace CertPlatform.Admin.Controllers.Workflow;
 
@@ -167,7 +168,7 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
     // ════════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// <b>可登记的宿主标准文件</b>：<c>cert_standard_directory_file</c> 中 <c>EnterpriseCode = YZH-STD-ENT</c>
+    /// <b>可登记的宿主标准文件</b>：<c>cert_standard_directory_file</c> 中 <c>EnterpriseCode = CoreOrgCodes.StdEnv</c>
     /// 的<b>模板文件定义行</b>，标记哪些已登记模板。
     ///
     /// <para><b>★ 为什么还要返回 <c>Editable*</c> 四列（实测教训）</b>：库里 168 个模板行中
@@ -180,7 +181,7 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
     {
         var rows = await _db.Client.Queryable<StandardDirectoryFile>()
             .Where(f => f.IsDeleted == false && f.IsValid == 1
-                        && f.EnterpriseCode == YzhVirtualEnterprise.Code)
+                        && f.EnterpriseCode == CoreOrgCodes.StdEnv)
             .OrderBy(f => f.SortOrder)
             .Select(f => new
             {
@@ -267,9 +268,9 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         if (file == null)
             return Ok(ApiResponse<object>.Fail("标准目录文件不存在或已删除"));
 
-        if (file.EnterpriseCode != YzhVirtualEnterprise.Code)
+        if (file.EnterpriseCode != CoreOrgCodes.StdEnv)
             return Ok(ApiResponse<object>.Fail(
-                "该行不是模板文件定义行（EnterpriseCode 不是 YZH-STD-ENT），不能作为填写模板。"));
+                $"该行不是模板文件定义行（EnterpriseCode 应为 {CoreOrgCodes.StdEnv}），不能作为填写模板。"));
 
         // ★ 可用字节：归一产物优先
         var storagePath = !string.IsNullOrWhiteSpace(file.EditableStoragePath)
@@ -350,13 +351,13 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         if (fileRow == null)
             return Ok(ApiResponse<object>.Fail("标准目录文件不存在或已删除"));
 
-        if (fileRow.EnterpriseCode != YzhVirtualEnterprise.Code)
+        if (fileRow.EnterpriseCode != CoreOrgCodes.StdEnv)
             return Ok(ApiResponse<object>.Fail(
-                "该行不是模板文件定义行（EnterpriseCode 不是 YZH-STD-ENT），不能上传空白模板。"));
+                $"该行不是模板文件定义行（EnterpriseCode 应为 {CoreOrgCodes.StdEnv}），不能上传空白模板。"));
 
         // ★ 身份段经唯一作用域入口推导（⛔ 不在此另写一份 —— 两套口径必然漂移）
         var scope = await _extraction.ResolveRuleScopeAsync(fileRow.Code);
-        if (string.IsNullOrWhiteSpace(scope.OrgCode))
+        if (OrgScope.IsLegacyUnassigned(scope.OrgCode))
             return Ok(ApiResponse<object>.Fail(
                 "无法确定模板所属机构：标准目录文件缺少 ConfigCode，或其所属配置缺少 OrgCode。请先在「标准目录」里补全。"));
 
@@ -731,7 +732,7 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
 
         // ★ 身份段经提取规则的唯一作用域入口推导（⛔ 不在此另写一份 —— 两套口径必然漂移）
         var scope = await _extraction.ResolveRuleScopeAsync(entity.StandardFileCode);
-        if (string.IsNullOrWhiteSpace(scope.OrgCode))
+        if (OrgScope.IsLegacyUnassigned(scope.OrgCode))
         {
             return (false,
                 "无法确定模板所属机构：标准目录文件缺少 ConfigCode，或其所属配置缺少 OrgCode。"

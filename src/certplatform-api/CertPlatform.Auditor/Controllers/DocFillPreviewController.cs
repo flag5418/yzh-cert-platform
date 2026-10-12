@@ -15,6 +15,7 @@ using CertPlatform.Auditor.Services.Ent.Normalize;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Entities.Doc;
 using CertPlatform.Shared.Storage;
+using CertPlatform.Shared.Domain.Scope;
 
 namespace CertPlatform.Auditor.Controllers
 {
@@ -155,7 +156,7 @@ namespace CertPlatform.Auditor.Controllers
             //    隔离要保护的是**企业数据**，而试填只碰模板自己的 `PreviewPdfPath` / `PreviewTime` 两列，
             //    且模板的维护权本就在后台端（见类注释）。有机构域的人（专家账号）照旧受限。
             if (certBodyCode != null
-                && !string.IsNullOrEmpty(template.OrgCode)
+                && !OrgScope.IsBackendBuilt(template.OrgCode)
                 && !string.Equals(template.OrgCode, certBodyCode, StringComparison.Ordinal))
             {
                 return Ok(ApiResponse<object?>.Fail("无权访问其他工作区的模板"));

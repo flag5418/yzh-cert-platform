@@ -6,9 +6,10 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
-using CertPlatform.Admin.Services.Workflow.Models;
+using CertPlatform.Shared.Workflow.Models;
 using YZH.Core.DataBase.Interfaces;
 using CertPlatform.Admin.Entities.Cert;
+using CertPlatform.Shared.Domain.Scope;
 
 namespace CertPlatform.Admin.Services.Workflow.Skills
 {
@@ -328,25 +329,38 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                 $"未知的 prompt_code：{code}（支持 nc_judge / nc_conclude）", WorkflowErrorCodes.ConfigError);
         }
 
+        /// <summary>
+        /// 取 nc_judge 模板。
+        /// <para><b>★ 取数口径（`OrgCode` 判据铁律 §2.2）</b>：机构专属优先 → 后台标准级回落。
+        /// 后台标准级 = <see cref="CoreOrgCodes.StdEnv"/>（虚拟机构 `yzh-std-env`）；
+        /// ⛔ 不写字符串字面量（守卫 <b>A-R9</b>），⛔ 不写 `OrgCode == ""` / `IsNullOrEmpty`（守卫 <b>A-R8</b>）。</para>
+        /// </summary>
         private static async Task<NcJudgePrompt?> LoadJudgeTemplateAsync(IDbOrm db, string org)
         {
             var r = await db.GetListAsync<NcJudgePrompt>(
-                x => x.OrgCode == org && x.PromptCode == "nc_judge" && x.IsDeleted == false,
+                x => (x.OrgCode == org || x.OrgCode == CoreOrgCodes.StdEnv)
+                     && x.PromptCode == "nc_judge" && x.IsDeleted == false,
                 includeDisabled: true);
             var rows = r.Data ?? new List<NcJudgePrompt>();
             return rows.Where(x => x.IsValid == 1)
-                        .OrderByDescending(x => x.IsDefault).ThenByDescending(x => x.Version)
+                        .OrderByDescending(x => x.OrgCode == org)   // ★ 机构专属优先
+                        .ThenByDescending(x => x.IsDefault).ThenByDescending(x => x.Version)
                         .FirstOrDefault();
         }
 
+        /// <summary>
+        /// 取 nc_conclude 模板。取数口径同 <see cref="LoadJudgeTemplateAsync"/>。
+        /// </summary>
         private static async Task<NcConcludePrompt?> LoadConcludeTemplateAsync(IDbOrm db, string org)
         {
             var r = await db.GetListAsync<NcConcludePrompt>(
-                x => x.OrgCode == org && x.PromptCode == "nc_conclude" && x.IsDeleted == false,
+                x => (x.OrgCode == org || x.OrgCode == CoreOrgCodes.StdEnv)
+                     && x.PromptCode == "nc_conclude" && x.IsDeleted == false,
                 includeDisabled: true);
             var rows = r.Data ?? new List<NcConcludePrompt>();
             return rows.Where(x => x.IsValid == 1)
-                        .OrderByDescending(x => x.IsDefault).ThenByDescending(x => x.Version)
+                        .OrderByDescending(x => x.OrgCode == org)   // ★ 机构专属优先
+                        .ThenByDescending(x => x.IsDefault).ThenByDescending(x => x.Version)
                         .FirstOrDefault();
         }
 

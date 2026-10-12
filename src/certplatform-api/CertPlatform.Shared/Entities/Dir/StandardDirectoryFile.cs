@@ -29,7 +29,7 @@ namespace CertPlatform.Shared.Entities.Dir
         [SugarColumn(Length = 36)]
         public string ConfigCode { get; set; } = string.Empty;
 
-        /// <summary>企业 Code：<c>YZH-STD-ENT</c>（<c>YzhVirtualEnterprise.Code</c>）= 模板文件定义行；真实值 = 该企业实际上传的文件行。⛔ 禁 NULL（P13，2026-09-28）。</summary>
+        /// <summary>企业 Code：<c>CoreOrgCodes.StdEnv</c>（值 <c>yzh-std-env</c>）= 模板文件定义行；真实值 = 该企业实际上传的文件行。⛔ 禁 NULL（P13，2026-09-28）。</summary>
         [SugarColumn(Length = 36)]
         public string EnterpriseCode { get; set; } = string.Empty;
 

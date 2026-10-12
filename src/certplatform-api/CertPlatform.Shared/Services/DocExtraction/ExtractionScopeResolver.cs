@@ -1,9 +1,10 @@
 using CertPlatform.Shared.DocExtraction;
-using CertPlatform.Shared.Constants;
-using CertPlatform.Admin.Entities.Dir;
 using YZH.Core.DataBase.Interfaces;
+using CertPlatform.Shared.Domain.Scope;
+using CertPlatform.Shared.Entities.Doc;
+using CertPlatform.Shared.Entities.Dir;
 
-namespace CertPlatform.Admin.Services.DocExtraction;
+namespace CertPlatform.Shared.Services.DocExtraction;
 
 /// <summary>
 /// 槽位提取判定结论（10 号 §六 S1：图 2 的 ①②③④ 收口为一份结构化结论）。
@@ -72,9 +73,9 @@ public sealed class ExtractionSlot
 public class ExtractionScopeResolver
 {
     private readonly IDbOrm _db;
-    private readonly DocExtractionRuleService _ruleService;
+    private readonly IExtractionRuleQuery _ruleService;
 
-    public ExtractionScopeResolver(IDbOrm db, DocExtractionRuleService ruleService)
+    public ExtractionScopeResolver(IDbOrm db, IExtractionRuleQuery ruleService)
     {
         _db = db;
         _ruleService = ruleService;
@@ -88,7 +89,7 @@ public class ExtractionScopeResolver
         if (file == null) return new ExtractionSlot();
 
         var scope = await _ruleService.ResolveRuleScopeAsync(file);
-        var rule = string.IsNullOrWhiteSpace(scope.OrgCode)
+        var rule = OrgScope.IsLegacyUnassigned(scope.OrgCode)
             ? null
             : await _ruleService.GetRuleByScopeAsync(
                 scope.OrgCode, scope.StandardCode, scope.StageCode, scope.RuleKey);
@@ -127,9 +128,9 @@ public class ExtractionScopeResolver
             .Distinct()
             .ToList();
 
-        // ③ 反查模板行 → 模板配置 → 机构（模板行属虚拟企业域）
+        // ③ 反查模板行 → 模板配置 → 机构（模板行属标准域）
         var tplRows = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.EnterpriseCode == YzhVirtualEnterprise.Code)).Data
+            x => x.EnterpriseCode == CoreOrgCodes.StdEnv)).Data
             ?? new List<StandardDirectoryFile>();
         var tplMap = tplRows
             .Where(x => !string.IsNullOrEmpty(x.Code) && ruleKeys.Contains(x.Code!))

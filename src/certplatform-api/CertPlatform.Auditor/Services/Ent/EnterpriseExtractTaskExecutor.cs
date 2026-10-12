@@ -1,10 +1,9 @@
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using CertPlatform.Admin.Services.DocExtraction;
-using CertPlatform.Shared.Constants;
+using CertPlatform.Shared.Services.DocExtraction;
+using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.DocExtraction;
-using CertPlatform.Admin.Entities.Dir;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 using YzhQueueTask = YZH.Core.Stand.Models.Queue.YzhQueueTask;
@@ -59,13 +58,13 @@ public class EnterpriseExtractTaskExecutor : IYzhTaskExecutor
                 return Fail("Payload 缺少 Code/EnterpriseCode", retryable: false);
 
             // 信封不变量：提取只允许写真实企业域，禁写模板域（虚拟企业 Code）
-            if (payload.EnterpriseCode == YzhVirtualEnterprise.Code)
+            if (payload.EnterpriseCode == CoreOrgCodes.StdEnv)
                 return Fail("禁止对标准模板域（虚拟企业 Code）执行企业提取", retryable: false);
 
             using var scope = _serviceProvider.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<IDbOrm>();
             var storage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
-            var ruleService = scope.ServiceProvider.GetRequiredService<DocExtractionRuleService>();
+            var ruleService = scope.ServiceProvider.GetRequiredService<IExtractionRuleQuery>();
             var resolver = scope.ServiceProvider.GetRequiredService<ExtractionScopeResolver>();
 
             // 1. 企业文件行（含中间态：转换链会临时置 IsValid=0，这里用 IgnoreValid 口径）
