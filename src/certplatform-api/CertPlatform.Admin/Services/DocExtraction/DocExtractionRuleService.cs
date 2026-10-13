@@ -445,7 +445,7 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
         var configCode = string.IsNullOrEmpty(templateRow?.ConfigCode) ? file.ConfigCode : templateRow!.ConfigCode;
         if (!string.IsNullOrEmpty(configCode))
         {
-            var config = (await _db.GetOneAsync<StandardDirectoryConfig>(x => x.Code == configCode)).Data;
+            var config = await _core.GetDirectoryConfigByCodeAsync(configCode);
             if (config != null)
             {
                 orgCode = config.OrgCode ?? "";
@@ -464,9 +464,10 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
                 if (string.IsNullOrEmpty(standardCode)) standardCode = fr.StandardCode ?? "";
                 if (string.IsNullOrEmpty(stageCode))
                 {
-                    var folder = (await _db.GetOneAsync<StandardDirectoryFolder>(x => x.Code == (fr.FolderCode ?? ""))).Data;
-                    var frConfig = folder == null ? null
-                        : (await _db.GetOneAsync<StandardDirectoryConfig>(x => x.Code == folder.ConfigCode)).Data;
+                    var folder = await _core.GetDirectoryFolderByCodeAsync(fr.FolderCode ?? "");
+                    var frConfig = folder == null
+                        ? null
+                        : await _core.GetDirectoryConfigByCodeAsync(folder.ConfigCode);
                     if (frConfig != null) stageCode = frConfig.StageCode;
                 }
             }
@@ -492,9 +493,11 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
         string orgCode, string standardCode, string stageCode, string standardFileCode)
     {
         if (string.IsNullOrWhiteSpace(standardFileCode)) return null;
-        return (await _db.GetOneAsync<DocExtractionRule>(x =>
-            x.OrgCode == orgCode && x.StandardCode == standardCode &&
-            x.StageCode == stageCode && x.StandardFileCode == standardFileCode)).Data;
+        var rules = await _core.GetDocExtractionRulesAsync(orgCode);
+        return rules.FirstOrDefault(x =>
+            x.StandardCode == standardCode &&
+            x.StageCode == stageCode &&
+            x.StandardFileCode == standardFileCode);
     }
 
     /// <summary>由文件编码推导四元组后取规则（管理端详情/删除/AI 分析/验证用）。</summary>
@@ -508,8 +511,8 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
 
         // 遗留兜底：文件行不存在（FR 模板缺失 / 历史测试 code）⇒ 推不出四元组，退回单列定位。
         // 企业提取不走本方法（执行器按四元组严格口径），此处仅供管理端详情/删除/AI 配置期使用。
-        var legacy = (await _db.GetListAsync<DocExtractionRule>(x => x.StandardFileCode == fileCode)).Data;
-        return legacy?.FirstOrDefault();
+        var legacy = await _core.GetDocExtractionRulesByStandardFileCodesAsync(new[] { fileCode });
+        return legacy.FirstOrDefault();
     }
 
     // ========================================================
@@ -791,10 +794,12 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
     private async Task<int> MarkFilesStaleAsync(DocExtractionRule rule, string reason)
     {
         // 文件行无机构列 ⇒ 经 ConfigCode → StandardDirectoryConfig.OrgCode 间接归属（01 §3）
-        var rows = (await _db.GetListAsync<StandardDirectoryFile>(x =>
-                x.StandardCode == rule.StandardCode && x.StageCode == rule.StageCode &&
-                x.StandardFileCode == rule.StandardFileCode && x.IsValid == 1)).Data
-            ?? new List<StandardDirectoryFile>();
+        // ★ 1.B.6d-2：取数收口 CoreResourceQuery（全量有效文件 + 内存三键过滤 ——
+        //   文件行是目录槽位级数据（百行级），全取优于再造一个复用度=1 的按键方法）
+        var rows = (await _core.GetDirectoryFilesAsync())
+            .Where(x => x.StandardCode == rule.StandardCode && x.StageCode == rule.StageCode &&
+                        x.StandardFileCode == rule.StandardFileCode)
+            .ToList();
 
         var cfgCodes = rows.Select(x => x.ConfigCode).Where(c => !string.IsNullOrEmpty(c)).Distinct().ToList();
         // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：全部有效目录配置）

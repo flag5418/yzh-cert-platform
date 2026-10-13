@@ -152,6 +152,9 @@ public interface ICoreResourceQuery
     /// <summary>按规则 <c>Code</c> 单查提取规则（未命中返回 <c>null</c>）。</summary>
     Task<DocExtractionRule?> GetDocExtractionRuleByCodeAsync(string? ruleCode);
 
+    /// <summary>按<b>宿主标准文件 <c>Code</c></b> 集合批量取提取规则（空集合直接返回空，⛔ 不发查询）。</summary>
+    Task<List<DocExtractionRule>> GetDocExtractionRulesByStandardFileCodesAsync(IEnumerable<string> standardFileCodes);
+
     // ─────────────────────── 标准目录文件 ───────────────────────
 
     /// <summary>取<b>全部有效</b>标准目录文件（对应端内 16 处冗余的 <c>x.IsValid == 1</c> 全表写法）。</summary>
@@ -162,6 +165,12 @@ public interface ICoreResourceQuery
 
     /// <summary>按文件 <c>Code</c> 单查标准目录文件（未命中返回 <c>null</c>）。</summary>
     Task<StandardDirectoryFile?> GetDirectoryFileByCodeAsync(string? fileCode);
+
+    /// <summary>
+    /// 按文件 <c>Code</c> 单查<b>指定企业</b>的文件行（租户卫：「Code + EnterpriseCode」
+    /// 双键谓词收口在本方法，端内 ⛔ 不要拆开手写第二处）。
+    /// </summary>
+    Task<StandardDirectoryFile?> GetDirectoryFileByCodeAsync(string? fileCode, string enterpriseCode);
 
     /// <summary>按文件 <c>Code</c> 集合批量取有效文件（空集合直接返回空，⛔ 不发查询）。</summary>
     Task<List<StandardDirectoryFile>> GetDirectoryFilesByCodesAsync(IEnumerable<string> fileCodes);
@@ -208,18 +217,44 @@ public interface ICoreResourceQuery
     /// </summary>
     Task<List<Enterprise>> GetEnterprisesAsync(string orgCode);
 
+    /// <summary>按企业 <c>Code</c> 单查企业（未命中返回 <c>null</c>）。</summary>
+    Task<Enterprise?> GetEnterpriseByCodeAsync(string? enterpriseCode);
+
+    /// <summary>按机构 <c>Code</c> 单查认证机构（未命中返回 <c>null</c>）。</summary>
+    Task<CertificationBody?> GetCertificationBodyByCodeAsync(string? orgCode);
+
+    /// <summary>按 <c>CbCode</c>（认证机构业务编号）单查认证机构（未命中返回 <c>null</c>）。</summary>
+    Task<CertificationBody?> GetCertificationBodyByCbCodeAsync(string? cbCode);
+
     // ─────────────── 目录配置 / 文件夹 / 模板 · 2026-10-13 阶段 1.B 扩充 ───────────────
 
     /// <summary>
     /// 取标准目录配置。<paramref name="orgCode"/> / <paramref name="standardCode"/> /
     /// <paramref name="stageCode"/> / <paramref name="enterpriseCode"/> 为 <c>null</c> = 该维<b>不限</b>。
     /// <para>⚠️ 全 <c>null</c> = 取全部有效行（配置数在十量级，全量取回优于逐阶段 N+1）。</para>
+    /// <para><paramref name="includeDisabled"/> = <c>true</c> 时跳过 <c>IsValid</c> 过滤
+    /// （「企业目录 ensure / 机构漂移兜底」须认出禁用行并复活，否则 INSERT 撞唯一键）。</para>
     /// </summary>
     Task<List<StandardDirectoryConfig>> GetDirectoryConfigsAsync(
-        string? orgCode = null, string? standardCode = null, string? stageCode = null, string? enterpriseCode = null);
+        string? orgCode = null, string? standardCode = null, string? stageCode = null,
+        string? enterpriseCode = null, bool includeDisabled = false);
+
+    /// <summary>按目录配置 <c>Code</c> 单查（未命中返回 <c>null</c>）。</summary>
+    Task<StandardDirectoryConfig?> GetDirectoryConfigByCodeAsync(string? configCode);
 
     /// <summary>按目录配置 <c>Code</c> 集合取文件夹（空集合直接返回空，⛔ 不发查询）。<b>不排序</b>。</summary>
     Task<List<StandardDirectoryFolder>> GetDirectoryFoldersAsync(IEnumerable<string> configCodes);
+
+    /// <summary>
+    /// 按文件夹 <c>Code</c> 单查（未命中返回 <c>null</c>）。
+    /// <para><paramref name="includeDisabled"/> = <c>true</c> 时含已禁用行
+    /// （仍排除软删）—— 目录读模型按 folderCode 反查 ConfigCode 时须用 <c>true</c>：
+    /// 禁用文件夹下的有效文件仍要能定位（否则「停用再启用」期间文件消失）。</para>
+    /// </summary>
+    Task<StandardDirectoryFolder?> GetDirectoryFolderByCodeAsync(string? folderCode, bool includeDisabled = false);
+
+    /// <summary>按文件夹 <c>Code</c> 集合批量取有效文件夹（空集合直接返回空，⛔ 不发查询）。</summary>
+    Task<List<StandardDirectoryFolder>> GetDirectoryFoldersByCodesAsync(IEnumerable<string> folderCodes);
 
     /// <summary>
     /// 取标准文档模板。<paramref name="orgCode"/> / <paramref name="standardCode"/> /
@@ -234,6 +269,9 @@ public interface ICoreResourceQuery
     /// （空集合直接返回空，⛔ 不发查询）。<b>不排序</b>。
     /// </summary>
     Task<List<DocTemplate>> GetDocTemplatesByStandardFileCodesAsync(IEnumerable<string> standardFileCodes);
+
+    /// <summary>按模板 <c>Code</c> 单查（未命中返回 <c>null</c>）。</summary>
+    Task<DocTemplate?> GetDocTemplateByCodeAsync(string? templateCode);
 
     // ─────────── 章节 / NC 检查规则（cert_validation_rule）· 2026-10-13 阶段 1.B ───────────
 
@@ -491,6 +529,17 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         return r.Data;
     }
 
+    public async Task<List<DocExtractionRule>> GetDocExtractionRulesByStandardFileCodesAsync(IEnumerable<string> standardFileCodes)
+    {
+        var codes = new List<string>();
+        foreach (var c in standardFileCodes)
+            if (!string.IsNullOrWhiteSpace(c)) codes.Add(c);
+        if (codes.Count == 0) return new List<DocExtractionRule>();
+
+        var rows = await _db.GetListAsync<DocExtractionRule>(x => codes.Contains(x.StandardFileCode!));
+        return rows.Data ?? new List<DocExtractionRule>();
+    }
+
     // ─────────────────────── 标准目录文件 ───────────────────────
 
     public async Task<List<StandardDirectoryFile>> GetDirectoryFilesAsync()
@@ -513,6 +562,15 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         if (string.IsNullOrWhiteSpace(fileCode)) return null;
         var fc = fileCode;
         var r = await _db.GetOneAsync<StandardDirectoryFile>(x => x.Code == fc);
+        return r.Data;
+    }
+
+    public async Task<StandardDirectoryFile?> GetDirectoryFileByCodeAsync(string? fileCode, string enterpriseCode)
+    {
+        if (string.IsNullOrWhiteSpace(fileCode) || string.IsNullOrWhiteSpace(enterpriseCode)) return null;
+        var fc = fileCode;
+        var ec = enterpriseCode;
+        var r = await _db.GetOneAsync<StandardDirectoryFile>(x => x.Code == fc && x.EnterpriseCode == ec);
         return r.Data;
     }
 
@@ -597,15 +655,41 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         return rows.Data ?? new List<Enterprise>();
     }
 
+    public async Task<Enterprise?> GetEnterpriseByCodeAsync(string? enterpriseCode)
+    {
+        if (string.IsNullOrWhiteSpace(enterpriseCode)) return null;
+        var ec = enterpriseCode;
+        var r = await _db.GetOneAsync<Enterprise>(x => x.Code == ec);
+        return r.Data;
+    }
+
+    public async Task<CertificationBody?> GetCertificationBodyByCodeAsync(string? orgCode)
+    {
+        if (string.IsNullOrWhiteSpace(orgCode)) return null;
+        var oc = orgCode;
+        var r = await _db.GetOneAsync<CertificationBody>(x => x.Code == oc);
+        return r.Data;
+    }
+
+    public async Task<CertificationBody?> GetCertificationBodyByCbCodeAsync(string? cbCode)
+    {
+        if (string.IsNullOrWhiteSpace(cbCode)) return null;
+        var cb = cbCode;
+        var r = await _db.GetOneAsync<CertificationBody>(x => x.CbCode == cb);
+        return r.Data;
+    }
+
     // ─────────────── 目录配置 / 文件夹 / 模板 · 2026-10-13 阶段 1.B 扩充 ───────────────
 
     public async Task<List<StandardDirectoryConfig>> GetDirectoryConfigsAsync(
-        string? orgCode = null, string? standardCode = null, string? stageCode = null, string? enterpriseCode = null)
+        string? orgCode = null, string? standardCode = null, string? stageCode = null,
+        string? enterpriseCode = null, bool includeDisabled = false)
     {
         // ⚠️ 4 维 ⇒ 16 种组合，用显式分支会爆炸 ⇒ 这里走链式 Where。
-        //    判据与 GetListAsync 口径一致：!IsDeleted && IsValid == 1（Queryable 不带默认过滤）。
+        //    判据与 GetListAsync 口径一致：!IsDeleted（恒有）+ IsValid == 1（includeDisabled=false 时）。
         var q = _db.Client.Queryable<StandardDirectoryConfig>()
-            .Where(x => !x.IsDeleted && x.IsValid == 1);
+            .Where(x => !x.IsDeleted);
+        if (!includeDisabled) q = q.Where(x => x.IsValid == 1);
 
         if (orgCode != null) { var v = orgCode; q = q.Where(x => x.OrgCode == v); }
         if (standardCode != null) { var v = standardCode; q = q.Where(x => x.StandardCode == v); }
@@ -613,6 +697,14 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         if (enterpriseCode != null) { var v = enterpriseCode; q = q.Where(x => x.EnterpriseCode == v); }
 
         return await q.ToListAsync() ?? new List<StandardDirectoryConfig>();
+    }
+
+    public async Task<StandardDirectoryConfig?> GetDirectoryConfigByCodeAsync(string? configCode)
+    {
+        if (string.IsNullOrWhiteSpace(configCode)) return null;
+        var cc = configCode;
+        var r = await _db.GetOneAsync<StandardDirectoryConfig>(x => x.Code == cc);
+        return r.Data;
     }
 
     public async Task<List<StandardDirectoryFolder>> GetDirectoryFoldersAsync(IEnumerable<string> configCodes)
@@ -623,6 +715,31 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         if (codes.Count == 0) return new List<StandardDirectoryFolder>();
 
         var rows = await _db.GetListAsync<StandardDirectoryFolder>(x => codes.Contains(x.ConfigCode!));
+        return rows.Data ?? new List<StandardDirectoryFolder>();
+    }
+
+    public async Task<StandardDirectoryFolder?> GetDirectoryFolderByCodeAsync(string? folderCode, bool includeDisabled = false)
+    {
+        if (string.IsNullOrWhiteSpace(folderCode)) return null;
+        var fc = folderCode;
+        if (includeDisabled)
+        {
+            // 只滤软删、不过滤 IsValid —— 语义 = includeDisabled（见接口注释）
+            var ignored = await _db.GetOneIgnoreValidAsync<StandardDirectoryFolder>(x => x.Code == fc);
+            return ignored.Data;
+        }
+        var r = await _db.GetOneAsync<StandardDirectoryFolder>(x => x.Code == fc);
+        return r.Data;
+    }
+
+    public async Task<List<StandardDirectoryFolder>> GetDirectoryFoldersByCodesAsync(IEnumerable<string> folderCodes)
+    {
+        var codes = new List<string>();
+        foreach (var c in folderCodes)
+            if (!string.IsNullOrWhiteSpace(c)) codes.Add(c);
+        if (codes.Count == 0) return new List<StandardDirectoryFolder>();
+
+        var rows = await _db.GetListAsync<StandardDirectoryFolder>(x => codes.Contains(x.Code!));
         return rows.Data ?? new List<StandardDirectoryFolder>();
     }
 
@@ -649,6 +766,14 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
 
         var rows = await _db.GetListAsync<DocTemplate>(x => codes.Contains(x.StandardFileCode!));
         return rows.Data ?? new List<DocTemplate>();
+    }
+
+    public async Task<DocTemplate?> GetDocTemplateByCodeAsync(string? templateCode)
+    {
+        if (string.IsNullOrWhiteSpace(templateCode)) return null;
+        var tc = templateCode;
+        var r = await _db.GetOneAsync<DocTemplate>(x => x.Code == tc);
+        return r.Data;
     }
 
     // ─────────── 章节 / NC 检查规则（cert_validation_rule）· 2026-10-13 阶段 1.B ───────────

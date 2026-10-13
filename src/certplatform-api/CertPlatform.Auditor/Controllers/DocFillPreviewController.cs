@@ -55,6 +55,7 @@ namespace CertPlatform.Auditor.Controllers
         private readonly IDbOrm _db;
         private readonly IUserContext _userContext;
         private readonly WorkspaceContextService _workspace;
+        private readonly ICoreResourceQuery _core;
         private readonly ILogger<DocFillPreviewController> _logger;
 
         public DocFillPreviewController(
@@ -64,6 +65,7 @@ namespace CertPlatform.Auditor.Controllers
             IDbOrm db,
             IUserContext userContext,
             WorkspaceContextService workspace,
+            ICoreResourceQuery core,
             ILogger<DocFillPreviewController> logger)
         {
             _orchestrator = orchestrator;
@@ -72,6 +74,7 @@ namespace CertPlatform.Auditor.Controllers
             _db = db;
             _userContext = userContext;
             _workspace = workspace;
+            _core = core;
             _logger = logger;
         }
 
@@ -146,8 +149,7 @@ namespace CertPlatform.Auditor.Controllers
             }
 
             // ── ⓪′ 取模板（⛔ 不看 PublishStatus，见方法注释）──
-            var template = (await _db.GetOneAsync<DocTemplate>(x =>
-                x.Code == req.TemplateCode && x.IsValid == 1)).Data;
+            var template = await _core.GetDocTemplateByCodeAsync(req.TemplateCode);
             if (template == null)
                 return Ok(ApiResponse<object?>.Fail($"模板不存在或已失效：{req.TemplateCode}"));
 
@@ -292,8 +294,7 @@ namespace CertPlatform.Auditor.Controllers
             if (string.IsNullOrWhiteSpace(templateCode))
                 return Ok(ApiResponse<object?>.Fail("缺少模板 Code"));
 
-            var template = (await _db.GetOneAsync<DocTemplate>(x =>
-                x.Code == templateCode && x.IsValid == 1)).Data;
+            var template = await _core.GetDocTemplateByCodeAsync(templateCode);
             if (template == null)
                 return Ok(ApiResponse<object?>.Fail($"模板不存在或已失效：{templateCode}"));
 

@@ -18,6 +18,7 @@ using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Entities.Sys;
 using CertPlatform.Shared.Domain.Organization;
 using CertPlatform.Shared.Domain.Scope;
+using CertPlatform.Shared.Domain.Dir;
 using CertPlatform.Shared.Storage;
 
 namespace CertPlatform.Admin.Services.StandardDirectory;
@@ -33,6 +34,12 @@ public class StandardDirectoryService
     private readonly IDbOrm _db;
     /// <summary>核心资源检索唯一入口（铁律 L5）—— 标准/目录文件等取数走它，⛔ 不在本类写 WHERE。</summary>
     private readonly ICoreResourceQuery _core;
+    /// <summary>
+    /// 目录域唯一读模型（2026-10-13 核心资源检索统一）—— 读端点（folders-flat / files /
+    /// root-files / stage-files / folder-tree）的取数 + 保留段过滤 + 排序口径全在
+    /// <c>CertPlatform.Shared.Domain.Dir</c>，本类只做 DTO 投影。
+    /// </summary>
+    private readonly DirectoryReadModel _dirRead;
     private readonly IObjectStorage _storage;
     private readonly IConfiguration _configuration;
     private readonly ILogger<StandardDirectoryService> _logger;
@@ -64,7 +71,8 @@ public class StandardDirectoryService
         ILogger<StandardDirectoryService> logger,
         QueueManager queueManager,
         IUserContext user,
-        ICoreResourceQuery core)
+        ICoreResourceQuery core,
+        DirectoryReadModel dirRead)
     {
         _db = db;
         _storage = storage;
@@ -73,6 +81,7 @@ public class StandardDirectoryService
         _queueManager = queueManager;
         _user = user;
         _core = core;
+        _dirRead = dirRead;
     }
 
     #region 组织树（org → standard → phase）
@@ -204,7 +213,7 @@ public class StandardDirectoryService
     ///
     /// <para><b>与「标准资料清单」页同源（保证不漂移）</b>：
     /// 机构 → 标准 → 阶段 三级<b>直接复用 <see cref="GetOrganizationTreeAsync"/></b>；
-    /// 文件夹保留段过滤复用 <see cref="CollectReservedFolderCodes"/> ⇒
+    /// 文件夹保留段过滤复用 <see cref="DirectoryVisibility.CollectReservedFolderCodes"/> ⇒
     /// 两页的树**不可能出现口径差异**（⛔ 不另写一套 org/std/phase 组装逻辑）。</para>
     ///
     /// <para><b>合并进来的模板状态</b>（挂在文件叶子 <c>Extra</c>）：
@@ -300,7 +309,8 @@ public class StandardDirectoryService
         var scopedFiles = await _core.GetDirectoryFilesByConfigCodesAsync(configCodes);
 
         // 保留段过滤（pdf / markdown / editable / _template / _archive）—— 与资料清单页同一份口径
-        var reservedCodes = CollectReservedFolderCodes(scopedFolders);
+        //    （⛔ 本类不再自持一份实现：唯一来源 = Shared 的 DirectoryVisibility）
+        var reservedCodes = DirectoryVisibility.CollectReservedFolderCodes(scopedFolders);
         if (reservedCodes.Count > 0)
         {
             scopedFolders = scopedFolders.Where(f => !reservedCodes.Contains(f.Code ?? "")).ToList();
@@ -454,7 +464,7 @@ public class StandardDirectoryService
 
     public async Task<StandardDirectoryConfig?> GetConfigAsync(string directoryCode)
     {
-        return (await _db.GetOneAsync<StandardDirectoryConfig>(x => x.Code == directoryCode)).Data;
+        return await _core.GetDirectoryConfigByCodeAsync(directoryCode);
     }
 
     public async Task<(bool ok, string? error, StandardDirectoryConfig? data)> CreateConfigAsync(
@@ -609,7 +619,7 @@ public class StandardDirectoryService
     /// </summary>
     public async Task<(bool ok, string? error)> UpdateConfigAsync(string directoryCode, StandardDirectoryConfig input)
     {
-        var existing = (await _db.GetOneAsync<StandardDirectoryConfig>(x => x.Code == directoryCode)).Data;
+        var existing = await _core.GetDirectoryConfigByCodeAsync(directoryCode);
         if (existing == null) return (false, "配置不存在");
 
         existing.RootFolderName = input.RootFolderName;
@@ -639,7 +649,7 @@ public class StandardDirectoryService
     /// </summary>
     public async Task<(bool ok, string? error)> DeleteConfigAsync(string directoryCode)
     {
-        var config = (await _db.GetOneAsync<StandardDirectoryConfig>(x => x.Code == directoryCode)).Data;
+        var config = await _core.GetDirectoryConfigByCodeAsync(directoryCode);
         if (config == null) return (false, "配置不存在");
 
         var lockErr = await GetQueueLockErrorAsync(directoryCode);
@@ -694,7 +704,7 @@ public class StandardDirectoryService
     private async Task<string?> GetConfigInvalidErrorAsync(string directoryCode)
     {
         if (string.IsNullOrWhiteSpace(directoryCode)) return "缺少目录标识";
-        var config = (await _db.GetOneAsync<StandardDirectoryConfig>(x => x.Code == directoryCode)).Data;
+        var config = await _core.GetDirectoryConfigByCodeAsync(directoryCode);
         if (config == null) return "目录配置不存在或已删除";
         return null;
     }
@@ -706,13 +716,18 @@ public class StandardDirectoryService
     /// <summary>
     /// 获取文件夹树（仅有效文件夹）
     /// </summary>
+    /// <remarks>
+    /// ★ 目录域读模型（2026-10-13 设计 §三 1.B.6d）：取数 / 保留段过滤 / 排序
+    /// （Sort→FolderName）唯一来源 = <c>DirectoryReadModel</c>，本方法只做递归装配。
+    /// 与 <see cref="GetFoldersFlatAsync"/> / <see cref="GetStageFileTreeAsync"/> 同一
+    /// 过滤口径 ⇒ 三棵树不再互相打架。
+    /// </remarks>
     public async Task<List<StandardDirectoryFolder>> GetFolderTreeAsync(string directoryCode)
     {
-        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：ConfigCode == 入参 ∧ IsValid == 1）
-        var folders = await _core.GetDirectoryFoldersAsync(new[] { directoryCode });
+        var snapshot = await _dirRead.LoadAsync(directoryCode);
+        var folders = snapshot.Folders;
 
-        var rootFolders = folders.Where(x => string.IsNullOrEmpty(x.ParentCode))
-            .OrderBy(x => x.Sort).ToList();
+        var rootFolders = folders.Where(x => string.IsNullOrEmpty(x.ParentCode)).ToList();
 
         foreach (var root in rootFolders)
             root.Children = GetChildFolders(folders, root.Code ?? "", new HashSet<string>(), 0);
@@ -730,50 +745,11 @@ public class StandardDirectoryService
     /// </remarks>
     public async Task<List<StandardDirectoryFolder>> GetFoldersFlatAsync(string directoryCode)
     {
-        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：ConfigCode == 入参 ∧ IsValid == 1）
-        var folders = await _core.GetDirectoryFoldersAsync(new[] { directoryCode });
-
-        var reserved = CollectReservedFolderCodes(folders);
-        if (reserved.Count == 0) return folders;
-        return folders.Where(f => !reserved.Contains(f.Code ?? "")).ToList();
+        // 取数 / 保留段过滤 / 排序全在 DirectoryReadModel ⇒ 与左树（GetFolderTreeAsync）
+        // 逐字段一致，不再各查各的。
+        var snapshot = await _dirRead.LoadAsync(directoryCode);
+        return snapshot.Folders.ToList();
     }
-
-    /// <summary>
-    /// 收集「产物 / 系统目录」及其全部子孙的 Code（大小写不敏感）。
-    /// <para>用于显示层过滤 <c>pdf</c> / <c>markdown</c> / <c>editable</c> / <c>_template</c> / <c>_archive</c> 保留段名文件夹。</para>
-    /// <para>★ 带环检测与深度上限 —— 脏数据 ParentCode 成环时不能无限递归。</para>
-    /// </summary>
-    private static HashSet<string> CollectReservedFolderCodes(List<StandardDirectoryFolder> folders)
-    {
-        var result = new HashSet<string>(StringComparer.Ordinal);
-        var roots = folders.Where(f => IsReservedSegmentName(f.FolderName)).ToList();
-        if (roots.Count == 0) return result;
-
-        // 子孙展开（迭代而非递归：脏数据成环时不会栈溢出）
-        var frontier = roots.ToList();
-        while (frontier.Count > 0)
-        {
-            var next = new List<StandardDirectoryFolder>();
-            foreach (var node in frontier)
-            {
-                var code = node.Code ?? "";
-                if (string.IsNullOrEmpty(code) || !result.Add(code)) continue;
-                foreach (var child in folders.Where(f => f.ParentCode == code))
-                {
-                    if (!result.Contains(child.Code ?? "")) next.Add(child);
-                }
-            }
-            if (result.Count > MAX_TREE_NODES) break;
-            frontier = next;
-        }
-        return result;
-    }
-
-    /// <summary>文件夹名是否为产物 / 系统保留段名（pdf / markdown / editable / _template / _archive）</summary>
-    private static bool IsReservedSegmentName(string? name)
-        => !string.IsNullOrWhiteSpace(name)
-           && PathBuilder.ReservedSegments.Any(s =>
-               string.Equals(s, name.Trim(), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// 递归取子文件夹。
@@ -781,12 +757,14 @@ public class StandardDirectoryService
     /// <c>ParentCode</c> 成环（A→B→A）时原实现无限递归直至内存耗尽。</para>
     /// </summary>
     private List<StandardDirectoryFolder> GetChildFolders(
-        List<StandardDirectoryFolder> allFolders, string parentCode,
+        IReadOnlyList<StandardDirectoryFolder> allFolders, string parentCode,
         HashSet<string> visited, int depth)
     {
         if (depth > MAX_TREE_DEPTH || visited.Count > MAX_TREE_NODES) return new();
+        // 排序口径唯一来源 = DirectorySnapshot（Sort→FolderName）；此处 ⛔ 不再 OrderBy
+        // （Where 保序 ⇒ 子级相对顺序 = 快照顺序；再排一次 = 第二排序源，正是本次要消灭的分叉）。
         var children = allFolders.Where(x => x.ParentCode == parentCode && !visited.Contains(x.Code ?? ""))
-            .OrderBy(x => x.Sort).ToList();
+            .ToList();
         foreach (var child in children)
         {
             if (child.Code != null) visited.Add(child.Code);
@@ -869,8 +847,7 @@ public class StandardDirectoryService
     /// </summary>
     public async Task<(bool ok, string? error)> UpdateFolderAsync(string folderCode, StandardDirectoryFolder input)
     {
-        var existing = (await _db.GetOneAsync<StandardDirectoryFolder>(
-            x => x.Code == folderCode && x.IsValid == 1)).Data;
+        var existing = await _core.GetDirectoryFolderByCodeAsync(folderCode);
         if (existing == null) return (false, "文件夹不存在");
 
         var lockErr = await GetQueueLockErrorAsync(existing.ConfigCode ?? "");
@@ -910,8 +887,7 @@ public class StandardDirectoryService
     public async Task<(bool ok, string? error, int foldersDeleted, int filesDeleted)> DeleteFolderAsync(
         string folderCode)
     {
-        var folder = (await _db.GetOneAsync<StandardDirectoryFolder>(
-            x => x.Code == folderCode && x.IsValid == 1)).Data;
+        var folder = await _core.GetDirectoryFolderByCodeAsync(folderCode);
         if (folder == null) return (false, "文件夹不存在", 0, 0);
 
         var lockErr = await GetQueueLockErrorAsync(folder.ConfigCode ?? "");
@@ -965,8 +941,7 @@ public class StandardDirectoryService
         }
 
         // 软删除文件夹（P1-7：走 IsDeleted，不再只置 IsValid）
-        var folderEntity = (await _db.GetOneAsync<StandardDirectoryFolder>(
-            x => x.Code == folderCode)).Data;
+        var folderEntity = await _core.GetDirectoryFolderByCodeAsync(folderCode);
         if (folderEntity != null)
         {
             folderEntity.IsDeleted = true;
@@ -1025,45 +1000,34 @@ public class StandardDirectoryService
     /// <summary>
     /// 获取文件列表
     /// </summary>
+    /// <remarks>
+    /// ★ 目录域读模型（2026-10-13 设计 §三 1.B.6d）：取数 + 配置隔离 + 保留段过滤 +
+    /// 排序（Sort→FileName）全在 <c>DirectoryReadModel</c>。
+    /// <para>⚠️ 有意行为变更（P0-3 修复）：<paramref name="folderCode"/> 空时原实现返回
+    /// <b>全表</b>（任何配置的文件都泄出）⇒ 现返回<b>空列表</b>。</para>
+    /// </remarks>
     public async Task<List<StandardDirectoryFile>> GetFilesAsync(string? folderCode = null)
     {
-        if (string.IsNullOrEmpty(folderCode))
-        {
-            return await _core.GetDirectoryFilesAsync();
-        }
-        return await _core.GetDirectoryFilesByFolderCodeAsync(folderCode);
+        if (string.IsNullOrEmpty(folderCode)) return new();
+        var snapshot = await _dirRead.LoadByFolderCodeAsync(folderCode);
+        return snapshot.FilesOf(folderCode).ToList();
     }
 
     /// <summary>
-    /// 获取目录根级别的文件（根 = <c>FolderCode == ""</c>，决策 ⑨）。
-    /// <para>★ P1-12 修复：改用专用视图 <see cref="StandardDirectoryRootFileView"/> ——
-    /// 原实现借 <c>v_upload_task_detail</c> 投影，只能捞到「有上传任务」的文件，
-    /// 手动创建 / 遗留的根级文件全部不可见。</para>
+    /// 获取目录根级别的文件（根 = <c>FolderCode</c> 不在有效文件夹集，决策 ⑨ / 裁决 ②）。
     /// </summary>
+    /// <remarks>
+    /// ★ 目录域读模型（2026-10-13）：原视图 <c>StandardDirectoryRootFileView</c> 查询已删
+    /// （P0-4）。三点差异均为<b>有意变更</b>：
+    /// <para>① 字段：视图 18 列投影 → 完整实体（新增字段是 additive，无字段消失）。</para>
+    /// <para>② 集合：原 <c>FolderCode == ""</c> 严格判据 → 裁决 ②「FolderCode ∉ 有效文件夹集」
+    /// （悬空 FolderCode 也归根级，不再凭空消失）。</para>
+    /// <para>③ 顺序：原无 ORDER BY（索引序）→ Sort→FileName。</para>
+    /// </remarks>
     public async Task<List<StandardDirectoryFile>> GetRootFilesAsync(string directoryCode)
     {
-        var viewResult = await _db.GetListAsync<StandardDirectoryRootFileView>(
-            x => x.ConfigCode == directoryCode && !x.IsDeleted);
-        return viewResult.Data?.Select(x => new StandardDirectoryFile
-        {
-            Code = x.Code,
-            FileName = x.FileName,
-            FileType = x.FileType,
-            ConfigCode = x.ConfigCode,
-            FolderCode = x.FolderCode ?? "",
-            UploadStatus = x.UploadStatus,
-            StoragePath = x.StoragePath,
-            ConvertedStoragePath = x.ConvertedStoragePath,
-            ConvertStatus = x.ConvertStatus,
-            ConvertMessage = x.ConvertMessage,
-            PreviewPdfPath = x.PreviewPdfPath,
-            MarkdownPath = x.MarkdownPath,
-            MarkdownStatus = x.MarkdownStatus,
-            MarkdownMessage = x.MarkdownMessage,
-            FileSize = x.FileSize,
-            TaskId = x.TaskId,
-            IsValid = x.IsValid
-        }).ToList() ?? new();
+        var snapshot = await _dirRead.LoadAsync(directoryCode);
+        return snapshot.RootFiles.ToList();
     }
 
     /// <summary>
@@ -1334,8 +1298,8 @@ public class StandardDirectoryService
     {
         try
         {
-            var rule = (await _db.GetOneAsync<DocExtractionRule>(
-                x => x.StandardFileCode == fileCode)).Data;
+            var rule = (await _core.GetDocExtractionRulesByStandardFileCodesAsync(new[] { fileCode }))
+                .FirstOrDefault();
             if (rule == null || string.IsNullOrEmpty(rule.DocContent)) return;
 
             rule.DocContent = null;
@@ -1363,8 +1327,7 @@ public class StandardDirectoryService
         // 1. 定位 StandardDirectoryConfig —— 决策 ⑦ 已删复合码 SDC-…，
         //    manifest.DirectoryCode 即 config.Code（GUID）。兼容过渡：Code 查不到时按三键回退；
         //    ★ 决策⑳修订后主键含 OrgCode —— 缺机构的回退会跨机构误命中（拿到别的机构的目录），禁用。
-        var config = (await _db.GetOneAsync<StandardDirectoryConfig>(
-            x => x.Code == manifest.DirectoryCode)).Data;
+        var config = await _core.GetDirectoryConfigByCodeAsync(manifest.DirectoryCode);
         if (config == null && !string.IsNullOrEmpty(manifest.OrgCode)
             && !string.IsNullOrEmpty(manifest.StandardCode) && !string.IsNullOrEmpty(manifest.PhaseCode))
         {
@@ -2089,8 +2052,7 @@ public class StandardDirectoryService
         if (string.IsNullOrEmpty(folder.ParentCode))
             return folder.FolderName;
 
-        var parent = (await _db.GetOneAsync<StandardDirectoryFolder>(
-            x => x.Code == folder.ParentCode)).Data;
+        var parent = await _core.GetDirectoryFolderByCodeAsync(folder.ParentCode);
         if (parent == null || string.IsNullOrEmpty(parent.FullPath))
             return folder.FolderName;
 
@@ -2136,34 +2098,17 @@ public class StandardDirectoryService
     /// 获取阶段的完整文件树（含规则属性）
     /// 用于文档提取规则管理页面，单次返回所有层级的文件夹和文件
     /// </summary>
+    /// <remarks>
+    /// ★ 目录域读模型（2026-10-13 设计 §三 1.B.6d）：1/2 步的取数 + 保留段过滤 +
+    /// 排序（Sort→FolderName / Sort→FileName）全在 <c>DirectoryReadModel</c>；
+    /// 本方法只做递归装配 + 规则状态关联 + DTO 投影。
+    /// </remarks>
     public async Task<StageFileTreeResponse> GetStageFileTreeAsync(string directoryCode)
     {
-        // 1. 查询所有启用的文件夹
-        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：ConfigCode == 入参 ∧ IsValid == 1）
-        var allFolders = await _core.GetDirectoryFoldersAsync(new[] { directoryCode });
-
-        // ★ 1.1 剔除「产物目录」（pdf / markdown / _archive）。
-        //   这三段是 PathBuilder 的保留段名 —— 系统把转换产物写在
-        //   `{StoragePath}/pdf/x.pdf`、`{StoragePath}/markdown/x.md`（企业库还有 `_archive/`），
-        //   与业务文件夹物理同层。正常路径下 ValidateFolderOrFileName 已挡住新建，
-        //   但历史数据 / 直改 DB / 模板导入仍可能留下同名文件夹 → 显示层统一过滤，
-        //   否则管理员会在目录树里看到自己没建过的「pdf」文件夹。
-        //   连同其下所有文件一并剔除（文件挂在被剔除的文件夹下已无意义）。
-        var reservedFolderCodes = CollectReservedFolderCodes(allFolders);
-        if (reservedFolderCodes.Count > 0)
-        {
-            allFolders = allFolders.Where(f => !reservedFolderCodes.Contains(f.Code ?? "")).ToList();
-        }
-
-        // 2. 查询所有启用的文件
-        var allFiles = await _core.GetDirectoryFilesByConfigCodeAsync(directoryCode);
-
-        if (reservedFolderCodes.Count > 0)
-        {
-            allFiles = allFiles
-                .Where(f => !reservedFolderCodes.Contains(f.FolderCode ?? ""))
-                .ToList();
-        }
+        // 1+2. 文件夹 / 文件：读模型一次装配（含保留段过滤 —— 原 1.1 / 2.x 手工过滤已下线）
+        var snapshot = await _dirRead.LoadAsync(directoryCode);
+        var allFolders = snapshot.Folders;
+        var allFiles = snapshot.Files;
 
         // 3. 规则状态权威来源：cert_doc_extraction_rule（按 StandardFileCode 关联）
         var ruleStatusMap = new Dictionary<string, string>();
@@ -2172,8 +2117,7 @@ public class StandardDirectoryService
             var stageFileCodes = allFiles.Select(f => f.Code ?? "").ToList();
             if (stageFileCodes.Count > 0)
             {
-                var rules = (await _db.GetListAsync<DocExtractionRule>(
-                    x => stageFileCodes.Contains(x.StandardFileCode))).Data ?? new();
+                var rules = await _core.GetDocExtractionRulesByStandardFileCodesAsync(stageFileCodes);
                 foreach (var r in rules)
                 {
                     string code = r.StandardFileCode;
@@ -2188,10 +2132,10 @@ public class StandardDirectoryService
             _logger.LogWarning(ex, "[GetStageFileTree] 规则状态查询失败，降级为 none");
         }
 
-        // 4. 构建根级文件夹树
+        // 4. 构建根级文件夹树（顺序已在快照内 = Sort→FolderName，⛔ 不再 OrderBy）
         var rootFolders = allFolders
             .Where(x => string.IsNullOrEmpty(x.ParentCode))
-            .OrderBy(x => x.Sort).ToList();
+            .ToList();
 
         var folderNodes = new List<StageFolderNode>();
         int totalFolders = 0, totalFiles = 0, configuredFiles = 0;
@@ -2203,10 +2147,8 @@ public class StandardDirectoryService
             folderNodes.Add(node);
         }
 
-        // 5. 根目录级孤儿文件（FolderCode 不在任何文件夹中）
-        var folderCodeSet = new HashSet<string>(allFolders.Select(f => f.Code ?? ""));
-        var rootOrphanFiles = allFiles
-            .Where(f => !folderCodeSet.Contains(f.FolderCode)).ToList();
+        // 5. 根目录级孤儿文件（FolderCode 不在有效文件夹集 —— 裁决 ②，已在快照内算好）
+        var rootOrphanFiles = snapshot.RootFiles;
 
         if (rootOrphanFiles.Count > 0)
         {
@@ -2270,8 +2212,8 @@ public class StandardDirectoryService
     /// </summary>
     private StageFolderNode BuildStageFolderNode(
         StandardDirectoryFolder folder,
-        List<StandardDirectoryFolder> allFolders,
-        List<StandardDirectoryFile> allFiles,
+        IReadOnlyList<StandardDirectoryFolder> allFolders,
+        IReadOnlyList<StandardDirectoryFile> allFiles,
         Dictionary<string, string> ruleStatusMap,
         ref int totalFolders, ref int totalFiles, ref int configuredFiles,
         HashSet<string> visited, int depth)
@@ -2289,18 +2231,18 @@ public class StandardDirectoryService
         // ★ P0-6：环 / 超深直接停在当前层（节点已建，只是不再向下递归）
         if (depth > MAX_TREE_DEPTH || !visited.Add(folder.Code ?? "")) return node;
 
-        // 子文件夹
+        // 子文件夹（输入已在快照内按 Sort→FolderName 排好，Where 保序 ⇒ ⛔ 不再 OrderBy）
         var children = allFolders
             .Where(x => x.ParentCode == folder.Code)
-            .OrderBy(x => x.Sort).ToList();
+            .ToList();
         foreach (var child in children)
             node.Children.Add(BuildStageFolderNode(child, allFolders, allFiles, ruleStatusMap,
                 ref totalFolders, ref totalFiles, ref configuredFiles, visited, depth + 1));
 
-        // 文件
+        // 文件（同理：快照已按 Sort→FileName 排好）
         var files = allFiles
             .Where(x => x.FolderCode == folder.Code)
-            .OrderBy(x => x.Sort).ToList();
+            .ToList();
         foreach (var file in files)
         {
             totalFiles++;
@@ -2358,8 +2300,7 @@ public class StandardDirectoryService
         // 从父文件夹回填 ConfigCode（决策 ⑦：DirectoryCode/复合 FileCode 已删）
         if (!string.IsNullOrEmpty(file.FolderCode))
         {
-            var parent = (await _db.GetOneAsync<StandardDirectoryFolder>(
-                x => x.Code == file.FolderCode && x.IsValid == 1)).Data;
+            var parent = await _core.GetDirectoryFolderByCodeAsync(file.FolderCode);
             if (parent == null) return (false, "父文件夹不存在", null);
             file.ConfigCode = parent.ConfigCode ?? file.ConfigCode;
         }
@@ -2382,8 +2323,7 @@ public class StandardDirectoryService
         // 计算 FullPath
         if (!string.IsNullOrEmpty(file.FolderCode))
         {
-            var parentFolder = (await _db.GetOneAsync<StandardDirectoryFolder>(
-                x => x.Code == file.FolderCode && x.IsValid == 1)).Data;
+            var parentFolder = await _core.GetDirectoryFolderByCodeAsync(file.FolderCode);
             var parentPath = parentFolder?.FullPath?.Trim('/') ?? "";
             file.FullPath = string.IsNullOrEmpty(parentPath)
                 ? file.FileName
@@ -2461,8 +2401,7 @@ public class StandardDirectoryService
     public async Task<Stream> ExportAsZipAsync(
         string directoryCode, List<string> selectedFolderCodes, List<string> selectedFileCodes)
     {
-        var config = (await _db.GetOneAsync<StandardDirectoryConfig>(
-            x => x.Code == directoryCode && x.IsValid == 1)).Data;
+        var config = await _core.GetDirectoryConfigByCodeAsync(directoryCode);
         if (config == null)
             throw new ArgumentException("目录配置不存在");
 
@@ -2646,8 +2585,7 @@ public class StandardDirectoryService
         if (lockErr != null) return (false, lockErr, null);
 
         // 决策 ⑦/⑩：复合 DirectoryCode 已删 —— 目录定位改用 config.Code，阶段列名 StageCode
-        var config = (await _db.GetOneAsync<StandardDirectoryConfig>(
-            x => x.Code == directoryCode)).Data;
+        var config = await _core.GetDirectoryConfigByCodeAsync(directoryCode);
         if (config == null) return (false, "目录配置不存在", null);
 
         standardCode ??= config.StandardCode;
@@ -2659,8 +2597,7 @@ public class StandardDirectoryService
         string parentDir = "";
         if (!string.IsNullOrEmpty(folderCode))
         {
-            var parentFolder = (await _db.GetOneAsync<StandardDirectoryFolder>(
-                x => x.Code == folderCode && x.IsValid == 1)).Data;
+            var parentFolder = await _core.GetDirectoryFolderByCodeAsync(folderCode);
             if (parentFolder == null) return (false, "父文件夹不存在", null);
             parentDir = parentFolder.FullPath ?? "";
         }

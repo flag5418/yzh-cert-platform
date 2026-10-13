@@ -472,9 +472,9 @@ public class GapDetector
         if (string.IsNullOrWhiteSpace(sfc)) return (null, null);
 
         // ★ 2026-10-13 判据收敛：模板文件定义行 = <b>非企业行</b>（EnterpriseCode 空）
-        //   —— 语义入口 OrgScope.IsEnterpriseRow；SqlSugar 表达式内用等价写法
-        var tpl = (await _db.GetOneAsync<StandardDirectoryFile>(x =>
-            x.Code == sfc && string.IsNullOrEmpty(x.EnterpriseCode))).Data;
+        //   —— 语义入口 OrgScope.IsEnterpriseRow；取数收口 CoreResourceQuery + 内存断言
+        var tpl = await _core.GetDirectoryFileByCodeAsync(sfc);
+        if (tpl != null && OrgScope.IsEnterpriseRow(tpl.EnterpriseCode)) tpl = null;
         return (sfc, tpl?.FileName);
     }
 

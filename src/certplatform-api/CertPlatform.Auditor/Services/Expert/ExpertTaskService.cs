@@ -594,8 +594,12 @@ namespace CertPlatform.Auditor.Services.Expert
                 return Result<TaskCreateResult>.Fail("请至少选择一个标准");
 
             // ── 2. 企业 / 阶段 / 标准 归属校验（⛔ 不静默放行，防越权）──
-            var enterprise = (await _db.GetOneAsync<Enterprise>(x =>
-                x.Code == req.EnterpriseCode && x.OrgCode == orgCode && !x.IsDeleted)).Data;
+            //    ★ 1.B.6d-2：Code 取数收口 CoreResourceQuery；OrgCode 归属在内存断言
+            //      （SQL `=` 为 ci 排序规则 ⇒ 代码类 Code 用 OrdinalIgnoreCase 等价）
+            var enterprise = await _core.GetEnterpriseByCodeAsync(req.EnterpriseCode);
+            if (enterprise != null
+                && !string.Equals(enterprise.OrgCode, orgCode, StringComparison.OrdinalIgnoreCase))
+                enterprise = null;
             if (enterprise == null)
                 return Result<TaskCreateResult>.Fail("企业不存在或不属于当前工作区");
 

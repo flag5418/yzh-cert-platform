@@ -159,7 +159,7 @@ public class QueueMonitorController : ControllerBase
 
     private async Task<string> ResolveFileConvertScopeAsync(string configCode)
     {
-        var config = (await _db.GetOneAsync<StandardDirectoryConfig>(x => x.Code == configCode)).Data;
+        var config = await _core.GetDirectoryConfigByCodeAsync(configCode);
         if (config == null) return string.Empty;
 
         var stdName = (await _core.GetStandardByCodeAsync(config.StandardCode))?.StandardName;
@@ -173,7 +173,7 @@ public class QueueMonitorController : ControllerBase
 
     private async Task<string> ResolveDocExtractScopeAsync(string enterpriseCode)
     {
-        var ent = (await _db.GetOneAsync<Enterprise>(x => x.Code == enterpriseCode && !x.IsDeleted)).Data;
+        var ent = await _core.GetEnterpriseByCodeAsync(enterpriseCode);
         return ent?.Name ?? string.Empty;
     }
 
@@ -198,7 +198,7 @@ public class QueueMonitorController : ControllerBase
     /// <summary>组装「企业名 / 阶段名」</summary>
     private async Task<string> BuildEnterpriseStageDisplayAsync(string enterpriseCode, string stageCode)
     {
-        var entName = (await _db.GetOneAsync<Enterprise>(x => x.Code == enterpriseCode && !x.IsDeleted)).Data?.Name;
+        var entName = (await _core.GetEnterpriseByCodeAsync(enterpriseCode))?.Name;
         var stageName = (await _core.GetStageByCodeAsync(stageCode))?.StageName;
 
         var parts = new List<string>();

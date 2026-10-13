@@ -440,8 +440,7 @@ public class EnterpriseFileService
         var folderCodes = allFiles.Select(f => f.FolderCode).Where(c => !string.IsNullOrEmpty(c)).Distinct().ToList();
         var folderRows = folderCodes.Count == 0
             ? new List<StandardDirectoryFolder>()
-            : (await _db.GetListAsync<StandardDirectoryFolder>(x => folderCodes.Contains(x.Code!))).Data
-              ?? new List<StandardDirectoryFolder>();
+            : await _core.GetDirectoryFoldersByCodesAsync(folderCodes);
         var folderNames = folderRows
             .Where(f => !string.IsNullOrEmpty(f.Code))
             .GroupBy(f => f.Code!)
@@ -1343,9 +1342,7 @@ public class EnterpriseFileService
         var tenantErr = await OwnershipErrorAsync(enterpriseCode);
         if (tenantErr != null) return Result.Fail(tenantErr);
 
-        var fr = await _db.GetOneAsync<StandardDirectoryFile>(
-            x => x.Code == fileCode && x.EnterpriseCode == enterpriseCode && x.IsValid == 1);
-        var file = fr.Data;
+        var file = await _core.GetDirectoryFileByCodeAsync(fileCode, enterpriseCode);
         if (file == null) return Result.Fail("文件不存在");
         var conflict = CheckModifyConflict(file, expectedModifyTime);
         if (conflict != null) return Result.Fail(conflict);
@@ -1665,9 +1662,7 @@ public class EnterpriseFileService
         var tenantErr = await OwnershipErrorAsync(enterpriseCode);
         if (tenantErr != null) return Result.Fail(tenantErr);
 
-        var fr = await _db.GetOneAsync<StandardDirectoryFile>(
-            x => x.Code == fileCode && x.EnterpriseCode == enterpriseCode && x.IsValid == 1);
-        var file = fr.Data;
+        var file = await _core.GetDirectoryFileByCodeAsync(fileCode, enterpriseCode);
         if (file == null) return Result.Fail("文件不存在");
         if (file.ConvertStatus != "completed") return Result.Fail("文件尚未完成转换");
         if (string.IsNullOrEmpty(file.MarkdownPath)) return Result.Fail("Markdown 产物不存在");
@@ -1819,11 +1814,8 @@ public class EnterpriseFileService
 
         // 1. 已有企业目录？（includeDisabled：禁用行须被认出并复活，否则 INSERT 撞唯一键）
         //    ★ 2026-10-13 归属模型 V2：机构维度就在 OrgCode（企业行也可带 = 机构冗余）
-        var existCfg = await _db.GetListAsync<StandardDirectoryConfig>(
-            x => x.OrgCode == orgCode && x.EnterpriseCode == enterpriseCode
-                 && x.StandardCode == standardCode && x.StageCode == stageCode,
-            includeDisabled: true);
-        var config = existCfg.Data?.FirstOrDefault();
+        var config = (await _core.GetDirectoryConfigsAsync(
+            orgCode, standardCode, stageCode, enterpriseCode, includeDisabled: true)).FirstOrDefault();
 
         // 1b. ★ 机构漂移兜底：归一后的 orgCode 查不到，但存在「同企业 + 同标准 + 同阶段、挂在别的机构下」
         //     的旧目录 ⇒ 迁移它的 OrgCode，而不是新建一个空目录。
@@ -1996,8 +1988,8 @@ public class EnterpriseFileService
 
     private async Task<string?> GetEnterpriseOrgCodeAsync(string enterpriseCode)
     {
-        var er = await _db.GetOneAsync<Enterprise>(x => x.Code == enterpriseCode);
-        return er.Data?.OrgCode;
+        var er = await _core.GetEnterpriseByCodeAsync(enterpriseCode);
+        return er?.OrgCode;
     }
 
     /// <summary>
@@ -2020,9 +2012,9 @@ public class EnterpriseFileService
         var ws = _workspace.Resolve(_user.UserCode);
         if (!ws.Success || ws.Data == null) return ws.Error ?? "无法定位当前工作区";
 
-        var ent = await _db.GetOneAsync<Enterprise>(x => x.Code == enterpriseCode);
-        if (ent.Data == null) return "企业不存在或不属于当前工作区";
-        if (!string.Equals(ent.Data.OrgCode, ws.Data.Code, System.StringComparison.Ordinal))
+        var ent = await _core.GetEnterpriseByCodeAsync(enterpriseCode);
+        if (ent == null) return "企业不存在或不属于当前工作区";
+        if (!string.Equals(ent.OrgCode, ws.Data.Code, System.StringComparison.Ordinal))
             return "企业不存在或不属于当前工作区";
 
         return null;
@@ -2296,7 +2288,7 @@ public class EnterpriseFileService
     /// <summary>租户/机构 Code：<c>cert_extraction_change_log.OrgCode</c> 是 NOT NULL</summary>
     private async Task<string> ResolveOrgCodeAsync(string enterpriseCode)
     {
-        var ent = (await _db.GetOneAsync<Enterprise>(x => x.Code == enterpriseCode)).Data;
+        var ent = await _core.GetEnterpriseByCodeAsync(enterpriseCode);
         return ent?.OrgCode ?? enterpriseCode;
     }
 
@@ -2312,8 +2304,7 @@ public class EnterpriseFileService
     {
         if (string.IsNullOrWhiteSpace(standardFileCode)) return "";
 
-        var rules = (await _db.GetListAsync<DocExtractionRule>(x =>
-            x.StandardFileCode == standardFileCode && !x.IsDeleted)).Data ?? new List<DocExtractionRule>();
+        var rules = await _core.GetDocExtractionRulesByStandardFileCodesAsync(new[] { standardFileCode });
 
         if (rules.Count == 0) return "";
         if (rules.Count > 1)

@@ -1,3 +1,4 @@
+using CertPlatform.Shared.Domain.Scope;
 using YZH.Core.Api.Models.Organization;
 using YZH.Core.Api.Models.Users;
 using YZH.Core.DataBase.Interfaces;
@@ -26,6 +27,7 @@ namespace CertPlatform.Auditor.Services;
 public class WorkspaceContextService
 {
     private readonly IDbOrm _db;
+    private readonly ICoreResourceQuery _core;
 
     /// <summary>工作区在机构树中的层级（根为 1）</summary>
     private const int WorkspaceLevel = 2;
@@ -33,9 +35,10 @@ public class WorkspaceContextService
     /// <summary>工作区节点类型</summary>
     private const string WorkspaceOrgType = "VirtualOrg";
 
-    public WorkspaceContextService(IDbOrm db)
+    public WorkspaceContextService(IDbOrm db, ICoreResourceQuery core)
     {
         _db = db;
+        _core = core;
     }
 
     /// <summary>
@@ -157,8 +160,8 @@ public class WorkspaceContextService
         if (string.IsNullOrWhiteSpace(orgCode)) return orgCode;
 
         // ① 本身就是认证机构 Code
-        var self = await _db.GetOneAsync<CertificationBody>(x => x.Code == orgCode);
-        if (self.Data != null) return orgCode;
+        var self = await _core.GetCertificationBodyByCodeAsync(orgCode);
+        if (self != null) return orgCode;
 
         // ② 是机构树节点 → 取 OrgCode → 尝试直接当认证机构 Code 匹配
         //    ★ 修复后 OrgCode 直接存认证机构 Code（GUID），优先按此匹配
@@ -167,17 +170,17 @@ public class WorkspaceContextService
         if (!string.IsNullOrWhiteSpace(orgCodeValue))
         {
             // 标准格式：OrgCode = 认证机构 Code（GUID）
-            var byCode = await _db.GetOneAsync<CertificationBody>(x => x.Code == orgCodeValue);
-            if (byCode.Data?.Code != null) return byCode.Data.Code;
+            var byCode = await _core.GetCertificationBodyByCodeAsync(orgCodeValue);
+            if (byCode?.Code != null) return byCode.Code;
 
             // 兼容历史遗留：OrgCode = CbCode（业务编号）
-            var byBiz = await _db.GetOneAsync<CertificationBody>(x => x.CbCode == orgCodeValue);
-            if (byBiz.Data?.Code != null) return byBiz.Data.Code;
+            var byBiz = await _core.GetCertificationBodyByCbCodeAsync(orgCodeValue);
+            if (byBiz?.Code != null) return byBiz.Code;
         }
 
         // ③ 传进来的直接就是业务编号（CbCode，极端兜底）
-        var legacy = await _db.GetOneAsync<CertificationBody>(x => x.CbCode == orgCode);
-        return legacy.Data?.Code ?? orgCode;
+        var legacy = await _core.GetCertificationBodyByCbCodeAsync(orgCode);
+        return legacy?.Code ?? orgCode;
     }
 
     /// <summary>

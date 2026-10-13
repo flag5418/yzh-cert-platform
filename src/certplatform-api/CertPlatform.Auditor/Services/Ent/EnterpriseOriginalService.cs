@@ -2057,9 +2057,9 @@ namespace CertPlatform.Auditor.Services.Ent
             var ws = _workspace.Resolve(_user.UserCode);
             if (!ws.Success || ws.Data == null) return ws.Error ?? "无法定位当前工作区";
 
-            var ent = await _db.GetOneAsync<Enterprise>(x => x.Code == enterpriseCode);
-            if (ent.Data == null) return "企业不存在或不属于当前工作区";
-            if (!string.Equals(ent.Data.OrgCode, ws.Data.Code, StringComparison.Ordinal))
+            var ent = await _core.GetEnterpriseByCodeAsync(enterpriseCode);
+            if (ent == null) return "企业不存在或不属于当前工作区";
+            if (!string.Equals(ent.OrgCode, ws.Data.Code, StringComparison.Ordinal))
                 return "企业不存在或不属于当前工作区";
 
             return null;
@@ -2067,8 +2067,8 @@ namespace CertPlatform.Auditor.Services.Ent
 
         private async Task<string> ResolveOrgCodeAsync(string enterpriseCode)
         {
-            var ent = await _db.GetOneAsync<Enterprise>(x => x.Code == enterpriseCode);
-            return ent.Data?.OrgCode ?? "";
+            var ent = await _core.GetEnterpriseByCodeAsync(enterpriseCode);
+            return ent?.OrgCode ?? "";
         }
 
         /// <summary>写策略 + 审计留痕（36 号 §八 T4.2）</summary>

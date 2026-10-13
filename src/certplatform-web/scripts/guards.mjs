@@ -904,6 +904,14 @@ const R17_SHARED_ALLOW = new Map([
         '「机构×标准×阶段」关联链视图（纯只读 V，DDL = scripts/db/views/v_org_standard_stage.sql）：检索唯一入口 ICoreResourceQuery.GetOrgStandardStageChainAsync 定义在 Shared，返回类型必须留 Shared/Entities（下沉到 Admin 会让 Shared 反向引用 Admin ⇒ 成环）；当前仅 Admin 端 StandardDirectoryService（T1 组织树）消费，Auditor 端接线后同样经该入口取数',
     },
   ],
+  [
+    'DocExtractionRule',
+    {
+      since: '2026-10-13',
+      reason:
+        '提取规则：检索唯一入口 ICoreResourceQuery.GetDocExtractionRuleByCodeAsync / GetDocExtractionRulesByStandardFileCodesAsync 定义在 Shared，返回类型必须留 Shared/Entities（下沉到 Admin ⇒ Shared 反向引用 Admin，A-R3 硬违规）。双端真实在用：Admin 写/管（DocExtractionRuleService 等 34 处），Auditor 经入口读 4 站（GapDetector:469 · GapFillService:204/300 · EnterpriseExtractTaskExecutor:128 · EnterpriseFileService:2307，均 var 接收 ⇒ 文本计数为 0，非真单端）。设计文档《核心资源检索统一-设计-V1》§1.2 实体分布表标注 Shared/Entities/Doc ✅（2026-10-13）',
+    },
+  ],
 ])
 
 function runR17() {
@@ -1633,36 +1641,30 @@ const RULES = [
       // CertEnterpriseStage：EnterpriseFileService(3) · EnterpriseOriginalService(2) ·
       //   EnterpriseNormalizeController(1) · FillParamValueController(1) · ExpertTaskService(1) ·
       //   EnterpriseStageController(1) · EnterpriseOriginalAnalyzeExecutor(1) = 10 处
-      'CertPlatform.Auditor/Services/Ent/EnterpriseFileService.cs': 14,
-      'CertPlatform.Auditor/Controllers/EnterpriseNormalizeController.cs': 10,
-      'CertPlatform.Auditor/Services/Ent/EnterpriseOriginalService.cs': 4,
+      'CertPlatform.Auditor/Services/Ent/EnterpriseFileService.cs': 6,
+      'CertPlatform.Auditor/Controllers/EnterpriseNormalizeController.cs': 4,
+      'CertPlatform.Auditor/Services/Ent/EnterpriseOriginalService.cs': 2,
       'CertPlatform.Auditor/Controllers/FillParamValueController.cs': 5,
-      'CertPlatform.Auditor/Services/Expert/ExpertTaskService.cs': 2,
+      'CertPlatform.Auditor/Services/Expert/ExpertTaskService.cs': 1,
       'CertPlatform.Auditor/Controllers/EnterpriseStageController.cs': 1,
       'CertPlatform.Auditor/Services/Ent/EnterpriseOriginalAnalyzeExecutor.cs': 1,
       // FileRequirement：DocExtractionRuleService(1) + .AI(1) = 2 处
-      'CertPlatform.Admin/Services/DocExtraction/DocExtractionRuleService.cs': 7,
+      'CertPlatform.Admin/Services/DocExtraction/DocExtractionRuleService.cs': 1,
       'CertPlatform.Admin/Services/DocExtraction/DocExtractionRuleService.AI.cs': 1,
       // ConclusionRule：NcConclusionCalcSkill(1) = 1 处
       'CertPlatform.Admin/Services/Workflow/Skills/NcConclusionCalcSkill.cs': 1,
       // ---- ★ 死类冻结（2026-10-06 已从 DI 摘除，仅存对照 ⇒ ⛔ 不改造、⛔ 不得增长）----
       'CertPlatform.Admin/Services/Ent/Executors/EnterpriseDocNormalizationExecutor.cs': 6,
-      // ---- 其余 = 1.B.6d-2/3/4 可收敛存量（收敛后逐行下调 / 删除）----
-      'CertPlatform.Admin/Services/StandardDirectory/StandardDirectoryService.cs': 37,
+      // ---- 其余 = 1.B.6d-3/4 可收敛存量（6d-2 BY 族已收口 2026-10-13；收敛后逐行下调 / 删除）----
+      'CertPlatform.Admin/Services/StandardDirectory/StandardDirectoryService.cs': 21,
       'CertPlatform.Admin/Controllers/Workflow/DocTemplateController.cs': 7,
       'CertPlatform.Admin/Controllers/Workflow/DocFillPromptController.cs': 5,
-      'CertPlatform.Admin/Controllers/Workflow/DocTemplateAnchorController.cs': 5,
       'CertPlatform.Admin/Controllers/Cert/FillParamDefController.cs': 3,
-      'CertPlatform.Admin/Controllers/System/QueueMonitorController.cs': 3,
       'CertPlatform.Admin/Controllers/Workflow/StandardDocContractController.cs': 1,
       'CertPlatform.Admin/Services/StandardDirectory/UploadQueueCancelHandler.cs': 1,
-      'CertPlatform.Auditor/Services/Ent/Normalize/DocumentFillOrchestrator.cs': 4,
-      'CertPlatform.Auditor/Services/WorkspaceContextService.cs': 4,
       'CertPlatform.Auditor/Controllers/DocumentFillController.cs': 3,
-      'CertPlatform.Auditor/Controllers/DocFillPreviewController.cs': 2,
       'CertPlatform.Auditor/Controllers/EnterpriseController.cs': 2,
       'CertPlatform.Auditor/Services/AuditorRegisterService.cs': 2,
-      'CertPlatform.Auditor/Services/Expert/GapDetector.cs': 1,
     },
   },
   {

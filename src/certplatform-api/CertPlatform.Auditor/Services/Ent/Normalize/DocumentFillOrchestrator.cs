@@ -107,10 +107,8 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                 //        （DocFillValue.IsPinned = L3）都【不】跳过填充 ——
                 //        L1 是「配置冻结」、L3 是「重写时不覆盖」，见 55 §18.1。
                 // ════════════════════════════════════════════════════════════
-                var instance = (await _db.GetOneAsync<StandardDirectoryFile>(x =>
-                    x.EnterpriseCode == req.EnterpriseCode &&
-                    x.StandardFileCode == req.StandardFileCode &&
-                    x.IsValid == 1)).Data;
+                var instance = (await _core.GetDirectoryFilesByEnterpriseCodeAsync(req.EnterpriseCode))
+                    .FirstOrDefault(x => x.StandardFileCode == req.StandardFileCode);
 
                 if (instance != null && instance.IsLocked)
                 {
@@ -196,7 +194,7 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                     x.IsLatest == true &&
                     x.IsValid == 1)).Data ?? new List<EnterpriseDocProfile>();
 
-                var ent = (await _db.GetOneAsync<Enterprise>(x => x.Code == req.EnterpriseCode)).Data;
+                var ent = await _core.GetEnterpriseByCodeAsync(req.EnterpriseCode);
                 var entInfo = EnterpriseInfoMapper.ToInfo(ent);
 
                 // ★ 企业已填值（cert_fill_param_value）—— 由本端（Auditor）预取后传给 SourceResolver。
@@ -819,8 +817,7 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                 }
 
                 // ── ① 取模板（⛔ 不看 PublishStatus）──
-                var template = (await _db.GetOneAsync<DocTemplate>(x =>
-                    x.Code == req.TemplateCode && x.IsValid == 1)).Data;
+                var template = await _core.GetDocTemplateByCodeAsync(req.TemplateCode);
                 if (template == null)
                 {
                     result.Message = $"模板不存在或已失效：{req.TemplateCode}";
@@ -1010,7 +1007,7 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
             // ── 机构（认证机构，⛔ 不是工作区）──
             var body = string.IsNullOrWhiteSpace(req.OrgCode)
                 ? null
-                : (await _db.GetOneAsync<CertificationBody>(x => x.Code == req.OrgCode)).Data;
+                : await _core.GetCertificationBodyByCodeAsync(req.OrgCode);
 
             // ── 文档元信息 ──
             var stdNo = string.IsNullOrWhiteSpace(req.StandardCode)

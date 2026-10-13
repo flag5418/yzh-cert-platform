@@ -10,6 +10,7 @@ using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
+using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Office;
 using CertPlatform.Shared.Office.Excel;
 using CertPlatform.Shared.Office.Word;
@@ -41,17 +42,20 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
     private readonly IDbOrm _db;
     private readonly IObjectStorage _storage;
     private readonly ILogger<DocTemplateAnchorController> _logger;
+    private readonly ICoreResourceQuery _core;
 
     public DocTemplateAnchorController(
         EntityService<DocTemplateAnchor> entityService,
         IUserContext userContext,
         IDbOrm db,
         IObjectStorage storage,
+        ICoreResourceQuery core,
         ILogger<DocTemplateAnchorController> logger)
         : base(entityService, userContext)
     {
         _db = db;
         _storage = storage;
+        _core = core;
         _logger = logger;
     }
 
@@ -275,7 +279,7 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
         if (string.IsNullOrWhiteSpace(templateCode))
             return Ok(ApiResponse<object>.Fail("请指定所属模板（templateCode）"));
 
-        var tpl = (await _db.GetOneAsync<DocTemplate>(t => t.Code == templateCode)).Data;
+        var tpl = await _core.GetDocTemplateByCodeAsync(templateCode);
         if (tpl == null)
             return Ok(ApiResponse<object>.Fail("模板不存在或已删除，请先上传空白模板"));
         if (string.IsNullOrWhiteSpace(tpl.StoragePath))
@@ -423,7 +427,7 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
         if (string.IsNullOrWhiteSpace(templateCode))
             return Ok(ApiResponse<object>.Fail("请指定所属模板（templateCode）"));
 
-        var tpl = (await _db.GetOneAsync<DocTemplate>(t => t.Code == templateCode)).Data;
+        var tpl = await _core.GetDocTemplateByCodeAsync(templateCode);
         if (tpl == null) return Ok(ApiResponse<object>.Fail("模板不存在或已删除"));
 
         var violations = await BuildViolationsAsync(templateCode);
@@ -479,7 +483,7 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
         if (string.IsNullOrWhiteSpace(templateCode))
             return Ok(ApiResponse<object>.Fail("请指定所属模板（templateCode）"));
 
-        var tpl = (await _db.GetOneAsync<DocTemplate>(t => t.Code == templateCode)).Data;
+        var tpl = await _core.GetDocTemplateByCodeAsync(templateCode);
         if (tpl == null) return Ok(ApiResponse<object>.Fail("模板不存在或已删除"));
 
         if (tpl.PartCount == 0)
@@ -643,7 +647,7 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
             var liveAnchors = await _db.Client.Queryable<DocTemplateAnchor>()
                 .Where(a => a.TemplateCode == req.TemplateCode && a.IsDeleted == false && a.IsValid == 1)
                 .CountAsync();
-            var tplRow = (await _db.GetOneAsync<DocTemplate>(t => t.Code == req.TemplateCode)).Data;
+            var tplRow = await _core.GetDocTemplateByCodeAsync(req.TemplateCode);
             if (tplRow != null && tplRow.PartCount != liveAnchors)
             {
                 tplRow.PartCount = liveAnchors;
@@ -1002,8 +1006,8 @@ public class DocTemplateAnchorController : YzhControllerBase<DocTemplateAnchor>
     /// <summary>确保所属模板存活（防止产生不可达的孤儿锚点）</summary>
     private async Task<string?> EnsureTemplateAsync(string templateCode)
     {
-        var tpl = await _db.GetOneAsync<DocTemplate>(t => t.Code == templateCode);
-        return tpl.Data == null ? "所属模板不存在或已删除，请先登记模板" : null;
+        var tpl = await _core.GetDocTemplateByCodeAsync(templateCode);
+        return tpl == null ? "所属模板不存在或已删除，请先登记模板" : null;
     }
 
     /// <summary>

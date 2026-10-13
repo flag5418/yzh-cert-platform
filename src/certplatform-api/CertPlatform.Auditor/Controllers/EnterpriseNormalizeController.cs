@@ -190,10 +190,9 @@ namespace CertPlatform.Auditor.Controllers
             var stdFiles = await _core.GetDirectoryFilesByCodesAsync(stdFileCodes);
 
             // ③ 企业侧实例行（状态 + 产物）
-            var instances = (await _db.GetListAsync<StandardDirectoryFile>(x =>
-                x.EnterpriseCode == enterpriseCode &&
-                stdFileCodes.Contains(x.StandardFileCode!) &&
-                x.IsValid == 1)).Data ?? new List<StandardDirectoryFile>();
+            var instances = (await _core.GetDirectoryFilesByEnterpriseCodeAsync(enterpriseCode))
+                .Where(x => stdFileCodes.Contains(x.StandardFileCode!))
+                .ToList();
 
             return (null, new NormalizeScope
             {
@@ -1642,8 +1641,7 @@ namespace CertPlatform.Auditor.Controllers
 
                 for (var round = 0; round < 8 && need.Count > 0; round++)
                 {
-                    var batch = (await _db.GetListAsync<StandardDirectoryFolder>(x =>
-                        need.Contains(x.Code!))).Data ?? new List<StandardDirectoryFolder>();
+                    var batch = await _core.GetDirectoryFoldersByCodesAsync(need);
 
                     var next = new HashSet<string>(StringComparer.Ordinal);
                     foreach (var f in batch)
@@ -1787,9 +1785,9 @@ namespace CertPlatform.Auditor.Controllers
             var entCode = req.EnterpriseCode.Trim();
             var stgCode = req.StageCode?.Trim() ?? string.Empty;
 
-            var rows = (await _db.GetListAsync<StandardDirectoryFile>(x =>
-                x.EnterpriseCode == entCode && x.NormalizedTime != null)).Data
-                ?? new List<StandardDirectoryFile>();
+            var rows = (await _core.GetDirectoryFilesByEnterpriseCodeAsync(entCode))
+                .Where(x => x.NormalizedTime != null)
+                .ToList();
 
             if (!string.IsNullOrEmpty(stgCode))
                 rows = rows
@@ -2112,8 +2110,7 @@ namespace CertPlatform.Auditor.Controllers
             // ★ 企业存在性校验（2026-10-09 加）：本端点是**会新建实例行**的写口 ——
             //   企业 Code 写错就是往库里种孤儿行，代价远高于 run / fill-one 这类只读场景，
             //   值得这一次查询。（⛔ 别处没这道校验 ≠ 这里也不该有。）
-            var enterprise = (await _db.GetOneAsync<Enterprise>(x =>
-                x.Code == req.EnterpriseCode && x.IsValid == 1)).Data;
+            var enterprise = await _core.GetEnterpriseByCodeAsync(req.EnterpriseCode);
             if (enterprise == null)
                 return Ok(ApiResponse<object>.Fail("企业不存在或已失效，请重新选择"));
 
@@ -2137,10 +2134,9 @@ namespace CertPlatform.Auditor.Controllers
             var missing = codes.Where(c => !stdMap.ContainsKey(c)).ToList();
             if (missing.Count > 0)
             {
-                var extra = (await _db.GetListAsync<StandardDirectoryFile>(x =>
-                    missing.Contains(x.Code!) &&
-                    string.IsNullOrEmpty(x.EnterpriseCode) &&
-                    x.IsValid == 1)).Data ?? new List<StandardDirectoryFile>();
+                var extra = (await _core.GetDirectoryFilesByCodesAsync(missing))
+                    .Where(x => string.IsNullOrEmpty(x.EnterpriseCode))
+                    .ToList();
                 foreach (var g in extra.GroupBy(r => r.Code!, StringComparer.Ordinal))
                     stdMap[g.Key] = g.First();
             }
@@ -2317,10 +2313,9 @@ namespace CertPlatform.Auditor.Controllers
                 return Ok(ApiResponse<object>.Fail(ws.Error ?? "无法定位当前工作区"));
 
             // ① 企业侧实例行（一次批量查；⛔ 不逐文件查 —— N 个文件 = N 次往返）
-            var rows = (await _db.GetListAsync<StandardDirectoryFile>(x =>
-                x.EnterpriseCode == req.EnterpriseCode &&
-                codes.Contains(x.StandardFileCode!) &&
-                x.IsValid == 1)).Data ?? new List<StandardDirectoryFile>();
+            var rows = (await _core.GetDirectoryFilesByEnterpriseCodeAsync(req.EnterpriseCode))
+                .Where(x => codes.Contains(x.StandardFileCode!))
+                .ToList();
 
             // ⚠️ 同键可能有多版本 ⇒ 取版本号最大者（与 BuildScopeAsync 同口径）
             var instMap = rows
