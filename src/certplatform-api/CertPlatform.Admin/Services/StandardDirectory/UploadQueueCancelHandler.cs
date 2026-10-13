@@ -1,5 +1,6 @@
 
 using System.Text.Json;
+using CertPlatform.Shared.Domain.Scope;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
@@ -43,9 +44,16 @@ public class UploadQueueCancelHandler : IYzhQueueCancelHandler
             using var scope = _serviceProvider.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<IDbOrm>();
 
-            var files = (await db.GetListAsync<StandardDirectoryFile>(
-                x => x.TaskId == taskId && x.IsValid == 0
-                    && (x.ConvertStatus == "pending" || x.ConvertStatus == "converting"))).Data ?? new();
+            // ★ 1.B.6d-3：取数收口 CoreResourceQuery —— 按 TaskId 取全量文件（含禁用行），
+            //   再在内存按「IsValid==0 + 转换中间态」过滤。
+            // ⚠️ 修复既有缺陷：原 `GetListAsync(pred 含 x.IsValid == 0)` 走默认过滤（追加 IsValid=1）
+            //    ⇒ 谓词自相矛盾**恒返回 0 行**（队列取消的失败回填从未生效）。
+            //    实测证据：`cert_standard_directory_file` 23 行、禁用 0 行 ⇒ 缺陷休眠、零现网影响。
+            var core = scope.ServiceProvider.GetRequiredService<ICoreResourceQuery>();
+            var files = (await core.GetDirectoryFilesByTaskIdAsync(taskId, includeDisabled: true))
+                .Where(x => x.IsValid == 0
+                    && (x.ConvertStatus == "pending" || x.ConvertStatus == "converting"))
+                .ToList();
 
             foreach (var file in files)
             {

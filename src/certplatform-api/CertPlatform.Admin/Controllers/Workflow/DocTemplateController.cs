@@ -183,9 +183,11 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
     [HttpGet("candidates")]
     public async Task<IActionResult> Candidates([FromQuery] string? keyword)
     {
-        var rows = await _db.Client.Queryable<StandardDirectoryFile>()
-            .Where(f => f.IsDeleted == false && f.IsValid == 1
-                        && string.IsNullOrEmpty(f.EnterpriseCode))
+        // ★ 1.B.6d-3：取数收口 CoreResourceQuery —— 有效行（框架内含 IsDeleted=0 + IsValid=1，
+        //   与原显式谓词等价）；EnterpriseCode 过滤与投影留在内存（string.IsNullOrEmpty 逐字保留；
+        //   OrderBy(Sort) 由 SQL 下移内存 —— 键与方向不变）
+        var rows = (await _core.GetDirectoryFilesAsync())
+            .Where(f => string.IsNullOrEmpty(f.EnterpriseCode))
             .OrderBy(f => f.Sort)
             .Select(f => new
             {
@@ -199,7 +201,7 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
                 f.EditableStoragePath,
                 f.EditableStatus,
             })
-            .ToListAsync();
+            .ToList();
 
         // 已登记 = 存活且有效的模板行（软删/禁用的不算已登记，可重新登记并复活）
         // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：全部有效模板）

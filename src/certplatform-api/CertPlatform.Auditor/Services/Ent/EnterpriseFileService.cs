@@ -984,8 +984,8 @@ public class EnterpriseFileService
         }
 
         // 草稿文件夹行激活（槽位模式无草稿文件夹；指派模式沿用模板文件夹，故通常为空 —— 保留以防将来扩展）
-        var draftFolders = (await _db.GetListAsync<StandardDirectoryFolder>(
-            x => x.TaskId == taskId, includeDisabled: true)).Data ?? new List<StandardDirectoryFolder>();
+        // ★ 1.B.6d-3：取数收口 CoreResourceQuery（GetDirectoryFoldersByTaskIdAsync 即 includeDisabled 语义）
+        var draftFolders = await _core.GetDirectoryFoldersByTaskIdAsync(taskId);
         foreach (var folder in draftFolders)
         {
             folder.IsValid = 1;

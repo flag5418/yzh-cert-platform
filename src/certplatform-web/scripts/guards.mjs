@@ -1641,7 +1641,8 @@ const RULES = [
       // CertEnterpriseStage：EnterpriseFileService(3) · EnterpriseOriginalService(2) ·
       //   EnterpriseNormalizeController(1) · FillParamValueController(1) · ExpertTaskService(1) ·
       //   EnterpriseStageController(1) · EnterpriseOriginalAnalyzeExecutor(1) = 10 处
-      'CertPlatform.Auditor/Services/Ent/EnterpriseFileService.cs': 6,
+      // EFS 5 = 挂账 CertEnterpriseStage 3 + BY 例外 1（:1829 反向谓词）+ 裸查例外 1（:1514 历史原始行）
+      'CertPlatform.Auditor/Services/Ent/EnterpriseFileService.cs': 5,
       'CertPlatform.Auditor/Controllers/EnterpriseNormalizeController.cs': 4,
       'CertPlatform.Auditor/Services/Ent/EnterpriseOriginalService.cs': 2,
       'CertPlatform.Auditor/Controllers/FillParamValueController.cs': 5,
@@ -1655,13 +1656,15 @@ const RULES = [
       'CertPlatform.Admin/Services/Workflow/Skills/NcConclusionCalcSkill.cs': 1,
       // ---- ★ 死类冻结（2026-10-06 已从 DI 摘除，仅存对照 ⇒ ⛔ 不改造、⛔ 不得增长）----
       'CertPlatform.Admin/Services/Ent/Executors/EnterpriseDocNormalizationExecutor.cs': 6,
-      // ---- 其余 = 1.B.6d-3/4 可收敛存量（6d-2 BY 族已收口 2026-10-13；收敛后逐行下调 / 删除）----
-      'CertPlatform.Admin/Services/StandardDirectory/StandardDirectoryService.cs': 21,
-      'CertPlatform.Admin/Controllers/Workflow/DocTemplateController.cs': 7,
+      // ---- 其余 = 1.B.6d-4 可收敛 + 6d-3 一次性例外（2026-10-13 6d-3 已收口 16 处：
+      //      SDS 13 · DTC 1 · EFS 1 · UQC 1（全清删行）；收敛后逐行下调 / 删除）----
+      // SDS 剩 8 = BY 例外 4（:676/:916/:970/:2417）+ 裸查例外 4（folder FullPath / 卡死扫描 / 重试候选 / 回填粗筛）
+      'CertPlatform.Admin/Services/StandardDirectory/StandardDirectoryService.cs': 8,
+      // DTC 剩 6 = 6d-4 模板/提示 5 + stdFileCodes 裸查例外 1（:616 无默认过滤语义，含已删/禁用行）
+      'CertPlatform.Admin/Controllers/Workflow/DocTemplateController.cs': 6,
       'CertPlatform.Admin/Controllers/Workflow/DocFillPromptController.cs': 5,
       'CertPlatform.Admin/Controllers/Cert/FillParamDefController.cs': 3,
       'CertPlatform.Admin/Controllers/Workflow/StandardDocContractController.cs': 1,
-      'CertPlatform.Admin/Services/StandardDirectory/UploadQueueCancelHandler.cs': 1,
       'CertPlatform.Auditor/Controllers/DocumentFillController.cs': 3,
       'CertPlatform.Auditor/Controllers/EnterpriseController.cs': 2,
       'CertPlatform.Auditor/Services/AuditorRegisterService.cs': 2,

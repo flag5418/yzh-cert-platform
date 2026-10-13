@@ -256,6 +256,36 @@ public interface ICoreResourceQuery
     /// <summary>按文件夹 <c>Code</c> 集合批量取有效文件夹（空集合直接返回空，⛔ 不发查询）。</summary>
     Task<List<StandardDirectoryFolder>> GetDirectoryFoldersByCodesAsync(IEnumerable<string> folderCodes);
 
+    /// <summary>按 <c>TaskId</c> 取文件夹（<c>includeDisabled: true</c> 语义 —— 草稿文件夹 <c>IsValid=0</c>
+    /// 缺省过滤会永远查不到 ⇒ 激活空转。仍排除软删）。</summary>
+    Task<List<StandardDirectoryFolder>> GetDirectoryFoldersByTaskIdAsync(string taskId);
+
+    // ─────────── 写侧查重原始行（含软删 / 禁用 —— uk 不含 IsDeleted，复活语义需要全状态行）· 1.B.6d-3 ───────────
+
+    /// <summary>
+    /// 按「机构 × 标准 × 阶段」（可选企业维）取目录配置<b>原始行</b>（含软删 / 禁用）。
+    /// <para>★ 写侧查重 / 就地复活专用（<c>uk_org_ent_std_stage</c> 不含 <c>IsDeleted</c>）；
+    /// 读侧一律走 <see cref="GetDirectoryConfigsAsync"/>，⛔ 不要混用。</para>
+    /// <param name="enterpriseCode"><c>null</c> = 该维<b>不限</b>（机构级 ensure 只按三键）；
+    /// 空串 = 精确匹配 <c>EnterpriseCode = ''</c>。</param>
+    /// </summary>
+    Task<StandardDirectoryConfig?> FindDirectoryConfigRawAsync(
+        string orgCode, string standardCode, string stageCode, string? enterpriseCode = null);
+
+    /// <summary>
+    /// 同层同名文件夹查重<b>原始行</b>（含软删 / 禁用 —— <c>uk_cfg_parent_name</c> 不含 <c>IsDeleted</c>，
+    /// 命中已删行须就地复活）。
+    /// <param name="excludeFolderCode">改名场景排除自己（<c>null</c> = 不排除）。</param>
+    /// </summary>
+    Task<StandardDirectoryFolder?> FindDirectoryFolderRawAsync(
+        string configCode, string parentCode, string folderName, string? excludeFolderCode = null);
+
+    /// <summary>
+    /// 同目录同路径文件查重<b>原始行</b>（含软删 / 禁用 —— <c>uk_cfg_fullpath</c> 不含 <c>IsDeleted</c>，
+    /// 任何状态的行都必须复用否则撞唯一键）。
+    /// </summary>
+    Task<StandardDirectoryFile?> FindDirectoryFileRawByFullPathAsync(string configCode, string fullPath);
+
     /// <summary>
     /// 取标准文档模板。<paramref name="orgCode"/> / <paramref name="standardCode"/> /
     /// <paramref name="stageCode"/> 为 <c>null</c> = 该维<b>不限</b>；
@@ -741,6 +771,54 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
 
         var rows = await _db.GetListAsync<StandardDirectoryFolder>(x => codes.Contains(x.Code!));
         return rows.Data ?? new List<StandardDirectoryFolder>();
+    }
+
+    public async Task<List<StandardDirectoryFolder>> GetDirectoryFoldersByTaskIdAsync(string taskId)
+    {
+        if (string.IsNullOrWhiteSpace(taskId)) return new List<StandardDirectoryFolder>();
+
+        var tid = taskId;
+        // includeDisabled：草稿文件夹 IsValid=0，缺省过滤会永远查不到 ⇒ 激活空转
+        var rows = await _db.GetListAsync<StandardDirectoryFolder>(x => x.TaskId == tid, includeDisabled: true);
+        return rows.Data ?? new List<StandardDirectoryFolder>();
+    }
+
+    public async Task<StandardDirectoryConfig?> FindDirectoryConfigRawAsync(
+        string orgCode, string standardCode, string stageCode, string? enterpriseCode = null)
+    {
+        // ⚠️ orgCode ⛔ 不能做空白守卫 —— 平台通用模板回退就是 OrgCode = ""（必须能查）。
+        if (string.IsNullOrWhiteSpace(standardCode) || string.IsNullOrWhiteSpace(stageCode))
+            return null;
+
+        // 原始行 = ⛔ 不加 IsDeleted / IsValid 过滤（复活语义需要已删 / 禁用行）
+        var q = _db.Client.Queryable<StandardDirectoryConfig>()
+            .Where(x => x.OrgCode == orgCode
+                     && x.StandardCode == standardCode && x.StageCode == stageCode);
+        if (enterpriseCode != null) q = q.Where(x => x.EnterpriseCode == enterpriseCode);
+        return await q.FirstAsync();
+    }
+
+    public async Task<StandardDirectoryFolder?> FindDirectoryFolderRawAsync(
+        string configCode, string parentCode, string folderName, string? excludeFolderCode = null)
+    {
+        if (string.IsNullOrWhiteSpace(configCode) || string.IsNullOrWhiteSpace(folderName))
+            return null;
+
+        var q = _db.Client.Queryable<StandardDirectoryFolder>()
+            .Where(x => x.ConfigCode == configCode && x.ParentCode == parentCode
+                        && x.FolderName == folderName);
+        if (excludeFolderCode != null) q = q.Where(x => x.Code != excludeFolderCode);
+        return await q.FirstAsync();
+    }
+
+    public async Task<StandardDirectoryFile?> FindDirectoryFileRawByFullPathAsync(string configCode, string fullPath)
+    {
+        if (string.IsNullOrWhiteSpace(configCode) || string.IsNullOrWhiteSpace(fullPath))
+            return null;
+
+        return await _db.Client.Queryable<StandardDirectoryFile>()
+            .Where(x => x.ConfigCode == configCode && x.FullPath == fullPath)
+            .FirstAsync();
     }
 
     public async Task<List<DocTemplate>> GetDocTemplatesAsync(

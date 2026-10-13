@@ -488,11 +488,9 @@ public class StandardDirectoryService
         // ★ 2026-10-13：查重口径 = 唯一键原文（OrgCode + EnterpriseCode + StandardCode + StageCode）。
         //   ⚠️ 补 EnterpriseCode 是修一个既有缺陷：原口径漏了它 ⇒ 同机构同标准同阶段、不同企业的
         //     企业目录会被误判「已存在」，且复活分支不回写 EnterpriseCode ⇒ 复活出错误归属的行。
-        var existing = await _db.Client.Queryable<StandardDirectoryConfig>()
-            .Where(x => x.OrgCode == config.OrgCode
-                     && x.EnterpriseCode == config.EnterpriseCode
-                     && x.StandardCode == config.StandardCode && x.StageCode == config.StageCode)
-            .FirstAsync();
+        // ★ 1.B.6d-3：取数收口 CoreResourceQuery（原始行 = 含软删/禁用，复活语义需要）
+        var existing = await _core.FindDirectoryConfigRawAsync(
+            config.OrgCode, config.StandardCode, config.StageCode, config.EnterpriseCode);
         if (existing != null)
         {
             if (!existing.IsDeleted)
@@ -559,21 +557,13 @@ public class StandardDirectoryService
             return (false, "缺少业务键：阶段 StageCode", null);
 
         // ★ 2026-10-13 归属模型 V2：机构维度就在 OrgCode ⇒ 机构键可直接命中。
-        var query = () => _db.Client.Queryable<StandardDirectoryConfig>()
-            .Where(x => x.OrgCode == orgCode
-                     && x.StandardCode == standardCode && x.StageCode == stageCode);
-
-        var existing = await query().FirstAsync();
+        // ★ 1.B.6d-3：取数收口 CoreResourceQuery（原始行 = 含软删/禁用）
+        var existing = await _core.FindDirectoryConfigRawAsync(orgCode, standardCode, stageCode);
 
         // 兜底：前端传具体机构但该机构无自有模板 ⇒ 回退「平台通用模板」（OrgCode 为空）。
         //   ⛔ 不要回退到「任意机构」—— 那会让机构 A 命中机构 B 的模板。
         if (existing == null)
-        {
-            existing = await _db.Client.Queryable<StandardDirectoryConfig>()
-                .Where(x => x.OrgCode == ""
-                         && x.StandardCode == standardCode && x.StageCode == stageCode)
-                .FirstAsync();
-        }
+            existing = await _core.FindDirectoryConfigRawAsync("", standardCode, stageCode);
         if (existing != null && !existing.IsDeleted)
             return (true, null, existing);
 
@@ -586,12 +576,9 @@ public class StandardDirectoryService
         if (created.ok) return created;
 
         // 并发：另一请求刚插入 → 「已存在」→ 重读返回赢家行
-        var again = await query().FirstAsync();
+        var again = await _core.FindDirectoryConfigRawAsync(orgCode, standardCode, stageCode);
         if (again == null)
-            again = await _db.Client.Queryable<StandardDirectoryConfig>()
-                .Where(x => x.OrgCode == ""
-                         && x.StandardCode == standardCode && x.StageCode == stageCode)
-                .FirstAsync();
+            again = await _core.FindDirectoryConfigRawAsync("", standardCode, stageCode);
         if (again != null) return (true, null, again);
         return created;
     }
@@ -794,11 +781,10 @@ public class StandardDirectoryService
         folder.ParentCode ??= string.Empty; // 决策 ⑨：根 ParentCode 用 ''
 
         // 同层同名查重（Decision ⑬：唯一键不含 IsDeleted，已删行也参与查重 →
-        // 裸查 SqlSugar（不走 GetOneAsync 的 IsValid/软删过滤），项目无全局过滤器）
-        var duplicate = await _db.Client.Queryable<StandardDirectoryFolder>()
-            .Where(x => x.ConfigCode == folder.ConfigCode && x.ParentCode == folder.ParentCode
-                        && x.FolderName == folder.FolderName)
-            .FirstAsync();
+        // 裸查不含 IsValid/软删过滤，项目无全局过滤器）
+        // ★ 1.B.6d-3：取数收口 CoreResourceQuery（原始行 = 含软删/禁用）
+        var duplicate = await _core.FindDirectoryFolderRawAsync(
+            folder.ConfigCode ?? string.Empty, folder.ParentCode ?? string.Empty, folder.FolderName);
         if (duplicate != null)
         {
             // ★⑬/§11.1：命中的是**已删**行 → 就地复活（Code 不变，指向它的文件/规则链不失效）
@@ -862,10 +848,9 @@ public class StandardDirectoryService
         if (nameErr != null) return (false, nameErr);
 
         // 同层同名查重（排除自己）—— Decision ⑬：裸查含已删行
-        var duplicate = await _db.Client.Queryable<StandardDirectoryFolder>()
-            .Where(x => x.ConfigCode == existing.ConfigCode && x.ParentCode == existing.ParentCode
-                        && x.FolderName == input.FolderName && x.Code != folderCode)
-            .FirstAsync();
+        // ★ 1.B.6d-3：取数收口 CoreResourceQuery（原始行 = 含软删/禁用）
+        var duplicate = await _core.FindDirectoryFolderRawAsync(
+            existing.ConfigCode, existing.ParentCode, input.FolderName, folderCode);
         if (duplicate != null)
             return (false, $"同级已存在同名文件夹「{input.FolderName}」");
 
@@ -1057,10 +1042,12 @@ public class StandardDirectoryService
     /// <param name="stageCode">阶段 Code（空/空白 = 不过滤）</param>
     public async Task<List<StandardDirectoryFile>> GetTemplateFilesAsync(string? standardCode, string? stageCode)
     {
-        var all = await _db.GetListAsync<StandardDirectoryFile>(
-            x => string.IsNullOrEmpty(x.EnterpriseCode) && x.IsValid == 1);
+        // ★ 1.B.6d-3：取数收口 CoreResourceQuery —— 有效行（框架内含 IsDeleted=0 + IsValid=1，
+        //   与原显式 x.IsValid == 1 等价）；EnterpriseCode 过滤移到内存（string.IsNullOrEmpty 逐字保留）
+        var all = await _core.GetDirectoryFilesAsync();
 
-        return (all.Data ?? new List<StandardDirectoryFile>())
+        return all
+            .Where(x => string.IsNullOrEmpty(x.EnterpriseCode))
             .Where(x => string.IsNullOrWhiteSpace(standardCode)
                         || string.Equals(x.StandardCode, standardCode, StringComparison.OrdinalIgnoreCase))
             .Where(x => string.IsNullOrWhiteSpace(stageCode)
@@ -1524,9 +1511,8 @@ public class StandardDirectoryService
                 // 创建模式（决策 ⑦：复合 FileCode 已删，业务键即 Code）
                 // ★⑬/§11.1 + 静默丢行：同 FullPath 存在**任何状态**的行（已删 / 残留 pending）
                 //   必须复用 —— 直接 InsertAsync 撞 uk_cfg_fullpath → Result.Fail 被吞 → 行不落库。
-                var reuseFile = await _db.Client.Queryable<StandardDirectoryFile>()
-                    .Where(x => x.ConfigCode == configCode && x.FullPath == fullPath)
-                    .FirstAsync();
+                // ★ 1.B.6d-3：取数收口 CoreResourceQuery（原始行 = 含软删/禁用）
+                var reuseFile = await _core.FindDirectoryFileRawByFullPathAsync(configCode, fullPath);
 
                 StandardDirectoryFile newFile;
                 if (reuseFile != null)
@@ -1845,8 +1831,8 @@ public class StandardDirectoryService
 
         // 激活文件夹：IsValid=0→1, 清除 TaskId
         // includeDisabled：草稿文件夹 IsValid=0，缺省过滤会永远查不到 → 激活空转 → 目录文件列表全空
-        var folders = (await _db.GetListAsync<StandardDirectoryFolder>(
-            x => x.TaskId == taskId, includeDisabled: true)).Data ?? new();
+        // ★ 1.B.6d-3：取数收口 CoreResourceQuery（GetDirectoryFoldersByTaskIdAsync 即 includeDisabled 语义）
+        var folders = await _core.GetDirectoryFoldersByTaskIdAsync(taskId);
         foreach (var folder in folders)
         {
             folder.IsValid = 1;
@@ -1963,14 +1949,13 @@ public class StandardDirectoryService
         }
 
         // 删除此任务创建的空文件夹
-        var taskFolders = (await _db.Client.Queryable<StandardDirectoryFolder>()
-            .Where(x => x.TaskId == taskId && !x.IsDeleted)
-            .ToListAsync());
+        // ★ 1.B.6d-3：取数收口 CoreResourceQuery（框架 IsDeleted=0 与原 !x.IsDeleted 等价；
+        //   includeDisabled 语义 = 无 IsValid 过滤，与原裸查等价）
+        var taskFolders = await _core.GetDirectoryFoldersByTaskIdAsync(taskId);
         foreach (var folder in taskFolders)
         {
-            var fileCount = await _db.Client.Queryable<StandardDirectoryFile>()
-                .Where(x => x.FolderCode == folder.Code && x.IsValid == 1 && !x.IsDeleted)
-                .CountAsync();
+            // ★ 1.B.6d-3：既有方法（框架内含 IsDeleted=0 + IsValid=1，与原显式谓词逐字等价）
+            var fileCount = (await _core.GetDirectoryFilesByFolderCodeAsync(folder.Code)).Count;
             if (fileCount == 0)
                 await _db.Client.Deleteable<StandardDirectoryFolder>()
                     .Where(x => x.Code == folder.Code)
@@ -2336,9 +2321,8 @@ public class StandardDirectoryService
 
         // ★⑬/§11.1：uk_cfg_fullpath 不含 IsDeleted → 建前含已删查重，命中已删同名行就地复活
         //   （Code 不变 —— 提取规则 StandardFileCode / 队列引用的就是这个 Code）
-        var dup = await _db.Client.Queryable<StandardDirectoryFile>()
-            .Where(x => x.ConfigCode == file.ConfigCode && x.FullPath == file.FullPath)
-            .FirstAsync();
+        // ★ 1.B.6d-3：取数收口 CoreResourceQuery（原始行 = 含软删/禁用）
+        var dup = await _core.FindDirectoryFileRawByFullPathAsync(file.ConfigCode, file.FullPath);
         if (dup != null)
         {
             if (!dup.IsDeleted)
@@ -2791,8 +2775,8 @@ public class StandardDirectoryService
                 }
 
                 // 5. 激活任务内文件夹
-                var folders = (await _db.GetListAsync<StandardDirectoryFolder>(
-                    x => x.TaskId == task.TaskId, includeDisabled: true)).Data ?? new();
+                // ★ 1.B.6d-3：取数收口 CoreResourceQuery（GetDirectoryFoldersByTaskIdAsync 即 includeDisabled 语义）
+                var folders = await _core.GetDirectoryFoldersByTaskIdAsync(task.TaskId);
                 foreach (var fd in folders)
                 {
                     fd.IsValid = 1;
