@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using SqlSugar;
 using YZH.Core.Api.Models.Organization;
 using CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.Domain.Organization;
 using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Storage;
 using YZH.Core.DataBase.Services;
@@ -101,9 +102,14 @@ public class EnterpriseFileService
         if (!ws.Success || ws.Data == null)
             return new { Configured = false, Message = ws.Error ?? "无法定位当前工作区", Enterprises = new object[0] };
 
-        var enterprises = (await _db.GetListAsync<Enterprise>(
-            x => x.OrgCode == ws.Data.Code, includeDisabled: false)).Data ?? new List<Enterprise>();
-        enterprises = enterprises.Where(e => e.IsValid == 1).OrderBy(e => e.Sort).ThenBy(e => e.EnterpriseNo).ToList();
+        // ★ 1.B.6b（2026-10-13）：取数收口到 CoreResourceQuery（铁律 L5），
+        //   排序收口到 OrgStandardTreeAssembler.OrderEnterprises（排序口径唯一实现）。
+        //   ⚠️ 等价性：原写法 `includeDisabled: false` + 显式 `.Where(e => e.IsValid == 1)`
+        //      与入口内 GetListAsync 的默认过滤（IsDeleted=0 + IsValid=1）逐字等价；
+        //      排序链 `Sort → EnterpriseNo` 与原写法一致 ⇒ 行为不变。
+        var enterprises = OrgStandardTreeAssembler.OrderEnterprises(
+            await _core.GetEnterprisesAsync(ws.Data.Code),
+            e => e.Sort, e => e.EnterpriseNo);
 
         if (enterprises.Count == 0)
             return new { Configured = true, Message = (string?)null, Enterprises = new object[0] };

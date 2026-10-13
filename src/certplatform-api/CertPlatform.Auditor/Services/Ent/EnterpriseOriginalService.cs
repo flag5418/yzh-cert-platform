@@ -9,6 +9,8 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.Domain.Organization;
+using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Storage;
 using Microsoft.Extensions.Logging;
@@ -49,6 +51,9 @@ namespace CertPlatform.Auditor.Services.Ent
         private readonly IUserContext _user;
         private readonly ILogger<EnterpriseOriginalService> _logger;
 
+        /// <summary>核心资源检索唯一入口（铁律 L5）—— 机构/标准/阶段的取数只走这里。</summary>
+        private readonly ICoreResourceQuery _core;
+
         /// <summary>批次有效期（分钟）：init 后超时未 confirm 即作废，防悬空草稿行永久占位</summary>
         private const int TaskExpireMinutes = 30;
 
@@ -62,7 +67,8 @@ namespace CertPlatform.Auditor.Services.Ent
             QueueManager queueManager,
             WorkspaceContextService workspace,
             IUserContext user,
-            ILogger<EnterpriseOriginalService> logger)
+            ILogger<EnterpriseOriginalService> logger,
+            ICoreResourceQuery core)
         {
             _db = db;
             _storage = storage;
@@ -70,6 +76,7 @@ namespace CertPlatform.Auditor.Services.Ent
             _workspace = workspace;
             _user = user;
             _logger = logger;
+            _core = core;
         }
 
         // ========================================================
@@ -245,11 +252,16 @@ namespace CertPlatform.Auditor.Services.Ent
             if (!ws.Success || ws.Data == null)
                 return new { Configured = false, Message = ws.Error ?? "无法定位当前工作区", Nodes = new object[0] };
 
-            var enterprises = (await _db.GetListAsync<Enterprise>(x => x.OrgCode == ws.Data.Code)).Data
-                ?? new List<Enterprise>();
+            // ★ 1.B.6b（2026-10-13）：取数收口 CoreResourceQuery（铁律 L5），
+            //   排序收口 OrgStandardTreeAssembler（排序口径唯一实现）。
+            //   ⚠️ 有意修正（裁决 A，见 核心资源检索统一-设计-V1 §1.5）：企业排序
+            //      `Name` → `Sort → EnterpriseNo`（中文 Name 按字符编码序，不是拼音序）。
+            var enterprises = OrgStandardTreeAssembler.OrderEnterprises(
+                await _core.GetEnterprisesAsync(ws.Data.Code),
+                e => e.Sort, e => e.EnterpriseNo);
 
             var nodes = new List<object>();
-            foreach (var ent in enterprises.OrderBy(e => e.Name))
+            foreach (var ent in enterprises)
             {
                 var links = await _db.Client.Queryable<CertEnterpriseStage>()
                     .Where(x => x.EnterpriseCode == ent.Code && x.IsValid == 1 && !x.IsDeleted)
@@ -269,34 +281,25 @@ namespace CertPlatform.Auditor.Services.Ent
                     .Where(c => c != "")
                     .Distinct(StringComparer.Ordinal)
                     .ToList();
-                var stdRows = stdCodes.Count == 0
-                    ? new List<ISOStandard>()
-                    : await _db.Client.Queryable<ISOStandard>()
-                        .Where(x => stdCodes.Contains(x.Code) && x.IsValid == 1 && !x.IsDeleted)
-                        .ToListAsync() ?? new List<ISOStandard>();
-                // ⚠️ 排序在内存里做（⛔ 不在 SqlSugar 表达式里 OrderBy）。
-                //    Sort 是标准表自己的排序号，实测**两个标准都是 0**（并列）⇒ 只靠它排序结果不稳定，
-                //    会让「食品标准」排在「9001标准」前面（对 9001 为主的企业很别扭）。
-                //    故补两级确定性兜底：VersionYear（标准版本年，旧的在前）→ StandardCode。
-                //    ⚠️ 这只是**确定性**排序，不代表业务上的主次（业务主次未定义）。
-                stdRows = stdRows
-                    .OrderBy(x => x.Sort)
-                    .ThenBy(x => x.VersionYear)
-                    .ThenBy(x => x.StandardCode, StringComparer.Ordinal)
-                    .ToList();
+                // ★ 1.B.6b：取数收口 CoreResourceQuery（空集合入口内直接返回空，⛔ 不发查询）；
+                //   排序收口 OrderStandards —— `Sort → VersionYear → StandardCode` 三级兜底。
+                //   ⚠️ 有意修正（裁决 B，见设计 §1.5）：VersionYear 升序 → **降序（新版在前）**。
+                //      Sort 实测两个标准都是 0（并列）⇒ 靠 VersionYear 决定先后，方向即「新版在前」。
+                var stdRows = OrgStandardTreeAssembler.OrderStandards(
+                    await _core.GetStandardsByCodesAsync(stdCodes),
+                    x => x.Sort, x => x.VersionYear, x => x.StandardCode);
 
+                // ★ 1.B.6b：取数收口 + 排序收口（`Sort → StageCode`，补上 T3 早已有的确定性兜底）。
                 var stageCodes = links.Select(l => l.StageCode).Distinct().ToList();
-                var stages = stageCodes.Count == 0
-                    ? new List<CertStage>()
-                    : await _db.Client.Queryable<CertStage>()
-                        .Where(x => stageCodes.Contains(x.Code) && x.IsValid == 1 && !x.IsDeleted)
-                        .ToListAsync() ?? new List<CertStage>();
+                var stages = OrgStandardTreeAssembler.OrderStages(
+                    await _core.GetStagesByCodesAsync(stageCodes),
+                    s => s.Sort, s => s.StageCode);
 
                 var counts = await _db.Client.Queryable<EnterpriseOriginalFile>()
                     .Where(x => x.EnterpriseCode == ent.Code && !x.IsDeleted && x.IsValid == 1)
                     .ToListAsync() ?? new List<EnterpriseOriginalFile>();
 
-                var children = stages.OrderBy(s => s.Sort).Select(s =>
+                var children = stages.Select(s =>
                 {
                     // ★ 必须用 s.Code（GUID）而不是 s.StageCode（slug 如 jd01/03）：
                     //   EnterpriseOriginalFile.StageCode 存的是**阶段 Code（GUID）**
