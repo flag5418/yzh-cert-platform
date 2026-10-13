@@ -2057,9 +2057,8 @@ public class EnterpriseFileService
     private async Task<StandardDirectoryFile?> GetDraftRowAsync(string fileCode, string taskId)
     {
         if (string.IsNullOrWhiteSpace(fileCode) || string.IsNullOrWhiteSpace(taskId)) return null;
-        var r = await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.Code == fileCode && x.TaskId == taskId, includeDisabled: true);
-        return r.Data?.FirstOrDefault();
+        var rows = await _core.GetDirectoryFilesByTaskIdAsync(taskId, includeDisabled: true);
+        return rows.FirstOrDefault(x => x.Code == fileCode);
     }
 
     private async Task<UploadTask?> GetTaskAsync(string taskId)

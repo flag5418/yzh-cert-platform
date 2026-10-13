@@ -149,8 +149,8 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                 }
                 // editable / hybrid → 现有七步编排（下面不动）
 
-                var template = (await _db.GetOneAsync<DocTemplate>(x =>
-                    x.StandardFileCode == req.StandardFileCode && x.IsValid == 1)).Data;
+                var template = (await _core.GetDocTemplatesByStandardFileCodesAsync(
+                    new[] { req.StandardFileCode })).FirstOrDefault();
                 if (template == null)
                 {
                     // ⛔ 不是错误：规范化范围 = 「配了填写规则的空白文档」（60 §六之补三）

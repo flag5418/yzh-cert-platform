@@ -1368,18 +1368,16 @@ public class StandardDirectoryService
         if (config == null && !string.IsNullOrEmpty(manifest.OrgCode)
             && !string.IsNullOrEmpty(manifest.StandardCode) && !string.IsNullOrEmpty(manifest.PhaseCode))
         {
-            config = (await _db.GetOneAsync<StandardDirectoryConfig>(
-                x => x.OrgCode == manifest.OrgCode
-                  && x.StandardCode == manifest.StandardCode && x.StageCode == manifest.PhaseCode)).Data;
+            config = (await _core.GetDirectoryConfigsAsync(
+                manifest.OrgCode, manifest.StandardCode, manifest.PhaseCode)).FirstOrDefault();
         }
         // ★ 2026-10-13 归属模型 V2 兜底：manifest.OrgCode 是机构（前端树节点值），
         //   平台通用模板行 = OrgCode 空 ⇒ 按机构三键未命中时再按平台模板键查一次，防上传 Step1 断链。
         if (config == null && !string.IsNullOrEmpty(manifest.StandardCode)
             && !string.IsNullOrEmpty(manifest.PhaseCode))
         {
-            config = (await _db.GetOneAsync<StandardDirectoryConfig>(
-                x => x.OrgCode == ""
-                  && x.StandardCode == manifest.StandardCode && x.StageCode == manifest.PhaseCode)).Data;
+            config = (await _core.GetDirectoryConfigsAsync(
+                "", manifest.StandardCode, manifest.PhaseCode)).FirstOrDefault();
         }
         if (config == null)
             return (false, "目录配置不存在（请从目录树选择标准与阶段后重试）", null);
@@ -1411,9 +1409,8 @@ public class StandardDirectoryService
             var folderErr = ValidateFolderOrFileName(folder.Path.Split('/').Last(), "文件夹名");
             if (folderErr != null) return (false, folderErr, null);
 
-            var existing = (await _db.GetOneAsync<StandardDirectoryFolder>(
-                x => x.ConfigCode == configCode
-                    && x.FullPath == folder.Path && x.IsValid == 1)).Data;
+            var existing = (await _core.GetDirectoryFoldersAsync(new[] { configCode }))
+                .FirstOrDefault(x => x.FullPath == folder.Path);
 
             if (existing != null)
             {
@@ -1521,9 +1518,8 @@ public class StandardDirectoryService
                 ? folderMap[parentDir] : "";
 
             // 查找已有文件
-            var existingFile = (await _db.GetOneAsync<StandardDirectoryFile>(
-                x => x.ConfigCode == configCode
-                    && x.FullPath == fullPath && x.IsValid == 1)).Data;
+            var existingFile = (await _core.GetDirectoryFilesByConfigCodeAsync(configCode))
+                .FirstOrDefault(x => x.FullPath == fullPath);
 
             // ★ 路径唯一权威：PathBuilder（身份段 = 归属机构 + StandardCode + StageCode 原文）
             //   ⚠️ 2026-10-13 归属模型 V2：身份段 = config.OrgCode（机构 Code），与存量前缀一致

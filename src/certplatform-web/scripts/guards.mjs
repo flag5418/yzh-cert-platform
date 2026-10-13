@@ -1633,7 +1633,7 @@ const RULES = [
       // CertEnterpriseStage：EnterpriseFileService(3) · EnterpriseOriginalService(2) ·
       //   EnterpriseNormalizeController(1) · FillParamValueController(1) · ExpertTaskService(1) ·
       //   EnterpriseStageController(1) · EnterpriseOriginalAnalyzeExecutor(1) = 10 处
-      'CertPlatform.Auditor/Services/Ent/EnterpriseFileService.cs': 15,
+      'CertPlatform.Auditor/Services/Ent/EnterpriseFileService.cs': 14,
       'CertPlatform.Auditor/Controllers/EnterpriseNormalizeController.cs': 10,
       'CertPlatform.Auditor/Services/Ent/EnterpriseOriginalService.cs': 4,
       'CertPlatform.Auditor/Controllers/FillParamValueController.cs': 5,
@@ -1648,7 +1648,7 @@ const RULES = [
       // ---- ★ 死类冻结（2026-10-06 已从 DI 摘除，仅存对照 ⇒ ⛔ 不改造、⛔ 不得增长）----
       'CertPlatform.Admin/Services/Ent/Executors/EnterpriseDocNormalizationExecutor.cs': 6,
       // ---- 其余 = 1.B.6d-2/3/4 可收敛存量（收敛后逐行下调 / 删除）----
-      'CertPlatform.Admin/Services/StandardDirectory/StandardDirectoryService.cs': 41,
+      'CertPlatform.Admin/Services/StandardDirectory/StandardDirectoryService.cs': 37,
       'CertPlatform.Admin/Controllers/Workflow/DocTemplateController.cs': 7,
       'CertPlatform.Admin/Controllers/Workflow/DocFillPromptController.cs': 5,
       'CertPlatform.Admin/Controllers/Workflow/DocTemplateAnchorController.cs': 5,
@@ -1656,7 +1656,7 @@ const RULES = [
       'CertPlatform.Admin/Controllers/System/QueueMonitorController.cs': 3,
       'CertPlatform.Admin/Controllers/Workflow/StandardDocContractController.cs': 1,
       'CertPlatform.Admin/Services/StandardDirectory/UploadQueueCancelHandler.cs': 1,
-      'CertPlatform.Auditor/Services/Ent/Normalize/DocumentFillOrchestrator.cs': 5,
+      'CertPlatform.Auditor/Services/Ent/Normalize/DocumentFillOrchestrator.cs': 4,
       'CertPlatform.Auditor/Services/WorkspaceContextService.cs': 4,
       'CertPlatform.Auditor/Controllers/DocumentFillController.cs': 3,
       'CertPlatform.Auditor/Controllers/DocFillPreviewController.cs': 2,
