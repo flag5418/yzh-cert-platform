@@ -848,7 +848,10 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
     /// </remarks>
     public async Task<List<object>> GetConfiguredRulesAsync()
     {
-        var result = await _db.GetListAsync<ConfiguredRuleView>();
+        // ★ 2026-10-13：有效性判据显式落在消费侧 —— 视图 v_cert_configured_rules 已按
+        // 26-数据库视图设计规范-V1 §三 去掉 WHERE 内固化的 IsValid = 1，改为暴露 RuleIsValid 列。
+        // 这里补上等价的谓词，线上可见行与改造前逐行一致（A/B 已核对）。
+        var result = await _db.GetListAsync<ConfiguredRuleView>(x => x.RuleIsValid == 1);
         // D-5 契约：显式经 ConfiguredRuleRow 输出 camelCase；直接序列化实体会是 PascalCase，
         // 前端读 r.standardFileCode 全部 undefined → 状态 map 为空 → 树标签恒为「未配置」
         var rows = (result.Data ?? new List<ConfiguredRuleView>())

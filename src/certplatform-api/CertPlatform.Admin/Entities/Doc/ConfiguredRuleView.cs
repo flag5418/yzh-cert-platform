@@ -62,6 +62,15 @@ namespace CertPlatform.Admin.Entities.Doc
         [SugarColumn(ColumnName = "Status")]
         public string Status { get; set; } = "";
 
+        /// <summary>
+        /// 规则启用状态（来自 cert_doc_extraction_rule.IsValid）
+        /// <para>★ 2026-10-13 按 26-数据库视图设计规范-V1 §三 改造：视图不再把 IsValid 固化进 WHERE，
+        /// 改为以本列暴露，由消费侧（DocExtractionRuleService.GetConfiguredRulesAsync）显式判 == 1。</para>
+        /// <para>⚠️ 列名刻意不叫 IsValid：本类继承 BaseEntity，用 IsValid 会被基类语义/ORM 判据混淆。</para>
+        /// </summary>
+        [SugarColumn(ColumnName = "RuleIsValid")]
+        public int RuleIsValid { get; set; } = 1;
+
         // 视图只读，禁用增删改相关字段
         [SugarColumn(IsIgnore = true)]
         public bool IsDeleted { get; set; }
