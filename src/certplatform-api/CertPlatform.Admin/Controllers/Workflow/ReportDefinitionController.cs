@@ -74,10 +74,10 @@ namespace CertPlatform.Admin.Controllers.Workflow
         protected override bool StrictConfigLoad => true;
 
         // ========================================================
-        // ★ 归属收口（2026-10-12 终裁，规则文档 §2.8(f)）：
-        //   cert_report_section 8 行已迁 OrgCode = 'yzh-std-env'（后台标准级）。
-        //   读：前端无论传机构还是空，一律改写为 StdEnv —— 否则静默 0 行；
-        //   写：新增 / 更新一律强制 StdEnv —— 否则新建行又是机构、与存量不一致。
+        // ★ 归属收口（2026-10-13 归属模型 V2）：cert_report_section 8 行已迁
+        //   OrgCode = ''（平台标准级 = 两列都空）。
+        //   读：前端无论传机构还是空，一律改写为 '' —— 否则静默 0 行；
+        //   写：新增 / 更新一律强制 '' —— 否则新建行又是机构、与存量不一致。
         // ========================================================
 
         /// <summary>查询判据改写：任何 OrgCode 过滤值 → <see cref="''"/></summary>

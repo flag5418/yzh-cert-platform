@@ -87,10 +87,10 @@ public class ValidationRuleController
     }
 
     // ========================================================
-    // ★ 归属收口（2026-10-12 终裁，规则文档 §2.8(f)）：
-    //   cert_validation_rule 8 行已迁 OrgCode = 'yzh-std-env'（后台标准级）。
-    //   读：/filter 的 OrgCode 过滤（设计器树、nc-config 右表）一律改写为 StdEnv；
-    //   写：新增 / 更新一律强制 StdEnv（⚠️ 自定义 Update 直调 Entity.Update，
+    // ★ 归属收口（2026-10-13 归属模型 V2）：cert_validation_rule 8 行已迁
+    //   OrgCode = ''（平台标准级 = 两列都空）。
+    //   读：/filter 的 OrgCode 过滤（设计器树、nc-config 右表）一律改写为 ''；
+    //   写：新增 / 更新一律强制 ''（⚠️ 自定义 Update 直调 Entity.Update，
     //       不经 OnBeforeUpdate 钩子，必须在此强制）。
     // ========================================================
 

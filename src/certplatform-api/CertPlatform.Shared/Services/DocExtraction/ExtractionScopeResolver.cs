@@ -130,7 +130,8 @@ public class ExtractionScopeResolver
             .ToList();
 
         // ③ 反查模板行 → 模板配置 → 机构（模板行 = 非企业行）
-        //   ★ 2026-10-13 判据收敛：标准域 = EnterpriseCode 空，⛔ 不再用机构常量（守卫 A-R11）
+        //   ★ 2026-10-13 判据收敛：模板行 = EnterpriseCode 空（OrgScope.IsEnterpriseRow），
+        //     ⛔ 不再用机构常量（yzh-std-env 已废除，守卫 A-R10）
         var tplRows = (await _db.GetListAsync<StandardDirectoryFile>(
             x => string.IsNullOrEmpty(x.EnterpriseCode))).Data
             ?? new List<StandardDirectoryFile>();

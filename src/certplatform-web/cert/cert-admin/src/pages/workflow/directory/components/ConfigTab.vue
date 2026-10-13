@@ -255,8 +255,9 @@ onMounted(async () => {
     >
       <el-form :model="form" label-width="100px">
         <el-form-item label="归属">
-          <!-- ★ 2026-10-12 终裁：目录模板是后台标准级（yzh-std-env），机构不再参与归属 -->
-          <el-input :model-value="'平台模板（后台标准级）'" disabled />
+          <!-- ★ 2026-10-13 归属模型 V2：目录配置归属 = 机构 Code（OrgCode）；
+               空 = 平台通用模板（不参与文件路径）。机构 Code 由入口（机构树节点）预设，此处只读展示 -->
+          <el-input :model-value="orgLabel(form.orgCode)" disabled />
         </el-form-item>
         <el-form-item label="标准">
           <el-select

@@ -52,10 +52,10 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
     /// <summary>S2③ 提取结果版本店（归档/回活/读取唯一口）</summary>
     private readonly EnterpriseExtractionResultStore _resultStore;
 
-    // ★ 2026-10-12 常量统一：本类原 `YzhStandardEnterpriseCode` 别名、以及旧 `YzhVirtualEnterprise`
-    //   常量**均已删除** —— 全仓「标准域」标记唯一常量 = `''`（值 yzh-std-env；
-    //   定义处 CertPlatform.Shared/Domain/Scope/CoreOrgCodes.cs；字面量唯一由守卫 A-R9 保证）。
-    //   ⛔ 不要再在本类内重建别名：别名 = 第二个字面量出口 = 下次改值必漏一处。
+    // ★ 2026-10-13 归属模型 V2：本类原 `YzhStandardEnterpriseCode` 别名、旧 `YzhVirtualEnterprise`
+    //   常量、以及 `CoreOrgCodes.StdEnv`（`yzh-std-env`）**均已删除** ——
+    //   平台标准级 = **两列都空**（`OrgCode` 空 且 `EnterpriseCode` 空），⛔ 不再用任何常量标记。
+    //   ⛔ 不要再在本类内重建别名 / 常量：别名 = 第二个字面量出口 = 下次改值必漏一处。
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -614,15 +614,10 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
         var rule = await GetRuleByFileAsync(standardFileCode);
         if (rule == null) return null;
 
-        // 读取标准样例域提取结果（B-08 字段值 / B-09 表格行），保存后重新进入可完整回显
-        // ★ 2026-10-13 判据收敛：读侧 = 非企业行（EnterpriseCode 空）
-        // 🚧 待收口（2026-10-13 发现，必须与本批一起裁决）：
-        //   本表 C# 属性名是 EnterpriseCode，但映射的 DB 列是 **OrgCode**，且该列的
-        //   **写侧**仍是 `yzh-std-env`（SyncExtractionResultToB08B09Async 的默认参
-        //   `enterpriseCode = ''`，唯一调用方 :290 不传参）。
-        //   ⇒ 现在「写 yzh-std-env / 读 ''」**不一致**：保存规则后重新进入会回显不到，
-        //     且 :729/:732 的物理删除删不掉旧行（会撞唯一键）。
-        //   ⛔ 表当前 0 行，尚未暴露。两条收口路径见 归属判据收敛与机构专用列-设计-V1.md §五。
+        // 读取平台标准级样例域提取结果（B-08 字段值 / B-09 表格行），保存后重新进入可完整回显
+        // ★ 2026-10-13 归属模型 V2（已收口 Task #33）：
+        //   ① DB 列已改名 `OrgCode` → `EnterpriseCode`（SQL §4），实体属性名与列名一致；
+        //   ② 写侧默认参 `enterpriseCode = ""`（见 :329）⇒ **写读同为「非企业行」**，回显一致。
         var b08Rows = await _db.Client.Queryable<ExtractionResult>()
             .Where(x => string.IsNullOrEmpty(x.EnterpriseCode) && x.StandardFileCode == standardFileCode && !x.IsDeleted)
             .Select(x => new B08Row { FieldCode = x.FieldCode, ExtractedValue = x.ExtractedValue })

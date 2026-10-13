@@ -44,7 +44,7 @@ namespace CertPlatform.Shared.Entities.Dir
         /// （机构 / 平台模板行）。
         ///
         /// <para>★ <b>唯一分类判据</b>：非空 ⇒ 企业行（<c>OrgScope.IsEnterpriseRow</c>）。
-        /// ⛔ <b>不要</b>把机构值写进本列（那是两个维度的错位 —— 守卫 <b>A-R11</b> 会拦）。</para>
+        /// ⛔ <b>不要</b>把机构值写进本列（机构 / 企业是两个维度，写错会让判据整体失准）。</para>
         /// <para>⛔ 禁 NULL（P13，2026-09-28）：uk 对 NULL 不生效，NULL/常量双口径必出脏数据。</para>
         /// <para>唯一键 <c>uk_org_ent_std_stage(OrgCode, EnterpriseCode, StandardCode, StageCode)</c>（P16 四列）。</para>
         /// </summary>

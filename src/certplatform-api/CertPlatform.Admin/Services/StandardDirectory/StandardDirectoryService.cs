@@ -1083,10 +1083,10 @@ public class StandardDirectoryService
     /// 「关联标准文件 Code → 模板行 Code」（见 <see cref="StandardDirectoryFile.StandardFileCode"/> 注释）。
     /// ⛔ 不要改成查企业行 —— 配置期没有企业上下文，且那样会让「标准要求」变成「某企业的现状」。</para>
     ///
-    /// <para><b>★ 2026-10-13 口径统一（重要，修订 10-12 版）</b>：模板行判据 = <c>EnterpriseCode</c> <b>为空</b>
-    /// （语义入口 <c>OrgScope.IsEnterpriseRow</c>）。⛔ <b>不再是</b>机构常量
-    /// （<c>''</c> 或旧 <c>YZH-STD-ENT</c>）—— <b>机构与企业是两个维度</b>，
-    /// 机构值不得填进企业列（守卫 <b>A-R11</b>）。</para>
+    /// <para><b>★ 2026-10-13 口径统一（归属模型 V2）</b>：模板行判据 = <c>EnterpriseCode</c> <b>为空</b>
+    /// （语义入口 <c>OrgScope.IsEnterpriseRow</c>）。⛔ <b>不再</b>用机构常量
+    /// （<c>yzh-std-env</c> / <c>YZH-STD-ENT</c>，均已废除，守卫 <b>A-R10</b>）——
+    /// <b>机构与企业是两个维度</b>，机构值不得填进企业列。</para>
     ///
     /// <para><b>⚠️ 实测状态（2026-10-12）</b>：本表当前共 23 行，<b>全部是「机构标准目录行」</b>
     /// （<c>OrgCode = &lt;机构 Code&gt;</c>、<c>EnterpriseCode = ''</c>、有 <c>StoragePath</c>，
@@ -1377,8 +1377,8 @@ public class StandardDirectoryService
                 x => x.OrgCode == manifest.OrgCode
                   && x.StandardCode == manifest.StandardCode && x.StageCode == manifest.PhaseCode)).Data;
         }
-        // ★ 2026-10-12 终裁兜底：manifest.OrgCode 是机构（前端树节点值），模板行已迁
-        //   'yzh-std-env' ⇒ 按机构三键未命中时再按后台模板键查一次，防上传 Step1 断链。
+        // ★ 2026-10-13 归属模型 V2 兜底：manifest.OrgCode 是机构（前端树节点值），
+        //   平台通用模板行 = OrgCode 空 ⇒ 按机构三键未命中时再按平台模板键查一次，防上传 Step1 断链。
         if (config == null && !string.IsNullOrEmpty(manifest.StandardCode)
             && !string.IsNullOrEmpty(manifest.PhaseCode))
         {

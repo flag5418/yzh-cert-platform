@@ -229,7 +229,7 @@ public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
 
     /// <summary><b>版本历史</b>：同一 <c>PromptCode</c> 的全部版本（含已软删），按版本降序。</summary>
     /// <remarks>
-    /// <b>★ 可见范围与 <c>resolve</c> 逐字一致</b>（<c>OrgCode = 'yzh-std-env'</c> 或命中查询机构）——
+    /// <b>★ 可见范围与 <c>resolve</c> 逐字一致</b>（<c>OrgCode</c> 为空 = 平台标准级，或命中查询机构）——
     /// 前端「编辑生效版本」先 resolve 拿 <c>Picked.Code</c>，再回本端点取**整行**提交 update；
     /// 两处范围不一致时会出现「resolve 选中的行在 versions 里查不到」⇒ 编辑无从保存。
     /// </remarks>

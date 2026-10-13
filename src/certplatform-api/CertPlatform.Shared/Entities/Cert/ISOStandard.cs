@@ -40,12 +40,11 @@ namespace CertPlatform.Shared.Entities.Cert
         public string? Remark { get; set; }
 
         /// <summary>
-        ///     ★ <b>机构归属</b>（`OrgCode` 判据铁律 —— 见
+        ///     ★ <b>机构归属</b>（归属模型 V2 —— 见
         ///     <c>docs/30-项目规则/跨端共享与核心资源检索规则-V1.md</c> §二）。
-        ///     <para>后台建立的标准级数据 ⇒ <c>''</c>（<c>'yzh-std-env'</c>）；
-        ///     企业专属 ⇒ 该企业 <c>Code</c>。</para>
-        ///     <para>⛔ <b>不要</b>用 <c>NULL</c> / <c>''</c> 表示「后台」；
-        ///     判断归属一律调 <c>OrgScope.IsBackendBuilt(...)</c>（守卫 <b>A-R8</b> 会拦自写判据）。</para>
+        ///     <para>本列 = <b>机构 Code</b>（该行归属的认证机构）；<b>空 = 平台标准级</b>
+        ///     （本表无 <c>EnterpriseCode</c> 列 ⇒ 只有「机构专属 / 平台级」两态）。</para>
+        ///     <para>⛔ 旧常量 <c>yzh-std-env</c> / <c>YZH-STD-ENT</c> <b>已废除</b>（守卫 <b>A-R10</b>）。</para>
         ///     <para>⚠️ 本列此前<b>未在实体声明</b>（DB 有列、实体无字段）⇒ 铁律无法生效；
         ///     2026-10-12 补声明。</para>
         /// </summary>

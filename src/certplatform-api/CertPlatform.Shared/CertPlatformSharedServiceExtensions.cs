@@ -59,8 +59,9 @@ public static class CertPlatformSharedServiceExtensions
         // ★ 铁律 L5「一个业务概念一个检索入口」：核心资源（机构 + 标准 + 阶段 及其派生的
         //   NC 规则 / 章节规则 / 填写规则 / 提取规则）的**取数**只允许在本接口内实现；
         //   端内只允许「投影」。守卫 A-R6 拦端内直查。
-        // ★ 判据唯一：OrgCode 归属判断一律走 OrgScope（守卫 A-R8）；
-        //   常量 'yzh-std-env' 唯一出处 = ''（守卫 A-R9）。
+        // ★ 判据唯一（归属模型 V2）：归属判断一律走 OrgScope
+        //   （IsEnterpriseRow 为唯一分类判据；IsOrgRow / IsPlatformLevel 配合）；
+        //   ⛔ 旧常量 'yzh-std-env' / 'YZH-STD-ENT' 已废除（守卫 A-R10）。
         // ★ 生命周期：持 IDbOrm（Scoped）⇒ 必须 AddScoped。
         // 规则全文：docs/30-项目规则/跨端共享与核心资源检索规则-V1.md
         services.AddScoped<CertPlatform.Shared.Domain.Scope.ICoreResourceQuery,

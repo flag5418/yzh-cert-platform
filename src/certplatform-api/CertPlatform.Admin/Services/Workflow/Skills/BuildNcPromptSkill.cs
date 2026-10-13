@@ -331,9 +331,9 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
 
         /// <summary>
         /// 取 nc_judge 模板。
-        /// <para><b>★ 取数口径（`OrgCode` 判据铁律 §2.2）</b>：机构专属优先 → 后台标准级回落。
-        /// 后台标准级 = <see cref="''"/>（虚拟机构 `yzh-std-env`）；
-        /// ⛔ 不写字符串字面量（守卫 <b>A-R9</b>），⛔ 不写 `OrgCode == ""` / `IsNullOrEmpty`（守卫 <b>A-R8</b>）。</para>
+        /// <para><b>★ 取数口径（归属模型 V2 §2.0）</b>：机构专属优先 → 平台标准级回落。
+        /// 平台标准级 = <c>OrgCode</c> 为空（两列都空）；
+        /// ⛔ 旧常量 <c>yzh-std-env</c> 已废除（守卫 <b>A-R10</b>）。</para>
         /// </summary>
         private static async Task<NcJudgePrompt?> LoadJudgeTemplateAsync(IDbOrm db, string org)
         {

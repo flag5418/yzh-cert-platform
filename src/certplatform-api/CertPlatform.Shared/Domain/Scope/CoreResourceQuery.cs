@@ -30,15 +30,16 @@ namespace CertPlatform.Shared.Domain.Scope;
 /// <c>NcConcludePrompt</c> / <c>DirectoryTemplate</c> / <c>FileRequirement</c>
 /// 待阶段 2/3 下沉后再纳入（<c>Shared</c> ⛔ 不能引 <c>Admin</c>）。</para>
 ///
-/// <para><b>⚠️ 机构判据</b>：本接口内的 <c>OrgCode</c> 过滤一律用 <see cref="''"/>
-/// 常量（⛔ 不用 <c>NULL</c> / <c>''</c>）；内存判断用 <see cref="OrgScope"/>。</para>
+/// <para><b>⚠️ 归属判据（归属模型 V2）</b>：本接口内的 SQL 谓词以 <c>x.OrgCode == ""</c>
+/// 表达「平台标准级」（= <b>两列都空</b>；⛔ 旧常量 <c>yzh-std-env</c> 已废除）；
+/// 内存判断一律走 <see cref="OrgScope"/>（<c>IsEnterpriseRow</c> 为唯一分类判据）。</para>
 /// </summary>
 public interface ICoreResourceQuery
 {
     // ──────────────────────────── 标准 ────────────────────────────
 
     /// <summary>
-    /// 取「后台标准级」标准（<c>OrgCode == 'yzh-std-env'</c>）；
+    /// 取「平台标准级」标准（<c>OrgCode</c> 为空 = 两列都空）；
     /// 给了 <paramref name="enterpriseCode"/> 时<b>并上</b>该企业的专属标准。
     /// </summary>
     Task<List<ISOStandard>> GetStandardsAsync(string? enterpriseCode = null);
@@ -86,7 +87,7 @@ public interface ICoreResourceQuery
     // ─────────────────────── 填写规则（参数定义 / 提示词）───────────────────────
 
     /// <summary>
-    /// 取后台参数定义（<c>OrgCode == 'yzh-std-env'</c>）。
+    /// 取平台标准级参数定义（<c>OrgCode</c> 为空 = 平台级）。
     /// <list type="bullet">
     /// <item><paramref name="standardCode"/> / <paramref name="stageCode"/> 为 <c>null</c> = 该维<b>不限</b>（不过滤）；</item>
     /// <item>传入值（含空串）= 取「通配（<c>列 == ""</c>）+ 等值」两组 —— 与端内既有谓词逐字一致。</item>
@@ -94,7 +95,7 @@ public interface ICoreResourceQuery
     /// </summary>
     Task<List<FillParamDef>> GetFillParamDefsAsync(string? standardCode = null, string? stageCode = null);
 
-    /// <summary>取填写提示词。<paramref name="orgCode"/> 缺省 = 后台标准级（<c>'yzh-std-env'</c>）。</summary>
+    /// <summary>取填写提示词。<paramref name="orgCode"/> 缺省 = 平台标准级（<c>OrgCode</c> 为空）。</summary>
     Task<List<DocFillPrompt>> GetDocFillPromptsAsync(string? orgCode = null);
 
     /// <summary>按提示词版本行 <c>Code</c> 单查（未命中返回 <c>null</c>）。</summary>
@@ -102,7 +103,7 @@ public interface ICoreResourceQuery
 
     // ──────────────────────────── 提取规则 ────────────────────────────
 
-    /// <summary>取文档提取规则。<paramref name="orgCode"/> 缺省 = 后台标准级（<c>'yzh-std-env'</c>）。</summary>
+    /// <summary>取文档提取规则。<paramref name="orgCode"/> 缺省 = 平台标准级（<c>OrgCode</c> 为空）。</summary>
     Task<List<DocExtractionRule>> GetDocExtractionRulesAsync(string? orgCode = null);
 
     /// <summary>按规则 <c>Code</c> 单查提取规则（未命中返回 <c>null</c>）。</summary>

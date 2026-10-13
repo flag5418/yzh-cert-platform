@@ -145,11 +145,10 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         }
 
         /// <summary>
-        /// 取判定规则：机构专属优先 → 后台标准级回落，再逐级匹配
-        /// <para><b>★ 取数口径（`OrgCode` 判据铁律 §2.2）</b>：同时取「机构专属」与
-        /// 「后台标准级（<see cref="''"/> = `yzh-std-env`）」两类行，
-        /// 机构专属优先。⛔ 不写字符串字面量（守卫 <b>A-R9</b>），⛔ 不写
-        /// `OrgCode == ""` / `IsNullOrEmpty`（守卫 <b>A-R8</b>）。</para>
+        /// 取判定规则：机构专属优先 → 平台标准级回落，再逐级匹配
+        /// <para><b>★ 取数口径（归属模型 V2 §2.0）</b>：同时取「机构专属」与
+        /// 「平台标准级（<c>OrgCode</c> 为空）」两类行，
+        /// 机构专属优先。⛔ 旧常量 <c>yzh-std-env</c> 已废除（守卫 <b>A-R10</b>）。</para>
         /// <para>优先级：</para>
         /// <list type="number">
         /// <item>(OrgCode, StandardCode, PhaseCode) 精确</item>
