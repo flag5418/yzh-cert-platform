@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Entities.Dir;
@@ -26,8 +27,9 @@ namespace CertPlatform.Shared.Domain.Scope;
 /// 守卫 <b>A-R6</b> 会拦下对下列实体的端内直查。</para>
 ///
 /// <para><b>★ 覆盖范围（2026-10-13 阶段 1.B 扩充后）</b>：已覆盖「机构 + 标准 + 阶段」<b>核心域</b>
-/// 的 <b>15 类实体</b>（含 <c>CertificationBody</c> / <c>Enterprise</c> /
-/// <c>StandardDirectoryConfig</c> / <c>StandardDirectoryFolder</c> / <c>DocTemplate</c>）。
+/// 的 <b>18 类实体</b>（含 <c>CertificationBody</c> / <c>Enterprise</c> /
+/// <c>StandardDirectoryConfig</c> / <c>StandardDirectoryFolder</c> / <c>DocTemplate</c> /
+/// <c>ValidationRule</c>（章节规则，2026-10-13 收口））。
 ///
 /// <para>⏸ <b>挂账 3 类</b>（实体未下沉 ⇒ 等阶段 2/3 收口，<c>Shared</c> ⛔ 不能引 <c>Admin</c>/<c>Auditor</c>）：
 /// <c>ConclusionRule</c> / <c>NcJudgePrompt</c> / <c>NcConcludePrompt</c>
@@ -232,6 +234,24 @@ public interface ICoreResourceQuery
     /// （空集合直接返回空，⛔ 不发查询）。<b>不排序</b>。
     /// </summary>
     Task<List<DocTemplate>> GetDocTemplatesByStandardFileCodesAsync(IEnumerable<string> standardFileCodes);
+
+    // ─────────── 章节 / NC 检查规则（cert_validation_rule）· 2026-10-13 阶段 1.B ───────────
+
+    /// <summary>
+    /// 按 <c>Code</c> 取单条检查规则（空 <c>Code</c> 返回 <c>null</c>，⛔ 不发查询）。
+    /// <para>⚠️ <paramref name="includeDisabled"/> = <c>true</c> 时跳过 <c>IsValid</c> 过滤 ——
+    /// <b>规则快照 / 复活分支专用</b>（任务创建时冻结的规则，停用后仍须可按快照执行）；
+    /// 其余场景一律走默认过滤，⛔ 不要滥用。</para>
+    /// </summary>
+    Task<ValidationRule?> GetClauseRuleByCodeAsync(string code, bool includeDisabled = false);
+
+    /// <summary>
+    /// 按「阶段」或「<c>Code</c> 集合」批量取<b>有效</b>检查规则
+    /// （框架 <c>GetListAsync</c> 内含 <c>IsDeleted=0</c> + <c>IsValid=1</c> ⇒ 谓词处 ⛔ 不重复写）。
+    /// <para>两维<b>都为空</b> = 取全部有效行；给了 <paramref name="codes"/> 时以它为准
+    /// （空集合直接返回空，⛔ 不发查询）。</para>
+    /// </summary>
+    Task<List<ValidationRule>> GetClauseRulesAsync(string? phaseCode = null, IEnumerable<string>? codes = null);
 }
 
 /// <summary>
@@ -629,5 +649,39 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
 
         var rows = await _db.GetListAsync<DocTemplate>(x => codes.Contains(x.StandardFileCode!));
         return rows.Data ?? new List<DocTemplate>();
+    }
+
+    // ─────────── 章节 / NC 检查规则（cert_validation_rule）· 2026-10-13 阶段 1.B ───────────
+
+    public async Task<ValidationRule?> GetClauseRuleByCodeAsync(string code, bool includeDisabled = false)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return null;
+        var c = code;
+        var rows = await _db.GetListAsync<ValidationRule>(x => x.Code == c, includeDisabled: includeDisabled);
+        return rows.Data?.FirstOrDefault();
+    }
+
+    public async Task<List<ValidationRule>> GetClauseRulesAsync(string? phaseCode = null, IEnumerable<string>? codes = null)
+    {
+        if (codes != null)
+        {
+            var set = new List<string>();
+            foreach (var c in codes)
+                if (!string.IsNullOrWhiteSpace(c)) set.Add(c);
+            if (set.Count == 0) return new List<ValidationRule>();
+
+            var byCodes = await _db.GetListAsync<ValidationRule>(x => set.Contains(x.Code!));
+            return byCodes.Data ?? new List<ValidationRule>();
+        }
+
+        if (phaseCode != null)
+        {
+            var p = phaseCode;
+            var byPhase = await _db.GetListAsync<ValidationRule>(x => x.PhaseCode == p);
+            return byPhase.Data ?? new List<ValidationRule>();
+        }
+
+        var all = await _db.GetListAsync<ValidationRule>();
+        return all.Data ?? new List<ValidationRule>();
     }
 }

@@ -237,11 +237,10 @@ public class GapDetector
     {
         if (isNc)
         {
-            // ⚠️ ValidationRule 只继承 BaseEntity（无 ISoftDelete / IIsValid）⇒ 启用判据是 IsActive。
-            //    这违反铁律九（启用字段唯一 = IsValid），属独立已知问题（README P0-19），
-            //    此处与 ExpertTaskService.ResolveScope 保持同口径，不在本次修。
-            var rules = (await _db.GetListAsync<ValidationRule>(x =>
-                itemCodes.Contains(x.Code!) && x.IsValid == 1)).Data ?? new List<ValidationRule>();
+            // ★ 取数走 CoreResourceQuery（A-R6：核心资源禁端内直查）。
+            //   框架默认过滤 IsDeleted=0 + IsValid=1，与原显式 `x.IsValid == 1` 谓词等价。
+            //   （ValidationRule 已于 2026-10-08 实现 IIsValid/ISoftDelete —— 旧注释「仅 IsActive」已过期。）
+            var rules = await _core.GetClauseRulesAsync(codes: itemCodes);
 
             return rules.Select(r => new ItemShape
             {

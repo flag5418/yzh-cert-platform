@@ -626,17 +626,20 @@ function runAR5() {
 /**
  * A-R6：★ 端内禁「核心资源实体」裸直查。
  *
- * 判据：`CertPlatform.{Admin,Auditor}` 下出现
+ * 判据：`CertPlatform.{Admin,Auditor,Enterprise}` 下出现
  *   `GetListAsync<T>` / `GetOneAsync<T>` / `CountAsync<T>` / `Queryable<T>` / `SqlQueryAsync<T>`
  * 且 `T` ∈ 核心资源实体集 ⇒ 违规。取数只允许走 `Shared/Domain/Scope/CoreResourceQuery.cs`。
  *
  * ★ 铁律 L5（一个业务概念一个检索入口）：**同一个 WHERE 出现在第二处 ⇒ 就是违规。**
  *   端内只允许「投影」：选字段 / 加派生列 / 排序分页 / 组装 DTO。
  *
- * ⚠️ 存量走 debt 白名单豁免，随接线逐条删除；删完即代表全站达标。
+ * ★ 存量豁免 = `debtBudget`（**按文件预算，只准减不准增**，2026-10-13 起）：
+ *   原「文件级 debt」有盲区 —— 文件在白名单内 ⇒ 该文件**新增**任何核心资源直查也静默通过。
+ *   现改为 `文件 → 允许的最大命中数`：超出即失败；减掉一处请同步下调预算；全清后删行。
  * ⛔ 不加实体到本清单 = 该实体处于守卫盲区。
  */
 const CORE_RESOURCE_ENTITIES = [
+  // ── 原 9 类（2026-10-12 首批纳管）──
   'ISOStandard',
   'ISOClause',
   'CertStage',
@@ -646,6 +649,18 @@ const CORE_RESOURCE_ENTITIES = [
   'DocFillPrompt',
   'DocExtractionRule',
   'StandardDirectoryFile',
+  // ── 核心域全口径扩充 5 类（2026-10-13 用户裁决「不留盲区」，原守卫盲区）──
+  'StandardDirectoryFolder',
+  'StandardDirectoryConfig',
+  'Enterprise',
+  'DocTemplate',
+  'CertificationBody',
+  // ── 挂账 3 类（实体未下沉 ⇒ 阶段 2/3 收口；`Shared` ⛔ 不能引 `Admin`/`Auditor`，A-R3）──
+  'CertEnterpriseStage',
+  'FileRequirement',
+  'ConclusionRule',
+  // ── 2026-10-13 追加：ValidationRule（实体**已在** Shared/Entities/Cert ⇒ 非挂账，4 处直查已收口）──
+  'ValidationRule',
 ]
 
 function runAR6() {
@@ -653,7 +668,7 @@ function runAR6() {
   const pattern = new RegExp(
     `\\b(?:GetListAsync|GetOneAsync|CountAsync|Queryable|SqlQueryAsync|GetPageListAsync)\\s*<\\s*(?:${CORE_RESOURCE_ENTITIES.join('|')})\\s*>`,
   )
-  for (const root of ['CertPlatform.Admin', 'CertPlatform.Auditor']) {
+  for (const root of ['CertPlatform.Admin', 'CertPlatform.Auditor', 'CertPlatform.Enterprise']) {
     const dir = join(API_ROOT, root)
     if (!existsSync(dir)) continue
     for (const file of listCsFiles(dir)) {
@@ -1602,35 +1617,53 @@ const RULES = [
     type: 'custom',
     desc: '端内禁核心资源实体裸直查（只允许 Shared/Domain/Scope/CoreResourceQuery —— 铁律 L5）',
     run: runAR6,
-    // ★ 2026-10-12 首次启用：实测存量 23 文件 / 131 处（按文件路径子串匹配，见下 debt）。
-    //   接线一处 ⇒ 从本清单删一行；删完 ⇒ 规则转正（零容忍）。
+    // ★ 2026-10-12 首次启用：实测存量 23 文件 / 131 处（按文件路径子串匹配）。
+    //   接线一处 ⇒ 下调该文件预算；一个文件全清 ⇒ 从本清单删一行；删完 ⇒ 规则转正（零容忍）。
     //   2026-10-12 接线第一轮（13 处 ISOStandard）后：22 文件 / 118 处。
     //   2026-10-12 接线第二轮（31 处 StandardDirectoryFile 清晰站：Code 单查/集合、ConfigCode、FolderCode）后：
     //   剩 20 文件 / 87 处；已全清移出：ExpertResultController.cs · PromptWorkbenchService.cs · StandardDocContractController.cs。
     //   2026-10-12 接线第三轮（31 处：includeDisabled 站 12 + CertStage/ISOClause 站 13 + 提取/填写规则站 6）后：
     //   剩 16 文件 / 56 处；已全清移出：QueueMonitorController.cs · ExpertTaskService.cs · GapFillService.cs · IsStdFileMissingSkill.cs。
+    //   2026-10-13 扩容轮：实体清单 9→18 类（核心域全口径 + ValidationRule）+ 豁免改**按文件预算**
+    //   （原文件级 debt 的盲区：文件在白名单内 ⇒ 新增直查也静默通过）。当前 26 文件 / 138 处。
     //   ⚠️ 判据：`Shared/Domain/Scope/CoreResourceQuery.cs` 是**唯一**核心资源检索入口；
     //      端内只允许「投影」（选字段 / 派生列 / 排序分页 / 组装 DTO），⛔ 不许自己写 WHERE。
-    debt: [
-      // ---- CertPlatform.Admin（8 文件）----
-      'CertPlatform.Admin/Controllers/Cert/FillParamDefController.cs',
-      'CertPlatform.Admin/Controllers/Workflow/DocFillPromptController.cs',
-      'CertPlatform.Admin/Controllers/Workflow/DocTemplateController.cs',
-      'CertPlatform.Admin/Services/DocExtraction/DocExtractionRuleService.AI.cs',
-      'CertPlatform.Admin/Services/DocExtraction/DocExtractionRuleService.cs',
-      'CertPlatform.Admin/Services/Ent/Executors/EnterpriseDocNormalizationExecutor.cs',
-      'CertPlatform.Admin/Services/StandardDirectory/StandardDirectoryService.cs',
-      'CertPlatform.Admin/Services/StandardDirectory/UploadQueueCancelHandler.cs',
-      // ---- CertPlatform.Auditor（8 文件）----
-      'CertPlatform.Auditor/Controllers/DocumentFillController.cs',
-      'CertPlatform.Auditor/Controllers/EnterpriseNormalizeController.cs',
-      'CertPlatform.Auditor/Controllers/FillParamValueController.cs',
-      'CertPlatform.Auditor/Services/Ent/EnterpriseExtractTaskExecutor.cs',
-      'CertPlatform.Auditor/Services/Ent/EnterpriseFileService.cs',
-      'CertPlatform.Auditor/Services/Ent/EnterpriseOriginalService.cs',
-      'CertPlatform.Auditor/Services/Ent/Normalize/DocumentFillOrchestrator.cs',
-      'CertPlatform.Auditor/Services/Expert/GapDetector.cs',
-    ],
+    debtBudget: {
+      // ---- ★ 挂账（实体未下沉 ⇒ 阶段 2/3 收口；本文件内含其直查）----
+      // CertEnterpriseStage：EnterpriseFileService(3) · EnterpriseOriginalService(2) ·
+      //   EnterpriseNormalizeController(1) · FillParamValueController(1) · ExpertTaskService(1) ·
+      //   EnterpriseStageController(1) · EnterpriseOriginalAnalyzeExecutor(1) = 10 处
+      'CertPlatform.Auditor/Services/Ent/EnterpriseFileService.cs': 15,
+      'CertPlatform.Auditor/Controllers/EnterpriseNormalizeController.cs': 10,
+      'CertPlatform.Auditor/Services/Ent/EnterpriseOriginalService.cs': 4,
+      'CertPlatform.Auditor/Controllers/FillParamValueController.cs': 5,
+      'CertPlatform.Auditor/Services/Expert/ExpertTaskService.cs': 2,
+      'CertPlatform.Auditor/Controllers/EnterpriseStageController.cs': 1,
+      'CertPlatform.Auditor/Services/Ent/EnterpriseOriginalAnalyzeExecutor.cs': 1,
+      // FileRequirement：DocExtractionRuleService(1) + .AI(1) = 2 处
+      'CertPlatform.Admin/Services/DocExtraction/DocExtractionRuleService.cs': 7,
+      'CertPlatform.Admin/Services/DocExtraction/DocExtractionRuleService.AI.cs': 1,
+      // ConclusionRule：NcConclusionCalcSkill(1) = 1 处
+      'CertPlatform.Admin/Services/Workflow/Skills/NcConclusionCalcSkill.cs': 1,
+      // ---- ★ 死类冻结（2026-10-06 已从 DI 摘除，仅存对照 ⇒ ⛔ 不改造、⛔ 不得增长）----
+      'CertPlatform.Admin/Services/Ent/Executors/EnterpriseDocNormalizationExecutor.cs': 6,
+      // ---- 其余 = 1.B.6d-2/3/4 可收敛存量（收敛后逐行下调 / 删除）----
+      'CertPlatform.Admin/Services/StandardDirectory/StandardDirectoryService.cs': 41,
+      'CertPlatform.Admin/Controllers/Workflow/DocTemplateController.cs': 7,
+      'CertPlatform.Admin/Controllers/Workflow/DocFillPromptController.cs': 5,
+      'CertPlatform.Admin/Controllers/Workflow/DocTemplateAnchorController.cs': 5,
+      'CertPlatform.Admin/Controllers/Cert/FillParamDefController.cs': 3,
+      'CertPlatform.Admin/Controllers/System/QueueMonitorController.cs': 3,
+      'CertPlatform.Admin/Controllers/Workflow/StandardDocContractController.cs': 1,
+      'CertPlatform.Admin/Services/StandardDirectory/UploadQueueCancelHandler.cs': 1,
+      'CertPlatform.Auditor/Services/Ent/Normalize/DocumentFillOrchestrator.cs': 5,
+      'CertPlatform.Auditor/Services/WorkspaceContextService.cs': 4,
+      'CertPlatform.Auditor/Controllers/DocumentFillController.cs': 3,
+      'CertPlatform.Auditor/Controllers/DocFillPreviewController.cs': 2,
+      'CertPlatform.Auditor/Controllers/EnterpriseController.cs': 2,
+      'CertPlatform.Auditor/Services/AuditorRegisterService.cs': 2,
+      'CertPlatform.Auditor/Services/Expert/GapDetector.cs': 1,
+    },
   },
   {
     id: 'A-R7',
@@ -1686,10 +1719,19 @@ for (const rule of RULES.filter((r) => r.type === 'cross' || r.type === 'custom'
     crossSkipped.push(rule)
     continue
   }
-  const kept = rule.debt?.length
-    ? violations.filter((v) => !rule.debt.some((d) => v.file.includes(d)))
-    : violations
-  if (rule.debt?.length && violations.length > kept.length)
+  let kept = violations
+  if (rule.debtBudget) {
+    // ★ 按文件预算（只准减不准增）：文件命中数 ≤ 预算 ⇒ 豁免；> 预算 ⇒ 新增直查，失败。
+    const counts = new Map()
+    for (const v of violations) counts.set(v.file, (counts.get(v.file) || 0) + 1)
+    kept = violations.filter((v) => {
+      const key = Object.keys(rule.debtBudget).find((d) => v.file.includes(d))
+      return !(key && counts.get(v.file) <= rule.debtBudget[key])
+    })
+  } else if (rule.debt?.length) {
+    kept = violations.filter((v) => !rule.debt.some((d) => v.file.includes(d)))
+  }
+  if (violations.length > kept.length)
     customDebtHits.push({ rule, hits: violations.length - kept.length })
   if (kept.length) failures.push({ rule, violations: kept })
   else if (REPORT_ONLY) console.log(`✓ ${rule.id} ${rule.desc}`)

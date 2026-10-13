@@ -449,9 +449,9 @@ namespace CertPlatform.Auditor.Services.Expert
             if (taskType == ExpertTaskConst.TaskTypeNcCheck)
             {
                 // ★ 2026-10-08：ValidationRule 已实现 IIsValid（铁律九），启用判据 = IsValid（不再是 IsActive）
-                var rules = (await _db.GetListAsync<ValidationRule>(x =>
-                    x.PhaseCode == stageCode && x.IsValid == 1)).Data
-                    ?? new List<ValidationRule>();
+                // ★ 取数走 CoreResourceQuery（A-R6）：框架默认过滤（IsDeleted=0 + IsValid=1）
+                //   与原显式 `x.IsValid == 1` 谓词等价。
+                var rules = await _core.GetClauseRulesAsync(phaseCode: stageCode);
 
                 if (standardCodes is { Count: > 0 })
                     rules = rules.Where(x => standardCodes.Contains(x.StandardCode)).ToList();
@@ -888,11 +888,11 @@ namespace CertPlatform.Auditor.Services.Expert
             string orgCode, TaskCreateRequest req, TaskCandidateDto c,
             string userCode, string? userName, DateTime now)
         {
-            // ★ 用 includeDisabled: true 取规则（2026-10-08）：实体实现 IIsValid 后 GetOneAsync 会套
+            // ★ 用 includeDisabled: true 取规则（2026-10-08）：实体实现 IIsValid 后默认查询会套
             //   IsValid=1 过滤；本处为规则快照 upsert（含「复活」已禁用实体行的分支），
             //   过滤会导致停用规则的任务落不到快照、条款号/严重度全空。
-            var rule = (await _db.GetListAsync<ValidationRule>(
-                x => x.Code == c.ItemCode, includeDisabled: true)).Data?.FirstOrDefault();
+            //   取数入口 = CoreResourceQuery（A-R6）。
+            var rule = await _core.GetClauseRuleByCodeAsync(c.ItemCode, includeDisabled: true);
 
             // ★ 条款号 / 条款标题必须**显式 JOIN** `cert_iso_clause` 取。
             //   `ValidationRule.ClauseNumber` / `ClauseTitle` 是 `[SugarColumn(IsIgnore = true)]`
