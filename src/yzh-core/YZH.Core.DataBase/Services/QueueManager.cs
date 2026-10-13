@@ -313,23 +313,30 @@ public class QueueManager
         await ReapStaleTasksAsync(orm);
 
         // 领取下一个 pending（MySQL FOR UPDATE SKIP LOCKED）
-        var sql = @"SELECT * FROM yzh_queue_task
-                    WHERE Status = 'pending'
-                      AND RetryCount < MaxRetryCount
-                      AND (NextRetryAt IS NULL OR NextRetryAt <= NOW())
-                    ORDER BY Priority DESC, CreateTime ASC
+        // ★ T5（2026-10-13）同队列串行：同 QueueCode 存在 processing 则不领
+        //   —— 对齐旧 ExpertTaskQueueRunner「无 running 才领」（D10 特性保全）。
+        //   serial 组 = QueueCode；跨队列照常并行，不受此约束。
+        var sql = @"SELECT * FROM yzh_queue_task t
+                    WHERE t.Status = 'pending'
+                      AND t.RetryCount < t.MaxRetryCount
+                      AND (t.NextRetryAt IS NULL OR t.NextRetryAt <= NOW())
+                      AND NOT EXISTS (
+                          SELECT 1 FROM yzh_queue_task r
+                          WHERE r.QueueCode = t.QueueCode AND r.Status = 'processing' AND r.IsDeleted = 0)
+                    ORDER BY t.Priority DESC, t.CreateTime ASC, t.Seq ASC
                     LIMIT 1 FOR UPDATE SKIP LOCKED";
         var result = await orm.SqlQueryAsync<YzhQueueTask>(sql);
         var task = result.Data?.FirstOrDefault();
         if (task == null) return null;
 
-        // 更新为 processing + 租约（业务键 Code — 准则 A）
+        // 乐观抢占（业务键 Code — 准则 A）：只有仍为 pending 才拿得到（affected != 1 ⇒ 被并发 worker 抢走，让出）
         var now = DateTime.Now;
         var updateSql = @"UPDATE yzh_queue_task
                          SET Status = 'processing', LockedAt = @lockedAt, LockedBy = @lockedBy,
                              ProcessTime = @processTime, LockedUntil = @lockedUntil, NextRetryAt = NULL
-                         WHERE Code = @code";
-        await orm.SqlExecuteAsync(updateSql, new { lockedAt = now, lockedBy = workerId, processTime = now, lockedUntil = now.AddMinutes(_leaseMinutes), code = task.Code });
+                         WHERE Code = @code AND Status = 'pending'";
+        var claim = await orm.SqlExecuteAsync(updateSql, new { lockedAt = now, lockedBy = workerId, processTime = now, lockedUntil = now.AddMinutes(_leaseMinutes), code = task.Code });
+        if (!claim.Success || claim.Data != 1) return null;
 
         task.Status = "processing";
         task.LockedAt = now;
