@@ -15,7 +15,6 @@ using CertPlatform.Shared.Office.Word;
 using CertPlatform.Shared.Office.Excel;
 using CertPlatform.Shared.Storage;
 using CertPlatform.Shared.Fill;
-using CertPlatform.Shared.Domain.Scope;
 using YZH.Core.Stand.Models.Entity;
 using CertPlatform.Shared.Fill.Ai;
 using CertPlatform.Shared.Services.Ent;
@@ -82,9 +81,10 @@ namespace CertPlatform.Admin.Services.Ent.Executors
                 var entInfo = CertPlatform.Shared.Services.Fill.EnterpriseInfoMapper.ToInfo(ent);
 
                 // 2. 获取当前标准下所有需要处理的文件清单
-                // ⚠️ 模板行标记为 CoreOrgCodes.StdEnv
+                // ★ 2026-10-13 判据收敛：模板文件定义行 = 非企业行（EnterpriseCode 空）
+                //   —— 语义入口 OrgScope.IsEnterpriseRow；SqlSugar 表达式内用等价写法
                 var stdFiles = (await _db.GetListAsync<StandardDirectoryFile>(x => 
-                    x.EnterpriseCode == CoreOrgCodes.StdEnv && 
+                    string.IsNullOrEmpty(x.EnterpriseCode) && 
                     x.StandardCode == payload.StandardCode &&
                     x.InstanceState != "archived" &&
                     x.IsValid == 1)).Data ?? new List<StandardDirectoryFile>();
@@ -96,7 +96,7 @@ namespace CertPlatform.Admin.Services.Ent.Executors
                 var config = (await _db.GetOneAsync<StandardDirectoryConfig>(x => 
                     x.StandardCode == payload.StandardCode && 
                     x.StageCode == payload.StageCode && 
-                    x.EnterpriseCode == CoreOrgCodes.StdEnv &&
+                    string.IsNullOrEmpty(x.EnterpriseCode) &&
                     x.IsValid == 1)).Data;
                 
                 var orgCode = config?.OrgCode ?? "";

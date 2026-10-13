@@ -611,16 +611,24 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
         var rule = await GetRuleByFileAsync(standardFileCode);
         if (rule == null) return null;
 
-        // 读取 YZH 标准企业提取结果（B-08 字段值 / B-09 表格行），保存后重新进入可完整回显
+        // 读取标准样例域提取结果（B-08 字段值 / B-09 表格行），保存后重新进入可完整回显
+        // ★ 2026-10-13 判据收敛：读侧 = 非企业行（EnterpriseCode 空）
+        // 🚧 待收口（2026-10-13 发现，必须与本批一起裁决）：
+        //   本表 C# 属性名是 EnterpriseCode，但映射的 DB 列是 **OrgCode**，且该列的
+        //   **写侧**仍是 `yzh-std-env`（SyncExtractionResultToB08B09Async 的默认参
+        //   `enterpriseCode = CoreOrgCodes.StdEnv`，唯一调用方 :290 不传参）。
+        //   ⇒ 现在「写 yzh-std-env / 读 ''」**不一致**：保存规则后重新进入会回显不到，
+        //     且 :729/:732 的物理删除删不掉旧行（会撞唯一键）。
+        //   ⛔ 表当前 0 行，尚未暴露。两条收口路径见 归属判据收敛与机构专用列-设计-V1.md §五。
         var b08Rows = await _db.Client.Queryable<ExtractionResult>()
-            .Where(x => x.EnterpriseCode == CoreOrgCodes.StdEnv && x.StandardFileCode == standardFileCode && !x.IsDeleted)
+            .Where(x => string.IsNullOrEmpty(x.EnterpriseCode) && x.StandardFileCode == standardFileCode && !x.IsDeleted)
             .Select(x => new B08Row { FieldCode = x.FieldCode, ExtractedValue = x.ExtractedValue })
             .ToListAsync();
         var b08Map = b08Rows.GroupBy(x => x.FieldCode, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().ExtractedValue ?? "", StringComparer.OrdinalIgnoreCase);
 
         var b09Rows = await _db.Client.Queryable<TableExtractionResult>()
-            .Where(x => x.EnterpriseCode == CoreOrgCodes.StdEnv && x.StandardFileCode == standardFileCode)
+            .Where(x => string.IsNullOrEmpty(x.EnterpriseCode) && x.StandardFileCode == standardFileCode)
             .OrderBy(x => x.TableIndex)
             .Select(x => new B09Row { TableIndex = x.TableIndex, ExtractedJson = x.ExtractedJson })
             .ToListAsync();
@@ -726,10 +734,10 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
 
         // 提取结果同步删除（物理删除，与 save 逻辑对齐）
         await _db.Client.Deleteable<ExtractionResult>()
-            .Where(x => x.EnterpriseCode == CoreOrgCodes.StdEnv && x.StandardFileCode == standardFileCode)
+            .Where(x => string.IsNullOrEmpty(x.EnterpriseCode) && x.StandardFileCode == standardFileCode)
             .ExecuteCommandAsync();
         await _db.Client.Deleteable<TableExtractionResult>()
-            .Where(x => x.EnterpriseCode == CoreOrgCodes.StdEnv && x.StandardFileCode == standardFileCode)
+            .Where(x => string.IsNullOrEmpty(x.EnterpriseCode) && x.StandardFileCode == standardFileCode)
             .ExecuteCommandAsync();
 
         await _db.DeleteByCodeAsync<DocExtractionRule>(rule.Code);
@@ -805,7 +813,7 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
             // 只标「有活跃结果可作废」的行：completed 才有结果；pending/skipped 本来就无结果
             if (row.ExtractStatus != EnterpriseExtractStatus.Completed) continue;
             if (string.IsNullOrEmpty(row.EnterpriseCode)) continue;
-            if (row.EnterpriseCode == CoreOrgCodes.StdEnv) continue;   // 模板行（虚拟企业域）不标
+            if (OrgScope.IsBackendBuilt(row.EnterpriseCode)) continue;   // 机构值误入企业列（异常行）不标
             if (!orgByCfg.TryGetValue(row.ConfigCode ?? "", out var org) || org != rule.OrgCode) continue;
 
             var ent = row.EnterpriseCode!;

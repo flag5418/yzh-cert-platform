@@ -142,7 +142,7 @@ export interface DocFillPromptVersion {
 // ==================== 端点 ====================
 
 /**
- * 可登记的空白模板候选（来源 = 标准目录里 `EnterpriseCode = CoreOrgCodes.StdEnv` 的模板行）。
+ * 可登记的空白模板候选（来源 = 标准目录里 `EnterpriseCode` 为空的模板行）。
  *
  * ⚠️ 实测：168 个模板行里 143 个 `.doc` + 11 个 `.xls`，而填写引擎只认
  * `.docx`/`.xlsx` ⇒ **登记的是「归一产物」**（`EditableStoragePath`），

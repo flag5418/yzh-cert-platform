@@ -172,8 +172,8 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
     // ════════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// <b>可登记的宿主标准文件</b>：<c>cert_standard_directory_file</c> 中 <c>EnterpriseCode = CoreOrgCodes.StdEnv</c>
-    /// 的<b>模板文件定义行</b>，标记哪些已登记模板。
+    /// <b>可登记的宿主标准文件</b>：<c>cert_standard_directory_file</c> 中 <c>EnterpriseCode</c> <b>为空</b>
+    /// 的<b>模板文件定义行</b>（不属于任何企业），标记哪些已登记模板。
     ///
     /// <para><b>★ 为什么还要返回 <c>Editable*</c> 四列（实测教训）</b>：库里 168 个模板行中
     /// <b>143 个是 <c>.doc</c>、11 个是 <c>.xls</c></b>，而填写引擎只认 <c>.docx</c> / <c>.xlsx</c>。
@@ -185,7 +185,7 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
     {
         var rows = await _db.Client.Queryable<StandardDirectoryFile>()
             .Where(f => f.IsDeleted == false && f.IsValid == 1
-                        && f.EnterpriseCode == CoreOrgCodes.StdEnv)
+                        && string.IsNullOrEmpty(f.EnterpriseCode))
             .OrderBy(f => f.SortOrder)
             .Select(f => new
             {
@@ -271,9 +271,9 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         if (file == null)
             return Ok(ApiResponse<object>.Fail("标准目录文件不存在或已删除"));
 
-        if (file.EnterpriseCode != CoreOrgCodes.StdEnv)
+        if (OrgScope.IsEnterpriseRow(file.EnterpriseCode))
             return Ok(ApiResponse<object>.Fail(
-                $"该行不是模板文件定义行（EnterpriseCode 应为 {CoreOrgCodes.StdEnv}），不能作为填写模板。"));
+                "该行不是模板文件定义行（EnterpriseCode 应留空 = 不属于任何企业），不能作为填写模板。"));
 
         // ★ 可用字节：归一产物优先
         var storagePath = !string.IsNullOrWhiteSpace(file.EditableStoragePath)
@@ -354,9 +354,9 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         if (fileRow == null)
             return Ok(ApiResponse<object>.Fail("标准目录文件不存在或已删除"));
 
-        if (fileRow.EnterpriseCode != CoreOrgCodes.StdEnv)
+        if (OrgScope.IsEnterpriseRow(fileRow.EnterpriseCode))
             return Ok(ApiResponse<object>.Fail(
-                $"该行不是模板文件定义行（EnterpriseCode 应为 {CoreOrgCodes.StdEnv}），不能上传空白模板。"));
+                "该行不是模板文件定义行（EnterpriseCode 应留空 = 不属于任何企业），不能上传空白模板。"));
 
         // ★ 身份段经唯一作用域入口推导（⛔ 不在此另写一份 —— 两套口径必然漂移）
         var scope = await _extraction.ResolveRuleScopeAsync(fileRow.Code);

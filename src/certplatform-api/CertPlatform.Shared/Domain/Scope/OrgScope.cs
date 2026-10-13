@@ -3,12 +3,19 @@ using System;
 namespace CertPlatform.Shared.Domain.Scope;
 
 /// <summary>
-/// ★★ <b>`OrgCode` 判据唯一入口</b> —— 回答「这一行数据是谁的」这个问题。
+/// ★★ <b>归属判据唯一入口</b> —— 回答「这一行数据是谁的」这个问题。
 ///
 /// <para><b>规则</b>：全仓任何地方要判断「这是后台标准级数据吗」/「这是某企业的数据吗」，
 /// <b>一律调本类</b>；⛔ <b>不许</b>自己写 <c>OrgCode == ""</c> / <c>IsNullOrEmpty(OrgCode)</c> /
 /// <c>IsNullOrWhiteSpace(OrgCode)</c>（守卫 <b>A-R8</b> 会拦，白名单仅
 /// <c>CertPlatform.Shared/Domain/Scope/**</c>）。</para>
+///
+/// <para><b>★ 覆盖两个列</b>（⛔ 是<b>两个维度</b>，不要混用）：</para>
+/// <list type="bullet">
+///   <item><b>机构列 <c>OrgCode</c></b> ⇒ <see cref="IsBackendBuilt"/>（后台标准级）/
+///         <see cref="IsLegacyUnassigned"/>（历史空值形态）。</item>
+///   <item><b>企业列 <c>EnterpriseCode</c></b> ⇒ <see cref="IsEnterpriseRow"/>（<b>空 = 非企业行</b>）。</item>
+/// </list>
 ///
 /// <para><b>★ 为什么必须收敛到一处</b>（用户 2026-10-12 原话）：
 /// 「<i>避免不同逻辑中，查看到的结果不一致，而且这种问题非常隐蔽，
@@ -45,6 +52,24 @@ public static class OrgScope
     public static bool IsEnterprise(string? orgCode, string? enterpriseCode)
         => !string.IsNullOrEmpty(enterpriseCode)
            && string.Equals(orgCode, enterpriseCode, StringComparison.Ordinal);
+
+    /// <summary>
+    /// ★★ <b>企业列（<c>EnterpriseCode</c>）的唯一判据</b> —— 回答「这一行属于某个<b>具体企业</b>吗」。
+    ///
+    /// <para>判据 = <c>EnterpriseCode</c> 非空白。<b>空 = 不属于任何企业</b>
+    /// （后台 / 机构行 —— 平台标准域行）。</para>
+    ///
+    /// <para><b>★ 为什么必须是「空」而不是机构常量</b>（用户 2026-10-13 口径）：
+    /// 机构（<see cref="CoreOrgCodes.StdEnv"/>）与企业是<b>两个不同维度</b>的列。
+    /// 把机构值填进企业列 ⇒ 语义错位，且与 DB 列注释「空 = 不属于任何企业」矛盾
+    /// （实测：全库 <c>EnterpriseCode</c> 无任何一行是机构常量）。守卫 <b>A-R11</b> 会拦。</para>
+    ///
+    /// <para><b>⚠️ 数据库表达式场景</b>：SqlSugar 表达式内无法调本方法，
+    /// 用等价的 <c>string.IsNullOrEmpty(x.EnterpriseCode)</c>（该写法在本仓已有多处先例，
+    /// 且列定义为 <c>NOT NULL</c>）。</para>
+    /// </summary>
+    public static bool IsEnterpriseRow(string? enterpriseCode)
+        => !string.IsNullOrWhiteSpace(enterpriseCode);
 
     /// <summary>
     /// 过渡期兼容判据：<c>yzh-std-env</c> <b>或</b> 历史空值形态（<c>NULL</c> / <c>''</c> / 空格）

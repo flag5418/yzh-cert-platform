@@ -96,7 +96,9 @@ public class OfficeConvertTaskExecutor : IYzhTaskExecutor
 
     private async Task EnqueueEnterpriseExtractAsync(FileConvertPayload payload, string? parentQueueCode)
     {
-        if (string.IsNullOrWhiteSpace(payload.EnterpriseCode) || payload.EnterpriseCode == CoreOrgCodes.StdEnv)
+        // ★ 2026-10-13 判据收敛：只对「真实企业行」入队 ——
+        //   ① 非企业行（EnterpriseCode 空）② 机构常量被误当企业码 一律跳过
+        if (!OrgScope.IsEnterpriseRow(payload.EnterpriseCode) || OrgScope.IsBackendBuilt(payload.EnterpriseCode))
             return;
 
         // ★ S2 图 3 分流：未要求自动提取 ⇒ 只转换不提取（状态留 none，原因落 ExtractMessage）

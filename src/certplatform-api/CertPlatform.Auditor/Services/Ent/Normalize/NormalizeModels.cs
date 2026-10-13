@@ -29,7 +29,7 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
 
         /// <summary>
         ///     ★ 目标标准文件 —— <c>cert_standard_directory_file.Code</c>
-        ///     <para>⚠️ 指 <b>标准域行</b>（<c>EnterpriseCode = CoreOrgCodes.StdEnv</c>，
+        ///     <para>⚠️ 指 <b>标准域行</b>（<c>EnterpriseCode</c> 为空，
         ///     即 <c>cert_doc_template.StandardFileCode</c> 指向的那一行），
         ///     ⛔ <b>不是</b>企业侧实例行。</para>
         ///     <para><b>为什么</b>：规范化驱动源 = <c>cert_doc_template</c>（`60` §六之补三），
@@ -288,7 +288,7 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
 
         /// <summary>
         ///     ★ 选中的目标文件 —— <c>cert_standard_directory_file.Code</c>
-        ///     <para>⚠️ 指 <b>标准域行</b>（<c>EnterpriseCode = CoreOrgCodes.StdEnv</c>），
+        ///     <para>⚠️ 指 <b>标准域行</b>（<c>EnterpriseCode</c> 为空），
         ///     ⛔ 不是企业侧实例行 —— 与 <see cref="FillOneRequest.StandardFileCode"/> 同口径。</para>
         ///
         ///     <para>⚠️ 服务端<b>不信任</b>这个清单：<c>run</c> 会重新按「已发布模板」复核一遍

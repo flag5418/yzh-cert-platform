@@ -1767,7 +1767,7 @@ public class EnterpriseFileService
 
     /// <summary>
     /// 企业目录初始化（13 号 E7）：按 (Org,Std,Stage) 复制模板行。
-    /// <para>幂等判据 = config 表 uk 四列 <c>(OrgCode, EnterpriseCode, StandardCode, StageCode)</c>；
+    /// <para>幂等判据 = config 表 uk 四列 <c>(OwnerOrgCode, EnterpriseCode, StandardCode, StageCode)</c>；
     /// 槽位行按 <c>(ConfigCode, StandardFileCode)</c> 对账，只补缺失、不重复插。</para>
     /// <para><b>本方法只是「预热」，不是唯一初始化入口</b>：<see cref="EnsureDirectoryAsync"/> 在
     /// 每个读接口里都会跑，所以这里失败不代表资料功能不可用，补齐数据后会自动恢复。</para>
@@ -1811,7 +1811,7 @@ public class EnterpriseFileService
 
         // 1. 已有企业目录？（includeDisabled：禁用行须被认出并复活，否则 INSERT 撞唯一键）
         var existCfg = await _db.GetListAsync<StandardDirectoryConfig>(
-            x => x.OrgCode == orgCode && x.EnterpriseCode == enterpriseCode
+            x => x.OwnerOrgCode == orgCode && x.EnterpriseCode == enterpriseCode
                  && x.StandardCode == standardCode && x.StageCode == stageCode,
             includeDisabled: true);
         var config = existCfg.Data?.FirstOrDefault();
@@ -1827,33 +1827,38 @@ public class EnterpriseFileService
         {
             var drifted = await _db.GetListAsync<StandardDirectoryConfig>(
                 x => x.EnterpriseCode == enterpriseCode && x.StandardCode == standardCode
-                     && x.StageCode == stageCode && x.OrgCode != orgCode,
+                     && x.StageCode == stageCode && x.OwnerOrgCode != orgCode,
                 includeDisabled: true);
             var orphan = drifted.Data?
-                .OrderByDescending(c => c.OrgCode == enterpriseCode)
+                .OrderByDescending(c => c.OwnerOrgCode == enterpriseCode)
                 .ThenByDescending(c => c.CreateTime)
                 .FirstOrDefault();
             if (orphan != null)
             {
-                var oldOrg = orphan.OrgCode;
+                var oldOrg = orphan.OwnerOrgCode;
+                // ★ 2026-10-13：机构维度落 OwnerOrgCode；OrgCode 同步（企业行遗留形态，见实体注释）
+                orphan.OwnerOrgCode = orgCode;
                 orphan.OrgCode = orgCode;
                 orphan.IsValid = 1;
                 orphan.IsDeleted = false;
                 orphan.UpdateBy = userCode ?? _user.UserCode;
                 orphan.UpdateTime = System.DateTime.Now;
-                await _db.UpdateAsync(orphan, nameof(StandardDirectoryConfig.OrgCode),
+                await _db.UpdateAsync(orphan, nameof(StandardDirectoryConfig.OwnerOrgCode),
+                    nameof(StandardDirectoryConfig.OrgCode),
                     nameof(StandardDirectoryConfig.IsValid), nameof(StandardDirectoryConfig.IsDeleted),
                     nameof(StandardDirectoryConfig.UpdateBy), nameof(StandardDirectoryConfig.UpdateTime));
                 _logger.LogWarning(
-                    "[EnsureDirectory] 企业目录机构漂移已修正 {Code}: OrgCode {Old} → {New}（企业 {Ent}）",
+                    "[EnsureDirectory] 企业目录机构漂移已修正 {Code}: OwnerOrgCode {Old} → {New}（企业 {Ent}）",
                     orphan.Code, oldOrg, orgCode, enterpriseCode);
                 config = orphan;
             }
         }
 
-        // 2. 模板行（EnterpriseCode = 虚拟企业常量）。多行时取第一（Sort → CreateTime，稳定口径）
+        // 2. 模板行 = 本机构建的、不属于任何企业的目录配置。多行时取第一（Sort → CreateTime，稳定口径）
+        //    ★ 2026-10-13：机构维度改用 OwnerOrgCode —— OrgCode 已统一为 yzh-std-env，
+        //      ⛔ 不再承载「具体机构」（见 docs/40-实施/迁移计划/归属判据收敛与机构专用列-设计-V1.md）
         var tplCfg = await _db.GetListAsync<StandardDirectoryConfig>(
-            x => x.OrgCode == orgCode && x.EnterpriseCode == CoreOrgCodes.StdEnv
+            x => x.OwnerOrgCode == orgCode && string.IsNullOrEmpty(x.EnterpriseCode)
                  && x.StandardCode == standardCode && x.StageCode == stageCode);
         var template = tplCfg.Data?
             .OrderBy(c => c.Sort)
@@ -1872,6 +1877,10 @@ public class EnterpriseFileService
             {
                 Code = Guid.NewGuid().ToString("N"),
                 OrgCode = orgCode,
+                // ★ 2026-10-13：机构维度显式落 OwnerOrgCode（uk 第一列 + 路径身份段）。
+                //   企业行的 OrgCode 仍是机构 Code（2026-10-12 终裁边界：企业行原样），
+                //   两列过渡期同值 —— 待「企业行 OrgCode 语义」单独裁决后收敛。
+                OwnerOrgCode = orgCode,
                 EnterpriseCode = enterpriseCode,
                 StandardCode = standardCode,
                 StageCode = stageCode,

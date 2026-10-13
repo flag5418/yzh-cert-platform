@@ -465,13 +465,22 @@ public class StandardDirectoryService
     public async Task<(bool ok, string? error, StandardDirectoryConfig? data)> CreateConfigAsync(
         StandardDirectoryConfig config)
     {
-        // ★ 2026-10-12 终裁（规则文档 §2.8(f)）：模板行（EnterpriseCode 空）OrgCode 恒为
-        //   'yzh-std-env' —— 两值模型下前端传机构也不落库，否则与存量模板行 uk 不同键、
-        //   静默建成「第二套目录」。企业行（EnterpriseCode 有值）不在本裁决范围，OrgCode 原样。
+        // ★ 2026-10-13 终裁（承接 10-12 两值模型 + 机构专用列 OwnerOrgCode）：
+        //   模板行（EnterpriseCode 空）⇒ OrgCode 统一 'yzh-std-env'（后台域标记），
+        //   调用方传的具体机构**改落 OwnerOrgCode**（⛔ 不能丢 —— 否则目录归属无法定位、
+        //   路径身份段与存量分叉）。企业行（EnterpriseCode 有值）不在本裁决范围，OrgCode 原样。
         if (string.IsNullOrWhiteSpace(config.EnterpriseCode))
+        {
+            if (string.IsNullOrWhiteSpace(config.OwnerOrgCode)
+                && !string.IsNullOrWhiteSpace(config.OrgCode)
+                && !OrgScope.IsBackendBuilt(config.OrgCode))
+                config.OwnerOrgCode = config.OrgCode;
             config.OrgCode = CoreOrgCodes.StdEnv;
+        }
+        // 机构维度兜底：未给具体机构 ⇒ 记「不特指机构」（空串），⛔ 不留 NULL
+        config.OwnerOrgCode ??= string.Empty;
 
-        // 业务键必填（决策⑳修订：三键 uk = OrgCode + StandardCode + StageCode）
+        // 业务键必填（决策⑳修订：四键 uk = OwnerOrgCode + EnterpriseCode + StandardCode + StageCode）
         if (string.IsNullOrWhiteSpace(config.OrgCode))
             return (false, "缺少业务键：请选择机构（OrgCode）", null);
         if (string.IsNullOrWhiteSpace(config.StandardCode))
@@ -482,8 +491,12 @@ public class StandardDirectoryService
         // ★⑬/§11.1：uk_org_std_stage 不含 IsDeleted → 建前必须「含已删」查重，命中已删行就地复活；
         //   ⛔ 不能只靠下面的 1062 兜底 —— 默认过滤把已删行藏起来，用户会看到
         //   「已存在」却在列表里找不到那行（删 → 再建永远失败）。
+        // ★ 2026-10-13：查重口径 = 唯一键原文（OwnerOrgCode + EnterpriseCode + StandardCode + StageCode）。
+        //   ⚠️ 补 EnterpriseCode 是修一个既有缺陷：原口径漏了它 ⇒ 同机构同标准同阶段、不同企业的
+        //     企业目录会被误判「已存在」，且复活分支不回写 EnterpriseCode ⇒ 复活出错误归属的行。
         var existing = await _db.Client.Queryable<StandardDirectoryConfig>()
-            .Where(x => x.OrgCode == config.OrgCode
+            .Where(x => x.OwnerOrgCode == config.OwnerOrgCode
+                     && x.EnterpriseCode == config.EnterpriseCode
                      && x.StandardCode == config.StandardCode && x.StageCode == config.StageCode)
             .FirstAsync();
         if (existing != null)
@@ -526,7 +539,7 @@ public class StandardDirectoryService
         }
         catch (Exception ex) when (IsDuplicateKeyError(ex))
         {
-            // 唯一键 uk_org_std_stage(OrgCode, StandardCode, StageCode)：同一机构+标准+阶段只能有一个目录
+            // 唯一键 uk_owner_std_stage(OwnerOrgCode, EnterpriseCode, StandardCode, StageCode)
             return (false, "该机构、标准与阶段的目录配置已存在", null);
         }
     }
@@ -552,19 +565,20 @@ public class StandardDirectoryService
         if (string.IsNullOrWhiteSpace(stageCode))
             return (false, "缺少业务键：阶段 StageCode", null);
 
+        // ★ 2026-10-13：机构维度已落 OwnerOrgCode ⇒ 机构键**可直接命中**（⛔ 不再是「必然未命中」）。
         var query = () => _db.Client.Queryable<StandardDirectoryConfig>()
-            .Where(x => x.OrgCode == orgCode
+            .Where(x => x.OwnerOrgCode == orgCode
                      && x.StandardCode == standardCode && x.StageCode == stageCode);
 
         var existing = await query().FirstAsync();
 
-        // ★ 2026-10-12 终裁：模板行 OrgCode 恒为 'yzh-std-env' —— 前端仍传机构 orgCode，
-        //   机构键未命中时必须回退后台模板键，否则「无感懒建」会把已迁模板误判为不存在、
-        //   静默新建一套 OrgCode=机构 的重复目录（uk 不同键，DB 不报错）。
+        // 兜底：前端传具体机构但该机构无自有模板 ⇒ 回退「不特指机构」的平台通用模板
+        //   （OwnerOrgCode 为空）。⛔ 不要回退到 OrgCode='yzh-std-env' —— 那是后台域标记，
+        //   对所有机构都一样，会命中任意机构的模板。
         if (existing == null)
         {
             existing = await _db.Client.Queryable<StandardDirectoryConfig>()
-                .Where(x => x.OrgCode == CoreOrgCodes.StdEnv
+                .Where(x => x.OwnerOrgCode == ""
                          && x.StandardCode == standardCode && x.StageCode == stageCode)
                 .FirstAsync();
         }
@@ -580,16 +594,31 @@ public class StandardDirectoryService
         if (created.ok) return created;
 
         // 并发：另一请求刚插入 → 「已存在」→ 重读返回赢家行
-        // ★ 赢家行 OrgCode 恒为 StdEnv（CreateConfigAsync 强制）⇒ 机构键重读未命中须回退模板键
         var again = await query().FirstAsync();
         if (again == null)
             again = await _db.Client.Queryable<StandardDirectoryConfig>()
-                .Where(x => x.OrgCode == CoreOrgCodes.StdEnv
+                .Where(x => x.OwnerOrgCode == ""
                          && x.StandardCode == standardCode && x.StageCode == stageCode)
                 .FirstAsync();
         if (again != null) return (true, null, again);
         return created;
     }
+
+    /// <summary>
+    /// ★ 路径<b>身份段</b> = 目录归属机构（<c>OwnerOrgCode</c>）。
+    ///
+    /// <para><b>★ 2026-10-13（修路径分裂）</b>：⛔ <b>不要</b>再用 <c>config.OrgCode</c> ——
+    /// 它已统一为后台域标记（<c>yzh-std-env</c>），用它会让新建产物的前缀变成
+    /// <c>/standard-directory/yzh-std-env/…</c>，而存量是 <c>/standard-directory/906e8b2a…/…</c>
+    /// ⇒ 同一逻辑目录两套物理前缀（旧对象成孤儿）。</para>
+    ///
+    /// <para>回退顺序：<c>OwnerOrgCode</c>（机构维度）→ <c>OrgCode</c>（企业行仍存机构 Code 的遗留形态）
+    /// → <c>yzh-std-env</c>（兜底，不特指机构）。</para>
+    /// </summary>
+    private static string OwnerSeg(StandardDirectoryConfig config)
+        => !string.IsNullOrWhiteSpace(config.OwnerOrgCode)
+            ? config.OwnerOrgCode
+            : (string.IsNullOrWhiteSpace(config.OrgCode) ? CoreOrgCodes.StdEnv : config.OrgCode);
 
     /// <summary>
     /// 更新目录配置。
@@ -1059,7 +1088,7 @@ public class StandardDirectoryService
     }
 
     /// <summary>
-    /// ★ 按「标准 + 阶段」列出标准目录的<b>模板文件行</b>（<c>EnterpriseCode = CoreOrgCodes.StdEnv</c>）。
+    /// ★ 按「标准 + 阶段」列出标准目录的<b>模板文件行</b>（<c>EnterpriseCode</c> <b>为空</b> = 不属于任何企业）。
     ///
     /// <para><b>用途</b>：NC 规则设计器里「标准目录文件是否缺失」特殊节点的配置期下拉 ——
     /// 选项就是本方法的结果。执行期 <c>IsStdFileMissingSkill</c> 拿所选行的 <c>Code</c>
@@ -1070,8 +1099,10 @@ public class StandardDirectoryService
     /// 「关联标准文件 Code → 模板行 Code」（见 <see cref="StandardDirectoryFile.StandardFileCode"/> 注释）。
     /// ⛔ 不要改成查企业行 —— 配置期没有企业上下文，且那样会让「标准要求」变成「某企业的现状」。</para>
     ///
-    /// <para><b>★ 2026-10-12 口径统一（重要）</b>：模板行标记值 = <c>CoreOrgCodes.StdEnv</c>（<c>yzh-std-env</c>），
-    /// ⛔ <b>不再是</b>旧常量 <c>YZH-STD-ENT</c>（该常量已删除，守卫 <b>A-R10</b> 禁其回归）。</para>
+    /// <para><b>★ 2026-10-13 口径统一（重要，修订 10-12 版）</b>：模板行判据 = <c>EnterpriseCode</c> <b>为空</b>
+    /// （语义入口 <c>OrgScope.IsEnterpriseRow</c>）。⛔ <b>不再是</b>机构常量
+    /// （<c>CoreOrgCodes.StdEnv</c> 或旧 <c>YZH-STD-ENT</c>）—— <b>机构与企业是两个维度</b>，
+    /// 机构值不得填进企业列（守卫 <b>A-R11</b>）。</para>
     ///
     /// <para><b>⚠️ 实测状态（2026-10-12）</b>：本表当前共 23 行，<b>全部是「机构标准目录行」</b>
     /// （<c>OrgCode = &lt;机构 Code&gt;</c>、<c>EnterpriseCode = ''</c>、有 <c>StoragePath</c>，
@@ -1084,7 +1115,7 @@ public class StandardDirectoryService
     public async Task<List<StandardDirectoryFile>> GetTemplateFilesAsync(string? standardCode, string? stageCode)
     {
         var all = await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.EnterpriseCode == CoreOrgCodes.StdEnv && x.IsValid == 1);
+            x => string.IsNullOrEmpty(x.EnterpriseCode) && x.IsValid == 1);
 
         return (all.Data ?? new List<StandardDirectoryFile>())
             .Where(x => string.IsNullOrWhiteSpace(standardCode)
@@ -1515,9 +1546,11 @@ public class StandardDirectoryService
                 x => x.ConfigCode == configCode
                     && x.FullPath == fullPath && x.IsValid == 1)).Data;
 
-            // ★ 路径唯一权威：PathBuilder（决策⑳修订 —— 身份段 = OrgCode + StandardCode + StageCode 原文）
+            // ★ 路径唯一权威：PathBuilder（身份段 = 归属机构 + StandardCode + StageCode 原文）
+            //   ⚠️ 2026-10-13：身份段取 OwnerSeg(config)（OwnerOrgCode 优先）——
+            //   ⛔ 不是 config.OrgCode（它已统一为 yzh-std-env，会让新旧产物前缀分叉）
             var storagePath = PathBuilder.StandardFile(
-                config.OrgCode, config.StandardCode, config.StageCode, parentDir, fileName);
+                OwnerSeg(config), config.StandardCode, config.StageCode, parentDir, fileName);
 
             if (existingFile != null)
             {
@@ -2505,7 +2538,7 @@ public class StandardDirectoryService
                 var objectName = file.StoragePath;
                 if (string.IsNullOrEmpty(objectName))
                     objectName = PathBuilder.StandardFile(
-                        config.OrgCode, config.StandardCode, config.StageCode, folderPath, file.FileName);
+                        OwnerSeg(config), config.StandardCode, config.StageCode, folderPath, file.FileName);
                 objectName = objectName.TrimStart('/');
 
                 var localPath = Path.Combine(tempDir, entryPath.Replace('/', Path.DirectorySeparatorChar));
@@ -2661,8 +2694,8 @@ public class StandardDirectoryService
         var nameErr = ValidateFolderOrFileName(fileName, "文件名");
         if (nameErr != null) return (false, nameErr, null);
 
-        // ★ 路径唯一权威：PathBuilder（决策⑳修订：身份段 = OrgCode + Code 原文）
-        var storagePath = PathBuilder.StandardFile(config.OrgCode, standardCode, phaseCode, parentDir, fileName);
+        // ★ 路径唯一权威：PathBuilder（身份段 = 归属机构 + Code 原文）
+        var storagePath = PathBuilder.StandardFile(OwnerSeg(config), standardCode, phaseCode, parentDir, fileName);
         var fullPath = string.IsNullOrEmpty(parentDir) ? fileName : $"{parentDir}/{fileName}";
 
         // 上传到 MinIO（使用 IObjectStorage 接口）

@@ -57,9 +57,11 @@ public class EnterpriseExtractTaskExecutor : IYzhTaskExecutor
             if (payload == null || string.IsNullOrWhiteSpace(payload.Code) || string.IsNullOrWhiteSpace(payload.EnterpriseCode))
                 return Fail("Payload 缺少 Code/EnterpriseCode", retryable: false);
 
-            // 信封不变量：提取只允许写真实企业域，禁写模板域（虚拟企业 Code）
-            if (payload.EnterpriseCode == CoreOrgCodes.StdEnv)
-                return Fail("禁止对标准模板域（虚拟企业 Code）执行企业提取", retryable: false);
+            // 信封不变量：提取只允许写真实企业域 —— ⛔ 机构常量（yzh-std-env）不得被当作企业 Code 传入
+            //   ★ 2026-10-13：模板行的企业列标记已改为「空」，但本检查仍保留 —— 它拦的是
+            //     「机构值误入企业列」这种异常入参（空值已由上一行的非空校验拦住）
+            if (OrgScope.IsBackendBuilt(payload.EnterpriseCode))
+                return Fail("禁止对标准模板域执行企业提取", retryable: false);
 
             using var scope = _serviceProvider.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<IDbOrm>();

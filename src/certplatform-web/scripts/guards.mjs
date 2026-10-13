@@ -692,17 +692,24 @@ function runAR7() {
  *
  * 实测违规（2026-10-12）：4 种写法 / ≥13 处 ——
  * `== ""` / `IsNullOrEmpty` / `IsNullOrWhiteSpace` / `== string.Empty || == org`。
+ *
+ * ⚠️ 2026-10-13：正则加**负向后顾** `(?<![A-Za-z])`，排除新列 `OwnerOrgCode` 的**误报**
+ *   （`OwnerOrgCode` 含子串 `OrgCode`，不加后顾会被吞成命中；详见下方 pats 注释）。
  */
 function runAR8() {
   const violations = []
   const ALLOW = '/Shared/Domain/Scope/'
+  // ⚠️ 2026-10-13：`OrgCode` 一律加**负向后顾** `(?<![A-Za-z])`，限定为**该列本身** ——
+  //   新增列 `OwnerOrgCode`（`cert_standard_directory_config` 机构专用列，含子串 `OrgCode`）
+  //   **不是**本规则的管制对象；它的空值判据（`== ""` / `IsNullOrWhiteSpace`）是**合法**的。
+  //   ⛔ 不加后顾 ⇒ `config.OwnerOrgCode` 会被 `[\w.]*OrgCode` 吞成命中（误报）。
   const pats = [
-    /OrgCode\s*==\s*""/,
-    /OrgCode\s*!=\s*""/,
-    /OrgCode\s*==\s*string\.Empty/,
-    /OrgCode\s*!=\s*string\.Empty/,
-    /IsNullOrEmpty\s*\(\s*[\w.]*OrgCode\s*\)/,
-    /IsNullOrWhiteSpace\s*\(\s*[\w.]*OrgCode\s*\)/,
+    /(?<![A-Za-z])OrgCode\s*==\s*""/,
+    /(?<![A-Za-z])OrgCode\s*!=\s*""/,
+    /(?<![A-Za-z])OrgCode\s*==\s*string\.Empty/,
+    /(?<![A-Za-z])OrgCode\s*!=\s*string\.Empty/,
+    /IsNullOrEmpty\s*\(\s*[\w.]*(?<![A-Za-z])OrgCode\s*\)/,
+    /IsNullOrWhiteSpace\s*\(\s*[\w.]*(?<![A-Za-z])OrgCode\s*\)/,
   ]
   // ★ 排除「合法用法」—— 本规则只针对「把 OrgCode 空值当作**后台标准级判据**」，
   //   不含下列四类（它们不是判据，是入参校验 / 用户机构 / 机构实体字段 / 业务键必填校验）：
@@ -760,6 +767,11 @@ function runAR9() {
  *   （`CoreOrgCodes.StdEnv`）**是同一件事的两种写法** —— 「这行数据属于标准域（平台方建立的
  *   标准/规则），不属于任何企业」。用户裁定**只能留一个** ⇒
  *   后端 `YzhVirtualEnterprise` + 前端 `YZH_VIRTUAL_ENTERPRISE_CODE` 已全部删除。
+ *
+ * ⚠️ **2026-10-13 口径修订（重要）**：上面「同一件事的两种写法」**只对 `OrgCode` 列成立**
+ *   （两值模型：`yzh-std-env` = 后台域 / `<企业 Code>` = 企业域）。
+ *   对企业列 `EnterpriseCode` 而言，机构常量 ⛔ **不再是**「非企业行」标记 ——
+ *   非企业行判据 = **空**（见守卫 **A-R11**）。**两者分属不同维度，不是同一件事。**
  *
  * 判据（两条，与后端 A-R9 对称）：
  *   ① 全仓源码 ⛔ 禁止再出现 `YZH-STD-ENT`（旧值，已废弃）；
@@ -820,6 +832,60 @@ function runAR10() {
     }
   }
   roots.forEach(rec)
+  return { violations, skipped: false }
+}
+
+/**
+ * A-R11：★ 企业列判据 ⛔ 不得使用机构常量（2026-10-13 用户裁定）。
+ *
+ * 背景：**三个维度**必须分清 ——
+ *   · `OrgCode`        —— 这行属于**后台域**（`yzh-std-env` = 所有机构的统称）还是**企业域**；
+ *   · `EnterpriseCode` —— 属于哪个**企业**；**空 = 不属于任何企业**（后台/机构模板行）；
+ *   · `OwnerOrgCode`（`cert_standard_directory_config` 专用）—— 属于哪个**具体机构**。
+ *   ⇒ 机构值 ⛔ 不得填进企业列；企业列的「非企业行」判据 = **空**。
+ *
+ * 为什么：曾用 `EnterpriseCode == CoreOrgCodes.StdEnv` 标记「模板行」（16+ 处），
+ *   但全库实测（22 张含 `EnterpriseCode` 的表）**没有任何一行**是该常量 ⇒ 判据恒不成立，
+ *   方法静默返回空列表。10-13 统一为「空 = 非企业行」，唯一入口 `OrgScope.IsEnterpriseRow`。
+ *
+ * 判据（后端 `.cs`，跳过注释行）：
+ *   ① `xxx.EnterpriseCode == / != CoreOrgCodes.StdEnv`（含反向写法）；
+ *   ② `string.Equals(xxx.EnterpriseCode, CoreOrgCodes.StdEnv, …)`。
+ * ⛔ 基线 **0**，**不进 debt**（新代码不得再引入）。
+ * ⚠️ 合法替代 = `OrgScope.IsEnterpriseRow(enterpriseCode)`
+ *   或 SqlSugar 表达式内的 `string.IsNullOrEmpty(x.EnterpriseCode)`。
+ */
+function runAR11() {
+  const violations = []
+  const pats = [
+    /\.EnterpriseCode\s*[!=]=\s*CoreOrgCodes\.StdEnv/,
+    /CoreOrgCodes\.StdEnv\s*[!=]=\s*[A-Za-z_][\w.]*\.EnterpriseCode/,
+    /\.EnterpriseCode\s*,\s*CoreOrgCodes\.StdEnv/,
+  ]
+  const dirs = [
+    join(API_ROOT, 'CertPlatform.Shared'),
+    join(API_ROOT, 'CertPlatform.Admin'),
+    join(API_ROOT, 'CertPlatform.Auditor'),
+    join(API_ROOT, 'CertPlatform.Enterprise'),
+    join(API_ROOT, 'CertPlatform.Admin.Tests'),
+  ]
+  for (const dir of dirs) {
+    for (const file of listCsFiles(dir)) {
+      const r = rel(file)
+      readFileSync(file, 'utf8')
+        .split('\n')
+        .forEach((line, i) => {
+          if (isCommentLine(line)) return
+          if (pats.some((re) => re.test(line))) {
+            violations.push({
+              file: r,
+              line: i + 1,
+              text: `企业列用了机构常量（EnterpriseCode 的「非企业行」判据 = 空）：${line.trim().slice(0, 100)}`,
+            })
+          }
+        })
+    }
+  }
   return { violations, skipped: false }
 }
 
@@ -1713,6 +1779,15 @@ const RULES = [
     desc: "标准域标记字面量唯一：全仓禁 YZH-STD-ENT（旧值已删）；前端 yzh-std-env 白名单仅 coreOrgCodes.ts",
     run: runAR10,
     // ★ 2026-10-12 用户裁定「两个常量只能留一个」后新增：存量已清零（后端 31 处 + 前端 1 常量全部收敛）。
+    debt: [],
+  },
+  {
+    id: 'A-R11',
+    type: 'custom',
+    desc: '企业列判据不得用机构常量（EnterpriseCode 的「非企业行」= 空；入口 OrgScope.IsEnterpriseRow）',
+    run: runAR11,
+    // ★ 2026-10-13 用户裁定「企业列统一为空」后新增：存量 16+ 处已全部改写，基线 0。
+    //    ⛔ 不进 debt —— 新代码不得再引入。
     debt: [],
   },
 ]

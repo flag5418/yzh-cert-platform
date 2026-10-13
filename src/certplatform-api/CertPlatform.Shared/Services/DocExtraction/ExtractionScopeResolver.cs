@@ -128,9 +128,10 @@ public class ExtractionScopeResolver
             .Distinct()
             .ToList();
 
-        // ③ 反查模板行 → 模板配置 → 机构（模板行属标准域）
+        // ③ 反查模板行 → 模板配置 → 机构（模板行 = 非企业行）
+        //   ★ 2026-10-13 判据收敛：标准域 = EnterpriseCode 空，⛔ 不再用机构常量（守卫 A-R11）
         var tplRows = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.EnterpriseCode == CoreOrgCodes.StdEnv)).Data
+            x => string.IsNullOrEmpty(x.EnterpriseCode))).Data
             ?? new List<StandardDirectoryFile>();
         var tplMap = tplRows
             .Where(x => !string.IsNullOrEmpty(x.Code) && ruleKeys.Contains(x.Code!))
