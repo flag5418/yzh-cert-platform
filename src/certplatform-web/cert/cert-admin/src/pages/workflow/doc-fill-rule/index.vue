@@ -32,9 +32,9 @@
  * 【★ 左树数据源唯一性】
  *   树由 `logic.loadTreeRoot()` 加载 `DocTemplate/directory-tree`（**唯一权威**，
  *   `Extra` 带模板状态），并由 `YzhTree :data="logic.treeData"` 渲染。
- *   ⛔ 不得再挂 `CertDirectoryTree` —— 它自带 `useFileTree` 的**另一棵树**
- *   （`stage-files` 口径、`Type` 字段、无 `Extra`），会出现「双表头 +
- *   点不中任何文件 + 右栏拿不到 templateCode」的三重错误。
+ *   ⛔ 不得再挂 `useFileTree` 的**第二棵树**（Q4 起 CertDirectoryTree / CertBizTree 已删除，
+ *   禁止重建同类包装件）—— 它自带另一套口径（`stage-files`、`Type` 字段、无 `Extra`），
+ *   会出现「双表头 + 点不中任何文件 + 右栏拿不到 templateCode」的三重错误。
  */
 import { Document, MagicStick, Refresh, View } from '@element-plus/icons-vue'
 import {

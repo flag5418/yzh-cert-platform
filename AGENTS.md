@@ -14,8 +14,8 @@ AIGC:
 
 > 本文件是 AI 编程助手（Cursor / Claude Code / Copilot / Aider 等）的自动加载入口。
 > **编码任务（生成/修改任何代码）必须启用本文件**，启用要求见 `项目全局规则.md` §8.0。
-> **本文件是全项目唯一权威源**（2026-09-24 起）。原先 `docs/30-项目规则/知识库/AGENTS.md` 的副本已删除，
-> 其独有内容已迁至知识库正确位置（术语表见 `08-术语表/`，踩坑记录见 `05-踩坑记录/`）。⛔ 不得再建副本。
+> **本文件是全项目唯一权威源**（2026-09-24 起）。原先 `docs/30-项目规则/知识库/AGENTS.md` 的副本已删除。
+> **2026-10-13 知识库目录撤销**：术语表迁至 `docs/00-工程体系/术语表-V1.md`；Vol 时代踩坑记录迁至 `docs/90-归档/历史项目/Vol框架/知识库-踩坑记录/`。⛔ 不得再建副本。
 
 ## ⚠️ AI 编码前必读 3 条（违反 = 返工）
 
@@ -25,7 +25,7 @@ AIGC:
 **① 前端新建/修改页面 → 先读 `docs/10-YZH架构/样板页面指南-V1.md`，照抄指定样板。**
 
 - 单表 CRUD 唯一模板：`src/certplatform-web/yzh.vue.core/src/pages/system/user/`（67 行，零手写 CRUD）
-  - ✅ **P8 已收口（2026-09-24）**：system 11 页面 + 登录/布局/首页应用壳已全部位于 `src/certplatform-web/yzh.vue.core/src/{pages,layouts,router,api/system}`（计划：`docs/50-任务/迁移计划/yzh.vue.core系统底座化迁移计划-V1.md`）。宿主（cert-admin 等）只组装路由，**不要再往 cert-admin 抄 system 页面**。
+  - ✅ **P8 已收口（2026-09-24）**：system 11 页面 + 登录/布局/首页应用壳已全部位于 `src/certplatform-web/yzh.vue.core/src/{pages,layouts,router,api/system}`（计划：`docs/40-实施/迁移计划/yzh.vue.core系统底座化迁移计划-V1.md`）。宿主（cert-admin 等）只组装路由，**不要再往 cert-admin 抄 system 页面**。
 - 左树右表唯一模板：`.../foundation/iso-standard/`（⚠️ **只抄 `logic.ts` 的 `dataLoader` 骨架**，`index.vue` 不抄）
 - 纯树节点模板：`src/certplatform-web/yzh.vue.core/src/pages/system/role/`（`logic.ts` 仅 16 行、零覆写）
 - ⚠️ **`pages/system/user/` 与 `pages/system/role/` 无路由可达是正常的**（2026-09-24 用户裁决：功能已被「机构-人员管理」`system/organization`、「角色-人员管理」`system/role-user` 取代，两条路由已删除）。**它们是照抄样板，目录必须保留** —— 照抄 = 复制文件，**不需要打开页面**。⛔ 不要因为「样板页在、路由不在」就把路由加回来（守卫 **R12** 会拦）。
@@ -50,7 +50,7 @@ AIGC:
   - **违反症状**：① 表内 `enable` 与 `IsValid` **并存** → **列表显示的行 ≠ 能操作的行**，两边都不报错 ② 实体注释写 `// DB: Name` 而 DB 实际是 `name`（代码自证清白，DB 不是）
   - 守卫：`guards.mjs` **R7**（前端）+ `scripts/db/fix/fix-column-naming-2026-09-24.sql` 文末 **DB 验证 SQL**
   - ⚠️ **验证 SQL 必须用 `CONVERT(COLUMN_NAME USING utf8mb4) COLLATE utf8mb4_bin`** —— `information_schema.COLUMN_NAME` 排序规则大小写不敏感，直接 `NOT REGEXP '^[A-Z]'` 会**永远返回 0 行**（假阴性，会让人误以为已清零）
-  - 详见 `docs/50-任务/分析报告/命名规范违规清单与消灭方案-V1.md`
+  - 详见 `docs/40-实施/分析报告/命名规范违规清单与消灭方案-V1.md`
 
 **④ 双关键字准则 A（Id/Code · 2026-09-24 · 违反 = 返工）**
 
@@ -122,8 +122,8 @@ AIGC:
   - **接口返回语义**（`success` 唯一判据 / `err` 错误出口 / 业务失败 HTTP 200 / 前端 L1–L4 读取顺序）→ `docs/10-YZH架构/22-接口返回规范-V1.md`
   - **信封统一改造计划**（阶段 F0/P0–P3 + 决策 D1–D6 + 验收矩阵；**改返回相关代码先读它**）→ `docs/10-YZH架构/23-前后端信封统一改造计划-V1.md`
   - **契约字段级对照**（逐字段大小写 + 例外 E1–E7）→ `docs/10-YZH架构/20-前后端契约权威表-V1.md`
-- **知识底座**：`docs/30-项目规则/知识库/README.md` — Vol 能力清单 / YZH 增量 / 边界约束 / 代码模板 / 踩坑记录 / 速查手册
-- **术语表**：`docs/30-项目规则/知识库/08-术语表/术语表-V1.md` — 认证行业 + 审核过程 + 系统功能 + 技术术语
+- **术语表**：`docs/00-工程体系/术语表-V1.md` — 认证行业 + 审核过程 + 系统功能 + 技术术语
+- **历史参考（Vol 时代，⛔ 不参与日常检索）**：`docs/90-归档/历史项目/Vol框架/`
 - **Skill 清单**：`docs/30-项目规则/Skill清单-V1.md` — 全部 Skill 的编码/输入输出/绑定模式/实现类/编写规范
 - **编码规范**：C# 编码规范与 Vue/TS 编码规范已归档至 `docs/90-归档/历史项目/Vol框架/归档-2026-09-09-Vol框架历史文档/`（Vol 专属，新架构请参考 `docs/10-YZH架构/02-后端架构.md` 与 `docs/10-YZH架构/03-前端架构.md`）
 - **脚本规范**：`scripts/README.md`（backend/db/frontend/storage/generate/tools 子目录）
@@ -144,13 +144,7 @@ AIGC:
 ## 编码强制约定
 
 1. **文档即宪法**：生成任何代码前，先查阅 `docs/` 中对应业务域的设计文档（见快速指针链路）；发现文档与实现不一致 → 更新文档，而非迁就代码。
-2. **知识库前置**：编码前查 `YZH-知识库/` 以下条目，避免重复踩坑：
-   - `10-架构迁移指南-V1.md`（**V4 新架构首选**）
-   - `08-Vol框架实战速查手册.md` / `09-常见错误对照表.md`（**仅历史参考，新页面不再使用**）
-   - `03-边界与约束.md` / `06-YZH与Vol边界定义.md`（不能碰的、不能改的）
-   - `01-Vol能力清单.md` / `02-YZH增量清单.md`（能力索引）
-   - `04-代码模板/`、`05-踩坑记录/`（直接引用/查重）
-   - `07-标准页面开发流程.md`（**已废弃，请按 `docs/10-YZH架构/样板页面指南-V1.md` 的唯一样板 `yzh.vue.core/src/pages/system/user/` 作为模板**）
+2. **知识库前置**：编码前查 `docs/10-YZH架构/08-常见错误与修复.md`，避免重复踩坑；历史 Vol 踩坑经验（仅参考）在 `docs/90-归档/历史项目/Vol框架/知识库-踩坑记录/`。
 3. **后端**：业务代码写 `src/certplatform-api/`；业务实体继承 `BaseEntity`，Controller **按职能选用** `YzhControllerBase<V>` / `TreeTableControllerBase<T,V>`（**非强制**——职能特殊的控制器直接继承 `ControllerBase` 是允许的）；钩子通过覆盖 virtual 方法实现。
    - ★ **`src/yzh-core/`（框架层）可以且鼓励合理改造** —— YZH 架构正在持续完善中，**不存在"禁止修改"这条规则**。改造须遵守第 11 条「框架层改造准入」。
    - ⛔ **真正禁止修改的是 `src/old/`**（历史 Vol 项目，已冻结，仅作参考）。
@@ -234,10 +228,10 @@ AIGC:
 
 > ⚠️ **侧栏只渲染 2 级**：`yzh.vue.core/src/layouts/YzhAppLayout.vue:23-36` 是硬编码「一级 `el-sub-menu` + 二级 `el-menu-item`」，**无递归**。DB 与后端 `MenuController.BuildTree` 支持 N 级，但**第 3 级及以下不会显示**。新增第 3 级分组前必须先改该布局为递归组件（走框架层改造准入）。
 
-## 与知识库的关系
+## 与各层文档的关系
 
 - 本文件（根目录）是 **AI 工具自动加载的入口**：负责"启动时把 AI 指向正确的位置与约束"。
 - `docs/10-YZH架构/` 是 **YZH 架构唯一权威入口**：负责"架构核心理念 + 编码规范"。
-- `docs/30-项目规则/知识库/` 是 **知识底座**：负责"开发中按需查阅的接口签名、踩坑经验、边界约束"。
-- 三处通过 `docs/00-工程体系/README.md` 登记关联；修改本文件后必须同步知识库副本。
+- `docs/30-项目规则/` 是 **本项目强制规定**：负责"编码时不可违反的硬约束"。
+- 各层通过 `docs/00-工程体系/README.md` 登记关联；⛔ 知识库副本已撤销，修改本文件后无需再同步副本。
 *（内容由AI生成，仅供参考）*

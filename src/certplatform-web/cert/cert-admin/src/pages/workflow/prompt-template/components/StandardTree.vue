@@ -13,9 +13,10 @@
  *
  * 强调：只有 level=3（版本叶子）可点击选择；体系和族仅作分组。
  */
-import { YzhEmptyState, YzhStatusBadge, resolveStatusBadge } from '@yzh-core'
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
-import { Collection, Folder, Document, Files } from '@element-plus/icons-vue'
+import { YzhStatusBadge, resolveStatusBadge } from '@yzh-core'
+import { ref, computed, onMounted } from 'vue'
+import { Collection, Folder, Files } from '@element-plus/icons-vue'
+import { OrgStandardStageTree, type StdStageTreeNode } from '@share/components'
 import { yzhApi } from '@yzh-core/api/client'
 import type { StandardOptionDto } from '@share/api/workflow/prompt-workbench'
 import { ROOT_SCOPE, normScope, type StandardScope } from '../logic'
@@ -30,7 +31,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{ (e: 'update:modelValue', v: string): void; (e: 'select', v: StandardScope): void }>()
 
-const treeRef = ref()
+const shellRef = ref<InstanceType<typeof OrgStandardStageTree>>()
 
 // ──── 数据：体系字典 + 族列表 ────
 const categories = ref<CategoryItem[]>([])
@@ -284,165 +285,72 @@ function countLeaves(nodes: TreeNode[]): number {
   return nodes.reduce((s, c) => s + (c.children ? countLeaves(c.children) : (c.isLeaf ? 1 : 0)), 0)
 }
 
-// ──── 默认展开全部节点 ────
-const expandedKeys = computed<string[]>(() => {
-  const keys: string[] = []
-  const walk = (nodes: TreeNode[]) => {
-    for (const n of nodes) {
-      if (n.Children?.length) {
-        keys.push(n.id)
-        walk(n.Children)
-      }
-    }
-  }
-  walk(treeData.value)
-  return keys
+// ──── 转换为壳节点（OrgStandardStageTree.StdStageTreeNode） ────
+/**
+ * level → 壳的 Type：
+ *   0=根「全部标准」→ root / 1=体系→category / 2=族→family / 3=版本叶子→standard
+ * 只有 Type='standard' 触发壳的 @select（leaf-types=['standard']），等价原 onNodeClick 的 level===3 闸。
+ */
+const shellNodes = computed<StdStageTreeNode[]>(() => {
+  // 数据全空（standards 与体系字典都没加载到内容）→ 交给壳的空态
+  if (dataReady.value && !props.standards.length && !categories.value.length) return []
+  return treeData.value.map(toShellNode)
 })
 
-// ──── 节点点击 ────
-function onNodeClick(data: TreeNode) {
-  if (data.level !== 3 || !data.standardCode) return
-  emit('update:modelValue', data.id)
-  emit('select', { code: data.id, label: data.label })
+function toShellNode(raw: TreeNode): StdStageTreeNode {
+  const type = raw.level === 0 ? 'root' : raw.level === 1 ? 'category' : raw.level === 2 ? 'family' : 'standard'
+  return {
+    id: raw.id,
+    Code: raw.id,
+    Name: raw.label,
+    Type: type,
+    IsLeaf: raw.isLeaf,
+    level: raw.level,
+    isValid: raw.isValid,
+    standardCode: raw.standardCode,
+    Children: raw.children?.length ? raw.children.map(toShellNode) : undefined,
+  }
 }
 
-// ──── 高亮同步 ────
+function onShellSelect(data: StdStageTreeNode) {
+  emit('update:modelValue', String(data.id ?? data.Code))
+  emit('select', { code: String(data.id ?? data.Code), label: data.Name ?? '' })
+}
+
+// ──── 高亮回拨（页面切换被拒时调用） ────
 function resync() {
-  treeRef.value?.setCurrentKey?.(props.modelValue || ROOT_SCOPE.code)
+  shellRef.value?.setCurrentKey?.(props.modelValue || ROOT_SCOPE.code)
 }
 defineExpose({ resync })
-
-watch(
-  () => props.modelValue,
-  async (v) => {
-    await nextTick()
-    treeRef.value?.setCurrentKey?.(v || ROOT_SCOPE.code)
-  },
-  { immediate: true },
-)
 </script>
 
 <template>
-  <div class="std-tree">
-    <div class="std-tree__header">
-      <span class="std-tree__title">适用标准</span>
-    </div>
-
-    <div class="std-tree__body">
-      <el-tree
-        ref="treeRef"
-        :data="treeData"
-        node-key="id"
-        highlight-current
-        :expand-on-click-node="false"
-        :default-expanded-keys="expandedKeys"
-        @node-click="onNodeClick"
-      >
-        <template #default="{ data }">
-          <span
-            class="std-tree__node"
-            :class="{
-              'std-tree__node--group': data.level === 1 || data.level === 2,
-              'std-tree__node--clickable': data.level === 3,
-            }"
-          >
-            <!-- 图标 -->
-            <el-icon v-if="data.level === 0" class="std-tree__icon"><Files /></el-icon>
-            <el-icon v-else-if="data.level === 1" class="std-tree__icon"><Collection /></el-icon>
-            <el-icon v-else-if="data.level === 2" class="std-tree__icon"><Folder /></el-icon>
-            <el-icon v-else class="std-tree__icon"><Document /></el-icon>
-
-            <!-- 标签 -->
-            <el-tooltip :content="data.label" placement="top" popper-class="std-tree-label-tip" :show-after="1000">
-              <span class="std-tree__label">{{ data.label }}</span>
-            </el-tooltip>
-
-            <!-- 启用/禁用徽章 -->
-            <YzhStatusBadge
-              v-if="resolveStatusBadge(data, 'IsValid')"
-              class="std-tree__status"
-              :type="resolveStatusBadge(data, 'IsValid')?.type"
-              :text="resolveStatusBadge(data, 'IsValid')?.text"
-              size="small"
-            />
-          </span>
-        </template>
-      </el-tree>
-
-      <YzhEmptyState v-if="dataReady && !standards.length && !categories.length" title="暂无标准" />
-    </div>
-  </div>
+  <OrgStandardStageTree
+    ref="shellRef"
+    :data="shellNodes"
+    node-key="id"
+    title="适用标准"
+    :filterable="false"
+    :default-expand-all="true"
+    :leaf-types="['standard']"
+    :icon-map="{ root: Files, category: Collection, family: Folder }"
+    :current-key="modelValue || ROOT_SCOPE.code"
+    @select="onShellSelect"
+  >
+    <template #node-extra="{ node }">
+      <YzhStatusBadge
+        v-if="resolveStatusBadge(node, 'IsValid')"
+        class="std-tree__status"
+        :type="resolveStatusBadge(node, 'IsValid')?.type"
+        :text="resolveStatusBadge(node, 'IsValid')?.text"
+        size="small"
+      />
+    </template>
+  </OrgStandardStageTree>
 </template>
 
 <style scoped>
-.std-tree {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
-.std-tree__header {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--yzh-space-1);
-  padding: var(--yzh-space-3) var(--yzh-space-4);
-  border-bottom: 1px solid var(--yzh-color-border-light);
-}
-.std-tree__title {
-  font-size: var(--yzh-font-size-sm);
-  font-weight: var(--yzh-font-weight-semibold);
-  color: var(--yzh-color-text-primary);
-}
-
-.std-tree__body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: var(--yzh-space-2) var(--yzh-space-1);
-}
-
-/*
- * ★ 对齐关键（对齐 YzhTree 的 yzh-tree__node 机制）：
- *   容器 `display:flex; flex:1` 撑满节点整行宽度；
- *   label `flex:1` 吸收剩余空间，把右侧 badges/status 在同一垂直列对齐。
- *   ⚠️ 不要用 inline-flex —— inline-flex 宽度由内容决定，status 必然参差不齐。
- */
-.std-tree__node {
-  display: flex;
-  align-items: center;
-  gap: var(--yzh-space-1);
-  flex: 1;
-  min-width: 0;
-  padding-right: var(--yzh-space-2);
-}
-.std-tree__node--group {
-  cursor: default;
-}
-.std-tree__node--clickable {
-  cursor: pointer;
-}
-.std-tree__icon {
-  color: var(--yzh-color-primary);
-  flex-shrink: 0;
-}
-/*
- * ★ 弹性宽度：撑开填满 node 中段，把所有右侧元素（badges / status）推到同一列。
- *   label 长短不重要了——右边界永远齐平（同 YzhTree yzh-tree__label）。
- */
-/* ★ el-tooltip 包裹 std-tree__label 时继承 flex 特性（对齐 OrgStandardStageTree 机制） */
-.std-tree__node > :deep(.el-tooltip__trigger) { flex: 1; min-width: 0; }
-.std-tree__label {
-  display: block;
-  font-size: var(--yzh-font-size-sm);
-  color: var(--yzh-color-text-regular);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-/* ★ 右侧状态徽章：固定收缩 + auto 推至最右列（同 YzhTree yzh-tree__status） */
+/* ★ 右侧状态徽章：固定收缩（壳节点行已是 flex + label flex:1 推齐右列） */
 .std-tree__status {
   flex-shrink: 0;
   margin-left: auto;

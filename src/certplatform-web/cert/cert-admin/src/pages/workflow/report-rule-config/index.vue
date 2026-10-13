@@ -28,8 +28,8 @@
       buildPayload: (ctx) => ({
         Id: ctx.leaf.Id,
         Code: ctx.leaf.Code,
-        // ★ 归属三元组：优先取左树 filter（去主表化后章节自带归属）
-        OrgCode: ctx.filter.OrgCode || ctx.leaf.OrgCode,
+        // ★ 归属三元组：OrgCode 恒为后台标准级常量（2026-10-12 终裁，树 filter 值不参与）
+        OrgCode: CORE_ORG_STD_ENV,
         StandardCode: ctx.filter.StandardCode || ctx.leaf.StandardCode,
         PhaseCode: ctx.filter.PhaseCode || ctx.leaf.PhaseCode,
         SectionName: ctx.leaf.SectionName,
@@ -52,6 +52,7 @@
 
 <script setup lang="ts">
 import WorkflowDesigner from '@share/components/workflow/WorkflowDesigner.vue'
+import { CORE_ORG_STD_ENV } from '@share/constants/coreOrgCodes'
 import { ElMessage } from 'element-plus'
 
 function onSaveSuccess(result: any) {

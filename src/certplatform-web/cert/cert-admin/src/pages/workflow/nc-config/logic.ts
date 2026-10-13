@@ -37,6 +37,7 @@ import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { loadOrgStageTree } from '@share/composables/useOrgStageTree'
 import { getNCRulePage, getISOClauseTree } from '@share/api/workflow/nc-config'
+import { CORE_ORG_STD_ENV } from '@share/constants/coreOrgCodes'
 import type { NCRule, ISOClauseTreeNode } from '@share/api/workflow/nc-config'
 
 export type { NCRule, ISOClauseTreeNode }
@@ -270,21 +271,22 @@ export class NCConfigLogic extends TreeTableLogic<any> {
    * 覆盖 buildFilters：基类注入 RelateField(PhaseCode)，
    * 这里追加 OrgCode + StandardCode —— 阶段编码（如 jd01）跨机构/标准会重复，
    * 三字段才能唯一定位一个阶段。
+   * ★ 2026-10-12 终裁：NC 规则是后台标准级 ⇒ OrgCode 恒为 StdEnv 常量
+   *   （树节点的机构值不再参与匹配，否则迁移后右表静默 0 行）。
    */
   protected override buildFilters(extra?: Record<string, any>): FilterItem[] {
     const base = super.buildFilters(extra)
     if (this.anySelected) {
-      const ex = this.selectedNode!.Extra!
-      base.push({ Field: 'OrgCode', Value: ex.OrgCode, Operator: 'eq' })
-      base.push({ Field: 'StandardCode', Value: ex.StdCode, Operator: 'eq' })
+      base.push({ Field: 'OrgCode', Value: CORE_ORG_STD_ENV, Operator: 'eq' })
+      base.push({ Field: 'StandardCode', Value: this.selectedNode!.Extra!.StdCode, Operator: 'eq' })
     }
     return base
   }
 
-  /** 新增准备钩子：注入树关联编码 */
+  /** 新增准备钩子：注入树关联编码（OrgCode 恒为 StdEnv，2026-10-12 终裁） */
   protected override onPrepareAdd(formData: Record<string, any>) {
     const ex = this.selectedNode?.Extra
-    formData.OrgCode = ex?.OrgCode ?? ''
+    formData.OrgCode = CORE_ORG_STD_ENV
     formData.StandardCode = ex?.StdCode ?? ''
     formData.PhaseCode = ex?.PhaseCode ?? ''
   }

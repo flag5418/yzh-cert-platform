@@ -933,6 +933,14 @@ const R17_SHARED_ALLOW = new Map([
         '机构-标准关联：后台配置两端复用同一份中间表，下沉 Shared 后两端均需重新接线；当前 Auditor 仅通过 using alias 引用，暂未影响业务',
     },
   ],
+  [
+    'ISOClause',
+    {
+      since: '2026-10-12',
+      reason:
+        'ISO 条款：检索唯一入口 ICoreResourceQuery.GetClausesAsync/GetClauseByCodeAsync 定义在 Shared，返回类型必须留 Shared/Entities；Auditor 端 2026-10-12 批 3 接线后改为经入口取数，不再直接引用实体类',
+    },
+  ],
 ])
 
 function runR17() {
@@ -1648,34 +1656,32 @@ const RULES = [
     run: runAR6,
     // ★ 2026-10-12 首次启用：实测存量 23 文件 / 131 处（按文件路径子串匹配，见下 debt）。
     //   接线一处 ⇒ 从本清单删一行；删完 ⇒ 规则转正（零容忍）。
+    //   2026-10-12 接线第一轮（13 处 ISOStandard）后：22 文件 / 118 处。
+    //   2026-10-12 接线第二轮（31 处 StandardDirectoryFile 清晰站：Code 单查/集合、ConfigCode、FolderCode）后：
+    //   剩 20 文件 / 87 处；已全清移出：ExpertResultController.cs · PromptWorkbenchService.cs · StandardDocContractController.cs。
+    //   2026-10-12 接线第三轮（31 处：includeDisabled 站 12 + CertStage/ISOClause 站 13 + 提取/填写规则站 6）后：
+    //   剩 16 文件 / 56 处；已全清移出：QueueMonitorController.cs · ExpertTaskService.cs · GapFillService.cs · IsStdFileMissingSkill.cs。
     //   ⚠️ 判据：`Shared/Domain/Scope/CoreResourceQuery.cs` 是**唯一**核心资源检索入口；
     //      端内只允许「投影」（选字段 / 派生列 / 排序分页 / 组装 DTO），⛔ 不许自己写 WHERE。
     debt: [
-      // ---- CertPlatform.Admin（12 文件）----
+      // ---- CertPlatform.Admin（8 文件）----
       'CertPlatform.Admin/Controllers/Cert/FillParamDefController.cs',
-      'CertPlatform.Admin/Controllers/System/QueueMonitorController.cs',
       'CertPlatform.Admin/Controllers/Workflow/DocFillPromptController.cs',
       'CertPlatform.Admin/Controllers/Workflow/DocTemplateController.cs',
-      'CertPlatform.Admin/Controllers/Workflow/StandardDocContractController.cs',
       'CertPlatform.Admin/Services/DocExtraction/DocExtractionRuleService.AI.cs',
       'CertPlatform.Admin/Services/DocExtraction/DocExtractionRuleService.cs',
       'CertPlatform.Admin/Services/Ent/Executors/EnterpriseDocNormalizationExecutor.cs',
       'CertPlatform.Admin/Services/StandardDirectory/StandardDirectoryService.cs',
       'CertPlatform.Admin/Services/StandardDirectory/UploadQueueCancelHandler.cs',
-      'CertPlatform.Admin/Services/Workflow/PromptWorkbenchService.cs',
-      'CertPlatform.Admin/Services/Workflow/Skills/IsStdFileMissingSkill.cs',
-      // ---- CertPlatform.Auditor（11 文件）----
+      // ---- CertPlatform.Auditor（8 文件）----
       'CertPlatform.Auditor/Controllers/DocumentFillController.cs',
       'CertPlatform.Auditor/Controllers/EnterpriseNormalizeController.cs',
-      'CertPlatform.Auditor/Controllers/ExpertResultController.cs',
       'CertPlatform.Auditor/Controllers/FillParamValueController.cs',
       'CertPlatform.Auditor/Services/Ent/EnterpriseExtractTaskExecutor.cs',
       'CertPlatform.Auditor/Services/Ent/EnterpriseFileService.cs',
       'CertPlatform.Auditor/Services/Ent/EnterpriseOriginalService.cs',
       'CertPlatform.Auditor/Services/Ent/Normalize/DocumentFillOrchestrator.cs',
-      'CertPlatform.Auditor/Services/Expert/ExpertTaskService.cs',
       'CertPlatform.Auditor/Services/Expert/GapDetector.cs',
-      'CertPlatform.Auditor/Services/Expert/GapFillService.cs',
     ],
   },
   {

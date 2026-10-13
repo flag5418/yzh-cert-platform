@@ -174,7 +174,7 @@ export function getDocTemplateTree() {
  * `GetOrganizationTreeAsync` + 同一份保留段过滤口径），差别只有两点：</p>
  * <ol>
  *   <li>载荷是 <b>PascalCase</b>（对齐 `YzhTreeTableLayout` 契约），
- *       而资料清单页内部用的是 `CertBizTree` 的 `{id,label,type}` camelCase 私有格式；</li>
+ *       而资料清单页走 `useFileTree` 的 `Code / Name / Type` 树（同为 PascalCase，字段集不同）；</li>
  *   <li>每个<b>文件叶子</b>额外带空白模板状态（`hasTemplate` / `templateCode` /
  *       `scanStatus` / `publishStatus` / `anchorCount` / `docCategory`）。</li>
  * </ol>

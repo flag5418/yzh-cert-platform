@@ -20,6 +20,9 @@
       <slot name="search-suffix" />
     </div>
 
+    <!-- 附加过滤行（如规则状态下拉）：仅在消费方提供内容时渲染 -->
+    <slot name="search-row" />
+
     <div v-loading="loading" class="org-std-stage-tree__content">
       <el-tree
         v-if="displayData.length > 0"
@@ -35,7 +38,7 @@
         @node-click="onNodeClick"
       >
         <template #default="{ data }">
-          <div class="org-std-stage-tree__node" :class="{ 'is-active': isActive(data) }">
+          <div class="org-std-stage-tree__node" :class="{ 'is-active': isActive(data), 'is-disabled': isDisabled(data), 'is-dimmed': isDimmed(data) }">
             <el-icon class="org-std-stage-tree__node-icon" :class="`is-${nodeType(data)}`">
               <component :is="getNodeIcon(nodeType(data))" />
             </el-icon>
@@ -126,6 +129,14 @@ const props = withDefaults(defineProps<{
   highlightCurrent?: boolean
   /** 默认展开层级：1=机构, 2=标准, 3=阶段, 4+ = 更深层级 */
   defaultExpandLevel?: number
+  /** 全部展开（优先于 defaultExpandLevel，用于企业→阶段等浅树） */
+  defaultExpandAll?: boolean
+  /** 外部图标映射（按节点类型合并覆盖内置表，如 enterprise→OfficeBuilding） */
+  iconMap?: Record<string, any>
+  /** 禁用字段名：节点该字段为真时不可点击（灰化且不触发任何事件），如 'Disabled' */
+  disabledField?: string
+  /** 仅灰化字段名：节点该字段为真时视觉置灰，但**仍可点击**（如「未关联标准」的阶段节点点击要弹提示） */
+  dimmedField?: string
   /** 树数据（已由外部加载完成） */
   data?: StdStageTreeNode[]
   /** 最大渲染层级：超过此层级节点不渲染 children（1=机构, 2=标准, 3=阶段, 4=文件） */
@@ -154,6 +165,10 @@ const props = withDefaults(defineProps<{
   lazyLoad: undefined,
   loading: false,
   currentKey: undefined,
+  defaultExpandAll: false,
+  iconMap: undefined,
+  disabledField: undefined,
+  dimmedField: undefined,
 })
 
 const emit = defineEmits<{
@@ -228,8 +243,18 @@ const displayData = computed(() => {
 // ========================================================
 
 const innerExpandedKeys = computed<(string | number)[]>(() => {
+  if (props.defaultExpandAll) return collectAllKeys(props.data || [])
   return collectExpandedKeys(props.data || [], 1)
 })
+
+function collectAllKeys(nodes: StdStageTreeNode[]): (string | number)[] {
+  const keys: (string | number)[] = []
+  for (const n of nodes) {
+    keys.push(n.Code)
+    if (n.Children?.length) keys.push(...collectAllKeys(n.Children))
+  }
+  return keys
+}
 
 function collectExpandedKeys(nodes: StdStageTreeNode[], currentLevel: number): (string | number)[] {
   const keys: (string | number)[] = []
@@ -256,12 +281,22 @@ const treeProps = {
 function getNodeIcon(type: string) {
   const iconMap: Record<string, any> = {
     organization: OfficeBuilding,
+    enterprise: OfficeBuilding,
     standard: Document,
     stage: Calendar,
     folder: FolderOpened,
     file: Document,
+    ...(props.iconMap || {}),
   }
   return iconMap[type] || Document
+}
+
+function isDisabled(data: StdStageTreeNode): boolean {
+  return !!props.disabledField && !!(data as any)[props.disabledField]
+}
+
+function isDimmed(data: StdStageTreeNode): boolean {
+  return !!props.dimmedField && !!(data as any)[props.dimmedField]
 }
 
 function isActive(data: StdStageTreeNode) {
@@ -273,6 +308,7 @@ function isActive(data: StdStageTreeNode) {
 // ========================================================
 
 function onNodeClick(data: StdStageTreeNode) {
+  if (isDisabled(data)) return
   selectedCode.value = data.Code
   emit('node-click', data)
   if (props.leafTypes.includes(nodeType(data))) {
@@ -317,6 +353,16 @@ watch(() => props.currentKey, (val) => {
 
 defineExpose({
   clearSelection: () => { selectedCode.value = null },
+  /**
+   * 外部强制拨回高亮（切换被拒等场景的回拨契约，如 prompt-template 的 resync）。
+   * 必须同时拨两处：壳自己的 is-active（selectedCode）+ el-tree 的 highlight-current。
+   * ⚠️ 仅靠 currentKey prop 不够 —— prop 值未变时 watch 不触发，而用户点击已把两处都切走。
+   */
+  setCurrentKey: (key: string | number | null | undefined) => {
+    if (key == null) return
+    selectedCode.value = key
+    treeRef.value?.setCurrentKey?.(key)
+  },
 })
 
 onMounted(() => {
@@ -368,6 +414,15 @@ onMounted(() => {
   gap: var(--yzh-space-1, 6px);
   flex: 1;
   min-width: 0;
+}
+
+.org-std-stage-tree__node.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.org-std-stage-tree__node.is-dimmed {
+  opacity: 0.5;
 }
 
 .org-std-stage-tree__node-icon {

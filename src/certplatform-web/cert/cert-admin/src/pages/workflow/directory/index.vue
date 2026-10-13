@@ -193,10 +193,10 @@ function resetRightPanel() {
 }
 
 /**
- * 左树节点点击（CertBizTree @node-click，所有节点类型都会触发）。
+ * 左树节点点击（OrgStandardStageTree @node-click，所有节点类型都会触发）。
  *
- * ⚠️ 不用 `@select`：CertBizTree 仅在 `data.Type === 'stage'` 时才 emit `select`
- *（见 components/CertBizTree.vue onNodeClick），点其它类型节点时页面收不到任何回调
+ * ⚠️ 不用 `@select`：@select 只在 leaf-types（本页 = stage）命中时触发，
+ * 点其它类型节点时页面收不到任何回调
  * → 右侧面板保持旧内容，看起来像「没刷新」。
  *
  * 分流：

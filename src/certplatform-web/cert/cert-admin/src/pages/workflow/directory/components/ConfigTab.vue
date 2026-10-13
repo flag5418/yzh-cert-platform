@@ -22,6 +22,7 @@ import {
   updateDirectoryConfig,
   deleteDirectoryConfig,
 } from '@share/composables/useDirectoryApi'
+import { CORE_ORG_STD_ENV } from '@share/constants/coreOrgCodes'
 import type { StandardDirectoryConfig, ISOStandard, CertStage, CertificationBody } from '@share/types'
 
 const emit = defineEmits<{ (e: 'changed'): void }>()
@@ -50,7 +51,7 @@ const form = reactive<{
   status: string
 }>({
   code: '',
-  orgCode: '',
+  orgCode: CORE_ORG_STD_ENV,
   standardCode: '',
   stageCode: '',
   rootFolderName: '',
@@ -80,6 +81,8 @@ async function loadOptions() {
 
 function orgLabel(code: string): string {
   if (!code) return '--'
+  // ★ 2026-10-12 终裁：StdEnv = 后台标准级模板行（全机构共享）
+  if (code === CORE_ORG_STD_ENV) return '平台模板'
   const b = bodies.value.find((x) => x.Code === code)
   return b ? b.Name || code : code
 }
@@ -110,7 +113,8 @@ async function loadConfigs() {
 
 function resetForm() {
   form.code = ''
-  form.orgCode = ''
+  // ★ 2026-10-12 终裁：模板行归属恒为后台标准级，不再由用户选机构
+  form.orgCode = CORE_ORG_STD_ENV
   form.standardCode = ''
   form.stageCode = ''
   form.rootFolderName = ''
@@ -119,7 +123,7 @@ function resetForm() {
 
 function handleAdd() {
   resetForm()
-  if (props.presetOrgCode) form.orgCode = props.presetOrgCode
+  // ⚠️ presetOrgCode 不再写入 orgCode —— 机构不参与目录归属（终裁两值模型）
   if (props.presetStandardCode) form.standardCode = props.presetStandardCode
   if (props.presetStageCode) form.stageCode = props.presetStageCode
   dialogVisible.value = true
@@ -137,7 +141,8 @@ function handleEdit(row: StandardDirectoryConfig) {
 
 async function handleSubmit() {
   if (!form.orgCode) {
-    ElMessage.warning('请选择机构')
+    // 防御：form.orgCode 恒为 CORE_ORG_STD_ENV（2026-10-12 终裁），不应走到这里
+    ElMessage.warning('归属缺失（OrgCode）')
     return
   }
   if (!form.standardCode) {
@@ -201,19 +206,19 @@ onMounted(async () => {
     <el-card shadow="never" class="config-card">
       <template #header>
         <div class="card-header">
-          <span class="card-title">目录配置管理（机构 × 标准 × 阶段）</span>
+          <span class="card-title">目录配置管理（平台模板 × 标准 × 阶段）</span>
           <el-button type="primary" size="small" :icon="Plus" @click="handleAdd">新建配置</el-button>
         </div>
       </template>
 
       <div class="hint">
         <el-icon><FolderOpened /></el-icon>
-        <span>一行 = 一套目录（uk = 机构+标准+阶段，同键不允许存在 2 份）。配置由阶段首次进入/上传时自动创建，此处用于管理根名 / 状态 / 级联清理。</span>
+        <span>一行 = 一套目录（uk = 归属+标准+阶段，同键不允许存在 2 份；归属恒为「平台模板」，2026-10-12 终裁）。配置由阶段首次进入/上传时自动创建，此处用于管理根名 / 状态 / 级联清理。</span>
       </div>
 
       <el-table :data="tableData" v-loading="loading" border stripe size="small">
         <el-table-column prop="Code" label="配置 Code" min-width="240" show-overflow-tooltip />
-        <el-table-column label="机构" min-width="160" show-overflow-tooltip>
+        <el-table-column label="归属" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">{{ orgLabel(row.OrgCode) }}</template>
         </el-table-column>
         <el-table-column label="标准" min-width="170" show-overflow-tooltip>
@@ -254,22 +259,9 @@ onMounted(async () => {
       destroy-on-close
     >
       <el-form :model="form" label-width="100px">
-        <el-form-item label="机构">
-          <el-select
-            v-model="form.orgCode"
-            placeholder="选择认证机构"
-            filterable
-            clearable
-            :disabled="!!form.code"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="b in bodies"
-              :key="b.Code"
-              :value="b.Code || ''"
-              :label="b.Name || b.Code || ''"
-            />
-          </el-select>
+        <el-form-item label="归属">
+          <!-- ★ 2026-10-12 终裁：目录模板是后台标准级（yzh-std-env），机构不再参与归属 -->
+          <el-input :model-value="'平台模板（后台标准级）'" disabled />
         </el-form-item>
         <el-form-item label="标准">
           <el-select

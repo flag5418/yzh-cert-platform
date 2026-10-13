@@ -29,7 +29,6 @@
   "cert/cert-auditor/src/pages/tasks/create.vue": 25,
   "cert/cert-auditor/src/pages/tasks/detail.vue": 18,
   "cert/cert-auditor/src/pages/tasks/index.vue": 2,
-  "cert/cert-share/src/components/CertBizTree.vue": 14,
   "cert/cert-share/src/components/CertConvertBadge.vue": 2,
   "cert/cert-share/src/components/CertPageHeader.vue": 4,
   "cert/cert-share/src/components/CertPagePlaceholder.vue": 2,

@@ -13,33 +13,20 @@
  * ★ 表格一律 YzhTable（守卫 R6：页面禁内联 `<el-table>`）；清单换批靠 dataRevision 换 key 重挂载
  * ★ 字段大小写：DB 列名字段 PascalCase（Code/FileName/StoragePath/Status），接口拼装字段 camel
  */
-import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { onMounted, onBeforeUnmount } from 'vue'
 import { YzhTable, YzhEmptyState } from '@yzh-core'
-import { Calendar, OfficeBuilding, Refresh, Search, Upload, UploadFilled, Files } from '@element-plus/icons-vue'
+import { Refresh, Upload, UploadFilled, Files } from '@element-plus/icons-vue'
+import { OrgStandardStageTree, type StdStageTreeNode } from '@share/components'
 import { ResourcesLogic, type ResourceTreeNode } from './logic'
 import type { FileSlot } from '@share/api'
 import StandardFolderTree from './components/StandardFolderTree.vue'
 
 const logic = new ResourcesLogic()
 
-// ─── 左树（本地 UI 状态：搜索框 + el-tree 实例） ───
-const treeRef = ref()
-const treeFilter = ref('')
+/** 选中态以 logic.selectedKey 为唯一权威（单阶段企业会自动深入阶段节点）——树高亮走壳 currentKey prop */
 
-/** el-tree 搜索：父节点可见性由 el-tree 自身按「子节点有命中」推导，无需手写递归 */
-function filterTreeNode(value: string, data: any): boolean {
-  if (!value) return true
-  return String(data?.Name ?? '').toLowerCase().includes(value.toLowerCase())
-}
-
-watch(treeFilter, (v) => treeRef.value?.filter(v))
-/** 选中态以 logic.selectedKey 为唯一权威（单阶段企业会自动深入阶段节点） */
-watch(() => logic.selectedKey.value, (key) => {
-  if (key) treeRef.value?.setCurrentKey(key)
-})
-
-function onTreeNodeClick(node: ResourceTreeNode) {
-  logic.selectTreeNode(node)
+function onTreeNodeClick(node: StdStageTreeNode) {
+  logic.selectTreeNode(node as ResourceTreeNode)
 }
 
 onMounted(async () => {
@@ -92,40 +79,26 @@ function onReplacePick(file: any) {
           </el-button>
         </div>
 
-        <div class="tree-panel__search">
-          <el-input v-model="treeFilter" placeholder="搜索企业 / 阶段" clearable size="small">
-            <template #prefix>
-              <el-icon><Search /></el-icon>
-            </template>
-          </el-input>
-        </div>
-
         <div class="tree-panel__body">
-          <el-tree
+          <OrgStandardStageTree
             v-if="logic.treeNodes.value.length"
-            ref="treeRef"
             :data="logic.treeNodes.value"
             node-key="Key"
-            :props="{ label: 'Name', children: 'Children' }"
-            highlight-current
-            :expand-on-click-node="false"
-            default-expand-all
-            :filter-node-method="filterTreeNode"
+            title=""
+            search-placeholder="搜索企业 / 阶段"
+            :default-expand-all="true"
+            dimmed-field="Disabled"
+            :loading="logic.loadingEnterprises.value"
+            :current-key="logic.selectedKey.value"
             @node-click="onTreeNodeClick"
           >
-            <template #default="{ data }">
-              <span class="tree-node" :class="{ 'is-disabled': data.Disabled }">
-                <el-icon class="tree-node__icon" :class="`is-${data.Type}`">
-                  <component :is="data.Type === 'enterprise' ? OfficeBuilding : Calendar" />
-                </el-icon>
-                <span class="tree-node__label" :title="data.Name">{{ data.Name }}</span>
-                <span v-if="data.Type === 'enterprise'" class="tree-node__badge">{{ data.StageCount }} 阶段</span>
-                <el-tag v-else size="small" :type="data.StandardCount ? 'success' : 'info'">
-                  {{ data.StandardCount ? `${data.StandardCount} 标准` : '未关联' }}
-                </el-tag>
-              </span>
+            <template #node-extra="{ node }">
+              <span v-if="node.Type === 'enterprise'" class="tree-node__badge">{{ node.StageCount }} 阶段</span>
+              <el-tag v-else size="small" :type="node.StandardCount ? 'success' : 'info'">
+                {{ node.StandardCount ? `${node.StandardCount} 标准` : '未关联' }}
+              </el-tag>
             </template>
-          </el-tree>
+          </OrgStandardStageTree>
 
           <el-skeleton v-else-if="logic.loadingEnterprises.value" :rows="4" animated />
           <YzhEmptyState v-else title="暂无企业数据" />
@@ -624,12 +597,6 @@ function onReplacePick(file: any) {
   flex-shrink: 0;
 }
 
-.tree-panel__search {
-  flex-shrink: 0;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
-
 .tree-panel__body {
   flex: 1;
   min-height: 0;
@@ -647,36 +614,6 @@ function onReplacePick(file: any) {
   border-radius: 4px;
 }
 
-.tree-node {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-}
-
-.tree-node__icon {
-  font-size: 15px;
-  flex-shrink: 0;
-}
-
-.tree-node__icon.is-enterprise {
-  color: var(--el-color-warning);
-}
-
-.tree-node__icon.is-stage {
-  color: var(--el-color-primary);
-}
-
-.tree-node__label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-}
-
 .tree-node__badge {
   flex-shrink: 0;
   font-size: 11px;
@@ -685,10 +622,6 @@ function onReplacePick(file: any) {
   border-radius: 9px;
   color: var(--el-text-color-secondary);
   background: var(--el-fill-color);
-}
-
-.tree-node.is-disabled .tree-node__label {
-  color: var(--el-text-color-secondary);
 }
 
 /* ═══════════ 右：阶段资料 ═══════════ */

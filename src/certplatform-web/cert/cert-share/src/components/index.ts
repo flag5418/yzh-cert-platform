@@ -4,8 +4,8 @@
  * 注：三个纯展示组件（CertConvertBadge/CertPageHeader/CertStatusBar）已加 lang="ts"，
  * vue-tsc 可正常推导类型；若新增零逻辑 SFC 请保持 <script setup lang="ts">。
  */
-export { default as CertBizTree } from './CertBizTree.vue'
-export { default as CertDirectoryTree } from './CertDirectoryTree.vue'
+// Q4（2026-10-12）：CertBizTree / CertDirectoryTree 已删除 —— 文件树/规则树统一走
+// OrgStandardStageTree（规则状态回写见 composables/useFileRuleStatus.ts）。
 // 通用机构+标准+阶段树（数据驱动，maxLevel / leafTypes 控制渲染深度与选中行为）
 export { default as OrgStandardStageTree } from './OrgStandardStageTree.vue'
 export type { StdStageTreeNode } from './OrgStandardStageTree.vue'

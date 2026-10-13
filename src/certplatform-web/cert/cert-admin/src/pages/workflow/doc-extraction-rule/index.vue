@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { MagicStick, ChatLineSquare, Pointer } from '@element-plus/icons-vue'
 import { confirmOrFalse, YzhPageLayout, YzhEmptyState } from '@yzh-core'
-import { CertDirectoryTree, DocPreview } from '@share/components'
+import { OrgStandardStageTree, CertConvertBadge, DocPreview } from '@share/components'
+import { useFileTree, type TreeNode } from '@share/composables/useFileTree'
+import { useFileRuleStatus } from '@share/composables/useFileRuleStatus'
+import { mergeConvertStatus } from '@share/utils/convertStatus'
 import { retryFailedConversions } from '@share/composables/useDirectoryApi'
 import {
   getRuleDetail,
@@ -18,9 +21,87 @@ import {
 import AIAnalysisTab from './components/AIAnalysisTab.vue'
 import PromptVerifyTab from './components/PromptVerifyTab.vue'
 
-const treeRef = ref<any>(null)
 const selectedFile = ref<any>(null)
 const activeTab = ref('analysis')
+
+// ========================================================
+// 左树：useFileTree 数据源 + 规则状态回写（Q4 后本页直连，
+// 不再经 CertDirectoryTree 包装 —— 该组件已随 Q4 删除）
+// ========================================================
+const { fileTreeData, loading: treeLoading, loadTree, loadStageFiles } = useFileTree()
+const { loadRuleStatuses, applyRuleStatusToLoaded } = useFileRuleStatus(fileTreeData)
+
+/** 规则状态筛选（原 CertBizTree 内部态，收敛到页面） */
+const ruleFilter = ref<'all' | 'configured' | 'none' | 'failed'>('all')
+
+/**
+ * 树数据：'all' 恒返回原引用（主路径零拷贝 —— 保住 stage 懒加载挂载与树高亮）；
+ * 其余按 `RuleStatus` 过滤 file 节点、裁掉空枝（未加载 stage 无 Children ⇒ 保留）。
+ * 依赖收集：过滤分支读过 `RuleStatus` 属性 → composable 就地回写后自动重算。
+ */
+const pageTreeData = computed(() => {
+  const want = ruleFilter.value
+  if (want === 'all') return fileTreeData.value
+  return filterByRule(fileTreeData.value, want)
+})
+
+function filterByRule(nodes: TreeNode[], want: string): TreeNode[] {
+  const out: TreeNode[] = []
+  for (const n of nodes) {
+    if (n.Type === 'file') {
+      if ((n.RuleStatus || 'none') === want) out.push(n)
+      continue
+    }
+    if (!n.Children?.length) {
+      out.push(n) // 未加载的 stage（Children undefined）无法判定，保留
+      continue
+    }
+    const kids = filterByRule(n.Children, want)
+    if (kids.length) out.push({ ...n, Children: kids })
+  }
+  return out
+}
+
+/** 按 Code 找回 useFileTree 原对象（maxLevel 截断/过滤态下 el-tree 里的节点是浅拷贝体） */
+function findStageNode(nodes: TreeNode[], code: string | number): TreeNode | undefined {
+  for (const n of nodes) {
+    if (n.Code === code) return n
+    if (n.Children) {
+      const hit = findStageNode(n.Children, code)
+      if (hit) return hit
+    }
+  }
+  return undefined
+}
+
+/** stage 节点点击 → 兜底懒加载（loadTree 已预载多数；此处管「总表无感懒建」的新 stage） */
+async function onTreeNodeClick(node: any) {
+  if (node?.Type !== 'stage') return
+  const origin = findStageNode(fileTreeData.value, node.Code)
+  if (!origin) return
+  try {
+    await loadStageFiles(origin)
+    applyRuleStatusToLoaded()
+  } catch (e: any) {
+    ElMessage.error('加载阶段文件失败：' + (e?.message || ''))
+  }
+}
+
+/** 双产物链合并徽标状态：只看 ConvertStatus 会漏掉「PDF 成功但 Markdown 失败」的文件 */
+function badgeStatus(node: any): string {
+  return mergeConvertStatus(node?.ConvertStatus, node?.MarkdownStatus)
+}
+
+const RULE_STATUS_TEXT: Record<string, string> = {
+  none: '未配置',
+  configured: '已配置',
+  failed: '配置失败',
+}
+
+onMounted(async () => {
+  await loadTree()
+  await loadRuleStatuses()
+})
 
 const skill = ref('')
 const fields = ref<FieldDefDto[]>([])
@@ -256,7 +337,7 @@ async function onSave() {
     ruleStatus.value = isValid.value === true ? 'configured' : 'failed'
     ElMessage.success('规则保存成功')
     // 刷新目录树的规则状态标签（已配置 / 未配置 / 配置失败）
-    await treeRef.value?.refresh?.()
+    await loadRuleStatuses()
   } catch (e: any) {
     ElMessage.error('保存失败: ' + (e?.message || '未知错误'))
   } finally {
@@ -304,9 +385,9 @@ async function onRetryFailed() {
     if (enqueued > 0) {
       ElMessage.success(`${message || '已重新入队'}（${enqueued} 个文件）`)
     } else {
-      ElMessage.info(message || '没有需要重试的文件')
+      ElMessage.info('没有需要重试的文件')
     }
-    await treeRef.value?.refresh?.()
+    await loadRuleStatuses()
   } catch (e: any) {
     ElMessage.error('重试失败：' + (e?.message || '未知错误'))
   } finally {
@@ -340,14 +421,17 @@ function startResizeLeft(e: MouseEvent) {
 <template>
   <YzhPageLayout title="文档提取规则" no-padding hide-toolbar>
     <div class="three-column-layout">
-      <!-- 左侧：文件目录（复用证书目录通用件） -->
+      <!-- 左侧：文件目录（Q4 后直连 OrgStandardStageTree 统一树壳） -->
       <div class="left-panel" :style="{ width: leftWidth + 'px' }">
-        <CertDirectoryTree
-          ref="treeRef"
+        <OrgStandardStageTree
           title="文件目录"
-          filterable
-          show-rule-status
-          :show-convert-badge="true"
+          search-placeholder="搜索文档..."
+          :data="pageTreeData as any"
+          :loading="treeLoading"
+          :default-expand-level="3"
+          :max-level="5"
+          :leaf-types="['file']"
+          @node-click="onTreeNodeClick"
           @select="onFileSelect"
         >
           <template #header-actions>
@@ -362,7 +446,35 @@ function startResizeLeft(e: MouseEvent) {
               重试失败转换
             </el-button>
           </template>
-        </CertDirectoryTree>
+
+          <template #search-row>
+            <div class="rule-filter-row">
+              <el-select
+                v-model="ruleFilter"
+                size="small"
+                placeholder="规则状态"
+                style="width: 110px"
+              >
+                <el-option label="全部" value="all" />
+                <el-option label="已配置规则" value="configured" />
+                <el-option label="未配置规则" value="none" />
+                <el-option label="配置失败" value="failed" />
+              </el-select>
+            </div>
+          </template>
+
+          <template #node-extra="{ node }">
+            <CertConvertBadge
+              v-if="node.Type === 'file' && badgeStatus(node)"
+              :status="badgeStatus(node)"
+            />
+            <span
+              v-if="node.Type === 'file'"
+              class="rule-tag"
+              :class="`is-${node.RuleStatus || 'none'}`"
+            >{{ RULE_STATUS_TEXT[node.RuleStatus || 'none'] }}</span>
+          </template>
+        </OrgStandardStageTree>
       </div>
 
       <!-- 拖拽调整宽度 -->
@@ -605,5 +717,38 @@ function startResizeLeft(e: MouseEvent) {
   padding: 12px 16px;
   border-top: 1px solid var(--el-border-color-lighter);
   background: var(--yzh-color-bg-container, #fff);
+}
+
+/* ========== 左树附加行 / 节点标签（Q4 自 CertBizTree 迁入） ========== */
+.rule-filter-row {
+  padding: var(--yzh-space-2, 8px) var(--yzh-space-3, 12px);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.rule-tag {
+  flex-shrink: 0;
+  font-size: var(--yzh-font-size-xs, 11px);
+  line-height: 18px;
+  padding: 0 var(--yzh-space-1, 4px);
+  border-radius: 2px;
+  border: 1px solid transparent;
+}
+
+.rule-tag.is-none {
+  color: var(--yzh-color-text-tertiary, #909399);
+  background: var(--yzh-color-bg-muted, #f4f4f5);
+  border-color: var(--el-border-color-lighter, #ebeef5);
+}
+
+.rule-tag.is-configured {
+  color: var(--el-color-success-dark-2, #529b2e);
+  background: var(--el-color-success-light-9, #f0f9eb);
+  border-color: var(--el-color-success-light-8, #e1f3d8);
+}
+
+.rule-tag.is-failed {
+  color: var(--el-color-danger-dark-2, #c45656);
+  background: var(--el-color-danger-light-9, #fef0f0);
+  border-color: var(--el-color-danger-light-8, #fde2e2);
 }
 </style>
