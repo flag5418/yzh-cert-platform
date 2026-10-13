@@ -25,10 +25,17 @@ namespace CertPlatform.Shared.Domain.Scope;
 /// <para><b>★ 判定口诀</b>：<b>同一个 <c>WHERE</c> 出现在第二处 ⇒ 就是违规。</b>
 /// 守卫 <b>A-R6</b> 会拦下对下列实体的端内直查。</para>
 ///
-/// <para><b>⚠️ 首期覆盖范围</b>：下表 8 类实体（<b>已在 <c>Shared/Entities/</c></b>）。
-/// 仍在 <c>Admin/Entities/</c> 的 <c>ConclusionRule</c> / <c>NcJudgePrompt</c> /
-/// <c>NcConcludePrompt</c> / <c>DirectoryTemplate</c> / <c>FileRequirement</c>
-/// 待阶段 2/3 下沉后再纳入（<c>Shared</c> ⛔ 不能引 <c>Admin</c>）。</para>
+/// <para><b>★ 覆盖范围（2026-10-13 阶段 1.B 扩充后）</b>：已覆盖「机构 + 标准 + 阶段」<b>核心域</b>
+/// 的 <b>15 类实体</b>（含 <c>CertificationBody</c> / <c>Enterprise</c> /
+/// <c>StandardDirectoryConfig</c> / <c>StandardDirectoryFolder</c> / <c>DocTemplate</c>）。
+///
+/// <para>⏸ <b>挂账 3 类</b>（实体未下沉 ⇒ 等阶段 2/3 收口，<c>Shared</c> ⛔ 不能引 <c>Admin</c>/<c>Auditor</c>）：
+/// <c>ConclusionRule</c> / <c>NcJudgePrompt</c> / <c>NcConcludePrompt</c>
+/// （<b>三个类同一文件</b> <c>Admin/Entities/Cert/ConclusionRule.cs</c>）·
+/// <c>FileRequirement</c>（<c>Admin/Entities/</c>）· <c>CertEnterpriseStage</c>（<c>Auditor/Entities/</c>）。</para>
+///
+/// <para>★ <b>树装配与排序口径</b>见 <c>Shared/Domain/Organization/OrgStandardTreeAssembler</c>
+/// （⛔ 端内不要自己写排序链）。</para>
 ///
 /// <para><b>⚠️ 归属判据（归属模型 V2）</b>：本接口内的 SQL 谓词以 <c>x.OrgCode == ""</c>
 /// 表达「平台标准级」（= <b>两列都空</b>；⛔ 旧常量 <c>yzh-std-env</c> 已废除）；
@@ -84,6 +91,15 @@ public interface ICoreResourceQuery
     /// <summary>取机构已关联的阶段（<paramref name="orgCode"/> = 机构 <c>Code</c>）。</summary>
     Task<List<CertOrgStage>> GetOrgStagesAsync(string orgCode);
 
+    /// <summary>
+    /// 取<b>全部</b>机构×标准关联 —— 供「一次取回 + 内存组树」的整树端点使用
+    /// （机构数在个位到十位，优于逐机构 N+1）。
+    /// </summary>
+    Task<List<CertOrgStandard>> GetAllOrgStandardsAsync();
+
+    /// <summary>取<b>全部</b>机构×阶段关联（用途同 <see cref="GetAllOrgStandardsAsync"/>）。</summary>
+    Task<List<CertOrgStage>> GetAllOrgStagesAsync();
+
     // ─────────────────────── 填写规则（参数定义 / 提示词）───────────────────────
 
     /// <summary>
@@ -134,6 +150,48 @@ public interface ICoreResourceQuery
 
     /// <summary>按文件夹 <c>Code</c> 取该文件夹下全部有效文件。</summary>
     Task<List<StandardDirectoryFile>> GetDirectoryFilesByFolderCodeAsync(string folderCode);
+
+    // ─────────────── 机构 / 企业（树根级）· 2026-10-13 阶段 1.B 扩充 ───────────────
+
+    /// <summary>
+    /// 取<b>全部有效认证机构</b>（树根级）。
+    /// <para>⚠️ <b>不排序</b> —— 排序口径唯一实现在
+    /// <c>OrgStandardTreeAssembler.OrderOrgs</c>，调用方自行排序。</para>
+    /// </summary>
+    Task<List<CertificationBody>> GetCertificationBodiesAsync();
+
+    /// <summary>
+    /// 取某机构（= 工作区）下的<b>有效企业</b>。
+    /// <para>⚠️ <b>不排序</b> —— 用 <c>OrgStandardTreeAssembler.OrderEnterprises</c>。</para>
+    /// </summary>
+    Task<List<Enterprise>> GetEnterprisesAsync(string orgCode);
+
+    // ─────────────── 目录配置 / 文件夹 / 模板 · 2026-10-13 阶段 1.B 扩充 ───────────────
+
+    /// <summary>
+    /// 取标准目录配置。<paramref name="orgCode"/> / <paramref name="standardCode"/> /
+    /// <paramref name="stageCode"/> / <paramref name="enterpriseCode"/> 为 <c>null</c> = 该维<b>不限</b>。
+    /// <para>⚠️ 全 <c>null</c> = 取全部有效行（配置数在十量级，全量取回优于逐阶段 N+1）。</para>
+    /// </summary>
+    Task<List<StandardDirectoryConfig>> GetDirectoryConfigsAsync(
+        string? orgCode = null, string? standardCode = null, string? stageCode = null, string? enterpriseCode = null);
+
+    /// <summary>按目录配置 <c>Code</c> 集合取文件夹（空集合直接返回空，⛔ 不发查询）。<b>不排序</b>。</summary>
+    Task<List<StandardDirectoryFolder>> GetDirectoryFoldersAsync(IEnumerable<string> configCodes);
+
+    /// <summary>
+    /// 取标准文档模板。<paramref name="orgCode"/> / <paramref name="standardCode"/> /
+    /// <paramref name="stageCode"/> 为 <c>null</c> = 该维<b>不限</b>；
+    /// <paramref name="onlyPublished"/> = <c>true</c> 时只取 <c>PublishStatus == "published"</c>。
+    /// </summary>
+    Task<List<DocTemplate>> GetDocTemplatesAsync(
+        string? orgCode = null, string? standardCode = null, string? stageCode = null, bool onlyPublished = false);
+
+    /// <summary>
+    /// 按<b>宿主标准文件 <c>Code</c></b> 集合批量取模板
+    /// （空集合直接返回空，⛔ 不发查询）。<b>不排序</b>。
+    /// </summary>
+    Task<List<DocTemplate>> GetDocTemplatesByStandardFileCodesAsync(IEnumerable<string> standardFileCodes);
 }
 
 /// <summary>
@@ -269,6 +327,18 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
 
         var org = orgCode;
         var rows = await _db.GetListAsync<CertOrgStage>(x => x.OrgCode == org);
+        return rows.Data ?? new List<CertOrgStage>();
+    }
+
+    public async Task<List<CertOrgStandard>> GetAllOrgStandardsAsync()
+    {
+        var rows = await _db.GetListAsync<CertOrgStandard>();
+        return rows.Data ?? new List<CertOrgStandard>();
+    }
+
+    public async Task<List<CertOrgStage>> GetAllOrgStagesAsync()
+    {
+        var rows = await _db.GetListAsync<CertOrgStage>();
         return rows.Data ?? new List<CertOrgStage>();
     }
 
@@ -412,5 +482,77 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         var fc = folderCode;
         var rows = await _db.GetListAsync<StandardDirectoryFile>(x => x.FolderCode == fc);
         return rows.Data ?? new List<StandardDirectoryFile>();
+    }
+
+    // ─────────────── 机构 / 企业（树根级）· 2026-10-13 阶段 1.B 扩充 ───────────────
+
+    public async Task<List<CertificationBody>> GetCertificationBodiesAsync()
+    {
+        // 框架 GetListAsync 内含 IsDeleted=0 + IsValid=1 ⇒ 谓词处 ⛔ 不重复写
+        var rows = await _db.GetListAsync<CertificationBody>();
+        return rows.Data ?? new List<CertificationBody>();
+    }
+
+    public async Task<List<Enterprise>> GetEnterprisesAsync(string orgCode)
+    {
+        if (string.IsNullOrWhiteSpace(orgCode)) return new List<Enterprise>();
+
+        var org = orgCode;
+        var rows = await _db.GetListAsync<Enterprise>(x => x.OrgCode == org);
+        return rows.Data ?? new List<Enterprise>();
+    }
+
+    // ─────────────── 目录配置 / 文件夹 / 模板 · 2026-10-13 阶段 1.B 扩充 ───────────────
+
+    public async Task<List<StandardDirectoryConfig>> GetDirectoryConfigsAsync(
+        string? orgCode = null, string? standardCode = null, string? stageCode = null, string? enterpriseCode = null)
+    {
+        // ⚠️ 4 维 ⇒ 16 种组合，用显式分支会爆炸 ⇒ 这里走链式 Where。
+        //    判据与 GetListAsync 口径一致：!IsDeleted && IsValid == 1（Queryable 不带默认过滤）。
+        var q = _db.Client.Queryable<StandardDirectoryConfig>()
+            .Where(x => !x.IsDeleted && x.IsValid == 1);
+
+        if (orgCode != null) { var v = orgCode; q = q.Where(x => x.OrgCode == v); }
+        if (standardCode != null) { var v = standardCode; q = q.Where(x => x.StandardCode == v); }
+        if (stageCode != null) { var v = stageCode; q = q.Where(x => x.StageCode == v); }
+        if (enterpriseCode != null) { var v = enterpriseCode; q = q.Where(x => x.EnterpriseCode == v); }
+
+        return await q.ToListAsync() ?? new List<StandardDirectoryConfig>();
+    }
+
+    public async Task<List<StandardDirectoryFolder>> GetDirectoryFoldersAsync(IEnumerable<string> configCodes)
+    {
+        var codes = new List<string>();
+        foreach (var c in configCodes)
+            if (!string.IsNullOrWhiteSpace(c)) codes.Add(c);
+        if (codes.Count == 0) return new List<StandardDirectoryFolder>();
+
+        var rows = await _db.GetListAsync<StandardDirectoryFolder>(x => codes.Contains(x.ConfigCode!));
+        return rows.Data ?? new List<StandardDirectoryFolder>();
+    }
+
+    public async Task<List<DocTemplate>> GetDocTemplatesAsync(
+        string? orgCode = null, string? standardCode = null, string? stageCode = null, bool onlyPublished = false)
+    {
+        var q = _db.Client.Queryable<DocTemplate>()
+            .Where(x => !x.IsDeleted && x.IsValid == 1);
+
+        if (orgCode != null) { var v = orgCode; q = q.Where(x => x.OrgCode == v); }
+        if (standardCode != null) { var v = standardCode; q = q.Where(x => x.StandardCode == v); }
+        if (stageCode != null) { var v = stageCode; q = q.Where(x => x.StageCode == v); }
+        if (onlyPublished) q = q.Where(x => x.PublishStatus == "published");
+
+        return await q.ToListAsync() ?? new List<DocTemplate>();
+    }
+
+    public async Task<List<DocTemplate>> GetDocTemplatesByStandardFileCodesAsync(IEnumerable<string> standardFileCodes)
+    {
+        var codes = new List<string>();
+        foreach (var c in standardFileCodes)
+            if (!string.IsNullOrWhiteSpace(c)) codes.Add(c);
+        if (codes.Count == 0) return new List<DocTemplate>();
+
+        var rows = await _db.GetListAsync<DocTemplate>(x => codes.Contains(x.StandardFileCode!));
+        return rows.Data ?? new List<DocTemplate>();
     }
 }

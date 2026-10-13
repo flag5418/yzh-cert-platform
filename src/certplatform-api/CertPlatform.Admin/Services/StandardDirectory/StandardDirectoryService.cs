@@ -15,6 +15,7 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Queue;
 using CertPlatform.Admin.Entities.Dir;
 using CertPlatform.Shared.Entities.Sys;
+using CertPlatform.Shared.Domain.Organization;
 using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Storage;
 
@@ -80,18 +81,20 @@ public class StandardDirectoryService
     /// </summary>
     public async Task<List<object>> GetOrganizationTreeAsync()
     {
-        var orgs = (await _db.GetListAsync<CertificationBody>(x => x.IsValid == 1)).Data ?? new();
+        // ★ 阶段 1.B（2026-10-13）：取数一律走 CoreResourceQuery（铁律 L5）；
+        //   排序一律走 OrgStandardTreeAssembler（排序口径唯一实现）。
+        var orgs = await _core.GetCertificationBodiesAsync();
         var standards = await _core.GetValidStandardsAsync();
-        var orgStandards = (await _db.GetListAsync<CertOrgStandard>()).Data ?? new();
-        var orgStages = (await _db.GetListAsync<CertOrgStage>()).Data ?? new();
+        var orgStandards = await _core.GetAllOrgStandardsAsync();
+        var orgStages = await _core.GetAllOrgStagesAsync();
 
         // CertStage 是机构-阶段关联的权威来源（cert_org_stage.StageCode ★Q2 起存 Code/GUID）
         // 与「认证阶段定义」页（/cert/cert-stage）同源
-        var phaseDefs = (await _core.GetStagesAsync())
-                        .OrderBy(x => x.Sort).ThenBy(x => x.StageCode).ToList();
+        var phaseDefs = OrgStandardTreeAssembler.OrderStages(
+            await _core.GetStagesAsync(), x => x.Sort, x => x.StageCode);
 
         // 目录配置 Code 索引：前端阶段节点用它作为 DirectoryCode（决策 ⑳修订：按机构隔离）
-        var configs = (await _db.GetListAsync<StandardDirectoryConfig>(x => x.IsValid == 1)).Data ?? new();
+        var configs = await _core.GetDirectoryConfigsAsync();
         var configCodeMap = configs
             .GroupBy(x => $"{x.OrgCode}|{x.StandardCode}|{x.StageCode}")
             .ToDictionary(g => g.Key, g => g.First().Code);
@@ -293,15 +296,9 @@ public class StandardDirectoryService
         var configCodes = phases.Select(x => x.ConfigCode).Distinct().ToList();
 
         // ② 文件夹 / 文件：各一次查询（⛔ 不逐阶段查 —— 那会是 2×N 次往返）
-        var allFolders = (await _db.GetListAsync<StandardDirectoryFolder>(x => x.IsValid == 1)).Data ?? new();
-        var allFiles = await _core.GetDirectoryFilesAsync();
-
-        var scopedFolders = allFolders
-            .Where(f => !string.IsNullOrEmpty(f.ConfigCode) && configCodes.Contains(f.ConfigCode!))
-            .ToList();
-        var scopedFiles = allFiles
-            .Where(f => !string.IsNullOrEmpty(f.ConfigCode) && configCodes.Contains(f.ConfigCode))
-            .ToList();
+        //    ★ 阶段 1.B（2026-10-13）：改为直接按 ConfigCode 集合查（原为「全量取回 + 内存过滤」）。
+        var scopedFolders = await _core.GetDirectoryFoldersAsync(configCodes);
+        var scopedFiles = await _core.GetDirectoryFilesByConfigCodesAsync(configCodes);
 
         // 保留段过滤（pdf / markdown / editable / _template / _archive）—— 与资料清单页同一份口径
         var reservedCodes = CollectReservedFolderCodes(scopedFolders);
@@ -311,11 +308,9 @@ public class StandardDirectoryService
             scopedFiles = scopedFiles.Where(f => !reservedCodes.Contains(f.FolderCode ?? "")).ToList();
         }
 
-        // ③ 空白模板（按宿主标准文件 Code 索引）
+        // ③ 空白模板（按宿主标准文件 Code 索引）—— ★ 阶段 1.B：走统一入口
         var fileCodes = scopedFiles.Select(f => f.Code ?? "").Where(c => c.Length > 0).Distinct().ToList();
-        var templates = fileCodes.Count == 0
-            ? new List<DocTemplate>()
-            : (await _db.GetListAsync<DocTemplate>(t => fileCodes.Contains(t.StandardFileCode!))).Data ?? new();
+        var templates = await _core.GetDocTemplatesByStandardFileCodesAsync(fileCodes);
 
         var tplByFile = templates
             .Where(t => !string.IsNullOrEmpty(t.StandardFileCode))
