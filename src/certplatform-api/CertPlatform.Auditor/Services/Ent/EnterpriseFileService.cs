@@ -32,6 +32,8 @@ namespace CertPlatform.Auditor.Services.Ent;
 public class EnterpriseFileService
 {
     private readonly IDbOrm _db;
+    /// <summary>核心资源检索唯一入口（铁律 L5）—— 标准/目录文件取数只走它。</summary>
+    private readonly ICoreResourceQuery _core;
     private readonly IObjectStorage _storage;
     private readonly QueueManager _queueManager;
     private readonly WorkspaceContextService _workspace;
@@ -71,9 +73,11 @@ public class EnterpriseFileService
         ILogger<EnterpriseFileService> logger,
         CertPlatform.Shared.Services.DocExtraction.EnterpriseExtractionResultStore resultStore,
         CertPlatform.Shared.Services.DocExtraction.ExtractionScopeResolver scopeResolver,
-        CertPlatform.Shared.Services.Sys.UserDisplayNameResolver userNames)
+        CertPlatform.Shared.Services.Sys.UserDisplayNameResolver userNames,
+        ICoreResourceQuery core)
     {
         _db = db;
+        _core = core;
         _storage = storage;
         _queueManager = queueManager;
         _workspace = workspace;
@@ -109,7 +113,7 @@ public class EnterpriseFileService
             x => entCodes.Contains(x.EnterpriseCode))).Data ?? new List<CertEnterpriseStage>();
         links = links.Where(l => l.IsValid == 1).ToList();
 
-        var stageRows = (await _db.GetListAsync<CertStage>(x => x.IsValid == 1)).Data ?? new List<CertStage>();
+        var stageRows = await _core.GetStagesAsync();
         var stageDict = stageRows
             .Where(s => !string.IsNullOrEmpty(s.Code))
             .GroupBy(s => s.Code)
@@ -173,8 +177,7 @@ public class EnterpriseFileService
             };
 
         var stageName = (await _db.GetOneAsync<CertStage>(x => x.Code == stageCode)).Data?.StageName;
-        var stdRows = (await _db.GetListAsync<ISOStandard>(x => stdCodes.Contains(x.Code!))).Data
-                      ?? new List<ISOStandard>();
+        var stdRows = await _core.GetStandardsByCodesAsync(stdCodes);
         var stdDict = stdRows.Where(s => !string.IsNullOrEmpty(s.Code))
             .GroupBy(s => s.Code!).ToDictionary(g => g.Key, g => g.First());
 
@@ -203,9 +206,7 @@ public class EnterpriseFileService
                 continue;
             }
 
-            var slots = (await _db.GetListAsync<StandardDirectoryFile>(
-                x => x.ConfigCode == ensure.Config!.Code, includeDisabled: true)).Data
-                ?? new List<StandardDirectoryFile>();
+            var slots = await _core.GetDirectoryFilesByConfigCodeAsync(ensure.Config!.Code, includeDisabled: true);
 
             var required = slots.Where(f => f.IsRequired).ToList();
             var live = required.Count(IsLive);
@@ -276,7 +277,7 @@ public class EnterpriseFileService
             return new { Configured = false, Message = ensure.Error, Files = new object[0], Folders = new object[0] };
 
         var config = ensure.Config!;
-        var std = (await _db.GetOneAsync<ISOStandard>(x => x.Code == standardCode)).Data;
+        var std = await _core.GetStandardByCodeAsync(standardCode);
 
         // 文件夹树：模板 folder 行（槽位沿用的是模板 FolderCode，故模板即权威结构）
         var tplFolders = (await _db.GetListAsync<StandardDirectoryFolder>(
@@ -300,8 +301,7 @@ public class EnterpriseFileService
             .GroupBy(f => f.Code).ToDictionary(g => g.Key, g => g.First());
 
         // 槽位全集：IsValid=1（在清单）∪ 有 StoragePath（已上传/已移除，证据保留）
-        var allSlots = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.ConfigCode == config.Code, includeDisabled: true)).Data ?? new List<StandardDirectoryFile>();
+        var allSlots = await _core.GetDirectoryFilesByConfigCodeAsync(config.Code, includeDisabled: true);
 
         // ★ P2 提取状态四态（2026-09-29 用户裁决）：
         //   not_configured 未配置（四元组无可用规则，resolver 结论）> queued 提取中（文件资源锁）
@@ -427,8 +427,7 @@ public class EnterpriseFileService
         var configCodes = configs.Select(c => c.Code).ToList();
         // ★ includeDisabled=true：`IsValid=0` 且已有对象 = 「已移除」槽位，**仍属应上传清单**（缺失态），
         //   滤掉会让需求凭空消失且零提示。
-        var allFiles = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => configCodes.Contains(x.ConfigCode), includeDisabled: true)).Data ?? new();
+        var allFiles = await _core.GetDirectoryFilesByConfigCodesAsync(configCodes, includeDisabled: true);
 
         var folderCodes = allFiles.Select(f => f.FolderCode).Where(c => !string.IsNullOrEmpty(c)).Distinct().ToList();
         var folderRows = folderCodes.Count == 0
@@ -441,8 +440,7 @@ public class EnterpriseFileService
             .ToDictionary(g => g.Key, g => g.First().FolderName ?? g.Key);
 
         var stdCodes = configs.Select(c => c.StandardCode).Distinct().ToList();
-        var stdRows = (await _db.GetListAsync<ISOStandard>(x => stdCodes.Contains(x.Code!))).Data
-                      ?? new List<ISOStandard>();
+        var stdRows = await _core.GetStandardsByCodesAsync(stdCodes);
         var stdNames = stdRows
             .Where(s => !string.IsNullOrEmpty(s.Code))
             .GroupBy(s => s.Code!)
@@ -538,7 +536,7 @@ public class EnterpriseFileService
         foreach (var stdCode in stdCodes)
         {
             var ensure = await EnsureDirectoryAsync(enterpriseCode, null, stdCode, stageCode);
-            var std = (await _db.GetOneAsync<ISOStandard>(x => x.Code == stdCode)).Data;
+            var std = await _core.GetStandardByCodeAsync(stdCode);
             if (ensure.Error != null)
             {
                 messages.Add(new { StandardCode = stdCode, Message = ensure.Error });
@@ -553,9 +551,7 @@ public class EnterpriseFileService
                 .GroupBy(f => f.Code!)
                 .ToDictionary(g => g.Key, g => RelativePath(g.First().FullPath, tplRoot));
 
-            var slots = (await _db.GetListAsync<StandardDirectoryFile>(
-                x => x.ConfigCode == ensure.Config!.Code, includeDisabled: true)).Data
-                ?? new List<StandardDirectoryFile>();
+            var slots = await _core.GetDirectoryFilesByConfigCodeAsync(ensure.Config!.Code, includeDisabled: true);
 
             scopes.Add(new DispatchMatcher.StandardScope
             {
@@ -694,8 +690,7 @@ public class EnterpriseFileService
                 ? RelativePath(fr.FullPath, rootSegment)
                 : "";
 
-        var allSlots = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.ConfigCode == config.Code, includeDisabled: true)).Data ?? new List<StandardDirectoryFile>();
+        var allSlots = await _core.GetDirectoryFilesByConfigCodeAsync(config.Code, includeDisabled: true);
 
         // ── 阶段 1：只读校验 + 生成计划（不落库） ──
         var plan = new List<InitPlanItem>();
@@ -952,8 +947,7 @@ public class EnterpriseFileService
         if (task.ExpireTime.HasValue && task.ExpireTime.Value < System.DateTime.Now)
             return ("上传任务已过期，请重新发起上传", null);
 
-        var rows = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.TaskId == taskId, includeDisabled: true)).Data ?? new List<StandardDirectoryFile>();
+        var rows = await _core.GetDirectoryFilesByTaskIdAsync(taskId, includeDisabled: true);
         if (rows.Count == 0) return ("上传任务下没有待激活的文件", null);
 
         var missingBytes = rows.Where(r => string.IsNullOrEmpty(r.StoragePath)).ToList();
@@ -1043,8 +1037,7 @@ public class EnterpriseFileService
         // 取消关联队列（TaskId 即队列任务的 TaskId）
         await _queueManager.CancelBatchAsync(taskId);
 
-        var rows = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.TaskId == taskId, includeDisabled: true)).Data ?? new List<StandardDirectoryFile>();
+        var rows = await _core.GetDirectoryFilesByTaskIdAsync(taskId, includeDisabled: true);
 
         int removedObjects = 0, deletedRows = 0, resetRows = 0;
         foreach (var row in rows)
@@ -1906,10 +1899,8 @@ public class EnterpriseFileService
             return (config, "", null, InitReason.Ok);
 
         // 3. 槽位对账：模板文件行 − 企业已有文件行（按 StandardFileCode）
-        var tplFiles = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.ConfigCode == template.Code)).Data ?? new();
-        var ownFiles = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.ConfigCode == config.Code, includeDisabled: true)).Data ?? new();
+        var tplFiles = await _core.GetDirectoryFilesByConfigCodeAsync(template.Code);
+        var ownFiles = await _core.GetDirectoryFilesByConfigCodeAsync(config.Code, includeDisabled: true);
         var ownByTpl = ownFiles
             .Where(f => !string.IsNullOrEmpty(f.StandardFileCode))
             .GroupBy(f => f.StandardFileCode!)

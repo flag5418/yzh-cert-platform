@@ -32,6 +32,8 @@ namespace CertPlatform.Admin.Services.DocExtraction;
 public partial class DocExtractionRuleService : IExtractionRuleQuery
 {
     private readonly IDbOrm _db;
+    /// <summary>核心资源检索唯一入口（铁律 L5）—— 标准目录文件按 Code 单查只走它。</summary>
+    private readonly ICoreResourceQuery _core;
     private readonly ILogger<DocExtractionRuleService> _logger;
     protected readonly IConfiguration _configuration;
     protected readonly CertPlatform.Shared.DocExtraction.DocumentConvertClient _convertClient;
@@ -69,10 +71,12 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
         CertPlatform.Shared.DocExtraction.LlmInvokeService llm,
         IConfiguration configuration,
         ILogger<DocExtractionRuleService> logger,
-        EnterpriseExtractionResultStore resultStore)
+        EnterpriseExtractionResultStore resultStore,
+        ICoreResourceQuery core)
     {
         _resultStore = resultStore;
         _db = db;
+        _core = core;
         _storage = storage;
         _convertClient = convertClient;
         _convertCore = convertCore;
@@ -425,7 +429,7 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
 
         // ① 模板行 = 规则键所属行（模板行自身即模板行，不必回查）
         var templateRow = ruleKey == file.Code ? file
-            : (await _db.GetOneAsync<StandardDirectoryFile>(x => x.Code == ruleKey)).Data;
+            : await _core.GetDirectoryFileByCodeAsync(ruleKey);
 
         // ② 标准/阶段以模板行为准；模板行缺失时退回文件行
         var standardCode = templateRow?.StandardCode ?? "";
@@ -472,7 +476,7 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
     public async Task<RuleScope> ResolveRuleScopeAsync(string fileCode)
     {
         if (string.IsNullOrWhiteSpace(fileCode)) return new RuleScope("", "", "", "");
-        var file = (await _db.GetOneAsync<StandardDirectoryFile>(x => x.Code == fileCode)).Data;
+        var file = await _core.GetDirectoryFileByCodeAsync(fileCode);
         if (file == null) return new RuleScope(fileCode, "", "", "");
         return await ResolveRuleScopeAsync(file);
     }

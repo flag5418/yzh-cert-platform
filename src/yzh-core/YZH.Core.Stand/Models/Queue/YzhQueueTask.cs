@@ -25,8 +25,23 @@ public class YzhQueueTask : BaseEntity, ISoftDelete
     /// <summary>任务类型：file_convert/auto_verify/report_generate</summary>
     public string TaskType { get; set; } = string.Empty;
 
+    /// <summary>业务实体 Code（最小队列单元：NC 检查项 Code / 报告章节 Code）</summary>
+    [SugarColumn(Length = 64, IsNullable = true)]
+    public string? ItemCode { get; set; }
+
+    /// <summary>明细顺序（章节天然有序，保证展示与执行顺序稳定）</summary>
+    public int Seq { get; set; }
+
+    /// <summary>提取结果版本戳（结果变更后据此判定需重跑）</summary>
+    [SugarColumn(Length = 100, IsNullable = true)]
+    public string? ExtractVersionStamp { get; set; }
+
+    /// <summary>工作流执行任务编码（与工作流执行留痕对齐）</summary>
+    [SugarColumn(Length = 64, IsNullable = true)]
+    public string? WorkflowExecTaskCode { get; set; }
+
     /// <summary>业务数据 JSON</summary>
-    [SugarColumn(ColumnDataType = "text", IsNullable = true)]
+    [SugarColumn(ColumnDataType = "json", IsNullable = true)]
     public string? Payload { get; set; }
 
     /// <summary>状态：pending/processing/completed/failed/cancelled</summary>

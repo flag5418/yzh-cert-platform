@@ -37,6 +37,7 @@ namespace CertPlatform.Auditor.Services.Expert;
 public class GapDetector
 {
     private readonly IDbOrm _db;
+    private readonly ICoreResourceQuery _core;
     private readonly ExtractionDataResolver _resolver;
     private readonly GapLabelResolver _labels;
     private readonly ILogger<GapDetector> _logger;
@@ -51,11 +52,13 @@ public class GapDetector
 
     public GapDetector(
         IDbOrm db,
+        ICoreResourceQuery core,
         ExtractionDataResolver resolver,
         GapLabelResolver labels,
         ILogger<GapDetector> logger)
     {
         _db = db;
+        _core = core;
         _resolver = resolver;
         _labels = labels;
         _logger = logger;
@@ -464,7 +467,7 @@ public class GapDetector
         string? sfc = null;
         if (!string.IsNullOrWhiteSpace(ruleCode))
         {
-            var rule = (await _db.GetOneAsync<DocExtractionRule>(x => x.Code == ruleCode)).Data;
+            var rule = await _core.GetDocExtractionRuleByCodeAsync(ruleCode);
             sfc = rule?.StandardFileCode;
         }
         if (string.IsNullOrWhiteSpace(sfc)) return (null, null);

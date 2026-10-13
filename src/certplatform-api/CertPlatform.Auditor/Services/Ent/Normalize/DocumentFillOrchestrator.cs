@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
+using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Entities.Dir;
 using CertPlatform.Shared.Entities.Doc;
@@ -61,6 +62,8 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
     public class DocumentFillOrchestrator
     {
         private readonly IDbOrm _db;
+        /// <summary>核心资源检索唯一入口（铁律 L5）—— 标准按 Code 单查只走它。</summary>
+        private readonly ICoreResourceQuery _core;
         private readonly IObjectStorage _storage;
         private readonly ILogger<DocumentFillOrchestrator> _logger;
         private readonly SourceResolver _sourceResolver;
@@ -71,9 +74,11 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
             IObjectStorage storage,
             ILogger<DocumentFillOrchestrator> logger,
             SourceResolver sourceResolver,
-            IAiFillInvoker aiInvoker)
+            IAiFillInvoker aiInvoker,
+            ICoreResourceQuery core)
         {
             _db = db;
+            _core = core;
             _storage = storage;
             _logger = logger;
             _sourceResolver = sourceResolver;
@@ -119,8 +124,7 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                 //  ① 取模板 —— 驱动源 = cert_doc_template（INNER JOIN 标准域行）
                 //     ★ 门槛 = PublishStatus='published'（60 §六之补三 用户裁决「按发布的来实施」）
                 // ════════════════════════════════════════════════════════════
-                var stdFile = (await _db.GetOneAsync<StandardDirectoryFile>(x =>
-                    x.Code == req.StandardFileCode && x.IsValid == 1)).Data;
+                var stdFile = await _core.GetDirectoryFileByCodeAsync(req.StandardFileCode);
                 if (stdFile == null)
                 {
                     result.Message = $"标准文件行不存在：{req.StandardFileCode}";
@@ -1011,11 +1015,11 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
             // ── 文档元信息 ──
             var stdNo = string.IsNullOrWhiteSpace(req.StandardCode)
                 ? null
-                : (await _db.GetOneAsync<ISOStandard>(x => x.Code == req.StandardCode)).Data?.StandardCode;
+                : (await _core.GetStandardByCodeAsync(req.StandardCode))?.StandardCode;
 
             var stageName = string.IsNullOrWhiteSpace(req.StageCode)
                 ? null
-                : (await _db.GetOneAsync<CertStage>(x => x.Code == req.StageCode)).Data?.StageName;
+                : (await _core.GetStageByCodeAsync(req.StageCode))?.StageName;
 
             return new FillContext
             {

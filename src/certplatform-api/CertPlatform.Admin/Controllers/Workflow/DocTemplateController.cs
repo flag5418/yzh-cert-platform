@@ -45,6 +45,8 @@ namespace CertPlatform.Admin.Controllers.Workflow;
 public class DocTemplateController : YzhControllerBase<DocTemplate>
 {
     private readonly IDbOrm _db;
+    /// <summary>核心资源检索唯一入口（铁律 L5）—— 目录文件按 Code 单查只走它。</summary>
+    private readonly ICoreResourceQuery _core;
     private readonly DocExtractionRuleService _extraction;
     private readonly EntityService<DocTemplateAnchor> _anchors;
     private readonly IObjectStorage _storage;
@@ -56,6 +58,7 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         EntityService<DocTemplateAnchor> anchors,
         IUserContext userContext,
         IDbOrm db,
+        ICoreResourceQuery core,
         DocExtractionRuleService extraction,
         IObjectStorage storage,
         StandardDirectoryService directory,
@@ -64,6 +67,7 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
     {
         _anchors = anchors;
         _db = db;
+        _core = core;
         _extraction = extraction;
         _storage = storage;
         _directory = directory;
@@ -263,8 +267,7 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         if (req == null || string.IsNullOrWhiteSpace(req.StandardFileCode))
             return Ok(ApiResponse<object>.Fail("请选择宿主标准文件（standardFileCode）"));
 
-        var fileResult = await _db.GetOneAsync<StandardDirectoryFile>(f => f.Code == req.StandardFileCode);
-        var file = fileResult.Data;
+        var file = await _core.GetDirectoryFileByCodeAsync(req.StandardFileCode);
         if (file == null)
             return Ok(ApiResponse<object>.Fail("标准目录文件不存在或已删除"));
 
@@ -347,7 +350,7 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
             return Ok(ApiResponse<object>.Fail(
                 "空白模板只支持 .docx / .xlsx。请先在本地把 .doc / .xls 另存为对应格式，并加上 {{标签}} / 书签 / YZH_Mark 标记。"));
 
-        var fileRow = (await _db.GetOneAsync<StandardDirectoryFile>(f => f.Code == dto.StandardFileCode)).Data;
+        var fileRow = await _core.GetDirectoryFileByCodeAsync(dto.StandardFileCode);
         if (fileRow == null)
             return Ok(ApiResponse<object>.Fail("标准目录文件不存在或已删除"));
 
@@ -594,11 +597,8 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
 
         var stageNames = stageCodes.Count == 0
             ? new Dictionary<string, string>(StringComparer.Ordinal)
-            : (await _db.Client.Queryable<CertStage>()
-                    .Where(x => stageCodes.Contains(x.Code))
-                    .Select(x => new { x.Code, Name = x.StageName })
-                    .ToListAsync())
-                .ToDictionary(x => x.Code, x => x.Name ?? x.Code, StringComparer.Ordinal);
+            : (await _core.GetStagesByCodesAsync(stageCodes))
+                .ToDictionary(x => x.Code, x => x.StageName ?? x.Code, StringComparer.Ordinal);
 
         // ★ 标准目录文件行：左树要给模板叶子挂「文档分类」徽标（37 号 §3.6 组 E / 组 F 分流），
         //   而 DocCategory 的**权威列在 `cert_standard_directory_file`**（不是契约表、也不是模板表）。

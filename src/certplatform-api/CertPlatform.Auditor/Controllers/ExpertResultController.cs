@@ -11,6 +11,7 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Auditor.Services;
 using CertPlatform.Auditor.Services.Expert;
+using CertPlatform.Shared.Domain.Scope;
 
 namespace CertPlatform.Auditor.Controllers;
 
@@ -208,14 +209,17 @@ public class ResultHistoryRequest
 public class ExpertResultController : WebControllerBase
 {
     private readonly IDbOrm _db;
+    /// <summary>核心资源检索唯一入口（铁律 L5）。</summary>
+    private readonly ICoreResourceQuery _core;
     private readonly WorkspaceContextService _workspace;
     private readonly IUserContext _user;
     private readonly ExpertTaskService _taskSvc;
 
     public ExpertResultController(
-        IDbOrm db, WorkspaceContextService workspace, IUserContext user, ExpertTaskService taskSvc)
+        IDbOrm db, WorkspaceContextService workspace, IUserContext user, ExpertTaskService taskSvc, ICoreResourceQuery core)
     {
         _db = db;
+        _core = core;
         _workspace = workspace;
         _user = user;
         _taskSvc = taskSvc;
@@ -1110,8 +1114,7 @@ public class ExpertResultController : WebControllerBase
     {
         var list = codes.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
         if (list.Count == 0) return new Dictionary<string, string>();
-        var stds = (await _db.GetListAsync<ISOStandard>(x => list.Contains(x.Code ?? ""))).Data
-            ?? new List<ISOStandard>();
+        var stds = await _core.GetStandardsByCodesAsync(list);
         return stds.GroupBy(x => x.Code ?? "")
             .ToDictionary(g => g.Key, g => g.First().StandardName ?? g.Key);
     }

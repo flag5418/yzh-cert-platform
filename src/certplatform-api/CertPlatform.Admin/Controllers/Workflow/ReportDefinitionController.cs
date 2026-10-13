@@ -4,8 +4,10 @@ using YZH.Core.Api.Services;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Interfaces;
+using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
+using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Entities.Rpt;
 
 namespace CertPlatform.Admin.Controllers.Workflow
@@ -71,6 +73,35 @@ namespace CertPlatform.Admin.Controllers.Workflow
         /// <summary>★ 缺 JSON 直接抛错（开发期暴露，不让页面空白上线）</summary>
         protected override bool StrictConfigLoad => true;
 
+        // ========================================================
+        // ★ 归属收口（2026-10-12 终裁，规则文档 §2.8(f)）：
+        //   cert_report_section 8 行已迁 OrgCode = 'yzh-std-env'（后台标准级）。
+        //   读：前端无论传机构还是空，一律改写为 StdEnv —— 否则静默 0 行；
+        //   写：新增 / 更新一律强制 StdEnv —— 否则新建行又是机构、与存量不一致。
+        // ========================================================
+
+        /// <summary>查询判据改写：任何 OrgCode 过滤值 → <see cref="CoreOrgCodes.StdEnv"/></summary>
+        protected override List<FilterItem> OnBuildingFilter(List<FilterItem> filters)
+        {
+            foreach (var f in filters.Where(f => f.Field == "OrgCode"))
+                f.Value = CoreOrgCodes.StdEnv;
+            if (!filters.Any(f => f.Field == "OrgCode"))
+                filters.Add(new FilterItem { Field = "OrgCode", Operator = "eq", Value = CoreOrgCodes.StdEnv });
+            return base.OnBuildingFilter(filters);
+        }
+
+        protected override Task<(bool ok, string? msg)> OnBeforeAdd(ReportSection entity)
+        {
+            entity.OrgCode = CoreOrgCodes.StdEnv;
+            return base.OnBeforeAdd(entity);
+        }
+
+        protected override Task<(bool ok, string? msg)> OnBeforeUpdate(ReportSection entity)
+        {
+            entity.OrgCode = CoreOrgCodes.StdEnv;
+            return base.OnBeforeUpdate(entity);
+        }
+
         // 行按钮走基类默认 Edit + Delete；启停走基类 POST /toggle-valid（IsValid）。
 
         /// <summary>★ 搜索字段：只暴露「章节名称」。三元组字段由前端树联动注入，不进搜索区</summary>
@@ -109,8 +140,10 @@ namespace CertPlatform.Admin.Controllers.Workflow
                 return Ok(ApiResponse<object?>.Fail("缺少机构 / 标准 / 阶段"));
             }
 
+            // ★ 2026-10-12 终裁：章节是后台标准级（OrgCode 恒 = StdEnv），
+            //   orgCode 入参仅为兼容旧调用保留，⚠️ 不参与匹配（传机构也能命中）。
             var result = await SectionEntity.GetListAsync(x =>
-                x.OrgCode == orgCode &&
+                x.OrgCode == CoreOrgCodes.StdEnv &&
                 x.StandardCode == standardCode &&
                 x.PhaseCode == phaseCode);
 
@@ -146,6 +179,9 @@ namespace CertPlatform.Admin.Controllers.Workflow
         {
             if (string.IsNullOrWhiteSpace(entity.SectionName))
                 return Ok(ApiResponse<object?>.Fail("章节名称不能为空"));
+
+            // ★ 2026-10-12 终裁：归属恒为后台标准级 —— 忽略前端传值，统一强制 StdEnv
+            entity.OrgCode = CoreOrgCodes.StdEnv;
 
             // ★ 改造：原来校验 ReportCode，现在校验三元组
             if (string.IsNullOrWhiteSpace(entity.OrgCode)
@@ -260,8 +296,9 @@ namespace CertPlatform.Admin.Controllers.Workflow
             if (isValid != 0 && isValid != 1)
                 return Ok(ApiResponse<object?>.Fail("isValid 只能是 0 或 1"));
 
+            // ★ 2026-10-12 终裁：章节恒为后台标准级 —— orgCode 入参不参与匹配
             var list = await SectionEntity.GetListAsync(
-                x => x.OrgCode == orgCode &&
+                x => x.OrgCode == CoreOrgCodes.StdEnv &&
                      x.StandardCode == standardCode &&
                      x.PhaseCode == phaseCode);
 

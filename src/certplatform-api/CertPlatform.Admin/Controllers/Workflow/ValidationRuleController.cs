@@ -8,6 +8,7 @@ using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Request;
 using YZH.Core.Stand.Models.Result;
+using CertPlatform.Shared.Domain.Scope;
 
 namespace CertPlatform.Admin.Controllers.Workflow;
 
@@ -83,6 +84,24 @@ public class ValidationRuleController
         }
 
         return await base.FilterCore(request);
+    }
+
+    // ========================================================
+    // ★ 归属收口（2026-10-12 终裁，规则文档 §2.8(f)）：
+    //   cert_validation_rule 8 行已迁 OrgCode = 'yzh-std-env'（后台标准级）。
+    //   读：/filter 的 OrgCode 过滤（设计器树、nc-config 右表）一律改写为 StdEnv；
+    //   写：新增 / 更新一律强制 StdEnv（⚠️ 自定义 Update 直调 Entity.Update，
+    //       不经 OnBeforeUpdate 钩子，必须在此强制）。
+    // ========================================================
+
+    /// <summary>查询判据改写：任何 OrgCode 过滤值 → <see cref="CoreOrgCodes.StdEnv"/></summary>
+    protected override List<FilterItem> OnBuildingFilter(List<FilterItem> filters)
+    {
+        foreach (var f in filters.Where(f => f.Field == "OrgCode"))
+            f.Value = CoreOrgCodes.StdEnv;
+        if (!filters.Any(f => f.Field == "OrgCode"))
+            filters.Add(new FilterItem { Field = "OrgCode", Operator = "eq", Value = CoreOrgCodes.StdEnv });
+        return base.OnBuildingFilter(filters);
     }
 
     // ========================================================
@@ -164,6 +183,10 @@ public class ValidationRuleController
         //   空画布 / "{}" / "null" / "[]" 在落库前一律归一为 NULL
         entity.RuleJson = ValidationRuleRules.NormalizeDag(entity.RuleJson);
 
+        // ★ 2026-10-12 终裁：归属恒为后台标准级 —— 忽略前端传值，强制 StdEnv
+        //   （本方法直调 Entity.Update、不经 OnBeforeUpdate 钩子，必须在此强制）
+        entity.OrgCode = CoreOrgCodes.StdEnv;
+
         var fields = typeof(ValidationRule)
             .GetProperties()
             .Where(p => p.Name != "Code" && p.Name != "Id"
@@ -195,6 +218,9 @@ public class ValidationRuleController
 
         // ★ NULL = 未配 DAG（唯一口径）：空画布 / "{}" / "null" / "[]" 落库前归一为 NULL
         entity.RuleJson = ValidationRuleRules.NormalizeDag(entity.RuleJson);
+
+        // ★ 2026-10-12 终裁：归属恒为后台标准级 —— 忽略前端传值，强制 StdEnv
+        entity.OrgCode = CoreOrgCodes.StdEnv;
 
         if (string.IsNullOrEmpty(entity.RuleCode))
         {

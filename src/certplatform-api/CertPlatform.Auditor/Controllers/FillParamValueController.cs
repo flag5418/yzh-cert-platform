@@ -48,16 +48,19 @@ namespace CertPlatform.Auditor.Controllers;
 public class FillParamValueController : YzhControllerBase<FillParamValue>
 {
     private readonly IDbOrm _db;
+    private readonly ICoreResourceQuery _core;
     private readonly WorkspaceContextService _workspace;
 
     public FillParamValueController(
         EntityService<FillParamValue> entityService,
         IUserContext userContext,
         IDbOrm db,
+        ICoreResourceQuery core,
         WorkspaceContextService workspace)
         : base(entityService, userContext)
     {
         _db = db;
+        _core = core;
         _workspace = workspace;
     }
 
@@ -85,11 +88,10 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
             .Select(x => new { x.Code, Name = x.StandardName, No = x.StandardCode })
             .ToListAsync();
 
-        var stages = await _db.Client.Queryable<CertStage>()
-            .Where(x => x.IsDeleted == false && x.IsValid == 1)
+        var stages = (await _core.GetStagesAsync())
             .OrderBy(x => x.SortOrder)
             .Select(x => new { x.Code, Name = x.StageName, No = x.StageCode })
-            .ToListAsync();
+            .ToList();
 
         return Ok(ApiResponse<object>.Ok(new
         {
@@ -427,11 +429,7 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
         var stageCode = req.StageCode ?? string.Empty;
 
         // 定义全集（校验 paramCode 合法性 —— 不认识的一律报错，不静默丢弃）
-        var defs = await _db.Client.Queryable<FillParamDef>()
-            .Where(d => d.OrgCode == CoreOrgCodes.StdEnv && d.IsDeleted == false && d.IsValid == 1
-                        && (d.StandardCode == "" || d.StandardCode == stdCode)
-                        && (d.StageCode == "" || d.StageCode == stageCode))
-            .ToListAsync();
+        var defs = await _core.GetFillParamDefsAsync(stdCode, stageCode);
 
         var defMap = defs
             .GroupBy(d => d.ParamCode)

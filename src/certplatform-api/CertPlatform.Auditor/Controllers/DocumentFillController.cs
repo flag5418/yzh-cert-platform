@@ -42,6 +42,7 @@ namespace CertPlatform.Auditor.Controllers;
 public class DocumentFillController : YzhControllerBase<FillParamValue>
 {
     private readonly IDbOrm _db;
+    private readonly ICoreResourceQuery _core;
     private readonly WorkspaceContextService _workspace;
     private readonly DocumentFillEngine _engine = new();
 
@@ -49,10 +50,12 @@ public class DocumentFillController : YzhControllerBase<FillParamValue>
         EntityService<FillParamValue> entityService,
         IUserContext userContext,
         IDbOrm db,
+        ICoreResourceQuery core,
         WorkspaceContextService workspace)
         : base(entityService, userContext)
     {
         _db = db;
+        _core = core;
         _workspace = workspace;
     }
 
@@ -132,11 +135,7 @@ public class DocumentFillController : YzhControllerBase<FillParamValue>
         var stageCode = req.StageCode ?? string.Empty;
 
         // ── 1. 定义（含通配，按具体度去重）──
-        var defs = await _db.Client.Queryable<FillParamDef>()
-            .Where(d => d.OrgCode == CoreOrgCodes.StdEnv && d.IsDeleted == false && d.IsValid == 1
-                        && (d.StandardCode == "" || d.StandardCode == stdCode)
-                        && (d.StageCode == "" || d.StageCode == stageCode))
-            .ToListAsync();
+        var defs = await _core.GetFillParamDefsAsync(stdCode, stageCode);
 
         var picked = ParamValueResolver.PickMostSpecific(defs);
 
@@ -190,10 +189,7 @@ public class DocumentFillController : YzhControllerBase<FillParamValue>
 
         var stageName = stageCode.Length == 0
             ? null
-            : await _db.Client.Queryable<CertStage>()
-                .Where(x => x.Code == stageCode)
-                .Select(x => x.StageName)
-                .FirstAsync();
+            : (await _core.GetStageByCodeAsync(stageCode))?.StageName;
 
         var docPrefix = parameters.TryGetValue("doc_prefix", out var dp) ? dp : null;
 

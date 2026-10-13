@@ -47,6 +47,7 @@ namespace CertPlatform.Admin.Controllers.Workflow;
 public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
 {
     private readonly IDbOrm _db;
+    private readonly ICoreResourceQuery _core;
     private readonly LlmInvokeService _llm;
     private readonly ILogger<DocFillPromptController> _logger;
 
@@ -54,11 +55,13 @@ public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
         EntityService<DocFillPrompt> entityService,
         IUserContext userContext,
         IDbOrm db,
+        ICoreResourceQuery core,
         LlmInvokeService llm,
         ILogger<DocFillPromptController> logger)
         : base(entityService, userContext)
     {
         _db = db;
+        _core = core;
         _llm = llm;
         _logger = logger;
     }
@@ -138,14 +141,14 @@ public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
         if (string.IsNullOrWhiteSpace(entity.Code))
             return Result<DocFillPrompt>.Fail("更新失败：缺少业务键 Code");
 
-        var current = await _db.GetOneAsync<DocFillPrompt>(p => p.Code == entity.Code);
-        if (current.Data == null)
+        var current = await _core.GetDocFillPromptByCodeAsync(entity.Code);
+        if (current == null)
             return Result<DocFillPrompt>.Fail("该提示词版本不存在或已删除");
 
         Normalize(entity);
 
         // ★ 版本号不可改（它是唯一键成员，改了等于换行；要出新版请用「新增」）
-        entity.Version = current.Data.Version;
+        entity.Version = current.Version;
 
         var err = Validate(entity);
         if (err != null) return Result<DocFillPrompt>.Fail(err);

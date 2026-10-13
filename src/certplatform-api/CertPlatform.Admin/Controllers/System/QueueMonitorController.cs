@@ -3,6 +3,7 @@ using YZH.Core.Api.Models.Users;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.DataBase.Services;
 using YZH.Core.Stand.Models.Result;
+using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Entities.Dir;
 
@@ -26,11 +27,14 @@ public class QueueMonitorController : ControllerBase
 {
     private readonly QueueManager _queueManager;
     private readonly IDbOrm _db;
+    /// <summary>核心资源检索唯一入口（铁律 L5）。</summary>
+    private readonly ICoreResourceQuery _core;
 
-    public QueueMonitorController(QueueManager queueManager, IDbOrm db)
+    public QueueMonitorController(QueueManager queueManager, IDbOrm db, ICoreResourceQuery core)
     {
         _queueManager = queueManager;
         _db = db;
+        _core = core;
     }
 
     [HttpPost("list")]
@@ -38,6 +42,7 @@ public class QueueMonitorController : ControllerBase
     {
         var result = await _queueManager.GetQueueListAsync(
             req.Type, req.Status, req.StartTime, req.EndTime, req.Page, req.Rows,
+            orgCode: req.OrgCode,
             scopeResolver: ResolveScopeDisplayAsync,
             creatorResolver: ResolveCreatorNameAsync);
         return Ok(ApiResponse<object?>.Ok(data: result));
@@ -46,28 +51,28 @@ public class QueueMonitorController : ControllerBase
     [HttpPost("detail")]
     public async Task<IActionResult> GetDetail([FromBody] QueueDetailRequest req)
     {
-        var result = await _queueManager.GetQueueDetailAsync(req.QueueCode, ResolveCreatorNameAsync);
+        var result = await _queueManager.GetQueueDetailAsync(req.QueueCode, ResolveCreatorNameAsync, req.OrgCode);
         return Ok(ApiResponse<object?>.Ok(data: result));
     }
 
     [HttpPost("cancel")]
     public async Task<IActionResult> Cancel([FromBody] QueueCancelRequest req)
     {
-        var (ok, error) = await _queueManager.CancelQueueAsync(req.QueueCode);
+        var (ok, error) = await _queueManager.CancelQueueAsync(req.QueueCode, req.OrgCode);
         return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail(error));
     }
 
     [HttpPost("retry")]
     public async Task<IActionResult> Retry([FromBody] QueueRetryRequest req)
     {
-        var (ok, error) = await _queueManager.RetryQueueAsync(req.QueueCode);
+        var (ok, error) = await _queueManager.RetryQueueAsync(req.QueueCode, req.OrgCode);
         return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail(error));
     }
 
     [HttpPost("task/retry")]
     public async Task<IActionResult> RetryTask([FromBody] TaskRetryRequest req)
     {
-        var (ok, error) = await _queueManager.RetryTaskAsync(req.TaskCode);
+        var (ok, error) = await _queueManager.RetryTaskAsync(req.TaskCode, req.OrgCode);
         return Ok(ok ? ApiResponse<object?>.Ok() : ApiResponse<object?>.Fail(error));
     }
 
@@ -157,8 +162,8 @@ public class QueueMonitorController : ControllerBase
         var config = (await _db.GetOneAsync<StandardDirectoryConfig>(x => x.Code == configCode)).Data;
         if (config == null) return string.Empty;
 
-        var stdName = (await _db.GetOneAsync<ISOStandard>(x => x.Code == config.StandardCode)).Data?.StandardName;
-        var stageName = (await _db.GetOneAsync<CertStage>(x => x.Code == config.StageCode)).Data?.StageName;
+        var stdName = (await _core.GetStandardByCodeAsync(config.StandardCode))?.StandardName;
+        var stageName = (await _core.GetStageByCodeAsync(config.StageCode))?.StageName;
 
         var parts = new List<string>();
         if (!string.IsNullOrWhiteSpace(stdName)) parts.Add(stdName);
@@ -194,7 +199,7 @@ public class QueueMonitorController : ControllerBase
     private async Task<string> BuildEnterpriseStageDisplayAsync(string enterpriseCode, string stageCode)
     {
         var entName = (await _db.GetOneAsync<Enterprise>(x => x.Code == enterpriseCode && !x.IsDeleted)).Data?.Name;
-        var stageName = (await _db.GetOneAsync<CertStage>(x => x.Code == stageCode)).Data?.StageName;
+        var stageName = (await _core.GetStageByCodeAsync(stageCode))?.StageName;
 
         var parts = new List<string>();
         if (!string.IsNullOrWhiteSpace(entName)) parts.Add(entName);
@@ -205,6 +210,7 @@ public class QueueMonitorController : ControllerBase
 
 #region 请求 DTO
 
+/// <summary>OrgCode 可选租户过滤（H12 / R-03）：传入则只看该机构的队列；空 = 平台全量（后台监控合法视角）。</summary>
 public class QueueListRequest
 {
     public string? Type { get; set; }
@@ -213,26 +219,31 @@ public class QueueListRequest
     public DateTime? EndTime { get; set; }
     public int Page { get; set; } = 1;
     public int Rows { get; set; } = 20;
+    public string? OrgCode { get; set; }
 }
 
 public class QueueDetailRequest
 {
     public string QueueCode { get; set; } = "";
+    public string? OrgCode { get; set; }
 }
 
 public class QueueCancelRequest
 {
     public string QueueCode { get; set; } = "";
+    public string? OrgCode { get; set; }
 }
 
 public class QueueRetryRequest
 {
     public string QueueCode { get; set; } = "";
+    public string? OrgCode { get; set; }
 }
 
 public class TaskRetryRequest
 {
     public string TaskCode { get; set; } = "";
+    public string? OrgCode { get; set; }
 }
 
 public class ResourceLockRequest

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Services.DocExtraction;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Models.Result;
@@ -30,12 +31,14 @@ namespace CertPlatform.Auditor.Services.Expert;
 public class GapFillService
 {
     private readonly IDbOrm _db;
+    private readonly ICoreResourceQuery _core;
     private readonly ExtractionDataResolver _resolver;
     private readonly ILogger<GapFillService> _logger;
 
-    public GapFillService(IDbOrm db, ExtractionDataResolver resolver, ILogger<GapFillService> logger)
+    public GapFillService(IDbOrm db, ICoreResourceQuery core, ExtractionDataResolver resolver, ILogger<GapFillService> logger)
     {
         _db = db;
+        _core = core;
         _resolver = resolver;
         _logger = logger;
     }
@@ -198,7 +201,7 @@ public class GapFillService
 
         // ★ 归属文件：规则声明的 StandardFileCode（本就存在的 GUID，非虚拟文件）
         var standardFileCode = gap.StandardFileCode
-            ?? (await _db.GetOneAsync<DocExtractionRule>(x => x.Code == ruleCode)).Data?.StandardFileCode
+            ?? (await _core.GetDocExtractionRuleByCodeAsync(ruleCode))?.StandardFileCode
             ?? "";
 
         var hit = existing.FirstOrDefault();
@@ -294,7 +297,7 @@ public class GapFillService
             && x.IsValid == 1)).Data ?? new List<TableExtractionResult>();
 
         var standardFileCode = gap.StandardFileCode
-            ?? (await _db.GetOneAsync<DocExtractionRule>(x => x.Code == ruleCode)).Data?.StandardFileCode
+            ?? (await _core.GetDocExtractionRuleByCodeAsync(ruleCode))?.StandardFileCode
             ?? "";
 
         var json = System.Text.Json.JsonSerializer.Serialize(rows);

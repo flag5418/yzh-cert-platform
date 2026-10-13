@@ -29,6 +29,8 @@ namespace CertPlatform.Admin.Services.StandardDirectory;
 public class StandardDirectoryService
 {
     private readonly IDbOrm _db;
+    /// <summary>核心资源检索唯一入口（铁律 L5）—— 标准/目录文件等取数走它，⛔ 不在本类写 WHERE。</summary>
+    private readonly ICoreResourceQuery _core;
     private readonly IObjectStorage _storage;
     private readonly IConfiguration _configuration;
     private readonly ILogger<StandardDirectoryService> _logger;
@@ -59,7 +61,8 @@ public class StandardDirectoryService
         IConfiguration configuration,
         ILogger<StandardDirectoryService> logger,
         QueueManager queueManager,
-        IUserContext user)
+        IUserContext user,
+        ICoreResourceQuery core)
     {
         _db = db;
         _storage = storage;
@@ -67,6 +70,7 @@ public class StandardDirectoryService
         _logger = logger;
         _queueManager = queueManager;
         _user = user;
+        _core = core;
     }
 
     #region 组织树（org → standard → phase）
@@ -77,14 +81,14 @@ public class StandardDirectoryService
     public async Task<List<object>> GetOrganizationTreeAsync()
     {
         var orgs = (await _db.GetListAsync<CertificationBody>(x => x.IsValid == 1)).Data ?? new();
-        var standards = (await _db.GetListAsync<ISOStandard>(x => x.IsValid == 1)).Data ?? new();
+        var standards = await _core.GetValidStandardsAsync();
         var orgStandards = (await _db.GetListAsync<CertOrgStandard>()).Data ?? new();
         var orgStages = (await _db.GetListAsync<CertOrgStage>()).Data ?? new();
 
         // CertStage 是机构-阶段关联的权威来源（cert_org_stage.StageCode ★Q2 起存 Code/GUID）
         // 与「认证阶段定义」页（/cert/cert-stage）同源
-        var phaseDefs = (await _db.GetListAsync<CertStage>(x => x.IsValid == 1 && !x.IsDeleted))
-                        .Data?.OrderBy(x => x.SortOrder).ThenBy(x => x.StageCode).ToList() ?? new();
+        var phaseDefs = (await _core.GetStagesAsync())
+                        .OrderBy(x => x.SortOrder).ThenBy(x => x.StageCode).ToList();
 
         // 目录配置 Code 索引：前端阶段节点用它作为 DirectoryCode（决策 ⑳修订：按机构隔离）
         var configs = (await _db.GetListAsync<StandardDirectoryConfig>(x => x.IsValid == 1)).Data ?? new();
@@ -146,7 +150,11 @@ public class StandardDirectoryService
                     // ★ 键必须是 org + phase.Code（cert_cert_stage.Code，GUID）——
                     //   config.StageCode 存的是该 GUID（见迁移脚本列注释），不是 'jd01' 这种 StageCode；
                     //   决策⑳修订后主键含 OrgCode ⇒ 键必须带机构，否则机构 A 的配置会被机构 B 命中。
-                    configCodeMap.TryGetValue($"{org.Code}|{std.Code}|{phase.Code}", out var configCode);
+                    // ★ 2026-10-12 终裁：模板行 OrgCode 已迁 'yzh-std-env'（后台标准级，
+                    //   全机构共享同一套目录模板）⇒ 先按「机构行」查（兼容未来机构级定制列），
+                    //   未命中再按「后台模板行」查 —— 否则任何机构节点都拿不到 configCode（静默断链）。
+                    if (!configCodeMap.TryGetValue($"{org.Code}|{std.Code}|{phase.Code}", out var configCode))
+                        configCodeMap.TryGetValue($"{CoreOrgCodes.StdEnv}|{std.Code}|{phase.Code}", out configCode);
                     var phaseNode = new Dictionary<string, object>
                     {
                         ["id"] = $"{org.Code}|{std.StandardCode}|{phase.StageCode}",
@@ -286,7 +294,7 @@ public class StandardDirectoryService
 
         // ② 文件夹 / 文件：各一次查询（⛔ 不逐阶段查 —— 那会是 2×N 次往返）
         var allFolders = (await _db.GetListAsync<StandardDirectoryFolder>(x => x.IsValid == 1)).Data ?? new();
-        var allFiles = (await _db.GetListAsync<StandardDirectoryFile>(x => x.IsValid == 1)).Data ?? new();
+        var allFiles = await _core.GetDirectoryFilesAsync();
 
         var scopedFolders = allFolders
             .Where(f => !string.IsNullOrEmpty(f.ConfigCode) && configCodes.Contains(f.ConfigCode!))
@@ -457,6 +465,12 @@ public class StandardDirectoryService
     public async Task<(bool ok, string? error, StandardDirectoryConfig? data)> CreateConfigAsync(
         StandardDirectoryConfig config)
     {
+        // ★ 2026-10-12 终裁（规则文档 §2.8(f)）：模板行（EnterpriseCode 空）OrgCode 恒为
+        //   'yzh-std-env' —— 两值模型下前端传机构也不落库，否则与存量模板行 uk 不同键、
+        //   静默建成「第二套目录」。企业行（EnterpriseCode 有值）不在本裁决范围，OrgCode 原样。
+        if (string.IsNullOrWhiteSpace(config.EnterpriseCode))
+            config.OrgCode = CoreOrgCodes.StdEnv;
+
         // 业务键必填（决策⑳修订：三键 uk = OrgCode + StandardCode + StageCode）
         if (string.IsNullOrWhiteSpace(config.OrgCode))
             return (false, "缺少业务键：请选择机构（OrgCode）", null);
@@ -543,6 +557,17 @@ public class StandardDirectoryService
                      && x.StandardCode == standardCode && x.StageCode == stageCode);
 
         var existing = await query().FirstAsync();
+
+        // ★ 2026-10-12 终裁：模板行 OrgCode 恒为 'yzh-std-env' —— 前端仍传机构 orgCode，
+        //   机构键未命中时必须回退后台模板键，否则「无感懒建」会把已迁模板误判为不存在、
+        //   静默新建一套 OrgCode=机构 的重复目录（uk 不同键，DB 不报错）。
+        if (existing == null)
+        {
+            existing = await _db.Client.Queryable<StandardDirectoryConfig>()
+                .Where(x => x.OrgCode == CoreOrgCodes.StdEnv
+                         && x.StandardCode == standardCode && x.StageCode == stageCode)
+                .FirstAsync();
+        }
         if (existing != null && !existing.IsDeleted)
             return (true, null, existing);
 
@@ -555,7 +580,13 @@ public class StandardDirectoryService
         if (created.ok) return created;
 
         // 并发：另一请求刚插入 → 「已存在」→ 重读返回赢家行
+        // ★ 赢家行 OrgCode 恒为 StdEnv（CreateConfigAsync 强制）⇒ 机构键重读未命中须回退模板键
         var again = await query().FirstAsync();
+        if (again == null)
+            again = await _db.Client.Queryable<StandardDirectoryConfig>()
+                .Where(x => x.OrgCode == CoreOrgCodes.StdEnv
+                         && x.StandardCode == standardCode && x.StageCode == stageCode)
+                .FirstAsync();
         if (again != null) return (true, null, again);
         return created;
     }
@@ -609,8 +640,7 @@ public class StandardDirectoryService
         var now = DateTime.Now;
 
         // 级联软删文件（先标状态，再删对象 —— P1-15：顺序反了 DB 失败即不可逆）
-        var files = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.ConfigCode == directoryCode && !x.IsDeleted, includeDisabled: true)).Data ?? new();
+        var files = await _core.GetDirectoryFilesByConfigCodeAsync(directoryCode, includeDisabled: true);
         foreach (var file in files)
         {
             await DeleteFileFromStorageAsync(file);
@@ -910,8 +940,7 @@ public class StandardDirectoryService
         }
 
         // 删除文件夹下的文件（先改 DB 状态再删对象 —— P1-15）
-        var files = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.FolderCode == folderCode && x.IsValid == 1)).Data ?? new();
+        var files = await _core.GetDirectoryFilesByFolderCodeAsync(folderCode);
         foreach (var file in files)
         {
             file.IsDeleted = true;
@@ -992,11 +1021,9 @@ public class StandardDirectoryService
     {
         if (string.IsNullOrEmpty(folderCode))
         {
-            return (await _db.GetListAsync<StandardDirectoryFile>(
-                x => x.IsValid == 1)).Data ?? new();
+            return await _core.GetDirectoryFilesAsync();
         }
-        return (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.FolderCode == folderCode && x.IsValid == 1)).Data ?? new();
+        return await _core.GetDirectoryFilesByFolderCodeAsync(folderCode);
     }
 
     /// <summary>
@@ -1076,8 +1103,7 @@ public class StandardDirectoryService
     /// </summary>
     public async Task<(bool ok, string? error)> UpdateFileAsync(string fileCode, StandardDirectoryFile input)
     {
-        var existing = (await _db.GetOneAsync<StandardDirectoryFile>(
-            x => x.Code == fileCode && x.IsValid == 1)).Data;
+        var existing = await _core.GetDirectoryFileByCodeAsync(fileCode);
         if (existing == null) return (false, "文件不存在");
 
         var nameErr = ValidateFolderOrFileName(input.FileName ?? "", "文件名");
@@ -1105,8 +1131,7 @@ public class StandardDirectoryService
         var lockErr = await GetFileLockErrorAsync(fileCode);
         if (lockErr != null) return (false, lockErr);
 
-        var file = (await _db.GetOneAsync<StandardDirectoryFile>(
-            x => x.Code == fileCode && x.IsValid == 1)).Data;
+        var file = await _core.GetDirectoryFileByCodeAsync(fileCode);
         if (file == null) return (false, "文件不存在");
 
         // 先改 DB 状态，再删对象 —— P1-15（顺序反了 MinIO 失败即不可逆）
@@ -1335,6 +1360,15 @@ public class StandardDirectoryService
         {
             config = (await _db.GetOneAsync<StandardDirectoryConfig>(
                 x => x.OrgCode == manifest.OrgCode
+                  && x.StandardCode == manifest.StandardCode && x.StageCode == manifest.PhaseCode)).Data;
+        }
+        // ★ 2026-10-12 终裁兜底：manifest.OrgCode 是机构（前端树节点值），模板行已迁
+        //   'yzh-std-env' ⇒ 按机构三键未命中时再按后台模板键查一次，防上传 Step1 断链。
+        if (config == null && !string.IsNullOrEmpty(manifest.StandardCode)
+            && !string.IsNullOrEmpty(manifest.PhaseCode))
+        {
+            config = (await _db.GetOneAsync<StandardDirectoryConfig>(
+                x => x.OrgCode == CoreOrgCodes.StdEnv
                   && x.StandardCode == manifest.StandardCode && x.StageCode == manifest.PhaseCode)).Data;
         }
         if (config == null)
@@ -1716,8 +1750,7 @@ public class StandardDirectoryService
         var lockErr = await GetFileLockErrorAsync(fileCode);
         if (lockErr != null) return (false, lockErr, null);
 
-        var file = (await _db.GetOneAsync<StandardDirectoryFile>(
-            x => x.Code == fileCode && x.IsValid == 1)).Data;
+        var file = await _core.GetDirectoryFileByCodeAsync(fileCode);
         if (file == null) return (false, "文件不存在", null);
         if (string.IsNullOrEmpty(file.StoragePath))
             return (false, "原文件从未上传过物理内容，请删除后重新上传", null);
@@ -1808,8 +1841,7 @@ public class StandardDirectoryService
         if (queueLockErr != null) return (false, queueLockErr, null);
 
         // 检查所有文件是否已上传（IgnoreValid：pending/replacing 文件 IsValid=0，GetListAsync 默认过滤会漏掉）
-        var allFiles = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.TaskId == taskId, includeDisabled: true)).Data ?? new();
+        var allFiles = await _core.GetDirectoryFilesByTaskIdAsync(taskId, includeDisabled: true);
 
         var pendingCount = allFiles.Count(x => x.UploadStatus == "pending");
         if (pendingCount > 0)
@@ -1936,8 +1968,7 @@ public class StandardDirectoryService
             if ((file.Remark ?? "").Contains(replaceMarker))
             {
                 // 替换模式：恢复为有效状态（直接更新实体）
-                var updateFile = (await _db.GetOneAsync<StandardDirectoryFile>(
-                    x => x.Code == file.Code)).Data;
+                var updateFile = await _core.GetDirectoryFileByCodeAsync(file.Code);
                 if (updateFile != null)
                 {
                     updateFile.IsValid = 1;
@@ -2069,8 +2100,7 @@ public class StandardDirectoryService
 
     private async Task<string?> GetFileLockErrorAsync(string fileCode)
     {
-        var file = (await _db.GetOneAsync<StandardDirectoryFile>(
-            x => x.Code == fileCode)).Data;
+        var file = await _core.GetDirectoryFileByCodeAsync(fileCode);
         if (file == null) return null;
 
         var dirLockErr = await GetQueueLockErrorAsync(file.ConfigCode ?? "");
@@ -2119,8 +2149,7 @@ public class StandardDirectoryService
         }
 
         // 2. 查询所有启用的文件
-        var allFiles = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.ConfigCode == directoryCode && x.IsValid == 1)).Data ?? new();
+        var allFiles = await _core.GetDirectoryFilesByConfigCodeAsync(directoryCode);
 
         if (reservedFolderCodes.Count > 0)
         {
@@ -2306,9 +2335,7 @@ public class StandardDirectoryService
     /// </summary>
     public async Task<List<StandardDirectoryFile>> GetFilesByDirectoryAsync(string directoryCode)
     {
-        return (await _db.GetListAsync<StandardDirectoryFile>(
-            x => x.ConfigCode == directoryCode && x.IsValid == 1))
-            .Data ?? new();
+        return await _core.GetDirectoryFilesByConfigCodeAsync(directoryCode);
     }
 
     #endregion
@@ -2450,8 +2477,7 @@ public class StandardDirectoryService
         if (expandedFileCodes.Count == 0)
             throw new ArgumentException("没有找到可导出的文件");
 
-        var filesToExport = (await _db.GetListAsync<StandardDirectoryFile>(
-            x => expandedFileCodes.Contains(x.Code) && x.IsValid == 1)).Data ?? new();
+        var filesToExport = await _core.GetDirectoryFilesByCodesAsync(expandedFileCodes);
 
         // 创建临时目录
         var tempDir = Path.Combine(Path.GetTempPath(), $"export_{Guid.NewGuid():N}");
@@ -2756,8 +2782,7 @@ public class StandardDirectoryService
             foreach (var task in stuckTasks)
             {
                 // 2. 任务下所有中间态文件（IgnoreValid 读 pending/replacing/uploaded）
-                var files = (await _db.GetListAsync<StandardDirectoryFile>(
-                    x => x.TaskId == task.TaskId, includeDisabled: true)).Data ?? new();
+                var files = await _core.GetDirectoryFilesByTaskIdAsync(task.TaskId, includeDisabled: true);
                 if (files.Count == 0)
                 {
                     // 无关联文件：直接关任务

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using CertPlatform.Shared.Entities.Cert;
+using CertPlatform.Shared.Entities.Dir;
 using CertPlatform.Shared.Entities.Doc;
 using CertPlatform.Shared.Entities.Sys;
 using YZH.Core.DataBase.Interfaces;
@@ -42,13 +43,37 @@ public interface ICoreResourceQuery
     /// </summary>
     Task<List<ISOStandard>> GetStandardsAsync(string? enterpriseCode = null);
 
+    /// <summary>
+    /// 取<b>全部有效标准</b>（<c>IsValid==1</c> 且未删 —— 框架 <c>GetListAsync</c> 内含两条件，
+    /// 调用方 ⛔ 不要再写 <c>x.IsValid == 1</c> / <c>!x.IsDeleted</c> 重复谓词）。
+    /// </summary>
+    Task<List<ISOStandard>> GetValidStandardsAsync();
+
+    /// <summary>按 <c>Code</c> 集合批量取标准（空集合直接返回空，⛔ 不发查询）。</summary>
+    Task<List<ISOStandard>> GetStandardsByCodesAsync(IEnumerable<string> standardCodes);
+
+    /// <summary>按 <c>Code</c> 单查标准（未命中返回 <c>null</c>）。</summary>
+    Task<ISOStandard?> GetStandardByCodeAsync(string? standardCode);
+
     /// <summary>取指定标准下的条款（按 <c>SortOrder</c> 升序）。<paramref name="standardCode"/> = 标准 <c>Code</c>（GUID）。</summary>
     Task<List<ISOClause>> GetClausesAsync(string standardCode);
+
+    /// <summary>按条款 <c>Code</c> 单查条款（未命中返回 <c>null</c>）。</summary>
+    Task<ISOClause?> GetClauseByCodeAsync(string? clauseCode);
 
     // ──────────────────────────── 阶段 ────────────────────────────
 
     /// <summary>取全部认证阶段（全局基础资料，无 <c>OrgCode</c> 维度）。</summary>
     Task<List<CertStage>> GetStagesAsync();
+
+    /// <summary>按阶段 <c>Code</c> 单查阶段（未命中返回 <c>null</c>）。</summary>
+    Task<CertStage?> GetStageByCodeAsync(string? stageCode);
+
+    /// <summary>按阶段 <c>Code</c> 集合批量取阶段（空集合直接返回空，⛔ 不发查询）。</summary>
+    Task<List<CertStage>> GetStagesByCodesAsync(IEnumerable<string> stageCodes);
+
+    /// <summary>按集合同时匹配 <c>Code</c> 或 <c>StageCode</c>（据实谓词：端内既有 <c>list.Contains(x.Code) || list.Contains(x.StageCode)</c> 写法）。</summary>
+    Task<List<CertStage>> GetStagesByCodeOrStageCodeAsync(IEnumerable<string> codes);
 
     // ────────────────────── 机构×标准 / 机构×阶段 ──────────────────────
 
@@ -61,18 +86,53 @@ public interface ICoreResourceQuery
     // ─────────────────────── 填写规则（参数定义 / 提示词）───────────────────────
 
     /// <summary>
-    /// 取后台参数定义（<c>OrgCode == 'yzh-std-env'</c>）；
-    /// 给了 <paramref name="standardCode"/> 时只取「通用（<c>StandardCode=''</c>）+ 该标准」两组。
+    /// 取后台参数定义（<c>OrgCode == 'yzh-std-env'</c>）。
+    /// <list type="bullet">
+    /// <item><paramref name="standardCode"/> / <paramref name="stageCode"/> 为 <c>null</c> = 该维<b>不限</b>（不过滤）；</item>
+    /// <item>传入值（含空串）= 取「通配（<c>列 == ""</c>）+ 等值」两组 —— 与端内既有谓词逐字一致。</item>
+    /// </list>
     /// </summary>
-    Task<List<FillParamDef>> GetFillParamDefsAsync(string? standardCode = null);
+    Task<List<FillParamDef>> GetFillParamDefsAsync(string? standardCode = null, string? stageCode = null);
 
     /// <summary>取填写提示词。<paramref name="orgCode"/> 缺省 = 后台标准级（<c>'yzh-std-env'</c>）。</summary>
     Task<List<DocFillPrompt>> GetDocFillPromptsAsync(string? orgCode = null);
+
+    /// <summary>按提示词版本行 <c>Code</c> 单查（未命中返回 <c>null</c>）。</summary>
+    Task<DocFillPrompt?> GetDocFillPromptByCodeAsync(string? promptCode);
 
     // ──────────────────────────── 提取规则 ────────────────────────────
 
     /// <summary>取文档提取规则。<paramref name="orgCode"/> 缺省 = 后台标准级（<c>'yzh-std-env'</c>）。</summary>
     Task<List<DocExtractionRule>> GetDocExtractionRulesAsync(string? orgCode = null);
+
+    /// <summary>按规则 <c>Code</c> 单查提取规则（未命中返回 <c>null</c>）。</summary>
+    Task<DocExtractionRule?> GetDocExtractionRuleByCodeAsync(string? ruleCode);
+
+    // ─────────────────────── 标准目录文件 ───────────────────────
+
+    /// <summary>取<b>全部有效</b>标准目录文件（对应端内 16 处冗余的 <c>x.IsValid == 1</c> 全表写法）。</summary>
+    Task<List<StandardDirectoryFile>> GetDirectoryFilesAsync();
+
+    /// <summary>按目录配置 <c>Code</c> 取该目录下文件。<paramref name="includeDisabled"/> = <c>true</c> 时含已禁用行（「已移除槽位」仍属对账清单）。</summary>
+    Task<List<StandardDirectoryFile>> GetDirectoryFilesByConfigCodeAsync(string configCode, bool includeDisabled = false);
+
+    /// <summary>按文件 <c>Code</c> 单查标准目录文件（未命中返回 <c>null</c>）。</summary>
+    Task<StandardDirectoryFile?> GetDirectoryFileByCodeAsync(string? fileCode);
+
+    /// <summary>按文件 <c>Code</c> 集合批量取有效文件（空集合直接返回空，⛔ 不发查询）。</summary>
+    Task<List<StandardDirectoryFile>> GetDirectoryFilesByCodesAsync(IEnumerable<string> fileCodes);
+
+    /// <summary>按目录配置 <c>Code</c> 集合批量取文件（<paramref name="includeDisabled"/> 语义同单数版）。</summary>
+    Task<List<StandardDirectoryFile>> GetDirectoryFilesByConfigCodesAsync(IEnumerable<string> configCodes, bool includeDisabled = false);
+
+    /// <summary>按上传任务 <c>TaskId</c> 取文件（<paramref name="includeDisabled"/>：待激活/等转换行 <c>IsValid=0</c>，须显式带上）。</summary>
+    Task<List<StandardDirectoryFile>> GetDirectoryFilesByTaskIdAsync(string taskId, bool includeDisabled = false);
+
+    /// <summary>按企业（<c>EnterpriseCode</c>，文件表的机构维度）取文件行。</summary>
+    Task<List<StandardDirectoryFile>> GetDirectoryFilesByEnterpriseCodeAsync(string enterpriseCode, bool includeDisabled = false);
+
+    /// <summary>按文件夹 <c>Code</c> 取该文件夹下全部有效文件。</summary>
+    Task<List<StandardDirectoryFile>> GetDirectoryFilesByFolderCodeAsync(string folderCode);
 }
 
 /// <summary>
@@ -109,6 +169,32 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         return both.Data ?? new List<ISOStandard>();
     }
 
+    public async Task<List<ISOStandard>> GetValidStandardsAsync()
+    {
+        // 框架 GetListAsync 内含 IsDeleted=0 + IsValid=1 ⇒ 谓词处 ⛔ 不重复写
+        var rows = await _db.GetListAsync<ISOStandard>();
+        return rows.Data ?? new List<ISOStandard>();
+    }
+
+    public async Task<List<ISOStandard>> GetStandardsByCodesAsync(IEnumerable<string> standardCodes)
+    {
+        var codes = new List<string>();
+        foreach (var c in standardCodes)
+            if (!string.IsNullOrWhiteSpace(c)) codes.Add(c);
+        if (codes.Count == 0) return new List<ISOStandard>();
+
+        var rows = await _db.GetListAsync<ISOStandard>(x => codes.Contains(x.Code!));
+        return rows.Data ?? new List<ISOStandard>();
+    }
+
+    public async Task<ISOStandard?> GetStandardByCodeAsync(string? standardCode)
+    {
+        if (string.IsNullOrWhiteSpace(standardCode)) return null;
+        var sc = standardCode;
+        var r = await _db.GetOneAsync<ISOStandard>(x => x.Code == sc);
+        return r.Data;
+    }
+
     public async Task<List<ISOClause>> GetClausesAsync(string standardCode)
     {
         if (string.IsNullOrWhiteSpace(standardCode)) return new List<ISOClause>();
@@ -118,11 +204,50 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         return rows.Data ?? new List<ISOClause>();
     }
 
+    public async Task<ISOClause?> GetClauseByCodeAsync(string? clauseCode)
+    {
+        if (string.IsNullOrWhiteSpace(clauseCode)) return null;
+        var cc = clauseCode;
+        var r = await _db.GetOneAsync<ISOClause>(x => x.Code == cc);
+        return r.Data;
+    }
+
     // ──────────────────────────── 阶段 ────────────────────────────
 
     public async Task<List<CertStage>> GetStagesAsync()
     {
         var rows = await _db.GetListAsync<CertStage>();
+        return rows.Data ?? new List<CertStage>();
+    }
+
+    public async Task<CertStage?> GetStageByCodeAsync(string? stageCode)
+    {
+        if (string.IsNullOrWhiteSpace(stageCode)) return null;
+        var sc = stageCode;
+        var r = await _db.GetOneAsync<CertStage>(x => x.Code == sc);
+        return r.Data;
+    }
+
+    public async Task<List<CertStage>> GetStagesByCodesAsync(IEnumerable<string> stageCodes)
+    {
+        var codes = new List<string>();
+        foreach (var c in stageCodes)
+            if (!string.IsNullOrWhiteSpace(c)) codes.Add(c);
+        if (codes.Count == 0) return new List<CertStage>();
+
+        var rows = await _db.GetListAsync<CertStage>(x => codes.Contains(x.Code!));
+        return rows.Data ?? new List<CertStage>();
+    }
+
+    public async Task<List<CertStage>> GetStagesByCodeOrStageCodeAsync(IEnumerable<string> codes)
+    {
+        var set = new List<string>();
+        foreach (var c in codes)
+            if (!string.IsNullOrWhiteSpace(c)) set.Add(c);
+        if (set.Count == 0) return new List<CertStage>();
+
+        var rows = await _db.GetListAsync<CertStage>(
+            x => set.Contains(x.Code!) || set.Contains(x.StageCode!));
         return rows.Data ?? new List<CertStage>();
     }
 
@@ -148,18 +273,38 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
 
     // ─────────────────────── 填写规则（参数定义 / 提示词）───────────────────────
 
-    public async Task<List<FillParamDef>> GetFillParamDefsAsync(string? standardCode = null)
+    public async Task<List<FillParamDef>> GetFillParamDefsAsync(string? standardCode = null, string? stageCode = null)
     {
-        if (string.IsNullOrWhiteSpace(standardCode))
+        // ⚠️ null = 该维不限；传值（含空串）= 「通配 + 等值」—— 与端内既有谓词逐字一致。
+        if (standardCode == null && stageCode == null)
         {
             var all = await _db.GetListAsync<FillParamDef>(x => x.OrgCode == CoreOrgCodes.StdEnv);
             return all.Data ?? new List<FillParamDef>();
         }
 
-        var sc = standardCode;
-        var rows = await _db.GetListAsync<FillParamDef>(
-            x => x.OrgCode == CoreOrgCodes.StdEnv && (x.StandardCode == "" || x.StandardCode == sc));
-        return rows.Data ?? new List<FillParamDef>();
+        if (stageCode == null)
+        {
+            var sc = standardCode;
+            var rows = await _db.GetListAsync<FillParamDef>(
+                x => x.OrgCode == CoreOrgCodes.StdEnv && (x.StandardCode == "" || x.StandardCode == sc));
+            return rows.Data ?? new List<FillParamDef>();
+        }
+
+        if (standardCode == null)
+        {
+            var stc = stageCode;
+            var rows = await _db.GetListAsync<FillParamDef>(
+                x => x.OrgCode == CoreOrgCodes.StdEnv && (x.StageCode == "" || x.StageCode == stc));
+            return rows.Data ?? new List<FillParamDef>();
+        }
+
+        var sc2 = standardCode;
+        var stc2 = stageCode;
+        var both = await _db.GetListAsync<FillParamDef>(
+            x => x.OrgCode == CoreOrgCodes.StdEnv
+                && (x.StandardCode == "" || x.StandardCode == sc2)
+                && (x.StageCode == "" || x.StageCode == stc2));
+        return both.Data ?? new List<FillParamDef>();
     }
 
     public async Task<List<DocFillPrompt>> GetDocFillPromptsAsync(string? orgCode = null)
@@ -169,6 +314,14 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         return rows.Data ?? new List<DocFillPrompt>();
     }
 
+    public async Task<DocFillPrompt?> GetDocFillPromptByCodeAsync(string? promptCode)
+    {
+        if (string.IsNullOrWhiteSpace(promptCode)) return null;
+        var pc = promptCode;
+        var r = await _db.GetOneAsync<DocFillPrompt>(x => x.Code == pc);
+        return r.Data;
+    }
+
     // ──────────────────────────── 提取规则 ────────────────────────────
 
     public async Task<List<DocExtractionRule>> GetDocExtractionRulesAsync(string? orgCode = null)
@@ -176,5 +329,87 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         var org = string.IsNullOrWhiteSpace(orgCode) ? CoreOrgCodes.StdEnv : orgCode!;
         var rows = await _db.GetListAsync<DocExtractionRule>(x => x.OrgCode == org);
         return rows.Data ?? new List<DocExtractionRule>();
+    }
+
+    public async Task<DocExtractionRule?> GetDocExtractionRuleByCodeAsync(string? ruleCode)
+    {
+        if (string.IsNullOrWhiteSpace(ruleCode)) return null;
+        var rc = ruleCode;
+        var r = await _db.GetOneAsync<DocExtractionRule>(x => x.Code == rc);
+        return r.Data;
+    }
+
+    // ─────────────────────── 标准目录文件 ───────────────────────
+
+    public async Task<List<StandardDirectoryFile>> GetDirectoryFilesAsync()
+    {
+        var rows = await _db.GetListAsync<StandardDirectoryFile>();
+        return rows.Data ?? new List<StandardDirectoryFile>();
+    }
+
+    public async Task<List<StandardDirectoryFile>> GetDirectoryFilesByConfigCodeAsync(string configCode, bool includeDisabled = false)
+    {
+        if (string.IsNullOrWhiteSpace(configCode)) return new List<StandardDirectoryFile>();
+
+        var cc = configCode;
+        var rows = await _db.GetListAsync<StandardDirectoryFile>(x => x.ConfigCode == cc, includeDisabled: includeDisabled);
+        return rows.Data ?? new List<StandardDirectoryFile>();
+    }
+
+    public async Task<StandardDirectoryFile?> GetDirectoryFileByCodeAsync(string? fileCode)
+    {
+        if (string.IsNullOrWhiteSpace(fileCode)) return null;
+        var fc = fileCode;
+        var r = await _db.GetOneAsync<StandardDirectoryFile>(x => x.Code == fc);
+        return r.Data;
+    }
+
+    public async Task<List<StandardDirectoryFile>> GetDirectoryFilesByCodesAsync(IEnumerable<string> fileCodes)
+    {
+        var codes = new List<string>();
+        foreach (var c in fileCodes)
+            if (!string.IsNullOrWhiteSpace(c)) codes.Add(c);
+        if (codes.Count == 0) return new List<StandardDirectoryFile>();
+
+        var rows = await _db.GetListAsync<StandardDirectoryFile>(x => codes.Contains(x.Code!));
+        return rows.Data ?? new List<StandardDirectoryFile>();
+    }
+
+    public async Task<List<StandardDirectoryFile>> GetDirectoryFilesByConfigCodesAsync(IEnumerable<string> configCodes, bool includeDisabled = false)
+    {
+        var codes = new List<string>();
+        foreach (var c in configCodes)
+            if (!string.IsNullOrWhiteSpace(c)) codes.Add(c);
+        if (codes.Count == 0) return new List<StandardDirectoryFile>();
+
+        var rows = await _db.GetListAsync<StandardDirectoryFile>(x => codes.Contains(x.ConfigCode!), includeDisabled: includeDisabled);
+        return rows.Data ?? new List<StandardDirectoryFile>();
+    }
+
+    public async Task<List<StandardDirectoryFile>> GetDirectoryFilesByTaskIdAsync(string taskId, bool includeDisabled = false)
+    {
+        if (string.IsNullOrWhiteSpace(taskId)) return new List<StandardDirectoryFile>();
+
+        var tid = taskId;
+        var rows = await _db.GetListAsync<StandardDirectoryFile>(x => x.TaskId == tid, includeDisabled: includeDisabled);
+        return rows.Data ?? new List<StandardDirectoryFile>();
+    }
+
+    public async Task<List<StandardDirectoryFile>> GetDirectoryFilesByEnterpriseCodeAsync(string enterpriseCode, bool includeDisabled = false)
+    {
+        if (string.IsNullOrWhiteSpace(enterpriseCode)) return new List<StandardDirectoryFile>();
+
+        var ec = enterpriseCode;
+        var rows = await _db.GetListAsync<StandardDirectoryFile>(x => x.EnterpriseCode == ec, includeDisabled: includeDisabled);
+        return rows.Data ?? new List<StandardDirectoryFile>();
+    }
+
+    public async Task<List<StandardDirectoryFile>> GetDirectoryFilesByFolderCodeAsync(string folderCode)
+    {
+        if (string.IsNullOrWhiteSpace(folderCode)) return new List<StandardDirectoryFile>();
+
+        var fc = folderCode;
+        var rows = await _db.GetListAsync<StandardDirectoryFile>(x => x.FolderCode == fc);
+        return rows.Data ?? new List<StandardDirectoryFile>();
     }
 }

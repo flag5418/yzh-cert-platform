@@ -202,7 +202,7 @@ public partial class DocExtractionRuleService
                 fr.TemplateStoragePath, null, null, null, null);
 
         // 2. 兜底：实际上传的标准目录文件（FileCode=FL-xxx）
-        var dir = (await _db.GetOneAsync<StandardDirectoryFile>(x => x.Code == standardFileCode)).Data;
+        var dir = await _core.GetDirectoryFileByCodeAsync(standardFileCode);
         if (dir != null && !string.IsNullOrEmpty(dir.StoragePath))
             return new FileInfoResult(dir.Code, dir.FileName, dir.StoragePath,
                 dir.PreviewPdfPath, dir.MarkdownPath, dir.MarkdownStatus, dir.MarkdownMessage);
@@ -327,8 +327,7 @@ public partial class DocExtractionRuleService
     {
         try
         {
-            var dirFile = (await _db.GetOneAsync<StandardDirectoryFile>(
-                x => x.Code == fileInfo.FileCode)).Data;
+            var dirFile = await _core.GetDirectoryFileByCodeAsync(fileInfo.FileCode);
             if (dirFile == null || string.IsNullOrEmpty(dirFile.StoragePath)) return;
 
             var targetPath = CertPlatform.Admin.Services.StandardDirectory.CodeGeneratorService.BuildProductPath(
@@ -364,8 +363,7 @@ public partial class DocExtractionRuleService
     {
         try
         {
-            var dirFile = (await _db.GetOneAsync<StandardDirectoryFile>(
-                x => x.Code == fileCode)).Data;
+            var dirFile = await _core.GetDirectoryFileByCodeAsync(fileCode);
             if (dirFile == null) return;
 
             dirFile.MarkdownStatus = status;
@@ -455,8 +453,7 @@ public partial class DocExtractionRuleService
     {
         try
         {
-            var dirFile = (await _db.GetOneAsync<StandardDirectoryFile>(
-                x => x.Code == fileInfo.FileCode)).Data;
+            var dirFile = await _core.GetDirectoryFileByCodeAsync(fileInfo.FileCode);
             if (dirFile == null || string.IsNullOrEmpty(dirFile.StoragePath)) return;
 
             var targetPath = CertPlatform.Admin.Services.StandardDirectory.CodeGeneratorService.BuildProductPath(

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using CertPlatform.Admin.Services.DocExtraction;
 using CertPlatform.Admin.Services.Workflow;
 using CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Entities.Dir;
 using CertPlatform.Shared.Fill;
 using YZH.Core.Api.Controllers;
@@ -50,6 +51,8 @@ namespace CertPlatform.Admin.Controllers.Workflow;
 public class StandardDocContractController : WebControllerBase
 {
     private readonly IDbOrm _db;
+    /// <summary>核心资源检索唯一入口（铁律 L5）—— 目录文件按 Code 单查只走它。</summary>
+    private readonly ICoreResourceQuery _core;
     private readonly DocExtractionRuleService _extraction;
     private readonly PromptWorkbenchService _prompts;
     private readonly IObjectStorage _storage;
@@ -62,9 +65,11 @@ public class StandardDocContractController : WebControllerBase
         PromptWorkbenchService prompts,
         IObjectStorage storage,
         IUserContext userContext,
-        ILogger<StandardDocContractController> logger)
+        ILogger<StandardDocContractController> logger,
+        ICoreResourceQuery core)
     {
         _db = db;
+        _core = core;
         _extraction = extraction;
         _prompts = prompts;
         _storage = storage;
@@ -88,7 +93,7 @@ public class StandardDocContractController : WebControllerBase
         if (string.IsNullOrWhiteSpace(fileCode))
             return Ok(ApiResponse<object>.Fail("缺少标准文件编码（fileCode）"));
 
-        var fileRow = (await _db.GetOneAsync<StandardDirectoryFile>(f => f.Code == fileCode)).Data;
+        var fileRow = await _core.GetDirectoryFileByCodeAsync(fileCode);
         if (fileRow == null)
             return Ok(ApiResponse<object>.Fail("标准目录文件不存在或已删除"));
 
@@ -162,7 +167,7 @@ public class StandardDocContractController : WebControllerBase
         if (req == null || string.IsNullOrWhiteSpace(req.StandardFileCode))
             return Ok(ApiResponse<object>.Fail("缺少标准文件编码（standardFileCode）"));
 
-        var fileRow = (await _db.GetOneAsync<StandardDirectoryFile>(f => f.Code == req.StandardFileCode)).Data;
+        var fileRow = await _core.GetDirectoryFileByCodeAsync(req.StandardFileCode);
         if (fileRow == null)
             return Ok(ApiResponse<object>.Fail("标准目录文件不存在或已删除"));
 
@@ -319,7 +324,7 @@ public class StandardDocContractController : WebControllerBase
         if (string.IsNullOrWhiteSpace(fileCode))
             return Ok(ApiResponse<object>.Fail("缺少标准文件编码（fileCode）"));
 
-        var fileRow = (await _db.GetOneAsync<StandardDirectoryFile>(f => f.Code == fileCode)).Data;
+        var fileRow = await _core.GetDirectoryFileByCodeAsync(fileCode);
         if (fileRow == null)
             return Ok(ApiResponse<object>.Fail("标准目录文件不存在或已删除"));
 

@@ -12,6 +12,15 @@ public class TaskExecutionResult
 
     /// <summary>是否可重试：false=永久错误（重试无意义，直接置 failed 不重试）</summary>
     public bool Retryable { get; set; } = true;
+
+    /// <summary>
+    /// 是否算「跳过」而非「失败」（Success=true 且 IsSkipped=true）：
+    /// 任务置终态 <c>skipped</c>、计入队列 <c>SkippedCount</c>，<b>不</b>计入 FailedCount、不触发重试。
+    /// 典型场景：专家任务「人工模式/未配工作流」类降级分支（跳过≠失败，是业务语义）。
+    /// <para>★ 框架层改造登记：2026-10-13，队列复用 T3 —— 真实缺口（T1 已落 yzh_queue.SkippedCount 列），
+    /// 此前框架无法表达「成功但跳过」，专家端只能私有扩展。</para>
+    /// </summary>
+    public bool IsSkipped { get; set; }
 }
 
 /// <summary>

@@ -10,6 +10,8 @@ using CertPlatform.Shared.Entities.Rpt;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
+using YZH.Core.Stand.Interfaces;
+using YZH.Core.Stand.Models.Queue;
 using YZH.Core.Stand.Models.Result;
 
 namespace CertPlatform.Auditor.Services.Expert
@@ -31,9 +33,14 @@ namespace CertPlatform.Auditor.Services.Expert
     /// <summary>
     /// 队列项执行器（专家任务专用）—— 按 <c>ItemType</c> 分发。
     ///
-    /// <para><b>★ 为什么不实现框架的 <c>IYzhTaskExecutor</c></b>：那是 <c>yzh_queue</c> 的分发接口，
-    /// 而专家任务按 D10 用<b>专用队列表</b>（跨租户泄露 H12 + ScopeKey 双口径）。
-    /// 本接口与之<b>形状对齐、职责相同</b>，只是绑定的表不同。</para>
+    /// <para><b>★ 2026-10-13 起（队列复用 T3 / Q1=C「接口反转」）</b>：本接口是
+    /// <b>过渡遗留</b> —— 两个实现类已<b>同时</b>实现框架的 <c>IYzhTaskExecutor</c>
+    /// （<c>TaskType</c> ≡ <c>ItemType</c>），新调度路径走框架统一队列
+    /// （<c>yzh_queue</c> → <c>QueueManager</c>）。本接口仅供旧 <c>ExpertTaskQueueRunner</c>
+    /// 在过渡期分发，<b>T8（调度切换 + 退役 runner）后删除</b>。⛔ 不要再往本接口加新能力。</para>
+    ///
+    /// <para>历史缘由（已被推翻）：原按 D10「专家任务用专用队列表」不实现 IYzhTaskExecutor；
+    /// 队列复用方案改判为共用 yzh_queue（跨租户风险由 OrgCode 过滤兜底，T2 已落）。</para>
     /// </summary>
     public interface IExpertItemExecutor
     {
@@ -106,13 +113,65 @@ namespace CertPlatform.Auditor.Services.Expert
     /// <c>ContentText</c> / <c>EvidenceRef</c> 是<b>专家结论</b>，机器永不写。
     /// 这保证「系统是辅助系统、不替代正式报告」在数据层可验证。</para>
     /// </summary>
-    public class ExpertNcCheckExecutor : IExpertItemExecutor
+    public class ExpertNcCheckExecutor : IExpertItemExecutor, IYzhTaskExecutor
     {
         public string ItemType => ExpertTaskConst.ItemType.NcCheck;
 
+        /// <summary>★ 与 <see cref="ItemType"/> 同值 —— 框架队列（yzh_queue）按 TaskType 分发（T3）</summary>
+        public string TaskType => ItemType;
+
         private readonly ILogger<ExpertNcCheckExecutor> _logger;
 
-        public ExpertNcCheckExecutor(ILogger<ExpertNcCheckExecutor> logger) => _logger = logger;
+        /// <summary>根容器 —— 仅用于 IYzhTaskExecutor 路径每次 CreateScope（单例安全，同 Adapter 先例）</summary>
+        private readonly IServiceProvider _rootProvider;
+
+        public ExpertNcCheckExecutor(ILogger<ExpertNcCheckExecutor> logger, IServiceProvider rootProvider)
+        {
+            _logger = logger;
+            _rootProvider = rootProvider;
+        }
+
+        /// <summary>
+        /// ★ 框架统一队列路径（T3）。解析 yzh_queue_task.Payload → 复用同一核心逻辑，
+        /// 把 <see cref="ItemExecOutcome"/> 映射为 <see cref="TaskExecutionResult"/>（skip 语义透传）。
+        /// </summary>
+        public async Task<TaskExecutionResult> ExecuteAsync(YzhQueueTask task, CancellationToken ct)
+        {
+            var p = ExpertItemPayload.Parse(task.Payload);
+            using var scope = _rootProvider.CreateScope();
+            var item = new CertExpertTaskQueueItem
+            {
+                Code = task.Code,
+                TaskCode = p.TaskCode,
+                ItemCode = p.ItemCode
+            };
+            var outcome = await ExecuteAsync(item, p, scope.ServiceProvider, ct);
+
+            // ★ T4 回写桥：新引擎执行完 → 旧表 item 状态 + 三层进度重算（UI 读模型，T8 删旧表前需要）。
+            //   ⛔ 回写失败只记日志 —— 结果行已由核心写出，不能因读模型同步失败把框架任务打成 failed。
+            try
+            {
+                await ExpertQueueFinalizer.WriteBackFromNewPathAsync(
+                    scope.ServiceProvider.GetRequiredService<IDbOrm>(), _logger,
+                    p.TaskCode, p.TaskItemCode, outcome);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[ExpertQueue] T4 回写桥失败 task={Task} item={Item}", p.TaskCode, p.TaskItemCode);
+            }
+
+            return new TaskExecutionResult
+            {
+                Success = outcome.Success,
+                Message = outcome.Message,
+                Retryable = outcome.Retryable,
+                IsSkipped = outcome.IsSkipped
+            };
+        }
+
+        /// <summary>框架状态钩子：本执行器无状态联动（结果写库在执行内完成），空实现</summary>
+        public Task OnTaskStateChangedAsync(YzhQueueTask task, string newStatus, string message)
+            => Task.CompletedTask;
 
         public async Task<ItemExecOutcome> ExecuteAsync(
             CertExpertTaskQueueItem item, ExpertItemPayload p,
@@ -458,13 +517,65 @@ namespace CertPlatform.Auditor.Services.Expert
     /// <c>AutoStatus = degraded</c>。<b>⛔ 它不是 AI 生成的初稿</b> —— 界面必须明确标注，
     /// 否则专家会误以为系统已产出内容。</para>
     /// </summary>
-    public class ExpertReportExecutor : IExpertItemExecutor
+    public class ExpertReportExecutor : IExpertItemExecutor, IYzhTaskExecutor
     {
         public string ItemType => ExpertTaskConst.ItemType.ReportSection;
 
+        /// <summary>★ 与 <see cref="ItemType"/> 同值 —— 框架队列（yzh_queue）按 TaskType 分发（T3）</summary>
+        public string TaskType => ItemType;
+
         private readonly ILogger<ExpertReportExecutor> _logger;
 
-        public ExpertReportExecutor(ILogger<ExpertReportExecutor> logger) => _logger = logger;
+        /// <summary>根容器 —— 仅用于 IYzhTaskExecutor 路径每次 CreateScope（单例安全，同 Adapter 先例）</summary>
+        private readonly IServiceProvider _rootProvider;
+
+        public ExpertReportExecutor(ILogger<ExpertReportExecutor> logger, IServiceProvider rootProvider)
+        {
+            _logger = logger;
+            _rootProvider = rootProvider;
+        }
+
+        /// <summary>
+        /// ★ 框架统一队列路径（T3）。解析 yzh_queue_task.Payload → 复用同一核心逻辑，
+        /// 把 <see cref="ItemExecOutcome"/> 映射为 <see cref="TaskExecutionResult"/>（skip 语义透传）。
+        /// </summary>
+        public async Task<TaskExecutionResult> ExecuteAsync(YzhQueueTask task, CancellationToken ct)
+        {
+            var p = ExpertItemPayload.Parse(task.Payload);
+            using var scope = _rootProvider.CreateScope();
+            var item = new CertExpertTaskQueueItem
+            {
+                Code = task.Code,
+                TaskCode = p.TaskCode,
+                ItemCode = p.ItemCode
+            };
+            var outcome = await ExecuteAsync(item, p, scope.ServiceProvider, ct);
+
+            // ★ T4 回写桥：新引擎执行完 → 旧表 item 状态 + 三层进度重算（UI 读模型，T8 删旧表前需要）。
+            //   ⛔ 回写失败只记日志 —— 结果行已由核心写出，不能因读模型同步失败把框架任务打成 failed。
+            try
+            {
+                await ExpertQueueFinalizer.WriteBackFromNewPathAsync(
+                    scope.ServiceProvider.GetRequiredService<IDbOrm>(), _logger,
+                    p.TaskCode, p.TaskItemCode, outcome);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[ExpertQueue] T4 回写桥失败 task={Task} item={Item}", p.TaskCode, p.TaskItemCode);
+            }
+
+            return new TaskExecutionResult
+            {
+                Success = outcome.Success,
+                Message = outcome.Message,
+                Retryable = outcome.Retryable,
+                IsSkipped = outcome.IsSkipped
+            };
+        }
+
+        /// <summary>框架状态钩子：本执行器无状态联动（结果写库在执行内完成），空实现</summary>
+        public Task OnTaskStateChangedAsync(YzhQueueTask task, string newStatus, string message)
+            => Task.CompletedTask;
 
         public async Task<ItemExecOutcome> ExecuteAsync(
             CertExpertTaskQueueItem item, ExpertItemPayload p,

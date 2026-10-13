@@ -87,13 +87,19 @@ public static class CertPlatformAuditorServiceExtensions
 
         // 队列项执行器（★ 单例：被单例 BackgroundService 通过 scope 解析时，
         //   实际按 Scoped 注册亦可，但注册为 Singleton 可避免每次执行重复构造）
+        // ★ T3（2026-10-13）：同实例双接口 —— 新路径走 IYzhTaskExecutor（yzh_queue 统一队列），
+        //   IExpertItemExecutor 仅供旧 ExpertTaskQueueRunner 过渡分发（T8 删除）。
         services.AddSingleton<ExpertNcCheckExecutor>();
         services.AddSingleton<IExpertItemExecutor>(sp => sp.GetRequiredService<ExpertNcCheckExecutor>());
+        services.AddSingleton<IYzhTaskExecutor>(sp => sp.GetRequiredService<ExpertNcCheckExecutor>());
         services.AddSingleton<ExpertReportExecutor>();
         services.AddSingleton<IExpertItemExecutor>(sp => sp.GetRequiredService<ExpertReportExecutor>());
+        services.AddSingleton<IYzhTaskExecutor>(sp => sp.GetRequiredService<ExpertReportExecutor>());
 
-        // 专家任务队列后台 Worker（★ 专用队列表，D10：不复用 yzh_queue）
-        services.AddHostedService<ExpertTaskQueueRunner>();
+        // ⛔ T4（2026-10-13）：旧专家队列 Worker 已停 —— 写侧已切 yzh_queue（QueueManager 调度），
+        //   若同时跑两个 Worker 会对同一业务项双执行（结果轮次翻倍，数据事故）。
+        //   类保留（收口逻辑已抽到 ExpertQueueFinalizer 供双路径复用），T8 随旧三表一并删除。
+        // services.AddHostedService<ExpertTaskQueueRunner>();
 
         return services;
     }

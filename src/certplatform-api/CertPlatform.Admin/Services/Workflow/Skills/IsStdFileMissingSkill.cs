@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Services.Workflow.Skills;
+using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Workflow.Models;
 using YZH.Core.DataBase.Interfaces;
 using CertPlatform.Shared.Workflow.Skills;
@@ -63,6 +64,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
             string? stage_code = null,
 
             [FromService] IDbOrm db = null!,
+            [FromService] ICoreResourceQuery core = null!,
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(standard_file_code))
@@ -74,9 +76,8 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
             var sfc = standard_file_code!;
 
             // ── ① 查该企业在此标准目录下的文件行 ──
-            var all = await db.GetListAsync<StandardDirectoryFile>(
-                x => x.EnterpriseCode == ent, includeDisabled: true);
-            var rows = (all.Data ?? new List<StandardDirectoryFile>())
+            var all = await core.GetDirectoryFilesByEnterpriseCodeAsync(ent, includeDisabled: true);
+            var rows = all
                 .Where(r => string.Equals(r.StandardFileCode, sfc, StringComparison.OrdinalIgnoreCase))
                 .Where(r => string.IsNullOrWhiteSpace(standard_code)
                             || string.Equals(r.StandardCode, standard_code, StringComparison.OrdinalIgnoreCase))

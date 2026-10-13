@@ -130,6 +130,15 @@ public class QueueManager
         public string TaskType { get; set; } = string.Empty;
         public string Payload { get; set; } = string.Empty;
         public string TaskId { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 业务明细键（T1 列，T4 启用）：如专家任务的 NC 检查项 Code / 报告章节 Code。
+        /// 仅供追溯与续跑定位，⛔ 不参与调度（调度键仍是 Code / TaskType）。
+        /// </summary>
+        public string ItemCode { get; set; } = string.Empty;
+
+        /// <summary>同队列内明细序号（T1 列，T4 启用）——保序展示与串行组排序（T5）用。</summary>
+        public int Seq { get; set; }
     }
 
     #endregion
@@ -226,7 +235,9 @@ public class QueueManager
                     UserName = req.UserName,
                     OrgCode = req.OrgCode,
                     Priority = 0,
-                    LockCodes = string.Join(",", taskLocks)
+                    LockCodes = string.Join(",", taskLocks),
+                    ItemCode = task.ItemCode ?? "",
+                    Seq = task.Seq
                 };
                 await orm.InsertAsync(queueTask);
                 taskNo++;
@@ -406,6 +417,16 @@ public class QueueManager
             if (result != null && !result.Success)
                 throw new Exception(result.Message ?? "任务执行失败");
 
+            // ★ T3（2026-10-13）：跳过 = 终态但非失败 —— 置 skipped，计入 SkippedCount，不重试。
+            if (result != null && result.IsSkipped)
+            {
+                await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET Status = 'skipped', CompleteTime = @ct, LockedUntil = NULL, ErrorMessage = @msg WHERE Code = @code",
+                    new { ct = now, msg = result.Message ?? "任务跳过", code = task.Code });
+                await ReleaseTaskLocksByCodesAsync(orm, task.LockCodes);
+                await RefreshQueueProgressAsync(orm, task.QueueCode);
+                return;
+            }
+
             // 标记完成
             await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET Status = 'completed', CompleteTime = @ct, LockedUntil = NULL WHERE Code = @code", new { ct = now, code = task.Code });
             await ReleaseTaskLocksByCodesAsync(orm, task.LockCodes);
@@ -499,7 +520,7 @@ public class QueueManager
             await CancelQueueAsync(queueCode);
     }
 
-    public async Task<(bool ok, string? error)> CancelQueueAsync(string queueCode)
+    public async Task<(bool ok, string? error)> CancelQueueAsync(string queueCode, string? orgCode = null)
     {
         if (string.IsNullOrEmpty(queueCode)) return (false, "队列编码不能为空");
         using var scope = _serviceProvider.CreateScope();
@@ -507,6 +528,8 @@ public class QueueManager
         var queueResult = await orm.GetOneAsync<YzhQueue>(q => q.QueueCode == queueCode);
         var queue = queueResult.Data;
         if (queue == null) return (false, "队列不存在");
+        // ★ 租户隔离（H12 / R-03）：调用方传了 orgCode 时校验归属，越权 = 视为不存在（不泄露他租户队列的存在性）
+        if (!string.IsNullOrEmpty(orgCode) && queue.OrgCode != orgCode) return (false, "队列不存在或无权访问");
         if (IsTerminal(queue.Status)) return (false, "队列已结束，无需取消");
 
         // 1. 主表先置终态
@@ -544,13 +567,15 @@ public class QueueManager
         return (true, null);
     }
 
-    public async Task<(bool ok, string? error)> RetryTaskAsync(string taskCode)
+    public async Task<(bool ok, string? error)> RetryTaskAsync(string taskCode, string? orgCode = null)
     {
         using var scope = _serviceProvider.CreateScope();
         var orm = scope.ServiceProvider.GetRequiredService<IDbOrm>();
         var result = await orm.GetOneAsync<YzhQueueTask>(j => j.Code == taskCode);
         var task = result.Data;
         if (task == null) return (false, "任务不存在");
+        // ★ 租户隔离（H12 / R-03）：传了 orgCode 则校验任务归属，越权 = 视为不存在
+        if (!string.IsNullOrEmpty(orgCode) && task.OrgCode != orgCode) return (false, "任务不存在或无权访问");
         if (task.Status != "failed") return (false, "仅失败的任务可重试");
 
         task.Status = "pending";
@@ -564,13 +589,15 @@ public class QueueManager
         return (true, null);
     }
 
-    public async Task<(bool ok, string? error)> RetryQueueAsync(string queueCode)
+    public async Task<(bool ok, string? error)> RetryQueueAsync(string queueCode, string? orgCode = null)
     {
         using var scope = _serviceProvider.CreateScope();
         var orm = scope.ServiceProvider.GetRequiredService<IDbOrm>();
         var queueResult = await orm.GetOneAsync<YzhQueue>(q => q.QueueCode == queueCode);
         var queue = queueResult.Data;
         if (queue == null) return (false, "队列不存在");
+        // ★ 租户隔离（H12 / R-03）：传了 orgCode 则校验归属，越权 = 视为不存在
+        if (!string.IsNullOrEmpty(orgCode) && queue.OrgCode != orgCode) return (false, "队列不存在或无权访问");
         if (!IsTerminal(queue.Status)) return (false, "仅已结束的队列可整队重跑");
 
         var tasksResult = await orm.GetListAsync<YzhQueueTask>(j => j.QueueCode == queueCode && j.Status == "failed");
@@ -608,6 +635,7 @@ public class QueueManager
         var completed = tasks.Count(j => j.Status == "completed");
         var failed = tasks.Count(j => j.Status == "failed");
         var cancelled = tasks.Count(j => j.Status == "cancelled");
+        var skipped = tasks.Count(j => j.Status == "skipped");
         var processing = tasks.Count(j => j.Status == "processing");
         var pending = tasks.Count(j => j.Status == "pending");
 
@@ -615,16 +643,18 @@ public class QueueManager
         queue.CompletedCount = completed;
         queue.FailedCount = failed;
         queue.CancelledCount = cancelled;
+        queue.SkippedCount = skipped;
         queue.ProcessingCount = processing;
         queue.PendingCount = pending;
-        queue.Progress = total > 0 ? (int)((decimal)(completed + failed + cancelled) / total * 100) : 0;
+        // ★ T3：skipped 计入「已处理」进度（跳过是业务终态，不是失败）
+        queue.Progress = total > 0 ? (int)((decimal)(completed + failed + cancelled + skipped) / total * 100) : 0;
 
         var wasTerminal = IsTerminal(queue.Status);
         string newStatus;
         if (pending > 0 || processing > 0) newStatus = "running";
         else if (failed > 0) newStatus = "failed";
         else if (cancelled > 0) newStatus = "cancelled";
-        else newStatus = "completed";
+        else newStatus = "completed";   // 全 skipped 也算 completed（跳过≠失败）
 
         if (newStatus == "running" && wasTerminal)
         {
@@ -715,11 +745,14 @@ public class QueueManager
         catch { return string.Empty; }
     }
 
-    public async Task<object> GetQueueStatsAsync()
+    /// <summary>队列统计。<paramref name="orgCode"/> 传入时仅统计该租户的队列（H12 / R-03）；null = 平台全量。</summary>
+    public async Task<object> GetQueueStatsAsync(string? orgCode = null)
     {
         using var scope = _serviceProvider.CreateScope();
         var orm = scope.ServiceProvider.GetRequiredService<IDbOrm>();
         var queues = (await orm.GetListAsync<YzhQueue>()).Data ?? new List<YzhQueue>();
+        if (!string.IsNullOrEmpty(orgCode))
+            queues = queues.Where(q => q.OrgCode == orgCode).ToList();
         var today = DateTime.Today;
         return new
         {
@@ -735,6 +768,12 @@ public class QueueManager
 
     /// <summary>
     /// 队列列表查询（全项目共用）
+    ///
+    /// <para>★ <paramref name="orgCode"/> 租户过滤（H12 / R-03）：
+    /// 传入时仅返回该 <c>OrgCode</c> 的队列（专家端强制传工作区 Code <c>ws.Code</c>）；
+    /// null / 空 = 平台全量（后台监控页合法视角）。对齐 <c>ExpertTaskService.GetQueueListAsync</c>
+    /// 的强制工作区过滤形状。</para>
+    ///
     /// <para>★ <paramref name="scopeResolver"/> 可选：<code>Func&lt;queueType, scopeKey, Task&lt;string&gt;&gt;</code>
     /// —— 调用方注入按队列类型解析 ScopeKey 为人话的回调（框架层不感知业务实体）。
     /// 不传则 <c>scopeDisplay</c> 回落为空字符串。</para>
@@ -746,6 +785,7 @@ public class QueueManager
     /// 框架层（DataBase）不引用 <c>Sys_User</c>（在 Api 层）⇒ 只能由调用方注入；不传则回落为空。</para>
     /// </summary>
     public async Task<object> GetQueueListAsync(string? type, string? status, DateTime? startTime, DateTime? endTime, int page, int rows,
+        string? orgCode = null,
         Func<string, string?, Task<string>>? scopeResolver = null,
         Func<string?, Task<string>>? creatorResolver = null)
     {
@@ -757,6 +797,9 @@ public class QueueManager
         var allResult = await orm.GetListAsync<YzhQueue>();
         var query = (allResult.Data ?? new List<YzhQueue>()).AsEnumerable();
 
+        // ★ 租户过滤（H12 / R-03）：传了 orgCode 只看本租户；null = 平台全量
+        if (!string.IsNullOrEmpty(orgCode))
+            query = query.Where(q => q.OrgCode == orgCode);
         if (!string.IsNullOrEmpty(type))
             query = query.Where(q => q.QueueType == type);
         if (!string.IsNullOrEmpty(status))
@@ -822,14 +865,18 @@ public class QueueManager
         return new { total, rows = rowsResult };
     }
 
+    /// <summary>队列详情。<paramref name="orgCode"/> 传入时校验归属，越权返回 null（H12 / R-03「越权读为空」）。</summary>
     public async Task<object?> GetQueueDetailAsync(string queueCode,
-        Func<string?, Task<string>>? creatorResolver = null)
+        Func<string?, Task<string>>? creatorResolver = null,
+        string? orgCode = null)
     {
         using var scope = _serviceProvider.CreateScope();
         var orm = scope.ServiceProvider.GetRequiredService<IDbOrm>();
         var queueResult = await orm.GetOneAsync<YzhQueue>(q => q.QueueCode == queueCode);
         var queue = queueResult.Data;
         if (queue == null) return null;
+        // ★ 租户隔离（H12 / R-03）：传了 orgCode 且归属不符 ⇒ 返回 null（越权读为空，不泄露存在性）
+        if (!string.IsNullOrEmpty(orgCode) && queue.OrgCode != orgCode) return null;
 
         var tasksResult = await orm.GetListAsync<YzhQueueTask>(j => j.QueueCode == queueCode);
         var locksResult = await orm.GetListAsync<YzhQueueResourceLock>(r => r.QueueCode == queueCode);

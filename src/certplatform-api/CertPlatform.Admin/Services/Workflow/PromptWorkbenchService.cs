@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
 using CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Services.Workflow;
 using CertPlatform.Admin.Entities.Doc;
 using CertPlatform.Admin.Entities.Wf;
@@ -56,6 +57,8 @@ public class PromptWorkbenchService : IPromptWorkbench
     private readonly DocumentConvertClient _convert;
     private readonly PromptMarkdownCache _mdCache;
     private readonly ILogger<PromptWorkbenchService> _logger;
+    /// <summary>核心资源检索唯一入口（铁律 L5）—— 标准按 Code 单查只走它。</summary>
+    private readonly ICoreResourceQuery _core;
 
 
     /// <summary>
@@ -146,13 +149,15 @@ public class PromptWorkbenchService : IPromptWorkbench
         LlmInvokeService llm,
         DocumentConvertClient convert,
         PromptMarkdownCache mdCache,
-        ILogger<PromptWorkbenchService> logger)
+        ILogger<PromptWorkbenchService> logger,
+        ICoreResourceQuery core)
     {
         _db = db;
         _llm = llm;
         _convert = convert;
         _mdCache = mdCache;
         _logger = logger;
+        _core = core;
     }
 
     // ========================================================
@@ -684,9 +689,9 @@ public class PromptWorkbenchService : IPromptWorkbench
     private async Task<string?> ResolveStandardSlugAsync(string? standardCode)
     {
         if (string.IsNullOrWhiteSpace(standardCode)) return null;
-        var r = await _db.GetOneAsync<ISOStandard>(x => x.Code == standardCode);
-        if (r.Success && r.Data != null && !string.IsNullOrWhiteSpace(r.Data.StandardCode))
-            return r.Data.StandardCode;
+        var r = await _core.GetStandardByCodeAsync(standardCode);
+        if (r != null && !string.IsNullOrWhiteSpace(r.StandardCode))
+            return r.StandardCode;
         // 已经是 slug（老数据兜底）就直接用
         return standardCode;
     }
@@ -983,10 +988,8 @@ public class PromptWorkbenchService : IPromptWorkbench
     {
         if (string.IsNullOrWhiteSpace(standardCode)) return "未指定标准（平台级默认规则，适用全部标准）";
 
-        var r = await _db.GetOneAsync<ISOStandard>(x => x.Code == standardCode);
-        if (!r.Success || r.Data == null) return "未指定标准（平台级默认规则，适用全部标准）";
-
-        var s = r.Data;
+        var s = await _core.GetStandardByCodeAsync(standardCode);
+        if (s == null) return "未指定标准（平台级默认规则，适用全部标准）";
         var sb = new StringBuilder();
         sb.Append(s.StandardName);
         if (s.VersionYear > 0) sb.Append("（").Append(s.VersionYear).Append(" 版）");
@@ -1013,9 +1016,7 @@ public class PromptWorkbenchService : IPromptWorkbench
             : new List<string>();
         if (cfgCodes.Count == 0) return "（该标准尚无目录配置，无标准文档清单）";
 
-        var fileR = await _db.GetListAsync<StandardDirectoryFile>(
-            x => cfgCodes.Contains(x.ConfigCode) && x.IsValid == 1 && !x.IsDeleted);
-        var rows = fileR.Success && fileR.Data != null ? fileR.Data : new List<StandardDirectoryFile>();
+        var rows = await _core.GetDirectoryFilesByConfigCodesAsync(cfgCodes);
         if (rows.Count == 0) return "（该标准尚无标准文档）";
 
         // ★ 必须按 FileName 去重：实测同一标准下有 4 份目录配置（阶段/机构维度的副本），
@@ -1204,8 +1205,8 @@ public class PromptWorkbenchService : IPromptWorkbench
     private async Task<string> ResolveStandardNameAsync(string? standardCode)
     {
         if (string.IsNullOrWhiteSpace(standardCode)) return string.Empty;
-        var r = await _db.GetOneAsync<ISOStandard>(x => x.Code == standardCode);
-        return r.Success && r.Data != null ? $"{r.Data.StandardName}（{r.Data.StandardCode}）" : standardCode!;
+        var r = await _core.GetStandardByCodeAsync(standardCode);
+        return r != null ? $"{r.StandardName}（{r.StandardCode}）" : standardCode!;
     }
 
     /// <summary>AI 连接配置（cert_sys_config 六键，与 DocExtractionRuleService 同源）</summary>

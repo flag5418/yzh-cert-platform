@@ -54,7 +54,31 @@ public class YzhQueue : BaseEntity, ISoftDelete
     public int CompletedCount { get; set; }
     public int FailedCount { get; set; }
     public int CancelledCount { get; set; }
+
+    /// <summary>跳过数（跳过≠失败，与 FailedCount 分列统计）</summary>
+    public int SkippedCount { get; set; }
+
     public int Progress { get; set; }
+
+    /// <summary>队列级优先级（越大越先，对齐专家队列表）</summary>
+    public int Priority { get; set; }
+
+    /// <summary>队列级重试次数</summary>
+    public int RetryCount { get; set; }
+
+    /// <summary>队列级最大重试</summary>
+    public int MaxRetryCount { get; set; } = 3;
+
+    /// <summary>队列级当前持有者（worker 标识）</summary>
+    [SugarColumn(Length = 50, IsNullable = true)]
+    public string? LockCode { get; set; }
+
+    /// <summary>队列级锁租约到期</summary>
+    public DateTime? LockedUntil { get; set; }
+
+    /// <summary>队列级最后错误（整队失败原因快照）</summary>
+    [SugarColumn(Length = 1000, IsNullable = true)]
+    public string? LastError { get; set; }
 
     public DateTime? StartTime { get; set; }
     public DateTime? EndTime { get; set; }

@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Entities.Rpt;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
+using YZH.Core.DataBase.Services;
+using YZH.Core.Stand.Models.Queue;
 using YZH.Core.Stand.Models.Result;
 
 namespace CertPlatform.Auditor.Services.Expert
@@ -314,21 +317,32 @@ namespace CertPlatform.Auditor.Services.Expert
     public class ExpertTaskService
     {
         private readonly IDbOrm _db;
+        /// <summary>核心资源检索唯一入口（铁律 L5）—— 标准取数只走它。</summary>
+        private readonly ICoreResourceQuery _core;
         private readonly ILogger<ExpertTaskService> _logger;
         /// <summary>★ 2026-09-30 补录清单生成器（R \ H 差集 · 裁决 J1）</summary>
         private readonly GapDetector _gapDetector;
+        /// <summary>★ T4（2026-10-13）：新队列引擎 —— 提交入队 / 失败重跑走 yzh_queue。</summary>
+        private readonly QueueManager _queueMgr;
 
         private static readonly JsonSerializerOptions JsonOpts = new()
         {
             PropertyNameCaseInsensitive = true
         };
 
-        public ExpertTaskService(IDbOrm db, ILogger<ExpertTaskService> logger, GapDetector gapDetector)
+        public ExpertTaskService(IDbOrm db, ILogger<ExpertTaskService> logger, GapDetector gapDetector, ICoreResourceQuery core, QueueManager queueMgr)
         {
             _db = db;
             _logger = logger;
             _gapDetector = gapDetector;
+            _core = core;
+            _queueMgr = queueMgr;
         }
+
+        /// <summary>★ T4 ScopeKey（§2.3 形态）：<c>nc|rpt : {企业} : {子任务}</c> —— 同车道防重复并发提交。</summary>
+        private static string MakeYzhScopeKey(string taskType, string enterpriseCode, string subCode)
+            => (taskType == ExpertTaskConst.TaskTypeNcCheck ? "nc" : "rpt")
+               + ":" + enterpriseCode + ":" + subCode;
 
         // ================================================================
         // 一、★ D36 业务锁判定
@@ -585,8 +599,7 @@ namespace CertPlatform.Auditor.Services.Expert
             if (enterprise == null)
                 return Result<TaskCreateResult>.Fail("企业不存在或不属于当前工作区");
 
-            var stage = (await _db.GetOneAsync<CertStage>(x =>
-                x.Code == req.StageCode && x.IsValid == 1 && !x.IsDeleted)).Data;
+            var stage = await _core.GetStageByCodeAsync(req.StageCode);
             if (stage == null)
                 return Result<TaskCreateResult>.Fail("阶段不存在或已停用");
 
@@ -887,7 +900,7 @@ namespace CertPlatform.Auditor.Services.Expert
             //   直接查实体恒为 null ⇒ NC 结果的「条款号」列永远是空的（静默缺数据）。
             var clause = string.IsNullOrWhiteSpace(rule?.ClauseCode)
                 ? null
-                : (await _db.GetOneAsync<ISOClause>(x => x.Code == rule!.ClauseCode)).Data;
+                : await _core.GetClauseByCodeAsync(rule!.ClauseCode);
 
             var existing = (await _db.GetListAsync<CertExpertNcItem>(x =>
                 x.OrgCode == orgCode
@@ -963,7 +976,7 @@ namespace CertPlatform.Auditor.Services.Expert
             // ★ 同 NC：章节实体自身不带条款号，必须 JOIN `cert_iso_clause`（ClauseCode 可空 = 概述类章节）
             var secClause = string.IsNullOrWhiteSpace(sec?.ClauseCode)
                 ? null
-                : (await _db.GetOneAsync<ISOClause>(x => x.Code == sec!.ClauseCode)).Data;
+                : await _core.GetClauseByCodeAsync(sec!.ClauseCode);
 
             var existing = (await _db.GetListAsync<CertExpertReportSectionItem>(x =>
                 x.OrgCode == orgCode
@@ -1053,9 +1066,30 @@ namespace CertPlatform.Auditor.Services.Expert
                 return Result<object>.Fail($"任务当前为「{task.LifecycleStatus}」，不可提交");
 
             if (task.ExecStatus != ExpertTaskConst.Exec.Draft
-                && task.ExecStatus != ExpertTaskConst.Exec.Failed)
+                && task.ExecStatus != ExpertTaskConst.Exec.Failed
+                && task.ExecStatus != ExpertTaskConst.Exec.PendingRun)
                 return Result<object>.Fail(
                     $"任务当前为「{ExecStatusLabel(task.ExecStatus)}」，只有草稿或有失败项的任务可提交");
+
+            // ★ T4 自愈放行：PendingRun 通常不可重提（防重复入队），但若「旧表已建队列、
+            //   新引擎（yzh_queue）缺队列」（提交中途崩溃的窗口），放行本次提交做补建
+            //   —— 循环内 existed-skip 分支会跳过旧表、只补 yzh_queue。
+            var pendingRunHeal = false;
+            if (task.ExecStatus == ExpertTaskConst.Exec.PendingRun)
+            {
+                var oldQs = (await _db.GetListAsync<CertExpertTaskQueue>(x =>
+                    x.TaskCode == taskCode && !x.IsDeleted)).Data ?? new List<CertExpertTaskQueue>();
+                foreach (var oq in oldQs)
+                {
+                    var yzhExisted = (await _db.GetListAsync<YzhQueue>(x =>
+                        x.ScopeKey == MakeYzhScopeKey(task.TaskType, task.EnterpriseCode, oq.SubTaskCode)
+                        && x.SourceId == taskCode && !x.IsDeleted)).Data is { Count: > 0 };
+                    if (!yzhExisted) { pendingRunHeal = true; break; }
+                }
+                if (!pendingRunHeal)
+                    return Result<object>.Fail(
+                        $"任务当前为「{ExecStatusLabel(task.ExecStatus)}」，只有草稿或有失败项的任务可提交");
+            }
 
             var subs = (await _db.GetListAsync<CertExpertTaskStandard>(x =>
                 x.TaskCode == taskCode && !x.IsDeleted)).Data ?? new List<CertExpertTaskStandard>();
@@ -1066,9 +1100,13 @@ namespace CertPlatform.Auditor.Services.Expert
             var createdQueues = 0;
             var createdItems = 0;
 
+            // ★ T4：待入新引擎的子任务（普通新建 + 自愈补建统一在此收集，【全部旧表提交后】再入队 ——
+            //   保证回写桥执行时旧 item 一定已可见，杜绝「引擎先跑完、旧表还在事务里」的回写丢失竞态）
+            var yzhPending = new List<(CertExpertTaskStandard Sub, List<(string RowCode, string ItemCode, string ItemName)> Rows, string ScopeKey, string OldQueueCode)>();
+
             // ★ 阶段人读码（如 `03`）—— 引擎层 `wf_execution_task.PhaseCode` 是 varchar(30)，
             //   装不下任务层的 32 位 GUID；两个口径不能混用。见 ExpertItemPayload.StageNo 注释。
-            var stageNo = (await _db.GetOneAsync<CertStage>(x => x.Code == task.StageCode)).Data?.StageCode;
+            var stageNo = (await _core.GetStageByCodeAsync(task.StageCode))?.StageCode;
 
             // ★ 2026-09-30 裁决 J1：提交时【重跑一次完备性检查】。
             //   为什么重跑：数据可能在上次检测之后被补录/替换/重新提取，缺口集合已变。
@@ -1086,16 +1124,53 @@ namespace CertPlatform.Auditor.Services.Expert
                 && x.GapStatus == ExpertTaskConst.GapStatus.Pending
                 && !x.IsDeleted)).Data;
 
+            // ★ T4：构建一条新引擎队列（一个标准子任务 = 一条 yzh_queue，按 NC 检查项 / 章节拆明细）
+            async Task<(bool ok, string? error, string? queueCode, int count)> BuildYzhQueueAsync(
+                CertExpertTaskStandard sub,
+                List<(string RowCode, string ItemCode, string ItemName)> rows,
+                string scopeKey)
+            {
+                var isNc = task.TaskType == ExpertTaskConst.TaskTypeNcCheck;
+                var seq = 1;
+                return await _queueMgr.CreateQueueAsync(new QueueManager.CreateQueueRequest
+                {
+                    QueueType = isNc ? "expert_nc" : "expert_report",
+                    QueueName = $"专家{(isNc ? "NC检查" : "报告章节")}-{sub.StandardCode}",
+                    ScopeKey = scopeKey,
+                    SourceType = "expert_task",
+                    SourceId = taskCode,
+                    UserCode = userCode,
+                    UserName = userName ?? "",
+                    OrgCode = orgCode,
+                    Tasks = rows.Select(r => new QueueManager.TaskItem
+                    {
+                        TaskType = isNc
+                            ? ExpertTaskConst.ItemType.NcCheck
+                            : ExpertTaskConst.ItemType.ReportSection,
+                        // 与旧表 item.Payload 同形（ExpertItemPayload 契约）——执行器新路径按它解析
+                        Payload = JsonSerializer.Serialize(new
+                        {
+                            TaskCode = taskCode,
+                            TaskItemCode = r.RowCode,
+                            ItemCode = r.ItemCode,
+                            ItemName = r.ItemName,
+                            EnterpriseCode = task.EnterpriseCode,
+                            StageCode = task.StageCode,
+                            StageNo = stageNo,
+                            StandardCode = sub.StandardCode
+                        }),
+                        TaskId = taskCode,
+                        ItemCode = r.ItemCode,
+                        Seq = seq++
+                    }).ToList()
+                });
+            }
+
             using var tx = _db.BeginTransaction();
             try
             {
                 foreach (var sub in subs)
                 {
-                    // 幂等：已有队列则跳过（可反复提交以补生成）
-                    var existed = (await _db.GetListAsync<CertExpertTaskQueue>(x =>
-                        x.SubTaskCode == sub.Code && !x.IsDeleted, includeDisabled: true)).Data;
-                    if (existed is { Count: > 0 }) continue;
-
                     var itemCodes = snapshot.Items.TryGetValue(sub.StandardCode, out var list)
                         ? list
                         : new List<string>();
@@ -1106,6 +1181,21 @@ namespace CertPlatform.Auditor.Services.Expert
                         : await LoadSectionRowsAsync(orgCode, task, sub.StandardCode, itemCodes);
 
                     if (rows.Count == 0) continue;
+
+                    var scopeKey = MakeYzhScopeKey(task.TaskType, task.EnterpriseCode, sub.Code);
+
+                    // 幂等：已有旧队列则不重复建（可反复提交以补生成）
+                    var existed = (await _db.GetListAsync<CertExpertTaskQueue>(x =>
+                        x.SubTaskCode == sub.Code && !x.IsDeleted, includeDisabled: true)).Data;
+                    if (existed is { Count: > 0 })
+                    {
+                        // ★ T4 自愈：旧队列在、新引擎缺（提交中途崩溃窗口）⇒ 只补 yzh_queue，不重建旧队列
+                        var yzhExisted = (await _db.GetListAsync<YzhQueue>(x =>
+                            x.ScopeKey == scopeKey && x.SourceId == taskCode && !x.IsDeleted)).Data is { Count: > 0 };
+                        if (!yzhExisted)
+                            yzhPending.Add((sub, rows, scopeKey, existed[0].Code ?? ""));
+                        continue;
+                    }
 
                     var queueCode = Guid.NewGuid().ToString("N");
                     var queue = new CertExpertTaskQueue
@@ -1186,6 +1276,9 @@ namespace CertPlatform.Auditor.Services.Expert
                         nameof(CertExpertTaskStandard.UpdateBy),
                         nameof(CertExpertTaskStandard.UpdateTime));
                     if (!subUp.Success) { tx.Rollback(); return Result<object>.Fail(subUp.Error); }
+
+                    // ★ T4：登记待入新引擎（commit 后统一入队）
+                    yzhPending.Add((sub, rows, scopeKey, queueCode));
                 }
 
                 // 任务头推进
@@ -1205,7 +1298,7 @@ namespace CertPlatform.Auditor.Services.Expert
                     TaskCode = taskCode,
                     LogAction = ExpertTaskConst.LogAction.TaskSubmitted,
                     LogLevel = ExpertTaskConst.LogLevel.Info,
-                    Message = $"提交执行：新建队列 {createdQueues} 个、队列项 {createdItems} 个（待启动）",
+                    Message = $"提交执行：新建队列 {createdQueues} 个、队列项 {createdItems} 个（提交即由新队列引擎自动执行）",
                     OperatorCode = userCode,
                     OperatorName = userName,
                     ClientIp = clientIp,
@@ -1217,21 +1310,100 @@ namespace CertPlatform.Auditor.Services.Expert
 
                 tx.Commit();
 
+                // ══ T4：旧表已提交 ⇒ 统一入新引擎（yzh_queue，提交即自动执行）。
+                //   顺序关键：先翻旧队列 pending→running 再建队 —— 否则回写桥先跑完、旧队列已置
+                //   Completed，我们再翻 Running 会把完成态盖掉（之后再无事件把它纠正回来）。 ══
+                var yzhCreated = 0;
+                var yzhFailed = 0;
+                foreach (var (sub, rows, scopeKey, oldQueueCode) in yzhPending)
+                {
+                    var oq = (await _db.GetOneAsync<CertExpertTaskQueue>(x => x.Code == oldQueueCode)).Data;
+                    if (oq != null && oq.QueueStatus == ExpertTaskConst.Queue.Pending)
+                    {
+                        oq.QueueStatus = ExpertTaskConst.Queue.Running;
+                        oq.StartTime ??= now;
+                        await _db.UpdateAsync(oq,
+                            nameof(CertExpertTaskQueue.QueueStatus),
+                            nameof(CertExpertTaskQueue.StartTime));
+                    }
+
+                    var (ok, err, _, _) = await BuildYzhQueueAsync(sub, rows, scopeKey);
+                    if (ok)
+                    {
+                        yzhCreated++;
+                    }
+                    else
+                    {
+                        yzhFailed++;
+                        _logger.LogError("[ExpertTask] T4 新引擎入队失败 task={Task} sub={Sub}: {Err}",
+                            taskCode, sub.Code, err);
+                        // 回退显示预位（别让 UI 假装在跑）；任务头 Failed ⇒ 下次提交走自愈补建
+                        if (oq != null && oq.QueueStatus == ExpertTaskConst.Queue.Running)
+                        {
+                            oq.QueueStatus = ExpertTaskConst.Queue.Pending;
+                            await _db.UpdateAsync(oq, nameof(CertExpertTaskQueue.QueueStatus));
+                        }
+                    }
+                }
+
+                if (yzhCreated > 0 || yzhFailed > 0)
+                {
+                    // 任务头推进：入队成功 ⇒ 运行中（提交即执行，无需再点「启动」——StartQueue 对
+                    // 新流程只会得到「已在运行中」）；全失败 ⇒ 置 Failed 放行下次提交自愈。
+                    // ★ 读一次最新态再写：回写桥可能已把状态推进到 Running/Completed（仅 PendingRun 才覆盖）
+                    var freshTask = (await _db.GetOneAsync<CertExpertTask>(x => x.Code == taskCode)).Data;
+                    if (freshTask != null && freshTask.ExecStatus == ExpertTaskConst.Exec.PendingRun)
+                    {
+                        freshTask.ExecStatus = yzhCreated > 0
+                            ? ExpertTaskConst.Exec.Running
+                            : ExpertTaskConst.Exec.Failed;
+                        freshTask.UpdateBy = userCode;
+                        freshTask.UpdateTime = DateTime.Now;
+                        await _db.UpdateAsync(freshTask,
+                            nameof(CertExpertTask.ExecStatus),
+                            nameof(CertExpertTask.UpdateBy),
+                            nameof(CertExpertTask.UpdateTime));
+                    }
+
+                    await InsertLogAsync(new CertExpertTaskLog
+                    {
+                        TaskCode = taskCode,
+                        LogAction = ExpertTaskConst.LogAction.QueueStarted,
+                        LogLevel = yzhFailed > 0 ? ExpertTaskConst.LogLevel.Warn : ExpertTaskConst.LogLevel.Info,
+                        Message = $"新队列引擎入队 {yzhCreated} 个队列（自动执行）"
+                                  + (yzhFailed > 0 ? $"，{yzhFailed} 个入队失败（可重新提交补建）" : ""),
+                        OperatorCode = userCode,
+                        OperatorName = userName,
+                        ClientIp = clientIp,
+                        OrgCode = orgCode,
+                        OperateTime = DateTime.Now,
+                        CreateTime = DateTime.Now,
+                        Payload = JsonSerializer.Serialize(new { yzhCreated, yzhFailed })
+                    });
+                }
+
+                var warningParts = new List<string>();
+                if (pendingGapCount > 0)
+                    warningParts.Add($"有 {pendingGapCount} 项数据未补录，依赖它们的检查项执行时会自动失败（可去「数据缺口」页补录或跳过）");
+                if (yzhFailed > 0)
+                    warningParts.Add($"{yzhFailed} 个子任务入新队列引擎失败，请重新提交以补建");
+
                 return Result<object>.Ok(new
                 {
                     TaskCode = taskCode,
                     QueueCount = createdQueues,
                     ItemCount = createdItems,
+                    YzhQueueCount = yzhCreated,
+                    YzhFailedCount = yzhFailed,
                     // ★ 2026-09-30 裁决 J1：⛔ 取消 05 号 §2.3 的 409 DATA_GAP_UNRESOLVED 硬阻断。
                     //   补录清单是【信息】不是【门禁】—— 客户可以忽略（用户原话）。
                     //   真正的门禁在执行期：引用数据为空 ⇒ 任务项自动失败 + 提示「缺失必要数据」。
                     PendingGapCount = pendingGapCount,
-                    Warning = pendingGapCount > 0
-                        ? $"有 {pendingGapCount} 项数据未补录，依赖它们的检查项执行时会自动失败（可去「数据缺口」页补录或跳过）"
-                        : null,
-                    Message = createdQueues == 0
+                    Warning = warningParts.Count > 0 ? string.Join("；", warningParts) : null,
+                    Message = createdQueues == 0 && yzhCreated == 0
                         ? "队列已存在，无需重复生成"
-                        : $"已生成 {createdQueues} 个队列、{createdItems} 个队列项，请在详情页「执行队列」中启动"
+                        : $"已生成 {createdQueues} 个队列、{createdItems} 个队列项，"
+                          + $"其中 {yzhCreated} 个已进入新队列引擎自动执行"
                 });
             }
             catch (Exception ex)
@@ -1359,8 +1531,7 @@ namespace CertPlatform.Auditor.Services.Expert
 
             return Result<object>.Ok(new { Message = "队列已启动" });
         }
-
-        /// <summary>暂停队列（running → pending；已在跑的项不中断，跑完后不再领新项）</summary>
+        /// <summary>暂停队列 —— ★ T4 语义收窄：新队列引擎无「暂停（可恢复）」态，诚实失败。</summary>
         public async Task<Result<object>> PauseQueueAsync(
             string orgCode, string queueCode, string userCode, string? userName, string? clientIp)
         {
@@ -1370,15 +1541,9 @@ namespace CertPlatform.Auditor.Services.Expert
             if (q.QueueStatus != ExpertTaskConst.Queue.Running)
                 return Result<object>.Fail("只有运行中的队列可暂停");
 
-            var now = DateTime.Now;
-            q.QueueStatus = ExpertTaskConst.Queue.Pending;
-            q.UpdateBy = userCode;
-            q.UpdateTime = now;
-            var up = await _db.UpdateAsync(q,
-                nameof(CertExpertTaskQueue.QueueStatus),
-                nameof(CertExpertTaskQueue.UpdateBy), nameof(CertExpertTaskQueue.UpdateTime));
-            if (!up.Success) return Result<object>.Fail(up.Error);
-
+            // ⛔ 不做「只改旧表显示、引擎照跑」的假暂停（那比报错更糟：UI 与引擎互相说谎）。
+            //   框架引擎只有终态取消（CancelQueueAsync，不可恢复）≠ 旧「暂停→启动」可恢复语义。
+            //   记录：旧暂停能力随 T8 退役旧调度器一并下线（设计 §2.6 执行记录已记）。
             await InsertLogAsync(new CertExpertTaskLog
             {
                 TaskCode = q.TaskCode,
@@ -1386,16 +1551,15 @@ namespace CertPlatform.Auditor.Services.Expert
                 QueueCode = queueCode,
                 LogAction = ExpertTaskConst.LogAction.QueuePaused,
                 LogLevel = ExpertTaskConst.LogLevel.Warn,
-                Message = "暂停队列（已在执行的项会跑完，之后不再领取新项）",
+                Message = "暂停被拒绝：新队列引擎自动执行、不支持暂停",
                 OperatorCode = userCode,
                 OperatorName = userName,
                 ClientIp = clientIp,
                 OrgCode = orgCode,
-                OperateTime = now,
-                CreateTime = now
+                OperateTime = DateTime.Now,
+                CreateTime = DateTime.Now
             });
-
-            return Result<object>.Ok(new { Message = "队列已暂停" });
+            return Result<object>.Fail("该队列由队列引擎自动执行，不支持暂停；请等待执行完成");
         }
 
         /// <summary>重试失败项（failed → pending，重试次数归零）</summary>
@@ -1458,12 +1622,25 @@ namespace CertPlatform.Auditor.Services.Expert
             await _db.UpdateAsync(task,
                 nameof(CertExpertTask.ExecStatus), nameof(CertExpertTask.UpdateTime));
 
+            // ★ T4：同步重跑新引擎（yzh_queue）的失败任务 —— 旧 runner 已停，真正重执行只认新引擎。
+            //   「没有可重试的任务」= 引擎侧本就没失败项（或仍在退避重试中），不算错误。
+            var yzhRetried = 0;
+            var yzhQueues = (await _db.GetListAsync<YzhQueue>(x =>
+                x.SourceId == taskCode && x.OrgCode == orgCode && !x.IsDeleted)).Data ?? new List<YzhQueue>();
+            foreach (var yzq in yzhQueues)
+            {
+                var (rok, rerr) = await _queueMgr.RetryQueueAsync(yzq.QueueCode, orgCode);
+                if (rok) yzhRetried++;
+                else if (!string.IsNullOrEmpty(rerr) && rerr != "没有可重试的任务")
+                    _logger.LogWarning("[ExpertTask] T4 新引擎重试失败 queue={Queue}: {Err}", yzq.QueueCode, rerr);
+            }
+
             await InsertLogAsync(new CertExpertTaskLog
             {
                 TaskCode = taskCode,
                 LogAction = ExpertTaskConst.LogAction.QueueStarted,
                 LogLevel = ExpertTaskConst.LogLevel.Info,
-                Message = $"重试失败项 {items.Count} 个",
+                Message = $"重试失败项 {items.Count} 个（旧读模型）/ {yzhRetried} 条新引擎队列",
                 OperatorCode = userCode,
                 OperatorName = userName,
                 ClientIp = clientIp,
@@ -1472,7 +1649,7 @@ namespace CertPlatform.Auditor.Services.Expert
                 CreateTime = now
             });
 
-            return Result<object>.Ok(new { Message = $"已重置 {items.Count} 个失败项", Count = items.Count });
+            return Result<object>.Ok(new { Message = $"已重置 {items.Count} 个失败项（新引擎同步重跑 {yzhRetried} 条）", Count = items.Count, YzhRetried = yzhRetried });
         }
 
         // ================================================================
@@ -2075,8 +2252,7 @@ namespace CertPlatform.Auditor.Services.Expert
 
         private async Task<List<ISOStandard>> LoadStandardsAsync(List<string>? codes)
         {
-            var all = (await _db.GetListAsync<ISOStandard>(x => x.IsValid == 1 && !x.IsDeleted)).Data
-                ?? new List<ISOStandard>();
+            var all = await _core.GetValidStandardsAsync();
             if (codes is { Count: > 0 })
                 all = all.Where(x => codes.Contains(x.Code ?? "")).ToList();
             return all;

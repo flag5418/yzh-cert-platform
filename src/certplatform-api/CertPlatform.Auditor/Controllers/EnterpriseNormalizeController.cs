@@ -73,6 +73,8 @@ namespace CertPlatform.Auditor.Controllers
         private readonly WorkspaceContextService _workspace;
         private readonly QueueManager _queueManager;
         private readonly IDbOrm _db;
+        /// <summary>核心资源检索唯一入口（铁律 L5）—— 标准取数只走它。</summary>
+        private readonly ICoreResourceQuery _core;
         private readonly IOcrProvider _ocrProvider;
         private readonly IObjectStorage _storage;
         private readonly ILogger<EnterpriseNormalizeController> _logger;
@@ -84,6 +86,7 @@ namespace CertPlatform.Auditor.Controllers
             WorkspaceContextService workspace,
             QueueManager queueManager,
             IDbOrm db,
+            ICoreResourceQuery core,
             IOcrProvider ocrProvider,
             IObjectStorage storage,
             ILogger<EnterpriseNormalizeController> logger)
@@ -93,6 +96,7 @@ namespace CertPlatform.Auditor.Controllers
             _workspace = workspace;
             _queueManager = queueManager;
             _db = db;
+            _core = core;
             _ocrProvider = ocrProvider;
             _storage = storage;
             _logger = logger;
@@ -182,8 +186,7 @@ namespace CertPlatform.Auditor.Controllers
 
             // ② 标准域行（拿文件名 / 文件夹路径 / 配置）
             var stdFileCodes = published.Select(t => t.StandardFileCode).Distinct().ToList();
-            var stdFiles = (await _db.GetListAsync<StandardDirectoryFile>(x =>
-                stdFileCodes.Contains(x.Code) && x.IsValid == 1)).Data ?? new List<StandardDirectoryFile>();
+            var stdFiles = await _core.GetDirectoryFilesByCodesAsync(stdFileCodes);
 
             // ③ 企业侧实例行（状态 + 产物）
             var instances = (await _db.GetListAsync<StandardDirectoryFile>(x =>
@@ -262,8 +265,7 @@ namespace CertPlatform.Auditor.Controllers
             var nameMap = new Dictionary<string, string>(StringComparer.Ordinal);
             if (codes.Count > 0)
             {
-                var named = (await _db.GetListAsync<StandardDirectoryFile>(x =>
-                    codes.Contains(x.Code) && x.IsValid == 1)).Data ?? new List<StandardDirectoryFile>();
+                var named = await _core.GetDirectoryFilesByCodesAsync(codes);
                 nameMap = named
                     .GroupBy(r => r.Code!, StringComparer.Ordinal)
                     .ToDictionary(g => g.Key,
@@ -830,8 +832,7 @@ namespace CertPlatform.Auditor.Controllers
                 }));
             }
 
-            var standards = (await _db.GetListAsync<ISOStandard>(x => allCodes.Contains(x.Code))).Data
-                            ?? new List<ISOStandard>();
+            var standards = await _core.GetStandardsByCodesAsync(allCodes);
             var stdDict = standards
                 .GroupBy(x => x.Code!, StringComparer.Ordinal)
                 .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
@@ -1302,8 +1303,7 @@ namespace CertPlatform.Auditor.Controllers
                 .ToList();
             if (failedCodes.Count > 0)
             {
-                var rows = (await _db.GetListAsync<StandardDirectoryFile>(x =>
-                    failedCodes.Contains(x.Code!))).Data ?? new List<StandardDirectoryFile>();
+                var rows = await _core.GetDirectoryFilesByCodesAsync(failedCodes);
                 nameMap = rows
                     .Where(r => !string.IsNullOrEmpty(r.Code))
                     .GroupBy(r => r.Code!, StringComparer.Ordinal)
@@ -1616,8 +1616,7 @@ namespace CertPlatform.Auditor.Controllers
             var stdRows = new List<StandardDirectoryFile>();
             if (stdCodes.Count > 0)
             {
-                stdRows = (await _db.GetListAsync<StandardDirectoryFile>(x =>
-                    stdCodes.Contains(x.Code!))).Data ?? new List<StandardDirectoryFile>();
+                stdRows = await _core.GetDirectoryFilesByCodesAsync(stdCodes);
 
                 nameMap = stdRows
                     .Where(r => !string.IsNullOrEmpty(r.Code))
@@ -2011,8 +2010,7 @@ namespace CertPlatform.Auditor.Controllers
                 .ToList();
             if (list.Count == 0) return new Dictionary<string, string>(StringComparer.Ordinal);
 
-            var rows = (await _db.GetListAsync<CertStage>(x =>
-                list.Contains(x.Code!) || list.Contains(x.StageCode))).Data ?? new List<CertStage>();
+            var rows = await _core.GetStagesByCodeOrStageCodeAsync(list);
 
             var map = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var r in rows)
@@ -2883,8 +2881,7 @@ namespace CertPlatform.Auditor.Controllers
 
             // ⑤ 留痕（失败 ⇒ 主操作已生效，但审计链断了 ⇒ Ok + AuditWarning，⛔ 不谎报失败）
             var warnings = new List<string>();
-            var fileName = (await _db.GetOneAsync<StandardDirectoryFile>(x =>
-                x.Code == row.StandardFileCode && x.IsValid == 1)).Data?.FileName ?? string.Empty;
+            var fileName = (await _core.GetDirectoryFileByCodeAsync(row.StandardFileCode))?.FileName ?? string.Empty;
 
             if (touchValue || touchSource)
             {
