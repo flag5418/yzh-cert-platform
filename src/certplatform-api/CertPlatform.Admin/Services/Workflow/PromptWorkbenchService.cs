@@ -1009,11 +1009,11 @@ public class PromptWorkbenchService : IPromptWorkbench
     {
         if (string.IsNullOrWhiteSpace(standardCode)) return "（平台级规则，未绑定具体标准，无标准文档清单）";
 
-        var cfgR = await _db.GetListAsync<StandardDirectoryConfig>(
-            x => x.StandardCode == standardCode && x.IsValid == 1 && !x.IsDeleted);
-        var cfgCodes = cfgR.Success && cfgR.Data != null
-            ? cfgR.Data.Select(x => x.Code).Where(c => !string.IsNullOrWhiteSpace(c)).ToList()
-            : new List<string>();
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：StandardCode ∧ IsValid==1 ∧ !IsDeleted）
+        var cfgR = await _core.GetDirectoryConfigsAsync(standardCode: standardCode);
+        // ⚠️ 末尾 Select(c => c!)：Code 可空，而下游取数签名要求 IEnumerable<string>；
+        //    Where 已在运行期滤空，这里的 ! 只为固定推断类型、避免 CS8620（不改行为）
+        var cfgCodes = cfgR.Select(x => x.Code).Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c!).ToList();
         if (cfgCodes.Count == 0) return "（该标准尚无目录配置，无标准文档清单）";
 
         var rows = await _core.GetDirectoryFilesByConfigCodesAsync(cfgCodes);
@@ -1113,16 +1113,15 @@ public class PromptWorkbenchService : IPromptWorkbench
     {
         if (string.IsNullOrWhiteSpace(standardCode)) return "（未指定标准）";
 
-        var cfgR = await _db.GetListAsync<StandardDirectoryConfig>(
-            x => x.StandardCode == standardCode && x.IsValid == 1);
-        var cfgs = cfgR.Success && cfgR.Data != null ? cfgR.Data : new List<StandardDirectoryConfig>();
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：StandardCode ∧ IsValid==1）
+        var cfgs = await _core.GetDirectoryConfigsAsync(standardCode: standardCode);
         if (cfgs.Count == 0) return "（该标准尚无目录配置）";
-        var cfgCodes = cfgs.Select(x => x.Code).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+        // ⚠️ 末尾 Select(c => c!)：理由同 BuildStdDocCatalogTextAsync（固定推断类型，避免 CS8620）
+        var cfgCodes = cfgs.Select(x => x.Code).Where(x => !string.IsNullOrWhiteSpace(x)).Select(c => c!).ToList();
         if (cfgCodes.Count == 0) return "（该标准尚无目录配置）";
 
-        var folderR = await _db.GetListAsync<StandardDirectoryFolder>(
-            x => cfgCodes.Contains(x.ConfigCode) && x.IsValid == 1);
-        var folders = folderR.Success && folderR.Data != null ? folderR.Data : new List<StandardDirectoryFolder>();
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：ConfigCode ∈ 集合 ∧ IsValid==1）
+        var folders = await _core.GetDirectoryFoldersAsync(cfgCodes);
         if (folders.Count == 0) return "（该标准尚无文件夹）";
 
         var byParent = folders.GroupBy(x => x.ParentCode ?? "")

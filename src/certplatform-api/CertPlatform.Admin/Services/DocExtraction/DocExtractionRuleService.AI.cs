@@ -884,7 +884,8 @@ public partial class DocExtractionRuleService
     /// <summary>测试字段提取（标准文档模式：从 sample_data 取值）</summary>
     public async Task<TestFieldResponse> TestFieldAsync(TestFieldRequest request)
     {
-        var rule = (await _db.GetOneAsync<DocExtractionRule>(x => x.Code == request.RuleCode)).Data;
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：by Code）
+        var rule = await _core.GetDocExtractionRuleByCodeAsync(request.RuleCode);
         if (rule == null)
             return new TestFieldResponse { FieldCode = request.FieldCode, Message = "规则不存在" };
 
@@ -921,7 +922,8 @@ public partial class DocExtractionRuleService
     /// <summary>测试表格提取（标准文档模式：从 sample_data 取行数据）</summary>
     public async Task<TestTableResponse> TestTableAsync(TestTableRequest request)
     {
-        var rule = (await _db.GetOneAsync<DocExtractionRule>(x => x.Code == request.RuleCode)).Data;
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：by Code）
+        var rule = await _core.GetDocExtractionRuleByCodeAsync(request.RuleCode);
         if (rule == null)
             return new TestTableResponse { TableCode = request.TableCode, Message = "规则不存在" };
 

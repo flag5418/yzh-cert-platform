@@ -162,8 +162,8 @@ namespace CertPlatform.Auditor.Controllers
             //     「`return Ok(ApiResponse.Ok(result))` **无条件包成功**」= **假成功**，明令禁止；
             //     且 §B02 明确「用错误文本表达失败、`success` 仍为 true」属同类违规。
             //   ⛔ 不要把「解释性文案」塞进 `data`（那是把错误藏在成功里，前端只能靠猜）。
-            var allTemplates = (await _db.GetListAsync<DocTemplate>(x => x.IsValid == 1)).Data
-                               ?? new List<DocTemplate>();
+            // ★ 1.B.6d-1：取数收口 CoreResourceQuery（谓词逐字等价：IsValid == 1 + 框架默认 IsDeleted == 0）
+            var allTemplates = await _core.GetDocTemplatesAsync();
 
             if (!allTemplates.Any(t =>
                     string.Equals(t.PublishStatus, "published", StringComparison.OrdinalIgnoreCase)))

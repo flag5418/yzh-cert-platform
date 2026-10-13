@@ -797,9 +797,10 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
             ?? new List<StandardDirectoryFile>();
 
         var cfgCodes = rows.Select(x => x.ConfigCode).Where(c => !string.IsNullOrEmpty(c)).Distinct().ToList();
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：全部有效目录配置）
         var orgByCfg = cfgCodes.Count == 0
             ? new Dictionary<string, string>()
-            : ((await _db.GetListAsync<StandardDirectoryConfig>()).Data ?? new List<StandardDirectoryConfig>())
+            : (await _core.GetDirectoryConfigsAsync())
                 .Where(c => cfgCodes.Contains(c.Code))
                 .GroupBy(c => c.Code)
                 .ToDictionary(g => g.Key, g => g.First().OrgCode ?? "");

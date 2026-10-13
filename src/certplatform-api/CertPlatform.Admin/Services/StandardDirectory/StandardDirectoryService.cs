@@ -448,7 +448,8 @@ public class StandardDirectoryService
 
     public async Task<List<StandardDirectoryConfig>> GetConfigsAsync()
     {
-        return (await _db.GetListAsync<StandardDirectoryConfig>(x => x.IsValid == 1)).Data ?? new();
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（谓词逐字等价：IsValid == 1 + 框架默认 IsDeleted == 0）
+        return await _core.GetDirectoryConfigsAsync();
     }
 
     public async Task<StandardDirectoryConfig?> GetConfigAsync(string directoryCode)
@@ -707,8 +708,8 @@ public class StandardDirectoryService
     /// </summary>
     public async Task<List<StandardDirectoryFolder>> GetFolderTreeAsync(string directoryCode)
     {
-        var folders = (await _db.GetListAsync<StandardDirectoryFolder>(
-            x => x.ConfigCode == directoryCode && x.IsValid == 1)).Data ?? new();
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：ConfigCode == 入参 ∧ IsValid == 1）
+        var folders = await _core.GetDirectoryFoldersAsync(new[] { directoryCode });
 
         var rootFolders = folders.Where(x => string.IsNullOrEmpty(x.ParentCode))
             .OrderBy(x => x.Sort).ToList();
@@ -729,8 +730,8 @@ public class StandardDirectoryService
     /// </remarks>
     public async Task<List<StandardDirectoryFolder>> GetFoldersFlatAsync(string directoryCode)
     {
-        var folders = (await _db.GetListAsync<StandardDirectoryFolder>(
-            x => x.ConfigCode == directoryCode && x.IsValid == 1)).Data ?? new();
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：ConfigCode == 入参 ∧ IsValid == 1）
+        var folders = await _core.GetDirectoryFoldersAsync(new[] { directoryCode });
 
         var reserved = CollectReservedFolderCodes(folders);
         if (reserved.Count == 0) return folders;
@@ -2142,8 +2143,8 @@ public class StandardDirectoryService
     public async Task<StageFileTreeResponse> GetStageFileTreeAsync(string directoryCode)
     {
         // 1. 查询所有启用的文件夹
-        var allFolders = (await _db.GetListAsync<StandardDirectoryFolder>(
-            x => x.ConfigCode == directoryCode && x.IsValid == 1)).Data ?? new();
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：ConfigCode == 入参 ∧ IsValid == 1）
+        var allFolders = await _core.GetDirectoryFoldersAsync(new[] { directoryCode });
 
         // ★ 1.1 剔除「产物目录」（pdf / markdown / _archive）。
         //   这三段是 PathBuilder 的保留段名 —— 系统把转换产物写在
@@ -2469,8 +2470,8 @@ public class StandardDirectoryService
         if (config == null)
             throw new ArgumentException("目录配置不存在");
 
-        var allFolders = (await _db.GetListAsync<StandardDirectoryFolder>(
-            x => x.ConfigCode == directoryCode && x.IsValid == 1)).Data ?? new();
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：ConfigCode == 入参 ∧ IsValid == 1）
+        var allFolders = await _core.GetDirectoryFoldersAsync(new[] { directoryCode });
 
         // 展开选中的文件夹（含子文件夹）
         var expandedFolderCodes = ExpandFolderCodes(allFolders, selectedFolderCodes);

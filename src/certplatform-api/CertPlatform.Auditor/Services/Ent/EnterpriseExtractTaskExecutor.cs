@@ -66,6 +66,8 @@ public class EnterpriseExtractTaskExecutor : IYzhTaskExecutor
             var storage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
             var ruleService = scope.ServiceProvider.GetRequiredService<IExtractionRuleQuery>();
             var resolver = scope.ServiceProvider.GetRequiredService<ExtractionScopeResolver>();
+            // ★ 1.B.6d-1：本类是单例，Scoped 依赖必须从已建 scope 取（与上面三行同规矩）
+            var core = scope.ServiceProvider.GetRequiredService<ICoreResourceQuery>();
 
             // 1. 企业文件行（含中间态：转换链会临时置 IsValid=0，这里用 IgnoreValid 口径）
             var file = (await db.GetOneIgnoreValidAsync<StandardDirectoryFile>(
@@ -122,7 +124,8 @@ public class EnterpriseExtractTaskExecutor : IYzhTaskExecutor
                 return new TaskExecutionResult { Success = true, Message = "无可用提取规则，跳过" };
             }
 
-            var rule = (await db.GetOneAsync<DocExtractionRule>(x => x.Code == slot.RuleCode)).Data;
+            // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：by Code）
+            var rule = await core.GetDocExtractionRuleByCodeAsync(slot.RuleCode);
             if (rule == null)
             {
                 await SetStatusAsync("skipped", "提取规则已失效，已跳过", null);

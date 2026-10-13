@@ -182,7 +182,8 @@ public class EnterpriseFileService
                 Standards = new object[0]
             };
 
-        var stageName = (await _db.GetOneAsync<CertStage>(x => x.Code == stageCode)).Data?.StageName;
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：by Code）
+        var stageName = (await _core.GetStageByCodeAsync(stageCode))?.StageName;
         var stdRows = await _core.GetStandardsByCodesAsync(stdCodes);
         var stdDict = stdRows.Where(s => !string.IsNullOrEmpty(s.Code))
             .GroupBy(s => s.Code!).ToDictionary(g => g.Key, g => g.First());
@@ -286,8 +287,8 @@ public class EnterpriseFileService
         var std = await _core.GetStandardByCodeAsync(standardCode);
 
         // 文件夹树：模板 folder 行（槽位沿用的是模板 FolderCode，故模板即权威结构）
-        var tplFolders = (await _db.GetListAsync<StandardDirectoryFolder>(
-            x => x.ConfigCode == ensure.TemplateConfigCode)).Data ?? new List<StandardDirectoryFolder>();
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：ConfigCode == 入参；框架默认 IsDeleted==0 ∧ IsValid==1）
+        var tplFolders = await _core.GetDirectoryFoldersAsync(new[] { ensure.TemplateConfigCode });
         // 路径口径：对外一律「相对配置根」（03 §3.2 / 05 §8.1），故剥掉模板根段
         var rootSegment = RootSegmentOf(tplFolders);
         var folders = tplFolders
@@ -418,8 +419,9 @@ public class EnterpriseFileService
         if (err != null)
             return new { Configured = false, Message = err, Standards = new object[0], Summary = new { TotalRequired = 0, TotalUploaded = 0, TotalExtracted = 0, TotalMissing = 0 } };
 
-        var configs = (await _db.GetListAsync<StandardDirectoryConfig>(
-            x => x.EnterpriseCode == enterpriseCode && x.StageCode == stageCode && x.IsValid == 1)).Data ?? new();
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：EnterpriseCode ∧ StageCode ∧ IsValid==1）
+        var configs = await _core.GetDirectoryConfigsAsync(
+            stageCode: stageCode, enterpriseCode: enterpriseCode);
 
         if (configs.Count == 0)
             return new
@@ -549,8 +551,8 @@ public class EnterpriseFileService
                 continue;
             }
 
-            var tplFolders = (await _db.GetListAsync<StandardDirectoryFolder>(
-                x => x.ConfigCode == ensure.TemplateConfigCode)).Data ?? new List<StandardDirectoryFolder>();
+            // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：ConfigCode == 入参；框架默认 IsDeleted==0 ∧ IsValid==1）
+            var tplFolders = await _core.GetDirectoryFoldersAsync(new[] { ensure.TemplateConfigCode });
             var tplRoot = RootSegmentOf(tplFolders);
             var folderPathByCode = tplFolders
                 .Where(f => !string.IsNullOrEmpty(f.Code))
@@ -685,8 +687,8 @@ public class EnterpriseFileService
         if (running != null)
             return ($"该标准目录正在执行转换队列（{running.QueueCode}），请等待完成后再上传", null);
 
-        var tplFolders = (await _db.GetListAsync<StandardDirectoryFolder>(
-            x => x.ConfigCode == ensure.TemplateConfigCode)).Data ?? new List<StandardDirectoryFolder>();
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：ConfigCode == 入参；框架默认 IsDeleted==0 ∧ IsValid==1）
+        var tplFolders = await _core.GetDirectoryFoldersAsync(new[] { ensure.TemplateConfigCode });
         var rootSegment = RootSegmentOf(tplFolders);
         var folderByCode = tplFolders.Where(f => !string.IsNullOrEmpty(f.Code))
             .GroupBy(f => f.Code!).ToDictionary(g => g.Key, g => g.First());
@@ -1643,8 +1645,8 @@ public class EnterpriseFileService
         if (row == null) return Result.Fail("队列不存在");
 
         // 归属校验：队列 ScopeKey 必须是本企业名下某个 config
-        var owned = (await _db.GetListAsync<StandardDirectoryConfig>(
-            x => x.EnterpriseCode == enterpriseCode)).Data ?? new();
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：EnterpriseCode == 入参）
+        var owned = await _core.GetDirectoryConfigsAsync(enterpriseCode: enterpriseCode);
         if (!owned.Any(c => c.Code == row.ScopeKey))
             return Result.Fail("队列不属于当前企业");
 
@@ -1861,10 +1863,11 @@ public class EnterpriseFileService
 
         // 2. 模板行 = 本机构建的、不属于任何企业的目录配置。多行时取第一（Sort → CreateTime，稳定口径）
         //    ★ 2026-10-13 归属模型 V2：机构维度就在 OrgCode（平台通用模板 = OrgCode 空，另行回退）
-        var tplCfg = await _db.GetListAsync<StandardDirectoryConfig>(
-            x => x.OrgCode == orgCode && string.IsNullOrEmpty(x.EnterpriseCode)
-                 && x.StandardCode == standardCode && x.StageCode == stageCode);
-        var template = tplCfg.Data?
+        //    ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：OrgCode ∧ EnterpriseCode 为空 ∧ StandardCode ∧ StageCode；
+        //      `== ""` 与 `IsNullOrEmpty` 等价 —— 该列 NOT NULL）
+        var tplCfg = await _core.GetDirectoryConfigsAsync(
+            orgCode: orgCode, standardCode: standardCode, stageCode: stageCode, enterpriseCode: "");
+        var template = tplCfg
             .OrderBy(c => c.Sort)
             .ThenBy(c => c.CreateTime)
             .FirstOrDefault();
@@ -1919,8 +1922,8 @@ public class EnterpriseFileService
 
         // 模板文件夹 FullPath 索引（槽位 FullPath 由它拼出，供 Step2 反推文件夹路径）。
         // ★ 口径：模板行含根段，槽位行存「相对配置根」（05 §8.1 例：1质量手册/XASL-QM 质量手册.doc）
-        var tplFolders = (await _db.GetListAsync<StandardDirectoryFolder>(
-            x => x.ConfigCode == template.Code)).Data ?? new List<StandardDirectoryFolder>();
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：ConfigCode == template.Code；框架默认 IsDeleted==0 ∧ IsValid==1）
+        var tplFolders = await _core.GetDirectoryFoldersAsync(new[] { template.Code });
         var rootSegment = RootSegmentOf(tplFolders);
         var folderPathByCode = tplFolders.Where(f => !string.IsNullOrEmpty(f.Code))
             .GroupBy(f => f.Code!).ToDictionary(g => g.Key, g => RelativePath(g.First().FullPath, rootSegment));

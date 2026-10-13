@@ -202,11 +202,11 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
             .ToListAsync();
 
         // 已登记 = 存活且有效的模板行（软删/禁用的不算已登记，可重新登记并复活）
-        var registered = (await _db.GetListAsync<DocTemplate>()).Data
-                             ?.Select(t => t.StandardFileCode)
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：全部有效模板）
+        var registered = (await _core.GetDocTemplatesAsync())
+                             .Select(t => t.StandardFileCode)
                              .Where(c => !string.IsNullOrEmpty(c))
-                             .ToHashSet(StringComparer.Ordinal)
-                         ?? new HashSet<string>(StringComparer.Ordinal);
+                             .ToHashSet(StringComparer.Ordinal);
 
         var kw = keyword?.Trim() ?? string.Empty;
         var items = rows
@@ -557,7 +557,8 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
     [HttpGet("tree")]
     public async Task<IActionResult> Tree()
     {
-        var templates = (await _db.GetListAsync<DocTemplate>()).Data ?? new List<DocTemplate>();
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：全部有效模板）
+        var templates = await _core.GetDocTemplatesAsync();
         if (templates.Count == 0)
             return Ok(ApiResponse<object>.Ok(new { Nodes = new List<object>(), Total = 0 }));
 

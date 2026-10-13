@@ -108,11 +108,11 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
         if (!ws.Success || ws.Data == null)
             return Ok(ApiResponse<object>.Fail(ws.Error ?? "无法定位当前工作区"));
 
-        var list = await _db.Client.Queryable<Enterprise>()
-            .Where(x => x.OrgCode == ws.Data.Code && x.IsDeleted == false && x.IsValid == 1)
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：OrgCode == 入参；框架默认 IsDeleted==0 ∧ IsValid==1）
+        var list = (await _core.GetEnterprisesAsync(ws.Data.Code))
             .OrderBy(x => x.EnterpriseNo)
             .Select(x => new { value = x.Code, label = x.Name, no = x.EnterpriseNo })
-            .ToListAsync();
+            .ToList();
 
         return Ok(ApiResponse<object>.Ok(list.Select(x => new { x.value, x.label, x.no }).ToList()));
     }
@@ -155,10 +155,10 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
         var workspaceCode = scope.Data.WorkspaceCode;
 
         // ── 1. 本工作区企业（树根）──
-        var enterprises = await _db.Client.Queryable<Enterprise>()
-            .Where(x => x.OrgCode == workspaceCode && x.IsDeleted == false && x.IsValid == 1)
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：OrgCode == 入参；框架默认 IsDeleted==0 ∧ IsValid==1）
+        var enterprises = (await _core.GetEnterprisesAsync(workspaceCode))
             .OrderBy(x => x.EnterpriseNo)
-            .ToListAsync();
+            .ToList();
 
         if (enterprises.Count == 0)
         {
@@ -269,12 +269,11 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
         var stageCode = req.StageCode ?? string.Empty;
 
         // ── 1. 取定义（含通配），按 ParamCode 去重取「更具体」的那条 ──
-        var defs = await _db.Client.Queryable<FillParamDef>()
-            .Where(d => d.OrgCode == orgCode && d.IsDeleted == false && d.IsValid == 1
-                        && (d.StandardCode == "" || d.StandardCode == stdCode)
-                        && (d.StageCode == "" || d.StageCode == stageCode))
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery
+        //   等价：OrgCode=="" + 「通配("")/等值」两维；框架默认 IsDeleted==0 ∧ IsValid==1
+        var defs = (await _core.GetFillParamDefsAsync(stdCode, stageCode))
             .OrderBy(d => d.Sort)
-            .ToListAsync();
+            .ToList();
 
         var picked = ParamValueResolver.PickMostSpecific(defs);
 
