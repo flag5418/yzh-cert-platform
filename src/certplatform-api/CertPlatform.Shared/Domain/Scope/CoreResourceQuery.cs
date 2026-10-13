@@ -100,6 +100,31 @@ public interface ICoreResourceQuery
     /// <summary>取<b>全部</b>机构×阶段关联（用途同 <see cref="GetAllOrgStandardsAsync"/>）。</summary>
     Task<List<CertOrgStage>> GetAllOrgStagesAsync();
 
+    // ─────────────── 机构×标准×阶段 关联链（视图）· 2026-10-13 阶段 1.B 试点 ───────────────
+
+    /// <summary>
+    /// ★★ 取<b>「机构 → 标准 → 阶段」关联链</b>（含目录配置 Code）—— 底层为视图
+    /// <c>v_org_standard_stage</c>（<b>一次取数</b>替代 6 次查询 + 内存组树）。
+    ///
+    /// <para><b>★ 返回值已做「逐级有效性归一」</b>（视图<b>不固化</b> <c>IsValid</c>，
+    /// 判据收口在本方法 —— 见 2026-10-13 用户裁定「视图不固化业务有效性」）：
+    /// <list type="number">
+    ///   <item><c>OrgIsValid != 1</c> ⇒ <b>整行剔除</b>（机构无效 = 不存在）；</item>
+    ///   <item>标准维无效（<c>StandardIsValid != 1</c> 或关联行 <c>OrgStandardIsValid != 1</c>）
+    ///         ⇒ 置空 <c>StandardCode</c>（<b>保留该行</b>，否则「机构下无标准」会整行消失）；</item>
+    ///   <item>阶段维无效（<c>StageIsValid != 1</c> 或关联行 <c>OrgStageIsValid != 1</c>）
+    ///         ⇒ 置空 <c>StageCode</c>；</item>
+    ///   <item>配置无效（<c>ConfigIsValid != 1</c>）⇒ 置空 <c>ConfigCode</c>。</item>
+    /// </list>
+    /// ⇒ 调用方只需判 <c>StandardCode == null</c> / <c>StageCode == null</c>，
+    /// ⛔ <b>不要再自行写 <c>IsValid</c> 谓词</b>（那就是判据分裂）。</para>
+    ///
+    /// <para><b>⚠️ 不排序</b> —— 排序口径唯一实现在
+    /// <c>OrgStandardTreeAssembler.OrderOrgs</c> / <c>OrderStandards</c> / <c>OrderStages</c>；
+    /// 调用方按各自页面口径排序（⚠️ 原实现<b>无排序</b>的端点请保持无排序）。</para>
+    /// </summary>
+    Task<List<OrgStandardStageView>> GetOrgStandardStageChainAsync();
+
     // ─────────────────────── 填写规则（参数定义 / 提示词）───────────────────────
 
     /// <summary>
@@ -340,6 +365,27 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
     {
         var rows = await _db.GetListAsync<CertOrgStage>();
         return rows.Data ?? new List<CertOrgStage>();
+    }
+
+    // ─────────────── 机构×标准×阶段 关联链（视图）· 2026-10-13 阶段 1.B 试点 ───────────────
+
+    public async Task<List<OrgStandardStageView>> GetOrgStandardStageChainAsync()
+    {
+        // ① 一次取数：视图已把 6 表 JOIN + 配置两级兜底做完（MERGE，谓词可下推）
+        var rows = await _db.GetListAsync<OrgStandardStageView>();
+        var list = rows.Data ?? new List<OrgStandardStageView>();
+
+        // ② 逐级有效性归一（视图不固化 IsValid ⇒ 判据只在这里）
+        //    ⚠️ 标准/阶段/配置 无效时「置空」而非「删行」—— 否则上级维度会跟着消失。
+        foreach (var r in list)
+        {
+            if (r.StandardIsValid != 1 || r.OrgStandardIsValid != 1) r.StandardCode = null;
+            if (r.StandardCode == null || r.StageIsValid != 1 || r.OrgStageIsValid != 1) r.StageCode = null;
+            if (r.StageCode == null || r.ConfigIsValid != 1) r.ConfigCode = null;
+        }
+        list.RemoveAll(r => r.OrgIsValid != 1);
+
+        return list;
     }
 
     // ─────────────────────── 填写规则（参数定义 / 提示词）───────────────────────

@@ -14,6 +14,7 @@ using YZH.Core.DataBase.Services;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Queue;
 using CertPlatform.Admin.Entities.Dir;
+using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Entities.Sys;
 using CertPlatform.Shared.Domain.Organization;
 using CertPlatform.Shared.Domain.Scope;
@@ -78,115 +79,113 @@ public class StandardDirectoryService
 
     /// <summary>
     /// 获取三级组织树：认证机构 → 标准 → 阶段
+    ///
+    /// <para>★ <b>阶段 1.B 试点（2026-10-13）</b>：取数由「<b>6 次查询 + C# 内存组树</b>」收成
+    /// <b>一次视图查询</b> —— 底层视图 <c>v_org_standard_stage</c>
+    /// （DDL：<c>scripts/db/views/v_org_standard_stage.sql</c>），
+    /// 经 <see cref="ICoreResourceQuery.GetOrgStandardStageChainAsync"/> 取回。</para>
+    ///
+    /// <para>★ <b>有效性判据（6 个 <c>IsValid</c>）收口在 <c>CoreResourceQuery</c></b>：
+    /// 视图只固化 <c>IsDeleted</c>、<b>⛔ 不固化</b> <c>IsValid</c>（2026-10-13 用户裁定）；
+    /// 本方法只做<b>投影</b>，⛔ 不写 <c>IsValid</c> 谓词。</para>
+    ///
+    /// <para>⚠️ <b>排序口径</b>：机构 / 标准<b>保持原实现的「无排序」</b>
+    /// （按视图行首次出现顺序，与改动前「无 <c>ORDER BY</c>」等价）；
+    /// 阶段走 <c>OrgStandardTreeAssembler.OrderStages</c>
+    /// —— 与改动前的 <c>OrderBy(Sort).ThenBy(StageCode)</c> <b>逐字一致</b>。</para>
     /// </summary>
     public async Task<List<object>> GetOrganizationTreeAsync()
     {
-        // ★ 阶段 1.B（2026-10-13）：取数一律走 CoreResourceQuery（铁律 L5）；
-        //   排序一律走 OrgStandardTreeAssembler（排序口径唯一实现）。
-        var orgs = await _core.GetCertificationBodiesAsync();
-        var standards = await _core.GetValidStandardsAsync();
-        var orgStandards = await _core.GetAllOrgStandardsAsync();
-        var orgStages = await _core.GetAllOrgStagesAsync();
-
-        // CertStage 是机构-阶段关联的权威来源（cert_org_stage.StageCode ★Q2 起存 Code/GUID）
-        // 与「认证阶段定义」页（/cert/cert-stage）同源
-        var phaseDefs = OrgStandardTreeAssembler.OrderStages(
-            await _core.GetStagesAsync(), x => x.Sort, x => x.StageCode);
-
-        // 目录配置 Code 索引：前端阶段节点用它作为 DirectoryCode（决策 ⑳修订：按机构隔离）
-        var configs = await _core.GetDirectoryConfigsAsync();
-        var configCodeMap = configs
-            .GroupBy(x => $"{x.OrgCode}|{x.StandardCode}|{x.StageCode}")
-            .ToDictionary(g => g.Key, g => g.First().Code);
+        var rows = await _core.GetOrgStandardStageChainAsync();
 
         var tree = new List<object>();
+        var orgNodes = new Dictionary<string, Dictionary<string, object>>(StringComparer.Ordinal);
+        var stdNodes = new Dictionary<string, Dictionary<string, object>>(StringComparer.Ordinal);
+        // (机构 Code|标准 Code) → 该组合的阶段行（先收集、后排序装配）
+        var stageRows = new Dictionary<string, List<OrgStandardStageView>>(StringComparer.Ordinal);
 
-        foreach (var org in orgs)
+        foreach (var r in rows)
         {
-            var orgNode = new Dictionary<string, object>
+            if (!orgNodes.TryGetValue(r.OrgCode, out var orgNode))
             {
-                ["id"] = org.Code,
-                ["label"] = org.Name,
-                ["type"] = "organization",
-                ["cbCode"] = org.Code,
-                ["children"] = new List<object>()
-            };
-            var orgChildren = (List<object>)orgNode["children"];
-
-            // 该机构关联的标准
-            var orgStdCodes = orgStandards
-                .Where(x => x.OrgCode == org.Code)
-                .Select(x => x.StandardCode).ToList();
-            var linkedStandards = standards
-                .Where(x => orgStdCodes.Contains(x.Code)).ToList();
-
-            foreach (var std in linkedStandards)
-            {
-                var stdNode = new Dictionary<string, object>
+                orgNode = new Dictionary<string, object>
                 {
-                    ["id"] = $"{org.Code}|{std.StandardCode}",
-                    ["label"] = $"{std.StandardCode} - {std.StandardName}",
-                    ["type"] = "standard",
-                    ["cbCode"] = org.Code,
-                    ["stdCode"] = std.Code,
-                    ["standardCode"] = std.StandardCode,
-                    ["standardName"] = std.StandardName,
+                    ["id"] = r.OrgCode,
+                    ["label"] = r.OrgName ?? string.Empty,
+                    ["type"] = "organization",
+                    ["cbCode"] = r.OrgCode,
                     ["children"] = new List<object>()
                 };
-                var stdChildren = (List<object>)stdNode["children"];
-
-                // 该机构+标准关联的阶段：cert_org_stage.StageCode == CertStage.Code（★Q2 统一 GUID，2026-10-08）
-                // StandardCode==null 表示适用于所有标准
-                var orgStageCodes = orgStages
-                    .Where(x => x.OrgCode == org.Code
-                        && (x.StandardCode == null || x.StandardCode == std.Code))
-                    .Select(x => x.StageCode).ToHashSet();
-
-                // CertStage 是权威数据源，按 Sort 排序展示
-                // ★ Q2：org_stage.StageCode 已统一为 Code(GUID) ⇒ 与 p.Code 比对，⛔ 不再用业务码 p.StageCode
-                var linkedPhases = phaseDefs
-                    .Where(p => orgStageCodes.Contains(p.Code))
-                    .ToList();
-
-                foreach (var phase in linkedPhases)
-                {
-                    // ★ 键必须是 org + phase.Code（cert_cert_stage.Code，GUID）——
-                    //   config.StageCode 存的是该 GUID（见迁移脚本列注释），不是 'jd01' 这种 StageCode；
-                    //   决策⑳修订后主键含 OrgCode ⇒ 键必须带机构，否则机构 A 的配置会被机构 B 命中。
-                    // ★ 2026-10-13 归属模型 V2：config.OrgCode = 机构 Code（空 = 平台通用模板）
-                    //   ⇒ 先按「本机构行」查，未命中再按「平台通用行」（OrgCode 空）查 ——
-                    //   否则任何机构节点都拿不到 configCode（静默断链）。
-                    if (!configCodeMap.TryGetValue($"{org.Code}|{std.Code}|{phase.Code}", out var configCode))
-                        configCodeMap.TryGetValue($"|{std.Code}|{phase.Code}", out configCode);
-                    var phaseNode = new Dictionary<string, object>
-                    {
-                        ["id"] = $"{org.Code}|{std.StandardCode}|{phase.StageCode}",
-                        ["label"] = $"{phase.StageCode} - {phase.StageName}",
-                        ["type"] = "phase",
-                        ["cbCode"] = org.Code,
-                        ["stdCode"] = std.Code,
-                        ["standardCode"] = std.StandardCode,
-                        // ★★ 2026-09-30 阶段口径统一（22 号 §1.1 / 06 号 §4.1）：
-                        //   phaseCode 由【业务码 'jd01'】改为【GUID = cert_cert_stage.Code】。
-                        //   原因：配置层 cert_validation_rule.PhaseCode / cert_report_section.PhaseCode
-                        //        已迁移为 GUID（scripts/db/fix/fix-stage-code-align-2026-09-30.sql）。
-                        //   影响链：树节点 phaseCode → useFileTree.Extra.PhaseCode
-                        //          → nc-config / report-rule 的 RelateField + onPrepareAdd
-                        //   ⇒ 全链路自动变 GUID，前端无需改动。
-                        //   ⛔ 不要再改回 phase.StageCode —— 那会让新规则又存业务码，
-                        //      与 cert_enterprise_stage.StageCode（GUID）永远 join 不上，静默 0 行。
-                        ["phaseCode"] = phase.Code,
-                        ["phaseName"] = phase.StageName,
-                        ["phaseDefinitionCode"] = phase.Code,
-                        // 目录配置 Code（null = 该「标准×阶段」尚未建配置 → 前端不加载、不上传）
-                        ["configCode"] = configCode
-                    };
-                    stdChildren.Add(phaseNode);
-                }
-                orgChildren.Add(stdNode);
+                orgNodes[r.OrgCode] = orgNode;
+                tree.Add(orgNode);
             }
-            tree.Add(orgNode);
+
+            // 该机构未关联标准（视图 LEFT JOIN 兜底行）⇒ 只出机构节点
+            if (r.StandardCode == null) continue;
+
+            var stdKey = $"{r.OrgCode}|{r.StandardCode}";
+            if (!stdNodes.TryGetValue(stdKey, out var stdNode))
+            {
+                stdNode = new Dictionary<string, object>
+                {
+                    ["id"] = $"{r.OrgCode}|{r.StandardNo}",
+                    ["label"] = $"{r.StandardNo} - {r.StandardName}",
+                    ["type"] = "standard",
+                    ["cbCode"] = r.OrgCode,
+                    ["stdCode"] = r.StandardCode,
+                    ["standardCode"] = r.StandardNo,
+                    ["standardName"] = r.StandardName,
+                    ["children"] = new List<object>()
+                };
+                stdNodes[stdKey] = stdNode;
+                ((List<object>)orgNode["children"]).Add(stdNode);
+            }
+
+            // 该标准未关联阶段 ⇒ 只出标准节点
+            if (r.StageCode == null) continue;
+
+            if (!stageRows.TryGetValue(stdKey, out var list))
+            {
+                list = new List<OrgStandardStageView>();
+                stageRows[stdKey] = list;
+            }
+            list.Add(r);
         }
+
+        // 阶段装配（排序口径唯一实现；与原 OrderBy(Sort).ThenBy(StageCode) 逐字一致）
+        foreach (var (stdKey, list) in stageRows)
+        {
+            var stdChildren = (List<object>)stdNodes[stdKey]["children"];
+            foreach (var r in OrgStandardTreeAssembler.OrderStages(
+                         list, x => x.StageSort ?? 0, x => x.StageNo))
+            {
+                // ★ 2026-09-30 阶段口径统一（22 号 §1.1 / 06 号 §4.1）：
+                //   phaseCode 由【业务码 'jd01'】改为【GUID = cert_cert_stage.Code】。
+                //   原因：配置层 cert_validation_rule.PhaseCode / cert_report_section.PhaseCode
+                //        已迁移为 GUID（scripts/db/fix/fix-stage-code-align-2026-09-30.sql）。
+                //   影响链：树节点 phaseCode → useFileTree.Extra.PhaseCode
+                //          → nc-config / report-rule 的 RelateField + onPrepareAdd
+                //   ⇒ 全链路自动变 GUID，前端无需改动。
+                //   ⛔ 不要再改回 r.StageNo —— 那会让新规则又存业务码，
+                //      与 cert_enterprise_stage.StageCode（GUID）永远 join 不上，静默 0 行。
+                stdChildren.Add(new Dictionary<string, object>
+                {
+                    ["id"] = $"{r.OrgCode}|{r.StandardNo}|{r.StageNo}",
+                    ["label"] = $"{r.StageNo} - {r.StageName}",
+                    ["type"] = "phase",
+                    ["cbCode"] = r.OrgCode,
+                    ["stdCode"] = r.StandardCode,
+                    ["standardCode"] = r.StandardNo,
+                    ["phaseCode"] = r.StageCode,
+                    ["phaseName"] = r.StageName,
+                    ["phaseDefinitionCode"] = r.StageCode,
+                    // 目录配置 Code（null = 该「标准×阶段」尚未建配置 → 前端不加载、不上传）
+                    // ★ 2026-10-13：两级兜底（机构行 → 平台通用行）已下沉到视图 v_org_standard_stage
+                    ["configCode"] = r.ConfigCode
+                });
+            }
+        }
+
         return tree;
     }
 

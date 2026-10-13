@@ -881,6 +881,14 @@ const R17_SHARED_ALLOW = new Map([
         'ISO 条款：检索唯一入口 ICoreResourceQuery.GetClausesAsync/GetClauseByCodeAsync 定义在 Shared，返回类型必须留 Shared/Entities；Auditor 端 2026-10-12 批 3 接线后改为经入口取数，不再直接引用实体类',
     },
   ],
+  [
+    'OrgStandardStageView',
+    {
+      since: '2026-10-13',
+      reason:
+        '「机构×标准×阶段」关联链视图（纯只读 V，DDL = scripts/db/views/v_org_standard_stage.sql）：检索唯一入口 ICoreResourceQuery.GetOrgStandardStageChainAsync 定义在 Shared，返回类型必须留 Shared/Entities（下沉到 Admin 会让 Shared 反向引用 Admin ⇒ 成环）；当前仅 Admin 端 StandardDirectoryService（T1 组织树）消费，Auditor 端接线后同样经该入口取数',
+    },
+  ],
 ])
 
 function runR17() {
