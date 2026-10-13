@@ -43,7 +43,7 @@ namespace CertPlatform.Shared.Entities.Cert
         public string Category { get; set; } = "process";
 
         /// <summary>排序号（1~9）</summary>
-        public int SortOrder { get; set; }
+        public int Sort { get; set; }
 
         /// <summary>阶段说明</summary>
         public string? Description { get; set; }

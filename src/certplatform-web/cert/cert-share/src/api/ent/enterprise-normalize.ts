@@ -239,7 +239,7 @@ export interface NormalizeFolderNode {
   FolderName: string
   ParentCode: string
   Depth: number
-  SortOrder: number
+  Sort: number
   FullPath: string
   /** ★ 该文件夹（含子文件夹）下标准域文件总数 —— ⛔ 不是可规范化数，用于解释「为什么只有这几个」 */
   TotalFileCount: number

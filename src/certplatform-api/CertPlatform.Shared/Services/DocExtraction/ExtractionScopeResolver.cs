@@ -89,7 +89,8 @@ public class ExtractionScopeResolver
         if (file == null) return new ExtractionSlot();
 
         var scope = await _ruleService.ResolveRuleScopeAsync(file);
-        var rule = OrgScope.IsLegacyUnassigned(scope.OrgCode)
+        // ★ 2026-10-13 归属模型 V2：scope.OrgCode = 机构 Code（空 = 平台标准级 ⇒ 无机构级规则）
+        var rule = !OrgScope.IsOrgRow(scope.OrgCode)
             ? null
             : await _ruleService.GetRuleByScopeAsync(
                 scope.OrgCode, scope.StandardCode, scope.StageCode, scope.RuleKey);

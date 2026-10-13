@@ -37,7 +37,6 @@ import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { loadOrgStageTree } from '@share/composables/useOrgStageTree'
 import { getNCRulePage, getISOClauseTree } from '@share/api/workflow/nc-config'
-import { CORE_ORG_STD_ENV } from '@share/constants/coreOrgCodes'
 import type { NCRule, ISOClauseTreeNode } from '@share/api/workflow/nc-config'
 
 export type { NCRule, ISOClauseTreeNode }
@@ -277,7 +276,7 @@ export class NCConfigLogic extends TreeTableLogic<any> {
   protected override buildFilters(extra?: Record<string, any>): FilterItem[] {
     const base = super.buildFilters(extra)
     if (this.anySelected) {
-      base.push({ Field: 'OrgCode', Value: CORE_ORG_STD_ENV, Operator: 'eq' })
+      base.push({ Field: 'OrgCode', Value: '', Operator: 'eq' })
       base.push({ Field: 'StandardCode', Value: this.selectedNode!.Extra!.StdCode, Operator: 'eq' })
     }
     return base
@@ -286,7 +285,7 @@ export class NCConfigLogic extends TreeTableLogic<any> {
   /** 新增准备钩子：注入树关联编码（OrgCode 恒为 StdEnv，2026-10-12 终裁） */
   protected override onPrepareAdd(formData: Record<string, any>) {
     const ex = this.selectedNode?.Extra
-    formData.OrgCode = CORE_ORG_STD_ENV
+    formData.OrgCode = ''
     formData.StandardCode = ex?.StdCode ?? ''
     formData.PhaseCode = ex?.PhaseCode ?? ''
   }

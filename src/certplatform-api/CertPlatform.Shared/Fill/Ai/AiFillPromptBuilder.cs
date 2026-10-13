@@ -256,11 +256,13 @@ namespace CertPlatform.Shared.Fill.Ai
             var rows = (await db.GetListAsync<DocFillPrompt>(x => x.PromptCode == code)).Data;
             if (rows == null || rows.Count == 0) return null;
 
-            // 机构专属优先；没有机构专属再退回后台标准级（OrgCode = CoreOrgCodes.StdEnv）
+            // 机构专属优先；没有机构专属再退回后台标准级（OrgCode = ''）
             var scoped = rows.Where(r => !string.IsNullOrEmpty(org)
                                          && string.Equals(r.OrgCode, org, StringComparison.Ordinal)).ToList();
+            // ★ 2026-10-13 归属模型 V2：平台标准级 = OrgCode 空
+            //   （cert_doc_fill_prompt 无 EnterpriseCode 列 ⇒ 只有「机构专属 / 平台级」两态）
             if (scoped.Count == 0)
-                scoped = rows.Where(r => OrgScope.IsBackendBuilt(r.OrgCode)).ToList();
+                scoped = rows.Where(r => string.IsNullOrWhiteSpace(r.OrgCode)).ToList();
             if (scoped.Count == 0) return null;
 
             return scoped

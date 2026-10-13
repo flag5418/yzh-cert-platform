@@ -46,7 +46,7 @@ export class CertStageLogic extends TreeTableCore<any> {
   protected override get defaultValues(): Record<string, any> {
     return {
       IsValid: 1,
-      SortOrder: 0,
+      Sort: 0,
     }
   }
 

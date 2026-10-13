@@ -50,7 +50,7 @@ export interface StageItem {
   StageCode: string
   StageName: string
   StageCodeBiz?: string | null
-  SortOrder: number
+  Sort: number
   /** 该阶段关联的标准数（0 = 未关联，节点置灰） */
   StandardCount: number
 }
@@ -107,7 +107,7 @@ export interface DirectoryFolder {
   ParentCode?: string | null
   FolderName: string
   Depth: number
-  SortOrder: number
+  Sort: number
   FullPath: string
 }
 

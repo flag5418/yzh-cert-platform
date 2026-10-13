@@ -31,7 +31,7 @@ namespace CertPlatform.Admin.Entities.Cert
         [UniqueField("文件夹名称", WithFields = new[] { "ConfigCode", "ParentCode" })]
         public string FolderName { get; set; } = string.Empty;
 
-        public int SortOrder { get; set; } = 0;
+        public int Sort { get; set; } = 0;
 
         // ──── ISoftDelete + IIsValid 接口显式实现 ────
         public bool IsDeleted { get; set; }

@@ -63,7 +63,7 @@
       "Enable": true
     },
     {
-      "FieldName": "SortOrder",
+      "FieldName": "Sort",
       "DesName": "章节排序",
       "Type": "Decimal",
       "Sxh": 1,

@@ -296,7 +296,7 @@ namespace CertPlatform.Auditor.Services.Ent
                     .Where(x => x.EnterpriseCode == ent.Code && !x.IsDeleted && x.IsValid == 1)
                     .ToListAsync() ?? new List<EnterpriseOriginalFile>();
 
-                var children = stages.OrderBy(s => s.SortOrder).Select(s =>
+                var children = stages.OrderBy(s => s.Sort).Select(s =>
                 {
                     // ★ 必须用 s.Code（GUID）而不是 s.StageCode（slug 如 jd01/03）：
                     //   EnterpriseOriginalFile.StageCode 存的是**阶段 Code（GUID）**

@@ -332,7 +332,7 @@ export interface StageFolderNode {
   Name: string
   ParentCode?: string
   Depth?: number
-  SortOrder?: number
+  Sort?: number
   Children?: StageFolderNode[]
   Files?: StageFileNode[]
 }

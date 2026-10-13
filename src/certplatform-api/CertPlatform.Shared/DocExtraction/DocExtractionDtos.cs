@@ -34,7 +34,7 @@ namespace CertPlatform.Shared.DocExtraction
         /// <summary>本次保存的验证结论（决定 status=configured/failed）</summary>
         public bool IsValid { get; set; }
 
-        /// <summary>同步落库的提取值（写入标准域 CoreOrgCodes.StdEnv 的 ExtractionResult）</summary>
+        /// <summary>同步落库的提取值（写入标准域 '' 的 ExtractionResult）</summary>
         public ExtractionData? ExtractionData { get; set; }
     }
 

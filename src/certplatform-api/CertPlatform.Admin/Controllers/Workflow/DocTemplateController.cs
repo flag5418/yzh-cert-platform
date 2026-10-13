@@ -186,7 +186,7 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         var rows = await _db.Client.Queryable<StandardDirectoryFile>()
             .Where(f => f.IsDeleted == false && f.IsValid == 1
                         && string.IsNullOrEmpty(f.EnterpriseCode))
-            .OrderBy(f => f.SortOrder)
+            .OrderBy(f => f.Sort)
             .Select(f => new
             {
                 f.Code,
@@ -360,7 +360,8 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
 
         // ★ 身份段经唯一作用域入口推导（⛔ 不在此另写一份 —— 两套口径必然漂移）
         var scope = await _extraction.ResolveRuleScopeAsync(fileRow.Code);
-        if (OrgScope.IsLegacyUnassigned(scope.OrgCode))
+        // ★ 2026-10-13 归属模型 V2：scope.OrgCode = 机构 Code（空 = 平台标准级 ⇒ 模板无机构身份段）
+        if (!OrgScope.IsOrgRow(scope.OrgCode))
             return Ok(ApiResponse<object>.Fail(
                 "无法确定模板所属机构：标准目录文件缺少 ConfigCode，或其所属配置缺少 OrgCode。请先在「标准目录」里补全。"));
 
@@ -732,7 +733,7 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
 
         // ★ 身份段经提取规则的唯一作用域入口推导（⛔ 不在此另写一份 —— 两套口径必然漂移）
         var scope = await _extraction.ResolveRuleScopeAsync(entity.StandardFileCode);
-        if (OrgScope.IsLegacyUnassigned(scope.OrgCode))
+        if (!OrgScope.IsOrgRow(scope.OrgCode))
         {
             return (false,
                 "无法确定模板所属机构：标准目录文件缺少 ConfigCode，或其所属配置缺少 OrgCode。"

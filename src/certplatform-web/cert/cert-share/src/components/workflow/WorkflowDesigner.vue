@@ -172,7 +172,6 @@ import { deserialize, extractLayout, serialize } from '@share/composables/workfl
 import { SPECIAL_NODE_CODES } from '@share/composables/workflow/specialNodes'
 import { useWorkflowStore } from '@share/composables/workflow/useWorkflowStore'
 import { installLogicFlowPatch } from '@share/utils/logicflow-patch'
-import { CORE_ORG_STD_ENV } from '@share/constants/coreOrgCodes'
 import {
   Calendar, CircleCheck, Clock, Delete, Document, Download, Grid,
   OfficeBuilding, Refresh, Search, Setting, VideoPlay, ArrowRight
@@ -486,7 +485,7 @@ async function loadDocRules() {
  * ★ 加载「标准文件」下拉选项（is_std_file_missing 特殊节点，2026-10-11）。
  *
  * <p>数据源 = <c>/StandardDirectory/std-files</c>，返回的是标准目录的**模板行**
- * （<c>EnterpriseCode = CORE_ORG_STD_ENV</c>）—— 即「标准要求有哪些文件」，
+ * （<c>EnterpriseCode = ''</c>）—— 即「标准要求有哪些文件」，
  * 与任何企业无关。执行期由后端拿所选行的 Code 反查企业行判断是否上传。</p>
  *
  * <p>⚠️ 后端响应恒 <b>PascalCase</b>（<c>Code</c>/<c>FileName</c>）⇒ 在这里归一化成
@@ -1256,7 +1255,7 @@ async function handleExecuteTest() {
     const res = await yzhApi.post(runApi, {
       TaskType: 'TEST',
       RuleCode: currentLeaf.value.Code || currentLeaf.value.RuleCode,
-      EnterpriseCode: currentLeaf.value.EnterpriseCode || CORE_ORG_STD_ENV,
+      EnterpriseCode: currentLeaf.value.EnterpriseCode || '',
       StandardCode: currentLeaf.value.StandardCode || currentFilter.StandardCode,
       PhaseCode: currentLeaf.value.PhaseCode || currentFilter.PhaseCode,
       ConfigJson: JSON.stringify(config)
@@ -1289,10 +1288,10 @@ async function handleExecuteTest() {
  *   响应新增 TaskCode（本次测试的任务编码），可凭它去日志/DB 里定位这次测试。
  */
 async function handleTestNode(nodeData: any) {
-  // 测试上下文元数据（可选字段，后端缺省时按 FULL / 标准域常量 CORE_ORG_STD_ENV 兜底）
+  // 测试上下文元数据（可选字段，后端缺省时按 FULL / 标准域常量 '' 兜底）
   const meta = {
     RuleCode: currentLeaf.value?.Code || currentLeaf.value?.RuleCode || '',
-    EnterpriseCode: currentLeaf.value?.EnterpriseCode || CORE_ORG_STD_ENV,
+    EnterpriseCode: currentLeaf.value?.EnterpriseCode || '',
     StandardCode: currentLeaf.value?.StandardCode || currentFilter.StandardCode || '',
     PhaseCode: currentLeaf.value?.PhaseCode || currentFilter.PhaseCode || ''
   }
@@ -1349,7 +1348,7 @@ async function handleTestWorkflow(nodeData: any) {
     const res = await yzhApi.post('/api/Admin/Workflow/test/run', {
       TaskType: 'TEST',
       RuleCode: currentLeaf.value.Code || currentLeaf.value.RuleCode,
-      EnterpriseCode: currentLeaf.value.EnterpriseCode || CORE_ORG_STD_ENV,
+      EnterpriseCode: currentLeaf.value.EnterpriseCode || '',
       StandardCode: currentLeaf.value.StandardCode || currentFilter.StandardCode,
       PhaseCode: currentLeaf.value.PhaseCode || currentFilter.PhaseCode,
       ConfigJson: JSON.stringify(config)

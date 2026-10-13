@@ -132,11 +132,11 @@ public class EnterpriseFileService
                         StageCode = g.Key,
                         StageName = stage?.StageName ?? g.Key,
                         StageCodeBiz = stage?.StageCode,
-                        SortOrder = stage?.SortOrder ?? 0,
+                        Sort = stage?.Sort ?? 0,
                         StandardCount = g.Select(x => x.StandardCode).Distinct().Count()
                     };
                 })
-                .OrderBy(s => s.SortOrder)
+                .OrderBy(s => s.Sort)
                 .ThenBy(s => s.StageCode)
                 .ToList();
 
@@ -285,14 +285,14 @@ public class EnterpriseFileService
         // 路径口径：对外一律「相对配置根」（03 §3.2 / 05 §8.1），故剥掉模板根段
         var rootSegment = RootSegmentOf(tplFolders);
         var folders = tplFolders
-            .OrderBy(f => f.Depth).ThenBy(f => f.SortOrder).ThenBy(f => f.Sort)
+            .OrderBy(f => f.Depth).ThenBy(f => f.Sort).ThenBy(f => f.Sort)
             .Select(f => new StandardDirectoryFolderView
             {
                 Code = f.Code,
                 ParentCode = string.IsNullOrEmpty(f.ParentCode) ? null : f.ParentCode,
                 FolderName = f.FolderName ?? "",
                 Depth = f.Depth,
-                SortOrder = f.SortOrder,
+                Sort = f.Sort,
                 FullPath = RelativePath(f.FullPath, rootSegment)
             })
             .ToList();
@@ -363,7 +363,7 @@ public class EnterpriseFileService
                     CreateTime = f.CreateTime
                 };
             })
-            .OrderBy(f => folderByCode.TryGetValue(f.FolderCode, out var fo) ? fo.SortOrder : 0)
+            .OrderBy(f => folderByCode.TryGetValue(f.FolderCode, out var fo) ? fo.Sort : 0)
             .ThenBy(f => f.FileName)
             .ToList();
 
@@ -1132,7 +1132,7 @@ public class EnterpriseFileService
     private static string? ValidateWritableEnterprise(string enterpriseCode)
         => string.IsNullOrWhiteSpace(enterpriseCode)
             ? "更新失败：缺少业务键 EnterpriseCode"
-            : enterpriseCode == CoreOrgCodes.StdEnv
+            : enterpriseCode == ""
                 ? "更新失败：禁止写入标准模板域（虚拟企业 Code）"
                 : null;
 
@@ -1767,7 +1767,7 @@ public class EnterpriseFileService
 
     /// <summary>
     /// 企业目录初始化（13 号 E7）：按 (Org,Std,Stage) 复制模板行。
-    /// <para>幂等判据 = config 表 uk 四列 <c>(OwnerOrgCode, EnterpriseCode, StandardCode, StageCode)</c>；
+    /// <para>幂等判据 = config 表 uk 四列 <c>(OrgCode, EnterpriseCode, StandardCode, StageCode)</c>；
     /// 槽位行按 <c>(ConfigCode, StandardFileCode)</c> 对账，只补缺失、不重复插。</para>
     /// <para><b>本方法只是「预热」，不是唯一初始化入口</b>：<see cref="EnsureDirectoryAsync"/> 在
     /// 每个读接口里都会跑，所以这里失败不代表资料功能不可用，补齐数据后会自动恢复。</para>
@@ -1810,8 +1810,9 @@ public class EnterpriseFileService
         orgCode = await NormalizeOrgCodeAsync(orgCode);
 
         // 1. 已有企业目录？（includeDisabled：禁用行须被认出并复活，否则 INSERT 撞唯一键）
+        //    ★ 2026-10-13 归属模型 V2：机构维度就在 OrgCode（企业行也可带 = 机构冗余）
         var existCfg = await _db.GetListAsync<StandardDirectoryConfig>(
-            x => x.OwnerOrgCode == orgCode && x.EnterpriseCode == enterpriseCode
+            x => x.OrgCode == orgCode && x.EnterpriseCode == enterpriseCode
                  && x.StandardCode == standardCode && x.StageCode == stageCode,
             includeDisabled: true);
         var config = existCfg.Data?.FirstOrDefault();
@@ -1827,38 +1828,35 @@ public class EnterpriseFileService
         {
             var drifted = await _db.GetListAsync<StandardDirectoryConfig>(
                 x => x.EnterpriseCode == enterpriseCode && x.StandardCode == standardCode
-                     && x.StageCode == stageCode && x.OwnerOrgCode != orgCode,
+                     && x.StageCode == stageCode && x.OrgCode != orgCode,
                 includeDisabled: true);
             var orphan = drifted.Data?
-                .OrderByDescending(c => c.OwnerOrgCode == enterpriseCode)
-                .ThenByDescending(c => c.CreateTime)
+                .OrderByDescending(c => c.CreateTime)
                 .FirstOrDefault();
             if (orphan != null)
             {
-                var oldOrg = orphan.OwnerOrgCode;
-                // ★ 2026-10-13：机构维度落 OwnerOrgCode；OrgCode 同步（企业行遗留形态，见实体注释）
-                orphan.OwnerOrgCode = orgCode;
+                var oldOrg = orphan.OrgCode;
+                // ★ 2026-10-13 归属模型 V2：机构维度就在 OrgCode（唯一机构列）
                 orphan.OrgCode = orgCode;
                 orphan.IsValid = 1;
                 orphan.IsDeleted = false;
                 orphan.UpdateBy = userCode ?? _user.UserCode;
                 orphan.UpdateTime = System.DateTime.Now;
-                await _db.UpdateAsync(orphan, nameof(StandardDirectoryConfig.OwnerOrgCode),
+                await _db.UpdateAsync(orphan,
                     nameof(StandardDirectoryConfig.OrgCode),
                     nameof(StandardDirectoryConfig.IsValid), nameof(StandardDirectoryConfig.IsDeleted),
                     nameof(StandardDirectoryConfig.UpdateBy), nameof(StandardDirectoryConfig.UpdateTime));
                 _logger.LogWarning(
-                    "[EnsureDirectory] 企业目录机构漂移已修正 {Code}: OwnerOrgCode {Old} → {New}（企业 {Ent}）",
+                    "[EnsureDirectory] 企业目录机构漂移已修正 {Code}: OrgCode {Old} → {New}（企业 {Ent}）",
                     orphan.Code, oldOrg, orgCode, enterpriseCode);
                 config = orphan;
             }
         }
 
         // 2. 模板行 = 本机构建的、不属于任何企业的目录配置。多行时取第一（Sort → CreateTime，稳定口径）
-        //    ★ 2026-10-13：机构维度改用 OwnerOrgCode —— OrgCode 已统一为 yzh-std-env，
-        //      ⛔ 不再承载「具体机构」（见 docs/40-实施/迁移计划/归属判据收敛与机构专用列-设计-V1.md）
+        //    ★ 2026-10-13 归属模型 V2：机构维度就在 OrgCode（平台通用模板 = OrgCode 空，另行回退）
         var tplCfg = await _db.GetListAsync<StandardDirectoryConfig>(
-            x => x.OwnerOrgCode == orgCode && string.IsNullOrEmpty(x.EnterpriseCode)
+            x => x.OrgCode == orgCode && string.IsNullOrEmpty(x.EnterpriseCode)
                  && x.StandardCode == standardCode && x.StageCode == stageCode);
         var template = tplCfg.Data?
             .OrderBy(c => c.Sort)
@@ -1876,11 +1874,9 @@ public class EnterpriseFileService
             config = new StandardDirectoryConfig
             {
                 Code = Guid.NewGuid().ToString("N"),
+                // ★ 2026-10-13 归属模型 V2：OrgCode = 机构 Code（uk 第一列 + 路径身份段）。
+                //   企业行同时带 EnterpriseCode（唯一分类判据）⇒「企业行 + 机构冗余」合法形态。
                 OrgCode = orgCode,
-                // ★ 2026-10-13：机构维度显式落 OwnerOrgCode（uk 第一列 + 路径身份段）。
-                //   企业行的 OrgCode 仍是机构 Code（2026-10-12 终裁边界：企业行原样），
-                //   两列过渡期同值 —— 待「企业行 OrgCode 语义」单独裁决后收敛。
-                OwnerOrgCode = orgCode,
                 EnterpriseCode = enterpriseCode,
                 StandardCode = standardCode,
                 StageCode = stageCode,
@@ -1970,7 +1966,7 @@ public class EnterpriseFileService
                 IsRequired = tf.IsRequired,
                 MaxFileSizeMB = tf.MaxFileSizeMB,
                 Description = tf.Description,
-                SortOrder = tf.SortOrder,
+                Sort = tf.Sort,
                 ExtractionEnabled = tf.ExtractionEnabled,
                 ExtractionRules = tf.ExtractionRules,
                 PreCheckRequired = tf.PreCheckRequired,
@@ -2395,7 +2391,7 @@ public class StandardDirectoryFolderView
     public string? ParentCode { get; set; }
     public string FolderName { get; set; } = "";
     public int Depth { get; set; }
-    public int SortOrder { get; set; }
+    public int Sort { get; set; }
     public string FullPath { get; set; } = "";
 }
 

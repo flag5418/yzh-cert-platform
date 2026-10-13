@@ -136,23 +136,6 @@
       "Enable": false
     },
     {
-      "FieldName": "StatusField",
-      "DesName": "状态字段",
-      "Type": "Other",
-      "Sxh": 8,
-      "XsFlag": false,
-      "BcFlag": false,
-      "Yxk": true,
-      "Width": 110,
-      "Row": 0,
-      "Col": 0,
-      "RowSpan": 1,
-      "ColSpan": 1,
-      "GroupIndex": "99",
-      "Mrz": "active",
-      "Enable": false
-    },
-    {
       "FieldName": "CreateTime",
       "DesName": "创建时间",
       "Type": "Other",

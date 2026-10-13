@@ -94,13 +94,13 @@ public class ValidationRuleController
     //       不经 OnBeforeUpdate 钩子，必须在此强制）。
     // ========================================================
 
-    /// <summary>查询判据改写：任何 OrgCode 过滤值 → <see cref="CoreOrgCodes.StdEnv"/></summary>
+    /// <summary>查询判据改写：任何 OrgCode 过滤值 → <see cref="''"/></summary>
     protected override List<FilterItem> OnBuildingFilter(List<FilterItem> filters)
     {
         foreach (var f in filters.Where(f => f.Field == "OrgCode"))
-            f.Value = CoreOrgCodes.StdEnv;
+            f.Value = "";
         if (!filters.Any(f => f.Field == "OrgCode"))
-            filters.Add(new FilterItem { Field = "OrgCode", Operator = "eq", Value = CoreOrgCodes.StdEnv });
+            filters.Add(new FilterItem { Field = "OrgCode", Operator = "eq", Value = "" });
         return base.OnBuildingFilter(filters);
     }
 
@@ -185,7 +185,7 @@ public class ValidationRuleController
 
         // ★ 2026-10-12 终裁：归属恒为后台标准级 —— 忽略前端传值，强制 StdEnv
         //   （本方法直调 Entity.Update、不经 OnBeforeUpdate 钩子，必须在此强制）
-        entity.OrgCode = CoreOrgCodes.StdEnv;
+        entity.OrgCode = "";
 
         var fields = typeof(ValidationRule)
             .GetProperties()
@@ -220,7 +220,7 @@ public class ValidationRuleController
         entity.RuleJson = ValidationRuleRules.NormalizeDag(entity.RuleJson);
 
         // ★ 2026-10-12 终裁：归属恒为后台标准级 —— 忽略前端传值，强制 StdEnv
-        entity.OrgCode = CoreOrgCodes.StdEnv;
+        entity.OrgCode = "";
 
         if (string.IsNullOrEmpty(entity.RuleCode))
         {

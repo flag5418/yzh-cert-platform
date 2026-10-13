@@ -398,7 +398,7 @@ namespace CertPlatform.Shared.Entities.Dir
         /// <summary>
         /// 排序号
         /// </summary>
-        public int SortOrder { get; set; }
+        public int Sort { get; set; }
 
         /// <summary>
         /// 子文件夹列表

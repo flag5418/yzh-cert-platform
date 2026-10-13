@@ -459,16 +459,20 @@ function runRE() {
 }
 
 /* ==========================================================================
- * ★ A-R1 ~ A-R9 —— 跨端共享与核心资源检索铁律（2026-10-12 用户裁定）
+ * ★ A-R1 ~ A-R10 —— 跨端共享与核心资源检索铁律（2026-10-12 用户裁定 / 10-13 归属模型 V2）
  *
  *   规则全文：docs/30-项目规则/跨端共享与核心资源检索规则-V1.md
- *   实施计划：docs/50-任务/迁移计划/跨端共享层收敛-实施计划-V2.md
+ *   实施计划：docs/40-实施/迁移计划/跨端共享层收敛-实施计划-V2.md
  *
  *   违规面四类：
  *     ① 依赖方向 —— A-R1（Admin→Auditor）/ A-R2（Auditor→Admin）/ A-R3（Shared→端）
  *     ② 死 using —— A-R5
  *     ③ 宿主语义 —— A-R7
- *     ④ OrgCode 判据分裂 —— A-R8（判据唯一）/ A-R9（字面量唯一）
+ *     ④ 归属判据分裂 —— A-R6（核心资源禁端内直查）/ A-R10（已废除的机构常量字面量全仓禁）
+ *
+ *   ⚠️ 2026-10-13 归属模型 V2：原 A-R8（OrgCode 空值判据）/ A-R9（yzh-std-env 字面量唯一）
+ *      / A-R11（企业列禁机构常量）三条**已退役** —— 它们监管的常量（CoreOrgCodes.StdEnv）
+ *      本身已被删除，判据统一收敛到 Shared/Domain/Scope/OrgScope.cs。A-R10 吸收其职责。
  *
  *   ⚠️ 为什么这些规则重要：项目此前**依赖方向零守卫** —— 全仓 24 条守卫里
  *      只有本组才覆盖「Admin / Shared / Auditor 三方结构」。
@@ -685,111 +689,36 @@ function runAR7() {
 }
 
 /**
- * A-R8：★ `OrgCode` 判据唯一。
+ * A-R10：★ 归属模型 V2 —— 已废除的机构常量字面量全仓禁（2026-10-13 用户裁定）。
  *
- * 判据：禁把 `OrgCode` 的空值/常量比较当作「这是后台标准级数据」的判断。
- * 白名单**仅** `CertPlatform.Shared/Domain/Scope/**`（`OrgScope.cs` 判据 + `CoreResourceQuery.cs` 查询）。
+ * 背景：旧模型用两个 magic value 标记「标准域」——
+ *   · `YZH-STD-ENT`（旧 `YzhVirtualEnterprise.Code`）—— 2026-10-12 已删；
+ *   · `yzh-std-env`（`CoreOrgCodes.StdEnv`）—— **2026-10-13 归属模型 V2 废除**。
  *
- * 实测违规（2026-10-12）：4 种写法 / ≥13 处 ——
- * `== ""` / `IsNullOrEmpty` / `IsNullOrWhiteSpace` / `== string.Empty || == org`。
+ * ★ **归属模型 V2（三态 + 机构冗余）**：
+ *   · 机构行     = `OrgCode` 有值（机构 Code）；
+ *   · 企业行     = `EnterpriseCode` 有值（可带 `OrgCode` = 机构 Code，冗余合法）；
+ *   · 平台标准级 = **两列都空**（⛔ 不再用任何常量标记）。
+ *   ⇒ 两个常量**都不再有存在理由**：后端 `CoreOrgCodes` 类已删除、
+ *     前端 `cert/cert-share/src/constants/coreOrgCodes.ts` 已删除。
  *
- * ⚠️ 2026-10-13：正则加**负向后顾** `(?<![A-Za-z])`，排除新列 `OwnerOrgCode` 的**误报**
- *   （`OwnerOrgCode` 含子串 `OrgCode`，不加后顾会被吞成命中；详见下方 pats 注释）。
- */
-function runAR8() {
-  const violations = []
-  const ALLOW = '/Shared/Domain/Scope/'
-  // ⚠️ 2026-10-13：`OrgCode` 一律加**负向后顾** `(?<![A-Za-z])`，限定为**该列本身** ——
-  //   新增列 `OwnerOrgCode`（`cert_standard_directory_config` 机构专用列，含子串 `OrgCode`）
-  //   **不是**本规则的管制对象；它的空值判据（`== ""` / `IsNullOrWhiteSpace`）是**合法**的。
-  //   ⛔ 不加后顾 ⇒ `config.OwnerOrgCode` 会被 `[\w.]*OrgCode` 吞成命中（误报）。
-  const pats = [
-    /(?<![A-Za-z])OrgCode\s*==\s*""/,
-    /(?<![A-Za-z])OrgCode\s*!=\s*""/,
-    /(?<![A-Za-z])OrgCode\s*==\s*string\.Empty/,
-    /(?<![A-Za-z])OrgCode\s*!=\s*string\.Empty/,
-    /IsNullOrEmpty\s*\(\s*[\w.]*(?<![A-Za-z])OrgCode\s*\)/,
-    /IsNullOrWhiteSpace\s*\(\s*[\w.]*(?<![A-Za-z])OrgCode\s*\)/,
-  ]
-  // ★ 排除「合法用法」—— 本规则只针对「把 OrgCode 空值当作**后台标准级判据**」，
-  //   不含下列四类（它们不是判据，是入参校验 / 用户机构 / 机构实体字段 / 业务键必填校验）：
-  //     ① 入参：request.OrgCode / req.OrgCode / dto.OrgCode
-  //     ② 用户机构：user.OrgCode / user.Data.OrgCode
-  //     ③ 机构实体：entity.OrgCode / existing.Data.OrgCode
-  //     ④ 业务键校验：config.OrgCode（目录配置所属机构必填）/ manifest.OrgCode（上传清单机构必填）
-  const EXCLUDE = /\b(request|req|user|entity|existing|dto|model|config|manifest)\s*[\w.\[\]]*\.OrgCode\b/
-  for (const file of listCsFiles(API_ROOT)) {
-    const r = rel(file)
-    if (r.includes(ALLOW)) continue
-    readFileSync(file, 'utf8')
-      .split('\n')
-      .forEach((line, i) => {
-        if (isCommentLine(line)) return
-        if (EXCLUDE.test(line)) return
-        for (const re of pats) {
-          if (re.test(line)) {
-            violations.push({ file: r, line: i + 1, text: line.trim().slice(0, 120) })
-            break
-          }
-        }
-      })
-  }
-  return { violations, skipped: false }
-}
-
-/**
- * A-R9：★ `"yzh-std-env"` 字面量唯一。
+ * 判据：全仓源码（`.cs` / `.ts` / `.vue` / `.js`，跳过注释行）⛔ 禁止出现：
+ *   ① `YZH-STD-ENT`（2026-10-12 已废弃）；
+ *   ② `yzh-std-env`（2026-10-13 归属模型 V2 废除）。
  *
- * 白名单**仅** `Shared/Domain/Scope/CoreOrgCodes.cs` —— 其余一律用 `CoreOrgCodes.StdEnv`。
- */
-function runAR9() {
-  const violations = []
-  const ALLOW = 'Shared/Domain/Scope/CoreOrgCodes.cs'
-  for (const file of listCsFiles(API_ROOT)) {
-    const r = rel(file)
-    if (r.includes(ALLOW)) continue
-    readFileSync(file, 'utf8')
-      .split('\n')
-      .forEach((line, i) => {
-        if (isCommentLine(line)) return
-        if (/["']yzh-std-env["']/.test(line)) {
-          violations.push({ file: r, line: i + 1, text: line.trim().slice(0, 120) })
-        }
-      })
-  }
-  return { violations, skipped: false }
-}
-
-/**
- * A-R10：★ 「标准域标记」字面量唯一（2026-10-12 用户裁定）。
- *
- * 背景：`YZH-STD-ENT`（旧 `YzhVirtualEnterprise.Code`）与 `yzh-std-env`
- *   （`CoreOrgCodes.StdEnv`）**是同一件事的两种写法** —— 「这行数据属于标准域（平台方建立的
- *   标准/规则），不属于任何企业」。用户裁定**只能留一个** ⇒
- *   后端 `YzhVirtualEnterprise` + 前端 `YZH_VIRTUAL_ENTERPRISE_CODE` 已全部删除。
- *
- * ⚠️ **2026-10-13 口径修订（重要）**：上面「同一件事的两种写法」**只对 `OrgCode` 列成立**
- *   （两值模型：`yzh-std-env` = 后台域 / `<企业 Code>` = 企业域）。
- *   对企业列 `EnterpriseCode` 而言，机构常量 ⛔ **不再是**「非企业行」标记 ——
- *   非企业行判据 = **空**（见守卫 **A-R11**）。**两者分属不同维度，不是同一件事。**
- *
- * 判据（两条，与后端 A-R9 对称）：
- *   ① 全仓源码 ⛔ 禁止再出现 `YZH-STD-ENT`（旧值，已废弃）；
- *   ② 前端源码里 `'yzh-std-env'` 字面量**只允许**出现在
- *      `cert/cert-share/src/constants/coreOrgCodes.ts` —— 其余一律引用 `CORE_ORG_STD_ENV`。
- *
- * ⚠️ 扫描范围 = 前后端源码（`.cs` / `.ts` / `.vue` / `.js`）；⛔ **不扫**：
+ * ⚠️ 扫描范围 = 前后端源码；⛔ **不扫**：
  *   · `docs/`（历史记录需保留原值，改了反而读不懂）
  *   · `scripts/db/`（迁移 SQL 必须引用旧值才能清理）
  *   · `dist/`（构建产物，随源码重新生成）
- *   · **注释行**（与 A-R9 对称：注释里写明「旧值已废弃」是有价值的留痕，
- *     规则要拦的是**代码里还在用旧值**）
+ *   · **注释行**（写明「旧值已废弃」是有价值的留痕，规则要拦的是**代码里还在用**）
+ *
+ * ★ 本规则**吸收了已退役的三条**：A-R8（`OrgCode` 空值判据）/ A-R9（`yzh-std-env` 字面量唯一）
+ *   / A-R11（企业列禁机构常量）—— 它们监管的常量本身已不存在，故一并退役。
  */
 function runAR10() {
   const violations = []
   const SKIP = new Set(['obj', 'bin', 'node_modules', '.git', 'Migrations', 'dist', '__pycache__'])
   const EXTS = ['.cs', '.ts', '.vue', '.js']
-  const FE_CONST_ALLOW = 'cert/cert-share/src/constants/coreOrgCodes.ts'
   const roots = [
     join(API_ROOT, 'CertPlatform.Shared'),
     join(API_ROOT, 'CertPlatform.Admin'),
@@ -818,74 +747,19 @@ function runAR10() {
             violations.push({
               file: r,
               line: i + 1,
-              text: `旧标记值 YZH-STD-ENT（已废弃，改用 CoreOrgCodes.StdEnv / CORE_ORG_STD_ENV）：${line.trim().slice(0, 80)}`,
+              text: `已废弃的旧标记值 YZH-STD-ENT（归属模型 V2：平台标准级 = 两列都空）：${line.trim().slice(0, 80)}`,
             })
-          } else if (/^(cert|yzh\.vue\.core)\//.test(r) && !r.includes(FE_CONST_ALLOW)
-                     && /["']yzh-std-env["']/.test(line)) {
+          } else if (/["']yzh-std-env["']/.test(line)) {
             violations.push({
               file: r,
               line: i + 1,
-              text: `前端 yzh-std-env 字面量（应引用 coreOrgCodes.ts 的 CORE_ORG_STD_ENV）：${line.trim().slice(0, 80)}`,
+              text: `已废除的机构常量 yzh-std-env（归属模型 V2：平台标准级 = 两列都空）：${line.trim().slice(0, 80)}`,
             })
           }
         })
     }
   }
   roots.forEach(rec)
-  return { violations, skipped: false }
-}
-
-/**
- * A-R11：★ 企业列判据 ⛔ 不得使用机构常量（2026-10-13 用户裁定）。
- *
- * 背景：**三个维度**必须分清 ——
- *   · `OrgCode`        —— 这行属于**后台域**（`yzh-std-env` = 所有机构的统称）还是**企业域**；
- *   · `EnterpriseCode` —— 属于哪个**企业**；**空 = 不属于任何企业**（后台/机构模板行）；
- *   · `OwnerOrgCode`（`cert_standard_directory_config` 专用）—— 属于哪个**具体机构**。
- *   ⇒ 机构值 ⛔ 不得填进企业列；企业列的「非企业行」判据 = **空**。
- *
- * 为什么：曾用 `EnterpriseCode == CoreOrgCodes.StdEnv` 标记「模板行」（16+ 处），
- *   但全库实测（22 张含 `EnterpriseCode` 的表）**没有任何一行**是该常量 ⇒ 判据恒不成立，
- *   方法静默返回空列表。10-13 统一为「空 = 非企业行」，唯一入口 `OrgScope.IsEnterpriseRow`。
- *
- * 判据（后端 `.cs`，跳过注释行）：
- *   ① `xxx.EnterpriseCode == / != CoreOrgCodes.StdEnv`（含反向写法）；
- *   ② `string.Equals(xxx.EnterpriseCode, CoreOrgCodes.StdEnv, …)`。
- * ⛔ 基线 **0**，**不进 debt**（新代码不得再引入）。
- * ⚠️ 合法替代 = `OrgScope.IsEnterpriseRow(enterpriseCode)`
- *   或 SqlSugar 表达式内的 `string.IsNullOrEmpty(x.EnterpriseCode)`。
- */
-function runAR11() {
-  const violations = []
-  const pats = [
-    /\.EnterpriseCode\s*[!=]=\s*CoreOrgCodes\.StdEnv/,
-    /CoreOrgCodes\.StdEnv\s*[!=]=\s*[A-Za-z_][\w.]*\.EnterpriseCode/,
-    /\.EnterpriseCode\s*,\s*CoreOrgCodes\.StdEnv/,
-  ]
-  const dirs = [
-    join(API_ROOT, 'CertPlatform.Shared'),
-    join(API_ROOT, 'CertPlatform.Admin'),
-    join(API_ROOT, 'CertPlatform.Auditor'),
-    join(API_ROOT, 'CertPlatform.Enterprise'),
-    join(API_ROOT, 'CertPlatform.Admin.Tests'),
-  ]
-  for (const dir of dirs) {
-    for (const file of listCsFiles(dir)) {
-      const r = rel(file)
-      readFileSync(file, 'utf8')
-        .split('\n')
-        .forEach((line, i) => {
-          if (isCommentLine(line)) return
-          if (pats.some((re) => re.test(line))) {
-            violations.push({
-              file: r,
-              line: i + 1,
-              text: `企业列用了机构常量（EnterpriseCode 的「非企业行」判据 = 空）：${line.trim().slice(0, 100)}`,
-            })
-          }
-        })
-    }
-  }
   return { violations, skipped: false }
 }
 
@@ -1758,36 +1632,13 @@ const RULES = [
     debt: [],
   },
   {
-    id: 'A-R8',
-    type: 'custom',
-    desc: 'OrgCode 判据唯一（禁 == "" / IsNullOrEmpty / IsNullOrWhiteSpace；白名单仅 Shared/Domain/Scope/）',
-    run: runAR8,
-    // ✅ 2026-10-12 阶段 1.A 已清零：13 处判据全部收敛到
-    //    `OrgScope.IsBackendBuilt` / `OrgScope.IsLegacyUnassigned` / `CoreOrgCodes.StdEnv`。
-    debt: [],
-  },
-  {
-    id: 'A-R9',
-    type: 'custom',
-    desc: "'yzh-std-env' 字面量唯一（白名单仅 CoreOrgCodes.cs —— 其余用 CoreOrgCodes.StdEnv）",
-    run: runAR9,
-    debt: [],
-  },
-  {
     id: 'A-R10',
     type: 'custom',
-    desc: "标准域标记字面量唯一：全仓禁 YZH-STD-ENT（旧值已删）；前端 yzh-std-env 白名单仅 coreOrgCodes.ts",
+    desc: "归属模型 V2：全仓禁已废除的机构常量字面量（YZH-STD-ENT / yzh-std-env —— 平台标准级 = 两列都空）",
     run: runAR10,
-    // ★ 2026-10-12 用户裁定「两个常量只能留一个」后新增：存量已清零（后端 31 处 + 前端 1 常量全部收敛）。
-    debt: [],
-  },
-  {
-    id: 'A-R11',
-    type: 'custom',
-    desc: '企业列判据不得用机构常量（EnterpriseCode 的「非企业行」= 空；入口 OrgScope.IsEnterpriseRow）',
-    run: runAR11,
-    // ★ 2026-10-13 用户裁定「企业列统一为空」后新增：存量 16+ 处已全部改写，基线 0。
-    //    ⛔ 不进 debt —— 新代码不得再引入。
+    // ★ 2026-10-12 新增（YZH-STD-ENT）→ 2026-10-13 归属模型 V2 扩展为「两个常量全禁」。
+    //    A-R8（OrgCode 空值判据）/ A-R9（yzh-std-env 字面量唯一）/ A-R11（企业列禁机构常量）
+    //    三条旧守卫**同时退役** —— 它们监管的常量本身已不存在（守卫体系由 4 条收敛为 1 条）。
     debt: [],
   },
 ]

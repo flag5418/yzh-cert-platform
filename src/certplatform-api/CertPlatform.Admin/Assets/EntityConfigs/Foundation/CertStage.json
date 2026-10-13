@@ -42,7 +42,7 @@
       "Align": "left"
     },
     {
-      "FieldName": "SortOrder",
+      "FieldName": "Sort",
       "DesName": "排序",
       "Type": "Decimal",
       "Sxh": 4,

@@ -507,7 +507,7 @@ namespace CertPlatform.Auditor.Services.Expert
                     .GroupBy(x => $"{x.StandardCode}|{x.SectionCode}")
                     .ToDictionary(g => g.Key, g => g.First());
 
-                foreach (var s in sections.OrderBy(x => x.SortOrder).ThenBy(x => x.Sort))
+                foreach (var s in sections.OrderBy(x => x.Sort).ThenBy(x => x.Sort))
                 {
                     var key = $"{s.StandardCode}|{s.Code}";
                     itemMap.TryGetValue(key, out var existing);
@@ -517,7 +517,7 @@ namespace CertPlatform.Auditor.Services.Expert
                         StandardCode = s.StandardCode,
                         StandardName = stdNameMap.GetValueOrDefault(s.StandardCode, s.StandardCode),
                         ItemCode = s.Code ?? "",
-                        ItemNumber = s.SortOrder.ToString(),
+                        ItemNumber = s.Sort.ToString(),
                         ItemName = s.SectionName,
                         ClauseNumber = null,
                         ClauseTitle = null,
@@ -996,7 +996,7 @@ namespace CertPlatform.Auditor.Services.Expert
                 existing.ClauseNumber = secClause?.ClauseNumber;
                 existing.ClauseTitle = secClause?.Title;
                 existing.WorkflowCode = sec?.WorkflowCode;
-                existing.Sort = sec?.SortOrder ?? 0;
+                existing.Sort = sec?.Sort ?? 0;
                 existing.UpdateBy = userCode;
                 existing.UpdateTime = now;
 
@@ -1029,7 +1029,7 @@ namespace CertPlatform.Auditor.Services.Expert
                 ClauseTitle = secClause?.Title,
                 WorkflowCode = sec?.WorkflowCode,
                 RuleVersion = 1,
-                Sort = sec?.SortOrder ?? 0,
+                Sort = sec?.Sort ?? 0,
                 RoundCount = 0,
                 CreateBy = userCode,
                 CreateName = userName,

@@ -73,7 +73,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                 return SkillResult.Fail("field_code 不能为空", WorkflowErrorCodes.PreconditionEmpty);
 
             var entCode = string.IsNullOrWhiteSpace(enterprise_code)
-                ? CoreOrgCodes.StdEnv
+                ? ""
                 : enterprise_code!;
 
             // ★ 取全部候选（不只取一条）—— 多版本/多文件时要能看出"有几条都空"
@@ -178,7 +178,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                 return SkillResult.Fail("table_code 不能为空", WorkflowErrorCodes.PreconditionEmpty);
 
             var entCode = string.IsNullOrWhiteSpace(enterprise_code)
-                ? CoreOrgCodes.StdEnv
+                ? ""
                 : enterprise_code!;
 
             var all = await db.GetListAsync<TableExtractionResult>(

@@ -130,7 +130,7 @@
       "Placeholder": "条款原文或要求摘要"
     },
     {
-      "FieldName": "SortOrder",
+      "FieldName": "Sort",
       "DesName": "排序",
       "Type": "Decimal",
       "Sxh": 4,

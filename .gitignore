@@ -80,6 +80,7 @@ src/server/Vue.NetCore/vol.web/dist/
 .freebuff/
 .playwright-mcp/
 .workbuddy-ai/
+.workbuddy/
 
 # ========================================================
 # Docker 运行时数据

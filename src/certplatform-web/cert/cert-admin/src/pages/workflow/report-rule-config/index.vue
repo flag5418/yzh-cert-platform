@@ -8,7 +8,7 @@
 
   ⚠️ 命名铁律（项目全局规则 §16.9 / YZH 架构铁律）
     数据库列名 = C# 属性名 = TS 字段名 = PascalCase，三处逐字一致。
-    - 章节实体 ReportSection → PascalCase（SectionName / WorkflowConfig / LayoutJson / SortOrder / IsValid）
+    - 章节实体 ReportSection → PascalCase（SectionName / WorkflowConfig / LayoutJson / Sort / IsValid）
     - 查询串键名 orgCode/standardCode/phaseCode 对应后端 C# 形参名
       （ReportDefinitionController.GetSectionsByContext），与 C# 侧逐字一致，保持 camelCase。
 -->
@@ -29,12 +29,12 @@
         Id: ctx.leaf.Id,
         Code: ctx.leaf.Code,
         // ★ 归属三元组：OrgCode 恒为后台标准级常量（2026-10-12 终裁，树 filter 值不参与）
-        OrgCode: CORE_ORG_STD_ENV,
+        OrgCode: '',
         StandardCode: ctx.filter.StandardCode || ctx.leaf.StandardCode,
         PhaseCode: ctx.filter.PhaseCode || ctx.leaf.PhaseCode,
         SectionName: ctx.leaf.SectionName,
         SectionNameEn: ctx.leaf.SectionNameEn,
-        SortOrder: ctx.leaf.SortOrder,
+        Sort: ctx.leaf.Sort,
         // ★ IsActive → IsValid（铁律九）
         IsValid: ctx.leaf.IsValid ?? 1,
         // ★ 判定方式：auto=AI 自动 / manual=人工 / semi=半自动（与 NC 规则对齐）
@@ -52,7 +52,6 @@
 
 <script setup lang="ts">
 import WorkflowDesigner from '@share/components/workflow/WorkflowDesigner.vue'
-import { CORE_ORG_STD_ENV } from '@share/constants/coreOrgCodes'
 import { ElMessage } from 'element-plus'
 
 function onSaveSuccess(result: any) {

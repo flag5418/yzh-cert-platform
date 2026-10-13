@@ -67,8 +67,6 @@ namespace CertPlatform.Shared.Entities.Dir
         [SugarColumn(ColumnDataType = "text", IsNullable = true)]
         public string? Description { get; set; }
 
-        public int SortOrder { get; set; } = 0;
-
         public bool ExtractionEnabled { get; set; } = false;
 
         [SugarColumn(ColumnDataType = "text", IsNullable = true)]
@@ -190,9 +188,6 @@ namespace CertPlatform.Shared.Entities.Dir
 
         [SugarColumn(Length = 20, IsNullable = true)]
         public string? Status { get; set; } = "draft";
-
-        [SugarColumn(Length = 20, IsNullable = true)]
-        public string? StatusField { get; set; } = "active";
 
         public int Sort { get; set; } = 0;
 

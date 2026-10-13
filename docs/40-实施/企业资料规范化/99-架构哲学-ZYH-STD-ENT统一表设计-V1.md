@@ -1,7 +1,13 @@
+---
+status: archived
+updated: 2026-10-13
+# 允许过时，读时自行核对实现
+---
+
 # YZH-STD-ENT 统一表架构哲学
 
 > **版本**：V1 | **日期**：2026-09-27 | **状态**：架构决策记录
-> **相关文档**：`14-需求深化讨论收敛与增补设计-V1.md` §2、`README.md` D11
+> **相关文档**：`README.md` D11 · ⚠️ `14-需求深化讨论收敛与增补设计-V1.md` §2 **已归档**至 `../../90-归档/旧版本/归档-2026-10-13-企业资料规范化清理/讨论与评估/`
 
 ---
 
@@ -194,7 +200,7 @@ YZH-STD-ENT 模式已在以下模块应用：
 - **2026-09-25**：裁决删除 `ent_*` 表，要求新表统一使用 `cert_` 前缀
 - **2026-09-27**：13 号分册实施 `YZH-STD-ENT` 统一表架构；14 号文档经 8 轮讨论后确认此为故意设计
 - **2026-09-28**：P13 裁定 `EnterpriseCode` **禁 NULL**（改 `NOT NULL DEFAULT ''`，存量回填常量）；P16 裁定 config 唯一键为**四列**（含 `OrgCode`）——见 `scripts/db/20260928_enterprise_file_uk4_V1.sql`
-- **2026-09-30**：本册勘误（常量名 `YzhVirtualEnterprise.Code`、企业侧值 = `cert_enterprise.Code`、查询谓词去 `IS NULL` 分支），见 `15-全册评估报告-V1.md` §三 R-02 / R-04 / R-14
+- **2026-09-30**：本册勘误（常量名 `YzhVirtualEnterprise.Code`、企业侧值 = `cert_enterprise.Code`、查询谓词去 `IS NULL` 分支），见 `15-全册评估报告-V2.md` §三 R-02 / R-04 / R-14
 
 ---
 

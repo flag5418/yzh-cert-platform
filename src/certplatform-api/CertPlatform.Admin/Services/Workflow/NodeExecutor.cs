@@ -436,13 +436,13 @@ namespace CertPlatform.Admin.Services.Workflow
             var docType = config.GetValueOrDefault("docType")?.ToString() ?? "standard";
             var enterpriseCode = contextParams?.GetValueOrDefault("enterpriseCode")?.ToString() ?? "";
             if (string.IsNullOrEmpty(enterpriseCode))
-                enterpriseCode = CoreOrgCodes.StdEnv;
+                enterpriseCode = "";
             var standardCode = contextParams?.GetValueOrDefault("standardCode")?.ToString() ?? "";
             // ★ 2026-09-30 修 B1：上下文键是 phaseCode，cert_extraction_result 的列是 StageCode。
             //   值口径已统一为 GUID（wf_execution_task.PhaseCode 已扩到 varchar(36），执行器改传 GUID）。
             var stageCode = contextParams?.GetValueOrDefault("phaseCode")?.ToString() ?? "";
 
-            var source = enterpriseCode == CoreOrgCodes.StdEnv ? "sample_data" : "enterprise_doc";
+            var source = enterpriseCode == "" ? "sample_data" : "enterprise_doc";
 
             _wfLogger.DocFieldQuery(ruleCode, fieldCode, docType, enterpriseCode);
 
@@ -519,11 +519,11 @@ namespace CertPlatform.Admin.Services.Workflow
             var docType = config.GetValueOrDefault("docType")?.ToString() ?? "standard";
             var enterpriseCode = contextParams?.GetValueOrDefault("enterpriseCode")?.ToString() ?? "";
             if (string.IsNullOrEmpty(enterpriseCode))
-                enterpriseCode = CoreOrgCodes.StdEnv;
+                enterpriseCode = "";
             var standardCode = contextParams?.GetValueOrDefault("standardCode")?.ToString() ?? "";
             var stageCode = contextParams?.GetValueOrDefault("phaseCode")?.ToString() ?? "";
 
-            var source = enterpriseCode == CoreOrgCodes.StdEnv ? "sample_data" : "enterprise_doc";
+            var source = enterpriseCode == "" ? "sample_data" : "enterprise_doc";
 
             _wfLogger.DocTableQuery(ruleCode, tableCode, docType, enterpriseCode);
 
@@ -743,7 +743,7 @@ namespace CertPlatform.Admin.Services.Workflow
             // ★ 与 docField / docTable 同口径：企业从上下文取，取不到回落虚拟企业（样例数据路径）
             var enterpriseCode = contextParams?.GetValueOrDefault("enterpriseCode")?.ToString() ?? "";
             if (string.IsNullOrWhiteSpace(enterpriseCode))
-                enterpriseCode = CoreOrgCodes.StdEnv;
+                enterpriseCode = "";
 
             // ⛔ 不传 standard_code / stage_code（见方法注释：二次过滤会静默滤掉正确行）
             var inputs = new Dictionary<string, object>

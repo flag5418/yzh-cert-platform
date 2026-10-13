@@ -88,7 +88,7 @@ public class StandardDirectoryService
         // CertStage 是机构-阶段关联的权威来源（cert_org_stage.StageCode ★Q2 起存 Code/GUID）
         // 与「认证阶段定义」页（/cert/cert-stage）同源
         var phaseDefs = (await _core.GetStagesAsync())
-                        .OrderBy(x => x.SortOrder).ThenBy(x => x.StageCode).ToList();
+                        .OrderBy(x => x.Sort).ThenBy(x => x.StageCode).ToList();
 
         // 目录配置 Code 索引：前端阶段节点用它作为 DirectoryCode（决策 ⑳修订：按机构隔离）
         var configs = (await _db.GetListAsync<StandardDirectoryConfig>(x => x.IsValid == 1)).Data ?? new();
@@ -139,7 +139,7 @@ public class StandardDirectoryService
                         && (x.StandardCode == null || x.StandardCode == std.Code))
                     .Select(x => x.StageCode).ToHashSet();
 
-                // CertStage 是权威数据源，按 SortOrder 排序展示
+                // CertStage 是权威数据源，按 Sort 排序展示
                 // ★ Q2：org_stage.StageCode 已统一为 Code(GUID) ⇒ 与 p.Code 比对，⛔ 不再用业务码 p.StageCode
                 var linkedPhases = phaseDefs
                     .Where(p => orgStageCodes.Contains(p.Code))
@@ -150,11 +150,11 @@ public class StandardDirectoryService
                     // ★ 键必须是 org + phase.Code（cert_cert_stage.Code，GUID）——
                     //   config.StageCode 存的是该 GUID（见迁移脚本列注释），不是 'jd01' 这种 StageCode；
                     //   决策⑳修订后主键含 OrgCode ⇒ 键必须带机构，否则机构 A 的配置会被机构 B 命中。
-                    // ★ 2026-10-12 终裁：模板行 OrgCode 已迁 'yzh-std-env'（后台标准级，
-                    //   全机构共享同一套目录模板）⇒ 先按「机构行」查（兼容未来机构级定制列），
-                    //   未命中再按「后台模板行」查 —— 否则任何机构节点都拿不到 configCode（静默断链）。
+                    // ★ 2026-10-13 归属模型 V2：config.OrgCode = 机构 Code（空 = 平台通用模板）
+                    //   ⇒ 先按「本机构行」查，未命中再按「平台通用行」（OrgCode 空）查 ——
+                    //   否则任何机构节点都拿不到 configCode（静默断链）。
                     if (!configCodeMap.TryGetValue($"{org.Code}|{std.Code}|{phase.Code}", out var configCode))
-                        configCodeMap.TryGetValue($"{CoreOrgCodes.StdEnv}|{std.Code}|{phase.Code}", out configCode);
+                        configCodeMap.TryGetValue($"|{std.Code}|{phase.Code}", out configCode);
                     var phaseNode = new Dictionary<string, object>
                     {
                         ["id"] = $"{org.Code}|{std.StandardCode}|{phase.StageCode}",
@@ -465,24 +465,13 @@ public class StandardDirectoryService
     public async Task<(bool ok, string? error, StandardDirectoryConfig? data)> CreateConfigAsync(
         StandardDirectoryConfig config)
     {
-        // ★ 2026-10-13 终裁（承接 10-12 两值模型 + 机构专用列 OwnerOrgCode）：
-        //   模板行（EnterpriseCode 空）⇒ OrgCode 统一 'yzh-std-env'（后台域标记），
-        //   调用方传的具体机构**改落 OwnerOrgCode**（⛔ 不能丢 —— 否则目录归属无法定位、
-        //   路径身份段与存量分叉）。企业行（EnterpriseCode 有值）不在本裁决范围，OrgCode 原样。
-        if (string.IsNullOrWhiteSpace(config.EnterpriseCode))
-        {
-            if (string.IsNullOrWhiteSpace(config.OwnerOrgCode)
-                && !string.IsNullOrWhiteSpace(config.OrgCode)
-                && !OrgScope.IsBackendBuilt(config.OrgCode))
-                config.OwnerOrgCode = config.OrgCode;
-            config.OrgCode = CoreOrgCodes.StdEnv;
-        }
-        // 机构维度兜底：未给具体机构 ⇒ 记「不特指机构」（空串），⛔ 不留 NULL
-        config.OwnerOrgCode ??= string.Empty;
+        // ★ 2026-10-13 归属模型 V2：OrgCode 就是机构 Code（空 = 平台通用模板），
+        //   调用方传什么就存什么 —— ⛔ 不再有 OwnerOrgCode 中转、⛔ 不再写 yzh-std-env。
+        config.OrgCode ??= string.Empty;
+        config.EnterpriseCode ??= string.Empty;
 
-        // 业务键必填（决策⑳修订：四键 uk = OwnerOrgCode + EnterpriseCode + StandardCode + StageCode）
-        if (string.IsNullOrWhiteSpace(config.OrgCode))
-            return (false, "缺少业务键：请选择机构（OrgCode）", null);
+        // 业务键必填（决策⑳修订：四键 uk = OrgCode + EnterpriseCode + StandardCode + StageCode）
+        //   ⚠️ OrgCode 允许为空（平台通用模板）—— 故不在此校验。
         if (string.IsNullOrWhiteSpace(config.StandardCode))
             return (false, "缺少业务键：请选择标准（StandardCode）", null);
         if (string.IsNullOrWhiteSpace(config.StageCode))
@@ -491,11 +480,11 @@ public class StandardDirectoryService
         // ★⑬/§11.1：uk_org_std_stage 不含 IsDeleted → 建前必须「含已删」查重，命中已删行就地复活；
         //   ⛔ 不能只靠下面的 1062 兜底 —— 默认过滤把已删行藏起来，用户会看到
         //   「已存在」却在列表里找不到那行（删 → 再建永远失败）。
-        // ★ 2026-10-13：查重口径 = 唯一键原文（OwnerOrgCode + EnterpriseCode + StandardCode + StageCode）。
+        // ★ 2026-10-13：查重口径 = 唯一键原文（OrgCode + EnterpriseCode + StandardCode + StageCode）。
         //   ⚠️ 补 EnterpriseCode 是修一个既有缺陷：原口径漏了它 ⇒ 同机构同标准同阶段、不同企业的
         //     企业目录会被误判「已存在」，且复活分支不回写 EnterpriseCode ⇒ 复活出错误归属的行。
         var existing = await _db.Client.Queryable<StandardDirectoryConfig>()
-            .Where(x => x.OwnerOrgCode == config.OwnerOrgCode
+            .Where(x => x.OrgCode == config.OrgCode
                      && x.EnterpriseCode == config.EnterpriseCode
                      && x.StandardCode == config.StandardCode && x.StageCode == config.StageCode)
             .FirstAsync();
@@ -511,7 +500,6 @@ public class StandardDirectoryService
             existing.IsValid = 1;
             existing.RootFolderName = config.RootFolderName;
             existing.Status = "draft";
-            existing.StatusField = config.StatusField ?? existing.StatusField;
             existing.Sort = config.Sort;
             existing.Remark = config.Remark;
             existing.UpdateTime = DateTime.Now;
@@ -519,7 +507,7 @@ public class StandardDirectoryService
                 nameof(StandardDirectoryConfig.IsDeleted), nameof(StandardDirectoryConfig.DeleteBy),
                 nameof(StandardDirectoryConfig.DeleteTime), nameof(StandardDirectoryConfig.IsValid),
                 nameof(StandardDirectoryConfig.RootFolderName), nameof(StandardDirectoryConfig.Status),
-                nameof(StandardDirectoryConfig.StatusField), nameof(StandardDirectoryConfig.Sort),
+                nameof(StandardDirectoryConfig.Sort),
                 nameof(StandardDirectoryConfig.Remark), nameof(StandardDirectoryConfig.UpdateTime));
             return (true, null, existing);
         }
@@ -539,7 +527,7 @@ public class StandardDirectoryService
         }
         catch (Exception ex) when (IsDuplicateKeyError(ex))
         {
-            // 唯一键 uk_owner_std_stage(OwnerOrgCode, EnterpriseCode, StandardCode, StageCode)
+            // 唯一键 uk_org_ent_std_stage(OrgCode, EnterpriseCode, StandardCode, StageCode)
             return (false, "该机构、标准与阶段的目录配置已存在", null);
         }
     }
@@ -565,20 +553,19 @@ public class StandardDirectoryService
         if (string.IsNullOrWhiteSpace(stageCode))
             return (false, "缺少业务键：阶段 StageCode", null);
 
-        // ★ 2026-10-13：机构维度已落 OwnerOrgCode ⇒ 机构键**可直接命中**（⛔ 不再是「必然未命中」）。
+        // ★ 2026-10-13 归属模型 V2：机构维度就在 OrgCode ⇒ 机构键可直接命中。
         var query = () => _db.Client.Queryable<StandardDirectoryConfig>()
-            .Where(x => x.OwnerOrgCode == orgCode
+            .Where(x => x.OrgCode == orgCode
                      && x.StandardCode == standardCode && x.StageCode == stageCode);
 
         var existing = await query().FirstAsync();
 
-        // 兜底：前端传具体机构但该机构无自有模板 ⇒ 回退「不特指机构」的平台通用模板
-        //   （OwnerOrgCode 为空）。⛔ 不要回退到 OrgCode='yzh-std-env' —— 那是后台域标记，
-        //   对所有机构都一样，会命中任意机构的模板。
+        // 兜底：前端传具体机构但该机构无自有模板 ⇒ 回退「平台通用模板」（OrgCode 为空）。
+        //   ⛔ 不要回退到「任意机构」—— 那会让机构 A 命中机构 B 的模板。
         if (existing == null)
         {
             existing = await _db.Client.Queryable<StandardDirectoryConfig>()
-                .Where(x => x.OwnerOrgCode == ""
+                .Where(x => x.OrgCode == ""
                          && x.StandardCode == standardCode && x.StageCode == stageCode)
                 .FirstAsync();
         }
@@ -597,7 +584,7 @@ public class StandardDirectoryService
         var again = await query().FirstAsync();
         if (again == null)
             again = await _db.Client.Queryable<StandardDirectoryConfig>()
-                .Where(x => x.OwnerOrgCode == ""
+                .Where(x => x.OrgCode == ""
                          && x.StandardCode == standardCode && x.StageCode == stageCode)
                 .FirstAsync();
         if (again != null) return (true, null, again);
@@ -605,20 +592,19 @@ public class StandardDirectoryService
     }
 
     /// <summary>
-    /// ★ 路径<b>身份段</b> = 目录归属机构（<c>OwnerOrgCode</c>）。
+    /// ★ 路径<b>身份段</b> = 目录归属机构（<c>config.OrgCode</c>）。
     ///
-    /// <para><b>★ 2026-10-13（修路径分裂）</b>：⛔ <b>不要</b>再用 <c>config.OrgCode</c> ——
-    /// 它已统一为后台域标记（<c>yzh-std-env</c>），用它会让新建产物的前缀变成
-    /// <c>/standard-directory/yzh-std-env/…</c>，而存量是 <c>/standard-directory/906e8b2a…/…</c>
-    /// ⇒ 同一逻辑目录两套物理前缀（旧对象成孤儿）。</para>
+    /// <para><b>★ 2026-10-13 归属模型 V2</b>：<c>OrgCode</c> 就是机构 Code ⇒ 直接用它，
+    /// 与存量 <c>/standard-directory/906e8b2a…/…</c> 前缀一致（⛔ 不会再分叉）。</para>
     ///
-    /// <para>回退顺序：<c>OwnerOrgCode</c>（机构维度）→ <c>OrgCode</c>（企业行仍存机构 Code 的遗留形态）
-    /// → <c>yzh-std-env</c>（兜底，不特指机构）。</para>
+    /// <para>⚠️ <b>平台通用模板（OrgCode 空）没有身份段</b> —— 这类配置当前 0 文件
+    /// （实测 <c>464d1b41…</c>），故直接抛异常而非静默回退（⛔ 不留静默口子）。</para>
     /// </summary>
     private static string OwnerSeg(StandardDirectoryConfig config)
-        => !string.IsNullOrWhiteSpace(config.OwnerOrgCode)
-            ? config.OwnerOrgCode
-            : (string.IsNullOrWhiteSpace(config.OrgCode) ? CoreOrgCodes.StdEnv : config.OrgCode);
+        => !string.IsNullOrWhiteSpace(config.OrgCode)
+            ? config.OrgCode
+            : throw new InvalidOperationException(
+                $"目录配置 {config.Code} 无机构身份段（OrgCode 为空 = 平台通用模板，不参与文件路径）");
 
     /// <summary>
     /// 更新目录配置。
@@ -633,7 +619,6 @@ public class StandardDirectoryService
 
         existing.RootFolderName = input.RootFolderName;
         existing.Status = input.Status;
-        existing.StatusField = input.StatusField;
         existing.Sort = input.Sort;
         existing.Remark = input.Remark;
         existing.IsValid = input.IsValid;
@@ -642,7 +627,6 @@ public class StandardDirectoryService
         var result = await _db.UpdateAsync(existing,
             nameof(StandardDirectoryConfig.RootFolderName),
             nameof(StandardDirectoryConfig.Status),
-            nameof(StandardDirectoryConfig.StatusField),
             nameof(StandardDirectoryConfig.Sort),
             nameof(StandardDirectoryConfig.Remark),
             nameof(StandardDirectoryConfig.IsValid),
@@ -733,7 +717,7 @@ public class StandardDirectoryService
             x => x.ConfigCode == directoryCode && x.IsValid == 1)).Data ?? new();
 
         var rootFolders = folders.Where(x => string.IsNullOrEmpty(x.ParentCode))
-            .OrderBy(x => x.SortOrder).ToList();
+            .OrderBy(x => x.Sort).ToList();
 
         foreach (var root in rootFolders)
             root.Children = GetChildFolders(folders, root.Code ?? "", new HashSet<string>(), 0);
@@ -807,7 +791,7 @@ public class StandardDirectoryService
     {
         if (depth > MAX_TREE_DEPTH || visited.Count > MAX_TREE_NODES) return new();
         var children = allFolders.Where(x => x.ParentCode == parentCode && !visited.Contains(x.Code ?? ""))
-            .OrderBy(x => x.SortOrder).ToList();
+            .OrderBy(x => x.Sort).ToList();
         foreach (var child in children)
         {
             if (child.Code != null) visited.Add(child.Code);
@@ -824,7 +808,7 @@ public class StandardDirectoryService
     /// <summary>
     /// 创建文件夹。
     /// <para>★ P1-21/P1-22 修复：复合编码 <c>FD-…</c> 已删除 —— 业务键即 <c>Code</c>（GUID）；
-    /// 序号改为按 <c>(ConfigCode, ParentCode)</c> 取 <c>MAX(SortOrder)</c>；
+    /// 序号改为按 <c>(ConfigCode, ParentCode)</c> 取 <c>MAX(Sort)</c>；
     /// 唯一冲突不再「静默改序号重试 100 次」，而是先查重并明确报错。</para>
     /// </summary>
     public async Task<(bool ok, string? error, StandardDirectoryFolder? folder)> CreateFolderAsync(
@@ -853,19 +837,19 @@ public class StandardDirectoryService
             duplicate.DeleteTime = null;
             duplicate.IsValid = 1;
             duplicate.Status = "draft";
-            duplicate.SortOrder = await GetMaxSortOrderAsync(folder.ConfigCode ?? "", folder.ParentCode) + 1;
+            duplicate.Sort = await GetMaxSortOrderAsync(folder.ConfigCode ?? "", folder.ParentCode) + 1;
             duplicate.FullPath = await BuildFolderFullPathAsync(duplicate);
             duplicate.UpdateTime = DateTime.Now;
             await _db.UpdateAsync(duplicate,
                 nameof(StandardDirectoryFolder.IsDeleted), nameof(StandardDirectoryFolder.DeleteBy),
                 nameof(StandardDirectoryFolder.DeleteTime), nameof(StandardDirectoryFolder.IsValid),
-                nameof(StandardDirectoryFolder.Status), nameof(StandardDirectoryFolder.SortOrder),
+                nameof(StandardDirectoryFolder.Status), nameof(StandardDirectoryFolder.Sort),
                 nameof(StandardDirectoryFolder.FullPath), nameof(StandardDirectoryFolder.UpdateTime));
             return (true, null, duplicate);
         }
 
         folder.Code = Guid.NewGuid().ToString("N");
-        folder.SortOrder = await GetMaxSortOrderAsync(folder.ConfigCode ?? "", folder.ParentCode) + 1;
+        folder.Sort = await GetMaxSortOrderAsync(folder.ConfigCode ?? "", folder.ParentCode) + 1;
         folder.FullPath = await BuildFolderFullPathAsync(folder);
         folder.IsValid = 1;
         folder.Status = "draft";
@@ -1006,7 +990,7 @@ public class StandardDirectoryService
     }
 
     /// <summary>
-    /// 同层最大序号：按 <c>(ConfigCode, ParentCode)</c> 取 <c>MAX(SortOrder)</c>。
+    /// 同层最大序号：按 <c>(ConfigCode, ParentCode)</c> 取 <c>MAX(Sort)</c>。
     /// <para>★ P1-21 修复：原实现按 <c>Depth</c> 过滤 + <c>Split('|')</c> 反解复合码 ——
     /// 复合码已删，且同层不同父共享序号空间。决策 ⑦ 下序号仅作展示排序，不再参与编码。</para>
     /// </summary>
@@ -1016,7 +1000,7 @@ public class StandardDirectoryService
         var folders = (await _db.GetListAsync<StandardDirectoryFolder>(
             x => x.ConfigCode == configCode && x.ParentCode == parentCode,
             includeDisabled: true)).Data ?? new();
-        return folders.Count == 0 ? 0 : folders.Max(x => x.SortOrder);
+        return folders.Count == 0 ? 0 : folders.Max(x => x.Sort);
     }
 
     /// <summary>
@@ -1101,7 +1085,7 @@ public class StandardDirectoryService
     ///
     /// <para><b>★ 2026-10-13 口径统一（重要，修订 10-12 版）</b>：模板行判据 = <c>EnterpriseCode</c> <b>为空</b>
     /// （语义入口 <c>OrgScope.IsEnterpriseRow</c>）。⛔ <b>不再是</b>机构常量
-    /// （<c>CoreOrgCodes.StdEnv</c> 或旧 <c>YZH-STD-ENT</c>）—— <b>机构与企业是两个维度</b>，
+    /// （<c>''</c> 或旧 <c>YZH-STD-ENT</c>）—— <b>机构与企业是两个维度</b>，
     /// 机构值不得填进企业列（守卫 <b>A-R11</b>）。</para>
     ///
     /// <para><b>⚠️ 实测状态（2026-10-12）</b>：本表当前共 23 行，<b>全部是「机构标准目录行」</b>
@@ -1122,7 +1106,7 @@ public class StandardDirectoryService
                         || string.Equals(x.StandardCode, standardCode, StringComparison.OrdinalIgnoreCase))
             .Where(x => string.IsNullOrWhiteSpace(stageCode)
                         || string.Equals(x.StageCode, stageCode, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(x => x.SortOrder)
+            .OrderBy(x => x.Sort)
             .ThenBy(x => x.FileName, StringComparer.Ordinal)
             .ToList();
     }
@@ -1399,7 +1383,7 @@ public class StandardDirectoryService
             && !string.IsNullOrEmpty(manifest.PhaseCode))
         {
             config = (await _db.GetOneAsync<StandardDirectoryConfig>(
-                x => x.OrgCode == CoreOrgCodes.StdEnv
+                x => x.OrgCode == ""
                   && x.StandardCode == manifest.StandardCode && x.StageCode == manifest.PhaseCode)).Data;
         }
         if (config == null)
@@ -1491,7 +1475,7 @@ public class StandardDirectoryService
                         ParentCode = parentCode ?? string.Empty, // 决策 ⑨：根 ParentCode 用 ''
                         FolderName = folderName,
                         Depth = depth,
-                        SortOrder = seqCounter++,
+                        Sort = seqCounter++,
                         IsValid = 0,
                         TaskId = taskId,
                         FullPath = folder.Path,
@@ -1547,8 +1531,7 @@ public class StandardDirectoryService
                     && x.FullPath == fullPath && x.IsValid == 1)).Data;
 
             // ★ 路径唯一权威：PathBuilder（身份段 = 归属机构 + StandardCode + StageCode 原文）
-            //   ⚠️ 2026-10-13：身份段取 OwnerSeg(config)（OwnerOrgCode 优先）——
-            //   ⛔ 不是 config.OrgCode（它已统一为 yzh-std-env，会让新旧产物前缀分叉）
+            //   ⚠️ 2026-10-13 归属模型 V2：身份段 = config.OrgCode（机构 Code），与存量前缀一致
             var storagePath = PathBuilder.StandardFile(
                 OwnerSeg(config), config.StandardCode, config.StageCode, parentDir, fileName);
 
@@ -2217,7 +2200,7 @@ public class StandardDirectoryService
         // 4. 构建根级文件夹树
         var rootFolders = allFolders
             .Where(x => string.IsNullOrEmpty(x.ParentCode))
-            .OrderBy(x => x.SortOrder).ToList();
+            .OrderBy(x => x.Sort).ToList();
 
         var folderNodes = new List<StageFolderNode>();
         int totalFolders = 0, totalFiles = 0, configuredFiles = 0;
@@ -2242,7 +2225,7 @@ public class StandardDirectoryService
                 Name = "根目录",
                 ParentCode = string.Empty,
                 Depth = 0,
-                SortOrder = 0
+                Sort = 0
             };
             foreach (var file in rootOrphanFiles)
             {
@@ -2309,7 +2292,7 @@ public class StandardDirectoryService
             Name = folder.FolderName ?? "",
             ParentCode = folder.ParentCode ?? "",
             Depth = folder.Depth,
-            SortOrder = folder.SortOrder
+            Sort = folder.Sort
         };
 
         // ★ P0-6：环 / 超深直接停在当前层（节点已建，只是不再向下递归）
@@ -2318,7 +2301,7 @@ public class StandardDirectoryService
         // 子文件夹
         var children = allFolders
             .Where(x => x.ParentCode == folder.Code)
-            .OrderBy(x => x.SortOrder).ToList();
+            .OrderBy(x => x.Sort).ToList();
         foreach (var child in children)
             node.Children.Add(BuildStageFolderNode(child, allFolders, allFiles, ruleStatusMap,
                 ref totalFolders, ref totalFiles, ref configuredFiles, visited, depth + 1));
@@ -2326,7 +2309,7 @@ public class StandardDirectoryService
         // 文件
         var files = allFiles
             .Where(x => x.FolderCode == folder.Code)
-            .OrderBy(x => x.SortOrder).ToList();
+            .OrderBy(x => x.Sort).ToList();
         foreach (var file in files)
         {
             totalFiles++;
@@ -3387,7 +3370,7 @@ public class StageFolderNode
     public string Name { get; set; } = "";
     public string ParentCode { get; set; } = "";
     public int Depth { get; set; }
-    public int SortOrder { get; set; }
+    public int Sort { get; set; }
     public List<StageFolderNode> Children { get; set; } = new();
     public List<StageFileNode> Files { get; set; } = new();
 }

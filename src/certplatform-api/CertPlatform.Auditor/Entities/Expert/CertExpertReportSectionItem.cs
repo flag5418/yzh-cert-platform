@@ -33,7 +33,7 @@ namespace CertPlatform.Auditor.Entities.Expert
         [SugarColumn(Length = 50, IsNullable = true)]
         public string? Status { get; set; }
 
-        /// <summary>排序号（SortOrder 快照）</summary>
+        /// <summary>排序号（Sort 快照）</summary>
         public int Sort { get; set; }
 
         /// <summary>备注</summary>

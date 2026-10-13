@@ -22,7 +22,6 @@ import {
   updateDirectoryConfig,
   deleteDirectoryConfig,
 } from '@share/composables/useDirectoryApi'
-import { CORE_ORG_STD_ENV } from '@share/constants/coreOrgCodes'
 import type { StandardDirectoryConfig, ISOStandard, CertStage, CertificationBody } from '@share/types'
 
 const emit = defineEmits<{ (e: 'changed'): void }>()
@@ -51,7 +50,7 @@ const form = reactive<{
   status: string
 }>({
   code: '',
-  orgCode: CORE_ORG_STD_ENV,
+  orgCode: '',
   standardCode: '',
   stageCode: '',
   rootFolderName: '',
@@ -80,9 +79,8 @@ async function loadOptions() {
 }
 
 function orgLabel(code: string): string {
-  if (!code) return '--'
-  // ★ 2026-10-12 终裁：StdEnv = 后台标准级模板行（全机构共享）
-  if (code === CORE_ORG_STD_ENV) return '平台模板'
+  // ★ 2026-10-13 归属模型 V2：OrgCode = 机构 Code；空 = 平台通用模板（不特指机构）
+  if (!code) return '平台通用模板'
   const b = bodies.value.find((x) => x.Code === code)
   return b ? b.Name || code : code
 }
@@ -113,8 +111,8 @@ async function loadConfigs() {
 
 function resetForm() {
   form.code = ''
-  // ★ 2026-10-12 终裁：模板行归属恒为后台标准级，不再由用户选机构
-  form.orgCode = CORE_ORG_STD_ENV
+  // ★ 2026-10-13 归属模型 V2：OrgCode = 机构 Code（空 = 平台通用模板）
+  form.orgCode = ''
   form.standardCode = ''
   form.stageCode = ''
   form.rootFolderName = ''
@@ -123,7 +121,8 @@ function resetForm() {
 
 function handleAdd() {
   resetForm()
-  // ⚠️ presetOrgCode 不再写入 orgCode —— 机构不参与目录归属（终裁两值模型）
+  // ★ 2026-10-13 归属模型 V2：机构回归目录归属（OrgCode）⇒ 预填当前选中机构
+  if (props.presetOrgCode) form.orgCode = props.presetOrgCode
   if (props.presetStandardCode) form.standardCode = props.presetStandardCode
   if (props.presetStageCode) form.stageCode = props.presetStageCode
   dialogVisible.value = true
@@ -140,11 +139,7 @@ function handleEdit(row: StandardDirectoryConfig) {
 }
 
 async function handleSubmit() {
-  if (!form.orgCode) {
-    // 防御：form.orgCode 恒为 CORE_ORG_STD_ENV（2026-10-12 终裁），不应走到这里
-    ElMessage.warning('归属缺失（OrgCode）')
-    return
-  }
+  // ★ 2026-10-13 归属模型 V2：OrgCode 允许为空（= 平台通用模板）⇒ 不再强制校验
   if (!form.standardCode) {
     ElMessage.warning('请选择标准')
     return

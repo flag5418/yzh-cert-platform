@@ -39,7 +39,7 @@ public class DirectoryTemplateService
             x => x.ConfigCode == configCode)).Data ?? new();
 
         return all.Where(x => string.IsNullOrEmpty(x.ParentCode))
-            .OrderBy(x => x.SortOrder).ToList();
+            .OrderBy(x => x.Sort).ToList();
     }
 
     public async Task<(bool ok, string? error, DirectoryTemplate? folder)> AddFolderAsync(
@@ -58,7 +58,7 @@ public class DirectoryTemplateService
         if (existing == null) return (false, "文件夹不存在");
 
         existing.FolderName = folder.FolderName;
-        existing.SortOrder = folder.SortOrder;
+        existing.Sort = folder.Sort;
         await _db.UpdateAsync(existing);
         return (true, null);
     }

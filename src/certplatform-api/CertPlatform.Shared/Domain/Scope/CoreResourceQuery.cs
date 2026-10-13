@@ -30,7 +30,7 @@ namespace CertPlatform.Shared.Domain.Scope;
 /// <c>NcConcludePrompt</c> / <c>DirectoryTemplate</c> / <c>FileRequirement</c>
 /// 待阶段 2/3 下沉后再纳入（<c>Shared</c> ⛔ 不能引 <c>Admin</c>）。</para>
 ///
-/// <para><b>⚠️ 机构判据</b>：本接口内的 <c>OrgCode</c> 过滤一律用 <see cref="CoreOrgCodes.StdEnv"/>
+/// <para><b>⚠️ 机构判据</b>：本接口内的 <c>OrgCode</c> 过滤一律用 <see cref="''"/>
 /// 常量（⛔ 不用 <c>NULL</c> / <c>''</c>）；内存判断用 <see cref="OrgScope"/>。</para>
 /// </summary>
 public interface ICoreResourceQuery
@@ -55,7 +55,7 @@ public interface ICoreResourceQuery
     /// <summary>按 <c>Code</c> 单查标准（未命中返回 <c>null</c>）。</summary>
     Task<ISOStandard?> GetStandardByCodeAsync(string? standardCode);
 
-    /// <summary>取指定标准下的条款（按 <c>SortOrder</c> 升序）。<paramref name="standardCode"/> = 标准 <c>Code</c>（GUID）。</summary>
+    /// <summary>取指定标准下的条款（按 <c>Sort</c> 升序）。<paramref name="standardCode"/> = 标准 <c>Code</c>（GUID）。</summary>
     Task<List<ISOClause>> GetClausesAsync(string standardCode);
 
     /// <summary>按条款 <c>Code</c> 单查条款（未命中返回 <c>null</c>）。</summary>
@@ -159,13 +159,13 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
     {
         if (string.IsNullOrWhiteSpace(enterpriseCode))
         {
-            var backend = await _db.GetListAsync<ISOStandard>(x => x.OrgCode == CoreOrgCodes.StdEnv);
+            var backend = await _db.GetListAsync<ISOStandard>(x => x.OrgCode == "");
             return backend.Data ?? new List<ISOStandard>();
         }
 
         var ent = enterpriseCode;
         var both = await _db.GetListAsync<ISOStandard>(
-            x => x.OrgCode == CoreOrgCodes.StdEnv || x.OrgCode == ent);
+            x => x.OrgCode == "" || x.OrgCode == ent);
         return both.Data ?? new List<ISOStandard>();
     }
 
@@ -278,7 +278,7 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         // ⚠️ null = 该维不限；传值（含空串）= 「通配 + 等值」—— 与端内既有谓词逐字一致。
         if (standardCode == null && stageCode == null)
         {
-            var all = await _db.GetListAsync<FillParamDef>(x => x.OrgCode == CoreOrgCodes.StdEnv);
+            var all = await _db.GetListAsync<FillParamDef>(x => x.OrgCode == "");
             return all.Data ?? new List<FillParamDef>();
         }
 
@@ -286,7 +286,7 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         {
             var sc = standardCode;
             var rows = await _db.GetListAsync<FillParamDef>(
-                x => x.OrgCode == CoreOrgCodes.StdEnv && (x.StandardCode == "" || x.StandardCode == sc));
+                x => x.OrgCode == "" && (x.StandardCode == "" || x.StandardCode == sc));
             return rows.Data ?? new List<FillParamDef>();
         }
 
@@ -294,14 +294,14 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         {
             var stc = stageCode;
             var rows = await _db.GetListAsync<FillParamDef>(
-                x => x.OrgCode == CoreOrgCodes.StdEnv && (x.StageCode == "" || x.StageCode == stc));
+                x => x.OrgCode == "" && (x.StageCode == "" || x.StageCode == stc));
             return rows.Data ?? new List<FillParamDef>();
         }
 
         var sc2 = standardCode;
         var stc2 = stageCode;
         var both = await _db.GetListAsync<FillParamDef>(
-            x => x.OrgCode == CoreOrgCodes.StdEnv
+            x => x.OrgCode == ""
                 && (x.StandardCode == "" || x.StandardCode == sc2)
                 && (x.StageCode == "" || x.StageCode == stc2));
         return both.Data ?? new List<FillParamDef>();
@@ -309,7 +309,7 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
 
     public async Task<List<DocFillPrompt>> GetDocFillPromptsAsync(string? orgCode = null)
     {
-        var org = string.IsNullOrWhiteSpace(orgCode) ? CoreOrgCodes.StdEnv : orgCode!;
+        var org = string.IsNullOrWhiteSpace(orgCode) ? "" : orgCode!;
         var rows = await _db.GetListAsync<DocFillPrompt>(x => x.OrgCode == org);
         return rows.Data ?? new List<DocFillPrompt>();
     }
@@ -326,7 +326,7 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
 
     public async Task<List<DocExtractionRule>> GetDocExtractionRulesAsync(string? orgCode = null)
     {
-        var org = string.IsNullOrWhiteSpace(orgCode) ? CoreOrgCodes.StdEnv : orgCode!;
+        var org = string.IsNullOrWhiteSpace(orgCode) ? "" : orgCode!;
         var rows = await _db.GetListAsync<DocExtractionRule>(x => x.OrgCode == org);
         return rows.Data ?? new List<DocExtractionRule>();
     }

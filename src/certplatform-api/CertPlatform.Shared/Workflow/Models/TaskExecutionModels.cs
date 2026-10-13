@@ -212,7 +212,7 @@ namespace CertPlatform.Shared.Workflow.Models
         /// <summary>规则编码（cert_validation_rule.Code），用于落库归属</summary>
         public string? RuleCode { get; set; }
 
-        /// <summary>企业编码（运行时绑定，缺省 = CoreOrgCodes.StdEnv 标准域）</summary>
+        /// <summary>企业编码（运行时绑定，缺省 = '' 标准域）</summary>
         public string? EnterpriseCode { get; set; }
 
         /// <summary>标准编码</summary>

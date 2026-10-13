@@ -97,7 +97,7 @@ namespace CertPlatform.Shared.Entities.Cert
         public bool IsBuiltin { get; set; }
 
         /// <summary>排序号</summary>
-        public int SortOrder { get; set; }
+        public int Sort { get; set; }
 
         /// <summary>参数说明（给企业看的填写指引）</summary>
         [StringLength(500)]

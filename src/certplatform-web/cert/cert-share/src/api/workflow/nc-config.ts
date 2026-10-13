@@ -19,14 +19,14 @@ export interface NCRule {
   CreateTime?: string
 }
 
-// ISOClause 复用 @share/types/cert 的定义（含 ParentCode/SortOrder 等全量字段），
+// ISOClause 复用 @share/types/cert 的定义（含 ParentCode/Sort 等全量字段），
 // 此处补充树形展示专用字段，避免与 api/cert/iso-clause 导出同名冲突（TS2308）
 export interface ISOClauseTreeNode {
   Code: string
   ParentCode?: string
   ClauseNumber: string
   Title: string
-  SortOrder?: number
+  Sort?: number
   /** 展示标签（ClauseNumber + Title），组树时注入 */
   Label?: string
   Children?: ISOClauseTreeNode[]

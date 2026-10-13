@@ -145,7 +145,7 @@
       "Placeholder": "AI Prompt 模板内容"
     },
     {
-      "FieldName": "SortOrder",
+      "FieldName": "Sort",
       "DesName": "排序",
       "Type": "Decimal",
       "Sxh": 7,

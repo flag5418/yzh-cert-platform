@@ -128,7 +128,7 @@ public class DocumentFillController : YzhControllerBase<FillParamValue>
             return Ok(ApiResponse<object>.Fail("无权访问其他工作区的企业"));
 
         // orgCode = 体系认证机构 Code（仅供页脚 {{@org}} 机构名查询）；
-        // ★ 参数定义全平台共享，OrgCode 恒为后台标准级 CoreOrgCodes.StdEnv
+        // ★ 参数定义全平台共享，OrgCode 恒为后台标准级 ''
         //   （2026-10-12 铁律取代 10-06「恒空串」裁决 —— 见跨端规则 §二）
         var orgCode = scope.Data.CertBodyCode;
         var stdCode = req.StandardCode ?? string.Empty;

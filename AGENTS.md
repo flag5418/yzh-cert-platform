@@ -78,6 +78,14 @@ AIGC:
 - 列宽：三列一律 ≥ `varchar(50)`（用户 Code 可为 36 位 GUID，窄列在严格模式报 1406、非严格模式**静默截断**成既非 Code 也非姓名的垃圾）；`BaseEntity` 标注 `[StringLength(64)]` 为准。
 - 守卫：`scripts/db/verify/verify_createby.sql`（**只读**，自动枚举**所有**基表的三列 + 列宽体检，期望 `C_违规 = 0`）；迁移脚本 `scripts/db/fix/20261011_createby_unify_to_usercode_V1.sql`（幂等，备份在 `_bak_usercode_20261011`）。
 
+**⑦ 排序 / 状态字段唯一写法（2026-10-13 · 违反 = 返工）**
+
+- 排序列**一律叫 `Sort`**：⛔ 禁止 `SortOrder` / `SortField`。`Sort` 是事实标准（60+ 表）。2026-10-13 已把 12 张表残留的 `SortOrder` 统一改名 / 合并为 `Sort`（双列并存时真值全在 `SortOrder`，故「删 `Sort` + `SortOrder` 改名」）。
+  - ⚠️ **例外（保留原名，⛔ 不要改）**：**分页排序方向**参数 —— `FilterRequest.SortOrder`（`'asc' | 'desc'`）、`YzhControllerBase`、`yzh.vue.core` 的 `SortOrder`、`TreeNodeViewBase.SortOrder`。它们与业务排序列无关。
+- 状态列**一律叫 `Status`**：⛔ 禁止 `StatusField`。2026-10-13 已删 3 张 dir 表（config/file/folder）的 `StatusField` 重复列 —— 它与 `Status` **值已分叉**（如 `_file`：`Status='draft'` / `StatusField='active'`），只读其中一列会得到**相反结论且不报错**。
+- 启用 / 禁用仍走 `IsValid`（见 **铁律九**），⛔ 不新增 `Enable`。
+- 守卫：DB 层无自动守卫 ⇒ 新增列前先比对本文；已清理脚本见 `scripts/db/fix/20261013_unify_fields_V1.sql`。
+
 **改完必跑**：`cd src/certplatform-web && node scripts/guards.mjs`（0 违规，**含 R12 路由↔菜单一致性 + R18/R19/R20 样式**）→ 对应端 `npm run build`（含 `vue-tsc`）。
 **动了审计人字段（`CreateBy`/`UpdateBy`/`DeleteBy`）的写入或迁移**：额外跑 `docker exec -i yzh-mysql mysql -uroot -p*** --default-character-set=utf8mb4 yzh_cert_platform < scripts/db/verify/verify_createby.sql`（期望 `C_违规 = 0`）。
 
@@ -105,7 +113,7 @@ AIGC:
 ## 快速指针（编码前必读链路）
 
 - **项目宪法**：`项目全局规则.md` — 项目概述/技术栈锁定/文档目录结构/AI 检索协议/端口规划/快速开始/禁止事项
-- **★ 跨端共享与核心资源检索铁律**（编码前必读）：`docs/30-项目规则/跨端共享与核心资源检索规则-V1.md` — `Admin`/`Shared`/`Auditor` 三方结构与依赖方向 + **`yzh-std-env` 虚拟机构铁律** + **核心资源检索唯一入口 `CoreResourceQuery`** + 守卫 `A-R1`…`A-R9` + 动手前检查清单
+- **★ 跨端共享与核心资源检索铁律**（编码前必读）：`docs/30-项目规则/跨端共享与核心资源检索规则-V1.md` — `Admin`/`Shared`/`Auditor` 三方结构与依赖方向 + **归属模型 V2（唯一分类判据 = `EnterpriseCode` 非空；平台标准级 = 两列都空）** + **核心资源检索唯一入口 `CoreResourceQuery`** + 守卫 `A-R1`…`A-R10` + 动手前检查清单
 - **项目结构与启动指南**：`docs/00-工程体系/项目结构与启动指南-V1.md` — 新旧架构路径/启动方式/端口规划/AI 检索协议
 - **文档导航**：`docs/00-工程体系/README.md` — 全项目文档索引（00/10/20/50/60/80/90 + 历史文档）
 - **★ YZH 架构唯一入口**：`docs/10-YZH架构/README.md`（← **V1 强制规范**：编码前必读，包含架构总纲/后端基类/前端基类/数据契约/权限体系/代码结构/开发流程/常见错误）
@@ -179,21 +187,23 @@ AIGC:
     - 范式文件：`cert-admin/src/pages/workflow/prompt-template/index.test.ts`（8 用例，覆盖 AI 生成自动落库 / 切换守卫 / 草稿恢复 / 状态提示 / 树高亮回拨）
     - ★ **stub 铁律**：带**作用域插槽**的组件（`el-tree` 等）stub 必须 `v-for` 渲染 `<slot :data="n" />` —— 只写 `<slot />` 会让 `#default="{ data }"` 拿到 undefined，**全部用例倒在渲染**；组件用到的指令（`v-loading`）须在 `global.directives` 补 stub
     - ⛔ 本机**无 Chromium**（`agent-browser` 未装 / playwright 缓存为空）⇒ 页面**逻辑**验证走组件测试；「页面**能否编译**」用 `curl --noproxy '*' http://127.0.0.1:9990/src/<路径>.vue`（返回 500 = Vite 编译失败 = 白屏）
-13. **★ 跨端共享与核心资源检索铁律**（2026-10-12，最高优先级，违反 = 返工）：
-    - **全文（必读）**：`docs/30-项目规则/跨端共享与核心资源检索规则-V1.md`；宪法摘要见 `项目全局规则.md` §十七。
+13. **★ 跨端共享与核心资源检索铁律**（2026-10-12 立 / 2026-10-13 归属模型 V2 修订，最高优先级，违反 = 返工）：
+    - **全文（必读）**：`docs/30-项目规则/跨端共享与核心资源检索规则-V1.md`（内容版本 V2）；宪法摘要见 `项目全局规则.md` §十七。
     - **① 三方结构**：`Admin`（后台端）与 `Auditor`（专家端）是**两个独立系统**，**互不引用**，只能通过 `CertPlatform.Shared` 共享；`Shared` **不引任何一端**。
-    - **② `yzh-std-env` 铁律**：后台标准级数据 ⇒ `OrgCode = 'yzh-std-env'`（虚拟机构），⛔ **不是** `NULL`/`''`/空格。判据**只允许**调 `OrgScope.IsBackendBuilt(orgCode)`（`Shared/Domain/Scope/OrgScope.cs`）；常量**只允许**用 `CoreOrgCodes.StdEnv`。
-      - ⛔ **明令作废**：`OrgCode == ""` / `IsNullOrEmpty(OrgCode)` / `IsNullOrWhiteSpace(OrgCode)` / `== string.Empty || == org`（2026-10-06「恒空串」裁决已被取代）。
-      - ⚠️ 旧写法「能用」**纯属侥幸**：实测 `cert_iso_clause` 用 `== ''` 查 **0 行**、用 `IS NULL OR = ''` 查 **163 行**。
+    - **② 归属模型 V2（唯一分类判据 = `EnterpriseCode` 非空）**：判「这行是谁的」**只允许**调 `OrgScope.IsEnterpriseRow(enterpriseCode)`（`Shared/Domain/Scope/OrgScope.cs`）。
+      - **三态**：`EnterpriseCode` 非空 ⇒ **企业行**（`OrgCode` 可同时带机构 Code = **冗余，合法**）；`OrgCode` 有值且 `EnterpriseCode` 空 ⇒ **机构行**；**两列都空 ⇒ 平台标准级**（如 `cert_iso_clause` 141 行）。
+      - ⛔ **明令作废**：`yzh-std-env`（`CoreOrgCodes.StdEnv`）与 `YZH-STD-ENT` 两个常量**已删除**，全仓**禁止**出现其字面量（守卫 **A-R10**）；前端 `coreOrgCodes.ts` 已删。
+      - ⛔ **不作判据**：`OrgCode == ""` / `IsNullOrEmpty(OrgCode)` 不再表示「后台标准级」—— 「空」在新模型下是**正解**（平台级 / 机构行），判归属**只看 `EnterpriseCode`**。
+      - ★ **例外**：`cert_expert_*`（8 表）的 `OrgCode` = 专家工作区编码（★非认证机构），⛔ **不适用**本判据。
     - **③ 检索唯一入口**：核心资源（**机构 + 标准 + 阶段**及其派生的 **NC 规则 / 章节规则 / 填写规则 / 提取规则**）的取数，**只能**调 `CoreResourceQuery`；端内**只准投影**（选字段 / 加派生列 / 排序分页），⛔ **不准自建 `Queryable<T>` / `GetListAsync<T>` / `WHERE`**。
       - **判定口诀**：**同一个 `WHERE` 出现在第二处 ⇒ 就是违规。**
-    - **④ 动手前必过检查清单**（规则文档 §五）：要的数是核心资源吗 → 在写 `Queryable<T>` 吗 → 在写 `OrgCode == ""` 吗 → 要写 `"yzh-std-env"` 字面量吗 → 两端都要用吗 → 有 `using CertPlatform.Admin.*` 吗 → 守卫跑了吗。
-    - **⑤ 守卫**：`A-R1`（`Admin` ⛔ 引 `Auditor`）· `A-R2`（`Auditor` ⛔ 引 `Admin`）· `A-R3`（`Shared` ⛔ 引端）· `A-R5`（禁死 using）· `A-R6`（核心资源禁端内直查）· `A-R8`（`OrgCode` 判据唯一）· `A-R9`（`yzh-std-env` 字面量唯一）。
+    - **④ 动手前必过检查清单**（规则文档 §五）：要的数是核心资源吗 → 在写 `Queryable<T>` 吗 → 在写 `EnterpriseCode == ""` 吗 → 要写 `"yzh-std-env"` / `"YZH-STD-ENT"` 字面量吗 → 两端都要用吗 → 有 `using CertPlatform.Admin.*` 吗 → 守卫跑了吗。
+    - **⑤ 守卫**：`A-R1`（`Admin` ⛔ 引 `Auditor`）· `A-R2`（`Auditor` ⛔ 引 `Admin`，已转正 0 debt）· `A-R3`（`Shared` ⛔ 引端）· `A-R5`（禁死 using）· `A-R6`（核心资源禁端内直查）· `A-R10`（已废除机构常量字面量全仓禁）。★ `A-R8` / `A-R9` / `A-R11` **已退役**。
 
 ## 业务菜单速览
 
 > ★ **事实源 = DB 表 `Sys_Menu`**（以 `admin` Tag 为后台专家端，`auditor` Tag 为专家端）。
-> 本节仅为速查，**改菜单后必须同步此处 + `docs/20-体系认证/03-详细设计/05-企业资料规范化/26-核心菜单功能设计（待审批）-V2.md` §五**。
+> 本节仅为速查，**改菜单后必须同步此处 + `docs/40-实施/企业资料规范化/26-核心菜单功能设计（待审批）-V2.md` §五**。
 > 事实源快照：`scripts/db/verify/menu-urls.tsv`（`./scripts/db/verify/sync_menu_urls.sh` 生成）。
 
 **命名法（消除「定义 / 设计」歧义，铁律）**：

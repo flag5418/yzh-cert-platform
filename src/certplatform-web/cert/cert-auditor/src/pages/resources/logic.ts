@@ -526,7 +526,7 @@ export class ResourcesLogic {
     const dir = this.directoryOf(standardCode)
     if (!dir) return []
     return [...dir.Folders]
-      .sort((a, b) => a.Depth - b.Depth || a.SortOrder - b.SortOrder)
+      .sort((a, b) => a.Depth - b.Depth || a.Sort - b.Sort)
       .map(f => ({
         FolderCode: f.Code,
         FullPath: f.FullPath,

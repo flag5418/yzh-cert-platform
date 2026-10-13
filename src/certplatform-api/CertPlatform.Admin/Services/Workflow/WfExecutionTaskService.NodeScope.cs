@@ -511,7 +511,7 @@ namespace CertPlatform.Admin.Services.Workflow
 
         /// <summary>企业编码缺省值：单节点测试默认打标准企业（与 NodeExecutor 内部兜底一致）</summary>
         private static string ResolveEnterpriseCode(string? enterpriseCode)
-            => string.IsNullOrWhiteSpace(enterpriseCode) ? CoreOrgCodes.StdEnv : enterpriseCode!;
+            => string.IsNullOrWhiteSpace(enterpriseCode) ? "" : enterpriseCode!;
 
         /// <summary>从 AI 节点的 WorkflowContext.ContextParams 读一个键（兼容 PascalCase / camelCase）</summary>
         private static string? ReadContextParam(AiNodeTestRequest request, params string[] keys)

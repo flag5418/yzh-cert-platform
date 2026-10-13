@@ -86,7 +86,7 @@ export class SkillTreeTableLogic extends TreeTableLogic<any> {
   protected override get defaultValues(): Record<string, any> {
     return {
       SkillType: 'manual',
-      SortOrder: 0,
+      Sort: 0,
       IsValid: 1,
     }
   }

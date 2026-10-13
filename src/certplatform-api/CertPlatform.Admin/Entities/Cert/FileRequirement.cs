@@ -44,7 +44,7 @@ namespace CertPlatform.Admin.Entities.Cert
         public string? Description { get; set; }
 
         /// <summary>排序</summary>
-        public int SortOrder { get; set; } = 0;
+        public int Sort { get; set; } = 0;
 
         /// <summary>模板文件 OSS 存储路径</summary>
         [StringLength(500)]

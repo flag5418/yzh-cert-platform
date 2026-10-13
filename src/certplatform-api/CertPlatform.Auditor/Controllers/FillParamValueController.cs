@@ -89,7 +89,7 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
             .ToListAsync();
 
         var stages = (await _core.GetStagesAsync())
-            .OrderBy(x => x.SortOrder)
+            .OrderBy(x => x.Sort)
             .Select(x => new { x.Code, Name = x.StageName, No = x.StageCode })
             .ToList();
 
@@ -273,7 +273,7 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
             .Where(d => d.OrgCode == orgCode && d.IsDeleted == false && d.IsValid == 1
                         && (d.StandardCode == "" || d.StandardCode == stdCode)
                         && (d.StageCode == "" || d.StageCode == stageCode))
-            .OrderBy(d => d.SortOrder)
+            .OrderBy(d => d.Sort)
             .ToListAsync();
 
         var picked = ParamValueResolver.PickMostSpecific(defs);
@@ -317,7 +317,7 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
                 SourceExpr = def.SourceExpr,
                 IsRequired = def.IsRequired,
                 IsBuiltin = def.IsBuiltin,
-                SortOrder = def.SortOrder,
+                Sort = def.Sort,
                 Description = def.Description,
                 Placeholder = def.Placeholder,
 
@@ -336,7 +336,7 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
             .Select(g => new
             {
                 GroupName = g.Key,
-                Items = g.OrderBy(i => i.SortOrder).ThenBy(i => i.ParamCode).ToList(),
+                Items = g.OrderBy(i => i.Sort).ThenBy(i => i.ParamCode).ToList(),
             })
             .ToList();
 
@@ -422,7 +422,7 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
             return Ok(ApiResponse<object>.Fail("无权修改其他工作区的企业参数"));
 
         // ★ 参数值行 OrgCode = 工作区 Code（数据归属，见 WorkspaceContextService 对照表）；
-        //   参数定义 OrgCode 恒为后台标准级 CoreOrgCodes.StdEnv
+        //   参数定义 OrgCode 恒为后台标准级 ''
         //   （2026-10-12 铁律取代 10-06「恒空串」裁决 —— 见跨端规则 §二）
         var workspaceCode = scope.Data.WorkspaceCode;
         var stdCode = req.StandardCode ?? string.Empty;
@@ -516,7 +516,7 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
                         MaintainMode = def.MaintainMode,
                         IsRequired = def.IsRequired,
                         IsFilled = !string.IsNullOrWhiteSpace(value),
-                        SortOrder = def.SortOrder,
+                        Sort = def.Sort,
                         IsValid = 1,
                         IsDeleted = false,
                         CreateTime = now,
@@ -620,7 +620,7 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
         public string? SourceExpr { get; set; }
         public bool IsRequired { get; set; }
         public bool IsBuiltin { get; set; }
-        public int SortOrder { get; set; }
+        public int Sort { get; set; }
         public string? Description { get; set; }
         public string? Placeholder { get; set; }
 

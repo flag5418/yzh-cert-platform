@@ -111,12 +111,12 @@ public class CertOrgStageController : ControllerBase
                 linked.Data?.Select(p => p.StageCode) ?? Array.Empty<string>());
 
             // 3. 合并返回（字段名对齐前端 CertOrgStageItem：PhaseCode=业务码仅供显示）
-            var items = stages.Data!.OrderBy(p => p.SortOrder).ThenBy(p => p.StageCode).Select(p => new
+            var items = stages.Data!.OrderBy(p => p.Sort).ThenBy(p => p.StageCode).Select(p => new
             {
                 Code = p.Code,
                 PhaseCode = p.StageCode,
                 PhaseName = p.StageName,
-                SortOrder = p.SortOrder,
+                Sort = p.Sort,
                 Category = p.Category,
                 CategoryName = p.CategoryName,
                 // ★ Q2：关联判定用 Code（GUID），⛔ 不再用业务码 p.StageCode

@@ -306,7 +306,7 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
 
             var nodes = new List<object>();
 
-            foreach (var st in filteredStages.OrderBy(p => p.SortOrder).ThenBy(p => p.StageCode))
+            foreach (var st in filteredStages.OrderBy(p => p.Sort).ThenBy(p => p.StageCode))
             {
                 // ★ 阶段键 = cert_cert_stage.Code（不是 StageCode 业务码 'jd01'）：
                 //   标准目录模板/提取规则/提取结果/文件行/op_log 全部按 Code 存 StageCode，
@@ -353,7 +353,7 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
                     {
                         StageCode = st.Code,
                         StageName = st.StageName,
-                        SortOrder = st.SortOrder,
+                        Sort = st.Sort,
                         ChildCount = children.Count,
                         // 启用/禁用徽章（与标准子节点同口径）
                         IsValid = st.IsValid

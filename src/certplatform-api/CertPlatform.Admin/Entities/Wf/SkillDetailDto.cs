@@ -19,7 +19,7 @@ namespace CertPlatform.Admin.Entities.Wf
         public string Version { get; set; } = "1.0";
         public string Icon { get; set; } = string.Empty;
         public string Color { get; set; } = string.Empty;
-        public int SortOrder { get; set; }
+        public int Sort { get; set; }
         public string Remark { get; set; } = string.Empty;
 
         public List<WfSkillInput> Inputs { get; set; } = new();

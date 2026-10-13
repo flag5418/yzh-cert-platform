@@ -332,13 +332,13 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         /// <summary>
         /// 取 nc_judge 模板。
         /// <para><b>★ 取数口径（`OrgCode` 判据铁律 §2.2）</b>：机构专属优先 → 后台标准级回落。
-        /// 后台标准级 = <see cref="CoreOrgCodes.StdEnv"/>（虚拟机构 `yzh-std-env`）；
+        /// 后台标准级 = <see cref="''"/>（虚拟机构 `yzh-std-env`）；
         /// ⛔ 不写字符串字面量（守卫 <b>A-R9</b>），⛔ 不写 `OrgCode == ""` / `IsNullOrEmpty`（守卫 <b>A-R8</b>）。</para>
         /// </summary>
         private static async Task<NcJudgePrompt?> LoadJudgeTemplateAsync(IDbOrm db, string org)
         {
             var r = await db.GetListAsync<NcJudgePrompt>(
-                x => (x.OrgCode == org || x.OrgCode == CoreOrgCodes.StdEnv)
+                x => (x.OrgCode == org || x.OrgCode == "")
                      && x.PromptCode == "nc_judge" && x.IsDeleted == false,
                 includeDisabled: true);
             var rows = r.Data ?? new List<NcJudgePrompt>();
@@ -354,7 +354,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         private static async Task<NcConcludePrompt?> LoadConcludeTemplateAsync(IDbOrm db, string org)
         {
             var r = await db.GetListAsync<NcConcludePrompt>(
-                x => (x.OrgCode == org || x.OrgCode == CoreOrgCodes.StdEnv)
+                x => (x.OrgCode == org || x.OrgCode == "")
                      && x.PromptCode == "nc_conclude" && x.IsDeleted == false,
                 includeDisabled: true);
             var rows = r.Data ?? new List<NcConcludePrompt>();

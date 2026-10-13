@@ -715,7 +715,7 @@ namespace CertPlatform.Auditor.Controllers
             public string FolderName { get; set; } = string.Empty;
             public string ParentCode { get; set; } = string.Empty;
             public int Depth { get; set; }
-            public int SortOrder { get; set; }
+            public int Sort { get; set; }
             public string FullPath { get; set; } = string.Empty;
 
             /// <summary>该文件夹（含子文件夹）下的标准域文件总数 —— ⛔ 不是可规范化数</summary>
@@ -982,7 +982,7 @@ namespace CertPlatform.Auditor.Controllers
                     FolderName = g.First().FolderName ?? string.Empty,
                     ParentCode = g.First().ParentCode ?? string.Empty,
                     Depth = g.First().Depth,
-                    SortOrder = g.First().SortOrder,
+                    Sort = g.First().Sort,
                     FullPath = g.First().FullPath ?? string.Empty,
                 }, StringComparer.Ordinal);
 
@@ -1015,7 +1015,7 @@ namespace CertPlatform.Auditor.Controllers
                 AccumulateCounts(r, totalByFolder, fillableByFolder);
 
             node.Folders = roots
-                .OrderBy(r => r.SortOrder)
+                .OrderBy(r => r.Sort)
                 .ThenBy(r => r.FolderName, StringComparer.Ordinal)
                 .ToList();
 
@@ -1046,7 +1046,7 @@ namespace CertPlatform.Auditor.Controllers
             n.TotalFileCount = total;
             n.FillableCount = fillable;
             n.Children = n.Children
-                .OrderBy(c => c.SortOrder)
+                .OrderBy(c => c.Sort)
                 .ThenBy(c => c.FolderName, StringComparer.Ordinal)
                 .ToList();
         }

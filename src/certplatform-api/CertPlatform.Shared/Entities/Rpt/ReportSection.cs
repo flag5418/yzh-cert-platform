@@ -16,7 +16,7 @@ namespace CertPlatform.Shared.Entities.Rpt
     ///   ② 旧 <c>ReportCode</c> 语义错位（DDL 声明 FK→rpt_audit_report，实际存 Template.Code）→ 列已删除
     ///   ③ 旧表用 <c>IsActive</c> 违反铁律九 → 现统一 <see cref="IIsValid.IsValid"/></para>
     /// <para>命名规范（YZH 铁律七）：DB 列名 = C# 属性名 = TS 字段名，PascalCase 逐字一致</para>
-    /// <para><b>★ 2026-10-09 删除策略改硬删除</b>：uk_scope_sort(OrgCode,StandardCode,PhaseCode,SortOrder)
+    /// <para><b>★ 2026-10-09 删除策略改硬删除</b>：uk_scope_sort(OrgCode,StandardCode,PhaseCode,Sort)
     /// 对全表行唯一（含已删行），软删除后「删第 N 章再建第 N 章」必撞唯一键 1062
     /// （预检 GetOne 过滤软删行，还给不出友好提示）⇒ 章节定义物理删除
     /// （先例：<c>CertOrgStandard</c> uk_org_std 同类改造）。</para>
@@ -54,9 +54,6 @@ namespace CertPlatform.Shared.Entities.Rpt
         [SugarColumn(ColumnDataType = "longtext", IsNullable = true, ColumnName = "SectionContent")]
         public string? Content { get; set; }
 
-        /// <summary>章节排序（★唯一键组成：OrgCode + StandardCode + PhaseCode + SortOrder）</summary>
-        public int SortOrder { get; set; }
-
         /// <summary>★ 有效标志（1=有效，0=无效）—— 铁律九唯一启用字段</summary>
         public int IsValid { get; set; } = 1;
 
@@ -92,6 +89,7 @@ namespace CertPlatform.Shared.Entities.Rpt
         [SugarColumn(Length = 50, IsNullable = true, ColumnName = "Status")]
         public string? Status { get; set; }
 
+        /// <summary>章节排序（★唯一键组成：OrgCode + StandardCode + PhaseCode + Sort）</summary>
         public int Sort { get; set; }
 
         // ──── ISoftDelete 接口显式实现 ────

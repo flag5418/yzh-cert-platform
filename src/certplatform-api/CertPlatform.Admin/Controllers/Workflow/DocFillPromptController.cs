@@ -185,7 +185,7 @@ public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
 
         var candidates = await _db.Client.Queryable<DocFillPrompt>()
             .Where(p => p.PromptCode == promptCode
-                        && (p.OrgCode == CoreOrgCodes.StdEnv || p.OrgCode == org)
+                        && (p.OrgCode == "" || p.OrgCode == org)
                         && p.IsDeleted == false
                         && p.IsValid == 1)
             .ToListAsync();
@@ -243,7 +243,7 @@ public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
 
         var rows = await _db.Client.Queryable<DocFillPrompt>()
             .Where(p => p.PromptCode == promptCode
-                        && (p.OrgCode == CoreOrgCodes.StdEnv || p.OrgCode == org))
+                        && (p.OrgCode == "" || p.OrgCode == org))
             .OrderByDescending(p => p.Version)
             .Select(p => new
             {

@@ -96,9 +96,9 @@ public class OfficeConvertTaskExecutor : IYzhTaskExecutor
 
     private async Task EnqueueEnterpriseExtractAsync(FileConvertPayload payload, string? parentQueueCode)
     {
-        // ★ 2026-10-13 判据收敛：只对「真实企业行」入队 ——
-        //   ① 非企业行（EnterpriseCode 空）② 机构常量被误当企业码 一律跳过
-        if (!OrgScope.IsEnterpriseRow(payload.EnterpriseCode) || OrgScope.IsBackendBuilt(payload.EnterpriseCode))
+        // ★ 2026-10-13 归属模型 V2：只对「真实企业行」入队（EnterpriseCode 非空）。
+        //   ⛔ 原「机构常量被误当企业码」防御已取消 —— yzh-std-env 常量本身已废除。
+        if (!OrgScope.IsEnterpriseRow(payload.EnterpriseCode))
             return;
 
         // ★ S2 图 3 分流：未要求自动提取 ⇒ 只转换不提取（状态留 none，原因落 ExtractMessage）

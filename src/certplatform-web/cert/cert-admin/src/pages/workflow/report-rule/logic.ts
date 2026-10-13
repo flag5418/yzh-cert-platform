@@ -34,7 +34,6 @@ import { ElMessage } from 'element-plus'
 import { loadOrgStageTree } from '@share/composables/useOrgStageTree'
 import { getISOClauseTree, type ISOClauseTreeNode } from '@share/api/workflow/nc-config'
 import { getReportSectionPage } from '@share/api/workflow/report-rule'
-import { CORE_ORG_STD_ENV } from '@share/constants/coreOrgCodes'
 import type { ReportSection } from '@share/types/cert'
 
 export type { ReportSection }
@@ -251,7 +250,7 @@ export class ReportRuleLogic extends TreeTableLogic<any> {
   protected override buildFilters(extra?: Record<string, any>): FilterItem[] {
     const base = super.buildFilters(extra)
     if (this.anySelected) {
-      base.push({ Field: 'OrgCode', Value: CORE_ORG_STD_ENV, Operator: 'eq' })
+      base.push({ Field: 'OrgCode', Value: '', Operator: 'eq' })
       base.push({ Field: 'StandardCode', Value: this.selectedNode!.Extra!.StdCode, Operator: 'eq' })
     }
     return base
@@ -260,7 +259,7 @@ export class ReportRuleLogic extends TreeTableLogic<any> {
   /** 新增准备钩子：注入树关联的三元组（★ 去主表化后章节自带归属；OrgCode 恒为 StdEnv） */
   protected override onPrepareAdd(formData: Record<string, any>) {
     const ex = this.selectedNode?.Extra
-    formData.OrgCode = CORE_ORG_STD_ENV
+    formData.OrgCode = ''
     formData.StandardCode = ex?.StdCode ?? ''
     formData.PhaseCode = ex?.PhaseCode ?? ''
   }

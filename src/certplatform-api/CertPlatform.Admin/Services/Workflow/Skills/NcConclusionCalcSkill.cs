@@ -147,7 +147,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         /// <summary>
         /// 取判定规则：机构专属优先 → 后台标准级回落，再逐级匹配
         /// <para><b>★ 取数口径（`OrgCode` 判据铁律 §2.2）</b>：同时取「机构专属」与
-        /// 「后台标准级（<see cref="CoreOrgCodes.StdEnv"/> = `yzh-std-env`）」两类行，
+        /// 「后台标准级（<see cref="''"/> = `yzh-std-env`）」两类行，
         /// 机构专属优先。⛔ 不写字符串字面量（守卫 <b>A-R9</b>），⛔ 不写
         /// `OrgCode == ""` / `IsNullOrEmpty`（守卫 <b>A-R8</b>）。</para>
         /// <para>优先级：</para>
@@ -164,7 +164,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
 
             // ★ GetListAsync 无 ct 参数；includeDisabled=true 以便显式判 IsValid
             var rules = await db.GetListAsync<ConclusionRule>(
-                x => (x.OrgCode == orgCode || x.OrgCode == CoreOrgCodes.StdEnv) && x.IsDeleted == false,
+                x => (x.OrgCode == orgCode || x.OrgCode == "") && x.IsDeleted == false,
                 includeDisabled: true);
 
             var candidates = (rules.Data ?? new List<ConclusionRule>())

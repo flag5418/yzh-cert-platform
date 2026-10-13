@@ -369,7 +369,7 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
       ...tmpl,
       StandardCode: this.selectedNode.Code,
       ParentCode: null,
-      SortOrder: 0,
+      Sort: 0,
       IsValid: 1,
     })
     await this.loadParentOptions()
@@ -392,7 +392,7 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
       ...tmpl,
       StandardCode: this.selectedNode.Code,
       ParentCode: row.Code,
-      SortOrder: 0,
+      Sort: 0,
       IsValid: 1,
     })
     await this.loadParentOptions()

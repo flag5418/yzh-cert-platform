@@ -25,39 +25,28 @@ namespace CertPlatform.Shared.Entities.Dir
         // ⛔ 复合编码 DirectoryCode（SDC-{标准}|{阶段}）已于 2026-09-26 删除，本行 Code 即业务键。
 
         /// <summary>
-        /// 后台域标记 —— <b>两值模型</b>（用户 2026-10-12/10-13 口径）。
+        /// ★ <b>机构 Code</b>（= <c>sys_organization.Code</c> = <c>cert_certification_body.Code</c>）
+        /// —— <b>归属模型 V2（2026-10-13 用户裁定）</b>。
         ///
-        /// <para>模板行（<see cref="EnterpriseCode"/> 为空）⇒ 恒 <c>CoreOrgCodes.StdEnv</c>（<c>yzh-std-env</c>）
-        /// —— 「所有机构的统称」，表示这行是<b>后台建立的标准级数据</b>。</para>
-        /// <para>⛔ <b>具体机构不在本列</b>（本列已统一为后台域标记）—— 见 <see cref="OwnerOrgCode"/>。</para>
-        /// <para>⚠️ 历史遗留：企业行（<c>EnterpriseCode</c> 有值）的 <c>OrgCode</c> 仍为机构 Code
-        /// （2026-10-12 终裁「企业行不在本裁决范围，OrgCode 原样」）—— 待后续统一，见设计文档 §五。</para>
+        /// <para>取值：<c>&lt;机构 Code&gt;</c>（该机构的目录模板）或 <c>''</c>（平台通用模板，不特指机构）。</para>
+        /// <para>★ 企业行（<see cref="EnterpriseCode"/> 有值）也可带本列 = 机构 Code ——
+        /// 「<i>通过机构 code 快速获取后台的规则或标准，算是一种冗余</i>」（用户原话）⇒ ⛔ <b>合法</b>。</para>
+        /// <para>★ <b>用途</b>：① 路径身份段（<c>PathBuilder.StandardFile</c>）② 唯一键第一列
+        /// （<c>uk_org_ent_std_stage</c>）③ 树节点 configCode 索引键。</para>
+        /// <para>⛔ 旧的 <c>yzh-std-env</c> 后台域标记与 <c>OwnerOrgCode</c> 机构专用列<b>均已废除</b>
+        /// （2026-10-13 归属模型 V2）；平台标准级 = 本列与 <see cref="EnterpriseCode"/> 都空。</para>
         /// </summary>
         [SugarColumn(Length = 50)]
         public string OrgCode { get; set; } = string.Empty;
 
         /// <summary>
-        /// ★ <b>具体机构 Code</b>（= <c>sys_organization.Code</c> = <c>cert_certification_body.Code</c>）
-        /// —— 目录的<b>归属机构</b>维度（2026-10-13 新增，承接用户口径「需要具体机构则增加新字段」）。
-        ///
-        /// <para>取值：<c>''</c>（不特指任何机构 —— 平台通用模板）或 <c>&lt;机构 Code&gt;</c>。</para>
-        /// <para>★ <b>用途</b>：① 路径身份段（<c>PathBuilder.StandardFile</c>）② 唯一键第一列
-        /// （<c>uk_owner_std_stage</c>）—— 恢复「按机构隔离」（决策⑳修订的本意）。</para>
-        /// <para>⛔ <b>不要</b>把机构值写进 <see cref="EnterpriseCode"/>（守卫 <b>A-R11</b>）；
-        /// ⛔ <b>不要</b>用 <see cref="OrgCode"/> 承载具体机构（它已统一为后台域标记）。</para>
-        /// </summary>
-        [SugarColumn(Length = 50)]
-        public string OwnerOrgCode { get; set; } = string.Empty;
-
-        /// <summary>
         /// 企业 Code。真实值 = 该企业该标准该阶段的企业目录；<b>空 = 不属于任何企业</b>
-        /// （后台 / 机构行 —— 平台标准域行）。
+        /// （机构 / 平台模板行）。
         ///
-        /// <para>★ <b>2026-10-13 判据收敛（修订 10-12 版）</b>：原写「<c>CoreOrgCodes.StdEnv</c> = 机构模板行」
-        /// —— 那是把<b>机构维度的值填进企业列</b>，语义错位（实测：全库 <c>EnterpriseCode</c>
-        /// 无任何一行是机构常量）。唯一判据入口 = <c>OrgScope.IsEnterpriseRow</c>（守卫 <b>A-R11</b>）。</para>
+        /// <para>★ <b>唯一分类判据</b>：非空 ⇒ 企业行（<c>OrgScope.IsEnterpriseRow</c>）。
+        /// ⛔ <b>不要</b>把机构值写进本列（那是两个维度的错位 —— 守卫 <b>A-R11</b> 会拦）。</para>
         /// <para>⛔ 禁 NULL（P13，2026-09-28）：uk 对 NULL 不生效，NULL/常量双口径必出脏数据。</para>
-        /// <para>唯一键 <c>uk_owner_std_stage(OwnerOrgCode, EnterpriseCode, StandardCode, StageCode)</c>（P16 四列）。</para>
+        /// <para>唯一键 <c>uk_org_ent_std_stage(OrgCode, EnterpriseCode, StandardCode, StageCode)</c>（P16 四列）。</para>
         /// </summary>
         [SugarColumn(Length = 36)]
         public string EnterpriseCode { get; set; } = string.Empty;
@@ -75,9 +64,6 @@ namespace CertPlatform.Shared.Entities.Dir
 
         [SugarColumn(Length = 20, IsNullable = true)]
         public string? Status { get; set; } = "draft";
-
-        [SugarColumn(Length = 20, IsNullable = true)]
-        public string? StatusField { get; set; } = "active";
 
         public int Sort { get; set; } = 0;
 

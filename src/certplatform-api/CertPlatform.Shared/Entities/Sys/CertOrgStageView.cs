@@ -23,9 +23,9 @@ namespace CertPlatform.Shared.Entities.Sys
         public string StageName { get; set; } = string.Empty;
 
         /// <summary>
-        /// 排序号（cert_cert_stage.SortOrder）
+        /// 排序号（cert_cert_stage.Sort）
         /// </summary>
-        public int SortOrder { get; set; }
+        public int Sort { get; set; }
 
         /// <summary>
         /// 分类中文名（字典翻译）

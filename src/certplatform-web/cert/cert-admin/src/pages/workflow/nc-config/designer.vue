@@ -26,7 +26,7 @@
       loadBodyBuilder: (filter) => ({
         Page: 1, PageSize: 200,
         Filters: [
-          { Field: 'OrgCode', Value: CORE_ORG_STD_ENV, Operator: 'Equal' },
+          { Field: 'OrgCode', Value: '', Operator: 'Equal' },
           filter.StandardCode ? { Field: 'StandardCode', Value: filter.StandardCode, Operator: 'Equal' } : null,
           filter.PhaseCode ? { Field: 'PhaseCode', Value: filter.PhaseCode, Operator: 'Equal' } : null
         ].filter(Boolean)
@@ -43,7 +43,7 @@
         const r = ctx.leaf
         return {
           Code: r.Code,
-          OrgCode: CORE_ORG_STD_ENV,
+          OrgCode: '',
           StandardCode: r.StandardCode || ctx.filter.StandardCode,
           PhaseCode: r.PhaseCode || ctx.filter.PhaseCode,
           ClauseCode: r.ClauseCode,
@@ -68,7 +68,6 @@
 
 <script setup lang="ts">
 import WorkflowDesigner from '@share/components/workflow/WorkflowDesigner.vue'
-import { CORE_ORG_STD_ENV } from '@share/constants/coreOrgCodes'
 import { ElMessage } from 'element-plus'
 
 function onSaveSuccess(result: any) {

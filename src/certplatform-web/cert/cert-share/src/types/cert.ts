@@ -76,7 +76,6 @@ export interface ISOClause {
   ClauseNumber: string
   Title: string
   Description?: string
-  SortOrder?: number
   Sort?: number
   IsValid?: number
   Remark?: string
@@ -130,7 +129,7 @@ export interface CertStage {
   StageCode: string
   StageName: string
   Category?: string
-  SortOrder: number
+  Sort: number
   Description?: string
   IsValid: number
   Status?: string
@@ -177,53 +176,6 @@ export interface CertStandardFamily {
   IsDeleted?: boolean
 }
 
-export interface AuditTask {
-  Id?: number
-  Code?: string
-  OrgCode?: string
-  PhaseCode: string
-  TaskNumber: string
-  AuditorCode: string
-  PlannedDate?: string
-  ActualStartDate?: string
-  ActualCompleteDate?: string
-  AuditScope?: string
-  Status?: string
-  IsValid?: number
-  Sort?: number
-  Remark?: string
-  CreateBy?: string
-  CreateTime?: string
-  UpdateBy?: string
-  UpdateTime?: string
-  DeleteBy?: string
-  DeleteTime?: string
-  IsDeleted?: boolean
-}
-
-export interface AuditorProfile {
-  Id?: number
-  Code?: string
-  OrgCode?: string
-  UserCode?: string
-  AuditorNo: string
-  AuditorName: string
-  Phone: string
-  Email?: string
-  Qualification?: string
-  ExpertiseAreas?: string
-  Status?: string
-  Remark?: string
-  CreateBy?: string
-  CreateTime?: string
-  UpdateBy?: string
-  UpdateTime?: string
-  DeleteBy?: string
-  DeleteTime?: string
-  IsDeleted?: boolean
-  IsValid?: number
-}
-
 /** 机构-标准关联（右表行数据） */
 export interface CertOrgStandardItem {
   Code: string
@@ -244,7 +196,7 @@ export interface CertOrgStageItem {
   Code: string
   PhaseCode: string
   PhaseName: string
-  SortOrder: number
+  Sort: number
   /** 阶段分类（process/audit/post） */
   Category: string
   /** 分类中文名（如「流程阶段」） */
@@ -270,7 +222,6 @@ export interface StandardDirectoryConfig {
   StageCode: string
   RootFolderName?: string
   Status?: string
-  StatusField?: string
   Sort?: number
   Remark?: string
   IsValid?: number
@@ -292,7 +243,7 @@ export interface StandardDirectoryFolder {
   ParentCode?: string
   FolderName: string
   Depth?: number
-  SortOrder?: number
+  Sort?: number
   Status?: string
   IsValid?: number
   TaskId?: string
@@ -321,7 +272,7 @@ export interface StandardDirectoryFile {
   IsRequired?: boolean
   MaxFileSizeMB?: number
   Description?: string
-  SortOrder?: number
+  Sort?: number
   ExtractionEnabled?: boolean
   ExtractionRules?: string
   PreCheckRequired?: boolean
@@ -373,7 +324,7 @@ export interface DirectoryTemplate {
   ConfigCode: string
   ParentCode?: string
   FolderName: string
-  SortOrder?: number
+  Sort?: number
 }
 
 /** 文件要求/模板文件 */
@@ -386,7 +337,7 @@ export interface FileRequirement {
   IsRequired?: boolean
   MaxSizeMB?: number
   Description?: string
-  SortOrder?: number
+  Sort?: number
   TemplateStoragePath?: string
   TemplateFileName?: string
   StandardCode?: string
@@ -427,28 +378,6 @@ export interface QueueStatus {
 // ========================================================
 
 /**
- * ★【已废弃 2026-09-29】报告模板
- * <p>报告主表已废弃（D34：不做报表系统，章节定义改为扁平结构）。
- * 保留此 interface 仅供历史代码编译期提示，新代码不应引用。</p>
- * @deprecated 表已改名为 z_deprecated_cert_report_template，0 行，不再写入
- */
-export interface ReportTemplate {
-  Id: number
-  Code: string
-  OrgCode: string
-  StandardCode: string
-  PhaseCode: string
-  TemplateName: string
-  TemplateFilePath: string
-  Remark: string
-  IsDefault: boolean
-  IsValid: number
-  CreateBy: string
-  CreateDate: string
-  ModifyDate: string
-}
-
-/**
  * ★ 报告章节（★2026-09-29 去主表化，扁平结构）
  * <p>★ 与 NC 检查规则（ValidationRule）完全对称：都是配置层、都按
  * (OrgCode + StandardCode + PhaseCode) 三元组定位、都用 IsValid 启用。</p>
@@ -468,8 +397,8 @@ export interface ReportSection {
   SectionNameEn: string
   /** 章节内容（模板示例正文，纯文本） */
   Content: string
-  /** 章节排序（唯一键组成：OrgCode+StandardCode+PhaseCode+SortOrder） */
-  SortOrder: number
+  /** 章节排序（唯一键组成：OrgCode+StandardCode+PhaseCode+Sort） */
+  Sort: number
   /** ★ 有效标志（1=启用，0=禁用）—— 铁律九唯一启用字段 */
   IsValid: number
   /** 对应条款编码（★可空：概述/结论类章节不映射条款） */

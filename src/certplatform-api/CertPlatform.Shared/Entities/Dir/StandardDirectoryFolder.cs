@@ -37,13 +37,8 @@ namespace CertPlatform.Shared.Entities.Dir
 
         public int Depth { get; set; } = 1;
 
-        public int SortOrder { get; set; } = 0;
-
         [SugarColumn(Length = 20, IsNullable = true)]
         public string? Status { get; set; } = "draft";
-
-        [SugarColumn(Length = 20, IsNullable = true)]
-        public string? StatusField { get; set; } = "active";
 
         public int Sort { get; set; } = 0;
 

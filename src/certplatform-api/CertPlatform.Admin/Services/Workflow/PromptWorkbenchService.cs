@@ -1025,7 +1025,7 @@ public class PromptWorkbenchService : IPromptWorkbench
         var files = rows
             .GroupBy(x => (x.FileName ?? string.Empty).Trim())
             .Select(g => g.First())
-            .OrderBy(x => x.SortOrder)
+            .OrderBy(x => x.Sort)
             .ThenBy(x => x.FileName)
             .ToList();
         if (files.Count == 0) return "（该标准尚无标准文档）";
@@ -1126,7 +1126,7 @@ public class PromptWorkbenchService : IPromptWorkbench
         if (folders.Count == 0) return "（该标准尚无文件夹）";
 
         var byParent = folders.GroupBy(x => x.ParentCode ?? "")
-                              .ToDictionary(g => g.Key, g => g.OrderBy(x => x.SortOrder).ThenBy(x => x.Sort).ToList());
+                              .ToDictionary(g => g.Key, g => g.OrderBy(x => x.Sort).ThenBy(x => x.Sort).ToList());
         var sb = new StringBuilder();
         sb.AppendLine("标准目录文件夹树（文档可能落在哪一层）：");
         AppendFolderLevel(sb, byParent, string.Empty, 0);

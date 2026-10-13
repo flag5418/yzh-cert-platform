@@ -88,7 +88,7 @@ namespace CertPlatform.Auditor.Entities.Cert
         public bool IsFilled { get; set; }
 
         /// <summary>排序号（冗余快照）</summary>
-        public int SortOrder { get; set; }
+        public int Sort { get; set; }
 
         // ──── 接口字段（BaseEntity 不含，必须声明在实体自身，否则全库过滤静默失效）────
 

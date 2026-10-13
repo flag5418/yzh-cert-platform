@@ -370,7 +370,7 @@ onMounted(async () => {
           </el-select>
         </el-form-item>
         <el-form-item label="排序">
-          <el-input-number v-model="logic.clauseFormData.value.SortOrder" :min="0" :step="1" style="width:100%" />
+          <el-input-number v-model="logic.clauseFormData.value.Sort" :min="0" :step="1" style="width:100%" />
         </el-form-item>
       </el-form>
       <template #footer>

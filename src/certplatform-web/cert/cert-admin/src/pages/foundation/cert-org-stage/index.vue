@@ -75,9 +75,9 @@ function buildStageTree(items: CertOrgStageItem[]): StageTreeNode[] {
     groupMap.get(cat)!.push(item)
   }
 
-  // 按 SortOrder 排序每组内阶段
+  // 按 Sort 排序每组内阶段
   const sortItems = (list: CertOrgStageItem[]) =>
-    [...list].sort((a, b) => (a.SortOrder ?? 0) - (b.SortOrder ?? 0))
+    [...list].sort((a, b) => (a.Sort ?? 0) - (b.Sort ?? 0))
 
   // 构建树节点
   const result: StageTreeNode[] = []
@@ -92,7 +92,7 @@ function buildStageTree(items: CertOrgStageItem[]): StageTreeNode[] {
       categoryName: catLabel,
       phaseCode: s.PhaseCode,
       phaseName: s.PhaseName,
-      sortOrder: s.SortOrder,
+      sortOrder: s.Sort,
       linked: s.Linked,
       isLeaf: true,
     }))

@@ -53,7 +53,7 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
     private readonly EnterpriseExtractionResultStore _resultStore;
 
     // ★ 2026-10-12 常量统一：本类原 `YzhStandardEnterpriseCode` 别名、以及旧 `YzhVirtualEnterprise`
-    //   常量**均已删除** —— 全仓「标准域」标记唯一常量 = `CoreOrgCodes.StdEnv`（值 yzh-std-env；
+    //   常量**均已删除** —— 全仓「标准域」标记唯一常量 = `''`（值 yzh-std-env；
     //   定义处 CertPlatform.Shared/Domain/Scope/CoreOrgCodes.cs；字面量唯一由守卫 A-R9 保证）。
     //   ⛔ 不要再在本类内重建别名：别名 = 第二个字面量出口 = 下次改值必漏一处。
 
@@ -145,7 +145,8 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
         // 1. 四元组作用域（S0，10 号 §三）：规则键 + 机构 + 标准 + 阶段。
         //    页面只传 fileCode，机构/标准/阶段一律后端权威推导（同 Skill 单一约束原则）。
         var scope = await ResolveRuleScopeAsync(request.FileCode);
-        if (OrgScope.IsLegacyUnassigned(scope.OrgCode))
+        // ★ 2026-10-13 归属模型 V2：scope.OrgCode = 机构 Code（空 = 平台标准级 ⇒ 推导不到机构）
+        if (!OrgScope.IsOrgRow(scope.OrgCode))
         {
             // 后端推导不到时才用页面显式值兜底；两者都空 ⇒ 无法按机构追溯，拒绝保存
             var fallbackOrg = (request.OrgCode ?? "").Trim();
@@ -286,7 +287,7 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
                 }
             }
 
-            // 5. 同步提取结果到 B-08/B-09（标准域 = CoreOrgCodes.StdEnv），供工作流验证
+            // 5. 同步提取结果到 B-08/B-09（标准域 = ''），供工作流验证
             await SyncExtractionResultToB08B09Async(rule, request);
 
             tx.Commit();
@@ -317,13 +318,15 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
     }
 
     /// <summary>
-    /// 将规则保存请求中的提取数据同步到 B-08/B-09（G-2a：企业域参数化，默认 = 标准域常量 CoreOrgCodes.StdEnv，管理端行为不变）。
+    /// 将规则保存请求中的提取数据同步到 B-08/B-09（G-2a：企业域参数化）。
+    /// <para>★ 2026-10-13 归属模型 V2（收口 Task #33）：默认 <paramref name="enterpriseCode"/> = <c>''</c>
+    /// = <b>平台标准级样例域</b>（非企业行）—— 与读侧 <c>string.IsNullOrEmpty(x.EnterpriseCode)</c> 一致。</para>
     /// <para>规则对照旧 SyncExtractionResultToB08B09Async（L528-612）：</para>
     /// <para>1. extractionData 为空 → 跳过；2. 物理删除旧结果（绕过软删拦截 + 唯一约束兜底）；</para>
     /// <para>3. 一致性过滤（只写定义中存在的 code）；4. 空值/空表格不写入</para>
     /// </summary>
     private async Task SyncExtractionResultToB08B09Async(DocExtractionRule rule, SaveExtractionRuleRequest request,
-        string enterpriseCode = CoreOrgCodes.StdEnv)
+        string enterpriseCode = "")
     {
         var extractionData = request.ExtractionData;
         if (extractionData == null) return;
@@ -500,7 +503,7 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
         if (string.IsNullOrWhiteSpace(fileCode)) return null;
 
         var scope = await ResolveRuleScopeAsync(fileCode);
-        if (!OrgScope.IsLegacyUnassigned(scope.OrgCode))
+        if (OrgScope.IsOrgRow(scope.OrgCode))
             return await GetRuleByScopeAsync(scope.OrgCode, scope.StandardCode, scope.StageCode, scope.RuleKey);
 
         // 遗留兜底：文件行不存在（FR 模板缺失 / 历史测试 code）⇒ 推不出四元组，退回单列定位。
@@ -616,7 +619,7 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
         // 🚧 待收口（2026-10-13 发现，必须与本批一起裁决）：
         //   本表 C# 属性名是 EnterpriseCode，但映射的 DB 列是 **OrgCode**，且该列的
         //   **写侧**仍是 `yzh-std-env`（SyncExtractionResultToB08B09Async 的默认参
-        //   `enterpriseCode = CoreOrgCodes.StdEnv`，唯一调用方 :290 不传参）。
+        //   `enterpriseCode = ''`，唯一调用方 :290 不传参）。
         //   ⇒ 现在「写 yzh-std-env / 读 ''」**不一致**：保存规则后重新进入会回显不到，
         //     且 :729/:732 的物理删除删不掉旧行（会撞唯一键）。
         //   ⛔ 表当前 0 行，尚未暴露。两条收口路径见 归属判据收敛与机构专用列-设计-V1.md §五。
@@ -813,7 +816,7 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
             // 只标「有活跃结果可作废」的行：completed 才有结果；pending/skipped 本来就无结果
             if (row.ExtractStatus != EnterpriseExtractStatus.Completed) continue;
             if (string.IsNullOrEmpty(row.EnterpriseCode)) continue;
-            if (OrgScope.IsBackendBuilt(row.EnterpriseCode)) continue;   // 机构值误入企业列（异常行）不标
+            // ★ 2026-10-13 归属模型 V2：机构常量 yzh-std-env 已废除 ⇒ 原「机构值误入企业列」防御取消
             if (!orgByCfg.TryGetValue(row.ConfigCode ?? "", out var org) || org != rule.OrgCode) continue;
 
             var ent = row.EnterpriseCode!;

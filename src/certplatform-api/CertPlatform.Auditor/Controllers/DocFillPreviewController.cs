@@ -155,8 +155,9 @@ namespace CertPlatform.Auditor.Controllers
             //    平台级账号 `certBodyCode == null` ⇒ 跳过。这不是「放松隔离」：
             //    隔离要保护的是**企业数据**，而试填只碰模板自己的 `PreviewPdfPath` / `PreviewTime` 两列，
             //    且模板的维护权本就在后台端（见类注释）。有机构域的人（专家账号）照旧受限。
+            //    ★ 2026-10-13 归属模型 V2：模板 OrgCode 空 = 平台通用（对所有机构开放）⇒ 不拦。
             if (certBodyCode != null
-                && !OrgScope.IsBackendBuilt(template.OrgCode)
+                && OrgScope.IsOrgRow(template.OrgCode)
                 && !string.Equals(template.OrgCode, certBodyCode, StringComparison.Ordinal))
             {
                 return Ok(ApiResponse<object?>.Fail("无权访问其他工作区的模板"));

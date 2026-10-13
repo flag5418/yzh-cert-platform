@@ -90,8 +90,8 @@ namespace CertPlatform.Admin.Entities.Wf
         [StringLength(20)]
         public string? Color { get; set; }
 
-        /// <summary>排序号（DB: SortOrder）</summary>
-        public int SortOrder { get; set; } = 0;
+        /// <summary>排序号（DB: Sort）</summary>
+        public int Sort { get; set; } = 0;
 
         /// <summary>备注（DB: Remark）</summary>
         [StringLength(500)]

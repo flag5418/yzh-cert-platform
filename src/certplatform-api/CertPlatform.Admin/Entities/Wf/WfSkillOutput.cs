@@ -38,7 +38,7 @@ namespace CertPlatform.Admin.Entities.Wf
         [StringLength(500)]
         public string? Description { get; set; }
 
-        public int SortOrder { get; set; }
+        public int Sort { get; set; }
 
         // ──── ISoftDelete + IIsValid 接口显式实现 ────
         public bool IsDeleted { get; set; }

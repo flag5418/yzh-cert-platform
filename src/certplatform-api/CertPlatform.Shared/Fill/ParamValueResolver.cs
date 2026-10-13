@@ -180,7 +180,7 @@ public static class ParamValueResolver
     public static List<FillParamDef> PickMostSpecific(IEnumerable<FillParamDef> defs) =>
         defs.GroupBy(d => d.ParamCode)
             .Select(g => g.OrderByDescending(Specificity).ThenBy(d => d.Id).First())
-            .OrderBy(d => d.SortOrder).ThenBy(d => d.ParamCode)
+            .OrderBy(d => d.Sort).ThenBy(d => d.ParamCode)
             .ToList();
 
     /// <summary>值表定位键（镜像定义的 <c>StandardCode</c> / <c>StageCode</c>）</summary>

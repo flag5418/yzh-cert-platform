@@ -80,25 +80,25 @@ namespace CertPlatform.Admin.Controllers.Workflow
         //   写：新增 / 更新一律强制 StdEnv —— 否则新建行又是机构、与存量不一致。
         // ========================================================
 
-        /// <summary>查询判据改写：任何 OrgCode 过滤值 → <see cref="CoreOrgCodes.StdEnv"/></summary>
+        /// <summary>查询判据改写：任何 OrgCode 过滤值 → <see cref="''"/></summary>
         protected override List<FilterItem> OnBuildingFilter(List<FilterItem> filters)
         {
             foreach (var f in filters.Where(f => f.Field == "OrgCode"))
-                f.Value = CoreOrgCodes.StdEnv;
+                f.Value = "";
             if (!filters.Any(f => f.Field == "OrgCode"))
-                filters.Add(new FilterItem { Field = "OrgCode", Operator = "eq", Value = CoreOrgCodes.StdEnv });
+                filters.Add(new FilterItem { Field = "OrgCode", Operator = "eq", Value = "" });
             return base.OnBuildingFilter(filters);
         }
 
         protected override Task<(bool ok, string? msg)> OnBeforeAdd(ReportSection entity)
         {
-            entity.OrgCode = CoreOrgCodes.StdEnv;
+            entity.OrgCode = "";
             return base.OnBeforeAdd(entity);
         }
 
         protected override Task<(bool ok, string? msg)> OnBeforeUpdate(ReportSection entity)
         {
-            entity.OrgCode = CoreOrgCodes.StdEnv;
+            entity.OrgCode = "";
             return base.OnBeforeUpdate(entity);
         }
 
@@ -143,12 +143,12 @@ namespace CertPlatform.Admin.Controllers.Workflow
             // ★ 2026-10-12 终裁：章节是后台标准级（OrgCode 恒 = StdEnv），
             //   orgCode 入参仅为兼容旧调用保留，⚠️ 不参与匹配（传机构也能命中）。
             var result = await SectionEntity.GetListAsync(x =>
-                x.OrgCode == CoreOrgCodes.StdEnv &&
+                x.OrgCode == "" &&
                 x.StandardCode == standardCode &&
                 x.PhaseCode == phaseCode);
 
             var sorted = (result.Data ?? new List<ReportSection>())
-                .OrderBy(x => x.SortOrder)
+                .OrderBy(x => x.Sort)
                 .ToList();
 
             return Ok(ApiResponse<object?>.Ok(data: sorted));
@@ -181,7 +181,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
                 return Ok(ApiResponse<object?>.Fail("章节名称不能为空"));
 
             // ★ 2026-10-12 终裁：归属恒为后台标准级 —— 忽略前端传值，统一强制 StdEnv
-            entity.OrgCode = CoreOrgCodes.StdEnv;
+            entity.OrgCode = "";
 
             // ★ 改造：原来校验 ReportCode，现在校验三元组
             if (string.IsNullOrWhiteSpace(entity.OrgCode)
@@ -202,7 +202,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
                 target.SectionName    = entity.SectionName;
                 target.SectionNameEn  = entity.SectionNameEn;
                 target.Content        = entity.Content;
-                target.SortOrder      = entity.SortOrder;
+                target.Sort      = entity.Sort;
                 target.IsValid        = entity.IsValid;          // ★ 原 IsActive
                 target.WorkflowCode   = entity.WorkflowCode;
                 target.WorkflowConfig = entity.WorkflowConfig;
@@ -227,18 +227,18 @@ namespace CertPlatform.Admin.Controllers.Workflow
             }
 
             // ──── 新增 ────
-            // ★ 同 (OrgCode, StandardCode, PhaseCode, SortOrder) 唯一，
+            // ★ 同 (OrgCode, StandardCode, PhaseCode, Sort) 唯一，
             //   冲突时给出明确提示而不是让 DB 报 1062
             var dup = await SectionEntity.GetOne(x =>
                 x.OrgCode == entity.OrgCode &&
                 x.StandardCode == entity.StandardCode &&
                 x.PhaseCode == entity.PhaseCode &&
-                x.SortOrder == entity.SortOrder);
+                x.Sort == entity.Sort);
 
             if (dup.Data != null)
             {
                 return Ok(ApiResponse<object?>.Fail(
-                    $"该阶段下第 {entity.SortOrder} 章已被「{dup.Data.SectionName}」占用，请调整排序号"));
+                    $"该阶段下第 {entity.Sort} 章已被「{dup.Data.SectionName}」占用，请调整排序号"));
             }
 
             entity.Code      = Guid.NewGuid().ToString("N");
@@ -254,7 +254,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
         }
 
         /// <summary>
-        /// 删除章节（★2026-10-09 改硬删：uk_scope_sort 不含 IsDeleted，软删后同 SortOrder
+        /// 删除章节（★2026-10-09 改硬删：uk_scope_sort 不含 IsDeleted，软删后同 Sort
         /// 重建必撞唯一键 1062 —— 与实体 <c>YZHDeleteStrategy(Hard)</c> 策略一致）
         /// </summary>
         [HttpPost("section/delete")]
@@ -270,7 +270,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
             if (!found.Success || found.Data == null)
                 return Ok(ApiResponse<object?>.Fail("章节不存在或已被删除", 404));
 
-            // ★ 物理删除：释放 SortOrder 占位（uk_scope_sort 对全表唯一），
+            // ★ 物理删除：释放 Sort 占位（uk_scope_sort 对全表唯一），
             //    与实体 [YZHDeleteStrategy(Hard)] 口径一致；章节定义无审计留痕需求，
             //    生成侧参照已拷贝至 cert_expert_report_section_item.SectionTemplateContent。
             var affected = await _db.Client.Deleteable<ReportSection>()
@@ -298,7 +298,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
 
             // ★ 2026-10-12 终裁：章节恒为后台标准级 —— orgCode 入参不参与匹配
             var list = await SectionEntity.GetListAsync(
-                x => x.OrgCode == CoreOrgCodes.StdEnv &&
+                x => x.OrgCode == "" &&
                      x.StandardCode == standardCode &&
                      x.PhaseCode == phaseCode);
 

@@ -501,7 +501,7 @@ export class StandardManageLogic extends TreeTableCore<any> {
     this.clauseFormData.value = {
       StandardCode: stdCode,
       ParentCode: null,
-      SortOrder: 0,
+      Sort: 0,
       IsValid: 1,
     }
     await this.loadParentOptions()

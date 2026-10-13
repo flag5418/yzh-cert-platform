@@ -59,7 +59,7 @@ export interface MergedParamItem {
   SourceExpr?: string | null
   IsRequired: boolean
   IsBuiltin: boolean
-  SortOrder: number
+  Sort: number
   Description?: string | null
   Placeholder?: string | null
 

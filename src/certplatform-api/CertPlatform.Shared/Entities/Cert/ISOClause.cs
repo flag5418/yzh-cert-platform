@@ -42,7 +42,7 @@ namespace CertPlatform.Shared.Entities.Cert
         /// <summary>
         ///     ★ <b>机构归属</b>（`OrgCode` 判据铁律 —— 见
         ///     <c>docs/30-项目规则/跨端共享与核心资源检索规则-V1.md</c> §二）。
-        ///     <para>后台建立的标准级数据 ⇒ <c>CoreOrgCodes.StdEnv</c>（<c>'yzh-std-env'</c>）；
+        ///     <para>后台建立的标准级数据 ⇒ <c>''</c>（<c>'yzh-std-env'</c>）；
         ///     企业专属 ⇒ 该企业 <c>Code</c>。</para>
         ///     <para>⛔ <b>不要</b>用 <c>NULL</c> / <c>''</c> 表示「后台」；
         ///     判断归属一律调 <c>OrgScope.IsBackendBuilt(...)</c>（守卫 <b>A-R8</b>）。</para>
@@ -74,8 +74,5 @@ namespace CertPlatform.Shared.Entities.Cert
 
         /// <summary>条款原文或摘要</summary>
         public string? Description { get; set; }
-
-        /// <summary>条款排序</summary>
-        public int SortOrder { get; set; }
     }
 }

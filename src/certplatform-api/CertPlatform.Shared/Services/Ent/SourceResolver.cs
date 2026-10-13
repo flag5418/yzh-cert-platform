@@ -32,8 +32,11 @@ namespace CertPlatform.Shared.Services.Ent
     /// （<c>24-后端实体归属清单</c> §一，守卫 R17 会把「上移到 Shared」拦下），
     /// 而本类在 Admin 端、⛔ 看不见它（C2：Admin 不引 Auditor）。
     /// ⇒ <b>由能读该表的调用方（Auditor 侧编排器）预取后传入</b>。
-    /// ⚠️ 当前唯一调用方 <c>EnterpriseDocNormalizationExecutor</c>（Admin，**待停用**）
-    /// 无法提供 ⇒ 显式传 <c>null</c>；第 2 批 P1 的新编排器落在 Auditor，届时传入真实值。</para>
+    /// <para>⚠️ 调用方现有<b>两个</b>（2026-10-13 核对，原注释「唯一调用方 / 待停用 / 届时传入」已过时）：
+    /// ① <c>DocumentFillOrchestrator</c>（Auditor，<b>现役主链</b>）—— 预取
+    /// <c>cert_fill_param_value</c> 后传入<b>真实值</b>（<c>DocumentFillOrchestrator.cs:201-204</c>）；
+    /// ② <c>EnterpriseDocNormalizationExecutor</c>（Admin，<b>旧链</b>）—— Admin 端看不见该实体
+    /// ⇒ 显式传 <c>null</c>（<c>EnterpriseDocNormalizationExecutor.cs:154-158</c>）。</para>
     /// </summary>
     public class SourceResolver
     {
