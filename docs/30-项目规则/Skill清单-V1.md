@@ -321,9 +321,15 @@ SkillExecutor.ExecuteAsync(skillCode, context, sp, ct)
 
 | 输入端口 | 类型 | 必填 | 默认值 | 绑定模式 | 说明 |
 |---|---|---|---|---|---|
-| `prefix_text` | string | 否 | null | LinkOrConstant | 前半部分文本（合并前） |
-| `suffix_text` | string | 否 | null | LinkOrConstant | 后半部分文本（合并后） |
-| `joiner` | string | 否 | null | LinkOrConstant | 连接符（空=直接拼接） |
+| `prefix_text` | string | 是 | null | LinkOrConstant | 前半部分文本（合并前），不允许为空 |
+| `suffix_text` | string | 是 | null | LinkOrConstant | 后半部分文本（合并后），不允许为空 |
+| `joiner` | string | 否 | null | ConstantOnly | 连接符（空=直接拼接） |
+
+> ★ 2026-10-12 实测对齐（`GET /api/Admin/Workflow/WfSkill/metadata`）：`prefix_text`/`suffix_text`
+> 声明 `AllowEmpty=Deny`（必填，空值 ⇒ `PRECONDITION_EMPTY` 中断）；`joiner` 由 LinkOrConstant 改
+> **ConstantOnly** —— 连接符是静态配置值，业务上不可能是上游节点输出，原模式会让界面默认停在
+> 「连线」页签、占位符显示「选择上游节点」，误导使用者。权威来源 = 代码 `[SkillParam]`
+> （`AssembleSkill.cs`），⛔ 非 `wf_skill_input` 表（该表BindMode 为死数据，改了不生效）。
 
 **输出 result**（string）：`assembled_text`。
 

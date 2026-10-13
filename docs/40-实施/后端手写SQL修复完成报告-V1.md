@@ -27,7 +27,7 @@ src/certplatform-api/CertPlatform.Shared/Entities/Dir/StandardDirectoryRootFileV
 scripts/db/views/v_cert_configured_rules.sql
 scripts/db/views/v_upload_task_detail.sql
 scripts/db/views/v_standard_directory_root_files.sql
-docs/50-任务/分析报告/后端手写SQL问题分析-V4.md
+docs/40-实施/分析报告/后端手写SQL问题分析-V4.md
 ```
 
 ### 2.2 修改文件

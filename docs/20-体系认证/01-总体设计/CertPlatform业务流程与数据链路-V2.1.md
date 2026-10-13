@@ -177,7 +177,7 @@ AddOnExecuting = (saveModel, entity) =>
 | `/api/AuditTask/` | `AuditTaskController` | `getPageData`, `add`, `update`, `del`, `assign` |
 
 > **注意**：前端 `options.js` `table.url` 必须 **以 `/` 结尾**，否则 VolTable 拼接会出现 `ISOStandardgetPageData` 形式的 404。
-> 对应踩坑见：[2026-08-03 踩坑记录 P2-06](../../30-项目规则/知识库/05-踩坑记录/2026-08-03_Phase2联调全栈问题修复记录.md)
+> 对应踩坑见：[2026-08-03 踩坑记录 P2-06](../../90-归档/历史项目/Vol框架/知识库-踩坑记录/2026-08-03_Phase2联调全栈问题修复记录.md)
 
 ---
 
@@ -260,7 +260,7 @@ const rowClick     = ({ row }) => { /* 保存选中行到 selectedRow ref */ }
 
 | 现象 | 入口文档 |
 |------|----------|
-| 接口 500 / Unknown column / repository null | [Phase2 联调踩坑记录 P2-01~P2-03](../../30-项目规则/知识库/05-踩坑记录/2026-08-03_Phase2联调全栈问题修复记录.md) |
+| 接口 500 / Unknown column / repository null | [Phase2 联调踩坑记录 P2-01~P2-03](../../90-归档/历史项目/Vol框架/知识库-踩坑记录/2026-08-03_Phase2联调全栈问题修复记录.md) |
 | Vue 3 parentNode 空 / formatter 报错 / 404 路径拼接错误 | 同上 P2-04~P2-07 |
 | 新增业务 Hook（保存前/后、流水号、自动生成子任务） | Vol Skill §12.A → 本文件 §六 |
 | 模块跳转参数丢失 | 本文件 §四 跳转矩阵 SOP |
