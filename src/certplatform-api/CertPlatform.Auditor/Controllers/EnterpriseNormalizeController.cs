@@ -21,6 +21,7 @@ using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Queue;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Shared.Domain.Scope;
+using CertPlatform.Shared.Domain.Organization;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Entities.Dir;
 using CertPlatform.Shared.Entities.Doc;
@@ -866,12 +867,17 @@ namespace CertPlatform.Auditor.Controllers
             }
 
             // ★ 排序（10-07 实测：两标准 Sort 都是 0 ⇒ 必须补版本年与标准 Code，否则顺序随机）
-            nodes = nodes
-                .OrderByDescending(n => n.Mounted)
-                .ThenBy(n => n.Sort)
-                .ThenByDescending(n => n.VersionYear)
-                .ThenBy(n => n.StandardCode, StringComparer.Ordinal)
-                .ToList();
+            // ★★ 1.B.6c：收口 OrgStandardTreeAssembler.OrderStandards —— 排序口径唯一实现。
+            //   「已挂载优先」（Mounted: 1/0）走**前置键**参数（`primaryDescendingOf`），
+            //   ⛔ 不在端点里重写排序链（那正是口径分裂的来源）。
+            //   改前：`.OrderByDescending(Mounted).ThenBy(Sort).ThenByDescending(VersionYear).ThenBy(StandardCode)`
+            //   ⇒ 逐键等价（`Mounted` 降序 = 1 在前 = true 在前）。
+            nodes = OrgStandardTreeAssembler.OrderStandards(
+                nodes,
+                n => n.Sort,
+                n => n.VersionYear,
+                n => n.StandardCode,
+                n => n.Mounted ? 1 : 0);
 
             return Ok(ApiResponse<object>.Ok(new
             {
@@ -903,19 +909,12 @@ namespace CertPlatform.Auditor.Controllers
 
             // ② 全部标准域文件 —— 只用于「这个文件夹一共有几个文件」的分母
             //    ⚠️ 必须按 ConfigCode 查（⛔ 不按 StandardCode）—— 同一标准可以有多个目录配置
-            var allStdFiles = configCodes.Count == 0
-                ? new List<StandardDirectoryFile>()
-                : (await _db.GetListAsync<StandardDirectoryFile>(x =>
-                      configCodes.Contains(x.ConfigCode) &&
-                      string.IsNullOrEmpty(x.EnterpriseCode) &&
-                      x.IsValid == 1)).Data ?? new List<StandardDirectoryFile>();
+            //    ★★ 1.B.6c：收口 CoreResourceQuery（谓词逐字一致：ConfigCode ∈ 集合 ∧ **非企业行** ∧ IsValid == 1）
+            var allStdFiles = await _core.GetNonEnterpriseDirectoryFilesByConfigCodesAsync(configCodes);
 
             // ③ 文件夹（结构要如实 —— 全显，不做「空文件夹剪枝」）
-            var folders = configCodes.Count == 0
-                ? new List<StandardDirectoryFolder>()
-                : (await _db.GetListAsync<StandardDirectoryFolder>(x =>
-                      configCodes.Contains(x.ConfigCode!) && x.IsValid == 1)).Data
-                  ?? new List<StandardDirectoryFolder>();
+            //    ★★ 1.B.6c：收口 CoreResourceQuery（空集合 ⇒ 内部直接返回空、⛔ 不发查询，语义同改前）
+            var folders = await _core.GetDirectoryFoldersAsync(configCodes);
 
             // ④ 最近一次填充留痕（页面要显示「上次跑成什么样」）
             var logs = fileCodes.Count == 0
@@ -1014,10 +1013,12 @@ namespace CertPlatform.Auditor.Controllers
             foreach (var r in roots)
                 AccumulateCounts(r, totalByFolder, fillableByFolder);
 
-            node.Folders = roots
-                .OrderBy(r => r.Sort)
-                .ThenBy(r => r.FolderName, StringComparer.Ordinal)
-                .ToList();
+            // ★★ 1.B.6c：排序收口 OrgStandardTreeAssembler.OrderFolders（口径唯一实现）。
+            //   ⚠️ 第二键**保留 `FolderName`**（⛔ 非 `Code`）：同层文件夹名唯一
+            //   （`StandardDirectoryService` 建/改文件夹时做同层同名查重）⇒ `FolderName` 既是
+            //   **确定性**兜底、又是用户可读序；`Code` 是 GUID，用它兜底会退化成**随机序**。
+            //   改前逐键等价（`OrderBy(Sort).ThenBy(FolderName, Ordinal)`）⇒ 响应零差异。
+            node.Folders = OrgStandardTreeAssembler.OrderFolders(roots, r => r.Sort, r => r.FolderName);
 
             // ⑧ 不在任何文件夹下的可规范化文件（FolderCode = "" 或指向已失效的文件夹）
             node.RootFiles = fileNodes
@@ -1045,10 +1046,8 @@ namespace CertPlatform.Auditor.Controllers
 
             n.TotalFileCount = total;
             n.FillableCount = fillable;
-            n.Children = n.Children
-                .OrderBy(c => c.Sort)
-                .ThenBy(c => c.FolderName, StringComparer.Ordinal)
-                .ToList();
+            // ★★ 1.B.6c：同 `node.Folders` —— 收口 OrderFolders；第二键 = `FolderName`（理由同上）
+            n.Children = OrgStandardTreeAssembler.OrderFolders(n.Children, c => c.Sort, c => c.FolderName);
         }
 
         // ════════════════════════════════════════════════════════════════════

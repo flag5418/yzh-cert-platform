@@ -89,13 +89,23 @@ public static class OrgStandardTreeAssembler
         => source.OrderBy(sortOf).ThenBy(stageCodeOf, StringComparer.Ordinal).ToList();
 
     /// <summary>
-    /// <b>文件夹 / 文件</b>排序：<c>Sort → Code</c>。
+    /// <b>文件夹 / 文件</b>排序：<c>Sort → 确定性兜底键</c>。
+    ///
+    /// <para><b>★ 第二键 = 调用方给的「确定性兜底键」</b>，⛔ 不必是 <c>Code</c>：
+    /// <list type="bullet">
+    ///   <item>节点以 <c>Code</c> 为业务键 ⇒ 传 <c>Code</c>（如目录配置 / 文件）；</item>
+    ///   <item><b>用户可见的文件夹</b> ⇒ 传 <c>FolderName</c> —— 同层文件夹名<b>唯一</b>
+    ///   （<c>StandardDirectoryService</c> 建/改时做同层同名查重）⇒ 同样确定性，
+    ///   且是人类可读序；<c>Code</c> 是 GUID，用它兜底会退化成<b>随机序</b>。</item>
+    /// </list>
+    /// ⚠️ 2026-10-13（1.B.6c）修正：原注释写死 <c>Sort → Code</c>，会让「文件夹按名字排」的
+    /// 端点被迫改成 GUID 序 —— 那是**无谓的行为变更**，与 §4.1「避免无谓行为变更」冲突。</para>
     /// </summary>
     public static List<T> OrderFolders<T>(
         IEnumerable<T> source,
         Func<T, int> sortOf,
-        Func<T, string?> codeOf)
-        => source.OrderBy(sortOf).ThenBy(codeOf, StringComparer.Ordinal).ToList();
+        Func<T, string?> deterministicKeyOf)
+        => source.OrderBy(sortOf).ThenBy(deterministicKeyOf, StringComparer.Ordinal).ToList();
 
     // ─────────────────────────────── 装配（父子上溯 + Children） ───────────────────────────────
 

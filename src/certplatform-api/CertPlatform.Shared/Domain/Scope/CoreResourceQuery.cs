@@ -167,6 +167,21 @@ public interface ICoreResourceQuery
     /// <summary>按目录配置 <c>Code</c> 集合批量取文件（<paramref name="includeDisabled"/> 语义同单数版）。</summary>
     Task<List<StandardDirectoryFile>> GetDirectoryFilesByConfigCodesAsync(IEnumerable<string> configCodes, bool includeDisabled = false);
 
+    /// <summary>
+    /// 按目录配置 <c>Code</c> 集合取<b>非企业行</b>（机构行 / 平台标准级）的目录文件。
+    ///
+    /// <para><b>★ 判据</b> = <c>OrgScope.IsEnterpriseRow</c> 的 <b>SQL 等价式</b>
+    /// <c>string.IsNullOrEmpty(x.EnterpriseCode)</c>（该列 <c>NOT NULL</c>，见 <c>OrgScope</c> 类注释）。</para>
+    ///
+    /// <para><b>★ 用途</b>：树端点里「<b>该目录一共有几个文件</b>」的<b>分母</b>
+    /// —— ⛔ 企业专属行不计入标准域分母（见 <c>EnterpriseNormalizeController.FillStandardTreeAsync</c>
+    /// 的 <c>TotalFileCount</c>）。</para>
+    ///
+    /// <para>⚠️ 与 <see cref="GetDirectoryFilesByConfigCodesAsync"/> 的<b>唯一差别</b> = 是否限定非企业行：
+    /// 后者<b>含</b>企业行（模板目录树 <c>GetTemplateDirectoryTreeAsync</c> 即用后者）。</para>
+    /// </summary>
+    Task<List<StandardDirectoryFile>> GetNonEnterpriseDirectoryFilesByConfigCodesAsync(IEnumerable<string> configCodes);
+
     /// <summary>按上传任务 <c>TaskId</c> 取文件（<paramref name="includeDisabled"/>：待激活/等转换行 <c>IsValid=0</c>，须显式带上）。</summary>
     Task<List<StandardDirectoryFile>> GetDirectoryFilesByTaskIdAsync(string taskId, bool includeDisabled = false);
 
@@ -500,6 +515,20 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         if (codes.Count == 0) return new List<StandardDirectoryFile>();
 
         var rows = await _db.GetListAsync<StandardDirectoryFile>(x => codes.Contains(x.ConfigCode!), includeDisabled: includeDisabled);
+        return rows.Data ?? new List<StandardDirectoryFile>();
+    }
+
+    public async Task<List<StandardDirectoryFile>> GetNonEnterpriseDirectoryFilesByConfigCodesAsync(IEnumerable<string> configCodes)
+    {
+        var codes = new List<string>();
+        foreach (var c in configCodes)
+            if (!string.IsNullOrWhiteSpace(c)) codes.Add(c);
+        if (codes.Count == 0) return new List<StandardDirectoryFile>();
+
+        // 非企业行 = EnterpriseCode 为空（OrgScope.IsEnterpriseRow 的 SQL 等价式；该列 NOT NULL）
+        // ⚠️ 谓词逐字沿用端内原写法；includeDisabled 默认 false ⇒ 追加 IsValid == 1（与原 x.IsValid == 1 等价）
+        var rows = await _db.GetListAsync<StandardDirectoryFile>(
+            x => codes.Contains(x.ConfigCode!) && string.IsNullOrEmpty(x.EnterpriseCode));
         return rows.Data ?? new List<StandardDirectoryFile>();
     }
 
