@@ -717,7 +717,7 @@ public class StandardDirectoryService
     /// 获取文件夹树（仅有效文件夹）
     /// </summary>
     /// <remarks>
-    /// ★ 目录域读模型（2026-10-13 设计 §三 1.B.6d）：取数 / 保留段过滤 / 排序
+    /// ★ 目录域读模型（2026-10-13 设计 §三 1.B.6e）：取数 / 保留段过滤 / 排序
     /// （Sort→FolderName）唯一来源 = <c>DirectoryReadModel</c>，本方法只做递归装配。
     /// 与 <see cref="GetFoldersFlatAsync"/> / <see cref="GetStageFileTreeAsync"/> 同一
     /// 过滤口径 ⇒ 三棵树不再互相打架。
@@ -1001,7 +1001,7 @@ public class StandardDirectoryService
     /// 获取文件列表
     /// </summary>
     /// <remarks>
-    /// ★ 目录域读模型（2026-10-13 设计 §三 1.B.6d）：取数 + 配置隔离 + 保留段过滤 +
+    /// ★ 目录域读模型（2026-10-13 设计 §三 1.B.6e）：取数 + 配置隔离 + 保留段过滤 +
     /// 排序（Sort→FileName）全在 <c>DirectoryReadModel</c>。
     /// <para>⚠️ 有意行为变更（P0-3 修复）：<paramref name="folderCode"/> 空时原实现返回
     /// <b>全表</b>（任何配置的文件都泄出）⇒ 现返回<b>空列表</b>。</para>
@@ -2099,7 +2099,7 @@ public class StandardDirectoryService
     /// 用于文档提取规则管理页面，单次返回所有层级的文件夹和文件
     /// </summary>
     /// <remarks>
-    /// ★ 目录域读模型（2026-10-13 设计 §三 1.B.6d）：1/2 步的取数 + 保留段过滤 +
+    /// ★ 目录域读模型（2026-10-13 设计 §三 1.B.6e）：1/2 步的取数 + 保留段过滤 +
     /// 排序（Sort→FolderName / Sort→FileName）全在 <c>DirectoryReadModel</c>；
     /// 本方法只做递归装配 + 规则状态关联 + DTO 投影。
     /// </remarks>

@@ -68,6 +68,15 @@ public static class CertPlatformSharedServiceExtensions
                            CertPlatform.Shared.Domain.Scope.CoreResourceQuery>();
 
         // ────────────────────────────────────────────────────────────────
+        // Shared/Domain/Dir/ —— 目录域唯一读模型（2026-10-13 核心资源检索统一）
+        // ────────────────────────────────────────────────────────────────
+        // ★ DirectoryReadModel = 取数（ICoreResourceQuery）+ DirectorySnapshot
+        //   （保留段过滤 + 统一排序口径 + 切片）的一处实现；
+        //   端内 4+1 个读端点只做 DTO 投影，⛔ 不准再自写过滤 / 排序。
+        // ★ 生命周期：持 ICoreResourceQuery（Scoped）⇒ 必须 AddScoped。
+        services.AddScoped<CertPlatform.Shared.Domain.Dir.DirectoryReadModel>();
+
+        // ────────────────────────────────────────────────────────────────
         // Shared/Services/Ai/ —— AI 执行内核
         // ────────────────────────────────────────────────────────────────
         // ★ 待 S1-6 落位：AiFillInvoker（Scoped，构造注入 IDbOrm）/ AiFillPromptBuilder（Singleton，无状态）

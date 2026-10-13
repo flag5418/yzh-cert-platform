@@ -107,6 +107,21 @@ public static class OrgStandardTreeAssembler
         Func<T, string?> deterministicKeyOf)
         => source.OrderBy(sortOf).ThenBy(deterministicKeyOf, StringComparer.Ordinal).ToList();
 
+    /// <summary>
+    /// <b>文件</b>排序：<c>Sort → FileName（Ordinal）</c>（2026-10-13 用户裁决 ①）。
+    ///
+    /// <para>★ 实现即 <see cref="OrderFolders{T}"/>（同一口径）—— 此处给文件排序一个
+    /// 语义化名字，调用点（<c>DirectorySnapshot.Create</c>）读起来即知「这是文件排序的
+    /// 唯一入口」。<paramref name="fileNameOf"/> 传 <c>f =&gt; f.FileName</c>：
+    /// 文件名在同层可重复（不像文件夹名有查重），但配合 Sort 主键仍<b>完全确定</b>
+    /// （同名文件靠稳定排序保持输入序）。</para>
+    /// </summary>
+    public static List<T> OrderFiles<T>(
+        IEnumerable<T> source,
+        Func<T, int> sortOf,
+        Func<T, string?> fileNameOf)
+        => OrderFolders(source, sortOf, fileNameOf);
+
     // ─────────────────────────────── 装配（父子上溯 + Children） ───────────────────────────────
 
     /// <summary>
