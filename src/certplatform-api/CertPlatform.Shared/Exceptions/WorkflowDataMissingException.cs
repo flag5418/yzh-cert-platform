@@ -20,7 +20,7 @@ namespace CertPlatform.Shared.Exceptions
     /// <c>cert_expert_task_data_gap</c> 补录记录。</para>
     ///
     /// <para><b>★ 2026-09-30 补 <see cref="RuleCode"/></b>（用户裁决 J4「1 文件 = 1 规则」）：
-    /// 补录回写 <c>cert_extraction_result</c> 时以 <c>(OrgCode, RuleCode, FieldCode)</c> 定位，
+    /// 补录回写 <c>cert_extraction_result</c> 时以 <c>(EnterpriseCode, RuleCode, FieldCode)</c> 定位，
     /// 没有 RuleCode 就不知道往哪一行写 ⇒ 必须随异常一起带出来。</para>
     /// </summary>
     public class WorkflowDataMissingException : Exception

@@ -20,6 +20,7 @@ import {
 } from '@element-plus/icons-vue'
 import { yzhApi } from '@yzh-core/api/client'
 import { YzhFolderUpload, CertStatusBar, OrgStandardStageTree } from '@share/components'
+import { buildAcceptAttribute, partitionUploadable, checkUploadable } from '@share/constants/upload-file-policy'
 import ConfigTab from './components/ConfigTab.vue'
 import { useFileTree, type TreeNode } from '@share/composables/useFileTree'
 import {
@@ -37,7 +38,6 @@ import {
   ensureDirectoryConfig,
   uploadFile,
   uploadConfirm,
-  filterIgnoredFiles,
   getActiveQueue,
   cancelConvert,
   getStageFileTree,
@@ -72,6 +72,8 @@ const showUploadDialog = ref(false)
 const uploadFiles = ref<File[]>([])
 const uploading = ref(false)
 const uploadProgress = ref({ status: 'idle', currentFile: '', completed: 0, total: 0 })
+/** ★ accept 由共享契约生成（唯一事实源 upload-file-policy.json，⛔ 不手写后缀串）；拖拽/选文件夹绕过 accept，submit 时 partitionUploadable 兜底 */
+const UPLOAD_ACCEPT = buildAcceptAttribute()
 
 // 选中项
 const selectedItems = reactive(new Set<string>())
@@ -613,6 +615,12 @@ async function onReplacePicked(e: Event) {
   const picked = input.files?.[0]
   input.value = '' // 允许重复选择同一文件
   if (!picked || !replaceTarget) return
+  // ★ 上传契约闸门（后端 ReplaceFileAsync 同样 Check —— 前端先拦，用户看到人话）
+  const verdict = checkUploadable(picked.name)
+  if (!verdict.ok) {
+    ElMessage.warning(verdict.message ?? '不支持的文件格式')
+    return
+  }
   const t = replaceTarget
   const ok = await confirmOrFalse(
     `确定用「${picked.name}」替换「${t.name}」吗？${['doc', 'xls'].includes(t.type) ? '替换后将自动重新转换。' : ''}`,
@@ -656,13 +664,23 @@ async function onUploadSubmit() {
     return
   }
 
-  uploading.value = true
-  const filteredFiles = filterIgnoredFiles(uploadFiles.value)
+  // ★ 上传契约闸门（唯一事实源 upload-file-policy.ts，与后端 upload/init 闸门同口径）：
+  //   系统噪声静默剔除；白名单外剔除并列出 —— ⛔ 不再用本地 filterIgnoredFiles 黑名单
+  const part = partitionUploadable(uploadFiles.value)
+  if (part.noise.length > 0) {
+    ElMessage.info(`已自动忽略 ${part.noise.length} 个系统文件（${part.noise.slice(0, 3).map((nf) => nf.name).join('、')}${part.noise.length > 3 ? ' 等' : ''}）`)
+  }
+  const okNames = new Set(part.accepted.map(a => a.name))
+  const filteredFiles = uploadFiles.value.filter(f => okNames.has(f.name))
   if (filteredFiles.length === 0) {
-    ElMessage.warning('所有文件均被过滤（如 .DS_Store），无可上传文件')
-    uploading.value = false
+    ElMessage.warning(part.rejected[0]?.message ?? '所有文件均被过滤，无可上传文件')
     return
   }
+  if (part.rejected.length > 0) {
+    ElMessage.warning(`以下 ${part.rejected.length} 个文件格式不支持，已移出本次上传：${part.rejected.slice(0, 3).map((rf) => rf.name).join('、')}${part.rejected.length > 3 ? ' 等' : ''}`)
+  }
+
+  uploading.value = true
   uploadProgress.value = { status: 'uploading', currentFile: '', completed: 0, total: filteredFiles.length }
 
   try {
@@ -942,7 +960,7 @@ onUnmounted(() => {
 <template>
   <div class="directory-manager">
     <!-- 替换文件用隐藏选择器 -->
-    <input ref="replaceInputRef" type="file" style="display: none" @change="onReplacePicked" />
+    <input ref="replaceInputRef" type="file" :accept="UPLOAD_ACCEPT" style="display: none" @change="onReplacePicked" />
     <!-- 转换队列状态条（历史项目位于面包屑下方，此处作为整页顶部通知） -->
     <div v-if="activeQueue" class="queue-banner">
       <el-icon class="is-spinning"><Loading /></el-icon>
@@ -968,7 +986,7 @@ onUnmounted(() => {
         title="目录结构"
         search-placeholder="搜索机构 / 标准 / 阶段..."
         :default-expand-level="3"
-        :max-level="5"
+        :max-level="0"
         :leaf-types="['stage']"
         :data="fileTreeData as any"
         @node-click="onTreeNodeClick"
@@ -1259,6 +1277,7 @@ onUnmounted(() => {
 
         <YzhFolderUpload
           v-model="uploadFiles"
+          :accept="UPLOAD_ACCEPT"
           :uploading="uploading"
           :max-files="500"
           :max-size="50 * 1024 * 1024"

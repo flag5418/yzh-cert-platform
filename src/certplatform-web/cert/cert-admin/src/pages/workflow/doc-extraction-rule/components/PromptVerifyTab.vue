@@ -179,7 +179,7 @@ function cellText(v: unknown): string {
       <el-button type="default" size="small" :loading="verifying" @click="emit('verify')">
         验证 Prompt
       </el-button>
-      <span class="verify-hint">{{ prompt ? '按上方提示词提取' : '按固定提示词（字段/表格定义）提取' }}</span>
+      <span class="verify-hint">{{ prompt ? '按上方提示词提取（验证通过后将自动保存）' : '按固定提示词（字段/表格定义）提取，验证通过后将自动保存' }}</span>
     </div>
   </div>
 </template>

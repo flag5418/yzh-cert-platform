@@ -44,7 +44,8 @@ public class YzhQueueResourceLock : BaseEntity, ISoftDelete
     public string? ActiveKey { get; set; }
 
     /// <summary>加锁时间</summary>
-    public DateTime? LockTime { get; set; } = DateTime.UtcNow;
+        /// <summary>★ 2026-10-14：默认值 UtcNow → Now（与 QueueManager 显式赋值、SQL NOW() 写的 ReleaseTime 同口径=本地时间）</summary>
+        public DateTime? LockTime { get; set; } = DateTime.Now;
 
     /// <summary>释放时间</summary>
     public DateTime? ReleaseTime { get; set; }

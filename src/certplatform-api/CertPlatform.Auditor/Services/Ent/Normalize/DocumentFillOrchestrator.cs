@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using YZH.Core.Api.Services;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 using CertPlatform.Shared.Domain.Scope;
@@ -69,13 +70,23 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
         private readonly SourceResolver _sourceResolver;
         private readonly IAiFillInvoker _aiInvoker;
 
+        // ★ 2026-10-14 审计字段统一（设计 §3.4 收敛清单）：账本 / AI 建议的 Code + CreateBy
+        //   由基类统一填（原 `_db.InsertBatchAsync` 直插不经过 AddCore ⇒ 审计人恒空）。
+        //   ⚠️ 只借它 FillOnly（见 WriteMode），插入仍走本类自己的 InsertBatchAsync：
+        //     ① 本处**在事务内**，基类 Commit 模式会自带 BeginTransaction ⇒ 嵌套破坏原子性；
+        //     ② 基类是逐条 InsertAsync，InsertBatchAsync 才是真批量。
+        private readonly EntityService<DocFillValue> _ledgerService;
+        private readonly EntityService<DocAiSuggestion> _suggestionService;
+
         public DocumentFillOrchestrator(
             IDbOrm db,
             IObjectStorage storage,
             ILogger<DocumentFillOrchestrator> logger,
             SourceResolver sourceResolver,
             IAiFillInvoker aiInvoker,
-            ICoreResourceQuery core)
+            ICoreResourceQuery core,
+            EntityService<DocFillValue> ledgerService,
+            EntityService<DocAiSuggestion> suggestionService)
         {
             _db = db;
             _core = core;
@@ -83,6 +94,8 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
             _logger = logger;
             _sourceResolver = sourceResolver;
             _aiInvoker = aiInvoker;
+            _ledgerService = ledgerService;
+            _suggestionService = suggestionService;
         }
 
         // ════════════════════════════════════════════════════════════════════
@@ -515,7 +528,17 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
 
                     if (ledger.Count > 0)
                     {
-                        var ledgerResult = await _db.InsertBatchAsync(ledger);
+                        // ★ §3.4 收敛：Code/CreateBy 由基类统一填（原直插不经过 AddCore ⇒ 审计人恒空）。
+                        //   ⚠️ FillOnly：只填不执行 —— 插入仍由**本事务内**的 InsertBatchAsync 完成
+                        //   （基类 Commit 模式会自带 BeginTransaction，嵌进本事务会破坏原子性）。
+                        var ledgerFillResult = await _ledgerService.InsertBatch(ledger, mode: WriteMode.FillOnly);
+                        if (!ledgerFillResult.Success)
+                        {
+                            throw new InvalidOperationException(
+                                $"取值账本审计字段填充失败：{ledgerFillResult.Error}");
+                        }
+
+                        var ledgerResult = await _db.InsertBatchAsync(ledgerFillResult.Data);
                         if (!ledgerResult.Success)
                         {
                             throw new InvalidOperationException(
@@ -1526,13 +1549,26 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                 {
                     // ★ 同样**必须检查返回值**：`InsertBatchAsync` 失败时返回 `Result.Fail` 而**不抛异常**
                     //   ⇒ 丢弃返回值 = 静默失败（建议池恒 0 行，而日志/界面照报「AI 已产建议」）。
-                    var suggResult = await _db.InsertBatchAsync(suggestions);
-                    if (!suggResult.Success)
+                    //
+                    // ★ §3.4 收敛：Code/CreateBy 由基类统一填（原直插不经过 AddCore ⇒ 审计人恒空）；
+                    //   FillOnly = 只填不执行，插入仍走 `_db.InsertBatchAsync`（真批量，避免逐条开销）。
+                    var suggFillResult = await _suggestionService.InsertBatch(suggestions, mode: WriteMode.FillOnly);
+                    if (!suggFillResult.Success)
                     {
-                        // ⛔ 不静默降级：AI 建议落库失败必须留痕（值已落笔不受影响，但审计缺行）
-                        _logger.LogError("[EntNorm] AI 建议落库失败（{Count} 条）：{Err}",
-                            suggestions.Count, suggResult.Error);
-                        skillTrace.Add($"ai_suggestion_insert_failed:{suggestions.Count}");
+                        _logger.LogError("[EntNorm] AI 建议审计字段填充失败（{Count} 条）：{Err}",
+                            suggestions.Count, suggFillResult.Error);
+                        skillTrace.Add($"ai_suggestion_fill_failed:{suggestions.Count}");
+                    }
+                    else
+                    {
+                        var suggResult = await _db.InsertBatchAsync(suggFillResult.Data);
+                        if (!suggResult.Success)
+                        {
+                            // ⛔ 不静默降级：AI 建议落库失败必须留痕（值已落笔不受影响，但审计缺行）
+                            _logger.LogError("[EntNorm] AI 建议落库失败（{Count} 条）：{Err}",
+                                suggestions.Count, suggResult.Error);
+                            skillTrace.Add($"ai_suggestion_insert_failed:{suggestions.Count}");
+                        }
                     }
                 }
             }

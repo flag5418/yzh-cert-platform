@@ -51,6 +51,7 @@ SET @is_exc = CONCAT(
   '   OR LEFT(x.V, 15) = ''fix_stage_align''',           -- fix_stage_align_20260930
   '   OR LEFT(x.V, 10) = ''manual_fix''',                -- manual_fix_20260925
   '   OR LEFT(x.V, 7)  = ''repair-''',                   -- repair-20260926
+  '   OR LEFT(x.V, 10) = ''migration-''',               -- migration-20261012（⚠️ 与整词 migration 并存：整词是老标记，带日期后缀是 2026-10-12 起的迁移脚本标记）
   '   OR LEFT(x.V, 15) = ''orphan_cleanup_''',           -- orphan_cleanup_20261007（孤儿机构清理）
   '   OR x.V IN (''migration'', ''sys_migration'', ''restore'', ''auditor_reg'',',
   '               ''menu-restructure'', ''fix_20261010'', ''standard-family-20261008'',',

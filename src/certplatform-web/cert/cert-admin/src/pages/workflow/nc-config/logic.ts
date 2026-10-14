@@ -11,9 +11,11 @@
  * - 选中阶段节点后，内核自动注入 OrgCode / StandardCode / PhaseCode 三字段联动过滤
  * - 数据加载走内核 dataLoader（未选中阶段 → NoSelectionBehavior=empty → 空表）
  * - 行按钮全部由后端 Cert/ValidationRule.json 的 RowButtons 配置驱动
- *   （Edit/Delete + CustomButtons: disable/enable/Copy，**EnableField=IsValid**（1/0）→
+ *   （Edit/Delete + CustomButtons: disable/enable，**EnableField=IsValid**（1/0）→
  *   内核按行状态二选一：启用行只显橙「禁用」、停用行只显绿「启用」），
  *   走标准 POST /action/{method} 约定，前端零硬编码按钮
+ *   ⚠️ 原单条「复制」按钮已下线（2026-10-14）：规划中的复制是**跨标准批量克隆**
+ *   （选目标标准 → 勾选源标准规则 → 批量生成），不是单行克隆，待另行设计
  * - ★ 2026-10-08 启停字段由 IsActive(bool) 统一为 IsValid(int 0/1)（铁律九）：
  *   后端默认过滤 IsValid=1 ⇒ 页面**必须**提供「显示已禁用」开关（见 index.vue），
  *   否则禁用即不可逆（已禁用行不进列表，无法再启用）
@@ -23,7 +25,7 @@
  *   loadConfig()   → 后端只有 GET /config，无 /treepconfig → 前端构造 TreeConfig
  *   loadTreeRoot() → 树不是本实体树，取 StandardDirectory 的组织树
  */
-import { confirmOrFalse,
+import {
   TreeTableLogic,
   expectOk,
   type YzhTableColumn,
@@ -133,7 +135,7 @@ export class NCConfigLogic extends TreeTableLogic<any> {
     return { IsValid: 1 }
   }
 
-  /** 删除/复制确认里显示的实体名称字段（默认 'Name'，本实体是 RuleName） */
+  /** 删除确认里显示的实体名称字段（默认 'Name'，本实体是 RuleName） */
   protected override get entityNameField(): string {
     return 'RuleName'
   }
@@ -151,14 +153,6 @@ export class NCConfigLogic extends TreeTableLogic<any> {
 
   constructor() {
     super()
-    // 「复制」动作加二次确认（按钮本身来自后端 RowButtons.CustomButtons，
-    // 前端仅覆写行为钩子，不改按钮声明）
-    this.registerHandler('custom:Copy', async (row) => {
-      if (!row) return
-      const ok = await confirmOrFalse(`确定复制规则「${row.RuleName}」？`, '确认复制', { type: 'info' })
-      if (!ok) return
-      await this.executeAction('Copy', row)
-    })
     // 新增前校验树选中（业务差异钩子）
     this.registerHandler('add', () => {
       if (!this.anySelected) {

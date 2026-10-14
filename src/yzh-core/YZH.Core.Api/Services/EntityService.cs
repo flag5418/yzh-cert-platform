@@ -426,7 +426,11 @@ public class EntityService<T> where T : class, new()
     /// <summary>
     ///     新增实体（自动填充 Code、审计字段）
     /// </summary>
-    public virtual async Task<Result<T>> Insert(T entity, string? clientIp = null)
+    /// <param name="mode">
+    ///     <see cref="WriteMode.Commit"/>（默认）= 填完立即执行；<see cref="WriteMode.FillOnly"/>
+    ///     = <b>只填 Code/审计字段、⛔ 不执行</b>（调用方在自己的事务里执行，见 WriteMode 注释）。
+    /// </param>
+    public virtual async Task<Result<T>> Insert(T entity, string? clientIp = null, WriteMode mode = WriteMode.Commit)
     {
         try
         {
@@ -443,6 +447,11 @@ public class EntityService<T> where T : class, new()
             }
 
             FillCreateAudit(entity);
+
+            // ★ FillOnly：审计字段已就位，调用方自己执行 —— ⛔ 不执行 SQL、不记「新增记录」审计日志
+            if (mode == WriteMode.FillOnly)
+                return Result<T>.Ok(entity);
+
             var result = await _dbOrm.InsertAsync(entity);
 
             var ctx = _userContext.GetRequestContext();
@@ -465,11 +474,16 @@ public class EntityService<T> where T : class, new()
     /// <summary>
     ///     修改实体（自动填充 UpdateTime/UpdateBy 审计字段）
     /// </summary>
-    public virtual async Task<Result<T>> Update(T entity, string? clientIp = null, string[]? updateFields = null)
+    /// <param name="mode"><see cref="WriteMode.FillOnly"/> = 只填审计字段、⛔ 不执行（见 <see cref="WriteMode"/>)</param>
+    public virtual async Task<Result<T>> Update(T entity, string? clientIp = null, string[]? updateFields = null, WriteMode mode = WriteMode.Commit)
     {
         try
         {
             FillUpdateAudit(entity);
+
+            if (mode == WriteMode.FillOnly)
+                return Result<T>.Ok(entity);
+
             var result = updateFields != null
                 ? await _dbOrm.UpdateAsync(entity, updateFields)
                 : await _dbOrm.UpdateAsync(entity);
@@ -533,7 +547,12 @@ public class EntityService<T> where T : class, new()
     // ==================== 批量操作（事务保护） ====================
 
     /// <summary>批量新增（事务保护）</summary>
-    public virtual async Task<Result<List<T>>> InsertBatch(IEnumerable<T> entities, string? clientIp = null)
+    /// <param name="mode">
+    ///     <see cref="WriteMode.FillOnly"/> = <b>只填 Code/审计字段、⛔ 不开事务不执行</b> ——
+    ///     专给「调用方已在自己的事务里 / 有更好的批量写法（如 <c>InsertBatchAsync</c> 真批量）」的场景，
+    ///     否则基类内部那圈 <c>BeginTransaction()</c> 嵌进外层事务会破坏原子性。
+    /// </param>
+    public virtual async Task<Result<List<T>>> InsertBatch(IEnumerable<T> entities, string? clientIp = null, WriteMode mode = WriteMode.Commit)
     {
         try
         {
@@ -556,6 +575,10 @@ public class EntityService<T> where T : class, new()
                 }
                 FillCreateAudit(entity);
             }
+
+            // ★ FillOnly：全部实体的 Code/审计字段已就位，交回给调用方执行
+            if (mode == WriteMode.FillOnly)
+                return Result<List<T>>.Ok(list);
 
             using var tx = _dbOrm.BeginTransaction();
             try

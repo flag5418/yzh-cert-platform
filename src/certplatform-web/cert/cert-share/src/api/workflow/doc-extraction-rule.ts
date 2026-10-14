@@ -54,6 +54,8 @@ export interface RuleDetailResponse {
   status: 'none' | 'configured' | 'failed'
   fields: FieldDefDto[]
   tables: TableDefDto[]
+  /** ★ 2026-10-14：已落库的验证结果（B-08 字段值 + B-09 表格行），重新进入文件后回显 */
+  extractionData?: ExtractionData | null
   createDate?: string
   modifyDate?: string
 }

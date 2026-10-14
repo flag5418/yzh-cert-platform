@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 using CertPlatform.Admin.Entities.Cert;
+using CertPlatform.Shared.Storage;
 
 namespace CertPlatform.Admin.Services.StandardDirectory;
 
@@ -75,6 +76,10 @@ public class DirectoryTemplateService
     public async Task<(bool ok, string? error, string? storagePath)> UploadTemplateFileAsync(
         System.IO.Stream stream, string fileName, string configCode)
     {
+        // ★ 上传契约闸门（唯一事实源 UploadFilePolicy）——此前零校验，任何后缀都能写 MinIO
+        var verdict = UploadFilePolicy.Check(fileName);
+        if (!verdict.Ok) return (false, verdict.Message, null);
+
         var objectName = $"templates/{configCode}/{fileName}";
         await _storage.UploadAsync(objectName, stream, stream.Length);
         return (true, null, objectName);

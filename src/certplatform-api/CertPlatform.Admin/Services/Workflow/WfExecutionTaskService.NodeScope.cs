@@ -41,6 +41,22 @@ namespace CertPlatform.Admin.Services.Workflow
 
         /// <summary>AI 节点测试专用：前端传入的原始 mockOutputs（nodeId → 输出）</summary>
         public Dictionary<string, Dictionary<string, object>> MockOutputs { get; set; } = new();
+
+        // ──── ★ 2026-10-14 新增：引擎真实产物（测试页 Debug 唯一数据源）────
+        //
+        // 为什么放在这里而不是让控制器自己算：控制器的旧实现用**第二套渲染逻辑**重算提示词，
+        // 且被 `if (ParamPool.Count > 0)` 包住 ⇒ 参数池为空时 RenderedPrompt 恒为 ""
+        // ⇒ 用户在测试页看到「提示词是空的」，排查方向被带偏（缺陷 D2）。
+        // 现在：引擎怎么渲的，就怎么显示，**同一逻辑只允许一处实现**。
+
+        /// <summary>★ 引擎真实渲染后送 LLM 的提示词（= <c>NodeExecutionResult.AiPrompt</c>）</summary>
+        public string AiPrompt { get; set; } = "";
+
+        /// <summary>★ 引擎渲染时**实际使用**的参数池（参数名 → 值）</summary>
+        public Dictionary<string, object> AiParamPool { get; set; } = new();
+
+        /// <summary>★ 渲染后仍未解析的模板引用（空 = 全部解析成功）</summary>
+        public List<string> AiUnresolvedRefs { get; set; } = new();
     }
 
     /// <summary>
@@ -301,7 +317,13 @@ namespace CertPlatform.Admin.Services.Workflow
                 DurationMs = aiResult.DurationMs,
                 Output = aiResult.Output,
                 FlattenedOutputs = flattenedOutputs,
-                MockOutputs = mockOutputs
+                MockOutputs = mockOutputs,
+                // ★ 2026-10-14：引擎真实产物原样带出 —— 测试页 Debug 只认这一份，⛔ 不重算。
+                //   失败时 aiResult 同样带 AiPrompt / AiUnresolvedRefs（见 AiNodeExecutor.ExecuteWithMockAsync），
+                //   因此「LLM 调用失败」的场景下测试页依然能看到「渲染后的提示词 + 还差哪些引用」。
+                AiPrompt = aiResult.AiPrompt ?? "",
+                AiParamPool = aiResult.AiParamPool ?? new Dictionary<string, object>(),
+                AiUnresolvedRefs = aiResult.AiUnresolvedRefs ?? new List<string>()
             };
         }
 
@@ -391,6 +413,10 @@ namespace CertPlatform.Admin.Services.Workflow
         /// <para>start / end / branch / ai_node 不执行（与旧 <c>WorkflowTestController.TestAiNode</c> 行为一致）：
         /// start 由 contextParams 注入代替，end/branch 在单节点测试里无意义，
         /// ai_node 不递归执行（只测目标那一个）。</para>
+        /// <para><b>★ 2026-10-14 参数即边（§2.2）</b>：入边 BFS 的结果还要与目标节点
+        /// <c>config.params[].nodeId</c> <b>取并集</b> —— 数据源节点没有物理连线，
+        /// BFS 走不到它；不并进来测试期就永远不执行（真实路径的同款逻辑见
+        /// <c>WorkflowInterpreter.PreExecuteAiParamSourcesAsync</c>）。</para>
         /// <para>解析失败时返回空列表（退回空上下文），不阻断目标节点测试 —— 与旧实现一致。</para>
         /// </summary>
         private List<WorkflowNodeConfig> ResolveUpstreamPlan(string ruleJson, string targetNodeId)
@@ -427,6 +453,52 @@ namespace CertPlatform.Admin.Services.Workflow
 
             // 反向 BFS：目标节点 → 所有上游（返回顺序为拓扑序）
             var upstreamIds = FindUpstreamNodes(inEdges, targetNodeId);
+
+            // ★★★ 参数即边（设计 §2.2 / 用户裁决 ②）：`params[].nodeId` 与「反向 BFS 出边」**取并集**。
+            //
+            //   数据源节点（docField / docTable）按设计**不需要手工连线** ⇒ 反向 BFS 的入边表里
+            //   根本没有它 ⇒ 不并进来的话，测试期它永远不会被执行，AI 拿到的永远是「上游不存在」
+            //   （前端已改为 MockOutputs 恒空，就是为了把这条路走通 —— 见 WorkflowDesigner §1.3）。
+            //
+            //   ⚠️ 并集只影响「**执行顺序 / 需要跑谁**」，⛔ 不改 ruleJson 的 edges、不改路径枚举。
+            if (allMap.TryGetValue(targetNodeId, out var targetNode))
+            {
+                // 双键索引：refKey（节点 ID ∪ 节点标题）→ 节点 ID（老写法 {{中文标题.端口}} 要能反查）
+                var refIndex = new Dictionary<string, string>(StringComparer.Ordinal);
+                foreach (var kv in allMap)
+                {
+                    refIndex[kv.Key] = kv.Key;
+                    if (!string.IsNullOrEmpty(kv.Value.Title))
+                        refIndex.TryAdd(kv.Value.Title!, kv.Key);
+                }
+
+                var paramIds = AiParams.CollectSourceNodeIds(
+                    targetNode, refKey => refIndex.TryGetValue(refKey, out var id) ? id : null);
+                if (paramIds.Count > 0)
+                {
+                    var ordered = new List<string>(upstreamIds);
+                    var seen = new HashSet<string>(upstreamIds, StringComparer.Ordinal);
+
+                    // ① 先补「参数来源自己的上游」（它同样可能没被 BFS 到）—— 在前 ⇒ 拓扑序成立
+                    foreach (var pid in paramIds)
+                    {
+                        foreach (var upOfParam in FindUpstreamNodes(inEdges, pid))
+                        {
+                            if (upOfParam != targetNodeId && seen.Add(upOfParam))
+                                ordered.Add(upOfParam);
+                        }
+                    }
+
+                    // ② 再追加参数来源本身（已在上游里的不重复加）
+                    foreach (var pid in paramIds)
+                    {
+                        if (pid != targetNodeId && seen.Add(pid))
+                            ordered.Add(pid);
+                    }
+
+                    upstreamIds = ordered;
+                }
+            }
 
             foreach (var upId in upstreamIds)
             {

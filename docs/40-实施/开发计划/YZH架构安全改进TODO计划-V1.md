@@ -69,7 +69,7 @@
 | 13 | **分页 `MaxPageSize` 钳制** | `FilterRequest.cs:7`、`PagerOptions.cs:12` | 0.5d | 后端核心 | 无 | `MaxPageSize = 500`（可配置），超限抛 400 |
 | 14 | **契约生成与漂移校验** | 前后端 | 3d | 全栈 | 9 | OpenAPI 生成 → `openapi-typescript` → `contracts.ts`；CI 加契约比对 |
 | 15 | **约定外控制器登记白名单** | `MenuController` / `AuthController` / `ApiSyncController` | 1d | 后端核心 | 1 | 白名单注册表 + 启动期扫描校验（非白名单裸 Controller 抛警告） |
-| 16 | **上传/导入统一校验策略** | `YzhControllerBase.cs:370-374` | 1d | 后端核心 | 无 | 扩展名/MIME/大小白名单 + 病毒扫描钩子接口 |
+| 16 | **上传/导入统一校验策略** ✅ **已完成（2026-10-14）** | `YzhControllerBase.cs:370-374` | 1d | 后端核心 | 无 | ~~扩展名/MIME/大小白名单 + 病毒扫描钩子接口~~ → **落地为**：`upload-file-policy.json` 单源事实 + `UploadFilePolicy.Check`（Shared，扩展名白/黑名单 + 系统噪声）+ `UploadPolicyGate` 框架扩展点（`FileStorageController` / `ImportCore` 接入，`Program.cs` 注册）+ 业务侧 init/替换/模板/试跑闸门 + 守卫 B-R7（后端）/ R21（前端）。MIME 与病毒扫描钩子**未做**（后续项） |
 | 17 | **审计写入改有界 Channel** | `YzhAuditLogger.cs` | 1.5d | 后端核心 | 无 | `System.Threading.Channels` 替换 `ConcurrentQueue` + 批量 Flush + 上限 1000 |
 | 18 | **缓存统一门面** | `CacheManager` / `INoSql` / `DictService` | 2d | 后端核心 | 11 | `ICacheManager` 接口 + `CacheKeys` 集中声明 + 存量替换 |
 | 19 | **假参数清零** | `EntityService.cs:134-195` | 1d | 后端核心 | 无 | `includeDeleted` 等未传递参数全量核对修复 + 单测补全 |

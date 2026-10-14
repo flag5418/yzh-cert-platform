@@ -30,7 +30,12 @@
  *    用 `UPLOAD_CATEGORIES` 按类别组合，避免每个页面各写一串。
  *
  * ⚠️ **前端过滤只是体验，后端 `UploadFilePolicy.cs` 才是权威** ——
- *    前端可绕过（改 accept / 直接调 API），后端必须硬拦。改规则**两边都要改**。
+ *    前端可绕过（改 accept / 直接调 API），后端必须硬拦。
+ *
+ * ★ **唯一事实源（2026-10-14 起）= `certplatform-api/CertPlatform.Shared/Storage/upload-file-policy.json`**
+ *    加/减后缀只改该 JSON，然后跑 `node scripts/generate/upload-policy.mjs` 重新生成
+ *    本文件与后端 `UploadFilePolicy.cs` 的 `<generated>` 清单段。⛔ 生成段禁手改（守卫 --check 会拦）；
+ *    本文件的判定逻辑（checkUploadable 等）仍为手写、与后端逐字对齐。
  */
 
 export type UploadCategory =
@@ -48,26 +53,24 @@ export interface UploadPolicyVerdict {
   message?: string
 }
 
+// <generated id="ext">
 /** 办公文档类 */
 export const EXT_DOCUMENT = [
-  '.doc', '.docx',
-  '.xls', '.xlsx',
-  '.ppt', '.pptx',
-  '.rtf',
-  '.odt', '.ods', '.odp',
-  '.txt', '.md', '.csv',
+  '.doc', '.docx', '.xls', '.xlsx',
+  '.ppt', '.pptx', '.rtf', '.odt',
+  '.ods', '.odp', '.txt', '.md',
+  '.csv',
 ] as const
 
 /** 图片类（证件 / 现场照片主要走这一类） */
-export const EXT_IMAGE = [
-  '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp',
-] as const
+export const EXT_IMAGE = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'] as const
 
 /** PDF 类（单独成类：判定顺序是「先文本层直解 → 失败才 AI」，与其它格式不同） */
 export const EXT_PDF = ['.pdf'] as const
 
-/** 压缩包类（默认**不开放**） */
+/** 压缩包类（默认**不开放**；理由见下方 DEFAULT_UPLOAD_CATEGORIES 注释） */
 export const EXT_ARCHIVE = ['.zip', '.rar', '.7z', '.tar', '.gz'] as const
+// </generated>
 
 /** 分类 → 后缀表 */
 export const UPLOAD_CATEGORIES: Record<UploadCategory, readonly string[]> = {
@@ -92,31 +95,38 @@ export const UPLOAD_ALLOWED_EXTENSIONS: readonly string[] = [
   ...EXT_PDF,
 ]
 
+/**
+ * ★ 业务子集：空白模板引擎只认 docx/xlsx（⊂ document 类白名单）。
+ * 对应后端 `DocTemplateController.ResolveFileKind` 的类型推导 —— 业务收窄是合法分级，
+ * 但清单必须落在本文件（⛔ 页面不许再硬编码 accept 后缀串）。
+ */
+export const TEMPLATE_EXTENSIONS: readonly string[] = ['.docx', '.xlsx']
+
+// <generated id="blacklist">
 /** 可执行文件 / 系统二进制 —— 明确黑名单（即使将来白名单写错，这些也永远拒） */
 export const UPLOAD_NEVER_EXTENSIONS: readonly string[] = [
-  '.exe', '.dll', '.so', '.dylib', '.bat', '.cmd', '.sh', '.bash',
+  '.exe', '.dll', '.so', '.dylib',
+  '.bat', '.cmd', '.sh', '.bash',
   '.msi', '.apk', '.deb', '.rpm',
 ]
 
 /** HTML/SVG —— ⛔ 拒绝：可内嵌脚本，放行等于给存储开了 XSS 面 */
-export const UPLOAD_SCRIPT_EXTENSIONS: readonly string[] = [
-  '.html', '.htm', '.xhtml', '.svg', '.xml',
-]
+export const UPLOAD_SCRIPT_EXTENSIONS: readonly string[] = ['.html', '.htm', '.xhtml', '.svg', '.xml']
 
 /**
  * 操作系统 / 编辑器垃圾文件名（**小写**）。
  * ⛔ 不要用黑名单穷举：`.DS_Store` 在每个目录都可能生成，还有 `.Spotlight-V100`、
  * `.Trashes`、`.fseventsd` 等 ⇒ 永远列不全。改用**前缀规则**兜底（见 `isSystemNoise`）。
  */
-export const UPLOAD_SYSTEM_NOISE_NAMES: readonly string[] = [
-  'thumbs.db', 'ehthumb.db', 'desktop.ini', 'icon\r',
-]
+export const UPLOAD_SYSTEM_NOISE_NAMES: readonly string[] = ['thumbs.db', 'ehthumb.db', 'desktop.ini', 'icon']
+// </generated>
 
-/** 扩展名（小写，含点）；无扩展名时返回空串 */
+/** 扩展名（小写，含点）；无扩展名 / 尾点（`file.`）/ 首字符即点时返回空串 —— 与后端 `ExtOf` 逐字对齐 */
 export function extOf(fileName?: string | null): string {
   const n = fileName ?? ''
   const i = n.lastIndexOf('.')
-  return i > 0 ? n.slice(i).toLowerCase() : ''
+  // ⚠️ 点号不能是最后一个字符（`file.`），也不能在开头（隐藏文件）—— 与后端 UploadFilePolicy.ExtOf 同款判定
+  return i > 0 && i < n.length - 1 ? n.slice(i).toLowerCase() : ''
 }
 
 /**

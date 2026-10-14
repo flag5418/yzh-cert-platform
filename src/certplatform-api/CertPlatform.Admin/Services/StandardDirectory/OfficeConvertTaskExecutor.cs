@@ -1,4 +1,5 @@
 
+using System.Collections.Concurrent;
 using System.Text.Json;
 using CertPlatform.Shared.Domain.Scope;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +22,23 @@ public class OfficeConvertTaskExecutor : IYzhTaskExecutor
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<OfficeConvertTaskExecutor> _logger;
+
+    /// <summary>
+    ///     转换批次 → 待提取文件缓冲（★ 批量提取，2026-10-14）。
+    ///
+    ///     <para>同一转换队列的多个 file_convert 任务并发跑完时，**不再一文件一提取队列**
+    ///     （那会产生 N 条「企业资料提取 - xx.doc 已完成」终态通知 = 弹窗轰炸）；
+    ///     而是先缓冲到父队列维度，待父转换队列**全部任务终态**后，合并成**一条**
+    ///     多任务提取队列 —— 终态只通知一次：「企业资料提取 - N 个文件」。</para>
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, List<FileConvertPayload>> PendingExtractBatches = new();
+
+    /// <summary>取消/重跑父转换队列时清掉缓冲，避免僵尸条目泄漏（公开给 CancelQueue 路径调用）</summary>
+    public static void ClearPendingExtractBatch(string? parentQueueCode)
+    {
+        if (!string.IsNullOrWhiteSpace(parentQueueCode))
+            PendingExtractBatches.TryRemove(parentQueueCode, out _);
+    }
 
     public OfficeConvertTaskExecutor(
         IServiceProvider serviceProvider,
@@ -49,7 +67,7 @@ public class OfficeConvertTaskExecutor : IYzhTaskExecutor
             var convertService = scope.ServiceProvider.GetRequiredService<OfficeConvertService>();
             var ok = await convertService.ConvertAsync(payload);
             if (ok)
-                await EnqueueEnterpriseExtractAsync(payload, task.QueueCode);
+                await TryEnqueueBatchExtractAsync(payload, task);
             return new TaskExecutionResult
             {
                 Success = ok,
@@ -94,10 +112,17 @@ public class OfficeConvertTaskExecutor : IYzhTaskExecutor
         }
     }
 
-    private async Task EnqueueEnterpriseExtractAsync(FileConvertPayload payload, string? parentQueueCode)
+    /// <summary>
+    ///     ★ <b>批量提取入队</b>（2026-10-14，替代「一文件一提取队列」）：
+    ///     先把成功转换且要求提取的文件缓冲到父转换队列维度；
+    ///     待父队列除当前任务外**再无 pending/processing** 时，合并成一条多任务提取队列。
+    ///
+    ///     <para>并发安全：先 Accumulate 再判兄弟任务 —— 两个 worker 同时收尾时，
+    ///     后完成者会看到前者的任务已置终态（ExecuteTaskAsync 在 ExecuteAsync 返回后才 UPDATE），
+    ///     由后完成者统一 Flush，不会丢缓冲。</para>
+    /// </summary>
+    private async Task TryEnqueueBatchExtractAsync(FileConvertPayload payload, YzhQueueTask task)
     {
-        // ★ 2026-10-13 归属模型 V2：只对「真实企业行」入队（EnterpriseCode 非空）。
-        //   ⛔ 原「机构常量被误当企业码」防御已取消 —— yzh-std-env 常量本身已废除。
         if (!OrgScope.IsEnterpriseRow(payload.EnterpriseCode))
             return;
 
@@ -109,31 +134,111 @@ public class OfficeConvertTaskExecutor : IYzhTaskExecutor
             return;
         }
 
+        var parentQueueCode = task.QueueCode;
+        if (string.IsNullOrWhiteSpace(parentQueueCode))
+        {
+            // 无父队列（异常路径）：退化为单文件提取，保证链路不断
+            await CreateExtractQueueAsync(new List<FileConvertPayload> { payload }, null);
+            return;
+        }
+
+        var batch = PendingExtractBatches.GetOrAdd(parentQueueCode, _ => new List<FileConvertPayload>());
+        lock (batch)
+        {
+            batch.Add(payload);
+        }
+
+        // 兄弟任务是否还有未终态的（排除当前任务 —— 其状态在 ExecuteAsync 返回后才 UPDATE）
+        var remaining = await CountNonTerminalSiblingsAsync(parentQueueCode, task.Code);
+        if (remaining > 0)
+        {
+            _logger.LogInformation(
+                "[FileConvert→Extract] 父队列 {QueueCode} 仍有 {Remaining} 个转换任务未终态，提取入队暂缓（已缓冲 {File}）",
+                parentQueueCode, remaining, payload.Code);
+            return;
+        }
+
+        // 当前是最后一个收尾的转换任务：Flush 全部缓冲
+        List<FileConvertPayload> toEnqueue;
+        lock (batch)
+        {
+            toEnqueue = new List<FileConvertPayload>(batch);
+            batch.Clear();
+        }
+        PendingExtractBatches.TryRemove(parentQueueCode, out _);
+
+        if (toEnqueue.Count == 0) return;
+        await CreateExtractQueueAsync(toEnqueue, parentQueueCode);
+    }
+
+    /// <summary>父转换队列中，除 <paramref name="excludeTaskCode"/> 外仍处于 pending/processing 的任务数</summary>
+    private async Task<int> CountNonTerminalSiblingsAsync(string parentQueueCode, string excludeTaskCode)
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<IDbOrm>();
+            var tasks = await db.GetListAsync<YzhQueueTask>(t => t.QueueCode == parentQueueCode);
+            return (tasks.Data ?? new List<YzhQueueTask>())
+                .Count(t => t.Code != excludeTaskCode && (t.Status == "pending" || t.Status == "processing"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[FileConvert→Extract] 统计兄弟任务失败，按已全部完成处理: {QueueCode}", parentQueueCode);
+            return 0;
+        }
+    }
+
+    /// <summary>把一批已转换文件合并成**一条**多任务提取队列（终态只通知一次）</summary>
+    private async Task CreateExtractQueueAsync(List<FileConvertPayload> files, string? parentQueueCode)
+    {
+        if (files.Count == 0) return;
+
         var queueManager = _serviceProvider.GetRequiredService<QueueManager>();
-        var fileCode = payload.Code;
         var creatorCode = await ResolveParentCreatorAsync(parentQueueCode);
+        var first = files[0];
+        var queueName = files.Count == 1
+            ? $"企业资料提取 - {first.FileName}"
+            : $"企业资料提取 - {files.Count} 个文件";
+
         var req = new QueueManager.CreateQueueRequest
         {
             QueueType = "doc_extract",
-            QueueName = $"企业资料提取 - {payload.FileName}",
-            ScopeKey = payload.EnterpriseCode,
+            QueueName = queueName,
+            // ScopeKey 取首个文件的企业码：资源锁仍逐文件持有；互斥以文件锁为准
+            ScopeKey = first.EnterpriseCode,
             SourceType = "enterprise_extract",
-            // yzh_queue.uk_source 唯一：同一文件多轮转换→提取必须逐次唯一
-            SourceId = $"{fileCode}@{DateTime.Now:yyyyMMddHHmmss}",
+            // yzh_queue.uk_source 唯一：SourceId 带毫秒时间戳 —— 父队列重跑再入提取也不撞唯一键
+            SourceId = string.IsNullOrWhiteSpace(parentQueueCode)
+                ? $"extract-batch@{DateTime.Now:yyyyMMddHHmmssfff}"
+                : $"{parentQueueCode}@{DateTime.Now:yyyyMMddHHmmssfff}",
             // ★ CreateBy 存用户 Code（契约）：继承触发转换的那个人，让派生队列也能通知到人
             UserCode = creatorCode,
-            ResourceLocks = new List<QueueManager.ResourceLockItem>
+            ResourceLocks = files.Select(f => new QueueManager.ResourceLockItem
             {
-                new() { ResourceTable = QueueManager.RESOURCE_FILE, ResourceCode = fileCode, ResourceName = payload.FileName }
-            },
-            Tasks = new List<QueueManager.TaskItem>
+                ResourceTable = QueueManager.RESOURCE_FILE,
+                ResourceCode = f.Code,
+                ResourceName = f.FileName
+            }).ToList(),
+            Tasks = files.Select(f => new QueueManager.TaskItem
             {
-                new() { TaskType = "doc_extract", Payload = JsonSerializer.Serialize(new { code = fileCode, enterpriseCode = payload.EnterpriseCode, stageCode = payload.StageCode, fileName = payload.FileName }) }
-            }
+                TaskType = "doc_extract",
+                Payload = JsonSerializer.Serialize(new
+                {
+                    code = f.Code,
+                    enterpriseCode = f.EnterpriseCode,
+                    stageCode = f.StageCode,
+                    fileName = f.FileName
+                })
+            }).ToList()
         };
-        var (qok, qerr, _, _) = await queueManager.CreateQueueAsync(req);
+        var (qok, qerr, qcode, qcount) = await queueManager.CreateQueueAsync(req);
         if (!qok)
-            _logger.LogWarning("[FileConvert→Extract] 提取队列创建失败: {FileCode} {Reason}", fileCode, qerr);
+            _logger.LogWarning("[FileConvert→Extract] 批量提取队列创建失败（{Count} 个文件）: {Reason}", files.Count, qerr);
+        else
+            _logger.LogInformation(
+                "[FileConvert→Extract] 批量提取队列已创建: {QueueCode}（{Count} 个文件，父队列 {Parent}）",
+                qcode, qcount, parentQueueCode ?? "-");
     }
 
     /// <summary>
@@ -165,10 +270,37 @@ public class OfficeConvertTaskExecutor : IYzhTaskExecutor
         }
     }
 
-    public Task OnTaskStateChangedAsync(YzhQueueTask task, string newStatus, string message)
+    public async Task OnTaskStateChangedAsync(YzhQueueTask task, string newStatus, string message)
     {
         _logger.LogInformation("文件转换任务状态变更: {TaskCode} → {Status} ({Message})",
             task.Code, newStatus, message);
-        return Task.CompletedTask;
+
+        // ★ 失败/取消收尾：成功路径已在 TryEnqueueBatchExtractAsync Flush；
+        //   若最后一个终态是失败/取消，兄弟里已成功的文件仍缓冲着 —— 此处补一次 Flush
+        //   （CountNonTerminalSiblingsAsync 见全终态即触发合并入队）
+        if (newStatus is "failed" or "cancelled" && !string.IsNullOrWhiteSpace(task.QueueCode))
+        {
+            try
+            {
+                var remaining = await CountNonTerminalSiblingsAsync(task.QueueCode, task.Code);
+                if (remaining > 0) return;
+
+                if (PendingExtractBatches.TryRemove(task.QueueCode, out var batch) && batch.Count > 0)
+                {
+                    List<FileConvertPayload> toEnqueue;
+                    lock (batch)
+                    {
+                        toEnqueue = new List<FileConvertPayload>(batch);
+                        batch.Clear();
+                    }
+                    if (toEnqueue.Count > 0)
+                        await CreateExtractQueueAsync(toEnqueue, task.QueueCode);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[FileConvert→Extract] 失败收尾 Flush 提取缓冲失败: {QueueCode}", task.QueueCode);
+            }
+        }
     }
 }

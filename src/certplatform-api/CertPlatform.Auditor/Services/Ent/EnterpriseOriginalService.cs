@@ -890,8 +890,8 @@ namespace CertPlatform.Auditor.Services.Ent
                 .ToListAsync() ?? new List<YzhQueue>();
             var running = active.FirstOrDefault();
 
-            // ★ 进度按**文件**聚合：一个文件 = 一个队列 = 一个任务 ⇒ 旧「单队列 TotalCount」
-            //   口径会显示成「0 / 1」，毫无意义。文件级口径 = 本次在跑的文件里已到终态的占比。
+            // ★ 进度按**文件**聚合：一次提交 = 一个队列、N 文件 = N 任务（2026-10-14 批次化）。
+            //   队列级 TotalCount 只回答「任务数」，文件口径 = 本次在跑的文件里已到终态的占比。
             int queueTotal = 0, queueCompleted = 0;
             if (active.Count > 0)
             {
@@ -1432,9 +1432,10 @@ namespace CertPlatform.Auditor.Services.Ent
             string? queueError = null;
             if (activatable.Count > 0)
             {
-                // 一个文件 = 一个队列 = 一个任务：转换段 + 分析段由 EnterpriseOriginalFileExecutor
-                // **串行**跑在同一个任务里 ⇒ 无须再等「整批转换完」补建 analyze（旧抢跑根因已消）。
-                // TaskId = task.Code ⇒ UploadCancelAsync 的 CancelBatchAsync(taskId) 仍可整批取消。
+                // 2026-10-14 批次化：一次提交 = 一个队列（N 文件 = N 任务，同队列串行执行）；
+                // 转换段 + 分析段由 EnterpriseOriginalFileExecutor 跑在同一个任务里 ⇒ 无须
+                // 等「整批转换完」补建 analyze（旧抢跑根因已消）。
+                // TaskId = task.Code ⇒ UploadCancelAsync 的 CancelBatchAsync(taskId) 仍可整队取消。
                 (queueCode, queueError) = await EnqueueFileQueuesAsync(
                     enterpriseCode, task.StageCode, activatable, task.Code);
             }
@@ -2113,19 +2114,22 @@ namespace CertPlatform.Auditor.Services.Ent
         }
 
         /// <summary>
-        /// ★ <b>按文件建队列</b>（2026-10-06 队列重构的<b>唯一入队口</b>）：
-        /// 一个文件 = 一个队列 = 一个任务（<c>enterprise_original_file</c>），
-        /// 任务内由 <see cref="EnterpriseOriginalFileExecutor"/> <b>串行</b>跑「转换段 → 分析段」。
+        /// ★ <b>按提交建队列</b>（2026-10-14 用户裁决，唯一入队口）：
+        /// <b>一次提交 = 一个队列</b>（<c>enterprise_original_file</c>），N 个文件 = N 个任务
+        /// （队列名「企业原始资料处理 - N 个文件」），对齐 EnterpriseFileService / directory-manager
+        /// 的批次语义 —— 上传后要跑的逻辑多，需要一个队列统一承载，且便于多专家端并发使用。
         ///
-        /// <para><b>同文件重入 = 取消旧队列再重建</b>（用户裁决 ③）：入队前先
-        /// <see cref="CancelActiveQueuesOfFileAsync"/> 收掉该文件的活跃队列（含旧批次 ingest
-        /// 持有的资源锁），否则 <c>yzh_queue_resource_lock.uk_active</c>（Table|Code 唯一）直接冲突。
-        /// ⛔ <b>不再做阶段级 ScopeKey 互斥</b>：一个文件在跑不该拦住同阶段的其他文件
-        /// （旧批次闸门「实测误伤」，已随重构废除）。</para>
+        /// <para><b>同队列串行（框架 T5）</b>：一个队列同一时刻只执行 1 个任务，任务内由
+        /// <see cref="EnterpriseOriginalFileExecutor"/> 跑「转换段 → 分析段」；跨队列照常并行。</para>
+        ///
+        /// <para><b>同文件重入（用户裁决 ③，批次化后的细化）</b>：
+        /// ① 旧队列<b>只含本文件</b>（legacy 单文件队列 / 单文件重建队列）⇒ 取消旧队列再入新队列；
+        /// ② 旧队列是<b>混合批次</b>（还含其他文件的任务）⇒ <b>不取消</b>（误伤同批其他文件），
+        /// 本文件跳过并在 Error 里说明等待；⛔ 仍不做阶段级 ScopeKey 互斥（旧闸门实测误伤）。</para>
         ///
         /// <para><b>★ <c>TaskId</c> = 触发标识 <paramref name="sourceTag"/></b>：confirm 传上传批次 Code
         /// ⇒ <see cref="UploadCancelAsync"/> 的 <c>CancelBatchAsync(taskId)</c>（框架按 TaskId 精确匹配）
-        /// 仍能整批取消；其余入口传 <c>file:{Code}</c> / <c>restore:v{n}</c> / <c>policy:analyze</c>。</para>
+        /// 仍能整队取消；其余入口传 <c>restore:v{n}</c> / <c>policy:analyze</c> 等。</para>
         /// </summary>
         /// <param name="skipAnalyze">true = 只重转不重识别（「重新生成」勾掉「重新识别」）</param>
         private async Task<(string? QueueCode, string? Error)> EnqueueFileQueuesAsync(
@@ -2136,97 +2140,146 @@ namespace CertPlatform.Auditor.Services.Ent
 
             var scopeKey = ScopeKeyOf(enterpriseCode, stageCode);
             var standardCodes = await ResolveStageStandardCodesAsync(enterpriseCode, stageCode);
-            var created = new List<string>();
-            string? firstErr = null;
 
+            // ── 同文件重入分流：单文件旧队列取消重建；混合批次队列不误伤，本文件跳过 ──
+            var ready = new List<EnterpriseOriginalFile>();
+            var blocked = new List<(string FileName, string QueueCode)>();
             foreach (var f in files)
             {
-                await CancelActiveQueuesOfFileAsync(f.Code, f.FileName);
-
-                var (ok, err, code, _) = await _queueManager.CreateQueueAsync(new QueueManager.CreateQueueRequest
+                var conflictQueue = await FindActiveQueueCodeOfFileAsync(f.Code);
+                if (conflictQueue == null)
                 {
-                    QueueType = EnterpriseOriginalQueue.QueueTypeFile,
-                    QueueName = $"企业原始资料处理 - {Truncate(f.FileName, 80)}",
-                    ScopeKey = scopeKey,
-                    SourceType = "enterprise_original",
-                    // uk_source(SourceType, SourceId) 唯一：文件 Code + 毫秒时间戳 ⇒ 同文件多轮不撞
-                    SourceId = $"file:{f.Code}@{DateTime.Now:yyyyMMddHHmmssfff}",
-                    // ★ CreateBy 存用户 Code（契约）—— 此前这个入口根本没传创建人，
-                    //   导致终态通知（站内信 + SignalR）无收件人而静默跳过
-                    UserCode = _user.UserCode,
-                    UserName = _user.UserName,
-                    // 持文件锁：转换段独占该行；取消/完成时由框架统一释放
-                    ResourceLocks = new List<QueueManager.ResourceLockItem>
-                    {
-                        new() { ResourceTable = ResourceTable, ResourceCode = f.Code, ResourceName = f.FileName },
-                    },
-                    Tasks = new List<QueueManager.TaskItem>
-                    {
-                        new()
-                        {
-                            TaskType = EnterpriseOriginalQueue.TaskTypeFile,
-                            TaskId = sourceTag,
-                            Payload = JsonSerializer.Serialize(new EnterpriseOriginalFilePayload
-                            {
-                                Code = f.Code,
-                                EnterpriseCode = f.EnterpriseCode,
-                                StageCode = f.StageCode,
-                                BatchCode = sourceTag,
-                                SkipAnalyze = skipAnalyze,
-                                StandardCodes = standardCodes,
-                            }),
-                        },
-                    },
-                });
-
-                if (ok && !string.IsNullOrEmpty(code))
-                {
-                    created.Add(code);
+                    ready.Add(f);
+                    continue;
                 }
-                else
+
+                var queueFiles = await GetQueueFileCodesAsync(conflictQueue);
+                if (queueFiles.Count == 1 && queueFiles.Contains(f.Code ?? ""))
                 {
-                    firstErr ??= err ?? "队列创建失败";
-                    // 并发下「别人刚给这个文件建好」表现为唯一约束冲突 ⇒ 已有队列在跑，不当失败
-                    if (IsDuplicateKeyError(err))
-                        _logger.LogInformation("[EnqueueFile] 并发下已有队列（唯一约束拦截）: {File}", f.Code);
-                    else
-                        _logger.LogWarning("[EnqueueFile] 队列创建失败: {File} {Reason}", f.Code, err);
+                    var (ok, err) = await _queueManager.CancelQueueAsync(conflictQueue);
+                    _logger.LogInformation("[EnqueueFile] 单文件旧队列 {Queue} 取消={Ok}（文件 {File}） {Reason}",
+                        conflictQueue, ok, f.FileName, err);
+                    if (ok)
+                    {
+                        ready.Add(f);
+                        continue;
+                    }
                 }
+                blocked.Add((f.FileName, conflictQueue));
             }
 
-            if (created.Count == 0) return (null, firstErr ?? "队列创建失败");
-            _logger.LogInformation("[EnqueueFile] {Scope} 入队 {Ok}/{Total} 个文件队列（{Tag}）",
-                scopeKey, created.Count, files.Count, sourceTag);
-            return (created[0], files.Count == created.Count ? null : firstErr);
+            if (ready.Count == 0)
+            {
+                var why = blocked.Count > 0
+                    ? $"文件「{blocked[0].FileName}」正在批次队列 {blocked[0].QueueCode} 中处理，请等待完成后再提交"
+                    : "队列创建失败";
+                return (null, why);
+            }
+
+            // ── 一次提交 = 一个队列：任务与资源锁按提交内文件序一一对应（TaskNo = Seq = i+1）──
+            var tasks = new List<QueueManager.TaskItem>();
+            var locks = new List<QueueManager.ResourceLockItem>();
+            for (var i = 0; i < ready.Count; i++)
+            {
+                var f = ready[i];
+                tasks.Add(new QueueManager.TaskItem
+                {
+                    TaskType = EnterpriseOriginalQueue.TaskTypeFile,
+                    TaskId = sourceTag,
+                    Seq = i + 1,
+                    Payload = JsonSerializer.Serialize(new EnterpriseOriginalFilePayload
+                    {
+                        Code = f.Code,
+                        EnterpriseCode = f.EnterpriseCode,
+                        StageCode = f.StageCode,
+                        BatchCode = sourceTag,
+                        SkipAnalyze = skipAnalyze,
+                        StandardCodes = standardCodes,
+                    }),
+                });
+                // 持文件锁：任务执行期间独占该行；取消/完成时由框架按 LockCodes 统一释放
+                locks.Add(new QueueManager.ResourceLockItem
+                {
+                    ResourceTable = ResourceTable,
+                    ResourceCode = f.Code,
+                    ResourceName = f.FileName,
+                    TaskNo = i + 1,
+                });
+            }
+
+            var (ok2, err2, code, _) = await _queueManager.CreateQueueAsync(new QueueManager.CreateQueueRequest
+            {
+                QueueType = EnterpriseOriginalQueue.QueueTypeFile,
+                QueueName = ready.Count == 1
+                    ? $"企业原始资料处理 - {Truncate(ready[0].FileName, 80)}"
+                    : $"企业原始资料处理 - {ready.Count} 个文件",
+                ScopeKey = scopeKey,
+                SourceType = "enterprise_original",
+                // 批次级唯一键：sourceTag + 毫秒时间戳 ⇒ 同批次多轮不撞
+                SourceId = $"batch:{sourceTag}@{DateTime.Now:yyyyMMddHHmmssfff}",
+                // ★ CreateBy 存用户 Code（契约）—— 终态通知（站内信 + SignalR）按它寻址收件人
+                UserCode = _user.UserCode,
+                UserName = _user.UserName,
+                ResourceLocks = locks,
+                Tasks = tasks,
+            });
+
+            if (!ok2 || string.IsNullOrEmpty(code))
+            {
+                // 并发下「别人刚给这些文件建好」表现为唯一约束冲突 ⇒ 已有队列在跑，不当失败
+                if (IsDuplicateKeyError(err2))
+                    _logger.LogInformation("[EnqueueFile] 并发下已有队列（唯一约束拦截）: {Tag}", sourceTag);
+                else
+                    _logger.LogWarning("[EnqueueFile] 队列创建失败: {Tag} {Reason}", sourceTag, err2);
+                return (null, err2 ?? "队列创建失败");
+            }
+
+            string? partial = null;
+            if (blocked.Count > 0)
+                partial = $"已入队 {ready.Count} 个文件；{blocked.Count} 个文件正在其他批次处理中，未入队："
+                    + string.Join("、", blocked.Select(b => $"「{b.FileName}」(队列 {b.QueueCode})"));
+
+            _logger.LogInformation("[EnqueueFile] {Scope} 一次提交入队 {Ready}/{Total} 个文件 → 队列 {Queue}（{Tag}）",
+                scopeKey, ready.Count, files.Count, code, sourceTag);
+            return (code, partial);
         }
 
         /// <summary>
-        /// 取消该文件的<b>所有活跃队列</b>（同文件重传 / 重新生成 / 回滚 / 改策略 = 先取消旧的再重建）。
-        /// <para>① 按<b>资源锁</b>找：覆盖旧 <c>enterprise_original_ingest</c> 批次队列（它们持文件锁）；
-        /// ② 按 <c>SourceId</c> 前缀 <c>file:{Code}@</c> 兜底：文件级队列锁已释放但队列仍活跃的窗口。</para>
+        /// 查该文件当前活跃（非终态）的队列 Code：
+        /// ① 按<b>资源锁</b>找（新旧通用：批次队列也持文件锁，锁记录指向所属队列）；
+        /// ② 按 <c>SourceId</c> 前缀 <c>file:{Code}@</c> 兜底（legacy 单文件队列锁已释放但队列未终态的窗口）。
         /// </summary>
-        private async Task CancelActiveQueuesOfFileAsync(string fileCode, string fileName)
+        private async Task<string?> FindActiveQueueCodeOfFileAsync(string fileCode)
         {
             var hit = await _queueManager.FindResourceLockAsync(ResourceTable, new List<string> { fileCode });
             if (hit != null && !string.IsNullOrEmpty(hit.QueueCode))
-            {
-                var (ok, err) = await _queueManager.CancelQueueAsync(hit.QueueCode);
-                _logger.LogInformation("[CancelOld] 文件 {File} 持锁队列 {Queue} 取消={Ok} {Reason}",
-                    fileName, hit.QueueCode, ok, err);
-            }
+                return hit.QueueCode;
 
-            var qs = await _db.Client.Queryable<YzhQueue>()
-                .Where(q => q.QueueType == EnterpriseOriginalQueue.QueueTypeFile
-                            && q.SourceId != null
-                            && q.SourceId.StartsWith($"file:{fileCode}@")
-                            && q.Status != "completed" && q.Status != "failed" && q.Status != "cancelled")
-                .ToListAsync() ?? new List<YzhQueue>();
-            foreach (var q in qs)
+            var q = await _db.Client.Queryable<YzhQueue>()
+                .Where(x => x.QueueType == EnterpriseOriginalQueue.QueueTypeFile
+                            && x.SourceId != null
+                            && x.SourceId.StartsWith($"file:{fileCode}@")
+                            && x.Status != "completed" && x.Status != "failed" && x.Status != "cancelled")
+                .OrderByDescending(x => x.CreateTime)
+                .FirstAsync();
+            return q?.QueueCode;
+        }
+
+        /// <summary>队列任务载荷里涉及的文件 Code 集合 —— 判「单文件队列 vs 混合批次队列」的依据
+        /// （单文件可取消重建；混合批次取消会误伤同批其他文件 ⇒ 只能拒绝/跳过）。</summary>
+        private async Task<HashSet<string>> GetQueueFileCodesAsync(string queueCode)
+        {
+            var tasks = await _db.Client.Queryable<YzhQueueTask>()
+                .Where(t => t.QueueCode == queueCode)
+                .ToListAsync() ?? new List<YzhQueueTask>();
+            var set = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var t in tasks)
             {
-                var (ok, err) = await _queueManager.CancelQueueAsync(q.QueueCode);
-                _logger.LogInformation("[CancelOld] 文件 {File} 前缀队列 {Queue} 取消={Ok} {Reason}",
-                    fileName, q.QueueCode, ok, err);
+                var one = ExtractPayloadCode(t.Payload);
+                if (!string.IsNullOrWhiteSpace(one)) set.Add(one!);
+                foreach (var c in ExtractPayloadFileCodes(t.Payload)) set.Add(c);
             }
+            return set;
         }
 
         /// <summary>

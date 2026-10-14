@@ -26,6 +26,17 @@ public static class CertPlatformAuditorServiceExtensions
         // ──── 企业资料服务 ────
         services.AddScoped<EnterpriseFileService>();
 
+        // ════════════════════════════════════════════════════════════════
+        // ──── ★ 企业资料参数通用服务（`66` V2.1 第 0 批）────
+        // ════════════════════════════════════════════════════════════════
+
+        // ★ 参数「查询 + 补录」的唯一入口 —— 原 FillParamValueController.MergeList / Save
+        //   与 EnterpriseNormalizeController.BuildParamGapsAsync 三处各写一遍，现收口到本服务。
+        //   ⚠️ 必须落 Auditor：它读写 FillParamValue（Auditor 独占实体），
+        //      而 Shared ⛔ 不能引 Auditor（A-R2 零容忍）。
+        //   ⚠️ Scoped：依赖 IDbOrm / ICoreResourceQuery（均 Scoped）。
+        services.AddScoped<IFillParamService, FillParamService>();
+
         // ──── 企业原始资料（36 号）────
         //   ⚠️ 与上面 EnterpriseFileService 是**两套东西**（输入库 vs 输出库、标准无关 vs 标准槽位），
         //      见 36 号 §2.1 判别表。切勿合并。

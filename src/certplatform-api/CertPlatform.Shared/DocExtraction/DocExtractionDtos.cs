@@ -166,6 +166,14 @@ namespace CertPlatform.Shared.DocExtraction
         [JsonPropertyName("status")] public string Status { get; set; } = "none";
         [JsonPropertyName("fields")] public List<FieldDefDto> Fields { get; set; } = new();
         [JsonPropertyName("tables")] public List<TableDefDto> Tables { get; set; } = new();
+
+        /// <summary>
+        /// ★ 2026-10-14：<b>已落库的验证结果</b>（B-08 字段值 + B-09 表格行组装），供
+        /// 「提示词与验证」页签回显 —— 没有它时重新进入文件只看得到「验证通过」横幅，
+        /// 下面逐项全是「未提取到」（结果其实已保存），用户据此判定「验证信息没保存」。
+        /// </summary>
+        [JsonPropertyName("extractionData")] public ExtractionData? ExtractionData { get; set; }
+
         [JsonPropertyName("createTime")] public DateTime? CreateTime { get; set; }
         [JsonPropertyName("updateTime")] public DateTime? UpdateTime { get; set; }
     }

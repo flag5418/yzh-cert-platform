@@ -60,10 +60,11 @@ export function deleteNCRule(codes: string[]) {
   return yzhApi.post('/api/Admin/Workflow/ValidationRule/delete', codes)
 }
 
-// ⚠️ 切换启用/复制规则已迁至标准行自定义操作约定：
-//    POST /api/Admin/Workflow/ValidationRule/action/{ToggleActive|Copy}
+// ⚠️ 启用/禁用已迁至行自定义操作约定：
+//    POST /api/Admin/Workflow/ValidationRule/action/{enable|disable}
 //    按钮由 Cert/ValidationRule.json 的 RowButtons.CustomButtons 配置驱动，
 //    前端经 SingleTableCore.dispatch('custom:{method}') 直达，无需手写 api 函数。
+//    （原单条「复制」按钮已下线，待跨标准批量克隆方案另行设计）
 
 // ──── 条款树（由 ISOClauseController 提供） ────
 

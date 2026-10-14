@@ -66,7 +66,7 @@ public class GapDetector
 
     /// <summary>★ 专家工作区（租户）编码 —— 由调用方（<c>ExpertTaskService</c>）注入。
     /// <para><c>cert_expert_task_data_gap.OrgCode</c> 是 NOT NULL 租户隔离键，
-    /// 与 <c>cert_extraction_result.OrgCode</c>（存企业 Code）<b>不是同一个口径</b>，勿混。</para>
+    /// 与 <c>cert_extraction_result.EnterpriseCode</c>（存企业 Code）<b>不是同一个口径</b>，勿混。</para>
     /// </summary>
     public string OrgCode { get; set; } = "";
 

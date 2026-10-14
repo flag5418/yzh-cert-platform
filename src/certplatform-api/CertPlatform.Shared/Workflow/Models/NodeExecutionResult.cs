@@ -56,6 +56,25 @@ namespace CertPlatform.Shared.Workflow.Models
         /// <summary>渲染后送 API 的完整 prompt（8KB 截断，仅 ai_node 有值）</summary>
         public string? AiPrompt { get; set; }
 
+        /// <summary>
+        /// ★ 2026-10-14 新增：渲染提示词时**实际使用**的参数池（参数名 → 值，仅 ai_node 有值）。
+        ///
+        /// <para><b>为什么必须有</b>：此前测试页的「参数池」是<b>控制器自己重算</b>出来的第二套结果
+        /// （<c>WorkflowTestController.BuildAiNodeDebugInfo</c>），与引擎实际渲染用的池<b>可能不一致</b> ——
+        /// 诊断面说谎，把排查方向带偏。现在改为由引擎<b>唯一产出</b>、原样回传。</para>
+        /// </summary>
+        public Dictionary<string, object>? AiParamPool { get; set; }
+
+        /// <summary>
+        /// ★ 2026-10-14 新增：渲染后**仍未解析**的模板引用（如 <c>文档字段.result</c>，仅 ai_node 有值）。
+        ///
+        /// <para>空列表 = 全部解析成功。<b>配置期测试</b>（<c>ExecuteWithMockAsync</c>）刻意不中断，
+        /// 但必须把这份清单<b>显式回传前端</b>（原实现只写一条 <c>LogWarning</c>，界面上完全看不见
+        /// ⇒ 用户以为「提示词没问题」）；<b>真实执行期</b>（<c>ExecuteAsync</c>）则据此抛
+        /// <c>WorkflowDataMissingException</c> 中断当前检查项。</para>
+        /// </summary>
+        public List<string>? AiUnresolvedRefs { get; set; }
+
         /// <summary>快速创建成功结果</summary>
         public static NodeExecutionResult Ok(Dictionary<string, object> output, int durationMs = 0)
             => new() { Success = true, Output = output ?? new(), DurationMs = durationMs };

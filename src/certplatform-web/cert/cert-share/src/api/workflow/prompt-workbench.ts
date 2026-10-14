@@ -89,6 +89,11 @@ export interface PromptGenerateResultDto {
 export interface ConvertLogDto {
   fileName: string
   success: boolean
+  /**
+   * ★ 转换状态（2026-10-14）：`completed` / `failed` / `unsupported`。
+   * `unsupported` = 能力边界（如扫描件但视觉未接入），与「文件坏了」区分显示。
+   */
+  status?: string | null
   message?: string | null
   markdownLength: number
   /** ★ 转换成功时的**完整 Markdown 正文**（用于「看转换结果」面板，33 号 §八 勘误） */

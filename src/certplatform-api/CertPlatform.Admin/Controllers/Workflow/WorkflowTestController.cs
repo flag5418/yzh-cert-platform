@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -247,115 +245,104 @@ namespace CertPlatform.Admin.Controllers.Workflow
 
         /// <summary>
         /// 构造 AI 节点的 Debug 展示信息（纯展示层逻辑，不参与执行）
-        /// <para>展示内容：模板中 <c>{{xxx.yyy}}</c> 引用解析后的 paramPool、渲染后的提示词、LLM 原始返回。</para>
+        ///
+        /// <para><b>★ 2026-10-14 重写（用户裁定 · 第 0 批止血）—— 删除「自算渲染」逻辑。</b></para>
+        ///
+        /// <para><b>旧实现的三宗罪</b>（缺陷 D2，是用户排查被带偏的直接原因）：</para>
+        /// <list type="number">
+        ///   <item>它用<b>第二套渲染实现</b>重算提示词（自己写正则、自己拼 <c>paramPool</c>），
+        ///     与引擎 <c>AiNodeExecutor</c> 的口径可能不一致 ⇒ 显示的未必是真正送 LLM 的那份；</item>
+        ///   <item>渲染被 <c>if (!string.IsNullOrEmpty(template) &amp;&amp; debugInfo.ParamPool.Count &gt; 0)</c>
+        ///     包住 ⇒ <c>ParamPool</c> 为空时 <c>RenderedPrompt</c> <b>恒为 <c>""</c></b>，
+        ///     界面显示「提示词是空的」，而引擎其实<b>照常把未替换的花括号原文送给了大模型</b>；</item>
+        ///   <item>未解析引用只写一条 <c>LogWarning</c>，<b>界面上完全看不见</b>。</item>
+        /// </list>
+        ///
+        /// <para><b>现在的纪律</b>：引擎怎么渲的就怎么显示 —— <c>RenderedPrompt</c> / <c>ParamPool</c> /
+        /// <c>UnresolvedRefs</c> 全部取自 <see cref="NodeScopeRunOutcome"/>（由
+        /// <c>NodeExecutionResult.AiPrompt / AiParamPool / AiUnresolvedRefs</c> 带出）。
+        /// <b>同一逻辑只允许一处实现</b> —— 这是 D2 的根因，只修一处必然再分叉。</para>
+        ///
+        /// <para><c>ParamsUsed</c> 是唯一例外：它描述「本节点<b>声明了</b>哪些参数」，
+        /// 属<b>配置事实</b>而非执行结果，故在此从 <c>request.Config</c> 读取。</para>
         /// </summary>
         private static AiNodeDebugInfo BuildAiNodeDebugInfo(AiNodeTestRequest request, NodeScopeRunOutcome outcome)
         {
-            var debugInfo = new AiNodeDebugInfo();
+            return new AiNodeDebugInfo
+            {
+                // ── 引擎真实产物：唯一数据源，⛔ 控制器不再重算 ──
+                RenderedPrompt = outcome.AiPrompt ?? string.Empty,
+                ParamPool = outcome.AiParamPool ?? new Dictionary<string, object>(),
+                UnresolvedRefs = outcome.AiUnresolvedRefs ?? new List<string>(),
 
-            if (!outcome.Success || outcome.Output == null)
-                return debugInfo;
+                // ── 配置事实：本节点声明了哪些参数 ──
+                ParamsUsed = ExtractDeclaredParams(request),
 
+                // ── LLM 返回 ──
+                LlmResponse = outcome.Output?.GetValueOrDefault("result")?.ToString() ?? string.Empty,
+                ConvertedResult = outcome.Output?.GetValueOrDefault("result")
+            };
+        }
+
+        /// <summary>
+        /// 提取 AI 节点<b>声明的参数清单</b>（纯配置事实，与执行结果无关）
+        ///
+        /// <para>两种来源，<b>新格式优先</b>：</para>
+        /// <list type="number">
+        ///   <item><c>config.params</c> —— 新方案（参数表 schema：<c>name/label/sourceType/nodeId/portName</c>）</item>
+        ///   <item><c>config.customParams</c> —— 旧方案兜底（字符串化 JSON 或数组；无 <c>label</c>）</item>
+        /// </list>
+        ///
+        /// <para>⚠️ 这里只<b>读</b>，不做任何校验 —— 配置期强校验属第 1 批（设计文档 §2.7）。
+        /// 解析失败只让 Debug 少显示一块，<b>绝不影响主流程</b>。</para>
+        /// </summary>
+        private static List<AiParamUsage> ExtractDeclaredParams(AiNodeTestRequest request)
+        {
+            var list = new List<AiParamUsage>();
             var config = request.Config ?? new Dictionary<string, object>();
-            var template = config.GetValueOrDefault("promptTemplate")?.ToString() ?? "";
-            debugInfo.ParamPool = new Dictionary<string, object>();
 
-            // 1. 兼容旧 customParams 配置
-            if (config.TryGetValue("customParams", out var cpValue))
+            // ① 新方案：config.params
+            if (config.TryGetValue("params", out var paramsValue) && paramsValue != null)
             {
                 try
                 {
-                    var customParams = JsonSerializer.Deserialize<List<CustomParam>>(
-                        cpValue.ToString() ?? "[]",
-                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    var raw = paramsValue is string s ? s : JsonSerializer.Serialize(paramsValue);
+                    var parsed = JsonSerializer.Deserialize<List<AiParamUsage>>(
+                        raw, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (parsed != null && parsed.Count > 0)
+                        return parsed;
+                }
+                catch { /* Debug 展示失败不影响主流程 */ }
+            }
 
-                    if (customParams != null)
+            // ② 旧方案兜底：config.customParams
+            if (config.TryGetValue("customParams", out var cpValue) && cpValue != null)
+            {
+                try
+                {
+                    var raw = cpValue is string cs ? cs : JsonSerializer.Serialize(cpValue);
+                    var oldParams = JsonSerializer.Deserialize<List<CustomParam>>(
+                        raw, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                    if (oldParams != null)
                     {
-                        foreach (var param in customParams)
+                        foreach (var p in oldParams)
                         {
-                            if (param.SourceType == "link")
+                            list.Add(new AiParamUsage
                             {
-                                var nodeId = param.SourceConfig?.GetValueOrDefault("nodeId")?.ToString();
-                                if (nodeId != null && outcome.MockOutputs.TryGetValue(nodeId, out var mo))
-                                {
-                                    var portName = param.SourceConfig?.GetValueOrDefault("portName")?.ToString() ?? "result";
-                                    if (mo.TryGetValue(portName, out var portValue))
-                                        debugInfo.ParamPool[param.ParamName] = portValue;
-                                    else if (mo.TryGetValue("result", out var resultValue))
-                                        debugInfo.ParamPool[param.ParamName] = resultValue;
-                                    else
-                                        debugInfo.ParamPool[param.ParamName] = mo;
-                                }
-                            }
-                            else if (param.SourceType == "constant")
-                            {
-                                debugInfo.ParamPool[param.ParamName] =
-                                    param.SourceConfig?.GetValueOrDefault("value")?.ToString() ?? string.Empty;
-                            }
+                                Name = p.ParamName ?? "",
+                                Label = null,   // 旧格式没有中文说明字段
+                                SourceType = p.SourceType ?? "",
+                                NodeId = p.SourceConfig?.GetValueOrDefault("nodeId")?.ToString(),
+                                PortName = p.SourceConfig?.GetValueOrDefault("portName")?.ToString()
+                            });
                         }
                     }
                 }
-                catch { /* ignore debug parse errors */ }
+                catch { /* 同上 */ }
             }
 
-            // 2. 从模板 {{节点名.端口}} 提取引用（新方案）
-            if (!string.IsNullOrEmpty(template))
-            {
-                var refRegex = new Regex(@"\{\{([\w\u4e00-\u9fff][\w\u4e00-\u9fff.]*)\}\}");
-                var matches = refRegex.Matches(template);
-                foreach (Match m in matches)
-                {
-                    var fullKey = m.Groups[1].Value;
-                    if (debugInfo.ParamPool.ContainsKey(fullKey))
-                        continue;
-
-                    var lastDot = fullKey.LastIndexOf('.');
-                    string refKey = lastDot >= 0 ? fullKey[..lastDot] : fullKey;
-                    string portName = lastDot >= 0 ? fullKey[(lastDot + 1)..] : "";
-
-                    if (outcome.FlattenedOutputs.TryGetValue(refKey, out var nodeOutput))
-                    {
-                        object? val;
-                        if (nodeOutput is Dictionary<string, object> dict)
-                        {
-                            if (!string.IsNullOrEmpty(portName) && dict.TryGetValue(portName, out var pv))
-                                val = pv;
-                            else if (dict.TryGetValue("result", out var rv))
-                                val = rv;
-                            else if (dict.Count == 1)
-                                val = dict.Values.First();
-                            else
-                                val = dict;
-                        }
-                        else
-                        {
-                            val = nodeOutput;
-                        }
-                        debugInfo.ParamPool[fullKey] = val ?? "";
-                    }
-                }
-            }
-
-            // 3. 计算 renderedPrompt
-            if (!string.IsNullOrEmpty(template) && debugInfo.ParamPool.Count > 0)
-            {
-                var rendered = template;
-                foreach (var (k, v) in debugInfo.ParamPool)
-                {
-                    var vStr = v switch
-                    {
-                        string s => s,
-                        _ => JsonSerializer.Serialize(v)
-                    };
-                    rendered = rendered.Replace($"{{{{{k}}}}}", vStr);
-                }
-                debugInfo.RenderedPrompt = rendered;
-            }
-
-            debugInfo.LlmResponse = outcome.Output.GetValueOrDefault("result")?.ToString() ?? string.Empty;
-            debugInfo.ConvertedResult = outcome.Output.GetValueOrDefault("result");
-
-            return debugInfo;
+            return list;
         }
 
         // ════════════════════════════════════════

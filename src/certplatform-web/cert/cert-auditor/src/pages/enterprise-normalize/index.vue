@@ -26,12 +26,12 @@
  *   ⛔ 不出现「标准域共 N 份 / 其中 M 份配了规则」这类内部计数。
  *
  * ════════════════════════════════════════════════════════════════════════
- * ★ 时间口径（⛔ 两列基准不同，别当成一个）
+ * ★ 时间口径（2026-10-14 起：yzh_queue 全列**本地时间**，JSON 不带 Z）
  *
- * · `CreateTime`（入队时间）= **UTC**（`BaseEntity.CreateTime` 走 `DateTime.UtcNow`）
- *   ⇒ 后端已补 `Z`，`formatDateTime` 会正确换算成本地时间
- * · `StartTime` / `EndTime` = **本地时间**（`QueueManager` 显式 `DateTime.Now`）
- *   ⇒ JSON **不带 `Z`**，JS 按本地解析 —— 正是我们要的结果，⛔ 不要手动补 `Z`
+ * · `CreateTime` / `StartTime` / `EndTime` 均为**本地时间**（后端 `DateTime.Now`）
+ *   ⇒ JSON **不带 `Z`**，`formatDateTime` 按本地解析即正确，⛔ 不要手动补 `Z`
+ * · ⛔ 历史口径（CreateTime=UTC + ToUtc 补 Z）已废止：QueueManager 已改写本地时间、
+ *   存量数据已 +8h 迁移（scripts/db/fix/20261014_queue_msg_createtime_local_V1.sql）
  */
 import { onActivated, onDeactivated, onUnmounted } from 'vue'
 import { YzhTable, useSingleTable, YzhStatusBadge } from '@yzh-core'

@@ -85,6 +85,9 @@ namespace CertPlatform.Admin.Controllers.Workflow
         ///  已定 wf_skill_input=规划中、SkillDetailDto=待删）。</para>
         /// <para>解析顺序：[Skill] 特性索引（零 DB 依赖）→ wf_skill_reflection（DI 型 Skill 回退）。</para>
         /// <para>返回的 <c>Code</c> = wf_skill.Code（画布节点 skillCode 取值），<c>SkillCode</c> = 执行/反射键。</para>
+        /// <para>★ 2026-10-14：wf_skill 双业务键已统一为单一 <c>Code</c>（2026-10-13 迁移删 SkillCode 列），
+        ///   DTO 的 <c>SkillCode</c> 字段保留并回填 <c>Code</c> 值 —— 前端双键索引（s.SkillCode || s.Code）与
+        ///   历史画布节点存量 skillCode 不受影响。</para>
         /// </summary>
         [HttpGet("metadata")]
         public async Task<IActionResult> GetMetadata(CancellationToken ct)
@@ -101,13 +104,13 @@ namespace CertPlatform.Admin.Controllers.Workflow
                     dtos.Add(new SkillMetadataDto
                     {
                         Code = skill.Code,
-                        SkillCode = skill.SkillCode,
+                        SkillCode = skill.Code,
                         Name = skill.Name,
                         Description = skill.Description ?? string.Empty,
                         // ★ 用途开关（2026-10-11）：节点库按当前设计器场景过滤，默认 0 = 不出现
                         IsUseForNcConfig = skill.IsUseForNcConfig,
                         IsUseForReport = skill.IsUseForReport,
-                        InputPorts = await ResolveInputPortsAsync(skill.SkillCode, ct)
+                        InputPorts = await ResolveInputPortsAsync(skill.Code, ct)
                     });
                 }
                 return Ok(ApiResponse<List<SkillMetadataDto>>.Ok(dtos));

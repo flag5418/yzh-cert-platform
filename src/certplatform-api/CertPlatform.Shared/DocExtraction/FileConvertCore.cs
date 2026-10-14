@@ -61,6 +61,21 @@ public interface IFileConvertCore
     Task<FileConvertCoreResult> ConvertToMarkdownAtAsync(string fileName, string? sourcePath, byte[]? content);
 
     /// <summary>
+    /// ★ <b>试跑链</b>（2026-10-14）：任意格式 → Markdown（<b>含 OCR 兜底</b>），但<b>不派生产物路径</b>。
+    ///
+    /// <para><b>为什么必须有它</b>：提示词工作台只有原始字节、<b>没有存储路径</b>
+    /// （文件不落 MinIO），而 <see cref="ConvertToMarkdownAtAsync"/> 缺 <c>sourcePath</c> 时会恒返回
+    /// <c>failed</c>。此前工作台只能退化为「<c>DocumentConvertClient</c> 直转」，
+    /// ⇒ <b>丢掉了 OCR 兜底</b>，于是「扫描件 / 图片」在测试环境永远测不出真实结果，
+    /// 与入库链路（<c>EnterpriseOriginalIngestExecutor</c>）<b>不同源</b> ——
+    /// 「测过的提示词，上线跑不出同样结果」正是这一类不一致造成的。</para>
+    ///
+    /// <para>本方法让试跑与线上共用<b>同一条</b>转换内核（anydoc → 视觉 OCR 兜底 + PDF 逐页渲染）。
+    /// 产物 <see cref="FileConvertCoreResult.TargetPath"/> 恒为空串（调用方本就不落库）。</para>
+    /// </summary>
+    Task<FileConvertCoreResult> ConvertToMarkdownInlineAsync(string fileName, byte[]? content);
+
+    /// <summary>
     /// ★ <b>视觉 OCR 直通</b>（图片 / PDF → Markdown，2026-10-09）。
     ///
     /// <para><b>存在的理由</b>：<see cref="ConvertToMarkdownAtAsync"/> 内部已含 OCR 兜底，
@@ -234,6 +249,20 @@ public class FileConvertCore : IFileConvertCore
             return FileConvertCoreResult.Failed("源文件内容为空");
 
         return await ConvertMarkdownInnerAsync(fileName, content, targetPath);
+    }
+
+    /// <summary>
+    /// 试跑链：不派生产物路径的 Markdown 转换（含 OCR 兜底）。
+    /// <para>与 <see cref="ConvertToMarkdownAtAsync"/> 走<b>同一段</b> <see cref="ConvertMarkdownInnerAsync"/>，
+    /// 仅把 <c>targetPath</c> 传空 —— 转换本身不需要产物路径，只有结果的 <c>TargetPath</c> 字段受影响
+    /// （试跑调用方只读 <c>Content</c>，不落库、不上传）。</para>
+    /// </summary>
+    public async Task<FileConvertCoreResult> ConvertToMarkdownInlineAsync(string fileName, byte[]? content)
+    {
+        if (content == null || content.Length == 0)
+            return FileConvertCoreResult.Failed("源文件内容为空");
+
+        return await ConvertMarkdownInnerAsync(fileName, content, "");
     }
 
     /// <summary>格式归一（LibreOffice）；<paramref name="targetFormat"/> 不含点，如 <c>docx</c></summary>

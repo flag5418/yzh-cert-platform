@@ -17,9 +17,8 @@ namespace CertPlatform.Shared.Entities.Doc
         // ──── Id / 审计字段由 BaseEntity 基类统一提供 ────
 
         // ──── 业务字段 ────
-        /// <summary>标准企业标识（多租户隔离，映射到 DB OrgCode 列）</summary>
+        /// <summary>标准企业标识（多租户隔离；DB 列 = EnterpriseCode，归属模型 V2 §4 已改名）</summary>
         [Required, StringLength(36)]
-        [SugarColumn(ColumnName = "OrgCode")]
         public string EnterpriseCode { get; set; }
 
         /// <summary>标准文件编码（规则键：实际文件 FileCode 或文件要求模板 Code，最长 200）</summary>

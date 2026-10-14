@@ -741,24 +741,32 @@ public partial class DocExtractionRuleService
                 };
 
             // 4. 验证成功：sample_data 落库（供工作流 test-field/test-table 使用）
-            if (rule != null && extraction != null)
+            //   ★ 2026-10-14：序列化口径收敛到 BuildSampleDataJson（与保存路径 SaveExtractionRuleAsync 同源，
+            //   见该方法注释 —— 两处各写一遍必然下次改一处漏一处）。
+            if (rule != null)
             {
-                var sampleDict = new Dictionary<string, object>();
-                if (extraction.Fields != null)
-                    foreach (var kv in extraction.Fields)
-                        if (!string.IsNullOrEmpty(kv.Key) && kv.Value != null)
-                            sampleDict[kv.Key] = kv.Value;
-                if (extraction.Tables != null)
-                    foreach (var kv in extraction.Tables)
-                        if (!string.IsNullOrEmpty(kv.Key) && kv.Value != null)
-                            sampleDict[kv.Key] = kv.Value;
-
-                rule.SampleData = JsonSerializer.Serialize(sampleDict, JsonOptions);
-                rule.DocIsValid = true;
-                rule.VerifyMessage = "验证成功";
-                rule.Status = sampleDict.Count > 0 ? "configured" : rule.Status;
-                rule.UpdateTime = DateTime.Now;
-                await _db.UpdateAsync(rule);
+                var sampleJson = BuildSampleDataJson(extraction);
+                if (sampleJson != null)
+                {
+                    rule.SampleData = sampleJson;
+                    rule.DocIsValid = true;
+                    rule.VerifyMessage = "验证成功";
+                    rule.Status = "configured";
+                    rule.UpdateTime = DateTime.Now;
+                    await _db.UpdateAsync(rule);
+                }
+            }
+            else
+            {
+                // ★ 2026-10-14 D2（消灭假成功）：规则行尚未创建 = 页面「先验证 → 后保存」的首次配置路径。
+                //   ⛔ 不能再静默：此前本分支既不落 sample_data、也不缓存 doc_content，却照样返回
+                //   「验证成功」⇒ 用户看到验证通过，工作流节点却报「尚未执行验证」
+                //   （实测 B-08 有 4 行真实值 / sample_data 长度 0）。
+                //   此处**不算失败**（验证本身确实成功，结果由保存规则时按同口径落库），
+                //   但必须留下可追溯的日志，避免再次出现「成功却什么都没写」。
+                _logger.LogWarning(
+                    "[DocExtractionRule] 验证通过但规则行尚未创建 (FileCode={FC})：sample_data / doc_content 缓存将在保存规则时落库",
+                    request.FileCode);
             }
 
             return new VerifyPromptResponse { Success = true, Message = "验证成功", Data = extraction };

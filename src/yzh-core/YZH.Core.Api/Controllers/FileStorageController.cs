@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using YZH.Core.Api.UploadPolicy;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Result;
 
@@ -37,6 +38,11 @@ public class FileStorageController : WebControllerBase
     {
         if (file == null || file.Length == 0)
             return Ok(ApiResponse<object?>.Fail("请选择文件"));
+
+        // ★ 上传后缀策略闸门（扩展点，Program.cs 注册 UploadFilePolicy 包装；未注册 = 放行）
+        var policyReason = UploadPolicyGate.Validate(file.FileName);
+        if (policyReason != null)
+            return Ok(ApiResponse<object?>.Fail(policyReason));
 
         // 未指定 objectName 时，使用时间戳路径
         var finalObjectName = objectName;
@@ -89,6 +95,21 @@ public class FileStorageController : WebControllerBase
         foreach (var file in files)
         {
             if (file.Length == 0) continue;
+
+            // ★ 上传后缀策略闸门（扩展点）：被拒文件记入结果（success=false），不写存储
+            var policyReason = UploadPolicyGate.Validate(file.FileName);
+            if (policyReason != null)
+            {
+                results.Add(new
+                {
+                    path = "",
+                    fileName = file.FileName,
+                    size = file.Length,
+                    success = false,
+                    error = policyReason,
+                });
+                continue;
+            }
 
             var ext = Path.GetExtension(file.FileName);
             var safeName = $"{DateTime.Now:yyyyMMddHHmmss}_{Guid.NewGuid():N}{ext}";

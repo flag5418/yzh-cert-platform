@@ -70,6 +70,16 @@ builder.UseYzhCore(options =>
     };
 });
 
+// ★ 上传后缀策略闸门（框架扩展点 UploadPolicyGate，2026-10-14）：
+//   FileStorageController（通用上传）与 YzhControllerBase.Import（Excel 导入）调用；
+//   框架层默认放行，此处注入业务判定 —— 唯一事实源 = CertPlatform.Shared/Storage/upload-file-policy.json
+//   （改后缀只改 JSON + 跑 node scripts/generate/upload-policy.mjs，⛔ 不改本行）。
+YZH.Core.Api.UploadPolicy.UploadPolicyGate.Validator = name =>
+{
+    var v = CertPlatform.Shared.Storage.UploadFilePolicy.Check(name);
+    return v.Ok ? null : v.Message;
+};
+
 // 业务服务自注册（启动工程不感知具体业务实现）
 // ⚠️ 顺序敏感：Shared **必须最前**。AddScoped 是「后注册覆盖先注册」的语义 ——
 //    若 Admin 也注册了同名服务，**Admin 的会赢**，Shared 那份就等于没注册（静默分叉）。

@@ -41,6 +41,16 @@
  *         ⚠️ `Description` 属**边界列**（也是人工可改，但常需随职责变更修订）：
  *            本轮不拦，但修订式 `UPDATE` 应自带「旧值匹配」条件保证幂等
  *            （样板见 `20261011_menu_aud_14_V1.sql` §②）。
+ *   B-R7  上传后缀策略单源 + 上传端点必过闸门（2026-10-14 用户铁律：全平台上传只认
+ *         `upload-file-policy.json` 一张表，「加后缀只改一处」）：
+ *         ① 事实源 JSON 与生成器存在，且 `generate/upload-policy.mjs --check` 退出码 0
+ *            （两端 `<generated>` 段与 JSON 漂移 ⇒ 失败）；
+ *         ② 含 `IFormFile` 的 .cs：文件内必须出现 `UploadPolicyGate.Validate` /
+ *            `UploadFilePolicy.Check`，或登记在豁免表（闸门在其 Service 层 / DTO 无端点 /
+ *            DocTemplate 走 `ResolveFileKind` 业务收窄）—— 新增上传端点忘了接闸门 ⇒ 失败；
+ *         ③ 禁私有后缀清单标识符回潮：`IgnoredFileExtensions` / `ValidateUploadFileType`
+ *            （三处曾各持一份清单、与事实源漂移，已删；防止以注释外形态复活）。
+ *         📏 基线：规则启用时（2026-10-14）逐文件实测 = 0 违规。
  *
  * ⛔ 严禁挂到 dotnet watch / dev 启动脚本 —— 只允许挂到 build / pre-commit / 手动门禁。
  *
@@ -50,6 +60,7 @@
  */
 
 import { readdirSync, readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -186,6 +197,112 @@ function checkMenuSql() {
   return violations
 }
 
+/**
+ * B-R7：上传后缀策略单源 + 上传端点必过闸门。
+ * 三段：① 生成物 --check；② IFormFile 端点闸门覆盖（或豁免且豁免目标已接闸门）；③ 私有清单标识符回潮。
+ */
+const UPLOAD_POLICY_JSON = join(ROOT, 'src/certplatform-api/CertPlatform.Shared/Storage/upload-file-policy.json')
+const UPLOAD_POLICY_GEN = join(ROOT, 'scripts/generate/upload-policy.mjs')
+
+/**
+ * 含 IFormFile 但闸门不在本文件的豁免表：相对路径 → 校验目标（相对路径 / null）。
+ * - null = 该文件是 DTO（只声明属性，无端点），豁免目标自证；
+ * - 相对路径 = 闸门所在文件，必须含 `UploadFilePolicy.Check` 或指定标识符（豁免目标自证）。
+ * ⛔ 新增上传端点请优先在端点/服务里接闸门；只有「业务收窄且收窄逻辑可验证」才登记豁免。
+ */
+const IFORMFILE_EXEMPT = {
+  // DTO：IFormFile 只是属性声明，不构成上传入口
+  'src/certplatform-api/CertPlatform.Shared/Entities/Dir/UploadFileDto.cs': null,
+  'src/certplatform-api/CertPlatform.Shared/Entities/Dir/UploadManifestDto.cs': null,
+  // 闸门在 Service 层（init/legacy/replace 均已 Check）
+  'src/certplatform-api/CertPlatform.Admin/Controllers/Foundation/DirectoryTemplateController.cs':
+    'src/certplatform-api/CertPlatform.Admin/Services/StandardDirectory/DirectoryTemplateService.cs',
+  'src/certplatform-api/CertPlatform.Admin/Controllers/Workflow/StandardDirectoryController.cs':
+    'src/certplatform-api/CertPlatform.Admin/Services/StandardDirectory/StandardDirectoryService.cs',
+  'src/certplatform-api/CertPlatform.Auditor/Controllers/EnterpriseFileController.cs':
+    'src/certplatform-api/CertPlatform.Auditor/Services/Ent/EnterpriseFileService.cs',
+  'src/certplatform-api/CertPlatform.Auditor/Controllers/EnterpriseOriginalController.cs':
+    'src/certplatform-api/CertPlatform.Auditor/Services/Ent/EnterpriseOriginalService.cs',
+  // 业务收窄：空白模板只认 docx/xlsx，闸门 = ResolveFileKind（收窄逻辑在本控制器内可验证）
+  'src/certplatform-api/CertPlatform.Admin/Controllers/Workflow/DocTemplateController.cs': 'SELF:ResolveFileKind',
+}
+
+/** 禁止回潮的私有后缀清单标识符（曾三处各持一份、与事实源漂移） */
+const B7_FORBID_IDENTIFIERS = ['IgnoredFileExtensions', 'ValidateUploadFileType']
+
+function checkB7(files) {
+  const violations = []
+
+  // ① 事实源 + 生成器存在，生成物与 JSON 同步（--check 退出码非 0 = 漂移）
+  const genStat = spawnSync(process.execPath, [UPLOAD_POLICY_GEN, '--check'], { encoding: 'utf8' })
+  if (genStat.error || genStat.status !== 0) {
+    const why = genStat.error
+      ? genStat.error.message
+      : (genStat.stdout || genStat.stderr || '').trim().split('\n').slice(-1)[0] || `exit ${genStat.status}`
+    violations.push({
+      file: relative(ROOT, UPLOAD_POLICY_GEN),
+      line: 0,
+      text: `B-R7① 生成物与 upload-file-policy.json 漂移（跑 node scripts/generate/upload-policy.mjs 修复）：${why}`,
+    })
+  }
+
+  for (const file of files) {
+    const rel = relative(ROOT, file)
+    const raw = readFileSync(file, 'utf8')
+    const code = stripComments(raw)
+
+    // ② 含 IFormFile 的端点文件：本文件接闸门，或登记豁免且豁免目标自证
+    if (/IFormFile\b/.test(code)) {
+      const hasGate = /UploadPolicyGate\s*\.\s*Validate|UploadFilePolicy\s*\.\s*Check/.test(code)
+      if (!hasGate) {
+        const exempt = Object.prototype.hasOwnProperty.call(IFORMFILE_EXEMPT, rel)
+        if (!exempt) {
+          violations.push({
+            file: rel,
+            line: lineOf(code, code.search(/IFormFile\b/)),
+            text: 'B-R7② 含 IFormFile 但未过上传闸门（接 UploadFilePolicy.Check / UploadPolicyGate.Validate，或登记 IFORMFILE_EXEMPT）',
+          })
+        } else {
+          const targetSpec = IFORMFILE_EXEMPT[rel]
+          if (targetSpec) {
+            const [self, marker] = targetSpec.startsWith('SELF:') ? ['SELF', targetSpec.slice(5)] : [null, null]
+            const targetRel = self ? rel : targetSpec
+            let targetText = ''
+            let targetOk = false
+            try {
+              targetText = stripComments(readFileSync(join(ROOT, targetRel), 'utf8'))
+              targetOk = /UploadFilePolicy\s*\.\s*Check/.test(targetText) || (marker && targetText.includes(marker))
+            } catch {
+              targetOk = false
+            }
+            if (!targetOk) {
+              violations.push({
+                file: rel,
+                line: 0,
+                text: `B-R7② 豁免目标 ${targetRel} 未接闸门/未找到 ${marker ?? 'UploadFilePolicy.Check'} —— 豁免失效`,
+              })
+            }
+          }
+        }
+      }
+    }
+
+    // ③ 私有后缀清单标识符回潮（去注释后匹配，注释里提及不算）
+    for (const ident of B7_FORBID_IDENTIFIERS) {
+      const re = new RegExp(`\\b${ident}\\b`)
+      const at = code.search(re)
+      if (at >= 0) {
+        violations.push({
+          file: rel,
+          line: lineOf(code, at),
+          text: `B-R7③ 私有后缀清单标识符 \`${ident}\` 回潮 —— 后缀规则只准来自 upload-file-policy.json`,
+        })
+      }
+    }
+  }
+  return violations
+}
+
 /** B-R4：静态存在性检查（运行时校验由该过滤器执行） */
 function checkB4() {
   const filterPath = join(ROOT, 'src/yzh-core/YZH.Core.Api/Filters/ApiResponseContractFilter.cs')
@@ -263,8 +380,18 @@ for (const rule of RULES) {
   else if (REPORT_ONLY) console.log(`✓ ${rule.id} ${rule.desc}`)
 }
 
-/** 自定义检查条数（B-R4 / B-R6）—— 与 RULES 一起计入摘要 */
-const CUSTOM_CHECKS = 2
+{
+  const rule = {
+    id: 'B-R7',
+    desc: '上传后缀策略单源（upload-file-policy.json 生成物同步 + IFormFile 端点必过闸门）',
+  }
+  const violations = checkB7(files)
+  if (violations.length) failures.push({ rule, violations })
+  else if (REPORT_ONLY) console.log(`✓ ${rule.id} ${rule.desc}`)
+}
+
+/** 自定义检查条数（B-R4 / B-R6 / B-R7）—— 与 RULES 一起计入摘要 */
+const CUSTOM_CHECKS = 3
 
 if (REPORT_ONLY) {
   console.log(`\n报告模式：${RULES.length + CUSTOM_CHECKS} 条规则 / ${scannedFiles} 个文件 / ${failures.length} 条违规规则（不阻断）`)

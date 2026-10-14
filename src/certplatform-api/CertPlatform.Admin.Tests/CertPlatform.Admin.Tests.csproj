@@ -35,6 +35,11 @@
          ⚠️ 注意：extern alias（Aliases="CertPlatform,SharedEntities"）只挂在 YZH.Core.Web 的引用上，
          Admin/Auditor/Tests 都是**普通引用**，可直接 typeof。 -->
     <ProjectReference Include="..\CertPlatform.Shared\CertPlatform.Shared.csproj" />
+    <!-- ★ 引用 Auditor：`66` V2.1 第 0 批的 `IFillParamService`（参数查询/补录唯一入口）落在此项目内
+         （FillParamValue 是 Auditor 独占实体 ⇒ Service 必须在 Auditor，见 66 §2.2）。
+         ⚠️ 这是**测试项目**引用，⛔ 不构成生产依赖边：Auditor ⛔ 不引 Admin（A-R1）依旧成立。
+         ⚠️ 测试项目无网络 ⇒ ⛔ 不能引 Moq/NSubstitute；假实现用 .NET 内置 DispatchProxy（见 FakeProxy.cs）。 -->
+    <ProjectReference Include="..\CertPlatform.Auditor\CertPlatform.Auditor.csproj" />
   </ItemGroup>
 
 </Project>

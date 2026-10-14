@@ -27,6 +27,7 @@ import type {
   EnterpriseNode, StageItem, StageOverviewResult, StageStandardSummary,
   StandardDirectoryResult, FileSlot, DispatchRow, FileVersionRow, HistoryItem
 } from '@share/api'
+import { partitionUploadable, checkUploadable } from '@share/constants/upload-file-policy'
 
 /** 右侧文件夹树节点（模板结构 + 该文件夹下的槽位行） */
 export interface FolderNode {
@@ -625,9 +626,32 @@ export class ResourcesLogic {
     this.singlePlanBlocked.value = []
   }
 
+  /**
+   * ★ 上传契约闸门（唯一事实源 = `@share/constants/upload-file-policy`，与后端 `UploadFilePolicy.Check` 同口径）：
+   * 系统噪声静默剔除（计数提示）；白名单外剔除并列出 —— ⛔ 页面不许自建后缀 if/else（守卫 R21）。
+   * 默认类别 document/image/pdf（⛔ 不含压缩包，与后端 AllowedExtensions 一致）。
+   */
+  private partitionByPolicy(files: File[]): File[] {
+    if (!files.length) return files
+    const part = partitionUploadable(files)
+    if (part.noise.length > 0) {
+      ElMessage.info(
+        `已自动忽略 ${part.noise.length} 个系统文件（${part.noise.slice(0, 3).map((nf) => nf.name).join('、')}${part.noise.length > 3 ? ' 等' : ''}）`)
+    }
+    if (part.rejected.length > 0) {
+      ElMessage.warning(
+        `已跳过 ${part.rejected.length} 个不支持的文件：${part.rejected.slice(0, 3).map((rf) => rf.name).join('、')}${part.rejected.length > 3 ? ' 等' : ''}`)
+    }
+    if (!part.accepted.length) return []
+    const ok = new Set(part.accepted.map((a) => a.name))
+    return files.filter((f) => ok.has(f.name))
+  }
+
   setSingleUploadFiles(files: File[]) {
-    const added = this.appendFiles(this.singleUploadFiles.value, files)
-    if (added < files.length) ElMessage.info(`已忽略 ${files.length - added} 个重复文件`)
+    const clean = this.partitionByPolicy(files)
+    if (!clean.length) return
+    const added = this.appendFiles(this.singleUploadFiles.value, clean)
+    if (added < clean.length) ElMessage.info(`已忽略 ${clean.length - added} 个重复文件`)
     this.resetSinglePlan()
     this.autoPreviewSingle()
   }
@@ -656,7 +680,10 @@ export class ResourcesLogic {
 
   /** 上传文件夹（webkitdirectory）：保留相对路径，才能让 M0 文件夹路径强匹配生效 */
   setSingleUploadFolderFiles(files: File[]) {
-    this.singleUploadFiles.value = files
+    // ★ 文件夹模式也过契约闸门（文件夹里什么都可能有：.DS_Store / ~$ 锁文件 / 可执行文件）
+    const clean = this.partitionByPolicy(files)
+    if (!clean.length) return
+    this.singleUploadFiles.value = clean
     this.resetSinglePlan()
     this.autoPreviewSingle()
   }
@@ -836,8 +863,10 @@ export class ResourcesLogic {
   }
 
   addBatchFiles(files: File[]) {
-    const added = this.appendFiles(this.batchFiles.value, files)
-    if (added < files.length) ElMessage.info(`已忽略 ${files.length - added} 个重复文件`)
+    const clean = this.partitionByPolicy(files)
+    if (!clean.length) return
+    const added = this.appendFiles(this.batchFiles.value, clean)
+    if (added < clean.length) ElMessage.info(`已忽略 ${clean.length - added} 个重复文件`)
     this.resetBatchPlan()
   }
 
@@ -1062,7 +1091,14 @@ export class ResourcesLogic {
     this.replaceReason.value = ''
   }
 
-  setReplaceNewFile(file: File | null) { this.replaceNewFile.value = file }
+  setReplaceNewFile(file: File | null) {
+    // ★ 替换也过契约闸门（后端 ReplaceFileAsync 同样 Check —— 前端先拦，用户看到人话而不是后端错误码）
+    if (file) {
+      const v = checkUploadable(file.name)
+      if (!v.ok) { ElMessage.warning(v.message ?? '不支持的文件格式'); return }
+    }
+    this.replaceNewFile.value = file
+  }
 
   async confirmReplace() {
     const target = this.replacingFile.value

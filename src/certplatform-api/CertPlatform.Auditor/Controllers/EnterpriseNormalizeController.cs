@@ -31,6 +31,7 @@ using CertPlatform.Shared.Storage;
 using CertPlatform.Auditor.Entities.Cert;
 using CertPlatform.Auditor.Entities.Doc;
 using CertPlatform.Auditor.Services;
+using CertPlatform.Auditor.Services.Ent;
 using CertPlatform.Auditor.Services.Ent.Normalize;
 
 namespace CertPlatform.Auditor.Controllers
@@ -76,6 +77,8 @@ namespace CertPlatform.Auditor.Controllers
         private readonly IDbOrm _db;
         /// <summary>核心资源检索唯一入口（铁律 L5）—— 标准取数只走它。</summary>
         private readonly ICoreResourceQuery _core;
+        /// <summary>★ 参数「查询 + 补录」的唯一入口（`66` V2.1 §二）—— 缺参预检只走它。</summary>
+        private readonly IFillParamService _fillParam;
         private readonly IOcrProvider _ocrProvider;
         private readonly IObjectStorage _storage;
         private readonly ILogger<EnterpriseNormalizeController> _logger;
@@ -88,6 +91,7 @@ namespace CertPlatform.Auditor.Controllers
             QueueManager queueManager,
             IDbOrm db,
             ICoreResourceQuery core,
+            IFillParamService fillParam,
             IOcrProvider ocrProvider,
             IObjectStorage storage,
             ILogger<EnterpriseNormalizeController> logger)
@@ -98,6 +102,7 @@ namespace CertPlatform.Auditor.Controllers
             _queueManager = queueManager;
             _db = db;
             _core = core;
+            _fillParam = fillParam;
             _ocrProvider = ocrProvider;
             _storage = storage;
             _logger = logger;
@@ -385,11 +390,15 @@ namespace CertPlatform.Auditor.Controllers
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
-            var orgCodeForGaps = scope.Published.FirstOrDefault()?.OrgCode ?? "";
             if (involvedStandards.Count > 0)
             {
+                // ★ 2026-10-14 第 0 批：缺参计算下沉 IFillParamService（`66` V2.1 §2.5）。
+                //   ⚠️ 口径已按 `66` V2.1 §1.4/§2.6 归一为「平台级 OrgCode == ''」——
+                //      原实现把 orgCodeForGaps（模板所属机构 Code）传进定义过滤，
+                //      而 cert_fill_param_def.OrgCode 恒空串 ⇒ 原实现恒取不到定义、缺参清单恒为空。
+                //      详见 FillParamService.GetGapListAsync 内注释。
                 result.ParamGaps = await BuildParamGapsAsync(
-                    orgCodeForGaps, enterpriseCode, stageCode ?? "", involvedStandards);
+                    enterpriseCode, stageCode ?? "", involvedStandards);
                 result.MissingRequired = result.ParamGaps.Sum(g => g.Items.Count);
             }
 
@@ -405,94 +414,31 @@ namespace CertPlatform.Auditor.Controllers
 
         /// <summary>
         /// ★ §6 缺参预检：按「入队标准」算「缺失的必填全局参数」（分标准分组，2026-10-07）。
-        /// <para><b>口径</b>：对每个涉及标准 S，取「该机构 × 阶段（通配）× (S 或不限标准)」下
+        /// <para><b>口径</b>：对每个涉及标准 S，取「(S 或 不限标准) × 阶段（通配）× <b>平台级定义</b>」下
         /// <c>IsRequired=true</c> 的参数定义全集，减去该企业「已填且非空」的参数值 ⇒ 缺失集合。
-        /// 通配（<c>StandardCode=''</c>/<c>StageCode=''</c>）定义与值都参与，与
-        /// <c>FillParamValueProvider.FindDefAsync</c> 的特异性口径一致。</para>
-        /// <para>⛔ 纯读零副作用（2 次 DB 查询：定义一次 + 值一次），不写库、不调 LLM。</para>
+        /// 通配（<c>StandardCode=''</c>/<c>StageCode=''</c>）定义与值都参与。</para>
+        /// <para>⛔ 纯读零副作用，不写库、不调 LLM。</para>
+        ///
+        /// <para>★ 2026-10-14 第 0 批通用 Service 抽取：实现已下沉
+        /// <see cref="IFillParamService.GetGapListAsync"/>（`66` V2.1 §2.5），本方法只做参数适配。
+        /// ⚠️ 原实现传的 <c>orgCode</c>（= <c>scope.Published</c> 的模板所属机构 Code）已按
+        /// `66` V2.1 §1.4 / §2.6 弃用 —— 详见 <c>FillParamService.GetGapListAsync</c> 内的 ★ 说明
+        /// （原写法下缺参清单恒为空 ⇒ 缺参拦截是死代码）。</para>
         /// </summary>
-        private async Task<List<NormalizeParamGapGroup>> BuildParamGapsAsync(
-            string orgCode, string enterpriseCode, string stageCode,
+        private Task<List<NormalizeParamGapGroup>> BuildParamGapsAsync(
+            string enterpriseCode, string stageCode,
             List<string> standards)
-        {
-            var result = new List<NormalizeParamGapGroup>();
-            if (string.IsNullOrEmpty(orgCode) || standards.Count == 0) return result;
-
-            // ★ 标准名称（让缺参拦截文案可读）：ISOStandard.StandardCode 为业务键
-            //   ⚠️ 用 GroupBy 再取首行 —— StandardCode **不是唯一键**（唯一约束是「名称+版本年」），
-            //      直接 ToDictionary 遇到同编号多版本会抛「已添加了具有相同键的项」。
-            var stdNames = (await _db.GetListAsync<ISOStandard>(s =>
-                standards.Contains(s.StandardCode) && s.IsValid == 1)).Data
-                ?? new List<ISOStandard>();
-            var stdNameMap = stdNames
-                .GroupBy(s => s.StandardCode, StringComparer.Ordinal)
-                .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
-
-            // ① 必填参数定义：该机构 × (阶段==stage 或不限) × (标准∈涉及 或 不限)
-            var defs = (await _db.GetListAsync<FillParamDef>(d =>
-                d.OrgCode == orgCode
-                && d.IsRequired
-                && d.IsValid == 1
-                && (d.StageCode == "" || d.StageCode == stageCode)
-                && (d.StandardCode == "" || standards.Contains(d.StandardCode)))).Data
-                ?? new List<FillParamDef>();
-            if (defs.Count == 0) return result;
-
-            // ② 企业已填的有效值：该企业 × (阶段==stage 或 不限) × (标准∈涉及 或 不限)
-            var filled = (await _db.GetListAsync<FillParamValue>(v =>
-                v.EnterpriseCode == enterpriseCode
-                && v.IsValid == 1
-                && (v.StageCode == "" || v.StageCode == stageCode)
-                && (v.StandardCode == "" || standards.Contains(v.StandardCode)))).Data
-                ?? new List<FillParamValue>();
-            var filledCodes = filled
-                .Where(v => !string.IsNullOrWhiteSpace(v.ParamValue))
-                .GroupBy(v => v.StandardCode, StringComparer.Ordinal)
-                .ToDictionary(g => g.Key, g => g.Select(v => v.ParamCode)
-                    .Where(p => !string.IsNullOrWhiteSpace(p))
-                    .ToHashSet(StringComparer.Ordinal));
-
-            foreach (var std in standards.Distinct(StringComparer.Ordinal))
-            {
-                // 该标准适用的必填参数 = def 的 StandardCode ∈ {std, ''}
-                var required = defs
-                    .Where(d => d.StandardCode == "" || d.StandardCode == std)
-                    .Select(d => d.ParamCode)
-                    .Where(p => !string.IsNullOrWhiteSpace(p))
-                    .Distinct(StringComparer.Ordinal)
-                    .ToList();
-                if (required.Count == 0) continue;
-
-                // 已填 = 该标准的通配值 + 该标准专属值（非空）
-                var filledForStd = new HashSet<string>(StringComparer.Ordinal);
-                if (filledCodes.TryGetValue("", out var wc)) filledForStd.UnionWith(wc);
-                if (filledCodes.TryGetValue(std, out var sc)) filledForStd.UnionWith(sc);
-
-                var missing = required.Except(filledForStd, StringComparer.Ordinal).ToList();
-                if (missing.Count == 0) continue;
-
-                var iso = stdNameMap.TryGetValue(std, out var found) ? found : null;
-
-                result.Add(new NormalizeParamGapGroup
-                {
-                    StandardCode = std,
-                    // ★ 查不到主数据时给「未登记标准（短码）」—— ⛔ 不回退裸 GUID（见 StandardLabel）
-                    StandardName = StandardLabel(iso?.StandardName, iso?.StandardCode, std),
-                    Items = missing
-                        .Select(pc => defs.First(d => d.ParamCode == pc && (d.StandardCode == "" || d.StandardCode == std)))
-                        .Select(d => new NormalizeParamGapItem
-                        {
-                            ParamCode = d.ParamCode,
-                            ParamName = d.ParamName,
-                            GroupName = d.GroupName ?? string.Empty,
-                            ValueType = d.ValueType,
-                            IsRequired = true,
-                        })
-                        .ToList(),
-                });
-            }
-            return result;
-        }
+            => _fillParam.GetGapListAsync(
+                new FillParamScope(
+                    // ⚠️ GetGapListAsync 只消费 EnterpriseCode / StageCode
+                    //    （定义口径 = 平台级 OrgCode == ''），WorkspaceCode / StandardCode 传空 ——
+                    //    ⛔ 不要误传「模板所属机构 Code」（那正是原实现的缺陷）。
+                    WorkspaceCode: string.Empty,
+                    EnterpriseCode: enterpriseCode,
+                    StandardCode: string.Empty,
+                    StageCode: stageCode),
+                standards,
+                includeOptional: false);
 
         // ════════════════════════════════════════════════════════════════════
         //  一、单文件同步执行（试跑 / 单文件测试入口）
@@ -648,36 +594,9 @@ namespace CertPlatform.Auditor.Controllers
             public List<OfficeFillPending> LastFillPendings { get; set; } = new();
         }
 
-        /// <summary>
-        ///     ★ <b>标准 Code 短码</b> —— 用于「主数据缺失」时的人话占位（如 <c>475da4fe</c>）。
-        ///
-        ///     <para>取前 8 位：既能唯一指认（本仓 Code 是 GUID 或 32 位 hex），
-        ///     又不会像完整 GUID 那样把版面撑爆、把人劝退。</para>
-        /// </summary>
-        private static string ShortCode(string? code)
-            => string.IsNullOrEmpty(code) ? "?" : (code.Length > 8 ? code[..8] : code);
-
-        /// <summary>
-        ///     ★ <b>标准显示名（后端生成文案用）</b> —— ⛔ <b>绝不把裸 GUID 当名字</b>。
-        ///
-        ///     <para>取值顺序：<c>StandardName</c> → <c>StandardCode</c>（业务编号，如 <c>iso9001</c>）
-        ///     → 「未登记标准（短码）」。</para>
-        ///
-        ///     <para><b>为什么不让它回退成 GUID</b>：2026-10-09 用户报障 ——
-        ///     `cert_iso_standard` 里 `475da4fe-…`（食品标准）被删、但企业阶段关联仍在，
-        ///     于是页面 Tab 直接显示一串 GUID。**用户看到的是「系统坏了」，不是「数据缺了」**。
-        ///     ⇒ 宁可显示「未登记标准（475da4fe）」，也不能显示 GUID。</para>
-        ///
-        ///     <para>⚠️ 本方法只服务**后端自己拼的文案**（缺参拦截、干跑拒绝原因）；
-        ///     `tree` 端点的标准节点仍回传**原始事实**（空串 + <c>StandardRegistered</c>），
-        ///     由前端决定怎么显示 —— 职责边界不要混。</para>
-        /// </summary>
-        private static string StandardLabel(string? name, string? no, string? code)
-        {
-            if (!string.IsNullOrWhiteSpace(name)) return name!;
-            if (!string.IsNullOrWhiteSpace(no)) return no!;
-            return $"未登记标准（{ShortCode(code)}）";
-        }
+        // ⛔ 原私有 `ShortCode` / `StandardLabel` 已上提 `Services/Ent/Normalize/NormalizeLabels.cs`
+        //    （2026-10-14 第 0 批通用 Service 抽取）—— 缺参预检下沉后 Service 也要拼同一句话，
+        //    留在本类会让 Service 复制一份、两处漂移且都不报错。调用点改走 `NormalizeLabels.*`。
 
         /// <summary>
         ///     ★ <b>容错解析 <c>cert_doc_fill_log.PendingsJson</c></b> —— ⛔ <b>绝不抛异常</b>。
@@ -1155,10 +1074,14 @@ namespace CertPlatform.Auditor.Controllers
                 _logger.LogWarning(
                     "[EntNorm] 视觉模型不可达，拒绝入队（含图片/PDF）：Ent={Ent}, Stage={Stage}",
                     req.EnterpriseCode, req.StageCode);
+                // ⚠️ 2026-10-14 纠错：原文案举例 `qwen3-vl-flash` —— 该模型在百炼账号**不存在**（404
+                //   model_not_found）⇒ 照着这条提示去配，配出来的依然是不可用的模型（提示语把人引向死路）。
+                //   举例一律用**实测存在**的模型；并补上「名字闸门」规则，避免再踩。
                 return Ok(ApiResponse<object>.Fail(
                     "本批文件包含图片 / PDF，需视觉模型（ai_vision_config）识别后才能规范化，"
                     + "但当前视觉模型未配置或不是视觉模型。请先到「系统参数 → 视觉模型配置」"
-                    + "配好可用的视觉模型（如 qwen3-vl-flash）再执行。"));
+                    + "配好可用的视觉模型（如 qwen-vl-ocr）再执行；"
+                    + "⛔ 模型名必须含 vl / vision / omni，否则会被判定为非视觉模型而静默禁用。"));
             }
 
             // ② 防重复入队（同企业同阶段同时只允许一条运行中的规范化队列）
@@ -1513,11 +1436,11 @@ namespace CertPlatform.Auditor.Controllers
                     EnterpriseCode = entCode,
                     EnterpriseName = entMap.TryGetValue(entCode, out var en) && !string.IsNullOrWhiteSpace(en)
                         ? en
-                        : $"未登记企业（{ShortCode(entCode)}）",
+                        : $"未登记企业（{NormalizeLabels.ShortCode(entCode)}）",
                     StageCode = stgCode,
                     StageName = stageMap.TryGetValue(stgCode, out var sn) && !string.IsNullOrWhiteSpace(sn)
                         ? sn
-                        : $"未登记阶段（{ShortCode(stgCode)}）",
+                        : $"未登记阶段（{NormalizeLabels.ShortCode(stgCode)}）",
                     Status = q.Status,
                     // ★ 终态由后端判（同 IsTerminalStatus 口径）—— ⛔ 不让前端按字符串猜，
                     //   两处各猜一次 ⇒ 页面永远转圈（见 IsTerminalStatus 注释）
@@ -1529,21 +1452,18 @@ namespace CertPlatform.Auditor.Controllers
                     Processing = q.ProcessingCount,
                     Pending = q.PendingCount,
                     Progress = q.Progress,
-                    // ★★★ 时区：**同一条队列记录里，两个时间列的基准不一样**（2026-10-11 实测）
-                    //   · CreateTime = `BaseEntity` 默认 `DateTime.UtcNow` ⇒ **UTC**，必须 ToUtc 补 Z
-                    //   · StartTime / EndTime = `QueueManager` 显式 `DateTime.Now` ⇒ **本地时间**
-                    //     ⇒ ⛔ **绝不能标 Z**：标了前端按 UTC 解析 ⇒ 显示成 +8h（09:25 变 17:25）。
-                    //     实测铁证：Q-20261011-9d94066d2 的 CreateTime=01:25:33（UTC=09:25 CST），
-                    //     而 StartTime=09:25:33（已是本地）—— 同一条记录差 8 小时。
-                    //   （同族先例：`StandardDirectoryFile.NormalizedTime` 也是本地时间，⛔ 不标 Z。
-                    //     已核 `QueueManager.cs:172/491/609/615` 与 `yzh_queue_task.ProcessTime/CompleteTime`
-                    //     同样是 `DateTime.Now`。）
+                    // ★★★ 时区（2026-10-14 已收口为「全本地时间」）：
+                    //   yzh_queue 的 CreateTime 曾经是 `DateTime.UtcNow`（UTC），与 StartTime/EndTime
+                    //   （`DateTime.Now` 本地）同行差 8 小时，列表曾用 ToUtc 补 Z 补偿。
+                    //   2026-10-14 起 `QueueManager.CreateQueueAsync` 已改写本地时间（存量数据已 +8h 迁移）
+                    //   ⇒ 三列统一**本地时间、JSON 不标 Z**，前端按本地解析即正确，⛔ 不要再补 Z。
                     StartTime = q.StartTime,
                     EndTime = q.EndTime,
-                    CreateTime = ToUtc(q.CreateTime),                    CreateBy = by,
-                        OperatorName = userMap.TryGetValue(by, out var un) && !string.IsNullOrWhiteSpace(un)
-                            ? un
-                            : $"未登记用户（{ShortCode(by)}）",
+                    CreateTime = q.CreateTime,
+                    CreateBy = by,
+                    OperatorName = userMap.TryGetValue(by, out var un) && !string.IsNullOrWhiteSpace(un)
+                        ? un
+                        : $"未登记用户（{NormalizeLabels.ShortCode(by)}）",
                 };
             }).ToList();
 
@@ -3120,11 +3040,14 @@ namespace CertPlatform.Auditor.Controllers
         };
 
         /// <summary>
-        ///     ★ 把 <c>BaseEntity.CreateTime</c>（<b>UTC</b>）标成带 Z 的时间。
+        ///     ★ 把仍以 <b>UTC</b> 落库的 <c>BaseEntity.CreateTime</c>（如 <c>cert_doc_fill_log</c>，
+        ///     经 <c>EntityService.AddCore</c> 写入）标成带 Z 的时间。
         ///     <para>⚠️ SqlSugar 从 MySQL 读回时 <c>Kind = Unspecified</c> ⇒ 不标的话
         ///     JSON 里没有 <c>Z</c> ⇒ 前端 <c>new Date()</c> 按<b>本地</b>解析 ⇒ 少 8 小时。
         ///     （同 <c>tree</c> 端点 <c>LastFillTime</c> 的处置；<c>NormalizedTime</c> 是本地时间，
         ///     ⛔ 不要一起标 —— 那个本来就是对的。）</para>
+        ///     <para>⛔ 仅限「仍存 UTC」的列。<c>yzh_queue.CreateTime</c> / 留痕 CreateTime
+        ///     2026-10-14 起已改本地时间，<b>不要</b>再经本方法（会 +8h 显示）。）</para>
         /// </summary>
         private static DateTime? ToUtc(DateTime value)
             => value == default ? null : DateTime.SpecifyKind(value, DateTimeKind.Utc);
@@ -3330,9 +3253,10 @@ namespace CertPlatform.Auditor.Controllers
                 AfterJson = a.AfterJson,
                 Reason = a.Reason,
                 CreateBy = a.CreateBy ?? string.Empty,
-                // ★ 兜底先放 Code —— 查不到姓名时⛔ 也不能留空（页面会显示成「操作人：」后面什么都没有）
+                // ★ 先兜底放 Code —— 查不到姓名时⛔ 也不能留空（页面会显示成「操作人：」后面什么都没有）
                 OperatorName = a.CreateBy ?? string.Empty,
-                CreateTime = ToUtc(a.CreateTime),
+                // ★ 2026-10-14：WriteActionAsync 已改写本地时间 ⇒ 不再 ToUtc 补 Z（补了会 +8h）
+                CreateTime = a.CreateTime,
                 QueueCode = a.QueueCode,
             }).ToList();
 
@@ -3555,7 +3479,8 @@ namespace CertPlatform.Auditor.Controllers
         {
             row.Code = Guid.NewGuid().ToString();
             row.CreateBy = UserContext.UserCode;
-            row.CreateTime = DateTime.UtcNow;
+            // ★ 2026-10-14：UtcNow → Now —— 留痕时间线上屏（BuildActionDtosAsync 已同步去掉 ToUtc）
+            row.CreateTime = DateTime.Now;
 
             try
             {

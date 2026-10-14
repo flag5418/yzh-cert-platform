@@ -176,7 +176,9 @@ public class QueueManager
                     Status = "locked",
                     ActiveKey = $"{item.ResourceTable}|{item.ResourceCode}",
                     OrgCode = req.OrgCode,
-                    LockTime = DateTime.UtcNow
+                    // ★ 2026-10-14：UtcNow → Now。同表 ReleaseTime 由 SQL NOW()（本地）写入，
+                    //   LockTime 用 UTC 会造成锁记录两列差 8 小时、详情页时间线错位。
+                    LockTime = DateTime.Now
                 };
                 lockRows.Add(lockRow);
                 await orm.InsertAsync(lockRow);
@@ -204,7 +206,11 @@ public class QueueManager
                 // ★ 契约：CreateBy = 用户 Code（BaseEntity 注释口径）。空 = 系统发起，归一为 NULL
                 //   —— 不让 "" 与 NULL 两种空值并存（否则任何 `CreateBy <> ''` 类判据都会漏掉一半）。
                 CreateBy = string.IsNullOrWhiteSpace(req.UserCode) ? null : req.UserCode.Trim(),
-                CreateTime = DateTime.UtcNow
+                // ★ 2026-10-14：UtcNow → Now（与 StartTime / yzh_queue_task.CreateTime / 全库口径对齐）。
+                //   ⛔ 曾经用 UtcNow ⇒ 同一行 CreateTime(UTC) 与 StartTime(本地) 差 8 小时：
+                //   队列监控按 CreateTime 排序/筛日期把新队列排到旧位置、规范化页需 ToUtc 补 Z 补偿。
+                //   消费方（EnterpriseNormalizeController 任务列表）已同步去掉 ToUtc，⛔ 不要再补 Z。
+                CreateTime = DateTime.Now
             };
             // 主表必须先落库：InsertAsync 失败只返回 Fail 不抛异常，这里必须检查，
             // 否则会出现「锁/任务已插入而主表无记录」的幽灵队列（监测页永远看不到）
@@ -413,6 +419,8 @@ public class QueueManager
             {
                 await orm.SqlExecuteAsync("UPDATE yzh_queue_task SET Status = 'cancelled', CompleteTime = @ct, LockedUntil = NULL, ErrorMessage = '队列已取消，任务跳过执行' WHERE Code = @code", new { ct = now, code = task.Code });
                 await RefreshQueueProgressAsync(orm, task.QueueCode);
+                // ★ 框架层补口（2026-10-14）：接口有钩子但从未被调用 ⇒ 业务侧失败/取消联动（如转换批次提取缓冲 Flush）会静默丢失
+                await SafeOnTaskStateChangedAsync(task, "cancelled", "队列已取消，任务跳过执行");
                 return;
             }
 
@@ -442,17 +450,55 @@ public class QueueManager
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             await HandleTaskFailureAsync(task, "任务执行超时或已取消，任务被强制终止", isCancel: true);
+            await SafeOnTaskStateChangedAsync(task, "cancelled", "任务执行超时或已取消");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[QueueManager] 任务执行失败: {TaskId}", task.Id);
             await HandleTaskFailureAsync(task, ex.InnerException?.Message ?? ex.Message, isCancel: false);
+            // ★ 失败终态钩子：HandleTaskFailureAsync 可能置 pending 重试 —— 只在真正 failed 时通知
+            var failedTask = await ReReadTaskStatusAsync(task.Code);
+            if (failedTask?.Status == "failed")
+                await SafeOnTaskStateChangedAsync(task, "failed", failedTask.ErrorMessage ?? ex.Message);
         }
         finally
         {
             _runningTokens.TryRemove(task.Id, out _);
             cts.Dispose();
             _semaphore.Release();
+        }
+    }
+
+    /// <summary>
+    ///     ★ 框架层补口（2026-10-14，改造准入 ①③）：<see cref="IYzhTaskExecutor.OnTaskStateChangedAsync"/>
+    ///     接口一直存在但 QueueManager **从未调用** ⇒ 业务侧「失败/取消联动」钩子等于死代码
+    ///     （实测：转换批次提取缓冲依赖此钩子 Flush，漏调 = 缓冲永久滞留）。
+    ///     旁路：钩子异常只记日志，不影响队列状态机。
+    /// </summary>
+    private async Task SafeOnTaskStateChangedAsync(YzhQueueTask task, string newStatus, string message)
+    {
+        try
+        {
+            if (_executors.TryGetValue(task.TaskType, out var executor))
+                await executor.OnTaskStateChangedAsync(task, newStatus, message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[QueueManager] OnTaskStateChangedAsync 钩子异常: {TaskCode} → {Status}", task.Code, newStatus);
+        }
+    }
+
+    private async Task<YzhQueueTask?> ReReadTaskStatusAsync(string taskCode)
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var orm = scope.ServiceProvider.GetRequiredService<IDbOrm>();
+            return (await orm.GetOneAsync<YzhQueueTask>(t => t.Code == taskCode)).Data;
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -495,6 +541,7 @@ public class QueueManager
         }
         await orm.UpdateAsync(taskRow);
         await RefreshQueueProgressAsync(orm, taskRow.QueueCode);
+        // ★ 失败终态钩子：HandleTaskFailureAsync 内不调（重试分支也会走到这）—— 由 ExecuteTaskAsync catch 统一判定 failed 后调
     }
 
     private bool ClassifyError(string? message)

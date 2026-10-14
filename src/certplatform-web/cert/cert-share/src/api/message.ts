@@ -4,21 +4,22 @@ import { yzhApi } from '@yzh-core'
  * 站内消息 API
  *
  * 接口路径：/api/Admin/System/Message/*
- * 契约：ApiResponse 信封，成功码 200
+ * 契约：ApiResponse 信封 camelCase（E1），业务实体 PascalCase（与 DB 列 / C# 属性一致）
+ * ★ 后端 Program.cs `PropertyNamingPolicy = null` ⇒ 消息列表字段是 PascalCase（Title/IsRead/CreateTime）
  */
 
 export interface MessageItem {
-  id: number
-  code: string
-  userCode: string
-  userName: string
-  title: string
-  content: string
-  messageType: string
-  isRead: number
-  extraData: string
-  createTime: string
-  readDate: string | null
+  Id: number
+  Code: string
+  UserCode?: string
+  UserName?: string
+  Title: string
+  Content: string
+  MessageType: string
+  IsRead: number
+  ExtraData?: string
+  CreateTime: string
+  ReadDate?: string | null
 }
 
 export interface MessageListParams {

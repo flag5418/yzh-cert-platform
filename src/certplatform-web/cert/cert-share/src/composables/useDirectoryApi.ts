@@ -10,6 +10,7 @@ import type {
   QueueStatus,
   DirectoryTemplate,
 } from '@share/types'
+import { isSystemNoise } from '@share/constants/upload-file-policy'
 
 // ========================================================
 // StandardDirectoryController (/api/Admin/Workflow/StandardDirectory/*)
@@ -156,15 +157,14 @@ export async function retryFailedConversions(): Promise<{
 }
 
 /** 上传初始化（创建任务） */
-const IgnoredFileExtensions = new Set(['.ds_store', '.thumbs.db', 'desktop.ini'])
-
+/**
+ * 系统噪声（.DS_Store / Thumbs.db / ~$ 锁文件 / desktop.ini…）静默剔除。
+ * ★ 唯一事实源 = `@share/constants/upload-file-policy`（2026-10-14 删本地私有
+ *   `IgnoredFileExtensions` —— 与事实源漂移且 `'.thumbs.db'` 永远命不中的 bug 一并消除）。
+ *   白名单外后缀的拦截在页面 submit 的 `partitionUploadable` + 后端 `upload/init` 闸门两处完成。
+ */
 export function filterIgnoredFiles(files: File[]): File[] {
-  return files.filter(f => {
-    const name = f.name.toLowerCase()
-    if (IgnoredFileExtensions.has(name)) return false
-    const ext = '.' + name.split('.').pop()
-    return !IgnoredFileExtensions.has(ext)
-  })
+  return files.filter(f => !isSystemNoise(f.name))
 }
 
 export async function uploadInit(

@@ -51,7 +51,8 @@ export interface QueueListResult {
 }
 
 export interface QueueDetailTask {
-  id: number
+  /** 业务键 `YzhQueueTask.Code`（单任务重试 `task/retry` 用；⛔ 不用数字 id） */
+  code: string
   taskNo: number
   taskType: string
   fileCode: string

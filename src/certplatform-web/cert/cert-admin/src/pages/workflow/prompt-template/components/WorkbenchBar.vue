@@ -8,7 +8,7 @@
  *
  * ⛔ 不显示 AI 模型：模型由 `cert_sys_config` 统一固定（D.2-1 / Q3=a），UI 不可选也不展示。
  */
-import { MagicStick, RefreshLeft, DocumentChecked, ArrowRight } from '@element-plus/icons-vue'
+import { MagicStick, RefreshLeft, DocumentChecked, ArrowRight, View } from '@element-plus/icons-vue'
 import type { PromptTypeDef } from '../logic'
 
 defineProps<{
@@ -39,7 +39,9 @@ defineProps<{
   saveState: 'saved' | 'unsaved' | 'draft'
   generating: boolean
   saving: boolean
-saveBlockedReason?: string
+  saveBlockedReason?: string
+  /** ★ 验证模式开关状态（2026-10-14）：true = 右侧结果面板已展开 */
+  resultOpen: boolean
 }>()
 
 const emit = defineEmits<{
@@ -47,6 +49,7 @@ const emit = defineEmits<{
   (e: 'generate'): void
   (e: 'save'): void
   (e: 'reset'): void
+  (e: 'toggleResult'): void
 }>()
 </script>
 
@@ -102,6 +105,16 @@ const emit = defineEmits<{
 
     <!-- 右：动作组 -->
     <div class="wb-bar__actions">
+      <!-- ★ 2026-10-14：编辑 / 验证 两模式切换。默认编辑模式（正文占满），
+           点“验证模式”才浮出右侧结果面板，不再一进页就分掉 45% 宽度。 -->
+      <el-button
+        :type="resultOpen ? 'primary' : 'default'"
+        :plain="resultOpen"
+        :icon="View"
+        @click="emit('toggleResult')"
+      >
+        {{ resultOpen ? '编辑模式' : '验证模式' }}
+      </el-button>
       <el-button
         class="wb-bar__ai"
         type="primary"

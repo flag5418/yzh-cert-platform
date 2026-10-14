@@ -11,7 +11,9 @@ using SqlSugar;
 using CertPlatform.Shared.Workflow.Models;
 using CertPlatform.Shared.Services.Workflow;
 using CertPlatform.Admin.Entities.Wf;
+using YZH.Core.Api.Services;
 using YZH.Core.DataBase.Interfaces;
+using YZH.Core.Stand.Interfaces;
 
 namespace CertPlatform.Admin.Services.Workflow
 {
@@ -51,6 +53,13 @@ namespace CertPlatform.Admin.Services.Workflow
         private readonly NodeExecutor _nodeExecutor;
         private readonly AiNodeExecutor _aiNodeExecutor;
 
+        // ★ 2026-10-14 审计字段统一（设计 §3.4 收敛清单）：
+        //   写入一律走 EntityService<T> ⇒ CreateBy/UpdateBy/DeleteBy 由基类按 IUserContext.UserCode 自动填，
+        //   ⛔ 不再直接 `_db.Client.Insertable/Updateable`（那样永远拿不到审计人 = 静默坏数据）。
+        private readonly IUserContext _userContext;
+        private readonly EntityService<WfNodeApproval> _approvalService;
+        private readonly EntityService<WfNodeExecution> _nodeExecService;
+
         /// <summary>
         /// 输出 JSON 落库上限（64KB）。超过则落「截断信封」而非完整内容。
         /// <para>动机：docTable 之类节点可能产出 MB 级输出，完整落库会撑大行宽并让
@@ -69,7 +78,10 @@ namespace CertPlatform.Admin.Services.Workflow
             NodeExecutor nodeExecutor,
             AiNodeExecutor aiNodeExecutor,
             IDbOrm db,
-            ILogger<WfExecutionTaskService> logger)
+            ILogger<WfExecutionTaskService> logger,
+            IUserContext userContext,
+            EntityService<WfNodeApproval> approvalService,
+            EntityService<WfNodeExecution> nodeExecService)
         {
             _parser = parser;
             _interpreter = interpreter;
@@ -79,6 +91,9 @@ namespace CertPlatform.Admin.Services.Workflow
             _aiNodeExecutor = aiNodeExecutor;
             _db = db;
             _logger = logger;
+            _userContext = userContext;
+            _approvalService = approvalService;
+            _nodeExecService = nodeExecService;
         }
 
         /// <summary>
@@ -473,6 +488,7 @@ namespace CertPlatform.Admin.Services.Workflow
                 .OrderBy(r => r.StartedAt)
                 .ToList();
 
+            var entities = new List<WfNodeExecution>(records.Count);
             foreach (var record in records)
             {
                 if (!parsed.NodeMap.TryGetValue(record.NodeId, out var node))
@@ -480,7 +496,7 @@ namespace CertPlatform.Admin.Services.Workflow
 
                 var outputJson = SerializeOutput(record.Output);
 
-                var nodeExec = new WfNodeExecution
+                entities.Add(new WfNodeExecution
                 {
                     Code = Guid.NewGuid().ToString("N"),
                     TaskCode = taskCode,
@@ -506,10 +522,21 @@ namespace CertPlatform.Admin.Services.Workflow
                     SourceFieldName = TryGetStr(record.Output, "sourceFieldName"),
                     SourceVersion = TryGetInt(record.Output, "sourceVersion"),
                     IsReused = record.IsReused ? 1 : 0,
-                    CreateTime = DateTime.Now,
                     IsDeleted = false
-                };
-                await _db.Client.Insertable(nodeExec).ExecuteCommandAsync();
+                });
+            }
+
+            if (entities.Count > 0)
+            {
+                // ★ §3.4：循环内逐条 Insertable → 一次 InsertBatch（事务保护 + 审计字段由基类统一填）
+                var insertResult = await _nodeExecService.InsertBatch(entities, _userContext.ClientIp);
+                if (!insertResult.Success)
+                {
+                    // ⛔ 不能吞：原来逐条 Insertable 抛异常 ⇒ 整个测试流失败；改走基类后异常被
+                    //   EntityService 吃成 Result.Fail ⇒ 必须在此处重新立起来，否则「落库失败但测试绿」。
+                    throw new InvalidOperationException(
+                        $"节点执行记录落库失败: {insertResult.Error}");
+                }
             }
 
             _logger.LogInformation(
@@ -553,8 +580,13 @@ namespace CertPlatform.Admin.Services.Workflow
         public async Task<bool> ApproveNodeAsync(NodeApprovalRequest request, CancellationToken ct)
         {
             var now = DateTime.Now;
-            var userCode = "USER_000001"; // TODO: 从认证上下文取当前用户 Code
-            var appName = "admin"; // TODO: 从认证上下文取
+
+            // ★ 2026-10-14 审计字段统一（设计 §3.4）：审批人 = 当前登录人 Sys_User.Code。
+            //   ⛔ 不许硬编码 "USER_000001" —— 那会造出「所有审批人都叫 000001」的静默坏数据，
+            //   且读侧按 Code 解析姓名时永远解析不出（与 CreateBy/UpdateBy 同一个坑，AGENTS ⑥）。
+            var userCode = _userContext.UserCode;
+            var userName = _userContext.UserTrueName ?? _userContext.UserName;
+            var clientIp = _userContext.ClientIp;
 
             // 1. UPSERT wf_node_approval
             var existing = await _db.Client.Queryable<WfNodeApproval>()
@@ -563,42 +595,53 @@ namespace CertPlatform.Admin.Services.Workflow
 
             if (existing != null)
             {
-                await _db.Client.Updateable(new WfNodeApproval
-                {
-                    Id = existing.Id,
-                    ApprovalStatus = request.ApprovalStatus,
-                    Comment = request.Comment,
-                    Confidence = request.Confidence,
-                    ManualResult = request.ManualResult,
-                    ApprovedAt = now
-                }).WhereColumns(a => a.Id).ExecuteCommandAsync();
+                // 更新分支：⛔ 原来 `Updateable(new{Id}).WhereColumns(a => a.Id)` 既违反「定位只用 Code」
+                //   （准则 A），又漏填 UpdateBy/UpdateTime ⇒ 整条改走基类，由它按 IUserContext 统一填。
+                existing.ApprovalStatus = request.ApprovalStatus;
+                existing.Comment = request.Comment;
+                existing.Confidence = request.Confidence;
+                existing.ManualResult = request.ManualResult;
+                existing.ApprovedAt = now;
+
+                var updateResult = await _approvalService.Update(existing, clientIp);
+                if (!updateResult.Success)
+                    throw new InvalidOperationException($"节点审批更新失败: {updateResult.Error}");
             }
             else
             {
-                await _db.Client.Insertable(new WfNodeApproval
+                // 新增：Code/CreateTime/CreateBy 由基类生成（§3.4 要求「业务只补必要字段」）
+                var insertResult = await _approvalService.Insert(new WfNodeApproval
                 {
                     Code = Guid.NewGuid().ToString("N"),
                     TaskCode = request.TaskCode,
                     NodeId = request.NodeId,
                     ApprverCode = userCode,
-                    ApprverName = appName,
+                    ApprverName = userName,
                     ApprovalStatus = request.ApprovalStatus,
                     Comment = request.Comment,
                     Confidence = request.Confidence,
                     ManualResult = request.ManualResult,
                     ApprovedAt = now,
-                    CreateTime = now,
                     IsDeleted = false
-                }).ExecuteCommandAsync();
+                }, clientIp);
+                if (!insertResult.Success)
+                    throw new InvalidOperationException($"节点审批新增失败: {insertResult.Error}");
             }
 
-            // 2. 同步写入 wf_node_execution.ApprovedOutputJson
+            // 2. 同步写入 wf_node_execution.ApprovedOutputJson（列级更新同样改走基类：顺带补 UpdateBy）
             if (!string.IsNullOrEmpty(request.ManualResult))
             {
-                await _db.Client.Updateable<WfNodeExecution>()
-                    .SetColumns(n => new WfNodeExecution { ApprovedOutputJson = request.ManualResult })
+                var executions = await _db.Client.Queryable<WfNodeExecution>()
                     .Where(n => n.TaskCode == request.TaskCode && n.NodeId == request.NodeId)
-                    .ExecuteCommandAsync();
+                    .ToListAsync(ct);
+
+                foreach (var row in executions)
+                {
+                    row.ApprovedOutputJson = request.ManualResult;
+                    var updResult = await _nodeExecService.Update(row, clientIp);
+                    if (!updResult.Success)
+                        throw new InvalidOperationException($"节点执行记录回写失败: {updResult.Error}");
+                }
             }
 
             return true;

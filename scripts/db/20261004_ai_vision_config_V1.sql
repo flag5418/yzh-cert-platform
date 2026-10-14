@@ -28,7 +28,7 @@ VALUES
 '{
   "Enabled": true,
   "Provider": "qianwen",
-  "Model": "qwen3-vl-flash",
+  "Model": "qwen-vl-ocr",
   "BaseUrl": "",
   "ApiKey": "",
   "TimeoutSeconds": 180,
@@ -40,9 +40,9 @@ VALUES
   "MaxImageBytes": 12582912
 }',
   'json', 'ai_model', '视觉模型配置',
-  '图片/扫描件 → Markdown。BaseUrl/ApiKey 留空则回填 ai_base_url/ai_api_key（同厂商不必重复配；切 agnes 在此覆盖）',
+  '图片/扫描件 → Markdown。⭐ Model 必须是视觉模型（名字含 vl / vision / omni，如 qwen-vl-ocr），否则整条视觉能力被静默禁用；BaseUrl/ApiKey 留空则回填 ai_base_url/ai_api_key（同厂商不必重复配）。图片按 token 计费（长边压到 ImageMaxEdge 约省一半）。',
   100, 0, 'active',
-  '图片/扫描件 → Markdown。BaseUrl/ApiKey 留空则回填 ai_base_url/ai_api_key（同厂商不必重复配；切 agnes 在此覆盖）',
+  '图片/扫描件 → Markdown。⭐ Model 必须是视觉模型（名字含 vl / vision / omni，如 qwen-vl-ocr），否则整条视觉能力被静默禁用；BaseUrl/ApiKey 留空则回填 ai_base_url/ai_api_key（同厂商不必重复配）。图片按 token 计费（长边压到 ImageMaxEdge 约省一半）。',
   NOW(), 'seed_ai_vision', 0, 1)
 ON DUPLICATE KEY UPDATE
   `ConfigValue` = VALUES(`ConfigValue`),

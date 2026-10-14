@@ -192,6 +192,23 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
         rule.Status = request.IsValid ? "configured" : "failed";
         rule.UpdateTime = DateTime.Now;
 
+        // ★ 2026-10-14 D1（根因修复）：补落 sample_data —— 工作流 test-field / test-table 的唯一数据源。
+        //   为什么以前不落：sample_data 全仓只有 VerifyPromptAsync 一处写入，且被 `if (rule != null)` 包住；
+        //   而页面流程是「先验证 → 后保存」⇒ 首次配置时规则行还不存在 ⇒ 永远不落库
+        //   ⇒ NC/报告设计器里点「测试提取」恒报「该规则尚未执行验证」。
+        //   而前端 saveRule **早已**把 extractionData 传上来（SaveExtractionRuleRequest.ExtractionData
+        //   也早已存在）—— 属典型「配了不生效」。此处与验证路径共用 BuildSampleDataJson，口径同源。
+        //   ⛔ 无内容时**保留原值**，不清空：改字段 / 改提示词后未重新验证的场景下清空 = 静默回退。
+        if (request.ExtractionData != null)
+        {
+            var sampleJson = BuildSampleDataJson(request.ExtractionData);
+            if (sampleJson != null)
+            {
+                rule.SampleData = sampleJson;
+                rule.VerifyMessage = "验证成功";
+            }
+        }
+
         using var tx = _db.BeginTransaction();
         try
         {
@@ -415,6 +432,44 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
                 await _db.Client.Insertable(tr).ExecuteCommandAsync();
             }
         }
+    }
+
+    /// <summary>
+    /// ★ 2026-10-14：<c>sample_data</c> 的**唯一构造口** —— 验证路径与保存路径同源。
+    ///
+    /// <para><b>为什么必须抽出来（实测缺陷）</b>：<c>sample_data</c> 是工作流
+    /// <c>test-field</c> / <c>test-table</c> 配置期试运行的**唯一数据源**。
+    /// 此前全仓只有一处写它（<c>VerifyPromptAsync</c>），且被 <c>if (rule != null)</c> 包住；
+    /// 而页面流程是「<b>先验证 → 后保存</b>」（<c>doc-extraction-rule/index.vue</c> 的
+    /// <c>onVerifyPrompt</c> → <c>onSave</c>）⇒ 首次配置某文件时规则行<b>尚不存在</b>
+    /// ⇒ 该分支进不去 ⇒ <c>sample_data</c> <b>永远不落库</b>
+    /// ⇒ 工作流节点测试恒报「该规则尚未执行验证」。
+    /// <para>实测证据：<c>cert_extraction_result</c>（B-08 标准域）已有 4 行真实值，
+    /// 而 <c>cert_doc_extraction_rule.SampleData</c> 长度 0 —— 数据进了 B-08，没进 sample_data。</para></para>
+    ///
+    /// <para><b>口径</b>：字段 + 表格**合并**进同一个对象（键 = <c>field_code</c> / <c>table_code</c>），
+    /// 与 <c>TestFieldAsync</c> / <c>TestTableAsync</c> 的读取口径一一对应；空键 / <c>null</c> 值不写入。</para>
+    ///
+    /// <para>⚠️ 与改造前的唯一行为差异：**全部值为空**时旧代码仍会写 <c>"{}"</c> 并把
+    /// <c>DocIsValid</c> 置 true（「零数据却声称已验证」）；本方法改为返回 <c>null</c> ⇒ 调用方不写，
+    /// 与旧代码里 <c>Status = sampleDict.Count &gt; 0 ? "configured" : rule.Status</c> 的判断同向。</para>
+    /// </summary>
+    /// <returns>无有效内容时返回 <c>null</c>（调用方据此决定「不覆盖原值」）。</returns>
+    private static string? BuildSampleDataJson(ExtractionData? extraction)
+    {
+        if (extraction == null) return null;
+
+        var sampleDict = new Dictionary<string, object>();
+        if (extraction.Fields != null)
+            foreach (var kv in extraction.Fields)
+                if (!string.IsNullOrEmpty(kv.Key) && kv.Value != null)
+                    sampleDict[kv.Key] = kv.Value;
+        if (extraction.Tables != null)
+            foreach (var kv in extraction.Tables)
+                if (!string.IsNullOrEmpty(kv.Key) && kv.Value != null)
+                    sampleDict[kv.Key] = kv.Value;
+
+        return sampleDict.Count == 0 ? null : JsonSerializer.Serialize(sampleDict, JsonOptions);
     }
 
     /// <summary>
@@ -687,6 +742,12 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
             catch { /* JSON 损坏时跳过该行回显 */ }
         }
 
+        // ★ 2026-10-14 验证结果回显：把已落库的提取值组装成 ExtractionData 返回。
+        //   数据源 = 上面已查出的 B-08/B-09（保存/验证时写入、口径与字段/表格定义同源过滤），
+        //   ⛔ 不另读 rule.SampleData —— 那是工作流试运行的合并字典（field/table 键混在一起），
+        //   需要再按定义拆一次键；而 B-08/B-09 本来就按定义拆好了，且与「自动分析」页签回显同源。
+        var extractionData = BuildDetailExtractionData(b08Map, tableDtos);
+
         return new RuleDetailResponse
         {
             Id = rule.Id,
@@ -701,8 +762,39 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
             Status = rule.Status ?? "none",
             Fields = fieldDtos,
             Tables = tableDtos,
+            ExtractionData = extractionData,
             CreateTime = rule.CreateTime,
             UpdateTime = rule.UpdateTime
+        };
+    }
+
+    /// <summary>
+    /// 把已经查好的 B-08/B-09 回显组装成 ExtractionData，供详情接口返回（避免 detail
+    /// 与「提示词与验证」页签之间出现「验证通过但提取结果全空」的视觉断裂）。
+    /// <para>口径：字段只保留规则定义内 code 的值；表格只保留有行的（空表不入 ExtractionData，
+    /// 避免与 AI 分析页签展示「未提取到」混淆）。</para>
+    /// </summary>
+    private static ExtractionData? BuildDetailExtractionData(
+        Dictionary<string, string> b08Map, List<TableDefDto> tableDtos)
+    {
+        if (b08Map.Count == 0 && tableDtos.All(t => t.ExtractedData == null || t.ExtractedData.Count == 0))
+            return null;
+
+        var fields = b08Map.Count > 0
+            ? new Dictionary<string, object>(b08Map.Count)
+            : null;
+        if (fields != null)
+            foreach (var kv in b08Map) fields[kv.Key] = kv.Value;
+
+        var tables = new Dictionary<string, List<Dictionary<string, object>>>();
+        foreach (var td in tableDtos)
+            if (!string.IsNullOrEmpty(td.Code) && td.ExtractedData?.Count > 0)
+                tables[td.Code] = td.ExtractedData;
+
+        return new ExtractionData
+        {
+            Fields = fields,
+            Tables = tables.Count > 0 ? tables : null
         };
     }
 

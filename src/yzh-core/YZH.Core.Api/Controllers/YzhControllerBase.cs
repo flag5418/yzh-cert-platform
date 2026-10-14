@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using YZH.Core.Api.Attributes;
 using YZH.Core.Api.Services;
+using YZH.Core.Api.UploadPolicy;
 using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Result;
@@ -393,6 +394,15 @@ public abstract class YzhControllerBase<V> : ControllerBase where V : class, new
     {
       if (file == null || file.Length == 0)
         return Result<ImportResult>.Fail("未上传文件");
+
+      // ★ 上传后缀策略闸门（扩展点，Program.cs 注册 UploadFilePolicy 包装）+ 导入格式限定：
+      //   基类 Excel 导入只支持 .xlsx（模板下载即该格式）；子类 override ImportCore 可自定义。
+      var policyReason = UploadPolicyGate.Validate(file.FileName);
+      if (policyReason != null)
+        return Result<ImportResult>.Fail(policyReason);
+      var importExt = Path.GetExtension(file.FileName ?? string.Empty).ToLowerInvariant();
+      if (importExt != ".xlsx")
+        return Result<ImportResult>.Fail($"导入文件只支持 .xlsx 格式（当前：{(importExt.Length > 0 ? importExt : "无扩展名")}）");
 
       // 解析 IExcelService（架构层约定，业务项目层注册 EPPlus/NPOI 实现）
       var excelService = ResolveExcelService();

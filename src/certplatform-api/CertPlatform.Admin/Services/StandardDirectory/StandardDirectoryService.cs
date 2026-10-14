@@ -58,11 +58,8 @@ public class StandardDirectoryService
         WriteIndented = false
     };
 
-    // 服务器端文件类型白名单（跳过 .DS_Store 等）
-    private static readonly HashSet<string> IgnoredFileExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".DS_Store", ".Thumbs.db", "desktop.ini"
-    };
+    // ★ 上传后缀规则唯一事实源 = CertPlatform.Shared/Storage/UploadFilePolicy（upload-file-policy.json 生成），
+    //   ⛔ 本类不再维护任何私有后缀清单（原 IgnoredFileExtensions 3 项黑名单已删，2026-10-14）。
 
     public StandardDirectoryService(
         IDbOrm db,
@@ -1174,7 +1171,7 @@ public class StandardDirectoryService
     private static bool NeedsConversion(StandardDirectoryFile f)
     {
         if (string.IsNullOrWhiteSpace(f.StoragePath)) return false;
-        if (IgnoredFileExtensions.Contains(Path.GetExtension(f.FileName ?? ""))) return false;
+        if (UploadFilePolicy.IsSystemNoise(f.FileName)) return false;
         return true;
     }
 
@@ -1348,6 +1345,18 @@ public class StandardDirectoryService
         // 3. 生成 TaskId
         var taskId = Guid.NewGuid().ToString("N");
 
+        // ★ 3.5 上传契约闸门（唯一事实源 = upload-file-policy.json → UploadFilePolicy）：
+        //   白名单外整批拒绝并列出 —— 在任何文件夹/文件写库**之前**完成，违规零副作用。
+        //   系统噪声（.DS_Store 等）不在此报错，由下方文件循环静默剔除（与 EnterpriseFileService init 同款口径）。
+        var policyViolations = new List<string>();
+        foreach (var f in manifest.Files)
+        {
+            var v = UploadFilePolicy.Check(f.FileName);
+            if (!v.Ok && !v.IsSystemNoise) policyViolations.Add(v.Message);
+        }
+        if (policyViolations.Count > 0)
+            return (false, $"以下文件不符合上传格式要求：{string.Join("；", policyViolations)}", null);
+
         // 5. 处理文件夹（按深度排序，复用或创建）
         var sortedFolders = manifest.Folders
             .OrderBy(f => f.Path.Count(c => c == '/'))
@@ -1458,9 +1467,11 @@ public class StandardDirectoryService
             var fullPath = fileItem.RelativePath;
             var fileName = fileItem.FileName;
 
-            // 服务器端白名单过滤
+            // 系统噪声（.DS_Store / Thumbs.db / ~$xx.doc / ._xx）静默剔除，不建行不报错
+            if (UploadFilePolicy.IsSystemNoise(fileName)) continue;
+
+            // FileType 列 = 小写扩展名（不含点）；格式合法性已在上方 3.5 闸门整批校验
             var ext = Path.GetExtension(fileName);
-            if (IgnoredFileExtensions.Contains(ext)) continue;
 
             // P0-2：文件名校验（防 ../ 路径穿越 + 保留段撞车）
             var nameErr = ValidateFolderOrFileName(fileName, "文件名");
@@ -1714,6 +1725,12 @@ public class StandardDirectoryService
         if (file == null) return (false, "文件不存在", null);
         if (string.IsNullOrEmpty(file.StoragePath))
             return (false, "原文件从未上传过物理内容，请删除后重新上传", null);
+
+        // ★ 上传契约闸门（客户端可直调 API 绕过前端 accept；「所有写入对象的端点都必须过 Check」——
+        //   替换沿用 DB 登记名，此处兜底历史存量中可能存在的违规名）
+        var verdict = UploadFilePolicy.Check(file.FileName);
+        if (!verdict.Ok)
+            return (false, verdict.Message, null);
 
         var objectName = file.StoragePath.TrimStart('/');
         try
@@ -2565,9 +2582,10 @@ public class StandardDirectoryService
         Stream fileStream, string fileName, string directoryCode, string folderCode,
         string orgCode, string? standardCode = null, string? phaseCode = null)
     {
-        // 校验文件类型
-        var typeErr = ValidateUploadFileType(fileName);
-        if (typeErr != null) return (false, typeErr, null);
+        // ★ 上传契约闸门（唯一事实源 UploadFilePolicy，⛔ 不再用私有清单 ValidateUploadFileType）
+        var verdict = UploadFilePolicy.Check(fileName);
+        if (!verdict.Ok)
+            return (false, verdict.Message, null);
 
         var lockErr = await GetQueueLockErrorAsync(directoryCode);
         if (lockErr != null) return (false, lockErr, null);
@@ -2656,23 +2674,8 @@ public class StandardDirectoryService
         };
     }
 
-    private static string? ValidateUploadFileType(string fileName)
-    {
-        if (string.IsNullOrWhiteSpace(fileName)) return "文件路径不能为空";
-
-        if (fileName.StartsWith(".")) return $"不允许上传系统文件：{fileName}";
-
-        var ext = Path.GetExtension(fileName)?.TrimStart('.').ToLower() ?? "";
-        var allowedExts = new HashSet<string>
-        {
-            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "rtf",
-            "jpg", "jpeg", "png", "gif", "bmp", "webp", "tif", "tiff"
-        };
-        if (!allowedExts.Contains(ext))
-            return $"不支持的文件类型：{fileName}（仅支持文档/图片）";
-
-        return null;
-    }
+    // ★ 原 ValidateUploadFileType 私有白名单（20 个后缀，与事实源漂移）已删（2026-10-14）：
+    //   格式判定唯一权威 = CertPlatform.Shared.Storage.UploadFilePolicy.Check（upload-file-policy.json 生成）。
 
     #endregion
 

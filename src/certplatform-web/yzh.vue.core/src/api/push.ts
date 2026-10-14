@@ -24,8 +24,9 @@ let starting = false
 
 function dispatch(msg: YzhPushMessage): void {
   if (!msg || !msg.value) return
-  // 默认行为：有标题就弹通知（队列终态等）；logout 由订阅方处理、不弹窗
-  if (msg.title && msg.value !== 'logout') {
+  // queue_progress：不逐条弹 ElNotification（上传 N 个文件会有 N 条终态推送 ⇒ 弹窗轰炸）；
+  // 站内信由 CertQueueNotifier 落 cert_message，铃铛 + 轮询承载。仅 logout 由订阅方处理。
+  if (msg.title && msg.value !== 'logout' && msg.value !== 'queue_progress') {
     ElNotification({ title: msg.title, message: msg.message || '', type: 'info' })
   }
   const set = handlers.get(msg.value)

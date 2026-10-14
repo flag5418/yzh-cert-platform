@@ -52,7 +52,6 @@ public class ValidationRuleController
         // 二选一（启用行只显「禁用」、停用行只显「启用」），不再发合并文案「启用/禁用」
         RegisterRowAction("disable", DisableAction);
         RegisterRowAction("enable", EnableAction);
-        RegisterRowAction("Copy", CopyAction);
     }
 
     // ========================================================
@@ -253,11 +252,11 @@ public class ValidationRuleController
     /// <para><b>为什么必须单独开一个方法（2026-10-08 实测踩坑）</b>：本实体实现
     /// <see cref="IIsValid"/> 后，<c>SqlSugarDbOrm.GetOneAsync</c> 会自动附加
     /// <c>IsValid = 1</c> 与 <c>IsDeleted = 0</c> 两个条件（`Where(IsValidCondition<T>())`）。
-    /// 于是 <c>Entity.GetOne(r =&gt; r.Code == code)</c> <b>取不到已禁用行</b>，直接造成三个可用性缺陷：
-    /// ① 点「禁用」后无法再「启用」（报“规则不存在”）⇒ <b>禁用不可逆</b>；
-    /// ② 已禁用规则无法「复制」；③ 已禁用规则详情（设计器 GET /{code}）打不开。</para>
+    /// 于是 <c>Entity.GetOne(r =&gt; r.Code == code)</c> <b>取不到已禁用行</b>，直接造成可用性缺陷：
+    /// 点「禁用」后无法再「启用」（报“规则不存在”）⇒ <b>禁用不可逆</b>；已禁用规则详情
+    /// （设计器 GET /{code}）打不开。</para>
     ///
-    /// <para>凡「按 Code 精确定位」的启停 / 复制 / 详情一律走本方法；
+    /// <para>凡「按 Code 精确定位」的启停 / 详情一律走本方法；
     /// 列表类查询仍走默认口径（只看启用行），两者职责不同。</para>
     /// </summary>
     private async Task<ValidationRule?> FindByCodeIgnoreValidAsync(string? code)
@@ -286,41 +285,5 @@ public class ValidationRuleController
             return Result<ApiResponse<object?>>.Fail(result.Error!);
 
         return Result<ApiResponse<object?>>.Ok(ApiResponse<object?>.Ok(active ? "已启用" : "已禁用"));
-    }
-
-    /// <summary>深拷贝规则（前端按钮：RowButtons.CustomButtons["复制"]）</summary>
-    private async Task<Result<ApiResponse<object?>>> CopyAction(ValidationRule entity)
-    {
-        // ★ 必须用 includeDisabled 取数：否则「复制」一条已禁用规则会报“源规则不存在”
-        var sourceData = await FindByCodeIgnoreValidAsync(entity.Code);
-        if (sourceData == null)
-            return Result<ApiResponse<object?>>.Fail("源规则不存在");
-
-        var copy = new ValidationRule
-        {
-            Code = Guid.NewGuid().ToString("N"),
-            OrgCode = sourceData.OrgCode,
-            StandardCode = sourceData.StandardCode,
-            PhaseCode = sourceData.PhaseCode,
-            ClauseCode = sourceData.ClauseCode,
-            RuleName = $"{sourceData.RuleName}（副本）",
-            RuleNameEn = sourceData.RuleNameEn,
-            SeverityIfViolated = sourceData.SeverityIfViolated,
-            NcDescriptionTemplate = sourceData.NcDescriptionTemplate,
-            Remark = sourceData.Remark,
-            // 副本以「禁用」状态落库，待确认后再启用（IsValid: 1=启用 / 0=禁用）
-            IsValid = 0,
-        };
-
-        var existing = await Entity.GetListAsync(r =>
-            r.StandardCode == copy.StandardCode, includeDisabled: true);
-        copy.RuleCode = ValidationRuleRules.NextRuleCode(
-            copy.StandardCode, existing.Data);
-
-        var result = await Entity.Insert(copy);
-        if (!result.Success)
-            return Result<ApiResponse<object?>>.Fail(result.Error!);
-
-        return Result<ApiResponse<object?>>.Ok(ApiResponse<object?>.Ok("复制成功"));
     }
 }

@@ -55,6 +55,8 @@ import {
   useTreeTable,
 } from '@yzh-core'
 import { OrgStandardStageTree } from '@share/components'
+// ★ 空白模板 accept / 后缀校验唯一事实源（⛔ 不再硬编码 ".docx,.xlsx" 于模板）
+import { TEMPLATE_EXTENSIONS, extOf } from '@share/constants/upload-file-policy'
 import { ElMessage } from 'element-plus'
 import { computed, onBeforeUnmount, onMounted, provide, ref } from 'vue'
 import AnchorRuleTab from './components/AnchorRuleTab.vue'
@@ -147,9 +149,6 @@ const originalPath = computed(() => logic.standardStoragePath)
 const templatePath = computed(() => logic.templateStoragePath)
 const templateFileName = computed(() => logic.templateFileName)
 const completion = computed(() => logic.completion)
-
-/** 面包屑：机构 / 标准 / 阶段 / 文件夹（由 logic 从树上回溯，未选中时为空数组） */
-const breadcrumb = computed(() => logic.breadcrumb)
 
 /** 设置状态（实时算，不落库 —— 口径唯一在 logic） */
 const setupStatus = computed(() => logic.setupStatus)
@@ -505,11 +504,21 @@ function pickTemplateFile() {
   fileInputRef.value?.click()
 }
 
+/** 空白模板 accept（由契约 TEMPLATE_EXTENSIONS 生成，改后缀只改 upload-file-policy.json） */
+const TEMPLATE_ACCEPT = TEMPLATE_EXTENSIONS.join(',')
+
 async function onTemplateFilePicked(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
   if (!file) return
+
+  // ★ 业务收窄校验（docx/xlsx ⊂ 白名单）：accept 可被粘贴/拖拽绕过，运行时兜底
+  const ext = extOf(file.name)
+  if (!TEMPLATE_EXTENSIONS.includes(ext)) {
+    ElMessage.warning(`空白模板只支持 ${TEMPLATE_EXTENSIONS.join(' / ')}（当前文件：${file.name}）`)
+    return
+  }
 
   uploading.value = true
   try {
@@ -672,9 +681,6 @@ function onPromptBound() {
     <div v-if="hasFile" class="topbar">
       <el-icon class="topbar__ico"><Document /></el-icon>
       <span class="topbar__name" :title="baseFileName">{{ baseFileName }}</span>
-      <span v-if="breadcrumb.length" class="topbar__path">
-        {{ breadcrumb.join(' / ') }}
-      </span>
       <span class="topbar__sp"></span>
 
       <span v-if="isDirty" class="topbar__dirty">有未保存的更改</span>
@@ -747,7 +753,7 @@ function onPromptBound() {
             title=""
             search-placeholder="搜索文档…"
             :default-expand-level="3"
-            :max-level="5"
+            :max-level="0"
             :data="visibleTree as any"
             :current-key="logic.selectedNode?.Code"
             @node-click="handleNodeClick"
@@ -1172,11 +1178,11 @@ function onPromptBound() {
       </div>
     </div>
 
-    <!-- 隐身上传 -->
+    <!-- 隐身上传（accept 由契约生成） -->
     <input
       ref="fileInputRef"
       type="file"
-      accept=".docx,.xlsx"
+      :accept="TEMPLATE_ACCEPT"
       style="display: none"
       @change="onTemplateFilePicked"
     />
@@ -1243,13 +1249,6 @@ function onPromptBound() {
   font-size: var(--yzh-font-size-md, 14px);
   font-weight: 600;
   color: var(--yzh-color-text-primary, #303133);
-}
-.topbar__path {
-  font-size: var(--yzh-font-size-xs, 12px);
-  color: var(--yzh-color-text-placeholder, #909399);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .topbar__dirty {
   font-size: var(--yzh-font-size-xs, 12px);

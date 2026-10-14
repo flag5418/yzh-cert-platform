@@ -113,7 +113,9 @@ public class CertMessageService
             IsRead = 0,
             ExtraData = extraData ?? string.Empty,
             CreateBy = user.Code,
-            CreateTime = DateTime.UtcNow,
+            // ★ 2026-10-14：UtcNow → Now —— MessageBell 前端 new Date() 按本地解析（JSON 无 Z），
+            //   写 UTC 会让「刚刚/N分钟前」与消息时间整体错 8 小时。
+            CreateTime = DateTime.Now,
             IsValid = 1,
         });
         return true;

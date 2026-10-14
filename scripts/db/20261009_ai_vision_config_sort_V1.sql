@@ -3,7 +3,11 @@
 -- 视觉模型配置的「排序号」归位（幂等）
 --
 -- 背景（2026-10-09 用户报障「系统参数中视觉模型还未配置」）：
---   `ai_vision_config` 确实已配好且可用（13 键、Enabled=true、Model=qwen3-vl-flash），
+--   ⚠️ 2026-10-14 更正：下列「确实已配好且**可用**」的判断当时是**错的** ——
+--      Model=qwen3-vl-flash 在账号**不存在**（404），整条视觉能力实际不可用（当时未察觉，
+--      因为工作台直连 anydoc 掩盖了它）。现已改为 qwen-vl-ocr，详见
+--      ./fix/20261014_ai_vision_model_V1.sql。本脚本只论「排序」，结论不变。
+--   `ai_vision_config` 确实已配好（13 键、Enabled=true、Model=qwen3-vl-flash），
 --   但它在 `/system/config` 页**第 2 页** ⇒ 打开页面看不到 ⇒ 被误判为「未配置」。
 --
 -- 根因两层（都已修）：

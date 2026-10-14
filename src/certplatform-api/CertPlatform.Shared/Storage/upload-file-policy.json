@@ -1,0 +1,30 @@
+{
+  "$comment": "★★ 上传文件类型契约 · 唯一手改处（全平台单一事实源，2026-10-14）。加/减后缀只改本文件，然后跑 node scripts/generate/upload-policy.mjs 重新生成两端清单段（后端 UploadFilePolicy.cs + 前端 upload-file-policy.ts 的 <generated> 区）。⛔ 生成段禁手改，守卫 --check 会拦。规则：① 系统噪声静默剔除 ② 白名单（文档/图片/PDF，不含压缩包）③ 永久黑名单（可执行/脚本）。",
+  "document": [
+    ".doc", ".docx",
+    ".xls", ".xlsx",
+    ".ppt", ".pptx",
+    ".rtf",
+    ".odt", ".ods", ".odp",
+    ".txt", ".md", ".csv"
+  ],
+  "image": [
+    ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"
+  ],
+  "pdf": [
+    ".pdf"
+  ],
+  "archive": [
+    ".zip", ".rar", ".7z", ".tar", ".gz"
+  ],
+  "never": [
+    ".exe", ".dll", ".so", ".dylib", ".bat", ".cmd", ".sh", ".bash",
+    ".msi", ".apk", ".deb", ".rpm"
+  ],
+  "script": [
+    ".html", ".htm", ".xhtml", ".svg", ".xml"
+  ],
+  "systemNoiseNames": [
+    "thumbs.db", "ehthumb.db", "desktop.ini", "icon"
+  ]
+}

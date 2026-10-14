@@ -92,8 +92,8 @@ public class ExtractionDataResolver
     /// <summary>
     /// 读取某企业某规则下指定字段的<b>当前可用值</b>（人工优先）。
     /// </summary>
-    /// <param name="enterpriseCode">企业 Code。⚠️ <c>cert_extraction_result.OrgCode</c> 列存的就是它
-    ///     （历史遗留列名，05 号 §2.1），⛔ 不要传认证机构 Code 或工作区 Code</param>
+    /// <param name="enterpriseCode">企业 Code。⚠️ <c>cert_extraction_result.EnterpriseCode</c> 列存的就是它
+    ///     （归属模型 V2 §4 已定名），⛔ 不要传认证机构 Code 或工作区 Code</param>
     /// <param name="ruleCode">规则 Code。★ <b>必填语义</b>，传空则跳过规则收窄（仅兼容测试用）</param>
     /// <param name="fieldCode">字段编码</param>
     /// <param name="standardCode">标准 Code；空 = 不限</param>

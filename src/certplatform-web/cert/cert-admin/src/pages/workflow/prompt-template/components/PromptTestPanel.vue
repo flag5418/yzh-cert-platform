@@ -13,13 +13,22 @@
  */
 import { YzhEmptyState } from '@yzh-core'
 import { ref, computed } from 'vue'
+import { ElMessage } from 'element-plus'
 import { Upload, RefreshRight, Delete, Close } from '@element-plus/icons-vue'
 import type { PromptTestResultDto, ConvertLogDto } from '@share/api/workflow/prompt-workbench'
 // ★ accept 来自共享上传契约（⛔ 本页不再硬编码后缀串；改规则只改 constants/upload-file-policy.ts）
-import { buildAcceptAttribute } from '@share/constants/upload-file-policy'
+import { buildAcceptAttribute, describeAllowed, partitionUploadable } from '@share/constants/upload-file-policy'
 
-/** 提示词试跑：只要文档 + 文本，不需要图片 */
-const ACCEPT = buildAcceptAttribute(['document', 'pdf'])
+/**
+ * 提示词试跑可选文件类型。
+ * ★ 2026-10-14：补 `image` —— 此前只有 document+pdf，导致**扫描件/图片根本选不进**，
+ *   而试跑链路已接视觉 OCR（IFileConvertCore），必须能选图片才能验证扫描件。
+ */
+/** 试跑允许的类别（与 ACCEPT 同源，⛔ 不另写清单） */
+const TEST_CATEGORIES = ['document', 'pdf', 'image'] as const
+const ACCEPT = buildAcceptAttribute(TEST_CATEGORIES)
+/** 人类可读的格式说明（与 ACCEPT 同源，⛔ 不另写文案） */
+const ACCEPT_HINT = describeAllowed(TEST_CATEGORIES)
 // 2026-10-03：SemanticResult 上移到 @share/components（36 号 §6.6），
 //   供 36 号「企业原始资料管理」的分析结果抽屉共用同一渲染器。
 import { SemanticResult } from '@share/components'
@@ -48,10 +57,21 @@ function pickFiles() {
 function onFilesChange(e: Event) {
   const el = e.target as HTMLInputElement
   if (!el.files?.length) return
-  // 同名去重：重复点选不会堆出重复项
   const incoming = Array.from(el.files)
+  // ★ 上传契约闸门（后端 PromptTemplateController.Test 同口径 Check）：accept 只是选择器提示，
+  //   粘贴/拖拽可绕过 ⇒ 运行时分区：噪声静默剔除、白名单外列出并剔除
+  const part = partitionUploadable(incoming, TEST_CATEGORIES)
+  if (part.noise.length > 0) {
+    ElMessage.info(`已自动忽略 ${part.noise.length} 个系统文件`)
+  }
+  if (part.rejected.length > 0) {
+    ElMessage.warning(`已跳过 ${part.rejected.length} 个不支持的文件：${part.rejected.slice(0, 3).map((rf) => rf.name).join('、')}${part.rejected.length > 3 ? ' 等' : ''}`)
+  }
+  if (!part.accepted.length) { el.value = ''; return }
+  // 同名去重：重复点选不会堆出重复项
+  const okNames = new Set(part.accepted.map((a) => a.name))
   const names = new Set(files.value.map((f) => f.name))
-  files.value = files.value.concat(incoming.filter((f) => !names.has(f.name)))
+  files.value = files.value.concat(incoming.filter((f) => okNames.has(f.name) && !names.has(f.name)))
   el.value = ''
 }
 
@@ -90,6 +110,18 @@ const okFiles = computed<ConvertLogDto[]>(() => (props.result?.files || []).filt
 
 const hasFiles = computed(() => (props.result?.files || []).length > 0)
 
+/** 转换状态徽标文案（unsupported 与 failed 要能一眼区分） */
+function fileTagText(f: ConvertLogDto): string {
+  if (f.status === 'unsupported') return '不支持'
+  return 'FAIL'
+}
+
+/** 转换状态徽标配色 */
+function fileTagType(f: ConvertLogDto): 'success' | 'warning' | 'danger' {
+  if (f.success) return 'success'
+  return f.status === 'unsupported' ? 'warning' : 'danger'
+}
+
 /** 单行运行指标（⛔ 不含模型名 —— 模型由系统参数统一固定，UI 不展示） */
 const metaLine = computed(() => {
   const r = props.result
@@ -119,7 +151,7 @@ const metaLine = computed(() => {
           :accept="ACCEPT"
           @change="onFilesChange"
         />
-        <el-button :icon="Upload" @click="pickFiles">选择文件</el-button>
+        <el-button :icon="Upload" :title="`支持：${ACCEPT_HINT}`" @click="pickFiles">选择文件</el-button>
         <el-button :icon="Delete" :disabled="!files.length" @click="clearFiles"> 清空 </el-button>
         <div class="test-panel__spacer" />
         <el-button
@@ -195,8 +227,10 @@ const metaLine = computed(() => {
               >
                 <template #title>
                   <span class="test-panel__fitem">
-                    <el-tag :type="f.success ? 'success' : 'danger'" size="small" effect="plain">
-                      {{ f.success ? 'OK' : 'FAIL' }}
+                    <!-- ★ 2026-10-14：区分「能力不支持」与「转换失败」——
+                         unsupported = 扫描件/图片但视觉未接入，属环境边界而非文件损坏。 -->
+                    <el-tag :type="fileTagType(f)" size="small" effect="plain">
+                      {{ f.success ? 'OK' : fileTagText(f) }}
                     </el-tag>
                     <span class="test-panel__fname">{{ f.fileName }}</span>
                     <span class="test-panel__fsize">{{ f.markdownLength }} 字符</span>

@@ -250,8 +250,7 @@
     "Delete": true,
     "CustomButtons": {
       "disable": "禁用",
-      "enable": "启用",
-      "Copy": "复制"
+      "enable": "启用"
     }
   },
   "FormCols": 1

@@ -97,8 +97,11 @@ namespace CertPlatform.Shared.DocExtraction
     /// <summary>
     /// PDF 走视觉 OCR 的渲染参数（2026-10-09）。
     /// <para><b>取值依据（2026-10-09 实测）</b>：A4 在 150 dpi 下约 1240×1754，
-    /// 单页 ≈ <b>2147 image tokens</b>（qwen3-vl-flash）。50 页 ≈ 10.7 万 tokens，
+    /// 单页 ≈ <b>2147 image tokens</b>。50 页 ≈ 10.7 万 tokens，
     /// 是「既不把单份文档做废、又不把上下文打满」的折中。</para>
+    /// <para>⚠️ <b>2026-10-14</b>：模型已换为 <c>qwen-vl-ocr</c>（原 <c>qwen3-vl-flash</c> 在账号不存在，
+    /// 404 <c>model_not_found</c>）。实测单页仍是**同一量级**（约 2159 image tokens）——
+    /// <b>图片 token 由分辨率决定，与模型无关</b>，故本页数上限不随换模型而变。</para>
     /// <para>⚠️ 超限<b>不是静默截断</b>：由 <c>FileConvertCore</c> 把「共 N 页，仅识别前 M 页」
     /// 写进 <c>MarkdownMessage</c> 如实告知。</para>
     /// </summary>

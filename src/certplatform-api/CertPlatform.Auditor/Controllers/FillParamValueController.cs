@@ -7,7 +7,7 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Auditor.Services;
-using CertPlatform.Shared.Fill;
+using CertPlatform.Auditor.Services.Ent;
 using CertPlatform.Shared.Domain.Scope;
 
 namespace CertPlatform.Auditor.Controllers;
@@ -51,17 +51,22 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
     private readonly ICoreResourceQuery _core;
     private readonly WorkspaceContextService _workspace;
 
+    /// <summary>★ 参数「查询 + 补录」的唯一入口（`66` V2.1 §二）—— 本控制器只做「鉴权 + 参数校验 + 包信封」。</summary>
+    private readonly IFillParamService _fillParam;
+
     public FillParamValueController(
         EntityService<FillParamValue> entityService,
         IUserContext userContext,
         IDbOrm db,
         ICoreResourceQuery core,
-        WorkspaceContextService workspace)
+        WorkspaceContextService workspace,
+        IFillParamService fillParam)
         : base(entityService, userContext)
     {
         _db = db;
         _core = core;
         _workspace = workspace;
+        _fillParam = fillParam;
     }
 
     /// <summary>缺 EntityConfig 时仅告警（本页是自定义合并视图，不依赖配置驱动的列）</summary>
@@ -241,6 +246,10 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
     /// <para>返回按 <c>GroupName</c> 分组的条目；每条都带
     /// <c>paramValue</c>（当前值）、<c>valueSource</c>（值来源）、<c>sourceRef</c>（来源说明）、
     /// <c>editable</c>（企业能否改）。前端只需按 <c>editable</c> 决定输入框只读与否。</para>
+    ///
+    /// <para>★ 2026-10-14 第 0 批通用 Service 抽取：实现已下沉
+    /// <see cref="IFillParamService.GetMergedListAsync"/>（`66` V2.1 §2.5），
+    /// 本端点只保留「工作区解析 + 入参校验 + 包信封」。</para>
     /// </summary>
     [HttpPost("merge-list")]
     public async Task<IActionResult> MergeList([FromBody] MergeListRequest req)
@@ -252,139 +261,18 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
         if (req == null || string.IsNullOrWhiteSpace(req.EnterpriseCode))
             return Ok(ApiResponse<object>.Fail("请先选择企业"));
 
-        var ent = await _db.Client.Queryable<Enterprise>()
-            .Where(x => x.Code == req.EnterpriseCode && x.IsDeleted == false)
-            .FirstAsync();
+        // ★ 值归属 = 工作区 Code（数据归属）；参数定义归属 = 平台标准级 ''（服务内部固定）
+        var ps = new FillParamScope(
+            WorkspaceCode: scope.Data.WorkspaceCode,
+            EnterpriseCode: req.EnterpriseCode,
+            StandardCode: req.StandardCode ?? string.Empty,
+            StageCode: req.StageCode ?? string.Empty);
 
-        if (ent == null)
-            return Ok(ApiResponse<object>.Fail("企业不存在或已删除"));
+        var r = await _fillParam.GetMergedListAsync(ps);
+        if (!r.Success || r.Data == null)
+            return Ok(ApiResponse<object>.Fail(r.Error ?? "查询失败"));
 
-        // ★ 越权防护：企业必须属于当前工作区（企业归属 = 工作区 Code）
-        if (!string.Equals(ent.OrgCode, scope.Data.WorkspaceCode, StringComparison.Ordinal))
-            return Ok(ApiResponse<object>.Fail("无权查看其他工作区的企业参数"));
-
-        // ★ 参数定义全平台共享（2026-10-06 起不分机构：OrgCode 恒空串 —— 见 26 号 §3.1 裁决）
-        var orgCode = string.Empty;
-        var stdCode = req.StandardCode ?? string.Empty;
-        var stageCode = req.StageCode ?? string.Empty;
-
-        // ── 1. 取定义（含通配），按 ParamCode 去重取「更具体」的那条 ──
-        // ★ 1.B.6d-1：取数收口 CoreResourceQuery
-        //   等价：OrgCode=="" + 「通配("")/等值」两维；框架默认 IsDeleted==0 ∧ IsValid==1
-        var defs = (await _core.GetFillParamDefsAsync(stdCode, stageCode))
-            .OrderBy(d => d.Sort)
-            .ToList();
-
-        var picked = ParamValueResolver.PickMostSpecific(defs);
-
-        // ── 2. 取已落库的企业填写值 ──
-        var paramCodes = picked.Select(d => d.ParamCode).ToList();
-        var saved = paramCodes.Count == 0
-            ? new List<FillParamValue>()
-            : await _db.Client.Queryable<FillParamValue>()
-                .Where(v => v.EnterpriseCode == ent.Code && v.IsDeleted == false
-                            && paramCodes.Contains(v.ParamCode))
-                .ToListAsync();
-
-        // 值行的 (StandardCode, StageCode) 镜像定义的；用「定义键 → 值」精确匹配，
-        // 避免「同一 ParamCode 在不同标准下各有值」时串行
-        var valueMap = saved
-            .GroupBy(v => ParamValueResolver.ValueKey(v.StandardCode, v.StageCode, v.ParamCode))
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
-
-        var entInfo = ToEnterpriseInfo(ent);
-
-        // ── 3. 逐条合并（取值决策统一走 ParamValueResolver，⛔ 不要在此另写一份）──
-        var items = new List<MergedItem>();
-        foreach (var def in picked)
-        {
-            valueMap.TryGetValue(
-                ParamValueResolver.ValueKey(def.StandardCode, def.StageCode, def.ParamCode), out var row);
-
-            var d = ParamValueResolver.Resolve(def, entInfo, row?.ParamValue, row?.ValueSource,
-                row?.IsManualEdited ?? false);
-
-            items.Add(new MergedItem
-            {
-                ParamCode = def.ParamCode,
-                ParamName = def.ParamName,
-                GroupName = string.IsNullOrWhiteSpace(def.GroupName) ? "其他" : def.GroupName!,
-                ValueType = def.ValueType,
-                EnumOptions = def.EnumOptions,
-                MaintainMode = def.MaintainMode,
-                SourceKind = def.SourceKind,
-                SourceExpr = def.SourceExpr,
-                IsRequired = def.IsRequired,
-                IsBuiltin = def.IsBuiltin,
-                Sort = def.Sort,
-                Description = def.Description,
-                Placeholder = def.Placeholder,
-
-                ParamValue = d.Value,
-                ValueSource = d.ValueSource,
-                SourceRef = d.SourceRef,
-                IsManualEdited = d.IsManualEdited,
-                Editable = d.Editable,
-                IsFilled = !string.IsNullOrWhiteSpace(d.Value),
-            });
-        }
-
-        // ── 4. 分组 + 完成度 ──
-        var groups = items
-            .GroupBy(i => i.GroupName)
-            .Select(g => new
-            {
-                GroupName = g.Key,
-                Items = g.OrderBy(i => i.Sort).ThenBy(i => i.ParamCode).ToList(),
-            })
-            .ToList();
-
-        var total = items.Count;
-        var filled = items.Count(i => i.IsFilled);
-        var requiredItems = items.Where(i => i.IsRequired).ToList();
-
-        return Ok(ApiResponse<object>.Ok(new
-        {
-            // ★ 整个响应一律 PascalCase（含外层与 Enterprise 匿名对象）。
-            //   ⛔ 本端点曾用 camelCase：前端按 `enterprise.Name` 读，恒得 undefined
-            //      ⇒「企业名永远显示为空且不报错」（铁律③的典型症状）；
-            //      且与同响应里的 MergedItem（PascalCase）风格不一致，更难排查。
-            OrgCode = orgCode,
-            WorkspaceCode = scope.Data.WorkspaceCode,
-            StandardCode = stdCode,
-            StageCode = stageCode,
-            Enterprise = new
-            {
-                Code = ent.Code,
-                Name = ent.Name,
-                ShortName = ent.ShortName,
-                CreditCode = ent.CreditCode,
-                LegalPerson = ent.LegalPerson,
-                Address = ent.Address,
-                IndustryType = ent.IndustryType,
-                EmployeeCount = ent.EmployeeCount,
-                CertScope = ent.CertScope,
-                ContactName = ent.ContactName,
-                ContactPhone = ent.ContactPhone,
-                ContactEmail = ent.ContactEmail,
-                EnterpriseNo = ent.EnterpriseNo,
-                Province = ent.Province,
-                City = ent.City,
-            },
-            Groups = groups,
-            Progress = new
-            {
-                Total = total,
-                Filled = filled,
-                Empty = total - filled,
-                // ★ 完成度是 **0~1 的比值**（不是百分数），前端负责 ×100。
-                // ⛔ Total=0 记 0 而不是 1：与前端 liveCompletion 口径一致，
-                //    且「没有参数定义」应由界面显示空态，不该显示「100% 已完善」。
-                Completion = total == 0 ? 0.0 : Math.Round((double)filled / total, 4),
-                Required = requiredItems.Count,
-                RequiredFilled = requiredItems.Count(i => i.IsFilled),
-            },
-        }));
+        return Ok(ApiResponse<object>.Ok(r.Data));
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -396,6 +284,9 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
     /// <para><b>只持久化 <c>manual</c> / <c>both</c> 两类</b>；<c>auto</c> 项被忽略并在
     /// <c>ignoredAuto</c> 中回报（前端可据此提示「该项由企业档案自动带出，请到企业管理修改」）。</para>
     /// <para>新增 vs 更新一律按 <c>Code</c> 分流（双关键字准则 A）；撞唯一键时走「复活」而非 INSERT。</para>
+    ///
+    /// <para>★ 2026-10-14 第 0 批通用 Service 抽取：实现已下沉
+    /// <see cref="IFillParamService.SaveAsync"/>（`66` V2.1 §2.5）。</para>
     /// </summary>
     [HttpPost("save")]
     public async Task<IActionResult> Save([FromBody] SaveRequest req)
@@ -407,171 +298,29 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
         if (req == null || string.IsNullOrWhiteSpace(req.EnterpriseCode))
             return Ok(ApiResponse<object>.Fail("请先选择企业"));
 
-        if (req.Items == null || req.Items.Count == 0)
-            return Ok(ApiResponse<object>.Fail("没有需要保存的内容"));
+        // ⚠️ 校验顺序与改前一致：企业为空 → 无内容 → 企业不存在 → 越权。
+        //    「无内容」与「企业不存在」的判定都在 Service 内，顺序未变。
+        var ps = new FillParamScope(
+            WorkspaceCode: scope.Data.WorkspaceCode,
+            EnterpriseCode: req.EnterpriseCode,
+            StandardCode: req.StandardCode ?? string.Empty,
+            StageCode: req.StageCode ?? string.Empty);
 
-        var ent = await _db.Client.Queryable<Enterprise>()
-            .Where(x => x.Code == req.EnterpriseCode && x.IsDeleted == false)
-            .FirstAsync();
-
-        if (ent == null)
-            return Ok(ApiResponse<object>.Fail("企业不存在或已删除"));
-
-        if (!string.Equals(ent.OrgCode, scope.Data.WorkspaceCode, StringComparison.Ordinal))
-            return Ok(ApiResponse<object>.Fail("无权修改其他工作区的企业参数"));
-
-        // ★ 参数值行 OrgCode = 工作区 Code（数据归属，见 WorkspaceContextService 对照表）；
-        //   参数定义 OrgCode 恒为后台标准级 ''
-        //   （2026-10-12 铁律取代 10-06「恒空串」裁决 —— 见跨端规则 §二）
-        var workspaceCode = scope.Data.WorkspaceCode;
-        var stdCode = req.StandardCode ?? string.Empty;
-        var stageCode = req.StageCode ?? string.Empty;
-
-        // 定义全集（校验 paramCode 合法性 —— 不认识的一律报错，不静默丢弃）
-        var defs = await _core.GetFillParamDefsAsync(stdCode, stageCode);
-
-        var defMap = defs
-            .GroupBy(d => d.ParamCode)
-            .ToDictionary(g => g.Key,
-                g => g.OrderByDescending(ParamValueResolver.Specificity).ThenBy(d => d.Id).First(),
-                StringComparer.Ordinal);
-
-        var unknown = req.Items
-            .Where(i => !defMap.ContainsKey(i.ParamCode))
-            .Select(i => i.ParamCode)
-            .ToList();
-        if (unknown.Count > 0)
-            return Ok(ApiResponse<object>.Fail(
-                $"以下参数编码未在当前标准作用域下定义（含通配）：{string.Join("、", unknown)}"));
-
-        var now = DateTime.Now;
-        var userCode = UserContext.UserCode;
-        var savedCount = 0;
-        var ignoredAuto = new List<string>();
-
-        using var tx = _db.BeginTransaction();
-        try
-        {
-            foreach (var item in req.Items)
+        var items = (req.Items ?? new List<SaveItem>())
+            .Select(i => new FillParamSaveItem
             {
-                var def = defMap[item.ParamCode];
+                ParamCode = i.ParamCode,
+                ParamValue = i.ParamValue,
+                // ⛔ 刻意不传 ValueSource：本页值来源恒 manual，由服务端写死
+            })
+            .ToList();
 
-                // ★ auto 项不接受覆盖：语义是「永远等于企业档案」
-                if (string.Equals(def.MaintainMode, ParamValueResolver.ModeAuto, StringComparison.Ordinal))
-                {
-                    ignoredAuto.Add(def.ParamName);
-                    continue;
-                }
+        var r = await _fillParam.SaveAsync(ps, items, UserContext.UserCode);
+        if (!r.Success || r.Data == null)
+            return Ok(ApiResponse<object>.Fail(r.Error ?? "保存失败"));
 
-                // 值行的 (StandardCode, StageCode) 镜像定义，与唯一键 uk_ent_std_stage_param 对齐
-                var rowStd = def.StandardCode;
-                var rowStage = def.StageCode;
-
-                // ★ 唯一键不含 IsDeleted ⇒ 查重必须「含已删」，命中已删行则复活
-                var row = await _db.GetOneIgnoreValidAsync<FillParamValue>(v =>
-                    v.EnterpriseCode == ent.Code
-                    && v.StandardCode == rowStd
-                    && v.StageCode == rowStage
-                    && v.ParamCode == def.ParamCode);
-
-                var value = item.ParamValue ?? string.Empty;
-
-                if (row.Success && row.Data != null)
-                {
-                    var existing = row.Data;
-                    existing.ParamValue = value;
-                    // ★ 本页是「按后台定义逐项手填」的简单填写页 ⇒ 值来源恒 manual
-                    //   （2026-10-07 用户裁决：信息由人填写，不由 AI 分析产出）
-                    existing.ValueSource = "manual";
-                    existing.IsManualEdited = true;
-                    existing.IsFilled = !string.IsNullOrWhiteSpace(value);
-                    existing.IsDeleted = false;
-                    existing.DeleteBy = null;
-                    existing.DeleteTime = null;
-                    existing.UpdateTime = now;
-                    existing.UpdateBy = userCode;
-                    await _db.UpdateAsync(existing);
-                }
-                else
-                {
-                    var entity = new FillParamValue
-                    {
-                        Code = Guid.NewGuid().ToString("N"),
-                        // ★ 值行 OrgCode = 工作区 Code（数据归属），⛔ 不是认证机构 Code
-                        OrgCode = workspaceCode,
-                        EnterpriseCode = ent.Code,
-                        EnterpriseName = ent.Name,
-                        StandardCode = rowStd,
-                        StageCode = rowStage,
-                        ParamCode = def.ParamCode,
-                        ParamName = def.ParamName,
-                        GroupName = def.GroupName,
-                        ValueType = def.ValueType,
-                        EnumOptions = def.EnumOptions,
-                        ParamValue = value,
-                        ValueSource = "manual",
-                        SourceRef = $"全局参数 · {def.ParamName}",
-                        IsManualEdited = true,
-                        MaintainMode = def.MaintainMode,
-                        IsRequired = def.IsRequired,
-                        IsFilled = !string.IsNullOrWhiteSpace(value),
-                        Sort = def.Sort,
-                        IsValid = 1,
-                        IsDeleted = false,
-                        CreateTime = now,
-                        CreateBy = userCode,
-                    };
-                    await _db.InsertAsync(entity);
-                }
-
-                savedCount++;
-            }
-
-            tx.Commit();
-        }
-        catch (Exception ex)
-        {
-            tx.Rollback();
-            return Ok(ApiResponse<object>.Fail($"保存失败：{ex.Message}"));
-        }
-
-        return Ok(ApiResponse<object>.Ok(new
-        {
-            savedCount,
-            ignoredAuto,
-            message = ignoredAuto.Count == 0
-                ? $"已保存 {savedCount} 项"
-                : $"已保存 {savedCount} 项；{ignoredAuto.Count} 项由企业档案自动带出，未保存（如需修改请到「企业管理」）",
-        }));
+        return Ok(ApiResponse<object>.Ok(r.Data));
     }
-
-    // ════════════════════════════════════════════════════════════════════
-    // 私有工具
-    // ════════════════════════════════════════════════════════════════════
-
-    // ⛔ 此处刻意**不**再放 Specificity / ValueKey / ResolveAuto ——
-    //    它们已上提为 ParamValueResolver 的公开成员。取值口径只能有一份：
-    //    「企业端显示的值」与「文档里填的值」必须永远一致，各写一份必然漂移且都不报错。
-
-    private static EnterpriseInfo ToEnterpriseInfo(Enterprise e) => new()
-    {
-        Code = e.Code,
-        Name = e.Name,
-        ShortName = e.ShortName,
-        CreditCode = e.CreditCode,
-        LegalPerson = e.LegalPerson,
-        Province = e.Province,
-        City = e.City,
-        Address = e.Address,
-        IndustryType = e.IndustryType,
-        EmployeeCount = e.EmployeeCount,
-        CertScope = e.CertScope,
-        ContactName = e.ContactName,
-        ContactPhone = e.ContactPhone,
-        ContactEmail = e.ContactEmail,
-        EnterpriseNo = e.EnterpriseNo,
-        ArchiveDate = e.ArchiveDate,
-    };
 
     // ════════════════════════════════════════════════════════════════════
     // 请求体
@@ -602,37 +351,8 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
         //    由服务端写死，不接受客户端指定。
     }
 
-    /// <summary>
-    /// 合并后的条目。
-    /// <para>⚠️ 序列化为 <b>PascalCase</b>（<c>Program.cs</c> 明确 <c>PropertyNamingPolicy = null</c>），
-    /// 前端按 <c>item.ParamCode</c> 读，⛔ 不要写成 <c>item.paramCode</c>（会渲染成空且不报错）。</para>
-    /// </summary>
-    public sealed class MergedItem
-    {
-        public string ParamCode { get; set; } = string.Empty;
-        public string ParamName { get; set; } = string.Empty;
-        public string GroupName { get; set; } = string.Empty;
-        public string ValueType { get; set; } = "text";
-        public string? EnumOptions { get; set; }
-        public string MaintainMode { get; set; } = ParamValueResolver.ModeAuto;
-        public string SourceKind { get; set; } = "global";
-        public string? SourceExpr { get; set; }
-        public bool IsRequired { get; set; }
-        public bool IsBuiltin { get; set; }
-        public int Sort { get; set; }
-        public string? Description { get; set; }
-        public string? Placeholder { get; set; }
-
-        public string? ParamValue { get; set; }
-
-        /// <summary>auto | manual | default | empty</summary>
-        public string ValueSource { get; set; } = "empty";
-
-        public string SourceRef { get; set; } = string.Empty;
-        public bool IsManualEdited { get; set; }
-        public bool IsFilled { get; set; }
-        public bool Editable { get; set; }
-    }
+    // ⛔ 原嵌套类 `MergedItem` 已下沉 `Services/Ent/FillParamModels.cs`（2026-10-14 第 0 批）——
+    //    它现在是 `IFillParamService.GetMergedListAsync` 的出参元素，⛔ 不要在本类里再建一份同形类型。
 
     /// <summary>
     /// 企业树节点（<b>企业 → 标准</b> 两级）—— <c>enterprise-tree</c> 的载荷。

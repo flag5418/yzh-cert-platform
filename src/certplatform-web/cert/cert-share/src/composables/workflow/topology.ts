@@ -11,6 +11,7 @@
  */
 
 // ==================== 日志系统 ====================
+import { parseAiParams, validateAiNodeParams } from './aiParams'
 
 type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR'
 
@@ -47,7 +48,17 @@ export const BRANCH_ANCHORS = ['success', 'failure']
 
 const REF_PATTERN = /^([a-zA-Z_]+_n\d+)\.([a-zA-Z_][a-zA-Z0-9_]*)$/
 const LOOSE_REF_PATTERN = /^([a-zA-Z_]+_n\d+)$/
-const PROMPT_REF_PATTERN = /\{\{([a-zA-Z_]+_n\d+)(?:\.([a-zA-Z_][a-zA-Z0-9_]*))?\}\}/g
+
+/**
+ * ★ 2026-10-14 修 M2：占位符正则放开中文标题与短参数名。
+ *
+ * <p>修复前：`/\{\{([a-zA-Z_]+_n\d+)...\}\}/g` **只认 nodeId 形态** ⇒ 用户实际写法
+ * `{{文档字段.result}}` 与新方案 `{{p1}}` **都不匹配** ⇒ 隐式边永不生成、参数表形同虚设。</p>
+ *
+ * <p>口径必须与后端 `PromptRenderer.Placeholder`（C#）以及 `aiParams.ts` 的
+ * `PLACEHOLDER_PATTERN` **三处逐字一致** —— 本次改造的病根就是「三套口径互不一致」。</p>
+ */
+const PROMPT_REF_PATTERN = /\{\{([\w\u4e00-\u9fff][\w\u4e00-\u9fff.]*)\}\}/g
 
 // ==================== 核心数据结构 ====================
 
@@ -56,6 +67,18 @@ export interface DependencyGraph {
   reverseAdj: Map<string, string[]>
   nodeMap: Map<string, any>
   dependencies: Array<{ source: string; target: string; type: string; handle?: string | null; refPort?: string; fromPort?: string; raw?: string; loose?: boolean }>
+  /**
+   * ★ 2026-10-14（设计 §2.2「参数即边」关键约束）：**隐式边独立成集**。
+   *
+   * <p>隐式边 = 端口引用（`inputs` 里的 `nodeId.port`）+ AI 提示词/参数表引用。
+   * 它们的语义是「**执行顺序 / 预执行前置**」，⛔ <b>不是</b>流程连线。</p>
+   *
+   * <p>修复前它们被直接 push 进 `adjacency`，而 `adjacency` 同时是
+   * `extractAllPaths` 的路径枚举依据 ⇒ 产生**伪路径**（如 `start → docField_n2 → ai_n6`），
+   * 让「执行了几条路径」失真。现在：<b>拓扑排序仍认</b>（走 `dependencies`），
+   * <b>路径枚举不认</b>（只走 `adjacency`）。</p>
+   */
+  implicitEdges: Array<{ source: string; target: string; type: string; refPort?: string; fromPort?: string; raw?: string; paramName?: string }>
   stats: {
     totalNodes: number
     totalEdges: number
@@ -108,10 +131,14 @@ export function buildDependencyGraph(config: any): DependencyGraph {
     reverseAdj: new Map(),
     nodeMap: new Map(),
     dependencies: [],
+    implicitEdges: [],
     stats: { totalNodes: 0, totalEdges: 0, explicitEdges: 0, implicitReferences: 0, aiPromptReferences: 0, startNodes: [], endNodes: [], branchNodes: [] }
   }
 
   if (!config || !config.nodes) { log('WARN', 'config 为空或缺少 nodes'); return graph }
+
+  // ⚠️ 必须在任何 addImplicit 调用之前初始化（隐式边要往里登记「被引用的数据源」）
+  graph.referencedNodes = new Set()
 
   for (const node of config.nodes) {
     const nodeId = node.nodeId || node.id
@@ -126,6 +153,24 @@ export function buildDependencyGraph(config: any): DependencyGraph {
     if (nodeType === 'branch') graph.stats.branchNodes.push(nodeId)
   }
 
+  /**
+   * ★ 2026-10-14（设计 §2.2）：**隐式边唯一入口** —— 进 `implicitEdges` + `dependencies`，
+   *   ⛔ **不进 `adjacency` / `reverseAdj`**。
+   *
+   *   - `dependencies`：拓扑排序 / 环检测用它 ⇒ 「先跑数据源、再跑 AI 节点」的执行顺序仍然成立；
+   *   - `adjacency`：路径枚举 `extractAllPaths` 用它 ⇒ 不再产生 `start → docField → ai` 伪路径；
+   *   - `referencedNodes`：孤立节点检测用它 ⇒ 数据源被引用即视为「已接线」，不再告警（§2.7.5）。
+   */
+  const addImplicit = (source: string, target: string, type: string, extra: Record<string, any> = {}) => {
+    if (!graph.nodeMap.has(source) || !graph.nodeMap.has(target)) return
+    if (source === target) return
+    const dup = graph.implicitEdges.some((e) => e.source === source && e.target === target && e.type === type && e.raw === extra.raw && e.paramName === extra.paramName)
+    if (dup) return
+    graph.implicitEdges.push({ source, target, type, ...extra })
+    graph.dependencies.push({ source, target, type, ...extra })
+    graph.referencedNodes!.add(source)
+  }
+
   for (const edge of (config.edges || [])) {
     const source = edge.source, target = edge.target
     if (!source || !target) continue
@@ -136,7 +181,6 @@ export function buildDependencyGraph(config: any): DependencyGraph {
     graph.stats.explicitEdges++
   }
 
-  graph.referencedNodes = new Set()
   for (const node of config.nodes) {
     const nodeId = node.nodeId || node.id
     const inputs = node.inputs || {}
@@ -145,53 +189,70 @@ export function buildDependencyGraph(config: any): DependencyGraph {
       let match = value.match(REF_PATTERN)
       if (match) {
         const refNodeId = match[1]
-        if (graph.nodeMap.has(refNodeId) && refNodeId !== nodeId) {
-          if (!graph.adjacency.get(refNodeId)!.includes(nodeId)) {
-            graph.adjacency.get(refNodeId)!.push(nodeId)
-            graph.reverseAdj.get(nodeId)!.push(refNodeId)
-            graph.dependencies.push({ source: refNodeId, target: nodeId, type: 'reference', refPort: match[2], fromPort: portName })
-            graph.stats.implicitReferences++
-            graph.referencedNodes.add(refNodeId)
-          }
-        }
+        const before = graph.implicitEdges.length
+        addImplicit(refNodeId, nodeId, 'reference', { refPort: match[2], fromPort: portName })
+        if (graph.implicitEdges.length > before) graph.stats.implicitReferences++
         continue
       }
       match = value.match(LOOSE_REF_PATTERN)
       if (match) {
         const refNodeId = match[1]
-        if (graph.nodeMap.has(refNodeId) && refNodeId !== nodeId) {
-          if (!graph.adjacency.get(refNodeId)!.includes(nodeId)) {
-            graph.adjacency.get(refNodeId)!.push(nodeId)
-            graph.reverseAdj.get(nodeId)!.push(refNodeId)
-            graph.dependencies.push({ source: refNodeId, target: nodeId, type: 'reference', refPort: 'result', fromPort: portName, loose: true })
-            graph.stats.implicitReferences++
-            graph.referencedNodes.add(refNodeId)
-          }
-        }
+        const before = graph.implicitEdges.length
+        addImplicit(refNodeId, nodeId, 'reference', { refPort: 'result', fromPort: portName })
+        if (graph.implicitEdges.length > before) graph.stats.implicitReferences++
       }
     }
+  }
+
+  // ── AI 节点引用：参数表优先（params），提示词正则兜底 ──
+  //
+  // ★ M1 修复：读 `config.promptTemplate`（面板字段名），⛔ 不是 `config.prompt` ——
+  //   读错字段 ⇒ `aiPromptReferences` 恒 0，整套隐式依赖静默失效。
+  //
+  // ★ 双键解析：占位符 refKey 可能是 **nodeId**（`docField_n2`）也可能是 **中文标题**（`文档字段`），
+  //   与后端 `AiNodeExecutor.ResolveTemplateRefs` 的 nodeId/Title 双键口径保持一致。
+  const resolveRefNodeId = (refKey: string): string | null => {
+    if (graph.nodeMap.has(refKey)) return refKey
+    for (const [id, n] of graph.nodeMap.entries()) {
+      if (n?.title && n.title === refKey) return id
+    }
+    return null
   }
 
   for (const node of config.nodes) {
     const nodeId = node.nodeId || node.id
     const nodeType = node.nodeType || node.classCode
     if (nodeType !== 'ai_node') continue
-    const prompt = node.config?.prompt || ''
+
+    const declared = parseAiParams(node.config)
+    if (declared.length > 0) {
+      // ① 参数表（§2.1 / 用户裁决 ①②：`params[].nodeId` 即依赖边）
+      for (const p of declared) {
+        if ((p.sourceType || 'node') !== 'node') continue
+        const srcId = p.nodeId || ''
+        if (!srcId || srcId === nodeId) continue
+        const before = graph.implicitEdges.length
+        addImplicit(srcId, nodeId, 'ai_reference', { refPort: p.portName || 'result', paramName: p.name })
+        if (graph.implicitEdges.length > before) graph.stats.aiPromptReferences++
+      }
+      continue
+    }
+
+    // ② 正则兜底（params 缺失 ⇒ 保留旧行为：从 {{引用}} 扫）
+    const prompt = typeof node.config?.promptTemplate === 'string' ? node.config.promptTemplate : ''
     if (!prompt) continue
     let match
     const regex = new RegExp(PROMPT_REF_PATTERN.source, PROMPT_REF_PATTERN.flags)
     while ((match = regex.exec(prompt)) !== null) {
-      const refNodeId = match[1]
-      const refPort = match[2] || 'result'
-      if (graph.nodeMap.has(refNodeId) && refNodeId !== nodeId) {
-        if (!graph.adjacency.get(refNodeId)!.includes(nodeId)) {
-          graph.adjacency.get(refNodeId)!.push(nodeId)
-          graph.reverseAdj.get(nodeId)!.push(refNodeId)
-          graph.dependencies.push({ source: refNodeId, target: nodeId, type: 'ai_reference', refPort, raw: match[0] })
-          graph.stats.aiPromptReferences++
-          graph.referencedNodes.add(refNodeId)
-        }
-      }
+      const fullKey = match[1]
+      const lastDot = fullKey.lastIndexOf('.')
+      const refKey = lastDot >= 0 ? fullKey.slice(0, lastDot) : fullKey
+      const refPort = lastDot >= 0 ? fullKey.slice(lastDot + 1) : 'result'
+      const refNodeId = resolveRefNodeId(refKey)
+      if (!refNodeId || refNodeId === nodeId) continue
+      const before = graph.implicitEdges.length
+      addImplicit(refNodeId, nodeId, 'ai_reference', { refPort, raw: match[0] })
+      if (graph.implicitEdges.length > before) graph.stats.aiPromptReferences++
     }
   }
 
@@ -303,17 +364,39 @@ export function extractAllPaths(graph: DependencyGraph): PathResult[] {
 
 // ==================== 4. 环检测 ====================
 
+/**
+ * ★ 2026-10-14：环检测改用 **`dependencies`（物理边 ∪ 隐式边）** 而不是 `adjacency`。
+ *
+ * <p>原因：隐式边（端口引用 / AI 提示词引用）已按 §2.2 移出 `adjacency`。
+ * 若环检测仍只看 `adjacency`，「A 的提示词引用 B、B 又引用 A」这类**真环会被漏掉**
+ * —— 拓扑排序（走 `dependencies`）会判定 `hasCycle=true`、但 `cycles` 却是空数组，
+ * 校验面板一句环都不报，用户无从下手。</p>
+ *
+ * <p>改造前后**环的识别集合不变**（改造前 `adjacency` 的内容恰好等于现在的 `dependencies`），
+ * 只是把口径对齐到「依赖」这一层。</p>
+ */
+function depAdjacency(graph: DependencyGraph): Map<string, string[]> {
+  const adj = new Map<string, string[]>()
+  for (const id of graph.nodeMap.keys()) adj.set(id, [])
+  for (const dep of graph.dependencies) {
+    if (!graph.nodeMap.has(dep.source) || !graph.nodeMap.has(dep.target)) continue
+    adj.get(dep.source)!.push(dep.target)
+  }
+  return adj
+}
+
 export function detectCycles(graph: DependencyGraph, suspects: string[] | null = null): Array<{ cycle: string[]; type: string }> {
   const cycles: Array<{ cycle: string[]; type: string }> = []
   const visited = new Set<string>()
   const recursionStack = new Set<string>()
   const path: string[] = []
+  const adjacency = depAdjacency(graph)
 
   function dfs(nodeId: string) {
     visited.add(nodeId)
     recursionStack.add(nodeId)
     path.push(nodeId)
-    for (const next of (graph.adjacency.get(nodeId) || [])) {
+    for (const next of (adjacency.get(nodeId) || [])) {
       if (!visited.has(next)) { dfs(next) }
       else if (recursionStack.has(next)) {
         const cycleStart = path.indexOf(next)
@@ -333,6 +416,7 @@ function findCycles(graph: DependencyGraph, remaining: string[]): string[][] {
   const cycles: string[][] = []
   if (!remaining || remaining.length === 0) return cycles
   const visited = new Set<string>()
+  const adjacency = depAdjacency(graph)
 
   for (const start of remaining) {
     if (visited.has(start)) continue
@@ -345,7 +429,7 @@ function findCycles(graph: DependencyGraph, remaining: string[]): string[][] {
       visited.add(node)
       path.push(node)
       pathSet.add(node)
-      for (const next of (graph.adjacency.get(node) || [])) { if (remaining.includes(next)) dfs(next) }
+      for (const next of (adjacency.get(node) || [])) { if (remaining.includes(next)) dfs(next) }
       path.pop()
       pathSet.delete(node)
     }
@@ -404,7 +488,18 @@ export function validateTopology(graph: DependencyGraph): TopologyValidation {
 
     if (!fromStart && !toEnd && !isReferenced) {
       result.warnings.push({ code: 'ORPHAN_NODE', severity: 'warning', node: nodeId, message: `孤立节点 ${nodeId}（无输入无输出）` })
-    } else if (!toEnd) {
+      continue
+    }
+
+    // ★ 2026-10-14（§2.7.5 / §2.2）：**被引用的数据源节点不再判「死路」**。
+    //
+    //   `docField` / `docTable` 是**数据源**，不是流程步骤：它没有物理出边、本来就不该到 end。
+    //   隐式边移出 `adjacency` 之后，它的可达性只体现在 `referencedNodes` 上 ——
+    //   若仍按「到不了 end = 错误」判，每个合规的 AI 分支都会被误报成校验失败。
+    //   判据：**没有物理出边 + 被引用** ⇒ 数据源，放行；有物理出边却到不了 end ⇒ 真死路，照报。
+    if (!toEnd) {
+      const hasPhysicalOut = (graph.adjacency.get(nodeId) || []).length > 0
+      if (isReferenced && !hasPhysicalOut) continue
       result.valid = false
       result.errors.push({ code: 'CANNOT_REACH_END', severity: 'error', node: nodeId, message: `节点 ${nodeId} 无法到达任何 end 节点（死路）` })
     }
@@ -421,6 +516,15 @@ export function validateTopology(graph: DependencyGraph): TopologyValidation {
     const nodeType = node.nodeType || node.classCode
     if (nodeType === 'skill' && !node.skillCode) {
       result.warnings.push({ code: 'MISSING_SKILL_CODE', severity: 'warning', node: nodeId, message: `功能节点 ${nodeId} 缺少 skillCode` })
+    }
+
+    // ★ §2.7 配置期强校验（AI 节点参数表）—— 任一不过 ⇒ 置 valid=false，
+    //   于是「校验」按钮与「执行验证」都会被挡住；保存拦截见 WorkflowDesigner.handleSave。
+    if (nodeType === 'ai_node') {
+      for (const msg of validateAiNodeParams(node, Array.from(graph.nodeMap.values()))) {
+        result.valid = false
+        result.errors.push({ code: 'AI_PARAM_INVALID', severity: 'error', node: nodeId, message: `AI 节点「${node.title || nodeId}」：${msg}` })
+      }
     }
   }
 

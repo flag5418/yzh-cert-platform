@@ -54,10 +54,12 @@ print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 # 判据：日志里出现 `Minio.MinioClient.BucketExistsAsync` + `Connection refused (127.0.0.1:xxxxx)`
 #       ⇒ 就是本条，⛔ 不要去查 MinIO 对象或数据库。
 #
-# ⚠️ 只**追加** NO_PROXY、⛔ 不要 unset 代理 —— 本机 LLM 调用（通义千问等）
-#    需要代理出网，清掉会让语义分析直接不可用。
+# ⚠️ 只**追加** NO_PROXY、⛔ 不要 unset 代理 —— 外网调用仍需要代理。
+#    但「国内 AI 服务（DashScope/阿里云）」⛔ 不需要代理，且代理端口动态变化
+#    ⇒ 一旦端口失效，语义分析会被静默拒绝（报「全部 N 个标准分析失败」）。
+#    2026-10-14 实测：追加 dashscope.aliyuncs.com 后直连 378ms 成功。
 # ─────────────────────────────────────────────────────────────────────────────
-export NO_PROXY="127.0.0.1,localhost,::1,0.0.0.0${NO_PROXY:+,$NO_PROXY}"
+export NO_PROXY="127.0.0.1,localhost,::1,0.0.0.0,dashscope.aliyuncs.com${NO_PROXY:+,$NO_PROXY}"
 export no_proxy="$NO_PROXY"
 
 # 编译项目

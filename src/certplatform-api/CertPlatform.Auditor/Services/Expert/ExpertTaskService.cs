@@ -2178,7 +2178,36 @@ namespace CertPlatform.Auditor.Services.Expert
                 .Take(rows)
                 .ToListAsync();
 
-            return Result<object>.Ok(new { Total = total, Rows = items });
+            // ★ 契约：信封内 data 字段 camelCase（与前端 ExpertQueueItem 逐字一致）。
+            // ⛔ 不能直接序列化实体（PascalCase）—— 2026-10-14 复盘：原 `{ Total, Rows }` + 实体
+            // 原样返回 ⇒ 前端 `data.rows` / `row.queueStatus` 全 undefined（任务队列 Tab 静默空白）。
+            return Result<object>.Ok(new
+            {
+                total,
+                rows = items.Select(x => new
+                {
+                    code = x.Code,
+                    queueType = x.QueueType,
+                    queueName = x.Remark,
+                    scopeKey = x.ScopeKey,
+                    taskCode = x.TaskCode,
+                    subTaskCode = x.SubTaskCode,
+                    standardCode = x.StandardCode,
+                    queueStatus = x.QueueStatus,
+                    totalCount = x.TotalCount,
+                    doneCount = x.DoneCount,
+                    failedCount = x.FailedCount,
+                    skippedCount = x.SkippedCount,
+                    progress = x.Progress,
+                    priority = x.Priority,
+                    startTime = x.StartTime?.ToString("yyyy-MM-dd HH:mm:ss"),
+                    finishTime = x.FinishTime?.ToString("yyyy-MM-dd HH:mm:ss"),
+                    createTime = x.CreateTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                    // CreateBy 是用户 Code；CreateName 是冗余姓名（同 yzh_queue 的 createByName 口径）
+                    createBy = string.IsNullOrEmpty(x.CreateName) ? x.CreateBy : x.CreateName,
+                    lastError = x.LastError
+                }).ToList()
+            });
         }
 
         /// <summary>队列监控统计卡（按状态聚合 + 今日计数）</summary>
@@ -2188,16 +2217,17 @@ namespace CertPlatform.Auditor.Services.Expert
                 x => x.OrgCode == orgCode && !x.IsDeleted)).Data ?? new List<CertExpertTaskQueue>();
 
             var today = DateTime.Today;
+            // ★ 契约：camelCase（与前端 ExpertQueueStats 一致；原 PascalCase ⇒ 前端统计卡静默全空）
             var stats = new
             {
-                Running = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Running),
-                Pending = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Pending),
-                Completed = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Completed),
-                Failed = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Failed),
-                Cancelled = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Cancelled),
-                TodayTotal = all.Count(x => x.CreateTime >= today),
-                TodayCompleted = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Completed && x.FinishTime >= today),
-                TodayFailed = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Failed && x.FinishTime >= today)
+                running = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Running),
+                pending = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Pending),
+                completed = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Completed),
+                failed = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Failed),
+                cancelled = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Cancelled),
+                todayTotal = all.Count(x => x.CreateTime >= today),
+                todayCompleted = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Completed && x.FinishTime >= today),
+                todayFailed = all.Count(x => x.QueueStatus == ExpertTaskConst.Queue.Failed && x.FinishTime >= today)
             };
 
             return Result<object>.Ok(stats);
@@ -2214,7 +2244,48 @@ namespace CertPlatform.Auditor.Services.Expert
                 x => x.QueueCode == queueCode && !x.IsDeleted)).Data
                 ?? new List<CertExpertTaskQueueItem>();
 
-            return Result<object>.Ok(new { Queue = q, Items = items });
+            // ★ 契约：camelCase（与前端 ExpertQueueItem / ExpertQueueTaskItem 一致）
+            return Result<object>.Ok(new
+            {
+                queue = new
+                {
+                    code = q.Code,
+                    queueType = q.QueueType,
+                    queueName = q.Remark,
+                    scopeKey = q.ScopeKey,
+                    taskCode = q.TaskCode,
+                    subTaskCode = q.SubTaskCode,
+                    standardCode = q.StandardCode,
+                    queueStatus = q.QueueStatus,
+                    totalCount = q.TotalCount,
+                    doneCount = q.DoneCount,
+                    failedCount = q.FailedCount,
+                    skippedCount = q.SkippedCount,
+                    progress = q.Progress,
+                    priority = q.Priority,
+                    startTime = q.StartTime?.ToString("yyyy-MM-dd HH:mm:ss"),
+                    finishTime = q.FinishTime?.ToString("yyyy-MM-dd HH:mm:ss"),
+                    createTime = q.CreateTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                    createBy = string.IsNullOrEmpty(q.CreateName) ? q.CreateBy : q.CreateName,
+                    lastError = q.LastError
+                },
+                items = items.OrderBy(i => i.Seq).Select(i => new
+                {
+                    code = i.Code,
+                    taskCode = i.TaskCode,
+                    taskItemCode = i.TaskItemCode,
+                    itemType = i.ItemType,
+                    itemCode = i.ItemCode,
+                    seq = i.Seq,
+                    payload = i.Payload,
+                    itemStatus = i.ItemStatus,
+                    errorType = i.ErrorType,
+                    errorMessage = i.ErrorMessage,
+                    retryCount = i.RetryCount,
+                    startTime = i.StartTime?.ToString("yyyy-MM-dd HH:mm:ss"),
+                    finishTime = i.FinishTime?.ToString("yyyy-MM-dd HH:mm:ss")
+                }).ToList()
+            });
         }
 
         /// <summary>取消队列（pending / running → cancelled）</summary>

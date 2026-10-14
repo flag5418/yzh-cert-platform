@@ -1151,11 +1151,9 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
         public string OperatorName { get; set; } = string.Empty;
 
         /// <summary>
-        ///     ★ 发生时间。
-        ///     <para>⚠️ <c>BaseEntity.CreateTime</c> 是 <c>DateTime.UtcNow</c>（<b>UTC</b>），
-        ///     而 SqlSugar 读回时 <c>Kind = Unspecified</c> ⇒ 不显式标 UTC 的话
-        ///     JSON 里<b>没有 Z</b> ⇒ 前端 <c>new Date()</c> 按本地解析 ⇒ <b>少 8 小时</b>。
-        ///     ⇒ 控制器已 <c>DateTime.SpecifyKind(…, Utc)</c>（同 <c>tree</c> 的 <c>LastFillTime</c>）。</para>
+        ///     ★ 发生时间 —— ★ <b>本地时间</b>（2026-10-14 起 <c>WriteActionAsync</c> 写
+        ///     <c>DateTime.Now</c>）⇒ JSON 不带 Z，前端按本地解析即正确。
+        ///     <para>⛔ 曾经是 UTC（控制器 ToUtc 补 Z），已废止，不要再补。</para>
         /// </summary>
         public DateTime? CreateTime { get; set; }
 
@@ -1253,10 +1251,9 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
         public DateTime? EndTime { get; set; }
 
         /// <summary>
-        ///     入队时间 —— ★ <b>UTC</b>（<c>BaseEntity.CreateTime</c> = <c>DateTime.UtcNow</c>）
-        ///     ⇒ JSON 里带 <c>Z</c>。
-        ///     <para>⚠️⚠️ <b>同一条记录里两个时间列基准不同</b>（实测差 8 小时）——
-        ///     混用会让页面显示 +8h，别照抄。</para>
+        ///     入队时间 —— ★ <b>本地时间</b>（2026-10-14 起 <c>QueueManager</c> 写 <c>DateTime.Now</c>，
+        ///     存量已迁移）⇒ JSON <b>不带 Z</b>，前端按本地解析即正确。
+        ///     <para>⛔ 曾经是 UTC（与 StartTime 同行差 8 小时、靠 ToUtc 补 Z），已废止，不要再补。</para>
         /// </summary>
         public DateTime? CreateTime { get; set; }
 

@@ -1,5 +1,5 @@
 <template>
-  <el-dropdown trigger="click" :popper-class="'yzh-msg-bell__popper'" @command="handleCommand">
+  <el-dropdown trigger="click" :popper-class="'yzh-msg-bell__popper'" @command="handleCommand" @visible-change="handleVisibleChange">
     <span class="yzh-msg-bell">
       <el-badge :value="unreadCount" :max="99" :hidden="unreadCount === 0" class="yzh-msg-bell__badge">
         <el-icon :size="18" class="yzh-msg-bell__icon"><Bell /></el-icon>
@@ -23,17 +23,17 @@
             </div>
             <div
               v-for="msg in messageList"
-              :key="msg.id"
+              :key="msg.Code"
               class="yzh-msg-dropdown__item"
-              :class="{ 'yzh-msg-dropdown__item--unread': msg.isRead === 0 }"
+              :class="{ 'yzh-msg-dropdown__item--unread': msg.IsRead === 0 }"
               @click.stop="handleMarkRead(msg)"
             >
-              <span v-if="msg.isRead === 0" class="yzh-msg-dropdown__dot" />
-              <div class="yzh-msg-dropdown__title">{{ msg.title }}</div>
-              <div class="yzh-msg-dropdown__content">{{ msg.content }}</div>
+              <span v-if="msg.IsRead === 0" class="yzh-msg-dropdown__dot" />
+              <div class="yzh-msg-dropdown__title">{{ msg.Title }}</div>
+              <div class="yzh-msg-dropdown__content">{{ msg.Content }}</div>
               <div class="yzh-msg-dropdown__meta">
-                <el-tag :type="getMessageTypeTag(msg.messageType)" size="small">{{ getMessageTypeLabel(msg.messageType) }}</el-tag>
-                <span class="yzh-msg-dropdown__time">{{ formatTime(msg.createTime) }}</span>
+                <el-tag :type="getMessageTypeTag(msg.MessageType)" size="small">{{ getMessageTypeLabel(msg.MessageType) }}</el-tag>
+                <span class="yzh-msg-dropdown__time">{{ formatTime(msg.CreateTime) }}</span>
               </div>
             </div>
           </el-scrollbar>
@@ -82,11 +82,11 @@ async function fetchMessageList() {
 }
 
 async function handleMarkRead(msg: MessageItem) {
-  if (msg.isRead === 1) return
+  if (msg.IsRead === 1) return
   try {
-    const res = await markMessageRead(msg.code)
+    const res = await markMessageRead(msg.Code)
     if (res.data) {
-      msg.isRead = 1
+      msg.IsRead = 1
       unreadCount.value = Math.max(0, unreadCount.value - 1)
     }
   } catch {
@@ -99,7 +99,7 @@ async function handleMarkAllRead() {
     const res = await markAllRead()
     if (res.data) {
       unreadCount.value = 0
-      messageList.value = messageList.value.map((m) => ({ ...m, isRead: 1 }))
+      messageList.value = messageList.value.map((m) => ({ ...m, IsRead: 1 }))
       ElMessage.success('已全部标记为已读')
     }
   } catch {
@@ -114,6 +114,14 @@ function handleViewAll() {
 function onPushMessage() {
   fetchUnreadCount()
   if (messageList.value.length > 0) {
+    fetchMessageList()
+  }
+}
+
+/** 下拉打开时必拉一次列表（此前只在 push 且列表非空时刷新 ⇒ 首次打开永远「暂无消息」） */
+function handleVisibleChange(visible: boolean) {
+  if (visible) {
+    fetchUnreadCount()
     fetchMessageList()
   }
 }

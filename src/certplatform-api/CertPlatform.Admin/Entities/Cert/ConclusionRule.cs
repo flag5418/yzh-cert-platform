@@ -71,6 +71,19 @@ namespace CertPlatform.Admin.Entities.Cert
         /// <summary>结论改动率告警阈值（%），专家改判率超此值提示规则需重新论证</summary>
         public int OverrideAlertThreshold { get; set; } = 30;
 
+        // ─── v2 多 judge 判定矩阵（2026-10-14 新增，NC 结论判定 v2 专用）───
+
+        /// <summary>哪些级别算「核心、影响结论」（JSON 数组，如 ["major","minor"]；★空 = 缺省 [major,minor]）</summary>
+        [SugarColumn(ColumnDataType = "json", IsNullable = true)]
+        public string? CoreLevels { get; set; }
+
+        /// <summary>非核心（observation）fail 容忍数；★ -1 = 不限量（默认，2 条轻微不过仍可推荐认证）</summary>
+        public int MinorTolerated { get; set; } = -1;
+
+        /// <summary>结论词映射（JSON：pass/pass_with_nc/improvement_required/fail → 中文词；★空 = 内置词）</summary>
+        [SugarColumn(ColumnDataType = "json", IsNullable = true)]
+        public string? ConclusionLabels { get; set; }
+
         // ─── Prompt 绑定 ───
         [SugarColumn(Length = 100, IsNullable = true)]
         public string? JudgePromptCode { get; set; }

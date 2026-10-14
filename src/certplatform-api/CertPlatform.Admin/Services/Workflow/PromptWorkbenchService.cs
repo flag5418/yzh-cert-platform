@@ -54,7 +54,12 @@ public class PromptWorkbenchService : IPromptWorkbench
 {
     private readonly IDbOrm _db;
     private readonly LlmInvokeService _llm;
-    private readonly DocumentConvertClient _convert;
+    /// <summary>
+    /// ★ 2026-10-14：试跑改装 <see cref="IFileConvertCore"/>（含视觉 OCR 兜底）——
+    /// 此前用裸 <see cref="DocumentConvertClient"/>，扫描件/图片在测试环境永远测不出，
+    /// 与入库链路不同源。⛔ 不要再退回直调 <c>DocumentConvertClient</c>。
+    /// </summary>
+    private readonly IFileConvertCore _convertCore;
     private readonly PromptMarkdownCache _mdCache;
     private readonly ILogger<PromptWorkbenchService> _logger;
     /// <summary>核心资源检索唯一入口（铁律 L5）—— 标准按 Code 单查只走它。</summary>
@@ -103,15 +108,16 @@ public class PromptWorkbenchService : IPromptWorkbench
     //    但另一处仍在用旧值 ⇒ 占位符静默不替换。保留唯一一份。
 
     /// <summary>
-    /// 输出 JSON Schema（33 号 §3.3 —— 两条提示词共享的唯一契约，对齐 06 号 §4.1 并增补 tags/infoItems）。
-    /// <para><c>doc_group</c> 可只出子集（<c>tags</c> + <c>suggestedPolicy</c>）。</para>
+    /// <b>作用提示词（doc_content）</b>的输出 Schema —— <b>单对象</b>（33 号 §3.3）。
+    /// <para>与 <see cref="OutputSchemaGroupJson"/> 拆开：两条提示词形状不同，
+    /// 共用一份会让模型把报告的批次契约读成单对象（历史缺陷）。</para>
     /// </summary>
-    private const string OutputSchemaJson =
+    private const string OutputSchemaContentJson =
         """
         {
           "tags": [
-            { "tagCode": "RecordInternalAudit", "tagName": "内审记录",
-              "confidence": 0.92, "reason": "标题含「内审」，编号前缀 XASL-QR" }
+            { "tagCode": "InternalAudit", "tagName": "内部审核",
+              "confidence": 0.92, "reason": "标题含「内审」，正文含审核员与日程" }
           ],
           "purpose": "【是什么】…【审核关注点】…【来源口径】…【包含信息】…",
           "infoItems": [
@@ -133,6 +139,42 @@ public class PromptWorkbenchService : IPromptWorkbench
         """;
 
     /// <summary>
+    /// <b>分类提示词（doc_group）</b>的输出 Schema —— ★ <b>批次 <c>items[]</c> 数组</b>（33 号 §3.4）。
+    ///
+    /// <para>⚠️ <b>为什么必须是 items[] 而不是单对象</b>：下游消费者
+    /// <c>CertPlatform.Shared.Fill.SemanticHints.ParseGroupItems</c> <b>只读</b> <c>root.items[]</c>，
+    /// 且<b>每项必须带 <c>fileName</c></b> 才能按文件回填。
+    /// 若模型输出单对象（历史缺陷：旧 Schema 与示例都是单对象），
+    /// <c>ParseGroupItems</c> 返回<b>空 map</b> ⇒ 整个批次的分组标签/建议策略全部落空，
+    /// 且<b>零报错</b>（静默降级）。</para>
+    ///
+    /// <para>字段取子集（33 号 §3.4 方案 B）：<c>index / fileName / tags / suggestedPolicy /
+    /// policyReason / purpose / confidence</c>，<b>不含</b> <c>fields / tables / infoItems / typeGuess</c>
+    /// —— 那些属于作用提示词，批次阶段拿不到全文，出了也是幻觉。</para>
+    /// </summary>
+    private const string OutputSchemaGroupJson =
+        """
+        {
+          "items": [
+            {
+              "index": 1,
+              "fileName": "XASL-QR-014 年度内审计划.doc",
+              "tags": [
+                { "tagCode": "InternalAudit", "tagName": "内部审核",
+                  "confidence": 0.96, "reason": "标题含「内审」" },
+                { "tagCode": "RecordForm", "tagName": "记录表格",
+                  "confidence": 0.9, "reason": "编号前缀 QR-" }
+              ],
+              "suggestedPolicy": "analyze",
+              "policyReason": "可对应标准文档《年度内审计划》，需读全文判定填写价值",
+              "purpose": "≤80 字：是什么 + 主要用途 + 能填标准清单里的哪一份",
+              "confidence": 0.9
+            }
+          ]
+        }
+        """;
+
+    /// <summary>
     /// 「只能从字典选」硬约束（14 号 D14 / 26 号 R-4）。
     /// <para>⚠️ 措辞里<b>不要写带花括号的占位符</b>：本常量会经
     /// <see cref="PromptRenderer.Render"/> 单趟替换，写进去的 {{tag_list}} 不会被二次渲染，
@@ -147,14 +189,14 @@ public class PromptWorkbenchService : IPromptWorkbench
     public PromptWorkbenchService(
         IDbOrm db,
         LlmInvokeService llm,
-        DocumentConvertClient convert,
+        IFileConvertCore convertCore,
         PromptMarkdownCache mdCache,
         ILogger<PromptWorkbenchService> logger,
         ICoreResourceQuery core)
     {
         _db = db;
         _llm = llm;
-        _convert = convert;
+        _convertCore = convertCore;
         _mdCache = mdCache;
         _logger = logger;
         _core = core;
@@ -405,7 +447,7 @@ public class PromptWorkbenchService : IPromptWorkbench
         }
 
         // 2. 取 Markdown：换文件（或首次）→ 转换 + 覆写缓存；否则 → 读缓存
-        List<(string FileName, string? Markdown, string? Error)> converted;
+        List<(string FileName, string? Markdown, string? Error, string Status)> converted;
         if (hasFiles)
         {
             converted = await ConvertToMarkdownsAsync(files!);
@@ -422,7 +464,7 @@ public class PromptWorkbenchService : IPromptWorkbench
                     cacheKey: effectiveKey);
 
             converted = cached
-                .Select(x => (x.FileName, (string?)x.Markdown, (string?)null))
+                .Select(x => (x.FileName, (string?)x.Markdown, (string?)null, "completed"))
                 .ToList();
         }
 
@@ -439,6 +481,7 @@ public class PromptWorkbenchService : IPromptWorkbench
             {
                 FileName = c.FileName,
                 Success = c.Markdown != null,
+                Status = c.Status,
                 Message = c.Error,
                 MarkdownLength = c.Markdown?.Length ?? 0,
                 MarkdownHead = c.Markdown == null ? null : Head(c.Markdown, 800),
@@ -701,32 +744,35 @@ public class PromptWorkbenchService : IPromptWorkbench
     /// <para>★ <c>DocumentConvertClient</c> 内部会话目录由 finally 清理 —— 清的是**转换临时文件**，
     /// 与本服务把**转出来的 Markdown 文本**落 Redis 缓存互不冲突。</para>
     /// </summary>
-    private async Task<List<(string FileName, string? Markdown, string? Error)>> ConvertToMarkdownsAsync(
+    private async Task<List<(string FileName, string? Markdown, string? Error, string Status)>> ConvertToMarkdownsAsync(
         IReadOnlyList<(string FileName, byte[] Content)> files)
     {
-        var converted = new List<(string FileName, string? Markdown, string? Error)>();
+        var converted = new List<(string FileName, string? Markdown, string? Error, string Status)>();
         foreach (var (fileName, content) in files)
         {
             if (content == null || content.Length == 0)
             {
-                converted.Add((fileName, null, "文件内容为空"));
+                converted.Add((fileName, null, "文件内容为空", "failed"));
                 continue;
             }
 
-            var r = await _convert.ConvertToMarkdownAsync(fileName, content);
+            // ★ 2026-10-14：走 <see cref="IFileConvertCore"/>（含 anydoc → 视觉 OCR 兜底 + PDF 逐页渲染），
+            //   与入库链路同源。此前直调 DocumentConvertClient，扫描件/图片在测试环境恒失败。
+            var r = await _convertCore.ConvertToMarkdownInlineAsync(fileName, content);
             if (!r.Success || r.Content == null)
             {
-                converted.Add((fileName, null, r.Message));
+                // Status 透传（completed / failed / unsupported）—— 让「未接 OCR」与「文件坏了」可区分
+                converted.Add((fileName, null, r.Message, r.Status));
                 continue;
             }
 
-            converted.Add((fileName, Encoding.UTF8.GetString(r.Content), null));
+            converted.Add((fileName, Encoding.UTF8.GetString(r.Content), r.Message, r.Status));
         }
         return converted;
     }
 
     /// <summary>把转换成功的 Markdown 写入 Redis（失败只记日志，不影响试跑）</summary>
-    private async Task SaveCacheAsync(string cacheKey, List<(string FileName, string? Markdown, string? Error)> ok)
+    private async Task SaveCacheAsync(string cacheKey, List<(string FileName, string? Markdown, string? Error, string Status)> ok)
     {
         try
         {
@@ -970,7 +1016,9 @@ public class PromptWorkbenchService : IPromptWorkbench
             [PhTagList] = BuildTagListText(tags),
             [PhCodePrefixMap] = BuildCodePrefixMapText(tags),
             [PhFolderTree] = await BuildFolderTreeTextAsync(standardCode),
-            [PhOutputSchema] = OutputSchemaJson,
+            // ★ 2026-10-14：按提示词类型注入对应形状 —— doc_group 用批次 items[]，
+            //   doc_content 用单对象。⛔ 用错形状会让下游 ParseGroupItems 静默取不到内容。
+            [PhOutputSchema] = promptType == PromptTypes.Group ? OutputSchemaGroupJson : OutputSchemaContentJson,
             [PhTagConstraint] = TagConstraintText,
             [PhStandardName] = await BuildStandardNameTextAsync(standardCode),
             [PhStdDocCatalog] = await BuildStdDocCatalogTextAsync(standardCode, tags),
@@ -1334,6 +1382,12 @@ public class PromptWorkbenchService : IPromptWorkbench
     {
         [JsonPropertyName("fileName")] public string FileName { get; set; } = "";
         [JsonPropertyName("success")] public bool Success { get; set; }
+        /// <summary>
+        /// ★ 转换状态（2026-10-14）：<c>completed</c> / <c>failed</c> / <c>unsupported</c>。
+        /// <para><c>unsupported</c> = 能力边界（如「扫描件但视觉未接入」）而非故障 ——
+        /// 前端据此区分「这份文件没识别出来是环境问题」与「文件坏了」，⛔ 不再只靠中文文案猜。</para>
+        /// </summary>
+        [JsonPropertyName("status")] public string? Status { get; set; }
         [JsonPropertyName("message")] public string? Message { get; set; }
         [JsonPropertyName("markdownLength")] public int MarkdownLength { get; set; }
         /// <summary>转换出的 Markdown 开头（供列表摘要显示，800 字）</summary>

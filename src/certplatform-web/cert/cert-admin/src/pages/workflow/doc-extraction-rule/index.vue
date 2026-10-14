@@ -210,11 +210,14 @@ async function loadExistingRule(fileCode: string) {
     tables.value = data.tables || []
     prompt.value = data.prompt || ''
     isValid.value = data.isValid ?? null
-    extractionData.value = null
+    // ★ 2026-10-14：恢复上次验证的提取结果回显（否则重新进入文件 PromptVerifyTab
+    //   只显示「验证通过」横幅、但下面全部「未提取到」，用户据此判定「验证信息没保存」）
+    extractionData.value = data.extractionData ?? null
     ruleStatus.value = data.isValid === false ? 'failed' : 'configured'
 
-    // 已有 Prompt 的文件直接落到「提示词与验证」页签
-    if (prompt.value) activeTab.value = 'prompt'
+    // 已有 Prompt 的文件直接落到「提示词与验证」页签；
+    // ★ 验证结果也有回显价值，同样落 prompt 页签（避免用户进来看到的是空的 analysis 页）
+    if (prompt.value || extractionData.value) activeTab.value = 'prompt'
   } catch {
     // 静默：文件可能尚无规则
     ruleStatus.value = 'none'
@@ -304,6 +307,16 @@ async function onVerifyPrompt() {
       isValid.value = true
       extractionData.value = data.data || null
       ElMessage.success('验证通过')
+      // ★ 2026-10-14：验证即保存 —— 避免用户先保存再验证后验证结果丢失。
+      //   把验证结论（isValid + extractionData）作为一次规则更新落库；同时把当前
+      //   页面上的字段/表格定义一并持久化，让「验证 = 针对当前规则的更新」。
+      const r = await persistRule()
+      if (r.ok) {
+        ElMessage.success('验证通过，验证结果已自动保存')
+      } else {
+        // 后端验证通过但落库失败（orgCode 推导等）—— 给用户明确指引
+        ElMessage.warning('验证通过，但自动保存失败：' + r.error)
+      }
     } else {
       isValid.value = false
       extractionData.value = null
@@ -311,18 +324,15 @@ async function onVerifyPrompt() {
     }
   } catch (e: any) {
     isValid.value = false
+    extractionData.value = null
     ElMessage.error('验证失败: ' + (e?.message || '未知错误'))
   } finally {
     verifying.value = false
   }
 }
 
-async function onSave() {
-  if (!selectedFileCode.value) {
-    ElMessage.warning('请先选择一个文件')
-    return
-  }
-
+async function persistRule(): Promise<{ ok: boolean; error?: string }> {
+  if (!selectedFileCode.value) return { ok: false, error: '请先选择一个文件' }
   saving.value = true
   try {
     await saveRule({
@@ -335,13 +345,21 @@ async function onSave() {
       extractionData: extractionData.value || undefined
     })
     ruleStatus.value = isValid.value === true ? 'configured' : 'failed'
-    ElMessage.success('规则保存成功')
-    // 刷新目录树的规则状态标签（已配置 / 未配置 / 配置失败）
     await loadRuleStatuses()
+    return { ok: true }
   } catch (e: any) {
-    ElMessage.error('保存失败: ' + (e?.message || '未知错误'))
+    return { ok: false, error: e?.message || '未知错误' }
   } finally {
     saving.value = false
+  }
+}
+
+async function onSave() {
+  const r = await persistRule()
+  if (r.ok) {
+    ElMessage.success('规则保存成功')
+  } else {
+    ElMessage.error('保存失败: ' + r.error)
   }
 }
 
@@ -429,7 +447,7 @@ function startResizeLeft(e: MouseEvent) {
           :data="pageTreeData as any"
           :loading="treeLoading"
           :default-expand-level="3"
-          :max-level="5"
+          :max-level="0"
           :leaf-types="['file']"
           @node-click="onTreeNodeClick"
           @select="onFileSelect"

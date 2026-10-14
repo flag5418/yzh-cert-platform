@@ -19,9 +19,13 @@ import { Refresh, Upload, UploadFilled, Files } from '@element-plus/icons-vue'
 import { OrgStandardStageTree, type StdStageTreeNode } from '@share/components'
 import { ResourcesLogic, type ResourceTreeNode } from './logic'
 import type { FileSlot } from '@share/api'
+import { buildAcceptAttribute } from '@share/constants/upload-file-policy'
 import StandardFolderTree from './components/StandardFolderTree.vue'
 
 const logic = new ResourcesLogic()
+
+/** ★ 文件选择器 accept（唯一事实源 upload-file-policy.json 生成，⛔ 不手写后缀串）——运行时仍由 logic 的 partitionByPolicy 兜底 */
+const UPLOAD_ACCEPT = buildAcceptAttribute()
 
 /** 选中态以 logic.selectedKey 为唯一权威（单阶段企业会自动深入阶段节点）——树高亮走壳 currentKey prop */
 
@@ -227,7 +231,7 @@ function onReplacePick(file: any) {
     </div>
 
     <!-- ═══════════ 单标准上传（plan 干跑预览 → 四段式执行） ═══════════ -->
-    <el-dialog v-model="logic.singleUploadVisible.value" title="上传到标准目录" width="820px">
+    <el-dialog v-model="logic.singleUploadVisible.value" title="上传到标准目录" width="820px" class="upload-dialog">
       <el-form label-width="96px">
         <el-form-item label="目标标准">
           <el-tag>{{ logic.standardOf(logic.currentUploadStandardCode.value)?.StandardName }}</el-tag>
@@ -242,7 +246,7 @@ function onReplacePick(file: any) {
         </el-form-item>
         <el-form-item label="选择方式">
           <el-button :icon="UploadFilled" @click="pickFolder()">选择文件夹（保留目录结构）</el-button>
-          <el-upload class="inline-upload" :auto-upload="false" :show-file-list="false" multiple :on-change="onSinglePick">
+          <el-upload class="inline-upload" :auto-upload="false" :show-file-list="false" :accept="UPLOAD_ACCEPT" multiple :on-change="onSinglePick">
             <el-button :icon="Upload">选择文件</el-button>
           </el-upload>
           <el-button size="small" :disabled="logic.singleUploadFiles.value.length === 0" @click="logic.clearSingleUploadFiles()">
@@ -256,14 +260,6 @@ function onReplacePick(file: any) {
           {{ f.name }}
         </el-tag>
       </div>
-
-      <el-alert type="info" :closable="false" show-icon class="dialog-tip">
-        按「文件夹路径（M0）→ 文件名精确（M1）→ 主词包含（M2）→ 目录+扩展名（M3）」的顺序自动匹配槽位。
-        <b>扩展名必须与模板同族</b>（doc↔docx、xls↔xlsx、ppt↔pptx、jpg↔jpeg）：模板要「.doc」却传「.pdf」
-        即使命中文件名也判为未归属，槽位保持「缺失」。
-        M3 是分不准时的兜底，<b>默认不勾选</b>，请你确认后再勾。
-        没匹配上的文件不会进入任何标准。
-      </el-alert>
 
       <el-button v-if="logic.singleUploadFiles.value.length" size="small" type="default"
                  :loading="logic.singlePlanLoading.value" @click="logic.previewSingleUpload()">
@@ -309,7 +305,7 @@ function onReplacePick(file: any) {
     </el-dialog>
 
     <!-- ═══════════ 上传（多标准分发，需求 3 核心） ═══════════ -->
-    <el-dialog v-model="logic.batchUploadVisible.value" title="上传" width="980px">
+    <el-dialog v-model="logic.batchUploadVisible.value" title="上传" width="980px" class="upload-dialog">
       <el-alert type="info" :closable="false" show-icon class="dialog-tip">
         目标阶段：<b>{{ logic.selectedStageName.value }}</b>；涉及标准：
         {{ logic.tabStandards.map(s => s.StandardName).join(' / ') || '—' }}
@@ -318,7 +314,7 @@ function onReplacePick(file: any) {
 
       <div class="batch-picker">
         <el-button :icon="UploadFilled" @click="pickFolder()">选择文件夹</el-button>
-        <el-upload class="inline-upload" :auto-upload="false" :show-file-list="false" multiple :limit="500" :on-change="onBatchPick">
+        <el-upload class="inline-upload" :auto-upload="false" :show-file-list="false" :accept="UPLOAD_ACCEPT" multiple :limit="500" :on-change="onBatchPick">
           <el-button :icon="Upload">选择文件</el-button>
         </el-upload>
         <el-button size="small" :disabled="logic.batchFiles.value.length === 0" @click="logic.clearBatchFiles()">
@@ -416,7 +412,7 @@ function onReplacePick(file: any) {
         <strong>当前文件：</strong>{{ logic.replacingFile.value?.FileName }}
         <el-tag size="small">v{{ logic.replacingFile.value?.VersionNumber }}</el-tag>
       </p>
-      <el-upload :auto-upload="false" :show-file-list="false" :limit="1" :on-change="onReplacePick">
+      <el-upload :auto-upload="false" :show-file-list="false" :accept="UPLOAD_ACCEPT" :limit="1" :on-change="onReplacePick">
         <el-button :icon="Upload">选择新文件</el-button>
       </el-upload>
       <span v-if="logic.replaceNewFile.value" class="selected-file">{{ logic.replaceNewFile.value.name }}</span>
@@ -925,5 +921,13 @@ function onReplacePick(file: any) {
   height: 100%;
   min-height: 70vh;
   border: none;
+}
+</style>
+
+<style>
+/* 上传弹窗高度控制（el-dialog teleport 到 body，须非 scoped；按 S03 令牌+兜底） */
+.upload-dialog .el-dialog__body {
+  max-height: min(70vh, calc(100vh - 200px));
+  overflow-y: auto;
 }
 </style>

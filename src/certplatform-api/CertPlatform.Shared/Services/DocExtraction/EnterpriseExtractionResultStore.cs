@@ -42,7 +42,7 @@ public class EnterpriseExtractionResultStore
     /// （05 号 §5.3 的 <c>ChangeAction='archive'</c>，见 25 号 §七 步骤 7）。</para>
     /// <para>⛔ 仍是<b>软归档</b>（<c>IsValid=0</c>），行数不减 —— 与本类铁律一致。</para>
     /// </summary>
-    /// <param name="enterpriseCode">企业 Code（注意：<c>cert_extraction_result.OrgCode</c> 列存的就是它）</param>
+    /// <param name="enterpriseCode">企业 Code（注意：<c>cert_extraction_result.EnterpriseCode</c> 列存的就是它）</param>
     /// <param name="ruleCode">规则 Code（<c>cert_doc_extraction_rule.Code</c>）</param>
     /// <param name="upToVersion">只归档 <c>VersionNumber &lt;=</c> 该版本的行；<c>null</c> = 该规则全部活跃行</param>
     /// <returns>被归档的行数（字段 + 表格）</returns>

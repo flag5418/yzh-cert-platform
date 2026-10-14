@@ -709,6 +709,11 @@ public class EnterpriseFileService
             if (string.IsNullOrWhiteSpace(item.FileName)) return ("文件名不能为空", null);
             totalSize += item.FileSize;
 
+            // ★ 上传契约闸门（唯一事实源 UploadFilePolicy）：指派模式此前零后缀校验 ——
+            //   客户端可绕过前端 accept 直调 init 传 .exe/.html；init 任一项不合法整批拒（零副作用）。
+            var policyVerdict = UploadFilePolicy.Check(item.FileName);
+            if (!policyVerdict.Ok) return (policyVerdict.Message, null);
+
             if (!string.IsNullOrWhiteSpace(item.SlotCode))
             {
                 // ── 槽位模式 ──

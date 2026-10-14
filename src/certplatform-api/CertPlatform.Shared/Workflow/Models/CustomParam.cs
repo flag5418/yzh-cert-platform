@@ -116,15 +116,61 @@ namespace CertPlatform.Shared.Workflow.Models
     }
 
     /// <summary>
+    /// AI 节点参数用途描述（Debug 展示用）
+    ///
+    /// <para>★ 2026-10-14 新增。测试页必须能回答一个问题：<b>「这个 AI 节点的提示词里，
+    /// 每个参数分别取自哪个节点的哪个端口」</b> —— 否则用户看到「渲染后提示词是空的」时
+    /// 只能靠猜。本类型是那份清单的载体（纯展示，不参与执行）。</para>
+    /// </summary>
+    public class AiParamUsage
+    {
+        /// <summary>参数名 —— 提示词里 <c>{{name}}</c> 用的短标识符（如 p1）</summary>
+        public string Name { get; set; } = "";
+
+        /// <summary>中文说明（给人看，也给模型看；对应 params[].label）</summary>
+        public string? Label { get; set; }
+
+        /// <summary>来源类型：<c>node</c> | <c>constant</c> | <c>skill</c></summary>
+        public string SourceType { get; set; } = "";
+
+        /// <summary>来源节点 ID（<c>sourceType=node</c> 时有值；★ 同时就是「隐式依赖边」的起点）</summary>
+        public string? NodeId { get; set; }
+
+        /// <summary>来源节点标题（便于人读）</summary>
+        public string? NodeTitle { get; set; }
+
+        /// <summary>来源端口名（默认 <c>result</c>）</summary>
+        public string? PortName { get; set; }
+    }
+
+    /// <summary>
     /// AI 节点 Debug 信息
     /// </summary>
     public class AiNodeDebugInfo
     {
-        /// <summary>替换后的真实提示词</summary>
+        /// <summary>
+        /// 替换后的真实提示词
+        /// <para>★ 2026-10-14 起：<b>由引擎唯一产出</b>（<c>NodeExecutionResult.AiPrompt</c>），
+        /// 控制器原样回传，<b>⛔ 不再自行重算</b> —— 重算是「诊断面说谎」的根因：
+        /// 旧实现把它包在 <c>if (ParamPool.Count &gt; 0)</c> 里，参数池为空时恒为 <c>""</c>，
+        /// 用户以为「提示词是空的」，排查方向被彻底带偏。</para>
+        /// </summary>
         public string RenderedPrompt { get; set; } = string.Empty;
 
-        /// <summary>参数池（参数名 → 值）</summary>
+        /// <summary>参数池（参数名 → 值）；★ 同样来自引擎，非控制器重算</summary>
         public Dictionary<string, object> ParamPool { get; set; } = new();
+
+        /// <summary>
+        /// ★ 渲染后仍未解析的模板引用（如 <c>文档字段.result</c>）；空 = 全部解析成功。
+        ///
+        /// <para><b>为什么必须回传</b>：配置期测试刻意不中断（搭图阶段上游本来就可能是空的），
+        /// 但「不中断」≠「不说」—— 原实现只写一条 <c>LogWarning</c>，界面上完全看不见，
+        /// 用户于是以为「提示词没问题」。前端应<b>红字列出</b>这份清单。</para>
+        /// </summary>
+        public List<string> UnresolvedRefs { get; set; } = new();
+
+        /// <summary>★ 本节点声明的参数清单（来自 <c>config.params</c>；兼容旧 <c>config.customParams</c>）</summary>
+        public List<AiParamUsage> ParamsUsed { get; set; } = new();
 
         /// <summary>LLM 原始返回</summary>
         public string LlmResponse { get; set; } = string.Empty;

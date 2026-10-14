@@ -58,10 +58,16 @@ import {
 // ==================== 持久化的视图偏好 ====================
 
 const LS_KEY = 'yzh.prompt-workbench.view'
+/**
+ * 视图偏好（★ 2026-10-14 改版）：
+ *   resultOpen=false ⇒ **编辑模式**：正文占满剩余宽度（默认，符合“长文优先”）。
+ *   resultOpen=true  ⇒ **验证模式**：右侧浮出结果面板，边改边看。
+ * ⚠️ 默认值从 true 改为 false：原默认一进来就分掉 45% 宽度，正文被压窄，违背本页“长文阅读”初衷。
+ */
 const view = ref({
   treeCollapsed: false,
-  resultOpen: true,
-  resultRatio: 0.45
+  resultOpen: false,
+  resultRatio: 0.42
 })
 try {
   const raw = localStorage.getItem(LS_KEY)
@@ -156,7 +162,8 @@ const testing = ref(false)
 const saving = ref(false)
 
 const treeWidth = ref(240)
-const editorArea = ref<HTMLElement>()
+/** 整个工作台容器 —— 右侧结果面板拖拽比例基于它的宽度 */
+const bodyEl = ref<HTMLElement>()
 
 /**
  * 草稿落盘：正文变化 700ms 后写入 localStorage。
@@ -508,6 +515,11 @@ async function onSave() {
   await doSave()
 }
 
+/** 验证模式开关（工具栏按钮） */
+function onToggleResult() {
+  view.value.resultOpen = !view.value.resultOpen
+}
+
 function onReset() {
   templateText.value = savedTemplate.value
   // 恢复 = 放弃本地编辑 ⇒ 草稿一并清掉，避免「点了恢复、切走再切回又冒出来」
@@ -542,17 +554,19 @@ function startResizeTree(e: MouseEvent) {
   document.body.style.userSelect = 'none'
 }
 
-/** 上下分栏：编辑器 / 结果区 比例 */
+/**
+ * 左右分栏：编辑器 / 右侧结果面板 宽度比例（★ 2026-10-14 由上下改为左右）。
+ * 结果面板在右侧 ⇒ 往右拖 = 结果区变窄（ratio 变小）。
+ */
 function startResizeResult(e: MouseEvent) {
-  const box = editorArea.value?.getBoundingClientRect()
+  const box = bodyEl.value?.getBoundingClientRect()
   if (!box) return
-  const startY = e.clientY
+  const startX = e.clientX
   const startRatio = view.value.resultRatio
   const onMove = (ev: MouseEvent) => {
-    const delta = ev.clientY - startY
-    // 往下拖 = 结果区变小
-    const next = startRatio - delta / box.height
-    view.value.resultRatio = Math.min(0.85, Math.max(0.15, next))
+    const delta = ev.clientX - startX
+    const next = startRatio - delta / box.width
+    view.value.resultRatio = Math.min(0.7, Math.max(0.22, next))
   }
   const onUp = () => {
     document.removeEventListener('mousemove', onMove)
@@ -562,7 +576,7 @@ function startResizeResult(e: MouseEvent) {
   }
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
-  document.body.style.cursor = 'row-resize'
+  document.body.style.cursor = 'col-resize'
   document.body.style.userSelect = 'none'
 }
 </script>
@@ -585,15 +599,17 @@ function startResizeResult(e: MouseEvent) {
         :generating="generating"
         :saving="saving"
         :save-blocked-reason="saveBlockedReason"
+        :result-open="view.resultOpen"
         @update:active-type="onSelectType"
         @generate="onGenerate"
         @save="onSave"
         @reset="onReset"
+        @toggle-result="onToggleResult"
       />
     </template>
 
     <div class="wb">
-      <div class="wb__body" v-loading="loading" element-loading-text="载入提示词…">
+      <div ref="bodyEl" class="wb__body" v-loading="loading" element-loading-text="载入提示词…">
         <!-- 左：标准树 -->
         <div class="wb__left" :style="{ width: treeWidth + 'px' }">
           <StandardTree
@@ -607,28 +623,30 @@ function startResizeResult(e: MouseEvent) {
           <div class="wb__bar" />
         </div>
 
-        <!-- 中：编辑器（上） + 结果区（下） -->
-        <div ref="editorArea" class="wb__main">
-          <div class="wb__editor" :style="view.resultOpen ? { flex: `1 1 ${(1 - view.resultRatio) * 100}%` } : { flex: '1 1 100%' }">
-            <PromptEditor v-model="templateText" :type-def="typeDef" :dirty="dirty" />
-          </div>
-
-          <template v-if="view.resultOpen">
-            <div class="wb__handle wb__handle--h" @mousedown.prevent="startResizeResult">
-              <div class="wb__bar" />
-            </div>
-            <div class="wb__result" :style="{ flex: `1 1 ${view.resultRatio * 100}%` }">
-              <PromptTestPanel
-                v-model:cache-key="cacheKey"
-                :prompt-type="activeType"
-                :standard-code="scope"
-                :testing="testing"
-                :result="result"
-                @run="onTest"
-              />
-            </div>
-          </template>
+        <!-- 中：编辑器（编辑模式占满；验证模式按比例收窄） -->
+        <div
+          class="wb__main"
+          :style="view.resultOpen ? { flex: `1 1 ${(1 - view.resultRatio) * 100}%` } : { flex: '1 1 100%' }"
+        >
+          <PromptEditor v-model="templateText" :type-def="typeDef" :dirty="dirty" />
         </div>
+
+        <!-- 右：验证模式结果面板（可拖拽宽度 / 可折叠） -->
+        <template v-if="view.resultOpen">
+          <div class="wb__handle" @mousedown.prevent="startResizeResult">
+            <div class="wb__bar" />
+          </div>
+          <div class="wb__result" :style="{ flex: `1 1 ${view.resultRatio * 100}%` }">
+            <PromptTestPanel
+              v-model:cache-key="cacheKey"
+              :prompt-type="activeType"
+              :standard-code="scope"
+              :testing="testing"
+              :result="result"
+              @run="onTest"
+            />
+          </div>
+        </template>
       </div>
     </div>
   </YzhPageLayout>
@@ -669,14 +687,13 @@ function startResizeResult(e: MouseEvent) {
   overflow: hidden;
 }
 
-.wb__editor,
+/* 右侧结果面板（验证模式）：纵向自适应容器 + 与编辑器分隔 */
 .wb__result {
   min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-}
-.wb__result {
+  border-left: 1px solid var(--yzh-color-border-light);
   background: var(--yzh-color-bg-container);
 }
 
@@ -694,11 +711,6 @@ function startResizeResult(e: MouseEvent) {
 .wb__handle:active {
   background: var(--el-color-primary-light-9);
 }
-.wb__handle--h {
-  width: auto;
-  height: 4px;
-  cursor: row-resize;
-}
 .wb__bar {
   width: 2px;
   height: 40px;
@@ -706,16 +718,8 @@ function startResizeResult(e: MouseEvent) {
   border-radius: 9999px;
   transition: all var(--yzh-transition-base);
 }
-.wb__handle--h .wb__bar {
-  width: 40px;
-  height: 2px;
-}
 .wb__handle:hover .wb__bar {
   background: var(--yzh-color-primary-light);
   height: 50px;
-}
-.wb__handle--h:hover .wb__bar {
-  width: 50px;
-  height: 2px;
 }
 </style>

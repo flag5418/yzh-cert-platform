@@ -9,6 +9,7 @@ using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
+using CertPlatform.Shared.Storage;
 
 namespace CertPlatform.Admin.Controllers.Workflow;
 
@@ -162,6 +163,11 @@ public class PromptTemplateController : YzhControllerBase<PromptTemplate>
             foreach (var f in req.Files!)
             {
                 if (f == null || f.Length == 0) continue;
+                // ★ 上传契约闸门（唯一事实源 UploadFilePolicy）——前端 accept 可绕过，此处硬拦：
+                //   系统噪声静默跳过；白名单外直接拒绝（本端点无落库，拒绝即零副作用）
+                var verdict = UploadFilePolicy.Check(f.FileName);
+                if (verdict.IsSystemNoise) continue;
+                if (!verdict.Ok) return Ok(ApiResponse.Fail(verdict.Message));
                 using var ms = new MemoryStream();
                 await f.CopyToAsync(ms);
                 files.Add((f.FileName, ms.ToArray()));

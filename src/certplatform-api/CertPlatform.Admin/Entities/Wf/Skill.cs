@@ -20,12 +20,12 @@ namespace CertPlatform.Admin.Entities.Wf
     {
         // ──── Id / Code / 审计字段由 BaseEntity 基类统一提供 ────
         // ──── ISoftDelete / IIsValid 接口字段由接口提供 ────
+        // ★ 2026-10-14：原 SkillCode 属性已删 —— 2026-10-13 迁移（20261013_unify_fields_V1.sql §4）
+        //   已把 wf_skill 双业务键（Code + SkillCode）统一为单一 Code（Code 对齐为原 SkillCode 值后删列）。
+        //   实体残留 SkillCode 属性会导致 SqlSugar SELECT 含已删列 ⇒
+        //   /filter 报 Unknown column 'SkillCode' in 'field list'（nc-config / report-rule-config 设计器分页失败）。
 
         // === 业务字段 ===
-
-        /// <summary>技能编码（DB: SkillCode）</summary>
-        [StringLength(100)]
-        public string SkillCode { get; set; } = string.Empty;
 
         /// <summary>技能名称（DB: Name）</summary>
         [StringLength(200)]

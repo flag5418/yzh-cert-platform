@@ -458,6 +458,88 @@ function runRE() {
   return { violations, skipped: false }
 }
 
+/**
+ * R21 —— 上传契约单源（2026-10-14 用户铁律：全平台上传后缀只认
+ * `cert/cert-share/src/constants/upload-file-policy.json` 生成的两端清单，「加后缀只改一处」）。
+ *
+ * 三段：
+ *  ① 生成物同步：`node scripts/generate/upload-policy.mjs --check`（与后端 B-R7 同源同判，
+ *     两端 `<generated>` 段与 JSON 漂移 ⇒ 失败）；
+ *  ② 禁字面量 `accept="…"`（含 `.` 后缀串）—— 合法写法是 `:accept="EXPR"` 绑定契约生成值；
+ *  ③ 有 file 选择面的文件（`type="file"` / `<el-upload` / `YzhFolderUpload` / `webkitdirectory`）
+ *     必须 import `upload-file-policy`（用 buildAcceptAttribute / partitionUploadable /
+ *     checkUploadable）—— 裸上传入口零契约 = 违规。
+ *
+ * 📏 基线：规则启用时（2026-10-14）逐文件实测 = 0 违规（豁免仅 2 个：通用组件 / 桶文件）。
+ */
+const UPLOAD_CONTRACT_EXEMPT = [
+  // 通用组件：accept 经 prop 注入，运行时闸门由消费方页面负责（本规则只管「谁用谁接契约」）
+  'cert/cert-share/src/components/YzhFolderUpload.vue',
+  // 桶文件（仅 re-export，无上传面）
+  'cert/cert-share/src/components/index.ts',
+]
+
+function runR21() {
+  const violations = []
+  const WEB_ROOT = resolve(WEB, '..', '..')
+
+  // ① 生成物与 upload-file-policy.json 同步
+  const gen = join(WEB_ROOT, 'scripts/generate/upload-policy.mjs')
+  if (!existsSync(gen)) {
+    violations.push({
+      file: '../scripts/generate/upload-policy.mjs',
+      line: 0,
+      text: 'R21① 上传契约生成脚本缺失 —— 单源链路断了（无法保证两端清单一致）',
+    })
+  } else {
+    const res = spawnSync(process.execPath, [gen, '--check'], { encoding: 'utf8' })
+    if (res.error || res.status !== 0) {
+      const why = res.error
+        ? res.error.message
+        : (res.stdout || res.stderr || '').trim().split('\n').slice(-1)[0] || `exit ${res.status}`
+      violations.push({
+        file: '../scripts/generate/upload-policy.mjs',
+        line: 0,
+        text: `R21① 生成物与 upload-file-policy.json 漂移（跑 node scripts/generate/upload-policy.mjs 修复）：${why}`,
+      })
+    }
+  }
+
+  // ② + ③ 页面 / 分享层 / 核心组件的上传面
+  const roots = [...PAGE_ROOTS, join(WEB, 'cert/cert-share/src'), join(WEB, 'yzh.vue.core/src/components')]
+  const surfaceRe = /type\s*=\s*["']file["']|<el-upload\b|YzhFolderUpload|webkitdirectory/
+  const literalAcceptRe = /(?<![:\w-])accept\s*=\s*["'][^"']*\.[^"']*["']/
+  for (const file of walkAll(roots, ['.vue', '.ts'])) {
+    const r = rel(file)
+    if (UPLOAD_CONTRACT_EXEMPT.includes(r)) continue
+    const text = readFileSync(file, 'utf8')
+    const lines = text.split('\n')
+
+    // ② 字面量 accept（硬编码后缀串）
+    lines.forEach((line, i) => {
+      if (isCommentLine(line)) return
+      if (literalAcceptRe.test(line)) {
+        violations.push({
+          file: r,
+          line: i + 1,
+          text: `R21② 字面量 accept 后缀串 —— 改用 :accept="buildAcceptAttribute(...)"（契约生成）：${line.trim().slice(0, 80)}`,
+        })
+      }
+    })
+
+    // ③ 有上传面必须接契约
+    if (surfaceRe.test(text) && !/upload-file-policy/.test(text)) {
+      const at = text.search(surfaceRe)
+      violations.push({
+        file: r,
+        line: lineOf(text, at),
+        text: 'R21③ 有 file 选择面但未接上传契约（import @share/constants/upload-file-policy）',
+      })
+    }
+  }
+  return { violations, skipped: false }
+}
+
 /* ==========================================================================
  * ★ A-R1 ~ A-R10 —— 跨端共享与核心资源检索铁律（2026-10-12 用户裁定 / 10-13 归属模型 V2）
  *
@@ -787,7 +869,8 @@ function runAR10() {
 //     · 双端共用 → CertPlatform.Shared/Entities/
 //
 //   判据是「谁真的读这张表」而非「表名像什么」：统计每个带 [SugarTable] 的实体在
-//   Admin / Auditor 两端的引用次数（跳过定义文件自身、跳过 bin/obj/node_modules）。
+//   Admin / Auditor 两端的**生产代码**引用次数（跳过定义文件自身、跳过 bin/obj/node_modules、
+//   ⛔ 不计测试工程 —— 见 PROJECT_DIRS.Tests 处 2026-10-14 裁定说明）。
 const API_ROOT = resolve(WEB, '../certplatform-api')
 /** 实体**定义**目录（归属判定的依据） */
 const ENTITY_DIRS = {
@@ -801,6 +884,15 @@ const PROJECT_DIRS = {
   Shared: join(API_ROOT, 'CertPlatform.Shared'),
   Admin: join(API_ROOT, 'CertPlatform.Admin'),
   Auditor: join(API_ROOT, 'CertPlatform.Auditor'),
+  // ⚠️ 测试工程**不参与** R17 的端归属计数（2026-10-14 用户裁定）。
+  //    理由：R17 判的是「**生产代码**里谁真的读这张表」。测试工程引用某类型
+  //    只说明「有人给它写了测试」，不构成「那一端在生产里用它」。
+  //    ★ 触发案例：CertPlatform.Admin.Tests 引用 Auditor 以测 IFillParamService，
+  //      测试文件里出现 FillParamValue（Auditor 独占实体）7 次 ⇒ 旧口径误判
+  //      「Admin=7 / Auditor=24 ⇒ 双端共用 ⇒ 分层倒退」。实测 Admin 生产代码 = 0 次。
+  //    ★ 副作用实测：摘除该桶后守卫 0 违规，且**不新增任何其他违规**
+  //      （说明该桶当时只制造了这一个假阳性）。
+  //    ⛔ 保留本常量供未来规则使用，勿删。
   Tests: join(API_ROOT, 'CertPlatform.Admin.Tests'),
 }
 const SKIP_DIRS = new Set(['obj', 'bin', 'node_modules', '.git', 'Migrations'])
@@ -924,7 +1016,8 @@ function runR17() {
       const st = text.indexOf('SugarTable')
       if (st < 0) continue // 纯常量类 / DTO / enum 不参与归属判定
 
-      const nAdmin = countRefs(cls, [PROJECT_DIRS.Admin, PROJECT_DIRS.Tests])
+      // ⚠️ 只数 Admin **生产代码**：⛔ 不含 PROJECT_DIRS.Tests（见该常量处 2026-10-14 裁定说明）
+      const nAdmin = countRefs(cls, [PROJECT_DIRS.Admin])
       const nAuditor = countRefs(cls, [PROJECT_DIRS.Auditor])
       const both = nAdmin > 0 && nAuditor > 0
 
@@ -1527,6 +1620,13 @@ const RULES = [
       '样式法条 S03–S11（按钮语义色/显式 type/空态/确认框/弹窗/状态标签/.bi 图标/左树右表/!important，' +
       '基线 scripts/style-clause-baseline.json 只准减不准增）',
     run: runR20,
+    debt: [],
+  },
+  {
+    id: 'R21',
+    type: 'custom',
+    desc: '上传契约单源（生成物同步 + 禁字面量 accept + file 选择面必接 upload-file-policy）',
+    run: runR21,
     debt: [],
   },
   // ===== 审计 §8（标准目录链路）：全部为后端 .cs 扫描，debt 随修复逐条删除 =====

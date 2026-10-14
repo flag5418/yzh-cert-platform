@@ -30,6 +30,11 @@ public class UploadQueueCancelHandler : IYzhQueueCancelHandler
 
     public async Task OnQueueCancelledAsync(YzhQueue queue)
     {
+        // ★ 2026-10-14：取消转换队列时清掉「批量提取缓冲」—— 否则 PendingExtractBatches 静态字典
+        //   会留下僵尸条目（取消路径不会走 OnTaskStateChangedAsync 的 Flush 分支）
+        if (queue.QueueType == "file_convert")
+            OfficeConvertTaskExecutor.ClearPendingExtractBatch(queue.QueueCode);
+
         if (queue.QueueType != "file_convert" || queue.SourceType != "upload_task")
             return;
 

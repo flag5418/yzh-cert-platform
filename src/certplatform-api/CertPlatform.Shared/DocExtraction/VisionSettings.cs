@@ -33,11 +33,15 @@ namespace CertPlatform.Shared.DocExtraction
         public string Provider { get; set; } = "qianwen";
 
         /// <summary>
-        /// 模型名。⭐ <b>必须是视觉模型</b>（<c>qwen3-vl-flash</c> / <c>qwen-vl-max</c> …）。
+        /// 模型名。⭐ <b>必须是视觉模型</b>（<c>qwen3-vl-plus</c> / <c>qwen-vl-max</c> …）。
         /// ⛔ <b>纯文本模型会静默忽略图片</b>：实测 <c>qwen-flash</c> 传 <c>image_url</c> 后
         /// HTTP 200 + 回答「请提供图片」，图片根本没进模型（2026-10-03 实测）。
+        /// <para>⚠️ <b>2026-10-14 纠错 + 降本</b>：原默认 <c>qwen3-vl-flash</c> 在百炼账号
+        /// <b>不存在</b>（404 <c>model_not_found</c>）⇒ 图片/扫描件识别整条不可用。
+        /// 改为账号实际存在且<b>最便宜</b>的专用 OCR 模型 <c>qwen-vl-ocr</c>
+        /// （官方定价 输入 0.3 / 输出 0.5 元每百万 Token；同日列举 /models 确认并实测可用）。</para>
         /// </summary>
-        public string Model { get; set; } = "qwen3-vl-flash";
+        public string Model { get; set; } = "qwen-vl-ocr";
 
         /// <summary>OpenAI 兼容端点（不含 <c>/chat/completions</c>）</summary>
         public string BaseUrl { get; set; } = "https://dashscope.aliyuncs.com/compatible-mode/v1";
@@ -122,7 +126,7 @@ namespace CertPlatform.Shared.DocExtraction
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 if (s == null) return new VisionSettings { Source = "default(null)" };
                 s.Source = "ai_vision_config";
-                if (string.IsNullOrWhiteSpace(s.Model)) s.Model = "qwen3-vl-flash";
+                if (string.IsNullOrWhiteSpace(s.Model)) s.Model = "qwen-vl-ocr";
                 if (string.IsNullOrWhiteSpace(s.DocumentParsePrompt)) s.DocumentParsePrompt = "qwenvl markdown";
                 if (string.IsNullOrWhiteSpace(s.DocPurposePrompt))
                     s.DocPurposePrompt =

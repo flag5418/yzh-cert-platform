@@ -32,12 +32,17 @@ public class CertQueueNotifier : IYzhQueueNotifier
     private static readonly Dictionary<string, string> QueueTypeNames = new()
     {
         ["file_convert"] = "文档转换",
+        ["doc_extract"] = "企业资料提取",
         ["auto_verify"] = "自动核验",
         ["report_generate"] = "报告生成",
         // ★ 2026-10-06 企业资料规范化（专家端 P1 编排器，TaskType 见
         //   CertPlatform.Auditor/Services/Ent/Normalize/EnterpriseNormalizeExecutor.TaskTypeName）
         //   ⚠️ 漏登记 = 队列页面显示成原始 task_type 字符串（功能不受影响，但可读性差）
-        ["enterprise_normalize"] = "企业资料规范化"
+        ["enterprise_normalize"] = "企业资料规范化",
+        // ★ 2026-10-14 企业原始资料（一文件一队列；漏登记会以原始类型名进标题/铃铛）
+        ["enterprise_original_file"] = "企业原始资料处理",
+        ["enterprise_original_ingest"] = "企业原始资料入库",
+        ["enterprise_original_analyze"] = "企业原始资料识别",
     };
 
     public CertQueueNotifier(

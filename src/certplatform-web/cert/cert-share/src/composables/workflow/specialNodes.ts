@@ -45,6 +45,9 @@ export interface PanelField {
   enumSource?: string
   options?: Array<{ label: string; value: any }>
   required?: boolean
+  /** ★ 第 5 批：条件显示 —— 当 `panelFieldValues[field]` 等于 `equals` 时才渲染该字段。
+   *  例：outputSchema 只在 outputType === 'json' 时出现。不写 = 恒显示（向后兼容）。 */
+  visibleWhen?: { field: string; equals: any }
 }
 
 export interface SpecialNodeMeta {
@@ -168,13 +171,28 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
     ],
     outputPorts: [],
     panelSchema: [
+      // ★ 2026-10-14（用户裁决 ①②④）：新增「参数」段 —— 三段式第 ① 段。
+      //
+      //   ① **参数即边**：这里登记的每一项（`params[].nodeId`）同时就是一条隐式依赖边，
+      //      系统据此知道「必须先跑数据源节点，再跑 AI 节点」—— 孤立的 docField/docTable
+      //      因此会被预执行，不再恒空（设计 §2.2 / 缺陷 D3）。
+      //   ② 提示词里写 `{{p1}}`，渲染时占位符替换成参数名、值集中注入末尾「参数说明」区
+      //      （注释式，用户裁决 ④）。
+      //   ③ 参数名必须是短 ASCII 标识符（p1/p2），中文说明放「标签」——
+      //      模型要完成「符号 → 值」映射，中文参数名会拉高弱模型的映射错误率（§2.3）。
+      {
+        field: 'config.params',
+        label: '参数',
+        type: 'ai-params',
+        description: '提示词里用 {{参数名}} 引用；每一项同时是一条依赖边（自动先执行来源节点）'
+      },
       {
         field: 'config.promptTemplate',
         label: '提示词模板',
         type: 'promptWithRef',
         required: true,
         rows: 6,
-        description: '点击「+ 引用」插入画布节点输出，格式 {{节点名.端口}}'
+        description: '点击「+ 引用」插入画布节点输出，格式 {{参数名}} 或 {{节点标题.端口}}'
       },
       {
         field: 'config.outputType',
@@ -190,6 +208,18 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
         ],
         defaultValue: 'string',
         description: 'LLM 输出将自动转换为此类型'
+      },
+      // ★ 第 5 批（outputType=json + Schema 校验）：仅当输出类型为 JSON 时出现。
+      //   填「字段名:类型」逐行，类型认 string/number/boolean/any + [] 数组 + a|b 枚举 + ? 可选。
+      //   例：verdict:pass|fail|unknown / confidence:number / quotes:string[]
+      //   ⛔ 留空 = 不校验（只解析 JSON）。配了则解析后逐字段机器校验，不符即节点失败。
+      {
+        field: 'config.outputSchema',
+        label: '输出 Schema（可选）',
+        type: 'textarea',
+        rows: 4,
+        visibleWhen: { field: 'config.outputType', equals: 'json' },
+        description: '每行「字段:类型」，如 verdict:pass|fail|unknown、confidence:number、quotes:string[]。留空不校验；配了则 JSON 解析后逐字段校验，不符即失败'
       }
     ]
   },
@@ -330,7 +360,7 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
     singleton: false,
     testable: true,
     renameable: true,
-    description: '判断企业是否缺少某个标准目录要求的文件。配置期按「标准 + 阶段」选定一个标准文件；执行期自动带入当前企业，输出 result(bool) 可直连条件分支',
+    description: '判断企业是否缺少某个标准目录要求的文件。配置期只需选定一个标准文件（标准/阶段取左树当前选中，⛔ 不再让用户选一次）；执行期自动带入当前企业，输出 result(bool) 可直连条件分支',
     inputPorts: [],
     outputPorts: [
       { name: 'result', label: '是否缺失', type: 'boolean', description: 'true = 缺失，可直接连条件分支的「条件值」', display: 'visible' },
@@ -338,10 +368,15 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
       { name: 'is_required', label: '是否必需', type: 'boolean', description: '该文件对本企业是否必需', display: 'hidden' },
       { name: 'message', label: '说明', type: 'string', description: '判定结论的文字说明', display: 'hidden' }
     ],
+    // ★ 2026-10-14（用户裁定）：删掉 `config.standardCode` / `config.stageCode` 两个下拉。
+    //   理由：① 左树已经定义了「标准 + 阶段」，再让用户选一次是重复负担；
+    //        ② 执行期**根本不用**这两个值 —— `NodeExecutor.ExecuteStdFileMissingAsync`
+    //           只读 `standardFileCode`，注释明确「刻意不传 standard_code / stage_code」
+    //           （二次过滤一旦口径不符会把本来命中的行整批滤掉，静默退化成 not_configured）。
+    //   现在这两个值由左树上下文自动带入（写入节点 config 仅留痕，见 NodePropertyForm），
+    //   面板只保留「标准文件」一个真需要人决策的下拉。
     panelSchema: [
-      { field: 'config.standardCode', label: '标准', type: 'std-select', description: '先选标准，用于筛选下面的标准文件' },
-      { field: 'config.stageCode', label: '阶段', type: 'stage-select', description: '再选阶段（可留空 = 不限阶段）' },
-      { field: 'config.standardFileCode', label: '标准文件', type: 'std-file-select', required: true, description: '要判断的标准文件；执行期按「当前企业 + 该文件」判断是否已上传' }
+      { field: 'config.standardFileCode', label: '标准文件', type: 'std-file-select', required: true, description: '选项 = 左树当前「标准 + 阶段」下的标准文件；执行期按「当前企业 + 该文件」判断是否已上传' }
     ]
   }
 ]

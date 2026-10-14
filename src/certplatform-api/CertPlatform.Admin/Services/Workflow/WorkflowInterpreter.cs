@@ -89,7 +89,7 @@ namespace CertPlatform.Admin.Services.Workflow
                     var pathResult = await ExecutePathAsync(
                         path, pathIndex, taskCode, itemCode,
                         sharedOutputs, executedNodes, contextParams,
-                        parsed.Adjacency, ct);
+                        parsed.Adjacency, parsed.NodeMap, parsed.InEdges, ct);
 
                     pathResults.Add(pathResult);
 
@@ -166,6 +166,8 @@ namespace CertPlatform.Admin.Services.Workflow
             Dictionary<string, NodeExecutionResult> executedNodes,
             Dictionary<string, object> contextParams,
             Dictionary<string, List<WorkflowEdgeConfig>> adjacency,
+            Dictionary<string, WorkflowNodeConfig> nodeMap,
+            Dictionary<string, List<WorkflowEdgeConfig>> inEdges,
             CancellationToken ct)
         {
             var nodeIds = path.Select(n => n.NodeId).ToList();
@@ -184,6 +186,10 @@ namespace CertPlatform.Admin.Services.Workflow
             };
 
             // 逐节点串行执行
+            // ★ preInserted：预执行的来源节点（参数即边）会插进 NodeIds，位置在所属 AI 节点之前，
+            //   后续插入要按累计位移算，否则索引会错位。
+            var preInserted = 0;
+
             for (var i = 0; i < path.Count; i++)
             {
                 var node = path[i];
@@ -213,6 +219,39 @@ namespace CertPlatform.Admin.Services.Workflow
                 }
                 else
                 {
+                    // ★★★ 参数即边（设计 §2.2 / 用户裁决 ②）：AI 节点开跑前，先把
+                    //   `config.params[].nodeId` 引用的来源节点（docField / docTable 等数据源）
+                    //   预执行掉。这些节点**不在任何路径上**（没有物理连线），不预执行就永远是空。
+                    //
+                    //   ⚠️ 两个关键约束：
+                    //   ① 预执行结果**同时写 sharedOutputs（nodeId + title 双键）与 executedNodes** ——
+                    //      后者让后续路径走「跨路径复用」，⛔ 不会重复执行；
+                    //   ② 预执行**不改 Paths**：它只加 NodeResults/NodeIds 明细，
+                    //      「执行了几条路径」仍是物理边枚举的结果（不产生伪路径）。
+                    if (IsAiNode(node))
+                    {
+                        var pre = await PreExecuteAiParamSourcesAsync(
+                            node, nodeMap, inEdges, taskCode, itemCode,
+                            sharedOutputs, executedNodes, contextParams, ct);
+
+                        if (pre.Records.Count > 0)
+                        {
+                            var preIds = pre.Records.Select(r => r.NodeId).ToList();
+                            // 插在本 AI 节点之前，保持 NodeIds 与 NodeResults 一一对应
+                            pathResult.NodeIds.InsertRange(i + preInserted, preIds);
+                            preInserted += preIds.Count;
+                            pathResult.NodeResults.AddRange(pre.Records);
+                        }
+
+                        // 来源节点失败 ⇒ 路径直接终止在它身上（与「它本来就在路径里」同一语义）
+                        if (pre.Blocker != null)
+                        {
+                            var (blockNodeId, blockResult) = pre.Blocker.Value;
+                            return FinishPath(pathResult, "failed", blockNodeId,
+                                blockResult.Error, blockResult.ErrorCode, pathSw);
+                        }
+                    }
+
                     // 执行节点
                     var result = await _nodeExecutor.ExecuteAsync(
                         node, taskCode, itemCode, sharedOutputs, contextParams, ct);
@@ -306,6 +345,140 @@ namespace CertPlatform.Admin.Services.Workflow
             pathResult.DurationMs = (int)pathSw.ElapsedMilliseconds;
             pathResult.CompletedAt = DateTime.Now;
             return pathResult;
+        }
+
+        // ── 参数即边：AI 节点来源预执行（设计 §2.2，2026-10-14） ──
+
+        /// <summary>是否 AI 节点 —— 只有它带 <c>config.params</c>，也只有它会触发预执行。</summary>
+        private static bool IsAiNode(WorkflowNodeConfig node)
+            => string.Equals(node.NodeType, "ai_node", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// ★ 参数即边（用户裁决 ②）：在 AI 节点开跑前，把 <c>config.params[].nodeId</c> 引用的
+        /// 来源节点（<c>docField</c> / <c>docTable</c> 等<b>数据源</b>）预执行掉。
+        ///
+        /// <para><b>为什么必须有这一步：</b>数据源节点<b>不需要用户手工连线</b>（设计 §2.2），
+        /// 因此它们不在任何一条路径上 —— 路径枚举只看物理边，压根走不到它们。
+        /// 不预执行 ⇒ AI 节点取到的永远是「上游不存在」⇒ 真实路径抛
+        /// <c>WorkflowDataMissingException</c> 中断，而画布上明明配了参数。</para>
+        ///
+        /// <para><b>三条纪律（改前必读）：</b></para>
+        /// <list type="number">
+        /// <item><b>DFS 后序 = 拓扑序</b>：先递归确保来源节点自己的入边上游跑完，再跑它自己；
+        ///   <c>visiting</c> 集合防环（解析器本就禁环，这里只是兜底）。</item>
+        /// <item><b>结果三处落位</b>：<c>executedNodes</c>（跨路径复用池）+ <c>sharedOutputs</c>
+        ///   （nodeId 与 title <b>双键</b>，供 <c>{{中文标题.端口}}</c> 取值）+ 返回的
+        ///   <see cref="NodeExecutionRecord"/>（落 <c>wf_node_execution</c>，验收判据要看到行）。</item>
+        /// <item><b>⛔ 不改 Paths</b>：只加执行明细，不加路径 —— 否则会出现
+        ///   「start → docField → ai」这类伪路径，让「执行了几条路径」失真（§2.2 关键约束）。</item>
+        /// </list>
+        ///
+        /// <para><b>节点类型过滤</b>与测试路径 <c>ResolveUpstreamPlan</c> 完全一致：
+        /// <c>start / end / branch / ai_node</c> 不预执行（start 由 contextParams 注入代替，
+        /// ai_node 不递归执行 —— 只测目标那一个）。</para>
+        ///
+        /// <para><b>返回</b>：<c>Records</c> = 本轮真正新执行的节点明细（按拓扑序）；
+        /// <c>Blocker</c> = 拦住本路径的失败节点（null = 无阻塞，调用方继续跑 AI 节点）。</para>
+        /// </summary>
+        private async Task<(List<NodeExecutionRecord> Records, (string NodeId, NodeExecutionResult Result)? Blocker)>
+            PreExecuteAiParamSourcesAsync(
+                WorkflowNodeConfig aiNode,
+                Dictionary<string, WorkflowNodeConfig> nodeMap,
+                Dictionary<string, List<WorkflowEdgeConfig>> inEdges,
+                string taskCode,
+                string itemCode,
+                Dictionary<string, object> sharedOutputs,
+                Dictionary<string, NodeExecutionResult> executedNodes,
+                Dictionary<string, object> contextParams,
+                CancellationToken ct)
+        {
+            var records = new List<NodeExecutionRecord>();
+            if (nodeMap == null || nodeMap.Count == 0) return (records, null);
+
+            // 双键索引：refKey（节点 ID ∪ 节点标题）→ 节点 ID
+            // 提示词里 {{中文标题.端口}} 的老写法要能反查出**节点 ID**，否则预执行找不到节点
+            var refIndex = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var kv in nodeMap)
+            {
+                refIndex[kv.Key] = kv.Key;
+                if (!string.IsNullOrEmpty(kv.Value.Title))
+                    refIndex.TryAdd(kv.Value.Title!, kv.Key);
+            }
+
+            var sourceIds = AiParams.CollectSourceNodeIds(
+                aiNode, refKey => refIndex.TryGetValue(refKey, out var id) ? id : null);
+            if (sourceIds.Count == 0) return (records, null);
+
+            var visiting = new HashSet<string>(StringComparer.Ordinal);
+
+            async Task<(string NodeId, NodeExecutionResult Result)?> EnsureAsync(string nodeId)
+            {
+                // ① 已执行过（本路径前段 / 其它路径 / 上一轮预执行）⇒ 复用；
+                //    只有「上次是失败的」才拦住本路径（成功则直接用）
+                if (executedNodes.TryGetValue(nodeId, out var done))
+                    return done.Success ? null : (nodeId, done);
+
+                // ② 节点已被删除 / 不在本图里 ⇒ 不预执行，交给 ResolveTemplateRefs 报 DataMissing
+                //    （点名缺失的引用比在这里静默吞掉更有用）
+                if (!nodeMap.TryGetValue(nodeId, out var src))
+                {
+                    _logger.LogWarning(
+                        "[AI_PREEXEC] 参数引用的节点 {NodeId} 不在本工作流中（可能已删除），跳过预执行",
+                        nodeId);
+                    return null;
+                }
+
+                // ③ 防环
+                if (!visiting.Add(nodeId)) return null;
+
+                // ④ 先跑它自己的上游（DFS 后序 ⇒ 拓扑序）
+                if (inEdges != null && inEdges.TryGetValue(nodeId, out var edges))
+                {
+                    foreach (var e in edges)
+                    {
+                        if (string.IsNullOrEmpty(e.Source) || e.Source == nodeId) continue;
+                        var up = await EnsureAsync(e.Source);
+                        if (up != null) return up;
+                    }
+                }
+
+                // ⑤ 与测试路径同一套过滤：start/end/branch/ai_node 不预执行
+                var type = src.NodeType?.ToLowerInvariant();
+                if (type is "start" or "end" or "branch" or "ai_node")
+                {
+                    visiting.Remove(nodeId);
+                    return null;
+                }
+
+                // ⑥ 打点：说明「这个数据源是因为 AI 参数被拉起来跑的」（NODE_EXEC 是既有契约 TAG）
+                _wfLogger.NodeExec(taskCode, itemCode, aiNode.NodeId, $"ai_param_preexec:{nodeId}");
+
+                var result = await _nodeExecutor.ExecuteAsync(
+                    src, taskCode, itemCode, sharedOutputs, contextParams, ct);
+
+                visiting.Remove(nodeId);
+
+                // ⑦ 三处落位：复用池 + 共享输出池（双键）+ 执行明细（落 wf_node_execution）
+                executedNodes[src.NodeId] = result;
+                if (result.Success)
+                {
+                    sharedOutputs[src.NodeId] = result.Output;
+                    if (!string.IsNullOrEmpty(src.Title))
+                        sharedOutputs[src.Title] = result.Output;
+                }
+
+                records.Add(NodeExecutionRecord.From(src.NodeId, result, isReused: false));
+
+                return result.Success ? null : (src.NodeId, result);
+            }
+
+            foreach (var srcId in sourceIds)
+            {
+                var blocker = await EnsureAsync(srcId);
+                if (blocker != null) return (records, blocker.Value);
+            }
+
+            return (records, null);
         }
 
         // ── 分支裁剪判据（2026-10-12） ──

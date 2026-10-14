@@ -12,7 +12,12 @@ namespace CertPlatform.Shared.Storage
     /// 而标准目录 / 资料库的上传端点<b>根本不校验后缀</b>（任何后缀都能传）。
     /// 结果就是「发现一个堵一个」：先是 <c>.exe</c>，再是 <c>.zip</c>，再是 <c>.DS_Store</c>……</para>
     ///
-    /// <para><b>规则（与前端 <c>cert-share/src/constants/upload-file-policy.ts</c> 逐字对齐）</b>：</para>
+    /// <para><b>★ 唯一事实源（2026-10-14 起）＝ 本目录 <c>upload-file-policy.json</c></b>：
+    /// 加/减后缀只改该 JSON，然后跑 <c>node scripts/generate/upload-policy.mjs</c> 重新生成
+    /// 本文件与前端 <c>cert-share/src/constants/upload-file-policy.ts</c> 的 <c>&lt;generated&gt;</c> 清单段。
+    /// ⛔ 生成段禁手改（守卫 <c>--check</c> 会拦）；本文件与前端文件的<b>判定逻辑</b>仍为手写、逐字对齐。</para>
+    ///
+    /// <para><b>规则</b>：</para>
     /// <list type="number">
     ///   <item><b>系统噪声静默剔除</b>：<c>.DS_Store</c> / <c>Thumbs.db</c> / <c>~$xx.doc</c> /
     ///         <c>._xx</c> / 一切 <c>.</c> 开头。⇒ <b>不报给用户、不阻塞上传</b>
@@ -32,24 +37,23 @@ namespace CertPlatform.Shared.Storage
     /// </summary>
     public static class UploadFilePolicy
     {
-        #region 类别定义
+        #region 类别定义（GENERATED — 唯一事实源 = upload-file-policy.json；改后缀改 JSON 后跑 scripts/generate/upload-policy.mjs）
 
+        // <generated id="categories">
         /// <summary>办公文档（Word/Excel/PPT/文本/RTF/OpenDocument）</summary>
         public static readonly IReadOnlyList<string> DocumentExtensions = new[]
         {
             ".doc", ".docx",
             ".xls", ".xlsx",
             ".ppt", ".pptx",
-            ".rtf",
-            ".odt", ".ods", ".odp",
-            ".txt", ".md", ".csv",
+            ".rtf", ".odt",
+            ".ods", ".odp",
+            ".txt", ".md",
+            ".csv",
         };
 
         /// <summary>图片（证件扫描件 / 现场照片）</summary>
-        public static readonly IReadOnlyList<string> ImageExtensions = new[]
-        {
-            ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp",
-        };
+        public static readonly IReadOnlyList<string> ImageExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp" };
 
         /// <summary>PDF（文本层直解优先，失败才 AI）</summary>
         public static readonly IReadOnlyList<string> PdfExtensions = new[] { ".pdf" };
@@ -60,28 +64,32 @@ namespace CertPlatform.Shared.Storage
         /// 后续所有处理链都不支持它；放进来只会占 MinIO 与数据库。
         /// 将来若要「打包上传并自动解压」，正确做法是<b>新增解压任务</b>，不是放宽白名单。</para>
         /// </summary>
-        public static readonly IReadOnlyList<string> ArchiveExtensions = new[]
-        {
-            ".zip", ".rar", ".7z", ".tar", ".gz",
-        };
+        public static readonly IReadOnlyList<string> ArchiveExtensions = new[] { ".zip", ".rar", ".7z", ".tar", ".gz" };
+        // </generated>
 
         #endregion
 
         #region 白名单 / 黑名单
 
         /// <summary>
-        /// 默认允许的后缀（小写，含点）。<b>不含压缩包</b>。
-        /// <para>⚠️ 与前端 <c>UPLOAD_ALLOWED_EXTENSIONS</c> 逐字一致 —— 改一处必须改另一处，
-        /// 否则出现「前端能选、后端拒」或反之的错位。</para>
+        /// 默认允许的后缀（小写，含点）。<b>不含压缩包</b>（由 document+image+pdf 组合派生，非手写清单）。
+        /// <para>与前端 <c>UPLOAD_ALLOWED_EXTENSIONS</c> 同源于 <c>upload-file-policy.json</c>，生成器保证一致。</para>
         /// </summary>
         public static readonly IReadOnlyList<string> AllowedExtensions =
             DocumentExtensions.Concat(ImageExtensions).Concat(PdfExtensions).ToList();
 
+        #region 黑名单 / 系统噪声（GENERATED — 唯一事实源 = upload-file-policy.json）
+
+        // <generated id="blacklist">
         /// <summary>永久黑名单：可执行文件 / 动态库 / 脚本执行器</summary>
         public static readonly IReadOnlyList<string> NeverExtensions = new[]
         {
-            ".exe", ".dll", ".so", ".dylib", ".bat", ".cmd", ".sh", ".bash",
-            ".msi", ".apk", ".deb", ".rpm",
+            ".exe", ".dll",
+            ".so", ".dylib",
+            ".bat", ".cmd",
+            ".sh", ".bash",
+            ".msi", ".apk",
+            ".deb", ".rpm",
         };
 
         /// <summary>
@@ -89,16 +97,16 @@ namespace CertPlatform.Shared.Storage
         /// <para>⚠️ 本项目 Markdown 会被前端直接渲染（提示词工作台），SVG 内嵌
         /// <c>&lt;script&gt;</c> 时会执行。</para>
         /// </summary>
-        public static readonly IReadOnlyList<string> ScriptExtensions = new[]
-        {
-            ".html", ".htm", ".xhtml", ".svg", ".xml",
-        };
+        public static readonly IReadOnlyList<string> ScriptExtensions = new[] { ".html", ".htm", ".xhtml", ".svg", ".xml" };
 
         /// <summary>操作系统 / 编辑器垃圾文件名（小写）</summary>
         private static readonly HashSet<string> SystemNoiseNames = new(StringComparer.OrdinalIgnoreCase)
         {
-            "thumbs.db", "ehthumb.db", "desktop.ini", "icon",
+            "thumbs.db", "ehthumb.db", "desktop.ini", "icon"
         };
+        // </generated>
+
+        #endregion
 
         private static readonly HashSet<string> AllowedSet =
             new(AllowedExtensions, StringComparer.OrdinalIgnoreCase);

@@ -136,11 +136,12 @@
                 :key="`panel_${forceRefreshTick}`"
                 :selected-node="selectedNode"
                 :skills="skills"
-                :doc-rules="docRules"
+                :doc-rules="docRulesForPanel"
                 :doc-fields="currentDocFields"
                 :doc-tables="currentDocTables"
+                :doc-empty-hint="docEmptyHint"
                 :canvas-nodes="canvasNodesForPanel"
-                :std-standards="stdStandards"
+                :std-context="stdContext"
                 :std-files="stdFiles"
                 @update-node="handleUpdateNode"
                 @delete-node="handleDeleteNode"
@@ -279,29 +280,65 @@ const currentRuleCode = computed<string>(() => {
 })
 
 /**
- * ★ is_std_file_missing 节点用：标准 → 阶段两级选项（从已加载的标准树派生，⛔ 不再发请求）。
+ * ★ 2026-10-14（用户裁定）：左树当前「标准 + 阶段」上下文 —— 两个特殊节点共用。
  *
- * <p>⚠️ 字段口径（易错）：树里 <c>standardCode</c> 是**业务码**（<c>iso9001</c>），
- * 而 <c>cert_standard_directory_file.StandardCode</c> 存的是 <b>GUID</b> ——
- * 能用于过滤的是 <c>stdCode</c>；阶段同理，用 <c>phaseCode</c>。</p>
+ * <p>① `is_std_file_missing` 用它**自动带入**标准/阶段（面板已删掉这两个下拉：
+ * 执行期 <c>NodeExecutor.ExecuteStdFileMissingAsync</c> 只读 <c>standardFileCode</c>，
+ * 这两个值本就只是配置期筛选器）；</p>
+ * <p>② `docField` / `docTable` 的「文档」下拉用它**收窄**候选文档。</p>
+ *
+ * <p>⚠️ 字段口径（易错，2026-10-11 已踩）：树里 <c>standardCode</c> 是**业务码**（<c>iso9001</c>），
+ * 而 <c>cert_standard_directory_file.StandardCode</c> / <c>cert_doc_extraction_rule.StandardCode</c>
+ * 存的都是 <b>GUID</b> —— 能用于过滤的是 <c>stdCode</c>；阶段用 <c>phaseCode</c>（同样是 GUID）。
+ * <c>selectLeaf</c> / <c>togglePhase</c> 写入 <c>currentFilter</c> 时已按此口径取，故此处直接用。</p>
  */
-const stdStandards = computed(() => {
-  const out: any[] = []
-  for (const org of (treeData.value || [])) {
-    for (const std of (org.children || [])) {
-      if (std.type && std.type !== 'standard') continue
-      out.push({
-        code: std.stdCode || std.standardCode || std.id,
-        name: std.standardName || std.label || std.standardCode || std.id,
-        stages: (std.children || []).map((p: any) => ({
-          code: p.phaseCode || p.id,
-          name: p.phaseName || p.label || p.phaseCode || p.id,
-        })),
-      })
-    }
+const stdContext = computed(() => ({
+  standardCode: currentFilter.StandardCode || '',
+  stageCode: currentFilter.PhaseCode || '',
+}))
+
+/**
+ * ★ 2026-10-14（用户裁定）：传给属性面板的「文档」候选列表 —— 按左树当前「标准 + 阶段」收窄。
+ *
+ * <p><b>为什么</b>：数据源 <c>/DocExtractionRule/configured-rules</c> 是**全库**已配置规则的文档
+ * （后端只判 <c>RuleIsValid==1</c>，无任何标准/阶段过滤）。实测全库 1 条规则、而当前阶段有 23 个标准文件，
+ * 用户在下拉里拿不到「当前阶段的文件列表」。</p>
+ *
+ * <p>用户裁定口径 = **保留「已配置提取规则」语义，只按阶段收窄**（⛔ 不是列当前阶段全部文件）。</p>
+ *
+ * <p>★ 兜底：过滤后若**不含当前节点已选的 ruleCode**（例如打开一个配在别的阶段的旧节点），
+ * 把该条补回列表末尾 —— 否则 el-select 会因选项缺失而**显示为空**，
+ * 表现为「已配好的文档不见了」（静默，最难查的一类）。</p>
+ *
+ * <p>⚠️ 无阶段上下文（未选叶子）时**不过滤**，保持历史行为。</p>
+ */
+const docRulesForPanel = computed(() => {
+  const all: any[] = docRules.value || []
+  const { standardCode, stageCode } = stdContext.value
+  if (!standardCode && !stageCode) return all
+
+  const ruleCodeOf = (r: any) => r?.ruleCode || r?.RuleCode || ''
+  const hits = all.filter((r: any) => {
+    // 后端 configured-rules 是**刻意 camelCase**（D-5 契约），此处兼容 PascalCase 以防契约回退
+    const rs = r?.standardCode || r?.StandardCode || ''
+    const rp = r?.stageCode || r?.StageCode || ''
+    return (!standardCode || rs === standardCode) && (!stageCode || rp === stageCode)
+  })
+
+  const cur = selectedNode.value?.config?.ruleCode || selectedNode.value?.config?.docCode || ''
+  if (cur && !hits.some((r: any) => ruleCodeOf(r) === cur)) {
+    const keep = all.find((r: any) => ruleCodeOf(r) === cur)
+    if (keep) return [...hits, keep]
   }
-  return out
+  return hits
 })
+
+/** 「文档」下拉为空时的提示（收窄后**必须**给出，否则用户只看到一个空下拉，无法自救） */
+const docEmptyHint = computed(() =>
+  stdContext.value.standardCode || stdContext.value.stageCode
+    ? '当前阶段暂无已配置提取规则的文档 —— 请先在「文档提取规则」页面为该文件配置规则'
+    : '暂无已配置提取规则的文档',
+)
 
 const treeLabel = computed(() => {
   const field = props.treeConfig.textField
@@ -1192,6 +1229,30 @@ function validateGraph() {
   return true
 }
 
+/**
+ * ★ §2.7 配置期强校验 —— 保存前拦截（返回 true = 已弹窗拒绝保存）。
+ *
+ * <p>只挑 `AI_PARAM_INVALID` 一类：**保存不因为「图还没画完」被挡**（那是「校验」按钮的职责），
+ * 但**必须**因为「参数引用了不存在的节点 / 参数名不合法 / 占位符没登记」被挡 ——
+ * 这些一旦落库就是静默坏数据：提示词里的 `{{p1}}` 永远取不到值。</p>
+ */
+function blockInvalidAiParams(config: any): boolean {
+  let aiErrors: any[] = []
+  try {
+    aiErrors = analyzeWorkflowTopology(config).validation.errors.filter((e: any) => e.code === 'AI_PARAM_INVALID')
+  } catch {
+    return false // 拓扑都算不出来时交给「校验」按钮报，不在保存路径上吞异常
+  }
+  if (!aiErrors.length) return false
+  const detail = aiErrors.map((e: any) => `  ✗ ${e.message}`).join('\n')
+  ElMessageBox.alert(
+    `保存被拒绝 —— AI 节点参数校验未通过（${aiErrors.length} 处）：\n\n${detail}\n\n修复后才能保存（设计文档 §2.7）。`,
+    '参数校验失败',
+    { type: 'error', confirmButtonText: '知道了' },
+  )
+  return true
+}
+
 async function handleSave() {
   if (!currentLeaf.value) { ElMessage.warning('请先选择项目'); return }
   if (!store.state.nodes.length) { ElMessage.warning('画布为空，请添加节点'); return }
@@ -1201,6 +1262,10 @@ async function handleSave() {
   syncPositionsFromDiagram()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const config = serialize(store.state.nodes, store.state.edges, { version: 1 as any, workflowType: props.workflowType } as any) as any
+  // ★ 2026-10-14（设计 §2.7 配置期强校验）：AI 节点参数表任一不过 ⇒ **拒绝保存**。
+  //   校验实现只有一处（topology.validateTopology → aiParams.validateAiNodeParams），
+  //   「校验 / 执行 / 保存」三个入口共用，⛔ 不在这里另写一套。
+  if (blockInvalidAiParams(config)) return
   const layout = extractLayout(store.state.nodes)
   const leafName = currentLeaf.value[props.treeConfig.textField] || currentLeaf.value[props.treeConfig.codeField] || ''
   const ok = await confirmOrFalse(`保存工作流到「${leafName}」？`, '保存确认', { type: 'info' })
@@ -1297,17 +1362,20 @@ async function handleTestNode(nodeData: any) {
   }
   try {
     if (nodeData.nodeType === 'ai_node') {
-      const mockOutputs: any = {}
+      // ★ 2026-10-14（设计 §1.3 / §2.2）：**测试期不再注入占位串**。
+      //
+      //   修复前：只遍历旧 `customParams`、把值写成 `[${节点标题}]` 这种假数据。
+      //     ① 新方案已不用 customParams ⇒ `mockOutputs` 恒空（缺陷 §1.3）；
+      //     ② 即便有值更糟 —— 后端 `RunAiNodeAsync` 看到 `mockOutputs.Count > 0` 就**跳过上游预执行**，
+      //        于是「参数即边」在测试期彻底失效，AI 拿到的永远是编出来的 `[标题]`。
+      //   现在：`MockOutputs` 恒为 `{}` ⇒ 后端按 ruleJson 反向 BFS ∪ `params[].nodeId` **真实预执行**
+      //     来源节点（docField/docTable），测试期值 = 真实执行结果；取不到就走
+      //     `AiUnresolvedRefs` 显式报红（第 0 批已落地），⛔ 不再拿假值糊弄模型。
+      const mockOutputs: Record<string, never> = {}
       const nodes = store.state.nodes
       const customParams = nodeData.config?.customParams || []
       let parsedCustomParams = customParams
       if (typeof customParams === 'string') { try { parsedCustomParams = JSON.parse(customParams) } catch { parsedCustomParams = [] } }
-      for (const param of parsedCustomParams) {
-        if (param?.sourceType === 'link' && param?.sourceConfig?.nodeId) {
-          const sourceNode = nodes.find((n: any) => n.id === param.sourceConfig.nodeId)
-          if (sourceNode) mockOutputs[param.sourceConfig.nodeId] = { result: `[${sourceNode.title || param.sourceConfig.nodeId}]`, success: true }
-        }
-      }
       let ruleJson = ''
       try { ruleJson = JSON.stringify(serialize(nodes, store.state.edges, { version: 1, workflowType: props.workflowType })) } catch { ruleJson = '' }
       // 请求体字段名与后端 AiNodeTestRequest / WorkflowContext 的 C# 属性名逐字一致（PascalCase）
