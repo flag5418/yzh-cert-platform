@@ -160,6 +160,15 @@ public interface ICoreResourceQuery
     /// <summary>取<b>全部有效</b>标准目录文件（对应端内 16 处冗余的 <c>x.IsValid == 1</c> 全表写法）。</summary>
     Task<List<StandardDirectoryFile>> GetDirectoryFilesAsync();
 
+    /// <summary>
+    /// 取<b>非企业行</b>（<c>EnterpriseCode</c> 为空）的<b>全部有效</b>标准目录文件 ——
+    /// 「标准文档清单 / 模板候选」专用（企业私有文件不参与）。
+    /// <para>★ 2026-10-14：判据 <c>string.IsNullOrEmpty(EnterpriseCode)</c> <b>下推 SQL</b>
+    /// （<c>EnterpriseCode IS NULL OR = ''</c>）；⛔ 端内不得再以「<see cref="GetDirectoryFilesAsync"/>
+    /// 全表取数 + 内存过滤」承接该谓词（违 <b>铁律 L5</b>：端内只允许投影，不许自己写 WHERE）。</para>
+    /// </summary>
+    Task<List<StandardDirectoryFile>> GetNonEnterpriseDirectoryFilesAsync();
+
     /// <summary>按目录配置 <c>Code</c> 取该目录下文件。<paramref name="includeDisabled"/> = <c>true</c> 时含已禁用行（「已移除槽位」仍属对账清单）。</summary>
     Task<List<StandardDirectoryFile>> GetDirectoryFilesByConfigCodeAsync(string configCode, bool includeDisabled = false);
 
@@ -575,6 +584,14 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
     public async Task<List<StandardDirectoryFile>> GetDirectoryFilesAsync()
     {
         var rows = await _db.GetListAsync<StandardDirectoryFile>();
+        return rows.Data ?? new List<StandardDirectoryFile>();
+    }
+
+    public async Task<List<StandardDirectoryFile>> GetNonEnterpriseDirectoryFilesAsync()
+    {
+        // 非企业行 = EnterpriseCode 为空（OrgScope.IsEnterpriseRow 的 SQL 等价式；该列 NOT NULL）
+        var rows = await _db.GetListAsync<StandardDirectoryFile>(
+            x => string.IsNullOrEmpty(x.EnterpriseCode));
         return rows.Data ?? new List<StandardDirectoryFile>();
     }
 

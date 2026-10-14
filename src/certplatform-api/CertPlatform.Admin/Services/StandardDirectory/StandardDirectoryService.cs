@@ -558,12 +558,17 @@ public class StandardDirectoryService
 
         // ★ 2026-10-13 归属模型 V2：机构维度就在 OrgCode ⇒ 机构键可直接命中。
         // ★ 1.B.6d-3：取数收口 CoreResourceQuery（原始行 = 含软删/禁用）
-        var existing = await _core.FindDirectoryConfigRawAsync(orgCode, standardCode, stageCode);
+        // ★ 2026-10-14 修复：查重键**必须补齐第四维 `EnterpriseCode = ""`**（机构级 / 平台模板的企业维恒为空串）。
+        //   `uk_org_ent_std_stage` = (OrgCode, EnterpriseCode, StandardCode, StageCode) ⇒ 缺该维时，
+        //   同「机构×标准×阶段」下若并存「机构行 + 企业行」，`FirstAsync()` 会命中**任意行**
+        //   （无 ORDER BY ⇒ 非确定）⇒ 前端 ensure 可能拿到**企业私有目录**的 configCode。
+        //   钉 `""` 后唯一键完备 ⇒ 命中唯一且确定（与 CreateConfigAsync 写入的 `""` 同源）。
+        var existing = await _core.FindDirectoryConfigRawAsync(orgCode, standardCode, stageCode, "");
 
         // 兜底：前端传具体机构但该机构无自有模板 ⇒ 回退「平台通用模板」（OrgCode 为空）。
         //   ⛔ 不要回退到「任意机构」—— 那会让机构 A 命中机构 B 的模板。
         if (existing == null)
-            existing = await _core.FindDirectoryConfigRawAsync("", standardCode, stageCode);
+            existing = await _core.FindDirectoryConfigRawAsync("", standardCode, stageCode, "");
         if (existing != null && !existing.IsDeleted)
             return (true, null, existing);
 
@@ -575,10 +580,10 @@ public class StandardDirectoryService
         });
         if (created.ok) return created;
 
-        // 并发：另一请求刚插入 → 「已存在」→ 重读返回赢家行
-        var again = await _core.FindDirectoryConfigRawAsync(orgCode, standardCode, stageCode);
+        // 并发：另一请求刚插入 → 「已存在」→ 重读返回赢家行（同钉 `EnterpriseCode = ""`，见上）
+        var again = await _core.FindDirectoryConfigRawAsync(orgCode, standardCode, stageCode, "");
         if (again == null)
-            again = await _core.FindDirectoryConfigRawAsync("", standardCode, stageCode);
+            again = await _core.FindDirectoryConfigRawAsync("", standardCode, stageCode, "");
         if (again != null) return (true, null, again);
         return created;
     }
@@ -1042,12 +1047,11 @@ public class StandardDirectoryService
     /// <param name="stageCode">阶段 Code（空/空白 = 不过滤）</param>
     public async Task<List<StandardDirectoryFile>> GetTemplateFilesAsync(string? standardCode, string? stageCode)
     {
-        // ★ 1.B.6d-3：取数收口 CoreResourceQuery —— 有效行（框架内含 IsDeleted=0 + IsValid=1，
-        //   与原显式 x.IsValid == 1 等价）；EnterpriseCode 过滤移到内存（string.IsNullOrEmpty 逐字保留）
-        var all = await _core.GetDirectoryFilesAsync();
+        // ★ 2026-10-14 修复：非企业行过滤**下推 SQL**（GetNonEnterpriseDirectoryFilesAsync）——
+        //   原「GetDirectoryFilesAsync 全表取数 + 内存 IsNullOrEmpty」违 L5（端内不许自己写 WHERE）
+        var all = await _core.GetNonEnterpriseDirectoryFilesAsync();
 
         return all
-            .Where(x => string.IsNullOrEmpty(x.EnterpriseCode))
             .Where(x => string.IsNullOrWhiteSpace(standardCode)
                         || string.Equals(x.StandardCode, standardCode, StringComparison.OrdinalIgnoreCase))
             .Where(x => string.IsNullOrWhiteSpace(stageCode)

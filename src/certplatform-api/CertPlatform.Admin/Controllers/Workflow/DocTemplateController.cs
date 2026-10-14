@@ -183,11 +183,10 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
     [HttpGet("candidates")]
     public async Task<IActionResult> Candidates([FromQuery] string? keyword)
     {
-        // ★ 1.B.6d-3：取数收口 CoreResourceQuery —— 有效行（框架内含 IsDeleted=0 + IsValid=1，
-        //   与原显式谓词等价）；EnterpriseCode 过滤与投影留在内存（string.IsNullOrEmpty 逐字保留；
-        //   OrderBy(Sort) 由 SQL 下移内存 —— 键与方向不变）
-        var rows = (await _core.GetDirectoryFilesAsync())
-            .Where(f => string.IsNullOrEmpty(f.EnterpriseCode))
+        // ★ 2026-10-14 修复：非企业行过滤**下推 SQL**（GetNonEnterpriseDirectoryFilesAsync）——
+        //   原「GetDirectoryFilesAsync 全表取数 + 内存 IsNullOrEmpty」违 L5（端内不许自己写 WHERE）。
+        //   OrderBy(Sort) 仍在内存 —— 键与方向不变（6d-1/6d-3 同类，已登记）
+        var rows = (await _core.GetNonEnterpriseDirectoryFilesAsync())
             .OrderBy(f => f.Sort)
             .Select(f => new
             {
