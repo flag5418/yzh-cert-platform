@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using CertPlatform.Admin.Services.Workflow.Skills.Nc;
+using CertPlatform.Shared.Workflow.Models;
 using Xunit;
 
 namespace CertPlatform.Admin.Tests.Nc
@@ -206,15 +208,19 @@ namespace CertPlatform.Admin.Tests.Nc
     }
 
     /// <summary>
-    /// ★ stamp_judge_level 盖级单测（重点：主输出=完整记录、缺省 major、verdict 推断）
+    /// ★ stamp_judge_level 盖级单测（2026-10-16 起：三种接法 + 运行期判定 6 条）
+    /// <para>M1 只连证据（有值⇒pass / 空⇒unverifiable）· M2 只连判定（true⇒pass / false⇒fail）·
+    /// M3 都连（★证据优先：证据空⇒unverifiable，证据有值才按判定）·
+    /// ⛔ 两端口都不接 ⇒ CONFIG_ERROR（判据 = 端口连接性，非值）。</para>
     /// </summary>
     public class StampJudgeLevelTests
     {
         private static Dictionary<string, object> RunRecord(
-            object? result, string code, string? level = null, string? verdict = null)
+            object? result, string code, string? level = null, string? verdict = null,
+            ISet<string>? connectedPorts = null)
         {
             var r = StampJudgeLevelSkill.ExecuteAsync(
-                result, code, level, verdict, null, default).GetAwaiter().GetResult();
+                result, code, level, verdict, null, connectedPorts, default).GetAwaiter().GetResult();
             Assert.True(r.Success, r.Error);
             return (Dictionary<string, object>)r.Outputs["result"]!;
         }
@@ -222,9 +228,11 @@ namespace CertPlatform.Admin.Tests.Nc
         [Fact]
         public void StampsLevelAndVerdict_Defaults()
         {
+            // ★ 2026-10-15 新语义（M1 只连证据）：证据非空 ⇒ pass
+            //   （旧语义「非空文本 ⇒ fail」已废止 —— 它把「材料在」猜成「不通过」）
             var rec = RunRecord("缺失审批记录", "J1", level: "major");
             Assert.Equal("major", (string)rec["level"]);
-            Assert.Equal("fail", (string)rec["verdict"]);   // 非空文本 ⇒ fail（确定性推断）
+            Assert.Equal(NcJudgeConstants.VerdictPass, (string)rec["verdict"]);
             Assert.Equal("J1", (string)rec["judge_code"]);
             Assert.Equal(false, (bool)rec["level_defaulted"]);
         }
@@ -262,7 +270,8 @@ namespace CertPlatform.Admin.Tests.Nc
         [Fact]
         public void InvalidVerdict_Fails()
         {
-            var r = StampJudgeLevelSkill.ExecuteAsync("x", "J6", "minor", "maybe", null, default).GetAwaiter().GetResult();
+            var r = StampJudgeLevelSkill.ExecuteAsync(
+                "x", "J6", "minor", "maybe", null, null, default).GetAwaiter().GetResult();
             Assert.False(r.Success);
             Assert.Contains("verdict 非法", r.Error);
         }
@@ -270,9 +279,114 @@ namespace CertPlatform.Admin.Tests.Nc
         [Fact]
         public void EmptyJudgeCode_Fails()
         {
-            var r = StampJudgeLevelSkill.ExecuteAsync("x", "", null, null, null, default).GetAwaiter().GetResult();
+            var r = StampJudgeLevelSkill.ExecuteAsync(
+                "x", "", null, null, null, null, default).GetAwaiter().GetResult();
             Assert.False(r.Success);
             Assert.Contains("judge_code", r.Error);
+        }
+
+        // ═══════════════════════════════════════════════════
+        // 三种接法 + 运行期判定 4 条（2026-10-15 用户定稿）
+        // ═══════════════════════════════════════════════════
+
+        /// <summary>⛔ 两端口都不接 ⇒ CONFIG_ERROR（不变量：「证据空 + 判定也空」不允许存在）</summary>
+        [Fact]
+        public void NoInputPortsConnected_ConfigError()
+        {
+            var r = StampJudgeLevelSkill.ExecuteAsync(
+                null, "J7", "major", null, null, new HashSet<string>(), default).GetAwaiter().GetResult();
+            Assert.False(r.Success);
+            Assert.Equal(WorkflowErrorCodes.ConfigError, r.ErrorCode);
+            Assert.Contains("未接任何输入", r.Error);
+        }
+
+        /// <summary>M1：证据端口已接但上游返回空 ⇒ unverifiable（「材料没拿到」≠「配置错」）</summary>
+        [Fact]
+        public void EvidenceConnectedButEmpty_Unverifiable()
+        {
+            var rec = RunRecord("  ", "J8", level: "minor",
+                connectedPorts: new HashSet<string> { "result" });
+            Assert.Equal(NcJudgeConstants.VerdictUnverifiable, (string)rec["verdict"]);
+        }
+
+        /// <summary>M2：判定 bool true（连线以 "True" 形态到达）⇒ pass</summary>
+        [Fact]
+        public void VerdictTrue_Pass()
+        {
+            var rec = RunRecord(null, "J9", level: "major", verdict: "True",
+                connectedPorts: new HashSet<string> { "verdict" });
+            Assert.Equal(NcJudgeConstants.VerdictPass, (string)rec["verdict"]);
+        }
+
+        /// <summary>M2：判定 bool false ⇒ fail</summary>
+        [Fact]
+        public void VerdictFalse_Fail()
+        {
+            var rec = RunRecord(null, "J10", level: "major", verdict: "False",
+                connectedPorts: new HashSet<string> { "verdict" });
+            Assert.Equal(NcJudgeConstants.VerdictFail, (string)rec["verdict"]);
+        }
+
+        /// <summary>② 判定值看不懂 ⇒ CONFIG_ERROR（⛔ 不静默猜 fail —— 旧规则已废止）</summary>
+        [Fact]
+        public void VerdictUnrecognized_ConfigError()
+        {
+            var r = StampJudgeLevelSkill.ExecuteAsync(
+                "有证据", "J11", "major", "1", null,
+                new HashSet<string> { "result", "verdict" }, default).GetAwaiter().GetResult();
+            Assert.False(r.Success);
+            Assert.Equal(WorkflowErrorCodes.ConfigError, r.ErrorCode);
+            Assert.Contains("verdict 非法", r.Error);
+        }
+
+        /// <summary>M3：证据 + 判定都连，★证据有值 ⇒ 按判定（证据非空文本不推翻 false）</summary>
+        [Fact]
+        public void BothConnected_EvidencePresent_VerdictWins()
+        {
+            var rec = RunRecord("材料齐全", "J12", level: "major", verdict: "false",
+                connectedPorts: new HashSet<string> { "result", "verdict" });
+            Assert.Equal(NcJudgeConstants.VerdictFail, (string)rec["verdict"]);
+        }
+
+        /// <summary>M3：证据 + 判定都连，★证据取到空 ⇒ unverifiable（★ 2026-10-16 证据优先，判定不介入）</summary>
+        [Fact]
+        public void BothConnected_EvidenceEmpty_Unverifiable()
+        {
+            var rec = RunRecord("  ", "J13", level: "major", verdict: "false",
+                connectedPorts: new HashSet<string> { "result", "verdict" });
+            Assert.Equal(NcJudgeConstants.VerdictUnverifiable, (string)rec["verdict"]);
+        }
+
+        /// <summary>非法 verdict 优先于「证据为空」—— 配置错必须报出来，⛔ 不被证据判空吞掉</summary>
+        [Fact]
+        public void BothConnected_EvidenceEmptyButVerdictIllegal_ConfigError()
+        {
+            var r = StampJudgeLevelSkill.ExecuteAsync(
+                "  ", "J14", "major", "maybe", null,
+                new HashSet<string> { "result", "verdict" }, default).GetAwaiter().GetResult();
+            Assert.False(r.Success);
+            Assert.Equal(WorkflowErrorCodes.ConfigError, r.ErrorCode);
+            Assert.Contains("verdict 非法", r.Error);
+        }
+
+        /// <summary>M2 可达性：result 允许空（否则「只连判定」会被 CollectMissingInputs 判成缺配置）</summary>
+        [Fact]
+        public void ResultParam_AllowsEmpty_ForM2()
+        {
+            var ps = typeof(StampJudgeLevelSkill)
+                .GetMethod("ExecuteAsync", BindingFlags.Public | BindingFlags.Static)!
+                .GetParameters();
+
+            var result = ps.First(p => p.Name == "result")
+                .GetCustomAttribute<SkillParamAttribute>()!;
+            var judgeCode = ps.First(p => p.Name == "judge_code")
+                .GetCustomAttribute<SkillParamAttribute>()!;
+            var verdict = ps.First(p => p.Name == "verdict")
+                .GetCustomAttribute<SkillParamAttribute>()!;
+
+            Assert.Equal(SkillParamEmptyPolicy.Allow, result.AllowEmpty);
+            Assert.Equal(SkillParamEmptyPolicy.Deny, judgeCode.AllowEmpty);
+            Assert.Equal(SkillParamEmptyPolicy.Allow, verdict.AllowEmpty);
         }
     }
 
@@ -291,8 +405,8 @@ namespace CertPlatform.Admin.Tests.Nc
         [Fact]
         public void AggregatesStampedRecords_ToJson()
         {
-            var a = StampJudgeLevelSkill.ExecuteAsync("缺审批", "J1", "major", null, null, default).GetAwaiter().GetResult();
-            var b = StampJudgeLevelSkill.ExecuteAsync("有值", "J2", "none", null, null, default).GetAwaiter().GetResult();
+            var a = StampJudgeLevelSkill.ExecuteAsync("缺审批", "J1", "major", "fail", null, default).GetAwaiter().GetResult();
+            var b = StampJudgeLevelSkill.ExecuteAsync("有值", "J2", "none", "pass", null, default).GetAwaiter().GetResult();
 
             var r = Collect(a.Outputs["result"], b.Outputs["result"]);
             Assert.True(r.Success, r.Error);
@@ -305,7 +419,7 @@ namespace CertPlatform.Admin.Tests.Nc
         [Fact]
         public void StampsStampedButNullPayloads_Skipped()
         {
-            var a = StampJudgeLevelSkill.ExecuteAsync("缺审批", "J1", "major", null, null, default).GetAwaiter().GetResult();
+            var a = StampJudgeLevelSkill.ExecuteAsync("缺审批", "J1", "major", "fail", null, default).GetAwaiter().GetResult();
             var r = Collect(a.Outputs["result"], null, null, null, null, null, null, null);
             Assert.True(r.Success);
             Assert.Equal(1, (int)r.Outputs["judges_count"]);

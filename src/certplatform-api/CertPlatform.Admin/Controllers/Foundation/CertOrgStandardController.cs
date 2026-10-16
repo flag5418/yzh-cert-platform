@@ -181,7 +181,7 @@ public class CertOrgStandardController : ControllerBase
                     StandardCode = request.StandardCode,
                     IsValid = 1,
                     CreateBy = _userContext.UserCode,
-                    CreateTime = DateTime.UtcNow
+                    CreateTime = DateTime.Now
                 };
                 var result = await _linkService.Insert(entity, _userContext.ClientIp);
                 if (!result.Success)

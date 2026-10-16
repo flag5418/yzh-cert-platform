@@ -49,7 +49,13 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         Name = "字段是否为空",
         ReturnType = "boolean",
         ResultPort = "result",
-        Description = "★ 判断某字段是否有值：返回三态 has_value/is_empty/not_found，永不失败，可直接接 branch/compare"
+        Description =
+            "【作用】判断某个**已提取的文档字段**有没有值，返回三态 has_value / is_empty / not_found（永不失败，" +
+            "可直接接条件分支或 compare）。能识别「无 / 暂无 / 待填写 / N/A」等占位符。\n" +
+            "【怎么配】字段编码必填（如 iso9001.ent_base.biz_lic.Name）；" +
+            "企业编码留空 = 用虚拟样例数据（配置期验证用）；文件编码可选，用于文件级过滤。\n" +
+            "【坑】⛔ not_found（压根没提取过）≠ is_empty（提取到了但为空），" +
+            "接分支前先确认你要拦的是哪一种。"
     )]
     public static class IsFieldEmptySkill
     {
@@ -154,7 +160,11 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         Name = "表格是否为空",
         ReturnType = "boolean",
         ResultPort = "result",
-        Description = "★ 判断某表格是否有数据：解析 JSON 后判行数，返回三态 has_value/is_empty/not_found，并回传 row_count/column_count"
+        Description =
+            "【作用】判断某个**已提取的表格**有没有数据，返回三态 has_value / is_empty / not_found，" +
+            "并回传 row_count / column_count。\n" +
+            "【怎么配】表格编码必填；企业编码留空 = 用虚拟样例数据（配置期验证用）；文件编码可选。\n" +
+            "【坑】⛔ 自动识别 {rows:[…]} 等 JSON 结构 —— 上游给的是纯文本表格会判成 is_empty。"
     )]
     public static class IsTableEmptySkill
     {

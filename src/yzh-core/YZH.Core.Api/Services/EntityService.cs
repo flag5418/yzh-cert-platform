@@ -679,24 +679,26 @@ public class EntityService<T> where T : class, new()
 
     // ==================== 审计字段填充 ====================
 
+    // ★ 审计时间统一用本地时间（Asia/Shanghai）——全库口径，见 BaseEntity.CreateTime 注释。
+    //   UtcNow 会让列表/详情显示早 8 小时（前端按本地解析无 Z 的 JSON）。
     private void FillCreateAudit(T entity)
     {
         dynamic dyn = entity;
-        try { dyn.CreateTime = DateTime.UtcNow; } catch { /* 实体可能没有该属性 */ }
+        try { dyn.CreateTime = DateTime.Now; } catch { /* 实体可能没有该属性 */ }
         try { dyn.CreateBy = _userContext.UserCode; } catch { /* 实体可能没有该属性 */ }
     }
 
     private void FillUpdateAudit(T entity)
     {
         dynamic dyn = entity;
-        try { dyn.UpdateTime = DateTime.UtcNow; } catch { /* 实体可能没有该属性 */ }
+        try { dyn.UpdateTime = DateTime.Now; } catch { /* 实体可能没有该属性 */ }
         try { dyn.UpdateBy = _userContext.UserCode; } catch { /* 实体可能没有该属性 */ }
     }
 
     private void FillDeleteAudit(T entity)
     {
         dynamic dyn = entity;
-        try { dyn.DeleteTime = DateTime.UtcNow; } catch { /* 实体可能没有该属性 */ }
+        try { dyn.DeleteTime = DateTime.Now; } catch { /* 实体可能没有该属性 */ }
         try { dyn.DeleteBy = _userContext.UserCode; } catch { /* 实体可能没有该属性 */ }
     }
 
@@ -707,7 +709,7 @@ public class EntityService<T> where T : class, new()
             // 通过接口统一设置三个软删除字段
             softDelete.IsDeleted = true;
             softDelete.DeleteBy = _userContext.UserCode;
-            softDelete.DeleteTime = DateTime.UtcNow;
+            softDelete.DeleteTime = DateTime.Now;
             var updateResult = await _dbOrm.UpdateAsync(entity, new[] { "IsDeleted", "DeleteTime", "DeleteBy" });
             return updateResult.Success
                 ? Result<bool>.Ok(true)

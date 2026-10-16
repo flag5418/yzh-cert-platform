@@ -37,7 +37,7 @@ public class Sys_RoleMenu : BaseEntity
 
     /// <summary>创建时间（DB: CreateTime）</summary>
     [SugarColumn(ColumnName = "CreateTime")]
-    public new DateTime CreateTime { get; set; } = DateTime.UtcNow;
+    public new DateTime CreateTime { get; set; } = DateTime.Now;
 
     /// <summary>创建人（DB: CreateBy）</summary>
     [SugarColumn(ColumnName = "CreateBy")]

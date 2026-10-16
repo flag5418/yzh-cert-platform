@@ -39,7 +39,13 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         Name = "是否为空",
         ReturnType = "boolean",
         ResultPort = "result",
-        Description = "判断上游返回值是否为空：null / 空白 / 空集合 / 空对象 都算空，输出 result(bool) 可直连分支节点"
+        Description =
+            "【作用】判断上游值是否为空，输出 bool（可直连条件分支）。" +
+            "null / 空白串 / 空集合 / 空对象 都算空；⚠️ false 与 0 **不算空**。\n" +
+            "【怎么配】把要判的值连到「待判断的值」即可，没有别的参数。\n" +
+            "【坑】⛔ 它只回答「有没有值」，不回答「值对不对」；" +
+            "「空 = 不符合」的场景（如查审批签字是否存在）请把它的取反接到 stamp_judge_level 的「判定」，" +
+            "⛔ 且不要连「证据」（证据空会被判成不可判定、盖过判定）。"
     )]
     public static class IsEmptySkill
     {

@@ -5,6 +5,8 @@ using YZH.Core.Api.Services;
 using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Config;
+using YZH.Core.Stand.Models.Request;
+using YZH.Core.Stand.Models.Result;
 using YZH.Core.Stand.Interfaces;
 
 namespace YZH.Core.Web.Controllers.System;
@@ -31,6 +33,20 @@ public class SysLogController : YzhControllerBase<SysLog>
     /// <summary>加载 EntityConfig 配置（Assets/EntityConfigs/System/SysLog.json）</summary>
     protected override EntityConfig LoadConfig()
         => EntityConfigHelper.GetConfig<SysLog>();
+
+    /// <summary>
+    ///     日志默认按操作时间倒序（最新在前）；前端显式指定排序时不覆盖。
+    ///     未指定排序时 ORM 不生成 ORDER BY，MySQL 按主键升序返回 = 永远先看到最旧的行。
+    /// </summary>
+    public override async Task<Result<PagedResult<SysLog>>> FilterCore(FilterRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.SortField))
+        {
+            request.SortField = "CreateTime";
+            request.SortOrder = "desc";
+        }
+        return await base.FilterCore(request);
+    }
 
     /// <summary>日志页面只读，禁用新增/删除</summary>
     protected override ToolbarConfig GetToolbar()

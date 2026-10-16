@@ -22,6 +22,7 @@ const { logic, tableRef } = useSingleTable(LogLogic)
       :columns="logic.columns"
       :data-loader="logic.dataLoader.bind(logic)"
       :search-fields="logic.searchFields"
+      :search-max-fields="3"
       :toolbar-actions="logic.toolbarActions"
       :row-action-buttons="logic.rowActions"
       row-key="Id"

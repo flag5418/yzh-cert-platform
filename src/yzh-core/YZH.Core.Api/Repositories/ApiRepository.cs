@@ -95,7 +95,7 @@ public class ApiRepository : IApiRepository
         {
             RoleCode = roleCode,
             ApiCode = apiCode,
-            CreateTime = DateTime.UtcNow
+            CreateTime = DateTime.Now
         }).ExecuteCommandAsync();
     }
 
@@ -131,7 +131,7 @@ public class ApiRepository : IApiRepository
         {
             UserCode = userCode,
             ApiCode = apiCode,
-            CreateTime = DateTime.UtcNow
+            CreateTime = DateTime.Now
         }).ExecuteCommandAsync();
     }
 

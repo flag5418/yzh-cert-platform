@@ -38,10 +38,10 @@ public static class TimeExtensions
     public static DateTime EndOfMonth(this DateTime dt) =>
         new(dt.Year, dt.Month, DateTime.DaysInMonth(dt.Year, dt.Month), 23, 59, 59);
 
-    /// <summary>Humanize - 人性化时间差显示</summary>
+    /// <summary>Humanize - 人性化时间差显示（★ 入参为本地时间，故用 DateTime.Now 对齐）</summary>
     public static string ToRelativeTime(this DateTime dt)
     {
-        var diff = DateTime.UtcNow - dt;
+        var diff = DateTime.Now - dt;
         return diff.TotalMinutes < 1 ? "刚刚"
             : diff.TotalMinutes < 60 ? $"{(int)diff.TotalMinutes}分钟前"
             : diff.TotalHours < 24 ? $"{(int)diff.TotalHours}小时前"

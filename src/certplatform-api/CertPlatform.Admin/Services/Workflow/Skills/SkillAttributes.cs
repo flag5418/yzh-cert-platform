@@ -37,6 +37,30 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         /// <c>get_table → rows</c>；<c>compare → result</c>；<c>is_empty → result</c>。</para>
         /// </summary>
         public string? ResultPort { get; set; }
+
+        /// <summary>
+        /// ★ <b>运行级登记池名</b>（2026-10-15 新增）。
+        ///
+        /// <para>声明「本节点成功执行后，把<b>主输出</b>（<see cref="ResultPort"/> 指定的那个值）
+        /// 追加进名为 <c>RegistersTo</c> 的<b>运行级池</b>」，供下游节点用
+        /// <see cref="FromContextAttribute"/> 一次性读取<b>全部</b>登记项。</para>
+        ///
+        /// <para><b>★ 为什么用「声明式」而不是引擎硬编码 skill 名</b>：引擎 ⛔ 不该知道
+        /// <c>stamp_judge_level</c> 这个业务概念 —— 硬编码会让「新增一种判定」变成改引擎。
+        /// 声明式则新增 skill 时<b>零引擎改动</b>。</para>
+        ///
+        /// <para><b>★ 它解决的真问题</b>：引擎有「<b>汇聚节点在多路径下只看到第一条路径</b>」的限制
+        /// （<c>WorkflowInterpreter.ExecutePathAsync</c> 对已在 <c>executedNodes</c> 的节点
+        /// <b>直接复用、不重跑</b>）⇒ 任何「多条线拉到一个节点」的汇聚都是假的。
+        /// 登记池把「汇总」从<b>画布节点</b>降级为<b>运行级副作用</b> ⇒
+        /// 分支裁剪（跳过路径不执行 ⇒ 不登记）与跨路径复用（不重跑 ⇒ 不重复登记）<b>天然正确</b>。</para>
+        ///
+        /// <para><b>当前用途</b>：<c>stamp_judge_level</c> 声明
+        /// <c>RegistersTo = WorkflowContextKeys.JudgePool</c> ⇒ 每条 judge 自动进
+        /// 「本次检查的判定清单」⇒ <c>nc_conclusion_v2</c> 直接读清单，
+        /// <b>画布上不再需要 <c>collect_judges</c> 节点与汇聚连线</b>。</para>
+        /// </summary>
+        public string? RegistersTo { get; set; }
     }
 
     /// <summary>
@@ -145,4 +169,39 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     /// </summary>
     [AttributeUsage(AttributeTargets.Parameter, AllowMultiple = false, Inherited = false)]
     public class FromServiceAttribute : Attribute { }
+
+    /// <summary>
+    /// ★ <b>标记「从运行上下文注入」的参数</b>（2026-10-15 新增）。
+    ///
+    /// <para><b>与 <see cref="FromServiceAttribute"/> 的分工</b>：
+    /// <c>[FromService]</c> 从 <b>DI 容器</b>取（拿的是<b>服务/工具</b>，如 <c>IDbOrm</c>）；
+    /// <c>[FromContext]</c> 从<b>本次运行的业务上下文</b>取（拿的是<b>数据</b> ——
+    /// 机构编码 / 标准编码 / 阶段编码 / 企业编码 / 规则编码 / 运行级池）。</para>
+    ///
+    /// <para><b>★ 为什么必须有它</b>：这些值「<b>引擎本来就知道</b>」——
+    /// 专家端从工作区取、后台测试从请求取 —— ⛔ 却因为没有注入通道，
+    /// 只能让规则作者在画布上<b>手填 GUID</b>。而抄错<b>不报错</b>，
+    /// 只是悄悄换成了另一套判定标准（本项目最典型的「静默错」）。</para>
+    ///
+    /// <para><b>★ 三处联动（缺一即静默失效，全在 <c>SkillExecutor</c>）</b>：</para>
+    /// <list type="number">
+    /// <item><c>BindArguments</c> ⇒ 命中则从 <see cref="SkillContext.ContextParams"/> 按
+    ///       <see cref="Key"/>（缺省 = 参数名）取值</item>
+    /// <item><c>Analyze</c> ⇒ 命中则 <b>skip</b> ⇒ <b>该参数不出现在画布上</b>（★ 核心效果）</item>
+    /// <item><c>CollectMissingInputs</c> ⇒ 命中则 skip ⇒ 缺值<b>不算规则作者的锅</b>
+    ///       （⛔ 不能报 <c>PRECONDITION_EMPTY</c> 让人去「补录」一个他本来就填不了的东西）</item>
+    /// </list>
+    ///
+    /// <para><b>⚠️ 键名必须与装配处逐字一致</b>（一律 camelCase，见
+    /// <c>WorkflowContextKeys</c>）：写错 = <b>静默拿到 <c>null</c></b> ⇒
+    /// 必须配「键名一致性」单测（枚举全仓 <c>[FromContext]</c> 的 Key，断言都在装配处出现）。</para>
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Parameter, AllowMultiple = false, Inherited = false)]
+    public class FromContextAttribute : Attribute
+    {
+        /// <summary>上下文键名；缺省（<c>null</c> / 空串）= 用参数名</summary>
+        public string? Key { get; set; }
+
+        public FromContextAttribute(string? key = null) { Key = key; }
+    }
 }

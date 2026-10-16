@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using CertPlatform.Shared.Workflow.Models;
 using CertPlatform.Shared.Domain.Scope;
+using CertPlatform.Shared.Exceptions;
 
 namespace CertPlatform.Admin.Services.Workflow
 {
@@ -35,6 +36,15 @@ namespace CertPlatform.Admin.Services.Workflow
 
         /// <summary>目标节点输出</summary>
         public Dictionary<string, object> Output { get; set; } = new();
+
+        /// <summary>
+        /// ★ 2026-10-15 新增：声明为连线、但本次取不到上游值的端口名
+        /// （= <c>NodeExecutionResult.UnresolvedInputs</c>）。
+        /// <para>配置期单节点测试刻意不执行上游 ⇒ 连线端口本来就没值；必须显式回传前端，
+        /// ⛔ 不能只写日志（否则用户只会看到下游报「verdict 非法」，把测试的能力边界
+        /// 误当成节点配置错误）。</para>
+        /// </summary>
+        public List<string> UnresolvedInputs { get; set; } = new();
 
         /// <summary>AI 节点测试专用：打平后的输出池（nodeId / title → 输出），供控制器构造 Debug 信息</summary>
         public Dictionary<string, object> FlattenedOutputs { get; set; } = new();
@@ -132,7 +142,9 @@ namespace CertPlatform.Admin.Services.Workflow
                 BuildSnapshotJson(new[] { nodeConfig }),
                 ruleCode, enterpriseCode, phaseCode, parsed, ct);
 
-            var contextParams = BuildContextParams(enterpriseCode, phaseCode, standardCode);
+            // ★ 机构编码：与整流测试同一推导链（规则 → 企业 → 登录人 → 空）
+            var orgCode = await ResolveOrgCodeAsync(ruleCode, enterpriseCode, ct);
+            var contextParams = BuildContextParams(enterpriseCode, phaseCode, standardCode, orgCode, ruleCode);
 
             _wfLogger.ItemStart(taskCode, itemCode, ruleCode);
             _wfLogger.PathEnum(taskCode, itemCode, 1);
@@ -141,12 +153,43 @@ namespace CertPlatform.Admin.Services.Workflow
             var sw = Stopwatch.StartNew();
 
             // NodeExecutor 内部 try/catch 全吞，恒返回 NodeExecutionResult（不抛异常）
-            var result = await _nodeExecutor.ExecuteAsync(
-                nodeConfig, taskCode, itemCode,
-                new Dictionary<string, object>(),   // sharedOutputs：单节点测试无上游
-                contextParams, ct);
+            // ⚠️ 唯一的例外是 WorkflowDataMissingException —— 它**按设计穿透**（要把补录缺口
+            //    交给 WorkflowInterpreter）。而单节点测试没有解释器兜底，没人接它 ⇒ 必须在本入口收口（见下方 catch）。
+            NodeExecutionResult result;
+            try
+            {
+                result = await _nodeExecutor.ExecuteAsync(
+                    nodeConfig, taskCode, itemCode,
+                    new Dictionary<string, object>(),   // sharedOutputs：单节点测试无上游
+                    contextParams, ct);
+            }
+            catch (WorkflowDataMissingException ex)
+            {
+                // ★ 2026-10-16：**在本入口收口，⛔ 不让它穿透到控制器**。
+                //
+                //   穿透的实测后果（用户 2026-10-16 上报：测试「聚合多路judge」节点）：
+                //   控制器 catch(Exception) ⇒ 响应体只剩一句
+                //     「节点执行失败: Skill 'collect_judges' 执行失败[PRECONDITION_EMPTY]: …」
+                //   ⇒ ① UnresolvedInputs 丢失（界面看不到「哪些端口因为没执行上游而无值」）
+                //      ② 本次测试**完全不落库**（wf_node_execution 无行 ⇒ 「测试历史」查不到）
+                //   而这两样正是 2026-10-15 刚补上的诊断面 —— 被异常路径整条绕过。
+                //
+                //   语义上这也不是「系统故障」：单节点测试刻意不执行上游 ⇒ 连线端口本来就没值。
+                //   故如实归类（skill 入参为空 = PRECONDITION_EMPTY；其余 = DATA_MISSING），
+                //   并走同一条落库路径，让「测试历史」能查到这次失败。
+                result = NodeExecutionResult.Fail(ex.Message, (int)sw.ElapsedMilliseconds);
+                result.ErrorCode = string.Equals(ex.DataKind, "skill_param", StringComparison.Ordinal)
+                    ? WorkflowErrorCodes.PreconditionEmpty
+                    : WorkflowErrorCodes.DataMissing;
+                result.UnresolvedInputs = ex.UnresolvedInputs ?? new List<string>();
+            }
 
             sw.Stop();
+
+            // ★ 失败且存在未取到值的连线端口 ⇒ 把「测试的能力边界」写进错误里。
+            //   仅靠 UnresolvedInputs 数组，前端只能笼统提示；点出端口名 + 下一步怎么做，才不用人猜。
+            var unresolvedInputs = result.UnresolvedInputs ?? new List<string>();
+            var error = result.Success ? result.Error : AppendUnresolvedUpstreamHint(result.Error, unresolvedInputs);
 
             var itemResult = await PersistNodeScopeAsync(
                 taskCode, itemCode, parsed,
@@ -158,12 +201,35 @@ namespace CertPlatform.Admin.Services.Workflow
                 TaskCode = taskCode,
                 ItemCode = itemCode,
                 Success = result.Success,
-                Error = result.Error,
+                Error = error,
                 DurationMs = result.DurationMs,
                 Output = result.Output,
+                // ★ 连线端口本次取不到值 ⇒ 显式带给控制器（前端据此提示「未执行上游」）
+                UnresolvedInputs = unresolvedInputs,
                 FlattenedOutputs = new Dictionary<string, object>(),
                 MockOutputs = new Dictionary<string, Dictionary<string, object>>()
             };
+        }
+
+        /// <summary>
+        /// 失败原因后追加「本次测试未执行上游」的说明（★ 2026-10-16）。
+        ///
+        /// <para><b>解的是什么</b>：用户 2026-10-16 在 NC 配置页测「聚合多路judge」节点，
+        /// 只看到一句 <c>Skill 'collect_judges' 执行失败[PRECONDITION_EMPTY]: …未收到任何 judge 结果</c>
+        /// ⇒ 看起来像「节点配错了」，实际是<b>单节点测试不执行上游</b>这条**能力边界**。
+        /// 指令本身没变（仍然失败），变的是「用户能不能看懂」。</para>
+        ///
+        /// <para>⛔ 端口清单为空时原样返回 —— ⛔ 不得凭空断言「是上游的问题」。</para>
+        /// </summary>
+        private static string? AppendUnresolvedUpstreamHint(string? error, List<string> unresolvedInputs)
+        {
+            if (unresolvedInputs == null || unresolvedInputs.Count == 0) return error;
+
+            var hint = $"（本次单节点测试未执行上游：{string.Join("、", unresolvedInputs)} 端口没有值" +
+                       "—— 这是单节点测试的能力边界，⛔ 不代表节点配置错；" +
+                       "请点「运行测试」整图执行，或给这些端口改填常量。）";
+
+            return string.IsNullOrWhiteSpace(error) ? hint : error + hint;
         }
 
         // ════════════════════════════════════════════════════════════
@@ -440,11 +506,28 @@ namespace CertPlatform.Admin.Services.Workflow
             if (wfConfig?.Nodes == null || wfConfig.Nodes.Count == 0)
                 return plan;
 
-            var allMap = wfConfig.Nodes.ToDictionary(n => n.NodeId, n => n);
+            // ★ 重复节点 ID 防御（2026-10-15）：坏 rule_json（同 nodeId 两个节点）会让
+            //   ToDictionary 抛 ArgumentException「same key already added」，且此处**在** try/catch 之外
+            //   ⇒ 违反本方法「解析失败不阻断目标节点测试」的契约。按首个节点去重 + 告警。
+            var dupNodeIds = wfConfig.Nodes
+                .GroupBy(n => n.NodeId ?? string.Empty, StringComparer.Ordinal)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToList();
+            if (dupNodeIds.Count > 0)
+            {
+                _logger.LogWarning(
+                    "[WorkflowEngine] AI 节点测试：rule_json 存在重复节点 ID（{Dup}），已按首个节点执行",
+                    string.Join("、", dupNodeIds));
+            }
+
+            var allMap = wfConfig.Nodes
+                .GroupBy(n => n.NodeId ?? string.Empty, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
 
             // 入边表
-            var inEdges = wfConfig.Nodes.ToDictionary(
-                n => n.NodeId, _ => new List<WorkflowEdgeConfig>());
+            var inEdges = allMap.Keys.ToDictionary(
+                k => k, _ => new List<WorkflowEdgeConfig>(), StringComparer.Ordinal);
             foreach (var edge in wfConfig.Edges ?? new List<WorkflowEdgeConfig>())
             {
                 if (inEdges.TryGetValue(edge.Target, out var list))
@@ -571,14 +654,21 @@ namespace CertPlatform.Admin.Services.Workflow
             return result;
         }
 
-        /// <summary>构造节点级测试的上下文参数（与整流测试的键名逐字一致：camelCase）</summary>
-        private static Dictionary<string, object> BuildContextParams(
-            string enterpriseCode, string phaseCode, string standardCode)
+        /// <summary>
+        /// 构造节点级测试的上下文参数（与整流测试的键名逐字一致：camelCase）。
+        /// <para>★ 2026-10-15：键名统一走 <see cref="WorkflowContextKeys"/>；新增
+        /// <c>orgCode</c> / <c>ruleCode</c> —— 机构编码自动装配，⛔ 不再手填。</para>
+        /// </summary>
+        private Dictionary<string, object> BuildContextParams(
+            string enterpriseCode, string phaseCode, string standardCode,
+            string orgCode, string ruleCode)
             => new()
             {
-                ["enterpriseCode"] = enterpriseCode,
-                ["phaseCode"] = phaseCode,
-                ["standardCode"] = standardCode
+                [WorkflowContextKeys.EnterpriseCode] = enterpriseCode,
+                [WorkflowContextKeys.PhaseCode] = phaseCode,
+                [WorkflowContextKeys.StandardCode] = standardCode,
+                [WorkflowContextKeys.OrgCode] = orgCode,
+                [WorkflowContextKeys.RuleCode] = ruleCode
             };
 
         /// <summary>企业编码缺省值：单节点测试默认打标准企业（与 NodeExecutor 内部兜底一致）</summary>

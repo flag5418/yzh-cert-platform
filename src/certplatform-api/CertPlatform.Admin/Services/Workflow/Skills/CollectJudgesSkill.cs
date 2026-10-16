@@ -12,6 +12,24 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     /// <summary>
     /// ★ 聚合多路 judge（NC 结论判定 v2 · 纯代码 · 不涉及 AI）
     ///
+    /// <para><b>⚠️ 2026-10-15 起：本节点 = 兼容通道，新链路请勿使用</b></para>
+    /// <list type="bullet">
+    /// <item><b>为什么降级</b>：引擎的<b>跨路径复用</b>（<c>WorkflowInterpreter.ExecutePathAsync</c>
+    ///   把 <c>sharedOutputs</c>/<c>executedNodes</c> 在同一次 item 的多条路径间共享）使
+    ///   「多条线拉到一个汇聚节点」的节点<b>只看得见第一条路径</b> —— 分支一多，本节点收不齐
+    ///   ⇒ 结论基于残缺清单，且<b>两边都不报错</b>。</item>
+    /// <item><b>替代做法</b>：<c>stamp_judge_level</c> 已声明
+    ///   <c>[Skill(RegistersTo = WorkflowContextKeys.JudgePool)]</c>，成功执行即<b>自动登记</b>
+    ///   进本次检查的判定清单；<c>nc_conclusion_v2</c> 直接读清单 ⇒ 画布上<b>不需要本节点、也不需要汇聚线</b>。</item>
+    /// <item><b>保留原因</b>：① 存量画布（已连线的规则）⛔ 不能一改就断；② 单节点测试/手工调试时
+    ///   需要「把几条 judge 塞进一个数组」的入口。⇒ 保留但<b>不再作为推荐链路</b>。</item>
+    /// <item><b>★ 2026-10-16 补：槽位全空时回落判定池</b>（<c>[FromContext(JudgePool)]</c>）——
+    ///   与 <c>nc_conclusion_v2</c> <b>同一条口径</b>（「连线优先，否则读判定清单池」）。
+    ///   为什么必须补：本节点收的正是 §1.2 那条「只看得见第一条路径」的线，
+    ///   而 <c>nc_conclusion_v2</c> 又是「连线优先」⇒ 存量画布会把**残缺清单**盖过刚登记好的完整池
+    ///   （结论基于残缺清单，两边都不报错）。回落之后，存量画布照样拿到完整清单。</item>
+    /// </list>
+    ///
     /// <para><b>作用</b>：把画布上**多条** nc_judge 分支（各自经 <c>stamp_judge_level</c>
     /// 盖章）汇入一个 <c>judges</c> 数组，喂给 <c>nc_conclusion_v2</c>。
     /// 这就是 2026-10-14 用户方案里「多个 nc_judge 传递一个结论计算器」的聚合点。</para>
@@ -23,14 +41,23 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     ///
     /// <para><b>★ 主输出</b>：<c>judges</c> = JSON 字符串（<c>[{judge_code,level,verdict,reason,result,level_defaulted},…]</c>），
     /// 与 <c>nc_conclusion_v2.judges_json</c> 字符串契约对齐（同 v1 <c>dimensions_json</c> 先例，
-    /// 因为引擎参数绑定按名字取标量，数组需序列化为字符串传递）。⛔ 全部槽位为空 ⇒ Fail（中断）。</para>
+    /// 因为引擎参数绑定按名字取标量，数组需序列化为字符串传递）。
+    /// ⛔ 槽位全空<b>且</b>本次检查未登记任何判定 ⇒ Fail（中断）—— 两个来源都没有才说明确实无判定可算。</para>
     /// </summary>
     [Skill(
         Code = "collect_judges",
         Name = "聚合多路judge",
         ReturnType = "json",
         ResultPort = "judges",
-        Description = "★ 把最多 8 条 stamp_judge_level 记录聚合成 judges JSON 数组（供 nc_conclusion_v2 计算结论）；全空则中断"
+        Description =
+            "⚠️【兼容通道，新链路请勿使用】\n" +
+            "【作用】把最多 8 条 stamp_judge_level 记录聚合成一个 judges JSON 数组，喂给 nc_conclusion_v2。\n" +
+            "【怎么配】每个槽连一条 stamp_judge_level 的输出（取 result 主端口）；用不到的槽留空即可。" +
+            "槽位一个都没接到时，自动改用「本次检查已登记的判定清单」（与 NC结论判定v2 同口径）。\n" +
+            "【坑】⛔ 新链路不需要本节点 —— 引擎的跨路径复用使「多条线汇聚到一个节点」**只看得见第一条路径**，" +
+            "分支一多就收不齐，而且两边都不报错；" +
+            "改用「判定自动登记」：stamp_judge_level 成功即自动登记，nc_conclusion_v2 直接读清单。" +
+            "保留本节点只为存量画布不断链 + 手工调试时一次性塞几条 judge。"
     )]
     public static class CollectJudgesSkill
     {
@@ -59,6 +86,11 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
             [SkillParam(Description = "judge 槽位 8", BindMode = SkillParamBindMode.Link, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             object? judge_8 = null,
 
+            // ★ 2026-10-16：槽位全空时的回落来源 —— 本次检查已登记的判定清单。
+            //   ⛔ 不出现在画布上（Analyze 跳过 [FromContext]）；单节点测试没有池 ⇒ 保持原有 Fail 语义。
+            [FromContext(WorkflowContextKeys.JudgePool)]
+            List<object>? judge_pool = null,
+
             CancellationToken ct = default)
         {
             object?[] slots = { judge_1, judge_2, judge_3, judge_4, judge_5, judge_6, judge_7, judge_8 };
@@ -76,11 +108,32 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                 if (warn != null) warnings.Add(warn);
             }
 
+            // ★ 槽位一条都没接 ⇒ 回落判定池（与 nc_conclusion_v2 同口径：「连线优先，否则读池」）。
+            //   池里的记录由 stamp_judge_level 登记（引擎保证是完整记录）⇒ 仍走同一个归一器，
+            //   输出形状与从槽位来的一模一样（下游 judges_json 契约零改动）。
+            var usedPool = false;
+            if (judges.Count == 0 && judge_pool is { Count: > 0 })
+            {
+                foreach (var entry in judge_pool)
+                {
+                    if (IsBlank(entry)) continue;
+                    judges.Add(NormalizeSlot(entry, judges.Count + 1, out _));
+                }
+                usedPool = judges.Count > 0;
+                if (usedPool)
+                {
+                    warnings.Add(
+                        $"本聚合节点没有接到任何 judge（槽位全空），已改用本次检查已登记的判定清单（{judges.Count} 条）");
+                }
+            }
+
             if (judges.Count == 0)
             {
-                // ★ 空聚合 = 画布上没接任何 judge ⇒ 该规则本就不该进结论计算 ⇒ 中断
+                // ★ 两个来源都空 = 画布上没接 judge、本次检查也确实没有任何判定登记
+                //   ⇒ 该规则本就不该进结论计算 ⇒ 中断
                 return Task.FromResult(SkillResult.Fail(
-                    "collect_judges 未收到任何 judge 结果（所有槽位为空），无法计算结论",
+                    $"collect_judges 未收到任何 judge 结果（{MaxSlots} 个槽位全空，" +
+                    "且本次检查未登记任何判定），无法计算结论",
                     WorkflowErrorCodes.PreconditionEmpty));
             }
 
@@ -111,6 +164,8 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                 ["judges"]        = judgesJson,
                 ["judges_count"]  = judges.Count,
                 ["judges_array"]  = records,          // ★ 诊断面：结构化数组（测试页可回看）
+                // ★ 诊断面：这批判定是从槽位来的还是回落判定池来的（「收得齐不齐」一眼可见）
+                ["judges_source"] = usedPool ? "judge_pool" : "slots",
                 ["warnings"]      = warnings.ToArray()
             };
             if (warnings.Count > 0)

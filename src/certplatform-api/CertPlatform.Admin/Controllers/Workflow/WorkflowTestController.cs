@@ -113,6 +113,9 @@ namespace CertPlatform.Admin.Controllers.Workflow
                     Success = outcome.Success,
                     Error = outcome.Error,
                     Output = outcome.Output,
+                    // ★ 声明为连线、但本次取不到上游值的端口 —— 单节点测试不执行上游，
+                    //   这是**正常的能力边界**而非节点错配，必须显式告诉用户（⛔ 不静默）。
+                    UnresolvedInputs = outcome.UnresolvedInputs,
                     DurationMs = outcome.DurationMs
                 }, "节点测试完成"));
             }

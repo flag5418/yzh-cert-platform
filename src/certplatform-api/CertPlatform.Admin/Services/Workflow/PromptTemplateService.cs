@@ -104,7 +104,7 @@ public class PromptTemplateService
             entity.Version = 1;
             entity.IsActive = true;
             entity.IsValid = 1;
-            entity.CreateTime = DateTime.UtcNow;
+            entity.CreateTime = DateTime.Now;
             if (string.IsNullOrWhiteSpace(entity.Status)) entity.Status = "active";
 
             var inserted = await _db.InsertAsync(entity);

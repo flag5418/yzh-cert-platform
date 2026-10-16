@@ -241,6 +241,16 @@ namespace CertPlatform.Shared.Workflow.Models
 
         public Dictionary<string, object> Output { get; set; } = new();
 
+        /// <summary>
+        /// ★ 2026-10-15 新增：<b>声明为连线、但本次取不到上游值的输入端口名</b>。
+        ///
+        /// <para>配置期单节点测试刻意不执行上游（<c>sharedOutputs</c> 传空）⇒ 连线端口
+        /// 本来就没有值。修复前引擎把「源节点 id」当业务值返回（只写一条 LogWarning），
+        /// 用户只会看到下游报「verdict 非法」⇒ 把<b>测试的能力边界</b>误当成<b>节点配置错误</b>。
+        /// 现改为显式回传，界面提示「本次测试未执行上游：verdict、result 无值」。</para>
+        /// </summary>
+        public List<string> UnresolvedInputs { get; set; } = new();
+
         public int DurationMs { get; set; }
     }
 

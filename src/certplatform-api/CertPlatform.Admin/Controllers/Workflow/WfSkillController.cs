@@ -101,12 +101,15 @@ namespace CertPlatform.Admin.Controllers.Workflow
                 var dtos = new List<SkillMetadataDto>(result.Data.Count);
                 foreach (var skill in result.Data)
                 {
+                    // ★ 2026-10-15：Description 改走反射（代码优先），见 ResolveDescription 注释。
+                    var meta = ResolveMeta(skill.Code);
+
                     dtos.Add(new SkillMetadataDto
                     {
                         Code = skill.Code,
                         SkillCode = skill.Code,
                         Name = skill.Name,
-                        Description = skill.Description ?? string.Empty,
+                        Description = ResolveDescription(meta, skill.Description),
                         // ★ 用途开关（2026-10-11）：节点库按当前设计器场景过滤，默认 0 = 不出现
                         IsUseForNcConfig = skill.IsUseForNcConfig,
                         IsUseForReport = skill.IsUseForReport,
@@ -121,13 +124,40 @@ namespace CertPlatform.Admin.Controllers.Workflow
             }
         }
 
+        /// <summary>
+        /// 取 Skill 的反射元数据（<c>[Skill]</c> 静态索引优先，零 DB 依赖）。
+        /// <para>返回 <c>null</c> = 该 code 不在代码索引里（如纯 DI 型 Skill，只有 wf_skill_reflection 登记）。</para>
+        /// </summary>
+        private SkillMetadata? ResolveMeta(string? skillCode)
+            => !string.IsNullOrWhiteSpace(skillCode) && SkillIndex.Value.TryGetValue(skillCode!, out var loc)
+                ? _skillExecutor.Analyze(loc.ClassPath, loc.MethodName)
+                : null;
+
+        /// <summary>
+        /// ★ 节点说明的取数口径（2026-10-15 修正）：<b>代码优先，DB 兜底</b>。
+        ///
+        /// <para><b>为什么必须改</b>：属性面板顶部的「!」悬浮读的就是本字段，而它此前<b>只读
+        /// <c>wf_skill.Description</c></b>。实测 <c>stamp_judge_level</c> / <c>nc_conclusion_v2</c> /
+        /// <c>collect_judges</c> 三个 v2 节点的该列为<b>空</b> ⇒ 用户在画布上<b>根本看不到「!」</b>，
+        /// 而代码 <c>[Skill(Description=…)]</c> 里那份说明（含「三种接法」「怎么配」）<b>写了却到不了界面</b>。</para>
+        ///
+        /// <para><b>为什么是「代码优先」</b>：与端口元数据（<see cref="ResolveInputPortsAsync"/>）
+        /// 同一口径 —— 本项目已定「代码即数据源，DB 登记只作回退」（见本文件
+        /// <c>SkillIndex</c> 注释）。若反过来的话，改说明要同时改代码 + 改 DB，必然分叉。</para>
+        /// </summary>
+        private static string ResolveDescription(SkillMetadata? meta, string? dbDescription)
+        {
+            if (meta != null && !string.IsNullOrWhiteSpace(meta.Description))
+                return meta.Description;
+            return dbDescription ?? string.Empty;
+        }
+
+        /// <summary>端口 DTO 投影（把反射端口翻译成对外契约）。</summary>
         private async Task<List<SkillPortDto>> ResolveInputPortsAsync(string skillCode, CancellationToken ct)
         {
             if (string.IsNullOrWhiteSpace(skillCode)) return new List<SkillPortDto>();
 
-            SkillMetadata? meta = null;
-            if (SkillIndex.Value.TryGetValue(skillCode, out var loc))
-                meta = _skillExecutor.Analyze(loc.ClassPath, loc.MethodName);
+            var meta = ResolveMeta(skillCode);
 
             if (meta == null)
                 meta = await _skillRegistry.LoadAsync(skillCode, ct);

@@ -33,7 +33,13 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         Name = "标准目录文件是否缺失",
         ReturnType = "boolean",
         ResultPort = "result",
-        Description = "★ 判断某标准目录要求的企业文件是否已上传：返回四态 uploaded/not_required/placeholder_only/not_configured，★ 区分「企业没交」与「目录没配」"
+        Description =
+            "【作用】判断某标准目录要求的企业文件是否已上传，返回四态 " +
+            "uploaded / not_required / placeholder_only / not_configured —— ★ 区分「企业没交」与「目录没配」。\n" +
+            "【怎么配】只填一个「标准文件」（选项 = 左侧树当前标准+阶段下的标准文件）；" +
+            "标准 / 阶段由左侧树自动带入，执行期按「当前企业 + 该文件」判定。\n" +
+            "【坑】⛔ not_configured（目录没配）≠ 缺失，接条件分支前先看清是四态里的哪一个；" +
+            "输出 result(bool) 可直接连条件分支的「条件值」。"
     )]
     public static class IsStdFileMissingSkill
     {

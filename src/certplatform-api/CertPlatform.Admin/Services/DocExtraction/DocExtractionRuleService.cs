@@ -958,6 +958,10 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
                 RuleCode = x.RuleCode,
                 StandardFileCode = x.StandardFileCode,
                 FileName = x.FileName,
+                // ★ 2026-10-15：文件夹路径（树形下拉用）—— 与实体 StandardDirectoryFile.FolderPath
+                //   计算属性同款：FullPath 去 FileName 后缀再 TrimEnd('/')。
+                //   文件行缺失（视图 COALESCE FullPath=''）→ folderPath='' → 前端归根级。
+                FolderPath = ComputeFolderPath(x.FullPath, x.FileName),
                 StandardCode = x.StandardCode,
                 StageCode = x.StageCode,
                 Skill = x.Skill,
@@ -967,6 +971,19 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
             .Cast<object>()
             .ToList();
         return rows;
+    }
+
+    /// <summary>
+    /// FullPath → 文件夹路径（FullPath 去 FileName 后缀）。
+    /// <para>与 <c>StandardDirectoryFile.FolderPath</c> 计算属性逐字同款 —— 视图行是匿名投影，
+    /// 无法直接复用实体计算属性，故在此内联（⛔ 不要改逻辑，两处必须一致）。</para>
+    /// </summary>
+    private static string ComputeFolderPath(string? fullPath, string? fileName)
+    {
+        if (string.IsNullOrEmpty(fullPath) || string.IsNullOrEmpty(fileName)) return "";
+        return fullPath.EndsWith(fileName, StringComparison.Ordinal)
+            ? fullPath[..^fileName.Length].TrimEnd('/')
+            : fullPath;
     }
 
     // ========================================================
@@ -1037,6 +1054,10 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
 
         [System.Text.Json.Serialization.JsonPropertyName("fileName")]
         public string FileName { get; set; } = "";
+
+        /// <summary>文件夹路径（'/' 分隔，无文件名）—— el-tree-select 构树用（2026-10-15）</summary>
+        [System.Text.Json.Serialization.JsonPropertyName("folderPath")]
+        public string FolderPath { get; set; } = "";
 
         [System.Text.Json.Serialization.JsonPropertyName("standardCode")]
         public string StandardCode { get; set; } = "";

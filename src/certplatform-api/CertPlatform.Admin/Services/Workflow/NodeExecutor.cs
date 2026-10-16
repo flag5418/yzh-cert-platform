@@ -76,12 +76,19 @@ namespace CertPlatform.Admin.Services.Workflow
             var startedAt = DateTime.Now;
             var sw = Stopwatch.StartNew();
 
+            // ★ 2026-10-15：声明为连线、但本次取不到上游值的端口名。
+            //   提到 try 外 ⇒ **失败路径也能回传**（用户实测正是「verdict 非法」这种失败，
+            //   此时最需要告诉用户「根因是测试没执行上游」，而不是让他去怀疑节点配置）。
+            var unresolvedInputs = new List<string>();
+
             _wfLogger.NodeStart(taskCode, itemCode, node.NodeId, node.NodeType, node.Title);
 
             try
             {
                 // 解析输入参数（使用 inputTypes 精确判断类型）
-                var resolvedInputs = ResolveInputs(node.Inputs, node.InputTypes, sharedOutputs, contextParams);
+                var (resolvedInputs, unresolved) = ResolveInputs(
+                    node.Inputs, node.InputTypes, node.InputPorts, sharedOutputs, contextParams);
+                unresolvedInputs = unresolved;
 
                 _wfLogger.NodeInputs(taskCode, itemCode, node.NodeId,
                     JsonSerializer.Serialize(resolvedInputs));
@@ -130,6 +137,10 @@ namespace CertPlatform.Admin.Services.Workflow
 
                 nodeResult.StartedAt = startedAt;
                 nodeResult.CompletedAt = DateTime.Now;
+                // ★ 未解析的连线端口 ⇒ 显式回传（⛔ 不静默）。
+                //   恒赋值（空集合也赋）⇒ 消费方永远拿到数组，不必判 null
+                //   （「有时 null 有时数组」是本项目反复踩的静默陷阱）。
+                nodeResult.UnresolvedInputs = unresolvedInputs;
                 return nodeResult;
             }
             catch (WorkflowDataMissingException ex)
@@ -149,6 +160,12 @@ namespace CertPlatform.Admin.Services.Workflow
                 //   失败分类码：DATA_MISSING（红·去补录） vs SYSTEM_ERROR（灰·报 bug）
                 sw.Stop();
                 _wfLogger.NodeFail(taskCode, itemCode, node.NodeId, ex.Message, (int)sw.ElapsedMilliseconds);
+
+                // ★ 2026-10-16：把「声明为连线但取不到上游值」的端口清单**挂到异常上**再穿透。
+                //   本异常按设计要交给 WorkflowInterpreter 落补录缺口，但那时 NodeExecutionResult
+                //   已经不存在了 ⇒ 诊断清单永久丢失。挂上来之后，调用方（如单节点测试）
+                //   即使只拿到异常也能告诉用户「是哪些端口没值」。
+                ex.UnresolvedInputs = unresolvedInputs;
                 throw;
             }
             catch (Exception ex)
@@ -163,6 +180,9 @@ namespace CertPlatform.Admin.Services.Workflow
                 //   （两者处置人不同：前者找规则作者改配置，后者报开发）。
                 failResult.ErrorCode = (ex as WorkflowNodeFailureException)?.ErrorCode
                                        ?? WorkflowErrorCodes.SystemError;
+                // ★ 失败时同样回传未解析端口 —— 用户实测的「verdict 非法」正是这种情形：
+                //   真正的根因是「测试没执行上游 ⇒ verdict 没值」，必须一并告诉用户。
+                failResult.UnresolvedInputs = unresolvedInputs;
                 failResult.StartedAt = startedAt;
                 failResult.CompletedAt = DateTime.Now;
                 return failResult;
@@ -177,43 +197,75 @@ namespace CertPlatform.Admin.Services.Workflow
         /// <para>  inputTypes[portName] = "constant" → 值为常量字符串，直接使用</para>
         /// <para>  inputTypes[portName] = "link" → 值为上游节点 ID，从 sharedOutputs 读取</para>
         /// <para>  inputTypes 不存在或未声明 → 回退旧逻辑（constant: 前缀 / 节点 ID 猜测）</para>
+        ///
+        /// <para><b>返回</b>：<c>Resolved</c> = 端口 → 值；<c>Unresolved</c> = 声明为连线、
+        /// 但本次取不到上游值的端口名（见 <c>NodeExecutionResult.UnresolvedInputs</c>）。</para>
         /// </summary>
-        private Dictionary<string, object> ResolveInputs(
+        private (Dictionary<string, object> Resolved, List<string> Unresolved) ResolveInputs(
             Dictionary<string, string> inputs,
             Dictionary<string, string> inputTypes,
+            List<PortConfig>? inputPorts,
             Dictionary<string, object> sharedOutputs,
             Dictionary<string, object> contextParams)
         {
             var resolved = new Dictionary<string, object>();
+            var unresolved = new List<string>();
 
             if (inputs == null || inputs.Count == 0)
-                return resolved;
+                return (resolved, unresolved);
+
+            // ★ 端口**声明**的 BindMode —— 唯一可靠判据，见 NodeExecutionResult.UnresolvedInputs 注释。
+            //   ⛔ 不能用前端送来的 inputTypes 代替：`ConstantOnly` 端口在 PortControl 里
+            //   是个纯输入框、**从不发 update:inputType** ⇒ 它的 inputType 恒为默认的 "link"
+            //   （实测：已填值的 judge_code 也带着 "link" 过来）。按 inputTypes 判定会把常量打成 null。
+            var bindModes = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var port in inputPorts ?? new List<PortConfig>())
+            {
+                if (!string.IsNullOrEmpty(port.Name) && !bindModes.ContainsKey(port.Name))
+                    bindModes[port.Name] = port.BindMode ?? "";
+            }
 
             foreach (var (portName, rawValue) in inputs)
             {
                 var inputType = inputTypes?.GetValueOrDefault(portName);
+                bindModes.TryGetValue(portName, out var bindMode);
                 // ★ targetPort 必须传下去 —— 上游输出是「多键字典」时靠它决定取哪个键
                 //   （2026-10-11 用户裁定 A：确立 result 主输出约定）
-                resolved[portName] = ResolveInputValue(rawValue, inputType, sharedOutputs, contextParams, portName);
+                resolved[portName] = ResolveInputValue(
+                    rawValue, inputType, bindMode, sharedOutputs, contextParams, portName, unresolved);
             }
 
-            return resolved;
+            return (resolved, unresolved);
         }
+
+        /// <summary>
+        /// 该端口是否**声明**为连线（<c>Link</c> / <c>LinkOrConstant</c>）。
+        ///
+        /// <para>⛔ 不看前端送来的 <c>inputTypes</c>（可能过期）；端口未声明时返回 <c>false</c>
+        /// ⇒ 保守沿用旧行为（原样返回），<b>不误杀常量</b>。</para>
+        /// </summary>
+        private static bool IsDeclaredLinkPort(string? bindMode) =>
+            string.Equals(bindMode, "Link", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(bindMode, "LinkOrConstant", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// 解析单个输入值
         /// </summary>
         /// <param name="rawValue">原始值</param>
         /// <param name="inputType">输入类型："link" / "constant" / null（未知）</param>
+        /// <param name="bindMode">该端口**声明**的绑定模式（<c>Link</c>/<c>LinkOrConstant</c>/<c>ConstantOnly</c>/<c>Enum</c>；未声明 = null）</param>
         /// <param name="sharedOutputs">已执行节点输出池</param>
         /// <param name="contextParams">上下文参数</param>
         /// <param name="targetPort">本端口的名字 —— 上游输出为多键字典时，优先取同名键（见 <see cref="PickFromOutput"/>）</param>
+        /// <param name="unresolved">收集「声明为连线但取不到值」的端口名（见 <c>NodeExecutionResult.UnresolvedInputs</c>）</param>
         private object? ResolveInputValue(
             string? rawValue,
             string? inputType,
+            string? bindMode,
             Dictionary<string, object> sharedOutputs,
             Dictionary<string, object> contextParams,
-            string? targetPort = null)
+            string? targetPort,
+            List<string> unresolved)
         {
             if (string.IsNullOrEmpty(rawValue))
                 return null;
@@ -242,7 +294,30 @@ namespace CertPlatform.Admin.Services.Workflow
                     return output;
                 }
 
-                _logger.LogWarning("连线输入值 '{RawValue}' 未找到对应节点输出，返回原始值", rawValue);
+                // ★★ 2026-10-15 修：**取不到上游值时，⛔ 不再把「源节点 id」当业务值返回**。
+                //
+                //   修复前：只写一条 LogWarning 就 `return rawValue` ⇒ 一个字符串
+                //   `"is_empty_n1"` 被当成 `verdict` 送进节点 ⇒ 节点只能报
+                //   「verdict 非法：is_empty_n1」，把**测试环境的能力边界**伪装成
+                //   **节点的配置错误**（用户实测上报）。与 AiUnresolvedRefs 要修的是同一类
+                //   「诊断面说谎」：只写日志 ⇒ 界面上完全看不见 ⇒ 用户以为配置没问题。
+                //
+                //   现在：值置 null（诚实的「没有值」）+ 记入 UnresolvedInputs 回传前端。
+                if (IsDeclaredLinkPort(bindMode))
+                {
+                    unresolved.Add(targetPort ?? rawValue);
+                    _logger.LogWarning(
+                        "连线端口 '{Port}' 的上游 '{RawValue}' 本次未执行 ⇒ 值置空（已记入 UnresolvedInputs）",
+                        targetPort, rawValue);
+                    return null;
+                }
+
+                // ⚠️ 端口**没有声明**为连线（或声明缺失）⇒ 保守沿用旧行为：原样返回。
+                //   实测踩点：`ConstantOnly` 端口在画布上是个纯输入框、恒带着 "link" 类型过来，
+                //   若在这里置 null，会把**已经填好的常量**（如 judge_code）一起打成空。
+                _logger.LogWarning(
+                    "连线输入值 '{RawValue}' 未找到对应节点输出，且端口 '{Port}' 未声明为连线 ⇒ 按常量原样使用",
+                    rawValue, targetPort);
                 return rawValue;
             }
 
@@ -343,10 +418,28 @@ namespace CertPlatform.Admin.Services.Workflow
         /// <c>type:'string'</c>）⇒ ⛔ <b>刻意不做</b>「猜数字/猜布尔」的自动转换：猜错会让
         /// <c>compare</c> 走错比较分支（数值比较 vs 字符串比较），正是本项目反复踩的
         /// 「静默算错」。要数值比较时由 <c>compare</c> 自己按内容判断（它本来就会先试数值）。</para>
+        ///
+        /// <para><b>★★ 2026-10-15 补：存量数据回落 <c>description</c></b>（NC 配置页实测缺陷）。</para>
+        /// <para>权威值仍是 <c>config.value</c>（§6.4）。但前端 <c>serializer.serialize</c> 只在
+        /// <c>Object.keys(config).length &gt; 0</c> 时才落 <c>config</c> ⇒ 用户在**常量值**文本框
+        /// 输入、而该值被持久化进 <c>description</c>（描述框）的存量节点，其 <c>config</c> 为空、
+        /// <c>description</c> 里恰恰是那个常量值。此时若只读 <c>config.value</c> ⇒ 恒得到空串 ⇒
+        /// <c>{{常量.result}}</c> 被 <see cref="AiNodeExecutor"/> 判为未解析 ⇒ 测试模式「不中断」
+        /// 会把<b>未替换的占位符原文</b>直接送 LLM（模型照抄，静默产出错误结论，正是 2026-10-12
+        /// 明令禁止的一类）。故在此<b>单点</b>回落：<c>config.value</c> 缺失/空白时取 <c>description</c>。
+        /// 新数据（走面板「常量值」= <c>config.value</c>）不受影响，回落是纯兼容兜底。</para>
         /// </summary>
         private static Dictionary<string, object> ExecuteConstant(WorkflowNodeConfig node)
         {
             var value = node.Config?.GetValueOrDefault("value")?.ToString() ?? string.Empty;
+
+            // ★ 兼容兜底：权威值 config.value 缺失（含空串）时，回落节点描述 description。
+            //   覆盖「常量值被填进描述框、config 未落库」的存量节点（serializer 丢空 config 的产物）。
+            if (string.IsNullOrWhiteSpace(value)
+                && !string.IsNullOrWhiteSpace(node.Description))
+            {
+                value = node.Description!;
+            }
 
             return new Dictionary<string, object>
             {
@@ -605,6 +698,24 @@ namespace CertPlatform.Admin.Services.Workflow
         }
 
         /// <summary>
+        /// 端口值是否算「**没有来源**」（⇒ 该端口不进 <c>ConnectedPorts</c>）。
+        ///
+        /// <para><b>口径与 skill 侧一致</b>（<c>StampJudgeLevelSkill.IsEmptyValue</c> /
+        /// <c>SkillExecutor.IsEmptyValue</c>）：<c>null</c> / 空白串 / 空集合 算空。</para>
+        ///
+        /// <para>⚠️ <c>false</c> 与 <c>0</c> <b>不算空</b> —— 它们是有效值
+        /// （如 <c>verdict</c> 手填 <c>"false"</c>、常量 <c>"0"</c>），
+        /// 若判成空会把「作者确实配了值」误判成「没配」。</para>
+        /// </summary>
+        private static bool IsEmptyInputValue(object? v)
+        {
+            if (v == null) return true;
+            if (v is string s) return string.IsNullOrWhiteSpace(s);
+            if (v is System.Collections.ICollection c) return c.Count == 0;
+            return false;
+        }
+
+        /// <summary>
         /// skill 节点：通过 ISkillRegistry 反射执行 Skill
         ///
         /// <para><b>★★★ 2026-10-12 用户裁定：失败必须真的中断</b></para>
@@ -637,9 +748,43 @@ namespace CertPlatform.Admin.Services.Workflow
             _wfLogger.SkillExec(skillCode, "ExecuteAsync");
 
             // 构造 SkillContext
+            // ★ 2026-10-15：新增两路注入 ——
+            //   ① ContextParams = 本次运行的业务上下文（orgCode / standardCode / phaseCode / …）
+            //      ⇒ skill 用 [FromContext] 取，画布上不再出现这些手填框；
+            //   ② ConnectedPorts = 「**确实有来源**」的端口名集合 ⇒ 让 skill 能区分
+            //      「端口没接」（配置错）与「接了但上游返回空」（不可判定）。
+            //
+            //   ★★ 2026-10-15 修：原实现直接取 `node.Inputs.Keys` ⇒ **被空值键污染**。
+            //   前端（WorkflowDesigner.handleTestNode）原样送 `nodeData.inputs`，其中
+            //   **包含用户没填的常量端口（值 = 空串）** —— 实测报文：
+            //     {"result":"docField_n1","judge_code":"","level":"","verdict":"is_empty_n1","reason":""}
+            //   ⇒ 「没接」与「接了但空」又分不开了：`stamp_judge_level` 的
+            //   「两个都不接 ⇒ CONFIG_ERROR」**硬性不变量在真实页面上静默失效**
+            //   （它只看到「result 在集合里」，而那个键其实来自一条空常量）。
+            //
+            //   现按「**值非空**」过滤 —— 与 `StampJudgeLevelSkill.IsEmptyValue` 同口径：
+            //     · 有连线   ⇒ 值是**源节点 id**（非空）⇒ 计入
+            //     · 有非空常量（如 judge_code="J1"）    ⇒ 计入
+            //     · 空串 / null / 空集合               ⇒ **没有来源** ⇒ ⛔ 不计入
+            var connectedPorts = new HashSet<string>(
+                (node.Inputs ?? new Dictionary<string, string>())
+                    .Where(kv => !IsEmptyInputValue(kv.Value))
+                    .Select(kv => kv.Key),
+                StringComparer.Ordinal);
+
+            // ⚠️ 必须**浅拷贝**：调用方传进来的是 item 级 runCtx，里面的登记池（JudgePool）
+            //    必须保持**同一实例**（否则登记会丢）—— 浅拷贝正好满足：只多一个键，引用不变。
+            var skillCtxParams = new Dictionary<string, object>(
+                contextParams ?? new Dictionary<string, object>())
+            {
+                [WorkflowContextKeys.ConnectedPorts] = connectedPorts
+            };
+
             var context = new SkillContext
             {
                 Inputs = resolvedInputs ?? new Dictionary<string, object>(),
+                ContextParams = skillCtxParams,
+                ConnectedPorts = connectedPorts,
                 WorkflowInstanceId = $"{taskCode}:{itemCode}",
                 NodeId = node.NodeId
             };

@@ -50,9 +50,14 @@ public abstract class BaseEntity : INotifyPropertyChanged
     [StringLength(36)]
     public string? Code { get; set; }
 
-    /// <summary>创建时间（创建时赋值，后续不变）</summary>
+    /// <summary>
+    ///     创建时间（创建时赋值，后续不变）
+    ///     <para>★ 全库口径 = <b>本地时间</b>（Asia/Shanghai，UTC+8）：日志/列表直接展示，
+    ///     前端 <c>new Date(无 Z 的 JSON)</c> 按本地解析。⛔ 不要用 <c>UtcNow</c>（会显示早 8 小时）。
+    ///     UtcNow 仅限内部机制：JWT 过期 / 缓存过期 / 超时比较 / 耗时统计 / Redis TTL。</para>
+    /// </summary>
     [SugarColumn(ColumnName = "CreateTime")]
-    public DateTime CreateTime { get; set; } = DateTime.UtcNow;
+    public DateTime CreateTime { get; set; } = DateTime.Now;
 
     /// <summary>创建人 Code（存储用户业务编码，非自增 ID）</summary>
     [SugarColumn(ColumnName = "CreateBy")]

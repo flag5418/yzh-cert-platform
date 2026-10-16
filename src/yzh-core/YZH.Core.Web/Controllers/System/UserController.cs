@@ -201,7 +201,7 @@ public class UserController : YzhControllerBase<Sys_User>
 
         var user = result.Data;
         user.UserPwd = _passwordHelper.AesEncrypt("123456");
-        user.LastModifyPwdDate = DateTime.UtcNow;
+        user.LastModifyPwdDate = DateTime.Now;
         
         var updateResult = await Entity.Update(user, UserContext.ClientIp);
         if (!updateResult.Success)

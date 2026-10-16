@@ -115,6 +115,17 @@ export function deserialize(config: WorkflowConfig, layoutJson: LayoutJson | nul
   const idGenerator = new NodeIdGenerator()
   const oldToNew: Record<string, string> = {}
 
+  // 第 0 遍：把全部合法 ID **一次性**喂给计数器。
+  // ⛔ 不可在下面 map 里逐节点 resetFromNodes：该方法先 clear 全表，逐节点调用后
+  //   计数器只剩「最后一个合法节点」那一档 —— 之后 next('ai_node') 会从 0 起算，
+  //   撞出已存在的 ai_node_n1（2026-10-15「AI 节点执行失败：same key already added.
+  //   Key: ai_node_n1」事故根因：重复节点 ID 落库 ⇒ 后端 ToDictionary 直接抛）。
+  idGenerator.resetFromNodes(
+    config.nodes
+      .map(n => ({ id: n.nodeId || n.id || '' }))
+      .filter(n => isValidNodeId(n.id))
+  )
+
   // 第一遍：检测并迁移旧 ID（n${Date.now()} 格式）
   const nodes = config.nodes.map((n, idx) => {
     const nodeId = n.nodeId || n.id || `n${idx}`
@@ -125,8 +136,6 @@ export function deserialize(config: WorkflowConfig, layoutJson: LayoutJson | nul
       newId = idGenerator.next(classCode)
       oldToNew[nodeId] = newId
       migrated = true
-    } else {
-      idGenerator.resetFromNodes([{ id: newId }])
     }
 
     const pos = positions[nodeId] || positions[newId] || {}

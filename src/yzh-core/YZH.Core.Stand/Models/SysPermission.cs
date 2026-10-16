@@ -42,7 +42,7 @@ public class SysApi : IIsValid
     public int IsValid { get; set; } = 1;
     
     /// <summary>创建时间</summary>
-    public DateTime CreateTime { get; set; } = DateTime.UtcNow;
+    public DateTime CreateTime { get; set; } = DateTime.Now;
 
     /// <summary>更新时间</summary>
     public DateTime? UpdateTime { get; set; }
@@ -67,7 +67,7 @@ public class SysRoleApi
     public string ApiCode { get; set; } = "";
 
     /// <summary>创建时间</summary>
-    public DateTime CreateTime { get; set; } = DateTime.UtcNow;
+    public DateTime CreateTime { get; set; } = DateTime.Now;
 }
 
 /// <summary>
@@ -89,7 +89,7 @@ public class SysUserPermission
     public string ApiCode { get; set; } = "";
 
     /// <summary>创建时间</summary>
-    public DateTime CreateTime { get; set; } = DateTime.UtcNow;
+    public DateTime CreateTime { get; set; } = DateTime.Now;
 
     /// <summary>更新时间</summary>
     public DateTime? UpdateTime { get; set; }

@@ -132,8 +132,14 @@
           </el-tab-pane>
           <el-tab-pane label="属性" name="props">
             <div class="prop-panel-wrapper">
+              <!-- ⛔ 禁止在这里给 NodePropertyForm 加 `:key` 强制重建（2026-10-15 已摘除 `panel_${forceRefreshTick}`）。
+                   原实现：面板内**任何一次编辑**都会 emit `update-node` → `handleUpdateNode` → tick++ →
+                   key 变化 ⇒ 整个 NodePropertyForm 被销毁重建。后果是「提示词 textarea 每敲一个字符就换一次 DOM」：
+                   焦点丢失 + `.node-form` 滚动容器 scrollTop 归零，用户侧表现为
+                   **「输入时滚动条自动跳、基本上没法输入」**（NC 规则配置页实测）。
+                   需要「外部改动回灌面板」时，靠 NodePropertyForm 内 `watch(selectedNode)` 的
+                   `_lastNodeId + form.title` 双判据（画布双击重命名即走此路），⛔ 不要用重建组件代替它。 -->
               <NodePropertyForm
-                :key="`panel_${forceRefreshTick}`"
                 :selected-node="selectedNode"
                 :skills="skills"
                 :doc-rules="docRulesForPanel"
@@ -253,11 +259,13 @@ const currentFilter = reactive({ OrgCode: '', StandardCode: '', PhaseCode: '' })
 const skills = ref<any[]>([])
 const categories = ref<any[]>([])
 const selectedNode = ref<any>(null)
-const forceRefreshTick = ref(0)
+// ⛔ 原 `forceRefreshTick`（只被 NodePropertyForm 的 `:key` 消费）已于 2026-10-15 整体删除 ——
+//   它等价于「用销毁重建组件来实现数据回灌」，任何面板内编辑都会触发一次整面板重建。
+//   回灌改由 NodePropertyForm 内 watch(selectedNode) 的双判据承担，详见模板处注释。
 const docRules = ref<any[]>([])
 const currentDocFields = ref<any[]>([])
 const currentDocTables = ref<any[]>([])
-/** ★ is_std_file_missing 节点用：当前「标准 + 阶段」下的标准文件，元素形如 { code, name } */
+/** ★ is_std_file_missing 节点用：当前「标准 + 阶段」下的标准文件，元素形如 { code, name, folderPath } */
 const stdFiles = ref<any[]>([])
 const savedTip = ref('')
 const executing = ref(false)
@@ -424,10 +432,18 @@ async function loadSkills() {
     // ★ skillCode 取 SkillCode（执行期 wf_skill_reflection 的键）：Code 与 SkillCode 对
     //   SK_* 类技能不一致，用 Code 会让 NodeExecutor 反射查不到 Skill（2026-10-10）。
     // ★ inputPorts 反射元数据（方案 A）：数据行 wf_skill_input 仅 6 行、不可依赖。
+    //
+    // ★★ 2026-10-15 补 `description` —— 这是一个**静默失效**的真缺陷：
+    //   `NodePropertyForm.nodeDescription` 读的是**小写** `s.description`，而这里此前只补了
+    //   skillCode/skillName/category/skillType/inputPorts 五个小写别名，`...s` 带过来的
+    //   是后端 PascalCase 的 `Description` ⇒ `s.description` 恒为 `undefined`
+    //   ⇒ **功能节点的属性面板永远不显示「!」节点说明**（后端写多好都到不了界面）。
+    //   ⛔ 与 portNormalize 同类问题：后端响应恒 PascalCase，跨边界必须显式归一化。
     skills.value = scopedItems.map((s: any) => ({
       ...s,
       skillCode: s.SkillCode || s.Code,
       skillName: s.Name,
+      description: s.Description ?? s.description ?? '',
       category: s.CategoryCode || '_default',
       skillType: s.SkillType || 'manual',
       inputPorts: skillPortIndex.value[s.SkillCode || s.Code] || []
@@ -527,6 +543,11 @@ async function loadDocRules() {
  *
  * <p>⚠️ 后端响应恒 <b>PascalCase</b>（<c>Code</c>/<c>FileName</c>）⇒ 在这里归一化成
  * <c>{ code, name }</c>，让面板只读小写（同 portNormalize 的思路，避免两套命名混用）。</p>
+ *
+ * <p>★ 2026-10-15：补 <c>folderPath</c> —— 下拉改「文件夹 → 文件」el-tree-select
+ * （buildFolderFileTree 构树）。优先读实体计算属性 <c>FolderPath</c>（System.Text.Json
+ * 默认序列化 get-only 属性）；若缺失则从 <c>FullPath</c> 去文件名后缀兜底推导
+ * （与后端 ComputeFolderPath 同款）。</p>
  */
 async function loadStdFiles(standardCode: string, stageCode: string) {
   if (!standardCode) { stdFiles.value = []; return }
@@ -535,15 +556,28 @@ async function loadStdFiles(standardCode: string, stageCode: string) {
     const res = await yzhApi.get(`/api/Admin/Workflow/StandardDirectory/std-files?${qs}`)
     expectOk(res as any, '标准文件列表加载失败')
     const arr: any[] = res?.data || res?.Data || []
-    stdFiles.value = (Array.isArray(arr) ? arr : []).map((f: any) => ({
-      code: f.Code || f.code || '',
-      name: f.FileName || f.fileName || '',
-      isRequired: f.IsRequired ?? f.isRequired ?? true,
-    }))
+    stdFiles.value = (Array.isArray(arr) ? arr : []).map((f: any) => {
+      const fileName = f.FileName || f.fileName || ''
+      const fullPath = f.FullPath || f.fullPath || ''
+      return {
+        code: f.Code || f.code || '',
+        name: fileName,
+        folderPath: f.FolderPath ?? f.folderPath ?? deriveFolderPath(fullPath, fileName),
+        isRequired: f.IsRequired ?? f.isRequired ?? true,
+      }
+    })
   } catch (e: any) {
     stdFiles.value = []
     ElMessage.error(e?.err || e?.message || '标准文件列表加载失败')
   }
+}
+
+/** FullPath 去 FileName 后缀 → 文件夹路径（与后端实体 FolderPath 计算属性同款；仅兜底用） */
+function deriveFolderPath(fullPath: string, fileName: string): string {
+  if (!fullPath || !fileName) return ''
+  return fullPath.endsWith(fileName)
+    ? fullPath.slice(0, fullPath.length - fileName.length).replace(/\/+$/, '')
+    : fullPath
 }
 
 /** 面板请求按「标准 + 阶段」重载标准文件 */
@@ -956,6 +990,11 @@ function handleUpdateNode(data: any) {
   diagram.value.updateText(data.nodeId, latestTitle || data.skillCode || '')
   diagram.value.setProperties(data.nodeId, { classCode: data.classCode || data.nodeType, nodeType: data.nodeType, title: latestTitle, description: data.description || "", skillCode: data.skillCode, config: data.config, inputs: data.inputs, inputTypes: data.inputTypes, inputPorts: data.inputPorts, outputPorts: data.outputPorts })
   nextTick(() => {
+    // ⛔ 迟到回调护栏（2026-10-15）：本次 `update-node` 从发出到此刻，用户可能已经
+    //   **切到别的节点 / 点了空白处取消选中**（切节点前会 flush 提示词缓冲，于是这条
+    //   update-node 是「迟到的」）。此时若照旧回写 `selectedNode`，就会把新选中项盖回旧节点，
+    //   或让已经取消选中的面板自己弹回来。判据：只有选中项仍是本节点才回写。
+    if (selectedNode.value?.nodeId !== data.nodeId) return
     const sn = store.getNodeById(data.nodeId)
     if (sn) {
       let branchEdges: any = undefined
@@ -965,7 +1004,8 @@ function handleUpdateNode(data: any) {
         branchEdges = outEdges.map((e: any) => ({ handle: e.properties?.sourceHandle || '', targetId: e.targetNodeId, edgeId: e.id }))
       }
       selectedNode.value = { nodeId: sn.id, nodeType: sn.nodeType, classCode: sn.classCode, title: sn.title, skillCode: sn.skillCode, config: { ...sn.config }, inputs: { ...sn.inputs }, inputTypes: { ...(sn.inputTypes || {}) }, outputs: { ...sn.outputs }, inputPorts: [...(sn.inputPorts || [])], outputPorts: [...(sn.outputPorts || [])], branchEdges }
-      forceRefreshTick.value++
+      // ⛔ 此处**刻意不**触发面板重建：本函数由面板自身编辑回调驱动，
+      //   重建 = 「一边输入一边拆掉输入框」。回灌由面板内 watch 判据负责（同 nodeId + 同 title ⇒ 早退）。
     }
   })
 }
@@ -990,7 +1030,8 @@ function promptEditNodeName(nodeId: string, currentName: string) {
             branchEdges = outEdges.map((e: any) => ({ handle: e.properties?.sourceHandle || '', targetId: e.targetNodeId, edgeId: e.id }))
           }
           selectedNode.value = { nodeId: storeNode.id, nodeType: storeNode.nodeType, classCode: storeNode.classCode, title: storeNode.title, description: storeNode.description || "", skillCode: storeNode.skillCode, config: { ...storeNode.config }, inputs: { ...storeNode.inputs }, inputTypes: { ...(storeNode.inputTypes || {}) }, outputs: { ...storeNode.outputs }, inputPorts: [...(storeNode.inputPorts || [])], outputPorts: [...(storeNode.outputPorts || [])], branchEdges }
-          forceRefreshTick.value++
+          // ★ 新 title 靠面板内 watch 判据回灌（`form.title !== node.title` ⇒ 重新初始化 form），
+          //   不再需要重建整个面板 —— 见模板处 ⛔ 注释。
         }
         _renamingNodeId.value = null; _renamingTimestamp.value = 0
       }, 300)
@@ -1232,22 +1273,29 @@ function validateGraph() {
 /**
  * ★ §2.7 配置期强校验 —— 保存前拦截（返回 true = 已弹窗拒绝保存）。
  *
- * <p>只挑 `AI_PARAM_INVALID` 一类：**保存不因为「图还没画完」被挡**（那是「校验」按钮的职责），
- * 但**必须**因为「参数引用了不存在的节点 / 参数名不合法 / 占位符没登记」被挡 ——
- * 这些一旦落库就是静默坏数据：提示词里的 `{{p1}}` 永远取不到值。</p>
+ * <p>只挑两类：`AI_PARAM_INVALID` 与 `DUPLICATE_NODE_ID`。**保存不因为「图还没画完」被挡**
+ * （那是「校验」按钮的职责），但**必须**因为下列坏数据被挡：</p>
+ * <p>① AI 参数引用了不存在的节点 / 参数名不合法 / 占位符没登记 —— 落库即静默坏数据，
+ * 提示词里的 `{{p1}}` 永远取不到值；</p>
+ * <p>② 重复节点 ID（2026-10-15）—— 落库即后端 `ToDictionary(n => n.NodeId)` 抛
+ * "An item with the same key has already been added"，AI 节点测试/执行直接 400。</p>
  */
-function blockInvalidAiParams(config: any): boolean {
-  let aiErrors: any[] = []
+function blockInvalidConfig(config: any): boolean {
+  const BLOCK_CODES = ['AI_PARAM_INVALID', 'DUPLICATE_NODE_ID']
+  let errs: any[] = []
   try {
-    aiErrors = analyzeWorkflowTopology(config).validation.errors.filter((e: any) => e.code === 'AI_PARAM_INVALID')
+    errs = analyzeWorkflowTopology(config).validation.errors.filter((e: any) => BLOCK_CODES.includes(e.code))
   } catch {
     return false // 拓扑都算不出来时交给「校验」按钮报，不在保存路径上吞异常
   }
-  if (!aiErrors.length) return false
-  const detail = aiErrors.map((e: any) => `  ✗ ${e.message}`).join('\n')
+  if (!errs.length) return false
+  const detail = errs.map((e: any) => `  ✗ ${e.message}`).join('\n')
+  const isDup = errs.some((e: any) => e.code === 'DUPLICATE_NODE_ID')
   ElMessageBox.alert(
-    `保存被拒绝 —— AI 节点参数校验未通过（${aiErrors.length} 处）：\n\n${detail}\n\n修复后才能保存（设计文档 §2.7）。`,
-    '参数校验失败',
+    isDup
+      ? `保存被拒绝 —— 存在重复节点 ID（${errs.length} 处）：\n\n${detail}\n\n删除重复节点后才能保存（否则后端执行会直接报错）。`
+      : `保存被拒绝 —— AI 节点参数校验未通过（${errs.length} 处）：\n\n${detail}\n\n修复后才能保存（设计文档 §2.7）。`,
+    isDup ? '节点 ID 重复' : '参数校验失败',
     { type: 'error', confirmButtonText: '知道了' },
   )
   return true
@@ -1262,10 +1310,10 @@ async function handleSave() {
   syncPositionsFromDiagram()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const config = serialize(store.state.nodes, store.state.edges, { version: 1 as any, workflowType: props.workflowType } as any) as any
-  // ★ 2026-10-14（设计 §2.7 配置期强校验）：AI 节点参数表任一不过 ⇒ **拒绝保存**。
+  // ★ 2026-10-14（设计 §2.7 配置期强校验）：AI 节点参数表 / 重复节点 ID 任一不过 ⇒ **拒绝保存**。
   //   校验实现只有一处（topology.validateTopology → aiParams.validateAiNodeParams），
   //   「校验 / 执行 / 保存」三个入口共用，⛔ 不在这里另写一套。
-  if (blockInvalidAiParams(config)) return
+  if (blockInvalidConfig(config)) return
   const layout = extractLayout(store.state.nodes)
   const leafName = currentLeaf.value[props.treeConfig.textField] || currentLeaf.value[props.treeConfig.codeField] || ''
   const ok = await confirmOrFalse(`保存工作流到「${leafName}」？`, '保存确认', { type: 'info' })
@@ -1393,7 +1441,9 @@ async function handleTestNode(nodeData: any) {
       }
       const res = await yzhApi.post('/api/Admin/Workflow/test/ai-node', testBody)
       if (res?.success && res.data) nodeData.onSuccess(res.data)
-      else nodeData.onError(res?.error || res?.err || res?.message || 'AI 节点测试失败', null)
+      // ★ 2026-10-16：同上 —— AI 节点失败时 data 里带着 Debug（渲染后的提示词 / 未解析引用），
+      //   必须一起回传，否则界面看不到「为什么没跑通」。
+      else nodeData.onError(res?.error || res?.err || res?.message || 'AI 节点测试失败', res?.data ?? null)
       return
     }
     const res = await yzhApi.post('/api/Admin/Workflow/test/node', {
@@ -1403,7 +1453,9 @@ async function handleTestNode(nodeData: any) {
       InputTypes: nodeData.inputTypes, InputPorts: nodeData.inputPorts, OutputPorts: nodeData.outputPorts
     })
     if (res?.success && res.data) nodeData.onSuccess(res.data)
-    else nodeData.onError(res?.error || res?.err || res?.message || '测试失败', null)
+    // ★ 2026-10-16：失败也把 data 带下去（载荷里有 UnresolvedInputs / Error 等诊断面），
+    //   否则节点面板只剩一句错误文本，「哪些端口本次没取到值」这类提示永远显示不出来。
+    else nodeData.onError(res?.error || res?.err || res?.message || '测试失败', res?.data ?? null)
   } catch (e: any) { nodeData.onError('请求失败: ' + (e?.message || e), null) }
 }
 

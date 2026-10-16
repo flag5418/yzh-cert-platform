@@ -29,6 +29,15 @@ namespace CertPlatform.Shared.Entities.Dir
         public string? PhaseCode { get; set; }
 
         /// <summary>
+        /// 目标文件夹编码（可选）：文件**没有**相对路径（走「选择文件」的普通选择器）时，
+        /// 落到这个文件夹；留空 = 目录根级。
+        /// <para>★ 2026-10-15：前端上传弹窗承诺「文件将上传到当前位置」，但契约里从来没有
+        /// 「当前位置」这个入参 ⇒ 单文件上传一律落到根级、用户在当前文件夹里看不到。
+        /// 本字段即那个缺失的入参。相对路径优先（整目录上传保持原层级）。</para>
+        /// </summary>
+        public string? TargetFolderCode { get; set; }
+
+        /// <summary>
         /// 需要创建的文件夹列表（前端从文件路径中提取去重）
         /// </summary>
         public List<FolderItem> Folders { get; set; } = new List<FolderItem>();

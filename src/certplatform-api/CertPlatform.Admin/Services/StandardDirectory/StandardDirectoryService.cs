@@ -1461,11 +1461,42 @@ public class StandardDirectoryService
         var enhancedFiles = new List<EnhancedFileItem>();
         long totalSize = 0;
 
+        // ★ 2026-10-15：目标文件夹回退（方案 A）——
+        //   走「选择文件」的普通选择器时 RelativePath = 纯文件名，没有父目录，
+        //   原实现一律落 FolderCode='' 根级 ⇒ 用户在文件夹里上传后「看不到」。
+        //   回退源 = manifest.TargetFolderCode（= 前端当前所在文件夹）。
+        //   校验：必须属本 config 且未软删；同时兼容本任务刚新建/复用的文件夹（folderMap 值域）。
+        string? targetFolderCode = null;
+        string? targetFolderFullPath = null;
+        if (!string.IsNullOrEmpty(manifest.TargetFolderCode))
+        {
+            var allFolders = await _core.GetDirectoryFoldersAsync(new[] { configCode });
+            var byCode = allFolders.FirstOrDefault(x => x.Code == manifest.TargetFolderCode);
+            if (byCode != null)
+            {
+                targetFolderCode = byCode.Code;
+                targetFolderFullPath = byCode.FullPath;
+            }
+            else
+            {
+                // 兼容：本任务刚新建 / 复用的文件夹（尚未进入有效文件夹集）
+                var ef = enhancedFolders.FirstOrDefault(f => f.FolderCode == manifest.TargetFolderCode);
+                if (ef != null)
+                {
+                    targetFolderCode = ef.FolderCode;
+                    targetFolderFullPath = ef.FullPath;
+                }
+            }
+            if (string.IsNullOrEmpty(targetFolderCode))
+                return (false, "目标文件夹不存在或已失效，请刷新目录后重试", null);
+        }
+
         for (int i = 0; i < manifest.Files.Count; i++)
         {
             var fileItem = manifest.Files[i];
-            var fullPath = fileItem.RelativePath;
+            var relPathKey = fileItem.RelativePath;   // 前端匹配键，响应里必须原样返回
             var fileName = fileItem.FileName;
+            var fullPath = relPathKey;
 
             // 系统噪声（.DS_Store / Thumbs.db / ~$xx.doc / ._xx）静默剔除，不建行不报错
             if (UploadFilePolicy.IsSystemNoise(fileName)) continue;
@@ -1479,8 +1510,25 @@ public class StandardDirectoryService
 
             // 解析父文件夹
             var parentDir = Path.GetDirectoryName(fullPath)?.Replace('\\', '/');
-            var folderCode = parentDir != null && folderMap.ContainsKey(parentDir)
-                ? folderMap[parentDir] : "";
+            string folderCode;
+            if (!string.IsNullOrEmpty(parentDir) && folderMap.ContainsKey(parentDir))
+            {
+                folderCode = folderMap[parentDir];
+            }
+            else if (targetFolderCode != null)
+            {
+                // ★ 回退：无相对路径（「选择文件」单文件上传）⇒ 落到用户当前所在文件夹
+                //   FullPath 必须与文件夹层级一致 —— 否则 uk_cfg_fullpath 与「文件在目录中的位置」脱钩，
+                //   将来用「选择文件夹」重传同名文件会判为不同路径而新建第二行（重复行）。
+                folderCode = targetFolderCode;
+                parentDir = targetFolderFullPath;
+                fullPath = string.IsNullOrEmpty(targetFolderFullPath)
+                    ? fileName : $"{targetFolderFullPath}/{fileName}";
+            }
+            else
+            {
+                folderCode = "";
+            }
 
             // 查找已有文件
             var existingFile = (await _core.GetDirectoryFilesByConfigCodeAsync(configCode))
@@ -1508,7 +1556,7 @@ public class StandardDirectoryService
                     Index = i,
                     FileCode = existingFile.Code ?? "",
                     FileName = fileName,
-                    RelativePath = fullPath,
+                    RelativePath = relPathKey,
                     FullPath = fullPath,
                     FileSize = fileItem.FileSize,
                     MimeType = fileItem.MimeType,
@@ -1603,7 +1651,7 @@ public class StandardDirectoryService
                     Index = i,
                     FileCode = newFile.Code ?? "",
                     FileName = fileName,
-                    RelativePath = fullPath,
+                    RelativePath = relPathKey,
                     FullPath = fullPath,
                     FileSize = fileItem.FileSize,
                     MimeType = fileItem.MimeType,

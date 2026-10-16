@@ -33,7 +33,12 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         Name = "获取字段值",
         ReturnType = "string",
         ResultPort = "field_value",
-        Description = "按字段编码和企业编码查询已提取的文档字段值"
+        Description =
+            "【作用】按「字段编码 + 企业编码」查**已提取入库**的文档字段值（读 ent_extraction_result）。\n" +
+            "【怎么配】字段编码必填（如 iso9001.ent_base.biz_lic.Name）；" +
+            "企业编码留空 = 平台标准级样例域（配置期验证用）。\n" +
+            "【坑】⛔ 查的是提取链路跑完后的结果，不是现场读文件 —— " +
+            "目标文档没跑过提取，这里恒为空。"
     )]
     public static class GetFieldSkill
     {

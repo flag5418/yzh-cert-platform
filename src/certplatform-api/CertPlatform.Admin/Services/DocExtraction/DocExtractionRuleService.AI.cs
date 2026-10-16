@@ -1502,20 +1502,35 @@ public partial class DocExtractionRuleService
         }
         if (cur != null) tables.Add(cur);
 
+        var bodyText = CollapseBlankLines(body);
+        var bodyEmpty = string.IsNullOrWhiteSpace(bodyText);
+
         var sb = new StringBuilder();
         sb.AppendLine("【正文】（普通段落/标题，字段只能来自这里）");
-        var bodyText = CollapseBlankLines(body);
-        sb.AppendLine(bodyText.Length > MaxContextChars
-            ? bodyText[..MaxContextChars] + "\n…（正文过长已截断；表格区块完整保留）"
-            : bodyText);
+        if (bodyEmpty)
+        {
+            // 表单/工艺卡类 docx 转 Markdown 后正文为空、整篇落在一个合并单元格大表里：
+            // 此时若仍禁止从表格出字段，模型只能违规输出且不带值 ⇒ 显式给出例外口径
+            sb.AppendLine("（正文为空：本文档内容全部位于下方表格区块内，疑为整表型表单/工艺卡。）");
+            sb.AppendLine("例外口径：允许从表格中识别「标签：值」形式的字段（标签作字段名，冒号后的实际内容作提取值，不得臆造）；纯数据型行列表格仍必须整体输出到 tables，禁止拆成字段。");
+        }
+        else
+        {
+            sb.AppendLine(bodyText.Length > MaxContextChars
+                ? bodyText[..MaxContextChars] + "\n…（正文过长已截断；表格区块完整保留）"
+                : bodyText);
+        }
 
         for (int i = 0; i < tables.Count; i++)
         {
             var t = tables[i];
             var headers = SplitTableRow(t[0]);
             var dataRows = Math.Max(0, t.Count - 2);
+            var headerLine = headers.All(string.IsNullOrEmpty)
+                ? "（表头为空，疑似合并单元格表单，按行内「标签：值」理解）"
+                : string.Join(" | ", headers);
             sb.AppendLine();
-            sb.AppendLine($"【表格 {i + 1}】（{dataRows} 行数据，列：{string.Join(" | ", headers)}）");
+            sb.AppendLine($"【表格 {i + 1}】（{dataRows} 行数据，列：{headerLine}）");
             foreach (var l in t) sb.AppendLine(l);
         }
 

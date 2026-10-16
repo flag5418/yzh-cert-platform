@@ -96,7 +96,13 @@ export function useWorkflowStore(): WorkflowStore {
       if (exists) { console.warn(`[Store] 节点 ${meta.className} 已存在，不允许重复添加`); return null }
     }
 
-    const nodeId = state.idGenerator.next(classCode)
+    let nodeId = state.idGenerator.next(classCode)
+    // ★ 唯一性兜底（2026-10-15）：计数器可能因旧数据/被覆盖而失真（next 返回已占用 ID）。
+    //   重复 ID 会让画布与 store 分叉（LogicFlow 自造 UUID）、落库 rule_json 带重复
+    //   nodeId ⇒ 后端 ToDictionary 抛 "An item with the same key has already been added"。
+    while (state.nodes.some(n => n.id === nodeId)) {
+      nodeId = state.idGenerator.next(classCode)
+    }
     const title = generateUniqueName(meta?.className || item.skillName || item.skillCode || classCode)
     // ★ 端口字段名归一化（2026-10-11）：item 来自 WorkflowDesigner.loadSkills，
     //   其 inputPorts 源自后端 metadata（PascalCase）⇒ 不归一化会让 port.name 为 undefined，
@@ -241,10 +247,27 @@ export function useWorkflowStore(): WorkflowStore {
   }
 
   function loadFromData(nodes: WorkflowNode[], edges: WorkflowEdge[]): void {
-    state.nodes = nodes; state.edges = edges
     state.idGenerator.resetFromNodes(nodes)
+
+    // ★ 重复节点 ID 防御（2026-10-15）：坏数据里两个节点可能共用同一 nodeId。
+    //   按 id 渲染时画布会静默丢掉后一个，LogicFlow 遇重复 id 还会自造 UUID ⇒
+    //   store 与画布 id 分叉 ⇒ 落库 rule_json 出现重复 nodeId ⇒ 后端 ToDictionary
+    //   抛 "An item with the same key has already been added. Key: ai_node_n1"。
+    //   后出现者重新编号（先出现者保持原 ID，edges / inputs 里对旧 ID 的引用仍指向先出现者）。
+    const seen = new Set<string>()
+    const deduped: WorkflowNode[] = []
+    for (const n of nodes) {
+      if (!seen.has(n.id)) { seen.add(n.id); deduped.push(n); continue }
+      let fresh = state.idGenerator.next(n.classCode || n.nodeType || 'skill')
+      while (seen.has(fresh)) fresh = state.idGenerator.next(n.classCode || n.nodeType || 'skill')
+      seen.add(fresh)
+      console.warn(`[Store] 加载时检测到重复节点 ID ${n.id}，已重编号为 ${fresh}`)
+      deduped.push({ ...n, id: fresh })
+    }
+
+    state.nodes = deduped; state.edges = edges
     state.dirty = false; state.operationLog = []
-    logOperation('loadFromData', { nodeCount: nodes.length, edgeCount: edges.length })
+    logOperation('loadFromData', { nodeCount: deduped.length, edgeCount: edges.length })
   }
 
   function generateUniqueName(baseName: string): string {

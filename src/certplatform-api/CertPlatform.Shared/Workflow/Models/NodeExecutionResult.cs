@@ -75,6 +75,29 @@ namespace CertPlatform.Shared.Workflow.Models
         /// </summary>
         public List<string>? AiUnresolvedRefs { get; set; }
 
+        /// <summary>
+        /// ★ 2026-10-15 新增：<b>本次执行中「声明为连线、但取不到上游值」的输入端口名</b>。
+        ///
+        /// <para><b>为什么必须有</b>：配置期<b>单节点测试</b>刻意不执行上游
+        /// （<c>RunSingleNodeAsync</c> 的 <c>sharedOutputs</c> 传空），于是「连线端口」的值
+        /// 谁也给不出来。修复前 <c>ResolveInputValue</c> 的做法是
+        /// <b>只写一条 <c>LogWarning</c>，然后把「源节点 id」当业务值返回</b> ——
+        /// 于是一个字符串 <c>"is_empty_n1"</c> 被送进下游，下游只能报
+        /// 「verdict 非法：is_empty_n1」，把<b>测试环境的能力边界</b>伪装成
+        /// <b>节点的配置错误</b>（用户实测上报过）。
+        /// 这与 <see cref="AiUnresolvedRefs"/> 要修的是同一类「诊断面说谎」。</para>
+        ///
+        /// <para><b>现在</b>：这类端口的值置 <c>null</c>（= 诚实的「没有值」），
+        /// 端口名收进本清单，由测试响应回传前端 ⇒ 界面可提示
+        /// 「本次测试未执行上游：verdict、result 无值」。</para>
+        ///
+        /// <para>⚠️ 判据是端口<b>声明的 <c>BindMode</c></b>（<c>Link</c>/<c>LinkOrConstant</c>），
+        /// ⛔ 不是前端送来的 <c>inputTypes</c> —— 后者可能过期
+        /// （前端 <c>NodePropertyForm</c> 优先复用已存的 type，实测出现过
+        /// 「已填值的常量端口仍标成 <c>link</c>」）⇒ 若按它判定会把<b>常量一起打成 null</b>。</para>
+        /// </summary>
+        public List<string>? UnresolvedInputs { get; set; }
+
         /// <summary>快速创建成功结果</summary>
         public static NodeExecutionResult Ok(Dictionary<string, object> output, int durationMs = 0)
             => new() { Success = true, Output = output ?? new(), DurationMs = durationMs };

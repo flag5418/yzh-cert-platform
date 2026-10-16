@@ -174,8 +174,8 @@ public class ApiScanner
                                 TreePath = ParseTreePath(groupPath),
                                 Description = ResolveDescription(method, httpMethodAttr, descAttr),
                                 Author = descAttr?.Author ?? "",
-                                CreatedAt = descAttr?.CreatedAt ?? DateTime.UtcNow,
-                                UpdatedAt = descAttr?.UpdatedAt ?? DateTime.UtcNow,
+                                CreatedAt = descAttr?.CreatedAt ?? DateTime.Now,
+                                UpdatedAt = descAttr?.UpdatedAt ?? DateTime.Now,
                                 Parameters = method.GetParameters()
                                     .Select(p => new ParamDescriptor
                                     {

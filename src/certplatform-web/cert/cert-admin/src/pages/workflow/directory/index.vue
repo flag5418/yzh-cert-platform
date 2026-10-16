@@ -691,7 +691,12 @@ async function onUploadSubmit() {
       return
     }
 
-    const { taskId, fileMap } = await uploadInit(directoryCode, filteredFiles, currentPhase.value?.OrgCode)
+    const { taskId, fileMap } = await uploadInit(
+      directoryCode,
+      filteredFiles,
+      currentPhase.value?.OrgCode,
+      currentFolderCode.value || undefined,
+    )
     if (!taskId) {
       ElMessage.error('上传初始化失败：未获取到 TaskId')
       uploading.value = false

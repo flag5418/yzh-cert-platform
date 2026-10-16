@@ -21,6 +21,10 @@ public class SysLog : BaseEntity
     [Required, StringLength(100)]
     public string Action { get; set; }
 
+    /// <summary>接口路径（HTTP 请求 Path，如 /api/Admin/Workflow/StandardDirectory/active-queue）</summary>
+    [StringLength(200)]
+    public string? ApiPath { get; set; }
+
     [StringLength(50)]
     public string? TargetType { get; set; }
 

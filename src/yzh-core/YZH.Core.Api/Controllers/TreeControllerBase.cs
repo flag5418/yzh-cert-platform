@@ -138,7 +138,8 @@ public abstract class TreeControllerBase<T> : YzhControllerBase<T>
                 System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
             if (createTimeProp != null && createTimeProp.PropertyType == typeof(DateTime))
             {
-                createTimeProp.SetValue(entity, DateTime.UtcNow);
+                // ★ 本地时间（Asia/Shanghai）——全库统一口径，⛔ 不用 UtcNow
+                createTimeProp.SetValue(entity, DateTime.Now);
             }
 
             // 3. 校验 parentCode 存在性

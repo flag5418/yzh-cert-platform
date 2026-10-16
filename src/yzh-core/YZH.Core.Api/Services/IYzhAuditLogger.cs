@@ -65,6 +65,15 @@ public class AuditLogEntry
     /// <summary>操作描述</summary>
     public string? Action { get; init; }
 
+    /// <summary>控制器名（不含 Controller 后缀，如 StandardDirectory）</summary>
+    public string? Controller { get; init; }
+
+    /// <summary>动作方法名（如 GetActiveQueue）</summary>
+    public string? ActionName { get; init; }
+
+    /// <summary>控制器完整命名空间（用于模块归类，如 CertPlatform.Admin.Controllers.Workflow）</summary>
+    public string? ControllerNamespace { get; init; }
+
     /// <summary>请求参数（脱敏）</summary>
     public string? RequestParams { get; init; }
 

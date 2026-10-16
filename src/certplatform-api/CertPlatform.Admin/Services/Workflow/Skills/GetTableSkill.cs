@@ -30,7 +30,11 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         Name = "获取表格数据",
         ReturnType = "json",
         ResultPort = "rows",
-        Description = "按表格编码和企业编码查询已提取的表格数据"
+        Description =
+            "【作用】按「表格编码 + 企业编码」查**已提取入库**的表格数据（读 ent_table_extraction_result）。\n" +
+            "【怎么配】表格编码必填；企业编码留空 = 标准样例企业（配置期验证用）；" +
+            "表格序号在「同一文件有多张表」时用于指定取第几张。\n" +
+            "【坑】⛔ 同 get_field：读的是已入库的提取结果，没跑过提取链路就取不到。"
     )]
     public static class GetTableSkill
     {

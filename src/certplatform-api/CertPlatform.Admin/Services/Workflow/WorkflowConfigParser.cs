@@ -62,8 +62,23 @@ namespace CertPlatform.Admin.Services.Workflow
             _logger.LogInformation("[WorkflowConfigParser] 反序列化完成: {NodeCount} 个节点, {EdgeCount} 条边",
                 config.Nodes.Count, config.Edges?.Count ?? 0);
 
+            // ★ 节点 ID 体检（2026-10-15）：先于 ToDictionary 拦截，避免抛英文
+            //   ArgumentException "An item with the same key has already been added"（定位不到是哪张图）。
+            var emptyCount = config.Nodes.Count(n => string.IsNullOrWhiteSpace(n.NodeId));
+            if (emptyCount > 0)
+                throw new InvalidOperationException($"rule_json 存在 {emptyCount} 个空 nodeId 的节点（工作流保存前请检查设计器数据）");
+
+            var dupNodeIds = config.Nodes
+                .GroupBy(n => n.NodeId!, StringComparer.Ordinal)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToList();
+            if (dupNodeIds.Count > 0)
+                throw new InvalidOperationException(
+                    $"rule_json 存在重复节点 ID：{string.Join("、", dupNodeIds)}（请在工作流设计器中删除重复节点后重新保存）");
+
             // 2. 构建节点映射
-            var nodeMap = config.Nodes.ToDictionary(n => n.NodeId, n => n);
+            var nodeMap = config.Nodes.ToDictionary(n => n.NodeId!, n => n, StringComparer.Ordinal);
 
             // 3. 构建邻接表 + 入边表
             var adjacency = new Dictionary<string, List<WorkflowEdgeConfig>>();

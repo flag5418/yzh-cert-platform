@@ -76,14 +76,31 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                 // ③ 参数绑定
                 var args = BindArguments(parameters, context, ct);
 
-                // ④ ★ 入参完备性校验（判据 = [SkillParam(AllowEmpty)]，见 IsRequired）
-                var missing = CollectMissingInputs(parameters, context);
-                if (missing.Count > 0)
+                // ④ ★ 入参完备性校验（判据 = [SkillParam(AllowEmpty)]，见 AllowsEmpty）
+                //    ★★ 2026-10-15 修：**先分「锅的归属」再报错**（见 CollectMissingInputs）。
+                //    修复前一律报 PRECONDITION_EMPTY ⇒ 一个 `ConstantOnly` 参数（如
+                //    `stamp_judge_level.judge_code`）没填，系统会给**企业**开一个它
+                //    **永远填不了**的补录缺口，并把「作者没配」伪装成「数据缺失」。
+                var (missingData, missingConfig) = CollectMissingInputs(parameters, context);
+
+                // ④-a 规则作者的锅 ⇒ CONFIG_ERROR
+                //   NodeExecutor 抛 WorkflowNodeFailureException ⇒ 终止当前**路径**，
+                //   ⛔ **不落补录缺口**（补录解决不了配置错），提示语指向「改配置」。
+                if (missingConfig.Count > 0)
                 {
-                    // PRECONDITION_EMPTY ⇒ NodeExecutor 会抛 WorkflowDataMissingException
-                    // ⇒ 全局中断当前检查项 + 落补录缺口 + 标「不可判定」（链路已存在，直接复用）
                     return SkillResult.Fail(
-                        $"{skillAttr.Code} 参数为空且该参数不允许为空: {string.Join(", ", missing)}",
+                        $"{skillAttr.Code} 配置不完整：参数 {string.Join(", ", missingConfig)} 未填写" +
+                        "（该参数只能由规则作者在画布上配置，企业无法补录）",
+                        WorkflowErrorCodes.ConfigError);
+                }
+
+                // ④-b 上游没给值 ⇒ PRECONDITION_EMPTY
+                //   NodeExecutor 抛 WorkflowDataMissingException ⇒ 全局中断当前检查项 +
+                //   落补录缺口 + 标「不可判定」（链路已存在，直接复用）。
+                if (missingData.Count > 0)
+                {
+                    return SkillResult.Fail(
+                        $"{skillAttr.Code} 上游未提供必要数据：{string.Join(", ", missingData)}",
                         WorkflowErrorCodes.PreconditionEmpty);
                 }
 
@@ -91,7 +108,13 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                 var result = await (Task<SkillResult>)method.Invoke(null, args)!;
 
                 // ⑥ 统一信封包装
-                return Wrap(skillAttr, result);
+                var wrapped = Wrap(skillAttr, result);
+
+                // ⑦ ★ 运行级登记（[Skill(RegistersTo)]）—— 把主输出追加进上下文里的池。
+                //    ⛔ 放这里而不是 NodeExecutor：只有本类拿得到 [Skill] 特性 ⇒ 零硬编码。
+                RegisterToPool(skillAttr, context, wrapped);
+
+                return wrapped;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -228,6 +251,9 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
             {
                 // 跳过 [FromService] 参数
                 if (p.GetCustomAttribute<FromServiceAttribute>() != null) continue;
+                // ★ 跳过 [FromContext] 参数 —— 值由引擎从运行上下文注入，
+                //   ⛔ 规则作者看不到也填不了 ⇒ 必须不出现在画布端口上（否则又是一个要手填 GUID 的空框）。
+                if (p.GetCustomAttribute<FromContextAttribute>() != null) continue;
                 // 跳过 CancellationToken
                 if (p.ParameterType == typeof(CancellationToken) ||
                     p.ParameterType == typeof(CancellationToken?)) continue;
@@ -301,29 +327,93 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         }
 
         /// <summary>
-        /// ★ 收集「声明了不允许为空、但实际为空」的参数名。
+        /// ★ 收集「声明了不允许为空、但实际为空」的参数，并按<b>锅的归属</b>分成两桶。
+        ///
+        /// <para><b>返回值</b>：<c>MissingData</c> = <b>上游没给值</b>（报
+        /// <c>PRECONDITION_EMPTY</c>，处置人 = <b>企业</b>）；
+        /// <c>MissingConfig</c> = <b>规则作者没配</b>（报 <c>CONFIG_ERROR</c>，处置人 = <b>规则作者</b>）。</para>
+        ///
+        /// <para><b>★★ 为什么必须分桶（2026-10-15 修）</b>：<c>PRECONDITION_EMPTY</c> 的引擎动作是
+        /// <b>全局中断当前检查项 + 落补录缺口 + 标「不可判定」</b>（见 <c>WorkflowErrorCodes</c>）。
+        /// 若一个 <c>ConstantOnly</c> 参数为空也报它，系统就会给企业开一个
+        /// <b>它永远填不了</b>的补录缺口 —— 把「作者没配」伪装成「数据缺失」，用户按提示去补录
+        /// 却发现无从下手。这正是 <see cref="FromContextAttribute"/> 注释里点名的反模式。</para>
+        ///
+        /// <para><b>判据（唯一口径）= 这个值「有没有可能来自上游」</b>：</para>
+        /// <list type="number">
+        /// <item><c>ConstantOnly</c> / <c>Enum</c> ⇒ 值<b>只能</b>来自规则作者的手填/选择
+        ///       ⇒ 空 = <b>配置错</b>。</item>
+        /// <item><c>Link</c> / <c>LinkOrConstant</c> ⇒ 若<b>确实没有来源</b>
+        ///       （<see cref="SkillContext.ConnectedPorts"/> 可用且不含该端口 —— 既没连线、
+        ///       也没非空常量）⇒ 谈不上「上游没给值」⇒ <b>配置错</b>。</item>
+        /// <item>其余（端口确有来源，只是取到了空）⇒ <b>上游没给值</b> ⇒ 数据缺口。</item>
+        /// </list>
+        ///
+        /// <para>⚠️ <c>ConnectedPorts</c> 为空集合（如直接单测调用、上下文未装配）时
+        /// <b>保守回落到数据缺口</b> —— 与 branch 裁剪的保守策略同源：<b>判据缺失时不误杀</b>
+        /// （否则会把「合法的上游为空」错报成配置错，反而更难排查）。</para>
+        ///
         /// <para>⚠️ 修复前此方法的判据是 <c>if (p.HasDefaultValue) continue;</c>，
         /// 而所有 skill 的参数都写了 <c>= null</c> ⇒ <c>missing</c> 恒空 ⇒ 死代码。</para>
         /// </summary>
-        private static List<string> CollectMissingInputs(ParameterInfo[] parameters, SkillContext context)
+        private static (List<string> MissingData, List<string> MissingConfig) CollectMissingInputs(
+            ParameterInfo[] parameters, SkillContext context)
         {
-            var missing = new List<string>();
+            var missingData = new List<string>();
+            var missingConfig = new List<string>();
+            var connected = context.ConnectedPorts;
+
             foreach (var p in parameters)
             {
                 if (p.GetCustomAttribute<FromServiceAttribute>() != null) continue;
+                // ★ 跳过 [FromContext] —— 值由引擎装配，缺失只说明「本次运行上下文没带这个键」，
+                //   ⛔ 不是规则作者能补的 ⇒ 报 PRECONDITION_EMPTY 会把人引到「去补录」的错误方向。
+                if (p.GetCustomAttribute<FromContextAttribute>() != null) continue;
                 if (p.ParameterType == typeof(CancellationToken) ||
                     p.ParameterType == typeof(CancellationToken?)) continue;
 
                 if (AllowsEmpty(p)) continue;   // 允许空 ⇒ 不校验
 
-                if (context.Inputs == null ||
-                    !context.Inputs.TryGetValue(p.Name!, out var v) ||
-                    IsEmptyValue(v))
+                if (context.Inputs != null &&
+                    context.Inputs.TryGetValue(p.Name!, out var v) &&
+                    !IsEmptyValue(v))
                 {
-                    missing.Add(p.Name!);
+                    continue;                   // 有值 ⇒ 无需校验
                 }
+
+                if (IsConfigSupplied(p, connected)) missingConfig.Add(p.Name!);
+                else missingData.Add(p.Name!);
             }
-            return missing;
+
+            return (missingData, missingConfig);
+        }
+
+        /// <summary>
+        /// 该参数的空值是否<b>只可能</b>是「规则作者没配」（⇒ <c>CONFIG_ERROR</c>）。
+        ///
+        /// <para>判据 = <b>这个值有没有可能来自上游数据</b>：只能手填/选字典的
+        /// （<c>ConstantOnly</c> / <c>Enum</c>）⇒ 是；连来源都没有的（端口不在
+        /// <paramref name="connectedPorts"/> 里）⇒ 是。</para>
+        ///
+        /// <para>⚠️ <paramref name="connectedPorts"/> 为空（上下文未装配 / 直接单测调用）时
+        /// <b>保守返回 <c>false</c></b> ⇒ 归入数据缺口，⛔ 不误杀。</para>
+        /// </summary>
+        private static bool IsConfigSupplied(ParameterInfo p, ISet<string>? connectedPorts)
+        {
+            var bindMode = p.GetCustomAttribute<SkillParamAttribute>()?.BindMode
+                           ?? SkillParamBindMode.LinkOrConstant;
+
+            // ① 只能由规则作者提供 ⇒ 与上游无关，空就是没配
+            if (bindMode == SkillParamBindMode.ConstantOnly || bindMode == SkillParamBindMode.Enum)
+                return true;
+
+            // ② 端口确实没有来源（没连线、也没有非空常量）⇒ 谈不上「上游没给值」
+            //    ⚠️ connectedPorts 为空集合时保守返回 false（不误杀）
+            if (connectedPorts != null && connectedPorts.Count > 0 &&
+                !connectedPorts.Contains(p.Name!))
+                return true;
+
+            return false;
         }
 
         private static Type? ResolveType(string classPath)
@@ -369,6 +459,28 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                 {
                     args[i] = _serviceProvider.GetService(p.ParameterType);
                 }
+                else if (p.GetCustomAttribute<FromContextAttribute>() != null)
+                {
+                    // ★ 运行上下文注入（2026-10-15）：键名 = 特性显式指定，缺省 = 参数名。
+                    //   ⛔ 刻意**不回落 Inputs** —— 该参数在画布上不存在，
+                    //   回落只会让「键名写错」伪装成「有人手动传了值」，更难查。
+                    var ctxAttr = p.GetCustomAttribute<FromContextAttribute>()!;
+                    var ctxKey = string.IsNullOrEmpty(ctxAttr.Key) ? p.Name! : ctxAttr.Key!;
+
+                    if (context.ContextParams != null &&
+                        context.ContextParams.TryGetValue(ctxKey, out var ctxVal))
+                    {
+                        args[i] = ConvertValue(ctxVal, p.ParameterType);
+                    }
+                    else if (p.HasDefaultValue)
+                    {
+                        args[i] = p.DefaultValue;
+                    }
+                    else
+                    {
+                        args[i] = p.ParameterType.IsValueType ? Activator.CreateInstance(p.ParameterType) : null;
+                    }
+                }
                 else if (p.ParameterType == typeof(CancellationToken))
                 {
                     args[i] = ct;
@@ -391,6 +503,37 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                 }
             }
             return args;
+        }
+
+        /// <summary>
+        /// ★ <b>运行级登记</b>（2026-10-15 新增）—— 把本节点的<b>主输出</b>追加进
+        /// <c>context.ContextParams[skillAttr.RegistersTo]</c> 指向的池。
+        ///
+        /// <para><b>★ 为什么放在本类而不是 <c>NodeExecutor</c></b>：只有这里拿得到
+        /// <see cref="SkillAttribute"/>（<c>NodeExecutor</c> 手上只有一个 skillCode 字符串）
+        /// ⇒ 放这里可<b>零硬编码</b>地支持任意 skill 声明登记（新增 skill 时引擎不用改）。</para>
+        ///
+        /// <para><b>⛔ 池不存在时静默跳过，不报错</b>：单节点测试（<c>test/node</c>）等场景
+        /// 没有 item 级池。这与「配了不生效且不报错」不同 —— 池是<b>引擎装配的</b>，
+        /// 不存在只说明「本次不是完整 item 执行」，⛔ 不是配置缺陷。</para>
+        ///
+        /// <para><b>幂等性由调用链保证</b>：节点被跨路径复用时（<c>WorkflowInterpreter.ExecutePathAsync</c>）
+        /// <b>不会重新执行</b> ⇒ 本方法不会被二次调用 ⇒ 池里不会有重复项。</para>
+        /// </summary>
+        private static void RegisterToPool(SkillAttribute skillAttr, SkillContext context, SkillResult wrapped)
+        {
+            var poolName = skillAttr.RegistersTo;
+            if (string.IsNullOrWhiteSpace(poolName)) return;
+            if (!wrapped.Success) return;                       // ⛔ 失败不登记（池里只放有效产物）
+            if (context.ContextParams == null) return;
+            if (!context.ContextParams.TryGetValue(poolName!, out var poolObj)) return;
+            if (poolObj is not List<object> pool) return;
+
+            // 主输出 = Wrap 已写入信封的 "result"（唯一口径，与 ResolveMainOutput 一致）
+            object? main = wrapped.Outputs.TryGetValue("result", out var r) ? r : null;
+            if (main == null) return;
+
+            pool.Add(main);
         }
 
         private static object? ConvertValue(object? value, Type targetType)

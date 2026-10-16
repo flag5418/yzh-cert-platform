@@ -10,7 +10,10 @@ using Microsoft.Extensions.Logging;
 using SqlSugar;
 using CertPlatform.Shared.Workflow.Models;
 using CertPlatform.Shared.Services.Workflow;
+using CertPlatform.Shared.Entities.Cert;
+using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Admin.Entities.Wf;
+using YZH.Core.Api.Models.Users;
 using YZH.Core.Api.Services;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
@@ -59,6 +62,8 @@ namespace CertPlatform.Admin.Services.Workflow
         private readonly IUserContext _userContext;
         private readonly EntityService<WfNodeApproval> _approvalService;
         private readonly EntityService<WfNodeExecution> _nodeExecService;
+        // ★ 核心资源唯一检索入口（铁律 L5 / 守卫 A-R6）：ValidationRule·Enterprise 按 Code 取数只准走它
+        private readonly ICoreResourceQuery _coreQuery;
 
         /// <summary>
         /// 输出 JSON 落库上限（64KB）。超过则落「截断信封」而非完整内容。
@@ -81,7 +86,8 @@ namespace CertPlatform.Admin.Services.Workflow
             ILogger<WfExecutionTaskService> logger,
             IUserContext userContext,
             EntityService<WfNodeApproval> approvalService,
-            EntityService<WfNodeExecution> nodeExecService)
+            EntityService<WfNodeExecution> nodeExecService,
+            ICoreResourceQuery coreQuery)
         {
             _parser = parser;
             _interpreter = interpreter;
@@ -94,6 +100,56 @@ namespace CertPlatform.Admin.Services.Workflow
             _userContext = userContext;
             _approvalService = approvalService;
             _nodeExecService = nodeExecService;
+            _coreQuery = coreQuery;
+        }
+
+        /// <summary>
+        /// ★ <b>装配机构编码</b>（2026-10-15 新增）—— 推导优先级见 <see cref="WorkflowContextKeys.OrgCode"/>：
+        /// <b>① 规则 → ② 企业 → ③ 登录人 → ④ 空（平台标准级）</b>。
+        ///
+        /// <para><b>★ 为什么放在编排层而不是 skill 里</b>：skill 是<b>纯函数</b>（项目铁律 G-4），
+        /// ⛔ 不查库、不推导归属；「本次运行属于哪个机构」是<b>运行上下文</b>，由编排层装配后注入。</para>
+        ///
+        /// <para><b>★ 为什么「空串」是合法结果、⛔ 不报错</b>：空 = <b>平台标准级</b>
+        /// （<c>cert_conclusion_rule.OrgCode = ''</c> 的通用行，见归属模型 V2）。
+        /// 报错会把「平台级规则」这条正常通路判死（现状 <c>nc_conclusion_v2</c> 正是这个毛病，
+        /// 描述写「空串=平台标准级」而 <c>AllowEmpty=Deny</c> 实测直接 <c>PRECONDITION_EMPTY</c>）。</para>
+        ///
+        /// <para><b>⚠️ ③ 的局限</b>：<c>Sys_User.OrgCode</c> 指向 <b>L3 分组</b>而非机构本身
+        /// （见 <c>WorkspaceContextService</c> 注释），故仅作<b>兜底</b>；专家端应优先由调用方
+        /// 传入工作区 <c>CertBodyCode</c>。</para>
+        /// </summary>
+        private async Task<string> ResolveOrgCodeAsync(
+            string? ruleCode, string? enterpriseCode, CancellationToken ct)
+        {
+            // ① 规则上挂的机构 —— 最贴近「本次检查按哪套标准判」
+            //   （★ A-R6：核心资源按 Code 取数只准走 CoreResourceQuery，⛔ 禁端内 GetOneAsync 裸查）
+            if (!string.IsNullOrWhiteSpace(ruleCode))
+            {
+                var rule = await _coreQuery.GetClauseRuleByCodeAsync(ruleCode!);
+                var org = rule?.OrgCode;
+                if (!string.IsNullOrWhiteSpace(org)) return org!;
+            }
+
+            // ② 企业归属机构
+            if (!string.IsNullOrWhiteSpace(enterpriseCode))
+            {
+                var ent = await _coreQuery.GetEnterpriseByCodeAsync(enterpriseCode);
+                var org = ent?.OrgCode;
+                if (!string.IsNullOrWhiteSpace(org)) return org;
+            }
+
+            // ③ 当前登录人所属机构（⚠️ 指向 L3 分组，仅兜底）
+            var userCode = _userContext?.UserCode;
+            if (!string.IsNullOrWhiteSpace(userCode))
+            {
+                var user = await _db.GetOneAsync<Sys_User>(x => x.Code == userCode);
+                var org = user?.Data?.OrgCode;
+                if (!string.IsNullOrWhiteSpace(org)) return org!;
+            }
+
+            // ④ 空 = 平台标准级（合法回落，⛔ 不报错）
+            return string.Empty;
         }
 
         /// <summary>
@@ -141,11 +197,17 @@ namespace CertPlatform.Admin.Services.Workflow
                 parsed, ct);
 
             // 3. 构造上下文参数
+            //   ★ 2026-10-15：键名统一走 WorkflowContextKeys（唯一出处）；新增 orgCode / ruleCode ——
+            //     机构编码由引擎自动装配，⛔ 不再让规则作者在画布上手填 GUID
+            //     （抄错不报错，只是悄悄换成了另一套判定标准 = 本项目最典型的静默错）。
             var contextParams = new Dictionary<string, object>
             {
-                ["enterpriseCode"] = request.EnterpriseCode ?? "",
-                ["phaseCode"] = request.PhaseCode ?? "",
-                ["standardCode"] = request.StandardCode ?? ""
+                [WorkflowContextKeys.EnterpriseCode] = request.EnterpriseCode ?? "",
+                [WorkflowContextKeys.PhaseCode] = request.PhaseCode ?? "",
+                [WorkflowContextKeys.StandardCode] = request.StandardCode ?? "",
+                [WorkflowContextKeys.RuleCode] = request.RuleCode ?? "",
+                [WorkflowContextKeys.OrgCode] = await ResolveOrgCodeAsync(
+                    request.RuleCode, request.EnterpriseCode, ct)
             };
 
             // 4. 执行

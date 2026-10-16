@@ -19,7 +19,10 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         Name = "文本拼接",
         ReturnType = "string",
         ResultPort = "assembled_text",
-        Description = "将前半部分文本和后半部分文本按连接符拼接为一个字符串"
+        Description =
+            "【作用】把「前半部分文本」与「后半部分文本」按连接符拼成一个字符串。\n" +
+            "【怎么配】两段文本各连一个取值节点（或手填常量）；连接符留空 = 首尾直接相接。\n" +
+            "【坑】⛔ 只做拼接，不做去重、不做格式化；要「先判断再拼」请在前面接条件分支。"
     )]
     public static class AssembleSkill
     {

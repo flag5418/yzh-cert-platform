@@ -42,6 +42,15 @@ namespace CertPlatform.Admin.Entities.Doc
         [SugarColumn(ColumnName = "FileName")]
         public string FileName { get; set; } = "";
 
+        /// <summary>
+        /// 文件完整路径（<c>cert_standard_directory_file.FullPath</c>，如「质量/一级/质量手册.doc」）。
+        /// <para>★ 2026-10-15 新增：NC 规则设计器文档下拉改「文件夹 → 文件」树形选择
+        /// （buildFolderFileTree）需要文件夹路径；消费侧由本列去 FileName 后缀得 folderPath。</para>
+        /// <para>文件行缺失（LEFT JOIN 未命中）时为空串 —— 下拉中该文件归根级，不报错。</para>
+        /// </summary>
+        [SugarColumn(ColumnName = "FullPath")]
+        public string FullPath { get; set; } = "";
+
         /// <summary>标准编码</summary>
         [SugarColumn(ColumnName = "StandardCode")]
         public string StandardCode { get; set; } = "";

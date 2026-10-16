@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace CertPlatform.Shared.Exceptions
 {
@@ -48,6 +49,22 @@ namespace CertPlatform.Shared.Exceptions
         public string? EnterpriseCode { get; }
         public string? StandardCode { get; }
         public string? StageCode { get; }
+
+        /// <summary>
+        /// ★ <b>声明为连线、但本次取不到上游值的端口名</b>（2026-10-16 新增，可空）。
+        ///
+        /// <para><b>为什么必须随异常带出来</b>：本异常<b>按设计穿透</b>
+        /// <c>NodeExecutor</c> 的 catch（要交给 <c>WorkflowInterpreter</c> 落补录缺口），
+        /// 于是 <c>NodeExecutionResult.UnresolvedInputs</c> 那份诊断<b>永远回不到调用方</b>。
+        /// 单节点测试（<c>RunSingleNodeAsync</c>）实测后果：控制器只拿到一句
+        /// 「节点执行失败: Skill 'x' 执行失败[PRECONDITION_EMPTY]: …」，
+        /// 用户看不到「是哪些端口因为没执行上游而无值」，把<b>测试的能力边界</b>
+        /// 误当成<b>节点配置错</b>（与 2026-10-15 修 <c>UnresolvedInputs</c> 要解决的正是同一件事）。</para>
+        ///
+        /// <para>⛔ 仅供诊断展示，<b>不参与</b>补录缺口（gap）生成 —— gap 的字段由
+        /// <see cref="DataKind"/> / <see cref="DataCode"/> / <see cref="Reason"/> 决定。</para>
+        /// </summary>
+        public List<string>? UnresolvedInputs { get; set; }
 
         public WorkflowDataMissingException(
             string dataKind, string dataCode, string reason, string message,

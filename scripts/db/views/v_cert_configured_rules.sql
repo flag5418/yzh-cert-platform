@@ -12,6 +12,10 @@
 --       `IsValid = 1` 硬过滤**不会**追加（2026-10-13 实测：视图无 IsValid 列时
 --       `WHERE IsValid = 1` 报 1054，而接口 200 无异常 ⇒ 证明 ORM 侧确实未下发）。
 --       ⇒ 改造前「有效性」只有视图 WHERE 这一处，属单点且不可见。
+-- 更新：2026-10-15 增 `COALESCE(f.FullPath, '') AS FullPath` —— NC 规则设计器
+--       文档字段/文档表格下拉由扁平 el-select 改为「文件夹 → 文件」树形选择
+--       （buildFolderFileTree），需要文件夹路径；消费侧 DocExtractionRuleService
+--       由 FullPath 去 FileName 后缀得出 folderPath（与实体 FolderPath 计算属性同款）。
 --
 -- ★ 改造后口径（行为不变，已 A/B 核对）：
 --   视图层只固化 `r.IsDeleted = 0`（软删 = 逻辑不存在），IsValid 一律暴露。
@@ -29,6 +33,7 @@ SELECT
     r.Code AS RuleCode,
     r.StandardFileCode AS StandardFileCode,
     COALESCE(f.FileName, r.StandardFileCode) AS FileName,
+    COALESCE(f.FullPath, '') AS FullPath,
     COALESCE(r.StandardCode, '') AS StandardCode,
     COALESCE(r.StageCode, '') AS StageCode,
     r.Skill AS Skill,

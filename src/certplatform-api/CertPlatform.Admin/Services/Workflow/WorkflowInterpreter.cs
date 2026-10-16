@@ -74,6 +74,19 @@ namespace CertPlatform.Admin.Services.Workflow
 
             var pathResults = new List<PathResult>();
 
+            // ★★★ 2026-10-15：item 级运行上下文 —— 必须在**本方法内克隆**，⛔ 不能直接改调用方
+            //   传进来的 contextParams：那是调用方复用的字典，在里面建池会让池**跨 item 累积**
+            //   （上一次检查项的判定漏进这一次 ⇒ 结论静默算错）。
+            var runCtx = new Dictionary<string, object>(
+                contextParams ?? new Dictionary<string, object>());
+
+            // ★ 运行级登记池（判定清单）：声明了
+            //   [Skill(RegistersTo = WorkflowContextKeys.JudgePool)] 的节点，成功执行后由
+            //   SkillExecutor.RegisterToPool 把主输出追加进来。
+            //   ⇒ 「汇总」从画布节点降级为运行级副作用：分支跳过不登记、跨路径复用不重复登记，
+            //     从而**绕开**「汇聚节点在多路径下只看到第一条路径」的引擎限制。
+            runCtx[WorkflowContextKeys.JudgePool] = new List<object>();
+
             // ★ 2026-09-30：缺失必要数据（本项无法判定）—— 不逐路径吞掉，直接上抛。
             //   语义：这不是「某条路径失败」，而是【整个检查项缺少必要数据】⇒ 自动失败。
             //   NodeExecutor 已把该异常放行出来（此前会被 catch(Exception) 压成字符串，
@@ -88,7 +101,7 @@ namespace CertPlatform.Admin.Services.Workflow
                     var path = parsed.Paths[pathIndex];
                     var pathResult = await ExecutePathAsync(
                         path, pathIndex, taskCode, itemCode,
-                        sharedOutputs, executedNodes, contextParams,
+                        sharedOutputs, executedNodes, runCtx,
                         parsed.Adjacency, parsed.NodeMap, parsed.InEdges, ct);
 
                     pathResults.Add(pathResult);

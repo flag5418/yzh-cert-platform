@@ -171,6 +171,7 @@ export async function uploadInit(
   directoryCode: string,
   files: File[],
   orgCode?: string,
+  targetFolderCode?: string,
 ): Promise<{ taskId: string; fileMap: Record<string, { fileCode: string; storagePath: string }> }> {
   const filtered = filterIgnoredFiles(files)
 
@@ -198,12 +199,15 @@ export async function uploadInit(
 
   const folderItems = Array.from(folderSet).map(p => ({ Path: p }))
 
-  console.log('[uploadInit] Sending:', { DirectoryCode: directoryCode, Folders: folderItems, Files: fileItems })
+  console.log('[uploadInit] Sending:', { DirectoryCode: directoryCode, Folders: folderItems, Files: fileItems, TargetFolderCode: targetFolderCode })
 
   const res = await yzhApi.post<ApiResponse<any>>('/api/Admin/Workflow/StandardDirectory/upload-init', {
     DirectoryCode: directoryCode,
     // 决策⑳修订：主键含 OrgCode —— 兜底回退按三键定位，避免跨机构误命中
     OrgCode: orgCode || undefined,
+    // ★ 2026-10-15：单文件上传（无 webkitRelativePath）时回退到目标文件夹，
+    //   避免「用户在文件夹里上传后看不到」—— 整目录上传时相对路径优先。
+    TargetFolderCode: targetFolderCode || undefined,
     Folders: folderItems,
     Files: fileItems,
   })

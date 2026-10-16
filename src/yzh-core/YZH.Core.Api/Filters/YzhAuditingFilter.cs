@@ -52,6 +52,12 @@ public class YzhAuditingFilter : IAsyncActionFilter
         var ipAddress = _userContext.ClientIp;
         var httpMethod = context.HttpContext.Request.Method;
 
+            // 结构化接口信息：控制器名 + 动作名 + 控制器命名空间（用于「模块」归类）
+            var routeValues = context.ActionDescriptor.RouteValues;
+            var controllerName = routeValues.TryGetValue("controller", out var c) ? c : null;
+            var actionName = routeValues.TryGetValue("action", out var a) ? a : null;
+            var controllerNamespace = context.Controller?.GetType().Namespace;
+
             // 记录请求参数（脱敏）
             var requestParams = SerializeParams(context.ActionArguments.ToDictionary(kvp => kvp.Key, kvp => (object?)kvp.Value));
 
@@ -75,6 +81,9 @@ public class YzhAuditingFilter : IAsyncActionFilter
                 IpAddress = ipAddress,
                 UserAgent = context.HttpContext.Request.Headers["User-Agent"].ToString(),
                 Action = context.ActionDescriptor.DisplayName,
+                Controller = controllerName,
+                ActionName = actionName,
+                ControllerNamespace = controllerNamespace,
                 RequestParams = requestParams,
                 StatusCode = executedContext.HttpContext.Response.StatusCode,
                 DurationMs = (long)(DateTime.UtcNow - startTime).TotalMilliseconds,
@@ -95,6 +104,9 @@ public class YzhAuditingFilter : IAsyncActionFilter
                 IpAddress = ipAddress,
                 UserAgent = context.HttpContext.Request.Headers["User-Agent"].ToString(),
                 Action = context.ActionDescriptor.DisplayName,
+                Controller = controllerName,
+                ActionName = actionName,
+                ControllerNamespace = controllerNamespace,
                 RequestParams = requestParams,
                 StatusCode = 500,
                 DurationMs = (long)(DateTime.UtcNow - startTime).TotalMilliseconds,

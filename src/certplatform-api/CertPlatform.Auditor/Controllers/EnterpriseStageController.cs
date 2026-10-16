@@ -511,7 +511,7 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
                     {
                         row.IsValid = 1;
                         row.UpdateBy = UserContext.UserCode;
-                        row.UpdateTime = DateTime.UtcNow;
+                        row.UpdateTime = DateTime.Now;
                         var revived = await Entity.Update(row, UserContext.ClientIp);
                         if (!revived.Success)
                             return Ok(ApiResponse.Fail(revived.Error));
@@ -531,7 +531,7 @@ public class EnterpriseStageController : YzhControllerBase<CertEnterpriseStage>
                     Status = "none",
                     IsValid = 1,
                     CreateBy = UserContext.UserCode,
-                    CreateTime = DateTime.UtcNow
+                    CreateTime = DateTime.Now
                 };
 
                 var ins = await Entity.Insert(entity, UserContext.ClientIp);

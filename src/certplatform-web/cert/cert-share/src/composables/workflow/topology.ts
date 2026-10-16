@@ -90,6 +90,13 @@ export interface DependencyGraph {
     branchNodes: string[]
   }
   referencedNodes?: Set<string>
+  /**
+   * ★ 2026-10-15：重复 nodeId 列表（坏数据，含 `ai_node_n1` 被生成两次这类）。
+   *   `nodeMap` 是 Map，重复项会静默覆盖 ⇒ 单看 nodeMap 发现不了，必须在建图时留痕。
+   *   落库后后端 `ToDictionary(n => n.NodeId)` 会抛
+   *   "An item with the same key has already been added"（AI 节点测试 400 事故根因）。
+   */
+  duplicateNodeIds?: string[]
 }
 
 export interface PathResult {
@@ -132,6 +139,7 @@ export function buildDependencyGraph(config: any): DependencyGraph {
     nodeMap: new Map(),
     dependencies: [],
     implicitEdges: [],
+    duplicateNodeIds: [],
     stats: { totalNodes: 0, totalEdges: 0, explicitEdges: 0, implicitReferences: 0, aiPromptReferences: 0, startNodes: [], endNodes: [], branchNodes: [] }
   }
 
@@ -143,10 +151,16 @@ export function buildDependencyGraph(config: any): DependencyGraph {
   for (const node of config.nodes) {
     const nodeId = node.nodeId || node.id
     if (!nodeId) { log('WARN', '节点缺少 nodeId，跳过', node); continue }
+    graph.stats.totalNodes++
+    if (graph.nodeMap.has(nodeId)) {
+      // ★ 重复 nodeId：留痕给 validateTopology 报错（Map 会静默覆盖，这里不 set，保住首个）
+      if (!graph.duplicateNodeIds!.includes(nodeId)) graph.duplicateNodeIds!.push(nodeId)
+      log('ERROR', `检测到重复节点 ID: ${nodeId}`, node)
+      continue
+    }
     graph.adjacency.set(nodeId, [])
     graph.reverseAdj.set(nodeId, [])
     graph.nodeMap.set(nodeId, node)
-    graph.stats.totalNodes++
     const nodeType = node.nodeType || node.classCode
     if (nodeType === 'start') graph.stats.startNodes.push(nodeId)
     if (nodeType === 'end') graph.stats.endNodes.push(nodeId)
@@ -451,6 +465,13 @@ export function validateTopology(graph: DependencyGraph): TopologyValidation {
   if (graph.stats.endNodes.length === 0) {
     result.valid = false
     result.errors.push({ code: 'NO_END', severity: 'error', message: '缺少结束节点（end）' })
+  }
+
+  // ★ 重复 nodeId（2026-10-15）：落库会让后端 ToDictionary 抛
+  //   "An item with the same key has already been added" ⇒ 保存/测试直接 400。
+  for (const dupId of graph.duplicateNodeIds || []) {
+    result.valid = false
+    result.errors.push({ code: 'DUPLICATE_NODE_ID', severity: 'error', node: dupId, message: `重复节点 ID：${dupId}（存在两个同 ID 节点，后端会拒绝执行，请删除多余的一个）` })
   }
 
   for (const branchId of graph.stats.branchNodes) {

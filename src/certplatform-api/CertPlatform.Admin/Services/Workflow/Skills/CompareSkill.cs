@@ -24,7 +24,12 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         Name = "值比较",
         ReturnType = "boolean",
         ResultPort = "result",
-        Description = "确定性比较：支持数值比较（> >= < <= == !=）和日期比较（自动解析日期格式，按天计算差值）"
+        Description =
+            "【作用】对两个值做确定性比较，输出 bool（可直连条件分支）。支持数值（> >= < <= == !=）" +
+            "与日期（自动解析格式，按天算差值）。\n" +
+            "【怎么配】A / B 各连一个取值节点（或手填常量），运算符从下拉选。\n" +
+            "【坑】⛔ 两侧类型要一致（数字对数字、日期对日期）；字符串比大小按字典序，" +
+            "「10」<「9」这类结果不符合直觉，数值比较请确保两边都是数字。"
     )]
     public static class CompareSkill
     {

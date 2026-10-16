@@ -13,6 +13,42 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         public string WorkflowInstanceId { get; set; } = string.Empty;
         public string NodeId { get; set; } = string.Empty;
         public ILogger? Logger { get; set; }
+
+        /// <summary>
+        /// ★ <b>运行上下文</b>（2026-10-15 新增）—— 引擎开跑前装配的<b>业务上下文</b>。
+        ///
+        /// <para><b>键名</b>见 <c>WorkflowContextKeys</c>（唯一出处，⛔ 禁止裸写字面量）：
+        /// <c>orgCode</c> / <c>standardCode</c> / <c>phaseCode</c> / <c>enterpriseCode</c> /
+        /// <c>ruleCode</c>，以及<b>运行级登记池</b>（见 <c>WorkflowContextKeys.JudgePool</c>）。</para>
+        ///
+        /// <para><b>取用方式</b>：skill 参数标 <c>[FromContext("orgCode")]</c> ⇒
+        /// 该参数<b>不出现在画布上</b>（<c>SkillExecutor.Analyze</c> 跳过它），
+        /// 值由引擎在此注入 ⇒ 规则作者<b>不再手填 GUID</b>。</para>
+        ///
+        /// <para>⚠️ <b>只读语义</b>：skill ⛔ 不得修改本字典（唯一例外 = 登记池的追加，
+        /// 由 <c>SkillExecutor</c> 按 <c>[Skill(RegistersTo)]</c> 统一执行）。</para>
+        /// </summary>
+        public IDictionary<string, object> ContextParams { get; set; } = new Dictionary<string, object>();
+
+        /// <summary>
+        /// ★ <b>本节点已连接的输入端口名</b>（2026-10-15 新增）—— 来自 <c>node.Inputs</c> 的键集合。
+        ///
+        /// <para><b>为什么必须单独传</b>：运行期「<b>端口没接</b>」与「<b>接了但上游返回空</b>」
+        /// 在 <c>Inputs</c> 取值上<b>都是 <c>null</c></b>，⛔ 无法区分。
+        /// 而 <c>stamp_judge_level</c> 的语义恰恰要求区分二者：</para>
+        /// <list type="bullet">
+        /// <item>两个端口<b>都没接</b> ⇒ <b>配置错</b>（<c>CONFIG_ERROR</c>）</item>
+        /// <item>接了「证据」但<b>材料没拿到</b> ⇒ <b>不可判定</b>（<c>unverifiable</c>，合法）</item>
+        /// </list>
+        ///
+        /// <para>⇒ 判据 = <b>端口名是否出现在本集合里</b>（<c>NodeExecutor.ResolveInputs</c>
+        /// 只为已声明的端口写 <c>resolved[portName]</c> ⇒ <b>未连的端口键不存在</b>）。</para>
+        ///
+        /// <para>⚠️ <b>skill 侧取法</b>：不直接读本字段，而是用
+        /// <c>[FromContext(WorkflowContextKeys.ConnectedPorts)]</c> —— 由 <c>NodeExecutor</c>
+        /// 把它以同名键放进 <see cref="ContextParams"/>（唯一绑定通道）。</para>
+        /// </summary>
+        public ISet<string> ConnectedPorts { get; set; } = new HashSet<string>();
     }
 
     /// <summary>

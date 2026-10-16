@@ -86,8 +86,20 @@ AIGC:
 - 启用 / 禁用仍走 `IsValid`（见 **铁律九**），⛔ 不新增 `Enable`。
 - 守卫：DB 层无自动守卫 ⇒ 新增列前先比对本文；已清理脚本见 `scripts/db/fix/20261013_unify_fields_V1.sql`。
 
+**⑧ 业务时间唯一写法 = 本地时间（2026-10-16 · 违反 = 返工）**
+
+- ★ **铁律十**：凡**落库 / 上屏**的时间列（`CreateTime` / `UpdateTime` / `DeleteTime` / `OperateTime` / `LastLoginDate` / `LastModifyPwdDate` / `StartTime` 等）**一律 `DateTime.Now`**（Asia/Shanghai，UTC+8 固定，无夏令时）。
+- ⛔ **禁止 `DateTime.UtcNow` / `DateTimeOffset.UtcNow` 写上述字段**。前端对**无 `Z`** 的 JSON 按**本地**解析 ⇒ UTC 值**整体早 8 小时**且**不报错**。
+- **`UtcNow` 唯一合法场景**（内部机制，与业务时间无关）：JWT 过期 / `iat`·`nbf`（`JwtHelper`）、缓存与节流**过期比较**（`EntityConfigHelper`/`PermissionCacheService`/`PromptMarkdownCache`）、超时 / **耗时统计**（`YzhAuditingFilter.DurationMs`）、ID 生成（`IdGenerator`）、Unix 时间戳、日志**文件名**。
+- **唯一事实源 = 框架层**：`BaseEntity.CreateTime` 默认值 + `EntityService` 审计填充（`FillCreateAudit`/`FillUpdateAudit`/`FillDeleteAudit`/`SoftDelete`）+ `TreeControllerBase` —— 已统一为 `Now`；业务侧自写这些列时必须同源，⛔ 不要另用 `UtcNow`。
+- **为什么**：曾框架层 `UtcNow`、业务侧（2026-10-14 起）`Now` **混用** ⇒ 同一行 `CreateTime`(UTC) 与 `StartTime`(本地) **差 8 小时**、按日期筛选**跨 UTC 日界漏数**、`yzh_queue` 队列监控 `CreateTime` 错 8h。
+- **症状**：「列表时间永远早 8 小时」「同一行两列差 8h」「按当天筛选漏掉跨 0 点数据」——三者**都不报错**，最难查。
+- 守卫：`scripts/backend/check-utcnow.sh`（**只读**，扫 `src/yzh-core` + `src/certplatform-api` 的 `DateTime.UtcNow`，白名单外即 `exit 1`）。
+- 存量纠偏脚本模板（+8h + 备份 + 幂等保护）：`scripts/db/fix/20261014_queue_msg_createtime_local_V1.sql`。
+
 **改完必跑**：`cd src/certplatform-web && node scripts/guards.mjs`（0 违规，**含 R12 路由↔菜单一致性 + R18/R19/R20 样式**）→ 对应端 `npm run build`（含 `vue-tsc`）。
 **动了审计人字段（`CreateBy`/`UpdateBy`/`DeleteBy`）的写入或迁移**：额外跑 `docker exec -i yzh-mysql mysql -uroot -p*** --default-character-set=utf8mb4 yzh_cert_platform < scripts/db/verify/verify_createby.sql`（期望 `C_违规 = 0`）。
+**动了时间字段的写入（`CreateTime`/`UpdateTime`/`DeleteTime` 等）**：额外跑 `./scripts/backend/check-utcnow.sh`（期望 `exit 0`，见 **铁律十**）。
 
 > **动了路由或菜单 → 额外跑一次**：`./scripts/db/verify/sync_menu_urls.sh` 刷新菜单快照，否则 R12 基于过期数据（快照缺失时 R12 会跳过并告警）。
 > R12 双向判据：菜单 `Url` 无对应路由 = **报错**（点击必白屏）；路由无对应菜单 = **报错**（孤儿路由，须补菜单 / 删路由 / 登记 `ORPHAN_ALLOW`）。

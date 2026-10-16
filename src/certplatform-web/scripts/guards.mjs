@@ -1754,6 +1754,9 @@ const RULES = [
       'CertPlatform.Admin/Services/DocExtraction/DocExtractionRuleService.AI.cs': 1,
       // ConclusionRule：NcConclusionCalcSkill(1) = 1 处
       'CertPlatform.Admin/Services/Workflow/Skills/NcConclusionCalcSkill.cs': 1,
+      // ConclusionRule（挂账）：NcConclusionV2Skill 的 LoadMatrix 站 1 处 —— 实体仍在
+      //   Admin/Entities ⇒ Shared 取不到（A-R3），与上面同批同款，随实体下沉一并清零
+      'CertPlatform.Admin/Services/Workflow/Skills/NcConclusionV2Skill.cs': 1,
       // ---- ★ 死类冻结（2026-10-06 已从 DI 摘除，仅存对照 ⇒ ⛔ 不改造、⛔ 不得增长）----
       'CertPlatform.Admin/Services/Ent/Executors/EnterpriseDocNormalizationExecutor.cs': 6,
       // ---- 其余 = 1.B.6d-4 可收敛 + 6d-3 一次性例外（2026-10-13 6d-3 已收口 16 处：
