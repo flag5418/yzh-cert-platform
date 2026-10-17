@@ -473,7 +473,7 @@ function onLedgerChanged(): void {
   display: flex;
   flex-direction: column;
   gap: var(--yzh-space-2, 8px);
-  background: var(--yzh-color-bg, #fff);
+  background: var(--yzh-color-bg-container, #fff);
 }
 
 /* ★ 第二坑：子项默认被 flex 压缩 ⇒ 必须显式 none，否则会被挤成一条线 */
@@ -537,7 +537,7 @@ function onLedgerChanged(): void {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--yzh-color-bg, #fff);
+  background: var(--yzh-color-bg-container, #fff);
   border: 1px solid var(--yzh-color-border-light, #ebeef5);
   border-radius: 4px;
 }

@@ -72,10 +72,28 @@ export type YzhNodeActions = YzhAction[] | ((node: any) => YzhAction[])
 
 /** 表格列定义 */
 export interface YzhTableColumn<T = any> {
-  /** 字段名（数据源中的 key） */
-  prop: keyof T | string
-  /** 列标题 */
-  label: string
+  /**
+   * 字段名（数据源中的 key）。
+   *
+   * ★ 2026-10-17：改为**可选** —— 展示型列（只有插槽、没有对应字段）与
+   *   `type: 'expand'` 的展开列本来就没有 `prop`。这类列必须配 `slotKey`
+   *   否则插槽名会变成 `column-undefined`（静默渲染空白）。
+   */
+  prop?: keyof T | string
+  /**
+   * 列标识（插槽名 / 列设置开关 / v-for key 都用它）。
+   *
+   * 缺省回落 `prop`；`prop` 为空时**必填**，插槽名为 `column-${slotKey}`。
+   */
+  slotKey?: string
+  /**
+   * 列类型。
+   * - `'expand'`：展开列，渲染 `<el-table-column type="expand">`，
+   *   内容由 `#expand` 插槽提供（`{ row, index }`）。
+   */
+  type?: 'expand'
+  /** 列标题（`type: 'expand'` 的展开列不需要，可省） */
+  label?: string
   /** 宽度 */
   width?: number | string
   /** 最小宽度 */

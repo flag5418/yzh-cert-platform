@@ -584,19 +584,13 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
 
         var orgNames = orgCodes.Count == 0
             ? new Dictionary<string, string>(StringComparer.Ordinal)
-            : (await _db.Client.Queryable<CertificationBody>()
-                    .Where(x => orgCodes.Contains(x.Code))
-                    .Select(x => new { x.Code, x.Name })
-                    .ToListAsync())
+            : (await _core.GetCertificationBodiesByCodesAsync(orgCodes))
                 .ToDictionary(x => x.Code, x => x.Name ?? x.Code, StringComparer.Ordinal);
 
         var stdNames = stdCodes.Count == 0
             ? new Dictionary<string, string>(StringComparer.Ordinal)
-            : (await _db.Client.Queryable<ISOStandard>()
-                    .Where(x => stdCodes.Contains(x.Code))
-                    .Select(x => new { x.Code, Name = x.StandardName })
-                    .ToListAsync())
-                .ToDictionary(x => x.Code, x => x.Name ?? x.Code, StringComparer.Ordinal);
+            : (await _core.GetStandardsByCodesAsync(stdCodes))
+                .ToDictionary(x => x.Code, x => x.StandardName ?? x.Code, StringComparer.Ordinal);
 
         var stageNames = stageCodes.Count == 0
             ? new Dictionary<string, string>(StringComparer.Ordinal)
@@ -874,7 +868,10 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         existing.StageCode = scope.StageCode;
         existing.UpdateTime = DateTime.Now;
 
-        var upd = await _db.UpdateAsync(existing);
+        var upd = await _db.UpdateAsync(existing,
+            nameof(DocTemplate.PreviewPdfPath), nameof(DocTemplate.PreviewTime),
+            nameof(DocTemplate.OrgCode), nameof(DocTemplate.StandardCode), nameof(DocTemplate.StageCode),
+            nameof(DocTemplate.UpdateTime));
         if (!upd.Success)
             return Result<DocTemplate>.Fail(upd.Error ?? "模板更新失败");
 
@@ -989,7 +986,9 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         dead.IsValid = incoming.IsValid;
         dead.UpdateTime = DateTime.Now;
 
-        var upd = await _db.UpdateAsync(dead);
+        var upd = await _db.UpdateAsync(dead,
+            nameof(DocTemplate.SourceSha256), nameof(DocTemplate.FillPromptCode),
+            nameof(DocTemplate.Remark), nameof(DocTemplate.IsValid), nameof(DocTemplate.UpdateTime));
         if (!upd.Success)
             return Result<DocTemplate>.Fail(upd.Error ?? "复活已删除的模板记录失败");
 

@@ -1,6 +1,7 @@
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using YZH.Core.Api.Controllers;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Admin.Services.StandardDirectory;
 using CertPlatform.Admin.Entities.Cert;
@@ -21,7 +22,7 @@ namespace CertPlatform.Admin.Controllers.Foundation;
 /// 只取路由<b>末段</b>作控制器名，本 Controller 的末段未变 ⇒ <c>ApiCode</c> 不变 ⇒
 /// <b>角色-接口关联不断裂</b>，无需重跑 ApiSync。</para>
 [Route("api/Admin/Foundation/[controller]")]
-public class DirectoryTemplateController : ControllerBase
+public class DirectoryTemplateController : WebControllerBase
 {
     private readonly DirectoryTemplateService _service;
 

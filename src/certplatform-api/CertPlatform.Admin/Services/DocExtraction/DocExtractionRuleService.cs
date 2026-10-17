@@ -220,7 +220,12 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
             else
             {
                 if (string.IsNullOrWhiteSpace(rule.Code)) { tx.Rollback(); return (false, "更新失败：缺少业务键 Code"); }
-                var upd = await _db.UpdateAsync(rule);
+                var upd = await _db.UpdateAsync(rule,
+                    nameof(DocExtractionRule.OrgCode), nameof(DocExtractionRule.FileCode),
+                    nameof(DocExtractionRule.StandardFileCode), nameof(DocExtractionRule.StandardCode),
+                    nameof(DocExtractionRule.StageCode), nameof(DocExtractionRule.Skill),
+                    nameof(DocExtractionRule.Prompt), nameof(DocExtractionRule.Remark),
+                    nameof(DocExtractionRule.UpdateTime), nameof(DocExtractionRule.UpdateBy));
                 if (!upd.Success) { tx.Rollback(); return (false, upd.Error ?? "更新规则失败"); }
             }
 

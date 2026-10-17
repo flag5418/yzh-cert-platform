@@ -20,11 +20,13 @@ import { yzhApi } from '@yzh-core/api/client'
 import { getCertStandardFamilyList } from '@share/api/cert/cert-standard-family'
 import {
   TreeTableLogic,
+  confirmOrFalse,
   type ApiResponse,
   type TreeNode,
   type YzhAction,
   type YzhFormField,
 } from '@yzh-core'
+import { ElMessage } from 'element-plus'
 import { reactive, ref } from 'vue'
 import { buildCategoryTree, type CategoryItem } from './group'
 
@@ -448,6 +450,99 @@ export class ISOStandardTreeTableLogic extends TreeTableLogic<any> {
     if (codes.length === 0) return
     await this.delete(codes)
     await this.refresh()
+  }
+
+  // ========================================================
+  // 页面动作收口（P1-⑦）
+  // 确认 / 提示 / 清选中一律留在 Logic —— 模板只允许出现 `logic.xxx` 与 `$event`，
+  // ⛔ 不再在 .vue 里 import `ElMessage` / `confirmOrFalse`（改由 Logic 承担）
+  // ========================================================
+
+  /** 新增顶级条款：未选标准时给提示（原来在页面上判断） */
+  async addClauseWithToast(): Promise<void> {
+    const ok = await this.openAddClauseDialog()
+    if (!ok) ElMessage.warning('请先选择标准')
+  }
+
+  /** 新增下级条款（行内 add-child） */
+  async addClauseChildWithToast(row: ClauseRow): Promise<void> {
+    const ok = await this.openAddClauseChild(row)
+    if (!ok) ElMessage.warning('请先选择标准')
+  }
+
+  /** 删除条款：确认 → 删除 → 提示（失败只提示，不把异常抛给模板） */
+  async deleteClauseWithConfirm(row: ClauseRow): Promise<void> {
+    const name = this.entityName(row) || '该条款'
+    const ok = await confirmOrFalse(`确定删除条款【${name}】？`, '删除确认', {
+      type: 'warning',
+    })
+    if (!ok) return
+    try {
+      await this.deleteClause(row)
+      ElMessage.success('删除成功')
+    } catch (e) {
+      this.reportError(e, '删除失败')
+    }
+  }
+
+  /**
+   * 批量删除：空选校验 → 确认 → 整批删除 → 清选中 → 提示。
+   *
+   * ★ 选中集合直接用基类 `selectedRows`（模板 `@selection-change="logic.onSelectionChange"` 写入），
+   *   ⛔ 不再由页面自己维护一份 ref —— 两份状态迟早不一致。
+   */
+  async batchDeleteClausesWithConfirm(): Promise<void> {
+    const rows = this.selectedRows.value
+    if (rows.length === 0) {
+      ElMessage.warning('请先选择要删除的条款')
+      return
+    }
+    const ok = await confirmOrFalse(`确定删除选中的 ${rows.length} 个条款？`, '批量删除', {
+      type: 'warning',
+    })
+    if (!ok) return
+    try {
+      await this.batchDeleteClauses(rows)
+      this.selectedRows.value = []
+      this._tableRef?.clearSelection?.()
+      ElMessage.success('批量删除成功')
+    } catch (e) {
+      this.reportError(e, '批量删除失败')
+    }
+  }
+
+  /** 提交条款表单：成败提示（树模式提交后整树 refresh，见 `submitClauseForm`） */
+  async submitClauseFormWithToast(): Promise<void> {
+    try {
+      await this.submitClauseForm()
+      ElMessage.success(this.dialogMode.value === 'add' ? '新增成功' : '修改成功')
+    } catch (e) {
+      this.reportError(e, '保存失败')
+    }
+  }
+
+  /** 启停条款：确认 → 接口 → 整树 refresh（树表不靠局部改行） */
+  async toggleClauseIsValid(row: ClauseRow): Promise<void> {
+    await this.toggleRowIsValidWithConfirm(row)
+    await this.refresh()
+  }
+
+  /**
+   * 行操作统一入口（`YzhTreeTable @row-action`）。
+   *
+   * ★ 必须写成**箭头函数属性**：模板里 `@row-action="logic.onRowAction"` 传的是函数引用，
+   *   普通方法会丢 `this`。
+   */
+  onRowAction = async (action: string, row: ClauseRow): Promise<void> => {
+    if (action === 'add-child') {
+      await this.addClauseChildWithToast(row)
+    } else if (action === 'edit') {
+      await this.openEditClauseDialog(row)
+    } else if (action === 'delete') {
+      await this.deleteClauseWithConfirm(row)
+    } else if (action === 'toggle-valid') {
+      await this.toggleClauseIsValid(row)
+    }
   }
 
   // ========================================================

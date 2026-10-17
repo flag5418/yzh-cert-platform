@@ -182,10 +182,7 @@ public class DocumentFillController : YzhControllerBase<FillParamValue>
         // ── 3. 文档元信息（页眉页脚变量来源）──
         var stdNo = stdCode.Length == 0
             ? null
-            : await _db.Client.Queryable<ISOStandard>()
-                .Where(x => x.Code == stdCode)
-                .Select(x => x.StandardCode)
-                .FirstAsync();
+            : (await _core.GetStandardByCodeAsync(stdCode))?.StandardCode;
 
         var stageName = stageCode.Length == 0
             ? null
@@ -195,10 +192,7 @@ public class DocumentFillController : YzhControllerBase<FillParamValue>
 
         // 页脚「{{@org}}」应为**体系认证机构**名称（不是工作区名 —— 工作区名形如「尚龙认证 · 王卿权」，
         // 印在正式文件页脚上不合适）
-        var certBodyName = await _db.Client.Queryable<CertificationBody>()
-            .Where(x => x.Code == orgCode)
-            .Select(x => x.Name)
-            .FirstAsync();
+        var certBodyName = (await _core.GetCertificationBodyByCodeAsync(orgCode))?.Name;
 
         var ctx = new FillContext
         {

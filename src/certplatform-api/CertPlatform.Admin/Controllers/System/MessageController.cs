@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using YZH.Core.Api.Controllers;
 using Microsoft.Extensions.Logging;
 using CertPlatform.Shared.Services.Sys;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,7 +17,7 @@ namespace CertPlatform.Admin.Controllers.System;
 /// </summary>
 [ApiController]
 [Route("api/Admin/System/[controller]")]
-public class MessageController : ControllerBase
+public class MessageController : WebControllerBase
 {
     private readonly CertMessageService _messageService;
     private readonly IYzhMessagePusher _pusher;

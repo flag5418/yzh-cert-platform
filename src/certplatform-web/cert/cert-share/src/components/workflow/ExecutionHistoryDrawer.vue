@@ -16,11 +16,12 @@
   （节点表 wf_node_execution 已按 NodeId 去重，IsReused 恒为 0 属预期行为）。
 -->
 <template>
-  <el-drawer
+  <YzhDrawer
     :model-value="modelValue"
     :title="drawerTitle"
     size="1080px"
     direction="rtl"
+    :show-footer="false"
     @update:model-value="(v: boolean) => $emit('update:modelValue', v)"
     @open="onOpen"
   >
@@ -44,156 +45,125 @@
         <el-button size="small" @click="resetFilters">重置</el-button>
       </div>
 
-      <!-- ===== 列表 ===== -->
-      <el-table
-        v-loading="loading"
-        :data="rows"
+      <!-- ===== 列表（R6：YzhTable；展开列 = type:'expand' + #expand 插槽） ===== -->
+      <YzhTable
+        ref="tableRef"
+        :columns="historyColumns"
+        :data-loader="dataLoader"
+        :toolbar="false"
+        :page-size="20"
         size="small"
-        border
         row-key="TaskCode"
         class="history-table"
+        empty-text="暂无测试历史"
         @expand-change="onExpandChange"
       >
-        <el-table-column type="expand">
-          <template #default="{ row }">
-            <div class="detail-wrapper">
-              <div v-if="detailLoading === row.TaskCode" class="detail-loading">加载中…</div>
-              <template v-else-if="details[row.TaskCode]">
-                <div class="detail-summary">
-                  <span>ItemCode: <code>{{ details[row.TaskCode]?.Items?.[0]?.ItemCode || '—' }}</code></span>
-                  <span v-if="details[row.TaskCode]!.RuleContext?.RuleName">规则: {{ details[row.TaskCode]!.RuleContext!.RuleName }}</span>
-                  <span v-if="details[row.TaskCode]!.RuleContext?.SeverityIfViolated">严重级别: {{ details[row.TaskCode]!.RuleContext!.SeverityIfViolated }}</span>
-                  <span>企业: {{ row.EnterpriseCode || '—' }}</span>
-                  <span>阶段: {{ row.PhaseCode || '—' }}</span>
-                  <span v-if="row.ErrorMessage" class="error-text">错误: {{ row.ErrorMessage }}</span>
-                </div>
+        <!-- 展开行：四层详情（懒加载 + 缓存） -->
+        <template #expand="{ row }">
+          <div class="detail-wrapper">
+            <div v-if="detailLoading === row.TaskCode" class="detail-loading">加载中…</div>
+            <template v-else-if="details[row.TaskCode]">
+              <div class="detail-summary">
+                <span>ItemCode: <code>{{ details[row.TaskCode]?.Items?.[0]?.ItemCode || '—' }}</code></span>
+                <span v-if="details[row.TaskCode]!.RuleContext?.RuleName">规则: {{ details[row.TaskCode]!.RuleContext!.RuleName }}</span>
+                <span v-if="details[row.TaskCode]!.RuleContext?.SeverityIfViolated">严重级别: {{ details[row.TaskCode]!.RuleContext!.SeverityIfViolated }}</span>
+                <span>企业: {{ row.EnterpriseCode || '—' }}</span>
+                <span>阶段: {{ row.PhaseCode || '—' }}</span>
+                <span v-if="row.ErrorMessage" class="error-text">错误: {{ row.ErrorMessage }}</span>
+              </div>
 
-                <!-- 路径层 -->
-                <div class="detail-section">
-                  <div class="detail-section-title">路径执行（{{ details[row.TaskCode]?.Paths?.length || 0 }} 条）</div>
-                  <el-table :data="details[row.TaskCode].Paths" size="small" border>
-                    <el-table-column label="路径" width="70" align="center">
-                      <template #default="{ row: p }">{{ p.PathIndex + 1 }}</template>
-                    </el-table-column>
-                    <el-table-column label="状态" width="90" align="center">
-                      <template #default="{ row: p }">
-                        <el-tag :type="p.Status === 'completed' ? 'success' : 'danger'" size="small">{{ p.Status }}</el-tag>
-                      </template>
-                    </el-table-column>
-                    <el-table-column label="耗时" width="80" align="right">
-                      <template #default="{ row: p }">{{ p.DurationMs }}ms</template>
-                    </el-table-column>
-                    <el-table-column label="复用" width="70" align="center">
-                      <template #default="{ row: p }">
-                        <el-tag v-if="p.ReusedCount > 0" type="info" size="small">{{ p.ReusedCount }}</el-tag>
-                        <span v-else class="muted">—</span>
-                      </template>
-                    </el-table-column>
-                    <el-table-column label="节点链" min-width="260">
-                      <template #default="{ row: p }"><span class="mono">{{ (p.NodeIds || []).join(' → ') }}</span></template>
-                    </el-table-column>
-                    <el-table-column label="失败点 / 输出" min-width="200">
-                      <template #default="{ row: p }">
-                        <span v-if="p.ErrorMessage" class="error-text">{{ p.FailedAtNodeId }}: {{ p.ErrorMessage }}</span>
-                        <el-popover v-else-if="p.Output" placement="left" :width="440" trigger="click">
-                          <template #reference><el-button link size="small">查看输出</el-button></template>
-                          <pre class="json-block">{{ formatJson(p.Output) }}</pre>
-                        </el-popover>
-                        <span v-else class="muted">—</span>
-                      </template>
-                    </el-table-column>
-                  </el-table>
-                </div>
+              <!-- 路径层 -->
+              <div class="detail-section">
+                <div class="detail-section-title">路径执行（{{ details[row.TaskCode]?.Paths?.length || 0 }} 条）</div>
+                <YzhTable
+                  :columns="pathColumns"
+                  :data="details[row.TaskCode]!.Paths"
+                  :toolbar="false"
+                  :show-pagination="false"
+                  size="small"
+                  row-key="PathIndex"
+                  empty-text="暂无路径"
+                >
+                  <template #column-PathIndex="{ row: p }">{{ p.PathIndex + 1 }}</template>
+                  <template #column-PathStatus="{ row: p }">
+                    <el-tag :type="p.Status === 'completed' ? 'success' : 'danger'" size="small">{{ p.Status }}</el-tag>
+                  </template>
+                  <template #column-PathDuration="{ row: p }">{{ p.DurationMs }}ms</template>
+                  <template #column-PathReused="{ row: p }">
+                    <el-tag v-if="p.ReusedCount > 0" type="info" size="small">{{ p.ReusedCount }}</el-tag>
+                    <span v-else class="muted">—</span>
+                  </template>
+                  <template #column-NodeIds="{ row: p }"><span class="mono">{{ (p.NodeIds || []).join(' → ') }}</span></template>
+                  <template #column-PathOutput="{ row: p }">
+                    <span v-if="p.ErrorMessage" class="error-text">{{ p.FailedAtNodeId }}: {{ p.ErrorMessage }}</span>
+                    <el-popover v-else-if="p.Output" placement="left" :width="440" trigger="click">
+                      <template #reference><el-button link size="small">查看输出</el-button></template>
+                      <pre class="json-block">{{ formatJson(p.Output) }}</pre>
+                    </el-popover>
+                    <span v-else class="muted">—</span>
+                  </template>
+                </YzhTable>
+              </div>
 
-                <!-- 节点层 -->
-                <div class="detail-section">
-                  <div class="detail-section-title">节点执行（{{ details[row.TaskCode]?.Nodes?.length || 0 }} 个，已按 NodeId 去重）</div>
-                  <el-table :data="details[row.TaskCode].Nodes" size="small" border>
-                    <el-table-column label="节点" min-width="160">
-                      <template #default="{ row: n }">
-                        <div class="node-cell">
-                          <span class="mono node-title">{{ n.NodeTitle || n.NodeId }}</span>
-                          <span class="node-desc">{{ n.NodeDescription || '' }}</span>
-                        </div>
-                      </template>
-                    </el-table-column>
-                    <el-table-column prop="NodeType" label="类型" width="90" />
-                    <el-table-column prop="NodeTitle" label="名称" min-width="120" />
-                    <el-table-column label="状态" width="80" align="center">
-                      <template #default="{ row: n }">
-                        <el-tag :type="n.ExecStatus === 'completed' ? 'success' : 'danger'" size="small">{{ n.ExecStatus }}</el-tag>
-                      </template>
-                    </el-table-column>
-                    <el-table-column label="耗时" width="80" align="right">
-                      <template #default="{ row: n }">{{ n.ExecutionTimeMs }}ms</template>
-                    </el-table-column>
-                    <el-table-column label="时序" width="150">
-                      <template #default="{ row: n }">
-                        <span class="muted">{{ shortTime(n.StartedAt) }} → {{ shortTime(n.CompletedAt) }}</span>
-                      </template>
-                    </el-table-column>
-                    <el-table-column label="输出 / 错误" min-width="200">
-                      <template #default="{ row: n }">
-                        <span v-if="n.ErrorMessage" class="error-text">{{ n.ErrorMessage }}</span>
-                        <el-popover v-else-if="n.Output" placement="left" :width="440" trigger="click">
-                          <template #reference><el-button link size="small">查看输出</el-button></template>
-                          <pre class="json-block">{{ formatJson(n.Output) }}</pre>
-                        </el-popover>
-                        <span v-else class="muted">—</span>
-                      </template>
-                    </el-table-column>
-                  </el-table>
-                </div>
-              </template>
-              <div v-else class="detail-loading">无详情数据</div>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="CreateTime" label="时间" width="160">
-          <template #default="{ row }">{{ formatTime(row.CreateTime) }}</template>
-        </el-table-column>
-        <el-table-column label="范围" width="90" align="center">
-          <template #default="{ row }">
-            <el-tag size="small" :type="scopeTagType(row.TestScope)">{{ row.TestScope }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="90" align="center">
-          <template #default="{ row }">
-            <el-tag size="small" :type="row.TaskStatus === 'completed' ? 'success' : 'danger'">{{ row.TaskStatus }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="RuleCode" label="规则编码" min-width="180" show-overflow-tooltip />
-        <el-table-column label="耗时" width="80" align="right">
-          <template #default="{ row }">{{ row.DurationMs ?? '—' }}ms</template>
-        </el-table-column>
-        <el-table-column prop="PathCount" label="路径" width="64" align="center" />
-        <el-table-column prop="NodeCount" label="节点" width="64" align="center" />
-        <el-table-column label="TaskCode" min-width="240">
-          <template #default="{ row }"><span class="mono muted">{{ row.TaskCode }}</span></template>
-        </el-table-column>
-      </el-table>
+              <!-- 节点层 -->
+              <div class="detail-section">
+                <div class="detail-section-title">节点执行（{{ details[row.TaskCode]?.Nodes?.length || 0 }} 个，已按 NodeId 去重）</div>
+                <YzhTable
+                  :columns="nodeColumns"
+                  :data="details[row.TaskCode]!.Nodes"
+                  :toolbar="false"
+                  :show-pagination="false"
+                  size="small"
+                  row-key="NodeId"
+                  empty-text="暂无节点"
+                >
+                  <template #column-Node="{ row: n }">
+                    <div class="node-cell">
+                      <span class="mono node-title">{{ n.NodeTitle || n.NodeId }}</span>
+                      <span class="node-desc">{{ n.NodeDescription || '' }}</span>
+                    </div>
+                  </template>
+                  <template #column-NodeStatus="{ row: n }">
+                    <el-tag :type="n.ExecStatus === 'completed' ? 'success' : 'danger'" size="small">{{ n.ExecStatus }}</el-tag>
+                  </template>
+                  <template #column-NodeDuration="{ row: n }">{{ n.ExecutionTimeMs }}ms</template>
+                  <template #column-Timing="{ row: n }">
+                    <span class="muted">{{ shortTime(n.StartedAt) }} → {{ shortTime(n.CompletedAt) }}</span>
+                  </template>
+                  <template #column-NodeOutput="{ row: n }">
+                    <span v-if="n.ErrorMessage" class="error-text">{{ n.ErrorMessage }}</span>
+                    <el-popover v-else-if="n.Output" placement="left" :width="440" trigger="click">
+                      <template #reference><el-button link size="small">查看输出</el-button></template>
+                      <pre class="json-block">{{ formatJson(n.Output) }}</pre>
+                    </el-popover>
+                    <span v-else class="muted">—</span>
+                  </template>
+                </YzhTable>
+              </div>
+            </template>
+            <div v-else class="detail-loading">无详情数据</div>
+          </div>
+        </template>
 
-      <div class="pager">
-        <el-pagination
-          v-model:current-page="page"
-          v-model:page-size="pageSize"
-          :total="total"
-          :page-sizes="[10, 20, 50]"
-          layout="total, sizes, prev, pager, next"
-          background
-          small
-          @current-change="load"
-          @size-change="reload"
-        />
-      </div>
+        <template #column-CreateTime="{ row }">{{ formatTime(row.CreateTime) }}</template>
+        <template #column-Scope="{ row }">
+          <el-tag size="small" :type="scopeTagType(row.TestScope)">{{ row.TestScope }}</el-tag>
+        </template>
+        <template #column-Status="{ row }">
+          <el-tag size="small" :type="row.TaskStatus === 'completed' ? 'success' : 'danger'">{{ row.TaskStatus }}</el-tag>
+        </template>
+        <template #column-Duration="{ row }">{{ row.DurationMs ?? '—' }}ms</template>
+        <template #column-TaskCode="{ row }"><span class="mono muted">{{ row.TaskCode }}</span></template>
+      </YzhTable>
     </div>
-  </el-drawer>
+  </YzhDrawer>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { YzhDrawer, YzhTable, type Page, type PageParams, type YzhTableColumn } from '@yzh-core'
 import {
   getTaskDetail,
   getTaskHistory,
@@ -216,10 +186,9 @@ defineExpose({ nodeApprovalStatus, showApprovalDialog, handleApprove })
 
 const drawerTitle = computed(() => '测试历史')
 
-const rows = ref<TaskHistoryItem[]>([])
-const total = ref(0)
-const page = ref(1)
-const pageSize = ref(20)
+/** 表格实例（重查/重置走它的 refresh，分页状态由组件自己管） */
+const tableRef = ref<any>(null)
+/** 查询按钮 loading（YzhTable 内部 loading 不对外暴露） */
 const loading = ref(false)
 
 const filters = reactive({
@@ -228,7 +197,45 @@ const filters = reactive({
   RuleCode: props.ruleCode || '',
 })
 
-/** TaskCode → 四层详情（展开时懒加载并缓存） */
+// ========================================================
+// 列定义
+// ★ 无字段的展示列必须给 `slotKey`（插槽名 = column-${slotKey}）；
+//   只写 label 不给 slotKey 会渲染成空白列。
+// ========================================================
+
+/** 主表：一次测试任务一行，展开看四层详情 */
+const historyColumns: YzhTableColumn<TaskHistoryItem>[] = [
+  { type: 'expand', width: 40 },
+  { slotKey: 'CreateTime', label: '时间', width: 160, slot: true },
+  { slotKey: 'Scope', label: '范围', width: 90, align: 'center', slot: true },
+  { slotKey: 'Status', label: '状态', width: 90, align: 'center', slot: true },
+  { prop: 'RuleCode', label: '规则编码', minWidth: 180, showOverflowTooltip: true },
+  { slotKey: 'Duration', label: '耗时', width: 80, align: 'right', slot: true },
+  { prop: 'PathCount', label: '路径', width: 64, align: 'center' },
+  { prop: 'NodeCount', label: '节点', width: 64, align: 'center' },
+  { slotKey: 'TaskCode', label: 'TaskCode', minWidth: 240, slot: true },
+]
+
+/** 展开层一：路径执行 */
+const pathColumns: YzhTableColumn[] = [
+  { slotKey: 'PathIndex', label: '路径', width: 70, align: 'center', slot: true },
+  { slotKey: 'PathStatus', label: '状态', width: 90, align: 'center', slot: true },
+  { slotKey: 'PathDuration', label: '耗时', width: 80, align: 'right', slot: true },
+  { slotKey: 'PathReused', label: '复用', width: 70, align: 'center', slot: true },
+  { slotKey: 'NodeIds', label: '节点链', minWidth: 260, slot: true },
+  { slotKey: 'PathOutput', label: '失败点 / 输出', minWidth: 200, slot: true },
+]
+
+/** 展开层二：节点执行（NodeType / NodeTitle 是真字段，其余走插槽） */
+const nodeColumns: YzhTableColumn[] = [
+  { slotKey: 'Node', label: '节点', minWidth: 160, slot: true },
+  { prop: 'NodeType', label: '类型', width: 90 },
+  { prop: 'NodeTitle', label: '名称', minWidth: 120 },
+  { slotKey: 'NodeStatus', label: '状态', width: 80, align: 'center', slot: true },
+  { slotKey: 'NodeDuration', label: '耗时', width: 80, align: 'right', slot: true },
+  { slotKey: 'Timing', label: '时序', width: 150, slot: true },
+  { slotKey: 'NodeOutput', label: '输出 / 错误', minWidth: 200, slot: true },
+]/** TaskCode → 四层详情（展开时懒加载并缓存） */
 const details = reactive<Record<string, TaskExecutionDetail>>({})
 const detailLoading = ref<string | null>(null)
 
@@ -239,31 +246,38 @@ function onOpen() {
   reload()
 }
 
-async function load() {
+/**
+ * YzhTable 数据加载器：分页/页码全部由组件驱动，这里只把筛选条件透给后端。
+ *
+ * ⛔ 失败**不要**自己吞掉并 `return { rows: [] }` —— 那会把「查询失败」渲染成
+ *    「暂无数据」；直接 throw，由 YzhTable 走错误态（保留上次数据 + 提示）。
+ */
+async function dataLoader(params: PageParams): Promise<Page<TaskHistoryItem>> {
   loading.value = true
   try {
     const res = await getTaskHistory({
-      Page: page.value,
-      PageSize: pageSize.value,
+      Page: params.page,
+      PageSize: params.rows,
       RuleCode: filters.RuleCode || undefined,
       TestScope: filters.TestScope || undefined,
       TaskStatus: filters.TaskStatus || undefined,
       TaskType: 'TEST',
     })
-    rows.value = res?.Items || []
-    total.value = res?.TotalCount || 0
-  } catch (e: any) {
-    ElMessage.error('测试历史查询失败: ' + (e?.message || e))
-    rows.value = []
-    total.value = 0
+    return { rows: res?.Items || [], total: res?.TotalCount || 0 }
   } finally {
     loading.value = false
   }
 }
 
+/**
+ * 重新查询。
+ *
+ * ★ 首次打开时表格还没挂载（`el-drawer` 懒渲染），此时 `tableRef` 为 null ⇒
+ *   什么都不做，等表格挂载后由它自己的 `onMounted` 用**已同步好的 filters** 加载。
+ *   ⛔ 别在这里无脑 `refresh()`，会打出两次相同请求。
+ */
 function reload() {
-  page.value = 1
-  load()
+  tableRef.value?.refresh()
 }
 
 function resetFilters() {
@@ -366,8 +380,7 @@ function formatJson(obj: any) {
 <style scoped lang="less">
 .history-drawer { display: flex; flex-direction: column; gap: 10px; height: 100%; }
 .filter-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-bottom: 8px; border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5); }
-.history-table { font-size: 12px; }
-.pager { display: flex; justify-content: flex-end; padding-top: 8px; }
+.history-table { font-size: 12px; flex: 1; min-height: 0; }
 .node-cell { display: flex; flex-direction: column; line-height: 1.3; .node-title { font-family: monospace; } .node-desc { color: var(--yzh-color-text-tertiary, #909399); font-size: 11px; } }
 .muted { color: var(--yzh-color-text-disabled, #c0c4cc); }
 .error-text { color: var(--yzh-color-danger, #F56C6C); }

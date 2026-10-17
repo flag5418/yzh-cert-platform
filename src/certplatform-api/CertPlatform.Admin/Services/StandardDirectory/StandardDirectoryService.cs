@@ -1618,7 +1618,10 @@ public class StandardDirectoryService
                 existingFile.StandardCode = config.StandardCode;
                 existingFile.StageCode = config.StageCode;
                 existingFile.Remark = $"[upload-replace:{taskId}]";
-                await _db.UpdateAsync(existingFile);
+                await _db.UpdateAsync(existingFile,
+                    nameof(StandardDirectoryFile.UploadStatus), nameof(StandardDirectoryFile.TaskId),
+                    nameof(StandardDirectoryFile.StoragePath), nameof(StandardDirectoryFile.StandardCode),
+                    nameof(StandardDirectoryFile.StageCode), nameof(StandardDirectoryFile.Remark));
 
                 enhancedFiles.Add(new EnhancedFileItem
                 {
@@ -1815,7 +1818,7 @@ public class StandardDirectoryService
             if (taskToUpdate != null)
             {
                 taskToUpdate.SuccessCount++;
-                await _db.UpdateAsync(taskToUpdate);
+                await _db.UpdateAsync(taskToUpdate, nameof(UploadTask.SuccessCount));
             }
 
             return (true, null);
@@ -1975,7 +1978,7 @@ public class StandardDirectoryService
         {
             folder.IsValid = 1;
             folder.TaskId = null;
-            await _db.UpdateAsync(folder);
+            await _db.UpdateAsync(folder, nameof(StandardDirectoryFolder.IsValid), nameof(StandardDirectoryFolder.TaskId));
         }
 
         // 创建转换队列（如有可转换文件）
@@ -2012,7 +2015,7 @@ public class StandardDirectoryService
         // 更新任务状态
         task.Status = "completed";
         task.UpdateTime = DateTime.Now;
-        await _db.UpdateAsync(task);
+        await _db.UpdateAsync(task, nameof(UploadTask.Status), nameof(UploadTask.UpdateTime));
 
         return (true, null, convertQueueCode);
     }
@@ -2072,7 +2075,11 @@ public class StandardDirectoryService
                     updateFile.ConvertedStoragePath = null;
                     updateFile.ConvertMessage = null;
                     updateFile.Remark = (updateFile.Remark ?? "").Replace(replaceMarker, "");
-                    await _db.UpdateAsync(updateFile);
+                    await _db.UpdateAsync(updateFile,
+                        nameof(StandardDirectoryFile.IsValid), nameof(StandardDirectoryFile.UploadStatus),
+                        nameof(StandardDirectoryFile.TaskId), nameof(StandardDirectoryFile.ConvertStatus),
+                        nameof(StandardDirectoryFile.ConvertedStoragePath), nameof(StandardDirectoryFile.ConvertMessage),
+                        nameof(StandardDirectoryFile.Remark));
                     restoredCount++;
                 }
             }
@@ -3083,7 +3090,10 @@ public class StandardDirectoryService
                     f.ConvertMessage = null;
                     f.MarkdownStatus = "pending";
                     f.MarkdownMessage = null;
-                    await _db.UpdateAsync(f);
+                    await _db.UpdateAsync(f,
+                        nameof(StandardDirectoryFile.IsValid), nameof(StandardDirectoryFile.ConvertStatus),
+                        nameof(StandardDirectoryFile.ConvertMessage), nameof(StandardDirectoryFile.MarkdownStatus),
+                        nameof(StandardDirectoryFile.MarkdownMessage));
                 }
                 enqueued += count;
                 queueCodes.Add(queueCode);

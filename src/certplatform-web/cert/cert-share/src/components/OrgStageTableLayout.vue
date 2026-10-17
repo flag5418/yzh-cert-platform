@@ -135,6 +135,7 @@ defineExpose({
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--el-border-color-lighter);
+  background: var(--yzh-color-bg-container, #fff);
   overflow: hidden;
 }
 

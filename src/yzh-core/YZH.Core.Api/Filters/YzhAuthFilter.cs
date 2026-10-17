@@ -2,7 +2,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
-using YZH.Core.Api.Attributes;
 using YZH.Core.Stand.Helpers;
 
 namespace YZH.Core.Api.Filters;
@@ -12,10 +11,9 @@ namespace YZH.Core.Api.Filters;
 ///     
 ///     执行时机：Authorization 阶段
 ///     功能链路：
-///     1. [YZHAnonymous] → 跳过，Mock 用户已由特性注入
-///     2. SSO 版本校验（JWT.ver vs Redis.ver）
-///     3. Token 续租（剩余有效期 < 30min 时签发新 Token）
-///     4. 新 Token 写入 Response Header "X-New-Token"
+///     1. SSO 版本校验（JWT.ver vs Redis.ver）
+///     2. Token 续租（剩余有效期 < 30min 时签发新 Token）
+///     3. 新 Token 写入 Response Header "X-New-Token"
 /// </summary>
 public class YzhAuthFilter : IAsyncAuthorizationFilter
 {
@@ -34,20 +32,10 @@ public class YzhAuthFilter : IAsyncAuthorizationFilter
 
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
-        // 跳过标记了 [YZHAnonymous] 的端点
-        var hasAnonymous = context.ActionDescriptor.EndpointMetadata
-            .Any(m => m is YZHAnonymousAttribute);
-        if (hasAnonymous)
-            return;
-
         var userCode = context.HttpContext.User.FindFirst("code")?.Value;
 
         // 无 Token 或解析失败 → 由框架 Authorization 中间件返回 401
         if (string.IsNullOrEmpty(userCode))
-            return;
-
-        // 匿名 Mock 用户 → 跳过 SSO 校验
-        if (userCode == "anonymous")
             return;
 
         // SSO 版本校验

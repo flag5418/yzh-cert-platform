@@ -1,5 +1,6 @@
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
+using YZH.Core.Api.Controllers;
 using SqlSugar;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Models.Result;
@@ -22,7 +23,7 @@ namespace CertPlatform.Admin.Controllers.Workflow;
 /// 只取路由<b>末段</b>作控制器名，本 Controller 的末段未变 ⇒ <c>ApiCode</c> 不变 ⇒
 /// <b>角色-接口关联不断裂</b>，无需重跑 ApiSync。</para>
 [Route("api/Admin/Workflow/AIUsage")]
-public class AIUsageController : ControllerBase
+public class AIUsageController : WebControllerBase
 {
     private readonly IDbOrm _db;
 

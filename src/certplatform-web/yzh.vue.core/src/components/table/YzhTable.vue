@@ -12,6 +12,10 @@
  *   操作列宽由 actionColWidth 按按钮文案自适应（⛔ 不要在 columns 里手写 Actions + width）
  * - render:'tag' 列级标签渲染（valueMap/tagTypeMap 由调用方传入）
  * - 插槽扩展（#column-prop）
+ * - 展开行（列配 `type:'expand'` + `#expand` 插槽）
+ * - 静态数据通道（`:data` 直出内存数组，与 `dataLoader` 二选一）
+ * - 无 `prop` 的展示列（配 `slotKey`，插槽名 `column-${slotKey}`）
+ * - 尺寸透传（`size="small"`，用于抽屉/折叠面板里的明细小表）
  *
  * 事件契约（C-A10）：
  * - row-action(key, row, action)
@@ -41,7 +45,22 @@ import type {
 const props = withDefaults(
   defineProps<{
     columns: YzhTableColumn<T>[]
-    dataLoader: YzhTableDataLoader<T>
+    /**
+     * 数据加载器（分页/排序/搜索走它）。
+     *
+     * ★ 2026-10-17：改为**可选** —— 内存数据（展开明细、结果面板里的静态数组）
+     *   用 `data` 更直接，不必为「本地数组」再包一个返回 Promise 的 loader。
+     *   `data` 与 `dataLoader` **至少给一个**（都不给会在加载时报错提示）。
+     */
+    dataLoader?: YzhTableDataLoader<T>
+    /**
+     * 静态数据通道（内存数组，不分页时不切片）。
+     *
+     * 与 `dataLoader` 互斥：给了 `data` 就**不再调用** `dataLoader`。
+     * `showPagination` 为 true 时按当前页切片，false 时整段直出。
+     * ⚠️ 只认**引用变化**（`data.value = [...]`）；原地 `push` 不会触发重载。
+     */
+    data?: T[]
     searchFields?: SearchField[]
     /** 兼容旧属性：等价 selectMode='multiple' */
     selectable?: boolean
@@ -87,8 +106,16 @@ const props = withDefaults(
     defaultExpandAll?: boolean
     /** 树形字段映射（透传 el-table tree-props；children 默认 'children'） */
     treeProps?: { children?: string; hasChildren?: string }
+    /**
+     * 表格尺寸（透传 `el-table` 的 `size`）。
+     *
+     * ★ 2026-10-17 补：抽屉/折叠面板里的**明细小表**必须用小号，
+     *   否则行高翻倍、一屏塞不下几行。缺省不传 = Element Plus 默认尺寸。
+     */
+    size?: 'large' | 'default' | 'small'
   }>(),
   {
+    data: undefined,
     selectable: false,
     selectMode: undefined,
     showPagination: true,
@@ -105,7 +132,8 @@ const props = withDefaults(
     actionDropdownOnly: false,
     actionFixed: true,
     defaultExpandAll: false,
-    treeProps: undefined
+    treeProps: undefined,
+    size: undefined
   }
 )
 
@@ -146,16 +174,29 @@ const effectiveSelectMode = computed<'none' | 'single' | 'multiple'>(() => {
 })
 const isMultiple = computed(() => effectiveSelectMode.value === 'multiple')
 
-/** 可被列设置的列（有 label 且非操作列） */
+/** 可被列设置的列（有 label 且非操作列 / 非展开列） */
 const columnSettingList = computed(() =>
-  props.columns.filter((c) => c.label && c.prop !== '__yzh_action')
+  props.columns.filter(
+    (c) => c.label && c.type !== 'expand' && c.prop !== '__yzh_action'
+  )
 )
+
+/**
+ * 列标识：插槽名 / 列设置开关 / `v-for` key 统一用它。
+ *
+ * ★ 2026-10-17：原来三处都直接吃 `col.prop`，导致「只有插槽、没有字段」的展示列
+ *   （以及展开列）插槽名变成 `column-undefined` —— 页面写了 `#column-xxx` 也**静默空白**。
+ *   现在缺省回落 `prop`，`prop` 为空时用 `slotKey`。
+ */
+function columnKey(col: YzhTableColumn<T>): string {
+  return String(col.slotKey ?? col.prop ?? '')
+}
 
 /** 实际可见的列 */
 const visibleColumns = computed(() =>
   props.columns.filter((c) => {
     if (c.hidden) return false
-    if (hiddenColumnFields.value.has(c.prop as string)) return false
+    if (hiddenColumnFields.value.has(columnKey(c))) return false
     return true
   })
 )
@@ -239,10 +280,11 @@ async function onToolbarActionClick(action: YzhAction) {
 
 /** 切换列显示/隐藏 */
 function toggleColumnVisibility(col: YzhTableColumn<T>, visible: boolean) {
+  const key = columnKey(col)
   if (visible) {
-    hiddenColumnFields.value.delete(col.prop as string)
+    hiddenColumnFields.value.delete(key)
   } else {
-    hiddenColumnFields.value.add(col.prop as string)
+    hiddenColumnFields.value.add(key)
   }
   hiddenColumnFields.value = new Set(hiddenColumnFields.value)
 }
@@ -297,6 +339,25 @@ async function loadData() {
   try {
     // 记录当前选中行的 key（用于数据重新加载后恢复选择）
     const selectedKeys = new Set(selectedRows.value.map((r: any) => r[props.rowKey]))
+
+    // ── 静态数据通道（内存数组）──────────────────────────────
+    if (props.data) {
+      const all = props.data
+      rows.value = props.showPagination
+        ? all.slice((page.value - 1) * pageSize.value, page.value * pageSize.value)
+        : all
+      total.value = all.length
+      if (selectedKeys.size > 0) {
+        selectedRows.value = rows.value.filter((row) =>
+          selectedKeys.has((row as any)[props.rowKey])
+        )
+      }
+      return
+    }
+
+    if (!props.dataLoader) {
+      throw new Error('YzhTable：必须提供 dataLoader 或 data 之一')
+    }
 
     const params: PageParams = {
       page: page.value,
@@ -461,6 +522,20 @@ watch(
     )
   },
   { immediate: true }
+)
+
+/**
+ * 静态数据通道：只认**引用变化**（原地 push 不触发，避免大数组深比较）。
+ * 分页模式下一旦总条数变化，页码越界会看到空页 ⇒ 顺带把页码收敛回 1。
+ */
+watch(
+  () => props.data,
+  () => {
+    if (!props.data) return
+    const maxPage = Math.max(1, Math.ceil(props.data.length / pageSize.value))
+    if (page.value > maxPage) page.value = maxPage
+    loadData()
+  }
 )
 
 /**
@@ -635,11 +710,11 @@ defineExpose({
               <div class="yzh-column-settings__body">
                 <div
                   v-for="col in columnSettingList"
-                  :key="col.prop as string"
+                  :key="columnKey(col)"
                   class="yzh-column-settings__item"
                 >
                   <el-checkbox
-                    :model-value="!hiddenColumnFields.has(col.prop as string) && !col.hidden"
+                    :model-value="!hiddenColumnFields.has(columnKey(col)) && !col.hidden"
                     @change="(val: boolean) => toggleColumnVisibility(col, val)"
                   >
                     {{ col.label }}
@@ -680,6 +755,7 @@ defineExpose({
           :tree-props="effectiveTreeProps"
           :height="height !== undefined && height !== null ? height : '100%'"
           :highlight-current-row="effectiveSelectMode === 'single'"
+          :size="size"
           stripe
           border
           @selection-change="onSelectionChange"
@@ -689,9 +765,22 @@ defineExpose({
         >
           <el-table-column v-if="isMultiple" type="selection" width="48" :reserve-selection="false" />
 
-          <template v-for="col in visibleColumns" :key="col.prop">
+          <template v-for="col in visibleColumns" :key="columnKey(col)">
+            <!-- 展开列（type='expand'）：内容由 #expand 插槽提供 -->
             <el-table-column
-              :prop="col.prop as string"
+              v-if="col.type === 'expand'"
+              type="expand"
+              :width="col.width"
+              :class-name="col.className"
+            >
+              <template #default="{ row, $index }">
+                <slot name="expand" :row="row" :index="$index" />
+              </template>
+            </el-table-column>
+
+            <el-table-column
+              v-else
+              :prop="col.prop as string | undefined"
               :label="col.label"
               :width="col.width"
               :min-width="col.minWidth"
@@ -704,29 +793,29 @@ defineExpose({
               <template #default="{ row, $index }">
                 <slot
                   v-if="col.slot"
-                  :name="`column-${String(col.prop)}`"
+                  :name="`column-${columnKey(col)}`"
                   :row="row"
                   :index="$index"
-                  :value="row[col.prop]"
+                  :value="row[col.prop as string]"
                 >
                   <!-- 默认 fallback 渲染 -->
-                  {{ col.formatter ? col.formatter(row[col.prop], row, $index) : row[col.prop] }}
+                  {{ col.formatter ? col.formatter(row[col.prop as string], row, $index) : row[col.prop as string] }}
                 </slot>
                 <template v-else-if="col.dictCode">
                   <el-tag v-if="col.tagType" :type="col.tagType" disable-transitions>
                     <!-- dictStore 将在后续版本引入 -->
-                    {{ row[col.prop] }}
+                    {{ row[col.prop as string] }}
                   </el-tag>
-                  <span v-else>{{ row[col.prop] }}</span>
+                  <span v-else>{{ row[col.prop as string] }}</span>
                 </template>
                 <!-- 通用标签渲染（valueMap/tagTypeMap 由调用方传入，组件不内置业务语义） -->
                 <template v-else-if="col.tagMap">
-                  <el-tag :type="col.tagTypeMap?.[row[col.prop]] ?? 'info'" size="small" disable-transitions>
-                    {{ col.tagMap![row[col.prop]] ?? row[col.prop] }}
+                  <el-tag :type="col.tagTypeMap?.[row[col.prop as string]] ?? 'info'" size="small" disable-transitions>
+                    {{ col.tagMap![row[col.prop as string]] ?? row[col.prop as string] }}
                   </el-tag>
                 </template>
                 <template v-else>
-                  {{ col.formatter ? col.formatter(row[col.prop], row, $index) : row[col.prop] }}
+                  {{ col.formatter ? col.formatter(row[col.prop as string], row, $index) : row[col.prop as string] }}
                 </template>
               </template>
             </el-table-column>

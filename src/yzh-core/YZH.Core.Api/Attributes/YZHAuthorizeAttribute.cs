@@ -13,7 +13,6 @@ namespace YZH.Core.Api.Attributes;
 ///     使用方式：
 ///     - 不标记任何特性 → 自动继承 YZHAuthorize（通过 Program.cs 配置默认策略）
 ///     - 显式标记 [YZHAuthorize] → 强制认证
-///     - 标记 [YZHAnonymous] → 免认证（仅开发用）
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
 public class YZHAuthorizeAttribute : AuthorizeAttribute

@@ -9,7 +9,6 @@ namespace YZH.Core.Api.Controllers;
 ///     特性：
 ///     - 类级别标记 [YZHAuthorize]，继承此类的所有 Controller 默认要求 JWT 认证
 ///     - 子类无需再标记任何认证特性，天然受保护
-///     - 需要临时测试的接口，在方法上标记 [YZHAnonymous] 即可
 ///     
 ///     继承链：
 ///     WebControllerBase → ControllerBase(.NET) + [YZHAuthorize]

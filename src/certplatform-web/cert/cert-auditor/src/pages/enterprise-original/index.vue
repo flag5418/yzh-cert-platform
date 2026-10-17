@@ -366,8 +366,13 @@ onBeforeUnmount(() => { stopPolling() })
       </template>
     </YzhTreeTableLayout>
 
-    <!-- ═══════════ 预览抽屉：专家直接看文件内容 ═══════════ -->
-    <el-drawer v-model="previewVisible" :title="previewRow?.FileName || '预览'" size="900px" @close="closePreview">
+    <!-- ═══════════ 预览抽屉：专家直接看文件内容 ═══════════
+         S07：只读抽屉用 YzhDrawer + show-footer=false；`@close` 改 `@closed`
+         （YzhDrawer 的 `close` 只在「取消」时发，点 X / 遮罩不发；`closed` 由 el-drawer 透传，任何关闭方式都发） -->
+    <YzhDrawer
+      v-model="previewVisible" :title="previewRow?.FileName || '预览'" size="900px"
+      :show-footer="false" @closed="closePreview"
+    >
       <div v-loading="previewLoading" class="eo-preview">
         <template v-if="previewKind === 'image'">
           <img :src="previewUrl" class="eo-preview__img" alt="预览" />
@@ -380,7 +385,7 @@ onBeforeUnmount(() => { stopPolling() })
         </template>
         <YzhEmptyState v-else-if="!previewLoading" title="这个格式暂时无法预览，请下载原件查看" />
       </div>
-    </el-drawer>
+    </YzhDrawer>
 
     <!-- ═══════════ ★ 「提取信息」抽屉（2026-10-07 四轮：详情 + 提取内容 合并）═══════════
          用户逐字：「可以增加一个**提取信息的展示**，审核员**可以关心，可以点击查看**，
@@ -528,7 +533,7 @@ onBeforeUnmount(() => { stopPolling() })
          ★ 2026-10-07 四轮：同一个抽屉现在有三个入口（上传文件 / 更新文件夹内容 / 替换单个文件），
            标题与目标提示条都跟着「本次目标」走 —— 否则从「替换」点进来的人看到的仍是
            「上传文件」，只能靠猜「我这次传的东西会落到哪、会不会改名」。 -->
-    <el-drawer v-model="uploadVisible" :title="uploadTitle" size="620px" @close="closeUpload">
+    <YzhDrawer v-model="uploadVisible" :title="uploadTitle" size="620px" @closed="closeUpload">
       <!-- ★ 目标提示条（常规上传时不出现）—— 说明「这次会落到哪里」 -->
       <el-alert
         v-if="uploadTargetLabel"
@@ -594,10 +599,10 @@ onBeforeUnmount(() => { stopPolling() })
           @click="startUpload"
         >开始上传</el-button>
       </template>
-    </el-drawer>
+    </YzhDrawer>
 
     <!-- ═══════════ 「不参与识别」抽屉（专家语言）══════════ -->
-    <el-drawer v-model="policyVisible" title="设置这份文件是否参与识别" size="440px">
+    <YzhDrawer v-model="policyVisible" title="设置这份文件是否参与识别" size="440px">
       <el-form label-width="90px">
         <el-form-item label="参与识别">
           <el-radio-group v-model="policyValue">
@@ -617,10 +622,10 @@ onBeforeUnmount(() => { stopPolling() })
         <el-button type="primary" @click="policyVisible = false">取消</el-button>
         <el-button type="primary" @click="submitPolicy">保存</el-button>
       </template>
-    </el-drawer>
+    </YzhDrawer>
 
     <!-- ═══════════ 处理进度抽屉 ═══════════ -->
-    <el-drawer v-model="queueVisible" title="处理进度" size="720px">
+    <YzhDrawer v-model="queueVisible" title="处理进度" size="720px" :show-footer="false">
       <div v-loading="queueLoading">
         <YzhEmptyState v-if="!queueLoading && (queueDetail?.Rows ?? []).length === 0" title="当前没有进行中的处理" />
         <div v-for="q in queueDetail?.Rows ?? []" :key="q.Code" class="eo-q">
@@ -633,14 +638,15 @@ onBeforeUnmount(() => { stopPolling() })
           </div>
         </div>
       </div>
-    </el-drawer>
+    </YzhDrawer>
 
     <!-- ═══════════ 历史版本抽屉 ═══════════ -->
-    <el-drawer v-model="versionVisible" title="历史版本" size="560px">
+    <YzhDrawer v-model="versionVisible" title="历史版本" size="560px" :show-footer="false">
       <el-alert type="info" :closable="false" show-icon class="eo-alert">
         当前是第 {{ currentVersion }} 版。恢复旧版本后，当前版本会作为历史保留。
       </el-alert>
       <YzhTable
+        class="eo-version-table"
         :columns="[
           { prop: 'VersionNumber', label: '版本', width: 80 },
           { prop: 'FileName', label: '文件名', minWidth: 180 },
@@ -654,7 +660,7 @@ onBeforeUnmount(() => { stopPolling() })
           <el-button link type="primary" size="small" @click="onRestore(row)">恢复</el-button>
         </template>
       </YzhTable>
-    </el-drawer>
+    </YzhDrawer>
   </div>
 </template>
 
@@ -815,4 +821,11 @@ onBeforeUnmount(() => { stopPolling() })
 
 .eo-q { padding: 8px 0; border-bottom: 1px solid var(--el-border-color-lighter); }
 .eo-q__head { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+
+/*
+ * 抽屉内表格：`YzhDrawer` 的 body 是 `display:flex; flex-direction:column; height:100%`，
+ * 而 `YzhTable` 根节点是 `height:100%` —— 不补 `flex:1; min-height:0` 时，
+ * 「提示条 + 表格」两段各自按 100% 算高 ⇒ 表格底部被裁。
+ */
+.eo-version-table { flex: 1; min-height: 0; }
 </style>

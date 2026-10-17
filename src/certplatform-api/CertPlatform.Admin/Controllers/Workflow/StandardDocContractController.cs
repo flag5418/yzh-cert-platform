@@ -256,7 +256,15 @@ public class StandardDocContractController : WebControllerBase
 
         var saveResult = isNew
             ? await _db.InsertAsync(contract)
-            : await _db.UpdateAsync(contract);
+            : await _db.UpdateAsync(contract,
+                nameof(StandardDocContract.IsDeleted), nameof(StandardDocContract.DeleteBy), nameof(StandardDocContract.DeleteTime),
+                nameof(StandardDocContract.ConfigCode), nameof(StandardDocContract.StandardCode), nameof(StandardDocContract.StageCode),
+                nameof(StandardDocContract.DocName), nameof(StandardDocContract.DocCategory),
+                nameof(StandardDocContract.DocPurpose), nameof(StandardDocContract.DocPurposeSource),
+                nameof(StandardDocContract.TagsJson), nameof(StandardDocContract.TagsSource),
+                nameof(StandardDocContract.InfoItemsJson), nameof(StandardDocContract.FingerprintJson),
+                nameof(StandardDocContract.IsManualCorrected), nameof(StandardDocContract.AnalyzeStatus),
+                nameof(StandardDocContract.UpdateBy), nameof(StandardDocContract.UpdateTime));
 
         if (!saveResult.Success)
             return Ok(ApiResponse<object>.Fail(saveResult.Error ?? "契约保存失败"));
@@ -714,7 +722,12 @@ public class StandardDocContractController : WebControllerBase
         contract.UpdateBy = user;
         contract.UpdateTime = now;
 
-        var save = isNew ? await _db.InsertAsync(contract) : await _db.UpdateAsync(contract);
+        var save = isNew ? await _db.InsertAsync(contract) : await _db.UpdateAsync(contract,
+            nameof(StandardDocContract.ModelName), nameof(StandardDocContract.PromptCode), nameof(StandardDocContract.PromptVersion),
+            nameof(StandardDocContract.PromptTokens), nameof(StandardDocContract.CompletionTokens),
+            nameof(StandardDocContract.DurationMs), nameof(StandardDocContract.AnalyzeStatus),
+            nameof(StandardDocContract.AnalyzeMessage), nameof(StandardDocContract.AnalyzeTime),
+            nameof(StandardDocContract.UpdateBy), nameof(StandardDocContract.UpdateTime));
         if (!save.Success)
         {
             _logger.LogWarning("[Contract] 语义结论落库失败：File={File}, Err={Err}", fileRow.Code, save.Error);

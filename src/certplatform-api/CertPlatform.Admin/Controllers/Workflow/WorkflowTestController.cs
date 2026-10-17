@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using CertPlatform.Admin.Services.Workflow;
 using CertPlatform.Shared.Workflow.Models;
 using YZH.Core.Stand.Models.Result;
+using YZH.Core.Api.Controllers;
 
 namespace CertPlatform.Admin.Controllers.Workflow
 {
@@ -41,8 +41,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
 /// 只取路由<b>末段</b>作控制器名，本 Controller 的末段未变 ⇒ <c>ApiCode</c> 不变 ⇒
 /// <b>角色-接口关联不断裂</b>，无需重跑 ApiSync。</para>
     [Route("api/Admin/Workflow")]
-    [Authorize]
-    public class WorkflowTestController : ControllerBase
+    public class WorkflowTestController : WebControllerBase
     {
         private readonly WfExecutionTaskService _taskService;
         private readonly ILogger<WorkflowTestController> _logger;
@@ -218,9 +217,8 @@ namespace CertPlatform.Admin.Controllers.Workflow
         /// <summary>
         /// 健康检查 — 验证引擎是否正常启动
         /// </summary>
-        [HttpGet("health")]
-        [AllowAnonymous]
-        public IActionResult Health()
+         [HttpGet("health")]
+         public IActionResult Health()
         {
             return Ok(new
             {

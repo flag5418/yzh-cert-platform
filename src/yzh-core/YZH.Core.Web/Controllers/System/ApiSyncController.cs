@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Attributes;
+using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Services;
 using YZH.Core.Api.Interfaces;
 using YZH.Core.Stand.Helpers;
@@ -17,7 +18,7 @@ namespace YZH.Core.Web.Controllers.System;
 [Route("api/System/[controller]")]
 [Route("api/[controller]")]
 [Authorize]
-public class ApiSyncController : ControllerBase
+public class ApiSyncController : WebControllerBase
 {
     private readonly ApiScanner _scanner;
     private readonly ApiSyncService _syncService;

@@ -383,8 +383,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--yzh-color-bg, #fff);
-  border-radius: var(--yzh-border-radius, 8px);
+  background: var(--yzh-color-bg-container, #fff);
+  border-radius: var(--yzh-radius-md, 8px);
   border: 1px solid var(--el-border-color-lighter, #ebeef5);
 }
 

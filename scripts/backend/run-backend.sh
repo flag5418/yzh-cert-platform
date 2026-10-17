@@ -34,8 +34,15 @@ if [ -z "$DOTNET_BIN" ]; then
     echo "[ERROR] 未找到 dotnet，请设置 DOTNET_BIN 或把 dotnet 加入 PATH"
     exit 1
 fi
-LOG_FILE="/tmp/vol_backend_9992.log"
+# ★ 运行日志落项目内 Logs/（2026-10-17 纠偏）：
+#   原为 /tmp/vol_backend_9992.log 且以 'w' 截断打开 ⇒ ① 重启即清空历史 ② /tmp 会被系统清理
+#   ⇒ 500 异常一旦发生且后端被重启排障，堆栈永远丢失（无法事后分析）。
+#   现改为内容根 Logs/backend-YYYYMMDD.log + 追加写入：重启只追加、按天分文件，可长期留存分析。
+#   口径：运行日志（排障用）≠ 审计日志（Logs/Audit/*.log + sys_log 表，追责用），两者互不替代。
+LOG_DIR="$WEB_API_DIR/Logs"
+LOG_FILE="$LOG_DIR/backend-$(date +%Y%m%d).log"
 PID_FILE="/tmp/vol_backend_9992.pid"
+mkdir -p "$LOG_DIR"
 
 print_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 print_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
@@ -114,7 +121,7 @@ import os, subprocess, sys
 pid = os.fork()
 if pid == 0:
     os.setsid()
-    log = open('$LOG_FILE', 'w')
+    log = open('$LOG_FILE', 'a')
     p = subprocess.Popen(['$DOTNET_BIN', 'run', '--project', 'YZH.Core.Web.csproj', '--no-build',
                           '--urls', 'http://0.0.0.0:$PORT'],
                          stdout=log, stderr=log, stdin=subprocess.DEVNULL)
@@ -148,6 +155,7 @@ if pid == 0:
 show_status() {
     if is_running; then
         print_info "后端运行中: PID $(pgrep -f 'YZH\.Core\.Web' | tr '\n' ' '), 端口 :$PORT"
+        print_info "今日运行日志: $LOG_FILE"
     else
         print_info "后端未运行"
     fi

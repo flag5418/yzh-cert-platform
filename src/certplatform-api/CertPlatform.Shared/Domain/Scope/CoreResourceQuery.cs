@@ -65,6 +65,13 @@ public interface ICoreResourceQuery
     /// <summary>按 <c>Code</c> 单查标准（未命中返回 <c>null</c>）。</summary>
     Task<ISOStandard?> GetStandardByCodeAsync(string? standardCode);
 
+    /// <summary>
+    /// 取全部 <b>叶子标准</b>（<c>IsLeaf == true</c> 且未删）。
+    /// <para><b>★ 语义</b>：等价于端内 <c>_db.Client.Queryable&lt;ISOStandard&gt;().Where(x => x.IsLeaf == true).OrderBy(x => x.Sort)</c>；
+    /// 排序口径在端内完成（与 <see cref="GetStandardsAsync"/> 一致，本方法不固化排序）。</para>
+    /// </summary>
+    Task<List<ISOStandard>> GetLeafStandardsAsync();
+
     /// <summary>取指定标准下的条款（按 <c>Sort</c> 升序）。<paramref name="standardCode"/> = 标准 <c>Code</c>（GUID）。</summary>
     Task<List<ISOClause>> GetClausesAsync(string standardCode);
 
@@ -239,8 +246,23 @@ public interface ICoreResourceQuery
     /// <summary>按机构 <c>Code</c> 单查认证机构（未命中返回 <c>null</c>）。</summary>
     Task<CertificationBody?> GetCertificationBodyByCodeAsync(string? orgCode);
 
+    /// <summary>
+    /// 按机构 <c>Code</c> 单查认证机构（含已禁用行，<paramref name="includeDisabled"/> = <c>true</c>）。
+    /// <para><b>★ 用途</b>：注册流程等场景须读禁用行（否则「已停用」错误消息无法显示机构名）。</para>
+    /// </summary>
+    Task<CertificationBody?> GetCertificationBodyByCodeAsync(string? orgCode, bool includeDisabled);
+
     /// <summary>按 <c>CbCode</c>（认证机构业务编号）单查认证机构（未命中返回 <c>null</c>）。</summary>
     Task<CertificationBody?> GetCertificationBodyByCbCodeAsync(string? cbCode);
+
+    /// <summary>
+    /// 取 <b>全部有效且 <c>Status == 'active'</c></b> 的认证机构（供注册页下拉使用）。
+    /// <para><b>★ 语义</b>：等价于端内 <c>_db.Client.Queryable&lt;CertificationBody&gt;().Where(x => x.IsValid == 1 &amp;&amp; x.Status == "active")</c>。</para>
+    /// </summary>
+    Task<List<CertificationBody>> GetRegistrableCertificationBodiesAsync();
+
+    /// <summary>按机构 <c>Code</c> 集合批量取认证机构（空集合直接返回空，⛔ 不发查询）。</summary>
+    Task<List<CertificationBody>> GetCertificationBodiesByCodesAsync(IEnumerable<string> orgCodes);
 
     // ─────────────── 目录配置 / 文件夹 / 模板 · 2026-10-13 阶段 1.B 扩充 ───────────────
 
@@ -396,6 +418,14 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         var sc = standardCode;
         var r = await _db.GetOneAsync<ISOStandard>(x => x.Code == sc);
         return r.Data;
+    }
+
+    public async Task<List<ISOStandard>> GetLeafStandardsAsync()
+    {
+        // 等价于端内 `_db.Client.Queryable<ISOStandard>().Where(x => x.IsLeaf == true)`；
+        // 框架默认 IsDeleted=0 + IsValid=1，调用方 ⛔ 不要重复写。
+        var rows = await _db.GetListAsync<ISOStandard>(x => x.IsLeaf == true);
+        return rows.Data ?? new List<ISOStandard>();
     }
 
     public async Task<List<ISOClause>> GetClausesAsync(string standardCode)
@@ -741,6 +771,39 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         if (string.IsNullOrWhiteSpace(cbCode)) return null;
         var cb = cbCode;
         var r = await _db.GetOneAsync<CertificationBody>(x => x.CbCode == cb);
+        return r.Data;
+    }
+
+    public async Task<List<CertificationBody>> GetRegistrableCertificationBodiesAsync()
+    {
+        // 等价于端内 `_db.Client.Queryable<CertificationBody>().Where(x => x.IsValid == 1 && x.Status == "active")`；
+        // 框架默认 IsDeleted=0，调用方 ⛔ 不要重复写。
+        var rows = await _db.GetListAsync<CertificationBody>(x => x.Status == "active");
+        return rows.Data ?? new List<CertificationBody>();
+    }
+
+    public async Task<List<CertificationBody>> GetCertificationBodiesByCodesAsync(IEnumerable<string> orgCodes)
+    {
+        var codes = new List<string>();
+        foreach (var c in orgCodes)
+            if (!string.IsNullOrWhiteSpace(c)) codes.Add(c);
+        if (codes.Count == 0) return new List<CertificationBody>();
+
+        var rows = await _db.GetListAsync<CertificationBody>(x => codes.Contains(x.Code!));
+        return rows.Data ?? new List<CertificationBody>();
+    }
+
+    public async Task<CertificationBody?> GetCertificationBodyByCodeAsync(string? orgCode, bool includeDisabled)
+    {
+        if (string.IsNullOrWhiteSpace(orgCode)) return null;
+        var oc = orgCode;
+        if (includeDisabled)
+        {
+            // 只滤软删、不过滤 IsValid —— 语义 = includeDisabled（见接口注释）
+            var ignored = await _db.GetOneIgnoreValidAsync<CertificationBody>(x => x.Code == oc);
+            return ignored.Data;
+        }
+        var r = await _db.GetOneAsync<CertificationBody>(x => x.Code == oc);
         return r.Data;
     }
 

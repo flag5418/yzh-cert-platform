@@ -30,7 +30,6 @@ namespace YZH.Core.Api.Controllers;
 ///
 ///     认证约定：
 ///     - 基类标记 [YZHAuthorize]，所有子类默认强认证
-///     - 临时测试接口：方法上标记 [YZHAnonymous]
 ///
 ///     方法分层：
 ///     - *Core() 方法：原子操作，返回 Result&lt;T&gt;，供任意代码调用

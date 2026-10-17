@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using SqlSugar;
 using CertPlatform.Auditor.Models;
+using CertPlatform.Shared.Domain.Scope;
 using YZH.Core.Api.Models.Organization;
 using YZH.Core.Api.Models.System;
 using YZH.Core.Api.Models.Users;
@@ -53,6 +54,7 @@ public class AuditorRegisterService
     private readonly EntityService<Sys_RoleUser> _roleUserService;
     private readonly PasswordHelper _password;
     private readonly ILogger<AuditorRegisterService> _logger;
+    private readonly ICoreResourceQuery _core;
 
     // ========================================================
     // 组织树形态常量（★ 唯一调整点）
@@ -92,7 +94,8 @@ public class AuditorRegisterService
         EntityService<Sys_User> userService,
         EntityService<Sys_RoleUser> roleUserService,
         PasswordHelper password,
-        ILogger<AuditorRegisterService> logger)
+        ILogger<AuditorRegisterService> logger,
+        ICoreResourceQuery core)
     {
         _dbOrm = dbOrm;
         _orgService = orgService;
@@ -100,6 +103,7 @@ public class AuditorRegisterService
         _roleUserService = roleUserService;
         _password = password;
         _logger = logger;
+        _core = core;
     }
 
     // ========================================================
@@ -114,10 +118,11 @@ public class AuditorRegisterService
     /// </summary>
     public async Task<List<CertBodyOptionDto>> GetCertBodyOptionsAsync()
     {
-        return await _dbOrm.Client.Queryable<CertificationBody>()
-            .Where(x => x.IsValid == 1 && x.Status == "active" && !x.IsDeleted)
-            .OrderBy(x => x.Sort)
+        // ★ 1.B.6d-1：取数收口 CoreResourceQuery（等价：IsValid==1 ∧ Status=='active'；框架默认 IsDeleted==0）
+        // 排序口径：按 Name 再 Sort —— 与旧端内 OrderBy 一致（CoreResourceQuery 不固化排序）。
+        return (await _core.GetRegistrableCertificationBodiesAsync())
             .OrderBy(x => x.Name)
+            .ThenBy(x => x.Sort)
             .Select(x => new CertBodyOptionDto
             {
                 Code = x.Code,
@@ -125,7 +130,7 @@ public class AuditorRegisterService
                 ShortName = x.ShortName,
                 CbCode = x.CbCode
             })
-            .ToListAsync();
+            .ToList();
     }
 
     // ========================================================
@@ -155,9 +160,8 @@ public class AuditorRegisterService
             return Result<AuditorRegisterResultDto>.Fail("请选择所属体系认证机构");
 
         // ---------- 2. 所选机构必须存在且可用 ----------
-        var certBody = await _dbOrm.Client.Queryable<CertificationBody>()
-            .Where(x => x.Code == req.CertBodyCode && !x.IsDeleted)
-            .FirstAsync();
+        // ★ includeDisabled=true：须能读到禁用行，才能给出「已停用」精确错误消息（否则 null ⇒ 误报「不存在」）。
+        var certBody = await _core.GetCertificationBodyByCodeAsync(req.CertBodyCode, includeDisabled: true);
 
         if (certBody == null)
             return Result<AuditorRegisterResultDto>.Fail("所选体系认证机构不存在");
@@ -351,6 +355,7 @@ public class AuditorRegisterService
     /// </summary>
     private async Task<Result<string>> EnsureVirtualOrgRootAsync(string? clientIp)
     {
+        // GetByCodeAny：虚拟机构根节点 `VirtualOrgRootCode` 在机构被停用时仍须可定位（否则注册流程报错「机构不存在」而非「机构已停用」）
         var existing = await _orgService.GetByCodeAny(VirtualOrgRootCode);
         if (existing.Success && existing.Data != null)
             return Result<string>.Ok(existing.Data.Code);

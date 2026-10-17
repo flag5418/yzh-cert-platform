@@ -11,7 +11,7 @@
  */
 import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { confirmOrFalse, YzhDrawer, YzhStatusBadge } from '@yzh-core'
+import { confirmOrFalse, YzhDrawer, YzhStatusBadge, YzhTable, type Page, type PageParams, type YzhAction, type YzhTableColumn } from '@yzh-core'
 import {
   getQueueList,
   getQueueStatus,
@@ -47,7 +47,6 @@ const props = withDefaults(
   },
 )
 
-const loading = ref(false)
 const stats = ref<QueueStatus>({
   runningQueues: 0,
   pendingQueues: 0,
@@ -60,10 +59,8 @@ const stats = ref<QueueStatus>({
 const activeTab = ref('all')
 const queueType = ref(props.defaultType)
 const timeRange = ref<[string, string] | null>(null)
-const rows = ref<QueueListItem[]>([])
-const total = ref(0)
-const page = ref(1)
-const pageSize = ref(10)
+/** 主表实例：分页/页码由 YzhTable 自持，外部只调 refresh / loadData */
+const tableRef = ref<any>(null)
 
 // 详情
 const detailVisible = ref(false)
@@ -81,48 +78,107 @@ const loadStats = async () => {
   }
 }
 
-const loadData = async () => {
-  loading.value = true
-  try {
-    const params: Record<string, any> = {
-      type: queueType.value,
-      status: activeTab.value === 'all' ? '' : activeTab.value,
-      page: page.value,
-      rows: pageSize.value,
-    }
-    if (timeRange.value && timeRange.value.length === 2) {
-      params.startTime = timeRange.value[0]
-      params.endTime = timeRange.value[1]
-    }
-    const data = await getQueueList(params)
-    if (data) {
-      rows.value = data.rows || []
-      total.value = data.total || 0
-    }
-    loadStats()
-  } catch {
-    ElMessage.error('获取队列列表失败')
-  } finally {
-    loading.value = false
+/**
+ * YzhTable 数据加载器：分页/页码由组件驱动，这里只把筛选条件透给后端。
+ * ⛔ 失败不要吞掉返回空数组（会把「查询失败」渲染成「暂无数据」），直接 throw。
+ */
+const dataLoader = async (params: PageParams): Promise<Page<QueueListItem>> => {
+  const query: Record<string, any> = {
+    type: queueType.value,
+    status: activeTab.value === 'all' ? '' : activeTab.value,
+    page: params.page,
+    rows: params.rows,
   }
+  if (timeRange.value && timeRange.value.length === 2) {
+    query.startTime = timeRange.value[0]
+    query.endTime = timeRange.value[1]
+  }
+  const data = await getQueueList(query)
+  loadStats()
+  return { rows: data?.rows || [], total: data?.total || 0 }
 }
 
+/** 用户主动重查（筛选变化 / 查询按钮）：回到第 1 页 */
+const requery = () => tableRef.value?.refresh()
+/**
+ * 轮询静默刷新：**保持当前页**。
+ * ⛔ 不能用 `refresh()` —— 它会把页码重置为 1，用户翻到第 3 页会被每 5 秒弹回去。
+ */
+const pollReload = () => tableRef.value?.loadData()
+
+// ========================================================
+// 列定义（R6：一律 YzhTable；无字段列用 slotKey 命名插槽）
+// ========================================================
+
+const queueColumns: YzhTableColumn<QueueListItem>[] = [
+  { prop: 'queueCode', label: '队列编码', width: 180, showOverflowTooltip: true },
+  { slotKey: 'queueType', label: '类型', width: 120, slot: true },
+  { prop: 'queueName', label: '队列名称', minWidth: 200, showOverflowTooltip: true },
+  { slotKey: 'scope', label: '范围', minWidth: 180, slot: true },
+  { slotKey: 'createBy', label: '创建人', width: 100, showOverflowTooltip: true, slot: true },
+  { slotKey: 'status', label: '状态', width: 90, align: 'center', slot: true },
+  { slotKey: 'progress', label: '进度', minWidth: 150, slot: true },
+  { slotKey: 'completed', label: '成功', width: 60, align: 'center', slot: true },
+  { slotKey: 'failed', label: '失败', width: 60, align: 'center', slot: true },
+  { slotKey: 'cancelled', label: '取消', width: 60, align: 'center', slot: true },
+  { prop: 'startTime', label: '开始时间', width: 160, slot: true },
+  { prop: 'endTime', label: '结束时间', width: 160, slot: true },
+]
+
+/** 主表行操作：详情常驻；失败可重试；待执行/执行中可取消 */
+const queueRowActions = (row: QueueListItem): YzhAction[] => {
+  const acts: YzhAction[] = [{ key: 'detail', text: '详情', type: 'primary' }]
+  if (row.status === 'failed') acts.push({ key: 'retry', text: '重试' })
+  if (['pending', 'running'].includes(row.status)) acts.push({ key: 'cancel', text: '取消', type: 'danger' })
+  return acts
+}
+
+const onQueueRowAction = (key: string, row: QueueListItem) => {
+  if (key === 'detail') openDetail(row)
+  else if (key === 'retry') handleRetryQueue(row)
+  else if (key === 'cancel') handleCancelQueue(row)
+}
+
+/** 详情抽屉：子任务明细 */
+const taskColumns: YzhTableColumn<any>[] = [
+  { prop: 'taskNo', label: '#', width: 50, align: 'center' },
+  { prop: 'fileName', label: '文件', minWidth: 220, showOverflowTooltip: true },
+  { slotKey: 'convertType', label: '类型', width: 90, slot: true },
+  { slotKey: 'taskStatus', label: '状态', width: 90, align: 'center', slot: true },
+  { prop: 'retryCount', label: '重试', width: 60, align: 'center' },
+  { slotKey: 'errorMessage', label: '错误信息', minWidth: 200, slot: true },
+]
+
+/** 子任务行操作：只有失败的可重试 */
+const taskRowActions = (row: any): YzhAction[] =>
+  row.status === 'failed' ? [{ key: 'retry', text: '重试' }] : []
+
+const onTaskRowAction = (key: string, row: any) => {
+  if (key === 'retry') handleRetryTask(row)
+}
+
+/** 详情抽屉：资源锁 */const lockColumns: YzhTableColumn<any>[] = [
+  { prop: 'resourceTable', label: '资源表', width: 220 },
+  { prop: 'resourceName', label: '资源', minWidth: 200, showOverflowTooltip: true },
+  { prop: 'taskNo', label: '任务', width: 70, align: 'center', slot: true },
+  { slotKey: 'lockStatus', label: '状态', width: 90, align: 'center', slot: true },
+  { prop: 'createTime', label: '加锁时间', width: 160 },
+  { slotKey: 'releaseTime', label: '释放时间', width: 160, slot: true },
+]
+
 const onTabChange = () => {
-  page.value = 1
-  loadData()
+  requery()
 }
 
 const onTypeChange = () => {
-  page.value = 1
-  loadData()
+  requery()
 }
 
 const resetFilter = () => {
   timeRange.value = null
   queueType.value = props.defaultType
   activeTab.value = 'all'
-  page.value = 1
-  loadData()
+  requery()
 }
 
 const openDetail = async (row: QueueListItem) => {
@@ -145,7 +201,7 @@ const handleRetryQueue = async (row: QueueListItem) => {
   try {
     await retryQueue(row.queueCode)
     ElMessage.success('队列已重新排队')
-    loadData()
+    pollReload()
   } catch {
     ElMessage.error('重试失败')
   }
@@ -157,7 +213,7 @@ const handleCancelQueue = async (row: QueueListItem) => {
   try {
     await cancelQueue(row.queueCode)
     ElMessage.success('队列已取消')
-    loadData()
+    pollReload()
   } catch {
     ElMessage.error('取消失败')
   }
@@ -171,7 +227,7 @@ const handleRetryTask = async (row: { code: string }) => {
       const d = await getQueueDetail(detail.value.queue.queueCode)
       if (d) detail.value = d
     }
-    loadData()
+    pollReload()
   } catch {
     ElMessage.error('重试失败')
   }
@@ -219,7 +275,7 @@ const formatScopeKey = (scopeKey: string) => {
 const startPolling = () => {
   stopPolling()
   pollTimer = setInterval(() => {
-    if (stats.value.runningQueues > 0 || stats.value.pendingQueues > 0) loadData()
+    if (stats.value.runningQueues > 0 || stats.value.pendingQueues > 0) pollReload()
   }, 5000)
 }
 
@@ -229,7 +285,7 @@ const stopPolling = () => {
 }
 
 onMounted(() => {
-  loadData()
+  // 表格数据由 YzhTable 自己的 onMounted 加载，这里只管轮询
   startPolling()
 })
 
@@ -315,7 +371,7 @@ onUnmounted(stopPolling)
           size="default"
           style="width: 360px"
         />
-        <el-button type="primary" @click="loadData">查询</el-button>
+        <el-button type="primary" @click="requery">查询</el-button>
         <el-button type="default" @click="resetFilter">重置</el-button>
       </div>
     </div>
@@ -323,94 +379,52 @@ onUnmounted(stopPolling)
     <!-- 队列主表（占满剩余高度，表体内部滚动） -->
     <el-card shadow="never" class="table-card">
       <div class="table-body">
-        <el-table :data="rows" v-loading="loading" size="default" stripe height="100%">
-          <el-table-column prop="queueCode" label="队列编码" width="180" show-overflow-tooltip />
-          <el-table-column label="类型" width="120">
-            <template #default="{ row }">
-              <YzhStatusBadge type="info" :text="typeText(row.queueType)" size="small" />
-            </template>
-          </el-table-column>
-          <el-table-column prop="queueName" label="队列名称" min-width="200" show-overflow-tooltip />
-          <el-table-column label="范围" min-width="180">
-            <template #default="{ row }">
-              <span class="scope-text">{{ row.scopeDisplay || formatScopeKey(row.scopeKey) || '—' }}</span>
-            </template>
-          </el-table-column>
+        <YzhTable
+          ref="tableRef"
+          :columns="queueColumns"
+          :data-loader="dataLoader"
+          :toolbar="false"
+          :page-size="10"
+          size="default"
+          row-key="queueCode"
+          :row-action-buttons="queueRowActions"
+          empty-text="暂无队列"
+          @row-action="onQueueRowAction"
+        >
+          <template #column-queueType="{ row }">
+            <YzhStatusBadge type="info" :text="typeText(row.queueType)" size="small" />
+          </template>
+          <template #column-scope="{ row }">
+            <span class="scope-text">{{ row.scopeDisplay || formatScopeKey(row.scopeKey) || '—' }}</span>
+          </template>
           <!-- 创建人：createBy 是用户 Code（契约），必须显示后端解析后的 createByName -->
-          <el-table-column label="创建人" width="100" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.createByName || '—' }}</template>
-          </el-table-column>
-          <el-table-column label="状态" width="90" align="center">
-            <template #default="{ row }">
-              <YzhStatusBadge :type="statusBadgeType(row.status)" :text="statusText(row.status)" size="small" />
-            </template>
-          </el-table-column>
-          <el-table-column label="进度" min-width="150">
-            <template #default="{ row }">
-              <div class="progress-cell">
-                <el-progress
-                  :percentage="Number(row.progress) || 0"
-                  :status="progressStatus(row)"
-                  :stroke-width="8"
-                  style="flex: 1"
-                />
-                <span class="progress-count">{{ row.completedCount }}/{{ row.totalCount }}</span>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="成功" width="60" align="center">
-            <template #default="{ row }">
-              <span class="count-success">{{ row.completedCount ?? 0 }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="失败" width="60" align="center">
-            <template #default="{ row }">
-              <span class="count-failed">{{ row.failedCount ?? 0 }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="取消" width="60" align="center">
-            <template #default="{ row }">
-              <span class="count-cancelled">{{ row.cancelledCount ?? 0 }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="startTime" label="开始时间" width="160">
-            <template #default="{ row }">{{ row.startTime || '—' }}</template>
-          </el-table-column>
-          <el-table-column prop="endTime" label="结束时间" width="160">
-            <template #default="{ row }">{{ row.endTime || '—' }}</template>
-          </el-table-column>
-          <el-table-column label="操作" min-width="130" align="center" fixed="right">
-            <template #default="{ row }">
-              <el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button>
-              <el-button
-                v-if="row.status === 'failed'"
-                link
-                type="default"
-                size="small"
-                @click="handleRetryQueue(row)"
-              >重试</el-button>
-              <el-button
-                v-if="['pending', 'running'].includes(row.status)"
-                link
-                type="danger"
-                size="small"
-                @click="handleCancelQueue(row)"
-              >取消</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-
-      <div class="pagination-row">
-        <el-pagination
-          v-model:current-page="page"
-          v-model:page-size="pageSize"
-          :total="total"
-          :page-sizes="[10, 20, 50]"
-          layout="total, sizes, prev, pager, next"
-          @current-change="loadData"
-          @size-change="loadData"
-        />
+          <template #column-createBy="{ row }">{{ row.createByName || '—' }}</template>
+          <template #column-status="{ row }">
+            <YzhStatusBadge :type="statusBadgeType(row.status)" :text="statusText(row.status)" size="small" />
+          </template>
+          <template #column-progress="{ row }">
+            <div class="progress-cell">
+              <el-progress
+                :percentage="Number(row.progress) || 0"
+                :status="progressStatus(row)"
+                :stroke-width="8"
+                style="flex: 1"
+              />
+              <span class="progress-count">{{ row.completedCount }}/{{ row.totalCount }}</span>
+            </div>
+          </template>
+          <template #column-completed="{ row }">
+            <span class="count-success">{{ row.completedCount ?? 0 }}</span>
+          </template>
+          <template #column-failed="{ row }">
+            <span class="count-failed">{{ row.failedCount ?? 0 }}</span>
+          </template>
+          <template #column-cancelled="{ row }">
+            <span class="count-cancelled">{{ row.cancelledCount ?? 0 }}</span>
+          </template>
+          <template #column-startTime="{ row }">{{ row.startTime || '—' }}</template>
+          <template #column-endTime="{ row }">{{ row.endTime || '—' }}</template>
+        </YzhTable>
       </div>
     </el-card>
 
@@ -444,60 +458,50 @@ onUnmounted(stopPolling)
 
         <div class="detail-section" v-loading="detailLoading">
           <h4>子任务明细（{{ detail.tasks.length }}）</h4>
-          <el-table :data="detail.tasks" border size="small" max-height="300">
-            <el-table-column prop="taskNo" label="#" width="50" align="center" />
-            <el-table-column prop="fileName" label="文件" min-width="220" show-overflow-tooltip />
-            <el-table-column label="类型" width="90">
-              <template #default="{ row }">{{ convertTypeText(row.convertType) }}</template>
-            </el-table-column>
-            <el-table-column label="状态" width="90" align="center">
-              <template #default="{ row }">
-                <YzhStatusBadge :type="taskStatusBadgeType(row.status)" :text="taskStatusText(row.status)" size="small" />
-              </template>
-            </el-table-column>
-            <el-table-column prop="retryCount" label="重试" width="60" align="center" />
-            <el-table-column label="错误信息" min-width="200">
-              <template #default="{ row }">
-                <span v-if="row.errorMessage" class="error-text" :title="row.errorMessage">{{ row.errorMessage }}</span>
-                <span v-else>—</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="90" align="center">
-              <template #default="{ row }">
-                <el-button
-                  v-if="row.status === 'failed'"
-                  link
-                  type="default"
-                  size="small"
-                  @click="handleRetryTask(row)"
-                >重试</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
+          <YzhTable
+            :columns="taskColumns"
+            :data="detail.tasks"
+            :toolbar="false"
+            :show-pagination="false"
+            :row-action-buttons="taskRowActions"
+            size="small"
+            height="300"
+            row-key="code"
+            empty-text="暂无子任务"
+            @row-action="onTaskRowAction"
+          >
+            <template #column-convertType="{ row }">{{ convertTypeText(row.convertType) }}</template>
+            <template #column-taskStatus="{ row }">
+              <YzhStatusBadge :type="taskStatusBadgeType(row.status)" :text="taskStatusText(row.status)" size="small" />
+            </template>
+            <template #column-errorMessage="{ row }">
+              <span v-if="row.errorMessage" class="error-text" :title="row.errorMessage">{{ row.errorMessage }}</span>
+              <span v-else>—</span>
+            </template>
+          </YzhTable>
         </div>
 
         <div class="detail-section">
           <h4>资源锁（{{ detail.locks.length }}）</h4>
-          <el-table :data="detail.locks" border size="small" max-height="220">
-            <el-table-column prop="resourceTable" label="资源表" width="220" />
-            <el-table-column prop="resourceName" label="资源" min-width="200" show-overflow-tooltip />
-            <el-table-column prop="taskNo" label="任务" width="70" align="center">
-              <template #default="{ row }">{{ row.taskNo || '队列级' }}</template>
-            </el-table-column>
-            <el-table-column label="状态" width="90" align="center">
-              <template #default="{ row }">
-                <YzhStatusBadge
-                  :type="row.status === 'locked' ? 'warning' : 'info'"
-                  :text="row.status === 'locked' ? '锁定中' : '已释放'"
-                  size="small"
-                />
-              </template>
-            </el-table-column>
-            <el-table-column prop="createTime" label="加锁时间" width="160" />
-            <el-table-column label="释放时间" width="160">
-              <template #default="{ row }">{{ row.releaseTime || '—' }}</template>
-            </el-table-column>
-          </el-table>
+          <YzhTable
+            :columns="lockColumns"
+            :data="detail.locks"
+            :toolbar="false"
+            :show-pagination="false"
+            size="small"
+            height="220"
+            empty-text="暂无资源锁"
+          >
+            <template #column-taskNo="{ row }">{{ row.taskNo || '队列级' }}</template>
+            <template #column-lockStatus="{ row }">
+              <YzhStatusBadge
+                :type="row.status === 'locked' ? 'warning' : 'info'"
+                :text="row.status === 'locked' ? '锁定中' : '已释放'"
+                size="small"
+              />
+            </template>
+            <template #column-releaseTime="{ row }">{{ row.releaseTime || '—' }}</template>
+          </YzhTable>
         </div>
       </template>
     </YzhDrawer>
@@ -614,13 +618,6 @@ onUnmounted(stopPolling)
   .count-success { color: var(--yzh-color-success, #67c23a); font-weight: 500; }
   .count-failed { color: var(--yzh-color-danger, #f56c6c); font-weight: 500; }
   .count-cancelled { color: var(--yzh-color-text-tertiary, #909399); }
-
-  .pagination-row {
-    flex-shrink: 0;
-    display: flex;
-    justify-content: flex-end;
-    padding: var(--yzh-space-3, 12px);
-  }
 }
 
 .detail-desc {

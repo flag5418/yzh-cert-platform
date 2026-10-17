@@ -190,3 +190,93 @@
   --el-box-shadow-light: 0px 0px 12px rgba(0, 0, 0, 0.12);
   --el-box-shadow-lighter: 0px 0px 6px rgba(0, 0, 0, 0.12);
 }
+
+/* ============================================================
+ * 暗色主题覆盖层（Dark Theme Override）
+ * ------------------------------------------------------------
+ * 触发条件：`<html class="dark">`（由 `useTheme` 切换，值持久化在 localStorage）。
+ *   - Element Plus 暗色基线：`element-plus/theme-chalk/dark/css-vars.css`
+ *   - 本节负责把 **core 自有令牌 `--yzh-*`** 一并切到暗色，并让 EP 桥接变量继续
+ *     指向 `--yzh-*`（保持「单旋钮换肤」）。
+ *
+ * ★ 选择器用 `html.dark`（特异度 0,1,1）而非 `.dark`（0,1,0）：
+ *   宿主 `main.css` 的 `:root { ... }`（0,1,0）在 tokens.css **之后**加载，
+ *   若用 `.dark` 会被宿主 `:root` 反超 ⇒ 暗色失效。0,1,1 才能稳定压过 `:root`。
+ *
+ * ⚠️ 本文件已在 R18 白名单（令牌定义层，允许 hex 字面量）。
+ * ============================================================ */
+html.dark {
+  color-scheme: dark;
+
+  /* ---------- 品牌主色（暗底需提亮才够对比度） ---------- */
+  --yzh-color-primary: #3b82f6;
+  --yzh-color-primary-light: #60a5fa;
+  --yzh-color-primary-lighter: #93c5fd;
+  --yzh-color-primary-dark: #2563eb;
+  --yzh-color-primary-disabled: #475569;
+
+  /* EP 主色档位：继续跟随品牌（覆盖 EP 暗色默认蓝），派生基准由白改黑 */
+  --el-color-primary: var(--yzh-color-primary);
+  --el-color-primary-dark-2: var(--yzh-color-primary-dark);
+  --el-color-primary-light-3: color-mix(in srgb, var(--yzh-color-primary) 70%, black);
+  --el-color-primary-light-5: color-mix(in srgb, var(--yzh-color-primary) 50%, black);
+  --el-color-primary-light-7: color-mix(in srgb, var(--yzh-color-primary) 30%, black);
+  --el-color-primary-light-8: color-mix(in srgb, var(--yzh-color-primary) 20%, black);
+  --el-color-primary-light-9: color-mix(in srgb, var(--yzh-color-primary) 10%, black);
+
+  /* ---------- 语义色（提亮 + 深色浅底） ---------- */
+  --yzh-color-success: #4ade80;
+  --yzh-color-success-light-9: #16281c;
+  --yzh-color-warning: #fbbf24;
+  --yzh-color-warning-light-9: #2b2215;
+  --yzh-color-danger: #f87171;
+  --yzh-color-danger-light-9: #2c1717;
+  --yzh-color-info: #94a3b8;
+  --yzh-color-info-light-9: #1f2937;
+
+  /* ---------- 背景 ---------- */
+  --yzh-color-bg-page: #0f1115;
+  --yzh-color-bg-container: #1a1d23;
+  --yzh-color-bg-card: #1a1d23;
+  --yzh-color-bg-hover: #23272f;
+  --yzh-color-bg-active: #1e2a3a;
+  --yzh-color-bg-subtle: #16181d;
+  --yzh-color-bg-muted: #23272f;
+
+  /* ---------- 文字 ---------- */
+  --yzh-color-text-primary: #e5e7eb;
+  --yzh-color-text-body: #cbd5e1;
+  --yzh-color-text-regular: #c0c4cc;
+  --yzh-color-text-secondary: #a3a6ad;
+  --yzh-color-text-tertiary: #8d9095;
+  --yzh-color-text-muted: #94a3b8;
+  --yzh-color-text-subtle: #9ca3af;
+  --yzh-color-text-placeholder: #6b7280;
+  --yzh-color-text-disabled: #4b5563;
+
+  /* ---------- 边框 ---------- */
+  --yzh-color-border: #2f333b;
+  --yzh-color-border-light: #262a31;
+  --yzh-color-border-input: #3a3f47;
+
+  /* ---------- 侧边栏（暗色下再压深一档，与内容区拉开层次） ---------- */
+  --yzh-color-sidebar-bg: #12151a;
+  --yzh-color-sidebar-text: #e5e7eb;
+  --yzh-color-sidebar-text-muted: rgba(229, 231, 235, 0.88);
+  --yzh-color-sidebar-hover: rgba(255, 255, 255, 0.08);
+  --yzh-color-sidebar-divider: rgba(255, 255, 255, 0.06);
+
+  /* ---------- EP 桥接：`--el-* → --yzh-*`（覆盖 :root 里的硬编码，避免暗色失配） ---------- */
+  --el-text-color-primary: var(--yzh-color-text-primary);
+  --el-text-color-regular: var(--yzh-color-text-regular);
+  --el-text-color-secondary: var(--yzh-color-text-tertiary);
+  --el-border-color: var(--yzh-color-border-input);
+  --el-border-color-light: var(--yzh-color-border);
+  --el-border-color-lighter: var(--yzh-color-border-light);
+  --el-bg-color: var(--yzh-color-bg-container);
+  --el-bg-color-page: var(--yzh-color-bg-page);
+  --el-fill-color: var(--yzh-color-bg-muted);
+  --el-fill-color-light: var(--yzh-color-bg-hover);
+  --el-fill-color-lighter: var(--yzh-color-bg-subtle);
+  --el-fill-color-blank: var(--yzh-color-bg-container);
+}

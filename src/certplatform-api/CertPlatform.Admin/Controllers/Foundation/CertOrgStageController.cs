@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Result;
@@ -29,7 +30,7 @@ namespace CertPlatform.Admin.Controllers.Foundation;
 /// 只取路由<b>末段</b>作控制器名，本 Controller 的末段未变 ⇒ <c>ApiCode</c> 不变 ⇒
 /// <b>角色-接口关联不断裂</b>，无需重跑 ApiSync。</para>
 [Route("api/Admin/Foundation/[controller]")]
-public class CertOrgStageController : ControllerBase
+public class CertOrgStageController : WebControllerBase
 {
     private readonly EntityService<CB> _cbService;
     private readonly EntityService<Stage> _stageService;

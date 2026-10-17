@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using SqlSugar;
+using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Models.System;
 using YZH.Core.Api.Services;
 using YZH.Core.DataBase.Interfaces;
@@ -15,7 +15,7 @@ namespace YZH.Core.Web.Controllers.System;
 /// </summary>
 [Route("api/System/[controller]")]
 [ApiController]
-public class MenuController : ControllerBase
+public class MenuController : WebControllerBase
 {
     private readonly IDbOrm _db;
     private readonly MenuPermissionService _menuPermission;

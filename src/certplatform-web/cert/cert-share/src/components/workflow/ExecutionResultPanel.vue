@@ -62,64 +62,58 @@
               <!-- 节点级明细：数据早已在响应里（NodeResults），此前未渲染 -->
               <div v-if="path.NodeResults?.length" class="node-detail">
                 <div class="node-detail-title">节点级明细 ({{ path.NodeResults.length }} 个)</div>
-                <el-table :data="path.NodeResults" size="small" border class="node-table">
-                  <el-table-column label="节点" min-width="200">
-                    <template #default="{ row }">
-                      <div class="node-cell">
-                        <span class="node-id">{{ row.NodeTitle || row.NodeId }}</span>
-                        <span class="node-type">{{ typeLabel(row.NodeId) }}</span>
-                        <span v-if="row.NodeDescription" class="node-desc">{{ row.NodeDescription }}</span>
-                      </div>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="状态" width="80" align="center">
-                    <template #default="{ row }">
-                      <el-tag :type="row.Success ? 'success' : 'danger'" size="small">{{ row.Success ? '成功' : '失败' }}</el-tag>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="耗时" width="80" align="right">
-                    <template #default="{ row }">{{ row.DurationMs }}ms</template>
-                  </el-table-column>
-                  <el-table-column label="LLM耗时" width="90" align="right">
-                    <template #default="{ row }">
-                      <span v-if="row.LlmDurationMs != null" class="llm-dur">{{ row.LlmDurationMs }}ms</span>
-                      <span v-else class="muted">—</span>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="来源" width="100">
-                    <template #default="{ row }">
-                      <span v-if="row.SourceFileCode" class="source-badge" :title="`文件: ${row.SourceFileCode}${row.SourceFieldName ? ' / 字段: ' + row.SourceFieldName : ''}`">
-                        📄 {{ row.SourceFieldName || '文档' }}
-                      </span>
-                      <span v-else-if="row.AiModel" class="ai-badge" :title="`模型: ${row.AiModel}`">🤖 {{ row.AiModel }}</span>
-                      <span v-else class="muted">—</span>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="Tokens" width="110" align="right">
-                    <template #default="{ row }">
-                      <span v-if="row.PromptTokens != null" class="token-badge" :title="`Prompt: ${row.PromptTokens} / Completion: ${row.CompletionTokens}`">
-                        {{ row.PromptTokens }} / {{ row.CompletionTokens }}
-                      </span>
-                      <span v-else class="muted">—</span>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="复用" width="64" align="center">
-                    <template #default="{ row }">
-                      <el-tag v-if="row.IsReused" type="info" size="small">复用</el-tag>
-                      <span v-else class="muted">—</span>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="输出 / 错误" min-width="200">
-                    <template #default="{ row }">
-                      <span v-if="row.Error" class="error-text">{{ row.Error }}</span>
-                      <el-popover v-else-if="row.Output && Object.keys(row.Output).length" placement="left" :width="420" trigger="click">
-                        <template #reference><el-button link size="small">查看输出</el-button></template>
-                        <pre class="nc-json popover-json">{{ formatJson(row.Output) }}</pre>
-                      </el-popover>
-                      <span v-else class="muted">—</span>
-                    </template>
-                  </el-table-column>
-                </el-table>
+                <!-- R6：一律走 YzhTable（列无字段 ⇒ 用 slotKey 命名插槽） -->
+                <YzhTable
+                  :columns="nodeColumns"
+                  :data="path.NodeResults"
+                  :toolbar="false"
+                  :show-pagination="false"
+                  size="small"
+                  row-key="NodeId"
+                  class="node-table"
+                  empty-text="暂无节点明细"
+                >
+                  <template #column-Node="{ row }">
+                    <div class="node-cell">
+                      <span class="node-id">{{ row.NodeTitle || row.NodeId }}</span>
+                      <span class="node-type">{{ typeLabel(row.NodeId) }}</span>
+                      <span v-if="row.NodeDescription" class="node-desc">{{ row.NodeDescription }}</span>
+                    </div>
+                  </template>
+                  <template #column-Status="{ row }">
+                    <el-tag :type="row.Success ? 'success' : 'danger'" size="small">{{ row.Success ? '成功' : '失败' }}</el-tag>
+                  </template>
+                  <template #column-Duration="{ row }">{{ row.DurationMs }}ms</template>
+                  <template #column-LlmDuration="{ row }">
+                    <span v-if="row.LlmDurationMs != null" class="llm-dur">{{ row.LlmDurationMs }}ms</span>
+                    <span v-else class="muted">—</span>
+                  </template>
+                  <template #column-Source="{ row }">
+                    <span v-if="row.SourceFileCode" class="source-badge" :title="`文件: ${row.SourceFileCode}${row.SourceFieldName ? ' / 字段: ' + row.SourceFieldName : ''}`">
+                      📄 {{ row.SourceFieldName || '文档' }}
+                    </span>
+                    <span v-else-if="row.AiModel" class="ai-badge" :title="`模型: ${row.AiModel}`">🤖 {{ row.AiModel }}</span>
+                    <span v-else class="muted">—</span>
+                  </template>
+                  <template #column-Tokens="{ row }">
+                    <span v-if="row.PromptTokens != null" class="token-badge" :title="`Prompt: ${row.PromptTokens} / Completion: ${row.CompletionTokens}`">
+                      {{ row.PromptTokens }} / {{ row.CompletionTokens }}
+                    </span>
+                    <span v-else class="muted">—</span>
+                  </template>
+                  <template #column-Reused="{ row }">
+                    <el-tag v-if="row.IsReused" type="info" size="small">复用</el-tag>
+                    <span v-else class="muted">—</span>
+                  </template>
+                  <template #column-Output="{ row }">
+                    <span v-if="row.Error" class="error-text">{{ row.Error }}</span>
+                    <el-popover v-else-if="row.Output && Object.keys(row.Output).length" placement="left" :width="420" trigger="click">
+                      <template #reference><el-button link size="small">查看输出</el-button></template>
+                      <pre class="nc-json popover-json">{{ formatJson(row.Output) }}</pre>
+                    </el-popover>
+                    <span v-else class="muted">—</span>
+                  </template>
+                </YzhTable>
               </div>
 
               <div v-if="path.Output && Object.keys(path.Output).length" class="path-output"><span>输出:</span><pre class="nc-json">{{ formatJson(path.Output) }}</pre></div>
@@ -141,10 +135,28 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { CircleCheck, Close } from '@element-plus/icons-vue'
+import { YzhTable, type YzhTableColumn } from '@yzh-core'
 
 defineProps<{ result: any }>()
 defineEmits<{ close: [] }>()
 const activePaths = ref([0])
+
+/**
+ * 节点级明细列定义。
+ *
+ * ★ 这些列**没有对应字段**（全靠插槽渲染）⇒ 必须给 `slotKey`，
+ *   插槽名 = `column-${slotKey}`。只写 `label` 不给 `slotKey` 会渲染成空白列。
+ */
+const nodeColumns: YzhTableColumn[] = [
+  { slotKey: 'Node', label: '节点', minWidth: 200, slot: true },
+  { slotKey: 'Status', label: '状态', width: 80, align: 'center', slot: true },
+  { slotKey: 'Duration', label: '耗时', width: 80, align: 'right', slot: true },
+  { slotKey: 'LlmDuration', label: 'LLM耗时', width: 90, align: 'right', slot: true },
+  { slotKey: 'Source', label: '来源', width: 100, slot: true },
+  { slotKey: 'Tokens', label: 'Tokens', width: 110, align: 'right', slot: true },
+  { slotKey: 'Reused', label: '复用', width: 64, align: 'center', slot: true },
+  { slotKey: 'Output', label: '输出 / 错误', minWidth: 200, slot: true },
+]
 
 /** 本路径复用的节点数（阶段三起同一信息也落在 wf_path_execution.ReusedCount） */
 function reusedCount(path: any): number {

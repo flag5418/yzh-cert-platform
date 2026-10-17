@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { confirmOrFalse, YzhEmptyState } from '@yzh-core'
+import { confirmOrFalse, YzhEmptyState, YzhDialog } from '@yzh-core'
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -1224,8 +1224,8 @@ onUnmounted(() => {
     </div>
     </div>
 
-    <!-- 新建文件夹弹窗 -->
-    <el-dialog v-model="showFolderDialog" title="新建文件夹" width="420px">
+    <!-- 新建文件夹弹窗（S07：一律 YzhDialog） -->
+    <YzhDialog v-model="showFolderDialog" title="新建文件夹" width="420px">
       <el-form :model="folderForm" label-width="90px">
         <el-form-item label="文件夹名称">
           <el-input v-model="folderForm.folderName" placeholder="请输入文件夹名称" />
@@ -1238,10 +1238,10 @@ onUnmounted(() => {
         <el-button @click="showFolderDialog = false">取消</el-button>
         <el-button type="primary" @click="submitFolder">确定</el-button>
       </template>
-    </el-dialog>
+    </YzhDialog>
 
     <!-- 重命名弹窗 -->
-    <el-dialog v-model="showRenameDialogVisible" title="重命名" width="400px">
+    <YzhDialog v-model="showRenameDialogVisible" title="重命名" width="400px">
       <el-form :model="renameForm" label-width="80px">
         <el-form-item label="名称">
           <el-input v-model="renameForm.newName" placeholder="请输入新名称" />
@@ -1251,20 +1251,20 @@ onUnmounted(() => {
         <el-button @click="showRenameDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="confirmRename(false)">确定</el-button>
       </template>
-    </el-dialog>
+    </YzhDialog>
 
     <!-- 目录配置（管理入口：改根名/状态/级联清理；创建已无感懒建，见 ensurePhaseConfig） -->
-    <el-dialog v-model="configDialogVisible" title="目录配置" width="1040px" destroy-on-close>
+    <YzhDialog v-model="configDialogVisible" title="目录配置" width="1040px" :destroy-on-close="true">
       <ConfigTab
         :preset-org-code="configPreset?.orgCode"
         :preset-standard-code="configPreset?.standardCode"
         :preset-stage-code="configPreset?.stageCode"
         @changed="onConfigChanged"
       />
-    </el-dialog>
+    </YzhDialog>
 
     <!-- 使用帮助 -->
-    <el-dialog v-model="showHelpDialog" title="使用帮助" width="600px">
+    <YzhDialog v-model="showHelpDialog" title="使用帮助" width="600px">
       <div class="help-content">
         <h4>页面功能说明</h4>
         <p>本页面用于维护每个「标准 × 阶段」的标准文件目录结构（平台全局库，机构不参与目录编码）。</p>
@@ -1286,14 +1286,13 @@ onUnmounted(() => {
       <template #footer>
         <el-button type="primary" @click="showHelpDialog = false">我知道了</el-button>
       </template>
-    </el-dialog>
+    </YzhDialog>
 
     <!-- 上传对话框 -->
-    <el-dialog
+    <YzhDialog
       v-model="showUploadDialog"
       title="上传文件"
       width="680px"
-      :close-on-click-modal="false"
       top="5vh"
     >
       <div class="upload-dialog-body">
@@ -1330,7 +1329,7 @@ onUnmounted(() => {
           {{ uploading ? '上传中...' : '开始上传' }}
         </el-button>
       </template>
-    </el-dialog>
+    </YzhDialog>
   </div>
 </template>
 
@@ -1378,6 +1377,7 @@ onUnmounted(() => {
   width: clamp(220px, 22vw, 300px);
   flex-shrink: 0;
   border-right: 1px solid var(--yzh-color-border, #e4e7ed);
+  background: var(--yzh-color-bg-container, #fff);
   display: flex;
   flex-direction: column;
   min-height: 0;

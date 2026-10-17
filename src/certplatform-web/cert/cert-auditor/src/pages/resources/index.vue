@@ -14,7 +14,7 @@
  * ★ 字段大小写：DB 列名字段 PascalCase（Code/FileName/StoragePath/Status），接口拼装字段 camel
  */
 import { onMounted, onBeforeUnmount } from 'vue'
-import { YzhTable, YzhEmptyState } from '@yzh-core'
+import { YzhTable, YzhEmptyState, YzhDialog, YzhDrawer } from '@yzh-core'
 import { Refresh, Upload, Files } from '@element-plus/icons-vue'
 import { OrgStandardStageTree, YzhFolderUpload, type StdStageTreeNode } from '@share/components'
 import { ResourcesLogic, type ResourceTreeNode } from './logic'
@@ -222,7 +222,7 @@ function pickFolder() {
     </div>
 
     <!-- ═══════════ 单标准上传（plan 干跑预览 → 四段式执行） ═══════════ -->
-    <el-dialog v-model="logic.singleUploadVisible.value" title="上传到标准目录" width="820px" class="upload-dialog">
+    <YzhDialog v-model="logic.singleUploadVisible.value" title="上传到标准目录" width="820px">
       <el-form label-width="96px">
         <el-form-item label="目标标准">
           <el-tag>{{ logic.standardOf(logic.currentUploadStandardCode.value)?.StandardName }}</el-tag>
@@ -291,10 +291,10 @@ function pickFolder() {
           确认上传
         </el-button>
       </template>
-    </el-dialog>
+    </YzhDialog>
 
     <!-- ═══════════ 上传（多标准分发，需求 3 核心） ═══════════ -->
-    <el-dialog v-model="logic.batchUploadVisible.value" title="上传" width="980px" class="upload-dialog">
+    <YzhDialog v-model="logic.batchUploadVisible.value" title="上传" width="980px">
       <el-alert type="info" :closable="false" show-icon class="dialog-tip">
         目标阶段：<b>{{ logic.selectedStageName.value }}</b>；涉及标准：
         {{ logic.tabStandards.map(s => s.StandardName).join(' / ') || '—' }}
@@ -392,10 +392,10 @@ function pickFolder() {
           确认上传（{{ logic.selectedBatchCount }} 个文件）
         </el-button>
       </template>
-    </el-dialog>
+    </YzhDialog>
 
     <!-- ═══════════ 替换文件 ═══════════ -->
-    <el-dialog v-model="logic.replaceDialogVisible.value" title="替换文件" width="520px">
+    <YzhDialog v-model="logic.replaceDialogVisible.value" title="替换文件" width="520px">
       <el-alert type="warning" :closable="false" show-icon class="dialog-tip">
         替换后旧文件归档到同目录「_archive/原名.v{版本号}」，版本号递增，可在版本面板恢复
       </el-alert>
@@ -420,10 +420,10 @@ function pickFolder() {
         <el-button type="primary" :disabled="!logic.replaceNewFile.value || !logic.replaceReason.value.trim()"
                    @click="logic.confirmReplace()">确认替换</el-button>
       </template>
-    </el-dialog>
+    </YzhDialog>
 
     <!-- ═══════════ 移除文件 ═══════════ -->
-    <el-dialog v-model="logic.deleteDialogVisible.value" title="移除文件" width="460px">
+    <YzhDialog v-model="logic.deleteDialogVisible.value" title="移除文件" width="460px">
       <el-alert type="warning" :closable="false" show-icon class="dialog-tip">
         移除只在清单上标记无效，存储对象与归档版本全部保留（证据保全），可在版本面板恢复
       </el-alert>
@@ -438,10 +438,10 @@ function pickFolder() {
         <el-button @click="logic.closeDeleteDialog()">取消</el-button>
         <el-button type="danger" :disabled="!logic.deleteReason.value.trim()" @click="logic.confirmDelete()">确认移除</el-button>
       </template>
-    </el-dialog>
+    </YzhDialog>
 
     <!-- ═══════════ 版本面板 ═══════════ -->
-    <el-drawer v-model="logic.versionsVisible.value" title="历史版本与操作留痕" direction="rtl" size="640px">
+    <YzhDrawer v-model="logic.versionsVisible.value" title="历史版本与操作留痕" direction="rtl" size="640px" :show-footer="false">
       <div v-if="logic.versionsFile.value" class="versions-head">
         <span class="versions-head__name">{{ logic.versionsFile.value.FileName }}</span>
         <el-tag size="small">当前 v{{ logic.versionsFile.value.VersionNumber }}</el-tag>
@@ -451,6 +451,7 @@ function pickFolder() {
       <div class="result-section__title">归档版本</div>
       <YzhTable
         :key="`${logic.versionsFile.value?.Code ?? ''}/${logic.versionsRev.value}`"
+        class="resources-version-table"
         :columns="logic.versionColumns"
         :data-loader="logic.versionRowsLoader()"
         :toolbar="false"
@@ -493,16 +494,16 @@ function pickFolder() {
         </el-timeline-item>
       </el-timeline>
       <YzhEmptyState v-else title="暂无操作记录" />
-    </el-drawer>
+    </YzhDrawer>
 
     <!-- ═══════════ PDF 预览（Blob → ObjectURL；裸链接无法带 Authorization） ═══════════ -->
-    <el-drawer v-model="logic.previewVisible.value" :title="`预览：${logic.previewName.value}`" direction="rtl" size="70%" @closed="logic.closePreview()">
+    <YzhDrawer v-model="logic.previewVisible.value" :title="`预览：${logic.previewName.value}`" direction="rtl" size="70%" :show-footer="false" @closed="logic.closePreview()">
       <iframe v-if="logic.previewUrl.value" :src="logic.previewUrl.value" class="preview-frame" />
       <YzhEmptyState v-else title="暂无预览" />
-    </el-drawer>
+    </YzhDrawer>
 
     <!-- ═══════════ 提取结果 ═══════════ -->
-    <el-drawer v-model="logic.resultDrawerVisible.value" title="提取结果" direction="rtl" size="520px">
+    <YzhDrawer v-model="logic.resultDrawerVisible.value" title="提取结果" direction="rtl" size="520px" :show-footer="false">
       <div v-if="logic.resultData.value" class="result-content">
         <el-descriptions :column="1" border size="small">
           <el-descriptions-item label="文件名">{{ logic.resultData.value?.FileName }}</el-descriptions-item>
@@ -535,7 +536,7 @@ function pickFolder() {
         </div>
       </div>
       <YzhEmptyState v-else title="暂无提取结果" />
-    </el-drawer>
+    </YzhDrawer>
   </div>
 </template>
 
@@ -913,12 +914,13 @@ function pickFolder() {
   min-height: 70vh;
   border: none;
 }
-</style>
 
-<style>
-/* 上传弹窗高度控制（el-dialog teleport 到 body，须非 scoped；按 S03 令牌+兜底） */
-.upload-dialog .el-dialog__body {
-  max-height: min(70vh, calc(100vh - 200px));
-  overflow-y: auto;
+/*
+ * 版本面板里的 YzhTable 自带 `height: 100%`。抽屉内容区是 flex 列容器
+ * （`.yzh-drawer__body`），默认 `flex-shrink: 1` 会把它压扁去给下面的时间线让位
+ * ⇒ 显式 `flex: none`，保持「表格占满 + 时间线在下方、整条抽屉滚动」的原样。
+ */
+.resources-version-table {
+  flex: none;
 }
 </style>

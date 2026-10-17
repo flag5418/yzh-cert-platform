@@ -27,7 +27,7 @@ import { computed, nextTick, onActivated, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Page, PageParams, YzhTableColumn } from '@yzh-core'
-import { YzhStatusBadge, YzhTable, confirmOrFalse, useAsyncAction } from '@yzh-core'
+import { YzhStatusBadge, YzhTable, YzhDrawer, confirmOrFalse, useAsyncAction } from '@yzh-core'
 import {
   batchFillGaps,
   fillGap,
@@ -1170,8 +1170,9 @@ function goResult() {
         @skip="onTableGapSkip"
       />
 
-      <!-- 补录留痕抽屉（cert_extraction_change_log · 不可变表，只追加） -->
-      <el-drawer v-model="logDrawerVisible" title="补录留痕" size="720px">
+      <!-- 补录留痕抽屉（cert_extraction_change_log · 不可变表，只追加）
+           S07：只读抽屉用 YzhDrawer + show-footer=false（默认 true 会凭空长出「保存/取消」） -->
+      <YzhDrawer v-model="logDrawerVisible" title="补录留痕" size="720px" :show-footer="false">
         <el-alert
           type="info"
           :closable="false"
@@ -1181,6 +1182,7 @@ function goResult() {
         />
         <YzhTable
           v-loading="changeLogsLoading"
+          class="td-log-table"
           :columns="changeLogColumns"
           :data-loader="changeLogLoader"
           :show-pagination="changeLogs.length > 20"
@@ -1211,7 +1213,7 @@ function goResult() {
             <span>{{ row.NewValue || '（已清除）' }}</span>
           </template>
         </YzhTable>
-      </el-drawer>
+      </YzhDrawer>
     </el-tabs>
   </div>
 </template>
@@ -1224,6 +1226,16 @@ function goResult() {
   background: var(--yzh-color-bg-container, #fff);
   border-radius: 4px;
   overflow: hidden;
+}
+
+/*
+ * 抽屉内的表格：`YzhDrawer` 的 body 是 `display:flex; flex-direction:column; height:100%`，
+ * 而 `YzhTable` 根节点是 `height:100%` —— 不补 `flex:1; min-height:0` 时，
+ * 「提示条 + 表格」两段各自按 100% 算高 ⇒ 表格底部被裁。
+ */
+.td-log-table {
+  flex: 1;
+  min-height: 0;
 }
 
 .td__head {

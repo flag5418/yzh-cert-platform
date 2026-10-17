@@ -14,8 +14,7 @@
  *   键（只有 `level`，值 0/1）⇒ 守卫恒拦、右表永不挂载、条款接口一次不发。
  */
 import { Delete, Plus, RefreshRight } from '@element-plus/icons-vue'
-import { confirmOrFalse, YzhForm, YzhEmptyState, YzhStatusBadge, resolveStatusBadge, YzhTreeTableLayout, YzhTreeTable, type TreeNode } from '@yzh-core'
-import { ElMessage } from 'element-plus'
+import { YzhFormDialog, YzhEmptyState, YzhStatusBadge, resolveStatusBadge, YzhTreeTableLayout, YzhTreeTable, type TreeNode } from '@yzh-core'
 import { computed, onMounted, ref } from 'vue'
 import { ISOStandardTreeTableLogic } from './logic'
 
@@ -31,7 +30,6 @@ const logic = new ISOStandardTreeTableLogic()
 
 const treeTableRef = ref()
 const tableRef = ref()
-const selectedRows = ref<any[]>([])
 
 /**
  * 函数式 ref：挂载/卸载时同步给内核。
@@ -72,76 +70,9 @@ async function handleNodeClick(node: TreeNode) {
 
 // ========================================================
 // 条款操作
+// ★ P1-⑦：确认 / 提示 / 清选中已全部下移进 `logic.ts`，
+//   本文件**不再** import `ElMessage` / `confirmOrFalse` —— 模板只绑 `logic.xxx`
 // ========================================================
-
-async function handleAddClause() {
-  const ok = await logic.openAddClauseDialog()
-  if (!ok) ElMessage.warning('请先选择标准')
-}
-
-async function handleEditClause(row: any) {
-  await logic.openEditClauseDialog(row)
-}
-
-async function handleDeleteClause(row: any) {
-  const ok = await confirmOrFalse(
-    `确定删除条款【${row.ClauseNumber} ${row.Title}】？`,
-    '删除确认',
-    { type: 'warning' },
-  )
-  if (!ok) return
-  await logic.deleteClause(row)
-  ElMessage.success('删除成功')
-}
-
-async function handleRowAction(action: string, row: any) {
-  if (action === 'add-child') {
-    const ok = await logic.openAddClauseChild(row)
-    if (!ok) ElMessage.warning('请先选择标准')
-  } else if (action === 'edit') {
-    await handleEditClause(row)
-  } else if (action === 'delete') {
-    await handleDeleteClause(row)
-  } else if (action === 'toggle-valid') {
-    await handleToggleClauseIsValid(row)
-  }
-}
-
-async function handleBatchDelete() {
-  if (selectedRows.value.length === 0) {
-    ElMessage.warning('请先选择要删除的条款')
-    return
-  }
-  const ok = await confirmOrFalse(
-    `确定删除选中的 ${selectedRows.value.length} 个条款？`,
-    '批量删除',
-    { type: 'warning' },
-  )
-  if (!ok) return
-  await logic.batchDeleteClauses(selectedRows.value)
-  selectedRows.value = []
-  tableRef.value?.clearSelection?.()
-  ElMessage.success('批量删除成功')
-}
-
-async function handleToggleClauseIsValid(row: any) {
-  await (logic as any).toggleRowIsValidWithConfirm(row, {
-    entityName: `${row.ClauseNumber} ${row.Title}`,
-  })
-  await logic.refresh()
-}
-
-async function handleClauseSubmit() {
-  try {
-    await logic.submitClauseForm()
-    ElMessage.success(logic.dialogMode.value === 'add' ? '新增成功' : '修改成功')
-  } catch (e: any) {
-    ElMessage.error(e.message || '保存失败')
-  }
-}
-
-function onClauseDialogOpened() { /* 弹窗完全打开后初始化 */ }
-function onClauseDialogClosed() { /* 弹窗完全关闭后清理 */ }
 
 onMounted(async () => {
   // refs 由模板函数式 ref 在子组件挂载时注入（早于本 onMounted），
@@ -185,8 +116,8 @@ onMounted(async () => {
             select-mode="multiple"
             row-key="Code"
             :allow-add-child="true"
-            @selection-change="selectedRows = $event"
-            @row-action="handleRowAction"
+            @selection-change="logic.onSelectionChange"
+            @row-action="logic.onRowAction"
           >
             <!-- 状态列 -->
             <template #column-IsValid="{ row }">
@@ -200,10 +131,10 @@ onMounted(async () => {
 
             <!-- 工具栏左侧 -->
             <template #toolbar-left>
-              <el-button type="primary" :icon="Plus" @click="handleAddClause">
+              <el-button type="primary" :icon="Plus" @click="logic.addClauseWithToast()">
                 新增顶级条款
               </el-button>
-              <el-button type="danger" :icon="Delete" @click="handleBatchDelete">
+              <el-button type="danger" :icon="Delete" @click="logic.batchDeleteClausesWithConfirm()">
                 批量删除
               </el-button>
               <el-button :icon="RefreshRight" @click="logic.refresh()">刷新</el-button>
@@ -224,25 +155,19 @@ onMounted(async () => {
       </template>
     </YzhTreeTableLayout>
 
-    <!-- 条款新增/编辑弹窗 -->
-    <el-dialog
-      v-model="logic.dialogVisible.value"
+    <!-- 条款新增/编辑弹窗（S07：表单型弹窗一律 YzhFormDialog，内含 YzhForm + 页脚提交） -->
+    <YzhFormDialog
+      v-model:visible="logic.dialogVisible.value"
+      v-model="logic.formData"
+      :mode="logic.dialogMode.value"
       :title="dialogTitle"
       width="600px"
-      :close-on-click-modal="false"
+      :fields="logic.formFields as any"
+      :loading="logic.submitting.value"
+      :cols="logic.formLayoutCols as any"
       :destroy-on-close="false"
-      @opened="onClauseDialogOpened"
-      @closed="onClauseDialogClosed"
-    >
-      <YzhForm
-        v-model="logic.formData"
-        :fields="logic.formFields as any"
-        :loading="logic.submitting.value"
-        :cols="logic.formLayoutCols as any"
-        @submit="handleClauseSubmit"
-        @reset="logic.dialogVisible.value = false"
-      />
-    </el-dialog>
+      @submit="logic.submitClauseFormWithToast()"
+    />
   </div>
 </template>
 

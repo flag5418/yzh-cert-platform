@@ -41,6 +41,8 @@
         </div>
 
         <div class="header-right">
+          <!-- 主题切换（亮色 / 暗色，持久化在 localStorage） -->
+          <YzhThemeToggle />
           <!-- 宿主附加顶栏项（slot） -->
           <slot name="header-right" />
           <!-- 用户信息下拉（#user-dropdown 可整块替换） -->
@@ -85,7 +87,7 @@
   </el-container>
 
   <!-- 个人信息弹窗 -->
-  <el-dialog
+  <YzhDialog
     v-if="userInfo"
     v-model="profileDialogVisible"
     title="个人信息"
@@ -113,10 +115,10 @@
       <el-button @click="profileDialogVisible = false">取消</el-button>
       <el-button type="primary" @click="saveProfile">保存</el-button>
     </template>
-  </el-dialog>
+  </YzhDialog>
 
   <!-- 修改密码弹窗 -->
-  <el-dialog
+  <YzhDialog
     v-model="passwordDialogVisible"
     title="修改密码"
     width="480px"
@@ -158,7 +160,7 @@
       <el-button @click="passwordDialogVisible = false">取消</el-button>
       <el-button type="primary" @click="changePassword">确认修改</el-button>
     </template>
-  </el-dialog>
+  </YzhDialog>
 </template>
 
 <script setup lang="ts">
@@ -176,8 +178,10 @@ import { useMenuTree } from '../composables/useMenuTree'
 import { onMenuChanged } from '../composables/useMenuChanged'
 import { filterMenuTreeByTag } from '../utils/menu'
 import YzhMenuNode from './components/YzhMenuNode.vue'
+import YzhDialog from '../components/layout/YzhDialog.vue'
 import YzhTabsBar from './components/YzhTabsBar.vue'
 import YzhPendingOverlay from './components/YzhPendingOverlay.vue'
+import YzhThemeToggle from './components/YzhThemeToggle.vue'
 
 /**
  * 原子应用布局（系统底座默认壳：侧栏 + 顶栏 + 个人中心 + 改密）

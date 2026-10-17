@@ -351,13 +351,13 @@ function runR16() {
  * ========================================================================== */
 
 /**
- * R-A 服务层禁止单参 `UpdateAsync(entity)`（全列写回 = 陷阱 ㉑ / P1-14）。
+ * R-A 禁止单参 `UpdateAsync(entity)`（全列写回 = 陷阱 ㉑ / P1-14）。
  * 判据：`UpdateAsync(X)` 且括号内无逗号；多参 `UpdateAsync(entity, fields…)` 放行。
- * 口径：仅 `certplatform-api/**\/Services/**`（框架 QueueManager 等框架内部状态机不在此列）。
+ * 口径：`certplatform-api/**\/Services/**` + `certplatform-api/**\/Controllers/**`。
  */
 function runRA() {
   const violations = []
-  const servicesRoot = walkAll([API_SRC], ['.cs']).filter((f) => f.includes('/Services/'))
+  const servicesRoot = walkAll([API_SRC], ['.cs']).filter((f) => f.includes('/Services/') || f.includes('/Controllers/'))
   for (const file of servicesRoot) {
     const lines = readFileSync(file, 'utf8').split('\n')
     lines.forEach((line, i) => {
@@ -614,6 +614,228 @@ function runR23() {
         })
       }
     })
+  }
+  return { violations, skipped: false }
+}
+
+/* ==========================================================================
+ * ★ R24 —— 页面 logic.ts 必须继承内核基类（2026-10-17 用户裁定 D4）
+ *
+ *   为什么：`logic.ts` 是页面唯一的业务逻辑落点。不继承内核基类时，
+ *   它既没有标准生命周期（init / loading / reportError），也没有统一的数据通道
+ *   （dataLoader / apiPost），表现为「每个页面重新发明一套 ref + try/catch」。
+ *
+ *   两类违规：
+ *     ① 裸 class —— `export class XxxLogic {`（无 extends）
+ *     ② 模块级单例 —— 无 class，但有顶层 `export const x = ref(...)`
+ *        （比 ① 更严重：状态挂在模块作用域，离开页面再进来**不重置**，多标签页共用一份）
+ *
+ *   ⛔ 不算违规：无 class 且无顶层 ref 的**纯函数模块**（例：`prompt-template/logic.ts`
+ *      是静态配置 + 纯函数，页面是三栏工作台而非列表页，本就不该套 CRUD 基类）。
+ *   ⚠️ `TreeTableLogic` 是 `@deprecated` 改名过渡别名（真身 `TreeTableCore`），
+ *      仍算合规，但 TT-1 收尾时应统一改名（当前 5 个文件在用）。
+ * ========================================================================== */
+const LOGIC_CORE_BASES = [
+  'SingleTableCore',
+  'TreeTableCore',
+  'CheckTreeCore',
+  'CheckTreeCrudCore',
+  'LinkTableCore',
+  'AssociationTreeCore',
+  // @deprecated 过渡别名：仍指向 TreeTableCore，故算合规
+  'TreeTableLogic',
+]
+
+function runR24() {
+  const violations = []
+  for (const file of walkAll(PAGE_ROOTS, ['.ts'])) {
+    if (basename(file) !== 'logic.ts') continue
+    const r = rel(file)
+    const text = readFileSync(file, 'utf8')
+    const lineOf = (idx) => text.slice(0, idx).split('\n').length
+
+    const classes = [
+      ...text.matchAll(
+        /^[ \t]*(?:export[ \t]+)?(?:default[ \t]+)?(?:abstract[ \t]+)?class[ \t]+(\w+)[ \t]*(?:extends[ \t]+([\w<>,.\s]+?))?[ \t]*\{/gm,
+      ),
+    ]
+
+    if (classes.length === 0) {
+      // 无 class：只有「顶层 ref/reactive/computed」才算模块级单例，纯函数模块放行
+      const moduleState = [
+        ...text.matchAll(/^export[ \t]+const[ \t]+\w+[ \t]*=[ \t]*(?:ref|reactive|computed)[<(]/gm),
+      ]
+      if (moduleState.length > 0) {
+        violations.push({
+          file: r,
+          line: lineOf(moduleState[0].index),
+          text: `模块级单例 Logic（${moduleState.length} 个顶层 ref/reactive/computed）—— 状态跨路由不重置，应改为 class extends 内核基类`,
+        })
+      }
+      continue
+    }
+
+    for (const m of classes) {
+      const name = m[1]
+      const base = (m[2] || '').split('<')[0].trim()
+      if (!base) {
+        violations.push({
+          file: r,
+          line: lineOf(m.index),
+          text: `${name} 未继承内核基类（必须 extends ${LOGIC_CORE_BASES.slice(0, 6).join(' | ')}）`,
+        })
+      } else if (!LOGIC_CORE_BASES.includes(base)) {
+        violations.push({
+          file: r,
+          line: lineOf(m.index),
+          text: `${name} extends ${base} —— 不是内核基类`,
+        })
+      }
+    }
+  }
+  return { violations, skipped: false }
+}
+
+/* ==========================================================================
+ * ★ R25 —— 暗色层完整性（2026-10-17 · D5 配套）
+ *
+ *   问题：`tokens.css` 的 `html.dark` 是**手写覆盖层**，`:root` 新增一个
+ *   `--yzh-color-*` 令牌而忘了在 `html.dark` 补值 ⇒ 该令牌在暗色下**仍取亮色值**，
+ *   且**任何地方都不报错**（页面只是「颜色不对」，不是「功能坏了」）。
+ *
+ *   判据（三条同时成立才算违规）：
+ *     ① 令牌名以 `--yzh-color-` 开头（阴影/圆角/间距/字号属主题中性，不参与）；
+ *     ② 在 `:root` 有定义、在 `html.dark` **没有**定义；
+ *     ③ **确实被业务代码引用**（引用数 > 0）—— 定义了却没人用，不构成暗色缺陷。
+ *
+ *   ⚠️ 选择器不写死 `html.dark`：任何含 `.dark` 或 `[data-theme="dark"]` 的块都算覆盖层，
+ *      避免将来换主题方案（data 属性）时规则误报。
+ * ========================================================================== */
+const DARK_TOKENS_FILE = join(WEB, 'yzh.vue.core/src/assets/css/tokens.css')
+
+/**
+ * 待补的暗色覆盖（**只准减不准增**）：补齐后把对应行删掉。
+ * 2026-10-17 实测 = 8 个「已引用但暗色未覆盖」的颜色令牌。
+ */
+const DARK_DEBT = [
+  '--yzh-color-primary-light-7',
+  '--yzh-color-primary-light-8',
+  '--yzh-color-success-light-7',
+  '--yzh-color-success-light-8',
+  '--yzh-color-warning-light-7',
+  '--yzh-color-warning-light-8',
+  '--yzh-color-danger-light-8',
+  '--yzh-color-text-inverse',
+]
+
+/** 取某选择器块内的全部自定义属性名（按花括号配对，不依赖缩进） */
+function blockTokenNames(text, selectorRe) {
+  const m = selectorRe.exec(text)
+  if (!m) return []
+  const start = text.indexOf('{', m.index)
+  if (start < 0) return []
+  let depth = 0
+  let end = text.length
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === '{') depth++
+    else if (text[i] === '}') {
+      depth--
+      if (depth === 0) {
+        end = i
+        break
+      }
+    }
+  }
+  return [...text.slice(start + 1, end).matchAll(/(--[\w-]+)\s*:/g)].map((x) => x[1])
+}
+
+function runR25() {
+  const violations = []
+  if (!existsSync(DARK_TOKENS_FILE)) return { violations, skipped: false }
+  const text = readFileSync(DARK_TOKENS_FILE, 'utf8')
+
+  const rootTokens = blockTokenNames(text, /^:root\s*\{/m)
+  const darkTokens = new Set(
+    blockTokenNames(text, /^[^\n{}]*?(?:\.dark|\[data-theme=['"]dark['"]\])[^\n{}]*\{/m),
+  )
+  if (!rootTokens.length) return { violations, skipped: false }
+
+  // 引用计数（业务代码，排除令牌定义文件自身）
+  const usage = new Map()
+  for (const file of walkAll(STYLE_ROOTS, ['.vue', '.ts'])) {
+    if (rel(file) === rel(DARK_TOKENS_FILE)) continue
+    const body = readFileSync(file, 'utf8')
+    for (const m of body.matchAll(/var\(\s*(--yzh-color-[\w-]+)/g)) {
+      usage.set(m[1], (usage.get(m[1]) || 0) + 1)
+    }
+  }
+
+  for (const name of rootTokens) {
+    if (!name.startsWith('--yzh-color-')) continue
+    if (darkTokens.has(name)) continue
+    if (DARK_DEBT.includes(name)) continue
+    const refs = usage.get(name) || 0
+    if (refs === 0) continue
+    violations.push({
+      file: rel(DARK_TOKENS_FILE),
+      line: 0,
+      text: `${name} 被引用 ${refs} 处，但暗色层（html.dark）未覆盖 ⇒ 暗色下仍取亮色值`,
+    })
+  }
+  return { violations, skipped: false }
+}
+
+/**
+ * R26 免认证纪律（D2 / D6 已定 2026-10-17）：
+ * - 全仓禁 `YZHAnonymous` 字面量（含 using / 特性 / 注释引用；⛔ 零容忍）。
+ * - `certplatform-api/**` 中出现 `[AllowAnonymous]` ⇒ **只允许 D6 白名单内的方法**。
+ * - `yzh-core`（框架层）不在本守卫范围（框架层按 AGENTS §11 单独准入）。
+ *
+ * ★ 2026-10-17 首次启用：`YZHAnonymousAttribute` 当前 **0 处业务使用**；
+ *   `[AllowAnonymous]` 在 certplatform-api 内共 6 处（Auth × 2 + AuditorAuth × 2 + User × 1 + WorkflowTest × 1），
+ *   其中 `WorkflowTest:222`（health）按 D2 需转 JWT ⇒ 白名单不含它；其余 5 处入白名单。
+ */
+function runR26() {
+  const violations = []
+  // ── ① YZHAnonymous 字面量禁令（含 yzh-core，零豁免除定义文件本身）──
+  const yzhAnonFiles = walkAll([API_SRC, YZH_CORE_SRC], ['.cs'])
+  for (const file of yzhAnonFiles) {
+    if (/YZHAnonymousAttribute\.cs$/.test(file)) continue // 定义文件正在被删除，豁免
+    const text = readFileSync(file, 'utf8')
+    const lines = text.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      if (/\bYZHAnonymous\b/.test(lines[i])) {
+        violations.push({ file: rel(file), line: i + 1, text: lines[i].trim().slice(0, 120) })
+      }
+    }
+  }
+  // ── ② certplatform-api 内 [AllowAnonymous] 白名单（D6 已定）──
+  //     白名单按「文件:方法名」粒度；未命中即违规。
+  //     yzh-core 全豁免（框架层按 AGENTS §11 单独管控，不在此守卫内）。
+  const ALLOWED = new Set([
+    '../certplatform-api/CertPlatform.Admin/Controllers/System/AuthController.cs:Login',
+    '../certplatform-api/CertPlatform.Admin/Controllers/System/UserController.cs:getVierificationCode',
+    '../certplatform-api/CertPlatform.Auditor/Controllers/AuditorAuthController.cs:Register',
+    '../certplatform-api/CertPlatform.Auditor/Controllers/AuditorAuthController.cs:GetOrgList',
+  ])
+  const apiFiles = walkAll([API_SRC], ['.cs'])
+  for (const file of apiFiles) {
+    const text = readFileSync(file, 'utf8')
+    const lines = text.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      if (!/AllowAnonymous/.test(lines[i])) continue
+      // 向后最多 6 行查找方法声明（形如 `public async Task<T> Method(`）
+      let methodName = null
+      for (let j = i + 1; j <= Math.min(i + 6, lines.length - 1); j++) {
+        const m = lines[j].match(/public\s+(?:async\s+)?(?:Task<[^>]+>|void|string|int|bool|long|IActionResult|IEnumerable<[^>]+>)\s+(\w+)\s*\(/)
+        if (m) { methodName = m[1]; break }
+      }
+      if (!methodName) continue
+      const key = rel(file) + ':' + methodName
+      if (!ALLOWED.has(key)) {
+        violations.push({ file: rel(file), line: i + 1, text: `${lines[i].trim().slice(0, 80)} → 方法 ${methodName}` })
+      }
+    }
   }
   return { violations, skipped: false }
 }
@@ -1280,7 +1502,7 @@ function runR19() {
  * ★ R20 —— 样式法条守卫（25 号 §四 S03–S11，基线只准减不准增）
  *
  * 分工：R18 = S01/S02（颜色·字号·间距裸硬编码）；R19 = 结构性 CSS；
- *      R20 = 组件写法条款（按钮/空态/确认框/弹窗/标签/图标/布局/!important）。
+ *      R20 = 组件写法条款（按钮/空态/确认框/弹窗/标签/图标/布局/!important/主题可适配性）。
  *
  * 基线文件 `scripts/style-clause-baseline.json`：
  *   { "<条款>": { "<rel 路径>": 处数 } }
@@ -1310,6 +1532,18 @@ const CLAUSE_EXEMPT = {
     'yzh.vue.core/src/components/layout/YzhDialog.vue',
     'yzh.vue.core/src/components/layout/YzhDrawer.vue',
     'yzh.vue.core/src/components/form/YzhFormDialog.vue',
+  ],
+  // S13 豁免 = 颜色是「品牌资产 / 数据的一部分」，改令牌会丢语义：
+  //   - 登录 / 注册页：品牌渐变（AGENTS.md ⑤ 明文豁免「登录页品牌渐变」）
+  //   - LogicFlow 画布 / ECharts：颜色由画布消费，不参与 CSS 主题（与 R18 的 STYLE_ALLOW 同源）
+  S13: [
+    'yzh.vue.core/src/pages/auth/Login.vue',
+    'cert/cert-auditor/src/layouts/AuditorLogin.vue',
+    'cert/cert-auditor/src/pages/register/index.vue',
+    'cert/cert-share/src/components/workflow/WorkflowDesigner.vue',
+    'cert/cert-share/src/composables/workflow/specialNodes.ts',
+    'cert/cert-share/src/composables/workflow/compiler.ts',
+    'cert/cert-admin/src/pages/workflow/ai-usage/index.vue',
   ],
 }
 
@@ -1392,12 +1626,32 @@ const CLAUSE_CHECKS = {
     }
     return n
   },
+  // S13 主题可适配性（明暗双主题）：background / background-color / color 里出现
+  // 「不随主题变化的颜色」= 裸 hex 或 黑白 rgba。
+  //
+  // 为什么单独一条（2026-10-17 用户裁定 D5）：
+  //   ① R18 只查 `<style>` 块内的裸 hex + 字号/间距 px —— 漏 rgba，也漏 `<template>` 内联 style
+  //      与 TS 字面量（`background: '#fafbfc'` 这类写在对象里，R18 完全看不见）；
+  //   ② 暗色主题（`html.dark`）下，`rgba(255,255,255,.05)` 叠在白底上尚可，叠在深底上仍是白蒙层；
+  //   ③ 判据只认「颜色类声明」，`box-shadow` / `border-color` 不计 —— 阴影与描边属主题中性，
+  //      强转令牌反而丢语义（与 R18「width/height 不计」同源考虑）。
+  //   ⚠️ 令牌兜底 `var(--x, #fff)` 已由 stripStyleNoise 剥掉：兜底值不参与主题切换，是合法写法。
+  S13(text) {
+    const clean = stripStyleNoise(text)
+    let n = 0
+    const declRe = /(?:^|["';\s{])(background(?:-color)?|color)\s*:\s*([^;}]*)/g
+    for (const m of clean.matchAll(declRe)) {
+      const v = m[2]
+      if (/#[0-9a-fA-F]{3,8}\b/.test(v) || /rgba?\(\s*(?:0|255)\s*,/.test(v)) n++
+    }
+    return n
+  },
 }
 
 /**
  * ★ 测试文件豁免（2026-10-04 修守卫自身缺陷）。
  *
- * <para>S 法条（S03–S11）针对的是**生产 UI 代码**的组件写法。测试文件里的
+ * <para>S 法条（S03–S13）针对的是**生产 UI 代码**的组件写法。测试文件里的
  * <c>ElMessageBox.confirm</c> 是给真实实现**打桩的 mock**，它反过来去 spy 被测代码 ——
  * 扫它等于把测试替身当成生产代码的「二次确认直调」，属误判。</para>
  *
@@ -1566,10 +1820,26 @@ const RULES = [
     desc: '统一表格组件（页面禁内联 <el-table，必须用 YzhTable）',
     // 启用时基线：cert-auditor / cert-enterprise = 0（新代码区）；
     // cert-admin = 97 处 / 11 文件（冻结存量，见下方 debt，随测试驱动修复逐个摘除）。
-    roots: PAGE_ROOTS,
+    //
+    // ★ 2026-10-17 作用域修正（用户裁定 D3「需要检查」→ 检查后扩域）：
+    //   原 roots 只有 PAGE_ROOTS（pages + layouts），**不含 cert-share** ⇒ 共享层表格成盲区：
+    //   同一目录的 <el-dialog> 被 R20(S07) 扫到，<el-table> 却无人管。
+    //   实测扩域后新增命中 7 处 / 3 文件（ExecutionHistoryDrawer 3 · QueueFileMonitor 3 ·
+    //   ExecutionResultPanel 1）+ 核心组件 1 处（YzhTreeTableCheckSelector），已全部登记。
+    //   ⚠️ 与 S07 的「地盘」对齐：R20 用 STYLE_ROOTS（四包整个 src）。
+    roots: [...PAGE_ROOTS, join(WEB, 'cert/cert-share/src'), join(WEB, 'yzh.vue.core/src/components')],
     exts: ['.vue'],
     forbid: [/<el-table\b/],
     skipComments: true,
+    // ★ 实现体豁免（永久）：这两个文件**本身就是表格组件**，包 el-table 是它们的职责。
+    //   `YzhTreeTableCheckSelector` 之所以不套 `YzhTable`：它整套语义挂在 el-table 实例上
+    //   （`toggleRowSelection` / `clearSelection` + `tree-props.checkStrictly`），
+    //   套一层只会把「selection 与 checkedKeys 必须恒等」这条隐式契约隔开一层，
+    //   收益为零、风险为正（文件顶部 36–44 行记录过级联错位事故）。
+    exempt: [
+      'yzh.vue.core/src/components/table/YzhTable.vue',
+      'yzh.vue.core/src/components/layout/YzhTreeTableCheckSelector.vue',
+    ],
     debt: [
       // 以下为 cert-admin 冻结存量（97 处）。修复某个页面后，把对应行从本清单删除。
       'foundation/cert-org-stage/',
@@ -1584,6 +1854,8 @@ const RULES = [
       'cert/cert-auditor/src/pages/queue/index.vue',
       // MessageBell 为新文件，R18/R20 待修（独立任务）
       'cert/cert-share/src/components/MessageBell/MessageBell.vue',
+      // ★ 2026-10-17 扩域新增的三处共享层债务 —— 已于第 2 批全部收口（3 文件 / 7 处 → 0），
+      //   故对应条目已删除；`YzhTreeTableCheckSelector` 转入上面的 exempt。
     ],
   },
   {
@@ -1721,21 +1993,49 @@ const RULES = [
     run: runR23,
     debt: [],
   },
+  {
+    id: 'R24',
+    type: 'custom',
+    desc: '页面 logic.ts 必须继承内核基类（禁裸 class / 模块级单例；纯函数模块除外）',
+    run: runR24,
+    // ★ 2026-10-17 首次启用（用户裁定 D4「增加守卫」）：实测存量 4 文件。
+    //   ⚠️ 用 debtBudget（按文件处数）而非 debt（按文件整体豁免）—— 后者有盲区：
+    //      文件进了白名单，再往里新增第二个裸 class 也静默通过（A-R6 踩过同一个坑）。
+    //   每页收口 ⇒ 下调 / 删行；删完 ⇒ 规则转正，新页面写裸 class 直接失败。
+    debtBudget: {
+      'cert/cert-auditor/src/pages/resources/logic.ts': 1,
+      'cert/cert-auditor/src/pages/enterprise-review/logic.ts': 1,
+      'cert/cert-auditor/src/pages/enterprise-fill-params/logic.ts': 1,
+      // 模块级单例（28 个顶层 ref）—— 比裸 class 更严重，见计划 §四 D2
+      'cert/cert-auditor/src/pages/enterprise-original/logic.ts': 1,
+    },
+  },
+  {
+    id: 'R25',
+    type: 'custom',
+    desc: '暗色层完整性（:root 的 --yzh-color-* 被引用时，html.dark 必须有覆盖）',
+    run: runR25,
+    debt: [],
+  },
+  {
+    id: 'R26',
+    type: 'custom',
+    desc: '免认证纪律：全仓禁 YZHAnonymous 字面量；certplatform-api 内 [AllowAnonymous] 仅限 D6 白名单（见 runR26）',
+    run: runR26,
+    // ★ 2026-10-17 首次启用（D2/D6 已定）：
+    //   - YZHAnonymousAttribute.cs 定义文件豁免（本轮删除后基线归零）
+    //   - certplatform-api [AllowAnonymous] 白名单 = 4 处（见 runR26 ALLOWED）
+    //   - yzh-core [AllowAnonymous] 不在本守卫范围（框架层 AGENTS §11 单独管控）
+    debt: [],
+  },
   // ===== 审计 §8（标准目录链路）：全部为后端 .cs 扫描，debt 随修复逐条删除 =====
   {
     id: 'R-A',
     type: 'custom',
     desc: '服务层禁止单参 UpdateAsync(entity)（全列写回 = 陷阱 ㉑ / P1-14）',
     run: runRA,
-    // §7 第 6 步「14 处列级写入」未做 → 命中文件整文件豁免，修一处也需整文件改完才摘
-    debt: [
-      'Services/DocExtraction/DocExtractionRuleService.AI.cs',
-      'Services/DocExtraction/DocExtractionRuleService.cs',
-      'Services/StandardDirectory/DirectoryTemplateService.cs',
-      'Services/StandardDirectory/StandardDirectoryService.cs',
-      'Services/StandardDirectory/UploadQueueCancelHandler.cs',
-      'Services/Workflow/PromptTemplateService.cs',
-    ],
+    // 2026-10-17 第 3 批：6 文件全部列级化，债务清零；R-A 同时覆盖 Controllers 后仍 0 违规。
+    debt: [],
   },
   {
     id: 'R-B',
@@ -1743,19 +2043,8 @@ const RULES = [
     desc: '控制器禁止直接继承裸 ControllerBase（白名单 Auth / 健康检查；应继承 YzhControllerBase<V> 或 WebControllerBase）',
     run: runRB,
     // 迁移到 YzhControllerBase<V> / WebControllerBase（路由已显式 [Route]、ApiCode 不变）后删除对应行
-    debt: [
-      'Controllers/Foundation/CertOrgStandardController.cs',
-      'Controllers/Foundation/DirectoryTemplateController.cs',
-      'Controllers/Foundation/CertOrgStageController.cs',
-      'Controllers/System/QueueMonitorController.cs',
-      'Controllers/Workflow/DocExtractionRuleController.cs',
-      'Controllers/Workflow/AIUsageController.cs',
-      'Controllers/Workflow/WorkflowTestController.cs',
-      'Controllers/Workflow/ReportDefinitionController.cs',
-      'YZH.Core.Web/Controllers/System/ApiSyncController.cs',
-      'YZH.Core.Web/Controllers/System/MenuController.cs',
-      'Controllers/System/MessageController.cs',  // 新文件待迁移（独立任务）
-    ],
+    // 2026-10-17 第 2 批：9 个已迁；R-B 债务清零。
+    debt: [],
   },
   {
     id: 'R-C',
@@ -1837,7 +2126,7 @@ const RULES = [
       'CertPlatform.Auditor/Services/Ent/EnterpriseFileService.cs': 5,
       'CertPlatform.Auditor/Controllers/EnterpriseNormalizeController.cs': 4,
       'CertPlatform.Auditor/Services/Ent/EnterpriseOriginalService.cs': 2,
-      'CertPlatform.Auditor/Controllers/FillParamValueController.cs': 5,
+       'CertPlatform.Auditor/Controllers/FillParamValueController.cs': 3,
       'CertPlatform.Auditor/Services/Expert/ExpertTaskService.cs': 1,
       'CertPlatform.Auditor/Controllers/EnterpriseStageController.cs': 1,
       'CertPlatform.Auditor/Services/Ent/EnterpriseOriginalAnalyzeExecutor.cs': 1,
@@ -1856,13 +2145,12 @@ const RULES = [
       // SDS 剩 8 = BY 例外 4（:676/:916/:970/:2417）+ 裸查例外 4（folder FullPath / 卡死扫描 / 重试候选 / 回填粗筛）
       'CertPlatform.Admin/Services/StandardDirectory/StandardDirectoryService.cs': 8,
       // DTC 剩 6 = 6d-4 模板/提示 5 + stdFileCodes 裸查例外 1（:616 无默认过滤语义，含已删/禁用行）
-      'CertPlatform.Admin/Controllers/Workflow/DocTemplateController.cs': 6,
+       'CertPlatform.Admin/Controllers/Workflow/DocTemplateController.cs': 4,
       'CertPlatform.Admin/Controllers/Workflow/DocFillPromptController.cs': 5,
       'CertPlatform.Admin/Controllers/Cert/FillParamDefController.cs': 3,
       'CertPlatform.Admin/Controllers/Workflow/StandardDocContractController.cs': 1,
-      'CertPlatform.Auditor/Controllers/DocumentFillController.cs': 3,
-      'CertPlatform.Auditor/Controllers/EnterpriseController.cs': 2,
-      'CertPlatform.Auditor/Services/AuditorRegisterService.cs': 2,
+       'CertPlatform.Auditor/Controllers/DocumentFillController.cs': 1,
+       'CertPlatform.Auditor/Controllers/EnterpriseController.cs': 2,
     },
   },
   {
@@ -1895,6 +2183,9 @@ for (const rule of RULES) {
   const violations = []
   for (const file of files) {
     const r = rel(file)
+    // ★ exempt = 「该文件是这条规则的**实现体本身**」，永久豁免（例：YzhTable 自身必须包 el-table）。
+    //   与 debt 的区别：debt 是「欠着的债，将来要还」；exempt 是「法外之地不存在，但这里就是法本身」。
+    if (rule.exempt?.some((d) => r.includes(d))) continue
     if (rule.debt?.some((d) => r.includes(d))) continue
     const lines = readFileSync(file, 'utf8').split('\n')
     lines.forEach((line, i) => {

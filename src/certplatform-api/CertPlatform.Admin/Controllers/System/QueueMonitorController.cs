@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Models.Users;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.DataBase.Services;
@@ -23,7 +24,7 @@ namespace CertPlatform.Admin.Controllers.System;
 /// 只取路由<b>末段</b>作控制器名，本 Controller 的末段未变 ⇒ <c>ApiCode</c> 不变 ⇒
 /// <b>角色-接口关联不断裂</b>，无需重跑 ApiSync。</para>
 [Route("api/Admin/System/[controller]")]
-public class QueueMonitorController : ControllerBase
+public class QueueMonitorController : WebControllerBase
 {
     private readonly QueueManager _queueManager;
     private readonly IDbOrm _db;

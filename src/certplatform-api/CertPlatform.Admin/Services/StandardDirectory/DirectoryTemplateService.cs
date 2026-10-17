@@ -60,7 +60,7 @@ public class DirectoryTemplateService
 
         existing.FolderName = folder.FolderName;
         existing.Sort = folder.Sort;
-        await _db.UpdateAsync(existing);
+        await _db.UpdateAsync(existing, nameof(DirectoryTemplate.FolderName), nameof(DirectoryTemplate.Sort));
         return (true, null);
     }
 

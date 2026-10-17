@@ -65,7 +65,7 @@ public class UploadQueueCancelHandler : IYzhQueueCancelHandler
                 file.IsValid = 1;
                 file.ConvertStatus = "failed";
                 file.ConvertMessage = "队列已取消";
-                await db.UpdateAsync(file);
+                await db.UpdateAsync(file, nameof(StandardDirectoryFile.IsValid), nameof(StandardDirectoryFile.ConvertStatus), nameof(StandardDirectoryFile.ConvertMessage));
             }
 
             _logger.LogInformation("上传队列取消处理完成: {TaskId}, 恢复 {Count} 个文件",

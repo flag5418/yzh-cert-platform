@@ -60,6 +60,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
         protected override async Task<(bool ok, string? msg)> OnBeforeAdd(
             CertPlatform.Admin.Entities.Wf.Skill entity)
         {
+            // GetByCodeAny：查重须无视 IsValid——即使目标技能已禁用，同一 Code 也不允许重复注册
             var result = await Entity.GetByCodeAny(entity.Code);
             if (result.Success && result.Data != null)
                 return (false, $"编码 {entity.Code} 已存在");
@@ -69,6 +70,7 @@ namespace CertPlatform.Admin.Controllers.Workflow
         protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(
             CertPlatform.Admin.Entities.Wf.Skill entity)
         {
+            // GetByCodeAny：查重须无视 IsValid——被禁用的旧行仍占用该 Code，不得被新行复用
             var result = await Entity.GetByCodeAny(entity.Code);
             if (result.Success && result.Data != null && result.Data.Code != entity.Code)
                 return (false, $"编码 {entity.Code} 已被其他记录使用");

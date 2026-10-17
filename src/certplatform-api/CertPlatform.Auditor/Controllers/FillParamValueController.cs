@@ -87,11 +87,10 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
     public async Task<IActionResult> Scopes()
     {
         // 标准是树形表 → 只取叶子，否则目录节点会混进选项
-        var standards = await _db.Client.Queryable<ISOStandard>()
-            .Where(x => x.IsDeleted == false && x.IsValid == 1 && x.IsLeaf == true)
+        var standards = (await _core.GetLeafStandardsAsync())
             .OrderBy(x => x.Sort)
             .Select(x => new { x.Code, Name = x.StandardName, No = x.StandardCode })
-            .ToListAsync();
+            .ToList();
 
         var stages = (await _core.GetStagesAsync())
             .OrderBy(x => x.Sort)
@@ -189,8 +188,7 @@ public class FillParamValueController : YzhControllerBase<FillParamValue>
 
         var stdMap = stdCodes.Count == 0
             ? new Dictionary<string, ISOStandard>(StringComparer.Ordinal)
-            : (await _db.Client.Queryable<ISOStandard>()
-                .Where(x => stdCodes.Contains(x.Code)).ToListAsync())
+            : (await _core.GetStandardsByCodesAsync(stdCodes))
               .ToDictionary(x => x.Code, x => x, StringComparer.Ordinal);
 
         // ── 4. 组装树：企业 → 标准（三元组按标准去重降为两级，⛔ 不再产 stage 节点）──

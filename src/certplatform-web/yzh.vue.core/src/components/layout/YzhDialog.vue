@@ -46,6 +46,13 @@ const props = withDefaults(
     destroyOnClose?: boolean
     /** 顶部距离（默认 15vh） */
     top?: string
+    /**
+     * 是否挂到 body（默认 false，与 `el-dialog` 一致）。
+     *
+     * ★ 2026-10-17 补：嵌套在**另一个弹窗/抽屉**里时必须传 `true`，
+     *   否则内层弹窗会被渲染进父级 DOM，层叠上下文里被压到父弹窗下面（表现为「点了没反应」）。
+     */
+    appendToBody?: boolean
   }>(),
   {
     title: '提示',
@@ -61,7 +68,8 @@ const props = withDefaults(
     showClose: true,
     customClass: '',
     destroyOnClose: false,
-    top: '15vh'
+    top: '15vh',
+    appendToBody: false
   }
 )
 
@@ -71,6 +79,8 @@ const emit = defineEmits<{
   (e: 'cancel'): void
   (e: 'open'): void
   (e: 'close'): void
+  /** 离场动画**结束后**才触发 —— 与 `YzhDrawer` 对齐（`close` 只在「取消」时发，点 X / 遮罩不发） */
+  (e: 'closed'): void
 }>()
 
 /** 计算宽度样式 */
@@ -118,7 +128,9 @@ watch(
     :class="customClass"
     :top="fullscreen ? '0' : top"
     :destroy-on-close="destroyOnClose"
+    :append-to-body="appendToBody"
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
+    @closed="emit('closed')"
   >
     <!-- 默认插槽：内容区域 -->
     <div class="yzh-dialog__body">

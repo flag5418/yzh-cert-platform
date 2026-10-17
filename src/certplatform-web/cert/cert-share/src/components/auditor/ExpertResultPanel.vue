@@ -21,7 +21,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { Page, PageParams, YzhTableColumn, YzhTreeNode } from '@yzh-core'
-import { YzhTable, YzhTree, confirmOrFalse } from '@yzh-core'
+import { YzhTable, YzhTree, YzhDialog, confirmOrFalse } from '@yzh-core'
 import {
   acknowledgeResults,
   exportResults,
@@ -598,12 +598,12 @@ watch(
       </div>
     </div>
 
-    <!-- ════ 修改弹窗 ════ -->
-    <el-dialog
+    <!-- ════ 修改弹窗（S07：YzhDialog；本组件常被嵌在父弹窗里 ⇒ append-to-body 必传）════ -->
+    <YzhDialog
       v-model="editVisible"
       :title="isReport ? '修改章节正文' : '修改 NC 结论'"
       width="720px"
-      append-to-body
+      :append-to-body="true"
     >
       <div v-if="editing" class="er__edit-ctx">
         <div class="er__edit-ctx-row">
@@ -681,10 +681,10 @@ watch(
         <el-button @click="editVisible = false">取消</el-button>
         <el-button type="primary" :loading="editSaving" @click="saveEdit">保存</el-button>
       </template>
-    </el-dialog>
+    </YzhDialog>
 
     <!-- ════ 历史轮次 ════ -->
-    <el-dialog v-model="historyVisible" :title="`历史轮次 — ${historyItemName}`" width="1000px" append-to-body>
+    <YzhDialog v-model="historyVisible" :title="`历史轮次 — ${historyItemName}`" width="1000px" :append-to-body="true" :show-footer="false">
       <div class="er__history">
         <YzhTable
           ref="historyTableRef"
@@ -718,7 +718,7 @@ watch(
           </template>
         </YzhTable>
       </div>
-    </el-dialog>
+    </YzhDialog>
   </div>
 </template>
 

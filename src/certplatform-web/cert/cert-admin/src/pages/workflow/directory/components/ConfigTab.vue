@@ -11,7 +11,7 @@
  *     `StageCode` = cert_cert_stage.Code
  *   - ★ 创建已无感懒建：阶段首次进入/上传时后端 Ensure 自动建行，本界面只做管理与批量查看。
  */
-import { confirmOrFalse, YzhEmptyState } from '@yzh-core'
+import { confirmOrFalse, YzhEmptyState, YzhDialog } from '@yzh-core'
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, FolderOpened } from '@element-plus/icons-vue'
@@ -247,11 +247,11 @@ onMounted(async () => {
       </el-table>
     </el-card>
 
-    <el-dialog
+    <YzhDialog
       v-model="dialogVisible"
       :title="form.code ? '编辑目录配置' : '新建目录配置'"
       width="520px"
-      destroy-on-close
+      :destroy-on-close="true"
     >
       <el-form :model="form" label-width="100px">
         <el-form-item label="归属">
@@ -310,7 +310,7 @@ onMounted(async () => {
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleSubmit">确定</el-button>
       </template>
-    </el-dialog>
+    </YzhDialog>
   </div>
 </template>
 

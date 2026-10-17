@@ -1509,38 +1509,39 @@ function onNodeDocChange(ruleCode: string) { if (ruleCode) loadFieldsAndTables(r
 </script>
 
 <style scoped lang="less">
-.studio-layout { display: flex; flex-direction: column; height: 100%; background: #f1f5f9; }
-.page-header { display: flex; align-items: center; padding: 12px 20px; background: #fff; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; }
+.studio-layout { display: flex; flex-direction: column; height: 100%; background: var(--yzh-color-bg-page, #f1f5f9); }
+.page-header { display: flex; align-items: center; padding: 12px 20px; background: var(--yzh-color-bg-container, #fff); border-bottom: 1px solid var(--yzh-color-border, #e2e8f0); flex-shrink: 0; }
 .header-left { display: flex; align-items: center; gap: 8px; }
-.header-title { font-size: 16px; font-weight: 700; color: #1e293b; }
+.header-title { font-size: 16px; font-weight: 700; color: var(--yzh-color-text-primary, #1e293b); }
 .page-body { display: flex; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
-.left-panel { width: 280px; min-width: 200px; flex-shrink: 1; flex-basis: 280px; background: #fff; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; overflow: hidden; }
-.right-panel { width: 360px; min-width: 260px; flex-shrink: 1; flex-basis: 360px; background: #fff; border-left: 1px solid #e2e8f0; display: flex; flex-direction: column; overflow: hidden; }
-.panel-toggle { width: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; background: #fff; color: #94a3b8; transition: all 0.2s; }
-.panel-toggle:hover { background: #f1f5f9; color: #2563eb; }
+.left-panel { width: 280px; min-width: 200px; flex-shrink: 1; flex-basis: 280px; background: var(--yzh-color-bg-container, #fff); border-right: 1px solid var(--yzh-color-border, #e2e8f0); display: flex; flex-direction: column; overflow: hidden; }
+.right-panel { width: 360px; min-width: 260px; flex-shrink: 1; flex-basis: 360px; background: var(--yzh-color-bg-container, #fff); border-left: 1px solid var(--yzh-color-border, #e2e8f0); display: flex; flex-direction: column; overflow: hidden; }
+.panel-toggle { width: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; background: var(--yzh-color-bg-container, #fff); color: var(--yzh-color-text-tertiary, #94a3b8); transition: all 0.2s; }
+.panel-toggle:hover { background: var(--yzh-color-bg-hover, #f1f5f9); color: var(--yzh-color-primary-light, #2563eb); }
 .panel-toggle .el-icon { transform: rotate(180deg); }
-.panel-toggle.left-toggle { border-right: 1px solid #e2e8f0; }
+.panel-toggle.left-toggle { border-right: 1px solid var(--yzh-color-border, #e2e8f0); }
 .panel-toggle.left-toggle:hover .el-icon { transform: rotate(0deg); }
-.panel-toggle.right-toggle { border-left: 1px solid #e2e8f0; }
+.panel-toggle.right-toggle { border-left: 1px solid var(--yzh-color-border, #e2e8f0); }
 .panel-toggle.right-toggle .el-icon { transform: rotate(0deg); }
 .panel-toggle.right-toggle:hover .el-icon { transform: rotate(180deg); }
-.panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; font-size: 13px; font-weight: 700; color: #334155; border-bottom: 1px solid #f1f5f9; }
-.tree-search { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
+.panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; font-size: 13px; font-weight: 700; color: var(--yzh-color-text-body, #334155); border-bottom: 1px solid var(--yzh-color-border-light, #f1f5f9); }
+.tree-search { padding: 8px 12px; border-bottom: 1px solid var(--yzh-color-border-light, #f1f5f9); }
 .tree-container { flex: 1; overflow-y: auto; padding: 8px; }
 .main-content { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.canvas-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 16px; background: #fff; border-bottom: 1px solid #e2e8f0; overflow: hidden; }
-.canvas-title { font-size: 13px; font-weight: 600; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; }
+.canvas-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 16px; background: var(--yzh-color-bg-container, #fff); border-bottom: 1px solid var(--yzh-color-border, #e2e8f0); overflow: hidden; }
+.canvas-title { font-size: 13px; font-weight: 600; color: var(--yzh-color-text-body, #475569); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; }
 .toolbar-actions { display: flex; gap: 4px; flex-shrink: 0; }
-.canvas-container { flex: 1; min-height: 0; background: #f8fafc; min-width: 240px; }
-.canvas-footer { padding: 6px 16px; font-size: 12px; color: #94a3b8; background: #fff; border-top: 1px solid #e2e8f0; }
+/* ★ LogicFlow 画布（含默认主题色）属登记豁免，不随主题反转，见 25-样式规范 §四 */
+.canvas-container { flex: 1; min-height: 0; background: var(--yzh-color-bg-page, #f8fafc); min-width: 240px; }
+.canvas-footer { padding: 6px 16px; font-size: 12px; color: var(--yzh-color-text-tertiary, #94a3b8); background: var(--yzh-color-bg-container, #fff); border-top: 1px solid var(--yzh-color-border, #e2e8f0); }
 .studio-tabs { height: 100%; display: flex; flex-direction: column; }
-:deep(.el-tabs__header) { margin: 0; padding: 0 16px; background: #fafbfc; border-bottom: 1px solid #e2e8f0; }
+:deep(.el-tabs__header) { margin: 0; padding: 0 16px; background: var(--yzh-color-bg-subtle, #fafbfc); border-bottom: 1px solid var(--yzh-color-border, #e2e8f0); }
 :deep(.el-tabs__content) { flex: 1; overflow: hidden; }
 :deep(.el-tab-pane) { height: 100%; overflow-y: auto; }
 .nodes-panel, .prop-panel-wrapper { height: 100%; }
-.tree-node { display: flex; align-items: center; padding: 6px 8px; cursor: pointer; border-radius: 4px; transition: background 0.15s; }
-.tree-node:hover { background: #f1f5f9; }
-.tree-node.active { background: #eff6ff; color: #2563eb; }
+.tree-node { display: flex; align-items: center; padding: 6px 8px; cursor: pointer; border-radius: var(--yzh-radius-sm, 4px); transition: background 0.15s; }
+.tree-node:hover { background: var(--yzh-color-bg-hover, #f1f5f9); }
+.tree-node.active { background: var(--yzh-color-bg-active, #eff6ff); color: var(--yzh-color-primary-light, #2563eb); }
 .tree-node .toggle-icon { margin-right: 4px; transition: transform 0.2s; }
 .tree-node.expanded > .toggle-icon { transform: rotate(90deg); }
 .tree-node .type-icon { margin-right: 6px; font-size: 16px; }
@@ -1555,7 +1556,7 @@ function onNodeDocChange(ruleCode: string) { if (ruleCode) loadFieldsAndTables(r
 .level-1 { padding-left: 20px; }
 .level-2 { padding-left: 40px; }
 .level-3 { padding-left: 60px; }
-.rule-code-text { font-family: 'JetBrains Mono', monospace; background: #f1f5f9; padding: 2px 6px; border-radius: 2px; color: #64748b; }
+.rule-code-text { font-family: 'JetBrains Mono', monospace; background: var(--yzh-color-bg-hover, #f1f5f9); padding: 2px 6px; border-radius: var(--yzh-radius-sm, 2px); color: var(--yzh-color-text-muted, #64748b); }
 /* ★ 树节点文字 tooltip（对齐 OrgStandardStageTree 的 org-std-stage-tree-label-tip） */
 .ws-tree-label-tip { max-width: 400px; }
 </style>

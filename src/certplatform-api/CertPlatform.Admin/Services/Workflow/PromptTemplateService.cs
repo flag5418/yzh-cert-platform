@@ -134,7 +134,11 @@ public class PromptTemplateService
         entity.DeleteTime = null;
         if (string.IsNullOrWhiteSpace(entity.Status)) entity.Status = existing.Status;
 
-        var updated = await _db.UpdateAsync(entity);
+        var updated = await _db.UpdateAsync(entity,
+            nameof(PromptTemplate.IsActive), nameof(PromptTemplate.IsValid),
+            nameof(PromptTemplate.CreateTime), nameof(PromptTemplate.CreateBy),
+            nameof(PromptTemplate.UpdateTime), nameof(PromptTemplate.DeleteBy),
+            nameof(PromptTemplate.DeleteTime), nameof(PromptTemplate.Status));
         if (!updated.Success)
             return (false, updated.Error ?? "保存失败");
         return (true, "保存成功");
@@ -148,7 +152,7 @@ public class PromptTemplateService
 
         entity.IsValid = 0;
         entity.UpdateTime = DateTime.Now;
-        var result = await _db.UpdateAsync(entity);
+        var result = await _db.UpdateAsync(entity, nameof(PromptTemplate.IsValid), nameof(PromptTemplate.UpdateTime));
         return result.Success;
     }
 
@@ -169,13 +173,13 @@ public class PromptTemplateService
             {
                 item.IsActive = false;
                 item.UpdateTime = DateTime.Now;
-                await _db.UpdateAsync(item);
+                await _db.UpdateAsync(item, nameof(PromptTemplate.IsActive), nameof(PromptTemplate.UpdateTime));
             }
         }
 
         target.IsActive = true;
         target.UpdateTime = DateTime.Now;
-        var result = await _db.UpdateAsync(target);
+        var result = await _db.UpdateAsync(target, nameof(PromptTemplate.IsActive), nameof(PromptTemplate.UpdateTime));
         return result.Success;
     }
 

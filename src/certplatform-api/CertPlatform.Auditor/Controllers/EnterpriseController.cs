@@ -376,6 +376,7 @@ public class EnterpriseController : YzhControllerBase<Enterprise>
 
             // ★ 关键：updateFields 可能不含全部字段，故同步时**重新读库**取权威值，
             //   而不是直接用入参 entity（否则 ContactName 未提交时会写成 null）。
+            // GetByCodeAny：须读完整行（含 IsValid=0 的已禁用企业），以便事务中校验后再写
             var authoritative = await Entity.GetByCodeAny(entityCode);
             if (!authoritative.Success || authoritative.Data == null)
             {
@@ -494,6 +495,7 @@ public class EnterpriseController : YzhControllerBase<Enterprise>
         if (string.IsNullOrWhiteSpace(code))
             return Result<ApiResponse<object?>>.Fail("缺少业务键 Code");
 
+        // GetByCodeAny：读已禁用企业（IsValid=0）以执行翻转；GetByCode 查不到已禁用行
         var result = await Entity.GetByCodeAny(code);
         if (!result.Success || result.Data == null)
             return Result<ApiResponse<object?>>.Fail("企业不存在");

@@ -114,7 +114,10 @@ public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
             entity.DeleteTime = null;
             entity.UpdateTime = DateTime.Now;
 
-            var upd = await _db.UpdateAsync(entity);
+            var upd = await _db.UpdateAsync(entity,
+                nameof(DocFillPrompt.CreateTime), nameof(DocFillPrompt.CreateBy),
+                nameof(DocFillPrompt.IsDeleted), nameof(DocFillPrompt.DeleteBy), nameof(DocFillPrompt.DeleteTime),
+                nameof(DocFillPrompt.UpdateTime), nameof(DocFillPrompt.Status));
             if (!upd.Success) return Result<DocFillPrompt>.Fail(upd.Error ?? "复活提示词版本失败");
 
             _logger.LogInformation("[DocFillPrompt] 复活已软删版本：{PromptCode} v{Ver}", entity.PromptCode, entity.Version);

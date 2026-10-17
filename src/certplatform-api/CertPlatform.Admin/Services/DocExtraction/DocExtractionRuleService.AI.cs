@@ -96,7 +96,14 @@ public partial class DocExtractionRuleService
             {
                 if (string.IsNullOrWhiteSpace(entity.Code))
                     return (false, "更新失败：缺少业务键 Code");
-                await _db.UpdateAsync(entity);
+                await _db.UpdateAsync(entity,
+                    nameof(DocExtractionRule.OrgCode), nameof(DocExtractionRule.FileCode),
+                    nameof(DocExtractionRule.StandardFileCode), nameof(DocExtractionRule.StandardCode),
+                    nameof(DocExtractionRule.StageCode), nameof(DocExtractionRule.Skill),
+                    nameof(DocExtractionRule.Prompt), nameof(DocExtractionRule.DocIsValid),
+                    nameof(DocExtractionRule.VerifyMessage), nameof(DocExtractionRule.SampleData),
+                    nameof(DocExtractionRule.Status), nameof(DocExtractionRule.Remark),
+                    nameof(DocExtractionRule.UpdateTime), nameof(DocExtractionRule.UpdateBy));
             }
 
             return (true, "保存成功");
@@ -690,7 +697,7 @@ public partial class DocExtractionRuleService
                 {
                     rule.DocContent = docContent;
                     rule.UpdateTime = DateTime.Now;
-                    await _db.UpdateAsync(rule);
+                    await _db.UpdateAsync(rule, nameof(DocExtractionRule.DocContent), nameof(DocExtractionRule.UpdateTime));
                     _logger.LogInformation("[DocExtractionRule] 文档内容已缓存 (FileCode={FC}, len={Len})", request.FileCode, docContent.Length);
                 }
             }
@@ -753,7 +760,10 @@ public partial class DocExtractionRuleService
                     rule.VerifyMessage = "验证成功";
                     rule.Status = "configured";
                     rule.UpdateTime = DateTime.Now;
-                    await _db.UpdateAsync(rule);
+                    await _db.UpdateAsync(rule,
+                        nameof(DocExtractionRule.SampleData), nameof(DocExtractionRule.DocIsValid),
+                        nameof(DocExtractionRule.VerifyMessage), nameof(DocExtractionRule.Status),
+                        nameof(DocExtractionRule.UpdateTime));
                 }
             }
             else

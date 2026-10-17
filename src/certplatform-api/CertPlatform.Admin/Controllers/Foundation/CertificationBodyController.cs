@@ -249,6 +249,7 @@ public class CertificationBodyController : YzhControllerBase<CB>
                 return Ok(ApiResponse.Fail("Code 不能为空"));
 
             var getResult = await Entity.GetByCodeAny(code);
+            // GetByCodeAny：须能读禁用行（IsValid=0）以执行翻转（启用/禁用互为动作）；用 GetByCode 会查不到已禁用行
             if (!getResult.Success || getResult.Data == null)
                 return Ok(ApiResponse.Fail($"认证机构 {code} 不存在"));
 
