@@ -3,8 +3,10 @@ import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import 'element-plus/dist/index.css'
+import 'element-plus/theme-chalk/dark/css-vars.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import { installApiErrorBoundary } from '@yzh-core/api/errorBoundary'
+import { initTheme } from '@yzh-core/composables/useTheme'
 // ★ 样式穿透三层（顺序不可颠倒）：element-plus 基线 → core 令牌默认层 → 宿主覆盖层
 import '@yzh-core/assets/css/tokens.css'
 import './assets/css/main.css'
@@ -19,6 +21,9 @@ installApiErrorBoundary({
 })
 
 const app = createApp(App)
+
+// 回放缓存主题（localStorage `yzh-theme`），须在挂载前执行，避免首屏亮/暗闪烁
+initTheme()
 
 // 注册所有 Element Plus 图标
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {

@@ -119,6 +119,7 @@ function onCommand(command: string) {
   display: flex;
   align-items: center;
   gap: var(--yzh-space-2);
+  height: 40px;
   padding: 0 var(--yzh-space-6);
   background: var(--yzh-color-bg-container);
   border-bottom: 1px solid var(--yzh-color-border-light);
@@ -144,5 +145,10 @@ function onCommand(command: string) {
 
 .yzh-tabs__list :deep(.el-tabs__nav-wrap)::after {
   height: 0;
+}
+
+/* 收掉「批量关闭」按钮的默认 padding —— 与标签栏高度对齐，不遮横线 */
+.yzh-tabs__actions :deep(.el-button) {
+  padding: var(--yzh-space-1) var(--yzh-space-2);
 }
 </style>

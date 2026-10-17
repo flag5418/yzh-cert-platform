@@ -336,7 +336,7 @@ onMounted(() => {
 .form-title {
   font-size: 24px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--yzh-color-text-primary, #1e293b);
   margin: 0 0 6px;
 }
 

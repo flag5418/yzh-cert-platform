@@ -1,6 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
+import { useMenuTree } from '@yzh-core/composables/useMenuTree'
+import { filterMenuTreeByTag } from '@yzh-core/utils/menu'
+import type { SysMenu } from '@yzh-core/api/system/menu'
 
 /**
  * 路由表
@@ -29,7 +32,8 @@ const routes: RouteRecordRaw[] = [
     path: '/',
     name: 'Home',
     component: () => import('@/layouts/AuditorLayout.vue'),
-    redirect: '/overview',
+    // 不再写死 `redirect: '/overview'`：菜单「系统一览」被禁用时，
+    // 首页落地需跳到第一个可用菜单项（见 `beforeEach` 内的动态判定）。
     children: [
       {
         path: 'overview',
@@ -75,7 +79,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/report-results/index.vue')
       },
       // ★ 企业全局参数定义（MENU_AUD_10）—— 企业档案 × 后台参数定义（标准核心字段）的关联补值清单
-      //   ⛔ 无「填充预览」（2026-10-06 裁决）：预览 UI 归企业资料规范化册承载
+      //   � 无「填充预览」（2026-10-06 裁决）：预览 UI 归企业资料规范化册承载
       {
         path: 'enterprise-fill-params',
         name: 'EnterpriseFillParams',
@@ -105,7 +109,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/enterprise-normalize/index.vue')
       },
       // ★ 规范化任务建立向导（`/enterprise-normalize/create` 必须排在 `/enterprise-normalize` 之前）
-      //   ⛔ 不进侧边栏：它是任务列表页的子页面，入口在列表工具栏「创建规范化任务」
+      //   � 不进侧边栏：它是任务列表页的子页面，入口在列表工具栏「创建规范化任务」
       //      与行按钮「重新执行」（带 `?from={queueCode}`）。
       //      ⇒ 已在 `scripts/guards.mjs` 的 ORPHAN_ALLOW 登记（R12 要求显式登记 + 理由）。
       {
@@ -115,7 +119,7 @@ const routes: RouteRecordRaw[] = [
       },
       // ★ 企业资料审核（MENU_AUD_14）—— 左树（企业 › 阶段 › 任务）+ 右表（已规范化文档）
       //   + 按阶段统一导出 + 逐锚点改值 / 钉住（审核抽屉）。
-      //   ⛔ 必须与菜单 MENU_AUD_14 成对落地：本端路由是静态的，菜单 Url 无子路由 ⇒ 点击白屏。
+      //   � 必须与菜单 MENU_AUD_14 成对落地：本端路由是静态的，菜单 Url 无对应子路由 ⇒ 点击白屏。
       {
         path: 'enterprise-review',
         name: 'EnterpriseReview',
@@ -146,7 +150,7 @@ const router = createRouter({
 })
 
 // 路由导航守卫
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
   // 匿名页（登录 / 注册）直接放行
@@ -161,7 +165,38 @@ router.beforeEach((to, _from, next) => {
     return
   }
 
+  /*
+   * ★ 动态首页落地（2026-10-17）：访问 `/` → 取可用菜单树上第一个叶子节点；
+   *   全部禁用时兜底 `/overview`（至少能看到兜底内容，而不是白屏或 404）。
+   *
+   * 实现：先去 `useMenuTree` 单例取菜单树（已加载直接走缓存，不会二次请求），
+   * 过滤出 `auditor` Tag 那一支，再递归取第一个有 Url 的叶子；
+   * 命中即 next(leafUrl) 完成跳转，否则 next('/overview') 兜底。
+   */
+  if (to.fullPath === '/') {
+    const { menus, loadMenus } = useMenuTree()
+    if (!menus.value.length) void loadMenus()
+    const auditorMenus = filterMenuTreeByTag(menus.value, 'auditor')
+    const firstLeaf = findFirstNavigableLeaf(auditorMenus)
+    next(firstLeaf || '/overview')
+    return
+  }
+
   next()
 })
+
+/** 递归取菜单树中第一个有 Url（即可导航叶子）的节点路径；全部禁用返回 '' */
+function findFirstNavigableLeaf(list: SysMenu[]): string {
+  for (const m of list) {
+    const kids = m.children
+    if (Array.isArray(kids) && kids.length > 0) {
+      const inner = findFirstNavigableLeaf(kids)
+      if (inner) return inner
+    } else if (typeof m.url === 'string' && m.url !== '') {
+      return m.url
+    }
+  }
+  return ''
+}
 
 export default router

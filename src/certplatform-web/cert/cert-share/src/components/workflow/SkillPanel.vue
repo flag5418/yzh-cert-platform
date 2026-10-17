@@ -83,7 +83,7 @@ function addNode(item: any) { emit('add-node', { ...item }) }
 .skill-dot { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--yzh-color-text-inverse, #fff); font-size: 14px; font-weight: 700; flex-shrink: 0; }
 .skill-name { font-size: 12px; font-weight: 600; color: var(--yzh-color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; max-width: 100%; }
 .panel-empty { padding: 40px 20px; text-align: center; color: #cbd5e1; font-size: 14px; }
-.skill-panel-item { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px; cursor: pointer; border-radius: 8px; transition: all 0.15s; border: 1px solid transparent; &:hover { background: #f0f7ff; border-color: #bfdbfe; } }
+.skill-panel-item { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px; cursor: pointer; border-radius: 8px; transition: all 0.15s; border: 1px solid transparent; &:hover { background: var(--yzh-color-bg-hover, #23272f); border-color: var(--yzh-color-border, #2f333b); } }
 .skill-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 0 12px; }
 .skill-dot { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--yzh-color-text-inverse, #fff); font-size: 14px; font-weight: 700; flex-shrink: 0; }
 </style>

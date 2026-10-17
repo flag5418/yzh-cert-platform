@@ -345,7 +345,7 @@ onMounted(() => {
 .form-title {
   font-size: 24px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--yzh-color-text-primary, #1e293b);
   margin: 0 0 6px;
 }
 
@@ -366,7 +366,7 @@ onMounted(() => {
 .form-body :deep(.el-form-item__label) {
   padding-bottom: 2px;
   font-size: 13px;
-  color: #475569;
+  color: var(--yzh-color-text-regular, #475569);
   line-height: 20px;
 }
 
@@ -413,7 +413,7 @@ onMounted(() => {
   margin-top: 4px;
   text-align: center;
   font-size: 13px;
-  color: var(--yzh-color-text-muted, #64748b);
+  color: var(--yzh-color-text-secondary, #64748b);
 }
 
 .login-link {

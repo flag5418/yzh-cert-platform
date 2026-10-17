@@ -19,6 +19,7 @@
       -->
       <el-menu
         :default-active="activeMenu"
+        :default-openeds="defaultOpenedMenus"
         router
         class="auditor-layout__menu"
       >
@@ -36,6 +37,7 @@
           <span class="auditor-layout__page-title">{{ pageTitle }}</span>
         </div>
         <div class="auditor-layout__header-right">
+          <YzhThemeToggle />
           <MessageBell />
           <el-dropdown>
             <span class="auditor-layout__user">
@@ -100,6 +102,7 @@ import YzhMenuNode from '@yzh-core/layouts/components/YzhMenuNode.vue'
 //   （都在 `yzh.vue.core` 内，两端各自 bundle 各持一份模块级单例，互不串扰）
 import YzhTabsBar from '@yzh-core/layouts/components/YzhTabsBar.vue'
 import YzhPendingOverlay from '@yzh-core/layouts/components/YzhPendingOverlay.vue'
+import YzhThemeToggle from '@yzh-core/layouts/components/YzhThemeToggle.vue'
 import type { SysMenu } from '@yzh-core/api/system/menu'
 import MessageBell from '@share/components/MessageBell/MessageBell.vue'
 import { yzhPush } from '@yzh-core/api/push'
@@ -118,6 +121,26 @@ const { menus, loadMenus, clearMenus } = useMenuTree()
  *    点击后专家端路由不存在 → 白屏。这层分流必须在前端做。
  */
 const visibleMenus = computed(() => filterMenuTreeByTag(menus.value, 'auditor'))
+
+/**
+ * 默认展开所有含子菜单的分组（YzhMenuNode 用 menu.code 作 el-sub-menu 的 index）
+ *
+ * ★ 为什么：ElPlus el-sub-menu **默认收起**；后端菜单「专家系统」是直接挂在根下的分组节点，
+ *   登录后需一眼看到全部顶级分组下的子项（系统一览、企业管理、任务中心……）。
+ *   递归收集所有 `children` 非空的节点 code，传给 `:default-openeds` 即默认全部展开。
+ */
+function collectOpenedCodes(list: SysMenu[], acc: string[] = []): string[] {
+  for (const m of list) {
+    if (Array.isArray(m.children) && m.children.length > 0) {
+      const key = m.code || String(m.id)
+      acc.push(key)
+      collectOpenedCodes(m.children, acc)
+    }
+  }
+  return acc
+}
+
+const defaultOpenedMenus = computed(() => collectOpenedCodes(visibleMenus.value))
 
 const activeMenu = computed(() => route.path)
 
