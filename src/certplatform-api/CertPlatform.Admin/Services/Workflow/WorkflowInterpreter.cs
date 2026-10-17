@@ -567,7 +567,7 @@ namespace CertPlatform.Admin.Services.Workflow
                 .Select(r => r.PathIndex)
                 .ToArray();
 
-            // ★ 全量路径结果（供 nc_conclusion_calc 之类做多维度聚合判定）
+            // ★ 全量路径结果（供 nc_conclusion_v2 之类做多维度聚合判定）
             var allPathResults = pathResults
                 .OrderBy(p => p.PathIndex)
                 .Select(p => new Dictionary<string, object?>

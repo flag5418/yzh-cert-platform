@@ -21,8 +21,11 @@ const BASE = '/api/Auditor/EnterpriseFile'
 /**
  * 预览/下载**不能**传裸 URL；统一本函数取 Blob。
  * @param storagePath 存储路径（`/enterprise-documents/...` 或归档/产物路径）
+ *
+ * ⚠️ 命名：与 `enterprise-original.ts` 的 `originalDownloadBlob` 对称，点明「取字节」语义。
+ *    ⛔ 保存动作请用 `saveBlob`（`@share/utils/download`），本函数**只取字节**。
  */
-export async function downloadBlob(storagePath: string): Promise<Blob> {
+export async function enterpriseDownloadBlob(storagePath: string): Promise<Blob> {
   return yzhApi.getBlob(`${BASE}/download`, { storagePath })
 }
 
@@ -31,17 +34,8 @@ export async function previewBlob(fileCode: string, enterpriseCode: string): Pro
   return yzhApi.getBlob(`${BASE}/file-preview/${fileCode}`, { enterpriseCode })
 }
 
-/** 浏览器触发保存（Blob → 临时 a 标签） */
-export function saveBlob(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = fileName
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
+// ★ 保存统一走 `@share/utils/download`（唯一实现，P1.3）；此处再导出，保持 `@share/api` 消费方 import 路径不变。
+export { saveBlob } from '@share/utils/download'
 
 // ═══════════════════════ 类型 ═══════════════════════
 
@@ -447,7 +441,7 @@ export interface ManualValuesArchivedNotice {
   notice: string
 }
 
-export async function replaceFile(
+export async function replaceEnterpriseFile(
   file: File, fileCode: string, enterpriseCode: string, reason: string, expectedModifyTime?: string
 ): Promise<ManualValuesArchivedNotice | null> {
   const fd = new FormData()

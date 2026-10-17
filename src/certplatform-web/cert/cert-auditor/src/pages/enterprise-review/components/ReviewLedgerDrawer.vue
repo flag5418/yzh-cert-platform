@@ -25,7 +25,7 @@
  */
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { YzhDrawer, YzhEmptyState, YzhStatusBadge } from '@yzh-core'
+import { YzhDrawer, YzhEmptyState, YzhStatusBadge, useAsyncAction } from '@yzh-core'
 import { formatDateTime } from '@share/utils/format'
 import {
   fetchNormalizeValues,
@@ -63,7 +63,14 @@ const ledger = ref<NormalizeLedgerResult | null>(null)
 const editing = ref<{ anchorCode: string; kind: 'value' | 'pin'; value: string; reason: string } | null>(
   null,
 )
-const submitting = ref(false)
+/**
+ * 改写账本值（2026-10-16）—— 走 `useAsyncAction` 修并发缺陷。
+ *
+ * ⛔ `{ global: false }`：**不接全局等待遮罩** —— 这是写单条值的秒级操作，
+ *    接了只会让遮罩一闪一闪；但它会**写库**，重复提交就是重复改写
+ *    ⇒ 必须用**并发计数**替掉单 boolean（单 boolean 下先后 `finally` 会提前解锁）。
+ */
+const { busy: submitting, run: runSubmitEdit } = useAsyncAction({ global: false })
 
 const visible = computed({
   get: () => props.modelValue,
@@ -152,8 +159,7 @@ async function submitEdit(): Promise<void> {
     return
   }
 
-  submitting.value = true
-  try {
+  await runSubmitEdit(async () => {
     const row = currentRow()
     const result = await overrideNormalizeValue({
       FillLogCode: lg.FillLogCode,
@@ -173,11 +179,9 @@ async function submitEdit(): Promise<void> {
     editing.value = null
     await load()
     emit('changed')
-  } catch (e2) {
+  }, '正在改写账本取值').catch((e2: unknown) => {
     ElMessage.error((e2 as Error)?.message || '改写失败')
-  } finally {
-    submitting.value = false
-  }
+  })
 }
 
 /** 当前编辑行（`IsPin` 取反用） */

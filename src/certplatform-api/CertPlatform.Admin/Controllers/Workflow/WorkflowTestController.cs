@@ -336,8 +336,8 @@ namespace CertPlatform.Admin.Controllers.Workflow
                                 Name = p.ParamName ?? "",
                                 Label = null,   // 旧格式没有中文说明字段
                                 SourceType = p.SourceType ?? "",
-                                NodeId = p.SourceConfig?.GetValueOrDefault("nodeId")?.ToString(),
-                                PortName = p.SourceConfig?.GetValueOrDefault("portName")?.ToString()
+                                NodeId = p.SourceConfig.GetConfigValue("NodeId")?.ToString(),
+                                PortName = p.SourceConfig.GetConfigValue("PortName")?.ToString()
                             });
                         }
                     }

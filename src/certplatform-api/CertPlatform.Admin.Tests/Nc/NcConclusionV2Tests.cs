@@ -219,8 +219,10 @@ namespace CertPlatform.Admin.Tests.Nc
             object? result, string code, string? level = null, string? verdict = null,
             ISet<string>? connectedPorts = null)
         {
+            // ★ 2026-10-16：judge 标识 = 节点名称 ⇒ 第 2 个实参 code 现作为 nodeTitle 注入
+            //   （[FromContext]，画布上不可见）。断言 rec["judge_code"] 仍等于该 code。
             var r = StampJudgeLevelSkill.ExecuteAsync(
-                result, code, level, verdict, null, connectedPorts, default).GetAwaiter().GetResult();
+                result, level, verdict, null, code, connectedPorts, default).GetAwaiter().GetResult();
             Assert.True(r.Success, r.Error);
             return (Dictionary<string, object>)r.Outputs["result"]!;
         }
@@ -271,18 +273,20 @@ namespace CertPlatform.Admin.Tests.Nc
         public void InvalidVerdict_Fails()
         {
             var r = StampJudgeLevelSkill.ExecuteAsync(
-                "x", "J6", "minor", "maybe", null, null, default).GetAwaiter().GetResult();
+                "x", "minor", "maybe", null, "J6", null, default).GetAwaiter().GetResult();
             Assert.False(r.Success);
             Assert.Contains("verdict 非法", r.Error);
         }
 
         [Fact]
-        public void EmptyJudgeCode_Fails()
+        public void EmptyNodeTitle_Fails()
         {
+            // ★ 2026-10-16：judge 标识取自节点名称（nodeTitle，第 5 个参数）⇒ 空名报配置错。
             var r = StampJudgeLevelSkill.ExecuteAsync(
-                "x", "", null, null, null, null, default).GetAwaiter().GetResult();
+                "x", null, null, null, "", null, default).GetAwaiter().GetResult();
             Assert.False(r.Success);
-            Assert.Contains("judge_code", r.Error);
+            Assert.Equal(WorkflowErrorCodes.ConfigError, r.ErrorCode);
+            Assert.Contains("未命名", r.Error);
         }
 
         // ═══════════════════════════════════════════════════
@@ -294,7 +298,7 @@ namespace CertPlatform.Admin.Tests.Nc
         public void NoInputPortsConnected_ConfigError()
         {
             var r = StampJudgeLevelSkill.ExecuteAsync(
-                null, "J7", "major", null, null, new HashSet<string>(), default).GetAwaiter().GetResult();
+                null, "major", null, null, "J7", new HashSet<string>(), default).GetAwaiter().GetResult();
             Assert.False(r.Success);
             Assert.Equal(WorkflowErrorCodes.ConfigError, r.ErrorCode);
             Assert.Contains("未接任何输入", r.Error);
@@ -332,7 +336,7 @@ namespace CertPlatform.Admin.Tests.Nc
         public void VerdictUnrecognized_ConfigError()
         {
             var r = StampJudgeLevelSkill.ExecuteAsync(
-                "有证据", "J11", "major", "1", null,
+                "有证据", "major", "1", null, "J11",
                 new HashSet<string> { "result", "verdict" }, default).GetAwaiter().GetResult();
             Assert.False(r.Success);
             Assert.Equal(WorkflowErrorCodes.ConfigError, r.ErrorCode);
@@ -362,7 +366,7 @@ namespace CertPlatform.Admin.Tests.Nc
         public void BothConnected_EvidenceEmptyButVerdictIllegal_ConfigError()
         {
             var r = StampJudgeLevelSkill.ExecuteAsync(
-                "  ", "J14", "major", "maybe", null,
+                "  ", "major", "maybe", null, "J14",
                 new HashSet<string> { "result", "verdict" }, default).GetAwaiter().GetResult();
             Assert.False(r.Success);
             Assert.Equal(WorkflowErrorCodes.ConfigError, r.ErrorCode);
@@ -379,14 +383,16 @@ namespace CertPlatform.Admin.Tests.Nc
 
             var result = ps.First(p => p.Name == "result")
                 .GetCustomAttribute<SkillParamAttribute>()!;
-            var judgeCode = ps.First(p => p.Name == "judge_code")
-                .GetCustomAttribute<SkillParamAttribute>()!;
             var verdict = ps.First(p => p.Name == "verdict")
                 .GetCustomAttribute<SkillParamAttribute>()!;
 
             Assert.Equal(SkillParamEmptyPolicy.Allow, result.AllowEmpty);
-            Assert.Equal(SkillParamEmptyPolicy.Deny, judgeCode.AllowEmpty);
             Assert.Equal(SkillParamEmptyPolicy.Allow, verdict.AllowEmpty);
+
+            // ★ 删除即红（2026-10-16）：judge_code 已从画布移除 —— 标识改取节点名称。
+            Assert.DoesNotContain(ps, p => p.Name == "judge_code");
+            Assert.NotNull(ps.First(p => p.Name == "nodeTitle")
+                .GetCustomAttribute<FromContextAttribute>());
         }
     }
 
@@ -405,8 +411,8 @@ namespace CertPlatform.Admin.Tests.Nc
         [Fact]
         public void AggregatesStampedRecords_ToJson()
         {
-            var a = StampJudgeLevelSkill.ExecuteAsync("缺审批", "J1", "major", "fail", null, default).GetAwaiter().GetResult();
-            var b = StampJudgeLevelSkill.ExecuteAsync("有值", "J2", "none", "pass", null, default).GetAwaiter().GetResult();
+            var a = StampJudgeLevelSkill.ExecuteAsync("缺审批", "major", "fail", null, "J1", default).GetAwaiter().GetResult();
+            var b = StampJudgeLevelSkill.ExecuteAsync("有值", "none", "pass", null, "J2", default).GetAwaiter().GetResult();
 
             var r = Collect(a.Outputs["result"], b.Outputs["result"]);
             Assert.True(r.Success, r.Error);
@@ -419,7 +425,7 @@ namespace CertPlatform.Admin.Tests.Nc
         [Fact]
         public void StampsStampedButNullPayloads_Skipped()
         {
-            var a = StampJudgeLevelSkill.ExecuteAsync("缺审批", "J1", "major", "fail", null, default).GetAwaiter().GetResult();
+            var a = StampJudgeLevelSkill.ExecuteAsync("缺审批", "major", "fail", null, "J1", default).GetAwaiter().GetResult();
             var r = Collect(a.Outputs["result"], null, null, null, null, null, null, null);
             Assert.True(r.Success);
             Assert.Equal(1, (int)r.Outputs["judges_count"]);

@@ -12,7 +12,8 @@
  *     **2026-10-07 第二轮之④已删警示条**（用户裁决：错误改「Tab 角标 + 点击弹层」，
  *     ⛔ 不让提示占太多空间）。明细在右栏角标弹层（`index.vue` 的 `anchorIssues`，
  *     同源于 `anchorViews`）；本页统计条的「已配齐 / 未配齐」一行徽标保留。
- *     「自动填充 / 预览」按钮仍在右栏操作条，按 `logic.anchorReadiness.ready` 置灰。
+ *     「自动填充 / 预览」按钮仍在右栏操作条，按 `logic.previewReadiness.ready` 置灰
+ *     （★ 2026-10-16：试填闸**不看来源配齐**，见 `logic.previewReadiness`）。
  *
  * 【★ 锚点清单的存储位置（本轮上移）】
  *   清单由 `logic.anchorRows` 持有（`logic.reloadAnchors()` 加载）—— 不再由本组件
@@ -65,6 +66,20 @@ const filtered = computed(() => filterAnchorViews(views.value, quickFilter.value
 const TABLE_TYPES = ['table', 'table_total']
 const isTableRow = (v: AnchorView) =>
   TABLE_TYPES.includes(String(v.row?.AnchorType ?? ''))
+
+/**
+ * ★ 2026-10-17：卡片上直读「字段标签 / 字段描述」。
+ *
+ * 【为什么在卡片上显示】
+ *   卡片头部的 `AnchorRef` 是**位置**（`Sheet1!G3` / `{{ENT_NAME}}`），不是语义；
+ *   实施人员要判断「这条锚点填的是什么」必须逐个点开抽屉 —— 而抽屉里的
+ *   `FieldCode`（字段标签）已改为**只读**，列表上不给看就更没有地方看了。
+ *   字段描述（`Remark`）更是运行期 AI 的填写说明，配错了只能靠肉眼复核。
+ *
+ * ⛔ 两者都只读展示，写入入口只有抽屉（`save-batch` 整行 upsert）。
+ */
+const tagText = (v: AnchorView) => String(v.row?.FieldCode ?? '').trim()
+const descText = (v: AnchorView) => String(v.row?.Remark ?? '').trim()
 
 const fieldViews = computed(() => filtered.value.filter((v) => !isTableRow(v)))
 const tableView = computed(() => filtered.value.filter(isTableRow))
@@ -308,7 +323,23 @@ async function toggleLock(v: AnchorView) {
               <div class="ac-meta">
                 <span class="m">类型：<b>{{ v.row.AnchorType }}</b></span>
                 <span class="m">位置：<b>{{ v.row.Position || '正文' }}</b></span>
+                <!-- ★ 2026-10-17：字段标签 = `FieldCode`（扫描带出的绑定键，抽屉里只读） -->
+                <span v-if="tagText(v)" class="m m--tag"
+                  >字段标签：<b>{{ tagText(v) }}</b></span
+                >
                 <span v-if="v.parseError" class="m m--bad">来源配置无法解析</span>
+              </div>
+
+              <!--
+                ★ 2026-10-17：字段描述（`Remark`）—— 运行期 AI 的填写说明，
+                  回退链是「来源提示词 → Remark → 锚点键」。
+                  空描述不是错误，但意味着 AI 只能靠锚点键猜 ⇒ 用占位文案如实提示。
+              -->
+              <div class="ac-desc" :class="{ 'is-empty': !descText(v) }">
+                <span class="k">字段描述:</span>
+                <span class="v" :title="descText(v)">{{
+                  descText(v) || '未填写（AI 只能按锚点键推断这一格填什么）'
+                }}</span>
               </div>
 
               <div class="ac-src">
@@ -573,8 +604,46 @@ async function toggleLock(v: AnchorView) {
   font-weight: 400;
   color: var(--yzh-color-text-placeholder, #c0c4cc);
 }
+/* ★ 2026-10-17：字段标签是「绑定键」，用等宽字体区分于普通属性值 */
+.ac-meta .m--tag b {
+  font-family: var(
+    --yzh-font-family-mono,
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace
+  );
+  color: var(--yzh-color-text-regular, #606266);
+}
 .ac-meta .m--bad {
   color: var(--yzh-color-danger, #dc2626);
+}
+
+/* ★ 2026-10-17：字段描述（`Remark`）—— 卡片上直读，最多两行 */
+.ac-desc {
+  padding: var(--yzh-space-1, 7px) var(--yzh-space-3, 12px);
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--yzh-color-text-regular, #606266);
+  display: flex;
+  gap: var(--yzh-space-1, 6px);
+  border-bottom: 1px dashed var(--yzh-color-border-light, #ebeef5);
+}
+.ac-desc .k {
+  color: var(--yzh-color-text-placeholder, #909399);
+  flex-shrink: 0;
+}
+.ac-desc .v {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.5;
+}
+.ac-desc.is-empty .v {
+  color: var(--yzh-color-text-placeholder, #c0c4cc);
 }
 
 .ac-src {

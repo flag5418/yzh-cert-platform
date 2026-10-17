@@ -171,9 +171,9 @@ namespace CertPlatform.Admin.Services.Workflow
                 {
                     case "docfield":
                         {
-                            var docType = config.GetValueOrDefault("docType")?.ToString() ?? "standard";
-                            var ruleCode = config.GetValueOrDefault("ruleCode")?.ToString() ?? "";
-                            var fieldCode = config.GetValueOrDefault("fieldCode")?.ToString() ?? "";
+                            var docType = config.GetConfigValue("DocType")?.ToString() ?? "standard";
+                            var ruleCode = config.GetConfigValue("RuleCode")?.ToString() ?? "";
+                            var fieldCode = config.GetConfigValue("FieldCode")?.ToString() ?? "";
 
                             if (docType == "enterprise")
                                 cacheKey = EntFieldKey(taskCode, enterpriseCode ?? "", ruleCode, fieldCode);
@@ -192,9 +192,9 @@ namespace CertPlatform.Admin.Services.Workflow
 
                     case "doctable":
                         {
-                            var docType = config.GetValueOrDefault("docType")?.ToString() ?? "standard";
-                            var ruleCode = config.GetValueOrDefault("ruleCode")?.ToString() ?? "";
-                            var tableCode = config.GetValueOrDefault("tableCode")?.ToString() ?? "";
+                            var docType = config.GetConfigValue("DocType")?.ToString() ?? "standard";
+                            var ruleCode = config.GetConfigValue("RuleCode")?.ToString() ?? "";
+                            var tableCode = config.GetConfigValue("TableCode")?.ToString() ?? "";
 
                             if (docType == "enterprise")
                                 cacheKey = EntTableKey(taskCode, enterpriseCode ?? "", ruleCode, tableCode);

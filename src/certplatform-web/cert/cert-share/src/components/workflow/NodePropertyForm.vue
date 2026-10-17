@@ -18,10 +18,10 @@
 
       <div v-if="visibleInputPorts.length > 0" class="inspector-section">
         <div class="inspector-section-header"><span class="inspector-section-title">输入端口 (INPUTS)</span></div>
-        <div v-for="port in visibleInputPorts" :key="port.name" class="inspector-field">
-          <div class="inspector-label"><span>{{ port.label || port.name }}</span><el-tag v-if="port.required" size="small" type="danger" effect="plain">REQ</el-tag></div>
-          <div v-if="port.description && port.description !== (port.label || port.name)" class="port-desc">{{ port.description }}</div>
-          <PortControl :key="`port_${port.name}_${form._updateTick || 0}`" :model-value="getInputValue(port.name)" :bind-mode="port.bindMode || 'LinkOrConstant'" :enum-source="port.enumSource" :linkable-nodes="linkableNodes.map((n: any) => ({ id: n.id, label: n.title || n.id }))" :input-type="getInputType(port.name)" :placeholder="getPortPlaceholder(port)" @update:model-value="(v: any) => setInputValue(port.name, v)" @update:input-type="(v: string) => setInputType(port.name, v)" @link-node="({ sourceNodeId }: any) => onLinkNode(port.name, sourceNodeId)" />
+        <div v-for="port in visibleInputPorts" :key="port.Name" class="inspector-field">
+          <div class="inspector-label"><span>{{ port.Label || port.Name }}</span><el-tag v-if="port.Required" size="small" type="danger" effect="plain">REQ</el-tag></div>
+          <div v-if="port.Description && port.Description !== (port.Label || port.Name)" class="port-desc">{{ port.Description }}</div>
+          <PortControl :key="`port_${port.Name}_${form._updateTick || 0}`" :model-value="getInputValue(port.Name)" :bind-mode="port.BindMode || 'LinkOrConstant'" :enum-source="port.EnumSource" :linkable-nodes="linkableNodes.map((n: any) => ({ id: n.id, label: n.title || n.id }))" :input-type="getInputType(port.Name)" :placeholder="getPortPlaceholder(port)" @update:model-value="(v: any) => setInputValue(port.Name, v)" @update:input-type="(v: string) => setInputType(port.Name, v)" @link-node="({ sourceNodeId }: any) => onLinkNode(port.Name, sourceNodeId)" />
         </div>
       </div>
 
@@ -45,9 +45,9 @@
               <el-tree-select v-model="panelFieldValues[field.field]" :data="docTreeData" node-key="value" size="small" style="width: 100%" :fit-input-width="true" :render-after-expand="false" placeholder="选择文档" @change="(v: string) => onDocSelect(field.field, v)" />
               <div v-if="!docList.length" class="panel-hint">{{ docEmptyHint || '暂无已配置提取规则的文档' }}</div>
             </template>
-            <el-select v-else-if="field.type === 'field-select'" v-model="panelFieldValues[field.field]" size="small" style="width: 100%" :disabled="!panelFieldValues['config.ruleCode']" @change="applyPanelFields"><el-option v-for="f in fieldList" :key="f.fieldCode" :label="f.fieldName" :value="f.fieldCode" /></el-select>
+            <el-select v-else-if="field.type === 'field-select'" v-model="panelFieldValues[field.field]" size="small" style="width: 100%" :disabled="!panelFieldValues['config.RuleCode']" @change="applyPanelFields"><el-option v-for="f in fieldList" :key="f.fieldCode" :label="f.fieldName" :value="f.fieldCode" /></el-select>
             <!-- ★ 2026-10-11 补：table-select 此前**没有任何渲染分支** ⇒ docTable 的「表格」下拉只显示 label、选不了 -->
-            <el-select v-else-if="field.type === 'table-select'" v-model="panelFieldValues[field.field]" size="small" style="width: 100%" :disabled="!panelFieldValues['config.ruleCode']" @change="applyPanelFields"><el-option v-for="t in tableList" :key="t.tableCode" :label="t.tableName" :value="t.tableCode" /></el-select>
+            <el-select v-else-if="field.type === 'table-select'" v-model="panelFieldValues[field.field]" size="small" style="width: 100%" :disabled="!panelFieldValues['config.RuleCode']" @change="applyPanelFields"><el-option v-for="t in tableList" :key="t.tableCode" :label="t.tableName" :value="t.tableCode" /></el-select>
             <!-- ★ 2026-10-14（用户裁定）：删除 std-select / stage-select 两个渲染分支。
                  is_std_file_missing 面板不再暴露「标准/阶段」—— 左树已经定义了它们，
                  且执行期 NodeExecutor.ExecuteStdFileMissingAsync 只读 standardFileCode。
@@ -65,7 +65,7 @@
             <!-- ★ 2026-10-14（设计 §2.1 / 用户裁决 ①②④）：AI 节点「参数」表。
                  每一行 = 一个 {{参数名}} 占位符 = **一条依赖边**（sourceType=node 时
                  params[].nodeId → 本节点，引擎据此预执行来源节点，见 topology.implicitEdges）。
-                 ⛔ 这里只编辑 `config.params`，不碰旧 `customParams`（那是兜底通道）。 -->
+                 ⛔ 这里只编辑 `config.Params`，不碰旧 `customParams`（那是兜底通道）。 -->
             <template v-else-if="field.type === 'ai-params'">
               <div v-for="(p, idx) in aiParams" :key="`aip_${idx}_${form._updateTick || 0}`" class="ai-param-item">
                 <div class="ai-param-head">
@@ -119,7 +119,6 @@
 <script setup lang="ts">
 import { YzhEmptyState } from '@yzh-core'
 import { getSpecialNode } from '@share/composables/workflow/specialNodes'
-import { normalizePorts } from '@share/composables/workflow/portNormalize'
 import { buildFolderFileTree } from '@share/composables/workflow/buildFolderFileTree'
 import { CircleCheck, Delete, InfoFilled, Plus, Warning } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -231,7 +230,7 @@ const testErrorText = computed(() => {
 
 // ══════════════════════════════════════════════════════════════
 // ★ AI 节点「参数」表（设计 §2.1 / 用户裁决 ①②④）
-//   数据源 = `config.params`（数组或字符串化 JSON 均可能，读写统一走 parseAiParams）。
+//   数据源 = `config.Params`（数组或字符串化 JSON 均可能，读写统一走 parseAiParams）。
 //   ⚠️ 参数表是**唯一权威**：旧 `customParams` 只作后端兜底，⛔ 这里不再编辑它。
 // ══════════════════════════════════════════════════════════════
 const aiParams = ref<AiParam[]>([])
@@ -280,7 +279,7 @@ function onAiParamNodeChange(idx: number, nodeId: string) {
 
 /** 把参数表写回 `config.params` 并标记画布已修改（⛔ 只写这一个键，不整份覆盖 config） */
 function commitAiParams() {
-  form.value.config = { ...form.value.config, params: aiParams.value.map((p) => ({ ...p })) }
+  form.value.config = { ...form.value.config, Params: aiParams.value.map((p) => ({ ...p })) }
   applyChanges()
 }
 
@@ -300,8 +299,8 @@ const nodeDescription = computed(() => { if (specialMeta.value) return specialMe
  */
 const nodeDescriptionHtml = computed(() => toDescriptionHtml(nodeDescription.value))
 const testable = computed(() => { if (specialMeta.value) return specialMeta.value.testable; return form.value.nodeType === 'skill' })
-const visibleInputPorts = computed(() => (form.value.inputPorts || []).filter((p: any) => p.display !== 'hidden'))
-const visibleOutputPorts = computed(() => (form.value.outputPorts || []).filter((p: any) => p.display !== 'hidden' && p.role !== 'anchor'))
+const visibleInputPorts = computed(() => (form.value.inputPorts || []).filter((p: any) => p.Display !== 'hidden'))
+const visibleOutputPorts = computed(() => (form.value.outputPorts || []).filter((p: any) => p.Display !== 'hidden' && p.Role !== 'anchor'))
 // ★ 第 5 批：panelSchema 支持 `visibleWhen: { field, equals }` 条件显示 ——
 //   例如 outputSchema 只在 outputType === 'json' 时出现，避免「配了 json 却看不到 Schema 框」。
 //   ⛔ 不写 visibleWhen 的字段恒显示（向后兼容既有 schema）。
@@ -354,8 +353,8 @@ function syncStdContextToConfig() {
   if (!ctx?.standardCode) return
   form.value.config = {
     ...form.value.config,
-    standardCode: ctx.standardCode,
-    stageCode: ctx.stageCode || '',
+    StandardCode: ctx.standardCode,
+    StageCode: ctx.stageCode || '',
   }
 }
 
@@ -368,7 +367,7 @@ function requestStdFiles() {
 
 const linkableNodes = computed(() => {
   const excludeTypes = new Set(['start', 'end', 'branch'])
-  const getOutputPorts = (nodeType: string) => getSpecialNode(nodeType)?.outputPorts?.filter((p: any) => p.display !== 'hidden') || [{ name: 'result', label: '结果', type: 'string' }]
+  const getOutputPorts = (nodeType: string) => getSpecialNode(nodeType)?.outputPorts?.filter((p: any) => p.Display !== 'hidden') || [{ Name: 'result', Label: '结果', Type: 'string' }]
   return (props.canvasNodes || []).filter((n: any) => n && n.id !== form.value.nodeId && !excludeTypes.has(n.nodeType)).map((n: any) => ({ id: n.id, title: n.title || n.id, nodeType: n.nodeType, color: getSpecialNode(n.nodeType)?.color || '', outputPorts: getOutputPorts(n.nodeType) }))
 })
 
@@ -406,14 +405,14 @@ function onLinkNode(portName: string, sourceNodeId: string | null) {
   else { emit('link-node', { portName, sourceNodeId, targetNodeId: form.value.nodeId }); inputValues.value[portName] = sourceNodeId; form.value.inputs = { ...form.value.inputs, [portName]: sourceNodeId } }
   applyChanges()
 }
-function getPortPlaceholder(port: any) { if (port.bindMode === 'Link') return '请在画布上连线'; if (port.bindMode === 'Enum') return '请选择'; if (port.bindMode === 'ConstantOnly') return '输入常量值'; return '输入常量或 {{n1.portName}}' }
+function getPortPlaceholder(port: any) { if (port.BindMode === 'Link') return '请在画布上连线'; if (port.BindMode === 'Enum') return '请选择'; if (port.BindMode === 'ConstantOnly') return '输入常量值'; return '输入常量或 {{n1.portName}}' }
 function applyPanelField(field: any) {
   const config = { ...form.value.config }; const parts = field.field.split('.')
   if (parts.length === 2 && parts[0] === 'config') config[parts[1]] = panelFieldValues.value[field.field]; else config[field.field] = panelFieldValues.value[field.field]
   form.value.config = config; applyChanges()
 }
 /**
- * ★ 2026-10-15：`promptWithRef`（= `config.promptTemplate`）的**专用**提交入口。
+ * ★ 2026-10-15：`promptWithRef`（= `config.PromptTemplate`）的**专用**提交入口。
  *
  * <para><b>为什么不沿用 `v-model` + `@update:model-value` 双挂</b>：两者编译后是**同一个 prop 键**
  * <c>onUpdate:modelValue</c>，只能靠编译器「同键合并成数组、v-model 在前」这一**隐式顺序**，
@@ -431,7 +430,7 @@ function applyPanelFields() {
 }
 function onDocSelect(field: string, ruleCode: string) {
   const config = { ...form.value.config }; const parts = field.split('.'); const key = parts.length === 2 ? parts[1] : field; config[key] = ruleCode
-  if (key === 'ruleCode' || key === 'docCode') { config.fieldCode = ''; config.tableCode = ''; panelFieldValues.value['config.fieldCode'] = ''; panelFieldValues.value['config.tableCode'] = ''; testResult.value = null }
+  if (key === 'RuleCode' || key === 'DocCode') { config.FieldCode = ''; config.TableCode = ''; panelFieldValues.value['config.FieldCode'] = ''; panelFieldValues.value['config.TableCode'] = ''; testResult.value = null }
   form.value.config = config; emit('load-doc-fields', ruleCode); applyChanges()
 }
 function testNode() {
@@ -451,11 +450,11 @@ function testNode() {
 function deleteNode() { if (form.value.nodeId) emit('delete-node', form.value.nodeId) }
 function testDocExtract() {
   const nodeType = form.value.nodeType; const config = form.value.config
-  if (!config.ruleCode) { ElMessage.warning('请先选择文档'); return }
-  if (nodeType === 'docField' && !config.fieldCode) { ElMessage.warning('请先选择字段'); return }
-  if (nodeType === 'docTable' && !config.tableCode) { ElMessage.warning('请先选择表格'); return }
+  if (!config.RuleCode) { ElMessage.warning('请先选择文档'); return }
+  if (nodeType === 'docField' && !config.FieldCode) { ElMessage.warning('请先选择字段'); return }
+  if (nodeType === 'docTable' && !config.TableCode) { ElMessage.warning('请先选择表格'); return }
   testLoading.value = true; testResult.value = null
-  const body = nodeType === 'docField' ? { ruleCode: config.ruleCode, fieldCode: config.fieldCode, docType: config.docType || 'standard' } : { ruleCode: config.ruleCode, tableCode: config.tableCode, docType: config.docType || 'standard' }
+  const body = nodeType === 'docField' ? { ruleCode: config.RuleCode, fieldCode: config.FieldCode, docType: config.DocType || 'standard' } : { ruleCode: config.RuleCode, tableCode: config.TableCode, docType: config.DocType || 'standard' }
   // 注意：父组件传入的 data 是 DocExtractionRule 的原始 payload（{fieldCode,value,confidence,message}
   // 或 {tableCode,rows,confidence,message}），本身没有 success 字段，必须在此包裹后再交给模板判定
   emit('test-doc-extract', { nodeType, body, onSuccess: (data: any) => { testResult.value = { success: true, data }; testLoading.value = false; ElMessage.success(data?.message || '测试完成') }, onError: (msg: string, errorData?: any) => { testResult.value = { success: false, message: msg, data: errorData }; testLoading.value = false; ElMessage.error(msg) } })
@@ -478,16 +477,14 @@ watch(() => props.selectedNode, (node: any) => {
     //   用户读到的结果是**别的节点**的，且两者都不报错（用户实测上报：切换节点后信息没清空）。
     //   ⛔ 不能放在早退之上：同一节点重渲染（改标题 / 选中态刷新）时要保留结果。
     testResult.value = null; testLoading.value = false
-    // ★ 端口字段名归一化（2026-10-11）：后端 metadata 返回 PascalCase（Name/Label/BindMode…），
-    //   而本组件与 PortControl 读小写（port.name / port.label / port.bindMode）。
-    //   不归一化 ⇒ 端口标题整片空白 + bindMode 失效（本该「仅常量」的参数被渲染成「选择上游节点」下拉）。
-    //   详见 composables/workflow/portNormalize.ts 的长注释。
-    form.value = { nodeId: currentNodeId, nodeType: node.nodeType || 'skill', title: node.title || '', description: node.description || '', skillCode: node.skillCode || '', inputs: { ...(node.inputs || {}) }, outputs: { ...(node.outputs || {}) }, config: { ...(node.config || {}) }, inputPorts: normalizePorts(node.inputPorts), outputPorts: normalizePorts(node.outputPorts), inputTypes: { ...(node.inputTypes || {}) }, _branchEdges: node.branchEdges || [], _updateTick }
+    // ★ 端口字段一律 PascalCase（2026-10-16 P3）：后端 metadata / rule_json / PortDef 三处同名，
+    //   ⛔ 不再需要归一化层（portNormalize 已删除，见守卫 G3）。
+    form.value = { nodeId: currentNodeId, nodeType: node.nodeType || 'skill', title: node.title || '', description: node.description || '', skillCode: node.skillCode || '', inputs: { ...(node.inputs || {}) }, outputs: { ...(node.outputs || {}) }, config: { ...(node.config || {}) }, inputPorts: node.inputPorts, outputPorts: node.outputPorts, inputTypes: { ...(node.inputTypes || {}) }, _branchEdges: node.branchEdges || [], _updateTick }
     const vals: Record<string, any> = {}; const types: Record<string, string> = {}
     for (const port of form.value.inputPorts) {
-      vals[port.name] = form.value.inputs[port.name] ?? ''
-      if (form.value.inputTypes[port.name]) types[port.name] = form.value.inputTypes[port.name]
-      else { const val = vals[port.name]; if (val && (props.canvasNodes || []).some((n: any) => n.id === val)) types[port.name] = 'link'; else if (val) types[port.name] = 'constant'; else types[port.name] = 'link' }
+      vals[port.Name] = form.value.inputs[port.Name] ?? ''
+      if (form.value.inputTypes[port.Name]) types[port.Name] = form.value.inputTypes[port.Name]
+      else { const val = vals[port.Name]; if (val && (props.canvasNodes || []).some((n: any) => n.id === val)) types[port.Name] = 'link'; else if (val) types[port.Name] = 'constant'; else types[port.Name] = 'link' }
     }
     inputValues.value = vals; inputTypes.value = types
     const pfv: Record<string, any> = {}; const schema = specialMeta.value?.panelSchema || []
@@ -495,10 +492,10 @@ watch(() => props.selectedNode, (node: any) => {
     panelFieldValues.value = pfv; docList.value = props.docRules || []; fieldList.value = props.docFields || []; tableList.value = props.docTables || []
     // ★ 参数表初始化：只在**切换节点**时做一次（上面有同节点早退，编辑中的改动不会被冲掉）
     aiParams.value = parseAiParams(form.value.config)
-    if ((node.nodeType === 'docField' || node.nodeType === 'docTable') && (node.config?.ruleCode || node.config?.docCode)) emit('load-doc-fields', node.config.ruleCode || node.config.docCode)
-    // ★ 选中「标准文件缺失」节点时按**左树上下文**加载标准文件下拉
+    if ((node.nodeType === 'docField' || node.nodeType === 'docTable') && (node.config?.RuleCode || node.config?.DocCode)) emit('load-doc-fields', node.config.RuleCode || node.config.DocCode)
+    // ★ 选中「标准文件缺失」/「文档全文」节点时按**左树上下文**加载标准文件下拉
     //   （否则已配好的文件显示为空；标准/阶段不再由本面板选择，见 stdContext 注释）
-    if (node.nodeType === 'is_std_file_missing') {
+    if (node.nodeType === 'is_std_file_missing' || node.nodeType === 'docMarkdown') {
       syncStdContextToConfig()
       requestStdFiles()
     }
@@ -513,7 +510,7 @@ watch(() => props.docTables, (tables) => { tableList.value = tables || [] }, { i
 //   重载文件下拉并同步留痕。不做这一步的话，换阶段后下拉仍停在上一个阶段的文件列表，
 //   用户会选到一个**不属于当前阶段**的标准文件（且执行期不报错）。
 watch(() => props.stdContext, () => {
-  if (form.value.nodeType !== 'is_std_file_missing' || !form.value.nodeId) return
+  if ((form.value.nodeType !== 'is_std_file_missing' && form.value.nodeType !== 'docMarkdown') || !form.value.nodeId) return
   syncStdContextToConfig()
   requestStdFiles()
 }, { deep: true })

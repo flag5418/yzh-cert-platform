@@ -70,19 +70,20 @@ namespace CertPlatform.Shared.Entities.Doc
         [StringLength(20)]
         public string DocCategory { get; set; } = "editable";
 
-        /// <summary>
-        ///     【固定文档 · 可替换性】<c>standard_provided</c> = 标准自带（不向企业索取）/
-        ///     <c>enterprise_provided</c> = 企业提供（要匹配依据）。
-        ///     <para>★ 仅当 <see cref="DocCategory"/> = <c>fixed</c> 时有意义；<b>人工判断，可覆盖</b>（不阻断）。</para>
-        ///     <para>⛔ <b>该列 DDL 早已存在</b>（<c>varchar(20) NOT NULL DEFAULT 'enterprise_provided'</c>），
-        ///     但实体此前未声明 ⇒ ORM 看不见 ⇒ 读写都被静默丢弃。本次补上（缺口 G1）。</para>
-        /// </summary>
-        [StringLength(20)]
-        public string FixedDocSubtype { get; set; } = "enterprise_provided";
-
-        /// <summary>required=必需 / optional=可选 / reference=参考 / attachment=附件</summary>
-        [StringLength(20)]
-        public string DocRole { get; set; } = "required";
+        // ⛔ 【2026-10-16 已物理删除两列】（`67` 号 §4.1，用户裁决②「删除，保留了可能误导」）
+        //
+        //   ① `FixedDocSubtype`  → 权威列改为 `cert_standard_directory_file.Replaceable`
+        //      （UI 口径 =「是否依赖企业文档」）
+        //   ② `DocRole`          → 权威列改为 `cert_standard_directory_file.IsRequired`
+        //      （UI 口径 =「文档约束」：必要 / 非必要）
+        //
+        //   为什么删而不是留：这两列是**第三对分叉列** —— 页面写本表、编排器读目录表，
+        //   两列永不同步，表现为「配了不生效」的静默失效。**留着就是下一次踩坑的诱饵**
+        //   （新人会照着列名去写，然后再次踩同一个坑）。
+        //
+        //   ⛔ 不要在本实体重新加回同义列 —— 文档级属性一律以 `cert_standard_directory_file`
+        //   的**标准行**（`EnterpriseCode` 为空）为唯一权威。
+        //   DDL 删除见 `scripts/db/fix/20261016_contract_role_to_directory_V1.sql`。
 
         /// <summary>【要素5a】匹配提示词：告诉 LLM 如何判断企业文档是否对应本文档</summary>
         public string? MatchPrompt { get; set; }

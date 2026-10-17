@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { MagicStick, ChatLineSquare, Pointer } from '@element-plus/icons-vue'
-import { confirmOrFalse, YzhPageLayout, YzhEmptyState } from '@yzh-core'
+import { confirmOrFalse, YzhPageLayout, YzhEmptyState, useAsyncAction } from '@yzh-core'
 import { OrgStandardStageTree, CertConvertBadge, DocPreview } from '@share/components'
 import { useFileTree, type TreeNode } from '@share/composables/useFileTree'
 import { useFileRuleStatus } from '@share/composables/useFileRuleStatus'
@@ -112,11 +112,28 @@ const extractionData = ref<ExtractionData | null>(null)
 const ruleStatus = ref<'none' | 'configured' | 'failed'>('none')
 
 const loading = ref(false)
-const saving = ref(false)
-const analyzing = ref(false)
-const generatingPrompt = ref(false)
-const verifying = ref(false)
 const retrying = ref(false)
+
+/**
+ * ★ 长耗时操作一律走 `useAsyncAction`（2026-10-16）—— 它一次接好两件事：
+ *   ① **并发计数**（`busy = runs > 0`）修掉「单 boolean 先后 `finally` 提前解锁」缺陷；
+ *   ② **全局等待提示**（内容区遮罩），解决「点了按钮、页面没有任何信息」。
+ *
+ * ⛔ 不接的操作（按用户裁决「根据情况添加，不是每个按钮都加」）：
+ *   - `loading`（读规则详情）· `saving`（保存规则）—— 秒级，接了遮罩只会一直闪；
+ *   - `retrying`（重试失败转换）—— 这是**入队**操作（裁决⑤：队列任务不进本轮横幅），
+ *     进度由 `/business/directory-manager` 的队列进度条负责，此处只留按钮 loading。
+ *   `saving` 仍用 `useAsyncAction({ global: false })`：不接遮罩，但要修并发缺陷
+ *   （验证通过会自动落库，可能与手动保存交叠）。
+ *
+ * ⚠️ **必须解构**（`{ busy: x, run: runX }`）：`busy` 是 `ComputedRef`，若写成
+ *   `const action = useAsyncAction()` 再在模板用 `action.busy`，模板**不会自动解包**
+ *   （自动解包只对顶层 ref 生效）⇒ 传进 `:loading` 的会是 ref 对象，恒为真。
+ */
+const { busy: analyzing, run: runAnalyze } = useAsyncAction()
+const { busy: generatingPrompt, run: runGenerate } = useAsyncAction()
+const { busy: verifying, run: runVerify } = useAsyncAction()
+const { busy: saving, run: runSave } = useAsyncAction({ global: false })
 
 const leftWidth = ref(280)
 const isResizing = ref(false)
@@ -135,6 +152,9 @@ const ruleStatusText = computed(() => {
 const selectedFileCode = computed(
   () => selectedFile.value?.fileCode || selectedFile.value?.FileCode || selectedFile.value?.Raw?.FileCode || ''
 )
+
+/** 当前文件名（等待提示文案用；树节点 PascalCase，此处只读归一化后的字段） */
+const fileLabel = computed(() => selectedFile.value?.fileName || selectedFileCode.value || '文档')
 
 /**
  * ★ 该文件是否**不支持提取规则**（2026-10-09）。
@@ -238,8 +258,7 @@ async function onAIAnalyze() {
     ElMessage.warning(`该文件不支持提取规则：${unsupportedReason.value}`)
     return
   }
-  analyzing.value = true
-  try {
+  await runAnalyze(async () => {
     const res: any = await analyzeDoc(selectedFileCode.value, skill.value)
     const data = res?.data
     if (data?.message && data.message !== 'AI分析完成') {
@@ -252,11 +271,9 @@ async function onAIAnalyze() {
     prompt.value = ''
     isValid.value = null
     extractionData.value = null
-  } catch (e: any) {
+  }, `正在分析文档：${fileLabel.value}`).catch((e: any) => {
     ElMessage.error('AI分析失败: ' + (e?.message || '未知错误'))
-  } finally {
-    analyzing.value = false
-  }
+  })
 }
 
 async function onGeneratePrompt() {
@@ -266,8 +283,7 @@ async function onGeneratePrompt() {
     return
   }
 
-  generatingPrompt.value = true
-  try {
+  await runGenerate(async () => {
     const res: any = await generatePrompt({
       fileCode: selectedFileCode.value,
       fields: fields.value,
@@ -282,11 +298,9 @@ async function onGeneratePrompt() {
     } else {
       ElMessage.warning('生成失败：未返回 Prompt 内容')
     }
-  } catch (e: any) {
+  }, `正在生成提示词：${fileLabel.value}`).catch((e: any) => {
     ElMessage.error('生成失败: ' + (e?.message || '未知错误'))
-  } finally {
-    generatingPrompt.value = false
-  }
+  })
 }
 
 async function onVerifyPrompt() {
@@ -296,8 +310,7 @@ async function onVerifyPrompt() {
   }
   // 提示词可为空：后端会用「固定提示词」（按本文件已配置的字段/表格清单生成）
 
-  verifying.value = true
-  try {
+  await runVerify(async () => {
     const res: any = await verifyPrompt({
       fileCode: selectedFileCode.value,
       prompt: prompt.value || ''
@@ -322,36 +335,33 @@ async function onVerifyPrompt() {
       extractionData.value = null
       ElMessage.warning(res?.err || data?.message || '验证失败')
     }
-  } catch (e: any) {
+  }, `正在验证提示词：${fileLabel.value}`).catch((e: any) => {
     isValid.value = false
     extractionData.value = null
     ElMessage.error('验证失败: ' + (e?.message || '未知错误'))
-  } finally {
-    verifying.value = false
-  }
+  })
 }
 
 async function persistRule(): Promise<{ ok: boolean; error?: string }> {
   if (!selectedFileCode.value) return { ok: false, error: '请先选择一个文件' }
-  saving.value = true
-  try {
-    await saveRule({
-      fileCode: selectedFileCode.value,
-      skill: skill.value,
-      fields: fields.value,
-      tables: tables.value,
-      prompt: prompt.value,
-      isValid: isValid.value === true,
-      extractionData: extractionData.value || undefined
-    })
-    ruleStatus.value = isValid.value === true ? 'configured' : 'failed'
-    await loadRuleStatuses()
-    return { ok: true }
-  } catch (e: any) {
-    return { ok: false, error: e?.message || '未知错误' }
-  } finally {
-    saving.value = false
-  }
+  return runSave(async () => {
+    try {
+      await saveRule({
+        fileCode: selectedFileCode.value,
+        skill: skill.value,
+        fields: fields.value,
+        tables: tables.value,
+        prompt: prompt.value,
+        isValid: isValid.value === true,
+        extractionData: extractionData.value || undefined
+      })
+      ruleStatus.value = isValid.value === true ? 'configured' : 'failed'
+      await loadRuleStatuses()
+      return { ok: true }
+    } catch (e: any) {
+      return { ok: false, error: e?.message || '未知错误' }
+    }
+  }, `正在保存规则：${fileLabel.value}`)
 }
 
 async function onSave() {

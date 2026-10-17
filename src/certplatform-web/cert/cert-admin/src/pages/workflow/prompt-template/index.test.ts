@@ -42,6 +42,7 @@ vi.mock('@share/api/workflow/prompt-workbench', () => ({
 vi.mock('@yzh-core', async () => {
   // 启用/禁用徽章判据用**真实实现**（mock 内不复制口径，唯一源 = utils/status.ts）
   const { resolveStatusBadge } = await import('@yzh-core/utils/status')
+  const { ref } = await import('vue')
   return {
     YzhPageLayout: {
       name: 'YzhPageLayout',
@@ -64,7 +65,13 @@ vi.mock('@yzh-core', async () => {
     confirmOrFalse: (msg: string, title: string) =>
       ElMessageBox.confirm(msg, title).then(() => true, () => false),
     confirmChoice: (msg: string, title: string) =>
-      ElMessageBox.confirm(msg, title).then(() => 'confirm' as const, (a: unknown) => (a === 'cancel' ? 'cancel' : 'close' as const))
+      ElMessageBox.confirm(msg, title).then(() => 'confirm' as const, (a: unknown) => (a === 'cancel' ? 'cancel' : 'close' as const)),
+    // ★ 2026-10-16：index.vue 用 useAsyncAction 包长耗时操作（并发计数 + 全局等待提示）。
+    //   测试里只需可解构的 { busy, run }；run 直接透传执行 fn（不接全局遮罩）。
+    useAsyncAction: () => {
+      const busy = ref(false)
+      return { busy, runs: ref(0), run: async (fn: () => any) => await fn() }
+    }
   }
 })
 

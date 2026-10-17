@@ -109,6 +109,13 @@ export interface AnchorRefCatalog {
  *
  * ⛔ 判不了就返回 `true`（视为存活）—— **宁可漏报，不可误报**：
  *    误报会让用户去修一个本来好好的配置。
+ *
+ * ★ 2026-10-16 修：**不需要 `ref` 的种类恒存活**（`manual` 人工填写 / `ai_semantic` /
+ *   `ai_field` / `ai_table` / `domain` 等）。旧实现在判 `kind` **之前**先 `if (!r) return false`
+ *   ⇒ 这些「本来就没有 ref」的锚点被一律判成「来源已失效」，锚点角标变红、`C8` 闸
+ *   （`anchorReadiness.ready`）恒不通过、「自动填充 / 预览」永远禁用 ——
+ *   而它们其实**完全正常**。用户实测症状：「设成人工填写却提示来源无效」。
+ *   空 `ref` 对它们不是缺配，是**正解**。
  */
 export function isRefAlive(
   kind: string,
@@ -117,6 +124,8 @@ export function isRefAlive(
 ): boolean {
   const k = String(kind ?? '').trim().toLowerCase()
   const r = String(ref ?? '').trim()
+  // 不需要 ref 的种类（值来自人工 / 提示词，与 ref 无关）⇒ 恒存活
+  if (!needsRef(k)) return true
   if (!r) return false
   if (k === 'replace')
     return (

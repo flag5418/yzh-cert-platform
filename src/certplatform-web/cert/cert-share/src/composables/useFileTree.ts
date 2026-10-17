@@ -40,6 +40,13 @@ export interface TreeNode {
   FileCode?: string
   /** 文件夹编码 */
   FolderCode?: string
+  /**
+   * ★ 后端造的虚拟「根目录」节点（装根级 / 孤儿文件，不是真实文件夹行）。
+   * <para>判据来自 `stage-files` 的 `StageFolderNode.IsVirtualRoot`。
+   * ⛔ 不要用「名字等于根目录」或「FolderCode === DirectoryCode」推断 —— 前者改名失效，
+   * 后者是**实现巧合**（虚拟节点的 Code 恰好 = 配置 Code）。</para>
+   */
+  IsVirtualRoot?: boolean
   /** 转换状态（预览 PDF 链） */
   ConvertStatus?: string
   /** Markdown 提取链状态：none/pending/converting/completed/failed/unsupported */
@@ -232,6 +239,8 @@ export function useFileTree() {
         Type: 'folder' as const,
         FolderCode: folder.FolderCode || folder.Code,
         DirectoryCode: directoryCode,
+        // ★ 虚拟「根目录」标记原样透传（页面据此区分真文件夹，见 TreeNode.IsVirtualRoot）
+        IsVirtualRoot: folder.IsVirtualRoot === true,
         Raw: folder,
         Children: [],
         _loaded: true,

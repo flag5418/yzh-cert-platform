@@ -108,6 +108,47 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
         /// </summary>
         public async Task<FillOneResult> FillOneAsync(FillOneRequest req, CancellationToken ct = default)
         {
+            var result = await FillOneCoreAsync(req, ct);
+
+            // ════════════════════════════════════════════════════════════════
+            //  ★ 文档约束归一（2026-10-16，`67` 号 §6.2 —— 用户裁决 2）
+            //
+            //  「非必要文档」= 有更好，生成不出来可以**忽略**
+            //  （`cert_standard_directory_file.IsRequired = false`）。
+            //  ⇒ 核心链路判失败时，若该文档是非必要文档，归一为 `skipped_optional`：
+            //     · `Success = true` —— 它不是「执行出错」，而是「按约定跳过」；
+            //     · ⛔ **不进失败统计** —— 否则队列监控页会被大量本可忽略的失败淹没，
+            //       真正需要人工介入的失败反而看不见（本项目最坏的失败形态：噪声盖住信号）。
+            //
+            //  ⚠️ 只在**失败路径**上多查一次目录行（异常路径，频率低，可接受）；正常路径零额外开销。
+            //  ⚠️ 已带 `skipped_` 前缀的状态（`skipped_locked` / `skipped_no_template` /
+            //     `skipped_no_anchor`）本来就是「成功跳过」，不重复归一。
+            // ════════════════════════════════════════════════════════════════
+            if (!result.Success && result.Status?.StartsWith("skipped_", StringComparison.Ordinal) != true)
+            {
+                var stdFile = await _core.GetDirectoryFileByCodeAsync(req.StandardFileCode);
+                if (stdFile != null && !stdFile.IsRequired)
+                {
+                    result.Success = true;
+                    result.Status = "skipped_optional";
+                    result.Message = string.IsNullOrWhiteSpace(result.Message)
+                        ? "非必要文档，未生成已忽略"
+                        : $"非必要文档，未生成已忽略：{result.Message}";
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        ///     <see cref="FillOneAsync"/> 的核心实现。
+        ///
+        ///     <para>⛔ <b>请勿直接调用</b> —— 外层 <see cref="FillOneAsync"/> 负责
+        ///     「非必要文档失败 ⇒ 归一为 <c>skipped_optional</c>」这一步；
+        ///     绕过外层会丢掉该语义（失败会被记成真失败，污染队列统计）。</para>
+        /// </summary>
+        private async Task<FillOneResult> FillOneCoreAsync(FillOneRequest req, CancellationToken ct = default)
+        {
             var result = new FillOneResult { Status = "failed" };
             var started = DateTime.Now;
 
@@ -143,22 +184,40 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                 }
 
                 // ════════════════════════════════════════════════════════════
-                //  ★ §2 四路分流（2026-10-07，路由按 DocCategory + Replaceable）
-                //    一个空白文档进队列 = 本方法一次调用，按文档类别走不同路径：
-                //      · editable / hybrid → 走下方七步编排（取锚点值 → Office 落笔）
-                //      · fixed + Replaceable=false → ① 快归档（直接存企业标准资料，无 AI/参数）
-                //      · fixed + Replaceable=true  → ② 文件匹配（读画像匹配结论 + ④ 无匹配兜底）
-                //    ⚠️ 标准域行（stdFile）56/57 号「永不写」⇒ 各路径状态记到企业实例行 instance。
-                //    ② 的「匹配算法」与 ① 的「归档搬运」为可替换接缝（见方法内 TODO）。
+                //  ★ 四路分流（2026-10-16 改造，`67` 号 §6.1）—— **两个正交维度**
+                //
+                //    维度① DocCategory  —— 这份文档**要不要被重新编写**（fixed / editable）
+                //    维度② Replaceable   —— 内容**是否依赖企业文档**（false = 标准自带，企业不用交）
+                //
+                //    依赖   × fixed    → ② 文件匹配（读画像匹配结论 + 无匹配兜底）
+                //    依赖   × editable → 七步编排（取企业资料 → Office 落笔）
+                //    不依赖 × fixed    → ① 快归档（按标准目录结构归档，无 AI / 无参数）
+                //    不依赖 × editable → 七步编排，但 ⛔ **不读企业资料**（见下方 ② 读输入）
+                //
+                //  ⚠️ 旧实现只按 DocCategory 二分，且 `Replaceable` **无任何写入入口**、恒为
+                //     默认 `true` ⇒ 「不依赖 × fixed」的归档路径**永不可达**（死代码）。
+                //     本次补齐写入端（契约保存同批写目录行，见 `StandardDocContractController.Save`）
+                //     后，四路才真正可达。
+                //  ⚠️ 标准域行（stdFile）56/57 号「永不写」⇒ 各路径状态记到企业实例行 instance。
+                //     ② 的「匹配算法」与 ① 的「归档搬运」为可替换接缝（见方法内 TODO）。
                 // ════════════════════════════════════════════════════════════
-                var category = (stdFile.DocCategory ?? "editable").Trim().ToLowerInvariant();
-                if (category == "fixed")
+                //  ★ 判定收口到纯函数 `DocumentFillRouter.Of`（可单测，见
+                //     `CertPlatform.Admin.Tests/Fill/DocumentFillRouterTests.cs`）。
+                //     ⛔ 不要在编排器里再写一份 `category == "fixed"` 判断 ——
+                //     同一判定两处并存必然漂移（Trim / 大小写 / 未知值回退口径只要有一处不同，
+                //     就会出现「单测全绿但线上走错路」）。
+                var route = DocumentFillRouter.Of(stdFile.DocCategory, stdFile.Replaceable);
+                var dependsOnEnterprise = stdFile.Replaceable;   // false = 标准自带，企业不用交
+
+                switch (route)
                 {
-                    if (!stdFile.Replaceable)
+                    case DocumentFillRoute.FixedArchive:
                         return await RunFixedArchiveAsync(req, instance, stdFile, result, ct);
-                    return await RunFixedMatchAsync(req, instance, stdFile, result, ct);
+                    case DocumentFillRoute.FixedMatch:
+                        return await RunFixedMatchAsync(req, instance, stdFile, result, ct);
                 }
-                // editable / hybrid → 现有七步编排（下面不动）
+                // FillWithEnterprise / FillStandardOnly → 七步编排；
+                // 「不依赖企业文档」时画像输入置空（见下方 ② 读输入）
 
                 var template = (await _core.GetDocTemplatesByStandardFileCodesAsync(
                     new[] { req.StandardFileCode })).FirstOrDefault();
@@ -200,12 +259,19 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                     x.IsOrphan == false)).Data ?? new List<DocTemplateAnchor>();
 
                 // 画像：一行 = 文件 × 标准（M6 多行画像），取该标准的 IsLatest 行
-                var profiles = (await _db.GetListAsync<EnterpriseDocProfile>(x =>
-                    x.EnterpriseCode == req.EnterpriseCode &&
-                    x.StageCode == req.StageCode &&
-                    x.StandardCode == req.StandardCode &&
-                    x.IsLatest == true &&
-                    x.IsValid == 1)).Data ?? new List<EnterpriseDocProfile>();
+                // ★ 第四路「不依赖企业文档 × editable」（`67` 号 §6.1）：本步**不读画像** ——
+                //   内容来自标准自带，与企业交上来的资料无关。置空后：
+                //     · 下游 AI 来源拿不到企业上下文 ⇒ 对应锚点自然记待办（⛔ 不报错）；
+                //     · 配置期已在 UI 提示过「该文档不依赖企业资料，锚点来源别配企业资料类」（§6.2）。
+                //   ⛔ 不要改成「读了但不用」—— 那会让 `SourceProfileCode` 等溯源列记下无关画像。
+                var profiles = dependsOnEnterprise
+                    ? ((await _db.GetListAsync<EnterpriseDocProfile>(x =>
+                        x.EnterpriseCode == req.EnterpriseCode &&
+                        x.StageCode == req.StageCode &&
+                        x.StandardCode == req.StandardCode &&
+                        x.IsLatest == true &&
+                        x.IsValid == 1)).Data ?? new List<EnterpriseDocProfile>())
+                    : new List<EnterpriseDocProfile>();
 
                 var ent = await _core.GetEnterpriseByCodeAsync(req.EnterpriseCode);
                 var entInfo = EnterpriseInfoMapper.ToInfo(ent);
@@ -275,8 +341,36 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                     }
 
                     var resolved = false;
+
+                    // ★ 「不依赖企业文档」的文档上被跳过的企业资料类来源（用于写实归因）
+                    var skippedEnterpriseSources = new List<string>();
+
                     foreach (var entry in spec.Sources)
                     {
+                        // ════════════════════════════════════════════════════════════
+                        //  ★ 2026-10-16（`67` §6.2）：第四路「不依赖企业文档 × editable」
+                        //     —— 跳过「需要企业资料」的来源。
+                        //
+                        //  ⛔ 为什么不「照常调用、等它返回 null」：
+                        //    · `ai_field` / `ai_table` 的**唯一证据**就是企业文档
+                        //      （`SrcAiFieldSkill` 自述「内容不确定（企业有什么）」，且
+                        //       `enterprise_docs` 声明 `AllowEmpty = Deny`）。
+                        //      文档为空时模型**会凭空编造** —— 产物里出现看似合理、
+                        //      实际无据的正文，比「取不到值」更糟（值错了看不出来）。
+                        //    · `profile` / `replace(enterprise.*)` 在这类文档上必然为空
+                        //      ⇒ 白跑一次查库，且最终只能报一句笼统的「来源链未命中」。
+                        //
+                        //  ★ 判据收口在 `FillSourcePolicy`（与配置期警告**共用同一函数**）——
+                        //    ⛔ 不要在这里另写一套 kind 判断，两处必然漂移。
+                        // ════════════════════════════════════════════════════════════
+                        if (!dependsOnEnterprise
+                            && FillSourcePolicy.DependsOnEnterpriseMaterial(entry.Kind, entry.Ref))
+                        {
+                            skippedEnterpriseSources.Add(
+                                FillSourcePolicy.DescribeMismatch(entry.Kind, entry.Ref));
+                            continue;
+                        }
+
                         // ★ AI 三类（`ai_semantic` / `ai_field` / `ai_table`）：只做「认领」，
                         //   真实 LLM 调用在下方 `ResolveAiAnchorsAsync` 统一批量执行。
                         //   ★ D2 裁决（评审 63 号 G4）：AI 产出随步骤④统一落笔（标量进 values、
@@ -317,7 +411,20 @@ namespace CertPlatform.Auditor.Services.Ent.Normalize
                     if (!resolved)
                     {
                         // ★ 归因到「具体下一步动作」，⛔ 不写笼统的「所有来源均未取到值」
-                        var why = await DiagnoseNoValueAsync(spec, savedValues, req);
+                        //
+                        // ★★ 优先级（2026-10-16，`67` §6.2）：**先判「配置本身就矛盾」** ——
+                        //    若该文档标了「不依赖企业文档」、而锚点配的全是企业资料类来源，
+                        //    那么真实原因是**配置矛盾**，不是「企业没填资料」。
+                        //    ⛔ 若让它落到 `DiagnoseNoValueAsync`，会输出「参数未在后台定义 ——
+                        //       请到企业资料参数页新增」这类**指错方向**的话术
+                        //       （把人引去做一件不但没用、还会把刚删掉的参数加回来的事）。
+                        var why = skippedEnterpriseSources.Count > 0
+                            ? skippedEnterpriseSources[0]
+                            : await DiagnoseNoValueAsync(spec, savedValues, req);
+
+                        if (skippedEnterpriseSources.Count > 0)
+                            skillTrace.Add($"skipped_enterprise_source:{key}");
+
                         pendings.Add(BuildPending(anchor, why));
                         ledger.Add(BuildLedgerRow(req, template, anchor, key, null,
                             sourceKind: spec.Sources.FirstOrDefault()?.Kind ?? "",

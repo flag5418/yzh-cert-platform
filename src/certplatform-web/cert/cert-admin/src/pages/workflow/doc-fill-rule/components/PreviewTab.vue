@@ -3,8 +3,13 @@
  * ★ 预览（右栏第三个 Tab）—— **自动填值 → 人工改 → 带 Overrides 出 PDF**。
  *
  * 【★ 用户裁决（2026-10-07 第二轮 4 项改造之③，前后端一起改）】
- *   ① 门槛 = **每个锚点规则都已填写** —— 判据直接用 `logic.anchorReadiness.ready`
- *      （与锚点页「自动填充」同一口径，⛔ 不在本组件另写一套）；
+ *   ① 门槛 = **能试填** —— 判据用 `logic.previewReadiness.ready`（与锚点页「自动填充」
+ *      同一口径，⛔ 不在本组件另写一套）。
+ *      ★ 2026-10-16 用户追加裁决：「*无论来源是什么，都可以自动生成填写内容，查看替换后的
+ *      预览效果是否准确 —— 提前发现我们更新文档后是否正确*」。⇒ 门槛**不再要求来源配齐**
+ *      （试填取值走 `PreviewValueFactory`：模板自带原文 + 按类型生成【试填】占位，
+ *      未配来源的锚点照样有值），只要求「有模板 + 扫描完成 + 至少 1 个锚点」。
+ *      ⛔ 旧实现用 `anchorReadiness.ready`（配置完成度）当门槛 ⇒ 有 1 个锚点没配来源就进不来。
  *   ② 进入本 Tab 即**自动试填一次**，把每个锚点的当前值列出来逐条可改；
  *   ③ 点「生成预览 PDF」把改动作为 `Overrides[]` 带上重跑 → `previewed` 事件
  *      交给父页把产物路径写进共享仓库并切中栏「填充后预览」。
@@ -37,6 +42,11 @@ const props = defineProps<{
    * 与「自动填充」按钮的 tooltip **同源**（⛔ 不在本组件复述一遍判据）。
    */
   blockReason: string
+  /**
+   * ★ 试填**提示**（非阻断，2026-10-16）—— 未配 / 失效来源 / 孤儿的存在不影响试填，
+   * 只如实告知「这些锚点用【试填】占位值」。空串 = 无提示。
+   */
+  sourceHint?: string
 }>()
 
 const emit = defineEmits<{
@@ -46,8 +56,12 @@ const emit = defineEmits<{
 
 const logic = inject<DocFillRuleLogic>('logic')
 
-/** 门槛（唯一判据 = C8 的 `anchorReadiness.ready`） */
-const ready = computed(() => !!props.templateCode && !!logic?.anchorReadiness.ready)
+/**
+ * 门槛（唯一判据 = `previewReadiness.ready` —— **只看能否试填，不看来源配齐**）。
+ *
+ * ⛔ 不改回 `anchorReadiness.ready`：那是「规则配齐了吗」（配置完成度），不是试填闸。
+ */
+const ready = computed(() => !!props.templateCode && !!logic?.previewReadiness.ready)
 
 /** 试填值一行（初值来自首次 `Values`，改动只在本组件内存里） */
 interface PreviewRow {
@@ -189,6 +203,9 @@ onMounted(() => {
         </el-button>
       </div>
 
+      <!-- ★ 2026-10-16：未配 / 失效来源**不阻断**试填（那些锚点用【试填】占位值），只如实提示 -->
+      <div v-if="sourceHint" class="pvtab__srcbar">{{ sourceHint }}</div>
+
       <!-- 待办（锚点值取不到的处所 —— 如实列出，⛔ 不静默） -->
       <div v-if="lastStatus?.Pendings?.length" class="pvtab__pend">
         <div v-for="p in lastStatus.Pendings" :key="p.AnchorRef" class="pend">
@@ -261,6 +278,18 @@ onMounted(() => {
 .pvtab__meta {
   font-size: var(--yzh-font-size-xs, 12px);
   color: var(--yzh-color-text-placeholder, #909399);
+}
+
+/* ── 试填提示条（非阻断：中性信息色，⛔ 不用警示色）── */
+.pvtab__srcbar {
+  padding: var(--yzh-space-2, 8px);
+  margin-bottom: var(--yzh-space-2, 8px);
+  border: 1px solid var(--yzh-color-border-light, #ebeef5);
+  border-radius: var(--yzh-radius-md, 8px);
+  background: var(--yzh-color-bg-subtle, #fafafa);
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--yzh-color-text-regular, #606266);
+  line-height: 1.6;
 }
 
 /* ── 待办清单（紧凑两列小字，⛔ 不用大块红色警示）── */

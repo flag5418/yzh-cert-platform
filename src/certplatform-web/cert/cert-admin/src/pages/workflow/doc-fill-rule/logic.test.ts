@@ -553,6 +553,60 @@ describe('DocFillRuleLogic · C8 锚点配齐 / C11 ai 节点', () => {
     expect(logic.anchorReadiness.ready).toBe(false)
   })
 
+  // ── ★ 2026-10-16：试填 / 预览闸（`previewReadiness`）—— 只看「能否试填」，⛔ 不看来源配齐 ──
+
+  it('previewReadiness：有未配来源的锚点 ⇒ 配齐闸不 ready，但试填闸仍 ready', () => {
+    const logic = withAnchors([
+      { Code: 'A1', AnchorType: 'scalar', SourceSpec: null },
+      { Code: 'A2', AnchorType: 'scalar', SourceSpec: null },
+    ])
+    expect(logic.anchorReadiness.ready).toBe(false)
+    expect(logic.previewReadiness.unconfigured).toBe(2)
+    expect(logic.previewReadiness.ready).toBe(true)
+  })
+
+  it('previewReadiness：有孤儿锚点 ⇒ 试填闸仍 ready（后端本就跳过 IsOrphan）', () => {
+    const logic = withAnchors([
+      { Code: 'A1', AnchorType: 'scalar', SourceSpec: globalSpec, IsOrphan: true },
+    ])
+    expect(logic.anchorReadiness.ready).toBe(false)
+    expect(logic.previewReadiness.orphan).toBe(1)
+    expect(logic.previewReadiness.ready).toBe(true)
+  })
+
+  it('previewReadiness：全配齐 ⇒ 两个闸都 ready（试填闸不比配齐闸更严）', () => {
+    const logic = withAnchors([
+      { Code: 'A1', AnchorType: 'scalar', SourceSpec: globalSpec },
+    ])
+    expect(logic.previewReadiness).toEqual({
+      total: 1,
+      unconfigured: 0,
+      staleRef: 0,
+      orphan: 0,
+      ready: true,
+    })
+  })
+
+  it('previewReadiness：没有锚点 ⇒ 不 ready（试填无对象）', () => {
+    expect(withAnchors([]).previewReadiness.ready).toBe(false)
+  })
+
+  it('previewReadiness：未扫描完成 ⇒ 不 ready', () => {
+    const logic = withAnchors(
+      [{ Code: 'A1', AnchorType: 'scalar', SourceSpec: globalSpec }],
+      { scanStatus: 'pending' },
+    )
+    expect(logic.previewReadiness.ready).toBe(false)
+  })
+
+  it('previewReadiness：没有模板 ⇒ 不 ready', () => {
+    const logic = withAnchors(
+      [{ Code: 'A1', AnchorType: 'scalar', SourceSpec: globalSpec }],
+      { hasTemplate: false },
+    )
+    expect(logic.previewReadiness.ready).toBe(false)
+  })
+
   it('★ C11：来源链里有 ai 节点才为真', () => {
     const no = withAnchors([{ Code: 'A1', AnchorType: 'scalar', SourceSpec: globalSpec }])
     expect(no.hasAiNode).toBe(false)

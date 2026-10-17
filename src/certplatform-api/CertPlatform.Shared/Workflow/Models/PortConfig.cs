@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 
 namespace CertPlatform.Shared.Workflow.Models
 {
@@ -24,7 +23,6 @@ namespace CertPlatform.Shared.Workflow.Models
         public bool Required { get; set; }
 
         /// <summary>最大入边数（默认 1，end 节点的 result 端口 = 999）</summary>
-        [JsonPropertyName("maxIn")]
         public int MaxIn { get; set; } = 1;
 
         /// <summary>面板显示：visible / hidden</summary>
@@ -34,11 +32,9 @@ namespace CertPlatform.Shared.Workflow.Models
         public string Role { get; set; } = "data";
 
         /// <summary>字典来源（仅 Enum 模式）</summary>
-        [JsonPropertyName("enumSource")]
         public string? EnumSource { get; set; }
 
         /// <summary>默认值</summary>
-        [JsonPropertyName("defaultValue")]
         public object? DefaultValue { get; set; }
     }
 }

@@ -79,8 +79,9 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                 // ④ ★ 入参完备性校验（判据 = [SkillParam(AllowEmpty)]，见 AllowsEmpty）
                 //    ★★ 2026-10-15 修：**先分「锅的归属」再报错**（见 CollectMissingInputs）。
                 //    修复前一律报 PRECONDITION_EMPTY ⇒ 一个 `ConstantOnly` 参数（如
-                //    `stamp_judge_level.judge_code`）没填，系统会给**企业**开一个它
+                //    `src_manual.anchor_code`）没填，系统会给**企业**开一个它
                 //    **永远填不了**的补录缺口，并把「作者没配」伪装成「数据缺失」。
+                //    （原举例 `stamp_judge_level.judge_code` 已于 2026-10-16 删除 —— 该标识改取节点名称。）
                 var (missingData, missingConfig) = CollectMissingInputs(parameters, context);
 
                 // ④-a 规则作者的锅 ⇒ CONFIG_ERROR
@@ -133,14 +134,19 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         ///   "errorCode": null,         // 失败分类码（成功时 null）
         ///   "error":    "",            // 人读原因（成功时空）
         ///   "result":   "实际的值",     // ★ 主输出（单值 / 数组），⛔ 不是整包字典
-        ///   "outputs":  { 端口名: 值 }, // 全量端口值（含 result），供多输出节点使用
-        ///   …业务键平铺（向后兼容既有消费方）
+        ///   …业务键平铺（含 result 之外的其余端口，供多输出节点按端口名直取）
         /// }
         /// </code>
         ///
         /// <para><b>⚠️ 写入顺序有讲究</b>：先平铺业务键，再写信封键 ——
         /// 否则某个 skill 若恰好输出名为 <c>success</c> / <c>result</c> 的业务键，
         /// 会把信封覆盖掉（修复前正是这个顺序，靠巧合没出事）。</para>
+        ///
+        /// <para><b>★ 2026-10-16：删除冗余键 <c>outputs</c></b> —— 业务键本就**平铺到顶层**，
+        /// 下游取端口走 <see cref="NodeExecutor"/> 的 <c>PickFromOutput</c>
+        /// （按目标端口名取同名键 → <c>result</c> → 唯一键 → 兜底），**全仓无任何读取方**
+        /// ⇒ 原 <c>outputs["outputs"] = business</c> 只是把业务键整包复制一份，
+        /// 白白撑大节点输出与 <c>wf_node_execution</c> 落库体积（近乎翻倍）。</para>
         /// </summary>
         private SkillResult Wrap(SkillAttribute skillAttr, SkillResult result)
         {
@@ -181,11 +187,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
             var main = ResolveMainOutput(business, skillAttr.ResultPort, skillAttr.Code);
             outputs["result"] = main!;
 
-            // ③ 全量端口值 —— 多输出节点（nc_validate.items / nc_conclusion_calc.stats）
-            //    从这里取，不必担心与信封键撞名
-            outputs["outputs"] = business;
-
-            // ④ 信封键最后写（保证不被业务键覆盖）
+            // ③ 信封键最后写（保证不被业务键覆盖）
             outputs["success"] = true;
             outputs["errorCode"] = null!;
             outputs["error"] = string.Empty;

@@ -172,7 +172,9 @@ public class NodeExecutorUnresolvedInputTests
             db: null!,
             wfLogger: new WorkflowLogger(NullLogger<WorkflowLogger>.Instance),
             logger: NullLogger<NodeExecutor>.Instance,
-            resolver: null!);
+            resolver: null!,
+            core: null!,
+            storage: null!);
 
         var node = new WorkflowNodeConfig
         {

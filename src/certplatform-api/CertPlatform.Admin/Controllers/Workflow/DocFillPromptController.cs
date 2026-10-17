@@ -402,9 +402,13 @@ public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
         sb.AppendLine("而每个具体格子填什么，由各锚点自己的规则负责 —— ⛔ 提示词不要越界去规定单个锚点的取值。");
         sb.AppendLine();
 
-        if (!string.IsNullOrWhiteSpace(req.DocRole))
+        // ★ 2026-10-16：`【文档角色】` → `【文档约束】`（`67` 号 §4.1）。
+        //   旧实现拼进去的是**英文枚举码**（`required`），大模型看到的是英文码而非中文；
+        //   现由前端渲染成中文口径再传（形如「必要文档 · 依赖企业文档（内容来自企业交上来的资料）」），
+        //   顺带把「是否依赖企业文档」也交代清楚 —— 它决定提示词该不该引用企业资料。
+        if (!string.IsNullOrWhiteSpace(req.DocConstraint))
         {
-            sb.AppendLine($"【文档角色】{req.DocRole.Trim()}");
+            sb.AppendLine($"【文档约束】{req.DocConstraint.Trim()}");
             sb.AppendLine();
         }
 
@@ -537,8 +541,12 @@ public class DocFillPromptController : YzhControllerBase<DocFillPrompt>
         /// <summary>文档作用（全局规则 Tab「文档作用」文本框内容）</summary>
         public string? DocPurpose { get; set; }
 
-        /// <summary>文档角色（可空）</summary>
-        public string? DocRole { get; set; }
+        /// <summary>
+        /// ★ 文档约束的中文口径（2026-10-16，替代已废弃的 <c>DocRole</c>）——
+        /// 形如 <c>必要文档 · 依赖企业文档（内容来自企业交上来的资料）</c>。
+        /// <para>⚠️ 由前端渲染成中文后传入；⛔ 后端不再接受英文枚举码（那样大模型看不懂）。</para>
+        /// </summary>
+        public string? DocConstraint { get; set; }
 
         /// <summary>现有提示词正文；非空 = 优化模式</summary>
         public string? CurrentPrompt { get; set; }

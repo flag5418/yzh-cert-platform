@@ -60,7 +60,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
             //
             //   ⇒ 口径：**永远返回成功**，结论放在 result(bool) 里（true = 空）。
             //      「为空 ⇒ 中断」这个行为由**不能接受空的节点**（compare / ai_node /
-            //      nc_conclusion_calc …）自己做，⛔ 不是 is_empty 做。
+            //      nc_conclusion_v2 …）自己做，⛔ 不是 is_empty 做。
             [SkillParam(Description = "待判断的值（通常连线上游节点输出；★本节点刻意允许为空）",
                         BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             object? value = null,

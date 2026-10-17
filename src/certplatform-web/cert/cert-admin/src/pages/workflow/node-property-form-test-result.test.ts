@@ -46,7 +46,7 @@ function mountForm() {
         skillCode: 'collect_judges',
         inputs: { judge_1: 'stamp_judge_level_n1' },
         inputTypes: { judge_1: 'link' },
-        inputPorts: [{ name: 'judge_1', type: 'json', bindMode: 'Link' }],
+        inputPorts: [{ Name: 'judge_1', Type: 'json', BindMode: 'Link' }],
         outputPorts: [],
         config: {}
       },
@@ -152,7 +152,7 @@ describe('节点测试结果面板 · 节点级失败必须显示为失败', () 
       selectedNode: {
         nodeId: 'collect_judges_n1', nodeType: 'skill', title: '聚合多路judge', skillCode: 'collect_judges',
         inputs: { judge_1: 'stamp_judge_level_n1' }, inputTypes: { judge_1: 'link' },
-        inputPorts: [{ name: 'judge_1', type: 'json', bindMode: 'Link' }], outputPorts: [], config: {}
+        inputPorts: [{ Name: 'judge_1', Type: 'json', BindMode: 'Link' }], outputPorts: [], config: {}
       }
     })
     await flushPromises()

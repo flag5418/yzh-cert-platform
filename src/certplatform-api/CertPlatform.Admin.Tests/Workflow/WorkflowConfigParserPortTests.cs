@@ -34,11 +34,11 @@ public class WorkflowConfigParserPortTests
           "Config": {}, "Inputs": {}, "inputTypes": {}, "inputPorts": [], "outputPorts": [] },
         { "nodeId": "stamp_judge_level_n1", "nodeType": "skill", "Title": "judge盖章级别",
           "skillCode": "stamp_judge_level", "Config": {},
-          "Inputs": { "result": "docField_n1", "judge_code": "J1", "verdict": "is_empty_n1" },
-          "inputTypes": { "result": "link", "judge_code": "link", "verdict": "link" },
+          "Inputs": { "result": "docField_n1", "level": "major", "verdict": "is_empty_n1" },
+          "inputTypes": { "result": "link", "level": "link", "verdict": "link" },
           "inputPorts": [
             { "Name": "result",     "BindMode": "LinkOrConstant" },
-            { "Name": "judge_code", "BindMode": "ConstantOnly"   },
+            { "Name": "level",      "BindMode": "ConstantOnly"   },
             { "Name": "verdict",    "BindMode": "LinkOrConstant" },
             { "Name": "no_bind_mode" }
           ],
@@ -75,7 +75,7 @@ public class WorkflowConfigParserPortTests
 
         var byName = node.InputPorts.ToDictionary(p => p.Name, p => p.BindMode);
         Assert.Equal("LinkOrConstant", byName["result"]);
-        Assert.Equal("ConstantOnly", byName["judge_code"]);
+        Assert.Equal("ConstantOnly", byName["level"]);
         Assert.Equal("LinkOrConstant", byName["verdict"]);
     }
 
@@ -148,7 +148,9 @@ public class WorkflowConfigParserPortTests
             db: null!,
             wfLogger: new WorkflowLogger(NullLogger<WorkflowLogger>.Instance),
             logger: NullLogger<NodeExecutor>.Instance,
-            resolver: null!);
+            resolver: null!,
+            core: null!,
+            storage: null!);
 
         var r = await executor.ExecuteAsync(
             node, "t", "i",
@@ -156,9 +158,9 @@ public class WorkflowConfigParserPortTests
             new Dictionary<string, object>(),
             System.Threading.CancellationToken.None);
 
-        // result / verdict 声明为连线且无上游 ⇒ 进清单；judge_code 是 ConstantOnly ⇒ 不进
+        // result / verdict 声明为连线且无上游 ⇒ 进清单；level 是 ConstantOnly ⇒ 不进
         Assert.Contains("result", r.UnresolvedInputs!);
         Assert.Contains("verdict", r.UnresolvedInputs!);
-        Assert.DoesNotContain("judge_code", r.UnresolvedInputs!);
+        Assert.DoesNotContain("level", r.UnresolvedInputs!);
     }
 }

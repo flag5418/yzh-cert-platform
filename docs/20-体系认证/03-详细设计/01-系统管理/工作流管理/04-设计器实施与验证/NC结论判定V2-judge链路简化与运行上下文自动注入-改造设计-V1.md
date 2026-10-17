@@ -431,6 +431,47 @@ ExecuteAsync(
 
 ---
 
+### 7.7 落地记录（2026-10-16 · `judge_code` 删除 ⇒ judge 标识改取「节点名称」）
+
+> 触发：用户反馈「`judge盖章级别` 的『judge 标识』能否不单独传？每个节点本来就有独立名称，
+> 改节点名称就等于给 judge 标识赋值；否则要在**两个地方**赋值，很奇怪。」
+
+**结论（用户裁定）**：✅ **彻底去掉「judge 标识」输入框**，judge 标识 = **本节点名称**（`WorkflowNodeConfig.Title`）。
+
+**为什么可行（取证）**：
+
+| 判据 | 证据 |
+| ---- | ---- |
+| 节点名称在画布内**唯一** | `cert-share/src/composables/workflow/useWorkflowStore.ts` —— 新增即 `generateUniqueName()` 去重；改名经 `isNameUnique()` 拦截重名（`:233`） |
+| `judge_code` **只是展示标签** | `NcConclusionV2Calculator.JudgeResult.JudgeCode` 注释「审计展示用」；全仓**无查表 / 分组 / 去重**，只是原样进 judge 记录与输出 |
+| 注入成本极低 | `NodeExecutor.ExecuteSkillAsync` 已持有 `node.Title`，`skillCtxParams` 本就是为「逐节点注入」新建的字典 ⇒ **零装配方改动** |
+
+**改动清单**：
+
+| 落点 | 改动 |
+| ---- | ---- |
+| `WorkflowContextKeys.cs` | 新增 `NodeTitle = "nodeTitle"`（逐节点注入；文档注明「画布内唯一标识」） |
+| `NodeExecutor.cs` | `ExecuteSkillAsync` 的 `skillCtxParams` 增 `[NodeTitle] = node.Title ?? ""` |
+| `StampJudgeLevelSkill.cs` | ⛔ 删 `judge_code` 参数（`ConstantOnly + Deny`）；新增 `[FromContext(NodeTitle)] string? nodeTitle`；`judgeCode = nodeTitle.Trim()`，空 ⇒ `Fail(CONFIG_ERROR)`「本节点未命名…」；`[Skill(Description)]` 与类注释同步 |
+| 前端 | **零改动** —— 端口由后端 `Analyze` 反射生成，参数删除即从属性面板消失 |
+
+**同类回归（测试）**：
+
+| 文件 | 改动 |
+| ---- | ---- |
+| `FromContextInjectionTests.cs` | 画布端口 5 → **4**（`result/level/verdict/reason`）；`judge_code`/`nodeTitle` 均不可见；stamp 声明 `NodeTitle` 键 |
+| `SkillParamCompletenessTests.cs` | 「`ConstantOnly` 为空 ⇒ `CONFIG_ERROR`」样例从 `stamp.judge_code` 改用 `src_manual.anchor_code`（同属性、免 DB） |
+| `NcConclusionV2Tests.cs` | `RunRecord` 第 2 实参改作 `nodeTitle` 注入；`EmptyJudgeCode_Fails` → `EmptyNodeTitle_Fails`；新增「`judge_code` 参数不存在 + `nodeTitle` 带 `[FromContext]`」断言 |
+| `WorkflowConfigParserPortTests.cs` | 「真实快照」fixture 的 `judge_code` 端口 → `level`（`ConstantOnly` 样例不变） |
+
+**影响 / 边界**：
+
+- 存量规则里已填的 `judge_code` 常量**被忽略**，judge 标签从旧值变为**节点名称**（仅展示层，δ 不影响结论计算）。
+- 名称唯一性目前**仅前端 store 守**；手改 `rule_json` 造成重名时，只表现为两条 judge **标签相同**，⛔ 不影响判定矩阵。
+- ⚠️ **本节取代 §7.6 结论表第 1 行**（「`judge_code` 保持必填」已作废）。
+
+---
+
 ## 8. 附：本方案对既有文档/记忆的影响
 
 | 对象                                                                               | 影响                                                                  |
@@ -438,4 +479,5 @@ ExecuteAsync(
 | 记忆「v2 链路 = 多条判定分支 → `stamp_judge_level` → `collect_judges` → `nc_conclusion_v2`」 | **落地形态变更**：`collect_judges` 由「必经」降为「兼容通道」；链路改为 `判定 → 盖章（自动登记） → 结论` |
 | `NcConclusionV2Skill.cs` 类注释里「⛔ 三个 code 参数不该连 `collect_judges`」                  | 升级为「三个 code 参数**已从画布移除**，由运行上下文注入」                                  |
 | `StampJudgeLevelSkill.cs` 类注释「verdict 建议一律显式填写」                                  | 升级为「verdict 可连线；留空且无法判定 ⇒ **报错**」                                   |
+| 记忆「`stamp_judge_level` 的 `judge_code` 必填」                                             | 作废（§7.7）：**画布上已无 judge 标识输入框**，judge 标识 = 本节点名称（`[FromContext] nodeTitle`） |
 | 记忆「需裁决项必须配白话说明书」                                                                 | 本文档 §0 已配 ✅                                                         |

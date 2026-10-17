@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
@@ -7,7 +8,9 @@ using CertPlatform.Admin.Services.Workflow;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Entities.Dir;
+using CertPlatform.Shared.Entities.Doc;
 using CertPlatform.Shared.Fill;
+using CertPlatform.Shared.Services.Ent;
 using YZH.Core.Api.Controllers;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
@@ -111,8 +114,12 @@ public class StandardDocContractController : WebControllerBase
             // ★ 分类权威 = 标准目录文件行（不是契约行）
             DocCategory = NormalizeCategory(fileRow.DocCategory, null),
 
-            // ★ 固定文档 · 可替换性（仅 DocCategory=fixed 时有意义；见 ContractSaveRequest）
-            FixedDocSubtype = contract?.FixedDocSubtype ?? "enterprise_provided",
+            // ★ 文档约束 + 是否依赖企业文档（2026-10-16 定稿，`67` 号 §4.2）
+            //   ⚠️ 权威位置 = **标准目录文件行**（不是契约行）——
+            //      契约表的 DocRole / FixedDocSubtype 已**物理删除**（那是「第三对分叉列」：
+            //      页面写契约列、编排器读目录列 ⇒ 配了不生效，见实体注释）。
+            IsRequired = fileRow.IsRequired,
+            Replaceable = fileRow.Replaceable,
 
             // ── ★ 标准原始文档的存储信息（37 号 §3.3 的「下载标准文档」）──
             //   页面中栏要「先看原始文档、再上传加工后的空白模板」，所以路径必须随本接口一起给。
@@ -126,7 +133,7 @@ public class StandardDocContractController : WebControllerBase
             EnterpriseCode = fileRow.EnterpriseCode,
 
             DocName = contract?.DocName ?? fileRow.FileName,
-            DocRole = contract?.DocRole ?? "required",
+            // ⛔ 不再返回 DocRole（该列已物理删除，2026-10-16）—— 见 `67` 号 §4.1
             DocPurpose = contract?.DocPurpose,
             TagsJson = contract?.TagsJson,
             InfoItemsJson = contract?.InfoItemsJson,
@@ -176,17 +183,11 @@ public class StandardDocContractController : WebControllerBase
         if (category == null)
             return Ok(ApiResponse<object>.Fail("文档分类只能是 fixed / editable（hybrid 一期不启用）"));
 
-        // ★ 固定文档 · 可替换性（缺口 G1 的下半场 —— 见 ContractSaveRequest 注释）
-        //   ⚠️ 空 = **本次不动**（与 DocPurpose / TagsJson 的「null 不动」口径一致）：
-        //      前端只改了分类、没碰可替换性时，不该把既有值冲回默认。
-        string? fixedSubtype = null;
-        if (!string.IsNullOrWhiteSpace(req.FixedDocSubtype))
-        {
-            var st = req.FixedDocSubtype.Trim().ToLowerInvariant();
-            if (st is not ("standard_provided" or "enterprise_provided"))
-                return Ok(ApiResponse<object>.Fail("固定文档可替换性只能是 standard_provided / enterprise_provided"));
-            fixedSubtype = st;
-        }
+        // ★ 文档约束 / 是否依赖企业文档（2026-10-16 定稿，`67` 号 §4.2）
+        //   ⚠️ 二者都是 `bool?`：`null` = **本次不动**（与 DocPurpose / TagsJson 的「null 不动」口径一致），
+        //      前端只改了分类、没碰这两个开关时，不该把既有值冲回默认。
+        //   ⛔ 本方法**不做**「不依赖企业文档却配了企业资料类锚点来源」的校验 —— 那是锚点级校验，
+        //      见 `67` 号 §6.2（配置期给警告，不阻断）。
 
         var scope = await _extraction.ResolveRuleScopeAsync(req.StandardFileCode);
         var now = DateTime.Now;
@@ -226,8 +227,8 @@ public class StandardDocContractController : WebControllerBase
         // ── 业务字段 ──
         contract.DocName = string.IsNullOrWhiteSpace(req.DocName) ? fileRow.FileName : req.DocName!;
         contract.DocCategory = category;
-        if (fixedSubtype != null) contract.FixedDocSubtype = fixedSubtype;
-        if (!string.IsNullOrWhiteSpace(req.DocRole)) contract.DocRole = req.DocRole!;
+        // ⛔ 2026-10-16：不再写 contract.DocRole / contract.FixedDocSubtype（两列已物理删除，`67` 号 §4.1）。
+        //   「文档约束」「是否依赖企业文档」的权威位置 = 标准目录文件行，见下方「同批同步」。
 
         // 只在「显式提交」时改写 —— null = 本次不动该字段（避免前端漏传导致清空）
         if (req.DocPurpose != null)
@@ -260,24 +261,70 @@ public class StandardDocContractController : WebControllerBase
         if (!saveResult.Success)
             return Ok(ApiResponse<object>.Fail(saveResult.Error ?? "契约保存失败"));
 
-        // ★ 同批同步权威列（DocCategory）—— 两处写同一请求，保证永不不一致
+        // ════════════════════════════════════════════════════════════════════
+        //  ★ 同批同步标准目录文件行（2026-10-16 扩展，`67` 号 §5.3）
+        //
+        //  三个「文档级」属性一次请求写到位，保证永不不一致：
+        //    · DocCategory  —— 流程分叉的权威列（原本就有）
+        //    · IsRequired   —— 文档约束（必要 / 非必要）
+        //    · Replaceable  —— 是否依赖企业文档
+        //
+        //  ⚠️ 只写【标准行】（EnterpriseCode 为空，归属模型 V2）—— 企业实例行不覆盖。
+        //  ⚠️ 列级写回（⛔ 禁止全列写回 —— 陷阱 ㉕：并发上传链会把这些列清成 NULL）。
+        //  ⚠️ 只把**真的变了**的列列入更新集，避免无谓写库与无谓的 UpdateTime 抖动。
+        // ════════════════════════════════════════════════════════════════════
+        var isStandardRow = string.IsNullOrEmpty(fileRow.EnterpriseCode);
+        var fileCols = new List<string>();
+
         if (!string.Equals(fileRow.DocCategory, category, StringComparison.Ordinal))
         {
             fileRow.DocCategory = category;
+            fileCols.Add(nameof(StandardDirectoryFile.DocCategory));
+        }
+        if (isStandardRow && req.IsRequired != null && fileRow.IsRequired != req.IsRequired.Value)
+        {
+            fileRow.IsRequired = req.IsRequired.Value;
+            fileCols.Add(nameof(StandardDirectoryFile.IsRequired));
+        }
+        if (isStandardRow && req.Replaceable != null && fileRow.Replaceable != req.Replaceable.Value)
+        {
+            fileRow.Replaceable = req.Replaceable.Value;
+            fileCols.Add(nameof(StandardDirectoryFile.Replaceable));
+        }
+
+        if (fileCols.Count > 0)
+        {
             fileRow.UpdateBy = user;
             fileRow.UpdateTime = now;
-            var sync = await _db.UpdateAsync(
-                fileRow, nameof(StandardDirectoryFile.DocCategory), nameof(StandardDirectoryFile.UpdateTime));
+            fileCols.Add(nameof(StandardDirectoryFile.UpdateBy));
+            fileCols.Add(nameof(StandardDirectoryFile.UpdateTime));
+
+            var sync = await _db.UpdateAsync(fileRow, fileCols.ToArray());
             if (!sync.Success)
             {
                 // 不阻塞主保存，但必须留日志 —— 否则两处静默分叉
-                _logger.LogWarning("[Contract] 契约已保存，但同步标准目录行 DocCategory 失败：File={File}, Err={Err}",
-                    req.StandardFileCode, sync.Error);
+                _logger.LogWarning(
+                    "[Contract] 契约已保存，但同步标准目录行失败：File={File}, Cols={Cols}, Err={Err}",
+                    req.StandardFileCode, string.Join(",", fileCols), sync.Error);
             }
         }
 
-        _logger.LogInformation("[Contract] 契约已保存：File={File}, Category={Cat}, New={New}, By={User}",
-            req.StandardFileCode, category, isNew, user);
+        // ════════════════════════════════════════════════════════════════════
+        //  ★ 配置期校验（`67` 号 §6.2，用户 2026-10-16 裁决③「需要实现」）
+        //
+        //  「不依赖企业文档」的文档由后台**自动生成**，企业⛔ 不用交东西。
+        //  若它的锚点仍配了「需要企业资料」的来源 ⇒ 运行期必然取不到值。
+        //  ⇒ 保存时**顺带扫一遍**并把结论回给前端（⛔ 不阻断保存，只提示）。
+        //
+        //  ⚠️ 只在 `Replaceable = false` 时才扫 —— 依赖企业文档的文档配这些来源是**正确**的。
+        //  ⚠️ 扫描走 `ICoreResourceQuery`（核心资源检索唯一入口，铁律 L5）。
+        // ════════════════════════════════════════════════════════════════════
+        var sourceWarnings = fileRow.Replaceable
+            ? new List<string>()
+            : await CollectEnterpriseSourceWarningsAsync(req.StandardFileCode);
+
+        _logger.LogInformation("[Contract] 契约已保存：File={File}, Category={Cat}, New={New}, By={User}, Warn={Warn}",
+            req.StandardFileCode, category, isNew, user, sourceWarnings.Count);
 
         return Ok(ApiResponse<object>.Ok(new
         {
@@ -285,14 +332,78 @@ public class StandardDocContractController : WebControllerBase
             contract.StandardFileCode,
             contract.DocName,
             contract.DocCategory,
-            contract.FixedDocSubtype,
+            // ★ 文档级属性回传的是**目录行的真实值**（权威位置）——
+            //   ⛔ 不是契约行（那两个列已废弃）。这样前端保存后能立刻看到「真的生效了」。
+            fileRow.IsRequired,
+            fileRow.Replaceable,
             contract.DocPurpose,
             contract.TagsJson,
             contract.InfoItemsJson,
             contract.FingerprintJson,
             contract.AnalyzeStatus,
             contract.IsManualCorrected,
+            // ★ 配置期警告（⛔ 不阻断保存）：该文档标了「不依赖企业文档」，
+            //   但锚点来源需要企业资料 ⇒ 逐条说明。空数组 = 无问题。
+            Warnings = sourceWarnings,
         }, isNew ? "契约已创建" : "契约已保存"));
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    //  ★ 配置期校验：「不依赖企业文档」⇒ 锚点来源不得需要企业资料
+    //     （`67` 号 §6.2 落地 —— 用户 2026-10-16 裁决③「需要实现」）
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    ///     扫描该标准文件下<b>全部锚点</b>的来源配置，挑出「<b>需要企业资料</b>」的那些，逐条成话。
+    ///
+    ///     <para><b>为什么必须做</b>：文档可标成「不依赖企业文档」（导航页 / 固定描述）——
+    ///     这类文档由后台<b>自动生成</b>，企业⛔ 不用交东西。若它的锚点仍配了
+    ///     「从企业文档抽字段」这类来源，<b>运行期必然取不到值</b>，
+    ///     而配置期一切正常、不报错（本项目最坏的失败形态：静默失效）。</para>
+    ///
+    ///     <para><b>⛔ 为什么只警告、不阻断</b>：用户可能是「先配锚点 → 后改文档属性」，
+    ///     也可能反过来 ⇒ 阻断会把人卡在中间态。判据：<b>配置期给提示，运行期有写实归因兜底</b>
+    ///     （编排器的 <c>skipped_enterprise_source</c> 待办）。</para>
+    ///
+    ///     <para><b>★ 判据与运行期共用</b> <see cref="FillSourcePolicy"/> ——
+    ///     ⛔ 不在这里另写一套 kind 判断（两处并存必然漂移）。</para>
+    ///
+    ///     <para>⚠️ 本方法<b>只读不写</b>，且异常一律吞掉只记日志 ——
+    ///     校验是「锦上添花」，⛔ 不得让保存主流程因它失败。</para>
+    /// </summary>
+    private async Task<List<string>> CollectEnterpriseSourceWarningsAsync(string standardFileCode)
+    {
+        var warnings = new List<string>();
+        try
+        {
+            var template = (await _core.GetDocTemplatesByStandardFileCodesAsync(new[] { standardFileCode }))
+                .FirstOrDefault();
+            if (template == null) return warnings;   // 没上传空白模板 ⇒ 没有锚点 ⇒ 无从校验
+
+            var anchors = (await _db.GetListAsync<DocTemplateAnchor>(x =>
+                x.TemplateCode == template.Code &&
+                x.IsValid == 1 &&
+                x.IsOrphan == false)).Data ?? new List<DocTemplateAnchor>();
+
+            foreach (var anchor in anchors)
+            {
+                var spec = SourceSpecModel.TryParse(anchor.SourceSpec);
+                if (spec?.Sources == null || spec.Sources.Count == 0) continue;
+
+                foreach (var entry in spec.Sources)
+                {
+                    if (!FillSourcePolicy.DependsOnEnterpriseMaterial(entry.Kind, entry.Ref)) continue;
+                    warnings.Add(FillSourcePolicy.DescribeConfigWarning(anchor.AnchorRef, entry.Kind, entry.Ref));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // ⛔ 校验失败不得影响主保存（它只是提示）
+            _logger.LogWarning(ex, "[Contract] 企业资料类来源校验失败：File={File}", standardFileCode);
+        }
+
+        return warnings;
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -767,20 +878,30 @@ public class StandardDocContractController : WebControllerBase
         public string? DocCategory { get; set; }
 
         /// <summary>
-        /// ★【固定文档 · 可替换性】<c>standard_provided</c>（标准自带，不向企业索取）/
-        /// <c>enterprise_provided</c>（企业提供，要匹配依据）。
+        /// ★【文档约束】必要 / 非必要（2026-10-16 定稿，`67` 号 §4.2）。
         ///
-        /// <para><b>★ 为什么必须出现在这里（缺口 G1 的下半场）</b>：该列 DDL 早已存在，
-        /// 但 ① 实体没声明（读写被静默丢弃）② 本 DTO 也没这个字段 ⇒ <b>没有任何入口能写它</b>
-        /// ⇒ 它永远停在 DB 默认值 <c>enterprise_provided</c>，成为又一条「列在库、值恒默认」的死配置。
-        /// 补上实体属性只是让 ORM 能看见，<b>还必须有人写它</b>。</para>
+        /// <para><c>true</c> = 必要文档（未生成 ⇒ 计入缺口）/
+        /// <c>false</c> = 非必要文档（生成不出来 ⇒ 可忽略，编排器记 <c>skipped_optional</c>）。</para>
         ///
-        /// <para>⚠️ 空 = 本次不动（⛔ 不冲回默认）。仅在 <see cref="DocCategory"/> = <c>fixed</c> 时有意义。</para>
+        /// <para>⚠️ <c>null</c> = <b>本次不动</b>该字段（⛔ 不冲回默认），与 DocPurpose / TagsJson 同口径。</para>
+        /// <para>权威位置 = <c>cert_standard_directory_file.IsRequired</c>（<b>标准行</b>）。</para>
         /// </summary>
-        public string? FixedDocSubtype { get; set; }
+        public bool? IsRequired { get; set; }
 
-        /// <summary>required / optional / reference / attachment</summary>
-        public string? DocRole { get; set; }
+        /// <summary>
+        /// ★【是否依赖企业文档】（2026-10-16 定稿，`67` 号 §4.2）。
+        ///
+        /// <para><c>true</c> = <b>依赖</b>企业文档（内容来自企业交上来的资料，要去匹配 / 取用）/
+        /// <c>false</c> = <b>不依赖</b>（标准自带的内容 —— 导航页 / 固定描述 —— 企业不用交，
+        /// 后台按规则自动生成并入库）。</para>
+        ///
+        /// <para>⚠️ <c>null</c> = <b>本次不动</b>该字段。权威位置 =
+        /// <c>cert_standard_directory_file.Replaceable</c>（<b>标准行</b>）。</para>
+        ///
+        /// <para>⛔ 本 DTO 不再有 <c>DocRole</c> / <c>FixedDocSubtype</c> —— 那两个契约表列已**物理删除**，
+        /// 见 `67` 号 §4.1。旧前端若仍传这两个字段，会被<b>静默忽略</b>（不报错）。</para>
+        /// </summary>
+        public bool? Replaceable { get; set; }
 
         /// <summary>文档作用（四段式人读文本）</summary>
         public string? DocPurpose { get; set; }

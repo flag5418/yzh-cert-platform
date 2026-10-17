@@ -9,7 +9,7 @@
  *
  *   ⇒ ① **选来源**（6 选 1，卡片）
  *      ② **来源属性**（随来源不同而不同；AI 节点 = 固定 3 属性）
- *      ③ **填写规则**（覆盖 / 填充 + 值类型 + 必填 + 空值兜底 + 备注）
+ *      ③ **填写规则**（覆盖 / 填充 + 值类型 + 必填 + 空值兜底 + 字段描述）
  *
  * 【★ 本轮删掉的东西（⛔ 不要加回来）】
  *   - **「组合方式」整层**（顺序回退 / 拼接 / 模板套用）—— 用户：
@@ -128,11 +128,11 @@ const paramOptions = ref<
 /* ============ 派生 ============ */
 const title = computed(() => props.anchor?.AnchorRef || '锚点规则')
 const anchorType = computed(() => String(props.anchor?.AnchorType || ''))
-const isDomainAuto = computed(
-  () =>
-    anchorType.value === 'domain' &&
-    String(props.anchor?.DomainKind || '') === 'auto',
-)
+/**
+ * ⚠️ 2026-10-17：原 `isDomainAuto` 只用于「语义字段输入框是否禁用」。
+ *   字段标签改为**恒只读**后该判定不再需要 —— ⛔ 不要留着未使用的 computed
+ *   （`vue-tsc` 的 noUnusedLocals 会报 TS6133，整条 `npm run build` 直接失败）。
+ */
 /** 操作方式（推导，⛔ 不可选）—— 与 `AnchorRuleTab` 的字段/表格分组同一口径 */
 const autoOp = computed<'cell' | 'table'>(() =>
   TABLE_TYPES.includes(anchorType.value) ? 'table' : 'cell',
@@ -494,14 +494,27 @@ async function onSave() {
               (anchor.HeaderKind ? `页眉页脚(${anchor.HeaderKind})` : '正文')
             }}</span>
           </div>
+          <!--
+            ★ 2026-10-17 用户裁决：**字段标签（原「语义字段」= `FieldCode`）不可编辑**。
+            它是扫描器从文档标签带出的**绑定键**（`{{xxx}}` 去前缀，见 `AnchorClassifier.FieldCodeOf`），
+            须与 `cert_doc_field_def.FieldCode` 逐字对齐；人工改它 = 换掉绑定键，
+            且下次重扫会被静默覆盖（`DocTemplateAnchorController` 重扫直接写回该列）。
+            「这一格填什么」的人话说明由下方「字段描述」（`Remark`）承载。
+          -->
           <div class="loc-item">
-            <label>语义字段</label>
-            <el-input
-              v-model="form.FieldCode"
-              size="small"
-              placeholder="字段编码"
-              :disabled="isDomainAuto"
-            />
+            <label>字段标签</label>
+            <span
+              v-if="form.FieldCode"
+              class="loc-ref"
+              :title="`${form.FieldCode} —— 由文档标签自动带出，不可编辑`"
+              >{{ form.FieldCode }}</span
+            >
+            <span
+              v-else
+              class="loc-empty"
+              title="该锚点的文档标签没有可用的字段名（改文档标签后重新扫描即可带出）"
+              >未绑定</span
+            >
           </div>
         </div>
 
@@ -767,13 +780,26 @@ async function onSave() {
               />
             </div>
             <div class="form-item full">
-              <label>备注</label>
+              <label>字段描述</label>
               <el-input
                 v-model="form.Remark"
                 size="small"
                 type="textarea"
-                :rows="1"
+                :rows="2"
+                maxlength="500"
+                show-word-limit
+                placeholder="这一格填什么（例：企业营业执照上的成立日期）"
               />
+            </div>
+            <!--
+              ★ 2026-10-17：说明「字段描述」的真实去向 —— 它不只是给人看的备注。
+              运行期 AI 填这一格时的 `Instruction` 回退链是
+              `来源提示词 → 锚点 Remark → 锚点键`（`DocumentFillOrchestrator.BuildAiInstructionAsync`、
+              `EnterpriseDocNormalizationExecutor.ProcessAiAnchorsAsync`）⇒ 写清楚描述 = 提高 AI 取值准确率。
+            -->
+            <div class="hint">
+              <b>字段描述</b>会作为 AI 填写这一格的说明（为空时退回用锚点键）。请写「填什么」，
+              ⛔ 不要写内部批注（如「待确认」），否则会被当成填写要求喂给模型。
             </div>
           </div>
 
@@ -950,6 +976,11 @@ async function onSave() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* ★ 2026-10-17：字段标签未绑定时的占位（只读展示，不是输入框） */
+.loc-item .loc-empty {
+  color: var(--t3);
+  font-style: normal;
 }
 
 /* ── ① 来源卡片 ── */

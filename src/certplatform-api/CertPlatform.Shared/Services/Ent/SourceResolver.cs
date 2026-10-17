@@ -49,22 +49,13 @@ namespace CertPlatform.Shared.Services.Ent
             _paramValues = paramValues;
         }
 
-        /// <summary>解析 SourceSpec JSON 字符串</summary>
-        public SourceSpecModel? Parse(string? json)
-        {
-            if (string.IsNullOrWhiteSpace(json)) return null;
-            try
-            {
-                return JsonSerializer.Deserialize<SourceSpecModel>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
-            }
-            catch
-            {
-                return null;
-            }
-        }
+        /// <summary>
+        ///     解析 SourceSpec JSON 字符串。
+        ///     <para>★ 2026-10-16：实现已<b>下沉</b>到 <see cref="SourceSpecModel.TryParse"/>，
+        ///     本方法仅作<b>实例门面</b>保留（现有调用方都用 <c>_sourceResolver.Parse(...)</c>，
+        ///     改签名会波及多处；⛔ 不要在这里另写一份解析）。</para>
+        /// </summary>
+        public SourceSpecModel? Parse(string? json) => SourceSpecModel.TryParse(json);
 
         /// <summary>
         ///     ★ <b>取参数定义</b> —— 供调用方做「<b>为什么取不到值</b>」的归因。
@@ -198,6 +189,35 @@ namespace CertPlatform.Shared.Services.Ent
         public string? Separator { get; set; }
         public string? Expr { get; set; }
         public List<SourceSpecEntry> Sources { get; set; } = new();
+
+        /// <summary>
+        ///     <b>解析 <c>SourceSpec</c> JSON（唯一实现）</b> —— 供<b>不需要 DB 的</b>调用方使用
+        ///     （如配置期校验：<c>StandardDocContractController</c>）。
+        ///
+        ///     <para>⚠️ <b>为什么要有这个静态版</b>：<see cref="SourceResolver.Parse"/> 是实例方法，
+        ///     而它所在类需要 <c>IDbOrm</c> + <c>FillParamValueProvider</c> 两个依赖 ——
+        ///     只想「读一下 JSON 里配了什么来源」的调用方<b>不该被迫构造一个取值器</b>，
+        ///     更不该自己抄一份 <c>JsonSerializer</c> 选项（抄一份 ⇒ 两处口径必然漂移）。</para>
+        ///
+        ///     <para>⇒ <see cref="SourceResolver.Parse"/> 已改为<b>委托到本方法</b>，两处同源。</para>
+        ///
+        ///     <para>⚠️ 解析失败返回 <c>null</c>（⛔ 不抛异常）—— 脏 JSON 由调用方决定怎么处置。</para>
+        /// </summary>
+        public static SourceSpecModel? TryParse(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            try
+            {
+                return JsonSerializer.Deserialize<SourceSpecModel>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+            }
+            catch
+            {
+                return null;
+            }
+        }
     }
 
     /// <summary>

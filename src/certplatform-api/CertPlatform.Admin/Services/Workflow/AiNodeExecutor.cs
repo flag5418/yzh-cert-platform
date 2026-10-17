@@ -132,8 +132,8 @@ namespace CertPlatform.Admin.Services.Workflow
             try
             {
                 var config = node.Config ?? new();
-                var template = config.GetValueOrDefault("promptTemplate")?.ToString() ?? "";
-                var outputType = config.GetValueOrDefault("outputType")?.ToString() ?? "string";
+                var template = config.GetConfigValue("PromptTemplate")?.ToString() ?? "";
+                var outputType = config.GetConfigValue("OutputType")?.ToString() ?? "string";
 
                 // ① 解析参数：★ 新方案 `config.params`（权威）+ 兼容旧 `customParams`（兜底）
                 //   ⚠️ 两条路径（真实执行 / 配置期测试）共用同一个 FillParamPoolAsync ——
@@ -172,9 +172,9 @@ namespace CertPlatform.Admin.Services.Workflow
                             "（请补录数据，或检查上游连线/节点输出端口是否正确）",
                         standardFileCode: null,
                         ruleCode: null,
-                        enterpriseCode: contextParams?.GetValueOrDefault("enterpriseCode")?.ToString(),
-                        standardCode: contextParams?.GetValueOrDefault("standardCode")?.ToString(),
-                        stageCode: contextParams?.GetValueOrDefault("phaseCode")?.ToString());
+                        enterpriseCode: contextParams?.GetValueOrDefault(WorkflowContextKeys.EnterpriseCode)?.ToString(),
+                        standardCode: contextParams?.GetValueOrDefault(WorkflowContextKeys.StandardCode)?.ToString(),
+                        stageCode: contextParams?.GetValueOrDefault(WorkflowContextKeys.PhaseCode)?.ToString());
                 }
 
                 _logger.LogInformation(
@@ -197,9 +197,9 @@ namespace CertPlatform.Admin.Services.Workflow
                             " —— 提示词无法跑通，已中断当前检查项",
                         standardFileCode: null,
                         ruleCode: null,
-                        enterpriseCode: contextParams?.GetValueOrDefault("enterpriseCode")?.ToString(),
-                        standardCode: contextParams?.GetValueOrDefault("standardCode")?.ToString(),
-                        stageCode: contextParams?.GetValueOrDefault("phaseCode")?.ToString());
+                        enterpriseCode: contextParams?.GetValueOrDefault(WorkflowContextKeys.EnterpriseCode)?.ToString(),
+                        standardCode: contextParams?.GetValueOrDefault(WorkflowContextKeys.StandardCode)?.ToString(),
+                        stageCode: contextParams?.GetValueOrDefault(WorkflowContextKeys.PhaseCode)?.ToString());
                 }
 
                 var renderedPrompt = rendered.Body;
@@ -315,8 +315,8 @@ namespace CertPlatform.Admin.Services.Workflow
             try
             {
                 var config = node.Config ?? new();
-                var template = config.GetValueOrDefault("promptTemplate")?.ToString() ?? "";
-                var outputType = config.GetValueOrDefault("outputType")?.ToString() ?? "string";
+                var template = config.GetConfigValue("PromptTemplate")?.ToString() ?? "";
+                var outputType = config.GetConfigValue("OutputType")?.ToString() ?? "string";
 
                 // ① 解析参数：★ 新方案 `config.params`（权威）+ 兼容旧 `customParams`（兜底）
                 //   与真实执行路径共用 FillParamPoolAsync（⛔ 不许分叉，见 D2）
@@ -434,7 +434,7 @@ namespace CertPlatform.Admin.Services.Workflow
             Dictionary<string, object> paramPool,
             out string paramSection)
         {
-            var template = node.Config?.GetValueOrDefault(AiParams.PromptKey)?.ToString() ?? "";
+            var template = node.GetConfig(AiParams.PromptKey)?.ToString() ?? "";
             var decls = AiParams.ParseDeclaredParams(node);
 
             var rendered = PromptRenderer.RenderCommentStyle(template, paramPool, decls);
@@ -484,7 +484,7 @@ namespace CertPlatform.Admin.Services.Workflow
             var config = node.Config ?? new();
             var settings = await GetAiSettingsAsync(ct);
 
-            var model = config.GetValueOrDefault("model")?.ToString();
+            var model = config.GetConfigValue("Model")?.ToString();
             if (string.IsNullOrWhiteSpace(model)) model = settings.Model;
 
             double temperature = settings.Temperature;
@@ -494,7 +494,7 @@ namespace CertPlatform.Admin.Services.Workflow
                 temperature = tParsed;
             }
 
-            var systemPrompt = config.GetValueOrDefault("systemPrompt")?.ToString()
+            var systemPrompt = config.GetConfigValue("SystemPrompt")?.ToString()
                 ?? "你是认证审核AI助手，只需输出结果，不要解释。";
 
             if (!string.IsNullOrWhiteSpace(paramSection))
@@ -593,9 +593,9 @@ namespace CertPlatform.Admin.Services.Workflow
             SourceType = decl.IsNodeSource ? "link" : decl.SourceType,
             SourceConfig = new Dictionary<string, object>
             {
-                ["nodeId"] = decl.NodeId,
-                ["portName"] = decl.PortName,
-                ["value"] = decl.Value!
+                ["NodeId"] = decl.NodeId,
+                ["PortName"] = decl.PortName,
+                ["Value"] = decl.Value!
             }
         };
 
@@ -606,7 +606,7 @@ namespace CertPlatform.Admin.Services.Workflow
         {
             var result = new List<CustomParam>();
 
-            if (node.Config == null || !node.Config.TryGetValue("customParams", out var cpValue))
+            if (node.Config == null || !node.Config.TryGetConfigValue("CustomParams", out var cpValue))
                 return result;
 
             try
@@ -649,7 +649,7 @@ namespace CertPlatform.Admin.Services.Workflow
                     return await ResolveSkillParamAsync(param, sharedOutputs, contextParams, taskCode, itemCode, ct);
 
                 case "constant":
-                    return param.SourceConfig?.GetValueOrDefault("value");
+                    return param.SourceConfig.GetConfigValue("Value");
 
                 default:
                     _logger.LogWarning("不支持的参数来源类型: {SourceType}", param.SourceType);
@@ -662,8 +662,8 @@ namespace CertPlatform.Admin.Services.Workflow
         /// </summary>
         private object? ResolveLinkParam(CustomParam param, Dictionary<string, object> sharedOutputs)
         {
-            var nodeId = param.SourceConfig?.GetValueOrDefault("nodeId")?.ToString();
-            var portName = param.SourceConfig?.GetValueOrDefault("portName")?.ToString();
+            var nodeId = param.SourceConfig.GetConfigValue("NodeId")?.ToString();
+            var portName = param.SourceConfig.GetConfigValue("PortName")?.ToString();
 
             if (string.IsNullOrEmpty(nodeId))
                 return null;
@@ -696,14 +696,14 @@ namespace CertPlatform.Admin.Services.Workflow
             string itemCode,
             CancellationToken ct)
         {
-            var skillCode = param.SourceConfig?.GetValueOrDefault("skillCode")?.ToString();
+            var skillCode = param.SourceConfig.GetConfigValue("SkillCode")?.ToString();
             if (string.IsNullOrEmpty(skillCode))
                 return null;
 
             // 解析 Skill 参数
             var skillParams = new Dictionary<string, object>();
-            if (param.SourceConfig.TryGetValue("skillParams", out var spValue) &&
-                param.SourceConfig.TryGetValue("skillParamsTypes", out var sptValue))
+            if (param.SourceConfig.TryGetConfigValue("SkillParams", out var spValue) &&
+                param.SourceConfig.TryGetConfigValue("SkillParamsTypes", out var sptValue))
             {
                 var spDict = ConvertToDict(spValue);
                 var sptDict = ConvertToDict(sptValue);

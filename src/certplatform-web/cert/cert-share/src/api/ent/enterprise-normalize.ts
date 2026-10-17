@@ -28,7 +28,7 @@
  *    前端 `unwrapOk` 抛 `BizError`，页面按「业务拒绝」处理（弹红 + 页面持久展示原因）。
  */
 import { yzhApi, unwrapOk, type ApiResponse } from '@yzh-core'
-import { downloadBlob } from '@share/utils/download'
+import { saveBlob } from '@share/utils/download'
 
 const BASE = '/api/Auditor/EnterpriseNormalize'
 
@@ -1250,7 +1250,7 @@ export async function packageNormalize(
     StageCode: req.StageCode ?? null,
     StandardFileCodes: req.StandardFileCodes ?? null,
   })
-  downloadBlob(blob, fileName.endsWith('.zip') ? fileName : `${fileName}.zip`)
+  saveBlob(blob, fileName.endsWith('.zip') ? fileName : `${fileName}.zip`)
 }
 
 /** 任务状态（`yzh_queue.Status`）→ 人话 */

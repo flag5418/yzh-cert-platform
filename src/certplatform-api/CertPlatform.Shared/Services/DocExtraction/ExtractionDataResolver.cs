@@ -102,7 +102,9 @@ public class ExtractionDataResolver
         string enterpriseCode, string? ruleCode, string fieldCode,
         string? standardCode = null, string? stageCode = null)
     {
-        if (string.IsNullOrWhiteSpace(enterpriseCode) || string.IsNullOrWhiteSpace(fieldCode))
+        // ★ 2026-10-17：允许空 enterpriseCode（= 平台标准级，归属模型 V2 的合法值）。
+        //   ⛔ 只拦「缺取数键（fieldCode）」——企业 Code 为空不再是错误。
+        if (string.IsNullOrWhiteSpace(fieldCode))
             return new FieldValue { State = EmptyJudge.StateNotFound };
 
         var rows = (await _db.GetListAsync<ExtractionResult>(x =>
@@ -152,7 +154,9 @@ public class ExtractionDataResolver
         string enterpriseCode, string? ruleCode, string tableCode,
         string? standardCode = null, string? stageCode = null)
     {
-        if (string.IsNullOrWhiteSpace(enterpriseCode) || string.IsNullOrWhiteSpace(tableCode))
+        // ★ 2026-10-17：允许空 enterpriseCode（= 平台标准级，归属模型 V2 的合法值）。
+        //   ⛔ 只拦「缺取数键（tableCode）」——企业 Code 为空不再是错误。
+        if (string.IsNullOrWhiteSpace(tableCode))
             return new TableValue { State = EmptyJudge.StateNotFound };
 
         var rows = (await _db.GetListAsync<TableExtractionResult>(x =>

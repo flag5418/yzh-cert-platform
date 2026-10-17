@@ -59,7 +59,7 @@ function missingPortDescriptions(nodes: readonly any[]): string[] {
   const bad: string[] = []
   for (const n of nodes) {
     for (const p of [...(n?.inputPorts ?? []), ...(n?.outputPorts ?? [])] as any[]) {
-      if (!((p?.description ?? '') as string).trim()) bad.push(`${n?.classCode}.${p?.name} 端口说明为空`)
+      if (!((p?.Description ?? '') as string).trim()) bad.push(`${n?.classCode}.${p?.Name} 端口说明为空`)
     }
   }
   return bad
@@ -85,7 +85,7 @@ describe('specialNodes — 编辑说明完备性', () => {
   it('节点清单未被意外增删（新增节点必须同时补说明）', () => {
     expect(SPECIAL_NODES.map((n: Node) => n.classCode).sort()).toEqual(
       [
-        'ai_node', 'branch', 'constant', 'docField', 'docTable',
+        'ai_node', 'branch', 'constant', 'docField', 'docMarkdown', 'docTable',
         'end', 'is_std_file_missing', 'loop', 'start'
       ]
     )
@@ -115,7 +115,7 @@ describe('specialNodes — 校验器负向对照（防「恒绿」）', () => {
   })
 
   it('端口说明为空 ⇒ 必须报出', () => {
-    const bad = missingPortDescriptions([{ classCode: 'demo', inputPorts: [{ name: 'x', description: '  ' }] }])
+    const bad = missingPortDescriptions([{ classCode: 'demo', inputPorts: [{ Name: 'x', Description: '  ' }] }])
     expect(bad).toEqual(['demo.x 端口说明为空'])
   })
 })
@@ -162,7 +162,8 @@ describe('NodePropertyForm — 参数说明必须被渲染（防死数据回归�
 //    五个小写别名，**漏了 description** ⇒ `s.description` 恒 undefined
 //    ⇒ 功能节点属性面板永远不显示「!」（后端写多好都到不了界面）。
 //
-//    ⛔ 与 portNormalize 同类：后端响应恒 PascalCase，跨边界必须显式归一化。
+//    ⛔ 同类跨边界命名问题：后端响应恒 PascalCase，前端内部模型字段在此显式映射。
+//      （端口字段已于 2026-10-16 P3 统一为 PascalCase ⇒ 不再需要 portNormalize 归一化层。）
 // ══════════════════════════════════════════════════════════════
 
 describe('WorkflowDesigner — skill 说明必须跨边界归一化（防「!」永不显示）', () => {

@@ -15,8 +15,8 @@ namespace CertPlatform.Admin.Services.Workflow.Skills.Nc
     ///
     /// <para><b>为什么必须是本地代码而不是 AI</b>：「哪些级别影响结论、几条不过判什么」
     /// 是专家确定的<b>决策矩阵</b> ⇒ 落成配置表，机器执行。让 AI 读提示词做这件事，
-    /// 同输入两次可能出不同结论，认证审计无法接受。本类是 v2 链路唯一的结论来源
-    /// （与 v1 <see cref="NcConclusionCalculator"/> 维度级计算器并存，互不影响）。</para>
+    /// 同输入两次可能出不同结论，认证审计无法接受。本类是链路唯一的结论来源
+    /// （v1 维度级计算器 NcConclusionCalculator 已于 2026-10-16 随 v1 Skill 一并删除）。</para>
     ///
     /// <para><b>判定矩阵（★ 顺序不可颠倒）</b>：</para>
     /// <list type="number">

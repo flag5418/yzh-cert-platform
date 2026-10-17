@@ -192,8 +192,8 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     ///       （⛔ 不能报 <c>PRECONDITION_EMPTY</c> 让人去「补录」一个他本来就填不了的东西）</item>
     /// </list>
     ///
-    /// <para><b>⚠️ 键名必须与装配处逐字一致</b>（一律 camelCase，见
-    /// <c>WorkflowContextKeys</c>）：写错 = <b>静默拿到 <c>null</c></b> ⇒
+    /// <para><b>⚠️ 键名必须与装配处逐字一致</b>（一律 <b>PascalCase</b>，见
+    /// <c>WorkflowContextKeys</c>；2026-10-17 用户裁定）：写错 = <b>静默拿到 <c>null</c></b> ⇒
     /// 必须配「键名一致性」单测（枚举全仓 <c>[FromContext]</c> 的 Key，断言都在装配处出现）。</para>
     /// </summary>
     [AttributeUsage(AttributeTargets.Parameter, AllowMultiple = false, Inherited = false)]

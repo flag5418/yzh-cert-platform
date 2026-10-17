@@ -326,8 +326,14 @@ export function setDocTemplatePrompt(templateCode: string, promptCode: string) {
 export interface GenerateFillPromptPayload {
   /** 文档作用（全局规则 Tab「文档作用」文本框内容）；与 Anchors 至少给一项 */
   DocPurpose?: string
-  /** 文档角色（可空） */
-  DocRole?: string
+  /**
+   * ★ 文档约束的中文口径（2026-10-16 新增）—— 形如
+   * `必要文档 · 依赖企业文档（内容来自企业交上来的资料）`。
+   *
+   * ⛔ 替代旧的 `DocRole`（已废弃）：旧值是把**英文枚举码** `required` 直接拼进提示词，
+   * 大模型看到的是英文码而非中文。现由前端渲染成中文再传，顺带交代「是否依赖企业文档」。
+   */
+  DocConstraint?: string
   /** 现有提示词正文；**非空 = 优化模式**（保留结构，不全量重写） */
   CurrentPrompt?: string
   /** 锚点清单（前端从当前模板锚点行组装） */
@@ -383,22 +389,30 @@ export interface DocContractDetail {
   /** ★ 分类权威列 = `cert_standard_directory_file.DocCategory`（不是契约行） */
   DocCategory: string
   DocName: string
-  /** required / optional / reference / attachment */
-  DocRole: string
+  /**
+   * ★ **文档约束**（2026-10-16 定稿，`67` 号 §4.2）—— 权威列 =
+   * `cert_standard_directory_file.IsRequired`（**标准行**，⛔ 不是契约行）。
+   *
+   * - `true` = 必要文档（未生成 ⇒ 计入缺口）
+   * - `false` = 非必要文档（生成不出来 ⇒ 可忽略，编排器记 `skipped_optional`）
+   */
+  IsRequired: boolean
+  /**
+   * ★ **是否依赖企业文档**（2026-10-16 定稿，`67` 号 §4.2）—— 权威列 =
+   * `cert_standard_directory_file.Replaceable`（**标准行**，⛔ 不是契约行）。
+   *
+   * - `true` = 依赖企业文档（内容来自企业交上来的资料，要去匹配 / 取用）
+   * - `false` = 不依赖（标准自带的内容 —— 导航页 / 固定描述 —— 企业不用交，后台自动生成）
+   *
+   * ⚠️ 列名叫 `Replaceable`，但**业务口径是「是否依赖企业文档」** —— 二者是同一件事的
+   * 两种表述（不依赖 ⇒ 自然也不能被企业文件替代）。⛔ 不要按「文件可替换」理解。
+   * ⚠️ 对**全部文档**有效，与 `DocCategory` **正交**（旧注释「仅 fixed 有意义」是错的）。
+   */
+  Replaceable: boolean
   DocPurpose?: string
   /** 标签数组 JSON 字符串 */
   TagsJson?: string
   InfoItemsJson?: string
-  /**
-   * ★ `fixed` 文档专用：**可替换性**（人工判断，49-V3 §2.2 已裁 D-AA1，⛔ 程序不推导）。
-   *
-   * - `standard_provided` = 标准自带（不向企业索取）
-   * - `enterprise_provided` = 企业提供（必须给匹配依据）
-   *
-   * ⚠️ 非 `fixed` 行忽略此列（后端不写）。默认值 `enterprise_provided`。
-   * ⛔ DDL 注释里曾写 `platform_generated` —— **那是错的**，别照着抄。
-   */
-  FixedDocSubtype?: string
   /** `fixed` 文档专用：指纹规则集 JSON */
   FingerprintJson?: string
 
@@ -428,13 +442,20 @@ export interface DocContractSavePayload {
   DocName?: string
   /** ★ 「这个文档是否不需要编辑」：`fixed`（固定格式免填）/ `editable`（要配填写规则） */
   DocCategory?: string
-  DocRole?: string
+  /**
+   * ★ 文档约束：`true` = 必要文档 / `false` = 非必要文档（2026-10-16 新增）。
+   * ⚠️ `null`（或不传）= **本次不动**该字段（⛔ 不冲回默认），与 `DocPurpose` 同口径。
+   */
+  IsRequired?: boolean | null
+  /**
+   * ★ 是否依赖企业文档：`true` = 依赖 / `false` = 不依赖（2026-10-16 新增）。
+   * ⚠️ `null`（或不传）= **本次不动**该字段。
+   */
+  Replaceable?: boolean | null
   /** ⚠️ 传 `null`（或不传）= 本次不动该字段；传空串 = 清空 */
   DocPurpose?: string | null
   TagsJson?: string | null
   InfoItemsJson?: string | null
-  /** ★ 仅 `fixed` 文档用：`standard_provided` / `enterprise_provided` */
-  FixedDocSubtype?: string | null
   FingerprintJson?: string | null
 }
 
@@ -471,9 +492,42 @@ export function getDocContract(fileCode: string) {
   )
 }
 
+/**
+ * `POST /StandardDocContract/save` 的返回体。
+ *
+ * ⚠️ `IsRequired` / `Replaceable` 回传的是**标准目录行的真实值**（权威位置），
+ * ⛔ 不是契约行的值 —— 前端保存后据此立刻显示「真的生效了」。
+ */
+export interface DocContractSaveResult {
+  Code: string
+  StandardFileCode: string
+  DocName: string
+  DocCategory: string
+  /** ★ 文档约束：`true` = 必要文档 / `false` = 非必要文档 */
+  IsRequired: boolean
+  /** ★ 是否依赖企业文档：`true` = 依赖 / `false` = 不依赖 */
+  Replaceable: boolean
+  DocPurpose?: string
+  TagsJson?: string
+  InfoItemsJson?: string
+  FingerprintJson?: string
+  AnalyzeStatus: string
+  IsManualCorrected: boolean
+  /**
+   * ★ **配置期警告**（2026-10-16 新增，`67` 号 §6.2）—— ⛔ **不阻断保存**。
+   *
+   * 内容 = 该文档标了「不依赖企业文档」，但某些锚点的取值来源
+   * **需要企业资料**（如 `ai_field` 从企业文档抽字段 / `enterprise.*` 读企业档案）。
+   * 运行期这些锚点会取不到值 ⇒ 保存时就告诉用户，别等跑完才发现。
+   *
+   * ⚠️ 空数组 = 无问题（正常情况）。后端异常时也会返回空数组，⛔ 不会因此让保存失败。
+   */
+  Warnings: string[]
+}
+
 /** 保存文档契约（人工编辑 ⇒ 标记 `manual`，后端同批同步标准目录行的 `DocCategory`） */
 export function saveDocContract(payload: DocContractSavePayload) {
-  return yzhApi.post<ApiResponse<any>>(
+  return yzhApi.post<ApiResponse<DocContractSaveResult>>(
     `${BASE}/StandardDocContract/save`,
     payload,
   )
@@ -698,8 +752,12 @@ export interface DocFillPreviewInfo {
 /**
  * ★ **试填一份空白模板并生成预览 PDF**（`52` B7）。
  *
- * 前置（前端闸 = C8）：锚点**配齐**才让点 —— `logic.anchorReadiness.ready`
- * （已上传模板 ∧ 扫描完成 ∧ 至少 1 个锚点 ∧ 无未配来源 ∧ 无孤儿）。
+ * 前置（前端闸）：**能试填**即可 —— `logic.previewReadiness.ready`
+ * （已上传模板 ∧ 扫描完成 ∧ 至少 1 个锚点）。
+ * ★ 2026-10-16 用户裁决：**不再要求来源配齐**（用户逐字「无论来源是什么，都可以自动生成
+ *   填写内容……提前发现我们更新文档后是否正确」）—— 试填取值走 `PreviewValueFactory`
+ *   （模板自带原文 + 按类型生成【试填】占位），未配 / 失效来源的锚点照样有占位值。
+ *   ⛔ 旧的 `anchorReadiness.ready`（配置完成度）**不是**试填闸。
  * ⛔ 后端**不设**这道闸（`52` §六 P2'：程序不阻断业务组合，只如实推导）——
  * 闸门在前端，是为了「不让用户白等一次必然全空的试填」。
  *

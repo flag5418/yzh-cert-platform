@@ -36,24 +36,30 @@
  * 见 `WfSkillController.ResolveDescription`。
  */
 
+/**
+ * ★ 端口字段一律 **PascalCase**（2026-10-16 P3 跨边界命名统一）：
+ *   `后端 SkillPortDto` = `rule_json` 端口 = 前端 `PortDef` 三处**逐字一致**，
+ *   ⛔ 不再有小写字段 + `portNormalize` 归一化层（已删除，见守卫 G3）。
+ */
 export interface PortDef {
-  name: string
-  label: string
-  type: string
-  description: string
-  defaultValue?: any
-  bindMode?: 'Link' | 'LinkOrConstant' | 'Enum'
-  required?: boolean
+  Name: string
+  Label: string
+  Type: string
+  Description: string
+  DefaultValue?: any
+  BindMode?: 'Link' | 'LinkOrConstant' | 'Enum'
+  Required?: boolean
   /**
    * ★ 该参数是否允许为空（2026-10-12 后端新增，`Required == !allowEmpty`，两者同源）。
    * <para>后端 `[SkillParam(AllowEmpty = …)]` 三态的投影：`false` = 节点开发者显式声明
    * 「本参数不允许为空」⇒ 上游给空值时该节点以 `PRECONDITION_EMPTY` 失败。</para>
-   * <para>与 `required` 冗余但语义更直白，供面板做「空值拦截」提示；当前无消费方。</para>
+   * <para>与 `Required` 冗余但语义更直白，供面板做「空值拦截」提示；当前无消费方。</para>
    */
-  allowEmpty?: boolean
-  maxIn?: number
-  role?: 'anchor'
-  display?: 'visible' | 'hidden'
+  AllowEmpty?: boolean
+  EnumSource?: string
+  MaxIn?: number
+  Role?: 'anchor'
+  Display?: 'visible' | 'hidden'
 }
 
 export interface PanelField {
@@ -126,13 +132,13 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
       '要收齐多分支结果请用「自动登记」类机制（如 stamp_judge_level 的判定清单），⛔ 不要指望 end 节点汇总。',
     inputPorts: [
       {
-        name: 'result',
-        label: '汇聚结果',
-        type: 'json',
-        description: '上游输出的总结果；多分支下只收到第一条路径（引擎限制，非配置问题）',
-        bindMode: 'Link',
-        required: false,
-        maxIn: 999
+        Name: 'result',
+        Label: '汇聚结果',
+        Type: 'json',
+        Description: '上游输出的总结果；多分支下只收到第一条路径（引擎限制，非配置问题）',
+        BindMode: 'Link',
+        Required: false,
+        MaxIn: 999
       }
     ],
     outputPorts: [],
@@ -157,28 +163,28 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
       '⛔ 未选中的那一支在运行期标记为「跳过」（正常业务行为，不是失败）。',
     inputPorts: [
       {
-        name: 'condition',
-        label: '条件值',
-        type: 'boolean',
-        description: '上游节点（通常为 compare）输出的 bool 结果',
-        bindMode: 'Link',
-        required: true
+        Name: 'condition',
+        Label: '条件值',
+        Type: 'boolean',
+        Description: '上游节点（通常为 compare）输出的 bool 结果',
+        BindMode: 'Link',
+        Required: true
       }
     ],
     outputPorts: [
       {
-        name: 'success',
-        label: '条件为真',
-        type: 'signal',
-        description: '条件满足时执行此分支',
-        role: 'anchor'
+        Name: 'success',
+        Label: '条件为真',
+        Type: 'signal',
+        Description: '条件满足时执行此分支',
+        Role: 'anchor'
       },
       {
-        name: 'failure',
-        label: '条件为假',
-        type: 'signal',
-        description: '条件不满足时执行此分支',
-        role: 'anchor'
+        Name: 'failure',
+        Label: '条件为假',
+        Type: 'signal',
+        Description: '条件不满足时执行此分支',
+        Role: 'anchor'
       }
     ],
     panelSchema: []
@@ -204,12 +210,12 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
       '⛔ 提示词里没被 {{}} 引用的参数等于白配；⛔ AI 节点「总有输出」，⛔ 别把它当判空的证据来源。',
     inputPorts: [
       {
-        name: 'input',
-        label: '输入数据',
-        type: 'json',
-        description: '上游节点输出（可选），可在提示词中通过 {{参数名}} 引用',
-        bindMode: 'LinkOrConstant',
-        required: false
+        Name: 'input',
+        Label: '输入数据',
+        Type: 'json',
+        Description: '上游节点输出（可选），可在提示词中通过 {{参数名}} 引用',
+        BindMode: 'LinkOrConstant',
+        Required: false
       }
     ],
     outputPorts: [],
@@ -224,7 +230,7 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
       //   ③ 参数名必须是短 ASCII 标识符（p1/p2），中文说明放「标签」——
       //      模型要完成「符号 → 值」映射，中文参数名会拉高弱模型的映射错误率（§2.3）。
       {
-        field: 'config.params',
+        field: 'config.Params',
         label: '参数',
         type: 'ai-params',
         description:
@@ -232,7 +238,7 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
           '未被提示词引用的参数不生效。'
       },
       {
-        field: 'config.promptTemplate',
+        field: 'config.PromptTemplate',
         label: '提示词模板',
         type: 'promptWithRef',
         required: true,
@@ -242,7 +248,7 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
           '引用名写错不报错，只会把占位符原文送给模型。'
       },
       {
-        field: 'config.outputType',
+        field: 'config.OutputType',
         label: '输出类型',
         type: 'select',
         required: true,
@@ -262,11 +268,11 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
       //   例：verdict:pass|fail|unknown / confidence:number / quotes:string[]
       //   ⛔ 留空 = 不校验（只解析 JSON）。配了则解析后逐字段机器校验，不符即节点失败。
       {
-        field: 'config.outputSchema',
+        field: 'config.OutputSchema',
         label: '输出 Schema（可选）',
         type: 'textarea',
         rows: 4,
-        visibleWhen: { field: 'config.outputType', equals: 'json' },
+        visibleWhen: { field: 'config.OutputType', equals: 'json' },
         description:
           '每行「字段:类型」，如 verdict:pass|fail|unknown；支持 [] 数组、a|b 枚举、? 可选。' +
           '留空 = 只解析不校验。'
@@ -291,11 +297,11 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
       '【坑】⛔ 引用的是节点标题不是节点 ID；⛔ 改标题会让已有引用失效，记得同步改提示词。',
     inputPorts: [],
     outputPorts: [
-      { name: 'result', label: '值', type: 'string', description: '配置的常量值', display: 'visible' }
+      { Name: 'result', Label: '值', Type: 'string', Description: '配置的常量值', Display: 'visible' }
     ],
     panelSchema: [
       {
-        field: 'config.value',
+        field: 'config.Value',
         label: '常量值',
         type: 'textarea',
         required: true,
@@ -322,26 +328,26 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
       '【坑】⛔ 上游给的不是数组时会当单元素处理；⛔ NC 判定链路基本用不到本节点 —— 逐条判定请用 stamp_judge_level 盖章，不要用循环。',
     inputPorts: [
       {
-        name: 'collection',
-        label: '循环集合',
-        type: 'json',
-        description: '上游节点输出的数组',
-        bindMode: 'Link',
-        required: true
+        Name: 'collection',
+        Label: '循环集合',
+        Type: 'json',
+        Description: '上游节点输出的数组',
+        BindMode: 'Link',
+        Required: true
       }
     ],
     outputPorts: [
       {
-        name: 'results',
-        label: '循环结果',
-        type: 'json',
-        description: '每个元素执行结果组成的数组',
-        display: 'visible'
+        Name: 'results',
+        Label: '循环结果',
+        Type: 'json',
+        Description: '每个元素执行结果组成的数组',
+        Display: 'visible'
       }
     ],
     panelSchema: [
       {
-        field: 'config.iterateMode',
+        field: 'config.IterateMode',
         label: '迭代模式',
         type: 'select',
         options: [
@@ -373,17 +379,17 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
       '★ 与「判定」同连时证据空会优先判不可判定（盖过判定）。',
     inputPorts: [],
     outputPorts: [
-      { name: 'fieldValue', label: '字段值', type: 'string', description: '提取的字段值', display: 'visible' },
-      { name: 'confidence', label: '置信度', type: 'number', description: '提取置信度', display: 'hidden' },
-      { name: 'is_manual_edited', label: '是否人工编辑', type: 'boolean', description: '该字段值是否被人工改写过（true = 人工覆盖过，报告里应标注来源）', display: 'hidden' }
+      { Name: 'fieldValue', Label: '字段值', Type: 'string', Description: '提取的字段值', Display: 'visible' },
+      { Name: 'confidence', Label: '置信度', Type: 'number', Description: '提取置信度', Display: 'hidden' },
+      { Name: 'is_manual_edited', Label: '是否人工编辑', Type: 'boolean', Description: '该字段值是否被人工改写过（true = 人工覆盖过，报告里应标注来源）', Display: 'hidden' }
     ],
     panelSchema: [
-      { field: 'config.docType', label: '文档类型', type: 'select', options: [
+      { field: 'config.DocType', label: '文档类型', type: 'select', options: [
         { label: '标准文档（配置验证）', value: 'standard' },
         { label: '企业文档（运行提取）', value: 'enterprise' }
       ], defaultValue: 'standard', description: '配置期用标准文档验证，运行期自动切企业文档。' },
-      { field: 'config.ruleCode', label: '文档', type: 'doc-select', description: '当前标准和阶段下已配提取规则的文档；未选阶段时为空。' },
-      { field: 'config.fieldCode', label: '字段', type: 'field-select', description: '所选文档已定义的字段；需先选文档。' }
+      { field: 'config.RuleCode', label: '文档', type: 'doc-select', description: '当前标准和阶段下已配提取规则的文档；未选阶段时为空。' },
+      { field: 'config.FieldCode', label: '字段', type: 'field-select', description: '所选文档已定义的字段；需先选文档。' }
     ]
   },
 
@@ -405,16 +411,47 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
       '「空表」会被判成「不可判定」—— 要判「表里该有的行有没有」请先用 is_table_empty 再取反。',
     inputPorts: [],
     outputPorts: [
-      { name: 'rows', label: '表格数据', type: 'json', description: '表格行数据', display: 'visible' },
-      { name: 'confidence', label: '置信度', type: 'number', description: '提取置信度', display: 'hidden' }
+      { Name: 'rows', Label: '表格数据', Type: 'json', Description: '表格行数据', Display: 'visible' },
+      { Name: 'confidence', Label: '置信度', Type: 'number', Description: '提取置信度', Display: 'hidden' }
     ],
     panelSchema: [
-      { field: 'config.docType', label: '文档类型', type: 'select', options: [
+      { field: 'config.DocType', label: '文档类型', type: 'select', options: [
         { label: '标准文档（配置验证）', value: 'standard' },
         { label: '企业文档（运行提取）', value: 'enterprise' }
       ], defaultValue: 'standard', description: '配置期用标准文档验证，运行期自动切企业文档。' },
-      { field: 'config.ruleCode', label: '文档', type: 'doc-select', description: '当前标准和阶段下已配提取规则的文档；未选阶段时为空。' },
-      { field: 'config.tableCode', label: '表格', type: 'table-select', description: '所选文档已定义的表格；需先选文档。' }
+      { field: 'config.RuleCode', label: '文档', type: 'doc-select', description: '当前标准和阶段下已配提取规则的文档；未选阶段时为空。' },
+      { field: 'config.TableCode', label: '表格', type: 'table-select', description: '所选文档已定义的表格；需先选文档。' }
+    ]
+  },
+
+  // ==================== 文档全文节点 ====================
+  {
+    classCode: 'docMarkdown',
+    className: '文档全文',
+    category: 'data',
+    color: '#00897B',
+    icon: 'Tickets',
+    singleton: false,
+    testable: true,
+    renameable: true,
+    description:
+      '【作用】取某份文档**转换后的整篇 Markdown 全文**，供 AI 节点做通篇语义分析（如摘要、章节归类、整体判定）。' +
+      '配置期用标准文档验证，运行期自动换成企业文档。\n' +
+      '【怎么配】① 文档类型 —— 配置期留「标准文档」；② 文档 —— 从左侧树当前标准+阶段下的标准文件里选（与「标准文件缺失」同一份清单）。\n' +
+      '【坑】⛔ 它吃的是**转换产物** Markdown —— 该文件还没转换完成时输出为空（不是报错）；' +
+      '⛔ 全文可能很长，直接喂进 AI 提示词会占用大量 token，必要时先截断或只取关键章节；' +
+      '⛔ 取不到时本节点**仍算成功**、只是输出空值 —— 要判「有没有拿到全文」请接 is_empty 再进条件分支。',
+    inputPorts: [],
+    outputPorts: [
+      { Name: 'markdown', Label: '全文', Type: 'string', Description: '整篇文档的 Markdown 原文；未转换或文件不存在时为空', Display: 'visible' },
+      { Name: 'charCount', Label: '字符数', Type: 'number', Description: '全文的字符数（0 = 未取到）', Display: 'hidden' }
+    ],
+    panelSchema: [
+      { field: 'config.DocType', label: '文档类型', type: 'select', options: [
+        { label: '标准文档（配置验证）', value: 'standard' },
+        { label: '企业文档（运行提取）', value: 'enterprise' }
+      ], defaultValue: 'standard', description: '配置期用标准文档验证，运行期自动切企业文档。' },
+      { field: 'config.StandardFileCode', label: '文档', type: 'std-file-select', required: true, description: '当前标准和阶段下的标准文件（按文件夹分组，叶子可选）；运行期取该企业对应文件的全文。' }
     ]
   },
 
@@ -437,10 +474,10 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
       '⛔ 判断依据是「该企业是否上传过这份文件」，与文件内容质量无关。',
     inputPorts: [],
     outputPorts: [
-      { name: 'result', label: '是否缺失', type: 'boolean', description: 'true = 缺失，可直连条件分支', display: 'visible' },
-      { name: 'state', label: '判定状态', type: 'string', description: 'uploaded / not_required / placeholder_only / not_configured', display: 'visible' },
-      { name: 'is_required', label: '是否必需', type: 'boolean', description: '该文件对本企业是否必需', display: 'hidden' },
-      { name: 'message', label: '说明', type: 'string', description: '判定结论的文字说明', display: 'hidden' }
+      { Name: 'result', Label: '是否缺失', Type: 'boolean', Description: 'true = 缺失，可直连条件分支', Display: 'visible' },
+      { Name: 'state', Label: '判定状态', Type: 'string', Description: 'uploaded / not_required / placeholder_only / not_configured', Display: 'visible' },
+      { Name: 'is_required', Label: '是否必需', Type: 'boolean', Description: '该文件对本企业是否必需', Display: 'hidden' },
+      { Name: 'message', Label: '说明', Type: 'string', Description: '判定结论的文字说明', Display: 'hidden' }
     ],
     // ★ 2026-10-14（用户裁定）：删掉 `config.standardCode` / `config.stageCode` 两个下拉。
     //   理由：① 左树已经定义了「标准 + 阶段」，再让用户选一次是重复负担；
@@ -450,7 +487,7 @@ export const SPECIAL_NODES: SpecialNodeMeta[] = [
     //   现在这两个值由左树上下文自动带入（写入节点 config 仅留痕，见 NodePropertyForm），
     //   面板只保留「标准文件」一个真需要人决策的下拉。
     panelSchema: [
-      { field: 'config.standardFileCode', label: '标准文件', type: 'std-file-select', required: true, description: '当前标准和阶段下的标准文件（按文件夹分组，叶子可选）；执行期按当前企业判断是否已上传。' }
+      { field: 'config.StandardFileCode', label: '标准文件', type: 'std-file-select', required: true, description: '当前标准和阶段下的标准文件（按文件夹分组，叶子可选）；执行期按当前企业判断是否已上传。' }
     ]
   }
 ]

@@ -208,6 +208,13 @@ public interface ICoreResourceQuery
     /// <summary>按企业（<c>EnterpriseCode</c>，文件表的机构维度）取文件行。</summary>
     Task<List<StandardDirectoryFile>> GetDirectoryFilesByEnterpriseCodeAsync(string enterpriseCode, bool includeDisabled = false);
 
+    /// <summary>
+    /// 按「企业 + <b>模板文档 Code</b>」定位企业上传行（企业行的 <c>StandardFileCode</c> = 模板行 <c>Code</c>）。
+    /// <para>「文档全文」等工作流节点在运行期由模板 Code 反查企业实例行 ⇒ 收口在本方法
+    /// （⛔ 端内不要另拼 <c>EnterpriseCode == … &amp;&amp; StandardFileCode == …</c> 的 WHERE）。</para>
+    /// </summary>
+    Task<StandardDirectoryFile?> FindEnterpriseDirectoryFileByTemplateAsync(string enterpriseCode, string standardFileCode);
+
     /// <summary>按文件夹 <c>Code</c> 取该文件夹下全部有效文件。</summary>
     Task<List<StandardDirectoryFile>> GetDirectoryFilesByFolderCodeAsync(string folderCode);
 
@@ -682,6 +689,17 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         var fc = folderCode;
         var rows = await _db.GetListAsync<StandardDirectoryFile>(x => x.FolderCode == fc);
         return rows.Data ?? new List<StandardDirectoryFile>();
+    }
+
+    public async Task<StandardDirectoryFile?> FindEnterpriseDirectoryFileByTemplateAsync(string enterpriseCode, string standardFileCode)
+    {
+        if (string.IsNullOrWhiteSpace(enterpriseCode) || string.IsNullOrWhiteSpace(standardFileCode)) return null;
+
+        var ec = enterpriseCode;
+        var sfc = standardFileCode;
+        var r = await _db.GetOneAsync<StandardDirectoryFile>(
+            x => x.EnterpriseCode == ec && x.StandardFileCode == sfc);
+        return r.Data;
     }
 
     // ─────────────── 机构 / 企业（树根级）· 2026-10-13 阶段 1.B 扩充 ───────────────

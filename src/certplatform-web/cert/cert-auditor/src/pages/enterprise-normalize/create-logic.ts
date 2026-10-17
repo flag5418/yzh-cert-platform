@@ -53,6 +53,7 @@
  */
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useAsyncAction } from '@yzh-core'
 import { fetchStageTree } from '@share/api/ent/enterprise-original'
 import {
   fetchNormalizeTaskFiles,
@@ -296,7 +297,25 @@ export class NormalizeCreateLogic {
   planResult = ref<NormalizePlanResult | null>(null)
   /** ★ 范围变过 ⇒ 上次干跑作废（否则会拿旧结论去执行新范围 —— 静默错配） */
   planStale = ref(false)
-  planning = ref(false)
+
+  /**
+   * ★ 干跑预览（2026-10-16）—— 走 `useAsyncAction`：并发计数 + 全局等待提示。
+   *
+   * 【为什么这个要接】干跑要按范围把「模板 / 文件 / 已填值」全算一遍（多表 JOIN），
+   *   页面此前只在预览卡里显示一行转圈；用户若在第 1→2 步自动干跑期间切走，
+   *   回来时**看不出系统还在算**。
+   * 【为什么不能用单 boolean】`planning` 之前是 `ref(false)`，而干跑有**两个触发点**
+   *   （`nextStep()` 进第 3 步自动跑 + 卡片上「重新预览」按钮）⇒ 交叠时先结束的那次
+   *   `finally` 会把它置回 `false` ⇒ 「正在计算」的提示提前消失、按钮提前可点。
+   *
+   * ⚠️ `useAsyncAction` 必须在 **setup 同步期**调用（内部要 `inject` 路由对象）
+   *   ⇒ 放在类字段初始化里（`new NormalizeCreateLogic()` 发生在页面 setup 中）。
+   */
+  private planAction = useAsyncAction()
+
+  /** 干跑进行中（模板按 `logic.planning.value` 读，`ComputedRef` 与 `ref` 用法一致） */
+  planning = this.planAction.busy
+  /** ★ 入队 = 队列任务（进度归 `/enterprise-normalize` 列表），按裁决⛔ 不接全局遮罩 */
   running = ref(false)
 
   /** ★ 只有「已预览 且 范围没变过 且 有可执行项」才允许真跑 */
@@ -518,20 +537,19 @@ export class NormalizeCreateLogic {
       return false
     }
 
-    this.planning.value = true
-    try {
-      const r = await planNormalize(this.buildRequest())
-      this.planResult.value = r
-      this.planStale.value = false
-      return true
-    } catch (e) {
-      this.planResult.value = null
-      this.planStale.value = true
-      ElMessage.error((e as Error).message)
-      return false
-    } finally {
-      this.planning.value = false
-    }
+    return await this.planAction
+      .run(async () => {
+        const r = await planNormalize(this.buildRequest())
+        this.planResult.value = r
+        this.planStale.value = false
+      }, '正在计算「将要做什么」（只读，不改动任何数据）')
+      .then(() => true)
+      .catch((e: unknown) => {
+        this.planResult.value = null
+        this.planStale.value = true
+        ElMessage.error((e as Error).message)
+        return false
+      })
   }
 
   /**

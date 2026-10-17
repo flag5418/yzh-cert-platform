@@ -541,6 +541,84 @@ function runR21() {
 }
 
 /* ==========================================================================
+ * ★ R22 —— 工作流跨边界命名 G2：前端禁以小写 B 键读/写 node.config
+ *
+ *   依据：docs/40-实施/开发计划/工作流跨边界命名统一方案-V1.md §2.2（边界 B）
+ *   口径：node.config 内层键一律 PascalCase（config.PromptTemplate / config.RuleCode …）。
+ *         边界 F（LayoutJson nodePositions）与 HTTP 请求体（边界 D）**不在此例**。
+ *   ⚠️ `value` 只查「带引号」形态（panelSchema/panelFieldValues 键），
+ *      因为 `this.config.value` 是 Vue ref 取值的正常写法（代码形态会误报）。
+ * ========================================================================== */
+const WORKFLOW_CFG_KEYS =
+  'docType|ruleCode|fieldCode|tableCode|standardFileCode|promptTemplate|outputType|outputSchema|iterateMode|params|model|systemPrompt'
+const WORKFLOW_CFG_ROOTS = [
+  join(WEB, 'cert/cert-share/src/composables/workflow'),
+  join(WEB, 'cert/cert-share/src/components/workflow'),
+  join(WEB, 'cert/cert-admin/src/pages/workflow'),
+  join(WEB, 'cert/cert-auditor/src/pages/workflow'),
+]
+
+function runR22() {
+  const violations = []
+  const codeRe = new RegExp(`\\bconfig\\s*\\.\\s*(${WORKFLOW_CFG_KEYS})\\b`)
+  const strRe = new RegExp(`['"\`]config\\.(${WORKFLOW_CFG_KEYS}|value)['"\`]`)
+  for (const file of walkAll(WORKFLOW_CFG_ROOTS, ['.ts', '.vue'])) {
+    const r = rel(file)
+    if (r.includes('.test.')) continue
+    const lines = readFileSync(file, 'utf8').split('\n')
+    lines.forEach((line, i) => {
+      if (isCommentLine(line)) return
+      const m = codeRe.exec(line) || strRe.exec(line)
+      if (!m) return
+      violations.push({
+        file: r,
+        line: i + 1,
+        text: `G2 node.config 键必须 PascalCase（命中 config.${m[1]}）—— 见 工作流跨边界命名统一方案-V1.md §2.2`,
+      })
+    })
+  }
+  return { violations, skipped: false }
+}
+
+/* ★ R23 —— 工作流跨边界命名 G3：禁归一化层 portNormalize 复活
+ *   端口字段已于 2026-10-16 P3 统一为 PascalCase（后端 metadata / rule_json / PortDef 同名），
+ *   归一化层属「两套命名并存」的补丁，一旦复活即意味着命名再次分裂。 */
+function runR23() {
+  const violations = []
+  const f = join(WEB, 'cert/cert-share/src/composables/workflow/portNormalize.ts')
+  if (existsSync(f)) {
+    violations.push({
+      file: rel(f),
+      line: 0,
+      text: 'G3 portNormalize 归一化层复活 —— 端口字段已统一 PascalCase，禁止再加归一化层',
+    })
+  }
+  const roots = [
+    join(WEB, 'cert/cert-share/src'),
+    join(WEB, 'cert/cert-admin/src'),
+    join(WEB, 'cert/cert-auditor/src'),
+    join(WEB, 'yzh.vue.core/src'),
+  ]
+  const re = /\b(normalizePorts|portNormalize)\b/
+  for (const file of walkAll(roots, ['.ts', '.vue'])) {
+    const r = rel(file)
+    if (r.includes('.test.')) continue
+    const lines = readFileSync(file, 'utf8').split('\n')
+    lines.forEach((line, i) => {
+      if (isCommentLine(line)) return
+      if (re.test(line)) {
+        violations.push({
+          file: r,
+          line: i + 1,
+          text: `G3 引用了已删除的归一化层（portNormalize/normalizePorts）—— 端口字段统一 PascalCase，无需归一化`,
+        })
+      }
+    })
+  }
+  return { violations, skipped: false }
+}
+
+/* ==========================================================================
  * ★ A-R1 ~ A-R10 —— 跨端共享与核心资源检索铁律（2026-10-12 用户裁定 / 10-13 归属模型 V2）
  *
  *   规则全文：docs/30-项目规则/跨端共享与核心资源检索规则-V1.md
@@ -1627,6 +1705,20 @@ const RULES = [
     type: 'custom',
     desc: '上传契约单源（生成物同步 + 禁字面量 accept + file 选择面必接 upload-file-policy）',
     run: runR21,
+    debt: [],
+  },
+  {
+    id: 'R22',
+    type: 'custom',
+    desc: '工作流跨边界命名 G2：node.config 内层键必须 PascalCase（禁 config.docType 等小写 B 键）',
+    run: runR22,
+    debt: [],
+  },
+  {
+    id: 'R23',
+    type: 'custom',
+    desc: '工作流跨边界命名 G3：禁归一化层 portNormalize/normalizePorts 复活（端口统一 PascalCase）',
+    run: runR23,
     debt: [],
   },
   // ===== 审计 §8（标准目录链路）：全部为后端 .cs 扫描，debt 随修复逐条删除 =====

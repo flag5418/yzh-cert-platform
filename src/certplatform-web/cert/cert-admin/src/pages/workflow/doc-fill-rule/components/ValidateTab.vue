@@ -104,7 +104,25 @@ async function refresh() {
   }
 }
 
-watch(() => props.templateCode, reset)
+/**
+ * ★ 2026-10-16：选中 / 上传模板后**自动跑一次校验**。
+ *
+ * 【为什么】此前 `canPublish` 只在用户**手动**点「开始校验」后才回填 ⇒ 底部「保存并发布」
+ * 一直是灰的，而保存条 tooltip 又写「请先完成必配项」⇒ 用户误以为「缺 AI 语义分析 /
+ * 类型确认」挡住了发布（实测把那两项与发布门混为一谈）。后台校验其实**已经通过**
+ * （`cert_doc_template` 的 `CanPublish=true`），只是前端没去问。
+ *
+ * 现改为：`templateCode` 一变（选中/上传/切换模板）就 `reset` + `refresh`，
+ * 让按钮直接反映**后端真实结论**，⛔ 不再要求用户先找到「发布校验」再点一次。
+ */
+watch(
+  () => props.templateCode,
+  async (code) => {
+    reset()
+    if (code) await refresh()
+  },
+  { immediate: true },
+)
 
 defineExpose({ refresh })
 </script>

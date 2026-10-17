@@ -10,7 +10,6 @@
 import { reactive } from 'vue'
 import { NodeIdGenerator } from '@share/composables/workflow/nodeIdGenerator'
 import { getSpecialNode, type SpecialNodeMeta, type PortDef } from '@share/composables/workflow/specialNodes'
-import { normalizePorts } from '@share/composables/workflow/portNormalize'
 
 export interface WorkflowNode {
   id: string
@@ -104,11 +103,9 @@ export function useWorkflowStore(): WorkflowStore {
       nodeId = state.idGenerator.next(classCode)
     }
     const title = generateUniqueName(meta?.className || item.skillName || item.skillCode || classCode)
-    // ★ 端口字段名归一化（2026-10-11）：item 来自 WorkflowDesigner.loadSkills，
-    //   其 inputPorts 源自后端 metadata（PascalCase）⇒ 不归一化会让 port.name 为 undefined，
-    //   buildDefaultInputs 读不到 defaultValue、落库端口带大写键。详见 portNormalize.ts
-    const inputPorts = normalizePorts(item.inputPorts?.length ? item.inputPorts : (meta?.inputPorts || []))
-    const outputPorts = normalizePorts(item.outputPorts?.length ? item.outputPorts : (meta?.outputPorts || []))
+    // ★ 端口字段一律 PascalCase（2026-10-16 P3）：后端 metadata / rule_json / PortDef 三处同名。
+    const inputPorts = item.inputPorts?.length ? item.inputPorts : (meta?.inputPorts || [])
+    const outputPorts = item.outputPorts?.length ? item.outputPorts : (meta?.outputPorts || [])
 
     const node: WorkflowNode = {
       id: nodeId, classCode, nodeType: meta ? classCode : 'skill', title,
@@ -283,20 +280,24 @@ export function useWorkflowStore(): WorkflowStore {
   }
 
   function buildDefaultConfig(classCode: string): Record<string, any> {
+    // ★ 2026-10-16 P5：config 内键一律 PascalCase（与后端 WorkflowConfigAccess / panelSchema 同名）。
+    //   ⛔ 历史遗留 fork 已归并：`prompt`→`PromptTemplate`、`jsonMode`→`OutputType`、
+    //   `docCode`→`RuleCode`（面板一直用 ruleCode，docCode 是死键 ⇒ 默认值从未显示）。
     const config: Record<string, any> = {}
-    if (classCode === 'docField') { config.docCode = ''; config.fieldCode = '' }
-    if (classCode === 'docTable') { config.docCode = ''; config.tableCode = '' }
-    if (classCode === 'ai_node') { config.prompt = ''; config.jsonMode = true }
+    if (classCode === 'docField') { config.DocType = 'standard'; config.RuleCode = ''; config.FieldCode = '' }
+    if (classCode === 'docTable') { config.DocType = 'standard'; config.RuleCode = ''; config.TableCode = '' }
+    if (classCode === 'docMarkdown') { config.DocType = 'standard'; config.StandardFileCode = '' }
+    if (classCode === 'ai_node') { config.PromptTemplate = ''; config.OutputType = 'string' }
     // ★ 标准文件缺失节点：标准/阶段只用于筛选下拉（⛔ 不参与执行期判定），
-    //   standardFileCode 才是执行期真正用的（= 标准目录模板行的 Code）
-    if (classCode === 'is_std_file_missing') { config.standardCode = ''; config.stageCode = ''; config.standardFileCode = '' }
+    //   StandardFileCode 才是执行期真正用的（= 标准目录模板行的 Code）
+    if (classCode === 'is_std_file_missing') { config.StandardCode = ''; config.StageCode = ''; config.StandardFileCode = '' }
     return config
   }
 
   function buildDefaultInputs(inputPorts: PortDef[]): Record<string, any> {
     const defaults: Record<string, any> = {}
     for (const port of (inputPorts || [])) {
-      if (port.defaultValue !== undefined && port.defaultValue !== '') defaults[port.name] = port.defaultValue
+      if (port.DefaultValue !== undefined && port.DefaultValue !== '') defaults[port.Name] = port.DefaultValue
     }
     return defaults
   }

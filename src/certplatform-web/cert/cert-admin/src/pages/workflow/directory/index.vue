@@ -33,7 +33,7 @@ import {
   updateFile,
   deleteFile,
   downloadFile,
-  replaceFile as replaceFileApi,
+  replaceDirectoryFile as replaceFileApi,
   uploadInit,
   ensureDirectoryConfig,
   uploadFile,
@@ -257,14 +257,28 @@ async function openTreeFolder(folder: TreeNode) {
   const folderCode = folder.FolderCode || String(folder.Code || '')
 
   // 「根目录」是后端为根级孤儿文件造的虚拟节点（Code = DirectoryCode），不是真文件夹
-  if (!folderCode || folderCode === folder.DirectoryCode) {
-    if (currentPhase.value) {
-      currentFolderCode.value = ''
-      breadcrumbPath.value = []
-      selectedItems.clear()
-      allSelected.value = false
-      await loadCurrentContent()
+  // ★ 判据优先 `IsVirtualRoot`；`folderCode === folder.DirectoryCode` 只作旧后端兜底
+  if (!folderCode || folder.IsVirtualRoot || folderCode === folder.DirectoryCode) {
+    // ★ 虚拟「根目录」= 阶段根。用户很可能**先点根目录、还没点阶段**
+    //   （树默认展开到阶段，根目录就挂在阶段下第一个）——
+    //   此前这里是 `if (currentPhase.value) { … } return`，阶段未选中时**整段跳过**
+    //   ⇒ 右侧毫无反应，看起来像「点了没作用 / 根目录是坏的」。
+    //   现改为：从树里反查所属阶段，需要就先切阶段（selectPhase 内部已 resetRightPanel
+    //   + loadCurrentContent），已在本阶段则只把层级退回根。
+    const hit = findStagePath(folder)
+    if (!hit) {
+      ElMessage.warning('未找到该文件夹所属的阶段，请点击「刷新」后重试')
+      return
     }
+    if (currentPhase.value?.Code !== hit.stage.Code) {
+      await selectPhase(hit.stage)
+      return
+    }
+    currentFolderCode.value = ''
+    breadcrumbPath.value = []
+    selectedItems.clear()
+    allSelected.value = false
+    await loadCurrentContent()
     return
   }
 
@@ -831,6 +845,16 @@ const scopeFolderCount = ref(0)
 const scopeFileCount = ref(0)
 const scopeTotalSize = ref(0)
 
+/**
+ * 是否后端造的虚拟「根目录」节点（装根级 / 孤儿文件，不是真实文件夹）。
+ *
+ * ★ 判据 = 后端下发的 `IsVirtualRoot`；名字比对只作**旧后端兼容兜底**
+ *   （此前唯一的判据就是 `Name === '根目录'`，改名 / 多语言会静默失效）。
+ */
+function isVirtualRootNode(node: StageFolderNode): boolean {
+  return node.IsVirtualRoot === true || node.Name === '根目录'
+}
+
 function buildFolderAgg(stageFolders: StageFolderNode[]) {
   const map = new Map<string, FolderAgg>()
   let rootFolderCount = 0
@@ -857,12 +881,13 @@ function buildFolderAgg(stageFolders: StageFolderNode[]) {
     const status = mergeStatus(statuses)
     const agg: FolderAgg = { size, fileCount, folderCount, status }
     // 后端「根目录」虚拟节点 Code === directoryCode，不是真实文件夹
-    if (isRealFolder && node.Code && node.Name !== '根目录') map.set(node.Code, agg)
+    // ★ 判据优先看后端下发的 `IsVirtualRoot`（稳定），名字比对只作旧后端兼容兜底
+    if (isRealFolder && node.Code && !isVirtualRootNode(node)) map.set(node.Code, agg)
     return agg
   }
 
   for (const node of stageFolders) {
-    const isRootVirtual = node.Name === '根目录'
+    const isRootVirtual = isVirtualRootNode(node)
     const agg = walk(node, !isRootVirtual)
     if (!isRootVirtual) rootFolderCount += agg.folderCount
     scopeCount += agg.fileCount

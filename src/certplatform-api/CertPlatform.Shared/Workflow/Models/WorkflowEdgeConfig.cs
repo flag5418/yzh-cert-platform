@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 
 namespace CertPlatform.Shared.Workflow.Models
 {
@@ -15,11 +14,9 @@ namespace CertPlatform.Shared.Workflow.Models
         public string Target { get; set; } = "";
 
         /// <summary>源输出端口。branch 节点区分 success / failure，其他节点为 null</summary>
-        [JsonPropertyName("sourceHandle")]
         public string? SourceHandle { get; set; }
 
         /// <summary>目标输入端口名（如 condition、result），无特定端口时为 null</summary>
-        [JsonPropertyName("targetHandle")]
         public string? TargetHandle { get; set; }
     }
 }

@@ -72,12 +72,14 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         Description =
             "【作用】把一条判定组织成一条 judge 记录并盖级别（critical/major/minor/observation/none），" +
             "自动登记进「本次检查的判定清单」，下游 nc_conclusion_v2 直接读清单，⛔ 不需要汇聚节点。\n" +
-            "【怎么配】judge_code 必填（如 J1 / rule_nc_75）；level = 这条不过时有多严重，留空按 major（安全侧）；" +
+            "【怎么配】judge 标识自动 = 本节点的名称（★ 改节点名称即改标识，⛔ 无需另填）；" +
+            "level = 这条不过时有多严重，留空按 major（安全侧）；" +
             "三种接法任选其一：\n" +
             "　① 只连「证据」→ 有值即视为通过，空值 ⇒ 不可判定\n" +
             "　② 只连「判定」→ true 通过 / false 不通过\n" +
             "　③ 两个都连 → ★证据优先：证据空 ⇒ 不可判定（判定不介入），证据有值才按判定\n" +
-            "【坑】⛔ 两个都不接 ⇒ 直接报配置错（这是硬性不变量）；" +
+            "【坑】⛔ 节点名称不能为空（它是 judge 标识的来源）；" +
+            "⛔ 两个都不接 ⇒ 直接报配置错（这是硬性不变量）；" +
             "⛔ 「证据」别连 AI 节点（AI 总有输出 ⇒ 判空形同虚设）；" +
             "「空 = 不符合」的场景（如查审批签字是否存在）请把 is_empty 的取反连到「判定」，" +
             "⛔ 且「证据」不要连（证据空会盖成不可判定）。"
@@ -105,10 +107,6 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                         BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             object? result,
 
-            [SkillParam(Description = "★ judge 标识（常量；如 J1 / rule_nc_75，用于报告阶段区分来源）",
-                        BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Deny)]
-            string? judge_code,
-
             [SkillParam(Description = "★ 级别（常量；critical/major/minor/observation/none，空=按 major 安全缺省）",
                         BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? level = null,
@@ -121,6 +119,12 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                         BindMode = SkillParamBindMode.ConstantOnly, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? reason = null,
 
+            // ★ 引擎注入（2026-10-16）：本节点名称 —— **judge 标识的唯一来源**。
+            //   ⛔ 画布上不再有「judge 标识」输入框（改节点名称即改标识，一处赋值）。
+            //   ⛔ 不出现在画布上（Analyze 跳过 [FromContext]）。
+            [FromContext(WorkflowContextKeys.NodeTitle)]
+            string? nodeTitle = null,
+
             // ★ 引擎注入：本节点已连接的输入端口名。⛔ 不出现在画布上（Analyze 跳过 [FromContext]）。
             //   用途 = 区分「端口没接」（配置错）与「接了但上游返回空」（不可判定）。
             [FromContext(WorkflowContextKeys.ConnectedPorts)]
@@ -128,9 +132,12 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
 
             CancellationToken ct = default)
         {
-            if (string.IsNullOrWhiteSpace(judge_code))
+            // ★ judge 标识 = 节点名称（画布内唯一，见 WorkflowContextKeys.NodeTitle）。
+            //   ⛔ 不再单独手填 —— 否则同一件事要在「节点名称」和「judge 标识」两处赋值。
+            var judgeCode = (nodeTitle ?? string.Empty).Trim();
+            if (judgeCode.Length == 0)
                 return Task.FromResult(SkillResult.Fail(
-                    "judge_code 不能为空（judge 标识由规则作者在画布上填写，企业无法补录）",
+                    "本节点未命名：judge 标识取自节点名称，请先在画布上给本节点起个名称",
                     WorkflowErrorCodes.ConfigError));
 
             // ── ① 连接性前置检查（§4.3）──
@@ -181,7 +188,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
             //   原始上游证据另存 "payload"，报告阶段可回看。
             var record = new Dictionary<string, object>
             {
-                ["judge_code"]      = judge_code,
+                ["judge_code"]      = judgeCode,
                 ["level"]           = effectiveLevel,
                 ["verdict"]         = effectiveVerdict,
                 ["reason"]          = reason ?? (object)string.Empty,

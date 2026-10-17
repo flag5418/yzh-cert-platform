@@ -54,7 +54,7 @@ namespace CertPlatform.Shared.Workflow.Models
         /// <summary>完整的 rule_json（含所有节点配置）</summary>
         public string RuleJson { get; set; } = string.Empty;
 
-        /// <summary>运行时上下文参数（enterpriseCode / phaseCode / standardCode / fileCode）</summary>
+        /// <summary>运行时上下文参数（键一律 PascalCase：EnterpriseCode / StandardCode / PhaseCode / RuleCode / OrgCode）</summary>
         public Dictionary<string, object> ContextParams { get; set; } = new();
 
         /// <summary>模拟的上游节点输出（nodeId → output）</summary>

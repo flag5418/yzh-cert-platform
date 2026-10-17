@@ -264,9 +264,9 @@ namespace CertPlatform.Admin.Services.Workflow
 
             var ruleCode = request.RuleCode ?? "";
             var enterpriseCode = ResolveEnterpriseCode(
-                request.EnterpriseCode ?? ReadContextParam(request, "EnterpriseCode", "enterpriseCode"));
-            var phaseCode = request.PhaseCode ?? ReadContextParam(request, "PhaseCode", "phaseCode") ?? "";
-            var standardCode = request.StandardCode ?? ReadContextParam(request, "StandardCode", "standardCode") ?? "";
+                request.EnterpriseCode ?? ReadContextParam(request, WorkflowContextKeys.EnterpriseCode));
+            var phaseCode = request.PhaseCode ?? ReadContextParam(request, WorkflowContextKeys.PhaseCode) ?? "";
+            var standardCode = request.StandardCode ?? ReadContextParam(request, WorkflowContextKeys.StandardCode) ?? "";
 
             var mockOutputs = request.WorkflowContext?.MockOutputs
                 ?? new Dictionary<string, Dictionary<string, object>>();
@@ -675,17 +675,14 @@ namespace CertPlatform.Admin.Services.Workflow
         private static string ResolveEnterpriseCode(string? enterpriseCode)
             => string.IsNullOrWhiteSpace(enterpriseCode) ? "" : enterpriseCode!;
 
-        /// <summary>从 AI 节点的 WorkflowContext.ContextParams 读一个键（兼容 PascalCase / camelCase）</summary>
-        private static string? ReadContextParam(AiNodeTestRequest request, params string[] keys)
+        /// <summary>从 AI 节点的 WorkflowContext.ContextParams 读一个键（键名一律 PascalCase，见 WorkflowContextKeys）</summary>
+        private static string? ReadContextParam(AiNodeTestRequest request, string key)
         {
             var ctx = request.WorkflowContext?.ContextParams;
             if (ctx == null) return null;
 
-            foreach (var key in keys)
-            {
-                if (ctx.TryGetValue(key, out var v) && v != null)
-                    return v.ToString();
-            }
+            if (ctx.TryGetValue(key, out var v) && v != null)
+                return v.ToString();
             return null;
         }
 

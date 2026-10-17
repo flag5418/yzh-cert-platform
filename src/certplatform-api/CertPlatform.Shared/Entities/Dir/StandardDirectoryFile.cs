@@ -60,6 +60,25 @@ namespace CertPlatform.Shared.Entities.Dir
         /// confirm 首传显式落 1（G-1b），替换在归档时序中递增（G-3a）；B-08 四元组对账基准。</summary>
         public int VersionNumber { get; set; } = 1;
 
+        /// <summary>
+        ///     ★ <b>文档约束</b>（2026-10-16 定稿，`67` 号 §4.2）：<c>true</c> = 必要文档 /
+        ///     <c>false</c> = 非必要文档。
+        ///
+        ///     <para><c>true</c> ⇒ 认证必须有这份文档；未生成要计入<b>缺口</b>（文档级统计的红档）。</para>
+        ///     <para><c>false</c> ⇒ 有更好；程序生成不出来可以<b>忽略</b> —— 编排器记
+        ///     <c>skipped_optional</c>，⛔ 不判失败、不进失败统计。</para>
+        ///
+        ///     <para>⛔ 与「是否依赖企业文档」（<see cref="Replaceable"/>）是<b>两个独立维度</b>，
+        ///     不可互相推导 —— 二者构成 2×2（`67` 号 §3.1）：<br/>
+        ///     必要×依赖 = 企业必须交（最常见）· 必要×不依赖 = 标准自带但必须存在（导航页 / 固定描述）·<br/>
+        ///     非必要×依赖 = 企业可以交，不交也行 · 非必要×不依赖 = 基本无意义。</para>
+        ///
+        ///     <para>⚠️ 仅在<b>标准行</b>上配置（<c>EnterpriseCode</c> 为空，归属模型 V2）；
+        ///     企业实例行不重复存本列，按 <c>StandardFileCode</c> 回标准行读。</para>
+        ///
+        ///     <para>⚠️ <b>历史遗留</b>：本列此前无 XML 注释、全项目零消费（「写了没人看」类缺陷），
+        ///     2026-10-16 一并补齐语义与消费点。</para>
+        /// </summary>
         public bool IsRequired { get; set; } = true;
 
         public int MaxFileSizeMB { get; set; } = 10;
@@ -86,10 +105,31 @@ namespace CertPlatform.Shared.Entities.Dir
         public string DocCategory { get; set; } = "editable";
 
         /// <summary>
-        ///     ★ <b>固定文档是否可用企业文件替代</b>（§2 路径分流，2026-10-07）。
-        ///     <para><c>false</c> = 直接按标准目录结构归档到企业标准资料 MinIO（路径①，无 AI / 无参数）；
-        ///     <c>true</c> = 走文件匹配（路径②：两层过滤 + 图片/PDF 视觉模型 + 语义）。</para>
-        ///     <para>仅 <c>DocCategory='fixed'</c> 时有意义；<c>editable/hybrid</c> 恒忽略本列。</para>
+        ///     ★ <b>是否依赖企业文档</b>（2026-10-16 定稿，`67` 号 §4.2 / §4.4）。
+        ///
+        ///     <para><b>业务口径</b>：<c>true</c> = <b>依赖</b>企业文档（内容来自企业交上来的资料，
+        ///     系统要去匹配 / 取用）；<c>false</c> = <b>不依赖</b>企业文档（标准自带的内容 ——
+        /// 如<b>导航页、固定描述</b> —— 企业不用交，由后台按规则自动生成并入库）。</para>
+        ///
+        ///     <para>⛔ <b>不要按列名「可替换」理解</b>。它答的是「这份文档的内容从哪来」；
+        ///     「不依赖企业文档」⇒ 自然也不能被企业文件替代 —— 两者是<b>同一件事的两种表述</b>
+        ///     （用户 2026-10-16 裁决①）。列名保留不改，仅在注释与 UI 措辞上统一为「是否依赖企业文档」。</para>
+        ///
+        ///     <para><b>★ 适用范围（2026-10-16 修正，重要）</b>：本列对<b>全部文档</b>有效，
+        ///     与 <see cref="DocCategory"/> <b>正交</b>。<br/>
+        ///     ⚠️ 旧注释曾写「仅 <c>DocCategory='fixed'</c> 时有意义；<c>editable/hybrid</c> 恒忽略本列」
+        ///     —— <b>那是错的</b>：标准里的导航页 / 固定描述在分类上通常是 <c>editable</c>
+        ///     （有模板、要走填充链），但内容不依赖企业资料。按旧注释实现 ⇒ 该场景配不了。</para>
+        ///
+        ///     <para><b>四路分流</b>（<c>DocumentFillOrchestrator.FillOneAsync</c>，`67` 号 §6.1）：<br/>
+        ///     依赖×<c>fixed</c> ⇒ ② 文件匹配 · 依赖×<c>editable</c> ⇒ 七步填充链（取企业资料）·<br/>
+        ///     不依赖×<c>fixed</c> ⇒ ① 快归档 · 不依赖×<c>editable</c> ⇒ 七步填充链（⛔ 不读企业资料）。</para>
+        ///
+        ///     <para>⚠️ 仅在<b>标准行</b>上配置（<c>EnterpriseCode</c> 为空，归属模型 V2）。</para>
+        ///
+        ///     <para>⚠️ <b>历史遗留</b>：本列此前全项目<b>只读不写</b>（编排器读它，但无任何写入入口）
+        ///     ⇒ 恒为默认 <c>true</c> ⇒ 所有 <c>fixed</c> 文档永远走「文件匹配」，
+        ///     <c>RunFixedArchiveAsync</c>（快归档）不可达。2026-10-16 补写入入口（契约保存同批写）。</para>
         /// </summary>
         [SugarColumn(IsNullable = false)]
         public bool Replaceable { get; set; } = true;

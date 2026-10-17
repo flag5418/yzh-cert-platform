@@ -17,11 +17,11 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
         /// <summary>
         /// ★ <b>运行上下文</b>（2026-10-15 新增）—— 引擎开跑前装配的<b>业务上下文</b>。
         ///
-        /// <para><b>键名</b>见 <c>WorkflowContextKeys</c>（唯一出处，⛔ 禁止裸写字面量）：
-        /// <c>orgCode</c> / <c>standardCode</c> / <c>phaseCode</c> / <c>enterpriseCode</c> /
-        /// <c>ruleCode</c>，以及<b>运行级登记池</b>（见 <c>WorkflowContextKeys.JudgePool</c>）。</para>
+        /// <para><b>键名</b>见 <c>WorkflowContextKeys</c>（唯一出处，⛔ 禁止裸写字面量；值一律 <b>PascalCase</b>）：
+        /// <c>OrgCode</c> / <c>StandardCode</c> / <c>PhaseCode</c> / <c>EnterpriseCode</c> /
+        /// <c>RuleCode</c>，以及<b>运行级登记池</b>（见 <c>WorkflowContextKeys.JudgePool</c>）。</para>
         ///
-        /// <para><b>取用方式</b>：skill 参数标 <c>[FromContext("orgCode")]</c> ⇒
+        /// <para><b>取用方式</b>：skill 参数标 <c>[FromContext("OrgCode")]</c> ⇒
         /// 该参数<b>不出现在画布上</b>（<c>SkillExecutor.Analyze</c> 跳过它），
         /// 值由引擎在此注入 ⇒ 规则作者<b>不再手填 GUID</b>。</para>
         ///

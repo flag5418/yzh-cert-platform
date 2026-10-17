@@ -27,7 +27,7 @@ import { computed, nextTick, onActivated, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Page, PageParams, YzhTableColumn } from '@yzh-core'
-import { YzhStatusBadge, YzhTable, confirmOrFalse } from '@yzh-core'
+import { YzhStatusBadge, YzhTable, confirmOrFalse, useAsyncAction } from '@yzh-core'
 import {
   batchFillGaps,
   fillGap,
@@ -661,7 +661,15 @@ function skipBadgeType(category: string): 'success' | 'warning' | 'danger' | 'in
  *   分批跑 / 先检查范围再跑这类能力**必须有独立入口**，否则能力丢失。
  *   所以列表 = 一步到底（日常），本页 = 拆开跑（高级），两者文案必须能区分。
  */
-const submitting = ref(false)
+/**
+ * 「仅生成队列」（2026-10-16）—— 走 `useAsyncAction` 修并发缺陷。
+ *
+ * ⛔ `{ global: false }`：**不接全局等待遮罩** —— 这一步只**生成队列行**、不执行，
+ *    是秒级操作；执行进度归「执行队列」页（裁决⑤：队列任务不进本轮横幅）。
+ *    但它会**写库**（重复提交 = 生成两批队列行）⇒ 用**并发计数**替掉单 boolean
+ *    （单 boolean 下先后 `finally` 会提前解锁，按钮提前恢复可点）。
+ */
+const { busy: submitting, run: runSubmit } = useAsyncAction({ global: false })
 
 async function onSubmit() {
   const t = task.value
@@ -674,8 +682,7 @@ async function onSubmit() {
     { confirmButtonText: '确定生成' },
   )
   if (!ok) return
-  submitting.value = true
-  try {
+  await runSubmit(async () => {
     const r = await submitTask(t.Code)
     if (r.PendingGapCount > 0) {
       ElMessageBox.alert(
@@ -691,9 +698,9 @@ async function onSubmit() {
     }
     await loadDetail()
     if (!gapsLoaded.value) await loadGaps()
-  } finally {
-    submitting.value = false
-  }
+  }, '正在生成执行队列').catch((e: unknown) => {
+    ElMessage.error((e as Error)?.message || '生成执行队列失败')
+  })
 }
 
 async function onRetry() {

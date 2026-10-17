@@ -27,6 +27,12 @@ SET NAMES utf8mb4;
 -- ① cert_standard_doc_contract.FixedDocSubtype
 --    fixed 文档的二级拆分（37 号 §4.5(2) A / 14 号 §D16）
 --    ⚠️ 非 fixed 行忽略此列；默认值 'enterprise_provided' 保证存量行有合法值
+--
+--    ⛔ 【2026-10-16 已废弃并物理删除】（67 号 §4.1，用户裁决②）
+--       权威列改为 cert_standard_directory_file.Replaceable（「是否依赖企业文档」）。
+--       本段**保留为历史记录**（已在旧库执行过，IF 守卫使其对新库无害）。
+--       删除见 scripts/db/fix/20261016_contract_role_to_directory_V1.sql §⑤。
+--       ⚠️ 新库若要「一步到位」，执行完本文件后再跑上述 fix 脚本即可。
 -- ----------------------------------------------------------------------------
 SET @ddl := (
   SELECT IF(COUNT(*) = 0,

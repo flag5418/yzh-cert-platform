@@ -60,7 +60,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                         BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? ai_conclusion,
 
-            [SkillParam(Description = "★规则算出的权威结论（来自 nc_conclusion_calc 节点）",
+            [SkillParam(Description = "★规则算出的权威结论（来自 nc_conclusion_v2 节点）",
                         BindMode = SkillParamBindMode.LinkOrConstant, AllowEmpty = SkillParamEmptyPolicy.Allow)]
             string? rule_conclusion,
 
@@ -127,7 +127,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
                         });
                     }
 
-                    // ★ 规则配置的维度清单（C2 基准）—— 从 nc_conclusion_calc 的快照取
+                    // ★ 规则配置的维度清单（C2 基准）—— 从 nc_conclusion_v2 的快照取
                     if (!string.IsNullOrWhiteSpace(wf_task_code) && db != null)
                     {
                         var expected = await LoadExpectedDimensionsAsync(db, wf_task_code!);
@@ -181,7 +181,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
 
         /// <summary>
         /// 拉取规则配置的维度号全集（C2 基准）
-        /// <para>来源：<c>wf_execution_task_item.OutputJson</c> 里 <c>nc_conclusion_calc</c> 的 ruleSnapshot
+        /// <para>来源：<c>wf_execution_task_item.OutputJson</c> 里 <c>nc_conclusion_v2</c> 的 ruleSnapshot
         /// —— 但那是规则阈值，不含维度清单。</para>
         /// <para>⚠️ 当前实现：nc_judge 节点配置里带 dimensions 时的兜底；若无则 C2 跳过（不误伤）。</para>
         /// </summary>

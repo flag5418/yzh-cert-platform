@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using CertPlatform.Admin.Services.Workflow.Skills;
+using CertPlatform.Admin.Services.Workflow.Skills.Fill;
 using CertPlatform.Shared.Workflow.Models;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -17,10 +18,12 @@ namespace CertPlatform.Admin.Tests.Workflow;
 /// 「<b>消费节点发现上游没给值</b>」，引擎动作 = <b>全局中断当前检查项 + 落补录缺口 + 标「不可判定」</b>
 /// ⇒ 处置人是<b>企业</b>。</para>
 ///
-/// <para>于是 <c>stamp_judge_level.judge_code</c>（<c>ConstantOnly</c>，<b>只能由规则作者在画布上填</b>）
+/// <para>于是 <c>src_manual.anchor_code</c>（<c>ConstantOnly</c>，<b>只能由规则作者在画布上填</b>）
 /// 为空时，系统会给企业开一个<b>它永远填不了</b>的补录缺口 —— 把「作者没配」伪装成「数据缺失」。
-/// 实测报文：<c>{"Inputs":{"judge_code":""}}</c> ⇒
-/// <c>[PRECONDITION_EMPTY] stamp_judge_level 参数为空且该参数不允许为空: judge_code</c>。</para>
+/// 实测报文：<c>{"Inputs":{"anchor_code":""}}</c> ⇒
+/// <c>[PRECONDITION_EMPTY] src_manual 参数为空且该参数不允许为空: anchor_code</c>。
+/// <i>（原举例 <c>stamp_judge_level.judge_code</c> 已于 2026-10-16 删除 —— 该标识改取节点名称，
+/// 画布上不再有「只能作者填」的必填框。）</i></para>
 ///
 /// <para><b>修后判据</b> = 这个值「有没有可能来自上游」：只能手填/选字典的
 /// （<c>ConstantOnly</c>/<c>Enum</c>），或端口确实没来源的 ⇒ <c>CONFIG_ERROR</c>（处置人 = 规则作者）；
@@ -35,45 +38,43 @@ public class SkillParamCompletenessTests
     // ══════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// ★ 回归：<c>stamp_judge_level.judge_code</c> 为空 ⇒ <c>CONFIG_ERROR</c>（⛔ 不是 PRECONDITION_EMPTY）。
-    /// <para>这正是用户实测上报的那条报文（<c>Inputs.judge_code = ""</c>）。</para>
+    /// ★ 回归：<c>src_manual.anchor_code</c> 为空 ⇒ <c>CONFIG_ERROR</c>（⛔ 不是 PRECONDITION_EMPTY）。
+    /// <para>这是一条真实上报过的报文形状：<c>Inputs</c> 里一个 <c>ConstantOnly</c> 必填参数为空。</para>
     /// </summary>
     [Fact]
     public void ConstantOnly参数为空_报配置错而非数据缺口()
     {
-        var r = Run(typeof(StampJudgeLevelSkill),
+        var r = Run(typeof(SrcManualSkill),
             inputs: new Dictionary<string, object>
             {
-                ["result"] = "docField_n1",      // 证据端口确有来源
-                ["judge_code"] = ""              // ★ 空
+                ["anchor_code"] = ""             // ★ 空（ConstantOnly + Deny）
             },
-            connectedPorts: new[] { "result" });   // 端口确有来源（连接性判据可用）
+            connectedPorts: Array.Empty<string>());
 
         Assert.False(r.Success);
         Assert.Equal(WorkflowErrorCodes.ConfigError, r.ErrorCode);
 
         // 消息要指向「配置」而不是「数据」
         Assert.Contains("配置不完整", r.Error);
-        Assert.Contains("judge_code", r.Error);
+        Assert.Contains("anchor_code", r.Error);
 
         // ⛔ 旧措辞必须消失（它读起来像「数据没到」，会把人引向「去补录」）
         Assert.DoesNotContain("参数为空且该参数不允许为空", r.Error);
         Assert.DoesNotContain("上游未提供必要数据", r.Error);
     }
 
-    /// <summary>负向对照：<c>judge_code</c> 填了 ⇒ 必须成功（证明上一条不是因为「恒失败」）。</summary>
+    /// <summary>负向对照：<c>anchor_code</c> 填了 ⇒ 必须成功（证明上一条不是因为「恒失败」）。</summary>
     [Fact]
-    public void 负向对照_填了judgeCode则正常执行()
+    public void 负向对照_填了anchorCode则正常执行()
     {
-        var r = Run(typeof(StampJudgeLevelSkill),
+        var r = Run(typeof(SrcManualSkill),
             inputs: new Dictionary<string, object>
             {
-                ["result"] = "docField_n1",
-                ["judge_code"] = "企业资料不全"
+                ["anchor_code"] = "锚点A"
             },
-            connectedPorts: new[] { "result" });
+            connectedPorts: Array.Empty<string>());
 
-        Assert.True(r.Success);
+        Assert.True(r.Success, r.Error);
         Assert.Null(r.ErrorCode);
     }
 
@@ -186,6 +187,41 @@ public class SkillParamCompletenessTests
         Assert.Equal(WorkflowErrorCodes.ConfigError, notConnected.ErrorCode);
         Assert.Equal(WorkflowErrorCodes.PreconditionEmpty, connected.ErrorCode);
         Assert.NotEqual(notConnected.ErrorCode, connected.ErrorCode);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // 3. ★ 引擎信封形状（三层同形）—— 2026-10-16 删冗余键 outputs
+    // ══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// 引擎包装后的节点输出 = <b>业务键平铺 + 信封键</b>，且**不含冗余的 <c>outputs</c> 键**。
+    /// <para>为什么删：业务键本就平铺到顶层，下游取端口走 <c>NodeExecutor.PickFromOutput</c>
+    /// （按目标端口名取同名键 → <c>result</c> → 唯一键 → 兜底），全仓无任何读取方；
+    /// 原 <c>outputs["outputs"] = business</c> 只是把业务键整包复制一份，撑大节点输出与
+    /// <c>wf_node_execution</c> 落库体积。本用例锁死契约：一旦有人把该键加回来即失败。</para>
+    /// </summary>
+    [Fact]
+    public void 引擎信封_含统一信封键且不含冗余outputs键()
+    {
+        // is_empty：无 [FromService] ⇒ 纯代码路径，结果可预期（"x" ⇒ 非空）
+        var r = Run(typeof(IsEmptySkill),
+            new Dictionary<string, object> { ["value"] = "x" },
+            new[] { "value" });
+
+        Assert.True(r.Success);
+
+        // 信封键（三层同形）
+        Assert.Contains("success", r.Outputs.Keys);
+        Assert.Contains("errorCode", r.Outputs.Keys);
+        Assert.Contains("error", r.Outputs.Keys);
+        Assert.Contains("result", r.Outputs.Keys);
+
+        // 业务键平铺（is_empty 自带 state / kind）
+        Assert.Contains("state", r.Outputs.Keys);
+        Assert.False((bool)r.Outputs["result"]);
+
+        // ★ 冗余键已删
+        Assert.DoesNotContain("outputs", r.Outputs.Keys);
     }
 
     // ── 私有工具 ──

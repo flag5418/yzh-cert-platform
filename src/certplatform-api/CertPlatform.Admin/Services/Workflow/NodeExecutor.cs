@@ -2,7 +2,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,7 +12,9 @@ using Microsoft.Extensions.Logging;
 using CertPlatform.Shared.Workflow.Models;
 using CertPlatform.Admin.Services.Workflow.Skills;
 using YZH.Core.DataBase.Interfaces;
+using YZH.Core.Stand.Interfaces;
 using CertPlatform.Shared.Domain.Scope;
+using CertPlatform.Shared.Entities.Dir;
 using CertPlatform.Shared.Exceptions;
 using CertPlatform.Shared.Workflow.Skills;
 using CertPlatform.Shared.Services.DocExtraction;
@@ -39,6 +43,9 @@ namespace CertPlatform.Admin.Services.Workflow
         private readonly ILogger<NodeExecutor> _logger;
         // ★ 2026-09-30 裁决 J1/J2/J4：取数唯一口径。⛔ docfield/doctable 不得再自己拼 WHERE。
         private readonly ExtractionDataResolver _resolver;
+        // ★ 2026-10-16：核心资源（目录文件）取数唯一入口 + 对象存储（读 Markdown 产物）。
+        private readonly ICoreResourceQuery _core;
+        private readonly IObjectStorage _storage;
 
         public NodeExecutor(
             ISkillRegistry skillRegistry,
@@ -46,7 +53,9 @@ namespace CertPlatform.Admin.Services.Workflow
             IDbOrm db,
             WorkflowLogger wfLogger,
             ILogger<NodeExecutor> logger,
-            ExtractionDataResolver resolver)
+            ExtractionDataResolver resolver,
+            ICoreResourceQuery core,
+            IObjectStorage storage)
         {
             _skillRegistry = skillRegistry;
             _aiNodeExecutor = aiNodeExecutor;
@@ -54,6 +63,8 @@ namespace CertPlatform.Admin.Services.Workflow
             _wfLogger = wfLogger;
             _logger = logger;
             _resolver = resolver;
+            _core = core;
+            _storage = storage;
         }
 
         /// <summary>
@@ -112,6 +123,8 @@ namespace CertPlatform.Admin.Services.Workflow
                         "branch" => ExecuteBranch(node, resolvedInputs, sharedOutputs),
                         "docfield" => await ExecuteDocFieldAsync(node, taskCode, contextParams, ct),
                         "doctable" => await ExecuteDocTableAsync(node, taskCode, contextParams, ct),
+                        // ★ 2026-10-16：文档全文节点 —— 取文档转换后的整篇 Markdown（供 AI 通篇分析）。
+                        "docmarkdown" => await ExecuteDocMarkdownAsync(node, contextParams, ct),
                         // ★ 特殊节点（2026-10-11 用户裁定）：配置期选「标准 + 阶段 + 标准文件」，
                         //   执行期的企业/标准/阶段由 start 注入的上下文提供 —— 普通 skill 表达不了。
                         "is_std_file_missing" => await ExecuteStdFileMissingAsync(node, taskCode, itemCode, contextParams, ct),
@@ -391,9 +404,9 @@ namespace CertPlatform.Admin.Services.Workflow
             Dictionary<string, object> contextParams)
         {
             _wfLogger.StartInject(
-                contextParams?.GetValueOrDefault("enterpriseCode")?.ToString(),
-                contextParams?.GetValueOrDefault("phaseCode")?.ToString(),
-                contextParams?.GetValueOrDefault("standardCode")?.ToString());
+                contextParams?.GetValueOrDefault(WorkflowContextKeys.EnterpriseCode)?.ToString(),
+                contextParams?.GetValueOrDefault(WorkflowContextKeys.PhaseCode)?.ToString(),
+                contextParams?.GetValueOrDefault(WorkflowContextKeys.StandardCode)?.ToString());
 
             return Task.FromResult(new Dictionary<string, object>(contextParams ?? new()));
         }
@@ -431,7 +444,7 @@ namespace CertPlatform.Admin.Services.Workflow
         /// </summary>
         private static Dictionary<string, object> ExecuteConstant(WorkflowNodeConfig node)
         {
-            var value = node.Config?.GetValueOrDefault("value")?.ToString() ?? string.Empty;
+            var value = node.GetConfigString("Value");
 
             // ★ 兼容兜底：权威值 config.value 缺失（含空串）时，回落节点描述 description。
             //   覆盖「常量值被填进描述框、config 未落库」的存量节点（serializer 丢空 config 的产物）。
@@ -524,16 +537,16 @@ namespace CertPlatform.Admin.Services.Workflow
             CancellationToken ct)
         {
             var config = node.Config ?? new();
-            var ruleCode = config.GetValueOrDefault("ruleCode")?.ToString() ?? "";
-            var fieldCode = config.GetValueOrDefault("fieldCode")?.ToString() ?? "";
-            var docType = config.GetValueOrDefault("docType")?.ToString() ?? "standard";
-            var enterpriseCode = contextParams?.GetValueOrDefault("enterpriseCode")?.ToString() ?? "";
+            var ruleCode = config.GetConfigValue("RuleCode")?.ToString() ?? "";
+            var fieldCode = config.GetConfigValue("FieldCode")?.ToString() ?? "";
+            var docType = config.GetConfigValue("DocType")?.ToString() ?? "standard";
+            var enterpriseCode = contextParams?.GetValueOrDefault(WorkflowContextKeys.EnterpriseCode)?.ToString() ?? "";
             if (string.IsNullOrEmpty(enterpriseCode))
                 enterpriseCode = "";
-            var standardCode = contextParams?.GetValueOrDefault("standardCode")?.ToString() ?? "";
+            var standardCode = contextParams?.GetValueOrDefault(WorkflowContextKeys.StandardCode)?.ToString() ?? "";
             // ★ 2026-09-30 修 B1：上下文键是 phaseCode，cert_extraction_result 的列是 StageCode。
             //   值口径已统一为 GUID（wf_execution_task.PhaseCode 已扩到 varchar(36），执行器改传 GUID）。
-            var stageCode = contextParams?.GetValueOrDefault("phaseCode")?.ToString() ?? "";
+            var stageCode = contextParams?.GetValueOrDefault(WorkflowContextKeys.PhaseCode)?.ToString() ?? "";
 
             var source = enterpriseCode == "" ? "sample_data" : "enterprise_doc";
 
@@ -607,14 +620,14 @@ namespace CertPlatform.Admin.Services.Workflow
             CancellationToken ct)
         {
             var config = node.Config ?? new();
-            var ruleCode = config.GetValueOrDefault("ruleCode")?.ToString() ?? "";
-            var tableCode = config.GetValueOrDefault("tableCode")?.ToString() ?? "";
-            var docType = config.GetValueOrDefault("docType")?.ToString() ?? "standard";
-            var enterpriseCode = contextParams?.GetValueOrDefault("enterpriseCode")?.ToString() ?? "";
+            var ruleCode = config.GetConfigValue("RuleCode")?.ToString() ?? "";
+            var tableCode = config.GetConfigValue("TableCode")?.ToString() ?? "";
+            var docType = config.GetConfigValue("DocType")?.ToString() ?? "standard";
+            var enterpriseCode = contextParams?.GetValueOrDefault(WorkflowContextKeys.EnterpriseCode)?.ToString() ?? "";
             if (string.IsNullOrEmpty(enterpriseCode))
                 enterpriseCode = "";
-            var standardCode = contextParams?.GetValueOrDefault("standardCode")?.ToString() ?? "";
-            var stageCode = contextParams?.GetValueOrDefault("phaseCode")?.ToString() ?? "";
+            var standardCode = contextParams?.GetValueOrDefault(WorkflowContextKeys.StandardCode)?.ToString() ?? "";
+            var stageCode = contextParams?.GetValueOrDefault(WorkflowContextKeys.PhaseCode)?.ToString() ?? "";
 
             var source = enterpriseCode == "" ? "sample_data" : "enterprise_doc";
 
@@ -669,6 +682,113 @@ namespace CertPlatform.Admin.Services.Workflow
         /// </summary>
         private static List<object> ParseTableRows(ExtractionDataResolver.TableValue table)
             => table.Rows.Select(r => (object)r).ToList();
+
+        /// <summary>
+        /// docMarkdown 节点：取文档转换后的整篇 Markdown 全文（★ 2026-10-16）。
+        ///
+        /// <para><b>与 docField / docTable 的区别</b>：后两者从 <c>cert_extraction_result</c>
+        /// 取「抽出来的字段 / 表格」，本节点取的是文档<b>转换产物</b>
+        /// （<c>cert_standard_directory_file.MarkdownPath</c>）的<b>整篇原文</b>，供 AI 做通篇语义分析。</para>
+        ///
+        /// <para><b>双模式</b>（与 docField 同款）：配置期存的是<b>模板行</b>的 Code
+        /// （<c>StandardFileCode</c>）；运行期 <c>enterpriseCode</c> 非空时按
+        /// 「企业 + 模板 Code」反查企业上传行（取企业文档全文），为空时取模板行本身（样例数据路径）。</para>
+        ///
+        /// <para><b>★ 取不到不算失败（2026-10-11「取数与判空正交」裁定）</b>：文件不存在 /
+        /// 未转换 / Markdown 未就绪 ⇒ <b>返回空值 + 成功</b>，让 <c>is_empty → branch</c> 分流。
+        /// ⛔ 唯一例外：<c>MarkdownPath</c> 有值但对象存储下载报错（行与对象不一致 / 存储故障）
+        /// ⇒ 抛 <see cref="WorkflowNodeFailureException"/>（SYSTEM_ERROR）—— 这是系统故障，
+        /// 不能被静默降级成「没有全文」。</para>
+        /// </summary>
+        private async Task<Dictionary<string, object>> ExecuteDocMarkdownAsync(
+            WorkflowNodeConfig node,
+            Dictionary<string, object> contextParams,
+            CancellationToken ct)
+        {
+            var standardFileCode = node.GetConfigString("StandardFileCode");
+            if (string.IsNullOrWhiteSpace(standardFileCode))
+                throw new WorkflowNodeFailureException(
+                    $"docMarkdown 节点 {node.NodeId} 缺少 standardFileCode 配置（请在右侧面板选择文档）",
+                    WorkflowErrorCodes.ConfigError, node.NodeId);
+
+            var enterpriseCode = contextParams?.GetValueOrDefault(WorkflowContextKeys.EnterpriseCode)?.ToString() ?? "";
+            if (string.IsNullOrWhiteSpace(enterpriseCode))
+                enterpriseCode = "";
+
+            var source = enterpriseCode == "" ? "sample_data" : "enterprise_doc";
+
+            // ① 定位目录文件行：企业上下文非空 ⇒ 按「企业 + 模板 Code」反查企业上传行；否则取模板行本身。
+            StandardDirectoryFile? fileRow;
+            if (enterpriseCode == "")
+            {
+                fileRow = await _core.GetDirectoryFileByCodeAsync(standardFileCode);
+                // 防御：模板查询按 Code 精确命中；若命中的是企业行则视为「配置了一个企业专属 Code」，不予取数
+                if (fileRow != null && OrgScope.IsEnterpriseRow(fileRow.EnterpriseCode))
+                    fileRow = null;
+            }
+            else
+            {
+                fileRow = await _core.FindEnterpriseDirectoryFileByTemplateAsync(enterpriseCode, standardFileCode);
+            }
+
+            _wfLogger.DocFieldQuery(standardFileCode, "", "markdown", enterpriseCode);
+
+            // ② 行不存在 ⇒ 空值 + 成功（供 is_empty 分流）
+            if (fileRow == null)
+                return BuildMarkdownOutput(null, "file_not_found", source, standardFileCode, null);
+
+            // ③ Markdown 未就绪（未转换 / 转换失败）⇒ 空值 + 成功
+            if (string.IsNullOrWhiteSpace(fileRow.MarkdownPath))
+                return BuildMarkdownOutput(null, "markdown_not_ready", source, standardFileCode, fileRow);
+
+            // ④ 读 Markdown 产物（MinIO）—— 与 StandardDocContractController.RunSemanticAsync 同口径
+            string markdown;
+            try
+            {
+                // ⚠️ 路径必须 TrimStart('/')：库里存的是带前导斜杠的展示路径，MinIO 的 key 不带
+                var (stream, _) = await _storage.DownloadAsync(fileRow.MarkdownPath!.TrimStart('/'), ct);
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms, ct);
+                markdown = Encoding.UTF8.GetString(ms.ToArray());
+            }
+            catch (Exception ex)
+            {
+                // MarkdownPath 有值却取不到 = 行与对象不一致 / 存储故障 ⇒ 真故障，不静默降级为空值。
+                _logger.LogWarning(ex, "[WorkflowEngine] docMarkdown 读取失败：Node={Node} File={File} Path={Path}",
+                    node.NodeId, fileRow.Code, fileRow.MarkdownPath);
+                throw new WorkflowNodeFailureException(
+                    $"docMarkdown 节点 {node.NodeId} 读取文档全文失败：{ex.Message}",
+                    WorkflowErrorCodes.SystemError, node.NodeId);
+            }
+
+            var state = string.IsNullOrWhiteSpace(markdown) ? "markdown_empty" : "has_value";
+            return BuildMarkdownOutput(markdown, state, source, standardFileCode, fileRow);
+        }
+
+        /// <summary>
+        /// docMarkdown 的统一输出形状（★ 主输出 <c>result</c> / <c>markdown</c> 同值，便于连线与 AI 参数引用）。
+        /// </summary>
+        private static Dictionary<string, object> BuildMarkdownOutput(
+            string? markdown, string dataState, string source, string standardFileCode, StandardDirectoryFile? fileRow)
+        {
+            var hasValue = !string.IsNullOrWhiteSpace(markdown);
+            return new Dictionary<string, object>
+            {
+                ["markdown"]  = markdown!,
+                // ★ result = 主输出（同 docField 裁定 A）：连线 / AI 参数引用默认取 result
+                ["result"]    = markdown!,
+                ["charCount"] = markdown?.Length ?? 0,
+                ["hasValue"]  = hasValue,
+                // 三态：file_not_found / markdown_not_ready / markdown_empty / has_value
+                ["dataState"] = dataState,
+                ["source"]    = source,
+                // ★ 溯源（与 docField / docTable 同构，供 wf_node_execution 记录来源）
+                ["sourceFileCode"]  = fileRow?.StandardFileCode ?? fileRow?.Code ?? standardFileCode,
+                ["sourceFieldName"] = "markdown",
+                ["sourceVersion"]   = fileRow?.VersionNumber ?? 0,
+                ["fileName"]        = fileRow?.FileName ?? ""
+            };
+        }
 
         /// <summary>
         /// ai_node 节点：委托 AiNodeExecutor
@@ -749,7 +869,7 @@ namespace CertPlatform.Admin.Services.Workflow
 
             // 构造 SkillContext
             // ★ 2026-10-15：新增两路注入 ——
-            //   ① ContextParams = 本次运行的业务上下文（orgCode / standardCode / phaseCode / …）
+            //   ① ContextParams = 本次运行的业务上下文（OrgCode / StandardCode / PhaseCode / …，一律 PascalCase）
             //      ⇒ skill 用 [FromContext] 取，画布上不再出现这些手填框；
             //   ② ConnectedPorts = 「**确实有来源**」的端口名集合 ⇒ 让 skill 能区分
             //      「端口没接」（配置错）与「接了但上游返回空」（不可判定）。
@@ -777,7 +897,10 @@ namespace CertPlatform.Admin.Services.Workflow
             var skillCtxParams = new Dictionary<string, object>(
                 contextParams ?? new Dictionary<string, object>())
             {
-                [WorkflowContextKeys.ConnectedPorts] = connectedPorts
+                [WorkflowContextKeys.ConnectedPorts] = connectedPorts,
+                // ★ 2026-10-16：本节点名称（逐节点注入）—— 供 stamp_judge_level 取 judge 标识
+                //   （judge 标识不再单独手填，改节点名称 = 改标识，一处赋值）。
+                [WorkflowContextKeys.NodeTitle] = node.Title ?? string.Empty
             };
 
             var context = new SkillContext
@@ -815,9 +938,9 @@ namespace CertPlatform.Admin.Services.Workflow
                         message: message,
                         standardFileCode: null,
                         ruleCode: null,
-                        enterpriseCode: contextParams?.GetValueOrDefault("enterpriseCode")?.ToString(),
-                        standardCode: contextParams?.GetValueOrDefault("standardCode")?.ToString(),
-                        stageCode: contextParams?.GetValueOrDefault("phaseCode")?.ToString());
+                        enterpriseCode: contextParams?.GetValueOrDefault(WorkflowContextKeys.EnterpriseCode)?.ToString(),
+                        standardCode: contextParams?.GetValueOrDefault(WorkflowContextKeys.StandardCode)?.ToString(),
+                        stageCode: contextParams?.GetValueOrDefault(WorkflowContextKeys.PhaseCode)?.ToString());
                 }
 
                 // 终止当前路径（分类码由 catch(Exception) 保留到 NodeExecutionResult.ErrorCode）
@@ -877,7 +1000,7 @@ namespace CertPlatform.Admin.Services.Workflow
         {
             const string skillCode = "is_std_file_missing";
 
-            var standardFileCode = node.Config?.GetValueOrDefault("standardFileCode")?.ToString() ?? "";
+            var standardFileCode = node.GetConfigString("StandardFileCode");
             if (string.IsNullOrWhiteSpace(standardFileCode))
                 // ★ 2026-10-12：分类码 = CONFIG_ERROR（规则作者在面板上选文件即可修），
                 //   ⛔ 不再是笼统的 SYSTEM_ERROR。
@@ -886,7 +1009,7 @@ namespace CertPlatform.Admin.Services.Workflow
                     WorkflowErrorCodes.ConfigError, node.NodeId);
 
             // ★ 与 docField / docTable 同口径：企业从上下文取，取不到回落虚拟企业（样例数据路径）
-            var enterpriseCode = contextParams?.GetValueOrDefault("enterpriseCode")?.ToString() ?? "";
+            var enterpriseCode = contextParams?.GetValueOrDefault(WorkflowContextKeys.EnterpriseCode)?.ToString() ?? "";
             if (string.IsNullOrWhiteSpace(enterpriseCode))
                 enterpriseCode = "";
 

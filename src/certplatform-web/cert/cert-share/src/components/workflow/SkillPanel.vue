@@ -6,20 +6,16 @@
       <div v-if="specialNodesForPanel.length > 0" class="skill-category">
         <div class="category-header"><span class="cat-dot" style="background: var(--yzh-color-text-muted, #64748b)"></span><span class="category-name">控制流节点</span><span class="category-count">{{ specialNodesForPanel.length }}</span></div>
         <div class="skill-list">
-          <!-- ★ 2026-10-15：节点库加悬停说明 —— 此前只显示名字，用户拖之前完全不知道
-               这个节点干什么、参数怎么填（说明其实一直都在，只是没人显示）。 -->
-          <el-tooltip v-for="sp in specialNodesForPanel" :key="sp.classCode" raw-content :content="toDescriptionHtml(sp.description)" placement="right" :show-after="300" :hide-after="0">
-            <div class="skill-panel-item" draggable="true" @dragstart="onDragStart($event, sp)" @click="addNode(sp)">
-              <div class="skill-dot" :style="{ background: sp.color }">
-                <el-icon v-if="sp.classCode === 'start'"><VideoPlay /></el-icon>
-                <el-icon v-else-if="sp.classCode === 'end'"><SwitchButton /></el-icon>
-                <el-icon v-else-if="sp.classCode === 'branch'"><Share /></el-icon>
-                <el-icon v-else-if="sp.classCode === 'ai_node'"><Cpu /></el-icon>
-                <span v-else>{{ (sp.className || '?').charAt(0) }}</span>
-              </div>
-              <span class="skill-name">{{ sp.className }}</span>
+          <div v-for="sp in specialNodesForPanel" :key="sp.classCode" class="skill-panel-item" draggable="true" @dragstart="onDragStart($event, sp)" @click="addNode(sp)">
+            <div class="skill-dot" :style="{ background: sp.color }">
+              <el-icon v-if="sp.classCode === 'start'"><VideoPlay /></el-icon>
+              <el-icon v-else-if="sp.classCode === 'end'"><SwitchButton /></el-icon>
+              <el-icon v-else-if="sp.classCode === 'branch'"><Share /></el-icon>
+              <el-icon v-else-if="sp.classCode === 'ai_node'"><Cpu /></el-icon>
+              <span v-else>{{ (sp.className || '?').charAt(0) }}</span>
             </div>
-          </el-tooltip>
+            <span class="skill-name">{{ sp.className }}</span>
+          </div>
         </div>
       </div>
       <div class="skill-categories">
@@ -30,14 +26,10 @@
             <span class="category-count">{{ cat.skills.length }}</span>
           </div>
           <div v-show="!cat.collapsed" class="skill-list">
-            <!-- ★ 2026-10-15：功能节点同样加悬停说明（来源 = 后端 [Skill(Description=…)]，
-                 经 WorkflowDesigner.loadSkills 归一化成小写 description 后传进来）。 -->
-            <el-tooltip v-for="skill in cat.skills" :key="skill.skillCode" raw-content :content="toDescriptionHtml(skill.description)" placement="right" :show-after="300" :hide-after="0">
-              <div class="skill-panel-item" draggable="true" @dragstart="onDragStart($event, skill)" @click="addNode(skill)">
-                <div class="skill-dot" :style="{ background: cat.color || 'var(--yzh-color-primary, #409EFF)' }">{{ (skill.skillName || skill.Name || '?').charAt(0) }}</div>
-                <span class="skill-name">{{ skill.skillName }}</span>
-              </div>
-            </el-tooltip>
+            <div v-for="skill in cat.skills" :key="skill.skillCode" class="skill-panel-item" draggable="true" @dragstart="onDragStart($event, skill)" @click="addNode(skill)">
+              <div class="skill-dot" :style="{ background: cat.color || 'var(--yzh-color-primary, #409EFF)' }">{{ (skill.skillName || skill.Name || '?').charAt(0) }}</div>
+              <span class="skill-name">{{ skill.skillName }}</span>
+            </div>
           </div>
         </div>
         <div v-if="!filteredCategories.length" class="panel-empty">暂无 Skill（请在 Skill 管理中维护）</div>
@@ -48,7 +40,6 @@
 
 <script setup lang="ts">
 import { SPECIAL_NODES } from '@share/composables/workflow/specialNodes'
-import { toDescriptionHtml } from '@share/composables/workflow/descriptionHtml'
 import { Cpu, VideoPlay, Share, SwitchButton } from '@element-plus/icons-vue'
 import { computed, ref } from 'vue'
 

@@ -314,6 +314,26 @@ public class StandardDirectoryService
             scopedFiles = scopedFiles.Where(f => !reservedCodes.Contains(f.FolderCode ?? "")).ToList();
         }
 
+        // ★★ 排序：必须与 `DirectorySnapshot.Create` **逐字同一口径**（2026-10-17 修复）。
+        //
+        //   此前本方法只复用了 `DirectoryVisibility` 的**保留段过滤**，漏了**排序** ——
+        //   `_core.GetDirectoryFoldersAsync` / `GetDirectoryFilesByConfigCodesAsync` 发出的
+        //   SQL **没有 ORDER BY** ⇒ 拿到的是 DB 返回序（索引序），而资料清单页走
+        //   `DirectorySnapshot` 已按 `Sort → FolderName / FileName` 排好。
+        //
+        //   症状（实测）：同一份数据两页顺序**相反** ——
+        //     资料清单页：检验作业指导书(Sort=2) → 制度文件(Sort=3)   ← 正确
+        //     填写规则页：制度文件 → 检验作业指导书                    ← DB 序，无任何报错
+        //   ⇒ 用户会认为「两个页面不是同一棵树」。这是 `DirectorySnapshot` 类注释里
+        //   写明的「排序口径分叉到 3 种」老问题的**残留一处**，⛔ 不要再自写 OrderBy。
+        //
+        //   ⚠️ 这里是**跨配置全局排序**（再按 ConfigCode 分组切片）：`Where` 保序 ⇒
+        //   与「逐配置排序」结果等价，且只排一次。
+        scopedFolders = OrgStandardTreeAssembler.OrderFolders(
+            scopedFolders, f => f.Sort, f => f.FolderName);
+        scopedFiles = OrgStandardTreeAssembler.OrderFiles(
+            scopedFiles, f => f.Sort, f => f.FileName);
+
         // ③ 空白模板（按宿主标准文件 Code 索引）—— ★ 阶段 1.B：走统一入口
         var fileCodes = scopedFiles.Select(f => f.Code ?? "").Where(c => c.Length > 0).Distinct().ToList();
         var templates = await _core.GetDocTemplatesByStandardFileCodesAsync(fileCodes);
@@ -368,14 +388,53 @@ public class StandardDirectoryService
                     phaseNode.Children.Add(node);
             }
 
+            // ★★ 根级 / 孤儿文件统一收进虚拟「根目录」节点（2026-10-17 修复）。
+            //
+            //   【为什么不能直接挂在阶段节点下】
+            //   资料清单页（`stage-files`）为根级文件造了一个虚拟「根目录」文件夹节点
+            //   （`GetStageFileTreeAsync` 第 5 步，Code = directoryCode、Sort = 0、插在最前）。
+            //   本方法此前把根级文件**平铺在阶段节点下** ⇒ 同一棵树在两页长得不一样：
+            //     资料清单页：S2 → [根目录(3 份)] / [3制度文件…] / …
+            //     填写规则页：S2 → [3制度文件…] / excel测试.xlsx / 【爱企查】… / 测绘成果…
+            //   ⇒ 「文件」与「文件夹」在树里平级混排，用户以为根级文件「丢了」。
+            //
+            //   【判据与 stage-files 逐字一致】
+            //   `FolderCode` 为空、或指向**已被保留段过滤 / 已软删 / 跨配置**的文件夹 ⇒ 根级。
+            //   ⚠️ 与 `DirectorySnapshot.RootFiles` 同一不变量：每个文件**恰属**一处
+            //   （父文件夹有效 ⇒ 该文件夹；否则 ⇒ 根目录），⛔ 不会既在文件夹又在根目录。
+            TemplateDirectoryNode? rootNode = null;
             foreach (var f in files)
             {
                 var node = BuildTemplateFileNode(f, tplByFile, anchorStat, orgCode, stdCode, stageCode);
                 var folderCode = f.FolderCode ?? "";
                 if (folderCode.Length > 0 && folderByCode.TryGetValue(folderCode, out var folderNode))
+                {
                     folderNode.Children.Add(node);
-                else
-                    phaseNode.Children.Add(node);
+                    continue;
+                }
+
+                if (rootNode == null)
+                {
+                    rootNode = new TemplateDirectoryNode
+                    {
+                        // Code 用配置 Code —— 与 stage-files 的虚拟根节点同源，且在本树内唯一
+                        // （阶段节点 Code = "{orgCode}|{standardNo}|{stageNo}"，不会撞）
+                        Code = configCode,
+                        Name = VirtualRootFolderName,
+                        Extra = new()
+                        {
+                            ["kind"] = "folder",
+                            ["depth"] = 0,
+                            // ★ 虚拟节点标记：它不是 `cert_standard_directory_folder` 的行。
+                            //   前端据此禁止「重命名 / 删除 / 上传到此 / 配规则」类操作 ——
+                            //   ⛔ 不要靠「名字等于根目录」来判，改名就会失效。
+                            ["isVirtualRoot"] = true,
+                        },
+                    };
+                    // Sort = 0 语义 ⇒ 排在同层文件夹最前（与 stage-files 的 Insert(0) 一致）
+                    phaseNode.Children.Insert(0, rootNode);
+                }
+                rootNode.Children.Add(node);
             }
         }
 
@@ -766,6 +825,16 @@ public class StandardDirectoryService
     private const int MAX_TREE_DEPTH = 20;
     /// <summary>树遍历节点上限：防御性兜底，避免 visited 失效时被拉爆</summary>
     private const int MAX_TREE_NODES = 5000;
+
+    /// <summary>
+    /// 虚拟「根目录」节点名 —— 装根级 / 孤儿文件的**唯一**分组节点。
+    ///
+    /// <para><b>★ 为什么要有常量</b>：`stage-files`（<see cref="GetStageFileTreeAsync"/>）与
+    /// `directory-tree`（<see cref="GetTemplateDirectoryTreeAsync"/>）必须造**同名同形**的虚拟节点，
+    /// 否则两页左树长得不一样。此前两处各写一次字面量，改名必然漂移。</para>
+    /// <para>⛔ 前端**不要**靠这个字符串判断「是不是虚拟节点」，判据 = `Extra.isVirtualRoot`。</para>
+    /// </summary>
+    private const string VirtualRootFolderName = "根目录";
 
     /// <summary>
     /// 创建文件夹。
@@ -2209,10 +2278,12 @@ public class StandardDirectoryService
             var rootNode = new StageFolderNode
             {
                 Code = directoryCode,
-                Name = "根目录",
+                Name = VirtualRootFolderName,
                 ParentCode = string.Empty,
                 Depth = 0,
-                Sort = 0
+                Sort = 0,
+                // ★ 前端判据（⛔ 不要靠 Name 比对）
+                IsVirtualRoot = true
             };
             foreach (var file in rootOrphanFiles)
             {
@@ -3338,6 +3409,19 @@ public class StageFolderNode
     public string ParentCode { get; set; } = "";
     public int Depth { get; set; }
     public int Sort { get; set; }
+
+    /// <summary>
+    /// ★ <b>虚拟「根目录」标记</b>（2026-10-17）：<c>true</c> ⇒ 本节点不是
+    /// <c>cert_standard_directory_folder</c> 的行，而是后端为**根级 / 孤儿文件**造的
+    /// 分组容器（<c>Code = directoryCode</c>、<c>Sort = 0</c>、<c>Name = "根目录"</c>）。
+    ///
+    /// <para><b>为什么必须有这个字段</b>：前端原先靠 <c>node.Name === '根目录'</c> 判断，
+    /// 一旦改名（或多语言）就**静默失效** —— 虚拟节点会被当成真实文件夹计入「文件夹 N 个」、
+    /// 并允许重命名 / 删除，操作必然失败且报错含糊。</para>
+    /// <para>⛔ 前端判断虚拟根**只准**看本字段，不要比对名字。</para>
+    /// </summary>
+    public bool IsVirtualRoot { get; set; }
+
     public List<StageFolderNode> Children { get; set; } = new();
     public List<StageFileNode> Files { get; set; } = new();
 }

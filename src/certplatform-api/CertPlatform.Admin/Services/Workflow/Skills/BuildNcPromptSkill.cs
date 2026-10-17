@@ -184,7 +184,7 @@ namespace CertPlatform.Admin.Services.Workflow.Skills
     ///
     /// <para><b>用法（画布）</b>：</para>
     /// <code>
-    ///   build_nc_prompt  →  nc_judge (ai_node)  →  nc_conclusion_calc  →  nc_conclude (ai_node)
+    ///   build_nc_prompt  →  nc_judge (ai_node)  →  nc_conclusion_v2  →  nc_conclude (ai_node)
     ///        (装配)             (提取事实)            (算结论·权威)            (写理由)
     /// </code>
     /// <para>上游的 get_field / get_table / is_* 节点把企业材料汇入 build_nc_prompt 的 data_material。</para>

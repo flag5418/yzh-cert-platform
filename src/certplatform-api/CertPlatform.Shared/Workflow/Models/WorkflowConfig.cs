@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text.Json.Serialization;
 
 namespace CertPlatform.Shared.Workflow.Models
 {
@@ -23,7 +22,6 @@ namespace CertPlatform.Shared.Workflow.Models
         public List<WorkflowEdgeConfig> Edges { get; set; } = new();
 
         /// <summary>输出配置（可选）</summary>
-        [JsonPropertyName("outputConfig")]
         public Dictionary<string, object>? OutputConfig { get; set; }
 
         /// <summary>术语表（可选）</summary>

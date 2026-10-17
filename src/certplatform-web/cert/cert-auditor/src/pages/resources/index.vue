@@ -15,8 +15,8 @@
  */
 import { onMounted, onBeforeUnmount } from 'vue'
 import { YzhTable, YzhEmptyState } from '@yzh-core'
-import { Refresh, Upload, UploadFilled, Files } from '@element-plus/icons-vue'
-import { OrgStandardStageTree, type StdStageTreeNode } from '@share/components'
+import { Refresh, Upload, Files } from '@element-plus/icons-vue'
+import { OrgStandardStageTree, YzhFolderUpload, type StdStageTreeNode } from '@share/components'
 import { ResourcesLogic, type ResourceTreeNode } from './logic'
 import type { FileSlot } from '@share/api'
 import { buildAcceptAttribute } from '@share/constants/upload-file-policy'
@@ -60,15 +60,6 @@ function pickFolder() {
   folderInput.click()
 }
 
-function onSinglePick(file: any) {
-  if (file?.raw) logic.setSingleUploadFiles([file.raw])
-}
-function onBatchPick(file: any) {
-  if (file?.raw) logic.addBatchFiles([file.raw])
-}
-function onReplacePick(file: any) {
-  logic.setReplaceNewFile(file?.raw ?? null)
-}
 </script>
 
 <template>
@@ -237,29 +228,27 @@ function onReplacePick(file: any) {
           <el-tag>{{ logic.standardOf(logic.currentUploadStandardCode.value)?.StandardName }}</el-tag>
         </el-form-item>
         <el-form-item label="目标文件夹">
-          <el-select v-model="logic.singleUploadFolderCode.value" style="width:320px" @change="logic.previewSingleUpload()">
+          <!-- ★ 从「缺失槽位 / 目录」上传进入 ⇒ 已锁定到该目录，只读不再手选 -->
+          <template v-if="logic.singleFolderLocked.value">
+            <span class="folder-locked-label">{{ logic.singleFolderLabel }}</span>
+            <span class="folder-locked-hint">已按该文件所在目录锁定</span>
+          </template>
+          <el-select v-else v-model="logic.singleUploadFolderCode.value" style="width:320px" @change="logic.previewSingleUpload()">
             <el-option
               v-for="f in logic.folderOptionsOf(logic.currentUploadStandardCode.value)"
               :key="f.FolderCode" :label="f.Label" :value="f.FolderCode"
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="选择方式">
-          <el-button :icon="UploadFilled" @click="pickFolder()">选择文件夹（保留目录结构）</el-button>
-          <el-upload class="inline-upload" :auto-upload="false" :show-file-list="false" :accept="UPLOAD_ACCEPT" multiple :on-change="onSinglePick">
-            <el-button :icon="Upload">选择文件</el-button>
-          </el-upload>
-          <el-button size="small" :disabled="logic.singleUploadFiles.value.length === 0" @click="logic.clearSingleUploadFiles()">
-            清空
-          </el-button>
-        </el-form-item>
       </el-form>
 
-      <div v-if="logic.singleUploadFiles.value.length" class="file-chips">
-        <el-tag v-for="(f, i) in logic.singleUploadFiles.value" :key="`${f.name}-${i}`" closable @close="logic.removeSingleUploadFile(i)">
-          {{ f.name }}
-        </el-tag>
-      </div>
+      <!-- ★ 统一上传底座（文件/文件夹拖拽 + 列表 + 清空），⛔ 不再手写 el-upload / webkitdirectory -->
+      <YzhFolderUpload
+        :model-value="logic.singleUploadFiles.value"
+        :accept="UPLOAD_ACCEPT"
+        :uploading="logic.uploading.value"
+        @change="(files) => logic.setSingleUploadFilesFromPicker(files)"
+      />
 
       <el-button v-if="logic.singleUploadFiles.value.length" size="small" type="default"
                  :loading="logic.singlePlanLoading.value" @click="logic.previewSingleUpload()">
@@ -312,14 +301,16 @@ function onReplacePick(file: any) {
         <br />逐标准独立判定：只把<b>属于该标准</b>的文件放进去，未命中不进入该标准
       </el-alert>
 
+      <!-- ★ 统一上传底座（多文件 / 多文件夹拖拽），选中即清空旧计划 -->
+      <YzhFolderUpload
+        :model-value="logic.batchFiles.value"
+        :accept="UPLOAD_ACCEPT"
+        :uploading="logic.uploading.value"
+        :max-files="500"
+        @change="(files) => logic.setBatchFilesFromPicker(files)"
+      />
+
       <div class="batch-picker">
-        <el-button :icon="UploadFilled" @click="pickFolder()">选择文件夹</el-button>
-        <el-upload class="inline-upload" :auto-upload="false" :show-file-list="false" :accept="UPLOAD_ACCEPT" multiple :limit="500" :on-change="onBatchPick">
-          <el-button :icon="Upload">选择文件</el-button>
-        </el-upload>
-        <el-button size="small" :disabled="logic.batchFiles.value.length === 0" @click="logic.clearBatchFiles()">
-          清空
-        </el-button>
         <span class="batch-count">已选 {{ logic.batchFiles.value.length }} 个文件</span>
         <el-button type="primary" size="small" :loading="logic.batchPlanLoading.value"
                    :disabled="logic.batchFiles.value.length === 0" @click="logic.previewBatchUpload()">
@@ -412,10 +403,12 @@ function onReplacePick(file: any) {
         <strong>当前文件：</strong>{{ logic.replacingFile.value?.FileName }}
         <el-tag size="small">v{{ logic.replacingFile.value?.VersionNumber }}</el-tag>
       </p>
-      <el-upload :auto-upload="false" :show-file-list="false" :accept="UPLOAD_ACCEPT" :limit="1" :on-change="onReplacePick">
-        <el-button :icon="Upload">选择新文件</el-button>
-      </el-upload>
-      <span v-if="logic.replaceNewFile.value" class="selected-file">{{ logic.replaceNewFile.value.name }}</span>
+      <YzhFolderUpload
+        :model-value="logic.replaceNewFile.value ? [logic.replaceNewFile.value] : []"
+        :accept="UPLOAD_ACCEPT"
+        :max-files="1"
+        @change="(files: File[]) => logic.setReplaceNewFile(files[files.length - 1] ?? null)"
+      />
       <el-form label-width="80px" class="reason-form">
         <el-form-item label="替换原因" required>
           <el-input v-model="logic.replaceReason.value" type="textarea" :rows="2" maxlength="200" show-word-limit
@@ -784,16 +777,14 @@ function onReplacePick(file: any) {
   color: var(--el-text-color-secondary);
 }
 
-.inline-upload {
-  display: inline-block;
+.folder-locked-label {
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--yzh-color-text-secondary, #606266);
 }
-
-.file-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  max-height: 120px;
-  overflow: auto;
+.folder-locked-hint {
+  margin-left: var(--yzh-space-2, 8px);
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--yzh-color-text-tertiary, #909399);
 }
 
 .plan-block {

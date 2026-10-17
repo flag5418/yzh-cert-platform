@@ -334,6 +334,45 @@ export class DocFillRuleLogic extends TreeTableLogic<any> {
   }
 
   /**
+   * ★ 试填 / 预览闸（2026-10-16 用户裁决）—— **只问「这模板能不能试填」，不问来源配齐没配齐**。
+   *
+   * 【用户逐字】「*预览的时候，无论来源是什么，都可以自动生成填写内容，查看替换后的预览
+   *   效果是否准确，就是为了提前发现，我们更新文档后，是否正确*」。
+   *
+   * 【为什么必须与 `anchorReadiness` 分开】
+   *   · `anchorReadiness.ready` 回答的是「**规则配齐了吗**」—— 配置完成度（锚点页「已配齐」
+   *     徽标 / C8 用），要求 `unconfigured/staleRef/orphan` 全为 0。
+   *   · 试填的取值**不走来源**：`DocumentFillOrchestrator.FillPreviewAsync` 对每个非孤儿锚点
+   *     调 `PreviewValueFactory`（模板自带 `OriginalText` + 按 `ValueType` 生成 `【试填】占位`），
+   *     **未配来源 / 来源失效的锚点照样产出占位值**（实测：来源是 `manual` / `ai_*` / 未配
+   *     都不影响）。⇒ 来源配没配齐，与「能不能试填」**无关**。
+   *   ⛔ 旧实现直接拿 `anchorReadiness.ready` 当试填闸 ⇒ 只要有 1 个锚点没配来源，
+   *     整个「自动填充 / 预览」就被禁用 —— 用户只是想「更新文档后看一眼替换对不对」却进不去。
+   *
+   * 判据三条（缺一不可）：① 已上传模板 ② 扫描完成 ③ **至少 1 个锚点**。
+   * ⛔ 不含来源相关条件；孤儿锚点也不拦（后端本就跳过 `IsOrphan`，产物照常出）。
+   */
+  get previewReadiness(): {
+    total: number
+    unconfigured: number
+    staleRef: number
+    orphan: number
+    ready: boolean
+  } {
+    const s = this.anchorStats
+    return {
+      total: s.total,
+      unconfigured: s.unconfigured,
+      staleRef: s.staleRef,
+      orphan: s.orphan,
+      ready:
+        this.hasTemplate &&
+        this.scanStatus === 'completed' &&
+        s.total > 0,
+    }
+  }
+
+  /**
    * ★ C11：本模板是否存在 **AI 节点**（来源是 `ai_semantic` / `ai_field` / `ai_table` 之一）。
    *
    * 存在才显示「全局填写规则」块 —— 没有 AI 节点时，整块与用户无关。

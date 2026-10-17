@@ -53,7 +53,10 @@ public class FromContextInjectionTests
             .Where(u => u.Skill == skill).Select(u => u.Key).ToHashSet(StringComparer.Ordinal);
 
         // stamp_judge_level：判定三段式的「连接性判据」来源（区分「没接」与「接到空」）
-        Assert.Contains(WorkflowContextKeys.ConnectedPorts, KeysOf("stamp_judge_level"));
+        //   + ★ 2026-10-16：judge 标识改取节点名称（[FromContext] nodeTitle），画布上不再手填。
+        var stamp = KeysOf("stamp_judge_level");
+        Assert.Contains(WorkflowContextKeys.ConnectedPorts, stamp);
+        Assert.Contains(WorkflowContextKeys.NodeTitle, stamp);
 
         // nc_conclusion_v2：判定清单池 + 组织三编码（画布上已移除，只能靠注入）
         var v2 = KeysOf("nc_conclusion_v2");
@@ -76,15 +79,16 @@ public class FromContextInjectionTests
         Assert.Equal("judges_json", port.Name);
     }
 
-    /// <summary>stamp：5 个可见端口（connectedPorts 不可见）；verdict 保持可连线（LinkOrConstant）</summary>
+    /// <summary>stamp：4 个可见端口（judge_code 已删、nodeTitle/connectedPorts 均不可见）；verdict 保持可连线（LinkOrConstant）</summary>
     [Fact]
-    public void 画布端口_stamp五个可见端口且无connectedPorts()
+    public void 画布端口_stamp四个可见端口且无connectedPorts()
     {
         var meta = Analyze(typeof(StampJudgeLevelSkill));
         var names = meta.InputPorts.Select(p => p.Name).ToList();
 
-        Assert.Equal(new[] { "result", "judge_code", "level", "verdict", "reason" }, names);
+        Assert.Equal(new[] { "result", "level", "verdict", "reason" }, names);
         Assert.DoesNotContain("connectedPorts", names);
+        Assert.DoesNotContain("nodeTitle", names);
 
         // ★ verdict 必须保持可连线 —— ConstantOnly 会让「一条 judge 三种结果 ⇒ 三个节点」回归
         var verdictPort = meta.InputPorts.First(p => p.Name == "verdict");

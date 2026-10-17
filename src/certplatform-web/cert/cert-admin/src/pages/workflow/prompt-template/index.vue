@@ -28,7 +28,7 @@
  */
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { confirmChoice, confirmOrFalse, YzhPageLayout } from '@yzh-core'
+import { confirmChoice, confirmOrFalse, YzhPageLayout, useAsyncAction } from '@yzh-core'
 import {
   PROMPT_TYPE,
   getStandardOptions,
@@ -157,9 +157,21 @@ const result = ref<PromptTestResultDto | null>(null)
 const testedTemplate = ref<string | null>(null)
 
 const loading = ref(false)
-const generating = ref(false)
-const testing = ref(false)
-const saving = ref(false)
+
+/**
+ * ★ 长耗时操作走 `useAsyncAction`（2026-10-16）—— 并发计数 + 全局等待提示一次接好。
+ *
+ * ⛔ 不接的：`loading`（载入提示词，秒级）—— 接了遮罩只会一直闪。
+ *   `saving` 用 `{ global: false }`：不接遮罩但要修并发缺陷
+ *   （`onGenerate` 内部会嵌套调 `doSave`，与手动保存可能交叠）。
+ *
+ * ⚠️ **必须解构**（`{ busy: x, run: runX }`）：`busy` 是 `ComputedRef`；写成
+ *   `const action = useAsyncAction()` 再在模板用 `action.busy` 时模板**不会自动解包**
+ *   （自动解包只对顶层 ref 生效）⇒ 传进 `:loading` 的会是 ref 对象，恒为真。
+ */
+const { busy: generating, run: runGenerate } = useAsyncAction()
+const { busy: testing, run: runTest } = useAsyncAction()
+const { busy: saving, run: runSave } = useAsyncAction({ global: false })
 
 const treeWidth = ref(240)
 /** 整个工作台容器 —— 右侧结果面板拖拽比例基于它的宽度 */
@@ -386,8 +398,7 @@ async function onGenerate() {
     if (!ok) return
   }
 
-  generating.value = true
-  try {
+  await runGenerate(async () => {
     const r = await generatePromptDraft({
       promptType: activeType.value,
       standardCode: scope.value || undefined,
@@ -418,11 +429,9 @@ async function onGenerate() {
     } else {
       ElMessage.warning('已生成，但自动保存失败 —— 内容已保留在编辑器并自动暂存为草稿')
     }
-  } catch (e: any) {
+  }, `正在生成提示词：${nodeLabel.value || '全部标准'}`).catch((e: any) => {
     ElMessage.error('AI 生成失败：' + (e?.message || '未知错误'))
-  } finally {
-    generating.value = false
-  }
+  })
 }
 
 // ==================== 测试（迭代闭环） ====================
@@ -433,8 +442,7 @@ async function onTest(files: File[]) {
     return
   }
   view.value.resultOpen = true
-  testing.value = true
-  try {
+  await runTest(async () => {
     const r = await testPrompt({
       files,
       promptType: activeType.value,
@@ -450,11 +458,9 @@ async function onTest(files: File[]) {
     } else {
       ElMessage.error(r.message || '分析失败')
     }
-  } catch (e: any) {
+  }, `正在测试提示词：${nodeLabel.value || '全部标准'}`).catch((e: any) => {
     ElMessage.error('分析失败：' + (e?.message || '未知错误'))
-  } finally {
-    testing.value = false
-  }
+  })
 }
 
 // ==================== 保存 ====================
@@ -484,31 +490,30 @@ async function doSave(opts: { bypassGate?: boolean; silent?: boolean } = {}): Pr
     if (!ok) return false
   }
 
-  saving.value = true
-  try {
-    const row = scopeRow.value
-    await savePrompt({
-      promptCode: row?.promptCode || makePromptCode(activeType.value, scope.value),
-      promptName: row?.promptName || makePromptName(activeType.value, nodeLabel.value || ROOT_SCOPE.label),
-      promptType: activeType.value,
-      standardCode: scope.value || null,
-      skillTarget: row?.skillTarget ?? null,
-      template: templateText.value,
-      description: row?.description || typeDef.value.desc
-    })
-    savedTemplate.value = templateText.value
-    // ★ 已落库 ⇒ 草稿作废（否则下次切回来会拿旧草稿覆盖刚保存的内容）
-    dropDraft(activeType.value, scope.value)
-    draftRestored.value = false
-    if (!opts.silent) ElMessage.success('保存成功')
-    await loadRows()
-    return true
-  } catch (e: any) {
-    if (!opts.silent) ElMessage.error('保存失败：' + (e?.message || '未知错误'))
-    return false
-  } finally {
-    saving.value = false
-  }
+  return runSave(async () => {
+    try {
+      const row = scopeRow.value
+      await savePrompt({
+        promptCode: row?.promptCode || makePromptCode(activeType.value, scope.value),
+        promptName: row?.promptName || makePromptName(activeType.value, nodeLabel.value || ROOT_SCOPE.label),
+        promptType: activeType.value,
+        standardCode: scope.value || null,
+        skillTarget: row?.skillTarget ?? null,
+        template: templateText.value,
+        description: row?.description || typeDef.value.desc
+      })
+      savedTemplate.value = templateText.value
+      // ★ 已落库 ⇒ 草稿作废（否则下次切回来会拿旧草稿覆盖刚保存的内容）
+      dropDraft(activeType.value, scope.value)
+      draftRestored.value = false
+      if (!opts.silent) ElMessage.success('保存成功')
+      await loadRows()
+      return true
+    } catch (e: any) {
+      if (!opts.silent) ElMessage.error('保存失败：' + (e?.message || '未知错误'))
+      return false
+    }
+  }, `正在保存提示词：${nodeLabel.value || '全部标准'}`)
 }
 
 async function onSave() {

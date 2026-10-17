@@ -51,6 +51,10 @@
         </div>
       </el-header>
 
+      <!-- ★ 多标签页（2026-10-16）—— 与管理端 YzhAppLayout 同一实现（core 内共享组件）。
+           ⛔ 放在 el-main 之外：整宽、不受内容区 padding 影响 -->
+      <YzhTabsBar />
+
       <el-main class="auditor-layout__main">
         <!--
           ★ 2026-10-07 修正 `keep-alive` 策略（用户报「返回列表不刷新」的根因层）。
@@ -65,11 +69,19 @@
           `:max="12"` ⇒ 给缓存封顶，超出按 LRU 淘汰（② 消失）；
           页面自身的「回到页面要刷新」由各页 `onActivated` 兜底（① 消失）。
         -->
-        <router-view v-slot="{ Component }">
-          <keep-alive :max="12">
-            <component :is="Component" :key="route.fullPath" />
-          </keep-alive>
-        </router-view>
+        <!-- ★ 滚动容器（2026-10-16）：原 el-main 的 padding / overflow 下移到这里 ——
+             ① 视觉与改造前逐像素一致（`--yzh-space-5` = 20px = 原 `padding: 20px`）；
+             ② el-main 变成「不滚动」的定位父级 ⇒ 等待遮罩 `inset:0` 才能盖住整个可视区
+                （若 el-main 仍 `overflow:auto`，遮罩会随内容一起滚走）。 -->
+        <div class="auditor-layout__scroll">
+          <router-view v-slot="{ Component }">
+            <keep-alive :max="12">
+              <component :is="Component" :key="route.fullPath" />
+            </keep-alive>
+          </router-view>
+        </div>
+        <!-- ★ 全局等待遮罩：只盖内容区，⛔ 不盖侧边栏/顶栏/标签栏 ⇒ 期间仍可切菜单 -->
+        <YzhPendingOverlay />
       </el-main>
     </el-container>
   </el-container>
@@ -84,6 +96,10 @@ import { useMenuTree } from '@yzh-core/composables/useMenuTree'
 import { onMenuChanged } from '@yzh-core/composables/useMenuChanged'
 import { filterMenuTreeByTag } from '@yzh-core/utils/menu'
 import YzhMenuNode from '@yzh-core/layouts/components/YzhMenuNode.vue'
+// ★ 2026-10-16 多标签页 + 全局等待遮罩：与管理端 `YzhAppLayout` **同一份实现**
+//   （都在 `yzh.vue.core` 内，两端各自 bundle 各持一份模块级单例，互不串扰）
+import YzhTabsBar from '@yzh-core/layouts/components/YzhTabsBar.vue'
+import YzhPendingOverlay from '@yzh-core/layouts/components/YzhPendingOverlay.vue'
 import type { SysMenu } from '@yzh-core/api/system/menu'
 import MessageBell from '@share/components/MessageBell/MessageBell.vue'
 import { yzhPush } from '@yzh-core/api/push'
@@ -271,5 +287,19 @@ onUnmounted(() => {
 .auditor-layout__page-title { font-size: var(--yzh-font-size-lg, 16px); font-weight: 600; }
 .auditor-layout__header-right { display: flex; align-items: center; }
 .auditor-layout__user { display: flex; align-items: center; gap: var(--yzh-space-1, 4px); cursor: pointer; color: var(--yzh-color-text-regular, #606266); }
-.auditor-layout__main { background: var(--yzh-color-bg-page, #f5f7fa); padding: var(--yzh-space-5, 20px); }
+
+/* 内容区：⛔ 不再自带 padding / 滚动 —— 都下移到 `.auditor-layout__scroll`，
+   使 el-main 成为「不滚动」的定位父级（等待遮罩 `inset:0` 才盖得住整个可视区） */
+.auditor-layout__main {
+  position: relative;
+  background: var(--yzh-color-bg-page, #f5f7fa);
+  padding: 0;
+  overflow: hidden;
+}
+
+.auditor-layout__scroll {
+  height: 100%;
+  padding: var(--yzh-space-5, 20px);
+  overflow-y: auto;
+}
 </style>

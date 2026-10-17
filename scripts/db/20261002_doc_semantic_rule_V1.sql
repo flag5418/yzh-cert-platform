@@ -204,7 +204,11 @@ CREATE TABLE IF NOT EXISTS `cert_standard_doc_contract` (
   `DocName` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '【要素1】标准文档名称（= 标准文件名，冗余供匹配读取，改名时同步）',
   `DocPurpose` text COMMENT '【要素2】文档作用（四段式：①是什么/核心内容 ②审核关注点 ③来源口径 ④包含信息）。人读存此列；机器读存 InfoItemsJson',
   `DocCategory` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'editable' COMMENT '【分类】fixed=固定文档(匹配即终点) / editable=可编写 / hybrid=混合。决定 04 §5.2 公式分支',
-  `DocRole` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'required' COMMENT 'required=必需 / optional=可选 / reference=参考 / attachment=附件',
+  -- ⛔ 【2026-10-16 已删除 DocRole 列】（67 号 §4.1，用户裁决②「删除，保留了可能误导」）
+  --    历史语义（备查）：required=必需 / optional=可选 / reference=参考 / attachment=附件
+  --    权威列改为 cert_standard_directory_file.IsRequired（UI 口径 =「文档约束」：必要/非必要）
+  --    ⚠️ 本表用 `CREATE TABLE IF NOT EXISTS` ⇒ 旧库不受本行删除影响；
+  --       旧库的物理删除见 scripts/db/fix/20261016_contract_role_to_directory_V1.sql §⑤
   `MatchPrompt` text COMMENT '【要素5a】匹配提示词：告诉 LLM 如何判断企业文档是否对应本文档（输出 JSON 契约见 04 §4.3）',
   `SynthesisPrompt` text COMMENT '【要素5b】填充提示词：不可直接结构化的段落如何组织撰写',
   `FingerprintJson` json DEFAULT NULL COMMENT '【固定文档】指纹规则集：{"fileNames":[],"regex":[],"keyFields":[{"name":"","pattern":""}],"minScore":0.8}',

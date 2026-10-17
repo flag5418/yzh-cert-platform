@@ -424,6 +424,7 @@ public partial class DocExtractionRuleService : IExtractionRuleQuery
                     FileCode = fileCode,
                     VersionNumber = 1,
                     RuleCode = rule.Code,
+                    TableCode = kv.Key,
                     TableIndex = tableIndex++,
                     ExtractedJson = System.Text.Json.JsonSerializer.Serialize(rows, JsonOptions),
                     ExtractedAt = now,

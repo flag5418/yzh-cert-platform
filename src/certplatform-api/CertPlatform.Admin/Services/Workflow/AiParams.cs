@@ -56,11 +56,14 @@ namespace CertPlatform.Admin.Services.Workflow
     /// </summary>
     public static class AiParams
     {
-        /// <summary>参数表在 <c>node.Config</c> 里的键（前端 panelSchema 同名，逐字一致）</summary>
-        public const string ConfigKey = "params";
+        /// <summary>
+        /// 参数表在 <c>node.Config</c> 里的键（★ 2026-10-16 起 PascalCase，前端 panelSchema 同名；
+        /// 读取走 <see cref="WorkflowConfigAccess"/> 大小写不敏感，旧 camelCase 数据同样命中）
+        /// </summary>
+        public const string ConfigKey = "Params";
 
         /// <summary>提示词模板键（★ M1 踩坑：是 promptTemplate，⛔ 不是 prompt）</summary>
-        public const string PromptKey = "promptTemplate";
+        public const string PromptKey = "PromptTemplate";
 
         private static readonly JsonSerializerOptions CaseInsensitive = new()
         {
@@ -79,7 +82,7 @@ namespace CertPlatform.Admin.Services.Workflow
             var result = new List<AiParamDecl>();
 
             if (node?.Config == null ||
-                !node.Config.TryGetValue(ConfigKey, out var raw) ||
+                !node.Config.TryGetConfigValue(ConfigKey, out var raw) ||
                 raw == null)
                 return result;
 
@@ -154,7 +157,7 @@ namespace CertPlatform.Admin.Services.Workflow
 
             // 正则兜底：{{节点标题.端口}} / {{nodeId.端口}} 的老写法
             if (resolveNodeId != null && node!.Config != null &&
-                node.Config.TryGetValue(PromptKey, out var promptObj))
+                node.Config.TryGetConfigValue(PromptKey, out var promptObj))
             {
                 var template = promptObj?.ToString() ?? string.Empty;
                 foreach (System.Text.RegularExpressions.Match m in PromptRenderer.Placeholder.Matches(template))

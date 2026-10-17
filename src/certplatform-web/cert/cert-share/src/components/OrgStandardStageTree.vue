@@ -281,9 +281,17 @@ const treeProps = {
 function getNodeIcon(type: string) {
   const iconMap: Record<string, any> = {
     organization: OfficeBuilding,
+    // ★ 别名：`directory-tree` 端点（标准文档填写规则页左树）用 `org` / `phase` 命名，
+    //   `useFileTree` 系列页面用 `organization` / `stage`。两种叫法**指向同一种节点**，
+    //   此前只登记了后者 ⇒ 填写规则页的机构节点图标 fallback 成「文档」图标，
+    //   与资料清单页（楼宇图标）不一致，用户会以为那是另一种节点。
+    //   ⛔ 不要为了「统一」去改后端 kind 字面量 —— 那会牵动 ApiCode 无关的判据与历史载荷；
+    //   图标层做别名是零风险收口。
+    org: OfficeBuilding,
     enterprise: OfficeBuilding,
     standard: Document,
     stage: Calendar,
+    phase: Calendar,
     folder: FolderOpened,
     file: Document,
     ...(props.iconMap || {}),
@@ -430,7 +438,10 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.org-std-stage-tree__node-icon.is-organization {
+/* ⚠️ 每条都成对写：`is-organization`/`is-org`、`is-stage`/`is-phase` 是**同一种节点**的
+   两种命名（见 getNodeIcon 注释）。只写一半 ⇒ 另一套树「图标对了但颜色还是灰的」。 */
+.org-std-stage-tree__node-icon.is-organization,
+.org-std-stage-tree__node-icon.is-org {
   color: var(--yzh-color-warning, #e6a23c);
 }
 
@@ -438,7 +449,8 @@ onMounted(() => {
   color: var(--yzh-color-primary, #409eff);
 }
 
-.org-std-stage-tree__node-icon.is-stage {
+.org-std-stage-tree__node-icon.is-stage,
+.org-std-stage-tree__node-icon.is-phase {
   color: var(--yzh-color-success, #67c23a);
 }
 

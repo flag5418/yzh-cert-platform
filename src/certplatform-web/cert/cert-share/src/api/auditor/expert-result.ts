@@ -14,7 +14,7 @@
 
 import { unwrap, unwrapOk, yzhApi } from '@yzh-core'
 import type { ApiResponse } from '@yzh-core'
-import { downloadBlob } from '@share/utils/download'
+import { saveBlob } from '@share/utils/download'
 
 const BASE = '/api/Auditor/ExpertResult'
 
@@ -246,5 +246,5 @@ export async function exportResults(req: ResultListRequest, fileName: string): P
     StandardCode: req.StandardCode ?? null,
     ReviewStatus: req.ReviewStatus ?? null,
   })
-  downloadBlob(blob, fileName.endsWith('.csv') ? fileName : `${fileName}.csv`)
+  saveBlob(blob, fileName.endsWith('.csv') ? fileName : `${fileName}.csv`)
 }

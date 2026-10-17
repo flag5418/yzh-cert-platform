@@ -36,7 +36,13 @@
  *   禁止重建同类包装件）—— 它自带另一套口径（`stage-files`、`Type` 字段、无 `Extra`），
  *   会出现「双表头 + 点不中任何文件 + 右栏拿不到 templateCode」的三重错误。
  */
-import { Document, MagicStick, Refresh, View } from '@element-plus/icons-vue'
+import {
+  Document,
+  InfoFilled,
+  MagicStick,
+  Refresh,
+  View,
+} from '@element-plus/icons-vue'
 import {
   analyzeDocForFill,
   getDocContract,
@@ -52,6 +58,7 @@ import {
   YzhPageLayout,
   YzhStatusBadge,
   unwrapOk,
+  useAsyncAction,
   useTreeTable,
 } from '@yzh-core'
 import { OrgStandardStageTree } from '@share/components'
@@ -124,13 +131,20 @@ const publishing = ref(false)
  * 分析并发计数（手动按钮 + 首次打开的自动分析可能交叠）—— `> 0` 即「分析中」。
  * ⛔ 不用单个 `boolean`：两个请求先后 `finally` 会把先结束的那次置 `false`，
  *    另一个还在跑时按钮却恢复可点 ⇒ 同一文件被发起第二次分析。
+ *
+ * ★ 2026-10-16：改由 `useAsyncAction` 统一提供 —— 并发计数（`busy = runs > 0`）
+ *   与**全局等待提示**一次接好。分析是**同步**端点（15~25s），正是用户报的
+ *   「点开页面什么都没有、不知道系统在干什么」那一类；自动分析也一并进遮罩
+ *   （`maybeAutoAnalyze` 与 `onAnalyze` **共用同一个 action** ⇒ 计数正确叠加）。
+ *
+ * ⚠️ **必须解构**（`{ busy, run }`）：`busy` 是 `ComputedRef`，模板不会自动解包
+ *   `action.busy`（只对顶层 ref 生效）⇒ 传进 `:loading` 的会是 ref 对象，恒为真。
  */
-const analyzeRuns = ref(0)
-const analyzing = computed(() => analyzeRuns.value > 0)
+const { busy: analyzing, run: runAnalyze } = useAsyncAction()
+/** ★ B7：试填进行中（要等 LibreOffice 转 PDF，秒级）—— 同样接全局等待提示 */
+const { busy: autoFilling, run: runAutoFill } = useAsyncAction()
 /** ★ 自动语义分析的会话内去重：同一文件每次进页面只自动跑一次（失败也占位，避免反复烧 LLM） */
 const autoAnalyzed = new Set<string>()
-/** ★ B7：试填进行中（要等 LibreOffice 转 PDF，秒级） */
-const autoFilling = ref(false)
 const canPublish = ref(false)
 const publishBlockReason = ref('')
 const isDirty = ref(false)
@@ -164,33 +178,72 @@ const statusMeta: Record<
 /** ★ C3：图片 / PDF 不可解析 ⇒ 文档类型置灰锁定 */
 const docTypeLocked = computed(() => logic.docTypeLocked)
 
+/**
+ * ★ 文档约束的中文口径（2026-10-16，`67` 号 §4.2）—— 传给 `PromptPanel`
+ * 作为「生成填写提示词」的上下文。
+ *
+ * ⛔ **不再传 `DocRole`**（已废弃）：旧实现把**英文枚举码**（`required`）直接拼进提示词
+ * （`【文档角色】required`），大模型看到的是英文码而非中文，等于没给。现改为中文口径，
+ * 且顺带把「是否依赖企业文档」也交代清楚 —— 它决定提示词该不该引用企业资料。
+ */
+const docConstraintText = computed(() => {
+  const c = contract.value
+  if (!c) return ''
+  return [
+    c.IsRequired ? '必要文档' : '非必要文档',
+    c.Replaceable
+      ? '依赖企业文档（内容来自企业交上来的资料）'
+      : '不依赖企业文档（标准自带，企业无需提供）',
+  ].join(' · ')
+})
+
 /* ============ ★ B7：自动填充 / 预览（C3 的那两个按钮） ============ */
 /**
- * 能不能点「自动填充」—— **唯一判据 = C8 的 `logic.anchorReadiness.ready`**。
+ * 能不能点「自动填充」/ 进「预览」Tab —— **唯一判据 = `logic.previewReadiness.ready`**。
  *
- * ⛔ 不在这里重写四条判据：那样就会出现两份「什么叫配齐」，
+ * ★ 2026-10-16 用户裁决：试填闸**不看来源配齐没配齐**（用户逐字「无论来源是什么，都可以
+ *   自动生成填写内容……提前发现我们更新文档后是否正确」）。试填取值走 `PreviewValueFactory`
+ *   （模板自带原文 + 按类型生成【试填】占位），未配 / 失效来源的锚点照样出占位值 ⇒
+ *   来源是否配齐与「能不能试填」无关，⛔ 不能拿配置完成度（`anchorReadiness.ready`）当试填闸。
+ *
+ * ⛔ 不在这里重写判据：那样就会出现两份「什么叫能试填」，
  *   而两份必然会漂移（本页已因同类原因把口径收进 `logic` 三次）。
  * ⛔ 后端**不设**这道闸（`52` §六 P2'：程序不阻断业务组合，只如实推导）——
  *   闸在前端，是为了「不让用户白等一次必然全空的试填」。
  */
-const previewReady = computed(() => logic.anchorReadiness.ready)
+const previewReady = computed(() => logic.previewReadiness.ready)
 
 /**
- * 「为什么现在不能点自动填充」—— 按**同一组判据**逐条给出**事实**。
+ * 「为什么现在不能自动填充」—— 按**同一组判据**逐条给出**事实**。
  *
- * ⚠️ 与 `AnchorRuleTab` 顶部那条 C8 警示条**同源不同形**：那条是「页面上的常驻提示」，
- *   这条是「按钮被禁用时的即时原因」。两条都从 `anchorReadiness` 取值 ⇒ 不会互相矛盾。
+ * ⚠️ 与 `AnchorRuleTab` 顶部那条统计徽标**同源不同形**：那条是「配置完成度」，
+ *   这条是「按钮被禁用时的即时原因」。⛔ 只在**硬阻断**（没模板 / 没扫描 / 没锚点）时
+ *   才有值；「未配来源」之类**不再是阻断**（见 `previewSourceHint`）。
  * ⛔ 文案只陈述事实（缺什么），⛔ 不写「请先去某某页面做某某事」的引导长句。
  */
 const previewBlockReason = computed(() => {
   if (isFixedDoc.value) return '固定文档不生成内容'
   if (!hasTemplate.value) return '还没有空白模板'
   if (logic.scanStatus !== 'completed') return '锚点还没扫描'
-  const r = logic.anchorReadiness
-  if (r.total === 0) return '没有识别到锚点'
-  if (r.unconfigured > 0) return `还有 ${r.unconfigured} 个锚点未配数据源`
-  if (r.orphan > 0) return `还有 ${r.orphan} 个孤儿锚点（模板里已找不到该标签）`
+  if (logic.anchorReadiness.total === 0) return '没有识别到锚点'
   return ''
+})
+
+/**
+ * ★ 试填**提示**（非阻断）—— 未配 / 失效来源 / 孤儿的存在**不影响试填**，
+ * 但要如实告知「这些锚点用的是【试填】占位值」，免得用户以为看到的是真实取值。
+ *
+ * ⛔ 不是错误、不置灰按钮、不写红色：试填本就用占位值，这正是它的用途。
+ */
+const previewSourceHint = computed(() => {
+  const r = logic.anchorReadiness
+  const parts: string[] = []
+  if (r.unconfigured > 0) parts.push(`${r.unconfigured} 个未配来源`)
+  if (r.staleRef > 0) parts.push(`${r.staleRef} 个来源失效`)
+  if (r.orphan > 0) parts.push(`${r.orphan} 个孤儿锚点`)
+  return parts.length
+    ? `${parts.join('、')} ⇒ 这些锚点用【试填】占位值（不影响验证替换效果）`
+    : ''
 })
 
 /** 已经试填过（有 PDF 产物）⇒ 「预览」按钮可用、中栏第三个视图可选 */
@@ -254,7 +307,7 @@ const globalTabBadge = computed(() =>
 )
 
 /**
- * ★ 第三 Tab 徽标：试填闸门的一眼结论（判据 = `anchorReadiness.ready`，
+ * ★ 第三 Tab 徽标：试填闸门的一眼结论（判据 = `previewReadiness.ready`，
  *   与「自动填充」按钮、`PreviewTab` 内部门槛**三处同源**）。
  */
 const previewTabBadge = computed(() => {
@@ -433,8 +486,7 @@ async function maybeAutoAnalyze() {
   if (autoAnalyzed.has(fileCode)) return
   autoAnalyzed.add(fileCode)
 
-  analyzeRuns.value++
-  try {
+  await runAnalyze(async () => {
     await analyzeDocForFill(fileCode)
     if (logic.standardFileCode !== fileCode) return
     // ★ 顺序必须是「先刷树、再读契约」：`loadContract` 要把分析状态回灌到树节点 Extra
@@ -450,13 +502,11 @@ async function maybeAutoAnalyze() {
     } else {
       ElMessage.warning('语义分析未产出结论，可点「开始 AI 语义分析」重试')
     }
-  } catch (err: any) {
+  }, `正在 AI 语义分析：${baseFileName.value || '当前文档'}`).catch((err: any) => {
     if (logic.standardFileCode === fileCode) {
       ElMessage.warning(err?.message || '自动语义分析未完成，可点「开始 AI 语义分析」重试')
     }
-  } finally {
-    analyzeRuns.value--
-  }
+  })
 }
 
 async function loadContract() {
@@ -580,8 +630,7 @@ async function onAutoFill() {
     return
   }
 
-  autoFilling.value = true
-  try {
+  await runAutoFill(async () => {
     const res = await runDocFillPreview(templateCode.value)
     const d = unwrapOk(res, '试填失败')
 
@@ -607,12 +656,10 @@ async function onAutoFill() {
     if (d.Warnings?.length) {
       ElMessage.warning(d.Warnings[0])
     }
-  } catch (err: any) {
+  }, `正在试填并生成预览：${baseFileName.value || '当前模板'}`).catch((err: any) => {
     // 失败出口：`BizError` 的 message 已是 `err` 原文（如「试填已生成，但转 PDF 失败：…」）
     ElMessage.error(err?.message || '试填失败')
-  } finally {
-    autoFilling.value = false
-  }
+  })
 }
 
 /** ★ 预览 —— 纯视图切换（切中栏到「填充后预览」），⛔ 不重跑试填 */
@@ -638,15 +685,15 @@ function onPreviewed(r: DocFillPreviewResult) {
 
 async function onAnalyze() {
   if (!logic.standardFileCode) return
-  analyzeRuns.value++
-  try {
-    await analyzeDocForFill(logic.standardFileCode)
+  const fileCode = logic.standardFileCode
+  await runAnalyze(async () => {
+    await analyzeDocForFill(fileCode)
     ElMessage.success('AI 语义分析已启动，请稍后刷新')
     await logic.reloadTree()
     await loadContract()
-  } finally {
-    analyzeRuns.value--
-  }
+  }, `正在 AI 语义分析：${baseFileName.value || '当前文档'}`).catch((err: any) => {
+    ElMessage.error(err?.message || 'AI 语义分析失败')
+  })
 }
 
 async function onPublish() {
@@ -978,8 +1025,10 @@ function onPromptBound() {
 
                 <!--
                   ★ B7 / C3：「自动填充」—— 把空白模板按当前规则试填一遍并产出预览 PDF。
-                  ⛔ 未配齐时**禁用**（判据 = C8 的 `logic.anchorReadiness.ready`，唯一口径）；
-                     tooltip 给出**具体缺什么**，而不是「请先配置」这种没有信息量的引导。
+                  ★ 2026-10-16：闸 = `logic.previewReadiness.ready`（**不看来源配齐没配齐**，
+                     未配 / 失效来源的锚点用【试填】占位值）——
+                     用户要的是「无论来源是什么都能试填，看替换对不对」。
+                     tooltip 只给**硬阻断**原因（无模板 / 未扫描 / 无锚点）。
                   ⚠️ 必须用 `<span>` 包住 disabled 的按钮 —— 原生 `disabled` 元素不派发
                      mouseenter，`el-tooltip` 收不到事件 ⇒ 禁用态的提示**永远不会显示**。
                 -->
@@ -1000,6 +1049,14 @@ function onPromptBound() {
                       自动填充
                     </el-button>
                   </span>
+                </el-tooltip>
+                <!-- ★ 2026-10-16：未配来源**不阻断**试填，只如实提示用了占位值 -->
+                <el-tooltip
+                  v-if="previewSourceHint"
+                  :content="previewSourceHint"
+                  placement="top" :show-after="600"
+                >
+                  <el-icon class="col3__hint"><InfoFilled /></el-icon>
                 </el-tooltip>
 
                 <!--
@@ -1078,7 +1135,7 @@ function onPromptBound() {
                     :org-code="logic.templateOrgCode"
                     :template-name="baseFileName"
                     :doc-purpose="contract?.DocPurpose"
-                    :doc-role="contract?.DocRole"
+                    :doc-constraint="docConstraintText"
                     @bound="onPromptBound"
                     @invalid-refs="(r: string[]) => (promptInvalidRefs = r)"
                   />
@@ -1116,6 +1173,7 @@ function onPromptBound() {
               <PreviewTab
                 :template-code="templateCode || ''"
                 :block-reason="previewBlockReason"
+                :source-hint="previewSourceHint"
                 @previewed="onPreviewed"
               />
             </template>
@@ -1141,15 +1199,21 @@ function onPromptBound() {
                 </div>
                 <b class="prog__num">{{ completion.done }}/{{ completion.total }}</b>
               </div>
-              <span v-if="completion.miss.length" class="savebar__miss">
-                缺：{{ completion.miss.join('、') }}
+              <span
+                v-if="completion.miss.length"
+                class="savebar__miss"
+                title="文档设置完成度（AI 语义分析 / 类型确认等），不是发布门；发布只需通过「发布校验」"
+              >
+                待完成：{{ completion.miss.join('、') }}
               </span>
             </div>
             <span class="topbar__sp"></span>
             <el-tooltip
               :content="
                 publishBlockReason ||
-                (!canPublish ? '请先完成必配项并通过测试验证' : '')
+                (!canPublish
+                  ? '发布前须通过「发布校验」：见本面板「全局规则」页签最下方，选中模板后会自动校验'
+                  : '')
               "
               placement="top" :show-after="1000"
             >
@@ -1530,6 +1594,12 @@ function onPromptBound() {
 }
 .col3__actions:empty {
   display: none;
+}
+/* 试填「未配来源不阻断」的提示图标（非阻断：只给信息，⛔ 不用警示色） */
+.col3__hint {
+  align-self: center;
+  color: var(--yzh-color-text-placeholder, #909399);
+  cursor: help;
 }
 
 /* 全局规则里的「发布校验」子块（原「测试验证」页签合并进来） */

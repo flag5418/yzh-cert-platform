@@ -22,6 +22,7 @@ import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { AnalyzePolicyKey, DocProfile, OriginalFile, QueueDetail, StandardRef, StatusBar } from '@share/api/ent/enterprise-original'
 import { partitionUploadable } from '@share/constants/upload-file-policy'
+import { saveBlob } from '@share/utils/download'
 import {
   batchRemoveFile,
   batchSetPolicy,
@@ -1171,15 +1172,8 @@ export function closeUpload(): void {
 
 export async function onDownload(row: OriginalFile): Promise<void> {
   try {
-    const blob = await originalDownloadBlob(row.StoragePath, row.EnterpriseCode)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = row.FileName
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    // 保存统一走 `saveBlob`（全平台唯一实现，P1.3）
+    saveBlob(await originalDownloadBlob(row.StoragePath, row.EnterpriseCode), row.FileName)
   } catch (e) {
     ElMessage.error((e as Error).message)
   }

@@ -445,3 +445,42 @@ describe('ANCHOR_QUICK_FILTERS', () => {
     expect(ANCHOR_QUICK_FILTERS.every((f) => f.label.length > 0)).toBe(true)
   })
 })
+
+/* ============================================================
+   ★ 回归：不需要 ref 的来源种类不得被判「已失效」
+   ============================================================ */
+describe('★ 不需要 ref 的 kind（manual / ai_* / domain-manual）不得判 staleRef', () => {
+  it('manual ⇒ 已配（不得「来源已失效」）', () => {
+    const v = toAnchorView(row({ SourceSpec: spec([{ kind: 'manual' }]) }))
+    expect(v.unconfigured).toBe(false)
+    expect(v.staleRef).toBe(false)
+    expect(anchorBadge(v)).toEqual({ text: '已配', tone: 'info' })
+  })
+
+  it('manual + 必填 ⇒ 已配 · 必填', () => {
+    const v = toAnchorView(
+      row({ SourceSpec: spec([{ kind: 'manual' }]), Required: true }),
+    )
+    expect(v.staleRef).toBe(false)
+    expect(anchorBadge(v)).toEqual({ text: '已配 · 必填', tone: 'success' })
+  })
+
+  it('AI 三类（无 ref）⇒ 不得判失效', () => {
+    for (const kind of ['ai_semantic', 'ai_field', 'ai_table']) {
+      const v = toAnchorView(row({ SourceSpec: spec([{ kind }]) }))
+      expect([kind, v.unconfigured]).toEqual([kind, false])
+      expect([kind, v.staleRef]).toEqual([kind, false])
+    }
+  })
+
+  it('仍需 ref 的种类（global/replace/headerFooter）照旧：空 ref ⇒ 未配，不误报失效', () => {
+    for (const kind of ['global', 'replace', 'headerFooter']) {
+      const v = toAnchorView(
+        row({ SourceSpec: spec([{ kind }]) }),
+        { paramCodes: [], ready: true },
+      )
+      expect([kind, v.unconfigured]).toEqual([kind, true])
+      expect([kind, v.staleRef]).toEqual([kind, false])
+    }
+  })
+})

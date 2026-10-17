@@ -33,6 +33,7 @@
  */
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useAsyncAction } from '@yzh-core'
 import {
   fetchNormalizeTaskFiles,
   fetchNormalizeTasks,
@@ -153,7 +154,23 @@ export class EnterpriseReviewLogic {
 
   // ══════════════ 四、导出 ══════════════
 
-  exporting = ref(false)
+  /**
+   * ★ 打包导出（2026-10-16）—— 走 `useAsyncAction`：并发计数 + 全局等待提示。
+   *
+   * 【为什么这个要接】**服务端要逐个取产物、压成一个 ZIP** —— 几十份文档时是
+   *   秒级到十几秒，期间页面此前**只有按钮转圈**，用户不知道系统在干什么。
+   * 【为什么不能用单 boolean】`exporting` 之前是 `ref(false)`：连续点两次时，
+   *   先结束的那次 `finally` 会把它置回 `false` ⇒ 按钮提前恢复可点 ⇒ 重复打包下载。
+   *
+   * ⚠️ `useAsyncAction` 必须在 **setup 同步期**调用（内部要 `inject` 路由对象）
+   *   ⇒ 放在类字段初始化里（`new EnterpriseReviewLogic()` 发生在页面 setup 中）。
+   *   本类**没有**在单测里被直接 `new`（auditor 无测试）—— 若将来加测试，
+   *   需在 `mount` 的组件 setup 里实例化，或给 `useAsyncAction` 传 `{ global: false }`。
+   */
+  private exportAction = useAsyncAction()
+
+  /** 导出进行中（模板按 `logic.exporting.value` 读，`ComputedRef` 与 `ref` 用法一致） */
+  exporting = this.exportAction.busy
 
   // ══════════════════════════════════════════════════════════════════════
   // 初始化
@@ -436,25 +453,24 @@ export class EnterpriseReviewLogic {
       return
     }
 
-    this.exporting.value = true
-    try {
-      const fileName = `${s.EnterpriseName}_${s.StageName}_规范化文档`
-      await packageNormalize(
-        {
-          EnterpriseCode: s.EnterpriseCode,
-          // ⛔ 恒为 null：范围已由 `StandardFileCodes` 锁定，见上方长注释
-          StageCode: null,
-          StandardFileCodes: codes,
-        },
-        fileName,
-      )
-      ElMessage.success('已开始下载')
-    } catch (e) {
-      // ★ 业务拒绝（该范围内还没有已规范化的文档）走这里 —— 后端 `err` 已是人话
-      ElMessage.error((e as Error)?.message || '导出失败')
-    } finally {
-      this.exporting.value = false
-    }
+    await this.exportAction
+      .run(async () => {
+        const fileName = `${s.EnterpriseName}_${s.StageName}_规范化文档`
+        await packageNormalize(
+          {
+            EnterpriseCode: s.EnterpriseCode,
+            // ⛔ 恒为 null：范围已由 `StandardFileCodes` 锁定，见上方长注释
+            StageCode: null,
+            StandardFileCodes: codes,
+          },
+          fileName,
+        )
+        ElMessage.success('已开始下载')
+      }, `正在打包导出：${s.EnterpriseName} › ${s.StageName}`)
+      .catch((e: unknown) => {
+        // ★ 业务拒绝（该范围内还没有已规范化的文档）走这里 —— 后端 `err` 已是人话
+        ElMessage.error((e as Error)?.message || '导出失败')
+      })
   }
 }
 

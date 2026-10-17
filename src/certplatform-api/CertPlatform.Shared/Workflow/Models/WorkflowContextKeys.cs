@@ -9,9 +9,12 @@ namespace CertPlatform.Shared.Workflow.Models
     /// 字符串写错<b>不报错</b>，只是静默拿到 <c>null</c> —— 本项目最典型的「配了不生效」。
     /// ⇒ 键名<b>只允许在这里定义一次</b>，两侧都引用常量（⛔ 禁止裸写字面量）。</para>
     ///
-    /// <para><b>命名口径</b>：一律 <b>camelCase</b>，与 <c>WorkflowNodeConfig.Inputs</c> 的
-    /// 端口名风格一致（既有 <c>contextParams</c> 就是 camelCase：
-    /// <c>enterpriseCode</c> / <c>standardCode</c> / <c>phaseCode</c>）。</para>
+    /// <para><b>★ 命名口径（2026-10-17 用户裁定，强制）</b>：一律 <b>PascalCase</b> ——
+    /// 与 DB 列名 / C# 属性名 / TS 字段名<b>逐字一致</b>（<c>EnterpriseCode</c> / <c>StandardCode</c> /
+    /// <c>PhaseCode</c> / <c>OrgCode</c> / <c>RuleCode</c>）。项目<b>只允许这一种编码风格</b>，
+    /// ⛔ 不再保留 camelCase 键名（旧口径「C 边界不动」已作废）。</para>
+    ///
+    /// <para>守卫：<c>scripts/backend/check-workflow-config-keys.sh</c>（小写上下文键 = 违规）。</para>
     /// </summary>
     public static class WorkflowContextKeys
     {
@@ -24,19 +27,19 @@ namespace CertPlatform.Shared.Workflow.Models
         /// → ③ 专家端工作区 <c>CertBodyCode</c> → ④ 登录人 <c>Sys_User.OrgCode</c>
         /// → ⑤ 空串（= <b>平台标准级</b>，合法值，⛔ 不是缺失）。</para>
         /// </summary>
-        public const string OrgCode = "orgCode";
+        public const string OrgCode = "OrgCode";
 
         /// <summary>标准编码（如 <c>iso9001</c>）。空 = 全部标准通用规则。</summary>
-        public const string StandardCode = "standardCode";
+        public const string StandardCode = "StandardCode";
 
         /// <summary>审核阶段编码。空 = 全阶段通用规则。</summary>
-        public const string PhaseCode = "phaseCode";
+        public const string PhaseCode = "PhaseCode";
 
         /// <summary>企业编码（<c>cert_enterprise.Code</c>）。空 = 标准域 / 虚拟企业。</summary>
-        public const string EnterpriseCode = "enterpriseCode";
+        public const string EnterpriseCode = "EnterpriseCode";
 
         /// <summary>规则编码（<c>cert_validation_rule.Code</c>）。</summary>
-        public const string RuleCode = "ruleCode";
+        public const string RuleCode = "RuleCode";
 
         /// <summary>
         /// <b>本节点已连接的输入端口名集合</b>（<c>ISet&lt;string&gt;</c>）—— 引擎<b>逐节点</b>注入。
@@ -55,7 +58,20 @@ namespace CertPlatform.Shared.Workflow.Models
         /// <para>⚠️ <b>取不到时（<c>null</c>）skill 必须保守处理</b>：不因「判据缺失」而报错，
         /// 与 branch 裁剪的保守策略一致（拿不到判据不跳过）。</para>
         /// </summary>
-        public const string ConnectedPorts = "__connectedPorts";
+        public const string ConnectedPorts = "__ConnectedPorts";
+
+        /// <summary>
+        /// <b>本节点的名称</b>（<c>WorkflowNodeConfig.Title</c>）—— 引擎<b>逐节点</b>注入。
+        ///
+        /// <para><b>为什么给</b>：节点名称是画布内的<b>唯一标识</b>
+        /// （<c>useWorkflowStore.generateUniqueName</c> 新增即去重，<c>isNameUnique</c> 改名时拦截重名），
+        /// 业务上可直接当「本节点是谁」用。典型消费方 = <c>stamp_judge_level</c>：
+        /// judge 标识<b>不再单独手填</b>，直接取本键 ⇒ 改节点名称 = 改 judge 标识，一处赋值。</para>
+        ///
+        /// <para>⚠️ 取值可能为空串（理论上节点未命名时）⇒ 消费方须自行兜底/报错，
+        /// ⛔ 不要静默当「有效标识」。</para>
+        /// </summary>
+        public const string NodeTitle = "NodeTitle";
 
         // ──────────── 运行级登记池 ────────────
 
@@ -73,6 +89,6 @@ namespace CertPlatform.Shared.Workflow.Models
         /// <para>消费方：<c>nc_conclusion_v2</c> 用
         /// <c>[FromContext(WorkflowContextKeys.JudgePool)] List&lt;object&gt;</c> 一次取全。</para>
         /// </summary>
-        public const string JudgePool = "judge";
+        public const string JudgePool = "Judge";
     }
 }

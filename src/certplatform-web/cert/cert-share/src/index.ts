@@ -9,6 +9,19 @@ export * from './components'
 // 不从根出口再导出（TS2305）；使用方直接 from '@share/composables/useDirectoryApi'
 export { useFileTree } from './composables/useFileTree'
 export { usePolling } from './composables/usePolling'
+// ★ 文件操作机制族（上传/替换/下载/打包）—— 三处入口统一机制，见 composables/useFileOps.ts
+export { useFileOps } from './composables/useFileOps'
+export type {
+  FileOpEntry,
+  FileOpTarget,
+  FileFailureMode,
+  UploadPipeline,
+  UploadRunResult,
+  ReplaceOp,
+  DownloadOp,
+  PackOp,
+  FileOpsOptions,
+} from './composables/useFileOps'
 
 // 业务类型
 export * from './types'
@@ -18,7 +31,7 @@ export * from './constants/upload-file-policy'
 
 // 业务工具
 export { formatFileSize, formatDate, formatDateTime } from './utils/format'
-export { downloadBlob, parseFileNameFromDisposition } from './utils/download'
+export { saveBlob, parseFileNameFromDisposition } from './utils/download'
 export { CONVERT_STATUS_MAP, convertStatusBadgeType, convertStatusLabel } from './utils/convertStatus'
 
 // 业务 API（admin + auditor 共用：认证业务、工作流）

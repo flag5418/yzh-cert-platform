@@ -51,8 +51,12 @@ const props = defineProps<{
   templateName: string
   /** 文档作用（生成上下文；来自契约，父页读 `DocContractDetail.DocPurpose`） */
   docPurpose?: string
-  /** 文档角色编码（生成上下文，可空） */
-  docRole?: string
+  /**
+   * ★ 文档约束的中文口径（2026-10-16）—— 形如
+   * `必要文档 · 依赖企业文档（内容来自企业交上来的资料）`。
+   * 由父页从契约行渲染后传入（⛔ 不再传英文枚举码 `DocRole`）。
+   */
+  docConstraint?: string
 }>()
 
 const emit = defineEmits<{
@@ -241,7 +245,7 @@ async function onGenerate() {
     const d = unwrapOk(
       await generateFillPrompt({
         DocPurpose: props.docPurpose?.trim() || undefined,
-        DocRole: props.docRole || undefined,
+        DocConstraint: props.docConstraint || undefined,
         // 非空 = 优化模式（后端据此切换提示词模式）
         CurrentPrompt: text.value.trim() || undefined,
         Anchors: genAnchors.value,

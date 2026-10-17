@@ -47,7 +47,7 @@ namespace CertPlatform.Admin.Entities.Wf
         [StringLength(50)]
         public string? ModelName { get; set; }
 
-        /// <summary>本提示词专用输出上限。NULL = 用系统默认 <c>ai_max_tokens</c>（当前 4096，偏小）。</summary>
+        /// <summary>本提示词专用输出上限。NULL = 用系统默认 <c>ai_max_tokens</c>（当前 32768）。</summary>
         public int? MaxTokens { get; set; }
 
         /// <summary>本提示词专用温度（0.00~1.00）。NULL = 用系统默认 <c>ai_temperature</c>。</summary>

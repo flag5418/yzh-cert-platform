@@ -36,43 +36,50 @@ export interface GraphData {
   meta?: Record<string, any>
 }
 
+/** 落库格式（rule_json）—— 外层键 PascalCase（P4）；保留 camelCase 仅用于容忍旧数据读取 */
 export interface WorkflowConfig {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Version?: number
+  WorkflowType?: string
+  Nodes?: Array<Record<string, any>>
+  Edges?: Array<Record<string, any>>
+  OutputConfig?: Record<string, any>
+  Glossary?: string
+  /** ↓ 旧数据兼容 */
   version?: number
-  workflowType: string
-  nodes: Array<Record<string, any>>
-  edges: Array<{ source: string; target: string; sourceHandle?: string; targetHandle?: string }>
-  outputConfig: Record<string, any>
-  glossary: string
+  workflowType?: string
+  nodes?: Array<Record<string, any>>
+  edges?: Array<Record<string, any>>
+  outputConfig?: Record<string, any>
+  glossary?: string
 }
 
 export function compileToWorkflowConfig(graphData: GraphData, meta: Record<string, any> = {}): WorkflowConfig {
   const nodes = graphData.nodes.map(n => {
     const d = n.properties || {}
-    const node: Record<string, any> = { nodeId: n.id, nodeType: d.nodeType || 'skill', title: d.title || n.text || d.skillCode || n.id }
-    if (d.skillCode) node.skillCode = d.skillCode
-    if (d.config && Object.keys(d.config).length > 0) node.config = d.config
-    if (d.inputs && Object.keys(d.inputs).length > 0) node.inputs = d.inputs
-    if (d.outputs && Object.keys(d.outputs).length > 0) node.outputs = d.outputs
-    if (d.inputPorts && d.inputPorts.length > 0) node.inputPorts = d.inputPorts
-    if (d.outputPorts && d.outputPorts.length > 0) node.outputPorts = d.outputPorts
+    const node: Record<string, any> = { NodeId: n.id, NodeType: d.nodeType || 'skill', Title: d.title || n.text || d.skillCode || n.id }
+    if (d.skillCode) node.SkillCode = d.skillCode
+    if (d.config && Object.keys(d.config).length > 0) node.Config = d.config
+    if (d.inputs && Object.keys(d.inputs).length > 0) node.Inputs = d.inputs
+    if (d.outputs && Object.keys(d.outputs).length > 0) node.Outputs = d.outputs
+    if (d.inputPorts && d.inputPorts.length > 0) node.InputPorts = d.inputPorts
+    if (d.outputPorts && d.outputPorts.length > 0) node.OutputPorts = d.outputPorts
     return node
   })
 
   const edges = graphData.edges.map(e => {
-    const edge: { source: string; target: string; sourceHandle?: string; targetHandle?: string } = { source: e.sourceNodeId, target: e.targetNodeId }
+    const edge: { Source: string; Target: string; SourceHandle?: string; TargetHandle?: string } = { Source: e.sourceNodeId, Target: e.targetNodeId }
     const ed = e.properties || {}
-    if (ed.sourceHandle) edge.sourceHandle = ed.sourceHandle
-    if (ed.targetHandle) edge.targetHandle = ed.targetHandle
+    if (ed.sourceHandle) edge.SourceHandle = ed.sourceHandle
+    if (ed.targetHandle) edge.TargetHandle = ed.targetHandle
     return edge
   })
 
   return {
-    version: meta.version ?? graphData.meta?.version ?? 1,
-    workflowType: meta.workflowType ?? graphData.meta?.workflowType ?? 'validation',
-    nodes, edges,
-    outputConfig: meta.outputConfig ?? graphData.meta?.outputConfig ?? {},
-    glossary: meta.glossary ?? graphData.meta?.glossary ?? ''
+    Version: meta.version ?? graphData.meta?.version ?? 1,
+    WorkflowType: meta.workflowType ?? graphData.meta?.workflowType ?? 'validation',
+    Nodes: nodes, Edges: edges,
+    OutputConfig: meta.outputConfig ?? graphData.meta?.outputConfig ?? {},
+    Glossary: meta.glossary ?? graphData.meta?.glossary ?? ''
   }
 }
 
@@ -83,47 +90,55 @@ export function decompileToGraphData(config: WorkflowConfig, layoutJson?: any): 
   const lfEdges: GraphEdge[] = []
 
   const positions = layoutJson?.nodePositions || {}
+  const configNodes = config.Nodes || config.nodes || []
+  const configEdges = config.Edges || config.edges || []
 
   ordered.forEach((nodeId: string, idx: number) => {
-    const node = config.nodes.find(n => n.nodeId === nodeId)
+    const node = configNodes.find(n => (n.NodeId || n.nodeId) === nodeId)
     if (!node) return
     const pos = positions[nodeId]
     const col = idx % 4
     const row = Math.floor(idx / 4)
     const x = pos?.x ?? 100 + col * 220
     const y = pos?.y ?? 80 + row * 130
-    const type = node.nodeType || 'skill'
+    const type = node.NodeType || node.nodeType || 'skill'
+    const skillCode = node.SkillCode || node.skillCode
+    const nodeCfg = node.Config || node.config
 
     const nodeProps: Record<string, any> = {
-      ...(node.config || {}), nodeType: type, title: node.title || '',
-      skillCode: node.skillCode || '', config: node.config || {},
-      inputs: node.inputs || {}, outputs: node.outputs || {},
-      inputPorts: node.inputPorts || [], outputPorts: node.outputPorts || []
+      ...(nodeCfg || {}), nodeType: type, title: node.Title || node.title || '',
+      skillCode: skillCode || '', config: nodeCfg || {},
+      inputs: node.Inputs || node.inputs || {}, outputs: node.Outputs || node.outputs || {},
+      inputPorts: node.InputPorts || node.inputPorts || [], outputPorts: node.OutputPorts || node.outputPorts || []
     }
     if (type === 'branch') nodeProps.points = [[0, -30], [50, 0], [0, 30]]
 
     const lfNode: GraphNode = {
       id: nodeId, type: lfNodeType(type), x, y,
-      text: node.title || node.skillCode || nodeId,
-      style: nodeStyle(type, node.skillCode),
+      text: node.Title || node.title || skillCode || nodeId,
+      style: nodeStyle(type, skillCode),
       properties: nodeProps
     }
     lfNodes.push(lfNode)
     nodeMap[nodeId] = lfNode
   })
 
-  for (const e of config.edges || []) {
-    if (!nodeMap[e.source] || !nodeMap[e.target]) continue
-    const isBranchAnchor = e.sourceHandle === 'success' || e.sourceHandle === 'failure'
+  for (const e of configEdges) {
+    const src = e.Source ?? e.source
+    const tgt = e.Target ?? e.target
+    const srcHandle = e.SourceHandle ?? e.sourceHandle
+    const tgtHandle = e.TargetHandle ?? e.targetHandle
+    if (!nodeMap[src] || !nodeMap[tgt]) continue
+    const isBranchAnchor = srcHandle === 'success' || srcHandle === 'failure'
     lfEdges.push({
-      id: `${e.source}-->${e.target}${e.sourceHandle ? '-' + e.sourceHandle : ''}`,
+      id: `${src}-->${tgt}${srcHandle ? '-' + srcHandle : ''}`,
       type: 'polyline',
-      sourceNodeId: e.source, targetNodeId: e.target,
-      text: isBranchAnchor ? (e.sourceHandle === 'success' ? '成功' : '失败') : '',
+      sourceNodeId: src, targetNodeId: tgt,
+      text: isBranchAnchor ? (srcHandle === 'success' ? '成功' : '失败') : '',
       style: isBranchAnchor
-        ? { stroke: e.sourceHandle === 'success' ? '#67C23A' : '#F56C6C', strokeWidth: 2 }
+        ? { stroke: srcHandle === 'success' ? '#67C23A' : '#F56C6C', strokeWidth: 2 }
         : { stroke: '#5B8FF9', strokeWidth: 2 },
-      properties: { sourceHandle: e.sourceHandle || null, targetHandle: e.targetHandle || null }
+      properties: { sourceHandle: srcHandle || null, targetHandle: tgtHandle || null }
     })
   }
 
@@ -131,7 +146,7 @@ export function decompileToGraphData(config: WorkflowConfig, layoutJson?: any): 
     graphData: {
       nodes: lfNodes, edges: lfEdges,
       transforms: layoutJson?.transforms || { x: 0, y: 0, zoom: 1 },
-      meta: { version: config.version || 1, workflowType: config.workflowType || 'validation', outputConfig: config.outputConfig || {}, glossary: config.glossary || '' }
+      meta: { version: config.Version ?? config.version ?? 1, workflowType: config.WorkflowType || config.workflowType || 'validation', outputConfig: config.OutputConfig || config.outputConfig || {}, glossary: config.Glossary || config.glossary || '' }
     },
     nodeMap
   }
@@ -185,12 +200,16 @@ export function nodeStyle(nodeType: string, _skillCode?: string, category?: stri
 }
 
 export function topologicalOrder(config: WorkflowConfig): string[] {
-  const nodeIds = new Set(config.nodes.map(n => n.nodeId))
+  const configNodes = config.Nodes || config.nodes || []
+  const configEdges = config.Edges || config.edges || []
+  const nodeIds = new Set(configNodes.map(n => n.NodeId || n.nodeId))
   const inDegree: Record<string, number> = {}
   const adj: Record<string, string[]> = {}
   nodeIds.forEach(id => { inDegree[id] = 0; adj[id] = [] })
-  for (const e of config.edges || []) {
-    if (nodeIds.has(e.source) && nodeIds.has(e.target)) { inDegree[e.target]++; adj[e.source].push(e.target) }
+  for (const e of configEdges) {
+    const src = e.Source ?? (e as any).source
+    const tgt = e.Target ?? (e as any).target
+    if (nodeIds.has(src) && nodeIds.has(tgt)) { inDegree[tgt]++; adj[src].push(tgt) }
   }
   const queue: string[] = []
   nodeIds.forEach(id => { if (inDegree[id] === 0) queue.push(id) })

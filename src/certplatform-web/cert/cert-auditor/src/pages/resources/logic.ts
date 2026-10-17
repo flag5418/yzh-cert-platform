@@ -18,15 +18,18 @@ import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { YzhTableColumn, YzhTableDataLoader } from '@yzh-core'
 import {
-  stageTree, stageOverview, standardDirectory, planDispatch, uploadFiles, activeQueue, cancelQueue,
-  downloadBlob, saveBlob, previewBlob,
-  replaceFile, deleteFile, restoreFile, getVersions, getHistory, triggerExtract, getExtractionResult,
+  stageTree, stageOverview, standardDirectory, planDispatch, activeQueue, cancelQueue,
+  uploadInit, uploadFileStep, uploadConfirm, uploadCancel,
+  enterpriseDownloadBlob, previewBlob,
+  replaceEnterpriseFile, deleteFile, restoreFile, getVersions, getHistory, triggerExtract, getExtractionResult,
   isSlotLive, isSlotRemoved, slotModifyTime
 } from '@share/api'
 import type {
   EnterpriseNode, StageItem, StageOverviewResult, StageStandardSummary,
-  StandardDirectoryResult, FileSlot, DispatchRow, FileVersionRow, HistoryItem
+  StandardDirectoryResult, FileSlot, DispatchRow, FileVersionRow, HistoryItem,
+  UploadConfirmResult, ManualValuesArchivedNotice
 } from '@share/api'
+import { useFileOps, type FileOpEntry } from '@share/composables/useFileOps'
 import { partitionUploadable, checkUploadable } from '@share/constants/upload-file-policy'
 
 /** 右侧文件夹树节点（模板结构 + 该文件夹下的槽位行） */
@@ -134,7 +137,56 @@ const UNMATCHED_REASON_TEXT: Record<string, string> = {
   ext_mismatch: '扩展名与匹配槽位不兼容（格式不符）'
 }
 
+/** 上传机制上下文（四段式的标准定位） */
+interface UploadCtx { enterpriseCode: string; stageCode: string; standardCode: string }
+/** 替换机制上下文 */
+interface ReplaceCtx { fileCode: string; enterpriseCode: string; reason: string; expectedModifyTime?: string }
+/** 下载机制上下文 */
+interface DownloadCtx { storagePath: string; fileName: string }
+/** 上传项业务载荷（槽位模式给 SlotCode，指派模式给 FolderCode） */
+type UploadPayload = { SlotCode?: string; FolderCode?: string }
+
 export class ResourcesLogic {
+  /**
+   * ★ 文件操作机制族（唯一入口）—— 上传/替换/下载统一走它，见 `@share/composables/useFileOps`。
+   * 失败语义 = `rollback`（与既有 `uploadFiles` 同口径：任一步失败即回滚草稿行 + 抛错）。
+   */
+  private readonly fileOps = useFileOps<
+    UploadCtx, UploadConfirmResult, ReplaceCtx, ManualValuesArchivedNotice | null, DownloadCtx
+  >({
+    upload: {
+      failureMode: 'rollback',
+      init: async (entries, ctx) => {
+        const res = await uploadInit(ctx.enterpriseCode, ctx.stageCode, ctx.standardCode,
+          entries.map(e => {
+            const p = e.payload as UploadPayload | undefined
+            return { SlotCode: p?.SlotCode, FolderCode: p?.FolderCode, FileName: e.file.name, FileSize: e.file.size }
+          }))
+        return {
+          taskId: res.TaskId,
+          // ★ 按 index 把后端目标行绑回本地 File 的关联键（既有 `uploadFiles` 同口径）
+          targets: res.Items.map((it, i) => ({ key: entries[i]?.key ?? `#${i}`, fileCode: it.FileCode }))
+        }
+      },
+      file: (taskId, target, file) => uploadFileStep(file, target.fileCode, taskId),
+      confirm: (taskId, ctx) => uploadConfirm(taskId, ctx.enterpriseCode),
+      cancel: (taskId, ctx) => uploadCancel(taskId, ctx.enterpriseCode)
+    },
+    replace: {
+      run: (file, ctx) =>
+        replaceEnterpriseFile(file, ctx.fileCode, ctx.enterpriseCode, ctx.reason, ctx.expectedModifyTime)
+    },
+    download: {
+      fetchBlob: ctx => enterpriseDownloadBlob(ctx.storagePath),
+      fileName: ctx => ctx.fileName
+    }
+  })
+
+  /** 计划行/裸文件 → 机制入口项（关联键优先用计划行 `Key`，回退目录感知键） */
+  private toEntry(file: File, payload: UploadPayload, key?: string): FileOpEntry<UploadPayload> {
+    return { key: key || this.fileKey(file), file, payload }
+  }
+
   // ─── 左侧：企业 / 阶段（stage-tree 一次取齐） ───
   readonly enterpriseNodes = ref<EnterpriseNode[]>([])
   readonly selectedEnterprise = ref<string>('')
@@ -169,6 +221,8 @@ export class ResourcesLogic {
   readonly singleUploadVisible = ref(false)
   readonly currentUploadStandardCode = ref<string>('')
   readonly singleUploadFolderCode = ref<string>('')
+  /** ★ 目标文件夹是否锁定：从「缺失槽位 / 目录」的「上传」进入时锁定 = 只读，不要求手选 */
+  readonly singleFolderLocked = ref(false)
   readonly singleUploadFiles = ref<File[]>([])
   readonly singlePlanLoading = ref(false)
   readonly singlePlanRows = ref<UploadPlanRow[]>([])
@@ -522,17 +576,24 @@ export class ResourcesLogic {
     return roots
   }
 
-  /** 目标文件夹下拉（含层级缩进；⛔ 不再硬编码 1质量手册 等 4 项） */
+  /**
+   * 目标文件夹下拉（含层级缩进；⛔ 不再硬编码 1质量手册 等 4 项）。
+   *
+   * <para>★ 首项固定为「根目录」（`FolderCode=''`）：根目录槽位确实存在（后端 `FolderCode:""`），
+   * 早期下拉只列真实文件夹 ⇒ 根目录槽位的目标**永远选不中**，只能被迫选错目录。</para>
+   */
   folderOptionsOf(standardCode: string): Array<{ FolderCode: string; Label: string; FullPath: string }> {
     const dir = this.directoryOf(standardCode)
     if (!dir) return []
-    return [...dir.Folders]
+    const root = { FolderCode: '', Label: '根目录', FullPath: '' }
+    const folders = [...dir.Folders]
       .sort((a, b) => a.Depth - b.Depth || a.Sort - b.Sort)
       .map(f => ({
         FolderCode: f.Code,
         FullPath: f.FullPath,
-        Label: `${'　'.repeat(Math.max(0, f.Depth - 1))}${f.FolderName}${f.FullPath ? '' : '（根）'}`
+        Label: `${'　'.repeat(Math.max(0, f.Depth - 1))}${f.FolderName}`
       }))
+    return [root, ...folders]
   }
 
   folderFullPathOf(standardCode: string, folderCode: string): string {
@@ -605,10 +666,23 @@ export class ResourcesLogic {
 
   // ═══════════════════ 单标准上传（入口 A/B） ═══════════════════
 
+  /**
+   * 打开单标准上传弹窗。
+   *
+   * <para>★ `folderCode !== undefined`（从「缺失槽位 / 目录」的「上传」进入）⇒ **锁定**到该目录
+   * （含根目录 `''`）并置只读 —— 槽位上传按文件名匹配，无需用户手选目录；⛔ 不能用 `??`
+   * 判空（根目录的 `FolderCode` 是空串，会被 `??` 当成"有值"而卡住回退）。</para>
+   */
   openSingleUpload(standardCode: string, folderCode?: string) {
     this.currentUploadStandardCode.value = standardCode
-    const opts = this.folderOptionsOf(standardCode)
-    this.singleUploadFolderCode.value = folderCode ?? opts[0]?.FolderCode ?? ''
+    if (folderCode !== undefined) {
+      this.singleUploadFolderCode.value = folderCode
+      this.singleFolderLocked.value = true
+    } else {
+      // 顶部「上传文件」入口：不锁定，默认第一个目录，可自由切换
+      this.singleUploadFolderCode.value = this.folderOptionsOf(standardCode)[0]?.FolderCode ?? ''
+      this.singleFolderLocked.value = false
+    }
     this.singleUploadFiles.value = []
     this.resetSinglePlan()
     this.singleUploadVisible.value = true
@@ -617,7 +691,16 @@ export class ResourcesLogic {
   closeSingleUploadDialog() {
     this.singleUploadVisible.value = false
     this.singleUploadFiles.value = []
+    this.singleFolderLocked.value = false
     this.resetSinglePlan()
+  }
+
+  /** 锁定态下目标文件夹的可读名称（根目录 `''` → 「根目录」） */
+  get singleFolderLabel(): string {
+    const code = this.singleUploadFolderCode.value
+    if (!code) return '根目录'
+    return this.folderOptionsOf(this.currentUploadStandardCode.value)
+      .find(o => o.FolderCode === code)?.Label.trim() || code
   }
 
   private resetSinglePlan() {
@@ -692,6 +775,35 @@ export class ResourcesLogic {
     this.singleUploadFiles.value.splice(index, 1)
     this.resetSinglePlan()
     this.autoPreviewSingle()
+  }
+
+  /** `YzhFolderUpload` 回传完整列表 ⇒ 覆盖式写入（组件自持列表，⛔ 不再 append） */
+  setSingleUploadFilesFromPicker(files: File[]) {
+    this.singleUploadFiles.value = this.dedupeByKey(this.partitionByPolicy(files))
+    this.resetSinglePlan()
+    this.autoPreviewSingle()
+  }
+
+  /** `YzhFolderUpload`（批量）回传完整列表 ⇒ 覆盖式写入 + 去重提示 */
+  setBatchFilesFromPicker(files: File[]) {
+    const clean = this.partitionByPolicy(files)
+    const deduped = this.dedupeByKey(clean)
+    if (deduped.length < clean.length) ElMessage.info(`已忽略 ${clean.length - deduped.length} 个重复文件`)
+    this.batchFiles.value = deduped
+    this.resetBatchPlan()
+  }
+
+  /** 按关联键去重（同名不同目录必须保留两份，见 {@link fileKey}） */
+  private dedupeByKey(files: File[]): File[] {
+    const seen = new Set<string>()
+    const out: File[] = []
+    for (const f of files) {
+      const k = this.fileKey(f)
+      if (seen.has(k)) continue
+      seen.add(k)
+      out.push(f)
+    }
+    return out
   }
 
   // ═══════════════════ 分发预览：本地文件 ↔ 计划行的关联键 ═══════════════════
@@ -983,13 +1095,13 @@ export class ResourcesLogic {
       for (const [standardCode, list] of groups) {
         const name = this.standardOf(standardCode)?.StandardName ?? standardCode
         try {
-          const res = await uploadFiles(
-            this.selectedEnterprise.value, this.selectedStage.value, standardCode,
-            list.map(i => ({ File: i.File, FolderCode: i.FolderCode })),
+          const res = await this.fileOps.start(
+            list.map(i => this.toEntry(i.File, { FolderCode: i.FolderCode })),
+            { enterpriseCode: this.selectedEnterprise.value, stageCode: this.selectedStage.value, standardCode },
             (done, total, n) => { this.uploadProgress.value = `${name} 指派 ${done}/${total} ${n}` }
           )
-          okFiles += res?.ActivatedCount ?? list.length
-          if (res?.QueueError) ElMessage.warning(`${name}：${res.QueueError}`)
+          okFiles += res.result?.ActivatedCount ?? list.length
+          if (res.result?.QueueError) ElMessage.warning(`${name}：${res.result.QueueError}`)
         } catch (e: any) {
           failed++
           ElMessage.error(`${name} 指派失败：${e?.message ?? '未知错误'}`)
@@ -1030,13 +1142,13 @@ export class ResourcesLogic {
     try {
       for (const g of groups) {
         try {
-          const res = await uploadFiles(
-            this.selectedEnterprise.value, this.selectedStage.value, g.StandardCode,
-            g.Rows.map(r => ({ File: r.File, SlotCode: r.SlotCode })),
+          const res = await this.fileOps.start(
+            g.Rows.map(r => this.toEntry(r.File, { SlotCode: r.SlotCode }, r.Key)),
+            { enterpriseCode: this.selectedEnterprise.value, stageCode: this.selectedStage.value, standardCode: g.StandardCode },
             (done, total, name) => { this.uploadProgress.value = `${g.StandardName} ${done}/${total} ${name}` }
           )
-          okFiles += res?.ActivatedCount ?? g.Rows.length
-          if (res?.QueueError) ElMessage.warning(`${g.StandardName}：${res.QueueError}`)
+          okFiles += res.result?.ActivatedCount ?? g.Rows.length
+          if (res.result?.QueueError) ElMessage.warning(`${g.StandardName}：${res.result.QueueError}`)
         } catch (e: any) {
           failed++
           ElMessage.error(`${g.StandardName} 上传失败：${e?.message ?? '未知错误'}`)
@@ -1057,15 +1169,19 @@ export class ResourcesLogic {
   private async runUpload(rows: UploadPlanRow[], standardCode: string, assignFolderCode?: string) {
     this.uploading.value = true
     try {
-      const res = await uploadFiles(
-        this.selectedEnterprise.value, this.selectedStage.value, standardCode,
-        rows.map(r => assignFolderCode
-          ? { File: r.File, FolderCode: assignFolderCode }
-          : { File: r.File, SlotCode: r.SlotCode }),
+      const entries = rows.map(r => this.toEntry(
+        r.File,
+        assignFolderCode ? { FolderCode: assignFolderCode } : { SlotCode: r.SlotCode },
+        r.Key
+      ))
+      const res = await this.fileOps.start(
+        entries,
+        { enterpriseCode: this.selectedEnterprise.value, stageCode: this.selectedStage.value, standardCode },
         (done, total, name) => { this.uploadProgress.value = `${done}/${total} ${name}` }
       )
-      ElMessage.success(`已上传 ${res?.ActivatedCount ?? rows.length} 个文件，转换队列已受理`)
-      if (res?.QueueError) ElMessage.warning(res.QueueError)
+      const confirmed = res.result
+      ElMessage.success(`已上传 ${confirmed?.ActivatedCount ?? rows.length} 个文件，转换队列已受理`)
+      if (confirmed?.QueueError) ElMessage.warning(confirmed.QueueError)
     } catch (e: any) {
       ElMessage.error(e?.message ?? '上传失败')
     } finally {
@@ -1106,10 +1222,12 @@ export class ResourcesLogic {
     if (!this.replaceNewFile.value) { ElMessage.warning('请选择新文件'); return }
     if (!this.replaceReason.value.trim()) { ElMessage.warning('请填写替换原因'); return }
     try {
-      const notice = await replaceFile(
-        this.replaceNewFile.value, target.Code, this.selectedEnterprise.value,
-        this.replaceReason.value.trim(), slotModifyTime(target)
-      )
+      const notice = await this.fileOps.replace(this.replaceNewFile.value, {
+        fileCode: target.Code,
+        enterpriseCode: this.selectedEnterprise.value,
+        reason: this.replaceReason.value.trim(),
+        expectedModifyTime: slotModifyTime(target)
+      })
       ElMessage.success('文件已替换，旧版本已归档')
       this.closeReplaceDialog()
       await this.reloadStandard(target.StandardCode ?? this.activeTab.value)
@@ -1162,7 +1280,7 @@ export class ResourcesLogic {
   async downloadRow(row: FileSlot) {
     if (!row.StoragePath) { ElMessage.warning('该文件尚未上传'); return }
     try {
-      saveBlob(await downloadBlob(row.StoragePath), row.FileName)
+      await this.fileOps.download({ storagePath: row.StoragePath, fileName: row.FileName })
     } catch (e: any) {
       ElMessage.error(e?.message ?? '下载失败')
     }
@@ -1170,7 +1288,7 @@ export class ResourcesLogic {
 
   async downloadVersion(row: FileVersionRow) {
     try {
-      saveBlob(await downloadBlob(row.StoragePath), row.FileName)
+      await this.fileOps.download({ storagePath: row.StoragePath, fileName: row.FileName })
     } catch (e: any) {
       ElMessage.error(e?.message ?? '下载失败')
     }

@@ -5,7 +5,7 @@
  *       AI节点参数与审计字段统一-改造设计-V1.md §2.1 / §2.2 / §2.7
  *
  * 三条铁律（改本文件前先读）：
- *  ① **参数表存 `config.params`**（用户裁决 ①：进 rule_json，零迁移）——⛔ 不要另起字段名。
+ *  ① **参数表存 `config.Params`**（用户裁决 ①：进 rule_json，零迁移）——⛔ 不要另起字段名。
  *  ② **参数即边**（用户裁决 ②）：`params[].nodeId → aiNode` 就是一条隐式依赖边，
  *     它只决定「执行顺序 / 预执行」，⛔ **不进路径枚举**（见 topology.ts 的 `implicitEdges`）。
  *  ③ **参数名 = 短 ASCII 标识符**（`p1`/`p2`），中文说明放 `label`。
@@ -20,7 +20,7 @@
 /** 参数来源类型：node = 画布节点输出；constant = 常量；skill = 方法预执行 */
 export type AiParamSourceType = 'node' | 'constant' | 'skill'
 
-/** 参数表单项（= `config.params[]` 的元素） */
+/** 参数表单项（= `config.Params[]` 的元素） */
 export interface AiParam {
   /** ★ 短 ASCII 标识符，提示词里写 `{{name}}`。必须匹配 `AI_PARAM_NAME_PATTERN` */
   name: string
@@ -65,11 +65,11 @@ export function splitRef(fullKey: string): { refKey: string; portName: string } 
 }
 
 /**
- * 读 `config.params`（数组或字符串化 JSON 均可 —— 落库前后两种形态都可能出现）。
+ * 读 `config.Params`（数组或字符串化 JSON 均可 —— 落库前后两种形态都可能出现）。
  * ⚠️ 解析失败**静默返回空**：本函数供校验/拓扑等多处调用，⛔ 不许在这里抛错打断主流程。
  */
 export function parseAiParams(config?: Record<string, any> | null): AiParam[] {
-  const raw = config?.params
+  const raw = config?.Params
   if (!raw) return []
   try {
     const arr = typeof raw === 'string' ? JSON.parse(raw) : raw
@@ -85,16 +85,16 @@ export function hasDeclaredParams(node?: { config?: Record<string, any> } | null
   return parseAiParams(node?.config).length > 0
 }
 
-/** 提示词模板（读 `config.promptTemplate` —— ⛔ 不是 `config.prompt`，那是 M1 踩过的坑） */
+/** 提示词模板（读 `config.PromptTemplate` —— ⛔ 不是 `config.prompt`，那是 M1 踩过的坑） */
 export function readPromptTemplate(node?: { config?: Record<string, any> } | null): string {
-  const v = node?.config?.promptTemplate
+  const v = node?.config?.PromptTemplate
   return typeof v === 'string' ? v : ''
 }
 
 /**
  * ★ §2.7 配置期强校验 —— 保存时调用，**任一条不过即拒绝保存**。
  *
- * @param node   AI 节点（含 config.promptTemplate / config.params）
+ * @param node   AI 节点（含 config.PromptTemplate / config.Params）
  * @param allNodes 画布全部节点（用于「nodeId 必须真实存在」「端口必须产出」）
  * @returns 错误文案列表；空数组 = 通过
  */

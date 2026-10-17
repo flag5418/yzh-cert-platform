@@ -4,6 +4,13 @@ export { notifyMenuChanged, onMenuChanged, MENU_CHANGED_EVENT } from './useMenuC
 export { useTable } from './useTable'
 export { useConfirm, type ConfirmOptions } from './useConfirm'
 export {
+  useGlobalPending,
+  usePendingByScope,
+  type YzhPendingItem,
+} from './useGlobalPending'
+export { useAsyncAction, type YzhAsyncActionOptions } from './useAsyncAction'
+export { useTabs, YZH_TAB_HOME_PATH, type YzhTabItem } from './useTabs'
+export {
   useSingleTable,
   useTreeTable,
   useCheckTree,

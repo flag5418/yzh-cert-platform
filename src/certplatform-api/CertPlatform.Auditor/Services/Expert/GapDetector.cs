@@ -152,14 +152,14 @@ public class GapDetector
 
             foreach (var node in dag?.Nodes ?? new List<WorkflowNodeConfig>())
             {
-                var ruleCode = GetConfig(node, "ruleCode");
+                var ruleCode = GetConfig(node, "RuleCode");
 
                 // ★ 节点类型必须 ToLowerInvariant —— DB 实测是 "docField" 驼峰（缺陷 B4）
                 switch (node.NodeType?.ToLowerInvariant())
                 {
                     case "docfield":
                     {
-                        var fieldCode = GetConfig(node, "fieldCode");
+                        var fieldCode = GetConfig(node, "FieldCode");
                         if (string.IsNullOrWhiteSpace(fieldCode)) break;
                         deps.Add(new DataDependency
                         {
@@ -177,7 +177,7 @@ public class GapDetector
 
                     case "doctable":
                     {
-                        var tableCode = GetConfig(node, "tableCode");
+                        var tableCode = GetConfig(node, "TableCode");
                         if (string.IsNullOrWhiteSpace(tableCode)) break;
                         deps.Add(new DataDependency
                         {
@@ -194,11 +194,14 @@ public class GapDetector
                     }
 
                     // ★ 以下节点不产生数据依赖（依赖上游输出，不是直接取数）
+                    //   · docMarkdown：取的是文档转换后的全文，被判缺的是「字段 / 表格」而非「全文」，
+                    //     且取不到时按设计返回空值交给 is_empty + branch 分流（⛔ 不落补录缺口）。
                     case "start":
                     case "end":
                     case "branch":
                     case "skill":
                     case "ai_node":
+                    case "docmarkdown":
                         break;
 
                     default:
@@ -412,7 +415,7 @@ public class GapDetector
     // ── 内部工具 ──────────────────────────────────────────────
 
     private static string GetConfig(WorkflowNodeConfig? node, string key)
-        => node?.Config?.GetValueOrDefault(key)?.ToString() ?? "";
+        => node?.Config.GetConfigString(key) ?? "";
 
     private CertExpertTaskDataGap BuildGap(
         DataDependency d,

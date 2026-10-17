@@ -180,7 +180,7 @@ namespace CertPlatform.Shared.Workflow.Models
         /// <summary>节点 ID</summary>
         public string? NodeId { get; set; }
 
-        /// <summary>节点类型：skill / ai_node / docField / docTable / branch</summary>
+        /// <summary>节点类型：skill / ai_node / docField / docTable / docMarkdown / branch</summary>
         public string? NodeType { get; set; }
 
         /// <summary>节点标题</summary>

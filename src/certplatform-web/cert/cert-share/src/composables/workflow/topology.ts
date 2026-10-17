@@ -143,13 +143,15 @@ export function buildDependencyGraph(config: any): DependencyGraph {
     stats: { totalNodes: 0, totalEdges: 0, explicitEdges: 0, implicitReferences: 0, aiPromptReferences: 0, startNodes: [], endNodes: [], branchNodes: [] }
   }
 
-  if (!config || !config.nodes) { log('WARN', 'config 为空或缺少 nodes'); return graph }
+  const configNodes = config?.Nodes || config?.nodes
+  const configEdges = config?.Edges || config?.edges || []
+  if (!config || !configNodes) { log('WARN', 'config 为空或缺少 nodes'); return graph }
 
   // ⚠️ 必须在任何 addImplicit 调用之前初始化（隐式边要往里登记「被引用的数据源」）
   graph.referencedNodes = new Set()
 
-  for (const node of config.nodes) {
-    const nodeId = node.nodeId || node.id
+  for (const node of configNodes) {
+    const nodeId = node.NodeId || node.nodeId || node.id
     if (!nodeId) { log('WARN', '节点缺少 nodeId，跳过', node); continue }
     graph.stats.totalNodes++
     if (graph.nodeMap.has(nodeId)) {
@@ -161,7 +163,7 @@ export function buildDependencyGraph(config: any): DependencyGraph {
     graph.adjacency.set(nodeId, [])
     graph.reverseAdj.set(nodeId, [])
     graph.nodeMap.set(nodeId, node)
-    const nodeType = node.nodeType || node.classCode
+    const nodeType = node.NodeType || node.nodeType || node.classCode
     if (nodeType === 'start') graph.stats.startNodes.push(nodeId)
     if (nodeType === 'end') graph.stats.endNodes.push(nodeId)
     if (nodeType === 'branch') graph.stats.branchNodes.push(nodeId)
@@ -185,19 +187,19 @@ export function buildDependencyGraph(config: any): DependencyGraph {
     graph.referencedNodes!.add(source)
   }
 
-  for (const edge of (config.edges || [])) {
-    const source = edge.source, target = edge.target
+  for (const edge of configEdges) {
+    const source = edge.Source ?? edge.source, target = edge.Target ?? edge.target
     if (!source || !target) continue
     if (!graph.nodeMap.has(source) || !graph.nodeMap.has(target)) continue
     graph.adjacency.get(source)!.push(target)
     graph.reverseAdj.get(target)!.push(source)
-    graph.dependencies.push({ source, target, type: 'edge', handle: edge.sourceHandle || null })
+    graph.dependencies.push({ source, target, type: 'edge', handle: (edge.SourceHandle ?? edge.sourceHandle) || null })
     graph.stats.explicitEdges++
   }
 
-  for (const node of config.nodes) {
-    const nodeId = node.nodeId || node.id
-    const inputs = node.inputs || {}
+  for (const node of configNodes) {
+    const nodeId = node.NodeId || node.nodeId || node.id
+    const inputs = node.Inputs || node.inputs || {}
     for (const [portName, value] of Object.entries(inputs)) {
       if (typeof value !== 'string') continue
       let match = value.match(REF_PATTERN)
@@ -220,7 +222,7 @@ export function buildDependencyGraph(config: any): DependencyGraph {
 
   // ── AI 节点引用：参数表优先（params），提示词正则兜底 ──
   //
-  // ★ M1 修复：读 `config.promptTemplate`（面板字段名），⛔ 不是 `config.prompt` ——
+  // ★ M1 修复 + P5：读 `config.PromptTemplate`（面板字段名），⛔ 不是 `config.prompt` ——
   //   读错字段 ⇒ `aiPromptReferences` 恒 0，整套隐式依赖静默失效。
   //
   // ★ 双键解析：占位符 refKey 可能是 **nodeId**（`docField_n2`）也可能是 **中文标题**（`文档字段`），
@@ -228,17 +230,18 @@ export function buildDependencyGraph(config: any): DependencyGraph {
   const resolveRefNodeId = (refKey: string): string | null => {
     if (graph.nodeMap.has(refKey)) return refKey
     for (const [id, n] of graph.nodeMap.entries()) {
-      if (n?.title && n.title === refKey) return id
+      const t = n?.Title || n?.title
+      if (t && t === refKey) return id
     }
     return null
   }
 
-  for (const node of config.nodes) {
-    const nodeId = node.nodeId || node.id
-    const nodeType = node.nodeType || node.classCode
+  for (const node of configNodes) {
+    const nodeId = node.NodeId || node.nodeId || node.id
+    const nodeType = node.NodeType || node.nodeType || node.classCode
     if (nodeType !== 'ai_node') continue
 
-    const declared = parseAiParams(node.config)
+    const declared = parseAiParams(node.Config || node.config)
     if (declared.length > 0) {
       // ① 参数表（§2.1 / 用户裁决 ①②：`params[].nodeId` 即依赖边）
       for (const p of declared) {
@@ -253,7 +256,8 @@ export function buildDependencyGraph(config: any): DependencyGraph {
     }
 
     // ② 正则兜底（params 缺失 ⇒ 保留旧行为：从 {{引用}} 扫）
-    const prompt = typeof node.config?.promptTemplate === 'string' ? node.config.promptTemplate : ''
+    const _aiCfg = node.Config || node.config
+    const prompt = typeof _aiCfg?.PromptTemplate === 'string' ? _aiCfg.PromptTemplate : ''
     if (!prompt) continue
     let match
     const regex = new RegExp(PROMPT_REF_PATTERN.source, PROMPT_REF_PATTERN.flags)
@@ -344,7 +348,7 @@ export function extractAllPaths(graph: DependencyGraph): PathResult[] {
         edges: [...pathEdges],
         branchDecisions: [...branchDecisions],
         endpoint: { start: pathNodes[0] || nodeId, end: nodeId },
-        nodeTypes: [...pathNodes, nodeId].map(id => graph.nodeMap.get(id)?.nodeType || 'unknown')
+        nodeTypes: [...pathNodes, nodeId].map(id => { const n = graph.nodeMap.get(id); return n?.NodeType || n?.nodeType || 'unknown' })
       })
       return
     }
@@ -352,7 +356,7 @@ export function extractAllPaths(graph: DependencyGraph): PathResult[] {
     const outNodes = graph.adjacency.get(nodeId) || []
     if (outNodes.length === 0) return
 
-    const nodeType = node.nodeType || node.classCode
+    const nodeType = node?.NodeType || node?.nodeType || node?.classCode
     if (nodeType === 'branch') {
       const branchEdges = graph.dependencies.filter(d => d.source === nodeId && d.type === 'edge')
       const successEdges = branchEdges.filter(e => e.handle === 'success')
@@ -500,7 +504,7 @@ export function validateTopology(graph: DependencyGraph): TopologyValidation {
 
   for (const nodeId of graph.nodeMap.keys()) {
     const node = graph.nodeMap.get(nodeId)
-    const nodeType = node?.nodeType || node?.classCode
+    const nodeType = node?.NodeType || node?.nodeType || node?.classCode
     if (nodeType === 'start' || nodeType === 'end') continue
 
     const fromStart = reachableFromStart.has(nodeId)
@@ -534,8 +538,8 @@ export function validateTopology(graph: DependencyGraph): TopologyValidation {
   }
 
   for (const [nodeId, node] of graph.nodeMap.entries()) {
-    const nodeType = node.nodeType || node.classCode
-    if (nodeType === 'skill' && !node.skillCode) {
+    const nodeType = node.NodeType || node.nodeType || node.classCode
+    if (nodeType === 'skill' && !(node.SkillCode || node.skillCode)) {
       result.warnings.push({ code: 'MISSING_SKILL_CODE', severity: 'warning', node: nodeId, message: `功能节点 ${nodeId} 缺少 skillCode` })
     }
 
@@ -544,7 +548,7 @@ export function validateTopology(graph: DependencyGraph): TopologyValidation {
     if (nodeType === 'ai_node') {
       for (const msg of validateAiNodeParams(node, Array.from(graph.nodeMap.values()))) {
         result.valid = false
-        result.errors.push({ code: 'AI_PARAM_INVALID', severity: 'error', node: nodeId, message: `AI 节点「${node.title || nodeId}」：${msg}` })
+        result.errors.push({ code: 'AI_PARAM_INVALID', severity: 'error', node: nodeId, message: `AI 节点「${node.Title || node.title || nodeId}」：${msg}` })
       }
     }
   }
@@ -607,8 +611,8 @@ export function analyzeTopology(config: any): TopologyAnalysis {
 export function formatPath(path: PathResult, nodeMap: Map<string, any>): string {
   return path.nodes.map((nodeId) => {
     const node = nodeMap.get(nodeId)
-    const title = node?.title || nodeId
-    const type = node?.nodeType || node?.classCode || ''
+    const title = node?.Title || node?.title || nodeId
+    const type = node?.NodeType || node?.nodeType || node?.classCode || ''
     const typeLabel = type === 'start' ? '🟢' : type === 'end' ? '🔴' : type === 'branch' ? '🔀' : type === 'ai_node' ? '🤖' : ''
     let str = `${typeLabel} ${title}`
     const decision = path.branchDecisions.find(d => d.at === nodeId)

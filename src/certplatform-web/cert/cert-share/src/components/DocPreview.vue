@@ -21,6 +21,7 @@ import { Download, Refresh, WarningFilled, Loading, Document } from '@element-pl
 import VueOfficePdf from '@vue-office/pdf'
 import { getFilePreviewBlob, getPreviewBlobByPath } from '@share/api/workflow/doc-extraction-rule'
 import { downloadRawBlob } from '@share/composables/useDirectoryApi'
+import { saveBlob } from '@share/utils/download'
 
 const props = defineProps<{
   file: any
@@ -326,15 +327,8 @@ function onOfficePdfError(e: any) {
 async function download() {
   if (!storagePath.value && !fileCode.value) return
   try {
-    const blob = await fetchRawBlob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName.value
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    // 保存统一走 `saveBlob`（全平台唯一实现，P1.3）
+    saveBlob(await fetchRawBlob(), fileName.value)
   } catch (e: any) {
     ElMessage.error('下载失败：' + (e?.message || ''))
   }

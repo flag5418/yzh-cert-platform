@@ -260,7 +260,7 @@ export async function uploadFile(taskId: string, fileCode: string, file: File): 
 }
 
 /** 单文件替换（一步完成：覆盖上传 + 回填大小 + doc/xls 自动进转换队列） */
-export async function replaceFile(fileCode: string, file: File): Promise<{ queueCode: string }> {
+export async function replaceDirectoryFile(fileCode: string, file: File): Promise<{ queueCode: string }> {
   if (!fileCode) throw new Error('替换失败：FileCode 为空')
 
   const formData = new FormData()
@@ -337,6 +337,16 @@ export interface StageFolderNode {
   ParentCode?: string
   Depth?: number
   Sort?: number
+  /**
+   * ★ 虚拟「根目录」标记（2026-10-17 新增）：`true` ⇒ 本节点不是
+   * `cert_standard_directory_folder` 的行，而是后端为**根级 / 孤儿文件**造的分组容器
+   * （`Code = directoryCode`、`Sort = 0`）。
+   *
+   * ⛔ 判断虚拟根**只准**看本字段，不要再比对 `Name === '根目录'` ——
+   * 改名 / 多语言会让判据**静默失效**（虚拟节点被当成真文件夹：计入「文件夹 N 个」、
+   * 放行重命名与删除，操作必然失败且报错含糊）。
+   */
+  IsVirtualRoot?: boolean
   Children?: StageFolderNode[]
   Files?: StageFileNode[]
 }

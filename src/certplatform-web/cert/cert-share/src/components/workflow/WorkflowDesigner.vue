@@ -333,7 +333,7 @@ const docRulesForPanel = computed(() => {
     return (!standardCode || rs === standardCode) && (!stageCode || rp === stageCode)
   })
 
-  const cur = selectedNode.value?.config?.ruleCode || selectedNode.value?.config?.docCode || ''
+  const cur = selectedNode.value?.config?.RuleCode || selectedNode.value?.config?.DocCode || ''
   if (cur && !hits.some((r: any) => ruleCodeOf(r) === cur)) {
     const keep = all.find((r: any) => ruleCodeOf(r) === cur)
     if (keep) return [...hits, keep]
@@ -879,22 +879,22 @@ function computeNodeInputsFromEdges(nodeId: string, currentInputs: any = {}, cur
   const newInputs: any = {}
   const newTypes: any = {}
   for (const port of inputPorts) {
-    if (port.bindMode !== 'Link' && port.bindMode !== 'LinkOrConstant') continue
-    const edge = inEdges.find((e: any) => { const h = e.properties?.targetHandle; return !h || h === port.name })
+    if (port.BindMode !== 'Link' && port.BindMode !== 'LinkOrConstant') continue
+    const edge = inEdges.find((e: any) => { const h = e.properties?.targetHandle; return !h || h === port.Name })
     if (edge) {
-      if (currentInputTypes[port.name] === 'constant' && currentInputs[port.name]) continue
-      newInputs[port.name] = edge.sourceNodeId
-      newTypes[port.name] = 'link'
+      if (currentInputTypes[port.Name] === 'constant' && currentInputs[port.Name]) continue
+      newInputs[port.Name] = edge.sourceNodeId
+      newTypes[port.Name] = 'link'
     }
   }
   const merged = { ...currentInputs, ...newInputs }
   const mergedTypes = { ...currentInputTypes, ...newTypes }
   for (const port of inputPorts) {
-    if (port.bindMode !== 'Link' && port.bindMode !== 'LinkOrConstant') continue
-    const val = merged[port.name]
+    if (port.BindMode !== 'Link' && port.BindMode !== 'LinkOrConstant') continue
+    const val = merged[port.Name]
     if (val && gd.nodes.some((n: any) => n.id === val)) {
       const stillConnected = inEdges.some((e: any) => e.sourceNodeId === val)
-      if (!stillConnected) { delete merged[port.name]; delete mergedTypes[port.name] }
+      if (!stillConnected) { delete merged[port.Name]; delete mergedTypes[port.Name] }
     }
   }
   return { inputs: merged, inputTypes: mergedTypes }
@@ -1421,7 +1421,7 @@ async function handleTestNode(nodeData: any) {
       //     `AiUnresolvedRefs` 显式报红（第 0 批已落地），⛔ 不再拿假值糊弄模型。
       const mockOutputs: Record<string, never> = {}
       const nodes = store.state.nodes
-      const customParams = nodeData.config?.customParams || []
+      const customParams = nodeData.config?.CustomParams ?? nodeData.config?.customParams ?? []
       let parsedCustomParams = customParams
       if (typeof customParams === 'string') { try { parsedCustomParams = JSON.parse(customParams) } catch { parsedCustomParams = [] } }
       let ruleJson = ''

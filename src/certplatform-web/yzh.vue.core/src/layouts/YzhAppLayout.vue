@@ -65,11 +65,21 @@
         </div>
       </el-header>
 
+      <!-- ★ 多标签页（2026-10-16）—— 解决「离开页面后想回去，只能从菜单重新找一遍」
+           ⛔ 放在 el-main 之外：整宽、不受内容区 padding 影响 -->
+      <YzhTabsBar />
+
       <!-- 内容区域 -->
       <el-main class="yzh-layout__content">
-        <router-view v-slot="{ Component }">
-          <keep-alive><component :is="Component" /></keep-alive>
-        </router-view>
+        <!-- ★ 滚动容器：把滚动从 el-main 下移到这里，
+             使 el-main 成为**不滚动**的定位父级 ⇒ 等待遮罩 `inset:0` 才能盖住整个可视区 -->
+        <div class="yzh-layout__scroll">
+          <router-view v-slot="{ Component }">
+            <keep-alive><component :is="Component" /></keep-alive>
+          </router-view>
+        </div>
+        <!-- ★ 全局等待遮罩：只盖内容区，⛔ 不盖侧边栏/顶栏/标签栏 ⇒ 期间仍可切菜单 -->
+        <YzhPendingOverlay />
       </el-main>
     </el-container>
   </el-container>
@@ -166,6 +176,8 @@ import { useMenuTree } from '../composables/useMenuTree'
 import { onMenuChanged } from '../composables/useMenuChanged'
 import { filterMenuTreeByTag } from '../utils/menu'
 import YzhMenuNode from './components/YzhMenuNode.vue'
+import YzhTabsBar from './components/YzhTabsBar.vue'
+import YzhPendingOverlay from './components/YzhPendingOverlay.vue'
 
 /**
  * 原子应用布局（系统底座默认壳：侧栏 + 顶栏 + 个人中心 + 改密）
@@ -580,8 +592,19 @@ onUnmounted(() => {
 
 /* ========== 内容区域 ========== */
 .yzh-layout__content {
+  position: relative;
   background: var(--yzh-color-bg-page);
-  padding: 24px;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ★ 滚动容器（2026-10-16）：原 el-main 的 padding / overflow 下移到这里 ——
+   ① 视觉与改造前**逐像素一致**（`--yzh-space-6` = 24px = 原 `padding: 24px`）；
+   ② el-main 因此变成「不滚动」的定位父级 ⇒ 等待遮罩 `inset:0` 才能盖住整个可视区
+      （若 el-main 仍 `overflow:auto`，遮罩会随内容一起滚走）。 */
+.yzh-layout__scroll {
+  height: 100%;
+  padding: var(--yzh-space-6);
   overflow-y: auto;
 }
 
