@@ -30,6 +30,8 @@ export interface RequestOptions {
   requireAuth?: boolean
   /** 自定义 raw response（不解析） */
   raw?: boolean
+  /** 是否启用请求去重/竞态保护（默认：GET=true，其他=false） */
+  deduplicate?: boolean
 }
 
 export interface YzhApiClientOptions {
@@ -37,6 +39,8 @@ export interface YzhApiClientOptions {
   getToken?: () => string | null
   onUnauthorized?: () => void
   onError?: (err: Error) => void
+  /** 全局启用请求去重（默认 true，仅对 GET 生效） */
+  enableDeduplication?: boolean
 }
 
 const TOKEN_KEY = 'YZH_TOKEN'
@@ -83,12 +87,16 @@ export class YzhApiClient {
   private getToken: () => string | null
   private onUnauthorized?: () => void
   private onError?: (err: Error) => void
+  private enableDeduplication: boolean
+  /** 进行中的请求映射：签名 → AbortController（仅 dedup 开启时填充） */
+  private pendingRequests: Map<string, AbortController> = new Map()
 
   constructor(options: YzhApiClientOptions) {
     this.baseURL = options.baseURL.replace(/\/$/, '')
     this.getToken = options.getToken || (() => tokenStore.get())
     this.onUnauthorized = options.onUnauthorized
     this.onError = options.onError
+    this.enableDeduplication = options.enableDeduplication !== false
   }
 
   /**
@@ -103,12 +111,28 @@ export class YzhApiClient {
     if (options.getToken) this.getToken = options.getToken
     if (options.onUnauthorized !== undefined) this.onUnauthorized = options.onUnauthorized
     if (options.onError !== undefined) this.onError = options.onError
+    if (options.enableDeduplication !== undefined) this.enableDeduplication = options.enableDeduplication
   }
 
   /**
-   * 通用请求方法
-   * 原样透传：返回后端 JSON，不做 key 转换
+   * 请求签名：method + url + 排序后的参数字符串
+   * 同一签名的请求视为「重复」，后来的会取消前者。
    */
+  private computeSignature(method: string, url: string, params?: Record<string, any>): string {
+    if (!params) return `${method}:${url}`
+    const sorted = Object.keys(params).sort()
+    const parts = sorted.map(k => `${k}=${JSON.stringify(params[k])}`)
+    return `${method}:${url}:${parts.join('&')}`
+  }
+
+  /**
+   * 取消所有进行中的请求（退出登录 / 路由切换时调用）
+   */
+  cancelAll(): void {
+    this.pendingRequests.forEach((ctrl) => ctrl.abort())
+    this.pendingRequests.clear()
+  }
+
   async request<T = any>(
     url: string,
     options: RequestOptions = {},
@@ -120,6 +144,7 @@ export class YzhApiClient {
       headers = {},
       requireAuth = true,
       raw: _raw = false,
+      deduplicate,
     } = options
 
     let finalUrl = url
@@ -190,6 +215,30 @@ export class YzhApiClient {
       fetchOptions.body = '{}'
     }
 
+    // ─── 请求去重 / 竞态保护 ───────────────────────────────────
+    // 默认行为：GET 请求开启去重（防重复查询），写操作关闭（全量执行）。
+    // 调用方可显式通过 `deduplicate` 覆盖。
+    const useDedup =
+      deduplicate !== undefined
+        ? deduplicate && this.enableDeduplication
+        : method === 'GET' && this.enableDeduplication
+
+    let signature: string | undefined
+    let abortCtrl: AbortController | undefined
+    if (useDedup) {
+      signature = this.computeSignature(method, url, params)
+      const prev = this.pendingRequests.get(signature)
+      if (prev) {
+        // 取消前一个未完成的请求
+        prev.abort()
+        this.pendingRequests.delete(signature)
+      }
+      abortCtrl = new AbortController()
+      this.pendingRequests.set(signature, abortCtrl)
+      // 优先使用外部传入的信号，若没有则用内部的
+      fetchOptions.signal = options.signal ?? abortCtrl.signal
+    }
+
     try {
       const res = await this.safeFetch(this.baseURL + finalUrl, fetchOptions)
 
@@ -227,6 +276,11 @@ export class YzhApiClient {
     } catch (e: any) {
       this.onError?.(e)
       throw e
+    } finally {
+      // 清理去重映射（无论成功还是失败）
+      if (signature) {
+        this.pendingRequests.delete(signature)
+      }
     }
   }
 
