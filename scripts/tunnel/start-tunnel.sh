@@ -15,11 +15,24 @@
 #
 # 【用法】
 #   ./scripts/tunnel/start-tunnel.sh              # 两个前端都开（默认）
-#   ./scripts/tunnel/start-tunnel.sh admin        # 只开 admin(9990)
-#   ./scripts/tunnel/start-tunnel.sh auditor      # 只开 auditor(9991)
+#   ./scripts/tunnel/start-tunnel.sh admin        # 只开 admin
+#   ./scripts/tunnel/start-tunnel.sh auditor      # 只开 auditor
 #
 #   关闭：./scripts/tunnel/stop-tunnel.sh
 #   查看：./scripts/tunnel/status-tunnel.sh
+#
+# 【默认目标端口（2026-10-19 起）】
+#   默认映射 **容器生产构建** 端口：admin=10990 / auditor=10991
+#   （由 ./scripts/deploy/deploy-web.sh 发布，见 docker/web/compose.yml）。
+#   如需临时映射 dev server（9990/9991），用环境变量覆盖：
+#     TUNNEL_ADMIN_PORT=9990 TUNNEL_AUDITOR_PORT=9991 ./scripts/tunnel/start-tunnel.sh
+#
+# 【地址稳定性（重要）】
+#   · 本脚本是**幂等**的：隧道已在运行且「目标端口一致」时**不会重启**，
+#     因此反复执行 deploy/本脚本都不会改变公网地址。
+#   · 只有「目标端口变化」时才重启一次（如首次从 dev 9990 切到容器 10990）。
+#   · 协议可用 TUNNEL_PROTOCOL 覆盖（默认 quic；跨境丢包严重时可试 http2）：
+#     TUNNEL_PROTOCOL=http2 ./scripts/tunnel/start-tunnel.sh
 #
 # 【依赖】
 #   cloudflared（缺失时自动下载到 scripts/tunnel/bin/，约 20MB）
@@ -54,14 +67,17 @@ error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 
 mkdir -p "$RUN_DIR"
 
-# 各端 dev 端口（与 scripts/README.md §2.3 保持一致）
+# 各端默认端口：容器生产构建（docker/web/compose.yml），可用环境变量覆盖为 dev 端口
 port_of() {
   case "$1" in
-    admin)   echo 9990 ;;
-    auditor) echo 9991 ;;
+    admin)   echo "${TUNNEL_ADMIN_PORT:-10990}" ;;
+    auditor) echo "${TUNNEL_AUDITOR_PORT:-10991}" ;;
     *)       echo "" ;;
   esac
 }
+
+# 隧道传输协议：quic（默认）| http2 | auto
+TUNNEL_PROTOCOL="${TUNNEL_PROTOCOL:-quic}"
 
 # ---------------- 参数解析 ----------------
 TARGET="${1:-all}"
@@ -127,7 +143,8 @@ check_port() {
     return 0
   fi
   error "$name 前端未运行（端口 $port 无监听）"
-  error "请先启动: $PROJECT_DIR/scripts/frontend/start.sh $name start"
+  error "请先发布容器: $PROJECT_DIR/scripts/deploy/deploy-web.sh $name"
+  error "（或临时映射 dev server: TUNNEL_$(echo "$name" | tr '[:lower:]' '[:upper:]')_PORT=9990 并先启动 $PROJECT_DIR/scripts/frontend/start.sh $name start）"
   return 1
 }
 
@@ -141,27 +158,42 @@ check_allowed_hosts() {
 
 # ---------------- 3. 启动单条隧道 ----------------
 start_one() {
-  local name="$1" port log pidfile old_url url i
+  local name="$1" port log pidfile old_url url i targetfile cur_target
   port="$(port_of "$name")"
   log="$RUN_DIR/${name}.log"
   pidfile="$RUN_DIR/${name}.pid"
+  targetfile="$RUN_DIR/${name}.target"
 
-  # 已在运行则不重复启动
+  # 已在运行：仅当「目标端口一致」才复用（保证地址不因重新发布而变）；
+  # 目标端口变了（如首次从 dev 9990 切到容器 10990）才重启一次。
   if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
-    old_url="$(grep -oE 'https://[A-Za-z0-9-]+\.trycloudflare\.com' "$log" 2>/dev/null | head -1 || true)"
-    warn "$name 隧道已在运行（PID $(cat "$pidfile")）"
-    echo "${name}|${port}|${old_url}"
-    return 0
+    cur_target=""
+    [ -f "$targetfile" ] && cur_target="$(cat "$targetfile" 2>/dev/null || echo "")"
+    if [ "$cur_target" = "$port" ]; then
+      old_url="$(grep -oE 'https://[A-Za-z0-9-]+\.trycloudflare\.com' "$log" 2>/dev/null | head -1 || true)"
+      warn "$name 隧道已在运行且目标一致（PID $(cat "$pidfile")，:$port），保持不变（地址不变）"
+      echo "${name}|${port}|${old_url}"
+      return 0
+    fi
+    warn "$name 隧道目标端口变化（${cur_target:-未知} -> $port），重启一次以切换"
+    kill "$(cat "$pidfile")" 2>/dev/null || true
+    for _ in $(seq 1 10); do
+      kill -0 "$(cat "$pidfile")" 2>/dev/null || break
+      sleep 0.5
+    done
+    kill -9 "$(cat "$pidfile")" 2>/dev/null || true
+    rm -f "$pidfile"
   fi
 
   check_port "$port" "$name" || return 1
   check_allowed_hosts "$name"
 
-  info "正在建立 $name 隧道（127.0.0.1:$port -> Cloudflare 边缘）..."
+  info "正在建立 $name 隧道（127.0.0.1:$port -> Cloudflare 边缘，protocol=$TUNNEL_PROTOCOL）..."
   : > "$log"
   nohup "$CF_BIN" tunnel --url "http://127.0.0.1:$port" --no-autoupdate \
-        >"$log" 2>&1 &
+        --protocol "$TUNNEL_PROTOCOL" >"$log" 2>&1 &
   echo $! > "$pidfile"
+  echo "$port" > "$targetfile"
 
   url=""
   for i in $(seq 1 45); do
@@ -198,16 +230,25 @@ if [ ${#RESULTS[@]} -eq 0 ]; then
 fi
 
 # 写入地址文件（供其他脚本/人工查阅）
-{
-  echo "# Cloudflare 临时隧道地址"
-  echo "# 生成时间: $(date '+%Y-%m-%d %H:%M:%S')"
-  echo "# 注意: Quick Tunnel 地址为随机值，每次重启都会变化"
-  for r in "${RESULTS[@]}"; do
-    IFS='|' read -r n p u <<< "$r"
-    [ -n "$p" ] || continue
-    echo "$n  (本机 127.0.0.1:$p)  ->  $u"
-  done
-} > "$URL_FILE"
+# 从运行态（pid/log/target）重建**全部**已知端的记录，避免逐端调用时相互覆盖。
+write_urls() {
+  {
+    echo "# Cloudflare 临时隧道地址"
+    echo "# 生成时间: $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "# 注意: Quick Tunnel 地址为随机值，进程重启会变化"
+    for role in admin auditor; do
+      local pf="$RUN_DIR/$role.pid" lg="$RUN_DIR/$role.log" tf="$RUN_DIR/$role.target" pt u
+      [ -f "$pf" ] || continue
+      kill -0 "$(cat "$pf" 2>/dev/null)" 2>/dev/null || continue
+      u="$(grep -oE 'https://[A-Za-z0-9-]+\.trycloudflare\.com' "$lg" 2>/dev/null | head -1 || true)"
+      [ -n "$u" ] || continue
+      pt=""
+      [ -f "$tf" ] && pt="$(cat "$tf" 2>/dev/null || echo "")"
+      echo "$role  (本机 127.0.0.1:${pt:-?})  ->  $u"
+    done
+  } > "$URL_FILE"
+}
+write_urls
 
 # ---------------- 5. 结果输出 ----------------
 echo ""

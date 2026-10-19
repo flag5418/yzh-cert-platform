@@ -19,9 +19,10 @@
  *   ⛔ **没有阶段层**：后台定义的 `StageCode` 恒空串（不分阶段），挂阶段只会让同一份
  *   清单重复出现 N 次。
  *
- * ⛔ 本页不使用 `useSingleTable` / `useTreeTable`：数据形态是「后台定义 × 企业档案」的
- *    **合并视图**，右区是分组卡片而不是表格，硬套内核只会让两边都变形。
- *    左树直接用 `YzhTreeTableLayout` 外壳 + 自己管理的 `treeNodes`。
+ * ★ Logic 继承 `SingleTableCore`（R24）：只取内核的**生命周期 / 统一错误出口 / 加载态**三样契约，
+ *   ⛔ 不复用其 CRUD 端点 —— 本页数据形态是「后台定义 × 企业档案」的**合并视图**，
+ *   右区是分组卡片而不是表格，因此**不挂 `useSingleTable` / `YzhTable`**。
+ *   左树直接用 `YzhTreeTableLayout` 外壳 + 自己管理的 `treeNodes`。
  */
 import { onMounted } from 'vue'
 import { YzhTreeTableLayout, type TreeNode } from '@yzh-core'

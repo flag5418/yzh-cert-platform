@@ -28,7 +28,7 @@
 | [`前端TreeTable基类增强与Composable封装实施计划-V2.md`](./前端TreeTable基类增强与Composable封装实施计划-V2.md) | 前端 TreeTable 基类增强与 Composable 封装实施计划 V2 | ⬜ 待核实 |
 | [`前端原子组件与CRUD内核重构TODO清单-V1.md`](./前端原子组件与CRUD内核重构TODO清单-V1.md) | 前端原子组件与 CRUD 内核重构 TODO 清单 V1 | ⬜ 待核实 |
 | [`前端架构收敛与文档先行计划-V2.md`](./前端架构收敛与文档先行计划-V2.md) | 前端架构收敛与文档先行计划 V2 | ⬜ 待评审（通过后进入实施） |
-| [`前端架构合规性修复与治理计划-V1.md`](./前端架构合规性修复与治理计划-V1.md) | 前端架构合规性修复与治理计划 V1（输入 = 前端架构合规性评估与严重违规清单-V1；D1–D5 已裁决；第 0/1/2 批已落地：S07 25→0、R6 扩域债务 7→0、YzhTable 补 expand/slotKey/data/size） | 🔄 第 2 批完成，第 3 批待开工 |
+| [`前端架构合规性修复与治理计划-V1.md`](./前端架构合规性修复与治理计划-V1.md) | 前端架构合规性修复与治理计划 V1（输入 = 前端架构合规性评估与严重违规清单-V1；D1–D5 已裁决；第 0/1/2/3.0/3.1/3.2④ 批已落地：S07 25→0、R6 扩域债务 7→0、YzhTable 补 expand/slotKey/data/size、cert-auditor 建测试安全网 67 例、enterprise-fill-params 继承 SingleTableCore、enterprise-original 模块级单例整类化） | 🔄 R24 债务 4→1；③ `resources` 已拆分（logic 1405→741 + useUpload/useFileActions）；余 ② `enterprise-review`（待重裁目标形态） |
 | [`前端组件Layout命名规范迁移TODO-V1.md`](./前端组件Layout命名规范迁移TODO-V1.md) | 前端组件 Layout 命名规范迁移 TODO V1 | ⬜ 待核实 |
 | [`后台管理-文件上传转换链路重构开发计划-V3.md`](./后台管理-文件上传转换链路重构开发计划-V3.md) | 后台管理 - 文件上传转换链路重构开发计划 - V3（可开工版） | 🔄 可开工版 |
 | [`三处上传入口统一机制设计-V2.md`](./三处上传入口统一机制设计-V2.md) | 三处上传入口统一机制设计 V2（文件操作机制族：上传/替换/下载/打包 + 进度） | ⬜ 待审批（裁决② 已定案） |

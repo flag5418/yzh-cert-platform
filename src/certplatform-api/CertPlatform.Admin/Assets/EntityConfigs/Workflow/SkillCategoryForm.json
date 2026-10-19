@@ -5,7 +5,7 @@
     {
       "FieldName": "ParentCode",
       "DesName": "上级分类",
-      "Type": "treeSelect",
+      "Type": "TreeSelect",
       "Sxh": 1,
       "XsFlag": true,
       "BcFlag": true,
@@ -77,7 +77,7 @@
     {
       "FieldName": "OrderNo",
       "DesName": "排序号",
-      "Type": "NumberBox",
+      "Type": "Decimal",
       "Sxh": 5,
       "XsFlag": true,
       "BcFlag": true,

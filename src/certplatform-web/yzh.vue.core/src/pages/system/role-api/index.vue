@@ -44,6 +44,7 @@
           :search-fields="['Name', 'Path', 'Method', 'ApiName']"
           search-placeholder="搜索接口名称 / 路径 / 方法"
           count-type="api"
+          status-field=""
           @check-change="handleCheckChange"
         >
           <!-- 分组行：分组名 + 接口数量；接口行：接口名称 -->

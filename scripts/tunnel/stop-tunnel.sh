@@ -45,7 +45,7 @@ for s in $SERVICES; do
   else
     echo "  $s: 进程已不存在，清理残留记录"
   fi
-  rm -f "$pidfile"
+  rm -f "$pidfile" "$RUN_DIR/$s.target"
 done
 
 rm -f "$RUN_DIR/tunnel-urls.txt"

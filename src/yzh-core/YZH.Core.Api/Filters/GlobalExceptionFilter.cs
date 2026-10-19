@@ -86,7 +86,13 @@ namespace YZH.Core.Api.Filters
                     err = _environment.IsDevelopment()
                         ? exception.Message
                         : "操作失败，请联系管理员";
-                    data = new { errorCode = "INTERNAL_ERROR" };
+                    // ★ traceId 回传给调用方（前端报错可直接带上来）：与响应头 X-Trace-Id、
+                    //   Logs/error-*.log 行首 [TraceId]、sys_log.TraceId 同值（TraceIdMiddleware 写入）
+                    data = new
+                    {
+                        errorCode = "INTERNAL_ERROR",
+                        traceId = context.HttpContext.Items["TraceId"] as string
+                    };
                     break;
             }
 

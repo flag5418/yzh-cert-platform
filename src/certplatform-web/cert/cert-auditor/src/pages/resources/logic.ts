@@ -13,24 +13,25 @@
  * ★ 上传（04 §一 四段式）：`upload/plan` 预览（DispatchMatcher M0–M3）→ `upload/init` → `upload/file` → `upload/confirm`
  * ★ 就位状态以后端 `Status` 字段为唯一权威（01 §5.1），前端不自行推断组合条件
  */
-import { confirmOrFalse } from '@yzh-core'
+import { confirmOrFalse, SingleTableCore } from '@yzh-core'
 import { ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import type { YzhTableColumn, YzhTableDataLoader } from '@yzh-core'
 import {
-  stageTree, stageOverview, standardDirectory, planDispatch, activeQueue, cancelQueue,
+  stageTree, stageOverview, standardDirectory, activeQueue, cancelQueue,
   uploadInit, uploadFileStep, uploadConfirm, uploadCancel,
-  enterpriseDownloadBlob, previewBlob,
-  replaceEnterpriseFile, deleteFile, restoreFile, getVersions, getHistory, triggerExtract, getExtractionResult,
-  isSlotLive, isSlotRemoved, slotModifyTime
+  enterpriseDownloadBlob,
+  replaceEnterpriseFile,
+  isSlotLive
 } from '@share/api'
 import type {
   EnterpriseNode, StageItem, StageOverviewResult, StageStandardSummary,
-  StandardDirectoryResult, FileSlot, DispatchRow, FileVersionRow, HistoryItem,
+  StandardDirectoryResult, FileSlot, FileVersionRow, HistoryItem, DispatchRow,
   UploadConfirmResult, ManualValuesArchivedNotice
 } from '@share/api'
 import { useFileOps, type FileOpEntry } from '@share/composables/useFileOps'
-import { partitionUploadable, checkUploadable } from '@share/constants/upload-file-policy'
+import { createUploadState, createUploadActions, type UploadActions } from './useUpload'
+import { createFileActionsState, createFileActions, type FileActions } from './useFileActions'
 
 /** 右侧文件夹树节点（模板结构 + 该文件夹下的槽位行） */
 export interface FolderNode {
@@ -128,30 +129,31 @@ export interface UnmatchedAssign {
   FolderCode: string
 }
 
-/** 未归属原因 → 中文（`ambiguous` = 有候选但分不清，提示人工指派而不是硬匹配；
- *  `ext_mismatch` = 文件名命中了槽位但扩展名与模板不同族，格式不符按未归属处理，槽位保持「缺失」） */
-const UNMATCHED_REASON_TEXT: Record<string, string> = {
-  no_standard: '该阶段无可用标准',
-  no_match: '未命中任何标准槽位',
-  ambiguous: '有相近槽位但分不清',
-  ext_mismatch: '扩展名与匹配槽位不兼容（格式不符）'
-}
-
 /** 上传机制上下文（四段式的标准定位） */
-interface UploadCtx { enterpriseCode: string; stageCode: string; standardCode: string }
+export interface UploadCtx { enterpriseCode: string; stageCode: string; standardCode: string }
 /** 替换机制上下文 */
-interface ReplaceCtx { fileCode: string; enterpriseCode: string; reason: string; expectedModifyTime?: string }
+export interface ReplaceCtx { fileCode: string; enterpriseCode: string; reason: string; expectedModifyTime?: string }
 /** 下载机制上下文 */
-interface DownloadCtx { storagePath: string; fileName: string }
+export interface DownloadCtx { storagePath: string; fileName: string }
 /** 上传项业务载荷（槽位模式给 SlotCode，指派模式给 FolderCode） */
-type UploadPayload = { SlotCode?: string; FolderCode?: string }
+export type UploadPayload = { SlotCode?: string; FolderCode?: string }
 
-export class ResourcesLogic {
+export class ResourcesLogic extends SingleTableCore<any> {
+  /** 本页没有 EntityConfig（右表是「标准 Tab × 模板文件夹树 × 槽位行」），仅为满足 R24 的基类契约 */
+  controllerName = 'Auditor/Resources'
+
+  /** 本页无 /config 端点 ⇒ 空实现，避免 `init()` 打 404 */
+  protected async loadConfig(): Promise<void> {}
+
+  protected async onAfterInit(): Promise<void> {
+    await this.loadEnterprises()
+  }
+
   /**
    * ★ 文件操作机制族（唯一入口）—— 上传/替换/下载统一走它，见 `@share/composables/useFileOps`。
    * 失败语义 = `rollback`（与既有 `uploadFiles` 同口径：任一步失败即回滚草稿行 + 抛错）。
    */
-  private readonly fileOps = useFileOps<
+  readonly fileOps = useFileOps<
     UploadCtx, UploadConfirmResult, ReplaceCtx, ManualValuesArchivedNotice | null, DownloadCtx
   >({
     upload: {
@@ -183,7 +185,7 @@ export class ResourcesLogic {
   })
 
   /** 计划行/裸文件 → 机制入口项（关联键优先用计划行 `Key`，回退目录感知键） */
-  private toEntry(file: File, payload: UploadPayload, key?: string): FileOpEntry<UploadPayload> {
+  toEntry(file: File, payload: UploadPayload, key?: string): FileOpEntry<UploadPayload> {
     return { key: key || this.fileKey(file), file, payload }
   }
 
@@ -204,7 +206,6 @@ export class ResourcesLogic {
   readonly overview = ref<StageOverviewResult | null>(null)
   readonly directories = ref<Record<string, StandardDirectoryResult>>({})
   readonly activeTab = ref<string>('')
-  readonly loading = ref(false)
   /** 不可配置的标准（机构未配模板）沿用后端给的说明文案 */
   readonly loadingMessage = ref<string>('')
 
@@ -213,63 +214,66 @@ export class ResourcesLogic {
   readonly queueBusy = ref(false)
   private pollTimer: ReturnType<typeof setInterval> | null = null
 
-  // ─── 进度（四段式上传中） ───
-  readonly uploading = ref(false)
-  readonly uploadProgress = ref('')
+  // ═══════════════════ 拆分接线（计划 §3.11 ③ · 2026-10-19） ═══════════════════
+  //
+  // 上传状态机 → `useUpload.ts`｜文件操作 → `useFileActions.ts`
+  // ⛔ 调用面**保持不变**（仍是 `logic.openSingleUpload(...)` / `logic.batchFiles`）——
+  //    `index.vue` 一个字都没改，39 例安全网也没改。
+  // ⚠️ `createUploadActions(this, …)` 传 `this` 当宿主：下面这些字段**必须**在它之前初始化
+  //    （`fileOps` / `toEntry` 在本块之前，树与文件夹查询是原型方法，不受字段顺序影响）。
 
-  // ─── 单标准上传（plan 预览 → 确认） ───
-  readonly singleUploadVisible = ref(false)
-  readonly currentUploadStandardCode = ref<string>('')
-  readonly singleUploadFolderCode = ref<string>('')
-  /** ★ 目标文件夹是否锁定：从「缺失槽位 / 目录」的「上传」进入时锁定 = 只读，不要求手选 */
-  readonly singleFolderLocked = ref(false)
-  readonly singleUploadFiles = ref<File[]>([])
-  readonly singlePlanLoading = ref(false)
-  readonly singlePlanRows = ref<UploadPlanRow[]>([])
-  readonly singlePlanUnmatched = ref<string[]>([])
-  readonly singlePlanBlocked = ref<UploadPlanRow[]>([])
-  /** 「未命中槽位的文件直接放入所选文件夹」（D8 模板外文件的人工落地出口，默认关） */
-  readonly singleAssignUnmatched = ref(false)
+  private readonly _uploadState = createUploadState()
+  private readonly _upload = createUploadActions(this, this._uploadState)
+  private readonly _fileState = createFileActionsState()
+  private readonly _fileActions = createFileActions(this, this._fileState)
 
-  // ─── 多标准上传（顶部入口，需求 3 核心） ───
-  readonly batchUploadVisible = ref(false)
-  readonly batchFiles = ref<File[]>([])
-  readonly batchPlanLoading = ref(false)
-  readonly batchPlanRows = ref<UploadPlanRow[]>([])
-  readonly batchPlanUnmatched = ref<Array<{ Key: string; FileName: string; RelativePath: string; Reason: string }>>([])
-  readonly batchPlanConflicts = ref<Array<{ StandardName: string; SlotFileName: string; FileNames: string[] }>>([])
-  readonly batchPlanCross = ref<Array<{ FileName: string; Standards: string[] }>>([])
-  readonly batchPlanBlocked = ref<UploadPlanRow[]>([])
-  readonly batchPlanMessage = ref('')
-  /** 未归属 → 人工指派：key = fileKey，值 = 目标标准 + 目标文件夹（D4 的另一半） */
-  readonly unmatchedAssign = ref<Record<string, { StandardCode: string; FolderCode: string }>>({})
+  readonly uploading = this._uploadState.uploading
+  readonly uploadProgress = this._uploadState.uploadProgress
+  readonly singleUploadVisible = this._uploadState.singleUploadVisible
+  readonly currentUploadStandardCode = this._uploadState.currentUploadStandardCode
+  readonly singleUploadFolderCode = this._uploadState.singleUploadFolderCode
+  readonly singleFolderLocked = this._uploadState.singleFolderLocked
+  readonly singleUploadFiles = this._uploadState.singleUploadFiles
+  readonly singlePlanLoading = this._uploadState.singlePlanLoading
+  readonly singlePlanRows = this._uploadState.singlePlanRows
+  readonly singlePlanUnmatched = this._uploadState.singlePlanUnmatched
+  readonly singlePlanBlocked = this._uploadState.singlePlanBlocked
+  readonly singleAssignUnmatched = this._uploadState.singleAssignUnmatched
+  readonly batchUploadVisible = this._uploadState.batchUploadVisible
+  readonly batchFiles = this._uploadState.batchFiles
+  readonly batchPlanLoading = this._uploadState.batchPlanLoading
+  readonly batchPlanRows = this._uploadState.batchPlanRows
+  readonly batchPlanUnmatched = this._uploadState.batchPlanUnmatched
+  readonly batchPlanConflicts = this._uploadState.batchPlanConflicts
+  readonly batchPlanCross = this._uploadState.batchPlanCross
+  readonly batchPlanBlocked = this._uploadState.batchPlanBlocked
+  readonly batchPlanMessage = this._uploadState.batchPlanMessage
+  readonly unmatchedAssign = this._uploadState.unmatchedAssign
+  readonly replaceDialogVisible = this._uploadState.replaceDialogVisible
+  readonly replacingFile = this._uploadState.replacingFile
+  readonly replaceNewFile = this._uploadState.replaceNewFile
+  readonly replaceReason = this._uploadState.replaceReason
 
-  // ─── 替换 / 移除 ───
-  readonly replaceDialogVisible = ref(false)
-  readonly replacingFile = ref<FileSlot | null>(null)
-  readonly replaceNewFile = ref<File | null>(null)
-  readonly replaceReason = ref<string>('')
+  readonly deleteDialogVisible = this._fileState.deleteDialogVisible
+  readonly deletingFile = this._fileState.deletingFile
+  readonly deleteReason = this._fileState.deleteReason
+  readonly versionsVisible = this._fileState.versionsVisible
+  readonly versionsFile = this._fileState.versionsFile
+  readonly versionRows = this._fileState.versionRows
+  readonly historyRows = this._fileState.historyRows
+  readonly restoringVersion = this._fileState.restoringVersion
+  readonly versionsRev = this._fileState.versionsRev
+  readonly previewVisible = this._fileState.previewVisible
+  readonly previewUrl = this._fileState.previewUrl
+  readonly previewName = this._fileState.previewName
+  readonly resultDrawerVisible = this._fileState.resultDrawerVisible
+  readonly resultData = this._fileState.resultData
 
-  readonly deleteDialogVisible = ref(false)
-  readonly deletingFile = ref<FileSlot | null>(null)
-  readonly deleteReason = ref<string>('')
-
-  // ─── 版本面板 ───
-  readonly versionsVisible = ref(false)
-  readonly versionsFile = ref<FileSlot | null>(null)
-  readonly versionRows = ref<FileVersionRow[]>([])
-  readonly historyRows = ref<HistoryItem[]>([])
-  readonly restoringVersion = ref(0)
-  readonly versionsRev = ref(0)
-
-  /** 预览抽屉（PDF Blob → ObjectURL） */
-  readonly previewVisible = ref(false)
-  readonly previewUrl = ref('')
-  readonly previewName = ref('')
-
-  /** 提取结果抽屉 */
-  readonly resultDrawerVisible = ref(false)
-  readonly resultData = ref<any>(null)
+  /** 锁定态下目标文件夹的可读名称（根目录 `''` → 「根目录」） */
+  get singleFolderLabel(): string { return this._upload.singleFolderLabel }
+  get batchPlanRowGroups() { return this._upload.batchPlanRowGroups }
+  get selectedBatchCount(): number { return this._upload.selectedBatchCount }
+  get assignedUnmatched(): UnmatchedAssign[] { return this._upload.assignedUnmatchedList() }
 
   /** 清单重挂载计数（YzhTable 只在挂载时跑 dataLoader） */
   readonly dataRevision = ref(0)
@@ -278,6 +282,7 @@ export class ResourcesLogic {
 
   readonly slotColumns: YzhTableColumn[] = [
     { prop: 'FileName', label: '标准文件槽位', minWidth: 300, slot: true },
+    { prop: 'FileSize', label: '大小', width: 90, slot: true },
     { prop: 'Status', label: '就位状态', width: 110, slot: true },
     { prop: 'ExtractState', label: '提取状态', width: 90, slot: true },
     { prop: 'VersionNumber', label: '版本', width: 70, slot: true }
@@ -664,742 +669,74 @@ export class ResourcesLogic {
     }
   }
 
-  // ═══════════════════ 单标准上传（入口 A/B） ═══════════════════
+  openSingleUpload(standardCode: string, folderCode?: string) { return this._upload.openSingleUpload(standardCode, folderCode) }
+  closeSingleUploadDialog() { return this._upload.closeSingleUploadDialog() }
+  resetSinglePlan() { return this._upload.resetSinglePlan() }
+  partitionByPolicy(files: File[]) { return this._upload.partitionByPolicy(files) }
+  setSingleUploadFiles(files: File[]) { return this._upload.setSingleUploadFiles(files) }
+  autoPreviewSingle() { return this._upload.autoPreviewSingle() }
+  clearSingleUploadFiles() { return this._upload.clearSingleUploadFiles() }
+  clearBatchFiles() { return this._upload.clearBatchFiles() }
+  setSingleUploadFolderFiles(files: File[]) { return this._upload.setSingleUploadFolderFiles(files) }
+  removeSingleUploadFile(index: number) { return this._upload.removeSingleUploadFile(index) }
+  setSingleUploadFilesFromPicker(files: File[]) { return this._upload.setSingleUploadFilesFromPicker(files) }
+  setBatchFilesFromPicker(files: File[]) { return this._upload.setBatchFilesFromPicker(files) }
+  dedupeByKey(files: File[]) { return this._upload.dedupeByKey(files) }
+  fileKey(file: File, folderPath = '') { return this._upload.fileKey(file, folderPath) }
 
-  /**
-   * 打开单标准上传弹窗。
-   *
-   * <para>★ `folderCode !== undefined`（从「缺失槽位 / 目录」的「上传」进入）⇒ **锁定**到该目录
-   * （含根目录 `''`）并置只读 —— 槽位上传按文件名匹配，无需用户手选目录；⛔ 不能用 `??`
-   * 判空（根目录的 `FolderCode` 是空串，会被 `??` 当成"有值"而卡住回退）。</para>
-   */
-  openSingleUpload(standardCode: string, folderCode?: string) {
-    this.currentUploadStandardCode.value = standardCode
-    if (folderCode !== undefined) {
-      this.singleUploadFolderCode.value = folderCode
-      this.singleFolderLocked.value = true
-    } else {
-      // 顶部「上传文件」入口：不锁定，默认第一个目录，可自由切换
-      this.singleUploadFolderCode.value = this.folderOptionsOf(standardCode)[0]?.FolderCode ?? ''
-      this.singleFolderLocked.value = false
-    }
-    this.singleUploadFiles.value = []
-    this.resetSinglePlan()
-    this.singleUploadVisible.value = true
+  /** 计划行构造（多行签名 ⇒ 生成脚本漏掉的，手工补） */
+  toPlanRow(r: DispatchRow, file: File, standardCode: string, standardName: string): UploadPlanRow {
+    return this._upload.toPlanRow(r, file, standardCode, standardName)
   }
 
-  closeSingleUploadDialog() {
-    this.singleUploadVisible.value = false
-    this.singleUploadFiles.value = []
-    this.singleFolderLocked.value = false
-    this.resetSinglePlan()
-  }
-
-  /** 锁定态下目标文件夹的可读名称（根目录 `''` → 「根目录」） */
-  get singleFolderLabel(): string {
-    const code = this.singleUploadFolderCode.value
-    if (!code) return '根目录'
-    return this.folderOptionsOf(this.currentUploadStandardCode.value)
-      .find(o => o.FolderCode === code)?.Label.trim() || code
-  }
-
-  private resetSinglePlan() {
-    this.singlePlanRows.value = []
-    this.singlePlanUnmatched.value = []
-    this.singlePlanBlocked.value = []
-  }
-
-  /**
-   * ★ 上传契约闸门（唯一事实源 = `@share/constants/upload-file-policy`，与后端 `UploadFilePolicy.Check` 同口径）：
-   * 系统噪声静默剔除（计数提示）；白名单外剔除并列出 —— ⛔ 页面不许自建后缀 if/else（守卫 R21）。
-   * 默认类别 document/image/pdf（⛔ 不含压缩包，与后端 AllowedExtensions 一致）。
-   */
-  private partitionByPolicy(files: File[]): File[] {
-    if (!files.length) return files
-    const part = partitionUploadable(files)
-    if (part.noise.length > 0) {
-      ElMessage.info(
-        `已自动忽略 ${part.noise.length} 个系统文件（${part.noise.slice(0, 3).map((nf) => nf.name).join('、')}${part.noise.length > 3 ? ' 等' : ''}）`)
-    }
-    if (part.rejected.length > 0) {
-      ElMessage.warning(
-        `已跳过 ${part.rejected.length} 个不支持的文件：${part.rejected.slice(0, 3).map((rf) => rf.name).join('、')}${part.rejected.length > 3 ? ' 等' : ''}`)
-    }
-    if (!part.accepted.length) return []
-    const ok = new Set(part.accepted.map((a) => a.name))
-    return files.filter((f) => ok.has(f.name))
-  }
-
-  setSingleUploadFiles(files: File[]) {
-    const clean = this.partitionByPolicy(files)
-    if (!clean.length) return
-    const added = this.appendFiles(this.singleUploadFiles.value, clean)
-    if (added < clean.length) ElMessage.info(`已忽略 ${clean.length - added} 个重复文件`)
-    this.resetSinglePlan()
-    this.autoPreviewSingle()
-  }
-
-  /**
-   * 选完文件**自动**干跑预览（04 §4.4 原文「直接展示该标准的匹配预览」）。
-   *
-   * <para>★ 为什么要自动：目标标准与目标文件夹在打开弹窗时就已给定，剩下的「文件 → 槽位」
-   * 是纯计算，后端 upload/plan 一次调用就能出结果 —— 让用户多点一次「匹配预览」只是白费一次点击。
-   * 真正需要人看的只有 M3 标黄、冲突、未归属这三类，它们在预览结果里逐行可见，勾选态即确认。</para>
-   */
-  private autoPreviewSingle() {
-    if (this.singleUploadFiles.value.length === 0) return
-    void this.previewSingleUpload()
-  }
-
-  clearSingleUploadFiles() {
-    this.singleUploadFiles.value = []
-    this.resetSinglePlan()
-  }
-
-  clearBatchFiles() {
-    this.batchFiles.value = []
-    this.resetBatchPlan()
-  }
-
-  /** 上传文件夹（webkitdirectory）：保留相对路径，才能让 M0 文件夹路径强匹配生效 */
-  setSingleUploadFolderFiles(files: File[]) {
-    // ★ 文件夹模式也过契约闸门（文件夹里什么都可能有：.DS_Store / ~$ 锁文件 / 可执行文件）
-    const clean = this.partitionByPolicy(files)
-    if (!clean.length) return
-    this.singleUploadFiles.value = clean
-    this.resetSinglePlan()
-    this.autoPreviewSingle()
-  }
-
-  removeSingleUploadFile(index: number) {
-    this.singleUploadFiles.value.splice(index, 1)
-    this.resetSinglePlan()
-    this.autoPreviewSingle()
-  }
-
-  /** `YzhFolderUpload` 回传完整列表 ⇒ 覆盖式写入（组件自持列表，⛔ 不再 append） */
-  setSingleUploadFilesFromPicker(files: File[]) {
-    this.singleUploadFiles.value = this.dedupeByKey(this.partitionByPolicy(files))
-    this.resetSinglePlan()
-    this.autoPreviewSingle()
-  }
-
-  /** `YzhFolderUpload`（批量）回传完整列表 ⇒ 覆盖式写入 + 去重提示 */
-  setBatchFilesFromPicker(files: File[]) {
-    const clean = this.partitionByPolicy(files)
-    const deduped = this.dedupeByKey(clean)
-    if (deduped.length < clean.length) ElMessage.info(`已忽略 ${clean.length - deduped.length} 个重复文件`)
-    this.batchFiles.value = deduped
-    this.resetBatchPlan()
-  }
-
-  /** 按关联键去重（同名不同目录必须保留两份，见 {@link fileKey}） */
-  private dedupeByKey(files: File[]): File[] {
-    const seen = new Set<string>()
-    const out: File[] = []
-    for (const f of files) {
-      const k = this.fileKey(f)
-      if (seen.has(k)) continue
-      seen.add(k)
-      out.push(f)
-    }
-    return out
-  }
-
-  // ═══════════════════ 分发预览：本地文件 ↔ 计划行的关联键 ═══════════════════
-
-  /**
-   * 文件的关联键 = `webkitRelativePath || name`（单文件上传时补目标文件夹前缀，与请求体同口径）。
-   *
-   * <para>★ 为什么不能用 `File.name`：一个文件夹里可以有多份同名文件
-   * （`1质量手册/x.doc` 与 `4记录文件/x.doc`），而分发计划对它们各产出一行。
-   * 用文件名做索引会把多行塌缩到<b>同一个 File 对象</b> ⇒ 同一份字节被写进多个槽位
-   * （这正是需求 3「一个文件夹里可能有 3 个标准的文件」的主场景）。</para>
-   */
-  private fileKey(file: File, folderPath = ''): string {
-    const rel = (file as any).webkitRelativePath as string | undefined
-    if (rel) return rel
-    return folderPath ? `${folderPath}/${file.name}` : file.name
-  }
-
-  /** 未归属原因 → 中文 */
-  unmatchedReasonText(reason: string): string {
-    return UNMATCHED_REASON_TEXT[reason] ?? reason
-  }
-
-  /** 干跑预览：走后端 DispatchMatcher（M0–M3，与批量入口同一套匹配） */
-  async previewSingleUpload() {
-    if (this.singleUploadFiles.value.length === 0) { ElMessage.warning('请先选择文件'); return }
-    this.singlePlanLoading.value = true
-    this.resetSinglePlan()
-    try {
-      const folderPath = this.folderFullPathOf(this.currentUploadStandardCode.value, this.singleUploadFolderCode.value)
-      const plan = await planDispatch(
-        this.selectedEnterprise.value, this.selectedStage.value,
-        this.singleUploadFiles.value.map(f => ({
-          FileName: f.name,
-          RelativePath: this.fileKey(f, folderPath),
-          FileSize: f.size
-        }))
-      )
-      const mine = plan.Standards.find(s => s.StandardCode === this.currentUploadStandardCode.value)
-      const byKey = new Map(this.singleUploadFiles.value.map(f => [this.fileKey(f, folderPath), f]))
-      const rows = (mine?.Rows ?? [])
-      this.singlePlanRows.value = rows
-        .filter(r => byKey.has(this.fileKeyOf(r)))
-        .map(r => this.toPlanRow(r, byKey.get(this.fileKeyOf(r))!, r.StandardCode, r.StandardName))
-      this.singlePlanBlocked.value = this.singlePlanRows.value.filter(r => r.BlockReason).map(r => ({ ...r, Selected: false }))
-      // 未命中名单 = 后端报的 Unmatched + 本地未被任何计划行认领的文件（去重）
-      const hitKeys = new Set(rows.map(r => this.fileKeyOf(r)))
-      const backendUnmatched = new Set(plan.Unmatched.map(u => this.fileKeyOf({ RelativePath: u.RelativePath, FileName: u.FileName } as DispatchRow)))
-      const names: string[] = []
-      for (const u of plan.Unmatched) if (!names.includes(u.FileName)) names.push(u.FileName)
-      for (const f of this.singleUploadFiles.value) {
-        if (hitKeys.has(this.fileKey(f, folderPath)) || backendUnmatched.has(this.fileKey(f, folderPath))) continue
-        if (!names.includes(f.name)) names.push(f.name)
-      }
-      this.singlePlanUnmatched.value = names
-      if (this.singlePlanRows.value.length === 0 && !this.singleAssignUnmatched.value) {
-        ElMessage.warning('所选文件未命中该标准的任何槽位（不会上传）；可勾选「放入所选文件夹」直接落地')
-      }
-    } catch (e: any) {
-      ElMessage.error(e?.message ?? '匹配预览失败')
-    } finally {
-      this.singlePlanLoading.value = false
-    }
-  }
-
-  /** 计划行的关联键（后端回显的 RelativePath，单文件上传时等于 FileName） */
-  private fileKeyOf(r: DispatchRow): string {
-    return r.RelativePath || r.FileName
-  }
-
-  private toPlanRow(
-    r: DispatchRow, file: File, standardCode: string, standardName: string
-  ): UploadPlanRow {
-    return {
-      File: file,
-      Key: this.fileKeyOf(r),
-      FileName: r.FileName,
-      StandardCode: standardCode,
-      StandardName: standardName,
-      SlotCode: r.SlotCode,
-      SlotFileName: r.SlotFileName,
-      FolderCode: r.FolderCode,
-      FolderPath: r.FolderPath,
-      Level: r.Level,
-      NeedsConfirm: r.NeedsConfirm,
-      BlockReason: r.BlockReason,
-      // ★ M3（NeedsConfirm）默认**不勾选**：后端已不再瞎猜，前端也不该替用户确认
-      Selected: !r.BlockReason && !r.NeedsConfirm
-    }
-  }
-
-  /** 确认上传：四段式（init → file... → confirm），未选/被拦的行不执行 */
-  async confirmSingleUpload() {
-    const rows = this.singlePlanRows.value.filter(r => r.Selected && !r.BlockReason)
-    // 勾了「放入所选文件夹」时，未命中槽位的文件走指派模式落进所选文件夹（D8）
-    const loose = this.singleAssignUnmatched.value ? this.looseSingleFiles(rows) : []
-    if (rows.length === 0 && loose.length === 0) { ElMessage.warning('没有可执行的上传行'); return }
-    if (rows.length > 0) await this.runUpload(rows, this.currentUploadStandardCode.value)
-    if (loose.length > 0) {
-      ElMessage.success(`另有 ${loose.length} 个文件将直接放入「${
-        this.folderFullPathOf(this.currentUploadStandardCode.value, this.singleUploadFolderCode.value) || '根目录'
-      }」`)
-      await this.runUpload(
-        loose.map(f => ({ ...({} as UploadPlanRow), File: f, Selected: true })),
-        this.currentUploadStandardCode.value,
-        this.singleUploadFolderCode.value
-      )
-    }
-    this.closeSingleUploadDialog()
-  }
-
-  /** 单标准入口里「未命中槽位、且未被计划行认领」的文件（按关联键去重） */
-  private looseSingleFiles(matched: UploadPlanRow[]): File[] {
-    const folderPath = this.folderFullPathOf(this.currentUploadStandardCode.value, this.singleUploadFolderCode.value)
-    const taken = new Set(matched.map(r => r.Key))
-    const out: File[] = []
-    const seen = new Set<string>()
-    for (const f of this.singleUploadFiles.value) {
-      const k = this.fileKey(f, folderPath)
-      if (taken.has(k) || seen.has(k)) continue
-      seen.add(k)
-      out.push(f)
-    }
-    return out
-  }
-
-  // ═══════════════════ 多标准上传（入口 C，需求 3 核心） ═══════════════════
-
-  openBatchUpload() {
-    this.batchFiles.value = []
-    this.resetBatchPlan()
-    this.batchUploadVisible.value = true
-  }
-
-  closeBatchUpload() {
-    this.batchUploadVisible.value = false
-    this.batchFiles.value = []
-    this.resetBatchPlan()
-  }
-
-  private resetBatchPlan() {
-    this.batchPlanRows.value = []
-    this.batchPlanUnmatched.value = []
-    this.batchPlanConflicts.value = []
-    this.batchPlanCross.value = []
-    this.batchPlanBlocked.value = []
-    this.batchPlanMessage.value = ''
-    this.unmatchedAssign.value = {}
-  }
-
-  /**
-   * 追加文件（按关联键去重）。
-   *
-   * <para>★ 为什么必须去重：同一批里出现两份同一文件时，后端会为它产出<b>两行同槽位</b>的计划，
-   * 于是「冲突」与「跨标准」告警全是假的（实测出现过 <c>9001标准 + 9001标准</c> 自我跨标准），
-   * 用户反而看不懂真正的问题。</para>
-   */
-  private appendFiles(target: File[], files: File[], folderPath = ''): number {
-    const seen = new Set(target.map(f => this.fileKey(f, folderPath)))
-    let added = 0
-    for (const f of files) {
-      const k = this.fileKey(f, folderPath)
-      if (seen.has(k)) continue
-      seen.add(k)
-      target.push(f)
-      added++
-    }
-    return added
-  }
-
-  addBatchFiles(files: File[]) {
-    const clean = this.partitionByPolicy(files)
-    if (!clean.length) return
-    const added = this.appendFiles(this.batchFiles.value, clean)
-    if (added < clean.length) ElMessage.info(`已忽略 ${clean.length - added} 个重复文件`)
-    this.resetBatchPlan()
-  }
-
-  removeBatchFile(index: number) {
-    this.batchFiles.value.splice(index, 1)
-    this.resetBatchPlan()
-  }
-
-  /** 选中即干跑：逐标准独立匹配（未命中不进入该标准 —— 需求 3 硬约束） */
-  async previewBatchUpload() {
-    if (this.batchFiles.value.length === 0) { ElMessage.warning('请先选择文件'); return }
-    this.batchPlanLoading.value = true
-    this.resetBatchPlan()
-    try {
-      const plan = await planDispatch(
-        this.selectedEnterprise.value, this.selectedStage.value,
-        this.batchFiles.value.map(f => ({
-          FileName: f.name,
-          RelativePath: this.fileKey(f),
-          FileSize: f.size
-        }))
-      )
-      this.batchPlanMessage.value = plan.Message ?? ''
-      // ★ 按关联键（RelativePath || FileName）索引，不按文件名 —— 同名不同目录必须各拿各的字节
-      const byKey = new Map(this.batchFiles.value.map(f => [this.fileKey(f), f]))
-      const rows: UploadPlanRow[] = []
-      for (const s of plan.Standards) {
-        for (const r of s.Rows) {
-          const file = byKey.get(this.fileKeyOf(r))
-          if (!file) continue
-          rows.push(this.toPlanRow(r, file, s.StandardCode, s.StandardName))
-        }
-      }
-      this.batchPlanRows.value = rows
-      this.batchPlanBlocked.value = rows.filter(r => r.BlockReason)
-      this.batchPlanUnmatched.value = plan.Unmatched.map(u => ({
-        Key: u.RelativePath || u.FileName,
-        FileName: u.FileName,
-        RelativePath: u.RelativePath,
-        Reason: u.Reason
-      }))
-      this.batchPlanConflicts.value = plan.Conflicts.map(c => ({
-        StandardName: c.StandardName, SlotFileName: c.SlotFileName, FileNames: c.FileNames
-      }))
-      this.batchPlanCross.value = plan.CrossStandard.map(c => ({ FileName: c.FileName, Standards: c.Standards }))
-    } catch (e: any) {
-      ElMessage.error(e?.message ?? '分发预览失败')
-    } finally {
-      this.batchPlanLoading.value = false
-    }
-  }
-
-  get batchPlanRowGroups(): Array<{ StandardCode: string; StandardName: string; Rows: UploadPlanRow[] }> {
-    const map = new Map<string, { StandardCode: string; StandardName: string; Rows: UploadPlanRow[] }>()
-    for (const r of this.batchPlanRows.value) {
-      if (!map.has(r.StandardCode)) map.set(r.StandardCode, { StandardCode: r.StandardCode, StandardName: r.StandardName, Rows: [] })
-      map.get(r.StandardCode)!.Rows.push(r)
-    }
-    return Array.from(map.values())
-  }
-
-  get selectedBatchCount(): number {
-    return this.batchPlanRows.value.filter(r => r.Selected && !r.BlockReason).length
-  }
-
-  // ═══════════════════ 未归属 → 人工指派（D4 的另一半 / H6-N2） ═══════════════════
-
-  /**
-   * 设置某个未归属文件的目标标准 / 目标文件夹（可分两步选）。
-   *
-   * <para>★ 半选状态必须保留：只选标准、还没选文件夹时，若把这条记录丢掉，
-   * 绑定它的标准下拉会立刻回空，用户永远走不到第二步（文件夹下拉也因此没有数据源）。</para>
-   */
-  setUnmatchedAssign(key: string, patch: { StandardCode?: string; FolderCode?: string }) {
-    const cur = this.unmatchedAssign.value[key] ?? { StandardCode: '', FolderCode: '' }
-    const next = { ...cur, ...patch }
-    // 换标准 ⇒ 文件夹选择失效（文件夹 Code 跨标准不通用）
-    if (patch.StandardCode !== undefined && patch.StandardCode !== cur.StandardCode) next.FolderCode = ''
-    this.unmatchedAssign.value = { ...this.unmatchedAssign.value, [key]: next }
-  }
-
-  unmatchedAssignOf(key: string): { StandardCode: string; FolderCode: string } {
-    return this.unmatchedAssign.value[key] ?? { StandardCode: '', FolderCode: '' }
-  }
-
-  /** 已指派齐（标准 + 文件夹都选好）的未归属文件 */
-  get assignedUnmatched(): UnmatchedAssign[] {
-    const byKey = new Map(this.batchFiles.value.map(f => [this.fileKey(f), f]))
-    const out: UnmatchedAssign[] = []
-    for (const u of this.batchPlanUnmatched.value) {
-      const a = this.unmatchedAssign.value[u.Key]
-      const file = byKey.get(u.Key)
-      if (!a?.StandardCode || !a.FolderCode || !file) continue
-      out.push({ File: file, FileName: u.FileName, StandardCode: a.StandardCode, FolderCode: a.FolderCode })
-    }
-    return out
-  }
-
-  /** 执行人工指派：按标准分组走四段式指派模式（不传 SlotCode） */
-  async confirmUnmatchedAssign(): Promise<boolean> {
-    const items = this.assignedUnmatched
-    if (items.length === 0) { ElMessage.warning('请先为未归属文件选择目标标准与文件夹'); return false }
-
-    const groups = new Map<string, UnmatchedAssign[]>()
-    for (const it of items) {
-      if (!groups.has(it.StandardCode)) groups.set(it.StandardCode, [])
-      groups.get(it.StandardCode)!.push(it)
-    }
-
-    this.uploading.value = true
-    let okFiles = 0
-    let failed = 0
-    try {
-      for (const [standardCode, list] of groups) {
-        const name = this.standardOf(standardCode)?.StandardName ?? standardCode
-        try {
-          const res = await this.fileOps.start(
-            list.map(i => this.toEntry(i.File, { FolderCode: i.FolderCode })),
-            { enterpriseCode: this.selectedEnterprise.value, stageCode: this.selectedStage.value, standardCode },
-            (done, total, n) => { this.uploadProgress.value = `${name} 指派 ${done}/${total} ${n}` }
-          )
-          okFiles += res.result?.ActivatedCount ?? list.length
-          if (res.result?.QueueError) ElMessage.warning(`${name}：${res.result.QueueError}`)
-        } catch (e: any) {
-          failed++
-          ElMessage.error(`${name} 指派失败：${e?.message ?? '未知错误'}`)
-        }
-      }
-    } finally {
-      this.uploading.value = false
-      this.uploadProgress.value = ''
-    }
-
-    if (okFiles > 0) ElMessage.success(`已指派上传 ${okFiles} 个文件到 ${groups.size} 个标准`)
-    if (failed > 0) return false
-    // 指派成功的行从未归属清单移除，只留失败项
-    const assignedKeys = new Set(this.batchPlanUnmatched.value
-      .filter(u => this.assignedUnmatched.some(i => this.fileKey(i.File) === u.Key))
-      .map(u => u.Key))
-    this.batchPlanUnmatched.value = this.batchPlanUnmatched.value.filter(u => !assignedKeys.has(u.Key))
-    this.unmatchedAssign.value = {}
-    await this.loadOverview()
-    return true
-  }
-
-  /** 勾选/取消一行（冲突区人工取舍的落点） */
-  toggleBatchRow(row: UploadPlanRow, selected: boolean) {
-    row.Selected = selected
-  }
-
-  /** 确认：按标准分组逐组走四段式（4.4），未归属/被拦行不产生任何调用 */
-  async confirmBatchUpload() {
-    const groups = this.batchPlanRowGroups
-      .map(g => ({ ...g, Rows: g.Rows.filter(r => r.Selected && !r.BlockReason) }))
-      .filter(g => g.Rows.length > 0)
-    if (groups.length === 0) { ElMessage.warning('没有可执行的上传行'); return }
-
-    let okFiles = 0
-    let failed = 0
-    this.uploading.value = true
-    try {
-      for (const g of groups) {
-        try {
-          const res = await this.fileOps.start(
-            g.Rows.map(r => this.toEntry(r.File, { SlotCode: r.SlotCode }, r.Key)),
-            { enterpriseCode: this.selectedEnterprise.value, stageCode: this.selectedStage.value, standardCode: g.StandardCode },
-            (done, total, name) => { this.uploadProgress.value = `${g.StandardName} ${done}/${total} ${name}` }
-          )
-          okFiles += res.result?.ActivatedCount ?? g.Rows.length
-          if (res.result?.QueueError) ElMessage.warning(`${g.StandardName}：${res.result.QueueError}`)
-        } catch (e: any) {
-          failed++
-          ElMessage.error(`${g.StandardName} 上传失败：${e?.message ?? '未知错误'}`)
-        }
-      }
-    } finally {
-      this.uploading.value = false
-      this.uploadProgress.value = ''
-    }
-
-    if (okFiles > 0) ElMessage.success(`已上传 ${okFiles} 个文件到 ${groups.length} 个标准`)
-    // 还有待指派的未归属文件时不关弹窗，否则用户的指派选择会被静默丢弃
-    if (failed === 0 && this.assignedUnmatched.length === 0) this.closeBatchUpload()
-    await this.loadOverview()
-  }
-
-  /** 单标准执行体：四段式 + 局部刷新。给了 `assignFolderCode` 则走指派模式（模板外文件） */
-  private async runUpload(rows: UploadPlanRow[], standardCode: string, assignFolderCode?: string) {
-    this.uploading.value = true
-    try {
-      const entries = rows.map(r => this.toEntry(
-        r.File,
-        assignFolderCode ? { FolderCode: assignFolderCode } : { SlotCode: r.SlotCode },
-        r.Key
-      ))
-      const res = await this.fileOps.start(
-        entries,
-        { enterpriseCode: this.selectedEnterprise.value, stageCode: this.selectedStage.value, standardCode },
-        (done, total, name) => { this.uploadProgress.value = `${done}/${total} ${name}` }
-      )
-      const confirmed = res.result
-      ElMessage.success(`已上传 ${confirmed?.ActivatedCount ?? rows.length} 个文件，转换队列已受理`)
-      if (confirmed?.QueueError) ElMessage.warning(confirmed.QueueError)
-    } catch (e: any) {
-      ElMessage.error(e?.message ?? '上传失败')
-    } finally {
-      this.uploading.value = false
-      this.uploadProgress.value = ''
-    }
-    await this.reloadStandard(standardCode)
-  }
-
-  // ═══════════════════ 替换 / 移除 ═══════════════════
-
-  openReplaceDialog(file: FileSlot) {
-    this.replacingFile.value = file
-    this.replaceNewFile.value = null
-    this.replaceReason.value = ''
-    this.replaceDialogVisible.value = true
-  }
-
-  closeReplaceDialog() {
-    this.replaceDialogVisible.value = false
-    this.replacingFile.value = null
-    this.replaceNewFile.value = null
-    this.replaceReason.value = ''
-  }
-
-  setReplaceNewFile(file: File | null) {
-    // ★ 替换也过契约闸门（后端 ReplaceFileAsync 同样 Check —— 前端先拦，用户看到人话而不是后端错误码）
-    if (file) {
-      const v = checkUploadable(file.name)
-      if (!v.ok) { ElMessage.warning(v.message ?? '不支持的文件格式'); return }
-    }
-    this.replaceNewFile.value = file
-  }
-
-  async confirmReplace() {
-    const target = this.replacingFile.value
-    if (!target) return
-    if (!this.replaceNewFile.value) { ElMessage.warning('请选择新文件'); return }
-    if (!this.replaceReason.value.trim()) { ElMessage.warning('请填写替换原因'); return }
-    try {
-      const notice = await this.fileOps.replace(this.replaceNewFile.value, {
-        fileCode: target.Code,
-        enterpriseCode: this.selectedEnterprise.value,
-        reason: this.replaceReason.value.trim(),
-        expectedModifyTime: slotModifyTime(target)
-      })
-      ElMessage.success('文件已替换，旧版本已归档')
-      this.closeReplaceDialog()
-      await this.reloadStandard(target.StandardCode ?? this.activeTab.value)
-
-      // ★ 2026-09-30 裁决 J4 的连带后果：按 RuleCode 归档会把人工补录值一起清掉。
-      //   后端已写 change_log 留痕，这里弹窗问专家是否要重新补录（05 号 §5.3）。
-      if (notice?.manualValuesArchived) {
-        ElMessageBox.alert(notice.notice, '人工补录值已被覆盖', {
-          type: 'warning',
-          confirmButtonText: '知道了',
-          dangerouslyUseHTMLString: false,
-        }).catch(() => undefined)
-      }
-    } catch (e: any) {
-      ElMessage.error(e?.message ?? '替换失败')
-    }
-  }
-
-  openDeleteDialog(file: FileSlot) {
-    this.deletingFile.value = file
-    this.deleteReason.value = ''
-    this.deleteDialogVisible.value = true
-  }
-
-  closeDeleteDialog() {
-    this.deleteDialogVisible.value = false
-    this.deletingFile.value = null
-    this.deleteReason.value = ''
-  }
-
-  async confirmDelete() {
-    const target = this.deletingFile.value
-    if (!target) return
-    if (!this.deleteReason.value.trim()) { ElMessage.warning('请填写移除原因'); return }
-    try {
-      await deleteFile(
-        target.Code, this.selectedEnterprise.value,
-        this.deleteReason.value.trim(), slotModifyTime(target)
-      )
-      ElMessage.success('已移除（存储对象保留，可在版本面板恢复）')
-      this.closeDeleteDialog()
-      await this.reloadStandard(this.activeTab.value)
-    } catch (e: any) {
-      ElMessage.error(e?.message ?? '移除失败')
-    }
-  }
-
-  // ═══════════════════ 下载 / 预览 ═══════════════════
-
-  async downloadRow(row: FileSlot) {
-    if (!row.StoragePath) { ElMessage.warning('该文件尚未上传'); return }
-    try {
-      await this.fileOps.download({ storagePath: row.StoragePath, fileName: row.FileName })
-    } catch (e: any) {
-      ElMessage.error(e?.message ?? '下载失败')
-    }
-  }
-
-  async downloadVersion(row: FileVersionRow) {
-    try {
-      await this.fileOps.download({ storagePath: row.StoragePath, fileName: row.FileName })
-    } catch (e: any) {
-      ElMessage.error(e?.message ?? '下载失败')
-    }
-  }
-
-  /** 预览：一律取 Blob 再用 ObjectURL（Authorization 头无法随裸链接发送） */
-  async previewRow(row: FileSlot) {
-    try {
-      const blob = await previewBlob(row.Code, this.selectedEnterprise.value)
-      if (this.previewUrl.value) URL.revokeObjectURL(this.previewUrl.value)
-      this.previewUrl.value = URL.createObjectURL(blob)
-      this.previewName.value = row.FileName
-      this.previewVisible.value = true
-    } catch (e: any) {
-      ElMessage.error(e?.message ?? '预览失败（可能尚未生成预览产物）')
-    }
-  }
-
-  closePreview() {
-    this.previewVisible.value = false
-    if (this.previewUrl.value) { URL.revokeObjectURL(this.previewUrl.value); this.previewUrl.value = '' }
-  }
-
-  // ═══════════════════ 版本 / 时间线 / 恢复 ═══════════════════
-
-  async openVersions(file: FileSlot) {
-    this.versionsFile.value = file
-    this.versionRows.value = []
-    this.historyRows.value = []
-    this.restoringVersion.value = 0
-    this.versionsVisible.value = true
-    try {
-      const [versions, history] = await Promise.all([
-        getVersions(file.Code, this.selectedEnterprise.value),
-        getHistory(file.Code, this.selectedEnterprise.value)
-      ])
-      this.versionRows.value = versions ?? []
-      this.historyRows.value = history?.Timeline ?? []
-      this.versionsRev.value++
-    } catch (e: any) {
-      ElMessage.error(e?.message ?? '版本信息加载失败')
-    }
-  }
-
-  closeVersions() {
-    this.versionsVisible.value = false
-    this.versionsFile.value = null
-  }
-
-  async handleRestore(row: FileVersionRow) {
-    const file = this.versionsFile.value
-    if (!file || this.restoringVersion.value > 0) return
-    const ok = await confirmOrFalse(
-      `用归档版本 v${row.VersionNumber}（${row.FileName}）恢复？当前文件会先归档，版本号继续递增。`,
-      '恢复确认', { type: 'warning', confirmButtonText: '恢复' }
-    )
-    if (!ok) return
-
-    this.restoringVersion.value = row.VersionNumber
-    try {
-      await restoreFile(file.Code, this.selectedEnterprise.value, row.VersionNumber, '从版本面板恢复')
-      ElMessage.success(`已恢复 v${row.VersionNumber}，重新进入转换队列`)
-      this.closeVersions()
-      await this.reloadStandard(this.activeTab.value)
-    } catch (e: any) {
-      ElMessage.error(e?.message ?? '恢复失败')
-    } finally { this.restoringVersion.value = 0 }
-  }
-
-  // ═══════════════════ 提取（真链，偏差 D10） ═══════════════════
-
-  async handleTriggerExtract(file: FileSlot) {
-    try {
-      const isRetry = file.ExtractState === 'failed'
-      await triggerExtract(file.Code, this.selectedEnterprise.value)
-      ElMessage.success(isRetry ? '已重新提交提取' : '提取已入队')
-      await this.reloadStandard(this.activeTab.value)
-    } catch (e: any) { ElMessage.error(e?.message ?? '触发提取失败') }
-  }
-
-  async handleViewResult(file: FileSlot) {
-    this.resultDrawerVisible.value = true
-    this.resultData.value = null
-    try { this.resultData.value = await getExtractionResult(file.Code, this.selectedEnterprise.value) }
-    catch { /* 无结果抽屉会显示空态 */ }
-  }
-
-  previewExtractedJson(json: string) {
-    try { ElMessage.info(JSON.stringify(JSON.parse(json), null, 2).slice(0, 400) + '...') }
-    catch { ElMessage.info(json?.slice(0, 400) + '...') }
-  }
-
-  opTypeText(item: HistoryItem): string {
-    const map: Record<string, string> = {
-      upload: '上传', replace: '替换', delete: '移除', restore: '恢复',
-      extract_trigger: '触发提取', extract_done: '提取完成', archive: '归档'
-    }
-    return map[item.OpType] ?? item.OpType
-  }
-
-  /** 匹配层级 → 中文（分发预览用） */
-  levelText(level: string): string {
-    const map: Record<string, string> = {
-      M0Path: 'M0 路径强匹配', M1Exact: 'M1 文件名精确', M2Contains: 'M2 主词包含', M3FolderExt: 'M3 分类+扩展名（需确认）'
-    }
-    return map[level] ?? level
-  }
-
-  /** 行是否展示「就位」相关操作 */
-  isLive(row: FileSlot): boolean { return isSlotLive(row) }
-  isRemoved(row: FileSlot): boolean { return isSlotRemoved(row) }
+  /** 批量冲突区的人工取舍 */
+  toggleBatchRow(row: UploadPlanRow, selected: boolean) { return this._upload.toggleBatchRow(row, selected) }
+  unmatchedReasonText(reason: string) { return this._upload.unmatchedReasonText(reason) }
+  previewSingleUpload() { return this._upload.previewSingleUpload() }
+  fileKeyOf(r: DispatchRow) { return this._upload.fileKeyOf(r) }
+  confirmSingleUpload() { return this._upload.confirmSingleUpload() }
+  looseSingleFiles(matched: UploadPlanRow[]) { return this._upload.looseSingleFiles(matched) }
+  openBatchUpload() { return this._upload.openBatchUpload() }
+  closeBatchUpload() { return this._upload.closeBatchUpload() }
+  resetBatchPlan() { return this._upload.resetBatchPlan() }
+  appendFiles(target: File[], files: File[], folderPath = '') { return this._upload.appendFiles(target, files, folderPath) }
+  addBatchFiles(files: File[]) { return this._upload.addBatchFiles(files) }
+  removeBatchFile(index: number) { return this._upload.removeBatchFile(index) }
+  previewBatchUpload() { return this._upload.previewBatchUpload() }
+  setUnmatchedAssign(key: string, patch: { StandardCode?: string; FolderCode?: string }) { return this._upload.setUnmatchedAssign(key, patch) }
+  unmatchedAssignOf(key: string) { return this._upload.unmatchedAssignOf(key) }
+  confirmUnmatchedAssign() { return this._upload.confirmUnmatchedAssign() }
+  confirmBatchUpload() { return this._upload.confirmBatchUpload() }
+  runUpload(rows: UploadPlanRow[], standardCode: string, assignFolderCode?: string) { return this._upload.runUpload(rows, standardCode, assignFolderCode) }
+  openReplaceDialog(file: FileSlot) { return this._upload.openReplaceDialog(file) }
+  closeReplaceDialog() { return this._upload.closeReplaceDialog() }
+  setReplaceNewFile(file: File | null) { return this._upload.setReplaceNewFile(file) }
+  confirmReplace() { return this._upload.confirmReplace() }
+  openDeleteDialog(file: FileSlot) { return this._fileActions.openDeleteDialog(file) }
+  closeDeleteDialog() { return this._fileActions.closeDeleteDialog() }
+  confirmDelete() { return this._fileActions.confirmDelete() }
+  downloadRow(row: FileSlot) { return this._fileActions.downloadRow(row) }
+  downloadVersion(row: FileVersionRow) { return this._fileActions.downloadVersion(row) }
+  previewRow(row: FileSlot) { return this._fileActions.previewRow(row) }
+  closePreview() { return this._fileActions.closePreview() }
+  openVersions(file: FileSlot) { return this._fileActions.openVersions(file) }
+  closeVersions() { return this._fileActions.closeVersions() }
+  handleRestore(row: FileVersionRow) { return this._fileActions.handleRestore(row) }
+  handleTriggerExtract(file: FileSlot) { return this._fileActions.handleTriggerExtract(file) }
+  handleViewResult(file: FileSlot) { return this._fileActions.handleViewResult(file) }
+  previewExtractedJson(json: string) { return this._fileActions.previewExtractedJson(json) }
+  opTypeText(item: HistoryItem) { return this._fileActions.opTypeText(item) }
+  levelText(level: string) { return this._fileActions.levelText(level) }
+  isLive(row: FileSlot) { return this._fileActions.isLive(row) }
+  isRemoved(row: FileSlot) { return this._fileActions.isRemoved(row) }
 }
+
+/**
+ * ★ 声明合并：把两个 composable 的动作**挂到类型上**。
+ *
+ * 运行时由类里的 `_upload` / `_fileActions` 逐个转发实现（见上面的转发块），
+ * 这里只补类型 —— 好处是 `index.vue` 的 `logic.xxx()` 调用**一个字都不用改**。
+ */
+export interface ResourcesLogic extends UploadActions, FileActions {}
 
 export default ResourcesLogic

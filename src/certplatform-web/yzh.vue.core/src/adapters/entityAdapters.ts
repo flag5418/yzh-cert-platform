@@ -76,17 +76,36 @@ export function mapSearchControlType(ct: string): SearchField['type'] {
 // AD-1 EntityConfig → YzhTableColumn[]
 // ========================================================
 
+/**
+ * 列填充模式阈值（2026-10-19 用户裁决）。
+ *
+ * 显示列数 **小于** 该值时，无论后端 `FillMode` 配成什么，一律按 `AutoFix`
+ * （等比例填满）渲染 —— 小表格列少，按像素渲染会在右侧留大片空白，观感差。
+ */
+export const FILL_MODE_MIN_COLUMNS = 10
+
 export function toTableColumns(config: EntityConfigDto | null): YzhTableColumn[] {
   const cols = config?.Columns
   if (!cols) return []
   const enableField = config?.EnableField
-  return cols
-    .filter((c) => c.XsFlag)
+  const displayCols = cols.filter((c) => c.XsFlag)
+
+  // ★ FillMode 消费（2026-10-19）——此前 FillMode 是「死配置」：
+  //   后端 `ConfigDtoConverter.ToDto` 已下发，但前端**从不读取** ⇒ 配了也没用。
+  //   · AutoFix → 列不设 `width`、改设 `minWidth`，交 el-table 按 minWidth 等比例分配
+  //     剩余宽度，完整充满容器（列宽只会 ≥ 配置值，不会更窄；超额时自动横向滚动）。
+  //   · PixFix  → 按 `Width` 像素渲染，超出容器宽度时横向滚动。
+  //   用户规则：显示列 < FILL_MODE_MIN_COLUMNS 时一律按 AutoFix。
+  const useFill = config?.FillMode !== 'PixFix' || displayCols.length < FILL_MODE_MIN_COLUMNS
+
+  return displayCols
     .map((c) => {
+      const w = Number(c.Width) || undefined
       const col: any = {
         prop: c.FieldName,
         label: c.DesName,
-        width: Number(c.Width) || undefined,
+        // 填充模式：minWidth（flex，等比例填满）；像素模式：width（固定，可横向滚动）
+        ...(useFill ? { minWidth: w } : { width: w }),
         sortable: c.Sortable || undefined,
         fixed: (c.Fixed as 'left' | 'right') || undefined,
         align: (c.Align as 'left' | 'center' | 'right') || undefined,

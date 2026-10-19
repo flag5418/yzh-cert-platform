@@ -176,7 +176,9 @@ function formatSize(size?: number | null) {
               <span>{{ row.FileName }}</span>
               <el-tag v-if="!row.IsRequired" size="small" type="info">选传</el-tag>
             </div>
-            <div v-if="row.FileSize" class="slot-sub">{{ formatSize(row.FileSize) }}</div>
+          </template>
+          <template #column-FileSize="{ row }">
+            <span>{{ formatSize(row.FileSize) }}</span>
           </template>
           <template #column-Status="{ row }">
             <el-tooltip
@@ -248,5 +250,4 @@ function formatSize(size?: number | null) {
 .folder-upload { margin-left: 12px; }
 .folder-tree--child { padding-left: 20px; border-left: 2px solid var(--el-border-color-lighter); }
 .slot-name { display: flex; align-items: center; gap: 6px; }
-.slot-sub { margin-top: 2px; font-size: 12px; color: var(--el-text-color-secondary); }
 </style>

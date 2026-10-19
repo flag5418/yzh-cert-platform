@@ -1,6 +1,7 @@
 
 using CertPlatform.Admin.Services.DocExtraction;
 using CertPlatform.Admin.Services.StandardDirectory;
+using CertPlatform.Admin.Services.Monitoring;
 using CertPlatform.Admin.Services.Audit;
 using CertPlatform.Admin.Services.Workflow;
 using CertPlatform.Admin.Services.Workflow.Skills;
@@ -114,6 +115,9 @@ public static class CertPlatformAdminServiceExtensions
 
         services.AddSingleton<IYzhQueueNotifier>(sp => sp.GetRequiredService<CertQueueNotifier>());
         services.AddSingleton<IYzhQueueCancelHandler>(sp => sp.GetRequiredService<UploadQueueCancelHandler>());
+
+        // ──── 服务监控（单例；仅持有 ILogger，无 Scoped 依赖） ────
+        services.AddSingleton<ServerMonitorService>();
 
         // ──── 操作日志数据库写入 ────
         // SysLogDbWriter 是 scoped（需要 IDbOrm），DbWriter 回调在调用时创建 scope

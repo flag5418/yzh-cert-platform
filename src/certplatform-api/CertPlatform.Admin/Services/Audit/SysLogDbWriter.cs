@@ -8,12 +8,14 @@ namespace CertPlatform.Admin.Services.Audit;
 /// 操作日志数据库写入服务
 /// 由 IYzhAuditLogger.DbWriter 回调调用，将审计条目持久化到 sys_log 表
 ///
-/// 落库语义（2026-10-16 修正，用户报障「看不出是哪个接口执行了什么操作」）：
-///   · Module    ← 控制器所在业务域（中文，如 基础资料 / 系统管理 / 业务管理）
-///   · Action    ← {中文操作} {动作方法名}（如 查询 Filter、新增 Save）
-///   · ApiPath   ← HTTP 请求路径（真实接口地址，新增列）
+/// 落库语义（2026-10-19 改用反射取接口名称/描述，用户要求「用反射，显示接口的名称和描述」）：
+///   · Action    ← 接口名称：反射方法上的 [ApiDescription].Description（如 获取角色接口树）
+///                 → 框架端点中文名（分页查询/新增/…）→ {操作类型} {方法名} 兜底
+///   · Module    ← 接口描述 / 业务分组：反射 [ApiDescription].Group（如 系统管理/接口权限）
+///                 → 命名空间业务域（基础资料/系统管理/…）兜底
+///   · ApiPath   ← HTTP 请求路径（真实接口地址）
 ///   · TargetType← 控制器名（去 Controller 后缀）
-///   旧实现仅按 HTTP 动词落库、Module/TargetType 写命名空间，真实接口信息全丢。
+///   旧实现仅按 HTTP 动词 + 方法名前缀猜测，Module 写命名空间业务域，接口名称全丢。
 /// </summary>
 public class SysLogDbWriter
 {
@@ -26,11 +28,19 @@ public class SysLogDbWriter
 
     public async Task WriteAsync(AuditLogEntry entry)
     {
-        var (module, controller, actionName) = ResolveEndpoint(entry);
+        var (namespaceModule, controller, actionName) = ResolveEndpoint(entry);
         var operationType = ExtractOperationType(entry.HttpMethod, actionName, entry.Level);
-        var actionText = string.IsNullOrEmpty(actionName)
-            ? operationType
-            : $"{operationType} {actionName}";
+
+        // Action ← 反射出的接口名称（[ApiDescription].Description / 框架端点中文名）；
+        // 若反射只能拿到英文方法名（无中文来源），前置动作类型保留「查询 Overview」语义。
+        var actionText = !string.IsNullOrWhiteSpace(entry.ApiName)
+            ? (string.Equals(entry.ApiName, actionName, StringComparison.Ordinal)
+                ? $"{operationType} {entry.ApiName}"
+                : entry.ApiName!)
+            : (string.IsNullOrEmpty(actionName) ? operationType : $"{operationType} {actionName}");
+
+        // Module ← 反射出的业务分组（[ApiDescription].Group）；无则回退命名空间业务域
+        var module = string.IsNullOrWhiteSpace(entry.ApiGroup) ? namespaceModule : entry.ApiGroup!;
 
         var logEntity = new SysLog
         {

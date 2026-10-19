@@ -74,6 +74,12 @@ public class AuditLogEntry
     /// <summary>控制器完整命名空间（用于模块归类，如 CertPlatform.Admin.Controllers.Workflow）</summary>
     public string? ControllerNamespace { get; init; }
 
+    /// <summary>接口名称（反射 <c>[ApiDescription].Description</c> → 框架端点中文名 → 方法名）</summary>
+    public string? ApiName { get; init; }
+
+    /// <summary>接口描述 / 业务分组（反射 <c>[ApiDescription].Group</c>，如「系统管理/接口权限」）</summary>
+    public string? ApiGroup { get; init; }
+
     /// <summary>请求参数（脱敏）</summary>
     public string? RequestParams { get; init; }
 

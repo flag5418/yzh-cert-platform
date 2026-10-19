@@ -37,37 +37,34 @@ import { buildAcceptAttribute, describeAllowed } from '@share/constants/upload-f
 /** ★ accept 由共享契约生成（⛔ 不再本地硬编码后缀串） */
 const ACCEPT = buildAcceptAttribute()
 import type { AnalyzePolicyKey, PolicyReasonKey } from '@share/api/ent/enterprise-original'
-import {
-  loadTree, treeNodes, treeHint, scopeLabel, scopeLoading,
-  stageCode, files, statusBar, selected, filterTags, onlyUsable, tagOptions,
-  filterActive, filterSummary, scopeTotal, filteredCount,
-  isBusy, queueProgress, queueLabel, describeQueueType, startPolling, stopPolling,
-  onNodeClick, loadTags, clearFilters, refresh, dataRevision,
-  standards, activeStandard, activeStandardName,
-  previewVisible, previewRow, previewUrl, previewKind, previewText, previewLoading, openPreview, closePreview,
-  contentText, contentMessage, contentLoading,
-  regenerating, onRegenerate,
-  tagDraft, purposeSaving, statusOf, statusTip,
-  // ★ 点击文件行的提示（2026-10-09）：只有「不支持提取规则」的文件会给反馈
-  onFileRowClick,
-  uploadVisible, uploadStage, planRows, planSummary, uploadProgress,
-  uploadTitle, uploadTargetLabel, uploadTargetAlertType,
-  openUpload, openFolderUpload, openReplace, onFilesPicked, startUpload, closeUpload, removePlanRow,
-  formatSize,
-  rootFiles, folderNodes,
-  onDownload, onVersions, versionVisible, versions, currentVersion, onRestore,
-  detailVisible, detailRow, detailLoading, detailPurposeText, infoTab,
-  openDetail, closeDetail, saveDetail, onDetailStandardChange,
-  excludeExtract, allowExtract,
-  excludeFolder, allowFolder, deleteFolder,
-  policyVisible, policyValue, policyReason, openPolicy, submitPolicy,
-  onDelete,
-  queueVisible, queueDetail, queueLoading, openQueueDetail,
-} from './logic'
+import { EnterpriseOriginalLogic, describeQueueType, statusOf, statusTip, onFileRowClick, formatSize, onDownload } from './logic'
+
 import { FolderOpened, Document, Loading } from '@element-plus/icons-vue'
 import OriginalFolderTree from './components/OriginalFolderTree.vue'
 import type { OriginalFolderNode } from './components/OriginalFolderTree.vue'
 import type { OriginalFile } from '@share/api/ent/enterprise-original'
+
+/**
+ * ★ 页面 Logic 实例（R24：logic.ts 已整类化，⛔ 不再有模块级单例）。
+ *
+ * 状态**解构**出来：解构后每个名字本身是顶层 ref ⇒ 模板自动解包。
+ * ⛔ 不能写 `logic.files`：模板对非 ref 绑定不会解包内部 ref，会渲染成 [object Object]。
+ * ⛔ 方法不能解构（丢 `this`）⇒ 模板与脚本里一律 `logic.xxx()`。
+ */
+const logic = new EnterpriseOriginalLogic()
+
+const {
+  treeNodes, treeHint, scopeLabel, scopeLoading, stageCode, files,
+  statusBar, selected, filterTags, onlyUsable, tagOptions, filterActive,
+  filterSummary, scopeTotal, filteredCount, isBusy, queueProgress, queueLabel,
+  dataRevision, standards, activeStandard, activeStandardName, previewVisible, previewRow,
+  previewUrl, previewKind, previewText, previewLoading, contentText, contentMessage,
+  contentLoading, regenerating, tagDraft, purposeSaving, uploadVisible, uploadStage,
+  planRows, planSummary, uploadProgress, uploadTitle, uploadTargetLabel, uploadTargetAlertType,
+  rootFiles, folderNodes, versionVisible, versions, currentVersion, detailVisible,
+  detailRow, detailLoading, detailPurposeText, infoTab, policyVisible, policyValue,
+  policyReason, queueVisible, queueDetail, queueLoading,
+} = logic
 
 /** ★ 专家语言：不是「是否参与识别」而是「这份文件要不要参与自动提取」 */
 const POLICY_OPTIONS: Array<{ value: AnalyzePolicyKey; label: string }> = [
@@ -85,6 +82,7 @@ const POLICY_OPTIONS: Array<{ value: AnalyzePolicyKey; label: string }> = [
  */
 const rootColumns: YzhTableColumn<any>[] = [
   { prop: 'FileName', label: '文件名', minWidth: 260, slot: true },
+  { prop: 'FileSize', label: '大小', width: 90, slot: true },
   { prop: 'ExtractState', label: '提取状态', width: 110, slot: true },
   { prop: 'VersionNumber', label: '版本', width: 60, align: 'center', slot: true }
   // ⛔ 操作列不手写（2026-10-07）：YzhTable 内置行动作列 + action-dropdown-only
@@ -120,21 +118,21 @@ function rootRowActions(row: OriginalFile): YzhAction[] {
 function onRootRowAction(key: string, row: OriginalFile) {
   switch (key) {
     case 'info':
-      return openDetail(row)
+      return logic.openDetail(row)
     case 'preview':
-      return openPreview(row)
+      return logic.openPreview(row)
     case 'download':
       return onDownload(row)
     case 'versions':
-      return onVersions(row)
+      return logic.onVersions(row)
     case 'replace':
-      return openReplace(row)
+      return logic.openReplace(row)
     case 'exclude':
-      return excludeExtract(row)
+      return logic.excludeExtract(row)
     case 'allow':
-      return allowExtract(row)
+      return logic.allowExtract(row)
     case 'delete':
-      return onDelete(row)
+      return logic.deleteFile(row)
   }
 }
 
@@ -142,8 +140,8 @@ function onRootRowAction(key: string, row: OriginalFile) {
 async function allowFromDetail(): Promise<void> {
   const row = detailRow.value
   if (!row) return
-  await allowExtract(row)
-  closeDetail()
+  await logic.allowExtract(row)
+  logic.closeDetail()
 }
 
 /**
@@ -177,8 +175,15 @@ function selectAll(checked: boolean): void {
   selected.value = checked ? [...files.value] : []
 }
 
-onMounted(() => { loadTree(); loadTags(); startPolling() })
-onBeforeUnmount(() => { stopPolling() })
+/**
+ * 首屏：走内核标准生命周期 `init()`（= `loadConfig()` → `onAfterInit()`）。
+ *
+ * ★ 为什么不再直接调 `loadTree()`：`init()` 是基类统一的入口，异常会被 `reportError`
+ *   兜住并弹一次提示；直接调 `loadTree()` 抛错就成了 unhandled rejection（页面白屏无提示）。
+ * ⛔ `init()` 里 `loadConfig()` 已被置空（本页没有 EntityConfig），不会打 `/config` 404。
+ */
+onMounted(() => { void logic.init(); logic.loadTags(); logic.startPolling() })
+onBeforeUnmount(() => { logic.stopPolling() })
 </script>
 
 <template>
@@ -191,7 +196,7 @@ onBeforeUnmount(() => { stopPolling() })
       :tree-searchable="true"
       :tree-lazy="false"
       :tree-default-expand-all="true"
-      @tree-node-click="onNodeClick"
+      @tree-node-click="logic.onNodeClick($event)"
     >
       <template #treeFooter>
         <div v-if="treeHint" class="eo-hint">{{ treeHint }}</div>
@@ -214,11 +219,11 @@ onBeforeUnmount(() => { stopPolling() })
               </div>
             </div>
             <div class="eo-header__right">
-              <el-button size="small" text type="primary" @click="openQueueDetail">处理进度</el-button>
-              <el-button v-if="stageCode" size="small" text type="primary" @click="refresh">刷新</el-button>
+              <el-button size="small" text type="primary" @click="logic.openQueueDetail()">处理进度</el-button>
+              <el-button v-if="stageCode" size="small" text type="primary" @click="logic.refresh()">刷新</el-button>
               <!-- ★ 2026-10-06 文件级队列：⛔ 不再按「阶段忙」禁用上传 —— 同阶段其他文件在跑
                    与本批次无关；同文件重传由后端「取消旧队列重建」兜底（旧阶段级拒绝实测误伤） -->
-              <el-button v-if="stageCode" type="primary" @click="openUpload">上传文件</el-button>
+              <el-button v-if="stageCode" type="primary" @click="logic.openUpload()">上传文件</el-button>
             </div>
           </div>
 
@@ -237,7 +242,7 @@ onBeforeUnmount(() => { stopPolling() })
             <span class="eo-queue-banner__count">
               {{ statusBar.QueueCompleted ?? 0 }} / {{ statusBar.QueueTotal ?? 0 }} 个文件
             </span>
-            <el-button link type="primary" size="small" @click="openQueueDetail">查看详情</el-button>
+            <el-button link type="primary" size="small" @click="logic.openQueueDetail()">查看详情</el-button>
           </div>
 
           <!-- ══════════ 筛选栏（专家语言）══════════ -->
@@ -252,7 +257,7 @@ onBeforeUnmount(() => { stopPolling() })
               </el-option>
             </el-select>
             <el-checkbox v-model="onlyUsable">只看已就绪的</el-checkbox>
-            <el-button v-if="filterTags.length || onlyUsable" size="small" text type="primary" @click="clearFilters">清空筛选</el-button>
+            <el-button v-if="filterTags.length || onlyUsable" size="small" text type="primary" @click="logic.clearFilters()">清空筛选</el-button>
 
             <span class="eo-filterbar__spacer" />
 
@@ -263,7 +268,7 @@ onBeforeUnmount(() => { stopPolling() })
             >
               全选
             </el-checkbox>
-            <el-button v-if="selected.length > 1" size="small" type="primary" @click="openPolicy('batch')">
+            <el-button v-if="selected.length > 1" size="small" type="primary" @click="logic.openPolicy('batch')">
               批量设置（已选 {{ selected.length }}）
             </el-button>
           </div>
@@ -284,8 +289,8 @@ onBeforeUnmount(() => { stopPolling() })
             <template #action>
               <!-- ★ 筛选未命中的出路是「清空筛选」，⛔ 不是「上传文件」——
                    给错动作会让用户以为文件丢了，重新上传一遍（2026-10-06 实测投诉） -->
-              <el-button v-if="filterActive" type="primary" @click="clearFilters">清空筛选</el-button>
-              <el-button v-else type="primary" @click="openUpload">上传文件</el-button>
+              <el-button v-if="filterActive" type="primary" @click="logic.clearFilters()">清空筛选</el-button>
+              <el-button v-else type="primary" @click="logic.openUpload()">上传文件</el-button>
             </template>
           </YzhEmptyState>
 
@@ -317,8 +322,9 @@ onBeforeUnmount(() => { stopPolling() })
                     <el-icon class="f-name__icon"><Document /></el-icon>
                     <span class="f-name__text" :title="row.FileName">{{ row.FileName }}</span>
                   </div>
-                  <!-- ★ 大小放文件名副行（用户裁决：文件名 + 大小合成一列，不必单开一列） -->
-                  <div class="f-sub">{{ formatSize(row.FileSize) }}</div>
+                </template>
+                <template #column-FileSize="{ row }">
+                  <span>{{ formatSize(row.FileSize) }}</span>
                 </template>
                 <!-- ★ 提取状态与文件夹树**共用同一份口径**（logic.statusOf）——
                      ⛔ 不再各判一套：原来上表只判两态、文件夹树判七态，
@@ -346,20 +352,20 @@ onBeforeUnmount(() => { stopPolling() })
               :nodes="folderNodes as OriginalFolderNode[]"
               :data-revision="dataRevision"
               :busy="isBusy"
-              @detail="openDetail"
+              @detail="logic.openDetail($event)"
               @row-click="onFileRowClick"
-              @regenerate="onRegenerate"
-              @preview="openPreview"
-              @replace="openReplace"
-              @exclude="excludeExtract"
-              @allow="allowExtract"
-              @versions="onVersions"
+              @regenerate="logic.onRegenerate($event)"
+              @preview="logic.openPreview($event)"
+              @replace="logic.openReplace($event)"
+              @exclude="logic.excludeExtract($event)"
+              @allow="logic.allowExtract($event)"
+              @versions="logic.onVersions($event)"
               @download="onDownload"
-              @delete="onDelete"
-              @folder-update="openFolderUpload"
-              @folder-exclude="excludeFolder"
-              @folder-allow="allowFolder"
-              @folder-delete="deleteFolder"
+              @delete="logic.deleteFile($event)"
+              @folder-update="logic.openFolderUpload($event)"
+              @folder-exclude="logic.excludeFolder($event)"
+              @folder-allow="logic.allowFolder($event)"
+              @folder-delete="logic.deleteFolder($event)"
             />
           </div>
         </div>
@@ -371,7 +377,7 @@ onBeforeUnmount(() => { stopPolling() })
          （YzhDrawer 的 `close` 只在「取消」时发，点 X / 遮罩不发；`closed` 由 el-drawer 透传，任何关闭方式都发） -->
     <YzhDrawer
       v-model="previewVisible" :title="previewRow?.FileName || '预览'" size="900px"
-      :show-footer="false" @closed="closePreview"
+      :show-footer="false" @closed="logic.closePreview()"
     >
       <div v-loading="previewLoading" class="eo-preview">
         <template v-if="previewKind === 'image'">
@@ -401,7 +407,7 @@ onBeforeUnmount(() => { stopPolling() })
     <YzhDrawer
       :model-value="detailVisible" size="720px"
       :title="detailRow ? ('提取信息 · ' + detailRow.FileName) : '提取信息'"
-      @update:model-value="(v: boolean) => { if (!v) closeDetail() }"
+      @update:model-value="(v: boolean) => { if (!v) logic.closeDetail() }"
     >
       <div v-loading="detailLoading" class="eo-detail">
         <template v-if="detailRow">
@@ -419,13 +425,13 @@ onBeforeUnmount(() => { stopPolling() })
 
           <!-- 预览 / 下载 / 历史版本 / 替换：一行文字按钮（就近入口，⛔ 不重复做区块） -->
           <div class="eo-detail__quick">
-            <el-button link type="primary" size="small" @click="openPreview(detailRow)">预览</el-button>
+            <el-button link type="primary" size="small" @click="logic.openPreview(detailRow)">预览</el-button>
             <el-divider direction="vertical" />
             <el-button link type="primary" size="small" @click="onDownload(detailRow)">下载原件</el-button>
             <el-divider direction="vertical" />
-            <el-button link type="primary" size="small" @click="onVersions(detailRow)">历史版本</el-button>
+            <el-button link type="primary" size="small" @click="logic.onVersions(detailRow)">历史版本</el-button>
             <el-divider direction="vertical" />
-            <el-button link type="primary" size="small" @click="openReplace(detailRow)">替换</el-button>
+            <el-button link type="primary" size="small" @click="logic.openReplace(detailRow)">替换</el-button>
           </div>
 
           <!-- ★ 标准选择器（该阶段绑了多个标准才出）—— 见抽屉头部注释 -->
@@ -433,7 +439,7 @@ onBeforeUnmount(() => { stopPolling() })
             <div class="eo-detail__label">按哪个标准查看</div>
             <el-radio-group
               :model-value="activeStandard"
-              @change="(v: any) => onDetailStandardChange(String(v))"
+              @change="(v: any) => logic.onDetailStandardChange(String(v))"
             >
               <el-radio-button v-for="s in standards" :key="s.Code" :value="s.Code">
                 {{ s.StandardName || s.StandardCode }}
@@ -502,7 +508,7 @@ onBeforeUnmount(() => { stopPolling() })
                     <el-button
                       v-if="detailRow" type="primary"
                       :loading="regenerating === detailRow.Code"
-                      @click="onRegenerate(detailRow)"
+                      @click="logic.onRegenerate(detailRow)"
                     >重新生成</el-button>
                   </template>
                 </YzhEmptyState>
@@ -513,18 +519,18 @@ onBeforeUnmount(() => { stopPolling() })
       </div>
 
       <template #footer>
-        <el-button type="default" @click="closeDetail">关闭</el-button>
+        <el-button type="default" @click="logic.closeDetail()">关闭</el-button>
         <el-button
           v-if="detailRow && !detailRow.IsNotSuggested"
           type="default"
           :loading="regenerating === detailRow.Code"
-          @click="onRegenerate(detailRow)"
+          @click="logic.onRegenerate(detailRow)"
         >重新生成内容</el-button>
         <!-- 不参与提取的文件：给出一条恢复的出路（原来只能去行操作下拉里找） -->
         <el-button v-if="detailRow?.IsNotSuggested" type="primary" @click="allowFromDetail">允许提取</el-button>
         <el-button
           v-if="detailRow && !detailRow.IsNotSuggested && activeStandard"
-          type="primary" :loading="purposeSaving" @click="saveDetail"
+          type="primary" :loading="purposeSaving" @click="logic.saveDetail()"
         >保存</el-button>
       </template>
     </YzhDrawer>
@@ -533,7 +539,7 @@ onBeforeUnmount(() => { stopPolling() })
          ★ 2026-10-07 四轮：同一个抽屉现在有三个入口（上传文件 / 更新文件夹内容 / 替换单个文件），
            标题与目标提示条都跟着「本次目标」走 —— 否则从「替换」点进来的人看到的仍是
            「上传文件」，只能靠猜「我这次传的东西会落到哪、会不会改名」。 -->
-    <YzhDrawer v-model="uploadVisible" :title="uploadTitle" size="620px" @closed="closeUpload">
+    <YzhDrawer v-model="uploadVisible" :title="uploadTitle" size="620px" @closed="logic.closeUpload()">
       <!-- ★ 目标提示条（常规上传时不出现）—— 说明「这次会落到哪里」 -->
       <el-alert
         v-if="uploadTargetLabel"
@@ -550,7 +556,7 @@ onBeforeUnmount(() => { stopPolling() })
       </el-alert>
 
       <div class="eo-upload">
-        <YzhFolderUpload :multiple="true" :accept="ACCEPT" @change="onFilesPicked" />
+        <YzhFolderUpload :multiple="true" :accept="ACCEPT" @change="logic.onFilesPicked($event)" />
       </div>
 
       <div v-if="planRows.length > 0 || planSummary.FilteredCount > 0" class="eo-plan">
@@ -581,7 +587,7 @@ onBeforeUnmount(() => { stopPolling() })
             <!-- ★ 可移除：解决「不支持的文件在弹窗里删不掉」
                  ⚠️ type 用 danger（移除动作）⛔ 不用 info/success/warning —— 守卫 S03a：
                     状态色（info/success/warning）只该给 el-tag，按钮语义色是 primary/danger -->
-            <el-button v-if="r.Blocked" link type="danger" size="small" class="eo-plan__del" @click="removePlanRow(i)">
+            <el-button v-if="r.Blocked" link type="danger" size="small" class="eo-plan__del" @click="logic.removePlanRow(i)">
               移除
             </el-button>
           </li>
@@ -592,11 +598,11 @@ onBeforeUnmount(() => { stopPolling() })
       <div v-else-if="uploadStage === 'done'" class="eo-progress eo-progress--done">{{ uploadProgress }}</div>
 
       <template #footer>
-        <el-button type="primary" @click="closeUpload">{{ uploadStage === 'done' ? '关闭' : '取消' }}</el-button>
+        <el-button type="primary" @click="logic.closeUpload()">{{ uploadStage === 'done' ? '关闭' : '取消' }}</el-button>
         <el-button
           v-if="uploadStage !== 'done'" type="primary"
           :loading="uploadStage === 'uploading'" :disabled="planRows.length === 0"
-          @click="startUpload"
+          @click="logic.startUpload()"
         >开始上传</el-button>
       </template>
     </YzhDrawer>
@@ -620,7 +626,7 @@ onBeforeUnmount(() => { stopPolling() })
       </el-alert>
       <template #footer>
         <el-button type="primary" @click="policyVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitPolicy">保存</el-button>
+        <el-button type="primary" @click="logic.submitPolicy()">保存</el-button>
       </template>
     </YzhDrawer>
 
@@ -657,7 +663,7 @@ onBeforeUnmount(() => { stopPolling() })
         :show-pagination="false" :toolbar="false" row-key="Code"
       >
         <template #column-_op="{ row }">
-          <el-button link type="primary" size="small" @click="onRestore(row)">恢复</el-button>
+          <el-button link type="primary" size="small" @click="logic.onRestore(row)">恢复</el-button>
         </template>
       </YzhTable>
     </YzhDrawer>
@@ -736,7 +742,6 @@ onBeforeUnmount(() => { stopPolling() })
 .f-name { display: flex; align-items: center; gap: 5px; }
 .f-name__icon { color: var(--el-text-color-secondary); flex: none; }
 .f-name__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.f-sub { font-size: 11px; color: var(--el-text-color-placeholder); margin-top: 1px; }
 .f-dim { color: var(--el-text-color-placeholder); }
 /* ⛔ `.f-tags` / `.f-tags__item` / `.f-purpose` 已于 2026-10-07 删除 ——
    标签与作用不再上表（用户裁决），它们只活在详情抽屉里 */

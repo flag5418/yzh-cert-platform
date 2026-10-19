@@ -74,9 +74,16 @@ public static class YzhWebBuilderExtensions
         builder.Services.AddScoped<IUserContext, UserContext>();
 
         // 注册审计日志服务（IYzhAuditLogger + YzhAuditLogger 后台服务）
-        // 注意：必须用 AddSingleton 保证 Filter 和 BackgroundService 使用同一个实例
-        builder.Services.AddSingleton<IYzhAuditLogger, YzhAuditLogger>();
-        builder.Services.AddHostedService<YzhAuditLogger>();
+        //
+        // ★★ 必须是**同一个实例**（2026-10-17 修正）：
+        //   `AddSingleton<IYzhAuditLogger, YzhAuditLogger>()` + `AddHostedService<YzhAuditLogger>()`
+        //   会创建**两个** YzhAuditLogger —— 过滤器入队到 A，而 ExecuteAsync 跑在 B 上（B 的队列永远是空的），
+        //   旧代码靠 EnqueueAndTryFlush 里的 Task.Run 顺手把 A 的队列抽干，才“看起来正常”。
+        //   一旦改成单消费者（本次修双消费者竞争），两个实例就会导致**审计完全不写**。
+        //   故改为：先注册具体类型，再让接口与 IHostedService 都指向它。
+        builder.Services.AddSingleton<YzhAuditLogger>();
+        builder.Services.AddSingleton<IYzhAuditLogger>(sp => sp.GetRequiredService<YzhAuditLogger>());
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<YzhAuditLogger>());
 
         // 注册实体操作服务
         builder.Services.AddScoped(typeof(EntityService<>));
@@ -178,6 +185,11 @@ public static class YzhWebBuilderExtensions
             // 使用 PascalCase（与数据库列名、实体属性名一致）
             // 这样 JSON 字段名 = 实体属性名 = 数据库列名
             json.JsonSerializerOptions.PropertyNamingPolicy = null;
+            // ★ 日期时间统一输出格式 yyyy-MM-dd HH:mm:ss（架构统一 · 2026-10-19）
+            //   详见 YZH.Core.Stand/Converters/YzhDateTimeJsonConverter.cs + 契约表 §3.7
+            //   （与 Program.cs 同源；ApplyYzhDateTimeFormat 幂等，两处都调不重复）
+            YZH.Core.Stand.Extensions.JsonDateTimeExtensions
+                .ApplyYzhDateTimeFormat(json.JsonSerializerOptions);
             json.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
             json.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
             // 敏感字段脱敏：带 [YzhSensitive] 的属性永不写出（输入绑定不受影响）

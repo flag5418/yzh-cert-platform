@@ -45,3 +45,22 @@
 | anydoc | - | yzh-anydoc | 文档转 Markdown（Word/PPT/Excel/PDF/EPUB/CSV） |
 
 > anydoc 不暴露端口，通过 `docker exec yzh-anydoc anydoc <文件>` 调用，详见 [anydoc/README.md](./anydoc/README.md)。
+
+---
+
+## 5. web/ — 前端生产构建容器（管理端 / 专家端）
+
+> **独立于**上面的依赖容器（`compose.yml`）。用于把前端**生产构建**常驻成 nginx 容器，供
+> Cloudflare 隧道对外映射，**不影响本地 dev**（dev 仍占 9990/9991）。
+
+| 文件 | 作用 |
+|------|------|
+| `web/Dockerfile` | 多阶段：`npm ci` + `vite build`（生产构建）→ `nginx:alpine` 静态托管 |
+| `web/nginx/admin.conf` | 管理端站点：gzip + 长缓存 + SPA 回退 + 反代 `/api`（含 WS）/`/swagger` |
+| `web/nginx/auditor.conf` | 专家端站点：同上（无 `/swagger`） |
+| `web/compose.yml` | 编排 `web-admin`(宿主 `127.0.0.1:10990`) / `web-auditor`(`127.0.0.1:10991`) |
+
+- **一键发布**（推荐）：`./scripts/deploy/deploy-web.sh`（构建镜像 → 起容器 → 保活隧道）。
+- 手动等价：`docker compose -f docker/web/compose.yml up -d --build`。
+- 只绑 `127.0.0.1`，**不外网暴露**；容器内 nginx 经 `host.docker.internal:9992` 回连宿主后端。
+- 端口刻意避开 dev 的 9990/9991；重新发布**不改变隧道公网地址**（隧道目标端口不变即不重启）。

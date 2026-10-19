@@ -501,7 +501,7 @@ function newer(a?: string | null, b?: string | null): boolean {
  * ⇒ 时间必须放最前，让它在任何宽度下都先出现。
  *    （完整文本仍可 hover 看 tooltip，`YzhTree` 自带。）
  *
- * ⛔ 不用 `formatDateTime`：它给 `2026/10/11 09:25:33`（19 字符），左树里放不下。
+ * ⛔ 不用 `formatDateTime`：它给 `2026-10-11 09:25:33`（19 字符），左树里放不下。
  */
 function taskLabel(t: NormalizeTaskRow): string {
   const name = t.QueueName || t.QueueCode

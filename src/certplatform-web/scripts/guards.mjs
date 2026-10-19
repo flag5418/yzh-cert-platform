@@ -2003,11 +2003,13 @@ const RULES = [
     //      文件进了白名单，再往里新增第二个裸 class 也静默通过（A-R6 踩过同一个坑）。
     //   每页收口 ⇒ 下调 / 删行；删完 ⇒ 规则转正，新页面写裸 class 直接失败。
     debtBudget: {
-      'cert/cert-auditor/src/pages/resources/logic.ts': 1,
+      // ★ 2026-10-19：`resources` 已拆分 + extends SingleTableCore ⇒ 债务归零、删行
+      //   （logic.ts 1405 → 741 行；上传状态机 → useUpload.ts，文件操作 → useFileActions.ts）
       'cert/cert-auditor/src/pages/enterprise-review/logic.ts': 1,
-      'cert/cert-auditor/src/pages/enterprise-fill-params/logic.ts': 1,
-      // 模块级单例（28 个顶层 ref）—— 比裸 class 更严重，见计划 §四 D2
-      'cert/cert-auditor/src/pages/enterprise-original/logic.ts': 1,
+      // ★ 2026-10-19：`enterprise-fill-params` 已 extends SingleTableCore ⇒ 债务归零、删行
+      // ★ 2026-10-19：`enterprise-original` 已整类化（原 28 个顶层 ref → 69 字段 / 38 方法）
+      //   ⇒ 债务归零、删行。⚠️ 该文件仍**导出** 16 个纯函数（statusOf / buildTree …）
+      //   供 index.vue 与 OriginalFolderTree.vue 共用 —— 那是模块级**函数**不是状态，R24 放行。
     },
   },
   {

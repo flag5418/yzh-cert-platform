@@ -18,5 +18,8 @@ export * from './workflow/doc-extraction-rule'
 export * from './workflow/prompt-workbench'
 export * from './workflow/execution'
 
+// System 域 API（服务监控）
+export * from './system/server-monitor'
+
 // Enterprise 域 API（专家端企业资料管理）
 export * from './ent'

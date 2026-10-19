@@ -18,10 +18,16 @@ echo "  Cloudflare 临时隧道状态"
 echo "=========================================================="
 
 for s in admin auditor; do
-  case "$s" in
-    admin)   port=9990 ;;
-    auditor) port=9991 ;;
-  esac
+  # 目标端口：优先读运行态记录，默认容器生产构建端口
+  target="$RUN_DIR/$s.target"
+  if [ -f "$target" ]; then
+    port="$(cat "$target" 2>/dev/null)"
+  else
+    case "$s" in
+      admin)   port=10990 ;;
+      auditor) port=10991 ;;
+    esac
+  fi
 
   log="$RUN_DIR/$s.log"
   pidfile="$RUN_DIR/$s.pid"

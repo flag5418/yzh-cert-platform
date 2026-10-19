@@ -17,7 +17,8 @@
  *   三个操作（预览 / 改标签 / 改作用）直接摊在卡面上，不需要点进详情。
  * ════════════════════════════════════════════════════════════════════════
  */
-import { confirmOrFalse } from '@yzh-core'
+
+import { confirmOrFalse, SingleTableCore } from '@yzh-core'
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { AnalyzePolicyKey, DocProfile, OriginalFile, QueueDetail, StandardRef, StatusBar } from '@share/api/ent/enterprise-original'
@@ -48,304 +49,9 @@ import {
 import type { PlanItem, PlanRow } from '@share/api/ent/enterprise-original'
 import { fetchVersions } from '@share/api/ent/enterprise-original'
 import type { FileVersion } from '@share/api/ent/enterprise-original'
+
 export { formatSize } from '@share/api/ent/enterprise-original'
 
-// ═══════════════════════ 一、左右树 + 作用域 ═══════════════════════
-
-export const treeNodes = ref<any[]>([])
-export const treeHint = ref('')
-export const enterpriseCode = ref('')
-export const stageCode = ref('')
-export const scopeLabel = ref('')
-export const scopeLoading = ref(false)
-
-/**
- * ★ **当前阶段绑定的标准清单**（2026-10-07 接入）。
- *
- * <para>来源：`cert_enterprise_stage`（一行 = 一个「企业 × 阶段 × 标准」）
- * ⇒ `cert_iso_standard`，由 `stage-tree` 随阶段节点下发。</para>
- *
- * <para><b>为什么必须有</b>：原始资料表 <c>cert_enterprise_original_file</c> <b>没有标准列</b>
- * （只有 <c>StageCode</c>），标准维度只存在于「关联表」与「画像表」。
- * 一个文件在 N 个标准下各有<b>一行</b>画像 ⇒ 前端不把标准传下去，后端只能取「某一行」
- * ⇒ <b>同一份文件在 A 标准下显示 B 标准的标签与作用</b>（用户点名痛点：
- * 「点击分组的时候，显示的信息不正确」）。</para>
- */
-export const standards = ref<StandardRef[]>([])
-
-/** 当前选中的标准 Code —— 传回 `list` / `profile` / `profile/correct` 三个端点 */
-export const activeStandard = ref('')
-
-/** 当前标准的中文名（页头、抽屉里显示「标准：xxx」；⛔ 不给用户看 GUID） */
-export const activeStandardName = computed(() => {
-  const hit = standards.value.find((s) => s.Code === activeStandard.value)
-  return hit ? (hit.StandardName || hit.StandardCode) : ''
-})
-
-export async function loadTree(): Promise<void> {
-  try {
-    const nodes = await fetchStageTree()
-    treeNodes.value = nodes.map((n: any) => ({
-      Code: n.Code,
-      Label: n.Label,
-      FileCount: n.FileCount,
-      EnterpriseCode: n.EnterpriseCode,
-      Children: (n.Children ?? []).map((c: any) => ({
-        ...c,
-        EnterpriseCode: c.EnterpriseCode,
-        // ★ 标准清单随阶段节点透传（`...c` 已带上，这里显式写出以防后人误删）
-        Standards: c.Standards ?? [],
-        Children: undefined,
-      })),
-    }))
-    treeHint.value = nodes.length === 0 ? '当前工作区下没有企业' : ''
-  } catch (e) {
-    treeHint.value = (e as Error).message
-  }
-}
-
-/** 点树节点：企业（有子节点）只提示，阶段（叶子）才加载 */
-export async function onNodeClick(node: any): Promise<void> {
-  const isLeaf = !node?.Children || node.Children.length === 0
-  if (!isLeaf) {
-    scopeLabel.value = `${node.Label}（请选择具体阶段）`
-    stageCode.value = ''
-    standards.value = []
-    activeStandard.value = ''
-    files.value = []
-    statusBar.value = null
-    return
-  }
-  const entCode = node.EnterpriseCode ?? node.Code
-  if (!entCode || !node.Code) {
-    ElMessage.warning('树节点缺少企业/阶段标识，请刷新后重试')
-    return
-  }
-  enterpriseCode.value = entCode
-  stageCode.value = node.Code
-  scopeLabel.value = node.Label
-  // ★ 标准 tab：该阶段绑定的标准清单（多标准 ⇒ 出 tab；单标准 ⇒ 只显示标准名）
-  standards.value = (node.Standards ?? []) as StandardRef[]
-  activeStandard.value = standards.value[0]?.Code ?? ''
-  // ⚠️ 换阶段必须清标签筛选：标签是**标准相关**的，上一个标准的 TagCode 在新标准下
-  //    可能根本不存在 ⇒ 筛出 0 命中，页面看着像「文件丢了」（2026-10-06 同类投诉）。
-  filterTags.value = []
-  await loadFiles()
-  startPolling()      // ★ 队列在跑时自动刷新进度
-}
-
-/**
- * 切换标准 tab。
- *
- * ★ 切换后必须**重取列表**：标签与作用都来自「该标准那一行画像」。
- * ⛔ 不清 `filterTags` 会留下上一个标准的标签 ⇒ 新标准下筛不到任何文件。
- */
-export async function onStandardChange(code: string): Promise<void> {
-  if (!code || code === activeStandard.value) return
-  activeStandard.value = code
-  filterTags.value = []
-  await loadFiles()
-}
-
-// ═══════════════════════ 二、文件列表（卡片）═══════════════════════
-
-export const files = ref<OriginalFile[]>([])
-export const statusBar = ref<StatusBar | null>(null)
-export const selected = ref<OriginalFile[]>([])
-export const filterTags = ref<string[]>([])
-export const onlyUsable = ref(false)
-export const tagOptions = ref<Array<{ TagCode: string; TagName: string; TagGroup?: string | null }>>([])
-
-/**
- * ★ 忙碌态：该阶段有队列排队中/执行中（2026-10-06 文件级重构后可能同时有多个）。
- * ⇒ 显示进度横幅 + 页面自动轮询刷新进度（用户要求「显示进度的详情，否则会造成误判」）。
- * ⛔ **不再禁用上传按钮**：一个文件一个队列互不冲突，阶段级拒绝是 2026-10-03 的旧口径；
- * 同文件重传由后端「取消旧队列重建」兜底。
- */
-export const isBusy = computed(() => statusBar.value?.IsBusy === true)
-
-/** 队列进度（0-100） */
-export const queueProgress = computed(() => {
-  const sb = statusBar.value
-  if (!sb) return 0
-  if (typeof sb.QueueProgress === 'number' && sb.QueueProgress > 0) return sb.QueueProgress
-  if ((sb.QueueTotal ?? 0) > 0) return Math.round(((sb.QueueCompleted ?? 0) / (sb.QueueTotal ?? 1)) * 100)
-  return 0
-})
-
-/**
- * 队列类型 → 专家语言（⛔ 不暴露 task_type 字面量）。
- * `enterprise_original_file` = 当前唯一写入口（转换+识别串行）；后两个是历史批次队列。
- */
-export function describeQueueType(t?: string | null): string {
-  if (t === 'enterprise_original_file') return '处理资料内容'
-  if (t === 'enterprise_original_analyze') return '识别资料内容'
-  return '读取文件内容'
-}
-
-/** 队列正在做什么（专家语言，横幅用：「正在…」） */
-export const queueLabel = computed(() => `正在${describeQueueType(statusBar.value?.QueueType)}`)
-
-let pollTimer: any = null
-
-/**
- * ★ 有队列在跑时自动轮询（3s），空闲时停。
- * <para>为什么必须有：一次几十份文件的语义分析要跑一两分钟，没有轮询用户只能手动点刷新，
- * 看不到进度 ⇒ 误判成「没触发队列」（2026-10-03 实测投诉）。</para>
- */
-export function startPolling(): void {
-  stopPolling()
-  pollTimer = setInterval(async () => {
-    if (!enterpriseCode.value || !stageCode.value) return
-    try {
-      const sb = await fetchStatusBar(enterpriseCode.value, stageCode.value)
-      const wasBusy = statusBar.value?.IsBusy === true
-      statusBar.value = sb
-      // 队列刚跑完 ⇒ 拉一次文件列表（标签/作用此时才有值）
-      if (wasBusy && sb?.IsBusy !== true) {
-        await loadFiles()
-        ElMessage.success('资料处理完成')
-      } else if (sb?.IsBusy) {
-        await loadFiles()
-      }
-    } catch { /* 轮询失败静默，不打断用户 */ }
-  }, 3000)
-}
-
-export function stopPolling(): void {
-  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
-}
-
-export const tagNameMap = computed<Record<string, string>>(() =>
-  Object.fromEntries(tagOptions.value.map((t) => [t.TagCode, t.TagName])))
-
-/**
- * ★ 是否处于「筛选态」（标签筛选 / 只看已就绪）。
- *
- * <para><b>为什么必须有这个 computed</b>：`list` 端点的 `Total` 是<b>过滤前</b>的行数
- * （`Total = rows.Count`），而 `Rows` 是<b>过滤后</b>的行数 —— 两者口径不同。
- * 于是筛选命中 0 行时，页头仍显示「共 101 个文件」，列表却空 ⇒ 页面<b>自相矛盾</b>，
- * 用户观感就是「<b>明明有资料，点一下却说没有</b>」（2026-10-06 实测投诉）。</para>
- *
- * <para>⇒ 页面必须区分「这个阶段真的没有文件」与「筛选没命中」，两者文案与动作都不同。</para>
- */
-export const filterActive = computed(() => filterTags.value.length > 0 || onlyUsable.value)
-
-/** 当前筛选条件的「人话」摘要（供空态说明，⛔ 不给用户看 TagCode） */
-export const filterSummary = computed(() => {
-  const parts: string[] = []
-  if (filterTags.value.length)
-    parts.push(filterTags.value.map((c) => tagNameMap.value[c] ?? c).join('、'))
-  if (onlyUsable.value) parts.push('只看已就绪的')
-  return parts.join(' ＋ ')
-})
-
-/** 本阶段真实文件总数（`status-bar` 的口径，⛔ 不受筛选影响） */
-export const scopeTotal = computed(() => statusBar.value?.Total ?? 0)
-
-/** 当前筛选命中的文件数（= 列表实际渲染的行数） */
-export const filteredCount = computed(() => files.value.length)
-
-export const tableRef = ref<any>(null)
-
-/**
- * 数据修订号：每次 loadFiles 自增。
- * ★ 用途：`YzhTable` 只在挂载时跑 dataLoader，而本模块的 dataLoader 是**内存版**
- *   （读 files.value）⇒ 数据变了必须靠换 :key 重挂载才会重取。资料库页面用同一手法
- *   （`resources/logic.ts` 的 dataRevision）。
- */
-export const dataRevision = ref(0)
-
-export async function loadFiles(): Promise<void> {
-  if (!enterpriseCode.value || !stageCode.value) return
-  scopeLoading.value = true
-  try {
-    // ★ 必须带上 activeStandard：标签/作用是按「标准那一行画像」来的（见 standards 注释）
-    const r = await fetchFilesFiltered(
-      enterpriseCode.value, stageCode.value, filterTags.value, onlyUsable.value, false,
-      activeStandard.value)
-    files.value = r.rows
-    const t = buildTree(r.rows)
-    rootFiles.value = t.root
-    folderNodes.value = t.nodes
-    statusBar.value = await fetchStatusBar(enterpriseCode.value, stageCode.value)
-    dataRevision.value++
-  } catch (e) {
-    ElMessage.error((e as Error).message)
-  } finally {
-    scopeLoading.value = false
-  }
-}
-
-export async function loadTags(): Promise<void> {
-  if (tagOptions.value.length > 0) return
-  try {
-    tagOptions.value = await fetchTags('enterprise')
-  } catch (e) {
-    ElMessage.warning(`标签清单加载失败：${(e as Error).message}`)
-  }
-}
-
-export async function toggleFilterTag(code: string): Promise<void> {
-  const i = filterTags.value.indexOf(code)
-  if (i >= 0) filterTags.value.splice(i, 1)
-  else filterTags.value.push(code)
-  await loadFiles()
-}
-
-export async function clearFilters(): Promise<void> {
-  filterTags.value = []
-  onlyUsable.value = false
-  await loadFiles()
-}
-
-export async function refresh(): Promise<void> {
-  await loadTree()
-  // ★ 树刷新后标准清单可能变（管理员改了该阶段的关联标准）⇒ 从新树里重新取一次；
-  //   当前选中的标准若已不在清单里，回落到第一个（否则会带着一个失效的 GUID 去查画像）
-  const cur = findStageNode(treeNodes.value, stageCode.value)
-  if (cur) {
-    standards.value = (cur.Standards ?? []) as StandardRef[]
-    if (!standards.value.some((s) => s.Code === activeStandard.value))
-      activeStandard.value = standards.value[0]?.Code ?? ''
-  }
-  await loadFiles()
-}
-
-/** 在树里按 Code 找节点（阶段节点在第二层，但递归写更耐改） */
-function findStageNode(list: any[], code: string): any | null {
-  for (const n of list ?? []) {
-    if (n.Code === code) return n
-    const hit = findStageNode(n.Children ?? [], code)
-    if (hit) return hit
-  }
-  return null
-}
-
-// ═══════════════════════ 三、★ 术语去技术化（专家语言）══════════════
-
-/**
- * ★★ **「提取状态」的唯一口径**（2026-10-07 从 `OriginalFolderTree.vue` 提到这里）。
- *
- * <para><b>为什么必须收成一份</b>：此前根目录表只判两态（已提取 / 其余），
- * 文件夹树判七态 ⇒ <b>同一份文件在页面上下两处显示不同的状态</b>，
- * 用户无法判断哪个是真的（这正是「显示的信息不正确」的一种）。</para>
- *
- * <para><b>为什么压在「一个」状态上</b>：专家不该看到
- * 「转换 completed ∧ Markdown completed ∧ 分析 analyzed」这种内部状态机，
- * 它在 UI 上只该表现为一句话：已提取 / 提取中 / 提取失败 / 需人工填写 / 已排除提取 / 待提取。</para>
- */
-/**
- * ★★ **状态词表（2026-10-07 按用户裁决改口径）**
- *
- * <para><b>为什么改词</b>：用户逐字指出「审核员不需要确认任何信息……针对我们提取的 markdown、
- * 标签、文档作用<b>不用做强制的审批</b>」。旧词表里
- * 「<b>需人工填写</b>」「<b>不建议提取</b>」都带着「等你来处理」的指令口气，
- * 会把系统内部准备工作的负担转嫁给审核员。</para>
- *
- * <para><b>新口径 = 状态只回答两件事</b>：① <b>系统能不能读到</b>（已提取 / 提取中 / 无法读取 / 提取失败）
- * ② <b>要不要参与提取</b>（待提取 / 不参与提取）。⛔ 不含任何「请你去确认/填写」的措辞。</para>
- */
 export const STATUS_TEXT: Record<string, { text: string; type: 'success' | 'info' | 'warning' | 'primary' | 'danger' }> = {
   done: { text: '已提取', type: 'success' },
   processing: { text: '提取中', type: 'primary' },
@@ -359,10 +65,39 @@ export const STATUS_TEXT: Record<string, { text: string; type: 'success' | 'info
   notSuggested: { text: '不参与提取', type: 'info' },
 }
 
-/** 状态键（⛔ 不要用 `statusOf(row).text` 做判断 —— 文案会变，键不会） */
 export type StatusKey = 'done' | 'processing' | 'failed' | 'manual' | 'excluded' | 'pending' | 'notSuggested'
 
-/** 三态（转换 / Markdown / 分析）压成**一个**专家能懂的状态 —— 返回状态键 */
+export interface OriginalFolderNode {
+  Path: string
+  Name: string
+  Depth: number
+  Files: OriginalFile[]
+  Children: OriginalFolderNode[]
+  Total: number
+  Done: number
+  Failed: number
+}
+
+export type UploadTarget =
+  | { kind: 'stage' }
+  | { kind: 'folder'; path: string; name: string }
+  | { kind: 'replace'; path: string; file: OriginalFile }
+
+export function describeQueueType(t?: string | null): string {
+  if (t === 'enterprise_original_file') return '处理资料内容'
+  if (t === 'enterprise_original_analyze') return '识别资料内容'
+  return '读取文件内容'
+}
+
+function findStageNode(list: any[], code: string): any | null {
+  for (const n of list ?? []) {
+    if (n.Code === code) return n
+    const hit = findStageNode(n.Children ?? [], code)
+    if (hit) return hit
+  }
+  return null
+}
+
 export function statusKeyOf(row: OriginalFile): StatusKey {
   if (row.IsUsableForFilling) return 'done'
   if (row.IsNotSuggested) return 'notSuggested'
@@ -380,12 +115,6 @@ export function statusOf(row: OriginalFile): { text: string; type: 'success' | '
   return STATUS_TEXT[statusKeyOf(row)]
 }
 
-/**
- * tooltip：说清「为什么是这个状态」，用专家看得懂的话。
- *
- * ⚠️ 判据一律用 {@link statusKeyOf} 的**键**，⛔ 不用 `statusOf(row).text` ——
- * 文案随时会被改（本轮就改了三处），拿文案当判据会在改词时静默失效。
- */
 export function statusTip(row: OriginalFile): string {
   const k = statusKeyOf(row)
   if (k === 'manual') {
@@ -404,29 +133,10 @@ export function statusTip(row: OriginalFile): string {
   return ''
 }
 
-/**
- * ★ 该文件是否「**不支持提取规则**」（2026-10-09）。
- *
- * <para>判据 = **Markdown 提取链**被判 <c>unsupported</c>，与后台端「文档提取规则」页
- * （`doc-extraction-rule`）**同一口径** —— 那边点击这类文件会直接提示「该文件不支持提取规则」。
- * 两处若各判一套，同一份文件在后台说「不支持」、在专家端说「支持」，用户无从判断哪个是真的
- * （同族教训见本文件顶部的「状态口径唯一来源」）。</para>
- *
- * <para>⛔ 刻意**不复用** {@link statusKeyOf} 的 <c>manual</c> 键：<c>manual</c> 还包含
- * <c>ConvertStatus === 'unsupported'</c>（预览 PDF 链不支持，但正文提取可能是好的）
- * 以及「提取产物不可用于填充」等情况，对它们说「不支持提取规则」是不准确的。</para>
- */
 export function isExtractionUnsupported(row: OriginalFile): boolean {
   return String(row.MarkdownStatus || '').toLowerCase() === 'unsupported'
 }
 
-/**
- * 「不支持提取规则」的原因文案。
- *
- * <para>优先用后端 <c>MarkdownMessage</c> —— 它本身就是写给用户看的一整句，含
- * 「可手工定义字段与表格，由人工填写」这样的**行动指引**；老数据可能为空
- * ⇒ 兜底句**必须同样含行动指引**，⛔ 不能只说「不支持」把用户留在原地。</para>
- */
 export function unsupportedExtractionTip(row: OriginalFile): string {
   return (
     row.MarkdownMessage ||
@@ -435,66 +145,22 @@ export function unsupportedExtractionTip(row: OriginalFile): string {
   )
 }
 
-/**
- * ★ **点击文件行**（2026-10-09）。
- *
- * <para>用户对这类文件的要求是「**点击该文件，直接提示**该文件不支持提取规则」——
- * 本页原先只有 hover 才出的 tooltip（见 {@link statusTip}），满足不了「点一下就知道」。</para>
- *
- * <para>⛔ 只对 {@link isExtractionUnsupported} 为真的行给反馈：其他行点一下没反应是本页**既有**
- * 行为（本页的行级动作都在「操作 ▾」下拉里），本轮不借机改变它 —— 那属于「行点击打开什么」
- * 的另一个议题。</para>
- *
- * <para>用 warning ⛔ 不是 error：这是**能力边界**（这类文件的正确出路是手工填写），
- * 不是系统出错。与后台端 `doc-extraction-rule` 页的提示口径逐字对齐。</para>
- */
 export function onFileRowClick(row: OriginalFile): void {
   if (!isExtractionUnsupported(row)) return
   ElMessage.warning(`该文件不支持提取规则：${unsupportedExtractionTip(row)}`)
 }
 
-/** 是否处于「已就绪」（可预览全文 + 有标签/作用） */
 export function canPreview(row: OriginalFile): boolean {
   return row.ConvertStatus === 'completed' || !!row.PreviewPdfPath || !!row.StoragePath
 }
 
-/** 文件名（去掉扩展名）—— 用作标题更易读 */
 export function displayName(row: OriginalFile): string {
   const n = row.FileName || ''
   const i = n.lastIndexOf('.')
   return i > 0 ? n.slice(0, i) : n
 }
 
-
-// ═══════════════════════ 三·b、★ 文件夹树（照抄资料库 StandardFolderTree 结构）═══
-
-/**
- * ★ 把扁平的 `RelFolderPath` 列表构建成**文件夹树**。
- *
- * <para>为什么必须有树：企业交上来的资料是<b>有层级</b>的（`4记录文件/技术类/…`），
- * 而且文件很多 —— 摊平成一张长表或卡片列表都看不清「哪些文件属于哪个目录」。
- * 老板 2026-10-03 明确要求「按资料库一样的显示方式，文件夹下套文件」。</para>
- *
- * <para>根目录（<c>RelFolderPath=''</c>）用 <b>空 Path</b> 表示，由页面单独渲染成「根目录」区，
- * 不混进树里 —— 否则会出现一个名字为空的文件夹节点。</para>
- */
-export interface OriginalFolderNode {
-  Path: string
-  Name: string
-  Depth: number
-  Files: OriginalFile[]
-  Children: OriginalFolderNode[]
-  Total: number
-  Done: number
-  Failed: number
-}
-
-/** 根目录（阶段根下直接放的文件） */
-export const rootFiles = ref<OriginalFile[]>([])
-/** 文件夹树（一级节点数组） */
-export const folderNodes = ref<OriginalFolderNode[]>([])
-
-function buildTree(files: OriginalFile[]): {
+export function buildTree(files: OriginalFile[]): {
   root: OriginalFile[]
   nodes: OriginalFolderNode[]
 } {
@@ -554,159 +220,6 @@ function buildTree(files: OriginalFile[]): {
   return { root, nodes }
 }
 
-/**
- * ★ **详情抽屉**（2026-10-07 按用户裁决重做）。
- *
- * <para><b>它只有一个职责</b>：看/改**当前标准下**的「标签」与「文档作用」。
- * 表格已经不再显示这两列 ⇒ 这里成了它们唯一的编辑入口（行操作「详情」打开的就是它）。</para>
- *
- * <para>⛔ 不再有「基本信息 / 预览 / 提取内容 / 版本」这些区块 ——
- * 它们各自是行操作里的一个动作（预览 / 提取内容 / 历史版本 / 下载原件），
- * 塞进抽屉只会让专家在无关信息里找按钮。</para>
- */
-export const detailVisible = ref(false)
-export const detailRow = ref<OriginalFile | null>(null)
-export const detailProfile = ref<DocProfile | null>(null)
-export const detailLoading = ref(false)
-
-/**
- * 抽屉内的 Tab：`group` = 分组与文档作用（可改）/ `content` = 提取内容（只读）。
- * ★ 默认落在「分组与文档作用」—— 想看 Markdown 的人自己切过去，⛔ 不把长文本糊在首屏。
- * ⚠️ 声明成 `string`（⛔ 不用字面量联合）：`el-tabs` 的 `v-model` 是 `string | number`，
- *    用联合类型会在 `vue-tsc` 下报赋值不兼容。
- */
-export const infoTab = ref('group')
-
-/**
- * ★ 文档作用草稿 —— **一个文本框**，不再拆四段。
- *
- * <para><b>为什么去掉「四段式」</b>：原表单拆成
- * 【是什么】【审核关注点】【来源口径】【包含信息】四格让专家逐格填写，
- * 但「审核关注点 / 审核内容」这两段系统根本不使用，专家也不需要填（用户明确裁决）。</para>
- *
- * <para>⚠️ 后端 `DocPurpose` 只作**自由文本**存储（无任何代码解析【】分段；
- * 结构化要素另存 `InfoItemsJson`）⇒ 整段编辑不会破坏任何下游。</para>
- */
-export const detailPurposeText = ref('')
-
-export async function openDetail(row: OriginalFile): Promise<void> {
-  detailRow.value = row
-  detailVisible.value = true
-  detailLoading.value = true
-  detailProfile.value = null
-  infoTab.value = 'group'
-  // 先用列表行的值垫底（列表已按当前标准取画像）⇒ 即使画像接口失败也能编辑
-  detailPurposeText.value = row.DocPurpose ?? ''
-  tagDraft.value = [...(row.Tags ?? [])]
-  try {
-    // ★ 必须带 activeStandard：不带就只能拿到「某一行」画像
-    //   ⇒ 显示的标签/作用可能属于另一个标准（用户点名痛点）
-    const p = await fetchProfile(row.Code, row.EnterpriseCode, activeStandard.value)
-    detailProfile.value = p
-    if (p) detailPurposeText.value = p.DocPurpose ?? ''
-  } catch {
-    // 该标准下无画像（策略跳过 / 分析未完成）⇒ 保留列表行的值，仍可人工编辑
-  } finally {
-    detailLoading.value = false
-  }
-  // ★ 第二个 Tab「提取内容」一并取回（原独立的「提取内容」抽屉已并入本抽屉）
-  await loadInfoContent(row)
-}
-
-/**
- * ★ 抽屉内切标准 —— 重新按新标准取该文件的画像。
- *
- * <para><b>为什么必须有</b>：主区已不再按标准分 tab（用户裁决去掉），
- * 但「一个文件 × 一个标准 = 一行画像」这个事实没变。切标准若不重取，
- * 抽屉里还是旧标准那行的标签/作用 —— 正是用户点名的「显示的信息不正确」。</para>
- */
-export async function onDetailStandardChange(code: string): Promise<void> {
-  if (!code || code === activeStandard.value) return
-  activeStandard.value = code
-  const row = detailRow.value
-  if (row) await openDetail(row)
-}
-
-export function closeDetail(): void {
-  detailVisible.value = false
-  detailRow.value = null
-  detailProfile.value = null
-  detailPurposeText.value = ''
-  infoTab.value = 'group'
-  contentText.value = ''
-  contentMessage.value = ''
-}
-
-/** 详情里保存标签 + 作用（一次提交，两者都带上） */
-export async function saveDetail(): Promise<void> {
-  const row = detailRow.value
-  if (!row) return
-  purposeSaving.value = true
-  try {
-    await correctProfile({
-      FileCode: row.Code,
-      EnterpriseCode: row.EnterpriseCode,
-      // ★ 必须带标准，否则后端改的是「版本号最大那一行」= 可能不是用户正在看的标准
-      StandardCode: activeStandard.value || null,
-      TagsJson: JSON.stringify(tagDraft.value),
-      DocPurpose: detailPurposeText.value,
-      InfoItemsJson: detailProfile.value?.InfoItemsJson ?? undefined,
-    })
-    ElMessage.success('已保存')
-    detailVisible.value = false
-    await loadFiles()
-  } catch (e) {
-    ElMessage.error((e as Error).message)
-  } finally {
-    purposeSaving.value = false
-  }
-}
-
-// ═══════════════════════ 七·b、排除提取 / 允许提取（一键）═══════════
-
-/**
- * ★ **排除提取**（原按钮文案「忽略」，2026-10-07 用户裁决改名）。
- *
- * <para>「忽略」的问题是：它同时可以是「忽略这个提示」「忽略这行数据」「忽略这个文件」，
- * 专家无法预判点下去会发生什么。改成「排除提取」后，动作与后果（<b>不再提取内容</b>）
- * 一一对应，且与列表里的「提取」状态列同一套词。</para>
- *
- * <para>语义：<c>AnalyzePolicy=ignore</c> —— 文件<b>仍作为证据保留</b>，只是不再自动提取内容。</para>
- */
-export async function excludeExtract(row: OriginalFile): Promise<void> {
-  try {
-    await setPolicy(row.Code, row.EnterpriseCode, 'ignore', 'manual', true)
-    ElMessage.success('已排除提取（文件仍作为证据保留）')
-    await loadFiles()
-  } catch (e) {
-    ElMessage.error((e as Error).message)
-  }
-}
-
-/** ★ **允许提取**（原按钮文案「恢复提取」）—— 与「排除提取」成对 */
-export async function allowExtract(row: OriginalFile): Promise<void> {
-  try {
-    await setPolicy(row.Code, row.EnterpriseCode, 'analyze', null, true)
-    ElMessage.success('已允许提取')
-    await loadFiles()
-  } catch (e) {
-    ElMessage.error((e as Error).message)
-  }
-}
-
-// ═══════════════════════ 七·c、★ 文件夹级操作（2026-10-07 新增）═══════════
-
-/**
- * ★ 收集文件夹**子树**下的全部文件 Code —— 文件夹级操作的作用域。
- *
- * <para><b>为什么在前端展开、而不是给后端一个「文件夹路径」</b>：
- * 后端<b>不持有「文件夹」这个概念</b>（只有 <c>RelFolderPath</c> 这个字符串列），
- * 前端这棵树本来就是用同一份 <c>files</c> 构建的 ⇒ 由前端展开，不存在
- * 「前后端各判一套子树归属、两处不一致」的可能。</para>
- *
- * <para>⚠️ 必须含子文件夹：用户点「删除整个文件夹」时，期望的是<b>这个文件夹连同里面的一切</b>，
- * 只删本层会留下一个半空的目录，比不删更让人困惑。</para>
- */
 export function folderFileCodes(node: OriginalFolderNode): string[] {
   const out: string[] = []
   const walk = (n: OriginalFolderNode): void => {
@@ -717,126 +230,11 @@ export function folderFileCodes(node: OriginalFolderNode): string[] {
   return out
 }
 
-/** 文件夹级操作的统一收尾：按成败给不同级别的提示（⛔ 不用 success 掩盖部分失败） */
 function reportBatch(prefix: string, r: { Total: number; SuccessCount: number; FailedCount: number }): void {
   const msg = `${prefix}：成功 ${r.SuccessCount} / ${r.Total} 份${r.FailedCount ? `，失败 ${r.FailedCount} 份` : ''}`
   ElMessage[r.FailedCount > 0 ? 'warning' : 'success'](msg)
 }
 
-/**
- * ★ 文件夹级「不参与提取」—— 复用 `policy/batch`，<b>零新表、零新端点</b>
- * （用户裁决：文件 + 文件夹都存成文件级）。
- *
- * <para>⚠️ 代价已知并接受：日后往该文件夹新上传的文件默认是「参与」，
- * 需要重新点一次 —— 换来的是一张表都不用建。</para>
- */
-export async function excludeFolder(node: OriginalFolderNode): Promise<void> {
-  const codes = folderFileCodes(node)
-  if (codes.length === 0) { ElMessage.warning('这个文件夹里没有文件'); return }
-  try {
-    const r = await batchSetPolicy(codes, enterpriseCode.value, 'ignore', 'manual', true)
-    reportBatch(`「${node.Name}」已设为不参与提取`, r)
-    await loadFiles()
-  } catch (e) {
-    ElMessage.error((e as Error).message)
-  }
-}
-
-/** ★ 文件夹级「恢复参与提取」—— 与 {@link excludeFolder} 成对 */
-export async function allowFolder(node: OriginalFolderNode): Promise<void> {
-  const codes = folderFileCodes(node)
-  if (codes.length === 0) { ElMessage.warning('这个文件夹里没有文件'); return }
-  try {
-    const r = await batchSetPolicy(codes, enterpriseCode.value, 'analyze', null, true)
-    reportBatch(`「${node.Name}」已恢复参与提取`, r)
-    await loadFiles()
-  } catch (e) {
-    ElMessage.error((e as Error).message)
-  }
-}
-
-/**
- * ★ 文件夹级「删除整个文件夹」（含子文件夹）。
- *
- * <para>走新增的 `delete/batch`：一次往返删完，⛔ 不让前端循环调单个 delete ——
- * 那样中途失败会留下「删了一半」而用户界面上看不出来。</para>
- */
-export async function deleteFolder(node: OriginalFolderNode): Promise<void> {
-  const codes = folderFileCodes(node)
-  if (codes.length === 0) { ElMessage.warning('这个文件夹里没有文件'); return }
-  const ok = await confirmOrFalse(
-    `删除整个「${node.Name}」文件夹？该文件夹（含子文件夹）下共 ${codes.length} 份文件会被一并删除，` +
-    `历史版本也会移除；识别结果（标签 / 作用）会保留以备审计。`,
-    '删除整个文件夹', { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' })
-  if (!ok) return
-  try {
-    const r = await batchRemoveFile(codes, enterpriseCode.value, `删除文件夹：${node.Path}`)
-    reportBatch(`已删除「${node.Name}」`, r)
-    await loadFiles()
-  } catch (e) {
-    ElMessage.error((e as Error).message)
-  }
-}
-
-// ═══════════════════════ 三·c、★ 内容查看 / 重新生成 ═══════════════════════
-
-/**
- * ★ 「提取信息」抽屉的第二个 Tab：**提取内容**（AI 读出来的 Markdown 原文，只读）。
- *
- * <para>⚠️ 2026-10-07 从独立抽屉并入「提取信息」—— 用户要的是「<b>一个</b>提取信息的展示」，
- * 而不是页面上一堆并列的入口；行操作里原来那条「提取内容」也随之取消。</para>
- *
- * <para>⛔ <b>只读，且不是给人逐字核对的</b>。用户逐字：「不能依赖这么多的文档，
- * 靠审核员一个一个的去核对，那整套智能系统就失去意义了」—— 留在这里是为了
- * <b>出问题时能查证</b>，不是为了让人审一遍。</para>
- */
-export const contentText = ref('')
-/** 取不到内容时的原因（Tab 空态里显示） */
-export const contentMessage = ref('')
-export const contentLoading = ref(false)
-
-export async function loadInfoContent(row: OriginalFile): Promise<void> {
-  contentLoading.value = true
-  contentText.value = ''
-  contentMessage.value = ''
-  try {
-    const r = await fetchMarkdownContent(row.Code, row.EnterpriseCode)
-    if (r?.Markdown) contentText.value = r.Markdown
-    // ⛔ 不弹 toast：抽屉自己会显示空态 + 原因，弹两个提示只会让人以为出了两次错
-    else contentMessage.value = r?.Message ?? '尚未生成内容'
-  } catch (e) {
-    contentMessage.value = `读取内容失败：${(e as Error).message}`
-  } finally {
-    contentLoading.value = false
-  }
-}
-
-/** ★ 重新生成：重跑转换链（此前只能重新上传整个文件夹） */
-export const regenerating = ref('')
-
-export async function onRegenerate(row: OriginalFile, reanalyze = true): Promise<void> {
-  regenerating.value = row.Code
-  try {
-    const r = await regenerate(row.Code, row.EnterpriseCode, reanalyze)
-    ElMessage.success(r?.Message ?? '已重新入队')
-    await loadFiles()
-  } catch (e) {
-    ElMessage.error((e as Error).message)
-  } finally {
-    regenerating.value = ''
-  }
-}
-
-// ═══════════════════════ 四、★ 预览（专家直接看文件）══════════════
-
-export const previewVisible = ref(false)
-export const previewRow = ref<OriginalFile | null>(null)
-export const previewUrl = ref('')
-export const previewKind = ref<'pdf' | 'image' | 'text' | 'none'>('none')
-export const previewText = ref('')
-export const previewLoading = ref(false)
-
-/** 按扩展名判定预览方式：图片直出、PDF 内嵌、文本读内容、其余转 PDF 后内嵌 */
 export function previewKindOf(row: OriginalFile): 'pdf' | 'image' | 'text' | 'none' {
   const t = (row.FileType || '').toLowerCase()
   if (['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'].includes(t)) return 'image'
@@ -846,173 +244,6 @@ export function previewKindOf(row: OriginalFile): 'pdf' | 'image' | 'text' | 'no
   return 'pdf'
 }
 
-export async function openPreview(row: OriginalFile): Promise<void> {
-  previewRow.value = row
-  previewVisible.value = true
-  previewLoading.value = true
-  previewText.value = ''
-  previewUrl.value = ''
-  try {
-    if (previewKindOf(row) === 'image') {
-      const blob = await originalPreviewBlob(row.Code, row.EnterpriseCode)
-      previewKind.value = 'image'
-      previewUrl.value = URL.createObjectURL(blob)
-    } else if (previewKindOf(row) === 'text') {
-      const blob = await originalPreviewBlob(row.Code, row.EnterpriseCode)
-      previewKind.value = 'text'
-      previewText.value = await blob.text()
-    } else {
-      const blob = await originalPreviewBlob(row.Code, row.EnterpriseCode)
-      previewKind.value = 'pdf'
-      previewUrl.value = URL.createObjectURL(blob)
-    }
-  } catch (e) {
-    previewKind.value = 'none'
-    ElMessage.warning(`预览失败：${(e as Error).message}`)
-  } finally {
-    previewLoading.value = false
-  }
-}
-
-export function closePreview(): void {
-  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
-  previewUrl.value = ''
-  previewRow.value = null
-}
-
-// ═══════════════════════ 五、详情抽屉的编辑草稿 ═══════════════════════
-
-/**
- * ★ 标签编辑草稿（受控多选）。
- *
- * <para>值必须 ∈ `cert_tag_dict.TagCode`，否则后端拒绝（标签漂移 → 召回退化）。</para>
- * <para>⛔ 只有详情抽屉在用 —— 页面上的「内联改标签 / 内联改作用」两套编辑器已于 2026-10-07 删除：
- * 表格不再显示「标签」「作用」两列，用户裁决「这个抽屉只有一个标签和文档作用的信息，
- * 不需要其他的详情设计」。</para>
- */
-export const tagDraft = ref<string[]>([])
-
-/** 详情抽屉「保存」按钮的 loading 态 */
-export const purposeSaving = ref(false)
-
-// ═══════════════════════ 七、上传（保留，不改交互）════════════════════
-
-export const uploadVisible = ref(false)
-export const uploadStage = ref<'idle' | 'uploading' | 'done'>('idle')
-export const planRows = ref<PlanRow[]>([])
-export const planSummary = ref<any>({})
-export const uploadProgress = ref('')
-export const pendingFiles = ref<File[]>([])
-
-/**
- * ★ **本次上传的目标**（2026-10-07 新增）—— 决定「选进来的文件放到哪个相对路径下」。
- *
- * <para>三种模式：
- * <list type="bullet">
- *   <item>`stage` —— 常规上传：保持所选文件夹的相对结构（原行为，⛔ 不变）。</item>
- *   <item>`folder` —— <b>更新本文件夹内容</b>：把选进来的东西放到该文件夹路径下。</item>
- *   <item>`replace` —— <b>替换单个文件</b>：强制沿用登记名 + 登记目录。
- *     ⚠️ 后端 <c>UploadFileStepAsync</c> 会硬校验「上传文件名 == 登记名」，
- *     ⛔ 不允许借「替换」改名（改名等于换逻辑文件，存储路径不同）。</item>
- * </list></para>
- */
-export type UploadTarget =
-  | { kind: 'stage' }
-  | { kind: 'folder'; path: string; name: string }
-  | { kind: 'replace'; path: string; file: OriginalFile }
-
-export const uploadTarget = ref<UploadTarget>({ kind: 'stage' })
-
-/** 当前上传目标的人话说明（抽屉顶部提示用；常规上传时为空串） */
-export const uploadTargetLabel = computed(() => {
-  const t = uploadTarget.value
-  if (t.kind === 'folder') return `更新文件夹「${t.name}」下的内容（${t.path}）`
-  if (t.kind === 'replace') return `替换「${t.file.FileName}」（${t.path || '根目录'}）· 请选择同名文件`
-  return ''
-})
-
-/**
- * ★ 上传抽屉的标题（2026-10-07 四轮）。
- *
- * <para>同一个抽屉承载三种入口，标题却恒为「上传文件」⇒ 从「替换」点进来的人会以为
- * 自己走错了地方。标题跟着目标走，是最低成本的自证。</para>
- */
-export const uploadTitle = computed(() => {
-  const t = uploadTarget.value
-  if (t.kind === 'replace') return '替换文件'
-  if (t.kind === 'folder') return '更新文件夹内容'
-  return '上传文件'
-})
-
-/**
- * ★ 目标提示条的级别：「替换」有**同名**硬约束（后端会拒），用 warning 让它显眼；
- * 「更新文件夹」只是说明落点，info 即可。⛔ 常规上传不显示提示条。
- */
-export const uploadTargetAlertType = computed<'warning' | 'info'>(() =>
-  uploadTarget.value.kind === 'replace' ? 'warning' : 'info')
-
-export function openUpload(): void { openUploadWith({ kind: 'stage' }) }
-
-/** ★ 文件夹级「更新本文件夹内容」—— 预置目标路径后打开上传抽屉 */
-export function openFolderUpload(node: OriginalFolderNode): void {
-  openUploadWith({ kind: 'folder', path: node.Path, name: node.Name })
-}
-
-/** ★ 文件级「替换」—— 预置登记名 + 登记目录后打开上传抽屉 */
-export function openReplace(row: OriginalFile): void {
-  openUploadWith({ kind: 'replace', path: row.RelFolderPath || '', file: row })
-}
-
-function openUploadWith(target: UploadTarget): void {
-  if (!enterpriseCode.value || !stageCode.value) {
-    ElMessage.warning('请先在左侧选择「企业 › 阶段」')
-    return
-  }
-  uploadStage.value = 'idle'
-  planRows.value = []
-  planSummary.value = {}
-  pendingFiles.value = []
-  uploadProgress.value = ''
-  uploadTarget.value = target
-  uploadVisible.value = true
-}
-
-/**
- * ★ 把浏览器选中的 `File` 列表翻译成后端的 `PlanItem` 列表。
- *
- * <para>⚠️ <b>相对路径的改写规则全部收在这里</b>：`plan` 与 `init` 两次调用必须用同一份映射，
- * 否则会出现「预检清单说会替换、实际却新建了另一个文件」这种清单与结果对不上的怪象。</para>
- */
-function toItems(files: File[]): PlanItem[] {
-  const t = uploadTarget.value
-  return files.map((f) => {
-    const rel = (f as any).webkitRelativePath || f.name
-    const slash = rel.lastIndexOf('/')
-    const name = slash >= 0 ? rel.slice(slash + 1) : rel
-    const dir = slash > 0 ? rel.slice(0, slash) : ''
-    // ★ 替换：强制沿用登记名与登记目录（后端会校验文件名一致，⛔ 不允许改名）
-    if (t.kind === 'replace') {
-      return { FileName: t.file.FileName, RelFolderPath: t.path, FileSize: f.size }
-    }
-    if (t.kind === 'folder') {
-      return { FileName: name, RelFolderPath: remapFolderPath(dir, t), FileSize: f.size }
-    }
-    return { FileName: name, RelFolderPath: dir, FileSize: f.size }
-  })
-}
-
-/**
- * ★ 文件夹级「更新」时的相对路径改写 —— 只有两条规则，必须可预期。
- *
- * <list type="number">
- *   <item>用户选的正是目标文件夹本身（首段名 == 目标文件夹名）⇒ 用目标路径替换首段，其余层级保持。
- *     例：更新「4记录文件/技术类」时选了「技术类」文件夹 ⇒ `技术类/a.doc` 落到 `4记录文件/技术类/a.doc`。</item>
- *   <item>其它情况（选了散文件、或选了别的文件夹）⇒ 整体挂到目标路径下。</item>
- * </list>
- *
- * <para>⛔ 不做模糊匹配、不做大小写归一 —— 猜错了会把文件放到用户没预期的地方，
- * 而这类错误在界面上很难被发现。</para>
- */
 function remapFolderPath(rawDir: string, t: { path: string; name: string }): string {
   const dir = (rawDir || '').replace(/^\/+|\/+$/g, '')
   const tgt = (t.path || '').replace(/^\/+|\/+$/g, '')
@@ -1023,153 +254,6 @@ function remapFolderPath(rawDir: string, t: { path: string; name: string }): str
   return [tgt, dir].filter(Boolean).join('/')
 }
 
-/**
- * 从 plan 清单里移除一行（只影响本次上传的清单，⛔ 不改已选中的原始 File 列表）。
- * ★ 解决用户报障：「不支持的文件在弹窗里删不掉，只能干等」。
- */
-export function removePlanRow(index: number): void {
-  if (index < 0 || index >= planRows.value.length) return
-  planRows.value.splice(index, 1)
-  const sum = planSummary.value ?? {}
-  planSummary.value = {
-    ...sum,
-    Total: planRows.value.length,
-    BlockedCount: planRows.value.filter((r) => r.Blocked).length,
-  }
-}
-
-export async function onFilesPicked(list: File[]): Promise<void> {
-  // ★ 先用共享契约本地过滤（36 号：改规则只改 upload-file-policy.ts，页面不写 if/else）
-  //   好处：① 立刻反馈，不必等后端往返 ② 系统垃圾文件根本不会出现在 UI 里
-  const part = partitionUploadable(list.map((f) => ({ name: f.name })))
-  let accepted = list.filter((f) => part.accepted.some((a) => a.name === f.name))
-
-  // ★ 替换模式：只接受 1 个文件，且必须**同名**
-  //   ⚠️ 后端 UploadFileStepAsync 会硬校验「上传文件名 == 登记名」，不一致直接拒；
-  //      在前端先拦一道，用户看到的是「要选同名文件」而不是一个后端错误码。
-  const t = uploadTarget.value
-  if (t.kind === 'replace') {
-    const hit = accepted.find((f) => f.name === t.file.FileName)
-    if (!hit) {
-      pendingFiles.value = []
-      planRows.value = []
-      planSummary.value = {} as any
-      ElMessage.warning(`「替换」要求同名文件：请选择名为「${t.file.FileName}」的文件（改名等于换一个文件）`)
-      return
-    }
-    accepted = [hit]
-  }
-  pendingFiles.value = accepted
-
-  if (part.noise.length > 0) {
-    ElMessage.info(
-      `已自动忽略 ${part.noise.length} 个系统文件（${part.noise.slice(0, 3).map((nf) => nf.name).join('、')}${part.noise.length > 3 ? ' 等' : ''}）`)
-  }
-
-  if (pendingFiles.value.length === 0) {
-    planRows.value = []
-    planSummary.value = {} as any
-    if (part.rejected.length > 0) {
-      ElMessage.warning(part.rejected[0].message + '（压缩包 / 可执行文件 / 网页脚本不支持）')
-    }
-    return
-  }
-
-  try {
-    const r = await planUpload(enterpriseCode.value, stageCode.value, toItems(pendingFiles.value))
-    planRows.value = r.rows
-    planSummary.value = r.summary
-    if (part.rejected.length > 0) {
-      ElMessage.warning(`已跳过 ${part.rejected.length} 个不支持的文件：${part.rejected.slice(0, 3).map((r2) => r2.name).join('、')}`)
-    }
-  } catch (e) {
-    ElMessage.error((e as Error).message)
-  }
-}
-
-/**
- * 开始上传。
- *
- * ★ 2026-10-03 修掉的卡死：原逻辑是「**只要有 1 个不合规文件就整体 return**」，
- *   而 macOS 选文件夹上传时每个目录都带 `.DS_Store` ⇒ 用户点了上传**毫无反应**。
- *   现改为：**不合规的跳过，合规的照常上传**，只有「一个都不合规」才中止。
- */
-export async function startUpload(): Promise<void> {
-  const all = planRows.value
-  const blocked = all.filter((r) => r.Blocked)
-  const uploadable = all.filter((r) => !r.Blocked)
-
-  if (all.length === 0) {
-    ElMessage.warning(
-      planSummary.value?.FilteredCount
-        ? `选中的 ${planSummary.value.FilteredCount} 个文件都是系统文件（.DS_Store 等），没有可上传的资料`
-        : '没有可上传的文件')
-    return
-  }
-  // ⛔ 只有「全部不合规」才中止；有合规的就继续传
-  if (uploadable.length === 0) {
-    ElMessage.error(`这 ${blocked.length} 个文件都不支持上传：${blocked.slice(0, 3).map((b) => b.FileName).join('、')}`)
-    return
-  }
-  if (blocked.length > 0) {
-    ElMessage.warning(`已跳过 ${blocked.length} 个不支持的文件：${blocked.slice(0, 3).map((b) => b.FileName).join('、')}${blocked.length > 3 ? ' 等' : ''}`)
-  }
-  const replaces = planSummary.value?.ReplaceCount ?? 0
-  const skips = planSummary.value?.SkipCount ?? 0
-  if (replaces > 0) {
-    const ok = await confirmOrFalse(
-      `本次上传 ${planRows.value.length} 份，其中 ${replaces} 份会替换旧文件（旧版本会保留），` +
-      `${skips} 份内容没变化会跳过。是否继续？`,
-      '确认上传', { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消' })
-    if (!ok) return
-  }
-  uploadStage.value = 'uploading'
-  const items = toItems(pendingFiles.value)
-  let taskId = ''
-  const codeByName = new Map<string, string>()
-  try {
-    const init = await originalUploadInit(enterpriseCode.value, stageCode.value, items)
-    taskId = init.TaskId
-    for (const it of init.Items) if (it.Action !== 'skip') codeByName.set(it.FileName, it.FileCode)
-  } catch (e) {
-    uploadStage.value = 'idle'
-    ElMessage.error((e as Error).message)
-    return
-  }
-  let done = 0
-  for (const f of pendingFiles.value) {
-    const rel = (f as any).webkitRelativePath || f.name
-    const slash = rel.lastIndexOf('/')
-    const name = slash >= 0 ? rel.slice(slash + 1) : rel
-    const code = codeByName.get(name)
-    if (code) {
-      uploadProgress.value = `正在上传 ${done + 1}/${pendingFiles.value.length}：${name}`
-      try { await originalUploadFile(taskId, code, f) }
-      catch (e) { ElMessage.warning(`${name} 上传失败：${(e as Error).message}`) }
-    }
-    done++
-  }
-  try {
-    const r: any = await originalUploadConfirm(taskId, enterpriseCode.value)
-    uploadProgress.value = `已完成：${r.ActivatedCount} 份文件已入库，正在识别`
-    uploadStage.value = 'done'
-    await loadFiles()
-  } catch (e) {
-    uploadStage.value = 'idle'
-    ElMessage.error((e as Error).message)
-  }
-}
-
-export function closeUpload(): void {
-  uploadVisible.value = false
-  uploadStage.value = 'idle'
-  pendingFiles.value = []
-  // ★ 目标必须一起清掉 —— 否则下一次点「上传文件」会带着上一次的「替换 xxx」目标
-  uploadTarget.value = { kind: 'stage' }
-}
-
-// ═══════════════════════ 八、其他操作 ═══════════════════════
-
 export async function onDownload(row: OriginalFile): Promise<void> {
   try {
     // 保存统一走 `saveBlob`（全平台唯一实现，P1.3）
@@ -1179,109 +263,776 @@ export async function onDownload(row: OriginalFile): Promise<void> {
   }
 }
 
-export const versionVisible = ref(false)
-export const versions = ref<FileVersion[]>([])
-export const currentVersion = ref(1)
-export const versionTarget = ref<OriginalFile | null>(null)
+/**
+ * 页面 Logic（R24：必须 extends 内核基类）
+ *
+ * ⛔ 覆写说明：
+ *   · `loadConfig()` 置空 —— 本页没有 EntityConfig，不置空则 `init()` 会请求不存在的 `/config`
+ *   · `refresh()` 被页面级「重拉树 + 标准 + 文件」覆盖（基类版本只刷 tableRef，本页不适用）
+ */
+export class EnterpriseOriginalLogic extends SingleTableCore<any> {
+  controllerName = 'Auditor/EnterpriseOriginal'
 
-export async function onVersions(row: OriginalFile): Promise<void> {
-  versionTarget.value = row
-  versionVisible.value = true
-  try {
-    const r = await fetchVersions(row.Code, row.EnterpriseCode)
-    versions.value = r.Rows
-    currentVersion.value = r.CurrentVersion
-  } catch (e) {
-    versions.value = []
+  /** 本页无 /config 端点 ⇒ 空实现，避免 init() 打 404 */
+  protected async loadConfig(): Promise<void> {}
+
+  protected async onAfterInit(): Promise<void> {
+    await this.loadTree()
   }
-}
 
-export async function onRestore(v: FileVersion): Promise<void> {
-  const row = versionTarget.value
-  if (!row) return
-  const ok = await confirmOrFalse(
-    `把「${v.FileName}」恢复为当前版本？当前版本会被保留为历史版本。`,
-    '恢复旧版本', { type: 'warning', confirmButtonText: '确认恢复', cancelButtonText: '取消' })
-  if (!ok) return
-  try {
-    await restoreVersion(row.Code, row.EnterpriseCode, v.VersionNumber, '页面手动恢复')
-    ElMessage.success('已恢复')
-    versionVisible.value = false
-    await loadFiles()
-  } catch (e) {
-    ElMessage.error((e as Error).message)
-  }
-}
+  readonly treeNodes = ref<any[]>([])
 
-export const policyVisible = ref(false)
-export const policyTarget = ref<'single' | 'batch'>('single')
-export const policyValue = ref<AnalyzePolicyKey>('analyze')
-export const policyReason = ref<string>('')
-export const policyRows = computed<OriginalFile[]>(() =>
-  policyTarget.value === 'batch' ? selected.value : (policyEditing.value ? [policyEditing.value] : []))
+  readonly treeHint = ref('')
 
-export const policyEditing = ref<OriginalFile | null>(null)
+  readonly enterpriseCode = ref('')
 
-export function openPolicy(mode: 'single' | 'batch', row?: OriginalFile): void {
-  if (mode === 'batch' && selected.value.length === 0) {
-    ElMessage.warning('请先勾选文件')
-    return
-  }
-  policyTarget.value = mode
-  policyEditing.value = row ?? null
-  policyValue.value = 'analyze'
-  policyReason.value = ''
-  policyVisible.value = true
-}
+  readonly stageCode = ref('')
 
-export async function submitPolicy(): Promise<void> {
-  const rows = policyRows.value
-  if (rows.length === 0) return
-  try {
-    if (rows.length === 1) {
-      await setPolicy(rows[0].Code, rows[0].EnterpriseCode, policyValue.value, (policyReason.value || null) as any, true)
-      ElMessage.success('已保存')
-    } else {
-      const r = await batchSetPolicy(rows.map((x) => x.Code), rows[0].EnterpriseCode,
-        policyValue.value, (policyReason.value || null) as any, true)
-      ElMessage[r.FailedCount > 0 ? 'warning' : 'success'](`成功 ${r.SuccessCount} / 失败 ${r.FailedCount}`)
+  readonly scopeLabel = ref('')
+
+  readonly scopeLoading = ref(false)
+
+  readonly standards = ref<StandardRef[]>([])
+
+  readonly activeStandard = ref('')
+
+  readonly activeStandardName = computed(() => {
+    const hit = this.standards.value.find((s) => s.Code === this.activeStandard.value)
+    return hit ? (hit.StandardName || hit.StandardCode) : ''
+  })
+
+  readonly files = ref<OriginalFile[]>([])
+
+  readonly statusBar = ref<StatusBar | null>(null)
+
+  readonly selected = ref<OriginalFile[]>([])
+
+  readonly filterTags = ref<string[]>([])
+
+  readonly onlyUsable = ref(false)
+
+  readonly tagOptions = ref<Array<{ TagCode: string; TagName: string; TagGroup?: string | null }>>([])
+
+  readonly isBusy = computed(() => this.statusBar.value?.IsBusy === true)
+
+  readonly queueProgress = computed(() => {
+    const sb = this.statusBar.value
+    if (!sb) return 0
+    if (typeof sb.QueueProgress === 'number' && sb.QueueProgress > 0) return sb.QueueProgress
+    if ((sb.QueueTotal ?? 0) > 0) return Math.round(((sb.QueueCompleted ?? 0) / (sb.QueueTotal ?? 1)) * 100)
+    return 0
+  })
+
+  readonly queueLabel = computed(() => `正在${describeQueueType(this.statusBar.value?.QueueType)}`)
+
+  pollTimer: any = null
+
+  readonly tagNameMap = computed<Record<string, string>>(() =>
+    Object.fromEntries(this.tagOptions.value.map((t) => [t.TagCode, t.TagName])))
+
+  readonly filterActive = computed(() => this.filterTags.value.length > 0 || this.onlyUsable.value)
+
+  readonly filterSummary = computed(() => {
+    const parts: string[] = []
+    if (this.filterTags.value.length)
+      parts.push(this.filterTags.value.map((c) => this.tagNameMap.value[c] ?? c).join('、'))
+    if (this.onlyUsable.value) parts.push('只看已就绪的')
+    return parts.join(' ＋ ')
+  })
+
+  readonly scopeTotal = computed(() => this.statusBar.value?.Total ?? 0)
+
+  readonly filteredCount = computed(() => this.files.value.length)
+
+  readonly tableRef = ref<any>(null)
+
+  readonly dataRevision = ref(0)
+
+  readonly rootFiles = ref<OriginalFile[]>([])
+
+  readonly folderNodes = ref<OriginalFolderNode[]>([])
+
+  readonly detailVisible = ref(false)
+
+  readonly detailRow = ref<OriginalFile | null>(null)
+
+  readonly detailProfile = ref<DocProfile | null>(null)
+
+  readonly detailLoading = ref(false)
+
+  readonly infoTab = ref('group')
+
+  readonly detailPurposeText = ref('')
+
+  readonly contentText = ref('')
+
+  readonly contentMessage = ref('')
+
+  readonly contentLoading = ref(false)
+
+  readonly regenerating = ref('')
+
+  readonly previewVisible = ref(false)
+
+  readonly previewRow = ref<OriginalFile | null>(null)
+
+  readonly previewUrl = ref('')
+
+  readonly previewKind = ref<'pdf' | 'image' | 'text' | 'none'>('none')
+
+  readonly previewText = ref('')
+
+  readonly previewLoading = ref(false)
+
+  readonly tagDraft = ref<string[]>([])
+
+  readonly purposeSaving = ref(false)
+
+  readonly uploadVisible = ref(false)
+
+  readonly uploadStage = ref<'idle' | 'uploading' | 'done'>('idle')
+
+  readonly planRows = ref<PlanRow[]>([])
+
+  readonly planSummary = ref<any>({})
+
+  readonly uploadProgress = ref('')
+
+  readonly pendingFiles = ref<File[]>([])
+
+  readonly uploadTarget = ref<UploadTarget>({ kind: 'stage' })
+
+  readonly uploadTargetLabel = computed(() => {
+    const t = this.uploadTarget.value
+    if (t.kind === 'folder') return `更新文件夹「${t.name}」下的内容（${t.path}）`
+    if (t.kind === 'replace') return `替换「${t.file.FileName}」（${t.path || '根目录'}）· 请选择同名文件`
+    return ''
+  })
+
+  readonly uploadTitle = computed(() => {
+    const t = this.uploadTarget.value
+    if (t.kind === 'replace') return '替换文件'
+    if (t.kind === 'folder') return '更新文件夹内容'
+    return '上传文件'
+  })
+
+  readonly uploadTargetAlertType = computed<'warning' | 'info'>(() =>
+    this.uploadTarget.value.kind === 'replace' ? 'warning' : 'info')
+
+  readonly versionVisible = ref(false)
+
+  readonly versions = ref<FileVersion[]>([])
+
+  readonly currentVersion = ref(1)
+
+  readonly versionTarget = ref<OriginalFile | null>(null)
+
+  readonly policyVisible = ref(false)
+
+  readonly policyTarget = ref<'single' | 'batch'>('single')
+
+  readonly policyValue = ref<AnalyzePolicyKey>('analyze')
+
+  readonly policyReason = ref<string>('')
+
+  readonly policyRows = computed<OriginalFile[]>(() =>
+    this.policyTarget.value === 'batch' ? this.selected.value : (this.policyEditing.value ? [this.policyEditing.value] : []))
+
+  readonly policyEditing = ref<OriginalFile | null>(null)
+
+  readonly queueVisible = ref(false)
+
+  readonly queueDetail = ref<QueueDetail | null>(null)
+
+  readonly queueLoading = ref(false)
+
+  async loadTree(): Promise<void> {
+    try {
+      const nodes = await fetchStageTree()
+      this.treeNodes.value = nodes.map((n: any) => ({
+        Code: n.Code,
+        Label: n.Label,
+        FileCount: n.FileCount,
+        EnterpriseCode: n.EnterpriseCode,
+        Children: (n.Children ?? []).map((c: any) => ({
+          ...c,
+          EnterpriseCode: c.EnterpriseCode,
+          // ★ 标准清单随阶段节点透传（`...c` 已带上，这里显式写出以防后人误删）
+          Standards: c.Standards ?? [],
+          Children: undefined,
+        })),
+      }))
+      this.treeHint.value = nodes.length === 0 ? '当前工作区下没有企业' : ''
+    } catch (e) {
+      this.treeHint.value = (e as Error).message
     }
-    policyVisible.value = false
-    await loadFiles()
-  } catch (e) {
-    ElMessage.error((e as Error).message)
   }
-}
 
-export async function onDelete(row: OriginalFile): Promise<void> {
-  const ok = await confirmOrFalse(
-    `删除「${row.FileName}」？文件与历史版本会一并移除；识别结果（标签/作用）会保留以备审计。`,
-    '删除确认', { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' })
-  if (!ok) return
-  try {
-    await removeFile(row.Code, row.EnterpriseCode, '页面删除')
-    ElMessage.success('已删除')
-    await loadFiles()
-  } catch (e) {
-    ElMessage.error((e as Error).message)
+  async onNodeClick(node: any): Promise<void> {
+    const isLeaf = !node?.Children || node.Children.length === 0
+    if (!isLeaf) {
+      this.scopeLabel.value = `${node.Label}（请选择具体阶段）`
+      this.stageCode.value = ''
+      this.standards.value = []
+      this.activeStandard.value = ''
+      this.files.value = []
+      this.statusBar.value = null
+      return
+    }
+    const entCode = node.EnterpriseCode ?? node.Code
+    if (!entCode || !node.Code) {
+      ElMessage.warning('树节点缺少企业/阶段标识，请刷新后重试')
+      return
+    }
+    this.enterpriseCode.value = entCode
+    this.stageCode.value = node.Code
+    this.scopeLabel.value = node.Label
+    // ★ 标准 tab：该阶段绑定的标准清单（多标准 ⇒ 出 tab；单标准 ⇒ 只显示标准名）
+    this.standards.value = (node.Standards ?? []) as StandardRef[]
+    this.activeStandard.value = this.standards.value[0]?.Code ?? ''
+    // ⚠️ 换阶段必须清标签筛选：标签是**标准相关**的，上一个标准的 TagCode 在新标准下
+    //    可能根本不存在 ⇒ 筛出 0 命中，页面看着像「文件丢了」（2026-10-06 同类投诉）。
+    this.filterTags.value = []
+    await this.loadFiles()
+    this.startPolling()      // ★ 队列在跑时自动刷新进度
   }
-}
 
-// ═══════════════════════ 九、队列（折叠进「处理进度」）════════════════
-
-export const queueVisible = ref(false)
-export const queueDetail = ref<QueueDetail | null>(null)
-export const queueLoading = ref(false)
-
-export async function openQueueDetail(): Promise<void> {
-  if (!enterpriseCode.value || !stageCode.value) return
-  queueVisible.value = true
-  queueLoading.value = true
-  try {
-    queueDetail.value = await fetchQueueDetail(enterpriseCode.value, stageCode.value)
-  } catch (e) {
-    queueDetail.value = null
-  } finally {
-    queueLoading.value = false
+  async onStandardChange(code: string): Promise<void> {
+    if (!code || code === this.activeStandard.value) return
+    this.activeStandard.value = code
+    this.filterTags.value = []
+    await this.loadFiles()
   }
+
+  startPolling(): void {
+    this.stopPolling()
+    this.pollTimer = setInterval(async () => {
+      if (!this.enterpriseCode.value || !this.stageCode.value) return
+      try {
+        const sb = await fetchStatusBar(this.enterpriseCode.value, this.stageCode.value)
+        const wasBusy = this.statusBar.value?.IsBusy === true
+        this.statusBar.value = sb
+        // 队列刚跑完 ⇒ 拉一次文件列表（标签/作用此时才有值）
+        if (wasBusy && sb?.IsBusy !== true) {
+          await this.loadFiles()
+          ElMessage.success('资料处理完成')
+        } else if (sb?.IsBusy) {
+          await this.loadFiles()
+        }
+      } catch { /* 轮询失败静默，不打断用户 */ }
+    }, 3000)
+  }
+
+  stopPolling(): void {
+    if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null }
+  }
+
+  async loadFiles(): Promise<void> {
+    if (!this.enterpriseCode.value || !this.stageCode.value) return
+    this.scopeLoading.value = true
+    try {
+      // ★ 必须带上 activeStandard：标签/作用是按「标准那一行画像」来的（见 standards 注释）
+      const r = await fetchFilesFiltered(
+        this.enterpriseCode.value, this.stageCode.value, this.filterTags.value, this.onlyUsable.value, false,
+        this.activeStandard.value)
+      this.files.value = r.rows
+      const t = buildTree(r.rows)
+      this.rootFiles.value = t.root
+      this.folderNodes.value = t.nodes
+      this.statusBar.value = await fetchStatusBar(this.enterpriseCode.value, this.stageCode.value)
+      this.dataRevision.value++
+    } catch (e) {
+      this.reportError(e, '加载文件列表失败')
+    } finally {
+      this.scopeLoading.value = false
+    }
+  }
+
+  async loadTags(): Promise<void> {
+    if (this.tagOptions.value.length > 0) return
+    try {
+      this.tagOptions.value = await fetchTags('enterprise')
+    } catch (e) {
+      ElMessage.warning(`标签清单加载失败：${(e as Error).message}`)
+    }
+  }
+
+  async toggleFilterTag(code: string): Promise<void> {
+    const i = this.filterTags.value.indexOf(code)
+    if (i >= 0) this.filterTags.value.splice(i, 1)
+    else this.filterTags.value.push(code)
+    await this.loadFiles()
+  }
+
+  async clearFilters(): Promise<void> {
+    this.filterTags.value = []
+    this.onlyUsable.value = false
+    await this.loadFiles()
+  }
+
+  async refresh(): Promise<void> {
+    await this.loadTree()
+    // ★ 树刷新后标准清单可能变（管理员改了该阶段的关联标准）⇒ 从新树里重新取一次；
+    //   当前选中的标准若已不在清单里，回落到第一个（否则会带着一个失效的 GUID 去查画像）
+    const cur = findStageNode(this.treeNodes.value, this.stageCode.value)
+    if (cur) {
+      this.standards.value = (cur.Standards ?? []) as StandardRef[]
+      if (!this.standards.value.some((s) => s.Code === this.activeStandard.value))
+        this.activeStandard.value = this.standards.value[0]?.Code ?? ''
+    }
+    await this.loadFiles()
+  }
+
+  async openDetail(row: OriginalFile): Promise<void> {
+    this.detailRow.value = row
+    this.detailVisible.value = true
+    this.detailLoading.value = true
+    this.detailProfile.value = null
+    this.infoTab.value = 'group'
+    // 先用列表行的值垫底（列表已按当前标准取画像）⇒ 即使画像接口失败也能编辑
+    this.detailPurposeText.value = row.DocPurpose ?? ''
+    this.tagDraft.value = [...(row.Tags ?? [])]
+    try {
+      // ★ 必须带 activeStandard：不带就只能拿到「某一行」画像
+      //   ⇒ 显示的标签/作用可能属于另一个标准（用户点名痛点）
+      const p = await fetchProfile(row.Code, row.EnterpriseCode, this.activeStandard.value)
+      this.detailProfile.value = p
+      if (p) this.detailPurposeText.value = p.DocPurpose ?? ''
+    } catch {
+      // 该标准下无画像（策略跳过 / 分析未完成）⇒ 保留列表行的值，仍可人工编辑
+    } finally {
+      this.detailLoading.value = false
+    }
+    // ★ 第二个 Tab「提取内容」一并取回（原独立的「提取内容」抽屉已并入本抽屉）
+    await this.loadInfoContent(row)
+  }
+
+  async onDetailStandardChange(code: string): Promise<void> {
+    if (!code || code === this.activeStandard.value) return
+    this.activeStandard.value = code
+    const row = this.detailRow.value
+    if (row) await this.openDetail(row)
+  }
+
+  closeDetail(): void {
+    this.detailVisible.value = false
+    this.detailRow.value = null
+    this.detailProfile.value = null
+    this.detailPurposeText.value = ''
+    this.infoTab.value = 'group'
+    this.contentText.value = ''
+    this.contentMessage.value = ''
+  }
+
+  async saveDetail(): Promise<void> {
+    const row = this.detailRow.value
+    if (!row) return
+    this.purposeSaving.value = true
+    try {
+      await correctProfile({
+        FileCode: row.Code,
+        EnterpriseCode: row.EnterpriseCode,
+        // ★ 必须带标准，否则后端改的是「版本号最大那一行」= 可能不是用户正在看的标准
+        StandardCode: this.activeStandard.value || null,
+        TagsJson: JSON.stringify(this.tagDraft.value),
+        DocPurpose: this.detailPurposeText.value,
+        InfoItemsJson: this.detailProfile.value?.InfoItemsJson ?? undefined,
+      })
+      ElMessage.success('已保存')
+      this.detailVisible.value = false
+      await this.loadFiles()
+    } catch (e) {
+      this.reportError(e, '保存失败')
+    } finally {
+      this.purposeSaving.value = false
+    }
+  }
+
+  async excludeExtract(row: OriginalFile): Promise<void> {
+    try {
+      await setPolicy(row.Code, row.EnterpriseCode, 'ignore', 'manual', true)
+      ElMessage.success('已排除提取（文件仍作为证据保留）')
+      await this.loadFiles()
+    } catch (e) {
+      this.reportError(e, '排除提取失败')
+    }
+  }
+
+  async allowExtract(row: OriginalFile): Promise<void> {
+    try {
+      await setPolicy(row.Code, row.EnterpriseCode, 'analyze', null, true)
+      ElMessage.success('已允许提取')
+      await this.loadFiles()
+    } catch (e) {
+      this.reportError(e, '恢复提取失败')
+    }
+  }
+
+  async excludeFolder(node: OriginalFolderNode): Promise<void> {
+    const codes = folderFileCodes(node)
+    if (codes.length === 0) { ElMessage.warning('这个文件夹里没有文件'); return }
+    try {
+      const r = await batchSetPolicy(codes, this.enterpriseCode.value, 'ignore', 'manual', true)
+      reportBatch(`「${node.Name}」已设为不参与提取`, r)
+      await this.loadFiles()
+    } catch (e) {
+      this.reportError(e, '文件夹排除提取失败')
+    }
+  }
+
+  async allowFolder(node: OriginalFolderNode): Promise<void> {
+    const codes = folderFileCodes(node)
+    if (codes.length === 0) { ElMessage.warning('这个文件夹里没有文件'); return }
+    try {
+      const r = await batchSetPolicy(codes, this.enterpriseCode.value, 'analyze', null, true)
+      reportBatch(`「${node.Name}」已恢复参与提取`, r)
+      await this.loadFiles()
+    } catch (e) {
+      this.reportError(e, '文件夹恢复提取失败')
+    }
+  }
+
+  async deleteFolder(node: OriginalFolderNode): Promise<void> {
+    const codes = folderFileCodes(node)
+    if (codes.length === 0) { ElMessage.warning('这个文件夹里没有文件'); return }
+    const ok = await confirmOrFalse(
+      `删除整个「${node.Name}」文件夹？该文件夹（含子文件夹）下共 ${codes.length} 份文件会被一并删除，` +
+      `历史版本也会移除；识别结果（标签 / 作用）会保留以备审计。`,
+      '删除整个文件夹', { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' })
+    if (!ok) return
+    try {
+      const r = await batchRemoveFile(codes, this.enterpriseCode.value, `删除文件夹：${node.Path}`)
+      reportBatch(`已删除「${node.Name}」`, r)
+      await this.loadFiles()
+    } catch (e) {
+      this.reportError(e, '删除文件夹失败')
+    }
+  }
+
+  async loadInfoContent(row: OriginalFile): Promise<void> {
+    this.contentLoading.value = true
+    this.contentText.value = ''
+    this.contentMessage.value = ''
+    try {
+      const r = await fetchMarkdownContent(row.Code, row.EnterpriseCode)
+      if (r?.Markdown) this.contentText.value = r.Markdown
+      // ⛔ 不弹 toast：抽屉自己会显示空态 + 原因，弹两个提示只会让人以为出了两次错
+      else this.contentMessage.value = r?.Message ?? '尚未生成内容'
+    } catch (e) {
+      this.contentMessage.value = `读取内容失败：${(e as Error).message}`
+    } finally {
+      this.contentLoading.value = false
+    }
+  }
+
+  async onRegenerate(row: OriginalFile, reanalyze = true): Promise<void> {
+    this.regenerating.value = row.Code
+    try {
+      const r = await regenerate(row.Code, row.EnterpriseCode, reanalyze)
+      ElMessage.success(r?.Message ?? '已重新入队')
+      await this.loadFiles()
+    } catch (e) {
+      this.reportError(e, '重新提取失败')
+    } finally {
+      this.regenerating.value = ''
+    }
+  }
+
+  async openPreview(row: OriginalFile): Promise<void> {
+    this.previewRow.value = row
+    this.previewVisible.value = true
+    this.previewLoading.value = true
+    this.previewText.value = ''
+    this.previewUrl.value = ''
+    try {
+      if (previewKindOf(row) === 'image') {
+        const blob = await originalPreviewBlob(row.Code, row.EnterpriseCode)
+        this.previewKind.value = 'image'
+        this.previewUrl.value = URL.createObjectURL(blob)
+      } else if (previewKindOf(row) === 'text') {
+        const blob = await originalPreviewBlob(row.Code, row.EnterpriseCode)
+        this.previewKind.value = 'text'
+        this.previewText.value = await blob.text()
+      } else {
+        const blob = await originalPreviewBlob(row.Code, row.EnterpriseCode)
+        this.previewKind.value = 'pdf'
+        this.previewUrl.value = URL.createObjectURL(blob)
+      }
+    } catch (e) {
+      this.previewKind.value = 'none'
+      ElMessage.warning(`预览失败：${(e as Error).message}`)
+    } finally {
+      this.previewLoading.value = false
+    }
+  }
+
+  closePreview(): void {
+    if (this.previewUrl.value) URL.revokeObjectURL(this.previewUrl.value)
+    this.previewUrl.value = ''
+    this.previewRow.value = null
+  }
+
+  openUpload(): void { this.openUploadWith({ kind: 'stage' }) }
+
+  openFolderUpload(node: OriginalFolderNode): void {
+    this.openUploadWith({ kind: 'folder', path: node.Path, name: node.Name })
+  }
+
+  openReplace(row: OriginalFile): void {
+    this.openUploadWith({ kind: 'replace', path: row.RelFolderPath || '', file: row })
+  }
+
+  openUploadWith(target: UploadTarget): void {
+    if (!this.enterpriseCode.value || !this.stageCode.value) {
+      ElMessage.warning('请先在左侧选择「企业 › 阶段」')
+      return
+    }
+    this.uploadStage.value = 'idle'
+    this.planRows.value = []
+    this.planSummary.value = {}
+    this.pendingFiles.value = []
+    this.uploadProgress.value = ''
+    this.uploadTarget.value = target
+    this.uploadVisible.value = true
+  }
+
+  toItems(files: File[]): PlanItem[] {
+    const t = this.uploadTarget.value
+    return files.map((f) => {
+      const rel = (f as any).webkitRelativePath || f.name
+      const slash = rel.lastIndexOf('/')
+      const name = slash >= 0 ? rel.slice(slash + 1) : rel
+      const dir = slash > 0 ? rel.slice(0, slash) : ''
+      // ★ 替换：强制沿用登记名与登记目录（后端会校验文件名一致，⛔ 不允许改名）
+      if (t.kind === 'replace') {
+        return { FileName: t.file.FileName, RelFolderPath: t.path, FileSize: f.size }
+      }
+      if (t.kind === 'folder') {
+        return { FileName: name, RelFolderPath: remapFolderPath(dir, t), FileSize: f.size }
+      }
+      return { FileName: name, RelFolderPath: dir, FileSize: f.size }
+    })
+  }
+
+  removePlanRow(index: number): void {
+    if (index < 0 || index >= this.planRows.value.length) return
+    this.planRows.value.splice(index, 1)
+    const sum = this.planSummary.value ?? {}
+    this.planSummary.value = {
+      ...sum,
+      Total: this.planRows.value.length,
+      BlockedCount: this.planRows.value.filter((r) => r.Blocked).length,
+    }
+  }
+
+  async onFilesPicked(list: File[]): Promise<void> {
+    // ★ 先用共享契约本地过滤（36 号：改规则只改 upload-file-policy.ts，页面不写 if/else）
+    //   好处：① 立刻反馈，不必等后端往返 ② 系统垃圾文件根本不会出现在 UI 里
+    const part = partitionUploadable(list.map((f) => ({ name: f.name })))
+    let accepted = list.filter((f) => part.accepted.some((a) => a.name === f.name))
+  
+    // ★ 替换模式：只接受 1 个文件，且必须**同名**
+    //   ⚠️ 后端 UploadFileStepAsync 会硬校验「上传文件名 == 登记名」，不一致直接拒；
+    //      在前端先拦一道，用户看到的是「要选同名文件」而不是一个后端错误码。
+    const t = this.uploadTarget.value
+    if (t.kind === 'replace') {
+      const hit = accepted.find((f) => f.name === t.file.FileName)
+      if (!hit) {
+        this.pendingFiles.value = []
+        this.planRows.value = []
+        this.planSummary.value = {} as any
+        ElMessage.warning(`「替换」要求同名文件：请选择名为「${t.file.FileName}」的文件（改名等于换一个文件）`)
+        return
+      }
+      accepted = [hit]
+    }
+    this.pendingFiles.value = accepted
+  
+    if (part.noise.length > 0) {
+      ElMessage.info(
+        `已自动忽略 ${part.noise.length} 个系统文件（${part.noise.slice(0, 3).map((nf) => nf.name).join('、')}${part.noise.length > 3 ? ' 等' : ''}）`)
+    }
+  
+    if (this.pendingFiles.value.length === 0) {
+      this.planRows.value = []
+      this.planSummary.value = {} as any
+      if (part.rejected.length > 0) {
+        ElMessage.warning(part.rejected[0].message + '（压缩包 / 可执行文件 / 网页脚本不支持）')
+      }
+      return
+    }
+  
+    try {
+      const r = await planUpload(this.enterpriseCode.value, this.stageCode.value, this.toItems(this.pendingFiles.value))
+      this.planRows.value = r.rows
+      this.planSummary.value = r.summary
+      if (part.rejected.length > 0) {
+        ElMessage.warning(`已跳过 ${part.rejected.length} 个不支持的文件：${part.rejected.slice(0, 3).map((r2) => r2.name).join('、')}`)
+      }
+    } catch (e) {
+      this.reportError(e, '读取文件失败')
+    }
+  }
+
+  async startUpload(): Promise<void> {
+    const all = this.planRows.value
+    const blocked = all.filter((r) => r.Blocked)
+    const uploadable = all.filter((r) => !r.Blocked)
+  
+    if (all.length === 0) {
+      ElMessage.warning(
+        this.planSummary.value?.FilteredCount
+          ? `选中的 ${this.planSummary.value.FilteredCount} 个文件都是系统文件（.DS_Store 等），没有可上传的资料`
+          : '没有可上传的文件')
+      return
+    }
+    // ⛔ 只有「全部不合规」才中止；有合规的就继续传
+    if (uploadable.length === 0) {
+      ElMessage.error(`这 ${blocked.length} 个文件都不支持上传：${blocked.slice(0, 3).map((b) => b.FileName).join('、')}`)
+      return
+    }
+    if (blocked.length > 0) {
+      ElMessage.warning(`已跳过 ${blocked.length} 个不支持的文件：${blocked.slice(0, 3).map((b) => b.FileName).join('、')}${blocked.length > 3 ? ' 等' : ''}`)
+    }
+    const replaces = this.planSummary.value?.ReplaceCount ?? 0
+    const skips = this.planSummary.value?.SkipCount ?? 0
+    if (replaces > 0) {
+      const ok = await confirmOrFalse(
+        `本次上传 ${this.planRows.value.length} 份，其中 ${replaces} 份会替换旧文件（旧版本会保留），` +
+        `${skips} 份内容没变化会跳过。是否继续？`,
+        '确认上传', { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消' })
+      if (!ok) return
+    }
+    this.uploadStage.value = 'uploading'
+    const items = this.toItems(this.pendingFiles.value)
+    let taskId = ''
+    const codeByName = new Map<string, string>()
+    try {
+      const init = await originalUploadInit(this.enterpriseCode.value, this.stageCode.value, items)
+      taskId = init.TaskId
+      for (const it of init.Items) if (it.Action !== 'skip') codeByName.set(it.FileName, it.FileCode)
+    } catch (e) {
+      this.uploadStage.value = 'idle'
+      this.reportError(e, '上传失败')
+      return
+    }
+    let done = 0
+    for (const f of this.pendingFiles.value) {
+      const rel = (f as any).webkitRelativePath || f.name
+      const slash = rel.lastIndexOf('/')
+      const name = slash >= 0 ? rel.slice(slash + 1) : rel
+      const code = codeByName.get(name)
+      if (code) {
+        this.uploadProgress.value = `正在上传 ${done + 1}/${this.pendingFiles.value.length}：${name}`
+        try { await originalUploadFile(taskId, code, f) }
+        catch (e) { ElMessage.warning(`${name} 上传失败：${(e as Error).message}`) }
+      }
+      done++
+    }
+    try {
+      const r: any = await originalUploadConfirm(taskId, this.enterpriseCode.value)
+      this.uploadProgress.value = `已完成：${r.ActivatedCount} 份文件已入库，正在识别`
+      this.uploadStage.value = 'done'
+      await this.loadFiles()
+    } catch (e) {
+      this.uploadStage.value = 'idle'
+      this.reportError(e, '上传失败')
+    }
+  }
+
+  closeUpload(): void {
+    this.uploadVisible.value = false
+    this.uploadStage.value = 'idle'
+    this.pendingFiles.value = []
+    // ★ 目标必须一起清掉 —— 否则下一次点「上传文件」会带着上一次的「替换 xxx」目标
+    this.uploadTarget.value = { kind: 'stage' }
+  }
+
+  async onVersions(row: OriginalFile): Promise<void> {
+    this.versionTarget.value = row
+    this.versionVisible.value = true
+    try {
+      const r = await fetchVersions(row.Code, row.EnterpriseCode)
+      this.versions.value = r.Rows
+      this.currentVersion.value = r.CurrentVersion
+    } catch (e) {
+      this.versions.value = []
+    }
+  }
+
+  async onRestore(v: FileVersion): Promise<void> {
+    const row = this.versionTarget.value
+    if (!row) return
+    const ok = await confirmOrFalse(
+      `把「${v.FileName}」恢复为当前版本？当前版本会被保留为历史版本。`,
+      '恢复旧版本', { type: 'warning', confirmButtonText: '确认恢复', cancelButtonText: '取消' })
+    if (!ok) return
+    try {
+      await restoreVersion(row.Code, row.EnterpriseCode, v.VersionNumber, '页面手动恢复')
+      ElMessage.success('已恢复')
+      this.versionVisible.value = false
+      await this.loadFiles()
+    } catch (e) {
+      this.reportError(e, '恢复历史版本失败')
+    }
+  }
+
+  openPolicy(mode: 'single' | 'batch', row?: OriginalFile): void {
+    if (mode === 'batch' && this.selected.value.length === 0) {
+      ElMessage.warning('请先勾选文件')
+      return
+    }
+    this.policyTarget.value = mode
+    this.policyEditing.value = row ?? null
+    this.policyValue.value = 'analyze'
+    this.policyReason.value = ''
+    this.policyVisible.value = true
+  }
+
+  async submitPolicy(): Promise<void> {
+    const rows = this.policyRows.value
+    if (rows.length === 0) return
+    try {
+      if (rows.length === 1) {
+        await setPolicy(rows[0].Code, rows[0].EnterpriseCode, this.policyValue.value, (this.policyReason.value || null) as any, true)
+        ElMessage.success('已保存')
+      } else {
+        const r = await batchSetPolicy(rows.map((x) => x.Code), rows[0].EnterpriseCode,
+          this.policyValue.value, (this.policyReason.value || null) as any, true)
+        ElMessage[r.FailedCount > 0 ? 'warning' : 'success'](`成功 ${r.SuccessCount} / 失败 ${r.FailedCount}`)
+      }
+      this.policyVisible.value = false
+      await this.loadFiles()
+    } catch (e) {
+      this.reportError(e, '保存提取策略失败')
+    }
+  }
+
+  async deleteFile(row: OriginalFile): Promise<void> {
+    const ok = await confirmOrFalse(
+      `删除「${row.FileName}」？文件与历史版本会一并移除；识别结果（标签/作用）会保留以备审计。`,
+      '删除确认', { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' })
+    if (!ok) return
+    try {
+      await removeFile(row.Code, row.EnterpriseCode, '页面删除')
+      ElMessage.success('已删除')
+      await this.loadFiles()
+    } catch (e) {
+      this.reportError(e, '删除文件失败')
+    }
+  }
+
+  async openQueueDetail(): Promise<void> {
+    if (!this.enterpriseCode.value || !this.stageCode.value) return
+    this.queueVisible.value = true
+    this.queueLoading.value = true
+    try {
+      this.queueDetail.value = await fetchQueueDetail(this.enterpriseCode.value, this.stageCode.value)
+    } catch (e) {
+      this.queueDetail.value = null
+    } finally {
+      this.queueLoading.value = false
+    }
+  }
+
 }

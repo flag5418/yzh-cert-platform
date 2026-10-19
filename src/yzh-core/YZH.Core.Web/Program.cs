@@ -5,8 +5,10 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Reflection;
 using System.Text;
+using Serilog;
 using YZH.Core.Api.Services;
 using YZH.Core.Web;
+using YZH.Core.Web.Extensions;
 using YZH.Core.DataBase.Services;
 using CertPlatform.Admin;
 using CertPlatform.Auditor;
@@ -42,7 +44,49 @@ using CertPlatform.Shared;
     Environment.SetEnvironmentVariable("no_proxy", merged);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ★ 引导期日志（2026-10-17）：DI 就绪前就要能留痕。
+//
+// 背景：配置缺失（JwtSettings:SecretKey / PasswordSecret / MinIO:SecretKey）与数据库连接失败
+//       都发生在 builder.Build() 之前或构建期，此前的日志只有控制台 ⇒ 重启一次就查不到了。
+//       这里先建一个最小 logger，写 Logs/boot-.log；host 构建成功后由 Serilog 正式管道接管。
+// ⚠️ 目录口径与 LoggingServiceExtensions.ResolveLogDirectory 一致（ContentRoot/Logs）；
+//    这里还拿不到 IConfiguration，故用进程当前目录（run-backend.sh 已 cd 到项目目录）。
+// ─────────────────────────────────────────────────────────────────────────────
+var bootLogDir = LoggingServiceExtensions.ResolveLogDirectory();
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .WriteTo.Console(outputTemplate: LoggingServiceExtensions.OutputTemplate)
+    .WriteTo.File(
+        Path.Combine(bootLogDir, "boot-.log"),
+        outputTemplate: LoggingServiceExtensions.OutputTemplate,
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 7,
+        shared: true)
+    .CreateBootstrapLogger();
+
+// 写一条引导日志：确保 boot-*.log 在**启动成功但尚未产出其他日志**时也存在（便于确认进程确实起来过）
+Log.Information("[Boot] 进程启动，工作目录={Dir}，日志目录={LogDir}",
+    Directory.GetCurrentDirectory(), bootLogDir);
+
+// Host 构建前/构建期的未处理异常（含配置缺失、DI 解析失败）→ 落 boot.log
+AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+{
+    try
+    {
+        var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [FTL] [boot] 未处理异常：{e.ExceptionObject}{Environment.NewLine}";
+        File.AppendAllText(Path.Combine(bootLogDir, "boot.log"), line);
+    }
+    catch
+    {
+        // 日志自身的失败绝不能再抛（否则掩盖真实异常）
+    }
+};
+
 var builder = WebApplication.CreateBuilder(args);
+
+// 运行日志：app-（Information+）/ error-（Warning+）双路按日滚动，保留 31/90 天
+builder.AddYzhFileLogging();
 
 // 使用 YZH Core 框架注册核心服务
 builder.UseYzhCore(options =>
@@ -180,6 +224,11 @@ builder.Services.AddControllers(options =>
     json.JsonSerializerOptions.PropertyNamingPolicy = null;
     // 枚举序列化为字符串（与前端 ControlType 名称一致：TextBox/ComboBox/Switch...）
     json.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    // ★ 日期时间统一输出格式 yyyy-MM-dd HH:mm:ss（架构统一 · 2026-10-19）
+    //   详见 YZH.Core.Stand/Converters/YzhDateTimeJsonConverter.cs + 契约表 §3.7
+    //   （与 YzhWebBuilder.cs 同源；ApplyYzhDateTimeFormat 幂等，两处都调不重复）
+    YZH.Core.Stand.Extensions.JsonDateTimeExtensions
+        .ApplyYzhDateTimeFormat(json.JsonSerializerOptions);
     json.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
     json.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
     // 敏感字段脱敏：带 [YzhSensitive] 的属性永不写出（输入绑定不受影响）
@@ -243,6 +292,16 @@ builder.Services.AddCors(cors =>
 });
 
 var app = builder.Build();
+
+// 后台任务里被吞掉的异常（Task 未 await / 未观察）→ 统一进 error 日志，避免静默失败
+TaskScheduler.UnobservedTaskException += (_, e) =>
+{
+    app.Logger.LogError(e.Exception, "未观察的后台任务异常（TaskScheduler.UnobservedTaskException）");
+    e.SetObserved();
+};
+
+// 链路 ID：响应头 X-Trace-Id + HttpContext.Items，与日志行 [TraceId] 同源
+app.UseMiddleware<YZH.Core.Web.Middleware.TraceIdMiddleware>();
 
 // CORS 必须在 Swagger 之前：否则静态文档不返回 CORS 头，
 // 前端（9990）无法读取 swagger.json 去构建接口深链。
@@ -308,4 +367,16 @@ app.MapHub<YZH.Core.Web.Hubs.UploadProgressHub>("/api/yzh-upload");
 // 临时测试端点：验证 routing pipeline 是否工作
 app.MapGet("/api/test/ping", () => "pong");
 
-app.Run();
+try
+{
+    app.Run();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "应用启动/运行失败");
+    throw;
+}
+finally
+{
+    Log.CloseAndFlush();
+}

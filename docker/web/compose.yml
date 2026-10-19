@@ -1,0 +1,63 @@
+##############################################################################
+# docker/web/compose.yml — 前端「生产构建」容器编排（管理端 / 专家端）
+#
+# 【作用】
+#   把 cert-admin / cert-auditor 的生产构建作为独立 nginx 容器常驻，
+#   供 scripts/tunnel/ 的 Cloudflare 隧道对外映射。
+#
+# 【与开发环境隔离】
+#   · 端口绑定用 **非开发端口**（10990 / 10991），绝不占用 dev 的 9990 / 9991；
+#   · 独立 compose 项目名 yzh-web，与 docker/compose.yml（依赖容器）互不干扰；
+#   · 只绑 127.0.0.1，不对局域网/公网暴露（外网仅经隧道）。
+#
+# 【一键发布】请用：./scripts/deploy/deploy-web.sh
+#   手动等价命令：docker compose -f docker/web/compose.yml up -d --build
+#
+# ⚠️ 后端（9992）与 MySQL/Redis/MinIO 仍由宿主/依赖容器提供，**不在此编排内**；
+#    容器内 nginx 通过 host.docker.internal 回连宿主 9992。
+##############################################################################
+
+name: yzh-web
+
+services:
+  ##########################################################################
+  # 管理端 cert-admin  （宿主 127.0.0.1:10990 -> 容器 80）
+  ##########################################################################
+  web-admin:
+    build:
+      context: ../..
+      dockerfile: docker/web/Dockerfile
+      args:
+        ROLE: admin
+    image: yzh-web-admin:local
+    container_name: yzh-web-admin
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:10990:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - yzh-web-net
+
+  ##########################################################################
+  # 专家端 cert-auditor（宿主 127.0.0.1:10991 -> 容器 80）
+  ##########################################################################
+  web-auditor:
+    build:
+      context: ../..
+      dockerfile: docker/web/Dockerfile
+      args:
+        ROLE: auditor
+    image: yzh-web-auditor:local
+    container_name: yzh-web-auditor
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:10991:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - yzh-web-net
+
+networks:
+  yzh-web-net:
+    name: yzh-web-network

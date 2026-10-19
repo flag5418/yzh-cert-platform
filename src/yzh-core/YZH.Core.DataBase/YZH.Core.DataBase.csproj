@@ -15,6 +15,9 @@
     <!-- MinIO 对象存储（IObjectStorage 的 MinIO 实现） -->
     <PackageReference Include="Minio" Version="7.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.0" />
+    <!-- 对象存储流式读取（MinioObjectStorage.OpenReadAsync 用 Pipe 做“边下边读”适配，
+         避免把整份文件读进 MemoryStream） -->
+    <PackageReference Include="System.IO.Pipelines" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.0" />
   </ItemGroup>
 

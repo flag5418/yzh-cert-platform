@@ -1,0 +1,40 @@
+# ============================================================
+# .dockerignore — 仅作用于「以仓库根为构建上下文」的构建
+# （即 docker/web/Dockerfile）。docker/anydoc、docker/libreoffice
+#  的上下文是各自子目录，不受本文件影响。
+# 目的：把构建上下文从「整个仓库」缩到「前端工作区源码」，
+#      避免把 node_modules / src/old / 数据卷塞进 docker build。
+# ============================================================
+
+# --- 版本控制 / 编辑器 ---
+.git
+.github
+.gitignore
+.DS_Store
+**/.DS_Store
+
+# --- 依赖与构建产物（容器内会重新 npm ci + vite build）---
+node_modules
+**/node_modules
+**/dist
+**/.vite-cache
+**/*.log
+
+# --- 后端 / 历史项目 / 与前端构建无关的大目录 ---
+src/old
+src/yzh-core
+src/certplatform-api
+CertPlatform.sln
+backup
+temp
+输出产物
+docs
+debug_*.png
+
+# --- 容器数据卷（体积大且无需进镜像）---
+docker/mysql
+docker/redis
+docker/minio
+docker/libreoffice/tmp
+docker/anydoc/tmp
+docker/data

@@ -26,10 +26,28 @@
  *   前端只负责按 `ValueType` 渲染控件 + 记录改动。
  *   （只读项分支 `Editable=false` →「去企业管理修改」保留：`auto`/`both` 维护方式
  *   一旦重新启用即可生效，当前迁移后恒为 `manual` 故不会出现。）
+ *
+ * ════════════════════════════════════════════════════════════════
+ * ★ 为什么 extends SingleTableCore（R24 · 2026-10-19）
+ *
+ *   本页**不是**单表 CRUD：没有 `EntityConfig`、没有 `/filter`、没有 `/add|/update|/delete`，
+ *   数据是「后台定义 × 企业已有值」的合并视图，右区是分组卡片而非表格。
+ *   因此继承内核**不是为了复用 CRUD 端点**，而是为了拿到内核的三样公共契约：
+ *
+ *     ① 标准生命周期 —— `init()` = `loadConfig()` → `onAfterInit()`
+ *        （原先每页自写 `init()`，形状各不相同）
+ *     ② 统一错误出口 `reportError(e, fallback)` —— 铁律 F-3「谁 catch 谁弹，只弹一次」，
+ *        带 `handled` 标记，避免与全局 `unhandledrejection` 兜底重复弹窗
+ *     ③ 统一加载态 `loading` —— 不再自建同义 ref，页面与组件共享同一语义
+ *
+ *   ⛔ **刻意覆写**：`loadConfig()` 置空（无 `/config` 端点）、`onAfterInit()` 改为加载树；
+ *      端点调用继续走 `@share/api/cert/fill-param-value` 的**类型化函数**
+ *      （信封解包 `unwrap` 已在那里统一，⛔ 不要退回基类裸 `apiPost` 绕开契约层）。
+ * ════════════════════════════════════════════════════════════════
  */
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import type { TreeNode } from '@yzh-core'
+import { SingleTableCore, type TreeNode } from '@yzh-core'
 import router from '@/router'
 import {
   getEnterpriseTree,
@@ -116,8 +134,15 @@ export function parseEnumOptions(json?: string | null): { label: string; value: 
   }
 }
 
-export class EnterpriseFillParamsLogic {
-  // ──── ★ 左树（企业 → 标准 → 阶段）────
+export class EnterpriseFillParamsLogic extends SingleTableCore<Record<string, any>> {
+  /**
+   * 控制器名（对齐 `/api/{controller}` 约定）。
+   *
+   * <p>本页不复用基类的 CRUD 端点，此字段仅用于保持内核契约完整与日志可读。</p>
+   */
+  controllerName = 'Auditor/FillParamValue'
+
+  // ──── ★ 左树（企业 → 标准）────
   readonly treeNodes = ref<TreeNode[]>([])
   readonly treeLoading = ref(false)
   /** 空树 / 无关联时的兜底提示（后端下发） */
@@ -139,7 +164,7 @@ export class EnterpriseFillParamsLogic {
   })
   readonly enterpriseName = ref('')
 
-  readonly loading = ref(false)
+  // ⛔ 不自建 loading：基类 `SingleTableCore.loading` 即本页加载态（R24 统一契约）
   readonly saving = ref(false)
   readonly loaded = ref(false)
 
@@ -166,10 +191,17 @@ export class EnterpriseFillParamsLogic {
   })
 
   // ════════════════════════════════════════════════════════════════
-  // 初始化
+  // 内核生命周期（init = loadConfig → onAfterInit）
   // ════════════════════════════════════════════════════════════════
 
-  async init(): Promise<void> {
+  /**
+   * ⛔ 本页没有 `EntityConfig`（不是单表 CRUD）⇒ 覆写为空实现，
+   * 避免基类 `init()` 去请求不存在的 `/api/Auditor/FillParamValue/config`。
+   */
+  protected async loadConfig(): Promise<void> {}
+
+  /** 基类 `init()` 的第二步：加载企业树（替代原先自写的 `init`） */
+  protected async onAfterInit(): Promise<void> {
     await this.loadTree()
   }
 
@@ -195,7 +227,8 @@ export class EnterpriseFillParamsLogic {
         )
       }
     } catch (e: any) {
-      ElMessage.error(e?.message || '加载企业树失败')
+      // F-3：统一错误出口（带 handled 标记，避免与全局兜底重复弹窗）
+      this.reportError(e, '加载企业树失败')
       this.treeNodes.value = []
     } finally {
       this.treeLoading.value = false
@@ -259,7 +292,7 @@ export class EnterpriseFillParamsLogic {
       this.edited.value = {}
       this.loaded.value = true
     } catch (e: any) {
-      ElMessage.error(e?.message || '加载参数清单失败')
+      this.reportError(e, '加载参数清单失败')
     } finally {
       this.loading.value = false
     }
@@ -318,7 +351,7 @@ export class EnterpriseFillParamsLogic {
       ElMessage.success(res.message || `已保存 ${res.savedCount} 项`)
       await this.loadMergeList()
     } catch (e: any) {
-      ElMessage.error(e?.message || '保存失败')
+      this.reportError(e, '保存失败')
     } finally {
       this.saving.value = false
     }

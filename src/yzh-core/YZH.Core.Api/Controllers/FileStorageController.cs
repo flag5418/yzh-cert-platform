@@ -156,14 +156,24 @@ public class FileStorageController : WebControllerBase
 
         try
         {
-            var (stream, contentType) = await _storage.DownloadAsync(path);
+            // ★ 流式打开（2026-10-17）：旧实现 DownloadAsync 会把整份文件读进 MemoryStream，
+            //   500 MB 上限下并发下载会直接吃内存。改为 OpenReadAsync + FileStreamResult 透传。
+            //   ⚠️ 不要 using/dispose：流的生命周期由 FileStreamResult 接管。
+            var content = await _storage.OpenReadAsync(path);
             var fileName = Path.GetFileName(path);
-            return File(stream, contentType, fileName);
+            // 仅可 Seek 的流支持 Range（本地磁盘/Memory）；MinIO 管道流不可 Seek，降级为整文件返回
+            return File(content.Stream, content.ContentType, fileName, enableRangeProcessing: content.Stream.CanSeek);
+        }
+        catch (ObjectNotFoundException)
+        {
+            // 明确的「不存在」：与网络/鉴权故障分开，避免把存储不可用报成文件缺失或反之
+            _logger.LogWarning("下载文件不存在: {Path}", path);
+            return Ok(ApiResponse<object?>.Fail("文件不存在", 404));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "下载文件失败: {Path}", path);
-            return Ok(ApiResponse<object?>.Fail($"文件不存在或下载失败：{ex.Message}", 404));
+            return Ok(ApiResponse<object?>.Fail($"文件下载失败：{ex.Message}", 500));
         }
     }
 

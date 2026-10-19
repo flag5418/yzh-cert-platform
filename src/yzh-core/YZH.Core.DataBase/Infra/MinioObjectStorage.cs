@@ -1,3 +1,4 @@
+using System.IO.Pipelines;
 using Microsoft.Extensions.Configuration;
 using Minio;
 using Minio.DataModel.Args;
@@ -55,6 +56,63 @@ public class MinioObjectStorage : IObjectStorage
         ms.Position = 0;
 
         return (ms, stat.ContentType ?? "application/octet-stream");
+    }
+
+    /// <summary>
+    /// 以流的方式打开对象（真流式，不把整份文件读进内存）。
+    /// <para>实现方式：Stat 拿长度/类型 → GetObject 回调写入 <see cref="Pipe"/> → 调用方从管道读取。</para>
+    /// <para>⚠️ 返回的流不可 Seek（无法处理 Range），由调用方决定是否降级为整文件返回。</para>
+    /// </summary>
+    public async Task<ObjectContent> OpenReadAsync(string objectName, CancellationToken ct = default)
+    {
+        var key = objectName.TrimStart('/');
+        var statArgs = new StatObjectArgs()
+            .WithBucket(_bucketName)
+            .WithObject(key);
+
+        long size;
+        string contentType;
+        try
+        {
+            var stat = await _client.StatObjectAsync(statArgs, ct);
+            size = stat.Size;
+            contentType = stat.ContentType ?? "application/octet-stream";
+        }
+        catch (Exception ex) when (IsNotFound(ex))
+        {
+            throw new ObjectNotFoundException(objectName, ex);
+        }
+
+        var pipe = new Pipe();
+        var getArgs = new GetObjectArgs()
+            .WithBucket(_bucketName)
+            .WithObject(key)
+            .WithCallbackStream(async (stream, token) =>
+            {
+                try
+                {
+                    await stream.CopyToAsync(pipe.Writer.AsStream(), token);
+                }
+                finally
+                {
+                    await pipe.Writer.CompleteAsync();
+                }
+            });
+
+        // 后台拉取；异常通过管道回传给读端（CompleteAsync(exception)），不会静默丢失
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _client.GetObjectAsync(getArgs, ct);
+            }
+            catch (Exception ex)
+            {
+                await pipe.Writer.CompleteAsync(ex);
+            }
+        }, CancellationToken.None);
+
+        return new ObjectContent(pipe.Reader.AsStream(), size, contentType);
     }
 
     /// <summary>删除 MinIO 对象</summary>
@@ -141,20 +199,40 @@ public class MinioObjectStorage : IObjectStorage
         }
     }
 
-    /// <summary>检查对象是否存在</summary>
+    /// <summary>
+    /// 检查对象是否存在。
+    /// <para>★ 只把「确实不存在」判为 false；网络不通、鉴权失败、桶不存在一律抛出。</para>
+    /// <para>旧实现 <c>catch { return false; }</c> 会把 <c>Connection refused</c> 报成「文件不存在」，
+    /// 与 2026-10-06 代理事故同型（症状与病因错位），已纠正。</para>
+    /// </summary>
     public async Task<bool> ExistsAsync(string objectName, CancellationToken ct = default)
     {
+        var args = new StatObjectArgs()
+            .WithBucket(_bucketName)
+            .WithObject(objectName.TrimStart('/'));
+
         try
         {
-            var args = new StatObjectArgs()
-                .WithBucket(_bucketName)
-                .WithObject(objectName.TrimStart('/'));
             await _client.StatObjectAsync(args, ct);
             return true;
         }
-        catch
+        catch (Exception ex) when (IsNotFound(ex))
         {
             return false;
         }
+    }
+
+    /// <summary>判定「对象不存在」的真实形态：显式 404、SDK 异常、消息文案。</summary>
+    private static bool IsNotFound(Exception ex)
+    {
+        if (ex is ObjectNotFoundException) return false; // 本类已升级的语义，不再二次包装
+
+        // Minio SDK 7.x 的专用异常（最可靠）；其余靠错误码文案兜底
+        if (ex is Minio.Exceptions.ObjectNotFoundException) return true;
+
+        var message = ex.Message ?? string.Empty;
+        return message.Contains("does not exist", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("NoSuchKey", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("specified key does not exist", StringComparison.OrdinalIgnoreCase);
     }
 }

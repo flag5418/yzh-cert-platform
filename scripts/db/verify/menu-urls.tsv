@@ -28,6 +28,7 @@ admin	MENU_00106	/system/api
 admin	MENU_00207	/business/directory-manager
 admin	MENU_00107	/system/dictionary
 admin	MENU_00213	/business/workflow-rules
+admin	5fa27ae2-ca08-11f1-a2f8-8ed31d9948bf	/business/server-monitor
 admin	MENU_00108	/system/log
 admin	MENU_00209	/business/report-def
 admin	MENU_00109	/system/config

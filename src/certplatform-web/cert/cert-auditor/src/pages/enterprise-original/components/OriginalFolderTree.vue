@@ -121,6 +121,7 @@ function pathKey(n: OriginalFolderNode): string {
 //       在本项目里按钮宽度算成 0（点不动、截图里像是没有）。宁可横向滚动，也不要固定列失效。
 const columns: YzhTableColumn<OriginalFile>[] = [
   { prop: 'FileName', label: '文件名', minWidth: 260, slot: true },
+  { prop: 'FileSize', label: '大小', width: 90, slot: true },
   { prop: 'ExtractState', label: '提取状态', width: 110, slot: true },
   { prop: 'VersionNumber', label: '版本', width: 60, align: 'center', slot: true }
   // ⛔ 操作列不再手写（2026-10-07）：YzhTable 内置行动作列 + action-dropdown-only
@@ -190,14 +191,9 @@ function onFolderAction(cmd: string, node: OriginalFolderNode) {
 // ★ statusOf / statusTip 已提到 logic.ts（与根目录表共用一份口径）
 
 function formatSize(size?: number | null): string {
-  if (!size) return ''
+  if (!size) return '—'
   if (size < 1024) return `${size} B`
   return size > 1024 * 1024 ? `${(size / 1024 / 1024).toFixed(1)} MB` : `${Math.round(size / 1024)} KB`
-}
-
-function extOf(name?: string): string {
-  const i = (name || '').lastIndexOf('.')
-  return i > 0 ? name!.slice(i + 1).toLowerCase() : ''
 }
 
 /** ★ 文件夹表头徽标口径：**本层文件数**（⛔ 不再用子树汇总当主数字，见模板注释） */
@@ -290,10 +286,9 @@ function ownCount(node: OriginalFolderNode): number {
               <el-icon class="f-name__icon"><Document /></el-icon>
               <span class="f-name__text" :title="row.FileName">{{ row.FileName }}</span>
             </div>
-            <div class="f-sub">
-              {{ formatSize(row.FileSize) }}
-              <template v-if="extOf(row.FileName)"> · {{ extOf(row.FileName).toUpperCase() }}</template>
-            </div>
+          </template>
+          <template #column-FileSize="{ row }">
+            <span>{{ formatSize(row.FileSize) }}</span>
           </template>
 
           <!-- ⛔ 原 #column-Tags（标签）与 #column-DocPurpose（作用）两个插槽已于 2026-10-07 删除：
@@ -390,7 +385,6 @@ function ownCount(node: OriginalFolderNode): number {
 .f-name { display: flex; align-items: center; gap: 5px; }
 .f-name__icon { color: var(--el-text-color-secondary); flex: none; }
 .f-name__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.f-sub { font-size: 11px; color: var(--el-text-color-placeholder); margin-top: 1px; }
 .f-dim { color: var(--el-text-color-placeholder); }
 
 .f-nofile { font-size: 12px; color: var(--el-text-color-placeholder); padding: 4px 0 8px; }

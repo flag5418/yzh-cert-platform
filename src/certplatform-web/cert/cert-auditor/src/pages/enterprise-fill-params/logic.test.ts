@@ -10,6 +10,7 @@
  *            onValueChange / liveCompletion / save / resetEdits
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { SingleTableCore } from '@yzh-core'
 import {
   parseEnumOptions,
   EnterpriseFillParamsLogic,
@@ -17,38 +18,30 @@ import {
   VALUE_SOURCE_TAG,
 } from './logic'
 
-// ─── mocks ──────────────────────────────────────────────────────
+// ─── mocks（必须用 vi.hoisted，否则 factory 执行时变量尚未初始化）────
 
-const mockPush = vi.fn()
-vi.mock('@/router', () => ({ default: { push: mockPush } }))
+const routerMock = vi.hoisted(() => ({ push: vi.fn() }))
+vi.mock('@/router', () => ({ default: routerMock }))
 
-const mockGetEnterpriseTree = vi.fn()
-const mockGetMergeList = vi.fn()
-const mockSaveValues = vi.fn()
+const apiMock = vi.hoisted(() => ({
+  getEnterpriseTree: vi.fn(),
+  getMergeList: vi.fn(),
+  saveValues: vi.fn(),
+}))
+vi.mock('@share/api/cert/fill-param-value', async () => apiMock)
 
-vi.mock('@share/api/cert/fill-param-value', async () => {
-  return {
-    getEnterpriseTree: mockGetEnterpriseTree,
-    getMergeList: mockGetMergeList,
-    saveValues: mockSaveValues,
-  }
-})
-
-const mockError = vi.fn()
-const mockWarning = vi.fn()
-const mockInfo = vi.fn()
-const mockSuccess = vi.fn()
-
-vi.mock('element-plus', async () => {
-  return {
-    ElMessage: {
-      error: mockError,
-      warning: mockWarning,
-      info: mockInfo,
-      success: mockSuccess,
-    },
-  }
-})
+const msgMock = vi.hoisted(() => ({
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+  success: vi.fn(),
+}))
+// ⚠️ 必须一并 mock `ElMessageBox`：`SingleTableCore` 传递依赖 `utils/confirm` 会 import 它，
+//    只给 `ElMessage` 时 Vitest 会报 "No 'ElMessageBox' export is defined on the mock"。
+vi.mock('element-plus', async () => ({
+  ElMessage: msgMock,
+  ElMessageBox: { confirm: vi.fn().mockResolvedValue('confirm') },
+}))
 
 // ─── fixtures ───────────────────────────────────────────────────
 
@@ -155,6 +148,13 @@ describe('VALUE_SOURCE_LABEL / VALUE_SOURCE_TAG', () => {
     expect(VALUE_SOURCE_LABEL.default).toBe('默认值')
     expect(VALUE_SOURCE_LABEL.empty).toBe('待完善')
   })
+
+  it('标签色映射与来源一一对应', () => {
+    expect(VALUE_SOURCE_TAG.auto).toBe('success')
+    expect(VALUE_SOURCE_TAG.manual).toBe('primary')
+    expect(VALUE_SOURCE_TAG.default).toBe('info')
+    expect(VALUE_SOURCE_TAG.empty).toBe('info')
+  })
 })
 
 // ─── EnterpriseFillParamsLogic ──────────────────────────────────
@@ -171,16 +171,37 @@ describe('EnterpriseFillParamsLogic', () => {
     vi.restoreAllMocks()
   })
 
+  describe('内核契约（R24）', () => {
+    it('继承 SingleTableCore —— 裸 class 会被守卫 R24 拦下', () => {
+      expect(logic).toBeInstanceOf(SingleTableCore)
+    })
+
+    it('loading 复用内核的加载态，不再自建同义 ref', async () => {
+      // 内核契约：loadMergeList 期间 loading=true，结束后复位
+      logic.enterpriseCode.value = 'ENT001'
+      let seenDuring: boolean | undefined
+      apiMock.getMergeList.mockImplementation(async () => {
+        seenDuring = logic.loading.value
+        return makeMergeResult()
+      })
+
+      await logic.loadMergeList()
+
+      expect(seenDuring).toBe(true)
+      expect(logic.loading.value).toBe(false)
+    })
+  })
+
   describe('init / loadTree', () => {
     it('init 会加载树并自动定位到第一个标准节点', async () => {
       const std = makeStandardNode()
-      mockGetEnterpriseTree.mockResolvedValue({
+      apiMock.getEnterpriseTree.mockResolvedValue({
         Nodes: [makeTreeNode({ Children: [std] })],
         EnterpriseCount: 1,
         LinkCount: 1,
         Hint: '',
       })
-      mockGetMergeList.mockResolvedValue(makeMergeResult())
+      apiMock.getMergeList.mockResolvedValue(makeMergeResult())
 
       await logic.init()
 
@@ -188,11 +209,11 @@ describe('EnterpriseFillParamsLogic', () => {
       expect(logic.enterpriseCode.value).toBe('ENT001')
       expect(logic.standardCode.value).toBe('STD001')
       expect(logic.scopeLevel.value).toBe('standard')
-      expect(mockGetMergeList).toHaveBeenCalled()
+      expect(apiMock.getMergeList).toHaveBeenCalled()
     })
 
     it('若树为空则企业编码留空', async () => {
-      mockGetEnterpriseTree.mockResolvedValue({
+      apiMock.getEnterpriseTree.mockResolvedValue({
         Nodes: [],
         EnterpriseCount: 0,
         LinkCount: 0,
@@ -206,23 +227,23 @@ describe('EnterpriseFillParamsLogic', () => {
     })
 
     it('异常时清空树并弹错误', async () => {
-      mockGetEnterpriseTree.mockRejectedValue(new Error('网络错误'))
+      apiMock.getEnterpriseTree.mockRejectedValue(new Error('网络错误'))
 
       await logic.loadTree()
 
       expect(logic.treeNodes.value).toEqual([])
-      expect(mockError).toHaveBeenCalledWith('网络错误')
+      expect(msgMock.error).toHaveBeenCalledWith('网络错误')
     })
 
     it('没有标准节点时退化到第一个企业节点', async () => {
       const ent = makeTreeNode()
-      mockGetEnterpriseTree.mockResolvedValue({
+      apiMock.getEnterpriseTree.mockResolvedValue({
         Nodes: [ent],
         EnterpriseCount: 1,
         LinkCount: 0,
         Hint: '',
       })
-      mockGetMergeList.mockResolvedValue(makeMergeResult())
+      apiMock.getMergeList.mockResolvedValue(makeMergeResult())
 
       await logic.loadTree()
 
@@ -232,7 +253,7 @@ describe('EnterpriseFillParamsLogic', () => {
 
   describe('onNodeClick / applyScope', () => {
     it('点击节点切换作用域并重载清单', async () => {
-      mockGetMergeList.mockResolvedValue(makeMergeResult())
+      apiMock.getMergeList.mockResolvedValue(makeMergeResult())
 
       const node: any = {
         Code: 'std-2',
@@ -245,7 +266,7 @@ describe('EnterpriseFillParamsLogic', () => {
       expect(logic.enterpriseCode.value).toBe('ENT002')
       expect(logic.standardCode.value).toBe('STD002')
       expect(logic.scopeLabel.value).toBe('ISO14001')
-      expect(mockGetMergeList).toHaveBeenCalledWith({
+      expect(apiMock.getMergeList).toHaveBeenCalledWith({
         EnterpriseCode: 'ENT002',
         StandardCode: 'STD002',
       })
@@ -260,24 +281,24 @@ describe('EnterpriseFillParamsLogic', () => {
       }
       await logic.onNodeClick(node)
 
-      expect(mockGetMergeList).not.toHaveBeenCalled()
+      expect(apiMock.getMergeList).not.toHaveBeenCalled()
     })
   })
 
   describe('loadMergeList', () => {
     it('未选企业时弹警告', async () => {
       await logic.loadMergeList()
-      expect(mockWarning).toHaveBeenCalledWith('请先在左侧选择企业')
+      expect(msgMock.warning).toHaveBeenCalledWith('请先在左侧选择企业')
     })
 
     it('正常加载后更新 groups / progress / enterpriseName', async () => {
-      mockGetEnterpriseTree.mockResolvedValue({
+      apiMock.getEnterpriseTree.mockResolvedValue({
         Nodes: [makeTreeNode({ Children: [makeStandardNode()] })],
         EnterpriseCount: 1,
         LinkCount: 1,
         Hint: '',
       })
-      mockGetMergeList.mockResolvedValue(makeMergeResult({
+      apiMock.getMergeList.mockResolvedValue(makeMergeResult({
         Enterprise: { Name: '测试企业' },
         Progress: { Total: 3, Filled: 1, Empty: 2, Completion: 0.33, Required: 2, RequiredFilled: 1 },
       }))
@@ -292,11 +313,11 @@ describe('EnterpriseFillParamsLogic', () => {
 
     it('异常时弹错误', async () => {
       logic.enterpriseCode.value = 'ENT001'
-      mockGetMergeList.mockRejectedValue(new Error('加载失败'))
+      apiMock.getMergeList.mockRejectedValue(new Error('加载失败'))
 
       await logic.loadMergeList()
 
-      expect(mockError).toHaveBeenCalledWith('加载失败')
+      expect(msgMock.error).toHaveBeenCalledWith('加载失败')
       expect(logic.loading.value).toBe(false)
     })
   })
@@ -361,20 +382,20 @@ describe('EnterpriseFillParamsLogic', () => {
   describe('save', () => {
     it('无改动时直接返回并提示', async () => {
       await logic.save()
-      expect(mockInfo).toHaveBeenCalledWith('没有需要保存的改动')
-      expect(mockSaveValues).not.toHaveBeenCalled()
+      expect(msgMock.info).toHaveBeenCalledWith('没有需要保存的改动')
+      expect(apiMock.saveValues).not.toHaveBeenCalled()
     })
 
     it('提交编辑并成功后重载清单', async () => {
       logic.enterpriseCode.value = 'ENT001'
       logic.standardCode.value = 'STD001'
       logic.edited.value = { P1: 'v1', P2: 'v2' }
-      mockSaveValues.mockResolvedValue({ savedCount: 2, ignoredAuto: [], message: '保存成功' })
-      mockGetMergeList.mockResolvedValue(makeMergeResult())
+      apiMock.saveValues.mockResolvedValue({ savedCount: 2, ignoredAuto: [], message: '保存成功' })
+      apiMock.getMergeList.mockResolvedValue(makeMergeResult())
 
       await logic.save()
 
-      expect(mockSaveValues).toHaveBeenCalledWith({
+      expect(apiMock.saveValues).toHaveBeenCalledWith({
         EnterpriseCode: 'ENT001',
         StandardCode: 'STD001',
         Items: [
@@ -382,19 +403,19 @@ describe('EnterpriseFillParamsLogic', () => {
           { ParamCode: 'P2', ParamValue: 'v2' },
         ],
       })
-      expect(mockSuccess).toHaveBeenCalledWith('保存成功')
-      expect(mockGetMergeList).toHaveBeenCalled() // 成功后重载
+      expect(msgMock.success).toHaveBeenCalledWith('保存成功')
+      expect(apiMock.getMergeList).toHaveBeenCalled() // 成功后重载
       expect(logic.saving.value).toBe(false)
     })
 
     it('异常时弹错误', async () => {
       logic.enterpriseCode.value = 'ENT001'
       logic.edited.value = { P1: 'v1' }
-      mockSaveValues.mockRejectedValue(new Error('保存出错'))
+      apiMock.saveValues.mockRejectedValue(new Error('保存出错'))
 
       await logic.save()
 
-      expect(mockError).toHaveBeenCalledWith('保存出错')
+      expect(msgMock.error).toHaveBeenCalledWith('保存出错')
       expect(logic.saving.value).toBe(false)
     })
   })
@@ -404,14 +425,14 @@ describe('EnterpriseFillParamsLogic', () => {
       logic.edited.value = { P1: 'x' }
       logic.resetEdits()
       expect(Object.keys(logic.edited.value)).toHaveLength(0)
-      expect(mockInfo).toHaveBeenCalledWith('已放弃未保存的改动')
+      expect(msgMock.info).toHaveBeenCalledWith('已放弃未保存的改动')
     })
   })
 
   describe('goToEnterprise', () => {
     it('跳转到企业管理页', () => {
       logic.goToEnterprise()
-      expect(mockPush).toHaveBeenCalledWith({ name: 'Enterprises' })
+      expect(routerMock.push).toHaveBeenCalledWith({ name: 'Enterprises' })
     })
   })
 })

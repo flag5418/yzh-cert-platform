@@ -172,7 +172,7 @@ public class ApiScanner
                                 Path = actionPath,
                                 GroupPath = groupPath,
                                 TreePath = ParseTreePath(groupPath),
-                                Description = ResolveDescription(method, httpMethodAttr, descAttr),
+                                Description = ApiDescriptionResolver.ResolveName(method),
                                 Author = descAttr?.Author ?? "",
                                 CreatedAt = descAttr?.CreatedAt ?? DateTime.Now,
                                 UpdatedAt = descAttr?.UpdatedAt ?? DateTime.Now,
@@ -275,49 +275,6 @@ public class ApiScanner
 
         return "";
     }
-
-    /// <summary>接口名称：[ApiDescription] → 框架端点中文名 → 方法名</summary>
-    private static string ResolveDescription(
-        MethodInfo method,
-        HttpMethodAttribute httpMethodAttr,
-        ApiDescriptionAttribute? descAttr)
-    {
-        if (descAttr != null && !string.IsNullOrWhiteSpace(descAttr.Description))
-            return descAttr.Description;
-
-        var template = string.IsNullOrWhiteSpace(httpMethodAttr.Template)
-            ? method.Name
-            : httpMethodAttr.Template!.Trim();
-
-        return BaseEndpointNames.TryGetValue(template, out var name) ? name : method.Name;
-    }
-
-    /// <summary>框架基类端点（无 [ApiDescription]）的中文名，避免权限树里出现空白名称</summary>
-    private static readonly Dictionary<string, string> BaseEndpointNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["config"] = "获取接口配置",
-        ["filter"] = "分页查询",
-        ["add"] = "新增",
-        ["update"] = "修改",
-        ["delete"] = "批量删除",
-        ["export"] = "导出",
-        ["import"] = "导入",
-        ["import/template"] = "下载导入模板",
-        ["action/{methodName}"] = "执行行操作",
-        ["toggle-valid"] = "启用/禁用",
-        ["tree/root"] = "树根节点",
-        ["tree/children"] = "树子节点",
-        ["tree/add"] = "新增树节点",
-        ["tree/update"] = "修改树节点",
-        ["tree/delete"] = "删除树节点",
-        ["tree/action/{methodName}"] = "执行树节点操作",
-        ["tree/toggle-valid"] = "树节点启用/禁用",
-        ["treepconfig"] = "树表配置",
-        ["checkTree"] = "关联树数据",
-        ["check/add"] = "新增关联",
-        ["check/remove"] = "移除关联",
-        ["check/all"] = "全部关联",
-    };
 
     /// <summary>
     /// 生成 ApiCode（基于 Method + ControllerName + ActionName）

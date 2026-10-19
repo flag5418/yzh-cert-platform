@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
 using YZH.Core.Api.Services;
@@ -46,7 +47,12 @@ public class YzhAuditingFilter : IAsyncActionFilter
             return;
         }
 
-        var startTime = DateTime.UtcNow;
+        // ★ 两个时间口径分开（2026-10-17 / 铁律十）：
+        //   ・审计时间戳（落库/上屏）= 本地时间 DateTime.Now；
+        //   ・耗时计算 = UtcNow 差值（属「耗时统计」合法场景，不受时区/校时影响）。
+        //   旧实现把 UtcNow 当 Timestamp ⇒ 审计文件/DB 比日志早 8 小时（0–8 点还会跨日）。
+        var startedAtUtc = DateTime.UtcNow;
+        var startedAtLocal = DateTime.Now;
         var userCode = _userContext.UserCode;
         var userName = _userContext.UserName;
         var ipAddress = _userContext.ClientIp;
@@ -57,6 +63,17 @@ public class YzhAuditingFilter : IAsyncActionFilter
             var controllerName = routeValues.TryGetValue("controller", out var c) ? c : null;
             var actionName = routeValues.TryGetValue("action", out var a) ? a : null;
             var controllerNamespace = context.Controller?.GetType().Namespace;
+
+            // 接口名称 / 描述：反射方法上的 [ApiDescription] 特性
+            //   （OperationLog「操作」列显示接口名称、Module 列显示业务分组；缺失时下游回退）
+            var descriptor = context.ActionDescriptor as ControllerActionDescriptor;
+            var endpointMethod = descriptor?.MethodInfo;
+            var apiName = endpointMethod != null
+                ? ApiDescriptionResolver.ResolveName(endpointMethod)
+                : null;
+            var apiGroup = endpointMethod != null
+                ? ApiDescriptionResolver.ResolveGroup(endpointMethod)
+                : null;
 
             // 记录请求参数（脱敏）
             var requestParams = SerializeParams(context.ActionArguments.ToDictionary(kvp => kvp.Key, kvp => (object?)kvp.Value));
@@ -73,7 +90,7 @@ public class YzhAuditingFilter : IAsyncActionFilter
             await _auditLogger.LogApiCallAsync(new AuditLogEntry
             {
                 Level = LogLevel.Information,
-                Timestamp = startTime,
+                Timestamp = startedAtLocal,
                 UserCode = userCode,
                 UserName = userName,
                 HttpMethod = httpMethod,
@@ -84,9 +101,11 @@ public class YzhAuditingFilter : IAsyncActionFilter
                 Controller = controllerName,
                 ActionName = actionName,
                 ControllerNamespace = controllerNamespace,
+                ApiName = apiName,
+                ApiGroup = apiGroup,
                 RequestParams = requestParams,
                 StatusCode = executedContext.HttpContext.Response.StatusCode,
-                DurationMs = (long)(DateTime.UtcNow - startTime).TotalMilliseconds,
+                DurationMs = (long)(DateTime.UtcNow - startedAtUtc).TotalMilliseconds,
                 IsSuccess = true
             });
         }
@@ -96,7 +115,7 @@ public class YzhAuditingFilter : IAsyncActionFilter
             await _auditLogger.LogApiCallAsync(new AuditLogEntry
             {
                 Level = LogLevel.Error,
-                Timestamp = startTime,
+                Timestamp = startedAtLocal,
                 UserCode = userCode,
                 UserName = userName,
                 HttpMethod = httpMethod,
@@ -107,9 +126,11 @@ public class YzhAuditingFilter : IAsyncActionFilter
                 Controller = controllerName,
                 ActionName = actionName,
                 ControllerNamespace = controllerNamespace,
+                ApiName = apiName,
+                ApiGroup = apiGroup,
                 RequestParams = requestParams,
                 StatusCode = 500,
-                DurationMs = (long)(DateTime.UtcNow - startTime).TotalMilliseconds,
+                DurationMs = (long)(DateTime.UtcNow - startedAtUtc).TotalMilliseconds,
                 IsSuccess = false,
                 ErrorMessage = ex.Message,
                 ExceptionType = ex.GetType().FullName,

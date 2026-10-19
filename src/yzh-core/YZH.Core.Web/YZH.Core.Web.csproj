@@ -17,6 +17,10 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+    <!-- 运行日志（2026-10-17）：控制台 + Logs/app-*.log（Information+）+ Logs/error-*.log（Warning+）
+         选 8.x 线是为了对齐 net8.0（Serilog.AspNetCore 9/10 线分别面向 net9/net10）。
+         ⛔ 不要升级到 9.x+：会引入 new-sdk 依赖并要求更高 TFM。 -->
+    <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
   </ItemGroup>
 
   <ItemGroup>

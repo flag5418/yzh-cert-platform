@@ -3,7 +3,7 @@
  * ISO 标准 → 条款管理（左树右表，配置驱动 TreeTable 架构）
  *
  * ★ 三层体系裁决（2026-10-08）：
- * - 左树：**全只读**（类别/标准均不可增删改）
+ * - 左树：**体系（分类） → 族 → 标准** 三层，**全只读**（不可增删改）
  * - 右表：仅当选中「标准」节点时加载条款树；否则显示空提示
  * - 条款操作（增/删/改）仍可用 —— 但只作用于已选中的标准
  *
@@ -61,7 +61,7 @@ const dialogTitle = computed(() =>
 
 async function handleNodeClick(node: TreeNode) {
   if (!logic.isSelectableNode(node)) {
-    // 点击类别（虚拟）节点：清空选择，右侧回到空提示
+    // 点击体系（虚拟）/族节点：清空选择，右侧回到空提示
     logic.selectedNode = null
     return
   }

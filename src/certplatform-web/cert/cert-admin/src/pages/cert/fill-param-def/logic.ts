@@ -21,7 +21,9 @@
  *   - `loadTreeRoot`          —— 树数据源 = 字典 + 族 + ISO 标准（跨控制器拼接）
  *   - `autoSelectFirstNode`   —— 自动选中第一个**可点击**节点（通用参数或首个标准），
  *                                而非第一个 virtual 体系节点
- *   - `isSelectableNode`      —— 区分 virtual/真实节点（virtual 不触发过滤）
+ *   - `isSelectableNode`      —— 区分归属节点 / 导航节点（体系·族不触发过滤、不可新增）
+ *   - `openAddDialog`         —— 内核 `runAction('add')` 走 `openAddDialog` 而非 `openRowDialog`，
+ *                                必须一并覆写并转调 `openRowDialog`，否则归属守卫是死代码
  *   - `onPrepareAdd`          —— 新增行注入 `StandardCode` = 选中节点 Code（归属键）
  *   - `requireTreeSelectionMessage` —— 本页业务文案
  *   - `toolbarActions` + refresh handler —— 样板同款（内核默认工具栏无「刷新」）
@@ -62,16 +64,22 @@ export class FillParamDefLogic extends TreeTableCore<any> {
   }
 
   /**
-   * 是否可点击（仅真实节点可触发过滤）：
+   * 是否「参数归属节点」：只有它能挂参数 / 触发右表过滤。
    * - 通用参数（Code=''）⇒ true
-   * - 体系/族（NodeType='virtual'）⇒ false
-   * - 标准（NodeType 非 virtual）⇒ true
+   * - 标准（NodeType 非 virtual / family）⇒ true
+   * - 体系 / 族 / 未归族（NodeType='virtual' 或 'family'）⇒ false（纯导航节点）
+   *
+   * <p>★ 唯一判据：新增参数、选择、过滤三处共用本方法，⛔ 不得各写各的。</p>
    */
-  isSelectableNode(node: TreeNode | null | undefined): boolean {
+  private isParamOwnerNode(node: TreeNode | null | undefined): boolean {
     if (!node) return false
-    // virtual 节点：只用于导航，不触发过滤
-    if (node.NodeType === 'virtual') return false
-    return true
+    if (node.Code === '') return true // 通用参数根节点
+    return node.NodeType !== 'virtual' && node.NodeType !== 'family'
+  }
+
+  /** 是否可点击（仅归属节点可触发过滤）：通用参数 / 标准 ⇒ true，导航节点 ⇒ false */
+  isSelectableNode(node: TreeNode | null | undefined): boolean {
+    return this.isParamOwnerNode(node)
   }
 
   /**
@@ -179,19 +187,28 @@ export class FillParamDefLogic extends TreeTableCore<any> {
   }
 
   /**
-   * 覆盖新增入口：virtual 节点（体系/族）不允许新增参数。
+   * 工具栏「新增参数」与行新增同走 `openRowDialog`（含归属节点校验）。
    *
-   * ＜p>内核默认 `openRowDialog` 对 virtual 跳过 `canAddUnderNode` 检查直接放行 ——
+   * <p>★ 为什么必须覆写：内核 `runAction('add')` 走的是 `openAddDialog()` 而**不是**
+   * `openRowDialog()`（见 `SingleTableCore.runAction`）——只覆写 `openRowDialog` 是死代码，
+   * 「新增参数」照样能在体系/族节点上打开弹窗（实测：选中族节点点新增 → 弹窗照开，
+   * 参数被挂到实体中不存在的族 GUID 上）。与 `system/organization`、`system/dictionary` 同款改法。</p>
+   */
+  override openAddDialog(): void {
+    this.openRowDialog(null)
+  }
+
+  /**
+   * 归属节点守卫：只有「通用参数」或「标准」可新增参数；体系/族等导航节点一律拦截。
+   *
+   * <p>内核默认 `openRowDialog` 对 virtual 跳过 `canAddUnderNode` 检查直接放行 ——
    * 若选中体系/族节点后点「新增参数」，`onPrepareAdd` 会把族 GUID 写入 StandardCode
    * ⇒ 参数挂到了实体中不存在的族上，且右表按 ISO GUID 过滤永不见影。</p>
    */
   override openRowDialog(row?: any | null): boolean {
-    if (!row) {
-      const node = this.selectedNode
-      if (node && this.isVirtualNode(node)) {
-        ElMessage.warning('请先在左侧选择「通用参数」或某个标准作为归属')
-        return false
-      }
+    if (!row && !this.isParamOwnerNode(this.selectedNode)) {
+      ElMessage.warning('请先在左侧选择「通用参数」或某个标准作为归属')
+      return false
     }
     return super.openRowDialog(row)
   }
@@ -201,10 +218,11 @@ export class FillParamDefLogic extends TreeTableCore<any> {
     entity.StandardCode = this.selectedNode?.Code ?? ''
   }
 
-  /** 工具栏：新增参数 + 批量删除 + 刷新（内核默认无 refresh 动作） */
+  /** 工具栏：新增参数 + 批量删除 + 刷新；「新增参数」仅在归属节点（通用参数/标准）下可用 */
   override get toolbarActions(): YzhAction[] {
+    const canAdd = this.isParamOwnerNode(this.selectedNode)
     return [
-      { key: 'add', text: '新增参数', type: 'primary' },
+      { key: 'add', text: '新增参数', type: 'primary', disabled: !canAdd },
       { key: 'delete', text: '批量删除', type: 'danger' },
       { key: 'refresh', text: '刷新', type: 'default' },
     ]

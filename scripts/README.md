@@ -67,7 +67,8 @@
 | `generate/` | 代码/实体生成 | 无 |
 | `storage/` | MinIO/存储相关 | 无 |
 | `tools/` | 通用工具（目录树、冻结检查、文档迁移） | 无 |
-| `tunnel/` | 公网临时隧道（Cloudflare Quick Tunnel）启停/状态 | ⛔ 无数据库操作 |
+| `deploy/` | 前端**生产构建镜像**打包发布（docker/web/）+ 隧道保活 | ⛔ 无数据库操作 |
+| `tunnel/` | 公网隧道（Cloudflare）启停/状态 | ⛔ 无数据库操作 |
 | `docker/`（仓库根） | 依赖容器启停/状态 | ⛔ 无数据库操作 |
 
 ---
@@ -139,17 +140,25 @@
 | `tools/freeze-check.sh` | 冻结检查（`src/old/` 禁改校验） |
 | `tools/docs-migration/` | 文档迁移脚本：`cleanup_refs_20260928.py` / `rebase_relative_links_20260928.py` / `update_refs.py`（一次性，已执行）+ **`check_docs.mjs`（常驻防回归校验，随时可跑：`node scripts/tools/docs-migration/check_docs.mjs`）** |
 
-### 2.5 tunnel/ — 公网临时访问（Cloudflare Quick Tunnel）
+### 2.5 deploy/ — 前端生产构建发布（Docker）
 
 | 脚本 | 作用 | 用法 |
 |------|------|------|
-| `start-tunnel.sh` | 一键把 admin(9990)/auditor(9991) 前端暴露到公网（免域名） | `./start-tunnel.sh [admin\|auditor\|all]` |
+| `deploy-web.sh` | ★ 一键：把**最新前端源码**做生产构建打进 nginx 镜像 → 起容器（宿主 127.0.0.1:10990/10991，**不占 dev 端口**）→ 保活隧道（已在运行则不重启，公网地址不变） | `./deploy-web.sh [admin\|auditor] [--build-only\|--tunnel-only\|--no-tunnel]` |
+
+**要点**：外网访问走「生产构建」而非 dev server —— dev 模式按需请求 ~275 个源码模块，跨境链路上逐个往返；生产构建只有 ~87 个可 gzip/长缓存的产物文件，这是外网提速的主来源。镜像定义见 `docker/web/`，编排见 `docker/web/compose.yml`。
+
+### 2.6 tunnel/ — 公网访问（Cloudflare Tunnel）
+
+| 脚本 | 作用 | 用法 |
+|------|------|------|
+| `start-tunnel.sh` | 把 admin/auditor 暴露到公网（免域名）。**幂等**：隧道存活且目标端口一致时**不重启**（地址不变） | `./start-tunnel.sh [admin\|auditor\|all]` |
 | `stop-tunnel.sh` | 关闭隧道，公网地址即刻失效 | `./stop-tunnel.sh [admin\|auditor\|all]` |
-| `status-tunnel.sh` | 查看隧道进程 / 本机端口 / 当前公网地址 | `./status-tunnel.sh` |
+| `status-tunnel.sh` | 查看隧道进程 / 目标端口 / 当前公网地址 | `./status-tunnel.sh` |
 
-**要点**：只暴露两个前端；后端 9992 与 MySQL/Redis/MinIO **不对外暴露**——前端以相对路径 `/api` 调用，由 Vite proxy 在本机转发。首次运行自动下载 `cloudflared` 至 `tunnel/bin/`。详见 `tunnel/README.md`。
+**要点**：默认映射**容器生产构建**端口（admin=10990 / auditor=10991，由 `deploy/` 发布）；临时映射 dev 用 `TUNNEL_ADMIN_PORT=9990` 覆盖。传输协议可用 `TUNNEL_PROTOCOL=http2` 切换。只暴露两个前端；后端 9992 与 MySQL/Redis/MinIO **不对外暴露**——前端以相对路径 `/api` 调用，由 nginx（容器内）在本机转发。首次运行自动下载 `cloudflared` 至 `tunnel/bin/`。详见 `tunnel/README.md`。
 
-### 2.6 仓库根 docker/ — 依赖容器
+### 2.7 仓库根 docker/ — 依赖容器
 
 | 脚本 | 作用 |
 |------|------|

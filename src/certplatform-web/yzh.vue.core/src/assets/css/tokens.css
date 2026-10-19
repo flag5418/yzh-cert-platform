@@ -225,6 +225,7 @@ html.dark {
   --el-color-primary-light-9: color-mix(in srgb, var(--yzh-color-primary) 10%, black);
 
   /* ---------- 语义色（提亮 + 深色浅底） ---------- */
+  --yzh-color-primary-light-9: color-mix(in srgb, var(--yzh-color-primary) 12%, #1a1d23);
   --yzh-color-success: #4ade80;
   --yzh-color-success-light-9: #16281c;
   --yzh-color-warning: #fbbf24;
