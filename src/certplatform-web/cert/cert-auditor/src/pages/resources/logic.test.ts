@@ -386,7 +386,7 @@ describe('文案映射', () => {
   it('opTypeText 七种历史操作', () => {
     const l = logic()
     const cases: Array<[string, string]> = [
-      ['upload', '上传'], ['replace', '替换'], ['delete', '移除'], ['restore', '恢复'],
+      ['upload', '上传'], ['replace', '替换'], ['delete', '删除'], ['restore', '恢复'],
       ['extract_trigger', '触发提取'], ['extract_done', '提取完成'], ['archive', '归档'],
     ]
     for (const [op, text] of cases) {

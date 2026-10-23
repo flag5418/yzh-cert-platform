@@ -1336,9 +1336,29 @@ public class EnterpriseFileService
         => DispatchMatcher.NormalizeExt("x." + a) == DispatchMatcher.NormalizeExt("x." + b);
 
     /// <summary>
-    /// 移除文件（处置而非毁灭，04 §六 偏差）：<b>MinIO 对象原地保留</b>，只置 <c>IsValid=0</c>。
-    /// <para>⛔ 不置 <c>IsDeleted</c>：本行同时是「应上传槽位」定义行，软删会被全局过滤器从所有查询里抹掉
-    /// ⇒ 需求凭空消失、版本面板再也打不开。移除语义 = 撤回该文件（清单留一行「已移除」，可恢复）。</para>
+    /// ★★★ <b>删除文件（真删，2026-10-20 用户裁决）</b>：物理删除全部存储对象 + 版本链 + 提取结果，
+    /// 槽位行复位为「缺失」以便重新上传。
+    ///
+    /// <para><b>为什么从「移除」改成「删除」</b>：企业资料<b>是否保留属于专家的判断</b>，不是系统的判断。
+    /// 系统替专家保留「已撤回」的文件，等于把不该留的资料留在库里 —— 一旦涉诉，举证责任反而落在机构身上
+    /// （ISO 19011 亦未要求机构长期保存被撤回的文件）。</para>
+    ///
+    /// <para><b>⛔ 与旧实现的三个语义反转</b>：</para>
+    /// <list type="number">
+    ///   <item><b>对象</b>：旧 = 原地保留（<c>IsValid=0</c>、可从版本面板恢复）⇒ 新 = <b>全部物理删除，不可恢复</b>；</item>
+    ///   <item><b>顺序</b>：旧 = 先改 DB 再删对象，且对象删除异常被 <c>catch</c> 吞掉 ⇒ <b>MinIO 删失败时前端仍报「成功」</b>；
+    ///         新 = <b>先删对象，全部成功才改 DB</b>。理由：DB 清了对象留着 = 永久孤儿且无从追溯；
+    ///         反之对象删了 DB 未改只是「打不开」，可重试且幂等（S3 <c>RemoveObject</c> 对不存在对象不报错）。</item>
+    ///   <item><b>行</b>：旧 = <c>IsValid=0</c>（清单显示「已移除」）⇒ 新 = <b>路径列全清、状态回「缺失」</b>。
+    ///         ⛔ 不删行：本行同时是「应上传槽位」定义行，硬删/软删会让需求凭空消失、缺口被掩盖。</item>
+    /// </list>
+    ///
+    /// <para><b>为什么版本号不回拨</b>：<c>cert_enterprise_file_version</c> 的软删行仍占用
+    /// <c>(FileCode, VersionNumber)</c> 组合，回拨会让下一次上传撞版本号；保持单调递增
+    /// ⇒ 时间线上能看出「删过一版、又传了一版」。</para>
+    ///
+    /// <para><b>失败语义</b>：任一对象删除失败 ⇒ <b>不做任何 DB 变更</b>并回报错误，由专家重试。
+    /// 这条比「尽力删」重要：半删状态会让「文件到底还在不在」无法回答。</para>
     /// </summary>
     public async Task<Result> DeleteFileAsync(string fileCode, string enterpriseCode, string? reason = null, System.DateTime? expectedModifyTime = null)
     {
@@ -1352,28 +1372,135 @@ public class EnterpriseFileService
         var conflict = CheckModifyConflict(file, expectedModifyTime);
         if (conflict != null) return Result.Fail(conflict);
 
+        if (file.IsLocked)
+            return Result.Fail("该文件已锁定（生成路径不得覆盖），请先解锁再删除");
+
         var lockHit = await _queueManager.FindResourceLockAsync(
             QueueManager.RESOURCE_FILE, new List<string> { fileCode });
         if (lockHit != null)
-            return Result.Fail($"该文件正在转换队列中（{lockHit.QueueCode}），请等待完成后再移除");
+            return Result.Fail($"该文件正在转换队列中（{lockHit.QueueCode}），请等待完成后再删除");
 
-        file.IsValid = 0;
+        // ─── ① 收集待删对象：当前 6 条路径 + 全部历史版本归档，按 key 去重 ───
+        //   ⚠️ 透传场景 PreviewPdfPath == StoragePath，重复删同一 key 无害，但去重后计数更真实。
+        var versions = (await _db.GetListAsync<EnterpriseFileVersion>(
+            x => x.FileCode == fileCode && x.EnterpriseCode == enterpriseCode,
+            includeDisabled: true)).Data ?? new List<EnterpriseFileVersion>();
+
+        var targets = new List<string>();
+        void Collect(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+            var key = path.TrimStart('/');
+            if (!targets.Contains(key, StringComparer.Ordinal)) targets.Add(key);
+        }
+        Collect(file.StoragePath);
+        Collect(file.PreviewPdfPath);
+        Collect(file.MarkdownPath);
+        // ★ 旧实现只删 4 条路径，下面 2 列是 10-03 / 10-06 新增的产物列 —— 漏删即孤儿
+        Collect(file.EditableStoragePath);   // 归一产物（editable/*.docx）
+        Collect(file.NormalizedPdfPath);     // 规范化产物 PDF
+        Collect(file.ConvertedStoragePath);  // 遗留中间产物
+        foreach (var v in versions) Collect(v.StoragePath);
+
+        // ─── ② 先删对象：任一失败即中止，DB 保持原样（可重试） ───
+        foreach (var key in targets)
+        {
+            try
+            {
+                await _storage.DeleteAsync(key);
+            }
+            catch (System.Exception ex)
+            {
+                _logger.LogError(ex, "[Delete] 存储对象删除失败，已中止（DB 未变更）: {Key}", key);
+                return Result.Fail($"存储对象删除失败，本次未做任何变更（可重试）：{ex.Message}");
+            }
+        }
+
+        // ─── ③ 版本行软删（保留「曾经有 v1/v2」的记录，内容对象已在上一步删除） ───
+        foreach (var v in versions.Where(x => !x.IsDeleted))
+        {
+            v.IsDeleted = true;
+            v.IsValid = 0;
+            v.DeleteBy = _user.UserCode;
+            v.DeleteTime = System.DateTime.Now;
+            await _db.UpdateAsync(v,
+                nameof(EnterpriseFileVersion.IsDeleted), nameof(EnterpriseFileVersion.IsValid),
+                nameof(EnterpriseFileVersion.DeleteBy), nameof(EnterpriseFileVersion.DeleteTime));
+        }
+
+        // ─── ④ 提取结果物理删（含人工补录值）───
+        //   ⚠️ 与本类其它链路（替换/恢复）不同：文件已不存在，没有可回活的历史，留着即法律风险。
+        var purgeRuleCode = await ResolveRuleCodeAsync(file.StandardFileCode);
+        var purgedResults = await _resultStore.PurgeAsync(enterpriseCode, purgeRuleCode, fileCode);
+
+        // ─── ⑤ 槽位行复位：清内容、回「缺失」，槽位定义保留 ───
+        file.StoragePath = null;
+        file.PreviewPdfPath = null;
+        file.MarkdownPath = null;
+        file.EditableStoragePath = null;
+        file.NormalizedPdfPath = null;
+        file.ConvertedStoragePath = null;
+        file.SourceOriginalPath = null;
+        file.SourceProfileCode = string.Empty;
+        file.FileSize = null;
+        file.UploadStatus = null;
+        file.TaskId = null;
+        // ⚠️ DB 的 Status 列是**实例状态枚举**（draft/pending/filling/filled/confirmed/archived），
+        //    「missing」只是 StatusOf 的**计算值**（由 StoragePath 为空推出），⛔ 不写库 —— 写进去就是枚举外的脏值。
+        file.Status = "draft";
+        file.ConvertStatus = null;
+        file.ConvertMessage = null;
+        file.ConvertDate = null;
+        file.MarkdownStatus = null;
+        file.MarkdownMessage = null;
+        file.MarkdownDate = null;
+        file.EditableStatus = null;
+        file.EditableMessage = null;
+        file.EditableDate = null;
+        file.ExtractStatus = "none";
+        file.ExtractMessage = null;
+        file.MaxConfidence = null;
+        file.NormalizedTime = null;
+        file.FillCompletion = 0m;
+        file.FillConfidence = 1.00m;
+        file.FillAnchorCount = 0;
+        file.FillPendingCount = 0;
+        file.IsLocked = false;
+        file.LockedBy = null;
+        file.LockedTime = null;
+        file.IsValid = 1;
         file.UpdateBy = _user.UserCode;
         file.UpdateTime = System.DateTime.Now;
         await _db.UpdateAsync(file,
+            nameof(StandardDirectoryFile.StoragePath), nameof(StandardDirectoryFile.PreviewPdfPath),
+            nameof(StandardDirectoryFile.MarkdownPath), nameof(StandardDirectoryFile.EditableStoragePath),
+            nameof(StandardDirectoryFile.NormalizedPdfPath), nameof(StandardDirectoryFile.ConvertedStoragePath),
+            nameof(StandardDirectoryFile.SourceOriginalPath), nameof(StandardDirectoryFile.SourceProfileCode),
+            nameof(StandardDirectoryFile.FileSize), nameof(StandardDirectoryFile.UploadStatus),
+            nameof(StandardDirectoryFile.TaskId), nameof(StandardDirectoryFile.Status),
+            nameof(StandardDirectoryFile.ConvertStatus), nameof(StandardDirectoryFile.ConvertMessage),
+            nameof(StandardDirectoryFile.ConvertDate), nameof(StandardDirectoryFile.MarkdownStatus),
+            nameof(StandardDirectoryFile.MarkdownMessage), nameof(StandardDirectoryFile.MarkdownDate),
+            nameof(StandardDirectoryFile.EditableStatus), nameof(StandardDirectoryFile.EditableMessage),
+            nameof(StandardDirectoryFile.EditableDate), nameof(StandardDirectoryFile.ExtractStatus),
+            nameof(StandardDirectoryFile.ExtractMessage), nameof(StandardDirectoryFile.MaxConfidence),
+            nameof(StandardDirectoryFile.NormalizedTime), nameof(StandardDirectoryFile.FillCompletion),
+            nameof(StandardDirectoryFile.FillConfidence), nameof(StandardDirectoryFile.FillAnchorCount),
+            nameof(StandardDirectoryFile.FillPendingCount), nameof(StandardDirectoryFile.IsLocked),
+            nameof(StandardDirectoryFile.LockedBy), nameof(StandardDirectoryFile.LockedTime),
             nameof(StandardDirectoryFile.IsValid), nameof(StandardDirectoryFile.UpdateBy),
             nameof(StandardDirectoryFile.UpdateTime));
 
-        // ★ S2③ 图 4：移除 ⇒ 归档该文件全部活跃结果（读取口径为空；只翻 IsValid，恢复时可回活）
-        // ★ 2026-09-30 改按 RuleCode 归档（用户裁决 J4），同 ReplaceFileAsync
-        var removeRuleCode = await ResolveRuleCodeAsync(file.StandardFileCode);
-        if (!string.IsNullOrEmpty(removeRuleCode))
-            await _resultStore.InvalidateByRuleAsync(enterpriseCode, removeRuleCode, file.VersionNumber);
-        else
-            await _resultStore.InvalidateActiveAsync(enterpriseCode, fileCode, file.VersionNumber);
-
+        // ─── ⑥ 留痕：只记「谁在何时删了哪份、为什么」，⛔ 不记内容 ───
         await WriteOpLogAsync(enterpriseCode, file.StageCode, fileCode, "delete", file.VersionNumber,
-            new { fileName = file.FileName, storagePath = file.StoragePath, reason });
+            new
+            {
+                fileName = file.FileName,
+                reason,
+                deletedObjects = targets.Count,
+                deletedVersions = versions.Count,
+                purgedResults
+            });
         return Result.Ok();
     }
 

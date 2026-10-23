@@ -705,11 +705,15 @@ public class StandardDirectoryService
 
         var now = DateTime.Now;
 
-        // 级联软删文件（先标状态，再删对象 —— P1-15：顺序反了 DB 失败即不可逆）
+        // 级联删文件：逐个「先删对象 → 再标软删」。
+        // ⚠️ 与单个文件删除不同，这里**不因个别对象失败而整体中止** —— 目录级动作涉及几十份文件，
+        //    逐份中止会让用户无从处理；DB 侧照常归档，失败数汇总成一条告警（需人工清理）。
         var files = await _core.GetDirectoryFilesByConfigCodeAsync(directoryCode, includeDisabled: true);
+        var objectFailures = 0;
         foreach (var file in files)
         {
-            await DeleteFileFromStorageAsync(file);
+            var (_, failed) = await DeleteFileFromStorageAsync(file);
+            objectFailures += failed;
             file.IsDeleted = true;
             file.IsValid = 0;
             file.DeleteBy = "system";
@@ -719,6 +723,10 @@ public class StandardDirectoryService
             await _db.UpdateAsync(files, nameof(StandardDirectoryFile.IsDeleted),
                 nameof(StandardDirectoryFile.IsValid), nameof(StandardDirectoryFile.DeleteBy),
                 nameof(StandardDirectoryFile.DeleteTime));
+        // 目录删除是批量动作，不因个别对象失败而整体中止（DB 侧已归档），但必须留下可追溯的告警
+        if (objectFailures > 0)
+            _logger.LogWarning("[DeleteConfig] {DirectoryCode} 有 {Count} 个存储对象清理失败（需人工清理）",
+                directoryCode, objectFailures);
 
         // 级联软删文件夹
         var folders = (await _db.GetListAsync<StandardDirectoryFolder>(
@@ -979,10 +987,20 @@ public class StandardDirectoryService
             filesDeleted += fild;
         }
 
-        // 删除文件夹下的文件（先改 DB 状态再删对象 —— P1-15）
+        // 删除文件夹下的文件：先删对象，成功才标软删。
+        // ⚠️ 对象删失败 ⇒ **保留该行**（用户仍能在列表里看到它、可单独重试），
+        //    而不是「DB 已删、对象还在」的永久孤儿（旧实现的形态）。
         var files = await _core.GetDirectoryFilesByFolderCodeAsync(folderCode);
         foreach (var file in files)
         {
+            var (_, objFailed) = await DeleteFileFromStorageAsync(file);
+            if (objFailed > 0)
+            {
+                _logger.LogWarning("[DeleteFolder] {FileCode} 有 {Count} 个对象清理失败，保留该行待重试",
+                    file.Code, objFailed);
+                continue;
+            }
+
             file.IsDeleted = true;
             file.IsValid = 0;
             file.Status = "archived";
@@ -992,7 +1010,6 @@ public class StandardDirectoryService
                 nameof(StandardDirectoryFile.IsDeleted), nameof(StandardDirectoryFile.IsValid),
                 nameof(StandardDirectoryFile.Status), nameof(StandardDirectoryFile.DeleteBy),
                 nameof(StandardDirectoryFile.DeleteTime));
-            await DeleteFileFromStorageAsync(file);
             filesDeleted++;
         }
 
@@ -1165,7 +1182,18 @@ public class StandardDirectoryService
         var file = await _core.GetDirectoryFileByCodeAsync(fileCode);
         if (file == null) return (false, "文件不存在");
 
-        // 先改 DB 状态，再删对象 —— P1-15（顺序反了 MinIO 失败即不可逆）
+        // ★ 2026-10-20：顺序改为「先删对象，全部成功再改 DB」。
+        //   旧顺序（先 DB 后对象）在对象删除失败时只 LogWarning 就 return (true, null)
+        //   ⇒ 前端报「删除成功」、DB 已 archived、对象永久孤儿且无从追溯。
+        //   新顺序下失败可重试且幂等（S3 RemoveObject 对不存在对象不报错）。
+        var (deleted, failed) = await DeleteFileFromStorageAsync(file);
+        if (failed > 0)
+        {
+            _logger.LogError("[DeleteFile] {FileCode} 有 {Failed}/{Total} 个对象删除失败，DB 未变更（可重试）",
+                fileCode, failed, deleted + failed);
+            return (false, $"存储对象删除失败（{failed} 个），本次未做任何变更，请重试");
+        }
+
         file.IsDeleted = true;
         file.IsValid = 0;
         file.Status = "archived";
@@ -1175,7 +1203,6 @@ public class StandardDirectoryService
             nameof(StandardDirectoryFile.IsDeleted), nameof(StandardDirectoryFile.IsValid),
             nameof(StandardDirectoryFile.Status), nameof(StandardDirectoryFile.DeleteBy),
             nameof(StandardDirectoryFile.DeleteTime));
-        await DeleteFileFromStorageAsync(file);
         return (true, null);
     }
 
@@ -1199,28 +1226,57 @@ public class StandardDirectoryService
     }
 
     /// <summary>
-    /// 删除文件在 MinIO 的全部对象（★ 2026-09-26 由 2 条路径扩到 4 条）
+    /// 删除文件在 MinIO 的全部对象（★ 2026-10-20 由 4 条路径扩到 6 条）
     ///
-    /// <para>必须删除：① 原始文件 ② 预览 PDF 产物 ③ Markdown 产物 ④ 遗留中间产物。</para>
-    /// <para>⚠️ 原实现只删 ① ④ → 删除/替换后 ② ③ 变**孤儿对象**。更危险的是：
-    /// 若之后重新上传同名文件，提取链可能读到**已删除文件的旧产物** → 提取到不存在的内容，
+    /// <para>必须删除：① 原始文件 ② 预览 PDF 产物 ③ Markdown 产物 ④ 遗留中间产物
+    /// ⑤ 归一产物（<c>editable/</c>）⑥ 规范化产物 PDF。</para>
+    /// <para>⚠️ 原实现只删 ① ④ → 删除/替换后 ② ③ 变<b>孤儿对象</b>。更危险的是：
+    /// 若之后重新上传同名文件，提取链可能读到<b>已删除文件的旧产物</b> → 提取到不存在的内容，
     /// 且零报错。</para>
+    /// <para>⚠️ <b>2026-10-20 补 ⑤ ⑥</b>：两列是 10-03 / 10-06 新增的产物列，删除逻辑没跟上 ——
+    /// 删这类文件必在 MinIO 留下孤儿（库里实测 21 行有 <c>EditableStoragePath</c>）。</para>
     /// </summary>
-    private async Task DeleteFileFromStorageAsync(StandardDirectoryFile file)
+    /// <returns>(成功删除数, 失败数)。失败只告警不抛 —— 由调用方决定是否回报给用户。</returns>
+    private async Task<(int Deleted, int Failed)> DeleteFileFromStorageAsync(StandardDirectoryFile file)
     {
-        await TryDeleteObjectAsync(file.StoragePath, "原始文件");
-        await TryDeleteObjectAsync(file.PreviewPdfPath, "预览PDF产物");
-        await TryDeleteObjectAsync(file.MarkdownPath, "Markdown产物");
-        await TryDeleteObjectAsync(file.ConvertedStoragePath, "遗留中间产物");
+        var deleted = 0;
+        var failed = 0;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        async Task TryAsync(string? path, string label)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+            var key = path.TrimStart('/');
+            // 透传场景下 PreviewPdfPath == StoragePath，避免重复删除同一对象
+            if (!seen.Add(key)) return;
+            if (await TryDeleteObjectAsync(key, label)) deleted++;
+            else failed++;
+        }
+
+        await TryAsync(file.StoragePath, "原始文件");
+        await TryAsync(file.PreviewPdfPath, "预览PDF产物");
+        await TryAsync(file.MarkdownPath, "Markdown产物");
+        await TryAsync(file.ConvertedStoragePath, "遗留中间产物");
+        await TryAsync(file.EditableStoragePath, "归一产物");
+        await TryAsync(file.NormalizedPdfPath, "规范化产物PDF");
+        return (deleted, failed);
     }
 
-    /// <summary>删除单个 MinIO 对象（空路径跳过；失败只告警不中断）</summary>
-    private async Task TryDeleteObjectAsync(string? path, string label)
+    /// <summary>删除单个 MinIO 对象（空路径跳过；失败只告警不中断）。</summary>
+    /// <returns>true = 已删除或无需删除；false = 删除失败（对象可能仍存在）</returns>
+    private async Task<bool> TryDeleteObjectAsync(string? path, string label)
     {
-        if (string.IsNullOrWhiteSpace(path)) return;
-        // 透传场景下 PreviewPdfPath == StoragePath，避免重复删除同一对象
-        try { await _storage.DeleteAsync(path.TrimStart('/')); }
-        catch (Exception ex) { _logger.LogWarning(ex, "MinIO 删除{Label}失败: {Path}", label, path); }
+        if (string.IsNullOrWhiteSpace(path)) return true;
+        try
+        {
+            await _storage.DeleteAsync(path.TrimStart('/'));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "MinIO 删除{Label}失败: {Path}", label, path);
+            return false;
+        }
     }
 
     #endregion

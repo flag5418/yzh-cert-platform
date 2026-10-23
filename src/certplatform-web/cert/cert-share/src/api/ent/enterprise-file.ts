@@ -179,7 +179,10 @@ export function isSlotLive(slot?: FileSlot | null): boolean {
   return !!slot && slot.IsValid !== 0 && !!slot.StoragePath
 }
 
-/** 槽位「已移除」：对象与版本都在，唯一出口是版本面板恢复 */
+/**
+ * 槽位「已移除」—— ⚠️ **仅历史遗留行**：旧「移除」语义（保留对象、可恢复）留下的 `Status='removed'`。
+ * <para>2026-10-20 起删除是<b>真删</b>：槽位复位为 `missing`，不会再产生本状态。</para>
+ */
 export function isSlotRemoved(slot?: FileSlot | null): boolean {
   return !!slot && slot.Status === 'removed'
 }
@@ -455,7 +458,10 @@ export async function replaceEnterpriseFile(
   return unwrap<ManualValuesArchivedNotice | null>(res, null)
 }
 
-/** 移除文件（软删 + 保留存储对象，Reason 必填） */
+/**
+ * 删除文件（**真删**，2026-10-20 用户裁决：存储对象 + 历史版本 + 提取结果一并物理删除，不可恢复）
+ * <para>Reason 必填（写入操作留痕）。后端先删对象、全部成功才改 DB ⇒ 失败时前端可原样重试。</para>
+ */
 export async function deleteFile(
   fileCode: string, enterpriseCode: string, reason: string, expectedModifyTime?: string
 ): Promise<void> {

@@ -9,6 +9,10 @@ namespace CertPlatform.Shared.Services.DocExtraction;
 /// <para><b>铁律</b>：行数永不减少 —— 任何失效只翻转 <c>IsValid</c>（0=归档 / 1=活跃），
 /// ⛔ 禁止物理 DELETE。历史版本必须可被 <see cref="RehydrateVersionAsync"/> 原样回活。</para>
 ///
+/// <para><b>★ 唯一例外：<see cref="PurgeAsync"/></b>（2026-10-20 用户裁决）。文件被<b>真删</b>时
+/// 版本链与存储对象已一并物理删除，不存在可回活的历史 ⇒ 内容继续留在库里只构成法律风险。
+/// 除该链路外，<b>任何地方都不得物理删除本表</b>。</para>
+///
 /// <para><b>活跃语义（D5 归档谓词按 VersionNumber 精确化）</b>：任一时刻同一 (企业, 文件)
 /// 只有<b>一个版本</b>的行是活跃的；<c>uk_extract_active</c>（含 ActiveFlag 生成列）
 /// 保证「同版本最多 1 行活跃」。</para>
@@ -122,6 +126,55 @@ public class EnterpriseExtractionResultStore
         var tableRows = await t.ExecuteCommandAsync();
 
         return fieldRows + tableRows;
+    }
+
+    /// <summary>
+    /// ★★★ <b>物理删除</b>某文件/规则的提取结果（含人工补录值）—— <b>本类「行数永不减少」铁律的唯一例外</b>。
+    ///
+    /// <para><b>为什么允许例外（2026-10-20 用户裁决）</b>：文件被<b>真删</b>时，其存储对象与版本链已一并
+    /// 物理删除，<b>不存在可被 <see cref="RehydrateVersionAsync"/> 回活的历史</b>。此时仍把提取出的字段值 /
+    /// 表格值留在库里，等于「文件删了、内容还在」—— 正是要消除的法律风险。</para>
+    ///
+    /// <para><b>⛔ 使用边界</b>：<b>只允许文件真删链路</b>（<c>EnterpriseFileService.DeleteFileAsync</c>）调用。
+    /// 替换 / 撤回 / 恢复一律走 <see cref="InvalidateByRuleAsync"/> / <see cref="InvalidateActiveAsync"/>（软归档），
+    /// 否则「版本可回活」的契约被打破。</para>
+    ///
+    /// <para><b>为什么同时按 RuleCode 与 FileCode 各删一遍</b>：补录行（<c>ValueSource='manual'</c>）的
+    /// <c>FileCode</c> 填的是规则声明的 <c>StandardFileCode</c>，<b>不是</b>槽位 Code
+    /// ⇒ 只按 FileCode 删会漏掉人工补录值（与 <see cref="InvalidateByRuleAsync"/> 同一陷阱）。</para>
+    /// </summary>
+    /// <param name="enterpriseCode">企业 Code</param>
+    /// <param name="ruleCode">规则 Code（空 = 只按 FileCode 删）</param>
+    /// <param name="fileCode">槽位文件 Code（空 = 只按 RuleCode 删）</param>
+    /// <returns>被物理删除的行数（字段 + 表格）</returns>
+    public async Task<int> PurgeAsync(string enterpriseCode, string? ruleCode, string? fileCode)
+    {
+        if (string.IsNullOrWhiteSpace(enterpriseCode)) return 0;
+        if (string.IsNullOrWhiteSpace(ruleCode) && string.IsNullOrWhiteSpace(fileCode)) return 0;
+
+        int fields = 0, tables = 0;
+
+        if (!string.IsNullOrWhiteSpace(ruleCode))
+        {
+            fields += await _db.Client.Deleteable<ExtractionResult>()
+                .Where(x => x.EnterpriseCode == enterpriseCode && x.RuleCode == ruleCode)
+                .ExecuteCommandAsync();
+            tables += await _db.Client.Deleteable<TableExtractionResult>()
+                .Where(x => x.EnterpriseCode == enterpriseCode && x.RuleCode == ruleCode)
+                .ExecuteCommandAsync();
+        }
+
+        if (!string.IsNullOrWhiteSpace(fileCode))
+        {
+            fields += await _db.Client.Deleteable<ExtractionResult>()
+                .Where(x => x.EnterpriseCode == enterpriseCode && x.FileCode == fileCode)
+                .ExecuteCommandAsync();
+            tables += await _db.Client.Deleteable<TableExtractionResult>()
+                .Where(x => x.EnterpriseCode == enterpriseCode && x.FileCode == fileCode)
+                .ExecuteCommandAsync();
+        }
+
+        return fields + tables;
     }
 
     /// <summary>

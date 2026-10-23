@@ -80,7 +80,7 @@ function rowActions(row: FileSlot): YzhAction[] {
   // else：转换中/未完成且非 not_configured ⇒ 不出「提取」（与原实现 v-if 链一致）
 
   list.push({ key: 'result', text: '结果' })
-  list.push({ key: 'remove', text: '移除', type: 'danger', disabled: props.busy })
+  list.push({ key: 'remove', text: '删除', type: 'danger', disabled: props.busy })
   return list
 }
 

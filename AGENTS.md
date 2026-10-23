@@ -148,6 +148,8 @@ AIGC:
 - **编码规范**：C# 编码规范与 Vue/TS 编码规范已归档至 `docs/90-归档/历史项目/Vol框架/归档-2026-09-09-Vol框架历史文档/`（Vol 专属，新架构请参考 `docs/10-YZH架构/02-后端架构.md` 与 `docs/10-YZH架构/03-前端架构.md`）
 - **脚本规范**：`scripts/README.md`（backend/db/frontend/storage/generate/tools 子目录）
 - **★ 前端一键发布（外网访问）**：`./scripts/deploy/deploy-web.sh` — 生产构建 → nginx 容器（`127.0.0.1:10990/10991`，**不占 dev 9990/9991**）→ 保活 Cloudflare 隧道（幂等，目标端口不变则不重启，**公网地址稳定**）。⛔ 禁止把 dev server 直接挂隧道。详见 `项目全局规则.md` §十八 与 `scripts/deploy/README.md`
+- **★ 企业资料规范化全册**（当前主线）：`docs/40-实施/企业资料规范化/README.md` — 索引 + `64`（实施规格/权威）+ `67`（依赖企业文档）
+- **★ 专家任务设计（审核检查表·待裁决）**：`docs/40-实施/专家任务设计/README.md` — 28→41 号，含部门维度/证据三源/竞品调研/法律风险/获客红线
 - **★ 运行期排查坑与沙箱铁律**（排障前必读）：`docs/00-工程体系/运行期排查坑与沙箱铁律-V1.md` — 端口真身（9990=前端 vite / 9992=后端）· 沙箱工具选择（`ps`⇒`lsof` / `nohup`⇒`run_in_background` / shell grep⇒Grep 工具 / `find`⇒Glob）· 进程与缓存假象（新增控制器须重建重启 / `lsof` 有监听≠跑 HEAD 代码 / MinIO 被代理毒死报「文件不存在」）· SqlSugar ORM 过滤双路径 + 写回 `Result` · 节点端口两个来源
 
 ## 项目速览

@@ -422,21 +422,21 @@ function pickFolder() {
       </template>
     </YzhDialog>
 
-    <!-- ═══════════ 移除文件 ═══════════ -->
-    <YzhDialog v-model="logic.deleteDialogVisible.value" title="移除文件" width="460px">
-      <el-alert type="warning" :closable="false" show-icon class="dialog-tip">
-        移除只在清单上标记无效，存储对象与归档版本全部保留（证据保全），可在版本面板恢复
+    <!-- ═══════════ 删除文件（真删，不可恢复） ═══════════ -->
+    <YzhDialog v-model="logic.deleteDialogVisible.value" title="删除文件" width="460px">
+      <el-alert type="error" :closable="false" show-icon class="dialog-tip">
+        该文件与其<b>全部历史版本、提取结果</b>将从存储中<b>永久删除，不可恢复</b>。清单上的槽位会回到「缺失」，可重新上传
       </el-alert>
       <p class="replace-info"><strong>文件：</strong>{{ logic.deletingFile.value?.FileName }}</p>
       <el-form label-width="80px" class="reason-form">
-        <el-form-item label="移除原因" required>
+        <el-form-item label="删除原因" required>
           <el-input v-model="logic.deleteReason.value" type="textarea" :rows="2" maxlength="200" show-word-limit
-                    placeholder="必填：为何移除（写入操作留痕，供审计追溯）" />
+                    placeholder="必填：为何删除（写入操作留痕，供审计追溯）" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="logic.closeDeleteDialog()">取消</el-button>
-        <el-button type="danger" :disabled="!logic.deleteReason.value.trim()" @click="logic.confirmDelete()">确认移除</el-button>
+        <el-button type="danger" :disabled="!logic.deleteReason.value.trim()" @click="logic.confirmDelete()">确认删除</el-button>
       </template>
     </YzhDialog>
 
