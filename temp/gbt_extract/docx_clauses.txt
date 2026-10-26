@@ -1,0 +1,113 @@
+======================================================================
+
+########## TABLE 0 rows=1 cols=6
+R0 [6c]: 'Process Area\n过程/区域' || GM/MR
+
+########## TABLE 1 rows=34 cols=4
+R0 [4c]: 'Clause条款' || Requriements要求
+R1 [4c]: '4.1' || Understanding the organisation and its context 理解组织及其环境 How the organisation has determined external and internal issues relevant to the business purpose and st
+R2 [4c]: '4.1' || Understanding the organisation and its context 理解组织及其环境 How the organisation has determined external and internal issues relevant to the business purpose and st
+R3 [4c]: '4.2' || Understanding the needs and expectations of interested parties理解相关方的需求和期望 How the organisation has determined interested parties relevant to the management syst
+R4 [4c]: '4.2' || Qualification and licensing status of the organization(including the name, number and validity period) 组织的资质、许可状态（包括名称、编号和有效期）?
+R5 [4c]: '4.3' || Determining the scope确定范围 Details how the scope of the management system has been determined and documented. Details of the boundaries, the types of products an
+R6 [4c]: 'Q 4.4' || Quality Management System and its processes 质量管理体系及其过程 4.4.1 Details how the organisation has determined the processes needed for the QMS and their application 
+R7 [4c]: 'E4.4' || Environmental management system环境管理体系 Details how the organisation has established and implemented EMS and how it maintains and continually improve an EMS, incl
+R8 [4c]: 'H4.4' || OH&S management system职业健康安全管理体系 Details how the organisation has established and implemented OH&S and how it maintains and continually improves OH&S. 列举说明组织如何建
+R9 [4c]: 'Q5.1' || Leadership and Commitment领导和承诺 5.1.1 Details how top management demonstrate leadership and commitment to QMS (e.g. been accountable, promoting use of the proces
+R10 [4c]: 'EH5.1' || Leadership and Commitment领导和承诺 Details how top management demonstrate leadership and commitment to management system. 列举说明最高管理者如何展示领导能力和对管理体系的承诺。
+R11 [4c]: 'Q 5.2.1/2\nE & H 5.2' || Policy方针 Details of a documented policy which addresses all relevant requirements. 具体的满足相关要求的文件化方针。
+R12 [4c]: 'Q 5.2.1/2\nE & H 5.2' || Communicated, understood, applied and available to all relevant interested parties传达、理解、应用并提供给所有相关方
+R13 [4c]: '5.3' || Organisational roles, responsibilities and authorities组织角色、责任和权限 How are the responsibilities and authorities assigned for relevant roles and communicated and u
+R14 [4c]: 'H 5.4' || Consultation and participation of workers 员工的参与和协商 Details how the organisation has established, implemented and maintain processes for consultation and partici
+R15 [4c]: '6.1.1\nQ6.1.2' || Actions to address risks and opportunities 应对风险和机遇的措施 When planning the management system, does the organisation consider issues and requirements referred to in
+R16 [4c]: 'E6.1.2' || Details how the organisation has determined environmental impacts and aspects. 列举说明组织如何确定环境影响和因素。
+R17 [4c]: 'H 6.1.2' || Hazard identification危险源辨识 Details how the organisation has established, implemented and maintain processes for hazard identification that is ongoing and proact
+R18 [4c]: 'H 6.1.2' || Assessment of OH&S risks and other risks to the OH&S management system职业健康安全风险和职业健康安全管理体系的其他风险评估 Details of the organisation’s methodology(ies) and criteria for
+R19 [4c]: 'E& H 6.1.4' || Planning action措施的策划 Details how the organisation plan actions to address significant environmental aspects and Health & Safety hazards, compliance obligations 
+R20 [4c]: '6.2.1/2' || Objectives and planning to achieve them 目标和实现目标的策划 Details how objectives are set at relevant functions, levels and processes needed for the management system. 
+R21 [4c]: 'Q 6.3' || Planning of changes变更的策划 Details how the changes are planned and managed (e.g. purpose and risk of change, resources, changes in responsibilities and authoritie
+R22 [4c]: 'Q 7.1.1\nE & H 7.1' || Resources资源 What resources has the organisation determined and provided for the establishment, implementation, maintenance and continual improvement of the mana
+R23 [4c]: 'Q7.1.2' || People人员 Details of the persons that the organisation has determined and provided necessary of the effective implementation of its management system and for the
+R24 [4c]: 'Q7.1.6' || Organisational knowledge组织知识 Details of the knowledge necessary for the operation of organisation’s processes and to achieve conformity of its products and serv
+R25 [4c]: '9.1.1' || Monitoring, measurement, analysis and evaluation监视、测量、分析和评价 Details how the organisation evaluates the management system performance and effectiveness (e.g. wha
+R26 [4c]: 'Q 9.1.3' || Analysis and evaluation分析与评价 Details how monitoring and measuring data is analysed and evaluated.(conformity of products, customer satisfaction, effectiveness o
+R27 [4c]: '9.2' || Internal Audit内部审核 Details of the internal audit programme, responsibilities, planning requirements and reporting. How are objectivity and the impartiality of t
+R28 [4c]: 'Q 9.3.1/2/3\nE & H 9.3' || Management Review管理评审 Details how management reviews are carried out and how they take into consideration: actions from previous management reviews; changes in 
+R29 [4c]: '10.1' || General总则 Details how the organisation determine and select opportunities for improvement to enhance customer satisfaction. 列举说明组织如何确定和选择改进机会，以提高客户满意度。
+R30 [4c]: 'QE10.2' || Nonconformity and corrective action 不符合及纠正措施 Details of the process to manage nonconformities and corrective actions.  Details of the documented information of 
+R31 [4c]: 'H10.2' || Incident, nonconformity and corrective action事件、不符合和纠正措施 Details how the organisation establish, implement and maintain processes, including reporting,investiga
+R32 [4c]: '10.3' || Continual Improvement持续改进 Details how the organisation continually improve the suitability, adequacy and effectiveness of the management system.  Including inci
+R33 [4c]: '' || Management system changes/logo usage/last non conformance verification /complaints from relevant parties 管理体系变更/标志使用/上次不符合项验证/相关方投诉
+
+########## TABLE 2 rows=1 cols=6
+R0 [6c]: 'Process Area\n过程/区域' || 行政财务、安环运行
+
+########## TABLE 3 rows=16 cols=4
+R0 [4c]: 'Clause条款' || Requriements要求
+R1 [4c]: '7.2' || Competence能力 Details how the organisation has determined the necessary competence of person(s) doing work under its control that affects the performance and eff
+R2 [4c]: '7.3' || Awareness意识 Details how the organisation ensures that persons doing work under its control are aware of the policy and objectives, their contribution to the man
+R3 [4c]: '7.4' || Communication沟通 Details how the organisation has determined the communication (internal and external) relevant to the management system (e.g. communication on w
+R4 [4c]: '7.5.1/7.5.2/7.5.3' || Documented Information文件化信息 Details of documented information available determined by the standard(s) and organisation.  Processes for creating, updating and co
+R5 [4c]: 'E6.1.2' || Environmental aspects环境因素 Details how the organisation has determined environmental impacts and aspects. 列举说明组织如何确定环境影响和因素。
+R6 [4c]: 'H 6.1.2.1' || Hazard identification危险源辨识 Details how the organisation has established, implemented and maintain processes for hazard identification that is ongoing and proact
+R7 [4c]: 'E 6.1.3' || Compliance obligations合规义务 Details how the organisation has determined, applied and considered the compliance obligations related to its environmental aspects. 
+R8 [4c]: 'H 6.1.3' || Determination of legal requirements and other requirements法律要求和其他要求的确定 Details how the organisation determine and have access to up-to-date legal requirements a
+R9 [4c]: 'E 8.1' || Operational planning and control 运行策划与控制 Details about the processes needed to meet EMS requirements, operating criteria and control of the processes.  Details 
+R10 [4c]: 'H 8.1.1' || General总则 Details how the organisation plan, implement, control and maintain the processes needed to meet requirements of the OH&S and to implement the actions 
+R11 [4c]: 'H 8.1.2' || Eliminating hazards and reducing OH&S risks消除危害，降低职业健康安全风险 Details how the organisation establish, implement and maintain a processes for the elimination of haz
+R12 [4c]: 'H 8.1.3' || Management of change变更管理 Details how the organisation establish processes for the implementation and control of planned temporary and permanent changes that imp
+R13 [4c]: 'E&H8.2' || Emergency preparedness and response应急准备和响应 Details how the organisation has established, implemented and maintain the processes needed to prepare for and respon
+R14 [4c]: 'E& H 9.1.1' || Monitoring, measurement, analysis and evaluation监视、测量、分析和评价 Details how the organisation evaluates the management system performance and effectiveness (e.g. wha
+R15 [4c]: 'E& H 9.1.2' || Evaluation of compliance合规性评价 What evidence is there that the organisation has created and maintained the process needed to evaluate fulfilment of its complianc
+
+########## TABLE 4 rows=1 cols=6
+R0 [6c]: 'Process Area\n过程/区域' || 生产部、质量管理部、设备部、研发部
+
+########## TABLE 5 rows=10 cols=4
+R0 [4c]: 'Clause条款' || Requirements要求
+R1 [4c]: '7.1.3/7.1.4' || Infrastructure and Environment for the operation of processes基出设施和环境 Details of the infrastructure and environment that the organisation has determined and prov
+R2 [4c]: '7.1.5.1' || Monitoring and measuring resources 监视和测量资源 Details of the resources the organisation has provided necessary to ensure valid and reliable results when monitoring
+R3 [4c]: '7.1.5.2' || Measurement traceability测量溯源 If measurement traceability is a requirement, details how measuring equipment is identified, verified and safeguarded from adjustme
+R4 [4c]: 'E6.1.2' || Environmental aspects环境因素 Details how the organisation has determined environmental impacts and aspects. 列举说明组织如何确定环境影响和因素。
+R5 [4c]: 'H 6.1.2.1' || Hazard identification危险源辨识 Details how the organisation has established, implemented and maintain processes for hazard identification that is ongoing and proact
+R6 [4c]: 'E 8.1' || Operational planning and control运行策划和控制 Details about the processes needed to meet EMS requirements, operating criteria and control of the processes.  Details h
+R7 [4c]: 'H 8.1.1' || General总则 Details how the organisation plan, implement, control and maintain the processes needed to meet requirements of the OH&S and to implement the actions 
+R8 [4c]: 'H 8.1.2' || Eliminating hazards and reducing OH&S risks消除危害，降低职业健康安全风险 Details how the organisation establish, implement and maintain a processes for the elimination of haz
+R9 [4c]: 'E&H8.2' || Emergency preparedness and response 应急准备和响应 Details how the organisation has established, implemented and maintain the processes needed to prepare for and respo
+
+########## TABLE 6 rows=1 cols=6
+R0 [6c]: 'Process Area\n过程/区域' || 生产部、质量管理部、设备部、研发部
+
+########## TABLE 7 rows=11 cols=3
+R0 [3c]: 'Clause条款' || AuditEvidence审核证据
+R1 [3c]: 'Q8.1' || 公司依据产品的实现要求策划、明确了产品实现流程。 1、产品生产工艺流程： 1）化学加物理工艺：溶解—聚合—中和—过滤—配置—灌装； 2）物理工艺：溶解—吸附—过滤—干燥—灌装 3）产品研发工艺流程： 研发流程：产品立项—小试研究（工艺研究、质量研究）—中试生产—生产放大转移—验证三批—验证三批质量研究—项目评审 2、检
+R2 [3c]: 'Q8.3' || 8.3.1组织建立、实施和保持适当的设计和开发过程，以确保后续的产品和服务的提供 组织制定了《设计开发控制程序》，研发部依据研发的实现要求策划了产品的设计流程。 产品设计实现过程： 1）研发流程：产品立项—小试研究（工艺研究、质量研究）—中试生产—验证三批—验证三批质量研究—项目评审 2）研发依据，如：客户资料（客户提
+R3 [3c]: 'Q8.5.1' || 生产部依据生产指令单安排生产制定生产计划。 抽样覆盖的具体产品或服务名称：药用辅料（甘油、聚乙二醇、月桂醇聚氧乙烯醚、中链甘油三酸酯、克罗米通、壬基酚聚氧乙烯醚、聚氧乙烯辛基酚醚、三乙胺、辛酸钠、甲醛溶液、油酸、辛酸、磷酸三丁酯、聚山梨酯、苯甲醇、曲拉通X-100、泰洛沙泊、4-羟乙基哌嗪乙磺酸、蔗糖八硫酸酯钠、泊洛沙
+R4 [3c]: 'Q8.5.2' || 组织根据生产及产品特征，制定了标识和可追溯要求。 公司车间、办公区，划分明确，产品均摆放于指定位置，堆放整齐，符合控制要求。 公司根据客户订单制定生产计划，通过客户简称、批记录号、日期、进行追溯； 抽见标识和可追溯管理： 磷酸三丁酯，如：产品名称：磷酸三丁酯，登记号：F20190000453，产品批号：C-10-260
+R5 [3c]: 'Q8.5.3' || 企业无外部供方财产，顾客财产为：合同信息、技术协议。 客户合同由营销部保存，有异常或遗失时通知客户，按客户要求处理。  现场查看：顾客或外部供方财产控制基本符合要求。
+R6 [3c]: 'Q8.5.4' || 产组织在生产期间对输出进行必要的防护，以确保符合要求。 企业采购原材料直接贮存于原材料仓库现场，半成品根据实际生产情况随工序流转或放置到半成品仓库，成品包装后存放于成品仓库。 半产品使用洁净桶进行转运，产品搬运过程中，防止产品的倾倒，破损。原材料直接放置在原材料仓库，半成品根据产品特性使用洁净桶放置，成品依据客户要求 
+R7 [3c]: 'Q8.5.5' || 交付后活动：组织充分考虑了法律法规要求、产品特性、顾客要求和顾客反馈等。 公司产品交付后的活动，依据合同要求提供相应的售后服务以及顾客反馈信息进行处理。 公司产品交付后的活动，依据合同要求提供相应的售后服务及顾客反馈信息的处理、不良品的退换货，定期对顾客满意度进行调查，与业务部负责人沟通，公司自管理体系运行，暂未发生客
+R8 [3c]: 'Q8.5.6' || 组织对生产过程的更改进行必要的评审和控制，以确保持续地符合要求。 组织在手册中规定了变更的要求，按流程要求，经过必要的评审，由负责人确认后进行更改。企业暂未发生变更。
+R9 [3c]: 'Q8.6' || 公司制定了《成品监视和测量控制程序》，根据检验操作规程、原材料质量标准、相关原料企业标准、顾客要求，对来料、过程和成品进行检验，主要原材料包括：癸酸、甘油、山梨糖醇、山梨糖醇液、油酸、苯甲醇、磷酸三丁酯、辛酸、二乙二醇、乙二醇、三乙胺、4-羟乙基哌嗪乙磺酸、蔗糖八硫酸酯钠、月桂醇、辛基酚、克罗米通、硬脂醇、棕榈酸、月桂
+R10 [3c]: 'Q8.7' || 按《不合格品控制程序》等进行控制，采取纠正措施，以消除不合格的原因，防止不合格的再发生。 1）对于原料中的不合格品经评估后，按让步接收、拒收、报废、退货等方式处理。近一个年度内暂无特殊放行情况发生。 2）见“偏差汇报表及偏差调差表”,12/03/2026，涉及工序/过程：稳定性样品检测，产品名称：甘油，数量：20kg，
+
+########## TABLE 8 rows=1 cols=6
+R0 [6c]: 'Process Area\n过程／区域' || 采购过程、销售过程 Procurement process, sales process
+
+########## TABLE 9 rows=8 cols=4
+R0 [4c]: 'Clause条款' || Requirements要求
+R1 [4c]: 'Q9.1.2' || Customer satisfaction顾客满意度 Details how the customer satisfaction is monitored (e.g. customer surveys, feedback, meetings, compliments, warranty claims) 列举说明如何监控
+R2 [4c]: 'E6.1.2' || Environmental aspects环境因素 Details how the organisation has determined environmental impacts and aspects. 列举说明组织如何确定环境影响和因素。
+R3 [4c]: 'H 6.1.2.1' || Hazard identification危险源辨识 Details how the organisation has established, implemented and maintain processes for hazard identification that is ongoing and proact
+R4 [4c]: 'E 8.1' || Details about the processes needed to meet EMS requirements, operating criteria and control of the processes.  Details how changes and outsources processes are 
+R5 [4c]: 'H 8.1.1' || General总则 Details how the organisation plan, implement, control and maintain the processes needed to meet requirements of the OH&S and to implement the actions 
+R6 [4c]: 'H 8.1.2' || Eliminating hazards and reducing OH&S risks消除危害，降低职业健康安全风险 Details how the organisation establish, implement and maintain a processes for the elimination of haz
+R7 [4c]: 'H 8.1.4' || Procurement采购 Details how the organisation establish, implement and maintain processes to control the procurement of products and services in order to ensure th
+
+########## TABLE 10 rows=1 cols=6
+R0 [6c]: '区域／过程\nProcess Area' || 采购过程、销售过程 Procurement process, sales process
+
+########## TABLE 11 rows=3 cols=3
+R0 [3c]: 'Clause条款' || Audit Evidence审核证据
+R1 [3c]: 'Q8.2' || 公司策划了《合同评审控制程序》、《服务客户管理规程》、《销售档案管理规程》等。公司明确了与顾客签订合同的流程，通过拜访、微信、电话、会议等方式接受客户意向，明确客户具体要求签订合同/订单。  抽样覆盖产品或服务名称：药用辅料（甘油、聚乙二醇、月桂醇聚氧乙烯醚、中链甘油三酸酯、克罗米通、壬基酚聚氧乙烯醚、聚氧乙烯辛基酚醚
+R2 [3c]: 'Q8.4' || 公司制定了《采购控制程序》、《供应商管理规程》、《物料管理规程》等，明确了对供方及采购过程的控制要求。 1、合格供方： 见“供应商的物料清单”，共登记了26家合格供方，如： 南通润丰石油化工有限公司，                         提供产品：磷酸三丁酯； 潜江新亿宏有机化工有限公司，         
