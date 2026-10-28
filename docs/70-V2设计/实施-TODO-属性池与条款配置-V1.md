@@ -8,7 +8,7 @@
 
 ## 0. 开工前基线（⛔ 每次接手先跑这三条）
 
-- [ ] `git status` 干净（除本轮预期改动）；当前分支 `v2/clause-centric`
+- [x] `git status` 干净（除本轮预期改动）；当前分支 `v2/clause-centric`
 - [ ] `dotnet build CertPlatform.sln` **0 Error**（⚠️ 仓库根）
 - [ ] `docker exec yzh-mysql ... -e "SELECT COUNT(*) FROM cert_iso_clause"` = **273**；`cert_clause_attr_def` 存在性已确认
 
@@ -26,13 +26,13 @@
 
 ## 1. 归档过期文档（P0）
 
-- [ ] 1.1 建归档目录 `docs/90-归档/旧版本/归档-2026-10-28-V2条款属性设计演进/`
-- [ ] 1.2 把 **23 号 §二（208 条叶子语法实测）** 迁进 24 号（作为 §十二 附录）—— 否则归档后 25 号 §十四 的指针会断
-- [ ] 1.3 移入归档：`00` + `01`–`19` + `21` + `23`（共 22 个文件）
-- [ ] 1.4 写 `归档记录-V1.md`（谁取代谁 / 存活内容迁到哪 / 不再引用声明）
-- [ ] 1.5 更新 `docs/70-V2设计/README.md` 索引（去掉已归档条目，改指归档目录）
-- [ ] 1.6 修 25 号 §十四「语法实测以 23 号为准」→ 改指 24 号附录
-- [ ] 1.7 `git commit` 归档（单独一笔，便于回溯）
+- [x] 1.1 建归档目录 `docs/90-归档/旧版本/归档-2026-10-28-V2条款属性设计演进/`
+- [x] 1.2 把 **23 号 §二（208 条叶子语法实测）** 迁进 24 号（作为 §十二 附录）—— 否则归档后 25 号 §十四 的指针会断
+- [x] 1.3 移入归档：`00` + `01`–`19` + `21` + `23`（共 22 个文件）→ 已 git mv，剩 20/22/24/25/26/README/TODO/依据
+- [x] 1.4 写 `归档记录-V1.md`（谁取代谁 / 存活内容迁到哪 / 不再引用声明）
+- [x] 1.5 更新 `docs/70-V2设计/README.md` 索引（去掉已归档条目，改指归档目录）
+- [x] 1.6 修 25 号 §十四「语法实测以 23 号为准」→ 改指 24 号附录
+- [x] 1.7 `git commit` 归档（单独一笔，便于回溯）→ `42c1e2f3`
 
 > **保留不归档**：`20`（评估报告，P0/P1 未裁）· `22`（表清单，D-K1…D-K6 未裁）· `24`/`25`/`26`/`README`
 
@@ -40,14 +40,14 @@
 
 ## 2. 建表 + 种子数据（P1）
 
-- [ ] 2.1 写 `scripts/db/20261028_clause_attr_V1.sql`
+- [x] 2.1 写 `scripts/db/20261028_clause_attr_V1.sql`
   - `cert_clause_attr_def`（L0 属性池）+ `cert_clause_attr`（L1 条款配置），字段严格照 24 号 §九
   - 8 条种子：`ClauseIntent`/`Obligation`/`Applicability`/`ApplicabilityCondition`/`Process`/`Artifacts`/`EvidenceChain`/`Severity`
   - `FilterCode` 生成列（`Obligation`/`Severity`/`Applicability`）
-- [ ] 2.2 执行 SQL → 验 `SELECT COUNT(*) FROM cert_clause_attr_def` = **8**
-- [ ] 2.3 字典：`ArtifactType`（材料类型受控码，`ArtifactHit.Kind` 落它）
-- [ ] 2.4 字典：`ProcessDomain`（受控过程词表：生产/销售/设计/采购/检验/计量/仓储/售后/人力/管理）
-- [ ] 2.5 验唯一键 `uk_attr(StandardCode,ClauseCode,AttrCode)` 与生成列 `idx_filter` 可用
+- [x] 2.2 执行 SQL → 验 `SELECT COUNT(*) FROM cert_clause_attr_def` = **8** ✅ 实测 8 条
+- [x] 2.3 字典：`ArtifactType`（材料类型受控码，`ArtifactHit.Kind` 落它）✅ 10 项
+- [x] 2.4 字典：`ProcessDomain`（受控过程词表：生产/销售/设计/采购/检验/计量/仓储/售后/人力/管理）✅ 10 项
+- [x] 2.5 验唯一键 `uk_attr(StandardCode,ClauseCode,AttrCode)` 与生成列 `idx_filter` 可用 ✅ `Obligation=shall`→`FilterCode=shall`；`Process`→NULL
 
 ---
 
