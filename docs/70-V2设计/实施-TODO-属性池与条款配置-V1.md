@@ -53,16 +53,21 @@
 
 ## 3. 后端实体 / 配置 / 控制器（P2）
 
-- [ ] 3.1 实体 `CertPlatform.Shared/Entities/Cert/ClauseAttrDef.cs`（`[SugarTable("cert_clause_attr_def")]`）
-- [ ] 3.2 实体 `CertPlatform.Shared/Entities/Cert/ClauseAttr.cs`
-- [ ] 3.3 EntityConfig `Admin/Assets/EntityConfigs/Cert/ClauseAttrDef.json`（⚠️ 文件名 = 类名；`Yxk` 可空列必须 `true`）
-- [ ] 3.4 EntityConfig `Admin/Assets/EntityConfigs/Cert/ClauseAttr.json`
-- [ ] 3.5 控制器 `Admin/Controllers/Cert/ClauseAttrDefController.cs`（`: YzhControllerBase<ClauseAttrDef>`）
-- [ ] 3.6 控制器 `Admin/Controllers/Cert/ClauseAttrController.cs`（含左树端点 `/tree/root`：标准 → 条款）
-- [ ] 3.7 登记 `Program.cs` 的 `BusinessEntityConfigPaths`（若 `Assets/**` 通配已覆盖则记录实测结论）
-- [ ] 3.8 `dotnet build CertPlatform.sln` **0 Error** + 重启后端
-- [ ] 3.9 `curl` 冒烟：`GET config` / `POST add` / `POST filter` / `POST toggle-valid` 全通
-- [ ] 3.10 ★ 反向用例：`ValueSource` 空提交必须被拒（`NOT NULL` 语义）、`AttrCode` 不在池中必须被拒
+- [x] 3.1 实体 `CertPlatform.Shared/Entities/Cert/ClauseAttrDef.cs`（`[SugarTable("cert_clause_attr_def")]`）
+- [x] 3.2 实体 `CertPlatform.Shared/Entities/Cert/ClauseAttr.cs`
+- [x] 3.3 EntityConfig `Admin/Assets/EntityConfigs/Cert/ClauseAttrDef.json`（⚠️ 文件名 = 类名；`Yxk` 可空列必须 `true`）
+- [x] 3.4 EntityConfig `Admin/Assets/EntityConfigs/Cert/ClauseAttr.json`
+- [x] 3.5 控制器 `Admin/Controllers/Cert/ClauseAttrDefController.cs`（`: YzhControllerBase<ClauseAttrDef>`）
+- [x] 3.6 控制器 `Admin/Controllers/Cert/ClauseAttrController.cs`（含左树端点 `/tree/root`：标准 → 条款）
+- [x] 3.7 登记 `Program.cs` 的 `BusinessEntityConfigPaths` → **不需要**：实测 `CertPlatform.Admin/Assets/**` 通配已把 JSON 复制到宿主 `YZH.Core.Web/bin/.../Assets/EntityConfigs/Cert/`，`ContentRoot/Assets/EntityConfigs` 即核心目录 ⇒ 无需注册
+- [x] 3.8 `dotnet build CertPlatform.sln` **0 Error** + 重启后端 ✅ 505 警告 / **0 错误**，3s 就绪
+- [x] 3.9 `curl` 冒烟 ✅ `/config` 7 列 · `/options` 8 条 · `/tree/root` 4 标准 208 叶子 · `/filter` TotalCount=1 · `/tree/counts` 正确
+- [x] 3.10 ★ 反向用例 ✅ 5 类全拒：重复属性 / 属性不在池 / 标准与条款不匹配 / ValueType=int / dict 无字典；删被引用属性被拒
+
+**⚠️ 已知框架缺陷（本轮不修，记在这里）**：`YzhControllerBase.ValidateEntity` 的必填文案取 `col.DesName`，
+但实测输出的是 **FieldName**（"ValueSource 不能为空" 而不是 "值来源 不能为空"），而 `/config` 返回的 `DesName` 是对的
+⇒ `Config` 与 `/config` 用的不是同一份列定义。影响：所有模块的必填提示都会漏英文列名。
+**业务后果可控**：前端表单按 `Yxk` 已有必填规则，用户正常操作看不到这句；后端业务校验（重复/不匹配/枚举）文案是对的。
 
 ---
 

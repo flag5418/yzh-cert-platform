@@ -81,7 +81,9 @@ INSERT INTO `Sys_Dictionary` (`Code`,`DicNo`,`DicName`,`Remark`,`IsValid`,`IsDel
  ('CLAUSE_APPLICABILITY','clause_applicability','条款适用性',   'general=通用（无条件）、conditional=有条件（须求值 ApplicabilityCondition）', 1,0, 920),
  ('CLAUSE_SEVERITY',     'clause_severity',     '条款严重度',   'critical/major/minor；材料级严重度由判定规则按 ArtifactType 给，不在属性层', 1,0, 930),
  ('ARTIFACT_TYPE',       'artifact_type',       '企业应备材料类型','★Artifacts 提示词输出 ArtifactHit.Kind 必须落这里的 DicValue（⛔ 不回自由文本）', 1,0, 940),
- ('PROCESS_DOMAIN',      'process_domain',      '过程域受控词表', '条款管哪些过程（多选）；企业部门声明负责哪些过程 → 取交集得部门×条款矩阵', 1,0, 950)
+ ('PROCESS_DOMAIN',      'process_domain',      '过程域受控词表', '条款管哪些过程（多选）；企业部门声明负责哪些过程 → 取交集得部门×条款矩阵', 1,0, 950),
+ ('CLAUSE_ATTR_VALUE_TYPE','clause_attr_value_type','条款属性值类型','★只有 5 种：text/dict/bool/json/prompt；⛔ 无 int/date/*_multi', 1,0, 960),
+ ('CLAUSE_VALUE_SOURCE', 'clause_value_source', '条款值来源',   'fixed=条款已定(存值) | reference=条款只给期望(存期望)；⛔ 只有这两档，无 runtime', 1,0, 970)
 ON DUPLICATE KEY UPDATE `DicName`=VALUES(`DicName`), `Remark`=VALUES(`Remark`), `OrderNo`=VALUES(`OrderNo`);
 
 INSERT INTO `Sys_DictionaryList` (`Code`,`DicCode`,`DicValue`,`DicName`,`Remark`,`IsValid`,`IsDeleted`,`OrderNo`) VALUES
@@ -118,7 +120,16 @@ INSERT INTO `Sys_DictionaryList` (`Code`,`DicCode`,`DicValue`,`DicName`,`Remark`
  ('CD_PD_warehouse','PROCESS_DOMAIN','warehouse','仓储','仓储/搬运/防护/标识',1,0,70),
  ('CD_PD_after_sales','PROCESS_DOMAIN','after_sales','售后','售后服务/投诉处理/召回',1,0,80),
  ('CD_PD_hr','PROCESS_DOMAIN','hr','人力','人力资源/培训/能力/职业健康',1,0,90),
- ('CD_PD_management','PROCESS_DOMAIN','management','管理','管理层/策划/评审/内审/改进',1,0,100)
+ ('CD_PD_management','PROCESS_DOMAIN','management','管理','管理层/策划/评审/内审/改进',1,0,100),
+ -- 条款属性值类型（只 5 种）
+ ('CD_VT_text','CLAUSE_ATTR_VALUE_TYPE','text','文本','单值文本',1,0,10),
+ ('CD_VT_dict','CLAUSE_ATTR_VALUE_TYPE','dict','字典','单值，取 DictCode 指定字典',1,0,20),
+ ('CD_VT_bool','CLAUSE_ATTR_VALUE_TYPE','bool','布尔','是/否',1,0,30),
+ ('CD_VT_json','CLAUSE_ATTR_VALUE_TYPE','json','JSON','结构化多值（如受控词表多选）',1,0,40),
+ ('CD_VT_prompt','CLAUSE_ATTR_VALUE_TYPE','prompt','提示词','值即提示词，内部须输出结构化 JSON',1,0,50),
+ -- 条款值来源（只 2 档）
+ ('CD_VS_fixed','CLAUSE_VALUE_SOURCE','fixed','固定','条款已定，存值本身',1,0,10),
+ ('CD_VS_reference','CLAUSE_VALUE_SOURCE','reference','参考','条款只给期望，存期望',1,0,20)
 ON DUPLICATE KEY UPDATE `DicName`=VALUES(`DicName`), `DicValue`=VALUES(`DicValue`), `OrderNo`=VALUES(`OrderNo`);
 
 -- ────────────────────────────────────────────────────────────────────────────
@@ -155,7 +166,7 @@ FROM `cert_clause_attr_def` WHERE `IsDeleted`=0 ORDER BY `Sort`;
 
 SELECT '--- 字典项数 ---' AS `check`;
 SELECT `DicCode`, COUNT(*) AS cnt FROM `Sys_DictionaryList`
-WHERE `IsDeleted`=0 AND `DicCode` IN ('CLAUSE_OBLIGATION','CLAUSE_APPLICABILITY','CLAUSE_SEVERITY','ARTIFACT_TYPE','PROCESS_DOMAIN')
+WHERE `IsDeleted`=0 AND `DicCode` IN ('CLAUSE_OBLIGATION','CLAUSE_APPLICABILITY','CLAUSE_SEVERITY','ARTIFACT_TYPE','PROCESS_DOMAIN','CLAUSE_ATTR_VALUE_TYPE','CLAUSE_VALUE_SOURCE')
 GROUP BY `DicCode`;
 
 SELECT '--- 条款配置 ---' AS `check`;
