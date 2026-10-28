@@ -18,7 +18,7 @@
 
 | 文档 | 内容 | 状态 |
 |---|---|:--:|
-| **[24-条款标准化整体设计-四层模型-V1.md](./24-条款标准化整体设计-四层模型-V1.md)** | ★★★ **「条款×属性×值」主链的唯一依据**：**四层模型**（属性池 `cert_clause_attr_def` → 条款配置 `cert_clause_attr` → 企业值 `cert_enterprise_clause_attr` → 证据/预NC `cert_check_evidence`/`cert_check_result`）；`ValueSource` 三档（fixed/expected/runtime）；`ValueState` 五态；4 张表 DDL 草案；裁决 22 号 三个平行体系矛盾；D-M1…D-M10 | **待裁决** |
+| **[24-条款标准化整体设计-四层模型-V1.md](./24-条款标准化整体设计-四层模型-V1.md)** | ★★★ **「条款×属性×值」主链的唯一依据**：**四层模型**（属性池 `cert_clause_attr_def` → 条款配置 `cert_clause_attr` → 企业值 `cert_enterprise_clause_attr` → 证据/预NC `cert_check_evidence`/`cert_check_result`）；**`ValueSource` 三档（fixed/expected/runtime）落 L1 条款配置必填**（采集与判定的总开关）；`ValueState` 五态；4 张表 DDL 草案；裁决 22 号 三个平行体系矛盾；D-M1…D-M11 | **待裁决** |
 | [20-总体设计评估报告-V1.md](./20-总体设计评估报告-V1.md) | 以国标原文 + CNCA 规则 + 真实案例对标 00 号，列 P0/P1/P2 建议 | 待裁决 |
 | [23-条款标准化-属性与条款配置-V1.md](./23-条款标准化-属性与条款配置-V1.md) | 属性**从国标条文语法推导**（208 条叶子实测）的**实测依据**：9 条通用属性、三层池子、必填集 switch。**仅前两层**，已被 24 号 取代（保留其统计与语法推导结论） | 参考 |
 | [22-条款域-表清单与关系-V1.md](./22-条款域-表清单与关系-V1.md) | 背景参考：现有 89 张表的分层与三处断点（条款→语义 / 条款→文件 / 标准→计划）；三个平行体系矛盾由 24 号 §九 裁决 | 参考 |
