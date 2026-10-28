@@ -28,6 +28,9 @@ const businessRoutes: RouteRecordRaw[] = [
   { path: 'business/doc-extraction-rule', name: 'BusinessDocExtractionRule', component: () => import('@/pages/workflow/doc-extraction-rule/index.vue') },
   // ★ 标准文档填写规则（MENU_00218）—— 给空白模板标注锚点 + 挂全文填写提示词
   { path: 'business/doc-fill-rule', name: 'BusinessDocFillRule', component: () => import('@/pages/workflow/doc-fill-rule/index.vue') },
+  // ★ V2 条款属性：属性池 L0（MENU_00220）/ 条款配置 L1（MENU_00221）
+  { path: 'cert/clause-attr-def', name: 'CertClauseAttrDef', component: () => import('@/pages/cert/clause-attr-def/index.vue') },
+  { path: 'cert/clause-attr', name: 'CertClauseAttr', component: () => import('@/pages/cert/clause-attr/index.vue') },
   { path: 'business/report-def', name: 'BusinessReportDef', component: () => import('@/pages/workflow/report-rule/index.vue') },
   { path: 'business/prompt-template', name: 'BusinessPromptTemplate', component: () => import('@/pages/workflow/prompt-template/index.vue') },
   { path: 'business/skill-manage', name: 'BusinessSkillManage', component: () => import('@/pages/workflow/skill-manage/index.vue') },

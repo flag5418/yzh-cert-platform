@@ -75,32 +75,52 @@
 
 ### 4.1 属性池页（`/cert/clause-attr-def`）
 
-- [ ] 4.1.1 `cert-admin/src/pages/cert/clause-attr-def/index.vue`（单表 CRUD，`YzhTablePage` 范式）
-- [ ] 4.1.2 `logic.ts`：`controllerName = 'Cert/ClauseAttrDef'`
-- [ ] 4.1.3 `ValueType` 用受控下拉（`text/dict/bool/json/prompt`），`DictCode` 仅在 `dict` 时必填（前端联动）
-- [ ] 4.1.4 `prompt` 类型用多行文本域（⛔ 单行 input），并提示「值即提示词，内部须输出 JSON」
+- [x] 4.1.1 `cert-admin/src/pages/cert/clause-attr-def/index.vue`（单表 CRUD，`SingleTableCore` + `YzhTable` + `YzhFormDialog`）
+- [x] 4.1.2 `logic.ts`：`controllerName = 'Admin/Cert/ClauseAttrDef'`（★ 原文漏了 `Admin/` 段，三层同构路由必须带）
+- [x] 4.1.3 `ValueType` 用受控下拉（`text/dict/bool/json/prompt`，由 JSON 的 `DictCode: clause_attr_value_type` 驱动），`DictCode` 仅在 `dict`/`json` 时必填
+  → 证据：实测切到「字典」后「字典编码」`is-required=true`；切回「文本」变 false
+- [x] 4.1.4 `prompt` 类型的提示文案：弹窗顶部按值类型动态显示一句话说明（含「值即提示词，内部须输出 JSON」三条铁律）
+  → ★ 属性池本身**不存**提示词正文（正文是每条款各一份，住 L1）⇒ 多行编辑落在 4.2.5 的抽屉
+
+> ★★ **实现坑（必记）**：`formFields` 里**不能**读 `this.formData.X` 做联动。
+> `YzhFormDialog` 的 `v-model` 回写是 `logic.formData = $event`，而逻辑实例**不是** `reactive` 的
+> ⇒ 这一步把 `SingleTableCore.formData`（reactive 对象）整个替换成**普通对象**，
+> 之后所有 `this.formData.X` 读取都不再建立响应依赖 ⇒ 依赖它的 getter 永远不重算。
+> 解法：用 `fieldProps.onChange` 把值镜像进一个独立 `ref`，getter 只读 ref。
 
 ### 4.2 条款属性配置页（`/cert/clause-attr`）
 
-- [ ] 4.2.1 `index.vue`：`YzhTreeTableLayout` 左树（标准 → 条款）+ 右表（该条款属性）
-- [ ] 4.2.2 `logic.ts` 继承 `TreeTableLogic`，覆写 4 处（`loadConfig`/`loadTreeRoot`/`shouldApplyTreeFilter`/`relatedValue`）
-- [ ] 4.2.3 右表列：属性名 / `ValueSource`（固定·参考）/ 值 / 启用
-- [ ] 4.2.4 新增行时 `AttrCode` 从属性池下拉选（只列 `IsValid=1`），`ValueSource` 默认 `reference`
-- [ ] 4.2.5 `prompt` 类型属性用 `el-drawer` 大文本编辑（⛔ 表格内塞 textarea）
-- [ ] 4.2.6 ★ 右面板滚动容器自给（`YzhTreeTableLayout` 右面板 `overflow:hidden` 坑）
-- [ ] 4.2.7 路由注册（`router/index.ts`，path 必须与 `Sys_Menu.Url` 逐字一致）
+- [x] 4.2.1 `index.vue`：`YzhTreeTableLayout` 左树（标准 → **叶子条款**）+ 右表（该条款属性）
+- [x] 4.2.2 `logic.ts` 继承 `TreeTableCore`（`TreeTableLogic` 已是废弃别名），覆写 `loadConfig`/`loadTreeRoot`/`shouldApplyTreeFilter`/`relatedValue`
+  → ★ 额外覆写 `afterTreeLoaded`（补选项）/ `onPrepareAdd`（注入三键之二）/ `buildFilters`（追加 StandardCode）/ `columns` / `formFields` / `rowActions` / `openAddDialog` / `openEditDialog`
+  → ⚠️ `dtoToNode` **不递归**（只服务懒加载），两层嵌套树必须自己写 `dtoToNodeDeep`，否则 208 条条款全丢
+- [x] 4.2.3 右表列：属性（中文名 + 裸 Code 副行）/ 值来源 / 值 / 排序 / 状态
+- [x] 4.2.4 新增行 `AttrCode` 从属性池下拉选（`GET ClauseAttrDef/options`，只列 `IsValid=1`），`ValueSource` 默认 `reference`
+- [x] 4.2.5 `prompt` 类型属性用 `YzhDrawer` 大文本编辑（行内「编辑提示词」按钮**只在该行属性是 prompt 时出现**）
+  → 实测：2 行数据中只有 prompt 那行有按钮；抽屉保存后 `AttrValue` 落库正确
+- [x] 4.2.6 ★ 右面板滚动容器自给（外层 `height:100% + overflow:hidden`，内层 `flex:1;min-height:0;overflow:hidden`，并加 `.xxx__table > * { flex: none }`）
+- [x] 4.2.7 路由注册（`router/index.ts` 两条，path 与 `Sys_Menu.Url` 逐字一致）
 
 ### 4.3 菜单
 
-- [ ] 4.3.1 SQL 插入 `MENU_00220` 条款属性池（`MENU_00302` 下，OrderNo 400）
-- [ ] 4.3.2 SQL 插入 `MENU_00221` 条款属性配置（`MENU_00302` 下，OrderNo 410）
-- [ ] 4.3.3 `bash scripts/db/verify/sync_menu_urls.sh` 重新导出快照（⚠️ 该文件须随代码提交）
+- [x] 4.3.1 SQL `scripts/db/20261028_clause_attr_menu_V1.sql` → `MENU_00220` 条款属性池（`MENU_00302` 下，OrderNo 400，`/cert/clause-attr-def`）
+- [x] 4.3.2 同脚本 → `MENU_00221` 条款属性配置（OrderNo 410，`/cert/clause-attr`）✅ 已执行（幂等，`ON DUPLICATE KEY UPDATE`）
+- [x] 4.3.3 `bash scripts/db/verify/sync_menu_urls.sh` ✅ 47 条菜单，两条新 URL 已入快照
 
 ### 4.4 前端收口
 
-- [ ] 4.4.1 `node scripts/guards.mjs` **0 违规**（重点 `S04` 显式 type / `S07` 禁裸 dialog / `R18` 禁裸 hex）
-- [ ] 4.4.2 `npm run build`（= guards + `vue-tsc` + vite build）通过
-- [ ] 4.4.3 浏览器实测：能新增/编辑/删除，`prompt` 长文本能存能回显
+- [x] 4.4.1 `node scripts/guards.mjs` **0 违规** ✅ `✓ 前端架构守卫通过（37 条规则 / 1505 个文件）`
+  → ⚠️ 踩过一次 `S08`（禁裸 `<el-tag>`）⇒ 状态徽标统一用 `YzhStatusBadge`
+- [x] 4.4.2 `vue-tsc` **0 错** + `vite build` **2712 modules transformed 成功**
+  → ⚠️ `npm run build` 整体会在最后 `emptyDir(dist)` 被**沙箱 safe-delete 守卫**拦下（87 文件 > 阈值 50，与代码无关）；
+     绕法：`npx vite build --outDir dist-verify --emptyOutDir false`
+- [x] 4.4.3 浏览器实测（Playwright + 本机 Chrome）：
+  - 属性池：8 行渲染、7 列正确、新增弹窗打开、值类型联动必填生效
+  - 条款配置：左树 4 标准 / 208 叶子、点条款右表联动、空态文案区分「没选条款」与「选了没配」
+  - 新增 2 条（`ClauseIntent` text / `Artifacts` prompt）→ 提示「保存成功」，`Sort` 自动 10/20
+  - 抽屉改提示词 → 「提示词已保存」，`AttrValue` 落库为改后正文
+  - 控制台错误 **0**
+  - 测试数据已清理（`cert_clause_attr` 归零）
 
 ---
 

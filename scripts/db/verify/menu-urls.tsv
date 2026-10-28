@@ -21,6 +21,8 @@ admin	MENU_00218	/business/doc-fill-rule
 admin	MENU_00104	/system/role-api
 admin	MENU_00205	/cert/link-org-standard
 admin	MENU_00215	/business/ai-usage
+admin	MENU_00220	/cert/clause-attr-def
+admin	MENU_00221	/cert/clause-attr
 admin	MENU_00105	/system/menu
 admin	MENU_00206	/cert/link-org-stage
 admin	MENU_00216	/business/queue-monitor
