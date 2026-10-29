@@ -18,13 +18,20 @@ namespace CertPlatform.Shared.Services.Workflow
         public const string Content = "doc_content";
         /// <summary>★ 语义精要提示词（长文档摘要，输入长 Markdown → 输出精简画像）</summary>
         public const string Essential = "doc_essential";
+        /// <summary>
+        /// ★★ 条款属性预生成提示词（输入「条款号 + 标题 + 正文」→ 输出 8 个条款属性的 JSON）。
+        /// <para>用于「条款属性配置」页的 AI 预生成（V2 条款主链）。</para>
+        /// <para>⚠️ 输出里的 <c>Artifacts</c> / <c>EvidenceChain</c> 是<b>提示词正文</b>（不是结论），
+        /// 因为这两条属性在 L1 的值类型就是 <c>prompt</c>。</para>
+        /// </summary>
+        public const string ClauseAttr = "clause_attr";
     }
 
     /// <summary>
     /// 生效提示词的<b>只读投影</b>（Shared 契约）。
     /// <para><b>为什么不直接返回实体</b>：<c>PromptTemplate</c> 是<b>后台端独占实体</b>
     /// （<c>CertPlatform.Admin/Entities/Wf/</c>）⇒ 透出它等于让专家端重新依赖后台端。
-    /// 本 DTO 只带调用方真正要用的 4 个字段。</para>
+    /// 本 DTO 只带调用方真正要用的 5 个字段。</para>
     /// </summary>
     public sealed class PromptTemplateView
     {
@@ -34,6 +41,12 @@ namespace CertPlatform.Shared.Services.Workflow
         public string? Template { get; init; }
         /// <summary>模型名快照（为空 = 用平台默认）</summary>
         public string? ModelName { get; init; }
+        /// <summary>
+        /// ★ 命中的是哪一级：<b>标准 GUID</b> = 该标准专属；<c>null</c>/空 = <b>平台级兜底</b>。
+        /// <para>调用方据此判断「回退是否发生」——多标准隔离下，用平台兜底等于
+        /// 「这个标准还没真正配置」，⛔ 必须能告警，不能静默。</para>
+        /// </summary>
+        public string? StandardCode { get; init; }
     }
 
     /// <summary>

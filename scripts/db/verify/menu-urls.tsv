@@ -6,6 +6,7 @@ admin	MENU_00212	/business/nc-config
 admin	MENU_00217	/business/fill-param-def
 admin	MENU_00301	
 admin	MENU_00219	/cert/standard-manage
+admin	MENU_00222	/business/doc-extract-rule
 admin	MENU_00002	/
 admin	MENU_00102	/system/role-user
 admin	MENU_00201	/cert/iso-standard
@@ -34,9 +35,11 @@ admin	5fa27ae2-ca08-11f1-a2f8-8ed31d9948bf	/business/server-monitor
 admin	MENU_00108	/system/log
 admin	MENU_00209	/business/report-def
 admin	MENU_00109	/system/config
+auditor	MENU_AUD_15	/audit-member
 auditor	MENU_AUD_02	/enterprises
 auditor	MENU_AUD_07	/enterprise-stages
 auditor	MENU_AUD_10	/enterprise-fill-params
+auditor	MENU_AUD_16	/enterprise-dept
 auditor	MENU_AUD_00	/
 auditor	MENU_AUD_03	/tasks
 auditor	MENU_AUD_13	/queue

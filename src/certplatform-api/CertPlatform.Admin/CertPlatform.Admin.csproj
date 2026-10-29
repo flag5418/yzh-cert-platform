@@ -29,6 +29,7 @@
     <Using Include="CertPlatform.Admin.Entities.Dir" />
         
     <Using Include="CertPlatform.Admin.Entities.Wf" />
+    <Using Include="CertPlatform.Admin.Entities.Workflow" />
     <Using Include="CertPlatform.Shared.DocExtraction" />
   </ItemGroup>
 

@@ -527,13 +527,17 @@ public class DocTemplateController : YzhControllerBase<DocTemplate>
         }
 
         tpl.FillPromptCode = promptCode.Length == 0 ? null : promptCode;
+        // ★ 审计列必须自己填 + 自己列 —— 本处是列级更新，服务层 EntityService.Update 的
+        //   「自动并入审计列」不生效（这里直调 IDbOrm.UpdateAsync），漏写就静默留旧值（见 E010）。
         tpl.UpdateTime = DateTime.Now;
+        tpl.UpdateBy = UserContext.UserCode;
 
         // ⚠️ 列级更新：并发写同行时不能整行覆盖（见「静默失败陷阱」㉕/㉖）
         var upd = await _db.UpdateAsync(tpl, new[]
         {
             nameof(DocTemplate.FillPromptCode),
             nameof(DocTemplate.UpdateTime),
+            nameof(DocTemplate.UpdateBy),
         });
         if (!upd.Success)
             return Ok(ApiResponse<object>.Fail(upd.Error ?? "挂接提示词失败"));

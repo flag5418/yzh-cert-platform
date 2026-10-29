@@ -1,0 +1,206 @@
+# Clause Attr 页面完整改造任务
+# 2026-02-16 创建
+
+[task]
+title = "Clause Attr 页面重构：树形结构 + 属性控件 + 原文展示 + 提示词维护"
+owner = "CatPaw AI"
+created = "2026-02-16"
+status = "in_progress"
+
+# ────────────────────────────────────────────────────────────────
+# 原始问题
+# ────────────────────────────────────────────────────────────────
+[problems]
+  [problems.1]
+  id = "P1"
+  title = "左侧不是树形结构"
+  detail = "后端 /tree/root 只返回标准→叶子条款，非叶子条款被过滤，208条叶子平铺"
+  
+  [problems.2]
+  id = "P2"
+  title = "右侧属性英文名、不理解作用"
+  detail = "AttrCode 英文驼峰，Remark 不展示，8条属性用途不直观"
+
+  [problems.3]
+  id = "P3"
+  title = "字典类型属性手动输入"
+  detail = "dict/json/prompt/text 四种 ValueType 应自动切换控件"
+
+# ────────────────────────────────────────────────────────────────
+# 补充需求
+# ────────────────────────────────────────────────────────────────
+[extra_requirements]
+  show_clause_content = "右侧展示选中条款原文（cert_iso_clause.Description）"
+  regenerate_attr = "单条/多条/全部条款重新生成默认属性值"
+  prompt_maintain = "顶部按钮维护通用 AI 提示词模板（每标准一条）"
+  batch_generate = "批量生成属性而非手填，支持未来标准和属性扩展"
+
+# ────────────────────────────────────────────────────────────────
+# 改造任务分解
+# ────────────────────────────────────────────────────────────────
+
+  # ──────────────────────────────────────────────────────────────
+  # P0: 左侧树完整层次
+  # ──────────────────────────────────────────────────────────────
+  [[phases]]
+  id = "P0"
+  title = "左侧树完整层次（后端+前端）"
+  priority = 0
+  status = "pending"
+  
+    [[phases.tasks]]
+    id = "P0-1"
+    title = "后端 ClauseAttrController: /tree/root 返回完整树"
+    detail = "AddClauseTreeDto 增加 Level/IsLeaf/NodePath 字段，ClauseAttrService 递归构建完整树（标准→章→节→叶子），ParentCode 复用现有字段"
+    assignee = "backend"
+    
+    [[phases.tasks]]
+    id = "P0-2"
+    title = "前端 dtoToNodeDeep 适配完整树"
+    detail = "NodeDto 增加 Level 字段映射，expandedKeys 改为展开第一个标准的所有章节层（~30个节点），叶子保持折叠"
+    assignee = "frontend"
+
+  # ──────────────────────────────────────────────────────────────
+  # P1: 表单控件按 ValueType 切换
+  # ──────────────────────────────────────────────────────────────
+  [[phases]]
+  id = "P1"
+  title = "表单控件按 ValueType 自动切换"
+  priority = 1
+  status = "pending"
+  
+    [[phases.tasks]]
+    id = "P1-1"
+    title = "前端 loadDictItems: 加载字典选项"
+    detail = "新增 loadDictItems(dictCode) 方法，返回 [{label, value}] 供下拉使用，缓存到 dictCache"
+    assignee = "frontend"
+    
+    [[phases.tasks]]
+    id = "P1-2"
+    title = "表单控件映射: dict→select, json→multiselect, prompt→textarea+button, text→input"
+    detail = "formFields 中根据 formAttrCode 的 ValueType 动态选择控件类型和 options"
+    assignee = "frontend"
+    
+    [[phases.tasks]]
+    id = "P1-3"
+    title = "Process 多选标签组件"
+    detail = "el-select multiple + 태그 显示，序列化为 JSON 数组存入 AttrValue"
+    assignee = "frontend"
+
+  # ──────────────────────────────────────────────────────────────
+  # P2: 右侧属性列展示优化
+  # ──────────────────────────────────────────────────────────────
+  [[phases]]
+  id = "P2"
+  title = "右侧属性列展示优化"
+  priority = 2
+  status = "pending"
+    
+    [[phases.tasks]]
+    id = "P2-1"
+    title = "AttrCode 列: 主行中文名 + 副行 Code + Remark tooltip"
+    detail = "修改 slot-AttrCode 模板，增加 el-tooltip 显示 Remark"
+    assignee = "frontend"
+    
+    [[phases.tasks]]
+    id = "P2-2"
+    title = "新增 ValueSource 列: fixed/reference 徽章区分"
+    detail = "新增 column-ValueSource 模板，用不同颜色区分已固化 vs 期望说明"
+    assignee = "frontend"
+    
+    [[phases.tasks]]
+    id = "P2-3"
+    title = "表格上方「属性说明」折叠面板"
+    detail = "点击展开 8 条属性的中文名、作用、值类型说明表"
+    assignee = "frontend"
+
+  # ──────────────────────────────────────────────────────────────
+  # P3: 右侧条款原文 + 重新生成
+  # ──────────────────────────────────────────────────────────────
+  [[phases]]
+  id = "P3"
+  title = "右侧条款原文展示 + 重新生成属性按钮"
+  priority = 3
+  status = "pending"
+    
+    [[phases.tasks]]
+    id = "P3-1"
+    title = "ClauseAttr 右侧: 条款原文展示"
+    detail = "表格 ClauseCode → cert_iso_clause.Description，返回 Markdown/HTML 原文"
+    assignee = "frontend"
+    
+    [[phases.tasks]]
+    id = "P3-2"
+    title = "新增「重新生成属性」按钮（行内/批量）"
+    detail = "行内按钮生成单条，工具栏按钮支持选择多条或全部重新生成，调用 POST /generate"
+    assignee = "frontend"
+    
+    [[phases.tasks]]
+    id = "P3-3"
+    title = "生成进度优化+自动刷新"
+    detail = "生成进行中禁用按钮/显示进度，完成后自动刷新右表"
+    assignee = "frontend"
+
+  # ──────────────────────────────────────────────────────────────
+  # P4: 通用提示词维护页面
+  # ──────────────────────────────────────────────────────────────
+  [[phases]]
+  id = "P4"
+  title = "新增通用提示词维护页面 /cert/clause-prompt"
+  priority = 4
+  status = "pending"
+    
+    [[phases.tasks]]
+    id = "P4-1"
+    title = "后端: ClausePrompt 实体+控制器"
+    detail = "新建 cert_clause_prompt 表（Code, StandardCode, PromptContent, Version 等），实现 /filter /update /generate-all 端点"
+    assignee = "backend"
+    
+    [[phases.tasks]]
+    id = "P4-2"
+    title = "前端: /cert/clause-prompt 页面"
+    detail = "左树选标准 + 右侧 PromptContent 大文本编辑 + 保存按钮 + 「批量生成全部条款属性」按钮"
+    assignee = "frontend"
+    
+    [[phases.tasks]]
+    id = "P4-3"
+    title = "ClauseAttr 页面顶部加「提示词维护」跳转按钮"
+    detail = "工具栏增加按钮，点击跳转 /cert/clause-prompt"
+    assignee = "frontend"
+
+  # ────────────────────────────────────────────────────────────────
+  # 涉及文件汇总
+  # ────────────────────────────────────────────────────────────────
+  [files]
+    [[files.backend]]
+    path = "src/certplatform-api/CertPlatform.Admin/Controllers/Cert/ClauseAttrController.cs"
+    
+    [[files.backend]]
+    path = "src/certplatform-api/CertPlatform.Admin/Controllers/Cert/ClausePromptController.cs"
+    action = "create"
+    
+    [[files.backend]]
+    path = "src/certplatform-api/CertPlatform.Shared/Domain/Cert/ClausePrompt.cs"
+    action = "create"
+    
+    [[files.frontend]]
+    path = "src/certplatform-web/cert/cert-admin/src/pages/cert/clause-attr/index.vue"
+    
+    [[files.frontend]]
+    path = "src/certplatform-web/cert/cert-admin/src/pages/cert/clause-attr/logic.ts"
+    
+    [[files.frontend]]
+    path = "src/certplatform-web/cert/cert-admin/src/pages/cert/clause-prompt/index.vue"
+    action = "create"
+    
+    [[files.frontend]]
+    path = "src/certplatform-web/cert/cert-admin/src/pages/cert/clause-prompt/logic.ts"
+    action = "create"
+    
+    [[files.frontend]]
+    path = "src/certplatform-web/cert/cert-share/src/api/cert/clause-prompt.ts"
+    action = "create"
+    
+    [[files.frontend]]
+    path = "src/certplatform-web/cert/cert-admin/src/router/cert.ts"
+    action = "modify"

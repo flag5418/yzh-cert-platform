@@ -26,6 +26,12 @@ public static class CertPlatformAdminServiceExtensions
         services.AddScoped<StandardDirectoryService>();
         services.AddScoped<DirectoryTemplateService>();
         services.AddScoped<OfficeConvertService>();
+        // ★ V2 条款属性 AI 预生成（P4）：给条款号+标题+正文 → 8 属性 JSON → 落 cert_clause_attr
+        services.AddScoped<CertPlatform.Admin.Services.Cert.ClauseAttrGenerateService>();
+        // ★ 条款属性预生成提示词存取 + 属性池注入段渲染（存在 sys_config · ConfigKey=clause_attr_prompt）
+        services.AddScoped<CertPlatform.Admin.Services.Cert.ClauseAttrPromptService>();
+        // ★ 通用提示词模板服务（一张表管全部提示词：PromptCode + 作用域解析 + 占位符注册）
+        services.AddScoped<CertPlatform.Admin.Services.Cert.PromptTemplateService>();
         // ★ 转换内核（36 号 T1.1）：PDF / Markdown / 格式归一 / OCR 兜底的**唯一实现**，
         //   无状态可注册单例。标准目录、企业资料库、企业原始资料三条链共用它 ——
         //   ⛔ 禁止在任何 Service 里再直接调 DocumentConvertClient（那是「状态机抄第二遍」的开端）。

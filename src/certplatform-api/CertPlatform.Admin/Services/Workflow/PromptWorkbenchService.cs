@@ -1459,7 +1459,9 @@ public class PromptWorkbenchService : IPromptWorkbench
             Code = t.Code ?? "",
             Version = t.Version,
             Template = t.Template,
-            ModelName = t.ModelName
+            ModelName = t.ModelName,
+            // ★ 标准级还是平台级 —— 调用方靠它判断回退是否发生（24 号 §0.4）
+            StandardCode = t.StandardCode
         };
     }
 }

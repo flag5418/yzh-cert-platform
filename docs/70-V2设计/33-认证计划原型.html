@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>认证计划（原型）· 体系认证平台 V2</title>
+<style>
+  :root{
+    --c-primary:#2f6fed; --c-primary-soft:#eaf1ff; --c-bg:#f5f7fa; --c-card:#ffffff;
+    --c-border:#e3e8ef; --c-text:#1f2733; --c-sub:#6b7686; --c-ok:#2bb673; --c-warn:#e6a23c;
+    --radius:10px; --shadow:0 2px 10px rgba(20,30,50,.06);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,"Microsoft YaHei",Segoe UI,Roboto,sans-serif;background:var(--c-bg);color:var(--c-text);font-size:14px;}
+  .topbar{height:54px;background:#fff;border-bottom:1px solid var(--c-border);display:flex;align-items:center;padding:0 22px;box-shadow:var(--shadow);}
+  .topbar b{font-size:16px;}
+  .topbar .tag{margin-left:10px;font-size:12px;color:var(--c-sub);background:var(--c-primary-soft);padding:2px 8px;border-radius:6px;}
+  .wrap{max-width:1080px;margin:22px auto;padding:0 18px;}
+  .card{background:var(--c-card);border:1px solid var(--c-border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:18px;}
+  .card h3{margin:0 0 14px;font-size:15px;}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+  .spacer{flex:1;}
+  button{cursor:pointer;border:1px solid var(--c-border);background:#fff;color:var(--c-text);padding:7px 14px;border-radius:8px;font-size:13px;transition:.15s;}
+  button:hover{border-color:var(--c-primary);color:var(--c-primary);}
+  button.primary{background:var(--c-primary);border-color:var(--c-primary);color:#fff;}
+  button.primary:hover{opacity:.92;color:#fff;}
+  button.ghost{background:transparent;}
+  button.danger{border-color:#f0c2c2;color:#d9534f;}
+  button.danger:hover{background:#fdeaea;border-color:#d9534f;color:#d9534f;}
+  button:disabled{opacity:.5;cursor:not-allowed;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{border:1px solid var(--c-border);padding:8px 10px;text-align:left;vertical-align:top;}
+  th{background:#f3f6fb;color:var(--c-sub);font-weight:600;}
+  .pill{display:inline-block;background:var(--c-primary-soft);color:var(--c-primary);border-radius:20px;padding:1px 9px;font-size:12px;margin:1px 2px;}
+  .pill.gray{background:#eef1f5;color:var(--c-sub);}
+  .pill.green{background:#e7f7ee;color:var(--c-ok);}
+  /* stepper */
+  .stepper{display:flex;align-items:center;gap:0;margin-bottom:18px;}
+  .step{display:flex;align-items:center;gap:8px;}
+  .step .dot{width:26px;height:26px;border-radius:50%;background:#e6eaf0;color:var(--c-sub);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;}
+  .step.active .dot{background:var(--c-primary);color:#fff;}
+  .step.done .dot{background:var(--c-ok);color:#fff;}
+  .step .lbl{font-size:13px;color:var(--c-sub);}
+  .step.active .lbl{color:var(--c-text);font-weight:600;}
+  .step-line{width:46px;height:2px;background:#e6eaf0;margin:0 10px;}
+  /* modal */
+  .mask{position:fixed;inset:0;background:rgba(20,30,50,.35);display:none;align-items:flex-start;justify-content:center;padding:40px 16px;z-index:50;overflow:auto;}
+  .mask.show{display:flex;}
+  .modal{background:#fff;width:1000px;max-width:100%;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.18);padding:22px;animation:pop .18s ease;}
+  @keyframes pop{from{transform:translateY(8px);opacity:.6;}to{transform:none;opacity:1;}}
+  .modal h3{margin:0 0 6px;font-size:16px;}
+  .field{margin:10px 0;}
+  .field label{display:block;font-size:12px;color:var(--c-sub);margin-bottom:5px;}
+  select,input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--c-border);border-radius:8px;font-size:13px;background:#fff;}
+  .chk-group{display:flex;flex-wrap:wrap;gap:8px;}
+  .chk{border:1px solid var(--c-border);border-radius:8px;padding:7px 11px;cursor:pointer;user-select:none;font-size:13px;}
+  .chk.sel{background:var(--c-primary-soft);border-color:var(--c-primary);color:var(--c-primary);}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .box{border:1px solid var(--c-border);border-radius:10px;padding:12px;max-height:300px;overflow:auto;}
+  .box h4{margin:0 0 8px;font-size:13px;color:var(--c-sub);}
+  .tree-node{padding:3px 0;}
+  .tree-node .indent{display:inline-block;}
+  .clause-group{margin-bottom:8px;}
+  .clause-group .g-title{font-weight:600;color:var(--c-sub);font-size:12px;margin:6px 0 4px;}
+  .hint{font-size:12px;color:var(--c-sub);background:#f3f6fb;border-radius:8px;padding:8px 10px;margin:10px 0;}
+  .empty{color:var(--c-sub);font-size:13px;padding:14px;text-align:center;}
+  .footer{display:flex;justify-content:space-between;margin-top:18px;border-top:1px solid var(--c-border);padding-top:14px;}
+  .sel-row td .x{color:#d9534f;cursor:pointer;}
+  .code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#445;}
+  .cl{margin:2px 0;font-size:13px;}
+  .mt{margin-top:14px;}
+  .sub{color:var(--c-sub);font-size:12px;}
+</style>
+</head>
+<body>
+<div class="topbar"><b>体系认证平台 · 认证计划</b><span class="tag">原型 / V2 条款为核心</span></div>
+
+<div class="wrap">
+  <div class="card">
+    <div class="row">
+      <h3 style="margin:0;">认证计划列表</h3>
+      <div class="spacer"></div>
+      <button class="primary" onclick="App.openWizard()">+ 新建计划</button>
+    </div>
+    <div class="sub mt">计划主表：企业 / 阶段 / 标准（多个，逗号隔开 code）/ 是否启用。计划明细：每条组合记录 条款(code) · 部门(code) · 部门名称 · 条款序号。</div>
+    <div id="planList" class="mt"></div>
+  </div>
+</div>
+
+<!-- 向导 / 详情 弹窗 -->
+<div class="mask" id="mask">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script>
+/* ============ 模拟数据（对齐真实表结构） ============ */
+const App = {
+  enterprises:[
+    {Code:'E001',Name:'华科医疗器械有限公司'},
+    {Code:'E002',Name:'锐进电子科技有限公司'},
+    {Code:'E003',Name:'绿源环境工程有限公司'},
+  ],
+  standards:[
+    {Code:'iso9001',Name:'质量管理体系',Abbrev:'e'},
+    {Code:'iso14001',Name:'环境管理体系',Abbrev:'n'},
+    {Code:'iso45001',Name:'职业健康安全管理体系',Abbrev:'s'},
+    {Code:'iso13485',Name:'医疗器械质量管理体系',Abbrev:'m'},
+  ],
+  stages:[
+    {Code:'S1',Name:'一阶段审核'},
+    {Code:'S2',Name:'二阶段审核'},
+    {Code:'SV',Name:'监督审核'},
+    {Code:'RC',Name:'再认证审核'},
+  ],
+  // cert_enterprise_dept：业务键 Code(GUID)，DeptName，ParentCode 树形
+  departments:[
+    {Code:'D001',DeptName:'生产部',ParentCode:null},
+    {Code:'D001A',DeptName:'灭菌车间',ParentCode:'D001'},
+    {Code:'D001B',DeptName:'装配车间',ParentCode:'D001'},
+    {Code:'D002',DeptName:'质量部',ParentCode:null},
+    {Code:'D003',DeptName:'设备部',ParentCode:null},
+    {Code:'D004',DeptName:'采购部',ParentCode:null},
+    {Code:'D005',DeptName:'销售部',ParentCode:null},
+    {Code:'D006',DeptName:'行政人事部',ParentCode:null},
+    {Code:'D007',DeptName:'技术研发部',ParentCode:null},
+  ],
+  // 条款：Code 唯一（标准:编号），Number 序号，Standard，Title
+  clauses:[
+    {Code:'iso9001:4.1',Number:'4.1',Standard:'iso9001',Title:'理解组织及其环境'},
+    {Code:'iso9001:4.2',Number:'4.2',Standard:'iso9001',Title:'理解相关方需求'},
+    {Code:'iso9001:4.3',Number:'4.3',Standard:'iso9001',Title:'确定体系范围'},
+    {Code:'iso9001:4.4',Number:'4.4',Standard:'iso9001',Title:'管理体系及其过程'},
+    {Code:'iso9001:5.1',Number:'5.1',Standard:'iso9001',Title:'领导作用与承诺'},
+    {Code:'iso9001:5.2',Number:'5.2',Standard:'iso9001',Title:'质量方针'},
+    {Code:'iso9001:5.3',Number:'5.3',Standard:'iso9001',Title:'职责、权限'},
+    {Code:'iso9001:6.1',Number:'6.1',Standard:'iso9001',Title:'应对风险与机遇'},
+    {Code:'iso9001:6.2',Number:'6.2',Standard:'iso9001',Title:'质量目标'},
+    {Code:'iso9001:7.1',Number:'7.1',Standard:'iso9001',Title:'资源'},
+    {Code:'iso9001:7.1.2',Number:'7.1.2',Standard:'iso9001',Title:'人员'},
+    {Code:'iso9001:7.1.3',Number:'7.1.3',Standard:'iso9001',Title:'基础设施'},
+    {Code:'iso9001:7.1.4',Number:'7.1.4',Standard:'iso9001',Title:'过程运行环境'},
+    {Code:'iso9001:7.1.5',Number:'7.1.5',Standard:'iso9001',Title:'监视和测量资源'},
+    {Code:'iso9001:7.1.6',Number:'7.1.6',Standard:'iso9001',Title:'组织的知识'},
+    {Code:'iso9001:7.2',Number:'7.2',Standard:'iso9001',Title:'能力'},
+    {Code:'iso9001:7.3',Number:'7.3',Standard:'iso9001',Title:'意识'},
+    {Code:'iso9001:7.4',Number:'7.4',Standard:'iso9001',Title:'沟通'},
+    {Code:'iso9001:7.5',Number:'7.5',Standard:'iso9001',Title:'成文信息'},
+    {Code:'iso9001:8.1',Number:'8.1',Standard:'iso9001',Title:'运行策划和控制'},
+    {Code:'iso9001:8.2',Number:'8.2',Standard:'iso9001',Title:'产品和服务要求'},
+    {Code:'iso9001:8.3',Number:'8.3',Standard:'iso9001',Title:'产品和服务的设计和开发'},
+    {Code:'iso9001:8.4',Number:'8.4',Standard:'iso9001',Title:'外部提供过程、产品和服务'},
+    {Code:'iso9001:8.5',Number:'8.5',Standard:'iso9001',Title:'生产和服务提供'},
+    {Code:'iso9001:8.5.1',Number:'8.5.1',Standard:'iso9001',Title:'生产和服务提供的控制'},
+    {Code:'iso9001:8.6',Number:'8.6',Standard:'iso9001',Title:'产品和服务的放行'},
+    {Code:'iso9001:8.7',Number:'8.7',Standard:'iso9001',Title:'不合格输出的控制'},
+    {Code:'iso9001:9.1',Number:'9.1',Standard:'iso9001',Title:'监视、测量、分析和评价'},
+    {Code:'iso9001:9.2',Number:'9.2',Standard:'iso9001',Title:'内部审核'},
+    {Code:'iso9001:9.3',Number:'9.3',Standard:'iso9001',Title:'管理评审'},
+    {Code:'iso9001:10.2',Number:'10.2',Standard:'iso9001',Title:'不合格和纠正措施'},
+    {Code:'iso9001:10.3',Number:'10.3',Standard:'iso9001',Title:'持续改进'},
+    {Code:'iso14001:6.1.2',Number:'6.1.2',Standard:'iso14001',Title:'环境因素'},
+    {Code:'iso14001:9.1.2',Number:'9.1.2',Standard:'iso14001',Title:'合规性评价'},
+    {Code:'iso45001:6.1.2',Number:'6.1.2',Standard:'iso45001',Title:'危险源辨识'},
+    {Code:'iso45001:8.1.2',Number:'8.1.2',Standard:'iso45001',Title:'消除危险源和降低风险'},
+  ],
+  /* 状态 */
+  plans:[],
+  draft:{enterprise:'',standards:[],stage:''},
+  selDepts:new Set(),
+  selClauses:new Set(),
+  selections:[],
+  step:1,
+  seq:1,
+
+  /* ---------- 工具 ---------- */
+  entName(c){const e=this.enterprises.find(x=>x.Code===c);return e?e.Name:c;},
+  stdName(c){const s=this.standards.find(x=>x.Code===c);return s?s.Name:c;},
+  stdAbbrev(c){const s=this.standards.find(x=>x.Code===c);return s?s.Abbrev:c;},
+  stageName(c){const s=this.stages.find(x=>x.Code===c);return s?s.Name:c;},
+  deptName(c){const d=this.departments.find(x=>x.Code===c);return d?d.DeptName:c;},
+  clauseByCode(c){return this.clauses.find(x=>x.Code===c);},
+
+  /* ---------- 计划列表 ---------- */
+  renderList(){
+    const box=document.getElementById('planList');
+    if(!this.plans.length){box.innerHTML='<div class="empty">暂无计划，点击右上角「新建计划」开始。</div>';return;}
+    let rows=this.plans.map(p=>{
+      const stds=p.master.standards.split(',').map(c=>`<span class="pill">${this.stdAbbrev(c)}</span>`).join('');
+      return `<tr>
+        <td><b>${p.name}</b><div class="sub code">${p.master.code}</div></td>
+        <td>${this.entName(p.master.enterprise)}</td>
+        <td>${this.stageName(p.master.stage)}</td>
+        <td>${stds}</td>
+        <td>${p.master.isValid? '<span class="pill green">启用</span>':'<span class="pill gray">停用</span>'}</td>
+        <td>${p.details.length} 项</td>
+        <td><button class="ghost" onclick="App.view('${p.master.code}')">查看</button></td>
+      </tr>`;
+    }).join('');
+    box.innerHTML=`<table><thead><tr><th>计划</th><th>企业</th><th>阶段</th><th>标准</th><th>状态</th><th>明细</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table>`;
+  },
+
+  /* ---------- 向导 ---------- */
+  openWizard(){
+    this.draft={enterprise:'',standards:[],stage:''};
+    this.selDepts=new Set();this.selClauses=new Set();this.selections=[];this.step=1;
+    this.showModal();this.renderWizard();
+  },
+  showModal(){document.getElementById('mask').classList.add('show');},
+  closeModal(){document.getElementById('mask').classList.remove('show');},
+
+  renderWizard(){
+    const m=document.getElementById('modal');
+    const stepCls=i=>this.step===i?'active':(this.step>i?'done':'');
+    const stepper=`<div class="stepper">
+      <div class="step ${stepCls(1)}"><div class="dot">1</div><div class="lbl">基本信息</div></div>
+      <div class="step-line"></div>
+      <div class="step ${stepCls(2)}"><div class="dot">2</div><div class="lbl">选择条款与部门</div></div>
+      <div class="step-line"></div>
+      <div class="step ${stepCls(3)}"><div class="dot">3</div><div class="lbl">确认生成</div></div>
+    </div>`;
+    let body='';
+    if(this.step===1) body=this.step1Html();
+    else if(this.step===2) body=this.step2Html();
+    else body=this.step3Html();
+    m.innerHTML=`<h3>新建认证计划</h3>${stepper}${body}`;
+  },
+
+  step1Html(){
+    const entOpts=this.enterprises.map(e=>`<option value="${e.Code}">${e.Name}</option>`).join('');
+    const std=this.standards.map(s=>`<span class="chk ${this.draft.standards.includes(s.Code)?'sel':''}" onclick="App.toggleStd('${s.Code}',this)">${this.stdAbbrev(s.Code)} · ${s.Name}</span>`).join('');
+    const stageOpts=this.stages.map(s=>`<option value="${s.Code}">${s.Name}</option>`).join('');
+    return `<div class="field"><label>企业</label><select id="fEnt">${entOpts}</select></div>
+      <div class="field"><label>认证标准（可多选）</label><div class="chk-group" id="fStd">${std}</div></div>
+      <div class="field"><label>当前阶段</label><select id="fStage">${stageOpts}</select></div>
+      <div class="hint">第一步只定范围：选企业、勾选本次要认证的标准（可多个，多体系）、选阶段。第二步再勾条款与部门。</div>
+      <div class="footer">
+        <button class="ghost" onclick="App.closeModal()">取消</button>
+        <button class="primary" onclick="App.next()">下一步</button>
+      </div>`;
+  },
+
+  toggleStd(code,el){el.classList.toggle('sel');const i=this.draft.standards.indexOf(code);if(i>=0)this.draft.standards.splice(i,1);else this.draft.standards.push(code);},
+
+  next(){
+    if(this.step===1){
+      this.draft.enterprise=document.getElementById('fEnt').value;
+      this.draft.stage=document.getElementById('fStage').value;
+      if(!this.draft.enterprise){alert('请选择企业');return;}
+      if(!this.draft.standards.length){alert('请至少选择一个认证标准');return;}
+      if(!this.draft.stage){alert('请选择阶段');return;}
+      this.step=2;
+    } else if(this.step===2){
+      if(!this.selections.length){alert('请至少添加一个选择组合（勾条款/部门后点「加入已选」）');return;}
+      this.step=3;
+    }
+    this.renderWizard();
+  },
+  prev(){if(this.step>1){this.step--;this.renderWizard();}},
+
+  /* 第二步：选择界面 + 已选页面 */
+  step2Html(){
+    return `
+      <div class="two-col">
+        <div class="box">
+          <h4>部门（企业部门树，可不选）</h4>
+          <div id="deptTree">${this.deptTreeHtml()}</div>
+        </div>
+        <div class="box">
+          <h4>条款（按所选标准过滤，可多选）</h4>
+          <div id="clauseList">${this.clauseHtml()}</div>
+        </div>
+      </div>
+      <div class="row mt">
+        <button class="primary" onclick="App.addSelection()">+ 加入已选</button>
+        <span class="sub">可只勾条款（不选部门），或勾多个部门 + 条款一起加入。每次加入生成一条「选择组合」。</span>
+      </div>
+      <div class="card mt" style="margin-bottom:0;">
+        <h3 style="margin:0 0 10px;">已选页面（可删除）</h3>
+        <div id="selList">${this.selListHtml()}</div>
+      </div>
+      <div class="footer">
+        <button class="ghost" onclick="App.prev()">上一步</button>
+        <button class="primary" onclick="App.next()">下一步：确认生成</button>
+      </div>`;
+  },
+
+  deptTreeHtml(){
+    const map={};this.departments.forEach(d=>map[d.Code]={...d,children:[]});
+    const roots=[];this.departments.forEach(d=>{const p=map[d.ParentCode];if(p)p.children.push(map[d.Code]);else roots.push(map[d.Code]);});
+    const walk=(nodes,depth)=>nodes.map(n=>{
+      const ind='&nbsp;'.repeat(depth*4);
+      const chk=this.selDepts.has(n.Code)?'checked':'';
+      const sub=n.children.length?`<div style="padding-left:14px;">${walk(n.children,depth+1)}</div>`:'';
+      return `<div class="tree-node"><span class="indent">${ind}</span>
+        <label><input type="checkbox" ${chk} onchange="App.toggleDept('${n.Code}',this.checked)"/> ${n.DeptName}</label></div>${sub}`;
+    }).join('');
+    return walk(roots,0);
+  },
+  clauseHtml(){
+    const list=this.clauses.filter(c=>this.draft.standards.includes(c.Standard));
+    const groups={};list.forEach(c=>{const ch=c.Number.split('.')[0];(groups[ch]=groups[ch]||[]).push(c);});
+    return Object.keys(groups).sort((a,b)=>a-b).map(ch=>{
+      const items=groups[ch].map(c=>{
+        const chk=this.selClauses.has(c.Code)?'checked':'';
+        const std=this.draft.standards.length>1?`<span class="pill gray">${this.stdAbbrev(c.Standard)}</span>`:'';
+        return `<label style="display:block;padding:2px 0;"><input type="checkbox" ${chk} onchange="App.toggleClause('${c.Code}',this.checked)"/> ${c.Number} ${c.Title} ${std}</label>`;
+      }).join('');
+      return `<div class="clause-group"><div class="g-title">第 ${ch} 章</div>${items}</div>`;
+    }).join('') || '<div class="empty">请返回上一步选择标准</div>';
+  },
+  toggleDept(code,on){if(on)this.selDepts.add(code);else this.selDepts.delete(code);},
+  toggleClause(code,on){if(on)this.selClauses.add(code);else this.selClauses.delete(code);},
+
+  addSelection(){
+    const clauseCodes=[...this.selClauses];
+    if(!clauseCodes.length){alert('请至少勾选一个条款');return;}
+    const deptCodes=[...this.selDepts];
+    const deptNames=deptCodes.map(c=>this.deptName(c));
+    const clauseNumbers=clauseCodes.map(c=>this.clauseByCode(c).Number);
+    this.selections.push({deptCodes,deptNames,clauseCodes,clauseNumbers});
+    this.selDepts.clear();this.selClauses.clear();
+    // 重置勾选状态
+    document.getElementById('deptTree').innerHTML=this.deptTreeHtml();
+    document.getElementById('clauseList').innerHTML=this.clauseHtml();
+    document.getElementById('selList').innerHTML=this.selListHtml();
+  },
+  removeSelection(i){this.selections.splice(i,1);document.getElementById('selList').innerHTML=this.selListHtml();},
+  selListHtml(){
+    if(!this.selections.length)return '<div class="empty">尚未加入任何选择组合</div>';
+    const rows=this.selections.map((s,i)=>{
+      const depts=s.deptNames.length?s.deptNames.map(n=>`<span class="pill">${n}</span>`).join(''):'<span class="pill gray">（无部门）</span>';
+      const cls=s.clauseCodes.map(c=>`<span class="pill">${this.stdAbbrev(this.clauseByCode(c).Standard)} ${this.clauseByCode(c).Number} ${this.clauseByCode(c).Title}</span>`).join('');
+      return `<tr class="sel-row"><td>${depts}</td><td>${cls}</td><td><span class="x" onclick="App.removeSelection(${i})">✕ 删除</span></td></tr>`;
+    }).join('');
+    return `<table><thead><tr><th>部门</th><th>条款</th><th width="80">操作</th></tr></thead><tbody>${rows}</tbody></table>`;
+  },
+
+  /* 第三步：生成预览 */
+  step3Html(){
+    const master=this.buildMaster();
+    const details=this.buildDetails(master);
+    const stdPills=master.standards.split(',').map(c=>`<span class="pill">${c}</span>`).join('');
+    const mHtml=`<table><thead><tr><th>企业</th><th>阶段</th><th>标准（逗号隔开 code）</th><th>是否启用</th></tr></thead>
+      <tbody><tr><td>${this.entName(master.enterprise)}</td><td>${this.stageName(master.stage)}</td><td class="code">${master.standards}</td><td>${master.isValid?'<span class="pill green">启用</span>':'<span class="pill gray">停用</span>'}</td></tr></tbody></table>`;
+    const dRows=details.map(d=>{
+      const codes=(d.clauses||'').split(',').filter(Boolean);
+      const clauseCells=codes.map(code=>{const c=this.clauseByCode(code);return c?`<div class="cl">${this.stdAbbrev(c.Standard)} ${c.Number} · ${c.Title}</div>`:code;}).join('');
+      const depts=(d.deptNames||'').split(',').filter(Boolean);
+      const deptCells=depts.length?depts.map(n=>`<span class="pill">${n}</span>`).join(' '):'<span class="pill gray">（无部门）</span>';
+      return `<tr><td>${clauseCells||'—'}</td><td>${deptCells}</td></tr>`;
+    }).join('');
+    const dHtml=`<table class="mt"><thead><tr><th>条款序号（标准简称+编号）</th><th>部门名称</th></tr></thead><tbody>${dRows}</tbody></table>`;
+    return `<div class="hint">以下为将写入「计划主表 / 计划明细」的数据预览（多标准、条款合并拆分均已体现）。</div>
+      <h4 style="margin:14px 0 6px;color:var(--c-sub);">计划主表</h4>${mHtml}
+      <h4 style="margin:14px 0 6px;color:var(--c-sub);">计划明细（${details.length} 项）</h4>${dHtml}
+      <div class="footer">
+        <button class="ghost" onclick="App.prev()">上一步</button>
+        <button class="primary" onclick="App.save()">保存计划</button>
+      </div>`;
+  },
+  buildMaster(){
+    const e=this.entName(this.draft.enterprise);
+    const s=this.stageName(this.draft.stage);
+    const code='PLAN'+String(this.seq).padStart(3,'0');
+    return {code,name:`${e}·${s}·认证计划`,enterprise:this.draft.enterprise,stage:this.draft.stage,standards:this.draft.standards.join(','),isValid:1};
+  },
+  buildDetails(master){
+    return this.selections.map(s=>({
+      planCode:master.code,
+      clauses:s.clauseCodes.join(','),
+      departments:s.deptCodes.join(','),
+      deptNames:s.deptNames.join(','),
+      clauseNumbers:s.clauseNumbers.join(','),
+    }));
+  },
+  save(){
+    if(!this.selections.length){alert('请先添加选择组合');return;}
+    const master=this.buildMaster();
+    const details=this.buildDetails(master);
+    this.plans.unshift({name:master.name,master,details});
+    this.seq++;
+    this.closeModal();
+    this.renderList();
+  },
+
+  /* 查看详情 */
+  view(code){
+    const p=this.plans.find(x=>x.master.code===code);if(!p)return;
+    const m=p.master;
+    const mHtml=`<table><thead><tr><th>企业</th><th>阶段</th><th>标准(code)</th><th>是否启用</th></tr></thead>
+      <tbody><tr><td>${this.entName(m.enterprise)}</td><td>${this.stageName(m.stage)}</td><td class="code">${m.standards}</td><td>${m.isValid?'启用':'停用'}</td></tr></tbody></table>`;
+    const dRows=p.details.map(d=>{
+      const codes=(d.clauses||'').split(',').filter(Boolean);
+      const clauseCells=codes.map(code=>{const c=this.clauseByCode(code);return c?`<div class="cl">${this.stdAbbrev(c.Standard)} ${c.Number} · ${c.Title}</div>`:code;}).join('');
+      const depts=(d.deptNames||'').split(',').filter(Boolean);
+      const deptCells=depts.length?depts.map(n=>`<span class="pill">${n}</span>`).join(' '):'<span class="pill gray">（无部门）</span>';
+      return `<tr><td>${clauseCells||'—'}</td><td>${deptCells}</td></tr>`;
+    }).join('');
+    const dHtml=`<table class="mt"><thead><tr><th>条款序号（标准简称+编号）</th><th>部门名称</th></tr></thead><tbody>${dRows}</tbody></table>`;
+    document.getElementById('modal').innerHTML=`<h3>${m.name}</h3>
+      <div class="sub code">${m.code}</div>
+      <h4 style="margin:14px 0 6px;color:var(--c-sub);">计划主表</h4>${mHtml}
+      <h4 style="margin:14px 0 6px;color:var(--c-sub);">计划明细（${p.details.length} 项）</h4>${dHtml}
+      <div class="footer"><button class="ghost" onclick="App.closeModal()">关闭</button></div>`;
+    this.showModal();
+  },
+};
+
+/* 初始化 */
+App.renderList();
+/* 点击遮罩空白处关闭 */
+document.getElementById('mask').addEventListener('click',e=>{if(e.target.id==='mask')App.closeModal();});
+</script>
+</body>
+</html>

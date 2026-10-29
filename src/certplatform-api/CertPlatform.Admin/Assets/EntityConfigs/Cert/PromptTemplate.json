@@ -1,0 +1,105 @@
+{
+  "title": "提示词模板",
+  "fillMode": "AutoFix",
+  "columns": [
+    {
+      "fieldName": "PromptCode",
+      "desName": "提示词代码",
+      "type": "text",
+      "xsFlag": true,
+      "bcFlag": true,
+      "yxk": false,
+      "sxh": 10,
+      "width": 150
+    },
+    {
+      "fieldName": "PromptName",
+      "desName": "提示词名称",
+      "type": "text",
+      "xsFlag": true,
+      "bcFlag": true,
+      "yxk": false,
+      "sxh": 20,
+      "width": 200
+    },
+    {
+      "fieldName": "OrgCode",
+      "desName": "机构 Code",
+      "type": "text",
+      "xsFlag": true,
+      "bcFlag": true,
+      "yxk": true,
+      "sxh": 30,
+      "width": 200
+    },
+    {
+      "fieldName": "ScopeKey",
+      "desName": "细分维度",
+      "type": "text",
+      "xsFlag": true,
+      "bcFlag": true,
+      "yxk": true,
+      "sxh": 40,
+      "width": 200
+    },
+    {
+      "fieldName": "Template",
+      "desName": "提示词正文",
+      "type": "textarea",
+      "xsFlag": false,
+      "bcFlag": true,
+      "yxk": false,
+      "sxh": 50
+    },
+    {
+      "fieldName": "Remark",
+      "desName": "备注",
+      "type": "textarea",
+      "xsFlag": true,
+      "bcFlag": true,
+      "yxk": true,
+      "sxh": 60,
+      "width": 250
+    },
+    {
+      "fieldName": "IsValid",
+      "desName": "启用",
+      "type": "switch",
+      "xsFlag": true,
+      "bcFlag": true,
+      "yxk": true,
+      "sxh": 70,
+      "width": 80
+    },
+    {
+      "fieldName": "Sort",
+      "desName": "排序",
+      "type": "number",
+      "xsFlag": true,
+      "bcFlag": true,
+      "yxk": true,
+      "sxh": 80,
+      "width": 80
+    },
+    {
+      "fieldName": "CreateBy",
+      "desName": "创建人",
+      "type": "text",
+      "xsFlag": true,
+      "bcFlag": false,
+      "yxk": true,
+      "sxh": 90,
+      "width": 120
+    },
+    {
+      "fieldName": "CreateTime",
+      "desName": "创建时间",
+      "type": "datetime",
+      "xsFlag": true,
+      "bcFlag": false,
+      "yxk": true,
+      "sxh": 100,
+      "width": 160
+    }
+  ]
+}

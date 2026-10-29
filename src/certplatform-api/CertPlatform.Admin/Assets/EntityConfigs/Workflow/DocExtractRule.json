@@ -1,0 +1,73 @@
+{
+  "Title": "文档提取规则",
+  "FillMode": "PixFix",
+  "Columns": [
+    {
+      "FieldName": "StandardName",
+      "DesName": "标准名称",
+      "Type": "TextBox",
+      "Sxh": 1,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 280,
+      "Sortable": false
+    },
+    {
+      "FieldName": "Version",
+      "DesName": "版本",
+      "Type": "TextBox",
+      "Sxh": 2,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 60,
+      "Sortable": false
+    },
+    {
+      "FieldName": "IsPublished",
+      "DesName": "已发布",
+      "Type": "Switch",
+      "Sxh": 3,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 70,
+      "Sortable": false
+    },
+    {
+      "FieldName": "Sort",
+      "DesName": "排序",
+      "Type": "TextBox",
+      "Sxh": 4,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 60,
+      "Sortable": false
+    },
+    {
+      "FieldName": "Remark",
+      "DesName": "备注",
+      "Type": "TextBox",
+      "Sxh": 5,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 200,
+      "Sortable": false
+    },
+    {
+      "FieldName": "UpdateTime",
+      "DesName": "更新时间",
+      "Type": "DateTimePicker",
+      "Sxh": 99,
+      "XsFlag": true,
+      "BcFlag": false,
+      "Yxk": true,
+      "Width": 160,
+      "Sortable": false
+    }
+  ],
+  "FormCols": 1
+}

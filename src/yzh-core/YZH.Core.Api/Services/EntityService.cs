@@ -484,8 +484,14 @@ public class EntityService<T> where T : class, new()
             if (mode == WriteMode.FillOnly)
                 return Result<T>.Ok(entity);
 
-            var result = updateFields != null
-                ? await _dbOrm.UpdateAsync(entity, updateFields)
+            // ★ 2026-10-29：显式列更新必须把审计列并进去。
+            //   FillUpdateAudit 只改内存对象，若 updateFields 不含 UpdateTime/UpdateBy，
+            //   ORM 生成的 SET 子句里就没有它们 ⇒ 审计"填了但永不落库"（全库 UpdateTime 恒 NULL）。
+            //   详见 WithAuditUpdateColumns 注释。
+            var fieldsToWrite = WithAuditUpdateColumns(updateFields);
+
+            var result = fieldsToWrite != null
+                ? await _dbOrm.UpdateAsync(entity, fieldsToWrite)
                 : await _dbOrm.UpdateAsync(entity);
 
             var ctx = _userContext.GetRequestContext();
@@ -701,6 +707,41 @@ public class EntityService<T> where T : class, new()
         try { dyn.DeleteTime = DateTime.Now; } catch { /* 实体可能没有该属性 */ }
         try { dyn.DeleteBy = _userContext.UserCode; } catch { /* 实体可能没有该属性 */ }
     }
+
+    /// <summary>
+    ///     显式列更新时把 <c>UpdateTime</c> / <c>UpdateBy</c> 并入更新列（<c>null</c> = 整行更新，原样返回）。
+    ///
+    ///     <para><b>为什么要补</b>：<see cref="FillUpdateAudit"/> 只改**内存对象**；ORM 走
+    ///     <c>UpdateColumns(fields)</c> 时只 SET 名单内的列 ⇒ 名单不含审计列时，
+    ///     “填了”的值被静默丢弃，DB 里 <c>UpdateTime</c>/<c>UpdateBy</c> 永远是 <c>NULL</c>。
+    ///     <c>YzhControllerBase.UpdateCore</c> 传的名单只有 <c>BcFlag</c> 业务列 ⇒ 所有标准
+    ///     update 端点都中招（症状：列表“更新时间”恒空、审计追溯没有“最后修改人”，且**不报错**）。</para>
+    ///
+    ///     <para>只补实体**确实声明了**的列（反射判断）：个别不继承 <c>BaseEntity</c> 的实体
+    ///     没有这两列，硬塞进 <c>UpdateColumns</c> 会让 SqlSugar 生成不存在的列而报错。</para>
+    ///
+    ///     <para>与 <c>UserController.UpdateProfile</c> 手工追加 <c>nameof(Sys_User.UpdateTime)</c>
+    ///     的口径一致 —— 本方法把该约定收敛到服务层，调用方漏写也不会丢审计。</para>
+    /// </summary>
+    private static string[]? WithAuditUpdateColumns(string[]? updateFields)
+    {
+        if (updateFields == null) return null;
+
+        var type = typeof(T);
+        var merged = new List<string>(updateFields.Length + AuditUpdateColumns.Length);
+        merged.AddRange(updateFields);
+
+        foreach (var name in AuditUpdateColumns)
+        {
+            if (type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance) != null)
+                merged.Add(name);
+        }
+
+        return merged.Distinct(StringComparer.Ordinal).ToArray();
+    }
+
+    /// <summary>更新时必须落库的审计列（见 <see cref="WithAuditUpdateColumns"/>）</summary>
+    private static readonly string[] AuditUpdateColumns = { "UpdateTime", "UpdateBy" };
 
     private async Task<Result<bool>> SoftDelete(T entity)
     {

@@ -126,6 +126,16 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/enterprise-review/index.vue')
       },
       {
+        path: 'audit-member',
+        name: 'AuditMember',
+        component: () => import('@/pages/audit-member/index.vue')
+      },
+      {
+        path: 'enterprise-dept',
+        name: 'EnterpriseDept',
+        component: () => import('@/pages/enterprise-dept/index.vue')
+      },
+      {
         path: 'organization',
         name: 'Organization',
         component: () => import('@/pages/organization/index.vue')

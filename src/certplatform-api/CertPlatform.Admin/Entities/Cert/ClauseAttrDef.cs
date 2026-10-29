@@ -55,6 +55,19 @@ namespace CertPlatform.Admin.Entities.Cert
         [StringLength(500)]
         public string? Remark { get; set; }
 
+        /// <summary>
+        /// <b>预生成提示词里的取值要求</b>（属性级生成契约 —— 给<b>模型</b>看，不是给人看）。
+        ///
+        /// <para>由 <c>ClauseAttrPromptService</c> 渲染进提示词的「属性清单」段。空白时按
+        /// <see cref="ValueType"/> 给默认话术；<c>Artifacts</c>/<c>EvidenceChain</c> 这类
+        /// 需要整段结构化契约的，正文就写在这里（<see cref="Remark"/> 装不下）。</para>
+        ///
+        /// <para><b>★ 为什么要有这一列</b>：属性池会长（8 → 30~50 条）。把判据写死在提示词正文里
+        /// ⇒ 池子一变模型就不产新属性，<b>挂接静默缺失且不报错</b>。有了它，新增属性只填属性池，
+        /// 提示词自动跟上。</para>
+        /// </summary>
+        public string? PromptHint { get; set; }
+
         /// <summary>排序号</summary>
         public int Sort { get; set; }
 

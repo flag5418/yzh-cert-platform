@@ -7,6 +7,7 @@ using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Admin.Entities.Cert;
+using CertPlatform.Admin.Services.Cert;
 using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Entities.Cert;
 
@@ -40,6 +41,12 @@ public class ClauseAttrController : YzhControllerBase<ClauseAttr>
     /// <summary>核心资源检索唯一入口（铁律 L5 / 守卫 A-R6）—— 标准与条款只走它，⛔ 不裸查</summary>
     private readonly ICoreResourceQuery _core;
 
+    /// <summary>AI 预生成（P4）</summary>
+    private readonly ClauseAttrGenerateService _generator;
+
+    /// <summary>条款属性预生成提示词（存取 + 属性池注入段渲染）</summary>
+    private readonly ClauseAttrPromptService _prompt;
+
     /// <summary>允许的值来源 —— <b>只 2 档</b>（24 号 §五）。⛔ 没有 runtime</summary>
     private static readonly HashSet<string> AllowedValueSources =
         new(StringComparer.Ordinal) { "fixed", "reference" };
@@ -48,11 +55,15 @@ public class ClauseAttrController : YzhControllerBase<ClauseAttr>
         EntityService<ClauseAttr> entityService,
         IUserContext userContext,
         IDbOrm db,
-        ICoreResourceQuery core)
+        ICoreResourceQuery core,
+        ClauseAttrGenerateService generator,
+        ClauseAttrPromptService prompt)
         : base(entityService, userContext)
     {
         _db = db;
         _core = core;
+        _generator = generator;
+        _prompt = prompt;
     }
 
     /// <summary>开发期强制暴露缺配置问题</summary>
@@ -122,10 +133,11 @@ public class ClauseAttrController : YzhControllerBase<ClauseAttr>
     // ════════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// 左树：<b>标准 → 叶子条款</b>（只列叶子 —— 配置粒度默认叶子，合并是例外）。
+    /// 左树：<b>标准 → 章 → 节 → 叶子条款</b>（完整层次，最多 4 层）。
     ///
-    /// <para>为什么只列叶子：非叶子条款本身不产生检查要求，给它配属性等于配了也不会被消费；
-    /// 而 208 条叶子平铺在标准下，按 ClauseNumber 排序天然按章节聚集，比嵌套树更好用。</para>
+    /// <para>返回完整树（非叶 + 叶子）：用户可逐层展开定位条款，不再 208 条叶子铺成平面。
+    /// 非叶子节点（章/节） NodeType = "chapter" / "section"，不能配属性（点了右表空 +
+    /// 给出引导文案），仅叶子节点（NodeType = "clause"）能配属性。</para>
     /// </summary>
     [HttpPost("tree/root")]
     public async Task<IActionResult> GetTreeRoot()
@@ -141,47 +153,73 @@ public class ClauseAttrController : YzhControllerBase<ClauseAttr>
         {
             // 每个标准一次（标准数个位级，4 个）—— 避免跨标准一次性捞全表
             var all = await _core.GetClausesAsync(s.Code);
-            var parentCodes = all
-                .Where(c => !string.IsNullOrEmpty(c.ParentCode))
-                .Select(c => c.ParentCode!)
-                .ToHashSet(StringComparer.Ordinal);
-
-            var children = all
-                .Where(c => !parentCodes.Contains(c.Code))     // 只列叶子
-                .OrderBy(c => c.Sort)
-                .ThenBy(c => c.ClauseNumber, StringComparer.Ordinal)
-                .Select(c => new TreeItemDto
-                {
-                    Code = c.Code,
-                    Name = $"{c.ClauseNumber} {c.Title}",
-                    ParentCode = s.StandardCode,
-                    NodeType = "clause",
-                    IsLeaf = true,
-                    Level = 2,
-                    Extra = new Dictionary<string, object>
-                    {
-                        ["ClauseNumber"] = c.ClauseNumber,
-                        ["Title"] = c.Title ?? string.Empty,
-                        ["StandardCode"] = s.StandardCode
-                    }
-                })
-                .ToList();
+            var leafCount = all.Count(c => !all.Any(x => x.ParentCode == c.Code));
 
             nodes.Add(new TreeItemDto
             {
                 Code = s.StandardCode,
-                Name = $"{s.StandardName}（{children.Count}）",
+                Name = $"{s.StandardName}（{leafCount}）",
                 ParentCode = null,
                 NodeType = "standard",
                 IsLeaf = false,
                 Level = 1,
                 Sort = s.Sort,
-                Children = children,
+                Children = BuildClauseTree(all, s.StandardCode),
                 Extra = new Dictionary<string, object> { ["StandardCode"] = s.StandardCode }
             });
         }
 
         return Ok(ApiResponse<List<TreeItemDto>>.Ok(nodes));
+    }
+
+    /// <summary>
+    /// 递归构建条款树（标准下一级的完整层次）。
+    /// <para>ParentCode 空 或 不在本集合 Code 内 ⇒ 当根级（章）；其余按父子递归。</para>
+    /// </summary>
+    private static List<TreeItemDto> BuildClauseTree(List<ISOClause> all, string standardCode)
+    {
+        var byCode = all.ToDictionary(c => c.Code, StringComparer.Ordinal);
+        // 找根级条款：ParentCode 为空 或 指向不在集合内的节点（即标准直接子节点 = 章）
+        var roots = all
+            .Where(c => string.IsNullOrEmpty(c.ParentCode) || !byCode.ContainsKey(c.ParentCode))
+            .OrderBy(c => c.Sort)
+            .ThenBy(c => c.ClauseNumber, StringComparer.Ordinal)
+            .ToList();
+
+        return roots.Select(r => BuildNode(r, all, standardCode, 2)).ToList();
+    }
+
+    private static TreeItemDto BuildNode(ISOClause clause, List<ISOClause> all, string standardCode, int level)
+    {
+        var children = all
+            .Where(c => string.Equals(c.ParentCode, clause.Code, StringComparison.Ordinal))
+            .OrderBy(c => c.Sort)
+            .ThenBy(c => c.ClauseNumber, StringComparer.Ordinal)
+            .Select(c => BuildNode(c, all, standardCode, level + 1))
+            .ToList();
+
+        var isLeaf = children.Count == 0;
+        var nodeType = isLeaf ? "clause" : (level <= 2 ? "chapter" : "section");
+
+        return new TreeItemDto
+        {
+            Code = clause.Code,
+            Name = $"{clause.ClauseNumber} {clause.Title}",
+            ParentCode = string.IsNullOrEmpty(clause.ParentCode) ? null : clause.ParentCode,
+            NodeType = nodeType,
+            IsLeaf = isLeaf,
+            Level = level,
+            Sort = clause.Sort,
+            Children = children.Count > 0 ? children : null,
+            Extra = new Dictionary<string, object>
+            {
+                ["ClauseNumber"] = clause.ClauseNumber,
+                ["Title"] = clause.Title ?? string.Empty,
+                ["StandardCode"] = standardCode,
+                ["Description"] = clause.Description ?? string.Empty,
+                ["IsLeaf"] = isLeaf,
+            }
+        };
     }
 
     /// <summary>
@@ -202,7 +240,59 @@ public class ClauseAttrController : YzhControllerBase<ClauseAttr>
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // 三、私有校验
+    // 三、提示词维护（对全部标准、全部条款生效的一条全局提示词）
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>读取提示词（给前端编辑抽屉）：正文 + 属性池注入段 + 元信息</summary>
+    [HttpGet("prompt")]
+    public async Task<IActionResult> GetPrompt()
+    {
+        var dto = await _prompt.GetPromptAsync();
+        return Ok(ApiResponse<ClauseAttrPromptDto>.Ok(dto));
+    }
+
+    /// <summary>保存提示词（幂等 upsert）：只改 ConfigValue，唯一键 = ConfigKey</summary>
+    [HttpPost("prompt")]
+    public async Task<IActionResult> SavePrompt([FromBody] ClauseAttrPromptSaveRequest request)
+    {
+        var (ok, message) = await _prompt.SaveAsync(
+            request?.Template ?? string.Empty, UserContext.UserCode);
+
+        return ok
+            ? Ok(ApiResponse.Ok(message))
+            : Ok(ApiResponse.BizFail(message));
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // 四、AI 预生成（P4）
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// <b>AI 预生成条款属性</b>：给条款号 + 标题 + 正文，让 LLM 产出该条款 8 个属性的值并落库。
+    ///
+    /// <para><b>⚠️ 串行</b>：逐条调用模型（并发必 429），故用 <c>MaxCount</c> 控制单次批量（默认 5，上限 50）。
+    /// 前端应分批调用并把 <c>Items</c> 逐条展示出来，让用户看到"第几条失败/为什么"。</para>
+    ///
+    /// <para><b>⛔ 不做全量一键跑</b>：273 条 × 8 属性 ≈ 2184 次写入，中途失败难以回滚；
+    /// 先小批验证提示词质量，再逐批推进。</para>
+    /// </summary>
+    [HttpPost("generate")]
+    public async Task<IActionResult> Generate([FromBody] ClauseAttrGenerateRequest request, CancellationToken ct)
+    {
+        var result = await _generator.GenerateAsync(request ?? new ClauseAttrGenerateRequest(), ct);
+
+        // ★ 信封语义（守卫 R13 口径）：
+        //   · 前置校验没过（一条都没跑：Total=0）⇒ **业务失败**，前端应弹红条
+        //   · 真跑过了（Total>0）⇒ 请求本身成功，逐条成败看 `data.Success` / `data.Items`
+        //   ⛔ 不能一律 Ok：否则「提示词没配 / AI 参数没填」也显示成功，用户以为跑过了
+        if (result.Total == 0)
+            return Ok(ApiResponse<ClauseAttrGenerateResult>.BizFail(result.Message));
+
+        return Ok(ApiResponse<ClauseAttrGenerateResult>.Ok(result, result.Message));
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // 五、私有校验
     // ════════════════════════════════════════════════════════════════════
 
     /// <summary>

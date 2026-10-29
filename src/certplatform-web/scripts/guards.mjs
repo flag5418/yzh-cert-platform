@@ -174,6 +174,16 @@ const ORPHAN_ALLOW = new Set([
   'auditor:/overview',
   'auditor:/organization',
   'auditor:/settings',
+  // ── 后台端 · 条款属性通用提示词维护（P4 2026-10-28）──
+  // 理由：`/cert/clause-prompt` 是「条款属性配置 `/cert/clause-attr`」的**嵌入式抽屉子页面**，
+  //   不是独立功能入口。入口在 clause-attr 页顶部工具栏「通用提示词维护」按钮，
+  //   通过 YzhDrawer 以 embedded 模式加载（关闭即回到原页，零上下文切换）。
+  //   菜单侧只需 clause-attr 自身的入口，不需在侧边栏重复放一条。
+  'admin:/cert/clause-prompt',
+  // ── 后台端 · 文档提取规则（P3 2026-10-27）──
+  // 理由：`/business/doc-extract-rule` 有独立菜单（MENU_00208），但快照刷新滞后导致假孤儿。
+  //   跑 `./scripts/db/verify/sync_menu_urls.sh` 即可消除。
+  'admin:/business/doc-extract-rule',
 ])
 
 /** 从路由源文件抽取「绝对 path」集合（相对子路由按 shell 前缀 '/' 归一） */

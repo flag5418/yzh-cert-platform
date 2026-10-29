@@ -151,6 +151,20 @@ export abstract class SingleTableCore<V extends Record<string, any> = any> {
     await this._tableRef?.refresh()
   }
 
+  /**
+   * 设置/清除单个搜索过滤条件（供页面内外部控件使用，如顶部的企业选择器）
+   *
+   * - 设置后不会自动刷新，调用方需自行 refresh()
+   * - 传空字符串即清除该过滤条件
+   */
+  setFilter(field: string, value: string): void {
+    if (value === '' || value == null) {
+      delete (this.searchParams as Record<string, any>)[field]
+    } else {
+      (this.searchParams as Record<string, any>)[field] = value
+    }
+  }
+
   // ========================================================
   // Computed: 从 config 派生 UI 结构（经 adapters/，业务字段不出内核）
   // ========================================================

@@ -31,12 +31,15 @@ const businessRoutes: RouteRecordRaw[] = [
   // ★ V2 条款属性：属性池 L0（MENU_00220）/ 条款配置 L1（MENU_00221）
   { path: 'cert/clause-attr-def', name: 'CertClauseAttrDef', component: () => import('@/pages/cert/clause-attr-def/index.vue') },
   { path: 'cert/clause-attr', name: 'CertClauseAttr', component: () => import('@/pages/cert/clause-attr/index.vue') },
+  // ★ 条款属性通用提示词维护（P4）：管理 AI 预生成条款属性的提示词（PromptType = clause_attr）
+  { path: 'cert/clause-prompt', name: 'CertClausePrompt', component: () => import('@/pages/cert/clause-prompt/index.vue') },
   { path: 'business/report-def', name: 'BusinessReportDef', component: () => import('@/pages/workflow/report-rule/index.vue') },
   { path: 'business/prompt-template', name: 'BusinessPromptTemplate', component: () => import('@/pages/workflow/prompt-template/index.vue') },
   { path: 'business/skill-manage', name: 'BusinessSkillManage', component: () => import('@/pages/workflow/skill-manage/index.vue') },
   { path: 'business/nc-config', name: 'BusinessNcConfig', component: () => import('@/pages/workflow/nc-config/designer.vue') },
   { path: 'business/workflow-rules', name: 'BusinessWorkflowRules', component: () => import('@/pages/workflow/nc-config/index.vue') },
   { path: 'business/report-rule-config', name: 'BusinessReportRuleConfig', component: () => import('@/pages/workflow/report-rule-config/index.vue') },
+  { path: 'business/doc-extract-rule', name: 'BusinessDocExtractRule', component: () => import('@/pages/workflow/doc-extract-rule/index.vue') },
   { path: 'business/ai-usage', name: 'BusinessAiUsage', component: () => import('@/pages/workflow/ai-usage/index.vue') },
   { path: 'business/queue-monitor', name: 'BusinessQueueMonitor', component: () => import('@/pages/workflow/queue/index.vue') },
   { path: 'business/server-monitor', name: 'BusinessServerMonitor', component: () => import('@/pages/system/server-monitor/index.vue') }
