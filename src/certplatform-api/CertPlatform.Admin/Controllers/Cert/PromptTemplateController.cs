@@ -8,6 +8,8 @@ using YZH.Core.Stand.Models.Request;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Admin.Entities.Cert;
 using CertPlatform.Admin.Services.Cert;
+// 消歧：Entities.Cert 与 Entities.Wf 均为全局 using，两边都有 PromptTemplate（wf_prompt_template 不接管）
+using PromptTemplate = CertPlatform.Admin.Entities.Cert.PromptTemplate;
 
 namespace CertPlatform.Admin.Controllers.Cert;
 

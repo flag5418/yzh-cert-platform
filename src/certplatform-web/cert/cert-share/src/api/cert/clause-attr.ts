@@ -229,14 +229,13 @@ export interface ClauseAttrGenerateResult {
   Written: number
   Skipped: number
   PromptCode: string
-  PromptVersion: number
   /**
-   * 本次用的提示词范围（★ 多标准隔离的可见性保证）。
+   * 本次用的提示词来源（★ 可见性保证）。
    *
-   * <p>`standard` = 该标准专属提示词；`platform` = 平台级兜底。
-   * ⛔ 兜底不许静默 —— 显示出来，用户才知道这个标准还没真正配置。</p>
+   * <p>`stored` = 库里已保存的版本（抽屉里改的就是它）；
+   * `fallback` = 代码内兜底正文 —— 说明抽屉里的正文<b>没生效</b>，别去怪模型。</p>
    */
-  PromptScope: 'standard' | 'platform' | ''
+  PromptScope: 'stored' | 'fallback' | ''
   Model: string
   Items: ClauseAttrGenerateItem[]
 }
@@ -264,7 +263,6 @@ export async function generateClauseAttrs(
     Written: 0,
     Skipped: 0,
     PromptCode: '',
-    PromptVersion: 0,
     PromptScope: '',
     Model: '',
     Items: [],

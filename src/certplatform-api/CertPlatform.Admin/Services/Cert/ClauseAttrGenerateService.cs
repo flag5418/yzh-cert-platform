@@ -8,7 +8,6 @@ using CertPlatform.Admin.Entities.Cert;
 using CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Domain.Scope;
-using CertPlatform.Shared.Services.Workflow;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 
@@ -17,8 +16,8 @@ namespace CertPlatform.Admin.Services.Cert;
 /// <summary>
 /// <b>条款属性 AI 预生成</b>（V2 条款主链 P4）。
 ///
-/// <para><b>做什么</b>：给一条条款（号 + 标题 + 正文）→ 让 LLM 产出该条款 8 个属性的值
-/// → 落 <c>cert_clause_attr</c>。省掉「273 条条款 × 8 属性 = 2184 次手工填写」。</para>
+/// <para><b>做什么</b>：给一条条款（号 + 标题 + 正文）→ 让 LLM 产出该条款在<b>属性池里每一条</b>属性的值
+/// → 落 <c>cert_clause_attr</c>。省掉「273 条条款 × N 属性」的手工填写。</para>
 ///
 /// <para><b>★ 关键设计（照 24 号 §三/§四）</b>：
 /// <list type="bullet">
@@ -27,7 +26,9 @@ namespace CertPlatform.Admin.Services.Cert;
 ///   <item>两份要求 <b>⛔ 不合并</b>：前者企业侧可公开，后者是审核员取证剧本。
 ///         合并 ⇒ 企业照着剧本准备 ⇒ 审核失效。</item>
 ///   <item><c>ValueSource</c>：<c>Artifacts</c>/<c>EvidenceChain</c> = <c>reference</c>（要索取）；
-///         其余 6 条 = <c>fixed</c>（条款已定，不需要企业提供）。</item>
+///         其余 = <c>fixed</c>（条款已定，不需要企业提供）。</item>
+///   <item><b>属性清单不写进正文</b>：正文只有 <c>{{attr_pool}}</c> 占位符，清单按属性池实时渲染
+///         ⇒ 池子增删属性，预生成自动跟上（⛔ 写死清单 = 新属性静默不产出）。</item>
 /// </list>
 ///
 /// <para><b>⚠️ 串行执行</b>：LLM 端点并发必 429（见「运行期排查坑与沙箱铁律」）。
@@ -41,41 +42,43 @@ public sealed class ClauseAttrGenerateService
 {
     private readonly IDbOrm _db;
     private readonly ICoreResourceQuery _core;
-    private readonly IPromptWorkbench _workbench;
     private readonly LlmInvokeService _llm;
     private readonly IUserContext _user;
 
-    /// <summary>提示词类型（唯一出处：<see cref="PromptTypes.ClauseAttr"/>）</summary>
-    private const string PromptType = PromptTypes.ClauseAttr;
+    /// <summary>
+    /// 提示词唯一来源（<c>cert_prompt_template</c> · <c>PromptCode = clause_attr_gen</c>）。
+    ///
+    /// <para><b>★★ 为什么必须走它、⛔ 不许再读 <c>wf_prompt_template</c> 的 clause_attr_v1/v2</b>：
+    /// 那两份正文把 8 条属性的 JSON 骨架<b>写死在提示词里</b>，池子一新增属性
+    /// （如 <c>DocCheckMode</c>）模型就<b>不产该字段</b> —— 落库静默缺失、全程不报错。
+    /// 本服务改用「正文只写通用规则 + <c>{{attr_pool}}</c> 占位符」，
+    /// 属性清单由 <see cref="ClauseAttrPromptService.BuildPoolSectionAsync"/> 按属性池实时渲染
+    /// ⇒ 池子增删改，预生成自动跟上。</para>
+    /// </summary>
+    private readonly ClauseAttrPromptService _prompt;
 
     /// <summary>单次请求最多跑多少条条款（防误点全量把 AI 额度烧光）</summary>
     public const int MaxBatchSize = 50;
 
     /// <summary>
     /// 「值来源」判定：<b>只有这两条是 reference</b>（条款只给期望，实际值要靠证据/企业材料）；
-    /// 其余 6 条（条款意图/约束强度/适用性/适用条件/涉及过程/严重度）由标准或工程师**当场定死**。
+    /// 其余（条款意图/约束强度/适用性/适用条件/涉及过程/严重度/资料核对方式）由标准或工程师**当场定死**。
     /// </summary>
     private static readonly HashSet<string> ReferenceAttrs =
         new(StringComparer.Ordinal) { "Artifacts", "EvidenceChain" };
 
-    /// <summary>提示词里的占位符（与种子 SQL 的正文逐字对应）</summary>
-    private const string PhStandardName = "{{standard_name}}";
-    private const string PhClauseNumber = "{{clause_number}}";
-    private const string PhClauseTitle = "{{clause_title}}";
-    private const string PhClauseContent = "{{clause_content}}";
-
     public ClauseAttrGenerateService(
         IDbOrm db,
         ICoreResourceQuery core,
-        IPromptWorkbench workbench,
         LlmInvokeService llm,
-        IUserContext user)
+        IUserContext user,
+        ClauseAttrPromptService prompt)
     {
         _db = db;
         _core = core;
-        _workbench = workbench;
         _llm = llm;
         _user = user;
+        _prompt = prompt;
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -101,22 +104,21 @@ public sealed class ClauseAttrGenerateService
         if (standard == null)
             return ClauseAttrGenerateResult.Fail($"标准【{standardCode}】不存在或已停用");
 
-        // ★★ 提示词按标准隔离（24 号 §零）：标准级 → 平台级 回退。
-        //    ⚠️ 这里传的是 standard.Code（**GUID**）—— wf_prompt_template.StandardCode 存 GUID，
-        //       与 cert_iso_standard.StandardCode（短码）**不是同一口径**。
-        //       传短码不会报错，只会静默回退到平台级 ⇒ 多标准隔离悄悄失效，且没人发现。
-        var prompt = await _workbench.ResolveActiveAsync(PromptType, standard.Code);
-        if (prompt == null || string.IsNullOrWhiteSpace(prompt.Template))
+        // ★★ 提示词唯一来源 = ClauseAttrPromptService（cert_prompt_template · clause_attr_gen）。
+        //    属性清单**不进正文**，由 {{attr_pool}} 按属性池实时渲染 —— 见字段注释。
+        //    ⚠️ 这里**不再**按标准做「标准级 → 平台级」回退：属性池是全标准共用的，
+        //       条款判据也共用一套（差异靠条款正文体现），多一份标准级副本只会分叉。
+        var (template, promptRow) = await _prompt.GetTemplateAsync(ct);
+        if (string.IsNullOrWhiteSpace(template))
             return ClauseAttrGenerateResult.Fail(
-                $"未找到生效的「条款属性预生成」提示词（PromptType=clause_attr，标准【{standardCode}】或平台级）。" +
-                "请先在「文档语义规则」页启用一条。");
+                "「条款属性预生成」提示词正文为空：请到「条款属性配置」页点「提示词」补全正文");
 
-        // ★★ 回退必须**可见**：标准级提示词缺失时用平台级兜底，前端要显示出来。
-        //    ⛔ 不许静默降级 —— 否则用户以为跑的是本标准的提示词，质量差了也找不到原因。
-        //    放在这里（而不是取到 todo 之后）是为了让「已全部配齐」这类提前返回也带得上。
-        result.PromptCode = prompt.Code;
-        result.PromptVersion = prompt.Version;
-        result.PromptScope = string.IsNullOrWhiteSpace(prompt.StandardCode) ? "platform" : "standard";
+        // ★ 用的是代码内兜底正文还是库里已保存的版本，必须**说出来** ——
+        //    ⛔ 不许静默：用户以为改的是生效版本、实际跑的是兜底，质量差了也找不到原因
+        result.PromptCode = ClauseAttrPromptService.PromptCode;
+        result.PromptScope = promptRow != null && !string.Equals(promptRow.Status, "fallback", StringComparison.Ordinal)
+            ? "stored"
+            : "fallback";
 
         var settings = await AiFillSettings.ReadAsync(_db, ct);
         if (!settings.IsUsable)
@@ -219,7 +221,7 @@ public sealed class ClauseAttrGenerateService
         var todo = leaves.Take(limit).ToList();
 
         result.Total = todo.Count;
-        result.Model = string.IsNullOrWhiteSpace(prompt.ModelName) ? settings.Model : prompt.ModelName!;
+        result.Model = settings.Model;
 
         // ★ 跳过的前置条款必须**说出来**：⛔ 不能静默少跑几条（用户会以为漏了/坏了）
         var preambleNote = skippedPreamble.Count == 0
@@ -228,12 +230,21 @@ public sealed class ClauseAttrGenerateService
               + (skippedPreamble.Count > 8 ? "…" : string.Empty)
               + "：范围/引用/术语类，不产生检查要求）";
 
+        // ★★ 属性清单段**只渲染一次**（里面含字典查询），逐条款复用 ——
+        //    ⛔ 不许在循环里调 RenderAsync：N 条条款 = N 次重复查库 + 重复渲染
+        var poolSection = await _prompt.BuildPoolSectionAsync(ct);
+
         // ── ③ 逐条串行（⛔ 不并发：LLM 端点并发必 429） ──
         foreach (var clause in todo)
         {
             ct.ThrowIfCancellationRequested();
+
+            // 渲染 = 条款占位符 + 属性池注入段（⛔ 不在这里拼属性名：拼了就与池子脱钩）
+            var renderedPrompt = ClauseAttrPromptService.RenderWithSection(
+                template, standard, clause, poolSection);
+
             var item = await GenerateOneAsync(
-                standard, clause, prompt.Template!, settings, result.Model, pool, request.Overwrite, ct);
+                standard, clause, renderedPrompt, settings, result.Model, pool, request.Overwrite, ct);
             result.Items.Add(item);
             if (item.Success) result.Succeeded++; else result.Failed++;
             result.Written += item.Written;
@@ -245,10 +256,10 @@ public sealed class ClauseAttrGenerateService
             ? $"完成：{result.Succeeded} 条条款，写入 {result.Written} 个属性，跳过 {result.Skipped} 个"
             : $"部分失败：成功 {result.Succeeded} 条 / 失败 {result.Failed} 条；写入 {result.Written} 个属性")
             + preambleNote
-            // ⚠️ 用了平台兜底提示词必须点名：这是「标准级提示词还没配」的信号，
-            //    ⛔ 不能让它悄悄发生（否则 4 个标准跑出同一种味道，还以为是模型问题）
-            + (result.PromptScope == "platform"
-                ? $"；注意：标准【{standardCode}】尚无专属提示词，本次用的是平台级兜底提示词"
+            // ⚠️ 用的是兜底正文必须点名：这是「提示词还没保存过」的信号，
+            //    ⛔ 不能让它悄悄发生（否则改了抽屉里的正文却一点变化都没有，还以为模型不行）
+            + (result.PromptScope == "fallback"
+                ? "；注意：库里还没有保存过提示词，本次用的是代码内兜底正文，建议在「提示词」抽屉里确认后保存"
                 : string.Empty);
         return result;
     }
@@ -291,10 +302,18 @@ public sealed class ClauseAttrGenerateService
     // 单条条款
     // ════════════════════════════════════════════════════════════════════
 
+    /// <summary>
+    /// 单条条款：调模型 → 解析 → 落库。
+    /// </summary>
+    /// <param name="prompt">
+    /// <b>已渲染完</b>的提示词（条款占位符 + 属性池注入段都已替换）。
+    /// <para>⚠️ 本方法<b>不再</b>做任何占位符替换 —— 渲染统一收口
+    /// <see cref="ClauseAttrPromptService.RenderWithSection"/>，两处各写一份必然分叉。</para>
+    /// </param>
     private async Task<ClauseAttrGenerateItem> GenerateOneAsync(
         CertPlatform.Shared.Entities.Cert.ISOStandard standard,
         CertPlatform.Shared.Entities.Cert.ISOClause clause,
-        string template,
+        string prompt,
         AiFillSettings settings,
         string model,
         List<ClauseAttrDef> pool,
@@ -308,14 +327,7 @@ public sealed class ClauseAttrGenerateService
             Title = clause.Title ?? string.Empty,
         };
 
-        // ① 渲染提示词（占位符名与种子 SQL 逐字对应）
-        var prompt = template
-            .Replace(PhStandardName, $"{standard.StandardName}（{standard.StandardCode}）")
-            .Replace(PhClauseNumber, clause.ClauseNumber ?? string.Empty)
-            .Replace(PhClauseTitle, clause.Title ?? string.Empty)
-            .Replace(PhClauseContent, clause.Description ?? string.Empty);
-
-        // ② 调模型（ForceJson ⇒ 输出必须是 JSON；Temperature 压低求稳定）
+        // ① 调模型（ForceJson ⇒ 输出必须是 JSON；Temperature 压低求稳定）
         var resp = await _llm.CompleteAsync(new LlmInvokeRequest
         {
             BaseUrl = settings.BaseUrl,
@@ -532,10 +544,10 @@ public sealed class ClauseAttrGenerateResult
     public int Written { get; set; }
     public int Skipped { get; set; }
     public string PromptCode { get; set; } = string.Empty;
-    public int PromptVersion { get; set; }
     /// <summary>
-    /// 本次用的提示词范围：<c>standard</c> = 该标准专属 · <c>platform</c> = 平台级兜底。
-    /// <para>前端必须显示 —— 多标准隔离下，「用了兜底」等于「这个标准还没真正配置」。</para>
+    /// 本次用的提示词来源：<c>stored</c> = 库里已保存的版本 · <c>fallback</c> = 代码内兜底正文。
+    /// <para>前端必须显示 —— 「用了兜底」等于「抽屉里改的正文没生效」，
+    /// 用户会以为模型不行，实际跑的是另一份。</para>
     /// </summary>
     public string PromptScope { get; set; } = string.Empty;
     public string Model { get; set; } = string.Empty;

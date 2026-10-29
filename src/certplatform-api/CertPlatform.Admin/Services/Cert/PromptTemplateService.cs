@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Entities.Cert;
+// 消歧：Entities.Cert 与 Entities.Wf 均有 PromptTemplate
+using PromptTemplate = CertPlatform.Admin.Entities.Cert.PromptTemplate;
 using SqlSugar;
 using YZH.Core.DataBase.Interfaces;
 

@@ -1,0 +1,1 @@
+{"success": true, "message": "操作成功", "err": "", "data": {"Success": true, "FileCode": "1917b98453984a1e81ee08aa6b3e061d", "FileName": "质量手册-提取验证.txt", "MarkdownStatus": "completed", "MarkdownMessage": "纯文本直通（无需转换）", "ConvertStatus": "completed", "MarkdownPath": "/enterprise-doc/26d6dff4d8084303ad8e7

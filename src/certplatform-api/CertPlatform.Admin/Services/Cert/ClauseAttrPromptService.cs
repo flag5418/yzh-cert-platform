@@ -5,8 +5,12 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Admin.Entities.Cert;
+// 消歧：Entities.Cert 与 Entities.Wf 均有 PromptTemplate
+using PromptTemplate = CertPlatform.Admin.Entities.Cert.PromptTemplate;
 using CertPlatform.Shared.Entities.Cert;
 using SqlSugar;
+// Sys_Dictionary / Sys_DictionaryList（字典读取用）
+using YZH.Core.Api.Models.System;
 using YZH.Core.DataBase.Interfaces;
 
 namespace CertPlatform.Admin.Services.Cert;
@@ -184,14 +188,27 @@ public sealed class ClauseAttrPromptService
     public async Task<string> RenderAsync(
         string template, ISOStandard standard, ISOClause? clause, CancellationToken ct = default)
     {
-        var rendered = template
+        var section = await BuildPoolSectionAsync(ct);
+        return RenderWithSection(template, standard, clause, section);
+    }
+
+    /// <summary>
+    /// 纯函数版渲染（占位符 + 已渲染好的注入段）—— <b>批量场景必须走这个</b>。
+    ///
+    /// <para>⚠️ 预生成要跑 N 条条款，若每条都调 <see cref="RenderAsync"/>，属性池段会被重复
+    /// 查库 + 渲染 N 次（池子里还有字典查询）。批量调用方先用
+    /// <see cref="BuildPoolSectionAsync"/> 取一次，再逐条款调本方法。</para>
+    /// </summary>
+    public static string RenderWithSection(
+        string template, ISOStandard standard, ISOClause? clause, string poolSection)
+    {
+        var rendered = (template ?? string.Empty)
             .Replace(PhStandardName, $"{standard.StandardName}（{standard.StandardCode}）")
             .Replace(PhClauseNumber, clause?.ClauseNumber ?? string.Empty)
             .Replace(PhClauseTitle, clause?.Title ?? string.Empty)
             .Replace(PhClauseContent, clause?.Description ?? string.Empty);
 
-        var section = await BuildPoolSectionAsync(ct);
-        return ApplyPoolSection(rendered, section);
+        return ApplyPoolSection(rendered, poolSection);
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -260,8 +277,11 @@ public sealed class ClauseAttrPromptService
         => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)) ?? string.Empty;
 
     /// <summary>
-    /// 库中还没有这条参数时的兜底正文（与迁移脚本种子逐字一致）。
+    /// 库中还没有这条参数时的兜底正文（<b>与 <c>scripts/db/20261029_clause_attr_prompt_V3.sql</c> 逐字一致</b>）。
     /// <para>⚠️ 兜底**不是**第二份可编辑副本：只在库里缺行时用于渲染，保存后即以库为准。</para>
+    /// <para>⚠️ 正文里 ⛔ 不写任何具体属性名清单 —— 字段清单只有 <c>{{attr_pool}}</c> 一个来源，
+    /// 写了第二份必然与属性池分叉（新属性静默不产出）。这里的「分类判据 / Artifacts 要求 /
+    /// EvidenceChain 要求」是**判据**，只在该属性存在于清单时才适用。</para>
     /// </summary>
     public const string FallbackTemplate = @"你是 ISO 管理体系认证的资深审核技术专家。你的任务：读一条标准条款，为这条条款产出「属性配置」JSON。
 
@@ -284,6 +304,36 @@ public sealed class ClauseAttrPromptService
 ② 出现「适用时 / 如有时 / 当…时」这类限定语 ⇒ 该条款是**条件适用**，必须把触发条件写出来，⛔ 不许笼统写「视情况而定」。
 ③ 判不了就留空串（或空数组），⛔ 不许编造、⛔ 不许用通用套话把字段填满。空值 = 待人工确认，是合法输出。
 ④ 所有文本用简体中文；字段名保持英文原样。
+
+## 分类判据（只对属性清单里**存在**的字段适用）
+
+- `Obligation`：按正文的**动词**判 —— 应/shall ⇒ `shall`；宜/should ⇒ `should`；可/may ⇒ `may`；
+  **一个义务动词都没有 ⇒ `note`**。⛔ 不许按「标准惯例」默认填 `shall`。
+- `Applicability`：没有「适用时/如有时/当…时」⇒ `general`；有 ⇒ `conditional`，并把触发条件原文要点写进
+  `ApplicabilityCondition`（通用条款给空串）。
+- `Process`：这条款落在哪些**过程域**（只能取清单允许的码），下游与企业部门取交集用。⛔ 不许把部门名当过程填。
+- `Severity`：这条款一旦缺失或失效，对**产品安全与体系有效性**的影响程度（只能取清单允许的码）。
+- `DocCheckMode`：这条款要不要靠企业资料来查（只能取清单允许的码）。拿不准给 `optional`，
+  ⛔ 不要一律给 `required` —— 一律 required 会把「我们没查」当成「企业没有」。
+
+## Artifacts 要求（企业侧 · 可公开给企业）
+
+产出的是**提示词正文**（不是结论、不是清单结果）。将来这条提示词给模型用，让它从企业资料里找出「这条款要求企业提供什么」。
+
+① **第一句必须是输出契约**，逐字照这个句式写：
+   「只输出 JSON 数组，不要任何解释文字。数组每个元素包含：Kind（取字典 artifact_type 的码）、Name、Purpose（一句话说明能证明什么）。」
+② 之后用 1~3 句写「去企业资料的哪类文件里找、认哪些关键字段」。
+③ ⛔ 不许预先写结论，⛔ 不许写「符合/不符合」，⛔ 不许把审核员取证步骤写进来。
+
+## EvidenceChain 要求（审核员侧 · 取证剧本，⛔ 不提前给企业）
+
+产出的是**提示词正文**（不是结论）。将来给审核员用，让模型生成「到这家企业该怎么取证」的步骤。
+
+① **第一句必须是输出契约**，逐字照这个句式写：
+   「只输出 JSON 数组，不要任何解释文字。数组每个元素包含：Kind（site|record|interview|doc）、Action、Target、Sample（无则省略）、Finding（留空）。」
+② 之后用 1~3 句写「去哪里、看什么、抽多少、问谁」。
+③ ⛔ 不许预先写结论；⛔ 找不到证据就留空，不许推测。
+④ 至少覆盖 2 种 `Kind`（纯查文件不足以证明体系在运行）。
 
 ## 硬约束
 

@@ -299,6 +299,41 @@ public static class PathBuilder
 
     #endregion
 
+    #region 企业文档库（唯一一层，2026-10-29 新增）
+
+    /// <summary>
+    /// ★ 企业文档库存储路径（<b>无阶段 / 无标准 / 无槽位</b>）。
+    /// <para>格式：<c>/enterprise-doc/{EnterpriseCode}/{FolderPath}/{FileName}</c></para>
+    ///
+    /// <para><b>为什么去掉阶段段</b>（2026-10-29 用户裁定）：一阶段与二阶段的企业资料
+    /// <b>是同一批文件</b>。老库 <see cref="EnterpriseOriginalSource"/> 把 <c>{Stage}</c>
+    /// 放在路径第 2 段 ⇒ 同一份文件在两个阶段下会变成两个 key（重复占空间、重复转换、
+    /// 提取结果分叉）。实测老表 237 份文件全挂 S2、唯一计划挂 AP，<b>阶段硬绑已经错位</b>。</para>
+    ///
+    /// <para><b>为什么不带标准段</b>：上传时<b>不知道</b>也不该问「这份文件属于哪个标准」——
+    /// 标准由下游 <c>cert_document_extraction</c>（文档 × 标准）承载，同一份《质量手册》
+    /// 对 iso9001 与 iso13485 各提取一次即可，<b>字节只存一份</b>。</para>
+    ///
+    /// <para><b>版本管理</b>：沿用企业资料库的同文件夹归档语义 —— 替换时先
+    /// <c>Rename(旧 → <see cref="Archive"/>)</c> 再向<b>同一路径</b>写新字节 ⇒
+    /// <see cref="EnterpriseDoc"/> 的 <c>StoragePath</c> 恒定，预览 / 下载 / 提取的路径永不失效。</para>
+    ///
+    /// <para>⚠️ <b>⛔ 不删 <see cref="EnterpriseOriginalSource"/></b>：历史 237 行的
+    /// <c>StoragePath</c> 是持久化值（含 <c>{Stage}</c> 段），解析它们仍要用旧构造器。</para>
+    /// </summary>
+    /// <param name="enterpriseCode">企业 <c>cert_enterprise.Code</c>（GUID 业务键原文）</param>
+    /// <param name="folderPath">相对 <c>{Ent}/</c> 的文件夹路径，<c>/</c> 分隔；可为空（文件直接位于根）</param>
+    /// <param name="fileName">原始文件名（含扩展名）</param>
+    public static string EnterpriseDoc(
+        string? enterpriseCode, string? folderPath, string? fileName)
+        => Join(
+            DocumentLibraryPath.EnterpriseDocPrefix,
+            Identity(enterpriseCode, "企业编码 EnterpriseCode"),
+            Folder(folderPath),
+            FileName(fileName));
+
+    #endregion
+
     #region 产物路径（预览 PDF / 提取 Markdown）
 
     /// <summary>

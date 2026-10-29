@@ -185,7 +185,7 @@ const App = {
     const box=document.getElementById('planList');
     if(!this.plans.length){box.innerHTML='<div class="empty">暂无计划，点击右上角「新建计划」开始。</div>';return;}
     let rows=this.plans.map(p=>{
-      const stds=p.master.standards.split(',').map(c=>`<span class="pill">${this.stdAbbrev(c)}</span>`).join('');
+      const stds=p.master.standards.split(',').map(c=>`<span class="pill">${this.stdName(c)}</span>`).join('');
       return `<tr>
         <td><b>${p.name}</b><div class="sub code">${p.master.code}</div></td>
         <td>${this.entName(p.master.enterprise)}</td>

@@ -98,13 +98,13 @@ export interface PlaceholderDescriptor {
   description: string
 }
 
-/** 文档提取提示词读取结果 */
+/** 文档提取提示词读取结果（PascalCase —— C# 默认 JSON 序列化） */
 export interface DocExtractPromptDto {
-  promptCode: string
-  standardCode?: string
-  template: string
-  isFallback: boolean
-  placeholders: PlaceholderDescriptor[]
+  PromptCode: string
+  StandardCode?: string
+  Template: string
+  IsFallback: boolean
+  Placeholders: PlaceholderDescriptor[]
 }
 
 /** 文档提取提示词保存入参 */

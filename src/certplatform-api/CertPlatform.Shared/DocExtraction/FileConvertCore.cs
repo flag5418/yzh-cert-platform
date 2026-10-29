@@ -304,10 +304,78 @@ public class FileConvertCore : IFileConvertCore
         _ => "application/octet-stream"
     };
 
+    /// <summary>
+    /// ★ <b>纯文本格式</b>：内容本身就是文本，<b>不需要任何转换</b>，直接当 Markdown 用。
+    ///
+    /// <para><b>为什么必须短路</b>（2026-10-29 实测缺陷）：<c>.txt</c> 走 anydoc 会被判
+    /// <see cref="ConvertFailureKind.Unsupported"/> ⇒ 落到「分支 B」⇒ 因为视觉模型可用，
+    /// 又被丢去 <see cref="TryOcrAsync"/> ⇒ 把<b>纯文本字节当图片</b>送模型 ⇒ 恒 400
+    /// <c>The image format is illegal</c>。结果：一个 131 字节的 .txt 花了钱、跑了 OCR、
+    /// 最后 Markdown 还是 failed。老模块（<c>EnterpriseOriginalIngestExecutor</c>）同样踩这个坑。</para>
+    ///
+    /// <para><b>为什么放内核而不放调用方</b>：4 个调用方（标准目录 / 企业资料库 / 企业原始资料 /
+    /// 企业文档）都走这里；放调用方就得改 4 处，且下一处新增调用方必然再踩一次。</para>
+    ///
+    /// <para>⚠️ <b>编码</b>：企业交上来的 .txt 在国内常见 GBK。这里先按 UTF-8 严格解码，
+    /// 解不出再按 GB18030 兜底（覆盖 GBK/GB2312），两者都失败才报 failed
+    /// —— ⛔ 不静默产出乱码（乱码流进 LLM 会生成一份「格式正确的错误结果」）。</para>
+    /// </summary>
+    private static readonly HashSet<string> PlainTextExtensions =
+        new(StringComparer.OrdinalIgnoreCase) { ".txt", ".md", ".markdown", ".csv" };
+
+    /// <summary>纯文本 → Markdown 直通（见 <see cref="PlainTextExtensions"/>）</summary>
+    private static bool TryPlainTextAsMarkdown(
+        string fileName, byte[] content, string targetPath, out FileConvertCoreResult result)
+    {
+        result = FileConvertCoreResult.Failed("");
+        var ext = Path.GetExtension(fileName ?? "");
+        if (!PlainTextExtensions.Contains(ext)) return false;
+
+        string text;
+        try
+        {
+            // 严格 UTF-8：非法字节序列直接抛，交给下面的 GB18030 兜底
+            text = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true)
+                .GetString(content);
+        }
+        catch (DecoderFallbackException)
+        {
+            try
+            {
+                Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+                text = Encoding.GetEncoding("GB18030").GetString(content);
+            }
+            catch (Exception ex)
+            {
+                result = FileConvertCoreResult.Failed(
+                    $"纯文本编码无法识别（UTF-8 / GB18030 均失败）：{ex.Message}");
+                return true;
+            }
+        }
+
+        // 去掉 BOM（Windows 记事本会写 EF BB BF，留着会让首行变成乱码）
+        text = text.TrimStart('\uFEFF');
+        if (text.Trim().Length == 0)
+        {
+            result = FileConvertCoreResult.Failed("纯文本内容为空（只有空白字符）");
+            return true;
+        }
+
+        result = FileConvertCoreResult.Completed(
+            targetPath, Encoding.UTF8.GetBytes(text), "text/markdown",
+            "纯文本直通（无需转换）");
+        return true;
+    }
+
     private async Task<FileConvertCoreResult> ConvertMarkdownInnerAsync(string fileName, byte[] content, string targetPath)
     {
         try
         {
+            // ── 分支 0：纯文本直通（.txt/.md/.csv）—— ⛔ 必须排在 anydoc 之前，
+            //    否则会被判 Unsupported 再丢去 OCR（实测恒 400）
+            if (TryPlainTextAsMarkdown(fileName, content, targetPath, out var plain))
+                return plain;
+
             var result = await _convertClient.ConvertToMarkdownAsync(fileName, content);
 
             // ── 分支 A：anydoc 判定需要 OCR（图片 / 扫描件，退出码 3）──

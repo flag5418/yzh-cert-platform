@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
 using CertPlatform.Admin.Entities.Wf;
+// 消歧：Entities.Wf 与 Entities.Cert 均有 PromptTemplate（本服务管 wf_prompt_template）
+using PromptTemplate = CertPlatform.Admin.Entities.Wf.PromptTemplate;
 
 namespace CertPlatform.Admin.Services.Workflow;
 

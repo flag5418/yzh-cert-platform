@@ -106,6 +106,16 @@ AIGC:
 - 守卫：`scripts/backend/check-utcnow.sh`（**只读**，扫 `src/yzh-core` + `src/certplatform-api` 的 `DateTime.UtcNow`，白名单外即 `exit 1`）。
 - 存量纠偏脚本模板（+8h + 备份 + 幂等保护）：`scripts/db/fix/20261014_queue_msg_createtime_local_V1.sql`。
 
+**⑨ V2 隔离铁律（2026-10-29 · 违反 = 返工）**
+
+> **V2 = 新表结构 + 新前后端代码 + 新菜单，与 V1 并行运行、⛔ 互不改动；V1 的清理等 V2 稳定后再做。**
+
+- **一律新建**：新表（⛔ 不改 V1 表结构、⛔ 不往 V1 表加列）/ 新服务·控制器 / 新页面·路由·菜单。⛔ 不改造 V1 服务、不复用 V1 页面改（宁可复制重写）。
+- **⛔ 不动 V1 任何逻辑**：V1 的代码 / 表 / 菜单 / 既有 bug 一律不碰，V1 只需"能跑"。唯一例外：该问题**挡住 V2 启动或运行**，且**先报备**再改。
+- **V1 残留只在 V2 稳定后清理**：触发条件 = `docs/70-V2设计/39-系统总纲-模块地图与术语表-V1.md` §七 各阶段验收全通过 **且** 用户明确启动。此前：**"两套并存"是允许的成本，"混改"才是不可接受的风险**。
+- **判断动作**：要改的文件/表若已登记在该文 §八 退役清单 → **停手，去建 V2 的对应物**，而不是修它。
+- **入口**：V2 的模块地图 + 术语唯一叫法 + 数据导航 = `docs/70-V2设计/39-系统总纲-模块地图与术语表-V1.md`（AI 接手 V2 任务的**第一份**文档）。
+
 **改完必跑**：`cd src/certplatform-web && node scripts/guards.mjs`（0 违规，**含 R12 路由↔菜单一致性 + R18/R19/R20 样式**）→ 对应端 `npm run build`（含 `vue-tsc`）。
 **动了审计人字段（`CreateBy`/`UpdateBy`/`DeleteBy`）的写入或迁移**：额外跑 `docker exec -i yzh-mysql mysql -uroot -p*** --default-character-set=utf8mb4 yzh_cert_platform < scripts/db/verify/verify_createby.sql`（期望 `C_违规 = 0`）。
 **动了时间字段的写入（`CreateTime`/`UpdateTime`/`DeleteTime` 等）**：额外跑 `./scripts/backend/check-utcnow.sh`（期望 `exit 0`，见 **铁律十**）。

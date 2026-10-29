@@ -131,7 +131,7 @@ async function loadPrompt(standardCode: string) {
   promptLoading.value = true
   try {
     promptData.value = await getPrompt(standardCode)
-    promptEditing.value = promptData.value.template
+    promptEditing.value = promptData.value?.Template ?? ''
   } catch (e: any) {
     ElMessage.error(`加载提示词失败: ${e?.message ?? e}`)
   } finally {
@@ -186,8 +186,8 @@ async function runTest() {
   // TODO: Phase C —— 上传文档 → LLM → 显示 JSON
 }
 
-const hasPrompt = computed(() => promptEditing.value.length > 0)
-const isFallbackPrompt = computed(() => promptData.value?.isFallback ?? false)
+const hasPrompt = computed(() => (promptEditing.value ?? '').length > 0)
+const isFallbackPrompt = computed(() => promptData.value?.IsFallback ?? false)
 </script>
 
 <template>

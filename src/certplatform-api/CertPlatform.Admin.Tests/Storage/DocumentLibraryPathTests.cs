@@ -118,7 +118,8 @@ public class DocumentLibraryPathTests
         {
             DocumentLibrary.StandardDirectory,
             DocumentLibrary.EnterpriseDocuments,
-            DocumentLibrary.EnterpriseOriginalSource
+            DocumentLibrary.EnterpriseOriginalSource,
+            DocumentLibrary.EnterpriseDoc
         })
         {
             var prefix = DocumentLibraryPath.PrefixOf(lib);
@@ -135,9 +136,14 @@ public class DocumentLibraryPathTests
         Assert.Equal("", DocumentLibraryPath.PrefixOf((DocumentLibrary)99));
     }
 
+    /// <summary>
+    /// 库前缀<b>数量守卫</b>：新增/删除库必须显式改本断言。
+    /// <para>★ 2026-10-29 由 3 → 4：新增 <see cref="DocumentLibrary.EnterpriseDoc"/>
+    /// （<c>enterprise-doc</c>，企业文档唯一一层，去阶段）。</para>
+    /// </summary>
     [Fact]
-    public void Prefixes_ContainsExactlyThreeLibraries()
-        => Assert.Equal(3, DocumentLibraryPath.Prefixes.Count);
+    public void Prefixes_ContainsExactlyFourLibraries()
+        => Assert.Equal(4, DocumentLibraryPath.Prefixes.Count);
 
     [Theory]
     [InlineData($"/{NewPrefix}/E/S/a.doc", DocumentLibrary.EnterpriseOriginalSource, true)]
@@ -151,6 +157,26 @@ public class DocumentLibraryPathTests
     {
         Assert.False(DocumentLibraryPath.IsUnder($"/{NewPrefix}/E/S/a.doc", DocumentLibrary.Unknown));
         Assert.False(DocumentLibraryPath.IsUnder(null, DocumentLibrary.StandardDirectory));
+    }
+
+    /// <summary>
+    /// ★ <c>enterprise-doc</c> 与 <c>enterprise-documents</c> 只差几个字母，必须靠
+    /// <b>首段精确相等</b>区分 —— 一旦有人把 <c>Resolve</c> 改成 <c>StartsWith</c>，
+    /// 企业文档会被判成企业资料库，产物路径白名单随之放错库。本断言就是那条护栏。
+    /// </summary>
+    [Fact]
+    public void Resolve_EnterpriseDoc_DoesNotCollideWithEnterpriseDocuments()
+    {
+        Assert.Equal(DocumentLibrary.EnterpriseDoc,
+            DocumentLibraryPath.Resolve("/enterprise-doc/E/4记录/a.doc"));
+        Assert.Equal(DocumentLibrary.EnterpriseDocuments,
+            DocumentLibraryPath.Resolve("/enterprise-documents/E/S/T/a.doc"));
+        Assert.Equal(DocumentLibrary.EnterpriseOriginalSource,
+            DocumentLibraryPath.Resolve("/enterprise-original-source/E/S/a.doc"));
+
+        // 反向：拿 A 的库去判 B 的路径，必须 false
+        Assert.False(DocumentLibraryPath.IsUnder("/enterprise-documents/E/S/T/a.doc", DocumentLibrary.EnterpriseDoc));
+        Assert.False(DocumentLibraryPath.IsUnder("/enterprise-doc/E/a.doc", DocumentLibrary.EnterpriseDocuments));
     }
 }
 
@@ -603,4 +629,64 @@ public class PathBuilderTests
     public void ReservedSegments_BusinessFolderNamedEditable_Throws()
         => Assert.Throws<ArgumentException>(() =>
             PathBuilder.StandardFile(Ent, Ent, Stage, "editable", "a.docx"));
+
+    // ═══════════════════════════════════════════════
+    // ★ EnterpriseDoc 构造（2026-10-29：唯一一层，无阶段无标准）
+    // ═══════════════════════════════════════════════
+
+    /// <summary>
+    /// ★ 路径里<b>只能有企业一段身份</b> —— 没有 <c>{Stage}</c>、没有 <c>{Standard}</c>。
+    /// <para>一旦有人把阶段段加回来，同一份文件在两个阶段下会变成两个 key
+    /// （重复占空间 + 重复转换 + 提取结果分叉），而<b>编译不会报错</b>。本断言就是那条护栏。</para>
+    /// </summary>
+    [Fact]
+    public void EnterpriseDoc_HasNoStageOrStandardSegment()
+    {
+        var p = PathBuilder.EnterpriseDoc(Ent, "4 记录文件", "内审报告.docx");
+        Assert.Equal($"/enterprise-doc/{Ent}/4 记录文件/内审报告.docx", p);
+
+        var segs = PathBuilder.Segments(p);
+        Assert.Equal(4, segs.Length);                     // enterprise-doc / {Ent} / {Folder} / {File}
+        Assert.Equal("enterprise-doc", segs[0]);
+        Assert.Equal(Ent, segs[1]);
+        Assert.DoesNotContain(Stage, segs);
+    }
+
+    [Fact]
+    public void EnterpriseDoc_RootFile_EmptyFolderBehavesLikeRoot()
+    {
+        Assert.Equal($"/enterprise-doc/{Ent}/营业执照.pdf",
+            PathBuilder.EnterpriseDoc(Ent, null, "营业执照.pdf"));
+        Assert.Equal(
+            PathBuilder.EnterpriseDoc(Ent, null, "a.pdf"),
+            PathBuilder.EnterpriseDoc(Ent, "  ", "a.pdf"));
+    }
+
+    /// <summary>身份段为空必须抛异常 —— 静默丢弃会产出「丢掉上下文」的错误路径（同名文件互相覆盖）</summary>
+    [Fact]
+    public void EnterpriseDoc_EmptyEnterprise_Throws()
+    {
+        Assert.Throws<ArgumentException>(() => PathBuilder.EnterpriseDoc("", "f", "a.pdf"));
+        Assert.Throws<ArgumentException>(() => PathBuilder.EnterpriseDoc(null, "f", "a.pdf"));
+    }
+
+    /// <summary>业务文件夹不得用保留段名（否则被 IsProductPath / IsArchivePath 误判）</summary>
+    [Fact]
+    public void EnterpriseDoc_FolderNamedArchive_Throws()
+        => Assert.Throws<ArgumentException>(() =>
+            PathBuilder.EnterpriseDoc(Ent, "_archive", "a.pdf"));
+
+    /// <summary>产物派生（PDF / Markdown）在无阶段路径下仍然正确 —— 两链产物同层级并列</summary>
+    [Fact]
+    public void EnterpriseDoc_ProductDerivation_KeepsEnterprisePrefix()
+    {
+        var src = PathBuilder.EnterpriseDoc(Ent, "4 记录文件", "内审报告.docx");
+        Assert.Equal($"/enterprise-doc/{Ent}/4 记录文件/pdf/内审报告.docx.pdf",
+            PathBuilder.Product(src, PathBuilder.PdfSegment, ".pdf"));
+        Assert.Equal($"/enterprise-doc/{Ent}/4 记录文件/markdown/内审报告.docx.md",
+            PathBuilder.Product(src, PathBuilder.MarkdownSegment, ".md"));
+        // 归档：同文件夹 _archive/{原名}.v{n}，StoragePath 恒定 ⇒ 预览/下载/提取路径永不失效
+        Assert.Equal($"/enterprise-doc/{Ent}/4 记录文件/_archive/内审报告.docx.v1",
+            PathBuilder.Archive(src, 1));
+    }
 }

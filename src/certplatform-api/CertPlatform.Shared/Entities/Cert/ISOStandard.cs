@@ -112,6 +112,14 @@ namespace CertPlatform.Shared.Entities.Cert
         public int VersionYear { get; set; }
 
         /// <summary>
+        ///     标准简称（如 iso9001→e、iso14001→n），用于「条款序号」前缀显示（如 <c>e 4.3</c>）。
+        ///     <para>★ 可空：未配置时由后端按 <see cref="StandardCode"/> slug 推导兜底；
+        ///     可在标准管理页维护。仅在条款序号上作为前缀，不替换标准名称。</para>
+        /// </summary>
+        [StringLength(20)]
+        public string? Abbrev { get; set; }
+
+        /// <summary>
         ///     所属体系（存 <c>iso_category</c> 字典 <b>DicValue</b>：quality / environment / safety …）
         /// <para>权威字典 = <c>Sys_Dictionary.DicNo='iso_category'</c>（GUID 集），读取接口
         ///     <c>GET /api/System/Dictionary/items/by-no/iso_category</c>。</para>

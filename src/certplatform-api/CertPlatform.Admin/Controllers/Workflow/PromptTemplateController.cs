@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using CertPlatform.Admin.Services.Workflow;
 using CertPlatform.Admin.Entities.Wf;
+// 消歧：Entities.Wf 与 Entities.Cert 均有 PromptTemplate（本控制器管 wf_prompt_template）
+using PromptTemplate = CertPlatform.Admin.Entities.Wf.PromptTemplate;
 using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Helpers;

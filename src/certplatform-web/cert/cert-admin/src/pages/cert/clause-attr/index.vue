@@ -342,8 +342,8 @@ function showEditor(row: AttrSheetRow): boolean {
 
         <div v-if="logic.genResult.value" class="clause-gen__summary">
           <span>{{ logic.genResult.value.Message }}</span>
-          <span v-if="logic.genResult.value.PromptScope === 'platform'" class="clause-gen__warn">
-            本次用的是平台级兜底提示词（该标准还没配专属提示词）
+          <span v-if="logic.genResult.value.PromptScope === 'fallback'" class="clause-gen__warn">
+            本次用的是代码内兜底提示词（库里还没保存过正文，抽屉里改的内容没生效）
           </span>
         </div>
 

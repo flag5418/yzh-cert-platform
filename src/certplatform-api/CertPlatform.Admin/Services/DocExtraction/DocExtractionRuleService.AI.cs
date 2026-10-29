@@ -17,6 +17,9 @@ using CertPlatform.Admin.Entities.Doc;
 using YZH.Core.Api.Models.System;
 using CertPlatform.Admin.Entities.Wf;
 using CertPlatform.Admin.Entities.Cert;
+// 消歧：Entities.Cert 与 Entities.Wf 均有 PromptTemplate
+// 本文件按 Version/IsActive 取生效模板 ⇒ 用 Wf.PromptTemplate（cert_ 实体无 Version/IsActive）
+using PromptTemplate = CertPlatform.Admin.Entities.Wf.PromptTemplate;
 
 namespace CertPlatform.Admin.Services.DocExtraction;
 

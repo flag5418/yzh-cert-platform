@@ -1,0 +1,21 @@
+{
+  "Title": "认证计划",
+  "FillMode": "PixFix",
+  "EnableField": "IsValid",
+  "FormCols": 2,
+  "Columns": [
+    {"FieldName":"Name","DesName":"计划名称","Type":"TextBox","Sxh":1,"XsFlag":true,"BcFlag":true,"Yxk":true,"Width":220,"Row":0,"Col":0,"RowSpan":1,"ColSpan":2,"GroupIndex":"0","Mrz":"","Enable":true,"Fixed":"left","Align":"left"},
+    {"FieldName":"EnterpriseCode","DesName":"企业","Type":"TextBox","Sxh":2,"XsFlag":true,"BcFlag":true,"Yxk":false,"Width":180,"Row":1,"Col":0,"RowSpan":1,"ColSpan":1,"GroupIndex":"0","Mrz":"","Enable":true,"Align":"left"},
+    {"FieldName":"StageCode","DesName":"阶段","Type":"TextBox","Sxh":3,"XsFlag":true,"BcFlag":true,"Yxk":false,"Width":150,"Row":1,"Col":1,"RowSpan":1,"ColSpan":1,"GroupIndex":"0","Mrz":"","Enable":true,"Align":"left"},
+    {"FieldName":"Standards","DesName":"认证标准","Type":"TextBox","Sxh":4,"XsFlag":true,"BcFlag":true,"Yxk":false,"Width":260,"Row":2,"Col":0,"RowSpan":1,"ColSpan":2,"GroupIndex":"0","Mrz":"","Enable":true,"Align":"left"},
+    {"FieldName":"IsValid","DesName":"启用","Type":"Switch","Sxh":5,"XsFlag":true,"BcFlag":true,"Yxk":true,"Width":80,"Row":3,"Col":0,"RowSpan":1,"ColSpan":1,"GroupIndex":"0","Mrz":"1","Enable":true,"Sortable":true,"Fixed":"right","Align":"center"},
+    {"FieldName":"Sort","DesName":"排序号","Type":"NumberBox","Sxh":6,"XsFlag":true,"BcFlag":true,"Yxk":true,"Width":80,"Row":3,"Col":1,"RowSpan":1,"ColSpan":1,"GroupIndex":"0","Mrz":"0","Enable":true,"Sortable":true,"Align":"center"},
+    {"FieldName":"Remark","DesName":"备注","Type":"Memo","Sxh":7,"XsFlag":false,"BcFlag":true,"Yxk":true,"Width":200,"Row":4,"Col":0,"RowSpan":2,"ColSpan":2,"GroupIndex":"0","Mrz":"","Enable":true,"Placeholder":"请输入备注"},
+    {"FieldName":"CreateTime","DesName":"创建时间","Type":"DateTimePicker","Sxh":98,"XsFlag":true,"BcFlag":false,"Yxk":true,"Width":170,"Row":5,"Col":0,"RowSpan":1,"ColSpan":1,"GroupIndex":"0","Mrz":"","Enable":true,"Sortable":true,"Align":"center"}
+  ],
+  "SearchFields": [
+    {"Label":"计划名称","Field":"Name","Operator":"like","ControlType":"input","Width":180},
+    {"Label":"企业编码","Field":"EnterpriseCode","Operator":"eq","ControlType":"input","Width":160}
+  ],
+  "RowButtons": {"Edit":true,"Delete":true,"Enable":true,"CustomButtons":{}}
+}

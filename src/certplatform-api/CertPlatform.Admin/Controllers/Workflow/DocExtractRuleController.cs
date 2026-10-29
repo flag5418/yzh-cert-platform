@@ -166,7 +166,8 @@ public sealed class DocExtractPromptDto
     public string? StandardCode { get; set; }
     public string Template { get; set; } = string.Empty;
     public bool IsFallback { get; set; }
-    public IReadOnlyList<PromptTemplateService.PlaceholderDescriptor> Placeholders { get; set; } = Array.Empty<PromptTemplateService.PlaceholderDescriptor>();
+    // PlaceholderDescriptor 是 Services.Cert 命名空间级 record（非 PromptTemplateService 嵌套类型）
+    public IReadOnlyList<PlaceholderDescriptor> Placeholders { get; set; } = Array.Empty<PlaceholderDescriptor>();
 }
 
 /// <summary>文档提取提示词保存入参</summary>

@@ -14,6 +14,8 @@ using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Services.Workflow;
 using CertPlatform.Admin.Entities.Doc;
 using CertPlatform.Admin.Entities.Wf;
+// 消歧：Entities.Wf 与 Entities.Cert 均有 PromptTemplate（本服务管 wf_prompt_template）
+using PromptTemplate = CertPlatform.Admin.Entities.Wf.PromptTemplate;
 using YZH.Core.Api.Models.System;
 using YZH.Core.DataBase.Interfaces;
 

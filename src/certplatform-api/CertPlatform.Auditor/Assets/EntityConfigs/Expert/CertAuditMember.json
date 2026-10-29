@@ -81,7 +81,7 @@
     {
       "FieldName": "WorkYears",
       "DesName": "从业年限",
-      "Type": "NumberBox",
+      "Type": "Decimal",
       "Sxh": 5,
       "XsFlag": true,
       "BcFlag": true,
@@ -172,7 +172,7 @@
     {
       "FieldName": "Sort",
       "DesName": "排序号",
-      "Type": "NumberBox",
+      "Type": "Decimal",
       "Sxh": 10,
       "XsFlag": true,
       "BcFlag": true,

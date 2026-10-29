@@ -41,6 +41,38 @@ public static class CertPlatformAuditorServiceExtensions
         //   ⚠️ 与上面 EnterpriseFileService 是**两套东西**（输入库 vs 输出库、标准无关 vs 标准槽位），
         //      见 36 号 §2.1 判别表。切勿合并。
         services.AddScoped<EnterpriseOriginalService>();
+
+        // ════════════════════════════════════════════════════════════════
+        // ──── ★★★ 企业文档（36 号 §四，2026-10-29 重写版）────
+        //   与上面 EnterpriseOriginalService 是**两代实现**：
+        //     · 老：按「企业 × 阶段」组织 + 分析段打标签画像（表 cert_enterprise_original_*）
+        //     · 新：按「企业」一层组织 + 下游按标准提取条款（表 cert_enterprise_doc / cert_document_extraction）
+        //   ⇒ 并存期两套都在（老表 237 行还在跑历史队列），P4 下线老的那套。
+        //   ⚠️ Scoped：依赖 IDbOrm / IObjectStorage / QueueManager / WorkspaceContextService / ICoreResourceQuery。
+        // ════════════════════════════════════════════════════════════════
+        services.AddScoped<EnterpriseDocService>();
+
+        // ★ TaskType = enterprise_doc_convert（格式归一 + PDF + Markdown，**无分析段**）。
+        //   ⚠️ 漏注册 = 任务静默分发不到（QueueManager 按 TaskType 建字典，不报错）。
+        services.AddSingleton<EnterpriseDocConvertExecutor>();
+        services.AddSingleton<IYzhTaskExecutor>(sp => sp.GetRequiredService<EnterpriseDocConvertExecutor>());
+
+        // ════════════════════════════════════════════════════════════════
+        // ──── ★★ 按标准提取条款（P2，2026-10-29）────
+        //   粒度 = 文档 × 标准 = 一行 cert_document_extraction（uk FileCode + StandardCode）。
+        //   ⚠️ 三个服务都是 Scoped：持 IDbOrm / IObjectStorage / ICoreResourceQuery。
+        // ════════════════════════════════════════════════════════════════
+
+        // 产物存取唯一写入口（Upsert / 按条款反查 / 过期标记 / 级联软删）
+        services.AddScoped<DocumentExtractionService>();
+
+        // 提取提示词（cert_prompt_template · PromptCode = doc_clause_extract，标准级 → 平台级回退）
+        services.AddScoped<DocExtractPromptService>();
+
+        // ★ TaskType = enterprise_clause_extract。⚠️ 漏注册 = 静默不分发。
+        services.AddSingleton<ClauseExtractExecutor>();
+        services.AddSingleton<IYzhTaskExecutor>(sp => sp.GetRequiredService<ClauseExtractExecutor>());
+
         // ★ TaskType = enterprise_original_ingest（格式归一 + 双产物）⚠️ 2026-10-06 起不再入队，仅被文件级编排器组合调用 + 读历史队列
         services.AddSingleton<EnterpriseOriginalIngestExecutor>();
         services.AddSingleton<IYzhTaskExecutor>(sp => sp.GetRequiredService<EnterpriseOriginalIngestExecutor>());

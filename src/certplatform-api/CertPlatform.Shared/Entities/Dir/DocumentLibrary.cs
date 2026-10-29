@@ -39,8 +39,24 @@ namespace CertPlatform.Shared.Entities.Dir
         /// 资料库按**阶段 × 标准 × 槽位**组织。生命周期不同，混库会导致
         /// 「重新规范化时分不清哪些是原始、哪些是产物」。</para>
         /// <para>规格见 docs/20-体系认证/03-详细设计/05-企业资料规范化/36-企业原始资料管理设计-V1.md。</para>
+        /// <para>⚠️ <b>2026-10-29 起被 <see cref="EnterpriseDoc"/> 取代</b>（一阶段二阶段资料相同 ⇒ 去掉阶段）。
+        /// 本库仅保留给历史 237 行解析用，<b>⛔ 新上传不得写入本库</b>；P4 下线。</para>
         /// </summary>
-        EnterpriseOriginalSource = 3
+        EnterpriseOriginalSource = 3,
+
+        /// <summary>
+        /// ★ 企业文档库（唯一一层）：<c>/enterprise-doc/{Ent}/{Folder}/{FileName}</c>
+        ///
+        /// <para><b>2026-10-29 用户裁定</b>：一阶段与二阶段的企业资料<b>是同一批文件</b>，
+        /// 按阶段管理必然错位（实测：老表 237 份文件全挂 S2，唯一计划挂 AP）。
+        /// ⇒ 本库<b>无阶段、无标准、无槽位</b>，只按企业组织。</para>
+        ///
+        /// <para><b>★ 与 <see cref="EnterpriseDocuments"/> 的区别</b>（名字很像，务必分清）：
+        /// <c>enterprise-documents</c> = 企业资料库的<b>规范化产物</b>（按阶段×标准×槽位，输出库）；
+        /// <c>enterprise-doc</c> = 企业<b>自己交上来的原始文件</b>（无阶段，提取的输入）。
+        /// 首段不同 ⇒ <see cref="DocumentLibraryPath.Resolve"/> 精确匹配，不会互相误判。</para>
+        /// </summary>
+        EnterpriseDoc = 4
     }
 
     /// <summary>文档库路径工具（前缀解析 + 白名单校验的唯一权威源）</summary>
@@ -55,12 +71,21 @@ namespace CertPlatform.Shared.Entities.Dir
         /// <summary>企业原始资料库前缀（36 号 D4；⛔ 禁改 —— 改前缀等于换库，历史对象全部孤立）</summary>
         public const string EnterpriseOriginalSourcePrefix = "enterprise-original-source";
 
+        /// <summary>
+        /// ★ 企业文档库前缀（唯一一层，2026-10-29 新增）：
+        /// <c>/enterprise-doc/{Ent}/{Folder}/{FileName}</c>。⛔ 禁改 —— 改前缀等于换库。
+        /// <para>⚠️ 与 <see cref="EnterpriseDocumentsPrefix"/>（<c>enterprise-documents</c>）只差几个字母，
+        /// 但 <see cref="Resolve"/> 是<b>首段精确相等</b>比较，不会互相误判。</para>
+        /// </summary>
+        public const string EnterpriseDocPrefix = "enterprise-doc";
+
         /// <summary>全部合法库前缀（白名单）</summary>
         public static readonly IReadOnlyList<string> Prefixes = new[]
         {
             StandardDirectoryPrefix,
             EnterpriseDocumentsPrefix,
-            EnterpriseOriginalSourcePrefix
+            EnterpriseOriginalSourcePrefix,
+            EnterpriseDocPrefix
         };
 
         /// <summary>取库对应的前缀段</summary>
@@ -69,6 +94,7 @@ namespace CertPlatform.Shared.Entities.Dir
             DocumentLibrary.StandardDirectory => StandardDirectoryPrefix,
             DocumentLibrary.EnterpriseDocuments => EnterpriseDocumentsPrefix,
             DocumentLibrary.EnterpriseOriginalSource => EnterpriseOriginalSourcePrefix,
+            DocumentLibrary.EnterpriseDoc => EnterpriseDocPrefix,
             _ => ""
         };
 
@@ -94,6 +120,8 @@ namespace CertPlatform.Shared.Entities.Dir
                 return DocumentLibrary.EnterpriseDocuments;
             if (firstSeg.Equals(EnterpriseOriginalSourcePrefix, StringComparison.OrdinalIgnoreCase))
                 return DocumentLibrary.EnterpriseOriginalSource;
+            if (firstSeg.Equals(EnterpriseDocPrefix, StringComparison.OrdinalIgnoreCase))
+                return DocumentLibrary.EnterpriseDoc;
 
             return DocumentLibrary.Unknown;
         }

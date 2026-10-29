@@ -85,10 +85,23 @@ const routes: RouteRecordRaw[] = [
         name: 'EnterpriseFillParams',
         component: () => import('@/pages/enterprise-fill-params/index.vue')
       },
+      // ★ 认证资料管理（MENU_AUD_04）—— **V1 老页面**（企业→阶段→标准→槽位 四层）
+      //   ⛔ 2026-10-29 用户裁决：「我们是新的表、新的逻辑、新的菜单，待 V2 稳定后，
+      //      再开始清理 V1 的残留」⇒ 本路由与老页面**一行不动**，V2 走下面的
+      //      `/enterprise-doc`（MENU_AUD_18）独立菜单，两套并存互不干扰。
       {
         path: 'resources',
         name: 'Resources',
         component: () => import('@/pages/resources/index.vue')
+      },
+      // ★ 企业资料（MENU_AUD_18）—— **上传模块重写版 V2**（36 号，2026-10-29）
+      //   左树只有企业一层（无阶段/无槽位）；上传不带标准，标准只从当前有效认证计划来；
+      //   转换产物 PDF + Markdown；按标准做 L1 条款提取（`cert_document_extraction`）。
+      //   ⚠️ 与 `/resources`（V1）是**两代实现**，⛔ 不要在同一页面里混用两者的 API。
+      {
+        path: 'enterprise-doc',
+        name: 'EnterpriseDoc',
+        component: () => import('@/pages/enterprise-doc/index.vue')
       },
       // ★ 企业原始资料管理（MENU_AUD_11，36 号）—— 企业散乱原始资料 → 双产物 → 语义分析 → L3 画像
       //   ⛔ 必须与菜单 MENU_AUD_11 成对落地：本端路由是静态的，菜单 Url 无对应子路由 ⇒ 点击白屏
@@ -134,6 +147,13 @@ const routes: RouteRecordRaw[] = [
         path: 'enterprise-dept',
         name: 'EnterpriseDept',
         component: () => import('@/pages/enterprise-dept/index.vue')
+      },
+      // ★ 认证计划（MENU_AUD_17）—— 按条款为核心的体系认证入场计划
+      //   计划列表 + 新建向导（企业/标准多选/阶段 → 部门树+条款树勾选加入已选 → 生成主表+明细）
+      {
+        path: 'audit-plan',
+        name: 'AuditPlan',
+        component: () => import('@/pages/audit-plan/index.vue')
       },
       {
         path: 'organization',
