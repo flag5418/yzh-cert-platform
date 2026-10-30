@@ -169,6 +169,30 @@ const routes: RouteRecordRaw[] = [
         path: 'settings',
         name: 'Settings',
         component: () => import('@/pages/settings/index.vue')
+      },
+      // ★ 认证检查任务（V2 独立认证检查闭环）—— 计划生成的检查任务列表
+      {
+        path: 'audit-task',
+        name: 'AuditTask',
+        component: () => import('@/pages/audit-task/index.vue')
+      },
+      // ★ 任务逐项分析面板（`/audit-task/:code/analyze`）
+      {
+        path: 'audit-task/:code/analyze',
+        name: 'AuditTaskAnalyze',
+        component: () => import('@/pages/audit-task/analyze.vue')
+      },
+      // ★ 证据挂接与变更监控（V2 独立认证检查闭环）
+      {
+        path: 'audit-evidence',
+        name: 'AuditEvidence',
+        component: () => import('@/pages/audit-evidence/index.vue')
+      },
+      // ★ 证据原文预览（新窗口独立页面，不在侧边栏显示）
+      {
+        path: 'audit-task/doc-preview',
+        name: 'DocPreview',
+        component: () => import('@/pages/audit-task/doc-preview.vue')
       }
     ]
   }

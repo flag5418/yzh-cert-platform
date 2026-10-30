@@ -24,6 +24,9 @@ import {
   ElTree, ElTag, ElSteps, ElStep, ElDescriptions, ElDescriptionsItem, ElMessage,
 } from 'element-plus'
 import { yzhApi } from '@yzh-core/api/client'
+import router from '@/router'
+import { createCertTask } from '@share/api/auditor/cert-check-task'
+import AuditPrepWorkbench from './audit-prep-workbench.vue'
 
 interface StandardItem { Code: string; StandardCode: string; StandardName: string; Abbrev: string }
 interface StageItem { Code: string; StageCode: string; StageName: string; Category: string }
@@ -218,7 +221,24 @@ async function savePlan() {
   }
 }
 
-// ──── 查看详情 ────
+// ──── 启动任务 ────
+const creatingTask = ref('')
+
+async function startTask(row: any, taskKind: string) {
+  creatingTask.value = taskKind
+  try {
+    const res = await createCertTask({ PlanCode: row.Code, TaskKind: taskKind, RunMode: 'full' })
+    const taskInfo = (res as any)?.data
+    ElMessage.success({ message: `已创建${taskKind === 'prep' ? '准备' : '检查'}任务：${taskInfo?.Name || taskInfo?.Code}`, duration: 3000 })
+    await router.push({ path: '/audit-task', query: { taskCode: taskInfo?.Code } })
+  } catch (e: any) {
+    ElMessage.error({ message: '创建任务失败：' + (e?.message || ''), duration: 5000 })
+  } finally {
+    creatingTask.value = ''
+  }
+}
+
+// ──── 查看详情（独立） ────
 const viewVisible = ref(false)
 const viewPlan = ref<PlanRow | null>(null)
 const viewDetails = ref<any[]>([])
@@ -228,6 +248,16 @@ async function openView(row: any) {
   viewVisible.value = true
   const res = await yzhApi.request('/api/Auditor/AuditPlan/details', { method: 'GET', params: { planCode: row.Code } })
   viewDetails.value = res?.data || []
+}
+
+// ──── 认证工作台（统一视图）────
+const workbenchVisible = ref(false)
+const workbenchPlanCode = ref('')
+const workbenchPlanName = ref('')
+function openWorkbench(row: PlanRow) {
+  workbenchPlanCode.value = row.Code
+  workbenchPlanName.value = row.Name || ''
+  workbenchVisible.value = true
 }
 </script>
 
@@ -256,9 +286,12 @@ async function openView(row: any) {
           <el-tag :type="row.IsValid === 1 ? 'success' : 'info'" size="small">{{ row.IsValid === 1 ? '启用' : '停用' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="90" align="center">
+      <el-table-column label="操作" width="300" align="center">
         <template #default="{ row }">
           <el-button link type="primary" @click="openView(row)">查看</el-button>
+          <el-button link type="primary" @click="openWorkbench(row)">进入工作台</el-button>
+          <el-button link type="warning" :loading="creatingTask === 'prep'" :disabled="!!creatingTask" @click="startTask(row, 'prep')">开启准备</el-button>
+          <el-button link type="success" :loading="creatingTask === 'onsite'" :disabled="!!creatingTask" @click="startTask(row, 'onsite')">开启检查</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -425,6 +458,23 @@ async function openView(row: any) {
         <el-button @click="viewVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- 认证工作台（V2 准备+检查一体化） -->
+    <el-dialog
+      v-model="workbenchVisible"
+      :title="workbenchPlanName ? `认证工作台 - ${workbenchPlanName}` : '认证工作台'"
+      width="96%"
+      top="2vh"
+      :close-on-click-modal="false"
+      destroy-on-close
+      class="workbench-dialog"
+    >
+      <AuditPrepWorkbench
+        v-if="workbenchVisible"
+        :plan-code="workbenchPlanCode"
+        :plan-name="workbenchPlanName"
+      />
+    </el-dialog>
   </div>
 </template>
 
@@ -516,5 +566,10 @@ async function openView(row: any) {
 }
 .ap-tag {
   margin: 0 var(--yzh-space-1, 4px) var(--yzh-space-1, 4px) 0;
+}
+.workbench-dialog :deep(.el-dialog__body) {
+  padding: 0;
+  height: 88vh;
+  overflow: hidden;
 }
 </style>
