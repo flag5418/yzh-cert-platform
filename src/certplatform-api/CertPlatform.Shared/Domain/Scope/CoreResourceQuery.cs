@@ -78,6 +78,22 @@ public interface ICoreResourceQuery
     /// <summary>按条款 <c>Code</c> 单查条款（未命中返回 <c>null</c>）。</summary>
     Task<ISOClause?> GetClauseByCodeAsync(string? clauseCode);
 
+    /// <summary>
+    /// 按条款 <c>Code</c> 集合批量取条款（空集合直接返回空，⛔ 不发查询）。
+    /// <para><b>★ 用途</b>：检查项 → 条款 Code 是逗号串（<c>cert_audit_plan_detail.Clauses</c>），
+    /// 一次取回整页检查项要展示的条款（编号 + 标题），避免逐条 N+1。
+    /// 端内 ⛔ 不准为这个场景直接 <c>_db.GetListAsync&lt;ISOClause&gt;</c>（违铁律 L5 / 守卫 A-R6）。</para>
+    /// </summary>
+    Task<List<ISOClause>> GetClausesByCodesAsync(IEnumerable<string> clauseCodes);
+
+    // ──────────────────────────── 企业 ────────────────────────────
+
+    /// <summary>
+    /// 按企业 <c>Code</c> 集合批量取企业（空集合直接返回空，⛔ 不发查询）。
+    /// <para>检查项列表 / 执行实例列表要显示企业名，一次取回避免逐行查。</para>
+    /// </summary>
+    Task<List<Enterprise>> GetEnterprisesByCodesAsync(IEnumerable<string> enterpriseCodes);
+
     // ──────────────────────────── 阶段 ────────────────────────────
 
     /// <summary>取全部认证阶段（全局基础资料，无 <c>OrgCode</c> 维度）。</summary>
@@ -443,6 +459,30 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         var cc = clauseCode;
         var r = await _db.GetOneAsync<ISOClause>(x => x.Code == cc);
         return r.Data;
+    }
+
+    public async Task<List<ISOClause>> GetClausesByCodesAsync(IEnumerable<string> clauseCodes)
+    {
+        var codes = new List<string>();
+        foreach (var c in clauseCodes)
+            if (!string.IsNullOrWhiteSpace(c)) codes.Add(c);
+        if (codes.Count == 0) return new List<ISOClause>();
+
+        var rows = await _db.GetListAsync<ISOClause>(x => codes.Contains(x.Code!));
+        return rows.Data ?? new List<ISOClause>();
+    }
+
+    // ──────────────────────────── 企业 ────────────────────────────
+
+    public async Task<List<Enterprise>> GetEnterprisesByCodesAsync(IEnumerable<string> enterpriseCodes)
+    {
+        var codes = new List<string>();
+        foreach (var c in enterpriseCodes)
+            if (!string.IsNullOrWhiteSpace(c)) codes.Add(c);
+        if (codes.Count == 0) return new List<Enterprise>();
+
+        var rows = await _db.GetListAsync<Enterprise>(x => codes.Contains(x.Code!));
+        return rows.Data ?? new List<Enterprise>();
     }
 
     // ──────────────────────────── 阶段 ────────────────────────────

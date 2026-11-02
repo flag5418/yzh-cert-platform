@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>认证计划 · 启动工作流 V6</title>
+<link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus"></script>
+<style>
+  :root{ --p:#409eff;--w:#e6a23c;--s:#67c23a;--d:#f56c6c;--i:#909399; }
+  body{ font-family:-apple-system,"Helvetica Neue",Arial,sans-serif;background:#f5f7fa;margin:0;padding:24px;color:#303133;}
+  .proto{ max-width:1300px;margin:0 auto;}
+  .t1{ font-size:20px;font-weight:700;margin-bottom:4px;} .t2{ font-size:13px;color:var(--i);margin-bottom:20px;line-height:1.7;}
+
+  .dlg{ border:2px solid var(--p);border-radius:10px; }
+  .dlg-hd{ background:#fafafa;padding:12px 18px;border-bottom:1px solid #ebeef5;display:flex;align-items:center;justify-content:space-between;border-radius:8px 8px 0 0;}
+  .dlg-hd .title{ font-size:15px;font-weight:700;} .dlg-hd .sub{ font-size:11px;color:#909399;}
+  .dlg-tool{ padding:9px 18px;background:#fafafa;border-bottom:1px solid #ebeef5;display:flex;align-items:center;gap:8px;}
+  .dlg-body-pad{ padding:12px 18px 0; }
+
+  .btn{ display:inline-flex;align-items:center;gap:4px;padding:6px 14px;border-radius:4px;font-size:13px;cursor:pointer;border:1px solid transparent;font-weight:500;white-space:nowrap;}
+  .btn-p{ background:var(--p);color:#fff;} .btn-w{ background:var(--w);color:#fff;} .btn-s{ background:var(--s);color:#fff;}
+  .btn-o{ background:#fff;border-color:#dcdfe6;color:#606266;}
+  .btn-t{ background:none;border:none;color:var(--p);padding:3px 8px;cursor:pointer;font-size:12px;}
+  .btn-t.w{ color:var(--w);} .btn-t.s{ color:var(--s);} .btn-t.d{ color:var(--d);}
+  .btn-t:disabled,.btn:disabled{ opacity:.45;cursor:not-allowed;}
+  .btn-xs{ padding:3px 8px;font-size:11px;border-radius:3px;}
+
+  .tag{ display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap;}
+  .tag.run{ background:#ecf5ff;color:var(--p);} .tag.done{ background:#f0f9eb;color:var(--s);} .tag.idle{ background:#fafafa;color:var(--i);border:1px solid #e4e7ed;}
+  .tag.nc-maj{ background:#fef0f0;color:var(--d);} .tag.nc-min{ background:#fdf6ec;color:var(--w);} .tag.nc-ok{ background:#f0f9eb;color:var(--s);}
+  .tag.lock{ background:#fef0f0;color:var(--d);border:1px solid #fcd3d3;}
+
+  /* 主表格 */
+  .mtbl{ width:100%;border-collapse:collapse;font-size:13px; }
+  .mtbl th{ background:#fafafa;padding:7px 9px;border:1px solid #ebeef5;font-weight:600;text-align:left;font-size:12px;color:#606299;}
+  .mtbl td{ padding:7px 9px;border:1px solid #ebeef5;vertical-align:middle;}
+  .mtbl tr:hover td{ background:#f5faff;cursor:pointer; } .mtbl tr.active td{ background:#ecf5ff; } .mtbl tr.locked td{ background:#fffbf0; }
+  .mtbl .ci-name{ font-weight:600; }
+  .mtbl .dept{ font-size:12px; color:#606266; }
+  .mtbl .contact{ font-size:11px; color:var(--i); display:flex; align-items:center; gap:4px; }
+  .mtbl .contact-list{ display:flex; flex-wrap:wrap; gap:3px; }
+
+  .ev-ref{ display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:12px;font-size:11px;border:1px solid;cursor:pointer;white-space:nowrap; }
+  .ev-ref.doc{ background:#ecf5ff;color:var(--p);border-color:#d9ecff;} .ev-ref.doc:hover{ text-decoration:underline; }
+
+  /* 侧边栏 */
+  .sidebar{ position:fixed;top:0;right:0;width:560px;height:100vh;background:#fff;box-shadow:-4px 0 20px rgba(0,0,0,.15);z-index:2000;display:flex;flex-direction:column;animation:si .15s ease;}
+  @keyframes si{ from{transform:translateX(100%)} to{transform:translateX(0)} }
+  .sb-hd{ padding:12px 16px;border-bottom:1px solid #ebeef5;display:flex;align-items:center;justify-content:space-between;background:#fafafa;flex-shrink:0; }
+  .sb-hd h3{ margin:0;font-size:14px;font-weight:700; }
+  .sb-hd .sub{ font-size:11px;color:var(--i); }
+  .sb-body{ flex:1;overflow-y:auto;padding:12px 16px; }
+  .sb-ft{ padding:10px 16px;border-top:1px solid #ebeef5;display:flex;justify-content:space-between;align-items:center;background:#fafafa;flex-shrink:0; }
+
+  /* zone */
+  .zone{ border-radius:6px;margin-bottom:10px;border:1px solid;overflow:hidden; }
+  .zone-hd{ padding:6px 10px;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:space-between; }
+  .zone-hd .badge{ font-size:10px;font-weight:400;opacity:.7; }
+  .zone-body{ padding:8px 10px;font-size:12px;line-height:1.6; }
+
+  .z-ev{ border-color:#d9ecff;} .z-ev .zone-hd{ background:#ecf5ff;color:var(--p);} .z-ev .zone-body{ background:#f8fcff; }
+  .z-doubt{ border-color:#fcd3d3;} .z-doubt .zone-hd{ background:#fef0f0;color:var(--d);} .z-doubt .zone-body{ background:#fff8f8;}
+  .z-doubt.ok{ border-color:#e1f3d8;} .z-doubt.ok .zone-hd{ background:#f0f9eb;color:var(--s);} .z-doubt.ok .zone-body{ background:#f8fdf5;}
+  .z-result{ border-color:#d9ecff;} .z-result .zone-hd{ background:#ecf5ff;color:var(--p);} .z-result .zone-body{ background:#f8fcff; }
+  .z-sup{ border-color:#fbebd3;} .z-sup .zone-hd{ background:#fdf6ec;color:var(--w);} .z-sup .zone-body{ background:#fffdf5;}
+  .z-dept{ border-color:#e1f3d8;} .z-dept .zone-hd{ background:#f0f9eb;color:var(--s);} .z-dept .zone-body{ background:#f8fdf5;}
+  .z-dir{ border-color:#d9ecff;} .z-dir .zone-hd{ background:#ecf5ff;color:var(--p);} .z-dir .zone-body{ background:#f8fcff;}
+
+  .sup-item{ padding:5px 0;border-bottom:1px dotted #f0e0c0;}.sup-item:last-child{ border-bottom:none; }
+  .sup-item .text{ font-size:12px;color:#303133;line-height:1.5; }
+  .sup-item .text textarea,.sup-item .text input{ width:100%;border:1px solid var(--p);border-radius:3px;padding:4px;font-size:12px;font-family:inherit;box-sizing:border-box; }
+  .sup-item .meta{ font-size:11px;color:var(--i);margin-top:3px;display:flex;justify-content:space-between;align-items:center;}
+
+  .result-edit select,.result-edit textarea{ border:1px solid #dcdfe6;border-radius:3px;padding:3px 6px;font-size:12px;font-family:inherit;width:100%;box-sizing:border-box;}
+
+  /* 底栏：去工作流步骤，只显示队列状态信息 */
+  .dock{ position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e4e7ed;z-index:100;padding:0;box-shadow:0 -2px 8px rgba(0,0,0,.06);}
+  .dock-inner{ max-width:1300px;margin:0 auto;width:100%;display:flex;align-items:center;gap:16px;padding:8px 24px;font-size:12px;color:#606266;}
+  .dock .qinfo{ display:flex;align-items:center;gap:10px;flex:1;flex-wrap:wrap; }
+  .dock .qinfo > span{ display:flex;align-items:center;gap:3px; }
+  .dock .bar{ height:6px;background:#e4e7ed;border-radius:3px;overflow:hidden;width:180px;margin:0 4px;}
+  .dock .bar > div{ height:100%;background:linear-gradient(90deg,var(--p),#79bbff);border-radius:3px;transition:width .3s;}
+
+  .overlay{ position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1500; }
+
+  .doc-pv{ position:fixed;inset:0;background:#f5f7fa;z-index:3000;display:flex;flex-direction:column; }
+  .doc-pv-hd{ background:#fff;padding:10px 20px;border-bottom:1px solid #ebeef5;display:flex;align-items:center;justify-content:space-between; }
+  .doc-pv-bd{ flex:1;display:flex;align-items:center;justify-content:center;padding:30px;overflow:auto; }
+  .doc-canvas{ background:#fff;border:1px solid #ddd;width:560px;min-height:600px;padding:50px;box-shadow:0 2px 12px rgba(0,0,0,.1);font-size:14px;line-height:1.8;}
+
+  /* 联系人头像/点 */
+  .contact-avatar{ width:20px;height:20px;border-radius:50%;background:#ecf5ff;color:var(--p);font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;border:1px solid #d9ecff;cursor:pointer; }
+  .contact-avatar:hover{ background:var(--p);color:#fff; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="proto">
+    <div class="t1">认证计划 · 启动工作流 V6（最终定稿）</div>
+    <div class="t2">统一视图 · 一张表看全部 · 部门 + 联系人直接列出 · 侧边栏保存+锁定 · 底栏只显队列信息</div>
+
+    <div class="dlg">
+      <!-- 头部：无 tab 切换 -->
+      <div class="dlg-hd">
+        <div>
+          <div class="title">XX科技 · QMS初次审核</div>
+          <div class="sub">PLAN-2026-001 · ISO 9001:2015 · 审核员：李振华 · 2026-10-30 开启</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <span style="font-size:11px;color:var(--i);">最后保存 10:42</span>
+        </div>
+      </div>
+
+      <!-- 工具栏：4 个操作（无方向切换 tab） -->
+      <div class="dlg-tool">
+        <button class="btn btn-w" :disabled="mode==='run'">▶ 自动分析</button>
+        <button class="btn btn-p" :disabled="mode==='run'">💾 保存报告</button>
+        <button class="btn btn-o" :disabled="mode==='run'">📤 导出报告</button>
+        <div style="flex:1"></div>
+        <span class="tag done">完成 4</span><span class="tag run">分析中 1</span><span class="tag idle">排队 2</span><span class="tag lock">锁定 2</span>
+      </div>
+
+      <div class="dlg-body-pad">
+        <!-- 主表：部门 + 联系人为独立列 -->
+        <table class="mtbl">
+          <thead>
+            <tr>
+              <th style="width:28px;"><input type="checkbox" checked></th>
+              <th style="width:28px;">#</th>
+              <th>检查项</th>
+              <th style="width:110px;">部门</th>
+              <th style="width:140px;">部门联系人</th>
+              <th style="width:90px;">状态</th>
+              <th style="width:80px;">PrepState / Conclusion</th>
+              <th style="width:80px;">建议 NC</th>
+              <th style="width:60px;">严重度</th>
+              <th style="width:50px;">证据</th>
+              <th style="width:60px;">疑点</th>
+              <th style="width:60px;">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="locked" @click="openSb(1)">
+              <td><input type="checkbox" @click.stop></td><td>1</td>
+              <td>
+                <div class="ci-name">4.1 组织环境 · 外部问题</div>
+              </td>
+              <td><div class="dept">总经办</div></td>
+              <td>
+                <div class="contact-list">
+                  <div class="contact"><div class="contact-avatar" title="王某某 · 13800138001">王</div><span>王某某</span></div>
+                </div>
+              </td>
+              <td><span class="tag lock">🔒 锁</span></td>
+              <td><span class="tag nc-ok">found</span></td>
+              <td><span style="color:var(--i);">—</span></td>
+              <td><span style="color:var(--i);">—</span></td>
+              <td>3 份</td>
+              <td><span class="tag nc-ok">无</span></td>
+              <td><button class="btn-t" @click.stop="openSb(1)">详情</button></td>
+            </tr>
+            <tr class="active" @click="openSb(2)">
+              <td><input type="checkbox" checked @click.stop></td><td>2</td>
+              <td><div class="ci-name">4.1 组织环境 · 内部问题</div></td>
+              <td><div class="dept">品管部</div></td>
+              <td>
+                <div class="contact-list">
+                  <div class="contact"><div class="contact-avatar" title="李主任 · 13900139001" style="background:#f0f9eb;color:var(--s);border-color:#e1f3d8;">李</div><span>李主任</span></div>
+                  <div class="contact"><div class="contact-avatar" title="张工 · 13700137001" style="background:#fdf6ec;color:var(--w);border-color:#fbebd3;">张</div><span>张工</span></div>
+                </div>
+              </td>
+              <td><span class="tag done">✓ 完成</span></td>
+              <td><span class="tag nc-min">partial</span></td>
+              <td><span class="tag nc-min">一般 NC</span></td>
+              <td><span class="tag nc-min">minor</span></td>
+              <td>2 份</td>
+              <td><span class="tag nc-maj">3项</span></td>
+              <td><button class="btn-t" @click.stop="openSb(2)">详情</button></td>
+            </tr>
+            <tr @click="openSb(3)">
+              <td><input type="checkbox" checked @click.stop></td><td>3</td>
+              <td><div class="ci-name">4.2 相关方需求分析</div></td>
+              <td><div class="dept">总经办 + 品管部</div></td>
+              <td>
+                <div class="contact-list">
+                  <div class="contact"><div class="contact-avatar" title="王某某">王</div><span>王某某</span></div>
+                  <div class="contact"><div class="contact-avatar" title="李主任" style="background:#f0f9eb;color:var(--s);border-color:#e1f3d8;">李</div><span>李主任</span></div>
+                  <div class="contact"><div class="contact-avatar" title="陈法务 · 13600136001" style="background:#fef0f0;color:var(--d);border-color:#fcd3d3;">陈</div><span>陈法务</span></div>
+                </div>
+              </td>
+              <td><span class="tag run">● 分析中</span></td>
+              <td colspan="5" style="text-align:center;color:var(--i);">LLM 执行中…</td>
+              <td><button class="btn-t" disabled>等待</button></td>
+            </tr>
+            <tr>
+              <td><input type="checkbox" checked @click.stop></td><td>4</td>
+              <td><div class="ci-name">5.1 领导作用 · 管理层承诺</div></td>
+              <td><div class="dept">企管部</div></td>
+              <td>
+                <div class="contact-list">
+                  <div class="contact"><div class="contact-avatar" title="赵经理 · 13500135001">赵</div><span>赵经理</span></div>
+                </div>
+              </td>
+              <td><span class="tag idle">排队</span></td>
+              <td colspan="5" style="text-align:center;color:var(--i);">排队第2位</td>
+              <td><button class="btn-t" disabled>—</button></td>
+            </tr>
+            <tr>
+              <td><input type="checkbox" checked @click.stop></td><td>5</td>
+              <td><div class="ci-name">6.1 风险与机遇</div></td>
+              <td><div class="dept">品管部 + 技术部</div></td>
+              <td>
+                <div class="contact-list">
+                  <div class="contact"><div class="contact-avatar" title="张工" style="background:#fdf6ec;color:var(--w);border-color:#fbebd3;">张</div><span>张工</span></div>
+                  <div class="contact"><div class="contact-avatar" title="刘工 · 13400134001" style="background:#f4f4f5;color:#606266;border-color:#e9e9eb;">刘</div><span>刘工</span></div>
+                </div>
+              </td>
+              <td><span class="tag idle">排队</span></td>
+              <td colspan="5" style="text-align:center;color:var(--i);">排队第3位</td>
+              <td><button class="btn-t" disabled>—</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="padding:8px 0 64px;font-size:11px;color:var(--i);text-align:center;">
+          共 5 项 · 点击行或「详情」展开侧边栏 · 黄色底=已锁定 · 联系人首字母可点击
+        </div>
+      </div>
+
+      <!-- 底栏：去工作流步骤，纯队列信息 -->
+      <div class="dock">
+        <div class="dock-inner">
+          <div class="qinfo">
+            <span><b style="color:var(--p);">队列</b></span>
+            <span>已完成 <b style="color:var(--s);">4</b> / 排队 <b>2</b> / 锁定 <b style="color:var(--d);">2</b></span>
+            <div class="bar"><div style="width:57%;"></div></div>
+            <span style="color:var(--i);">已用 03:12</span>
+            <span style="color:var(--i);">预计剩余 01:20</span>
+            <span style="margin-left:12px;">当前：<b>4.2 相关方需求分析</b></span>
+          </div>
+          <button class="btn btn-o btn-xs" @click="mode=mode==='run'?'idle':'run'">{{ mode==='run'?'⏸ 暂停':'▶ 继续' }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ 侧边栏 ══════════ -->
+  <div class="overlay" v-if="sbOpen" @click="sbOpen=false"></div>
+  <div class="sidebar" v-if="sbOpen">
+    <div class="sb-hd">
+      <div>
+        <h3>{{ sbData.name }}</h3>
+        <div class="sub">{{ sbData.clause }} · 部门：{{ sbData.dept }}</div>
+      </div>
+      <button class="btn btn-o" style="padding:3px 8px;font-size:18px;line-height:1;" @click="sbOpen=false">×</button>
+    </div>
+
+    <div class="sb-body">
+      <!-- 摘要 -->
+      <div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:#fafafa;border-radius:6px;margin-bottom:10px;flex-wrap:wrap;">
+        <span style="font-size:12px;">PrepState: <span class="tag" :class="sbData.prepState==='found'?'nc-ok':'nc-min'">{{ sbData.prepState }}</span></span>
+        <span style="font-size:12px;">建议NC: <span class="tag" :class="sbData.nc==='无'?'nc-ok':'nc-min'">{{ sbData.nc }}</span></span>
+        <span style="font-size:12px;">严重度: <span class="tag nc-min">{{ sbData.severity }}</span></span>
+        <span v-if="sbData.locked" style="margin-left:auto;"><span class="tag lock">🔒</span></span>
+      </div>
+
+      <!-- 部门联系人（独立 zone） -->
+      <div class="zone z-dept">
+        <div class="zone-hd"><span>👥 部门 & 联系人</span><span class="badge">检查该条款涉及的部门</span></div>
+        <div class="zone-body">
+          <div style="display:flex;align-items:center;gap:8px;padding:3px 0;">
+            <b style="font-size:13px;color:var(--s);">品管部</b>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px;">
+            <div style="display:flex;align-items:center;gap:4px;padding:3px 10px;background:#fff;border:1px solid #e1f3d8;border-radius:14px;">
+              <div class="contact-avatar" style="width:18px;height:18px;font-size:10px;">李</div>
+              <span style="font-size:12px;">李主任</span>
+              <span style="font-size:10px;color:var(--i);">13900139001</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:3px 0;">
+            <b style="font-size:13px;color:var(--s);">技术部</b>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            <div style="display:flex;align-items:center;gap:4px;padding:3px 10px;background:#fff;border:1px solid #fbebd3;border-radius:14px;">
+              <div class="contact-avatar" style="width:18px;height:18px;font-size:10px;background:#fdf6ec;color:var(--w);border-color:#fbebd3;">张</div>
+              <span style="font-size:12px;">张工</span>
+              <span style="font-size:10px;color:var(--i);">13700137001</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;padding:3px 10px;background:#fff;border:1px solid #e9e9eb;border-radius:14px;">
+              <div class="contact-avatar" style="width:18px;height:18px;font-size:10px;background:#f4f4f5;color:#606266;border-color:#e9e9eb;">刘</div>
+              <span style="font-size:12px;">刘工</span>
+              <span style="font-size:10px;color:var(--i);">13400134001</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 检查证据 -->
+      <div class="zone z-ev">
+        <div class="zone-hd"><span>📄 检查证据</span><span class="badge">LLM 产出 · 引用 {{ sbData.evidence.length }} 份原始文件</span></div>
+        <div class="zone-body">
+          <div style="font-size:12px;color:#606266;margin-bottom:6px;">{{ sbData.evText }}</div>
+          <div v-for="(e,i) in sbData.evidence" :key="i" style="display:flex;align-items:center;gap:6px;padding:3px 0;">
+            <span class="ev-ref doc" @click="openDoc(e.file)">📎 {{ e.file }}</span>
+            <span style="font-size:10px;color:var(--i);">{{ e.anchor }}</span>
+          </div>
+          <div style="font-size:11px;color:var(--i);margin-top:4px;">↗ 文件名 → 独立预览页</div>
+        </div>
+      </div>
+
+      <!-- 疑点 -->
+      <div class="zone" :class="sbData.doubts.length===0?'z-doubt ok':'z-doubt'">
+        <div class="zone-hd"><span>⚠️ 疑点</span><span class="badge">{{ sbData.doubts.length }} 项 · 可补充</span></div>
+        <div class="zone-body">
+          <div v-if="sbData.doubts.length===0" style="color:var(--s);">✓ 无疑点</div>
+          <div v-else>
+            <div v-for="(d,i) in sbData.doubts" :key="i" style="padding:5px 0;border-bottom:1px dotted #f5d0d0;">
+              <div style="font-weight:600;color:var(--d);margin-bottom:2px;">{{ i+1 }}. {{ d.title }}</div>
+              <div style="font-size:12px;line-height:1.5;">{{ d.detail }}</div>
+              <div style="font-size:11px;color:var(--i);margin-top:3px;"><span class="ev-ref doc" style="font-size:10px;" @click="openDoc(d.file)">{{ d.file }}</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 补充材料 -->
+      <div class="zone z-sup">
+        <div class="zone-hd"><span>📝 补充材料</span><button class="btn-t w" @click="addSupp">+ 新增</button></div>
+        <div class="zone-body">
+          <div v-if="sbData.supplements.length===0" style="color:var(--i);text-align:center;padding:10px;font-size:12px;">暂无</div>
+          <div v-for="(s,i) in sbData.supplements" :key="i" class="sup-item">
+            <div class="text">
+              <textarea v-if="s.editing" v-model="s.text" rows="2"></textarea>
+              <span v-else>{{ s.text }}</span>
+            </div>
+            <div class="meta">
+              <span>{{ s.author }} · {{ s.time }}</span>
+              <span>
+                <button v-if="!s.editing" class="btn-t" @click="s.editing=true">编辑</button>
+                <button v-if="s.editing" class="btn-t s" @click="s.editing=false">确定</button>
+                <button class="btn-t d">删除</button>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 侧边栏底部：保存 + 锁定 -->
+    <div class="sb-ft">
+      <div>
+        <button class="btn btn-p" :disabled="mode==='run'">💾 保存</button>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button v-if="!sbData.locked" class="btn btn-w" :disabled="mode==='run'">🔒 锁定此项</button>
+        <button v-else class="btn btn-o" :disabled="mode==='run'">🔓 解锁</button>
+        <button class="btn btn-o" @click="sbOpen=false">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ 文档预览 ══════════ -->
+  <div class="doc-pv" v-if="docPvOpen">
+    <div class="doc-pv-hd">
+      <div><div style="font-weight:600;font-size:14px;">{{ docFile }}</div><div style="font-size:12px;color:var(--i);">企业资料库 · 检查项：{{ sbData.name }}</div></div>
+      <button class="btn btn-o" @click="docPvOpen=false">× 关闭预览</button>
+    </div>
+    <div class="doc-pv-bd">
+      <div class="doc-canvas">
+        <h2 style="text-align:center;margin-bottom:20px;">{{ docFile }}</h2>
+        <p style="text-align:center;color:var(--i);">（文档全文预览）</p>
+        <div style="margin-top:30px;padding:14px;background:#fafafa;border-radius:8px;border:1px solid #e4e7ed;font-size:13px;">
+          <b>📎 引用锚点（检查项定位）</b>
+          <div style="margin-top:6px;color:#606266;">· p.3 部门职责段落<br>· p.48 设备台帐表</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, reactive } = Vue
+createApp({
+  setup(){
+    const open=ref(true), mode=ref('run'), sbOpen=ref(true), docPvOpen=ref(false), docFile=ref('')
+    const sbData = reactive({
+      name:'4.1 组织环境 · 内部问题识别', clause:'ISO 9001 4.1', dept:'品管部 + 技术部',
+      prepState:'partial', nc:'一般 NC', severity:'minor', locked:false,
+      evText:'通过分析企业资料，识别内部问题 4 项（治理结构/企业文化/人力资源/能力）。',
+      evidence:[{file:'组织架构.docx',anchor:'p.3'},{file:'设备清单.xlsx',anchor:'p.48'}],
+      doubts:[
+        {title:'关键缺失：未包含实验室设备',detail:'设备清单仅覆盖生产线设备，未包含实验室检测仪器。',file:'设备清单.xlsx'},
+        {title:'信息矛盾：组织架构 vs 设备责任人',detail:'品管部 8 人中设备责任人无一品管部人员。',file:'组织架构.docx'},
+        {title:'时效性存疑',detail:'设备清单最后更新 2025-12，近 10 个月新增 3 台注塑机未录入。',file:'设备清单.xlsx'},
+      ],
+      supplements:[
+        {text:'审核员电话确认：新采购注塑机正在验收，验收完成后立即录入台帐。',author:'李振华',time:'2026-10-30 14:22',editing:false},
+      ],
+    })
+    const openSb = () => { sbOpen.value = true }
+    const openDoc = f => { docFile.value=f; docPvOpen.value=true }
+    const addSupp = () => { sbData.supplements.push({text:'新增补充材料…',author:'李振华',time:'刚刚',editing:true}) }
+    return { open, mode, sbOpen, sbData, openSb, docPvOpen, docFile, openDoc, addSupp }
+  }
+}).use(ElementPlus).mount('#app')
+</script>
+</body>
+</html>

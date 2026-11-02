@@ -33,10 +33,8 @@ const { logic, tableRef } = useSingleTable(AuditMemberLogic)
         <YzhStatusBadge :type="row.IsValid === 1 ? 'success' : 'info'" :text="row.IsValid === 1 ? '启用' : '禁用'" />
       </template>
 
-      <!-- 性别列 -->
-      <template #column-Gender="{ row }">
-        <span>{{ row.Gender === 1 ? '男' : row.Gender === 2 ? '女' : '未知' }}</span>
-      </template>
+      <!-- 性别列：由 EntityConfig 的 DictCode='gender' 驱动（YzhTable 字典翻译），
+           不在页面里手写映射 —— 字典是 0=男 / 1=女，手写 1=男 会整体错位 -->
 
       <!-- 「显示已禁用」开关 -->
       <template #toolbar-right>

@@ -236,6 +236,19 @@
 | 6 | `reflow` 级用 `stripWhitespace`（**剥掉**全部空白），⛔ 不是折叠成空格 | 折叠后原文 `程序，\n确保` 与锚点 `程序，确保` 仍差一个空格 ⇒ 永远匹配不上 |
 | 7 | 方法名避开基类：`fileColumns` / `docRowActions` / `handleRowAction` / `onRowsSelected` | `columns` / `rowActions` / `rowActionButtons` 是基类 getter（TS2610）；`onRowAction` / `onSelectionChange` 是基类实例属性（TS2425） |
 | 8 | `onNodeClick(node: any)` | `YzhTreeTableLayout` 回传组件自身的 `YzhTreeNode`，声明 `EntDocNode` 会 TS2345 |
+| 9 | ⛔ 不要给有自定义 `#footer` 的 `YzhDialog` 传 `:show-footer="false"` | 插槽在 `v-if="showFooter"` **内部**，关掉会把自定义底部一起藏掉 ⇒ 弹窗一个按钮都没有（2026-10-30 报障） |
+| 10 | 有「空态占位 + `v-else` 挂表格」的页面，`setTableRef` 必须 `watch` 持续同步 | 首屏 `rows` 为空 ⇒ 表格未挂载 ⇒ 只 `onMounted` 注入会拿到 `null` ⇒ `_tableRef` 永远为空 ⇒ `refresh()` 只改 `logic.rows`，表格永不更新（2026-10-30 报障） |
+
+### P3.5 ✅ 2026-10-30 报障修复（上传弹窗无按钮 / 上传后表格不刷新）
+
+| # | 现象 | 根因 | 修法 |
+|---|---|---|---|
+| 1 | 点「上传文件」选完文件后**一个按钮都没有**，无法开始上传 | `YzhDialog` 的底部是 `<template v-if="showFooter" #footer>` ⇒ 页面传了 `:show-footer="false"` 又提供 `#footer` 插槽，**插槽被一起藏掉** | 删掉 `:show-footer="false"`（四段按钮组靠插槽按阶段切换） |
+| 2 | 上传成功后表头「共 N 份文件」会变，但**表格行数停在首屏那一批**，点刷新也没用 | `setTableRef` 只在 `onMounted` 调用一次；首屏 `rows` 为空 ⇒ 走 `YzhEmptyState` 占位 ⇒ `YzhTable` **未挂载** ⇒ 注入的是 `null`，之后再没更新 ⇒ `logic._tableRef` 永远为 null ⇒ `refresh()` 全部走 fallback，只更新 `logic.rows`，从不驱动已挂载的表格 | `index.vue` 加 `watch(tableRef, el => logic.setTableRef(el), { flush: 'post' })` 持续同步 |
+
+**排查依据（真机实测）**：单次点「刷新」时后端返回 `n=6`、`logic.rows=6`，但 `YzhTable.rows=2 / total=2`、DOM 2 行，且 `logic._tableRef` 为 `undefined` —— 三个数字对不上才定位到「引用没注入」而不是「后端少返回」。
+
+**教训（写进 P3.3 决策表）**：凡「空态占位 + `v-else` 挂表格」的页面，`setTableRef` 必须 `watch` 持续同步，⛔ 不能只 `onMounted` 一次。
 
 ### P3.4 实测（1440×900 视口，`wzm` 账号，企业 `测试开发企业`）
 

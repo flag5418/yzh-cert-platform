@@ -95,7 +95,7 @@ const props = withDefaults(
     loading?: boolean
     /** 布局列数 */
     cols?: 1 | 2 | 3 | 4
-    /** 标签宽度 */
+    /** 标签宽度（默认 `'auto'`：按最长 label 自适应，避免长 label 折行，见 YzhForm） */
     labelWidth?: string
     /** 提交按钮文字 */
     submitText?: string
@@ -119,7 +119,7 @@ const props = withDefaults(
     modelValue: () => ({}),
     loading: false,
     cols: 2,
-    labelWidth: '100px',
+    labelWidth: 'auto',
     submitText: undefined,
     destroyOnClose: true,
     showValidateMessage: false,

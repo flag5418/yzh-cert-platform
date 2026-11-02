@@ -12,7 +12,7 @@
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { computed, reactive, ref, watch } from 'vue'
-import { yzhApi } from '../../api/client'
+import { coerceDictValue, loadDictItems } from '../../utils/dictionary'
 import type { EntityFieldSchema } from '../../types/contracts'
 
 export type YzhFieldType =
@@ -90,6 +90,16 @@ const props = withDefaults(
     modelValue: T
     fields: YzhFormField[]
     rules?: FormRules
+    /**
+     * 标签宽度。
+     *
+     * ★ 默认 `'auto'`（2026-10-30）：由 Element Plus 量出**本表单最长 label** 作为统一宽度，
+     *   其余 label 靠 margin 右对齐。为什么不用固定 `100px`：
+     *   label 来自后端 `DesName`（业务术语可能 7+ 字，如「负责人联系电话」），
+     *   固定 px 装不下就**折成两行**（截图实测），且**与弹窗宽度无关**——
+     *   加大弹窗只加宽输入区，label 仍按 100px 硬切。
+     *   需要像素级对齐的页面仍可显式传 `'130px'` 等值。
+     */
     labelWidth?: string
     labelPosition?: 'left' | 'right' | 'top'
     size?: 'large' | 'default' | 'small'
@@ -112,7 +122,7 @@ const props = withDefaults(
     validateMessage?: string
   }>(),
   {
-    labelWidth: '100px',
+    labelWidth: 'auto',
     labelPosition: 'right',
     size: 'default',
     showActions: true,
@@ -217,17 +227,16 @@ const asyncOptions = reactive<Record<string, any[]>>({})
  * 契约：data 载荷 PascalCase（Value/Label/Code/Color，与 DB列=C#=TS 字段一致铁律），
  *       组件层 options 为 camelCase（label/value）→ 此处映射。
  * 框架层 DictCode 打通（2026-09-26，见 REFERENCE.md「框架层已改动清单」）
+ *
+ * ★ 2026-10-30 补两处：
+ *   ① 缓存/并发去重走 `utils/dictionary.ts`（与 `YzhTable` 共用，一次页面只打一次接口）；
+ *   ② `value` 按字段 schema 类型对齐（`DicValue` 恒为字符串，实体列可能是 int/bool）——
+ *      否则 `el-select` 用 `===` 比较 `0` 与 `'0'` 不命中，弹窗里显示 0/1 且下拉无选中项。
  */
-async function loadDictOptions(dicNo: string) {
-  const res = await yzhApi.get<{
-    success?: boolean
-    data?: Array<{ Value: string; Label: string; Code?: string; Color?: string }>
-    err?: string
-  }>(`/api/System/Dictionary/items/by-no/${encodeURIComponent(dicNo)}`)
-  if (!res?.success || !Array.isArray(res.data)) {
-    throw new Error(res?.err || `字典【${dicNo}】加载失败`)
-  }
-  return res.data.map((o) => ({ label: o.Label, value: o.Value }))
+async function loadDictOptions(field: YzhFormField) {
+  const items = await loadDictItems(field.dictCode as string)
+  const schemaType = field.fieldSchema?.Type
+  return items.map((o) => ({ label: o.Label, value: coerceDictValue(o.Value, schemaType) }))
 }
 
 async function ensureOptions(field: YzhFormField) {
@@ -239,7 +248,7 @@ async function ensureOptions(field: YzhFormField) {
     return opts
   }
   if (field.dictCode) {
-    const opts = await loadDictOptions(field.dictCode)
+    const opts = await loadDictOptions(field)
     asyncOptions[field.prop] = opts
     return opts
   }

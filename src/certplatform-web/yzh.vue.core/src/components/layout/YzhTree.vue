@@ -509,7 +509,10 @@ function appendNode(parentCode: string | null, newNode: YzhTreeNode) {
   //       setData，store.root.childNodes 不变 ⇒ 新节点不渲染。
   try {
     ;(treeRef.value as any).append(newNode, parentCode ?? undefined)
-    if (!parentCode) {
+    if (parentCode) {
+      // 父级可能仍是「末端」且未展开 ⇒ 新节点在 store 里但用户看不见
+      revealAppendedChild(parentCode)
+    } else {
       // store 根节点只把数据写进 array.Children（属性），数组本体不动 → 补写，
       // 保持 treeData 与 store 同源（findNodeByCode / badge 以它为准）。
       // 根节点没有 tree-node 监听器，此处 push 不会触发 updateChildren 重复建节点。
@@ -527,17 +530,43 @@ function appendNode(parentCode: string | null, newNode: YzhTreeNode) {
     const parentNode = store?.nodesMap?.[parentCode]
     if (parentNode && typeof parentNode.insertChild === 'function') {
       parentNode.insertChild({ data: newNode })
+      revealAppendedChild(parentCode)
       return
     }
 
     // ③ 最终 fallback：直接在数据中查找父节点并插入
-    if (addToTree(props.data, parentCode, newNode)) return
+    if (addToTree(props.data, parentCode, newNode)) {
+      revealAppendedChild(parentCode)
+      return
+    }
     // 父节点既不在 store 也不在数据里 → 不动（⛔ 绝不降级成根级追加）
     return
   }
 
   // ④ 兜底：只更新数据
   props.data.push(newNode)
+}
+
+/**
+ * 让刚追加的子节点立刻可见（2026-10-30 修「新增部门保存成功后左树没刷新」）
+ *
+ * 两个坑，任何一个都会表现为「接口成功 + 提示成功，但树上没有新节点」：
+ * ① **末端标记被缓存**：`props.isLeaf` 是函数，`Node.initialize` 只取一次并存进
+ *    `isLeafByUser`；此后改 `data.IsLeaf` 不再生效（懒加载分支 `updateLeafState`
+ *    直接 `return isLeafByUser`）⇒ 原先是叶子的父节点继续按叶子渲染，连展开箭头都没有。
+ * ② **父节点未展开**：`append` 只往 `node.childNodes` 里塞节点，父节点收着谁也看不见。
+ *
+ * 这里同时纠正 `isLeafByUser/isLeaf` 并调 `node.expand()`：懒加载且未加载时会先
+ * `loadData` 拉**全量**子节点（避免父节点原有子节点只剩本地新增的这一条），
+ * 已加载则只是展开。
+ */
+function revealAppendedChild(parentCode: string) {
+  const store: any = (treeRef.value as any)?.store
+  const parentNode: any = store?.nodesMap?.[parentCode]
+  if (!parentNode) return
+  parentNode.isLeafByUser = false
+  parentNode.isLeaf = false
+  if (!parentNode.expanded) parentNode.expand()
 }
 
 /** 在树数据中找到 parentCode 对应节点并追加子节点 */

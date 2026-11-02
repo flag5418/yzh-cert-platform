@@ -254,9 +254,10 @@ async function openView(row: any) {
 const workbenchVisible = ref(false)
 const workbenchPlanCode = ref('')
 const workbenchPlanName = ref('')
-function openWorkbench(row: PlanRow) {
-  workbenchPlanCode.value = row.Code
-  workbenchPlanName.value = row.Name || ''
+function openWorkbench(row: any) {
+  const plan = row as PlanRow
+  workbenchPlanCode.value = plan.Code
+  workbenchPlanName.value = plan.Name || ''
   workbenchVisible.value = true
 }
 </script>

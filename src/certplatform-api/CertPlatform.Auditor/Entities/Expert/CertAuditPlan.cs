@@ -37,6 +37,21 @@ namespace CertPlatform.Auditor.Entities.Expert
         /// <summary>排序号</summary>
         public int Sort { get; set; }
 
+        /// <summary>计划类型：stage1 / stage2 / surveillance / recert / special</summary>
+        [StringLength(20)]
+        public string? PlanKind { get; set; }
+
+        /// <summary>覆盖模式：full / sample / scope_change</summary>
+        [StringLength(20)]
+        public string? CoverageMode { get; set; }
+
+        /// <summary>审核年度（用于跨年比较与抽查依据）</summary>
+        public int? AuditYear { get; set; }
+
+        /// <summary>上一年计划 Code（抽查取上年 NC 条款；NULL 表示首年）</summary>
+        [StringLength(50)]
+        public string? PreviousPlanCode { get; set; }
+
         /// <summary>备注</summary>
         [MaxLength(500)]
         public string? Remark { get; set; }

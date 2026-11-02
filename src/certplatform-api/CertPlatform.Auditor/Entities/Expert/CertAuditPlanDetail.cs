@@ -44,6 +44,19 @@ namespace CertPlatform.Auditor.Entities.Expert
         /// <summary>排序号（计划内顺序）</summary>
         public int Sort { get; set; }
 
+        /// <summary>
+        /// 检查项负责审核员 Code（关联专家组成员）。
+        /// <para>★ 口径（用户 2026-11-01）：<b>只在认证准备阶段可定义</b>；认证检查阶段只读，
+        /// 因为审核员分工是入场计划的关键信息，必须由审核组长在准备期定死。
+        /// 一个企业审核通常 2–3 人，不同人负责不同部门（A 查 A 部门、B 查 B 部门）。</para>
+        /// </summary>
+        [StringLength(64)]
+        public string? OwnerCode { get; set; }
+
+        /// <summary>检查项负责审核员姓名（冗余存储，便于列表直接展示）</summary>
+        [StringLength(64)]
+        public string? OwnerName { get; set; }
+
         /// <summary>备注</summary>
         [MaxLength(500)]
         public string? Remark { get; set; }

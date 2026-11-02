@@ -174,6 +174,13 @@ const ORPHAN_ALLOW = new Set([
   'auditor:/overview',
   'auditor:/organization',
   'auditor:/settings',
+  // ── 专家端 · 认证准备 / 认证检查的**详情页**（2026-11-02）──
+  // 理由：这两条是列表页 `/audit-prep`（MENU_AUD_21）/ `/audit-onsite`（MENU_AUD_22）
+  //   的**子页面**：`code` = 计划 Code，从列表行点进去看该计划下的检查项。
+  //   菜单侧只需列表那一条；把详情也放侧边栏会变成「同一功能两个入口」，
+  //   而且侧边栏没法带 `:code`（点进去必然空态）。
+  'auditor:/audit-prep/:code',
+  'auditor:/audit-onsite/:code',
   // ── 后台端 · 条款属性通用提示词维护（P4 2026-10-28）──
   // 理由：`/cert/clause-prompt` 是「条款属性配置 `/cert/clause-attr`」的**嵌入式抽屉子页面**，
   //   不是独立功能入口。入口在 clause-attr 页顶部工具栏「通用提示词维护」按钮，

@@ -193,6 +193,39 @@ const routes: RouteRecordRaw[] = [
         path: 'audit-task/doc-preview',
         name: 'DocPreview',
         component: () => import('@/pages/audit-task/doc-preview.vue')
+      },
+      // ══════════════════════════════════════════════════════════════
+      // ★ 认证准备 / 认证检查 —— 两个独立菜单（用户 2026-11-01 裁决）
+      //
+      // 与 `/audit-task`（V2 任务视角）的区别：
+      //   · audit-task  = 「一个任务跑了多少项」的队列视角
+      //   · audit-prep  = 「这家企业这个阶段的准备做到哪一步」的业务视角，产出**入场计划**
+      //   · audit-onsite= 同上，产出**认证报告**，NC 逐条签发
+      //
+      // 两个分支共用 `components/check/*`，只在 stageKind 上分叉 ——
+      // ⛔ 不要把它们的差异写成两份页面，否则用户提的「两个详情页设计类似」就守不住了。
+      // ⚠️ 菜单 Url 必须与这里成对（`scripts/guards.mjs` R12 会校验）。
+      // ══════════════════════════════════════════════════════════════
+      {
+        path: 'audit-prep',
+        name: 'AuditPrep',
+        component: () => import('@/pages/audit-prep/index.vue')
+      },
+      // ★ 详情页（`/audit-prep/:code`，code = 计划 Code）
+      {
+        path: 'audit-prep/:code',
+        name: 'AuditPrepDetail',
+        component: () => import('@/pages/audit-prep/detail.vue')
+      },
+      {
+        path: 'audit-onsite',
+        name: 'AuditOnsite',
+        component: () => import('@/pages/audit-onsite/index.vue')
+      },
+      {
+        path: 'audit-onsite/:code',
+        name: 'AuditOnsiteDetail',
+        component: () => import('@/pages/audit-onsite/detail.vue')
       }
     ]
   }

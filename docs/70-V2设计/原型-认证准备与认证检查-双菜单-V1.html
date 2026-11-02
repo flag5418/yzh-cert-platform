@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>认证准备 / 认证检查 · 双菜单原型 V1</title>
+<style>
+:root{
+  --p:#409eff; --w:#e6a23c; --s:#67c23a; --d:#f56c6c; --i:#909399;
+  --line:#ebeef5; --line2:#e4e7ed; --bg:#f5f7fa; --txt:#303133; --txt2:#606266;
+  --prep:#e6a23c; --onsite:#409eff;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;display:flex;flex-direction:column;overflow:hidden;
+  font-family:-apple-system,"Helvetica Neue","PingFang SC","Microsoft YaHei",Arial,sans-serif;
+  font-size:13px;color:var(--txt);background:var(--bg);}
+
+/* ── 原型导航条（非产品界面） ── */
+.pbar{flex:0 0 auto;background:#1f2d3d;color:#c0c4cc;display:flex;align-items:center;
+  gap:6px;padding:0 14px;height:42px;overflow-x:auto;white-space:nowrap;}
+.pbar .lb{font-size:11px;color:#7c8794;margin-right:6px;letter-spacing:.5px;}
+.pbar button{background:transparent;border:1px solid #3a4a5c;color:#c0c4cc;font-size:12px;
+  padding:4px 11px;border-radius:4px;cursor:pointer;font-family:inherit;}
+.pbar button:hover{background:#2c3e50;color:#fff;}
+.pbar button.on{background:var(--p);border-color:var(--p);color:#fff;font-weight:600;}
+
+/* ── 外壳 ── */
+.app{flex:1;display:flex;min-height:0;}
+.side{flex:0 0 196px;background:#fff;border-right:1px solid var(--line2);
+  display:flex;flex-direction:column;overflow-y:auto;}
+.side .logo{padding:14px 16px 12px;font-size:14px;font-weight:600;color:var(--txt);
+  border-bottom:1px solid var(--line);}
+.side .grp{padding:12px 16px 4px;font-size:11px;color:var(--i);letter-spacing:.5px;}
+.side a{display:flex;align-items:center;gap:8px;padding:8px 16px;font-size:13px;
+  color:var(--txt2);text-decoration:none;cursor:pointer;border-left:2px solid transparent;}
+.side a:hover{background:#f5f7fa;color:var(--txt);}
+.side a.active{background:#ecf5ff;color:var(--p);border-left-color:var(--p);font-weight:600;}
+.side a .dot{width:5px;height:5px;border-radius:50%;background:#c8c9cc;flex:0 0 auto;}
+.side a.active .dot{background:var(--p);}
+.side a.dim{color:#b4b6ba;}
+.side .tip{margin-top:auto;padding:10px 16px 14px;font-size:11px;color:var(--i);
+  line-height:1.6;border-top:1px solid var(--line);}
+
+.main{flex:1;overflow:auto;position:relative;min-width:0;transition:margin-right .18s ease;}
+body.sb-open .main{margin-right:500px;}
+
+/* ── 视图切换 ── */
+.view{display:none;padding:18px 22px 70px;}
+.view.on{display:block;}
+
+/* ── 页头 ── */
+.ph{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px;}
+.ph h1{margin:0 0 4px;font-size:19px;font-weight:600;display:flex;align-items:center;gap:8px;}
+.ph .sub{font-size:12px;color:var(--i);line-height:1.65;max-width:720px;}
+.ph .acts{display:flex;gap:8px;flex:0 0 auto;}
+.bar-accent{height:3px;border-radius:2px;width:34px;display:inline-block;}
+.bar-accent.prep{background:var(--prep);}
+.bar-accent.onsite{background:var(--onsite);}
+
+/* ── 按钮 ── */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:4px;
+  font-size:13px;cursor:pointer;border:1px solid transparent;font-weight:500;
+  white-space:nowrap;font-family:inherit;}
+.btn-p{background:var(--p);color:#fff;}
+.btn-w{background:var(--w);color:#fff;}
+.btn-s{background:var(--s);color:#fff;}
+.btn-o{background:#fff;border-color:#dcdfe6;color:var(--txt2);}
+.btn-o:hover{border-color:var(--p);color:var(--p);}
+.btn:disabled,.btn-t:disabled{opacity:.45;cursor:not-allowed;}
+.btn-t{background:none;border:none;color:var(--p);padding:3px 6px;cursor:pointer;
+  font-size:12px;font-family:inherit;}
+.btn-t.w{color:var(--w);} .btn-t.s{color:var(--s);} .btn-t.d{color:var(--d);}
+.btn-xs{padding:3px 9px;font-size:11px;border-radius:3px;}
+
+/* ── 标签 ── */
+.tag{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:4px;
+  font-size:11px;font-weight:600;white-space:nowrap;line-height:1.5;}
+.tag.run{background:#ecf5ff;color:var(--p);}
+.tag.done{background:#f0f9eb;color:var(--s);}
+.tag.idle{background:#fafafa;color:var(--i);border:1px solid var(--line2);}
+.tag.pause{background:#fdf6ec;color:var(--w);}
+.tag.nc-maj{background:#fef0f0;color:var(--d);}
+.tag.nc-min{background:#fdf6ec;color:var(--w);}
+.tag.nc-ok{background:#f0f9eb;color:var(--s);}
+.tag.lock{background:#fef0f0;color:var(--d);border:1px solid #fcd3d3;}
+.tag.std{background:#ecf5ff;color:#337ecc;font-weight:500;}
+.tag.branch-prep{background:#fdf6ec;color:var(--w);border:1px solid #fbebd3;}
+.tag.branch-onsite{background:#ecf5ff;color:var(--p);border:1px solid #d9ecff;}
+
+/* ── 统计条 ── */
+.stats{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.stat{background:#fff;border:1px solid var(--line);border-radius:6px;padding:9px 16px;
+  min-width:104px;}
+.stat .n{font-size:20px;font-weight:600;line-height:1.2;}
+.stat .l{font-size:11px;color:var(--i);margin-top:2px;}
+.stat.a .n{color:var(--p);} .stat.b .n{color:var(--s);}
+.stat.c .n{color:var(--w);} .stat.d .n{color:var(--d);}
+
+/* ── 表格 ── */
+.card{background:#fff;border:1px solid var(--line);border-radius:6px;overflow:hidden;}
+.scrollx{overflow-x:auto;}
+.mtbl{width:max-content;min-width:100%;border-collapse:collapse;font-size:13px;}
+.mtbl th{background:#fafafa;padding:8px 9px;border-bottom:1px solid var(--line);
+  font-weight:600;text-align:left;font-size:12px;color:#5a5e66;white-space:nowrap;}
+.mtbl td{padding:8px 9px;border-bottom:1px solid var(--line);vertical-align:middle;}
+.mtbl tbody tr:hover td{background:#f5faff;cursor:pointer;}
+.mtbl tbody tr.active td{background:#ecf5ff;}
+.mtbl tbody tr.locked td{background:#fffbf0;}
+.mtbl .ci{font-weight:600;color:var(--txt);}
+.mtbl .dept{font-size:12px;color:var(--txt2);}
+.mtbl .muted{color:var(--i);}
+.mtbl tfoot td{background:#fafafa;color:var(--i);font-size:11px;padding:7px 9px;}
+
+.contact-list{display:flex;flex-wrap:wrap;gap:5px;align-items:center;}
+.contact{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--txt2);}
+.avatar{width:20px;height:20px;border-radius:50%;background:#ecf5ff;color:var(--p);
+  font-size:10px;font-weight:700;display:inline-flex;align-items:center;
+  justify-content:center;border:1px solid #d9ecff;flex:0 0 auto;}
+.avatar.g{background:#f0f9eb;color:var(--s);border-color:#e1f3d8;}
+.avatar.o{background:#fdf6ec;color:var(--w);border-color:#fbebd3;}
+.avatar.r{background:#fef0f0;color:var(--d);border-color:#fcd3d3;}
+.avatar.n{background:#f4f4f5;color:var(--txt2);border-color:#e9e9eb;}
+
+.prog{display:inline-flex;align-items:center;gap:6px;}
+.prog .bar{width:64px;height:5px;background:var(--line2);border-radius:3px;overflow:hidden;}
+.prog .bar>div{height:100%;background:var(--p);border-radius:3px;}
+.prog .num{font-size:11px;color:var(--i);}
+
+/* ── 空态 ── */
+.empty{background:#fff;border:1px solid var(--line);border-radius:8px;
+  padding:64px 24px;text-align:center;}
+.empty .ico{width:64px;height:64px;margin:0 auto 16px;border:2px dashed #dcdfe6;
+  border-radius:12px;display:flex;align-items:center;justify-content:center;}
+.empty .ico svg{opacity:.5;}
+.empty h2{margin:0 0 8px;font-size:15px;font-weight:600;color:var(--txt);}
+.empty p{margin:0 auto 18px;font-size:12px;color:var(--i);line-height:1.8;max-width:520px;}
+.empty .acts{display:flex;gap:10px;justify-content:center;}
+
+/* ── 详情页头部 ── */
+.dhead{background:#fff;border:1px solid var(--line);border-radius:6px;
+  padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;
+  justify-content:space-between;gap:16px;flex-wrap:wrap;}
+.dhead .t{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;}
+.dhead .m{font-size:11px;color:var(--i);margin-top:4px;line-height:1.7;}
+.dhead .m b{color:var(--txt2);font-weight:500;}
+.crumb{font-size:12px;color:var(--i);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.crumb a{color:var(--p);text-decoration:none;cursor:pointer;}
+
+.toolbar{background:#fff;border:1px solid var(--line);border-radius:6px;
+  padding:9px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;
+  flex-wrap:wrap;}
+.toolbar .sp{flex:1;}
+
+.lockbar{background:#fdf6ec;border:1px solid #fbebd3;border-radius:6px;
+  padding:8px 14px;margin-bottom:12px;font-size:12px;color:#b88230;
+  display:flex;align-items:center;gap:8px;}
+.lockbar b{color:#8a5d10;}
+
+/* ── 右侧抽屉 ── */
+.sb{position:fixed;top:42px;right:0;bottom:0;width:500px;background:#fff;
+  border-left:1px solid var(--line2);box-shadow:-4px 0 18px rgba(0,0,0,.10);
+  z-index:200;display:none;flex-direction:column;}
+.sb.on{display:flex;}
+.sb-hd{padding:11px 16px;border-bottom:1px solid var(--line);display:flex;
+  align-items:flex-start;justify-content:space-between;gap:10px;background:#fafafa;flex:0 0 auto;}
+.sb-hd h3{margin:0;font-size:14px;font-weight:600;}
+.sb-hd .sub{font-size:11px;color:var(--i);margin-top:3px;}
+.sb-body{flex:1;overflow-y:auto;padding:12px 16px;}
+.sb-ft{padding:9px 16px;border-top:1px solid var(--line);display:flex;
+  justify-content:space-between;align-items:center;background:#fafafa;flex:0 0 auto;}
+
+.summary{display:flex;align-items:center;gap:12px;padding:9px 12px;background:#fafafa;
+  border-radius:6px;margin-bottom:10px;flex-wrap:wrap;font-size:12px;color:var(--txt2);}
+.summary .k{color:var(--i);}
+
+.zone{border:1px solid;border-radius:6px;margin-bottom:10px;overflow:hidden;}
+.zone-hd{padding:6px 10px;font-size:12px;font-weight:600;display:flex;
+  align-items:center;justify-content:space-between;}
+.zone-hd .badge{font-size:10px;font-weight:400;opacity:.75;}
+.zone-body{padding:9px 11px;font-size:12px;line-height:1.65;}
+.z-ev{border-color:#d9ecff;} .z-ev .zone-hd{background:#ecf5ff;color:var(--p);}
+.z-ev .zone-body{background:#f8fcff;}
+.z-doubt{border-color:#fcd3d3;} .z-doubt .zone-hd{background:#fef0f0;color:var(--d);}
+.z-doubt .zone-body{background:#fff8f8;}
+.z-doubt.ok{border-color:#e1f3d8;} .z-doubt.ok .zone-hd{background:#f0f9eb;color:var(--s);}
+.z-doubt.ok .zone-body{background:#f8fdf5;}
+.z-sup{border-color:#fbebd3;} .z-sup .zone-hd{background:#fdf6ec;color:var(--w);}
+.z-sup .zone-body{background:#fffdf5;}
+.z-dept{border-color:#e1f3d8;} .z-dept .zone-hd{background:#f0f9eb;color:var(--s);}
+.z-dept .zone-body{background:#f8fdf5;}
+.z-judge{border-color:#d9ecff;} .z-judge .zone-hd{background:#ecf5ff;color:var(--p);}
+.z-judge .zone-body{background:#f8fcff;}
+
+.ev-ref{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;
+  font-size:11px;background:#ecf5ff;color:var(--p);border:1px solid #d9ecff;
+  cursor:pointer;white-space:nowrap;}
+.ev-ref:hover{text-decoration:underline;}
+
+.sup-item{padding:6px 0;border-bottom:1px dotted #f0e0c0;}
+.sup-item:last-child{border-bottom:none;}
+.sup-item .meta{font-size:11px;color:var(--i);margin-top:4px;display:flex;
+  justify-content:space-between;align-items:center;}
+
+.doubt{padding:6px 0;border-bottom:1px dotted #f5d0d0;}
+.doubt:last-child{border-bottom:none;}
+.doubt .ti{font-weight:600;color:var(--d);margin-bottom:2px;}
+.doubt .de{font-size:12px;line-height:1.6;color:var(--txt);}
+.doubt .ft{font-size:11px;color:var(--i);margin-top:4px;}
+
+select,input[type=text],textarea{width:100%;border:1px solid #dcdfe6;border-radius:3px;
+  padding:5px 7px;font-size:12px;font-family:inherit;box-sizing:border-box;color:var(--txt);}
+textarea{resize:vertical;}
+.field{margin-bottom:8px;}
+.field label{display:block;font-size:11px;color:var(--i);margin-bottom:4px;}
+
+/* ── 底栏队列 ── */
+.dock{position:fixed;bottom:0;left:196px;right:0;background:#fff;
+  border-top:1px solid var(--line2);box-shadow:0 -2px 8px rgba(0,0,0,.05);
+  z-index:150;display:none;align-items:center;gap:14px;padding:8px 22px;
+  font-size:12px;color:var(--txt2);}
+.dock.show{display:flex;}
+body.sb-open .dock{right:500px;}
+.dock .q{display:flex;align-items:center;gap:10px;flex:1;flex-wrap:wrap;}
+.dock .bar{height:6px;background:var(--line2);border-radius:3px;overflow:hidden;width:170px;}
+.dock .bar>div{height:100%;background:var(--p);border-radius:3px;}
+.dock b.s{color:var(--s);} .dock b.d{color:var(--d);} .dock b.p{color:var(--p);}
+
+/* ── 设计说明 ── */
+.doc{max-width:960px;}
+.doc h2{font-size:14px;font-weight:600;margin:22px 0 8px;padding-left:9px;
+  border-left:3px solid var(--p);}
+.doc h2:first-child{margin-top:0;}
+.doc p{margin:0 0 10px;line-height:1.8;color:var(--txt2);font-size:13px;}
+.doc ul{margin:0 0 12px;padding-left:20px;line-height:1.9;color:var(--txt2);}
+.doc code{background:#f4f4f5;padding:1px 5px;border-radius:3px;font-size:12px;
+  font-family:"SF Mono",Menlo,Consolas,monospace;color:#c7254e;}
+.doc table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px;
+  background:#fff;border:1px solid var(--line);}
+.doc th{background:#fafafa;padding:8px 10px;border:1px solid var(--line);
+  text-align:left;font-weight:600;color:#5a5e66;}
+.doc td{padding:8px 10px;border:1px solid var(--line);vertical-align:top;
+  line-height:1.65;color:var(--txt2);}
+.doc .q{background:#fdf6ec;border:1px solid #fbebd3;border-radius:6px;
+  padding:12px 16px;margin-bottom:14px;}
+.doc .q b{color:#8a5d10;}
+.doc .q ol{margin:6px 0 0;padding-left:20px;line-height:1.9;color:#7d6035;font-size:12px;}
+
+.toast{position:fixed;top:58px;left:50%;transform:translateX(-50%);background:rgba(48,49,51,.92);
+  color:#fff;font-size:12px;padding:8px 18px;border-radius:4px;z-index:900;
+  opacity:0;pointer-events:none;transition:opacity .2s;white-space:nowrap;}
+.toast.on{opacity:1;}
+</style>
+</head>
+<body data-view="doc">
+
+<div class="pbar">
+  <span class="lb">原型视图</span>
+  <button data-view="doc" class="on">设计说明</button>
+  <button data-view="plan">① 认证计划（派生入口）</button>
+  <button data-view="prep-list">② 认证准备 · 列表</button>
+  <button data-view="prep-empty">③ 认证准备 · 空态</button>
+  <button data-view="prep-detail">④ 认证准备 · 详情</button>
+  <button data-view="onsite-list">⑤ 认证检查 · 列表</button>
+  <button data-view="onsite-detail">⑥ 认证检查 · 详情</button>
+</div>
+
+<div class="app">
+  <aside class="side">
+    <div class="logo">体系认证平台</div>
+    <div class="grp">认证作业</div>
+    <a data-view="plan"><span class="dot"></span>认证计划</a>
+    <a data-view="prep-list"><span class="dot"></span>认证准备</a>
+    <a data-view="onsite-list"><span class="dot"></span>认证检查</a>
+    <div class="grp">支撑</div>
+    <a class="dim" data-toast="证据挂接页本次不改动"><span class="dot"></span>证据挂接</a>
+    <a class="dim" data-toast="队列监控页本次不改动"><span class="dot"></span>队列监控</a>
+    <div class="tip">
+      认证准备 / 认证检查<br>由「认证计划」派生<br>
+      <span style="color:#c8c9cc">未开启则为空列表</span>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- ══════════ 设计说明 ══════════ -->
+    <div class="view on" id="v-doc">
+      <div class="doc">
+        <div class="ph">
+          <div>
+            <h1>认证准备 / 认证检查 · 双菜单</h1>
+            <div class="sub">把原先混在「认证检查任务」里的两类批次，拆成两个独立菜单；每个菜单是「列表 → 详情」，详情沿用你给的原型版式。认证准备与认证检查从「认证计划」派生。</div>
+          </div>
+        </div>
+
+        <h2>一、菜单结构变化</h2>
+        <table>
+          <tr><th style="width:50%">现状</th><th>新设计</th></tr>
+          <tr>
+            <td>菜单「认证检查任务」<code>/audit-task</code><br>一个批次列表，<code>prep</code> 与 <code>onsite</code> 混在一起</td>
+            <td>菜单「认证准备」<code>/audit-prep</code><br>菜单「认证检查」<code>/audit-onsite</code><br>各管一个分支</td>
+          </tr>
+          <tr>
+            <td>一行 = 一次批量执行批次（只看得见进度条）</td>
+            <td>一行 = 一份计划的某个分支<br>企业 / 阶段 / 标准 / 开启时间 全部可见</td>
+          </tr>
+          <tr>
+            <td>详情 = 无地址的弹窗（96% 宽，刷新即丢）</td>
+            <td>详情 = 独立页面 <code>/audit-prep/:code</code><br>可刷新、可分享、可收藏</td>
+          </tr>
+          <tr>
+            <td>点「开启准备」跳 <code>/audit-task</code>，丢掉计划上下文</td>
+            <td>点「开启准备」直接进这份计划的准备详情</td>
+          </tr>
+          <tr>
+            <td>弹窗里准备/检查两分支混看</td>
+            <td>详情页只看本分支：准备看 <code>PrepState</code>，检查看 <code>Conclusion</code></td>
+          </tr>
+          <tr>
+            <td><code>/audit-task</code> 兼做进度监控</td>
+            <td>进度在列表进度列 + 详情底栏，不再单设批次页</td>
+          </tr>
+        </table>
+
+        <h2>二、五个页面</h2>
+        <table>
+          <tr><th style="width:150px">页面</th><th style="width:180px">路由</th><th>内容与数据来源</th></tr>
+          <tr>
+            <td><b>认证准备 · 列表</b></td>
+            <td><code>/audit-prep</code></td>
+            <td>列：企业 / 计划 / 阶段 / 标准 / 检查项 / 进度 / 状态 / 开启时间<br>
+                来源：<code>cert_task</code> where <code>TaskKind='prep'</code>，join 计划取企业与标准</td>
+          </tr>
+          <tr>
+            <td><b>认证准备 · 详情</b></td>
+            <td><code>/audit-prep/:code</code></td>
+            <td>检查项总表（PrepState 列）+ 右侧抽屉（部门联系人 / 检查证据 / 疑点 / 补充材料）+ 底部队列条<br>
+                来源：<code>cert_task_item</code> + <code>cert_check_analysis</code>(StageKind=prep)</td>
+          </tr>
+          <tr>
+            <td><b>认证检查 · 列表</b></td>
+            <td><code>/audit-onsite</code></td>
+            <td>同上，多一列「NC 数」<br>
+                来源：<code>cert_task</code> where <code>TaskKind='onsite'</code></td>
+          </tr>
+          <tr>
+            <td><b>认证检查 · 详情</b></td>
+            <td><code>/audit-onsite/:code</code></td>
+            <td>检查项总表（结论 / 建议NC / 严重度 三列）+ 抽屉里多一块「结论判定」<br>
+                来源：<code>cert_check_analysis</code>(StageKind=onsite) + <code>cert_check_result</code></td>
+          </tr>
+          <tr>
+            <td><b>认证计划</b></td>
+            <td><code>/audit-plan</code></td>
+            <td>不改版式，只改行操作：<br>「进入工作台」删掉，换成「开启准备 / 开启检查 / 查看准备 / 查看检查」</td>
+          </tr>
+        </table>
+
+        <h2>三、派生关系（关键）</h2>
+        <p>认证准备、认证检查两个菜单<strong>不自己造数据</strong>，全部来自认证计划的「开启」动作：</p>
+        <ul>
+          <li>计划列表 → 点「开启准备」→ 建一条 <code>cert_task(TaskKind='prep')</code> → 跳 <code>/audit-prep/:code</code></li>
+          <li>计划列表 → 点「开启检查」→ 建一条 <code>cert_task(TaskKind='onsite')</code> → 跳 <code>/audit-onsite/:code</code></li>
+          <li>某计划从未开启过准备 → 准备列表里没有它；两个菜单都为空时，显示空态引导去认证计划</li>
+        </ul>
+
+        <h2>四、与原型的差异</h2>
+        <p>你给的 <code>原型-计划启动工作流.html</code> 里，一列叫「PrepState / Conclusion」，是因为两个分支塞在同一张表。拆成两个菜单后：</p>
+        <ul>
+          <li>准备详情：只保留 <code>PrepState</code>（found / partial / missing / unknown / na），没有「建议NC / 严重度」—— 准备阶段不判 NC</li>
+          <li>检查详情：<code>Conclusion</code>（符合 / 观察项 / 一般不符合 / 严重不符合 / 不适用）+ 建议NC + 严重度，没有 <code>PrepState</code></li>
+          <li>其余版式（部门联系人独立列、抽屉分区、底部队列条、锁定语义）完全沿用你的原型</li>
+        </ul>
+
+        <h2>五、需要你拍板的 4 件事</h2>
+        <div class="q">
+          <b>这四条不定，代码没法写</b>
+          <ol>
+            <li><b>同一计划同一分支开启第二次，列表是新增一行还是复用原行？</b><br>
+                我倾向：复用原行、刷新「开启时间」，历史轮次进详情看（<code>RunNo</code> 已经有）。否则列表会被重跑刷屏。</li>
+            <li><b><code>/audit-task</code> 怎么处理？</b><br>
+                我倾向：保留但不进菜单，作为运维排查页（看 <code>yzh_queue</code> 批次），日常不用。</li>
+            <li><b>详情页路由用哪个主键？</b><br>
+                我倾向 <code>cert_task.Code</code>，因为它已经是「计划 × 分支 × 轮次」的天然载体。</li>
+            <li><b>「认证检查」这个词，是不是就是 <code>onsite</code>（现场检查）？</b><br>
+                数据库里是 <code>prep</code> / <code>onsite</code>。如果认证检查还包含非现场部分，路由名要另起。</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ ① 认证计划 ══════════ -->
+    <div class="view" id="v-plan">
+      <div class="ph">
+        <div>
+          <h1>认证计划</h1>
+          <div class="sub">本次只改这一页的行操作：去掉「进入工作台」，改成「开启准备 / 开启检查」，已开启的显示「查看准备 / 查看检查」。其余版式不动。</div>
+        </div>
+        <div class="acts"><button class="btn btn-p">+ 新建计划</button></div>
+      </div>
+
+      <div class="card scrollx">
+        <table class="mtbl">
+          <thead>
+            <tr>
+              <th style="width:200px">计划名称</th>
+              <th style="width:150px">企业</th>
+              <th style="width:100px">阶段</th>
+              <th>认证标准</th>
+              <th style="width:130px">认证准备</th>
+              <th style="width:130px">认证检查</th>
+              <th style="width:230px">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="ci">QMS 初次审核</td>
+              <td>XX科技有限公司</td>
+              <td>初次认证</td>
+              <td><span class="tag std">ISO 9001:2015</span></td>
+              <td><span class="tag run">进行中 8/12</span></td>
+              <td><span class="tag idle">未开启</span></td>
+              <td>
+                <button class="btn-t" onclick="go('prep-detail')">查看准备</button>
+                <button class="btn-t s" onclick="go('onsite-detail')">开启检查</button>
+              </td>
+            </tr>
+            <tr>
+              <td class="ci">QMS 监督审核</td>
+              <td>XX科技有限公司</td>
+              <td>监督</td>
+              <td><span class="tag std">ISO 9001:2015</span><span class="tag std">ISO 14001:2015</span></td>
+              <td><span class="tag done">已完成 8/8</span></td>
+              <td><span class="tag done">已完成 8/8</span></td>
+              <td>
+                <button class="btn-t" onclick="go('prep-detail')">查看准备</button>
+                <button class="btn-t" onclick="go('onsite-detail')">查看检查</button>
+              </td>
+            </tr>
+            <tr>
+              <td class="ci">EMS 再认证</td>
+              <td>YY制造股份</td>
+              <td>再认证</td>
+              <td><span class="tag std">ISO 14001:2015</span></td>
+              <td><span class="tag idle">未开启</span></td>
+              <td><span class="tag idle">未开启</span></td>
+              <td>
+                <button class="btn-t w" onclick="go('prep-empty')">开启准备</button>
+                <button class="btn-t s" disabled>开启检查</button>
+              </td>
+            </tr>
+            <tr>
+              <td class="ci">OHSMS 初次审核</td>
+              <td>ZZ建设集团</td>
+              <td>初次认证</td>
+              <td><span class="tag std">ISO 45001:2018</span></td>
+              <td><span class="tag pause">已暂停 3/9</span></td>
+              <td><span class="tag idle">未开启</span></td>
+              <td>
+                <button class="btn-t" onclick="go('prep-detail')">查看准备</button>
+                <button class="btn-t s" disabled>开启检查</button>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr><td colspan="7">共 4 份计划 · 准备已开启 3 份 · 检查已开启 1 份 · 「开启检查」需准备完成 100% 后解锁（可配）</td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════ ② 认证准备 · 列表 ══════════ -->
+    <div class="view" id="v-prep-list">
+      <div class="ph">
+        <div>
+          <h1><span class="bar-accent prep"></span>认证准备</h1>
+          <div class="sub">由「认证计划」派生：计划里点「开启准备」后才会出现在这里。一行 = 一份计划的认证准备，不是一次执行批次。</div>
+        </div>
+        <div class="acts">
+          <button class="btn btn-o">刷新</button>
+          <button class="btn btn-o" onclick="go('prep-empty')">看空态</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat a"><div class="n">1</div><div class="l">进行中</div></div>
+        <div class="stat b"><div class="n">1</div><div class="l">已完成</div></div>
+        <div class="stat c"><div class="n">1</div><div class="l">已暂停</div></div>
+        <div class="stat"><div class="n">26</div><div class="l">检查项合计</div></div>
+      </div>
+
+      <div class="card scrollx">
+        <table class="mtbl">
+          <thead>
+            <tr>
+              <th style="width:150px">企业</th>
+              <th style="width:150px">计划</th>
+              <th style="width:90px">阶段</th>
+              <th>认证标准</th>
+              <th style="width:70px">检查项</th>
+              <th style="width:130px">进度</th>
+              <th style="width:90px">状态</th>
+              <th style="width:140px">开启时间</th>
+              <th style="width:130px">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr onclick="go('prep-detail')">
+              <td class="ci">XX科技有限公司</td>
+              <td>QMS 初次审核</td>
+              <td>初次认证</td>
+              <td><span class="tag std">ISO 9001:2015</span></td>
+              <td>12</td>
+              <td><span class="prog"><span class="bar"><div style="width:66%"></div></span><span class="num">8/12</span></span></td>
+              <td><span class="tag run">进行中</span></td>
+              <td class="muted">2026-10-30 14:20</td>
+              <td>
+                <button class="btn-t" onclick="event.stopPropagation();go('prep-detail')">详情</button>
+                <button class="btn-t w" onclick="event.stopPropagation();toast('已暂停队列')">暂停</button>
+              </td>
+            </tr>
+            <tr onclick="go('prep-detail')">
+              <td class="ci">XX科技有限公司</td>
+              <td>QMS 监督审核</td>
+              <td>监督</td>
+              <td><span class="tag std">ISO 9001:2015</span><span class="tag std">ISO 14001:2015</span></td>
+              <td>8</td>
+              <td><span class="prog"><span class="bar"><div style="width:100%;background:#67c23a"></div></span><span class="num">8/8</span></span></td>
+              <td><span class="tag done">已完成</span></td>
+              <td class="muted">2026-10-28 09:10</td>
+              <td>
+                <button class="btn-t" onclick="event.stopPropagation();go('prep-detail')">详情</button>
+                <button class="btn-t" onclick="event.stopPropagation();toast('重跑将新增轮次，列表不新增行')">重跑</button>
+              </td>
+            </tr>
+            <tr onclick="go('prep-detail')">
+              <td class="ci">ZZ建设集团</td>
+              <td>OHSMS 初次审核</td>
+              <td>初次认证</td>
+              <td><span class="tag std">ISO 45001:2018</span></td>
+              <td>9</td>
+              <td><span class="prog"><span class="bar"><div style="width:33%;background:#e6a23c"></div></span><span class="num">3/9</span></span></td>
+              <td><span class="tag pause">已暂停</span></td>
+              <td class="muted">2026-10-29 16:05</td>
+              <td>
+                <button class="btn-t" onclick="event.stopPropagation();go('prep-detail')">详情</button>
+                <button class="btn-t s" onclick="event.stopPropagation();toast('已继续队列')">继续</button>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr><td colspan="9">共 3 份 · 按开启时间倒序 · 「认证检查」菜单同理，只是数据源换成 <code>TaskKind='onsite'</code></td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════ ③ 认证准备 · 空态 ══════════ -->
+    <div class="view" id="v-prep-empty">
+      <div class="ph">
+        <div>
+          <h1><span class="bar-accent prep"></span>认证准备</h1>
+          <div class="sub">一份计划都还没开启认证准备时的样子。</div>
+        </div>
+      </div>
+
+      <div class="empty">
+        <div class="ico">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#c0c4cc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 2v6h6"/>
+            <path d="M9 13h6M9 17h4"/>
+          </svg>
+        </div>
+        <h2>还没有开启过认证准备</h2>
+        <p>认证准备由「认证计划」派生 —— 到计划列表选一份计划，点「开启准备」，这里才会出现对应的记录。</p>
+        <div class="acts">
+          <button class="btn btn-p" onclick="go('plan')">去认证计划</button>
+          <button class="btn btn-o" onclick="toast('打开说明文档')">什么是认证准备</button>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:12px 16px;font-size:12px;color:var(--i);line-height:1.8;">
+        同样的空态也适用于「认证检查」菜单：<b style="color:var(--txt2)">尚未开启任何认证检查</b>。
+        两个菜单互不依赖，准备可以不做就直接开检查（若业务允许）。
+      </div>
+    </div>
+
+    <!-- ══════════ ④ 认证准备 · 详情 ══════════ -->
+    <div class="view" id="v-prep-detail">
+      <div class="crumb"><a onclick="go('prep-list')">认证准备</a><span>/</span><span>XX科技有限公司 · QMS 初次审核</span></div>
+
+      <div class="dhead">
+        <div>
+          <div class="t">
+            XX科技有限公司 · QMS 初次审核
+            <span class="tag branch-prep">认证准备</span>
+          </div>
+          <div class="m">
+            <b>阶段</b> 初次认证 &nbsp;·&nbsp; <b>标准</b> ISO 9001:2015 &nbsp;·&nbsp;
+            <b>审核员</b> 李振华 &nbsp;·&nbsp; <b>开启</b> 2026-10-30 14:20 &nbsp;·&nbsp;
+            <b>本轮</b> 第 2 次 &nbsp;·&nbsp; <b>最后保存</b> 10:42
+          </div>
+        </div>
+        <div class="acts">
+          <button class="btn btn-o" onclick="go('prep-list')">返回列表</button>
+        </div>
+      </div>
+
+      <div class="lockbar">
+        <b>队列执行中</b> · 本页暂时只读，队列完成后自动恢复编辑 · 已完成 <b>4</b> / 12
+      </div>
+
+      <div class="toolbar">
+        <button class="btn btn-w" disabled>自动分析</button>
+        <button class="btn btn-p" disabled>保存</button>
+        <button class="btn btn-o" disabled>导出报告</button>
+        <div class="sp"></div>
+        <span class="tag done">完成 4</span>
+        <span class="tag run">分析中 1</span>
+        <span class="tag idle">排队 2</span>
+        <span class="tag lock">锁定 2</span>
+      </div>
+
+      <div class="card scrollx">
+        <table class="mtbl">
+          <thead>
+            <tr>
+              <th style="width:28px"><input type="checkbox" checked></th>
+              <th style="width:28px">#</th>
+              <th style="min-width:230px">检查项</th>
+              <th style="width:120px">部门</th>
+              <th style="width:150px">部门联系人</th>
+              <th style="width:85px">状态</th>
+              <th style="width:95px">PrepState</th>
+              <th style="width:60px">证据</th>
+              <th style="width:70px">疑点</th>
+              <th style="width:60px">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="locked" onclick="openSb('prep')">
+              <td><input type="checkbox" onclick="event.stopPropagation()"></td>
+              <td>1</td>
+              <td><div class="ci">4.1 组织环境 · 外部问题</div></td>
+              <td><div class="dept">总经办</div></td>
+              <td>
+                <div class="contact-list">
+                  <div class="contact"><span class="avatar">王</span><span>王某某</span></div>
+                </div>
+              </td>
+              <td><span class="tag lock">已锁定</span></td>
+              <td><span class="tag nc-ok">found</span></td>
+              <td>3 份</td>
+              <td><span class="tag nc-ok">无</span></td>
+              <td><button class="btn-t" onclick="event.stopPropagation();openSb('prep')">详情</button></td>
+            </tr>
+            <tr class="active" onclick="openSb('prep')">
+              <td><input type="checkbox" checked onclick="event.stopPropagation()"></td>
+              <td>2</td>
+              <td><div class="ci">4.1 组织环境 · 内部问题</div></td>
+              <td><div class="dept">品管部</div></td>
+              <td>
+                <div class="contact-list">
+                  <div class="contact"><span class="avatar g">李</span><span>李主任</span></div>
+                  <div class="contact"><span class="avatar o">张</span><span>张工</span></div>
+                </div>
+              </td>
+              <td><span class="tag done">已完成</span></td>
+              <td><span class="tag nc-min">partial</span></td>
+              <td>2 份</td>
+              <td><span class="tag nc-maj">3 项</span></td>
+              <td><button class="btn-t" onclick="event.stopPropagation();openSb('prep')">详情</button></td>
+            </tr>
+            <tr onclick="openSb('prep')">
+              <td><input type="checkbox" checked onclick="event.stopPropagation()"></td>
+              <td>3</td>
+              <td><div class="ci">4.2 相关方需求分析</div></td>
+              <td><div class="dept">总经办 + 品管部</div></td>
+              <td>
+                <div class="contact-list">
+                  <div class="contact"><span class="avatar">王</span><span>王某某</span></div>
+                  <div class="contact"><span class="avatar g">李</span><span>李主任</span></div>
+                  <div class="contact"><span class="avatar r">陈</span><span>陈法务</span></div>
+                </div>
+              </td>
+              <td><span class="tag run">分析中</span></td>
+              <td colspan="3" class="muted" style="text-align:center">LLM 执行中…</td>
+              <td><button class="btn-t" disabled>等待</button></td>
+            </tr>
+            <tr>
+              <td><input type="checkbox" checked onclick="event.stopPropagation()"></td>
+              <td>4</td>
+              <td><div class="ci">5.1 领导作用 · 管理层承诺</div></td>
+              <td><div class="dept">企管部</div></td>
+              <td>
+                <div class="contact-list">
+                  <div class="contact"><span class="avatar n">赵</span><span>赵经理</span></div>
+                </div>
+              </td>
+              <td><span class="tag idle">排队</span></td>
+              <td colspan="3" class="muted" style="text-align:center">排队第 2 位</td>
+              <td><button class="btn-t" disabled>—</button></td>
+            </tr>
+            <tr>
+              <td><input type="checkbox" checked onclick="event.stopPropagation()"></td>
+              <td>5</td>
+              <td><div class="ci">6.1 风险与机遇</div></td>
+              <td><div class="dept">品管部 + 技术部</div></td>
+              <td>
+                <div class="contact-list">
+                  <div class="contact"><span class="avatar o">张</span><span>张工</span></div>
+                  <div class="contact"><span class="avatar n">刘</span><span>刘工</span></div>
+                </div>
+              </td>
+              <td><span class="tag idle">排队</span></td>
+              <td colspan="3" class="muted" style="text-align:center">排队第 3 位</td>
+              <td><button class="btn-t" disabled>—</button></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr><td colspan="10">共 12 项（示例显示前 5 项）· 点行展开右侧抽屉 · 黄底 = 已锁定 · 准备阶段不判 NC · 抽屉打开时表格可横向滚动看剩余列</td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════ ⑤ 认证检查 · 列表 ══════════ -->
+    <div class="view" id="v-onsite-list">
+      <div class="ph">
+        <div>
+          <h1><span class="bar-accent onsite"></span>认证检查</h1>
+          <div class="sub">由「认证计划」派生：计划里点「开启检查」后才会出现在这里。与「认证准备」互不依赖。</div>
+        </div>
+        <div class="acts"><button class="btn btn-o">刷新</button></div>
+      </div>
+
+      <div class="stats">
+        <div class="stat a"><div class="n">0</div><div class="l">进行中</div></div>
+        <div class="stat b"><div class="n">1</div><div class="l">已完成</div></div>
+        <div class="stat d"><div class="n">4</div><div class="l">不符合项</div></div>
+        <div class="stat"><div class="n">8</div><div class="l">检查项合计</div></div>
+      </div>
+
+      <div class="card scrollx">
+        <table class="mtbl">
+          <thead>
+            <tr>
+              <th style="width:150px">企业</th>
+              <th style="width:150px">计划</th>
+              <th style="width:90px">阶段</th>
+              <th>认证标准</th>
+              <th style="width:70px">检查项</th>
+              <th style="width:120px">进度</th>
+              <th style="width:70px">NC</th>
+              <th style="width:90px">状态</th>
+              <th style="width:140px">开启时间</th>
+              <th style="width:90px">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr onclick="go('onsite-detail')">
+              <td class="ci">XX科技有限公司</td>
+              <td>QMS 监督审核</td>
+              <td>监督</td>
+              <td><span class="tag std">ISO 9001:2015</span><span class="tag std">ISO 14001:2015</span></td>
+              <td>8</td>
+              <td><span class="prog"><span class="bar"><div style="width:100%;background:#67c23a"></div></span><span class="num">8/8</span></span></td>
+              <td><span class="tag nc-maj">4</span></td>
+              <td><span class="tag done">已完成</span></td>
+              <td class="muted">2026-10-31 09:05</td>
+              <td><button class="btn-t" onclick="event.stopPropagation();go('onsite-detail')">详情</button></td>
+            </tr>
+            <tr>
+              <td class="ci">ZZ建设集团</td>
+              <td>OHSMS 初次审核</td>
+              <td>初次认证</td>
+              <td><span class="tag std">ISO 45001:2018</span></td>
+              <td>9</td>
+              <td><span class="prog"><span class="bar"><div style="width:0%"></div></span><span class="num">0/9</span></span></td>
+              <td class="muted">—</td>
+              <td><span class="tag pause">待启动</span></td>
+              <td class="muted">2026-11-01 11:30</td>
+              <td>
+                <button class="btn-t" onclick="event.stopPropagation();go('onsite-detail')">详情</button>
+                <button class="btn-t s" onclick="event.stopPropagation();toast('已启动队列')">启动</button>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr><td colspan="10">共 2 份 · 按开启时间倒序 · 「NC」列 = 该份检查已签发的 NC 数量</td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════ ⑥ 认证检查 · 详情 ══════════ -->
+    <div class="view" id="v-onsite-detail">
+      <div class="crumb"><a onclick="go('onsite-list')">认证检查</a><span>/</span><span>XX科技有限公司 · QMS 监督审核</span></div>
+
+      <div class="dhead">
+        <div>
+          <div class="t">
+            XX科技有限公司 · QMS 监督审核
+            <span class="tag branch-onsite">认证检查</span>
+          </div>
+          <div class="m">
+            <b>阶段</b> 监督 &nbsp;·&nbsp; <b>标准</b> ISO 9001:2015 / ISO 14001:2015 &nbsp;·&nbsp;
+            <b>审核员</b> 李振华 &nbsp;·&nbsp; <b>开启</b> 2026-10-31 09:05 &nbsp;·&nbsp;
+            <b>已签发 NC</b> 4
+          </div>
+        </div>
+        <div class="acts">
+          <button class="btn btn-o" onclick="go('onsite-list')">返回列表</button>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <button class="btn btn-p">自动分析</button>
+        <button class="btn btn-o">导出报告</button>
+        <button class="btn btn-o">签发 NC</button>
+        <div class="sp"></div>
+        <span class="tag done">完成 8</span>
+        <span class="tag lock">锁定 3</span>
+        <span class="tag nc-maj">不符合 4</span>
+      </div>
+
+      <div class="card scrollx">
+        <table class="mtbl">
+          <thead>
+            <tr>
+              <th style="width:28px"><input type="checkbox"></th>
+              <th style="width:28px">#</th>
+              <th style="min-width:220px">检查项</th>
+              <th style="width:110px">部门</th>
+              <th style="width:140px">部门联系人</th>
+              <th style="width:80px">状态</th>
+              <th style="width:110px">结论</th>
+              <th style="width:85px">建议 NC</th>
+              <th style="width:75px">严重度</th>
+              <th style="width:55px">证据</th>
+              <th style="width:60px">疑点</th>
+              <th style="width:55px">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="locked" onclick="openSb('onsite')">
+              <td><input type="checkbox" onclick="event.stopPropagation()"></td>
+              <td>1</td>
+              <td><div class="ci">4.1 组织环境 · 外部问题</div></td>
+              <td><div class="dept">总经办</div></td>
+              <td><div class="contact-list"><div class="contact"><span class="avatar">王</span><span>王某某</span></div></div></td>
+              <td><span class="tag lock">已锁定</span></td>
+              <td><span class="tag nc-ok">符合</span></td>
+              <td class="muted">—</td>
+              <td class="muted">—</td>
+              <td>3 份</td>
+              <td><span class="tag nc-ok">无</span></td>
+              <td><button class="btn-t" onclick="event.stopPropagation();openSb('onsite')">详情</button></td>
+            </tr>
+            <tr class="active" onclick="openSb('onsite')">
+              <td><input type="checkbox" checked onclick="event.stopPropagation()"></td>
+              <td>2</td>
+              <td><div class="ci">4.1 组织环境 · 内部问题</div></td>
+              <td><div class="dept">品管部</div></td>
+              <td>
+                <div class="contact-list">
+                  <div class="contact"><span class="avatar g">李</span><span>李主任</span></div>
+                  <div class="contact"><span class="avatar o">张</span><span>张工</span></div>
+                </div>
+              </td>
+              <td><span class="tag done">已完成</span></td>
+              <td><span class="tag nc-min">一般不符合</span></td>
+              <td><span class="tag nc-min">一般 NC</span></td>
+              <td><span class="tag nc-min">minor</span></td>
+              <td>2 份</td>
+              <td><span class="tag nc-maj">3 项</span></td>
+              <td><button class="btn-t" onclick="event.stopPropagation();openSb('onsite')">详情</button></td>
+            </tr>
+            <tr>
+              <td><input type="checkbox" checked onclick="event.stopPropagation()"></td>
+              <td>3</td>
+              <td><div class="ci">4.2 相关方需求分析</div></td>
+              <td><div class="dept">总经办 + 品管部</div></td>
+              <td>
+                <div class="contact-list">
+                  <div class="contact"><span class="avatar">王</span><span>王某某</span></div>
+                  <div class="contact"><span class="avatar g">李</span><span>李主任</span></div>
+                  <div class="contact"><span class="avatar r">陈</span><span>陈法务</span></div>
+                </div>
+              </td>
+              <td><span class="tag run">分析中</span></td>
+              <td colspan="5" class="muted" style="text-align:center">LLM 执行中…</td>
+              <td><button class="btn-t" disabled>等待</button></td>
+            </tr>
+            <tr>
+              <td><input type="checkbox" onclick="event.stopPropagation()"></td>
+              <td>4</td>
+              <td><div class="ci">5.1 领导作用 · 管理层承诺</div></td>
+              <td><div class="dept">企管部</div></td>
+              <td><div class="contact-list"><div class="contact"><span class="avatar n">赵</span><span>赵经理</span></div></div></td>
+              <td><span class="tag done">已完成</span></td>
+              <td><span class="tag nc-min">观察项</span></td>
+              <td class="muted">—</td>
+              <td class="muted">—</td>
+              <td>1 份</td>
+              <td><span class="tag nc-ok">无</span></td>
+              <td><button class="btn-t" onclick="event.stopPropagation();openSb('onsite')">详情</button></td>
+            </tr>
+            <tr>
+              <td><input type="checkbox" onclick="event.stopPropagation()"></td>
+              <td>5</td>
+              <td><div class="ci">6.1 风险与机遇</div></td>
+              <td><div class="dept">品管部 + 技术部</div></td>
+              <td>
+                <div class="contact-list">
+                  <div class="contact"><span class="avatar o">张</span><span>张工</span></div>
+                  <div class="contact"><span class="avatar n">刘</span><span>刘工</span></div>
+                </div>
+              </td>
+              <td><span class="tag done">已完成</span></td>
+              <td><span class="tag nc-maj">严重不符合</span></td>
+              <td><span class="tag nc-maj">严重 NC</span></td>
+              <td><span class="tag nc-maj">major</span></td>
+              <td>4 份</td>
+              <td><span class="tag nc-min">1 项</span></td>
+              <td><button class="btn-t" onclick="event.stopPropagation();openSb('onsite')">详情</button></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr><td colspan="12">共 8 项（示例显示前 5 项）· 结论四态：符合 / 观察项 / 一般不符合 / 严重不符合（+ 不适用）</td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ══════════ 抽屉：认证准备 ══════════ -->
+<div class="sb" id="sb-prep">
+  <div class="sb-hd">
+    <div>
+      <h3>4.1 组织环境 · 内部问题识别</h3>
+      <div class="sub">ISO 9001 4.1 · 品管部 + 技术部</div>
+    </div>
+    <button class="btn btn-o btn-xs" onclick="closeSb()">关闭</button>
+  </div>
+  <div class="sb-body">
+    <div class="summary">
+      <span><span class="k">PrepState</span> <span class="tag nc-min">partial</span></span>
+      <span><span class="k">缺失类型</span> 实验室设备 / 时效性</span>
+      <span><span class="k">疑点</span> 3 项</span>
+      <span style="margin-left:auto"><span class="tag lock">已锁定</span></span>
+    </div>
+
+    <div class="zone z-dept">
+      <div class="zone-hd"><span>部门 &amp; 联系人</span><span class="badge">检查该条款涉及的部门</span></div>
+      <div class="zone-body">
+        <div style="font-weight:600;color:var(--s);margin-bottom:5px">品管部</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px">
+          <div style="display:flex;align-items:center;gap:5px;padding:3px 10px;background:#fff;border:1px solid #e1f3d8;border-radius:14px">
+            <span class="avatar g" style="width:18px;height:18px;font-size:10px">李</span>
+            <span>李主任</span><span style="font-size:10px;color:var(--i)">13900139001</span>
+          </div>
+        </div>
+        <div style="font-weight:600;color:var(--s);margin-bottom:5px">技术部</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <div style="display:flex;align-items:center;gap:5px;padding:3px 10px;background:#fff;border:1px solid #fbebd3;border-radius:14px">
+            <span class="avatar o" style="width:18px;height:18px;font-size:10px">张</span>
+            <span>张工</span><span style="font-size:10px;color:var(--i)">13700137001</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:5px;padding:3px 10px;background:#fff;border:1px solid #e9e9eb;border-radius:14px">
+            <span class="avatar n" style="width:18px;height:18px;font-size:10px">刘</span>
+            <span>刘工</span><span style="font-size:10px;color:var(--i)">13400134001</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="zone z-ev">
+      <div class="zone-hd"><span>检查证据</span><span class="badge">LLM 产出 · 引用 2 份原始文件</span></div>
+      <div class="zone-body">
+        <div style="color:var(--txt2);margin-bottom:7px">通过分析企业资料，识别内部问题 4 项（治理结构 / 企业文化 / 人力资源 / 能力），其中人力资源与能力相关记录不完整。</div>
+        <div style="display:flex;align-items:center;gap:7px;padding:3px 0">
+          <span class="ev-ref">组织架构.docx</span><span style="font-size:10px;color:var(--i)">p.3 部门职责段落</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;padding:3px 0">
+          <span class="ev-ref">设备清单.xlsx</span><span style="font-size:10px;color:var(--i)">p.48 设备台帐表</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="zone z-doubt">
+      <div class="zone-hd"><span>疑点</span><span class="badge">3 项 · 可补充</span></div>
+      <div class="zone-body">
+        <div class="doubt">
+          <div class="ti">1. 关键缺失：未包含实验室设备</div>
+          <div class="de">设备清单仅覆盖生产线设备，未包含实验室检测仪器。</div>
+          <div class="ft"><span class="ev-ref" style="font-size:10px">设备清单.xlsx</span></div>
+        </div>
+        <div class="doubt">
+          <div class="ti">2. 信息矛盾：组织架构 vs 设备责任人</div>
+          <div class="de">品管部 8 人中设备责任人无一品管部人员。</div>
+          <div class="ft"><span class="ev-ref" style="font-size:10px">组织架构.docx</span></div>
+        </div>
+        <div class="doubt">
+          <div class="ti">3. 时效性存疑</div>
+          <div class="de">设备清单最后更新 2025-12，近 10 个月新增 3 台注塑机未录入。</div>
+          <div class="ft"><span class="ev-ref" style="font-size:10px">设备清单.xlsx</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="zone z-sup">
+      <div class="zone-hd"><span>补充材料</span><button class="btn-t w" onclick="toast('新增一条补充材料')">+ 新增</button></div>
+      <div class="zone-body">
+        <div class="sup-item">
+          <div>审核员电话确认：新采购注塑机正在验收，验收完成后立即录入台帐。</div>
+          <div class="meta"><span>李振华 · 2026-10-30 14:22</span>
+            <span><button class="btn-t">编辑</button><button class="btn-t d">删除</button></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="sb-ft">
+    <div><button class="btn btn-p" disabled>保存</button></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-o" disabled>解锁</button>
+      <button class="btn btn-o" onclick="closeSb()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 抽屉：认证检查 ══════════ -->
+<div class="sb" id="sb-onsite">
+  <div class="sb-hd">
+    <div>
+      <h3>4.1 组织环境 · 内部问题识别</h3>
+      <div class="sub">ISO 9001 4.1 · 品管部 + 技术部</div>
+    </div>
+    <button class="btn btn-o btn-xs" onclick="closeSb()">关闭</button>
+  </div>
+  <div class="sb-body">
+    <div class="summary">
+      <span><span class="k">结论</span> <span class="tag nc-min">一般不符合</span></span>
+      <span><span class="k">建议NC</span> <span class="tag nc-min">一般 NC</span></span>
+      <span><span class="k">严重度</span> <span class="tag nc-min">minor</span></span>
+    </div>
+
+    <div class="zone z-dept">
+      <div class="zone-hd"><span>部门 &amp; 联系人</span><span class="badge">检查该条款涉及的部门</span></div>
+      <div class="zone-body">
+        <div style="font-weight:600;color:var(--s);margin-bottom:5px">品管部</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px">
+          <div style="display:flex;align-items:center;gap:5px;padding:3px 10px;background:#fff;border:1px solid #e1f3d8;border-radius:14px">
+            <span class="avatar g" style="width:18px;height:18px;font-size:10px">李</span>
+            <span>李主任</span><span style="font-size:10px;color:var(--i)">13900139001</span>
+          </div>
+        </div>
+        <div style="font-weight:600;color:var(--s);margin-bottom:5px">技术部</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <div style="display:flex;align-items:center;gap:5px;padding:3px 10px;background:#fff;border:1px solid #fbebd3;border-radius:14px">
+            <span class="avatar o" style="width:18px;height:18px;font-size:10px">张</span>
+            <span>张工</span><span style="font-size:10px;color:var(--i)">13700137001</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="zone z-ev">
+      <div class="zone-hd"><span>检查证据</span><span class="badge">LLM 产出 · 引用 2 份原始文件</span></div>
+      <div class="zone-body">
+        <div style="color:var(--txt2);margin-bottom:7px">企业提供了治理结构、企业文化、人力资源三方面记录，但「能力」维度缺少培训有效性评价记录，不满足 4.1 对内部因素完整识别的要求。</div>
+        <div style="display:flex;align-items:center;gap:7px;padding:3px 0">
+          <span class="ev-ref">组织架构.docx</span><span style="font-size:10px;color:var(--i)">p.3</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;padding:3px 0">
+          <span class="ev-ref">培训记录.xlsx</span><span style="font-size:10px;color:var(--i)">p.12</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="zone z-doubt">
+      <div class="zone-hd"><span>疑点</span><span class="badge">1 项</span></div>
+      <div class="zone-body">
+        <div class="doubt">
+          <div class="ti">1. 培训有效性未评价</div>
+          <div class="de">培训记录仅有签到表，无考核或效果评价。</div>
+          <div class="ft"><span class="ev-ref" style="font-size:10px">培训记录.xlsx</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="zone z-judge">
+      <div class="zone-hd"><span>结论判定</span><span class="badge">人工确认后锁定，队列不再覆盖</span></div>
+      <div class="zone-body">
+        <div class="field">
+          <label>结论</label>
+          <select>
+            <option>符合</option>
+            <option>观察项</option>
+            <option selected>一般不符合</option>
+            <option>严重不符合</option>
+            <option>不适用</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>判定依据（写入报告）</label>
+          <textarea rows="3">企业未提供培训有效性评价记录，4.1 内部因素识别不完整，构成一般不符合。</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="zone z-sup">
+      <div class="zone-hd"><span>补充材料</span><button class="btn-t w" onclick="toast('新增一条补充材料')">+ 新增</button></div>
+      <div class="zone-body">
+        <div class="sup-item">
+          <div>现场询问：培训由各部门自行组织，无统一评价模板。</div>
+          <div class="meta"><span>李振华 · 2026-10-31 10:05</span>
+            <span><button class="btn-t">编辑</button><button class="btn-t d">删除</button></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="sb-ft">
+    <div><button class="btn btn-p">保存</button></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-w">锁定此项</button>
+      <button class="btn btn-o" onclick="closeSb()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div class="dock" id="dock">
+  <div class="q">
+    <b class="p">队列</b>
+    <span>已完成 <b class="s">4</b> / 排队 <b>2</b> / 锁定 <b class="d">2</b></span>
+    <div class="bar"><div style="width:57%"></div></div>
+    <span style="color:var(--i)">已用 03:12</span>
+    <span style="color:var(--i)">预计剩余 01:20</span>
+    <span style="margin-left:10px">当前：<b>4.2 相关方需求分析</b></span>
+  </div>
+  <button class="btn btn-o btn-xs" onclick="toast('已暂停队列')">暂停</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var toastTimer = null;
+
+function toast(msg) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { el.classList.remove('on'); }, 2000);
+}
+
+var NAV_OF = {
+  'plan': 'plan',
+  'prep-list': 'prep-list', 'prep-empty': 'prep-list', 'prep-detail': 'prep-list',
+  'onsite-list': 'onsite-list', 'onsite-detail': 'onsite-list'
+};
+
+function go(name) {
+  closeSb();
+  document.querySelectorAll('.view').forEach(function (v) {
+    v.classList.toggle('on', v.id === 'v-' + name);
+  });
+  document.querySelectorAll('.pbar button').forEach(function (b) {
+    b.classList.toggle('on', b.dataset.view === name);
+  });
+  var nav = NAV_OF[name];
+  document.querySelectorAll('.side a').forEach(function (a) {
+    a.classList.toggle('active', a.dataset.view === nav);
+  });
+  document.body.dataset.view = name;
+  var dock = document.getElementById('dock');
+  dock.classList.toggle('show', name === 'prep-detail');
+  document.querySelector('.main').scrollTop = 0;
+}
+
+function openSb(kind) {
+  closeSb();
+  document.getElementById('sb-' + kind).classList.add('on');
+  document.body.classList.add('sb-open');
+}
+
+function closeSb() {
+  document.querySelectorAll('.sb').forEach(function (s) { s.classList.remove('on'); });
+  document.body.classList.remove('sb-open');
+}
+
+document.querySelectorAll('.pbar button').forEach(function (b) {
+  b.addEventListener('click', function () { go(b.dataset.view); });
+});
+
+document.querySelectorAll('.side a').forEach(function (a) {
+  a.addEventListener('click', function () {
+    if (a.dataset.view) go(a.dataset.view);
+    else if (a.dataset.toast) toast(a.dataset.toast);
+  });
+});
+
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') closeSb();
+});
+</script>
+</body>
+</html>

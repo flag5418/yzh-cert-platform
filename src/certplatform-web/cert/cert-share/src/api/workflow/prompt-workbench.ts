@@ -29,7 +29,7 @@ import type { ApiResponse } from '@yzh-core/types'
 
 // ==================== 类型定义（对齐后端 PromptTemplateController.cs） ====================
 
-/** 提示词类型常量（值必须与后端 PromptWorkbenchService.Types 一致） */
+/** 提示词类型常量（值必须与后端 PromptTypes 一致 —— 唯一出处见 IPromptWorkbench.cs） */
 export const PROMPT_TYPE = {
   /** 标题 / 分类提示词：输入文件清单 → 输出每个文件的类别 */
   Group: 'doc_group',
@@ -38,7 +38,21 @@ export const PROMPT_TYPE = {
   /** 元提示词：供「AI 自动生成 / 优化」按钮调用 */
   Generator: 'prompt_generator',
   /** 旧路径：字段 / 表格提取 */
-  DocumentAnalysis: 'document_analysis'
+  DocumentAnalysis: 'document_analysis',
+  /**
+   * ★ 认证准备资料完备性分析（2026-11-01 新增）
+   *
+   * 输入「条款 + 属性 + 文档摘录」→ 输出 PrepState（found/partial/missing/unknown/na）+ 缺料 + 矛盾。
+   * ⛔ 准备阶段审核员还没到现场，**不能下符合性结论**（输出 pass/nc 是语义污染）。
+   */
+  AuditPrep: 'audit_prep',
+  /**
+   * ★ 认证检查符合性分析
+   *
+   * 输入「条款 + 证据」→ 输出结论（pass/ofi/nc/na）+ NC 建议 + 严重程度。
+   * 与 AuditPrep 是两个值域，⛔ 不共用一个提示词。
+   */
+  AuditCheck: 'audit_check'
 } as const
 
 export interface PromptTemplateDto {

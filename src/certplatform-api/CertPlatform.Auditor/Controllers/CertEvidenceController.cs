@@ -16,13 +16,16 @@ namespace CertPlatform.Auditor.Controllers;
 public class CertEvidenceController : ControllerBase
 {
     private readonly CertEvidenceService _evidenceSvc;
+    private readonly CertTaskService _taskSvc;
     private readonly IUserContext _userContext;
 
     public CertEvidenceController(
         CertEvidenceService evidenceSvc,
+        CertTaskService taskSvc,
         IUserContext userContext)
     {
         _evidenceSvc = evidenceSvc;
+        _taskSvc = taskSvc;
         _userContext = userContext;
     }
 
@@ -48,10 +51,15 @@ public class CertEvidenceController : ControllerBase
     // ============================================================
 
     /// <summary>POST /api/Auditor/CertEvidence/add — 新增证据</summary>
+    /// <remarks>页面锁（F12）：队列执行期间禁止改证据，命中返回 409。</remarks>
     [HttpPost("add")]
     public async Task<ApiResponse<CertEvidenceAddResponse>> Add(
         [FromBody] CertEvidenceAddRequest req)
     {
+        var pageLock = await _taskSvc.AssertPageEditableAsync(req.CheckItemCode ?? "");
+        if (!pageLock.Success)
+            return ApiResponse<CertEvidenceAddResponse>.Fail(pageLock.Error!, pageLock.Code ?? 409);
+
         var result = await _evidenceSvc.AddAsync(UserCode, req);
         return result.Success
             ? ApiResponse<CertEvidenceAddResponse>.Ok(result.Data!, result.Data!.Message)
@@ -77,10 +85,14 @@ public class CertEvidenceController : ControllerBase
     // ============================================================
 
     /// <summary>POST /api/Auditor/CertEvidence/update — 更新证据内容（自动同步 MD5）</summary>
+    /// <remarks>页面锁（F12）：队列执行期间禁止改证据，命中返回 409。</remarks>
     [HttpPost("update")]
     public async Task<ApiResponse> Update(
         [FromBody] CertEvidenceUpdateRequest req)
     {
+        var pageLock = await _taskSvc.AssertPageEditableByEvidenceAsync(req.Code);
+        if (!pageLock.Success) return ApiResponse.Fail(pageLock.Error!, pageLock.Code ?? 409);
+
         var result = await _evidenceSvc.UpdateAsync(UserCode, req);
         return result.Success
             ? ApiResponse.Ok("更新成功")

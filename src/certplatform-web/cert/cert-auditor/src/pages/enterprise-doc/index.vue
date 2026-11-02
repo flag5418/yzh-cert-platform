@@ -24,7 +24,7 @@
  *   ⛔ 不能写 `logic.rows`：模板对非 ref 绑定不会解包内部 ref，会渲染成 `[object Object]`。
  *   ⛔ 方法不能解构（丢 `this`）⇒ 模板里一律 `logic.xxx()`。
  */
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   YzhDialog,
   YzhDrawer,
@@ -266,6 +266,23 @@ function queueTasks(q: EntDocQueueRow): EntDocQueueTask[] {
 
 // ═══════════════════════ 生命周期 ═══════════════════════
 
+/*
+ * ★★ 表格引用必须**持续同步**，⛔ 不能只在 onMounted 注入一次。
+ *
+ * 本页的 `YzhTable` 在 `v-else` 分支里（空态时用 `YzhEmptyState` 占位）⇒
+ * 首屏 `rows` 为空 ⇒ 表格根本没挂载 ⇒ `tableRef.value === null`。
+ * 若只在 onMounted 里 `setTableRef(null)`，之后就再也不会更新 ⇒
+ * `logic._tableRef` **永远是 null** ⇒ `refresh()` 全部走 fallback 分支：
+ * 只更新了 `logic.rows`，却从不驱动已挂载的表格。
+ *
+ * 真机表现（2026-10-30 实际报障）：
+ *   上传成功后表头「共 N 份文件」会变，但**表格行数停在首次挂载时的那一批**，
+ *   点「刷新」也没用 —— 看起来像「上传没成功」。
+ *
+ * `flush: 'post'` 保证拿到的是已挂载的组件实例（ref 在 DOM 更新后才被赋值）。
+ */
+watch(tableRef, (el) => logic.setTableRef(el), { flush: 'post' })
+
 onMounted(async () => {
   // 先注入表格引用再 init：`dataLoader` 模式下 `logic.refresh()` 靠它触发重载
   await nextTick()
@@ -489,11 +506,18 @@ onBeforeUnmount(() => {
     </YzhTreeTableLayout>
 
     <!-- ══════════════════ 上传弹窗 ══════════════════ -->
+    <!--
+      ⚠️ ⛔ 不要加 `:show-footer="false"`。
+      `YzhDialog` 的底部是 `<template v-if="showFooter" #footer>` ——
+      关掉它会把**自定义 `#footer` 插槽一起藏掉**（插槽在 v-if 内部），
+      表现为「选完文件后一个按钮都没有，没法开始上传」（2026-10-30 实际报障）。
+      本弹窗四段（pick / plan / uploading / done）各有自己的按钮组，
+      所以必须保留 `showFooter`（默认 true），靠插槽内容按阶段切换。
+    -->
     <YzhDialog
       :model-value="uploadVisible"
       title="上传企业资料"
       width="820px"
-      :show-footer="false"
       @update:model-value="onUploadVisibleChange"
     >
       <div class="ed-upload">
@@ -1131,12 +1155,16 @@ onBeforeUnmount(() => {
 }
 
 /* ── 上传 ── */
+/*
+ * ⚠️ 这里 ⛔ 不要再写 `max-height` + `overflow`：
+ *   `YzhDialog` 的 `.yzh-dialog__body` 已经是 `max-height:60vh; overflow-y:auto`，
+ *   再套一层滚动容器会**双滚动条**，而且顶部 `el-alert` 会被内层裁掉一半
+ *   （2026-10-30 真机截图可见：提示文字只露出上边缘）。
+ */
 .ed-upload {
   display: flex;
   flex-direction: column;
   gap: var(--yzh-space-2, 8px);
-  max-height: 60vh;
-  overflow: auto;
 }
 
 .ed-upload__pick {

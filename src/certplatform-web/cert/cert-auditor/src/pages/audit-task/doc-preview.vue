@@ -16,7 +16,7 @@
  */
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElButton, ElTag, ElDescriptions, ElDescriptionsItem, Empty } from 'element-plus'
+import { ElButton, ElTag, ElDescriptions, ElDescriptionsItem } from 'element-plus'
 import { yzhApi } from '@yzh-core/api/client'
 
 const route = useRoute()
@@ -25,21 +25,33 @@ const sourceCode = ref<string>((route.query.sourceCode as string) || '')
 const evidenceCode = ref<string>((route.query.evidenceCode as string) || '')
 const anchor = ref<string>((route.query.anchor as string) || '')
 
+/**
+ * 文档定位编码：优先 sourceCode（源文档），
+ * 缺失时退回 evidenceCode —— 工作台侧边栏「原始证据」只传 evidenceCode，
+ * 而 CertEvidence/detail 同样支持按证据 Code 直接查询。
+ */
+const docCode = computed(() => sourceCode.value || evidenceCode.value)
+
 const loading = ref(false)
 const doc = ref<any>(null)
 const error = ref('')
 
 const hasContent = computed(() => !!(doc.value?.Content || doc.value?.TranscriptText || doc.value?.Markdown))
+const canCloseWindow = computed(() => typeof window !== 'undefined' && !!window.opener)
+
+function closeWindow() {
+  window.close()
+}
 
 async function loadDoc() {
-  if (!sourceCode.value) {
-    error.value = '缺少源文档编码（sourceCode）'
+  if (!docCode.value) {
+    error.value = '缺少文档编码（sourceCode / evidenceCode）'
     return
   }
   loading.value = true
   error.value = ''
   try {
-    const res = await yzhApi.get('/api/Auditor/CertEvidence/detail', { params: { code: sourceCode.value } })
+    const res = await yzhApi.get('/api/Auditor/CertEvidence/detail', { params: { code: docCode.value } })
     if (res?.success && res.data) {
       doc.value = res.data
     } else {
@@ -65,7 +77,7 @@ onMounted(loadDoc)
         <el-tag v-if="doc.EvidenceKind" size="small" type="info" effect="plain">{{ doc.EvidenceKind }}</el-tag>
         <el-tag v-if="doc.CapturedIn" size="small" type="success" effect="plain">{{ doc.CapturedIn }}</el-tag>
       </div>
-      <el-button size="small" @click="window.close()" v-if="window.opener">关闭窗口</el-button>
+      <el-button size="small" @click="closeWindow" v-if="canCloseWindow">关闭窗口</el-button>
     </div>
 
     <!-- 文档元信息 -->

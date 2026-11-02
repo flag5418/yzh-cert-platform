@@ -139,6 +139,40 @@ public static class CertPlatformAuditorServiceExtensions
         services.AddSingleton<IExpertItemExecutor>(sp => sp.GetRequiredService<ExpertReportExecutor>());
         services.AddSingleton<IYzhTaskExecutor>(sp => sp.GetRequiredService<ExpertReportExecutor>());
 
+        // ════════════════════════════════════════════════════════════════
+        // ──── ★★ 认证检查闭环（V2 — 2026-10-30）────
+        // ════════════════════════════════════════════════════════════════
+
+        // 认证任务服务（任务创建/启停/证据 MD5 变更检测/影响分析）
+        services.AddScoped<CertTaskService>();
+
+        // ★ 检查项锁服务（2026-11-01 · 46 号 §10）—— 锁的唯一读写出口。
+        //   三道闸门（入队 / 执行 / 写入）都调它，⛔ 别在别处各写一份判锁 SQL。
+        //   载体 = cert_check_lock（检查项级），不是 cert_check_result 的行级字段。
+        services.AddScoped<CertCheckLockService>();
+
+        // 认证分析引擎（准备/检查共用一条链 · StageKind 分流 · 锁硬跳过 · 分析层留痕）
+        // 依赖 LlmInvokeService（Singleton）+ IPromptWorkbench（Singleton）+ IDbOrm（Scoped）
+        services.AddScoped<CertCheckContextBuilder>();
+        services.AddScoped<CertCheckEngineService>();
+
+        // ★ 认证分析队列执行器（2026-11-01 · 46 号 §5.3 / M3）
+        //   TaskType = cert_check_prep / cert_check_onsite，由 yzh_queue 统一队列分发。
+        //   ⚠️ 漏注册 = 任务静默分发不到（QueueManager 按 GroupBy(TaskType) 建字典，
+        //      找不到执行器时既不报错也不重试，队列项永久 pending ⇒ 页面锁永久锁死）。
+        //   ⚠️ 必须 Singleton：QueueManager 构造注入 IEnumerable<IYzhTaskExecutor>，
+        //      执行器内部用根容器 CreateScope() 拿 Scoped 服务（引擎 / IDbOrm）。
+        services.AddSingleton<CertCheckPrepExecutor>();
+        services.AddSingleton<IYzhTaskExecutor>(sp => sp.GetRequiredService<CertCheckPrepExecutor>());
+        services.AddSingleton<CertCheckOnsiteExecutor>();
+        services.AddSingleton<IYzhTaskExecutor>(sp => sp.GetRequiredService<CertCheckOnsiteExecutor>());
+
+        // NC 不符合项服务（签发 + 状态流转 + AI 建议）
+        services.AddScoped<CertNcService>();
+
+        // 证据管理服务（列表 + 新增 + 内容更新 + MD5 计算）
+        services.AddScoped<CertEvidenceService>();
+
         // ⛔ T4（2026-10-13）：旧专家队列 Worker 已停 —— 写侧已切 yzh_queue（QueueManager 调度），
         //   若同时跑两个 Worker 会对同一业务项双执行（结果轮次翻倍，数据事故）。
         //   类保留（收口逻辑已抽到 ExpertQueueFinalizer 供双路径复用），T8 随旧三表一并删除。

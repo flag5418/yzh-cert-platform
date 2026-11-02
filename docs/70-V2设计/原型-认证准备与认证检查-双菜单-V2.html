@@ -1,0 +1,1518 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>认证准备 / 认证检查 · 双菜单原型 V2</title>
+<style>
+:root{
+  --p:#409eff; --w:#e6a23c; --s:#67c23a; --d:#f56c6c; --i:#909399;
+  --line:#ebeef5; --line2:#e4e7ed; --bg:#f5f7fa; --txt:#303133; --txt2:#606266;
+  --prep:#e6a23c; --onsite:#409eff;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;display:flex;flex-direction:column;overflow:hidden;
+  font-family:-apple-system,"Helvetica Neue","PingFang SC","Microsoft YaHei",Arial,sans-serif;
+  font-size:13px;color:var(--txt);background:var(--bg);}
+
+.pbar{flex:0 0 auto;background:#1f2d3d;color:#c0c4cc;display:flex;align-items:center;
+  gap:6px;padding:0 14px;height:42px;overflow-x:auto;white-space:nowrap;}
+.pbar .lb{font-size:11px;color:#7c8794;margin-right:6px;letter-spacing:.5px;}
+.pbar button{background:transparent;border:1px solid #3a4a5c;color:#c0c4cc;font-size:12px;
+  padding:4px 11px;border-radius:4px;cursor:pointer;font-family:inherit;}
+.pbar button:hover{background:#2c3e50;color:#fff;}
+.pbar button.on{background:var(--p);border-color:var(--p);color:#fff;font-weight:600;}
+
+.app{flex:1;display:flex;min-height:0;}
+.side{flex:0 0 196px;background:#fff;border-right:1px solid var(--line2);
+  display:flex;flex-direction:column;overflow-y:auto;}
+.side .logo{padding:14px 16px 12px;font-size:14px;font-weight:600;
+  border-bottom:1px solid var(--line);}
+.side .grp{padding:12px 16px 4px;font-size:11px;color:var(--i);letter-spacing:.5px;}
+.side a{display:flex;align-items:center;gap:8px;padding:8px 16px;font-size:13px;
+  color:var(--txt2);text-decoration:none;cursor:pointer;border-left:2px solid transparent;}
+.side a:hover{background:#f5f7fa;color:var(--txt);}
+.side a.active{background:#ecf5ff;color:var(--p);border-left-color:var(--p);font-weight:600;}
+.side a .dot{width:5px;height:5px;border-radius:50%;background:#c8c9cc;flex:0 0 auto;}
+.side a.active .dot{background:var(--p);}
+.side a.dim{color:#b4b6ba;}
+.side .tip{margin-top:auto;padding:10px 16px 14px;font-size:11px;color:var(--i);
+  line-height:1.6;border-top:1px solid var(--line);}
+
+.main{flex:1;overflow:auto;position:relative;min-width:0;transition:margin-right .18s ease;}
+body.sb-open .main{margin-right:500px;}
+
+.view{display:none;padding:18px 22px 70px;}
+.view.on{display:block;}
+
+.ph{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px;}
+.ph h1{margin:0 0 4px;font-size:19px;font-weight:600;display:flex;align-items:center;gap:8px;}
+.ph .sub{font-size:12px;color:var(--i);line-height:1.65;max-width:740px;}
+.ph .acts{display:flex;gap:8px;flex:0 0 auto;}
+.bar-accent{height:3px;border-radius:2px;width:34px;display:inline-block;}
+.bar-accent.prep{background:var(--prep);}
+.bar-accent.onsite{background:var(--onsite);}
+
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:4px;
+  font-size:13px;cursor:pointer;border:1px solid transparent;font-weight:500;
+  white-space:nowrap;font-family:inherit;}
+.btn-p{background:var(--p);color:#fff;}
+.btn-w{background:var(--w);color:#fff;}
+.btn-s{background:var(--s);color:#fff;}
+.btn-o{background:#fff;border-color:#dcdfe6;color:var(--txt2);}
+.btn-o:hover{border-color:var(--p);color:var(--p);}
+.btn:disabled{opacity:.42;cursor:not-allowed;}
+.btn-t{background:none;border:none;color:var(--p);padding:3px 6px;cursor:pointer;
+  font-size:12px;font-family:inherit;}
+.btn-t.w{color:var(--w);} .btn-t.s{color:var(--s);} .btn-t.d{color:var(--d);}
+.btn-xs{padding:3px 9px;font-size:11px;border-radius:3px;}
+
+.tag{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:4px;
+  font-size:11px;font-weight:600;white-space:nowrap;line-height:1.5;}
+.tag.run{background:#ecf5ff;color:var(--p);}
+.tag.done{background:#f0f9eb;color:var(--s);}
+.tag.idle{background:#fafafa;color:var(--i);border:1px solid var(--line2);}
+.tag.pause{background:#fdf6ec;color:var(--w);}
+.tag.nc-maj{background:#fef0f0;color:var(--d);}
+.tag.nc-min{background:#fdf6ec;color:var(--w);}
+.tag.nc-ok{background:#f0f9eb;color:var(--s);}
+.tag.lock{background:#fef0f0;color:var(--d);border:1px solid #fcd3d3;}
+.tag.std{background:#ecf5ff;color:#337ecc;font-weight:500;}
+.tag.branch-prep{background:#fdf6ec;color:var(--w);border:1px solid #fbebd3;}
+.tag.branch-onsite{background:#ecf5ff;color:var(--p);border:1px solid #d9ecff;}
+.tag.click{cursor:pointer;}
+.tag.click:hover{filter:brightness(.94);text-decoration:underline;}
+
+.stats{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.stat{background:#fff;border:1px solid var(--line);border-radius:6px;padding:9px 16px;min-width:104px;}
+.stat .n{font-size:20px;font-weight:600;line-height:1.2;}
+.stat .l{font-size:11px;color:var(--i);margin-top:2px;}
+.stat.a .n{color:var(--p);} .stat.b .n{color:var(--s);}
+.stat.c .n{color:var(--w);} .stat.d .n{color:var(--d);}
+
+.card{background:#fff;border:1px solid var(--line);border-radius:6px;overflow:hidden;}
+.scrollx{overflow-x:auto;}
+.mtbl{width:max-content;min-width:100%;border-collapse:collapse;font-size:13px;}
+.mtbl th{background:#fafafa;padding:8px 9px;border-bottom:1px solid var(--line);
+  font-weight:600;text-align:left;font-size:12px;color:#5a5e66;white-space:nowrap;}
+.mtbl td{padding:8px 9px;border-bottom:1px solid var(--line);vertical-align:middle;}
+.mtbl tbody tr:hover td{background:#f5faff;cursor:pointer;}
+.mtbl tbody tr.active td{background:#ecf5ff;}
+.mtbl tbody tr.locked td{background:#fffbf0;}
+.mtbl .ci{font-weight:600;color:var(--txt);}
+.mtbl .dept{font-size:12px;color:var(--txt2);}
+.mtbl .muted{color:var(--i);}
+.mtbl tfoot td{background:#fafafa;color:var(--i);font-size:11px;padding:7px 9px;}
+.mtbl .ctr{text-align:center;}
+
+.contact-list{display:flex;flex-wrap:wrap;gap:5px;align-items:center;}
+.contact{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--txt2);}
+.avatar{width:20px;height:20px;border-radius:50%;background:#ecf5ff;color:var(--p);
+  font-size:10px;font-weight:700;display:inline-flex;align-items:center;
+  justify-content:center;border:1px solid #d9ecff;flex:0 0 auto;}
+.avatar.g{background:#f0f9eb;color:var(--s);border-color:#e1f3d8;}
+.avatar.o{background:#fdf6ec;color:var(--w);border-color:#fbebd3;}
+.avatar.r{background:#fef0f0;color:var(--d);border-color:#fcd3d3;}
+.avatar.n{background:#f4f4f5;color:var(--txt2);border-color:#e9e9eb;}
+
+.prog{display:inline-flex;align-items:center;gap:6px;}
+.prog .bar{width:64px;height:5px;background:var(--line2);border-radius:3px;overflow:hidden;}
+.prog .bar>div{height:100%;background:var(--p);border-radius:3px;}
+.prog .num{font-size:11px;color:var(--i);}
+
+.lk{background:#fff;border:1px solid #fcd3d3;color:var(--d);font-size:11px;
+  padding:2px 9px;border-radius:3px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.lk:hover{background:#fef0f0;}
+.lk.on{background:#fef0f0;font-weight:600;}
+.lk:disabled{opacity:.55;cursor:not-allowed;}
+.ncno{font-size:11px;font-weight:600;color:var(--d);white-space:nowrap;}
+
+.empty{background:#fff;border:1px solid var(--line);border-radius:8px;padding:56px 24px;text-align:center;}
+.empty .ico{width:64px;height:64px;margin:0 auto 16px;border:2px dashed #dcdfe6;
+  border-radius:12px;display:flex;align-items:center;justify-content:center;}
+.empty h2{margin:0 0 8px;font-size:15px;font-weight:600;}
+.empty p{margin:0 auto 18px;font-size:12px;color:var(--i);line-height:1.8;max-width:520px;}
+.empty .acts{display:flex;gap:10px;justify-content:center;}
+
+.dhead{background:#fff;border:1px solid var(--line);border-radius:6px;padding:12px 16px;
+  margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;
+  gap:16px;flex-wrap:wrap;}
+.dhead .t{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;}
+.dhead .m{font-size:11px;color:var(--i);margin-top:4px;line-height:1.7;}
+.dhead .m b{color:var(--txt2);font-weight:500;}
+.crumb{font-size:12px;color:var(--i);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.crumb a{color:var(--p);text-decoration:none;cursor:pointer;}
+
+.steps{display:flex;align-items:center;background:#fff;border:1px solid var(--line);
+  border-radius:6px;padding:11px 16px;margin-bottom:12px;overflow-x:auto;}
+.step{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
+.step .n{width:22px;height:22px;border-radius:50%;background:#f0f2f5;color:var(--i);
+  font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
+.step.done .n{background:var(--s);color:#fff;}
+.step.cur .n{background:var(--p);color:#fff;}
+.step .t{font-size:12px;color:var(--i);}
+.step.done .t{color:var(--txt2);}
+.step.cur .t{font-weight:600;color:var(--p);}
+.step .d{font-size:11px;color:var(--i);margin-left:2px;}
+.step-line{width:26px;height:1px;background:#dcdfe6;margin:0 12px;flex:0 0 auto;}
+
+.toolbar{background:#fff;border:1px solid var(--line);border-radius:6px;padding:9px 14px;
+  margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.toolbar .sp{flex:1;}
+.toolbar .grp{border-right:1px solid var(--line);padding-right:8px;margin-right:2px;
+  display:flex;gap:8px;align-items:center;}
+
+.lockbar{background:#fdf6ec;border:1px solid #fbebd3;border-radius:6px;padding:8px 14px;
+  margin-bottom:12px;font-size:12px;color:#b88230;display:flex;align-items:center;gap:8px;}
+.lockbar b{color:#8a5d10;}
+
+.sb{position:fixed;top:42px;right:0;bottom:0;width:500px;background:#fff;
+  border-left:1px solid var(--line2);box-shadow:-4px 0 18px rgba(0,0,0,.10);
+  z-index:200;display:none;flex-direction:column;}
+.sb.on{display:flex;}
+.sb-hd{padding:11px 16px;border-bottom:1px solid var(--line);display:flex;
+  align-items:flex-start;justify-content:space-between;gap:10px;background:#fafafa;flex:0 0 auto;}
+.sb-hd h3{margin:0;font-size:14px;font-weight:600;}
+.sb-hd .sub{font-size:11px;color:var(--i);margin-top:3px;}
+.sb-body{flex:1;overflow-y:auto;padding:12px 16px;}
+.sb-ft{padding:9px 16px;border-top:1px solid var(--line);display:flex;
+  justify-content:space-between;align-items:center;background:#fafafa;flex:0 0 auto;}
+
+.summary{display:flex;align-items:center;gap:12px;padding:9px 12px;background:#fafafa;
+  border-radius:6px;margin-bottom:10px;flex-wrap:wrap;font-size:12px;color:var(--txt2);}
+.summary .k{color:var(--i);}
+
+.zone{border:1px solid;border-radius:6px;margin-bottom:10px;overflow:hidden;}
+.zone-hd{padding:6px 10px;font-size:12px;font-weight:600;display:flex;
+  align-items:center;justify-content:space-between;}
+.zone-hd .badge{font-size:10px;font-weight:400;opacity:.75;}
+.zone-body{padding:9px 11px;font-size:12px;line-height:1.65;}
+.z-ev{border-color:#d9ecff;} .z-ev .zone-hd{background:#ecf5ff;color:var(--p);}
+.z-ev .zone-body{background:#f8fcff;}
+.z-doubt{border-color:#fcd3d3;} .z-doubt .zone-hd{background:#fef0f0;color:var(--d);}
+.z-doubt .zone-body{background:#fff8f8;}
+.z-doubt.ok{border-color:#e1f3d8;} .z-doubt.ok .zone-hd{background:#f0f9eb;color:var(--s);}
+.z-doubt.ok .zone-body{background:#f8fdf5;}
+.z-sup{border-color:#fbebd3;} .z-sup .zone-hd{background:#fdf6ec;color:var(--w);}
+.z-sup .zone-body{background:#fffdf5;}
+.z-dept{border-color:#e1f3d8;} .z-dept .zone-hd{background:#f0f9eb;color:var(--s);}
+.z-dept .zone-body{background:#f8fdf5;}
+.z-judge{border-color:#d9ecff;} .z-judge .zone-hd{background:#ecf5ff;color:var(--p);}
+.z-judge .zone-body{background:#f8fcff;}
+.z-nc{border-color:#fcd3d3;} .z-nc .zone-hd{background:#fef0f0;color:var(--d);}
+.z-nc .zone-body{background:#fff8f8;}
+.z-plan{border-color:#fbebd3;} .z-plan .zone-hd{background:#fdf6ec;color:var(--w);}
+.z-plan .zone-body{background:#fffdf5;}
+
+.ev-ref{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;
+  font-size:11px;background:#ecf5ff;color:var(--p);border:1px solid #d9ecff;
+  cursor:pointer;white-space:nowrap;}
+.ev-ref:hover{text-decoration:underline;}
+
+.sup-item{padding:6px 0;border-bottom:1px dotted #f0e0c0;}
+.sup-item:last-child{border-bottom:none;}
+.sup-item .meta{font-size:11px;color:var(--i);margin-top:4px;display:flex;
+  justify-content:space-between;align-items:center;}
+
+.doubt{padding:6px 0;border-bottom:1px dotted #f5d0d0;}
+.doubt:last-child{border-bottom:none;}
+.doubt .ti{font-weight:600;color:var(--d);margin-bottom:2px;}
+.doubt .de{font-size:12px;line-height:1.6;}
+.doubt .ft{font-size:11px;color:var(--i);margin-top:4px;}
+
+select,input[type=text],input[type=date],textarea{width:100%;border:1px solid #dcdfe6;
+  border-radius:3px;padding:5px 7px;font-size:12px;font-family:inherit;color:var(--txt);}
+textarea{resize:vertical;}
+.field{margin-bottom:8px;}
+.field label{display:block;font-size:11px;color:var(--i);margin-bottom:4px;}
+.row2{display:flex;gap:8px;}
+.row2>*{flex:1;}
+
+.dock{position:fixed;bottom:0;left:196px;right:0;background:#fff;border-top:1px solid var(--line2);
+  box-shadow:0 -2px 8px rgba(0,0,0,.05);z-index:150;display:none;align-items:center;
+  gap:14px;padding:8px 22px;font-size:12px;color:var(--txt2);}
+.dock.show{display:flex;}
+body.sb-open .dock{right:500px;}
+.dock .q{display:flex;align-items:center;gap:10px;flex:1;flex-wrap:wrap;}
+.dock .bar{height:6px;background:var(--line2);border-radius:3px;overflow:hidden;width:170px;}
+.dock .bar>div{height:100%;background:var(--p);border-radius:3px;}
+.dock b.s{color:var(--s);} .dock b.d{color:var(--d);} .dock b.p{color:var(--p);}
+
+.dd-menu{position:fixed;background:#fff;border:1px solid var(--line2);border-radius:6px;
+  box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:700;min-width:172px;padding:4px 0;display:none;}
+.dd-menu.on{display:block;}
+.dd-item{padding:7px 14px;font-size:12px;color:var(--txt2);cursor:pointer;white-space:nowrap;}
+.dd-item:hover{background:#f5f7fa;color:var(--p);}
+.dd-item.dis{color:#c8c9cc;cursor:not-allowed;}
+.dd-item.dis:hover{background:transparent;color:#c8c9cc;}
+.dd-sep{height:1px;background:var(--line);margin:4px 0;}
+.dd-title{padding:6px 14px 3px;font-size:10px;color:var(--i);letter-spacing:.5px;}
+
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;display:none;}
+.mask.on{display:block;}
+.dlg{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;
+  border-radius:8px;z-index:600;display:none;flex-direction:column;max-height:84vh;
+  box-shadow:0 8px 32px rgba(0,0,0,.18);}
+.dlg.on{display:flex;}
+.dlg-hd{padding:13px 18px;border-bottom:1px solid var(--line);display:flex;
+  align-items:flex-start;justify-content:space-between;gap:12px;}
+.dlg-hd h3{margin:0;font-size:15px;font-weight:600;}
+.dlg-hd .sub{font-size:11px;color:var(--i);margin-top:3px;}
+.dlg-bd{padding:14px 18px;overflow-y:auto;}
+.dlg-ft{padding:10px 18px;border-top:1px solid var(--line);display:flex;
+  justify-content:flex-end;gap:8px;background:#fafafa;border-radius:0 0 8px 8px;}
+
+.doc{max-width:980px;}
+.doc h2{font-size:14px;font-weight:600;margin:22px 0 8px;padding-left:9px;border-left:3px solid var(--p);}
+.doc h2:first-child{margin-top:0;}
+.doc p{margin:0 0 10px;line-height:1.8;color:var(--txt2);font-size:13px;}
+.doc ul{margin:0 0 12px;padding-left:20px;line-height:1.9;color:var(--txt2);}
+.doc code{background:#f4f4f5;padding:1px 5px;border-radius:3px;font-size:12px;
+  font-family:"SF Mono",Menlo,Consolas,monospace;color:#c7254e;}
+.doc table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px;
+  background:#fff;border:1px solid var(--line);}
+.doc th{background:#fafafa;padding:8px 10px;border:1px solid var(--line);
+  text-align:left;font-weight:600;color:#5a5e66;}
+.doc td{padding:8px 10px;border:1px solid var(--line);vertical-align:top;
+  line-height:1.65;color:var(--txt2);}
+.doc .q{background:#fdf6ec;border:1px solid #fbebd3;border-radius:6px;padding:12px 16px;margin-bottom:14px;}
+.doc .q b{color:#8a5d10;}
+.doc .q ol{margin:6px 0 0;padding-left:20px;line-height:1.9;color:#7d6035;font-size:12px;}
+
+.toast{position:fixed;top:58px;left:50%;transform:translateX(-50%);
+  background:rgba(48,49,51,.92);color:#fff;font-size:12px;padding:8px 18px;
+  border-radius:4px;z-index:900;opacity:0;pointer-events:none;transition:opacity .2s;white-space:nowrap;}
+.toast.on{opacity:1;}
+</style>
+</head>
+<body data-view="doc">
+
+<div class="pbar">
+  <span class="lb">原型视图</span>
+  <button data-view="doc" class="on">设计说明</button>
+  <button data-view="plan">① 认证计划</button>
+  <button data-view="prep-list">② 准备列表</button>
+  <button data-view="prep-detail">③ 准备详情</button>
+  <button data-view="onsite-list">④ 检查列表</button>
+  <button data-view="onsite-detail">⑤ 检查详情</button>
+  <button data-view="empty">⑥ 空态</button>
+</div>
+
+<div class="app">
+  <aside class="side">
+    <div class="logo">体系认证平台</div>
+    <div class="grp">认证作业</div>
+    <a data-view="plan"><span class="dot"></span>认证计划</a>
+    <a data-view="prep-list"><span class="dot"></span>认证准备</a>
+    <a data-view="onsite-list"><span class="dot"></span>认证检查</a>
+    <div class="grp">支撑</div>
+    <a class="dim" data-toast="证据挂接页本次不改动"><span class="dot"></span>证据挂接</a>
+    <a class="dim" data-toast="队列监控页本次不改动"><span class="dot"></span>队列监控</a>
+    <div class="tip">准备产出「入场计划」<br>检查产出「认证报告」<br>
+      <span style="color:#c8c9cc">均从认证计划派生</span></div>
+  </aside>
+
+  <main class="main">
+
+    <!-- ══════════ 设计说明 ══════════ -->
+    <div class="view on" id="v-doc">
+      <div class="doc">
+        <div class="ph">
+          <div>
+            <h1>认证准备 / 认证检查 · 双菜单 V2</h1>
+            <div class="sub">按你的 6 条反馈重做。最大的变化：两个分支的数据流方向相反，所以详情页的步骤条、按钮顺序、状态语义都不一样，但版式骨架保持一致。</div>
+          </div>
+        </div>
+
+        <h2>一、两个分支的本质差异</h2>
+        <table>
+          <tr><th style="width:96px"></th><th style="width:46%">认证准备</th><th>认证检查</th></tr>
+          <tr><td><b>① 起点</b></td><td>企业资料（企业上传，已齐）</td><td>企业资料 + <b>审核员现场证据</b></td></tr>
+          <tr><td><b>② 先做</b></td><td>系统分析（LLM 读企业资料）</td><td><b>审核员先挂证据</b>（拍照 / 访谈 / 抽样）</td></tr>
+          <tr><td><b>③ 再做</b></td><td><b>审核员补充证据</b>（要补件 / 电话确认）</td><td>系统分析（企业资料 + 审核员证据）</td></tr>
+          <tr><td><b>④ 判定</b></td><td><code>PrepState</code> —— 资料够不够<br>found / partial / missing / unknown / na</td><td><code>Conclusion</code> —— 符不符合<br>符合 / 观察项 / 一般不符合 / 严重不符合</td></tr>
+          <tr><td><b>⑤ 产出</b></td><td><b>入场计划</b>（查哪些条款、怎么查、查谁）</td><td><b>认证报告</b></td></tr>
+          <tr><td><b>⑥ NC</b></td><td><b>不签发</b>（准备阶段不判 NC）</td><td><b>逐条签发</b>（一条 NC 对应一个检查项）</td></tr>
+        </table>
+        <p>所以详情页顶部各有一条步骤条，顺序相反：</p>
+        <ul>
+          <li>准备：① 分析企业资料 → ② 补充证据 → ③ 判定是否入场 → ④ 生成入场计划</li>
+          <li>检查：① 挂接证据 → ② 分析 → ③ 签发 NC → ④ 生成报告</li>
+        </ul>
+        <p>检查侧有个硬约束：<b>证据为 0 的检查项不允许分析</b>，状态显示「待挂证据」，「自动分析」按钮对该行不可用。</p>
+
+        <h2>二、你这 6 条反馈的落点</h2>
+        <table>
+          <tr><th style="width:36px">#</th><th style="width:210px">你的意见</th><th>怎么落的</th></tr>
+          <tr><td>1</td><td>计划可调整、可独立查看，按钮多用下拉</td>
+            <td>计划列表操作列只留「查看计划」+「更多 ▾」；下拉里是编辑计划 / 开启准备 / 开启检查 / 停用。认证准备、认证检查两列的状态标签<b>可点击</b>，直接进对应详情，不再占按钮位</td></tr>
+          <tr><td>2</td><td>可点击状态查看</td>
+            <td>列表里所有状态标签都可点，弹出「状态详情」抽屉：队列概览 / 执行轮次历史 / 每项状态与耗时 / 失败原因</td></tr>
+          <tr><td>3</td><td>锁定放表格内部</td>
+            <td>两个详情表都多一列「锁定」，行内直接「锁定 / 已锁·解」。抽屉里也保留一个，双入口。队列运行时按钮置灰</td></tr>
+          <tr><td>4</td><td>准备不签发 NC，检查逐条签发</td>
+            <td>准备详情<b>没有</b> NC 列、没有签发按钮；检查详情多一列「NC」，结论为不符合时显示「签发」，点开单条签发弹窗（事实 / 条款 / 严重度 / 整改要求 / 期限），签发后显示 NC 编号</td></tr>
+          <tr><td>5</td><td>数据流顺序相反、产出不同</td>
+            <td>见上表 + 步骤条；准备工具栏「自动分析 → 补充证据 → 生成入场计划」，检查工具栏「挂接证据 → 自动分析 → 签发 NC → 生成报告」</td></tr>
+          <tr><td>6</td><td>可反复重新执行</td>
+            <td>列表操作下拉和详情工具栏都有「重新执行」；同一记录开新一轮（<code>RunNo+1</code>），<b>列表不新增行</b>，历史轮次在状态抽屉里看</td></tr>
+        </table>
+
+        <h2>三、新增的东西</h2>
+        <p><b>入场计划</b>是全新产出物，库里目前没有任何表。建议新表 <code>cert_onsite_plan</code> + <code>cert_onsite_plan_item</code>：</p>
+        <table>
+          <tr><th style="width:170px">字段</th><th>含义</th></tr>
+          <tr><td><code>TaskCode</code></td><td>来自哪次认证准备</td></tr>
+          <tr><td><code>CheckItemCode</code></td><td>哪个检查项</td></tr>
+          <tr><td><code>EnterOnsite</code></td><td>是否需要现场检查（准备阶段判定：已符合的可以不查）</td></tr>
+          <tr><td><code>VerifyMethod</code></td><td>检查方式：文件查阅 / 现场观察 / 人员访谈 / 抽样验证</td></tr>
+          <tr><td><code>RequiredDocs</code></td><td>现场需企业提供的文件</td></tr>
+          <tr><td><code>Interviewees</code></td><td>需访谈的部门与人员</td></tr>
+          <tr><td><code>FocusPoints</code></td><td>重点核查什么（来自疑点）</td></tr>
+        </table>
+
+        <h2>四、检查项状态机（两边不同）</h2>
+        <table>
+          <tr><th style="width:46%">认证准备</th><th>认证检查</th></tr>
+          <tr>
+            <td>待分析 → 分析中 → 已分析 → <b>待补充</b>（资料缺失，等审核员补）→ 已复核</td>
+            <td><b>待挂证据</b>（证据 0 份，不可分析）→ 待分析 → 分析中 → 已分析 → <b>已签发 NC</b></td>
+          </tr>
+        </table>
+
+        <h2>五、还需要你定 3 件事</h2>
+        <div class="q">
+          <b>这三条不定，落地时会有歧义</b>
+          <ol>
+            <li><b>重新执行时，已签发的 NC 怎么处理？</b><br>
+                我的建议：NC 是正式产出，<b>保留</b>；如果重跑后该条结论不再是「不符合」，把 NC 标记为「建议撤回」让人确认，不自动删。因为 NC 可能已经发给企业了。</li>
+            <li><b>「必须挂证据才能分析」是硬卡还是软提示？</b><br>
+                我的建议：<b>硬卡</b>。证据 0 份时该行不可分析，但允许审核员手填一句「现场未见相关记录」作为证据，避免卡死。</li>
+            <li><b>入场计划里的「是否入场」由谁定？</b><br>
+                我的建议：系统先给建议（PrepState=found 且无疑点 → 建议免现场），<b>审核员逐条确认</b>，确认完才能生成入场计划。</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ ① 认证计划 ══════════ -->
+    <div class="view" id="v-plan">
+      <div class="ph">
+        <div>
+          <h1>认证计划</h1>
+          <div class="sub">操作列只留「查看计划」+「更多 ▾」。认证准备 / 认证检查两列的状态标签可点击，直接进对应详情。</div>
+        </div>
+        <div class="acts"><button class="btn btn-p">+ 新建计划</button></div>
+      </div>
+
+      <div class="card scrollx">
+        <table class="mtbl">
+          <thead>
+            <tr>
+              <th style="width:190px">计划名称</th>
+              <th style="width:150px">企业</th>
+              <th style="width:90px">阶段</th>
+              <th>认证标准</th>
+              <th style="width:130px">认证准备</th>
+              <th style="width:130px">认证检查</th>
+              <th style="width:150px">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="ci">QMS 初次审核</td>
+              <td>XX科技有限公司</td>
+              <td>初次认证</td>
+              <td><span class="tag std">ISO 9001:2015</span></td>
+              <td><span class="tag run click" onclick="go('prep-detail')">进行中 8/12</span></td>
+              <td><span class="tag idle">未开启</span></td>
+              <td>
+                <button class="btn-t" onclick="toast('打开计划详情（只读）')">查看计划</button>
+                <button class="btn-t" onclick="openDd(this)">更多 ▾</button>
+                <div class="dd-menu">
+                  <div class="dd-title">计划</div>
+                  <div class="dd-item" onclick="toast('编辑计划')">编辑计划</div>
+                  <div class="dd-item" onclick="toast('查看计划详情')">查看计划详情</div>
+                  <div class="dd-sep"></div>
+                  <div class="dd-title">认证准备</div>
+                  <div class="dd-item dis">开启认证准备（已开启）</div>
+                  <div class="dd-item" onclick="go('prep-detail')">查看认证准备</div>
+                  <div class="dd-item" onclick="toast('重新执行准备 → 第 3 轮')">重新执行准备</div>
+                  <div class="dd-sep"></div>
+                  <div class="dd-title">认证检查</div>
+                  <div class="dd-item" onclick="toast('开启认证检查')">开启认证检查</div>
+                  <div class="dd-sep"></div>
+                  <div class="dd-item" onclick="toast('停用计划')">停用计划</div>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="ci">QMS 监督审核</td>
+              <td>XX科技有限公司</td>
+              <td>监督</td>
+              <td><span class="tag std">ISO 9001:2015</span><span class="tag std">ISO 14001:2015</span></td>
+              <td><span class="tag done click" onclick="go('prep-detail')">已完成 8/8</span></td>
+              <td><span class="tag done click" onclick="go('onsite-detail')">已完成 8/8</span></td>
+              <td>
+                <button class="btn-t" onclick="toast('打开计划详情（只读）')">查看计划</button>
+                <button class="btn-t" onclick="openDd(this)">更多 ▾</button>
+                <div class="dd-menu">
+                  <div class="dd-title">计划</div>
+                  <div class="dd-item" onclick="toast('编辑计划')">编辑计划</div>
+                  <div class="dd-item" onclick="toast('查看计划详情')">查看计划详情</div>
+                  <div class="dd-sep"></div>
+                  <div class="dd-title">认证准备</div>
+                  <div class="dd-item" onclick="go('prep-detail')">查看认证准备</div>
+                  <div class="dd-item" onclick="toast('重新执行准备 → 第 3 轮')">重新执行准备</div>
+                  <div class="dd-sep"></div>
+                  <div class="dd-title">认证检查</div>
+                  <div class="dd-item" onclick="go('onsite-detail')">查看认证检查</div>
+                  <div class="dd-item" onclick="toast('重新执行检查 → 第 2 轮')">重新执行检查</div>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="ci">EMS 再认证</td>
+              <td>YY制造股份</td>
+              <td>再认证</td>
+              <td><span class="tag std">ISO 14001:2015</span></td>
+              <td><span class="tag idle">未开启</span></td>
+              <td><span class="tag idle">未开启</span></td>
+              <td>
+                <button class="btn-t" onclick="toast('打开计划详情（只读）')">查看计划</button>
+                <button class="btn-t" onclick="openDd(this)">更多 ▾</button>
+                <div class="dd-menu">
+                  <div class="dd-title">计划</div>
+                  <div class="dd-item" onclick="toast('编辑计划')">编辑计划</div>
+                  <div class="dd-item" onclick="toast('查看计划详情')">查看计划详情</div>
+                  <div class="dd-sep"></div>
+                  <div class="dd-title">认证准备</div>
+                  <div class="dd-item" onclick="go('empty')">开启认证准备</div>
+                  <div class="dd-sep"></div>
+                  <div class="dd-title">认证检查</div>
+                  <div class="dd-item" onclick="toast('开启认证检查')">开启认证检查</div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr><td colspan="7">共 3 份计划 · 状态标签可点击进详情 · 「更多」里按分支分组 · 认证检查未开启时可独立开启（不强依赖准备完成）</td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════ ② 认证准备 · 列表 ══════════ -->
+    <div class="view" id="v-prep-list">
+      <div class="ph">
+        <div>
+          <h1><span class="bar-accent prep"></span>认证准备</h1>
+          <div class="sub">由「认证计划」派生。一行 = 一份计划的认证准备。<b>可反复重新执行</b>：同一行开新一轮，不新增行。</div>
+        </div>
+        <div class="acts">
+          <button class="btn btn-o" onclick="go('empty')">看空态</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat a"><div class="n">1</div><div class="l">进行中</div></div>
+        <div class="stat b"><div class="n">1</div><div class="l">已完成</div></div>
+        <div class="stat c"><div class="n">1</div><div class="l">已暂停</div></div>
+        <div class="stat"><div class="n">26</div><div class="l">检查项合计</div></div>
+      </div>
+
+      <div class="card scrollx">
+        <table class="mtbl">
+          <thead>
+            <tr>
+              <th style="width:150px">企业</th>
+              <th style="width:150px">计划</th>
+              <th style="width:90px">阶段</th>
+              <th>认证标准</th>
+              <th style="width:70px">检查项</th>
+              <th style="width:120px">进度</th>
+              <th style="width:110px">状态</th>
+              <th style="width:140px">开启时间</th>
+              <th style="width:140px">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr onclick="go('prep-detail')">
+              <td class="ci">XX科技有限公司</td>
+              <td>QMS 初次审核</td>
+              <td>初次认证</td>
+              <td><span class="tag std">ISO 9001:2015</span></td>
+              <td>12</td>
+              <td><span class="prog"><span class="bar"><div style="width:66%"></div></span><span class="num">8/12</span></span></td>
+              <td><span class="tag run click" onclick="event.stopPropagation();openStatus('prep')">进行中</span></td>
+              <td class="muted">2026-10-30 14:20</td>
+              <td>
+                <button class="btn-t" onclick="event.stopPropagation();go('prep-detail')">详情</button>
+                <button class="btn-t" onclick="event.stopPropagation();openDd(this)">更多 ▾</button>
+                <div class="dd-menu">
+                  <div class="dd-item" onclick="toast('已暂停队列')">暂停执行</div>
+                  <div class="dd-item" onclick="toast('重新执行 → 第 3 轮')">重新执行</div>
+                  <div class="dd-sep"></div>
+                  <div class="dd-item" onclick="openPlanDlg()">查看入场计划</div>
+                  <div class="dd-item" onclick="toast('导出入场计划')">导出入场计划</div>
+                </div>
+              </td>
+            </tr>
+            <tr onclick="go('prep-detail')">
+              <td class="ci">XX科技有限公司</td>
+              <td>QMS 监督审核</td>
+              <td>监督</td>
+              <td><span class="tag std">ISO 9001:2015</span><span class="tag std">ISO 14001:2015</span></td>
+              <td>8</td>
+              <td><span class="prog"><span class="bar"><div style="width:100%;background:#67c23a"></div></span><span class="num">8/8</span></span></td>
+              <td><span class="tag done click" onclick="event.stopPropagation();openStatus('prep')">已完成</span></td>
+              <td class="muted">2026-10-28 09:10</td>
+              <td>
+                <button class="btn-t" onclick="event.stopPropagation();go('prep-detail')">详情</button>
+                <button class="btn-t" onclick="event.stopPropagation();openDd(this)">更多 ▾</button>
+                <div class="dd-menu">
+                  <div class="dd-item" onclick="toast('重新执行 → 第 3 轮，已锁定的 2 项将跳过')">重新执行</div>
+                  <div class="dd-sep"></div>
+                  <div class="dd-item" onclick="openPlanDlg()">查看入场计划</div>
+                  <div class="dd-item" onclick="toast('导出入场计划')">导出入场计划</div>
+                </div>
+              </td>
+            </tr>
+            <tr onclick="go('prep-detail')">
+              <td class="ci">ZZ建设集团</td>
+              <td>OHSMS 初次审核</td>
+              <td>初次认证</td>
+              <td><span class="tag std">ISO 45001:2018</span></td>
+              <td>9</td>
+              <td><span class="prog"><span class="bar"><div style="width:33%;background:#e6a23c"></div></span><span class="num">3/9</span></span></td>
+              <td><span class="tag pause click" onclick="event.stopPropagation();openStatus('prep')">已暂停</span></td>
+              <td class="muted">2026-10-29 16:05</td>
+              <td>
+                <button class="btn-t" onclick="event.stopPropagation();go('prep-detail')">详情</button>
+                <button class="btn-t" onclick="event.stopPropagation();openDd(this)">更多 ▾</button>
+                <div class="dd-menu">
+                  <div class="dd-item" onclick="toast('已继续队列')">继续执行</div>
+                  <div class="dd-item" onclick="toast('重新执行 → 第 2 轮')">重新执行</div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr><td colspan="9">共 3 份 · 点状态标签看执行明细 · 「重新执行」不新增行，开新一轮</td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════ ③ 认证准备 · 详情 ══════════ -->
+    <div class="view" id="v-prep-detail">
+      <div class="crumb"><a onclick="go('prep-list')">认证准备</a><span>/</span><span>XX科技有限公司 · QMS 初次审核</span></div>
+
+      <div class="dhead">
+        <div>
+          <div class="t">XX科技有限公司 · QMS 初次审核 <span class="tag branch-prep">认证准备</span></div>
+          <div class="m">
+            <b>阶段</b> 初次认证 &nbsp;·&nbsp; <b>标准</b> ISO 9001:2015 &nbsp;·&nbsp;
+            <b>审核员</b> 李振华 &nbsp;·&nbsp; <b>开启</b> 2026-10-30 14:20 &nbsp;·&nbsp;
+            <b>第 2 轮</b> &nbsp;·&nbsp; <b>最后保存</b> 10:42
+          </div>
+        </div>
+        <div class="acts">
+          <button class="btn btn-o" onclick="openStatus('prep')">执行状态</button>
+          <button class="btn btn-o" onclick="go('prep-list')">返回列表</button>
+        </div>
+      </div>
+
+      <div class="steps">
+        <div class="step done"><span class="n">1</span><span class="t">分析企业资料</span><span class="d">12/12</span></div>
+        <div class="step-line"></div>
+        <div class="step cur"><span class="n">2</span><span class="t">补充证据</span><span class="d">进行中</span></div>
+        <div class="step-line"></div>
+        <div class="step"><span class="n">3</span><span class="t">判定是否入场</span></div>
+        <div class="step-line"></div>
+        <div class="step"><span class="n">4</span><span class="t">生成入场计划</span></div>
+      </div>
+
+      <div class="lockbar">
+        <b>队列执行中</b> · 本页暂时只读，队列完成后自动恢复编辑 · 已完成 <b>8</b> / 12 · 锁定项本次跳过
+      </div>
+
+      <div class="toolbar">
+        <div class="grp">
+          <button class="btn btn-w" disabled>重新分析</button>
+          <button class="btn btn-p">补充证据</button>
+        </div>
+        <div class="grp">
+          <button class="btn btn-o">判定是否入场</button>
+          <button class="btn btn-o" onclick="openPlanDlg()">生成入场计划</button>
+        </div>
+        <button class="btn btn-o" onclick="toast('重新执行 → 第 3 轮')">重新执行</button>
+        <div class="sp"></div>
+        <span class="tag done">已分析 8</span>
+        <span class="tag nc-min">待补充 2</span>
+        <span class="tag idle">排队 2</span>
+        <span class="tag lock">锁定 2</span>
+      </div>
+
+      <div class="card scrollx">
+        <table class="mtbl">
+          <thead>
+            <tr>
+              <th style="width:28px">#</th>
+              <th style="min-width:230px">检查项</th>
+              <th style="width:110px">部门</th>
+              <th style="width:150px">部门联系人</th>
+              <th style="width:90px">状态</th>
+              <th style="width:100px">PrepState</th>
+              <th style="width:75px">疑点</th>
+              <th style="width:95px" class="ctr">锁定</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="locked" onclick="openSb('prep')">
+              <td>1</td>
+              <td><div class="ci">4.1 组织环境 · 外部问题</div></td>
+              <td><div class="dept">总经办</div></td>
+              <td><div class="contact-list"><div class="contact"><span class="avatar">王</span><span>王某某</span></div></div></td>
+              <td><span class="tag lock">已复核</span></td>
+              <td><span class="tag nc-ok">found</span></td>
+              <td><span class="tag nc-ok">无</span></td>
+              <td class="ctr"><button class="lk on" disabled onclick="event.stopPropagation()">已锁 · 解</button></td>
+            </tr>
+            <tr class="active" onclick="openSb('prep')">
+              <td>2</td>
+              <td><div class="ci">4.1 组织环境 · 内部问题</div></td>
+              <td><div class="dept">品管部</div></td>
+              <td><div class="contact-list"><div class="contact"><span class="avatar g">李</span><span>李主任</span></div><div class="contact"><span class="avatar o">张</span><span>张工</span></div></div></td>
+              <td><span class="tag nc-min">待补充</span></td>
+              <td><span class="tag nc-min">partial</span></td>
+              <td><span class="tag nc-maj">3 项</span></td>
+              <td class="ctr"><button class="lk" disabled onclick="event.stopPropagation()">锁定</button></td>
+            </tr>
+            <tr onclick="openSb('prep')">
+              <td>3</td>
+              <td><div class="ci">4.2 相关方需求分析</div></td>
+              <td><div class="dept">总经办 + 品管部</div></td>
+              <td><div class="contact-list"><div class="contact"><span class="avatar">王</span><span>王某某</span></div><div class="contact"><span class="avatar g">李</span><span>李主任</span></div><div class="contact"><span class="avatar r">陈</span><span>陈法务</span></div></div></td>
+              <td><span class="tag run">分析中</span></td>
+              <td colspan="2" class="muted" style="text-align:center">LLM 执行中…</td>
+              <td class="ctr"><button class="lk" disabled onclick="event.stopPropagation()">锁定</button></td>
+            </tr>
+            <tr onclick="openSb('prep')">
+              <td>4</td>
+              <td><div class="ci">5.1 领导作用 · 管理层承诺</div></td>
+              <td><div class="dept">企管部</div></td>
+              <td><div class="contact-list"><div class="contact"><span class="avatar n">赵</span><span>赵经理</span></div></div></td>
+              <td><span class="tag idle">排队</span></td>
+              <td colspan="2" class="muted" style="text-align:center">排队第 2 位</td>
+              <td class="ctr"><button class="lk" disabled onclick="event.stopPropagation()">锁定</button></td>
+            </tr>
+            <tr onclick="openSb('prep')">
+              <td>5</td>
+              <td><div class="ci">6.1 风险与机遇</div></td>
+              <td><div class="dept">品管部 + 技术部</div></td>
+              <td><div class="contact-list"><div class="contact"><span class="avatar o">张</span><span>张工</span></div><div class="contact"><span class="avatar n">刘</span><span>刘工</span></div></div></td>
+              <td><span class="tag nc-min">待补充</span></td>
+              <td><span class="tag nc-maj">missing</span></td>
+              <td><span class="tag nc-maj">2 项</span></td>
+              <td class="ctr"><button class="lk" disabled onclick="event.stopPropagation()">锁定</button></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr><td colspan="8">共 12 项（示例 5 项）· 点行开抽屉看证据与疑点 · 锁定按钮在行内 · 队列运行时禁用 · <b>准备阶段不签发 NC</b></td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════ ④ 认证检查 · 列表 ══════════ -->
+    <div class="view" id="v-onsite-list">
+      <div class="ph">
+        <div>
+          <h1><span class="bar-accent onsite"></span>认证检查</h1>
+          <div class="sub">由「认证计划」派生。与准备互不依赖。产出是<b>认证报告</b>，NC 逐条签发。</div>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat a"><div class="n">0</div><div class="l">进行中</div></div>
+        <div class="stat b"><div class="n">1</div><div class="l">已完成</div></div>
+        <div class="stat d"><div class="n">4</div><div class="l">已签发 NC</div></div>
+        <div class="stat"><div class="n">8</div><div class="l">检查项合计</div></div>
+      </div>
+
+      <div class="card scrollx">
+        <table class="mtbl">
+          <thead>
+            <tr>
+              <th style="width:150px">企业</th>
+              <th style="width:150px">计划</th>
+              <th style="width:90px">阶段</th>
+              <th>认证标准</th>
+              <th style="width:70px">检查项</th>
+              <th style="width:120px">进度</th>
+              <th style="width:80px">NC</th>
+              <th style="width:100px">状态</th>
+              <th style="width:140px">开启时间</th>
+              <th style="width:140px">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr onclick="go('onsite-detail')">
+              <td class="ci">XX科技有限公司</td>
+              <td>QMS 监督审核</td>
+              <td>监督</td>
+              <td><span class="tag std">ISO 9001:2015</span><span class="tag std">ISO 14001:2015</span></td>
+              <td>8</td>
+              <td><span class="prog"><span class="bar"><div style="width:100%;background:#67c23a"></div></span><span class="num">8/8</span></span></td>
+              <td><span class="tag nc-maj">4</span></td>
+              <td><span class="tag done click" onclick="event.stopPropagation();openStatus('onsite')">已完成</span></td>
+              <td class="muted">2026-10-31 09:05</td>
+              <td>
+                <button class="btn-t" onclick="event.stopPropagation();go('onsite-detail')">详情</button>
+                <button class="btn-t" onclick="event.stopPropagation();openDd(this)">更多 ▾</button>
+                <div class="dd-menu">
+                  <div class="dd-item" onclick="toast('重新执行 → 第 2 轮，已签发 NC 保留')">重新执行</div>
+                  <div class="dd-sep"></div>
+                  <div class="dd-item" onclick="toast('生成认证报告')">生成认证报告</div>
+                  <div class="dd-item" onclick="toast('导出认证报告 PDF')">导出认证报告</div>
+                  <div class="dd-item" onclick="toast('查看已签发 NC 清单（4 条）')">NC 清单</div>
+                </div>
+              </td>
+            </tr>
+            <tr onclick="go('onsite-detail')">
+              <td class="ci">ZZ建设集团</td>
+              <td>OHSMS 初次审核</td>
+              <td>初次认证</td>
+              <td><span class="tag std">ISO 45001:2018</span></td>
+              <td>9</td>
+              <td><span class="prog"><span class="bar"><div style="width:0%"></div></span><span class="num">0/9</span></span></td>
+              <td class="muted">—</td>
+              <td><span class="tag pause click" onclick="event.stopPropagation();openStatus('onsite')">待启动</span></td>
+              <td class="muted">2026-11-01 11:30</td>
+              <td>
+                <button class="btn-t" onclick="event.stopPropagation();go('onsite-detail')">详情</button>
+                <button class="btn-t" onclick="event.stopPropagation();openDd(this)">更多 ▾</button>
+                <div class="dd-menu">
+                  <div class="dd-item" onclick="toast('已启动队列')">启动执行</div>
+                  <div class="dd-item dis">重新执行（未执行过）</div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr><td colspan="10">共 2 份 · NC 列 = 已签发数量，点进详情逐条查看</td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════ ⑤ 认证检查 · 详情 ══════════ -->
+    <div class="view" id="v-onsite-detail">
+      <div class="crumb"><a onclick="go('onsite-list')">认证检查</a><span>/</span><span>XX科技有限公司 · QMS 监督审核</span></div>
+
+      <div class="dhead">
+        <div>
+          <div class="t">XX科技有限公司 · QMS 监督审核 <span class="tag branch-onsite">认证检查</span></div>
+          <div class="m">
+            <b>阶段</b> 监督 &nbsp;·&nbsp; <b>标准</b> ISO 9001:2015 / ISO 14001:2015 &nbsp;·&nbsp;
+            <b>审核员</b> 李振华 &nbsp;·&nbsp; <b>开启</b> 2026-10-31 09:05 &nbsp;·&nbsp;
+            <b>已签发 NC</b> 4
+          </div>
+        </div>
+        <div class="acts">
+          <button class="btn btn-o" onclick="openStatus('onsite')">执行状态</button>
+          <button class="btn btn-o" onclick="go('onsite-list')">返回列表</button>
+        </div>
+      </div>
+
+      <div class="steps">
+        <div class="step done"><span class="n">1</span><span class="t">挂接证据</span><span class="d">6/8</span></div>
+        <div class="step-line"></div>
+        <div class="step done"><span class="n">2</span><span class="t">分析</span><span class="d">5/8</span></div>
+        <div class="step-line"></div>
+        <div class="step cur"><span class="n">3</span><span class="t">签发 NC</span><span class="d">4 已签发</span></div>
+        <div class="step-line"></div>
+        <div class="step"><span class="n">4</span><span class="t">生成认证报告</span></div>
+      </div>
+
+      <div class="toolbar">
+        <div class="grp">
+          <button class="btn btn-w">挂接证据</button>
+        </div>
+        <div class="grp">
+          <button class="btn btn-p" disabled>自动分析</button>
+          <button class="btn btn-o" disabled>签发 NC</button>
+        </div>
+        <div class="grp">
+          <button class="btn btn-o" onclick="toast('生成认证报告')">生成报告</button>
+        </div>
+        <button class="btn btn-o" onclick="toast('重新执行 → 第 2 轮')">重新执行</button>
+        <div class="sp"></div>
+        <span class="tag done">已分析 5</span>
+        <span class="tag nc-min">待挂证据 2</span>
+        <span class="tag nc-maj">NC 4</span>
+        <span class="tag lock">锁定 3</span>
+      </div>
+
+      <div class="lockbar">
+        <b>证据不足</b> · 2 个检查项还没有挂接任何证据，分析已自动跳过。挂完证据后再点「自动分析」。
+      </div>
+
+      <div class="card scrollx">
+        <table class="mtbl">
+          <thead>
+            <tr>
+              <th style="width:28px">#</th>
+              <th style="min-width:210px">检查项</th>
+              <th style="width:110px">部门</th>
+              <th style="width:140px">部门联系人</th>
+              <th style="width:95px">状态</th>
+              <th style="width:70px">证据</th>
+              <th style="width:115px">结论</th>
+              <th style="width:140px">NC</th>
+              <th style="width:95px" class="ctr">锁定</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="locked" onclick="openSb('onsite')">
+              <td>1</td>
+              <td><div class="ci">4.1 组织环境 · 外部问题</div></td>
+              <td><div class="dept">总经办</div></td>
+              <td><div class="contact-list"><div class="contact"><span class="avatar">王</span><span>王某某</span></div></div></td>
+              <td><span class="tag lock">已锁定</span></td>
+              <td>3 份</td>
+              <td><span class="tag nc-ok">符合</span></td>
+              <td class="muted">—</td>
+              <td class="ctr"><button class="lk on" disabled onclick="event.stopPropagation()">已锁 · 解</button></td>
+            </tr>
+            <tr class="active" onclick="openSb('onsite')">
+              <td>2</td>
+              <td><div class="ci">4.1 组织环境 · 内部问题</div></td>
+              <td><div class="dept">品管部</div></td>
+              <td><div class="contact-list"><div class="contact"><span class="avatar g">李</span><span>李主任</span></div><div class="contact"><span class="avatar o">张</span><span>张工</span></div></div></td>
+              <td><span class="tag done">已分析</span></td>
+              <td>2 份</td>
+              <td><span class="tag nc-min">一般不符合</span></td>
+              <td><span class="ncno">NC-2026-007</span> <span class="tag nc-min">minor</span></td>
+              <td class="ctr"><button class="lk" onclick="event.stopPropagation();toast('已锁定该项')">锁定</button></td>
+            </tr>
+            <tr onclick="openSb('onsite')">
+              <td>3</td>
+              <td><div class="ci">4.2 相关方需求分析</div></td>
+              <td><div class="dept">总经办 + 品管部</div></td>
+              <td><div class="contact-list"><div class="contact"><span class="avatar">王</span><span>王某某</span></div><div class="contact"><span class="avatar g">李</span><span>李主任</span></div></div></td>
+              <td><span class="tag nc-min">待挂证据</span></td>
+              <td><span style="color:var(--d);font-weight:600">0 份</span></td>
+              <td colspan="2" class="muted" style="text-align:center">证据为 0，不可分析</td>
+              <td class="ctr"><button class="lk" onclick="event.stopPropagation();toast('已锁定该项')">锁定</button></td>
+            </tr>
+            <tr onclick="openSb('onsite')">
+              <td>4</td>
+              <td><div class="ci">5.1 领导作用 · 管理层承诺</div></td>
+              <td><div class="dept">企管部</div></td>
+              <td><div class="contact-list"><div class="contact"><span class="avatar n">赵</span><span>赵经理</span></div></div></td>
+              <td><span class="tag done">已分析</span></td>
+              <td>1 份</td>
+              <td><span class="tag nc-min">观察项</span></td>
+              <td class="muted">—</td>
+              <td class="ctr"><button class="lk" onclick="event.stopPropagation();toast('已锁定该项')">锁定</button></td>
+            </tr>
+            <tr onclick="openSb('onsite')">
+              <td>5</td>
+              <td><div class="ci">6.1 风险与机遇</div></td>
+              <td><div class="dept">品管部 + 技术部</div></td>
+              <td><div class="contact-list"><div class="contact"><span class="avatar o">张</span><span>张工</span></div><div class="contact"><span class="avatar n">刘</span><span>刘工</span></div></div></td>
+              <td><span class="tag done">已分析</span></td>
+              <td>4 份</td>
+              <td><span class="tag nc-maj">严重不符合</span></td>
+              <td><button class="btn-t d" onclick="event.stopPropagation();openNcDlg()">签发</button></td>
+              <td class="ctr"><button class="lk" onclick="event.stopPropagation();toast('已锁定该项')">锁定</button></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr><td colspan="9">共 8 项（示例 5 项）· 证据 0 份的项不可分析 · NC 逐条签发，签发后显示编号 · 锁定在行内</td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════ ⑥ 空态 ══════════ -->
+    <div class="view" id="v-empty">
+      <div class="ph">
+        <div>
+          <h1>两个菜单都是空的</h1>
+          <div class="sub">一份计划都没开启过认证准备 / 认证检查时的样子。</div>
+        </div>
+      </div>
+
+      <div class="empty">
+        <div class="ico">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#c0c4cc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/>
+          </svg>
+        </div>
+        <h2>还没有开启过认证准备</h2>
+        <p>认证准备与认证检查都从「认证计划」派生。到计划列表选一份计划，在「更多」里点「开启认证准备」，这里才会出现记录。</p>
+        <div class="acts">
+          <button class="btn btn-p" onclick="go('plan')">去认证计划</button>
+          <button class="btn btn-o" onclick="go('doc')">看设计说明</button>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:12px 16px;font-size:12px;color:var(--i);line-height:1.8;">
+        「认证检查」菜单同理：<b style="color:var(--txt2)">尚未开启任何认证检查</b>。
+        两个菜单互不依赖，准备可以不做就直接开检查（若业务允许）。
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ══════════ 抽屉：认证准备详情 ══════════ -->
+<div class="sb" id="sb-prep">
+  <div class="sb-hd">
+    <div>
+      <h3>4.1 组织环境 · 内部问题识别</h3>
+      <div class="sub">ISO 9001 4.1 · 品管部 + 技术部 · 第 2 轮</div>
+    </div>
+    <button class="btn btn-o btn-xs" onclick="closeSb()">关闭</button>
+  </div>
+  <div class="sb-body">
+    <div class="summary">
+      <span><span class="k">PrepState</span> <span class="tag nc-min">partial</span></span>
+      <span><span class="k">缺失</span> 实验室设备 / 时效性</span>
+      <span><span class="k">疑点</span> 3 项</span>
+      <span style="margin-left:auto"><span class="tag nc-min">待补充</span></span>
+    </div>
+
+    <div class="zone z-dept">
+      <div class="zone-hd"><span>部门 &amp; 联系人</span><span class="badge">该条款涉及的部门</span></div>
+      <div class="zone-body">
+        <div style="font-weight:600;color:var(--s);margin-bottom:5px">品管部</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px">
+          <div style="display:flex;align-items:center;gap:5px;padding:3px 10px;background:#fff;border:1px solid #e1f3d8;border-radius:14px">
+            <span class="avatar g" style="width:18px;height:18px;font-size:10px">李</span>
+            <span>李主任</span><span style="font-size:10px;color:var(--i)">13900139001</span>
+          </div>
+        </div>
+        <div style="font-weight:600;color:var(--s);margin-bottom:5px">技术部</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <div style="display:flex;align-items:center;gap:5px;padding:3px 10px;background:#fff;border:1px solid #fbebd3;border-radius:14px">
+            <span class="avatar o" style="width:18px;height:18px;font-size:10px">张</span>
+            <span>张工</span><span style="font-size:10px;color:var(--i)">13700137001</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="zone z-ev">
+      <div class="zone-hd"><span>企业资料分析结果</span><span class="badge">LLM 读企业资料 · 引用 2 份</span></div>
+      <div class="zone-body">
+        <div style="color:var(--txt2);margin-bottom:7px">识别内部问题 4 项（治理结构 / 企业文化 / 人力资源 / 能力），其中「能力」维度缺少培训有效性评价，判定 partial。</div>
+        <div style="display:flex;align-items:center;gap:7px;padding:3px 0">
+          <span class="ev-ref">组织架构.docx</span><span style="font-size:10px;color:var(--i)">p.3 部门职责</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;padding:3px 0">
+          <span class="ev-ref">设备清单.xlsx</span><span style="font-size:10px;color:var(--i)">p.48 台帐表</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="zone z-doubt">
+      <div class="zone-hd"><span>疑点</span><span class="badge">3 项 · 需现场核实</span></div>
+      <div class="zone-body">
+        <div class="doubt">
+          <div class="ti">1. 关键缺失：未包含实验室设备</div>
+          <div class="de">设备清单仅覆盖生产线设备，未包含实验室检测仪器。</div>
+          <div class="ft"><span class="ev-ref" style="font-size:10px">设备清单.xlsx</span></div>
+        </div>
+        <div class="doubt">
+          <div class="ti">2. 信息矛盾：组织架构 vs 设备责任人</div>
+          <div class="de">品管部 8 人中设备责任人无一品管部人员。</div>
+          <div class="ft"><span class="ev-ref" style="font-size:10px">组织架构.docx</span></div>
+        </div>
+        <div class="doubt">
+          <div class="ti">3. 时效性存疑</div>
+          <div class="de">设备清单最后更新 2025-12，近 10 个月新增 3 台注塑机未录入。</div>
+          <div class="ft"><span class="ev-ref" style="font-size:10px">设备清单.xlsx</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="zone z-sup">
+      <div class="zone-hd"><span>补充证据（审核员）</span><button class="btn-t w" onclick="toast('新增一条补充证据')">+ 新增</button></div>
+      <div class="zone-body">
+        <div class="sup-item">
+          <div>电话确认：新采购注塑机正在验收，验收完成后立即录入台帐。</div>
+          <div class="meta"><span>李振华 · 2026-10-30 14:22</span>
+            <span><button class="btn-t">编辑</button><button class="btn-t d">删除</button></span>
+          </div>
+        </div>
+        <div class="sup-item">
+          <div>企业补充提供《实验室仪器清单》v2（2026-10）。</div>
+          <div class="meta"><span>李振华 · 2026-10-30 15:10</span>
+            <span><button class="btn-t">编辑</button><button class="btn-t d">删除</button></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="zone z-plan">
+      <div class="zone-hd"><span>入场判定</span><span class="badge">决定这条是否要现场查</span></div>
+      <div class="zone-body">
+        <div class="field">
+          <label>是否现场检查</label>
+          <select>
+            <option>需要现场检查（疑点未消除）</option>
+            <option>不需要（已符合，可免现场）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>检查方式</label>
+          <input type="text" value="现场观察 + 抽样验证">
+        </div>
+        <div class="field">
+          <label>现场需提供的文件</label>
+          <input type="text" value="设备台帐、实验室仪器清单、培训有效性评价记录">
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="sb-ft">
+    <div><button class="btn btn-p" disabled>保存</button></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-w" disabled>锁定此项</button>
+      <button class="btn btn-o" onclick="closeSb()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 抽屉：认证检查详情 ══════════ -->
+<div class="sb" id="sb-onsite">
+  <div class="sb-hd">
+    <div>
+      <h3>4.1 组织环境 · 内部问题识别</h3>
+      <div class="sub">ISO 9001 4.1 · 品管部 + 技术部 · 已签发 NC-2026-007</div>
+    </div>
+    <button class="btn btn-o btn-xs" onclick="closeSb()">关闭</button>
+  </div>
+  <div class="sb-body">
+    <div class="summary">
+      <span><span class="k">结论</span> <span class="tag nc-min">一般不符合</span></span>
+      <span><span class="k">严重度</span> <span class="tag nc-min">minor</span></span>
+      <span><span class="k">证据</span> 2 份</span>
+      <span style="margin-left:auto"><span class="tag done">已分析</span></span>
+    </div>
+
+    <div class="zone z-dept">
+      <div class="zone-hd"><span>部门 &amp; 联系人</span><span class="badge">现场受访对象</span></div>
+      <div class="zone-body">
+        <div style="font-weight:600;color:var(--s);margin-bottom:5px">品管部</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px">
+          <div style="display:flex;align-items:center;gap:5px;padding:3px 10px;background:#fff;border:1px solid #e1f3d8;border-radius:14px">
+            <span class="avatar g" style="width:18px;height:18px;font-size:10px">李</span>
+            <span>李主任</span><span style="font-size:10px;color:var(--i)">13900139001</span>
+          </div>
+        </div>
+        <div style="font-weight:600;color:var(--s);margin-bottom:5px">技术部</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <div style="display:flex;align-items:center;gap:5px;padding:3px 10px;background:#fff;border:1px solid #fbebd3;border-radius:14px">
+            <span class="avatar o" style="width:18px;height:18px;font-size:10px">张</span>
+            <span>张工</span><span style="font-size:10px;color:var(--i)">13700137001</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="zone z-ev">
+      <div class="zone-hd"><span>已挂接证据</span><button class="btn-t" onclick="toast('挂接证据：文件 / 照片 / 访谈记录 / 抽样')">+ 挂接</button></div>
+      <div class="zone-body">
+        <div style="display:flex;align-items:center;gap:7px;padding:4px 0;border-bottom:1px dotted #d9ecff">
+          <span class="ev-ref">现场照片_设备铭牌.jpg</span>
+          <span style="font-size:10px;color:var(--i)">2026-10-31 09:40 · 现场观察</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;padding:4px 0">
+          <span class="ev-ref">访谈记录_李主任.docx</span>
+          <span style="font-size:10px;color:var(--i)">2026-10-31 10:05 · 人员访谈</span>
+        </div>
+        <div style="margin-top:7px;font-size:11px;color:var(--i)">证据齐了才能点「自动分析」，否则该行状态是「待挂证据」</div>
+      </div>
+    </div>
+
+    <div class="zone z-ev">
+      <div class="zone-hd"><span>分析结论</span><span class="badge">LLM 读企业资料 + 审核员证据</span></div>
+      <div class="zone-body">
+        <div style="color:var(--txt2);margin-bottom:7px">企业提供了治理结构、企业文化、人力资源三方面记录，但「能力」维度缺少培训有效性评价记录，且现场未见考核台账，不满足 4.1 内部因素完整识别的要求。</div>
+        <div style="display:flex;align-items:center;gap:6px;padding:3px 0">
+          <span class="ev-ref">组织架构.docx</span><span class="ev-ref">培训记录.xlsx</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="zone z-nc">
+      <div class="zone-hd"><span>已签发 NC</span><span class="badge">NC-2026-007</span></div>
+      <div class="zone-body">
+        <div style="margin-bottom:5px"><b style="color:var(--d)">事实描述</b></div>
+        <div style="color:var(--txt2);margin-bottom:8px">未提供 2025-2026 年度培训有效性评价记录，现场亦未见考核台账。</div>
+        <div style="margin-bottom:5px"><b style="color:var(--d)">违反条款</b></div>
+        <div style="color:var(--txt2);margin-bottom:8px">ISO 9001:2015 4.1 理解组织及其环境</div>
+        <div style="margin-bottom:5px"><b style="color:var(--d)">整改要求</b></div>
+        <div style="color:var(--txt2);margin-bottom:8px">建立培训有效性评价机制，30 日内提交评价记录。</div>
+        <div style="font-size:11px;color:var(--i)">签发：李振华 · 2026-10-31 11:20 · 状态：待企业整改</div>
+      </div>
+    </div>
+
+    <div class="zone z-judge">
+      <div class="zone-hd"><span>结论判定</span><span class="badge">人工确认后锁定，重跑不再覆盖</span></div>
+      <div class="zone-body">
+        <div class="field">
+          <label>结论</label>
+          <select>
+            <option>符合</option><option>观察项</option>
+            <option selected>一般不符合</option>
+            <option>严重不符合</option><option>不适用</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>判定依据（写入报告）</label>
+          <textarea rows="3">企业未提供培训有效性评价记录，4.1 内部因素识别不完整，构成一般不符合。</textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="sb-ft">
+    <div><button class="btn btn-p">保存</button></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-w">锁定此项</button>
+      <button class="btn btn-o" onclick="closeSb()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 抽屉：执行状态 ══════════ -->
+<div class="sb" id="sb-status">
+  <div class="sb-hd">
+    <div>
+      <h3>执行状态</h3>
+      <div class="sub" id="st-sub">XX科技有限公司 · QMS 初次审核 · 认证准备</div>
+    </div>
+    <button class="btn btn-o btn-xs" onclick="closeSb()">关闭</button>
+  </div>
+  <div class="sb-body">
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <div class="stat" style="flex:1;min-width:0"><div class="n" style="color:var(--s)">8</div><div class="l">已完成</div></div>
+      <div class="stat" style="flex:1;min-width:0"><div class="n" style="color:var(--p)">1</div><div class="l">分析中</div></div>
+      <div class="stat" style="flex:1;min-width:0"><div class="n" style="color:var(--i)">2</div><div class="l">排队</div></div>
+      <div class="stat" style="flex:1;min-width:0"><div class="n" style="color:var(--d)">2</div><div class="l">锁定跳过</div></div>
+    </div>
+
+    <div class="zone z-judge">
+      <div class="zone-hd"><span>执行轮次</span><span class="badge">重跑不新增列表行</span></div>
+      <div class="zone-body">
+        <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dotted #d9ecff">
+          <span><b>第 2 轮</b>（当前）</span><span style="color:var(--i)">2026-10-30 14:20 · 进行中</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0">
+          <span>第 1 轮</span><span style="color:var(--i)">2026-10-28 09:10 · 已完成 12/12</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="zone z-ev">
+      <div class="zone-hd"><span>队列</span><span class="badge">yzh_queue · cert_prep</span></div>
+      <div class="zone-body">
+        <div style="display:flex;justify-content:space-between;padding:3px 0"><span>队列编号</span><span style="color:var(--i)">Q-20261030-0012</span></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0"><span>已用 / 预计剩余</span><span style="color:var(--i)">03:12 / 01:20</span></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0"><span>当前执行</span><span>4.2 相关方需求分析</span></div>
+      </div>
+    </div>
+
+    <div class="zone z-sup">
+      <div class="zone-hd"><span>逐项明细</span><span class="badge">12 项</span></div>
+      <div class="zone-body" style="padding:0">
+        <table class="mtbl" style="width:100%;font-size:12px">
+          <tbody>
+            <tr><td style="padding:6px 10px">4.1 外部问题</td><td style="padding:6px 10px;text-align:right"><span class="tag lock">锁定跳过</span></td><td style="padding:6px 10px;text-align:right;color:var(--i);width:60px">—</td></tr>
+            <tr><td style="padding:6px 10px">4.1 内部问题</td><td style="padding:6px 10px;text-align:right"><span class="tag done">完成</span></td><td style="padding:6px 10px;text-align:right;color:var(--i);width:60px">2.3s</td></tr>
+            <tr><td style="padding:6px 10px">4.2 相关方</td><td style="padding:6px 10px;text-align:right"><span class="tag run">分析中</span></td><td style="padding:6px 10px;text-align:right;color:var(--i);width:60px">—</td></tr>
+            <tr><td style="padding:6px 10px">5.1 领导作用</td><td style="padding:6px 10px;text-align:right"><span class="tag idle">排队</span></td><td style="padding:6px 10px;text-align:right;color:var(--i);width:60px">—</td></tr>
+            <tr><td style="padding:6px 10px">6.1 风险与机遇</td><td style="padding:6px 10px;text-align:right"><span class="tag idle">排队</span></td><td style="padding:6px 10px;text-align:right;color:var(--i);width:60px">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="sb-ft">
+    <div><button class="btn btn-o" onclick="toast('刷新状态')">刷新</button></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-w" onclick="toast('重新执行 → 第 3 轮')">重新执行</button>
+      <button class="btn btn-o" onclick="closeSb()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 弹窗：入场计划 ══════════ -->
+<div class="mask" id="mask" onclick="closeDlg()"></div>
+<div class="dlg" id="dlg-plan" style="width:1040px">
+  <div class="dlg-hd">
+    <div>
+      <h3>入场计划 · XX科技有限公司 · QMS 初次审核</h3>
+      <div class="sub">由认证准备产出 · 第 2 轮 · 2026-10-30 · 12 个检查项</div>
+    </div>
+    <button class="btn btn-o btn-xs" onclick="closeDlg()">关闭</button>
+  </div>
+  <div class="dlg-bd">
+    <div style="display:flex;gap:10px;margin-bottom:12px">
+      <div class="stat"><div class="n" style="color:var(--d)">7</div><div class="l">需现场检查</div></div>
+      <div class="stat"><div class="n" style="color:var(--s)">5</div><div class="l">已符合免现场</div></div>
+      <div class="stat"><div class="n" style="color:var(--w)">3</div><div class="l">需提前补件</div></div>
+    </div>
+    <div class="card scrollx">
+      <table class="mtbl">
+        <thead>
+          <tr>
+            <th style="width:210px">条款</th>
+            <th style="width:120px">部门</th>
+            <th style="width:120px">联系人</th>
+            <th style="width:90px">是否入场</th>
+            <th style="width:150px">检查方式</th>
+            <th>现场需提供 / 重点核查</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="ci">4.1 组织环境 · 外部问题</td>
+            <td class="dept">总经办</td>
+            <td>王某某</td>
+            <td><span class="tag nc-ok">免现场</span></td>
+            <td class="muted">—</td>
+            <td class="muted">资料已齐，无疑点</td>
+          </tr>
+          <tr>
+            <td class="ci">4.1 组织环境 · 内部问题</td>
+            <td class="dept">品管部 + 技术部</td>
+            <td>李主任、张工</td>
+            <td><span class="tag nc-maj">需入场</span></td>
+            <td>现场观察 + 抽样</td>
+            <td>设备台帐、实验室仪器清单；核查培训有效性评价</td>
+          </tr>
+          <tr>
+            <td class="ci">4.2 相关方需求分析</td>
+            <td class="dept">总经办 + 品管部</td>
+            <td>王某某、李主任、陈法务</td>
+            <td><span class="tag nc-maj">需入场</span></td>
+            <td>文件查阅 + 访谈</td>
+            <td>相关方登记表、需求分析记录；访谈陈法务确认合规要求识别</td>
+          </tr>
+          <tr>
+            <td class="ci">5.1 领导作用 · 管理层承诺</td>
+            <td class="dept">企管部</td>
+            <td>赵经理</td>
+            <td><span class="tag nc-maj">需入场</span></td>
+            <td>人员访谈</td>
+            <td>访谈总经理，确认管理评审参与度</td>
+          </tr>
+          <tr>
+            <td class="ci">6.1 风险与机遇</td>
+            <td class="dept">品管部 + 技术部</td>
+            <td>张工、刘工</td>
+            <td><span class="tag nc-maj">需入场</span></td>
+            <td>抽样验证</td>
+            <td>风险清单、措施跟踪表；抽查 3 项措施落实情况</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr><td colspan="6">共 12 项（示例 5 项）· 「是否入场」由系统建议 + 审核员逐条确认</td></tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+  <div class="dlg-ft">
+    <button class="btn btn-o" onclick="closeDlg()">取消</button>
+    <button class="btn btn-o" onclick="toast('导出入场计划 Excel')">导出</button>
+    <button class="btn btn-p" onclick="closeDlg();toast('入场计划已生成，可在认证检查里引用')">生成并保存</button>
+  </div>
+</div>
+
+<!-- ══════════ 弹窗：签发 NC ══════════ -->
+<div class="dlg" id="dlg-nc" style="width:600px">
+  <div class="dlg-hd">
+    <div>
+      <h3>签发不符合项</h3>
+      <div class="sub">6.1 风险与机遇 · 品管部 + 技术部 · 结论：严重不符合</div>
+    </div>
+    <button class="btn btn-o btn-xs" onclick="closeDlg()">关闭</button>
+  </div>
+  <div class="dlg-bd">
+    <div class="row2">
+      <div class="field">
+        <label>NC 编号</label>
+        <input type="text" value="NC-2026-008">
+      </div>
+      <div class="field">
+        <label>严重程度</label>
+        <select><option selected>严重不符合（major）</option><option>一般不符合（minor）</option></select>
+      </div>
+    </div>
+    <div class="field">
+      <label>不符合事实描述</label>
+      <textarea rows="3">风险与机遇清单自 2025-06 后未更新，现场抽查 3 项措施中 2 项无跟踪记录，无法证明措施有效性。</textarea>
+    </div>
+    <div class="field">
+      <label>违反条款</label>
+      <input type="text" value="ISO 9001:2015 6.1 应对风险和机遇的措施">
+    </div>
+    <div class="field">
+      <label>整改要求</label>
+      <textarea rows="2">重新识别风险与机遇，建立措施跟踪机制并保留有效性证据，30 日内提交。</textarea>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>整改截止日期</label>
+        <input type="date" value="2026-12-01">
+      </div>
+      <div class="field">
+        <label>责任部门</label>
+        <input type="text" value="品管部">
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--i);line-height:1.7;background:#fafafa;border-radius:4px;padding:8px 10px">
+      签发后该条 NC 立即生效并计入报告；一个检查项签发一条，需逐条进行。
+    </div>
+  </div>
+  <div class="dlg-ft">
+    <button class="btn btn-o" onclick="closeDlg()">取消</button>
+    <button class="btn btn-o" onclick="toast('AI 已生成建议描述')">AI 润色描述</button>
+    <button class="btn btn-w" onclick="closeDlg();toast('NC-2026-008 已签发')">确认签发</button>
+  </div>
+</div>
+
+<div class="dock" id="dock">
+  <div class="q">
+    <b class="p">队列</b>
+    <span>已完成 <b class="s">8</b> / 排队 <b>2</b> / 锁定 <b class="d">2</b></span>
+    <div class="bar"><div style="width:66%"></div></div>
+    <span style="color:var(--i)">已用 03:12</span>
+    <span style="color:var(--i)">预计剩余 01:20</span>
+    <span style="margin-left:10px">当前：<b>4.2 相关方需求分析</b></span>
+  </div>
+  <button class="btn btn-o btn-xs" onclick="toast('已暂停队列')">暂停</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var toastTimer = null;
+
+function toast(msg) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { el.classList.remove('on'); }, 2200);
+}
+
+var NAV_OF = {
+  'plan': 'plan',
+  'prep-list': 'prep-list', 'prep-detail': 'prep-list',
+  'onsite-list': 'onsite-list', 'onsite-detail': 'onsite-list'
+};
+
+function go(name) {
+  closeSb(); closeDd();
+  document.querySelectorAll('.view').forEach(function (v) {
+    v.classList.toggle('on', v.id === 'v-' + name);
+  });
+  document.querySelectorAll('.pbar button').forEach(function (b) {
+    b.classList.toggle('on', b.dataset.view === name);
+  });
+  var nav = NAV_OF[name];
+  document.querySelectorAll('.side a').forEach(function (a) {
+    a.classList.toggle('active', a.dataset.view === nav);
+  });
+  document.body.dataset.view = name;
+  document.getElementById('dock').classList.toggle('show', name === 'prep-detail');
+  document.querySelector('.main').scrollTop = 0;
+}
+
+function openSb(kind) {
+  closeSb(); closeDd();
+  document.getElementById('sb-' + kind).classList.add('on');
+  document.body.classList.add('sb-open');
+}
+
+function openStatus(kind) {
+  closeSb(); closeDd();
+  document.getElementById('st-sub').textContent = kind === 'prep'
+    ? 'XX科技有限公司 · QMS 初次审核 · 认证准备'
+    : 'XX科技有限公司 · QMS 监督审核 · 认证检查';
+  document.getElementById('sb-status').classList.add('on');
+  document.body.classList.add('sb-open');
+}
+
+function closeSb() {
+  document.querySelectorAll('.sb').forEach(function (s) { s.classList.remove('on'); });
+  document.body.classList.remove('sb-open');
+}
+
+function openDd(btn) {
+  closeDd();
+  var menu = btn.nextElementSibling;
+  if (!menu || !menu.classList.contains('dd-menu')) return;
+  var r = btn.getBoundingClientRect();
+  menu.classList.add('on');
+  var w = menu.offsetWidth, h = menu.offsetHeight;
+  var left = Math.min(r.right - w, window.innerWidth - w - 8);
+  var top = r.bottom + 4;
+  if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 4);
+  menu.style.left = Math.max(8, left) + 'px';
+  menu.style.top = top + 'px';
+}
+
+function closeDd() {
+  document.querySelectorAll('.dd-menu').forEach(function (m) { m.classList.remove('on'); });
+}
+
+function openDlg() {
+  document.getElementById('mask').classList.add('on');
+}
+
+function openPlanDlg() {
+  closeSb(); closeDd(); openDlg();
+  document.getElementById('dlg-plan').classList.add('on');
+}
+
+function openNcDlg() {
+  closeSb(); closeDd(); openDlg();
+  document.getElementById('dlg-nc').classList.add('on');
+}
+
+function closeDlg() {
+  document.getElementById('mask').classList.remove('on');
+  document.querySelectorAll('.dlg').forEach(function (d) { d.classList.remove('on'); });
+}
+
+document.querySelectorAll('.pbar button').forEach(function (b) {
+  b.addEventListener('click', function () { go(b.dataset.view); });
+});
+
+document.querySelectorAll('.side a').forEach(function (a) {
+  a.addEventListener('click', function () {
+    if (a.dataset.view) go(a.dataset.view);
+    else if (a.dataset.toast) toast(a.dataset.toast);
+  });
+});
+
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('.dd-menu') && !e.target.closest('.btn-t')) closeDd();
+});
+
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') { closeSb(); closeDd(); closeDlg(); }
+});
+</script>
+</body>
+</html>

@@ -10,17 +10,28 @@
  *   - 原始证据与检查证据分离（原始可跳新页面预览）
  *   - 仅「自动分析 / 保存报告 / 导出报告」三个全局按钮
  *   - 侧边栏「保存」「锁定」行级操作
- *   - 底部纯队列状态
+ *   - 底部队列状态由轮询真实驱动
+ *
+ * 所有写操作均走真实接口：
+ *   保存结论   POST /api/Auditor/CertTask/save-result
+ *   锁定/解锁  POST /api/Auditor/CertTask/lock-result | unlock-result
+ *   补充材料   POST /api/Auditor/CertEvidence/add | update
+ *   自动分析   POST /api/Auditor/CertTask/create + /start
  */
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import {
   ElButton, ElTable, ElTableColumn, ElTag, ElDrawer, ElInput,
-  ElDescriptions, ElDescriptionsItem, ElEmpty, ElMessageBox, ElMessage,
-  ElPopover, ElForm, ElFormItem, ElSelect, ElOption, ElDialog,
+  ElEmpty, ElMessageBox, ElMessage,
+  ElPopover, ElForm, ElFormItem, ElSelect, ElOption,
 } from 'element-plus'
-import { yzhApi } from '@yzh-core/api/client'
-import { getPlanChecklist, getPlanCheckItemDetail, exportPlanReport } from '@share/api/auditor/cert-check-task'
-import type { CertPlanCheckItemRow, CertPlanChecklistResponse, CertPlanCheckItemDetail, CertEvidenceRow, ContactPerson } from '@share/api/auditor/cert-check-task'
+import {
+  getPlanChecklist, getPlanCheckItemDetail, exportPlanReport,
+  lockConclusion, unlockConclusion, saveCheckResult, addEvidence, updateEvidence,
+  createCertTask, startCertTask,
+} from '@share/api/auditor/cert-check-task'
+import type {
+  CertPlanCheckItemRow, CertPlanCheckItemDetail, ContactPerson,
+} from '@share/api/auditor/cert-check-task'
 
 const props = defineProps<{
   planCode: string
@@ -29,7 +40,6 @@ const props = defineProps<{
 
 // ──── 数据状态 ────
 const loading = ref(false)
-const checklist = ref<CertPlanChecklistResponse | null>(null)
 const rows = ref<CertPlanCheckItemRow[]>([])
 
 // ──── 侧边栏 ────
@@ -44,48 +54,140 @@ const editForm = reactive({
 })
 
 // ──── 补充材料 ────
-const supplementList = ref<Array<{ text: string }>>([])
+const supplementList = ref<Array<{ code: string; text: string }>>([])
 const newSupplement = ref('')
 
-// ──── 队列状态（模拟） ────
+// ──── 操作进行中标记 ────
+const busy = reactive({
+  analyze: false,
+  save: false,
+  lock: false,
+  supplement: false,
+})
+
+// ──── 队列状态（轮询真实驱动） ────
 const queueStatus = reactive({
   running: false,
+  taskCode: '',
+  taskNo: '',
   total: 0,
   done: 0,
-  queued: 0,
-  duration: '',
-  lastTaskKind: '',
+  elapsed: 0,
+})
+let pollTimer: number | null = null
+const POLL_INTERVAL_MS = 5000
+
+/**
+ * 页面锁（F12）：队列在跑 ⇒ 整页只读。
+ *
+ * <p>⛔ 不要把它做成「我点了开始所以只读」的本地开关 —— 那样刷新一下就失效了。
+ * 唯一真相是后端每轮返回的 <c>TaskRunning</c>（来源 <c>cert_task.Status='running'</c>），
+ * 前端只做展示层拦截，后端写接口还会各自 409 兜底（两道防线，缺一不可）。</p>
+ */
+const pageLocked = computed(() => queueStatus.running)
+const lockTip = computed(() =>
+  pageLocked.value
+    ? `队列执行中${queueStatus.taskNo ? '（' + queueStatus.taskNo + '）' : ''}，完成后才能编辑`
+    : '',
+)
+
+// ════════════════════════════════════════════════════════════
+// 解析辅助（统一兜底，避免脏 JSON 导致整表渲染中断）
+// ════════════════════════════════════════════════════════════
+
+function parseContacts(json: string | null | undefined): ContactPerson[] {
+  if (!json) return []
+  try {
+    const arr = JSON.parse(json)
+    return Array.isArray(arr) ? (arr as ContactPerson[]) : []
+  } catch {
+    return []
+  }
+}
+
+/** 表格行视图：预解析联系人，避免模板内重复 JSON.parse */
+interface RowView extends CertPlanCheckItemRow {
+  contacts: ContactPerson[]
+}
+const rowsView = computed<RowView[]>(() =>
+  rows.value.map(r => ({ ...r, contacts: parseContacts(r.ContactsJson) })),
+)
+
+interface DeptContactView {
+  deptCode: string
+  deptName: string
+  leaderName: string
+  leaderPhone: string
+  contacts: Array<{ name: string; position: string; phone: string }>
+}
+
+/** 部门联系人：后端外层为 camelCase、内层为 PascalCase，此处统一归一 */
+const deptContactsDisplay = computed<DeptContactView[]>(() => {
+  const raw = detail.value?.DeptContactsJson
+  if (!raw) return []
+  try {
+    const arr = JSON.parse(raw)
+    if (!Array.isArray(arr)) return []
+    return arr.map((d: any) => ({
+      deptCode: d.deptCode ?? d.DeptCode ?? '',
+      deptName: d.deptName ?? d.DeptName ?? '',
+      leaderName: d.leaderName ?? d.LeaderName ?? '',
+      leaderPhone: d.leaderPhone ?? d.LeaderPhone ?? '',
+      contacts: (Array.isArray(d.contacts) ? d.contacts : []).map((c: any) => ({
+        name: c.name ?? c.Name ?? '',
+        position: c.position ?? c.Position ?? c.roleType ?? c.RoleType ?? '',
+        phone: c.phone ?? c.Phone ?? '',
+      })),
+    }))
+  } catch {
+    return []
+  }
 })
 
-// 计算属性
-const allContacts = computed((): ContactPerson[] => {
-  const all: ContactPerson[] = []
-  rows.value.forEach(r => {
-    if (r.ContactsJson) {
-      try { all.push(...(JSON.parse(r.ContactsJson) as ContactPerson[]) } catch { /* skip */ }
-    }
-  })
-  return all
+const doubtsDisplay = computed<Array<{ kind: string; text: string }>>(() => {
+  const raw = detail.value?.DoubtsJson
+  if (!raw) return []
+  try {
+    const arr = JSON.parse(raw)
+    if (!Array.isArray(arr)) return []
+    return arr.map((d: any) => ({
+      kind: d.kind ?? d.Kind ?? '',
+      text: d.text ?? d.Text ?? '',
+    }))
+  } catch {
+    return []
+  }
 })
 
-const deptContactsDisplay = computed(() => {
-  if (!detail.value?.DeptContactsJson) return []
-  try { return JSON.parse(detail.value.DeptContactsJson) } catch { return [] }
+/** 工具栏统计（仅统计可由数据真实推导的项） */
+const stats = computed(() => {
+  const total = rows.value.length
+  const done = rows.value.filter(r => !!r.Conclusion).length
+  const locked = rows.value.filter(r => r.IsLocked).length
+  return { total, done, locked, pending: total - done }
 })
 
-const doubtsDisplay = computed(() => {
-  if (!detail.value?.DoubtsJson) return []
-  try { return JSON.parse(detail.value.DoubtsJson) } catch { return []
-})
+// ════════════════════════════════════════════════════════════
+// 加载
+// ════════════════════════════════════════════════════════════
 
-// ──── 加载数据 ────
 async function loadChecklist() {
   loading.value = true
   try {
     const res = await getPlanChecklist(props.planCode)
     if (res?.success && res.data) {
-      checklist.value = res.data
       rows.value = res.data.Rows || []
+      // ★ 页面锁（F12）：running 与否以后端为准 ——
+      //   刷新页面 / 换个人打开 / 队列在后台跑完，都能立刻跟上（本地状态做不到）。
+      queueStatus.running = !!res.data.TaskRunning
+      queueStatus.taskCode = res.data.RunningTaskCode || ''
+      queueStatus.taskNo = res.data.RunningTaskNo || ''
+      queueStatus.total = res.data.RunningItemTotal || 0
+      queueStatus.done = res.data.RunningItemDone || 0
+      if (!queueStatus.running) {
+        queueStatus.elapsed = 0
+        stopPolling()
+      }
     } else {
       ElMessage.error(res?.message || '加载失败')
     }
@@ -101,17 +203,22 @@ async function openDetail(row: CertPlanCheckItemRow) {
   detailLoading.value = true
   drawerVisible.value = true
   detail.value = null
+  editingConclusion.value = false
+  supplementList.value = []
+  newSupplement.value = ''
   try {
     const res = await getPlanCheckItemDetail(row.DetailCode)
     if (res?.success && res.data) {
       detail.value = res.data
       editForm.conclusion = res.data.Conclusion || ''
       editForm.reason = res.data.Reason || ''
-      // 从检查证据中获取补充材料
+      // 补充材料 = 人工录入类检查证据
       supplementList.value = (res.data.CheckEvidences || [])
         .filter(e => e.EvidenceKind === 'manual' && e.CapturedIn === 'manual')
-        .map(e => ({ text: e.Snippet || e.LlmSummary || '' }))
+        .map(e => ({ code: e.Code, text: e.Snippet || e.LlmSummary || '' }))
         .filter(s => s.text)
+    } else {
+      ElMessage.error(res?.message || '加载详情失败')
     }
   } catch (e: any) {
     ElMessage.error('加载详情失败：' + (e?.message || ''))
@@ -120,62 +227,240 @@ async function openDetail(row: CertPlanCheckItemRow) {
   }
 }
 
-// ──── 全局操作 ────
+function onRowClick(row: any) {
+  openDetail(row as CertPlanCheckItemRow)
+}
+
+function rowClassName({ row }: { row: any }) {
+  const cls: string[] = []
+  if (row.IsLocked) cls.push('wb-row-locked')
+  if (row.DetailCode && row.DetailCode === selectedDetailCode.value) cls.push('wb-row-active')
+  return cls.join(' ')
+}
+
+// ════════════════════════════════════════════════════════════
+// 全局操作
+// ════════════════════════════════════════════════════════════
+
 async function handleAutoAnalyze() {
-  // 调起任务创建 + 启动队列流程
-  await ElMessageBox.confirm(
-    '将创建新的认证准备任务并启动队列分析，是否继续？',
-    '启动自动分析',
-    { confirmButtonText: '确定', cancelButtonText: '取消', type: 'info' }
-  ).catch(() => {})
-}
+  if (busy.analyze) return
+  try {
+    await ElMessageBox.confirm(
+      '将创建新的认证准备任务并启动队列分析，是否继续？',
+      '启动自动分析',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'info' },
+    )
+  } catch {
+    return // 用户取消
+  }
 
-async function handleSaveReport() {
-  // TODO: 保存报告草稿（后端待实现报告草稿接口）
-  ElMessage.info('开发中：报告保存功能')
-}
+  busy.analyze = true
+  try {
+    const created = await createCertTask({
+      PlanCode: props.planCode,
+      TaskKind: 'prep',
+      RunMode: 'full',
+    })
+    if (!created?.success || !created.data) {
+      ElMessage.error(created?.message || '创建任务失败')
+      return
+    }
 
-async function handleExport() {
-  const res = await exportPlanReport(props.planCode)
-  if (res?.success && res.data) {
-    ElMessage.success(res.data.Message || '导出已排队')
-  } else {
-    ElMessage.error(res?.message || '导出失败')
+    const taskCode = created.data.TaskCode
+    const started = await startCertTask(taskCode)
+    if (!started?.success) {
+      ElMessage.error(started?.message || '启动任务失败')
+      return
+    }
+
+    ElMessage.success(`已启动分析：${created.data.TaskNo || taskCode}`)
+    queueStatus.taskCode = taskCode
+    queueStatus.taskNo = created.data.TaskNo || ''
+    queueStatus.total = created.data.ItemTotal || rows.value.length
+    queueStatus.done = rows.value.filter(r => !!r.Conclusion).length
+    queueStatus.elapsed = 0
+    queueStatus.running = true
+    startPolling()
+  } catch (e: any) {
+    ElMessage.error('启动分析失败：' + (e?.message || ''))
+  } finally {
+    busy.analyze = false
   }
 }
 
-// ──── 侧边栏保存 ────
-function saveItemDetail() {
-  // TODO: 提交结论 + 补充材料（后端待实现）
-  ElMessage.success('已保存')
-  editingConclusion.value = false
+async function handleSaveReport() {
+  ElMessage.info('报告草稿保存尚未开放，请使用「导出报告」生成正式报告')
 }
 
-function addSupplement() {
+async function handleExport() {
+  try {
+    const res = await exportPlanReport(props.planCode)
+    if (res?.success && res.data) {
+      ElMessage.success(res.data.Message || '导出已排队')
+    } else {
+      ElMessage.error(res?.message || '导出失败')
+    }
+  } catch (e: any) {
+    ElMessage.error('导出失败：' + (e?.message || ''))
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// 侧边栏：保存结论 / 锁定
+// ════════════════════════════════════════════════════════════
+
+async function saveItemDetail() {
+  const d = detail.value
+  if (!d) return
+  if (!d.ResultCode) {
+    ElMessage.warning('该项尚无结论记录，请先执行「自动分析」')
+    return
+  }
+  if (d.IsLocked) {
+    ElMessage.warning('结论已锁定，请先解锁再修改')
+    return
+  }
+  busy.save = true
+  try {
+    const res = await saveCheckResult(d.ResultCode, editForm.conclusion, editForm.reason)
+    if (res?.success) {
+      d.Conclusion = editForm.conclusion || d.Conclusion
+      d.Reason = editForm.reason
+      editingConclusion.value = false
+      ElMessage.success('已保存')
+      await loadChecklist()
+    } else {
+      ElMessage.error(res?.message || '保存失败')
+    }
+  } catch (e: any) {
+    ElMessage.error('保存失败：' + (e?.message || ''))
+  } finally {
+    busy.save = false
+  }
+}
+
+async function toggleLock() {
+  const d = detail.value
+  if (!d) return
+  if (!d.ResultCode) {
+    ElMessage.warning('该项尚无结论记录，无法锁定')
+    return
+  }
+  busy.lock = true
+  try {
+    const res = d.IsLocked
+      ? await unlockConclusion(d.ResultCode)
+      : await lockConclusion(d.ResultCode, 'manual_confirm')
+    if (res?.success) {
+      d.IsLocked = !d.IsLocked
+      ElMessage.success(d.IsLocked ? '已锁定该项' : '已解锁该项')
+      await loadChecklist()
+    } else {
+      ElMessage.error(res?.message || '操作失败')
+    }
+  } catch (e: any) {
+    ElMessage.error('操作失败：' + (e?.message || ''))
+  } finally {
+    busy.lock = false
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// 补充材料（真实落库：cert_evidence）
+// ════════════════════════════════════════════════════════════
+
+async function addSupplement() {
   const text = newSupplement.value.trim()
-  if (!text) return
-  supplementList.value.push({ text })
-  newSupplement.value = ''
+  const d = detail.value
+  if (!text || !d) return
+  busy.supplement = true
+  try {
+    const res = await addEvidence({
+      SourceName: '审核员补充材料',
+      CheckItemCode: d.DetailCode,
+      EvidenceKind: 'manual',
+      CapturedIn: 'manual',
+      Snippet: text,
+    })
+    if (res?.success && res.data) {
+      supplementList.value.push({ code: res.data.EvidenceCode, text })
+      newSupplement.value = ''
+      ElMessage.success('已添加补充材料')
+      await loadChecklist()
+    } else {
+      ElMessage.error(res?.message || '添加失败')
+    }
+  } catch (e: any) {
+    ElMessage.error('添加失败：' + (e?.message || ''))
+  } finally {
+    busy.supplement = false
+  }
 }
 
-function removeSupplement(idx: number) {
-  supplementList.value.splice(idx, 1)
+async function removeSupplement(idx: number) {
+  const item = supplementList.value[idx]
+  if (!item) return
+  if (!item.code) {
+    supplementList.value.splice(idx, 1)
+    return
+  }
+  busy.supplement = true
+  try {
+    // 软删除：置为 dropped，保留审计痕迹；详情接口已过滤 dropped
+    const res = await updateEvidence({
+      Code: item.code,
+      Status: 'dropped',
+      DroppedReason: '审核员删除补充材料',
+    })
+    if (res?.success) {
+      supplementList.value.splice(idx, 1)
+      ElMessage.success('已删除')
+      await loadChecklist()
+    } else {
+      ElMessage.error(res?.message || '删除失败')
+    }
+  } catch (e: any) {
+    ElMessage.error('删除失败：' + (e?.message || ''))
+  } finally {
+    busy.supplement = false
+  }
 }
 
-// ──── 原始证据预览（新窗口） ────
+// ════════════════════════════════════════════════════════════
+// 原始证据预览（新窗口）
+// ════════════════════════════════════════════════════════════
+
 function openEvidencePreview(evidenceCode: string, anchor?: string | null) {
   const url = `/audit-task/doc-preview?evidenceCode=${encodeURIComponent(evidenceCode)}${anchor ? '&anchor=' + encodeURIComponent(anchor) : ''}`
   window.open(url, '_blank')
 }
 
-// ──── 队列 ────
-function startQueueSimulation() {
-  queueStatus.running = true
-  queueStatus.total = rows.value.filter(r => !r.Conclusion || r.Conclusion === 'na').length
-  queueStatus.done = rows.value.filter(r => r.Conclusion && r.Conclusion !== 'na').length
-  queueStatus.queued = queueStatus.total - queueStatus.done
-  queueStatus.lastTaskKind = 'prep'
-  queueStatus.duration = '00:00'
+// ════════════════════════════════════════════════════════════
+// 队列轮询
+// ════════════════════════════════════════════════════════════
+
+function startPolling() {
+  stopPolling()
+  pollTimer = window.setInterval(async () => {
+    queueStatus.elapsed += Math.round(POLL_INTERVAL_MS / 1000)
+    // loadChecklist 内部会刷新 queueStatus.running（以后端 TaskRunning 为准），
+    // 并在「不再 running」时自己停轮询 —— 这里⛔ 不要再按「有结论的项数 == 总数」判停：
+    // 准备分支的结论是 PrepState（Conclusion 恒为空），那个条件永远不成立，会一直转到刷新页面为止。
+    await loadChecklist()
+  }, POLL_INTERVAL_MS)
+}
+
+function stopPolling() {
+  if (pollTimer !== null) {
+    window.clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+function formatDuration(sec: number) {
+  const m = String(Math.floor(sec / 60)).padStart(2, '0')
+  const s = String(sec % 60).padStart(2, '0')
+  return `${m}:${s}`
 }
 
 onMounted(() => {
@@ -183,7 +468,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  // cleanup timers
+  stopPolling()
 })
 </script>
 
@@ -193,19 +478,28 @@ onBeforeUnmount(() => {
     <div class="wb-toolbar">
       <div class="wb-toolbar-left">
         <span class="wb-plan-name">{{ planName }}</span>
-        <span class="wb-meta" v-if="checklist">共 {{ rows.length }} 项</span>
+        <span class="wb-meta">共 {{ stats.total }} 项</span>
+        <span class="wb-badge done">已完成 {{ stats.done }}</span>
+        <span class="wb-badge lock">已锁定 {{ stats.locked }}</span>
+        <span class="wb-badge idle">待分析 {{ stats.pending }}</span>
       </div>
       <div class="wb-toolbar-right">
-        <el-button type="primary" @click="handleAutoAnalyze" :disabled="queueStatus.running">自动分析</el-button>
+        <el-button type="primary" :loading="busy.analyze" :disabled="pageLocked" @click="handleAutoAnalyze">自动分析</el-button>
         <el-button @click="handleSaveReport">保存报告</el-button>
         <el-button @click="handleExport">导出报告</el-button>
       </div>
     </div>
 
+    <!-- 页面锁提示（F12）：队列在跑时整页只读，必须明确告诉用户「为什么点不动」 -->
+    <div class="wb-lock-banner" v-if="pageLocked">
+      <span class="wb-lock-icon">🔒</span>
+      <span class="wb-lock-text">{{ lockTip }}</span>
+    </div>
+
     <!-- 主表 -->
     <div class="wb-table-wrap">
       <el-table
-        :data="rows"
+        :data="rowsView"
         border
         stripe
         size="small"
@@ -214,67 +508,95 @@ onBeforeUnmount(() => {
         empty-text="暂无检查项"
         row-key="DetailCode"
         highlight-current-row
-        @row-click="openDetail"
+        :row-class-name="rowClassName"
+        @row-click="onRowClick"
       >
-        <el-table-column label="检查项" prop="ClauseNumbers" min-width="180" show-overflow-tooltip>
+        <el-table-column label="#" width="48" align="center">
+          <template #default="{ $index }">{{ $index + 1 }}</template>
+        </el-table-column>
+        <el-table-column label="检查项" prop="ClauseNumbers" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="wb-clause">{{ row.ClauseNumbers || '-' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="部门" prop="DeptName" width="110" show-overflow-tooltip>
+        <el-table-column label="部门" prop="DeptName" width="120" show-overflow-tooltip>
           <template #default="{ row }">
-            {{ row.DeptName || '-' }}
+            <span v-if="row.DeptName">{{ row.DeptName }}</span>
+            <span v-else class="wb-muted">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="部门联系人" width="160">
+        <el-table-column label="部门联系人" width="170">
           <template #default="{ row }">
-            <el-popover
-              v-if="row.ContactsJson"
-              placement="right"
-              :width="220"
-              trigger="hover"
-              :content="JSON.parse(row.ContactsJson || '[]').map((c: ContactPerson) => `${c.name} / ${c.position} / ${c.phone}`).join('\n')"
-            >
-              <template #reference>
-                <el-tag size="small" type="info">联系人({{ JSON.parse(row.ContactsJson || '[]').length }})</el-tag>
-              </template>
-            </el-popover>
-            <span v-else>-</span>
+            <div v-if="row.contacts.length" class="wb-contacts">
+              <span
+                v-for="c in row.contacts.slice(0, 2)"
+                :key="(c.name || '') + (c.phone || '')"
+                class="wb-contact-chip"
+                :title="[c.name, c.position, c.phone].filter(Boolean).join(' · ')"
+              >
+                <span class="wb-avatar">{{ (c.name || '?').charAt(0) }}</span>
+                <span class="wb-contact-name">{{ c.name || '未命名' }}</span>
+              </span>
+              <el-popover
+                v-if="row.contacts.length > 2"
+                placement="right"
+                :width="240"
+                trigger="hover"
+              >
+                <template #reference>
+                  <span class="wb-contact-more">+{{ row.contacts.length - 2 }}</span>
+                </template>
+                <div v-for="c in row.contacts" :key="(c.name || '') + (c.phone || '')" class="wb-contact-line">
+                  {{ c.name || '未命名' }}<span v-if="c.position"> · {{ c.position }}</span><span v-if="c.phone"> · {{ c.phone }}</span>
+                </div>
+              </el-popover>
+            </div>
+            <span v-else class="wb-muted">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="80" align="center">
+        <el-table-column label="状态" width="92" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.Conclusion" size="small" type="success" effect="plain">已分析</el-tag>
+            <el-tag v-if="row.IsLocked" size="small" type="warning" effect="plain">🔒 已锁定</el-tag>
+            <el-tag v-else-if="row.Conclusion" size="small" type="success" effect="plain">已分析</el-tag>
             <el-tag v-else size="small" type="info" effect="plain">待分析</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="PrepState / 结论" width="120" align="center">
+        <el-table-column label="PrepState / 结论" width="140" align="center">
           <template #default="{ row }">
             <span v-if="row.PrepState" class="wb-prep-state">{{ row.PrepState }}</span>
             <span v-if="row.Conclusion" class="wb-conclusion">{{ row.Conclusion }}</span>
-            <span v-if="!row.PrepState && !row.Conclusion" class="wb-muted">-</span>
+            <span v-if="!row.PrepState && !row.Conclusion" class="wb-muted">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="NC" width="60" align="center">
+        <el-table-column label="严重度" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.Severity" size="small" :type="row.Severity === 'major' ? 'danger' : 'warning'" effect="plain">
+              {{ row.Severity }}
+            </el-tag>
+            <span v-else class="wb-muted">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="建议NC" width="80" align="center">
           <template #default="{ row }">
             <el-tag v-if="row.NcSuggested" size="small" type="danger">NC</el-tag>
-            <span v-else class="wb-muted">-</span>
+            <span v-else class="wb-muted">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="原始证据" width="80" align="center">
-          <template #default="{ row }">
-            {{ row.RawEvidenceCount || 0 }}
-          </template>
+        <el-table-column label="原始证据" width="88" align="center">
+          <template #default="{ row }">{{ row.RawEvidenceCount || 0 }}</template>
         </el-table-column>
-        <el-table-column label="检查证据" width="80" align="center">
-          <template #default="{ row }">
-            {{ row.CheckEvidenceCount || 0 }}
-          </template>
+        <el-table-column label="检查证据" width="88" align="center">
+          <template #default="{ row }">{{ row.CheckEvidenceCount || 0 }}</template>
         </el-table-column>
-        <el-table-column label="疑点" width="60" align="center">
+        <el-table-column label="疑点" width="70" align="center">
           <template #default="{ row }">
             <span v-if="row.DoubtCount" class="wb-doubt">{{ row.DoubtCount }}</span>
             <span v-else class="wb-muted">0</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="80" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" size="small" @click.stop="onRowClick(row)">详情</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -282,23 +604,23 @@ onBeforeUnmount(() => {
 
     <!-- 底部队列进度栏 -->
     <div class="wb-queue-bar" v-if="queueStatus.running">
-      <span class="wb-queue-label">队列进度</span>
+      <span class="wb-queue-label">队列</span>
       <span class="wb-queue-info">已完成 {{ queueStatus.done }} / 共 {{ queueStatus.total }}</span>
-      <span class="wb-queue-info">排队中 {{ queueStatus.queued }}</span>
-      <span class="wb-queue-info">任务类型：{{ queueStatus.lastTaskKind === 'prep' ? '认证准备' : '认证检查' }}</span>
-      <span class="wb-queue-info">已耗时 {{ queueStatus.duration }}</span>
-      <el-button size="small" type="warning" text>暂停队列</el-button>
+      <span class="wb-queue-info">排队 {{ Math.max(queueStatus.total - queueStatus.done, 0) }}</span>
+      <span class="wb-queue-info">已用 {{ formatDuration(queueStatus.elapsed) }}</span>
+      <span class="wb-queue-info" v-if="queueStatus.taskNo">任务：{{ queueStatus.taskNo }}</span>
     </div>
     <div class="wb-queue-bar idle" v-else>
       <span class="wb-queue-label">空闲</span>
       <span class="wb-queue-info">无执行中的队列任务</span>
+      <span class="wb-queue-info" v-if="stats.pending > 0">尚有 {{ stats.pending }} 项待分析</span>
     </div>
 
     <!-- 右侧侧边栏 Drawer -->
     <el-drawer
       v-model="drawerVisible"
       direction="rtl"
-      size="420px"
+      size="480px"
       :title="detail?.ClauseNumbers || '检查项详情'"
       :close-on-click-modal="true"
     >
@@ -310,6 +632,13 @@ onBeforeUnmount(() => {
               <span class="wb-summary-label">结论：</span>
               <el-tag v-if="detail.Conclusion" size="small" type="primary">{{ detail.Conclusion }}</el-tag>
               <span v-else class="wb-muted">待分析</span>
+              <el-button
+                link
+                type="primary"
+                size="small"
+                :disabled="detail.IsLocked || pageLocked"
+                @click="editingConclusion = !editingConclusion"
+              >{{ editingConclusion ? '收起' : '编辑' }}</el-button>
             </div>
             <div class="wb-summary-row">
               <span class="wb-summary-label">严重程度：</span>
@@ -322,7 +651,7 @@ onBeforeUnmount(() => {
               <span v-else class="wb-muted">否</span>
             </div>
             <div class="wb-summary-row" v-if="detail.IsLocked">
-              <el-tag size="small" type="warning">已锁定 ({{ detail.LockedBy }})</el-tag>
+              <el-tag size="small" type="warning">已锁定 ({{ detail.LockedBy || '—' }})</el-tag>
             </div>
           </div>
 
@@ -333,8 +662,8 @@ onBeforeUnmount(() => {
               <div v-for="dc in deptContactsDisplay" :key="dc.deptCode" class="wb-dept">
                 <div class="wb-dept-name">{{ dc.deptName }}</div>
                 <div v-if="dc.leaderName" class="wb-dept-leader">{{ dc.leaderName }} / {{ dc.leaderPhone }}</div>
-                <div v-for="c in dc.contacts" :key="c.name" class="wb-dept-contact">
-                  {{ c.name }} / {{ c.position || c.roleType }} / {{ c.phone }}
+                <div v-for="c in dc.contacts" :key="c.name + c.phone" class="wb-dept-contact">
+                  {{ c.name }} / {{ c.position || '—' }} / {{ c.phone || '—' }}
                 </div>
               </div>
             </div>
@@ -390,10 +719,11 @@ onBeforeUnmount(() => {
           <div class="wb-zone">
             <div class="wb-zone-title">补充材料</div>
             <div class="wb-supplement-list">
-              <div v-for="(s, i) in supplementList" :key="i" class="wb-sup-item">
+              <div v-for="(s, i) in supplementList" :key="s.code || i" class="wb-sup-item">
                 <span>{{ s.text }}</span>
-                <el-button link type="danger" size="small" @click="removeSupplement(i)">删除</el-button>
+                <el-button link type="danger" size="small" :disabled="busy.supplement || pageLocked" @click="removeSupplement(i)">删除</el-button>
               </div>
+              <div v-if="!supplementList.length" class="wb-zone-empty text-muted">暂无</div>
             </div>
             <div class="wb-supplement-add">
               <el-input
@@ -403,7 +733,7 @@ onBeforeUnmount(() => {
                 placeholder="输入补充材料..."
                 resize="none"
               />
-              <el-button type="primary" size="small" @click="addSupplement">添加</el-button>
+              <el-button type="primary" size="small" :loading="busy.supplement" :disabled="pageLocked" @click="addSupplement">添加</el-button>
             </div>
           </div>
 
@@ -413,10 +743,11 @@ onBeforeUnmount(() => {
             <el-form label-position="top" size="small">
               <el-form-item label="结论">
                 <el-select v-model="editForm.conclusion" style="width: 100%;">
-                  <el-option label="pass" value="pass" />
-                  <el-option label="ofi" value="ofi" />
-                  <el-option label="nc" value="nc" />
-                  <el-option label="na" value="na" />
+                  <el-option label="conformant（符合）" value="conformant" />
+                  <el-option label="observation（观察项）" value="observation" />
+                  <el-option label="minor_nc（一般不符合）" value="minor_nc" />
+                  <el-option label="major_nc（严重不符合）" value="major_nc" />
+                  <el-option label="unknown（待定）" value="unknown" />
                 </el-select>
               </el-form-item>
               <el-form-item label="判定依据">
@@ -431,10 +762,17 @@ onBeforeUnmount(() => {
       <!-- 抽屉底部 -->
       <template #footer>
         <div class="wb-drawer-footer">
-          <el-button @click="saveItemDetail" type="primary" :disabled="detail?.IsLocked">保存</el-button>
+          <el-button
+            @click="saveItemDetail"
+            type="primary"
+            :loading="busy.save"
+            :disabled="!detail?.ResultCode || detail?.IsLocked || pageLocked"
+          >保存</el-button>
           <el-button
             :type="detail?.IsLocked ? 'warning' : 'danger'"
-            @click="detail && (detail.IsLocked = !detail.IsLocked)"
+            :loading="busy.lock"
+            :disabled="!detail?.ResultCode || pageLocked"
+            @click="toggleLock"
           >
             {{ detail?.IsLocked ? '解锁此项' : '锁定此项' }}
           </el-button>
@@ -466,15 +804,54 @@ onBeforeUnmount(() => {
 .wb-toolbar-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 .wb-plan-name {
   font-size: 15px;
   font-weight: 600;
   color: var(--el-text-color-primary);
 }
+/* 页面锁横幅（F12）—— 用 warning 色，和「已锁定」徽标同一套语义 */
+.wb-lock-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: var(--el-color-warning-light-9);
+  border-bottom: 1px solid var(--el-color-warning-light-7);
+  color: var(--el-color-warning-dark-2);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.wb-lock-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+.wb-lock-text {
+  font-weight: 500;
+}
 .wb-meta {
   font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.wb-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.wb-badge.done {
+  background: var(--el-color-success-light-9);
+  color: var(--el-color-success);
+}
+.wb-badge.lock {
+  background: var(--el-color-warning-light-9);
+  color: var(--el-color-warning);
+}
+.wb-badge.idle {
+  background: var(--el-fill-color-light);
   color: var(--el-text-color-secondary);
 }
 .wb-toolbar-right {
@@ -507,6 +884,58 @@ onBeforeUnmount(() => {
   color: var(--el-color-danger);
   font-weight: 600;
 }
+/* 联系人 */
+.wb-contacts {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.wb-contact-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 68px;
+}
+.wb-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  border: 1px solid var(--el-color-primary-light-7);
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.wb-contact-name {
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-contact-more {
+  font-size: 11px;
+  color: var(--el-color-primary);
+  cursor: pointer;
+}
+.wb-contact-line {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--el-text-color-regular);
+}
+/* 行状态 */
+:deep(.wb-row-locked) > td {
+  background: var(--el-color-warning-light-9) !important;
+}
+:deep(.wb-row-active) > td {
+  background: var(--el-color-primary-light-9) !important;
+}
+/* 队列栏 */
 .wb-queue-bar {
   display: flex;
   align-items: center;
@@ -524,6 +953,9 @@ onBeforeUnmount(() => {
 .wb-queue-label {
   font-weight: 600;
   color: var(--el-color-warning);
+}
+.wb-queue-bar.idle .wb-queue-label {
+  color: var(--el-text-color-secondary);
 }
 .wb-queue-info {
   color: var(--el-text-color-secondary);

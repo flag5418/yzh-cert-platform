@@ -148,6 +148,18 @@ public class QueueMonitorController : WebControllerBase
                 case "enterprise_original_analyze":
                     return await ResolveEnterpriseOriginalScopeAsync(scopeKey);
 
+                // ── enterprise_doc_convert / enterprise_clause_extract（V2 上传重写）：
+                //    ScopeKey = "ent:{EnterpriseCode}" ──
+                case "enterprise_doc_convert":
+                case "enterprise_clause_extract":
+                    return await ResolveEntPrefixedScopeAsync(scopeKey);
+
+                // ── expert_nc / expert_report：
+                //    ScopeKey = "nc:{EnterpriseCode}:{TaskCode}" / "rpt:{EnterpriseCode}:{TaskCode}" ──
+                case "expert_nc":
+                case "expert_report":
+                    return await ResolveNcRptScopeAsync(scopeKey);
+
                 default:
                     return string.Empty;
             }
@@ -194,6 +206,24 @@ public class QueueMonitorController : WebControllerBase
         var parts = scopeKey.Split('@');
         if (parts.Length < 2) return string.Empty;
         return await BuildEnterpriseStageDisplayAsync(parts[0], parts[1]);
+    }
+
+    /// <summary>ent:{EnterpriseCode} → 企业名（V2 上传重写的转换 / 条款提取队列）</summary>
+    private async Task<string> ResolveEntPrefixedScopeAsync(string scopeKey)
+    {
+        var parts = scopeKey.Split(':');
+        if (parts.Length < 2) return string.Empty;
+        var ent = await _core.GetEnterpriseByCodeAsync(parts[1]);
+        return ent?.Name ?? string.Empty;
+    }
+
+    /// <summary>nc:{EnterpriseCode}:{TaskCode} / rpt:{EnterpriseCode}:{TaskCode} → 企业名</summary>
+    private async Task<string> ResolveNcRptScopeAsync(string scopeKey)
+    {
+        var parts = scopeKey.Split(':');
+        if (parts.Length < 2) return string.Empty;
+        var ent = await _core.GetEnterpriseByCodeAsync(parts[1]);
+        return ent?.Name ?? string.Empty;
     }
 
     /// <summary>组装「企业名 / 阶段名」</summary>

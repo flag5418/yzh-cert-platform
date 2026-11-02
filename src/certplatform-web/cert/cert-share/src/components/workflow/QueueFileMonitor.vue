@@ -111,7 +111,6 @@ const pollReload = () => tableRef.value?.loadData()
 // ========================================================
 
 const queueColumns: YzhTableColumn<QueueListItem>[] = [
-  { prop: 'queueCode', label: '队列编码', width: 180, showOverflowTooltip: true },
   { slotKey: 'queueType', label: '类型', width: 120, slot: true },
   { prop: 'queueName', label: '队列名称', minWidth: 200, showOverflowTooltip: true },
   { slotKey: 'scope', label: '范围', minWidth: 180, slot: true },
@@ -261,7 +260,15 @@ const progressStatus = (row: QueueListItem): 'success' | 'exception' | undefined
 }
 
 const typeText = (t: string) =>
-  ({ file_convert: '文件转换', doc_extract: '内容提取', enterprise_original_file: '企业原始资料' }[t] || t || '—')
+  ({
+    file_convert: '文件转换',
+    doc_extract: '内容提取',
+    enterprise_original_file: '企业原始资料',
+    enterprise_doc_convert: '企业资料转换',
+    enterprise_clause_extract: '条款提取',
+    expert_nc: 'NC 检查',
+    expert_report: '报告生成',
+  }[t] || t || '—')
 
 const convertTypeText = (t: string) => ({ doc2docx: 'doc→docx', xls2xlsx: 'xls→xlsx' }[t] || t || '—')
 

@@ -276,6 +276,10 @@ export abstract class TreeTableCore<
           required: !c.Yxk,
           disabled: c.Enable === false,
           span: ((c as any).ColSpan ?? 0) > 1 ? 24 : baseSpan,
+          // ★ RowSpan（"跨 N 行"）与 entityAdapters.toFormFields 同口径透传：
+          //   否则「备注跨 2 行 2 列」这类版式在树表单里只能跨列、跨不了行
+          //   （textarea 恒 3 行高，配置写了 RowSpan 也毫无效果）。
+          rowSpan: Math.max(1, Number((c as any).RowSpan) || 1),
           dictCode: c.DictCode || undefined,
           options: undefined,
           placeholder: c.Type?.includes('Picker')
@@ -779,6 +783,11 @@ export abstract class TreeTableCore<
     } else {
       this.treeSide.appendChild(parentNode?.Code ?? null, newNode)
     }
+
+    // ★ 父节点从「末端」变「非末端」：数据层必须同步，否则 treeData 上的 IsLeaf 仍是 true
+    //   （徽章 / canAddUnderNode 等判定按它走）。el-tree store 侧的兜底与自动展开
+    //   由 YzhTree.appendNode → revealAppendedChild 完成（2026-10-30 修「保存后左树不刷新」）。
+    if (parentNode) parentNode.IsLeaf = false
 
     return newNode
   }

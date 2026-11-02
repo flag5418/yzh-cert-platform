@@ -169,6 +169,19 @@ export async function unlockConclusion(resultCode: string): Promise<ApiResponse>
   return yzhApi.post(TASK_BASE + '/unlock-result', resultCode)
 }
 
+/** POST /api/Auditor/CertTask/save-result — 保存人工结论（结论 + 判定依据） */
+export async function saveCheckResult(
+  resultCode: string,
+  conclusion: string,
+  reason?: string,
+): Promise<ApiResponse> {
+  return yzhApi.post(TASK_BASE + '/save-result', {
+    ResultCode: resultCode,
+    Conclusion: conclusion,
+    Reason: reason,
+  })
+}
+
 // ── NC 接口 ──
 
 /** POST /api/Auditor/CertNc/issue — 签发 NC */
@@ -296,6 +309,7 @@ export interface CertPlanCheckItemRow {
   Conclusion: string | null
   Severity: string | null
   NcSuggested: boolean | null
+  IsLocked: boolean
   RawEvidenceCount: number
   CheckEvidenceCount: number
   DoubtCount: number
@@ -311,12 +325,26 @@ export interface CertPlanChecklistResponse {
   StageName: string | null
   TasksJson: string | null
   Rows: CertPlanCheckItemRow[]
+  /**
+   * 该计划当前是否有任务在跑队列 —— 页面锁的唯一真相来源（46 号 §5.5 / F12）。
+   * 为 true 时整页只读：队列正在写库，人再写会互相覆盖。
+   */
+  TaskRunning: boolean
+  RunningTaskCode: string | null
+  RunningTaskNo: string | null
+  /** prep / onsite */
+  RunningTaskKind: string | null
+  RunningItemTotal: number
+  RunningItemDone: number
+  RunningItemSkipped: number
   Message: string
 }
 
 /** 计划检查项侧面详情 */
 export interface CertPlanCheckItemDetail {
   DetailCode: string
+  /** 对应 cert_check_result.Code；保存/锁定/解锁的唯一标识，无结论时为 null */
+  ResultCode: string | null
   ClauseNumbers: string | null
   DeptNames: string | null
   DeptContactsJson: string | null
@@ -354,4 +382,215 @@ export async function getPlanCheckItemDetail(detailCode: string): Promise<ApiRes
 /** POST /api/Auditor/CertTask/export-report — 导出计划报告 */
 export async function exportPlanReport(planCode: string): Promise<ApiResponse<CertExportReportResponse>> {
   return yzhApi.post(TASK_BASE + '/export-report', planCode)
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 八、分支实例列表（认证准备 / 认证检查 两个独立菜单的列表页）
+// ══════════════════════════════════════════════════════════════════════
+
+/** 分支实例请求 */
+export interface CertStageListRequest {
+  StageKind: 'prep' | 'onsite'
+  Keyword?: string
+  /** all / waiting / running / paused / done / partial / failed */
+  Status?: string
+  PageIndex?: number
+  PageSize?: number
+}
+
+/** 分支实例行 —— 一行 = 一个「计划 × 分支」的执行实例 */
+export interface CertStageInstanceRow {
+  PlanCode: string
+  PlanName: string | null
+  EnterpriseCode: string | null
+  EnterpriseName: string | null
+  StageName: string | null
+  /** 认证标准名，逗号分隔 */
+  Standards: string | null
+  StageKind: string
+  ItemTotal: number
+  ItemDone: number
+  ItemLocked: number
+  /** 已签发/建议 NC 数（仅 onsite） */
+  ItemNc: number
+  /** 资料缺失/部分缺失（仅 prep） */
+  ItemMissing: number
+  ItemDoubt: number
+  /** waiting / running / paused / done / partial / failed */
+  State: string
+  TaskCode: string | null
+  TaskNo: string | null
+  StartedAt: string | null
+  FinishedAt: string | null
+  /** 第几轮执行 */
+  RunRound: number
+  OwnerNames: string | null
+  /** 队列正在跑 ⇒ 页面锁 */
+  TaskRunning: boolean
+}
+
+export interface CertStageListSummary {
+  InstanceTotal: number
+  Running: number
+  Done: number
+  Paused: number
+  ItemTotal: number
+  NcTotal: number
+  LockedTotal: number
+}
+
+export interface CertStageListResponse {
+  Rows: CertStageInstanceRow[]
+  Total: number
+  PageIndex: number
+  PageSize: number
+  Summary: CertStageListSummary
+  Message: string
+}
+
+/** POST /api/Auditor/CertTask/stage-list — 分支实例列表（列表页） */
+export async function getStageList(req: CertStageListRequest): Promise<ApiResponse<CertStageListResponse>> {
+  return yzhApi.post(TASK_BASE + '/stage-list', req)
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 九、跨计划检查项清单（详情页的检查项表）
+// ══════════════════════════════════════════════════════════════════════
+
+export interface CertWorklistRequest {
+  StageKind: 'prep' | 'onsite'
+  Keyword?: string
+  PlanCode?: string
+  EnterpriseCode?: string
+  OwnerCode?: string
+  /** all / waiting / analyzed / locked / nc / doubt */
+  Status?: string
+  PageIndex?: number
+  PageSize?: number
+}
+
+/** 清单行 —— 一行 = 一个检查项 */
+export interface CertWorklistRow {
+  PlanCode: string
+  PlanName: string | null
+  EnterpriseCode: string | null
+  EnterpriseName: string | null
+  StageName: string | null
+
+  DetailCode: string
+  ClauseNumbers: string | null
+  /** 条款标题（权威编号 + 标题，如「5.5.1 职责和权限」） */
+  ClauseTitles: string | null
+  DeptNames: string | null
+  DeptCode: string | null
+  DeptName: string | null
+  ContactsJson: string | null
+
+  /** 负责审核员（准备期可定义，检查期只读） */
+  OwnerCode: string | null
+  OwnerName: string | null
+  /** 该检查项是否已进入认证检查阶段（有 onsite 结论）⇒ 准备期也不可再改审核员 */
+  OnsiteStarted: boolean
+
+  StageKind: string
+  /** prep：found / partial / missing / unknown / na */
+  PrepState: string | null
+  /** onsite：pass / ofi / nc / na —— 准备分支恒为 null（不签发 NC） */
+  Conclusion: string | null
+  Severity: string | null
+  NcSuggested: boolean | null
+  ReasonBrief: string | null
+
+  ResultCode: string | null
+  AnalysisCode: string | null
+  /** 任务项 Code —— analyze-item 的入参；null 表示该分支还没建过任务 */
+  TaskItemCode: string | null
+  /** waiting / analyzed / locked */
+  State: string
+
+  IsLocked: boolean
+  LockedBy: string | null
+  LockedAt: string | null
+
+  RawEvidenceCount: number
+  CheckEvidenceCount: number
+  DoubtCount: number
+  AnalyzeCount: number
+  LastAnalyzedAt: string | null
+  Sort: number
+}
+
+export interface CertWorklistSummary {
+  ItemTotal: number
+  Waiting: number
+  Analyzed: number
+  Locked: number
+  NcCount: number
+  MissingCount: number
+  DoubtCount: number
+  RunningPlans: number
+}
+
+export interface CertWorklistPlanOption {
+  PlanCode: string
+  PlanName: string | null
+  EnterpriseName: string | null
+  StageName: string | null
+  ItemCount: number
+}
+
+export interface CertWorklistResponse {
+  Rows: CertWorklistRow[]
+  Total: number
+  PageIndex: number
+  PageSize: number
+  Summary: CertWorklistSummary
+  Plans: CertWorklistPlanOption[]
+  /** 计划 Code → 正在跑的任务号 */
+  RunningPlanTasks: Record<string, string>
+  Message: string
+}
+
+/** POST /api/Auditor/CertTask/worklist — 跨计划检查项清单 */
+export async function getWorklist(req: CertWorklistRequest): Promise<ApiResponse<CertWorklistResponse>> {
+  return yzhApi.post(TASK_BASE + '/worklist', req)
+}
+
+/** POST /api/Auditor/CertTask/set-owner — 设置检查项审核员（仅准备阶段可改） */
+export async function setCheckItemOwner(
+  detailCode: string,
+  ownerCode: string | null,
+  ownerName: string | null,
+): Promise<ApiResponse> {
+  return yzhApi.post(TASK_BASE + '/set-owner', {
+    DetailCode: detailCode,
+    OwnerCode: ownerCode,
+    OwnerName: ownerName,
+  })
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 专家组成员池（设置检查项负责审核员的下拉数据源）
+// ══════════════════════════════════════════════════════════════════════
+
+/** 专家组成员选项 */
+export interface CertMemberOption {
+  Code: string
+  Name: string
+  /** 职称（组长 / 组员 / 技术专家…） */
+  Title?: string | null
+  /** 专业 */
+  Profession?: string | null
+}
+
+/**
+ * POST /api/Auditor/CertTask/member-options
+ *
+ * ★ 审核员必须从专家组成员池里挑（用户 2026-11-01），不能手打姓名 ——
+ *   入场计划要按审核员分组派工，手打的姓名在成员池里查不到人就派不出去。
+ */
+export async function getMemberOptions(
+  keyword?: string,
+): Promise<ApiResponse<CertMemberOption[]>> {
+  return yzhApi.post(TASK_BASE + '/member-options', { Keyword: keyword || undefined })
 }

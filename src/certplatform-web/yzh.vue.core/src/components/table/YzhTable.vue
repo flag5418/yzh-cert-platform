@@ -24,6 +24,7 @@
  * 独立可用性（C-A11）：仅传 columns + dataLoader 即可渲染与交互。
  */
 import { confirmOrFalse } from '../../utils/confirm'
+import { dictLabelOf, loadDictItems } from '../../utils/dictionary'
 import YzhEmptyState from '../ui/YzhEmptyState.vue'
 import { ElMessage } from 'element-plus'
 import { Operation, WarningFilled } from '@element-plus/icons-vue'
@@ -191,6 +192,32 @@ const columnSettingList = computed(() =>
 function columnKey(col: YzhTableColumn<T>): string {
   return String(col.slotKey ?? col.prop ?? '')
 }
+
+/**
+ * ★ 字典池预热（2026-10-30 补齐 `dictCode` 空壳）
+ *
+ * 列上声明 `dictCode`（后端 EntityConfig 的 `DictCode`）→ 自动拉
+ * `GET /api/System/Dictionary/items/by-no/{dicNo}`，把 0/1 这类原始值翻译成中文。
+ * 缓存与并发去重统一在 `utils/dictionary.ts`（与 `YzhForm` 共用，一次页面只打一次接口）。
+ */
+const dictCodes = computed(() => {
+  const set = new Set<string>()
+  props.columns.forEach((c) => {
+    if (c.dictCode) set.add(c.dictCode)
+  })
+  return [...set]
+})
+
+watch(
+  dictCodes,
+  (codes) => {
+    codes.forEach((code) => {
+      // 失败不阻塞表格渲染：`dictLabelOf` 会回落原始值
+      void loadDictItems(code)
+    })
+  },
+  { immediate: true }
+)
 
 /** 实际可见的列 */
 const visibleColumns = computed(() =>
@@ -802,11 +829,11 @@ defineExpose({
                   {{ col.formatter ? col.formatter(row[col.prop as string], row, $index) : row[col.prop as string] }}
                 </slot>
                 <template v-else-if="col.dictCode">
+                  <!-- 字典翻译：dicNo → 显示文本（未加载/未命中回落原始值） -->
                   <el-tag v-if="col.tagType" :type="col.tagType" disable-transitions>
-                    <!-- dictStore 将在后续版本引入 -->
-                    {{ row[col.prop as string] }}
+                    {{ dictLabelOf(col.dictCode, row[col.prop as string]) }}
                   </el-tag>
-                  <span v-else>{{ row[col.prop as string] }}</span>
+                  <span v-else>{{ dictLabelOf(col.dictCode, row[col.prop as string]) }}</span>
                 </template>
                 <!-- 通用标签渲染（valueMap/tagTypeMap 由调用方传入，组件不内置业务语义） -->
                 <template v-else-if="col.tagMap">

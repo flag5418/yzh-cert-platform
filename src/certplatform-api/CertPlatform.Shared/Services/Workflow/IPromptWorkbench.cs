@@ -18,6 +18,27 @@ namespace CertPlatform.Shared.Services.Workflow
         public const string Content = "doc_content";
         /// <summary>★ 语义精要提示词（长文档摘要，输入长 Markdown → 输出精简画像）</summary>
         public const string Essential = "doc_essential";
+        /// <summary>★★★ 认证准备资料完备性分析（输入「条款 + 属性 + 文档摘录」→ 输出 PrepState / 缺料 / 矛盾 JSON）</summary>
+        /// <remarks>
+        /// ★ 2026-11-01 新增（46 号 §6.1）：准备与检查是<b>两套提示词</b>，⛔ 不再共用一个 <see cref="AuditCheck"/>。
+        /// <para>为什么必须分开：两者要回答的问题不同 ——</para>
+        /// <list type="bullet">
+        ///   <item><b>准备</b>问「资料齐不齐」（输出 <c>found/partial/missing/unknown/na</c> + 缺哪些材料 + 跨文档矛盾），
+        ///         此时审核员还没到现场，<b>不能下符合性结论</b>；</item>
+        ///   <item><b>检查</b>问「符不符合」（输出 <c>pass/ofi/nc/na</c> + NC 建议 + 严重程度）。</item>
+        /// </list>
+        /// <para>共用一个提示词会让模型在两个值域之间摇摆 —— 这正是 46 号 F3「把 pass 写进 PrepState」
+        /// 那类语义污染的温床。</para>
+        /// </remarks>
+        public const string AuditPrep = "audit_prep";
+
+        /// <summary>★★★ 认证检查符合性分析（输入「条款 + 证据」→ 输出结论/NC 建议 JSON）</summary>
+        public const string AuditCheck = "audit_check";
+        /// <summary>★★★ NC 不符合项描述与处置建议（输入「条款 + 证据 + 结论」→ 输出 NC No/描述/等级建议）</summary>
+        public const string NcSuggest = "nc_suggest";
+        /// <summary>★★★ 证据与检查项关联分析（输入「证据元数据列表 + 检查项」→ 输出关联度 JSON）</summary>
+        public const string EvidenceLink = "evidence_link";
+
         /// <summary>
         /// ★★ 条款属性预生成提示词（输入「条款号 + 标题 + 正文」→ 输出 8 个条款属性的 JSON）。
         /// <para>用于「条款属性配置」页的 AI 预生成（V2 条款主链）。</para>

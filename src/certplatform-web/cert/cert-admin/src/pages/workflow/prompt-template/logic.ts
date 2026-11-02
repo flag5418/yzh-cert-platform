@@ -93,6 +93,33 @@ export const PLACEHOLDER_DOCS: Record<string, { label: string; desc: string }> =
   document_content: {
     label: '文件全文',
     desc: '单份企业资料转换后的 Markdown 全文。仅「作用提示词」使用。'
+  },
+
+  // ── 认证准备 / 认证检查（2026-11-01 新增，46 号 §6.3）──
+
+  task_kind: {
+    label: '分支',
+    desc: 'prep（认证准备）/ onsite（认证检查）。同一份提示词正文可据此微调口径。数据源：cert_task.TaskKind。'
+  },
+  check_item_name: {
+    label: '检查项名称',
+    desc: '「03 文件控制（4.2.4/4.2.5）｜品质部」这样的可读名。数据源：cert_audit_plan_detail。'
+  },
+  dept_names: {
+    label: '涉及部门',
+    desc: '部门名，逗号分隔。⛔ 不带联系人姓名（联系人属于现场访谈信息，不应进提示词）。'
+  },
+  clause_blocks: {
+    label: '条款块（★ 唯一大块）',
+    desc: '按条款分组的完整块：条款正文 + 6 个条款属性 + 该条款命中的文档摘录。顺序与锚点由内容聚合器渲染，⛔ 不交给模型自己拼。'
+  },
+  previous_results: {
+    label: '上次结论',
+    desc: '上一轮同分支结论（仅 incremental 模式非空）。用于「为什么上次判 X 这次判 Y」的对比。'
+  },
+  onsite_evidence: {
+    label: '现场证据（仅检查）',
+    desc: '访谈转录 / 照片说明 / 抽样记录等现场采集证据块。⛔ 认证准备提示词不使用本占位符。'
   }
 }
 
@@ -116,6 +143,35 @@ export const PROMPT_TYPES: PromptTypeDef[] = [
     badge: '作用',
     desc: '输入单文件 Markdown，输出作用、关键要素与结构',
     placeholders: ['document_content', ...STD_PLACEHOLDERS, 'tag_list', 'output_schema', 'tag_constraint']
+  },
+  {
+    type: PROMPT_TYPE.AuditPrep,
+    label: '认证准备提示词',
+    badge: '准备',
+    desc: '输入「条款 + 属性 + 文档摘录」，输出资料完备性（found/partial/missing/unknown/na）+ 缺料 + 矛盾。⛔ 不能输出 pass/nc',
+    placeholders: [
+      'task_kind',
+      'check_item_name',
+      'dept_names',
+      'clause_blocks',
+      'previous_results',
+      ...STD_PLACEHOLDERS
+    ]
+  },
+  {
+    type: PROMPT_TYPE.AuditCheck,
+    label: '认证检查提示词',
+    badge: '检查',
+    desc: '输入「条款 + 证据 + 现场证据」，输出符合性判定（pass/ofi/nc/na）+ NC 建议 + 严重程度',
+    placeholders: [
+      'task_kind',
+      'check_item_name',
+      'dept_names',
+      'clause_blocks',
+      'previous_results',
+      'onsite_evidence',
+      ...STD_PLACEHOLDERS
+    ]
   }
 ]
 
