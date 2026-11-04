@@ -39,6 +39,9 @@ namespace CertPlatform.Shared.Services.Workflow
         /// <summary>★★★ 证据与检查项关联分析（输入「证据元数据列表 + 检查项」→ 输出关联度 JSON）</summary>
         public const string EvidenceLink = "evidence_link";
 
+        /// <summary>★★★ 入场检查内容生成（输入「条款信息 + 部门」→ 输出查什么 / 怎么查 JSON）</summary>
+        public const string OnsitePlan = "onsite_plan";
+
         /// <summary>
         /// ★★ 条款属性预生成提示词（输入「条款号 + 标题 + 正文」→ 输出 8 个条款属性的 JSON）。
         /// <para>用于「条款属性配置」页的 AI 预生成（V2 条款主链）。</para>

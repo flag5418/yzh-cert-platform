@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
@@ -7,6 +8,7 @@ using YZH.Core.Api.Attributes;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Result;
+using CertPlatform.Auditor.Entities.Expert;
 using CertPlatform.Shared.Entities.Cert;
 
 namespace CertPlatform.Auditor.Controllers;
@@ -28,15 +30,18 @@ public class CertQueryController : ControllerBase
     private readonly EntityService<ISOStandard> _stdSvc;
     private readonly EntityService<ISOClause> _clauseSvc;
     private readonly EntityService<CertStage> _stageSvc;
+    private readonly EntityService<CertAuditPlanDetail> _detailSvc;
 
     public CertQueryController(
         EntityService<ISOStandard> stdSvc,
         EntityService<ISOClause> clauseSvc,
-        EntityService<CertStage> stageSvc)
+        EntityService<CertStage> stageSvc,
+        EntityService<CertAuditPlanDetail> detailSvc)
     {
         _stdSvc = stdSvc;
         _clauseSvc = clauseSvc;
         _stageSvc = stageSvc;
+        _detailSvc = detailSvc;
     }
 
     /// <summary>标准目录（含简称 Abbrev）</summary>
@@ -99,6 +104,64 @@ public class CertQueryController : ControllerBase
                 StageCode = s.StageCode,
                 StageName = s.StageName,
                 Category = s.Category
+            })
+            .ToList();
+        return Ok(ApiResponse<object?>.Ok(data));
+    }
+
+    /// <summary>
+    /// 条款详细内容（详情页点条款编号时的小弹窗）。
+    /// <para>按计划明细 <c>detailCode</c> 取其 <c>Clauses</c>（ISOClause.Code）精确取条款，
+    /// 避免同编号跨标准歧义；返回编号 / 标题 / 原文摘要 / 标准名。</para>
+    /// </summary>
+    [HttpGet("clause-content")]
+    public async Task<ActionResult<ApiResponse<object?>>> ClauseContent([FromQuery] string? detailCode)
+    {
+        if (string.IsNullOrWhiteSpace(detailCode))
+            return Ok(ApiResponse<object?>.Fail("缺少 detailCode"));
+
+        var dl = await _detailSvc.GetListAsync(d => d.Code == detailCode && !d.IsDeleted);
+        var detail = dl.Success ? dl.Data?.FirstOrDefault() : null;
+        if (detail == null)
+            return Ok(ApiResponse<object?>.Fail("计划明细不存在"));
+
+        var codes = (detail.Clauses ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(c => c.Trim())
+            .Where(c => c.Length > 0)
+            .Distinct()
+            .ToArray();
+        if (codes.Length == 0)
+            return Ok(ApiResponse<object?>.Ok(new List<object>()));
+
+        var cl = await _clauseSvc.GetListAsync(c => codes.Contains(c.Code!) && c.IsValid == 1 && !c.IsDeleted);
+        if (!cl.Success)
+            return Ok(ApiResponse<object?>.Fail(cl.Error ?? "查询条款失败"));
+
+        var clauses = cl.Data ?? new List<ISOClause>();
+        var stdCodes = clauses.Select(c => c.StandardCode ?? string.Empty).Where(c => c.Length > 0).Distinct().ToArray();
+        var stds = stdCodes.Length == 0
+            ? new List<ISOStandard>()
+            : (await _stdSvc.GetListAsync(s => stdCodes.Contains(s.Code!))).Data ?? new List<ISOStandard>();
+        var stdMap = stds.Where(s => !string.IsNullOrEmpty(s.Code)).ToDictionary(s => s.Code!, s => s);
+
+        var data = clauses
+            .OrderBy(c => c.Sort)
+            .ThenBy(c => c.ClauseNumber)
+            .Select(c =>
+            {
+                var std = stdMap.TryGetValue(c.StandardCode ?? string.Empty, out var hit) ? hit : null;
+                return new
+                {
+                    c.Code,
+                    c.ClauseNumber,
+                    c.Title,
+                    c.Description,
+                    StandardName = std?.StandardName,
+                    Abbrev = std == null
+                        ? string.Empty
+                        : (string.IsNullOrWhiteSpace(std.Abbrev) ? DeriveAbbrev(std.StandardCode) : std.Abbrev)
+                };
             })
             .ToList();
         return Ok(ApiResponse<object?>.Ok(data));

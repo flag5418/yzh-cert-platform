@@ -146,6 +146,9 @@ public static class CertPlatformAuditorServiceExtensions
         // 认证任务服务（任务创建/启停/证据 MD5 变更检测/影响分析）
         services.AddScoped<CertTaskService>();
 
+        // 入场检查内容服务（认证准备「检查内容」增删改查；生成走 CertCheckEngineService）
+        services.AddScoped<CertOnsitePlanService>();
+
         // ★ 检查项锁服务（2026-11-01 · 46 号 §10）—— 锁的唯一读写出口。
         //   三道闸门（入队 / 执行 / 写入）都调它，⛔ 别在别处各写一份判锁 SQL。
         //   载体 = cert_check_lock（检查项级），不是 cert_check_result 的行级字段。

@@ -101,12 +101,20 @@ public class CertEvidenceUpdateRequest
 {
     public string Code { get; set; } = string.Empty;
     public string? SourceName { get; set; }
+    /// <summary>证据类型：doc_slice / pq_result / lead / onsite_media / interview / sample / manual</summary>
+    public string? EvidenceKind { get; set; }
     public string? LlmSummary { get; set; }
     public string? Snippet { get; set; }
     public string? SourceCode { get; set; }
     public string? Anchor { get; set; }
     public string Status { get; set; } = "";
     public string? DroppedReason { get; set; }
+}
+
+/// <summary>删除证据请求</summary>
+public class CertEvidenceDeleteRequest
+{
+    public string Code { get; set; } = string.Empty;
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -224,6 +232,9 @@ public class CertEvidenceService
 
         await _db.InsertAsync(evidence);
 
+        // ★ 2026-11-03：证据新增后，已分析过的检查项标记「建议重新分析」
+        await MarkRerunSuggestedAsync(userCode, evidence.CheckItemCode);
+
         return Result<CertEvidenceAddResponse>.Ok(new CertEvidenceAddResponse
         {
             EvidenceCode = evidence.Code,
@@ -246,6 +257,7 @@ public class CertEvidenceService
         var e = existing.Data;
 
         if (req.SourceName != null) e.SourceName = req.SourceName;
+        if (req.EvidenceKind != null) e.EvidenceKind = req.EvidenceKind;
         if (req.Snippet != null) e.Snippet = req.Snippet;
         if (req.SourceCode != null) e.SourceCode = req.SourceCode;
         if (req.Anchor != null) e.Anchor = req.Anchor;
@@ -256,6 +268,14 @@ public class CertEvidenceService
             e.PrevContentMD5 = e.ContentMD5;
             e.LlmSummary = req.LlmSummary;
             e.ContentMD5 = ComputeMd5(req.LlmSummary);
+        }
+        else if (req.Snippet != null)
+        {
+            // 只改原文摘录时同步 LLM 消费文本 —— 分析实际读的是 LlmSummary，
+            // 不同步会出现「页面上改了证据、分析还用旧内容」的静默不一致。
+            e.PrevContentMD5 = e.ContentMD5;
+            e.LlmSummary = req.Snippet;
+            e.ContentMD5 = ComputeMd5(req.Snippet);
         }
 
         if (!string.IsNullOrEmpty(req.Status))
@@ -268,6 +288,36 @@ public class CertEvidenceService
         e.UpdateTime = DateTime.Now;
 
         await _db.UpdateAsync(e);
+
+        // ★ 2026-11-03：证据内容变化后，已分析过的检查项标记「建议重新分析」
+        await MarkRerunSuggestedAsync(userCode, e.CheckItemCode);
+
+        return Result.Ok();
+    }
+
+    /// <summary>删除证据（软删，保留审计留痕）</summary>
+    public async Task<Result> DeleteAsync(string userCode, string code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+            return Result.Fail("证据 Code 不能为空");
+
+        var existing = await _db.GetOneAsync<CertEvidence>(e =>
+            e.Code == code && !e.IsDeleted);
+        if (existing.Data == null)
+            return Result.Fail("证据不存在");
+
+        var e = existing.Data;
+        e.IsDeleted = true;
+        e.DeleteBy = userCode;
+        e.DeleteTime = DateTime.Now;
+        e.UpdateBy = userCode;
+        e.UpdateTime = DateTime.Now;
+
+        await _db.UpdateAsync(e);
+
+        // ★ 2026-11-03：证据删除后，已分析过的检查项标记「建议重新分析」
+        await MarkRerunSuggestedAsync(userCode, e.CheckItemCode);
+
         return Result.Ok();
     }
 
@@ -305,6 +355,39 @@ public class CertEvidenceService
             CreateBy = e.CreateBy,
             CreateTime = e.CreateTime
         });
+    }
+
+    /// <summary>
+    /// 证据变化后，把该检查项「已完成自动分析」的任务项标记为「建议重新分析」。
+    /// <para>★ 用户 2026-11-03：认证准备已提交新证据时，应提示审核员可以重新自动分析。</para>
+    /// <para>只影响已分析过的任务项；从未分析过的保持 none。</para>
+    /// </summary>
+    private async Task MarkRerunSuggestedAsync(string userCode, string? checkItemCode)
+    {
+        if (string.IsNullOrWhiteSpace(checkItemCode)) return;
+
+        var result = await _db.GetListAsync<CertTaskItem>(i =>
+            i.CheckItemCode == checkItemCode && !i.IsDeleted);
+        var items = result.Data ?? new List<CertTaskItem>();
+        var analyzed = items.Where(i =>
+            string.Equals(i.AnalysisState, "done", StringComparison.OrdinalIgnoreCase)
+            || (string.IsNullOrWhiteSpace(i.AnalysisState) && i.AnalyzeCount > 0))
+            .Where(i => !string.Equals(i.RerunState, "suggested", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (analyzed.Count == 0) return;
+
+        var now = DateTime.Now;
+        foreach (var item in analyzed)
+        {
+            item.RerunState = "suggested";
+            item.UpdateBy = userCode;
+            item.UpdateTime = now;
+            // R-A：列级写回
+            await _db.UpdateAsync(item,
+                nameof(CertTaskItem.RerunState),
+                nameof(CertTaskItem.UpdateBy),
+                nameof(CertTaskItem.UpdateTime));
+        }
     }
 
     /// <summary>计算 MD5（工具方法）</summary>

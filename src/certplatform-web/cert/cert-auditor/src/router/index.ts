@@ -170,25 +170,7 @@ const routes: RouteRecordRaw[] = [
         name: 'Settings',
         component: () => import('@/pages/settings/index.vue')
       },
-      // ★ 认证检查任务（V2 独立认证检查闭环）—— 计划生成的检查任务列表
-      {
-        path: 'audit-task',
-        name: 'AuditTask',
-        component: () => import('@/pages/audit-task/index.vue')
-      },
-      // ★ 任务逐项分析面板（`/audit-task/:code/analyze`）
-      {
-        path: 'audit-task/:code/analyze',
-        name: 'AuditTaskAnalyze',
-        component: () => import('@/pages/audit-task/analyze.vue')
-      },
-      // ★ 证据挂接与变更监控（V2 独立认证检查闭环）
-      {
-        path: 'audit-evidence',
-        name: 'AuditEvidence',
-        component: () => import('@/pages/audit-evidence/index.vue')
-      },
-      // ★ 证据原文预览（新窗口独立页面，不在侧边栏显示）
+      // ★ 证据原文预览（新窗口独立页面，不在侧边栏显示）—— 由认证准备工作台引用
       {
         path: 'audit-task/doc-preview',
         name: 'DocPreview',
@@ -197,14 +179,9 @@ const routes: RouteRecordRaw[] = [
       // ══════════════════════════════════════════════════════════════
       // ★ 认证准备 / 认证检查 —— 两个独立菜单（用户 2026-11-01 裁决）
       //
-      // 与 `/audit-task`（V2 任务视角）的区别：
-      //   · audit-task  = 「一个任务跑了多少项」的队列视角
-      //   · audit-prep  = 「这家企业这个阶段的准备做到哪一步」的业务视角，产出**入场计划**
-      //   · audit-onsite= 同上，产出**认证报告**，NC 逐条签发
-      //
-      // 两个分支共用 `components/check/*`，只在 stageKind 上分叉 ——
-      // ⛔ 不要把它们的差异写成两份页面，否则用户提的「两个详情页设计类似」就守不住了。
-      // ⚠️ 菜单 Url 必须与这里成对（`scripts/guards.mjs` R12 会校验）。
+      // ⛔ `/audit-task`（任务队列视角）与 `/audit-evidence`（证据挂接）已于
+      //    2026-11-03 按用户口径判定为失效入口，菜单与路由一并移除；
+      //    证据挂接已内聚到认证准备 / 认证检查的详情页。
       // ══════════════════════════════════════════════════════════════
       {
         path: 'audit-prep',

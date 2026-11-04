@@ -177,9 +177,20 @@ namespace CertPlatform.Auditor.Services.Expert
         public string? DeptNames { get; set; }
         public string? TasksJson { get; set; }
         public string? PrepState { get; set; }
+        /// <summary>审核员判定的最终结论（pass / ofi / nc / na；未判定为 null）</summary>
         public string? Conclusion { get; set; }
+        /// <summary>系统建议结论（AI 产出，仅供参考，⛔ 不是最终结论）</summary>
+        public string? AiConclusion { get; set; }
+        /// <summary>系统建议不符合程度（AI 产出，仅供参考）</summary>
+        public string? AiSeverity { get; set; }
+        /// <summary>不符合程度（审核员判定）</summary>
         public string? Severity { get; set; }
+        /// <summary>是否已由审核员判定（ConclusionBy 非空即已判定）</summary>
+        public bool ConclusionConfirmed { get; set; }
         public bool? NcSuggested { get; set; }
+        /// <summary>负责审核员（审核人信息）</summary>
+        public string? OwnerCode { get; set; }
+        public string? OwnerName { get; set; }
         /// <summary>结论是否已锁定（列表行用于黄底标记与锁徽章）—— 来自 cert_check_lock（检查项级）</summary>
         public bool IsLocked { get; set; }
         public string? LockedBy { get; set; }
@@ -189,6 +200,12 @@ namespace CertPlatform.Auditor.Services.Expert
         public int DoubtCount { get; set; }
         public int SupplementCount { get; set; }
         public int Sort { get; set; }
+        /// <summary>自动分析状态：none（未分析）/ done（已完成）/ failed（失败）</summary>
+        public string AnalysisState { get; set; } = "none";
+        /// <summary>是否建议重新分析：none / suggested（证据变化后由系统标记）</summary>
+        public string RerunState { get; set; } = "none";
+        public string? TaskItemCode { get; set; }
+        public DateTime? LastAnalyzedAt { get; set; }
     }
 
     /// <summary>计划检查项侧面详情</summary>
@@ -206,10 +223,22 @@ namespace CertPlatform.Auditor.Services.Expert
         public string? DeptContactsJson { get; set; }
         /// <summary>准备分支：found / partial / missing / unknown / na</summary>
         public string? PrepState { get; set; }
-        /// <summary>检查分支：pass / ofi / nc / na</summary>
+        /// <summary>检查分支：审核员判定的最终结论 pass / ofi / nc / na（未判定为 null）</summary>
         public string? Conclusion { get; set; }
+        /// <summary>系统建议结论 / 建议程度（AI 产出，仅供参考）</summary>
+        public string? AiConclusion { get; set; }
+        public string? AiSeverity { get; set; }
         public string? Severity { get; set; }
         public string? Reason { get; set; }
+        /// <summary>判定人（Code / 姓名 / 时间）</summary>
+        public string? ConclusionBy { get; set; }
+        public string? ConclusionByName { get; set; }
+        public DateTime? ConclusionAt { get; set; }
+        /// <summary>是否已由审核员判定</summary>
+        public bool ConclusionConfirmed { get; set; }
+        /// <summary>负责审核员（审核人信息）</summary>
+        public string? OwnerCode { get; set; }
+        public string? OwnerName { get; set; }
         public bool? NcSuggested { get; set; }
         public bool IsLocked { get; set; }
         public string? LockedBy { get; set; }
@@ -217,6 +246,13 @@ namespace CertPlatform.Auditor.Services.Expert
         public List<CertEvidenceRow> RawEvidences { get; set; } = new();
         public List<CertEvidenceRow> CheckEvidences { get; set; } = new();
         public string? DoubtsJson { get; set; }
+        /// <summary>自动分析状态：none（未分析）/ done（已完成）/ failed（失败）</summary>
+        public string AnalysisState { get; set; } = "none";
+        /// <summary>是否建议重新分析：none / suggested</summary>
+        public string RerunState { get; set; } = "none";
+        public string? TaskItemCode { get; set; }
+        public int AnalyzeCount { get; set; }
+        public DateTime? LastAnalyzedAt { get; set; }
         public string Message { get; set; } = string.Empty;
     }
 
@@ -225,6 +261,12 @@ namespace CertPlatform.Auditor.Services.Expert
     {
         public string PlanCode { get; set; } = string.Empty;
         public string? PlanName { get; set; }
+
+        /// <summary>计划状态：active 进行中 / closed 已关闭（关闭后准备/检查只读）</summary>
+        public string? PlanStatus { get; set; }
+
+        /// <summary>计划已关闭 —— 前端据此把编辑入口全部置灰，只保留查看</summary>
+        public bool PlanClosed { get; set; }
         public string? EnterpriseName { get; set; }
         public string? StageName { get; set; }
         public string? TasksJson { get; set; }
@@ -321,9 +363,14 @@ namespace CertPlatform.Auditor.Services.Expert
         public string StageKind { get; set; } = string.Empty;
         /// <summary>准备分支：found / partial / missing / unknown / na</summary>
         public string? PrepState { get; set; }
-        /// <summary>检查分支：pass / ofi / nc / na</summary>
+        /// <summary>检查分支：审核员判定的最终结论 pass / ofi / nc / na（未判定为 null）</summary>
         public string? Conclusion { get; set; }
+        /// <summary>系统建议结论 / 建议程度（AI 产出，仅供参考）</summary>
+        public string? AiConclusion { get; set; }
+        public string? AiSeverity { get; set; }
         public string? Severity { get; set; }
+        /// <summary>是否已由审核员判定（ConclusionBy 非空）</summary>
+        public bool ConclusionConfirmed { get; set; }
         public bool? NcSuggested { get; set; }
         /// <summary>判定依据（截断到 200 字，详情页看全文）</summary>
         public string? ReasonBrief { get; set; }
@@ -353,6 +400,11 @@ namespace CertPlatform.Auditor.Services.Expert
         public int AnalyzeCount { get; set; }
         public DateTime? LastAnalyzedAt { get; set; }
 
+        /// <summary>自动分析状态：none（未分析）/ done（已完成）/ failed（失败）</summary>
+        public string AnalysisState { get; set; } = "none";
+        /// <summary>是否建议重新分析：none / suggested（证据变化后由系统标记）</summary>
+        public string RerunState { get; set; } = "none";
+
         public int Sort { get; set; }
     }
 
@@ -363,6 +415,10 @@ namespace CertPlatform.Auditor.Services.Expert
         public int Waiting { get; set; }
         public int Analyzed { get; set; }
         public int Locked { get; set; }
+        /// <summary>自动分析失败</summary>
+        public int Failed { get; set; }
+        /// <summary>已完成分析但证据发生变化，建议重新分析</summary>
+        public int RerunSuggested { get; set; }
         public int NcCount { get; set; }
         /// <summary>准备分支：资料缺失/部分缺失的检查项数（判断该不该进场的关键指标）</summary>
         public int MissingCount { get; set; }
@@ -523,6 +579,7 @@ namespace CertPlatform.Auditor.Services.Expert
         /// 守卫 A-R6 会拦，且 `npm run build` 过不去。</para>
         /// </summary>
         private readonly CertPlatform.Shared.Domain.Scope.ICoreResourceQuery _core;
+        private readonly CertPlatform.Shared.Services.Sys.UserDisplayNameResolver _userNames;
 
         private static readonly JsonSerializerOptions JsonOpts = new()
         {
@@ -534,12 +591,14 @@ namespace CertPlatform.Auditor.Services.Expert
             CertCheckLockService lockService,
             YZH.Core.DataBase.Services.QueueManager queueManager,
             CertPlatform.Shared.Domain.Scope.ICoreResourceQuery core,
+            CertPlatform.Shared.Services.Sys.UserDisplayNameResolver userNames,
             ILogger<CertTaskService> logger)
         {
             _db = db;
             _lock = lockService;
             _queueMgr = queueManager;
             _core = core;
+            _userNames = userNames;
             _logger = logger;
         }
 
@@ -564,6 +623,10 @@ namespace CertPlatform.Auditor.Services.Expert
                 return Result<CertTaskCreateResponse>.Fail("计划不存在或已删除");
 
             var plan = planResult.Data;
+
+            // 已关闭的计划不能再发起新的认证准备 / 认证检查任务
+            if (plan.Status == "closed")
+                return Result<CertTaskCreateResponse>.Fail("认证计划已关闭，不能继续执行认证准备/认证检查");
 
             // 取计划明细（检查项）
             var detailsResult = await _db.GetListAsync<CertAuditPlanDetail>(d =>
@@ -879,6 +942,12 @@ namespace CertPlatform.Auditor.Services.Expert
                 d.Code == checkItemCode && !d.IsDeleted)).Data;
             if (detail == null) return Result.Ok();
 
+            // 计划已关闭 ⇒ 认证准备 / 认证检查一并作废，只允许查看
+            var plan = (await _db.GetOneAsync<CertAuditPlan>(p =>
+                p.Code == detail.PlanCode && !p.IsDeleted)).Data;
+            if (plan != null && plan.Status == "closed")
+                return Result.Fail("认证计划已关闭：对应的认证准备与认证检查已作废，只能查看", 409);
+
             var runningTasks = (await _db.GetListAsync<CertTask>(t =>
                 t.PlanCode == detail.PlanCode
                 && t.Status == "running"
@@ -989,11 +1058,12 @@ namespace CertPlatform.Auditor.Services.Expert
         }
 
         /// <summary>
-        /// 保存人工结论（结论 + 判定依据）。
+        /// 保存审核员判定（结论 + 不符合程度 + 判定依据）。
+        /// <para>★ 2026-11-03：系统只给建议（<c>AiConclusion</c>），最终结论只能由审核员写这里。</para>
         /// <para>已锁定的检查项禁止修改，需先解锁 —— 锁是硬约束，⛔ 不是提示（§10.1）。</para>
         /// </summary>
         public async Task<Result> SaveResultAsync(
-            string userCode, string resultCode, string? conclusion, string? reason)
+            string userCode, string resultCode, string? conclusion, string? reason, string? severity = null)
         {
             var result = await _db.GetOneAsync<CertCheckResult>(r =>
                 r.Code == resultCode && !r.IsDeleted);
@@ -1009,11 +1079,43 @@ namespace CertPlatform.Auditor.Services.Expert
             if (await _lock.IsLockedAsync(r.CheckItemCode, stage))
                 return Result.Fail("检查项已锁定，请先解锁再修改");
 
-            if (!string.IsNullOrWhiteSpace(conclusion))
-                r.Conclusion = conclusion.Trim();
+            // 认证准备分支不产生结论（只改判定依据），检查分支才写「认证结论」
+            var isPrepStage = string.Equals(
+                stage, CertCheckEngineService.StagePrep, StringComparison.OrdinalIgnoreCase);
+
+            if (!isPrepStage)
+            {
+                if (string.IsNullOrWhiteSpace(conclusion))
+                    return Result.Fail("请选择认证结论（是否符合）");
+
+                // ★ 落库前必须过 CertVerdictMapper（唯一出口）：前端历史上传过
+                //   conformant / minor_nc / major_nc 这类 LLM 原始值，直接写进
+                //   cert_check_result.Conclusion 会让「按结论筛选」和 NC 统计静默失效。
+                var normalized = CertVerdictMapper.ToConclusion(conclusion);
+                if (normalized == null)
+                    return Result.Fail("结论值不合法：只接受 pass / ofi / nc / na");
+
+                // 不符合必须选程度（一般 / 严重）；非不符合时清空程度
+                if (normalized == CertVerdictMapper.ConclusionNc)
+                {
+                    var sev = CertVerdictMapper.NormalizeSeverity(severity);
+                    if (sev == null)
+                        return Result.Fail("不符合必须选择程度（一般 / 严重）");
+                    r.Severity = sev;
+                    r.SeveritySource = "manual";
+                }
+                else
+                {
+                    r.Severity = null;
+                    r.SeveritySource = null;
+                }
+
+                r.Conclusion = normalized;
+                r.ConclusionBy = userCode;
+                r.ConclusionAt = DateTime.Now;
+            }
+
             r.Reason = reason;
-            r.ConclusionBy = userCode;
-            r.ConclusionAt = DateTime.Now;
             r.UpdateBy = userCode;
             r.UpdateTime = DateTime.Now;
 
@@ -1445,6 +1547,8 @@ namespace CertPlatform.Auditor.Services.Expert
             {
                 PlanCode = planCode,
                 PlanName = plan.Name,
+                PlanStatus = plan.Status,
+                PlanClosed = plan.Status == "closed",
                 TasksJson = JsonSerializer.Serialize(taskList.Select(t => new
                 {
                     t.Code,
@@ -1528,12 +1632,28 @@ namespace CertPlatform.Auditor.Services.Expert
                 e.EvidenceKind == "manual" || e.EvidenceKind == "onsite_media" ||
                 e.CapturedIn == "onsite" || e.CapturedIn == "manual");
 
-            // 疑点数 = 准备期 NC 提示 + 检查期 NC 建议
+            // 疑点数 = 准备期 NC 提示 + 检查期疑点分析（AI 产出的多条疑点；旧数据回退 NC 建议）
+            var onsiteDoubts = ParseDoubtList(rOnsite?.DoubtsJson);
             var doubtCount = 0;
             if (rPrep != null && !string.IsNullOrEmpty(rPrep.PrepNcHint)) doubtCount++;
-            if (rOnsite != null && rOnsite.NcSuggested == true) doubtCount++;
+            if (onsiteDoubts.Count > 0) doubtCount += onsiteDoubts.Count;
+            else if (rOnsite != null && rOnsite.NcSuggested == true) doubtCount++;
 
             lockMap.TryGetValue(d.Code ?? "", out var lk);
+
+            // ★ 自动分析状态（计划总览用）：检查分支优先，准备分支兜底
+            var prepTaskCodes = tasks
+                .Where(t => t.TaskKind == CertCheckEngineService.StagePrep)
+                .Select(t => t.Code).ToHashSet();
+            var onsiteTaskCodes = tasks
+                .Where(t => t.TaskKind == CertCheckEngineService.StageOnsite)
+                .Select(t => t.Code).ToHashSet();
+            var tiOnsite = detailTaskItems.FirstOrDefault(i => onsiteTaskCodes.Contains(i.TaskCode));
+            var tiPrep = detailTaskItems.FirstOrDefault(i => prepTaskCodes.Contains(i.TaskCode));
+            var ti = tiOnsite ?? tiPrep;
+            var analysisState = ti?.AnalysisState;
+            if (string.IsNullOrWhiteSpace(analysisState))
+                analysisState = rOnsite != null || rPrep != null ? "done" : "none";
 
             return new CertPlanCheckItemRow
             {
@@ -1545,9 +1665,15 @@ namespace CertPlatform.Auditor.Services.Expert
                 DeptNames = d.DeptNames,
                 TasksJson = JsonSerializer.Serialize(detailTasks),
                 PrepState = rPrep?.PrepState,           // ← 准备分支
-                Conclusion = rOnsite?.Conclusion,       // ← 检查分支
+                // ★ 2026-11-03：Conclusion 只认审核员判定（引擎不再写它）
+                Conclusion = CertVerdictMapper.ToConclusion(rOnsite?.Conclusion),
+                AiConclusion = CertVerdictMapper.ToConclusion(rOnsite?.AiConclusion),
+                AiSeverity = CertVerdictMapper.NormalizeSeverity(rOnsite?.AiSeverity),
+                ConclusionConfirmed = !string.IsNullOrWhiteSpace(rOnsite?.ConclusionBy),
                 Severity = r?.Severity,
                 NcSuggested = r?.NcSuggested,
+                OwnerCode = d.OwnerCode,
+                OwnerName = d.OwnerName,
                 IsLocked = lk != null,                  // ← 检查项级锁
                 LockedBy = lk?.LockedBy,
                 LockedAt = lk?.LockedAt,
@@ -1555,7 +1681,11 @@ namespace CertPlatform.Auditor.Services.Expert
                 CheckEvidenceCount = checkCount,
                 DoubtCount = doubtCount,
                 SupplementCount = checkCount,
-                Sort = d.Sort
+                Sort = d.Sort,
+                AnalysisState = analysisState,
+                RerunState = string.IsNullOrWhiteSpace(ti?.RerunState) ? "none" : ti!.RerunState,
+                TaskItemCode = ti?.Code,
+                LastAnalyzedAt = ti?.LastAnalyzedAt
             };
         }
 
@@ -1631,18 +1761,58 @@ namespace CertPlatform.Auditor.Services.Expert
                 }
             }
 
-            // 疑点（准备分支：PrepNcHint + ConflictsJson；检查分支：NC 建议）
+            // 疑点（准备分支：PrepNcHint + ConflictsJson；检查分支：AI 疑点分析，可多条）
             var doubts = new List<object>();
             if (rPrep != null && !string.IsNullOrEmpty(rPrep.PrepNcHint))
-                doubts.Add(new { kind = "prep_nc_hint", text = rPrep.PrepNcHint });
+                doubts.Add(new { kind = "prep_nc_hint", point = "准备期不符合提示", detail = rPrep.PrepNcHint, text = rPrep.PrepNcHint });
             // ★ 空数组 `[]` 不算疑点：直接透出会让抽屉里出现一条内容为「[]」的假疑点
             if (rPrep != null && !IsEmptyJsonArray(rPrep.ConflictsJson))
-                doubts.Add(new { kind = "conflict", text = rPrep.ConflictsJson });
-            if (rOnsite != null && rOnsite.NcSuggested == true)
-                doubts.Add(new { kind = "onsite_nc_suggested", text = rOnsite.Reason });
+                doubts.Add(new { kind = "conflict", point = "资料冲突", detail = rPrep.ConflictsJson, text = rPrep.ConflictsJson });
+            foreach (var dt in ParseDoubtList(rOnsite?.DoubtsJson))
+            {
+                doubts.Add(new
+                {
+                    kind = "onsite_doubt",
+                    point = dt.Point,
+                    detail = dt.Detail,
+                    text = string.IsNullOrWhiteSpace(dt.Detail) ? dt.Point : $"{dt.Point}：{dt.Detail}"
+                });
+            }
+            // 旧数据兜底：没有多条疑点时，把 NC 建议当一条疑点
+            if (doubts.Count == 0 && rOnsite?.NcSuggested == true)
+                doubts.Add(new { kind = "onsite_nc_suggested", point = "系统建议开不符合项", detail = rOnsite.Reason, text = rOnsite.Reason });
+
+            // 判定人姓名（ConclusionBy 存的是用户 Code）
+            var nameMap = await _userNames.ResolveManyAsync(new[] { rOnsite?.ConclusionBy });
+
+            // ★ 自动分析状态：优先检查分支的任务项，回退准备分支
+            var taskList = (await _db.GetListAsync<CertTask>(t =>
+                t.PlanCode == detail.PlanCode && !t.IsDeleted)).Data ?? new List<CertTask>();
+            var detailItems = (await _db.GetListAsync<CertTaskItem>(i =>
+                i.CheckItemCode == detail.Code && !i.IsDeleted)).Data ?? new List<CertTaskItem>();
+            var taskKindMap = taskList.ToDictionary(t => t.Code, t => t.TaskKind);
+            var tiOnsite = detailItems
+                .Where(i => taskKindMap.TryGetValue(i.TaskCode, out var k)
+                            && k == CertCheckEngineService.StageOnsite)
+                .OrderByDescending(i => i.AnalyzeCount)
+                .FirstOrDefault();
+            var tiPrep = detailItems
+                .Where(i => taskKindMap.TryGetValue(i.TaskCode, out var k)
+                            && k == CertCheckEngineService.StagePrep)
+                .OrderByDescending(i => i.AnalyzeCount)
+                .FirstOrDefault();
+            var ti = rOnsite != null ? tiOnsite ?? tiPrep : tiPrep ?? tiOnsite;
+            var analysisState = ti?.AnalysisState;
+            if (string.IsNullOrWhiteSpace(analysisState))
+                analysisState = r != null ? "done" : "none";
 
             return Result<CertPlanCheckItemDetail>.Ok(new CertPlanCheckItemDetail
             {
+                AnalysisState = analysisState,
+                RerunState = string.IsNullOrWhiteSpace(ti?.RerunState) ? "none" : ti!.RerunState,
+                TaskItemCode = ti?.Code,
+                AnalyzeCount = ti?.AnalyzeCount ?? 0,
+                LastAnalyzedAt = ti?.LastAnalyzedAt,
                 DetailCode = detail.Code,
                 // 前端保存/锁定/解锁的入口 Code —— 优先检查分支（现场判定才是最终结论），回退准备分支
                 ResultCode = r?.Code,
@@ -1655,8 +1825,19 @@ namespace CertPlatform.Auditor.Services.Expert
                 // ★ 归一化（CertVerdictMapper 是唯一出口）：历史结论行可能存的是 LLM
                 //   原始词表（major_nc），直接透出会让抽屉里显示「major_nc」这种内部值。
                 Conclusion = CertVerdictMapper.ToConclusion(rOnsite?.Conclusion),
+                // ★ 2026-11-03：系统建议与审核员判定分开（建议仅供参考，最终由审核员判定）
+                AiConclusion = CertVerdictMapper.ToConclusion(rOnsite?.AiConclusion),
+                AiSeverity = CertVerdictMapper.NormalizeSeverity(rOnsite?.AiSeverity),
                 Severity = CertVerdictMapper.ToSeverity(rOnsite?.Conclusion, rOnsite?.Severity),
                 Reason = r?.Reason,
+                ConclusionBy = rOnsite?.ConclusionBy,
+                ConclusionByName = rOnsite?.ConclusionBy == null
+                    ? null
+                    : nameMap.TryGetValue(rOnsite.ConclusionBy, out var nm) ? nm : rOnsite.ConclusionBy,
+                ConclusionAt = rOnsite?.ConclusionAt,
+                ConclusionConfirmed = !string.IsNullOrWhiteSpace(rOnsite?.ConclusionBy),
+                OwnerCode = detail.OwnerCode,
+                OwnerName = detail.OwnerName,
                 NcSuggested = rOnsite?.NcSuggested,
                 IsLocked = lk != null,
                 LockedBy = lk?.LockedBy,
@@ -1704,6 +1885,49 @@ namespace CertPlatform.Auditor.Services.Expert
             if (string.IsNullOrWhiteSpace(json)) return true;
             var s = json.Trim();
             return s is "[]" or "{}" or "null";
+        }
+
+        /// <summary>
+        /// 解析疑点分析 JSON（<c>[{point, detail}]</c> 或 <c>["..."]</c>）。
+        /// <para>空 / 非法 JSON ⇒ 空列表（不抛异常：疑点解析失败不能把整个详情拖垮）。</para>
+        /// </summary>
+        private static List<CertDoubtDto> ParseDoubtList(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json) || IsEmptyJsonArray(json))
+                return new List<CertDoubtDto>();
+
+            try
+            {
+                var arr = JsonSerializer.Deserialize<JsonElement>(json!, JsonOpts);
+                if (arr.ValueKind != JsonValueKind.Array) return new List<CertDoubtDto>();
+
+                var list = new List<CertDoubtDto>();
+                foreach (var item in arr.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.String)
+                    {
+                        var text = item.GetString();
+                        if (!string.IsNullOrWhiteSpace(text))
+                            list.Add(new CertDoubtDto { Point = text!.Trim() });
+                        continue;
+                    }
+                    if (item.ValueKind != JsonValueKind.Object) continue;
+
+                    var point = item.TryGetProperty("point", out var p) && p.ValueKind == JsonValueKind.String
+                        ? p.GetString() ?? "" : "";
+                    var detail = item.TryGetProperty("detail", out var d) && d.ValueKind == JsonValueKind.String
+                        ? d.GetString() ?? "" : "";
+                    if (string.IsNullOrWhiteSpace(point) && !string.IsNullOrWhiteSpace(detail))
+                        point = detail.Length > 40 ? detail[..40] : detail;
+                    if (string.IsNullOrWhiteSpace(point) && string.IsNullOrWhiteSpace(detail)) continue;
+                    list.Add(new CertDoubtDto { Point = point.Trim(), Detail = detail.Trim() });
+                }
+                return list;
+            }
+            catch
+            {
+                return new List<CertDoubtDto>();
+            }
         }
 
         // ================================================================
@@ -1956,17 +2180,31 @@ namespace CertPlatform.Auditor.Services.Expert
                     e.EvidenceKind == "manual" || e.EvidenceKind == "onsite_media" ||
                     e.CapturedIn == "onsite" || e.CapturedIn == "manual");
 
+                // 疑点：优先用 AI 的多条疑点分析；旧数据回退「NC 建议 / 结论」口径
+                var stageDoubts = ParseDoubtList(rStage?.DoubtsJson);
                 var doubtCount = 0;
                 if (!string.IsNullOrEmpty(rOther?.PrepNcHint)) doubtCount++;
-                // NcSuggested 字段可能为 null（旧结论行没这个字段），用结论兜一层
-                if (rOther?.NcSuggested == true || rStage?.NcSuggested == true
-                    || CertVerdictMapper.ToConclusion(rStage?.Conclusion) == CertVerdictMapper.ConclusionNc
-                    || CertVerdictMapper.ToConclusion(rOther?.Conclusion) == CertVerdictMapper.ConclusionNc)
+                if (stageDoubts.Count > 0) doubtCount += stageDoubts.Count;
+                else if (rOther?.NcSuggested == true || rStage?.NcSuggested == true
+                         || CertVerdictMapper.ToConclusion(rStage?.Conclusion) == CertVerdictMapper.ConclusionNc
+                         || CertVerdictMapper.ToConclusion(rOther?.Conclusion) == CertVerdictMapper.ConclusionNc)
                     doubtCount++;
                 if (!string.IsNullOrEmpty(rStage?.ConflictsJson)) doubtCount++;
 
                 var isLocked = lk != null;
-                var state = isLocked ? "locked" : (rStage != null ? "analyzed" : "waiting");
+                // ★ 2026-11-03：新增「自动分析状态」——未分析 / 分析中 / 已完成 / 失败
+                //   不能只看结果行是否存在：分析失败同样没有结果行，但状态必须区分出来，
+                //   否则审核员看到「未分析」会以为系统不会自动分析。
+                var analysisState = ti?.AnalysisState;
+                if (string.IsNullOrWhiteSpace(analysisState))
+                    analysisState = rStage != null ? "done" : "none";
+                var rerunState = string.IsNullOrWhiteSpace(ti?.RerunState) ? "none" : ti!.RerunState;
+
+                var state = isLocked
+                    ? "locked"
+                    : analysisState == "failed" || ti?.Status == "failed"
+                        ? "failed"
+                        : rStage != null ? "analyzed" : "waiting";
 
                 var reason = stageKind == CertCheckEngineService.StagePrep
                     ? rStage?.PrepNcHint ?? rStage?.Reason
@@ -2010,6 +2248,15 @@ namespace CertPlatform.Auditor.Services.Expert
                         //   ToConclusion 是幂等的，已映射过的值原样返回。
                         ? CertVerdictMapper.ToConclusion(rStage?.Conclusion)
                         : null,
+                    // ★ 2026-11-03：AI 建议独立成列，最终结论仍由审核员判定
+                    AiConclusion = stageKind == CertCheckEngineService.StageOnsite
+                        ? CertVerdictMapper.ToConclusion(rStage?.AiConclusion)
+                        : null,
+                    AiSeverity = stageKind == CertCheckEngineService.StageOnsite
+                        ? CertVerdictMapper.NormalizeSeverity(rStage?.AiSeverity)
+                        : null,
+                    ConclusionConfirmed = stageKind == CertCheckEngineService.StageOnsite
+                          && !string.IsNullOrWhiteSpace(rStage?.ConclusionBy),
                     Severity = stageKind == CertCheckEngineService.StageOnsite
                         ? CertVerdictMapper.NormalizeSeverity(rStage?.Severity)
                           ?? CertVerdictMapper.ToSeverity(rStage?.Conclusion, rStage?.Severity)
@@ -2033,6 +2280,8 @@ namespace CertPlatform.Auditor.Services.Expert
                     DoubtCount = doubtCount,
                     AnalyzeCount = ti?.AnalyzeCount ?? 0,
                     LastAnalyzedAt = ti?.LastAnalyzedAt,
+                    AnalysisState = analysisState,
+                    RerunState = rerunState,
 
                     Sort = d.Sort
                 });
@@ -2068,6 +2317,8 @@ namespace CertPlatform.Auditor.Services.Expert
                 //   否则锁一个检查项，进度条反而从 100% 掉到 50%，看着像把工作作废了。
                 Analyzed = filtered.Count(r => r.State == "analyzed" || r.IsLocked),
                 Locked = filtered.Count(r => r.IsLocked),
+                Failed = filtered.Count(r => r.State == "failed"),
+                RerunSuggested = filtered.Count(r => r.RerunState == "suggested"),
                 // 准备分支不签发 NC ⇒ 这个数字恒为 0，前端在准备页隐藏该统计
                 NcCount = isOnsite ? filtered.Count(r => r.Conclusion == "nc") : 0,
                 MissingCount = filtered.Count(r =>
@@ -2083,6 +2334,8 @@ namespace CertPlatform.Auditor.Services.Expert
                 "waiting" => filtered.Where(r => r.State == "waiting"),
                 "analyzed" => filtered.Where(r => r.State == "analyzed"),
                 "locked" => filtered.Where(r => r.IsLocked),
+                "failed" => filtered.Where(r => r.State == "failed"),
+                "rerun" => filtered.Where(r => r.RerunState == "suggested"),
                 "nc" => filtered.Where(r => r.Conclusion == "nc"),
                 "doubt" => filtered.Where(r => r.DoubtCount > 0),
                 _ => filtered

@@ -34,6 +34,14 @@ namespace CertPlatform.Auditor.Entities.Expert
         [StringLength(500)]
         public string? Standards { get; set; }
 
+        /// <summary>
+        /// 计划状态：<c>active</c> 进行中 / <c>closed</c> 已关闭。
+        /// <para>★ 关闭是业务状态（不是启用/禁用，故不复用 <c>IsValid</c>，见铁律九 / 排序状态字段唯一写法）。
+        /// 关闭后对应的认证准备 / 认证检查一并作废，只允许查看。</para>
+        /// </summary>
+        [StringLength(20)]
+        public string Status { get; set; } = "active";
+
         /// <summary>排序号</summary>
         public int Sort { get; set; }
 

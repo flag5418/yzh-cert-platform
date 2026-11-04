@@ -80,9 +80,21 @@ namespace CertPlatform.Auditor.Entities.Expert
 
         // ═══ 检查组（check 方向写）═══
 
-        /// <summary>pass / ofi / nc / na（人填为最终）</summary>
+        /// <summary>pass / ofi / nc / na（**只由审核员写**；AI 只给 <see cref="AiConclusion"/> 建议）</summary>
         [StringLength(20)]
         public string? Conclusion { get; set; }
+
+        /// <summary>
+        /// 系统建议结论：pass / ofi / nc / na（AI 产出，⛔ 仅供审核员参考）。
+        /// <para>2026-11-03：系统是辅助系统，分析只给建议 —— 最终 <see cref="Conclusion"/>
+        /// 必须由审核员判定（<see cref="ConclusionBy"/> 非空即已判定）。</para>
+        /// </summary>
+        [StringLength(20)]
+        public string? AiConclusion { get; set; }
+
+        /// <summary>系统建议不符合程度：major / minor（AI 产出，⛔ 仅供参考）</summary>
+        [StringLength(20)]
+        public string? AiSeverity { get; set; }
 
         /// <summary>检查期是否建议开 NC（≠ 已开 NC，见 cert_nc）</summary>
         public bool? NcSuggested { get; set; }
@@ -101,6 +113,13 @@ namespace CertPlatform.Auditor.Entities.Expert
 
         /// <summary>判定依据摘要（必填）</summary>
         public string? Reason { get; set; }
+
+        /// <summary>
+        /// 疑点分析（JSON 数组 <c>[{point, detail}]</c>，可多条；空数组 = 无疑点）。
+        /// <para>AI 产出的疑点只作参考：无疑点时系统建议该检查项合格；
+        /// 有疑点也不等于不合格，仍由审核员判定。</para>
+        /// </summary>
+        public string? DoubtsJson { get; set; }
 
         /// <summary>判定人 Code</summary>
         [StringLength(64)]

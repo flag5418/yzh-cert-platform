@@ -277,12 +277,18 @@ public class CertNcService
             if (promptView?.Template == null)
                 return Result<string>.Fail("未找到 NC 建议提示词模板（nc_suggest）");
 
+            // ★ 2026-11-03：优先用审核员判定；未判定时用系统建议，并明确标注「未经审核员确认」
+            var finalConclusion = conclusionResult.Data?.Conclusion;
+            var aiConclusion = conclusionResult.Data?.AiConclusion;
+            var conclusionText = finalConclusion ?? aiConclusion ?? "未分析";
+            var conclusionSource = finalConclusion != null ? "审核员判定" : (aiConclusion != null ? "系统建议（未经审核员确认）" : "—");
+
             var prompt = $"## 检查项\n" +
                 $"条款：{(detail.Data.Clauses ?? "-")}\n" +
                 $"条款序号：{(detail.Data.ClauseNumbers ?? "-")}\n" +
                 $"涉及部门：{(detail.Data.DeptNames ?? "-")}\n\n" +
                 $"## 已有结论\n" +
-                $"结论：{conclusionResult.Data?.Conclusion ?? "未分析"}\n" +
+                $"结论：{conclusionText}（来源：{conclusionSource}）\n" +
                 $"判定依据：{conclusionResult.Data?.Reason ?? ""}\n\n" +
                 $"请生成 JSON: {{\"fact_desc\":\"不符合事实描述\",\"requirement_ref\":\"违反条款原文\",\"severity\":\"minor或major\",\"corrective_req\":\"整改建议\",\"nc_no_suggestion\":\"建议 NC 编号\"}}";
 

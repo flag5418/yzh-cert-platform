@@ -156,6 +156,11 @@ const ORPHAN_ALLOW = new Set([
   //   菜单侧只需 `MENU_AUD_12`（/enterprise-normalize）一条；
   //   审核页 `/enterprise-review` 是**独立功能**，有自己的菜单 `MENU_AUD_14`，⛔ 不在此登记。
   'auditor:/enterprise-normalize/create',
+  // ── 专家端 · 证据原文预览（2026-11-03）──
+  // 理由：`/audit-task/doc-preview` 是认证准备工作台点击证据原文时**新窗口打开**的
+  //   嵌入式预览页（`audit-prep-workbench.vue` 拼 URL），不是独立功能入口。
+  //   路径沿用历史 `audit-task/` 前缀（仅剩此一个文件），⛔ 不需要侧边栏菜单。
+  'auditor:/audit-task/doc-preview',
   // ── 专家端 · **刻意停用**的三个菜单（2026-10-11 用户已裁决，✅ 不再是「待裁决」）──
   // ★ 用户原话：「菜单是故意的，因为有些菜单现在没有实现，我故意禁用了」。
   // 事实：`Sys_Menu` 里 MENU_AUD_01(/overview) / MENU_AUD_05(/organization) /

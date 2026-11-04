@@ -1425,9 +1425,9 @@ namespace CertPlatform.Auditor.Services.Ent
         // ========================================================
 
         /// <summary>
-        /// 取某企业的<b>当前有效计划</b>（<c>cert_audit_plan</c>，一企业一有效计划）。
-        /// <para>⚠️ 理论上最多 1 条；若历史脏数据有多条，取 <c>Sort → CreateTime</c> 最小者（确定性）。
-        /// ⛔ 不静默挑一条了事 —— 调用方可用 <see cref="ResolvePlanStandardCodesAsync"/> 的告警得知。</para>
+        /// 取某企业的<b>当前有效计划</b>（<c>cert_audit_plan</c>）。
+        /// <para>★ 计划只增不废（2026-11-03 用户裁定）⇒ 同一企业可能有多条有效计划，
+        /// 一律取 <c>CreateTime</c> 最新的一条（与 <c>AuditPlanController.GetActivePlan</c> 同口径）。</para>
         /// </summary>
         public async Task<CertAuditPlan?> GetActivePlanAsync(string enterpriseCode)
         {
@@ -1435,7 +1435,7 @@ namespace CertPlatform.Auditor.Services.Ent
             var list = await _db.Client.Queryable<CertAuditPlan>()
                 .Where(x => x.EnterpriseCode == enterpriseCode && x.IsValid == 1 && !x.IsDeleted)
                 .ToListAsync() ?? new List<CertAuditPlan>();
-            return list.OrderBy(p => p.Sort).ThenBy(p => p.CreateTime).FirstOrDefault();
+            return list.OrderByDescending(p => p.CreateTime).ThenByDescending(p => p.Sort).FirstOrDefault();
         }
 
         /// <summary>

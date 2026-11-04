@@ -50,6 +50,12 @@ public class CertCheckConclusionDto
     public string? SeveritySuggestion { get; set; }
     public string? ClauseCodes { get; set; }
 
+    /// <summary>
+    /// 疑点分析（<b>可多条</b>；空数组 = 无疑点 ⇒ 系统建议该检查项合格）。
+    /// <para>2026-11-03：系统只给建议，疑点是否成立、最终是否符合由审核员判定。</para>
+    /// </summary>
+    public List<CertDoubtDto> Doubts { get; set; } = new();
+
     // ═══ 准备分支专用（StageKind=prep）═══
     // 准备问「资料齐不齐」，检查问「符不符合」—— 两个值域，⛔ 不要混用（46 号 F3）。
 
@@ -67,6 +73,16 @@ public class CertCheckConclusionDto
 
     /// <summary>准备期"建议开 NC 吗" + 理由（只是给现场的建议）</summary>
     public string? PrepNcHint { get; set; }
+}
+
+/// <summary>疑点（一条 = 一个可独立审阅的可疑点）</summary>
+public class CertDoubtDto
+{
+    /// <summary>疑点标题（一句话）</summary>
+    public string Point { get; set; } = "";
+
+    /// <summary>疑点说明（为什么可疑：涉及哪份文件 / 条款 / 缺什么）</summary>
+    public string Detail { get; set; } = "";
 }
 
 /// <summary>分析执行结果</summary>
@@ -315,11 +331,18 @@ public class CertCheckEngineService
         // ---- L7：解析 LLM JSON ----
         var conclusion = ParseConclusion(llmResponse);
         result.ConclusionData = conclusion;
-        // 返回值里的 Conclusion 也用落库口径（onsite 的 major_nc → nc），
+
+        // 系统建议（⚠️ 不是最终结论）：无疑点 ⇒ 建议合格；有疑点 ⇒ 至少观察项
+        var aiConclusion = isPrep ? null : ResolveSuggestedConclusion(conclusion);
+        var aiSeverity = isPrep || aiConclusion != CertVerdictMapper.ConclusionNc
+            ? null
+            : CertVerdictMapper.ToSeverity(conclusion?.Conclusion, conclusion?.SeveritySuggestion);
+
+        // 返回值里的 Conclusion 用「系统建议」口径（onsite 的 major_nc → nc），
         // 原始值保留在 ConclusionData 里供排查
         result.Conclusion = isPrep
             ? (CertVerdictMapper.NormalizePrepState(conclusion?.PrepState) ?? "unknown")
-            : (CertVerdictMapper.ToConclusion(conclusion?.Conclusion) ?? "unknown");
+            : (aiConclusion ?? "unknown");
 
         // ---- L8：落库（分析行 + 逐条款结果 + 证据链）----
         // ★ 条款来源优先用装配上下文（条款号取自 cert_iso_clause，权威）；
@@ -376,6 +399,12 @@ public class CertCheckEngineService
                     conclusion_mapped = isPrep
                         ? CertVerdictMapper.NormalizePrepState(conclusion?.PrepState)
                         : CertVerdictMapper.ToConclusion(conclusion?.Conclusion),
+                    // 系统建议（⛔ 不是最终结论；最终由审核员判定）
+                    ai_suggestion = isPrep
+                        ? CertVerdictMapper.NormalizePrepState(conclusion?.PrepState)
+                        : aiConclusion,
+                    ai_severity_suggestion = aiSeverity,
+                    doubt_count = conclusion?.Doubts.Count ?? 0,
                     severity = isPrep
                         ? null
                         : CertVerdictMapper.ToSeverity(conclusion?.Conclusion, conclusion?.SeveritySuggestion),
@@ -414,16 +443,19 @@ public class CertCheckEngineService
                     VerifyLevel = isPrep ? conclusion?.VerifyLevel : null,
                     PrepNcHint = isPrep ? conclusion?.PrepNcHint : null,
 
-                    // ★ 词表映射（V3 §5.6）：LLM 的 conformant/observation/minor_nc/major_nc
-                    //   ⛔ 不能直存，Conclusion 字段的值域是 pass/ofi/nc/na
-                    Conclusion = isPrep ? null : CertVerdictMapper.ToConclusion(conclusion?.Conclusion),
-                    NcSuggested = isPrep
+                    // ★ 2026-11-03：分析只写「系统建议」，⛔ 不写最终结论
+                    //   最终 Conclusion / Severity 由审核员在判定弹窗里写（SaveResultAsync）。
+                    //   无疑点 ⇒ 建议合格；有疑点 ⇒ 按模型结论映射，模型说合格也不给「合格」的假建议。
+                    AiConclusion = isPrep ? null : aiConclusion,
+                    AiSeverity = isPrep ? null : aiSeverity,
+                    DoubtsJson = isPrep
                         ? null
-                        : CertVerdictMapper.SuggestsNc(conclusion?.Conclusion, conclusion?.NcSuggestion),
-                    Severity = isPrep
-                        ? null
-                        : CertVerdictMapper.ToSeverity(conclusion?.Conclusion, conclusion?.SeveritySuggestion),
-                    SeveritySource = isPrep ? null : "ai",
+                        : (conclusion != null && conclusion.Doubts.Count > 0
+                            ? JsonSerializer.Serialize(conclusion.Doubts)
+                            : null),
+                    NcSuggested = isPrep ? null : aiConclusion == CertVerdictMapper.ConclusionNc,
+                    ConclusionBy = null,
+                    ConclusionAt = null,
 
                     Reason = conclusion?.Summary,
                     RollupTo = true,
@@ -462,8 +494,10 @@ public class CertCheckEngineService
         }
 
         result.Message = clausePairs.Count == 0
-            ? $"分析完成（{stageKind}）→ {result.Conclusion}；⚠️ 该检查项未配置条款，未写结论行"
-            : $"分析完成（{stageKind}）→ {result.Conclusion}，{result.ClauseResultCount} 个条款";
+            ? $"分析完成（{stageKind}）→ {(isPrep ? "准备状态" : "系统建议")} {result.Conclusion}；⚠️ 该检查项未配置条款，未写结论行"
+            : $"分析完成（{stageKind}）→ {(isPrep ? "准备状态" : "系统建议")} {result.Conclusion}"
+              + (isPrep ? "" : "（最终结论由审核员判定）")
+              + $"，{result.ClauseResultCount} 个条款";
         return Result<CertAnalysisResult>.Ok(result);
     }
 
@@ -598,6 +632,7 @@ public class CertCheckEngineService
                 EvidenceCodes = root.TryGetProperty("evidence_codes", out var evs) && evs.ValueKind == JsonValueKind.Array
                     ? evs.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => !string.IsNullOrEmpty(s)).ToList()
                     : new List<string>(),
+                Doubts = ParseDoubts(root),
 
                 // ── 准备分支字段（audit_prep 输出；缺失时保持 null，⛔ 不要回填成检查分支的值）──
                 PrepState = GetStr(root, "prep_state"),
@@ -614,10 +649,72 @@ public class CertCheckEngineService
         }
     }
 
+    /// <summary>
+    /// 计算「系统建议结论」（⛔ 不是最终结论）。
+    /// <para>规则（用户 2026-11-03）：</para>
+    /// <list type="bullet">
+    ///   <item>无疑点 ⇒ <c>pass</c>（建议该检查项合格）；</item>
+    ///   <item>有疑点 ⇒ 按模型结论映射；模型若说合格 / 不适用，降级为 <c>ofi</c>
+    ///         （有疑点就不该给「合格」的建议，但也不替审核员判不合格）。</item>
+    /// </list>
+    /// </summary>
+    private static string? ResolveSuggestedConclusion(CertCheckConclusionDto? conclusion)
+    {
+        if (conclusion == null) return null;
+
+        if (conclusion.Doubts.Count == 0)
+            return CertVerdictMapper.ConclusionPass;
+
+        var mapped = CertVerdictMapper.ToConclusion(conclusion.Conclusion);
+        return mapped == CertVerdictMapper.ConclusionPass || mapped == CertVerdictMapper.ConclusionNa
+            ? CertVerdictMapper.ConclusionOfi
+            : mapped ?? CertVerdictMapper.ConclusionOfi;
+    }
+
     private static string? GetStr(JsonElement root, string name)
         => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String
             ? v.GetString()
             : null;
+
+    /// <summary>
+    /// 解析 <c>doubts</c>（疑点分析，可多条）。
+    /// <para>兼容两种写法：<c>[{"point":"...","detail":"..."}]</c> 与 <c>["..."]</c>；
+    /// 空数组 / 缺失 ⇒ 空列表（= 无疑点 ⇒ 建议合格）。</para>
+    /// </summary>
+    private static List<CertDoubtDto> ParseDoubts(JsonElement root)
+    {
+        var list = new List<CertDoubtDto>();
+        if (!root.TryGetProperty("doubts", out var arr) || arr.ValueKind != JsonValueKind.Array)
+            return list;
+
+        foreach (var item in arr.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.String)
+            {
+                var text = item.GetString();
+                if (!string.IsNullOrWhiteSpace(text))
+                    list.Add(new CertDoubtDto { Point = text!.Trim(), Detail = "" });
+                continue;
+            }
+
+            if (item.ValueKind != JsonValueKind.Object) continue;
+
+            var point = item.TryGetProperty("point", out var p) && p.ValueKind == JsonValueKind.String
+                ? p.GetString() ?? ""
+                : "";
+            var detail = item.TryGetProperty("detail", out var d) && d.ValueKind == JsonValueKind.String
+                ? d.GetString() ?? ""
+                : "";
+
+            // 只有 detail 没有 point 时，用 detail 首句当标题，避免界面上出现空标题
+            if (string.IsNullOrWhiteSpace(point) && !string.IsNullOrWhiteSpace(detail))
+                point = detail.Length > 40 ? detail[..40] : detail;
+
+            if (string.IsNullOrWhiteSpace(point) && string.IsNullOrWhiteSpace(detail)) continue;
+            list.Add(new CertDoubtDto { Point = point.Trim(), Detail = detail.Trim() });
+        }
+        return list;
+    }
 
     /// <summary>把 JSON 数组属性序列化回字符串（落 <c>MissingKindsJson</c> / <c>ConflictsJson</c>）；非数组返回 null</summary>
     private static string? GetJsonArrayText(JsonElement root, string name)
@@ -625,6 +722,182 @@ public class CertCheckEngineService
         if (!root.TryGetProperty(name, out var v)) return null;
         if (v.ValueKind == JsonValueKind.Null) return null;
         return v.ValueKind == JsonValueKind.Array ? v.GetRawText() : null;
+    }
+
+    // ================================================================
+    // 三·补、入场检查内容生成（认证准备「检查内容」）
+    // ================================================================
+
+    /// <summary>
+    /// 为检查项生成「入场检查内容」（查什么 / 怎么查，可多条）。
+    /// <para>★ 用户 2026-11-03：认证准备阶段多一个「检查内容」，可由系统自动生成，审核员可再编辑。</para>
+    /// <para>只会替换 <c>Source=ai</c> 的旧行，人工维护的行保留。</para>
+    /// </summary>
+    public async Task<Result<List<CertOnsitePlanItem>>> GenerateOnsitePlanAsync(
+        string userCode, string checkItemCode)
+    {
+        if (string.IsNullOrWhiteSpace(checkItemCode))
+            return Result<List<CertOnsitePlanItem>>.Fail("检查项 Code 不能为空");
+
+        var detailResult = await _db.GetOneAsync<CertAuditPlanDetail>(d =>
+            d.Code == checkItemCode && !d.IsDeleted);
+        var detail = detailResult.Data;
+        if (detail == null)
+            return Result<List<CertOnsitePlanItem>>.Fail("检查项不存在");
+
+        var planResult = await _db.GetOneAsync<CertAuditPlan>(p =>
+            p.Code == detail.PlanCode && !p.IsDeleted);
+        var plan = planResult.Data;
+        if (plan == null)
+            return Result<List<CertOnsitePlanItem>>.Fail("认证计划不存在");
+
+        var clauseCodes = SplitClauses(detail.Clauses, detail.ClauseNumbers)
+            .Select(c => c.ClauseCode).ToList();
+        if (clauseCodes.Count == 0)
+            return Result<List<CertOnsitePlanItem>>.Fail("该检查项未配置条款，无法生成检查内容");
+
+        var promptType = PromptTypes.OnsitePlan;
+        var standardCode = await ResolveStandardCodeAsync(detail.PlanCode);
+        var promptView = await _promptWb.ResolveActiveAsync(promptType, standardCode);
+        if (promptView?.Template == null)
+            return Result<List<CertOnsitePlanItem>>.Fail("未找到入场检查内容提示词模板（onsite_plan）");
+
+        var context = await _ctxBuilder.BuildAsync(clauseCodes, plan.EnterpriseCode, new List<CertEvidence>());
+        var prompt = BuildPrompt(promptView.Template, StagePrep, detail, context, new List<CertEvidence>());
+
+        var aiSettings = await GetAiSettingsAsync();
+        var llmResponse = await _llm.CompleteAsync(new LlmInvokeRequest
+        {
+            BaseUrl = aiSettings.BaseUrl,
+            ApiKey = aiSettings.ApiKey,
+            Model = aiSettings.Model,
+            Temperature = aiSettings.Temperature,
+            MaxTokens = aiSettings.MaxTokens,
+            SystemPrompt = "你是资深 ISO 管理体系审核员，请输出入场检查内容清单 JSON。",
+            Prompt = prompt,
+            DocumentContent = "",
+            ForceJson = true
+        });
+
+        if (!llmResponse.Success || llmResponse.Json == null)
+            return Result<List<CertOnsitePlanItem>>.Fail(
+                $"AI 生成失败：{llmResponse.Message ?? "模型未返回有效 JSON"}");
+
+        var items = ParseOnsitePlanItems(llmResponse.Json.RootElement);
+        if (items.Count == 0)
+            return Result<List<CertOnsitePlanItem>>.Fail("AI 未生成任何检查内容，请重试或手工添加");
+
+        var now = DateTime.Now;
+
+        // 只清掉旧「系统生成」行，人工行保留
+        var existingResult = await _db.GetListAsync<CertOnsitePlanItem>(i =>
+            i.CheckItemCode == checkItemCode && !i.IsDeleted);
+        var oldAiRows = (existingResult.Data ?? new List<CertOnsitePlanItem>())
+            .Where(i => string.Equals(i.Source, "ai", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        foreach (var old in oldAiRows)
+        {
+            old.IsDeleted = true;
+            old.DeleteBy = userCode;
+            old.DeleteTime = now;
+            old.UpdateBy = userCode;
+            old.UpdateTime = now;
+            // R-A：只写软删相关列
+            await _db.UpdateAsync(old,
+                nameof(CertOnsitePlanItem.IsDeleted),
+                nameof(CertOnsitePlanItem.DeleteBy),
+                nameof(CertOnsitePlanItem.DeleteTime),
+                nameof(CertOnsitePlanItem.UpdateBy),
+                nameof(CertOnsitePlanItem.UpdateTime));
+        }
+
+        var seq = (existingResult.Data ?? new List<CertOnsitePlanItem>())
+            .Where(i => !i.IsDeleted && !string.Equals(i.Source, "ai", StringComparison.OrdinalIgnoreCase))
+            .Select(i => Math.Max(i.SeqNo, i.Sort))
+            .DefaultIfEmpty(0)
+            .Max();
+
+        // 条款号 → 条款 Code，便于后续按 Code 追溯
+        var clausePairs = SplitClauses(detail.Clauses, detail.ClauseNumbers);
+        var numberToCode = clausePairs
+            .Where(p => !string.IsNullOrWhiteSpace(p.ClauseNumber))
+            .GroupBy(p => p.ClauseNumber!)
+            .ToDictionary(g => g.Key, g => g.First().ClauseCode);
+
+        var created = new List<CertOnsitePlanItem>();
+        foreach (var item in items)
+        {
+            seq++;
+            var clauseNumbers = item.ClauseNumbers;
+            var mappedCodes = string.IsNullOrWhiteSpace(clauseNumbers)
+                ? null
+                : string.Join(",",
+                    clauseNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Select(n => numberToCode.TryGetValue(n, out var code) ? code : null)
+                        .Where(c => c != null)
+                        .Distinct());
+
+            var entity = new CertOnsitePlanItem
+            {
+                Code = Guid.NewGuid().ToString("N"),
+                PlanCode = detail.PlanCode,
+                CheckItemCode = checkItemCode,
+                SeqNo = seq,
+                Sort = seq,
+                CheckWhat = Truncate(item.CheckWhat, 500) ?? "",
+                CheckMethod = Truncate(item.CheckMethod, 50),
+                TargetDept = Truncate(item.TargetDept, 200),
+                SampleRequirement = Truncate(item.SampleRequirement, 200),
+                ExpectedFinding = Truncate(item.ExpectedFinding, 500),
+                ClauseCodes = Truncate(string.IsNullOrWhiteSpace(mappedCodes) ? clauseNumbers : mappedCodes, 500),
+                Source = "ai",
+                Status = "planned",
+                CreateBy = userCode,
+                CreateTime = now
+            };
+            await _db.InsertAsync(entity);
+            created.Add(entity);
+        }
+
+        return Result<List<CertOnsitePlanItem>>.Ok(created);
+    }
+
+    private static List<OnsitePlanItemDto> ParseOnsitePlanItems(JsonElement root)
+    {
+        var list = new List<OnsitePlanItemDto>();
+        var arr = root;
+        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("items", out var items))
+            arr = items;
+        if (arr.ValueKind != JsonValueKind.Array)
+            return list;
+
+        foreach (var item in arr.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object) continue;
+            var what = GetStr(item, "check_what") ?? GetStr(item, "checkWhat") ?? "";
+            if (string.IsNullOrWhiteSpace(what)) continue;
+
+            list.Add(new OnsitePlanItemDto
+            {
+                CheckWhat = what.Trim(),
+                CheckMethod = GetStr(item, "check_method") ?? GetStr(item, "checkMethod"),
+                TargetDept = GetStr(item, "target_dept") ?? GetStr(item, "targetDept"),
+                SampleRequirement = GetStr(item, "sample_requirement") ?? GetStr(item, "sampleRequirement"),
+                ExpectedFinding = GetStr(item, "expected_finding") ?? GetStr(item, "expectedFinding"),
+                ClauseNumbers = GetStr(item, "clause_numbers") ?? GetStr(item, "clauseNumbers")
+            });
+        }
+        return list;
+    }
+
+    private class OnsitePlanItemDto
+    {
+        public string CheckWhat { get; set; } = "";
+        public string? CheckMethod { get; set; }
+        public string? TargetDept { get; set; }
+        public string? SampleRequirement { get; set; }
+        public string? ExpectedFinding { get; set; }
+        public string? ClauseNumbers { get; set; }
     }
 
     // ================================================================

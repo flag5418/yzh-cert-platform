@@ -47,8 +47,6 @@ auditor	MENU_AUD_22	/audit-onsite
 auditor	MENU_AUD_00	/
 auditor	MENU_AUD_03	/tasks
 auditor	MENU_AUD_13	/queue
-auditor	MENU_AUD_19	/audit-task
-auditor	MENU_AUD_20	/audit-evidence
 auditor	MENU_AUD_08	/nc-results
 auditor	MENU_AUD_09	/report-results
 auditor	MENU_AUD_04	/resources

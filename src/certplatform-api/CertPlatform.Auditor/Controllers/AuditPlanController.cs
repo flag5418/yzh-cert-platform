@@ -28,20 +28,20 @@ namespace CertPlatform.Auditor.Controllers;
 public class AuditPlanController : YzhControllerBase<CertAuditPlan>
 {
     private readonly EntityService<CertAuditPlanDetail> _detailSvc;
-
-    /// <summary>
-    /// 本次请求内被自动作废的计划条数（供 <c>save</c> 回显）。
-    /// <para>⚠️ 控制器是每请求实例，跨 await 读同一字段安全；⛔ 不要做成 static。</para>
-    /// </summary>
-    private int _invalidatedCount;
+    private readonly EntityService<CertAuditMember> _memberSvc;
+    private readonly EntityService<CertTask> _taskSvc;
 
     public AuditPlanController(
         EntityService<CertAuditPlan> entityService,
         IUserContext userContext,
-        EntityService<CertAuditPlanDetail> detailSvc)
+        EntityService<CertAuditPlanDetail> detailSvc,
+        EntityService<CertAuditMember> memberSvc,
+        EntityService<CertTask> taskSvc)
         : base(entityService, userContext)
     {
         _detailSvc = detailSvc;
+        _memberSvc = memberSvc;
+        _taskSvc = taskSvc;
     }
 
     /// <summary>缺 EntityConfig 时直接抛错（开发期暴露）</summary>
@@ -76,72 +76,20 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
     }
 
     // ========================================================
-    // ★★ 一企业一有效计划（36 号 §4.0，2026-10-29 用户裁定）
+    // ★★ 计划只增不改不删（2026-11-03 用户裁定）
     // ========================================================
+    //
+    // 旧实现会把同一企业的其它计划置 IsValid=0，结果「新建一次计划，旧计划全部消失」。
+    // 用户要求：建立计划必须留痕（保留创建时间、按时间倒序），因此：
+    //   · 新建计划不再作废任何旧计划；
+    //   · 计划不允许删除（历史留存）；
+    //   · 「当前计划」由 GetActivePlan 按 CreateTime 最新给出。
 
-    /// <summary>
-    /// 作废同一企业下<b>其它</b>有效计划（<c>IsValid 1 → 0</c>）。
-    ///
-    /// <para><b>为什么在 <c>OnAfterAdd</c> 而不是 <c>OnBeforeAdd</c></b>：
-    /// 放 before 时，若插入失败（唯一键/DB 异常），旧计划已被作废 ⇒ 该企业<b>零有效计划</b>，
-    /// 上传模块随即拿不到标准。必须先插成功再作废旧的。</para>
-    ///
-    /// <para><b>为什么靠代码而不靠唯一索引</b>：MySQL 没有部分唯一索引；
-    /// 建 <c>(EnterpriseCode, IsValid)</c> 唯一索引会把<b>历史作废行</b>也挡掉（同一企业只能有 1 条 IsValid=0）。</para>
-    ///
-    /// <para><b>⛔ 只作废、不删行、不删明细</b>：历史计划与其部门×条款关系必须留痕，
-    /// 否则「上一轮计划审了什么」永久丢失。</para>
-    /// </summary>
-    /// <param name="enterpriseCode">企业 Code</param>
-    /// <param name="keepCode">要保留的计划 Code（null = 全部作废）</param>
-    /// <returns>实际作废条数</returns>
-    private async Task<int> InvalidateOtherPlansAsync(string? enterpriseCode, string? keepCode)
+    /// <summary>计划不允许删除 —— 历史计划必须留痕</summary>
+    protected override Task<(bool ok, string? msg)> OnBeforeDelete(string[] codes)
     {
-        _invalidatedCount = 0;
-        if (string.IsNullOrWhiteSpace(enterpriseCode)) return 0;
-
-        // ⚠️ ORM 没有全局查询过滤器（IsValid / IsDeleted 都要手写）⇒ 必须显式带上
-        var list = await Entity.GetListAsync(p =>
-            p.EnterpriseCode == enterpriseCode && p.IsValid == 1 && !p.IsDeleted);
-        if (!list.Success || list.Data == null || list.Data.Count == 0) return 0;
-
-        // keepCode 的比较放内存里做：SQL 里 p.Code != null 是 NULL 语义（永不成立），易踩坑
-        var others = list.Data
-            .Where(p => string.IsNullOrEmpty(keepCode) || p.Code != keepCode)
-            .ToList();
-        if (others.Count == 0) return 0;
-
-        var stamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
-        int n = 0;
-        foreach (var old in others)
-        {
-            old.IsValid = 0;
-            old.Remark = Trim($"[{stamp} 自动作废] 同一企业只允许一个有效计划，已被新计划取代。{old.Remark}", 500);
-            var r = await Entity.Update(old, UserContext.ClientIp);
-            if (r.Success) n++;
-        }
-        _invalidatedCount = n;
-        return n;
-    }
-
-    /// <summary>截断到 <paramref name="max"/> 字符（DB 列宽硬约束，超长会报 1406）</summary>
-    private static string Trim(string? s, int max)
-    {
-        if (string.IsNullOrEmpty(s)) return string.Empty;
-        return s.Length <= max ? s : s.Substring(0, max);
-    }
-
-    /// <summary>新增成功后作废该企业其它有效计划</summary>
-    protected override async Task OnAfterAdd(CertAuditPlan entity)
-    {
-        await InvalidateOtherPlansAsync(entity.EnterpriseCode, entity.Code);
-    }
-
-    /// <summary>更新成功后作废该企业其它有效计划（仅当本计划是有效的）</summary>
-    protected override async Task OnAfterUpdate(CertAuditPlan entity)
-    {
-        if (entity.IsValid == 1)
-            await InvalidateOtherPlansAsync(entity.EnterpriseCode, entity.Code);
+        return Task.FromResult<(bool, string?)>(
+            (false, "认证计划不允许删除；如需更换范围，请新建计划，旧计划保留以供追溯"));
     }
 
     // ========================================================
@@ -169,16 +117,16 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
         if (!list.Success)
             return Ok(ApiResponse<object?>.Fail(list.Error ?? "查询计划失败"));
 
-        // 理论上最多 1 条；若历史脏数据有 2 条，取 Sort 最小者并如实告知（⛔ 不静默挑一条）
+        // ★ 计划只增不废 ⇒ 同一企业可能有多条有效计划，取「创建时间最新」的那条作为当前计划
         var rows = (list.Data ?? new List<CertAuditPlan>())
-            .OrderBy(p => p.Sort).ThenBy(p => p.CreateTime).ToList();
+            .OrderByDescending(p => p.CreateTime).ThenByDescending(p => p.Sort).ToList();
         if (rows.Count == 0)
             return Ok(ApiResponse<object?>.Ok(new { plan = (CertAuditPlan?)null, standardCodes = new List<string>(), warnings = new List<string>() }));
 
         var plan = rows[0];
         var warnings = new List<string>();
         if (rows.Count > 1)
-            warnings.Add($"该企业存在 {rows.Count} 个有效计划（数据异常），已按 Sort 取第一个：{plan.Name}");
+            warnings.Add($"该企业存在 {rows.Count} 个有效计划，已按创建时间取最新一个：{plan.Name}");
 
         var standardCodes = SplitCodes(plan.Standards);
         if (standardCodes.Count == 0)
@@ -211,6 +159,8 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
         public string Departments { get; set; } = string.Empty;
         public string DeptNames { get; set; } = string.Empty;
         public string ClauseNumbers { get; set; } = string.Empty;
+        /// <summary>负责审核员（专家组成员 Code，可空 = 后续在准备阶段分配）</summary>
+        public string? OwnerCode { get; set; }
         public string? Remark { get; set; }
     }
 
@@ -236,12 +186,27 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
             || string.IsNullOrWhiteSpace(plan.Standards))
             return Ok(ApiResponse<object?>.Fail("企业 / 阶段 / 标准 不能为空"));
 
-        // 一企业一有效计划：计数由 OnAfterAdd / OnAfterUpdate 回填，先清零
-        _invalidatedCount = 0;
+        // ★ 计划支持重新调整（2026-11-03 用户纠正）：带 Code 走更新（部门 / 条款约定 / 审核员均可改），
+        //   不带 Code 走新建。历史计划一律保留（不再「新建即作废旧计划」），删除仍被禁止。
+        var isUpdate = !string.IsNullOrWhiteSpace(plan.Code);
+
+        // 审核员（可选）：必须来自专家组成员池；姓名以成员池为准，不采信前端传值。
+        // 先校验再落库 —— 否则计划已写入、明细才失败，会留下一个没有分工的空计划。
+        var ownerNames = new Dictionary<string, string>();
+        foreach (var d in dto.Details)
+        {
+            var oc = d.OwnerCode?.Trim();
+            if (string.IsNullOrEmpty(oc) || ownerNames.ContainsKey(oc)) continue;
+            var mem = await _memberSvc.GetListAsync(m => m.Code == oc && !m.IsDeleted && m.IsValid == 1);
+            var hit = mem.Success ? mem.Data?.FirstOrDefault() : null;
+            if (hit == null)
+                return Ok(ApiResponse<object?>.Fail($"审核员不在专家组成员池中：{oc}，请先在「专家组设置」里维护"));
+            ownerNames[oc] = hit.Name;
+        }
 
         try
         {
-            if (string.IsNullOrWhiteSpace(plan.Code))
+            if (!isUpdate)
             {
                 // 新增主表（AddCore 自动生成 Code + 审计字段）
                 var add = await AddCore(plan);
@@ -251,8 +216,25 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
             }
             else
             {
-                // 更新主表
-                var upd = await UpdateCore(plan);
+                // 更新主表（企业 / 阶段 / 标准 / 名称 可调整）
+                // ★ 必须先按 Code 取现有行再覆盖可改字段：UpdateCore 按 BcFlag 全列写回，
+                //   直接拿前端传来的「部分字段」更新会把 CreateTime / CreateBy 等审计列清空。
+                var cur = await Entity.GetListAsync(p => p.Code == plan.Code && !p.IsDeleted);
+                var row = cur.Success ? cur.Data?.FirstOrDefault() : null;
+                if (row == null)
+                    return Ok(ApiResponse<object?>.Fail($"计划不存在：{plan.Code}"));
+
+                // 已关闭的计划不允许再调整（只能查看）
+                if (row.Status == "closed")
+                    return Ok(ApiResponse<object?>.Fail("计划已关闭，不能再调整；如需继续，请新建计划"));
+
+                row.Name = plan.Name;
+                row.EnterpriseCode = plan.EnterpriseCode;
+                row.StageCode = plan.StageCode;
+                row.Standards = plan.Standards;
+                row.IsValid = 1;
+
+                var upd = await UpdateCore(row);
                 if (!upd.Success)
                     return Ok(ApiResponse<object?>.Fail(upd.Error ?? "更新计划失败"));
 
@@ -275,6 +257,7 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
             for (int i = 0; i < dto.Details.Count; i++)
             {
                 var d = dto.Details[i];
+                var ownerCode = d.OwnerCode?.Trim();
                 var detail = new CertAuditPlanDetail
                 {
                     PlanCode = plan.Code!,
@@ -282,6 +265,8 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
                     Departments = d.Departments,
                     DeptNames = d.DeptNames,
                     ClauseNumbers = d.ClauseNumbers,
+                    OwnerCode = string.IsNullOrEmpty(ownerCode) ? null : ownerCode,
+                    OwnerName = string.IsNullOrEmpty(ownerCode) ? null : ownerNames[ownerCode],
                     Sort = i,
                     IsValid = 1,
                     Remark = d.Remark
@@ -293,9 +278,7 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
             return Ok(ApiResponse<object?>.Ok(new
             {
                 plan,
-                details = savedDetails,
-                // 一企业一有效计划：本次自动作废的旧计划条数（0 = 该企业此前无有效计划）
-                invalidatedPlans = _invalidatedCount
+                details = savedDetails
             }));
         }
         catch (Exception ex)
@@ -316,5 +299,46 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
             return Ok(ApiResponse<object?>.Fail(list.Error ?? "查询明细失败"));
 
         return Ok(ApiResponse<object?>.Ok(list.Data ?? new List<CertAuditPlanDetail>()));
+    }
+
+    /// <summary>关闭计划请求</summary>
+    public class PlanCodeRequest
+    {
+        public string? Code { get; set; }
+    }
+
+    /// <summary>
+    /// 关闭计划（2026-11-03）。
+    /// <para>关闭后该计划对应的认证准备 / 认证检查一并作废：所有写操作返回 409，只允许查看。</para>
+    /// <para>★ 只改业务状态 <c>Status='closed'</c>，不动 <c>IsValid</c>（启用/禁用是另一维度）。</para>
+    /// </summary>
+    [HttpPost("close")]
+    public async Task<ActionResult<ApiResponse<object?>>> Close([FromBody] PlanCodeRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req?.Code))
+            return Ok(ApiResponse<object?>.Fail("缺少计划 Code"));
+
+        var cur = await Entity.GetListAsync(p => p.Code == req.Code && !p.IsDeleted);
+        var row = cur.Success ? cur.Data?.FirstOrDefault() : null;
+        if (row == null)
+            return Ok(ApiResponse<object?>.Fail($"计划不存在：{req.Code}"));
+
+        if (row.Status == "closed")
+            return Ok(ApiResponse<object?>.Ok(new { Code = row.Code, Status = row.Status }));
+
+        // 队列正在写库时不允许关闭：关闭会让页面立刻只读，而队列仍在后台落库
+        var running = await _taskSvc.GetListAsync(t =>
+            t.PlanCode == row.Code && t.Status == "running" && !t.IsDeleted);
+        var runningTask = running.Success ? running.Data?.FirstOrDefault() : null;
+        if (runningTask != null)
+            return Ok(ApiResponse<object?>.Fail(
+                $"计划下还有任务在跑队列（{runningTask.TaskNo}），请等队列完成后再关闭"));
+
+        row.Status = "closed";
+        var upd = await UpdateCore(row);
+        if (!upd.Success)
+            return Ok(ApiResponse<object?>.Fail(upd.Error ?? "关闭计划失败"));
+
+        return Ok(ApiResponse<object?>.Ok(new { Code = row.Code, Status = row.Status }));
     }
 }

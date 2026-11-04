@@ -98,4 +98,22 @@ public class CertEvidenceController : ControllerBase
             ? ApiResponse.Ok("更新成功")
             : ApiResponse.Fail(result.Error!);
     }
+
+    // ============================================================
+    // 五、删除
+    // ============================================================
+
+    /// <summary>POST /api/Auditor/CertEvidence/delete — 软删证据</summary>
+    /// <remarks>页面锁（F12）：队列执行期间禁止改证据，命中返回 409。</remarks>
+    [HttpPost("delete")]
+    public async Task<ApiResponse> Delete([FromBody] CertEvidenceDeleteRequest req)
+    {
+        var pageLock = await _taskSvc.AssertPageEditableByEvidenceAsync(req.Code);
+        if (!pageLock.Success) return ApiResponse.Fail(pageLock.Error!, pageLock.Code ?? 409);
+
+        var result = await _evidenceSvc.DeleteAsync(UserCode, req.Code);
+        return result.Success
+            ? ApiResponse.Ok("删除成功")
+            : ApiResponse.Fail(result.Error!);
+    }
 }

@@ -32,6 +32,7 @@ import {
 import type {
   CertPlanCheckItemRow, CertPlanCheckItemDetail, ContactPerson,
 } from '@share/api/auditor/cert-check-task'
+import { CONCLUSION_LABELS, labelOf } from '@/components/check/verdict'
 
 const props = defineProps<{
   planCode: string
@@ -322,7 +323,7 @@ async function saveItemDetail() {
   }
   busy.save = true
   try {
-    const res = await saveCheckResult(d.ResultCode, editForm.conclusion, editForm.reason)
+    const res = await saveCheckResult(d.ResultCode, editForm.conclusion, null, editForm.reason)
     if (res?.success) {
       d.Conclusion = editForm.conclusion || d.Conclusion
       d.Reason = editForm.reason
@@ -564,7 +565,9 @@ onBeforeUnmount(() => {
         <el-table-column label="PrepState / 结论" width="140" align="center">
           <template #default="{ row }">
             <span v-if="row.PrepState" class="wb-prep-state">{{ row.PrepState }}</span>
-            <span v-if="row.Conclusion" class="wb-conclusion">{{ row.Conclusion }}</span>
+            <span v-if="row.Conclusion" class="wb-conclusion">
+              {{ labelOf(CONCLUSION_LABELS, row.Conclusion) }}
+            </span>
             <span v-if="!row.PrepState && !row.Conclusion" class="wb-muted">—</span>
           </template>
         </el-table-column>
@@ -630,7 +633,9 @@ onBeforeUnmount(() => {
           <div class="wb-summary">
             <div class="wb-summary-row">
               <span class="wb-summary-label">结论：</span>
-              <el-tag v-if="detail.Conclusion" size="small" type="primary">{{ detail.Conclusion }}</el-tag>
+              <el-tag v-if="detail.Conclusion" size="small" type="primary">
+                {{ labelOf(CONCLUSION_LABELS, detail.Conclusion) }}
+              </el-tag>
               <span v-else class="wb-muted">待分析</span>
               <el-button
                 link
@@ -742,12 +747,11 @@ onBeforeUnmount(() => {
             <div class="wb-zone-title">编辑结论</div>
             <el-form label-position="top" size="small">
               <el-form-item label="结论">
-                <el-select v-model="editForm.conclusion" style="width: 100%;">
-                  <el-option label="conformant（符合）" value="conformant" />
-                  <el-option label="observation（观察项）" value="observation" />
-                  <el-option label="minor_nc（一般不符合）" value="minor_nc" />
-                  <el-option label="major_nc（严重不符合）" value="major_nc" />
-                  <el-option label="unknown（待定）" value="unknown" />
+                <el-select v-model="editForm.conclusion" placeholder="请选择结论" style="width: 100%;">
+                  <el-option label="符合（pass）" value="pass" />
+                  <el-option label="观察项（ofi）" value="ofi" />
+                  <el-option label="不符合（nc）" value="nc" />
+                  <el-option label="不适用（na）" value="na" />
                 </el-select>
               </el-form-item>
               <el-form-item label="判定依据">

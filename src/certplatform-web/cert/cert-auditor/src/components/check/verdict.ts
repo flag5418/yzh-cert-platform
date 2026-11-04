@@ -5,7 +5,7 @@
  *   后端有**四套状态词表**同时在跑，页面上一旦混用，审核员看到的字就自相矛盾：
  *     ① PrepState        准备分支五态  found / partial / missing / unknown / na
  *     ② Conclusion       检查分支四态  pass / ofi / nc / na
- *     ③ LLM 原始结论      conformant / observation / minor_nc / major_nc（只在库里，不上页面）
+ *     ③ LLM 原始结论      conformant / observation / minor_nc / major_nc（仅 LLM 输出，落库前归一为 ②）
  *     ④ DimensionConformity  conform / nonconform / na / unverifiable（维度级，二期）
  *   后端已用 `CertVerdictMapper` 把 ③ 归一化到 ②，前端在这里把 ② / ① 翻成中文。
  *

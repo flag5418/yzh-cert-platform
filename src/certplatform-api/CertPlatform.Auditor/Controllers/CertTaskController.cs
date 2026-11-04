@@ -118,7 +118,7 @@ public class CertTaskController : ControllerBase
         if (!pageLock.Success) return ApiResponse.Fail(pageLock.Error!, pageLock.Code ?? 409);
 
         var result = await _taskSvc.SaveResultAsync(
-            UserCode, req.ResultCode, req.Conclusion, req.Reason);
+            UserCode, req.ResultCode, req.Conclusion, req.Reason, req.Severity);
         return result.Success
             ? ApiResponse.Ok("保存成功")
             : ApiResponse.Fail(result.Error!);
@@ -370,7 +370,10 @@ public class LockResultRequest
 public class SaveResultRequest
 {
     public string ResultCode { get; set; } = string.Empty;
+    /// <summary>审核员判定结论 pass / ofi / nc / na（必填）</summary>
     public string? Conclusion { get; set; }
+    /// <summary>不符合程度 major / minor（Conclusion=nc 时必填）</summary>
+    public string? Severity { get; set; }
     public string? Reason { get; set; }
 }
 

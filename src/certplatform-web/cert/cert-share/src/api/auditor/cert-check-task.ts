@@ -81,7 +81,7 @@ export interface CertCheckResultRow {
   TaskItemCode: string
   CheckItemCode: string
   PrepState: string | null
-  Conclusion: string // conformant | minor_nc | major_nc | observation | unknown
+  Conclusion: string // pass | ofi | nc | na（落库四态，唯一值域）
   Summary: string | null
   Recommendation: string | null
   Confidence: number
@@ -169,15 +169,17 @@ export async function unlockConclusion(resultCode: string): Promise<ApiResponse>
   return yzhApi.post(TASK_BASE + '/unlock-result', resultCode)
 }
 
-/** POST /api/Auditor/CertTask/save-result — 保存人工结论（结论 + 判定依据） */
+/** POST /api/Auditor/CertTask/save-result — 保存审核员判定（结论 + 不符合程度 + 判定依据） */
 export async function saveCheckResult(
   resultCode: string,
-  conclusion: string,
+  conclusion: string | null,
+  severity?: string | null,
   reason?: string,
 ): Promise<ApiResponse> {
   return yzhApi.post(TASK_BASE + '/save-result', {
     ResultCode: resultCode,
     Conclusion: conclusion,
+    Severity: severity ?? undefined,
     Reason: reason,
   })
 }
@@ -262,6 +264,8 @@ export interface CertEvidenceAddResponse {
 export interface CertEvidenceUpdateRequest {
   Code: string
   SourceName?: string
+  /** 证据类型（interview / onsite_media / sample / manual …） */
+  EvidenceKind?: string
   LlmSummary?: string
   Snippet?: string
   SourceCode?: string
@@ -283,6 +287,25 @@ export async function addEvidence(req: CertEvidenceAddRequest): Promise<ApiRespo
 /** POST /api/Auditor/CertEvidence/update — 更新证据 */
 export async function updateEvidence(req: CertEvidenceUpdateRequest): Promise<ApiResponse> {
   return yzhApi.post(EVIDENCE_BASE + '/update', req)
+}
+
+/** POST /api/Auditor/CertEvidence/delete — 软删证据 */
+export async function deleteEvidence(code: string): Promise<ApiResponse> {
+  return yzhApi.post(EVIDENCE_BASE + '/delete', { Code: code })
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 六·五、认证计划（关闭）
+// ══════════════════════════════════════════════════════════════════════
+
+const PLAN_BASE = '/api/Auditor/AuditPlan'
+
+/**
+ * POST /api/Auditor/AuditPlan/close — 关闭计划。
+ * 关闭后该计划对应的认证准备 / 认证检查一并作废，只能查看。
+ */
+export async function closeAuditPlan(planCode: string): Promise<ApiResponse<{ Code: string; Status: string }>> {
+  return yzhApi.post(PLAN_BASE + '/close', { Code: planCode })
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -307,20 +330,38 @@ export interface CertPlanCheckItemRow {
   TasksJson: string | null
   PrepState: string | null
   Conclusion: string | null
+  /** 系统建议结论 / 建议程度（AI 产出，仅供参考，⛔ 不是最终结论） */
+  AiConclusion?: string | null
+  AiSeverity?: string | null
+  /** 是否已由审核员判定（ConclusionBy 非空） */
+  ConclusionConfirmed?: boolean
   Severity: string | null
   NcSuggested: boolean | null
+  /** 负责审核员（审核人信息） */
+  OwnerCode?: string | null
+  OwnerName?: string | null
   IsLocked: boolean
   RawEvidenceCount: number
   CheckEvidenceCount: number
   DoubtCount: number
   SupplementCount: number
   Sort: number
+  /** 自动分析状态：none（未分析）/ done（已完成）/ failed（失败） */
+  AnalysisState?: string
+  /** none / suggested（证据变化后建议重新分析） */
+  RerunState?: string
+  TaskItemCode?: string | null
+  LastAnalyzedAt?: string | null
 }
 
 /** 计划统一视图聚合响应 */
 export interface CertPlanChecklistResponse {
   PlanCode: string
   PlanName: string | null
+  /** 计划状态：active 进行中 / closed 已关闭（关闭后准备/检查只读） */
+  PlanStatus?: string | null
+  /** 计划已关闭 —— 前端据此把编辑入口全部置灰，只保留查看 */
+  PlanClosed?: boolean
   EnterpriseName: string | null
   StageName: string | null
   TasksJson: string | null
@@ -350,8 +391,20 @@ export interface CertPlanCheckItemDetail {
   DeptContactsJson: string | null
   PrepState: string | null
   Conclusion: string | null
+  /** 系统建议结论 / 建议程度（AI 产出，仅供参考） */
+  AiConclusion?: string | null
+  AiSeverity?: string | null
   Severity: string | null
   Reason: string | null
+  /** 判定人（Code / 姓名 / 时间） */
+  ConclusionBy?: string | null
+  ConclusionByName?: string | null
+  ConclusionAt?: string | null
+  /** 是否已由审核员判定 */
+  ConclusionConfirmed?: boolean
+  /** 负责审核员（审核人信息） */
+  OwnerCode?: string | null
+  OwnerName?: string | null
   NcSuggested: boolean | null
   IsLocked: boolean
   LockedBy: string | null
@@ -359,6 +412,13 @@ export interface CertPlanCheckItemDetail {
   RawEvidences: CertEvidenceRow[]
   CheckEvidences: CertEvidenceRow[]
   DoubtsJson: string | null
+  /** 自动分析状态：none（未分析）/ done（已完成）/ failed（失败） */
+  AnalysisState?: string
+  /** none / suggested（证据变化后建议重新分析） */
+  RerunState?: string
+  TaskItemCode?: string | null
+  AnalyzeCount?: number
+  LastAnalyzedAt?: string | null
 }
 
 /** 导出报告响应 */
@@ -497,6 +557,11 @@ export interface CertWorklistRow {
   PrepState: string | null
   /** onsite：pass / ofi / nc / na —— 准备分支恒为 null（不签发 NC） */
   Conclusion: string | null
+  /** 系统建议结论 / 建议程度（AI 产出，仅供参考，⛔ 不是最终结论） */
+  AiConclusion?: string | null
+  AiSeverity?: string | null
+  /** 是否已由审核员判定 */
+  ConclusionConfirmed?: boolean
   Severity: string | null
   NcSuggested: boolean | null
   ReasonBrief: string | null
@@ -505,8 +570,12 @@ export interface CertWorklistRow {
   AnalysisCode: string | null
   /** 任务项 Code —— analyze-item 的入参；null 表示该分支还没建过任务 */
   TaskItemCode: string | null
-  /** waiting / analyzed / locked */
+  /** waiting / analyzed / locked / failed */
   State: string
+  /** 自动分析状态：none（未分析）/ done（已完成）/ failed（失败） */
+  AnalysisState?: string
+  /** none / suggested（证据变化后建议重新分析） */
+  RerunState?: string
 
   IsLocked: boolean
   LockedBy: string | null
@@ -525,6 +594,10 @@ export interface CertWorklistSummary {
   Waiting: number
   Analyzed: number
   Locked: number
+  /** 自动分析失败 */
+  Failed?: number
+  /** 已分析但证据变化，建议重新分析 */
+  RerunSuggested?: number
   NcCount: number
   MissingCount: number
   DoubtCount: number
@@ -593,4 +666,90 @@ export async function getMemberOptions(
   keyword?: string,
 ): Promise<ApiResponse<CertMemberOption[]>> {
   return yzhApi.post(TASK_BASE + '/member-options', { Keyword: keyword || undefined })
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 条款详细内容（详情页点条款编号的小弹窗）
+// ══════════════════════════════════════════════════════════════════════
+
+export interface CertClauseContentRow {
+  Code: string
+  ClauseNumber: string
+  Title: string
+  /** 条款原文或摘要 */
+  Description?: string | null
+  StandardName?: string | null
+  Abbrev?: string | null
+}
+
+/** GET /api/Auditor/CertQuery/clause-content — 按计划明细取精确条款内容（避免跨标准同号歧义） */
+export async function getClauseContent(
+  detailCode: string,
+): Promise<ApiResponse<CertClauseContentRow[]>> {
+  return yzhApi.get('/api/Auditor/CertQuery/clause-content', { detailCode })
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 入场检查内容（认证准备「检查内容」：查什么 / 怎么查，可多条）
+// ══════════════════════════════════════════════════════════════════════
+
+const ONSITE_PLAN_BASE = '/api/Auditor/CertOnsitePlan'
+
+/** 入场检查内容行 */
+export interface CertCheckContentRow {
+  Code: string
+  CheckItemCode: string
+  SeqNo: number
+  CheckWhat: string
+  CheckMethod: string | null
+  TargetDept: string | null
+  SampleRequirement: string | null
+  ExpectedFinding: string | null
+  ClauseCodes: string | null
+  /** manual / ai */
+  Source: string
+  /** planned / done / skipped */
+  Status: string
+  Sort: number
+  Remark: string | null
+}
+
+/** 保存检查内容（Code 有值 = 更新） */
+export interface CertCheckContentSaveRequest {
+  Code?: string
+  CheckItemCode: string
+  CheckWhat: string
+  CheckMethod?: string
+  TargetDept?: string
+  SampleRequirement?: string
+  ExpectedFinding?: string
+  ClauseCodes?: string
+  Remark?: string
+  Sort?: number
+}
+
+/** POST /api/Auditor/CertOnsitePlan/list — 查询某检查项的「检查内容」 */
+export async function listCheckContents(
+  checkItemCode: string,
+): Promise<ApiResponse<CertCheckContentRow[]>> {
+  return yzhApi.post(ONSITE_PLAN_BASE + '/list', { CheckItemCode: checkItemCode })
+}
+
+/** POST /api/Auditor/CertOnsitePlan/save — 新增 / 更新检查内容 */
+export async function saveCheckContent(
+  req: CertCheckContentSaveRequest,
+): Promise<ApiResponse<CertCheckContentRow>> {
+  return yzhApi.post(ONSITE_PLAN_BASE + '/save', req)
+}
+
+/** POST /api/Auditor/CertOnsitePlan/delete — 删除检查内容（软删） */
+export async function deleteCheckContent(code: string): Promise<ApiResponse> {
+  return yzhApi.post(ONSITE_PLAN_BASE + '/delete', { Code: code })
+}
+
+/** POST /api/Auditor/CertOnsitePlan/generate — 系统自动生成检查内容 */
+export async function generateCheckContents(
+  checkItemCode: string,
+): Promise<ApiResponse<CertCheckContentRow[]>> {
+  return yzhApi.post(ONSITE_PLAN_BASE + '/generate', { CheckItemCode: checkItemCode })
 }

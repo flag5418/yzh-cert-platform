@@ -11,12 +11,16 @@
  *   企业   POST /api/Auditor/Enterprise/filter
  *   标准   GET  /api/Auditor/CertQuery/standards   （含简称 Abbrev）
  *   条款   GET  /api/Auditor/CertQuery/clauses?standardCode=xx
- *   阶段   GET  /api/Auditor/CertQuery/stages
- *   部门   POST /api/Auditor/EnterpriseDept/filter （需先选企业）
+ *   阶段   GET  /api/Auditor/CertQuery/stages      （下拉只取 Category='audit'）
+ *   部门   POST /api/Auditor/EnterpriseDept/tree/children （企业节点 → 部门子树）
  *   保存   POST /api/Auditor/AuditPlan/save
  *   明细   GET  /api/Auditor/AuditPlan/details?planCode=xx
  *
  * ★ 简称只在「条款序号」上作为前缀（如 e 4.3），不替换标准名称。
+ * ★ 阶段只列 GB/T 审核类阶段（S1/S2/SV/RC/SA/TT）；申请受理/合同评审/认证决定/证书状态
+ *   属于认证流程动作，不构成入场计划要执行的审核阶段。
+ * ★ 部门可空：多数条款（4.1/5.1/6.1 等公司级条款）在计划期并不落到具体部门，
+ *   报告里也按「受审核部门/场所」分册而非全局必填（见 案例资料/脱敏版）。
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import {
@@ -24,17 +28,20 @@ import {
   ElTree, ElTag, ElSteps, ElStep, ElDescriptions, ElDescriptionsItem, ElMessage,
 } from 'element-plus'
 import { yzhApi } from '@yzh-core/api/client'
+import { confirmOrFalse } from '@yzh-core'
 import router from '@/router'
-import { createCertTask } from '@share/api/auditor/cert-check-task'
-import AuditPrepWorkbench from './audit-prep-workbench.vue'
+import {
+  closeAuditPlan, getMemberOptions, type CertMemberOption,
+} from '@share/api/auditor/cert-check-task'
 
 interface StandardItem { Code: string; StandardCode: string; StandardName: string; Abbrev: string }
 interface StageItem { Code: string; StageCode: string; StageName: string; Category: string }
 interface EnterpriseItem { Code: string; Name: string }
 interface DeptItem { Code: string; DeptName: string; ParentCode: string | null }
+interface DeptNode { Code: string; Name: string; ParentCode: string | null; NodeType?: string; IsLeaf?: boolean; Extra?: Record<string, any> }
 interface ClauseItem { Code: string; StandardCode: string; ClauseNumber: string; Title: string; ParentCode: string | null }
-interface PlanRow { Code: string; Name: string; EnterpriseCode: string; StageCode: string; Standards: string; IsValid: number; CreateTime?: string }
-interface Selection { deptCodes: string[]; deptNames: string[]; clauseCodes: string[]; clauseNumbers: string[] }
+interface PlanRow { Code: string; Name: string; EnterpriseCode: string; StageCode: string; Standards: string; IsValid: number; Status?: string; CreateTime?: string }
+interface Selection { deptCodes: string[]; deptNames: string[]; clauseCodes: string[]; clauseNumbers: string[]; ownerCode: string; ownerName: string }
 
 const plans = ref<PlanRow[]>([])
 const enterprises = ref<EnterpriseItem[]>([])
@@ -42,6 +49,7 @@ const standards = ref<StandardItem[]>([])
 const stages = ref<StageItem[]>([])
 const depts = ref<DeptItem[]>([])
 const clausesByStd = ref<Record<string, ClauseItem[]>>({})
+const members = ref<CertMemberOption[]>([])
 
 const stdMap = computed(() => { const m: Record<string, StandardItem> = {}; standards.value.forEach(s => { m[s.Code] = s }); return m })
 const stageMap = computed(() => { const m: Record<string, StageItem> = {}; stages.value.forEach(s => { m[s.Code] = s }); return m })
@@ -57,11 +65,19 @@ const stdAbbrev = (c: string) => stdMap.value[c]?.Abbrev || ''
 const stageName = (c: string) => stageMap.value[c]?.StageName || c
 const deptName = (c: string) => depts.value.find(d => d.Code === c)?.DeptName || c
 const splitCsv = (s?: string) => (s || '').split(',').filter(Boolean)
+/** 后端时间形如 2026-11-03T10:20:30 / 2026-11-03 10:20:30 —— 统一成可读格式 */
+const fmtTime = (s?: string) => (s ? s.replace('T', ' ').slice(0, 19) : '—')
 
 // ──── 加载 ────
 async function loadPlans() {
-  const res = await yzhApi.post('/api/Auditor/AuditPlan/filter', { Page: 1, PageSize: 100, Filters: [] })
-  plans.value = res?.data?.Items || []
+  // ★ ShowDisabled=true：计划只增不废，历史计划（旧数据里 IsValid=0）也必须显示，
+  //   否则用户会看到「新建一次计划，之前的计划全没了」。
+  const res = await yzhApi.post('/api/Auditor/AuditPlan/filter', {
+    Page: 1, PageSize: 200, ShowDisabled: true, Filters: [],
+  })
+  const items: PlanRow[] = res?.data?.Items || []
+  // ★ 按建立时间倒序：最新计划在最上面
+  plans.value = items.sort((a, b) => (b.CreateTime || '').localeCompare(a.CreateTime || ''))
 }
 async function loadEnterprises() {
   const res = await yzhApi.post('/api/Auditor/Enterprise/filter', {
@@ -73,19 +89,52 @@ async function loadStandards() {
   const res = await yzhApi.request('/api/Auditor/CertQuery/standards', { method: 'GET' })
   standards.value = res?.data || []
 }
+/** 入场计划下拉只允许选择 GB/T 审核类阶段（cert_cert_stage.Category='audit'），并按固定顺序排列 */
+const AUDIT_STAGE_ORDER = ['S1', 'S2', 'SV', 'RC', 'SA', 'TT']
 async function loadStages() {
   const res = await yzhApi.request('/api/Auditor/CertQuery/stages', { method: 'GET' })
   stages.value = res?.data || []
 }
+/** 下拉数据源（audit 类阶段）；stages 保留全量用于历史计划 StageCode → 名称映射 */
+const auditStages = computed(() =>
+  stages.value
+    .filter(s => s.Category === 'audit')
+    .sort((a, b) => AUDIT_STAGE_ORDER.indexOf(a.StageCode) - AUDIT_STAGE_ORDER.indexOf(b.StageCode)),
+)
+
+/**
+ * 部门数据源 = 左树接口（企业节点 → 顶层部门 → 子部门逐级展开）。
+ * ⛔ 不能用 `/EnterpriseDept/filter`：基类的 filter 查的是右表「部门人员」
+ *    （cert_enterprise_dept_member），根本没有 DeptName 列，取回来必然是空树。
+ *
+ * 部门可选：企业未维护部门时返回空列表，向导仍允许「只勾条款」加入已选。
+ */
 async function loadDepts(entCode: string) {
-  const res = await yzhApi.post('/api/Auditor/EnterpriseDept/filter', {
-    Page: 1, PageSize: 500,
-    Filters: [
-      { Field: 'EnterpriseCode', Operator: 'eq', Value: entCode },
-      { Field: 'IsValid', Operator: 'eq', Value: '1' },
-    ],
-  })
-  depts.value = res?.data?.Items || []
+  depts.value = []
+  if (!entCode) return
+  const collected: DeptItem[] = []
+
+  async function walk(parentCode: string, level: number) {
+    const res = await yzhApi.post('/api/Auditor/EnterpriseDept/tree/children', {
+      ParentCode: parentCode,
+      Level: level,
+    })
+    // 失败要显式报出，否则空树会被误读成「企业本来就没有部门」
+    if (res?.success === false) {
+      ElMessage.error(res?.err || res?.message || '加载企业部门失败')
+      return
+    }
+    const nodes: DeptNode[] = res?.data || []
+    for (const n of nodes) {
+      if (n.NodeType !== 'dept') continue
+      if (Number(n.Extra?.IsValid ?? 1) === 0) continue
+      collected.push({ Code: n.Code, DeptName: n.Name, ParentCode: n.ParentCode ?? null })
+      if (!n.IsLeaf) await walk(n.Code, level + 1)
+    }
+  }
+
+  await walk(entCode, 0)
+  depts.value = collected
 }
 async function loadClausesForStandards(stdCodes: string[]) {
   const map: Record<string, ClauseItem[]> = {}
@@ -106,8 +155,12 @@ const step = ref(1)
 const draft = reactive({ enterprise: '', standards: [] as string[], stage: '' })
 const selections = ref<Selection[]>([])
 const saving = ref(false)
+const ownerCode = ref('')
 const deptTreeRef = ref<any>(null)
 const clauseTreeRef = ref<any>(null)
+/** 空 = 新建；非空 = 正在调整的计划 Code */
+const editingPlanCode = ref('')
+const wizardTitle = computed(() => (editingPlanCode.value ? '调整认证计划' : '新建认证计划'))
 
 const previewMaster = computed(() => ({
   Name: `${entName(draft.enterprise)}·${stageName(draft.stage)}·认证计划`,
@@ -141,7 +194,8 @@ const clauseTreeData = computed(() => {
   })
 })
 
-function openWizard() {
+async function openWizard() {
+  editingPlanCode.value = ''
   step.value = 1
   draft.enterprise = ''
   draft.standards = []
@@ -149,7 +203,58 @@ function openWizard() {
   selections.value = []
   depts.value = []
   clausesByStd.value = {}
+  ownerCode.value = ''
   wizardVisible.value = true
+  // 审核员下拉数据源 = 专家组成员池（与检查项「设置负责审核员」同一来源）
+  await ensureMembers()
+}
+
+async function ensureMembers() {
+  if (members.value.length) return
+  const res = await getMemberOptions()
+  members.value = res?.data || []
+}
+
+/**
+ * 调整已有计划（2026-11-03 用户纠正：计划可重新调整）。
+ * 把已有明细还原成「已选组合」，部门 / 条款范围与负责审核员都可改，保存时带 Code 走更新。
+ */
+async function openEdit(row: PlanRow) {
+  editingPlanCode.value = row.Code
+  step.value = 1
+  selections.value = []
+  depts.value = []
+  clausesByStd.value = {}
+  draft.enterprise = row.EnterpriseCode
+  draft.standards = splitCsv(row.Standards)
+  draft.stage = row.StageCode
+  ownerCode.value = ''
+  wizardVisible.value = true
+  await ensureMembers()
+  await loadDepts(row.EnterpriseCode)
+  await loadClausesForStandards(draft.standards)
+  const res = await yzhApi.get('/api/Auditor/AuditPlan/details', { planCode: row.Code })
+  const details: any[] = res?.data || []
+  selections.value = details.map(d => {
+    const clauseCodes = splitCsv(d.Clauses)
+    // 旧数据可能只有 ClauseNumbers 没有 Clauses —— 此时按编号标签原样展示，避免组合凭空消失
+    const clauseNumbers = clauseCodes.length
+      ? clauseCodes.map(c => { const cl = clauseMap.value[c]; return cl ? `${stdAbbrev(cl.StandardCode)} ${cl.ClauseNumber}` : c })
+      : splitCsv(d.ClauseNumbers)
+    return {
+      deptCodes: splitCsv(d.Departments),
+      deptNames: splitCsv(d.DeptNames),
+      clauseCodes,
+      clauseNumbers,
+      ownerCode: d.OwnerCode || '',
+      ownerName: d.OwnerName || '',
+    }
+  })
+}
+
+/** 已选组合里改审核员：姓名以成员池为准（与后端校验同源） */
+function onOwnerChange(row: Selection) {
+  row.ownerName = members.value.find(m => m.Code === row.ownerCode)?.Name || ''
 }
 
 function toggleStd(code: string) {
@@ -171,16 +276,36 @@ async function next() {
   }
 }
 
+/**
+ * 收集树勾选结果（含半选的父级）。
+ *
+ * 树已去掉 check-strictly：勾父级 → 自动勾选全部子级；只勾子级时父级为半选，
+ * 这里把半选父级一并收进来（用户 2026-11-03 要求「选子节点时父节点也要选中」）。
+ * 标准分组伪节点（STD:xxx）永远排除。
+ */
+function collectTreeKeys(treeRef: any): string[] {
+  const checked: string[] = (treeRef?.getCheckedKeys() || []) as string[]
+  const half: string[] = (treeRef?.getHalfCheckedKeys?.() || []) as string[]
+  return Array.from(new Set([...checked, ...half])).filter(c => !c.startsWith('STD:'))
+}
+
 function addSelection() {
-  const deptCodes: string[] = (deptTreeRef.value?.getCheckedKeys() || []).filter((c: string) => !c.startsWith('STD:'))
-  const clauseCodes: string[] = (clauseTreeRef.value?.getCheckedKeys() || []).filter((c: string) => !c.startsWith('STD:'))
+  const deptCodes = collectTreeKeys(deptTreeRef.value)
+  const clauseCodes = collectTreeKeys(clauseTreeRef.value)
   if (!clauseCodes.length) { ElMessage.warning('请至少勾选一个条款'); return }
+  // 每个组合必须落到一个负责审核员（报告里的条款要有审核人）；成员池为空时允许留空，后续在准备阶段补
+  if (members.value.length && !ownerCode.value) { ElMessage.warning('请先选择负责审核员'); return }
+  const member = members.value.find(m => m.Code === ownerCode.value)
   const deptNames = deptCodes.map(c => deptName(c))
   const clauseNumbers = clauseCodes.map(c => {
     const cl = clauseMap.value[c]
     return cl ? `${stdAbbrev(cl.StandardCode)} ${cl.ClauseNumber}` : c
   })
-  selections.value.push({ deptCodes, deptNames, clauseCodes, clauseNumbers })
+  selections.value.push({
+    deptCodes, deptNames, clauseCodes, clauseNumbers,
+    ownerCode: ownerCode.value,
+    ownerName: member?.Name || '',
+  })
   deptTreeRef.value?.setCheckedKeys([])
   clauseTreeRef.value?.setCheckedKeys([])
 }
@@ -191,7 +316,7 @@ async function savePlan() {
   try {
     const payload = {
       Plan: {
-        Code: '',
+        Code: editingPlanCode.value,
         Name: previewMaster.value.Name,
         EnterpriseCode: draft.enterprise,
         StageCode: draft.stage,
@@ -204,12 +329,14 @@ async function savePlan() {
         Departments: s.deptCodes.join(','),
         DeptNames: s.deptNames.join(','),
         ClauseNumbers: s.clauseNumbers.join(','),
+        OwnerCode: s.ownerCode || null,
       })),
     }
     const res = await yzhApi.post('/api/Auditor/AuditPlan/save', payload)
     if (res?.success) {
-      ElMessage.success('计划已保存')
+      ElMessage.success(editingPlanCode.value ? '计划已调整' : '计划已保存')
       wizardVisible.value = false
+      editingPlanCode.value = ''
       await loadPlans()
     } else {
       ElMessage.error(res?.err || res?.message || '保存失败')
@@ -221,21 +348,33 @@ async function savePlan() {
   }
 }
 
-// ──── 启动任务 ────
-const creatingTask = ref('')
-
-async function startTask(row: any, taskKind: string) {
-  creatingTask.value = taskKind
-  try {
-    const res = await createCertTask({ PlanCode: row.Code, TaskKind: taskKind, RunMode: 'full' })
-    const taskInfo = (res as any)?.data
-    ElMessage.success({ message: `已创建${taskKind === 'prep' ? '准备' : '检查'}任务：${taskInfo?.Name || taskInfo?.Code}`, duration: 3000 })
-    await router.push({ path: '/audit-task', query: { taskCode: taskInfo?.Code } })
-  } catch (e: any) {
-    ElMessage.error({ message: '创建任务失败：' + (e?.message || ''), duration: 5000 })
-  } finally {
-    creatingTask.value = ''
+// ──── 关闭计划 ────
+/**
+ * 关闭计划（2026-11-03 用户要求）：关闭后该计划对应的认证准备 / 认证检查一并作废，
+ * 只能查看、不能再编辑；计划本身也不再允许调整。
+ */
+async function closePlan(row: PlanRow) {
+  const ok = await confirmOrFalse(
+    `关闭计划「${row.Name}」后，其认证准备与认证检查将一并作废，只能查看、不能再编辑。`,
+    '关闭计划',
+  )
+  if (!ok) return
+  const res = await closeAuditPlan(row.Code)
+  if (res?.success === false) {
+    ElMessage.error(res?.err || res?.message || '关闭计划失败')
+    return
   }
+  ElMessage.success('计划已关闭，对应认证准备与认证检查已作废（只读）')
+  await loadPlans()
+}
+
+// ──── 进入认证准备 / 认证检查 ────
+// ★ 一个计划只对应唯一的准备 / 检查分支：从计划直接进详情，不再绕道任务列表或工作台。
+function openPrep(row: any) {
+  router.push(`/audit-prep/${row.Code}`)
+}
+function openOnsite(row: any) {
+  router.push(`/audit-onsite/${row.Code}`)
 }
 
 // ──── 查看详情（独立） ────
@@ -248,17 +387,6 @@ async function openView(row: any) {
   viewVisible.value = true
   const res = await yzhApi.request('/api/Auditor/AuditPlan/details', { method: 'GET', params: { planCode: row.Code } })
   viewDetails.value = res?.data || []
-}
-
-// ──── 认证工作台（统一视图）────
-const workbenchVisible = ref(false)
-const workbenchPlanCode = ref('')
-const workbenchPlanName = ref('')
-function openWorkbench(row: any) {
-  const plan = row as PlanRow
-  workbenchPlanCode.value = plan.Code
-  workbenchPlanName.value = plan.Name || ''
-  workbenchVisible.value = true
 }
 </script>
 
@@ -282,23 +410,33 @@ function openWorkbench(row: any) {
           <el-tag v-for="c in splitCsv(row.Standards)" :key="c" size="small" class="ap-tag">{{ stdName(c) }}</el-tag>
         </template>
       </el-table-column>
+      <el-table-column prop="CreateTime" label="建立时间" width="170" align="center" sortable>
+        <template #default="{ row }">{{ fmtTime(row.CreateTime) }}</template>
+      </el-table-column>
       <el-table-column label="状态" width="90" align="center">
         <template #default="{ row }">
-          <el-tag :type="row.IsValid === 1 ? 'success' : 'info'" size="small">{{ row.IsValid === 1 ? '启用' : '停用' }}</el-tag>
+          <el-tag v-if="row.Status === 'closed'" type="info" size="small">已关闭</el-tag>
+          <el-tag v-else :type="row.IsValid === 1 ? 'success' : 'info'" size="small">{{ row.IsValid === 1 ? '启用' : '停用' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="300" align="center">
+      <el-table-column label="操作" width="360" align="center">
         <template #default="{ row }">
           <el-button link type="primary" @click="openView(row)">查看</el-button>
-          <el-button link type="primary" @click="openWorkbench(row)">进入工作台</el-button>
-          <el-button link type="warning" :loading="creatingTask === 'prep'" :disabled="!!creatingTask" @click="startTask(row, 'prep')">开启准备</el-button>
-          <el-button link type="success" :loading="creatingTask === 'onsite'" :disabled="!!creatingTask" @click="startTask(row, 'onsite')">开启检查</el-button>
+          <el-button link type="primary" :disabled="row.Status === 'closed'" @click="openEdit(row as PlanRow)">调整</el-button>
+          <el-button link type="warning" @click="openPrep(row)">认证准备</el-button>
+          <el-button link type="success" @click="openOnsite(row)">认证检查</el-button>
+          <el-button
+            v-if="row.Status !== 'closed'"
+            link
+            type="danger"
+            @click="closePlan(row as PlanRow)"
+          >关闭</el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <!-- 新建向导 -->
-    <el-dialog v-model="wizardVisible" title="新建认证计划" width="1000px" :close-on-click-modal="false" destroy-on-close>
+    <!-- 新建 / 调整向导 -->
+    <el-dialog v-model="wizardVisible" :title="wizardTitle" width="1000px" :close-on-click-modal="false" destroy-on-close>
       <el-steps :active="step - 1" simple class="ap-steps">
         <el-step title="基本信息" />
         <el-step title="选择条款与部门" />
@@ -327,12 +465,15 @@ function openWorkbench(row: any) {
           </div>
         </div>
         <div class="ap-field">
-          <label>当前阶段</label>
-          <el-select v-model="draft.stage" placeholder="请选择阶段" class="ap-full">
-            <el-option v-for="s in stages" :key="s.Code" :label="s.StageName" :value="s.Code" />
+          <label>审核阶段（GB/T 审核类型，只列审核类）</label>
+          <el-select v-model="draft.stage" placeholder="请选择审核阶段" class="ap-full">
+            <el-option v-for="s in auditStages" :key="s.Code" :label="`${s.StageCode} · ${s.StageName}`" :value="s.Code" />
           </el-select>
         </div>
-        <div class="ap-hint">第一步只定范围：选企业、勾选本次要认证的标准（可多个）、选阶段。第二步再勾条款与部门。</div>
+        <div class="ap-hint">
+          第一步只定范围：选企业、勾选本次要认证的标准（可多个）、选审核阶段。第二步再勾条款与部门。
+          申请受理 / 合同评审 / 认证决定 / 证书状态属于认证流程动作，不在入场计划的可选阶段内。
+        </div>
       </div>
 
       <!-- ② 选择条款与部门 -->
@@ -344,12 +485,14 @@ function openWorkbench(row: any) {
               ref="deptTreeRef"
               :data="deptTreeData"
               show-checkbox
-              check-strictly
               node-key="Code"
               :props="{ label: 'label', children: 'children' }"
               default-expand-all
             />
-            <div v-if="!deptTreeData.length" class="ap-hint">该企业暂无部门数据</div>
+            <div v-if="!deptTreeData.length" class="ap-hint">
+              该企业未维护部门 —— 部门为可选项，直接勾选条款即可加入。公司级条款（4.1 / 5.1 / 6.1 等）通常不落具体部门。
+            </div>
+            <div class="ap-hint">勾选父级部门会自动勾选全部下级；只勾下级时父级显示为半选，并会一并纳入本次范围。</div>
           </div>
           <div class="ap-box">
             <div class="ap-box-title">条款（按所选标准过滤，可多选）</div>
@@ -357,17 +500,28 @@ function openWorkbench(row: any) {
               ref="clauseTreeRef"
               :data="clauseTreeData"
               show-checkbox
-              check-strictly
               node-key="Code"
               :props="{ label: 'label', children: 'children' }"
               default-expand-all
             />
             <div v-if="!clauseTreeData.length" class="ap-hint">请返回上一步选择标准</div>
+            <div v-else class="ap-hint">勾选父级条款会自动勾选全部下级；只勾下级时父级显示为半选，并会一并纳入本次范围。</div>
           </div>
         </div>
         <div class="ap-add-row">
+          <el-select v-model="ownerCode" filterable clearable placeholder="负责审核员（必选）" class="ap-owner">
+            <el-option
+              v-for="m in members"
+              :key="m.Code"
+              :label="m.Name + (m.Title ? ' · ' + m.Title : '')"
+              :value="m.Code"
+            />
+          </el-select>
           <el-button type="primary" @click="addSelection">+ 加入已选</el-button>
-          <span class="ap-hint">可只勾条款（不选部门），或勾多个部门 + 条款一起加入。每次加入生成一条「选择组合」。</span>
+          <span class="ap-hint">可只勾条款（不选部门），或勾多个部门 + 条款一起加入。每次加入生成一条「选择组合」，并落到该审核员名下。</span>
+        </div>
+        <div v-if="!members.length" class="ap-hint">
+          专家组成员池为空：请先在「专家组设置」维护审核员，否则组合只能留空、后续在认证准备阶段再分配。
         </div>
         <div class="ap-selected">
           <div class="ap-box-title">已选页面（可删除）</div>
@@ -383,6 +537,25 @@ function openWorkbench(row: any) {
             <el-table-column label="条款" min-width="260">
               <template #default="{ row }">
                 <el-tag v-for="(n, i) in row.clauseNumbers" :key="i" size="small" class="ap-tag">{{ n }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="负责审核员" width="200">
+              <template #default="{ row }">
+                <el-select
+                  v-model="row.ownerCode"
+                  size="small"
+                  filterable
+                  clearable
+                  placeholder="未分配"
+                  @change="onOwnerChange(row as Selection)"
+                >
+                  <el-option
+                    v-for="m in members"
+                    :key="m.Code"
+                    :label="m.Name + (m.Title ? ' · ' + m.Title : '')"
+                    :value="m.Code"
+                  />
+                </el-select>
               </template>
             </el-table-column>
             <el-table-column label="操作" width="80" align="center">
@@ -419,6 +592,12 @@ function openWorkbench(row: any) {
               <el-tag v-else type="info" size="small">（无部门）</el-tag>
             </template>
           </el-table-column>
+          <el-table-column label="负责审核员" width="120">
+            <template #default="{ row }">
+              <el-tag v-if="row.ownerName" size="small" class="ap-tag">{{ row.ownerName }}</el-tag>
+              <el-tag v-else type="warning" size="small">未分配</el-tag>
+            </template>
+          </el-table-column>
         </el-table>
       </div>
 
@@ -453,28 +632,17 @@ function openWorkbench(row: any) {
               <el-tag v-else type="info" size="small">（无部门）</el-tag>
             </template>
           </el-table-column>
+          <el-table-column label="负责审核员" width="120">
+            <template #default="{ row }">
+              <el-tag v-if="row.OwnerName" size="small" class="ap-tag">{{ row.OwnerName }}</el-tag>
+              <el-tag v-else type="warning" size="small">未分配</el-tag>
+            </template>
+          </el-table-column>
         </el-table>
       </template>
       <template #footer>
         <el-button @click="viewVisible = false">关闭</el-button>
       </template>
-    </el-dialog>
-
-    <!-- 认证工作台（V2 准备+检查一体化） -->
-    <el-dialog
-      v-model="workbenchVisible"
-      :title="workbenchPlanName ? `认证工作台 - ${workbenchPlanName}` : '认证工作台'"
-      width="96%"
-      top="2vh"
-      :close-on-click-modal="false"
-      destroy-on-close
-      class="workbench-dialog"
-    >
-      <AuditPrepWorkbench
-        v-if="workbenchVisible"
-        :plan-code="workbenchPlanCode"
-        :plan-name="workbenchPlanName"
-      />
     </el-dialog>
   </div>
 </template>
@@ -554,6 +722,10 @@ function openWorkbench(row: any) {
   align-items: center;
   gap: var(--yzh-space-2, 8px);
   margin: var(--yzh-space-3, 12px) 0;
+  flex-wrap: wrap;
+}
+.ap-owner {
+  width: 240px;
 }
 .ap-hint {
   font-size: var(--yzh-font-size-sm, 13px);
@@ -567,10 +739,5 @@ function openWorkbench(row: any) {
 }
 .ap-tag {
   margin: 0 var(--yzh-space-1, 4px) var(--yzh-space-1, 4px) 0;
-}
-.workbench-dialog :deep(.el-dialog__body) {
-  padding: 0;
-  height: 88vh;
-  overflow: hidden;
 }
 </style>
