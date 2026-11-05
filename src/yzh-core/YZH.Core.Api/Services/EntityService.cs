@@ -240,8 +240,8 @@ public class EntityService<T> where T : class, new()
             List<T> result;
             if (string.IsNullOrEmpty(parentCode))
             {
-                // 返回根节点（parent_code IS NULL）
-                var nullPredicate = BuildStringNullExpression("ParentCode");
+                // 返回根节点（ParentCode IS NULL OR ParentCode = ''：两种「无父」表示历史并存）
+                var nullPredicate = BuildStringNullOrEmptyExpression("ParentCode");
                 if (nullPredicate != null)
                 {
                     var queryResult = await _dbOrm.GetListAsync<T>(nullPredicate, includeDisabled);
@@ -800,6 +800,29 @@ public class EntityService<T> where T : class, new()
         var nullConstant = Expression.Constant(null, typeof(string));
         var equality = Expression.Equal(propertyAccess, nullConstant);
         return Expression.Lambda<Func<T, bool>>(equality, param);
+    }
+
+    /// <summary>
+    ///     构建字符串属性为 null 或空串的表达式（<code>IS NULL OR = ''</code>）
+    ///
+    ///     ★ 修复（2026-11-05）：树根判定 <c>ParentCode</c> 的「无父」表示在历史数据中
+    ///     有 <b>NULL</b> 与 <b>空串 ''</b> 两种（如 <c>cert_iso_standard</c> 标准数据为 ''），
+    ///     原先只查 IS NULL 导致这类树表（<b>tree/root</b>）返回空、族下无标准、右表无条款可维护。
+    ///
+    ///     只作用于「未指定根哨兵」（rootParentCode 为 null/空）的根查询分支；
+    ///     显式哨兵（如菜单的 RootParentCode='0'）仍走等值分支，契约不变。
+    /// </summary>
+    private static Expression<Func<T, bool>>? BuildStringNullOrEmptyExpression(string propertyName)
+    {
+        var property = typeof(T).GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+        if (property == null || property.PropertyType != typeof(string))
+            return null;
+
+        var param = Expression.Parameter(typeof(T), "e");
+        var propertyAccess = Expression.Property(param, property);
+        var nullCheck = Expression.Equal(propertyAccess, Expression.Constant(null, typeof(string)));
+        var emptyCheck = Expression.Equal(propertyAccess, Expression.Constant("", typeof(string)));
+        return Expression.Lambda<Func<T, bool>>(Expression.OrElse(nullCheck, emptyCheck), param);
     }
 
     // ==================== 错误格式化 ====================

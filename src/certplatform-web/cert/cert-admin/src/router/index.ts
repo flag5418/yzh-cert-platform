@@ -33,6 +33,8 @@ const businessRoutes: RouteRecordRaw[] = [
   { path: 'cert/clause-attr', name: 'CertClauseAttr', component: () => import('@/pages/cert/clause-attr/index.vue') },
   // ★ 条款属性通用提示词维护（P4）：管理 AI 预生成条款属性的提示词（PromptType = clause_attr）
   { path: 'cert/clause-prompt', name: 'CertClausePrompt', component: () => import('@/pages/cert/clause-prompt/index.vue') },
+  // ★ 条款管理（MENU_ISO_CLAUSE）—— 标准选择器 + 条款树（增/改/删/批量删除）
+  { path: 'cert/iso-clause', name: 'CertIsoClause', component: () => import('@/pages/foundation/iso-clause/index.vue') },
   { path: 'business/report-def', name: 'BusinessReportDef', component: () => import('@/pages/workflow/report-rule/index.vue') },
   { path: 'business/prompt-template', name: 'BusinessPromptTemplate', component: () => import('@/pages/workflow/prompt-template/index.vue') },
   { path: 'business/skill-manage', name: 'BusinessSkillManage', component: () => import('@/pages/workflow/skill-manage/index.vue') },

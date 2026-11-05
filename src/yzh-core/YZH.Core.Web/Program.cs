@@ -5,11 +5,13 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Reflection;
 using System.Text;
+using SqlSugar;
 using Serilog;
 using YZH.Core.Api.Services;
 using YZH.Core.Web;
 using YZH.Core.Web.Extensions;
 using YZH.Core.DataBase.Services;
+using YZH.Core.Stand.Models.Entity;
 using CertPlatform.Admin;
 using CertPlatform.Auditor;
 using CertPlatform.Shared;
@@ -292,6 +294,85 @@ builder.Services.AddCors(cors =>
 });
 
 var app = builder.Build();
+
+// ── CodeFirst 建表（仅当 CodeFirst:AutoCreate=true 时启用）──
+// 原理：扫描所有业务程序集中继承 BaseEntity 的实体类 → SqlSugar CodeFirst 自动建表。
+// 触发条件：appsettings.json CodeFirst:AutoCreate=true 且表尚不存在。
+// 幂等：InitTables 不删已有表，重复跑不会丢数据。
+// ★ MySQL FK 约束是 CodeFirst 批量建表的最大障碍（entity 排序随机 → ALTER 被 FK 拒）。
+//   关闭 FOREIGN_KEY_CHECKS 再建表 ⇒ 让 SqlSugar 按任意顺序建表 + 建 FK，最后统一校验。
+var autoCreate = builder.Configuration.GetValue<bool>("CodeFirst:AutoCreate");
+if (autoCreate)
+{
+    using (var scope = app.Services.CreateScope())
+    {
+        var dbFactory = scope.ServiceProvider.GetRequiredService<YZH.Core.DataBase.MultiDatabase.IDbContextFactory>();
+        var sugar = dbFactory.GetDefault().Client;
+
+        var entityTypes = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => a.GetName().Name is "CertPlatform.Shared" or "CertPlatform.Admin"
+                         or "CertPlatform.Auditor" or "CertPlatform.Enterprise"
+                         or "YZH.Core.Api" or "YZH.Core.Stand")
+            .SelectMany(a =>
+            {
+                try { return a.GetTypes(); }
+                catch (ReflectionTypeLoadException ex) { return ex.Types.Where(t => t != null)!; }
+            })
+            .Where(t => t is { IsClass: true, IsAbstract: false } && typeof(BaseEntity).IsAssignableFrom(t))
+            .ToArray();
+
+        Log.Information("[CodeFirst] 扫描到 {Count} 个实体类，开始建表...", entityTypes.Length);
+
+        try
+        {
+            // ★ 灾难恢复场景：假设数据库结构完整，先 DROP DATABASE 后 CREATE ⇒ 干净建表。
+            //   ⚠️ 此操作会删除所有数据！仅适用于空库恢复场景（AutoCreate=true 仅在首次启动或清库后使用）。
+            var connStr = sugar.CurrentConnectionConfig.ConnectionString;
+            var dbName = System.Text.RegularExpressions.Regex.Match(connStr, @"Database\s*=\s*([^;]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Groups[1].Value.Trim();
+            Log.Information("[CodeFirst] 准备删库重建: {Db}", dbName);
+
+            // 构建「无 Database」连接字符串（DROP/CREATE 时 MySQL 不允许连向正在删除的库）
+            var noDbConnStr = System.Text.RegularExpressions.Regex.Replace(connStr, @"Database\s*=\s*[^;]+;?", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            using var noDbSugar = new SqlSugarClient(new SqlSugar.ConnectionConfig
+            {
+                ConnectionString = noDbConnStr,
+                DbType = sugar.CurrentConnectionConfig.DbType,
+                InitKeyType = SqlSugar.InitKeyType.Attribute,
+                IsAutoCloseConnection = true,
+                ConfigureExternalServices = sugar.CurrentConnectionConfig.ConfigureExternalServices
+            });
+
+            noDbSugar.Ado.ExecuteCommand($"DROP DATABASE IF EXISTS `{dbName}`");
+            noDbSugar.Ado.ExecuteCommand($"CREATE DATABASE `{dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci");
+            noDbSugar.Close();
+
+            // 原来的 sugar 连接重建
+            sugar.Close();
+            sugar.Open();
+
+            // 逐实体建表（单个实体报错不阻断其余实体）
+            var ok = 0; var fail = 0;
+            foreach (var t in entityTypes)
+            {
+                try
+                {
+                    sugar.CodeFirst.InitTables(t);
+                    ok++;
+                }
+                catch (Exception ex)
+                {
+                    fail++;
+                    Log.Warning("[CodeFirst] 单实体建表失败 {Entity}: {Msg}", t.Name, ex.Message);
+                }
+            }
+            Log.Information("[CodeFirst] 建表完成：成功 {Ok} / 失败 {Fail} / 总计 {Total}", ok, fail, entityTypes.Length);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[CodeFirst] 建表过程出错（已忽略，表可能已存在或手动建库）");
+        }
+    }
+}
 
 // 后台任务里被吞掉的异常（Task 未 await / 未观察）→ 统一进 error 日志，避免静默失败
 TaskScheduler.UnobservedTaskException += (_, e) =>
