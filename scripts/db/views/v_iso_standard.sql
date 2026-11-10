@@ -1,18 +1,25 @@
 -- ============================================================
 -- 视图：v_iso_standard
--- 用途：ISO 标准列表（T+V 的 V 端）—— 含机构简称 CbName 与字典翻译列 CategoryName / StatusName
+-- 用途：ISO 标准列表（T+V 的 V 端）—— 含机构简称 CbName 与字典翻译列 CategoryName
 -- 引用表：cert_iso_standard / cert_certification_body / sys_dictionary / sys_dictionarylist
 -- 算法：MERGE（无 GROUP BY / UNION / DISTINCT / 聚合 ⇒ 谓词可下推到基表）
 -- 日期：2026-10-13 补录（★ 库中早已存在、scripts/db/views/ 缺档 ⇒ 见规范 §一 偏差 D-1）
+--       2026-11-06 修正：移除 s.Status / StatusName 两列
 --
 -- ★ 有效性规范（26-数据库视图设计规范-V1 §三）
 --   · 固化 IsDeleted = 0 —— 主表 + 3 张关联表全部（软删行 = 逻辑不存在）
 --   · ⛔ 不固化 IsValid —— 以列暴露（s.IsValid AS IsValid），由消费侧判
 --
--- ★ 消费现状（2026-10-13 实测）：**本视图当前无任何代码消费方**
+-- ★ 消费现状：**本视图当前无任何代码消费方**
 --   V 实体 CertPlatform.Shared/Entities/Cert/ISOStandardView.cs 仅自身声明、零引用
---   （其类注释「当前未创建」已过期 —— 视图确实存在，见本文件）
---   ⇒ 补录 DDL 属「补档 + 按规范加固」，无线上行为变更
+--   ⇒ 无线上行为变更
+--
+-- ★ 2026-11-06 修正说明（s.Status 移除的来龙去脉）：
+--   原 DDL 从旧库（2026-11-05 灾难前）补档，含 `s.Status` + `StatusName` 两列。
+--   11-05 CodeFirst 按实体重建后，`cert_iso_standard` 基表**不存在 Status 列**
+--   （实体 ISOStandard 亦无 Status 属性，有效性统一走 IsValid —— 铁律九）。
+--   原库.status 列属于历史遗留（未入实体），补档 DDL 误抄。
+--   本次移除这两列：有效性以 IsValid 列表达，与视图其余列口径一致。
 --
 -- ★ 补录时的加固说明（相对原库定义的行为差异，仅一处）：
 --   原定义 `LEFT JOIN cert_certification_body cb ON s.CbCode = cb.Code` **未**过滤 cb.IsDeleted。
@@ -39,12 +46,6 @@ SELECT
     s.Category,
     cat.DicName AS CategoryName,
     s.Description,
-    s.Status,
-    CASE s.Status
-        WHEN 'active'   THEN '启用'
-        WHEN 'inactive' THEN '停用'
-        ELSE s.Status
-    END AS StatusName,
     s.CreateBy,
     s.CreateTime,
     s.UpdateBy,

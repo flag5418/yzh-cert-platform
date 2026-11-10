@@ -98,7 +98,8 @@ namespace CertPlatform.Auditor.Entities.Expert
         public int GapCount { get; set; }
 
         /// <summary>执行进度 %</summary>
-        [SugarColumn(DecimalDigits = 2, ColumnDataType = "decimal(5,2)")]
+        // ★ 2026-11-06：删除 DecimalDigits —— 与 ColumnDataType="decimal(x,y)" 组合会致 SqlSugar 建表 SQL 语法错误
+        [SugarColumn(ColumnDataType = "decimal(5,2)")]
         public decimal Progress { get; set; }
 
         // ──── 时间与错误 ────

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>企业文档与审核报告映射</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #fbfbfd; color: #1d2129; padding: 40px 48px;
+  }
+  h1 { font-size: 26px; font-weight: 600; letter-spacing: .5px; }
+  .sub { margin-top: 10px; color: #646a73; font-size: 14px; line-height: 1.7; }
+  .wrap { display: flex; align-items: flex-start; margin-top: 34px; gap: 0; }
+  .root {
+    width: 250px; flex: none; padding: 22px 20px; border-radius: 10px;
+    background: linear-gradient(160deg,#1f3a5f,#2b5c8a); color: #fff;
+  }
+  .root .t { font-size: 17px; font-weight: 600; line-height: 1.5; }
+  .root .d { margin-top: 10px; font-size: 12.5px; line-height: 1.8; opacity: .85; }
+  .root .k { margin-top: 14px; font-size: 12px; opacity: .9; border-top: 1px solid rgba(255,255,255,.25); padding-top: 10px; }
+  .stem { width: 34px; flex: none; position: relative; }
+  .stem::before { content:""; position:absolute; left:0; top:50%; width:34px; height:2px; background:#d0d5dd; }
+  .branches { flex: 1; display: flex; flex-direction: column; gap: 12px; position: relative; }
+  .branches::before { content:""; position:absolute; left:-1px; top:0; bottom:0; width:2px; background:#d0d5dd; }
+  .br { display: flex; align-items: flex-start; gap: 14px; }
+  .bl {
+    width: 244px; flex: none; padding: 12px 14px; overflow: hidden; border-radius: 8px; background: #fff;
+    border: 1px solid #e5e8ec; border-left: 4px solid var(--c); box-shadow: 0 1px 2px rgba(0,0,0,.03);
+  }
+  .bl .h { font-size: 14.5px; font-weight: 600; }
+  .bl .p { margin-top: 6px; font-size: 12px; color: var(--c); font-weight: 600; }
+  .bl .n { margin-top: 4px; font-size: 11.5px; color: #8a9099; line-height: 1.6; }
+  .items { flex: 1; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; padding: 8px 0 8px 16px; }
+  .chip {
+    padding: 8px 12px; border-radius: 6px; background: #fff; border: 1px solid #e5e8ec;
+    font-size: 12.5px; line-height: 1.5; color: #333a45; max-width: 520px;
+  }
+  .chip b { color: var(--c); font-weight: 600; }
+  .bar { display: flex; height: 26px; border-radius: 4px; overflow: hidden; margin-top: 16px; border: 1px solid #e5e8ec; }
+  .seg { display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff; font-weight: 600; }
+  .legend { display: flex; gap: 20px; margin-top: 10px; font-size: 12px; color: #646a73; }
+  .legend span::before { content:""; display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; vertical-align:middle; background:var(--c); }
+  .foot { margin-top: 26px; padding-top: 14px; border-top: 1px dashed #d9dde3; font-size: 12.5px; color: #646a73; line-height: 1.8; }
+</style>
+</head>
+<body>
+  <h1>企业文档 → 审核报告：映射关系</h1>
+  <div class="sub">实证样本：3 份正式审核记录（1 份 80 页 QES 一体化、6 个部门、49,522 字、843 句）</div>
+
+  <div class="bar">
+    <div class="seg" style="width:42.6%;background:#3b6ea5">搬运 42.6%</div>
+    <div class="seg" style="width:20.5%;background:#5b8ec4">引用+概括 20.5%</div>
+    <div class="seg" style="width:11.3%;background:#7aa7d4">抽查 11.3%</div>
+    <div class="seg" style="width:11.0%;background:#a8763e">结论 11.0%</div>
+    <div class="seg" style="width:14.6%;background:#c9cdd4">短说明 14.6%</div>
+  </div>
+  <div class="legend">
+    <span style="--c:#3b6ea5">原文照抄</span>
+    <span style="--c:#5b8ec4">文件名+一句话概括</span>
+    <span style="--c:#7aa7d4">编号行明细</span>
+    <span style="--c:#a8763e">判断句</span>
+  </div>
+
+  <div class="wrap">
+    <div class="root">
+      <div class="t">报告文字从哪来</div>
+      <div class="d">报告不是"写"出来的，是搬 + 引 + 抽 + 断 拼出来的</div>
+      <div class="k">规则可做 74% ｜ 模型概括 20% ｜ 人判断 11%</div>
+    </div>
+    <div class="stem"></div>
+    <div class="branches">
+
+      <div class="br" style="--c:#3b6ea5">
+        <div class="bl">
+          <div class="h">① 四类转化</div>
+          <div class="p">加工度决定谁来做</div>
+          <div class="n">L0 复制 / L1 抽样 / L2 概括 / L3 判断</div>
+        </div>
+        <div class="items">
+          <div class="chip"><b>L0 搬运</b> 42.6%｜证件字段、合同条款、职责 a)–f) 逐条照抄</div>
+          <div class="chip"><b>L1 抽样</b> 11.3%｜"1、××，低压电工作业，2023-05-22 至 2029-05-21"</div>
+          <div class="chip"><b>L2 引用+概括</b> 20.5%｜文件名 +（编号）+ 规定的核心动作 + 本部门角色</div>
+          <div class="chip"><b>L3 结论</b> 11.0%｜基本符合 / 基本适宜 / 有效 / 待确认（封闭词表）</div>
+        </div>
+      </div>
+
+      <div class="br" style="--c:#2f7d5f">
+        <div class="bl">
+          <div class="h">② 文档类型 → 写法</div>
+          <div class="p">7 类，写法各不相同</div>
+          <div class="n">手册最长，程序最难压缩</div>
+        </div>
+        <div class="items">
+          <div class="chip"><b>手册·职责</b> a)b)c) 逐条搬运 → L0</div>
+          <div class="chip"><b>手册·工艺</b> 关键过程 / 特殊过程 / 外包过程 三行 → L1</div>
+          <div class="chip"><b>程序文件</b> 查见《X 程序》（编号），规定…… → L2</div>
+          <div class="chip"><b>指导书</b> 引用更短，有时只提名称 → L1–L2</div>
+          <div class="chip"><b>台账/清单</b> 抽 N 份，列明细 → L1</div>
+          <div class="chip"><b>合同</b> 名称 + 双方 + 标的 + 期限 + 签署 → L0</div>
+          <div class="chip"><b>证书</b> 证号 + 权利人 + 用途 + 期限 + 发证机关 → L0</div>
+        </div>
+      </div>
+
+      <div class="br" style="--c:#8256a8">
+        <div class="bl">
+          <div class="h">③ 三个难点</div>
+          <div class="p">难在选与归位，不在抽</div>
+          <div class="n">抽错位置不报错，只表现为没证据</div>
+        </div>
+        <div class="items">
+          <div class="chip"><b>选哪几份</b> 同条款多份可用，报告只写 2–3 份 → 抽样策略，规则默认+人调</div>
+          <div class="chip"><b>归位到条款×部门</b> 一份培训记录同时服务 7.2 与 7.3 → 映射表一次确认后固定</div>
+          <div class="chip"><b>长段压成一句</b> 5 页程序 → 一句"规定了……" → 唯一必须模型的环节</div>
+        </div>
+      </div>
+
+      <div class="br" style="--c:#c2703a">
+        <div class="bl">
+          <div class="h">④ 模型边界</div>
+          <div class="p">只做两件事</div>
+          <div class="n">归位 + 概括；其余全部规则与模板</div>
+        </div>
+        <div class="items">
+          <div class="chip"><b>交给模型</b> 文档→条款归位（语义匹配）；长段落→一句概括</div>
+          <div class="chip"><b>不让模型做</b> 字段抽取（规则命中率更高）、抽样选择、结论词、句式顺序</div>
+          <div class="chip"><b>必须人做</b> 结论确认、现场观察与访谈、NC 事实描述</div>
+        </div>
+      </div>
+
+      <div class="br" style="--c:#4a6fa5">
+        <div class="bl">
+          <div class="h">⑤ 可直接写进代码</div>
+          <div class="p">三条硬规则</div>
+          <div class="n">违反即判不合格</div>
+        </div>
+        <div class="items">
+          <div class="chip"><b>结论封闭词表</b> 基本符合 / 符合 / 基本适宜 / 有效 / 未发现 / 待确认 / 不适用</div>
+          <div class="chip"><b>抽样条数必须对齐</b> 声明抽 3 份就必须 3 条编号行，多一条少一条即不一致</div>
+          <div class="chip"><b>引用句四件套</b> 文件名 + 编号 + 核心动作 + 部门角色，缺一退回重写</div>
+        </div>
+      </div>
+
+      <div class="br" style="--c:#5f7d3a">
+        <div class="bl">
+          <div class="h">⑥ 下一步</div>
+          <div class="p">先实证，后评估模型</div>
+          <div class="n">不做模型也能验证 74% 的部分</div>
+        </div>
+        <div class="items">
+          <div class="chip">1. 基线表：文档类型 → 句子形态 → 字段（7 类）</div>
+          <div class="chip">2. 取 1 家企业 5 个条款，手工还原"文档 → 报告句"</div>
+          <div class="chip">3. 与真实报告逐句比对，出差异清单</div>
+          <div class="chip">4. 只对 L2 环节验证模型必要性（占比 &lt;25% 时模型只做概括）</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="foot">
+    关键数字：报告正文 63% 是搬运与引用，11% 是判断；引用最多的是"表/清单/台账"（105 处中 41 处），程序文件仅 13 处但每处平均 95 字。<br>
+    结论：自动化主战场是"把已有内容搬到正确位置"，不是"生成判断"。
+  </div>
+</body>
+</html>

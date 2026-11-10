@@ -138,7 +138,8 @@ namespace CertPlatform.Auditor.Entities.Expert
         public string? SkipCategory { get; set; }
 
         /// <summary>AI 置信度（记录自动结果时）</summary>
-        [SugarColumn(DecimalDigits = 2, ColumnDataType = "decimal(3,2)", IsNullable = true)]
+        // ★ 2026-11-06：删除 DecimalDigits —— 与 ColumnDataType="decimal(x,y)" 组合会致 SqlSugar 建表 SQL 语法错误
+        [SugarColumn(ColumnDataType = "decimal(3,2)", IsNullable = true)]
         public decimal? Confidence { get; set; }
 
         /// <summary>★人读消息（23 号 §四）</summary>

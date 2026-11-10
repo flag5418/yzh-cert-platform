@@ -35,7 +35,8 @@ namespace CertPlatform.Admin.Entities.Doc
 
         public int TotalTokens { get; set; } = 0;
 
-        [SugarColumn(DecimalDigits = 6, ColumnDataType = "decimal(10,6)")]
+        // ★ 2026-11-06：删除 DecimalDigits —— 与 ColumnDataType="decimal(x,y)" 组合会致 SqlSugar 建表 SQL 语法错误
+        [SugarColumn(ColumnDataType = "decimal(10,6)")]
         public decimal CostUsd { get; set; } = 0;
 
         public long DurationMs { get; set; } = 0;

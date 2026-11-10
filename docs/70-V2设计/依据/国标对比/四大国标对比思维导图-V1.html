@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>四大国标对比 · 审核报告自动生成规律 思维导图</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; height:100%; background:#F7F8FA;
+    font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; }
+  #bar { position:fixed; top:0; left:0; right:0; height:56px; background:#FFFFFF;
+    border-bottom:1px solid #E3E6EB; display:flex; align-items:center; padding:0 20px;
+    z-index:10; gap:14px; }
+  #bar h1 { font-size:15px; font-weight:600; color:#1F3A5F; margin:0; letter-spacing:.5px;}
+  #bar .hint { font-size:12px; color:#8A94A6; }
+  #bar .btns { margin-left:auto; display:flex; gap:8px; }
+  #bar button { border:1px solid #D5DAE1; background:#fff; color:#3C4A5C; font-size:12px;
+    padding:5px 12px; border-radius:6px; cursor:pointer; font-family:inherit; }
+  #bar button:hover { background:#F1F4F8; }
+  #stage { position:absolute; top:56px; left:0; right:0; bottom:0; overflow:auto; cursor:grab; }
+  #stage.drag { cursor:grabbing; }
+  #canvas { position:relative; transform-origin:0 0; }
+  svg#links { position:absolute; left:0; top:0; pointer-events:none; }
+  .node { position:absolute; border-radius:9px; padding:7px 12px; cursor:pointer;
+    transition:box-shadow .15s, background .15s; }
+  .node .t { display:block; line-height:1.42; }
+  .node .sub { display:block; font-size:10.5px; opacity:.75; margin-top:3px; line-height:1.35; }
+  .root { background:#1F3A5F; color:#fff; font-size:18px; font-weight:600; padding:12px 18px;
+    box-shadow:0 4px 14px rgba(31,58,95,.28); border-radius:12px; }
+  .d1 { font-size:14px; font-weight:600; color:#1B2733; }
+  .d2 { font-size:12.5px; color:#26313D; }
+  .d3 { font-size:11.5px; color:#4A5666; }
+  .node:hover { box-shadow:0 3px 12px rgba(0,0,0,.12); }
+  #foot { position:fixed; right:16px; bottom:12px; font-size:11px; color:#9AA4B2;
+    background:rgba(247,248,250,.92); padding:4px 10px; border-radius:6px; z-index:5;}
+</style>
+</head>
+<body>
+<div id="bar">
+  <h1>四大国标条款对比 · 审核报告自动生成规律</h1>
+  <span class="hint">点击节点折叠/展开 · 空白处拖拽平移</span>
+  <div class="btns">
+    <button id="expand">全部展开</button>
+    <button id="zin">放大</button>
+    <button id="zout">缩小</button>
+    <button id="reset">复位</button>
+  </div>
+</div>
+<div id="stage"><div id="canvas"><svg id="links"></svg></div></div>
+<div id="foot">GB/T 19001-2016 · 24001-2016 · 45001-2020 · 42061-2022</div>
+
+<script>
+const COLORS = ['#0F766E','#B45309','#9A3412','#3F6212','#1D4ED8','#0E7490','#6B4A1F','#4B5563'];
+const COLX = [28, 285, 615, 1030];
+const MAXW = [225, 255, 380, 430];
+const GAP = 14;
+
+const DATA = {
+  t:'四大国标 · 审核报告自动生成',
+  c:[
+    { t:'① 标准身份（均为 IDT 采标）', c:[
+        { t:'GB/T 19001-2016', s:'ISO 9001:2015 ｜ QMS 质量' },
+        { t:'GB/T 24001-2016', s:'ISO 14001:2015 ｜ EMS 环境' },
+        { t:'GB/T 45001-2020', s:'ISO 45001:2018 ｜ OHSMS 职安' },
+        { t:'GB/T 42061-2022', s:'ISO 13485:2016 ｜ MDQMS 医械' }
+    ]},
+    { t:'② 架构血统：三同构 + 一独立', c:[
+        { t:'Annex SL 高阶结构', c:[
+            { t:'章节固定 4—10 共七章' },
+            { t:'PDCA：4-6 策划｜7-8 实施｜9 检查｜10 改进' },
+            { t:'统一"应"句式与统一术语' }
+        ]},
+        { t:'19001 / 24001 / 45001 章条同构', s:'同位置、同编号、同功能' },
+        { t:'42061 独立血统：4—8 章旧骨架', c:[
+            { t:'4 质量管理体系 ｜ 5 管理职责' },
+            { t:'6 资源管理 ｜ 7 产品实现' },
+            { t:'8 测量、分析和改进' },
+            { t:'附录 B 给出与 9001 官方双向对照' }
+        ]},
+        { t:'结论：一张骨架 + 一张增量表', s:'禁止建四套条款模型' }
+    ]},
+    { t:'③ 共性：20 条通用内核', c:[
+        { t:'组织侧 4 条', s:'4.1 组织环境 / 4.2 相关方 / 4.3 范围 / 4.4 体系' },
+        { t:'领导侧 3 条', s:'5.1 承诺 / 5.2 方针 / 5.3 职责权限' },
+        { t:'策划侧 2 条', s:'6.1 风险机遇 / 6.2 目标与措施' },
+        { t:'支持侧 5 条', s:'7.1 资源 / 7.2 能力 / 7.3 意识 / 7.4 沟通 / 7.5 文件' },
+        { t:'运行侧 1 条', s:'8.1 运行策划和控制' },
+        { t:'评价改进侧 5 条', s:'9.1 / 9.2 / 9.3 / 10.2 / 10.3' },
+        { t:'四种形态：方针 / 策划 / 支持 / 评价改进', s:'形态决定可审核落点' }
+    ]},
+    { t:'④ 差异：只有三类', c:[
+        { t:'① 名词替换', s:'方针→质量·环境·职安方针；成文信息→文件化信息→文件与记录' },
+        { t:'② 条款增补', c:[
+            { t:'环境独有', s:'6.1.2 环境因素 / 6.1.3 合规义务 / 8.2 应急 / 9.1.2 合规性评价' },
+            { t:'职安独有', s:'5.4 协商参与 / 6.1.2 危险源 / 8.1.2 层级控制 / 8.1.3 变更 / 8.1.4 采购承包方外包 / 10.2 事件调查' },
+            { t:'医械独有', s:'4.2.3 器械文档 / 5.5.2 管代 / 6.4.2 污染 / 8.2.2 投诉 / 8.2.3 监管报告' }
+        ]},
+        { t:'③ 要求加严', c:[
+            { t:'范围与文档', s:'手册须说明删减/不适用及理由；4.2.4 / 4.2.5 文件与记录控制' },
+            { t:'设计开发', s:'7.3.8 设计转换 / 7.3.10 设计文件 / 7.3.6 验证 / 7.3.7 确认' },
+            { t:'生产与追溯', s:'7.5.2 清洁 / 7.5.5 无菌 / 7.5.6-7.5.7 灭菌确认 / 7.5.9.2 植入追溯' }
+        ]},
+        { t:'同号不同义警告', s:'45001 的 6.1.2 ≠ 24001 的 6.1.2 ｜ 主键须"标准 + 条款号"' }
+    ]},
+    { t:'⑤ 条款语法：条文 → 检查点', c:[
+        { t:'五要素', s:'主体 · 情态 · 动作 · 对象 · 输出' },
+        { t:'情态判定力', c:[
+            { t:'应 shall → 强制，可判定' },
+            { t:'宜 should → 建议，不作不符合' },
+            { t:'可 may → 自选，不判定' },
+            { t:'注 note → 说明，禁止作为判据' }
+        ]},
+        { t:'12 动词 → 证据类型', s:'建立→文件 ｜ 实施→记录 ｜ 监视→数据 ｜ 评审→报告 ｜ 处置→闭环' },
+        { t:'最强自动化信号', s:'"应保留成文信息" = 必有证据' },
+        { t:'检查点粒度', s:'二级条款拆 3—8 个；一级条款拆 5—10 个' }
+    ]},
+    { t:'⑥ 证据模型与五态判定', c:[
+        { t:'企业资料四层', c:[
+            { t:'管理手册', s:'覆盖全部条款的文件层证据' },
+            { t:'程序文件', s:'15—25 个，覆盖约 60% 条款' },
+            { t:'三级文件 / 作业指导书', s:'按部门或工序成组' },
+            { t:'记录表单', s:'数量最大，覆盖约 35% 条款' }
+        ]},
+        { t:'证据三元组', s:'文件（说了）→ 记录（做了）→ 现场（真的）｜ 逐级验证，非加总' },
+        { t:'证据配方五字段', s:'必备证据 · 抽样量 · 覆盖期 · 关键字段 · 判据' },
+        { t:'五态判定（含 N/A 共六态）', c:[
+            { t:'符合 / 基本符合（观察项）' },
+            { t:'一般不符合 / 严重不符合' },
+            { t:'待确认（证据缺口）', s:'安全阀：无证据不造结论' },
+            { t:'不适用 N/A', s:'须有删减理由' }
+        ]},
+        { t:'抽样由规则决定', s:'多场所 初次 Y=X / 再认证 Y=0.8X；记录抽 3—5 份；覆盖 3 或 12 个月' }
+    ]},
+    { t:'⑦ 报告生成', c:[
+        { t:'法定骨架：CNCA 5.11.3 共 19 项', s:'仅第 12 项需智能生成，其余 18 项应模板化' },
+        { t:'最小单元：审核发现字段', s:'标准维度 · 条款号 · 部门 · 检查点 · 证据引用 · 事实 · 判定 · 依据 · 抽样 · 签署' },
+        { t:'四类句式模板', c:[
+            { t:'文件类', s:'查见《X》，规定了……' },
+            { t:'记录类', s:'抽见《X》，覆盖××月—××月，共××份，均……' },
+            { t:'现场 / 访谈类', s:'现场询问负责人，表示……' },
+            { t:'结论类', s:'经查，符合标准要求 / 基本符合，建议……' }
+        ]},
+        { t:'部门 × 标准 × 条款矩阵', s:'按"谁产出证据"分配，而非平均分配' },
+        { t:'三层结论', s:'条款级 → 部门级 → 体系级；逻辑必须闭合' },
+        { t:'措辞固化', s:'五种结论句型，禁止模型自创第六种' }
+    ]},
+    { t:'⑧ 落地与边界', c:[
+        { t:'新增三张表', c:[
+            { t:'clause_syntax 条款语法', s:'决定"问什么"' },
+            { t:'evidence_recipe 证据配方', s:'决定"看什么"' },
+            { t:'finding_template 句式模板', s:'决定"怎么写"' }
+        ]},
+        { t:'三期实施', s:'一期覆盖度缺口 → 二期五态判定 → 三期报告闭环' },
+        { t:'四道闸门', s:'证据可溯 · 判定留白 · 人工签署 · 模式复核' },
+        { t:'自动化上限约七成', s:'设计开发有效性、风险准则、灭菌确认、现场一致性、人员能力、法规适用、管评深度必须到现场' }
+    ]}
+  ]
+};
+
+const canvas = document.getElementById('canvas');
+const svg = document.getElementById('links');
+const stage = document.getElementById('stage');
+let allNodes = [], rootNode = null, scale = 1;
+
+function tint(hex, k){
+  const r=parseInt(hex.substr(1,2),16), g=parseInt(hex.substr(3,2),16), b=parseInt(hex.substr(5,2),16);
+  const m=(c)=>Math.round(255 - (255-c)*k);
+  return 'rgb('+m(r)+','+m(g)+','+m(b)+')';
+}
+
+function mkNode(d, depth, parent, branchIdx){
+  const el = document.createElement('div');
+  el.className = 'node ' + (depth===0?'root':'d'+depth);
+  const t = document.createElement('span');
+  t.className='t'; t.textContent = d.t;
+  el.appendChild(t);
+  if(d.s){ const s=document.createElement('span'); s.className='sub'; s.textContent=d.s; el.appendChild(s); }
+  if(depth===1){
+    el.style.background = '#ffffff';
+    el.style.borderLeft = '6px solid ' + COLORS[branchIdx];
+    el.style.color = COLORS[branchIdx];
+    el.style.boxShadow = '0 1px 3px rgba(0,0,0,.07)';
+  } else if(depth===2){
+    el.style.background = tint(COLORS[branchIdx], 0.045);
+    el.style.borderLeft = '3px solid ' + COLORS[branchIdx];
+  } else if(depth===3){
+    el.style.background = '#ffffff';
+    el.style.borderLeft = '2px solid ' + COLORS[branchIdx];
+    el.style.boxShadow = '0 1px 2px rgba(0,0,0,.05)';
+  }
+  el.style.maxWidth = MAXW[depth] + 'px';
+  el.style.left = COLX[depth] + 'px';
+  el.style.top = '0px';
+  canvas.appendChild(el);
+  const node = { el, depth, parent, children:[], collapsed:false, h:0, color:COLORS[branchIdx] };
+  if(parent) parent.children.push(node);
+  (d.c||[]).forEach((ch,i)=>mkNode(ch, depth+1, node, depth===0 ? i : branchIdx));
+  el.addEventListener('click', e=>{
+    e.stopPropagation();
+    if(!node.children.length) return;
+    node.collapsed = !node.collapsed;
+    layout();
+  });
+  allNodes.push(node);
+  return node;
+}
+
+function visChildren(n){ return n.collapsed ? [] : n.children; }
+
+function measure(n){
+  n.h = n.el.offsetHeight;
+  const kids = visChildren(n);
+  if(!kids.length){ n.blockH = 0; return; }
+  kids.forEach(measure);
+  n.blockH = kids.reduce((a,c)=>a+c.h,0) + GAP*(kids.length-1);
+  n.h = Math.max(n.h, n.blockH);
+}
+
+function place(n, top){
+  const kids = visChildren(n);
+  if(!kids.length){
+    n.el.style.top = (top + (n.h - n.el.offsetHeight)/2) + 'px';
+    return;
+  }
+  let childTop = top + (n.h - n.blockH)/2;
+  kids.forEach(c=>{ place(c, childTop); childTop += c.h + GAP; });
+  n.el.style.top = (top + (n.h - n.el.offsetHeight)/2) + 'px';
+}
+
+function drawLinks(){
+  const NS='http://www.w3.org/2000/svg';
+  svg.innerHTML='';
+  let W=0,H=0;
+  allNodes.forEach(n=>{
+    if(n.el.style.display==='none') return;
+    const x=parseFloat(n.el.style.left), y=parseFloat(n.el.style.top);
+    W=Math.max(W, x+n.el.offsetWidth+40);
+    H=Math.max(H, y+n.el.offsetHeight+40);
+    visChildren(n).forEach(c=>{
+      const x1=x+n.el.offsetWidth, y1=y+n.el.offsetHeight/2;
+      const x2=parseFloat(c.el.style.left), y2=parseFloat(c.el.style.top)+c.el.offsetHeight/2;
+      const dx=(x2-x1)*0.55;
+      const path=document.createElementNS(NS,'path');
+      path.setAttribute('d',`M ${x1} ${y1} C ${x1+dx} ${y1}, ${x2-dx} ${y2}, ${x2} ${y2}`);
+      path.setAttribute('stroke', c.color);
+      path.setAttribute('stroke-width', n.depth===0 ? 2.6 : 1.6);
+      path.setAttribute('fill','none');
+      path.setAttribute('opacity', n.depth===0 ? 0.9 : 0.65);
+      path.setAttribute('stroke-linecap','round');
+      svg.appendChild(path);
+    });
+  });
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  canvas.style.width = W+'px'; canvas.style.height = H+'px';
+}
+
+function layout(){
+  allNodes.forEach(n=>{
+    let hidden=false, p=n.parent;
+    while(p){ if(p.collapsed){ hidden=true; break; } p=p.parent; }
+    n.el.style.display = hidden ? 'none' : 'block';
+  });
+  measure(rootNode);
+  place(rootNode, 26);
+  drawLinks();
+}
+
+rootNode = mkNode(DATA, 0, null, 0);
+layout();
+
+function applyScale(s){
+  scale = Math.min(1.6, Math.max(0.4, s));
+  canvas.style.transform = 'scale('+scale+')';
+}
+document.getElementById('zin').onclick = ()=>applyScale(scale*1.15);
+document.getElementById('zout').onclick = ()=>applyScale(scale/1.15);
+document.getElementById('expand').onclick = ()=>{
+  allNodes.forEach(n=>n.collapsed=false);
+  layout(); applyScale(1.05); stage.scrollTo(0,0);
+};
+document.getElementById('reset').onclick = ()=>{ applyScale(1); stage.scrollTo(0,0); };
+
+let down=false, sx=0, sy=0, sl=0, st=0;
+stage.addEventListener('mousedown', e=>{
+  if(e.target.closest('.node')) return;
+  down=true; stage.classList.add('drag');
+  sx=e.clientX; sy=e.clientY; sl=stage.scrollLeft; st=stage.scrollTop;
+});
+window.addEventListener('mousemove', e=>{
+  if(!down) return;
+  stage.scrollLeft = sl - (e.clientX-sx);
+  stage.scrollTop  = st - (e.clientY-sy);
+});
+window.addEventListener('mouseup', ()=>{ down=false; stage.classList.remove('drag'); });
+</script>
+</body>
+</html>

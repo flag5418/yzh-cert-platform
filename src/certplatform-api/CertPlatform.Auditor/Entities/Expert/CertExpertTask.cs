@@ -161,7 +161,9 @@ namespace CertPlatform.Auditor.Entities.Expert
         public int GapCount { get; set; }
 
         /// <summary>执行进度 %（队列执行进度，<b>非认可进度</b>）</summary>
-        [SugarColumn(DecimalDigits = 2, ColumnDataType = "decimal(5,2)")]
+        // ★ 2026-11-06：删除 DecimalDigits —— SqlSugar 与 ColumnDataType="decimal(x,y)" 组合时
+        //   生成的建表 SQL 丢失 `decimal` 前缀（near '(5,2) NOT NULL' 语法错误 ⇒ CodeFirst 建表失败）
+        [SugarColumn(ColumnDataType = "decimal(5,2)")]
         public decimal Progress { get; set; }
 
         // ──── 数据缺口 ────

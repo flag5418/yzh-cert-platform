@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>文档分类与编辑方式实证</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #fbfbfd; color: #1d2129; padding: 40px 48px; }
+  h1 { font-size: 26px; font-weight: 600; }
+  .sub { margin-top: 10px; color: #646a73; font-size: 14px; line-height: 1.7; }
+  .kpi { display: flex; gap: 14px; margin-top: 22px; }
+  .card { flex: 1; background: #fff; border: 1px solid #e5e8ec; border-radius: 10px; padding: 14px 18px; }
+  .card .n { font-size: 26px; font-weight: 700; line-height: 1.2; }
+  .card .t { margin-top: 6px; font-size: 12.5px; color: #646a73; line-height: 1.6; }
+  .wrap { display: flex; align-items: flex-start; margin-top: 26px; }
+  .root { width: 250px; flex: none; padding: 22px 20px; border-radius: 10px;
+    background: linear-gradient(160deg,#1f3a5f,#2b5c8a); color: #fff; }
+  .root .t { font-size: 17px; font-weight: 600; line-height: 1.5; }
+  .root .d { margin-top: 10px; font-size: 12.5px; line-height: 1.8; opacity: .85; }
+  .root .k { margin-top: 14px; font-size: 12px; opacity: .9; border-top: 1px solid rgba(255,255,255,.25); padding-top: 10px; }
+  .stem { width: 34px; flex: none; position: relative; }
+  .stem::before { content:""; position:absolute; left:0; top:50%; width:34px; height:2px; background:#d0d5dd; }
+  .branches { flex: 1; display: flex; flex-direction: column; gap: 12px; position: relative; }
+  .branches::before { content:""; position:absolute; left:-1px; top:0; bottom:0; width:2px; background:#d0d5dd; }
+  .br { display: flex; align-items: flex-start; gap: 14px; }
+  .bl { width: 250px; flex: none; padding: 12px 14px; border-radius: 8px; background: #fff;
+    border: 1px solid #e5e8ec; border-left: 4px solid var(--c); }
+  .bl .h { font-size: 14.5px; font-weight: 600; }
+  .bl .p { margin-top: 6px; font-size: 12px; color: var(--c); font-weight: 600; }
+  .bl .n { margin-top: 4px; font-size: 11.5px; color: #8a9099; line-height: 1.6; }
+  .items { flex: 1; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; padding: 8px 0 8px 16px; }
+  .chip { padding: 8px 12px; border-radius: 6px; background: #fff; border: 1px solid #e5e8ec;
+    font-size: 12.5px; line-height: 1.55; color: #333a45; max-width: 540px; }
+  .chip b { color: var(--c); font-weight: 600; }
+  .foot { margin-top: 26px; padding-top: 14px; border-top: 1px dashed #d9dde3; font-size: 12.5px; color: #646a73; line-height: 1.8; }
+</style>
+</head>
+<body>
+  <h1>企业文档 → 审核报告：文档分类与编辑方式</h1>
+  <div class="sub">3 套配对样本：368 份企业文档 100.3 万字 · 3 份真实审核记录 1,528 句；逐句比对句子与事实</div>
+
+  <div class="kpi">
+    <div class="card"><div class="n" style="color:#3b6ea5">3–11%</div><div class="t">报告句子的<b>逐字重合</b><br>最长重合中位数仅 19 字</div></div>
+    <div class="card"><div class="n" style="color:#2f7d5f">99.7%</div><div class="t">事实点可溯源<br>日期/编号/数值/文件名 300+ 个</div></div>
+    <div class="card"><div class="n" style="color:#c2703a">31–45%</div><div class="t">企业文档真正进报告的比例<br>一半以上从不出场</div></div>
+    <div class="card"><div class="n" style="color:#8256a8">69–79%</div><div class="t">描述句占比<br>由事实点 + 固定句式构成</div></div>
+  </div>
+
+  <div class="wrap">
+    <div class="root">
+      <div class="t">报告怎么来的</div>
+      <div class="d">事实来自文档，句式来自审核员；中间是"填槽"</div>
+      <div class="k">不抄原文 · 不全量分析 · 模板要两维</div>
+    </div>
+    <div class="stem"></div>
+    <div class="branches">
+
+      <div class="br" style="--c:#3b6ea5">
+        <div class="bl"><div class="h">① 不抄原文</div><div class="p">逐字 3–11%，事实 99.7%</div><div class="n">照抄部分只是"《文件名》+编号"那一截</div></div>
+        <div class="items">
+          <div class="chip"><b>句子层</b> 原文命中 3.2% / 9.4% / 5.2%，其余为改写</div>
+          <div class="chip"><b>事实层</b> 日期 37/37、数值 101/102、文件名 262/262、编号 14/14</div>
+          <div class="chip"><b>推论</b> 不能做"相似段落检索 + 复制"，产物会像企业文件不像审核报告</div>
+        </div>
+      </div>
+
+      <div class="br" style="--c:#2f7d5f">
+        <div class="bl"><div class="h">② 文档覆盖</div><div class="p">只有 31–45% 进报告</div><div class="n">不是遗漏，是审核逻辑只要那几份</div></div>
+        <div class="items">
+          <div class="chip"><b>覆盖</b> 44/97（45%）、35/105（33%）、51/166（31%）</div>
+          <div class="chip"><b>手册</b> 2–22 次/份，每份都精读；97% 内容不进报告，但引用的一半以上是原样</div>
+          <div class="chip"><b>程序</b> 0.1–0.5 次/份，只点名+概括，照抄率 21–50%</div>
+          <div class="chip"><b>三阶</b> 0–0.4 次/份，几乎不进报告</div>
+          <div class="chip"><b>记录</b> 少数被反复抽（管评 12 次、合规性 11 次），照抄率 19–71%</div>
+        </div>
+      </div>
+
+      <div class="br" style="--c:#8256a8">
+        <div class="bl"><div class="h">③ 五个编辑动作</div><div class="p">覆盖全部报告文字</div><div class="n">前四个能程序化，第五个必须人</div></div>
+        <div class="items">
+          <div class="chip"><b>① 点名复述</b> 9–20%｜文件名 + 编号 + "明确了……"一句</div>
+          <div class="chip"><b>② 字段罗列</b> 证号/期限/双方/面积，纯规则</div>
+          <div class="chip"><b>③ 抽看明细</b> 1–2%｜"抽 N 份：1、… 2、…"，事实密度最高</div>
+          <div class="chip"><b>④ 改写成句</b> 69–79%｜事实全保留，句式重写（必须模型）</div>
+          <div class="chip"><b>⑤ 判断结论</b> 7–10%｜符合/有效/适宜/未发现（人确认，词表封闭）</div>
+        </div>
+      </div>
+
+      <div class="br" style="--c:#c2703a">
+        <div class="bl"><div class="h">④ 加工度修正</div><div class="p">L0≈0，重心在 L1+L2</div><div class="n">旧口径"搬运 42.6%"实为改写长句</div></div>
+        <div class="items">
+          <div class="chip"><b>L0 复制</b> ≈0%｜报告里没有大段原文</div>
+          <div class="chip"><b>L1 事实抽取</b> 全部句子的事实来源｜规则 + 解析器</div>
+          <div class="chip"><b>L2 模板复述</b> 69–79%｜模板为主，模型兜底</div>
+          <div class="chip"><b>L3 判断</b> 7–10%｜人</div>
+        </div>
+      </div>
+
+      <div class="br" style="--c:#5f7d3a">
+        <div class="bl"><div class="h">⑤ 对系统的三个结论</div><div class="p">省钱与成败都在这里</div><div class="n">按文档重要度分级，而非全量跑</div></div>
+        <div class="items">
+          <div class="chip"><b>不做相似段复制</b>：做"抽事实 + 填模板"</div>
+          <div class="chip"><b>不做全量全条款</b>：手册精读、程序只取元数据+一句、三阶几乎不读、记录只读被引用那几份 → 调用量降一个数量级</div>
+          <div class="chip"><b>模板两维</b>：文档类型 × 条款类型（手册写"规定了…"，记录写"抽看了…结论为…"）</div>
+        </div>
+      </div>
+
+      <div class="br" style="--c:#4a6fa5">
+        <div class="bl"><div class="h">⑥ 下一步</div><div class="p">先规则，后模型</div><div class="n">用三套样本做回归测试更省</div></div>
+        <div class="items">
+          <div class="chip">1. 12 类句式模板（每类 2–3 变体），覆盖 69–79% 描述句</div>
+          <div class="chip">2. 6 类记录字段清单（证书/合同/培训/校准/评审/内审）</div>
+          <div class="chip">3. 规则 + 模板回归，目标 ≥60% 字符可拼出</div>
+          <div class="chip">4. 差额才交模型，事实冻结不许改</div>
+        </div>
+      </div>
+
+
+      <div class="br" style="--c:#8a5a2b">
+        <div class="bl"><div class="h">⑦ 事实层 / 风格层解耦</div><div class="p">换机构不重做事实层</div><div class="n">风格差异未实测，属推断</div></div>
+        <div class="items">
+          <div class="chip"><b>事实层（不变）</b> 属性池 / 文档分类 / 字段抽取 / 明细</div>
+          <div class="chip"><b>风格层（每机构一套）</b> 句式模板 + 标题层级 + 结论词表 + 报告结构（CNCA 19 项 vs ACM 四列表）</div>
+          <div class="chip"><b>注意</b> 三份样本同属 ACM 一家，机构间风格差异尚无实测</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    样本：科斯亚 97 份/30.2 万字、双尼 105 份/30.1 万字、尚龙 166 份/40.1 万字；报告 378/506/644 句，平均 25–31 字一句。<br>
+    一句话：报告 = 文档里的事实 + 审核员脑子里的固定句式，产品要做的是中间那一步"填槽"。
+  </div>
+</body>
+</html>

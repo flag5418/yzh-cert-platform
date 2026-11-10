@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  html,body{margin:0;padding:0;background:#fff;}
+  .wrap{width:1600px;height:1150px;position:relative;font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;}
+  svg{width:1600px;height:1150px;}
+  .t{font-size:26px;font-weight:700;fill:#1f2937;}
+  .s{font-size:16px;fill:#4b5563;}
+  .lbl{font-size:17px;font-weight:600;}
+  .note{font-size:14px;fill:#6b7280;}
+  .h{font-size:34px;font-weight:700;fill:#111827;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<svg viewBox="0 0 1600 1150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a1" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+    <marker id="a2" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>
+    <marker id="a3" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#d97706"/></marker>
+    <marker id="a4" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+    <marker id="a5" markerWidth="12" markerHeight="12" refX="10" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9ca3af"/></marker>
+  </defs>
+
+  <text x="60" y="70" class="h">三者关系模型：条款属性池 · 文档结构 · 证据提示词</text>
+  <text x="60" y="104" class="s">三层各答一个问题；L1 与 L2 不直接对话，唯一接触点是「条款相关」标记；六条边各传一种东西</text>
+
+  <!-- 中心：证据单元 -->
+  <ellipse cx="800" cy="500" rx="205" ry="70" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+  <text x="800" y="482" text-anchor="middle" class="t" fill="#92400e">证据单元</text>
+  <text x="800" y="514" text-anchor="middle" class="s" fill="#92400e">条款 × 过程域（部门）</text>
+  <text x="800" y="544" text-anchor="middle" class="note" fill="#92400e">由审核计划生成 · K1</text>
+
+  <!-- L1 左上 -->
+  <g>
+    <rect x="180" y="300" width="330" height="215" rx="16" fill="#eff6ff" stroke="#2563eb" stroke-width="2.5"/>
+    <text x="205" y="342" class="t" fill="#1d4ed8">L1 条款属性池</text>
+    <text x="205" y="372" class="s">回答：这条要求什么</text>
+    <text x="205" y="400" class="s">意图 / 义务强度（应·宜·可）</text>
+    <text x="205" y="426" class="s">适用性 / 过程域 / 证据形态</text>
+    <text x="205" y="452" class="s">功能角色 R1–R7 / 严重度</text>
+    <text x="205" y="478" class="s">待答问题清单</text>
+    <text x="205" y="502" class="note">不知道资料有什么 · 不知道句子怎么写</text>
+  </g>
+
+  <!-- L2 左下 -->
+  <g>
+    <rect x="180" y="740" width="365" height="245" rx="16" fill="#ecfdf5" stroke="#059669" stroke-width="2.5"/>
+    <text x="205" y="782" class="t" fill="#047857">L2 文档结构</text>
+    <text x="205" y="812" class="s">回答：资料里有什么事实</text>
+    <text x="205" y="842" class="s">画像：是否条款相关 · 是否需提取</text>
+    <text x="205" y="868" class="s">类别：手册/程序/指导书/记录/资质</text>
+    <text x="205" y="894" class="s">过程域 / 用途 / 置信度</text>
+    <text x="205" y="926" class="s">事实条目：谁·做了什么·何时</text>
+    <text x="205" y="952" class="s">多少·结论·出处（页码/锚点）</text>
+    <text x="205" y="976" class="note">不知道条款 · 不知道报告句式</text>
+  </g>
+
+  <!-- L3 右上 -->
+  <g>
+    <rect x="1080" y="300" width="360" height="215" rx="16" fill="#fff7ed" stroke="#d97706" stroke-width="2.5"/>
+    <text x="1105" y="342" class="t" fill="#b45309">L3 证据提示词</text>
+    <text x="1105" y="372" class="s">回答：怎么用事实回答要求</text>
+    <text x="1105" y="400" class="s">骨架（角色×形态 → 模板编号 K3）</text>
+    <text x="1105" y="426" class="s">槽位清单（对应事实字段 K2）</text>
+    <text x="1105" y="452" class="s">结论强度 / 篇幅 / 机构风格包</text>
+    <text x="1105" y="484" class="s">唯一按机构分方案的一层</text>
+    <text x="1105" y="506" class="note">不生产事实 · 不定义要求</text>
+  </g>
+
+  <!-- ④ L3→L1（上弧，虚线） -->
+  <path d="M1080,336 C900,238 620,238 512,332" stroke="#7c3aed" stroke-width="2.5" fill="none" stroke-dasharray="8 6" marker-end="url(#a4)"/>
+  <text x="800" y="226" text-anchor="middle" class="lbl" fill="#6d28d9">④ 反馈：属性长期 0 消费 → 删；槽位填不满 → 补</text>
+
+  <!-- ① L1→L3（下弧，实线） -->
+  <path d="M500,470 C620,700 980,700 1090,470" stroke="#2563eb" stroke-width="3" fill="none" marker-end="url(#a1)"/>
+  <text x="800" y="726" text-anchor="middle" class="lbl" fill="#1d4ed8">① 约束：必覆盖点 · 义务强度 · 句式 · 取数范围</text>
+
+  <!-- ② L1→L2 -->
+  <path d="M300,516 C300,650 320,690 336,738" stroke="#2563eb" stroke-width="3" fill="none" marker-end="url(#a1)"/>
+  <text x="196" y="646" class="lbl" fill="#1d4ed8">② 检索键</text>
+  <text x="196" y="670" class="note">条款 × 过程域（只传这个）</text>
+
+  <!-- ③ L2→L3 -->
+  <path d="M545,860 C780,930 1030,880 1150,516" stroke="#059669" stroke-width="3" fill="none" marker-end="url(#a2)"/>
+  <text x="820" y="924" text-anchor="middle" class="lbl" fill="#047857">③ 供给：事实条目填进槽位</text>
+
+  <!-- ⑤ L3→L2 -->
+  <path d="M1085,516 C1060,690 880,760 548,772" stroke="#d97706" stroke-width="2.5" fill="none" stroke-dasharray="8 6" marker-end="url(#a3)"/>
+  <text x="1105" y="676" class="lbl" fill="#b45309">⑤ 反查：缺事实 → 补提取字段</text>
+
+  <!-- ⑥ 外环 回归 -->
+  <path d="M1470,640 C1470,1010 1180,1060 800,1060 C420,1060 150,1010 150,640" stroke="#9ca3af" stroke-width="3" fill="none" stroke-dasharray="10 7" marker-end="url(#a5)"/>
+  <text x="800" y="1096" text-anchor="middle" class="lbl" fill="#6b7280">⑥ 回归：覆盖率 / 溯源率 / 篇幅 / 结论率 四项指标 → 提示词与属性升版</text>
+  <text x="1430" y="600" class="note" fill="#6b7280">报告样本</text>
+  <text x="1430" y="624" class="note" fill="#6b7280">101 块</text>
+
+  <!-- 底部说明 -->
+  <text x="180" y="1132" class="note">自检 1：问句不重叠——越层即模型错误　｜　自检 2：每个属性必须在 L3 有消费点，否则删　｜　自检 3：任一真实条款块可反推出角色/形态/事实/属性</text>
+</svg>
+</div>
+</body>
+</html>
